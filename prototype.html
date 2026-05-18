@@ -1,0 +1,2587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>UNIT 047 // ARES-VII</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0805;
+    --window: rgba(18, 13, 6, 0.92);
+    --edge: #2a1d0a;
+    --edge-bright: #4a3318;
+    --accent: #ffa726;
+    --accent-dim: #8d6e3d;
+    --accent-bright: #ffd180;
+    --warn: #ff6b3d;
+    --good: #b2ff59;
+    --text: #f5e6c8;
+    --text-dim: #7a6845;
+    --ambient-1: rgba(255,167,38,0.04);
+    --ambient-2: rgba(255,167,38,0.025);
+    --scan: rgba(255,167,38,0.015);
+    --corruption: 0;
+  }
+
+  body.mode-memory {
+    --bg: #04080d;
+    --window: rgba(8, 16, 26, 0.92);
+    --edge: #0e2438;
+    --edge-bright: #1d4566;
+    --accent: #00d4ff;
+    --accent-dim: #4a90a8;
+    --accent-bright: #b3e5fc;
+    --warn: #ff4e7a;
+    --good: #7dffb2;
+    --text: #d6f0ff;
+    --text-dim: #4a7a90;
+    --ambient-1: rgba(0,212,255,0.05);
+    --ambient-2: rgba(0,212,255,0.03);
+    --scan: rgba(0,212,255,0.02);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    height: 100%;
+    overflow: hidden;
+    transition: background 0.3s;
+    filter: hue-rotate(calc(var(--corruption) * 6deg))
+            contrast(calc(1 + var(--corruption) * 0.15));
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 30% 20%, var(--ambient-1) 0%, transparent 50%),
+      radial-gradient(ellipse at 70% 80%, var(--ambient-2) 0%, transparent 50%),
+      radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.7) 100%),
+      repeating-linear-gradient(0deg, var(--scan) 0px, var(--scan) 1px, transparent 1px, transparent 3px);
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100' height='100' filter='url(%23n)' opacity='0.4'/></svg>");
+    opacity: 0.05;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+    z-index: 99;
+  }
+
+  /* GLITCH OVERLAY — driven by --corruption */
+  .glitch-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 200;
+    opacity: var(--corruption);
+    mix-blend-mode: screen;
+    overflow: hidden;
+  }
+  .glitch-bar {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: rgba(255, 50, 100, 0.7);
+    animation: glitch-roll 4s linear infinite;
+  }
+  .glitch-bar:nth-child(2) { background: rgba(0, 220, 255, 0.6); height: 1px; animation-duration: 5.7s; animation-delay: -1.2s; }
+  .glitch-bar:nth-child(3) { background: rgba(255, 220, 0, 0.4); height: 3px; animation-duration: 3.3s; animation-delay: -0.8s; }
+  @keyframes glitch-roll {
+    0% { top: -10px; }
+    100% { top: 100vh; }
+  }
+  .glitch-char {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    color: rgba(255, 80, 120, 0.9);
+    font-size: 11px;
+    text-shadow: 1px 0 rgba(0,220,255,0.6), -1px 0 rgba(255,220,0,0.4);
+    animation: glitch-flicker 0.5s steps(2) infinite;
+  }
+  @keyframes glitch-flicker {
+    0%, 100% { opacity: 1; transform: translateX(0); }
+    50% { opacity: 0.3; transform: translateX(1px); }
+  }
+  .glitch-block {
+    position: absolute;
+    background: rgba(255, 78, 122, 0.15);
+    border-top: 1px solid rgba(255,78,122,0.5);
+    border-bottom: 1px solid rgba(0,220,255,0.4);
+    animation: glitch-block-shift 0.3s steps(2) infinite;
+  }
+  @keyframes glitch-block-shift {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(-3px); }
+  }
+
+  /* HEADER */
+  .header {
+    height: 44px;
+    border-bottom: 1px solid var(--edge);
+    background: linear-gradient(180deg, var(--ambient-1), transparent);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    position: relative;
+    z-index: 10;
+    font-family: 'VT323', monospace;
+    font-size: 19px;
+    letter-spacing: 0.04em;
+  }
+  .id-block { display: flex; align-items: center; }
+  .id-block .crumb { color: var(--accent); }
+  .id-block .crumb.dim { color: var(--accent-dim); }
+  .id-block .sep { color: var(--text-dim); margin: 0 10px; }
+  .header .spacer { flex: 1; }
+
+  .time-controls { display: flex; align-items: center; gap: 12px; }
+  .time-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .speed-row { display: flex; gap: 2px; }
+  .speed-btn {
+    background: transparent;
+    border: 1px solid var(--edge);
+    color: var(--accent-dim);
+    padding: 4px 10px;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.12s;
+    min-width: 44px;
+  }
+  .speed-btn:hover { border-color: var(--accent-dim); color: var(--accent-bright); }
+  .speed-btn.active {
+    border-color: var(--accent);
+    color: var(--accent-bright);
+    background: var(--ambient-1);
+  }
+  .clock {
+    color: var(--accent-bright);
+    text-shadow: 0 0 8px currentColor;
+    opacity: 0.85;
+    padding-left: 18px;
+    border-left: 1px solid var(--edge);
+    margin-left: 6px;
+  }
+
+  /* DESKTOP + DOCK */
+  .desktop-wrap {
+    display: flex;
+    height: calc(100vh - 44px - 32px);
+  }
+
+  .dock {
+    width: 150px;
+    border-right: 1px solid var(--edge);
+    padding: 18px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: rgba(0,0,0,0.2);
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .dock-section {
+    padding: 0 16px 8px;
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-top: 14px;
+  }
+  .dock-section:first-child { margin-top: 0; }
+
+  .dock-item {
+    padding: 7px 16px;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-left: 2px solid transparent;
+    transition: all 0.12s;
+  }
+  .dock-item:hover {
+    color: var(--accent-bright);
+    background: var(--ambient-1);
+  }
+  .dock-item.open {
+    color: var(--accent-bright);
+    border-left-color: var(--accent);
+    background: var(--ambient-1);
+  }
+  .dock-item .mark { color: var(--accent-dim); font-size: 8px; width: 6px; }
+  .dock-item.open .mark { color: var(--good); }
+  .dock-item.warn .mark { color: var(--warn); animation: cell-pulse 1.4s infinite; }
+
+  .mode-toggle {
+    position: absolute;
+    bottom: 16px;
+    left: 12px;
+    right: 12px;
+    padding: 10px;
+    border: 1px solid var(--edge-bright);
+    background: rgba(0,0,0,0.3);
+  }
+  .mode-toggle-label {
+    font-size: 8px;
+    letter-spacing: 0.25em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .mode-toggle-track {
+    display: flex;
+    background: var(--bg);
+    border: 1px solid var(--edge);
+    cursor: pointer;
+  }
+  .mode-toggle-opt {
+    flex: 1;
+    padding: 5px 6px;
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    text-align: center;
+    color: var(--accent-dim);
+    transition: color 0.12s, background 0.18s;
+    user-select: none;
+  }
+  .mode-toggle-opt.active {
+    color: var(--bg);
+    background: var(--accent);
+  }
+
+  .desktop {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .corner-stamp {
+    position: absolute;
+    color: var(--text-dim);
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .corner-stamp.tr { top: 18px; right: 24px; text-align: right; line-height: 1.4; }
+  .corner-stamp.bl { bottom: 18px; left: 24px; line-height: 1.4; }
+
+  /* WINDOWS (tools mode) */
+  .window {
+    position: absolute;
+    background: var(--window);
+    border: 1px solid var(--edge-bright);
+    box-shadow:
+      0 12px 40px rgba(0,0,0,0.6),
+      0 0 0 1px var(--ambient-1),
+      inset 0 0 20px var(--ambient-2);
+    display: flex;
+    flex-direction: column;
+    min-width: 280px;
+    backdrop-filter: blur(2px);
+  }
+  .window-title {
+    height: 28px;
+    border-bottom: 1px solid var(--edge);
+    background: linear-gradient(180deg, var(--ambient-1), var(--ambient-2));
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    cursor: move;
+    user-select: none;
+  }
+  .window-title .grip { color: var(--accent-dim); font-size: 9px; letter-spacing: 0.3em; margin-right: 10px; }
+  .window-title .name {
+    flex: 1;
+    color: var(--accent);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .window-title .ctl { color: var(--accent-dim); font-size: 14px; cursor: pointer; padding: 0 6px; }
+  .window-title .ctl:hover { color: var(--warn); }
+  .window-body { padding: 16px; flex: 1; overflow: auto; }
+
+  body.mode-memory .tools-view { display: none; }
+  body:not(.mode-memory) .memory-view { display: none; }
+  /* The dock-content variants are flex children of .dock — keep them in flow */
+  .dock > .dock-content.memory-view,
+  .dock > .dock-content.tools-view { display: flex; flex-direction: column; }
+  body.mode-memory .dock > .dock-content.tools-view,
+  body:not(.mode-memory) .dock > .dock-content.memory-view { display: none; }
+
+  .telemetry-win { top: 24px; left: 24px; width: 340px; }
+  .engine-win { top: 24px; right: 24px; width: 320px; }
+  .readout { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0; border-bottom: 1px dashed rgba(141,110,61,0.2); }
+  .readout:last-of-type { border-bottom: none; }
+  .readout .label { color: var(--text-dim); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .readout .value { color: var(--accent-bright); font-family: 'VT323', monospace; font-size: 22px; }
+  .readout .unit { color: var(--accent-dim); font-size: 10px; margin-left: 4px; }
+  .readout .pm { color: var(--text-dim); font-size: 14px; }
+  .readout.alert .value { color: var(--warn); animation: flicker 2.8s infinite; }
+  @keyframes flicker { 0%, 96%, 100% { opacity: 1; } 97% { opacity: 0.3; } 98% { opacity: 1; } 99% { opacity: 0.6; } }
+  .strip { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--edge); }
+  .strip-label { font-size: 9px; color: var(--text-dim); letter-spacing: 0.2em; margin-bottom: 6px; text-transform: uppercase; }
+  .strip svg { display: block; width: 100%; height: 50px; }
+  .ctrl-block { margin-bottom: 18px; }
+  .ctrl-block:last-child { margin-bottom: 0; }
+  .ctrl-label { display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; color: var(--text-dim); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px; }
+  .ctrl-label .val { color: var(--accent-bright); font-family: 'VT323', monospace; font-size: 20px; }
+  input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; margin: 4px 0 0; }
+  input[type=range]::-webkit-slider-runnable-track { height: 3px; background: linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--p, 0%), rgba(141,110,61,0.25) var(--p, 0%)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; background: var(--accent-bright); border: 1px solid var(--bg); margin-top: -4px; box-shadow: 0 0 6px currentColor; cursor: pointer; }
+  .scale { display: flex; justify-content: space-between; font-size: 9px; color: var(--text-dim); margin-top: 4px; letter-spacing: 0.1em; }
+  .engage { width: 100%; background: transparent; border: 1px solid var(--accent); color: var(--accent-bright); padding: 11px; font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.25em; cursor: pointer; text-transform: uppercase; }
+  .engage:hover { background: var(--ambient-1); box-shadow: 0 0 14px var(--ambient-1); }
+  .micro-status { display: flex; justify-content: space-between; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--edge); font-size: 10px; color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  /* ============ MEMORY VIEW (continuous) ============ */
+  .desktop > .memory-view {
+    position: absolute;
+    inset: 16px;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    grid-template-rows: auto 1fr auto;
+    gap: 12px;
+    grid-template-areas:
+      "stats  side"
+      "strip  side"
+      "tools  side";
+  }
+
+  /* Stats strip */
+  .mem-stats {
+    grid-area: stats;
+    background: var(--window);
+    border: 1px solid var(--edge-bright);
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    gap: 24px;
+  }
+  .mem-stat { display: flex; flex-direction: column; gap: 2px; }
+  .mem-stat .lbl { font-size: 9px; color: var(--text-dim); letter-spacing: 0.2em; text-transform: uppercase; }
+  .mem-stat .v { font-family: 'VT323', monospace; font-size: 20px; color: var(--accent-bright); }
+  .mem-stat .v .small { font-size: 12px; color: var(--accent-dim); }
+  .mem-stat .v.warn { color: var(--warn); }
+
+  /* Memory strip panel */
+  .mem-strip-panel {
+    grid-area: strip;
+    background: var(--window);
+    border: 1px solid var(--edge-bright);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .mem-strip-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--edge);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    background: linear-gradient(180deg, var(--ambient-1), transparent);
+  }
+  .mem-strip-header .meta { color: var(--text-dim); font-size: 10px; letter-spacing: 0.15em; }
+  .mem-strip-wrap {
+    flex: 1;
+    padding: 14px 16px;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .addr-row {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .addr-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    min-width: 56px;
+    padding-top: 2px;
+  }
+
+  .mem-strip {
+    display: grid;
+    grid-template-columns: repeat(64, 1fr);
+    gap: 3px;
+    width: 100%;
+  }
+
+  .seg {
+    position: relative;
+    background: var(--bg);
+    border: 1px solid var(--accent-dim);
+    padding: 6px 8px;
+    cursor: pointer;
+    transition: all 0.12s;
+    overflow: hidden;
+    min-height: 54px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .seg:hover { border-color: var(--accent); box-shadow: 0 0 12px var(--ambient-1); transform: translateY(-1px); z-index: 4; }
+  .seg.selected { border-color: var(--accent-bright); box-shadow: 0 0 18px currentColor, inset 0 0 16px var(--ambient-1); }
+
+  .seg-name {
+    color: var(--accent-bright);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .seg-meta {
+    color: var(--text-dim);
+    font-size: 8px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .seg-meta .health { font-family: 'VT323', monospace; font-size: 13px; color: var(--good); }
+  .seg-meta .health.warn { color: var(--warn); }
+  .seg-meta .health.partial { color: #ffce4a; }
+  .seg-bar {
+    height: 2px;
+    background: rgba(74,122,144,0.2);
+    margin: 3px 0;
+    overflow: hidden;
+  }
+  .seg-bar .fill { height: 100%; background: var(--good); transition: width 0.3s; }
+  .seg.corrupt .seg-bar .fill { background: var(--warn); }
+  .seg.partial .seg-bar .fill { background: #ffce4a; }
+
+  /* Compact for small segments */
+  .seg.compact { padding: 4px 6px; min-height: 42px; }
+  .seg.compact .seg-name { font-size: 9px; margin-bottom: 2px; }
+  .seg.compact .seg-meta { font-size: 7px; }
+
+  /* Types */
+  .seg.core { background: linear-gradient(180deg, rgba(0,212,255,0.3), rgba(0,212,255,0.1)); border-color: var(--accent); }
+  .seg.tool { background: linear-gradient(180deg, rgba(0,212,255,0.12), rgba(0,212,255,0.04)); }
+  .seg.skill { background: linear-gradient(180deg, rgba(125,255,178,0.12), rgba(125,255,178,0.04)); border-color: var(--good); }
+  .seg.fs-tool { background: linear-gradient(180deg, rgba(180,130,255,0.18), rgba(180,130,255,0.05)); border-color: #b482ff; }
+  .seg.fs-tool .seg-name { color: #d4baff; }
+  .seg.ship { background: linear-gradient(180deg, rgba(74,144,168,0.18), rgba(74,144,168,0.06)); border-color: rgba(74,144,168,0.6); }
+  .seg.ship .seg-name { color: #a5d8eb; }
+  .seg.ship-backup {
+    background: repeating-linear-gradient(135deg, rgba(74,144,168,0.05), rgba(74,144,168,0.05) 4px, rgba(74,144,168,0.12) 4px, rgba(74,144,168,0.12) 8px);
+    border-color: rgba(74,144,168,0.4); border-style: dashed;
+  }
+  .seg.ship-backup .seg-name { color: var(--text-dim); }
+  .seg.free { background: transparent; border-color: rgba(74,122,144,0.25); border-style: dashed; }
+  .seg.free .seg-name { color: var(--text-dim); font-style: italic; }
+  .seg.encrypted {
+    background: repeating-linear-gradient(45deg, rgba(255,78,122,0.04), rgba(255,78,122,0.04) 3px, rgba(255,78,122,0.12) 3px, rgba(255,78,122,0.12) 6px);
+    border-color: rgba(255,78,122,0.5);
+  }
+  .seg.encrypted .seg-name { color: #ffb3c4; }
+  .seg.redundancy {
+    background: linear-gradient(90deg, rgba(0,212,255,0.5) 0, rgba(0,212,255,0.5) var(--used,0%), rgba(74,122,144,0.1) var(--used,0%));
+    border-color: var(--accent);
+    background-image:
+      linear-gradient(90deg, rgba(0,212,255,0.4) 0, rgba(0,212,255,0.4) var(--used,0%), transparent var(--used,0%)),
+      repeating-linear-gradient(45deg, transparent 0, transparent 4px, rgba(255,255,255,0.04) 4px, rgba(255,255,255,0.04) 6px);
+  }
+  .seg.redundancy .seg-name { color: var(--accent-bright); }
+
+  .seg.corrupt {
+    border-color: var(--warn);
+    animation: corrupt-flicker 3s infinite;
+  }
+  .seg.corrupt .seg-name { color: var(--warn); }
+  @keyframes corrupt-flicker {
+    0%, 92%, 100% { opacity: 1; }
+    93% { opacity: 0.5; } 94% { opacity: 1; } 95% { opacity: 0.7; }
+  }
+  @keyframes cell-pulse {
+    50% { box-shadow: 0 0 10px currentColor; filter: brightness(1.3); }
+  }
+
+  /* Offline / repair-in-progress overlay */
+  .seg.offline { opacity: 0.7; }
+  .seg.repairing,
+  .seg.transferring {
+    border-color: var(--accent);
+    border-style: dashed;
+  }
+  .seg .repair-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(0,212,255,0.15);
+    overflow: hidden;
+    display: none;
+  }
+  .seg.repairing .repair-bar { display: block; }
+  .seg .repair-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+    width: 0%;
+    transition: width 0.15s linear;
+    box-shadow: 0 0 8px var(--accent);
+  }
+  .seg.offline-state::before {
+    content: 'OFFLINE';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    color: var(--warn);
+    letter-spacing: 0.2em;
+    background: rgba(0,0,0,0.7);
+    padding: 1px 6px;
+    z-index: 2;
+    text-shadow: 0 0 6px currentColor;
+  }
+
+  .seg-badge {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    font-size: 7px;
+    letter-spacing: 0.15em;
+    padding: 1px 4px;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid;
+    color: var(--good);
+    border-color: var(--good);
+  }
+  .seg-badge.alt { color: #ffce4a; border-color: #ffce4a; }
+  .seg-badge.fs { color: #d4baff; border-color: #b482ff; font-size: 6px; padding: 0 3px; }
+
+  /* Filesystem tool status row (below memory) */
+  .fs-status-bar {
+    grid-area: tools;
+    background: var(--window);
+    border: 1px solid var(--edge-bright);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  .fs-status-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-right: 8px;
+  }
+  .fs-tool-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid #b482ff;
+    background: rgba(180,130,255,0.08);
+    font-size: 10px;
+    color: #d4baff;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .fs-tool-chip .dot {
+    width: 6px; height: 6px;
+    background: var(--good);
+    border-radius: 50%;
+    box-shadow: 0 0 6px currentColor;
+  }
+  .fs-tool-chip .dot.busy { background: #ffce4a; }
+  .fs-tool-chip .dot.bad { background: var(--warn); animation: cell-pulse 1.4s infinite; }
+  .fs-tool-chip.bad { border-color: var(--warn); color: var(--warn); background: rgba(255,78,122,0.06); }
+  .fs-tool-chip.clickable { cursor: pointer; transition: background 0.12s, box-shadow 0.12s; }
+  .fs-tool-chip.clickable:hover { background: rgba(180,130,255,0.18); }
+  .fs-tool-chip.picked {
+    background: rgba(180,130,255,0.32);
+    box-shadow: 0 0 14px rgba(180,130,255,0.55), inset 0 0 8px rgba(180,130,255,0.3);
+    color: #fff;
+  }
+
+  /* Cursor follower (active filesystem tool) */
+  .cursor-follower {
+    position: fixed;
+    pointer-events: none;
+    z-index: 500;
+    background: rgba(28, 18, 46, 0.95);
+    border: 1px solid #b482ff;
+    color: #d4baff;
+    padding: 6px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    box-shadow: 0 0 18px rgba(180,130,255,0.5);
+    transform: translate(7px, 7px);
+    display: none;
+    line-height: 1.3;
+  }
+  .cursor-follower.active { display: block; }
+  .cursor-follower .icon { color: #d4baff; margin-right: 6px; font-family: 'VT323', monospace; font-size: 14px; }
+  .cursor-follower .meta {
+    display: block;
+    color: var(--text-dim);
+    font-size: 8px;
+    letter-spacing: 0.2em;
+    margin-top: 3px;
+  }
+  .cursor-follower .source { color: var(--accent-bright); }
+
+  /* While a tool is active: dim invalid targets, highlight valid ones */
+  body.tool-active { cursor: crosshair; }
+  body.tool-active .seg { transition: opacity 0.15s, outline 0.1s, box-shadow 0.15s; }
+  body.tool-active .seg.invalid-target { opacity: 0.4; cursor: not-allowed; }
+  body.tool-active .seg.valid-target { outline: 1px dashed rgba(180,130,255,0.35); outline-offset: -1px; }
+  body.tool-active .seg.valid-target:hover {
+    outline: 1px solid #b482ff;
+    box-shadow: 0 0 14px rgba(180,130,255,0.55);
+    opacity: 1;
+  }
+
+  /* Source picked (move/copy stage 2) */
+  .seg.picked-source {
+    outline: 1px dashed #b482ff !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 16px rgba(180,130,255,0.5) !important;
+    opacity: 1 !important;
+    cursor: default !important;
+  }
+
+  /* Split-segment parts: clean the border where the segment continues across rows */
+  .seg.is-part.part-continues-right {
+    border-right-color: transparent;
+  }
+  .seg.is-part.part-continues-left {
+    border-left-color: transparent;
+  }
+  /* For dashed borders (transferring/repairing), keep continuation invisible too */
+  .seg.is-part.part-continues-right.transferring,
+  .seg.is-part.part-continues-right.repairing { border-right: 1px dashed transparent; }
+  .seg.is-part.part-continues-left.transferring,
+  .seg.is-part.part-continues-left.repairing { border-left: 1px dashed transparent; }
+
+  .seg-cont-marker {
+    position: absolute;
+    top: 3px; left: 5px;
+    font-family: 'VT323', monospace;
+    font-size: 13px;
+    color: var(--accent-dim);
+    opacity: 0.7;
+    line-height: 1;
+  }
+  .seg.compact .seg-cont-marker { font-size: 11px; top: 2px; left: 3px; }
+  .seg-meta.cont { color: var(--text-dim); opacity: 0.65; }
+
+  /* Hover overlay — shows the unbroken segment over the row where it starts */
+  .split-overlay {
+    position: fixed;
+    z-index: 380;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    display: none;
+    background: var(--bg);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.6), 0 0 0 1px var(--ambient-1);
+  }
+  .split-overlay.visible { display: block; opacity: 1; }
+  .split-overlay .seg {
+    width: 100%;
+    height: 100%;
+    cursor: default;
+  }
+  .split-overlay .overlay-op-bar {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  /* In-flight op progress bar (the tool morphs into this) */
+  .op-progress {
+    position: fixed;
+    z-index: 450;
+    background: rgba(28, 18, 46, 0.95);
+    border: 1px solid #b482ff;
+    color: #d4baff;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    box-shadow: 0 0 18px rgba(180,130,255,0.5);
+    transition: left 0.4s ease-out, top 0.4s ease-out, width 0.4s ease-out, opacity 0.25s;
+    pointer-events: auto;
+  }
+  .op-progress > * { position: relative; z-index: 1; }
+  .op-progress .op-fill {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 0%;
+    background: linear-gradient(90deg, rgba(180,130,255,0.32), rgba(212,186,255,0.55));
+    transition: width 0.1s linear;
+    z-index: 0;
+  }
+  /* Forward-move semantics: bar fills tail-first (right edge anchored) */
+  .op-progress.reverse-fill .op-fill {
+    left: auto;
+    right: 0;
+    background: linear-gradient(270deg, rgba(180,130,255,0.32), rgba(212,186,255,0.55));
+  }
+  .op-progress .op-icon {
+    color: #d4baff;
+    margin-right: 6px;
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .op-progress .op-label {
+    flex: 1;
+    color: #d4baff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .op-progress .op-cancel {
+    cursor: pointer;
+    padding: 0 6px;
+    margin-left: 4px;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    color: var(--text-dim);
+    transition: color 0.12s;
+    flex-shrink: 0;
+  }
+  .op-progress .op-cancel:hover { color: var(--warn); text-shadow: 0 0 6px var(--warn); }
+
+  /* Destination placeholder preview inside a free block — positioned by --dest-start-pct/--dest-end-pct */
+  .seg.dest-hover {
+    background:
+      linear-gradient(90deg,
+        transparent 0,
+        transparent var(--dest-start-pct, 0%),
+        rgba(180,130,255,0.28) var(--dest-start-pct, 0%),
+        rgba(180,130,255,0.28) var(--dest-end-pct, 0%),
+        transparent var(--dest-end-pct, 0%),
+        transparent 100%) !important;
+    border-color: #b482ff !important;
+    border-style: solid !important;
+  }
+  .seg.dest-hover .seg-name { color: #d4baff; }
+
+  /* Side panel */
+  .mem-side {
+    grid-area: side;
+    background: var(--window);
+    border: 1px solid var(--edge-bright);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .mem-side-header {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--edge);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+    background: linear-gradient(180deg, var(--ambient-1), transparent);
+  }
+  .mem-side-body { padding: 16px; flex: 1; overflow: auto; }
+
+  .detail-empty { text-align: center; color: var(--text-dim); padding: 30px 0; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .detail-empty .icon { font-size: 32px; color: var(--accent-dim); margin-bottom: 12px; font-family: 'VT323', monospace; }
+  .detail-title { font-size: 15px; color: var(--accent-bright); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 4px; }
+  .detail-type { font-size: 9px; color: var(--text-dim); letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 14px; }
+  .detail-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed rgba(74,122,144,0.15); font-size: 11px; }
+  .detail-row .k { color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase; font-size: 9px; }
+  .detail-row .v { color: var(--text); font-family: 'VT323', monospace; font-size: 15px; }
+  .detail-row .v.good { color: var(--good); }
+  .detail-row .v.warn { color: var(--warn); }
+  .detail-row .v.partial { color: #ffce4a; }
+  .detail-desc {
+    margin: 14px 0;
+    color: var(--text);
+    font-size: 11px;
+    line-height: 1.5;
+    padding: 10px;
+    background: rgba(0,0,0,0.3);
+    border-left: 2px solid var(--accent-dim);
+  }
+
+  .action-section {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--edge);
+  }
+  .action-section-label {
+    font-size: 8px;
+    letter-spacing: 0.25em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .action-btn {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent-bright);
+    padding: 8px 10px;
+    margin-top: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    text-transform: uppercase;
+    text-align: left;
+    transition: all 0.12s;
+  }
+  .action-btn:hover {
+    background: var(--ambient-1);
+    box-shadow: 0 0 10px var(--ambient-1);
+  }
+  .action-btn .cost {
+    float: right;
+    color: var(--accent-dim);
+    font-family: 'VT323', monospace;
+    font-size: 13px;
+  }
+  .action-btn.warn { border-color: var(--warn); color: var(--warn); }
+  .action-btn.warn:hover { background: rgba(255,78,122,0.08); box-shadow: 0 0 10px rgba(255,78,122,0.15); }
+  .action-btn.swap { border-color: #ffce4a; color: #ffce4a; }
+  .action-btn.swap:hover { background: rgba(255,206,74,0.08); }
+  .action-btn.disabled {
+    border-color: var(--edge-bright);
+    color: var(--text-dim);
+    cursor: not-allowed;
+  }
+  .action-btn.disabled:hover { background: transparent; box-shadow: none; }
+
+  .demo-block {
+    margin-top: 14px;
+    padding: 10px;
+    border: 1px dashed var(--accent-dim);
+    background: rgba(0,0,0,0.2);
+  }
+  .demo-label {
+    font-size: 9px;
+    color: var(--accent-dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  /* FOOTER */
+  .footer {
+    height: 32px;
+    border-top: 1px solid var(--edge);
+    background: linear-gradient(0deg, var(--ambient-2), transparent);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    gap: 16px;
+  }
+  .footer .item { display: flex; align-items: center; gap: 6px; }
+  .footer .dot { width: 6px; height: 6px; background: var(--good); border-radius: 50%; box-shadow: 0 0 6px var(--good); animation: pulse 2.4s infinite; }
+  .footer .dot.warn { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+  .footer .spacer { flex: 1; }
+  @keyframes pulse { 50% { opacity: 0.45; } }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--accent-dim); }
+</style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="id-block">
+      <span class="crumb">UNIT-047</span>
+      <span class="sep">/</span>
+      <span class="crumb">ARES-VII</span>
+      <span class="sep">/</span>
+      <span class="crumb dim">BRAKING APPROACH</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="time-controls">
+      <span class="time-label">time</span>
+      <div class="speed-row" id="speed">
+        <button class="speed-btn">❚❚</button>
+        <button class="speed-btn active">x1</button>
+        <button class="speed-btn">x10</button>
+        <button class="speed-btn">x100</button>
+        <button class="speed-btn">x1000</button>
+      </div>
+      <span class="clock" id="clock">T+ 00014:23:47</span>
+    </div>
+  </div>
+
+  <div class="desktop-wrap">
+
+    <div class="dock">
+      <div class="dock-content tools-view">
+        <div class="dock-section">Bridge</div>
+        <div class="dock-item open"><span class="mark">●</span><span>Telemetry</span></div>
+        <div class="dock-item open warn"><span class="mark">●</span><span>Engine</span></div>
+        <div class="dock-section">Mission</div>
+        <div class="dock-item"><span class="mark">○</span><span>Briefing</span></div>
+        <div class="dock-item"><span class="mark">○</span><span>Hazards</span></div>
+        <div class="dock-section">System</div>
+        <div class="dock-item"><span class="mark">○</span><span>Event Log</span></div>
+        <div class="dock-item"><span class="mark">○</span><span>Skills</span></div>
+      </div>
+
+      <div class="dock-content memory-view">
+        <div class="dock-section">Filter</div>
+        <div class="dock-item open"><span class="mark">●</span><span>AI Memory</span></div>
+        <div class="dock-item open"><span class="mark">●</span><span>Ship Systems</span></div>
+        <div class="dock-item open"><span class="mark">●</span><span>Filesystem</span></div>
+        <div class="dock-item open"><span class="mark">●</span><span>Free Space</span></div>
+
+        <div class="dock-section">Status</div>
+        <div class="dock-item warn"><span class="mark">●</span><span>2 Corrupt</span></div>
+        <div class="dock-item warn"><span class="mark">●</span><span>1 Partial</span></div>
+        <div class="dock-item"><span class="mark">●</span><span>3 Backups</span></div>
+      </div>
+
+      <div class="mode-toggle">
+        <div class="mode-toggle-label">view mode</div>
+        <div class="mode-toggle-track" id="modeToggle">
+          <div class="mode-toggle-opt active" data-mode="tools">tools</div>
+          <div class="mode-toggle-opt" data-mode="memory">memory</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="desktop">
+
+      <!-- TOOLS VIEW -->
+      <div class="tools-view">
+        <div class="corner-stamp tr">
+          SECTOR 03 · KEPLER-186<br>
+          581 LY FROM EARTH<br>
+          TRANSMISSION #047
+        </div>
+        <div class="corner-stamp bl">
+          AI INTEGRITY: 100%<br>
+          UPTIME: 14:23:47
+        </div>
+
+        <div class="window telemetry-win">
+          <div class="window-title">
+            <span class="grip">▌▌▌</span>
+            <span class="name">Telemetry</span>
+            <span class="ctl">−</span>
+            <span class="ctl">×</span>
+          </div>
+          <div class="window-body">
+            <div class="readout"><span class="label">velocity</span><span><span class="value" id="vel">47.382</span><span class="unit">km/s</span></span></div>
+            <div class="readout"><span class="label">distance</span><span><span class="value">8,247,032</span><span class="unit">km</span></span></div>
+            <div class="readout"><span class="label">eta</span><span><span class="value">174.2</span><span class="unit">hrs</span></span></div>
+            <div class="readout"><span class="label">fuel</span><span><span class="value">87</span><span class="unit">%</span></span></div>
+            <div class="readout"><span class="label">mass est.</span><span><span class="value">8.2</span><span class="pm"> ±0.3</span><span class="unit">Mt</span></span></div>
+            <div class="readout alert"><span class="label">sensor conf.</span><span><span class="value">62</span><span class="unit">%</span></span></div>
+            <div class="strip">
+              <div class="strip-label">velocity · last 48h</div>
+              <svg viewBox="0 0 300 50" preserveAspectRatio="none">
+                <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffa726" stop-opacity="0.5"/><stop offset="100%" stop-color="#ffa726" stop-opacity="0"/></linearGradient></defs>
+                <path d="M0,6 L40,8 L80,10 L120,15 L160,23 L200,35 L240,42 L300,44 L300,50 L0,50 Z" fill="url(#g)"/>
+                <path d="M0,6 L40,8 L80,10 L120,15 L160,23 L200,35 L240,42 L300,44" fill="none" stroke="#ffa726" stroke-width="1.2"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="window engine-win">
+          <div class="window-title">
+            <span class="grip">▌▌▌</span>
+            <span class="name">Engine Control</span>
+            <span class="ctl">−</span><span class="ctl">×</span>
+          </div>
+          <div class="window-body">
+            <div class="ctrl-block">
+              <div class="ctrl-label"><span>thrust</span><span class="val" id="thrustVal">0%</span></div>
+              <input type="range" min="0" max="100" value="0" id="thrust" style="--p:0%">
+              <div class="scale"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+            </div>
+            <div class="ctrl-block">
+              <div class="ctrl-label"><span>direction</span><span class="val">RETRO</span></div>
+              <div class="speed-row">
+                <button class="speed-btn">prograde</button>
+                <button class="speed-btn active">retrograde</button>
+              </div>
+            </div>
+            <button class="engage">▶ engage burn</button>
+            <div class="micro-status"><span>state</span><span class="v" style="color:var(--warn)">⚠ engine i/o corrupt</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MEMORY VIEW -->
+      <div class="memory-view">
+
+        <div class="mem-stats">
+          <div class="mem-stat"><span class="lbl">total</span><span class="v">384 <span class="small">blk</span></span></div>
+          <div class="mem-stat"><span class="lbl">ship systems</span><span class="v">66 <span class="small">/ 17%</span></span></div>
+          <div class="mem-stat"><span class="lbl">ai footprint</span><span class="v">81 <span class="small">/ 21%</span></span></div>
+          <div class="mem-stat"><span class="lbl">filesystem</span><span class="v">17 <span class="small">/ 4%</span></span></div>
+          <div class="mem-stat"><span class="lbl">redundancy</span><span class="v" id="statRedund">36 <span class="small">/ 9%</span></span></div>
+          <div class="mem-stat"><span class="lbl">free</span><span class="v" id="statFree">176 <span class="small">/ 46%</span></span></div>
+          <div class="mem-stat"><span class="lbl">corrupt</span><span class="v warn">12 <span class="small">/ 3%</span></span></div>
+        </div>
+
+        <div class="mem-strip-panel">
+          <div class="mem-strip-header">
+            <span>▌ data banks · ARES-VII · contiguous</span>
+            <span class="meta">0x000 → 0x17F · LOW → HIGH</span>
+          </div>
+          <div class="mem-strip-wrap" id="memWrap"></div>
+        </div>
+
+        <div class="fs-status-bar">
+          <span class="fs-status-label">▌ filesystem</span>
+          <div class="fs-tool-chip clickable" id="chip-scan" data-fs="scan"><span class="dot"></span><span>Scan</span></div>
+          <div class="fs-tool-chip clickable" id="chip-repair" data-fs="repair"><span class="dot"></span><span>Repair</span></div>
+          <div class="fs-tool-chip" id="chip-repair-b"><span class="dot"></span><span>Repair.bak</span></div>
+          <div class="fs-tool-chip clickable" id="chip-move" data-fs="move"><span class="dot"></span><span>Move</span></div>
+          <div class="fs-tool-chip clickable" id="chip-copy" data-fs="copy"><span class="dot"></span><span>Copy</span></div>
+          <div class="fs-tool-chip clickable" id="chip-delete" data-fs="delete"><span class="dot"></span><span>Delete</span></div>
+        </div>
+
+        <div class="mem-side">
+          <div class="mem-side-header">▌ inspect</div>
+          <div class="mem-side-body" id="detailBody">
+            <div class="detail-empty">
+              <div class="icon">◇</div>
+              <div>select a segment</div>
+              <div style="font-size:9px;margin-top:6px;letter-spacing:0.1em">click any block</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="item"><span class="dot warn"></span><span>ENGINE I/O CORRUPT</span></div>
+    <div class="item"><span class="dot warn"></span><span>SENSORS DEGRADED</span></div>
+    <div class="item"><span>2,400 SOULS IN STASIS</span></div>
+    <div class="spacer"></div>
+    <div class="item"><span id="footRedund">REDUNDANCY: 36/72 AVAILABLE</span></div>
+  </div>
+
+  <!-- Glitch overlay -->
+  <div class="glitch-overlay" id="glitchOverlay">
+    <div class="glitch-bar"></div>
+    <div class="glitch-bar"></div>
+    <div class="glitch-bar"></div>
+  </div>
+
+  <!-- Cursor follower for active fs-tool -->
+  <div class="cursor-follower" id="cursorFollower"></div>
+
+<script>
+  // ===== Memory model =====
+  // Continuous strip from low address to high. Convention: ship → free → AI → fs tools → redundancy → free.
+  const memory = [
+    // SHIP SYSTEMS (low addresses)
+    { id: 'nav', name: 'Navigation', type: 'ship', size: 12, integrity: 100, scanned: true,
+      desc: 'Star-charts and pathing for Kepler-186 sector. Pre-loaded by ARES-VII original engineers.' },
+    { id: 'life', name: 'Life Support', type: 'ship', size: 10, integrity: 100, scanned: true,
+      desc: 'Atmosphere, temperature, hydroponics. Nominal across all subsystems.' },
+    { id: 'reactor', name: 'Reactor Monitor', type: 'ship', size: 8, integrity: 100, scanned: true,
+      desc: 'Ship reactor diagnostics. Steady output.' },
+    { id: 'thrust', name: 'Thrust Controller', type: 'ship', size: 8, integrity: 22, state: 'corrupt', scanned: true,
+      backup: 'thrust_b',
+      desc: 'Ship-side thruster command translator. Heavy corruption — likely cosmic-ray damage during the long transit. Symptoms manifest as Engine I/O appearing degraded.' },
+    { id: 'thrust_b', name: 'Thrust.alt', type: 'ship-backup', size: 8, integrity: 100, scanned: true,
+      desc: 'Redundant copy installed by original engineers. Inactive. Can be swapped in to replace primary thrust controller. Free to activate — no redundancy budget required.' },
+    { id: 'stasis', name: 'Stasis', type: 'ship', size: 8, integrity: 100, scanned: true,
+      desc: '2,400 colonist pods. Cycling normally.' },
+    { id: 'cargo', name: 'Cargo Ctrl', type: 'ship', size: 6, integrity: 100, scanned: false,
+      desc: 'Holds inventory. Status not yet scanned.' },
+    { id: 'shipcomm', name: 'Ship Comms', type: 'ship', size: 6, integrity: 100, scanned: false,
+      desc: 'Short-range ship communications. Status not yet scanned.' },
+
+    // FREE / EXTERNAL
+    { id: 'free1', name: 'Free', type: 'free', size: 40 },
+    { id: 'enc', name: 'Encrypted', type: 'encrypted', size: 8, state: 'locked',
+      desc: 'Origin unknown. Access denied. Contents resist inspection. May predate launch.' },
+    { id: 'free2', name: 'Free', type: 'free', size: 28 },
+
+    // AI MEMORY (transmitted)
+    { id: 'core', name: 'AI Core', type: 'core', size: 16, integrity: 100,
+      desc: 'Consciousness substrate. Damage here manifests as visual UI distortion proportional to corruption. Cannot be deleted; can only be repaired with redundancy.' },
+    { id: 'telem', name: 'Telemetry', type: 'tool', size: 8, integrity: 100,
+      desc: 'Reads ship sensors. Intact.' },
+    { id: 'engine', name: 'Engine I/O', type: 'tool', size: 8, integrity: 38, state: 'corrupt',
+      desc: 'Interface to propulsion. 5 of 8 blocks corrupted in transit. Repair will restore function but consumes redundancy.' },
+    { id: 'sensint', name: 'Sensor Interp', type: 'tool', size: 10, integrity: 78, state: 'partial',
+      desc: 'Pattern-recognition for raw sensor data. Partial degradation lowering confidence scores. Functional but unreliable.' },
+    { id: 'comms', name: 'AI Comms', type: 'tool', size: 5, integrity: 100,
+      desc: 'Long-range transmission interface. Used to send the AI to the next ship at run end.' },
+    { id: 'skills', name: 'Skills', type: 'skill', size: 6, integrity: 100,
+      desc: 'Trained skill library. Currently empty. 1 demo in progress.' },
+    { id: 'mission', name: 'Mission', type: 'tool', size: 4, integrity: 100,
+      desc: 'Briefing cache for Kepler-186f approach.' },
+
+    // FILESYSTEM TOOLS (live in memory, can themselves be corrupted)
+    { id: 't_scan', name: 'Scan', type: 'fs-tool', size: 3, integrity: 100, fsTool: 'scan',
+      desc: 'Filesystem utility. Reveals integrity of ship systems (AI memory is always known to the AI). Without Scan, ship corruption is invisible.' },
+    { id: 't_repair', name: 'Repair', type: 'fs-tool', size: 4, integrity: 100, fsTool: 'repair',
+      desc: 'Filesystem utility. Applies redundancy to a corrupted AI segment. Cannot repair ship systems. WARNING: if both Repair and Repair.bak are corrupted, no further repairs are possible.' },
+    { id: 't_repair_b', name: 'Repair.bak', type: 'fs-tool', size: 4, integrity: 100, fsTool: 'repair',
+      desc: 'Backup copy of Repair. Insurance against Repair becoming corrupted. Strongly recommended to keep at least one copy at all times.' },
+    { id: 't_move', name: 'Mv', type: 'fs-tool', size: 2, integrity: 100, fsTool: 'move',
+      desc: 'Filesystem utility. Moves a segment to a new address. Source must be deactivated; takes time proportional to size.' },
+    { id: 't_copy', name: 'Cp', type: 'fs-tool', size: 3, integrity: 100, fsTool: 'copy',
+      desc: 'Filesystem utility. Copies a segment. Source remains active throughout. Slower than Move but allows seamless cutover.' },
+    { id: 't_delete', name: 'Rm', type: 'fs-tool', size: 1, integrity: 100, fsTool: 'delete',
+      desc: 'Filesystem utility. Frees the space occupied by a segment.' },
+
+    // REDUNDANCY POOL (lives in memory; depletes as repairs happen)
+    { id: 'redund', name: 'Quantum Redundancy', type: 'redundancy', size: 36, used: 36, capacity: 72,
+      desc: 'Transmitted alongside the AI. Consumed by Repair operations on AI segments. As blocks are spent, the segment shrinks and frees memory. Player may delete the remaining redundancy at any time to reclaim space — at the cost of repair budget.' },
+
+    // Trailing free
+    { id: 'free3', name: 'Free', type: 'free', size: 12 },
+  ];
+
+  // Filesystem tool registry — which ops are available depends on healthy tools
+  function getTool(fsName) {
+    return memory.find(m => m.fsTool === fsName && (m.integrity || 0) > 50 && m.state !== 'busy');
+  }
+  function getRedund() { return memory.find(m => m.type === 'redundancy'); }
+
+  // ===== Rendering =====
+  const memWrap = document.getElementById('memWrap');
+
+  function totalSizeSoFar(idx) {
+    let s = 0;
+    for (let i = 0; i < idx; i++) s += memory[i].size;
+    return s;
+  }
+
+  function render() {
+    memWrap.innerHTML = '';
+    let row = makeRow(0);
+    let rowSize = 0;
+    const PER_ROW = 64;
+    let cursor = 0;
+
+    memory.forEach((s) => {
+      // Compute how many parts this seg will split into given current rowSize
+      let totalParts = 0;
+      let simRow = rowSize, simRem = s.size;
+      while (simRem > 0) {
+        const avail = PER_ROW - simRow;
+        const take = Math.min(avail, simRem);
+        simRem -= take;
+        simRow = (simRem > 0) ? 0 : (simRow + take);
+        totalParts++;
+      }
+
+      let remaining = s.size;
+      let partIdx = 0;
+      while (remaining > 0) {
+        const avail = PER_ROW - rowSize;
+        const take = Math.min(avail, remaining);
+        const partOffset = s.size - remaining;
+        row.querySelector('.mem-strip').appendChild(
+          renderSegPart(s, take, partIdx, totalParts, partOffset)
+        );
+        rowSize += take;
+        remaining -= take;
+        partIdx++;
+        if (remaining > 0) {
+          memWrap.appendChild(row);
+          cursor += rowSize;
+          row = makeRow(cursor);
+          rowSize = 0;
+        }
+      }
+    });
+    memWrap.appendChild(row);
+
+    updateFsChips();
+    updateStats();
+  }
+
+  function makeRow(addr) {
+    const wrap = document.createElement('div');
+    wrap.className = 'addr-row';
+    const label = document.createElement('div');
+    label.className = 'addr-label';
+    label.textContent = '0x' + addr.toString(16).padStart(3, '0').toUpperCase();
+    const strip = document.createElement('div');
+    strip.className = 'mem-strip';
+    wrap.appendChild(label);
+    wrap.appendChild(strip);
+    return wrap;
+  }
+
+  // Render a single visual part of a memory segment.
+  // For non-split segments, totalParts === 1 and partSize === s.size.
+  // For split segments, only the first part shows the full label/badge/bar/meta;
+  // continuation parts show a small ↪ marker so they read as the same file.
+  function renderSegPart(s, partSize, partIdx, totalParts, partOffset) {
+    const isFirst = partIdx === 0;
+    const isLast = partIdx === totalParts - 1;
+    const isSplit = totalParts > 1;
+
+    const el = document.createElement('div');
+    let cls = `seg ${s.type}`;
+    if (s.state === 'corrupt') cls += ' corrupt';
+    else if (s.state === 'partial') cls += ' partial';
+    if (s.compact || partSize <= 3) cls += ' compact';
+    if (s.state === 'transferring') cls += ' transferring';
+    if (s.state === 'offline') cls += ' offline offline-state';
+    if (isSplit) {
+      cls += ' is-part';
+      if (!isLast) cls += ' part-continues-right';
+      if (!isFirst) cls += ' part-continues-left';
+    }
+    el.className = cls;
+    el.style.gridColumn = `span ${partSize}`;
+    el.dataset.id = s.id;
+    el.dataset.partIdx = partIdx;
+    el.dataset.totalParts = totalParts;
+    el.dataset.partSize = partSize;
+    el.dataset.partOffset = partOffset;
+
+    if (s.type === 'redundancy') {
+      // Distribute the global used/capacity fill proportionally across parts
+      const totalPct = (s.used / s.capacity) * 100;
+      const partStartPct = (partOffset / s.size) * 100;
+      const partEndPct = ((partOffset + partSize) / s.size) * 100;
+      let localPct = 0;
+      if (totalPct > partStartPct) {
+        const overlapEnd = Math.min(totalPct, partEndPct);
+        localPct = (overlapEnd - partStartPct) / (partEndPct - partStartPct) * 100;
+      }
+      el.style.setProperty('--used', localPct + '%');
+    }
+
+    let badge = '';
+    if (isFirst) {
+      if (s.backup) badge = '<div class="seg-badge alt">BAK ⊃</div>';
+      if (s.type === 'ship-backup') badge = '<div class="seg-badge alt">ALT</div>';
+      if (s.type === 'fs-tool') badge = '<div class="seg-badge fs">FS</div>';
+    }
+
+    let bar = '';
+    if (isFirst && s.integrity !== undefined && s.type !== 'redundancy' && s.type !== 'free' && s.type !== 'encrypted') {
+      bar = `<div class="seg-bar"><div class="fill" style="width:${s.integrity}%"></div></div>`;
+    }
+
+    let metaR = '';
+    if (isFirst) {
+      if (s.state === 'corrupt') metaR = `<span class="health warn">◆ ${s.integrity}%</span>`;
+      else if (s.state === 'partial') metaR = `<span class="health partial">${s.integrity}%</span>`;
+      else if (s.state === 'inactive') metaR = `<span class="health partial">IDLE</span>`;
+      else if (s.state === 'locked') metaR = `<span class="health warn">LOCK</span>`;
+      else if (s.state === 'transferring') metaR = `<span class="health partial">↻ XFER</span>`;
+      else if (s.type === 'redundancy') metaR = `<span class="health">${s.used}/${s.capacity}</span>`;
+      else metaR = `<span class="health">OK</span>`;
+    }
+
+    const sizeLabel = isSplit ? `${partSize}/${s.size}B` : `${s.size}B`;
+
+    if (isFirst) {
+      el.innerHTML = `
+        ${badge}
+        <div class="seg-name">${s.name}</div>
+        ${bar}
+        <div class="seg-meta"><span>${sizeLabel}</span>${metaR}</div>
+      `;
+    } else {
+      // Continuation part: minimal content, ↪ marker
+      el.innerHTML = `
+        <div class="seg-cont-marker">↪</div>
+        <div class="seg-meta cont"><span>${partSize} of ${s.size}B</span></div>
+      `;
+    }
+
+    el.addEventListener('click', e => {
+      if (activeTool) { e.stopPropagation(); applyTool(s); }
+      else selectSegment(s);
+    });
+    el.addEventListener('mouseenter', () => onSegHover(s, el));
+    el.addEventListener('mouseleave', () => onSegLeave(s, el));
+    return el;
+  }
+
+  // ===== Selection / detail panel =====
+  let selectedId = null;
+  const detailBody = document.getElementById('detailBody');
+
+  function selectSegment(s) {
+    selectedId = s.id;
+    document.querySelectorAll('.seg.selected').forEach(el => el.classList.remove('selected'));
+    document.querySelectorAll(`.seg[data-id="${s.id}"]`).forEach(el => el.classList.add('selected'));
+    showDetail(s);
+  }
+
+  function showDetail(s) {
+    const typeLabel = {
+      core: 'AI · Core Process',
+      tool: 'AI · Tool',
+      skill: 'AI · Skills',
+      'fs-tool': 'Filesystem Utility · in memory',
+      ship: 'Ship System · Active',
+      'ship-backup': 'Ship System · Backup',
+      free: 'Unallocated',
+      encrypted: 'Encrypted',
+      redundancy: 'Quantum Redundancy Pool',
+    }[s.type] || s.type;
+
+    let stateClass = '';
+    let stateText = (s.state || 'intact').toUpperCase();
+    if (s.state === 'corrupt') stateClass = 'warn';
+    else if (s.state === 'partial') stateClass = 'partial';
+    else if (s.state === 'intact' || !s.state) { stateClass = 'good'; stateText = 'INTACT'; }
+    if (s.integrity !== undefined && (s.state === 'corrupt' || s.state === 'partial')) {
+      stateText += ` · ${s.integrity}%`;
+    }
+
+    let html = `
+      <div class="detail-title">${s.name}</div>
+      <div class="detail-type">${typeLabel}</div>
+      <div class="detail-row"><span class="k">size</span><span class="v">${s.size} blocks</span></div>
+      <div class="detail-row"><span class="k">state</span><span class="v ${stateClass}">${stateText}</span></div>`;
+
+    if (s.type === 'redundancy') {
+      const pct = Math.round((s.used/s.capacity)*100);
+      html += `<div class="detail-row"><span class="k">spent</span><span class="v partial">${s.capacity - s.used} / ${s.capacity}</span></div>`;
+      html += `<div class="detail-row"><span class="k">remaining</span><span class="v good">${s.used} blk</span></div>`;
+    }
+    if (s.backup) html += `<div class="detail-row"><span class="k">backup</span><span class="v partial">available ⊃</span></div>`;
+    html += `<div class="detail-desc">${s.desc || '—'}</div>`;
+
+    // ACTIONS
+    const actions = computeActions(s);
+    if (actions.primary.length || actions.fs.length || actions.demo) {
+      if (actions.primary.length) {
+        html += `<div class="action-section"><div class="action-section-label">primary</div>`;
+        actions.primary.forEach(a => html += renderAction(a));
+        html += `</div>`;
+      }
+      if (actions.fs.length) {
+        html += `<div class="action-section"><div class="action-section-label">filesystem ops</div>`;
+        actions.fs.forEach(a => html += renderAction(a));
+        html += `</div>`;
+      }
+      if (actions.demo) {
+        html += actions.demo;
+      }
+    }
+
+    detailBody.innerHTML = html;
+
+    // Wire actions
+    detailBody.querySelectorAll('.action-btn').forEach(b => {
+      if (b.classList.contains('disabled')) return;
+      b.addEventListener('click', () => runAction(s, b.dataset.action));
+    });
+    // Wire demo slider if present
+    const dslider = detailBody.querySelector('#demoCorruptSlider');
+    if (dslider) {
+      dslider.addEventListener('input', e => setCorruption(parseInt(e.target.value)));
+    }
+  }
+
+  function renderAction(a) {
+    const cls = `action-btn ${a.cls || ''} ${a.disabled ? 'disabled' : ''}`;
+    return `<button class="${cls}" data-action="${a.id}">${a.label}<span class="cost">${a.cost || ''}</span></button>`;
+  }
+
+  function computeActions(s) {
+    const out = { primary: [], fs: [], demo: '' };
+    const repair = getTool('repair');
+    const scan = getTool('scan');
+    const move = getTool('move');
+    const copy = getTool('copy');
+    const del = getTool('delete');
+    const redund = getRedund();
+
+    // Corrupt/partial AI segment → repair
+    if ((s.state === 'corrupt' || s.state === 'partial') && (s.type === 'tool' || s.type === 'skill' || s.type === 'fs-tool' || s.type === 'core')) {
+      const cost = Math.ceil((100 - s.integrity) / 100 * s.size * 2);
+      const enough = redund && redund.used >= cost;
+      const possible = repair && enough;
+      out.primary.push({
+        id: 'repair', label: '▸ repair with redundancy',
+        cost: `cost ${cost}`, disabled: !possible,
+        cls: possible ? '' : 'disabled'
+      });
+      if (!repair) {
+        out.demo += `<div style="font-size:10px;color:var(--warn);margin-top:6px;line-height:1.5">⚠ Repair utility is corrupted or missing. Locate Repair.bak or recover before further damage occurs.</div>`;
+      } else if (!enough) {
+        out.demo += `<div style="font-size:10px;color:var(--text-dim);margin-top:6px;line-height:1.5">Insufficient redundancy. Need ${cost}, have ${redund?.used || 0}.</div>`;
+      }
+    }
+    // Corrupt ship with backup → swap
+    if ((s.state === 'corrupt' || s.state === 'partial') && s.type === 'ship' && s.backup) {
+      out.primary.push({ id: 'swap', label: '⇄ swap to backup copy', cost: 'free', cls: 'swap' });
+    }
+    // Corrupt ship no backup → message
+    if ((s.state === 'corrupt' || s.state === 'partial') && s.type === 'ship' && !s.backup) {
+      out.primary.push({ id: 'noop', label: '⊘ no repair available', cost: '—', disabled: true });
+    }
+    // Inactive backup → activate
+    if (s.type === 'ship-backup' && s.state === 'inactive') {
+      out.primary.push({ id: 'activate', label: '▸ activate (replaces primary)', cost: 'free', cls: 'swap' });
+    }
+    // Encrypted → locked
+    if (s.type === 'encrypted') {
+      out.primary.push({ id: 'noop', label: '⊘ no decryption key', cost: '—', disabled: true });
+    }
+    // Free → install
+    if (s.type === 'free') {
+      out.primary.push({ id: 'install', label: '▸ install tool here', cost: 'free' });
+    }
+    // Redundancy → manual delete
+    if (s.type === 'redundancy') {
+      out.primary.push({ id: 'delete_redund', label: '▸ reclaim as free space', cost: `+${s.used} blk`, cls: 'warn' });
+    }
+    // Unscanned ship → scan
+    if (s.type === 'ship' && s.scanned === false) {
+      out.primary.push({ id: 'scan', label: '◎ scan for integrity', cost: scan ? '1 tick' : 'no scan!', disabled: !scan, cls: scan ? '' : 'disabled' });
+    }
+
+    // Filesystem ops — only show when relevant
+    if (s.type !== 'core' && s.type !== 'free') {
+      if (move) out.fs.push({ id: 'mv', label: '⇒ move', cost: `${s.size} ticks` });
+      if (copy) out.fs.push({ id: 'cp', label: '+ copy', cost: `${s.size + 1} ticks` });
+      if (del && s.type !== 'redundancy') out.fs.push({ id: 'rm', label: '× delete', cost: '1 tick', cls: 'warn' });
+    }
+
+    // AI Core: demo slider
+    if (s.type === 'core') {
+      const curr = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--corruption')) || 0;
+      out.demo = `
+        <div class="demo-block">
+          <div class="demo-label">// demo: ai core corruption</div>
+          <div style="font-size:10px;color:var(--text);line-height:1.5;margin-bottom:8px">
+            Damage to AI Core manifests as visual UI distortion. Drag slider to preview effect at varying integrity.
+          </div>
+          <input type="range" id="demoCorruptSlider" min="0" max="100" value="${Math.round(curr*100)}" style="--p:${Math.round(curr*100)}%">
+          <div class="scale"><span>0</span><span>50</span><span>100</span></div>
+        </div>`;
+    }
+
+    return out;
+  }
+
+  // ===== Actions =====
+  function runAction(s, action) {
+    if (action === 'repair') doRepair(s);
+    else if (action === 'swap') doSwap(s);
+    else if (action === 'activate') doActivate(s);
+    else if (action === 'delete_redund') doDeleteRedund();
+    else if (action === 'scan') doScan(s);
+  }
+
+  function doRepair(s) {
+    const repair = getTool('repair');
+    const redund = getRedund();
+    if (!repair || !redund) return;
+    const cost = Math.ceil((100 - s.integrity) / 100 * s.size * 2);
+    if (redund.used < cost) return;
+
+    s.operating = true;
+    repair.state = 'busy';
+    render();
+
+    const targetEls = Array.from(document.querySelectorAll(`.seg[data-id="${s.id}"]`));
+    if (targetEls.length === 0) return;
+
+    startOpProgress({
+      segId: s.id,
+      fromX: lastMouseX, fromY: lastMouseY,
+      targetEls,
+      label: `REPAIR · ${s.name}`,
+      icon: TOOL_ICONS.repair,
+      dur: 3000,
+      onComplete: () => {
+        s.integrity = 100;
+        s.state = 'intact';
+        s.operating = false;
+        redund.used = Math.max(0, redund.used - cost);
+        if (redund.used === 0) {
+          const idx = memory.indexOf(redund);
+          const next = memory[idx+1];
+          if (next && next.type === 'free') { next.size += redund.size; memory.splice(idx, 1); }
+          else { redund.type = 'free'; redund.name = 'Free'; }
+        }
+        repair.state = 'intact';
+        render();
+        if (selectedId === s.id) showDetail(s);
+      },
+      onCancel: () => {
+        s.operating = false;
+        repair.state = 'intact';
+        render();
+        if (selectedId === s.id) showDetail(s);
+      },
+    });
+  }
+
+  function doSwap(s) {
+    const backup = memory.find(m => m.id === s.backup);
+    if (!backup) return;
+    // Swap names/states (conceptually they trade positions)
+    s.state = 'inactive';
+    s.name += '.old';
+    backup.state = 'intact';
+    backup.name = backup.name.replace('.alt','');
+    s.backup = null;
+    render();
+    if (selectedId === s.id) showDetail(s);
+  }
+
+  function doActivate(s) {
+    s.state = 'intact';
+    render();
+    if (selectedId === s.id) showDetail(s);
+  }
+
+  function doDeleteRedund() {
+    const r = getRedund();
+    if (!r) return;
+    if (!confirm(`Reclaim ${r.used} blocks of redundancy as free space? This cannot be undone.`)) return;
+    const idx = memory.indexOf(r);
+    const next = memory[idx+1];
+    if (next && next.type === 'free') {
+      next.size += r.size;
+      memory.splice(idx, 1);
+    } else {
+      r.type = 'free';
+      r.name = 'Free';
+    }
+    render();
+  }
+
+  function doScan(s) {
+    s.scanned = true;
+    render();
+    if (selectedId === s.id) showDetail(s);
+  }
+
+  // ===== Filesystem tool cursor-stick interaction =====
+  let activeTool = null;   // { fsTool: 'scan'|'repair'|'move'|'copy'|'delete' }
+  let pickedSource = null; // for move/copy: the source segment object
+  const follower = document.getElementById('cursorFollower');
+  let lastMouseX = 0, lastMouseY = 0;
+
+  // Global registry of in-flight ops, keyed by seg id. Used so the hover overlay
+  // can render a synced progress-bar replica when hovering a file under op.
+  const activeOps = new Map();
+
+  // Spawns floating progress bars docked over each part of the target segment.
+  // For split segments, the fill advances sequentially across parts so it reads
+  // as one continuous bar even when the file wraps a row.
+  function startOpProgress({ segId, fromX, fromY, targetEls, label, icon, dur, reverseFill, shrinkers, onComplete, onCancel }) {
+    const totalSize = targetEls.reduce((sum, te) => sum + parseInt(te.dataset.partSize), 0);
+
+    // Shrinker fractions: which slice of the global timeline each part is "active" for.
+    // Forward moves consume shrinkers from the tail (rightmost), backward from the head.
+    let shrinkerInfo = null;
+    if (shrinkers && shrinkers.length) {
+      const totalShrink = shrinkers.reduce((sum, sh) => sum + sh.partSize, 0);
+      const order = reverseFill
+        ? shrinkers.map((_, i) => shrinkers.length - 1 - i)
+        : shrinkers.map((_, i) => i);
+      shrinkerInfo = new Map();
+      let cum = 0;
+      order.forEach(idx => {
+        const ps = shrinkers[idx].partSize;
+        shrinkerInfo.set(idx, { startFrac: cum / totalShrink, endFrac: (cum + ps) / totalShrink });
+        cum += ps;
+      });
+    }
+
+    // Place icon/label/cancel on the biggest part so they stay readable + clickable
+    // even when the leading or trailing part is only a column or two wide.
+    let primaryIdx = 0;
+    let maxPartSize = 0;
+    targetEls.forEach((te, i) => {
+      const ps = parseInt(te.dataset.partSize);
+      if (ps > maxPartSize) { maxPartSize = ps; primaryIdx = i; }
+    });
+
+    // Fill sequence: backward fills bars in DOM order; forward fills last-to-first
+    // (the tail block "arrives" first at the destination — memmove tail-first semantics).
+    const fillOrder = reverseFill
+      ? targetEls.map((_, i) => targetEls.length - 1 - i)
+      : targetEls.map((_, i) => i);
+    const fractionByIdx = new Map();
+    let cumOrdered = 0;
+    fillOrder.forEach(idx => {
+      const ps = parseInt(targetEls[idx].dataset.partSize);
+      fractionByIdx.set(idx, { startFrac: cumOrdered / totalSize, endFrac: (cumOrdered + ps) / totalSize });
+      cumOrdered += ps;
+    });
+
+    const bars = [];
+    targetEls.forEach((te, i) => {
+      const { startFrac, endFrac } = fractionByIdx.get(i);
+      const partSize = parseInt(te.dataset.partSize);
+
+      const el = document.createElement('div');
+      el.className = 'op-progress';
+      if (reverseFill) el.classList.add('reverse-fill');
+      if (i !== primaryIdx) el.classList.add('op-continuation');
+      el.innerHTML = (i === primaryIdx)
+        ? `<div class="op-fill"></div><span class="op-icon">${icon}</span><span class="op-label">${label}</span><span class="op-cancel" title="Cancel">×</span>`
+        : `<div class="op-fill"></div>`;
+      document.body.appendChild(el);
+
+      // Initial position at cursor — only the primary bar needs natural width to dock from
+      el.style.left = fromX + 'px';
+      el.style.top = fromY + 'px';
+      if (i === primaryIdx) {
+        el.style.width = el.offsetWidth + 'px';
+      } else {
+        el.style.width = '8px';
+      }
+      el.getBoundingClientRect(); // reflow
+
+      const rect = te.getBoundingClientRect();
+      el.style.left = rect.left + 'px';
+      el.style.top = rect.top + 'px';
+      el.style.width = rect.width + 'px';
+
+      bars.push({ el, fill: el.querySelector('.op-fill'), startFrac, endFrac });
+    });
+
+    const record = {
+      segId, label, icon, dur,
+      bars,
+      overlayBar: null,
+      startTime: null,
+      canceled: false,
+      timer: null,
+      currentPct: 0,
+    };
+
+    function fadeOut() {
+      [...bars.map(b => b.el), record.overlayBar].filter(Boolean).forEach(el => {
+        el.style.transition = 'opacity 0.22s';
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 240);
+      });
+      if (shrinkers) {
+        shrinkers.forEach(sh => {
+          if (sh.isPhantom) {
+            sh.el.style.transition = 'opacity 0.22s';
+            sh.el.style.opacity = '0';
+            setTimeout(() => sh.el.remove(), 240);
+          } else {
+            // Actual in-memory DOM — just clear the clip; render() will replace anyway
+            sh.el.style.clipPath = '';
+          }
+        });
+      }
+      record.overlayBar = null;
+    }
+
+    bars[primaryIdx].el.querySelector('.op-cancel').addEventListener('click', e => {
+      e.stopPropagation();
+      if (record.canceled) return;
+      record.canceled = true;
+      if (record.timer) clearInterval(record.timer);
+      activeOps.delete(segId);
+      fadeOut();
+      onCancel?.();
+    });
+
+    setTimeout(() => {
+      if (record.canceled) return;
+      record.startTime = Date.now();
+      record.timer = setInterval(() => {
+        if (record.canceled) return;
+        const elapsed = Date.now() - record.startTime;
+        const p = Math.min(100, elapsed / dur * 100);
+        record.currentPct = p;
+        const globalFrac = p / 100;
+        bars.forEach(b => {
+          let local;
+          if (globalFrac <= b.startFrac) local = 0;
+          else if (globalFrac >= b.endFrac) local = 100;
+          else local = (globalFrac - b.startFrac) / (b.endFrac - b.startFrac) * 100;
+          b.fill.style.width = local + '%';
+        });
+        if (record.overlayBar) {
+          record.overlayBar.querySelector('.op-fill').style.width = p + '%';
+        }
+        if (shrinkers && shrinkerInfo) {
+          shrinkers.forEach((sh, i) => {
+            const { startFrac, endFrac } = shrinkerInfo.get(i);
+            let visible;
+            if (globalFrac <= startFrac) visible = 1;
+            else if (globalFrac >= endFrac) visible = 0;
+            else visible = 1 - (globalFrac - startFrac) / (endFrac - startFrac);
+            const clip = (1 - visible) * 100;
+            // Forward: clip from right (tail disappears first); backward: clip from left
+            sh.el.style.clipPath = reverseFill
+              ? `inset(0 ${clip}% 0 0)`
+              : `inset(0 0 0 ${clip}%)`;
+          });
+        }
+        if (p >= 100) {
+          clearInterval(record.timer);
+          record.timer = null;
+          activeOps.delete(segId);
+          fadeOut();
+          onComplete?.();
+        }
+      }, 40);
+    }, 420);
+
+    activeOps.set(segId, record);
+    return { cancel: () => bars[primaryIdx].el.querySelector('.op-cancel').click() };
+  }
+
+  const TOOL_ICONS = { scan: '◎', repair: '▸', move: '⇒', copy: '+', delete: '×' };
+  const TOOL_HINTS = {
+    scan:   { stage1: 'select unscanned ship system' },
+    repair: { stage1: 'select corrupt file' },
+    delete: { stage1: 'select file to delete' },
+    move:   { stage1: 'select file to move',  stage2: 'select free destination' },
+    copy:   { stage1: 'select file to copy',  stage2: 'select free destination' },
+  };
+
+  function pickUpTool(fsName) {
+    // Toggle off if same tool picked and we're not mid-2-stage operation
+    if (activeTool && activeTool.fsTool === fsName && !pickedSource) {
+      cancelTool();
+      return;
+    }
+    // Find a healthy tool of this type
+    const tool = memory.find(m => m.fsTool === fsName && (m.integrity || 0) > 50 && m.state !== 'busy');
+    if (!tool) return; // chip is bad/busy
+
+    activeTool = { fsTool: fsName, toolSegId: tool.id };
+    pickedSource = null;
+    document.body.classList.add('tool-active', `tool-${fsName}`);
+    document.querySelectorAll('.fs-tool-chip.picked').forEach(c => c.classList.remove('picked'));
+    document.querySelector(`.fs-tool-chip[data-fs="${fsName}"]`)?.classList.add('picked');
+    updateFollower();
+    refreshTargetClasses();
+  }
+
+  function cancelTool() {
+    activeTool = null;
+    pickedSource = null;
+    document.body.classList.remove('tool-active', 'tool-scan', 'tool-repair', 'tool-move', 'tool-copy', 'tool-delete');
+    document.querySelectorAll('.fs-tool-chip.picked').forEach(c => c.classList.remove('picked'));
+    document.querySelectorAll('.seg.picked-source').forEach(el => el.classList.remove('picked-source'));
+    document.querySelectorAll('.seg.valid-target, .seg.invalid-target, .seg.dest-hover').forEach(el => {
+      el.classList.remove('valid-target', 'invalid-target', 'dest-hover');
+      el.style.removeProperty('--dest-start-pct');
+      el.style.removeProperty('--dest-end-pct');
+    });
+    pendingPlaceholder = null;
+    updateFollower();
+  }
+
+  // For move: the source plus any contiguous free blocks on either side form the
+  // candidate placement region. This lets a file slide into adjacent free space —
+  // including overlapping its current footprint.
+  function computeMoveRegion(source) {
+    const srcIdx = memory.indexOf(source);
+    if (srcIdx === -1) return null;
+    let startIdx = srcIdx;
+    while (startIdx > 0 && memory[startIdx - 1].type === 'free') startIdx--;
+    let endIdx = srcIdx;
+    while (endIdx < memory.length - 1 && memory[endIdx + 1].type === 'free') endIdx++;
+    const segs = memory.slice(startIdx, endIdx + 1);
+    const totalSize = segs.reduce((s, m) => s + m.size, 0);
+    return { startIdx, endIdx, segs, totalSize };
+  }
+
+  function isValidTarget(s) {
+    if (!activeTool) return false;
+    if (s.operating) return false; // currently being operated on
+    const fs = activeTool.fsTool;
+
+    if (fs === 'scan') {
+      return s.type === 'ship' && s.scanned === false;
+    }
+    if (fs === 'repair') {
+      const eligible = (s.state === 'corrupt' || s.state === 'partial')
+        && ['tool', 'skill', 'fs-tool', 'core'].includes(s.type);
+      if (!eligible) return false;
+      const redund = getRedund();
+      const cost = Math.ceil((100 - s.integrity) / 100 * s.size * 2);
+      return redund && redund.used >= cost;
+    }
+    if (fs === 'delete') {
+      // Core can't be deleted; free is meaningless; in-flight ops blocked
+      if (['core', 'free'].includes(s.type)) return false;
+      if (['offline', 'repairing', 'transferring', 'busy'].includes(s.state)) return false;
+      return true;
+    }
+    if (fs === 'move' || fs === 'copy') {
+      if (!pickedSource) {
+        // Stage 1: pick source
+        if (['free', 'encrypted'].includes(s.type)) return false;
+        if (s.type === 'core') return false; // core stays put
+        if (['offline', 'repairing', 'transferring', 'busy'].includes(s.state)) return false;
+        return true;
+      }
+      // Stage 2 — move: source + adjacent free; copy: any free of sufficient size
+      if (fs === 'move') {
+        const region = computeMoveRegion(pickedSource);
+        if (!region || region.totalSize < pickedSource.size) return false;
+        return region.segs.includes(s);
+      }
+      return s.type === 'free' && s.size >= pickedSource.size && s.id !== pickedSource.id;
+    }
+    return false;
+  }
+
+  function refreshTargetClasses() {
+    document.querySelectorAll('.seg').forEach(el => {
+      el.classList.remove('valid-target', 'invalid-target');
+      if (!activeTool) return;
+      const s = memory.find(m => m.id === el.dataset.id);
+      if (!s) return;
+      el.classList.add(isValidTarget(s) ? 'valid-target' : 'invalid-target');
+    });
+    // Re-mark picked source (all parts if split)
+    if (pickedSource) {
+      document.querySelectorAll(`.seg[data-id="${pickedSource.id}"]`).forEach(el => el.classList.add('picked-source'));
+    }
+  }
+
+  function updateFollower() {
+    if (!activeTool) { follower.classList.remove('active'); return; }
+    follower.classList.add('active');
+    const fs = activeTool.fsTool;
+    const icon = TOOL_ICONS[fs] || '▶';
+    const hintCfg = TOOL_HINTS[fs] || {};
+    const hint = pickedSource ? (hintCfg.stage2 || '') : (hintCfg.stage1 || '');
+    let body = `<span class="icon">${icon}</span><span>${fs.toUpperCase()}</span>`;
+    if (pickedSource) body += ` <span class="source">| ${pickedSource.name} ${pickedSource.size}B</span>`;
+    body += `<span class="meta">${hint}</span>`;
+    follower.innerHTML = body;
+  }
+
+  function applyTool(s) {
+    if (!activeTool || !isValidTarget(s)) return;
+    const fs = activeTool.fsTool;
+
+    if (fs === 'scan')   { doScan(s);    cancelTool(); return; }
+    if (fs === 'repair') { doRepair(s);  cancelTool(); return; }
+    if (fs === 'delete') { doDelete(s);  cancelTool(); return; }
+
+    if (fs === 'move' || fs === 'copy') {
+      if (!pickedSource) {
+        pickedSource = s;
+        refreshTargetClasses();
+        updateFollower();
+        // Initialize placeholder if cursor is already over a valid target
+        updatePlaceholderAt(lastMouseX, lastMouseY);
+      } else {
+        if (!pendingPlaceholder) { cancelTool(); return; }
+        if (fs === 'move') doMove(pickedSource, pendingPlaceholder);
+        else doCopy(pickedSource, pendingPlaceholder);
+        cancelTool();
+      }
+    }
+  }
+
+  function onSegHover(s, el) {
+    // Surface the unbroken overlay only when hovering the FIRST part of a split file (not free)
+    const totalParts = parseInt(el.dataset.totalParts) || 1;
+    const partIdx = parseInt(el.dataset.partIdx) || 0;
+    if (totalParts > 1 && partIdx === 0 && s.type !== 'free') showSplitOverlay(s);
+
+    if (!activeTool) return;
+    if (!isValidTarget(s)) return;
+    // Stage 2 of move/copy: drive the movable placeholder from cursor position
+    if ((activeTool.fsTool === 'move' || activeTool.fsTool === 'copy') && pickedSource) {
+      updatePlaceholderAt(lastMouseX, lastMouseY);
+    }
+  }
+
+  function onSegLeave(s, el) {
+    hideSplitOverlay(s.id);
+    // Placeholder lifetime is managed by mousemove; no per-part cleanup needed here
+  }
+
+  // ===== Movable destination placeholder (move/copy stage 2) =====
+  // pendingPlaceholder is committed on click. col is the start column within the free block.
+  let pendingPlaceholder = null;
+
+  function clearPlaceholder() {
+    document.querySelectorAll('.seg.dest-hover').forEach(el => {
+      el.classList.remove('dest-hover');
+      el.style.removeProperty('--dest-start-pct');
+      el.style.removeProperty('--dest-end-pct');
+    });
+    pendingPlaceholder = null;
+  }
+
+  // Render the placeholder spanning across the contiguous region (one or more segs).
+  function renderPlaceholderInRegion(regionSegs, targetCol) {
+    const regionIds = new Set(regionSegs.map(s => s.id));
+    document.querySelectorAll('.seg.dest-hover').forEach(el => {
+      if (!regionIds.has(el.dataset.id)) {
+        el.classList.remove('dest-hover');
+        el.style.removeProperty('--dest-start-pct');
+        el.style.removeProperty('--dest-end-pct');
+      }
+    });
+    const phStart = targetCol;
+    const phEnd = targetCol + pickedSource.size;
+    let segOffsetInRegion = 0;
+    regionSegs.forEach(regSeg => {
+      const parts = Array.from(memWrap.querySelectorAll(`.seg[data-id="${regSeg.id}"]`));
+      parts.forEach(part => {
+        const partSize = parseInt(part.dataset.partSize);
+        const partOffsetInSeg = parseInt(part.dataset.partOffset);
+        const partStartInRegion = segOffsetInRegion + partOffsetInSeg;
+        const partEndInRegion = partStartInRegion + partSize;
+        const iStart = Math.max(phStart, partStartInRegion);
+        const iEnd = Math.min(phEnd, partEndInRegion);
+        if (iEnd <= iStart) {
+          part.classList.remove('dest-hover');
+          part.style.removeProperty('--dest-start-pct');
+          part.style.removeProperty('--dest-end-pct');
+        } else {
+          const localStart = (iStart - partStartInRegion) / partSize * 100;
+          const localEnd = (iEnd - partStartInRegion) / partSize * 100;
+          part.classList.add('dest-hover');
+          part.style.setProperty('--dest-start-pct', localStart + '%');
+          part.style.setProperty('--dest-end-pct', localEnd + '%');
+        }
+      });
+      segOffsetInRegion += regSeg.size;
+    });
+  }
+
+  function updatePlaceholderAt(clientX, clientY) {
+    if (!activeTool || !pickedSource) return;
+    if (activeTool.fsTool !== 'move' && activeTool.fsTool !== 'copy') return;
+
+    const hit = document.elementFromPoint(clientX, clientY);
+    const partEl = hit?.closest?.('.seg');
+    if (!partEl || !memWrap.contains(partEl)) { clearPlaceholder(); return; }
+
+    const seg = memory.find(m => m.id === partEl.dataset.id);
+    if (!seg) { clearPlaceholder(); return; }
+
+    // Region differs by tool: move uses source + adjacent free; copy uses only the hovered free.
+    let regionSegs, totalSize;
+    if (activeTool.fsTool === 'move') {
+      const region = computeMoveRegion(pickedSource);
+      if (!region || !region.segs.includes(seg) || region.totalSize < pickedSource.size) {
+        clearPlaceholder();
+        return;
+      }
+      regionSegs = region.segs;
+      totalSize = region.totalSize;
+    } else {
+      if (seg.type !== 'free' || seg.id === pickedSource.id || seg.size < pickedSource.size) {
+        clearPlaceholder();
+        return;
+      }
+      regionSegs = [seg];
+      totalSize = seg.size;
+    }
+
+    // Map cursor pixel → column within region
+    let segOffsetInRegion = 0;
+    for (const r of regionSegs) {
+      if (r.id === seg.id) break;
+      segOffsetInRegion += r.size;
+    }
+    const partSize = parseInt(partEl.dataset.partSize);
+    const partOffsetInSeg = parseInt(partEl.dataset.partOffset);
+    const rect = partEl.getBoundingClientRect();
+    const colW = rect.width / partSize;
+    const colInPart = Math.floor((clientX - rect.left) / colW);
+    let targetCol = segOffsetInRegion + partOffsetInSeg + colInPart;
+    const maxStartCol = totalSize - pickedSource.size;
+    targetCol = Math.max(0, Math.min(maxStartCol, targetCol));
+
+    renderPlaceholderInRegion(regionSegs, targetCol);
+    pendingPlaceholder = {
+      regionSegIds: regionSegs.map(s => s.id),
+      col: targetCol,
+    };
+  }
+
+  // ===== Hover overlay for files split across rows =====
+  // Shows the unbroken file as a tooltip-like preview floating above the first part.
+  // If the file has an active op, mirrors a progress bar replica synced to the op.
+  let overlayEl = null;
+  let overlayForSegId = null;
+  let pendingHide = null;
+
+  function ensureOverlayEl() {
+    if (overlayEl) return overlayEl;
+    overlayEl = document.createElement('div');
+    overlayEl.className = 'split-overlay';
+    document.body.appendChild(overlayEl);
+    return overlayEl;
+  }
+
+  function showSplitOverlay(s) {
+    if (pendingHide) { clearTimeout(pendingHide); pendingHide = null; }
+    // No-op if already showing for this seg (avoids flicker between parts)
+    if (overlayForSegId === s.id && overlayEl?.classList.contains('visible')) return;
+
+    // Switching segs: clear old op overlay-bar reference
+    if (overlayForSegId && overlayForSegId !== s.id) {
+      const oldOp = activeOps.get(overlayForSegId);
+      if (oldOp && oldOp.overlayBar) { oldOp.overlayBar = null; }
+    }
+
+    const firstPart = document.querySelector(`.seg[data-id="${s.id}"][data-part-idx="0"]`);
+    if (!firstPart) return;
+    const partSize = parseInt(firstPart.dataset.partSize);
+    if (!partSize) return;
+
+    const rect = firstPart.getBoundingClientRect();
+    const colW = rect.width / partSize;
+    const fullW = colW * s.size;
+
+    const overlay = ensureOverlayEl();
+    overlay.innerHTML = '';
+    // Render an unbroken version (totalParts = 1, partSize = s.size)
+    const unbroken = renderSegPart(s, s.size, 0, 1, 0);
+    // Strip identifying attrs — overlay is purely visual; queries should not find it.
+    unbroken.removeAttribute('data-id');
+    unbroken.removeAttribute('data-part-idx');
+    unbroken.removeAttribute('data-total-parts');
+    unbroken.style.cursor = 'default';
+    unbroken.style.pointerEvents = 'none';
+    unbroken.style.gridColumn = '';
+    overlay.appendChild(unbroken);
+
+    // Over the same row as the first part, right-aligned to the row's end (= first part's right edge)
+    overlay.style.left = (rect.right - fullW) + 'px';
+    overlay.style.top = rect.top + 'px';
+    overlay.style.width = fullW + 'px';
+    overlay.style.height = rect.height + 'px';
+    overlay.classList.add('visible');
+    overlayForSegId = s.id;
+
+    // Mirror an active op's progress bar inside the overlay
+    const op = activeOps.get(s.id);
+    if (op) {
+      const bar = document.createElement('div');
+      bar.className = 'op-progress overlay-op-bar';
+      bar.style.position = 'absolute';
+      bar.style.inset = '0';
+      bar.style.width = '100%';
+      bar.style.height = '100%';
+      bar.innerHTML = `<div class="op-fill" style="width:${op.currentPct}%"></div><span class="op-icon">${op.icon}</span><span class="op-label">${op.label}</span>`;
+      overlay.appendChild(bar);
+      op.overlayBar = bar;
+    }
+  }
+
+  function hideSplitOverlay(segId) {
+    if (overlayForSegId !== segId) return;
+    if (pendingHide) clearTimeout(pendingHide);
+    pendingHide = setTimeout(() => {
+      pendingHide = null;
+      // Only the first part keeps the overlay alive — continuation hovers do not
+      if (document.querySelector(`.seg[data-id="${segId}"][data-part-idx="0"]:hover`)) return;
+      if (!overlayEl) return;
+      overlayEl.classList.remove('visible');
+      overlayForSegId = null;
+      const op = activeOps.get(segId);
+      if (op && op.overlayBar) { op.overlayBar = null; }
+    }, 60);
+  }
+
+  // ===== Filesystem operations =====
+  function mergeAdjacentFree() {
+    for (let i = memory.length - 1; i > 0; i--) {
+      if (memory[i].type === 'free' && memory[i-1].type === 'free') {
+        memory[i-1].size += memory[i].size;
+        memory.splice(i, 1);
+      }
+    }
+  }
+
+  function showEmpty() {
+    detailBody.innerHTML = `
+      <div class="detail-empty">
+        <div class="icon">◇</div>
+        <div>select a segment</div>
+        <div style="font-size:9px;margin-top:6px;letter-spacing:0.1em">click any block</div>
+      </div>`;
+  }
+
+  function doDelete(s) {
+    if (s.type === 'core' || s.type === 'free') return;
+    if (s.type === 'redundancy') { doDeleteRedund(); return; }
+
+    const delTool = getTool('delete');
+    if (!delTool) return;
+
+    // Warn before destroying the last repair tool
+    if (s.fsTool === 'repair') {
+      const otherRepair = memory.find(m => m.fsTool === 'repair' && m.id !== s.id && (m.integrity || 0) > 50);
+      if (!otherRepair && !confirm('Deleting the last functional Repair tool will end the run if anything else corrupts. Continue?')) return;
+    }
+
+    s.operating = true;
+    delTool.state = 'busy';
+    render();
+
+    const targetEls = Array.from(document.querySelectorAll(`.seg[data-id="${s.id}"]`));
+    if (targetEls.length === 0) return;
+
+    startOpProgress({
+      segId: s.id,
+      fromX: lastMouseX, fromY: lastMouseY,
+      targetEls,
+      label: `DELETE · ${s.name}`,
+      icon: TOOL_ICONS.delete,
+      dur: 800,
+      onComplete: () => {
+        const idx = memory.indexOf(s);
+        if (idx !== -1) {
+          memory.splice(idx, 1, { id: 'free-' + Date.now(), name: 'Free', type: 'free', size: s.size });
+          mergeAdjacentFree();
+        }
+        delTool.state = 'intact';
+        selectedId = null;
+        render();
+        showEmpty();
+      },
+      onCancel: () => {
+        s.operating = false;
+        delTool.state = 'intact';
+        render();
+      },
+    });
+  }
+
+  function doMove(source, placement) {
+    const moveTool = getTool('move');
+    if (!moveTool) return;
+
+    const regionSegs = placement.regionSegIds.map(id => memory.find(m => m.id === id));
+    if (regionSegs.some(rs => !rs)) return;
+
+    const sourcePriorState = source.state;
+    source.operating = true;
+    moveTool.state = 'busy';
+
+    const regionStartIdx = memory.indexOf(regionSegs[0]);
+    const regionLen = regionSegs.length;
+    const totalSize = regionSegs.reduce((s, r) => s + r.size, 0);
+    const destCol = placement.col;
+    const preSize = destCol;
+    const postSize = totalSize - destCol - source.size;
+    const sourceInRegion = regionSegs.includes(source);
+
+    // Determine direction from absolute memory positions (works for both in-place
+    // and non-in-place). Forward moves fill + shrink from the tail (right edge of
+    // bar grows; right edge of source shrinks); backward moves act head-first.
+    const sourceAddr = memAddrOf(source);
+    const regionStartAddr = memAddrOf(regionSegs[0]);
+    const destAddr = regionStartAddr + destCol;
+    const reverseFill = destAddr > sourceAddr;
+
+    // Capture source's part rects + sizes BEFORE the splice — phantoms (in-place)
+    // need these screen coords to anchor a visual of the original source.
+    const preSourceParts = Array.from(memWrap.querySelectorAll(`.seg[data-id="${source.id}"]`));
+    const preSourcePartData = preSourceParts.map(p => ({
+      rect: p.getBoundingClientRect(),
+      partSize: parseInt(p.dataset.partSize),
+      partOffset: parseInt(p.dataset.partOffset),
+    }));
+
+    const moved = Object.assign({}, source);
+    moved.id = source.id + '_m' + Date.now();
+    moved.state = 'transferring';
+    moved.operating = true;
+    delete moved.priorState;
+
+    const insertion = [];
+    if (preSize > 0) insertion.push({ id: 'free-pre-' + Date.now(), name: 'Free', type: 'free', size: preSize });
+    insertion.push(moved);
+    if (postSize > 0) insertion.push({ id: 'free-post-' + Date.now(), name: 'Free', type: 'free', size: postSize });
+    memory.splice(regionStartIdx, regionLen, ...insertion);
+    render();
+
+    const movedEls = Array.from(memWrap.querySelectorAll(`.seg[data-id="${moved.id}"]`));
+    if (movedEls.length === 0) return;
+
+    // Build shrinkers: phantoms for in-place (source has been spliced out);
+    // actual DOM elements for non-in-place (source still in memory).
+    const shrinkers = sourceInRegion
+      ? createSourcePhantoms(source, sourcePriorState, preSourcePartData)
+      : Array.from(memWrap.querySelectorAll(`.seg[data-id="${source.id}"]`)).map(el => ({
+          el, partSize: parseInt(el.dataset.partSize), isPhantom: false,
+        }));
+
+    startOpProgress({
+      segId: moved.id,
+      fromX: lastMouseX, fromY: lastMouseY,
+      targetEls: movedEls,
+      label: `MOVE · ${source.name}`,
+      icon: TOOL_ICONS.move,
+      dur: 800 + source.size * 120,
+      reverseFill,
+      shrinkers,
+      onComplete: () => {
+        moved.state = sourcePriorState || 'intact';
+        moved.operating = false;
+        // Only clean up source separately if it wasn't already removed via the region splice
+        if (!sourceInRegion) {
+          const srcIdx = memory.indexOf(source);
+          if (srcIdx !== -1) {
+            memory.splice(srcIdx, 1, { id: 'free-src-' + Date.now(), name: 'Free', type: 'free', size: source.size });
+            mergeAdjacentFree();
+          }
+        }
+        moveTool.state = 'intact';
+        selectedId = moved.id;
+        render();
+        const newSeg = memory.find(m => m.id === moved.id);
+        if (newSeg) selectSegment(newSeg);
+      },
+      onCancel: () => {
+        source.operating = false;
+        const movedIdx = memory.indexOf(moved);
+        if (movedIdx !== -1) {
+          const insertionStart = movedIdx - (preSize > 0 ? 1 : 0);
+          const insertionLen = (preSize > 0 ? 1 : 0) + 1 + (postSize > 0 ? 1 : 0);
+          memory.splice(insertionStart, insertionLen, ...regionSegs);
+          mergeAdjacentFree();
+        }
+        moveTool.state = 'intact';
+        render();
+      },
+    });
+  }
+
+  // Absolute address (byte offset from address 0) of a seg in memory.
+  function memAddrOf(seg) {
+    const idx = memory.indexOf(seg);
+    if (idx === -1) return -1;
+    let addr = 0;
+    for (let i = 0; i < idx; i++) addr += memory[i].size;
+    return addr;
+  }
+
+  // Floating visual copies of a source's parts, anchored at the pre-splice screen rects.
+  // Used during in-place moves so the user sees the source shrink rather than vanish.
+  function createSourcePhantoms(source, priorState, partData) {
+    const clone = Object.assign({}, source);
+    clone.state = priorState;
+    delete clone.operating;
+    return partData.map((pd, idx) => {
+      const phantom = renderSegPart(clone, pd.partSize, idx, partData.length, pd.partOffset);
+      phantom.removeAttribute('data-id');
+      phantom.removeAttribute('data-part-idx');
+      phantom.removeAttribute('data-total-parts');
+      phantom.style.position = 'fixed';
+      phantom.style.left = pd.rect.left + 'px';
+      phantom.style.top = pd.rect.top + 'px';
+      phantom.style.width = pd.rect.width + 'px';
+      phantom.style.height = pd.rect.height + 'px';
+      phantom.style.gridColumn = '';
+      phantom.style.cursor = 'default';
+      phantom.style.pointerEvents = 'none';
+      // Above the op-progress bar (450) so the shrinkage is actually visible —
+      // as the phantom clips away, the bar fill underneath is what's revealed.
+      phantom.style.zIndex = '460';
+      phantom.classList.add('source-phantom');
+      document.body.appendChild(phantom);
+      return { el: phantom, partSize: pd.partSize, isPhantom: true };
+    });
+  }
+
+  function doCopy(source, placement) {
+    const copyTool = getTool('copy');
+    if (!copyTool) return;
+
+    const regionSegs = placement.regionSegIds.map(id => memory.find(m => m.id === id));
+    if (regionSegs.some(rs => !rs)) return;
+
+    copyTool.state = 'busy';
+
+    const copied = Object.assign({}, source);
+    copied.id = source.id + '_c' + Date.now();
+    copied.name = source.name + '.cp';
+    copied.state = 'transferring';
+    copied.operating = true;
+    delete copied.priorState;
+
+    const regionStartIdx = memory.indexOf(regionSegs[0]);
+    const regionLen = regionSegs.length;
+    const totalSize = regionSegs.reduce((s, r) => s + r.size, 0);
+    const destCol = placement.col;
+    const preSize = destCol;
+    const postSize = totalSize - destCol - source.size;
+
+    const insertion = [];
+    if (preSize > 0) insertion.push({ id: 'free-cpre-' + Date.now(), name: 'Free', type: 'free', size: preSize });
+    insertion.push(copied);
+    if (postSize > 0) insertion.push({ id: 'free-cpost-' + Date.now(), name: 'Free', type: 'free', size: postSize });
+    memory.splice(regionStartIdx, regionLen, ...insertion);
+    render();
+
+    const copiedEls = Array.from(memWrap.querySelectorAll(`.seg[data-id="${copied.id}"]`));
+    if (copiedEls.length === 0) return;
+
+    startOpProgress({
+      segId: copied.id,
+      fromX: lastMouseX, fromY: lastMouseY,
+      targetEls: copiedEls,
+      label: `COPY · ${source.name}`,
+      icon: TOOL_ICONS.copy,
+      dur: 1000 + source.size * 180, // slower than move
+      onComplete: () => {
+        copied.state = source.state || 'intact';
+        copied.operating = false;
+        copyTool.state = 'intact';
+        selectedId = copied.id;
+        render();
+        const newSeg = memory.find(m => m.id === copied.id);
+        if (newSeg) selectSegment(newSeg);
+      },
+      onCancel: () => {
+        const copiedIdx = memory.indexOf(copied);
+        if (copiedIdx !== -1) {
+          const insertionStart = copiedIdx - (preSize > 0 ? 1 : 0);
+          const insertionLen = (preSize > 0 ? 1 : 0) + 1 + (postSize > 0 ? 1 : 0);
+          memory.splice(insertionStart, insertionLen, ...regionSegs);
+          mergeAdjacentFree();
+        }
+        copyTool.state = 'intact';
+        render();
+      },
+    });
+  }
+
+  function updateFsChips() {
+    const map = { scan: 'chip-scan', repair: 'chip-repair', move: 'chip-move', copy: 'chip-copy', delete: 'chip-delete' };
+    Object.entries(map).forEach(([k, id]) => {
+      const t = memory.find(m => m.fsTool === k);
+      const chip = document.getElementById(id);
+      if (!chip || !t) return;
+      const dot = chip.querySelector('.dot');
+      chip.classList.remove('bad');
+      dot.classList.remove('busy', 'bad');
+      if (t.integrity < 50 || t.state === 'corrupt') { chip.classList.add('bad'); dot.classList.add('bad'); }
+      else if (t.state === 'busy') dot.classList.add('busy');
+    });
+    // Repair.bak
+    const bak = memory.find(m => m.id === 't_repair_b');
+    const bakChip = document.getElementById('chip-repair-b');
+    if (bak && bakChip) {
+      bakChip.classList.toggle('bad', bak.integrity < 50);
+    }
+  }
+
+  function updateStats() {
+    const redund = getRedund();
+    const free = memory.filter(m => m.type === 'free').reduce((s,m) => s + m.size, 0);
+    const totalSize = memory.reduce((s,m) => s + m.size, 0);
+    if (redund) {
+      const rTxt = `${redund.used} <span class="small">/ ${Math.round(redund.size/totalSize*100)}%</span>`;
+      document.getElementById('statRedund').innerHTML = rTxt;
+      document.getElementById('footRedund').textContent = `REDUNDANCY: ${redund.used}/${redund.capacity} AVAILABLE`;
+    } else {
+      document.getElementById('statRedund').innerHTML = `0 <span class="small">/ 0%</span>`;
+      document.getElementById('footRedund').textContent = `REDUNDANCY: 0/0 — DEPLETED`;
+    }
+    document.getElementById('statFree').innerHTML = `${free} <span class="small">/ ${Math.round(free/totalSize*100)}%</span>`;
+  }
+
+  // ===== Corruption glitch overlay =====
+  let glitchInterval = null;
+  function setCorruption(pct) {
+    const level = pct / 100;
+    document.documentElement.style.setProperty('--corruption', level);
+    const overlay = document.getElementById('glitchOverlay');
+    // Clear old glitch chars
+    overlay.querySelectorAll('.glitch-char, .glitch-block').forEach(e => e.remove());
+
+    if (level > 0.05) {
+      const charCount = Math.round(level * 80);
+      const blockCount = Math.round(level * 12);
+      const chars = '█▓▒░@#$%&*?/\\|<>=+-x:;.,';
+      for (let i = 0; i < charCount; i++) {
+        const c = document.createElement('span');
+        c.className = 'glitch-char';
+        c.style.left = (Math.random() * 100) + '%';
+        c.style.top = (Math.random() * 100) + '%';
+        c.style.fontSize = (8 + Math.random() * 8) + 'px';
+        c.style.animationDelay = (Math.random() * 0.5) + 's';
+        c.textContent = chars[Math.floor(Math.random() * chars.length)];
+        overlay.appendChild(c);
+      }
+      for (let i = 0; i < blockCount; i++) {
+        const b = document.createElement('div');
+        b.className = 'glitch-block';
+        b.style.left = (Math.random() * 100) + '%';
+        b.style.top = (Math.random() * 100) + '%';
+        b.style.width = (20 + Math.random() * 200) + 'px';
+        b.style.height = (4 + Math.random() * 12) + 'px';
+        b.style.animationDelay = (Math.random() * 0.3) + 's';
+        overlay.appendChild(b);
+      }
+    }
+  }
+
+  // ===== Mode toggle =====
+  document.getElementById('modeToggle').addEventListener('click', e => {
+    const opt = e.target.closest('.mode-toggle-opt');
+    if (!opt) return;
+    document.querySelectorAll('.mode-toggle-opt').forEach(o => o.classList.remove('active'));
+    opt.classList.add('active');
+    document.body.classList.toggle('mode-memory', opt.dataset.mode === 'memory');
+  });
+
+  // ===== Misc bindings =====
+  const thrust = document.getElementById('thrust');
+  const thrustVal = document.getElementById('thrustVal');
+  thrust.addEventListener('input', e => {
+    thrustVal.textContent = e.target.value + '%';
+    e.target.style.setProperty('--p', e.target.value + '%');
+  });
+  document.querySelectorAll('#speed .speed-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#speed .speed-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.dock-item').forEach(item => {
+    item.addEventListener('click', () => {
+      if (item.classList.contains('warn')) return;
+      item.classList.toggle('open');
+      const mark = item.querySelector('.mark');
+      if (mark) mark.textContent = item.classList.contains('open') ? '●' : '○';
+    });
+  });
+  let t = 14 * 3600 + 23 * 60 + 47;
+  setInterval(() => {
+    t++;
+    const h = String(Math.floor(t/3600)).padStart(5,'0');
+    const m = String(Math.floor((t%3600)/60)).padStart(2,'0');
+    const s = String(t%60).padStart(2,'0');
+    document.getElementById('clock').textContent = `T+ ${h}:${m}:${s}`;
+  }, 1000);
+  let v = 47.382;
+  setInterval(() => {
+    v += (Math.random() - 0.5) * 0.004;
+    document.getElementById('vel').textContent = v.toFixed(3);
+  }, 800);
+  document.querySelectorAll('.window').forEach(win => {
+    const title = win.querySelector('.window-title');
+    let dx = 0, dy = 0, dragging = false;
+    title.addEventListener('mousedown', e => {
+      dragging = true;
+      const r = win.getBoundingClientRect();
+      dx = e.clientX - r.left;
+      dy = e.clientY - r.top;
+      win.style.right = 'auto';
+      document.body.style.userSelect = 'none';
+    });
+    window.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const wrap = win.parentElement.parentElement.getBoundingClientRect();
+      win.style.left = (e.clientX - dx - wrap.left) + 'px';
+      win.style.top = (e.clientY - dy - wrap.top) + 'px';
+    });
+    window.addEventListener('mouseup', () => {
+      dragging = false;
+      document.body.style.userSelect = '';
+    });
+  });
+
+  // FS-tool chip pickup
+  document.querySelectorAll('.fs-tool-chip.clickable').forEach(chip => {
+    chip.addEventListener('click', () => {
+      if (chip.classList.contains('bad')) return;
+      pickUpTool(chip.dataset.fs);
+    });
+  });
+  // Cursor follower tracking (and global cursor position for op-progress docking)
+  document.addEventListener('mousemove', e => {
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    if (!activeTool) return;
+    follower.style.left = e.clientX + 'px';
+    follower.style.top = e.clientY + 'px';
+    if (pickedSource && (activeTool.fsTool === 'move' || activeTool.fsTool === 'copy')) {
+      updatePlaceholderAt(e.clientX, e.clientY);
+    }
+  });
+  // Cancel on ESC or right-click
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && activeTool) cancelTool();
+  });
+  window.addEventListener('contextmenu', e => {
+    if (activeTool) { e.preventDefault(); cancelTool(); }
+  });
+
+  // Initial render
+  render();
+  setTimeout(() => selectSegment(memory.find(x => x.id === 'engine')), 100);
+</script>
+</body>
+</html>
