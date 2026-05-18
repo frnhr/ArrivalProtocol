@@ -1,4 +1,7 @@
 import type { Segment, FsToolSegment, RedundancySegment } from '@/types/segment';
+import type { Store } from '@state/store';
+import type { GameState } from '@state/schema';
+import { getFsTool, getRedundancy, selectCorruption } from '@state/selectors';
 import { TYPE_LABELS } from '@data/type-labels';
 
 export type DetailActionId =
@@ -180,4 +183,45 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
       });
     }
   }
+}
+
+// Renders the empty-state placeholder shown when no segment is selected.
+function renderEmpty(target: HTMLElement): void {
+  target.innerHTML = `
+    <div class="detail-empty">
+      <div class="icon">◇</div>
+      <div>select a segment</div>
+      <div style="font-size:9px;margin-top:6px;letter-spacing:0.1em">click any block</div>
+    </div>`;
+}
+
+// Mount the detail panel as a store subscriber. Re-renders whenever the store
+// is notified (memory mutations from actions trigger this via store.notify()
+// after legacy's rerender; pure store.update calls fire it directly). Always-
+// false comparator so in-place memory mutations don't get missed.
+export function mountDetailPanel(
+  store: Store<GameState>,
+  opts: { onAction: (seg: Segment, actionId: DetailActionId) => void },
+): () => void {
+  const target = document.getElementById('detailBody');
+  if (!target) return () => {};
+
+  function paint(state: GameState): void {
+    const segId = state.ui.selectedId;
+    const seg = segId ? state.memory.find((m) => m.id === segId) : null;
+    if (!seg) { renderEmpty(target!); return; }
+    renderDetailPanel(target!, seg, {
+      getFsTool: (kind) => getFsTool(state, kind),
+      getRedundancy: () => getRedundancy(state),
+      onAction: opts.onAction,
+      onCorruptionSliderInput: (pct) => {
+        store.update((d) => { d.ai.coreIntegrity = 100 - pct; });
+      },
+      getCorruption: () => selectCorruption(state),
+    });
+  }
+
+  paint(store.getState());
+  const unsub = store.subscribe((s) => s, (s) => paint(s), () => false);
+  return unsub;
 }

@@ -10,7 +10,8 @@ import { TYPE_LABELS } from '@data/type-labels';
 import { store } from '@state/instance';
 import { renderMemoryStrip } from '@components/memory-view/MemoryStrip';
 import { renderSegmentPart } from '@components/memory-view/SegmentBlock';
-import { renderDetailPanel } from '@components/memory-view/DetailPanel';
+import { renderDetailPanel, mountDetailPanel } from '@components/memory-view/DetailPanel';
+import { mountSelectionHighlight } from '@components/memory-view/SelectionHighlight';
 import { updateFsChips as updateFsChipsExt } from '@components/memory-view/FsStatusBar';
 import { renderCursorFollower } from '@components/cursor-follower/CursorFollower';
 import { computeMoveRegion as computeMoveRegionExt, isValidTarget as isValidTargetExt } from '@systems/fs-tools';
@@ -66,25 +67,12 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
     return renderSegmentPart(s, { partSize, partIdx, totalParts, partOffset }, segBehavior);
   }
 
-  // ===== Selection / detail panel =====
-  let selectedId = null;
-  const detailBody = document.getElementById('detailBody');
-
+  // ===== Selection — store-driven =====
+  // selectedId lives in state.ui; DetailPanel and SelectionHighlight subscribe.
+  // selectSegment is a thin store-update dispatcher kept here so click handlers
+  // wired by MemoryStrip's segBehavior can still call it by name.
   function selectSegment(s) {
-    selectedId = s.id;
-    document.querySelectorAll('.seg.selected').forEach(el => el.classList.remove('selected'));
-    document.querySelectorAll(`.seg[data-id="${s.id}"]`).forEach(el => el.classList.add('selected'));
-    showDetail(s);
-  }
-
-  function showDetail(s) {
-    renderDetailPanel(detailBody, s, {
-      getFsTool: (kind) => getFsTool(store.getState(), kind),
-      getRedundancy: () => getRedundancy(store.getState()),
-      onAction: (seg, actionId) => runAction(seg, actionId),
-      onCorruptionSliderInput: (pct) => setCorruption(pct),
-      getCorruption: () => selectCorruption(store.getState()),
-    });
+    store.update(d => { d.ui.selectedId = s.id; });
   }
 
   // ===== Actions =====
@@ -98,15 +86,12 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
 
   // doRepair delegated to actionRepair in @state/actions.ts (see actionDeps binding above)
 
-  // Actions delegated to @state/actions.ts. The deps bag wires legacy's
-  // render(), showDetail(), cursor tracking, and selection — once those
-  // subsystems are subscriber-driven, the bag disappears.
+  // Actions delegated to @state/actions.ts. After Step 14d the deps bag only
+  // wires render() and cursor tracking — selection, detail refresh, and empty
+  // state are all subscriber-driven now (see DetailPanel + SelectionHighlight).
   const actionDeps = {
     rerender: () => render(),
-    refreshDetailFor: (seg) => showDetail(seg),
     getCursorXY: () => ({ x: lastMouseX, y: lastMouseY }),
-    clearDetail: () => showEmpty(),
-    setSelected: (id) => { selectedId = id; },
   };
   const doSwap        = (s) => actionSwap(store, s, actionDeps);
   const doActivate    = (s) => actionActivate(store, s, actionDeps);
@@ -442,14 +427,8 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
   const mergeAdjacentFreeFromOps = mergeAdjacentFreeExt;
   function mergeAdjacentFree() { mergeAdjacentFreeFromOps(memory); }
 
-  function showEmpty() {
-    detailBody.innerHTML = `
-      <div class="detail-empty">
-        <div class="icon">◇</div>
-        <div>select a segment</div>
-        <div style="font-size:9px;margin-top:6px;letter-spacing:0.1em">click any block</div>
-      </div>`;
-  }
+  // showEmpty removed — DetailPanel subscriber renders empty state when
+  // state.ui.selectedId is null.
 
   // doDelete delegated to actionDelete in @state/actions.ts (see actionDeps binding above)
 
@@ -499,6 +478,15 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
     if (activeTool) { e.preventDefault(); cancelTool(); }
   });
 
-  // Initial render
+  // Subscriber-driven UI for the detail panel and selection highlight.
+  // Mounted from here (not main.ts) because runAction closes over legacy's
+  // local do* aliases; once those move to actions.ts, mounting moves to main.ts.
+  mountDetailPanel(store, { onAction: (seg, actionId) => runAction(seg, actionId) });
+  mountSelectionHighlight(store);
+
+  // Initial render + initial selection
   render();
-  setTimeout(() => selectSegment(memory.find(x => x.id === 'engine')), 100);
+  setTimeout(() => {
+    const engine = memory.find(x => x.id === 'engine');
+    if (engine) store.update(d => { d.ui.selectedId = engine.id; });
+  }, 100);

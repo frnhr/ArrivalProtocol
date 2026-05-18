@@ -12,24 +12,18 @@ import { memAddrOf } from '@systems/memory-ops';
 import { renderSegmentPart } from '@components/memory-view/SegmentBlock';
 import type { PendingPlacement } from './schema';
 
-// Transitional callback bag: legacy still owns the full re-render pipeline
-// (render() calls renderMemoryStrip + updateFsChips + store.notify), the
-// selection-driven detail panel refresh, and cursor tracking. Action functions
-// invoke these via the bag so they don't need to know which subsystem is
-// responsible. When MemoryStrip and DetailPanel become subscribers and cursor
-// tracking moves into a system module, the bag disappears.
+// Transitional callback bag. After Step 14d:
+//   - Selection lives in state.ui.selectedId (DetailPanel + SelectionHighlight
+//     subscribe), so refreshDetailFor and setSelected are gone — actions write
+//     directly through store.update.
+//   - rerender stays only because legacy still owns the MemoryStrip render
+//     pipeline. Once MemoryStrip becomes a subscriber, this disappears too
+//     and actions just call store.notify().
+//   - getCursorXY stays — cursor position is module-local in the fs-tools
+//     system; mousemove fires too often to route through the store.
 export interface ActionDeps {
   rerender: () => void;
-  refreshDetailFor: (seg: Segment) => void;
-  // Cursor position in viewport coords, used to dock op progress bars.
-  // Stays out of the store: it changes on every mousemove.
   getCursorXY: () => { x: number; y: number };
-  // Clears the detail panel — used when the selected segment is destroyed
-  // mid-op (delete). Legacy's showEmpty() is the current implementation.
-  clearDetail: () => void;
-  // Sets the selected segment to a new id (or null). Once UiState.selectedId
-  // is the source of truth, this becomes a store.update call internally.
-  setSelected: (id: string | null) => void;
 }
 
 // AI segments that can be repaired (excludes ship systems — those use swap).
@@ -45,7 +39,6 @@ export function actionScan(store: Store<GameState>, seg: ShipSegment, deps: Acti
   if (seg.scanned) return;
   seg.scanned = true;
   deps.rerender();
-  if (store.getState().ui.selectedId === seg.id) deps.refreshDetailFor(seg);
 }
 
 // Swap a ship system with its backup. The primary becomes inactive (with .old
@@ -64,7 +57,6 @@ export function actionSwap(store: Store<GameState>, seg: ShipSegment, deps: Acti
   delete seg.backup;
 
   deps.rerender();
-  if (store.getState().ui.selectedId === seg.id) deps.refreshDetailFor(seg);
 }
 
 // Activate an inactive ship-backup. Instant; the backup becomes intact and
@@ -76,7 +68,6 @@ export function actionActivate(
 ): void {
   seg.state = 'intact';
   deps.rerender();
-  if (store.getState().ui.selectedId === seg.id) deps.refreshDetailFor(seg);
 }
 
 // Reclaim the redundancy pool as free space. Requires user confirmation since
@@ -164,13 +155,11 @@ export function actionRepair(
       }
       repair.state = 'intact';
       deps.rerender();
-      if (store.getState().ui.selectedId === seg.id) deps.refreshDetailFor(seg);
     },
     onCancel: () => {
       (seg as Segment & { operating?: boolean }).operating = false;
       repair.state = 'intact';
       deps.rerender();
-      if (store.getState().ui.selectedId === seg.id) deps.refreshDetailFor(seg);
     },
   });
 }
@@ -232,9 +221,8 @@ export function actionDelete(
         mergeAdjacentFree(memory);
       }
       delTool.state = 'intact';
-      deps.setSelected(null);
+      store.update((d) => { d.ui.selectedId = null; });
       deps.rerender();
-      deps.clearDetail();
     },
     onCancel: () => {
       (seg as Segment & { operating?: boolean }).operating = false;
@@ -426,10 +414,9 @@ export function actionMove(
         }
       }
       moveTool.state = 'intact';
-      deps.setSelected(moved.id);
+      store.update((d) => { d.ui.selectedId = moved.id; });
       deps.rerender();
       const newSeg = store.getState().memory.find((m) => m.id === moved.id);
-      if (newSeg) deps.refreshDetailFor(newSeg);
     },
     onCancel: () => {
       (source as Segment & { operating?: boolean }).operating = false;
@@ -496,10 +483,9 @@ export function actionCopy(
       (copied as Segment & { state?: string }).state = sourcePriorState || 'intact';
       (copied as Segment & { operating?: boolean }).operating = false;
       copyTool.state = 'intact';
-      deps.setSelected(copied.id);
+      store.update((d) => { d.ui.selectedId = copied.id; });
       deps.rerender();
       const newSeg = store.getState().memory.find((m) => m.id === copied.id);
-      if (newSeg) deps.refreshDetailFor(newSeg);
     },
     onCancel: () => {
       const mem = store.getState().memory;
