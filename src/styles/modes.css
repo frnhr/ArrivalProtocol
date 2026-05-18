@@ -1,0 +1,16 @@
+body.mode-memory {
+  --bg: #04080d;
+  --window: rgba(8, 16, 26, 0.92);
+  --edge: #0e2438;
+  --edge-bright: #1d4566;
+  --accent: #00d4ff;
+  --accent-dim: #4a90a8;
+  --accent-bright: #b3e5fc;
+  --warn: #ff4e7a;
+  --good: #7dffb2;
+  --text: #d6f0ff;
+  --text-dim: #4a7a90;
+  --ambient-1: rgba(0,212,255,0.05);
+  --ambient-2: rgba(0,212,255,0.03);
+  --scan: rgba(0,212,255,0.02);
+}

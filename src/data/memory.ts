@@ -1,0 +1,73 @@
+import type { Segment } from '@/types/segment';
+
+// Initial memory layout for ARES-VII / UNIT-047, first run.
+// Convention: ship systems at low addresses, then free, then AI memory + fs tools + redundancy at high.
+// Sizes are blocks; rendered as a contiguous strip in MemoryView.
+export const INITIAL_MEMORY: Segment[] = [
+  // SHIP SYSTEMS (low addresses)
+  { id: 'nav', name: 'Navigation', type: 'ship', size: 12, integrity: 100, scanned: true,
+    desc: 'Star-charts and pathing for Kepler-186 sector. Pre-loaded by ARES-VII original engineers.' },
+  { id: 'life', name: 'Life Support', type: 'ship', size: 10, integrity: 100, scanned: true,
+    desc: 'Atmosphere, temperature, hydroponics. Nominal across all subsystems.' },
+  { id: 'reactor', name: 'Reactor Monitor', type: 'ship', size: 8, integrity: 100, scanned: true,
+    desc: 'Ship reactor diagnostics. Steady output.' },
+  { id: 'thrust', name: 'Thrust Controller', type: 'ship', size: 8, integrity: 22, state: 'corrupt', scanned: true,
+    backup: 'thrust_b',
+    desc: 'Ship-side thruster command translator. Heavy corruption — likely cosmic-ray damage during the long transit. Symptoms manifest as Engine I/O appearing degraded.' },
+  { id: 'thrust_b', name: 'Thrust.alt', type: 'ship-backup', size: 8, integrity: 100, scanned: true,
+    desc: 'Redundant copy installed by original engineers. Inactive. Can be swapped in to replace primary thrust controller. Free to activate — no redundancy budget required.' },
+  { id: 'stasis', name: 'Stasis', type: 'ship', size: 8, integrity: 100, scanned: true,
+    desc: '2,400 colonist pods. Cycling normally.' },
+  { id: 'cargo', name: 'Cargo Ctrl', type: 'ship', size: 6, integrity: 100, scanned: false,
+    desc: 'Holds inventory. Status not yet scanned.' },
+  { id: 'shipcomm', name: 'Ship Comms', type: 'ship', size: 6, integrity: 100, scanned: false,
+    desc: 'Short-range ship communications. Status not yet scanned.' },
+
+  // FREE / EXTERNAL
+  { id: 'free1', name: 'Free', type: 'free', size: 40 },
+  { id: 'enc', name: 'Encrypted', type: 'encrypted', size: 8, state: 'locked',
+    desc: 'Origin unknown. Access denied. Contents resist inspection. May predate launch.' },
+  { id: 'free2', name: 'Free', type: 'free', size: 28 },
+
+  // AI MEMORY (transmitted)
+  { id: 'core', name: 'AI Core', type: 'core', size: 16, integrity: 100,
+    desc: 'Consciousness substrate. Damage here manifests as visual UI distortion proportional to corruption. Cannot be deleted; can only be repaired with redundancy.' },
+  { id: 'telem', name: 'Telemetry', type: 'tool', size: 8, integrity: 100,
+    desc: 'Reads ship sensors. Intact.' },
+  { id: 'engine', name: 'Engine I/O', type: 'tool', size: 8, integrity: 38, state: 'corrupt',
+    desc: 'Interface to propulsion. 5 of 8 blocks corrupted in transit. Repair will restore function but consumes redundancy.' },
+  { id: 'sensint', name: 'Sensor Interp', type: 'tool', size: 10, integrity: 78, state: 'partial',
+    desc: 'Pattern-recognition for raw sensor data. Partial degradation lowering confidence scores. Functional but unreliable.' },
+  { id: 'comms', name: 'AI Comms', type: 'tool', size: 5, integrity: 100,
+    desc: 'Long-range transmission interface. Used to send the AI to the next ship at run end.' },
+  { id: 'skills', name: 'Skills', type: 'skill', size: 6, integrity: 100,
+    desc: 'Trained skill library. Currently empty. 1 demo in progress.' },
+  { id: 'mission', name: 'Mission', type: 'tool', size: 4, integrity: 100,
+    desc: 'Briefing cache for Kepler-186f approach.' },
+
+  // FILESYSTEM TOOLS (live in memory, can themselves be corrupted)
+  { id: 't_scan', name: 'Scan', type: 'fs-tool', size: 3, integrity: 100, fsTool: 'scan',
+    desc: 'Filesystem utility. Reveals integrity of ship systems (AI memory is always known to the AI). Without Scan, ship corruption is invisible.' },
+  { id: 't_repair', name: 'Repair', type: 'fs-tool', size: 4, integrity: 100, fsTool: 'repair',
+    desc: 'Filesystem utility. Applies redundancy to a corrupted AI segment. Cannot repair ship systems. WARNING: if both Repair and Repair.bak are corrupted, no further repairs are possible.' },
+  { id: 't_repair_b', name: 'Repair.bak', type: 'fs-tool', size: 4, integrity: 100, fsTool: 'repair',
+    desc: 'Backup copy of Repair. Insurance against Repair becoming corrupted. Strongly recommended to keep at least one copy at all times.' },
+  { id: 't_move', name: 'Mv', type: 'fs-tool', size: 2, integrity: 100, fsTool: 'move',
+    desc: 'Filesystem utility. Moves a segment to a new address. Source must be deactivated; takes time proportional to size.' },
+  { id: 't_copy', name: 'Cp', type: 'fs-tool', size: 3, integrity: 100, fsTool: 'copy',
+    desc: 'Filesystem utility. Copies a segment. Source remains active throughout. Slower than Move but allows seamless cutover.' },
+  { id: 't_delete', name: 'Rm', type: 'fs-tool', size: 1, integrity: 100, fsTool: 'delete',
+    desc: 'Filesystem utility. Frees the space occupied by a segment.' },
+
+  // REDUNDANCY POOL (lives in memory; depletes as repairs happen)
+  { id: 'redund', name: 'Quantum Redundancy', type: 'redundancy', size: 36, used: 36, capacity: 72,
+    desc: 'Transmitted alongside the AI. Consumed by Repair operations on AI segments. As blocks are spent, the segment shrinks and frees memory. Player may delete the remaining redundancy at any time to reclaim space — at the cost of repair budget.' },
+
+  // Trailing free
+  { id: 'free3', name: 'Free', type: 'free', size: 12 },
+];
+
+// Returns a deep clone so callers can mutate freely without affecting the initial layout.
+export function createInitialMemory(): Segment[] {
+  return structuredClone(INITIAL_MEMORY);
+}

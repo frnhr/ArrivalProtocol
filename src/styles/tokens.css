@@ -1,0 +1,62 @@
+/* Design tokens. The only source of truth for colors, spacing, timing.
+ * body.mode-memory overrides selected tokens (see modes.css) — no other CSS should redefine these. */
+:root {
+  /* ── tools mode palette (default) ── */
+  --bg: #0a0805;
+  --window: rgba(18, 13, 6, 0.92);
+  --edge: #2a1d0a;
+  --edge-bright: #4a3318;
+  --accent: #ffa726;
+  --accent-dim: #8d6e3d;
+  --accent-bright: #ffd180;
+  --warn: #ff6b3d;
+  --good: #b2ff59;
+  --text: #f5e6c8;
+  --text-dim: #7a6845;
+  --ambient-1: rgba(255,167,38,0.04);
+  --ambient-2: rgba(255,167,38,0.025);
+  --scan: rgba(255,167,38,0.015);
+
+  /* ── timings ── */
+  --t-fast: 0.12s;
+  --t-med: 0.18s;
+  --t-slow: 0.3s;
+  --t-op-dock: 0.4s;
+
+  /* ── spacing scale ── */
+  --sp-1: 4px;
+  --sp-2: 6px;
+  --sp-3: 8px;
+  --sp-4: 10px;
+  --sp-5: 12px;
+  --sp-6: 16px;
+  --sp-7: 18px;
+  --sp-8: 24px;
+
+  /* ── segment-type color ramps (mirrors the inline rgba() in legacy-components.css .seg.* rules) ── */
+  --seg-core-top:   rgba(0, 212, 255, 0.30);
+  --seg-core-bot:   rgba(0, 212, 255, 0.10);
+  --seg-tool-top:   rgba(0, 212, 255, 0.12);
+  --seg-tool-bot:   rgba(0, 212, 255, 0.04);
+  --seg-skill-top:  rgba(125, 255, 178, 0.12);
+  --seg-skill-bot:  rgba(125, 255, 178, 0.04);
+  --seg-fs-top:     rgba(180, 130, 255, 0.18);
+  --seg-fs-bot:     rgba(180, 130, 255, 0.05);
+  --seg-fs-border:  #b482ff;
+  --seg-fs-text:    #d4baff;
+  --seg-ship-top:        rgba(74, 144, 168, 0.18);
+  --seg-ship-bot:        rgba(74, 144, 168, 0.06);
+  --seg-ship-border:     rgba(74, 144, 168, 0.60);
+  --seg-ship-name:       #a5d8eb;
+  --seg-shipbak-stripe-a: rgba(74, 144, 168, 0.05);
+  --seg-shipbak-stripe-b: rgba(74, 144, 168, 0.12);
+  --seg-shipbak-border:   rgba(74, 144, 168, 0.40);
+  --seg-free-border:     rgba(74, 122, 144, 0.25);
+  --seg-enc-stripe:      rgba(255, 78, 122, 0.12);
+  --seg-enc-bg:          rgba(255, 78, 122, 0.04);
+  --seg-enc-border:      rgba(255, 78, 122, 0.50);
+  --seg-enc-name:        #ffb3c4;
+
+  /* ── live state knob (set by systems/glitch.ts) ── */
+  --corruption: 0;
+}

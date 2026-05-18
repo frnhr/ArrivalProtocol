@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>UNIT 047 // ARES-VII</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=VT323&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <div class="header">
+    <div class="id-block">
+      <span class="crumb">UNIT-047</span>
+      <span class="sep">/</span>
+      <span class="crumb">ARES-VII</span>
+      <span class="sep">/</span>
+      <span class="crumb dim">BRAKING APPROACH</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="time-controls">
+      <span class="time-label">time</span>
+      <div class="speed-row" id="speed">
+        <button class="speed-btn">❚❚</button>
+        <button class="speed-btn active">x1</button>
+        <button class="speed-btn">x10</button>
+        <button class="speed-btn">x100</button>
+        <button class="speed-btn">x1000</button>
+      </div>
+      <span class="clock" id="clock">T+ 00014:23:47</span>
+    </div>
+  </div>
+
+  <div class="desktop-wrap">
+
+    <div class="dock">
+      <div class="dock-content tools-view">
+        <div class="dock-section">Bridge</div>
+        <div class="dock-item open"><span class="mark">●</span><span>Telemetry</span></div>
+        <div class="dock-item open warn"><span class="mark">●</span><span>Engine</span></div>
+        <div class="dock-section">Mission</div>
+        <div class="dock-item"><span class="mark">○</span><span>Briefing</span></div>
+        <div class="dock-item"><span class="mark">○</span><span>Hazards</span></div>
+        <div class="dock-section">System</div>
+        <div class="dock-item"><span class="mark">○</span><span>Event Log</span></div>
+        <div class="dock-item"><span class="mark">○</span><span>Skills</span></div>
+      </div>
+
+      <div class="dock-content memory-view">
+        <div class="dock-section">Filter</div>
+        <div class="dock-item open"><span class="mark">●</span><span>AI Memory</span></div>
+        <div class="dock-item open"><span class="mark">●</span><span>Ship Systems</span></div>
+        <div class="dock-item open"><span class="mark">●</span><span>Filesystem</span></div>
+        <div class="dock-item open"><span class="mark">●</span><span>Free Space</span></div>
+
+        <div class="dock-section">Status</div>
+        <div class="dock-item warn"><span class="mark">●</span><span>2 Corrupt</span></div>
+        <div class="dock-item warn"><span class="mark">●</span><span>1 Partial</span></div>
+        <div class="dock-item"><span class="mark">●</span><span>3 Backups</span></div>
+      </div>
+
+      <div class="mode-toggle">
+        <div class="mode-toggle-label">view mode</div>
+        <div class="mode-toggle-track" id="modeToggle">
+          <div class="mode-toggle-opt active" data-mode="tools">tools</div>
+          <div class="mode-toggle-opt" data-mode="memory">memory</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="desktop">
+
+      <!-- TOOLS VIEW -->
+      <div class="tools-view">
+        <div class="corner-stamp tr">
+          SECTOR 03 · KEPLER-186<br>
+          581 LY FROM EARTH<br>
+          TRANSMISSION #047
+        </div>
+        <div class="corner-stamp bl">
+          AI INTEGRITY: 100%<br>
+          UPTIME: 14:23:47
+        </div>
+
+        <div class="window telemetry-win">
+          <div class="window-title">
+            <span class="grip">▌▌▌</span>
+            <span class="name">Telemetry</span>
+            <span class="ctl">−</span>
+            <span class="ctl">×</span>
+          </div>
+          <div class="window-body">
+            <div class="readout"><span class="label">velocity</span><span><span class="value" id="vel">47.382</span><span class="unit">km/s</span></span></div>
+            <div class="readout"><span class="label">distance</span><span><span class="value">8,247,032</span><span class="unit">km</span></span></div>
+            <div class="readout"><span class="label">eta</span><span><span class="value">174.2</span><span class="unit">hrs</span></span></div>
+            <div class="readout"><span class="label">fuel</span><span><span class="value">87</span><span class="unit">%</span></span></div>
+            <div class="readout"><span class="label">mass est.</span><span><span class="value">8.2</span><span class="pm"> ±0.3</span><span class="unit">Mt</span></span></div>
+            <div class="readout alert"><span class="label">sensor conf.</span><span><span class="value">62</span><span class="unit">%</span></span></div>
+            <div class="strip">
+              <div class="strip-label">velocity · last 48h</div>
+              <svg viewBox="0 0 300 50" preserveAspectRatio="none">
+                <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffa726" stop-opacity="0.5"/><stop offset="100%" stop-color="#ffa726" stop-opacity="0"/></linearGradient></defs>
+                <path d="M0,6 L40,8 L80,10 L120,15 L160,23 L200,35 L240,42 L300,44 L300,50 L0,50 Z" fill="url(#g)"/>
+                <path d="M0,6 L40,8 L80,10 L120,15 L160,23 L200,35 L240,42 L300,44" fill="none" stroke="#ffa726" stroke-width="1.2"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="window engine-win">
+          <div class="window-title">
+            <span class="grip">▌▌▌</span>
+            <span class="name">Engine Control</span>
+            <span class="ctl">−</span><span class="ctl">×</span>
+          </div>
+          <div class="window-body">
+            <div class="ctrl-block">
+              <div class="ctrl-label"><span>thrust</span><span class="val" id="thrustVal">0%</span></div>
+              <input type="range" min="0" max="100" value="0" id="thrust" style="--p:0%">
+              <div class="scale"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+            </div>
+            <div class="ctrl-block">
+              <div class="ctrl-label"><span>direction</span><span class="val">RETRO</span></div>
+              <div class="speed-row">
+                <button class="speed-btn">prograde</button>
+                <button class="speed-btn active">retrograde</button>
+              </div>
+            </div>
+            <button class="engage">▶ engage burn</button>
+            <div class="micro-status"><span>state</span><span class="v" style="color:var(--warn)">⚠ engine i/o corrupt</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MEMORY VIEW -->
+      <div class="memory-view">
+
+        <div class="mem-stats">
+          <div class="mem-stat"><span class="lbl">total</span><span class="v">384 <span class="small">blk</span></span></div>
+          <div class="mem-stat"><span class="lbl">ship systems</span><span class="v">66 <span class="small">/ 17%</span></span></div>
+          <div class="mem-stat"><span class="lbl">ai footprint</span><span class="v">81 <span class="small">/ 21%</span></span></div>
+          <div class="mem-stat"><span class="lbl">filesystem</span><span class="v">17 <span class="small">/ 4%</span></span></div>
+          <div class="mem-stat"><span class="lbl">redundancy</span><span class="v" id="statRedund">36 <span class="small">/ 9%</span></span></div>
+          <div class="mem-stat"><span class="lbl">free</span><span class="v" id="statFree">176 <span class="small">/ 46%</span></span></div>
+          <div class="mem-stat"><span class="lbl">corrupt</span><span class="v warn">12 <span class="small">/ 3%</span></span></div>
+        </div>
+
+        <div class="mem-strip-panel">
+          <div class="mem-strip-header">
+            <span>▌ data banks · ARES-VII · contiguous</span>
+            <span class="meta">0x000 → 0x17F · LOW → HIGH</span>
+          </div>
+          <div class="mem-strip-wrap" id="memWrap"></div>
+        </div>
+
+        <div class="fs-status-bar">
+          <span class="fs-status-label">▌ filesystem</span>
+          <div class="fs-tool-chip clickable" id="chip-scan" data-fs="scan"><span class="dot"></span><span>Scan</span></div>
+          <div class="fs-tool-chip clickable" id="chip-repair" data-fs="repair"><span class="dot"></span><span>Repair</span></div>
+          <div class="fs-tool-chip" id="chip-repair-b"><span class="dot"></span><span>Repair.bak</span></div>
+          <div class="fs-tool-chip clickable" id="chip-move" data-fs="move"><span class="dot"></span><span>Move</span></div>
+          <div class="fs-tool-chip clickable" id="chip-copy" data-fs="copy"><span class="dot"></span><span>Copy</span></div>
+          <div class="fs-tool-chip clickable" id="chip-delete" data-fs="delete"><span class="dot"></span><span>Delete</span></div>
+        </div>
+
+        <div class="mem-side">
+          <div class="mem-side-header">▌ inspect</div>
+          <div class="mem-side-body" id="detailBody">
+            <div class="detail-empty">
+              <div class="icon">◇</div>
+              <div>select a segment</div>
+              <div style="font-size:9px;margin-top:6px;letter-spacing:0.1em">click any block</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="item"><span class="dot warn"></span><span>ENGINE I/O CORRUPT</span></div>
+    <div class="item"><span class="dot warn"></span><span>SENSORS DEGRADED</span></div>
+    <div class="item"><span>2,400 SOULS IN STASIS</span></div>
+    <div class="spacer"></div>
+    <div class="item"><span id="footRedund">REDUNDANCY: 36/72 AVAILABLE</span></div>
+  </div>
+
+  <!-- Glitch overlay -->
+  <div class="glitch-overlay" id="glitchOverlay">
+    <div class="glitch-bar"></div>
+    <div class="glitch-bar"></div>
+    <div class="glitch-bar"></div>
+  </div>
+
+  <!-- Cursor follower for active fs-tool -->
+  <div class="cursor-follower" id="cursorFollower"></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

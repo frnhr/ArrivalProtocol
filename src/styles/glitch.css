@@ -1,0 +1,46 @@
+/* GLITCH OVERLAY — driven by --corruption */
+.glitch-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 200;
+  opacity: var(--corruption);
+  mix-blend-mode: screen;
+  overflow: hidden;
+}
+.glitch-bar {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: rgba(255, 50, 100, 0.7);
+  animation: glitch-roll 4s linear infinite;
+}
+.glitch-bar:nth-child(2) { background: rgba(0, 220, 255, 0.6); height: 1px; animation-duration: 5.7s; animation-delay: -1.2s; }
+.glitch-bar:nth-child(3) { background: rgba(255, 220, 0, 0.4); height: 3px; animation-duration: 3.3s; animation-delay: -0.8s; }
+@keyframes glitch-roll {
+  0% { top: -10px; }
+  100% { top: 100vh; }
+}
+.glitch-char {
+  position: absolute;
+  font-family: 'JetBrains Mono', monospace;
+  color: rgba(255, 80, 120, 0.9);
+  font-size: 11px;
+  text-shadow: 1px 0 rgba(0,220,255,0.6), -1px 0 rgba(255,220,0,0.4);
+  animation: glitch-flicker 0.5s steps(2) infinite;
+}
+@keyframes glitch-flicker {
+  0%, 100% { opacity: 1; transform: translateX(0); }
+  50% { opacity: 0.3; transform: translateX(1px); }
+}
+.glitch-block {
+  position: absolute;
+  background: rgba(255, 78, 122, 0.15);
+  border-top: 1px solid rgba(255,78,122,0.5);
+  border-bottom: 1px solid rgba(0,220,255,0.4);
+  animation: glitch-block-shift 0.3s steps(2) infinite;
+}
+@keyframes glitch-block-shift {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-3px); }
+}
