@@ -22,6 +22,8 @@ import { mountAllWindows } from '@components/window/Window';
 import { mountEngineWindow } from '@components/tools-view/EngineWindow';
 import { mountMemoryStats } from '@components/memory-view/MemoryStats';
 import { mountFooter } from '@components/footer/Footer';
+import { mountFsToolsSystem } from '@systems/fs-tools';
+import { mountCursorFollower } from '@components/cursor-follower/CursorFollower';
 
 mountGlitchDriver(store);
 mountClock(store);
@@ -32,3 +34,5 @@ mountAllWindows();
 mountEngineWindow();
 mountMemoryStats(store);
 mountFooter(store);
+mountFsToolsSystem(store);
+mountCursorFollower(store);

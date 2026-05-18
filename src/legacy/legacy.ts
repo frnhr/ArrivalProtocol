@@ -4,47 +4,40 @@
 // Step 6: the legacy `memory` array is now the same reference as store.getState().memory.
 // Mutations made here are visible to anything that reads via the store. We call
 // store.notify() at the end of render() so subscribers get re-evaluated.
+// Step 14e: fs-tool state machine + cursor follower + global handlers moved to
+// @systems/fs-tools.ts. What remains here: render() pipeline + segBehavior closure,
+// runAction dispatcher, split-overlay, placement preview, repair.bak chip.
 
-import { TOOL_ICONS, TOOL_HINTS } from '@data/fs-tools';
-import { TYPE_LABELS } from '@data/type-labels';
 import { store } from '@state/instance';
 import { renderMemoryStrip } from '@components/memory-view/MemoryStrip';
 import { renderSegmentPart } from '@components/memory-view/SegmentBlock';
-import { renderDetailPanel, mountDetailPanel } from '@components/memory-view/DetailPanel';
+import { mountDetailPanel } from '@components/memory-view/DetailPanel';
 import { mountSelectionHighlight } from '@components/memory-view/SelectionHighlight';
 import { updateFsChips as updateFsChipsExt } from '@components/memory-view/FsStatusBar';
-import { renderCursorFollower } from '@components/cursor-follower/CursorFollower';
-import { computeMoveRegion as computeMoveRegionExt, isValidTarget as isValidTargetExt } from '@systems/fs-tools';
-import { startOp, getActiveOp } from '@systems/ops';
-import { getFsTool, getRedundancy, selectCorruption } from '@state/selectors';
-import { actionScan, actionSwap, actionActivate, actionDeleteRedundancy, actionRepair, actionDelete, actionMove, actionCopy } from '@state/actions';
-import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } from '@systems/memory-ops';
+import {
+  computeMoveRegion as computeMoveRegionExt,
+  applyTool,
+  getCursorXY,
+  setPlacementBridge,
+} from '@systems/fs-tools';
+import { getActiveOp } from '@systems/ops';
+import { actionScan, actionSwap, actionActivate, actionDeleteRedundancy, actionRepair, actionDelete } from '@state/actions';
 
-  // ===== Memory model =====
-  // Continuous strip from low address to high. Convention: ship → free → AI → fs tools → redundancy → free.
   const memory = store.getState().memory;
-
-  // Filesystem tool registry — which ops are available depends on healthy tools
-  function getTool(fsName) {
-    return memory.find(m => m.fsTool === fsName && (m.integrity || 0) > 50 && m.state !== 'busy');
-  }
-  function getRedund() { return memory.find(m => m.type === 'redundancy'); }
 
   // ===== Rendering =====
   const memWrap = document.getElementById('memWrap');
 
-  function totalSizeSoFar(idx) {
-    let s = 0;
-    for (let i = 0; i < idx; i++) s += memory[i].size;
-    return s;
-  }
-
-  // Selection/hover/click behavior is still owned by legacy closures here;
-  // MemoryStrip just builds the DOM and wires the handlers we pass in.
+  // segBehavior is consumed by MemoryStrip when it builds segment parts.
+  // Click decides: tool-apply (when a tool is active) or selection update.
   const segBehavior = {
     onClick: (s, ev) => {
-      if (activeTool) { ev.stopPropagation(); applyTool(s); }
-      else selectSegment(s);
+      if (store.getState().ui.activeTool) {
+        ev.stopPropagation();
+        applyTool(store, s, actionDeps);
+      } else {
+        store.update(d => { d.ui.selectedId = s.id; });
+      }
     },
     onMouseEnter: (s, el) => onSegHover(s, el),
     onMouseLeave: (s, el) => onSegLeave(s, el),
@@ -53,180 +46,60 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
   function render() {
     renderMemoryStrip(memWrap, memory, segBehavior);
     updateFsChips();
-    updateStats();
     // Re-evaluate selectors for anything subscribed to the store. Legacy mutates
     // `memory` (which IS store.getState().memory) in place, so subscribers need a
     // manual nudge here — until each subsystem owns its mutations via store.update().
     store.notify();
   }
 
-  // Thin wrapper around the extracted SegmentBlock module. Kept here so the
-  // split-overlay and phantom-creation paths in this file continue to work.
-  // Will be removed once those callers migrate in later steps.
+  // Thin wrapper used by showSplitOverlay to render an unbroken preview.
   function renderSegPart(s, partSize, partIdx, totalParts, partOffset) {
     return renderSegmentPart(s, { partSize, partIdx, totalParts, partOffset }, segBehavior);
   }
 
-  // ===== Selection — store-driven =====
-  // selectedId lives in state.ui; DetailPanel and SelectionHighlight subscribe.
-  // selectSegment is a thin store-update dispatcher kept here so click handlers
-  // wired by MemoryStrip's segBehavior can still call it by name.
-  function selectSegment(s) {
-    store.update(d => { d.ui.selectedId = s.id; });
-  }
-
   // ===== Actions =====
+  // runAction is the dispatcher invoked by DetailPanel's action buttons. The
+  // fs-tools system invokes individual action functions directly via applyTool.
   function runAction(s, action) {
-    if (action === 'repair') doRepair(s);
-    else if (action === 'swap') doSwap(s);
-    else if (action === 'activate') doActivate(s);
-    else if (action === 'delete_redund') doDeleteRedund();
-    else if (action === 'scan') doScan(s);
+    if (action === 'repair') actionRepair(store, s, actionDeps);
+    else if (action === 'swap') actionSwap(store, s, actionDeps);
+    else if (action === 'activate') actionActivate(store, s, actionDeps);
+    else if (action === 'delete_redund') actionDeleteRedundancy(store, actionDeps);
+    else if (action === 'scan') actionScan(store, s, actionDeps);
+    else if (action === 'rm') actionDelete(store, s, actionDeps);
   }
 
-  // doRepair delegated to actionRepair in @state/actions.ts (see actionDeps binding above)
-
-  // Actions delegated to @state/actions.ts. After Step 14d the deps bag only
-  // wires render() and cursor tracking — selection, detail refresh, and empty
-  // state are all subscriber-driven now (see DetailPanel + SelectionHighlight).
+  // Transitional callback bag. Once MemoryStrip becomes a subscriber (14g),
+  // rerender disappears and actions just call store.notify().
   const actionDeps = {
     rerender: () => render(),
-    getCursorXY: () => ({ x: lastMouseX, y: lastMouseY }),
+    getCursorXY,
   };
-  const doSwap        = (s) => actionSwap(store, s, actionDeps);
-  const doActivate    = (s) => actionActivate(store, s, actionDeps);
-  const doDeleteRedund = () => actionDeleteRedundancy(store, actionDeps);
-  const doScan        = (s) => actionScan(store, s, actionDeps);
-  const doRepair      = (s) => actionRepair(store, s, actionDeps);
-  const doDelete      = (s) => actionDelete(store, s, actionDeps);
-  const doMove        = (src, placement) => actionMove(store, src, placement, actionDeps);
-  const doCopy        = (src, placement) => actionCopy(store, src, placement, actionDeps);
 
-  // ===== Filesystem tool cursor-stick interaction =====
-  let activeTool = null;   // { fsTool: 'scan'|'repair'|'move'|'copy'|'delete' }
-  let pickedSource = null; // for move/copy: the source segment object
-  const follower = document.getElementById('cursorFollower');
-  let lastMouseX = 0, lastMouseY = 0;
-
-  // Op engine moved to @systems/ops.ts. activeOps tracking is private to that module;
-  // the split-overlay reads in-flight records via getActiveOp(segId).
-  function startOpProgress(opts) {
-    return startOp(opts);
-  }
-
-  function pickUpTool(fsName) {
-    // Toggle off if same tool picked and we're not mid-2-stage operation
-    if (activeTool && activeTool.fsTool === fsName && !pickedSource) {
-      cancelTool();
-      return;
-    }
-    // Find a healthy tool of this type
-    const tool = memory.find(m => m.fsTool === fsName && (m.integrity || 0) > 50 && m.state !== 'busy');
-    if (!tool) return; // chip is bad/busy
-
-    activeTool = { fsTool: fsName, toolSegId: tool.id };
-    pickedSource = null;
-    document.body.classList.add('tool-active', `tool-${fsName}`);
-    document.querySelectorAll('.fs-tool-chip.picked').forEach(c => c.classList.remove('picked'));
-    document.querySelector(`.fs-tool-chip[data-fs="${fsName}"]`)?.classList.add('picked');
-    updateFollower();
-    refreshTargetClasses();
-  }
-
-  function cancelTool() {
-    activeTool = null;
-    pickedSource = null;
-    document.body.classList.remove('tool-active', 'tool-scan', 'tool-repair', 'tool-move', 'tool-copy', 'tool-delete');
-    document.querySelectorAll('.fs-tool-chip.picked').forEach(c => c.classList.remove('picked'));
-    document.querySelectorAll('.seg.picked-source').forEach(el => el.classList.remove('picked-source'));
-    document.querySelectorAll('.seg.valid-target, .seg.invalid-target, .seg.dest-hover').forEach(el => {
-      el.classList.remove('valid-target', 'invalid-target', 'dest-hover');
-      el.style.removeProperty('--dest-start-pct');
-      el.style.removeProperty('--dest-end-pct');
-    });
-    pendingPlaceholder = null;
-    updateFollower();
-  }
-
-  // Pure logic now lives in @systems/fs-tools.ts; these wrappers close over the
-  // legacy `activeTool` and `pickedSource` locals so all existing call-sites keep working.
-  function computeMoveRegion(source) {
-    return computeMoveRegionExt(memory, source);
-  }
-
-  function isValidTarget(s) {
-    if (!activeTool) return false;
-    return isValidTargetExt(s, {
-      state: store.getState(),
-      activeKind: activeTool.fsTool,
-      pickedSource,
-    });
-  }
-
-  function refreshTargetClasses() {
-    document.querySelectorAll('.seg').forEach(el => {
-      el.classList.remove('valid-target', 'invalid-target');
-      if (!activeTool) return;
-      const s = memory.find(m => m.id === el.dataset.id);
-      if (!s) return;
-      el.classList.add(isValidTarget(s) ? 'valid-target' : 'invalid-target');
-    });
-    // Re-mark picked source (all parts if split)
-    if (pickedSource) {
-      document.querySelectorAll(`.seg[data-id="${pickedSource.id}"]`).forEach(el => el.classList.add('picked-source'));
-    }
-  }
-
-  function updateFollower() {
-    renderCursorFollower(follower, activeTool?.fsTool ?? null, pickedSource);
-  }
-
-  function applyTool(s) {
-    if (!activeTool || !isValidTarget(s)) return;
-    const fs = activeTool.fsTool;
-
-    if (fs === 'scan')   { doScan(s);    cancelTool(); return; }
-    if (fs === 'repair') { doRepair(s);  cancelTool(); return; }
-    if (fs === 'delete') { doDelete(s);  cancelTool(); return; }
-
-    if (fs === 'move' || fs === 'copy') {
-      if (!pickedSource) {
-        pickedSource = s;
-        refreshTargetClasses();
-        updateFollower();
-        // Initialize placeholder if cursor is already over a valid target
-        updatePlaceholderAt(lastMouseX, lastMouseY);
-      } else {
-        if (!pendingPlaceholder) { cancelTool(); return; }
-        if (fs === 'move') doMove(pickedSource, pendingPlaceholder);
-        else doCopy(pickedSource, pendingPlaceholder);
-        cancelTool();
-      }
-    }
-  }
+  // ===== Hover handlers — feed into split overlay and placement preview =====
 
   function onSegHover(s, el) {
-    // Surface the unbroken overlay only when hovering the FIRST part of a split file (not free)
     const totalParts = parseInt(el.dataset.totalParts) || 1;
     const partIdx = parseInt(el.dataset.partIdx) || 0;
     if (totalParts > 1 && partIdx === 0 && s.type !== 'free') showSplitOverlay(s);
 
-    if (!activeTool) return;
-    if (!isValidTarget(s)) return;
-    // Stage 2 of move/copy: drive the movable placeholder from cursor position
-    if ((activeTool.fsTool === 'move' || activeTool.fsTool === 'copy') && pickedSource) {
-      updatePlaceholderAt(lastMouseX, lastMouseY);
+    const state = store.getState();
+    const active = state.ui.activeTool;
+    if (!active) return;
+    // Stage 2 of move/copy: keep the placeholder following the cursor.
+    if (state.ui.pickedSourceId && (active.kind === 'move' || active.kind === 'copy')) {
+      const { x, y } = getCursorXY();
+      updatePlaceholderAt(x, y);
     }
   }
 
-  function onSegLeave(s, el) {
+  function onSegLeave(s, _el) {
     hideSplitOverlay(s.id);
-    // Placeholder lifetime is managed by mousemove; no per-part cleanup needed here
   }
 
   // ===== Movable destination placeholder (move/copy stage 2) =====
-  // pendingPlaceholder is committed on click. col is the start column within the free block.
-  let pendingPlaceholder = null;
+  // Writes the chosen placement into state.ui.pendingPlacement; the fs-tools
+  // system reads it from there when applyTool fires for stage 2.
 
   function clearPlaceholder() {
     document.querySelectorAll('.seg.dest-hover').forEach(el => {
@@ -234,11 +107,10 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
       el.style.removeProperty('--dest-start-pct');
       el.style.removeProperty('--dest-end-pct');
     });
-    pendingPlaceholder = null;
+    store.update(d => { d.ui.pendingPlacement = null; });
   }
 
-  // Render the placeholder spanning across the contiguous region (one or more segs).
-  function renderPlaceholderInRegion(regionSegs, targetCol) {
+  function renderPlaceholderInRegion(regionSegs, targetCol, pickedSource) {
     const regionIds = new Set(regionSegs.map(s => s.id));
     document.querySelectorAll('.seg.dest-hover').forEach(el => {
       if (!regionIds.has(el.dataset.id)) {
@@ -276,8 +148,13 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
   }
 
   function updatePlaceholderAt(clientX, clientY) {
-    if (!activeTool || !pickedSource) return;
-    if (activeTool.fsTool !== 'move' && activeTool.fsTool !== 'copy') return;
+    const state = store.getState();
+    const active = state.ui.activeTool;
+    const pickedId = state.ui.pickedSourceId;
+    if (!active || !pickedId) return;
+    if (active.kind !== 'move' && active.kind !== 'copy') return;
+    const pickedSource = memory.find(m => m.id === pickedId);
+    if (!pickedSource) return;
 
     const hit = document.elementFromPoint(clientX, clientY);
     const partEl = hit?.closest?.('.seg');
@@ -286,13 +163,9 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
     const seg = memory.find(m => m.id === partEl.dataset.id);
     if (!seg) { clearPlaceholder(); return; }
 
-    // Region differs by tool and by which kind of seg the cursor is over:
-    //   move + in-region hover → slide within source + adjacent free
-    //   move + non-adjacent free hover → drop into that free seg (same shape as copy)
-    //   copy → only the hovered free seg
     let regionSegs, totalSize;
-    if (activeTool.fsTool === 'move') {
-      const region = computeMoveRegion(pickedSource);
+    if (active.kind === 'move') {
+      const region = computeMoveRegionExt(memory, pickedSource);
       if (region && region.segs.includes(seg) && region.totalSize >= pickedSource.size) {
         regionSegs = region.segs;
         totalSize = region.totalSize;
@@ -312,7 +185,6 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
       totalSize = seg.size;
     }
 
-    // Map cursor pixel → column within region
     let segOffsetInRegion = 0;
     for (const r of regionSegs) {
       if (r.id === seg.id) break;
@@ -327,16 +199,20 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
     const maxStartCol = totalSize - pickedSource.size;
     targetCol = Math.max(0, Math.min(maxStartCol, targetCol));
 
-    renderPlaceholderInRegion(regionSegs, targetCol);
-    pendingPlaceholder = {
-      regionSegIds: regionSegs.map(s => s.id),
-      col: targetCol,
-    };
+    renderPlaceholderInRegion(regionSegs, targetCol, pickedSource);
+    store.update(d => {
+      d.ui.pendingPlacement = {
+        regionSegIds: regionSegs.map(s => s.id),
+        col: targetCol,
+      };
+    });
   }
 
+  // Bridge placement updater/clearer into the fs-tools system so the
+  // system's mousemove and cancelTool paths can drive them.
+  setPlacementBridge(updatePlaceholderAt, clearPlaceholder);
+
   // ===== Hover overlay for files split across rows =====
-  // Shows the unbroken file as a tooltip-like preview floating above the first part.
-  // If the file has an active op, mirrors a progress bar replica synced to the op.
   let overlayEl = null;
   let overlayForSegId = null;
   let pendingHide = null;
@@ -351,10 +227,8 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
 
   function showSplitOverlay(s) {
     if (pendingHide) { clearTimeout(pendingHide); pendingHide = null; }
-    // No-op if already showing for this seg (avoids flicker between parts)
     if (overlayForSegId === s.id && overlayEl?.classList.contains('visible')) return;
 
-    // Switching segs: clear old op overlay-bar reference
     if (overlayForSegId && overlayForSegId !== s.id) {
       const oldOp = getActiveOp(overlayForSegId);
       if (oldOp && oldOp.overlayBar) { oldOp.overlayBar = null; }
@@ -371,9 +245,7 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
 
     const overlay = ensureOverlayEl();
     overlay.innerHTML = '';
-    // Render an unbroken version (totalParts = 1, partSize = s.size)
     const unbroken = renderSegPart(s, s.size, 0, 1, 0);
-    // Strip identifying attrs — overlay is purely visual; queries should not find it.
     unbroken.removeAttribute('data-id');
     unbroken.removeAttribute('data-part-idx');
     unbroken.removeAttribute('data-total-parts');
@@ -382,7 +254,6 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
     unbroken.style.gridColumn = '';
     overlay.appendChild(unbroken);
 
-    // Over the same row as the first part, right-aligned to the row's end (= first part's right edge)
     overlay.style.left = (rect.right - fullW) + 'px';
     overlay.style.top = rect.top + 'px';
     overlay.style.width = fullW + 'px';
@@ -390,7 +261,6 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
     overlay.classList.add('visible');
     overlayForSegId = s.id;
 
-    // Mirror an active op's progress bar inside the overlay
     const op = getActiveOp(s.id);
     if (op) {
       const bar = document.createElement('div');
@@ -410,7 +280,6 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
     if (pendingHide) clearTimeout(pendingHide);
     pendingHide = setTimeout(() => {
       pendingHide = null;
-      // Only the first part keeps the overlay alive — continuation hovers do not
       if (document.querySelector(`.seg[data-id="${segId}"][data-part-idx="0"]:hover`)) return;
       if (!overlayEl) return;
       overlayEl.classList.remove('visible');
@@ -420,67 +289,11 @@ import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } 
     }, 60);
   }
 
-  // ===== Filesystem operations =====
-  // mergeAdjacentFree delegated to @systems/memory-ops; thin wrapper closes
-  // over the local `memory` so existing callers (doMove, doCopy, doDelete)
-  // stay the same.
-  const mergeAdjacentFreeFromOps = mergeAdjacentFreeExt;
-  function mergeAdjacentFree() { mergeAdjacentFreeFromOps(memory); }
-
-  // showEmpty removed — DetailPanel subscriber renders empty state when
-  // state.ui.selectedId is null.
-
-  // doDelete delegated to actionDelete in @state/actions.ts (see actionDeps binding above)
-
-
   function updateFsChips() {
     updateFsChipsExt(memory);
   }
 
-  // updateStats is now a subscriber-driven component (MemoryStats, Footer).
-  // render()'s store.notify() call below fires those subscribers.
-  function updateStats() { /* delegated */ }
-
-  // ===== Corruption (delegated to systems/glitch.ts) =====
-  // Demo-slider input arrives as 0..100 representing corruption percentage.
-  // We translate that into ai.coreIntegrity (100..0) and let the glitch driver react.
-  function setCorruption(pct) {
-    store.update(d => { d.ai.coreIntegrity = 100 - pct; });
-  }
-
-  // Mode toggle, dock items, time controls, clock, velocity sim, and window
-  // dragging are now owned by their respective modules under @components and
-  // @systems, mounted from src/main.ts after this legacy module executes.
-
-  // FS-tool chip pickup
-  document.querySelectorAll('.fs-tool-chip.clickable').forEach(chip => {
-    chip.addEventListener('click', () => {
-      if (chip.classList.contains('bad')) return;
-      pickUpTool(chip.dataset.fs);
-    });
-  });
-  // Cursor follower tracking (and global cursor position for op-progress docking)
-  document.addEventListener('mousemove', e => {
-    lastMouseX = e.clientX;
-    lastMouseY = e.clientY;
-    if (!activeTool) return;
-    follower.style.left = e.clientX + 'px';
-    follower.style.top = e.clientY + 'px';
-    if (pickedSource && (activeTool.fsTool === 'move' || activeTool.fsTool === 'copy')) {
-      updatePlaceholderAt(e.clientX, e.clientY);
-    }
-  });
-  // Cancel on ESC or right-click
-  window.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && activeTool) cancelTool();
-  });
-  window.addEventListener('contextmenu', e => {
-    if (activeTool) { e.preventDefault(); cancelTool(); }
-  });
-
-  // Subscriber-driven UI for the detail panel and selection highlight.
-  // Mounted from here (not main.ts) because runAction closes over legacy's
-  // local do* aliases; once those move to actions.ts, mounting moves to main.ts.
+  // Subscriber-driven UI mounted from here because runAction is local.
   mountDetailPanel(store, { onAction: (seg, actionId) => runAction(seg, actionId) });
   mountSelectionHighlight(store);
 
