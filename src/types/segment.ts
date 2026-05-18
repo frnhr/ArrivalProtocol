@@ -1,6 +1,4 @@
 // Segment is the unit of the memory strip. A memory layout is an ordered list of segments.
-// The discriminated union below is the canonical shape; legacy code may temporarily relax
-// some fields via `// @ts-nocheck` during the migration.
 
 import type { FsToolKind } from '@/types/fs-tool';
 

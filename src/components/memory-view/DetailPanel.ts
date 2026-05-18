@@ -196,9 +196,9 @@ function renderEmpty(target: HTMLElement): void {
 }
 
 // Mount the detail panel as a store subscriber. Re-renders whenever the store
-// is notified (memory mutations from actions trigger this via store.notify()
-// after legacy's rerender; pure store.update calls fire it directly). Always-
-// false comparator so in-place memory mutations don't get missed.
+// is notified (action functions call store.notify() after in-place segment
+// mutations; store.update() fires it implicitly). Always-false comparator so
+// in-place memory mutations don't get missed.
 export function mountDetailPanel(
   store: Store<GameState>,
   opts: { onAction: (seg: Segment, actionId: DetailActionId) => void },

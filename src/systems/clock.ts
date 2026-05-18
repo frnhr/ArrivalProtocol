@@ -49,7 +49,12 @@ export function mountClock(store: Store<GameState>): () => void {
 
     const dtGame = dtWall * speed;
 
-    store.update((d) => {
+    // mutate (not update): clock tSec + velocity have no store subscribers — the
+    // clock patches its own DOM below, and other readers pull on demand. Going
+    // through update() at 20Hz would fan out to every always-false-equals
+    // subscriber and rebuild the memory strip ~20 times per second, which
+    // interrupts clicks (DOM replaced between mousedown and mouseup).
+    store.mutate((d) => {
       d.clock.tSec += dtGame;
       d.telemetry.velocity += (Math.random() - 0.5) * VELOCITY_NOISE_RATE * dtGame;
     });

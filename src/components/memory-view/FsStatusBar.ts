@@ -1,5 +1,7 @@
 import type { Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
+import type { Store } from '@state/store';
+import type { GameState } from '@state/schema';
 
 // Map each fs-tool kind to its primary chip element id.
 const KIND_TO_CHIP_ID: Record<FsToolKind, string> = {
@@ -11,7 +13,6 @@ const KIND_TO_CHIP_ID: Record<FsToolKind, string> = {
 };
 
 // Patches the chip strip's state classes in place. No remount.
-// Called from legacy's render() until the chips own their own subscription.
 export function updateFsChips(memory: readonly Segment[]): void {
   (Object.entries(KIND_TO_CHIP_ID) as Array<[FsToolKind, string]>).forEach(([kind, chipId]) => {
     const tool = memory.find(
@@ -38,4 +39,11 @@ export function updateFsChips(memory: readonly Segment[]): void {
   if (bak && 'integrity' in bak && bakChip) {
     bakChip.classList.toggle('bad', bak.integrity < 50);
   }
+}
+
+// Mount as store subscriber. Always-false comparator since chip state depends
+// on per-segment integrity/state mutations that don't change the array reference.
+export function mountFsStatusBar(store: Store<GameState>): () => void {
+  updateFsChips(store.getState().memory);
+  return store.subscribe((s) => s.memory, (mem) => updateFsChips(mem), () => false);
 }

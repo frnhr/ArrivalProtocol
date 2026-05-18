@@ -98,12 +98,11 @@ export function getCursorXY(): { x: number; y: number } {
   return { x: lastMouseX, y: lastMouseY };
 }
 
-// ----- Placement bridge (transitional until Step 14f) -----
-// The placement-preview DOM (the moving placeholder during move/copy stage 2)
-// still lives in legacy.ts. The fs-tools system owns the cursor/event pipeline,
-// so legacy registers updater/clearer callbacks here and the system fires them
-// from mousemove and cancel paths. When 14f extracts Placement into its own
-// component, that component will register here instead, and legacy drops out.
+// ----- Placement bridge -----
+// The Placement component (@components/memory-view/Placement.ts) owns the
+// moving-placeholder DOM. The fs-tools system owns the cursor/event pipeline,
+// so Placement registers updater/clearer callbacks here and the system fires
+// them from mousemove and cancel paths. One-way: system → component.
 
 type PlacementUpdater = (x: number, y: number) => void;
 type PlacementClearer = () => void;
@@ -146,8 +145,7 @@ export function cancelTool(store: Store<GameState>): void {
     d.ui.pickedSourceId = null;
     d.ui.pendingPlacement = null;
   });
-  // Placement-preview DOM cleanup. A subscriber-driven Placement component
-  // (14f) will own this; until then, legacy registers a clearer callback.
+  // Placement-preview DOM cleanup — fires the bridge clearer.
   placementClearer?.();
 }
 

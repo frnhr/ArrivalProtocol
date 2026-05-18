@@ -50,6 +50,11 @@ export interface UiState {
   activeTool: ActiveTool | null;
   pickedSourceId: string | null;
   pendingPlacement: PendingPlacement | null;
+  // Bumped by action functions after in-place memory mutations. Subscribers
+  // that need to rebuild on memory shape/state changes watch this counter
+  // (with default Object.is equality) instead of using always-false equals,
+  // so they don't fan out on every unrelated UI update.
+  memoryRev: number;
 }
 
 export interface OpRecord {

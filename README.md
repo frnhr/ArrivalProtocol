@@ -6,23 +6,26 @@ Heavy aesthetic debt to *Uplink* (2001): the entire game lives in a UI of window
 
 ## Current state
 
-Early prototype. `prototype.html` is a single-file mockup of the in-flight UI, covering:
+Early prototype, refactored into a Vite + TypeScript modular structure (`src/`). The in-flight UI covers:
 
 - A two-mode desktop: **TOOLS** (amber CRT, where you fly the ship) and **MEMORY** (neon blue, where you inspect and repair the AI's own memory)
 - An interactive repair flow (offline → progress bar → repaired) consuming quantum redundancy
 - A filesystem-tools-as-memory-segments mechanic (Scan, Repair, Move, Copy, Delete all live in memory and can themselves be corrupted)
 - A glitch overlay demonstrating AI Core corruption effects
 
+The original single-file mockup is preserved at `legacy/prototype.html` as a behavioral reference.
+
 See `DESIGN.md` for the full design rationale and `CLAUDE.md` for working notes.
 
 ## Running
 
-Open `prototype.html` in a browser. No build step.
+```
+npm install
+npm run dev        # Vite dev server with HMR
+npm run build      # production bundle to dist/
+```
 
-```
-open prototype.html      # macOS
-xdg-open prototype.html  # Linux
-```
+To compare against the original snapshot: `open legacy/prototype.html`.
 
 ## Origin
 

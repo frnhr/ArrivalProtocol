@@ -1,4 +1,6 @@
 import type { Segment } from '@/types/segment';
+import type { Store } from '@state/store';
+import type { GameState } from '@state/schema';
 import { renderSegmentPart, type SegmentBehavior } from './SegmentBlock';
 
 const PER_ROW = 64;
@@ -66,4 +68,26 @@ export function renderMemoryStrip(
     }
   }
   container.appendChild(row);
+}
+
+// Mount MemoryStrip as a store subscriber. Subscribes to state.ui.memoryRev
+// (bumped by action functions after in-place memory mutations) with default
+// Object.is equality — so it ONLY rebuilds when memory actually changed, not
+// on unrelated UI updates like pendingPlacement, selectedId, or activeTool.
+// Rebuilding mid-mousemove would wipe Placement's .dest-hover classes; rebuilding
+// on selection changes would interrupt clicks between mousedown and mouseup.
+//
+// MUST mount before subscribers that paint classes onto .seg elements
+// (SelectionHighlight, fs-tools target classes) — those repaint after every
+// store.update, and need to run AFTER MemoryStrip's rebuild wipes the DOM.
+export function mountMemoryStrip(
+  store: Store<GameState>,
+  container: HTMLElement,
+  behavior: SegmentBehavior,
+): () => void {
+  renderMemoryStrip(container, store.getState().memory, behavior);
+  return store.subscribe(
+    (s) => s.ui.memoryRev,
+    () => renderMemoryStrip(container, store.getState().memory, behavior),
+  );
 }

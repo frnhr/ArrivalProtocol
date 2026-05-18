@@ -8,9 +8,16 @@ export type Equals<T> = (a: T, b: T) => boolean;
 export interface Store<S> {
   getState(): Readonly<S>;
   update(mutator: (draft: S) => void): void;
+  // Mutate state WITHOUT firing subscribers. For high-frequency writes that no
+  // store subscriber cares about (clock tSec, telemetry velocity) — the writer
+  // patches DOM directly and other readers pull on demand. Misuse will silently
+  // desynchronize subscriber-driven UI; only use when you can prove no one
+  // subscribes to the touched slice.
+  mutate(mutator: (draft: S) => void): void;
   subscribe<T>(selector: Selector<S, T>, listener: Listener<T>, equals?: Equals<T>): () => void;
-  // Manually re-evaluate all selectors. Used by legacy code that mutates state in place
-  // without going through update(). Components that use update() never need to call this.
+  // Manually re-evaluate all selectors. Used by action functions that mutate state
+  // in place (avoiding update() so memory slice references stay stable for the
+  // op-engine's stored seg references). Components that use update() never need this.
   notify(): void;
 }
 
@@ -40,12 +47,17 @@ export function createStore<S>(initial: S): Store<S> {
     }
   }
 
+  function mutate(mutator: (draft: S) => void): void {
+    mutator(state);
+  }
+
   function update(mutator: (draft: S) => void): void {
-    // Mutate in place. Re-enable structuredClone once legacy.ts is fully migrated
-    // and no module outside this store holds long-lived references to state slices —
-    // cloning while legacy holds an aliased `memory` reference desynchronizes them.
-    // Object-slice subscribers must supply a custom `equals` if they care about
-    // internal changes (since the array reference itself won't change).
+    // Mutate in place. Action functions hold direct references to memory and to
+    // individual segments (e.g. the `seg` arg passed in, captured in startOp
+    // callbacks). Cloning would desynchronize those — use update() only for
+    // pointer-like fields (selectedId, pendingPlacement) and notify() for
+    // in-place segment mutations. Object-slice subscribers must supply a custom
+    // `equals` if they care about internal changes.
     mutator(state);
     fireAll();
   }
@@ -69,7 +81,7 @@ export function createStore<S>(initial: S): Store<S> {
     fireAll();
   }
 
-  return { getState, update, subscribe, notify };
+  return { getState, update, mutate, subscribe, notify };
 }
 
 // Common equality helpers.

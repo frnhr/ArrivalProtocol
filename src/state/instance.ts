@@ -4,8 +4,6 @@ import { createInitialMemory } from '@data/memory';
 import { INITIAL_MISSION, INITIAL_TELEMETRY, INITIAL_CLOCK, INITIAL_AI } from '@data/mission';
 
 // The single global store. Components and systems import this singleton.
-// Legacy code holds a direct reference to state.memory and mutates it in place,
-// then calls store.notify() to re-evaluate subscriber selectors.
 export const store = createStore<GameState>({
   mission: INITIAL_MISSION,
   memory: createInitialMemory(),
@@ -18,6 +16,7 @@ export const store = createStore<GameState>({
     activeTool: null,
     pickedSourceId: null,
     pendingPlacement: null,
+    memoryRev: 0,
   },
   ops: { byId: {} },
 });

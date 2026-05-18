@@ -6,13 +6,8 @@ import './styles/base.css';
 import './styles/glitch.css';
 import './styles/legacy-components.css';
 
-// Legacy entry point — boots the prototype's UI. Progressively shrinking
-// as each subsystem is extracted into proper modules.
-import './legacy/legacy';
-
-// Systems and components extracted out of legacy. Must run after legacy executes
-// (which builds the initial DOM and seeds the store).
 import { store } from '@state/instance';
+import type { Segment } from '@/types/segment';
 import { mountGlitchDriver } from '@systems/glitch';
 import { mountClock } from '@systems/clock';
 import { mountModeToggle } from '@components/dock/ModeToggle';
@@ -22,8 +17,32 @@ import { mountAllWindows } from '@components/window/Window';
 import { mountEngineWindow } from '@components/tools-view/EngineWindow';
 import { mountMemoryStats } from '@components/memory-view/MemoryStats';
 import { mountFooter } from '@components/footer/Footer';
-import { mountFsToolsSystem } from '@systems/fs-tools';
+import { mountFsToolsSystem, applyTool, getCursorXY } from '@systems/fs-tools';
 import { mountCursorFollower } from '@components/cursor-follower/CursorFollower';
+import { mountMemoryStrip } from '@components/memory-view/MemoryStrip';
+import { mountSelectionHighlight } from '@components/memory-view/SelectionHighlight';
+import { mountDetailPanel, type DetailActionId } from '@components/memory-view/DetailPanel';
+import { mountSplitOverlay } from '@components/memory-view/SplitOverlay';
+import { mountPlacement } from '@components/memory-view/Placement';
+import { mountFsStatusBar } from '@components/memory-view/FsStatusBar';
+import {
+  actionScan, actionSwap, actionActivate, actionDeleteRedundancy,
+  actionRepair, actionDelete, type ActionDeps,
+} from '@state/actions';
+
+// Cursor position is module-local in fs-tools (mousemove writes; everything else reads).
+const actionDeps: ActionDeps = { getCursorXY };
+
+// DetailPanel action buttons dispatch through this. The fs-tools system
+// invokes individual action functions directly via applyTool.
+function runAction(seg: Segment, action: DetailActionId): void {
+  if (action === 'repair') actionRepair(store, seg, actionDeps);
+  else if (action === 'swap' && seg.type === 'ship') actionSwap(store, seg, actionDeps);
+  else if (action === 'activate' && seg.type === 'ship-backup') actionActivate(store, seg, actionDeps);
+  else if (action === 'delete_redund') actionDeleteRedundancy(store, actionDeps);
+  else if (action === 'scan' && seg.type === 'ship') actionScan(store, seg, actionDeps);
+  else if (action === 'rm') actionDelete(store, seg, actionDeps);
+}
 
 mountGlitchDriver(store);
 mountClock(store);
@@ -32,7 +51,46 @@ mountDockItems();
 mountTimeControls(store);
 mountAllWindows();
 mountEngineWindow();
-mountMemoryStats(store);
-mountFooter(store);
+
+// SplitOverlay handle is needed by segBehavior, so mount it before MemoryStrip.
+const memWrap = document.getElementById('memWrap');
+if (!memWrap) throw new Error('memWrap container missing from DOM');
+const splitOverlay = mountSplitOverlay(memWrap);
+
+// Click decides apply-vs-select; hover drives split-overlay. Placement updates
+// flow through the fs-tools system's mousemove → placement bridge.
+const segBehavior = {
+  onClick: (seg: Segment, ev: MouseEvent): void => {
+    if (store.getState().ui.activeTool) {
+      ev.stopPropagation();
+      applyTool(store, seg, actionDeps);
+    } else {
+      store.update((d) => { d.ui.selectedId = seg.id; });
+    }
+  },
+  onMouseEnter: (seg: Segment, el: HTMLElement): void => {
+    const totalParts = parseInt(el.dataset.totalParts ?? '1', 10);
+    const partIdx = parseInt(el.dataset.partIdx ?? '0', 10);
+    if (totalParts > 1 && partIdx === 0 && seg.type !== 'free') splitOverlay.show(seg);
+  },
+  onMouseLeave: (seg: Segment): void => splitOverlay.hide(seg.id),
+};
+
+// Mount order matters for store-notify cascade:
+//   1. MemoryStrip rebuilds DOM (always-false equals → fires every notify)
+//   2. SelectionHighlight + fs-tools target classes repaint .seg classes
+//      (must subscribe AFTER MemoryStrip so they run after the rebuild)
+//   3. DetailPanel, MemoryStats, FsStatusBar, Footer — independent of .seg classes
+mountMemoryStrip(store, memWrap, segBehavior);
 mountFsToolsSystem(store);
+mountSelectionHighlight(store);
 mountCursorFollower(store);
+mountDetailPanel(store, { onAction: runAction });
+mountMemoryStats(store);
+mountFsStatusBar(store);
+mountFooter(store);
+mountPlacement(store, memWrap);
+
+// Initial selection.
+const engine = store.getState().memory.find((m) => m.id === 'engine');
+if (engine) store.update((d) => { d.ui.selectedId = engine.id; });

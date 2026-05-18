@@ -12,17 +12,10 @@ import { memAddrOf } from '@systems/memory-ops';
 import { renderSegmentPart } from '@components/memory-view/SegmentBlock';
 import type { PendingPlacement } from './schema';
 
-// Transitional callback bag. After Step 14d:
-//   - Selection lives in state.ui.selectedId (DetailPanel + SelectionHighlight
-//     subscribe), so refreshDetailFor and setSelected are gone — actions write
-//     directly through store.update.
-//   - rerender stays only because legacy still owns the MemoryStrip render
-//     pipeline. Once MemoryStrip becomes a subscriber, this disappears too
-//     and actions just call store.notify().
-//   - getCursorXY stays — cursor position is module-local in the fs-tools
-//     system; mousemove fires too often to route through the store.
+// Cursor position is module-local in the fs-tools system; mousemove fires too
+// often to route through the store. Memory mutations propagate by bumping
+// state.ui.memoryRev via store.update — that's what MemoryStrip watches.
 export interface ActionDeps {
-  rerender: () => void;
   getCursorXY: () => { x: number; y: number };
 }
 
@@ -38,7 +31,7 @@ function isRepairable(seg: Segment): seg is RepairableSegment {
 export function actionScan(store: Store<GameState>, seg: ShipSegment, deps: ActionDeps): void {
   if (seg.scanned) return;
   seg.scanned = true;
-  deps.rerender();
+  store.update((d) => { d.ui.memoryRev++; });
 }
 
 // Swap a ship system with its backup. The primary becomes inactive (with .old
@@ -56,7 +49,7 @@ export function actionSwap(store: Store<GameState>, seg: ShipSegment, deps: Acti
   backup.name = backup.name.replace('.alt', '');
   delete seg.backup;
 
-  deps.rerender();
+  store.update((d) => { d.ui.memoryRev++; });
 }
 
 // Activate an inactive ship-backup. Instant; the backup becomes intact and
@@ -67,7 +60,7 @@ export function actionActivate(
   deps: ActionDeps,
 ): void {
   seg.state = 'intact';
-  deps.rerender();
+  store.update((d) => { d.ui.memoryRev++; });
 }
 
 // Reclaim the redundancy pool as free space. Requires user confirmation since
@@ -91,7 +84,7 @@ export function actionDeleteRedundancy(store: Store<GameState>, deps: ActionDeps
     (free as { name: string }).name = 'Free';
   }
   mergeAdjacentFree(memory);
-  deps.rerender();
+  store.update((d) => { d.ui.memoryRev++; });
 }
 
 // Used by actionDeleteRedundancy and tests — exposed for re-use, not exported
@@ -119,7 +112,7 @@ export function actionRepair(
 
   (seg as Segment & { operating?: boolean }).operating = true;
   repair.state = 'busy';
-  deps.rerender();
+  store.update((d) => { d.ui.memoryRev++; });
 
   const targetEls = Array.from(document.querySelectorAll<HTMLElement>(
     `.seg[data-id="${seg.id}"]`,
@@ -154,12 +147,12 @@ export function actionRepair(
         mergeAdjacentFree(memory);
       }
       repair.state = 'intact';
-      deps.rerender();
+      store.update((d) => { d.ui.memoryRev++; });
     },
     onCancel: () => {
       (seg as Segment & { operating?: boolean }).operating = false;
       repair.state = 'intact';
-      deps.rerender();
+      store.update((d) => { d.ui.memoryRev++; });
     },
   });
 }
@@ -193,7 +186,7 @@ export function actionDelete(
 
   (seg as Segment & { operating?: boolean }).operating = true;
   delTool.state = 'busy';
-  deps.rerender();
+  store.update((d) => { d.ui.memoryRev++; });
 
   const targetEls = Array.from(document.querySelectorAll<HTMLElement>(
     `.seg[data-id="${seg.id}"]`,
@@ -222,12 +215,12 @@ export function actionDelete(
       }
       delTool.state = 'intact';
       store.update((d) => { d.ui.selectedId = null; });
-      deps.rerender();
+      store.update((d) => { d.ui.memoryRev++; });
     },
     onCancel: () => {
       (seg as Segment & { operating?: boolean }).operating = false;
       delTool.state = 'intact';
-      deps.rerender();
+      store.update((d) => { d.ui.memoryRev++; });
     },
   });
 }
@@ -376,7 +369,7 @@ export function actionMove(
   if (postSize > 0) insertion.push(freeSeg(postSize, 'free-post'));
   memory.splice(regionStartIdx, regionLen, ...insertion);
   void totalSize;   // captured above; unused after splice
-  deps.rerender();
+  store.update((d) => { d.ui.memoryRev++; });
 
   const movedEls = Array.from(document.querySelectorAll<HTMLElement>(
     `.seg[data-id="${moved.id}"]`,
@@ -415,8 +408,7 @@ export function actionMove(
       }
       moveTool.state = 'intact';
       store.update((d) => { d.ui.selectedId = moved.id; });
-      deps.rerender();
-      const newSeg = store.getState().memory.find((m) => m.id === moved.id);
+      store.update((d) => { d.ui.memoryRev++; });
     },
     onCancel: () => {
       (source as Segment & { operating?: boolean }).operating = false;
@@ -429,7 +421,7 @@ export function actionMove(
         mergeAdjacentFree(mem);
       }
       moveTool.state = 'intact';
-      deps.rerender();
+      store.update((d) => { d.ui.memoryRev++; });
     },
   });
 }
@@ -451,6 +443,9 @@ export function actionCopy(
   const { regionSegs, regionStartIdx, regionLen, preSize, postSize } = resolved;
 
   copyTool.state = 'busy';
+  // Lock the source so other tools can't target it while the copy is in flight.
+  // isValidTarget rejects any segment with operating=true.
+  (source as Segment & { operating?: boolean }).operating = true;
 
   const copied: Segment = structuredClone(source);
   (copied as Segment & { id: string }).id = source.id + '_c' + Date.now();
@@ -463,7 +458,7 @@ export function actionCopy(
   insertion.push(copied);
   if (postSize > 0) insertion.push(freeSeg(postSize, 'free-cpost'));
   memory.splice(regionStartIdx, regionLen, ...insertion);
-  deps.rerender();
+  store.update((d) => { d.ui.memoryRev++; });
 
   const copiedEls = Array.from(document.querySelectorAll<HTMLElement>(
     `.seg[data-id="${copied.id}"]`,
@@ -482,12 +477,13 @@ export function actionCopy(
     onComplete: () => {
       (copied as Segment & { state?: string }).state = sourcePriorState || 'intact';
       (copied as Segment & { operating?: boolean }).operating = false;
+      (source as Segment & { operating?: boolean }).operating = false;
       copyTool.state = 'intact';
       store.update((d) => { d.ui.selectedId = copied.id; });
-      deps.rerender();
-      const newSeg = store.getState().memory.find((m) => m.id === copied.id);
+      store.update((d) => { d.ui.memoryRev++; });
     },
     onCancel: () => {
+      (source as Segment & { operating?: boolean }).operating = false;
       const mem = store.getState().memory;
       const copiedIdx = mem.indexOf(copied);
       if (copiedIdx !== -1) {
@@ -497,7 +493,7 @@ export function actionCopy(
         mergeAdjacentFree(mem);
       }
       copyTool.state = 'intact';
-      deps.rerender();
+      store.update((d) => { d.ui.memoryRev++; });
     },
   });
 }
