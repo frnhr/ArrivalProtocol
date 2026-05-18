@@ -114,7 +114,7 @@ import { getFsTool, getRedundancy, selectCorruption } from '@state/selectors';
       targetEls,
       label: `REPAIR · ${s.name}`,
       icon: TOOL_ICONS.repair,
-      dur: 3000,
+      dur: 6000,
       onComplete: () => {
         s.integrity = 100;
         s.state = 'intact';
@@ -543,7 +543,7 @@ import { getFsTool, getRedundancy, selectCorruption } from '@state/selectors';
       targetEls,
       label: `DELETE · ${s.name}`,
       icon: TOOL_ICONS.delete,
-      dur: 800,
+      dur: 1600,
       onComplete: () => {
         const idx = memory.indexOf(s);
         if (idx !== -1) {
@@ -634,7 +634,7 @@ import { getFsTool, getRedundancy, selectCorruption } from '@state/selectors';
       targetEls: movedEls,
       label: `MOVE · ${source.name}`,
       icon: TOOL_ICONS.move,
-      dur: 800 + source.size * 120,
+      dur: 1600 + source.size * 240,
       reverseFill,
       shrinkers,
       onComplete: () => {
@@ -745,7 +745,7 @@ import { getFsTool, getRedundancy, selectCorruption } from '@state/selectors';
       targetEls: copiedEls,
       label: `COPY · ${source.name}`,
       icon: TOOL_ICONS.copy,
-      dur: 1000 + source.size * 180, // slower than move
+      dur: 2000 + source.size * 360, // slower than move
       onComplete: () => {
         copied.state = source.state || 'intact';
         copied.operating = false;

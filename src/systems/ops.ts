@@ -4,11 +4,17 @@
 // target segment. For split segments, the fill advances sequentially across parts
 // so it reads as one continuous bar even when the file wraps a row.
 //
+// Progress consumes IN-GAME time via onGameTick — paused when speed is 0, faster
+// at higher speeds. The 420ms dock-in and 240ms fade-out animations stay on
+// wall-clock because they're input feedback, not world advancement.
+//
 // Optional `shrinkers` represent in-place source DOM that should "disappear" as
 // the op progresses (used by move/copy phantom animations).
 //
 // Active op records are tracked in a module-private Map so the split-file hover
 // overlay can mirror an in-flight op's progress bar — see getActiveOp().
+
+import { onGameTick } from './clock';
 
 interface OpBar {
   el: HTMLElement;
@@ -27,12 +33,12 @@ export interface OpRecord {
   segId: string;
   label: string;
   icon: string;
-  dur: number;
+  dur: number;                      // duration in GAME milliseconds
   bars: OpBar[];
   overlayBar: HTMLElement | null;   // mutated by split-overlay code
-  startTime: number | null;
+  accumGameSec: number;             // accumulated progress, in game seconds
   canceled: boolean;
-  timer: ReturnType<typeof setInterval> | null;
+  unsubTick: (() => void) | null;   // game-tick subscription, cleared on complete/cancel
   currentPct: number;
 }
 
@@ -142,9 +148,9 @@ export function startOp(opts: StartOpOpts): OpHandle {
     segId, label, icon, dur,
     bars,
     overlayBar: null,
-    startTime: null,
+    accumGameSec: 0,
     canceled: false,
-    timer: null,
+    unsubTick: null,
     currentPct: 0,
   };
 
@@ -177,19 +183,21 @@ export function startOp(opts: StartOpOpts): OpHandle {
     e.stopPropagation();
     if (record.canceled) return;
     record.canceled = true;
-    if (record.timer) clearInterval(record.timer);
+    record.unsubTick?.();
+    record.unsubTick = null;
     activeOps.delete(segId);
     fadeOut();
     onCancel?.();
   });
 
+  // Dock-in animation is wall-clock — input feedback, runs even when game is paused.
   setTimeout(() => {
     if (record.canceled) return;
-    record.startTime = Date.now();
-    record.timer = setInterval(() => {
+    const durSec = dur / 1000;
+    record.unsubTick = onGameTick((dtGameSec) => {
       if (record.canceled) return;
-      const elapsed = Date.now() - record.startTime!;
-      const p = Math.min(100, (elapsed / dur) * 100);
+      record.accumGameSec += dtGameSec;
+      const p = Math.min(100, (record.accumGameSec / durSec) * 100);
       record.currentPct = p;
       const globalFrac = p / 100;
       bars.forEach((b) => {
@@ -219,13 +227,13 @@ export function startOp(opts: StartOpOpts): OpHandle {
         });
       }
       if (p >= 100) {
-        clearInterval(record.timer!);
-        record.timer = null;
+        record.unsubTick?.();
+        record.unsubTick = null;
         activeOps.delete(segId);
         fadeOut();
         onComplete?.();
       }
-    }, 40);
+    });
   }, 420);
 
   activeOps.set(segId, record);

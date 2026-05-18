@@ -25,6 +25,6 @@ mountGlitchDriver(store);
 mountClock(store);
 mountModeToggle();
 mountDockItems();
-mountTimeControls();
+mountTimeControls(store);
 mountAllWindows();
 mountEngineWindow();
