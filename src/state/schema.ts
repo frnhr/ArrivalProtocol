@@ -44,6 +44,9 @@ export interface PendingPlacement {
   col: number;             // column within that region where the new copy will start
 }
 
+export type FilterKey = 'ai' | 'ship' | 'filesystem' | 'free';
+export type StatusKey = 'corrupt' | 'partial' | 'backup';
+
 export interface UiState {
   mode: ViewMode;
   selectedId: string | null;
@@ -55,6 +58,13 @@ export interface UiState {
   // (with default Object.is equality) instead of using always-false equals,
   // so they don't fan out on every unrelated UI update.
   memoryRev: number;
+  // Sidebar filters: which categories are currently muted. Empty = all
+  // visible (default). Adding a key dims segments in that category.
+  filtersOff: FilterKey[];
+  // Sidebar spotlights: which statuses are pinned. Empty = no spotlight
+  // (default — all segments at full opacity). When non-empty, segments that
+  // don't match ANY active spotlight get dimmed.
+  spotlight: StatusKey[];
 }
 
 export interface OpRecord {

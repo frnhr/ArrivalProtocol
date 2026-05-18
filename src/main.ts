@@ -12,6 +12,7 @@ import { mountGlitchDriver } from '@systems/glitch';
 import { mountClock } from '@systems/clock';
 import { mountModeToggle } from '@components/dock/ModeToggle';
 import { mountDockItems } from '@components/dock/Dock';
+import { mountSidebarFilters } from '@components/dock/SidebarFilters';
 import { mountTimeControls } from '@components/header/TimeControls';
 import { mountAllWindows } from '@components/window/Window';
 import { mountEngineWindow } from '@components/tools-view/EngineWindow';
@@ -21,13 +22,14 @@ import { mountFsToolsSystem, applyTool, getCursorXY } from '@systems/fs-tools';
 import { mountCursorFollower } from '@components/cursor-follower/CursorFollower';
 import { mountMemoryStrip } from '@components/memory-view/MemoryStrip';
 import { mountSelectionHighlight } from '@components/memory-view/SelectionHighlight';
+import { mountDimPainter } from '@components/memory-view/DimPainter';
 import { mountDetailPanel, type DetailActionId } from '@components/memory-view/DetailPanel';
 import { mountSplitOverlay } from '@components/memory-view/SplitOverlay';
 import { mountPlacement } from '@components/memory-view/Placement';
 import { mountFsStatusBar } from '@components/memory-view/FsStatusBar';
 import {
   actionScan, actionSwap, actionActivate, actionDeleteRedundancy,
-  actionRepair, actionDelete, type ActionDeps,
+  actionRepair, type ActionDeps,
 } from '@state/actions';
 
 // Cursor position is module-local in fs-tools (mousemove writes; everything else reads).
@@ -41,7 +43,6 @@ function runAction(seg: Segment, action: DetailActionId): void {
   else if (action === 'activate' && seg.type === 'ship-backup') actionActivate(store, seg, actionDeps);
   else if (action === 'delete_redund') actionDeleteRedundancy(store, actionDeps);
   else if (action === 'scan' && seg.type === 'ship') actionScan(store, seg, actionDeps);
-  else if (action === 'rm') actionDelete(store, seg, actionDeps);
 }
 
 mountGlitchDriver(store);
@@ -65,7 +66,9 @@ const segBehavior = {
       ev.stopPropagation();
       applyTool(store, seg, actionDeps);
     } else {
-      store.update((d) => { d.ui.selectedId = seg.id; });
+      // Toggle: clicking the currently-selected segment deselects.
+      const alreadySelected = store.getState().ui.selectedId === seg.id;
+      store.update((d) => { d.ui.selectedId = alreadySelected ? null : seg.id; });
     }
   },
   onMouseEnter: (seg: Segment, el: HTMLElement): void => {
@@ -76,6 +79,16 @@ const segBehavior = {
   onMouseLeave: (seg: Segment): void => splitOverlay.hide(seg.id),
 };
 
+// Click on background area of memWrap (address labels, empty space below rows)
+// deselects. Clicks on .seg elements bubble through, but closest() finds the
+// seg and we ignore them — the seg's own handler already ran.
+memWrap.addEventListener('click', (ev) => {
+  if (store.getState().ui.activeTool) return;
+  if ((ev.target as HTMLElement).closest('.seg')) return;
+  if (store.getState().ui.selectedId === null) return;
+  store.update((d) => { d.ui.selectedId = null; });
+});
+
 // Mount order matters for store-notify cascade:
 //   1. MemoryStrip rebuilds DOM (always-false equals → fires every notify)
 //   2. SelectionHighlight + fs-tools target classes repaint .seg classes
@@ -84,10 +97,12 @@ const segBehavior = {
 mountMemoryStrip(store, memWrap, segBehavior);
 mountFsToolsSystem(store);
 mountSelectionHighlight(store);
+mountDimPainter(store);
 mountCursorFollower(store);
 mountDetailPanel(store, { onAction: runAction });
 mountMemoryStats(store);
 mountFsStatusBar(store);
+mountSidebarFilters(store);
 mountFooter(store);
 mountPlacement(store, memWrap);
 

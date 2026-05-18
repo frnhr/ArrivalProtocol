@@ -17,6 +17,8 @@ export const store = createStore<GameState>({
     pickedSourceId: null,
     pendingPlacement: null,
     memoryRev: 0,
+    filtersOff: [],
+    spotlight: [],
   },
   ops: { byId: {} },
 });

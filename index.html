@@ -48,15 +48,15 @@
 
       <div class="dock-content memory-view">
         <div class="dock-section">Filter</div>
-        <div class="dock-item open"><span class="mark">●</span><span>AI Memory</span></div>
-        <div class="dock-item open"><span class="mark">●</span><span>Ship Systems</span></div>
-        <div class="dock-item open"><span class="mark">●</span><span>Filesystem</span></div>
-        <div class="dock-item open"><span class="mark">●</span><span>Free Space</span></div>
+        <div class="dock-item open" data-filter="ai"><span class="mark">●</span><span>AI Memory</span></div>
+        <div class="dock-item open" data-filter="ship"><span class="mark">●</span><span>Ship Systems</span></div>
+        <div class="dock-item open" data-filter="filesystem"><span class="mark">●</span><span>Filesystem</span></div>
+        <div class="dock-item open" data-filter="free"><span class="mark">●</span><span>Free Space</span></div>
 
         <div class="dock-section">Status</div>
-        <div class="dock-item warn"><span class="mark">●</span><span>2 Corrupt</span></div>
-        <div class="dock-item warn"><span class="mark">●</span><span>1 Partial</span></div>
-        <div class="dock-item"><span class="mark">●</span><span>3 Backups</span></div>
+        <div class="dock-item" data-status="corrupt"><span class="mark">○</span><span><span class="count" id="countCorrupt">0</span> Corrupt</span></div>
+        <div class="dock-item" data-status="partial"><span class="mark">○</span><span><span class="count" id="countPartial">0</span> Partial</span></div>
+        <div class="dock-item" data-status="backup"><span class="mark">○</span><span><span class="count" id="countBackup">0</span> Backups</span></div>
       </div>
 
       <div class="mode-toggle">

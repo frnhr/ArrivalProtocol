@@ -6,7 +6,7 @@ import { TYPE_LABELS } from '@data/type-labels';
 
 export type DetailActionId =
   | 'repair' | 'swap' | 'activate' | 'delete_redund' | 'scan'
-  | 'install' | 'noop' | 'mv' | 'cp' | 'rm';
+  | 'install' | 'noop';
 
 interface ActionOption {
   id: DetailActionId;
@@ -18,7 +18,6 @@ interface ActionOption {
 
 export interface ComputedActions {
   primary: ActionOption[];
-  fs: ActionOption[];
   demoHtml: string;
 }
 
@@ -35,12 +34,9 @@ export interface RenderDetailDeps extends ComputeActionsDeps {
 }
 
 export function computeActions(seg: Segment, deps: ComputeActionsDeps): ComputedActions {
-  const out: ComputedActions = { primary: [], fs: [], demoHtml: '' };
+  const out: ComputedActions = { primary: [], demoHtml: '' };
   const repair = deps.getFsTool('repair');
   const scan = deps.getFsTool('scan');
-  const move = deps.getFsTool('move');
-  const copy = deps.getFsTool('copy');
-  const del = deps.getFsTool('delete');
   const redund = deps.getRedundancy();
 
   const state = 'state' in seg ? seg.state : undefined;
@@ -88,12 +84,6 @@ export function computeActions(seg: Segment, deps: ComputeActionsDeps): Computed
       cost: scan ? '1 tick' : 'no scan!',
       disabled: !scan, cls: scan ? '' : 'disabled',
     });
-  }
-
-  if (seg.type !== 'core' && seg.type !== 'free') {
-    if (move) out.fs.push({ id: 'mv', label: '⇒ move', cost: `${seg.size} ticks` });
-    if (copy) out.fs.push({ id: 'cp', label: '+ copy', cost: `${seg.size + 1} ticks` });
-    if (del && seg.type !== 'redundancy') out.fs.push({ id: 'rm', label: '× delete', cost: '1 tick', cls: 'warn' });
   }
 
   return out;
@@ -147,15 +137,10 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
   html += `<div class="detail-desc">${seg.desc || '—'}</div>`;
 
   const actions = computeActions(seg, deps);
-  if (actions.primary.length || actions.fs.length || actions.demoHtml || seg.type === 'core') {
+  if (actions.primary.length || actions.demoHtml || seg.type === 'core') {
     if (actions.primary.length) {
       html += `<div class="action-section"><div class="action-section-label">primary</div>`;
       actions.primary.forEach((a) => { html += renderActionButton(a); });
-      html += `</div>`;
-    }
-    if (actions.fs.length) {
-      html += `<div class="action-section"><div class="action-section-label">filesystem ops</div>`;
-      actions.fs.forEach((a) => { html += renderActionButton(a); });
       html += `</div>`;
     }
     if (actions.demoHtml) html += actions.demoHtml;
@@ -185,14 +170,55 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
   }
 }
 
-// Renders the empty-state placeholder shown when no segment is selected.
-function renderEmpty(target: HTMLElement): void {
+// Renders a memory-bank overview shown when no segment is selected.
+// Aggregates over state.memory: capacity, allocation, known damage, redundancy.
+// "Known" damage excludes unscanned ship segments — the AI can't know their
+// integrity until Scan reveals it.
+function renderOverview(target: HTMLElement, state: GameState): void {
+  const memory = state.memory;
+  const total = memory.reduce((acc, m) => acc + m.size, 0);
+  const free = memory.filter((m) => m.type === 'free').reduce((acc, m) => acc + m.size, 0);
+  const used = total - free;
+  const usedPct = total > 0 ? Math.round((used / total) * 100) : 0;
+  const freePct = total > 0 ? Math.round((free / total) * 100) : 0;
+
+  let corruptCount = 0;
+  let partialCount = 0;
+  let damageBlocks = 0;
+  for (const seg of memory) {
+    const segState = 'state' in seg ? seg.state : undefined;
+    const integrity = 'integrity' in seg ? seg.integrity : undefined;
+    const isUnscannedShip = seg.type === 'ship' && seg.scanned === false;
+    if (isUnscannedShip) continue;
+    if (segState === 'corrupt') corruptCount++;
+    if (segState === 'partial') partialCount++;
+    if ((segState === 'corrupt' || segState === 'partial') && integrity !== undefined) {
+      damageBlocks += ((100 - integrity) / 100) * seg.size;
+    }
+  }
+  damageBlocks = Math.round(damageBlocks);
+
+  const redund = getRedundancy(state);
+  const redundLine = redund
+    ? `<span class="v">${redund.used} / ${redund.capacity}</span>`
+    : `<span class="v warn">none</span>`;
+
+  const damageLine = damageBlocks > 0
+    ? `<span class="v warn">~${damageBlocks} blk</span>`
+    : `<span class="v good">none known</span>`;
+  const damageDetail = (corruptCount > 0 || partialCount > 0)
+    ? `<div class="detail-row"><span class="k">└ breakdown</span><span class="v">${corruptCount} corrupt · ${partialCount} partial</span></div>`
+    : '';
+
   target.innerHTML = `
-    <div class="detail-empty">
-      <div class="icon">◇</div>
-      <div>select a segment</div>
-      <div style="font-size:9px;margin-top:6px;letter-spacing:0.1em">click any block</div>
-    </div>`;
+    <div class="detail-title">Memory Banks</div>
+    <div class="detail-type">${state.mission.shipId} · ${total} blk total</div>
+    <div class="detail-row"><span class="k">used</span><span class="v">${used} blk · ${usedPct}%</span></div>
+    <div class="detail-row"><span class="k">free</span><span class="v good">${free} blk · ${freePct}%</span></div>
+    <div class="detail-row"><span class="k">damage</span>${damageLine}</div>
+    ${damageDetail}
+    <div class="detail-row"><span class="k">redundancy</span>${redundLine}</div>
+    <div class="detail-desc">Click any segment to inspect. Click again or click outside any block to return here.</div>`;
 }
 
 // Mount the detail panel as a store subscriber. Re-renders whenever the store
@@ -209,7 +235,7 @@ export function mountDetailPanel(
   function paint(state: GameState): void {
     const segId = state.ui.selectedId;
     const seg = segId ? state.memory.find((m) => m.id === segId) : null;
-    if (!seg) { renderEmpty(target!); return; }
+    if (!seg) { renderOverview(target!, state); return; }
     renderDetailPanel(target!, seg, {
       getFsTool: (kind) => getFsTool(state, kind),
       getRedundancy: () => getRedundancy(state),

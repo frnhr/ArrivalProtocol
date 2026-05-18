@@ -106,6 +106,8 @@
 .dock-item .mark { color: var(--accent-dim); font-size: 8px; width: 6px; }
 .dock-item.open .mark { color: var(--good); }
 .dock-item.warn .mark { color: var(--warn); animation: cell-pulse 1.4s infinite; }
+.dock-item .count { color: var(--accent-bright); margin-right: 4px; }
+.dock-item.warn .count { color: var(--warn); }
 
 .mode-toggle {
   position: absolute;
@@ -407,6 +409,34 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px
 }
 @keyframes cell-pulse {
   50% { box-shadow: 0 0 10px currentColor; filter: brightness(1.3); }
+}
+
+/* Sidebar filter / spotlight: dim segments outside the active scope.
+   Stays interactive (clickable, hoverable) — just visually demoted. */
+.seg.dimmed {
+  opacity: 0.28;
+  filter: saturate(0.4);
+  transition: opacity 0.15s ease-out, filter 0.15s ease-out;
+}
+.seg.dimmed:hover { opacity: 0.85; filter: saturate(0.8); }
+
+/* Sidebar hover preview: pulsating bright outline on segments matching the
+   hovered filter/status item. Does NOT clobber `.dimmed` opacity — that lets
+   the player click and immediately see the dim toggle take effect, even while
+   the cursor is still parked on the sidebar item. Dimmed-AND-previewed gets a
+   partial opacity lift so the player can still read what's in the category. */
+.seg.hl-preview {
+  border-color: var(--accent-bright);
+  z-index: 3;
+  animation: hl-pulse 2s ease-in-out infinite;
+}
+.seg.dimmed.hl-preview {
+  opacity: 0.6;
+  filter: saturate(0.7);
+}
+@keyframes hl-pulse {
+  0%, 100% { box-shadow: 0 0 10px var(--ambient-1), 0 0 3px var(--accent-bright); }
+  50%      { box-shadow: 0 0 24px var(--ambient-1), 0 0 10px var(--accent-bright); }
 }
 
 /* Offline / repair-in-progress overlay */
