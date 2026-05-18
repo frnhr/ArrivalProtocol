@@ -232,7 +232,15 @@ export function mountDetailPanel(
   const target = document.getElementById('detailBody');
   if (!target) return () => {};
 
+  // The demo corruption slider fires `input` per pixel of drag. Each event
+  // does `store.update`, which would re-render this panel via the subscriber
+  // below — destroying the slider DOM node mid-drag and cancelling the
+  // browser's native drag tracking. Set this flag while applying the slider's
+  // own update so paint() skips, leaving the slider intact.
+  let sliderActive = false;
+
   function paint(state: GameState): void {
+    if (sliderActive) return;
     const segId = state.ui.selectedId;
     const seg = segId ? state.memory.find((m) => m.id === segId) : null;
     if (!seg) { renderOverview(target!, state); return; }
@@ -241,7 +249,12 @@ export function mountDetailPanel(
       getRedundancy: () => getRedundancy(state),
       onAction: opts.onAction,
       onCorruptionSliderInput: (pct) => {
-        store.update((d) => { d.ai.coreIntegrity = 100 - pct; });
+        sliderActive = true;
+        try {
+          store.update((d) => { d.ai.coreIntegrity = 100 - pct; });
+        } finally {
+          sliderActive = false;
+        }
       },
       getCorruption: () => selectCorruption(state),
     });

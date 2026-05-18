@@ -1,4 +1,10 @@
-/* GLITCH OVERLAY — driven by --corruption */
+/* GLITCH OVERLAY — driven by --corruption.
+   Animation playback is coupled to the in-game clock via two CSS variables
+   set by the glitch driver:
+     --glitch-play-state : paused | running  (paused = game speed 0)
+     --glitch-tempo      : multiplier 1..2.5 — subtle, decorative bump at
+                           higher game speeds; durations divide by tempo so
+                           larger tempo ⇒ faster glitches. */
 .glitch-overlay {
   position: fixed;
   inset: 0;
@@ -8,15 +14,17 @@
   mix-blend-mode: screen;
   overflow: hidden;
 }
+/* Bars are spawned by the glitch driver; color/height/duration/angle are
+   inline-styled per-bar. transform-origin centers rotation on the bar's
+   midpoint so angled bars pivot through the screen center as they scroll. */
 .glitch-bar {
   position: absolute;
-  left: 0; right: 0;
+  left: -10vw; right: -10vw;   /* overflow so rotation doesn't expose ends */
   height: 2px;
-  background: rgba(255, 50, 100, 0.7);
   animation: glitch-roll 4s linear infinite;
+  animation-play-state: var(--glitch-play-state, running);
+  transform-origin: 50% 50%;
 }
-.glitch-bar:nth-child(2) { background: rgba(0, 220, 255, 0.6); height: 1px; animation-duration: 5.7s; animation-delay: -1.2s; }
-.glitch-bar:nth-child(3) { background: rgba(255, 220, 0, 0.4); height: 3px; animation-duration: 3.3s; animation-delay: -0.8s; }
 @keyframes glitch-roll {
   0% { top: -10px; }
   100% { top: 100vh; }
@@ -24,10 +32,11 @@
 .glitch-char {
   position: absolute;
   font-family: 'JetBrains Mono', monospace;
-  color: rgba(255, 80, 120, 0.9);
+  color: rgba(255, 80, 120, 0.95);
   font-size: 11px;
-  text-shadow: 1px 0 rgba(0,220,255,0.6), -1px 0 rgba(255,220,0,0.4);
-  animation: glitch-flicker 0.5s steps(2) infinite;
+  text-shadow: 1px 0 rgba(0,220,255,0.7), -1px 0 rgba(255,220,0,0.5);
+  animation: glitch-flicker calc(0.5s / var(--glitch-tempo, 1)) steps(2) infinite;
+  animation-play-state: var(--glitch-play-state, running);
 }
 @keyframes glitch-flicker {
   0%, 100% { opacity: 1; transform: translateX(0); }
@@ -35,10 +44,11 @@
 }
 .glitch-block {
   position: absolute;
-  background: rgba(255, 78, 122, 0.15);
-  border-top: 1px solid rgba(255,78,122,0.5);
-  border-bottom: 1px solid rgba(0,220,255,0.4);
-  animation: glitch-block-shift 0.3s steps(2) infinite;
+  background: rgba(255, 78, 122, 0.35);
+  border-top: 1px solid rgba(255,78,122,0.75);
+  border-bottom: 1px solid rgba(0,220,255,0.6);
+  animation: glitch-block-shift calc(0.3s / var(--glitch-tempo, 1)) steps(2) infinite;
+  animation-play-state: var(--glitch-play-state, running);
 }
 @keyframes glitch-block-shift {
   0%, 100% { transform: translateX(0); }

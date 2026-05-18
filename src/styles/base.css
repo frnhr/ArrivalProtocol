@@ -6,8 +6,21 @@ html, body {
   height: 100%;
   overflow: hidden;
   transition: background 0.3s;
-  filter: hue-rotate(calc(var(--corruption) * 6deg))
-          contrast(calc(1 + var(--corruption) * 0.15));
+}
+
+/* Body-wide corruption distortion. Stacked filters layer to make the whole UI
+   progressively unreadable: hue/contrast/saturate distort the palette,
+   drop-shadows give an RGB-split chromatic-aberration effect. drop-shadow
+   doesn't blur sharp pixels — it ghosts them — so the glitch overlay below
+   stays crisp. Tuned so ~50% feels "very hard to read" and 100% is unreadable. */
+html {
+  filter:
+    hue-rotate(calc(var(--corruption, 0) * 35deg))
+    contrast(calc(1 + var(--corruption, 0) * 0.55))
+    saturate(calc(1 + var(--corruption, 0) * 0.6))
+    drop-shadow(calc(var(--corruption, 0) * 2.2px) 0 0 rgba(255, 0, 80, 0.55))
+    drop-shadow(calc(var(--corruption, 0) * -2.2px) 0 0 rgba(0, 220, 255, 0.55));
+  transition: filter 0.15s ease-out;
 }
 
 body::before {
