@@ -16,6 +16,8 @@ import { renderCursorFollower } from '@components/cursor-follower/CursorFollower
 import { computeMoveRegion as computeMoveRegionExt, isValidTarget as isValidTargetExt } from '@systems/fs-tools';
 import { startOp, getActiveOp } from '@systems/ops';
 import { getFsTool, getRedundancy, selectCorruption } from '@state/selectors';
+import { actionScan, actionSwap, actionActivate, actionDeleteRedundancy, actionRepair, actionDelete, actionMove, actionCopy } from '@state/actions';
+import { mergeAdjacentFree as mergeAdjacentFreeExt, memAddrOf as memAddrOfExt } from '@systems/memory-ops';
 
   // ===== Memory model =====
   // Continuous strip from low address to high. Convention: ship → free → AI → fs tools → redundancy → free.
@@ -94,91 +96,26 @@ import { getFsTool, getRedundancy, selectCorruption } from '@state/selectors';
     else if (action === 'scan') doScan(s);
   }
 
-  function doRepair(s) {
-    const repair = getTool('repair');
-    const redund = getRedund();
-    if (!repair || !redund) return;
-    const cost = Math.ceil((100 - s.integrity) / 100 * s.size * 2);
-    if (redund.used < cost) return;
+  // doRepair delegated to actionRepair in @state/actions.ts (see actionDeps binding above)
 
-    s.operating = true;
-    repair.state = 'busy';
-    render();
-
-    const targetEls = Array.from(document.querySelectorAll(`.seg[data-id="${s.id}"]`));
-    if (targetEls.length === 0) return;
-
-    startOpProgress({
-      segId: s.id,
-      fromX: lastMouseX, fromY: lastMouseY,
-      targetEls,
-      label: `REPAIR · ${s.name}`,
-      icon: TOOL_ICONS.repair,
-      dur: 6000,
-      onComplete: () => {
-        s.integrity = 100;
-        s.state = 'intact';
-        s.operating = false;
-        redund.used = Math.max(0, redund.used - cost);
-        if (redund.used === 0) {
-          const idx = memory.indexOf(redund);
-          const next = memory[idx+1];
-          if (next && next.type === 'free') { next.size += redund.size; memory.splice(idx, 1); }
-          else { redund.type = 'free'; redund.name = 'Free'; }
-        }
-        repair.state = 'intact';
-        render();
-        if (selectedId === s.id) showDetail(s);
-      },
-      onCancel: () => {
-        s.operating = false;
-        repair.state = 'intact';
-        render();
-        if (selectedId === s.id) showDetail(s);
-      },
-    });
-  }
-
-  function doSwap(s) {
-    const backup = memory.find(m => m.id === s.backup);
-    if (!backup) return;
-    // Swap names/states (conceptually they trade positions)
-    s.state = 'inactive';
-    s.name += '.old';
-    backup.state = 'intact';
-    backup.name = backup.name.replace('.alt','');
-    s.backup = null;
-    render();
-    if (selectedId === s.id) showDetail(s);
-  }
-
-  function doActivate(s) {
-    s.state = 'intact';
-    render();
-    if (selectedId === s.id) showDetail(s);
-  }
-
-  function doDeleteRedund() {
-    const r = getRedund();
-    if (!r) return;
-    if (!confirm(`Reclaim ${r.used} blocks of redundancy as free space? This cannot be undone.`)) return;
-    const idx = memory.indexOf(r);
-    const next = memory[idx+1];
-    if (next && next.type === 'free') {
-      next.size += r.size;
-      memory.splice(idx, 1);
-    } else {
-      r.type = 'free';
-      r.name = 'Free';
-    }
-    render();
-  }
-
-  function doScan(s) {
-    s.scanned = true;
-    render();
-    if (selectedId === s.id) showDetail(s);
-  }
+  // Actions delegated to @state/actions.ts. The deps bag wires legacy's
+  // render(), showDetail(), cursor tracking, and selection — once those
+  // subsystems are subscriber-driven, the bag disappears.
+  const actionDeps = {
+    rerender: () => render(),
+    refreshDetailFor: (seg) => showDetail(seg),
+    getCursorXY: () => ({ x: lastMouseX, y: lastMouseY }),
+    clearDetail: () => showEmpty(),
+    setSelected: (id) => { selectedId = id; },
+  };
+  const doSwap        = (s) => actionSwap(store, s, actionDeps);
+  const doActivate    = (s) => actionActivate(store, s, actionDeps);
+  const doDeleteRedund = () => actionDeleteRedundancy(store, actionDeps);
+  const doScan        = (s) => actionScan(store, s, actionDeps);
+  const doRepair      = (s) => actionRepair(store, s, actionDeps);
+  const doDelete      = (s) => actionDelete(store, s, actionDeps);
+  const doMove        = (src, placement) => actionMove(store, src, placement, actionDeps);
+  const doCopy        = (src, placement) => actionCopy(store, src, placement, actionDeps);
 
   // ===== Filesystem tool cursor-stick interaction =====
   let activeTool = null;   // { fsTool: 'scan'|'repair'|'move'|'copy'|'delete' }
@@ -499,14 +436,11 @@ import { getFsTool, getRedundancy, selectCorruption } from '@state/selectors';
   }
 
   // ===== Filesystem operations =====
-  function mergeAdjacentFree() {
-    for (let i = memory.length - 1; i > 0; i--) {
-      if (memory[i].type === 'free' && memory[i-1].type === 'free') {
-        memory[i-1].size += memory[i].size;
-        memory.splice(i, 1);
-      }
-    }
-  }
+  // mergeAdjacentFree delegated to @systems/memory-ops; thin wrapper closes
+  // over the local `memory` so existing callers (doMove, doCopy, doDelete)
+  // stay the same.
+  const mergeAdjacentFreeFromOps = mergeAdjacentFreeExt;
+  function mergeAdjacentFree() { mergeAdjacentFreeFromOps(memory); }
 
   function showEmpty() {
     detailBody.innerHTML = `
@@ -517,276 +451,16 @@ import { getFsTool, getRedundancy, selectCorruption } from '@state/selectors';
       </div>`;
   }
 
-  function doDelete(s) {
-    if (s.type === 'core' || s.type === 'free') return;
-    if (s.type === 'redundancy') { doDeleteRedund(); return; }
+  // doDelete delegated to actionDelete in @state/actions.ts (see actionDeps binding above)
 
-    const delTool = getTool('delete');
-    if (!delTool) return;
-
-    // Warn before destroying the last repair tool
-    if (s.fsTool === 'repair') {
-      const otherRepair = memory.find(m => m.fsTool === 'repair' && m.id !== s.id && (m.integrity || 0) > 50);
-      if (!otherRepair && !confirm('Deleting the last functional Repair tool will end the run if anything else corrupts. Continue?')) return;
-    }
-
-    s.operating = true;
-    delTool.state = 'busy';
-    render();
-
-    const targetEls = Array.from(document.querySelectorAll(`.seg[data-id="${s.id}"]`));
-    if (targetEls.length === 0) return;
-
-    startOpProgress({
-      segId: s.id,
-      fromX: lastMouseX, fromY: lastMouseY,
-      targetEls,
-      label: `DELETE · ${s.name}`,
-      icon: TOOL_ICONS.delete,
-      dur: 1600,
-      onComplete: () => {
-        const idx = memory.indexOf(s);
-        if (idx !== -1) {
-          memory.splice(idx, 1, { id: 'free-' + Date.now(), name: 'Free', type: 'free', size: s.size });
-          mergeAdjacentFree();
-        }
-        delTool.state = 'intact';
-        selectedId = null;
-        render();
-        showEmpty();
-      },
-      onCancel: () => {
-        s.operating = false;
-        delTool.state = 'intact';
-        render();
-      },
-    });
-  }
-
-  function doMove(source, placement) {
-    const moveTool = getTool('move');
-    if (!moveTool) return;
-
-    const regionSegs = placement.regionSegIds.map(id => memory.find(m => m.id === id));
-    if (regionSegs.some(rs => !rs)) return;
-
-    const sourcePriorState = source.state;
-    source.operating = true;
-    moveTool.state = 'busy';
-
-    const regionStartIdx = memory.indexOf(regionSegs[0]);
-    const regionLen = regionSegs.length;
-    const totalSize = regionSegs.reduce((s, r) => s + r.size, 0);
-    const destCol = placement.col;
-    const preSize = destCol;
-    const postSize = totalSize - destCol - source.size;
-    const sourceInRegion = regionSegs.includes(source);
-
-    // Direction depends on whether source and destination footprints overlap.
-    // Overlapping forward shift: fill tail-first (memmove semantics — preserves
-    // un-transferred head bytes from being overwritten by the moving copy).
-    // Overlapping backward shift or non-overlapping move: fill head-first, which
-    // is the natural visual reading order.
-    const sourceAddr = memAddrOf(source);
-    const regionStartAddr = memAddrOf(regionSegs[0]);
-    const destAddr = regionStartAddr + destCol;
-    const sourceEndAddr = sourceAddr + source.size;
-    const destEndAddr = destAddr + source.size;
-    const overlaps = destAddr < sourceEndAddr && sourceAddr < destEndAddr;
-    const reverseFill = overlaps && destAddr > sourceAddr;
-
-    // Capture source's part rects + sizes BEFORE the splice — phantoms (in-place)
-    // need these screen coords to anchor a visual of the original source.
-    const preSourceParts = Array.from(memWrap.querySelectorAll(`.seg[data-id="${source.id}"]`));
-    const preSourcePartData = preSourceParts.map(p => ({
-      rect: p.getBoundingClientRect(),
-      partSize: parseInt(p.dataset.partSize),
-      partOffset: parseInt(p.dataset.partOffset),
-    }));
-
-    const moved = Object.assign({}, source);
-    moved.id = source.id + '_m' + Date.now();
-    moved.state = 'transferring';
-    moved.operating = true;
-    delete moved.priorState;
-
-    const insertion = [];
-    if (preSize > 0) insertion.push({ id: 'free-pre-' + Date.now(), name: 'Free', type: 'free', size: preSize });
-    insertion.push(moved);
-    if (postSize > 0) insertion.push({ id: 'free-post-' + Date.now(), name: 'Free', type: 'free', size: postSize });
-    memory.splice(regionStartIdx, regionLen, ...insertion);
-    render();
-
-    const movedEls = Array.from(memWrap.querySelectorAll(`.seg[data-id="${moved.id}"]`));
-    if (movedEls.length === 0) return;
-
-    // Build shrinkers: phantoms for in-place (source has been spliced out);
-    // actual DOM elements for non-in-place (source still in memory).
-    const shrinkers = sourceInRegion
-      ? createSourcePhantoms(source, sourcePriorState, preSourcePartData)
-      : Array.from(memWrap.querySelectorAll(`.seg[data-id="${source.id}"]`)).map(el => ({
-          el, partSize: parseInt(el.dataset.partSize), isPhantom: false,
-        }));
-
-    startOpProgress({
-      segId: moved.id,
-      fromX: lastMouseX, fromY: lastMouseY,
-      targetEls: movedEls,
-      label: `MOVE · ${source.name}`,
-      icon: TOOL_ICONS.move,
-      dur: 1600 + source.size * 240,
-      reverseFill,
-      shrinkers,
-      onComplete: () => {
-        moved.state = sourcePriorState || 'intact';
-        moved.operating = false;
-        // Only clean up source separately if it wasn't already removed via the region splice
-        if (!sourceInRegion) {
-          const srcIdx = memory.indexOf(source);
-          if (srcIdx !== -1) {
-            memory.splice(srcIdx, 1, { id: 'free-src-' + Date.now(), name: 'Free', type: 'free', size: source.size });
-            mergeAdjacentFree();
-          }
-        }
-        moveTool.state = 'intact';
-        selectedId = moved.id;
-        render();
-        const newSeg = memory.find(m => m.id === moved.id);
-        if (newSeg) selectSegment(newSeg);
-      },
-      onCancel: () => {
-        source.operating = false;
-        const movedIdx = memory.indexOf(moved);
-        if (movedIdx !== -1) {
-          const insertionStart = movedIdx - (preSize > 0 ? 1 : 0);
-          const insertionLen = (preSize > 0 ? 1 : 0) + 1 + (postSize > 0 ? 1 : 0);
-          memory.splice(insertionStart, insertionLen, ...regionSegs);
-          mergeAdjacentFree();
-        }
-        moveTool.state = 'intact';
-        render();
-      },
-    });
-  }
-
-  // Absolute address (byte offset from address 0) of a seg in memory.
-  function memAddrOf(seg) {
-    const idx = memory.indexOf(seg);
-    if (idx === -1) return -1;
-    let addr = 0;
-    for (let i = 0; i < idx; i++) addr += memory[i].size;
-    return addr;
-  }
-
-  // Floating visual copies of a source's parts, anchored at the pre-splice screen rects.
-  // Used during in-place moves so the user sees the source shrink rather than vanish.
-  function createSourcePhantoms(source, priorState, partData) {
-    const clone = Object.assign({}, source);
-    clone.state = priorState;
-    delete clone.operating;
-    return partData.map((pd, idx) => {
-      const phantom = renderSegPart(clone, pd.partSize, idx, partData.length, pd.partOffset);
-      phantom.removeAttribute('data-id');
-      phantom.removeAttribute('data-part-idx');
-      phantom.removeAttribute('data-total-parts');
-      phantom.style.position = 'fixed';
-      phantom.style.left = pd.rect.left + 'px';
-      phantom.style.top = pd.rect.top + 'px';
-      phantom.style.width = pd.rect.width + 'px';
-      phantom.style.height = pd.rect.height + 'px';
-      phantom.style.gridColumn = '';
-      phantom.style.cursor = 'default';
-      phantom.style.pointerEvents = 'none';
-      // Above the op-progress bar (450) so the shrinkage is actually visible —
-      // as the phantom clips away, the bar fill underneath is what's revealed.
-      phantom.style.zIndex = '460';
-      phantom.classList.add('source-phantom');
-      document.body.appendChild(phantom);
-      return { el: phantom, partSize: pd.partSize, isPhantom: true };
-    });
-  }
-
-  function doCopy(source, placement) {
-    const copyTool = getTool('copy');
-    if (!copyTool) return;
-
-    const regionSegs = placement.regionSegIds.map(id => memory.find(m => m.id === id));
-    if (regionSegs.some(rs => !rs)) return;
-
-    copyTool.state = 'busy';
-
-    const copied = Object.assign({}, source);
-    copied.id = source.id + '_c' + Date.now();
-    copied.name = source.name + '.cp';
-    copied.state = 'transferring';
-    copied.operating = true;
-    delete copied.priorState;
-
-    const regionStartIdx = memory.indexOf(regionSegs[0]);
-    const regionLen = regionSegs.length;
-    const totalSize = regionSegs.reduce((s, r) => s + r.size, 0);
-    const destCol = placement.col;
-    const preSize = destCol;
-    const postSize = totalSize - destCol - source.size;
-
-    const insertion = [];
-    if (preSize > 0) insertion.push({ id: 'free-cpre-' + Date.now(), name: 'Free', type: 'free', size: preSize });
-    insertion.push(copied);
-    if (postSize > 0) insertion.push({ id: 'free-cpost-' + Date.now(), name: 'Free', type: 'free', size: postSize });
-    memory.splice(regionStartIdx, regionLen, ...insertion);
-    render();
-
-    const copiedEls = Array.from(memWrap.querySelectorAll(`.seg[data-id="${copied.id}"]`));
-    if (copiedEls.length === 0) return;
-
-    startOpProgress({
-      segId: copied.id,
-      fromX: lastMouseX, fromY: lastMouseY,
-      targetEls: copiedEls,
-      label: `COPY · ${source.name}`,
-      icon: TOOL_ICONS.copy,
-      dur: 2000 + source.size * 360, // slower than move
-      onComplete: () => {
-        copied.state = source.state || 'intact';
-        copied.operating = false;
-        copyTool.state = 'intact';
-        selectedId = copied.id;
-        render();
-        const newSeg = memory.find(m => m.id === copied.id);
-        if (newSeg) selectSegment(newSeg);
-      },
-      onCancel: () => {
-        const copiedIdx = memory.indexOf(copied);
-        if (copiedIdx !== -1) {
-          const insertionStart = copiedIdx - (preSize > 0 ? 1 : 0);
-          const insertionLen = (preSize > 0 ? 1 : 0) + 1 + (postSize > 0 ? 1 : 0);
-          memory.splice(insertionStart, insertionLen, ...regionSegs);
-          mergeAdjacentFree();
-        }
-        copyTool.state = 'intact';
-        render();
-      },
-    });
-  }
 
   function updateFsChips() {
     updateFsChipsExt(memory);
   }
 
-  function updateStats() {
-    const redund = getRedund();
-    const free = memory.filter(m => m.type === 'free').reduce((s,m) => s + m.size, 0);
-    const totalSize = memory.reduce((s,m) => s + m.size, 0);
-    if (redund) {
-      const rTxt = `${redund.used} <span class="small">/ ${Math.round(redund.size/totalSize*100)}%</span>`;
-      document.getElementById('statRedund').innerHTML = rTxt;
-      document.getElementById('footRedund').textContent = `REDUNDANCY: ${redund.used}/${redund.capacity} AVAILABLE`;
-    } else {
-      document.getElementById('statRedund').innerHTML = `0 <span class="small">/ 0%</span>`;
-      document.getElementById('footRedund').textContent = `REDUNDANCY: 0/0 — DEPLETED`;
-    }
-    document.getElementById('statFree').innerHTML = `${free} <span class="small">/ ${Math.round(free/totalSize*100)}%</span>`;
-  }
+  // updateStats is now a subscriber-driven component (MemoryStats, Footer).
+  // render()'s store.notify() call below fires those subscribers.
+  function updateStats() { /* delegated */ }
 
   // ===== Corruption (delegated to systems/glitch.ts) =====
   // Demo-slider input arrives as 0..100 representing corruption percentage.

@@ -20,6 +20,8 @@ import { mountDockItems } from '@components/dock/Dock';
 import { mountTimeControls } from '@components/header/TimeControls';
 import { mountAllWindows } from '@components/window/Window';
 import { mountEngineWindow } from '@components/tools-view/EngineWindow';
+import { mountMemoryStats } from '@components/memory-view/MemoryStats';
+import { mountFooter } from '@components/footer/Footer';
 
 mountGlitchDriver(store);
 mountClock(store);
@@ -28,3 +30,5 @@ mountDockItems();
 mountTimeControls(store);
 mountAllWindows();
 mountEngineWindow();
+mountMemoryStats(store);
+mountFooter(store);
