@@ -36,24 +36,28 @@ interface SegmentBase {
 export interface CoreSegment extends SegmentBase {
   type: 'core';
   integrity: number;
+  scanned: boolean;
   state?: SegmentState;
 }
 
 export interface ToolSegment extends SegmentBase {
   type: 'tool';
   integrity: number;
+  scanned: boolean;
   state?: SegmentState;
 }
 
 export interface SkillSegment extends SegmentBase {
   type: 'skill';
   integrity: number;
+  scanned: boolean;
   state?: SegmentState;
 }
 
 export interface FsToolSegment extends SegmentBase {
   type: 'fs-tool';
   integrity: number;
+  scanned: boolean;
   fsTool: FsToolKind;
   state?: SegmentState;
 }

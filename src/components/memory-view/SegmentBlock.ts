@@ -30,8 +30,18 @@ export function renderSegmentPart(
   const el = document.createElement('div');
   let cls = `seg ${seg.type}`;
   const state = 'state' in seg ? seg.state : undefined;
-  if (state === 'corrupt') cls += ' corrupt';
-  else if (state === 'partial') cls += ' partial';
+  // `scanned` is what gates visible damage indicators on the memory strip.
+  // Unscanned files render the bar/state as "unknown"; their underlying state
+  // is still in the data (drives glitch, window-grip flicker), just not shown
+  // here. Segments without a `scanned` field (free, encrypted, redundancy)
+  // count as "known" for rendering purposes.
+  const knownScanned = 'scanned' in seg ? seg.scanned : true;
+  if (knownScanned) {
+    if (state === 'corrupt') cls += ' corrupt';
+    else if (state === 'partial') cls += ' partial';
+  } else {
+    cls += ' unscanned';
+  }
   if (partSize <= 3) cls += ' compact';
   if (state === 'transferring') cls += ' transferring';
   if (state === 'offline') cls += ' offline offline-state';
@@ -73,17 +83,27 @@ export function renderSegmentPart(
 
   let bar = '';
   if (isFirst && integrity !== undefined && seg.type !== 'redundancy' && seg.type !== 'free' && seg.type !== 'encrypted') {
-    bar = `<div class="seg-bar"><div class="fill" style="width:${integrity}%"></div></div>`;
+    if (knownScanned) {
+      bar = `<div class="seg-bar"><div class="fill" style="width:${integrity}%"></div></div>`;
+    } else {
+      // Pre-scan: no integrity readout. Render a flat, dim placeholder bar so
+      // the row visually parks where the bar would be without revealing health.
+      bar = `<div class="seg-bar unscanned"></div>`;
+    }
   }
 
   let metaR = '';
   if (isFirst) {
-    if (state === 'corrupt') metaR = `<span class="health warn">◆ ${integrity}%</span>`;
-    else if (state === 'partial') metaR = `<span class="health partial">${integrity}%</span>`;
-    else if (state === 'inactive') metaR = `<span class="health partial">IDLE</span>`;
+    // Inactive / transferring / locked are observable mid-op states, not health
+    // — show them regardless of scan status. Everything else is gated behind
+    // a scan for non-decorative segments.
+    if (state === 'inactive') metaR = `<span class="health partial">IDLE</span>`;
     else if (state === 'locked') metaR = `<span class="health warn">LOCK</span>`;
     else if (state === 'transferring') metaR = `<span class="health partial">↻ XFER</span>`;
     else if (seg.type === 'redundancy') metaR = `<span class="health">${seg.used}/${seg.capacity}</span>`;
+    else if (!knownScanned) metaR = `<span class="health unknown">— —</span>`;
+    else if (state === 'corrupt') metaR = `<span class="health warn">◆ ${integrity}%</span>`;
+    else if (state === 'partial') metaR = `<span class="health partial">${integrity}%</span>`;
     else metaR = `<span class="health">OK</span>`;
   }
 

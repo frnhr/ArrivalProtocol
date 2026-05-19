@@ -10,12 +10,15 @@ export function getRedundancy(state: GameState): RedundancySegment | undefined {
   return state.memory.find((seg): seg is RedundancySegment => seg.type === 'redundancy');
 }
 
-// Find the highest-integrity, non-busy fs-tool of the requested kind.
-// A tool is considered "available" above 50% integrity.
+// Find an available fs-tool of the requested kind. "Available" = above 50%
+// integrity. Tools are NOT consumed by use — multiple ops of the same kind
+// run in parallel against different targets, so there's no busy-mutex on the
+// tool segment itself. (Concurrency caps will eventually come from a global
+// "software cores" budget; see task 500.)
 export function getFsTool(state: GameState, kind: FsToolKind): FsToolSegment | undefined {
   return state.memory.find(
     (seg): seg is FsToolSegment =>
-      seg.type === 'fs-tool' && seg.fsTool === kind && seg.integrity > 50 && seg.state !== 'busy',
+      seg.type === 'fs-tool' && seg.fsTool === kind && seg.integrity > 50,
   );
 }
 

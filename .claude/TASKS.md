@@ -44,7 +44,7 @@ When finalizing a task, always update dependencies as appropriate (remove the ta
 
 Also, the glitches should be much more severe. The UI is very slightly hard to read at 100% now. Should be totally unreadable at 100%, and very hard to see what's what at 50%. Current 100% is ok for about 15%.
 
-## 400. Ensure all files can be scanned and improve initial health display ⬅️
+## 400. Ensure all files can be scanned and improve initial health display ✅
 
 See [TASK-400-scannable-files.md](TASK-400-scannable-files.md) for details.
 

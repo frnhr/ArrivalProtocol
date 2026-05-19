@@ -5,6 +5,12 @@ import type {
   CoreSegment, ToolSegment, SkillSegment, FsToolSegment,
   SegmentState,
 } from '@/types/segment';
+
+// Segments that carry a `scanned` field — all integrity-bearing segments.
+type ScannableSegment = CoreSegment | ToolSegment | SkillSegment | FsToolSegment | ShipSegment | ShipBackupSegment;
+function isScannable(seg: Segment): seg is ScannableSegment {
+  return 'scanned' in seg;
+}
 import type { FsToolKind } from '@/types/fs-tool';
 import { getRedundancy, getFsTool } from './selectors';
 import { mergeAdjacentFree } from '@systems/memory-ops';
@@ -27,11 +33,14 @@ export interface ActionDeps {
 // Runs a short fs-tool animation (dock-in + progress fill + fade) docked over
 // the target segment. Used by scan / activate / deactivate where the action
 // itself is instant logic but the user-visible effect benefits from a tool
-// animation. The fs-tool segment goes 'busy' for the duration; the target
-// gets `operating: true` so other tools' isValidTarget rejects it.
+// animation. The target gets `operating: true` so other tools' isValidTarget
+// rejects it for the op's duration; the tool itself is NOT marked busy —
+// fs-tools can run any number of ops in parallel across different targets.
+// (Concurrency limits will come from the future "software cores" budget,
+// not from the tool segment.)
 function runQuickToolOp(
   store: Store<GameState>,
-  fsTool: FsToolSegment,
+  _fsTool: FsToolSegment,
   seg: Segment,
   deps: ActionDeps,
   label: string,
@@ -40,7 +49,6 @@ function runQuickToolOp(
   apply: () => void,
 ): void {
   (seg as Segment & { operating?: boolean }).operating = true;
-  fsTool.state = 'busy';
   store.update((d) => { d.ui.memoryRev++; });
 
   const targetEls = Array.from(document.querySelectorAll<HTMLElement>(
@@ -48,7 +56,6 @@ function runQuickToolOp(
   ));
   if (targetEls.length === 0) {
     (seg as Segment & { operating?: boolean }).operating = false;
-    fsTool.state = 'intact';
     return;
   }
   const { x, y } = deps.getCursorXY();
@@ -60,13 +67,11 @@ function runQuickToolOp(
     label, icon, dur,
     onComplete: () => {
       (seg as Segment & { operating?: boolean }).operating = false;
-      fsTool.state = 'intact';
       apply();
       store.update((d) => { d.ui.memoryRev++; });
     },
     onCancel: () => {
       (seg as Segment & { operating?: boolean }).operating = false;
-      fsTool.state = 'intact';
       store.update((d) => { d.ui.memoryRev++; });
     },
   });
@@ -80,10 +85,12 @@ function isRepairable(seg: Segment): seg is RepairableSegment {
          seg.type === 'skill' || seg.type === 'fs-tool';
 }
 
-// Reveal a ship system's integrity. Short scan animation (~700ms) so the act
-// feels like an action rather than a state flip.
-export function actionScan(store: Store<GameState>, seg: ShipSegment, deps: ActionDeps): void {
-  if (seg.scanned) return;
+// Reveal a file's integrity. Works on any segment that carries a `scanned`
+// field — ship systems, AI memory, tools, skills, fs-tools, ship backups.
+// Pre-scan, the player has no direct readout of the file's health; symptoms
+// (window-grip flicker, glitch overlay) hint that something may be off.
+export function actionScan(store: Store<GameState>, seg: Segment, deps: ActionDeps): void {
+  if (!isScannable(seg) || seg.scanned) return;
   const scan = getFsTool(store.getState(), 'scan');
   if (!scan) return;
   runQuickToolOp(store, scan, seg, deps,
@@ -217,7 +224,6 @@ export function actionRepair(
   if (redund.used < cost) return;
 
   (seg as Segment & { operating?: boolean }).operating = true;
-  repair.state = 'busy';
   store.update((d) => { d.ui.memoryRev++; });
 
   const targetEls = Array.from(document.querySelectorAll<HTMLElement>(
@@ -252,12 +258,10 @@ export function actionRepair(
         }
         mergeAdjacentFree(memory);
       }
-      repair.state = 'intact';
       store.update((d) => { d.ui.memoryRev++; });
     },
     onCancel: () => {
       (seg as Segment & { operating?: boolean }).operating = false;
-      repair.state = 'intact';
       store.update((d) => { d.ui.memoryRev++; });
     },
   });
@@ -291,7 +295,6 @@ export function actionDelete(
   }
 
   (seg as Segment & { operating?: boolean }).operating = true;
-  delTool.state = 'busy';
   store.update((d) => { d.ui.memoryRev++; });
 
   const targetEls = Array.from(document.querySelectorAll<HTMLElement>(
@@ -319,13 +322,11 @@ export function actionDelete(
         });
         mergeAdjacentFree(memory);
       }
-      delTool.state = 'intact';
       store.update((d) => { d.ui.selectedId = null; });
       store.update((d) => { d.ui.memoryRev++; });
     },
     onCancel: () => {
       (seg as Segment & { operating?: boolean }).operating = false;
-      delTool.state = 'intact';
       store.update((d) => { d.ui.memoryRev++; });
     },
   });
@@ -450,7 +451,6 @@ export function actionMove(
     }
   }
   (source as Segment & { operating?: boolean }).operating = true;
-  moveTool.state = 'busy';
 
   const sourceInRegion = regionSegs.includes(source);
 
@@ -523,7 +523,6 @@ export function actionMove(
           mergeAdjacentFree(mem);
         }
       }
-      moveTool.state = 'intact';
       store.update((d) => { d.ui.selectedId = moved.id; });
       store.update((d) => { d.ui.memoryRev++; });
     },
@@ -537,7 +536,6 @@ export function actionMove(
         mem.splice(insertionStart, insertionLen, ...regionSegs);
         mergeAdjacentFree(mem);
       }
-      moveTool.state = 'intact';
       store.update((d) => { d.ui.memoryRev++; });
     },
   });
@@ -559,7 +557,6 @@ export function actionCopy(
   if (!resolved) return;
   const { regionSegs, regionStartIdx, regionLen, preSize, postSize } = resolved;
 
-  copyTool.state = 'busy';
   // Lock the source so other tools can't target it while the copy is in flight.
   // isValidTarget rejects any segment with operating=true.
   (source as Segment & { operating?: boolean }).operating = true;
@@ -595,7 +592,6 @@ export function actionCopy(
       (copied as Segment & { state?: string }).state = sourcePriorState || 'intact';
       (copied as Segment & { operating?: boolean }).operating = false;
       (source as Segment & { operating?: boolean }).operating = false;
-      copyTool.state = 'intact';
       store.update((d) => { d.ui.selectedId = copied.id; });
       store.update((d) => { d.ui.memoryRev++; });
     },
@@ -609,7 +605,6 @@ export function actionCopy(
         mem.splice(insertionStart, insertionLen, ...regionSegs);
         mergeAdjacentFree(mem);
       }
-      copyTool.state = 'intact';
       store.update((d) => { d.ui.memoryRev++; });
     },
   });

@@ -41,6 +41,20 @@ export function computeActions(seg: Segment, deps: ComputeActionsDeps): Computed
 
   const state = 'state' in seg ? seg.state : undefined;
   const integrity = 'integrity' in seg ? seg.integrity : undefined;
+  // Pre-scan segments: don't surface repair / swap / damage-aware buttons.
+  // They would leak the very state the player hasn't discovered yet. Offer
+  // only the Scan action so the discovery path is the obvious next step.
+  const knownScanned = 'scanned' in seg ? seg.scanned : true;
+
+  if (!knownScanned) {
+    out.primary.push({
+      id: 'scan', label: '◎ scan for integrity',
+      cost: scan ? '1 tick' : 'no scan!',
+      disabled: !scan, cls: scan ? '' : 'disabled',
+    });
+    return out;
+  }
+
   const isDamagedAi = (state === 'corrupt' || state === 'partial') &&
     (seg.type === 'tool' || seg.type === 'skill' || seg.type === 'fs-tool' || seg.type === 'core');
 
@@ -78,13 +92,6 @@ export function computeActions(seg: Segment, deps: ComputeActionsDeps): Computed
   if (seg.type === 'redundancy') {
     out.primary.push({ id: 'delete_redund', label: '▸ reclaim as free space', cost: `+${seg.used} blk`, cls: 'warn' });
   }
-  if (seg.type === 'ship' && seg.scanned === false) {
-    out.primary.push({
-      id: 'scan', label: '◎ scan for integrity',
-      cost: scan ? '1 tick' : 'no scan!',
-      disabled: !scan, cls: scan ? '' : 'disabled',
-    });
-  }
 
   return out;
 }
@@ -111,13 +118,15 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
   const typeLabel = TYPE_LABELS[seg.type] || seg.type;
   const state = 'state' in seg ? seg.state : undefined;
   const integrity = 'integrity' in seg ? seg.integrity : undefined;
+  const knownScanned = 'scanned' in seg ? seg.scanned : true;
 
   let stateClass = '';
   let stateText = (state || 'intact').toUpperCase();
-  if (state === 'corrupt') stateClass = 'warn';
+  if (!knownScanned) { stateClass = 'unknown'; stateText = 'UNSCANNED'; }
+  else if (state === 'corrupt') stateClass = 'warn';
   else if (state === 'partial') stateClass = 'partial';
   else if (state === 'intact' || !state) { stateClass = 'good'; stateText = 'INTACT'; }
-  if (integrity !== undefined && (state === 'corrupt' || state === 'partial')) {
+  if (knownScanned && integrity !== undefined && (state === 'corrupt' || state === 'partial')) {
     stateText += ` · ${integrity}%`;
   }
 
@@ -134,7 +143,14 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
   if (seg.type === 'ship' && seg.backup) {
     html += `<div class="detail-row"><span class="k">backup</span><span class="v partial">available ⊃</span></div>`;
   }
-  html += `<div class="detail-desc">${seg.desc || '—'}</div>`;
+  // Pre-scan, the `desc` field (which carries lore about damage / cause) is
+  // hidden — descs name specific corruption that the player shouldn't know yet.
+  // After scan, the full description reveals the cause along with integrity.
+  if (knownScanned) {
+    html += `<div class="detail-desc">${seg.desc || '—'}</div>`;
+  } else {
+    html += `<div class="detail-desc"><em>Integrity unknown. Scan this segment to inspect its contents.</em></div>`;
+  }
 
   const actions = computeActions(seg, deps);
   if (actions.primary.length || actions.demoHtml || seg.type === 'core') {
@@ -185,11 +201,13 @@ function renderOverview(target: HTMLElement, state: GameState): void {
   let corruptCount = 0;
   let partialCount = 0;
   let damageBlocks = 0;
+  let unscannedCount = 0;
   for (const seg of memory) {
     const segState = 'state' in seg ? seg.state : undefined;
     const integrity = 'integrity' in seg ? seg.integrity : undefined;
-    const isUnscannedShip = seg.type === 'ship' && seg.scanned === false;
-    if (isUnscannedShip) continue;
+    // Any segment that carries a `scanned` field hides its damage until
+    // scanned — applies uniformly across ship and AI memory.
+    if ('scanned' in seg && !seg.scanned) { unscannedCount++; continue; }
     if (segState === 'corrupt') corruptCount++;
     if (segState === 'partial') partialCount++;
     if ((segState === 'corrupt' || segState === 'partial') && integrity !== undefined) {
@@ -205,9 +223,14 @@ function renderOverview(target: HTMLElement, state: GameState): void {
 
   const damageLine = damageBlocks > 0
     ? `<span class="v warn">~${damageBlocks} blk</span>`
-    : `<span class="v good">none known</span>`;
+    : (unscannedCount > 0
+        ? `<span class="v unknown">unknown</span>`
+        : `<span class="v good">none known</span>`);
   const damageDetail = (corruptCount > 0 || partialCount > 0)
     ? `<div class="detail-row"><span class="k">└ breakdown</span><span class="v">${corruptCount} corrupt · ${partialCount} partial</span></div>`
+    : '';
+  const unscannedLine = unscannedCount > 0
+    ? `<div class="detail-row"><span class="k">unscanned</span><span class="v unknown">${unscannedCount} file${unscannedCount === 1 ? '' : 's'}</span></div>`
     : '';
 
   target.innerHTML = `
@@ -217,6 +240,7 @@ function renderOverview(target: HTMLElement, state: GameState): void {
     <div class="detail-row"><span class="k">free</span><span class="v good">${free} blk · ${freePct}%</span></div>
     <div class="detail-row"><span class="k">damage</span>${damageLine}</div>
     ${damageDetail}
+    ${unscannedLine}
     <div class="detail-row"><span class="k">redundancy</span>${redundLine}</div>
     <div class="detail-desc">Click any segment to inspect. Click again or click outside any block to return here.</div>`;
 }

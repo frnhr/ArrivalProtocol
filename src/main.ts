@@ -16,6 +16,7 @@ import { mountSidebarFilters } from '@components/dock/SidebarFilters';
 import { mountTimeControls } from '@components/header/TimeControls';
 import { mountAllWindows } from '@components/window/Window';
 import { mountEngineWindow } from '@components/tools-view/EngineWindow';
+import { mountWindowGrips } from '@components/tools-view/WindowGrip';
 import { mountMemoryStats } from '@components/memory-view/MemoryStats';
 import { mountFooter } from '@components/footer/Footer';
 import { mountFsToolsSystem, applyTool, getCursorXY, pickUpTool } from '@systems/fs-tools';
@@ -47,7 +48,7 @@ function runAction(seg: Segment, action: DetailActionId): void {
   else if (action === 'swap' && seg.type === 'ship') actionSwap(store, seg, actionDeps);
   else if (action === 'activate' && seg.type === 'ship-backup') actionActivate(store, seg, actionDeps);
   else if (action === 'delete_redund') actionDeleteRedundancy(store, actionDeps);
-  else if (action === 'scan' && seg.type === 'ship') actionScan(store, seg, actionDeps);
+  else if (action === 'scan') actionScan(store, seg, actionDeps);
 }
 
 mountGlitchDriver(store);
@@ -57,6 +58,7 @@ mountDockItems();
 mountTimeControls(store);
 mountAllWindows();
 mountEngineWindow();
+mountWindowGrips(store);
 
 // SplitOverlay handle is needed by segBehavior, so mount it before MemoryStrip.
 const memWrap = document.getElementById('memWrap');

@@ -46,12 +46,20 @@ export function isValidTarget(seg: Segment, ctx: ValidTargetContext): boolean {
   const segState = 'state' in seg ? seg.state : undefined;
 
   if (activeKind === 'scan') {
-    return seg.type === 'ship' && seg.scanned === false;
+    // Any segment that has a `scanned` field and hasn't been scanned yet.
+    // Concurrent operations on the same target are blocked by the `operating`
+    // check above, so no other state guard is needed here.
+    if (!('scanned' in seg)) return false;
+    return !seg.scanned;
   }
   if (activeKind === 'repair') {
-    const eligible = (segState === 'corrupt' || segState === 'partial') &&
+    // Repair targets must be scanned — otherwise targeting them would leak the
+    // very damage info the player has yet to discover.
+    const isScannedDamage =
+      'scanned' in seg && seg.scanned === true &&
+      (segState === 'corrupt' || segState === 'partial') &&
       (seg.type === 'tool' || seg.type === 'skill' || seg.type === 'fs-tool' || seg.type === 'core');
-    if (!eligible) return false;
+    if (!isScannedDamage) return false;
     const integrity = 'integrity' in seg ? seg.integrity : 0;
     const redund = getRedundancy(state);
     const cost = Math.ceil(((100 - integrity) / 100) * seg.size * 2);
@@ -70,13 +78,13 @@ export function isValidTarget(seg: Segment, ctx: ValidTargetContext): boolean {
     // invalid-target classes line up with what would actually happen.
     if (seg.type === 'fs-tool') {
       if (activeKind === 'deactivate') return false;
-      return seg.integrity > 50 && segState !== 'busy';
+      return seg.integrity > 50;
     }
     const togglable = seg.type === 'tool' || seg.type === 'skill' ||
                       seg.type === 'ship' || seg.type === 'ship-backup' ||
                       seg.type === 'core';
     if (!togglable) return false;
-    if (segState === 'busy' || segState === 'transferring' ||
+    if (segState === 'transferring' ||
         segState === 'repairing' || segState === 'offline') return false;
     if (activeKind === 'activate') return segState === 'inactive';
     // deactivate: anything currently not inactive
@@ -149,7 +157,7 @@ export function pickUpTool(store: Store<GameState>, kind: FsToolKind): void {
   }
   const tool = state.memory.find(
     (m): m is FsToolSegment =>
-      m.type === 'fs-tool' && m.fsTool === kind && m.integrity > 50 && m.state !== 'busy',
+      m.type === 'fs-tool' && m.fsTool === kind && m.integrity > 50,
   );
   if (!tool) return;
   store.update((d) => {
@@ -169,6 +177,17 @@ export function cancelTool(store: Store<GameState>): void {
   placementClearer?.();
 }
 
+// Reset stage-1/2 state but keep the tool in hand so the player can apply it
+// again in quick succession. Used after every successful apply — the only way
+// out is now an explicit cancel (chip click, ESC, right-click).
+function resetToolStage(store: Store<GameState>): void {
+  store.update((d) => {
+    d.ui.pickedSourceId = null;
+    d.ui.pendingPlacement = null;
+  });
+  placementClearer?.();
+}
+
 export function applyTool(
   store: Store<GameState>,
   seg: Segment,
@@ -181,29 +200,28 @@ export function applyTool(
   const picked = pickedId ? state.memory.find((m) => m.id === pickedId) ?? null : null;
   if (!isValidTarget(seg, { state, activeKind: active.kind, pickedSource: picked })) return;
 
+  // Single-target tools: stay in the player's hand after applying so a chain
+  // of similar ops (scan three files in a row, repair multiple, etc.) doesn't
+  // require re-clicking the chip each time. Cancel is explicit: chip re-click,
+  // Esc, or right-click.
   if (active.kind === 'scan') {
-    if (seg.type === 'ship') actionScan(store, seg, deps);
-    cancelTool(store);
+    actionScan(store, seg, deps);
     return;
   }
   if (active.kind === 'repair') {
     actionRepair(store, seg, deps);
-    cancelTool(store);
     return;
   }
   if (active.kind === 'delete') {
     actionDelete(store, seg, deps);
-    cancelTool(store);
     return;
   }
   if (active.kind === 'activate') {
     actionActivate(store, seg, deps);
-    cancelTool(store);
     return;
   }
   if (active.kind === 'deactivate') {
     actionDeactivate(store, seg, deps);
-    cancelTool(store);
     return;
   }
 
@@ -218,7 +236,8 @@ export function applyTool(
   if (!placement) { cancelTool(store); return; }
   if (active.kind === 'move') actionMove(store, picked, placement, deps);
   else actionCopy(store, picked, placement, deps);
-  cancelTool(store);
+  // Keep the tool in hand; reset back to stage-1 (next click picks a new source).
+  resetToolStage(store);
 }
 
 // ----- Subscriber: target classes -----

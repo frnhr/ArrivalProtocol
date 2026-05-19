@@ -189,7 +189,47 @@
   cursor: move;
   user-select: none;
 }
-.window-title .grip { color: var(--accent-dim); font-size: 9px; letter-spacing: 0.3em; margin-right: 10px; }
+/* The window-title grip doubles as the bound segment's health indicator.
+ * Three bars, painted by mountWindowGrips based on integrity. Intact = solid,
+ * partial = yellow + occasional flicker, corrupt = red + frequent drop-outs.
+ * Currentcolor is set by .intact/.partial/.corrupt; .bar elements inherit it. */
+.window-title .grip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 10px;
+  color: var(--good);
+}
+.window-title .grip .bar {
+  display: inline-block;
+  width: 3px;
+  height: 12px;
+  background: currentColor;
+  opacity: 0.9;
+}
+.window-title .grip.intact      { color: var(--good); }
+.window-title .grip.partial     { color: #ffce4a; }
+.window-title .grip.corrupt     { color: var(--warn); }
+.window-title .grip.intact .bar { animation: none; }
+.window-title .grip.partial .bar:nth-child(1) { animation: grip-flicker-soft 5.7s infinite; }
+.window-title .grip.partial .bar:nth-child(2) { animation: grip-flicker-soft 7.3s infinite 1.2s; }
+.window-title .grip.partial .bar:nth-child(3) { animation: grip-flicker-soft 4.1s infinite 0.6s; }
+.window-title .grip.corrupt .bar:nth-child(1) { animation: grip-flicker-hard 1.7s infinite; }
+.window-title .grip.corrupt .bar:nth-child(2) { animation: grip-flicker-hard 2.3s infinite 0.4s; }
+.window-title .grip.corrupt .bar:nth-child(3) { animation: grip-flicker-hard 1.3s infinite 0.9s; }
+@keyframes grip-flicker-soft {
+  0%, 95%, 100% { opacity: 0.9; }
+  96%  { opacity: 0.1; }
+  97%  { opacity: 0.9; }
+}
+@keyframes grip-flicker-hard {
+  0%, 72%, 100% { opacity: 0.9; }
+  73%  { opacity: 0.05; }
+  78%  { opacity: 0.4; }
+  82%  { opacity: 0.9; }
+  90%  { opacity: 0.1; }
+  93%  { opacity: 0.9; }
+}
 .window-title .name {
   flex: 1;
   color: var(--accent);
@@ -363,6 +403,14 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px
 .seg-bar .fill { height: 100%; background: var(--good); transition: width 0.3s; }
 .seg.corrupt .seg-bar .fill { background: var(--warn); }
 .seg.partial .seg-bar .fill { background: #ffce4a; }
+/* Unscanned: no fill, just an inset dark bar so the row layout is preserved. */
+.seg-bar.unscanned {
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+.seg-meta .health.unknown { color: var(--text-dim); letter-spacing: 0.15em; }
+.detail-row .v.unknown { color: var(--text-dim); }
+.detail-row .v.unknown::before { content: '◌ '; opacity: 0.7; }
 
 /* Compact for small segments */
 .seg.compact { padding: 4px 6px; min-height: 42px; }

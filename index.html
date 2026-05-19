@@ -37,7 +37,7 @@
       <div class="dock-content tools-view">
         <div class="dock-section">Bridge</div>
         <div class="dock-item open"><span class="mark">●</span><span>Telemetry</span></div>
-        <div class="dock-item open warn"><span class="mark">●</span><span>Engine</span></div>
+        <div class="dock-item open"><span class="mark">●</span><span>Engine</span></div>
         <div class="dock-section">Mission</div>
         <div class="dock-item"><span class="mark">○</span><span>Briefing</span></div>
         <div class="dock-item"><span class="mark">○</span><span>Hazards</span></div>
@@ -82,9 +82,9 @@
           UPTIME: 14:23:47
         </div>
 
-        <div class="window telemetry-win">
+        <div class="window telemetry-win" data-seg="telem">
           <div class="window-title">
-            <span class="grip">▌▌▌</span>
+            <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
             <span class="name">Telemetry</span>
             <span class="ctl">−</span>
             <span class="ctl">×</span>
@@ -107,9 +107,9 @@
           </div>
         </div>
 
-        <div class="window engine-win">
+        <div class="window engine-win" data-seg="engine">
           <div class="window-title">
-            <span class="grip">▌▌▌</span>
+            <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
             <span class="name">Engine Control</span>
             <span class="ctl">−</span><span class="ctl">×</span>
           </div>
@@ -127,7 +127,6 @@
               </div>
             </div>
             <button class="engage">▶ engage burn</button>
-            <div class="micro-status"><span>state</span><span class="v" style="color:var(--warn)">⚠ engine i/o corrupt</span></div>
           </div>
         </div>
       </div>
@@ -142,7 +141,7 @@
           <div class="mem-stat"><span class="lbl">filesystem</span><span class="v">17 <span class="small">/ 4%</span></span></div>
           <div class="mem-stat"><span class="lbl">redundancy</span><span class="v" id="statRedund">36 <span class="small">/ 9%</span></span></div>
           <div class="mem-stat"><span class="lbl">free</span><span class="v" id="statFree">176 <span class="small">/ 46%</span></span></div>
-          <div class="mem-stat"><span class="lbl">corrupt</span><span class="v warn">12 <span class="small">/ 3%</span></span></div>
+          <div class="mem-stat"><span class="lbl">corrupt</span><span class="v" id="statCorrupt">— <span class="small">unscanned</span></span></div>
         </div>
 
         <div class="mem-strip-panel">
@@ -182,8 +181,6 @@
   </div>
 
   <div class="footer">
-    <div class="item"><span class="dot warn"></span><span>ENGINE I/O CORRUPT</span></div>
-    <div class="item"><span class="dot warn"></span><span>SENSORS DEGRADED</span></div>
     <div class="item"><span>2,400 SOULS IN STASIS</span></div>
     <div class="spacer"></div>
     <div class="item"><span id="footRedund">REDUNDANCY: 36/72 AVAILABLE</span></div>
