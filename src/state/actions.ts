@@ -132,7 +132,7 @@ export function actionScan(store: Store<GameState>, seg: Segment, deps: ActionDe
   const scan = getFsTool(store.getState(), 'scan');
   if (!scan) return;
   runQuickToolOp(store, scan, seg, deps,
-    `SCAN · ${seg.name}`, TOOL_ICONS.scan, 700,
+    `SCAN · ${seg.name}`, TOOL_ICONS.scan, 400 + seg.size * 120,
     () => {
       seg.scanned = true;
       const cur = seg.state;
@@ -325,7 +325,7 @@ export function actionRepair(
     targetEls,
     label: `REPAIR · ${seg.name}`,
     icon: TOOL_ICONS.repair,
-    dur: 6000,
+    dur: 1500 + seg.size * 500,
     onProgress: (pct) => {
       // Drain whole-block units only so the visual ticks down in steady steps
       // instead of doing sub-block fractional fills that don't match the
