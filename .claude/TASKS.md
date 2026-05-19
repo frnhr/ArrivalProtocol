@@ -48,7 +48,7 @@ Also, the glitches should be much more severe. The UI is very slightly hard to r
 
 See [TASK-400-scannable-files.md](TASK-400-scannable-files.md) for details.
 
-## 500. Add software cores system to limit and progress parallel tool execution 🈺
+## 500. Add software cores system to limit and progress parallel tool execution ✅
 
 ## 600. Automatic skill development mechanic with tool progression ⬅️
 
