@@ -95,9 +95,6 @@ export function computeActions(seg: Segment, deps: ComputeActionsDeps): Computed
   if (seg.type === 'free') {
     out.primary.push({ id: 'install', label: '▸ install tool here', cost: 'free' });
   }
-  if (seg.type === 'redundancy') {
-    out.primary.push({ id: 'delete_redund', label: '▸ reclaim as free space', cost: `+${seg.used} blk`, cls: 'warn' });
-  }
   if (canRescan) {
     out.primary.push({
       id: 'scan', label: '◎ re-scan',
