@@ -929,6 +929,15 @@ body.tool-active .seg.valid-target:hover {
   margin-bottom: 8px;
 }
 
+/* Disabled demo block — tool has no higher revisions yet. Slider is rendered
+   for symmetry but visibly muted so the player reads "upgrade-able later". */
+.demo-block.disabled { opacity: 0.55; }
+.demo-block.disabled input[type=range] { cursor: not-allowed; }
+.demo-block.disabled input[type=range]::-webkit-slider-thumb {
+  background: var(--accent-dim);
+  box-shadow: none;
+}
+
 /* FOOTER */
 .footer {
   height: 32px;

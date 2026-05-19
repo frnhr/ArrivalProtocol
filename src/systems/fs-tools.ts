@@ -37,6 +37,16 @@ export interface ValidTargetContext {
   pickedSource: Segment | null;
 }
 
+// Resolves the version of the currently-active tool segment, defaulting to 1
+// if not picked up or not found. Used by isValidTarget to gate v2+ behaviour.
+function getActiveToolVersion(state: GameState): number {
+  const active = state.ui.activeTool;
+  if (!active) return 1;
+  const seg = state.memory.find((m) => m.id === active.toolSegId);
+  if (!seg || seg.type !== 'fs-tool') return 1;
+  return seg.version;
+}
+
 // Determines whether a given segment is a valid target for the currently active tool.
 // Pure logic; reads only memory + active-tool snapshot, no DOM, no mutation.
 export function isValidTarget(seg: Segment, ctx: ValidTargetContext): boolean {
@@ -53,6 +63,13 @@ export function isValidTarget(seg: Segment, ctx: ValidTargetContext): boolean {
     return 'scanned' in seg;
   }
   if (activeKind === 'repair') {
+    // Repair v2+ adds the Redundancy segment as a valid target — compacts it
+    // by reclaiming the wasted blocks between `used` and `size` as free space.
+    if (seg.type === 'redundancy') {
+      const ver = getActiveToolVersion(state);
+      if (ver < 2) return false;
+      return seg.size > seg.used;
+    }
     // Repair targets must be scanned — otherwise targeting them would leak the
     // very damage info the player has yet to discover.
     const isScannedDamage =
@@ -155,13 +172,17 @@ export function pickUpTool(store: Store<GameState>, kind: FsToolKind): void {
     cancelTool(store);
     return;
   }
-  const tool = state.memory.find(
-    (m): m is FsToolSegment =>
-      m.type === 'fs-tool' && m.fsTool === kind && m.integrity > 50,
-  );
+  // Pick the highest-version healthy copy. Identical to getFsTool's
+  // selection — kept inline here to avoid coupling pickup logic to the
+  // selector module.
+  let tool: FsToolSegment | undefined;
+  for (const m of state.memory) {
+    if (m.type !== 'fs-tool' || m.fsTool !== kind || m.integrity <= 50) continue;
+    if (!tool || m.version > tool.version) tool = m;
+  }
   if (!tool) return;
   store.update((d) => {
-    d.ui.activeTool = { kind, toolSegId: tool.id };
+    d.ui.activeTool = { kind, toolSegId: tool!.id };
     d.ui.pickedSourceId = null;
     d.ui.pendingPlacement = null;
   });

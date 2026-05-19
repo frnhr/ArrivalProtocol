@@ -4,6 +4,7 @@ import type { GameState } from '@state/schema';
 import { getFsTool, getRedundancy, selectCorruption } from '@state/selectors';
 import { getActiveOpCount } from '@systems/ops';
 import { TYPE_LABELS } from '@data/type-labels';
+import { TOOL_MAX_VERSION } from '@data/fs-tools';
 
 export type DetailActionId =
   | 'repair' | 'swap' | 'activate' | 'delete_redund' | 'scan'
@@ -34,6 +35,9 @@ export interface RenderDetailDeps extends ComputeActionsDeps {
   getCorruption?: () => number;
   // Demo: live-tweak the AI Core's concurrency capacity (1..15).
   onCapacitySliderInput?: (n: number) => void;
+  // Demo: bump a specific fs-tool segment's version. Receives the seg id so
+  // multiple tool copies (Repair / Repair.bak) can be tweaked independently.
+  onVersionSliderInput?: (segId: string, n: number) => void;
 }
 
 export function computeActions(seg: Segment, deps: ComputeActionsDeps): ComputedActions {
@@ -124,6 +128,29 @@ function renderDemoBlock(currentCorruption: number): string {
     </div>`;
 }
 
+// Demo control to live-tweak an fs-tool segment's version. Slider range is
+// 1..TOOL_MAX_VERSION for the tool kind. When max is 1, no upgrade exists
+// yet — the slider is rendered disabled so the player can see that future
+// versions are possible but none are currently available.
+function renderVersionDemoBlock(seg: FsToolSegment): string {
+  const max = TOOL_MAX_VERSION[seg.fsTool];
+  const cur = Math.max(1, Math.min(max, seg.version));
+  const range = max - 1;
+  const pct = range > 0 ? Math.round(((cur - 1) / range) * 100) : 50;
+  const disabled = max <= 1;
+  return `
+    <div class="demo-block${disabled ? ' disabled' : ''}">
+      <div class="demo-label">// demo: tool version</div>
+      <div style="font-size:10px;color:var(--text);line-height:1.5;margin-bottom:8px">
+        ${disabled
+          ? 'No upgrade path defined for this tool yet. Future revisions will unlock new behaviours.'
+          : 'Drag to switch this tool between known revisions. Higher versions add capabilities (e.g. Repair v2 compacts the Redundancy segment).'}
+      </div>
+      <input type="range" id="demoVersionSlider" data-seg-id="${seg.id}" min="1" max="${Math.max(max, 1)}" value="${cur}" style="--p:${pct}%"${disabled ? ' disabled' : ''}>
+      <div class="scale"><span>v1</span>${max > 1 ? `<span>v${max}</span>` : ''}</div>
+    </div>`;
+}
+
 // Demo control to live-tweak the Core's concurrency capacity. Range 1..15
 // covers everything from "single-threaded scarcity" to "unlimited-feeling"
 // without crowding the segment visually. Uses the same slider styling as
@@ -205,6 +232,9 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
     if (seg.type === 'core' && deps.onCapacitySliderInput) {
       html += renderCapacityDemoBlock(seg.capacity);
     }
+    if (seg.type === 'fs-tool' && deps.onVersionSliderInput) {
+      html += renderVersionDemoBlock(seg);
+    }
   }
 
   target.innerHTML = html;
@@ -232,6 +262,17 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
       slider.addEventListener('input', (ev) => {
         const value = parseInt((ev.target as HTMLInputElement).value, 10);
         deps.onCapacitySliderInput!(value);
+      });
+    }
+  }
+  if (deps.onVersionSliderInput) {
+    const slider = target.querySelector<HTMLInputElement>('#demoVersionSlider');
+    if (slider && !slider.disabled) {
+      slider.addEventListener('input', (ev) => {
+        const el = ev.target as HTMLInputElement;
+        const value = parseInt(el.value, 10);
+        const segId = el.dataset.segId;
+        if (segId) deps.onVersionSliderInput!(segId, value);
       });
     }
   }
@@ -343,6 +384,21 @@ export function mountDetailPanel(
           store.update((d) => {
             const core = d.memory.find((m) => m.type === 'core');
             if (core && core.type === 'core') core.capacity = n;
+          });
+        } finally {
+          sliderActive = false;
+        }
+      },
+      // Demo: bump a specific fs-tool's version. sliderActive blocks the
+      // panel from re-rendering mid-drag (would destroy the slider). The
+      // store update fires all subscribers, so isValidTarget repaints pick
+      // up the v2+ unlock immediately (Redundancy becomes a valid target).
+      onVersionSliderInput: (segId, n) => {
+        sliderActive = true;
+        try {
+          store.update((d) => {
+            const tool = d.memory.find((m) => m.id === segId);
+            if (tool && tool.type === 'fs-tool') tool.version = n;
           });
         } finally {
           sliderActive = false;

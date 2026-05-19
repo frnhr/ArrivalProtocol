@@ -17,16 +17,20 @@ export function getAiCore(state: GameState): CoreSegment | undefined {
   return state.memory.find((seg): seg is CoreSegment => seg.type === 'core');
 }
 
-// Find an available fs-tool of the requested kind. "Available" = above 50%
-// integrity. Tools are NOT consumed by use — multiple ops of the same kind
-// run in parallel against different targets, so there's no busy-mutex on the
-// tool segment itself. Global concurrency comes from the AI Core's `capacity`
-// (see getAiCore and systems/ops.ts).
+// Find the best available fs-tool of the requested kind. "Available" = above
+// 50% integrity. When multiple healthy copies exist (Repair / Repair.bak),
+// returns the one with the highest `version` so v2+ capabilities are picked
+// over v1 automatically. Tools are NOT consumed by use — multiple ops of the
+// same kind run in parallel against different targets, so there's no
+// busy-mutex on the tool segment itself. Global concurrency comes from the
+// AI Core's `capacity` (see getAiCore and systems/ops.ts).
 export function getFsTool(state: GameState, kind: FsToolKind): FsToolSegment | undefined {
-  return state.memory.find(
-    (seg): seg is FsToolSegment =>
-      seg.type === 'fs-tool' && seg.fsTool === kind && seg.integrity > 50,
-  );
+  let best: FsToolSegment | undefined;
+  for (const seg of state.memory) {
+    if (seg.type !== 'fs-tool' || seg.fsTool !== kind || seg.integrity <= 50) continue;
+    if (!best || seg.version > best.version) best = seg;
+  }
+  return best;
 }
 
 export function getFreeTotal(state: GameState): number {

@@ -64,6 +64,10 @@ export interface FsToolSegment extends SegmentBase {
   scanned: boolean;
   fsTool: FsToolKind;
   state?: SegmentState;
+  // Tool revision. Starts at 1. Higher versions unlock new capabilities
+  // (e.g. Repair v2 can compact the Redundancy segment). Max per kind lives
+  // in data/fs-tools.ts as TOOL_MAX_VERSION.
+  version: number;
 }
 
 export interface ShipSegment extends SegmentBase {
