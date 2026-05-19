@@ -195,8 +195,13 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
     <div class="detail-row"><span class="k">state</span><span class="v ${stateClass}">${stateText}</span></div>`;
 
   if (seg.type === 'redundancy') {
+    const wasted = Math.max(0, seg.size - seg.used);
     html += `<div class="detail-row"><span class="k">spent</span><span class="v partial">${seg.capacity - seg.used} / ${seg.capacity}</span></div>`;
     html += `<div class="detail-row"><span class="k">remaining</span><span class="v good">${seg.used} blk</span></div>`;
+    html += `<div class="detail-row"><span class="k">footprint</span><span class="v">${seg.size} blk</span></div>`;
+    if (wasted > 0) {
+      html += `<div class="detail-row"><span class="k">reclaimable</span><span class="v partial">${wasted} blk · needs Repair v2</span></div>`;
+    }
   }
   if (seg.type === 'core') {
     const inUse = getActiveOpCount();

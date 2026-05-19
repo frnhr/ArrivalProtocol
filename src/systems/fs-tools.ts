@@ -5,7 +5,7 @@ import type { GameState } from '@state/schema';
 import type { Store } from '@state/store';
 import {
   actionScan, actionRepair, actionDelete, actionMove, actionCopy,
-  actionActivate, actionDeactivate,
+  actionActivate, actionDeactivate, isRedundancyBusy,
   type ActionDeps,
 } from '@state/actions';
 
@@ -37,14 +37,20 @@ export interface ValidTargetContext {
   pickedSource: Segment | null;
 }
 
-// Resolves the version of the currently-active tool segment, defaulting to 1
-// if not picked up or not found. Used by isValidTarget to gate v2+ behaviour.
+// Resolves the effective version for the currently-active tool kind: the
+// highest version among all healthy copies of that kind, NOT just the one
+// segment that was picked up. This avoids the gotcha where a player picks
+// up Repair (then v1) and later bumps Repair.bak to v2 — the player gets
+// the upgrade without re-picking the chip.
 function getActiveToolVersion(state: GameState): number {
   const active = state.ui.activeTool;
   if (!active) return 1;
-  const seg = state.memory.find((m) => m.id === active.toolSegId);
-  if (!seg || seg.type !== 'fs-tool') return 1;
-  return seg.version;
+  let max = 1;
+  for (const m of state.memory) {
+    if (m.type !== 'fs-tool' || m.fsTool !== active.kind || m.integrity <= 50) continue;
+    if (m.version > max) max = m.version;
+  }
+  return max;
 }
 
 // Determines whether a given segment is a valid target for the currently active tool.
@@ -64,11 +70,16 @@ export function isValidTarget(seg: Segment, ctx: ValidTargetContext): boolean {
   }
   if (activeKind === 'repair') {
     // Repair v2+ adds the Redundancy segment as a valid target — compacts it
-    // by reclaiming the wasted blocks between `used` and `size` as free space.
+    // by reclaiming the wasted blocks (size − used) as free space. No scan
+    // required; redundancy state is always known to the player. The op is
+    // permitted even when size == used (nothing to reclaim) — it plays the
+    // animation and no-ops on completion, mirroring how Repair on a fully
+    // intact file would behave. While ANY repair / compact is in flight the
+    // pool is locked so a fresh attempt isn't allowed to interleave.
     if (seg.type === 'redundancy') {
+      if (isRedundancyBusy()) return false;
       const ver = getActiveToolVersion(state);
-      if (ver < 2) return false;
-      return seg.size > seg.used;
+      return ver >= 2;
     }
     // Repair targets must be scanned — otherwise targeting them would leak the
     // very damage info the player has yet to discover.

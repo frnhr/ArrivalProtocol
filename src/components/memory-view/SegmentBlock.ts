@@ -61,8 +61,13 @@ export function renderSegmentPart(
   el.dataset.partOffset = String(partOffset);
 
   if (seg.type === 'redundancy') {
-    // Distribute the global used/capacity fill proportionally across parts
-    const totalPct = (seg.used / seg.capacity) * 100;
+    // Fill = used / size so the bar is honest about memory blocks. Each visible
+    // block in the seg represents one block of memory; "wasted" blocks (size −
+    // used, accumulated from drained repairs) show as the empty tail. Compact
+    // (Repair v2) reclaims exactly that tail. `capacity` is the historical
+    // blueprint max and stays in the detail panel as info, not on the bar.
+    const filled = Math.max(0, Math.min(seg.size, seg.used));
+    const totalPct = seg.size > 0 ? (filled / seg.size) * 100 : 0;
     const partStartPct = (partOffset / seg.size) * 100;
     const partEndPct = ((partOffset + partSize) / seg.size) * 100;
     let localPct = 0;
@@ -101,7 +106,7 @@ export function renderSegmentPart(
     if (state === 'inactive') metaR = `<span class="health partial">IDLE</span>`;
     else if (state === 'locked') metaR = `<span class="health warn">LOCK</span>`;
     else if (state === 'transferring') metaR = `<span class="health partial">↻ XFER</span>`;
-    else if (seg.type === 'redundancy') metaR = `<span class="health">${seg.used}/${seg.capacity}</span>`;
+    else if (seg.type === 'redundancy') metaR = `<span class="health">${seg.used}/${seg.size}</span>`;
     else if (!knownScanned) metaR = `<span class="health unknown">— —</span>`;
     else if (state === 'corrupt') metaR = `<span class="health warn">◆ ${integrity}%</span>`;
     else if (state === 'partial') metaR = `<span class="health partial">${integrity}%</span>`;

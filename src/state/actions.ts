@@ -43,6 +43,26 @@ function flashCapFull(): void {
   }, 450);
 }
 
+// Counter of in-flight ops that touch the redundancy pool — AI repair drains
+// and v2 compact both count. isValidTarget consults this so a fresh compact
+// click is refused while another repair is mid-drain, and so a second drain
+// is refused while a compact is reshaping the seg. Bracketed by acquireRedund
+// / releaseRedund at op start and op end (complete OR cancel).
+let redundancyBusyCount = 0;
+export function isRedundancyBusy(): boolean { return redundancyBusyCount > 0; }
+function acquireRedund(store: Store<GameState>): void {
+  redundancyBusyCount++;
+  // No state field on RedundancySegment to flip, and isValidTarget reads
+  // isRedundancyBusy() directly — so the visual repaint of target classes
+  // hinges on a store notify. Bumping memoryRev would rebuild the strip
+  // (unnecessary); a plain notify is enough.
+  store.notify();
+}
+function releaseRedund(store: Store<GameState>): void {
+  redundancyBusyCount = Math.max(0, redundancyBusyCount - 1);
+  store.notify();
+}
+
 // Runs a short fs-tool animation (dock-in + progress fill + fade) docked over
 // the target segment. Used by scan / activate / deactivate where the action
 // itself is instant logic but the user-visible effect benefits from a tool
@@ -234,12 +254,14 @@ export function _isRedundancy(seg: Segment): seg is RedundancySegment {
 // value, WITHOUT going through store.update — repainting the strip every game
 // tick would interrupt clicks and tank parallel ops. The stats-panel count
 // snaps to its final value via the regular subscriber on op completion. The
-// per-part --used formula mirrors renderSegmentPart so the visual lines up.
+// per-part --used formula mirrors renderSegmentPart so the visual lines up:
+// fill is used/size (block-honest), not used/capacity.
 function paintRedundProgress(redund: RedundancySegment): void {
   const parts = Array.from(document.querySelectorAll<HTMLElement>(
     `.seg[data-id="${redund.id}"]`,
   ));
-  const totalPct = (redund.used / redund.capacity) * 100;
+  const filled = Math.max(0, Math.min(redund.size, redund.used));
+  const totalPct = redund.size > 0 ? (filled / redund.size) * 100 : 0;
   parts.forEach((el) => {
     const partSize = parseInt(el.dataset.partSize ?? String(redund.size), 10);
     const partOffset = parseInt(el.dataset.partOffset ?? '0', 10);
@@ -285,6 +307,7 @@ export function actionRepair(
   const startUsed = redund.used;
 
   (seg as Segment & { operating?: boolean }).operating = true;
+  acquireRedund(store);
   store.update((d) => { d.ui.memoryRev++; });
 
   const targetEls = Array.from(document.querySelectorAll<HTMLElement>(
@@ -336,11 +359,13 @@ export function actionRepair(
         }
         mergeAdjacentFree(memory);
       }
+      releaseRedund(store);
       store.update((d) => { d.ui.memoryRev++; });
     },
     onCancel: () => {
       (seg as Segment & { operating?: boolean }).operating = false;
       // Partial drain stays consumed — work-in-progress can't be undone.
+      releaseRedund(store);
       store.update((d) => { d.ui.memoryRev++; });
     },
   });
@@ -348,21 +373,21 @@ export function actionRepair(
 
 // Repair v2 on the Redundancy segment: compact the segment down to its
 // available budget, returning the wasted blocks (size − used) to free space.
-// Capacity is rebased to the new size so the bar reads 100% afterward.
-// No-op if there's nothing to reclaim. Cost-free; the v2 capability itself
-// is the cost (occupies an upgrade slot once the upgrade system is wired).
+// `capacity` (original blueprint max) is preserved — only `size` shrinks, so
+// the "spent" rollup in the detail panel still reflects total historical
+// repair consumption. Reclaim of 0 still plays the animation and no-ops,
+// matching how Repair on an intact file behaves.
 function actionCompactRedundancy(
   store: Store<GameState>,
   redund: RedundancySegment,
   deps: ActionDeps,
 ): void {
-  const reclaim = redund.size - redund.used;
-  if (reclaim <= 0) return;
   const repair = getFsTool(store.getState(), 'repair');
   if (!repair || repair.version < 2) return;
   if (!canStartOp()) { flashCapFull(); return; }
 
   (redund as Segment & { operating?: boolean }).operating = true;
+  acquireRedund(store);
   store.update((d) => { d.ui.memoryRev++; });
 
   const targetEls = Array.from(document.querySelectorAll<HTMLElement>(
@@ -380,31 +405,33 @@ function actionCompactRedundancy(
     dur: 2400,
     onComplete: () => {
       (redund as Segment & { operating?: boolean }).operating = false;
-      const memory = store.getState().memory;
-      const idx = memory.indexOf(redund);
-      // Shrink the redundancy footprint to match the surviving budget. New
-      // capacity = used so the visual bar reads 100% (no more "wasted" gap).
-      redund.size = redund.used;
-      redund.capacity = redund.used;
-      // Place the reclaimed blocks as a free seg adjacent to redundancy; if
-      // the next seg is already free, just grow it. mergeAdjacentFree handles
-      // any remaining stitching.
-      const next = memory[idx + 1];
-      if (next && next.type === 'free') {
-        next.size += reclaim;
-      } else {
-        memory.splice(idx + 1, 0, {
-          id: 'free-cpt-' + Date.now(),
-          name: 'Free',
-          type: 'free',
-          size: reclaim,
-        });
+      // Re-read state at op completion: ops may have drained redundancy in
+      // parallel while this compact was running, so the snapshot from
+      // op-start is stale. Reclaim = current size − current used.
+      const reclaim = Math.max(0, redund.size - redund.used);
+      if (reclaim > 0) {
+        const memory = store.getState().memory;
+        const idx = memory.indexOf(redund);
+        redund.size = redund.used;
+        const next = memory[idx + 1];
+        if (next && next.type === 'free') {
+          next.size += reclaim;
+        } else {
+          memory.splice(idx + 1, 0, {
+            id: 'free-cpt-' + Date.now(),
+            name: 'Free',
+            type: 'free',
+            size: reclaim,
+          });
+        }
+        mergeAdjacentFree(memory);
       }
-      mergeAdjacentFree(memory);
+      releaseRedund(store);
       store.update((d) => { d.ui.memoryRev++; });
     },
     onCancel: () => {
       (redund as Segment & { operating?: boolean }).operating = false;
+      releaseRedund(store);
       store.update((d) => { d.ui.memoryRev++; });
     },
   });
