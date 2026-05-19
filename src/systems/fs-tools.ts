@@ -150,6 +150,12 @@ export function isValidTarget(seg: Segment, ctx: ValidTargetContext): boolean {
 let lastMouseX = 0;
 let lastMouseY = 0;
 
+// Most recently applied target across the current tool-held session, used by
+// cancelTool as a fallback selection when pickedSourceId isn't set (i.e. for
+// single-click tools like scan/repair that never enter the stage-1 picked
+// state). Reset on every fresh pickup so it doesn't leak across sessions.
+let lastAppliedTargetId: string | null = null;
+
 export function getCursorXY(): { x: number; y: number } {
   return { x: lastMouseX, y: lastMouseY };
 }
@@ -192,6 +198,7 @@ export function pickUpTool(store: Store<GameState>, kind: FsToolKind): void {
     if (!tool || m.version > tool.version) tool = m;
   }
   if (!tool) return;
+  lastAppliedTargetId = null;
   store.update((d) => {
     d.ui.activeTool = { kind, toolSegId: tool!.id };
     d.ui.pickedSourceId = null;
@@ -201,10 +208,17 @@ export function pickUpTool(store: Store<GameState>, kind: FsToolKind): void {
 
 export function cancelTool(store: Store<GameState>): void {
   store.update((d) => {
+    // Sidebar fallback chain: an in-flight Move/Copy stage-1 pickedSourceId
+    // wins, otherwise the most recent single-click target applied during
+    // this session. A second cancel gesture (esc / right-click / empty-space
+    // click) then clears the selection back to the memory-bank overview.
+    const fallback = d.ui.pickedSourceId ?? lastAppliedTargetId;
+    if (fallback) d.ui.selectedId = fallback;
     d.ui.activeTool = null;
     d.ui.pickedSourceId = null;
     d.ui.pendingPlacement = null;
   });
+  lastAppliedTargetId = null;
   // Placement-preview DOM cleanup — fires the bridge clearer.
   placementClearer?.();
 }
@@ -231,6 +245,12 @@ export function applyTool(
   const pickedId = state.ui.pickedSourceId;
   const picked = pickedId ? state.memory.find((m) => m.id === pickedId) ?? null : null;
   if (!isValidTarget(seg, { state, activeKind: active.kind, pickedSource: picked })) return;
+
+  // Remember the most recently targeted file for this tool session so
+  // cancelTool can seed selectedId on dismissal. Single-click tools never
+  // populate pickedSourceId; without this the sidebar would fall back to a
+  // stale prior selection instead of the file just operated on.
+  lastAppliedTargetId = seg.id;
 
   // Single-target tools: stay in the player's hand after applying so a chain
   // of similar ops (scan three files in a row, repair multiple, etc.) doesn't
@@ -350,15 +370,28 @@ export function mountFsToolsSystem(store: Store<GameState>): () => void {
   };
   document.addEventListener('mousemove', onMouseMove);
 
+  // Escape and right-click cascade: first dismiss the active tool, then clear
+  // the lingering selection. Lets the player walk back from "tool armed on
+  // target" → "inspecting target" → "memory overview" with one gesture per
+  // step, using the same keys.
   const onKeyDown = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape' && store.getState().ui.activeTool) cancelTool(store);
+    if (e.key !== 'Escape') return;
+    const state = store.getState();
+    if (state.ui.activeTool) { cancelTool(store); return; }
+    if (state.ui.selectedId) store.update((d) => { d.ui.selectedId = null; });
   };
   window.addEventListener('keydown', onKeyDown);
 
   const onContextMenu = (e: MouseEvent): void => {
-    if (store.getState().ui.activeTool) {
+    const state = store.getState();
+    if (state.ui.activeTool) {
       e.preventDefault();
       cancelTool(store);
+      return;
+    }
+    if (state.ui.selectedId) {
+      e.preventDefault();
+      store.update((d) => { d.ui.selectedId = null; });
     }
   };
   window.addEventListener('contextmenu', onContextMenu);

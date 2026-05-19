@@ -362,10 +362,7 @@ export function mountDetailPanel(
 
   function paint(state: GameState): void {
     if (sliderActive) return;
-    const segId = state.ui.selectedId;
-    const seg = segId ? state.memory.find((m) => m.id === segId) : null;
-    if (!seg) { renderOverview(target!, state); return; }
-    renderDetailPanel(target!, seg, {
+    const deps: RenderDetailDeps = {
       getFsTool: (kind) => getFsTool(state, kind),
       getRedundancy: () => getRedundancy(state),
       onAction: opts.onAction,
@@ -409,7 +406,25 @@ export function mountDetailPanel(
           sliderActive = false;
         }
       },
-    });
+    };
+
+    // Tool-held mode takes precedence over a stale selectedId: once the
+    // player has picked up a tool, the sidebar should track what they're
+    // about to operate ON (picked source) or WITH (the tool's own file).
+    // Falls through to selectedId / overview when nothing is held.
+    const activeTool = state.ui.activeTool;
+    if (activeTool) {
+      const pickedId = state.ui.pickedSourceId;
+      const picked = pickedId ? state.memory.find((m) => m.id === pickedId) : null;
+      if (picked) { renderDetailPanel(target!, picked, deps); return; }
+      const toolSeg = state.memory.find((m) => m.id === activeTool.toolSegId);
+      if (toolSeg) { renderDetailPanel(target!, toolSeg, deps); return; }
+    }
+
+    const segId = state.ui.selectedId;
+    const seg = segId ? state.memory.find((m) => m.id === segId) : null;
+    if (!seg) { renderOverview(target!, state); return; }
+    renderDetailPanel(target!, seg, deps);
   }
 
   paint(store.getState());
