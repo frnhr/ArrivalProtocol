@@ -14,12 +14,17 @@ const KIND_TO_CHIP_ID: Record<FsToolKind, string> = {
   deactivate: 'chip-deactivate',
 };
 
-// Patches the chip strip's state classes in place. No remount.
+// Patches the chip strip's state classes in place. No remount. Also stamps a
+// "vN" badge on the chip label when the highest healthy copy of that tool kind
+// is past v1, so the player can see at a glance whether a tool upgrade is
+// armed before clicking the chip.
 export function updateFsChips(memory: readonly Segment[]): void {
   (Object.entries(KIND_TO_CHIP_ID) as Array<[FsToolKind, string]>).forEach(([kind, chipId]) => {
-    const tool = memory.find(
-      (m): m is Segment & { type: 'fs-tool' } => m.type === 'fs-tool' && m.fsTool === kind,
+    const copies = memory.filter(
+      (m): m is Segment & { type: 'fs-tool'; fsTool: FsToolKind; version: number; integrity: number; state?: string } =>
+        m.type === 'fs-tool' && m.fsTool === kind,
     );
+    const tool = copies[0];
     const chip = document.getElementById(chipId);
     if (!chip || !tool) return;
     const dot = chip.querySelector('.dot');
@@ -32,6 +37,22 @@ export function updateFsChips(memory: readonly Segment[]): void {
       dot?.classList.add('bad');
     } else if (state === 'busy') {
       dot?.classList.add('busy');
+    }
+    // Highest version among healthy copies — drives the chip's version badge.
+    let bestVer = 1;
+    for (const c of copies) {
+      if (c.integrity > 50 && c.version > bestVer) bestVer = c.version;
+    }
+    let badge = chip.querySelector<HTMLElement>('.ver');
+    if (bestVer > 1) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'ver';
+        chip.appendChild(badge);
+      }
+      badge.textContent = `v${bestVer}`;
+    } else if (badge) {
+      badge.remove();
     }
   });
 

@@ -938,6 +938,19 @@ body.tool-active .seg.valid-target:hover {
   box-shadow: none;
 }
 
+/* Version badge — stamped onto the chip label and the cursor follower when
+   the best healthy copy of a tool is past v1. Plain, low-key, monospace. */
+.fs-tool-chip .ver,
+.cursor-follower .ver {
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  color: var(--good);
+  border: 1px solid var(--good);
+  padding: 0 4px;
+  border-radius: 2px;
+  margin-left: 4px;
+}
+
 /* FOOTER */
 .footer {
   height: 32px;

@@ -317,6 +317,7 @@ export function actionRepair(
   const { x, y } = deps.getCursorXY();
 
   let lastDrainedInt = 0;
+  void startUsed;   // captured for diagnostics; drains are delta-based below
 
   startOp({
     segId: seg.id,
@@ -328,23 +329,29 @@ export function actionRepair(
     onProgress: (pct) => {
       // Drain whole-block units only so the visual ticks down in steady steps
       // instead of doing sub-block fractional fills that don't match the
-      // segment's block-granular semantics.
+      // segment's block-granular semantics. CRITICAL: apply as a DELTA off
+      // the live redund.used, not an absolute snapshot off startUsed — two
+      // repairs running in parallel each have their own startUsed and would
+      // overwrite each other's drains, making the bar jitter.
       const wantDrained = Math.floor((cost * pct) / 100);
-      if (wantDrained === lastDrainedInt) return;
+      const delta = wantDrained - lastDrainedInt;
+      if (delta === 0) return;
       lastDrainedInt = wantDrained;
       // Mutate directly — same reason as clock.ts uses store.mutate elsewhere:
       // notifying subscribers per-tick would rebuild the memory strip dozens of
       // times per second, interrupting clicks. paintRedundProgress patches the
       // affected DOM in place.
-      redund.used = Math.max(0, startUsed - wantDrained);
+      redund.used = Math.max(0, redund.used - delta);
       paintRedundProgress(redund);
     },
     onComplete: () => {
       seg.integrity = 100;
       seg.state = 'intact';
       (seg as Segment & { operating?: boolean }).operating = false;
-      // Reconcile any rounding gap from the floor()-stepped drain.
-      redund.used = Math.max(0, startUsed - cost);
+      // Reconcile any rounding gap left by the floor()-stepped drain: drain
+      // the unticked remainder off live redund.used (delta-style, not absolute).
+      const remaining = cost - lastDrainedInt;
+      if (remaining > 0) redund.used = Math.max(0, redund.used - remaining);
       if (redund.used === 0) {
         const memory = store.getState().memory;
         const idx = memory.indexOf(redund);
