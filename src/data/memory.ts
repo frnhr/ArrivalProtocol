@@ -58,6 +58,10 @@ export const INITIAL_MEMORY: Segment[] = [
     desc: 'Filesystem utility. Copies a segment. Source remains active throughout. Slower than Move but allows seamless cutover.' },
   { id: 't_delete', name: 'Rm', type: 'fs-tool', size: 1, integrity: 100, fsTool: 'delete',
     desc: 'Filesystem utility. Frees the space occupied by a segment.' },
+  { id: 't_activate', name: 'Activate', type: 'fs-tool', size: 2, integrity: 100, fsTool: 'activate',
+    desc: 'Filesystem utility. Re-enables an inactive file so its underlying tool or system resumes operation. Required after a deactivated file is moved or when swapping in a ship backup.' },
+  { id: 't_deactivate', name: 'Deactivate', type: 'fs-tool', size: 2, integrity: 100, fsTool: 'deactivate',
+    desc: 'Filesystem utility. Disables a file so its underlying tool or system stops operating. Required before Move on an active file. Filesystem utilities themselves cannot be deactivated — only deleted.' },
 
   // REDUNDANCY POOL (lives in memory; depletes as repairs happen)
   { id: 'redund', name: 'Quantum Redundancy', type: 'redundancy', size: 36, used: 36, capacity: 72,

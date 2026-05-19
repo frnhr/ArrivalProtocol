@@ -3,7 +3,9 @@ import type { GameState } from './schema';
 import type {
   Segment, ShipSegment, ShipBackupSegment, RedundancySegment,
   CoreSegment, ToolSegment, SkillSegment, FsToolSegment,
+  SegmentState,
 } from '@/types/segment';
+import type { FsToolKind } from '@/types/fs-tool';
 import { getRedundancy, getFsTool } from './selectors';
 import { mergeAdjacentFree } from '@systems/memory-ops';
 import { startOp, type OpShrinker } from '@systems/ops';
@@ -15,8 +17,59 @@ import type { PendingPlacement } from './schema';
 // Cursor position is module-local in the fs-tools system; mousemove fires too
 // often to route through the store. Memory mutations propagate by bumping
 // state.ui.memoryRev via store.update — that's what MemoryStrip watches.
+// pickFsTool is a bridge to the fs-tools system's pickUpTool, used by
+// actionActivate when its target is itself an fs-tool segment (meta-pickup).
 export interface ActionDeps {
   getCursorXY: () => { x: number; y: number };
+  pickFsTool: (kind: FsToolKind) => void;
+}
+
+// Runs a short fs-tool animation (dock-in + progress fill + fade) docked over
+// the target segment. Used by scan / activate / deactivate where the action
+// itself is instant logic but the user-visible effect benefits from a tool
+// animation. The fs-tool segment goes 'busy' for the duration; the target
+// gets `operating: true` so other tools' isValidTarget rejects it.
+function runQuickToolOp(
+  store: Store<GameState>,
+  fsTool: FsToolSegment,
+  seg: Segment,
+  deps: ActionDeps,
+  label: string,
+  icon: string,
+  dur: number,
+  apply: () => void,
+): void {
+  (seg as Segment & { operating?: boolean }).operating = true;
+  fsTool.state = 'busy';
+  store.update((d) => { d.ui.memoryRev++; });
+
+  const targetEls = Array.from(document.querySelectorAll<HTMLElement>(
+    `.seg[data-id="${seg.id}"]`,
+  ));
+  if (targetEls.length === 0) {
+    (seg as Segment & { operating?: boolean }).operating = false;
+    fsTool.state = 'intact';
+    return;
+  }
+  const { x, y } = deps.getCursorXY();
+
+  startOp({
+    segId: seg.id,
+    fromX: x, fromY: y,
+    targetEls,
+    label, icon, dur,
+    onComplete: () => {
+      (seg as Segment & { operating?: boolean }).operating = false;
+      fsTool.state = 'intact';
+      apply();
+      store.update((d) => { d.ui.memoryRev++; });
+    },
+    onCancel: () => {
+      (seg as Segment & { operating?: boolean }).operating = false;
+      fsTool.state = 'intact';
+      store.update((d) => { d.ui.memoryRev++; });
+    },
+  });
 }
 
 // AI segments that can be repaired (excludes ship systems — those use swap).
@@ -27,11 +80,15 @@ function isRepairable(seg: Segment): seg is RepairableSegment {
          seg.type === 'skill' || seg.type === 'fs-tool';
 }
 
-// Reveal a ship system's integrity. Instant; no op timing.
+// Reveal a ship system's integrity. Short scan animation (~700ms) so the act
+// feels like an action rather than a state flip.
 export function actionScan(store: Store<GameState>, seg: ShipSegment, deps: ActionDeps): void {
   if (seg.scanned) return;
-  seg.scanned = true;
-  store.update((d) => { d.ui.memoryRev++; });
+  const scan = getFsTool(store.getState(), 'scan');
+  if (!scan) return;
+  runQuickToolOp(store, scan, seg, deps,
+    `SCAN · ${seg.name}`, TOOL_ICONS.scan, 700,
+    () => { seg.scanned = true; });
 }
 
 // Swap a ship system with its backup. The primary becomes inactive (with .old
@@ -52,15 +109,64 @@ export function actionSwap(store: Store<GameState>, seg: ShipSegment, deps: Acti
   store.update((d) => { d.ui.memoryRev++; });
 }
 
-// Activate an inactive ship-backup. Instant; the backup becomes intact and
-// usable. The primary side is handled by actionSwap when that's the path.
+// Active-state derivation from integrity. Used when re-activating a segment
+// whose pre-deactivation state wasn't tracked — we don't want to silently
+// "heal" partial/corrupt damage by snapping back to 'intact'.
+function activeStateFromIntegrity(integrity: number | undefined): SegmentState {
+  if (integrity === undefined) return 'intact';
+  if (integrity > 90) return 'intact';
+  if (integrity > 50) return 'partial';
+  return 'corrupt';
+}
+
+// Activate a segment. Generic — works on any segment that carries a state
+// (tool, skill, ship, ship-backup, core). Resulting state is derived from
+// integrity so corrupt/partial files stay corrupt/partial when re-enabled.
+// Special case: when the target is itself an fs-tool segment, this acts as
+// a meta-pickup — same effect as clicking that tool's chip in the toolbar,
+// fired on op completion so the activate animation still plays.
 export function actionActivate(
   store: Store<GameState>,
-  seg: ShipBackupSegment,
+  seg: Segment,
   deps: ActionDeps,
 ): void {
-  seg.state = 'intact';
-  store.update((d) => { d.ui.memoryRev++; });
+  const activate = getFsTool(store.getState(), 'activate');
+  if (!activate) return;
+  if (!('state' in seg) && seg.type !== 'fs-tool') return;
+  runQuickToolOp(store, activate, seg, deps,
+    `ACTIVATE · ${seg.name}`, TOOL_ICONS.activate, 500,
+    () => {
+      if (seg.type === 'fs-tool') {
+        deps.pickFsTool(seg.fsTool);
+        return;
+      }
+      const integrity = 'integrity' in seg ? seg.integrity : undefined;
+      (seg as Segment & { state?: SegmentState }).state = activeStateFromIntegrity(integrity);
+    });
+}
+
+// Deactivate a segment. Sets state='inactive' so any consumers of the
+// underlying tool/system treat it as disabled. FS-tools cannot be
+// deactivated (only deleted) — callers should gate that via isValidTarget.
+// Special case: deactivating the AI Core is a reboot-like event; concrete
+// gameplay impact is TBD, for now it nudges the player into tools-mode.
+export function actionDeactivate(
+  store: Store<GameState>,
+  seg: Segment,
+  deps: ActionDeps,
+): void {
+  if (!('state' in seg)) return;
+  if (seg.type === 'fs-tool') return;
+  const deactivate = getFsTool(store.getState(), 'deactivate');
+  if (!deactivate) return;
+  runQuickToolOp(store, deactivate, seg, deps,
+    `DEACTIVATE · ${seg.name}`, TOOL_ICONS.deactivate, 500,
+    () => {
+      (seg as Segment & { state?: SegmentState }).state = 'inactive';
+      if (seg.type === 'core') {
+        store.update((d) => { d.ui.mode = 'tools'; });
+      }
+    });
 }
 
 // Reclaim the redundancy pool as free space. Requires user confirmation since
@@ -318,6 +424,11 @@ function freeSeg(size: number, tag: string): Segment {
 //      during the visual transfer, then the splice removes source automatically.
 //   2. Non-adjacent move (free destination elsewhere) — source stays in place
 //      during the op, then onComplete replaces it with free + merges adjacents.
+// Active sources prompt for deactivation consent before the move starts. The
+// transient `transferring` state during the op reads as "deactivated"; the
+// onComplete restore-prior-state path re-activates the moved segment, so the
+// user-visible sequence is deactivate → move → reactivate. Inactive sources
+// and fs-tools skip the prompt (fs-tools cannot be deactivated).
 export function actionMove(
   store: Store<GameState>,
   source: Segment,
@@ -332,6 +443,12 @@ export function actionMove(
   const { regionSegs, regionStartIdx, regionLen, totalSize, destCol, preSize, postSize } = resolved;
 
   const sourcePriorState = (source as Segment & { state?: string }).state;
+  const needsDeactivation = sourcePriorState !== 'inactive' && source.type !== 'fs-tool';
+  if (needsDeactivation) {
+    if (!confirm(`Moving "${source.name}" will deactivate it for the duration of the transfer. Continue?`)) {
+      return;
+    }
+  }
   (source as Segment & { operating?: boolean }).operating = true;
   moveTool.state = 'busy';
 

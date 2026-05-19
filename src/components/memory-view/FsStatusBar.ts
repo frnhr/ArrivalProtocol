@@ -10,6 +10,8 @@ const KIND_TO_CHIP_ID: Record<FsToolKind, string> = {
   move: 'chip-move',
   copy: 'chip-copy',
   delete: 'chip-delete',
+  activate: 'chip-activate',
+  deactivate: 'chip-deactivate',
 };
 
 // Patches the chip strip's state classes in place. No remount.

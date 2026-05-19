@@ -1,1 +1,1 @@
-export type FsToolKind = 'scan' | 'repair' | 'move' | 'copy' | 'delete';
+export type FsToolKind = 'scan' | 'repair' | 'move' | 'copy' | 'delete' | 'activate' | 'deactivate';

@@ -35,6 +35,7 @@ export function renderSegmentPart(
   if (partSize <= 3) cls += ' compact';
   if (state === 'transferring') cls += ' transferring';
   if (state === 'offline') cls += ' offline offline-state';
+  if (state === 'inactive') cls += ' inactive';
   if (isSplit) {
     cls += ' is-part';
     if (!isLast) cls += ' part-continues-right';

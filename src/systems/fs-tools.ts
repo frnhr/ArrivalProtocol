@@ -5,6 +5,7 @@ import type { GameState } from '@state/schema';
 import type { Store } from '@state/store';
 import {
   actionScan, actionRepair, actionDelete, actionMove, actionCopy,
+  actionActivate, actionDeactivate,
   type ActionDeps,
 } from '@state/actions';
 
@@ -61,6 +62,25 @@ export function isValidTarget(seg: Segment, ctx: ValidTargetContext): boolean {
     if (segState === 'offline' || segState === 'repairing' ||
         segState === 'transferring' || segState === 'busy') return false;
     return true;
+  }
+  if (activeKind === 'activate' || activeKind === 'deactivate') {
+    // FS-tool targets: only valid for Activate, and act as a meta-pickup of
+    // that fs-tool (same as clicking the chip). FS-tools cannot be
+    // deactivated. Gate matches pickUpTool's own integrity/state checks so
+    // invalid-target classes line up with what would actually happen.
+    if (seg.type === 'fs-tool') {
+      if (activeKind === 'deactivate') return false;
+      return seg.integrity > 50 && segState !== 'busy';
+    }
+    const togglable = seg.type === 'tool' || seg.type === 'skill' ||
+                      seg.type === 'ship' || seg.type === 'ship-backup' ||
+                      seg.type === 'core';
+    if (!togglable) return false;
+    if (segState === 'busy' || segState === 'transferring' ||
+        segState === 'repairing' || segState === 'offline') return false;
+    if (activeKind === 'activate') return segState === 'inactive';
+    // deactivate: anything currently not inactive
+    return segState !== 'inactive';
   }
   if (activeKind === 'move' || activeKind === 'copy') {
     if (!pickedSource) {
@@ -176,6 +196,16 @@ export function applyTool(
     cancelTool(store);
     return;
   }
+  if (active.kind === 'activate') {
+    actionActivate(store, seg, deps);
+    cancelTool(store);
+    return;
+  }
+  if (active.kind === 'deactivate') {
+    actionDeactivate(store, seg, deps);
+    cancelTool(store);
+    return;
+  }
 
   // move / copy
   if (!picked) {
@@ -223,7 +253,7 @@ export function mountTargetClasses(store: Store<GameState>): () => void {
 // ----- Subscriber: body class reflector -----
 // Mirrors state.ui.activeTool onto body classes + the FS-chip .picked class.
 
-const TOOL_KINDS: readonly FsToolKind[] = ['scan', 'repair', 'move', 'copy', 'delete'];
+const TOOL_KINDS: readonly FsToolKind[] = ['scan', 'repair', 'move', 'copy', 'delete', 'activate', 'deactivate'];
 
 function paintBodyClasses(active: GameState['ui']['activeTool']): void {
   document.body.classList.toggle('tool-active', !!active);

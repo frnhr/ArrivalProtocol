@@ -18,7 +18,7 @@ import { mountAllWindows } from '@components/window/Window';
 import { mountEngineWindow } from '@components/tools-view/EngineWindow';
 import { mountMemoryStats } from '@components/memory-view/MemoryStats';
 import { mountFooter } from '@components/footer/Footer';
-import { mountFsToolsSystem, applyTool, getCursorXY } from '@systems/fs-tools';
+import { mountFsToolsSystem, applyTool, getCursorXY, pickUpTool } from '@systems/fs-tools';
 import { mountCursorFollower } from '@components/cursor-follower/CursorFollower';
 import { mountMemoryStrip } from '@components/memory-view/MemoryStrip';
 import { mountSelectionHighlight } from '@components/memory-view/SelectionHighlight';
@@ -33,7 +33,12 @@ import {
 } from '@state/actions';
 
 // Cursor position is module-local in fs-tools (mousemove writes; everything else reads).
-const actionDeps: ActionDeps = { getCursorXY };
+// pickFsTool is the bridge that lets actionActivate meta-pick-up an fs-tool
+// when Activate is applied to an fs-tool segment in memory.
+const actionDeps: ActionDeps = {
+  getCursorXY,
+  pickFsTool: (kind) => pickUpTool(store, kind),
+};
 
 // DetailPanel action buttons dispatch through this. The fs-tools system
 // invokes individual action functions directly via applyTool.
