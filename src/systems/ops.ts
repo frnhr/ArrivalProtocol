@@ -52,6 +52,10 @@ export interface StartOpOpts {
   dur: number;
   reverseFill?: boolean;
   shrinkers?: OpShrinker[];
+  // Fires inside the game tick whenever progress advances (0..100). Use for
+  // op-driven side effects that should track the bar fill — e.g. redundancy
+  // depletion during repair. Runs on game-time, so pause halts it.
+  onProgress?: (pct: number) => void;
   onComplete?: () => void;
   onCancel?: () => void;
 }
@@ -66,10 +70,49 @@ export function getActiveOp(segId: string): OpRecord | undefined {
   return activeOps.get(segId);
 }
 
+// Hard concurrency cap, set from the AI Core's `capacity`. New ops are
+// refused when activeOps.size is already at capacity — see canStartOp().
+// Default Infinity preserves old behaviour until main.ts wires the sync.
+let coresCapacity = Infinity;
+
+export function setCoresCapacity(n: number): void {
+  coresCapacity = Number.isFinite(n) ? Math.max(0, n) : Infinity;
+  notifyLoadListeners();
+}
+
+export function getActiveOpCount(): number {
+  return activeOps.size;
+}
+
+export function getCoresCapacity(): number {
+  return coresCapacity;
+}
+
+// Hard cap check. Action functions consult this before doing any setup work
+// (DOM, segment mutation) so a refused op leaves no half-state behind.
+export function canStartOp(): boolean {
+  return activeOps.size < coresCapacity;
+}
+
+// Subscribers notified when activeOps.size changes — used by the AI Core's
+// thread indicator and the footer counter to repaint in real time. Capacity
+// changes also fire this (via setCoresCapacity).
+type LoadListener = () => void;
+const loadListeners = new Set<LoadListener>();
+
+export function onOpLoadChange(listener: LoadListener): () => void {
+  loadListeners.add(listener);
+  return () => { loadListeners.delete(listener); };
+}
+
+function notifyLoadListeners(): void {
+  loadListeners.forEach((fn) => fn());
+}
+
 export function startOp(opts: StartOpOpts): OpHandle {
   const {
     segId, fromX, fromY, targetEls, label, icon, dur,
-    reverseFill = false, shrinkers, onComplete, onCancel,
+    reverseFill = false, shrinkers, onProgress, onComplete, onCancel,
   } = opts;
 
   const totalSize = targetEls.reduce((sum, te) => sum + parseInt(te.dataset.partSize ?? '0', 10), 0);
@@ -186,6 +229,7 @@ export function startOp(opts: StartOpOpts): OpHandle {
     record.unsubTick?.();
     record.unsubTick = null;
     activeOps.delete(segId);
+    notifyLoadListeners();
     fadeOut();
     onCancel?.();
   });
@@ -226,10 +270,12 @@ export function startOp(opts: StartOpOpts): OpHandle {
             : `inset(0 0 0 ${clip}%)`;
         });
       }
+      onProgress?.(p);
       if (p >= 100) {
         record.unsubTick?.();
         record.unsubTick = null;
         activeOps.delete(segId);
+        notifyLoadListeners();
         fadeOut();
         onComplete?.();
       }
@@ -237,5 +283,6 @@ export function startOp(opts: StartOpOpts): OpHandle {
   }, 420);
 
   activeOps.set(segId, record);
+  notifyLoadListeners();
   return { cancel: () => cancelBtn.click() };
 }

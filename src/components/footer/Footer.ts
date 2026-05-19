@@ -1,21 +1,46 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { getRedundancy } from '@state/selectors';
+import { getRedundancy, getAiCore } from '@state/selectors';
+import { getActiveOpCount, onOpLoadChange } from '@systems/ops';
 
-// Footer's redundancy counter mirrors the redundancy pool's used/capacity.
-// Subscribes with an always-false comparator so it picks up in-place mutations.
+// Footer counters mirror two pool-like resources:
+//   • Redundancy — repair budget, drains on Repair ops
+//   • Core threads — concurrency budget on the AI Core, ticks with active ops
+// Both subscribe with an always-false comparator so in-place mutations
+// (which don't change array refs) still trigger repaints. The thread counter
+// also listens to op-load changes (which never bump store state) so it tracks
+// live op start/finish.
 export function mountFooter(store: Store<GameState>): () => void {
-  const el = document.getElementById('footRedund');
-  if (!el) return () => {};
+  const redundEl = document.getElementById('footRedund');
+  const coresEl = document.getElementById('footCores');
 
-  function paint(state: GameState): void {
+  function paintRedund(state: GameState): void {
+    if (!redundEl) return;
     const redund = getRedundancy(state);
-    el!.textContent = redund
+    redundEl.textContent = redund
       ? `REDUNDANCY: ${redund.used}/${redund.capacity} AVAILABLE`
       : `REDUNDANCY: 0/0 — DEPLETED`;
   }
 
-  paint(store.getState());
-  const unsub = store.subscribe((s) => s, (s) => paint(s), () => false);
-  return () => { unsub(); };
+  function paintCores(state: GameState): void {
+    if (!coresEl) return;
+    const core = getAiCore(state);
+    const inUse = getActiveOpCount();
+    if (!core) {
+      coresEl.textContent = `THREADS: — / —`;
+      return;
+    }
+    coresEl.textContent = `THREADS: ${inUse}/${core.capacity} ACTIVE`;
+  }
+
+  paintRedund(store.getState());
+  paintCores(store.getState());
+
+  const unsubStore = store.subscribe((s) => s, (s) => {
+    paintRedund(s);
+    paintCores(s);
+  }, () => false);
+  const unsubLoad = onOpLoadChange(() => paintCores(store.getState()));
+
+  return () => { unsubStore(); unsubLoad(); };
 }

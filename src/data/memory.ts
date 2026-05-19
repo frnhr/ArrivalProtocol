@@ -30,8 +30,8 @@ export const INITIAL_MEMORY: Segment[] = [
   { id: 'free2', name: 'Free', type: 'free', size: 28 },
 
   // AI MEMORY (transmitted) — integrity unknown until scanned, even self
-  { id: 'core', name: 'AI Core', type: 'core', size: 16, integrity: 100, scanned: false,
-    desc: 'Consciousness substrate. Damage here manifests as visual UI distortion proportional to corruption. Cannot be deleted; can only be repaired with redundancy.' },
+  { id: 'core', name: 'AI Core', type: 'core', size: 16, integrity: 100, scanned: false, capacity: 2,
+    desc: 'Consciousness substrate AND compute pool. Each running filesystem operation claims one core thread; at capacity, new ops are refused. Damage manifests as visual UI distortion proportional to corruption. Cannot be deleted; can only be repaired with redundancy.' },
   { id: 'telem', name: 'Telemetry', type: 'tool', size: 8, integrity: 100, scanned: false,
     desc: 'Reads ship sensors. Intact.' },
   { id: 'engine', name: 'Engine I/O', type: 'tool', size: 8, integrity: 38, state: 'corrupt', scanned: false,

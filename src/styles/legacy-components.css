@@ -446,6 +446,64 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px
 }
 .seg.redundancy .seg-name { color: var(--accent-bright); }
 
+/* AI Core thread-dot row — one dot per concurrency slot, lit when an op is
+   running in that slot. The Core is also the compute substrate, so this lives
+   inside the .seg.core block alongside the integrity bar. */
+.seg.core .thread-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.seg.core .thread-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--accent-dim);
+  flex: 0 0 auto;
+  transition: background 0.12s ease-out, box-shadow 0.12s ease-out;
+}
+.seg.core .thread-dot.lit {
+  background: var(--good);
+  border-color: var(--good);
+  box-shadow: 0 0 6px var(--good), 0 0 1px var(--good);
+  animation: thread-pulse 1.2s ease-in-out infinite;
+}
+@keyframes thread-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+.seg.core .thread-count {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+
+/* Cap-full flash — body class added for ~450ms whenever an action is refused
+   because the Core is saturated. Briefly tints the lit dots warn-red and
+   shakes the row + cursor follower so the player notices the click went
+   nowhere. Dots transition back to green via the .thread-dot base transition. */
+body.cap-full .seg.core .thread-dot.lit {
+  background: var(--warn);
+  border-color: var(--warn);
+  box-shadow: 0 0 10px var(--warn), 0 0 2px var(--warn);
+}
+body.cap-full .seg.core .thread-count { color: var(--warn); }
+body.cap-full .seg.core .thread-row { animation: cap-shake 0.18s ease-in-out 2; }
+body.cap-full .cursor-follower { animation: cap-shake 0.18s ease-in-out 2; }
+@keyframes cap-shake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-3px); }
+  75%      { transform: translateX(3px); }
+}
+
+/* Footer warn — used by the threads indicator at capacity. */
+.footer .item > .warn,
+.footer .item span.warn { color: var(--warn); }
+
 .seg.corrupt {
   border-color: var(--warn);
   animation: corrupt-flicker calc(3s / var(--glitch-tempo, 1)) infinite;

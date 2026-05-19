@@ -46,11 +46,11 @@ export function isValidTarget(seg: Segment, ctx: ValidTargetContext): boolean {
   const segState = 'state' in seg ? seg.state : undefined;
 
   if (activeKind === 'scan') {
-    // Any segment that has a `scanned` field and hasn't been scanned yet.
-    // Concurrent operations on the same target are blocked by the `operating`
-    // check above, so no other state guard is needed here.
-    if (!('scanned' in seg)) return false;
-    return !seg.scanned;
+    // Any segment that has a `scanned` field is scannable — re-scanning a
+    // previously-scanned file refreshes its readouts (will matter once files
+    // start degrading progressively). Concurrent operations on the same target
+    // are blocked by the `operating` check above.
+    return 'scanned' in seg;
   }
   if (activeKind === 'repair') {
     // Repair targets must be scanned — otherwise targeting them would leak the

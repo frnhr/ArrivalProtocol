@@ -2,6 +2,7 @@ import type { Segment, FsToolSegment, RedundancySegment } from '@/types/segment'
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { getFsTool, getRedundancy, selectCorruption } from '@state/selectors';
+import { getActiveOpCount } from '@systems/ops';
 import { TYPE_LABELS } from '@data/type-labels';
 
 export type DetailActionId =
@@ -31,6 +32,8 @@ export interface RenderDetailDeps extends ComputeActionsDeps {
   onCorruptionSliderInput?: (pct: number) => void;
   // current global corruption 0..1, used to initialize the demo slider
   getCorruption?: () => number;
+  // Demo: live-tweak the AI Core's concurrency capacity (1..15).
+  onCapacitySliderInput?: (n: number) => void;
 }
 
 export function computeActions(seg: Segment, deps: ComputeActionsDeps): ComputedActions {
@@ -54,6 +57,9 @@ export function computeActions(seg: Segment, deps: ComputeActionsDeps): Computed
     });
     return out;
   }
+  // Post-scan: a re-scan refreshes the integrity readout. Useful once files
+  // start degrading over time; currently mostly a no-op but always available.
+  const canRescan = 'scanned' in seg;
 
   const isDamagedAi = (state === 'corrupt' || state === 'partial') &&
     (seg.type === 'tool' || seg.type === 'skill' || seg.type === 'fs-tool' || seg.type === 'core');
@@ -92,6 +98,13 @@ export function computeActions(seg: Segment, deps: ComputeActionsDeps): Computed
   if (seg.type === 'redundancy') {
     out.primary.push({ id: 'delete_redund', label: '▸ reclaim as free space', cost: `+${seg.used} blk`, cls: 'warn' });
   }
+  if (canRescan) {
+    out.primary.push({
+      id: 'scan', label: '◎ re-scan',
+      cost: scan ? '1 tick' : 'no scan!',
+      disabled: !scan, cls: scan ? '' : 'disabled',
+    });
+  }
 
   return out;
 }
@@ -111,6 +124,27 @@ function renderDemoBlock(currentCorruption: number): string {
       </div>
       <input type="range" id="demoCorruptSlider" min="0" max="100" value="${pct}" style="--p:${pct}%">
       <div class="scale"><span>0</span><span>50</span><span>100</span></div>
+    </div>`;
+}
+
+// Demo control to live-tweak the Core's concurrency capacity. Range 1..15
+// covers everything from "single-threaded scarcity" to "unlimited-feeling"
+// without crowding the segment visually. Uses the same slider styling as
+// the corruption demo so the two blocks read as a matched pair.
+const CAPACITY_MIN = 1;
+const CAPACITY_MAX = 15;
+function renderCapacityDemoBlock(currentCapacity: number): string {
+  const clamped = Math.max(CAPACITY_MIN, Math.min(CAPACITY_MAX, currentCapacity));
+  const range = CAPACITY_MAX - CAPACITY_MIN;
+  const pct = Math.round(((clamped - CAPACITY_MIN) / range) * 100);
+  return `
+    <div class="demo-block">
+      <div class="demo-label">// demo: core threads</div>
+      <div style="font-size:10px;color:var(--text);line-height:1.5;margin-bottom:8px">
+        Concurrency cap. Each running filesystem op claims one thread. Drag to widen or tighten the budget.
+      </div>
+      <input type="range" id="demoCapacitySlider" min="${CAPACITY_MIN}" max="${CAPACITY_MAX}" value="${clamped}" style="--p:${pct}%">
+      <div class="scale"><span>${CAPACITY_MIN}</span><span>${Math.round((CAPACITY_MIN + CAPACITY_MAX) / 2)}</span><span>${CAPACITY_MAX}</span></div>
     </div>`;
 }
 
@@ -140,6 +174,14 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
     html += `<div class="detail-row"><span class="k">spent</span><span class="v partial">${seg.capacity - seg.used} / ${seg.capacity}</span></div>`;
     html += `<div class="detail-row"><span class="k">remaining</span><span class="v good">${seg.used} blk</span></div>`;
   }
+  if (seg.type === 'core') {
+    const inUse = getActiveOpCount();
+    const atCap = inUse >= seg.capacity;
+    html += `<div class="detail-row"><span class="k">threads</span><span class="v ${atCap ? 'warn' : 'good'}">${inUse} / ${seg.capacity}</span></div>`;
+    if (atCap) {
+      html += `<div class="detail-row"><span class="k">status</span><span class="v warn">at capacity — new ops refused</span></div>`;
+    }
+  }
   if (seg.type === 'ship' && seg.backup) {
     html += `<div class="detail-row"><span class="k">backup</span><span class="v partial">available ⊃</span></div>`;
   }
@@ -163,6 +205,9 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
     if (seg.type === 'core' && deps.getCorruption) {
       html += renderDemoBlock(deps.getCorruption());
     }
+    if (seg.type === 'core' && deps.onCapacitySliderInput) {
+      html += renderCapacityDemoBlock(seg.capacity);
+    }
   }
 
   target.innerHTML = html;
@@ -181,6 +226,15 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
       slider.addEventListener('input', (ev) => {
         const value = parseInt((ev.target as HTMLInputElement).value, 10);
         deps.onCorruptionSliderInput!(value);
+      });
+    }
+  }
+  if (deps.onCapacitySliderInput) {
+    const slider = target.querySelector<HTMLInputElement>('#demoCapacitySlider');
+    if (slider) {
+      slider.addEventListener('input', (ev) => {
+        const value = parseInt((ev.target as HTMLInputElement).value, 10);
+        deps.onCapacitySliderInput!(value);
       });
     }
   }
@@ -281,6 +335,22 @@ export function mountDetailPanel(
         }
       },
       getCorruption: () => selectCorruption(state),
+      // Demo: live-tweak Core capacity. sliderActive blocks the panel from
+      // re-rendering mid-drag (which would destroy the slider DOM and kill
+      // the browser's native drag tracking). store.update fires the
+      // syncCoreCapacity subscriber → setCoresCapacity → paintCoreThreads,
+      // so the thread row rebuilds with the new dot count immediately.
+      onCapacitySliderInput: (n) => {
+        sliderActive = true;
+        try {
+          store.update((d) => {
+            const core = d.memory.find((m) => m.type === 'core');
+            if (core && core.type === 'core') core.capacity = n;
+          });
+        } finally {
+          sliderActive = false;
+        }
+      },
     });
   }
 

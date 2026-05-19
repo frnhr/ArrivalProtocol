@@ -1,4 +1,5 @@
 import type { Segment } from '@/types/segment';
+import { getActiveOpCount } from '@systems/ops';
 
 export interface SegmentPartLayout {
   partSize: number;
@@ -109,11 +110,25 @@ export function renderSegmentPart(
 
   const sizeLabel = isSplit ? `${partSize}/${seg.size}B` : `${seg.size}B`;
 
+  // AI Core renders a row of "thread" dots — one per capacity slot. Lit dots
+  // = currently-running ops; dim dots = available slots. Visualizes the hard
+  // concurrency cap. Live updates come from paintCoreThreads in main.ts.
+  let threadRow = '';
+  if (isFirst && seg.type === 'core') {
+    const inUse = getActiveOpCount();
+    const dots: string[] = [];
+    for (let i = 0; i < seg.capacity; i++) {
+      dots.push(`<span class="thread-dot${i < inUse ? ' lit' : ''}"></span>`);
+    }
+    threadRow = `<div class="thread-row" data-threads>${dots.join('')}<span class="thread-count">${inUse}/${seg.capacity}</span></div>`;
+  }
+
   if (isFirst) {
     el.innerHTML = `
       ${badge}
       <div class="seg-name">${seg.name}</div>
       ${bar}
+      ${threadRow}
       <div class="seg-meta"><span>${sizeLabel}</span>${metaR}</div>
     `;
   } else {

@@ -28,6 +28,8 @@ import { mountDetailPanel, type DetailActionId } from '@components/memory-view/D
 import { mountSplitOverlay } from '@components/memory-view/SplitOverlay';
 import { mountPlacement } from '@components/memory-view/Placement';
 import { mountFsStatusBar } from '@components/memory-view/FsStatusBar';
+import { setCoresCapacity, onOpLoadChange, getActiveOpCount } from '@systems/ops';
+import { getAiCore } from '@state/selectors';
 import {
   actionScan, actionSwap, actionActivate, actionDeleteRedundancy,
   actionRepair, type ActionDeps,
@@ -112,6 +114,47 @@ mountFsStatusBar(store);
 mountSidebarFilters(store);
 mountFooter(store);
 mountPlacement(store, memWrap);
+
+// Wire the AI Core's `capacity` into the ops engine's hard cap. Re-sync on
+// every store change so future damage/upgrade paths flow through automatically.
+// If the Core is somehow missing, cap drops to 0 and no new ops can start.
+function syncCoreCapacity(): void {
+  const core = getAiCore(store.getState());
+  setCoresCapacity(core ? core.capacity : 0);
+}
+syncCoreCapacity();
+store.subscribe((s) => s, syncCoreCapacity, () => false);
+
+// Repaint the AI Core's thread-dot row in real time as ops start/finish.
+// Walks the Core's already-rendered DOM so the memory strip doesn't rebuild
+// — that would interrupt clicks and tank in-flight ops.
+function paintCoreThreads(): void {
+  const core = getAiCore(store.getState());
+  if (!core) return;
+  const inUse = getActiveOpCount();
+  const parts = Array.from(document.querySelectorAll<HTMLElement>(
+    `.seg[data-id="${core.id}"]`,
+  ));
+  parts.forEach((el) => {
+    const row = el.querySelector<HTMLElement>('[data-threads]');
+    if (!row) return;
+    const dots = row.querySelectorAll<HTMLElement>('.thread-dot');
+    // Capacity may have changed (demo slider, future upgrades) — rebuild the
+    // dot row when its length doesn't match. Otherwise just toggle .lit.
+    if (dots.length !== core.capacity) {
+      const dotsHtml: string[] = [];
+      for (let i = 0; i < core.capacity; i++) {
+        dotsHtml.push(`<span class="thread-dot${i < inUse ? ' lit' : ''}"></span>`);
+      }
+      row.innerHTML = dotsHtml.join('') + `<span class="thread-count">${inUse}/${core.capacity}</span>`;
+      return;
+    }
+    dots.forEach((dot, i) => dot.classList.toggle('lit', i < inUse));
+    const count = row.querySelector<HTMLElement>('.thread-count');
+    if (count) count.textContent = `${inUse}/${core.capacity}`;
+  });
+}
+onOpLoadChange(paintCoreThreads);
 
 // Initial selection.
 const engine = store.getState().memory.find((m) => m.id === 'engine');

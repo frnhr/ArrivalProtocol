@@ -1,5 +1,5 @@
 import type { GameState } from './schema';
-import type { Segment, RedundancySegment, FsToolSegment } from '@/types/segment';
+import type { Segment, RedundancySegment, FsToolSegment, CoreSegment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 
 export function getSegmentById(state: GameState, id: string): Segment | undefined {
@@ -10,11 +10,18 @@ export function getRedundancy(state: GameState): RedundancySegment | undefined {
   return state.memory.find((seg): seg is RedundancySegment => seg.type === 'redundancy');
 }
 
+// The AI Core segment also carries the concurrency budget — the Core IS the
+// compute substrate that runs both the player's consciousness and the tools.
+// See systems/ops.ts for how `capacity` gates new op starts.
+export function getAiCore(state: GameState): CoreSegment | undefined {
+  return state.memory.find((seg): seg is CoreSegment => seg.type === 'core');
+}
+
 // Find an available fs-tool of the requested kind. "Available" = above 50%
 // integrity. Tools are NOT consumed by use — multiple ops of the same kind
 // run in parallel against different targets, so there's no busy-mutex on the
-// tool segment itself. (Concurrency caps will eventually come from a global
-// "software cores" budget; see task 500.)
+// tool segment itself. Global concurrency comes from the AI Core's `capacity`
+// (see getAiCore and systems/ops.ts).
 export function getFsTool(state: GameState, kind: FsToolKind): FsToolSegment | undefined {
   return state.memory.find(
     (seg): seg is FsToolSegment =>

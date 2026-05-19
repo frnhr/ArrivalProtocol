@@ -38,6 +38,10 @@ export interface CoreSegment extends SegmentBase {
   integrity: number;
   scanned: boolean;
   state?: SegmentState;
+  // Concurrency budget: max number of fs-tool ops the player can run at once.
+  // This is the AI's compute substrate — the same Core that runs the player IS
+  // what runs the tools. At capacity, new ops are refused (hard cap).
+  capacity: number;
 }
 
 export interface ToolSegment extends SegmentBase {

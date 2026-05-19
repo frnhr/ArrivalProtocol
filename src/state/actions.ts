@@ -14,7 +14,7 @@ function isScannable(seg: Segment): seg is ScannableSegment {
 import type { FsToolKind } from '@/types/fs-tool';
 import { getRedundancy, getFsTool } from './selectors';
 import { mergeAdjacentFree } from '@systems/memory-ops';
-import { startOp, type OpShrinker } from '@systems/ops';
+import { startOp, canStartOp, type OpShrinker } from '@systems/ops';
 import { TOOL_ICONS } from '@data/fs-tools';
 import { memAddrOf } from '@systems/memory-ops';
 import { renderSegmentPart } from '@components/memory-view/SegmentBlock';
@@ -28,6 +28,19 @@ import type { PendingPlacement } from './schema';
 export interface ActionDeps {
   getCursorXY: () => { x: number; y: number };
   pickFsTool: (kind: FsToolKind) => void;
+}
+
+// Brief body-class flash that gives the player visible feedback when a tool
+// click is refused because the AI Core is at op capacity. CSS targets
+// .cap-full on body to pulse the Core's thread row and the cursor follower.
+let capFlashTimer: ReturnType<typeof setTimeout> | null = null;
+function flashCapFull(): void {
+  document.body.classList.add('cap-full');
+  if (capFlashTimer) clearTimeout(capFlashTimer);
+  capFlashTimer = setTimeout(() => {
+    document.body.classList.remove('cap-full');
+    capFlashTimer = null;
+  }, 450);
 }
 
 // Runs a short fs-tool animation (dock-in + progress fill + fade) docked over
@@ -48,6 +61,8 @@ function runQuickToolOp(
   dur: number,
   apply: () => void,
 ): void {
+  // Hard cap from the AI Core's `capacity`. Refused ops leave no state behind.
+  if (!canStartOp()) { flashCapFull(); return; }
   (seg as Segment & { operating?: boolean }).operating = true;
   store.update((d) => { d.ui.memoryRev++; });
 
@@ -89,13 +104,22 @@ function isRepairable(seg: Segment): seg is RepairableSegment {
 // field — ship systems, AI memory, tools, skills, fs-tools, ship backups.
 // Pre-scan, the player has no direct readout of the file's health; symptoms
 // (window-grip flicker, glitch overlay) hint that something may be off.
+// Re-scanning is allowed: it refreshes the visible `state` from current
+// integrity, which matters once files start degrading progressively. Player-
+// set states (inactive, locked, etc.) are preserved across re-scan.
 export function actionScan(store: Store<GameState>, seg: Segment, deps: ActionDeps): void {
-  if (!isScannable(seg) || seg.scanned) return;
+  if (!isScannable(seg)) return;
   const scan = getFsTool(store.getState(), 'scan');
   if (!scan) return;
   runQuickToolOp(store, scan, seg, deps,
     `SCAN · ${seg.name}`, TOOL_ICONS.scan, 700,
-    () => { seg.scanned = true; });
+    () => {
+      seg.scanned = true;
+      const cur = seg.state;
+      if (cur === undefined || cur === 'intact' || cur === 'partial' || cur === 'corrupt') {
+        seg.state = activeStateFromIntegrity(seg.integrity);
+      }
+    });
 }
 
 // Swap a ship system with its backup. The primary becomes inactive (with .old
@@ -206,22 +230,52 @@ export function _isRedundancy(seg: Segment): seg is RedundancySegment {
   return seg.type === 'redundancy';
 }
 
-// Repair an AI segment using redundancy. Cost scales with damage × size. The
-// segment goes offline (state='busy' on the tool side) for the op duration;
-// on completion integrity restores to 100 and the redundancy pool shrinks.
-// When the pool hits zero, it converts to free space (absorbed by adjacent
-// free seg if present, otherwise retyped in place).
+// Patch the redundancy seg's parts and the footer readout from a current `used`
+// value, WITHOUT going through store.update — repainting the strip every game
+// tick would interrupt clicks and tank parallel ops. The stats-panel count
+// snaps to its final value via the regular subscriber on op completion. The
+// per-part --used formula mirrors renderSegmentPart so the visual lines up.
+function paintRedundProgress(redund: RedundancySegment): void {
+  const parts = Array.from(document.querySelectorAll<HTMLElement>(
+    `.seg[data-id="${redund.id}"]`,
+  ));
+  const totalPct = (redund.used / redund.capacity) * 100;
+  parts.forEach((el) => {
+    const partSize = parseInt(el.dataset.partSize ?? String(redund.size), 10);
+    const partOffset = parseInt(el.dataset.partOffset ?? '0', 10);
+    const partStartPct = (partOffset / redund.size) * 100;
+    const partEndPct = ((partOffset + partSize) / redund.size) * 100;
+    let localPct = 0;
+    if (totalPct > partStartPct) {
+      const overlapEnd = Math.min(totalPct, partEndPct);
+      localPct = ((overlapEnd - partStartPct) / (partEndPct - partStartPct)) * 100;
+    }
+    el.style.setProperty('--used', localPct + '%');
+  });
+  const footRedund = document.getElementById('footRedund');
+  if (footRedund) footRedund.textContent = `REDUNDANCY: ${redund.used}/${redund.capacity} AVAILABLE`;
+}
+
+// Repair an AI segment using redundancy. Cost scales with damage × size and
+// is drained progressively from the redundancy pool as the op advances —
+// canceling mid-op stops further drain but doesn't refund what was already
+// consumed (representing partial work-in-progress that can't be reclaimed).
+// On completion integrity restores to 100. When the pool hits zero it
+// converts to free space (absorbed by adjacent free seg if present, otherwise
+// retyped in place).
 export function actionRepair(
   store: Store<GameState>,
   seg: Segment,
   deps: ActionDeps,
 ): void {
   if (!isRepairable(seg)) return;
+  if (!canStartOp()) { flashCapFull(); return; }
   const repair = getFsTool(store.getState(), 'repair');
   const redund = getRedundancy(store.getState());
   if (!repair || !redund) return;
   const cost = Math.ceil(((100 - seg.integrity) / 100) * seg.size * 2);
   if (redund.used < cost) return;
+  const startUsed = redund.used;
 
   (seg as Segment & { operating?: boolean }).operating = true;
   store.update((d) => { d.ui.memoryRev++; });
@@ -232,6 +286,8 @@ export function actionRepair(
   if (targetEls.length === 0) return;
   const { x, y } = deps.getCursorXY();
 
+  let lastDrainedInt = 0;
+
   startOp({
     segId: seg.id,
     fromX: x, fromY: y,
@@ -239,11 +295,26 @@ export function actionRepair(
     label: `REPAIR · ${seg.name}`,
     icon: TOOL_ICONS.repair,
     dur: 6000,
+    onProgress: (pct) => {
+      // Drain whole-block units only so the visual ticks down in steady steps
+      // instead of doing sub-block fractional fills that don't match the
+      // segment's block-granular semantics.
+      const wantDrained = Math.floor((cost * pct) / 100);
+      if (wantDrained === lastDrainedInt) return;
+      lastDrainedInt = wantDrained;
+      // Mutate directly — same reason as clock.ts uses store.mutate elsewhere:
+      // notifying subscribers per-tick would rebuild the memory strip dozens of
+      // times per second, interrupting clicks. paintRedundProgress patches the
+      // affected DOM in place.
+      redund.used = Math.max(0, startUsed - wantDrained);
+      paintRedundProgress(redund);
+    },
     onComplete: () => {
       seg.integrity = 100;
       seg.state = 'intact';
       (seg as Segment & { operating?: boolean }).operating = false;
-      redund.used = Math.max(0, redund.used - cost);
+      // Reconcile any rounding gap from the floor()-stepped drain.
+      redund.used = Math.max(0, startUsed - cost);
       if (redund.used === 0) {
         const memory = store.getState().memory;
         const idx = memory.indexOf(redund);
@@ -262,6 +333,7 @@ export function actionRepair(
     },
     onCancel: () => {
       (seg as Segment & { operating?: boolean }).operating = false;
+      // Partial drain stays consumed — work-in-progress can't be undone.
       store.update((d) => { d.ui.memoryRev++; });
     },
   });
@@ -277,6 +349,7 @@ export function actionDelete(
 ): void {
   if (seg.type === 'core' || seg.type === 'free') return;
   if (seg.type === 'redundancy') { actionDeleteRedundancy(store, deps); return; }
+  if (!canStartOp()) { flashCapFull(); return; }
 
   const delTool = getFsTool(store.getState(), 'delete');
   if (!delTool) return;
@@ -436,6 +509,7 @@ export function actionMove(
   placement: PendingPlacement,
   deps: ActionDeps,
 ): void {
+  if (!canStartOp()) { flashCapFull(); return; }
   const moveTool = getFsTool(store.getState(), 'move');
   if (!moveTool) return;
   const memory = store.getState().memory;
@@ -550,6 +624,7 @@ export function actionCopy(
   placement: PendingPlacement,
   deps: ActionDeps,
 ): void {
+  if (!canStartOp()) { flashCapFull(); return; }
   const copyTool = getFsTool(store.getState(), 'copy');
   if (!copyTool) return;
   const memory = store.getState().memory;
