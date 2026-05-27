@@ -26,6 +26,10 @@ export function renderMemoryStrip(
   behavior: SegmentBehavior,
 ): void {
   const perRow = getMemoryBlocksPerRow();
+  // `.mem-strip` is a CSS grid with `repeat(var(--mem-cols, 64), 1fr)`. We
+  // must publish the actual per-row count so segments span the full row
+  // width instead of leaving the tail blank.
+  container.style.setProperty('--mem-cols', String(perRow));
   container.innerHTML = '';
   let row = makeRow(0);
   let rowSize = 0;
