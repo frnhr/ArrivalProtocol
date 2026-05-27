@@ -5,12 +5,13 @@ export function isMobileViewport(): boolean {
   return window.matchMedia(`(max-width: ${MOBILE_MAX}px)`).matches;
 }
 
-// Row width tracks viewport: 20 blocks fits comfortably on a 390px phone
-// (each block ~17px) while desktop keeps the original 64 for density.
+// Row width tracks viewport. 32 (0x20) on mobile aligns rows to hex address
+// boundaries so segments laid out on 0x20 multiples don't split mid-row.
+// Desktop keeps 64 (0x40) for the same reason at higher density.
 export function getMemoryBlocksPerRow(): number {
   const w = window.innerWidth;
-  if (w <= NARROW_MAX) return 20;
-  if (w <= MOBILE_MAX) return 20;
+  if (w <= NARROW_MAX) return 32;
+  if (w <= MOBILE_MAX) return 32;
   return 64;
 }
 
