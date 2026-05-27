@@ -5,6 +5,7 @@ import './styles/reset.css';
 import './styles/base.css';
 import './styles/glitch.css';
 import './styles/legacy-components.css';
+import './styles/responsive.css';
 
 import { store } from '@state/instance';
 import type { Segment } from '@/types/segment';
@@ -16,6 +17,7 @@ import { mountSidebarFilters } from '@components/dock/SidebarFilters';
 import { mountTimeControls } from '@components/header/TimeControls';
 import { mountAllWindows } from '@components/window/Window';
 import { mountEngineWindow } from '@components/tools-view/EngineWindow';
+import { mountToolsTabs } from '@components/tools-view/ToolsTabs';
 import { mountWindowGrips } from '@components/tools-view/WindowGrip';
 import { mountMemoryStats } from '@components/memory-view/MemoryStats';
 import { mountFooter } from '@components/footer/Footer';
@@ -59,6 +61,7 @@ mountModeToggle();
 mountDockItems();
 mountTimeControls(store);
 mountAllWindows();
+mountToolsTabs();
 mountEngineWindow();
 mountWindowGrips(store);
 

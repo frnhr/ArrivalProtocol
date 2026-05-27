@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>UNIT 047 // ARES-VII</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -71,7 +72,11 @@
     <div class="desktop">
 
       <!-- TOOLS VIEW -->
-      <div class="tools-view">
+      <div class="tools-view" data-active-tool="telemetry">
+        <div class="tools-tabs" hidden>
+          <button type="button" class="tools-tab active" data-tool="telemetry">Telemetry</button>
+          <button type="button" class="tools-tab" data-tool="engine">Engine</button>
+        </div>
         <div class="corner-stamp tr">
           SECTOR 03 · KEPLER-186<br>
           581 LY FROM EARTH<br>

@@ -19,7 +19,7 @@ function makeRow(addr: number): HTMLElement {
 }
 
 // Full re-render of the memory strip into `container`. Walks the memory array
-// and lays out each segment across PER_ROW-wide rows, splitting segments that
+// and lays out each segment across viewport-sized rows, splitting segments that
 // straddle a row boundary into multiple visual parts.
 export function renderMemoryStrip(
   container: HTMLElement,

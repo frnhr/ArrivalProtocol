@@ -1,3 +1,5 @@
+import { MOBILE_MEDIA_QUERY } from '@/utils/viewport';
+
 // Generalized drag behavior for any .window element with a .window-title grip.
 // Positions are written to `left`/`top` style on the win element, relative to
 // the offset parent (.desktop). Returns a teardown that removes listeners.
@@ -42,9 +44,25 @@ export function makeDraggable(win: HTMLElement, titleSelector = '.window-title')
   };
 }
 
-// Convenience: makes every .window in the document draggable. Returns a combined teardown.
+// Convenience: makes every .window in the document draggable on desktop only.
 export function mountAllWindows(): () => void {
   const wins = Array.from(document.querySelectorAll<HTMLElement>('.window'));
-  const teardowns = wins.map((w) => makeDraggable(w));
-  return () => teardowns.forEach((t) => t());
+  let teardowns: Array<() => void> = [];
+
+  const sync = (): void => {
+    teardowns.forEach((t) => t());
+    teardowns = [];
+    if (!window.matchMedia(MOBILE_MEDIA_QUERY).matches) {
+      teardowns = wins.map((w) => makeDraggable(w));
+    }
+  };
+
+  sync();
+  const mq = window.matchMedia(MOBILE_MEDIA_QUERY);
+  mq.addEventListener('change', sync);
+
+  return () => {
+    mq.removeEventListener('change', sync);
+    teardowns.forEach((t) => t());
+  };
 }
