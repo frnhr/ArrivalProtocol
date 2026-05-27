@@ -1,9 +1,8 @@
 import type { Segment } from '@/types/segment';
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
+import { getMemoryBlocksPerRow } from '@/utils/viewport';
 import { renderSegmentPart, type SegmentBehavior } from './SegmentBlock';
-
-const PER_ROW = 64;
 
 function makeRow(addr: number): HTMLElement {
   const wrap = document.createElement('div');
@@ -26,6 +25,7 @@ export function renderMemoryStrip(
   memory: readonly Segment[],
   behavior: SegmentBehavior,
 ): void {
+  const perRow = getMemoryBlocksPerRow();
   container.innerHTML = '';
   let row = makeRow(0);
   let rowSize = 0;
@@ -37,7 +37,7 @@ export function renderMemoryStrip(
     let simRow = rowSize;
     let simRem = seg.size;
     while (simRem > 0) {
-      const avail = PER_ROW - simRow;
+      const avail = perRow - simRow;
       const take = Math.min(avail, simRem);
       simRem -= take;
       simRow = simRem > 0 ? 0 : simRow + take;
@@ -47,7 +47,7 @@ export function renderMemoryStrip(
     let remaining = seg.size;
     let partIdx = 0;
     while (remaining > 0) {
-      const avail = PER_ROW - rowSize;
+      const avail = perRow - rowSize;
       const take = Math.min(avail, remaining);
       const partOffset = seg.size - remaining;
       const strip = row.querySelector('.mem-strip');
@@ -85,9 +85,27 @@ export function mountMemoryStrip(
   container: HTMLElement,
   behavior: SegmentBehavior,
 ): () => void {
+  let lastPerRow = getMemoryBlocksPerRow();
   renderMemoryStrip(container, store.getState().memory, behavior);
-  return store.subscribe(
+
+  const unsubscribe = store.subscribe(
     (s) => s.ui.memoryRev,
     () => renderMemoryStrip(container, store.getState().memory, behavior),
   );
+
+  // Row width is viewport-dependent; re-render when the breakpoint changes so
+  // segment splits are recomputed. Skip when perRow is unchanged to avoid
+  // wiping placement/highlight classes on every cosmetic resize.
+  const onResize = (): void => {
+    const next = getMemoryBlocksPerRow();
+    if (next === lastPerRow) return;
+    lastPerRow = next;
+    renderMemoryStrip(container, store.getState().memory, behavior);
+  };
+  window.addEventListener('resize', onResize);
+
+  return () => {
+    unsubscribe();
+    window.removeEventListener('resize', onResize);
+  };
 }

@@ -5,10 +5,12 @@ export function isMobileViewport(): boolean {
   return window.matchMedia(`(max-width: ${MOBILE_MAX}px)`).matches;
 }
 
+// Row width tracks viewport: 20 blocks fits comfortably on a 390px phone
+// (each block ~17px) while desktop keeps the original 64 for density.
 export function getMemoryBlocksPerRow(): number {
   const w = window.innerWidth;
-  if (w <= NARROW_MAX) return 16;
-  if (w <= MOBILE_MAX) return 32;
+  if (w <= NARROW_MAX) return 20;
+  if (w <= MOBILE_MAX) return 20;
   return 64;
 }
 

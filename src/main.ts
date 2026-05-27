@@ -30,6 +30,8 @@ import { mountDetailPanel, type DetailActionId } from '@components/memory-view/D
 import { mountSplitOverlay } from '@components/memory-view/SplitOverlay';
 import { mountPlacement } from '@components/memory-view/Placement';
 import { mountFsStatusBar } from '@components/memory-view/FsStatusBar';
+import { mountMobileDrawers, setDrawerOpen } from '@components/memory-view/MobileDrawers';
+import { isMobileViewport } from '@/utils/viewport';
 import { setCoresCapacity, onOpLoadChange, getActiveOpCount } from '@systems/ops';
 import { getAiCore } from '@state/selectors';
 import {
@@ -114,6 +116,7 @@ mountCursorFollower(store);
 mountDetailPanel(store, { onAction: runAction });
 mountMemoryStats(store);
 mountFsStatusBar(store);
+mountMobileDrawers();
 mountSidebarFilters(store);
 mountFooter(store);
 mountPlacement(store, memWrap);
@@ -162,3 +165,14 @@ onOpLoadChange(paintCoreThreads);
 // Initial selection.
 const engine = store.getState().memory.find((m) => m.id === 'engine');
 if (engine) store.update((d) => { d.ui.selectedId = engine.id; });
+
+// On mobile, selecting a segment auto-opens the inspect drawer so the detail
+// panel surfaces without an extra tap; deselecting collapses it. Subscribed
+// AFTER the initial selection so a fresh load starts with the drawer closed.
+store.subscribe(
+  (s) => s.ui.selectedId,
+  (id) => {
+    if (!isMobileViewport()) return;
+    setDrawerOpen('inspect', id !== null);
+  },
+);

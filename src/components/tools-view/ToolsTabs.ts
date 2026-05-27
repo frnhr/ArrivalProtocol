@@ -1,75 +1,102 @@
+import { MOBILE_MEDIA_QUERY } from '@/utils/viewport';
+
+// Maps a tool id (matches dock-item[data-tool=…]) to the window selector in
+// the tools view. Only tools listed here have a real panel; other dock items
+// are decorative placeholders for future content.
 const TAB_WINDOWS: Record<string, string> = {
   telemetry: '.telemetry-win',
   engine: '.engine-win',
 };
 
+// On mobile, the bottom dock's tool items double as a tab bar: at most one
+// window is visible at a time, and clicking an item switches to it. On desktop,
+// dock items are independent open/close toggles that hide/show their panel.
 export function mountToolsTabs(): () => void {
   const toolsView = document.querySelector<HTMLElement>('.desktop > .tools-view');
-  const tabBar = toolsView?.querySelector<HTMLElement>('.tools-tabs');
-  if (!toolsView || !tabBar) return () => {};
+  const dock = document.querySelector<HTMLElement>('.dock-content.tools-view');
+  if (!toolsView || !dock) return () => {};
 
-  const tabs = Array.from(tabBar.querySelectorAll<HTMLElement>('.tools-tab'));
-  const windows = new Map(
-    Object.entries(TAB_WINDOWS).map(([id, sel]) => [
-      id,
-      toolsView.querySelector<HTMLElement>(sel),
-    ]),
+  const windowOf = (id: string): HTMLElement | null =>
+    toolsView.querySelector<HTMLElement>(TAB_WINDOWS[id] ?? '');
+
+  const toolItems = Array.from(
+    dock.querySelectorAll<HTMLElement>('.dock-item[data-tool]'),
   );
 
-  const setActive = (id: string): void => {
-    toolsView.dataset.activeTool = id;
-    tabs.forEach((tab) => {
-      tab.classList.toggle('active', tab.dataset.tool === id);
-    });
-    windows.forEach((win, winId) => {
-      if (win) win.classList.toggle('tools-tab-panel', true);
-      if (win) win.hidden = winId !== id;
-    });
+  const setMark = (item: HTMLElement, open: boolean): void => {
+    item.classList.toggle('open', open);
+    const mark = item.querySelector('.mark');
+    if (mark) mark.textContent = open ? '●' : '○';
   };
 
-  const onTabClick = (tab: HTMLElement): void => {
-    const id = tab.dataset.tool;
-    if (id) setActive(id);
-  };
+  const mq = window.matchMedia(MOBILE_MEDIA_QUERY);
 
-  const handlers: Array<[HTMLElement, () => void]> = tabs.map((tab) => {
-    const handler = (): void => onTabClick(tab);
-    tab.addEventListener('click', handler);
-    return [tab, handler];
-  });
-
-  const mq = window.matchMedia('(max-width: 768px)');
-  const syncLayout = (): void => {
-    const mobile = mq.matches;
-    toolsView.classList.toggle('tools-tabs-mode', mobile);
-    tabBar.hidden = !mobile;
-    windows.forEach((win) => {
-      if (!win) return;
-      if (mobile) {
+  const renderDesktop = (): void => {
+    toolsView.classList.remove('tools-tabs-mode');
+    toolItems.forEach((item) => {
+      const id = item.dataset.tool;
+      if (!id) return;
+      const win = windowOf(id);
+      if (win) {
+        win.hidden = !item.classList.contains('open');
+        win.classList.remove('tools-tab-panel');
         win.style.position = '';
         win.style.left = '';
         win.style.top = '';
         win.style.right = '';
-        win.classList.add('tools-tab-panel');
-      } else {
-        win.hidden = false;
-        win.classList.remove('tools-tab-panel');
       }
     });
-    if (mobile) {
-      const active = toolsView.dataset.activeTool ?? 'telemetry';
-      setActive(active);
+  };
+
+  const renderMobile = (activeId: string): void => {
+    toolsView.classList.add('tools-tabs-mode');
+    toolsView.dataset.activeTool = activeId;
+    toolItems.forEach((item) => {
+      const id = item.dataset.tool;
+      if (!id) return;
+      setMark(item, id === activeId);
+      const win = windowOf(id);
+      if (!win) return;
+      win.classList.add('tools-tab-panel');
+      win.hidden = id !== activeId;
+      win.style.position = '';
+      win.style.left = '';
+      win.style.top = '';
+      win.style.right = '';
+    });
+  };
+
+  const pickActiveId = (): string => {
+    const stored = toolsView.dataset.activeTool;
+    if (stored && TAB_WINDOWS[stored]) return stored;
+    const firstOpen = toolItems.find((i) => i.classList.contains('open') && i.dataset.tool);
+    return firstOpen?.dataset.tool ?? 'telemetry';
+  };
+
+  const sync = (): void => {
+    if (mq.matches) renderMobile(pickActiveId());
+    else renderDesktop();
+  };
+
+  const onClick = (e: Event): void => {
+    const target = (e.target as HTMLElement | null)?.closest<HTMLElement>('.dock-item[data-tool]');
+    if (!target || !dock.contains(target)) return;
+    const id = target.dataset.tool;
+    if (!id) return;
+
+    if (mq.matches) {
+      if (!TAB_WINDOWS[id]) return;
+      e.stopPropagation();
+      renderMobile(id);
     }
   };
 
-  syncLayout();
-  mq.addEventListener('change', syncLayout);
-  if (mq.matches) {
-    setActive(toolsView.dataset.activeTool ?? 'telemetry');
-  }
+  dock.addEventListener('click', onClick, true);
+  mq.addEventListener('change', sync);
+  sync();
 
   return () => {
-    mq.removeEventListener('change', syncLayout);
-    handlers.forEach(([tab, handler]) => tab.removeEventListener('click', handler));
+    dock.removeEventListener('click', onClick, true);
+    mq.removeEventListener('change', sync);
   };
 }
