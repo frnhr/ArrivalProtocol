@@ -153,6 +153,19 @@
           <div class="mem-strip-wrap" id="memWrap"></div>
         </div>
 
+        <div class="mem-side mobile-drawer" data-drawer="inspect" data-open="false">
+          <div class="mem-side-header drawer-toggle" data-drawer-toggle="inspect" role="button" tabindex="0" aria-expanded="false">
+            <span class="drawer-caret" aria-hidden="true">▸</span><span>▌ inspect</span><span class="drawer-sub" id="inspectSubtitle"></span>
+          </div>
+          <div class="mem-side-body" id="detailBody">
+            <div class="detail-empty">
+              <div class="icon">◇</div>
+              <div>select a segment</div>
+              <div style="font-size:9px;margin-top:6px;letter-spacing:0.1em">click any block</div>
+            </div>
+          </div>
+        </div>
+
         <div class="fs-status-bar mobile-drawer" data-drawer="fs-tools" data-open="false">
           <span class="fs-status-label drawer-toggle" data-drawer-toggle="fs-tools" role="button" tabindex="0" aria-expanded="false">
             <span class="drawer-caret" aria-hidden="true">▸</span>▌ filesystem
@@ -166,20 +179,6 @@
             <div class="fs-tool-chip clickable" id="chip-delete" data-fs="delete"><span class="dot"></span><span>Delete</span></div>
             <div class="fs-tool-chip clickable" id="chip-activate" data-fs="activate"><span class="dot"></span><span>Activate</span></div>
             <div class="fs-tool-chip clickable" id="chip-deactivate" data-fs="deactivate"><span class="dot"></span><span>Deactivate</span></div>
-          </div>
-        </div>
-
-        <div class="mem-side mobile-drawer" data-drawer="inspect" data-open="false">
-          <div class="mem-side-header drawer-toggle" data-drawer-toggle="inspect" role="button" tabindex="0" aria-expanded="false">
-            <span class="drawer-caret" aria-hidden="true">▸</span><span>▌ inspect</span>
-            <span class="drawer-sub" id="inspectSubtitle"></span>
-          </div>
-          <div class="mem-side-body" id="detailBody">
-            <div class="detail-empty">
-              <div class="icon">◇</div>
-              <div>select a segment</div>
-              <div style="font-size:9px;margin-top:6px;letter-spacing:0.1em">click any block</div>
-            </div>
           </div>
         </div>
 

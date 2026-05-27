@@ -30,8 +30,7 @@ import { mountDetailPanel, type DetailActionId } from '@components/memory-view/D
 import { mountSplitOverlay } from '@components/memory-view/SplitOverlay';
 import { mountPlacement } from '@components/memory-view/Placement';
 import { mountFsStatusBar } from '@components/memory-view/FsStatusBar';
-import { mountMobileDrawers, setDrawerOpen } from '@components/memory-view/MobileDrawers';
-import { isMobileViewport } from '@/utils/viewport';
+import { mountMobileDrawers } from '@components/memory-view/MobileDrawers';
 import { setCoresCapacity, onOpLoadChange, getActiveOpCount } from '@systems/ops';
 import { getAiCore } from '@state/selectors';
 import {
@@ -162,17 +161,31 @@ function paintCoreThreads(): void {
 }
 onOpLoadChange(paintCoreThreads);
 
+// Mirror the active selection in the mobile inspect drawer header. Resolves
+// the name from store state for picked sources / tool segments first so it
+// matches what the detail panel actually renders. Empty string when nothing
+// is being inspected (renders nothing on desktop; collapsed header on mobile).
+function paintInspectSubtitle(): void {
+  const el = document.getElementById('inspectSubtitle');
+  if (!el) return;
+  const state = store.getState();
+  const activeTool = state.ui.activeTool;
+  let name = '';
+  if (activeTool) {
+    const pickedId = state.ui.pickedSourceId;
+    const picked = pickedId ? state.memory.find((m) => m.id === pickedId) : null;
+    const toolSeg = state.memory.find((m) => m.id === activeTool.toolSegId);
+    name = picked?.name ?? toolSeg?.name ?? '';
+  } else if (state.ui.selectedId) {
+    const seg = state.memory.find((m) => m.id === state.ui.selectedId);
+    name = seg?.name ?? '';
+  }
+  el.textContent = name ? `— ${name}` : '';
+}
+
 // Initial selection.
 const engine = store.getState().memory.find((m) => m.id === 'engine');
 if (engine) store.update((d) => { d.ui.selectedId = engine.id; });
 
-// On mobile, selecting a segment auto-opens the inspect drawer so the detail
-// panel surfaces without an extra tap; deselecting collapses it. Subscribed
-// AFTER the initial selection so a fresh load starts with the drawer closed.
-store.subscribe(
-  (s) => s.ui.selectedId,
-  (id) => {
-    if (!isMobileViewport()) return;
-    setDrawerOpen('inspect', id !== null);
-  },
-);
+paintInspectSubtitle();
+store.subscribe((s) => s, paintInspectSubtitle, () => false);

@@ -1,10 +1,13 @@
 /* Mobile / narrow layouts — desktop behavior unchanged above 768px */
 
 /* On desktop, drawer wrappers are no-ops: bodies always flow and the toggle
-   caret is hidden so the existing layout is untouched. */
+   caret is hidden so the existing layout is untouched. The subtitle slot
+   (shows selected file name on mobile) is also hidden — desktop already
+   renders the segment name prominently in the inspect body. */
 .drawer-caret { display: none; }
 .drawer-toggle { cursor: default; }
 .drawer-body { display: contents; }
+.drawer-sub { display: none; }
 
 @media (max-width: 768px) {
   body {
@@ -305,19 +308,29 @@
     margin-right: 0;
   }
 
-  /* Inspect drawer: header strip when collapsed, expands upward when open. */
+  /* Inspect drawer: header strip when collapsed, takes a large slice of the
+     viewport when open so the detail body (action list, sliders, etc.) has
+     room to be useful. It sits above the filesystem drawer, between the
+     memory banks and the fs tools. */
   .mem-side.mobile-drawer {
     flex: 0 0 auto;
     max-height: none;
     min-height: 0;
-  }
-  .mem-side.mobile-drawer[data-open='true'] {
-    max-height: min(45vh, 320px);
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+  }
+  .mem-side.mobile-drawer[data-open='true'] {
+    flex: 1 1 0;
+    min-height: 220px;
+    max-height: 70vh;
   }
   .mem-side.mobile-drawer .mem-side-header {
     padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
   }
   .mem-side-body {
     overflow-y: auto;
@@ -328,11 +341,21 @@
     min-height: 0;
   }
   .mem-side.mobile-drawer .drawer-sub {
-    margin-left: auto;
-    font-size: 9px;
-    color: var(--text-dim);
-    letter-spacing: 0.12em;
-    text-transform: none;
+    display: inline;
+    color: var(--accent-bright);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  /* Banks panel keeps its own min-height so the inspect drawer can't push
+     it offscreen when fully expanded; both fight for `flex: 1 1 0` space. */
+  .mem-strip-panel {
+    min-height: 160px;
   }
 }
 
