@@ -36,6 +36,16 @@ export function renderMemoryStrip(
   let cursor = 0;
 
   for (const seg of memory) {
+    // If the previous segment filled the row exactly, advance to a fresh row
+    // before processing this seg. Without this, `avail` would be 0 on the
+    // first iteration and we'd emit a zero-size phantom continuation part.
+    if (rowSize === perRow) {
+      container.appendChild(row);
+      cursor += rowSize;
+      row = makeRow(cursor);
+      rowSize = 0;
+    }
+
     // First compute how many parts this segment splits into given current rowSize.
     let totalParts = 0;
     let simRow = rowSize;
