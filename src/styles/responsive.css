@@ -3,11 +3,13 @@
 /* On desktop, drawer wrappers are no-ops: bodies always flow and the toggle
    caret is hidden so the existing layout is untouched. The subtitle slot
    (shows selected file name on mobile) is also hidden — desktop already
-   renders the segment name prominently in the inspect body. */
+   renders the segment name prominently in the inspect body. The in-panel
+   fs-tool pill is mobile-only; on desktop the cursor follower handles it. */
 .drawer-caret { display: none; }
 .drawer-toggle { cursor: default; }
 .drawer-body { display: contents; }
 .drawer-sub { display: none; }
+.fs-tool-pill { display: none; }
 
 @media (max-width: 768px) {
   body {
@@ -356,6 +358,101 @@
      it offscreen when fully expanded; both fight for `flex: 1 1 0` space. */
   .mem-strip-panel {
     min-height: 160px;
+  }
+
+  /* --- Active fs-tool: in-drawer pill replaces the cursor follower ---
+     Touch viewports can't move a mouse-anchored pill, so when a tool is
+     active we swap the filesystem drawer's chips for a full-width pill
+     showing the active tool + stage hint + an explicit cancel button.
+     The drawer is forced open and the toggle header is hidden — the pill
+     is the only interaction surface until the player cancels.
+
+     Op progress bars (`.op-progress`) are unaffected: once an op starts,
+     it docks above its target file with its own progress bar exactly as
+     it does on desktop. */
+  .cursor-follower {
+    display: none !important;
+  }
+
+  body.tool-active .fs-status-bar.mobile-drawer .drawer-toggle {
+    display: none;
+  }
+  body.tool-active .fs-status-bar.mobile-drawer .drawer-body {
+    display: none;
+  }
+  body.tool-active .fs-status-bar.mobile-drawer {
+    padding: 0;
+    border-color: #b482ff;
+    background: rgba(180, 130, 255, 0.06);
+  }
+
+  body.tool-active .fs-tool-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 6px 10px 12px;
+    width: 100%;
+    background: rgba(28, 18, 46, 0.95);
+    border: 1px solid #b482ff;
+    color: #d4baff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    box-shadow: 0 0 14px rgba(180, 130, 255, 0.45);
+  }
+  .fs-tool-pill .pill-body {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    line-height: 1.3;
+  }
+  .fs-tool-pill .icon {
+    color: #d4baff;
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+  }
+  .fs-tool-pill .label {
+    color: #fff;
+    font-weight: 500;
+  }
+  .fs-tool-pill .ver {
+    color: #ffce4a;
+    font-size: 9px;
+    border: 1px solid currentColor;
+    padding: 0 4px;
+  }
+  .fs-tool-pill .source {
+    color: var(--accent-bright);
+    text-transform: none;
+    letter-spacing: 0.1em;
+  }
+  .fs-tool-pill .meta {
+    flex-basis: 100%;
+    color: var(--text-dim);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+  }
+  .fs-tool-pill .pill-cancel {
+    flex: 0 0 auto;
+    min-width: 44px;
+    min-height: 44px;
+    background: transparent;
+    border: 1px solid #b482ff;
+    color: #d4baff;
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .fs-tool-pill .pill-cancel:hover,
+  .fs-tool-pill .pill-cancel:active {
+    background: rgba(180, 130, 255, 0.25);
+    color: #fff;
   }
 }
 

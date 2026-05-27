@@ -31,6 +31,7 @@ import { mountSplitOverlay } from '@components/memory-view/SplitOverlay';
 import { mountPlacement } from '@components/memory-view/Placement';
 import { mountFsStatusBar } from '@components/memory-view/FsStatusBar';
 import { mountMobileDrawers } from '@components/memory-view/MobileDrawers';
+import { mountFsToolPill } from '@components/memory-view/FsToolPill';
 import { setCoresCapacity, onOpLoadChange, getActiveOpCount } from '@systems/ops';
 import { getAiCore } from '@state/selectors';
 import {
@@ -116,6 +117,7 @@ mountDetailPanel(store, { onAction: runAction });
 mountMemoryStats(store);
 mountFsStatusBar(store);
 mountMobileDrawers();
+mountFsToolPill(store);
 mountSidebarFilters(store);
 mountFooter(store);
 mountPlacement(store, memWrap);
