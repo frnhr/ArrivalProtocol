@@ -53,3 +53,48 @@ There's a ship system module — call it **Power Regulator** or **EM Shielding**
 - The two are differentiable in-fiction: radiation is announced (or discoverable as an environmental fact), regulator damage is a ship-internal cascade that the player has to diagnose.
 - Need to decide damage distribution: uniform across segments, or weighted (e.g., larger segments more likely, since they have more "surface area").
 - AI Core damage from these effects feeds directly into the glitch overlay — chef's kiss for a doom-spiral scenario.
+
+---
+
+## Orbital insertion (reframe the braking burn)
+
+Pivot the braking burn from a 1D velocity-window minigame into a 2D **orbital insertion** around the target planet. Came out of a playtest: the player overshot and had no legible way to read the target speed while braking. An orbital plot answers that *spatially* — you watch the trajectory bend closed into an orbit, escape, or dive into the planet — instead of reading a number against a window. Fits the title literally: the arrival *is* the insertion.
+
+### The loop (real capture-and-circularize)
+
+1. **Approach** on a hyperbola (excess speed). Do nothing → flyby/escape, or crash.
+2. **Braking burn (capture)** — retrograde near periapsis bends the hyperbola into an ellipse.
+   - Under-brake → escape (the old *overshoot*).
+   - Over-brake → periapsis drops inside the planet → crash (the old *undershoot*, now spatially meaningful).
+3. **Coast ("the pause")** — ride the ellipse out to apoapsis, fast-forwarding with the time controls. This is the "something to look at."
+4. **Circularization burn** — prograde at apoapsis raises periapsis to meet it → the ellipse rounds to a circle. Land inside the target altitude band → stable orbit → success.
+
+More forgiving than the current reload-to-retry: botch the circularization and you coast around for another pass (costs time + fuel). A control loop, not a one-shot.
+
+### Sensor health is the gem
+
+The drawn orbit is a *prediction*, so degrade the prediction with damage without ever touching the truth. Stackable channels driven by `sensorConfPct`:
+
+- **Uncertainty band** — draw a fuzzy cone of possible orbits, width ∝ (1 − confidence). The whole band must fit tolerance → low sensors force margin.
+- **Staleness** — damaged sensors refresh the plot every N seconds; the ship marker jumps. Vicious in combination with time-compression (x10000 + lag = reckless).
+- **Bias** — predicted apo/peri offset from truth (generalizes the existing hidden-mass mechanic).
+
+Cross-tie: the sensor is a **file in memory** — scan/repair it with the fs-tools, spending quantum redundancy. Finally couples the memory half of the game to the flying half. Caution: two uncertainties now (mass + sensor); make sensor the headline and keep mass a subtle secondary, then tune.
+
+### Architecture (keeps the "no real physics engine" rule honest)
+
+- **Truth** — a 2D state vector `{x, y, vx, vy}`, Velocity-Verlet under one attractor: `a = −μ·r̂/|r|² + thrust`. Strictly 2-body, point mass. Still ~one equation per tick, just in 2D.
+- **Display** — derive orbital elements (semi-major axis, eccentricity, apo/peri radius, time-to-apoapsis) *analytically* from the state vector and draw the conic closed-form. Sensor noise is injected here, on the estimated elements.
+- Reuses the burn-sim PR foundation: `onGameTick` fan-out, mutate/update discipline, time controls (now load-bearing for the coast), result banner, hidden-mass seeding. The existing 1D cruise-brake becomes the **approach** that sets the initial hyperbola — chain the phases, don't discard.
+- New surfaces: an orbital-plot window (amber wireframe SVG — planet disc + crash ring + target-altitude ring + ship marker + predicted conic/band + apo/peri pips); wire the prograde/retrograde buttons in Engine Control that are currently cosmetic.
+
+### Decisions taken
+
+- **Fidelity: real bounded 2D** — true 2-body integration + analytic conic display. (Not parametric/faked, not a 1D corridor plot.)
+- **First build: plot renderer first** — a static ellipse from hand-fed elements (planet, rings, markers) to de-risk the rendering before wiring any live sim. The rendering is the novel part; the math is textbook.
+
+### Open / later
+
+- Tuning of the double uncertainty; corrective-burn fuel cost.
+- Atmosphere / aerobraking, normal & radial burns: future, skip v1.
+- Ties to skill training (Task 600): the two-burn insertion is the ideal demo to record and train into an autonomous skill.

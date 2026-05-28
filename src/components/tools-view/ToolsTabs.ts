@@ -6,6 +6,7 @@ import { MOBILE_MEDIA_QUERY } from '@/utils/viewport';
 const TAB_WINDOWS: Record<string, string> = {
   telemetry: '.telemetry-win',
   engine: '.engine-win',
+  navplot: '.navplot-win',
 };
 
 // On mobile, the bottom dock's tool items double as a tab bar: at most one

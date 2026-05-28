@@ -44,6 +44,8 @@ export const INITIAL_MEMORY: Segment[] = [
     desc: 'Trained skill library. Currently empty. 1 demo in progress.' },
   { id: 'mission', name: 'Mission', type: 'tool', size: 4, integrity: 100, scanned: false,
     desc: 'Briefing cache for Kepler-186f approach.' },
+  { id: 'navplot', name: 'Nav Plotter', type: 'tool', size: 6, integrity: 100, scanned: false,
+    desc: 'Projects the ship orbital trajectory for insertion — capture and circularization. Prediction accuracy degrades with Sensor Interp damage.' },
 
   // FILESYSTEM TOOLS (live in memory, can themselves be corrupted)
   { id: 't_scan', name: 'Scan', type: 'fs-tool', size: 3, integrity: 100, scanned: false, version: 1, fsTool: 'scan',

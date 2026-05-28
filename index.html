@@ -40,6 +40,7 @@
         <div class="dock-section">Bridge</div>
         <div class="dock-item open" data-tool="telemetry"><span class="mark">●</span><span>Telemetry</span></div>
         <div class="dock-item open" data-tool="engine"><span class="mark">●</span><span>Engine</span></div>
+        <div class="dock-item open" data-tool="navplot"><span class="mark">●</span><span>Nav Plot</span></div>
         <div class="dock-section">Mission</div>
         <div class="dock-item"><span class="mark">○</span><span>Briefing</span></div>
         <div class="dock-item"><span class="mark">○</span><span>Hazards</span></div>
@@ -129,6 +130,40 @@
               </div>
             </div>
             <button class="engage">▶ engage burn</button>
+          </div>
+        </div>
+
+        <div class="window navplot-win" data-seg="navplot">
+          <div class="window-title">
+            <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
+            <span class="name">Nav Plot</span>
+            <span class="ctl">−</span><span class="ctl">×</span>
+          </div>
+          <div class="window-body">
+            <svg id="navplotSvg" class="navplot-svg" viewBox="0 0 320 320" preserveAspectRatio="xMidYMid meet">
+              <defs>
+                <radialGradient id="planetFill" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="var(--accent-dim)" stop-opacity="0.40"/>
+                  <stop offset="100%" stop-color="var(--accent-dim)" stop-opacity="0.04"/>
+                </radialGradient>
+              </defs>
+              <!-- orbit furniture is built and patched by renderOrbit() -->
+            </svg>
+            <!-- DEV CONTROLS — REMOVE WHEN THE LIVE SIM DRIVES THIS PLOT -->
+            <div class="np-dev" data-dev-only>
+              <div class="ctrl-block">
+                <div class="ctrl-label"><span>dev · eccentricity</span><span class="val" id="np-ecc-val">0.50</span></div>
+                <input type="range" id="np-ecc" min="0" max="1.6" step="0.01" value="0.5">
+              </div>
+              <div class="ctrl-block">
+                <div class="ctrl-label"><span>dev · true anomaly</span><span class="val" id="np-nu-val">0.80</span></div>
+                <input type="range" id="np-nu" min="-3.14" max="3.14" step="0.02" value="0.8">
+              </div>
+              <div class="ctrl-block">
+                <div class="ctrl-label"><span>dev · periapsis radius</span><span class="val" id="np-rp-val">1.35</span></div>
+                <input type="range" id="np-rp" min="1.05" max="3" step="0.01" value="1.35">
+              </div>
+            </div>
           </div>
         </div>
       </div>

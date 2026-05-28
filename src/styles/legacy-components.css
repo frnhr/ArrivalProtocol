@@ -247,6 +247,10 @@ body:not(.mode-memory) .dock > .dock-content.memory-view { display: none; }
 
 .telemetry-win { top: 24px; left: 24px; width: 340px; }
 .engine-win { top: 24px; right: 24px; width: 320px; }
+.navplot-win { top: 24px; left: 380px; width: 360px; }
+.navplot-svg { display: block; width: 100%; aspect-ratio: 1 / 1; }
+.np-dev { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--warn); }
+.np-dev .ctrl-label span:first-child { color: var(--warn); }
 .readout { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0; border-bottom: 1px dashed rgba(141,110,61,0.2); }
 .readout:last-of-type { border-bottom: none; }
 .readout .label { color: var(--text-dim); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }

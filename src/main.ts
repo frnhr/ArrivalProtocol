@@ -18,6 +18,7 @@ import { mountSidebarFilters } from '@components/dock/SidebarFilters';
 import { mountTimeControls } from '@components/header/TimeControls';
 import { mountAllWindows } from '@components/window/Window';
 import { mountEngineWindow } from '@components/tools-view/EngineWindow';
+import { mountNavPlotWindow } from '@components/tools-view/NavPlotWindow';
 import { mountToolsTabs } from '@components/tools-view/ToolsTabs';
 import { mountWindowGrips } from '@components/tools-view/WindowGrip';
 import { mountMemoryStats } from '@components/memory-view/MemoryStats';
@@ -68,6 +69,7 @@ mountTimeControls(store);
 mountAllWindows();
 mountToolsTabs();
 mountEngineWindow(store);
+mountNavPlotWindow(store);
 mountWindowGrips(store);
 
 // SplitOverlay handle is needed by segBehavior, so mount it before MemoryStrip.

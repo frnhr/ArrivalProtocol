@@ -53,3 +53,10 @@ See [TASK-400-scannable-files.md](TASK-400-scannable-files.md) for details.
 ## 600. Automatic skill development mechanic with tool progression ⬅️
 
 See [TASK-600-skill-development.md](TASK-600-skill-development.md) for details.
+
+## 700. Tighter coupling between tools and their backing files ⬅️
+
+Deleting a tool's backing file should make the corresponding tool vanish from the UI (dock launcher + window), not just go inert. Design to work out first:
+- Multi-copy behavior: some tools/systems have multiple copies (e.g. Repair + Repair.bak, ship-system backups). Does the tool stay available while ≥1 copy exists, and only vanish when the last copy is deleted?
+- How a dock launcher / window maps to "any copy present" vs one specific segment.
+- Relationship to deactivation (inactive file → tool disabled) vs deletion (file gone → tool removed).
