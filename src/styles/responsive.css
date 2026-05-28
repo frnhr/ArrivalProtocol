@@ -1,0 +1,467 @@
+/* Mobile / narrow layouts — desktop behavior unchanged above 768px */
+
+/* On desktop, drawer wrappers are no-ops: bodies always flow and the toggle
+   caret is hidden so the existing layout is untouched. The subtitle slot
+   (shows selected file name on mobile) is also hidden — desktop already
+   renders the segment name prominently in the inspect body. The in-panel
+   fs-tool pill is mobile-only; on desktop the cursor follower handles it. */
+.drawer-caret { display: none; }
+.drawer-toggle { cursor: default; }
+.drawer-body { display: contents; }
+.drawer-sub { display: none; }
+.fs-tool-pill { display: none; }
+
+@media (max-width: 768px) {
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  .header {
+    flex-shrink: 0;
+    padding: 0 10px;
+    font-size: 16px;
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 44px;
+    gap: 6px;
+  }
+
+  .id-block .crumb.dim { display: none; }
+  .id-block .sep:nth-of-type(2) { display: none; }
+
+  .time-controls {
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .time-label { display: none; }
+
+  .speed-btn {
+    min-width: 36px;
+    padding: 4px 6px;
+    font-size: 14px;
+  }
+
+  .clock {
+    font-size: 15px;
+    padding-left: 10px;
+    margin-left: 0;
+    border-left: none;
+  }
+
+  .footer {
+    flex-shrink: 0;
+    font-size: 9px;
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 32px;
+    padding: 4px 8px;
+    gap: 4px;
+  }
+
+  .footer .item:first-child {
+    width: 100%;
+    text-align: center;
+  }
+
+  .desktop-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+    flex-direction: column;
+  }
+
+  .desktop {
+    order: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .corner-stamp { display: none; }
+
+  /* Dock — compact horizontal strip below the desktop area */
+  .dock {
+    order: 2;
+    flex: 0 0 auto;
+    width: 100%;
+    max-height: none;
+    border-right: none;
+    border-top: 1px solid var(--edge);
+    padding: 6px 8px 8px;
+    flex-direction: column;
+    gap: 6px;
+    overflow: visible;
+  }
+
+  .dock > .dock-content.tools-view,
+  .dock > .dock-content.memory-view {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    gap: 4px;
+    padding: 0;
+    flex: none;
+    max-height: 60px;
+    align-items: stretch;
+  }
+
+  .dock-section { display: none; }
+
+  /* Tool dock-items without data-tool are decorative placeholders without a
+     panel; hide them on mobile so the dock acts as an exclusive tab bar. */
+  .dock-content.tools-view .dock-item:not([data-tool]) { display: none; }
+
+  .dock-item {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 6px 10px;
+    font-size: 10px;
+    border-left: none;
+    border: 1px solid var(--edge);
+    background: rgba(0, 0, 0, 0.15);
+  }
+
+  .dock-item.open {
+    border-left: none;
+    border-color: var(--accent);
+  }
+
+  /* Mobile tool tabs: the active tool gets a brighter fill so it reads as a
+     selected tab instead of a passive "on" indicator. */
+  .dock-content.tools-view .dock-item.open {
+    background: var(--ambient-1);
+    color: var(--accent-bright);
+  }
+
+  .mode-toggle {
+    position: static;
+    flex-shrink: 0;
+    width: 100%;
+    margin: 0;
+    order: unset;
+  }
+
+  /* Tools view: single panel fills the available area; corner stamps drop out */
+  .tools-view.tools-tabs-mode {
+    display: flex;
+    flex-direction: column;
+    inset: 0;
+    position: absolute;
+    padding: 6px;
+    overflow: hidden;
+  }
+
+  .tools-view.tools-tabs-mode .window.tools-tab-panel {
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: none;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tools-view.tools-tabs-mode .window.tools-tab-panel[hidden] {
+    display: none;
+  }
+
+  .tools-view.tools-tabs-mode .window.tools-tab-panel .window-body {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tools-view.tools-tabs-mode .window-title {
+    cursor: default;
+    flex-shrink: 0;
+  }
+
+  .tools-view.tools-tabs-mode .window-title .ctl {
+    display: none;
+  }
+
+  /* Memory view: flex stack with the banks panel taking all remaining space.
+     Drawers below collapse to a single header strip until tapped. */
+  .desktop > .memory-view {
+    position: absolute;
+    inset: 0;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow: hidden;
+  }
+
+  .mem-stats {
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    padding: 6px 10px;
+  }
+
+  .mem-stat .lbl { font-size: 8px; letter-spacing: 0.15em; }
+  .mem-stat .v { font-size: 15px; }
+  .mem-stat .v .small { font-size: 10px; }
+
+  .mem-strip-panel {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .mem-strip-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 6px 10px;
+    flex-shrink: 0;
+  }
+
+  .mem-strip-header .meta { font-size: 9px; }
+
+  .mem-strip-wrap {
+    flex: 1 1 0;
+    min-height: 0;
+    padding: 6px 8px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .addr-label {
+    min-width: 38px;
+    font-size: 8px;
+  }
+
+  .seg {
+    min-height: 40px;
+    padding: 4px 5px;
+  }
+
+  .seg-name { font-size: 9px; }
+  .seg-meta { font-size: 7px; }
+
+  /* --- Mobile drawers (fs-status-bar + inspect) --- */
+  .drawer-caret {
+    display: inline-block;
+    transition: transform 0.18s ease;
+    color: var(--accent-dim);
+    margin-right: 6px;
+    font-size: 10px;
+  }
+  .mobile-drawer[data-open='true'] .drawer-caret {
+    transform: rotate(90deg);
+    color: var(--accent-bright);
+  }
+
+  .mobile-drawer .drawer-toggle {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+  }
+  .mobile-drawer .drawer-toggle:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Hide bodies until the drawer is tapped open. */
+  .mobile-drawer[data-open='false'] .drawer-body,
+  .mobile-drawer[data-open='false'] .mem-side-body {
+    display: none;
+  }
+
+  /* Filesystem drawer: collapsed = label only; open = chips wrap below. */
+  .fs-status-bar.mobile-drawer {
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 6px 10px;
+    max-height: none;
+    overflow: visible;
+  }
+  .fs-status-bar.mobile-drawer .drawer-body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 32vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .fs-status-bar.mobile-drawer[data-open='false'] .drawer-body {
+    display: none;
+  }
+  .fs-status-label.drawer-toggle {
+    width: 100%;
+    margin-right: 0;
+  }
+
+  /* Inspect drawer: header strip when collapsed, takes a large slice of the
+     viewport when open so the detail body (action list, sliders, etc.) has
+     room to be useful. It sits above the filesystem drawer, between the
+     memory banks and the fs tools. */
+  .mem-side.mobile-drawer {
+    flex: 0 0 auto;
+    max-height: none;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .mem-side.mobile-drawer[data-open='true'] {
+    flex: 1 1 0;
+    min-height: 220px;
+    max-height: 70vh;
+  }
+  .mem-side.mobile-drawer .mem-side-header {
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .mem-side-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mem-side.mobile-drawer[data-open='true'] .mem-side-body {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  .mem-side.mobile-drawer .drawer-sub {
+    display: inline;
+    color: var(--accent-bright);
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  /* Banks panel keeps its own min-height so the inspect drawer can't push
+     it offscreen when fully expanded; both fight for `flex: 1 1 0` space. */
+  .mem-strip-panel {
+    min-height: 160px;
+  }
+
+  /* --- Active fs-tool: in-drawer pill replaces the cursor follower ---
+     Touch viewports can't move a mouse-anchored pill, so when a tool is
+     active we swap the filesystem drawer's chips for a full-width pill
+     showing the active tool + stage hint + an explicit cancel button.
+     The drawer is forced open and the toggle header is hidden — the pill
+     is the only interaction surface until the player cancels.
+
+     Op progress bars (`.op-progress`) are unaffected: once an op starts,
+     it docks above its target file with its own progress bar exactly as
+     it does on desktop. */
+  .cursor-follower {
+    display: none !important;
+  }
+
+  body.tool-active .fs-status-bar.mobile-drawer .drawer-toggle {
+    display: none;
+  }
+  body.tool-active .fs-status-bar.mobile-drawer .drawer-body {
+    display: none;
+  }
+  body.tool-active .fs-status-bar.mobile-drawer {
+    padding: 0;
+    border-color: #b482ff;
+    background: rgba(180, 130, 255, 0.06);
+  }
+
+  body.tool-active .fs-tool-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 6px 10px 12px;
+    width: 100%;
+    background: rgba(28, 18, 46, 0.95);
+    border: 1px solid #b482ff;
+    color: #d4baff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    box-shadow: 0 0 14px rgba(180, 130, 255, 0.45);
+  }
+  .fs-tool-pill .pill-body {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    line-height: 1.3;
+  }
+  .fs-tool-pill .icon {
+    color: #d4baff;
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+  }
+  .fs-tool-pill .label {
+    color: #fff;
+    font-weight: 500;
+  }
+  .fs-tool-pill .ver {
+    color: #ffce4a;
+    font-size: 9px;
+    border: 1px solid currentColor;
+    padding: 0 4px;
+  }
+  .fs-tool-pill .source {
+    color: var(--accent-bright);
+    text-transform: none;
+    letter-spacing: 0.1em;
+  }
+  .fs-tool-pill .meta {
+    flex-basis: 100%;
+    color: var(--text-dim);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+  }
+  .fs-tool-pill .pill-cancel {
+    flex: 0 0 auto;
+    min-width: 44px;
+    min-height: 44px;
+    background: transparent;
+    border: 1px solid #b482ff;
+    color: #d4baff;
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .fs-tool-pill .pill-cancel:hover,
+  .fs-tool-pill .pill-cancel:active {
+    background: rgba(180, 130, 255, 0.25);
+    color: #fff;
+  }
+}
+
+@media (max-width: 400px) {
+  .speed-row .speed-btn:nth-child(n + 4) { display: none; }
+  .mem-stat .lbl { font-size: 8px; }
+  .seg.compact { min-height: 36px; }
+  .dock > .dock-content.tools-view,
+  .dock > .dock-content.memory-view {
+    max-height: 56px;
+  }
+}

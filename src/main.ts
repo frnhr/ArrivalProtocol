@@ -5,6 +5,7 @@ import './styles/reset.css';
 import './styles/base.css';
 import './styles/glitch.css';
 import './styles/legacy-components.css';
+import './styles/responsive.css';
 
 import { store } from '@state/instance';
 import type { Segment } from '@/types/segment';
@@ -16,6 +17,7 @@ import { mountSidebarFilters } from '@components/dock/SidebarFilters';
 import { mountTimeControls } from '@components/header/TimeControls';
 import { mountAllWindows } from '@components/window/Window';
 import { mountEngineWindow } from '@components/tools-view/EngineWindow';
+import { mountToolsTabs } from '@components/tools-view/ToolsTabs';
 import { mountWindowGrips } from '@components/tools-view/WindowGrip';
 import { mountMemoryStats } from '@components/memory-view/MemoryStats';
 import { mountFooter } from '@components/footer/Footer';
@@ -28,6 +30,8 @@ import { mountDetailPanel, type DetailActionId } from '@components/memory-view/D
 import { mountSplitOverlay } from '@components/memory-view/SplitOverlay';
 import { mountPlacement } from '@components/memory-view/Placement';
 import { mountFsStatusBar } from '@components/memory-view/FsStatusBar';
+import { mountMobileDrawers } from '@components/memory-view/MobileDrawers';
+import { mountFsToolPill } from '@components/memory-view/FsToolPill';
 import { setCoresCapacity, onOpLoadChange, getActiveOpCount } from '@systems/ops';
 import { getAiCore } from '@state/selectors';
 import {
@@ -59,6 +63,7 @@ mountModeToggle();
 mountDockItems();
 mountTimeControls(store);
 mountAllWindows();
+mountToolsTabs();
 mountEngineWindow();
 mountWindowGrips(store);
 
@@ -111,6 +116,8 @@ mountCursorFollower(store);
 mountDetailPanel(store, { onAction: runAction });
 mountMemoryStats(store);
 mountFsStatusBar(store);
+mountMobileDrawers();
+mountFsToolPill(store);
 mountSidebarFilters(store);
 mountFooter(store);
 mountPlacement(store, memWrap);
@@ -156,6 +163,31 @@ function paintCoreThreads(): void {
 }
 onOpLoadChange(paintCoreThreads);
 
+// Mirror the active selection in the mobile inspect drawer header. Resolves
+// the name from store state for picked sources / tool segments first so it
+// matches what the detail panel actually renders. Empty string when nothing
+// is being inspected (renders nothing on desktop; collapsed header on mobile).
+function paintInspectSubtitle(): void {
+  const el = document.getElementById('inspectSubtitle');
+  if (!el) return;
+  const state = store.getState();
+  const activeTool = state.ui.activeTool;
+  let name = '';
+  if (activeTool) {
+    const pickedId = state.ui.pickedSourceId;
+    const picked = pickedId ? state.memory.find((m) => m.id === pickedId) : null;
+    const toolSeg = state.memory.find((m) => m.id === activeTool.toolSegId);
+    name = picked?.name ?? toolSeg?.name ?? '';
+  } else if (state.ui.selectedId) {
+    const seg = state.memory.find((m) => m.id === state.ui.selectedId);
+    name = seg?.name ?? '';
+  }
+  el.textContent = name ? `— ${name}` : '';
+}
+
 // Initial selection.
 const engine = store.getState().memory.find((m) => m.id === 'engine');
 if (engine) store.update((d) => { d.ui.selectedId = engine.id; });
+
+paintInspectSubtitle();
+store.subscribe((s) => s, paintInspectSubtitle, () => false);

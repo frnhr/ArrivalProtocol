@@ -1,0 +1,19 @@
+previews:
+  generation: automatic
+
+projects:
+  - name: dev
+    environments:
+      - name: Production
+        services:
+          - type: web
+            name: arrival-protocol
+            runtime: static
+            repo: https://github.com/frnhr/ArrivalProtocol
+            branch: main
+            buildCommand: npm ci && npm run build
+            staticPublishPath: dist
+            routes:
+              - type: rewrite
+                source: /*
+                destination: /index.html
