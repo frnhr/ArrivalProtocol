@@ -190,15 +190,14 @@
   user-select: none;
 }
 /* The window-title grip doubles as the bound segment's health indicator.
- * Three bars, painted by mountWindowGrips based on integrity. Intact = solid,
- * partial = yellow + occasional flicker, corrupt = red + frequent drop-outs.
- * Currentcolor is set by .intact/.partial/.corrupt; .bar elements inherit it. */
+ * Three amber bars, painted by mountWindowGrips. Health is read entirely from
+ * flicker: intact = solid, partial = occasional drop-outs, corrupt = frequent. */
 .window-title .grip {
   display: inline-flex;
   align-items: center;
   gap: 2px;
   margin-right: 10px;
-  color: var(--good);
+  color: var(--accent);
 }
 .window-title .grip .bar {
   display: inline-block;
@@ -207,9 +206,6 @@
   background: currentColor;
   opacity: 0.9;
 }
-.window-title .grip.intact      { color: var(--good); }
-.window-title .grip.partial     { color: #ffce4a; }
-.window-title .grip.corrupt     { color: var(--warn); }
 .window-title .grip.intact .bar { animation: none; }
 .window-title .grip.partial .bar:nth-child(1) { animation: grip-flicker-soft 5.7s infinite; }
 .window-title .grip.partial .bar:nth-child(2) { animation: grip-flicker-soft 7.3s infinite 1.2s; }
