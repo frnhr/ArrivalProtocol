@@ -8,7 +8,6 @@ import type { GameState } from '@state/schema';
 // response, not the world advancing.
 
 const TICK_MS = 50;                  // 20Hz integration step
-const VELOCITY_NOISE_RATE = 0.005;   // sensor jitter per game-second; placeholder until burn sim
 
 type GameTickListener = (dtGameSec: number) => void;
 const tickListeners = new Set<GameTickListener>();
@@ -28,13 +27,28 @@ function formatClock(tSec: number): string {
   return `T+ ${h}:${m}:${s}`;
 }
 
+function fmtEta(etaHrs: number): string {
+  return Number.isFinite(etaHrs) ? etaHrs.toFixed(1) : '∞';
+}
+
 export function mountClock(store: Store<GameState>): () => void {
   const clockEl = document.getElementById('clock');
   const velEl = document.getElementById('vel');
+  const distEl = document.getElementById('distVal');
+  const etaEl = document.getElementById('etaVal');
+  const fuelEl = document.getElementById('fuelVal');
+
+  function paintTelemetry(): void {
+    const t = store.getState().telemetry;
+    if (velEl) velEl.textContent = t.velocity.toFixed(3);
+    if (distEl) distEl.textContent = Math.round(t.distance).toLocaleString('en-US');
+    if (etaEl) etaEl.textContent = fmtEta(t.etaHrs);
+    if (fuelEl) fuelEl.textContent = Math.round(t.fuelPct).toString();
+  }
 
   // Paint initial state
   if (clockEl) clockEl.textContent = formatClock(store.getState().clock.tSec);
-  if (velEl) velEl.textContent = store.getState().telemetry.velocity.toFixed(3);
+  paintTelemetry();
 
   let lastWall = performance.now();
   let lastDisplayedSec = Math.floor(store.getState().clock.tSec);
@@ -49,15 +63,18 @@ export function mountClock(store: Store<GameState>): () => void {
 
     const dtGame = dtWall * speed;
 
-    // mutate (not update): clock tSec + velocity have no store subscribers — the
-    // clock patches its own DOM below, and other readers pull on demand. Going
-    // through update() at 20Hz would fan out to every always-false-equals
-    // subscriber and rebuild the memory strip ~20 times per second, which
-    // interrupts clicks (DOM replaced between mousedown and mouseup).
+    // mutate (not update): clock tSec has no store subscribers — the clock
+    // patches its own DOM below, and other readers pull on demand. Going through
+    // update() at 20Hz would fan out to every always-false-equals subscriber and
+    // rebuild the memory strip ~20 times per second, which interrupts clicks
+    // (DOM replaced between mousedown and mouseup).
     store.mutate((d) => {
       d.clock.tSec += dtGame;
-      d.telemetry.velocity += (Math.random() - 0.5) * VELOCITY_NOISE_RATE * dtGame;
     });
+
+    // Fan out to game-time subscribers (burn sim, ops, hazard timers) before
+    // painting, so telemetry DOM reflects this frame's integrated values.
+    tickListeners.forEach((fn) => fn(dtGame));
 
     // DOM patches — cheap direct writes, no need to subscribe through the store.
     // Clock only repaints when the displayed integer second changes (avoids
@@ -67,10 +84,7 @@ export function mountClock(store: Store<GameState>): () => void {
       if (clockEl) clockEl.textContent = formatClock(tSec);
       lastDisplayedSec = tSec;
     }
-    if (velEl) velEl.textContent = store.getState().telemetry.velocity.toFixed(3);
-
-    // Fan out to all game-time subscribers (ops, future burn sim, hazard timers).
-    tickListeners.forEach((fn) => fn(dtGame));
+    paintTelemetry();
   }, TICK_MS);
 
   return () => {

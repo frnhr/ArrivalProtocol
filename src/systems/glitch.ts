@@ -48,6 +48,7 @@ function speedToTempo(speed: TimeSpeed): number {
     case 10:   return 1.4;
     case 100:  return 1.8;
     case 1000: return 2.3;
+    case 10000: return 2.6;
   }
 }
 

@@ -11,6 +11,7 @@ import { store } from '@state/instance';
 import type { Segment } from '@/types/segment';
 import { mountGlitchDriver } from '@systems/glitch';
 import { mountClock } from '@systems/clock';
+import { mountBurnSim } from '@systems/burn';
 import { mountModeToggle } from '@components/dock/ModeToggle';
 import { mountDockItems } from '@components/dock/Dock';
 import { mountSidebarFilters } from '@components/dock/SidebarFilters';
@@ -21,6 +22,7 @@ import { mountToolsTabs } from '@components/tools-view/ToolsTabs';
 import { mountWindowGrips } from '@components/tools-view/WindowGrip';
 import { mountMemoryStats } from '@components/memory-view/MemoryStats';
 import { mountFooter } from '@components/footer/Footer';
+import { mountBurnResult } from '@components/burn/BurnResult';
 import { mountFsToolsSystem, applyTool, getCursorXY, pickUpTool } from '@systems/fs-tools';
 import { mountCursorFollower } from '@components/cursor-follower/CursorFollower';
 import { mountMemoryStrip } from '@components/memory-view/MemoryStrip';
@@ -59,12 +61,13 @@ function runAction(seg: Segment, action: DetailActionId): void {
 
 mountGlitchDriver(store);
 mountClock(store);
+mountBurnSim(store);
 mountModeToggle();
 mountDockItems();
 mountTimeControls(store);
 mountAllWindows();
 mountToolsTabs();
-mountEngineWindow();
+mountEngineWindow(store);
 mountWindowGrips(store);
 
 // SplitOverlay handle is needed by segBehavior, so mount it before MemoryStrip.
@@ -120,6 +123,7 @@ mountMobileDrawers();
 mountFsToolPill(store);
 mountSidebarFilters(store);
 mountFooter(store);
+mountBurnResult(store);
 mountPlacement(store, memWrap);
 
 // Wire the AI Core's `capacity` into the ops engine's hard cap. Re-sync on

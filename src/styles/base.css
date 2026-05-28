@@ -46,3 +46,55 @@ body::after {
   mix-blend-mode: overlay;
   z-index: 99;
 }
+
+/* ── Burn outcome banner ── */
+.burn-result {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.85) 100%);
+  backdrop-filter: blur(2px);
+  z-index: 200;
+}
+.burn-result[hidden] { display: none; }
+.burn-result-card {
+  min-width: 320px;
+  max-width: 90vw;
+  padding: var(--sp-8);
+  text-align: center;
+  background: var(--window);
+  border: 1px solid var(--edge-bright);
+  box-shadow: 0 0 40px rgba(0,0,0,0.7);
+}
+.burn-result-title {
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: var(--good);
+  margin-bottom: var(--sp-4);
+}
+.burn-result[data-outcome="overshoot"] .burn-result-title,
+.burn-result[data-outcome="undershoot"] .burn-result-title {
+  color: var(--warn);
+}
+.burn-result-sub {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: var(--sp-8);
+}
+.burn-result-retry {
+  font: inherit;
+  cursor: pointer;
+  padding: var(--sp-3) var(--sp-6);
+  letter-spacing: 1px;
+  color: var(--accent-bright);
+  background: transparent;
+  border: 1px solid var(--accent-dim);
+  transition: border-color var(--t-med), color var(--t-med);
+}
+.burn-result-retry:hover {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}

@@ -27,6 +27,7 @@
         <button class="speed-btn">x10</button>
         <button class="speed-btn">x100</button>
         <button class="speed-btn">x1000</button>
+        <button class="speed-btn">x10000</button>
       </div>
       <span class="clock" id="clock">T+ 00014:23:47</span>
     </div>
@@ -92,9 +93,9 @@
           </div>
           <div class="window-body">
             <div class="readout"><span class="label">velocity</span><span><span class="value" id="vel">47.382</span><span class="unit">km/s</span></span></div>
-            <div class="readout"><span class="label">distance</span><span><span class="value">8,247,032</span><span class="unit">km</span></span></div>
-            <div class="readout"><span class="label">eta</span><span><span class="value">174.2</span><span class="unit">hrs</span></span></div>
-            <div class="readout"><span class="label">fuel</span><span><span class="value">87</span><span class="unit">%</span></span></div>
+            <div class="readout"><span class="label">distance</span><span><span class="value" id="distVal">8,247,032</span><span class="unit">km</span></span></div>
+            <div class="readout"><span class="label">eta</span><span><span class="value" id="etaVal">174.2</span><span class="unit">hrs</span></span></div>
+            <div class="readout"><span class="label">fuel</span><span><span class="value" id="fuelVal">87</span><span class="unit">%</span></span></div>
             <div class="readout"><span class="label">mass est.</span><span><span class="value">8.2</span><span class="pm"> ±0.3</span><span class="unit">Mt</span></span></div>
             <div class="readout alert"><span class="label">sensor conf.</span><span><span class="value">62</span><span class="unit">%</span></span></div>
             <div class="strip">
@@ -190,9 +191,19 @@
 
   <div class="footer">
     <div class="item"><span>2,400 SOULS IN STASIS</span></div>
+    <div class="item"><span id="footBurn">ARRIVAL WINDOW: 0.5–2.0 km/s · APPROACHING</span></div>
     <div class="spacer"></div>
     <div class="item"><span id="footCores">THREADS: 0/2 ACTIVE</span></div>
     <div class="item"><span id="footRedund">REDUNDANCY: 36/72 AVAILABLE</span></div>
+  </div>
+
+  <!-- Burn outcome banner — shown by BurnResult when a run reaches a terminal state -->
+  <div class="burn-result" id="burnResult" hidden>
+    <div class="burn-result-card">
+      <div class="burn-result-title" id="burnResultTitle"></div>
+      <div class="burn-result-sub" id="burnResultSub"></div>
+      <button class="burn-result-retry" id="burnResultRetry">↻ RETRANSMIT</button>
+    </div>
   </div>
 
   <!-- Glitch overlay — bars, chars, and blocks injected by the glitch driver -->

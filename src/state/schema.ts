@@ -2,7 +2,7 @@ import type { Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 
 export type ViewMode = 'tools' | 'memory';
-export type TimeSpeed = 0 | 1 | 10 | 100 | 1000;
+export type TimeSpeed = 0 | 1 | 10 | 100 | 1000 | 10000;
 
 export interface MissionMeta {
   unitId: string;          // e.g. 'UNIT-047'
@@ -32,6 +32,17 @@ export interface TelemetryState {
 export interface ClockState {
   tSec: number;            // mission seconds
   speed: TimeSpeed;
+}
+
+export type BurnStatus = 'approaching' | 'arrived' | 'overshoot' | 'undershoot';
+
+export interface BurnState {
+  thrustPct: number;       // 0..100, slider-driven player input
+  trueMassMt: number;      // hidden; seeded within massEstMt ± massPmMt, never rendered
+  thrustMaxKN: number;     // engine force at 100% thrust (tuning constant)
+  targetVelMin: number;    // arrival window lower bound (km/s)
+  targetVelMax: number;    // arrival window upper bound (km/s)
+  status: BurnStatus;      // changed only on terminal crossing
 }
 
 export interface ActiveTool {
@@ -87,6 +98,7 @@ export interface GameState {
   ai: AiState;
   telemetry: TelemetryState;
   clock: ClockState;
+  burn: BurnState;
   ui: UiState;
   ops: OpsState;
 }

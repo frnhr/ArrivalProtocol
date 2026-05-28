@@ -10,9 +10,17 @@ import { getActiveOpCount, onOpLoadChange } from '@systems/ops';
 // (which don't change array refs) still trigger repaints. The thread counter
 // also listens to op-load changes (which never bump store state) so it tracks
 // live op start/finish.
+const BURN_STATUS_LABEL: Record<GameState['burn']['status'], string> = {
+  approaching: 'APPROACHING',
+  arrived: 'ARRIVED ✓',
+  overshoot: 'OVERSHOOT ✗',
+  undershoot: 'UNDERSHOOT ✗',
+};
+
 export function mountFooter(store: Store<GameState>): () => void {
   const redundEl = document.getElementById('footRedund');
   const coresEl = document.getElementById('footCores');
+  const burnEl = document.getElementById('footBurn');
 
   function paintRedund(state: GameState): void {
     if (!redundEl) return;
@@ -33,12 +41,21 @@ export function mountFooter(store: Store<GameState>): () => void {
     coresEl.textContent = `THREADS: ${inUse}/${core.capacity} ACTIVE`;
   }
 
+  function paintBurn(state: GameState): void {
+    if (!burnEl) return;
+    const b = state.burn;
+    burnEl.textContent =
+      `ARRIVAL WINDOW: ${b.targetVelMin}–${b.targetVelMax} km/s · ${BURN_STATUS_LABEL[b.status]}`;
+  }
+
   paintRedund(store.getState());
   paintCores(store.getState());
+  paintBurn(store.getState());
 
   const unsubStore = store.subscribe((s) => s, (s) => {
     paintRedund(s);
     paintCores(s);
+    paintBurn(s);
   }, () => false);
   const unsubLoad = onOpLoadChange(() => paintCores(store.getState()));
 
