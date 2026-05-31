@@ -60,3 +60,22 @@ Deleting a tool's backing file should make the corresponding tool vanish from th
 - Multi-copy behavior: some tools/systems have multiple copies (e.g. Repair + Repair.bak, ship-system backups). Does the tool stay available while ≥1 copy exists, and only vanish when the last copy is deleted?
 - How a dock launcher / window maps to "any copy present" vs one specific segment.
 - Relationship to deactivation (inactive file → tool disabled) vs deletion (file gone → tool removed).
+
+## 800. Multi-body gravity system — feasibility & implementation planning ⬅️
+
+Plan and implement a multi-body gravity model for the approach & orbit-insertion phase of travel. The most common case is arriving in a sun-bound (heliocentric) orbit and then performing the maneuvers needed to drop into orbit around the target planet.
+
+Complications to consider and design for:
+
+- **Dual-star system** — two gravitational primaries at the system level.
+- **Moon orbiting the target planet** — a secondary body around the destination creates additional perturbations and may itself be a valid orbit target.
+- **"Nemesis"-type planet** — a body sharing the target planet's orbital radius but located at the opposite side of the orbit (e.g. a Trojan or co-orbital companion).
+
+## 900. Damaged engine control — thrust deviation effects ⬅️
+
+Adjust the effects of a damaged engine control tool to produce realistic, damage-scaled thrust noise:
+
+- **Random short deviations** — brief spikes/dips of actual thrust away from the set value, including when the set value is zero (ghost thrust).
+- **Sticking chance** — each deviation has a probability of persisting (becoming the new effective thrust level) rather than snapping back.
+- **Game-time scheduling** — deviations must fire on game-time intervals, not wall-clock time; needs care at high warp factors (×1 M) where ticks are large and naive timers will miss or bunch events.
+- **Damage-scaled parameters** — the worse the damage, the higher the deviation frequency, the larger the amplitude, and the higher the sticking chance; gated thresholds apply (e.g. sticking cannot occur below ~20% damage, ghost-thrust only above some threshold, etc.).
