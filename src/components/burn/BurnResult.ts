@@ -2,17 +2,21 @@ import type { Store } from '@state/store';
 import type { GameState, BurnStatus } from '@state/schema';
 
 const RESULT_COPY: Record<Exclude<BurnStatus, 'approaching'>, { title: string; sub: string }> = {
-  arrived: {
-    title: 'ARRIVAL CONFIRMED',
-    sub: 'Δv within tolerance — colony intact. Begin landing prep.',
+  inserted: {
+    title: 'ORBITAL INSERTION COMPLETE',
+    sub: 'Trajectory matched into the target corridor — colony secured. Handing off to descent.',
   },
-  overshoot: {
-    title: 'HULL BREACH — OVERSHOOT',
-    sub: 'Arrived too fast. The ship did not survive orbital insertion.',
+  captured: {
+    title: 'STABLE ORBIT — OFF TARGET',
+    sub: 'Captured, but the orbit missed the target corridor. Survivable, just not the insertion we needed.',
   },
-  undershoot: {
-    title: 'STRANDED — UNDERSHOOT',
-    sub: 'Braked too hard and stopped short. The ship will never arrive.',
+  escaped: {
+    title: 'ESCAPE TRAJECTORY',
+    sub: 'Never captured — the ship is receding into deep space.',
+  },
+  crashed: {
+    title: 'SURFACE IMPACT',
+    sub: 'The trajectory dropped into the planet. The ship did not survive.',
   },
 };
 

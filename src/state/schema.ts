@@ -1,8 +1,9 @@
 import type { Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
+import type { PlanetParams } from '@/types/orbit';
 
 export type ViewMode = 'tools' | 'memory';
-export type TimeSpeed = 0 | 1 | 10 | 100 | 1000 | 10000;
+export type TimeSpeed = 0 | 1 | 100 | 10000 | 1000000 | 100000000;
 
 export interface MissionMeta {
   unitId: string;          // e.g. 'UNIT-047'
@@ -31,18 +32,47 @@ export interface TelemetryState {
 
 export interface ClockState {
   tSec: number;            // mission seconds
-  speed: TimeSpeed;
+  // EFFECTIVE multiplier the sim integrates by — continuous, not a TimeSpeed. It eases
+  // toward speedTarget at a fixed log rate (the glide lives in systems/clock.ts), so
+  // changing time-warp ramps through the orders of magnitude rather than jumping. 0 = paused.
+  speed: number;
+  speedTarget: TimeSpeed;  // the discrete value the player selected; speed glides toward this
 }
 
-export type BurnStatus = 'approaching' | 'arrived' | 'overshoot' | 'undershoot';
+export type BurnStatus = 'approaching' | 'inserted' | 'captured' | 'escaped' | 'crashed';
+
+// Attitude autopilot helpers (SAS-style). 'off' = manual rotation thrusters only; the rest
+// auto-slew the heading and hold it — 'hold' locks the current attitude, the others track a
+// live direction. Availability is gated per level (LevelState.sasModes).
+export type SasMode = 'off' | 'hold' | 'prograde' | 'retrograde' | 'radial-in' | 'radial-out';
 
 export interface BurnState {
-  thrustPct: number;       // 0..100, slider-driven player input
-  trueMassMt: number;      // hidden; seeded within massEstMt ± massPmMt, never rendered
-  thrustMaxKN: number;     // engine force at 100% thrust (tuning constant)
-  targetVelMin: number;    // arrival window lower bound (km/s)
-  targetVelMax: number;    // arrival window upper bound (km/s)
-  status: BurnStatus;      // changed only on terminal crossing
+  thrustPct: number;        // 0..100, main thrust magnitude (fires along the heading)
+  heading: number;          // radians, inertial — direction the ship points / thrust fires
+  omega: number;            // rad per game-second — angular velocity (carries momentum)
+  rotInput: -1 | 0 | 1;     // rotation thruster input: −1 = CW, +1 = CCW, 0 = none
+  sasMode: SasMode;         // active attitude autopilot ('off' = manual rotation)
+  holdTarget: number;       // captured heading for sasMode 'hold' (radians, inertial)
+  trueMassMt: number;       // hidden; seeded within massEstMt ± massPmMt, never rendered
+  thrustForce: number;      // engine constant; max accel = thrustForce / trueMass (km/s²)
+  status: BurnStatus;       // changed only on terminal crossing
+}
+
+// 2D two-body truth integrated by the orbit sim (planet at origin). SI-ish units
+// (km, km/s). The NAV PLOT derives OrbitElements from this each frame.
+export interface OrbitVecState {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  tToPeriHrs: number;       // cheap time-to-periapsis estimate for the HUD
+}
+
+// Immutable per run: the planet the AI is inserting around, plus which attitude autopilot
+// helpers the engine exposes this level/version (everything else is flown manually).
+export interface LevelState {
+  planet: PlanetParams;
+  sasModes: SasMode[];
 }
 
 export interface ActiveTool {
@@ -99,6 +129,8 @@ export interface GameState {
   telemetry: TelemetryState;
   clock: ClockState;
   burn: BurnState;
+  orbit: OrbitVecState;
+  level: LevelState;
   ui: UiState;
   ops: OpsState;
 }

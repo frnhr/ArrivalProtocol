@@ -1,21 +1,28 @@
 import type { Store } from '@state/store';
-import type { GameState } from '@state/schema';
+import type { GameState, BurnStatus } from '@state/schema';
+import { onGameTick } from '@systems/clock';
 import {
   deriveOrbit, sampleConic, pointAt, periapsisPoint, apoapsisPoint,
-  viewMaxRadius, makeProjector,
+  makeProjector, elementsFromState,
   type OrbitElements, type PlanetParams, type OrbitRenderOpts, type Vec2,
 } from '@/types/orbit';
 
-// Orbital trajectory plot. THIS SLICE renders from hand-fed elements scrubbed by
-// dev sliders — no sim, no store reads. `renderOrbit` consumes only OrbitElements
-// + PlanetParams, so the future Verlet sim can feed the exact same function
-// (derive elements from {x,y,vx,vy} → renderOrbit). The node-cache + attribute
-// patching keeps it cheap enough to drive at 20Hz then. All colours are CSS vars
-// so the amber→blue memory-mode reskin happens automatically.
+// Orbital trajectory plot, driven live by the orbit sim. Each game tick it reads the
+// 2D truth state, derives the current conic, and patches the SVG; on a terminal it
+// paints the frozen final frame. `renderOrbit` consumes only OrbitElements +
+// PlanetParams (the sim↔render seam), so the same function served the dev-slider
+// fixture in slice 1. Node-cache + attribute patching keeps it cheap at 20Hz. All
+// colours are CSS vars so the amber→blue memory-mode reskin happens automatically.
 
 const VB = 320;        // svg viewBox is "0 0 320 320"
 const MARGIN_PX = 16;
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Two-phase plot scale (see renderOrbit): far out the view fits the ship (it rides the
+// edge while the planet grows); once the ship is within the near-field floor the scale
+// locks and the ship travels the orbit.
+const MIN_VIEW_FACTOR = 1.7;    // near-field floor as a multiple of the target-band outer radius
+const SHIP_EDGE_MARGIN = 1.05;  // keeps the far-out ship just inside the plot edge
 
 interface OrbitNodes {
   planet: SVGCircleElement;
@@ -26,13 +33,14 @@ interface OrbitNodes {
   conic: SVGPathElement;
   peri: SVGCircleElement;
   apo: SVGCircleElement;
-  ship: SVGCircleElement;
+  prograde: SVGLineElement;
+  ship: SVGPolygonElement;
 }
 
 // Keyed by svg element so multiple plot instances each keep their own nodes.
 const nodeCache = new WeakMap<SVGSVGElement, OrbitNodes>();
 
-function el(tag: 'circle' | 'path', cls: string, attrs: Record<string, string>): SVGElement {
+function el(tag: 'circle' | 'path' | 'line' | 'polygon', cls: string, attrs: Record<string, string>): SVGElement {
   const node = document.createElementNS(SVG_NS, tag);
   node.setAttribute('class', cls);
   for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
@@ -49,10 +57,13 @@ function build(svg: SVGSVGElement): OrbitNodes {
   const conic = el('path', 'np-conic', { fill: 'none', stroke: 'var(--accent-bright)', 'stroke-width': '1.4', 'vector-effect': 'non-scaling-stroke' }) as SVGPathElement;
   const peri = el('circle', 'np-peri', { r: '3', fill: 'var(--accent-bright)' }) as SVGCircleElement;
   const apo = el('circle', 'np-apo', { r: '3', fill: 'var(--accent)' }) as SVGCircleElement;
-  const ship = el('circle', 'np-ship', { r: '4', fill: 'var(--good)', stroke: 'var(--bg)', 'stroke-width': '1' }) as SVGCircleElement;
+  const prograde = el('line', 'np-prograde', { stroke: 'var(--good)', 'stroke-width': '1.5', 'stroke-dasharray': '2 2', 'vector-effect': 'non-scaling-stroke' }) as SVGLineElement;
+  // Ship marker: a triangle whose apex is the nose, so heading reads unambiguously (a plain
+  // line could be mistaken for either the nose or the exhaust). Filled green like the old dot.
+  const ship = el('polygon', 'np-ship', { fill: 'var(--good)', stroke: 'var(--bg)', 'stroke-width': '1', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke' }) as SVGPolygonElement;
 
-  const nodes: OrbitNodes = { planet, crash, atm, band, ghost, conic, peri, apo, ship };
-  [planet, crash, atm, band, ghost, conic, peri, apo, ship].forEach((n) => svg.appendChild(n));
+  const nodes: OrbitNodes = { planet, crash, atm, band, ghost, conic, peri, apo, prograde, ship };
+  [planet, crash, atm, band, ghost, conic, peri, apo, prograde, ship].forEach((n) => svg.appendChild(n));
   nodeCache.set(svg, nodes);
   return nodes;
 }
@@ -80,6 +91,31 @@ function setCircle(node: SVGCircleElement, cx: number, cy: number, r: number): v
   node.setAttribute('r', r.toFixed(2));
 }
 
+// A short reference tick from the ship pointing at angleRad (world frame; SVG y is
+// flipped) — used for the prograde marker. Hidden when the angle is undefined.
+function setDirTick(node: SVGLineElement, from: Vec2, angleRad: number | undefined, len: number): void {
+  if (angleRad === undefined) { node.style.display = 'none'; return; }
+  node.style.display = '';
+  node.setAttribute('x1', from.x.toFixed(2));
+  node.setAttribute('y1', from.y.toFixed(2));
+  node.setAttribute('x2', (from.x + len * Math.cos(angleRad)).toFixed(2));
+  node.setAttribute('y2', (from.y - len * Math.sin(angleRad)).toFixed(2));
+}
+
+// Ship marker triangle: the apex (nose) points along headingRad (world frame; SVG y is
+// flipped) and the base trails behind. TIP = 2·BACK puts the centroid on the ship
+// position, so the glyph shows location and facing at once. Sized in screen px, so it
+// stays legible whether the ship rides the far edge or sits deep in the near view.
+function setShipTriangle(node: SVGPolygonElement, center: Vec2, headingRad: number): void {
+  const TIP = 9, BACK = 4.5, HALF = 5.5;
+  const fx = Math.cos(headingRad), fy = -Math.sin(headingRad);   // forward (screen)
+  const px = -fy, py = fx;                                        // forward rotated +90°
+  const tip = `${(center.x + fx * TIP).toFixed(2)},${(center.y + fy * TIP).toFixed(2)}`;
+  const left = `${(center.x - fx * BACK + px * HALF).toFixed(2)},${(center.y - fy * BACK + py * HALF).toFixed(2)}`;
+  const right = `${(center.x - fx * BACK - px * HALF).toFixed(2)},${(center.y - fy * BACK - py * HALF).toFixed(2)}`;
+  node.setAttribute('points', `${tip} ${left} ${right}`);
+}
+
 export function renderOrbit(
   svg: SVGSVGElement,
   orbit: OrbitElements,
@@ -94,11 +130,14 @@ export function renderOrbit(
     ? { ...orbit, e: orbit.e * opts.ghostScale, rp: orbit.rp + opts.ghostDr }
     : null;
 
-  // Fit to both the true orbit and the ghost so the whole envelope shows.
-  const viewMaxR = Math.max(
-    viewMaxRadius(orbit, planet),
-    ghostEl ? viewMaxRadius(ghostEl, planet) : 0,
-  );
+  // Two-phase scale. FAR: fit the ship — it rides the plot edge while the view zooms
+  // in and the planet grows as the ship closes in. NEAR: once the ship is inside the
+  // near-field floor (a multiple of the target band), hold that fixed scale and let
+  // the ship travel along the orbit. No floor on the planet size — far out it's a
+  // sub-pixel dot, exactly to scale.
+  const shipPoint = pointAt(orbit, orbit.nu);
+  const shipR = Math.hypot(shipPoint.x, shipPoint.y);
+  const viewMaxR = Math.max(shipR * SHIP_EDGE_MARGIN, planet.rMax * MIN_VIEW_FACTOR);
   const proj = makeProjector(viewMaxR, VB, MARGIN_PX);
   const half = VB / 2;
   const s = proj.scale;
@@ -121,55 +160,98 @@ export function renderOrbit(
   const c = sampleConic(orbit, viewMaxR);
   nodes.conic.setAttribute('d', pathFrom(c.pts.map(proj.project), c.closed));
 
-  // Periapsis pip (always), apoapsis pip (ellipse only), ship at true anomaly.
+  // Periapsis pip (always), apoapsis pip (ellipse only, and only when it fits the
+  // clamped view — a near-parabolic capture's apoapsis runs off-frame), ship at nu.
   const pp = proj.project(periapsisPoint(orbit));
   setCircle(nodes.peri, pp.x, pp.y, 3);
-  if (isClosed && ra !== null) {
+  if (isClosed && ra !== null && ra <= viewMaxR) {
     nodes.apo.style.display = '';
     const ap = proj.project(apoapsisPoint(orbit, ra));
     setCircle(nodes.apo, ap.x, ap.y, 3);
   } else {
     nodes.apo.style.display = 'none';
   }
-  const sp = proj.project(pointAt(orbit, orbit.nu));
-  setCircle(nodes.ship, sp.x, sp.y, 4);
+  const sp = proj.project(shipPoint);
+
+  // Prograde reference tick (green dashed), then the ship triangle on top pointing along
+  // the heading. Falls back to prograde / +x if no heading is supplied (e.g. dev fixture).
+  setDirTick(nodes.prograde, sp, opts.progradeRad, 13);
+  setShipTriangle(nodes.ship, sp, opts.headingRad ?? opts.progradeRad ?? 0);
 }
 
-export function mountNavPlotWindow(_store: Store<GameState>): () => void {
+const STATUS_LABEL: Record<BurnStatus, string> = {
+  approaching: 'INSERTING',
+  inserted: 'INSERTED',
+  captured: 'OFF-TGT',
+  escaped: 'ESCAPED',
+  crashed: 'CRASHED',
+};
+
+const STATUS_CLASS: Record<BurnStatus, string> = {
+  approaching: '',
+  inserted: 'good',
+  captured: '',
+  escaped: 'warn',
+  crashed: 'warn',
+};
+
+function fmtKm(km: number): string {
+  return `${Math.round(km).toLocaleString('en-US')} km`;
+}
+
+export function mountNavPlotWindow(store: Store<GameState>): () => void {
   const svg = document.getElementById('navplotSvg') as SVGSVGElement | null;
   if (!svg) return () => {};
 
-  // Hand-fed fixture for this slice (world units: planet radius = 1).
-  const planet: PlanetParams = { R: 1, rAtm: 1.18, rMin: 1.5, rMax: 1.9, mu: 1 };
-  const orbit: OrbitElements = { rp: 1.35, e: 0.5, omega: -0.6, nu: 0.8 };
-  const opts: OrbitRenderOpts = { showGhost: true, ghostScale: 1.06, ghostDr: 0.06 };
-
-  // --- DEV sliders — removed when the live sim drives this plot ---
-  const ecc = document.getElementById('np-ecc') as HTMLInputElement | null;
-  const anom = document.getElementById('np-nu') as HTMLInputElement | null;
-  const peri = document.getElementById('np-rp') as HTMLInputElement | null;
   const eccVal = document.getElementById('np-ecc-val');
-  const anomVal = document.getElementById('np-nu-val');
-  const periVal = document.getElementById('np-rp-val');
+  const periVal = document.getElementById('np-peri-val');
+  const apoVal = document.getElementById('np-apo-val');
+  const statusVal = document.getElementById('np-status-val');
 
-  const redraw = (): void => {
-    if (ecc) orbit.e = Number(ecc.value);
-    if (anom) orbit.nu = Number(anom.value);
-    if (peri) orbit.rp = Number(peri.value);
-    if (eccVal) eccVal.textContent = orbit.e.toFixed(2);
-    if (anomVal) anomVal.textContent = orbit.nu.toFixed(2);
-    if (periVal) periVal.textContent = orbit.rp.toFixed(2);
-    renderOrbit(svg, orbit, planet, opts);
-  };
+  function paintReadout(orbit: OrbitElements, planet: PlanetParams, status: BurnStatus): void {
+    const { ra, isClosed } = deriveOrbit(orbit);
+    if (eccVal) eccVal.textContent = orbit.e.toFixed(3);
+    if (periVal) periVal.textContent = fmtKm(orbit.rp - planet.R);
+    if (apoVal) apoVal.textContent = isClosed && ra !== null ? fmtKm(ra - planet.R) : '—';
+    if (statusVal) {
+      statusVal.textContent = STATUS_LABEL[status];
+      const cls = STATUS_CLASS[status];
+      statusVal.className = cls ? `v ${cls}` : 'v';
+    }
+  }
 
-  ecc?.addEventListener('input', redraw);
-  anom?.addEventListener('input', redraw);
-  peri?.addEventListener('input', redraw);
-  redraw();
+  function redraw(): void {
+    const state = store.getState();
+    const planet = state.level.planet;
+    const orbit = elementsFromState(state.orbit, planet.mu);
+    // Ghost is a placeholder for sensor uncertainty (slice 3); scale the radial
+    // offset to the planet so it's visible in SI units. Slice 3 drives it off
+    // telemetry.sensorConfPct instead of a constant.
+    const opts: OrbitRenderOpts = {
+      showGhost: true,
+      ghostScale: 1.04,
+      ghostDr: planet.R * 0.04,
+      headingRad: state.burn.heading,
+      progradeRad: Math.atan2(state.orbit.vy, state.orbit.vx),
+    };
+    renderOrbit(svg!, orbit, planet, opts);
+    paintReadout(orbit, planet, state.burn.status);
+  }
+
+  // Two redraw triggers:
+  //  1. game tick — live update while approaching. Registered here (mountNavPlotWindow
+  //     runs AFTER mountOrbitSim in main.ts), so it reads freshly-integrated state.
+  //  2. burn.status — paints the FROZEN terminal frame; onGameTick stops firing once
+  //     the sim pauses the clock, so without this the captured/escaped/crashed frame
+  //     would never be drawn. The sim mutates final geometry before flipping status,
+  //     so this reads consistent state.
+  const offTick = onGameTick(() => redraw());
+  const unsubStatus = store.subscribe((s) => s.burn.status, () => redraw());
+
+  redraw(); // initial paint of the seed orbit
 
   return () => {
-    ecc?.removeEventListener('input', redraw);
-    anom?.removeEventListener('input', redraw);
-    peri?.removeEventListener('input', redraw);
+    offTick();
+    unsubStatus();
   };
 }

@@ -1,7 +1,7 @@
 import { createStore } from './store';
 import type { GameState } from './schema';
 import { createInitialMemory } from '@data/memory';
-import { INITIAL_MISSION, INITIAL_TELEMETRY, INITIAL_CLOCK, INITIAL_AI, seedBurn } from '@data/mission';
+import { INITIAL_MISSION, INITIAL_TELEMETRY, INITIAL_CLOCK, INITIAL_AI, seedBurn, seedOrbit, seedLevel } from '@data/mission';
 
 // The single global store. Components and systems import this singleton.
 export const store = createStore<GameState>({
@@ -11,6 +11,8 @@ export const store = createStore<GameState>({
   telemetry: INITIAL_TELEMETRY,
   clock: INITIAL_CLOCK,
   burn: seedBurn(),
+  orbit: seedOrbit(),
+  level: seedLevel(),
   ui: {
     mode: 'tools',
     selectedId: null,

@@ -20,8 +20,10 @@ export interface PlanetParams {
 
 export interface OrbitRenderOpts {
   showGhost: boolean;
-  ghostScale: number; // multiplicative offset applied to e for the ghost conic
-  ghostDr: number;    // radial offset (world units) applied to the ghost conic
+  ghostScale: number;   // multiplicative offset applied to e for the ghost conic
+  ghostDr: number;      // radial offset (world units) applied to the ghost conic
+  headingRad?: number;  // ship heading (thrust direction) — drawn as an arrow from the ship
+  progradeRad?: number; // velocity direction at the ship — drawn as a reference tick
 }
 
 export interface OrbitDerived {
@@ -59,10 +61,14 @@ export function deriveOrbit(el: OrbitElements): OrbitDerived {
 
 // World radius the plot must contain. K keeps the hyperbola's periapsis region
 // readable while its branches run off-frame, instead of the asymptotes
-// dominating the fit.
+// dominating the fit. KA does the same for a near-parabolic *capture*: an
+// ellipse with e→1 has an enormous apoapsis that would shrink the planet to a
+// speck, so cap its contribution at KA·rp. sampleConic then clips the rest to a
+// clean open arc near periapsis (closed:false) rather than a chord.
+const KA = 8;
 export function viewMaxRadius(el: OrbitElements, planet: PlanetParams, K = 4): number {
   const { ra, isClosed } = deriveOrbit(el);
-  const orbitR = isClosed && ra !== null ? ra : K * el.rp;
+  const orbitR = isClosed && ra !== null ? Math.min(ra, KA * el.rp) : K * el.rp;
   return Math.max(planet.R, planet.rAtm, planet.rMax, orbitR);
 }
 
@@ -144,4 +150,69 @@ export function makeProjector(viewMaxR: number, viewBox: number, marginPx: numbe
     scale,
     project: (point) => ({ x: half + point.x * scale, y: half - point.y * scale }),
   };
+}
+
+// --- Sim ↔ render seam: Cartesian state <-> orbital elements ---
+// Both are pure and unit-agnostic: feed SI (km, km/s, μ in km³/s²) or
+// dimensionless units, same code. The live two-body sim integrates {x,y,vx,vy};
+// the renderer wants OrbitElements. stateFromElements seeds the sim from a chosen
+// conic; elementsFromState reads the current conic back each frame (for the plot)
+// and at periapsis (for the capture/escape decision, which keys off |e| and so is
+// frame-independent).
+
+export interface OrbitState {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+}
+
+// Perifocal position+velocity at true anomaly nu, rotated by omega into the
+// planet frame. Counterclockwise motion (h > 0). Valid for e > 1 (hyperbola).
+export function stateFromElements(
+  rp: number, e: number, omega: number, nu: number, mu: number,
+): OrbitState {
+  const p = rp * (1 + e);
+  const h = Math.sqrt(mu * p);
+  const r = p / (1 + e * Math.cos(nu));
+  // Perifocal frame has periapsis along +x; rotate by omega afterwards.
+  const xPf = r * Math.cos(nu);
+  const yPf = r * Math.sin(nu);
+  const vxPf = -(mu / h) * Math.sin(nu);
+  const vyPf = (mu / h) * (e + Math.cos(nu));
+  const cosw = Math.cos(omega);
+  const sinw = Math.sin(omega);
+  return {
+    x: xPf * cosw - yPf * sinw,
+    y: xPf * sinw + yPf * cosw,
+    vx: vxPf * cosw - vyPf * sinw,
+    vy: vxPf * sinw + vyPf * cosw,
+  };
+}
+
+// Eccentricity-vector method. e is a magnitude (orientation-independent), so the
+// capture (e < 1) / escape (e ≥ 1) decision never depends on how nu wraps.
+export function elementsFromState(state: OrbitState, mu: number): OrbitElements {
+  const { x, y, vx, vy } = state;
+  const r = Math.hypot(x, y);
+  const v2 = vx * vx + vy * vy;
+  const rDotV = x * vx + y * vy;
+  const h = x * vy - y * vx; // scalar specific angular momentum (z of r × v)
+  // e_vec = ((v² − μ/r)·r_vec − (r·v)·v_vec) / μ
+  const ex = ((v2 - mu / r) * x - rDotV * vx) / mu;
+  const ey = ((v2 - mu / r) * y - rDotV * vy) / mu;
+  const e = Math.hypot(ex, ey);
+  const omega = Math.atan2(ey, ex);
+  const p = (h * h) / mu;
+  const rp = p / (1 + e);
+  const nu = wrapPi(Math.atan2(y, x) - omega);
+  return { rp, e, omega, nu };
+}
+
+// Normalize an angle to [−π, π).
+function wrapPi(angle: number): number {
+  const twoPi = 2 * Math.PI;
+  let a = (angle + Math.PI) % twoPi;
+  if (a < 0) a += twoPi;
+  return a - Math.PI;
 }

@@ -11,10 +11,11 @@ import { getActiveOpCount, onOpLoadChange } from '@systems/ops';
 // also listens to op-load changes (which never bump store state) so it tracks
 // live op start/finish.
 const BURN_STATUS_LABEL: Record<GameState['burn']['status'], string> = {
-  approaching: 'APPROACHING',
-  arrived: 'ARRIVED ✓',
-  overshoot: 'OVERSHOOT ✗',
-  undershoot: 'UNDERSHOOT ✗',
+  approaching: 'IN PROGRESS',
+  inserted: 'INSERTED ✓',
+  captured: 'OFF-TARGET',
+  escaped: 'ESCAPED ✗',
+  crashed: 'CRASHED ✗',
 };
 
 export function mountFooter(store: Store<GameState>): () => void {
@@ -43,9 +44,7 @@ export function mountFooter(store: Store<GameState>): () => void {
 
   function paintBurn(state: GameState): void {
     if (!burnEl) return;
-    const b = state.burn;
-    burnEl.textContent =
-      `ARRIVAL WINDOW: ${b.targetVelMin}–${b.targetVelMax} km/s · ${BURN_STATUS_LABEL[b.status]}`;
+    burnEl.textContent = `INSERTION · ${BURN_STATUS_LABEL[state.burn.status]}`;
   }
 
   paintRedund(store.getState());

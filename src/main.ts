@@ -11,7 +11,7 @@ import { store } from '@state/instance';
 import type { Segment } from '@/types/segment';
 import { mountGlitchDriver } from '@systems/glitch';
 import { mountClock } from '@systems/clock';
-import { mountBurnSim } from '@systems/burn';
+import { mountOrbitSim } from '@systems/orbit-sim';
 import { mountModeToggle } from '@components/dock/ModeToggle';
 import { mountDockItems } from '@components/dock/Dock';
 import { mountSidebarFilters } from '@components/dock/SidebarFilters';
@@ -62,7 +62,7 @@ function runAction(seg: Segment, action: DetailActionId): void {
 
 mountGlitchDriver(store);
 mountClock(store);
-mountBurnSim(store);
+mountOrbitSim(store);
 mountModeToggle();
 mountDockItems();
 mountTimeControls(store);

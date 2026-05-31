@@ -39,11 +39,31 @@
   min-width: 44px;
 }
 .speed-btn:hover { border-color: var(--accent-dim); color: var(--accent-bright); }
+/* Live effective-multiplier readout. Fixed-width + right-aligned so the header
+   doesn't shift as the glide runs through ×1 … ×100M. */
+.speed-mult {
+  font-family: 'VT323', monospace;
+  font-size: 16px;
+  color: var(--accent);
+  opacity: 0.8;
+  min-width: 3.4em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .speed-btn.active {
   border-color: var(--accent);
   color: var(--accent-bright);
   background: var(--ambient-1);
 }
+.speed-btn:disabled,
+.speed-btn:disabled:hover {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--edge);
+  color: var(--accent-dim);
+}
+/* Autopilot (SAS) helper buttons: wrap to a second row in the narrow engine window. */
+.sas-row { display: flex; gap: 2px; flex-wrap: wrap; }
 .clock {
   color: var(--accent-bright);
   text-shadow: 0 0 8px currentColor;
@@ -249,8 +269,12 @@ body:not(.mode-memory) .dock > .dock-content.memory-view { display: none; }
 .engine-win { top: 24px; right: 24px; width: 320px; }
 .navplot-win { top: 24px; left: 380px; width: 360px; }
 .navplot-svg { display: block; width: 100%; aspect-ratio: 1 / 1; }
-.np-dev { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--warn); }
-.np-dev .ctrl-label span:first-child { color: var(--warn); }
+.np-readout { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--accent-dim); }
+.np-stat { display: flex; flex-direction: column; gap: 3px; }
+.np-stat .lbl { color: var(--text-dim); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; }
+.np-stat .v { color: var(--accent-bright); font-family: 'VT323', monospace; font-size: 18px; line-height: 1; }
+.np-stat .v.good { color: var(--good); }
+.np-stat .v.warn { color: var(--warn); }
 .readout { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0; border-bottom: 1px dashed rgba(141,110,61,0.2); }
 .readout:last-of-type { border-bottom: none; }
 .readout .label { color: var(--text-dim); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }

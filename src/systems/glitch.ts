@@ -43,12 +43,12 @@ function buildBar(angled: boolean): HTMLElement {
 // enough that the UI "feels" faster when game time is racing.
 function speedToTempo(speed: TimeSpeed): number {
   switch (speed) {
-    case 0:    return 1;     // value irrelevant; play-state is paused
-    case 1:    return 1;
-    case 10:   return 1.4;
-    case 100:  return 1.8;
-    case 1000: return 2.3;
-    case 10000: return 2.6;
+    case 0:         return 1;     // value irrelevant; play-state is paused
+    case 1:         return 1;
+    case 100:       return 1.4;
+    case 10000:     return 1.8;
+    case 1000000:   return 2.3;
+    case 100000000: return 2.6;
   }
 }
 
@@ -191,10 +191,13 @@ export function mountGlitchDriver(store: Store<GameState>): () => void {
 
   // Initialize from current state, then track changes.
   applyCorruption(selectCorruption(store.getState()));
-  applyClock(store.getState().clock.speed);
+  applyClock(store.getState().clock.speedTarget);
 
+  // Tempo/play-state track the selected TARGET, not the live gliding speed: the
+  // effective speed is mutated at 20Hz (no fanout) so it can't be subscribed, and the
+  // decorative tempo reads fine snapping to "where time is heading" on each click.
   const unsubCorruption = store.subscribe(selectCorruption, (next) => applyCorruption(next));
-  const unsubClock = store.subscribe((s) => s.clock.speed, (next) => applyClock(next));
+  const unsubClock = store.subscribe((s) => s.clock.speedTarget, (next) => applyClock(next));
 
   return () => {
     unsubCorruption();

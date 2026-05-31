@@ -74,9 +74,12 @@ body::after {
   color: var(--good);
   margin-bottom: var(--sp-4);
 }
-.burn-result[data-outcome="overshoot"] .burn-result-title,
-.burn-result[data-outcome="undershoot"] .burn-result-title {
+.burn-result[data-outcome="escaped"] .burn-result-title,
+.burn-result[data-outcome="crashed"] .burn-result-title {
   color: var(--warn);
+}
+.burn-result[data-outcome="captured"] .burn-result-title {
+  color: var(--accent);
 }
 .burn-result-sub {
   font-size: 13px;

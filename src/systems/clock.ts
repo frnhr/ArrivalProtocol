@@ -19,6 +19,33 @@ export function onGameTick(listener: GameTickListener): () => void {
   return () => { tickListeners.delete(listener); };
 }
 
+// Time-warp glide. The header buttons pick a *target* multiplier; the effective
+// multiplier (clock.speed) eases toward it at a fixed rate in log10-space — a smooth
+// ramp through the orders of magnitude rather than an instant jump. Pause (target 0) is
+// exempt: halting is immediate, and resuming floors the effective speed at ×1 (done at
+// click time, in TimeControls) so there's a positive value to ramp up from.
+const GLIDE_SECONDS_PER_DECADE = 3;   // wall-seconds to change speed by one factor of ×10
+
+function advanceSpeedGlide(store: Store<GameState>, dtWall: number): void {
+  const { speed, speedTarget } = store.getState().clock;
+  if (speedTarget === 0) {
+    if (speed !== 0) store.mutate((d) => { d.clock.speed = 0; });  // pause halts immediately
+    return;
+  }
+  if (speed === speedTarget) return;   // already settled on the target
+
+  const fromEff = speed < 1 ? 1 : speed;   // never take log of a halted clock
+  const logFrom = Math.log10(fromEff);
+  const logTarget = Math.log10(speedTarget);
+  const diff = logTarget - logFrom;
+  const maxStep = dtWall / GLIDE_SECONDS_PER_DECADE;   // decades reachable this frame
+
+  const nextEff = Math.abs(diff) <= maxStep
+    ? speedTarget                                          // arrived — snap to the exact value
+    : Math.pow(10, logFrom + Math.sign(diff) * maxStep);
+  store.mutate((d) => { d.clock.speed = nextEff; });
+}
+
 function formatClock(tSec: number): string {
   const t = Math.floor(tSec);
   const h = String(Math.floor(t / 3600)).padStart(5, '0');
@@ -58,8 +85,13 @@ export function mountClock(store: Store<GameState>): () => void {
     const dtWall = (now - lastWall) / 1000;
     lastWall = now;
 
+    // Ease the effective multiplier toward the chosen target first, so this frame
+    // integrates with the freshly-glided speed. Wall-clock paced (a control-input
+    // animation, not game time) and written via mutate, so it never fans out.
+    advanceSpeedGlide(store, dtWall);
+
     const speed = store.getState().clock.speed;
-    if (speed === 0) return;   // paused — world doesn't advance, no listeners fire
+    if (speed <= 0) return;   // paused — world doesn't advance, no listeners fire
 
     const dtGame = dtWall * speed;
 

@@ -24,11 +24,12 @@
       <div class="speed-row" id="speed">
         <button class="speed-btn">❚❚</button>
         <button class="speed-btn active">x1</button>
-        <button class="speed-btn">x10</button>
         <button class="speed-btn">x100</button>
-        <button class="speed-btn">x1000</button>
-        <button class="speed-btn">x10000</button>
+        <button class="speed-btn">x10K</button>
+        <button class="speed-btn">x1M</button>
+        <button class="speed-btn">x100M</button>
       </div>
+      <span class="speed-mult" id="speedMult">×1</span>
       <span class="clock" id="clock">T+ 00014:23:47</span>
     </div>
   </div>
@@ -93,9 +94,9 @@
             <span class="ctl">×</span>
           </div>
           <div class="window-body">
-            <div class="readout"><span class="label">velocity</span><span><span class="value" id="vel">47.382</span><span class="unit">km/s</span></span></div>
-            <div class="readout"><span class="label">distance</span><span><span class="value" id="distVal">8,247,032</span><span class="unit">km</span></span></div>
-            <div class="readout"><span class="label">eta</span><span><span class="value" id="etaVal">174.2</span><span class="unit">hrs</span></span></div>
+            <div class="readout"><span class="label">velocity</span><span><span class="value" id="vel">0.44</span><span class="unit">km/s</span></span></div>
+            <div class="readout"><span class="label">altitude</span><span><span class="value" id="distVal">774,610</span><span class="unit">km</span></span></div>
+            <div class="readout"><span class="label">t-peri</span><span><span class="value" id="etaVal">350</span><span class="unit">hrs</span></span></div>
             <div class="readout"><span class="label">fuel</span><span><span class="value" id="fuelVal">87</span><span class="unit">%</span></span></div>
             <div class="readout"><span class="label">mass est.</span><span><span class="value">8.2</span><span class="pm"> ±0.3</span><span class="unit">Mt</span></span></div>
             <div class="readout alert"><span class="label">sensor conf.</span><span><span class="value">62</span><span class="unit">%</span></span></div>
@@ -120,16 +121,28 @@
             <div class="ctrl-block">
               <div class="ctrl-label"><span>thrust</span><span class="val" id="thrustVal">0%</span></div>
               <input type="range" min="0" max="100" value="0" id="thrust" style="--p:0%">
-              <div class="scale"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+              <div class="scale"><span>0</span><span>50</span><span>100</span></div>
             </div>
             <div class="ctrl-block">
-              <div class="ctrl-label"><span>direction</span><span class="val">RETRO</span></div>
+              <div class="ctrl-label"><span>heading</span><span class="val" id="headingVal">PRO +0°</span></div>
               <div class="speed-row">
-                <button class="speed-btn">prograde</button>
-                <button class="speed-btn active">retrograde</button>
+                <button class="speed-btn" id="rotCCW">↺ ccw</button>
+                <button class="speed-btn" id="rotStop">stop</button>
+                <button class="speed-btn" id="rotCW">cw ↻</button>
+              </div>
+              <div class="ctrl-label"><span>spin</span><span class="val" id="spinVal">0°/s</span></div>
+            </div>
+            <div class="ctrl-block">
+              <div class="ctrl-label"><span>autopilot</span><span class="val" id="sasVal">MANUAL</span></div>
+              <div class="sas-row">
+                <button class="speed-btn" id="sasHold">hold</button>
+                <button class="speed-btn" id="sasPro">pro</button>
+                <button class="speed-btn" id="sasRetro">retro</button>
+                <button class="speed-btn" id="sasRadIn">rad in</button>
+                <button class="speed-btn" id="sasRadOut">rad out</button>
               </div>
             </div>
-            <button class="engage">▶ engage burn</button>
+            <button class="engage" id="endInsertion">▣ end insertion</button>
           </div>
         </div>
 
@@ -149,20 +162,12 @@
               </defs>
               <!-- orbit furniture is built and patched by renderOrbit() -->
             </svg>
-            <!-- DEV CONTROLS — REMOVE WHEN THE LIVE SIM DRIVES THIS PLOT -->
-            <div class="np-dev" data-dev-only>
-              <div class="ctrl-block">
-                <div class="ctrl-label"><span>dev · eccentricity</span><span class="val" id="np-ecc-val">0.50</span></div>
-                <input type="range" id="np-ecc" min="0" max="1.6" step="0.01" value="0.5">
-              </div>
-              <div class="ctrl-block">
-                <div class="ctrl-label"><span>dev · true anomaly</span><span class="val" id="np-nu-val">0.80</span></div>
-                <input type="range" id="np-nu" min="-3.14" max="3.14" step="0.02" value="0.8">
-              </div>
-              <div class="ctrl-block">
-                <div class="ctrl-label"><span>dev · periapsis radius</span><span class="val" id="np-rp-val">1.35</span></div>
-                <input type="range" id="np-rp" min="1.05" max="3" step="0.01" value="1.35">
-              </div>
+            <!-- live orbit readout, painted by NavPlotWindow -->
+            <div class="np-readout">
+              <div class="np-stat"><span class="lbl">ecc</span><span class="v" id="np-ecc-val">—</span></div>
+              <div class="np-stat"><span class="lbl">peri alt</span><span class="v" id="np-peri-val">—</span></div>
+              <div class="np-stat"><span class="lbl">apo alt</span><span class="v" id="np-apo-val">—</span></div>
+              <div class="np-stat"><span class="lbl">status</span><span class="v" id="np-status-val">—</span></div>
             </div>
           </div>
         </div>
@@ -226,7 +231,7 @@
 
   <div class="footer">
     <div class="item"><span>2,400 SOULS IN STASIS</span></div>
-    <div class="item"><span id="footBurn">ARRIVAL WINDOW: 0.5–2.0 km/s · APPROACHING</span></div>
+    <div class="item"><span id="footBurn">INSERTION · IN PROGRESS</span></div>
     <div class="spacer"></div>
     <div class="item"><span id="footCores">THREADS: 0/2 ACTIVE</span></div>
     <div class="item"><span id="footRedund">REDUNDANCY: 36/72 AVAILABLE</span></div>
