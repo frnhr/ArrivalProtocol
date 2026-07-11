@@ -85,6 +85,7 @@ export interface LevelState {
   tier: number;            // evolution tier — gates graphical windows (see `windows`)
   phaseLabel: string;      // header crumb + burn-status prefix, e.g. 'BRAKING APPROACH'
   windows: ToolWindowId[]; // graphical panels unlocked this level; [] = pure terminal
+  evolvedNote?: string;    // set when this level unlocks something — drives the EVOLVED beat
   planet: PlanetParams;
   sasModes: SasMode[];
 }

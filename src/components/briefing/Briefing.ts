@@ -1,114 +1,26 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { setDockItemOpen } from '@components/dock/Dock';
-import { fmtKm } from '@/utils/format';
 
-// Mission briefing overlay — the run's front door. The game boots into
-// burn.status 'briefing' with the clock at 0: the world holds behind this
-// (fully blocking) overlay until BEGIN APPROACH commits the run. Fully
-// blocking matters: fs-ops advance on game time, so letting the player start
-// ops behind a paused clock would freeze progress bars at 0%.
+// Run start. The flight terminal is the intro for every level — its boot sequence (and the
+// EVOLVED beat on levels that unlock something) is the briefing — so this simply commits
+// the run: flip briefing → approaching, stamp the elapsed-time base, and start the clock at
+// ×1. The terminal mounts before this component, so its burn.status subscription catches
+// the transition and prints the boot lines.
 //
-// The dock's BRIEFING item reopens it mid-run for reference; reopening pauses
-// the clock (a modal over a live burn would be a trap) and the button becomes
-// CLOSE — the player resumes time from the header when ready.
-//
-// Damage is reported as SYMPTOMS, not numbers — integrity is hidden until
-// scanned (even the AI's own substrate), so the briefing points at memory
-// mode instead of spoiling the diagnosis.
-
+// (The full-screen briefing overlay markup in index.html is retained, unused, for higher
+// evolution tiers that may reintroduce a formal briefing later.)
 export function mountBriefing(store: Store<GameState>): () => void {
-  const root = document.getElementById('briefing');
-  const beginBtn = document.getElementById('briefingBegin');
-  const dockItem = document.querySelector<HTMLElement>('.dock-item[data-action="briefing"]');
+  const overlay = document.getElementById('briefing');
+  if (overlay) overlay.hidden = true;
 
-  // Level 1 "kernel" (no graphical windows unlocked): skip the modal briefing entirely and
-  // begin immediately — the terminal's own boot sequence is the intro. The terminal is
-  // mounted before this component, so its status subscription catches the transition.
-  if (store.getState().level.windows.length === 0) {
-    if (store.getState().burn.status === 'briefing') {
-      store.update((d) => {
-        d.burn.status = 'approaching';
-        d.burn.startedTSec = d.clock.tSec;
-        d.clock.speedTarget = 1;
-        d.clock.speed = 1;
-      });
-    }
-    if (root) root.hidden = true;
-    return () => {};
+  if (store.getState().burn.status === 'briefing') {
+    store.update((d) => {
+      d.burn.status = 'approaching';
+      d.burn.startedTSec = d.clock.tSec;
+      d.clock.speedTarget = 1;
+      d.clock.speed = 1;
+    });
   }
 
-  if (!root || !beginBtn) {
-    // The briefing is the ONLY writer of status 'approaching' — if its markup
-    // is missing, holding the world would soft-lock the whole game. Fail open:
-    // behave like the pre-briefing boot and start the run immediately.
-    if (store.getState().burn.status === 'briefing') {
-      store.update((d) => {
-        d.burn.status = 'approaching';
-        d.burn.startedTSec = d.clock.tSec;
-        d.clock.speedTarget = 1;
-        d.clock.speed = 1;
-      });
-    }
-    return () => {};
-  }
-
-  // Dynamic copy from mission/level state (band expressed as altitude, matching
-  // the NAV PLOT's peri/apo readouts).
-  const state = store.getState();
-  const { mission } = state;
-  const planet = state.level.planet;
-  const fill = (id: string, text: string): void => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
-  };
-  fill('briefTransmission', `TRANSMISSION #${String(mission.transmissionNum).padStart(3, '0')} · ${mission.unitId} → ${mission.shipId}`);
-  fill('briefDestination', `${mission.destination} · ${mission.sector} · ${mission.distanceLy} LY FROM EARTH`);
-  fill('briefSouls', `${mission.souls.toLocaleString('en-US')} souls in stasis`);
-  fill('briefBand', `${fmtKm(planet.rMin - planet.R)} – ${fmtKm(planet.rMax - planet.R)} altitude`);
-
-  function paintDockMark(open: boolean): void {
-    if (dockItem) setDockItemOpen(dockItem, open);
-  }
-
-  function show(): void {
-    const briefing = store.getState().burn.status === 'briefing';
-    if (!briefing) {
-      // Reopened mid-run: hold the clock so nothing burns behind the modal.
-      store.update((d) => { d.clock.speedTarget = 0; d.clock.speed = 0; });
-    }
-    beginBtn!.textContent = briefing ? '▶ BEGIN APPROACH' : '✕ CLOSE — CLOCK HELD';
-    root!.hidden = false;
-    paintDockMark(true);
-  }
-
-  function hide(): void {
-    root!.hidden = true;
-    paintDockMark(false);
-  }
-
-  const onBegin = (): void => {
-    if (store.getState().burn.status === 'briefing') {
-      store.update((d) => {
-        d.burn.status = 'approaching';
-        d.burn.startedTSec = d.clock.tSec;   // the debrief's elapsed-time base
-        d.clock.speedTarget = 1;
-        d.clock.speed = 1;
-      });
-    }
-    hide();
-  };
-  beginBtn.addEventListener('click', onBegin);
-
-  const onDock = (): void => { if (root.hidden) show(); else hide(); };
-  dockItem?.addEventListener('click', onDock);
-
-  // Boot state: the overlay is up whenever the run hasn't been committed yet.
-  if (store.getState().burn.status === 'briefing') show();
-  else hide();
-
-  return () => {
-    beginBtn.removeEventListener('click', onBegin);
-    dockItem?.removeEventListener('click', onDock);
-  };
+  return () => {};
 }

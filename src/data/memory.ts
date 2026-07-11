@@ -96,9 +96,3 @@ export function createInitialMemory(health: Record<string, number> = {}): Segmen
   }
   return mem;
 }
-
-// Flight-critical files start healthy at level 1 (the terminal "kernel" tutorial): full
-// delivered thrust and crisp sensors, so the single trim burn is trivial. The authored
-// transit damage (Engine I/O 38%, Thrust Controller 22%, Sensor Interp 78%) returns at
-// higher evolution tiers.
-export const LEVEL1_HEALTH: Record<string, number> = { engine: 100, thrust: 100, sensint: 100 };

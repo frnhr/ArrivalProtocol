@@ -32,5 +32,28 @@ export function mountEvolution(store: Store<GameState>): () => void {
   const crumb = document.getElementById('phaseCrumb');
   if (crumb) crumb.textContent = level.phaseLabel;
 
-  return () => {};
+  // Reflect the current ship in the header crumbs (the AI moves between ships each level).
+  const mission = store.getState().mission;
+  const unitCrumb = document.getElementById('unitCrumb');
+  if (unitCrumb) unitCrumb.textContent = mission.unitId;
+  const shipCrumb = document.getElementById('shipCrumb');
+  if (shipCrumb) shipCrumb.textContent = mission.shipId;
+
+  // EVOLVED beat: a transient toast when this level unlocked a capability. The terminal
+  // boot also announces it; the toast is the peripheral flash so it reads even if the
+  // player isn't watching the log.
+  let toastTimer: ReturnType<typeof setTimeout> | null = null;
+  if (level.evolvedNote) {
+    const toast = document.createElement('div');
+    toast.className = 'evolved-toast';
+    toast.textContent = `▲ EVOLVED — ${level.evolvedNote}`;
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+    toastTimer = setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 600);
+    }, 5200);
+  }
+
+  return () => { if (toastTimer) clearTimeout(toastTimer); };
 }

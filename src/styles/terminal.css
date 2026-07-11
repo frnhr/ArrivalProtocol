@@ -20,10 +20,12 @@ body:not(.mode-memory) .terminal { display: flex; }
 .tools-view.terminal-primary .terminal {
   top: var(--sp-8); left: var(--sp-8); right: var(--sp-8); bottom: var(--sp-8);
 }
-/* Once a window is unlocked, the terminal sits along the left as the control spine. */
+/* Once a window is unlocked, the terminal sits along the left as the control spine and the
+   graphical panels sit to its right. */
 .tools-view:not(.terminal-primary) .terminal {
-  top: var(--sp-8); left: var(--sp-8); bottom: var(--sp-8); width: 460px;
+  top: var(--sp-8); left: var(--sp-8); bottom: var(--sp-8); width: 440px;
 }
+.tools-view:not(.terminal-primary) .navplot-win { left: 500px; top: var(--sp-8); }
 
 .terminal-head {
   display: flex; align-items: center; gap: var(--sp-3);
@@ -74,6 +76,27 @@ body:not(.mode-memory) .terminal { display: flex; }
   padding: 0;
 }
 .term-input::placeholder { color: var(--accent-dim); opacity: 0.75; }
+
+/* EVOLVED beat — a transient toast when a level unlocks a new capability. */
+.evolved-toast {
+  position: fixed;
+  top: 64px; left: 50%;
+  transform: translate(-50%, -12px);
+  z-index: 220;
+  padding: var(--sp-4) var(--sp-7);
+  background: var(--window);
+  border: 1px solid var(--good);
+  color: var(--good);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  box-shadow: 0 0 24px rgba(178,255,89,0.35);
+  opacity: 0;
+  transition: opacity var(--t-slow) ease, transform var(--t-slow) ease;
+  pointer-events: none;
+}
+.evolved-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* Mobile: terminal fills the tools area under the header. */
 @media (max-width: 720px) {

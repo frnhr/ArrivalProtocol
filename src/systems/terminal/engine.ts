@@ -73,10 +73,15 @@ function startBurnUntilBand(store: Store<GameState>): void {
   });
 }
 
-// `warp peri`: fast-forward, then STEP the compression down as periapsis nears so a single
-// tick can never tunnel past the burn window (at ×10000 a tick is ~500 game-s). Stages:
-// ×10000 → ×100 (under 1 h out) → ×1 (under ~40 s out), then hand control back for the burn.
+// `warp peri`: fast-forward to periapsis, then STEP the compression down so a single tick
+// can't tunnel past the burn window. Both the initial jump and the step-downs SNAP the
+// effective clock speed (not the glide) — otherwise the eased speed lags the target and the
+// ship overshoots periapsis while `speed` is still ramping down. Stages: ×10000 → ×100
+// (under ~700 s out, > one ×10000 tick) → ×1 (under ~25 s out), then hand back for the burn.
 const WARP_PERI_FACTOR = 10000;
+function snapWarp(store: Store<GameState>, target: 1 | 100 | 10000): void {
+  store.update((d) => { d.clock.speedTarget = target; d.clock.speed = target; });
+}
 function startWarpPeri(store: Store<GameState>): void {
   stopWarpWatch();
   warpWatch = onGameTick(() => {
@@ -84,16 +89,9 @@ function startWarpPeri(store: Store<GameState>): void {
     if (s.burn.status !== 'approaching') { stopWarpWatch(); return; }
     const etaS = s.orbit.tToPeriHrs * 3600;
     if (!Number.isFinite(etaS)) return;
-    const cur = s.clock.speedTarget;
-    const target = etaS < 40 ? 1 : etaS < 3600 ? 100 : cur;
-    if (target === cur) return;
-    store.update((d) => {
-      d.clock.speedTarget = target as GameState['clock']['speedTarget'];
-      d.clock.speed = Math.max(1, d.clock.speed);
-    });
-    if (target === 100) {
-      emit([os('  TIME ▸ nearing periapsis — easing to ×100')]);
-    } else if (target === 1) {
+    const cur = s.clock.speed;
+    if (etaS < 25 && cur > 1) {
+      snapWarp(store, 1);
       emit([
         os('  TIME ▸ periapsis approaching — dropping to ×1'),
         aux('✦ aux: Here we are. Burn when ready — I\'d give it everything. The orbit ' +
@@ -101,6 +99,9 @@ function startWarpPeri(store: Store<GameState>): void {
         sys('  next ▸ burn 100 until band'),
       ]);
       stopWarpWatch();
+    } else if (etaS < 700 && cur > 100) {
+      snapWarp(store, 100);
+      emit([os('  TIME ▸ nearing periapsis — easing to ×100')]);
     }
   });
 }
@@ -251,7 +252,7 @@ const COMMANDS: Command[] = [
     handler: (store, args) => {
       const a = (args[0] ?? '').toLowerCase();
       if (a === 'peri' || a === 'periapsis' || a === '') {
-        store.update((d) => { d.clock.speedTarget = WARP_PERI_FACTOR; d.clock.speed = Math.max(1, d.clock.speed); });
+        snapWarp(store, WARP_PERI_FACTOR);   // snap up so the fast-forward is immediate
         startWarpPeri(store);
         return [
           os(`  TIME ▸ ×${WARP_PERI_FACTOR.toLocaleString('en-US')}  → holding until periapsis, then ×1`),
@@ -320,12 +321,23 @@ export function dispatch(store: Store<GameState>, raw: string): TermLine[] {
   return [echo, ...cmd.handler(store, tokens.slice(1))];
 }
 
-// Boot banner + auto-status, printed when the run goes live.
+// Boot banner + auto-status, printed when the run goes live. On a level that just unlocked
+// something (evolvedNote), the boot leads with the EVOLVED beat.
 export function bootLines(store: Store<GameState>): TermLine[] {
-  const m = store.getState().mission;
+  const s = store.getState();
+  const m = s.mission;
+  const evolved = s.level.evolvedNote
+    ? [
+        good(`  ▲ EVOLVED — ${s.level.evolvedNote}`),
+        aux('✦ aux: New capability online. I can show you more now.'),
+        sys('  ───────────────────────────────────────────────────'),
+      ]
+    : [];
   return [
+    ...evolved,
     sys('  ARRIVAL PROTOCOL — flight terminal'),
-    sys(`  ${m.unitId} online. ${m.souls.toLocaleString('en-US')} souls in stasis. Approach authority: you.`),
+    sys(`  ${m.unitId} · ${m.shipId} · transmission #${String(m.transmissionNum).padStart(3, '0')}`),
+    sys(`  ${m.souls.toLocaleString('en-US')} souls in stasis. Approach authority: you.`),
     sys('  type  help  · tab completes · ↑ recalls'),
     os('  linking sensors................ ok'),
     os('  flight-assist [aux] ........... loaded'),
