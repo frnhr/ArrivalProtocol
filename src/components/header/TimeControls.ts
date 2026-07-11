@@ -1,14 +1,21 @@
 import type { Store } from '@state/store';
-import type { GameState, TimeSpeed } from '@state/schema';
+import type { GameState } from '@state/schema';
+import { REAL_TIME_SPEED, MAX_SPEED_TARGET } from '@state/schema';
 import { onGameTick } from '@systems/clock';
 
-// The header buttons in order: pause, x1, x100, x10K, x1M, x100M. Each is a TARGET the
-// effective multiplier (clock.speed) eases toward — steps of ×100 span real-time fine
-// control up to skipping the long cruise. Single click = glide toward the value (the
-// ramp lives in systems/clock.ts); double click = snap to it immediately.
-const SPEEDS: readonly TimeSpeed[] = [0, 1, 100, 10000, 1000000, 100000000];
+// Header time controls: pause ❚❚ · REAL TIME · ×10 · live readout · ÷10.
+//
+// Everything drives clock.speedTarget (where time is heading); the effective
+// clock.speed eases toward it in log-space (the glide lives in systems/clock.ts).
+//   • ×10 / ÷10 step the TARGET by one decade and let the speed glide — pressing
+//     ×10 twice always lands on ×100, regardless of where the glide currently sits.
+//   • REAL TIME is the one control that SNAPS: it drops straight to ×1, no glide
+//     (the player wants to slow down *now*, e.g. approaching periapsis).
+//   • Pause freezes at once and remembers the multiplier to restore on resume.
+// Bounds: ÷10 floors at REAL_TIME_SPEED (×1), ×10 caps at MAX_SPEED_TARGET (×10M);
+// the end button disables at its limit.
 
-// Compact readout of the live effective multiplier (×1, ×42.3, ×10K, ×100M …). Paused
+// Compact readout of the live effective multiplier (×1, ×42.3, ×10K, ×10M …). Paused
 // shows the pause glyph. Kept terse — it lives in the cramped header strip.
 function formatMult(eff: number): string {
   if (eff <= 0) return '❚❚';
@@ -23,42 +30,78 @@ function formatMult(eff: number): string {
 }
 
 export function mountTimeControls(store: Store<GameState>): () => void {
-  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('#speed .speed-btn'));
-  if (buttons.length === 0) return () => {};
-
+  const pauseBtn = document.getElementById('speedPause') as HTMLButtonElement | null;
+  const realBtn = document.getElementById('speedReal') as HTMLButtonElement | null;
+  const upBtn = document.getElementById('speedUp') as HTMLButtonElement | null;
+  const downBtn = document.getElementById('speedDown') as HTMLButtonElement | null;
   const readout = document.getElementById('speedMult');
-  const handlers: Array<[HTMLButtonElement, string, () => void]> = [];
+  if (!pauseBtn || !realBtn || !upBtn || !downBtn) return () => {};
 
-  buttons.forEach((btn, idx) => {
-    const speed = SPEEDS[idx];
-    if (speed === undefined) return;
+  // The multiplier to restore when un-pausing — the target captured the moment we froze.
+  let resumeTarget = Math.max(REAL_TIME_SPEED, store.getState().clock.speedTarget || REAL_TIME_SPEED);
 
-    // Single click picks the target. Pausing halts at once (a glide-to-zero is
-    // meaningless); resuming from a stop floors the effective speed at ×1 so the
-    // log glide has a positive value to ramp up from.
-    const onClick = (): void => {
-      store.update((d) => {
-        d.clock.speedTarget = speed;
-        if (speed === 0) d.clock.speed = 0;
-        else if (d.clock.speed < 1) d.clock.speed = 1;
-      });
-      paintReadout();
-    };
-    // Double click snaps straight to the value, skipping the glide.
-    const onDbl = (): void => {
-      store.update((d) => { d.clock.speedTarget = speed; d.clock.speed = speed; });
-      paintReadout();
-    };
-    btn.addEventListener('click', onClick);
-    btn.addEventListener('dblclick', onDbl);
-    handlers.push([btn, 'click', onClick], [btn, 'dblclick', onDbl]);
-  });
+  // Floor the effective speed at ×1 on (re)start so the log glide has a positive value
+  // to ramp up from — a halted clock (speed 0) has no defined log.
+  const floorForGlide = (clock: GameState['clock']): void => {
+    if (clock.speed < 1) clock.speed = 1;
+  };
 
-  // The active button tracks the TARGET (where time is heading), so the highlight
-  // settles the instant you choose rather than crawling with the glide.
-  function paintActive(target: TimeSpeed): void {
-    const activeIdx = SPEEDS.indexOf(target);
-    buttons.forEach((b, i) => b.classList.toggle('active', i === activeIdx));
+  // Pause toggles. Freeze: remember where we were, halt immediately. Resume: restore
+  // the remembered target and let the speed glide back up.
+  const onPause = (): void => {
+    store.update((d) => {
+      if (d.clock.speedTarget === 0) {
+        d.clock.speedTarget = resumeTarget;
+        floorForGlide(d.clock);
+      } else {
+        resumeTarget = d.clock.speedTarget;
+        d.clock.speedTarget = 0;
+        d.clock.speed = 0;
+      }
+    });
+    paintReadout();
+  };
+
+  // REAL TIME snaps: target AND effective speed jump straight to ×1, skipping the glide.
+  const onReal = (): void => {
+    store.update((d) => { d.clock.speedTarget = REAL_TIME_SPEED; d.clock.speed = REAL_TIME_SPEED; });
+    paintReadout();
+  };
+
+  // ×10: step the target up one decade and glide toward it. From a pause the base is
+  // ×1, so a single press resumes at ×10. Capped at the ceiling.
+  const onUp = (): void => {
+    store.update((d) => {
+      const base = d.clock.speedTarget === 0 ? REAL_TIME_SPEED : d.clock.speedTarget;
+      d.clock.speedTarget = Math.min(MAX_SPEED_TARGET, base * 10);
+      floorForGlide(d.clock);
+    });
+    paintReadout();
+  };
+
+  // ÷10: step the target down one decade and glide toward it. Floored at ×1; a no-op
+  // at the floor or while paused (the button is also disabled in those states).
+  const onDown = (): void => {
+    store.update((d) => {
+      if (d.clock.speedTarget <= REAL_TIME_SPEED) return;
+      d.clock.speedTarget = Math.max(REAL_TIME_SPEED, d.clock.speedTarget / 10);
+    });
+    paintReadout();
+  };
+
+  pauseBtn.addEventListener('click', onPause);
+  realBtn.addEventListener('click', onReal);
+  upBtn.addEventListener('click', onUp);
+  downBtn.addEventListener('click', onDown);
+
+  // Highlight the active state (pause or real time) and disable the steppers at their
+  // limits. Tracks the TARGET, so the UI settles the instant you choose rather than
+  // crawling with the glide.
+  function paintControls(target: number): void {
+    pauseBtn!.classList.toggle('active', target === 0);
+    realBtn!.classList.toggle('active', target === REAL_TIME_SPEED);
+    upBtn!.disabled = target >= MAX_SPEED_TARGET;
+    downBtn!.disabled = target <= REAL_TIME_SPEED;   // covers both real time and paused (0)
   }
 
   // Live multiplier readout. clock.speed is mutated at 20Hz (no store fanout) so we
@@ -71,16 +114,19 @@ export function mountTimeControls(store: Store<GameState>): () => void {
     if (txt !== lastReadout) { readout.textContent = txt; lastReadout = txt; }
   }
 
-  paintActive(store.getState().clock.speedTarget);
+  paintControls(store.getState().clock.speedTarget);
   paintReadout();
   const unsub = store.subscribe((s) => s.clock.speedTarget, (target) => {
-    paintActive(target);
+    paintControls(target);
     paintReadout();   // catches terminal stops (target→0) that the tick won't, since ticks halt
   });
   const offTick = onGameTick(paintReadout);
 
   return () => {
-    handlers.forEach(([btn, type, handler]) => btn.removeEventListener(type, handler));
+    pauseBtn.removeEventListener('click', onPause);
+    realBtn.removeEventListener('click', onReal);
+    upBtn.removeEventListener('click', onUp);
+    downBtn.removeEventListener('click', onDown);
     unsub();
     offTick();
   };

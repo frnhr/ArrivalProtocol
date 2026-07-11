@@ -1,5 +1,5 @@
 import type { Store } from '@state/store';
-import type { GameState, TimeSpeed } from '@state/schema';
+import type { GameState } from '@state/schema';
 import { selectCorruption } from '@state/selectors';
 
 const GLITCH_CHARS = '█▓▒░@#$%&*?/\\|<>=+-x:;.,';
@@ -38,18 +38,13 @@ function buildBar(angled: boolean): HTMLElement {
   return bar;
 }
 
-// Maps in-game speed to a decorative animation tempo. Pause halts; higher
-// speeds bump the glitch animation rate subtly — not a literal scaling, just
-// enough that the UI "feels" faster when game time is racing.
-function speedToTempo(speed: TimeSpeed): number {
-  switch (speed) {
-    case 0:         return 1;     // value irrelevant; play-state is paused
-    case 1:         return 1;
-    case 100:       return 1.4;
-    case 10000:     return 1.8;
-    case 1000000:   return 2.3;
-    case 100000000: return 2.6;
-  }
+// Maps in-game speed to a decorative animation tempo. Pause / real time sit at 1;
+// higher speeds bump the glitch animation rate subtly — not a literal scaling, just
+// enough that the UI "feels" faster when game time is racing. Continuous in log10 so
+// every ×10 step (×1…×10M) nudges it a little (~+0.2/decade → ~2.4 at the ×10M cap).
+function speedToTempo(speed: number): number {
+  if (speed <= 1) return 1;
+  return 1 + 0.2 * Math.log10(speed);
 }
 
 // Snap-jerk the whole page through 4 random offsets (5..15px) over ~500ms.
@@ -151,7 +146,7 @@ export function mountGlitchDriver(store: Store<GameState>): () => void {
     }
   }
 
-  function applyClock(speed: TimeSpeed): void {
+  function applyClock(speed: number): void {
     document.documentElement.style.setProperty(
       '--glitch-play-state',
       speed === 0 ? 'paused' : 'running',

@@ -59,19 +59,6 @@ export function deriveOrbit(el: OrbitElements): OrbitDerived {
   return { p, a, ra, isClosed };
 }
 
-// World radius the plot must contain. K keeps the hyperbola's periapsis region
-// readable while its branches run off-frame, instead of the asymptotes
-// dominating the fit. KA does the same for a near-parabolic *capture*: an
-// ellipse with e→1 has an enormous apoapsis that would shrink the planet to a
-// speck, so cap its contribution at KA·rp. sampleConic then clips the rest to a
-// clean open arc near periapsis (closed:false) rather than a chord.
-const KA = 8;
-export function viewMaxRadius(el: OrbitElements, planet: PlanetParams, K = 4): number {
-  const { ra, isClosed } = deriveOrbit(el);
-  const orbitR = isClosed && ra !== null ? Math.min(ra, KA * el.rp) : K * el.rp;
-  return Math.max(planet.R, planet.rAtm, planet.rMax, orbitR);
-}
-
 // Sample r(φ) = p / (1 + e·cos φ), φ = θ − ω, into world points. For e ≥ 1 the
 // branch is open and only valid where the denominator stays positive; we trim
 // just inside the asymptotes and clamp at viewMaxR so the arc doesn't run to ∞.
