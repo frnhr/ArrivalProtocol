@@ -2,7 +2,7 @@ import type { Store } from '@state/store';
 import type { GameState, BurnStatus } from '@state/schema';
 import { fmtKm } from '@/utils/format';
 import { deriveOrbit, elementsFromState, inTargetBand } from '@/types/orbit';
-import { advanceLevel } from '@data/levels';
+import { advanceLevel, isLastLevel } from '@data/levels';
 
 // Statuses with no banner: pre-flight hold and the live run.
 type SilentStatus = 'briefing' | 'approaching';
@@ -76,8 +76,13 @@ export function mountBurnResult(store: Store<GameState>): () => void {
     root!.dataset.outcome = status;
     root!.hidden = false;
     // A successful insertion evolves the AI onward: advance the level pointer so the
-    // RETRANSMIT reload seeds the next ship. Any other outcome retries the same level.
-    if (status === 'inserted') { advanceLevel(); retryEl!.textContent = '↻ TRANSMIT ONWARD'; }
+    // RETRANSMIT reload seeds the next ship. On the final charted ship there's nowhere
+    // further to go — replay it rather than mislabel a dead-end as "onward". Any non-success
+    // outcome retries the same level.
+    if (status === 'inserted') {
+      if (isLastLevel()) { retryEl!.textContent = '↻ REPLAY — all charted ships secured'; }
+      else { advanceLevel(); retryEl!.textContent = '↻ TRANSMIT ONWARD'; }
+    }
   }
 
   const onRetry = (): void => window.location.reload();

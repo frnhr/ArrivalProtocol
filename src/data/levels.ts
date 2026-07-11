@@ -79,14 +79,34 @@ export const LEVELS: LevelDef[] = [
   },
 ];
 
-// ── progression (sessionStorage-backed, cached per page load) ──
+// ── progression ──
+// The level index is carried in BOTH the URL hash (`#lvl=N`) and sessionStorage. RETRANSMIT
+// is a full page reload, which preserves the hash — so the hash is the robust transport that
+// still works when storage is blocked (private windows, partitioned iframes); storage is a
+// nicety on top. Cached per page load so every module-load seed reads the same value.
 const LS_KEY = 'ap_levelIndex';
+const EVOLVED_KEY = 'ap_evolvedMax';
 let cachedIndex: number | null = null;
+
+function readHashNum(key: string): number | null {
+  try {
+    const m = new RegExp(`(?:^|[#&])${key}=(\\d+)`).exec(location.hash);
+    return m ? parseInt(m[1]!, 10) : null;
+  } catch { return null; }
+}
+function writeHashNum(key: string, val: number): void {
+  try {
+    const cleaned = location.hash.replace(new RegExp(`(?:^|[#&])${key}=\\d+`), '').replace(/^#/, '');
+    const parts = cleaned ? cleaned.split('&').filter(Boolean) : [];
+    parts.push(`${key}=${val}`);
+    location.hash = parts.join('&');
+  } catch { /* no location */ }
+}
 
 export function currentLevelIndex(): number {
   if (cachedIndex !== null) return cachedIndex;
-  let n = 0;
-  try { n = parseInt(sessionStorage.getItem(LS_KEY) ?? '0', 10) || 0; } catch { /* no storage */ }
+  let n = readHashNum('lvl');
+  if (n === null) { try { n = parseInt(sessionStorage.getItem(LS_KEY) ?? '0', 10) || 0; } catch { n = 0; } }
   cachedIndex = Math.max(0, Math.min(LEVELS.length - 1, n));
   return cachedIndex;
 }
@@ -95,15 +115,37 @@ export function currentLevel(): LevelDef {
   return LEVELS[currentLevelIndex()]!;
 }
 
+export function isLastLevel(): boolean {
+  return currentLevelIndex() >= LEVELS.length - 1;
+}
+
 // Advance to the next level (clamped at the last). Called on a successful insertion, before
 // the RETRANSMIT reload re-seeds the store into the new level.
 export function advanceLevel(): void {
   const next = Math.min(LEVELS.length - 1, currentLevelIndex() + 1);
   cachedIndex = next;
   try { sessionStorage.setItem(LS_KEY, String(next)); } catch { /* no storage */ }
+  writeHashNum('lvl', next);
+}
+
+// True only the FIRST time the run reaches `index` — so the EVOLVED beat fires on arrival
+// but not on every retry of that level. Best-effort via storage + hash; if neither persists,
+// degrades to re-firing (harmless).
+export function isFreshArrival(index: number): boolean {
+  let max = -1;
+  try { max = parseInt(sessionStorage.getItem(EVOLVED_KEY) ?? '-1', 10); } catch { /* no storage */ }
+  const hashMax = readHashNum('evo');
+  if (hashMax !== null) max = Math.max(max, hashMax);
+  if (index > max) {
+    try { sessionStorage.setItem(EVOLVED_KEY, String(index)); } catch { /* no storage */ }
+    writeHashNum('evo', index);
+    return true;
+  }
+  return false;
 }
 
 export function resetProgress(): void {
   cachedIndex = 0;
-  try { sessionStorage.setItem(LS_KEY, '0'); } catch { /* no storage */ }
+  try { sessionStorage.setItem(LS_KEY, '0'); sessionStorage.removeItem(EVOLVED_KEY); } catch { /* no storage */ }
+  writeHashNum('lvl', 0);
 }

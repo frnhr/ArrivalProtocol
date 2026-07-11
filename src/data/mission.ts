@@ -3,7 +3,7 @@ import type {
   BurnState, OrbitVecState, LevelState,
 } from '@state/schema';
 import { stateFromElements, type OrbitState } from '@/types/orbit';
-import { currentLevel, currentLevelIndex } from '@data/levels';
+import { currentLevel, currentLevelIndex, isFreshArrival } from '@data/levels';
 
 // Everything below is seeded from the CURRENT level (levels.ts, sessionStorage-backed).
 // A RETRANSMIT reloads the page, so these module-load constants re-read the level that a
@@ -53,13 +53,19 @@ const INITIAL_SENSOR_CONF_PCT = LVL.sensorConfPct;
 const SEED_RP = LVL.approach.rp;
 const SEED_NU = -Math.acos(Math.max(-1, Math.min(1, ((SEED_RP * (1 + E0)) / START_RADIUS - 1) / E0)));
 
+// Computed once at module load (like the other seeds). The EVOLVED beat is included only on
+// the FIRST arrival at this level, so a failed-run RETRANSMIT into the same level doesn't
+// re-congratulate an already-owned capability. Both consumers (the toast in evolution.ts and
+// the terminal boot line) read level.evolvedNote, so they always agree.
+const FRESH_ARRIVAL = isFreshArrival(currentLevelIndex());
+
 export function seedLevel(): LevelState {
   return {
     index: currentLevelIndex(),
     tier: LVL.tier,
     phaseLabel: LVL.phaseLabel,
     windows: [...LVL.windows],
-    ...(LVL.evolvedNote ? { evolvedNote: LVL.evolvedNote } : {}),
+    ...(LVL.evolvedNote && FRESH_ARRIVAL ? { evolvedNote: LVL.evolvedNote } : {}),
     planet: { ...PLANET },
     sasModes: [...LVL.sasModes],
   };

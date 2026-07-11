@@ -39,21 +39,28 @@ export function mountEvolution(store: Store<GameState>): () => void {
   const shipCrumb = document.getElementById('shipCrumb');
   if (shipCrumb) shipCrumb.textContent = mission.shipId;
 
-  // EVOLVED beat: a transient toast when this level unlocked a capability. The terminal
-  // boot also announces it; the toast is the peripheral flash so it reads even if the
-  // player isn't watching the log.
-  let toastTimer: ReturnType<typeof setTimeout> | null = null;
+  // EVOLVED beat: a transient toast when this level unlocked a capability (only on first
+  // arrival — level.evolvedNote is gated in seedLevel). The terminal boot also announces it;
+  // the toast is the peripheral flash so it reads even if the player isn't watching the log.
+  let toastNode: HTMLElement | null = null;
+  let fadeTimer: ReturnType<typeof setTimeout> | null = null;
+  let removeTimer: ReturnType<typeof setTimeout> | null = null;
   if (level.evolvedNote) {
-    const toast = document.createElement('div');
-    toast.className = 'evolved-toast';
-    toast.textContent = `▲ EVOLVED — ${level.evolvedNote}`;
-    document.body.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add('show'));
-    toastTimer = setTimeout(() => {
-      toast.classList.remove('show');
-      setTimeout(() => toast.remove(), 600);
+    toastNode = document.createElement('div');
+    toastNode.className = 'evolved-toast';
+    toastNode.textContent = `▲ EVOLVED — ${level.evolvedNote}`;
+    document.body.appendChild(toastNode);
+    requestAnimationFrame(() => toastNode?.classList.add('show'));
+    fadeTimer = setTimeout(() => {
+      toastNode?.classList.remove('show');
+      removeTimer = setTimeout(() => { toastNode?.remove(); toastNode = null; }, 600);
     }, 5200);
   }
 
-  return () => { if (toastTimer) clearTimeout(toastTimer); };
+  return () => {
+    if (fadeTimer) clearTimeout(fadeTimer);
+    if (removeTimer) clearTimeout(removeTimer);
+    toastNode?.remove();
+    toastNode = null;
+  };
 }

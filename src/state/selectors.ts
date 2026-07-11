@@ -105,6 +105,9 @@ const FLIGHT_CRITICAL: ReadonlyArray<{ rootId: string; types: readonly SegmentTy
   { rootId: 'engine', types: ['tool'], label: 'Engine I/O — the throttle goes dead' },
   { rootId: 'thrust', types: ['ship', 'ship-backup'], label: 'Thrust Controller — the engine cannot fire' },
   { rootId: 'sensint', types: ['tool'], label: 'Sensor Interp — navigation falls to dead reckoning' },
+  // No backup ships for the assistant: deleting it leaves the terminal ~88% unreliable with
+  // nothing left to repair, so it must warn like the other unrecoverable deletions.
+  { rootId: 'termasst', types: ['tool'], label: 'Terminal Assistant — commands become badly unreliable' },
 ];
 
 // If deleting `seg` would remove the LAST live copy of a flight-critical

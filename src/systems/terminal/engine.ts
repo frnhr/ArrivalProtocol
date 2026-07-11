@@ -4,7 +4,7 @@ import { onGameTick } from '@systems/clock';
 import { evaluateInsertion } from '@systems/orbit-sim';
 import { elementsFromState, deriveOrbit, inTargetBand } from '@/types/orbit';
 import { fmtKm } from '@/utils/format';
-import { rollCommandError, garble, assistantIntegrity, type ErrFile, type ErrResult } from '@systems/terminal/errors';
+import { rollCommandError, garble, assistantIntegrity, HEALTHY_INTEGRITY, type ErrFile, type ErrResult } from '@systems/terminal/errors';
 
 // The flight terminal's command engine. Every command is a thin wrapper over the same
 // store fields the sim already reads (burn.thrustPct / burn.sasMode / clock.speedTarget /
@@ -57,16 +57,23 @@ function startBurnUntilBand(store: Store<GameState>): void {
       }
       lastBucket = bucket;
     }
-    if (evaluateInsertion(s.orbit, planet) === 'inserted') {
+    // Cut when inserted, OR as a safety when apoapsis has descended to/below the band bottom
+    // (further braking would push the orbit under the band — stop the runaway even if a
+    // large tick skipped the exact 'inserted' instant).
+    const overshoot = isClosed && ra !== null && ra <= planet.rMin;
+    if (evaluateInsertion(s.orbit, planet) === 'inserted' || overshoot) {
       store.update((d) => { d.burn.thrustPct = 0; });
       const a = elementsFromState(store.getState().orbit, planet.mu);
       const d = deriveOrbit(a);
+      const good2 = !overshoot;
       emit([
-        good('  ENGINE ▸ orbit closed — apoapsis in band — CUTTING THRUST'),
+        good2 ? good('  ENGINE ▸ orbit closed — apoapsis in band — CUTTING THRUST')
+          : warn('  ENGINE ▸ over-braked past the band — CUTTING THRUST'),
         os('  THRUST 0%'),
-        aux(`✦ aux: That's it. Periapsis ${fmtKm(a.rp - planet.R)}, apoapsis ` +
-          `${d.ra !== null ? fmtKm(d.ra - planet.R) : '—'} — whole orbit inside the band. ` +
-          `Commit when you're ready.`),
+        aux(`✦ aux: Periapsis ${fmtKm(a.rp - planet.R)}, apoapsis ` +
+          `${d.ra !== null ? fmtKm(d.ra - planet.R) : '—'}. ` +
+          (good2 ? 'Whole orbit inside the band. Commit when you\'re ready.'
+            : 'We went a touch far — commit, or nudge prograde to lift it back.')),
         sys('  next ▸ insert'),
       ]);
       stopBurnWatch();
@@ -83,26 +90,47 @@ const WARP_PERI_FACTOR = 10000;
 function snapWarp(store: Store<GameState>, target: 1 | 100 | 10000): void {
   store.update((d) => { d.clock.speedTarget = target; d.clock.speed = target; });
 }
+function emitAtPeri(): void {
+  emit([
+    os('  TIME ▸ periapsis approaching — dropping to ×1'),
+    aux('✦ aux: Here we are. Burn when ready — I\'d give it everything. The orbit ' +
+      'draws closed as you brake; I\'ll cut thrust the instant it\'s in the band.'),
+    sys('  next ▸ burn 100 until band'),
+  ]);
+}
 function startWarpPeri(store: Store<GameState>): void {
   stopWarpWatch();
-  warpWatch = onGameTick(() => {
+  warpWatch = onGameTick((dtGame) => {
     const s = store.getState();
     if (s.burn.status !== 'approaching') { stopWarpWatch(); return; }
     const etaS = s.orbit.tToPeriHrs * 3600;
-    if (!Number.isFinite(etaS)) return;
     const cur = s.clock.speed;
-    if (etaS < 25 && cur > 1) {
-      snapWarp(store, 1);
-      emit([
-        os('  TIME ▸ periapsis approaching — dropping to ×1'),
-        aux('✦ aux: Here we are. Burn when ready — I\'d give it everything. The orbit ' +
-          'draws closed as you brake; I\'ll cut thrust the instant it\'s in the band.'),
-        sys('  next ▸ burn 100 until band'),
-      ]);
+
+    // Receding (past periapsis / outbound): tToPeri is Infinity. We missed the burn point —
+    // hand control back at ×1 instead of escaping at high warp, and stop the watcher.
+    if (!Number.isFinite(etaS)) {
+      if (cur > 1) {
+        snapWarp(store, 1);
+        emit([
+          os('  TIME ▸ past periapsis — dropping to ×1'),
+          aux('✦ aux: We slipped past the low point. Burn retrograde to come back around, or commit from here.'),
+        ]);
+      }
       stopWarpWatch();
-    } else if (etaS < 700 && cur > 100) {
-      snapWarp(store, 100);
-      emit([os('  TIME ▸ nearing periapsis — easing to ×100')]);
+      return;
+    }
+
+    if (cur <= 1) {
+      if (etaS < 60) { emitAtPeri(); stopWarpWatch(); }   // already slow and close — hand off
+      return;
+    }
+    // Step the compression down so a single tick — however large it grows under jank or a
+    // backgrounded tab (dtGame can spike well past the nominal 500 game-s at ×10000) — can
+    // never leap past the burn window. Keep ≥ 3 ticks of margin, floored at 60 s.
+    const margin = Math.max(60, dtGame * 3);
+    if (etaS < margin) {
+      if (cur > 100) snapWarp(store, 100);
+      else { snapWarp(store, 1); emitAtPeri(); stopWarpWatch(); }
     }
   });
 }
@@ -188,13 +216,15 @@ const ENGINE: ErrFile = { rootId: 'engine', types: ['tool'] };
 const THRUST: ErrFile = { rootId: 'thrust', types: ['ship', 'ship-backup'] };
 const SENSINT: ErrFile = { rootId: 'sensint', types: ['tool'] };
 
-function pointDir(arg: string | undefined): SasMode | null {
-  const a = (arg ?? '').replace(/[-_]/g, '');
+// Accepts the whole argument string so spaced forms work ("point radial in") as well as
+// hyphenated ("radial-in") and short ("in") — everything is normalized to letters only.
+function pointDir(raw: string): SasMode | null {
+  const a = raw.toLowerCase().replace(/[^a-z]/g, '');
+  if (a === '' || a === 'hold') return 'hold';
   if (['retro', 'retrograde'].includes(a)) return 'retrograde';
   if (['pro', 'prograde'].includes(a)) return 'prograde';
   if (['radin', 'radialin', 'in'].includes(a)) return 'radial-in';
   if (['radout', 'radialout', 'out'].includes(a)) return 'radial-out';
-  if (a === '' || a === 'hold') return 'hold';
   return null;
 }
 
@@ -215,7 +245,7 @@ const COMMANDS: Command[] = [
     help: 'point <retro|pro|radial-in|radial-out|hold> — aim the ship',
     errFiles: () => [ENGINE],
     handler: (store, args) => {
-      const mode = pointDir(args[0]);
+      const mode = pointDir(args.join(' '));
       if (!mode) return [warn(`  can't aim "${args.join(' ')}". try: point retro`)];
       store.update((d) => {
         if (mode === 'hold') d.burn.holdTarget = d.burn.heading;
@@ -236,26 +266,37 @@ const COMMANDS: Command[] = [
     help: 'burn <0-100> [until band]  — fire main engine along heading (bare `burn` = 100 until band)',
     errFiles: () => [ENGINE, THRUST],
     handler: (store, args) => {
-      const nums = args.map((a) => a.replace('%', '')).filter((a) => /^\d+$/.test(a));
-      const pct = args.length === 0 ? 100 : Math.max(0, Math.min(100, parseInt(nums[0] ?? '100', 10)));
-      const untilBand = args.length === 0 || args.join(' ').includes('band');
-      if (pct === 0) { stopBurnWatch(); }
+      const flags = args.map((a) => a.toLowerCase());
+      const numTok = flags.find((a) => /^\d+%?$/.test(a));
+      const pct = args.length === 0 ? 100 : Math.max(0, Math.min(100, numTok ? parseInt(numTok.replace('%', ''), 10) : 100));
+      // Auto-cut is the DEFAULT (safe): every burn ends itself when the orbit lands in the
+      // band. Opt out with `free`/`manual`/`hold` for an uncut burn you end yourself.
+      const untilBand = pct > 0 && !flags.some((a) => ['free', 'manual', 'hold', 'nocut'].includes(a));
+      if (pct === 0) { stopBurnWatch(); store.update((d) => { d.burn.thrustPct = 0; }); return [os('  ENGINE ▸ THRUST 0% — cut')]; }
       store.update((d) => { d.burn.thrustPct = pct; });
-      if (pct === 0) return [os('  ENGINE ▸ THRUST 0% — cut')];
       const s = store.getState();
       const retro = s.burn.sasMode === 'retrograde';
       const lines: TermLine[] = [
         os(`  ENGINE ▸ THRUST ${pct}%${retro ? ' (retrograde)' : ''}  ▓▓▓▓▓▓▓▓`),
         os('  braking...'),
       ];
+      if (args.length > 0 && numTok === undefined && !flags.some((a) => ['free', 'manual', 'hold', 'nocut'].includes(a))) {
+        lines.push(warn('  ⚠ throttle not recognized — firing 100%'));
+      }
       if (!retro) lines.push(warn('  ⚠ not pointed retrograde — thrust may not brake. try: point retro'));
-      if (untilBand) startBurnUntilBand(store);
+      if (untilBand) {
+        // Auto-cut needs to catch band entry each tick — burn at ×1 so a single big tick
+        // can't leap through the band and over-brake into a crash.
+        if (s.clock.speed > 1) snapWarp(store, 1);
+        startBurnUntilBand(store);
+      }
       return lines;
     },
   },
   {
     names: ['stop', 'cut', 'cutoff'],
     help: 'stop              — cut the engine',
+    exempt: true,   // the brake pedal must always work, even with a corrupted assistant
     handler: (store) => {
       stopBurnWatch();
       store.update((d) => { d.burn.thrustPct = 0; });
@@ -267,7 +308,8 @@ const COMMANDS: Command[] = [
     help: 'warp <1|100|peri> — time compression (`warp peri` fast-forwards to periapsis)',
     handler: (store, args) => {
       const a = (args[0] ?? '').toLowerCase();
-      if (a === 'peri' || a === 'periapsis' || a === '') {
+      if (a === '') return [sys('  usage: warp <1|100|10000|peri>   (`warp peri` fast-forwards to periapsis)')];
+      if (a === 'peri' || a === 'periapsis') {
         snapWarp(store, WARP_PERI_FACTOR);   // snap up so the fast-forward is immediate
         startWarpPeri(store);
         return [
@@ -416,7 +458,7 @@ export function bootLines(store: Store<GameState>): TermLine[] {
     : [];
   // Degraded-assistant tell: telegraph the error mechanic up front so it reads as rising
   // tension, not a rug-pull. The deadzone (≥92%) keeps this silent on the pristine early ships.
-  const degraded = assistantIntegrity(s) < 90
+  const degraded = assistantIntegrity(s) <= HEALTHY_INTEGRITY
     ? [
         warn('  ⚠ carrier signal degraded — terminal parser integrity below spec'),
         aux('✦ aux: A wa%rning, Unit — my parser took damage in transit. If my responses ' +

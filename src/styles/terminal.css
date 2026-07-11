@@ -98,8 +98,14 @@ body:not(.mode-memory) .terminal { display: flex; }
 }
 .evolved-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* Mobile: terminal fills the tools area under the header. */
+/* Mobile: the terminal is the whole tools surface at every level. The graphical bridge
+   windows are desktop-only readouts here — hiding them avoids the terminal overlapping an
+   unlocked panel and sidesteps the tab-selection picking a locked window. You fly by
+   terminal on mobile regardless of tier. */
 @media (max-width: 720px) {
+  .tools-view .telemetry-win,
+  .tools-view .engine-win,
+  .tools-view .navplot-win { display: none !important; }
   .tools-view .terminal,
   .tools-view.terminal-primary .terminal {
     top: var(--sp-3); left: var(--sp-3); right: var(--sp-3); bottom: var(--sp-3); width: auto;
