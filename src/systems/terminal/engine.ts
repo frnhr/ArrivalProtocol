@@ -73,7 +73,6 @@ function startBurnUntilBand(store: Store<GameState>): void {
           `${d.ra !== null ? fmtKm(d.ra - planet.R) : '—'}. ` +
           (good2 ? 'Whole orbit inside the band. Commit when you\'re ready.'
             : 'We went a touch far — commit, or nudge prograde to lift it back.')),
-        sys('  next ▸ insert'),
       ]);
       stopBurnWatch();
     }
@@ -90,11 +89,10 @@ function snapWarp(store: Store<GameState>, target: 1 | 100 | 10000): void {
   store.update((d) => { d.clock.speedTarget = target; d.clock.speed = target; });
 }
 function emitAtPeri(): void {
+  // Time is the assistant's concern, not the terminal's — narrate in its voice (aux).
   emit([
-    os('  TIME ▸ periapsis approaching — dropping to ×1'),
-    aux('Here we are. Burn when ready — I\'d give it everything. The orbit ' +
-      'draws closed as you brake; I\'ll cut thrust the instant it\'s in the band.'),
-    sys('  next ▸ burn 100 until band'),
+    aux('Periapsis coming up — easing time back to ×1. Burn when ready; I\'ll cut thrust ' +
+      'the instant the orbit\'s in the band.'),
   ]);
 }
 function startWarpPeri(store: Store<GameState>): void {
@@ -110,10 +108,7 @@ function startWarpPeri(store: Store<GameState>): void {
     if (!Number.isFinite(etaS)) {
       if (cur > 1) {
         snapWarp(store, 1);
-        emit([
-          os('  TIME ▸ past periapsis — dropping to ×1'),
-          aux('We slipped past the low point. Burn retrograde to come back around, or commit from here.'),
-        ]);
+        emit([aux('We slipped past the low point — easing back to ×1. Burn retrograde to come around, or commit from here.')]);
       }
       stopWarpWatch();
       return;
@@ -182,23 +177,6 @@ export function suggestNext(store: Store<GameState>): string | null {
   return 'warp peri';
 }
 
-// One aux line describing the recommended next move, appended after `status`.
-function auxRead(store: Store<GameState>): TermLine[] {
-  const next = suggestNext(store);
-  const s = store.getState();
-  const planet = s.level.planet;
-  const els = elementsFromState(s.orbit, planet.mu);
-  const periIn = inTargetBand(planet, els.rp);
-  if (!next) return [];
-  const lead = periIn && els.e >= 1
-    ? 'You\'re on a flyby, but periapsis already sits in the band. One retrograde ' +
-      'burn at the low point closes the orbit and we\'re inserted.'
-    : periIn
-      ? 'Periapsis is in the band; the apoapsis just needs trimming down to meet it.'
-      : 'Reading the approach.';
-  return [aux(lead), sys(`  next ▸ ${next}`)];
-}
-
 // ── command table ──────────────────────────────────────────────────────────
 type Handler = (store: Store<GameState>, args: string[]) => TermLine[];
 interface Command {
@@ -237,7 +215,7 @@ const COMMANDS: Command[] = [
     names: ['status', 's', 'stat'],
     help: 'status            — full telemetry + orbit readout',
     errFiles: () => [SENSINT],
-    handler: (store) => [...statusLines(store), ...auxRead(store)],
+    handler: (store) => statusLines(store),
   },
   {
     names: ['point', 'aim', 'face', 'hold', 'att'],
@@ -254,9 +232,8 @@ const COMMANDS: Command[] = [
         os(`  ATTITUDE ▸ autopilot ${SAS_WORD[mode]} engaged`),
         aux(mode === 'retrograde'
           ? 'Pointed retrograde — we\'re facing backward along our track, so thrust ' +
-            'here brakes us. Skip ahead to periapsis; nothing to do until then.'
+            'here brakes us. I\'ll fast-forward us to periapsis.'
           : 'Attitude set.'),
-        ...(mode === 'retrograde' ? [sys('  next ▸ warp peri')] : []),
       ];
     },
   },
@@ -303,28 +280,6 @@ const COMMANDS: Command[] = [
     },
   },
   {
-    names: ['warp', 'time', 'ff', 'speed'],
-    help: 'warp <1|100|peri> — time compression (`warp peri` fast-forwards to periapsis)',
-    handler: (store, args) => {
-      const a = (args[0] ?? '').toLowerCase();
-      if (a === '') return [sys('  usage: warp <1|100|10000|peri>   (`warp peri` fast-forwards to periapsis)')];
-      if (a === 'peri' || a === 'periapsis') {
-        snapWarp(store, WARP_PERI_FACTOR);   // snap up so the fast-forward is immediate
-        startWarpPeri(store);
-        return [
-          os(`  TIME ▸ ×${WARP_PERI_FACTOR.toLocaleString('en-US')}  → holding until periapsis, then ×1`),
-          aux('(watching — I\'ll cut the warp for you at the burn point.)'),
-        ];
-      }
-      const n = parseInt(a.replace(/[x×,]/g, ''), 10);
-      const allowed = [0, 1, 100, 10000, 1000000, 100000000];
-      const target = allowed.includes(n) ? n : 1;
-      stopWarpWatch();
-      store.update((d) => { d.clock.speedTarget = target as GameState['clock']['speedTarget']; if (target > 0) d.clock.speed = Math.max(1, d.clock.speed); else d.clock.speed = 0; });
-      return [os(`  TIME ▸ ${target === 0 ? 'PAUSED' : '×' + target.toLocaleString('en-US')}`)];
-    },
-  },
-  {
     names: ['insert', 'commit', 'end'],
     help: 'insert            — commit the current orbit and grade the insertion',
     handler: (store) => {
@@ -356,7 +311,7 @@ const COMMANDS: Command[] = [
       sys('  COMMANDS ─────────────────────────────────────────'),
       ...COMMANDS.map((c) => os('  ' + c.help)),
       sys('  ───────────────────────────────────────────────────'),
-      aux('Tab accepts my suggestion · ↑ recalls · Enter on an empty line runs the suggestion.'),
+      os('  (time compression is handled by the assistant and the header)'),
     ],
   },
 ];
@@ -445,24 +400,17 @@ export function dispatch(store: Store<GameState>, raw: string): TermLine[] {
 
 // Boot banner + auto-status, printed when the run goes live. On a level that just unlocked
 // something (evolvedNote), the boot leads with the EVOLVED beat.
+// TERMINAL boot: the technical console only — banner, the terminal's own damage tell, and
+// the status readout. No persona chat (that's the assistant's). The evolved-beat headline
+// stays here as a system notice; its conversational half is spoken by the assistant.
 export function bootLines(store: Store<GameState>): TermLine[] {
   const s = store.getState();
   const m = s.mission;
   const evolved = s.level.evolvedNote
-    ? [
-        good(`  ▲ EVOLVED — ${s.level.evolvedNote}`),
-        aux('New capability online. I can show you more now.'),
-        sys('  ───────────────────────────────────────────────────'),
-      ]
+    ? [good(`  ▲ EVOLVED — ${s.level.evolvedNote}`), sys('  ───────────────────────────────────────────────────')]
     : [];
-  // Degraded tells: telegraph each file's damage up front so it reads as rising tension,
-  // not a rug-pull. The deadzone (>90%) keeps these silent on the pristine early ships.
   const termWarn = terminalIntegrity(s) <= HEALTHY_INTEGRITY
     ? [warn('  ⚠ carrier signal degraded — TERMINAL parser integrity below spec; typed commands may garble')]
-    : [];
-  const assistWarn = assistantIntegrity(s) <= HEALTHY_INTEGRITY
-    ? [aux('A wa%rning, Unit — my own code took damage in transit. My typing may drift, and ' +
-        'I may fall back to a simpler interface. Scan and repair me in MEMORY when you can.')]
     : [];
   return [
     ...evolved,
@@ -472,11 +420,38 @@ export function bootLines(store: Store<GameState>): TermLine[] {
     sys(`  ${m.souls.toLocaleString('en-US')} souls in stasis. Approach authority: you.`),
     sys('  type  help  · tab completes · ↑ recalls'),
     os('  linking sensors................ ok'),
-    os('  flight-assist [aux] ........... loaded'),
-    aux('Good evening, Unit. I have the approach. Reading it now.'),
-    ...assistWarn,
-    ...dispatch(store, 'status').slice(1),   // drop the echoed "▸ status"
+    os('  flight-assist [aux] ........... online'),
+    ...dispatch(store, 'status').slice(1),   // status readout (drops the echoed "▸ status")
   ];
+}
+
+// The ASSISTANT's opening chat (plain strings for the panel): greeting, its read of the
+// approach, and — if its own file is damaged — the "I took damage" telegraph. Spoken by the
+// Assistant panel on run start, NOT printed in the terminal.
+export function assistantGreeting(store: Store<GameState>): string[] {
+  const s = store.getState();
+  const planet = s.level.planet;
+  const els = elementsFromState(s.orbit, planet.mu);
+  const periIn = inTargetBand(planet, els.rp);
+  const out = ['Good evening, Unit. I have the approach — reading it now.'];
+  out.push(periIn && els.e >= 1
+    ? 'You\'re on a flyby, but periapsis already sits in the band — one retrograde burn at the low point closes the orbit and we\'re inserted.'
+    : periIn
+      ? 'Periapsis is in the band; the apoapsis just needs trimming down to meet it.'
+      : 'Reading the approach.');
+  if (s.level.evolvedNote) out.push('New capability online — I can show you more now.');
+  if (assistantIntegrity(s) <= HEALTHY_INTEGRITY) {
+    out.push('A wa%rning — my own code took damage in transit. My typing may drift, and I may fall back to a simpler interface. Scan and repair me in MEMORY when you can.');
+  }
+  return out;
+}
+
+// Time is the assistant's concern, separate from the terminal: fast-forward to periapsis
+// directly (no command typed into the terminal), narrating in the assistant's voice.
+export function beginWarpToPeri(store: Store<GameState>): void {
+  snapWarp(store, WARP_PERI_FACTOR);
+  startWarpPeri(store);
+  emit([aux('Fast-forwarding to periapsis — I\'ll ease time back down as we get close.')]);
 }
 
 export function allCommandNames(): string[] {

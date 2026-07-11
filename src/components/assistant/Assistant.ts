@@ -1,8 +1,8 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { onGameTick } from '@systems/clock';
-import { suggestNext } from '@systems/terminal/engine';
-import { setAuxSink, assistantType, logLine } from '@systems/terminal/bus';
+import { suggestNext, beginWarpToPeri, assistantGreeting } from '@systems/terminal/engine';
+import { setAuxSink, assistantType } from '@systems/terminal/bus';
 import { assistantIntegrity, mangleCommand, SAFE_MODE_INTEGRITY, HEALTHY_INTEGRITY } from '@systems/terminal/errors';
 
 // The Assistant panel — the aux persona's own interface, distinct from the Terminal it types
@@ -36,30 +36,33 @@ export function mountAssistant(store: Store<GameState>): () => void {
   let lastHeader = '';
 
   // The actions the assistant offers: its recommended next move (if any) + always-available
-  // Status and Abort.
+  // Status and Abort. `warp peri` is shown with a friendlier label since the assistant
+  // performs it directly (time is its concern, not a terminal command).
   function actions(): Action[] {
     const out: Action[] = [];
     const next = suggestNext(store);
-    if (next) out.push({ label: next, cmd: next });
+    if (next) out.push({ label: next.startsWith('warp') ? 'warp to periapsis' : next, cmd: next });
     out.push({ label: 'status', cmd: 'status' });
     out.push({ label: 'abort', cmd: 'abort' });
     return out;
   }
   const sigOf = (opts: Action[]): string => opts.map((a) => a.cmd).join('|');
 
-  // The assistant acts: it types the command for you, with mistakes proportional to its own
-  // corruption — EXCEPT safety commands, which it always types verbatim (the burn auto-cut
-  // and stop/abort are the recovery net and must never be corrupted).
+  // The assistant acts. Time-warp it does DIRECTLY (not a terminal command). Everything else
+  // it TYPES into the terminal, with mistakes proportional to its own corruption — EXCEPT
+  // safety commands (stop/abort), always typed verbatim so the recovery net can't corrupt.
   function act(cmd: string): void {
-    const text = SAFE_CMDS.has(cmd.trim().toLowerCase())
-      ? cmd
-      : mangleCommand(cmd, assistantIntegrity(store.getState())).text;
+    const c = cmd.trim().toLowerCase();
+    if (c.startsWith('warp')) { beginWarpToPeri(store); return; }
+    const text = SAFE_CMDS.has(c) ? cmd : mangleCommand(cmd, assistantIntegrity(store.getState())).text;
     assistantType(text);
   }
 
+  let lastAux = '';
   function addChat(text: string): void {
     chatLog.push(text);
     while (chatLog.length > CHAT_CAP) chatLog.shift();
+    lastAux = text;
     if (mode === 'gui') {
       const chat = body!.querySelector('.asst-chat');
       if (chat) {
@@ -70,8 +73,10 @@ export function mountAssistant(store: Store<GameState>): () => void {
         chat.scrollTop = chat.scrollHeight;
       }
     } else {
-      // SAFE MODE keeps no chat — forward guidance to the terminal log so it isn't lost.
-      logLine({ voice: 'aux', text: `✦ aux: ${text}` });
+      // SAFE MODE keeps only the latest line (limited history — a visible degradation),
+      // shown above the menu rather than a scrolling chat.
+      const last = body!.querySelector('.asst-last');
+      if (last) last.textContent = lastAux;
     }
   }
   setAuxSink((texts) => texts.forEach(addChat));
@@ -121,7 +126,10 @@ export function mountAssistant(store: Store<GameState>): () => void {
   function buildSafe(): void {
     body!.innerHTML =
       '<div class="asst-safe-note">chat unavailable · select with ↑ ↓ · Enter to run</div>' +
+      '<div class="asst-last"></div>' +
       '<div class="asst-menu" tabindex="0"></div>';
+    const last = body!.querySelector('.asst-last');
+    if (last) last.textContent = lastAux;   // keep the most recent guidance visible
     menuIdx = 0;
     lastSig = '';
     paintMenu();
@@ -180,16 +188,28 @@ export function mountAssistant(store: Store<GameState>): () => void {
     paintHeader(integ);
   }
 
+  // The assistant speaks its own opening on run start (greeting + read +, if damaged, its
+  // "I took damage" tell) — this is the persona, so it lives here, not in the terminal boot.
+  let greeted = false;
+  function greet(): void {
+    if (greeted || store.getState().burn.status !== 'approaching') return;
+    greeted = true;
+    for (const line of assistantGreeting(store)) addChat(line);
+  }
+  const unsubStatus = store.subscribe((s) => s.burn.status, greet);
+
   // Re-render on memory changes (repair flips the mode) and per tick (the recommended next
   // action changes as the orbit evolves). refreshActions() makes the per-tick path a no-op
   // unless the option list actually changed.
   const unsubMem = store.subscribe((s) => s.ui.memoryRev, render);
   const offTick = onGameTick(render);
   render();
+  greet();   // in case the run is already live at mount
 
   return () => {
     setAuxSink(null);
     body.removeEventListener('keydown', onMenuKey);
+    unsubStatus();
     unsubMem();
     offTick();
   };

@@ -131,6 +131,12 @@ body:not(.mode-memory) .assistant { display: flex; }
   color: var(--text-dim); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
   border-bottom: 1px solid var(--edge);
 }
+/* SAFE MODE keeps only the latest guidance line (limited history). */
+.asst-last {
+  flex: 0 0 auto; padding: var(--sp-3) var(--sp-5);
+  color: #d7e9a6; opacity: 0.85; font-size: 11px; line-height: 1.5;
+  min-height: 2.4em; border-bottom: 1px solid var(--edge);
+}
 .asst-menu { flex: 1 1 auto; outline: none; padding: var(--sp-4) 0; }
 .asst-menu-item {
   padding: var(--sp-2) var(--sp-6);

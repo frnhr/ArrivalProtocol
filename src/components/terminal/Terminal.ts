@@ -50,12 +50,19 @@ export function mountTerminal(store: Store<GameState>): () => void {
   }
   setLogSink(print);
 
+  // The terminal only ever suggests TERMINAL commands. Time-warp is the assistant's concern,
+  // so a `warp …` suggestion is suppressed here (the assistant offers it instead).
+  function ghostSuggest(): string | null {
+    const g = suggestNext(store);
+    return g && g.startsWith('warp') ? null : g;
+  }
+
   // Ghost suggestion → input placeholder. Only refresh when the field is empty (and not
   // being typed into by the assistant) so it never fights visible input.
   let lastGhost = '';
   function refreshGhost(): void {
     if (input!.value !== '' || typing) return;
-    const g = suggestNext(store) ?? '';
+    const g = ghostSuggest() ?? '';
     if (g !== lastGhost) { input!.placeholder = g; lastGhost = g; }
   }
 
@@ -107,13 +114,13 @@ export function mountTerminal(store: Store<GameState>): () => void {
       const typed = input.value.trim();
       if (typed) { run(typed); return; }
       // Empty line: run the ghost suggestion, else repeat the last command.
-      const ghost = suggestNext(store);
+      const ghost = ghostSuggest();
       if (ghost) run(ghost);
       else if (lastCmd) run(lastCmd);
       return;
     }
     if ((e.key === 'Tab' || e.key === 'ArrowRight') && input.value === '') {
-      const ghost = suggestNext(store);
+      const ghost = ghostSuggest();
       if (ghost) { e.preventDefault(); input.value = ghost; input.setSelectionRange(ghost.length, ghost.length); }
       return;
     }
