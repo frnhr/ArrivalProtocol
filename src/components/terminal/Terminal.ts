@@ -70,8 +70,10 @@ export function mountTerminal(store: Store<GameState>): () => void {
 
   // Visible typing: the assistant enters a command character by character, then submits it.
   // Wall-clock paced (UI feedback, not game time). While typing, keyboard input is ignored.
+  // Declines if already typing, if the player has a half-typed command in the field (don't
+  // clobber their input), or if the run isn't live.
   function typeAndRun(cmd: string): void {
-    if (typing) return;
+    if (typing || input!.value.trim() !== '' || store.getState().burn.status !== 'approaching') return;
     typing = true;
     input!.value = '';
     input!.placeholder = '';
@@ -89,6 +91,12 @@ export function mountTerminal(store: Store<GameState>): () => void {
       }
     };
     step();
+  }
+  // Abort any in-progress visible typing (e.g. the run ended mid-type) so a stale command
+  // can't dispatch against a finished run.
+  function cancelTyping(): void {
+    if (typeTimer !== null) { window.clearTimeout(typeTimer); typeTimer = null; }
+    if (typing) { typing = false; input!.value = ''; }
   }
   setTyper(typeAndRun);
 
@@ -158,7 +166,7 @@ export function mountTerminal(store: Store<GameState>): () => void {
   const unsubStatus = store.subscribe((s) => s.burn.status, (status) => {
     if (status === 'approaching') boot();
     const result = RESULT_LINE[status];
-    if (result) { print([result]); resetTerminalWatchers(); }
+    if (result) { cancelTyping(); print([result]); resetTerminalWatchers(); }
   });
   if (store.getState().burn.status === 'approaching') boot();
 

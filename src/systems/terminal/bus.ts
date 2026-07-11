@@ -41,3 +41,7 @@ export function routeLines(lines: TermLine[]): void {
 // Ask the terminal to have the assistant visibly type + submit a command. No-op when the
 // terminal isn't mounted.
 export function assistantType(cmd: string): void { typer?.(cmd); }
+
+// Push a single line straight to the terminal log — used by the Assistant panel in SAFE
+// MODE, where it has no chat to render aux guidance into but the guidance must not be lost.
+export function logLine(line: TermLine): void { logSink?.([line]); }
