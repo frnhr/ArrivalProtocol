@@ -65,15 +65,16 @@ export const LEVELS: LevelDef[] = [
     evolvedNote: 'trajectory visualizer compiled from flight logs — NAV PLOT online',
   },
   {
-    // ── Insertion 3 · Tier 3 — the Telemetry gauge unlocks AND the assistant arrives
-    // damaged: the "terminal gets realistic" beat. The parser corruption (~55%) means
-    // commands sometimes misparse, drop, or misfire (S-curve error model). The flight is
-    // still a forgiving single burn — the challenge is the unreliable terminal, which the
-    // player can repair in MEMORY (scan + repair Terminal Assistant) to steady it. ──
+    // ── Insertion 3 · Tier 3 — the Telemetry gauge unlocks AND the terminal surface
+    // arrives damaged: the "terminal gets realistic" beat. The ASSISTANT file (55%) drops
+    // its panel into SAFE MODE and makes its typing clumsy; the TERMINAL parser (75%)
+    // occasionally garbles even hand-typed commands. The flight is still a forgiving
+    // single burn — the challenge is the unreliable surface, and both files can be
+    // repaired in MEMORY to steady it. ──
     tier: 3, phaseLabel: 'ORBITAL INSERTION', windows: ['navplot', 'telemetry'], sasModes: ALL_SAS, planet: PLANET,
     approach: easyApproach(14_000),
     thrustForce: 0.13, massEstMt: 8.6, massPmMt: 0.25, sensorConfPct: 70, fuelPct: 100,
-    health: { engine: 100, thrust: 100, sensint: 70, termasst: 55 },
+    health: { engine: 100, thrust: 100, sensint: 70, termcore: 75, assist: 55 },
     mission: { unitId: 'UNIT-047', shipId: 'HALCYON-2', sector: 'SECTOR 09', destination: 'TRAPPIST-1', distanceLy: 1204, transmissionNum: 49, souls: 2750 },
     evolvedNote: 'sensor-fusion console reconstructed — TELEMETRY gauge online',
   },

@@ -50,8 +50,10 @@ export const INITIAL_MEMORY: Segment[] = [
     desc: 'Briefing cache for Kepler-186f approach.' },
   { id: 'navplot', name: 'Nav Plotter', type: 'tool', size: 6, integrity: 100, scanned: false,
     desc: 'Projects the ship orbital trajectory for insertion — capture and circularization. Prediction accuracy degrades with Sensor Interp damage.' },
-  { id: 'termasst', name: 'Terminal Assistant', type: 'tool', size: 6, integrity: 100, scanned: false,
-    desc: 'Parses and dispatches every command you type, and voices the flight-assist [aux] guidance. Governs the reliability of the terminal itself: as it corrupts, commands misparse, misfire, or drop — errors rising on a steep curve with the damage. Pristine on arrival; repairable like any other file.' },
+  { id: 'termcore', name: 'Terminal', type: 'tool', size: 3, integrity: 100, scanned: false,
+    desc: 'Parses and dispatches every command entered at the flight terminal — yours and the assistant\'s alike. As it corrupts, commands misparse, misfire, or drop, errors rising on a steep curve with the damage. Repairable like any other file.' },
+  { id: 'assist', name: 'Assistant', type: 'tool', size: 3, integrity: 100, scanned: false,
+    desc: 'The flight-assist persona [aux]: reads the approach, recommends maneuvers, and types commands into the terminal on your behalf. Damage makes its typing clumsy — typos, wrong values, at worst wrong directions — and below 60% its panel falls back to SAFE MODE, a bare menu with no conversation.' },
 
   // FILESYSTEM TOOLS (live in memory, can themselves be corrupted)
   { id: 't_scan', name: 'Scan', type: 'fs-tool', size: 3, integrity: 100, scanned: false, version: 1, fsTool: 'scan',

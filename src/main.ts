@@ -27,6 +27,7 @@ import { mountFooter } from '@components/footer/Footer';
 import { mountBurnResult } from '@components/burn/BurnResult';
 import { mountBriefing } from '@components/briefing/Briefing';
 import { mountTerminal } from '@components/terminal/Terminal';
+import { mountAssistant } from '@components/assistant/Assistant';
 import { mountEvolution } from '@systems/evolution';
 import { mountFsToolsSystem, applyTool, getCursorXY, pickUpTool } from '@systems/fs-tools';
 import { mountCursorFollower } from '@components/cursor-follower/CursorFollower';
@@ -134,6 +135,7 @@ mountBurnResult(store);
 // terminal-kernel level auto-begins the run. Evolution gates which graphical windows
 // exist before either runs.
 mountTerminal(store);
+mountAssistant(store);
 mountEvolution(store);
 mountBriefing(store);
 mountPlacement(store, memWrap);

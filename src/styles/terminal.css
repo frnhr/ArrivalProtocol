@@ -16,16 +16,15 @@
 }
 body:not(.mode-memory) .terminal { display: flex; }
 
-/* Level-1 kernel: the terminal owns the whole tools surface. */
-.tools-view.terminal-primary .terminal {
-  top: var(--sp-8); left: var(--sp-8); right: var(--sp-8); bottom: var(--sp-8);
+/* Three columns within the dock-inset tools surface (~1128px at 1280 viewport): the terminal
+   (left, control), the graphical windows (middle, re-earned), the Assistant panel (right).
+   right:auto on the windows clears their default right-anchor so they don't stretch under
+   the Assistant. */
+.terminal {
+  top: var(--sp-8); left: var(--sp-8); bottom: var(--sp-8); width: 424px;
 }
-/* Once a window is unlocked, the terminal sits along the left as the control spine and the
-   graphical panels sit to its right. */
-.tools-view:not(.terminal-primary) .terminal {
-  top: var(--sp-8); left: var(--sp-8); bottom: var(--sp-8); width: 440px;
-}
-.tools-view:not(.terminal-primary) .navplot-win { left: 500px; top: var(--sp-8); }
+.tools-view:not(.terminal-primary) .navplot-win { left: 460px; right: auto; top: var(--sp-8); width: 300px; }
+.tools-view:not(.terminal-primary) .telemetry-win { left: 460px; right: auto; top: 448px; bottom: var(--sp-8); width: 300px; }
 
 .terminal-head {
   display: flex; align-items: center; gap: var(--sp-3);
@@ -77,6 +76,69 @@ body:not(.mode-memory) .terminal { display: flex; }
 }
 .term-input::placeholder { color: var(--accent-dim); opacity: 0.75; }
 
+/* ── Assistant panel ── the aux persona's own interface (chat + actions), degrading to a
+   bare arrow-key SAFE MODE menu as its file corrupts. Right column at every tier. */
+.assistant {
+  position: absolute;
+  display: none;
+  flex-direction: column;
+  top: var(--sp-8); right: var(--sp-8); bottom: var(--sp-8); width: 300px;
+  background: var(--window);
+  border: 1px solid var(--edge-bright);
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.5), inset 0 0 60px var(--ambient-2);
+  overflow: hidden;
+}
+body:not(.mode-memory) .assistant { display: flex; }
+.asst-header {
+  flex: 0 0 auto;
+  padding: var(--sp-3) var(--sp-5);
+  border-bottom: 1px solid var(--edge);
+  color: #d7e9a6;
+  font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+  background: linear-gradient(180deg, rgba(215,233,166,0.06), transparent);
+}
+.asst-header.warn { color: var(--accent); }
+.asst-header.safe { color: var(--warn); animation: flicker 2.8s infinite; }
+.asst-body { flex: 1 1 auto; display: flex; flex-direction: column; overflow: hidden; }
+.asst-chat {
+  flex: 1 1 auto; overflow-y: auto;
+  padding: var(--sp-4) var(--sp-5);
+  display: flex; flex-direction: column; gap: var(--sp-3);
+  scrollbar-width: thin;
+}
+.asst-bubble {
+  color: #d7e9a6;
+  background: rgba(215,233,166,0.06);
+  border-left: 2px solid rgba(215,233,166,0.5);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12px; line-height: 1.5;
+}
+.asst-actions {
+  flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-5); border-top: 1px solid var(--edge);
+}
+.asst-btn {
+  font: inherit; font-size: 12px; cursor: pointer;
+  color: var(--accent-bright); background: transparent;
+  border: 1px solid var(--accent-dim); padding: var(--sp-2) var(--sp-4);
+  letter-spacing: 0.06em;
+  transition: border-color var(--t-med), color var(--t-med), background var(--t-med);
+}
+.asst-btn:hover { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+/* SAFE MODE — bare menu, no chat. */
+.asst-safe-note {
+  flex: 0 0 auto; padding: var(--sp-4) var(--sp-5);
+  color: var(--text-dim); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  border-bottom: 1px solid var(--edge);
+}
+.asst-menu { flex: 1 1 auto; outline: none; padding: var(--sp-4) 0; }
+.asst-menu-item {
+  padding: var(--sp-2) var(--sp-6);
+  font-family: 'JetBrains Mono', monospace; font-size: 14px;
+  color: var(--text-dim); white-space: pre; cursor: pointer;
+}
+.asst-menu-item.sel { color: var(--warn); background: rgba(255,107,61,0.10); }
+
 /* EVOLVED beat — a transient toast when a level unlocks a new capability. */
 .evolved-toast {
   position: fixed;
@@ -105,9 +167,9 @@ body:not(.mode-memory) .terminal { display: flex; }
 @media (max-width: 720px) {
   .tools-view .telemetry-win,
   .tools-view .engine-win,
-  .tools-view .navplot-win { display: none !important; }
-  .tools-view .terminal,
-  .tools-view.terminal-primary .terminal {
+  .tools-view .navplot-win,
+  .assistant { display: none !important; }
+  .tools-view .terminal {
     top: var(--sp-3); left: var(--sp-3); right: var(--sp-3); bottom: var(--sp-3); width: auto;
   }
   .term-log { font-size: 12px; }

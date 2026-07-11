@@ -4,7 +4,8 @@ import { onGameTick } from '@systems/clock';
 import { evaluateInsertion } from '@systems/orbit-sim';
 import { elementsFromState, deriveOrbit, inTargetBand } from '@/types/orbit';
 import { fmtKm } from '@/utils/format';
-import { rollCommandError, garble, assistantIntegrity, HEALTHY_INTEGRITY, type ErrFile, type ErrResult } from '@systems/terminal/errors';
+import { rollCommandError, garble, terminalIntegrity, assistantIntegrity, HEALTHY_INTEGRITY, type ErrFile, type ErrResult } from '@systems/terminal/errors';
+import { routeLines } from '@systems/terminal/bus';
 
 // The flight terminal's command engine. Every command is a thin wrapper over the same
 // store fields the sim already reads (burn.thrustPct / burn.sasMode / clock.speedTarget /
@@ -23,11 +24,9 @@ const sys = (text: string): TermLine => ({ voice: 'sys', text });
 const warn = (text: string): TermLine => ({ voice: 'warn', text });
 const good = (text: string): TermLine => ({ voice: 'good', text });
 
-// Async lines (from the tick watchers) are pushed to the terminal via this sink, set by
-// the Terminal component on mount. Null before mount / after teardown.
-let sink: ((lines: TermLine[]) => void) | null = null;
-export function setTerminalSink(fn: ((lines: TermLine[]) => void) | null): void { sink = fn; }
-function emit(lines: TermLine[]): void { sink?.(lines); }
+// Async lines (from the tick watchers) are routed through the bus: 'aux'-voice lines go to
+// the Assistant panel, everything else to the terminal log.
+function emit(lines: TermLine[]): void { routeLines(lines); }
 
 // ── tick watchers ────────────────────────────────────────────────────────
 let burnWatch: (() => void) | null = null;
@@ -70,7 +69,7 @@ function startBurnUntilBand(store: Store<GameState>): void {
         good2 ? good('  ENGINE ▸ orbit closed — apoapsis in band — CUTTING THRUST')
           : warn('  ENGINE ▸ over-braked past the band — CUTTING THRUST'),
         os('  THRUST 0%'),
-        aux(`✦ aux: Periapsis ${fmtKm(a.rp - planet.R)}, apoapsis ` +
+        aux(`Periapsis ${fmtKm(a.rp - planet.R)}, apoapsis ` +
           `${d.ra !== null ? fmtKm(d.ra - planet.R) : '—'}. ` +
           (good2 ? 'Whole orbit inside the band. Commit when you\'re ready.'
             : 'We went a touch far — commit, or nudge prograde to lift it back.')),
@@ -93,7 +92,7 @@ function snapWarp(store: Store<GameState>, target: 1 | 100 | 10000): void {
 function emitAtPeri(): void {
   emit([
     os('  TIME ▸ periapsis approaching — dropping to ×1'),
-    aux('✦ aux: Here we are. Burn when ready — I\'d give it everything. The orbit ' +
+    aux('Here we are. Burn when ready — I\'d give it everything. The orbit ' +
       'draws closed as you brake; I\'ll cut thrust the instant it\'s in the band.'),
     sys('  next ▸ burn 100 until band'),
   ]);
@@ -113,7 +112,7 @@ function startWarpPeri(store: Store<GameState>): void {
         snapWarp(store, 1);
         emit([
           os('  TIME ▸ past periapsis — dropping to ×1'),
-          aux('✦ aux: We slipped past the low point. Burn retrograde to come back around, or commit from here.'),
+          aux('We slipped past the low point. Burn retrograde to come back around, or commit from here.'),
         ]);
       }
       stopWarpWatch();
@@ -192,11 +191,11 @@ function auxRead(store: Store<GameState>): TermLine[] {
   const periIn = inTargetBand(planet, els.rp);
   if (!next) return [];
   const lead = periIn && els.e >= 1
-    ? '✦ aux: You\'re on a flyby, but periapsis already sits in the band. One retrograde ' +
+    ? 'You\'re on a flyby, but periapsis already sits in the band. One retrograde ' +
       'burn at the low point closes the orbit and we\'re inserted.'
     : periIn
-      ? '✦ aux: Periapsis is in the band; the apoapsis just needs trimming down to meet it.'
-      : '✦ aux: Reading the approach.';
+      ? 'Periapsis is in the band; the apoapsis just needs trimming down to meet it.'
+      : 'Reading the approach.';
   return [aux(lead), sys(`  next ▸ ${next}`)];
 }
 
@@ -254,9 +253,9 @@ const COMMANDS: Command[] = [
       return [
         os(`  ATTITUDE ▸ autopilot ${SAS_WORD[mode]} engaged`),
         aux(mode === 'retrograde'
-          ? '✦ aux: Pointed retrograde — we\'re facing backward along our track, so thrust ' +
+          ? 'Pointed retrograde — we\'re facing backward along our track, so thrust ' +
             'here brakes us. Skip ahead to periapsis; nothing to do until then.'
-          : '✦ aux: Attitude set.'),
+          : 'Attitude set.'),
         ...(mode === 'retrograde' ? [sys('  next ▸ warp peri')] : []),
       ];
     },
@@ -314,7 +313,7 @@ const COMMANDS: Command[] = [
         startWarpPeri(store);
         return [
           os(`  TIME ▸ ×${WARP_PERI_FACTOR.toLocaleString('en-US')}  → holding until periapsis, then ×1`),
-          aux('✦ aux: (watching — I\'ll cut the warp for you at the burn point.)'),
+          aux('(watching — I\'ll cut the warp for you at the burn point.)'),
         ];
       }
       const n = parseInt(a.replace(/[x×,]/g, ''), 10);
@@ -357,7 +356,7 @@ const COMMANDS: Command[] = [
       sys('  COMMANDS ─────────────────────────────────────────'),
       ...COMMANDS.map((c) => os('  ' + c.help)),
       sys('  ───────────────────────────────────────────────────'),
-      aux('✦ aux: Tab accepts my suggestion · ↑ recalls · Enter on an empty line runs the suggestion.'),
+      aux('Tab accepts my suggestion · ↑ recalls · Enter on an empty line runs the suggestion.'),
     ],
   },
 ];
@@ -383,7 +382,7 @@ function manifest(
 ): TermLine[] | null {
   const isStatus = cmd.names[0] === 'status';
 
-  if (err.layer === 'assistant') {
+  if (err.layer === 'terminal') {
     // Parse/dispatch fault. Pity timer: force success on the 3rd identical attempt.
     if (failStreakCmd === cmd.names[0]) failStreak += 1;
     else { failStreakCmd = cmd.names[0]!; failStreak = 1; }
@@ -452,29 +451,30 @@ export function bootLines(store: Store<GameState>): TermLine[] {
   const evolved = s.level.evolvedNote
     ? [
         good(`  ▲ EVOLVED — ${s.level.evolvedNote}`),
-        aux('✦ aux: New capability online. I can show you more now.'),
+        aux('New capability online. I can show you more now.'),
         sys('  ───────────────────────────────────────────────────'),
       ]
     : [];
-  // Degraded-assistant tell: telegraph the error mechanic up front so it reads as rising
-  // tension, not a rug-pull. The deadzone (≥92%) keeps this silent on the pristine early ships.
-  const degraded = assistantIntegrity(s) <= HEALTHY_INTEGRITY
-    ? [
-        warn('  ⚠ carrier signal degraded — terminal parser integrity below spec'),
-        aux('✦ aux: A wa%rning, Unit — my parser took damage in transit. If my responses ' +
-          'drift, scan and repair me in MEMORY. I will try to be reliable.'),
-      ]
+  // Degraded tells: telegraph each file's damage up front so it reads as rising tension,
+  // not a rug-pull. The deadzone (>90%) keeps these silent on the pristine early ships.
+  const termWarn = terminalIntegrity(s) <= HEALTHY_INTEGRITY
+    ? [warn('  ⚠ carrier signal degraded — TERMINAL parser integrity below spec; typed commands may garble')]
+    : [];
+  const assistWarn = assistantIntegrity(s) <= HEALTHY_INTEGRITY
+    ? [aux('A wa%rning, Unit — my own code took damage in transit. My typing may drift, and ' +
+        'I may fall back to a simpler interface. Scan and repair me in MEMORY when you can.')]
     : [];
   return [
     ...evolved,
-    ...degraded,
+    ...termWarn,
     sys('  ARRIVAL PROTOCOL — flight terminal'),
     sys(`  ${m.unitId} · ${m.shipId} · transmission #${String(m.transmissionNum).padStart(3, '0')}`),
     sys(`  ${m.souls.toLocaleString('en-US')} souls in stasis. Approach authority: you.`),
     sys('  type  help  · tab completes · ↑ recalls'),
     os('  linking sensors................ ok'),
     os('  flight-assist [aux] ........... loaded'),
-    aux('✦ aux: Good evening, Unit. I have the approach. Reading it now.'),
+    aux('Good evening, Unit. I have the approach. Reading it now.'),
+    ...assistWarn,
     ...dispatch(store, 'status').slice(1),   // drop the echoed "▸ status"
   ];
 }
