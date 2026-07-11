@@ -1,6 +1,7 @@
 import type { Store } from '@state/store';
 import type { GameState, BurnStatus } from '@state/schema';
 import { selectSensorConfidence } from '@state/selectors';
+import { fmtKm } from '@/utils/format';
 import { onGameTick } from '@systems/clock';
 import {
   deriveOrbit, sampleConic, pointAt, periapsisPoint, apoapsisPoint,
@@ -198,10 +199,6 @@ const STATUS_CLASS: Record<BurnStatus, string> = {
   crashed: 'warn',
 };
 
-function fmtKm(km: number): string {
-  return `${Math.round(km).toLocaleString('en-US')} km`;
-}
-
 export function mountNavPlotWindow(store: Store<GameState>): () => void {
   const svg = document.getElementById('navplotSvg') as SVGSVGElement | null;
   if (!svg) return () => {};
@@ -223,26 +220,26 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     }
   }
 
-  // Sensor-uncertainty spans: at confidence c the ghost conic offsets from the
-  // predicted one by SPAN·(1−c/100) in eccentricity scale and planet-radii of
-  // periapsis. Calibrated so the seed confidence (62%) reproduces the original
-  // fixed ghost (scale 1.04 / dr 0.04·R); repairs visibly tighten the band and
-  // a dead Sensor Interp (conf 15%) leaves the prediction obviously untrustworthy.
-  const GHOST_SCALE_SPAN = 0.105;
-  const GHOST_DR_SPAN = 0.105;
+  // Sensor-uncertainty span: at confidence c the ghost conic offsets from the
+  // predicted one by SPAN·(1−c/100), applied jointly to the eccentricity scale
+  // and the periapsis radius (one constant — the two halves of the band must
+  // agree on how uncertain the sensors are). Calibrated so the seed confidence
+  // (62%) reproduces the original fixed ghost (scale 1.04 / dr 0.04·R); repairs
+  // visibly tighten the band, a dead Sensor Interp (15%) leaves it untrustworthy.
+  const GHOST_SPAN = 0.105;
 
   function redraw(): void {
     const state = store.getState();
     const planet = state.level.planet;
     const orbit = elementsFromState(state.orbit, planet.mu);
     // The ghost conic is the sensor-uncertainty envelope, driven live by the
-    // Sensor Interp file's health. Read via the selector (not telemetry) so
-    // the band reflects this tick's memory state, not last tick's snapshot.
+    // Sensor Interp file's health (selector, not the telemetry snapshot — the
+    // memoryRev redraw below must see memory changes made while paused).
     const uncertainty = (100 - selectSensorConfidence(state)) / 100;
     const opts: OrbitRenderOpts = {
       showGhost: true,
-      ghostScale: 1 + GHOST_SCALE_SPAN * uncertainty,
-      ghostDr: planet.R * GHOST_DR_SPAN * uncertainty,
+      ghostScale: 1 + GHOST_SPAN * uncertainty,
+      ghostDr: planet.R * GHOST_SPAN * uncertainty,
       headingRad: state.burn.heading,
       progradeRad: Math.atan2(state.orbit.vy, state.orbit.vx),
     };
@@ -250,20 +247,25 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     paintReadout(orbit, planet, state.burn.status);
   }
 
-  // Two redraw triggers:
+  // Three redraw triggers:
   //  1. game tick — live update while approaching. Registered here (mountNavPlotWindow
   //     runs AFTER mountOrbitSim in main.ts), so it reads freshly-integrated state.
   //  2. burn.status — paints the FROZEN terminal frame; onGameTick stops firing once
   //     the sim pauses the clock, so without this the captured/escaped/crashed frame
   //     would never be drawn. The sim mutates final geometry before flipping status,
   //     so this reads consistent state.
+  //  3. ui.memoryRev — memory ops fired while the clock is paused (repair start
+  //     taking Sensor Interp offline, an instant swap) must reshape the ghost
+  //     band immediately, not on the next tick after resume.
   const offTick = onGameTick(() => redraw());
   const unsubStatus = store.subscribe((s) => s.burn.status, () => redraw());
+  const unsubMemory = store.subscribe((s) => s.ui.memoryRev, () => redraw());
 
   redraw(); // initial paint of the seed orbit
 
   return () => {
     offTick();
     unsubStatus();
+    unsubMemory();
   };
 }

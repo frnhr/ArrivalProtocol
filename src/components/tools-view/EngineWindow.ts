@@ -39,8 +39,10 @@ export function mountEngineWindow(store: Store<GameState>): () => void {
   paintThrust(store.getState().burn.thrustPct);
 
   // --- delivered-thrust readout: what the damaged drivetrain actually gives ---
-  // Repainted per game tick (repairs completing under time-warp show up live)
-  // AND on memoryRev (catches an instant backup swap made while paused).
+  // memoryRev alone is the repaint trigger: EVERY mutation the effectiveness
+  // selector reads (integrity, segment state, swaps, op start/end — including
+  // repairs completing under time-warp) is followed by a memoryRev bump, so a
+  // per-tick repaint would only recompute an unchanged value 20×/sec.
   const engEffVal = document.getElementById('engEffVal');
   function paintEngEff(): void {
     if (!engEffVal) return;
@@ -130,7 +132,7 @@ export function mountEngineWindow(store: Store<GameState>): () => void {
       spinVal.textContent = Math.abs(dps) < 0.05 ? '0°/s' : `${dps > 0 ? '+' : ''}${dps.toFixed(1)}°/s`;
     }
   }
-  const offTick = onGameTick(() => { paintAttitude(); paintEngEff(); });
+  const offTick = onGameTick(() => paintAttitude());
   paintAttitude();
 
   // --- END INSERTION: the manual end. Always commits the current orbit and stops, grading

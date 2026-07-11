@@ -57,7 +57,10 @@ export interface BurnState {
   holdTarget: number;       // captured heading for sasMode 'hold' (radians, inertial)
   trueMassMt: number;       // hidden; seeded within massEstMt ± massPmMt, never rendered
   thrustForce: number;      // engine constant; max accel = thrustForce / trueMass (km/s²)
-  status: BurnStatus;       // changed only on terminal crossing
+  // Run phase + outcome. Exactly two transitions: briefing → approaching (the
+  // player's BEGIN APPROACH commit) and approaching → terminal (once per run).
+  status: BurnStatus;
+  startedTSec: number;      // clock.tSec when BEGIN APPROACH committed — debrief elapsed base
 }
 
 // 2D two-body truth integrated by the orbit sim (planet at origin). SI-ish units

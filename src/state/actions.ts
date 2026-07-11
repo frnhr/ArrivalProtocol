@@ -12,7 +12,7 @@ function isScannable(seg: Segment): seg is ScannableSegment {
   return 'scanned' in seg;
 }
 import type { FsToolKind } from '@/types/fs-tool';
-import { getRedundancy, getFsTool } from './selectors';
+import { getRedundancy, getFsTool, lastFlightCopyWarning } from './selectors';
 import { mergeAdjacentFree } from '@systems/memory-ops';
 import { startOp, canStartOp, type OpShrinker } from '@systems/ops';
 import { TOOL_ICONS } from '@data/fs-tools';
@@ -307,13 +307,28 @@ export function actionRepair(
   const startUsed = redund.used;
 
   (seg as Segment & { operating?: boolean }).operating = true;
+  // Repair takes the file OFFLINE for the op's duration (DESIGN.md): the
+  // 'repairing' state is what the flight-coupling selectors treat as dead,
+  // and the fs-tool targeting layer already refuses 'repairing' segments.
+  const priorState = seg.state;
+  seg.state = 'repairing';
   acquireRedund(store);
   store.update((d) => { d.ui.memoryRev++; });
 
   const targetEls = Array.from(document.querySelectorAll<HTMLElement>(
     `.seg[data-id="${seg.id}"]`,
   ));
-  if (targetEls.length === 0) return;
+  if (targetEls.length === 0) {
+    // Bail without leaking: a stuck operating flag / 'repairing' state would
+    // permanently kill the backing flight system, and the unreleased
+    // redundancy lock would refuse all future repairs.
+    (seg as Segment & { operating?: boolean }).operating = false;
+    if (priorState === undefined) delete seg.state;
+    else seg.state = priorState;
+    releaseRedund(store);
+    store.update((d) => { d.ui.memoryRev++; });
+    return;
+  }
   const { x, y } = deps.getCursorXY();
 
   let lastDrainedInt = 0;
@@ -371,6 +386,9 @@ export function actionRepair(
     },
     onCancel: () => {
       (seg as Segment & { operating?: boolean }).operating = false;
+      // Back online, still damaged — restore the exact pre-repair state.
+      if (priorState === undefined) delete seg.state;
+      else seg.state = priorState;
       // Partial drain stays consumed — work-in-progress can't be undone.
       releaseRedund(store);
       store.update((d) => { d.ui.memoryRev++; });
@@ -470,6 +488,14 @@ export function actionDelete(
         !confirm('Deleting the last functional Repair tool will end the run if anything else corrupts. Continue?')) {
       return;
     }
+  }
+
+  // Warn before destroying the last live copy of a flight-critical system —
+  // the run continues but the corresponding control surface goes dead.
+  const flightWarning = lastFlightCopyWarning(store.getState(), seg);
+  if (flightWarning &&
+      !confirm(`Deleting the last working copy of ${flightWarning}. Continue?`)) {
+    return;
   }
 
   (seg as Segment & { operating?: boolean }).operating = true;

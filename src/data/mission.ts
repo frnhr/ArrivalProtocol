@@ -99,6 +99,9 @@ export function seedBurn(): BurnState {
     trueMassMt,
     thrustForce: THRUST_FORCE,
     status: 'briefing',
+    // Overwritten with the live clock at BEGIN APPROACH; the seed only matters
+    // if a future change lets time pass during the pre-commit hold.
+    startedTSec: MISSION_START_TSEC,
   };
 }
 

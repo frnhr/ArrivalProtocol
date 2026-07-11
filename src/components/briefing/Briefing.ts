@@ -1,5 +1,7 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
+import { setDockItemOpen } from '@components/dock/Dock';
+import { fmtKm } from '@/utils/format';
 
 // Mission briefing overlay — the run's front door. The game boots into
 // burn.status 'briefing' with the clock at 0: the world holds behind this
@@ -19,14 +21,26 @@ export function mountBriefing(store: Store<GameState>): () => void {
   const root = document.getElementById('briefing');
   const beginBtn = document.getElementById('briefingBegin');
   const dockItem = document.querySelector<HTMLElement>('.dock-item[data-action="briefing"]');
-  if (!root || !beginBtn) return () => {};
+  if (!root || !beginBtn) {
+    // The briefing is the ONLY writer of status 'approaching' — if its markup
+    // is missing, holding the world would soft-lock the whole game. Fail open:
+    // behave like the pre-briefing boot and start the run immediately.
+    if (store.getState().burn.status === 'briefing') {
+      store.update((d) => {
+        d.burn.status = 'approaching';
+        d.burn.startedTSec = d.clock.tSec;
+        d.clock.speedTarget = 1;
+        d.clock.speed = 1;
+      });
+    }
+    return () => {};
+  }
 
   // Dynamic copy from mission/level state (band expressed as altitude, matching
   // the NAV PLOT's peri/apo readouts).
   const state = store.getState();
   const { mission } = state;
   const planet = state.level.planet;
-  const fmtKm = (km: number): string => Math.round(km).toLocaleString('en-US');
   const fill = (id: string, text: string): void => {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
@@ -34,13 +48,10 @@ export function mountBriefing(store: Store<GameState>): () => void {
   fill('briefTransmission', `TRANSMISSION #${String(mission.transmissionNum).padStart(3, '0')} · ${mission.unitId} → ${mission.shipId}`);
   fill('briefDestination', `${mission.destination} · ${mission.sector} · ${mission.distanceLy} LY FROM EARTH`);
   fill('briefSouls', `${mission.souls.toLocaleString('en-US')} souls in stasis`);
-  fill('briefBand', `${fmtKm(planet.rMin - planet.R)}–${fmtKm(planet.rMax - planet.R)} km altitude`);
+  fill('briefBand', `${fmtKm(planet.rMin - planet.R)} – ${fmtKm(planet.rMax - planet.R)} altitude`);
 
   function paintDockMark(open: boolean): void {
-    if (!dockItem) return;
-    dockItem.classList.toggle('open', open);
-    const mark = dockItem.querySelector('.mark');
-    if (mark) mark.textContent = open ? '●' : '○';
+    if (dockItem) setDockItemOpen(dockItem, open);
   }
 
   function show(): void {
@@ -63,6 +74,7 @@ export function mountBriefing(store: Store<GameState>): () => void {
     if (store.getState().burn.status === 'briefing') {
       store.update((d) => {
         d.burn.status = 'approaching';
+        d.burn.startedTSec = d.clock.tSec;   // the debrief's elapsed-time base
         d.clock.speedTarget = 1;
         d.clock.speed = 1;
       });

@@ -4,7 +4,7 @@ import { onGameTick } from '@systems/clock';
 import { stepAttitude } from '@systems/attitude';
 import { FUEL_BURN_RATE } from '@data/mission';
 import { selectEngineEffectiveness, selectSensorConfidence } from '@state/selectors';
-import { elementsFromState, type PlanetParams } from '@/types/orbit';
+import { elementsFromState, inTargetBand, type PlanetParams } from '@/types/orbit';
 
 // 2D two-body orbital-insertion sim. The AI arrives on an APPROXIMATE hyperbola (a large
 // miss; hidden true mass) and the player flies it in: a single main throttle thrusts
@@ -77,8 +77,7 @@ export function evaluateInsertion(
   const els = elementsFromState(orbit, planet.mu);
   if (els.e >= 1) return 'escaped'; // open trajectory — flew / flying by
   const ra = (els.rp * (1 + els.e)) / (1 - els.e);
-  const inBand = (rr: number): boolean => rr >= planet.rMin && rr <= planet.rMax;
-  return inBand(els.rp) && inBand(ra) ? 'inserted' : 'captured';
+  return inTargetBand(planet, els.rp) && inTargetBand(planet, ra) ? 'inserted' : 'captured';
 }
 
 export function mountOrbitSim(store: Store<GameState>): () => void {
@@ -143,7 +142,11 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
     const tToPeriHrs = rDotV < 0 ? (r - els.rp) / Math.max(vRadial, 1e-9) / 3600 : Infinity;
 
     // Fuel drains by GAME-TIME (∝ dtGame), independent of sub-step count.
-    const fuelDelta = fuelBefore > 0 ? FUEL_BURN_RATE * (burn.thrustPct / 100) * dtGame : 0;
+    // Drain follows COMMANDED throttle — a degraded drivetrain wastes propellant
+    // — but a fully OFFLINE drivetrain (engEff 0: file deleted, deactivated, or
+    // mid-repair) pumps nothing, so an open throttle costs nothing while dead.
+    const fuelDelta = fuelBefore > 0 && engEff > 0
+      ? FUEL_BURN_RATE * (burn.thrustPct / 100) * dtGame : 0;
     const fuelAfter = Math.max(0, fuelBefore - fuelDelta);
 
     // Attitude (per tick, game-time): the autopilot helpers (sasMode) slew the heading

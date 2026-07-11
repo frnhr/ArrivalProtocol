@@ -14,7 +14,11 @@ export const INITIAL_MEMORY: Segment[] = [
   { id: 'thrust', name: 'Thrust Controller', type: 'ship', size: 8, integrity: 22, state: 'corrupt', scanned: false,
     backup: 'thrust_b',
     desc: 'Ship-side thruster command translator. Heavy corruption — likely cosmic-ray damage during the long transit. Symptoms manifest as Engine I/O appearing degraded.' },
-  { id: 'thrust_b', name: 'Thrust.alt', type: 'ship-backup', size: 8, integrity: 100, scanned: false,
+  // state 'inactive' is load-bearing: dormancy must be an explicit state so a
+  // Scan (which materializes a state from integrity on stateless segments) or
+  // a Move/Copy (which restores prior state) can't silently wake the backup —
+  // only Swap/Activate may bring it online.
+  { id: 'thrust_b', name: 'Thrust.alt', type: 'ship-backup', size: 8, integrity: 100, state: 'inactive', scanned: false,
     desc: 'Redundant copy installed by original engineers. Inactive. Can be swapped in to replace primary thrust controller. Free to activate — no redundancy budget required.' },
   { id: 'stasis', name: 'Stasis', type: 'ship', size: 8, integrity: 100, scanned: false,
     desc: '2,400 colonist pods. Cycling normally.' },

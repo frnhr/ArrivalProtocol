@@ -1,7 +1,7 @@
 import type { Store } from '@state/store';
 import type { GameState, BurnStatus } from '@state/schema';
-import { MISSION_START_TSEC } from '@data/mission';
-import { deriveOrbit, elementsFromState } from '@/types/orbit';
+import { fmtKm } from '@/utils/format';
+import { deriveOrbit, elementsFromState, inTargetBand } from '@/types/orbit';
 
 // Statuses with no banner: pre-flight hold and the live run.
 type SilentStatus = 'briefing' | 'approaching';
@@ -24,8 +24,6 @@ const RESULT_COPY: Record<Exclude<BurnStatus, SilentStatus>, { title: string; su
   },
 };
 
-const fmtKm = (km: number): string => `${Math.round(km).toLocaleString('en-US')} km`;
-
 // Debrief rows read directly from terminal state: final orbit shape vs the
 // target band, fuel left in the tank, and how much mission clock the run took.
 // The sim writes final geometry BEFORE flipping status, so these are consistent.
@@ -33,18 +31,20 @@ function buildStats(state: GameState): string {
   const planet = state.level.planet;
   const els = elementsFromState(state.orbit, planet.mu);
   const { ra, isClosed } = deriveOrbit(els);
-  const inBand = (r: number): boolean => r >= planet.rMin && r <= planet.rMax;
 
   const row = (label: string, value: string, cls = ''): string =>
     `<div class="burn-stat"><span class="lbl">${label}</span><span class="v${cls ? ` ${cls}` : ''}">${value}</span></div>`;
 
-  const periCls = inBand(els.rp) ? 'good' : 'warn';
-  const apoCls = isClosed && ra !== null ? (inBand(ra) ? 'good' : 'warn') : 'warn';
-  const elapsedHrs = (state.clock.tSec - MISSION_START_TSEC) / 3600;
+  // A crash terminates with the osculating periapsis at/under the surface —
+  // "below surface" reads as the verdict it is, not a broken negative number.
+  const periAlt = els.rp - planet.R;
+  const periCls = inTargetBand(planet, els.rp) ? 'good' : 'warn';
+  const apoCls = isClosed && ra !== null ? (inTargetBand(planet, ra) ? 'good' : 'warn') : 'warn';
+  const elapsedHrs = (state.clock.tSec - state.burn.startedTSec) / 3600;
 
   return [
     row('target band', `${fmtKm(planet.rMin - planet.R)} – ${fmtKm(planet.rMax - planet.R)} alt`),
-    row('periapsis alt', fmtKm(els.rp - planet.R), periCls),
+    row('periapsis alt', periAlt < 0 ? 'below surface' : fmtKm(periAlt), periCls),
     row('apoapsis alt', isClosed && ra !== null ? fmtKm(ra - planet.R) : '— (open)', apoCls),
     row('fuel remaining', `${Math.round(state.telemetry.fuelPct)}%`),
     row('elapsed', `${elapsedHrs.toFixed(1)} hrs`),
