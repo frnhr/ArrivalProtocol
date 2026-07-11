@@ -3,6 +3,7 @@ import type { GameState, BurnStatus } from '@state/schema';
 import { onGameTick } from '@systems/clock';
 import { stepAttitude } from '@systems/attitude';
 import { FUEL_BURN_RATE } from '@data/mission';
+import { selectEngineEffectiveness, selectSensorConfidence } from '@state/selectors';
 import { elementsFromState, type PlanetParams } from '@/types/orbit';
 
 // 2D two-body orbital-insertion sim. The AI arrives on an APPROXIMATE hyperbola (a large
@@ -72,7 +73,7 @@ function segmentHitsCircle(ax: number, ay: number, bx: number, by: number, R: nu
 export function evaluateInsertion(
   orbit: Cartesian,
   planet: PlanetParams,
-): Exclude<BurnStatus, 'approaching' | 'crashed'> {
+): Exclude<BurnStatus, 'briefing' | 'approaching' | 'crashed'> {
   const els = elementsFromState(orbit, planet.mu);
   if (els.e >= 1) return 'escaped'; // open trajectory — flew / flying by
   const ra = (els.rp * (1 + els.e)) / (1 - els.e);
@@ -89,7 +90,12 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
     const burn = s0.burn;
 
     const fuelBefore = s0.telemetry.fuelPct;
-    const aMax = fuelBefore > 0 ? burn.thrustForce / burn.trueMassMt : 0;
+    // Memory → flight: the drivetrain only delivers what its backing files can
+    // carry (Engine I/O tool × active Thrust Controller copy). Fuel drain below
+    // stays proportional to COMMANDED throttle — a damaged drivetrain burns the
+    // same propellant for less thrust, which is the repair incentive.
+    const engEff = selectEngineEffectiveness(s0);
+    const aMax = fuelBefore > 0 ? (engEff * burn.thrustForce) / burn.trueMassMt : 0;
     const aThrust = (burn.thrustPct / 100) * aMax;
     const heading = burn.heading; // thrust direction this tick (fixed across sub-steps)
 
@@ -178,6 +184,10 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
       t.distance = Math.max(0, r - planet.R);
       t.etaHrs = tToPeriHrs;
       t.fuelPct = fuelAfter;
+      // Live sensor confidence from the Sensor Interp file's health — the HUD
+      // readout tracks it via paintTelemetry; the NAV PLOT reads the selector
+      // directly so its ghost band stays fresh even across pauses.
+      t.sensorConfPct = selectSensorConfidence(s0);
     });
 
     // …then flip status (update → subscribers read consistent terminal geometry).

@@ -64,6 +64,8 @@ export function mountClock(store: Store<GameState>): () => void {
   const distEl = document.getElementById('distVal');
   const etaEl = document.getElementById('etaVal');
   const fuelEl = document.getElementById('fuelVal');
+  const sensConfEl = document.getElementById('sensConfVal');
+  const sensConfRow = sensConfEl?.closest('.readout') ?? null;
 
   function paintTelemetry(): void {
     const t = store.getState().telemetry;
@@ -71,6 +73,9 @@ export function mountClock(store: Store<GameState>): () => void {
     if (distEl) distEl.textContent = Math.round(t.distance).toLocaleString('en-US');
     if (etaEl) etaEl.textContent = fmtEta(t.etaHrs);
     if (fuelEl) fuelEl.textContent = Math.round(t.fuelPct).toString();
+    if (sensConfEl) sensConfEl.textContent = Math.round(t.sensorConfPct).toString();
+    // Amber-alert the row while confidence is low — the nudge toward memory mode.
+    if (sensConfRow) sensConfRow.classList.toggle('alert', t.sensorConfPct < 70);
   }
 
   // Paint initial state

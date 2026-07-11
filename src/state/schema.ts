@@ -39,7 +39,9 @@ export interface ClockState {
   speedTarget: TimeSpeed;  // the discrete value the player selected; speed glides toward this
 }
 
-export type BurnStatus = 'approaching' | 'inserted' | 'captured' | 'escaped' | 'crashed';
+// 'briefing' is the pre-flight hold: the world is paused behind the mission
+// briefing overlay until the player commits with BEGIN APPROACH.
+export type BurnStatus = 'briefing' | 'approaching' | 'inserted' | 'captured' | 'escaped' | 'crashed';
 
 // Attitude autopilot helpers (SAS-style). 'off' = manual rotation thrusters only; the rest
 // auto-slew the heading and hold it — 'hold' locks the current attitude, the others track a

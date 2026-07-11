@@ -24,6 +24,7 @@ import { mountWindowGrips } from '@components/tools-view/WindowGrip';
 import { mountMemoryStats } from '@components/memory-view/MemoryStats';
 import { mountFooter } from '@components/footer/Footer';
 import { mountBurnResult } from '@components/burn/BurnResult';
+import { mountBriefing } from '@components/briefing/Briefing';
 import { mountFsToolsSystem, applyTool, getCursorXY, pickUpTool } from '@systems/fs-tools';
 import { mountCursorFollower } from '@components/cursor-follower/CursorFollower';
 import { mountMemoryStrip } from '@components/memory-view/MemoryStrip';
@@ -126,6 +127,7 @@ mountFsToolPill(store);
 mountSidebarFilters(store);
 mountFooter(store);
 mountBurnResult(store);
+mountBriefing(store);
 mountPlacement(store, memWrap);
 
 // Wire the AI Core's `capacity` into the ops engine's hard cap. Re-sync on

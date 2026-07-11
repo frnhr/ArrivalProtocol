@@ -1,5 +1,6 @@
 import type { Store } from '@state/store';
 import type { GameState, BurnStatus } from '@state/schema';
+import { selectSensorConfidence } from '@state/selectors';
 import { onGameTick } from '@systems/clock';
 import {
   deriveOrbit, sampleConic, pointAt, periapsisPoint, apoapsisPoint,
@@ -180,6 +181,7 @@ export function renderOrbit(
 }
 
 const STATUS_LABEL: Record<BurnStatus, string> = {
+  briefing: 'HOLDING',
   approaching: 'INSERTING',
   inserted: 'INSERTED',
   captured: 'OFF-TGT',
@@ -188,6 +190,7 @@ const STATUS_LABEL: Record<BurnStatus, string> = {
 };
 
 const STATUS_CLASS: Record<BurnStatus, string> = {
+  briefing: '',
   approaching: '',
   inserted: 'good',
   captured: '',
@@ -220,17 +223,26 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     }
   }
 
+  // Sensor-uncertainty spans: at confidence c the ghost conic offsets from the
+  // predicted one by SPAN·(1−c/100) in eccentricity scale and planet-radii of
+  // periapsis. Calibrated so the seed confidence (62%) reproduces the original
+  // fixed ghost (scale 1.04 / dr 0.04·R); repairs visibly tighten the band and
+  // a dead Sensor Interp (conf 15%) leaves the prediction obviously untrustworthy.
+  const GHOST_SCALE_SPAN = 0.105;
+  const GHOST_DR_SPAN = 0.105;
+
   function redraw(): void {
     const state = store.getState();
     const planet = state.level.planet;
     const orbit = elementsFromState(state.orbit, planet.mu);
-    // Ghost is a placeholder for sensor uncertainty (slice 3); scale the radial
-    // offset to the planet so it's visible in SI units. Slice 3 drives it off
-    // telemetry.sensorConfPct instead of a constant.
+    // The ghost conic is the sensor-uncertainty envelope, driven live by the
+    // Sensor Interp file's health. Read via the selector (not telemetry) so
+    // the band reflects this tick's memory state, not last tick's snapshot.
+    const uncertainty = (100 - selectSensorConfidence(state)) / 100;
     const opts: OrbitRenderOpts = {
       showGhost: true,
-      ghostScale: 1.04,
-      ghostDr: planet.R * 0.04,
+      ghostScale: 1 + GHOST_SCALE_SPAN * uncertainty,
+      ghostDr: planet.R * GHOST_DR_SPAN * uncertainty,
       headingRad: state.burn.heading,
       progradeRad: Math.atan2(state.orbit.vy, state.orbit.vx),
     };

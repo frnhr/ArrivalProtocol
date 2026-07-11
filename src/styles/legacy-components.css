@@ -290,6 +290,9 @@ body:not(.mode-memory) .dock > .dock-content.memory-view { display: none; }
 .ctrl-block:last-child { margin-bottom: 0; }
 .ctrl-label { display: flex; justify-content: space-between; align-items: baseline; font-size: 10px; color: var(--text-dim); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 8px; }
 .ctrl-label .val { color: var(--accent-bright); font-family: 'VT323', monospace; font-size: 20px; }
+.ctrl-label.eng-eff { margin: 6px 0 0; }
+.ctrl-label .val.warn { color: var(--warn); }
+.ctrl-label .val.good { color: var(--good); }
 input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; margin: 4px 0 0; }
 input[type=range]::-webkit-slider-runnable-track { height: 3px; background: linear-gradient(90deg, var(--accent) 0%, var(--accent) var(--p, 0%), rgba(141,110,61,0.25) var(--p, 0%)); }
 input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 12px; width: 12px; background: var(--accent-bright); border: 1px solid var(--bg); margin-top: -4px; box-shadow: 0 0 6px currentColor; cursor: pointer; }

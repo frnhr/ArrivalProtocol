@@ -1,5 +1,5 @@
 import type { GameState } from './schema';
-import type { Segment, RedundancySegment, FsToolSegment, CoreSegment } from '@/types/segment';
+import type { Segment, SegmentType, RedundancySegment, FsToolSegment, CoreSegment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 
 export function getSegmentById(state: GameState, id: string): Segment | undefined {
@@ -57,4 +57,67 @@ export function totalSize(state: GameState): number {
 // Drives the glitch overlay opacity and body filter intensity.
 export function selectCorruption(state: GameState): number {
   return Math.max(0, Math.min(1, (100 - state.ai.coreIntegrity) / 100));
+}
+
+// ── Memory → flight coupling ─────────────────────────────────────────────
+// Flight systems read the health of their backing files live, so damage in the
+// memory strip is felt at the controls and repairs pay off the moment they land.
+
+// States in which a copy contributes nothing to its system. `operating` covers
+// in-flight fs-tool ops (repair takes the file offline for the op's duration).
+const DEAD_STATES: ReadonlySet<string> = new Set(['inactive', 'offline', 'transferring', 'repairing']);
+
+function isLiveCopy(seg: Segment): boolean {
+  if (seg.operating) return false;
+  const state = 'state' in seg ? seg.state : undefined;
+  if (state !== undefined) return !DEAD_STATES.has(state);
+  // No explicit state: ship backups are dormant until swapped/activated
+  // (actionSwap/actionActivate set a state); everything else runs by default.
+  return seg.type !== 'ship-backup';
+}
+
+// Best integrity among live copies of a logical file. Move/Copy derivatives
+// keep the root id as a prefix ('engine' → 'engine_m…' / 'engine_c…'), so a
+// prefix match follows the file wherever the player relocates it. Returns
+// null when no live copy exists — the system is gone or fully offline.
+function bestLiveIntegrity(state: GameState, rootId: string, types: readonly SegmentType[]): number | null {
+  let best: number | null = null;
+  for (const seg of state.memory) {
+    if (!types.includes(seg.type) || !seg.id.startsWith(rootId)) continue;
+    if (!('integrity' in seg) || !isLiveCopy(seg)) continue;
+    if (best === null || seg.integrity > best) best = seg.integrity;
+  }
+  return best;
+}
+
+// Integrity → output authority. The floor keeps a badly damaged system limping
+// rather than dead — dead comes only from having no live copy at all.
+const EFF_FLOOR = 0.3;
+function effFromIntegrity(integrity: number): number {
+  return EFF_FLOOR + (1 - EFF_FLOOR) * Math.max(0, Math.min(100, integrity)) / 100;
+}
+
+// Delivered-thrust fraction (0..1): the Engine I/O tool (AI side) chained with
+// the active Thrust Controller copy (ship side) — two damage layers, two repair
+// flows (repair with redundancy vs swap in Thrust.alt). Either layer fully
+// offline (repairing, deactivated, deleted) kills thrust outright.
+// NOTE: fuel intentionally drains at COMMANDED throttle (orbit-sim), so a
+// degraded drivetrain also wastes propellant — repair is a fuel investment.
+export function selectEngineEffectiveness(state: GameState): number {
+  const engineIo = bestLiveIntegrity(state, 'engine', ['tool']);
+  const controller = bestLiveIntegrity(state, 'thrust', ['ship', 'ship-backup']);
+  if (engineIo === null || controller === null) return 0;
+  return effFromIntegrity(engineIo) * effFromIntegrity(controller);
+}
+
+// Sensor confidence (%) from the Sensor Interp tool. Even a pristine
+// interpreter never reaches 100 — residual uncertainty keeps the nav plot's
+// ghost band honest about the hidden mass. With no live copy the AI falls
+// back to dead reckoning.
+const SENSOR_CONF_MAX = 80;
+const SENSOR_CONF_DEAD_RECKONING = 15;
+export function selectSensorConfidence(state: GameState): number {
+  const interp = bestLiveIntegrity(state, 'sensint', ['tool']);
+  if (interp === null) return SENSOR_CONF_DEAD_RECKONING;
+  return Math.round(SENSOR_CONF_MAX * interp / 100);
 }

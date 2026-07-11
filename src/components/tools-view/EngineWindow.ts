@@ -1,5 +1,6 @@
 import type { Store } from '@state/store';
 import type { GameState, SasMode } from '@state/schema';
+import { selectEngineEffectiveness } from '@state/selectors';
 import { onGameTick } from '@systems/clock';
 import { evaluateInsertion } from '@systems/orbit-sim';
 
@@ -36,6 +37,20 @@ export function mountEngineWindow(store: Store<GameState>): () => void {
   thrust.addEventListener('input', onThrust);
   const unsubThrust = store.subscribe((s) => s.burn.thrustPct, (pct) => { thrust.value = String(pct); paintThrust(pct); });
   paintThrust(store.getState().burn.thrustPct);
+
+  // --- delivered-thrust readout: what the damaged drivetrain actually gives ---
+  // Repainted per game tick (repairs completing under time-warp show up live)
+  // AND on memoryRev (catches an instant backup swap made while paused).
+  const engEffVal = document.getElementById('engEffVal');
+  function paintEngEff(): void {
+    if (!engEffVal) return;
+    const eff = selectEngineEffectiveness(store.getState());
+    engEffVal.textContent = `${Math.round(eff * 100)}%`;
+    engEffVal.classList.toggle('warn', eff < 0.6);
+    engEffVal.classList.toggle('good', eff >= 0.95);
+  }
+  const unsubEngEff = store.subscribe((s) => s.ui.memoryRev, paintEngEff);
+  paintEngEff();
 
   // --- rotation thrusters: hold to apply torque; momentum persists; stop nulls it ---
   const setRot = (input: -1 | 0 | 1): void => store.update((d) => { d.burn.rotInput = input; });
@@ -115,7 +130,7 @@ export function mountEngineWindow(store: Store<GameState>): () => void {
       spinVal.textContent = Math.abs(dps) < 0.05 ? '0°/s' : `${dps > 0 ? '+' : ''}${dps.toFixed(1)}°/s`;
     }
   }
-  const offTick = onGameTick(() => paintAttitude());
+  const offTick = onGameTick(() => { paintAttitude(); paintEngEff(); });
   paintAttitude();
 
   // --- END INSERTION: the manual end. Always commits the current orbit and stops, grading
@@ -133,6 +148,7 @@ export function mountEngineWindow(store: Store<GameState>): () => void {
   return () => {
     thrust.removeEventListener('input', onThrust);
     unsubThrust();
+    unsubEngEff();
     rotCCW?.removeEventListener('pointerdown', onCCWDown);
     rotCW?.removeEventListener('pointerdown', onCWDown);
     document.removeEventListener('pointerup', onPointerUp);

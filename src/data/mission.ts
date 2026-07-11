@@ -14,10 +14,16 @@ export const INITIAL_MISSION: MissionMeta = {
   souls: 2400,
 };
 
+// Mission clock at arrival. Kept as a named constant (not just the seed) because
+// instance.ts hands INITIAL_CLOCK to the store BY REFERENCE — tSec mutates as the
+// game runs — and the debrief needs the true start time to compute elapsed time.
+export const MISSION_START_TSEC = 14 * 3600 + 23 * 60 + 47;    // T+ 14:23:47
+
 export const INITIAL_CLOCK: ClockState = {
-  tSec: 14 * 3600 + 23 * 60 + 47,    // T+ 14:23:47
-  speed: 1,
-  speedTarget: 1,
+  tSec: MISSION_START_TSEC,
+  // The run opens paused behind the briefing overlay; BEGIN APPROACH starts time.
+  speed: 0,
+  speedTarget: 0,
 };
 
 export const INITIAL_AI: AiState = {
@@ -92,7 +98,7 @@ export function seedBurn(): BurnState {
     holdTarget: heading,
     trueMassMt,
     thrustForce: THRUST_FORCE,
-    status: 'approaching',
+    status: 'briefing',
   };
 }
 
