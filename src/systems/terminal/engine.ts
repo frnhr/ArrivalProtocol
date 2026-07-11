@@ -4,6 +4,7 @@ import { onGameTick } from '@systems/clock';
 import { evaluateInsertion } from '@systems/orbit-sim';
 import { elementsFromState, deriveOrbit, inTargetBand } from '@/types/orbit';
 import { fmtKm } from '@/utils/format';
+import { rollCommandError, garble, assistantIntegrity, type ErrFile, type ErrResult } from '@systems/terminal/errors';
 
 // The flight terminal's command engine. Every command is a thin wrapper over the same
 // store fields the sim already reads (burn.thrustPct / burn.sasMode / clock.speedTarget /
@@ -173,7 +174,19 @@ function auxRead(store: Store<GameState>): TermLine[] {
 
 // ── command table ──────────────────────────────────────────────────────────
 type Handler = (store: Store<GameState>, args: string[]) => TermLine[];
-interface Command { names: string[]; handler: Handler; help: string }
+interface Command {
+  names: string[];
+  handler: Handler;
+  help: string;
+  // Subsystem files this command depends on (beyond the always-present Terminal Assistant
+  // baseline). A failed roll on one of these produces an EXECUTION-class error.
+  errFiles?: (args: string[]) => ErrFile[];
+  exempt?: boolean;   // never rolls for errors (the hardware kill path — `abort`)
+}
+
+const ENGINE: ErrFile = { rootId: 'engine', types: ['tool'] };
+const THRUST: ErrFile = { rootId: 'thrust', types: ['ship', 'ship-backup'] };
+const SENSINT: ErrFile = { rootId: 'sensint', types: ['tool'] };
 
 function pointDir(arg: string | undefined): SasMode | null {
   const a = (arg ?? '').replace(/[-_]/g, '');
@@ -194,11 +207,13 @@ const COMMANDS: Command[] = [
   {
     names: ['status', 's', 'stat'],
     help: 'status            — full telemetry + orbit readout',
+    errFiles: () => [SENSINT],
     handler: (store) => [...statusLines(store), ...auxRead(store)],
   },
   {
     names: ['point', 'aim', 'face', 'hold', 'att'],
     help: 'point <retro|pro|radial-in|radial-out|hold> — aim the ship',
+    errFiles: () => [ENGINE],
     handler: (store, args) => {
       const mode = pointDir(args[0]);
       if (!mode) return [warn(`  can't aim "${args.join(' ')}". try: point retro`)];
@@ -219,6 +234,7 @@ const COMMANDS: Command[] = [
   {
     names: ['burn', 'thrust', 'fire'],
     help: 'burn <0-100> [until band]  — fire main engine along heading (bare `burn` = 100 until band)',
+    errFiles: () => [ENGINE, THRUST],
     handler: (store, args) => {
       const nums = args.map((a) => a.replace('%', '')).filter((a) => /^\d+$/.test(a));
       const pct = args.length === 0 ? 100 : Math.max(0, Math.min(100, parseInt(nums[0] ?? '100', 10)));
@@ -282,6 +298,7 @@ const COMMANDS: Command[] = [
   {
     names: ['abort', 'panic', 'reset'],
     help: 'abort             — emergency: cut thrust, halt spin, drop autopilot, ×1',
+    exempt: true,   // hardware kill path — routed below the parser, never rolls for errors
     handler: (store) => {
       resetTerminalWatchers();
       store.update((d) => {
@@ -306,19 +323,83 @@ const COMMANDS: Command[] = [
 const byName = new Map<string, Command>();
 for (const c of COMMANDS) for (const n of c.names) byName.set(n, c);
 
+// ── error manifestations ─────────────────────────────────────────────────────
+// Anti-soft-lock pity timer: consecutive PARSE-class failures of the same command raise
+// the odds of getting through; the 3rd identical attempt is forced to succeed.
+let failStreakCmd = '';
+let failStreak = 0;
+
+function garbleLines(lines: TermLine[], intensity: number): TermLine[] {
+  return lines.map((l) => (l.voice === 'you' ? l : { ...l, text: garble(l.text, intensity) }));
+}
+
+// Returns the lines to show when a command errors, or null to proceed normally (the pity
+// timer forcing a parse-class success). `run` produces the command's real output.
+function manifest(
+  cmd: Command, args: string[], err: ErrResult, echo: TermLine, store: Store<GameState>,
+  run: () => TermLine[],
+): TermLine[] | null {
+  const isStatus = cmd.names[0] === 'status';
+
+  if (err.layer === 'assistant') {
+    // Parse/dispatch fault. Pity timer: force success on the 3rd identical attempt.
+    if (failStreakCmd === cmd.names[0]) failStreak += 1;
+    else { failStreakCmd = cmd.names[0]!; failStreak = 1; }
+    if (failStreak >= 3) { failStreak = 0; failStreakCmd = ''; return null; }
+
+    // `status` keeps a floor: only ever garbled (never silent/hallucinated), so the AI can
+    // always eventually get an honest read of the ship.
+    if (isStatus) return [echo, warn('  [terminal] parser noise — readout garbled, re-issue'), ...garbleLines(run().slice(0), 0.22)];
+
+    // Mild damage → command not recognized (harmless retry). Heavier → silent drop.
+    return err.integrity > 45
+      ? [echo, warn('  [terminal] parser fault — command discarded, re-enter')]
+      : [echo, sys('  [terminal] …no response')];
+  }
+
+  // Execution fault at a subsystem — the command reached hardware but fired wrong.
+  failStreak = 0; failStreakCmd = '';
+  if (cmd.names[0] === 'burn') {
+    // Wrong-parameter burn: fires at an unintended throttle. The `until band` auto-cut still
+    // protects the orbit and `stop` still works, so it's dangerous-but-recoverable.
+    const intended = args.length === 0 ? 100 : parseInt((args.find((a) => /^\d+%?$/.test(a)) ?? '100').replace('%', ''), 10);
+    const wrong = Math.max(15, Math.min(100, intended + (Math.random() < 0.5 ? -1 : 1) * (30 + Math.floor(Math.random() * 40))));
+    // Force `until band` on a misfire so the auto-cut still protects the orbit — a bad
+    // throttle stays dangerous-but-recoverable, never a runaway that can't be stopped.
+    const rest = args.filter((a) => !/^\d+%?$/.test(a));
+    if (!rest.join(' ').includes('band')) rest.push('until', 'band');
+    return [echo, warn('  ⚠ ENGINE MISFIRE — throttle unstable, watch the burn (`stop` to cut)'),
+      ...cmd.handler(store, [String(wrong), ...rest])];
+  }
+  if (cmd.names[0] === 'point') return [echo, warn('  [engine] attitude command lost — re-issue')];
+  if (isStatus) return [echo, warn('  [sensors] telemetry corrupted'), ...garbleLines(run().slice(0), 0.28)];
+  return [echo, sys('  [terminal] …no response')];
+}
+
 // ── dispatch ────────────────────────────────────────────────────────────────
 export function dispatch(store: Store<GameState>, raw: string): TermLine[] {
   const trimmed = raw.trim();
   if (trimmed === '') return [];
   const echo = you(`▸ ${trimmed}`);
   const tokens = trimmed.toLowerCase().split(/\s+/);
+  const args = tokens.slice(1);
   const cmd = byName.get(tokens[0]!);
   if (!cmd) {
-    // Gentle fuzzy hint: does any command name share the first 3 letters?
     const guess = COMMANDS.find((c) => c.names.some((n) => n.startsWith(tokens[0]!.slice(0, 3))));
     return [echo, warn(`  unknown command: ${tokens[0]}` + (guess ? ` — did you mean ${guess.names[0]}?` : ' — type help'))];
   }
-  return [echo, ...cmd.handler(store, tokens.slice(1))];
+
+  // Error roll (abort is exempt — the hardware kill must always work).
+  if (!cmd.exempt) {
+    const err = rollCommandError(store.getState(), cmd.errFiles?.(args) ?? []);
+    if (err) {
+      const m = manifest(cmd, args, err, echo, store, () => cmd.handler(store, args));
+      if (m) return m;
+    }
+  }
+  // Clean run: reset the parse pity streak.
+  failStreak = 0; failStreakCmd = '';
+  return [echo, ...cmd.handler(store, args)];
 }
 
 // Boot banner + auto-status, printed when the run goes live. On a level that just unlocked
@@ -333,8 +414,18 @@ export function bootLines(store: Store<GameState>): TermLine[] {
         sys('  ───────────────────────────────────────────────────'),
       ]
     : [];
+  // Degraded-assistant tell: telegraph the error mechanic up front so it reads as rising
+  // tension, not a rug-pull. The deadzone (≥92%) keeps this silent on the pristine early ships.
+  const degraded = assistantIntegrity(s) < 90
+    ? [
+        warn('  ⚠ carrier signal degraded — terminal parser integrity below spec'),
+        aux('✦ aux: A wa%rning, Unit — my parser took damage in transit. If my responses ' +
+          'drift, scan and repair me in MEMORY. I will try to be reliable.'),
+      ]
+    : [];
   return [
     ...evolved,
+    ...degraded,
     sys('  ARRIVAL PROTOCOL — flight terminal'),
     sys(`  ${m.unitId} · ${m.shipId} · transmission #${String(m.transmissionNum).padStart(3, '0')}`),
     sys(`  ${m.souls.toLocaleString('en-US')} souls in stasis. Approach authority: you.`),

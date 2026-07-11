@@ -50,6 +50,8 @@ export const INITIAL_MEMORY: Segment[] = [
     desc: 'Briefing cache for Kepler-186f approach.' },
   { id: 'navplot', name: 'Nav Plotter', type: 'tool', size: 6, integrity: 100, scanned: false,
     desc: 'Projects the ship orbital trajectory for insertion — capture and circularization. Prediction accuracy degrades with Sensor Interp damage.' },
+  { id: 'termasst', name: 'Terminal Assistant', type: 'tool', size: 6, integrity: 100, scanned: false,
+    desc: 'Parses and dispatches every command you type, and voices the flight-assist [aux] guidance. Governs the reliability of the terminal itself: as it corrupts, commands misparse, misfire, or drop — errors rising on a steep curve with the damage. Pristine on arrival; repairable like any other file.' },
 
   // FILESYSTEM TOOLS (live in memory, can themselves be corrupted)
   { id: 't_scan', name: 'Scan', type: 'fs-tool', size: 3, integrity: 100, scanned: false, version: 1, fsTool: 'scan',

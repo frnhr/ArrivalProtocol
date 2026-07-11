@@ -88,7 +88,7 @@ function isLiveCopy(seg: Segment): boolean {
 // KNOWN LIMIT: prefix matching means a future segment id sharing a root's
 // prefix would join that system; a first-class rootId field on Segment is the
 // deeper mechanism when the memory map grows past one ship.
-function bestLiveIntegrity(state: GameState, rootId: string, types: readonly SegmentType[]): number | null {
+export function bestLiveIntegrity(state: GameState, rootId: string, types: readonly SegmentType[]): number | null {
   let best: number | null = null;
   for (const seg of state.memory) {
     if (!types.includes(seg.type) || !seg.id.startsWith(rootId)) continue;
