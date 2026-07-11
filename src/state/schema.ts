@@ -3,7 +3,13 @@ import type { FsToolKind } from '@/types/fs-tool';
 import type { PlanetParams } from '@/types/orbit';
 
 export type ViewMode = 'tools' | 'memory';
-export type TimeSpeed = 0 | 1 | 100 | 10000 | 1000000 | 100000000;
+
+// Time-warp targets are powers of ten from real time (×1) up to MAX_SPEED_TARGET,
+// plus 0 for paused. The ×10 / ÷10 header buttons step the exponent; REAL TIME snaps
+// back to ×1; pause sets 0. speedTarget holds one of these discrete values and the
+// effective clock.speed glides toward it (the ramp lives in systems/clock.ts).
+export const REAL_TIME_SPEED = 1;
+export const MAX_SPEED_TARGET = 1e7;   // ×10M ceiling
 
 export interface MissionMeta {
   unitId: string;          // e.g. 'UNIT-047'
@@ -32,11 +38,11 @@ export interface TelemetryState {
 
 export interface ClockState {
   tSec: number;            // mission seconds
-  // EFFECTIVE multiplier the sim integrates by — continuous, not a TimeSpeed. It eases
-  // toward speedTarget at a fixed log rate (the glide lives in systems/clock.ts), so
-  // changing time-warp ramps through the orders of magnitude rather than jumping. 0 = paused.
+  // EFFECTIVE multiplier the sim integrates by — continuous. It eases toward speedTarget
+  // at a fixed log rate (the glide lives in systems/clock.ts), so changing time-warp ramps
+  // through the orders of magnitude rather than jumping. 0 = paused.
   speed: number;
-  speedTarget: TimeSpeed;  // the discrete value the player selected; speed glides toward this
+  speedTarget: number;     // discrete target: 0 = paused, else a power of ten ×1…×10M; speed glides toward this
 }
 
 export type BurnStatus = 'approaching' | 'inserted' | 'captured' | 'escaped' | 'crashed';

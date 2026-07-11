@@ -20,11 +20,19 @@ export function onGameTick(listener: GameTickListener): () => void {
 }
 
 // Time-warp glide. The header buttons pick a *target* multiplier; the effective
-// multiplier (clock.speed) eases toward it at a fixed rate in log10-space — a smooth
-// ramp through the orders of magnitude rather than an instant jump. Pause (target 0) is
-// exempt: halting is immediate, and resuming floors the effective speed at ×1 (done at
-// click time, in TimeControls) so there's a positive value to ramp up from.
-const GLIDE_SECONDS_PER_DECADE = 3;   // wall-seconds to change speed by one factor of ×10
+// multiplier (clock.speed) eases toward it in log10-space — a smooth ramp through the
+// orders of magnitude rather than an instant jump. Pause (target 0) is exempt: halting is
+// immediate, and resuming floors the effective speed at ×1 (done at click time, in
+// TimeControls) so there's a positive value to ramp up from.
+//
+// Rate model: FLOORED PROPORTIONAL. The glide rate (decades/sec) scales with the remaining
+// log-distance, so far targets glide fast instead of crawling at a flat pace — but it never
+// drops below a floor, so the last decade always arrives at a steady, readable speed and the
+// glide finishes in finite time (no asymptotic tail). The crossover sits one decade out:
+// beyond it the proportional term wins (accelerates big skips); within it the floor takes
+// over. e.g. ×1→×10 ≈ 3s (all floor), ×1→×100 ≈ 5.1s, ×1→×10M ≈ 8.8s (vs 21s flat).
+const GLIDE_SECONDS_PER_DECADE = 3;   // FLOOR: wall-seconds per ×10 within the final decade
+const GLIDE_TAU_SECONDS = 3;          // proportional time constant — rate = log-distance / this
 
 function advanceSpeedGlide(store: Store<GameState>, dtWall: number): void {
   const { speed, speedTarget } = store.getState().clock;
@@ -37,12 +45,18 @@ function advanceSpeedGlide(store: Store<GameState>, dtWall: number): void {
   const fromEff = speed < 1 ? 1 : speed;   // never take log of a halted clock
   const logFrom = Math.log10(fromEff);
   const logTarget = Math.log10(speedTarget);
-  const diff = logTarget - logFrom;
-  const maxStep = dtWall / GLIDE_SECONDS_PER_DECADE;   // decades reachable this frame
+  const diff = logTarget - logFrom;        // signed decades remaining
+  const absDiff = Math.abs(diff);
 
-  const nextEff = Math.abs(diff) <= maxStep
+  // Rate scales with distance but is floored, so big jumps accelerate while the final
+  // decade still arrives at the steady base pace. Symmetric: applies to speed-ups and
+  // slow-downs alike.
+  const rate = Math.max(1 / GLIDE_SECONDS_PER_DECADE, absDiff / GLIDE_TAU_SECONDS);
+  const step = rate * dtWall;              // decades reachable this frame
+
+  const nextEff = step >= absDiff
     ? speedTarget                                          // arrived — snap to the exact value
-    : Math.pow(10, logFrom + Math.sign(diff) * maxStep);
+    : Math.pow(10, logFrom + Math.sign(diff) * step);
   store.mutate((d) => { d.clock.speed = nextEff; });
 }
 

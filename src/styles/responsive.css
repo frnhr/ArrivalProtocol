@@ -457,7 +457,6 @@
 }
 
 @media (max-width: 400px) {
-  .speed-row .speed-btn:nth-child(n + 4) { display: none; }
   .mem-stat .lbl { font-size: 8px; }
   .seg.compact { min-height: 36px; }
   .dock > .dock-content.tools-view,

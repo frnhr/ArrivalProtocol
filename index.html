@@ -22,14 +22,12 @@
     <div class="time-controls">
       <span class="time-label">time</span>
       <div class="speed-row" id="speed">
-        <button class="speed-btn">❚❚</button>
-        <button class="speed-btn active">x1</button>
-        <button class="speed-btn">x100</button>
-        <button class="speed-btn">x10K</button>
-        <button class="speed-btn">x1M</button>
-        <button class="speed-btn">x100M</button>
+        <button class="speed-btn" id="speedPause" aria-label="pause">❚❚</button>
+        <button class="speed-btn active" id="speedReal">REAL TIME</button>
+        <button class="speed-btn" id="speedDown" aria-label="slow down ten times" disabled>/10</button>
+        <span class="speed-mult" id="speedMult">×1</span>
+        <button class="speed-btn" id="speedUp" aria-label="speed up ten times">×10</button>
       </div>
-      <span class="speed-mult" id="speedMult">×1</span>
       <span class="clock" id="clock">T+ 00014:23:47</span>
     </div>
   </div>
