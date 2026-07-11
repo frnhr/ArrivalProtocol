@@ -73,9 +73,18 @@ export interface OrbitVecState {
   tToPeriHrs: number;       // cheap time-to-periapsis estimate for the HUD
 }
 
-// Immutable per run: the planet the AI is inserting around, plus which attitude autopilot
-// helpers the engine exposes this level/version (everything else is flown manually).
+// Bridge windows that the graphical UI can expose. The player starts as a bare
+// terminal "kernel" (no windows) and re-earns each panel as the AI evolves.
+export type ToolWindowId = 'telemetry' | 'engine' | 'navplot';
+
+// Immutable per run: the planet the AI is inserting around, the evolution tier and
+// the graphical windows it unlocks, plus which attitude autopilot helpers the engine
+// exposes this level/version (everything else is flown manually or via the terminal).
 export interface LevelState {
+  index: number;           // 0-based level index (which ship / insertion this is)
+  tier: number;            // evolution tier — gates graphical windows (see `windows`)
+  phaseLabel: string;      // header crumb + burn-status prefix, e.g. 'BRAKING APPROACH'
+  windows: ToolWindowId[]; // graphical panels unlocked this level; [] = pure terminal
   planet: PlanetParams;
   sasModes: SasMode[];
 }

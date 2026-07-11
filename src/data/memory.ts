@@ -78,6 +78,27 @@ export const INITIAL_MEMORY: Segment[] = [
 ];
 
 // Returns a deep clone so callers can mutate freely without affecting the initial layout.
-export function createInitialMemory(): Segment[] {
-  return structuredClone(INITIAL_MEMORY);
+// `health` overrides per-segment integrity by id (e.g. heal the flight-critical files for
+// the trivial level-1 approach); the segment's visible state is re-derived from the new
+// integrity so a healed file reads 'intact'. Backups and encrypted partitions keep their
+// special state. Ids not present in `health` keep the template's authored damage.
+export function createInitialMemory(health: Record<string, number> = {}): Segment[] {
+  const mem = structuredClone(INITIAL_MEMORY);
+  for (const seg of mem) {
+    const override = health[seg.id];
+    if (override === undefined || !('integrity' in seg)) continue;
+    seg.integrity = override;
+    if (seg.type === 'ship-backup') continue;   // backups stay dormant regardless of health
+    if ('state' in seg && (seg.state === undefined || seg.state === 'intact' ||
+        seg.state === 'partial' || seg.state === 'corrupt')) {
+      seg.state = override > 90 ? 'intact' : override > 50 ? 'partial' : 'corrupt';
+    }
+  }
+  return mem;
 }
+
+// Flight-critical files start healthy at level 1 (the terminal "kernel" tutorial): full
+// delivered thrust and crisp sensors, so the single trim burn is trivial. The authored
+// transit damage (Engine I/O 38%, Thrust Controller 22%, Sensor Interp 78%) returns at
+// higher evolution tiers.
+export const LEVEL1_HEALTH: Record<string, number> = { engine: 100, thrust: 100, sensint: 100 };

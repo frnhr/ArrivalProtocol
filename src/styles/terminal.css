@@ -1,0 +1,85 @@
+/* ── Flight terminal ──────────────────────────────────────────────────────
+   The command surface for the early "kernel" tiers. Amber CRT: scrollback log +
+   one input line. Three voices are colour-coded (you / ship-OS / aux assistant). */
+
+/* Locked graphical windows / dock items (evolution gating) — wins over ToolsTabs. */
+.tool-locked { display: none !important; }
+
+.terminal {
+  position: absolute;
+  display: none;                 /* shown only in tools mode via the rule below */
+  flex-direction: column;
+  background: var(--window);
+  border: 1px solid var(--edge-bright);
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.5), inset 0 0 60px var(--ambient-2);
+  overflow: hidden;
+}
+body:not(.mode-memory) .terminal { display: flex; }
+
+/* Level-1 kernel: the terminal owns the whole tools surface. */
+.tools-view.terminal-primary .terminal {
+  top: var(--sp-8); left: var(--sp-8); right: var(--sp-8); bottom: var(--sp-8);
+}
+/* Once a window is unlocked, the terminal sits along the left as the control spine. */
+.tools-view:not(.terminal-primary) .terminal {
+  top: var(--sp-8); left: var(--sp-8); bottom: var(--sp-8); width: 460px;
+}
+
+.terminal-head {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
+  border-bottom: 1px solid var(--edge);
+  background: linear-gradient(180deg, rgba(255,167,38,0.06), transparent);
+  flex: 0 0 auto;
+}
+.term-grip { color: var(--accent); }
+.term-name { flex: 1; color: var(--accent); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; }
+.term-dot { color: var(--good); font-size: 10px; letter-spacing: 0.12em; }
+
+.term-log {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--sp-5) var(--sp-6);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  scrollbar-width: thin;
+}
+.term-line {
+  white-space: pre-wrap;         /* preserve leading-space column alignment AND wrap prose */
+  word-break: break-word;
+}
+.tl-you  { color: var(--accent-bright); }
+.tl-os   { color: var(--accent); }
+.tl-aux  { color: #d7e9a6; }     /* pale green-gold — the assistant's distinct voice */
+.tl-sys  { color: var(--text-dim); }
+.tl-warn { color: var(--warn); }
+.tl-good { color: var(--good); text-shadow: 0 0 8px rgba(178,255,89,0.35); }
+
+.term-inputrow {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-6);
+  border-top: 1px solid var(--edge);
+  background: rgba(0,0,0,0.25);
+  flex: 0 0 auto;
+}
+.term-prompt { color: var(--accent-bright); font-weight: 700; }
+.term-input {
+  flex: 1;
+  background: transparent; border: none; outline: none;
+  color: var(--accent-bright);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  caret-color: var(--accent-bright);
+  padding: 0;
+}
+.term-input::placeholder { color: var(--accent-dim); opacity: 0.75; }
+
+/* Mobile: terminal fills the tools area under the header. */
+@media (max-width: 720px) {
+  .tools-view .terminal,
+  .tools-view.terminal-primary .terminal {
+    top: var(--sp-3); left: var(--sp-3); right: var(--sp-3); bottom: var(--sp-3); width: auto;
+  }
+  .term-log { font-size: 12px; }
+}

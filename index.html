@@ -16,7 +16,7 @@
       <span class="sep">/</span>
       <span class="crumb">ARES-VII</span>
       <span class="sep">/</span>
-      <span class="crumb dim">BRAKING APPROACH</span>
+      <span class="crumb dim" id="phaseCrumb">BRAKING APPROACH</span>
     </div>
     <div class="spacer"></div>
     <div class="time-controls">
@@ -144,6 +144,20 @@
               </div>
             </div>
             <button class="engage" id="endInsertion">▣ end insertion</button>
+          </div>
+        </div>
+
+        <div class="terminal" id="terminal">
+          <div class="terminal-head">
+            <span class="term-grip">▌</span>
+            <span class="term-name">flight terminal</span>
+            <span class="term-dot" id="termDot">● online</span>
+          </div>
+          <div class="term-log" id="termLog"></div>
+          <div class="term-inputrow">
+            <span class="term-prompt">▸</span>
+            <input class="term-input" id="termInput" type="text" autocomplete="off"
+                   autocapitalize="off" spellcheck="false" placeholder="" aria-label="terminal input" />
           </div>
         </div>
 

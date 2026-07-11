@@ -21,6 +21,23 @@ export function mountBriefing(store: Store<GameState>): () => void {
   const root = document.getElementById('briefing');
   const beginBtn = document.getElementById('briefingBegin');
   const dockItem = document.querySelector<HTMLElement>('.dock-item[data-action="briefing"]');
+
+  // Level 1 "kernel" (no graphical windows unlocked): skip the modal briefing entirely and
+  // begin immediately — the terminal's own boot sequence is the intro. The terminal is
+  // mounted before this component, so its status subscription catches the transition.
+  if (store.getState().level.windows.length === 0) {
+    if (store.getState().burn.status === 'briefing') {
+      store.update((d) => {
+        d.burn.status = 'approaching';
+        d.burn.startedTSec = d.clock.tSec;
+        d.clock.speedTarget = 1;
+        d.clock.speed = 1;
+      });
+    }
+    if (root) root.hidden = true;
+    return () => {};
+  }
+
   if (!root || !beginBtn) {
     // The briefing is the ONLY writer of status 'approaching' — if its markup
     // is missing, holding the world would soft-lock the whole game. Fail open:
