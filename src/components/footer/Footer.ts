@@ -11,6 +11,7 @@ import { getActiveOpCount, onOpLoadChange } from '@systems/ops';
 // also listens to op-load changes (which never bump store state) so it tracks
 // live op start/finish.
 const BURN_STATUS_LABEL: Record<GameState['burn']['status'], string> = {
+  briefing: 'AWAITING COMMIT',
   approaching: 'IN PROGRESS',
   inserted: 'INSERTED ✓',
   captured: 'OFF-TARGET',

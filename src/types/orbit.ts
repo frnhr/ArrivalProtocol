@@ -18,6 +18,12 @@ export interface PlanetParams {
   mu: number;    // GM — reserved for the live-sim seam; UNUSED by the renderer
 }
 
+// The insertion-grading band test. Lives here (next to PlanetParams) so the
+// sim's verdict (evaluateInsertion) and the debrief's row colours share one rule.
+export function inTargetBand(planet: PlanetParams, r: number): boolean {
+  return r >= planet.rMin && r <= planet.rMax;
+}
+
 export interface OrbitRenderOpts {
   showGhost: boolean;
   ghostScale: number;   // multiplicative offset applied to e for the ghost conic

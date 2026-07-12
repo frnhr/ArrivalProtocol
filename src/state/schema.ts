@@ -39,7 +39,9 @@ export interface ClockState {
   speedTarget: TimeSpeed;  // the discrete value the player selected; speed glides toward this
 }
 
-export type BurnStatus = 'approaching' | 'inserted' | 'captured' | 'escaped' | 'crashed';
+// 'briefing' is the pre-flight hold: the world is paused behind the mission
+// briefing overlay until the player commits with BEGIN APPROACH.
+export type BurnStatus = 'briefing' | 'approaching' | 'inserted' | 'captured' | 'escaped' | 'crashed';
 
 // Attitude autopilot helpers (SAS-style). 'off' = manual rotation thrusters only; the rest
 // auto-slew the heading and hold it — 'hold' locks the current attitude, the others track a
@@ -55,7 +57,10 @@ export interface BurnState {
   holdTarget: number;       // captured heading for sasMode 'hold' (radians, inertial)
   trueMassMt: number;       // hidden; seeded within massEstMt ± massPmMt, never rendered
   thrustForce: number;      // engine constant; max accel = thrustForce / trueMass (km/s²)
-  status: BurnStatus;       // changed only on terminal crossing
+  // Run phase + outcome. Exactly two transitions: briefing → approaching (the
+  // player's BEGIN APPROACH commit) and approaching → terminal (once per run).
+  status: BurnStatus;
+  startedTSec: number;      // clock.tSec when BEGIN APPROACH committed — debrief elapsed base
 }
 
 // 2D two-body truth integrated by the orbit sim (planet at origin). SI-ish units
@@ -68,9 +73,19 @@ export interface OrbitVecState {
   tToPeriHrs: number;       // cheap time-to-periapsis estimate for the HUD
 }
 
-// Immutable per run: the planet the AI is inserting around, plus which attitude autopilot
-// helpers the engine exposes this level/version (everything else is flown manually).
+// Bridge windows that the graphical UI can expose. The player starts as a bare
+// terminal "kernel" (no windows) and re-earns each panel as the AI evolves.
+export type ToolWindowId = 'telemetry' | 'engine' | 'navplot';
+
+// Immutable per run: the planet the AI is inserting around, the evolution tier and
+// the graphical windows it unlocks, plus which attitude autopilot helpers the engine
+// exposes this level/version (everything else is flown manually or via the terminal).
 export interface LevelState {
+  index: number;           // 0-based level index (which ship / insertion this is)
+  tier: number;            // evolution tier — gates graphical windows (see `windows`)
+  phaseLabel: string;      // header crumb + burn-status prefix, e.g. 'BRAKING APPROACH'
+  windows: ToolWindowId[]; // graphical panels unlocked this level; [] = pure terminal
+  evolvedNote?: string;    // set when this level unlocks something — drives the EVOLVED beat
   planet: PlanetParams;
   sasModes: SasMode[];
 }

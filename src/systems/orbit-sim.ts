@@ -3,7 +3,8 @@ import type { GameState, BurnStatus } from '@state/schema';
 import { onGameTick } from '@systems/clock';
 import { stepAttitude } from '@systems/attitude';
 import { FUEL_BURN_RATE } from '@data/mission';
-import { elementsFromState, type PlanetParams } from '@/types/orbit';
+import { selectEngineEffectiveness, selectSensorConfidence } from '@state/selectors';
+import { elementsFromState, inTargetBand, type PlanetParams } from '@/types/orbit';
 
 // 2D two-body orbital-insertion sim. The AI arrives on an APPROXIMATE hyperbola (a large
 // miss; hidden true mass) and the player flies it in: a single main throttle thrusts
@@ -72,12 +73,11 @@ function segmentHitsCircle(ax: number, ay: number, bx: number, by: number, R: nu
 export function evaluateInsertion(
   orbit: Cartesian,
   planet: PlanetParams,
-): Exclude<BurnStatus, 'approaching' | 'crashed'> {
+): Exclude<BurnStatus, 'briefing' | 'approaching' | 'crashed'> {
   const els = elementsFromState(orbit, planet.mu);
   if (els.e >= 1) return 'escaped'; // open trajectory — flew / flying by
   const ra = (els.rp * (1 + els.e)) / (1 - els.e);
-  const inBand = (rr: number): boolean => rr >= planet.rMin && rr <= planet.rMax;
-  return inBand(els.rp) && inBand(ra) ? 'inserted' : 'captured';
+  return inTargetBand(planet, els.rp) && inTargetBand(planet, ra) ? 'inserted' : 'captured';
 }
 
 export function mountOrbitSim(store: Store<GameState>): () => void {
@@ -89,7 +89,12 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
     const burn = s0.burn;
 
     const fuelBefore = s0.telemetry.fuelPct;
-    const aMax = fuelBefore > 0 ? burn.thrustForce / burn.trueMassMt : 0;
+    // Memory → flight: the drivetrain only delivers what its backing files can
+    // carry (Engine I/O tool × active Thrust Controller copy). Fuel drain below
+    // stays proportional to COMMANDED throttle — a damaged drivetrain burns the
+    // same propellant for less thrust, which is the repair incentive.
+    const engEff = selectEngineEffectiveness(s0);
+    const aMax = fuelBefore > 0 ? (engEff * burn.thrustForce) / burn.trueMassMt : 0;
     const aThrust = (burn.thrustPct / 100) * aMax;
     const heading = burn.heading; // thrust direction this tick (fixed across sub-steps)
 
@@ -137,7 +142,11 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
     const tToPeriHrs = rDotV < 0 ? (r - els.rp) / Math.max(vRadial, 1e-9) / 3600 : Infinity;
 
     // Fuel drains by GAME-TIME (∝ dtGame), independent of sub-step count.
-    const fuelDelta = fuelBefore > 0 ? FUEL_BURN_RATE * (burn.thrustPct / 100) * dtGame : 0;
+    // Drain follows COMMANDED throttle — a degraded drivetrain wastes propellant
+    // — but a fully OFFLINE drivetrain (engEff 0: file deleted, deactivated, or
+    // mid-repair) pumps nothing, so an open throttle costs nothing while dead.
+    const fuelDelta = fuelBefore > 0 && engEff > 0
+      ? FUEL_BURN_RATE * (burn.thrustPct / 100) * dtGame : 0;
     const fuelAfter = Math.max(0, fuelBefore - fuelDelta);
 
     // Attitude (per tick, game-time): the autopilot helpers (sasMode) slew the heading
@@ -178,6 +187,10 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
       t.distance = Math.max(0, r - planet.R);
       t.etaHrs = tToPeriHrs;
       t.fuelPct = fuelAfter;
+      // Live sensor confidence from the Sensor Interp file's health — the HUD
+      // readout tracks it via paintTelemetry; the NAV PLOT reads the selector
+      // directly so its ghost band stays fresh even across pauses.
+      t.sensorConfPct = selectSensorConfidence(s0);
     });
 
     // …then flip status (update → subscribers read consistent terminal geometry).

@@ -1,5 +1,6 @@
 import type { Store } from '@state/store';
 import type { GameState, SasMode } from '@state/schema';
+import { selectEngineEffectiveness } from '@state/selectors';
 import { onGameTick } from '@systems/clock';
 import { evaluateInsertion } from '@systems/orbit-sim';
 
@@ -36,6 +37,22 @@ export function mountEngineWindow(store: Store<GameState>): () => void {
   thrust.addEventListener('input', onThrust);
   const unsubThrust = store.subscribe((s) => s.burn.thrustPct, (pct) => { thrust.value = String(pct); paintThrust(pct); });
   paintThrust(store.getState().burn.thrustPct);
+
+  // --- delivered-thrust readout: what the damaged drivetrain actually gives ---
+  // memoryRev alone is the repaint trigger: EVERY mutation the effectiveness
+  // selector reads (integrity, segment state, swaps, op start/end — including
+  // repairs completing under time-warp) is followed by a memoryRev bump, so a
+  // per-tick repaint would only recompute an unchanged value 20×/sec.
+  const engEffVal = document.getElementById('engEffVal');
+  function paintEngEff(): void {
+    if (!engEffVal) return;
+    const eff = selectEngineEffectiveness(store.getState());
+    engEffVal.textContent = `${Math.round(eff * 100)}%`;
+    engEffVal.classList.toggle('warn', eff < 0.6);
+    engEffVal.classList.toggle('good', eff >= 0.95);
+  }
+  const unsubEngEff = store.subscribe((s) => s.ui.memoryRev, paintEngEff);
+  paintEngEff();
 
   // --- rotation thrusters: hold to apply torque; momentum persists; stop nulls it ---
   const setRot = (input: -1 | 0 | 1): void => store.update((d) => { d.burn.rotInput = input; });
@@ -133,6 +150,7 @@ export function mountEngineWindow(store: Store<GameState>): () => void {
   return () => {
     thrust.removeEventListener('input', onThrust);
     unsubThrust();
+    unsubEngEff();
     rotCCW?.removeEventListener('pointerdown', onCCWDown);
     rotCW?.removeEventListener('pointerdown', onCWDown);
     document.removeEventListener('pointerup', onPointerUp);

@@ -64,6 +64,13 @@ export function mountClock(store: Store<GameState>): () => void {
   const distEl = document.getElementById('distVal');
   const etaEl = document.getElementById('etaVal');
   const fuelEl = document.getElementById('fuelVal');
+  const sensConfEl = document.getElementById('sensConfVal');
+  const sensConfRow = sensConfEl?.closest('.readout') ?? null;
+
+  // Sensor confidence only changes on memory events, unlike its per-tick
+  // neighbours — skip the identical rewrites (same discipline as the clock
+  // text below, which only repaints when the displayed second changes).
+  let lastSensConf = -1;
 
   function paintTelemetry(): void {
     const t = store.getState().telemetry;
@@ -71,6 +78,13 @@ export function mountClock(store: Store<GameState>): () => void {
     if (distEl) distEl.textContent = Math.round(t.distance).toLocaleString('en-US');
     if (etaEl) etaEl.textContent = fmtEta(t.etaHrs);
     if (fuelEl) fuelEl.textContent = Math.round(t.fuelPct).toString();
+    const sensConf = Math.round(t.sensorConfPct);
+    if (sensConf !== lastSensConf) {
+      lastSensConf = sensConf;
+      if (sensConfEl) sensConfEl.textContent = sensConf.toString();
+      // Amber-alert the row while confidence is low — the nudge toward memory mode.
+      if (sensConfRow) sensConfRow.classList.toggle('alert', sensConf < 70);
+    }
   }
 
   // Paint initial state

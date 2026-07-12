@@ -6,6 +6,7 @@ import './styles/base.css';
 import './styles/glitch.css';
 import './styles/legacy-components.css';
 import './styles/responsive.css';
+import './styles/terminal.css';
 
 import { store } from '@state/instance';
 import type { Segment } from '@/types/segment';
@@ -24,6 +25,10 @@ import { mountWindowGrips } from '@components/tools-view/WindowGrip';
 import { mountMemoryStats } from '@components/memory-view/MemoryStats';
 import { mountFooter } from '@components/footer/Footer';
 import { mountBurnResult } from '@components/burn/BurnResult';
+import { mountBriefing } from '@components/briefing/Briefing';
+import { mountTerminal } from '@components/terminal/Terminal';
+import { mountAssistant } from '@components/assistant/Assistant';
+import { mountEvolution } from '@systems/evolution';
 import { mountFsToolsSystem, applyTool, getCursorXY, pickUpTool } from '@systems/fs-tools';
 import { mountCursorFollower } from '@components/cursor-follower/CursorFollower';
 import { mountMemoryStrip } from '@components/memory-view/MemoryStrip';
@@ -126,6 +131,13 @@ mountFsToolPill(store);
 mountSidebarFilters(store);
 mountFooter(store);
 mountBurnResult(store);
+// Terminal mounts BEFORE Briefing so its burn.status subscription is live when a
+// terminal-kernel level auto-begins the run. Evolution gates which graphical windows
+// exist before either runs.
+mountTerminal(store);
+mountAssistant(store);
+mountEvolution(store);
+mountBriefing(store);
 mountPlacement(store, memWrap);
 
 // Wire the AI Core's `capacity` into the ops engine's hard cap. Re-sync on
@@ -197,3 +209,8 @@ if (engine) store.update((d) => { d.ui.selectedId = engine.id; });
 
 paintInspectSubtitle();
 store.subscribe((s) => s, paintInspectSubtitle, () => false);
+
+// Dev-only: expose the store for in-browser probing / Playwright assertions.
+if (import.meta.env.DEV) {
+  (window as unknown as { __store?: typeof store }).__store = store;
+}

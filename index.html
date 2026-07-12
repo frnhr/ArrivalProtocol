@@ -12,11 +12,11 @@
 
   <div class="header">
     <div class="id-block">
-      <span class="crumb">UNIT-047</span>
+      <span class="crumb" id="unitCrumb">UNIT-047</span>
       <span class="sep">/</span>
-      <span class="crumb">ARES-VII</span>
+      <span class="crumb" id="shipCrumb">ARES-VII</span>
       <span class="sep">/</span>
-      <span class="crumb dim">BRAKING APPROACH</span>
+      <span class="crumb dim" id="phaseCrumb">BRAKING APPROACH</span>
     </div>
     <div class="spacer"></div>
     <div class="time-controls">
@@ -43,7 +43,7 @@
         <div class="dock-item open" data-tool="engine"><span class="mark">●</span><span>Engine</span></div>
         <div class="dock-item open" data-tool="navplot"><span class="mark">●</span><span>Nav Plot</span></div>
         <div class="dock-section">Mission</div>
-        <div class="dock-item"><span class="mark">○</span><span>Briefing</span></div>
+        <div class="dock-item" data-action="briefing"><span class="mark">○</span><span>Briefing</span></div>
         <div class="dock-item"><span class="mark">○</span><span>Hazards</span></div>
         <div class="dock-section">System</div>
         <div class="dock-item"><span class="mark">○</span><span>Event Log</span></div>
@@ -99,7 +99,7 @@
             <div class="readout"><span class="label">t-peri</span><span><span class="value" id="etaVal">350</span><span class="unit">hrs</span></span></div>
             <div class="readout"><span class="label">fuel</span><span><span class="value" id="fuelVal">87</span><span class="unit">%</span></span></div>
             <div class="readout"><span class="label">mass est.</span><span><span class="value">8.2</span><span class="pm"> ±0.3</span><span class="unit">Mt</span></span></div>
-            <div class="readout alert"><span class="label">sensor conf.</span><span><span class="value">62</span><span class="unit">%</span></span></div>
+            <div class="readout alert"><span class="label">sensor conf.</span><span><span class="value" id="sensConfVal">62</span><span class="unit">%</span></span></div>
             <div class="strip">
               <div class="strip-label">velocity · last 48h</div>
               <svg viewBox="0 0 300 50" preserveAspectRatio="none">
@@ -122,6 +122,7 @@
               <div class="ctrl-label"><span>thrust</span><span class="val" id="thrustVal">0%</span></div>
               <input type="range" min="0" max="100" value="0" id="thrust" style="--p:0%">
               <div class="scale"><span>0</span><span>50</span><span>100</span></div>
+              <div class="ctrl-label eng-eff"><span>delivered</span><span class="val" id="engEffVal">—</span></div>
             </div>
             <div class="ctrl-block">
               <div class="ctrl-label"><span>heading</span><span class="val" id="headingVal">PRO +0°</span></div>
@@ -144,6 +145,25 @@
             </div>
             <button class="engage" id="endInsertion">▣ end insertion</button>
           </div>
+        </div>
+
+        <div class="terminal" id="terminal">
+          <div class="terminal-head">
+            <span class="term-grip">▌</span>
+            <span class="term-name">flight terminal</span>
+            <span class="term-dot" id="termDot">● online</span>
+          </div>
+          <div class="term-log" id="termLog"></div>
+          <div class="term-inputrow">
+            <span class="term-prompt">▸</span>
+            <input class="term-input" id="termInput" type="text" autocomplete="off"
+                   autocapitalize="off" spellcheck="false" placeholder="" aria-label="terminal input" />
+          </div>
+        </div>
+
+        <div class="assistant" id="assistant">
+          <div class="asst-header" id="asstHeader">✦ AUX ASSISTANT</div>
+          <div class="asst-body" id="asstBody"></div>
         </div>
 
         <div class="window navplot-win" data-seg="navplot">
@@ -242,7 +262,38 @@
     <div class="burn-result-card">
       <div class="burn-result-title" id="burnResultTitle"></div>
       <div class="burn-result-sub" id="burnResultSub"></div>
+      <div class="burn-result-stats" id="burnResultStats"></div>
       <button class="burn-result-retry" id="burnResultRetry">↻ RETRANSMIT</button>
+    </div>
+  </div>
+
+  <!-- Mission briefing — blocks the run until BEGIN APPROACH; reopens from the dock -->
+  <div class="burn-result briefing" id="briefing" hidden>
+    <div class="burn-result-card briefing-card">
+      <div class="briefing-kicker" id="briefTransmission">TRANSMISSION</div>
+      <div class="burn-result-title">MISSION BRIEFING</div>
+      <div class="briefing-meta"><span id="briefDestination"></span><br><span id="briefSouls"></span></div>
+      <div class="briefing-block">
+        <div class="briefing-heading">▌ objective</div>
+        <p>Bend the hyperbolic approach into a stable orbit inside the target
+        band — <strong id="briefBand"></strong> — then commit with
+        <strong>END INSERTION</strong>. Under-brake and you escape; over-brake
+        and you fall into the planet.</p>
+      </div>
+      <div class="briefing-block">
+        <div class="briefing-heading">▌ transit damage report</div>
+        <ul class="briefing-list">
+          <li>Thrust response degraded — cause unknown. Run diagnostics in <strong>MEMORY</strong> view; repairs consume quantum redundancy.</li>
+          <li>Sensor confidence low — the plotted trajectory is a prediction; its error band is drawn on the NAV PLOT.</li>
+          <li>Drivetrain damage wastes propellant: fuel burns at commanded throttle, not delivered thrust.</li>
+        </ul>
+      </div>
+      <div class="briefing-block">
+        <div class="briefing-heading">▌ advisory</div>
+        <p>The approach window is long. Time compression is your ally — but
+        repairs run on the same clock you are compressing.</p>
+      </div>
+      <button class="burn-result-retry" id="briefingBegin">▶ BEGIN APPROACH</button>
     </div>
   </div>
 

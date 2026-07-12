@@ -9,6 +9,8 @@ Heavy aesthetic debt to *Uplink* (2001): the entire game lives in a UI of window
 Early prototype, refactored into a Vite + TypeScript modular structure (`src/`). The in-flight UI covers:
 
 - A two-mode desktop: **TOOLS** (amber CRT, where you fly the ship) and **MEMORY** (neon blue, where you inspect and repair the AI's own memory)
+- A playable orbital-insertion run: mission briefing → fly the hyperbolic approach into the target band → outcome debrief → retransmit
+- **Memory ↔ flight coupling**: the Engine I/O tool and the ship's Thrust Controller derate delivered thrust (repair one with redundancy, swap in the backup for the other); Sensor Interp health drives the NAV PLOT's live uncertainty band and the sensor-confidence readout
 - An interactive repair flow (offline → progress bar → repaired) consuming quantum redundancy
 - A filesystem-tools-as-memory-segments mechanic (Scan, Repair, Move, Copy, Delete all live in memory and can themselves be corrupted)
 - A glitch overlay demonstrating AI Core corruption effects

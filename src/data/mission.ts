@@ -2,22 +2,26 @@ import type {
   MissionMeta, TelemetryState, ClockState, AiState,
   BurnState, OrbitVecState, LevelState,
 } from '@state/schema';
-import { stateFromElements, type PlanetParams, type OrbitState } from '@/types/orbit';
+import { stateFromElements, type OrbitState } from '@/types/orbit';
+import { currentLevel, currentLevelIndex, isFreshArrival } from '@data/levels';
 
-export const INITIAL_MISSION: MissionMeta = {
-  unitId: 'UNIT-047',
-  shipId: 'ARES-VII',
-  sector: 'SECTOR 03',
-  destination: 'KEPLER-186',
-  distanceLy: 581,
-  transmissionNum: 47,
-  souls: 2400,
-};
+// Everything below is seeded from the CURRENT level (levels.ts, sessionStorage-backed).
+// A RETRANSMIT reloads the page, so these module-load constants re-read the level that a
+// successful insertion advanced to.
+const LVL = currentLevel();
+
+export const INITIAL_MISSION: MissionMeta = { ...LVL.mission };
+
+// Mission clock at arrival. Kept as a named constant (not just the seed) because
+// instance.ts hands INITIAL_CLOCK to the store BY REFERENCE — tSec mutates as the
+// game runs — and the debrief needs the true start time to compute elapsed time.
+export const MISSION_START_TSEC = 14 * 3600 + 23 * 60 + 47;    // T+ 14:23:47
 
 export const INITIAL_CLOCK: ClockState = {
-  tSec: 14 * 3600 + 23 * 60 + 47,    // T+ 14:23:47
-  speed: 1,
-  speedTarget: 1,
+  tSec: MISSION_START_TSEC,
+  // The run opens paused behind the briefing overlay; BEGIN APPROACH starts time.
+  speed: 0,
+  speedTarget: 0,
 };
 
 export const INITIAL_AI: AiState = {
@@ -26,30 +30,14 @@ export const INITIAL_AI: AiState = {
 };
 
 // --- Orbital insertion level (SI-ish units: km, km/s, μ in km³/s²) ---
-// Mars-ish planet. The NAV PLOT renderer is scale-free, so we pick physical units so
-// the HUD reads in real km/s and km with no conversion layer.
-const PLANET: PlanetParams = { R: 3390, rAtm: 3800, rMin: 5000, rMax: 7000, mu: 43000 };
-
-// Incoming hyperbola (e > 1). The periapsis arrives FAR ABOVE the band — a large miss,
-// randomized each run — so the opening move is to steer it down toward the band, then
-// brake/shape and commit when the whole orbit sits in the band.
-const E0 = 1.6;
-const OMEGA0 = -0.6;
-const RP_SEED_MIN = 250_000;
-const RP_SEED_MAX = 400_000;
-// Starting distance from the planet (the ship coasts in from here).
-const START_RADIUS = 778_000;
-
-// Hidden mass: the estimate ± uncertainty shown to the player; true value seeded within
-// the band and never rendered. With the narrow "whole orbit in band" target, this
-// ±3.7% meaningfully shifts the burn the player needs.
-const MASS_EST_MT = 8.2;
-const MASS_PM_MT = 0.3;
-
-// Engine: max accel = THRUST_FORCE / trueMassMt (km/s²); the main throttle scales thrust
-// along the ship heading within that. Enough authority to steer a large miss in over the
-// long approach, still controllable near periapsis at low throttle / low time-compression.
-const THRUST_FORCE = 0.03;
+// All geometry/engine constants come from the current level definition (levels.ts).
+const PLANET = LVL.planet;
+const E0 = LVL.approach.e;
+const OMEGA0 = LVL.approach.omega;
+const START_RADIUS = LVL.approach.startR;
+const MASS_EST_MT = LVL.massEstMt;
+const MASS_PM_MT = LVL.massPmMt;
+const THRUST_FORCE = LVL.thrustForce;
 
 // Fuel drain per game-second at full thrust. Running dry auto-commits the current orbit.
 // Generous for now so the 2-axis flying can be learned without fuel frustration; tighten
@@ -57,20 +45,29 @@ const THRUST_FORCE = 0.03;
 const FUEL_RATE = 0.005;
 export const FUEL_BURN_RATE = FUEL_RATE;
 
-const INITIAL_FUEL_PCT = 100;
-const INITIAL_SENSOR_CONF_PCT = 62;
+const INITIAL_FUEL_PCT = LVL.fuelPct;
+const INITIAL_SENSOR_CONF_PCT = LVL.sensorConfPct;
 
-// Randomized incoming periapsis + the inbound true anomaly that places the ship at
-// START_RADIUS on that hyperbola. Computed once per load so seedOrbit and
-// INITIAL_TELEMETRY agree; a reload (Retransmit) reseeds for a fresh approach.
-const SEED_RP = RP_SEED_MIN + Math.random() * (RP_SEED_MAX - RP_SEED_MIN);
+// Periapsis + the inbound true anomaly that places the ship at START_RADIUS on the conic
+// (nu < 0 = approaching periapsis).
+const SEED_RP = LVL.approach.rp;
 const SEED_NU = -Math.acos(Math.max(-1, Math.min(1, ((SEED_RP * (1 + E0)) / START_RADIUS - 1) / E0)));
 
+// Computed once at module load (like the other seeds). The EVOLVED beat is included only on
+// the FIRST arrival at this level, so a failed-run RETRANSMIT into the same level doesn't
+// re-congratulate an already-owned capability. Both consumers (the toast in evolution.ts and
+// the terminal boot line) read level.evolvedNote, so they always agree.
+const FRESH_ARRIVAL = isFreshArrival(currentLevelIndex());
+
 export function seedLevel(): LevelState {
-  // All attitude helpers unlocked for now; gate per level / engine version later.
   return {
+    index: currentLevelIndex(),
+    tier: LVL.tier,
+    phaseLabel: LVL.phaseLabel,
+    windows: [...LVL.windows],
+    ...(LVL.evolvedNote && FRESH_ARRIVAL ? { evolvedNote: LVL.evolvedNote } : {}),
     planet: { ...PLANET },
-    sasModes: ['hold', 'prograde', 'retrograde', 'radial-in', 'radial-out'],
+    sasModes: [...LVL.sasModes],
   };
 }
 
@@ -92,7 +89,10 @@ export function seedBurn(): BurnState {
     holdTarget: heading,
     trueMassMt,
     thrustForce: THRUST_FORCE,
-    status: 'approaching',
+    status: 'briefing',
+    // Overwritten with the live clock at BEGIN APPROACH; the seed only matters
+    // if a future change lets time pass during the pre-commit hold.
+    startedTSec: MISSION_START_TSEC,
   };
 }
 

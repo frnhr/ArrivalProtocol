@@ -1,0 +1,182 @@
+/* ── Flight terminal ──────────────────────────────────────────────────────
+   The command surface for the early "kernel" tiers. Amber CRT: scrollback log +
+   one input line. Three voices are colour-coded (you / ship-OS / aux assistant). */
+
+/* Locked graphical windows / dock items (evolution gating) — wins over ToolsTabs. */
+.tool-locked { display: none !important; }
+
+.terminal {
+  position: absolute;
+  display: none;                 /* shown only in tools mode via the rule below */
+  flex-direction: column;
+  background: var(--window);
+  border: 1px solid var(--edge-bright);
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.5), inset 0 0 60px var(--ambient-2);
+  overflow: hidden;
+}
+body:not(.mode-memory) .terminal { display: flex; }
+
+/* Three columns within the dock-inset tools surface (~1128px at 1280 viewport): the terminal
+   (left, control), the graphical windows (middle, re-earned), the Assistant panel (right).
+   right:auto on the windows clears their default right-anchor so they don't stretch under
+   the Assistant. */
+.terminal {
+  top: var(--sp-8); left: var(--sp-8); bottom: var(--sp-8); width: 424px;
+}
+.tools-view:not(.terminal-primary) .navplot-win { left: 460px; right: auto; top: var(--sp-8); width: 300px; }
+.tools-view:not(.terminal-primary) .telemetry-win { left: 460px; right: auto; top: 448px; bottom: var(--sp-8); width: 300px; }
+
+.terminal-head {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
+  border-bottom: 1px solid var(--edge);
+  background: linear-gradient(180deg, rgba(255,167,38,0.06), transparent);
+  flex: 0 0 auto;
+}
+.term-grip { color: var(--accent); }
+.term-name { flex: 1; color: var(--accent); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; }
+.term-dot { color: var(--good); font-size: 10px; letter-spacing: 0.12em; }
+
+.term-log {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: var(--sp-5) var(--sp-6);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  scrollbar-width: thin;
+}
+.term-line {
+  white-space: pre-wrap;         /* preserve leading-space column alignment AND wrap prose */
+  word-break: break-word;
+}
+.tl-you  { color: var(--accent-bright); }
+.tl-os   { color: var(--accent); }
+.tl-aux  { color: #d7e9a6; }     /* pale green-gold — the assistant's distinct voice */
+.tl-sys  { color: var(--text-dim); }
+.tl-warn { color: var(--warn); }
+.tl-good { color: var(--good); text-shadow: 0 0 8px rgba(178,255,89,0.35); }
+
+.term-inputrow {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-6);
+  border-top: 1px solid var(--edge);
+  background: rgba(0,0,0,0.25);
+  flex: 0 0 auto;
+}
+.term-prompt { color: var(--accent-bright); font-weight: 700; }
+.term-input {
+  flex: 1;
+  background: transparent; border: none; outline: none;
+  color: var(--accent-bright);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  caret-color: var(--accent-bright);
+  padding: 0;
+}
+.term-input::placeholder { color: var(--accent-dim); opacity: 0.75; }
+
+/* ── Assistant panel ── the aux persona's own interface (chat + actions), degrading to a
+   bare arrow-key SAFE MODE menu as its file corrupts. Right column at every tier. */
+.assistant {
+  position: absolute;
+  display: none;
+  flex-direction: column;
+  top: var(--sp-8); right: var(--sp-8); bottom: var(--sp-8); width: 300px;
+  background: var(--window);
+  border: 1px solid var(--edge-bright);
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.5), inset 0 0 60px var(--ambient-2);
+  overflow: hidden;
+}
+body:not(.mode-memory) .assistant { display: flex; }
+.asst-header {
+  flex: 0 0 auto;
+  padding: var(--sp-3) var(--sp-5);
+  border-bottom: 1px solid var(--edge);
+  color: #d7e9a6;
+  font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+  background: linear-gradient(180deg, rgba(215,233,166,0.06), transparent);
+}
+.asst-header.warn { color: var(--accent); }
+.asst-header.safe { color: var(--warn); animation: flicker 2.8s infinite; }
+.asst-body { flex: 1 1 auto; display: flex; flex-direction: column; overflow: hidden; }
+.asst-chat {
+  flex: 1 1 auto; overflow-y: auto;
+  padding: var(--sp-4) var(--sp-5);
+  display: flex; flex-direction: column; gap: var(--sp-3);
+  scrollbar-width: thin;
+}
+.asst-bubble {
+  color: #d7e9a6;
+  background: rgba(215,233,166,0.06);
+  border-left: 2px solid rgba(215,233,166,0.5);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 12px; line-height: 1.5;
+}
+.asst-actions {
+  flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-5); border-top: 1px solid var(--edge);
+}
+.asst-btn {
+  font: inherit; font-size: 12px; cursor: pointer;
+  color: var(--accent-bright); background: transparent;
+  border: 1px solid var(--accent-dim); padding: var(--sp-2) var(--sp-4);
+  letter-spacing: 0.06em;
+  transition: border-color var(--t-med), color var(--t-med), background var(--t-med);
+}
+.asst-btn:hover { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+/* SAFE MODE — bare menu, no chat. */
+.asst-safe-note {
+  flex: 0 0 auto; padding: var(--sp-4) var(--sp-5);
+  color: var(--text-dim); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  border-bottom: 1px solid var(--edge);
+}
+/* SAFE MODE keeps only the latest guidance line (limited history). */
+.asst-last {
+  flex: 0 0 auto; padding: var(--sp-3) var(--sp-5);
+  color: #d7e9a6; opacity: 0.85; font-size: 11px; line-height: 1.5;
+  min-height: 2.4em; border-bottom: 1px solid var(--edge);
+}
+.asst-menu { flex: 1 1 auto; outline: none; padding: var(--sp-4) 0; }
+.asst-menu-item {
+  padding: var(--sp-2) var(--sp-6);
+  font-family: 'JetBrains Mono', monospace; font-size: 14px;
+  color: var(--text-dim); white-space: pre; cursor: pointer;
+}
+.asst-menu-item.sel { color: var(--warn); background: rgba(255,107,61,0.10); }
+
+/* EVOLVED beat — a transient toast when a level unlocks a new capability. */
+.evolved-toast {
+  position: fixed;
+  top: 64px; left: 50%;
+  transform: translate(-50%, -12px);
+  z-index: 220;
+  padding: var(--sp-4) var(--sp-7);
+  background: var(--window);
+  border: 1px solid var(--good);
+  color: var(--good);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  box-shadow: 0 0 24px rgba(178,255,89,0.35);
+  opacity: 0;
+  transition: opacity var(--t-slow) ease, transform var(--t-slow) ease;
+  pointer-events: none;
+}
+.evolved-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* Mobile: the terminal is the whole tools surface at every level. The graphical bridge
+   windows are desktop-only readouts here — hiding them avoids the terminal overlapping an
+   unlocked panel and sidesteps the tab-selection picking a locked window. You fly by
+   terminal on mobile regardless of tier. */
+@media (max-width: 720px) {
+  .tools-view .telemetry-win,
+  .tools-view .engine-win,
+  .tools-view .navplot-win,
+  .assistant { display: none !important; }
+  .tools-view .terminal {
+    top: var(--sp-3); left: var(--sp-3); right: var(--sp-3); bottom: var(--sp-3); width: auto;
+  }
+  .term-log { font-size: 12px; }
+}
