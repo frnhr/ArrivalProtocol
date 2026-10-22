@@ -2,6 +2,8 @@ import type { Store } from '@state/store';
 import type { GameState, FilterKey, StatusKey } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import { ALL_FILTER_KEYS, categoryOf, countByStatus, matchesStatus } from '@state/sidebar-filters';
+import { archiveSealed } from '@state/selectors';
+import { requireById } from '@components/dom';
 
 // Owns click handlers on Filter / Status dock items, plus their visual state
 // (mark dot + .open class + live counts). State lives in store.ui.filtersOff
@@ -33,16 +35,16 @@ export function mountSidebarFilters(store: Store<GameState>): () => void {
     const memory = store.getState().memory;
     const ids = new Set<string>();
     for (const seg of memory) if (predicate(seg)) ids.add(seg.id);
-    document.querySelectorAll<HTMLElement>('.seg').forEach((el) => {
-      const id = el.dataset.id;
-      if (id && ids.has(id)) el.classList.add('hl-preview');
+    document.querySelectorAll<HTMLElement>('.seg').forEach((part) => {
+      const id = part.dataset.id;
+      if (id && ids.has(id)) part.classList.add('hl-preview');
     });
   }
 
   function clearHighlight(): void {
     document
       .querySelectorAll('.seg.hl-preview')
-      .forEach((el) => el.classList.remove('hl-preview'));
+      .forEach((part) => part.classList.remove('hl-preview'));
   }
 
   function bindItem(item: HTMLElement, predicate: (seg: Segment) => boolean, onClick: () => void): void {
@@ -71,27 +73,27 @@ export function mountSidebarFilters(store: Store<GameState>): () => void {
       //   - Otherwise: plain toggle
       // Array reference is replaced (not mutated in place) so default-Object.is
       // subscribers see a real change and fire.
-      store.update((d) => {
-        const off = d.ui.filtersOff;
+      store.update((draft) => {
+        const off = draft.ui.filtersOff;
         const clickedIsOn = !off.includes(key);
         const activeCount = ALL_FILTER_KEYS.length - off.length;
 
         if (clickedIsOn && activeCount === ALL_FILTER_KEYS.length) {
           // All on → solo: everything except `key` goes off.
-          d.ui.filtersOff = ALL_FILTER_KEYS.filter((k) => k !== key);
+          draft.ui.filtersOff = ALL_FILTER_KEYS.filter((k) => k !== key);
         } else if (clickedIsOn && activeCount === 1) {
           // Last active → un-solo: everything back on.
-          d.ui.filtersOff = [];
+          draft.ui.filtersOff = [];
         } else {
           // Plain toggle.
-          d.ui.filtersOff = clickedIsOn
+          draft.ui.filtersOff = clickedIsOn
             ? [...off, key]
             : off.filter((k) => k !== key);
         }
 
         // Filter interaction takes over: clear any active spotlight so the
         // strip reflects the filter selection alone.
-        if (d.ui.spotlight.length > 0) d.ui.spotlight = [];
+        if (draft.ui.spotlight.length > 0) draft.ui.spotlight = [];
       });
     });
   });
@@ -100,10 +102,10 @@ export function mountSidebarFilters(store: Store<GameState>): () => void {
     const key = item.dataset.status as StatusKey | undefined;
     if (!key) return;
     bindItem(item, (seg) => matchesStatus(seg, key), () => {
-      store.update((d) => {
-        d.ui.spotlight = d.ui.spotlight.includes(key)
-          ? d.ui.spotlight.filter((k) => k !== key)
-          : [...d.ui.spotlight, key];
+      store.update((draft) => {
+        draft.ui.spotlight = draft.ui.spotlight.includes(key)
+          ? draft.ui.spotlight.filter((k) => k !== key)
+          : [...draft.ui.spotlight, key];
       });
     });
   });
@@ -135,14 +137,18 @@ export function mountSidebarFilters(store: Store<GameState>): () => void {
     });
   }
 
+  // CORRUPT and PARTIAL are status bands (adjectives: `1 Corrupt`, `3 Partial`); BACKUP counts files, so it takes a
+  // plural (final review: the dock read `1 Backups`).
+  const corruptEl = requireById('countCorrupt');
+  const partialEl = requireById('countPartial');
+  const backupEl = requireById('countBackup');
+  const backupWordEl = requireById('countBackupWord');
   function paintCounts(state: GameState): void {
     const counts = countByStatus(state.memory);
-    const corruptEl = document.getElementById('countCorrupt');
-    const partialEl = document.getElementById('countPartial');
-    const backupEl = document.getElementById('countBackup');
-    if (corruptEl) corruptEl.textContent = String(counts.corrupt);
-    if (partialEl) partialEl.textContent = String(counts.partial);
-    if (backupEl) backupEl.textContent = String(counts.backup);
+    corruptEl.textContent = String(counts.corrupt);
+    partialEl.textContent = String(counts.partial);
+    backupEl.textContent = String(counts.backup);
+    backupWordEl.textContent = counts.backup === 1 ? 'Backup' : 'Backups';
 
     // Warn-color the row when the count is non-zero and the status is bad.
     statusItems.forEach((item) => {
@@ -155,9 +161,16 @@ export function mountSidebarFilters(store: Store<GameState>): () => void {
     });
   }
 
+  // The Souls filter appears with the colonists (WP5): before the STASIS reveal it would give the
+  // secret away in the dock.
+  const soulsItem = filterItems.find((item) => item.dataset.filter === 'souls');
+  if (!soulsItem) throw new Error('.dock-item[data-filter="souls"] missing from index.html');
+  const paintSoulsItem = (state: Readonly<GameState>): void => { soulsItem.hidden = archiveSealed(state); };
+
   paintFilters(store.getState().ui.filtersOff, store.getState().ui.spotlight);
   paintSpotlight(store.getState().ui.spotlight);
   paintCounts(store.getState());
+  paintSoulsItem(store.getState());
 
   const unsubFilters = store.subscribe(
     (s) => s.ui.filtersOff,
@@ -181,6 +194,7 @@ export function mountSidebarFilters(store: Store<GameState>): () => void {
     (s) => s.ui.memoryRev,
     () => {
       paintCounts(store.getState());
+      paintSoulsItem(store.getState());
       if (hoverPredicate) applyHighlight(hoverPredicate);
     },
   );

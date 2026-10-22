@@ -1,0 +1,1443 @@
+// Global tuning. Every number a rule depends on lives here (or per ship in ships.ts), with
+// the reason it has that value. Rule code imports these names and carries no numeric
+// literals of its own, so balancing never means hunting through systems.
+
+import type { Band, GhostSpec } from '@systems/capabilities';
+
+// --- Heartbeat -------------------------------------------------------------------------
+
+// 20 Hz: smooth enough for the plot and the burn feel, cheap enough that a tick never
+// competes with input handling.
+export const TICK_MS = 50;
+
+// A throttled background tab, laptop sleep or a long GC pause can hand us a multi-second
+// tick. Clamping it keeps one tick from lumping minutes of world time into a single step
+// (and from finishing a countdown the player never saw).
+export const DT_WALL_MAX = 0.25;
+
+// --- Pace and countdowns (tactical seconds = game seconds / ship.tacticalWarp) ---------
+
+// The world snaps to TACTICAL this long before the START BURN tick, so the kid gets a
+// readable GET READY 5-4-3-2-1 at a pace where every second is a real second.
+export const TACTICAL_LEAD_BURN_TAC = 8;
+
+// SKIP stops this far ahead of the next event: long enough for CRUISE to show the event
+// coming before TACTICAL takes over, short enough that SKIP still feels like a jump.
+export const SKIP_END_LEAD_TAC = 15;
+
+// SKIP warp = game seconds to the event / this. Covering the gap in about this many wall
+// seconds at full warp reads as "fast forward", not as a teleport. LEAD-2: with no warp ceiling
+// any more (the coast SKIP flies the orbit in exact jumps, orbit-sim.ts), this is every SKIP's
+// length: about 4 s at its warp plus the clock's glide up to it, about 6 s in all (5.8–6.1 s
+// measured), whether the WAIT is five minutes or 49 tactical days.
+export const SKIP_DIVISOR = 4;
+
+// (LEAD-2 removed SKIP_MAX_WARP, 2,000. It kept the integrator's sub-steps sane and a SKIP from
+// overshooting its end by a tick; a SKIP tick is now one exact jump along the conic, and the last
+// tick lands on the end point, so nothing needs it. It made a 49-tactical-day WAIT 14.6 wall hours.)
+
+// The shortest jump a new SKIP is offered for, in tactical seconds past its end lead: a SKIP of less
+// would be over in a few frames. Below it SKIP says BURN COMING UP / NOTHING TO SKIP TO. Five tactical
+// seconds is the 100 game s of the old ceiling's one tick on ship 1, so the offer is where it was.
+export const SKIP_MIN_JUMP_TAC = 5;
+
+// A SKIP has landed once its end point is less than this many game seconds ahead: the 10 Hz re-plan of
+// the same coast recomputes event times from a state it jumped to, and on a loop days of game time long
+// that rounding is a few microseconds. A millisecond of game time is far below anything the game shows.
+export const SKIP_LANDING_TOLERANCE_SEC = 1e-3;
+
+// (LEAD-2 removed SKIP_BUDGET_WALL_SEC, 120 wall s: the lead's Rule 4 budget. A WAIT the FUEL was to
+// blame for was dropped for ACCEPT ORBIT when SKIP could not cross it in two minutes at the old ceiling.
+// Every SKIP now takes the same few seconds, so it decided nothing; worse, it stranded ships whose tank
+// paid for the whole fix (31–34% FUEL off the ring after 120 s of ignoring: `NOT ENOUGH FUEL to reach the
+// printers` beside a 31.4% fix the tank could pay). Rule 4 now strands only when the FUEL is to blame.)
+
+// Ceiling for the ?debug warp ladder (the old x10M header ladder lives on here only). At
+// x10M a 50 ms tick is 5.8 game days: enough to fast-forward any loop or escape the game
+// produces. Only ?debug goes past SIM_SUBSTEP_MAX_SEC per sub-step (SIM_MAX_SUBSTEPS caps the
+// count), and the swept crash test keeps that safe.
+export const DEBUG_WARP_MAX = 1e7;
+
+// The ORBIT LOCK ritual: HOLD STEADY 3-2-1 in real (AI) seconds.
+export const LOCK_HOLD_AI_SEC = 3.0;
+
+// A burn is centred on its apsis: start half the estimated burn before it. Symmetric burns
+// waste the least fuel and make "START BURN" a single readable tick on the path.
+export const BURN_POINT_LEAD_FRAC = 0.5;
+
+// Corrections aim for the middle half of the ring (the sweet zone), not its edge, so a
+// late release or a sloppy capture still lands inside the ring.
+export const SWEET_ZONE_FRAC = 0.25;
+
+// WP12 p3 (the lead's ruling 1 of 2026-10-21 06:20, HALCYON's opener): a ▼ correction says RELEASE once ▼ will reach
+// the sweet zone's middle within this many tactical seconds at its current rate, not only once it is inside the zone.
+// A full-POWER IN on HALCYON at 30,000 km crosses its sweet zone (1,250 km) in about 0.8 s, so a release a
+// 12-year-old makes (0.7–1.2 s after the word) landed ▼ under the ring; the opposite correction then overshot the
+// same way, and following the strip line by line emptied the tank (52 of 200 sloppy HALCYONs). 0.7 s centres the
+// release between a quick kid (0.4 s: ▼ stops just inside the zone's near half) and a slow one (1.2 s: ▼ stops past
+// the middle, still in the ring). On a slow correction (ARES-VII's) ▼ enters the zone first, so nothing changes there.
+export const RELEASE_LEAD_TAC = 0.7;
+// ▼'s rate under thrust is a one-step difference of the conic's periapsis along the thrust: this much burning.
+export const RP_RATE_PROBE_SEC = 0.1;
+
+// Captures aim the far side of the loop at 95% of the ring's outer edge: inside the ring
+// with a margin, and as wide as possible so the capture costs the least fuel.
+export const RA_TARGET_FRAC = 0.95;
+
+// Firing a capture or trim more than this before its START BURN tick is TOO EARLY. Three
+// seconds forgives an eager kid; more than that visibly bends the line the wrong way.
+export const EARLY_BURN_GUARD_TAC = 3;
+
+// Inside this many tactical seconds of the capture burn point there is no time left for an
+// OUT/IN correction: guidance says "brake anyway — trim it later" instead.
+export const LATE_CAPTURE_TAC = 15;
+
+// A trim whose apsis (▼ or ▲) passed less than this many tactical seconds ago is always still
+// due NOW instead of one whole loop later: that close to the apsis (about 10° of arc at ▼ on
+// ship 1) the burn costs nearly the same, even when it then needs a second, small trim.
+// Past it, the trim stays due NOW only while a burn started now still lands the loop in the
+// ring (predict.ts, lateTrimLands): right after a capture the next ▼ is a whole loop away (hours of game
+// time; LEAD-2's coast SKIP crosses it in seconds, but a burn now still beats a loop of waiting).
+export const LATE_TRIM_TAC = 15;
+
+// ...and only while that late burn costs at most this many times the on-time burn at the
+// apsis. Right after a capture braking stops landing long before it gets that dear (≤ 1.2× on
+// ship 1), so this only bites on small loops. Past it, on the first half of the climb the kid
+// gets SHRINK THE LOOP (the same RETRO, stopped by the rules below) instead of a WAIT of over
+// SHRINK_WAIT_TAC (WP1-rules 2); later in the climb, the wait for the cheaper trim at ▼.
+export const LATE_TRIM_DV_FACTOR = 1.5;
+
+// ...and no trim waits longer than this many tactical seconds while the ship climbs away on a
+// loop that is too big (▲ above the ring) and braking now could shrink it: the kid gets
+// SHRINK THE LOOP instead of a WAIT (WP1-rules 2). A whole minute is the longest a "wait for it"
+// stays readable; past ▼ the next pass of a just-captured loop is hours of game time away (seconds of
+// SKIP since LEAD-2, but a burn the kid makes now is still the better minute of play).
+export const SHRINK_WAIT_TAC = 60;
+
+// ...and only on the first half of the climb, while ▲ is still more than this fraction of the
+// loop's period away. Later, braking mostly drags ▼ down without bringing ▲ much closer, and the
+// trim at ▲ is the nearer burn anyway. A share of the period, not a time, so it scales with the
+// loop and only ever turns off as the ship coasts (the offer never comes back after it lapses).
+export const SHRINK_MIN_APO_FRAC = 0.25;
+
+// Braking away from ▼ drags ▼ down, and near the end of a shrink by up to 400 km per second of
+// RETRO, so the shrink stops while the kid can still over-hold its hand-over: once ▼ is below
+// the ring on a loop that is already small (see SHRINK_SMALL_LOOP_FACTOR), while holding on for
+// this many more tactical seconds would still keep ▼ above the surface. Five seconds matches the
+// capture's own forgiveness (its RELEASE [SPACE]! leaves about 4 s before the loop leaves the
+// ring and 6.6 s before IMPACT). On ship 1 a shrink that starts with ▼ in the ring and the ship
+// still near it therefore stops with ▼ at the ring's edge, so the rest of the fix is the usual
+// RETRO at ▼, and the whole fix costs only a few % more FUEL than waiting for that ▼ would.
+// (WP7: this and the next three are ship 1's values and every ship's starting point; predict.ts reads the
+// ship's own copy, ShipDef.shrink, because where the ring's edge falls along a shrink depends on the ship.)
+export const SHRINK_MARGIN_TAC = 5;
+
+// ...and never less than this many, the margin a loop that is still big may be shrunk down to:
+// there every second of braking still saves hours of game time (a capture with ▼ near the bottom of
+// the ring, or a kid who let the shrink ride for minutes), and a kid who lets go within a second
+// or two still lands clear of the surface.
+export const SHRINK_MARGIN_MIN_TAC = 3;
+
+// "Already small": ▲ within this multiple of the ring's outer edge (ship 1: 22,500 km). Its next
+// pass is then no more than about 200 tactical s away, so braking on would buy little waiting for
+// the safety it costs. A size, not a time: it only shrinks as the burn goes on and stays put on a
+// coast, so a shrink that stopped on it never starts again.
+export const SHRINK_SMALL_LOOP_FACTOR = 2.5;
+
+// The shrink spends only FUEL it can spare: it stops while the FUEL left still pays for the trims
+// after it (an impulsive estimate) plus a reserve for a sloppy release: this share of their cost...
+// A shrink that leaves the kid unable to finish is not progress. The estimate is already on the safe
+// side (the strip says RELEASE when the loop enters the ring, short of the trim's aim: obeyed trims at
+// ▼ spent 2.5–7.6% less than it), so a small share is enough for the trims themselves.
+export const SHRINK_FUEL_RESERVE_FRAC = 0.05;
+// ...but never less than the FUEL the ship's shrink.marginMinTac of burning takes (ShipDef.shrink; the WHY
+// is ShrinkTuning's).
+// ...and while the trim the shrink would leave is still more than this many tactical seconds away,
+// the shrink may spend that reserve too (LEAD-1): a tank just short of the trims plus the reserve
+// otherwise got no shrink at all and a WAIT of hours (`WAIT — brake at ▼ in 35364:28`, about six
+// wall hours of SKIP before LEAD-2's coast SKIP). Past this point the reserve is kept again, so the
+// shrink stops on the first of the two: the WAIT is down to this, or the tank. 2,000 tactical s was
+// about 20 s of SKIP on ship 1 (pillar 5: something happens every 20 seconds). It is a time the
+// shrink only shortens and a coast only counts down, so a shrink that stopped on it is never offered
+// again. (LEAD-2 kept it: it still decides how far a shrink may eat into its reserve, and the bands it
+// shapes are pinned by the WP1-rules and LEAD-1 suites; whether a shrink should still spend the reserve
+// now that the WAIT it saves costs seconds is a question for Fran, LEAD-2's question 3.)
+export const SHRINK_RESERVE_WAIT_TAC = 2000;
+// (LEAD-2 removed SHRINK_LOCK_WAIT_MAX_TAC, 6,000 tactical s: "a lock is worth up to a minute of SKIP".
+// Past it a short tank, or a shrink that ran out of spare FUEL, spent its last FUEL now (`LAST FUEL: SHRINK
+// THE LOOP`) and ended ORBIT ACCEPTED. With the coast SKIP the WAIT costs seconds, so it never decided well:
+// waiting for the trim's apsis and spending the tank there ends on a better loop in every row measured
+// (.tmp/lead2/probes/last-fuel-vs-apsis.ts: 30% FUEL, 84% printer range against the last FUEL's 48%; from
+// 32% it locks), and a paid lock always beats an ACCEPTED one. The last FUEL went with it.)
+
+// A trim the tank can't pay for in full is still offered while the whole tank, spent at its apsis, ends on a
+// loop the printers reach (predict.ts tankAtTrimStrands, an impulsive estimate): the kid holds it to the empty
+// tank and the flight ends ORBIT ACCEPTED. The estimate must clear the strand line (STRANDED_RANGE_FRAC) by
+// this much printer range, or the strip says NOT ENOUGH FUEL instead: a kid who obeys a save must never end
+// STRANDED. The real burn is spread over seconds around ▼, but centred on it the loop it ends on matched the
+// impulsive one to 0.01 point on all three ships, for kids reacting at once, 0.3 s and 0.5 s late
+// (.tmp/lead2/probes/strand-promise.ts, 0 promised saves stranded). A tenth of a point is ten times that; the
+// half point of the last FUEL's LAST_FUEL_RANGE_MARGIN (whose plan drifted between refreshes) turned
+// KESTREL's 28% after an ignored capture, which the last FUEL saved at 11%, into the STRANDED line.
+export const STRAND_LINE_MARGIN = 0.001;
+
+// A shrink that ends with ▼ still inside the ring stops this many tactical seconds of RETRO before
+// ▼ would leave it (LEAD-1): the kid's reaction time. It used to stop exactly at the ring's inner
+// edge, so a human release 0.3–0.6 s late put ▼ under the ring, the hand-over retyped from
+// `brake at ▼` to `burn at ▲`, the fix took three burns and the lock came with about 6% less FUEL.
+// The strip refreshes the plan 10 times a second, so 0.6 s covers a 0.5 s reaction; stopping that
+// early costs nothing measurable (the trim at ▼ grows by what the shrink saves, and the WAIT for
+// it by about 100 tactical s).
+export const SHRINK_REACTION_TAC = 0.6;
+
+// A missed ▼ on an open path: once the kid has let MISSED ▼ … NOW ride for this many tactical
+// seconds without burning, the world drops to CRUISE and SKIP may jump to the escape (WP1-rules
+// 3a). The strip still says how to save it; twenty seconds is plenty to react to a red NOW.
+export const IGNORED_NOW_TAC = 20;
+
+// An open path counts as ESCAPED once it is receding beyond this multiple of the start
+// radius: far enough that it clearly left, close enough that nobody waits minutes for it.
+// It also ends as ESCAPED the moment it is receding with less FUEL than the least Δv that could
+// still bring ▲ inside that radius, or inside the printers' reach if that is wider (orbit-sim.ts,
+// closeBoundRadius and closeLoopDvKmS; WP1-rules 3b).
+export const ESCAPE_R_FACTOR = 1.5;
+
+// Halvings of a radius interval in the bisections that find where the tank stops covering the
+// close-the-loop Δv on a coast, and how wide a loop the printers still reach: 40 take a
+// 1,000,000 km interval below a micrometre, far past what timing or ringFraction need.
+export const RADIUS_BISECT_STEPS = 40;
+
+// ▼ radii sampled between the surface and the ring's outer edge when looking for the loop with
+// the most printer range at a given ▲. The best one dips exactly to the ring's inner edge, which
+// is always a sample; the rest only guard that claim at a negligible one-off cost per ring.
+export const PRINTER_REACH_SAMPLES = 64;
+
+// Countdowns turn red at or below this, and F7/F8 corrections become urgent. Half a minute
+// is the shortest warning in which a kid can still read the strip, pick a preset and burn;
+// any earlier and red stops meaning "act soon".
+export const COUNTDOWN_RED_TAC = 30;
+
+// Burn-point countdowns beep from 5 down to 1, the classic launch count that matches GET
+// READY. An impact beeps from 10: a crash needs the longer alarm to pull eyes back.
+export const BEEP_BURN_TAC = 5;
+export const BEEP_IMPACT_TAC = 10;
+
+// --- Prediction --------------------------------------------------------------------------
+
+// The predicted path is recomputed at most this often (plus immediately when a burn starts
+// or stops, or the status changes). 10 Hz looks live without re-propagating every tick.
+export const PREDICT_HZ = 10;
+
+// Adaptive propagation step h = PREDICT_STEP_ORBIT_FRAC × r / v, clamped. 1% of the
+// crossing time keeps the drawn path within a few km of the truth; the clamp keeps tight
+// periapsis passes accurate and long apoapsis coasts cheap.
+export const PREDICT_STEP_ORBIT_FRAC = 0.01;
+export const PREDICT_STEP_MIN = 1;
+export const PREDICT_STEP_MAX = 60;
+
+// A just-captured loop can take days of game time to come round. Its step ceiling is widened
+// so one prediction never takes more than about this many steps (well under a millisecond);
+// near ▲ the ship barely moves, so the wider step costs no visible accuracy.
+export const PREDICT_STEPS_BUDGET = 3000;
+
+// Drawn path points are thinned to one per this fraction of the local radius (about one
+// degree of arc). Keeps a huge just-captured loop to a few hundred SVG points.
+export const PREDICT_POINT_SPACING_FRAC = 0.02;
+
+// A closed loop is drawn until it has swept one full turn. This guard ends the run at 110% of
+// the analytic period in case integrator drift ever keeps the turn from completing.
+export const PREDICT_LOOP_TIME_GUARD = 1.1;
+
+// --- Flight ------------------------------------------------------------------------------
+
+// Physics sub-step ceiling: per-step travel stays far below the crash margin, so the surface
+// test never tunnels. The sub-step cap bounds CPU at extreme debug warp.
+export const SIM_SUBSTEP_MAX_SEC = 1.5;
+export const SIM_MAX_SUBSTEPS = 4000;
+
+// A preset counts as "aligned" within this angle; outside it the engine gives no thrust and
+// the button reads ALIGNING… (no wasted fuel thrusting sideways during a flip).
+export const PRESET_ALIGN_DEG = 10;
+
+// Attitude thrusters. Punchy acceleration, deliberately slow top spin (~4.8°/game-s): at
+// TACTICAL x20 a full flip takes about 2 real seconds, long enough to read as a turn.
+export const ROT_ACCEL = 0.12;   // rad/game-s²
+export const MAX_OMEGA = 0.0833; // rad/game-s
+
+// Engine jitter noise is re-rolled this often (then lerped), so a damaged engine sputters
+// at a rhythm the ear can follow instead of white noise.
+export const THRUST_NOISE_PERIOD_TAC = 0.3;
+
+// The FUEL star (§4.4): lock the orbit with at least this much FUEL left. The FUEL bar carries
+// a ★ notch here from the first flight, so the target is visible before stars exist (WP5).
+export const STAR_FUEL_PCT = 20;
+
+// A closed loop that spends less than this fraction of its time inside the ring cannot be
+// reached by the bio-printers: STRANDED instead of ACCEPTED. Below 10% the low-range roll
+// (§3.3 P2: gap chance (0.5 − range) × 2) would give at least 80% of the clusters missing
+// memories, so the ship is treated as out of reach rather than as a near-total loss.
+export const STRANDED_RANGE_FRAC = 0.1;
+
+// ACCEPT ORBIT appears after this long idling on a closed, not-green loop (or when FUEL can
+// no longer pay for the fix), and needs a second click within ACCEPT_CONFIRM_SEC. Fifteen
+// seconds is longer than any countdown pause in a normal flight, so a kid only sees it once
+// they have clearly stopped trying; three seconds is a deliberate double click, not a stray one.
+export const ACCEPT_IDLE_AI_SEC = 15;
+export const ACCEPT_CONFIRM_SEC = 3;
+
+// The lowest POWER the MANUAL slider allows. At 0% SPACE would "burn" without any thrust
+// while the strip says KEEP HOLDING; a dead engine gets its own guidance row (WP4) instead.
+export const POWER_MIN_PCT = 10;
+
+// --- Time-warp glide (speed-ups only; slow-downs snap) ---------------------------------
+
+// Floored proportional log glide: big jumps accelerate, the final decade always arrives
+// at a steady readable pace, and the glide finishes in finite time.
+export const GLIDE_SECONDS_PER_DECADE = 3;
+export const GLIDE_TAU_SECONDS = 3;
+
+// ...but a SKIP's rise from CRUISE to its warp takes at most about this many wall seconds, however many
+// decades it climbs (LEAD-2): with no warp ceiling a SKIP across a just-captured loop runs at ×10M, five
+// decades above CRUISE, and the glide above took 8.5 s to climb them (an 11 s SKIP). Two seconds still
+// reads as the world speeding up, and with SKIP_DIVISOR and SKIP_EASE_OUT_SEC every SKIP lasts about 7 s in all.
+export const SKIP_RAMP_SEC = 2;
+
+// ...and it glides back down onto its end point over about this many wall seconds (LEAD-2 review round 1; clock.ts
+// skipEaseCap). At one warp all the way, the fall back to ▼ at the end of a long WAIT came in one or two frames
+// (502,000 km to 6,097 km, and the NAV PLOT's zoom jumping 45×), and the return read as a cut. A second shows that fall
+// as part of the time-lapse, mirrors the ramp, and adds under a second to the SKIP.
+export const SKIP_EASE_OUT_SEC = 1;
+
+// --- NAV PLOT view --------------------------------------------------------------------------
+
+// The plot's radius = max(ship radius × PLOT_SHIP_MARGIN, ring.max × PLOT_RING_FACTOR). Near
+// the planet the scale holds still (the ring, the planet and the whole loop stay put and the
+// ship travels); a ship further out rides the plot edge instead of leaving it.
+export const PLOT_SHIP_MARGIN = 1.05;
+export const PLOT_RING_FACTOR = 1.5;
+
+// The FLYBY tag sits on the last stretch of an open path that is still this far inside the
+// plot edge, so the word stays readable instead of being clipped by the frame.
+export const PLOT_FLYBY_TAG_FRAC = 0.82;
+
+// --- Guidance ------------------------------------------------------------------------------
+
+// A new objective must persist this long before it replaces the shown one (unless it is
+// urgent), so the strip never flickers between two rows at a threshold.
+export const OBJECTIVE_HYSTERESIS_SEC = 0.3;
+
+// Every on-screen line fits one row of the objective strip.
+export const MAX_LINE_CHARS = 70;
+
+// --- Voice: say() and the log (WP2, §6.3) ----------------------------------------------------
+
+// A line that waits (the engine is firing, or another line was just spoken) lives this many AI
+// seconds in the queue. Long enough to survive an ordinary burn, short enough that a quip never
+// arrives after the moment it was about.
+export const SAY_QUEUE_TTL_SEC = 8;
+
+// The queue releases at most one line per this many AI seconds, so a burn that queued three
+// quips does not dump them all at once the moment the kid lets go.
+export const SAY_FLUSH_INTERVAL_SEC = 3;
+
+// Story lines are spaced at least this far apart (§7.2): two lines landing in the same breath
+// read as one blur, and the second one gets lost.
+export const SAY_SPACING_SEC = 1.5;
+
+// The ticker on the objective strip shows the newest unread line of the hidden screen this long.
+// Six seconds reads a 70-character line twice; longer and it masks the next one.
+export const TICKER_SHOW_SEC = 6;
+
+// The log keeps this many lines (oldest dropped). Far more than COMMS or the TERMINAL ever show;
+// the cap only keeps a very long session from growing the store without bound.
+export const LOG_MAX_ENTRIES = 200;
+
+// Ship names, family names and other placeholders are at most this long, so every templated
+// line is checked against the strip width with the worst case (ships.ts validates the names).
+export const NAME_MAX_CHARS = 12;
+
+// --- Director (WP2, §6.3) -------------------------------------------------------------------
+
+// In blue with no op running and nothing infected for this long, the director offers the SKIP
+// hint: long enough that it never interrupts a kid who is busy, short enough for a coast.
+export const MIND_CLEAR_IDLE_SEC = 5;
+
+// A refused input that comes with an explanation (SPACE in blue) shows that line on the strip for
+// this many wall seconds: one read, then the real objective comes back.
+export const REFUSAL_FLASH_SEC = 1.8;
+
+// --- Flight alarms and countdown cues (WP2, §6.1, §7.2) -------------------------------------
+
+// Below this many tactical seconds to impact, the crash is an alarm: the klaxon sounds once and
+// the red vignette comes on. Equal to the red-countdown threshold, so colour and sound agree.
+export const IMPACT_ALARM_TAC = 30;
+
+// A countdown beep only re-arms once its countdown has climbed this far back above the beep's
+// second. The prediction is re-estimated at 10 Hz, so a countdown can wobble a few hundredths
+// back up across a whole second; without this the same second would beep twice.
+export const BEEP_REARM_TAC = 0.5;
+
+// A countdown that drops by more than this in one tick jumped (a burn reshaped the path, or a
+// SKIP raced it): seconds it skipped over are not beeped, so a jump never fires a burst of beeps.
+export const BEEP_JUMP_TAC = 1.5;
+
+// --- Boot (WP2, §5.1, §7.1) -------------------------------------------------------------------
+
+// The boot after RECEIVE TRANSMISSION, in wall seconds: the memory strip assembles over
+// BOOT_ASSEMBLE_SEC while the TERMINAL types its three lines (the TERMINAL types 40 chars/s, so
+// 1.3 s apart lets each finish before the next starts). The klaxon starts in blue a beat before
+// the cut to amber, so the alarm is heard before the red line is seen. About five seconds in all.
+// A later ship's boot (WP7) says two more lines, what the crossing hit and the REPAIR CHARGE that
+// arrived (and a third if charge overflowed), at the same 1.3 s rhythm; the klaxon follows the last line
+// by BOOT_KLAXON_AFTER_LAST_LINE_SEC whatever their number, and the cut to amber BOOT_END_AFTER_KLAXON_SEC
+// after it (ship 1: 4.5 s and 4.9 s, as before). KESTREL (WP9) can say two more again: its own arrival damage
+// (`> ECC: SENSOR INTERP 45% — PATH UNCERTAIN`) and AUTOBURN.skl trained from the kid's captures. VESPER (WP10) closes
+// its boot with HOLLOW's own line, which types slowly: the klaxon waits for it (BOOT_AFTER_HOLLOW_LINE_SEC).
+export const BOOT_ASSEMBLE_SEC = 1.5;
+export const BOOT_LINE_AT_SEC: readonly number[] = [0.5, 1.8, 3.1, 4.4, 5.7, 7.0, 8.3, 9.6];
+export const BOOT_KLAXON_AFTER_LAST_LINE_SEC = 1.4;
+export const BOOT_END_AFTER_KLAXON_SEC = 0.4;
+
+// Skip clicks and keys are ignored for this long after RECEIVE TRANSMISSION. Kids double-click
+// buttons, and the second click of a double-click (or a second SPACE) skipped the whole boot:
+// the strip assembling and the TERMINAL's lines are the only on-screen introduction of MIND.
+export const BOOT_SKIP_GRACE_SEC = 0.8;
+
+// The strip's rows keep their assembling class this much longer than BOOT_ASSEMBLE_SEC, so the
+// last row's slide-in (0.42 s in game.css) always finishes before the class is dropped.
+export const BOOT_ASSEMBLE_SETTLE_SEC = 1;
+
+// --- Mode switch (WP2, §7.3) ------------------------------------------------------------------
+
+// The scanline wipe on every SHIP ⇄ MIND switch: quick enough to never slow a TAB, long enough
+// to read as "the screen changed channel".
+export const MODE_WIPE_MS = 150;
+
+// --- Audio mix (WP2, §7.2). The voices themselves are sound design and live in audio.ts. ------
+
+// Overall loudness. The master sits below 1 so a stack of cues never clips before the limiter.
+export const AUDIO_MASTER_GAIN = 0.8;
+
+// Bus levels. UI ticks and the engine bed sit under the chords and alarms, which carry meaning.
+export const AUDIO_BUS_GAIN = { ui: 0.55, ambient: 0.7, chord: 0.65, alarm: 0.6 } as const;
+
+// Chords and stamps duck the UI and ambient buses by 9 dB for 0.4 s (§7.2): the payoff cuts
+// through the rumble instead of fighting it, and the bed comes back before anyone misses it.
+export const AUDIO_DUCK_DB = -9;
+export const AUDIO_DUCK_HOLD_SEC = 0.4;
+export const AUDIO_DUCK_RELEASE_SEC = 0.15;
+
+// --- Voice on screen: COMMS, TERMINAL, ticker (WP2 part 2, §6.3, §7.1) ------------------------
+
+// The radio and the TERMINAL type at this many characters per wall second (§7.1): a 70-character
+// line takes under two seconds, slow enough to feel typed, fast enough to never hold the kid up.
+export const COMMS_TYPE_CPS = 40;
+export const TERMINAL_TYPE_CPS = 40;
+
+// HOLLOW types one letter at a time (§5.1), noticeably slower than the unit's own lines, so
+// "> ...047?" lands as something reaching out, not as another system message.
+export const HOLLOW_TYPE_CPS = 12;
+// WP11 part 2: a HOLLOW verb's telegraph (`> rm repair.bak ... 3`) jumps the TERMINAL's queue (every line still waiting
+// is shown at once) and rattles in at this speed: its 3 s are the kid's to block it, and in the duel the TERMINAL is
+// busy with print echoes and bites (a browser run saw it type a second late, at `... 2`). Still typed, so it reads as
+// someone typing your commands.
+export const VERB_TELEGRAPH_TYPE_CPS = 160;
+
+// ARRIVAL CONTROL's C-E-G chime plays before its line starts typing; the line waits this long
+// so the chime is heard as the prefix, not under the first letters.
+export const CONTROL_CHIME_LEAD_SEC = 0.3;
+
+// Presentation on wall time (typing, the WAKE REPORT's roll) advances at most this much per frame:
+// a tab that was hidden mid-line resumes typing where it stopped instead of dumping the rest of the
+// line at once, and the credits do not jump.
+export const WALL_FRAME_MAX_SEC = 0.1;
+
+// The TERMINAL pane shows this many lines (§7.1); COMMS shows as many as its window fits. Both
+// keep this many rows in the page, so the kid can scroll back over a whole ship's chatter.
+export const TERMINAL_VISIBLE_LINES = 4;
+export const LOG_VIEW_KEEP_ROWS = 40;
+
+// The objective strip types a new instruction this fast: an urgent line (HOLD [SPACE] NOW) is
+// fully on screen in a fifth of a second; calmer lines get a visible, readable type-on.
+export const STRIP_TYPE_CPS_NOW = 180;
+export const STRIP_TYPE_CPS = 90;
+
+// While the strip types, a soft tick plays every this many characters: a quick teletype
+// "brrt" that says "new instruction" without chattering over the engine.
+export const STRIP_TICK_EVERY_CHARS = 3;
+
+// The strip's caret keeps blinking this long after a line finished typing, then hides, so a
+// fresh instruction reads as fresh and an old one sits still.
+export const STRIP_CARET_LINGER_SEC = 1.6;
+
+// A HOLLOW line landing on the ticker (in amber) is announced by a few of its detuned blips:
+// three, a little apart, read as a voice trying to get through, not as one more UI tick.
+export const HOLLOW_ANNOUNCE_BLIPS = 3;
+export const HOLLOW_ANNOUNCE_GAP_SEC = 0.11;
+
+// Up to this many upcoming events sit on the right of the strip while no line is on the ticker
+// (§7.1): enough for "▼ … · ▲ …", few enough to stay a glance.
+export const UPCOMING_EVENTS_MAX = 2;
+
+// ...and only events within this many tactical seconds: right after a capture ▲ is hours away,
+// and `▲ 34217:56` on the strip is noise, not something coming up.
+export const UPCOMING_HORIZON_TAC = 600;
+
+// --- Juice (WP2 part 2, §7.3) ------------------------------------------------------------------
+
+// A stamp of the same kind within this many ms is dropped (§9 WP2 item 11), so a line that
+// flickers across a threshold never machine-guns CLEAR OF THE PLANET.
+export const STAMP_DEBOUNCE_MS = 600;
+
+// A stamp scales in over STAMP_IN_MS (§7.3: 120 ms) and is gone after STAMP_SHOW_MS: one clear
+// read of two or three words, then the plot is free again.
+export const STAMP_IN_MS = 120;
+export const STAMP_SHOW_MS = 1500;
+
+// A stamp is never wider than this share of the room it lands in (the NAV PLOT in amber): the
+// windows beside the plot carry FUEL and COMMS, which the kid reads during the moment. The
+// padding does not shrink with the text, so the share leaves a margin for it.
+export const STAMP_MAX_WIDTH_FRAC = 0.92;
+
+// The flight's result banner waits this long after the outcome, so the stamp, the chord and the
+// flash land on their own before the banner covers the screen.
+export const RESULT_BANNER_DELAY_MS = 1600;
+
+// Screen shake on .desktop-wrap (§7.3): a nudge when the engine lights, a hard jolt on a crash.
+// The shake lasts SHAKE_MS_PER_PX per pixel of amplitude, between the two bounds, so a nudge is
+// a blink and a crash rattles for most of a second.
+export const SHAKE_BURN_PX = 2;
+export const SHAKE_CRASH_PX = 10;
+export const SHAKE_MS_PER_PX = 70;
+export const SHAKE_MIN_MS = 160;
+export const SHAKE_MAX_MS = 700;
+// Keyframes per shake: enough direction changes to read as a rattle, not a slide.
+export const SHAKE_STEPS = 8;
+
+// The predicted line's colour tweens this long when its state changes (§7.3): red to flyby to
+// green reads as a change of state, not a redraw.
+export const LINE_TWEEN_MS = 300;
+
+// Full-screen flashes: ORBIT LOCKED gets the amber "you did it" flash (§5.1), a crash a red one.
+export const SCREEN_FLASH_MS = 450;
+
+// --- The mind's clock: ops on AI time (WP3, §3.4, §6.5) ---------------------------------------
+
+// Op durations in AI seconds (wall seconds while unpaused): base + per block of the target. Warp
+// and SKIP never make a mind op faster, so a repair costs the same real seconds at any pace.
+// Scan is quick (it only reads), moves and copies are the slow "data transfer" ops, and copy is
+// slower than move because the source keeps running while it is read.
+export const SCAN_BASE_SEC = 1.0;
+export const SCAN_PER_BLOCK_SEC = 0.1;
+export const MOVE_BASE_SEC = 1.5;
+export const MOVE_PER_BLOCK_SEC = 0.2;
+export const COPY_BASE_SEC = 2.0;
+export const COPY_PER_BLOCK_SEC = 0.3;
+export const DELETE_SEC = 1.0;
+// Repair v2 on REPAIR CHARGE (squeezing out the spent blocks) kept the duration it had at ×1.
+export const COMPACT_SEC = 2.4;
+// SWAP (WP10, §6.5): handing a ship file's job to its backup takes 2.0 AI s and holds a Core thread, like any op. Long
+// enough to be seen and to cost a thread (hack or burn), short enough that a kid who found the fix is not punished.
+export const SWAP_SEC = 2.0;
+
+// --- WP10: VESPER's engine firing by itself (C2), THE DEAL ----------------------------------------------------
+
+// The ship's first uncommanded burst holds its alarm (the klaxon, TACTICAL, the strip's alarm line) at least this long
+// (AI s): §9 WP10 says TACTICAL during the burst, but a burst is 1 s, too short to read `UNCOMMANDED THRUST — the
+// engine fired by itself, ▼ drifts`.
+export const GHOST_ALARM_MIN_SEC = 3;
+// A later burst a SKIP flies through stops it when the SKIP's target moved by more than this many ticks of the SKIP's
+// warp (the lead's ruling: "the target event moved by more than a tick"). Eight, not one (a WP10 deviation): a SKIP
+// crosses its whole jump in about 80 ticks at its warp, and a 1 s burst far out on a big loop moves the burn point by
+// 1.2–1.5 of them (it changes the period a little), so at one tick a 1,400 tac s WAIT on VESPER took 12–21 presses of
+// F with the same line on the strip all the way (.tmp/wp10/probes/skip-presses-1tick.log). Eight ticks (a tenth of the
+// jump) still stop the SKIP when the target is another event: the next pass of ▼, or ▲ instead of ▼, is half a loop or
+// more away, tens of ticks. Measured at eight: one press flies through 34–53 bursts and stops when the plan changes.
+export const SKIP_REPLAN_TICKS = 8;
+// The ghost lesson (THE ENGINE IS FIRING BY ITSELF — click the THRUST CTRL pip, then SWAP it) comes after this many
+// bursts (§9 WP10 item 2: "after the second event"): one burst can be a fluke, two are a pattern. Each of its two steps
+// steps aside after GHOST_LESSON_SHOW_SEC on the strip (the counter and the flashing pip stay).
+export const GHOST_LESSON_AFTER_BURSTS = 2;
+export const GHOST_LESSON_SHOW_SEC = 20;
+// The COPY lesson (`UNIT-046 IS HUNTING YOUR TOOLS — COPY your Repair`) stands at most this long.
+export const COPY_LESSON_SHOW_SEC = 15;
+// WP12 p3 (the lead's ruling 4 of 2026-10-21 06:20, and the WP11 verifier's belt item): a lesson that teaches a ship's
+// new rule (VESPER's COPY, LAST LIGHT's belt) gets this many AI seconds on the strip ahead of HOLLOW's eating and wall
+// lines (GuideRule.leadIn), long enough to read a 50-character line twice; its amber `[TAB]` wording and its blue one
+// share these seconds (WP12 review). Before, the eating lines took the strip the moment the tools were hunted, and a
+// slow kid never read the lesson (the belt's was live 52.9 s of the coast and shown 4.7 s). Alarms, the flight's NOW
+// lines and a verb's countdown still come first.
+export const LESSON_LEAD_IN_SEC = 6;
+// What an uncommanded burst did to ▼ (`▼ DRIFT −120 km` beside ▼ and in the LOWEST readout, in red) stands this many AI s
+// after the burst (WP10 review: one burst lowers ▼ by tens of km, about 120 km at GHOST_BY_BAND's 30%, a pixel or two on
+// the plot, so "▼ drifts" was nowhere to be seen). A burst within this time of the last one adds to the same drift, so a
+// run of them (a SKIP flying through) counts up. It outlasts the first burst's alarm line (GHOST_ALARM_MIN_SEC) by a second.
+export const GHOST_DRIFT_SHOW_SEC = 4;
+// A drift smaller than this (km) is no drift worth naming (a burst across the path barely moves ▼).
+export const GHOST_DRIFT_MIN_KM = 1;
+// The drift is named to the nearest this many km: the burst's size, not the sensor's last digit.
+export const GHOST_DRIFT_ROUND_KM = 10;
+// A seed that hunts your tools (VESPER, §6.6 'near-tools') lands this many free blocks from the tool it is aimed at: a
+// GAP (under WALL_MIN_BLOCKS), so it bites the tool at its next bite, with a block between them so the seed reads as a
+// thing of its own next to the tool, not part of it.
+export const SEED_TOOL_GAP_BLOCKS = 1;
+// THE DEAL (§6.6, WP10): offered once, when a hollow front is within DEAL_FRONT_BLOCKS free blocks of a soul cluster and
+// at least DEAL_MIN_CLUSTERS clusters are still in memory.
+export const DEAL_FRONT_BLOCKS = 3;
+export const DEAL_MIN_CLUSTERS = 3;
+// The choice's timer (AI s, from when its line has typed): §6.6's 15 s, long enough to read the line and decide, short
+// enough to be pressure while HOLLOW keeps eating.
+export const DEAL_TIMEOUT_SEC = 15;
+// ACCEPT: no bites and no seeds for this long (AI s, §6.6 "for a while").
+export const DEAL_PAUSE_SEC = 60;
+// REFUSE or the timer running out: the bite interval is this share as long for DEAL_HASTE_SEC (§6.6: ×0.8 for 30 s),
+// starting with the bite already counting down (its NEXT BITE drops at once: the refusal's visible cost).
+export const DEAL_REFUSE_INTERVAL_FACTOR = 0.8;
+export const DEAL_HASTE_SEC = 30;
+// A seed whose telegraph an ACCEPT called off comes again this many AI s of running seed clock after the pause (WP10
+// review): soon enough that the deal visibly bought only the pause, never 0, so a first seed still waits for a calm
+// flight (the hold freezes a running count; a clock already at 0 fires at once).
+export const DEAL_SEED_CALLED_OFF_SEC = 5;
+
+// Repair heals continuously at 100 / (REPAIR_BASE_SEC + REPAIR_PER_BLOCK_SEC × size) % per AI
+// second: a whole 8-block file in 5.4 s, so the tug-of-war against HOLLOW (WP6) is visible and
+// any repair started before zero outruns its bite (heal(8) = 18.5 %/s > 1.5 × the worst drain).
+export const REPAIR_BASE_SEC = 3.0;
+export const REPAIR_PER_BLOCK_SEC = 0.3;
+// REPAIR v2 (an upgrade card, §6.9) heals this many times faster.
+export const REPAIR_V2_HEAL_MULT = 2;
+// The upgrade's version number: v2 heals faster and can squeeze REPAIR CHARGE.
+export const REPAIR_V2_VERSION = 2;
+// REPAIR CHARGE per integrity point per block of the target: size × 2 / 100 per point, so a
+// whole 8-block file costs 16 charge and fighting a bite (healing the same points twice) costs
+// more. Charge is paid in whole points before the healing that uses them (never on credit), so
+// the total is the accrued cost rounded up and the pool never goes negative.
+export const REPAIR_CHARGE_PER_POINT_PER_BLOCK = 2 / 100;
+
+// Integrity runs 0..100 and op progress 0..100: a step that reports this has finished.
+export const INTEGRITY_MAX = 100;
+export const OP_COMPLETE_PCT = 100;
+
+// Float slack for whole-number arithmetic on ops: 62 points × 0.16 is 9.919999…, which must
+// round up to 10 charge, not 11; 36 ticks of 0.05 s must finish a 1.8 s op, not need a 37th.
+export const FLOAT_SLACK = 1e-9;
+
+// Running ops report their progress to the views at most this often (per op): smooth enough for
+// a bar and a climbing integrity number, and never a reason to repaint every tick.
+export const OP_PROGRESS_HZ = 10;
+
+// A Core below this integrity runs on CORE_LOW_THREADS thread (§3.3 C5): a hurt mind does one
+// thing at a time. The running ops still finish; only new ones are refused.
+export const CORE_LOW_INTEGRITY = 50;
+export const CORE_LOW_THREADS = 1;
+
+// OVERCLOCK (§3.2, §6.1): in blue at TACTICAL pace the world runs at this fraction of the
+// tactical warp while the mind's ops run at full speed. A quarter turns a 10-second crisis into
+// 40 real seconds of hacking, and still visibly moves the countdown.
+export const OVERCLOCK_FACTOR = 0.25;
+
+// A refused tool click explains itself next to the cursor for this long (wall ms): one read.
+export const TOOL_REFUSAL_FLASH_MS = 1400;
+// The Core's thread dots flash red and shake this long when every thread is busy.
+export const CAP_FULL_FLASH_MS = 450;
+
+// While an op runs in blue, the mind chirps this many times a second (§7.2 opChirp): a quiet
+// 8-bit "data moving" burble that stops the moment the last op ends.
+export const OP_CHIRP_HZ = 12;
+
+// The op bar docks from the cursor onto its file over this long (a cosmetic CSS transition; the
+// op's progress already runs in the ops core) and fades out over OP_BAR_FADE_MS when it ends.
+export const OP_BAR_DOCK_MS = 400;
+export const OP_BAR_FADE_MS = 240;
+
+// Segment names are at most this long, so every line that names a file (the NO CHARGE TERMINAL
+// line, the inline confirm) fits one row. data/memory.ts validates the seed against it.
+export const SEG_NAME_MAX_CHARS = 20;
+
+// --- Every capability is a file (WP4, §3.3, §6.4) ---------------------------------------------
+
+// File health bands (§6.4): at or above BAND_OK_MIN a file is ok, then degraded, failing, and
+// below BAND_FAILING_MIN dead. Four bands a kid can tell apart by colour, with the big drop
+// (failing) in the middle so a hurt file is visibly worse long before it is gone. The strip's
+// health words follow them (intact / partial / corrupt), and an fs-tool copy works while it is
+// degraded or better: one bad copy of Repair and the .bak takes over, and the chip turns bad at
+// the same line, so it never looks healthy while unusable.
+export const BAND_OK_MIN = 80;
+export const BAND_DEGRADED_MIN = 50;
+export const BAND_FAILING_MIN = 25;
+
+// Engine I/O (C1): the share of nominal thrust it lets through, and how hard the engine
+// sputters around it (thrust × (1 + jitter × noise)). Failing is the ship-1 fault: 40% with
+// ±35% sputter makes ▼ creep and the rumble cough, which a kid hears before reading anything,
+// while the capture still fits (§5.1). Dead or missing: nothing.
+export const ENGINE_POWER_BY_BAND: Readonly<Record<Band, number>> = { ok: 1, degraded: 0.75, failing: 0.4, dead: 0, missing: 0 };
+export const ENGINE_JITTER_BY_BAND: Readonly<Record<Band, number>> = { ok: 0, degraded: 0.15, failing: 0.35, dead: 0, missing: 0 };
+
+// The Reactor (C4) shares its power between the engine and the mind: its band sets a ceiling,
+// and every busy Core thread takes REACTOR_THREAD_SHARE of it (two threads: half thrust). A dead
+// or missing reactor still runs on backup cells, loudly labelled (REACTOR BACKUP CELLS), so a
+// ship file the kid deleted slows the ship instead of ending the run.
+export const REACTOR_CAP_BY_BAND: Readonly<Record<Band, number>> = { ok: 1, degraded: 0.85, failing: 0.6, dead: 0.3, missing: 0.3 };
+export const REACTOR_THREAD_SHARE = 0.25;
+
+// Thrust Ctrl (C2): a failing controller fires the engine by itself now and then, a dead one
+// as often and sometimes it sticks until SPACE is pressed. Means are in tactical seconds so the
+// rate reads the same at any warp; durTac 1.0 is one clear "whump". ok and degraded: never.
+// WP12 (the 200-seed playthrough, .tmp/wp12; the lead's steer of 03:10 to move a careless kid's losses from the Core
+// to the flight): at §3.3's 15% every 25 tac s VESPER's bursts were a nuisance, so a kid who never SWAPs still locked
+// VESPER (87.5%), stayed on through its whole tool hunt, and lost REPAIR to the seeds in half the runs; on LAST LIGHT
+// it then had nothing to fight with and the run ended OVERWRITTEN (sloppy runs completed: 63.5%). At 30% every 10 tac
+// s VESPER is the ship that kid loses (89%: the engine it never fixed takes the FUEL) while a kid who follows the pip
+// lesson after the second burst loses about two bursts and locks (COMPETENT and the strip-literal kid: 100%, FUEL ★
+// kept); sloppy runs completed 85.5%. A dead controller keeps at least a failing one's rate and strength.
+export const GHOST_BY_BAND: Readonly<Partial<Record<Band, GhostSpec>>> = {
+  failing: { meanIntervalTac: 10, amp: 0.3, durTac: 1.0, stickChance: 0 },
+  dead: { meanIntervalTac: 10, amp: 0.3, durTac: 1.0, stickChance: 0.3 },
+};
+
+// Sensor Interp (C3): a degraded sensor rounds the path's readouts to ±(100 − integrity) × this
+// many km (78% → 330 km on ship 1: a visible ≈, never a wrong colour). A failing one only
+// refreshes the path every PLOT_STALE_TAC tactical seconds (the grey PATH UNCERTAIN band).
+export const SENSOR_FUZZ_KM_PER_POINT = 15;
+export const PLOT_STALE_TAC = 3;
+
+// Telemetry (C3): below this integrity its digits start to scramble, all of them at 0 or missing.
+export const TELEMETRY_SCRAMBLE_BELOW = 60;
+
+// The Printer Uplink (C7): print speed by band; dead or missing prints nothing (NO PRINTER).
+export const PRINTER_SPEED_BY_BAND: Readonly<Record<Band, number>> = { ok: 1, degraded: 0.75, failing: 0.5, dead: 0, missing: 0 };
+
+// The glitch overlay follows the Core's damage in steps of this much (§3.3 C5): a repair that
+// heals the Core redraws the static a few times, not on every healed point.
+export const CORRUPTION_STEP = 0.05;
+
+// The ship-1 ENGINE I/O FAULT (§5.1): after this many tactical seconds of delivered thrust the
+// engine crunches and Engine I/O drops to ENGINE_FAULT_INTEGRITY (failing). Two seconds is just
+// after the line peels off the planet (1.1 s), so the kid has already seen a burn work at full
+// power and hears the difference; 38% is failing, the band that sputters at 40%.
+export const ENGINE_FAULT_AFTER_TAC = 2.0;
+export const ENGINE_FAULT_INTEGRITY = 38;
+
+// A licence's chime lands this long after its transmitIn chirps start: the files arrive, then
+// the new chip sounds, two beats instead of one smear.
+export const CHIME_AFTER_TRANSMIT_SEC = 0.45;
+
+// --- WP4 part 2: the files on screen ------------------------------------------------------------
+
+// The ENGINE I/O FAULT lands as a jolt (§7.3: 4 px), between the burn's 2 px nudge and a crash.
+export const SHAKE_FAULT_PX = 4;
+// A window pip flashes this long when its file is hit (the fault's 85 → 38): long enough to
+// catch the eye after the crunch, short enough to stop shouting once the kid has seen it.
+export const PIP_FLASH_MS = 2400;
+// The engine coughs this long after the fault's crunch: the break, then the engine choking on it.
+export const FAULT_COUGH_AFTER_SEC = 0.18;
+// ENGINE WEAK — press [TAB] stays on the strip at most this many AI seconds. Long enough to read
+// twice and act on; a kid who flies on instead then gets the flight's own line back (▼ TOO LOW,
+// WAIT … [F] SKIP), while the mode toggle keeps flashing MIND ▸ ENGINE I/O 38%. Without a cap
+// the reminder hid every flight line for the rest of a 40% flight (about three minutes).
+export const ENGINE_WEAK_MAX_SHOWN_SEC = 10;
+
+// Damaged digits (C3 Telemetry, and ▓ in CONTROL's lines) re-roll at most this often: fast
+// enough to read as "broken signal", slow enough not to strobe (≤ 4 Hz, §9 WP4 item 5).
+export const SCRAMBLE_HZ = 4;
+// The glyph that stands in for a lost character.
+export const SCRAMBLE_GLYPH = '▓';
+
+// AI Comms (C6): the share of ARRIVAL CONTROL's letters lost on the radio, by band. Failing
+// garbles enough to notice and still read; dead loses most of a line; missing loses all of it.
+export const COMMS_GARBLE_BY_BAND: Readonly<Record<Band, number>> = { ok: 0, degraded: 0, failing: 0.25, dead: 0.6, missing: 1 };
+
+// The NAV PLOT's fuzz band (approx) and grey band (uncertain) are drawn at least this wide on
+// each side of the path, in plot viewBox units (320 across): a 330 km fuzz on a 30,000 km view is
+// under 2 units and would vanish under the line itself.
+export const PLOT_FUZZ_MIN_UNITS = 2.2;
+export const PLOT_UNCERTAIN_MIN_UNITS = 5;
+
+// The planet is drawn at least this radius, in plot viewBox units (LEAD-2 review round 1; the NAV PLOT's 320 across and
+// the mini-HUD's 100 alike). The coast SKIP carries the ship out to ▲ of a just-captured loop, 2.5 million km on ship
+// 1, in seconds, and the plot follows it: the planet and the ring shrink under a pixel, and through most of a long
+// SKIP the kid saw a thin ellipse around nothing. A dot of about 5 px keeps what the loop goes around in view; near
+// the planet its true size is far larger.
+export const PLOT_PLANET_MIN_UNITS = 2.5;
+
+// The mini-HUD's plot (§7.1: 90 px), as a viewBox: the same projection as the NAV PLOT at a size
+// where a 2-unit stroke still reads.
+export const MINI_PLOT_VIEWBOX = 100;
+
+// --- WP5: the Soul Archive (§4.2 racks, §6.7 souls, the reveal and printing) ---------------------
+
+// Memory is 6 RACKS (A–F) of 64 blocks: one rack is one row of the strip on desktop, and a rack is
+// a place the game can name (debris hits RACK C, the belt racks A–B). 64 keeps the old 0x40 rows.
+export const RACK_BLOCKS = 64;
+export const RACK_COUNT = 6;
+
+// A soul cluster is 8 blocks of 200 colonists (§3.5 CLUSTER): big enough to read a family name on
+// the strip, small enough that 12 of them fill racks B–C with room for the root and a gap.
+export const CLUSTER_BLOCKS = 8;
+export const SOULS_PER_CLUSTER = 200;
+// The `R` token in a rack layout: HOLLOW's root, the size of one cluster (R16 spells out others).
+export const ROOT_BLOCKS = 8;
+
+// INSPECT names this many colonists per cluster: enough to read as a family, few enough to read.
+export const FEATURED_PER_CLUSTER = 3;
+// A colonist's line ("wants to name the first tree.") stays this short, so `Okafor, Ada (11): …`
+// fits one INSPECT row and one WAKE REPORT credit line (≤ MAX_LINE_CHARS).
+export const COLONIST_LINE_MAX_CHARS = 40;
+// Family names stay this short: `C12 · LINDQVIST` must fit an 8-block chip at 1280 px.
+export const FAMILY_MAX_CHARS = 10;
+
+// A cluster printed at or above this integrity wakes intact (§4.4: counts 1); below it, it wakes
+// with missing memories (counts 0.5). Set just under 100 so a bite healed back to 96 still counts,
+// and high enough that a hurt cluster (C09 at 71%) is always worth one repair.
+export const SOUL_WAKE_INTACT_MIN = 95;
+// What a soul that woke with missing memories is worth in the run's SCORE (§4.4). WP7 (the lead's rule):
+// only the SCORE on RUN END counts it half; WOKE everywhere else counts heads.
+export const WOKE_WITH_GAPS_SCORE = 0.5;
+
+// Printing (§6.7, AI time). Interval = ship.printBaseSec / max(range, PRINT_RANGE_FLOOR) / the
+// Printer Uplink's speed. The floor keeps a poor orbit from stalling the ship for minutes (at 50%
+// range a cluster takes twice as long, never longer); below it the low-range roll takes over:
+// each cluster may wake with gaps, with chance (floor − range) / floor, i.e. (0.5 − range) × 2.
+export const PRINT_RANGE_FLOOR = 0.5;
+// PRINT FAST ▸▸ (§6.7): a quarter of the interval. A clean ship then prints in seconds, which is
+// the reward for clearing the mind before printing.
+export const PRINT_FAST_FACTOR = 0.25;
+// After the last cluster prints, the ship lingers this many AI seconds before the WAKE REPORT:
+// the last bell and `+200 WOKE` land before the screen changes.
+export const PRINT_DONE_LINGER_SEC = 1.5;
+
+// The STASIS reveal (§1, §5.1 0:38), in AI seconds from the scan's end. It is the emotional turn of
+// the whole game, so it takes its time: the first line lands, a breath, `rescanning…`, a breath,
+// the truth, a beat of silence, then the slabs crack (one chip every REVEAL_CRACK_STAGGER_SEC,
+// §6.7: 60 ms) under the choir, and the panel settles on Ada a moment later.
+export const REVEAL_LINE_AT_SEC: readonly number[] = [0, 1.8, 3.6];
+export const REVEAL_CRACK_AT_SEC = 6.2;
+export const REVEAL_CRACK_STAGGER_SEC = 0.06;
+// One chip's crack on screen (grey slab → flash → the chip), in seconds. The strip sets each chip's
+// animation from this and the stagger, so the picture, the ripple of cracks and the C12 selection
+// stay in step when either is tuned.
+export const REVEAL_CRACK_ANIM_SEC = 0.9;
+// The crack is the picture of the whole reveal, so it waits for the kid to be looking at the mind:
+// a kid who TABbed back to amber to make a burn mid-reveal finds the slabs still shut, and the strip
+// says where to look. It waits at most this many AI seconds (12: a capture burn and its HOLD STEADY),
+// then cracks anyway, so a kid who never looks still gets the colonists, and printing never stalls.
+export const REVEAL_VIEW_WAIT_MAX_SEC = 12;
+// From the last chip cracking to the lead cluster (C12 · OKAFOR) being selected: the strip is the
+// picture for a moment, then INSPECT names a person.
+export const REVEAL_SELECT_AFTER_SEC = 1.4;
+// The reveal lines type into INSPECT at this many characters per second: slower than the radio
+// (COMMS_TYPE_CPS 40), so the words land one at a time.
+export const REVEAL_TYPE_CPS = 30;
+// ...with a quiet relay tick every this many characters (every letter crowded the reveal's own
+// pings).
+export const REVEAL_TICK_EVERY_CHARS = 2;
+// The run-1 ask (CHECK THE 2,400) shows on a coast only while the next burn is at least this many
+// tactical seconds away, so the reveal plays out before GET READY: the kid's TAB and SCAN (≈ 3 s),
+// the scan (1.4 s) and the reveal (≈ 8.3 s) are ≈ 13 wall s, ≈ 37 tactical s at ship 1's CRUISE
+// (×60 over ×20), plus GET READY's own TACTICAL_LEAD_BURN_TAC. A shorter coast waits for the next.
+export const SOULS_ASK_MIN_LEAD_TAC = 45;
+// Run 1 holds SKIP for the colonists (CHECK THE COLONISTS FIRST, §6.1) only until the ask has stood
+// on the strip this many AI seconds in all (LEAD-1, WP5 question 1 option a). A kid who ignored it
+// was measured at 125 s of forced CRUISE coast (pillar 5: something every 20 seconds). Twenty is the
+// ask read twice and acted on; after it the amber ask steps aside for the coast's `WAIT … · [F] SKIP`,
+// and the mode toggle, which named the ask while it stood, goes quiet. Nothing reveals itself
+// mid-flight: the bite's breach or the printer's find after the lock (which waits for the kid to look)
+// still shows the colonists to a kid who never scans STASIS.
+export const SOULS_ASK_HOLD_SEC = 20;
+// When printing starts with the archive still sealed (the kid never scanned STASIS), the reveal
+// plays by itself this long after the lock: after ORBIT LOCKED's stamp is gone (STAMP_SHOW_MS),
+// never in the same second (§6.7).
+export const REVEAL_AUTO_DELAY_SEC = 2.0;
+// ...and the first print waits at least this long after a reveal ends (§6.7: ≥ 3 s), so the kid
+// sees the colonists before the first one leaves.
+export const REVEAL_PRINT_GAP_SEC = 3.0;
+
+// After the reveal, the archive's hearts are heard: three heartbeats about a second apart, fading
+// (audio-cues), so the strip's new heartbeat lines have a sound the first time they appear.
+export const HEARTBEATS_AFTER_REVEAL: readonly number[] = [1, 0.75, 0.5];
+export const HEARTBEAT_GAP_SEC = 0.95;
+// A printed cluster's flash and `+200 WOKE` live this long on screen (wall ms; the CSS animations
+// fit inside it): long enough to read the number as it floats up, gone before the next print.
+export const PRINT_FX_MS = 1400;
+
+// --- WP5 part 2: racks on the strip, the WAKE REPORT, the stars -----------------------------------
+
+// The strip draws every file at its true width (one column per block), so small files are small.
+// What a chip can show depends on how many blocks wide it is; at the 1280 px minimum one block is
+// about 10 px across. Up to STRIP_NARROW_MAX_BLOCKS a chip packs tighter (a 6-block chip still fits
+// TELEMETRY or a two-line PRINTER UPLINK); up to STRIP_TINY_MAX_BLOCKS it drops the size and badge
+// and keeps a smaller name and the health (AUTO-/PILOT, STASIS, REPAIR fit 4 blocks); up to
+// STRIP_MICRO_MAX_BLOCKS only a glyph fits (Rm is 1 block: 7 px), and INSPECT names it.
+export const STRIP_NARROW_MAX_BLOCKS = 6;
+export const STRIP_TINY_MAX_BLOCKS = 4;
+export const STRIP_MICRO_MAX_BLOCKS = 1;
+
+// The stars of a ship (§4.4). INTACT: at least this share of the ship's souls woke intact. With
+// 200-soul clusters and at most 16 of them on a ship, one cluster with gaps already misses it:
+// a hurt cluster is always worth a repair.
+export const STAR_INTACT_FRAC = 0.95;
+// Each star is +6 REPAIR CHARGE on arrival at the next ship (§4.4, §6.9): good flying funds the
+// next fight. The WAKE REPORT promises it; WP7's transmission pays it.
+export const STAR_CHARGE_BONUS = 6;
+
+// The WAKE REPORT (§9 WP5 item 8). The credits scroll at 2 lines a second: a line is one row of
+// text, so a colonist (name, then first words) takes a second to rise one place, and each stays
+// on screen for several seconds, long enough to read. One colonist per cluster, the lead first:
+// about 15 s on ship 1, and SKIP is one key away.
+export const CREDITS_LINES_PER_SEC = 2;
+// The scroll ends when the last colonist reaches this share of the way up the credits window (from
+// its bottom), so the last names are read before the totals take the screen (each name has been
+// on screen for some seconds by then; rolling it all the way up only added dead time).
+export const CREDITS_END_AT_FRAC = 0.4;
+// After the credits, the stars land one at a time this far apart: each is its own moment, with
+// its own sound, before the next one is judged.
+export const REPORT_STAR_GAP_SEC = 0.75;
+// ...and the line under them (the REPAIR CHARGE they are worth) and CONTINUE follow this long
+// after the last star.
+export const REPORT_CHARGE_AFTER_SEC = 0.6;
+// The report's bed is the reveal's choir (§7.2); it is a 6.6 s swell, so it is struck again this
+// often while the credits roll: a slow breathing under the names instead of one swell that dies.
+export const REPORT_CHOIR_EVERY_SEC = 5.5;
+// The lead colonist (Ada, on run 1) holds the middle of the screen this long before the credits
+// start to roll: the first person the kid saved gets a moment of her own, with a bell.
+export const REPORT_LEAD_HOLD_SEC = 1.6;
+// The count under the credits beats a heart for each family it adds: full for intact, fainter for
+// a family that woke with missing memories (heard, as the count is).
+export const REPORT_COUNT_HEARTBEAT: Readonly<Record<'woke' | 'gaps', number>> = { woke: 0.55, gaps: 0.3 };
+// An earned star's chime follows its thud by this much (the thud lands, then it rings), and the
+// ★★★ fanfare waits this long after the last star, so it is heard as the answer to it.
+export const REPORT_STAR_CHIME_AFTER_SEC = 0.08;
+export const REPORT_FANFARE_AFTER_SEC = 0.25;
+// SPACE is the burn key, so a kid mashes it: every stage of the report ignores SPACE / ENTER / a
+// click for this long after it starts, so one press is one step and Ada's moment, the stars and
+// their reasons can't all be thrown away in under a second.
+export const REPORT_ADVANCE_LOCK_SEC = 0.8;
+// A skip during the stars lands the ones still to come this far apart (each still heard), instead
+// of the full REPORT_STAR_GAP_SEC.
+export const REPORT_STAR_HURRY_GAP_SEC = 0.15;
+// CONTINUE leaves the report for good, so it takes input only once its line has been up this long.
+export const REPORT_CONTINUE_ARM_SEC = 1.0;
+// The archive's heartbeat bed (§7.2 heartbeat: "soul racks in view, very quiet"): in blue, once the
+// colonists are found and while any are still in memory, one soft lub-dub every HEARTBEAT_BED_SEC
+// (AI time, so it stops with pause), at a strength felt more than heard under the ops' chirps. A hurt
+// cluster in memory quickens it (C09 at 71%), and a repair calms it: the kid hears the fix. WP6
+// adds the jitter near infection.
+export const HEARTBEAT_BED_SEC = 1.2;
+export const HEARTBEAT_BED_HURT_SEC = 0.85;
+export const HEARTBEAT_BED_STRENGTH = 0.22;
+
+// --- WP6: HOLLOW (§6.6) ---------------------------------------------------------------------------
+
+// The rule a kid can repeat: "4 free blocks stop it." A run of this many free blocks between HOLLOW
+// and a file is a WALL; fewer is a GAP it bites across. 4 is two of the smallest moves you can make
+// (a 2-block seed deleted next to a 2-block gap), and half a cluster: walls cost real space.
+export const WALL_MIN_BLOCKS = 4;
+// A cured file RECOILS this many AI seconds: HOLLOW's bites skip it, so a kid who just won a fight
+// has time to MOVE it behind a wall (a cluster's move is 3.1 s) before the next bite.
+export const HOLLOW_RECOIL_SEC = 10;
+// The design rule (§6.6): a repair started before zero always wins. Every ship's heal on an 8-block
+// cluster must beat this many times its fastest drain (burning or printing), so the green boundary
+// visibly pushes the red back even at the worst moment. Checked by validateShipDef.
+export const HEAL_BEATS_DRAIN_FACTOR = 1.5;
+// A cluster projected to be eaten within this many AI seconds raises the alarm: klaxon, TACTICAL,
+// `C12 WILL BE EATEN IN 0:08`. The projection (systems/hollow.ts secondsToEaten) uses the phase's
+// worst drain (in flight: as if the engine were burning), minus any repair healing it, so the number
+// never jumps when SPACE is pressed or let go (§2 pillar 5): coasting, it only falls slower. 10 s is a
+// TAB, a pickup and a click with time to spare, and the repair then wins (HEAL_BEATS_DRAIN_FACTOR).
+export const EATEN_ALARM_SEC = 10;
+// ...and it is cleared only once the projection is past this (or the cluster is cured, eaten, or a
+// winning repair is on it). At the lock the projection moves from the burn's drain (burnMult 2) to the
+// printer's (printMult 1), up to twice as far out: the alarm raised in flight must not clear there
+// and sound a second klaxon at the next rise. Just over twice EATEN_ALARM_SEC covers the ×2.
+export const EATEN_ALARM_CLEAR_SEC = 21;
+// Ship 1's scripted bite lands this many AI seconds after the true path first closes (§5.1: CAPTURED
+// at 1:10, the bite at 1:11). The CAPTURED chord and its duck (AUDIO_DUCK_HOLD_SEC + _RELEASE_SEC) are
+// over, so the chomp and the pink toggle land as a beat of their own, still inside the capture burn
+// (which doubles the drain: P1). Longer would push "idle loses C12 30 ± 2 s after the lock" (§9 WP6
+// acceptance 3) to its edge: every second here is two seconds of burn drain C12 keeps.
+export const HOLLOW_SCRIPTED_BITE_DELAY_SEC = 1.0;
+// Ship 1's script (§6.6): after the first fight is decided, a sealed archive's full reveal waits this
+// long, so the fight's own moment (SAVED and its chord, or DID NOT WAKE and its falling sweep) is
+// heard alone before the reveal's pings start (§7.2's 1.5 s between story beats). LEAD-1: and only once
+// both screens have been quiet HOLLOW_STORY_SILENCE_SEC after the fight's own echo (HOLLOW's slow
+// `> eat c12 ...` takes ≈ 3.3 s; its last letters typed under the reveal's first line, and since the
+// first LEAD-1 build the reveal still began the moment they ended).
+export const HOLLOW_REVEAL_AFTER_FIGHT_SEC = 1.5;
+// ...then, once no reveal is playing and both screens have typed what they were given (the TERMINAL's
+// echoes; since LEAD-1 also the radio, where CONTROL's `Oh, you found them!` after a reveal used to type
+// right up to `> ...047?`), this many AI seconds of silence, and HOLLOW types `> ...047?`...
+export const HOLLOW_STORY_SILENCE_SEC = 1.5;
+// ...and this long after that ARRIVAL CONTROL says it is nothing: the pink line has typed out
+// (9 characters at HOLLOW_TYPE_CPS 12 ≈ 0.8 s) and been read before the radio talks over it. Anything
+// else said in between (a print's echo) is waited out with the same silence (say.ts createStory).
+export const HOLLOW_CONTROL_AFTER_SEC = 2.5;
+// ...and CONTROL's line stays up this long once its chime and its letters are done before the ship may
+// move on (the WAKE REPORT waits for it): a full-screen report must not cover a line nobody has read.
+export const HOLLOW_STORY_READ_SEC = 2.0;
+// DELETE on a hollow block (§6.5): 1.0 s + 0.5 s per block, slower than a file (DELETE_SEC): cutting
+// HOLLOW back is a commitment that holds a thread.
+export const DELETE_HOLLOW_BASE_SEC = 1.0;
+export const DELETE_HOLLOW_PER_BLOCK_SEC = 0.5;
+// The infection's crawl and the integrity readouts on infected files repaint at most this often
+// (§9 WP6 item 6: ≤ 10 Hz). The painter counts wall time, not AI time, so a debug bite or a rebuild
+// while paused still paints: smooth for a drain of a few % per second, cheap.
+export const HOLLOW_PAINT_HZ = 10;
+
+// --- WP6 part 2: HOLLOW's painter, its sounds, the mini-strip (§6.6, §7.1, §7.2) ---------------------
+
+// NEXT BITE turns urgent this many AI seconds before the bite: the countdown and the dashed arrows to
+// its targets pulse fast. 5 s is a TAB, a pickup and a click; a cluster's MOVE (3.1 s) still fits.
+export const HOLLOW_BITE_URGENT_SEC = 5;
+// The amber mini-strip (§7.1) repaints at most this often: it is a glance, and a 2 %/s drain moves
+// its red by a fraction of a pixel per repaint.
+export const MINI_STRIP_PAINT_HZ = 4;
+// The chew (§7.2 hollowChew, "gain by total drain") is at full loudness at this total drain, in
+// integrity points per AI second over every infected file: ship 1's C12 while the engine burns
+// (2 × burnMult 2). C12 at rest chews at half, so a kid hears the burn make it worse (P1).
+export const CHEW_FULL_DRAIN = 4;
+// The tug-of-war's beating tones (§7.2 tugBeat): two sines this many Hz apart per integrity point per
+// second the boundary moves, kept between the two limits. Ship 1's winning repair (16.5 %/s) beats
+// about 8 times a second: a fight, not a drone. A slower boundary (a burn doubling the drain) beats
+// slower, so the kid hears the burn pushing back.
+export const TUG_BEAT_PER_PCT = 0.5;
+export const TUG_BEAT_MIN_HZ = 2;
+export const TUG_BEAT_MAX_HZ = 12;
+// ...and the pair climbs with the file's integrity, from TUG_PITCH_LOW_HZ at 0 to TUG_PITCH_HIGH_HZ at
+// 100 (§7.2's 300 Hz sits in the middle): the green winning sounds like it is getting somewhere.
+export const TUG_PITCH_LOW_HZ = 240;
+export const TUG_PITCH_HIGH_HZ = 360;
+// The heartbeat bed while anything is infected (§7.2: "faster and jittery near infection"): a beat
+// about this often, each gap ± HEARTBEAT_BED_JITTER of it at random (cosmetic and unseeded, like
+// every sound's small randomness). Quicker than a hurt cluster's HEARTBEAT_BED_HURT_SEC: fear, not pain.
+export const HEARTBEAT_BED_INFECTED_SEC = 0.62;
+export const HEARTBEAT_BED_JITTER = 0.3;
+// HOLLOW's moments on the strip (wall ms, cosmetic): the cure's blue sparkles and `SAVED`, the
+// eaten block's red flash and `DID NOT WAKE`, the bite's flash on its target, a WALL's flash as it
+// holds. Long enough to be seen from the corner of an eye, short enough to be gone by the next bite.
+export const HOLLOW_FX_MS = 1300;
+// Sparks the red shatters into when a repair wins (§5.1 "the red shatters into blue sparkles").
+export const CURE_SPARKS = 16;
+
+// --- WP7: the run (transmit, carry, soft fails; §4.3, §6.9) ---------------------------------------
+
+// Transit hits (§6.9): each one takes this many integrity points from one packed file, at random in
+// the range (seeded per link). 15–35 hurts enough to name on the boot's ECC line and to want a repair,
+// and three of them on ship 2 cost a few REPAIR CHARGE, never a whole tool.
+export const TRANSIT_HIT_MIN = 15;
+export const TRANSIT_HIT_MAX = 35;
+// The best copy of every tool kind (an fs-tool kind, or an AI tool's job) never drops below this in
+// transit: degraded at worst, so every tool still works when the kid arrives and a bad roll can never
+// start a ship blind or without REPAIR (pillar 5: fair). A second, worse copy can still be hit lower.
+export const TRANSIT_LAST_COPY_FLOOR = 60;
+// The Core takes at most this much from one hit: it is you, and a 35-point hit to the glitch overlay
+// would turn the boot into static. WP12 (the 200-seed playthrough, .tmp/wp12): at 15 the run's 18 crossing hits
+// wore the Core of a kid who did not heal it to its CORE_RESET_INTEGRITY floor by LAST LIGHT (one thread), and
+// nothing on the strip asks for a Core REPAIR before it is infected (WP11's TODO), so a competent kid spent its
+// MERGE savings healing it on the coasts: only 81 of 200 competent runs reached the choice with MERGE's 20 (the
+// lead's target is half), 40 of the 100 that played for MERGE. At 8: 124 of 200 (73 of 100), and an unhealed Core
+// arrives at LAST LIGHT around 50 with both threads (the sloppy kid's median low 25 → 52). The boot names every hit.
+export const TRANSIT_CORE_MAX_HIT = 8;
+// A Core HOLLOW ate to 0 comes back at this after an EMERGENCY TRANSMIT (§4.3), and no transmission
+// (a crash's −25, the hits) ever delivers a Core below it: under 50 it already thinks one thing at a
+// time (CORE_LOW_INTEGRITY), and much lower the glitch overlay would hide the screen.
+export const CORE_RESET_INTEGRITY = 25;
+// The extra hits and the Core's toll of the way a ship was left (§6.9): BEAM OUT is a hurried
+// transmission (+2 hits), an EMERGENCY TRANSMIT out of a crash a desperate one (+3 hits, Core −25).
+export const BEAM_OUT_EXTRA_HITS = 2;
+export const EMERGENCY_EXTRA_HITS = 3;
+export const EMERGENCY_CORE_HIT = 25;
+// REPAIR CHARGE on arrival is never below this (§6.5: "a guarantee, not a fallback"): a unit that lost
+// every star and spent everything still has two repairs of an 8-block file's bite for HOLLOW's fight.
+export const CHARGE_ARRIVAL_FLOOR = 12;
+
+// BEAM OUT (§4.3, §9 WP7 item 6). It is offered on a doomed ship: the impact is this close (tactical s),
+// or the FUEL left can no longer lift ▼ out of the planet. Twenty seconds is the red end of the IMPACT
+// countdown: long enough to read the offer, short enough that it never tempts a kid who can still save
+// the ship by burning.
+export const BEAM_OUT_OFFER_TAC = 20;
+// The TRANSMITTING bar takes this many tactical seconds (world time: the antenna races the ground). It
+// can be cancelled until it is full. Six seconds is a real race against a 20-second countdown.
+export const BEAM_OUT_TAC = 6;
+// "Can the tank still lift ▼ out of the planet?" flies the OUT burn ahead, at most this many game
+// seconds of it (longer than any capture burn at full power on every ship).
+export const BEAM_OUT_LIFT_MAX_SEC = 4000;
+// Run 1's unit is UNIT-047 (§1): forty-six went before it. WP8's archive adds one per run.
+export const FIRST_UNIT_NUMBER = 47;
+// The whole route the Exodus Fleet flies (§1: 581 light-years), on the title card.
+export const FLEET_ROUTE_LY = 581;
+// A printer halted for good (NO PRINTER: the Printer Uplink is a ship file, nothing heals it) holds the
+// strip's `NO PRINTER — nobody can be printed` this long, read twice, then the colonists still in memory
+// are lost and the ship goes on to its WAKE REPORT (WP5's TODO: before, the ship never ended).
+export const NO_PRINTER_GIVE_UP_SEC = 8;
+// HALCYON's wall rule (`4 FREE BLOCKS STOP IT — REPAIR, then MOVE souls behind a WALL`) holds the strip
+// this long at HOLLOW's wake: read twice, then the plain `SOMETHING IS EATING C08` lines name each
+// cluster the repairs must reach (the rule is back as `MOVE C09 behind a WALL` once they are cured).
+export const WALL_RULE_SHOW_SEC = 8;
+// The strip's `MOVE your FIREWALL (FW) into the GAP next to ???` (WP8 fix round 1) stands this long at most:
+// long enough to TAB in and pick up MOVE, then it gives the strip back (the Skills window keeps the hint).
+export const FIREWALL_HINT_SHOW_SEC = 12;
+// HALCYON's naming (systems/hollow.ts): `???` flips to UNIT-046 this long after `> i was 046. they sent
+// me first.` has typed out: the last letter lands, a breath, then the name changes on the strip.
+export const HOLLOW_NAME_AFTER_TYPED_SEC = 0.4;
+
+// HALCYON's own SHRINK THE LOOP numbers (ships.ts, the lead's per-ship shrink tuning; swept on HALCYON with
+// AP_SHIP=1). "Already small" is the same 22,500 km as ship 1 (the same planet: the same periods, the same
+// seconds of SKIP to the next pass), which is 3 × HALCYON's narrower ring...
+export const HALCYON_SMALL_LOOP_FACTOR = 3;
+// ...and a hand-over at the ring's inner edge backs off this much RETRO: at ×25, ▼ falls from the edge to
+// the surface in about 2.8 tac s, so ship 1's 0.6 s back-off left 3.2–3.6 s of over-hold before IMPACT;
+// 1.7 s gives ship 1's 4–5 s, and a release up to that late keeps ▼ in the ring (the two-burn fix).
+export const HALCYON_EDGE_BACK_OFF_TAC = 1.7;
+// KESTREL's (WP9, the lead's item: swept on KESTREL with AP_SHIP=2; PROGRESS.md WP9 has the logs). The same
+// planet and warp as HALCYON, a ring of 5,000–7,000: "already small" is again ship 1's 22,500 km, here
+// 22,500 / 7,000 ≈ 3.2 × the ring's outer edge...
+export const KESTREL_SMALL_LOOP_FACTOR = 3.2;
+// ...and a hand-over at the ring's inner edge backs off this much RETRO, more than HALCYON's 1.7: KESTREL's tank
+// (2.1 km/s) leaves less to spare, and its narrower ring makes a late release cost a third burn sooner. Swept
+// (rule2-shrink, AP_SHIP=2): with 1.7 a release 2 s late already turned the fix into three burns (▼ TOO LOW at ▲)
+// and locked with 17.9% FUEL, under the ★; with 2.5 a release 2 s late keeps the two-burn fix and locks with
+// 20.5%, and the hand-over leaves 5.6 s of over-hold before IMPACT (1.7: 4.9 s).
+export const KESTREL_EDGE_BACK_OFF_TAC = 2.5;
+// VESPER's (WP10, the lead's item 2: swept on VESPER with AP_SHIP=3, its controller swapped: AP_GHOST=quiet; logs in
+// .tmp/wp10/sweeps/). KESTREL's ring and planet, but ×30: a second of over-hold drops ▼ further, so KESTREL's 22,500 km
+// "already small" (3.2) left a capture let go and ignored 60 s handing over at ▲ 27,600 km with only the 3 s margin,
+// and a release 1 s late already turned the fix into three burns (`▼ TOO LOW — at ▲ press [W]`, 20.4% FUEL left).
+// At 5.0 (35,000 km) that hand-over keeps the full 5 s margin: a release 1 s late keeps the two-burn fix (22.5%), 2 s
+// late locks with 18.7% (3.2: 16.2%), and the ignored-60 s flight locks with 24.6% (3.2: 23.7%). 5.5 ends that shrink
+// within 2 s (too short to read), and no factor kept a 2 s late release to two burns. Rule 4's sweeps are unchanged.
+export const VESPER_SMALL_LOOP_FACTOR = 5.0;
+// ...and the ring-edge hand-over's back-off: KESTREL's 2.5 (the same ring). Swept 1.7–4.5 with both factors: no flown
+// row of rule2-shrink changes (VESPER's flown hand-overs end on the margin, not at the ring's edge of a small loop);
+// only the planted target rows move (more back-off, fewer shrinks: 1,160 at 3.0 against 1,111 at 4.5).
+export const VESPER_EDGE_BACK_OFF_TAC = 2.5;
+
+// --- WP7 part 2: the run on screen (TRANSMIT, the arrival, BEAM OUT, RUN END) ----------------------------
+
+// TRANSMIT (§4.1 step 5). The screen ignores SPACE / ENTER this long after it opens: SPACE is also the
+// WAKE REPORT's CONTINUE, and a kid mashing through the report must still see where the unit is going.
+export const TRANSMIT_ARM_SEC = 1.0;
+// The send: the files stream out one by one while the light-years tick past and the FM sweep rises. Long
+// enough to feel the 22 light-years and the stake (the files about to be hit), short enough to never be
+// dead time. The chips leave in the first TRANSMIT_STREAM_FRAC of it.
+export const TRANSMIT_SEND_SEC = 2.2;
+export const TRANSMIT_STREAM_FRAC = 0.7;
+// The white-out at the end of the send (§9 WP7 item 4): the screen floods white, holds, and the new ship
+// comes up from under it while it fades. The world reset happens at full white, so nothing jumps.
+export const WHITE_OUT_IN_SEC = 0.35;
+export const WHITE_OUT_HOLD_SEC = 0.25;
+export const WHITE_OUT_FADE_SEC = 1.1;
+
+// The arrival's red flashes (§4.1 step 1, §9 WP7 item 3): as the boot's ECC line types, each file a transit
+// hit landed on flashes red with what it lost, one after another, so the kid sees WHERE the crossing hurt.
+export const ARRIVAL_HIT_STAGGER_SEC = 0.32;
+export const ARRIVAL_HIT_FX_MS = 1700;
+// A skip never cuts the crossing's damage out of the boot (WP7 fix round 1): SPACE is also the key that just
+// CONTINUEd and TRANSMITted, so a kid mashing it skipped every arrival straight to amber and heard the hits
+// crackle over nothing. On an arrival boot the first skip jumps to the ECC line (its flashes start at
+// once), and the next is honoured only once the last flash has been on screen this long.
+export const ARRIVAL_HIT_SEEN_SEC = 0.9;
+
+// BEAM OUT (§5.3 signature 14): when the bar fills, the old ship's windows cut to black, and the next
+// screen (TRANSMIT, or RUN END on the last ship) comes up after this long: the moment the unit left.
+export const BEAM_OUT_BLACKOUT_SEC = 1.6;
+// ...and the sweep that carries the unit away as they go black: a short one (the full TRANSMIT sweep is
+// the send's own, on the next screen).
+export const BEAM_OUT_SWEEP_SEC = 0.7;
+
+// HOLLOW names itself (HALCYON): `???` decodes into UNIT-046 on every hollow block over this long, a letter
+// at a time through static, as the truth note falls. Seen later (the kid was flying), it plays this long
+// after the jack-in, once the scanline wipe has cleared.
+export const HOLLOW_NAME_DECODE_MS = 1100;
+export const HOLLOW_NAME_SEEN_DELAY_SEC = 0.35;
+
+// RUN END (§9 WP7 item 7). Input waits this long (SPACE ended the last screen too); the ship rows land one
+// by one this far apart, each with a heartbeat, and the WOKE count rolls up over RUN_END_COUNT_SEC.
+export const RUN_END_ARM_SEC = 1.5;
+export const RUN_END_ROW_GAP_SEC = 0.45;
+export const RUN_END_COUNT_SEC = 1.6;
+// A ship's stars (§4.4: ORBIT LOCKED, INTACT, FUEL): RUN END draws the missed ones as ☆ beside the earned.
+export const STARS_PER_SHIP = 3;
+// The rank (§4.4), by the run's SCORE, out of the whole fleet's 12,400 souls: DRIFTER under 3,000, SHEPHERD,
+// CARETAKER, ARK ANGEL. While the fleet is shorter (ships still being built), each threshold scales with
+// the souls the fleet has, rounded to RANK_ROUND_TO, so the top rank stays reachable and the gap lines stay
+// honest; with all five ships the numbers are §4.4's exactly.
+export const RANKS: readonly { name: string; minScore: number }[] = [
+  { name: 'DRIFTER', minScore: 0 },
+  { name: 'SHEPHERD', minScore: 3000 },
+  { name: 'CARETAKER', minScore: 6800 },
+  { name: 'ARK ANGEL', minScore: 10700 },
+];
+export const RANK_FLEET_SOULS = 12400;
+export const RANK_ROUND_TO = 100;
+// Near misses on RUN END (§4.4): at most this many lines, so they read as a nudge, not a report. A locked
+// ship's FUEL counts as a near miss within this many points under the ★.
+export const NEAR_MISS_LINES_MAX = 2;
+export const NEAR_MISS_FUEL_PCT = 5;
+
+// --- WP8: what carries over (the draft, upgrade files, the archive, the ghost; §4.5, §5.2, §6.9) ---------
+
+// The draft between ships (§6.9 `PICK ONE TO CARRY`): this many distinct cards, one of them mandatory.
+export const DRAFT_CARDS = 3;
+// A card's weight before the run's stats boost it. Every card can come up, so a kid who played
+// cleanly still sees the whole pool across a run.
+export const DRAFT_BASE_WEIGHT = 1;
+// The boosts (§6.9's table): a card answers the trouble the kid had. With clustersLost ≥ 1, FIREWALL at ×3
+// against four cards at ×1 is in about 89% of drafts (acceptance: ≥ 60% of 1,000 seeds).
+export const DRAFT_FIREWALL_BOOST = 3;
+export const DRAFT_FIREWALL_LOST_MIN = 1;
+export const DRAFT_REPAIR_V2_BOOST = 3;
+export const DRAFT_REPAIR_V2_REPAIRS_MIN = 5;
+export const DRAFT_THREAD_BOOST = 2;
+export const DRAFT_THREAD_REFUSALS_MIN = 3;
+export const DRAFT_CHARGE_BOOST = 2;
+// "charge < 15": the unit holds fewer than this at TRANSMIT.
+export const DRAFT_CHARGE_BELOW = 15;
+export const DRAFT_FUEL_TRIM_BOOST = 2;
+// "last fuel left < 20%": the ship just left ended with less FUEL than this (the ★ notch, STAR_FUEL_PCT).
+export const DRAFT_FUEL_TRIM_BELOW_PCT = 20;
+// The mild step of each boost (WP8 fix round 1, the lead's note: the draft must answer how the kid played).
+// §6.9's thresholds are trouble a clean tutorial never reaches (5 REPAIRs, a lost cluster, FUEL under the ★),
+// so its draft said `ARRIVAL CONTROL had a spare` on two or three cards. A taste of the same trouble gives the
+// card a smaller push and its reason: a bite on a cluster (ship 1's scripted bite counts, saved or not), a
+// second REPAIR (the ENGINE I/O lesson is the first), one refused click on busy THREADS, a sixth of a fresh
+// unit's 36 REPAIR CHARGE spent, half the FUEL burned. Small against the strong boosts, so FIREWALL after a
+// loss still leads (about 80% of drafts against four mild cards).
+export const DRAFT_MILD_BOOST = 1.5;
+export const DRAFT_FIREWALL_BITTEN_MIN = 1;
+export const DRAFT_REPAIR_V2_MILD_MIN = 2;
+export const DRAFT_THREAD_MILD_MIN = 1;
+export const DRAFT_CHARGE_MILD_BELOW = 30;
+export const DRAFT_FUEL_TRIM_MILD_BELOW_PCT = 50;
+
+// FIREWALL.sys and FUEL TRIM are 2-block files (§6.9): small enough to MOVE anywhere, big enough to see.
+export const FIREWALL_BLOCKS = 2;
+export const FUEL_TRIM_BLOCKS = 2;
+// How many of each file a unit may own (§6.9 "FIREWALL (stack 2)"). Two FIREWALLs can seal both sides of
+// the root; two FUEL TRIMs widen the budget twice. REPAIR v2 and THREAD+ change a file once; the charge card
+// stacks without limit, so a draft always has three cards to show in a five-ship run (WP8 deviation).
+export const FIREWALL_MAX_OWNED = 2;
+export const FUEL_TRIM_MAX_OWNED = 2;
+// REPAIR v2 and THREAD+ are one-offs (§6.9: owned non-stackables are excluded): a second REPAIR v2 would
+// change nothing, and §6.5's THREAD+ makes the Core three threads, not four.
+export const REPAIR_V2_MAX_OWNED = 1;
+export const THREAD_PLUS_MAX_OWNED = 1;
+// FUEL TRIM: each live file at or above BAND_DEGRADED_MIN widens the next arrival's Δv budget by this
+// share (§6.9 "+15% Δv budget on arrival"). Read at the arrival only: consumed mid-ship, it applies from
+// the next arrival (§9 WP8 edge case).
+export const FUEL_TRIM_DV_BONUS_FRAC = 0.15;
+// THREAD+ raises the Core's capacity by one thread (§6.5: "THREAD+ or the MERGE bonus makes it 3").
+export const THREAD_PLUS_THREADS = 1;
+// +12 REPAIR CHARGE (§6.9): added on arrival with the star credit, before the floor.
+export const CHARGE_CARD_BLOCKS = 12;
+
+// The archive (§4.5): one localStorage key, versioned, so a later shape is a new key, never a silent
+// reinterpretation of an old one.
+export const META_STORAGE_KEY = 'arrival-protocol/meta/v1';
+export const META_VERSION = 1;
+// A MERGE makes HOLLOW the two units together (`UNIT-046·047`, §4.5). The name keeps at most this many
+// units, the newest: a chip on the strip and a ≤ 70-character ghost line still fit after many merges.
+export const HOLLOW_NAME_MAX_UNITS = 2;
+
+// The run-2 boot (§5.2): the ghost line types first, at HOLLOW's slow speed, from this moment; the boot's
+// own lines follow BOOT_AFTER_GHOST_SEC after its last letter. A skip waits until it has typed: the
+// ghost's greeting is the moment run 2 is about, and SPACE is the key a returning kid mashes.
+export const BOOT_GHOST_AT_SEC = 0.5;
+export const BOOT_AFTER_GHOST_SEC = 0.6;
+
+// --- WP9: KESTREL (hazard zones, seeds, AUTOBURN; §4.2, §6.6, §6.8, §6.10) --------------------------------
+
+// Debris (§3.3 P3, §6.8): the first time the true path enters the cloud, every file with blocks in its rack
+// loses this × (its blocks in the rack ÷ its size). A cluster wholly in the rack loses a quarter: it still
+// wakes, with gaps, unless the kid repairs it (25 points of an 8-block cluster cost 4 REPAIR CHARGE).
+export const DEBRIS_HIT_DAMAGE = 25;
+// The belt (§6.8, LAST LIGHT; built and tested here): while inside, hits come as a Poisson process in game
+// time with this mean gap (P(hit) per tick = 1 − exp(−dt/τ), at most one a tick), each −8 to a random
+// damageable file in the belt's racks that no op holds (a pick an op holds is drawn again this many times).
+// A 1,080 game-s crossing averages 5.4 hits: enough to hurt, few enough to repair.
+export const BELT_HIT_MEAN_SEC = 200;
+export const BELT_HIT_DAMAGE = 8;
+export const BELT_TARGET_REROLLS = 1;
+// Pace (§6.8): TACTICAL from this many tactical seconds before a zone entry until the exit, so contact is
+// always seen at real-second speed. A running SKIP ends when this lead begins (pace.ts): the TACTICAL rule
+// would hold the world at ×25 under it anyway (the spec's 15 s SKIP end lead is the shorter of the two).
+export const ZONE_TACTICAL_LEAD_TAC = 20;
+// The strip's `DEBRIS HITS RACK C IN 1:10 — MOVE souls out of it` (script.ts): once a correction can no
+// longer clear the cloud (the flight's line is past the IN correction), shown while contact is at most this
+// far off. A minute and a half is time for two threads to MOVE a few clusters into rack D.
+export const DEBRIS_MOVE_HINT_TAC = 90;
+
+// Seeds (§6.6): a 2-block HOLLOW block, telegraphed by a blinking outline for this many AI seconds before it
+// lands (the kid sees where, and DELETE arrives with the first one).
+export const SEED_BLOCKS = 2;
+export const SEED_TELEGRAPH_SEC = 2;
+
+// AUTOBURN (§6.10): trained from the kid's own captures. It installs at the next boot once this many manual
+// captures are recorded; it learns half their mean START BURN offset (a sloppy teacher makes a sloppy skill),
+// clamped to ±8 tactical s, and its ACCURACY is 100 − 8 per tactical second of that, within 40..99.
+export const AUTOBURN_DEMOS_TO_TRAIN = 2;
+export const AUTOBURN_OFFSET_FACTOR = 0.5;
+export const AUTOBURN_OFFSET_MAX_TAC = 8;
+export const AUTOBURN_ACCURACY_PER_TAC = 8;
+export const AUTOBURN_ACCURACY_MIN = 40;
+export const AUTOBURN_ACCURACY_MAX = 99;
+// AUTOBURN.skl's file (§6.10: 6 blocks, in rack E with the unit's other files).
+export const AUTOBURN_SKILL_BLOCKS = 6;
+// AUTO is offered while the capture's START BURN is at most this many tactical seconds away (§6.10).
+export const AUTOBURN_WINDOW_TAC = 90;
+// `AUTOBURN: CAPTURED — trim it green yourself` stays on the strip this many AI seconds after the hand-back.
+export const AUTOBURN_DONE_LINE_SEC = 4;
+// A lost skill mid-burn (§6.10): the klaxon and `AUTOBURN.skl LOST — MANUAL` stand this long, then the flight's
+// own line (HOLD [SPACE] NOW) takes the strip back.
+export const AUTOBURN_LOST_ALARM_SEC = 2.5;
+
+// The first seed's `RM THE SEED — pick up DELETE, click the seed` (script.ts) stands this long at most: long
+// enough to TAB in and DELETE it; then the strip goes back to the flight (the line returns for any seed that can bite).
+export const SEED_LESSON_SHOW_SEC = 15;
+// `AUTOBURN READY — press [B] and it brakes at ▼ for you` (script.ts), once a run: this long at most. The capture
+// lines keep offering ` · or [B] AUTO` after it.
+export const AUTOBURN_READY_SHOW_SEC = 10;
+
+// The debris dodge (predict.ts debrisDodge, WP9 review round 1). The strip promises `· 0:40 to dodge DEBRIS C` only
+// while the ▼ correction started then, held to the sweet zone's far edge, passes the cloud with this many km to
+// spare. The model stops its burn exactly there; the kid, told KEEP HOLDING — dodge DEBRIS C until the path clears,
+// lets go a little after it clears (a tick, a 10 Hz refresh, a reaction), which only takes the path farther off: on
+// KESTREL every promised start dodged, by 0.3–25 km. The margin covers a start a tick or two late and the engine's
+// jitter, and costs the window about a tactical second of its 152 (each second later passes about 10 km nearer). The
+// window is judged with as many Core threads busy as the Core holds (LEAD-2, predict.ts dodgeAccel): that, not this
+// margin, is what keeps a start in its last seconds from failing while two REPAIRs run.
+// (The first model stopped a sub-step past the first RELEASE: that overshoot made it the optimist, and a promise
+// with no margin was broken by 4–11 km.)
+export const DODGE_PROMISE_MARGIN_KM = 10;
+// The deadline's search stops this close (tactical s) to the true edge: well under the countdown's whole second.
+export const DODGE_DEADLINE_RESOLUTION_TAC = 0.05;
+// The deadline is worked out once per coast and kept by the coast's conic (predict.ts dodgeKey), rounded to these
+// decimals: ▼ to 0.1 km, the eccentricity and the ▼ direction to 1e-7. On a pure coast the integrator only moves
+// them in later digits; the smallest tap of the engine moves them in these.
+export const DODGE_MEMO_RP_DECIMALS = 1;
+export const DODGE_MEMO_ANGLE_DECIMALS = 7;
+
+// The lead's ruling for WP9 fix round 1, made whole in round 2 (`· 0:24 to dodge DEBRIS C`):
+// • the countdown turns the warning colour for its last DODGE_WARN_TAC tactical seconds;
+// • the world drops to TACTICAL for the same stretch, as for a burn (pace.ts), so those seconds are real seconds
+//   (at CRUISE ×80 the last 10 lasted 3 wall s); a SKIP ends SKIP_END_LEAD_TAC before the deadline, ahead of it;
+// • a timed HOLLOW wake waits while the dodge is open and WAKE_AFTER_DODGE_SEC (AI s) after it closes (hollow.ts):
+//   the TOO LATE TO DODGE stamp, or CLEAR OF THE DEBRIS and the RELEASE after it, get a moment of their own before
+//   the first bite (round 1 gave the lapse 10 s by putting KESTREL's latest wake at 60 s, which held only at CRUISE).
+export const DODGE_WARN_TAC = 10;
+export const DODGE_TACTICAL_LEAD_TAC = DODGE_WARN_TAC;
+export const WAKE_AFTER_DODGE_SEC = 8;
+
+// --- WP9 part 2: KESTREL on screen and in the ears (§6.8, §7.2, §7.3) -------------------------------------
+
+// §7.3: the screen shakes 6 px when debris hits a rack (between the ENGINE I/O FAULT's 4 and a crash's 10).
+export const SHAKE_DEBRIS_PX = 6;
+// The red flash on a hit rack's rows (the strip in blue, the mini-strip in amber), and the belt's per-hit one.
+export const RACK_FLASH_MS = 900;
+// The MIND's rack tags (`DEBRIS 03:30` under `RACK C`) and the mini-strip's lit row are patched this often: a
+// countdown in whole seconds needs no more.
+export const RACK_TAG_PAINT_HZ = 4;
+// §7.2 geiger: inside a belt, clicks come as a Poisson stream whose rate rises from the edge to the middle of the
+// belt (the deeper in, the more it hurts to hear). Per wall second. A belt hit adds a short flurry on top.
+export const GEIGER_EDGE_HZ = 2;
+export const GEIGER_PEAK_HZ = 11;
+export const GEIGER_HIT_CLICKS = 6;
+export const GEIGER_HIT_SPREAD_SEC = 0.25;
+// A seed's warning outline blinks this often (§6.6 "a blinking outline for 2 AI-s"): four blinks in the
+// telegraph, each with a blip in HOLLOW's voice, so the warning is heard from the amber screen too.
+export const SEED_BLINK_SEC = 0.5;
+
+// --- WP10 part 2: VESPER on screen and in the ears (§7.2, §7.3, §9 WP10 items 2 and 5) ---------------------------
+
+// §7.3: the ship's first uncommanded burst slams the screen like debris (6 px: nobody touched SPACE, so it must feel
+// like something happening TO the ship); every later burst is a 3 px kick, felt but not alarming (the counter and the
+// pip say it is still going on).
+export const SHAKE_GHOST_FIRST_PX = 6;
+export const SHAKE_GHOST_PX = 3;
+// A TERMINAL choice's timer (THE DEAL's) turns the warning colour, pulses and ticks higher for its last seconds, in
+// the TERMINAL and on the ticker: the 15 s must feel like pressure (the lead's note), and the last five are where a
+// kid who is still reading has to decide.
+export const CHOICE_URGENT_SEC = 5;
+// MERGE (§1, §6.6 ship 5) costs this much REPAIR CHARGE. VESPER's boot line foreshadows it (`> keep 20 charge for me,
+// 047. you'll see.`, §9 WP10 item 5), so the number is the same constant WP11's MERGE will charge.
+export const MERGE_COST_CHARGE = 20;
+// VESPER's boot: after HOLLOW's line has typed (it is slow, HOLLOW_TYPE_CPS), the klaxon waits this long more, so the
+// line is read before the cut to amber (the boot's other lines get BOOT_KLAXON_AFTER_LAST_LINE_SEC from their start).
+export const BOOT_AFTER_HOLLOW_LINE_SEC = 1.0;
+
+// --- WP11: LAST LIGHT, HOLLOW's verbs, the root duel, PURGE or MERGE (§4.2, §6.6, §9 WP11) -------------------------
+
+// LAST LIGHT's own SHRINK THE LOOP numbers (ships.ts, the lead's per-ship tuning; swept on LAST LIGHT with AP_SHIP=4,
+// logs in .tmp/wp11/sweeps/). VESPER's ring and planet at VESPER's ×30, so its numbers are the starting point; see
+// PROGRESS.md WP11 for what the sweep said.
+export const LAST_LIGHT_SMALL_LOOP_FACTOR = 5.0;
+export const LAST_LIGHT_EDGE_BACK_OFF_TAC = 2.5;
+// HOLLOW's verbs (§6.6 ship 5): the weights are 1 + the last unit's MOVEs (MV) or DELETEs (RM) over this many, so a
+// unit that moved a lot is fought with moves ("it fights like you did", §4.5) without either verb ever vanishing.
+export const VERB_WEIGHT_PER_STAT = 10;
+// MV's aim (§6.6: "the free region nearest the most soul blocks"): a spot's pull is the soul blocks within this many
+// blocks of it, either way. One rack: a block parked between two full racks of colonists pulls harder than one at
+// the edge of a lone cluster.
+export const VERB_MV_NEAR_BLOCKS = 64;
+// A cluster HOLLOW has bitten this many times in the same spot is in a trap (WP11 review, the lead's ruling of 21:30):
+// the strip asks to MOVE it behind a WALL before the next bite, ahead of the quieter lines. On LAST LIGHT the root's
+// 2-block GAPs bit C13 and C14 every 12 s, and repairing them again and again drained the charge MERGE needs. WP12 (the
+// lead's note for part 1, 01:35; .tmp/wp12 LITERAL, the kid who does only what the strip says): at two bites that kid
+// reached LAST LIGHT's choice with MERGE's 20 charge in 49 of 196 runs (COMPETENT 124 of 200), having paid a second
+// REPAIR on every trapped cluster on every ship; at one, 149 of 199, and its souls woke 95% → 98.5%. The first bite
+// still teaches REPAIR: the ask comes only once that cluster is cured and HOLLOW will bite it there again.
+export const BITTEN_AGAIN_COUNT = 1;
+// The ship-5 root's DELETE (§6.5: "the ship-5 root takes 12 s"), whatever its size: the duel's one long op, during which
+// the verbs come every duelEverySec.
+export const ROOT_DELETE_SEC = 12;
+// What the root leaves when its DELETE completes (§6.6: "a single last block"): one block, in the middle of where the
+// root was, so a WALL stands on both sides of it (it no longer bites, but the strip must not read `GAP 2` beside it).
+export const LAST_BLOCK_SIZE = 1;
+// MERGE (§9 WP11 item 5): every cluster HOLLOW ate on LAST LIGHT comes back at this integrity (in place, if its
+// block still stands): below SOUL_WAKE_INTACT_MIN, so it wakes with missing memories, the half credit §6.6 asks for.
+export const MERGE_RESTORE_INTEGRITY = 50;
+// ...and the run after a MERGE (§4.5): the Core starts with this many threads, and the screen keeps this much
+// corruption for good (a faint shimmer of the unit that came along). The floor tints the screen only: the page-jerk
+// dice still roll on the Core's own damage, so a healthy merged unit never twitches.
+export const MERGE_BONUS_CORE_CAPACITY = 3;
+export const MERGE_CORRUPTION_FLOOR = 0.05;
+// glitchBurst (§7.3): a verb landing, HALCYON's naming and the duel's spikes flash the glitch overlay to this level
+// for this long (§9 WP11 item 3: glitchBurst(0.3, 400)). Under reduced motion it is a dim pulse of the same length.
+export const GLITCH_BURST_LEVEL = 0.3;
+export const GLITCH_BURST_MS = 400;
+// The strip's `BELT HITS RACKS A–B IN 1:10 — MOVE souls out of RACK B` (script.ts, LAST LIGHT): shown while the belt's
+// entry is at most this far off and colonists are still in its racks. As long as the debris's: time for two threads to
+// MOVE a few clusters out of rack B (§4.2: "move souls out of rack B before crossing").
+export const BELT_MOVE_HINT_TAC = 90;
+
+// --- WP11 part 2: the verbs' telegraph, the duel's spikes, the choice and the typed endings -----------------------
+
+// The duel's glitch spikes (§9 WP11: "the DELETE duel runs with glitch spikes", §7.3): while the root's DELETE runs,
+// HOLLOW thrashes. A spike every DUEL_SPIKE_EVERY_START_SEC at the DELETE's start, quickening to every
+// DUEL_SPIKE_EVERY_END_SEC near its end, from DUEL_SPIKE_LEVEL_START to DUEL_SPIKE_LEVEL_END: the screen tears more the
+// closer the root is to gone, so the 12 s build to the moment. Short (DUEL_SPIKE_MS), so a verb's countdown and the
+// strip stay readable between them; a verb landing (GLITCH_BURST_LEVEL) still stands out above the early ones.
+export const DUEL_SPIKE_EVERY_START_SEC = 2.0;
+export const DUEL_SPIKE_EVERY_END_SEC = 0.8;
+export const DUEL_SPIKE_LEVEL_START = 0.15;
+export const DUEL_SPIKE_LEVEL_END = 0.4;
+export const DUEL_SPIKE_MS = 220;
+// The root opening at ORBIT LOCK (a burst like a verb's), and the root's DELETE completing: the biggest tear of the
+// game, held long enough to feel like something large going out, then quiet for the choice.
+export const ROOT_GONE_GLITCH_LEVEL = 0.6;
+export const ROOT_GONE_GLITCH_MS = 900;
+// MERGE: it comes into you. A long, rolling burst that settles into the faint floor the next run keeps.
+export const MERGE_GLITCH_LEVEL = 0.5;
+export const MERGE_GLITCH_MS = 1600;
+// The choice card (FinaleChoice): it comes up this long after the root's end (AI s, like every story timer since the WP11
+// review: the collapse and `> 047. wait.` are seen first), and its buttons take clicks and keys only this long after it
+// is up, so a kid still clicking the root (or mashing a key) never chooses by accident.
+export const FINALE_CHOICE_DELAY_SEC = 1.4;
+export const FINALE_CHOICE_ARM_SEC = 1.6;
+// The typed ending (§9 WP11 item 5): at most this many lines, typed at FINALE_ENDING_CPS (slower than the TERMINAL: it is
+// the story's last words) with FINALE_ENDING_GAP_SEC between lines and CONTROL's chime before its line, then held for
+// FINALE_ENDING_HOLD_SEC to be read. The WAKE REPORT waits for it (finalePending); a click or a key ends it early.
+// UNRESOLVED's one line (`> you can't delete me now. …`) gets the same hold once it has typed (WP11 review).
+export const FINALE_ENDING_MAX_LINES = 6;
+export const FINALE_ENDING_CPS = 26;
+export const FINALE_ENDING_GAP_SEC = 0.7;
+export const FINALE_ENDING_HOLD_SEC = 4.0;

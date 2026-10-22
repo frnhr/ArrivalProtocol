@@ -14,7 +14,10 @@ html, body {
    doesn't blur sharp pixels — it ghosts them — so the glitch overlay below
    stays crisp. Tuned so ~50% feels "very hard to read" and 100% is unreadable. */
 html {
+  /* WP11: --glitch-dim is a glitchBurst under reduced motion (systems/glitch.ts): the screen dims for its moment
+     instead of flickering. */
   filter:
+    brightness(calc(1 - var(--glitch-dim, 0)))
     hue-rotate(calc(var(--corruption, 0) * 35deg))
     contrast(calc(1 + var(--corruption, 0) * 0.55))
     saturate(calc(1 + var(--corruption, 0) * 0.6))
@@ -75,10 +78,12 @@ body::after {
   margin-bottom: var(--sp-4);
 }
 .burn-result[data-outcome="escaped"] .burn-result-title,
-.burn-result[data-outcome="crashed"] .burn-result-title {
+.burn-result[data-outcome="crashed"] .burn-result-title,
+.burn-result[data-outcome="stranded"] .burn-result-title,
+.burn-result[data-outcome="core-lost"] .burn-result-title {
   color: var(--warn);
 }
-.burn-result[data-outcome="captured"] .burn-result-title {
+.burn-result[data-outcome="accepted"] .burn-result-title {
   color: var(--accent);
 }
 .burn-result-sub {

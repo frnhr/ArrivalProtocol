@@ -3,7 +3,7 @@ import { MOBILE_MEDIA_QUERY } from '@/utils/viewport';
 // Generalized drag behavior for any .window element with a .window-title grip.
 // Positions are written to `left`/`top` style on the win element, relative to
 // the offset parent (.desktop). Returns a teardown that removes listeners.
-export function makeDraggable(win: HTMLElement, titleSelector = '.window-title'): () => void {
+function makeDraggable(win: HTMLElement, titleSelector = '.window-title'): () => void {
   const title = win.querySelector<HTMLElement>(titleSelector);
   if (!title) return () => {};
 
@@ -11,21 +11,21 @@ export function makeDraggable(win: HTMLElement, titleSelector = '.window-title')
   let dy = 0;
   let dragging = false;
 
-  const onMouseDown = (e: MouseEvent): void => {
+  const onMouseDown = (event: MouseEvent): void => {
     dragging = true;
-    const r = win.getBoundingClientRect();
-    dx = e.clientX - r.left;
-    dy = e.clientY - r.top;
+    const rect = win.getBoundingClientRect();
+    dx = event.clientX - rect.left;
+    dy = event.clientY - rect.top;
     win.style.right = 'auto';
     document.body.style.userSelect = 'none';
   };
 
-  const onMouseMove = (e: MouseEvent): void => {
+  const onMouseMove = (event: MouseEvent): void => {
     if (!dragging) return;
     const wrap = win.parentElement?.parentElement?.getBoundingClientRect();
     if (!wrap) return;
-    win.style.left = e.clientX - dx - wrap.left + 'px';
-    win.style.top = e.clientY - dy - wrap.top + 'px';
+    win.style.left = event.clientX - dx - wrap.left + 'px';
+    win.style.top = event.clientY - dy - wrap.top + 'px';
   };
 
   const onMouseUp = (): void => {

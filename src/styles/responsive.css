@@ -10,6 +10,8 @@
 .drawer-body { display: contents; }
 .drawer-sub { display: none; }
 .fs-tool-pill { display: none; }
+/* Its phone rules give it an author display (tool-active, a refusal's flash): `hidden` must still win (§9). */
+.fs-tool-pill[hidden] { display: none !important; }
 
 @media (max-width: 768px) {
   body {
@@ -19,38 +21,46 @@
     min-height: 100dvh;
   }
 
+  /* The header in two rows (WP12): the crumbs with ❚❚ ♪ ◐ on the right, then the pace, the countdown and SKIP with
+     its reason. The time controls join the header's own rows (display: contents) and are ordered into them; the
+     header's spacer breaks the line. The mission clock (T+) gives way: the countdown is the clock that matters. */
   .header {
     flex-shrink: 0;
-    padding: 0 10px;
+    padding: 4px 10px;
     font-size: 16px;
     flex-wrap: wrap;
     height: auto;
     min-height: 44px;
-    gap: 6px;
+    gap: 4px 6px;
   }
+  .time-controls { display: contents; }
+  .header .id-block { order: 0; flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
+  .header #speedPause,
+  .header #muteBtn,
+  .header #motionBtn { order: 1; }
+  .header .spacer { order: 2; flex: 0 0 100%; height: 0; }
+  .header .pace-label,
+  .header .countdown-chip,
+  .header .skip-btn,
+  .header .skip-reason { order: 3; }
+  .header .debug-ladder { order: 4; }
+  .header .clock { display: none; }
+  .pace-label { min-width: 0; text-align: left; font-size: 14px; }
+  .countdown-chip { font-size: 19px; padding: 0 8px; }
+  .skip-reason { max-width: none; flex: 1 1 0; min-width: 0; }
+  /* No keyboard: the key caps on the header's buttons say nothing (the strip names the buttons instead). */
+  .skip-btn kbd.keycap { display: none; }
 
-  .id-block .crumb.dim { display: none; }
-  .id-block .sep:nth-of-type(2) { display: none; }
-
-  .time-controls {
-    flex-wrap: wrap;
-    gap: 6px;
-    width: 100%;
-    justify-content: flex-end;
-  }
-  .time-label { display: none; }
+  /* The phase crumb and the separator before it give way (the objective strip says the same).
+     The crumb is .dim in the markup until TimeControls paints it as .phase. */
+  .id-block .crumb.dim,
+  .id-block .crumb.phase,
+  .id-block .sep.sep-phase { display: none; }
 
   .speed-btn {
     min-width: 36px;
     padding: 4px 6px;
     font-size: 14px;
-  }
-
-  .clock {
-    font-size: 15px;
-    padding-left: 10px;
-    margin-left: 0;
-    border-left: none;
   }
 
   .footer {
@@ -81,8 +91,6 @@
     min-height: 0;
     overflow: hidden;
   }
-
-  .corner-stamp { display: none; }
 
   /* Dock — compact horizontal strip below the desktop area */
   .dock {
@@ -134,21 +142,35 @@
   }
 
   /* Mobile tool tabs: the active tool gets a brighter fill so it reads as a
-     selected tab instead of a passive "on" indicator. */
+     selected tab instead of a passive "on" indicator. The fill says which tab is open, so the ●/○ mark gives
+     way and the five tabs share the row: a 390 px phone shows them all, SKILLS included (WP12). */
   .dock-content.tools-view .dock-item.open {
     background: var(--ambient-1);
     color: var(--accent-bright);
   }
+  .dock-content.tools-view .dock-item[data-tool] { flex: 1 1 auto; justify-content: center; padding: 6px 4px; letter-spacing: 0.06em; }
+  .dock-content.tools-view .dock-item .mark { display: none; }
 
+  /* The screen button (§9 WP12 item 3: a mode button instead of TAB): one row, the other screen's alert beside a
+     tall SHIP | MIND track, with no TAB caption. */
   .mode-toggle {
     position: static;
     flex-shrink: 0;
     width: 100%;
     margin: 0;
     order: unset;
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
+    padding: 6px;
   }
+  .mode-toggle-label { display: none; }
+  .mode-toggle-alert { flex: 1 1 0; min-width: 0; margin: 0; justify-content: center; }
+  .mode-toggle-track { flex: 1 1 auto; min-width: 150px; }
+  .mode-toggle-alert:not([hidden]) + .mode-toggle-track { flex: 0 0 150px; }
+  .mode-toggle-opt { display: flex; align-items: center; justify-content: center; min-height: 36px; font-size: 18px; }
 
-  /* Tools view: single panel fills the available area; corner stamps drop out */
+  /* Tools view: single panel fills the available area */
   .tools-view.tools-tabs-mode {
     display: flex;
     flex-direction: column;
@@ -163,6 +185,8 @@
     top: auto;
     left: auto;
     right: auto;
+    /* Skills is pinned under Engine down to the desk's bottom (WP8); as a tab it flows like the rest. */
+    bottom: auto;
     width: 100%;
     min-width: 0;
     flex: 1 1 0;
@@ -382,24 +406,25 @@
   }
   body.tool-active .fs-status-bar.mobile-drawer {
     padding: 0;
-    border-color: #b482ff;
-    background: rgba(180, 130, 255, 0.06);
+    border-color: var(--violet);
+    background: rgba(var(--violet-rgb), 0.06);
   }
 
-  body.tool-active .fs-tool-pill {
+  body.tool-active .fs-tool-pill,
+  .fs-tool-pill.refusal {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 10px 6px 10px 12px;
     width: 100%;
-    background: rgba(28, 18, 46, 0.95);
-    border: 1px solid #b482ff;
-    color: #d4baff;
+    background: rgba(var(--violet-dark-rgb), 0.95);
+    border: 1px solid var(--violet);
+    color: var(--violet-bright);
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     letter-spacing: 0.15em;
     text-transform: uppercase;
-    box-shadow: 0 0 14px rgba(180, 130, 255, 0.45);
+    box-shadow: 0 0 14px rgba(var(--violet-rgb), 0.45);
   }
   .fs-tool-pill .pill-body {
     flex: 1 1 0;
@@ -411,7 +436,7 @@
     line-height: 1.3;
   }
   .fs-tool-pill .icon {
-    color: #d4baff;
+    color: var(--violet-bright);
     font-family: 'VT323', monospace;
     font-size: 18px;
   }
@@ -441,8 +466,8 @@
     min-width: 44px;
     min-height: 44px;
     background: transparent;
-    border: 1px solid #b482ff;
-    color: #d4baff;
+    border: 1px solid var(--violet);
+    color: var(--violet-bright);
     font-family: 'VT323', monospace;
     font-size: 22px;
     line-height: 1;
@@ -451,14 +476,19 @@
   }
   .fs-tool-pill .pill-cancel:hover,
   .fs-tool-pill .pill-cancel:active {
-    background: rgba(180, 130, 255, 0.25);
+    background: rgba(var(--violet-rgb), 0.25);
     color: #fff;
   }
 }
 
 @media (max-width: 400px) {
+  /* A narrow phone: the pace label gives way in the header (the countdown's ▸▸ / ×¼ badge says the pace) so a SKIP
+     refusal's reason keeps its words, and the NAV PLOT's readouts tighten to fit four columns. */
+  .header .pace-label { display: none; }
+  .np-stat .lbl { font-size: 8px; letter-spacing: 0.04em; }
+  .np-stat .v { font-size: 16px; }
   .mem-stat .lbl { font-size: 8px; }
-  .seg.compact { min-height: 36px; }
+  .seg.tier-tiny, .seg.tier-micro { min-height: 36px; }
   .dock > .dock-content.tools-view,
   .dock > .dock-content.memory-view {
     max-height: 56px;

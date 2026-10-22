@@ -1,7 +1,7 @@
 // Hover preview for files that wrap across row breaks: shows an unbroken copy
 // of the segment, anchored over the first part's row. If the segment has an
-// in-flight op, mirrors that op's progress bar into the overlay so the file
-// reads as a single thing even when the underlying parts are physically split.
+// in-flight op, borrows a bar from OpBars (kept filled with the op's progress)
+// so the file reads as a single thing even when its parts are physically split.
 //
 // Triggered from SegmentBlock onMouseEnter/onMouseLeave via the handle returned
 // by mountSplitOverlay. The 60ms pendingHide debounce keeps the overlay stable
@@ -9,7 +9,8 @@
 
 import type { Segment } from '@/types/segment';
 import { renderSegmentPart, type SegmentBehavior } from './SegmentBlock';
-import { getActiveOp } from '@systems/ops';
+import { attachOverlayBar, paintThreadRows } from './OpBars';
+import { partNumber } from '@components/dom';
 
 const HIDE_DEBOUNCE_MS = 60;
 
@@ -19,7 +20,7 @@ const noopBehavior: SegmentBehavior = {
   onMouseLeave: () => {},
 };
 
-export interface SplitOverlayHandle {
+interface SplitOverlayHandle {
   show: (seg: Segment) => void;
   hide: (segId: string) => void;
   teardown: () => void;
@@ -29,6 +30,9 @@ export function mountSplitOverlay(memWrap: HTMLElement): SplitOverlayHandle {
   let overlayEl: HTMLDivElement | null = null;
   let overlayForSegId: string | null = null;
   let pendingHide: ReturnType<typeof setTimeout> | null = null;
+  // The borrowed op bar (OpBars keeps it filled); detached whenever the copy goes away.
+  let detachBar: (() => void) | null = null;
+  const dropBar = (): void => { detachBar?.(); detachBar = null; };
 
   function ensureOverlayEl(): HTMLDivElement {
     if (overlayEl) return overlayEl;
@@ -42,19 +46,14 @@ export function mountSplitOverlay(memWrap: HTMLElement): SplitOverlayHandle {
     if (pendingHide) { clearTimeout(pendingHide); pendingHide = null; }
     if (overlayForSegId === seg.id && overlayEl?.classList.contains('visible')) return;
 
-    // Detach overlay-bar pointer from any previously-mirrored op so the op
-    // engine stops writing into the (about-to-be-replaced) overlay DOM.
-    if (overlayForSegId && overlayForSegId !== seg.id) {
-      const oldOp = getActiveOp(overlayForSegId);
-      if (oldOp) oldOp.overlayBar = null;
-    }
+    // The old copy's bar stops being filled before its DOM is replaced.
+    dropBar();
 
     const firstPart = memWrap.querySelector<HTMLElement>(
       `.seg[data-id="${seg.id}"][data-part-idx="0"]`,
     );
     if (!firstPart) return;
-    const partSize = parseInt(firstPart.dataset.partSize ?? '0', 10);
-    if (!partSize) return;
+    const partSize = partNumber(firstPart, 'partSize');
 
     const rect = firstPart.getBoundingClientRect();
     const colW = rect.width / partSize;
@@ -85,22 +84,8 @@ export function mountSplitOverlay(memWrap: HTMLElement): SplitOverlayHandle {
     overlay.style.height = rect.height + 'px';
     overlay.classList.add('visible');
     overlayForSegId = seg.id;
-
-    const op = getActiveOp(seg.id);
-    if (op) {
-      const bar = document.createElement('div');
-      bar.className = 'op-progress overlay-op-bar';
-      bar.style.position = 'absolute';
-      bar.style.inset = '0';
-      bar.style.width = '100%';
-      bar.style.height = '100%';
-      bar.innerHTML =
-        `<div class="op-fill" style="width:${op.currentPct}%"></div>` +
-        `<span class="op-icon">${op.icon}</span>` +
-        `<span class="op-label">${op.label}</span>`;
-      overlay.appendChild(bar);
-      op.overlayBar = bar;
-    }
+    paintThreadRows();
+    detachBar = attachOverlayBar(seg.id, overlay);
   }
 
   function hide(segId: string): void {
@@ -113,13 +98,13 @@ export function mountSplitOverlay(memWrap: HTMLElement): SplitOverlayHandle {
       if (!overlayEl) return;
       overlayEl.classList.remove('visible');
       overlayForSegId = null;
-      const op = getActiveOp(segId);
-      if (op) op.overlayBar = null;
+      dropBar();
     }, HIDE_DEBOUNCE_MS);
   }
 
   function teardown(): void {
     if (pendingHide) { clearTimeout(pendingHide); pendingHide = null; }
+    dropBar();
     overlayEl?.remove();
     overlayEl = null;
     overlayForSegId = null;

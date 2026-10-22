@@ -1,128 +1,113 @@
 import type {
-  MissionMeta, TelemetryState, ClockState, AiState,
-  BurnState, OrbitVecState, LevelState,
+  MissionMeta, ClockState, BurnState, OrbitVecState, LevelState,
 } from '@state/schema';
-import { stateFromElements, type PlanetParams, type OrbitState } from '@/types/orbit';
+import type { ShipDef } from '@data/ships';
+import type { Rng } from '@systems/rng';
+import type { Zone } from '@/types/zone';
+import { presetHeading } from '@systems/attitude';
+import { stateFromElements, inboundAnomalyAtRadius } from '@/types/orbit';
+import { unitName } from '@systems/say';
+import { FLEET_ROUTE_LY } from '@data/tuning';
 
-export const INITIAL_MISSION: MissionMeta = {
-  unitId: 'UNIT-047',
-  shipId: 'ARES-VII',
-  sector: 'SECTOR 03',
-  destination: 'KEPLER-186',
-  distanceLy: 581,
-  transmissionNum: 47,
-  souls: 2400,
-};
+// Factories for the per-ship and per-run slices. Each call returns FRESH objects: nothing
+// here is a shared constant that the live store could alias and mutate.
 
-export const INITIAL_CLOCK: ClockState = {
-  tSec: 14 * 3600 + 23 * 60 + 47,    // T+ 14:23:47
-  speed: 1,
-  speedTarget: 1,
-};
+export interface FlightMods {
+  dvBonusFrac: number;     // carried upgrades widen the Δv budget (WP8); 0 = stock
+}
 
-export const INITIAL_AI: AiState = {
-  coreIntegrity: 100,
-  uptimeSec: 0,
-};
+export interface FlightInit {
+  level: LevelState;
+  orbit: OrbitVecState;
+  burn: BurnState;
+}
 
-// --- Orbital insertion level (SI-ish units: km, km/s, μ in km³/s²) ---
-// Mars-ish planet. The NAV PLOT renderer is scale-free, so we pick physical units so
-// the HUD reads in real km/s and km with no conversion layer.
-const PLANET: PlanetParams = { R: 3390, rAtm: 3800, rMin: 5000, rMax: 7000, mu: 43000 };
+// Places the ship on its arrival hyperbola and arms the engine. The hyperbola is fixed by
+// the ship data: e = 1 + rp0·v∞²/μ, the ship sits at r0 on the INBOUND branch, and the
+// whole conic is rotated by omega0. `rng` is the ship's flight stream; ship 1 has no seeded
+// start variation, later ships draw from it. `mods` is required: a caller that forgot the carried
+// upgrades (capabilities.ts flightModsOf) would drop FUEL TRIM without a sound. `zones` are the ship's hazard
+// zones as this run resolved them (systems/zones.ts resolveZones; [] on a ship without any).
+export function createFlight(ship: ShipDef, rng: Rng, mods: FlightMods, zones: readonly Zone[]): FlightInit {
+  void rng;
+  const { planet, ring, start } = ship.flight;
+  const ecc = 1 + (start.rp0 * start.vInf * start.vInf) / planet.mu;
+  const nu = inboundAnomalyAtRadius(start.rp0, ecc, start.r0);
+  if (nu === null) throw new Error(`createFlight ${ship.id}: r0 ${start.r0} is not on the arrival hyperbola`);
+  const orbit = stateFromElements(start.rp0, ecc, start.omega0, nu, planet.mu);
 
-// Incoming hyperbola (e > 1). The periapsis arrives FAR ABOVE the band — a large miss,
-// randomized each run — so the opening move is to steer it down toward the band, then
-// brake/shape and commit when the whole orbit sits in the band.
-const E0 = 1.6;
-const OMEGA0 = -0.6;
-const RP_SEED_MIN = 250_000;
-const RP_SEED_MAX = 400_000;
-// Starting distance from the planet (the ship coasts in from here).
-const START_RADIUS = 778_000;
-
-// Hidden mass: the estimate ± uncertainty shown to the player; true value seeded within
-// the band and never rendered. With the narrow "whole orbit in band" target, this
-// ±3.7% meaningfully shifts the burn the player needs.
-const MASS_EST_MT = 8.2;
-const MASS_PM_MT = 0.3;
-
-// Engine: max accel = THRUST_FORCE / trueMassMt (km/s²); the main throttle scales thrust
-// along the ship heading within that. Enough authority to steer a large miss in over the
-// long approach, still controllable near periapsis at low throttle / low time-compression.
-const THRUST_FORCE = 0.03;
-
-// Fuel drain per game-second at full thrust. Running dry auto-commits the current orbit.
-// Generous for now so the 2-axis flying can be learned without fuel frustration; tighten
-// later so fuel + hidden mass become real constraints.
-const FUEL_RATE = 0.005;
-export const FUEL_BURN_RATE = FUEL_RATE;
-
-const INITIAL_FUEL_PCT = 100;
-const INITIAL_SENSOR_CONF_PCT = 62;
-
-// Randomized incoming periapsis + the inbound true anomaly that places the ship at
-// START_RADIUS on that hyperbola. Computed once per load so seedOrbit and
-// INITIAL_TELEMETRY agree; a reload (Retransmit) reseeds for a fresh approach.
-const SEED_RP = RP_SEED_MIN + Math.random() * (RP_SEED_MAX - RP_SEED_MIN);
-const SEED_NU = -Math.acos(Math.max(-1, Math.min(1, ((SEED_RP * (1 + E0)) / START_RADIUS - 1) / E0)));
-
-export function seedLevel(): LevelState {
-  // All attitude helpers unlocked for now; gate per level / engine version later.
-  return {
-    planet: { ...PLANET },
-    sasModes: ['hold', 'prograde', 'retrograde', 'radial-in', 'radial-out'],
+  const level: LevelState = {
+    shipId: ship.id,
+    shipName: ship.name,
+    planet: { ...planet },
+    ring: { ...ring },
+    r0: start.r0,
+    tacticalWarp: ship.flight.tacticalWarp,
+    cruiseWarp: ship.flight.cruiseWarp,
+    dvBudgetKmS: ship.flight.dvBudgetKmS * (1 + mods.dvBonusFrac),
+    aNominalKmS2: ship.flight.aNominalKmS2,
+    shrink: { ...ship.shrink },
+    zones: structuredClone(zones),
   };
-}
 
-export function seedOrbit(): OrbitVecState {
-  const state = seedState();
-  return { ...state, tToPeriHrs: estTimeToPeriHrs(state, SEED_RP) };
-}
-
-export function seedBurn(): BurnState {
-  const trueMassMt = MASS_EST_MT + (Math.random() * 2 - 1) * MASS_PM_MT;
-  const s = seedState();
-  const heading = Math.atan2(s.vy, s.vx); // start pointing prograde
-  return {
-    thrustPct: 0,
-    heading,
+  // The start preset is engaged and already aligned: the very first SPACE fires the right way.
+  const burn: BurnState = {
+    status: 'approaching',
+    thrustPct: 100,
+    heading: presetHeading(start.sas, orbit),
     omega: 0,
     rotInput: 0,
-    sasMode: 'off',
-    holdTarget: heading,
-    trueMassMt,
-    thrustForce: THRUST_FORCE,
-    status: 'approaching',
+    sasMode: start.sas,
+    firing: false,
+    firingSource: null,
+    firingFor: null,
+    presetAligning: false,
+    fuelPct: 100,
+    dvDeliveredKmS: 0,
+    lastTickDvKmS: 0,
+    lockHoldAiSec: 0,
+    closedIdleAiSec: 0,
+    missedIdleTac: 0,
+    acceptOnly: false,
+    thrustTac: 0,
+    coastAtAi: null,
+    ghost: null,
+    ghostBursts: 0,
+    auto: { phase: 'idle', atAi: 0, end: null },
   };
+
+  return { level, orbit: { x: orbit.x, y: orbit.y, vx: orbit.vx, vy: orbit.vy }, burn };
 }
 
-// Derived from the seed orbit so the pre-run HUD matches the plot — no jump on tick 1.
-export const INITIAL_TELEMETRY: TelemetryState = buildInitialTelemetry();
-
-function seedState(): OrbitState {
-  return stateFromElements(SEED_RP, E0, OMEGA0, SEED_NU, PLANET.mu);
-}
-
-function buildInitialTelemetry(): TelemetryState {
-  const state = seedState();
-  const r = Math.hypot(state.x, state.y);
+// `unitNumber` and `wave` are the run's (RunState): UNIT-047 on wave 1.
+export function createMissionMeta(ship: ShipDef, unitNumber: number, wave: number): MissionMeta {
   return {
-    velocity: Math.hypot(state.vx, state.vy),
-    distance: Math.max(0, r - PLANET.R),
-    etaHrs: estTimeToPeriHrs(state, SEED_RP),
-    fuelPct: INITIAL_FUEL_PCT,
-    massEstMt: MASS_EST_MT,
-    massPmMt: MASS_PM_MT,
-    sensorConfPct: INITIAL_SENSOR_CONF_PCT,
+    unitId: unitName(unitNumber),
+    shipId: ship.name,
+    destination: ship.world.toUpperCase(),
+    distanceLy: FLEET_ROUTE_LY,
+    transmissionNum: unitNumber,
+    wave,
+    // Counted from the ship's memory by createInitialState (the clusters it was built with).
+    souls: 0,
   };
 }
 
-// Cheap time-to-periapsis (the same estimate the sim paints): radial distance to
-// periapsis over radial speed. Infinity while receding.
-function estTimeToPeriHrs(state: OrbitState, rp: number): number {
-  const r = Math.hypot(state.x, state.y);
-  const rDotV = state.x * state.vx + state.y * state.vy;
-  if (rDotV >= 0) return Infinity;
-  const vRadial = Math.abs(rDotV) / r;
-  return (r - rp) / Math.max(vRadial, 1e-9) / 3600;
+// The clock starts halted; the first tick's pace evaluation lifts it straight to the
+// ship's tactical warp (a resume from 0 snaps), so the opening countdown is real seconds.
+export function createClockState(): ClockState {
+  return {
+    tSec: 0,
+    aiSec: 0,
+    speed: 0,
+    speedTarget: 0,
+    paused: false,
+    pace: 'tactical',
+    overclock: false,
+    skipWarp: null,
+    skipEndTSec: null,
+    skipWaypoint: null,
+    debugWarp: null,
+  };
 }
+

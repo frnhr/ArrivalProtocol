@@ -19,6 +19,9 @@ export interface Store<S> {
   // in place (avoiding update() so memory slice references stay stable for the
   // op-engine's stored seg references). Components that use update() never need this.
   notify(): void;
+  // True while subscribers are being called. say() asserts it is false: a line spoken from a
+  // store listener would nest an update inside the fan-out (§9 tick discipline).
+  isNotifying(): boolean;
 }
 
 interface SubRecord<S, T> {
@@ -31,19 +34,25 @@ interface SubRecord<S, T> {
 export function createStore<S>(initial: S): Store<S> {
   let state: S = initial;
   const subs = new Set<SubRecord<S, unknown>>();
+  let notifyDepth = 0;
 
   function getState(): Readonly<S> {
     return state;
   }
 
   function fireAll(): void {
-    for (const sub of subs) {
-      const next = sub.selector(state);
-      if (!sub.equals(next, sub.last)) {
-        const prev = sub.last;
-        sub.last = next;
-        sub.listener(next, prev);
+    notifyDepth++;
+    try {
+      for (const sub of subs) {
+        const next = sub.selector(state);
+        if (!sub.equals(next, sub.last)) {
+          const prev = sub.last;
+          sub.last = next;
+          sub.listener(next, prev);
+        }
       }
+    } finally {
+      notifyDepth--;
     }
   }
 
@@ -81,7 +90,7 @@ export function createStore<S>(initial: S): Store<S> {
     fireAll();
   }
 
-  return { getState, update, mutate, subscribe, notify };
+  return { getState, update, mutate, subscribe, notify, isNotifying: () => notifyDepth > 0 };
 }
 
 // Common equality helpers.

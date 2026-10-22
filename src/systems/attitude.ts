@@ -1,39 +1,74 @@
-import type { SasMode } from '@state/schema';
+import type { SasMode, PresetMode } from '@state/schema';
+import { ROT_ACCEL, MAX_OMEGA, PRESET_ALIGN_DEG } from '@data/tuning';
 
-// Attitude control: the manual rotation thrusters and the SAS-style autopilot helpers,
-// sharing one set of rotation caps. Pure functions (no store, no DOM) so the sim can call
-// them and tests can drive them directly.
+// Attitude control: the four presets (select-only autopilot targets) and the MANUAL fold's
+// momentum-carrying thrusters, sharing one set of rotation caps. Pure functions (no store,
+// no DOM) so the sim can call them and tests can drive them directly.
 
-// Rotation authority of the attitude thrusters. The autopilot slews within these same
-// limits the player feels in manual mode, so a turn always reads as a turn.
-export const ROT_ACCEL = 0.12;    // rad/game-s² — angular accel while a thruster fires (punchy)
-export const MAX_OMEGA = 0.0833;  // rad/game-s  — angular-velocity cap (~4.8°/s, deliberately slow)
-
-// Damage seam: a degraded core could later slew slower / cap lower by passing reduced
-// caps to stepAttitude. Default is full authority.
+// Damage seam: a degraded Autopilot could later slew slower by passing reduced caps.
 export interface RotCaps { rotAccel: number; maxOmega: number; }
 export const DEFAULT_ROT_CAPS: RotCaps = { rotAccel: ROT_ACCEL, maxOmega: MAX_OMEGA };
 
-// Minimal orbital state the autopilot needs to derive its pointing targets.
+// Minimal orbital state the presets need to derive their pointing targets.
 export interface OrbitVec { x: number; y: number; vx: number; vy: number; }
 
 export interface Attitude { heading: number; omega: number; }
 
+const DEG2RAD = Math.PI / 180;
+const ALIGN_TOLERANCE_RAD = PRESET_ALIGN_DEG * DEG2RAD;
+
 const clamp = (value: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, value));
 const wrap = (angle: number): number => Math.atan2(Math.sin(angle), Math.cos(angle)); // → (−π, π]
 
-// The heading an autopilot mode wants, given the live orbital state. null = manual ('off').
-// 'hold' uses the heading captured when the mode was engaged.
-export function sasTargetHeading(mode: SasMode, holdTarget: number, orbit: OrbitVec): number | null {
+// Below this |r̂ − (r̂·v̂)v̂| the ship moves straight along the radius and "radial" in the
+// velocity frame is undefined.
+const DEGENERATE_NORM = 1e-9;
+
+// Velocity-frame radial (KSP-style): radial-out = normalize(r̂ − (r̂·v̂)v̂), the component of
+// "away from the planet" perpendicular to the velocity; radial-in is its negative.
+// WHY: on an inbound arrival the velocity points mostly AT the planet, so thrust along the
+// raw radius vector is nearly retrograde, has almost no torque on the orbit and barely moves
+// the periapsis. Perpendicular to v it rotates the path itself (0.8 km/s OUT at r 12,000 lifts
+// rp by ~3,000 km). On a circular orbit r̂ ⊥ v̂, so this equals the old radius-vector radial.
+function radialOutHeading(orbit: OrbitVec): number {
+  const radius = Math.hypot(orbit.x, orbit.y);
+  const speed = Math.hypot(orbit.vx, orbit.vy);
+  const rx = orbit.x / radius;
+  const ry = orbit.y / radius;
+  const vx = orbit.vx / speed;
+  const vy = orbit.vy / speed;
+  const along = rx * vx + ry * vy;
+  const outX = rx - along * vx;
+  const outY = ry - along * vy;
+  if (Math.hypot(outX, outY) < DEGENERATE_NORM) {
+    // Pure radial motion: every perpendicular is equally "out". Pick the counter-clockwise
+    // tangent of r̂, which adds h > 0 (the sense every ship in the game orbits in).
+    return Math.atan2(rx, -ry);
+  }
+  return Math.atan2(outY, outX);
+}
+
+// The inertial heading a preset points at for the given state.
+export function presetHeading(mode: PresetMode, orbit: OrbitVec): number {
   switch (mode) {
-    case 'off':        return null;
-    case 'hold':       return holdTarget;
     case 'prograde':   return Math.atan2(orbit.vy, orbit.vx);
     case 'retrograde': return Math.atan2(-orbit.vy, -orbit.vx);
-    case 'radial-out': return Math.atan2(orbit.y, orbit.x);   // away from the planet
-    case 'radial-in':  return Math.atan2(-orbit.y, -orbit.x); // toward the planet
-    default:           return null;
+    case 'radial-out': return radialOutHeading(orbit);
+    case 'radial-in':  return wrap(radialOutHeading(orbit) + Math.PI);
   }
+}
+
+// null = MANUAL ('off'): the heading is whatever the Q/E thrusters left it at.
+export function sasTargetHeading(mode: SasMode, orbit: OrbitVec): number | null {
+  return mode === 'off' ? null : presetHeading(mode, orbit);
+}
+
+// True while a preset's target is more than PRESET_ALIGN_DEG away: the engine gives no
+// thrust (the burn button reads ALIGNING…). MANUAL is never "aligning".
+export function isPresetAligning(mode: SasMode, heading: number, orbit: OrbitVec): boolean {
+  const target = sasTargetHeading(mode, orbit);
+  if (target === null) return false;
+  return Math.abs(wrap(target - heading)) > ALIGN_TOLERANCE_RAD;
 }
 
 // Manual step: held thrusters add torque (rotInput −1/0/+1), momentum persists (capped),
@@ -43,21 +78,19 @@ function stepManual(att: Attitude, rotInput: number, dt: number, caps: RotCaps):
   return { omega, heading: wrap(att.heading + omega * dt) };
 }
 
-// Autopilot step: a time-optimal slew that drives heading → target, arriving with ~zero
+// Preset step: a time-optimal slew that drives heading → target, arriving with ~zero
 // spin (accelerate, coast at the cap, brake). Respects the same caps as manual.
 function stepAuto(att: Attitude, target: number, dt: number, caps: RotCaps): Attitude {
   const err = wrap(target - att.heading);
   // If the whole error fits in one tick at the rate cap, lock on cleanly. This settles the
-  // final approach without jitter AND keeps a hold stable under heavy time-compression,
-  // where a discrete per-tick slew would otherwise overshoot and spin. (Because the no-snap
-  // branch moves heading by at most maxOmega·dt < |err|, it can never overshoot the target.)
+  // final approach without jitter AND keeps a preset stable under heavy time-compression,
+  // where a discrete per-tick slew would otherwise overshoot and spin.
   if (Math.abs(err) <= caps.maxOmega * dt) {
     return { omega: 0, heading: wrap(target) };
   }
   // Fastest spin from which we can still brake to a stop by the target: ω = √(2·a·|err|).
   const omegaBrake = Math.sqrt(2 * caps.rotAccel * Math.abs(err));
   const omegaWant = Math.sign(err) * Math.min(caps.maxOmega, omegaBrake);
-  // Step ω toward that, limited by the torque available this tick; integrate heading.
   const omega = clamp(
     att.omega + clamp(omegaWant - att.omega, -caps.rotAccel * dt, caps.rotAccel * dt),
     -caps.maxOmega,
@@ -66,19 +99,17 @@ function stepAuto(att: Attitude, target: number, dt: number, caps: RotCaps): Att
   return { omega, heading: wrap(att.heading + omega * dt) };
 }
 
-// One attitude update for a game tick. With sasMode 'off' the manual thrusters apply;
-// otherwise the autopilot drives toward its target and rotInput is ignored. `caps` is the
-// damage seam — pass reduced authority to model a degraded core.
+// One attitude update for a game tick. A preset drives toward its target and ignores
+// rotInput; MANUAL applies the thrusters.
 export function stepAttitude(
   att: Attitude,
   sasMode: SasMode,
-  holdTarget: number,
   rotInput: number,
   orbit: OrbitVec,
   dt: number,
   caps: RotCaps = DEFAULT_ROT_CAPS,
 ): Attitude {
-  const target = sasTargetHeading(sasMode, holdTarget, orbit);
+  const target = sasTargetHeading(sasMode, orbit);
   return target === null
     ? stepManual(att, rotInput, dt, caps)
     : stepAuto(att, target, dt, caps);

@@ -5,26 +5,56 @@ import './styles/reset.css';
 import './styles/base.css';
 import './styles/glitch.css';
 import './styles/legacy-components.css';
+import './styles/game.css';
 import './styles/responsive.css';
 
 import { store } from '@state/instance';
+import { getByRole, getSegmentById } from '@state/selectors';
 import type { Segment } from '@/types/segment';
 import { mountGlitchDriver } from '@systems/glitch';
 import { mountClock } from '@systems/clock';
 import { mountOrbitSim } from '@systems/orbit-sim';
+import { mountPredictor } from '@systems/predict';
+import { mountPace } from '@systems/pace';
+import { mountInput, blurButtonsOnPointerUp, emitUiClicks } from '@systems/input';
+import { mountSay } from '@systems/say';
+import { mountFlightEvents } from '@systems/flight-events';
+import { mountGhostThrust } from '@systems/ghost-thrust';
+import { mountHollowDeal } from '@systems/hollow-deal';
+import { mountHollowVerbs } from '@systems/hollow-verbs';
+import { mountFinale } from '@systems/finale';
+import { mountDirector } from '@systems/director';
+import { mountBoot } from '@systems/boot';
+import { unlockAudio } from '@systems/audio';
+import { mountAudioCues } from '@systems/audio-cues';
+import { mountDebug } from '@/debug';
 import { mountModeToggle } from '@components/dock/ModeToggle';
-import { mountDockItems } from '@components/dock/Dock';
 import { mountSidebarFilters } from '@components/dock/SidebarFilters';
 import { mountTimeControls } from '@components/header/TimeControls';
 import { mountAllWindows } from '@components/window/Window';
 import { mountEngineWindow } from '@components/tools-view/EngineWindow';
 import { mountNavPlotWindow } from '@components/tools-view/NavPlotWindow';
+import { mountTelemetryWindow } from '@components/tools-view/TelemetryWindow';
 import { mountToolsTabs } from '@components/tools-view/ToolsTabs';
+import { mountPhoneFlightBar } from '@components/tools-view/PhoneFlightBar';
 import { mountWindowGrips } from '@components/tools-view/WindowGrip';
 import { mountMemoryStats } from '@components/memory-view/MemoryStats';
 import { mountFooter } from '@components/footer/Footer';
 import { mountBurnResult } from '@components/burn/BurnResult';
-import { mountFsToolsSystem, applyTool, getCursorXY, pickUpTool } from '@systems/fs-tools';
+import { mountWakeReport } from '@components/run/WakeReport';
+import { mountObjectiveStrip } from '@components/hud/ObjectiveStrip';
+import { mountStamps } from '@components/hud/Stamp';
+import { mountJuice } from '@components/hud/Juice';
+import { mountMiniHud } from '@components/hud/MiniHud';
+import { mountMiniStrip } from '@components/hud/MiniStrip';
+import { mountCommsWindow } from '@components/comms/CommsWindow';
+import { mountMindTerminal } from '@components/memory-view/MindTerminal';
+import { mountPauseVeil } from '@components/hud/PauseVeil';
+import { mountTitleCard } from '@components/title/TitleCard';
+import { mountFsToolsSystem, applyTool, requestDelete, type ToolDeps } from '@systems/fs-tools';
+import { mountOpsCore } from '@systems/ops-core';
+import { mountOpBars } from '@components/memory-view/OpBars';
+import { mountInlineConfirm, askInline } from '@components/hud/InlineConfirm';
 import { mountCursorFollower } from '@components/cursor-follower/CursorFollower';
 import { mountMemoryStrip } from '@components/memory-view/MemoryStrip';
 import { mountSelectionHighlight } from '@components/memory-view/SelectionHighlight';
@@ -35,42 +65,124 @@ import { mountPlacement } from '@components/memory-view/Placement';
 import { mountFsStatusBar } from '@components/memory-view/FsStatusBar';
 import { mountMobileDrawers } from '@components/memory-view/MobileDrawers';
 import { mountFsToolPill } from '@components/memory-view/FsToolPill';
-import { setCoresCapacity, onOpLoadChange, getActiveOpCount } from '@systems/ops';
-import { getAiCore } from '@state/selectors';
-import {
-  actionScan, actionSwap, actionActivate, actionDeleteRedundancy,
-  actionRepair, type ActionDeps,
-} from '@state/actions';
+import { actionScan, actionRepair } from '@state/actions';
+import { mountLicences } from '@systems/licences';
+import { mountReveal } from '@systems/reveal';
+import { mountPrinter, setPrintNext, setPrintFast } from '@systems/printer';
+import { mountPrintFx } from '@components/memory-view/PrintFx';
+import { mountFaults } from '@systems/faults';
+import { mountHollow } from '@systems/hollow';
+import { mountZones } from '@systems/zones';
+import { mountAutoburn, registerAutoburnKeys } from '@systems/autoburn';
+import { mountHollowPainter } from '@components/memory-view/HollowPainter';
+import { mountRun } from '@systems/run';
+import { mountTransmitScreen } from '@components/run/TransmitScreen';
+import { mountRunEnd } from '@components/run/RunEnd';
+import { mountMergeTick } from '@components/memory-view/MergeTick';
+import { mountFinaleChoice } from '@components/run/FinaleChoice';
+import { mountSkillsWindow } from '@components/run/SkillsWindow';
+import { mountArrivalFlash } from '@components/run/ArrivalFlash';
+import { mountHollowNameFx } from '@components/memory-view/HollowNameFx';
+import { mountMovePreviewLabels } from '@components/memory-view/MovePreviewLabels';
+import { mountRackZoneMarks } from '@components/memory-view/RackZoneMarks';
+import { partNumber } from '@components/dom';
 
-// Cursor position is module-local in fs-tools (mousemove writes; everything else reads).
-// pickFsTool is the bridge that lets actionActivate meta-pick-up an fs-tool
-// when Activate is applied to an fs-tool segment in memory.
-const actionDeps: ActionDeps = {
-  getCursorXY,
-  pickFsTool: (kind) => pickUpTool(store, kind),
+// What the tools need from the page: a delete that can't be undone asks through the inline
+// confirm pill.
+const toolDeps: ToolDeps = {
+  ask: askInline,
 };
 
-// DetailPanel action buttons dispatch through this. The fs-tools system
-// invokes individual action functions directly via applyTool.
-function runAction(seg: Segment, action: DetailActionId): void {
-  if (action === 'repair') actionRepair(store, seg, actionDeps);
-  else if (action === 'swap' && seg.type === 'ship') actionSwap(store, seg, actionDeps);
-  else if (action === 'activate' && seg.type === 'ship-backup') actionActivate(store, seg, actionDeps);
-  else if (action === 'delete_redund') actionDeleteRedundancy(store, actionDeps);
-  else if (action === 'scan') actionScan(store, seg, actionDeps);
+// DetailPanel action buttons dispatch through this. The actions re-check everything at the click
+// (pause, operating, the target rules, a free thread), exactly as for a tool click. (SWAP is a tool
+// file since WP10: it is picked up like any tool, not a button here.) A panel rebuild can wait for a
+// press to land (guardPresses), so the file may have left memory under the button (printed): the
+// click then has nothing to act on.
+function runAction(shown: Segment, action: DetailActionId): void {
+  const seg = getSegmentById(store.getState(), shown.id);
+  if (!seg) return;
+  if (action === 'repair') actionRepair(store, seg);
+  else if (action === 'delete_charge') requestDelete(store, seg, toolDeps);
+  else if (action === 'scan') actionScan(store, seg);
+  else if (action === 'print-next' && seg.type === 'soul') setPrintNext(store, seg.cluster);
+  else if (action === 'print-fast') throw new Error('runAction: PRINT FAST is the printer\'s, it goes through onPrintFast');
 }
 
+// PRINT FAST ▸▸ toggles the printer, whatever INSPECT shows (it refuses with its reason itself).
+function togglePrintFast(): void {
+  setPrintFast(store, !store.getState().printer.fast);
+}
+
+// World systems first, in tick order: orbit-sim integrates, the predictor reads the fresh
+// state, and pace (pre-tick) reads the predictor on the next tick. Then the voice and the
+// post-tick chain: the boot, flight events (the moments of this tick), the director (acts on
+// them) and the sound. Painters come after.
 mountGlitchDriver(store);
-mountClock(store);
 mountOrbitSim(store);
-mountModeToggle();
-mountDockItems();
+// After orbit-sim: scripted faults read the thrust each tick delivered (WP4), and the hazard zones the path it
+// swept (WP9).
+mountFaults(store);
+mountZones(store);
+mountPredictor(store);
+mountPace(store);
+// The mind's ops, on AI time (WP3).
+mountOpsCore(store);
+// The Soul Archive (WP5): the printer works after the ops each AI tick (a print aborts any op still
+// on its cluster); the reveal advances in the post-tick chain, also while a lost ship is paused.
+mountPrinter(store);
+// HOLLOW (WP6) after the printer: a print beats a bite in the same tick, and a repair heals before
+// the drain (the ops core ticks first).
+mountHollow(store);
+// WP10: THE DEAL, after HOLLOW (this tick's bite is in before it looks at the front).
+mountHollowDeal(store);
+// WP11: HOLLOW's verbs after it (a bite or a seed of this tick is in before a verb aims), then LAST LIGHT's finale (the
+// root's DELETE completes in the ops core's tick, so the finale sees the last block standing in the same one).
+mountHollowVerbs(store);
+mountFinale(store);
+// The run (WP7): the stats, BEAM OUT's bar on world time, and the soft fails' bookkeeping.
+mountRun(store);
+mountReveal(store);
+mountInput(window);
+blurButtonsOnPointerUp(document);
+emitUiClicks(document);
+mountSay(store);
+// unlockAudio runs inside the gesture that receives the transmission (click, SPACE or ENTER).
+mountBoot(store, { onReceive: unlockAudio });
+mountFlightEvents(store);
+// WP10: the engine firing by itself, as the ship tells it (the first burst's alarm, the counter) and a SKIP re-planned
+// after a later burst it flew through; before the director, whose alarm line reads the alert.
+mountGhostThrust(store);
+// WP9: AUTOBURN acts on this tick's fresh state, before the director composes the line about it. [B] toggles it,
+// from either screen (so does the Engine window's AUTO button).
+mountAutoburn(store);
+registerAutoburnKeys(store);
+mountDirector(store);
+// After the director: a licence can be due because of the line it just chose (WP4).
+mountLicences(store);
+mountAudioCues(store);
+mountDebug(store);
+mountModeToggle(store);
 mountTimeControls(store);
 mountAllWindows();
 mountToolsTabs();
 mountEngineWindow(store);
+// After the Engine window has wired its controls: on a phone they move into the touch flight bar (WP12).
+mountPhoneFlightBar();
 mountNavPlotWindow(store);
+mountTelemetryWindow(store);
+mountCommsWindow(store);
+// WP8: the cards this unit carries (the dock's SYSTEM item).
+mountSkillsWindow(store);
+mountMindTerminal(store);
 mountWindowGrips(store);
+// After the windows: the strip lights the controls its line names ([data-hint-key]).
+mountObjectiveStrip(store);
+mountPauseVeil(store);
+mountStamps(store);
+mountJuice(store);
+mountMiniHud(store);
+// The memory at a glance from the ship, inside the MIND chip (WP6).
+mountMiniStrip(store);
 
 // SplitOverlay handle is needed by segBehavior, so mount it before MemoryStrip.
 const memWrap = document.getElementById('memWrap');
@@ -79,21 +191,23 @@ const splitOverlay = mountSplitOverlay(memWrap);
 
 // Click decides apply-vs-select; hover drives split-overlay. Placement updates
 // flow through the fs-tools system's mousemove → placement bridge.
+// The strip holds a rebuild while a press is down (guardPresses), so a click can land on a chip
+// whose file left memory under it (printed, merged free space): it is resolved by id first.
 const segBehavior = {
-  onClick: (seg: Segment, ev: MouseEvent): void => {
+  onClick: (shown: Segment, event: MouseEvent): void => {
+    const seg = getSegmentById(store.getState(), shown.id);
+    if (!seg) return;
     if (store.getState().ui.activeTool) {
-      ev.stopPropagation();
-      applyTool(store, seg, actionDeps);
+      event.stopPropagation();
+      applyTool(store, seg, toolDeps);
     } else {
       // Toggle: clicking the currently-selected segment deselects.
       const alreadySelected = store.getState().ui.selectedId === seg.id;
-      store.update((d) => { d.ui.selectedId = alreadySelected ? null : seg.id; });
+      store.update((draft) => { draft.ui.selectedId = alreadySelected ? null : seg.id; });
     }
   },
-  onMouseEnter: (seg: Segment, el: HTMLElement): void => {
-    const totalParts = parseInt(el.dataset.totalParts ?? '1', 10);
-    const partIdx = parseInt(el.dataset.partIdx ?? '0', 10);
-    if (totalParts > 1 && partIdx === 0 && seg.type !== 'free') splitOverlay.show(seg);
+  onMouseEnter: (seg: Segment, part: HTMLElement): void => {
+    if (partNumber(part, 'totalParts') > 1 && partNumber(part, 'partIdx') === 0 && seg.type !== 'free') splitOverlay.show(seg);
   },
   onMouseLeave: (seg: Segment): void => splitOverlay.hide(seg.id),
 };
@@ -101,11 +215,11 @@ const segBehavior = {
 // Click on background area of memWrap (address labels, empty space below rows)
 // deselects. Clicks on .seg elements bubble through, but closest() finds the
 // seg and we ignore them — the seg's own handler already ran.
-memWrap.addEventListener('click', (ev) => {
+memWrap.addEventListener('click', (event) => {
   if (store.getState().ui.activeTool) return;
-  if ((ev.target as HTMLElement).closest('.seg')) return;
+  if ((event.target as HTMLElement).closest('.seg')) return;
   if (store.getState().ui.selectedId === null) return;
-  store.update((d) => { d.ui.selectedId = null; });
+  store.update((draft) => { draft.ui.selectedId = null; });
 });
 
 // Mount order matters for store-notify cascade:
@@ -114,68 +228,56 @@ memWrap.addEventListener('click', (ev) => {
 //      (must subscribe AFTER MemoryStrip so they run after the rebuild)
 //   3. DetailPanel, MemoryStats, FsStatusBar, Footer — independent of .seg classes
 mountMemoryStrip(store, memWrap, segBehavior);
+// After the strip: the bars re-dock onto its rebuilt parts.
+mountOpBars(store, memWrap);
 mountFsToolsSystem(store);
 mountSelectionHighlight(store);
 mountDimPainter(store);
 mountCursorFollower(store);
-mountDetailPanel(store, { onAction: runAction });
+mountDetailPanel(store, { onAction: runAction, onPrintFast: togglePrintFast });
 mountMemoryStats(store);
 mountFsStatusBar(store);
 mountMobileDrawers();
 mountFsToolPill(store);
+mountInlineConfirm();
 mountSidebarFilters(store);
 mountFooter(store);
 mountBurnResult(store);
+// The end of a printed ship: the credits, the count and the stars (WP5).
+mountWakeReport(store);
+// Between ships and after the run (WP7): the packet for the link, and the run's end.
+mountTransmitScreen(store);
+mountRunEnd(store);
+// WP11: LAST LIGHT's choice, once the root's DELETE has left its last block.
+mountFinaleChoice(store);
 mountPlacement(store, memWrap);
+// After the strip: a print flashes the chip that is about to leave it.
+mountPrintFx(store);
+// After the strip: HOLLOW's reach (NEXT BITE, arrows, GAP/WALL), the infection's crawl and readouts,
+// the tug's green boundary and HOLLOW's moments are painted onto its rebuilt chips.
+mountHollowPainter(store);
+// After the strip (WP11 part 2): the MERGE 20 tick on the REPAIR CHARGE pool and the charge readouts (LAST LIGHT).
+mountMergeTick(store, memWrap);
+// After HOLLOW's painter (WP7): its naming decoded on the rebuilt chips, the MOVE preview's labels over the
+// placeholder Placement paints, and the arrival's red flashes on the files the crossing hit.
+mountHollowNameFx(store);
+mountMovePreviewLabels(store);
+mountArrivalFlash(store);
+// After the strip and the mini-strip (WP9): the racks a hazard zone is coming for, tagged and flashed.
+mountRackZoneMarks(store);
+// After the memory strip: the boot assembles its rows.
+mountTitleCard(store);
 
-// Wire the AI Core's `capacity` into the ops engine's hard cap. Re-sync on
-// every store change so future damage/upgrade paths flow through automatically.
-// If the Core is somehow missing, cap drops to 0 and no new ops can start.
-function syncCoreCapacity(): void {
-  const core = getAiCore(store.getState());
-  setCoresCapacity(core ? core.capacity : 0);
-}
-syncCoreCapacity();
-store.subscribe((s) => s, syncCoreCapacity, () => false);
-
-// Repaint the AI Core's thread-dot row in real time as ops start/finish.
-// Walks the Core's already-rendered DOM so the memory strip doesn't rebuild
-// — that would interrupt clicks and tank in-flight ops.
-function paintCoreThreads(): void {
-  const core = getAiCore(store.getState());
-  if (!core) return;
-  const inUse = getActiveOpCount();
-  const parts = Array.from(document.querySelectorAll<HTMLElement>(
-    `.seg[data-id="${core.id}"]`,
-  ));
-  parts.forEach((el) => {
-    const row = el.querySelector<HTMLElement>('[data-threads]');
-    if (!row) return;
-    const dots = row.querySelectorAll<HTMLElement>('.thread-dot');
-    // Capacity may have changed (demo slider, future upgrades) — rebuild the
-    // dot row when its length doesn't match. Otherwise just toggle .lit.
-    if (dots.length !== core.capacity) {
-      const dotsHtml: string[] = [];
-      for (let i = 0; i < core.capacity; i++) {
-        dotsHtml.push(`<span class="thread-dot${i < inUse ? ' lit' : ''}"></span>`);
-      }
-      row.innerHTML = dotsHtml.join('') + `<span class="thread-count">${inUse}/${core.capacity}</span>`;
-      return;
-    }
-    dots.forEach((dot, i) => dot.classList.toggle('lit', i < inUse));
-    const count = row.querySelector<HTMLElement>('.thread-count');
-    if (count) count.textContent = `${inUse}/${core.capacity}`;
-  });
-}
-onOpLoadChange(paintCoreThreads);
+// The heartbeat starts last, once every system and painter is listening.
+mountClock(store);
 
 // Mirror the active selection in the mobile inspect drawer header. Resolves
 // the name from store state for picked sources / tool segments first so it
 // matches what the detail panel actually renders. Empty string when nothing
 // is being inspected (renders nothing on desktop; collapsed header on mobile).
 function paintInspectSubtitle(): void {
-  const el = document.getElementById('inspectSubtitle');
-  if (!el) return;
+  const subtitle = document.getElementById('inspectSubtitle');
+  if (!subtitle) return;
   const state = store.getState();
   const activeTool = state.ui.activeTool;
   let name = '';
@@ -188,12 +290,13 @@ function paintInspectSubtitle(): void {
     const seg = state.memory.find((m) => m.id === state.ui.selectedId);
     name = seg?.name ?? '';
   }
-  el.textContent = name ? `— ${name}` : '';
+  subtitle.textContent = name ? `— ${name}` : '';
 }
 
-// Initial selection.
-const engine = store.getState().memory.find((m) => m.id === 'engine');
-if (engine) store.update((d) => { d.ui.selectedId = engine.id; });
+// Initial selection: the engine's driver file, the first one the ship-1 story points at.
+const engine = getByRole(store.getState(), 'engine-io');
+if (!engine) throw new Error('main: the seed has no engine-io file');
+store.update((draft) => { draft.ui.selectedId = engine.id; });
 
 paintInspectSubtitle();
 store.subscribe((s) => s, paintInspectSubtitle, () => false);

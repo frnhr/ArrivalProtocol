@@ -1,132 +1,228 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { REAL_TIME_SPEED, MAX_SPEED_TARGET } from '@state/schema';
 import { onGameTick } from '@systems/clock';
+import { getPrediction, getSensedPrediction } from '@systems/predict';
+import { togglePause, requestSkip, registerTimeKeys, setDebugWarp } from '@systems/pace';
+import { countdownChip, paceLabel, skipButton, formatWarp, headerCrumbs, overclockBadge, nextHazard } from '@systems/flight-hud';
+import { toggleMuted, isMuted, onMuteChange } from '@systems/audio';
+import { requireById, replayAnimation } from '@components/dom';
+import { isDebugMode } from '@/debug';
+import { DEBUG_WARP_MAX } from '@data/tuning';
 
-// Header time controls: pause ❚❚ · REAL TIME · ×10 · live readout · ÷10.
-//
-// Everything drives clock.speedTarget (where time is heading); the effective
-// clock.speed eases toward it in log-space (the glide lives in systems/clock.ts).
-//   • ×10 / ÷10 step the TARGET by one decade and let the speed glide — pressing
-//     ×10 twice always lands on ×100, regardless of where the glide currently sits.
-//   • REAL TIME is the one control that SNAPS: it drops straight to ×1, no glide
-//     (the player wants to slow down *now*, e.g. approaching periapsis).
-//   • Pause freezes at once and remembers the multiplier to restore on resume.
-// Bounds: ÷10 floors at REAL_TIME_SPEED (×1), ×10 caps at MAX_SPEED_TARGET (×10M);
-// the end button disables at its limit.
+// Header time controls (§6.1, §7.1). The director (systems/pace.ts) owns the warp; the player
+// only ever pauses or asks to SKIP:
+//   • the pace label: TACTICAL ×20 / CRUISE ×60 / SKIP ▸▸ ×871 / OVERCLOCK ×¼ (in blue while
+//     something is happening: the ship slows to a quarter, the mind keeps full speed);
+//   • the main countdown chip: IMPACT, the next burn, or ▼/▲, in tactical seconds, with ▸▸
+//     while the world runs faster than real time, ×¼ under OVERCLOCK, and red at ≤ 30;
+//   • on a phone, the next hazard beside it (`DEBRIS C? 03:41`, WP12 review): the strip's upcoming list has no room there;
+//   • ❚❚ (P): the look-only pause;
+//   • ▸▸ SKIP (F): struck out, with the reason next to it, whenever a skip would be refused;
+//   • ♪ (M): sound on/off for the session;
+//   • ◐: reduced motion on/off for the session (ui.reducedMotion, §7.3).
+// The crumbs on the left are live too: UNIT-047 / ARES-VII / IMPACT COURSE, FLYBY, GET READY,
+// CAPTURED … (§7.1), and so is the browser tab's title (UNIT-047 · ARES-VII, §9 WP12 item 4), so a
+// kid who tabbed away sees which unit and ship are waiting. The old ×10 ladder survives only behind
+// ?debug (it writes clock.debugWarp).
 
-// Compact readout of the live effective multiplier (×1, ×42.3, ×10K, ×10M …). Paused
-// shows the pause glyph. Kept terse — it lives in the cramped header strip.
-function formatMult(eff: number): string {
-  if (eff <= 0) return '❚❚';
-  let val = eff;
-  let suffix = '';
-  if (eff >= 1e6) { val = eff / 1e6; suffix = 'M'; }
-  else if (eff >= 1e3) { val = eff / 1e3; suffix = 'K'; }
-  const txt = val >= 100 ? Math.round(val).toString()
-    : val % 1 === 0 ? val.toFixed(0)
-    : val.toFixed(1);
-  return `×${txt}${suffix}`;
+// How long a refused SKIP stays flashed (matches the skip-refused keyframes in game.css).
+const REFUSED_FLASH_MS = 600;
+
+function formatClock(tSec: number): string {
+  const whole = Math.floor(tSec);
+  const hours = String(Math.floor(whole / 3600)).padStart(5, '0');
+  const minutes = String(Math.floor((whole % 3600) / 60)).padStart(2, '0');
+  const seconds = String(whole % 60).padStart(2, '0');
+  return `T+ ${hours}:${minutes}:${seconds}`;
 }
 
 export function mountTimeControls(store: Store<GameState>): () => void {
-  const pauseBtn = document.getElementById('speedPause') as HTMLButtonElement | null;
-  const realBtn = document.getElementById('speedReal') as HTMLButtonElement | null;
-  const upBtn = document.getElementById('speedUp') as HTMLButtonElement | null;
-  const downBtn = document.getElementById('speedDown') as HTMLButtonElement | null;
-  const readout = document.getElementById('speedMult');
-  if (!pauseBtn || !realBtn || !upBtn || !downBtn) return () => {};
+  const paceEl = requireById('paceLabel');
+  const chipEl = requireById('countdownChip');
+  const chipLabel = requireById('cdLabel');
+  const chipTime = requireById('cdTime');
+  const chipFastForward = requireById('cdFastForward');
+  const chipSlow = requireById('cdSlow');
+  const hazardEl = requireById('hazardChip');
+  chipSlow.textContent = overclockBadge();
+  const pauseBtn = requireById<HTMLButtonElement>('speedPause');
+  const skipBtn = requireById<HTMLButtonElement>('skipBtn');
+  const skipReasonEl = requireById('skipReason');
+  const ladder = requireById('debugLadder');
+  const autoBtn = requireById<HTMLButtonElement>('speedReal');
+  const upBtn = requireById<HTMLButtonElement>('speedUp');
+  const downBtn = requireById<HTMLButtonElement>('speedDown');
+  const ladderReadout = requireById('speedMult');
+  const clockEl = requireById('clock');
+  const muteBtn = requireById<HTMLButtonElement>('muteBtn');
+  const motionBtn = requireById<HTMLButtonElement>('motionBtn');
+  const crumbUnit = requireById('crumbUnit');
+  const crumbWave = requireById('crumbWave');
+  const crumbShip = requireById('crumbShip');
+  const crumbPhase = requireById('crumbPhase');
 
-  // The multiplier to restore when un-pausing — the target captured the moment we froze.
-  let resumeTarget = Math.max(REAL_TIME_SPEED, store.getState().clock.speedTarget || REAL_TIME_SPEED);
+  const debug = isDebugMode();
+  ladder.hidden = !debug;
 
-  // Floor the effective speed at ×1 on (re)start so the log glide has a positive value
-  // to ramp up from — a halted clock (speed 0) has no defined log.
-  const floorForGlide = (clock: GameState['clock']): void => {
-    if (clock.speed < 1) clock.speed = 1;
+  // A refused SKIP (button or F) flashes the struck-out button and its reason so the reason
+  // gets read. Wall-clock timing is fine here: it is input feedback, not game logic, and it
+  // must also end under reduced motion, where the shake animation is off.
+  let flashTimer: ReturnType<typeof setTimeout> | null = null;
+  const flashRefused = (): void => {
+    replayAnimation(skipBtn, 'refused');
+    if (flashTimer !== null) clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => { skipBtn.classList.remove('refused'); flashTimer = null; }, REFUSED_FLASH_MS);
   };
-
-  // Pause toggles. Freeze: remember where we were, halt immediately. Resume: restore
-  // the remembered target and let the speed glide back up.
-  const onPause = (): void => {
-    store.update((d) => {
-      if (d.clock.speedTarget === 0) {
-        d.clock.speedTarget = resumeTarget;
-        floorForGlide(d.clock);
-      } else {
-        resumeTarget = d.clock.speedTarget;
-        d.clock.speedTarget = 0;
-        d.clock.speed = 0;
-      }
-    });
-    paintReadout();
+  const paintMute = (muted: boolean): void => {
+    muteBtn.classList.toggle('muted', muted);
+    muteBtn.title = muted ? 'Sound is off (M)' : 'Sound is on (M)';
+    muteBtn.setAttribute('aria-label', muted ? 'sound off' : 'sound on');
   };
+  paintMute(isMuted());
+  const offMute = onMuteChange(paintMute);
+  const onMuteClick = (): void => toggleMuted();
+  muteBtn.addEventListener('click', onMuteClick);
 
-  // REAL TIME snaps: target AND effective speed jump straight to ×1, skipping the glide.
-  const onReal = (): void => {
-    store.update((d) => { d.clock.speedTarget = REAL_TIME_SPEED; d.clock.speed = REAL_TIME_SPEED; });
-    paintReadout();
+  const paintMotion = (reduced: boolean): void => {
+    motionBtn.classList.toggle('active', reduced);
+    motionBtn.title = reduced ? 'Reduced motion is on: no shake, flashes or pulses' : 'Reduced motion is off';
+    motionBtn.setAttribute('aria-pressed', String(reduced));
   };
+  paintMotion(store.getState().ui.reducedMotion);
+  const unsubMotion = store.subscribe((s) => s.ui.reducedMotion, paintMotion);
+  const onMotionClick = (): void => store.update((draft) => { draft.ui.reducedMotion = !draft.ui.reducedMotion; });
+  motionBtn.addEventListener('click', onMotionClick);
 
-  // ×10: step the target up one decade and glide toward it. From a pause the base is
-  // ×1, so a single press resumes at ×10. Capped at the ceiling.
-  const onUp = (): void => {
-    store.update((d) => {
-      const base = d.clock.speedTarget === 0 ? REAL_TIME_SPEED : d.clock.speedTarget;
-      d.clock.speedTarget = Math.min(MAX_SPEED_TARGET, base * 10);
-      floorForGlide(d.clock);
-    });
-    paintReadout();
-  };
-
-  // ÷10: step the target down one decade and glide toward it. Floored at ×1; a no-op
-  // at the floor or while paused (the button is also disabled in those states).
-  const onDown = (): void => {
-    store.update((d) => {
-      if (d.clock.speedTarget <= REAL_TIME_SPEED) return;
-      d.clock.speedTarget = Math.max(REAL_TIME_SPEED, d.clock.speedTarget / 10);
-    });
-    paintReadout();
-  };
-
+  const onPause = (): void => { togglePause(store); };
+  const onSkip = (): void => { if (!requestSkip(store).ok) flashRefused(); };
   pauseBtn.addEventListener('click', onPause);
-  realBtn.addEventListener('click', onReal);
-  upBtn.addEventListener('click', onUp);
-  downBtn.addEventListener('click', onDown);
+  skipBtn.addEventListener('click', onSkip);
+  const offKeys = registerTimeKeys(store, { onSkipRefused: flashRefused });
 
-  // Highlight the active state (pause or real time) and disable the steppers at their
-  // limits. Tracks the TARGET, so the UI settles the instant you choose rather than
-  // crawling with the glide.
-  function paintControls(target: number): void {
-    pauseBtn!.classList.toggle('active', target === 0);
-    realBtn!.classList.toggle('active', target === REAL_TIME_SPEED);
-    upBtn!.disabled = target >= MAX_SPEED_TARGET;
-    downBtn!.disabled = target <= REAL_TIME_SPEED;   // covers both real time and paused (0)
+  // --- ?debug ladder (decades between ×1 and DEBUG_WARP_MAX) ---
+  const onAuto = (): void => setDebugWarp(store, null);
+  const onUp = (): void => {
+    const clock = store.getState().clock;
+    const base = clock.debugWarp ?? Math.max(1, clock.speedTarget);
+    setDebugWarp(store, Math.min(DEBUG_WARP_MAX, Math.pow(10, Math.floor(Math.log10(base)) + 1)));
+  };
+  const onDown = (): void => {
+    const clock = store.getState().clock;
+    const base = clock.debugWarp ?? Math.max(1, clock.speedTarget);
+    setDebugWarp(store, Math.max(1, Math.pow(10, Math.ceil(Math.log10(base)) - 1)));
+  };
+  if (debug) {
+    autoBtn.addEventListener('click', onAuto);
+    upBtn.addEventListener('click', onUp);
+    downBtn.addEventListener('click', onDown);
   }
 
-  // Live multiplier readout. clock.speed is mutated at 20Hz (no store fanout) so we
-  // can't subscribe to it — repaint off the game tick (fires whenever the world is
-  // advancing, including mid-glide), plus on target changes for the paused/settled edges.
-  let lastReadout = '';
-  function paintReadout(): void {
-    if (!readout) return;
-    const txt = formatMult(store.getState().clock.speed);
-    if (txt !== lastReadout) { readout.textContent = txt; lastReadout = txt; }
+  // Patch text and classes only when they change: this runs at 20 Hz.
+  const last = { pace: '', chip: '', hazard: '', skip: '', ladder: '', clock: '', crumbs: '' };
+
+  function paint(): void {
+    const state = store.getState();
+    // The crumbs and the countdown read what the instruments show (WP4); SKIP reads the truth,
+    // because that is what pace (the only SKIP rule) acts on.
+    const pred = getSensedPrediction();
+    const truth = getPrediction();
+
+    const crumbs = headerCrumbs(state, pred);
+    const crumbsKey = `${crumbs.unit}|${crumbs.wave}|${crumbs.ship}|${crumbs.phase.text}|${crumbs.phase.tone}`;
+    if (crumbsKey !== last.crumbs) {
+      last.crumbs = crumbsKey;
+      crumbUnit.textContent = crumbs.unit;
+      crumbWave.textContent = crumbs.wave;
+      crumbShip.textContent = crumbs.ship;
+      crumbPhase.textContent = crumbs.phase.text;
+      crumbPhase.className = `crumb phase tone-${crumbs.phase.tone}`;
+      document.title = `${crumbs.unit} · ${crumbs.ship}`;
+    }
+
+    const pace = paceLabel(state);
+    if (pace !== last.pace) {
+      paceEl.textContent = pace;
+      paceEl.classList.toggle('overclock', state.clock.overclock && !state.clock.paused);
+      last.pace = pace;
+    }
+
+    const chip = countdownChip(state, pred);
+    const chipKey = chip ? `${chip.label}|${chip.time}|${chip.urgent}|${chip.fastForward}|${chip.slow}|${chip.kind}` : '';
+    if (chipKey !== last.chip) {
+      last.chip = chipKey;
+      chipEl.hidden = chip === null;
+      if (chip) {
+        chipLabel.textContent = chip.label;
+        chipTime.textContent = chip.time;
+        chipFastForward.hidden = !chip.fastForward;
+        chipSlow.hidden = !chip.slow;
+        chipEl.classList.toggle('urgent', chip.urgent);
+        chipEl.dataset.kind = chip.kind;
+      }
+    }
+
+    // The next hazard (a phone shows it here; the stylesheet hides it on a desktop, where the strip lists it).
+    const hazard = nextHazard(state, pred);
+    if (hazard !== last.hazard) {
+      last.hazard = hazard;
+      hazardEl.hidden = hazard === '';
+      hazardEl.textContent = hazard;
+    }
+
+    const skip = skipButton(state, truth);
+    const skipKey = `${skip.active}|${skip.blockedReason}`;
+    if (skipKey !== last.skip) {
+      last.skip = skipKey;
+      skipBtn.classList.toggle('active', skip.active);
+      skipBtn.classList.toggle('blocked', skip.blockedReason !== null);
+      // Glows while a skip is available, so a kid waiting out a coast discovers it.
+      skipBtn.classList.toggle('ready', !skip.active && skip.blockedReason === null);
+      skipBtn.title = skip.active
+        ? 'Skipping to the next event'
+        : skip.blockedReason ?? 'Skip ahead to the next event (F)';
+      skipReasonEl.textContent = skip.blockedReason ?? (skip.active ? 'SKIPPING…' : '');
+    }
+
+    pauseBtn.classList.toggle('active', state.clock.paused);
+
+    if (debug) {
+      const ladderKey = `${state.clock.debugWarp}|${formatWarp(state.clock.speed)}`;
+      if (ladderKey !== last.ladder) {
+        last.ladder = ladderKey;
+        ladderReadout.textContent = formatWarp(state.clock.speed);
+        autoBtn.classList.toggle('active', state.clock.debugWarp === null);
+        upBtn.disabled = (state.clock.debugWarp ?? 0) >= DEBUG_WARP_MAX;
+        downBtn.disabled = state.clock.debugWarp !== null && state.clock.debugWarp <= 1;
+      }
+    }
+
+    const clockText = formatClock(state.clock.tSec);
+    if (clockText !== last.clock) { clockEl.textContent = clockText; last.clock = clockText; }
   }
 
-  paintControls(store.getState().clock.speedTarget);
-  paintReadout();
-  const unsub = store.subscribe((s) => s.clock.speedTarget, (target) => {
-    paintControls(target);
-    paintReadout();   // catches terminal stops (target→0) that the tick won't, since ticks halt
-  });
-  const offTick = onGameTick(paintReadout);
+  // Ticks paint the live countdown; ticks stop while paused or after the flight, so the
+  // discrete changes (pause, pace, skip, firing, status) repaint directly.
+  const unsub = store.subscribe(
+    (s) => `${s.run.phase}|${s.clock.paused}|${s.clock.pace}|${s.clock.overclock}|${s.clock.skipWarp}|${s.clock.debugWarp}|${s.clock.speedTarget}|${s.burn.firing}|${s.burn.status}`,
+    () => paint(),
+  );
+  const offTick = onGameTick(() => paint());
+  paint();
 
   return () => {
+    muteBtn.removeEventListener('click', onMuteClick);
+    motionBtn.removeEventListener('click', onMotionClick);
+    unsubMotion();
+    offMute();
     pauseBtn.removeEventListener('click', onPause);
-    realBtn.removeEventListener('click', onReal);
-    upBtn.removeEventListener('click', onUp);
-    downBtn.removeEventListener('click', onDown);
+    skipBtn.removeEventListener('click', onSkip);
+    if (flashTimer !== null) clearTimeout(flashTimer);
+    if (debug) {
+      autoBtn.removeEventListener('click', onAuto);
+      upBtn.removeEventListener('click', onUp);
+      downBtn.removeEventListener('click', onDown);
+    }
+    offKeys();
     unsub();
     offTick();
   };

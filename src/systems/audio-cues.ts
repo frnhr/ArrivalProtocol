@@ -1,0 +1,353 @@
+import type { Store } from '@state/store';
+import type { GameState } from '@state/schema';
+import { on } from '@systems/events';
+import { onPostTick } from '@systems/clock';
+import { registerKeys } from '@systems/input';
+import { getPrediction } from '@systems/predict';
+import { isThrustOn, engineAccel, thrustJitter } from '@systems/orbit-sim';
+import {
+  CHIME_AFTER_TRANSMIT_SEC, FAULT_COUGH_AFTER_SEC, REVEAL_CRACK_STAGGER_SEC, HEARTBEATS_AFTER_REVEAL, HEARTBEAT_GAP_SEC,
+  HEARTBEAT_BED_SEC, HEARTBEAT_BED_HURT_SEC, HEARTBEAT_BED_STRENGTH, SOUL_WAKE_INTACT_MIN, HEARTBEAT_BED_INFECTED_SEC,
+  HEARTBEAT_BED_JITTER, REVEAL_LINE_AT_SEC, ARRIVAL_HIT_STAGGER_SEC, BEAM_OUT_SWEEP_SEC,
+} from '@data/tuning';
+import { soulsInMemory, verbSecondsLeft } from '@state/selectors';
+import { play, setEngineLevel, setLockTone, setChewLevel, setTugTone, setDuelTone, toggleMuted, type WhoompShape } from '@systems/audio';
+import { rootDeleteProgress } from '@systems/hollow';
+import { chewLevel, tugTone } from '@systems/hollow-hud';
+import { getOps } from '@systems/ops-core';
+import { OP_CHIRP_HZ } from '@data/tuning';
+import type { LineState } from '@systems/flight-events';
+import { beltDepth } from '@systems/zones';
+import { openChoiceEntry, choiceTimerRunning, choiceSecondsLeft } from '@systems/say';
+import {
+  GEIGER_EDGE_HZ, GEIGER_PEAK_HZ, GEIGER_HIT_CLICKS, GEIGER_HIT_SPREAD_SEC, SEED_BLINK_SEC, SEED_TELEGRAPH_SEC,
+  CHOICE_URGENT_SEC,
+} from '@data/tuning';
+
+// The reveal's last line (the truth: `They're in here.`) has its own ping, the floor dropping away.
+const REVEAL_TRUTH_STEP = REVEAL_LINE_AT_SEC.length - 1;
+
+// What the game sounds like (§7.2): the one table from game events and state to cues. Every
+// cue a moment plays is chosen here, so a moment never plays twice from two places. Stamps
+// (components/hud/Stamp) are visuals only: their stampHit is already part of the moment's sound
+// below. Typing sounds belong to the views that type (COMMS, TERMINAL, the objective strip).
+//
+// • line-state      → lineWhoomp: rise (off the planet), shimmer (green), fall (back to red),
+//                     sag (green lost, loop reopened)
+// • loop-closed     → capturedChord + stampHit (CAPTURED)
+// • lowest-in-ring  → chime (▼ entered the ring)
+// • locked          → lockArp + stampHit; accepted → chime + stampHit; stranded / escaped →
+//                     sag + stampHit; crashed → heavy stampHit
+// • clear-of-planet → stampHit (CLEAR OF THE PLANET)
+// • burn-point      → falling chime at GET READY
+// • countdown-beep  → countdownBeep (the burn's NOW an octave up)
+// • lock-count      → holdTick (HOLD STEADY 3, 2, 1 rising into lockArp's C)
+// • mode-change     → jackIn / jackOut; refused → buzz; ui-click → uiClick
+// • op-done         → opDone, or buzz when a repair ran out of REPAIR CHARGE
+// • licence         → transmitIn, then a chime as the files land (WP4)
+// • engine-cough    → engineCough (SPACE on an engine that can't fire)
+// • file-fault      → faultCrunch, then engineCough as the engine chokes (the ENGINE I/O FAULT)
+// • plot-mode       → lineWhoomp 'clear' when the instruments see exactly again (Sensor Interp
+//                     or Nav Plotter repaired)
+// • while ops run in blue: opChirp at OP_CHIRP_HZ (the mind at work)
+// • reveal-line     → revealPing (empty ping, rescanning sweep, the floor dropping away); the
+//                     slabs cracking → soulCrack per chip (60 ms apart) + revealChoir; the end of
+//                     the reveal → three heartbeats; cluster-printed → printBell (lower with gaps)
+// • while the found colonists are in memory and the kid is in blue: the heartbeat bed, quicker
+//   while a cluster is hurt (WP5 part 2), quicker still and uneven while anything is infected (WP6)
+// • HOLLOW (WP6): hollow-infect → hollowBite; hollow-wall → fizzle; hollow-consume → soulLost when a
+//   cluster did not wake, else hollowBite (a file or a half-written copy gone: nobody was lost);
+//   hollow-cure → clusterSaved (several in one tick sound once: one bite timer, one moment); and
+//   every tick the chew follows the total drain and the tug's beating tones follow the boundary
+// • WP7: hollow-name-shown → the truth note + nameGlitch; arrival-hits → transitHit per hit (staggered);
+//   beam-out-start → transmitIn; beam-out-cancel → sag; abandoned → a short transmitSweep
+// • WP9 (KESTREL): zone-hit → debrisImpact (a cloud slams into a rack; its thud is the stamp's) or, in a belt,
+//   transitHit with a flurry of Geiger clicks; zone-forecast → the CLEAR OF THE DEBRIS stamp's thud and a chime
+//   when a correction takes the path off the cloud, a sag when a path runs back into it; dodge-lapsed → the
+//   TOO LATE TO DODGE stamp's heavy thud and the sag; seed-telegraph → one seedWarn blip per blink of the outline; seed-landed → seedDrop; AUTOBURN armed → chime; skill-trained →
+//   transmitIn, then the licence's chime as AUTOBURN.skl lands; and every tick inside a belt, the geiger's
+//   Poisson clicks at a rate that rises toward the belt's middle
+// • WP10 (VESPER): ghost-start → ghostIgnite (the relay and the whump of the engine lighting by itself; the ship's
+//   first one heavier, under the klaxon its alarm raises; a burst a SKIP flew through too, its only sound); deal → the answer
+//   stamp's thud (an ACCEPT's eaten cluster plays soulLost through hollow-consume); and every whole second of a
+//   standing TERMINAL choice's clock (THE DEAL), once it runs: dealTick, higher in its last CHOICE_URGENT_SEC
+// • WP11 part 2 (LAST LIGHT): a verb's telegraph → verbTick for each whole second it counts (3, 2, 1, climbing; it
+//   stands still under TACTICAL like the countdown); verb-blocked → verbBlocked + the BLOCKED stamp's thud;
+//   verb-landed → verbLanded; root-unlocked → rootOpen; duel-spike → duelSpike (brighter as the DELETE nears its end),
+//   and while the root's DELETE runs, the duel's drone climbs with it; root-deleted → rootDeleted; finale-chosen →
+//   purgeTone or mergeChord (the choice card plays its own hold, FinaleChoice)
+// • a new alarm alert → klaxon
+// • every tick: the engine rumble follows delivered thrust, the engine firing by itself (ghost
+//   thrust, C2) included; the lock tone follows the green share of a captured loop while burning
+//   near the ring, and holds through HOLD STEADY.
+
+function whoompFor(from: LineState, to: LineState): WhoompShape | null {
+  if (to === 'impact') return 'fall';
+  if (from === 'impact') return 'rise';
+  // A capture straight into the ring is one moment: the CAPTURED chord says it.
+  if (to === 'in-ring') return from === 'open' ? null : 'shimmer';
+  if (from === 'open' && to === 'closed') return null;
+  return 'sag';
+}
+
+type HollowCue = 'hollowBite' | 'fizzle' | 'soulLost' | 'clusterSaved';
+
+export function mountAudioCues(store: Store<GameState>): () => void {
+  // AI seconds to the heartbeat bed's next beat (see below; the reveal's end sets it too).
+  let nextBeatIn = 0;
+  const playedThisTick = new Set<HollowCue>();
+  const onceThisTick = (cue: HollowCue): void => {
+    if (playedThisTick.has(cue)) return;
+    playedThisTick.add(cue);
+    play(cue);
+  };
+  const offs: Array<() => void> = [
+    on('line-state', ({ from, to }) => {
+      const shape = whoompFor(from, to);
+      if (shape) play('lineWhoomp', { shape });
+    }),
+    on('clear-of-planet', () => play('stampHit', { heavy: false })),
+    on('loop-closed', () => {
+      play('capturedChord');
+      play('stampHit', { heavy: false });
+    }),
+    on('lowest-in-ring', () => play('chime', { falling: false })),
+    on('locked', () => {
+      play('lockArp');
+      play('stampHit', { heavy: false });
+    }),
+    on('accepted', () => {
+      play('chime', { falling: false });
+      play('stampHit', { heavy: false });
+    }),
+    on('stranded', () => {
+      play('lineWhoomp', { shape: 'sag' });
+      play('stampHit', { heavy: false });
+    }),
+    on('escaped', () => {
+      play('lineWhoomp', { shape: 'sag' });
+      play('stampHit', { heavy: false });
+    }),
+    on('crashed', () => play('stampHit', { heavy: true })),
+    on('burn-point', ({ stage }) => { if (stage === 'ready') play('chime', { falling: true }); }),
+    on('countdown-beep', ({ final }) => play('countdownBeep', { final })),
+    on('lock-count', ({ count }) => play('holdTick', { count })),
+    on('mode-change', ({ to }) => play(to === 'memory' ? 'jackIn' : 'jackOut')),
+    on('refused', () => play('buzz')),
+    on('op-done', ({ result }) => play(result === 'done' ? 'opDone' : 'buzz')),
+    on('ui-click', () => play('uiClick')),
+    on('licence', () => {
+      play('transmitIn');
+      play('chime', { falling: false }, { delaySec: CHIME_AFTER_TRANSMIT_SEC });
+    }),
+    on('engine-cough', () => play('engineCough')),
+    on('file-fault', ({ role }) => {
+      play('faultCrunch');
+      if (role === 'engine-io') play('engineCough', undefined, { delaySec: FAULT_COUGH_AFTER_SEC });
+    }),
+    on('plot-mode', ({ to }) => { if (to === 'exact') play('lineWhoomp', { shape: 'clear' }); }),
+    // WP5: the reveal builds line by line, the slabs open under the choir, and the colonists' hearts
+    // are heard once they are found. The ripple of cracks goes with the picture: at once when the
+    // kid is looking, else on their first look at the mind. A lost ship's LOST card plays its own
+    // choir (BurnResult), so the 'lost' crack is silent here (it has no picture: 'crack-shown'
+    // never comes).
+    on('reveal-line', ({ index }) => play('revealPing', { step: index })),
+    on('souls-unsealed', ({ codes, cause }) => {
+      if (cause !== 'lost' && codes.length > 1) play('revealChoir');
+    }),
+    on('crack-shown', ({ count }) => {
+      for (let i = 0; i < count; i++) play('soulCrack', undefined, { delaySec: i * REVEAL_CRACK_STAGGER_SEC });
+    }),
+    on('reveal-done', ({ cause }) => {
+      if (cause === 'lost') return;
+      HEARTBEATS_AFTER_REVEAL.forEach((strength, i) => play('heartbeat', { strength }, { delaySec: i * HEARTBEAT_GAP_SEC }));
+      // The bed picks the rhythm up after the reveal's own three beats.
+      nextBeatIn = HEARTBEATS_AFTER_REVEAL.length * HEARTBEAT_GAP_SEC;
+    }),
+    on('cluster-printed', ({ outcome }) => { if (outcome !== 'lost') play('printBell', { gaps: outcome === 'gaps' }); }),
+    // WP6: HOLLOW's moments, once per tick each (a bite on two files is one bite).
+    on('hollow-infect', () => onceThisTick('hollowBite')),
+    on('hollow-wall', () => onceThisTick('fizzle')),
+    on('hollow-firewall', () => onceThisTick('fizzle')),
+    on('hollow-consume', ({ soul }) => onceThisTick(soul ? 'soulLost' : 'hollowBite')),
+    on('hollow-cure', () => onceThisTick('clusterSaved')),
+    // WP7: HOLLOW names itself (HALCYON, `> i was 046.`): the second turn of the story gets the first one's
+    // truth note, the floor dropping away under one high glass note, with HOLLOW's own blips stepping down
+    // through static as `???` decodes into UNIT-046. Heard with the picture: at once in blue, else on the
+    // kid's first look (components/memory-view/HollowNameFx, 'hollow-name-shown').
+    on('hollow-name-shown', () => {
+      play('revealPing', { step: REVEAL_TRUTH_STEP });
+      play('nameGlitch');
+    }),
+    // WP7 part 2: the run. The arrival's hits crackle one by one with their red flashes (ArrivalFlash runs
+    // on the same stagger); BEAM OUT opens the link with the modem handshake, a cancelled bar sags, and a
+    // filled one sweeps the unit away as the old ship's windows go black.
+    on('arrival-hits', ({ hits }) => {
+      hits.forEach((_hit, i) => play('transitHit', undefined, { delaySec: i * ARRIVAL_HIT_STAGGER_SEC }));
+    }),
+    on('beam-out-start', () => play('transmitIn')),
+    on('beam-out-cancel', () => play('lineWhoomp', { shape: 'sag' })),
+    on('abandoned', () => play('transmitSweep', { seconds: BEAM_OUT_SWEEP_SEC })),
+    // WP8: the archive stopped keeping this unit mid-run: one buzz with the TERMINAL's line (data/script.ts).
+    on('archive-lost', () => play('buzz')),
+    // WP9: the physical layer reaching into the mind, heard. Debris is one slam (the stamp's thud is part of it);
+    // a belt hit is a smaller crackle of damaged data inside the Geiger's chatter.
+    on('zone-hit', ({ kind }) => {
+      if (kind === 'debris') { play('debrisImpact'); return; }
+      play('transitHit');
+      for (let i = 0; i < GEIGER_HIT_CLICKS; i++) play('geiger', undefined, { delaySec: Math.random() * GEIGER_HIT_SPREAD_SEC });
+    }),
+    // The moment steering early saves rack C (§5.1 5:00): the hatching vanishes under CLEAR OF THE DEBRIS.
+    on('zone-forecast', ({ from, to }) => {
+      if (from === 'hit' && to === 'clear') {
+        play('stampHit', { heavy: false });
+        play('chime', { falling: false });
+      } else if (from === 'clear' && to === 'hit') {
+        play('lineWhoomp', { shape: 'sag' });
+      }
+    }),
+    // The dodge ran out (the strip: `· too late to dodge DEBRIS C`): the TOO LATE TO DODGE stamp's heavy thud, then the
+    // same sag as a path running back into the cloud, the sound of a chance gone.
+    on('dodge-lapsed', () => {
+      play('stampHit', { heavy: true });
+      play('lineWhoomp', { shape: 'sag' });
+    }),
+    on('seed-telegraph', () => {
+      const blinks = Math.round(SEED_TELEGRAPH_SEC / SEED_BLINK_SEC);
+      for (let i = 0; i < blinks; i++) play('seedWarn', undefined, { delaySec: i * SEED_BLINK_SEC });
+    }),
+    on('seed-landed', () => play('seedDrop')),
+    // A burst a SKIP flies through takes no wall time, so the rumble that follows delivered thrust never sounds for
+    // it: its ignite (the relay and the whump) is what says the engine fired (WP10 review, the lead's ruling).
+    on('ghost-start', ({ first }) => play('ghostIgnite', { first })),
+    on('deal', ({ outcome }) => { if (outcome !== 'invalidated') play('stampHit', { heavy: outcome === 'accepted' }); }),
+    on('autoburn', ({ to }) => { if (to === 'armed') play('chime', { falling: false }); }),
+    on('skill-trained', () => {
+      play('transmitIn');
+      play('chime', { falling: false }, { delaySec: CHIME_AFTER_TRANSMIT_SEC });
+    }),
+    // WP11 part 2: LAST LIGHT's verbs, the duel and the choice.
+    on('verb-blocked', () => {
+      play('verbBlocked');
+      play('stampHit', { heavy: false });
+    }),
+    on('verb-landed', () => play('verbLanded')),
+    on('root-unlocked', () => play('rootOpen')),
+    on('duel-spike', ({ progress }) => play('duelSpike', { progress })),
+    on('root-deleted', () => play('rootDeleted')),
+    on('finale-chosen', ({ choice }) => play(choice === 'purge' ? 'purgeTone' : 'mergeChord')),
+  ];
+  offs.push(onPostTick(() => playedThisTick.clear()));
+
+  // The klaxon sounds once per alarm, when it is raised (not for as long as it lasts).
+  let alarmIds = new Set<string>();
+  offs.push(store.subscribe((s) => s.alerts.rev, () => {
+    const alarmIdsNow = new Set(store.getState().alerts.list.filter((alert) => alert.severity === 'alarm').map((alert) => alert.id));
+    for (const id of alarmIdsNow) {
+      if (!alarmIds.has(id)) { play('klaxon'); break; }
+    }
+    alarmIds = alarmIdsNow;
+  }));
+
+  // THE DEAL's clock (WP10): a tock for every whole second its timer passes, on either screen (the ticker counts it in
+  // amber), from when its line has typed. AI time: it stands still while paused, like the timer.
+  let choiceSecond: { entryId: number; second: number } | null = null;
+  offs.push(onPostTick(() => {
+    const state = store.getState();
+    const entry = openChoiceEntry(state);
+    if (entry === null || entry.choice === null || !choiceTimerRunning(state, entry)) { choiceSecond = null; return; }
+    const second = choiceSecondsLeft(entry.choice);
+    if (choiceSecond !== null && choiceSecond.entryId === entry.id && second < choiceSecond.second && second > 0) {
+      play('dealTick', { urgent: second <= CHOICE_URGENT_SEC });
+    }
+    choiceSecond = { entryId: entry.id, second };
+  }));
+
+  // A verb's telegraph (WP11 part 2): a tick for its first second as it starts, and one for every whole second it then
+  // passes (3, 2, 1), on either screen: the countdown is heard from amber too (the strip says TAB). Read from the
+  // telegraph's own clock, which stands still while the flight is at TACTICAL (systems/hollow-verbs.ts).
+  let verbSecond: { targetId: string; second: number } | null = null;
+  offs.push(onPostTick(() => {
+    const verb = store.getState().hollow.verb;
+    if (verb === null) { verbSecond = null; return; }
+    const second = verbSecondsLeft(verb);
+    if (verbSecond === null || verbSecond.targetId !== verb.targetId || second < verbSecond.second) play('verbTick', { count: second });
+    verbSecond = { targetId: verb.targetId, second };
+  }));
+
+  // The ops chirp on AI time: frozen with the ops while paused, and only on the blue screen,
+  // where the kid watches them (in amber the engine owns the sound).
+  // Each tick schedules the chirps that fall inside the next tick, sample-accurately, so they
+  // keep an even 12 Hz instead of snapping to the 20 Hz tick grid.
+  const chirpPeriod = 1 / OP_CHIRP_HZ;
+  let nextChirpIn = 0;
+  offs.push(onPostTick((_dtWall, dtAi) => {
+    const chirping = dtAi > 0 && getOps().length > 0 && store.getState().ui.mode === 'memory';
+    if (!chirping) { nextChirpIn = 0; return; }
+    while (nextChirpIn < dtAi) {
+      play('opChirp', undefined, { delaySec: nextChirpIn });
+      nextChirpIn += chirpPeriod;
+    }
+    nextChirpIn -= dtAi;
+  }));
+
+  // The heartbeat bed, on AI time like the chirps: only in blue (the soul racks in view), only once
+  // the colonists are found and while some are still in memory. Scheduled ahead inside the tick so
+  // the beat stays even.
+  offs.push(onPostTick((_dtWall, dtAi) => {
+    const state = store.getState();
+    const souls = state.ui.mode === 'memory' && state.souls.reveal.stage === 'revealed' ? soulsInMemory(state) : [];
+    // Off (amber, paused, nobody left): coming back starts a beat later, not on top of the jack-in.
+    if (dtAi <= 0 || souls.length === 0) {
+      nextBeatIn = Math.max(nextBeatIn, HEARTBEAT_BED_SEC);
+      return;
+    }
+    // Near infection the hearts race and stumble (§7.2): quicker, and each gap a little off.
+    const infected = souls.some((soul) => soul.infected !== undefined);
+    const hurt = souls.some((soul) => soul.integrity < SOUL_WAKE_INTACT_MIN);
+    const period = infected ? HEARTBEAT_BED_INFECTED_SEC : hurt ? HEARTBEAT_BED_HURT_SEC : HEARTBEAT_BED_SEC;
+    while (nextBeatIn < dtAi) {
+      play('heartbeat', { strength: HEARTBEAT_BED_STRENGTH }, { delaySec: nextBeatIn });
+      nextBeatIn += infected ? period * (1 + (Math.random() * 2 - 1) * HEARTBEAT_BED_JITTER) : period;
+    }
+    nextBeatIn -= dtAi;
+  }));
+
+  // The geiger (§7.2, WP9): while the ship is inside a belt and the world runs, clicks at random (exponential)
+  // gaps whose mean follows the depth, scheduled inside the tick like the chirps. Cosmetic randomness.
+  let nextClickIn = 0;
+  offs.push(onPostTick((_dtWall, dtAi) => {
+    const depth = dtAi > 0 ? beltDepth(store.getState()) : null;
+    if (depth === null) { nextClickIn = 0; return; }
+    const rateHz = GEIGER_EDGE_HZ + (GEIGER_PEAK_HZ - GEIGER_EDGE_HZ) * depth;
+    while (nextClickIn < dtAi) {
+      play('geiger', undefined, { delaySec: nextClickIn });
+      nextClickIn += -Math.log(1 - Math.random()) / rateHz;
+    }
+    nextClickIn -= dtAi;
+  }));
+
+  // The continuous voices, every tick (also while paused, so they fall silent at once).
+  offs.push(onPostTick(() => {
+    const state = store.getState();
+    const live = state.run.phase === 'flight' && state.burn.status === 'approaching' && !state.clock.paused;
+    const thrust = live && isThrustOn(state);
+    const ghost = live && state.burn.ghost ? state.burn.ghost.amp : 0;
+    const level = (thrust ? engineAccel(state) / state.level.aNominalKmS2 : 0) + ghost;
+    setEngineLevel(level, thrustJitter(state));
+    const pred = getPrediction();
+    const nearRing = live && pred.outcome === 'closed' && (thrust || pred.fit.inRing);
+    setLockTone(nearRing ? (pred.fit.inRing ? 1 : pred.greenFraction) : null);
+    // HOLLOW (WP6): the chew while anything drains (louder while the engine fires: P1), and the
+    // tug's beating tones while a repair fights it. Both are heard on either screen.
+    setChewLevel(chewLevel(state));
+    setTugTone(tugTone(state));
+    // WP11 part 2: the duel's drone follows the root's DELETE (silent while paused: the op stands still then).
+    setDuelTone(state.run.phase === 'printing' && !state.clock.paused ? rootDeleteProgress(state) : null);
+  }));
+
+  // M mutes for the session (§7.2).
+  offs.push(registerKeys({ layer: 'game', codes: ['KeyM'], onDown: () => toggleMuted() }));
+
+  return () => offs.forEach((off) => off());
+}

@@ -1,40 +1,231 @@
-import type { Segment } from '@/types/segment';
-import { getActiveOpCount } from '@systems/ops';
+import type { Segment, RedundancySegment, SoulSegment, FreeSegment, HollowSegment } from '@/types/segment';
+import type { ClusterOutcome } from '@state/schema';
+import { shownIntegrity, soulOutcome, isInfected, type HealthSegment } from '@state/selectors';
+import { crackDelaySec } from '@systems/reveal';
+import { REVEAL_CRACK_ANIM_SEC, INTEGRITY_MAX } from '@data/tuning';
+import {
+  fileHintTarget, clusterHintTarget, toolFileHintTarget, firewallHintTarget, SEED_HINT_TARGET, ROOT_HINT_TARGET,
+} from '@data/fs-tools';
+import { stripTier, stripName, type StripTier } from '@data/type-labels';
+import { HOLLOW_HUD_TEXT, HOLLOW_FINALE, UNNAMED_HOLLOW } from '@data/hollow-text';
+import { UPGRADE_FILE_TEXT } from '@data/upgrades';
 
-export interface SegmentPartLayout {
+interface SegmentPartLayout {
   partSize: number;
   partIdx: number;
   totalParts: number;
   partOffset: number;
+  // The grid columns the part spans when that is fewer than its blocks: a phone row's free part that also draws the
+  // rack's last few free blocks rather than open a row for them (MemoryStrip, WP12 review). Its painters all measure
+  // a part as a share of its width, so its blocks are only drawn narrower.
+  spanCols?: number;
+  // A sealed cluster right after another in the same row: the two draw as one grey slab (§6.7),
+  // and only the slab's first part carries its label.
+  joinsSealedLeft?: boolean;
 }
 
 export interface SegmentBehavior {
-  onClick: (seg: Segment, ev: MouseEvent) => void;
-  onMouseEnter: (seg: Segment, el: HTMLElement) => void;
-  onMouseLeave: (seg: Segment, el: HTMLElement) => void;
+  onClick: (seg: Segment, event: MouseEvent) => void;
+  onMouseEnter: (seg: Segment, part: HTMLElement) => void;
+  onMouseLeave: (seg: Segment, part: HTMLElement) => void;
+}
+
+// The share of one part of REPAIR CHARGE that still holds points (its --used fill). Fill =
+// points / size, so each visible block is one block of memory and the spent blocks show as the
+// empty tail that Repair v2 squeezes out. Shared with OpBars, which patches it live while a
+// repair spends charge (a full strip rebuild per tick would swallow clicks).
+export function chargePartUsedPct(seg: RedundancySegment, partOffset: number, partSize: number): number {
+  const filled = Math.max(0, Math.min(seg.size, seg.used));
+  const totalPct = seg.size > 0 ? (filled / seg.size) * 100 : 0;
+  const partStartPct = (partOffset / seg.size) * 100;
+  const partEndPct = ((partOffset + partSize) / seg.size) * 100;
+  if (totalPct <= partStartPct) return 0;
+  const overlapEnd = Math.min(totalPct, partEndPct);
+  return ((overlapEnd - partStartPct) / (partEndPct - partStartPct)) * 100;
+}
+
+export function chargeMeta(seg: RedundancySegment): string {
+  return `${seg.used}/${seg.size}`;
+}
+
+// The AI Core's thread dots: one per thread of capacity. Lit = an op (or a reserved thread) is
+// running on it; out = lost while the Core is below 50 (§3.3 C5). Ops already running when the
+// Core drops keep their threads until they finish (shownThreadsTotal), so a busy dot never reads
+// as lost and the count never reads 2/1.
+export function threadRowHtml(capacity: number, threads: number, busy: number): string {
+  const shown = shownThreadsTotal(threads, busy);
+  const dots: string[] = [];
+  for (let i = 0; i < capacity; i++) {
+    const cls = i < busy ? ' lit' : i >= shown ? ' out' : '';
+    dots.push(`<span class="thread-dot${cls}"></span>`);
+  }
+  return `${dots.join('')}<span class="thread-count">${busy}/${shown}</span>`;
+}
+
+// The thread total a readout shows: the Core's threads, or more while ops that started before a
+// drop are still finishing on the lost ones.
+export function shownThreadsTotal(threads: number, busy: number): number {
+  return Math.max(threads, busy);
+}
+
+// What the integrity readout says: `↻ 62%` while a repair heals it, the plain number otherwise.
+export const LIVE_REPAIR_PREFIX = '↻ ';
+
+// --- HOLLOW on the strip (§6.6, §7.1) --------------------------------------------------------------
+
+// An infected file's chip: the red crawl comes in from the side that faces HOLLOW and covers the
+// share already eaten (--eaten; HollowPainter patches it live, at most HOLLOW_PAINT_HZ on the wall
+// clock, so it paints while paused too). A ship file nobody has scanned shows only a fixed hatch:
+// the infection is always visible, its health is not (§3.2).
+function infectedClasses(seg: Segment, healthShown: boolean): string {
+  if (!isInfected(seg)) return '';
+  return ` infected from-${seg.infected.side}${healthShown ? '' : ' infected-unknown'}`;
+}
+
+function setEaten(part: HTMLElement, seg: Segment, healthShown: boolean): void {
+  if (!isInfected(seg) || !healthShown) return;
+  part.style.setProperty('--eaten', `${Math.max(0, INTEGRITY_MAX - seg.integrity)}%`);
+}
+
+// The live readout of a file being eaten: always the number (an infected file at 85% must not read
+// OK), in the warning colour, patched by HollowPainter as it drains.
+function infectedHealthHtml(seg: HealthSegment, prefix: string): string {
+  return `<span class="health warn live" data-live-integrity="${seg.id}" data-live-prefix="${prefix}">${prefix}${shownIntegrity(seg.integrity)}%</span>`;
+}
+
+// A hollow block (§7.1): black with crawling red static, its owner's name (`???`), its NEXT BITE
+// countdown (HollowPainter writes and ticks it: `data-hollow-bite`), LOCKED on the root, `ATE C12` on
+// a block that was colonists (where they went), the blocks it took on any other eaten one. A 1-block
+// one is a glyph; the painter's arrows carry its reach.
+// The name and LOCKED (or its size) share the top row, so the countdown under them keeps its big
+// digits in a 52 px rack row at 1280×720 (game.css: the tag drops under a long name once the countdown
+// is gone; a name cut short carries its whole self in the title).
+function hollowPartHtml(seg: HollowSegment, layout: SegmentPartLayout, tier: StripTier): string {
+  if (layout.partIdx !== 0) return `<div class="hollow-static" aria-hidden="true"></div>`;
+  if (tier === 'micro') return `<div class="hollow-static" aria-hidden="true"></div><div class="seg-name">▚</div>`;
+  let tag = `<span class="hollow-tag">${seg.size}B</span>`;
+  if (seg.locked) tag = '<span class="hollow-tag locked">LOCKED</span>';
+  else if (seg.root) tag = `<span class="hollow-tag root">${HOLLOW_FINALE.rootTag(seg.size)}</span>`;
+  else if (seg.ateCluster) tag = `<span class="hollow-tag ate">${HOLLOW_HUD_TEXT.ateTag(seg.ateCluster)}</span>`;
+  // A seed is a SEED on the strip (WP9): the word the kid is told to DELETE.
+  const name = seg.seed ? HOLLOW_HUD_TEXT.seedChip : stripName(seg, layout.partSize);
+  return `
+    <div class="hollow-static" aria-hidden="true"></div>
+    <div class="hollow-head"><div class="seg-name" title="${seg.name}">${name}</div>${tag}</div>
+    <div class="hollow-bite" data-hollow-bite><span class="bite-k"></span><span class="bite-t"></span></div>`;
+}
+
+// WP11 part 2 (WP8's note): a merged HOLLOW's name (`UNIT-046·047`) was cut to `UNIT-046·…` on an 8-block chip at
+// 1280×720. A name longer than one unit's (`UNIT-046`) is set tighter (game.css .long-name) so it fits whole.
+const ONE_UNIT_NAME_CHARS = 8;
+
+function renderHollowPart(part: HTMLElement, seg: HollowSegment, layout: SegmentPartLayout, behavior: SegmentBehavior): HTMLElement {
+  const tier = stripTier(layout.partSize);
+  // `named`: HOLLOW has said who it is (HALCYON's `> i was 046.`): its name is longer than `???` (WP7).
+  const named = seg.owner !== UNNAMED_HOLLOW;
+  let cls = `seg hollow tier-${tier}${seg.root ? ' hollow-root' : ''}${seg.locked ? ' locked' : ''}${named ? ' named' : ''}${seg.seed ? ' hollow-seed' : ''}`;
+  if (seg.owner.length > ONE_UNIT_NAME_CHARS) cls += ' long-name';
+  if (layout.totalParts > 1) {
+    cls += ' is-part';
+    if (layout.partIdx < layout.totalParts - 1) cls += ' part-continues-right';
+    if (layout.partIdx > 0) cls += ' part-continues-left';
+  }
+  part.className = cls;
+  stampPart(part, seg, layout);
+  if (seg.operating) part.classList.add('operating');
+  part.title = seg.ate ? `${seg.name} · was ${seg.ate}` : seg.name;
+  // WP9: a seed HOLLOW dropped is what `RM THE SEED — pick up DELETE, click the seed` lights (its chip reads SEED).
+  if (seg.seed && layout.partIdx === 0) part.dataset.hintTarget = SEED_HINT_TARGET;
+  // WP11: LAST LIGHT's root, open for the duel, is what `DELETE THE ROOT` lights.
+  if (seg.root && !seg.locked && layout.partIdx === 0) part.dataset.hintTarget = ROOT_HINT_TARGET;
+  part.innerHTML = hollowPartHtml(seg, layout, tier);
+  wire(part, seg, behavior);
+  return part;
+}
+
+// --- Soul clusters (§6.7) -------------------------------------------------------------------------
+
+// The heartbeat line on a cluster's chip (an ECG trace in a 48×12 box): steady while the cluster
+// would wake intact, ragged and fast while it is hurt, flat at 0. The bright pulse runs along it
+// (CSS); reduced motion keeps the trace and drops the pulse.
+export type Heartbeat = 'steady' | 'weak' | 'flat';
+const HEARTBEAT_PATH: Readonly<Record<Heartbeat, string>> = {
+  steady: 'M0 7 H14 L16 5 L18 7 H21 L23 1 L25 11 L27 6 L28 7 H33 L35 5 L37 7 H48',
+  weak: 'M0 7 H8 L10 5.5 L11 7 H15 L16.5 3.5 L18 9.5 L19.5 7 H26 L27 6 L28 7 H31 L32.5 4.5 L33.5 9 L35 7 H40 L41 8 L42 7 H48',
+  flat: 'M0 7 H48',
+};
+
+// The heartbeat of a cluster that would wake this way (the chip and INSPECT draw the same one).
+export function heartbeatKind(outcome: ClusterOutcome): Heartbeat {
+  return outcome === 'woke' ? 'steady' : outcome === 'gaps' ? 'weak' : 'flat';
+}
+
+function heartbeatOf(soul: SoulSegment): Heartbeat {
+  return heartbeatKind(soulOutcome(soul.integrity));
+}
+
+export function heartbeatSvg(kind: Heartbeat): string {
+  const path = HEARTBEAT_PATH[kind];
+  return `<svg class="heartbeat hb-${kind}" viewBox="0 0 48 12" preserveAspectRatio="none" aria-hidden="true">`
+    + `<path class="hb-trace" d="${path}" pathLength="100"/><path class="hb-pulse" d="${path}" pathLength="100"/></svg>`;
+}
+
+// A cluster's part on the strip: the sealed slab (grey, no name, no health: nothing leaks before
+// the reveal), or the open chip. The chip reads like every file (name, bar, meta) with people in it:
+// the family on top (the name a kid remembers), the heartbeat where a file has its bar, then the
+// code the strip's lines use (C09) beside the health. Continuation parts of a chip split by a row
+// break show only the ↪ marker.
+function soulPartHtml(soul: SoulSegment, layout: SegmentPartLayout): string {
+  const isFirst = layout.partIdx === 0;
+  if (soul.sealed) {
+    if (layout.joinsSealedLeft || !isFirst) return '';
+    return `<div class="slab-label">SEALED</div><div class="slab-sub">no access</div>`;
+  }
+  if (!isFirst) return `<div class="seg-cont-marker">↪</div>`;
+  const shown = shownIntegrity(soul.integrity);
+  const outcome = soulOutcome(soul.integrity);
+  const healthCls = outcome === 'woke' ? '' : outcome === 'gaps' ? ' partial' : ' warn';
+  let health: string;
+  if (soul.state === 'repairing') {
+    health = `<span class="health live${soul.infected ? ' warn' : ''}" data-live-integrity="${soul.id}" data-live-prefix="${LIVE_REPAIR_PREFIX}">${LIVE_REPAIR_PREFIX}${shown}%</span>`;
+  } else if (soul.infected) {
+    health = infectedHealthHtml(soul, '');
+  } else {
+    health = soul.state === 'transferring' ? `<span class="health partial">↻ XFER</span>` : `<span class="health${healthCls}">${shown}%</span>`;
+  }
+  return `
+    <div class="soul-family">${soul.family.toUpperCase()}</div>
+    ${heartbeatSvg(heartbeatOf(soul))}
+    <div class="seg-meta"><span class="soul-code">${soul.cluster}<span class="soul-count">${soul.souls}</span></span>${health}</div>`;
 }
 
 // Builds a single visual part of a memory segment.
 // For non-split segments, totalParts === 1 and partSize === seg.size.
 // For split segments, only the first part shows the full label/badge/bar/meta;
-// continuation parts show a small ↪ marker so they read as the same file.
+// continuation parts show a small ↪ marker so they read as the same file. Free space is the
+// exception: every part of a free run is whole (see freePartHtml).
+// What a chip shows also depends on its width (stripTier): a 4-block file at 1280 px is about 40 px
+// across, so it keeps a smaller name and its health and drops the rest (INSPECT has it all).
 export function renderSegmentPart(
   seg: Segment,
   layout: SegmentPartLayout,
   behavior: SegmentBehavior,
 ): HTMLElement {
-  const { partSize, partIdx, totalParts, partOffset } = layout;
+  const { partSize, partIdx, totalParts } = layout;
   const isFirst = partIdx === 0;
   const isLast = partIdx === totalParts - 1;
   const isSplit = totalParts > 1;
+  const tier = stripTier(partSize);
 
-  const el = document.createElement('div');
-  let cls = `seg ${seg.type}`;
+  const part = document.createElement('div');
+  if (seg.type === 'soul') return renderSoulPart(part, seg, layout, behavior);
+  if (seg.type === 'hollow') return renderHollowPart(part, seg, layout, behavior);
+  let cls = `seg ${seg.type} tier-${tier}`;
   const state = 'state' in seg ? seg.state : undefined;
   // `scanned` is what gates visible damage indicators on the memory strip.
   // Unscanned files render the bar/state as "unknown"; their underlying state
   // is still in the data (drives glitch, window-grip flicker), just not shown
-  // here. Segments without a `scanned` field (free, encrypted, redundancy)
+  // here. Segments without a `scanned` field (free, hollow, redundancy)
   // count as "known" for rendering purposes.
   const knownScanned = 'scanned' in seg ? seg.scanned : true;
   if (knownScanned) {
@@ -43,52 +234,87 @@ export function renderSegmentPart(
   } else {
     cls += ' unscanned';
   }
-  if (partSize <= 3) cls += ' compact';
   if (state === 'transferring') cls += ' transferring';
+  if (state === 'repairing') cls += ' repairing';
   if (state === 'offline') cls += ' offline offline-state';
   if (state === 'inactive') cls += ' inactive';
+  // WP10: a backup a SWAP put to work is a ship file doing its job now: drawn as one, not as a dashed spare.
+  if (seg.type === 'ship-backup' && seg.role) cls += ' in-use';
+  // Free space a running move/copy carved out around its clone: part of that op, not usable.
+  if (seg.type === 'free' && seg.reservedBy !== undefined) cls += ' reserved';
+  cls += infectedClasses(seg, knownScanned);
+  // A free run that crosses a rack border is drawn as a whole piece of space in each rack, so its
+  // parts keep their own borders; a file split by a row break reads as one file with open edges.
   if (isSplit) {
     cls += ' is-part';
-    if (!isLast) cls += ' part-continues-right';
-    if (!isFirst) cls += ' part-continues-left';
-  }
-  el.className = cls;
-  el.style.gridColumn = `span ${partSize}`;
-  el.dataset.id = seg.id;
-  el.dataset.partIdx = String(partIdx);
-  el.dataset.totalParts = String(totalParts);
-  el.dataset.partSize = String(partSize);
-  el.dataset.partOffset = String(partOffset);
-
-  if (seg.type === 'redundancy') {
-    // Fill = used / size so the bar is honest about memory blocks. Each visible
-    // block in the seg represents one block of memory; "wasted" blocks (size −
-    // used, accumulated from drained repairs) show as the empty tail. Compact
-    // (Repair v2) reclaims exactly that tail. `capacity` is the historical
-    // blueprint max and stays in the detail panel as info, not on the bar.
-    const filled = Math.max(0, Math.min(seg.size, seg.used));
-    const totalPct = seg.size > 0 ? (filled / seg.size) * 100 : 0;
-    const partStartPct = (partOffset / seg.size) * 100;
-    const partEndPct = ((partOffset + partSize) / seg.size) * 100;
-    let localPct = 0;
-    if (totalPct > partStartPct) {
-      const overlapEnd = Math.min(totalPct, partEndPct);
-      localPct = ((overlapEnd - partStartPct) / (partEndPct - partStartPct)) * 100;
+    if (seg.type !== 'free') {
+      if (!isLast) cls += ' part-continues-right';
+      if (!isFirst) cls += ' part-continues-left';
     }
-    el.style.setProperty('--used', localPct + '%');
+  }
+  part.className = cls;
+  stampPart(part, seg, layout);
+  setEaten(part, seg, knownScanned);
+  // A strip line can point at the file that does a job ("CLICK ENGINE I/O"), whatever its id.
+  if (isFirst && seg.role) part.dataset.hintTarget = fileHintTarget(seg.role);
+  else if (isFirst && seg.type === 'firewall') part.dataset.hintTarget = firewallHintTarget(seg.id);
+  else if (isFirst && seg.type === 'fs-tool') part.dataset.hintTarget = toolFileHintTarget(seg.fsTool);
+  // A small chip shows a short or broken name: the whole one is a hover away.
+  if (tier === 'tiny' || tier === 'micro') part.title = seg.name;
+
+  if (seg.type === 'redundancy') part.style.setProperty('--used', chargePartUsedPct(seg, layout.partOffset, partSize) + '%');
+
+  if (seg.type === 'free') {
+    part.innerHTML = freePartHtml(seg, partSize, tier);
+  } else if (isFirst) {
+    part.innerHTML = filePartHtml(seg, layout, tier, knownScanned, state);
+  } else {
+    part.innerHTML = `
+      <div class="seg-cont-marker">↪</div>
+      <div class="seg-meta cont"><span>${partSize} of ${seg.size}B</span></div>
+    `;
   }
 
+  wire(part, seg, behavior);
+  return part;
+}
+
+// Free space as its rack sees it: FREE and the blocks in this part. One free segment can span racks
+// (rack C's tail and the empty rack D are one gap in memory), and `↪ 64 of 72B` on an empty rack
+// read as a broken file. A sliver of free space too narrow for the word shows only its size.
+function freePartHtml(seg: FreeSegment, partSize: number, tier: StripTier): string {
+  if (tier === 'micro') return '';
+  const name = tier === 'tiny' ? '' : `<div class="seg-name">${seg.name}</div>`;
+  return `${name}<div class="seg-meta"><span>${partSize}B</span></div>`;
+}
+
+// A file's first part: its badge, name, health bar (dim until scanned), the Core's thread row, and
+// the meta row (size or badge on the left, health on the right).
+function filePartHtml(
+  seg: Exclude<Segment, SoulSegment | FreeSegment | HollowSegment>,
+  layout: SegmentPartLayout,
+  tier: StripTier,
+  knownScanned: boolean,
+  state: string | undefined,
+): string {
+  const { partSize, totalParts } = layout;
+  const roomy = tier === 'wide' || tier === 'narrow';
+  // The backup badges sit in the meta row, where the size was: in the top corner they covered the
+  // name of an 8-block Thrust Controller at 1280 px. A tool file needs no FS badge: it is purple,
+  // and it lives in rack F with the others.
+  // After a SWAP (WP10) the pair reads as what each now is: the backup doing the job (ALT ✓), and the switched-off
+  // primary (OLD: a ship file with no job, the only kind a swap leaves).
   let badge = '';
-  if (isFirst) {
-    if (seg.type === 'ship' && seg.backup) badge = '<div class="seg-badge alt">BAK ⊃</div>';
-    else if (seg.type === 'ship-backup') badge = '<div class="seg-badge alt">ALT</div>';
-    else if (seg.type === 'fs-tool') badge = '<div class="seg-badge fs">FS</div>';
-  }
+  if (roomy && seg.type === 'ship' && seg.backup) badge = '<span class="seg-badge alt">BAK ⊃</span>';
+  else if (roomy && seg.type === 'ship-backup') {
+    badge = seg.role ? '<span class="seg-badge alt on">ALT ✓</span>' : '<span class="seg-badge alt">ALT</span>';
+  } else if (roomy && seg.type === 'ship' && seg.role === undefined) badge = '<span class="seg-badge alt old">OLD</span>';
 
   const integrity = 'integrity' in seg ? seg.integrity : undefined;
+  const shown = integrity === undefined ? undefined : shownIntegrity(integrity);
 
   let bar = '';
-  if (isFirst && integrity !== undefined && seg.type !== 'redundancy' && seg.type !== 'free' && seg.type !== 'encrypted') {
+  if (integrity !== undefined && seg.type !== 'redundancy') {
     if (knownScanned) {
       bar = `<div class="seg-bar"><div class="fill" style="width:${integrity}%"></div></div>`;
     } else {
@@ -98,53 +324,126 @@ export function renderSegmentPart(
     }
   }
 
-  let metaR = '';
-  if (isFirst) {
-    // Inactive / transferring / locked are observable mid-op states, not health
-    // — show them regardless of scan status. Everything else is gated behind
-    // a scan for non-decorative segments.
-    if (state === 'inactive') metaR = `<span class="health partial">IDLE</span>`;
-    else if (state === 'locked') metaR = `<span class="health warn">LOCK</span>`;
-    else if (state === 'transferring') metaR = `<span class="health partial">↻ XFER</span>`;
-    else if (seg.type === 'redundancy') metaR = `<span class="health">${seg.used}/${seg.size}</span>`;
-    else if (!knownScanned) metaR = `<span class="health unknown">— —</span>`;
-    else if (state === 'corrupt') metaR = `<span class="health warn">◆ ${integrity}%</span>`;
-    else if (state === 'partial') metaR = `<span class="health partial">${integrity}%</span>`;
-    else metaR = `<span class="health">OK</span>`;
+  // A 1-block chip is its glyph and its bar: the bar's colour is its health.
+  if (tier === 'micro') return `<div class="seg-name">${stripName(seg, partSize)}</div>${bar}`;
+
+  // Inactive / transferring / repairing / locked are observable mid-op states, not health —
+  // shown regardless of scan status. Everything else is gated behind a scan. A tiny chip keeps the
+  // number and drops the prefix glyphs (◆, ↻: the op bar above it already says REPAIRING).
+  const livePrefix = roomy ? LIVE_REPAIR_PREFIX : '';
+  let metaR: string;
+  if (state === 'inactive') metaR = `<span class="health partial">IDLE</span>`;
+  else if (state === 'locked') metaR = `<span class="health warn">LOCK</span>`;
+  else if (state === 'transferring') metaR = `<span class="health partial">${roomy ? '↻ XFER' : 'XFER'}</span>`;
+  else if (state === 'repairing') {
+    metaR = `<span class="health live${isInfected(seg) ? ' warn' : ''}" data-live-integrity="${seg.id}" data-live-prefix="${livePrefix}">${livePrefix}${shown}%</span>`;
   }
-
-  const sizeLabel = isSplit ? `${partSize}/${seg.size}B` : `${seg.size}B`;
-
-  // AI Core renders a row of "thread" dots — one per capacity slot. Lit dots
-  // = currently-running ops; dim dots = available slots. Visualizes the hard
-  // concurrency cap. Live updates come from paintCoreThreads in main.ts.
-  let threadRow = '';
-  if (isFirst && seg.type === 'core') {
-    const inUse = getActiveOpCount();
-    const dots: string[] = [];
-    for (let i = 0; i < seg.capacity; i++) {
-      dots.push(`<span class="thread-dot${i < inUse ? ' lit' : ''}"></span>`);
-    }
-    threadRow = `<div class="thread-row" data-threads>${dots.join('')}<span class="thread-count">${inUse}/${seg.capacity}</span></div>`;
+  else if (isInfected(seg) && knownScanned) metaR = infectedHealthHtml(seg, '');
+  else if (seg.type === 'redundancy') metaR = `<span class="health" data-live-charge>${chargeMeta(seg)}</span>`;
+  // A FIREWALL has no health: its chip says what it does (WP8).
+  else if (seg.type === 'firewall') {
+    metaR = `<span class="health">${roomy ? UPGRADE_FILE_TEXT.firewall.chip : UPGRADE_FILE_TEXT.firewall.chipGlyph}</span>`;
   }
+  else if (!knownScanned) metaR = `<span class="health unknown">— —</span>`;
+  else if (state === 'corrupt') metaR = `<span class="health warn">${roomy ? '◆ ' : ''}${shown}%</span>`;
+  else if (state === 'partial') metaR = `<span class="health partial">${shown}%</span>`;
+  else metaR = `<span class="health">OK</span>`;
 
-  if (isFirst) {
-    el.innerHTML = `
-      ${badge}
-      <div class="seg-name">${seg.name}</div>
-      ${bar}
-      ${threadRow}
-      <div class="seg-meta"><span>${sizeLabel}</span>${metaR}</div>
-    `;
+  const sizeLabel = totalParts > 1 ? `${partSize}/${seg.size}B` : `${seg.size}B`;
+  const metaL = !roomy ? '' : badge || `<span>${sizeLabel}</span>`;
+
+  // AI Core renders a row of "thread" dots; OpBars paints them live as ops start and end.
+  const threadRow = seg.type === 'core' ? `<div class="thread-row" data-threads></div>` : '';
+
+  return `
+    <div class="seg-name">${stripName(seg, partSize)}</div>
+    ${bar}
+    ${threadRow}
+    <div class="seg-meta">${metaL}${metaR}</div>
+  `;
+}
+
+// The part data every chip carries, so the op bars, the split overlay and the hint painter find a
+// file's parts the same way whatever it is: its width on the grid, its id, and where it sits.
+function stampPart(part: HTMLElement, seg: Segment, layout: SegmentPartLayout): void {
+  part.style.gridColumn = `span ${layout.spanCols ?? layout.partSize}`;
+  part.dataset.id = seg.id;
+  part.dataset.partIdx = String(layout.partIdx);
+  part.dataset.totalParts = String(layout.totalParts);
+  part.dataset.partSize = String(layout.partSize);
+  part.dataset.partOffset = String(layout.partOffset);
+}
+
+// When the chip's crack starts, in seconds from now (negative: that far along), for the CSS.
+function setCrackDelay(part: HTMLElement, delaySec: number): void {
+  part.style.setProperty('--crack-delay', `${delaySec.toFixed(3)}s`);
+}
+
+// A chip whose crack is still to play (or still playing: a rebuild mid-crack) gets it, timed by the
+// reveal: the CSS takes its delay and length from here. Once played it drops the class. A TAB away
+// mid-crack cancels the animation instead (no animationend); settleCracks handles the view coming back.
+function playCrack(part: HTMLElement, code: string): string {
+  const delay = crackDelaySec(code);
+  if (delay === null) return '';
+  setCrackDelay(part, delay);
+  part.style.setProperty('--crack-dur', `${REVEAL_CRACK_ANIM_SEC}s`);
+  part.addEventListener('animationend', (event) => {
+    if (event.target === part) part.classList.remove('cracking');
+  });
+  return ' cracking';
+}
+
+// A TAB back into MIND shows the memory view again after display:none, which cancelled every chip's
+// crack animation and now restarts it from its first frame: a kid who TABbed away mid-crack saw it play
+// twice (LEAD-1, from the WP5 verify). Run just before the view is shown (ModeToggle): a chip whose crack
+// has played by now on the reveal's clock (crackDelaySec: null) drops it, and one still mid-crack picks
+// it up where that clock is (a negative delay), so the restart continues instead of replaying.
+export function settleCracks(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('.seg.soul.cracking').forEach((chip) => {
+    const code = chip.dataset.cluster;
+    if (code === undefined) throw new Error('settleCracks: a cracking chip without data-cluster');
+    const delay = crackDelaySec(code);
+    if (delay === null) chip.classList.remove('cracking');
+    else setCrackDelay(chip, delay);
+  });
+}
+
+function wire(part: HTMLElement, seg: Segment, behavior: SegmentBehavior): void {
+  part.addEventListener('click', (event) => behavior.onClick(seg, event));
+  part.addEventListener('mouseenter', () => behavior.onMouseEnter(seg, part));
+  part.addEventListener('mouseleave', () => behavior.onMouseLeave(seg, part));
+}
+
+// A cluster's part (see soulPartHtml). It keeps the shared part data (size, index, offset) so the
+// op bars, the split overlay and the hint painter treat it like any file. A chip the reveal just
+// opened plays its crack, staggered by its crack order (playCrack).
+function renderSoulPart(part: HTMLElement, soul: SoulSegment, layout: SegmentPartLayout, behavior: SegmentBehavior): HTMLElement {
+  const { partIdx, totalParts } = layout;
+  const isFirst = partIdx === 0;
+  let cls = 'seg soul';
+  if (soul.sealed) {
+    cls += ' sealed';
+    if (layout.joinsSealedLeft) cls += ' slab-join';
   } else {
-    el.innerHTML = `
-      <div class="seg-cont-marker">↪</div>
-      <div class="seg-meta cont"><span>${partSize} of ${seg.size}B</span></div>
-    `;
+    cls += ` hb-${heartbeatOf(soul)}`;
+    cls += playCrack(part, soul.cluster);
   }
-
-  el.addEventListener('click', (ev) => behavior.onClick(seg, ev));
-  el.addEventListener('mouseenter', () => behavior.onMouseEnter(seg, el));
-  el.addEventListener('mouseleave', () => behavior.onMouseLeave(seg, el));
-  return el;
+  if (soul.state === 'transferring') cls += ' transferring';
+  if (soul.state === 'repairing') cls += ' repairing';
+  // A sealed cluster bitten through its slab is unsealed at once (systems/hollow.ts breach).
+  cls += infectedClasses(soul, !soul.sealed);
+  if (totalParts > 1) {
+    cls += ' is-part';
+    if (partIdx < totalParts - 1) cls += ' part-continues-right';
+    if (!isFirst) cls += ' part-continues-left';
+  }
+  part.className = cls;
+  stampPart(part, soul, layout);
+  setEaten(part, soul, !soul.sealed);
+  part.dataset.cluster = soul.cluster;
+  // A strip line can point at a cluster by its code (C09 IS HURT); never at a sealed one.
+  if (isFirst && !soul.sealed) part.dataset.hintTarget = clusterHintTarget(soul.cluster);
+  part.innerHTML = soulPartHtml(soul, layout);
+  wire(part, soul, behavior);
+  return part;
 }

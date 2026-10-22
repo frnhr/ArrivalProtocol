@@ -1,0 +1,3505 @@
+/* Game HUD (the overhaul's new UI): objective strip, header time controls, the flight windows'
+ * layout, NAV PLOT, Engine and the pause veil. Colours come from tokens only (tokens.css +
+ * modes.css), so everything here reskins with the mode. Imported before responsive.css. */
+
+/* ── Key caps: [SPACE], [S] … inside any text ── */
+kbd.keycap {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.04em;
+  padding: 0 4px;
+  margin: 0 2px;
+  border: 1px solid currentColor;
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  vertical-align: 1px;
+}
+kbd.keycap[hidden] { display: none; }
+
+/* ── Objective strip: the one line that says what to do next ── */
+.objective-strip {
+  height: var(--objective-h);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg));
+  font-family: 'VT323', monospace;
+  font-size: 21px;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  position: relative;
+  z-index: 10;
+  transition: background var(--t-slow), color var(--t-slow);
+}
+.objective-strip[hidden] { display: none; }
+/* A desktop window closed from the dock (ToolsTabs.ts). */
+.window[hidden] { display: none; }
+.objective-glyph { color: var(--accent); font-size: 13px; }
+.objective-text { overflow: hidden; text-overflow: ellipsis; }
+.objective-text kbd.keycap { font-size: 11px; vertical-align: 2px; }
+/* "now": the line the kid must act on, brightest; "wait": calm. */
+.objective-strip[data-urgency="now"] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 13%, var(--bg));
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.objective-strip[data-urgency="now"] .objective-glyph { color: var(--accent-bright); }
+.objective-strip[data-urgency="soon"] { color: var(--accent-bright); }
+/* A countdown in its last seconds (the debris dodge's last DODGE_WARN_TAC, WP9 review round 2): the warning colour
+   and a slow pulse, on the same line (nothing retypes). Reduced motion keeps the colour and drops the pulse. */
+.objective-strip[data-warn="true"] {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, var(--bg));
+  text-shadow: 0 0 8px color-mix(in srgb, var(--warn) 55%, transparent);
+  animation: objective-warn 0.9s ease-in-out infinite;
+}
+@keyframes objective-warn {
+  50% { background: color-mix(in srgb, var(--warn) 24%, var(--bg)); }
+}
+/* The glyph names the screen the line's controls are on (§7.1: ◆ amber SHIP, ◇ blue MIND), in
+   that screen's colour whichever screen shows it. */
+.objective-strip[data-layer="ship"] .objective-glyph { color: var(--layer-ship); }
+.objective-strip[data-layer="mind"] .objective-glyph { color: var(--layer-mind); }
+
+/* The control the objective names ([data-hint-key] matches one of its key caps). */
+.hint-pulse { animation: hint-pulse 1.1s ease-in-out infinite; }
+@keyframes hint-pulse {
+  50% {
+    box-shadow: 0 0 0 1px var(--accent-bright), 0 0 16px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+}
+
+/* ── Header time controls ── */
+.pace-label {
+  font-family: 'VT323', monospace;
+  font-size: 16px;
+  color: var(--accent-dim);
+  letter-spacing: 0.06em;
+  min-width: 8.5em;
+  text-align: right;
+  white-space: nowrap;
+}
+.countdown-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 10px;
+  border: 1px solid var(--accent-dim);
+  color: var(--accent-bright);
+  font-size: 21px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.countdown-chip[hidden] { display: none; }
+.countdown-chip .cd-ff { color: var(--accent-dim); font-size: 14px; }
+.countdown-chip .cd-ff[hidden] { display: none; }
+/* OVERCLOCK: the countdown ticks slower than real seconds while the kid works in the mind. */
+/* JetBrains Mono: VT323 draws ¼ about 4 px wide, so `×¼` read as a smudge. */
+.countdown-chip .cd-slow { color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 13px; letter-spacing: 0.02em; }
+.countdown-chip .cd-slow[hidden] { display: none; }
+.countdown-chip.urgent .cd-slow { color: var(--warn); }
+.pace-label.overclock {
+  color: var(--accent-bright);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent);
+  font-family: 'JetBrains Mono', monospace;   /* the ¼ of OVERCLOCK ×¼ (see .cd-slow) */
+  font-size: 12px;
+}
+.countdown-chip.urgent {
+  color: var(--warn);
+  border-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  animation: countdown-pulse 1s ease-in-out infinite;
+}
+.countdown-chip.urgent .cd-ff { color: var(--warn); }
+@keyframes countdown-pulse { 50% { background: color-mix(in srgb, var(--warn) 28%, transparent); } }
+/* The next hazard (TimeControls, WP12 review): a phone's only readable place for `DEBRIS C? 03:41`. A desktop lists it in
+   the strip's upcoming events, so it never shows there. */
+.hazard-chip { display: none; }
+@media (max-width: 768px) {
+  .header .hazard-chip {
+    order: 3;
+    display: inline-flex;
+    align-items: baseline;
+    padding: 0 6px;
+    border: 1px dashed var(--warn);
+    color: var(--warn);
+    font-size: 17px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .header .hazard-chip[hidden] { display: none; }
+}
+
+.skip-btn { display: inline-flex; align-items: center; gap: 6px; }
+.skip-btn[hidden] { display: none; }
+.skip-btn kbd.keycap { font-size: 9px; }
+.skip-btn.blocked { opacity: 0.5; cursor: not-allowed; }
+.skip-btn.blocked .skip-label { text-decoration: line-through; }
+.skip-btn.ready { color: var(--accent-bright); border-color: var(--accent); }
+.skip-btn.ready:not(.hint-pulse) { animation: skip-ready 2.4s ease-in-out infinite; }
+@keyframes skip-ready { 50% { box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent); } }
+.skip-btn.refused { animation: skip-refused 0.6s ease-out; }
+@keyframes skip-refused {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); border-color: var(--warn); color: var(--warn); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+}
+/* A reason may take two lines (CHECK THE COLONISTS / FIRST): the header has the height, not the
+   width, and a reason cut to `CHECK THE COLONISTS FI…` says nothing. */
+.skip-reason {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  line-height: 1.25;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  max-width: 150px;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.skip-reason[hidden] { display: none; }
+.skip-btn.refused + .skip-reason { color: var(--warn); }
+.debug-ladder[hidden] { display: none; }
+
+/* ── Flight windows: three columns positioned by custom properties (§7.1). Windows stay
+ *    draggable; dragging writes inline left/top over these. ── */
+.desktop > .tools-view {
+  --gutter: 16px;
+  --col-left-w: 280px;
+  --col-right-w: 300px;
+  /* What the plot window adds around its square plot: title bar, the file pips row (WP4), readout
+     row, padding and the top gutter. Keeps the window inside the desk at any height ≥ 720. */
+  --plot-chrome-h: 124px;
+  --plot-avail-w: calc(100vw - var(--dock-w) - var(--col-left-w) - var(--col-right-w) - 4 * var(--gutter));
+  --plot-avail-h: calc(100vh - var(--header-h) - var(--objective-h) - var(--footer-h) - var(--plot-chrome-h));
+  --plot-side: clamp(400px, min(var(--plot-avail-w), var(--plot-avail-h)), 620px);
+}
+.telemetry-win { top: var(--gutter); left: var(--gutter); width: var(--col-left-w); }
+.engine-win { top: var(--gutter); right: var(--gutter); width: var(--col-right-w); }
+.navplot-win {
+  top: var(--gutter);
+  /* centred in the space between the two columns */
+  left: calc(2 * var(--gutter) + var(--col-left-w) + max(0px, (var(--plot-avail-w) - var(--plot-side)) / 2));
+  width: var(--plot-side);
+}
+
+/* ── NAV PLOT ── */
+.navplot-body { padding: 12px; }
+.np-stage { position: relative; }
+.navplot-svg { display: block; width: 100%; aspect-ratio: 1 / 1; }
+.navplot-svg[hidden] { display: none; }
+/* The label sizes are NavPlotWindow's LABEL_FONT_UNITS and RING_FONT_UNITS (viewBox units); on a phone it scales them up
+   to stay readable (--np-label-scale, --np-ring-scale; WP12 review) and lays the labels out at that size. */
+.navplot-svg text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: calc(7.4px * var(--np-label-scale, 1));
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 2.6px;
+  stroke-linejoin: round;
+}
+.np-surface { fill: none; stroke: var(--warn); stroke-opacity: 0.5; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.np-atm { fill: none; stroke: var(--accent-dim); stroke-width: 1; stroke-dasharray: 3 4; vector-effect: non-scaling-stroke; }
+.np-ring {
+  fill: var(--good);
+  fill-opacity: 0.18;
+  fill-rule: evenodd;
+  stroke: var(--good);
+  stroke-opacity: 0.45;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  transition: fill-opacity var(--t-slow), stroke-opacity var(--t-slow);
+}
+.np-ring.hot { fill-opacity: 0.32; stroke-opacity: 0.9; }
+.navplot-svg .np-ring-label {
+  fill: var(--good);
+  fill-opacity: 0.85;
+  font-size: calc(6.2px * var(--np-ring-scale, 1));
+  letter-spacing: 0.22em;
+  stroke: none;
+}
+.np-path { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.np-path-flyby { stroke: var(--accent-bright); stroke-width: 1.8; stroke-dasharray: 6 5; }
+.np-path-green { stroke: var(--good); stroke-width: 2.6; }
+.np-path-impact { stroke: var(--warn); stroke-width: 2.4; }
+.np-impact-mark { fill: none; stroke: var(--warn); stroke-width: 2.2; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.np-apsis { stroke: var(--bg); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.np-apsis.tone-plain { fill: var(--accent-bright); }
+.np-apsis.tone-good { fill: var(--good); }
+.np-apsis.tone-ghost { fill: none; stroke: var(--warn); stroke-dasharray: 2 1.5; }
+/* ▼ while the engine firing by itself has just moved it (WP10 review: `▼ DRIFT −60 km` beside it): the marker too. */
+.np-apsis.tone-danger { fill: var(--warn); }
+.np-burn-tick { stroke: var(--text); stroke-width: 2.4; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.navplot-svg .np-label.tone-plain { fill: var(--accent-bright); }
+.navplot-svg .np-label.tone-good { fill: var(--good); }
+.navplot-svg .np-label.tone-danger { fill: var(--warn); }
+.navplot-svg .np-label.tone-ghost { fill: var(--warn); fill-opacity: 0.8; }
+.navplot-svg .np-label.tone-flyby,
+.navplot-svg .np-flyby-tag { fill: var(--accent-bright); letter-spacing: 0.2em; }
+.navplot-svg .np-burn-label { fill: var(--text); letter-spacing: 0.08em; }
+.np-ship { fill: var(--text); stroke: var(--bg); stroke-width: 1; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+/* Per-segment opacity (oldest faintest) is set by NavPlotWindow. */
+.np-trail { stroke: var(--text); stroke-width: 1.4; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.np-flame { fill: var(--accent); animation: flame-flicker 0.12s steps(2) infinite alternate; }
+@keyframes flame-flicker { from { opacity: 1; } to { opacity: 0.55; } }
+
+.np-chip {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  padding: 0 8px;
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  pointer-events: none;
+}
+.np-chip:empty { display: none; }
+.np-readout {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--accent-dim);
+}
+.np-readout[hidden],
+.np-stat[hidden] { display: none; }
+.np-stat { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.np-stat .lbl { color: var(--text-dim); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; }
+.np-stat .v { font-family: 'VT323', monospace; font-size: 19px; line-height: 1; white-space: nowrap; }
+/* ▼'s drift after an uncommanded burst (WP12 p3): beside the LOWEST caption, in the warning colour, like the value. */
+.np-stat .np-drift { margin-left: 6px; color: var(--warn); letter-spacing: 0.04em; }
+.np-stat .np-drift[hidden] { display: none; }
+.np-chip.tone-plain, .np-stat .v.tone-plain { color: var(--accent-bright); }
+.np-chip.tone-good, .np-stat .v.tone-good { color: var(--good); }
+.np-chip.tone-danger, .np-stat .v.tone-danger { color: var(--warn); }
+.np-chip.tone-flyby, .np-stat .v.tone-flyby { color: var(--accent-bright); }
+
+/* ── Engine ── */
+.engine-body { padding: 14px; }
+.burn-btn {
+  display: block;
+  height: 54px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  transition: background var(--t-fast), color var(--t-fast), box-shadow var(--t-fast);
+  touch-action: none;
+}
+.burn-btn[hidden] { display: none; }
+.burn-btn kbd.keycap { font-size: 11px; letter-spacing: 0.04em; }
+.burn-btn[data-look="burning"] {
+  background: var(--accent);
+  color: var(--bg);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.burn-btn[data-look="aligning"] {
+  border-style: dashed;
+  color: var(--accent);
+  animation: aligning-blink 0.7s steps(2) infinite;
+}
+@keyframes aligning-blink { 50% { opacity: 0.55; } }
+.burn-btn[data-look="blocked"],
+.burn-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.preset-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.preset-row[hidden] { display: none; }
+.preset-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: transparent;
+  border: 1px solid var(--edge-bright);
+  color: var(--accent-dim);
+  padding: 5px 0 3px;
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast);
+}
+.preset-btn[hidden] { display: none; }
+.preset-btn kbd.keycap { font-size: 9px; margin: 0; }
+.preset-btn:hover { color: var(--accent-bright); border-color: var(--accent-dim); }
+.preset-btn.active { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+.preset-btn.active.aligning { animation: aligning-blink 0.7s steps(2) infinite; }
+.preset-hint {
+  margin-top: 8px;
+  min-height: 1.4em;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+.preset-hint kbd.keycap { font-size: 9px; }
+
+.fuel-block { margin-bottom: 14px; }
+.fuel-bar {
+  position: relative;
+  height: 12px;
+  margin-top: 14px;
+  border: 1px solid var(--edge-bright);
+  background: color-mix(in srgb, var(--accent-dim) 15%, transparent);
+}
+.fuel-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+.fuel-fill.low { background: var(--warn); }
+.fuel-star {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 0;
+  border-left: 1px dashed var(--good);
+}
+.fuel-star::before {
+  content: '★';
+  position: absolute;
+  top: -12px;
+  left: -5px;
+  font-size: 9px;
+  color: var(--good);
+}
+.fuel-need {
+  position: absolute;
+  top: -5px;
+  bottom: -5px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text);
+}
+.fuel-need.short { background: var(--warn); }
+.fuel-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+.fuel-scale[hidden] { display: none; }
+.fuel-scale .short { color: var(--warn); }
+
+.accept-btn {
+  display: block;
+  margin-bottom: 14px;
+  border-color: var(--good);
+  color: var(--good);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+.accept-btn[hidden] { display: none; }
+.accept-btn.armed {
+  background: color-mix(in srgb, var(--good) 22%, transparent);
+  animation: aligning-blink 0.7s steps(2) infinite;
+}
+/* Accepting this loop would strand the ship: never in the "good" colour. */
+.accept-btn.strands { border-color: var(--warn); color: var(--warn); }
+.accept-btn.strands.armed { background: color-mix(in srgb, var(--warn) 22%, transparent); }
+.accept-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.manual-toggle {
+  display: block;
+  width: 100%;
+  padding: 8px 0 0;
+  border: none;
+  border-top: 1px dashed var(--edge-bright);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+.manual-toggle[hidden] { display: none; }
+.manual-toggle:hover { color: var(--accent-bright); }
+.manual-fold { padding-top: 10px; }
+.manual-row { display: flex; gap: 4px; margin: 4px 0 12px; }
+.manual-row[hidden] { display: none; }
+.manual-row .speed-btn { flex: 1; min-width: 0; }
+
+/* ── Pause veil: look-only, so it never takes the pointer ── */
+.pause-veil {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: calc(var(--header-h) + var(--objective-h));
+  bottom: var(--footer-h);
+  z-index: 150;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  /* The card sits over the window title bars: pause is for looking, so it must not hide the
+     plot or the readouts. */
+  padding-top: 8px;
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+  pointer-events: none;
+}
+.pause-veil[hidden] { display: none; }
+.pause-veil-card {
+  font-family: 'VT323', monospace;
+  font-size: 26px;
+  letter-spacing: 0.14em;
+  color: var(--accent-bright);
+  padding: 2px 24px;
+  border: 1px solid var(--accent);
+  background: var(--window);
+  box-shadow: 0 0 30px color-mix(in srgb, var(--bg) 80%, transparent);
+}
+.pause-veil-card kbd.keycap { font-size: 13px; vertical-align: 3px; }
+
+/* ── Header: sound toggle (M) ── */
+.mute-btn { min-width: 34px; padding: 4px 8px; }
+.mute-btn[hidden] { display: none; }
+.mute-btn.muted { text-decoration: line-through; opacity: 0.55; }
+
+/* ── Mode toggle: SHIP / MIND with its TAB key cap ── */
+.mode-toggle-label kbd.keycap { font-size: 8px; padding: 0 3px; vertical-align: 0; }
+
+/* ── SHIP ⇄ MIND scanline wipe: a bright band sweeps down over a quick dim flash ── */
+.mode-wipe {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  pointer-events: none;
+}
+.mode-wipe[hidden] { display: none; }
+.mode-wipe.run {
+  background:
+    linear-gradient(180deg,
+      transparent 0%,
+      transparent 44%,
+      color-mix(in srgb, var(--accent-bright) 35%, transparent) 48.5%,
+      var(--accent-bright) 50%,
+      color-mix(in srgb, var(--accent-bright) 35%, transparent) 51.5%,
+      transparent 56%,
+      transparent 100%),
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--bg) 40%, transparent) 0 1px, transparent 1px 3px);
+  background-size: 100% 300%, 100% 100%;
+  animation: mode-wipe var(--wipe-ms, 150ms) linear both;
+}
+@keyframes mode-wipe {
+  from { background-position: 0 100%, 0 0; background-color: color-mix(in srgb, var(--bg) 70%, transparent); }
+  to { background-position: 0 0%, 0 0; background-color: transparent; }
+}
+
+/* ── Title card (z 300, an input modal) and the boot's click-to-skip catcher ── */
+.title-card {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--accent) 10%, var(--bg)) 0%, var(--bg) 55%, var(--vignette-edge) 100%);
+  transition: background 0.4s ease-out;
+}
+.title-card[hidden] { display: none; }
+.title-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, var(--scan) 0 1px, transparent 1px 3px);
+  pointer-events: none;
+}
+.title-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  text-align: center;
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
+.title-signal {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  color: var(--accent-dim);
+}
+.title-signal-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 8px var(--warn);
+  animation: signal-blink 1.2s steps(2) infinite;
+}
+@keyframes signal-blink { 50% { opacity: 0.2; } }
+.title-name {
+  margin: 0;
+  font-family: 'VT323', monospace;
+  font-weight: normal;
+  font-size: clamp(48px, 9vw, 104px);
+  line-height: 0.9;
+  letter-spacing: 0.08em;
+  color: var(--accent-bright);
+  text-shadow:
+    0 0 18px color-mix(in srgb, var(--accent) 70%, transparent),
+    0 0 48px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.title-sub {
+  margin-top: -6px;
+  font-family: 'VT323', monospace;
+  font-size: 26px;
+  letter-spacing: 0.3em;
+  color: var(--accent);
+}
+.title-unit {
+  margin-top: 18px;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: var(--text);
+}
+.title-receive {
+  margin-top: 22px;
+  padding: 8px 26px;
+  font-family: 'VT323', monospace;
+  font-size: 26px;
+  letter-spacing: 0.14em;
+  color: var(--accent-bright);
+  background: transparent;
+  border: 1px solid var(--accent);
+  cursor: pointer;
+  animation: receive-glow 1.8s ease-in-out infinite;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.title-receive:hover { background: var(--accent); color: var(--bg); }
+@keyframes receive-glow {
+  50% { box-shadow: 0 0 22px color-mix(in srgb, var(--accent) 60%, transparent); }
+}
+.title-note {
+  margin-top: 6px;
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+/* A returning unit (WP8): the one before it, in HOLLOW's pink (that unit is what waits in the memory), and
+   the endings found. A unit that stayed with its colonists became no HOLLOW: its line is the souls' green. */
+.title-lineage {
+  margin-top: -2px;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--hollow-text);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--hollow) 35%, transparent);
+}
+.title-lineage.stayed { color: var(--soul); text-shadow: none; }
+.title-lineage[hidden] { display: none; }
+.title-endings { font-size: 10px; letter-spacing: 0.3em; color: var(--text-dim); }
+.title-endings[hidden] { display: none; }
+/* The archive not behind this page (WP8, §4.5): a warning box under the unit, never a quiet one. CORRUPT
+   asks its question in it, with two buttons; RECEIVE TRANSMISSION waits for the answer. */
+.title-archive {
+  margin-top: 12px;
+  max-width: 620px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--warn);
+  border: 1px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 7%, transparent);
+  padding: 8px 14px;
+}
+.title-archive[hidden] { display: none; }
+.title-archive-line { font-weight: 700; }
+.title-archive-detail { font-size: 10px; letter-spacing: 0.08em; line-height: 1.45; color: var(--text); }
+.title-archive-detail[hidden] { display: none; }
+.title-archive-choices { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 2px; }
+.title-archive-choices[hidden] { display: none; }
+.title-archive-btn {
+  padding: 5px 14px;
+  font-family: 'VT323', monospace;
+  font-size: 20px;
+  letter-spacing: 0.1em;
+  color: var(--warn);
+  background: transparent;
+  border: 1px solid var(--warn);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.title-archive-btn:hover { background: var(--warn); color: var(--bg); }
+.title-archive-hints { display: flex; flex-direction: column; gap: 2px; font-size: 9px; letter-spacing: 0.08em; color: var(--text-dim); }
+.title-archive-hints[hidden] { display: none; }
+.title-archive.wiped { color: var(--good); border-color: var(--good); background: color-mix(in srgb, var(--good) 7%, transparent); }
+.title-receive[hidden] { display: none; }
+/* Booting: the card goes clear (the blue mind shows through) but still catches the skip click. */
+.title-card.booting { background: transparent; cursor: pointer; }
+.title-card.booting::after { display: none; }
+.title-card.booting .title-inner { opacity: 0; transform: scale(1.05); pointer-events: none; }
+
+/* The boot: the memory strip's rows land one after another (TitleCard sets --row, --row-step). */
+.addr-row.assembling {
+  animation: rack-assemble 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--row, 0) * var(--row-step, 0.25s));
+}
+@keyframes rack-assemble {
+  from { opacity: 0; transform: translateX(-24px); clip-path: inset(0 100% 0 0); filter: brightness(2.2); }
+  60% { filter: brightness(1.5); }
+  to { opacity: 1; transform: none; clip-path: inset(0 0 0 0); filter: none; }
+}
+
+@keyframes rack-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ══ WP2 part 2: voice on screen, stamps and juice ══════════════════════════════════════════ */
+
+/* ── Objective strip: typed line + caret on the left, ticker / upcoming events on the right.
+ *    The instruction keeps its room; the ticker gives way first (flex-shrink). ── */
+.objective-text { flex: 0 1 auto; min-width: 0; white-space: nowrap; }
+.objective-caret {
+  margin-left: -9px;
+  color: var(--accent-bright);
+  font-size: 18px;
+  animation: caret-blink 0.9s steps(2) infinite;
+}
+.objective-caret.typing { animation: none; }
+@keyframes caret-blink { 50% { opacity: 0; } }
+.objective-spacer { flex: 1 1 0; min-width: 8px; }
+.objective-ticker {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 0 100 auto;
+  min-width: 0;
+  max-width: 52%;
+  padding: 1px 8px;
+  border: 1px solid currentColor;
+  background: color-mix(in srgb, currentColor 8%, var(--bg));
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-shadow: none;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+}
+.objective-ticker[hidden] { display: none; }
+.objective-ticker[data-from="ship"] { color: var(--layer-ship); }
+.objective-ticker[data-from="mind"] { color: var(--layer-mind); }
+.objective-ticker[data-speaker="hollow"],
+.objective-ticker[data-speaker="hollow-cmd"] { color: var(--hollow); }
+.objective-ticker:hover { background: color-mix(in srgb, currentColor 18%, var(--bg)); }
+.ticker-glyph { font-size: 10px; }
+.ticker-tag { font-weight: 700; letter-spacing: 0.12em; }
+.ticker-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.objective-ticker.fresh { animation: ticker-in 0.4s ease-out both; }
+@keyframes ticker-in {
+  from { transform: translateX(24px); opacity: 0; box-shadow: 0 0 18px currentColor; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes ticker-fade { from { opacity: 0; } to { opacity: 1; } }
+.objective-upcoming {
+  flex: 0 50 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  /* Readable (about 5:1 on the strip) but a step below the instruction itself. */
+  color: color-mix(in srgb, var(--accent) 70%, var(--bg));
+  text-shadow: none;
+}
+
+/* ── Header: live crumbs, reduced-motion toggle ── */
+.id-block .crumb.phase { transition: color var(--t-slow); white-space: nowrap; }
+/* The run's wave beside the unit (WP8: UNIT-048 · WAVE 2), quieter than the unit itself. */
+.id-block .crumb-wave { margin-left: 8px; color: var(--accent-dim); white-space: nowrap; }
+.id-block .crumb-wave::before { content: '·'; margin-right: 8px; color: var(--text-dim); }
+/* On a narrow desk (1280 with a two-line SKIP reason, or ?debug's ladder) the crumbs never wrap: the phase
+   crumb gives way first with an ellipsis (the objective strip says the same), then the wave, then the ship, so
+   the unit stays. The block clips what is left: at 1280×720 a long SKIP reason (DODGE THE DEBRIS FIRST) left it
+   153 px for 247 px of crumbs, and `KESTREL /` was drawn over the pace label (WP9 review round 2). */
+/* WP12 p3 (LEAD_NOTES): the ship's name never gives way: at 1280×720 it was cut to `LA…` while the countdown chip and
+   a SKIP reason showed. Measured without ?debug, every header keeps it whole (LAST LIGHT with the longest reason,
+   `.tmp/wp12/p3/hdr-noladder/`); the cut came from the debug ladder, which takes the T+ clock's place below 1440 px. */
+@media (min-width: 769px) {
+  .id-block { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .id-block > * { flex-shrink: 0; }
+  .id-block .crumb.phase { flex-shrink: 1000; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .id-block .crumb-wave { flex-shrink: 100; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .time-controls { flex-shrink: 0; }
+}
+@media (min-width: 769px) and (max-width: 1439px) {
+  .time-controls:has(.debug-ladder:not([hidden])) .clock { display: none; }
+}
+.id-block .crumb.phase.tone-plain { color: var(--accent); }
+.id-block .crumb.phase.tone-flyby { color: var(--accent-bright); }
+.id-block .crumb.phase.tone-good { color: var(--good); }
+.id-block .crumb.phase.tone-danger { color: var(--warn); }
+.motion-btn { min-width: 34px; padding: 4px 8px; }
+.motion-btn[hidden] { display: none; }
+.motion-btn.active { color: var(--accent-bright); border-color: var(--accent); background: var(--ambient-1); }
+
+/* ── COMMS: the amber radio, under Telemetry in the left column. The top clears Telemetry's
+ *    height (CommsWindow.ts measures it; 178px is its height before the first measure); the
+ *    height takes what is left of the desk, capped. ── */
+.desktop > .tools-view {
+  --telemetry-h: 178px;
+  --comms-top: calc(2 * var(--gutter) + var(--telemetry-h));
+}
+.comms-win {
+  top: var(--comms-top);
+  left: var(--gutter);
+  width: var(--col-left-w);
+  height: clamp(140px, calc(100% - var(--comms-top) - var(--gutter)), 340px);
+}
+.comms-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 10px 12px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.comms-body[hidden] { display: none; }
+.comms-log {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.comms-log[hidden] { display: none; }
+.comms-line { font-size: 11px; line-height: 1.5; color: var(--text); transition: opacity var(--t-slow); }
+.comms-line:not(:last-child) { opacity: 0.55; }
+.comms-tag {
+  margin-right: 7px;
+  padding: 0 4px;
+  border: 1px solid var(--edge-bright);
+  font-size: 8.5px;
+  letter-spacing: 0.16em;
+  color: var(--accent-dim);
+  vertical-align: 1px;
+}
+.comms-line.speaker-control .comms-tag { color: var(--accent-bright); border-color: var(--accent-dim); }
+.comms-line.typing .comms-text::after,
+.term-line.typing .term-text::after {
+  content: '▌';
+  margin-left: 1px;
+  animation: caret-blink 0.6s steps(2) infinite;
+}
+.comms-lamp {
+  margin-right: 8px;
+  padding: 0 4px;
+  font-size: 8.5px;
+  letter-spacing: 0.15em;
+  color: var(--accent-dim);
+  border: 1px solid var(--edge);
+  opacity: 0.5;
+}
+.comms-lamp.on {
+  opacity: 1;
+  color: var(--good);
+  border-color: var(--good);
+  text-shadow: 0 0 6px var(--good);
+  animation: caret-blink 0.5s steps(2) infinite;
+}
+
+/* ── TERMINAL: four typed lines between the memory strip and the filesystem chips ── */
+.desktop > .memory-view {
+  grid-template-rows: auto 1fr auto auto;
+  grid-template-areas:
+    "stats  side"
+    "strip  side"
+    "term   side"
+    "tools  side";
+}
+.mind-terminal {
+  grid-area: term;
+  padding: 6px 14px 8px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  border: 1px solid var(--edge-bright);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+.mind-terminal[hidden] { display: none; }
+.mind-term-head {
+  margin-bottom: 3px;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: var(--accent-dim);
+  text-transform: uppercase;
+}
+.mind-term-lines {
+  --term-line-h: 19px;
+  height: calc(var(--term-lines, 4) * var(--term-line-h));
+  overflow-y: auto;
+  scrollbar-width: none;
+  cursor: pointer;
+}
+.term-line {
+  position: relative;
+  line-height: var(--term-line-h);
+  /* pre, not nowrap: an echo's `   [user: ???]` keeps its spacing (WP6). */
+  white-space: pre;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.term-line.speaker-mind-sys { color: var(--accent-bright); }
+.term-line.speaker-cmd { color: var(--accent); }
+/* HOLLOW's lines are written in lowercase (script); not forced here, so cluster codes like C11
+   keep their capitals. */
+/* WP11: its command echoes ('hollow-cmd': `> infect c12`, the verbs' countdowns) wear the same pink at the TERMINAL's pace. */
+.term-line.speaker-hollow,
+.term-line.speaker-hollow-cmd {
+  color: var(--hollow);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--hollow) 55%, transparent);
+}
+.term-line.timed-out { opacity: 0.5; }
+.term-choice { display: inline-flex; gap: 6px; margin-left: 12px; vertical-align: 1px; }
+.term-choice[hidden] { display: none; }
+.term-choice-btn {
+  padding: 0 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  line-height: 15px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  cursor: pointer;
+}
+.term-choice-btn:hover { background: color-mix(in srgb, currentColor 18%, transparent); }
+/* The answer given stays lit. (WP10: it was `background: currentColor; color: var(--bg)`, which drew the background
+   colour on the background colour: currentColor is the button's own colour once `color` is set, so the pick vanished.) */
+.term-choice-btn.picked {
+  background: color-mix(in srgb, currentColor 30%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, currentColor 60%, transparent);
+  font-weight: 700;
+}
+.term-choice-btn:disabled { cursor: default; opacity: 0.5; }
+.term-choice-btn.picked:disabled { opacity: 1; }
+.term-timer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: color-mix(in srgb, currentColor 20%, transparent);
+}
+.term-timer > span { display: block; height: 100%; width: 100%; background: currentColor; }
+.term-timer > span[hidden] { display: none; }
+
+/* ── Mode toggle: the other screen flashes in its own colour while it holds unread lines ── */
+.mode-toggle-opt[data-mode="tools"] { --unread: var(--layer-ship); }
+.mode-toggle-opt[data-mode="memory"] { --unread: var(--layer-mind); }
+.mode-toggle-opt.unread { animation: toggle-unread 1s ease-in-out infinite; }
+@keyframes toggle-unread {
+  50% { color: var(--bg); background: var(--unread); box-shadow: 0 0 12px var(--unread); }
+}
+
+/* ── Stamps: VT323 capitals slammed over the plot (Stamp.ts sets left/top) ── */
+.stamp-layer { position: fixed; inset: 0; z-index: 220; pointer-events: none; }
+.stamp {
+  position: absolute;
+  padding: 6px 26px 2px;
+  border: 4px double currentColor;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  font-family: 'VT323', monospace;
+  font-size: clamp(34px, 4.2vw, 62px);
+  line-height: 1;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  color: var(--accent-bright);
+  text-shadow: 0 0 22px currentColor;
+  box-shadow: 0 0 34px color-mix(in srgb, currentColor 35%, transparent);
+  transform: translate(-50%, -50%) rotate(-3deg);
+  animation:
+    stamp-in var(--stamp-in-ms, 120ms) cubic-bezier(0.2, 0.9, 0.3, 1.25) both,
+    stamp-out 0.35s ease-in calc(var(--stamp-show-ms, 1500ms) - 0.35s) both;
+}
+.stamp.tone-good { color: var(--good); }
+.stamp.tone-danger { color: var(--warn); }
+@keyframes stamp-in {
+  /* the first frame flashes white-hot, then the stamp lands at full size */
+  from { transform: translate(-50%, -50%) rotate(-3deg) scale(1.9); opacity: 0.2; filter: brightness(3.2); }
+  40% { opacity: 1; filter: brightness(2.2); }
+  to { transform: translate(-50%, -50%) rotate(-3deg) scale(1); opacity: 1; filter: none; }
+}
+@keyframes stamp-out { to { opacity: 0; } }
+@keyframes stamp-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── HOLD STEADY 3-2-1 (Juice.ts centres it on the plot) ── */
+.hold-steady {
+  position: fixed;
+  z-index: 160;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  pointer-events: none;
+  color: var(--good);
+  text-align: center;
+  text-shadow: 0 0 6px var(--bg), 0 0 14px var(--bg), 0 0 22px var(--bg);
+}
+.hold-steady[hidden] { display: none; }
+.hs-title { font-family: 'VT323', monospace; font-size: 22px; letter-spacing: 0.3em; }
+.hs-count {
+  font-family: 'VT323', monospace;
+  font-size: 84px;
+  line-height: 0.82;
+  text-shadow: 0 0 20px var(--good), 0 0 8px var(--bg);
+}
+.hs-count.pop { animation: hs-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.4); }
+@keyframes hs-pop { from { transform: scale(1.7); opacity: 0.25; } }
+.hs-bar { width: 120px; height: 3px; background: color-mix(in srgb, var(--good) 20%, transparent); }
+.hs-bar > span { display: block; height: 100%; width: 0; background: var(--good); box-shadow: 0 0 6px var(--good); }
+.hs-bar > span[hidden] { display: none; }
+.hs-sub { font-size: 9px; letter-spacing: 0.2em; color: var(--text); text-transform: uppercase; }
+
+/* ── Red alarm vignette while any alarm is up ── */
+.alarm-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease-out;
+  background: radial-gradient(ellipse at center, transparent 52%, color-mix(in srgb, var(--warn) 26%, transparent) 100%);
+  box-shadow: inset 0 0 90px color-mix(in srgb, var(--warn) 32%, transparent);
+}
+body.alarm .alarm-vignette { opacity: 1; animation: vignette-pulse 1s ease-in-out infinite; }
+@keyframes vignette-pulse { 50% { opacity: 0.5; } }
+
+/* ── Full-screen flash: ORBIT LOCKED (amber), a crash (red) ── */
+.screen-flash { position: fixed; inset: 0; z-index: 230; pointer-events: none; }
+.screen-flash[hidden] { display: none; }
+.screen-flash[data-tone="good"] { --flash: var(--layer-ship); }
+.screen-flash[data-tone="danger"] { --flash: var(--warn); }
+.screen-flash.run { animation: screen-flash var(--flash-ms, 450ms) ease-out both; }
+@keyframes screen-flash {
+  from { background: color-mix(in srgb, var(--flash) 42%, transparent); }
+  to { background: transparent; }
+}
+
+/* ── NAV PLOT: the line tweens out of the colour it just left; the ring breathes in-ring ── */
+.navplot-svg.tween[data-tween-from="impact"] .np-path { animation: line-from-impact var(--line-tween-ms, 300ms) ease-out; }
+.navplot-svg.tween[data-tween-from="open"] .np-path,
+.navplot-svg.tween[data-tween-from="closed"] .np-path { animation: line-from-flyby var(--line-tween-ms, 300ms) ease-out; }
+.navplot-svg.tween[data-tween-from="in-ring"] .np-path { animation: line-from-green var(--line-tween-ms, 300ms) ease-out; }
+@keyframes line-from-impact { from { stroke: var(--warn); } }
+@keyframes line-from-flyby { from { stroke: var(--accent-bright); } }
+@keyframes line-from-green { from { stroke: var(--good); } }
+.np-ring.hot { animation: ring-breathe 1.8s ease-in-out infinite; }
+@keyframes ring-breathe { 50% { fill-opacity: 0.2; stroke-opacity: 0.6; } }
+
+/* ── Short desktops (the 1280×720 minimum, §7.1): the TERMINAL row pushed the strip's last rack
+ *    into a hidden scroll. The blue screen tightens instead: 3 TERMINAL lines without the head,
+ *    smaller gaps and stats padding. The strip needs about 775 px of height at full size. ── */
+@media (max-height: 800px) and (min-width: 769px) {
+  .desktop > .memory-view { gap: 8px; }
+  .mem-stats { padding-top: 6px; padding-bottom: 6px; }
+  .mind-terminal { padding-top: 4px; padding-bottom: 5px; }
+  .mind-term-head { display: none; }
+  .mind-term-lines { --term-lines: 3; }
+}
+
+/* ── Mobile: the TERMINAL shows 2 lines (the phase crumb's rule is in responsive.css) ── */
+@media (max-width: 768px) {
+  .mind-term-lines { height: calc(2 * var(--term-line-h)); }
+  .objective-upcoming { display: none; }
+  /* No room for the ticker beside the instruction on a phone: it shrank to a bare glyph and
+     cut the instruction's key cap. The mode toggle still flashes for an unread line. */
+  .objective-ticker { display: none; }
+  /* Two lines on a phone (§9 WP12 item 3): a 390 px row holds about 36 characters, and the strip's lines run to
+     MAX_LINE_CHARS (70). The height is always two lines, so the desk does not jump when a line wraps or unwraps.
+     A slightly smaller face fits 41 characters a row (.tmp/wp12/p2/phone.mjs checks the longest lines). HOLLOW's
+     amber bite countdown and the typing caret give way: the mode toggle's alert names the bite, and the line itself
+     is the instruction. */
+  .objective-strip {
+    --strip-line-h: 20px;
+    height: calc(2 * var(--strip-line-h) + 8px);
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 10px;
+    font-size: 19px;
+    line-height: var(--strip-line-h);
+    letter-spacing: 0.03em;
+    white-space: normal;
+  }
+  .objective-glyph { line-height: var(--strip-line-h); }
+  .objective-text {
+    flex: 1 1 auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+  .objective-caret,
+  .objective-spacer,
+  .objective-bite { display: none; }
+}
+
+/* ── Reduced motion (ui.reducedMotion → body.reduced-motion): no shake, scale, flashes or
+ *    pulses. Every colour, word and countdown stays (§7.3). ── */
+body.reduced-motion .hint-pulse { animation: none; box-shadow: 0 0 0 1px var(--accent-bright); }
+body.reduced-motion .countdown-chip.urgent,
+body.reduced-motion .skip-btn.ready:not(.hint-pulse),
+body.reduced-motion .skip-btn.refused,
+body.reduced-motion .burn-btn[data-look="aligning"],
+body.reduced-motion .preset-btn.active.aligning,
+body.reduced-motion .accept-btn.armed,
+body.reduced-motion .np-flame,
+body.reduced-motion .np-ring.hot,
+body.reduced-motion .title-signal-dot,
+body.reduced-motion .title-receive,
+body.reduced-motion .objective-caret,
+body.reduced-motion .objective-strip[data-warn="true"],
+body.reduced-motion .comms-lamp.on,
+body.reduced-motion .hs-count.pop,
+body.reduced-motion.alarm .alarm-vignette,
+body.reduced-motion .comms-line.typing .comms-text::after,
+body.reduced-motion .term-line.typing .term-text::after { animation: none; }
+body.reduced-motion .mode-toggle-opt.unread {
+  animation: none;
+  color: var(--unread);
+  box-shadow: inset 0 0 0 1px var(--unread);
+}
+body.reduced-motion .objective-ticker.fresh { animation-name: ticker-fade; }
+body.reduced-motion .stamp {
+  animation:
+    stamp-fade-in var(--stamp-in-ms, 120ms) ease-out both,
+    stamp-out 0.35s ease-in calc(var(--stamp-show-ms, 1500ms) - 0.35s) both;
+}
+body.reduced-motion .mode-wipe.run { animation: none; background: none; }
+body.reduced-motion .addr-row.assembling { animation-name: rack-fade; }
+body.reduced-motion .title-inner { transition: opacity 0.3s ease-out; }
+body.reduced-motion .title-card.booting .title-inner { transform: none; }
+/* The older loops (window grips, status dots, the memory strip's flickers and pulses) stop; their
+   colours and borders stay. Each later loop adds its own rule here: a blanket rule would also
+   freeze loops that carry information. The glitch's flicker becomes a steady dim below (§7.3),
+   and its bars keep rolling, slowly (glitch.ts caps their speed). */
+body.reduced-motion .dock-item.warn .mark,
+body.reduced-motion .window-title .grip .bar:nth-child(n),
+body.reduced-motion .seg.core .thread-dot.lit,
+body.reduced-motion .seg.corrupt,
+body.reduced-motion .seg.hl-preview,
+body.reduced-motion .fs-tool-chip .dot.bad,
+body.reduced-motion .footer .dot,
+body.reduced-motion .glitch-char,
+body.reduced-motion .glitch-block { animation: none; }
+/* The flicker's average, held: the Core's damage still shows, it just doesn't strobe. The bars stop where their
+   random start put them (WP12's audit: a slow roll is still motion across the whole screen). */
+body.reduced-motion .glitch-char,
+body.reduced-motion .glitch-block { opacity: 0.6; }
+body.reduced-motion .glitch-bar { animation-play-state: paused; }
+
+/* ══ WP3: the mind's ops ══════════════════════════════════════════════════════════════════════ */
+
+/* ── The strip's columns are blocks: equal widths that may shrink below a small file's padding
+ *    (its name clips), so the strip always fits beside INSPECT. With auto minimums the row of
+ *    small fs-tool files pushed the inspect panel 126 px off screen at 1280×720. ── */
+.desktop > .memory-view { grid-template-columns: minmax(0, 1fr) 320px; }
+.mem-strip { grid-template-columns: repeat(var(--mem-cols, 64), minmax(0, 1fr)); }
+/* The chip row has to fit the same honest width (WP4's licences keep it to five chips at most). */
+.fs-status-bar { min-width: 0; }
+
+/* ── Op bars (components/memory-view/OpBars): a fixed layer over the strip that hides with the
+ *    blue screen (.memory-view). The bars let clicks through to the files under them; only the
+ *    × takes the pointer. A move's ghost drains under its clone's bar. ── */
+.op-bars-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 450;
+  pointer-events: none;
+}
+.op-bars-layer .op-progress {
+  z-index: 2;
+  pointer-events: none;
+  transition:
+    left var(--op-dock-ms, 400ms) ease-out,
+    top var(--op-dock-ms, 400ms) ease-out,
+    width var(--op-dock-ms, 400ms) ease-out,
+    opacity 0.25s;
+}
+.op-bars-layer .op-cancel { pointer-events: auto; }
+/* Solid (the file name under a bar never shows through its label), at least wide enough for the
+   icon and the ×, which may overhang a 1–2-block file so its op can always be cancelled, and the ×
+   keeps its own solid chip so it reads on a full fill. */
+.op-bars-layer .op-progress { background: var(--op-bar-bg); }
+.op-bars-layer .op-progress:not(.op-continuation) { min-width: 52px; }
+.op-bars-layer .op-cancel { color: var(--text); background: var(--op-bar-bg); }
+.op-drain {
+  position: fixed;
+  z-index: 1;
+  pointer-events: none;
+  border: 1px dashed var(--accent);
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 22%, transparent) 0 4px,
+    transparent 4px 8px);
+  opacity: 0.75;
+  transition: clip-path 0.1s linear;
+}
+.split-overlay .overlay-op-bar { width: auto; height: auto; }
+
+/* Free blocks a running move/copy carved out around its clone: the op owns them. */
+.seg.free.reserved {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent) 7%, transparent) 0 3px,
+    transparent 3px 7px);
+}
+
+/* A file mid-op is not a target, but it is the thing to watch: it stays readable while a tool is
+   held (the other invalid targets dim to 40%). */
+body.tool-active .seg.invalid-target.repairing,
+body.tool-active .seg.invalid-target.transferring { opacity: 0.9; }
+
+/* The meta row stays one line: a small file's `↻ XFER` or `↻ 55%` used to wrap, growing its rack
+   row by 13 px (and every row below it hopped) while the op ran. The size label gives way first. */
+.seg-meta { white-space: nowrap; overflow: hidden; }
+.seg-meta > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.seg-meta .health { flex-shrink: 0; }
+
+/* A file being healed: the number climbs live (OpBars patches it). */
+.seg-meta .health.live,
+.detail-row .v.live { color: var(--accent-bright); text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 60%, transparent); }
+
+/* A Core thread lost while the Core is below 50 (§3.3 C5). */
+.seg.core .thread-dot.out {
+  opacity: 0.25;
+  background: transparent;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+/* ── The cursor follower: a refused click explains itself; "all threads busy" before the click ── */
+.cursor-follower.refusal {
+  border-color: var(--warn);
+  color: var(--warn);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--warn) 45%, transparent);
+}
+.cursor-follower.refusal .icon { color: var(--warn); }
+/* The thread cap is a rule the kid must learn: larger than the 8 px hint it replaces. */
+.cursor-follower .meta.warn { color: var(--warn); font-size: 10px; letter-spacing: 0.12em; }
+/* No ghost of the held tool behind the inline confirm. */
+body.inline-confirm-open .cursor-follower { visibility: hidden; }
+
+/* ── Detail panel notes and the delete button ── */
+.detail-note {
+  margin-top: 6px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.detail-note.warn { color: var(--warn); }
+
+/* ── Inline confirm pill (components/hud/InlineConfirm): next to the cursor, above the bars ── */
+.inline-confirm {
+  position: fixed;
+  z-index: 600;
+  max-width: 320px;
+  padding: 9px 12px 8px;
+  background: var(--window-solid);
+  border: 1px solid var(--warn);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--warn) 25%, transparent),
+    0 8px 28px color-mix(in srgb, var(--vignette-edge) 70%, transparent),
+    0 0 22px color-mix(in srgb, var(--warn) 30%, transparent);
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text);
+  animation: inline-confirm-in 0.12s ease-out;
+}
+.inline-confirm[hidden] { display: none; }
+@keyframes inline-confirm-in { from { opacity: 0; transform: translateY(-4px); } }
+.ic-question {
+  font-family: 'VT323', monospace;
+  font-size: 20px;
+  letter-spacing: 0.06em;
+  color: var(--warn);
+  line-height: 1.1;
+}
+.ic-detail {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.ic-buttons { display: flex; gap: 8px; margin-top: 8px; }
+.ic-btn {
+  flex: 1;
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid var(--edge-bright);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+}
+.ic-btn.ic-yes { border-color: var(--warn); color: var(--warn); }
+.ic-btn.ic-yes:hover { background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.ic-btn.ic-no:hover { background: var(--ambient-1); border-color: var(--accent); color: var(--accent-bright); }
+.ic-keys {
+  margin-top: 6px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+/* Reduced motion: the bar appears on its file without sliding in from the cursor, and a refused
+   thread no longer shakes the dots and the follower (they still turn red). */
+body.reduced-motion .inline-confirm { animation: none; }
+body.reduced-motion .op-bars-layer .op-progress { transition: opacity 0.25s; }
+body.reduced-motion.cap-full .cursor-follower,
+body.reduced-motion.cap-full .seg.core .thread-row { animation: none; }
+
+/* ── Mobile: the held-tool pill mirrors the question (no cursor to sit next to) ── */
+@media (max-width: 768px) {
+  body.tool-active .inline-confirm { display: none; }
+  .fs-tool-pill .label.warn { color: var(--warn); }
+  .fs-tool-pill .pill-answer {
+    padding: 6px 10px;
+    background: transparent;
+    border: 1px solid var(--edge-bright);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+  }
+  .fs-tool-pill .pill-answer.yes { border-color: var(--warn); color: var(--warn); }
+}
+
+/* ══ WP4: every capability is a file ══════════════════════════════════════════════════════════ */
+
+/* ── The filesystem chips (FsStatusBar): one per tool kind, only while its file is in memory, with
+ *    a health dot per copy. A licence slides its chip in from the right. ── */
+.fs-tool-chip[hidden] { display: none; }
+.fs-tool-chip .dots { display: inline-flex; gap: 3px; }
+.fs-tool-chip.arriving { animation: chip-arrive 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+@keyframes chip-arrive {
+  0% { opacity: 0; transform: translateX(40px); box-shadow: 0 0 0 0 transparent; }
+  60% { opacity: 1; transform: translateX(-3px); box-shadow: 0 0 18px var(--accent-bright); }
+  100% { transform: none; box-shadow: none; }
+}
+body.reduced-motion .fs-tool-chip.arriving { animation-name: chip-arrive-flat; }
+@keyframes chip-arrive-flat {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* A licence's files glow once as they transmit in, with the chip's slide-in (FsStatusBar). A
+   smooth fade, no flashing, so reduced motion keeps it. */
+.seg.transmit-in { animation: seg-transmit-in 1.4s ease-out; }
+@keyframes seg-transmit-in {
+  0% { filter: brightness(2.4); box-shadow: inset 0 0 0 2px var(--accent-bright), 0 0 14px var(--accent-bright); }
+  100% { filter: none; box-shadow: none; }
+}
+
+/* ══ WP4 part 2: the files on screen ══════════════════════════════════════════════════════════ */
+
+/* ── Window pips (WindowGrip): one per file behind a window, under its title, in the band colours.
+ *    ● a file (green ok, pale yellow degraded, red failing, blinking red dead), ? a ship file not
+ *    scanned yet, ↻ being repaired (the mind's colour: the fix is under way), ✕ missing. ── */
+.window-pips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, max-content));
+  gap: 2px 12px;
+  padding: 3px 10px 4px;
+  border-bottom: 1px solid var(--edge);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+.window-pips[hidden] { display: none; }
+.pip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pip[hidden] { display: none; }
+.pip:hover .pip-label { color: var(--accent-bright); text-decoration: underline; }
+.pip-glyph { font-size: 10px; }
+.pip-reading { font-weight: 700; }
+.pip-reading[hidden] { display: none; }
+.pip[data-look="ok"] .pip-glyph { color: var(--good); }
+.pip[data-look="degraded"] { color: var(--accent-bright); }
+.pip[data-look="failing"],
+.pip[data-look="dead"],
+.pip[data-look="missing"] { color: var(--warn); }
+.pip[data-look="dead"] .pip-glyph,
+.pip[data-look="missing"] .pip-glyph { animation: pip-blink 0.8s steps(2) infinite; }
+.pip[data-look="unknown"] .pip-glyph { color: var(--text-dim); font-weight: 700; }
+.pip[data-look="offline"] { color: var(--layer-mind); }
+.pip[data-look="offline"] .pip-glyph { display: inline-block; animation: pip-spin 1.2s linear infinite; }
+@keyframes pip-blink { 50% { opacity: 0.2; } }
+@keyframes pip-spin { to { transform: rotate(360deg); } }
+/* The fault's pip: a red flash the eye catches after the crunch. It blinks until WindowGrip takes
+   the class away (PIP_FLASH_MS), so the length lives in one place. step-end: a clean on/off blink (WP10 review:
+   steps(2) spent half of every beat on a half-blend, a dark red fill under dark text). */
+.pip.flash { animation: pip-flash 0.3s step-end infinite; border-radius: 2px; }
+@keyframes pip-flash {
+  50% { background: var(--warn); color: var(--bg); box-shadow: 0 0 10px var(--warn); }
+}
+.pip.flash .pip-glyph { color: inherit; }
+
+/* ── TASK 700 hybrid: a window whose own file is gone says so instead of vanishing ── */
+.window[data-veil-role] > .window-body { position: relative; }
+.window-veil {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  text-align: center;
+  font-family: 'VT323', monospace;
+  font-size: 22px;
+  letter-spacing: 0.1em;
+  color: var(--warn);
+  background:
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--warn) 8%, transparent) 0 2px, transparent 2px 4px),
+    var(--window-solid);
+  z-index: 2;
+}
+.window-veil[hidden] { display: none; }
+
+/* ── Engine: dead presets (a failing Autopilot file, C3) ── */
+.preset-btn:disabled,
+.preset-btn:disabled:hover {
+  cursor: not-allowed;
+  color: var(--text-dim);
+  border-color: var(--edge);
+  border-style: dashed;
+  background: transparent;
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.preset-hint.dead { color: var(--warn); }
+
+/* ── Engine: THRUST LIMIT hatched over FUEL from the right (C1, C4) ── */
+.fuel-limit {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--warn) 55%, transparent) 0 2px,
+    color-mix(in srgb, var(--bg) 70%, transparent) 2px 5px);
+  border-left: 1px solid var(--warn);
+  transition: width 0.15s linear;
+}
+.fuel-limit[hidden] { display: none; }
+/* A touch bigger than the scale's other labels: it is the one that explains a weak burn. */
+.fuel-scale .fuel-limit-label { color: var(--warn); font-size: 10px; }
+.fuel-scale .fuel-limit-label[hidden] { display: none; }
+
+/* ── Engine: the REACTOR row, its power in cells; a busy thread THINKs in the mind's colour ── */
+.reactor-block { margin-bottom: 14px; }
+.reactor-pip { margin-right: 6px; font-size: 9px; }
+.reactor-pip[data-look="ok"] { color: var(--good); }
+.reactor-pip[data-look="degraded"] { color: var(--accent-bright); }
+.reactor-pip[data-look="failing"],
+.reactor-pip[data-look="dead"],
+.reactor-pip[data-look="missing"] { color: var(--warn); }
+.reactor-pip[data-look="unknown"] { color: var(--text-dim); font-weight: 700; }
+.reactor-pip[data-look="offline"] { color: var(--layer-mind); }
+/* --cells is set by EngineWindow from the model (1 / REACTOR_THREAD_SHARE), so a retuned share
+   never leaves cells wrapping onto a second row. */
+.reactor-cells { display: grid; grid-template-columns: repeat(var(--cells), 1fr); gap: 3px; }
+.reactor-cell {
+  padding: 2px 0 1px;
+  text-align: center;
+  font-family: 'VT323', monospace;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  transition: background var(--t-med), color var(--t-med), border-color var(--t-med);
+}
+.reactor-cell.think {
+  color: var(--layer-mind);
+  border-color: var(--layer-mind);
+  background: color-mix(in srgb, var(--layer-mind) 16%, transparent);
+}
+
+/* ── Footer: THRUST LIMIT n% · its cause, while the files cap the engine ── */
+.footer .item.foot-limit { color: var(--warn); }
+.footer .item.foot-limit[hidden] { display: none; }
+/* WP8: the archive is not keeping this unit. Warning red when it failed (OFFLINE), dim when the kid chose to
+   play without it; a failure mid-run flashes it in. */
+.footer .item.foot-archive { color: var(--text-dim); }
+.footer .item.foot-archive.warn { color: var(--warn); }
+.footer .item.foot-archive[hidden] { display: none; }
+.footer .item.foot-archive.archive-lost { animation: foot-archive-lost 0.5s steps(2) 4; }
+@keyframes foot-archive-lost { 50% { background: var(--warn); color: var(--bg); } }
+body.reduced-motion .footer .item.foot-archive.archive-lost { animation: none; }
+
+/* ── Telemetry: a scrambled digit (▓) comes from a fallback font with a taller line box. A fixed
+ *    line-height (VT323's own 1.0, so nothing moves while the digits are clean) keeps the row, and
+ *    every window stacked under it, still while the holes re-roll at SCRAMBLE_HZ. ── */
+.readout .value { line-height: 1; }
+
+/* ── NAV PLOT: what the instruments can show (C3) ── */
+/* A ≈ sensor: a soft band along the line, ±fuzz wide (NavPlotWindow sets stroke-width). */
+.np-band {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke-opacity var(--t-slow);
+}
+.np-band.approx { stroke: var(--accent-bright); stroke-opacity: 0.16; }
+/* Blind (PATH UNCERTAIN): one grey band, no colours, no altitudes. */
+.np-band.uncertain { stroke: var(--text-dim); stroke-opacity: 0.42; }
+.np-chip.tone-unknown, .np-stat .v.tone-unknown { color: var(--text-dim); }
+.np-chip.tone-unknown { border-style: dashed; }
+/* NO SIGNAL: the Nav Plotter is dead or gone. Rolling static over the plot. */
+.np-veil {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  color: var(--warn);
+  background:
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--text-dim) 22%, transparent) 0 1px, transparent 1px 3px),
+    color-mix(in srgb, var(--bg) 82%, transparent);
+  background-size: 100% 6px, auto;
+  animation: np-static 0.35s steps(3) infinite;
+}
+.np-veil[hidden] { display: none; }
+@keyframes np-static { to { background-position: 0 6px, 0 0; } }
+.np-veil-title { font-family: 'VT323', monospace; font-size: 46px; letter-spacing: 0.16em; line-height: 1; }
+.np-veil-why { font-size: 11px; letter-spacing: 0.1em; color: var(--text); }
+
+/* ── Mode toggle: the other screen's top problem (ModeToggle), in that screen's colour ── */
+.mode-toggle-alert {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 0 0 6px;
+  padding: 3px 6px;
+  border: 1px solid var(--alert-colour, var(--layer-mind));
+  background: color-mix(in srgb, var(--alert-colour, var(--layer-mind)) 12%, transparent);
+  color: var(--alert-colour, var(--layer-mind));
+  font-family: 'VT323', monospace;
+  font-size: 13px;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+  animation: toggle-alert 1s ease-in-out infinite;
+}
+.mode-toggle-alert[hidden] { display: none; }
+.mode-toggle-alert[data-screen="memory"] { --alert-colour: var(--layer-mind); }
+.mode-toggle-alert[data-screen="tools"] { --alert-colour: var(--layer-ship); }
+.mode-toggle-alert[data-severity="alarm"] { --alert-colour: var(--warn); animation-duration: 0.5s; }
+/* HOLLOW's alerts are its pink on both screens (WP6): the thing in the memory, not a broken file. */
+.mode-toggle-alert[data-hollow="true"] { --alert-colour: var(--hollow); }
+.mta-head { font-size: 11px; opacity: 0.85; }
+@keyframes toggle-alert { 50% { box-shadow: 0 0 12px var(--alert-colour, var(--layer-mind)); } }
+.mode-toggle-opt[data-mode="tools"] { --alerting: var(--layer-ship); }
+.mode-toggle-opt[data-mode="memory"] { --alerting: var(--layer-mind); }
+.mode-toggle-opt.alerting:not(.unread) { animation: toggle-alerting 1s ease-in-out infinite; }
+@keyframes toggle-alerting {
+  50% { color: var(--bg); background: var(--alerting); box-shadow: 0 0 12px var(--alerting); }
+}
+
+/* ── The amber MIND chip above the toggle (MiniHud): threads and REPAIR CHARGE ── */
+.mind-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 5px 7px;
+  border: 1px solid color-mix(in srgb, var(--layer-mind) 45%, transparent);
+  background: color-mix(in srgb, var(--layer-mind) 6%, transparent);
+  color: var(--layer-mind);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+.mind-chip[hidden] { display: none; }
+body.mode-memory .mind-chip { display: none; }
+.mind-chip:hover { border-color: var(--layer-mind); }
+.mind-chip-head { font-family: 'VT323', monospace; font-size: 14px; letter-spacing: 0.1em; text-transform: lowercase; }
+.mind-chip-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; color: color-mix(in srgb, var(--layer-mind) 75%, var(--text)); }
+.mind-chip-threads { display: inline-flex; align-items: center; gap: 5px; }
+.mind-chip-dots { display: inline-flex; gap: 3px; }
+.mind-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--layer-mind);
+}
+.mind-chip-dot.lit { background: var(--layer-mind); box-shadow: 0 0 6px var(--layer-mind); }
+
+/* ── The mini-HUD card (MiniHud): bottom-right in blue, under INSPECT, beside the TERMINAL and the
+ *    chip row, so it never covers a rack and the TERMINAL keeps its full width. ── */
+.desktop > .memory-view {
+  grid-template-areas:
+    "stats  side"
+    "strip  side"
+    "term   hud"
+    "tools  hud";
+}
+.mini-hud {
+  grid-area: hud;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 6px 10px 8px;
+  background: color-mix(in srgb, var(--layer-ship) 4%, var(--window));
+  border: 1px solid color-mix(in srgb, var(--layer-ship) 45%, transparent);
+  color: var(--layer-ship);
+  cursor: pointer;
+  overflow: hidden;
+}
+.mini-hud[hidden] { display: none; }
+.mini-hud:hover { border-color: var(--layer-ship); }
+.mh-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.mh-title { font-family: 'VT323', monospace; font-size: 14px; letter-spacing: 0.12em; text-transform: lowercase; }
+.mh-pace { color: color-mix(in srgb, var(--layer-ship) 70%, var(--text)); letter-spacing: 0.12em; }
+.mh-body { display: flex; gap: 10px; align-items: center; min-height: 0; flex: 1; }
+.mh-plot { width: 96px; height: 96px; flex: none; }
+.mh-stats { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.mh-countdown { display: flex; gap: 6px; align-items: baseline; font-family: 'VT323', monospace; white-space: nowrap; }
+.mh-cd-label { font-size: 15px; letter-spacing: 0.06em; }
+.mh-cd-time { font-size: 24px; line-height: 1; color: var(--layer-ship-bright); }
+/* JetBrains Mono: VT323 draws ¼ about 4 px wide (the header's ×¼ has the same rule). */
+.mh-cd-badge { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0; }
+.mh-countdown.urgent { color: var(--warn); animation: aligning-blink 0.7s steps(2) infinite; }
+.mh-countdown.urgent .mh-cd-time { color: var(--warn); }
+.mh-state { font-family: 'VT323', monospace; font-size: 15px; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mh-state[data-tone="good"] { color: var(--good); }
+.mh-state[data-tone="danger"] { color: var(--warn); }
+.mh-state[data-tone="unknown"] { color: var(--text-dim); }
+.mh-fuel { display: flex; align-items: center; gap: 6px; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; }
+.mh-k { color: color-mix(in srgb, var(--layer-ship) 70%, var(--text)); }
+.mh-fuel-bar {
+  position: relative;
+  flex: 1;
+  height: 7px;
+  border: 1px solid color-mix(in srgb, var(--layer-ship) 50%, transparent);
+}
+.mh-fuel-fill { position: absolute; inset: 0 auto 0 0; background: var(--layer-ship); }
+.mh-fuel-fill.low { background: var(--warn); }
+.mh-fuel-limit {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  background: repeating-linear-gradient(135deg, var(--warn) 0 2px, transparent 2px 4px);
+  border-left: 1px solid var(--warn);
+}
+.mh-fuel-limit[hidden] { display: none; }
+.mh-fuel-val { font-family: 'VT323', monospace; font-size: 14px; letter-spacing: 0.04em; min-width: 32px; text-align: right; }
+.mh-limit { color: var(--warn); font-size: 8.5px; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mh-limit[hidden] { display: none; }
+/* The mini plot: the NAV PLOT's colours at a glance. Amber (the ship's), whichever screen shows it. */
+.mh-planet { fill: color-mix(in srgb, var(--layer-ship) 30%, transparent); stroke: var(--warn); stroke-opacity: 0.6; stroke-width: 0.6; }
+.mh-ring { fill: var(--good); fill-opacity: 0.16; fill-rule: evenodd; stroke: none; }
+.mh-ring.hot { fill-opacity: 0.32; }
+.mh-path { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.mh-path-flyby { stroke: var(--layer-ship-bright); stroke-width: 1.3; stroke-dasharray: 3 2.5; }
+.mh-path-green { stroke: var(--good); stroke-width: 2; }
+.mh-path-impact { stroke: var(--warn); stroke-width: 2; }
+.mh-band { fill: none; stroke: var(--text-dim); stroke-opacity: 0.5; stroke-linecap: round; stroke-linejoin: round; }
+.mh-ship { fill: var(--text); stroke: var(--bg); stroke-width: 0.6; }
+.mh-dark { fill: var(--warn); font-family: 'VT323', monospace; font-size: 13px; letter-spacing: 0.1em; dominant-baseline: middle; }
+
+/* ── A file a strip line points at pulses like any hinted control (SelectionHighlight) ── */
+.seg.hint-pulse { z-index: 1; }
+
+/* ── Short desktops: the mini plot shrinks with the TERMINAL's third line ── */
+@media (max-height: 800px) and (min-width: 769px) {
+  .mh-plot { width: 72px; height: 72px; }
+  .mh-cd-time { font-size: 21px; }
+}
+
+/* ── Mobile: the footer carries the threads and the charge, so no MIND chip in amber; the mini-HUD is a top bar in
+ *    blue and the window pips stay (WP12 part 2, at the end of this file). ── */
+@media (max-width: 768px) {
+  .mind-chip { display: none; }
+  /* A strip line lighting a chip inside the closed FILESYSTEM drawer (PICK UP REPAIR) lights the
+     drawer's header instead, so the way to the chip is visible: tap it open. */
+  .fs-status-bar.mobile-drawer[data-open='false']:has(.fs-tool-chip.hint-pulse) .fs-status-label {
+    animation: hint-pulse 1.1s ease-in-out infinite;
+  }
+  body.reduced-motion .fs-status-bar.mobile-drawer[data-open='false']:has(.fs-tool-chip.hint-pulse) .fs-status-label {
+    animation: none;
+    box-shadow: 0 0 0 1px var(--accent-bright);
+  }
+}
+
+/* ── Reduced motion: no blinking, spinning or flashing; the colours and glyphs stay ── */
+body.reduced-motion .pip[data-look="dead"] .pip-glyph,
+body.reduced-motion .pip[data-look="missing"] .pip-glyph,
+body.reduced-motion .pip[data-look="offline"] .pip-glyph,
+body.reduced-motion .np-veil,
+body.reduced-motion .mode-toggle-alert,
+body.reduced-motion .mode-toggle-opt.alerting,
+body.reduced-motion .mh-countdown.urgent { animation: none; }
+body.reduced-motion .pip.flash { animation: none; background: var(--warn); color: var(--bg); }
+body.reduced-motion .mode-toggle-opt.alerting:not(.unread) { color: var(--alerting); box-shadow: inset 0 0 0 1px var(--alerting); }
+
+/* ══ WP5: the Soul Archive ══════════════════════════════════════════════════════════════════════ */
+
+/* ── A soul cluster's chip, laid out like a file (name, bar, meta) with people in it: the family on
+ *    top, the heartbeat where a file has its bar, the code (C09) and the health underneath. Mint is
+ *    life; a hurt cluster (it would wake with gaps) turns the hurt yellow; a flat one goes dark. ── */
+.seg.soul {
+  background: linear-gradient(180deg, var(--soul-bg-top), var(--soul-bg-bot));
+  border-color: var(--soul-dim);
+  justify-content: flex-start;
+  gap: 2px;
+}
+.seg.soul:hover { border-color: var(--soul); }
+.seg.soul .soul-family {
+  font-size: 9px; letter-spacing: 0.06em; color: var(--text); min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.seg.soul .soul-code { font-family: 'VT323', monospace; font-size: 15px; line-height: 1; letter-spacing: 0.04em; color: var(--soul); white-space: nowrap; }
+.seg.soul .soul-count { font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.08em; color: var(--text-dim); margin-left: 5px; }
+.seg.soul .seg-meta { margin-top: auto; }
+.seg.soul .seg-meta .health { color: var(--soul); }
+.seg.soul .seg-meta .health.partial { color: var(--soul-hurt); }
+.seg.soul .seg-meta .health.warn { color: var(--warn); }
+/* The count is the bare number (`C01 200 100%`): with the word "souls" an 8-block chip overflowed
+   even at 1440 px. Below 1440 px it has room for the code and the health only: every cluster is
+   200 people, and INSPECT and the stats row say so. */
+@media (max-width: 1439px) {
+  .seg.soul .soul-count { display: none; }
+}
+.seg.soul.hb-weak { border-color: color-mix(in srgb, var(--soul-hurt) 70%, transparent); }
+.seg.soul.hb-weak .soul-code { color: var(--soul-hurt); }
+.seg.soul.hb-flat { border-color: var(--text-dim); filter: saturate(0.3); }
+.seg.soul.repairing,
+.seg.soul.transferring { opacity: 1; }
+
+/* ── The heartbeat: a dim trace, and a bright pulse running along it (steady: once a second;
+ *    hurt: faster and uneven; flat: none) ── */
+.heartbeat { display: block; width: 100%; height: 12px; overflow: visible; }
+.heartbeat path { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.heartbeat .hb-trace { stroke: var(--soul-dim); stroke-width: 1; }
+.heartbeat .hb-pulse { stroke: var(--soul); stroke-width: 1.6; stroke-dasharray: 16 84; stroke-dashoffset: 100; animation: hb-run 1.15s linear infinite; }
+.heartbeat.hb-weak .hb-trace { stroke: color-mix(in srgb, var(--soul-hurt) 45%, transparent); }
+.heartbeat.hb-weak .hb-pulse { stroke: var(--soul-hurt); animation: hb-run 0.72s cubic-bezier(0.6, 0, 0.3, 1) infinite; }
+.heartbeat.hb-flat .hb-trace { stroke: var(--text-dim); }
+.heartbeat.hb-flat .hb-pulse { display: none; }
+@keyframes hb-run { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+
+/* ── The sealed slab (§6.7): consecutive sealed clusters in a row draw as ONE grey slab with one
+ *    label, so racks B–C read as two shut things, not as twelve hidden files ── */
+.seg.soul.sealed {
+  background: repeating-linear-gradient(135deg, var(--sealed-a) 0 6px, var(--sealed-b) 6px 12px);
+  border-color: var(--sealed-edge);
+  cursor: default;
+}
+.seg.soul.sealed:hover { transform: none; border-color: var(--sealed-edge); box-shadow: none; }
+.seg.soul.sealed.slab-join { margin-left: -4px; border-left-color: transparent; }
+/* No seam where two parts meet, also when a held tool dims the slab (see-through parts would show
+   the overlapped edge). */
+.seg.soul.sealed:has(+ .seg.soul.sealed.slab-join) { border-right-color: transparent; }
+.seg.soul .slab-label { font-family: 'VT323', monospace; font-size: 17px; letter-spacing: 0.3em; color: var(--sealed-text); white-space: nowrap; }
+.seg.soul .slab-sub { font-size: 8px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--sealed-text); opacity: 0.7; white-space: nowrap; }
+
+/* ── The crack (the STASIS reveal): each chip, in order, breaks out of the grey with a flash of its
+ *    own colour. The state flipped at once; only the picture is staggered. Its delay and length
+ *    come from the reveal (SegmentBlock playCrack: REVEAL_CRACK_STAGGER_SEC, REVEAL_CRACK_ANIM_SEC);
+ *    a negative delay resumes a crack the strip rebuilt mid-way. ── */
+.seg.soul.cracking { animation: soul-crack var(--crack-dur) ease-out both; animation-delay: var(--crack-delay); }
+@keyframes soul-crack {
+  0% { background: repeating-linear-gradient(135deg, var(--sealed-a) 0 6px, var(--sealed-b) 6px 12px); border-color: var(--sealed-edge); color: transparent; filter: brightness(0.8); }
+  18% { border-color: var(--print-flash); box-shadow: 0 0 0 1px var(--print-flash), 0 0 22px var(--soul); filter: brightness(1.8); }
+  100% { box-shadow: none; filter: none; }
+}
+.seg.soul.cracking > * { animation: soul-crack-content var(--crack-dur) ease-out both; animation-delay: var(--crack-delay); }
+@keyframes soul-crack-content { 0%, 15% { opacity: 0; } 100% { opacity: 1; } }
+
+/* ── Printing (§6.7): the chip flashes white (solid at first, so the FREE label the strip draws under
+ *    it does not show through), and `+200 WOKE` floats up from where it was, on its own backing ── */
+.print-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; }
+.print-fx-layer .print-flash {
+  position: fixed; box-sizing: border-box; border: 1px solid var(--print-flash);
+  background: var(--print-flash);
+  animation: print-flash 1.2s ease-out both;
+}
+.print-fx-layer .print-flash.outcome-gaps { border-color: var(--soul-hurt); }
+@keyframes print-flash {
+  0% { opacity: 0; } 8% { opacity: 1; background: var(--print-flash); } 25% { background: var(--print-flash); }
+  50% { background: color-mix(in srgb, var(--soul) 25%, transparent); }
+  100% { opacity: 0; background: transparent; }
+}
+.print-fx-layer .print-woke {
+  position: fixed; transform: translate(-50%, -4px); padding: 0 5px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  font-family: 'VT323', monospace; font-size: 18px; letter-spacing: 0.08em; white-space: nowrap;
+  color: var(--soul); text-shadow: 0 0 8px var(--soul);
+  animation: print-woke 1.35s ease-out both;
+}
+.print-fx-layer .print-woke.outcome-gaps { color: var(--soul-hurt); text-shadow: 0 0 8px var(--soul-hurt); }
+@keyframes print-woke {
+  0% { opacity: 0; transform: translate(-50%, 6px); } 12% { opacity: 1; }
+  75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -30px); }
+}
+
+/* ── INSPECT: the reveal's lines (typed), a cluster's people, the PRINT buttons ── */
+.reveal-lines { margin: 6px 0 12px; padding: 8px 10px; border-left: 2px solid var(--soul-dim); background: var(--ambient-1); }
+.reveal-line { font-size: 11px; line-height: 1.55; letter-spacing: 0.04em; color: var(--text); min-height: 1.55em; }
+.reveal-line.truth { color: var(--soul); }
+.reveal-line.typing::after { content: '▌'; color: var(--accent-bright); animation: caret-blink 0.9s steps(1) infinite; }
+.soul-title { color: var(--soul); }
+.soul-heart { margin: 2px 0 10px; height: 22px; }
+.soul-heart .heartbeat { height: 22px; }
+.colonists { list-style: none; margin: 12px 0 4px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.colonists .colonist { font-size: 11px; line-height: 1.45; color: var(--text); padding-left: 10px; border-left: 2px solid var(--soul-dim); }
+.colonists .colonist-name { color: var(--soul); letter-spacing: 0.04em; }
+.colonists .colonist-age { color: var(--text-dim); }
+.action-btn.print { border-color: var(--soul-dim); color: var(--soul); }
+.action-btn.print:hover { background: color-mix(in srgb, var(--soul) 8%, transparent); }
+.action-btn.print.on { background: color-mix(in srgb, var(--soul) 14%, transparent); border-color: var(--soul); }
+
+/* ── The footer's colonists, once found ── */
+#footSouls.revealed { color: var(--soul); }
+
+/* ── The reveal's beat on the footer and the stats row: SOULS IN STASIS → SOULS IN MEMORY lights up
+ *    once as it flips (small text that only changed colour went unnoticed) ── */
+#footSouls.souls-flip,
+.mem-stat.souls-flip { animation: souls-flip 2.4s ease-out both; }
+@keyframes souls-flip {
+  0%, 25% { filter: brightness(2.2); text-shadow: 0 0 12px var(--soul); }
+  100% { filter: none; text-shadow: none; }
+}
+
+/* ── The LOST card's colonists line: on ship 1 before the reveal it is the reveal ── */
+.burn-result-souls { font-size: 14px; letter-spacing: 0.06em; color: var(--text); margin: -10px 0 var(--sp-8); min-height: 1.4em; }
+.burn-result-souls.reveal { color: var(--soul); font-family: 'VT323', monospace; font-size: 22px; letter-spacing: 0.1em; }
+.burn-result-souls[hidden] { display: none; }
+
+/* ── The mini-HUD while printing ── */
+.mh-print { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.mh-print[hidden] { display: none; }
+.mh-print-text { font-family: 'VT323', monospace; font-size: 15px; color: var(--soul); letter-spacing: 0.06em; white-space: nowrap; }
+.mh-print-text.halted { color: var(--warn); }
+.mh-print-fast {
+  font: inherit; font-size: 9px; letter-spacing: 0.08em; padding: 2px 6px; cursor: pointer;
+  background: transparent; color: var(--soul); border: 1px solid var(--soul-dim);
+}
+.mh-print-fast.on { background: color-mix(in srgb, var(--soul) 16%, transparent); border-color: var(--soul); }
+.mh-print-fast.blocked { opacity: 0.45; text-decoration: line-through; cursor: not-allowed; }
+
+.dock-item[hidden] { display: none; }
+
+/* ── Reduced motion: no running pulse (the trace still says steady / hurt / flat), the crack and
+ *    the print fade in place without flashing or moving ── */
+body.reduced-motion .heartbeat .hb-pulse { animation: none; display: none; }
+body.reduced-motion .seg.soul.cracking { animation-name: soul-crack-reduced; }
+@keyframes soul-crack-reduced {
+  0% { background: repeating-linear-gradient(135deg, var(--sealed-a) 0 6px, var(--sealed-b) 6px 12px); border-color: var(--sealed-edge); }
+}
+body.reduced-motion .print-fx-layer .print-flash { animation-name: print-fade; background: transparent; }
+body.reduced-motion .print-fx-layer .print-woke { animation-name: print-fade; transform: translate(-50%, -4px); }
+@keyframes print-fade { 0% { opacity: 0; } 15% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+body.reduced-motion .reveal-line.typing::after { animation: none; }
+body.reduced-motion #footSouls.souls-flip,
+body.reduced-motion .mem-stat.souls-flip { animation: souls-flip-fade 1.2s ease-out both; }
+@keyframes souls-flip-fade { from { opacity: 0.2; } to { opacity: 1; } }
+
+/* ══ WP5 part 2: racks on the strip, the computed stats, the WAKE REPORT ═════════════════════════ */
+
+/* ── The strip is six RACKS (§3.2): on desktop a row is a rack, and the six rows share the panel's
+ *    height, so every rack is in view at 1280×720 without a scroll and the chips grow with the room
+ *    (a taller heartbeat, two-line names). Rows never go below a readable height (the panel then
+ *    scrolls) nor stretch into slabs on a tall screen. ── */
+@media (min-width: 769px) {
+  .mem-strip-wrap { gap: 5px; padding-top: 10px; padding-bottom: 10px; }
+  .addr-row { flex: 1 1 0; min-height: 50px; max-height: 88px; }
+  .addr-row .seg { min-height: 0; }
+}
+.addr-row { gap: 8px; }
+.addr-label {
+  min-width: 48px; padding-top: 0;
+  display: flex; flex-direction: column; justify-content: center; gap: 3px;
+}
+.addr-label .rack-name { font-family: 'VT323', monospace; font-size: 17px; line-height: 1; letter-spacing: 0.06em; color: var(--accent); white-space: nowrap; }
+/* The label is `RACK C · 0x080`; stacked, the dot between the two lines is not needed. */
+.addr-label .rack-sep { display: none; }
+.addr-label .rack-addr { font-size: 8px; letter-spacing: 0.12em; color: var(--text-dim); }
+
+/* ── A file's name may take two lines (THRUST / CONTROLLER at 1280 px); it breaks at spaces and at
+ *    the soft hyphens data/type-labels.ts puts into words too long for a small chip (AUTO- / PILOT),
+ *    and only as a last resort inside a word, so nothing is cut off unseen. ── */
+.seg .seg-name {
+  white-space: normal; overflow-wrap: anywhere; hyphens: manual; line-height: 1.15; margin-bottom: 3px;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.seg.tier-wide { padding: 6px 7px; }
+.seg.tier-narrow { padding: 5px 5px; }
+.seg.tier-narrow .seg-name { letter-spacing: 0.04em; }
+/* Tiny chips (3–4 blocks: STASIS, AUTOPILOT, AI COMMS, SCAN, REPAIR): a smaller name and the
+   health; the size and badges are in INSPECT. */
+.seg.tier-tiny { padding: 5px 3px; }
+.seg.tier-tiny .seg-name { font-size: 8px; letter-spacing: 0.02em; }
+.seg.tier-tiny .seg-meta { justify-content: flex-end; }
+.seg.tier-tiny .seg-meta .health { font-size: 12px; }
+/* A 1-block chip is a glyph over its health bar. */
+.seg.tier-micro { padding: 5px 0; align-items: stretch; }
+.seg.tier-micro .seg-name { font-size: 10px; letter-spacing: 0; text-align: center; overflow: visible; margin-bottom: 0; }
+.seg.tier-micro .seg-bar { margin: 3px 1px 0; }
+/* The backup badges ride in the meta row now (a corner badge covered the name). */
+.seg-meta .seg-badge { position: static; font-size: 7px; padding: 0 3px; letter-spacing: 0.08em; line-height: 1.5; }
+@media (max-width: 1439px) and (min-width: 769px) {
+  .seg.tier-wide { padding: 5px 6px; }
+  .seg.tier-wide .seg-name { letter-spacing: 0.05em; }
+}
+
+/* Short desktops (1280×720): a rack row is about 52 px, so a chip with a two-line name packs its
+   name, bar and health tighter to keep all of it inside the chip. */
+@media (max-height: 800px) and (min-width: 769px) {
+  .addr-row .seg { padding-top: 3px; padding-bottom: 3px; }
+  .seg .seg-name { line-height: 1.05; margin-bottom: 1px; }
+  .seg .seg-bar { margin: 2px 0; }
+  .seg .seg-meta .health { font-size: 12px; line-height: 1.1; }
+  .seg.core .thread-row { margin-top: 1px; }
+}
+
+/* ── Free space reads FREE and its blocks, piece by piece, in its rack ── */
+.seg.free .seg-meta { justify-content: flex-start; }
+
+/* ── A cluster's heartbeat takes the room a taller rack gives it ── */
+.seg.soul .heartbeat { flex: 1 1 auto; height: auto; min-height: 8px; max-height: 20px; }
+
+/* ── Phones: a rack is two rows of 32, the first labelled; a little air between racks. Chips are
+ *    about 7 px a block, so they pack as tight as a short desktop's; the always-384 MEMORY stat
+ *    gives its line back to the strip. ── */
+@media (max-width: 768px) {
+  .addr-row.rack-start:not(:first-child) { margin-top: 6px; }
+  .addr-label .rack-name { font-size: 14px; }
+  .addr-label .rack-addr { font-size: 7px; }
+  .addr-row .seg.tier-wide, .addr-row .seg.tier-narrow { padding-left: 4px; padding-right: 4px; }
+  /* A name breaks only at its spaces and at type-labels' soft hyphens here, never inside a word (WP12 review: STASIS, the
+     file run 1 asks the kid to SCAN, read STASI / S, and SCAN read SCA / N); a tiny chip's name packs tight enough for a
+     six-letter word in its 4 blocks. (.tmp/wp12/fix1/phone.mjs checks every one-word name renders on one line, whole.) */
+  .seg .seg-name { letter-spacing: 0.03em; overflow-wrap: normal; }
+  /* The face shrinks with the chip (27cqi: six letters of 0.6 em in its width) on a phone narrower than 390 px. */
+  .seg.tier-tiny { container-type: inline-size; }
+  .seg.tier-tiny .seg-name { font-size: min(7.5px, 27cqi); letter-spacing: 0; }
+  .mem-stat:has(#statTotal) { display: none; }
+}
+
+/* ── The stats row (MemoryStats): computed from memory ── */
+.mem-stat .v.soul { color: var(--soul); }
+.mem-stat .v.unknown { color: var(--text-dim); }
+.mem-stat .v.good { color: var(--good); }
+
+/* ── The WAKE REPORT (components/run/WakeReport): a night screen over everything, the colonists'
+ *    mint, gold stars. The credits roll in a masked window; --wr-line-h is one credit line (the
+ *    roll's speed is in lines per second, so the component reads it). ── */
+.wake-report {
+  --wr-line-h: 22px;
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  display: flex;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 38%, var(--report-glow) 0%, transparent 62%), var(--report-bg);
+  color: var(--report-text);
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  animation: wr-in 0.9s ease-out both;
+}
+.wake-report[hidden] { display: none; }
+.wake-report::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, var(--scan) 0 1px, transparent 1px 3px);
+  pointer-events: none;
+}
+@keyframes wr-in { from { opacity: 0; } to { opacity: 1; } }
+.wr-inner {
+  position: relative;
+  width: min(780px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 34px 0 26px;
+  min-height: 0;
+}
+.wr-head { text-align: center; flex: 0 0 auto; }
+.wr-title {
+  font-family: 'VT323', monospace; font-size: 40px; line-height: 1; letter-spacing: 0.35em; padding-left: 0.35em;
+  color: var(--soul); text-shadow: 0 0 18px var(--soul-dim);
+}
+.wr-route { margin-top: 6px; font-size: 11px; letter-spacing: 0.3em; color: var(--report-dim); text-transform: uppercase; }
+
+/* The credits window: the roll moves inside it, fading in at the bottom and out at the top. */
+.wr-credits {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, var(--vignette-edge) 16%, var(--vignette-edge) 84%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, var(--vignette-edge) 16%, var(--vignette-edge) 84%, transparent 100%);
+}
+.wr-credits[hidden] { display: none; }
+.wr-roll { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
+/* Reduced motion: the list stands still and scrolls by hand. */
+.wr-credits.still { overflow-y: auto; -webkit-mask-image: none; mask-image: none; }
+.wr-credits.still .wr-roll { position: static; }
+
+/* One colonist, film-credit style: the cluster and how they woke on the left, the person and their
+   first words on the right. */
+.wr-credit {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 22px;
+  line-height: var(--wr-line-h);
+  margin-bottom: calc(var(--wr-line-h) * 0.3);
+}
+.wr-c-code, .wr-c-status { text-align: right; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; white-space: nowrap; }
+.wr-c-code { color: var(--report-dim); }
+.wr-c-status { color: var(--soul); }
+.wr-c-who { font-size: 14px; letter-spacing: 0.03em; color: var(--report-text); white-space: nowrap; }
+.wr-c-age { color: var(--report-dim); }
+.wr-c-words { font-size: 13px; color: var(--soul); }
+.wr-credit.outcome-gaps .wr-c-status,
+.wr-credit.outcome-gaps .wr-c-words { color: var(--soul-hurt); }
+.wr-credit.outcome-lost .wr-c-status,
+.wr-credit.outcome-lost .wr-c-who,
+.wr-credit.outcome-lost .wr-c-words { color: var(--report-dim); }
+
+/* The lead: her own moment in the middle of the screen. */
+.wr-credit.wr-lead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: calc(var(--wr-line-h) * 1.1);
+}
+.wr-l-name { font-family: 'VT323', monospace; font-size: 36px; line-height: calc(var(--wr-line-h) * 2); letter-spacing: 0.06em; color: var(--report-text); }
+.wr-l-age { color: var(--report-dim); }
+.wr-l-about { font-size: 12px; letter-spacing: 0.04em; color: var(--report-dim); }
+.wr-l-words {
+  font-family: 'VT323', monospace; font-size: 30px; line-height: calc(var(--wr-line-h) * 1.8);
+  color: var(--soul); text-shadow: 0 0 14px var(--soul-dim);
+}
+.wr-l-tag { font-size: 10px; letter-spacing: 0.22em; color: var(--report-dim); text-transform: uppercase; }
+.wr-lead.outcome-gaps .wr-l-words { color: var(--soul-hurt); text-shadow: none; }
+.wr-lead.outcome-lost .wr-l-words { color: var(--report-dim); text-shadow: none; }
+
+/* The count rolls up under the credits, a bump per family. */
+.wr-total {
+  flex: 0 0 auto;
+  font-family: 'VT323', monospace; font-size: 46px; line-height: 1; letter-spacing: 0.08em;
+  color: var(--soul); text-shadow: 0 0 16px var(--soul-dim);
+}
+.wr-total.bump { animation: wr-bump 0.35s ease-out; }
+/* WOKE counts heads (WP7): the cost of a bad print is its own line right under the count, in the hurt
+   yellow of the credits that cost it, big enough for a kid to read at a glance. */
+.wr-missing {
+  flex: 0 0 auto;
+  font-family: 'VT323', monospace; font-size: 26px; line-height: 1; letter-spacing: 0.08em;
+  color: var(--soul-hurt); text-shadow: 0 0 12px color-mix(in srgb, var(--soul-hurt) 40%, transparent);
+}
+.wr-missing[hidden] { display: none; }
+@keyframes wr-bump { 30% { transform: scale(1.06); filter: brightness(1.4); } }
+.wr-breakdown { font-size: 11px; letter-spacing: 0.12em; color: var(--report-dim); text-transform: uppercase; text-align: center; animation: wr-in 0.5s ease-out both; }
+.wr-breakdown[hidden] { display: none; }
+
+/* The lead's words stay on the final card. */
+.wr-epigraph { text-align: center; animation: wr-in 0.7s ease-out both; margin-bottom: 6px; }
+.wr-epigraph[hidden] { display: none; }
+.wr-e-words { font-family: 'VT323', monospace; font-size: 34px; line-height: 1.1; color: var(--soul); }
+.wr-epigraph.outcome-gaps .wr-e-words { color: var(--soul-hurt); }
+.wr-epigraph.outcome-lost .wr-e-words { color: var(--report-dim); }
+.wr-e-who { margin-top: 4px; font-size: 12px; letter-spacing: 0.1em; color: var(--report-dim); }
+
+/* The stars land one at a time: gold when earned, a cold outline with its reason when missed. */
+.wr-stars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; width: min(100%, 600px); margin: 12px 0 8px; }
+.wr-stars[hidden] { display: none; }
+.wr-star { text-align: center; opacity: 0; }
+.wr-star.landed { opacity: 1; animation: wr-star-land 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+@keyframes wr-star-land { from { transform: scale(2.4); opacity: 0; } to { transform: none; opacity: 1; } }
+.wr-s-glyph { font-size: 54px; line-height: 1; }
+.wr-star.earned .wr-s-glyph { color: var(--star); text-shadow: 0 0 18px var(--star-glow); }
+.wr-star.missed .wr-s-glyph { color: var(--star-missed); }
+.wr-s-label { margin-top: 6px; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--report-text); }
+.wr-star.missed .wr-s-label { color: var(--report-dim); }
+.wr-s-reason { margin-top: 5px; font-size: 10px; line-height: 1.45; letter-spacing: 0.02em; color: var(--soul-hurt); }
+.wr-charge { font-family: 'VT323', monospace; font-size: 26px; letter-spacing: 0.12em; color: var(--star); text-align: center; animation: wr-in 0.5s ease-out both; }
+.wr-charge.none { color: var(--report-dim); }
+.wr-charge[hidden] { display: none; }
+
+.wr-foot { flex: 0 0 auto; display: flex; gap: 12px; justify-content: center; min-height: 34px; margin-top: 6px; }
+.wr-skip, .wr-continue {
+  font: inherit; font-size: 11px; letter-spacing: 0.2em; padding: 6px 16px; cursor: pointer;
+  background: transparent; border: 1px solid var(--soul-dim); color: var(--soul);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.wr-skip { color: var(--report-dim); border-color: var(--star-missed); }
+.wr-continue { animation: wr-glow 1.6s ease-in-out infinite; }
+/* Not armed yet (REPORT_CONTINUE_ARM_SEC): dim and still, so a mashed SPACE is seen to do nothing. */
+.wr-continue.arming { opacity: 0.4; animation: none; }
+@keyframes wr-glow { 50% { box-shadow: 0 0 18px var(--soul-dim); } }
+.wr-skip[hidden], .wr-continue[hidden] { display: none; }
+
+/* Short desktops: the card tightens so the stars and CONTINUE fit at 1280×720. */
+@media (max-height: 800px) {
+  .wr-inner { padding: 22px 0 18px; gap: 9px; }
+  .wr-title { font-size: 34px; }
+  .wr-total { font-size: 40px; }
+  .wr-missing { font-size: 22px; }
+  .wr-e-words { font-size: 30px; }
+}
+/* Phones: one column per credit (cluster, person, status, words), smaller type. */
+@media (max-width: 768px) {
+  .wake-report { --wr-line-h: 19px; }
+  .wr-title { font-size: 28px; letter-spacing: 0.25em; }
+  .wr-credit { grid-template-columns: 1fr; text-align: center; }
+  .wr-c-code, .wr-c-status { text-align: center; }
+  .wr-l-name { font-size: 28px; }
+  .wr-l-words, .wr-e-words { font-size: 24px; }
+  .wr-total { font-size: 34px; }
+  .wr-missing { font-size: 20px; }
+  .wr-stars { gap: 8px; }
+  .wr-s-glyph { font-size: 34px; }
+  .wr-charge { font-size: 20px; }
+}
+/* Reduced motion: everything fades in place; nothing scales, bumps or glows. */
+body.reduced-motion .wr-star.landed { animation: wr-in 0.3s ease-out both; }
+body.reduced-motion .wr-total.bump,
+body.reduced-motion .wr-continue { animation: none; }
+
+/* ── The mini-HUD's INTACT star while printing: gold on track; the hurt yellow, breathing and naming
+ *    the cluster (`· REPAIR C09`) while a repair could still save it (the two colours alone are
+ *    too close to tell apart); a dim hollow ☆ once it is gone ── */
+.mh-intact { font-family: 'VT323', monospace; font-size: 15px; letter-spacing: 0.06em; white-space: nowrap; color: var(--star); }
+.mh-intact[data-tone="risk"] { color: var(--soul-hurt); animation: mh-intact-risk 1.2s ease-in-out infinite; }
+@keyframes mh-intact-risk { 50% { opacity: 0.55; } }
+body.reduced-motion .mh-intact[data-tone="risk"] { animation: none; }
+.mh-intact[data-tone="lost"] { color: var(--star-missed); }
+.mh-intact[hidden] { display: none; }
+.mh-countdown[hidden] { display: none; }
+
+/* ── HOLLOW (WP6, §7.1): a block it owns is black with crawling red ▚▞ static, the root LOCKED; an
+ *    infected file is eaten from the side that faces it (--eaten, patched live by HollowPainter).
+ *    The static is a checker of red quarter-squares stepping sideways: it reads as "noise that
+ *    moves" at 7 px per block. An unscanned ship file shows only a fixed hatch: the infection is
+ *    always visible, its health is not (§3.2). ── */
+.seg.hollow {
+  background: var(--hollow-bg);
+  border-color: var(--hollow-edge);
+}
+.seg.hollow:hover { border-color: var(--hollow-red); box-shadow: 0 0 12px var(--hollow-static); }
+.seg.hollow .seg-name { position: relative; z-index: 1; color: var(--hollow-text); text-shadow: 0 0 6px var(--hollow-bg); }
+.hollow-static,
+.seg.infected::after {
+  background-image: conic-gradient(var(--hollow-static) 25%, transparent 0 50%, var(--hollow-static) 0 75%, transparent 0);
+  background-size: 6px 6px;
+  animation: hollow-crawl 0.9s steps(3) infinite;
+}
+.hollow-static { position: absolute; inset: 0; pointer-events: none; opacity: 0.55; }
+.seg.hollow-root { box-shadow: inset 0 0 14px var(--hollow-static); }
+@keyframes hollow-crawl {
+  from { background-position: 0 0; }
+  to { background-position: 6px 3px; }
+}
+/* A file being eaten throbs red from the inside, so even a fresh bite (a sliver of red) reads as
+   "something is wrong here" across the strip (WP6 part 2). */
+.seg.infected,
+.seg.soul.infected { border-color: var(--hollow-red); animation: infected-throb 1.1s ease-in-out infinite; }
+@keyframes infected-throb { 50% { box-shadow: inset 0 0 16px var(--hollow-static), 0 0 10px var(--hollow-static); } }
+.seg.infected::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--eaten, 0%);
+  pointer-events: none;
+  background-color: color-mix(in srgb, var(--hollow-red) 28%, transparent);
+  box-shadow: 0 0 8px var(--hollow-static);
+  transition: width 0.12s linear;
+}
+.seg.infected.from-left::after { left: 0; }
+.seg.infected.from-right::after { right: 0; }
+.seg.infected.infected-unknown::after {
+  width: 30%;
+  background-image: repeating-linear-gradient(45deg, var(--hollow-hatch) 0 3px, transparent 3px 6px);
+  background-color: transparent;
+  animation: none;
+}
+.detail-title.hollow-title { color: var(--hollow-text); }
+body.reduced-motion .hollow-static,
+body.reduced-motion .seg.infected,
+body.reduced-motion .seg.soul.infected,
+body.reduced-motion .seg.infected::after { animation: none; }
+body.reduced-motion .seg.infected { box-shadow: inset 0 0 12px var(--hollow-static); }
+
+/* ══ WP6 part 2: HOLLOW's reach, the tug-of-war, its moments, the amber mini-strip ════════════════ */
+
+/* ── NEXT BITE on every hollow block (HollowPainter ticks it): the time big, in HOLLOW's red on a
+ *    black plate (red digits on the red static were lost), flashing white in its last seconds. Done
+ *    for the ship, the static calms and the slot goes. ── */
+/* The owner's name and the tag share a row (LEAD-1): the name on one line, cut with an ellipsis, while
+   the tag stays whole. A file name may wrap (above), but `???` broke as `??` / `?` under the tag at
+   1280×720. The tag's tighter spacing (0.04em, was 0.08em) keeps `??? ATE C12` on one row on an 8-block
+   chip at 1280 px. Once HOLLOW is done for the ship (hollow-quiet: the NEXT BITE slot is gone) a name
+   that does not fit beside the tag takes the row alone and the tag drops under it (`UNIT-046` /
+   `ATE C12`): the ellipsis left `UN… ATE C12` at 1280 px (review round 1). While the slot shows, the
+   one row keeps the countdown's big digits inside a 52 px rack row; the name's title says it whole. */
+.seg.hollow .hollow-head {
+  position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: baseline;
+  column-gap: 4px; min-width: 0;
+}
+.seg.hollow.hollow-quiet .hollow-head { flex-wrap: wrap; }
+.seg.hollow .hollow-head .seg-name {
+  display: block; flex: 1 1 auto; min-width: 0; margin-bottom: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: none;
+}
+.seg.hollow .hollow-tag { flex-shrink: 0; font-size: 10px; letter-spacing: 0.04em; color: var(--hollow-text); white-space: nowrap; }
+.seg.hollow .hollow-tag.locked,
+.seg.hollow .hollow-tag.ate { color: var(--hollow-red); }
+.seg.hollow.tier-tiny .hollow-tag { display: none; }
+.seg.hollow .hollow-bite {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0;
+  color: var(--hollow-red); line-height: 1; white-space: nowrap; overflow: hidden;
+}
+.seg.hollow .hollow-bite .bite-k { font-size: 10px; letter-spacing: 0.08em; color: var(--hollow-text); }
+.seg.hollow .hollow-bite .bite-k:empty { display: none; }
+.seg.hollow .hollow-bite .bite-t {
+  font-family: 'VT323', monospace; font-size: 19px; letter-spacing: 0.04em; text-shadow: 0 0 8px var(--hollow-static);
+  padding: 0 3px; background: var(--hollow-bg);
+}
+.seg.hollow.bite-urgent .hollow-bite .bite-t { animation: bite-urgent 0.5s ease-in-out infinite; }
+@keyframes bite-urgent { 50% { color: var(--print-flash); text-shadow: 0 0 12px var(--hollow-red); } }
+.seg.hollow.hollow-quiet .hollow-static { opacity: 0.2; animation-duration: 3.2s; }
+.seg.hollow.hollow-quiet .hollow-bite { visibility: hidden; }
+@media (max-height: 800px) and (min-width: 769px) {
+  .seg.hollow .hollow-bite .bite-t { font-size: 16px; }
+}
+
+/* ── Its reach. The mark layers ride inside the chips (they move with every rebuild and scroll), never
+ *    take the pointer, and sit over the chip's own text like the infection's crawl. ── */
+.hollow-mark { position: absolute; pointer-events: none; z-index: 2; }
+/* The mouth: the hollow block's edge that faces the file it bites next glows red. */
+.mouth-mark { top: 0; bottom: 0; width: 3px; font-size: 0; background: var(--hollow-red); box-shadow: 0 0 9px var(--hollow-red); animation: reach-pulse 1.2s ease-in-out infinite; }
+.mouth-mark.at-left { left: 0; }
+.mouth-mark.at-right { right: 0; }
+/* The target: a red dashed edge where the red will come in, an arrow pointing inward. */
+.bite-mark {
+  top: 0; bottom: 0; width: 15px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: var(--hollow-red); text-shadow: 0 0 6px var(--hollow-red);
+  animation: reach-pulse 1.2s ease-in-out infinite;
+}
+.bite-mark.at-right { right: 0; border-right: 2px dashed var(--hollow-red); background: linear-gradient(to left, color-mix(in srgb, var(--hollow-red) 30%, transparent), transparent); }
+.bite-mark.at-left { left: 0; border-left: 2px dashed var(--hollow-red); background: linear-gradient(to right, color-mix(in srgb, var(--hollow-red) 30%, transparent), transparent); }
+.seg.bite-urgent .bite-mark,
+.seg.hollow.bite-urgent .mouth-mark { animation-duration: 0.45s; }
+@keyframes reach-pulse { 50% { opacity: 0.35; } }
+/* A GAP: red dashed all the way across, the dashed arrow's shaft through the middle, `GAP` over
+   `◀ 2` pointing the way the bite goes. The free space's own FREE / 2B gives way to it. */
+.seg.free.hollow-gap {
+  border-color: var(--hollow-red); border-style: dashed;
+  background: color-mix(in srgb, var(--hollow-red) 9%, transparent);
+}
+.seg.free.hollow-gap::before {
+  content: ''; position: absolute; left: 2px; right: 2px; top: 50%;
+  border-top: 2px dashed var(--hollow-red); opacity: 0.7; pointer-events: none;
+}
+.seg.free.hollow-gap > .seg-name,
+.seg.free.hollow-gap > .seg-meta,
+.seg.free.hollow-wall > .seg-name,
+.seg.free.hollow-wall > .seg-meta { visibility: hidden; }
+.gap-mark,
+.wall-mark {
+  inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  font-family: 'VT323', monospace; line-height: 1; white-space: nowrap;
+}
+.gap-mark { color: var(--hollow-red); animation: gap-pulse 1.2s ease-in-out infinite; }
+@keyframes gap-pulse { 50% { opacity: 0.6; } }
+.mark-word { font-size: 10px; letter-spacing: 0.06em; padding: 0 1px; background: var(--bg); }
+.mark-count { font-size: 15px; letter-spacing: 0.02em; padding: 0 2px; background: var(--bg); }
+/* A 1-block gap: one glyph a line, the arrow over the count. */
+.gap-mark.micro .mark-word { font-size: 13px; letter-spacing: 0; padding: 0; }
+.gap-mark.micro .mark-count { padding: 0 1px; }
+/* A WALL: a green bracket on the edge that faces HOLLOW, `WALL` over `8 ✓`. It holds. */
+.seg.free.hollow-wall {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--hollow-wall) 35%, transparent);
+  background: color-mix(in srgb, var(--hollow-wall) 6%, transparent);
+}
+.seg.free.hollow-wall.reach-at-left { border-left: 3px solid var(--hollow-wall); box-shadow: inset 10px 0 12px -10px var(--hollow-wall-glow); }
+.seg.free.hollow-wall.reach-at-right { border-right: 3px solid var(--hollow-wall); box-shadow: inset -10px 0 12px -10px var(--hollow-wall-glow); }
+.wall-mark { color: var(--hollow-wall); }
+/* WP8: a FIREWALL holding a side gets the WALL's green bracket on the edge that faces HOLLOW. */
+.seg.firewall.firewall-holding.reach-at-left { border-left: 3px solid var(--hollow-wall); box-shadow: inset 10px 0 12px -10px var(--hollow-wall-glow), 0 0 10px var(--firewall-glow); }
+.seg.firewall.firewall-holding.reach-at-right { border-right: 3px solid var(--hollow-wall); box-shadow: inset -10px 0 12px -10px var(--hollow-wall-glow), 0 0 10px var(--firewall-glow); }
+.wall-mark .mark-word,
+.wall-mark .mark-count { background: transparent; }
+
+/* ── The tug-of-war (§6.6): the healthy share turns green with stripes marching toward the red, and
+ *    one bright green boundary that moves as the repair wins (--eaten, patched live). ── */
+.seg.infected.tug { border-color: var(--tug-heal); box-shadow: 0 0 12px var(--hollow-wall-glow); animation: none; }
+.tug-front {
+  top: 0; bottom: 0; z-index: 1;
+  background-color: var(--tug-heal-fill);
+  background-image: linear-gradient(110deg, transparent 0 38%, var(--tug-heal-stripe) 38% 56%, transparent 56%);
+  background-size: 14px 100%;
+  transition: left 0.12s linear, right 0.12s linear;
+}
+.tug-front.from-right { left: 0; right: var(--eaten, 0%); border-right: 2px solid var(--tug-heal); box-shadow: 5px 0 12px -3px var(--tug-heal); animation: tug-push-right 0.5s linear infinite; }
+.tug-front.from-left { right: 0; left: var(--eaten, 0%); border-left: 2px solid var(--tug-heal); box-shadow: -5px 0 12px -3px var(--tug-heal); animation: tug-push-left 0.5s linear infinite; }
+@keyframes tug-push-right { from { background-position: 0 0; } to { background-position: 14px 0; } }
+@keyframes tug-push-left { from { background-position: 0 0; } to { background-position: -14px 0; } }
+.seg.tug .seg-meta .health.live { color: var(--tug-heal); text-shadow: 0 0 6px var(--hollow-wall-glow); }
+/* An infected file's own number sits on a black plate: red (or green) digits on the red crawl were lost
+   at the very moment they matter. */
+.seg.infected .seg-meta .health.live { position: relative; z-index: 3; padding: 0 3px; background: var(--hollow-bg); }
+/* A REPAIR's bar over a tug (OpBars over-tug): a thin strip with its × only, so the fight fills the chip. */
+.op-progress.over-tug { height: 12px; justify-content: flex-end; padding: 0 3px; }
+.op-progress.over-tug .op-icon,
+.op-progress.over-tug .op-label { display: none; }
+.op-progress.over-tug .op-cancel { font-size: 13px; line-height: 1; padding: 0 4px; margin-left: 0; }
+/* INSPECT: a key never runs into its value. */
+.detail-row { gap: 10px; }
+.detail-row .k { flex-shrink: 0; }
+
+/* ── HOLLOW's moments (HollowPainter, a fixed layer that hides with the blue screen): the bite snaps
+ *    red onto its target's edge; a WALL flashes green as it holds; the cure flashes and the red
+ *    shatters into blue sparkles with `SAVED`; an eaten block flashes red and flatlines with
+ *    `DID NOT WAKE`. ── */
+.hollow-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; }
+.hollow-fx { position: fixed; box-sizing: border-box; pointer-events: none; }
+.hollow-fx.bite-flash { animation: fx-flash 0.7s ease-out both; }
+.hollow-fx.bite-flash.at-right { background: linear-gradient(to left, var(--hollow-red), transparent 65%); }
+.hollow-fx.bite-flash.at-left { background: linear-gradient(to right, var(--hollow-red), transparent 65%); }
+.hollow-fx.wall-flash { border: 2px solid var(--hollow-wall); box-shadow: 0 0 18px var(--hollow-wall-glow), inset 0 0 14px var(--hollow-wall-glow); animation: fx-flash 0.8s ease-out both; }
+.hollow-fx.cure-flash { background: color-mix(in srgb, var(--cure-spark) 55%, transparent); border: 1px solid var(--cure-spark); animation: fx-flash 0.6s ease-out both; }
+.hollow-fx.eaten-flash { background: color-mix(in srgb, var(--hollow-red) 60%, transparent); animation: fx-flash 1.2s ease-out both; }
+/* The flatline across an eaten block. */
+.hollow-fx.eaten-flash::after { content: ''; position: absolute; left: 6%; right: 6%; top: 50%; border-top: 2px solid var(--print-flash); }
+@keyframes fx-flash { 0% { opacity: 0; } 10% { opacity: 1; } 100% { opacity: 0; } }
+.cure-spark {
+  position: fixed; width: 4px; height: 4px; margin: -2px 0 0 -2px;
+  background: var(--cure-spark); box-shadow: 0 0 6px var(--cure-spark), 0 0 12px var(--layer-mind);
+  animation: cure-spark 0.95s ease-out both;
+}
+@keyframes cure-spark {
+  0% { opacity: 0; transform: translate(0, 0) rotate(45deg) scale(1.5); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(45deg) scale(0.3); }
+}
+.hollow-fx-label {
+  position: fixed; transform: translate(-50%, 0); padding: 0 6px;
+  font-family: 'VT323', monospace; font-size: 19px; letter-spacing: 0.08em; white-space: nowrap;
+  background: var(--window-solid); animation: fx-rise 1.3s ease-out both;
+}
+.hollow-fx-label.saved { color: var(--tug-heal); border: 1px solid var(--tug-heal); }
+.hollow-fx-label.eaten { color: var(--hollow-red); border: 1px solid var(--hollow-red); }
+@keyframes fx-rise {
+  0% { opacity: 0; transform: translate(-50%, 0); }
+  15% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -26px); }
+}
+
+/* ── The amber mini-strip (MiniStrip, inside the MIND chip): six racks, a cell per segment as wide as
+ *    its blocks. The colonists mint (grey sealed, yellow hurt), HOLLOW red and pulsing, an infected file
+ *    blinking with its eaten share in red from HOLLOW's side, green-edged while a repair fights. ── */
+.mini-strip { display: flex; flex-direction: column; gap: 2px; margin: 3px 0 3px; }
+.ms-row { display: flex; gap: 1px; height: 4px; }
+.ms-cell { position: relative; flex-basis: 0; min-width: 0; background: color-mix(in srgb, var(--layer-mind) 26%, transparent); }
+.ms-free { background: color-mix(in srgb, var(--layer-mind) 6%, transparent); }
+.ms-core,
+.ms-charge { background: color-mix(in srgb, var(--layer-mind) 55%, transparent); }
+.ms-soul { background: var(--soul); }
+.ms-soul-hurt { background: var(--soul-hurt); }
+.ms-sealed { background: var(--sealed-edge); }
+.ms-hollow { background: var(--hollow-red); animation: ms-hollow 1.4s ease-in-out infinite; }
+@keyframes ms-hollow { 50% { opacity: 0.45; } }
+.ms-infected { outline: 1px solid var(--hollow-red); animation: ms-infected 0.8s steps(2, jump-none) infinite; }
+.ms-infected::after { content: ''; position: absolute; top: 0; bottom: 0; width: var(--eaten, 0%); background: var(--hollow-red); }
+.ms-infected.from-left::after { left: 0; }
+.ms-infected.from-right::after { right: 0; }
+.ms-infected.ms-unknown::after { width: 40%; background: repeating-linear-gradient(90deg, var(--hollow-red) 0 1px, transparent 1px 2px); }
+.ms-infected.ms-healing { outline-color: var(--tug-heal); }
+@keyframes ms-infected { 50% { outline-color: transparent; } }
+
+.hollow-head[hidden],
+.hollow-bite[hidden],
+.bite-mark[hidden],
+.gap-mark[hidden],
+.wall-mark[hidden],
+.mini-strip[hidden],
+.ms-row[hidden] { display: none; }
+
+/* ── Reduced motion: nothing pulses, marches or flies; the marks keep their colour and text, and the
+ *    moments fade in place. ── */
+body.reduced-motion .seg.hollow.bite-urgent .hollow-bite .bite-t,
+body.reduced-motion .mouth-mark,
+body.reduced-motion .bite-mark,
+body.reduced-motion .gap-mark,
+body.reduced-motion .tug-front,
+body.reduced-motion .ms-hollow,
+body.reduced-motion .ms-infected { animation: none; }
+body.reduced-motion .seg.hollow.bite-urgent .hollow-bite .bite-t { color: var(--print-flash); }
+body.reduced-motion .cure-spark { display: none; }
+body.reduced-motion .hollow-fx-label { animation-name: print-fade; transform: translate(-50%, -4px); }
+
+/* ══ WP7 part 1: the log keeps its history across ships ══════════════════════════════════════════ */
+/* The named HOLLOW (HALCYON): `UNIT-046` does not fit beside a tag on an 8-block chip with the NEXT BITE
+   countdown under it (it read `UNIT-… LOCKED` and `UNIT_ ATE C08` even at 1440×900), and its naming is the
+   story's second turn. While the countdown shows, each block keeps what it is about: the root its name
+   (LOCKED is in INSPECT and in every tool's refusal), an eaten block where the colonists went (ATE C08;
+   every hollow block has the same owner, the chip's title names it). Once HOLLOW is quiet both come back. */
+.seg.hollow.named:not(.hollow-quiet) .hollow-tag.locked { display: none; }
+.seg.hollow.named:not(.hollow-quiet) .hollow-head:has(.hollow-tag.ate) .seg-name { display: none; }
+/* WP11 part 2: a merged HOLLOW's longer name (`UNIT-046·047`) set tighter, so it fits an 8-block chip at 1280×720. */
+.seg.hollow.long-name .hollow-head .seg-name { font-size: 9px; letter-spacing: 0; }
+
+/* The rule both screens draw between two ships (say.ts logDivider): the new ship's name, dim and
+   centred, so the last ship's chatter reads as the past. */
+.comms-line.log-divider,
+.term-line.log-divider {
+  color: var(--text-dim);
+  text-align: center;
+  letter-spacing: 0.2em;
+  opacity: 0.8;
+}
+.comms-line.log-divider[hidden],
+.term-line.log-divider[hidden] { display: none; }
+
+/* ══ WP7 part 2: the run on screen (TRANSMIT, the arrival, BEAM OUT, HOLLOW's name, RUN END) ══════════ */
+
+/* ── HOLLOW's next bite on the amber strip (HACK OR BURN): its pink, on AI time (no ▸▸ badge), white in
+ *    its last seconds like the NEXT BITE on the blocks. ── */
+.objective-bite {
+  flex: 0 0 auto; margin: 0 10px; padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--hollow) 55%, transparent);
+  font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.1em; white-space: nowrap;
+  color: var(--hollow); text-shadow: none;
+}
+.objective-bite[hidden] { display: none; }
+.objective-bite.urgent { animation: bite-urgent 0.5s ease-in-out infinite; }
+
+/* ── BEAM OUT in the Engine window: the offer (red, glowing when no burn can save the ship), then the
+ *    TRANSMITTING bar racing the impact with its CANCEL. ── */
+.beam-btn {
+  display: block; margin-bottom: 14px;
+  border-color: var(--warn); color: var(--warn);
+  font-size: 11px; letter-spacing: 0.16em;
+}
+.beam-btn[hidden] { display: none; }
+.beam-btn:hover { background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.beam-btn.hopeless { background: color-mix(in srgb, var(--warn) 16%, transparent); animation: beam-glow 0.9s ease-in-out infinite; }
+.beam-btn:disabled { opacity: 0.45; cursor: not-allowed; animation: none; }
+@keyframes beam-glow { 50% { box-shadow: 0 0 16px color-mix(in srgb, var(--warn) 70%, transparent); } }
+.beam-bar {
+  position: relative; display: flex; align-items: center; justify-content: space-between;
+  height: 30px; margin-bottom: 14px; padding: 0 0 0 10px;
+  border: 1px solid var(--layer-mind); background: var(--bg); overflow: hidden;
+}
+.beam-bar[hidden] { display: none; }
+.beam-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--layer-mind) 45%, transparent) 0 6px, color-mix(in srgb, var(--layer-mind) 25%, transparent) 6px 8px);
+  transition: width 0.1s linear;
+}
+.beam-label { position: relative; font-size: 11px; letter-spacing: 0.16em; color: var(--text); text-shadow: 0 0 6px var(--bg); }
+.beam-cancel {
+  position: relative; align-self: stretch; padding: 0 10px;
+  border: none; border-left: 1px solid var(--layer-mind); background: var(--bg);
+  color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em; cursor: pointer;
+}
+.beam-cancel:hover { color: var(--accent-bright); }
+
+/* ── COMMS: ABANDON SHIP under the radio's lines, and the bar while it transmits ── */
+.comms-abandon { flex: 0 0 auto; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--edge-bright); }
+.comms-abandon[hidden] { display: none; }
+.comms-abandon-btn {
+  display: block; width: 100%; padding: 7px 0;
+  border: 1px solid var(--warn); background: transparent; color: var(--warn);
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.14em; cursor: pointer;
+}
+.comms-abandon-btn[hidden] { display: none; }
+.comms-abandon-btn:hover { background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.comms-abandon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.comms-beam { position: relative; height: 22px; border: 1px solid var(--layer-mind); overflow: hidden; }
+.comms-beam[hidden] { display: none; }
+.comms-beam-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: color-mix(in srgb, var(--layer-mind) 35%, transparent); transition: width 0.1s linear; }
+.comms-beam-label { position: relative; display: block; line-height: 20px; text-align: center; font-size: 10px; letter-spacing: 0.16em; color: var(--text); }
+
+/* ── BEAM OUT filled: the old ship's windows collapse like a CRT switched off, then black, with LINK
+ *    CLOSED over them (Juice sets data-blackout from the script). ── */
+body.beamed-out .desktop > .tools-view .window-body { animation: crt-off 0.5s ease-in forwards; }
+@keyframes crt-off {
+  0% { transform: none; filter: none; }
+  55% { transform: scaleY(0.03); filter: brightness(2.6); }
+  100% { transform: scaleY(0.03); filter: brightness(0); opacity: 0; }
+}
+body.beamed-out .desktop > .tools-view .window { background: var(--blackout); }
+.desktop > .tools-view[data-blackout]::after {
+  content: attr(data-blackout);
+  position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%);
+  padding: 4px 14px; z-index: 50; pointer-events: none;
+  font-family: 'VT323', monospace; font-size: 34px; letter-spacing: 0.3em; color: var(--text-dim);
+  border: 1px solid var(--edge-bright); background: var(--blackout);
+  animation: wr-in 0.6s ease-out 0.45s both;
+}
+body.reduced-motion.beamed-out .desktop > .tools-view .window-body { animation: none; opacity: 0; }
+
+/* ── TRANSMIT (TransmitScreen): the report's night in the mind's blue. The packet bar is the link's
+ *    blocks: the files in blue, the charge in green, the room left dark; charge that does not fit hangs
+ *    off the end in red. Each file is a chip; a locked one is dim and says why. ── */
+.transmit-screen {
+  position: fixed; inset: 0; z-index: 700;
+  display: flex; justify-content: center; overflow-y: auto;
+  background: radial-gradient(ellipse at 50% 30%, var(--transmit-glow) 0%, transparent 60%), var(--report-bg);
+  color: var(--report-text); font-family: 'JetBrains Mono', monospace;
+  animation: wr-in 0.6s ease-out both;
+}
+.transmit-screen[hidden] { display: none; }
+.transmit-screen::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, var(--scan) 0 1px, transparent 1px 3px);
+}
+.tx-inner {
+  position: relative; width: min(860px, calc(100% - 32px));
+  display: flex; flex-direction: column; align-items: stretch; gap: 14px;
+  margin: auto 0; padding: 30px 0 26px;
+}
+.tx-head { text-align: center; }
+.tx-title {
+  font-family: 'VT323', monospace; font-size: 42px; line-height: 1; letter-spacing: 0.4em; padding-left: 0.4em;
+  color: var(--transmit-line); text-shadow: 0 0 18px color-mix(in srgb, var(--transmit-line) 45%, transparent);
+}
+.tx-next { margin-top: 8px; font-family: 'VT323', monospace; font-size: 26px; letter-spacing: 0.14em; color: var(--report-text); }
+.tx-why { margin-top: 6px; font-size: 12px; letter-spacing: 0.14em; color: var(--accent-bright); }
+.tx-why.emergency { color: var(--warn); }
+.tx-why[hidden] { display: none; }
+.tx-packet { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 8px; row-gap: 6px; }
+.tx-bar {
+  position: relative; display: flex; height: 18px;
+  border: 1px solid var(--transmit-line); background: var(--bg);
+  /* One tick a block of the link (§6.9: the link is counted in blocks; TransmitScreen sets --link-blocks). */
+  background-image: linear-gradient(90deg, transparent calc(100% - 1px), color-mix(in srgb, var(--transmit-line) 18%, transparent) calc(100% - 1px));
+  background-size: calc(100% / var(--link-blocks)) 100%;
+}
+.tx-bar-files { height: 100%; background: color-mix(in srgb, var(--transmit-line) 55%, transparent); transition: width 0.25s ease-out; }
+.tx-bar-charge { height: 100%; background: color-mix(in srgb, var(--transmit-charge) 50%, transparent); transition: width 0.25s ease-out; }
+.tx-bar-over {
+  padding: 0 6px; height: 18px; line-height: 18px; font-size: 11px; color: var(--warn);
+  border: 1px dashed var(--warn);
+  background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--warn) 18%, transparent) 0 3px, transparent 3px 6px);
+}
+.tx-bar-over[hidden] { display: none; }
+.tx-packet-line { grid-column: 1 / -1; text-align: center; font-size: 12px; letter-spacing: 0.16em; color: var(--report-dim); }
+.tx-drop-line { text-align: center; font-size: 10px; letter-spacing: 0.18em; color: var(--report-dim); text-transform: uppercase; }
+.tx-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.tx-chip {
+  display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0;
+  padding: 7px 9px; text-align: left; cursor: default;
+  border: 1px solid color-mix(in srgb, var(--transmit-line) 55%, transparent);
+  background: color-mix(in srgb, var(--transmit-line) 7%, var(--report-bg));
+  color: var(--report-text); font-family: 'JetBrains Mono', monospace;
+}
+.tx-chip.toggleable { cursor: pointer; }
+.tx-chip.toggleable:hover { border-color: var(--transmit-line); box-shadow: 0 0 10px var(--transmit-glow); }
+.tx-chip.locked { border-color: var(--star-missed); background: var(--report-bg); }
+.tx-chip.dropped { border-style: dashed; border-color: var(--star-missed); opacity: 0.6; }
+.tx-chip.dropped .tx-chip-name { text-decoration: line-through; }
+.tx-chip.infected { border-color: var(--hollow); box-shadow: inset 0 0 10px color-mix(in srgb, var(--hollow) 25%, transparent); }
+.tx-chip-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.tx-chip-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; letter-spacing: 0.1em; }
+.tx-chip-size { font-size: 10px; color: var(--report-dim); }
+.tx-chip-health { font-size: 11px; color: var(--good); }
+.tx-chip-health.band-degraded { color: var(--accent-bright); }
+.tx-chip-health.band-failing,
+.tx-chip-health.band-dead { color: var(--warn); }
+.tx-chip-note { font-size: 10px; line-height: 1.35; color: var(--report-dim); }
+.tx-chip.locked .tx-chip-note { letter-spacing: 0.08em; }
+.tx-chip-gain { font-size: 10px; letter-spacing: 0.1em; color: var(--transmit-charge); }
+.tx-chip-warn { font-size: 10px; letter-spacing: 0.06em; color: var(--hollow); }
+.tx-notes { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.tx-note { font-size: 12px; letter-spacing: 0.1em; color: var(--report-text); text-align: center; }
+.tx-note[hidden] { display: none; }
+.tx-arrival { color: var(--star); }
+.tx-infected { color: var(--hollow); }
+.tx-send { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.tx-send[hidden] { display: none; }
+.tx-send-line { font-family: 'VT323', monospace; font-size: 24px; letter-spacing: 0.16em; color: var(--transmit-line); }
+.tx-send-bar { width: min(100%, 520px); height: 6px; background: color-mix(in srgb, var(--transmit-line) 15%, transparent); }
+.tx-send-bar span { display: block; height: 100%; width: 0; background: var(--transmit-line); box-shadow: 0 0 12px var(--transmit-line); }
+.tx-send-ly { font-family: 'VT323', monospace; font-size: 22px; letter-spacing: 0.12em; color: var(--report-text); }
+.tx-foot { display: flex; justify-content: center; min-height: 36px; }
+.tx-go {
+  font: inherit; font-size: 12px; letter-spacing: 0.22em; padding: 8px 22px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  background: transparent; border: 1px solid var(--transmit-line); color: var(--transmit-line);
+  animation: tx-glow 1.6s ease-in-out infinite;
+}
+.tx-go.arming { opacity: 0.4; animation: none; }
+.tx-go:disabled { opacity: 0.3; animation: none; cursor: default; }
+@keyframes tx-glow { 50% { box-shadow: 0 0 18px color-mix(in srgb, var(--transmit-line) 50%, transparent); } }
+/* The send: each file streams up and away into the link, one after another. */
+.transmit-screen.sending .tx-chip.sent { animation: tx-chip-send 0.55s ease-in both; }
+@keyframes tx-chip-send {
+  0% { transform: none; opacity: 1; }
+  30% { transform: none; opacity: 1; border-color: var(--white-out); box-shadow: 0 0 16px var(--transmit-line); }
+  100% { transform: translateY(-34px) scaleX(0.2); opacity: 0; }
+}
+.transmit-screen.sending .tx-chip.dropped { opacity: 0.25; }
+/* Short desktops: the screen tightens so TRANSMIT fits at 1280×720. */
+@media (max-height: 800px) {
+  .tx-inner { gap: 10px; padding: 20px 0 18px; }
+  .tx-title { font-size: 34px; }
+  .tx-next { font-size: 22px; }
+  .tx-chip { padding: 5px 8px; }
+}
+@media (max-width: 768px) {
+  .tx-title { font-size: 28px; letter-spacing: 0.25em; }
+  .tx-next { font-size: 18px; }
+  .tx-chips { grid-template-columns: 1fr 1fr; }
+}
+.transmit-screen.reduced .tx-chip.sent { animation: wr-fade-out 0.4s ease-out both; }
+@keyframes wr-fade-out { to { opacity: 0.2; } }
+
+/* ── PICK ONE TO CARRY (WP8 part 2): three cards in the violet of what the unit carries (its tools, its
+ *    upgrade files). Each says what it is, what it does and why it was offered; a reason that answers how
+ *    the kid played is in the star's gold. The picked card lights up and the others step back; until one is
+ *    picked TRANSMIT ▸ says so, and a refused send nudges the cards. ── */
+.tx-inner { width: min(960px, calc(100% - 32px)); }
+.tx-chips { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); }
+.tx-draft { display: flex; flex-direction: column; gap: 16px; }
+.tx-draft[hidden] { display: none; }
+.tx-draft-head { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 4px 18px; }
+.tx-draft-title {
+  font-family: 'VT323', monospace; font-size: 28px; line-height: 1; letter-spacing: 0.2em;
+  color: var(--violet-bright); text-shadow: 0 0 14px rgba(var(--violet-rgb), 0.55);
+}
+.tx-draft-keys { font-size: 10px; letter-spacing: 0.16em; color: var(--report-dim); text-transform: uppercase; }
+.tx-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.tx-card {
+  position: relative;
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0;
+  padding: 10px 12px 12px; text-align: left; cursor: pointer;
+  border: 1px solid var(--violet);
+  background: linear-gradient(180deg, rgba(var(--violet-rgb), 0.14), rgba(var(--violet-rgb), 0.03)), var(--report-bg);
+  color: var(--report-text); font-family: 'JetBrains Mono', monospace;
+  transition: opacity var(--t-med), border-color var(--t-med), box-shadow var(--t-med), transform var(--t-med);
+}
+.tx-card:hover { border-color: var(--violet-bright); box-shadow: 0 0 16px rgba(var(--violet-rgb), 0.4); }
+.tx-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tx-card-top .keycap { color: var(--violet-bright); border-color: var(--violet); }
+.tx-card-tag { font-size: 9px; letter-spacing: 0.16em; color: var(--report-dim); }
+.tx-card-title {
+  font-family: 'VT323', monospace; font-size: 30px; line-height: 0.95; letter-spacing: 0.06em;
+  color: var(--violet-bright); overflow-wrap: anywhere;
+}
+.tx-card-effect { font-size: 12px; line-height: 1.4; color: var(--report-text); }
+.tx-card-why {
+  margin-top: auto; padding-top: 6px; border-top: 1px dashed rgba(var(--violet-rgb), 0.35);
+  font-size: 11px; line-height: 1.35; letter-spacing: 0.02em; color: var(--report-dim);
+}
+.tx-card.boosted .tx-card-why { color: var(--star); }
+.tx-card.boosted .tx-card-why::before { content: '◆ '; }
+.tx-card-picked {
+  position: absolute; top: -9px; right: 10px; padding: 1px 7px;
+  font-size: 10px; letter-spacing: 0.14em; color: var(--report-bg); background: var(--violet-bright);
+  visibility: hidden;
+}
+.tx-card.picked {
+  border-color: var(--violet-bright);
+  background: linear-gradient(180deg, rgba(var(--violet-rgb), 0.3), rgba(var(--violet-rgb), 0.08)), var(--report-bg);
+  box-shadow: 0 0 22px rgba(var(--violet-rgb), 0.55), inset 0 0 12px rgba(var(--violet-bright-rgb), 0.18);
+  transform: translateY(-3px);
+}
+.tx-card.picked .tx-card-picked { visibility: visible; }
+.tx-cards.has-pick .tx-card:not(.picked) { opacity: 0.5; }
+.tx-cards.has-pick .tx-card:not(.picked):hover { opacity: 0.85; }
+/* The send: the card goes with the packet; the others are left behind. */
+.tx-cards.sending .tx-card.picked { animation: tx-chip-send 0.7s ease-in 0.2s both; }
+.tx-cards.sending .tx-card:not(.picked) { opacity: 0.2; }
+/* A send refused for want of a pick: the cards shake once, and the button says why. */
+.tx-cards.nudge .tx-card { animation: tx-card-nudge 0.42s ease-in-out; }
+@keyframes tx-card-nudge {
+  20%, 60% { transform: translateX(-4px); border-color: var(--violet-bright); }
+  40%, 80% { transform: translateX(4px); }
+}
+.tx-go.waiting { border-color: var(--violet); color: var(--violet-bright); animation: none; }
+.tx-go.waiting .keycap { color: var(--violet-bright); border-color: var(--violet); }
+.tx-go.nudge { animation: tx-go-refused 0.42s steps(2) 1; }
+@keyframes tx-go-refused { 50% { background: rgba(var(--violet-rgb), 0.3); } }
+/* The picked card's new file, among the packed files. */
+.tx-chip.card-file { border-style: dashed; border-color: var(--violet-bright); background: rgba(var(--violet-rgb), 0.1); }
+.tx-chip.card-file .tx-chip-note { color: var(--violet-bright); letter-spacing: 0.08em; }
+.transmit-screen.reduced .tx-cards.nudge .tx-card { animation: tx-card-nudge-reduced 0.42s steps(2) 1; }
+@keyframes tx-card-nudge-reduced { 50% { border-color: var(--violet-bright); box-shadow: 0 0 16px rgba(var(--violet-rgb), 0.5); } }
+.transmit-screen.reduced .tx-card { transition: none; }
+.transmit-screen.reduced .tx-card.picked { transform: none; }
+.transmit-screen.reduced .tx-cards.sending .tx-card.picked { animation: wr-fade-out 0.4s ease-out both; }
+@media (max-height: 800px) {
+  .tx-draft { gap: 13px; }
+  .tx-draft-title { font-size: 24px; }
+  .tx-card { padding: 8px 10px 10px; gap: 4px; }
+  .tx-card-title { font-size: 26px; }
+  .tx-card-effect { font-size: 11px; }
+}
+@media (max-width: 768px) {
+  .tx-chips { grid-template-columns: 1fr 1fr; }
+  .tx-cards { grid-template-columns: 1fr; gap: 10px; }
+  .tx-card-title { font-size: 24px; }
+}
+
+/* ── The white-out: floods in, holds, and the next ship comes up from under it. Reduced motion: a slow
+ *    fade through the night instead of a flash. ── */
+.white-out {
+  position: fixed; inset: 0; z-index: 950; pointer-events: none;
+  background: var(--white-out); opacity: 0;
+  transition: opacity var(--wo-in) ease-in;
+}
+.white-out[hidden] { display: none; }
+.white-out.on { opacity: 1; }
+.white-out.fading { transition: opacity var(--wo-fade) ease-out; }
+.white-out.reduced { background: var(--report-bg); }
+
+/* ── The arrival: each file a transit hit landed on flashes red, and what it lost floats off it ── */
+.arrival-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 62; }
+.arrival-fx-hit {
+  position: fixed; box-sizing: border-box; border: 2px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 45%, transparent);
+  box-shadow: 0 0 18px var(--warn);
+  animation: arrival-hit 1.7s ease-out both;
+}
+@keyframes arrival-hit {
+  0% { opacity: 0; } 6% { opacity: 1; background: color-mix(in srgb, var(--warn) 70%, transparent); }
+  40% { opacity: 1; background: color-mix(in srgb, var(--warn) 25%, transparent); }
+  100% { opacity: 0; }
+}
+.arrival-fx-label {
+  position: fixed; transform: translate(-50%, -50%); padding: 0 6px;
+  font-family: 'VT323', monospace; font-size: 26px; letter-spacing: 0.06em; white-space: nowrap;
+  color: var(--warn); background: var(--window-solid); border: 1px solid var(--warn);
+  text-shadow: 0 0 10px var(--warn);
+  animation: arrival-label 1.7s ease-out both;
+}
+@keyframes arrival-label {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(1.4); }
+  10% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  70% { opacity: 1; transform: translate(-50%, -50%); }
+  100% { opacity: 0; transform: translate(-50%, -110%); }
+}
+.arrival-fx-layer.reduced .arrival-fx-hit,
+.arrival-fx-layer.reduced .arrival-fx-label { animation: fx-flash 1.7s ease-out both; }
+
+/* ── HOLLOW names itself: `???` decodes into UNIT-046 through static on every hollow block, which pulses
+ *    pink; the strip jolts once; the TERMINAL's old `[user: ???]` tags flicker into the name. ── */
+.seg.hollow .seg-name.name-decoding { color: var(--print-flash); text-shadow: 0 0 8px var(--hollow), 0 0 2px var(--hollow); }
+.seg.hollow .seg-name.name-still { color: var(--hollow); text-shadow: 0 0 10px var(--hollow); transition: text-shadow 1.1s ease-out; }
+/* CORE LOST (BurnResult): the card sits above the glitch overlay (z 200), so it can be read over the static. */
+.burn-result.over-static { z-index: 201; }
+
+/* The naming plays at full strength with a tool in hand: HOLLOW is never a target of the tools the kid holds
+   at that moment (REPAIR, MOVE), and the 0.4 dim of an invalid target greyed out the story's second turn. (WP11: the
+   chips' pink pulse is now the screen's glitchBurst; `naming` only marks them while their names decode.) */
+body.tool-active .seg.hollow.invalid-target.naming { opacity: 1; }
+.mem-strip-panel.name-jolt { animation: name-jolt 0.32s steps(4) both; }
+@keyframes name-jolt {
+  0% { transform: translate(3px, 0); filter: hue-rotate(-40deg) saturate(1.6); }
+  25% { transform: translate(-4px, 1px); }
+  50% { transform: translate(2px, -1px); filter: none; }
+  100% { transform: none; }
+}
+.term-line.renamed { animation: term-renamed 0.9s steps(6) both; }
+@keyframes term-renamed {
+  0%, 30%, 60% { color: var(--print-flash); text-shadow: 0 0 8px var(--hollow); }
+  15%, 45% { opacity: 0.4; }
+  100% { text-shadow: none; }
+}
+
+/* ── The MOVE preview: what the move does to HOLLOW's reach, on the file and on the placeholder ── */
+.move-preview-layer { position: fixed; inset: 0; pointer-events: none; z-index: 61; }
+.move-preview-label {
+  position: fixed; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 2px 7px; white-space: nowrap; line-height: 1;
+  background: var(--window-solid); border: 1px solid currentColor;
+  box-shadow: 0 0 12px color-mix(in srgb, currentColor 35%, transparent);
+}
+.move-preview-label.tone-good { color: var(--hollow-wall); }
+.move-preview-label.tone-bad { color: var(--hollow-red); }
+.move-preview-label .mp-caption { font-size: 9px; letter-spacing: 0.14em; opacity: 0.85; }
+.move-preview-label .mp-value { font-family: 'VT323', monospace; font-size: 20px; letter-spacing: 0.06em; }
+.move-preview-label.single .mp-value { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 3px 0; }
+.move-preview-label.source { border-style: dashed; }
+.move-preview-label.dest { transform: translate(-50%, calc(-100% - 3px)); }
+.move-preview-label.source.above { transform: translate(-50%, calc(-100% - 3px)); }
+
+/* ── RUN END (RunEnd): the report's night. The ships land one by one; the SCORE and rank land last. ── */
+.run-end {
+  position: fixed; inset: 0; z-index: 700;
+  display: flex; justify-content: center; overflow-y: auto;
+  background: radial-gradient(ellipse at 50% 34%, var(--report-glow) 0%, transparent 62%), var(--report-bg);
+  color: var(--report-text); font-family: 'JetBrains Mono', monospace;
+  animation: wr-in 0.9s ease-out both;
+}
+.run-end[hidden] { display: none; }
+.run-end::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, var(--scan) 0 1px, transparent 1px 3px);
+}
+.re-inner {
+  position: relative; width: min(780px, calc(100% - 32px));
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  margin: auto 0; padding: 30px 0 26px; text-align: center;
+}
+.re-kicker { font-size: 11px; letter-spacing: 0.3em; color: var(--report-dim); }
+.re-title {
+  font-family: 'VT323', monospace; font-size: 46px; line-height: 1; letter-spacing: 0.16em;
+  color: var(--warn); text-shadow: 0 0 18px color-mix(in srgb, var(--warn) 40%, transparent);
+}
+.run-end.tone-victory .re-title { color: var(--soul); text-shadow: 0 0 18px var(--soul-dim); }
+.re-why { font-size: 13px; color: var(--report-text); }
+.re-total {
+  margin-top: 6px; font-family: 'VT323', monospace; font-size: 48px; line-height: 1; letter-spacing: 0.08em;
+  color: var(--soul); text-shadow: 0 0 16px var(--soul-dim);
+}
+/* WP11 (the lead's item 2): a sombre ending's total is a count, not a celebration: the report's plain text, no glow. */
+.run-end.tone-sombre .re-total { color: var(--report-text); text-shadow: none; }
+.re-missing {
+  font-family: 'VT323', monospace; font-size: 26px; line-height: 1; letter-spacing: 0.08em;
+  color: var(--soul-hurt); text-shadow: 0 0 12px color-mix(in srgb, var(--soul-hurt) 40%, transparent);
+}
+.re-missing[hidden] { display: none; }
+.re-ships { display: flex; flex-direction: column; gap: 6px; width: min(100%, 640px); margin: 6px 0; }
+.re-ship {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto 64px 150px; align-items: baseline; column-gap: 12px;
+  padding: 6px 12px; border: 1px solid var(--star-missed); text-align: left; opacity: 0;
+}
+.re-ship.landed { animation: re-ship-land 0.4s ease-out both; }
+@keyframes re-ship-land { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.re-ship-n { font-size: 11px; color: var(--report-dim); }
+.re-ship-name { font-family: 'VT323', monospace; font-size: 22px; letter-spacing: 0.08em; }
+.re-ship-outcome { font-size: 11px; letter-spacing: 0.14em; color: var(--soul); }
+.re-ship-stars { font-size: 16px; color: var(--star); letter-spacing: 0.08em; text-shadow: 0 0 8px var(--star-glow); }
+.re-ship-woke { font-size: 11px; letter-spacing: 0.08em; text-align: right; color: var(--report-text); }
+.re-ship.outcome-partial .re-ship-outcome { color: var(--soul-hurt); }
+.re-ship.outcome-stranded .re-ship-outcome,
+.re-ship.outcome-escaped .re-ship-outcome,
+.re-ship.outcome-crashed .re-ship-outcome,
+.re-ship.outcome-abandoned .re-ship-outcome,
+.re-ship.outcome-emergency .re-ship-outcome { color: var(--warn); }
+.re-ship.outcome-none { border-style: dashed; }
+.re-ship.outcome-none .re-ship-name,
+.re-ship.outcome-none .re-ship-outcome { color: var(--report-dim); }
+.re-score-row { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 2px 26px; opacity: 0; }
+.run-end.scored .re-score-row { animation: wr-in 0.5s ease-out both; }
+.re-score { font-family: 'VT323', monospace; font-size: 30px; letter-spacing: 0.12em; color: var(--star); }
+/* What the SCORE counts, on its own line under the two (the lead's rule: labelled as a score). */
+.re-score-note { flex: 1 0 100%; font-size: 10px; letter-spacing: 0.14em; color: var(--report-dim); }
+.re-rank { font-family: 'VT323', monospace; font-size: 30px; letter-spacing: 0.16em; color: var(--report-text); }
+.re-rank.land { animation: wr-star-land 0.42s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+.re-near { display: flex; flex-direction: column; gap: 3px; opacity: 0; }
+.run-end.scored .re-near { animation: wr-in 0.6s ease-out 0.4s both; }
+.re-near-line { font-size: 12px; letter-spacing: 0.06em; color: var(--soul-hurt); }
+.re-seed { font-size: 10px; letter-spacing: 0.2em; color: var(--star-missed); }
+.re-archive { font-size: 11px; letter-spacing: 0.12em; color: var(--warn); }
+.re-archive[hidden] { display: none; }
+.re-foot { display: flex; justify-content: center; min-height: 36px; margin-top: 4px; }
+.re-new {
+  font: inherit; font-size: 12px; letter-spacing: 0.22em; padding: 8px 22px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  background: transparent; border: 1px solid var(--soul-dim); color: var(--soul);
+  animation: wr-glow 1.6s ease-in-out infinite;
+}
+.re-new.arming { opacity: 0.4; animation: none; }
+@media (max-height: 800px) {
+  .re-inner { gap: 8px; padding: 18px 0 16px; }
+  .re-title { font-size: 38px; }
+  .re-total { font-size: 40px; }
+  .re-missing { font-size: 22px; }
+  .re-ship { padding: 4px 10px; }
+}
+@media (max-width: 768px) {
+  .re-title { font-size: 30px; }
+  .re-ship { grid-template-columns: 18px minmax(0, 1fr) auto; }
+  .re-ship-stars, .re-ship-woke { grid-column: 2 / -1; text-align: left; }
+}
+.run-end.reduced .re-ship.landed,
+.run-end.reduced.scored .re-score-row,
+.run-end.reduced.scored .re-near { animation: wr-in 0.3s ease-out both; }
+.run-end.reduced .re-new { animation: none; }
+
+/* ── Reduced motion for the rest: no pulses, jolts or flickers; the colours and words stay ── */
+body.reduced-motion .objective-bite.urgent,
+body.reduced-motion .beam-btn.hopeless,
+body.reduced-motion .tx-go,
+body.reduced-motion .mem-strip-panel.name-jolt,
+body.reduced-motion .term-line.renamed { animation: none; }
+
+/* ── WP8: the cards' files on the strip ──────────────────────────────────────────────────────────────
+   An upgrade file (FUEL TRIM, later AUTOBURN.skl) is the violet of the tools that carry it with a dashed
+   edge: a card the kid picked, not a licence. A FIREWALL is the green of a WALL, striped like a shield,
+   with a steady glow on its edge: HOLLOW can't eat it and can't bite past it. */
+.seg.upgrade {
+  background: linear-gradient(180deg, var(--seg-upgrade-top), var(--seg-upgrade-bot));
+  border-color: var(--seg-upgrade-border);
+  border-style: dashed;
+}
+.seg.upgrade .seg-name { color: var(--violet-bright); }
+.seg.firewall {
+  background: repeating-linear-gradient(135deg, var(--firewall-stripe-a) 0 4px, var(--firewall-stripe-b) 4px 8px);
+  border-color: var(--firewall);
+  box-shadow: inset 0 0 6px var(--firewall-glow);
+}
+.seg.firewall .seg-name,
+.seg.firewall .health { color: var(--firewall); }
+
+/* ── WP8 part 2: the Skills window (SkillsWindow). Amber like the other flight windows; each card a row with
+ *    its name in the violet of what the unit carries, what it does, a pip per file (the window pips' look),
+ *    and what it is doing now in the tone of its news. In the right column from Engine's measured bottom
+ *    (--engine-h) to the desk's, its rows scrolling when that is short (fix round 1: a fixed floor let it
+ *    cover Engine's MANUAL fold at 1280×720). Where the two still meet (MANUAL open on a short desk, the
+ *    window down to its title), Engine is on top: it comes later in index.html. ── */
+.desktop > .tools-view { --engine-h: 450px; }
+.skills-win {
+  right: var(--gutter);
+  top: calc(var(--engine-h) + 2 * var(--gutter));
+  bottom: var(--gutter);
+  width: var(--col-right-w);
+  display: flex;
+  flex-direction: column;
+}
+.skills-body { padding: 10px 12px; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+/* No room under Engine (SkillsWindow sets data-skills-dock): the window takes the left column's foot under COMMS, and
+   COMMS gives it that height, keeping the radio at least two lines tall (WP12). */
+.desktop > .tools-view { --skills-left-h: 210px; }
+.desktop > .tools-view[data-skills-dock="left"]:not(.tools-tabs-mode) .skills-win {
+  left: var(--gutter);
+  right: auto;
+  top: auto;
+  bottom: var(--gutter);
+  width: var(--col-left-w);
+  height: var(--skills-left-h);
+}
+.desktop > .tools-view[data-skills-dock="left"]:not(.tools-tabs-mode):has(> .skills-win:not([hidden])) .comms-win {
+  height: clamp(110px, calc(100% - var(--comms-top) - 2 * var(--gutter) - var(--skills-left-h)), 340px);
+}
+.skills-empty { display: flex; flex-direction: column; gap: 4px; padding: 4px 0; }
+.skills-empty[hidden] { display: none; }
+.skills-empty-title { font-size: 11px; letter-spacing: 0.2em; color: var(--accent-dim); }
+.skills-empty-hint { font-size: 11px; line-height: 1.45; color: var(--text-dim); }
+.skills-list { display: flex; flex-direction: column; gap: 10px; }
+.skill-row { display: flex; flex-direction: column; gap: 4px; padding-bottom: 9px; border-bottom: 1px dashed var(--edge); }
+.skill-row:last-child { border-bottom: none; padding-bottom: 0; }
+.skill-head { display: flex; align-items: baseline; gap: 8px; }
+.skill-title { font-family: 'VT323', monospace; font-size: 21px; line-height: 1; letter-spacing: 0.06em; color: var(--violet-bright); }
+.skill-count { font-size: 11px; color: var(--violet); }
+.skill-effect { font-size: 10px; line-height: 1.4; color: var(--text); }
+.skill-pips { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.skill-pip[data-look="holding"] { color: var(--good); }
+.skill-pip[data-look="holding"] .pip-glyph { color: var(--good); text-shadow: 0 0 6px var(--good); }
+.skill-pip[data-look="idle"] .pip-glyph { color: var(--accent-dim); }
+.skill-pip[data-look="missing"] .pip-reading { color: var(--warn); }
+.skill-status { font-size: 10px; letter-spacing: 0.12em; }
+.skill-row.tone-good .skill-status { color: var(--good); }
+.skill-row.tone-hint .skill-status { color: var(--accent-bright); }
+.skill-row.tone-warn .skill-status { color: var(--warn); }
+.skill-row.tone-dim .skill-status { color: var(--text-dim); }
+/* The dock item while a new card waits unseen: NEW pulses in the card violet until the window is opened. */
+.dock-new { display: none; margin-left: auto; padding: 0 4px; font-size: 9px; letter-spacing: 0.12em; color: var(--bg); background: var(--violet-bright); }
+.dock-item.fresh .dock-new { display: inline-block; box-shadow: 0 0 8px rgba(var(--violet-rgb), 0.8); animation: dock-new-pulse 1.1s ease-in-out infinite; }
+.dock-item.fresh { color: var(--violet-bright); border-left-color: var(--violet); background: rgba(var(--violet-rgb), 0.1); }
+@keyframes dock-new-pulse { 50% { opacity: 0.6; box-shadow: none; } }
+body.reduced-motion .dock-item.fresh .dock-new { animation: none; }
+/* FUEL TRIM's share of this ship's tank, beside FUEL (WP8): a card the kid picked, in its violet. */
+.fuel-trim { margin-left: 8px; padding: 0 4px; font-size: 9px; letter-spacing: 0.1em; color: var(--violet-bright); border: 1px dashed var(--violet); }
+.fuel-trim[hidden] { display: none; }
+
+/* ══ WP9 part 2: KESTREL on screen (zones on the plot and in the MIND, seeds, AUTO, the skill) ═══════════ */
+
+/* ── NAV PLOT hazard zones (NavPlotWindow): a hatched circle (debris) or annulus (belt) in the colour of
+ *    what the instruments say it will do; the path's run through it hatched red over the line. ── */
+.np-hatch-stripe.verdict-hit { fill: var(--warn); fill-opacity: 0.55; }
+.np-hatch-stripe.verdict-spent { fill: var(--warn); fill-opacity: 0.25; }
+.np-hatch-stripe.verdict-unknown { fill: var(--text-dim); fill-opacity: 0.6; }
+.np-zone { fill-rule: evenodd; stroke-width: 1.2; vector-effect: non-scaling-stroke; transition: stroke var(--t-slow), stroke-opacity var(--t-slow); }
+.np-zone.verdict-hit { stroke: var(--warn); stroke-dasharray: 3 2; animation: zone-warn 1.2s ease-in-out infinite; }
+.np-zone.verdict-spent { stroke: var(--warn); stroke-opacity: 0.45; stroke-dasharray: 2 3; }
+.np-zone.verdict-unknown { stroke: var(--text-dim); stroke-dasharray: 3 3; }
+.np-zone.verdict-clear { stroke: var(--good); stroke-opacity: 0.6; stroke-dasharray: 2 3; }
+@keyframes zone-warn { 50% { stroke-opacity: 0.35; } }
+.np-zone-specks { stroke: none; }
+.np-zone-specks.verdict-hit, .np-zone-specks.verdict-spent { fill: var(--warn); }
+.np-zone-specks.verdict-unknown { fill: var(--text-dim); }
+.np-zone-specks.verdict-clear { fill: var(--good); fill-opacity: 0.55; }
+.np-hazard { fill: none; stroke-linecap: butt; stroke-linejoin: round; opacity: 0.9; }
+/* Under the band: a dark road across the cloud, edged in red, so the path's run through it stands out from the
+   cloud's own hatching at the far zoom (WP9 review round 1). */
+.np-hazard-casing { fill: none; stroke: var(--bg); stroke-linecap: butt; stroke-linejoin: round; opacity: 0.85; filter: drop-shadow(0 0 1px var(--warn)); }
+/* A real-size cloud is small at the far zoom (900 km): a glow in its colour finds it on the plot. */
+.np-zone.verdict-hit { filter: drop-shadow(0 0 3px var(--warn)); }
+.np-zone.verdict-unknown { filter: drop-shadow(0 0 2px var(--text-dim)); }
+.navplot-svg .np-label.tone-unknown { fill: var(--text-dim); }
+body.reduced-motion .np-zone.verdict-hit { animation: none; }
+
+/* The mini-HUD's plot shows the same zones, filled in their verdict colour (no room for hatching). */
+.mh-zone { fill-rule: evenodd; stroke: none; }
+.mh-zone.verdict-hit { fill: var(--warn); fill-opacity: 0.45; }
+.mh-zone.verdict-spent { fill: var(--warn); fill-opacity: 0.2; }
+.mh-zone.verdict-unknown { fill: var(--text-dim); fill-opacity: 0.45; }
+.mh-zone.verdict-clear { fill: var(--good); fill-opacity: 0.22; }
+
+/* AUTOBURN at work, on the mini-HUD card in the MIND (MiniHud): its line, and while it flies the card's border
+   pulses violet (WP9 review round 1: an 8.5 px line alone was easy to miss while fighting). */
+.mh-auto { color: var(--violet-bright); font-size: 9.5px; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mh-auto[hidden] { display: none; }
+.mini-hud.auto-flying { animation: mh-auto-pulse 1.4s ease-in-out infinite; }
+@keyframes mh-auto-pulse { 50% { border-color: var(--violet-bright); box-shadow: 0 0 10px var(--violet); } }
+body.reduced-motion .mini-hud.auto-flying { animation: none; border-color: var(--violet-bright); }
+
+/* ── The MIND's side of a zone (RackZoneMarks): a tag under the rack's name while a zone is coming for it
+ *    (or after debris hit it), the rack's label edged in the same colour; on the amber mini-strip the rack's
+ *    row is outlined. A hit flashes the rack's rows red, on whichever screen is up. ── */
+.addr-label .rack-zone-tag {
+  display: flex; flex-direction: column; gap: 1px;
+  font-size: 9px; line-height: 1.1; letter-spacing: 0.06em; white-space: nowrap;
+}
+/* While a tag shows, it takes the address's line, and the rack's name turns the tag's colour. */
+.addr-label:has(.rack-zone-tag:not([hidden])) .rack-addr { display: none; }
+.addr-label:has(.rack-zone-tag.tone-danger:not([hidden])) .rack-name { color: var(--warn); }
+.addr-label:has(.rack-zone-tag.tone-unknown:not([hidden])) .rack-name { color: var(--text-dim); }
+.addr-label .rack-zone-tag[hidden] { display: none; }
+.addr-label .rack-zone-tag.tone-danger { color: var(--warn); }
+.addr-label .rack-zone-tag.tone-unknown { color: var(--text-dim); }
+.addr-label:has(.rack-zone-tag.tone-danger:not([hidden])) { box-shadow: inset 2px 0 0 var(--warn); padding-left: 4px; }
+.addr-label:has(.rack-zone-tag.tone-unknown:not([hidden])) { box-shadow: inset 2px 0 0 var(--text-dim); padding-left: 4px; }
+/* While a debris tag counts down, the hit is coming: the tag pulses. Once it hit it stays still. */
+.addr-label .rack-zone-tag.tone-danger.coming { animation: rack-tag-pulse 1.2s ease-in-out infinite; }
+@keyframes rack-tag-pulse { 50% { opacity: 0.45; } }
+.ms-row.ms-zone-hit { outline: 1px solid var(--warn); outline-offset: 1px; }
+.ms-row.ms-zone-unknown { outline: 1px dashed var(--text-dim); outline-offset: 1px; }
+.zone-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+.zone-fx.rack-flash {
+  position: fixed; pointer-events: none;
+  border: 1px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 34%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--warn) 70%, transparent);
+  animation: rack-flash var(--rack-flash-ms, 900ms) ease-out both;
+}
+@keyframes rack-flash { 0% { opacity: 1; } 15% { opacity: 0.35; } 30% { opacity: 1; } 100% { opacity: 0; } }
+body.reduced-motion .addr-label .rack-zone-tag.tone-danger.coming { animation: none; }
+body.reduced-motion .zone-fx.rack-flash { animation: rack-flash-fade var(--rack-flash-ms, 900ms) ease-out both; }
+@keyframes rack-flash-fade { from { opacity: 0.8; } to { opacity: 0; } }
+
+/* ── HOLLOW's seeds (§6.6): the 2-block outline blinking where the next one lands (HollowPainter), and the
+ *    seed's own chip: SEED, not the owner's name (`RM THE SEED` names it so), with a bite clock that fits. ── */
+.seg .hollow-mark.seed-telegraph {
+  position: absolute; top: 2px; bottom: 2px; z-index: 2; pointer-events: none;
+  border: 1px dashed var(--hollow-red);
+  background: var(--hollow-hatch);
+  box-shadow: 0 0 10px var(--hollow-static);
+  animation: seed-blink var(--seed-blink-sec, 0.5s) steps(2, jump-none) infinite;
+}
+@keyframes seed-blink { 50% { opacity: 0.15; } }
+body.reduced-motion .seg .hollow-mark.seed-telegraph { animation: none; }
+/* A 2-block chip has about 14 px of room at 1280 (19 at 1440): SEED stands upright down the chip, and the bite
+   clock stays on the root (it is one timer for every hollow block; the seed still pulses with it). */
+.seg.hollow.hollow-seed { padding: 3px 0; align-items: center; justify-content: center; }
+.seg.hollow.hollow-seed .hollow-head { justify-content: center; }
+.seg.hollow.hollow-seed .hollow-head .seg-name {
+  flex: 0 0 auto; writing-mode: vertical-rl; text-orientation: upright;
+  font-size: 8px; line-height: 1; letter-spacing: -1px; overflow: visible; text-overflow: clip;
+}
+.seg.hollow.hollow-seed .hollow-bite { display: none; }
+
+/* ── AUTO in the Engine window (§7.1 `AUTO · B`): the trained skill's control, in the skill file's violet.
+ *    Its name and key on the left, what it is doing or why it can't on the right. ── */
+.auto-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: -6px 0 14px; padding: 7px 10px;
+  border-color: var(--violet-bright); color: var(--violet-bright);
+  font-size: 11px; letter-spacing: 0.14em;
+}
+.auto-btn[hidden] { display: none; }
+.auto-btn .auto-head { white-space: nowrap; }
+.auto-btn .auto-note { font-size: 9px; letter-spacing: 0.08em; text-transform: none; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.auto-btn kbd.keycap { font-size: 9px; }
+.auto-btn:hover { background: rgba(var(--violet-rgb), 0.12); }
+.auto-btn[data-look="ready"] { box-shadow: 0 0 12px rgba(var(--violet-rgb), 0.45); animation: auto-ready 1.6s ease-in-out infinite; }
+@keyframes auto-ready { 50% { box-shadow: 0 0 3px rgba(var(--violet-rgb), 0.2); } }
+.auto-btn[data-look="armed"] { background: rgba(var(--violet-rgb), 0.18); }
+.auto-btn[data-look="flying"] { background: var(--violet); color: var(--bg); border-color: var(--violet); }
+.auto-btn[data-look="flying"] .auto-note { color: var(--bg); }
+.auto-btn[data-look="blocked"] { opacity: 0.72; }
+.auto-btn[data-look="blocked"] .auto-note { color: var(--accent-dim); }
+body.reduced-motion .auto-btn[data-look="ready"] { animation: none; }
+
+/* ══ WP10 part 2: VESPER on screen (the engine firing by itself, SWAP, THE DEAL) ══════════════════════════════ */
+
+/* The THRUST CTRL pip counts the engine firing by itself (`? THRUST CTRL FIRED ×3`), in the warning colour: the
+   counter sits on the way to its cause, and the pip flashes at every burst (WindowGrip). */
+.pip-count { font-weight: 700; color: var(--warn); }
+.pip-count[hidden] { display: none; }
+.pip.flash .pip-count { color: inherit; }
+/* The lesson lights the THRUST CTRL pip (`click the THRUST CTRL pip`): a pip is too small for the soft ring every
+   other lit control gets, so it blinks in the warning colour, a beat slower than a burst's flash: a clean on/off blink
+   between its label in the warning colour inside a warning outline and the full fill with dark text, readable in both
+   (WP10 review: steps(2) spent half of every beat on a half-blend, `? THRUST CTRL FIRED ×2` dark on dark red). */
+.pip.hint-pulse {
+  animation: pip-hint 0.8s step-end infinite; border-radius: 2px; padding: 0 3px; margin: 0 -3px;
+  color: var(--warn); box-shadow: 0 0 0 1px var(--warn);
+}
+@keyframes pip-hint { 50% { background: var(--warn); color: var(--bg); box-shadow: 0 0 12px var(--warn); } }
+.pip.hint-pulse .pip-glyph,
+.pip.hint-pulse .pip-count { color: inherit; }
+body.reduced-motion .pip.hint-pulse { animation: none; background: var(--warn); color: var(--bg); box-shadow: none; }
+/* The NAV PLOT's flame while nobody is on the throttle: the warning colour, so ▼'s drift has a visible cause. */
+.np-flame.ghost { fill: var(--warn); }
+/* After a SWAP: the backup doing the job is drawn as a ship file (solid, its name bright), with ALT ✓ in green; the
+   switched-off primary keeps its dim inactive look with OLD. */
+.seg.ship-backup.in-use {
+  background: linear-gradient(180deg, var(--seg-ship-top), var(--seg-ship-bot));
+  border-color: var(--seg-ship-border); border-style: solid;
+}
+.seg.ship-backup.in-use .seg-name { color: var(--seg-ship-name); }
+.seg-badge.alt.on { color: var(--good); border-color: var(--good); }
+.seg-badge.alt.old { color: var(--text-dim); border-color: var(--text-dim); }
+
+/* THE DEAL in the TERMINAL: the offer, then `[Y] ACCEPT  [N] REFUSE  0:12` once it has typed, with the bar under the
+   line. While it stands it is pinned to the pane (the bites and echoes it brings scroll under it), and its last
+   seconds turn the warning colour and pulse. */
+.term-line.has-choice { display: flex; align-items: center; }
+/* Each TERMINAL row waits hidden for its turn in the type queue: the flex above must not lay it out meanwhile. */
+.term-line.has-choice[hidden] { display: none; }
+.term-line.has-choice .term-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.term-line.has-choice .term-choice { flex: none; }
+/* On a phone the offer cut to `> give me C08. …` beside its buttons (WP10 review): there the row wraps, its words on
+   their own lines and the buttons and clock under them, and the 2-line pane grows to hold it while it stands. */
+@media (max-width: 768px) {
+  .term-line.has-choice { flex-wrap: wrap; row-gap: 2px; }
+  .term-line.has-choice .term-text { flex: 1 1 100%; white-space: pre-wrap; overflow: visible; }
+  .term-line.has-choice .term-choice { margin-left: 0; }
+  .mind-term-lines:has(.term-line.choice-open) { height: auto; max-height: calc(5 * var(--term-line-h)); }
+}
+.term-line.choice-open {
+  position: sticky; top: 0; bottom: 0; z-index: 1;
+  background: var(--bg);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--hollow) 35%, transparent);
+}
+.term-choice-btn kbd.keycap { margin: 0 3px 0 -3px; font-size: 9px; line-height: 1.2; vertical-align: 1px; }
+.term-clock {
+  min-width: 4ch; padding-left: 4px;
+  font-family: 'VT323', monospace; font-size: 17px; line-height: 15px; letter-spacing: 0.04em;
+  color: inherit;
+}
+.term-clock[hidden] { display: none; }
+.term-line.urgent .term-clock { color: var(--warn); animation: choice-urgent 0.5s steps(2) infinite; }
+.term-line.urgent .term-timer > span { background: var(--warn); }
+@keyframes choice-urgent { 50% { opacity: 0.35; } }
+
+/* ...and on the ticker in amber (`UNIT-046: WANTS A DEAL · [TAB] 0:12`): in HOLLOW's colour, its words bright, its
+   last seconds in the warning colour, pulsing. */
+.objective-ticker.choice .ticker-text { color: inherit; font-weight: 700; }
+.objective-ticker.choice kbd.keycap { font-size: 9px; vertical-align: 1px; }
+.objective-ticker.urgent { color: var(--warn); animation: choice-urgent 0.5s steps(2) infinite; }
+
+/* NEXT BITE after THE DEAL's answer: fed (an ACCEPT keeps it still), calm and dim; faster (a REFUSE), hot. */
+.seg.hollow .hollow-bite[data-mood="fed"] .bite-k { color: var(--text-dim); }
+.seg.hollow .hollow-bite[data-mood="fed"] .bite-t { color: var(--hollow-text); text-shadow: none; }
+.seg.hollow .hollow-bite[data-mood="hasted"] .bite-k { color: var(--hollow-red); font-weight: 700; }
+
+body.reduced-motion .term-line.urgent .term-clock,
+body.reduced-motion .objective-ticker.urgent { animation: none; }
+
+/* ── WP11 part 2: LAST LIGHT's choice and its typed ending (FinaleChoice). The card comes up over a dimmed desk (the
+   printing goes on under it): ROOT DELETED, the last block pulsing, the title in HOLLOW's pink, its last words typing,
+   then PURGE (cold white) and MERGE (pink into blue) with what each runs, means and costs. The choice clears the card
+   and types the ending in it. Every colour from tokens; reduced motion keeps every word and drops the pulses. ── */
+.finale-choice {
+  position: fixed; inset: 0; z-index: 650;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--finale-backdrop);
+  font-family: 'JetBrains Mono', monospace;
+  animation: fc-backdrop-in 0.8s ease-out both;
+}
+.finale-choice[hidden] { display: none; }
+.finale-choice.closing { animation: fc-backdrop-out 0.6s ease-in both; }
+@keyframes fc-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fc-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+.fc-card {
+  position: relative;
+  width: min(640px, calc(100% - 32px));
+  max-height: calc(100% - 32px); overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 22px 26px 20px;
+  border: 1px solid var(--hollow); background: var(--hollow-bg);
+  box-shadow: 0 0 40px var(--merge-glow), inset 0 0 30px color-mix(in srgb, var(--hollow) 10%, transparent);
+  color: var(--report-text); text-align: center;
+  animation: fc-card-in 0.7s cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+@keyframes fc-card-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
+.fc-kicker { font-size: 10px; letter-spacing: 0.34em; color: var(--hollow-text); }
+.fc-last { display: flex; justify-content: center; padding: 2px 0; }
+/* The one block left: black with red static, beating slowly like something waiting. */
+.fc-block {
+  width: 22px; height: 30px; border: 1px solid var(--hollow-red);
+  background: repeating-linear-gradient(135deg, var(--hollow-static) 0 2px, var(--hollow-bg) 2px 5px);
+  box-shadow: 0 0 14px var(--hollow-static);
+  animation: fc-block-beat 1.6s ease-in-out infinite;
+}
+@keyframes fc-block-beat { 0%, 100% { opacity: 0.55; transform: scale(0.94); } 50% { opacity: 1; transform: scale(1.04); } }
+.fc-title {
+  font-family: 'VT323', monospace; font-size: 38px; line-height: 1; letter-spacing: 0.14em;
+  color: var(--hollow); text-shadow: 0 0 16px var(--merge-glow);
+}
+.fc-words { min-height: 22px; font-size: 15px; color: var(--hollow); text-shadow: 0 0 8px var(--merge-glow); white-space: pre; }
+.fc-words.typing::after { content: '▌'; margin-left: 1px; animation: caret-blink 0.6s steps(2) infinite; }
+.fc-sub { font-size: 12px; color: var(--report-text); }
+.fc-options {
+  display: flex; gap: 14px; flex-wrap: wrap; width: 100%; margin-top: 4px;
+  opacity: 0; transform: translateY(6px); transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+  pointer-events: none;
+}
+.fc-options.shown { opacity: 1; transform: none; }
+.finale-choice.armed .fc-options.shown { pointer-events: auto; }
+.fc-btn {
+  position: relative; flex: 1 1 240px; min-width: 0;
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 14px 12px;
+  font-family: inherit; color: var(--report-text); text-align: left; background: transparent; cursor: pointer;
+  border: 1px solid var(--edge-bright);
+  transition: background 0.15s ease-out, box-shadow 0.15s ease-out;
+}
+.finale-choice:not(.armed) .fc-btn { cursor: default; }
+.fc-head { display: flex; align-items: center; gap: 10px; }
+.fc-key { flex: none; }
+.fc-word { font-family: 'VT323', monospace; font-size: 32px; line-height: 1; letter-spacing: 0.22em; }
+.fc-cmd { font-size: 11px; letter-spacing: 0.04em; color: var(--report-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc-what { font-size: 12px; line-height: 1.4; }
+.fc-cost { font-size: 11px; line-height: 1.4; color: var(--report-dim); }
+/* PURGE: clean and a little cold. */
+.fc-purge { border-color: var(--purge); }
+.fc-purge .fc-word { color: var(--purge); text-shadow: 0 0 10px var(--purge-glow); }
+.finale-choice.armed .fc-purge:hover { background: color-mix(in srgb, var(--purge) 10%, transparent); box-shadow: 0 0 22px var(--purge-glow); }
+/* MERGE: warm, costly, two colours meeting. */
+.fc-merge { border-color: var(--hollow); border-right-color: var(--layer-mind); border-bottom-color: var(--layer-mind); }
+.fc-merge .fc-word {
+  background: linear-gradient(90deg, var(--hollow), var(--layer-mind));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: none; filter: drop-shadow(0 0 8px var(--merge-glow));
+}
+.fc-merge .fc-cost { color: var(--soul); }
+.finale-choice.armed .fc-merge:hover { background: color-mix(in srgb, var(--hollow) 10%, transparent); box-shadow: 0 0 22px var(--merge-glow), 0 0 30px var(--merge-glow-blue); }
+/* MERGE's price: the charge against the MERGE tick, the 20 it will spend hatched off the end. */
+.fc-price { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
+.fc-meter { position: relative; height: 8px; border: 1px solid var(--edge-bright); background: color-mix(in srgb, var(--layer-mind) 6%, transparent); }
+.fc-meter-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, var(--layer-mind) 0, var(--layer-mind) var(--spend-from, 100%), transparent var(--spend-from, 100%)),
+    repeating-linear-gradient(135deg, var(--hollow) 0 3px, color-mix(in srgb, var(--hollow) 30%, transparent) 3px 6px);
+}
+.fc-meter-tick { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--hollow); box-shadow: 0 0 6px var(--hollow); }
+.fc-price-text { font-size: 10px; letter-spacing: 0.08em; color: var(--report-dim); }
+.fc-why { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--warn); }
+.fc-why[hidden] { display: none; }
+/* Short of the price: out of reach, and it says why (the meter shows how far short). */
+.fc-merge.short { opacity: 0.62; border-style: dashed; cursor: not-allowed; }
+.finale-choice.armed .fc-merge.short:hover { background: transparent; box-shadow: none; }
+.fc-merge.short .fc-meter-fill { background: var(--layer-mind); }
+.fc-btn.refused { animation: fc-refuse 0.32s steps(4) both; }
+@keyframes fc-refuse { 25% { transform: translateX(-4px); } 50% { transform: translateX(4px); } 75% { transform: translateX(-2px); } }
+
+/* The ending: the card clears and types the lines, one voice each. */
+.finale-choice.ending .fc-kicker, .finale-choice.ending .fc-last, .finale-choice.ending .fc-title,
+.finale-choice.ending .fc-words, .finale-choice.ending .fc-sub, .finale-choice.ending .fc-options { display: none; }
+.finale-choice.ending { cursor: pointer; }
+.fc-card.chose-purge {
+  border-color: var(--purge); background: var(--report-bg);
+  box-shadow: 0 0 46px var(--purge-glow); animation: fc-purge-flash 0.9s ease-out both;
+}
+@keyframes fc-purge-flash { 0% { background: var(--purge); } 35% { background: var(--report-bg); } }
+.fc-card.chose-merge {
+  border-color: var(--hollow); border-right-color: var(--layer-mind); border-bottom-color: var(--layer-mind);
+  background: var(--report-bg);
+  box-shadow: 0 0 40px var(--merge-glow), 0 0 60px var(--merge-glow-blue);
+  animation: fc-merge-in 1.6s ease-out both;
+}
+@keyframes fc-merge-in {
+  0% { box-shadow: 0 0 90px var(--hollow), 0 0 10px var(--layer-mind); }
+  100% { box-shadow: 0 0 40px var(--merge-glow), 0 0 60px var(--merge-glow-blue); }
+}
+.fc-ending { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; padding: 10px 0 4px; }
+.fc-ending[hidden] { display: none; }
+.fc-line { max-width: 100%; white-space: pre-wrap; animation: fc-line-in 0.3s ease-out both; }
+.fc-line[hidden] { display: none; }
+/* A line still to come keeps its room on the card (FinaleChoice lays every line out at once), and fades in with its
+   first letter: the animation starts as 'pending' goes. */
+.fc-line.pending { visibility: hidden; animation: none; }
+@keyframes fc-line-in { from { opacity: 0; } to { opacity: 1; } }
+.fc-line.typing .fc-line-text::after { content: '▌'; margin-left: 1px; animation: caret-blink 0.6s steps(2) infinite; }
+.fc-line.voice-cmd { font-size: 14px; color: var(--layer-mind); text-shadow: 0 0 8px var(--merge-glow-blue); }
+.chose-purge .fc-line.voice-cmd { color: var(--purge); text-shadow: 0 0 8px var(--purge-glow); }
+.fc-line.voice-story { font-family: 'VT323', monospace; font-size: 30px; line-height: 1.05; letter-spacing: 0.08em; color: var(--report-text); }
+.chose-purge .fc-line.voice-story { color: var(--purge); }
+.fc-line.voice-us {
+  font-size: 18px; font-weight: 700;
+  background: linear-gradient(90deg, var(--hollow), var(--layer-mind));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 8px var(--merge-glow));
+}
+.fc-line.voice-control { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--layer-ship-bright); }
+.fc-line.voice-control[hidden] { display: none; }
+.fc-line-tag { font-size: 9px; letter-spacing: 0.3em; color: var(--layer-ship); }
+.fc-hint { font-size: 10px; letter-spacing: 0.2em; color: var(--report-dim); animation: fc-line-in 0.6s ease-out both; }
+.fc-hint[hidden] { display: none; }
+.fc-hint.pending { visibility: hidden; animation: none; }
+body.reduced-motion .finale-choice, body.reduced-motion .fc-card, body.reduced-motion .fc-card.chose-purge,
+body.reduced-motion .fc-card.chose-merge, body.reduced-motion .fc-block, body.reduced-motion .fc-btn.refused { animation: none; }
+body.reduced-motion .fc-options { transition: none; transform: none; }
+body.reduced-motion .fc-words.typing::after, body.reduced-motion .fc-line.typing .fc-line-text::after { animation: none; }
+@media (max-width: 768px) {
+  .fc-card { padding: 16px 14px; gap: 8px; }
+  .fc-title { font-size: 28px; }
+  .fc-line.voice-story { font-size: 24px; }
+}
+
+/* ── WP11 part 2: HOLLOW's verbs. In the TERMINAL the telegraph counts down live with a pink bar draining under it and
+   a flash each second (its last second blinking); once it ends it greys out where it stands, and the outcome line
+   reads BLOCKED in the good green or the landed verb in the warning red. On the strip the target wears a pink dashed
+   outline with `RM 3` on it, and an MV's landing spot is outlined too. ── */
+.term-line.verb-countdown { padding-bottom: 2px; }
+/* The counting line is the most urgent line in the pane: pinned while it counts, like an open choice (WP10), so the
+   print echoes and bites of the duel scroll under it instead of pushing it out of a 3-line (or a phone's 2-line) pane
+   before its 3 s are up (WP11 review). Its tick flash runs on the pane's own background for the same reason. */
+.term-line.verb-live {
+  position: sticky; top: 0; bottom: 0; z-index: 1;
+  background: var(--bg);
+}
+.term-line.verb-live .term-text { font-weight: 700; }
+.term-line.verb-live.verb-tick { animation: verb-term-tick 0.4s ease-out; }
+@keyframes verb-term-tick { from { background: color-mix(in srgb, var(--hollow) 26%, var(--bg)); } to { background: var(--bg); } }
+.term-line.verb-live.verb-urgent .term-text { animation: choice-urgent 0.4s steps(2) infinite; }
+.term-line.verb-over { opacity: 0.42; }
+.term-line .verb-timer > span { background: var(--hollow); }
+.term-line.tone-good { color: var(--hollow-wall); text-shadow: 0 0 8px var(--hollow-wall-glow); font-weight: 700; }
+.term-line.tone-danger { color: var(--hollow-red); text-shadow: 0 0 8px var(--hollow-static); }
+body.reduced-motion .term-line.verb-live.verb-tick,
+body.reduced-motion .term-line.verb-live.verb-urgent .term-text { animation: none; }
+.seg.verb-target { outline: 2px dashed var(--hollow); outline-offset: -2px; animation: verb-target-pulse 1s steps(2, jump-none) infinite; }
+.seg.verb-target.verb-urgent { animation-duration: 0.4s; }
+@keyframes verb-target-pulse { 50% { outline-color: color-mix(in srgb, var(--hollow) 30%, transparent); } }
+/* At the chip's bottom left, so the file's name the strip tells you to click stays readable. */
+.seg .hollow-mark.verb-badge {
+  bottom: 2px; left: 2px; z-index: 4; padding: 0 4px;
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; line-height: 14px; letter-spacing: 0.06em;
+  color: var(--hollow-bg); background: var(--hollow); box-shadow: 0 0 8px var(--merge-glow);
+}
+.seg .hollow-mark.verb-dest {
+  top: 2px; bottom: 2px; z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; color: var(--hollow);
+  border: 2px dashed var(--hollow); background: color-mix(in srgb, var(--hollow) 12%, transparent);
+  animation: seed-blink 0.5s steps(2, jump-none) infinite;
+}
+body.reduced-motion .seg.verb-target, body.reduced-motion .seg .hollow-mark.verb-dest { animation: none; }
+.hollow-fx.verb-blocked-flash {
+  border: 2px solid var(--hollow-wall); background: color-mix(in srgb, var(--hollow-wall) 30%, transparent);
+  box-shadow: 0 0 22px var(--hollow-wall-glow); animation: fx-flash 0.9s ease-out both;
+}
+.hollow-fx.verb-landed-flash { background: color-mix(in srgb, var(--hollow-red) 55%, transparent); border: 2px solid var(--hollow-red); animation: fx-flash 1.1s ease-out both; }
+.hollow-fx-label.blocked { color: var(--hollow-wall); border: 1px solid var(--hollow-wall); }
+
+/* ── WP11 part 2: the MERGE tick on the charge readouts (MergeTick): pink while the charge is short of it, green ✓
+   once it covers it; on the REPAIR CHARGE pool a pink line at its 20th block with the label above. ── */
+.merge-tick { margin-left: 6px; font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: var(--hollow); white-space: nowrap; }
+.merge-tick.met { color: var(--hollow-wall); }
+/* On the narrow amber chip `M20 ✓` sits after the charge: tighter, so `CHARGE 36 M20 ✓` keeps its gaps (WP11 review). */
+.mind-chip-row .merge-tick { margin-left: 4px; letter-spacing: 0.04em; }
+.merge-tick[hidden] { display: none; }
+.mem-stat .merge-tick { align-self: center; padding: 0 4px; border: 1px solid currentColor; }
+.seg .merge-tick-mark {
+  position: absolute; top: 0; bottom: 0; z-index: 3; width: 0; pointer-events: none;
+  border-left: 2px dashed var(--hollow);
+  font-size: 0;
+}
+.seg .merge-tick-mark::after {
+  content: attr(data-label); position: absolute; top: 2px; left: 4px;
+  font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700; letter-spacing: 0.08em; white-space: nowrap;
+  color: var(--hollow); background: var(--hollow-bg); padding: 0 3px;
+}
+.seg .merge-tick-mark.met { border-left-color: var(--hollow-wall); }
+.seg .merge-tick-mark.met::after { color: var(--hollow-wall); }
+.seg .merge-tick-mark.beyond::after { left: auto; right: 4px; }
+
+/* ── WP11 part 2: RUN END's tone (the lead's item 2): the won finale is the only celebratory screen. Its title takes the
+   ending's colour, an orbit ring breathes behind it, the endings found stand under it; every other ending is a grey
+   night. ── */
+.run-end.tone-sombre { background: radial-gradient(ellipse at 50% 34%, var(--report-glow-sombre) 0%, transparent 62%), var(--report-bg); }
+.run-end.tone-victory::before {
+  content: ''; position: fixed; left: 50%; top: 22%; width: 520px; height: 520px; margin: -260px 0 0 -260px;
+  border: 2px solid var(--soul-dim); border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 40px var(--soul-dim), inset 0 0 40px var(--soul-dim);
+  animation: re-orbit 4s ease-in-out infinite;
+}
+@keyframes re-orbit { 0%, 100% { opacity: 0.18; transform: scale(0.96); } 50% { opacity: 0.4; transform: scale(1.02); } }
+.run-end.tone-victory.ending-purge .re-title { color: var(--purge); text-shadow: 0 0 22px var(--purge-glow); }
+.run-end.tone-victory.ending-merge .re-title {
+  background: linear-gradient(90deg, var(--hollow), var(--layer-mind));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: none; filter: drop-shadow(0 0 12px var(--merge-glow));
+}
+.run-end.tone-victory.ending-merge::before { border-color: var(--merge-glow); box-shadow: 0 0 40px var(--merge-glow), inset 0 0 40px var(--merge-glow-blue); }
+.re-endings { font-size: 11px; letter-spacing: 0.3em; color: var(--star); }
+.re-endings[hidden] { display: none; }
+/* A won ending over a flagship where nobody woke is found, but no prize: no gold on the grey night (WP11 review). */
+.run-end.tone-sombre .re-endings { color: var(--report-dim); }
+.re-carry { font-size: 11px; letter-spacing: 0.08em; color: var(--hollow); }
+.re-carry[hidden] { display: none; }
+.title-endings.found { color: var(--star); }
+body.reduced-motion .run-end.tone-victory::before { animation: none; opacity: 0.3; }
+
+/* ══ WP12 part 2: the phone (≤ 768 px, §9 WP12 item 3) ════════════════════════════════════════════════════════════
+ *    Desktop is untouched above the breakpoint; src/utils/viewport.ts holds the number (.tmp/wp12/p2/breakpoints.test.ts
+ *    keeps every query on it). ── */
+
+/* ── The phone's flight bar (PhoneFlightBar): the Engine window's FUEL, presets, BURN and context buttons under every
+ *    amber tab. BURN is the big touch target: a finger holds it like SPACE. ── */
+.phone-bar[hidden] { display: none; }
+@media (max-width: 768px) {
+  .phone-bar {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 6px;
+  }
+  .phone-bar .fuel-block {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "label bar" ". scale";
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 1px;
+    margin: 0;
+  }
+  .phone-bar .fuel-block .ctrl-label { grid-area: label; margin: 0; gap: 8px; }
+  .phone-bar .fuel-block .ctrl-label .val { font-size: 18px; }
+  .phone-bar .fuel-bar { grid-area: bar; margin-top: 0; }
+  .phone-bar .fuel-scale { grid-area: scale; margin-top: 0; }
+  .phone-bar .preset-btn { min-height: 38px; justify-content: center; font-size: 20px; }
+  .phone-bar .burn-btn {
+    height: 58px;
+    margin: 0;
+    font-size: 17px;
+    letter-spacing: 0.3em;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .phone-bar .accept-btn,
+  .phone-bar .beam-btn,
+  .phone-bar .beam-bar { margin: 0; min-height: 40px; }
+  /* A quick second tap (a preset, then BURN) is two taps, never a double-tap zoom. */
+  button, .dock-item, .mode-toggle-opt, .seg, .fs-tool-chip { touch-action: manipulation; }
+
+  /* The tab's window takes what the bar leaves; the NAV PLOT's square shrinks to fit it instead of scrolling. */
+  .tools-view.tools-tabs-mode .navplot-body { display: flex; flex-direction: column; padding: 8px; overflow: hidden; }
+  .tools-view.tools-tabs-mode .np-stage { flex: 1 1 0; min-height: 0; }
+  .tools-view.tools-tabs-mode .navplot-svg { width: 100%; height: 100%; aspect-ratio: auto; }
+  .tools-view.tools-tabs-mode .np-readout { flex: none; margin-top: 6px; padding-top: 6px; }
+  .tools-view.tools-tabs-mode .window-title { padding-top: 6px; padding-bottom: 6px; }
+
+  /* ── Key caps (keycaps.ts): no keyboard, so a cap shows the control it stands for (`hold [BURN]`, `press [OUT]`);
+   *    a button's own key and the words tying it in go, and so does a control's name said twice. Caps naming no
+   *    control (the draft's digits, a TERMINAL choice's letter, ENTER / ESC) leave with their containers. ── */
+  kbd.keycap[data-touch] { font-size: 0 !important; letter-spacing: 0; }
+  kbd.keycap[data-touch]::after { content: attr(data-touch); font-size: 11px; letter-spacing: 0.04em; }
+  kbd.keycap.cap-own,
+  .cap-own-gap,
+  .cap-dup,
+  button kbd.keycap:not([data-touch]),
+  .tx-draft-keys,
+  .ic-keys { display: none; }
+
+  /* ── The mini-HUD becomes a top bar in blue: the ship's countdown, line state and FUEL above the memory, a small
+   *    plot beside them. A tap goes back to the ship, like the card's click on the desktop. ── */
+  .mini-hud {
+    order: -1;
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+  }
+  .mh-head { flex-direction: column; align-items: flex-start; gap: 2px; margin: 0; flex: none; }
+  .mh-body { gap: 8px; }
+  .mh-plot { width: 44px; height: 44px; }
+  .mh-stats { flex-direction: row; flex-wrap: wrap; align-items: center; column-gap: 10px; row-gap: 2px; }
+  .mh-cd-time { font-size: 20px; }
+  .mh-fuel { flex: 1 1 140px; }
+  .mh-print, .mh-intact, .mh-auto, .mh-limit { flex: 1 1 100%; }
+}
+/* A short phone (a 640-px screen): the flight bar slims so the NAV PLOT keeps a readable square. */
+@media (max-width: 768px) and (max-height: 700px) {
+  .phone-bar { gap: 4px; padding-top: 4px; }
+  .phone-bar .preset-btn { min-height: 30px; font-size: 17px; }
+  .phone-bar .burn-btn { height: 46px; }
+}

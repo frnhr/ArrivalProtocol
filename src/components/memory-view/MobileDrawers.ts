@@ -21,19 +21,19 @@ export function mountMobileDrawers(root: ParentNode = document): () => void {
   };
 
   toggles.forEach((toggle) => {
-    const onActivate = (ev: Event): void => {
+    const onActivate = (event: Event): void => {
       if (!isMobile()) return;
       const drawer = findDrawer(toggle);
       if (!drawer) return;
-      ev.preventDefault();
+      event.preventDefault();
       const open = drawer.dataset.open === 'true';
       const next = !open;
       drawer.dataset.open = String(next);
       toggle.setAttribute('aria-expanded', String(next));
     };
-    const onKey = (ev: KeyboardEvent): void => {
-      if (ev.key !== 'Enter' && ev.key !== ' ') return;
-      onActivate(ev);
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      onActivate(event);
     };
     toggle.addEventListener('click', onActivate);
     toggle.addEventListener('keydown', onKey as EventListener);
@@ -41,23 +41,25 @@ export function mountMobileDrawers(root: ParentNode = document): () => void {
   });
 
   return () => {
-    handlers.forEach(([el, fn]) => {
-      el.removeEventListener('click', fn);
-      el.removeEventListener('keydown', fn);
+    handlers.forEach(([toggle, fn]) => {
+      toggle.removeEventListener('click', fn);
+      toggle.removeEventListener('keydown', fn);
     });
   };
 }
 
 // Public helper so other systems (e.g. tools picking up an fs-tool) can pop
 // the filesystem drawer open programmatically when needed.
+// An unknown id is a caller's bug: it throws rather than doing nothing (final review, Fran's no-silent-fallback rule).
 export function setDrawerOpen(id: string, open: boolean): void {
   const drawer = document.querySelector<HTMLElement>(
     `.mobile-drawer[data-drawer="${id}"]`,
   );
-  if (!drawer) return;
+  if (!drawer) throw new Error(`setDrawerOpen: no .mobile-drawer[data-drawer="${id}"] in index.html`);
   drawer.dataset.open = String(open);
   const toggle = document.querySelector<HTMLElement>(
     `.drawer-toggle[data-drawer-toggle="${id}"]`,
   );
-  if (toggle) toggle.setAttribute('aria-expanded', String(open));
+  if (!toggle) throw new Error(`setDrawerOpen: no .drawer-toggle[data-drawer-toggle="${id}"] in index.html`);
+  toggle.setAttribute('aria-expanded', String(open));
 }

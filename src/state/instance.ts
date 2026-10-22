@@ -1,27 +1,31 @@
 import { createStore } from './store';
 import type { GameState } from './schema';
-import { createInitialMemory } from '@data/memory';
-import { INITIAL_MISSION, INITIAL_TELEMETRY, INITIAL_CLOCK, INITIAL_AI, seedBurn, seedOrbit, seedLevel } from '@data/mission';
+import { createInitialState } from './initial';
+import { newRunSeed } from '@systems/rng';
+import { openRunArchive, archiveLineage, browserStorage } from '@systems/meta';
 
-// The single global store. Components and systems import this singleton.
-export const store = createStore<GameState>({
-  mission: INITIAL_MISSION,
-  memory: createInitialMemory(),
-  ai: INITIAL_AI,
-  telemetry: INITIAL_TELEMETRY,
-  clock: INITIAL_CLOCK,
-  burn: seedBurn(),
-  orbit: seedOrbit(),
-  level: seedLevel(),
-  ui: {
-    mode: 'tools',
-    selectedId: null,
-    activeTool: null,
-    pickedSourceId: null,
-    pendingPlacement: null,
-    memoryRev: 0,
-    filtersOff: [],
-    spotlight: [],
-  },
-  ops: { byId: {} },
-});
+// The run seed is the one entropy source of a run (every game roll is a child stream of
+// it). `?seed=N` pins it so a screenshot or a bug report replays the same run.
+function pickRunSeed(): number {
+  const param = new URLSearchParams(window.location.search).get('seed');
+  if (param !== null) {
+    const seed = Number(param);
+    if (!Number.isInteger(seed)) throw new Error(`?seed=${param} is not an integer`);
+    return seed >>> 0;
+  }
+  return newRunSeed();
+}
+
+// The archive is read before the store exists: the very first title already names this run's unit
+// (UNIT-048 · WAVE 2 after one run) and the last one's lineage.
+const archiveStatus = openRunArchive(browserStorage);
+
+// The single global store. Components and systems import this singleton. The page opens on
+// the title card; RECEIVE TRANSMISSION boots the unit and starts the flight (systems/boot).
+export const store = createStore<GameState>(createInitialState({
+  seed: pickRunSeed(),
+  phase: 'title',
+  reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  lineage: archiveLineage(),
+  archive: { status: archiveStatus },
+}));

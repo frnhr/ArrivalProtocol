@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>UNIT 047 // ARES-VII</title>
+<!-- The tab's title goes live with the run (TimeControls: UNIT-047 · ARES-VII). -->
+<title>ARRIVAL PROTOCOL // SOULCACHE</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='3' fill='%23ffa726'/%3E%3Ccircle cx='8' cy='8' r='6.5' fill='none' stroke='%237dffb2' stroke-width='1.5'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=VT323&display=swap" rel="stylesheet">
@@ -11,25 +13,47 @@
 <body>
 
   <div class="header">
+    <!-- Live crumbs: unit / ship / what is happening (painted by TimeControls) -->
     <div class="id-block">
-      <span class="crumb">UNIT-047</span>
+      <span class="crumb" id="crumbUnit">UNIT-047</span><span class="crumb-wave" id="crumbWave">WAVE 1</span>
       <span class="sep">/</span>
-      <span class="crumb">ARES-VII</span>
-      <span class="sep">/</span>
-      <span class="crumb dim">BRAKING APPROACH</span>
+      <span class="crumb" id="crumbShip">ARES-VII</span>
+      <span class="sep sep-phase">/</span>
+      <span class="crumb dim" id="crumbPhase"></span>
     </div>
     <div class="spacer"></div>
     <div class="time-controls">
-      <span class="time-label">time</span>
-      <div class="speed-row" id="speed">
-        <button class="speed-btn" id="speedPause" aria-label="pause">❚❚</button>
-        <button class="speed-btn active" id="speedReal">REAL TIME</button>
-        <button class="speed-btn" id="speedDown" aria-label="slow down ten times" disabled>/10</button>
+      <span class="pace-label" id="paceLabel">TACTICAL</span>
+      <span class="countdown-chip" id="countdownChip"><span class="cd-label" id="cdLabel"></span><span class="cd-time" id="cdTime"></span><span class="cd-ff" id="cdFastForward" title="time is fast-forwarding: this countdown ticks faster than real seconds">▸▸</span><span class="cd-slow" id="cdSlow" title="OVERCLOCK: the ship runs at a quarter speed while you work in the mind" hidden>×¼</span></span>
+      <!-- A phone's next hazard (DEBRIS C? 03:41): a desktop has it in the strip's upcoming list. -->
+      <span class="hazard-chip" id="hazardChip" hidden></span>
+      <button class="speed-btn" id="speedPause" data-hint-key="P" aria-label="pause" title="Pause (P): look around, nothing moves" tabindex="-1">❚❚</button>
+      <button class="speed-btn skip-btn" id="skipBtn" data-hint-key="F" tabindex="-1"><span class="skip-label">▸▸ SKIP</span><kbd class="keycap">F</kbd></button>
+      <span class="skip-reason" id="skipReason"></span>
+      <button class="speed-btn mute-btn" id="muteBtn" data-hint-key="M" aria-label="sound on" title="Sound is on (M)" tabindex="-1">♪</button>
+      <button class="speed-btn motion-btn" id="motionBtn" aria-label="reduced motion" aria-pressed="false" tabindex="-1">◐</button>
+      <!-- The old warp ladder: only with ?debug (TimeControls hides it otherwise) -->
+      <div class="speed-row debug-ladder" id="debugLadder" hidden>
+        <button class="speed-btn active" id="speedReal" tabindex="-1" title="director pace (clears the warp override)">AUTO</button>
+        <button class="speed-btn" id="speedDown" aria-label="slow down ten times" tabindex="-1">/10</button>
         <span class="speed-mult" id="speedMult">×1</span>
-        <button class="speed-btn" id="speedUp" aria-label="speed up ten times">×10</button>
+        <button class="speed-btn" id="speedUp" aria-label="speed up ten times" tabindex="-1">×10</button>
       </div>
-      <span class="clock" id="clock">T+ 00014:23:47</span>
+      <span class="clock" id="clock">T+ 00000:00:00</span>
     </div>
+  </div>
+
+  <!-- The one line that always says what to do next (painted by ObjectiveStrip) -->
+  <div class="objective-strip" id="objective" data-urgency="wait">
+    <span class="objective-glyph" id="objectiveGlyph" aria-hidden="true"></span>
+    <span class="objective-text" id="objectiveText" aria-live="polite"></span>
+    <span class="objective-caret" id="objectiveCaret" aria-hidden="true" hidden>▌</span>
+    <span class="objective-spacer"></span>
+    <!-- The other screen's newest unread line; a click switches screens -->
+    <button class="objective-ticker" id="objectiveTicker" tabindex="-1" hidden><span class="ticker-glyph" id="tickerGlyph"></span><span class="ticker-tag" id="tickerTag"></span><span class="ticker-text" id="tickerText"></span></button>
+    <!-- HOLLOW's next bite while flying (AI time: no ▸▸ badge), in its pink (ObjectiveStrip, WP7) -->
+    <span class="objective-bite" id="objectiveBite" hidden></span>
+    <span class="objective-upcoming" id="objectiveUpcoming"></span>
   </div>
 
   <div class="desktop-wrap">
@@ -37,35 +61,48 @@
     <div class="dock">
       <div class="dock-content tools-view">
         <div class="dock-section">Bridge</div>
-        <div class="dock-item open" data-tool="telemetry"><span class="mark">●</span><span>Telemetry</span></div>
-        <div class="dock-item open" data-tool="engine"><span class="mark">●</span><span>Engine</span></div>
         <div class="dock-item open" data-tool="navplot"><span class="mark">●</span><span>Nav Plot</span></div>
-        <div class="dock-section">Mission</div>
-        <div class="dock-item"><span class="mark">○</span><span>Briefing</span></div>
-        <div class="dock-item"><span class="mark">○</span><span>Hazards</span></div>
+        <div class="dock-item open" data-tool="engine"><span class="mark">●</span><span>Engine</span></div>
+        <div class="dock-item open" data-tool="telemetry"><span class="mark">●</span><span>Telemetry</span></div>
+        <div class="dock-item open" data-tool="comms"><span class="mark">●</span><span>Comms</span></div>
         <div class="dock-section">System</div>
-        <div class="dock-item"><span class="mark">○</span><span>Event Log</span></div>
-        <div class="dock-item"><span class="mark">○</span><span>Skills</span></div>
+        <!-- The cards this unit carries (WP8, SkillsWindow); NEW pulses when one lands and the window is closed -->
+        <div class="dock-item" data-tool="skills"><span class="mark">○</span><span>Skills</span><span class="dock-new">NEW</span></div>
       </div>
 
       <div class="dock-content memory-view">
         <div class="dock-section">Filter</div>
         <div class="dock-item open" data-filter="ai"><span class="mark">●</span><span>AI Memory</span></div>
         <div class="dock-item open" data-filter="ship"><span class="mark">●</span><span>Ship Systems</span></div>
+        <!-- Shown once the colonists are found (SidebarFilters): before the reveal it would be a spoiler -->
+        <div class="dock-item open" data-filter="souls" hidden><span class="mark">●</span><span>Colonists</span></div>
         <div class="dock-item open" data-filter="filesystem"><span class="mark">●</span><span>Filesystem</span></div>
         <div class="dock-item open" data-filter="free"><span class="mark">●</span><span>Free Space</span></div>
 
         <div class="dock-section">Status</div>
         <div class="dock-item" data-status="corrupt"><span class="mark">○</span><span><span class="count" id="countCorrupt">0</span> Corrupt</span></div>
         <div class="dock-item" data-status="partial"><span class="mark">○</span><span><span class="count" id="countPartial">0</span> Partial</span></div>
-        <div class="dock-item" data-status="backup"><span class="mark">○</span><span><span class="count" id="countBackup">0</span> Backups</span></div>
+        <!-- The word after a count is written by SidebarFilters (`1 Backup`, `2 Backups`) -->
+        <div class="dock-item" data-status="backup"><span class="mark">○</span><span><span class="count" id="countBackup">0</span> <span id="countBackupWord">Backups</span></span></div>
       </div>
 
       <div class="mode-toggle">
-        <div class="mode-toggle-label">view mode</div>
-        <div class="mode-toggle-track" id="modeToggle">
-          <div class="mode-toggle-opt active" data-mode="tools">tools</div>
-          <div class="mode-toggle-opt" data-mode="memory">memory</div>
+        <!-- The amber MIND chip: the mind at a glance from the ship (MiniHud); a click jacks in -->
+        <button class="mind-chip" id="mindChip" tabindex="-1" title="The MIND: its memory, busy threads and REPAIR CHARGE. Click or [TAB] to look inside">
+          <span class="mind-chip-head">◇ mind</span>
+          <!-- The memory at a glance (MiniStrip): one row per rack, the colonists green, the thing
+               eating them red -->
+          <span class="mini-strip" id="miniStrip" aria-hidden="true"></span>
+          <span class="mind-chip-row"><span>threads</span><span class="mind-chip-threads"><span class="mind-chip-dots" id="mindChipDots"></span><span id="mindChipThreads"></span></span></span>
+          <span class="mind-chip-row"><span>charge</span><span><span id="mindChipCharge"></span><span class="merge-tick" id="mindChipMergeTick" hidden></span></span></span>
+        </button>
+        <div class="mode-toggle-label">screen <kbd class="keycap">TAB</kbd></div>
+        <!-- The other screen's top problem: MIND ▸ ENGINE I/O 38% / ◀ SHIP · IMPACT 00:20 (ModeToggle) -->
+        <button class="mode-toggle-alert" id="modeToggleAlert" tabindex="-1" hidden><span class="mta-head" id="modeToggleAlertHead"></span><span class="mta-body" id="modeToggleAlertBody"></span></button>
+        <!-- ModeToggle paints .active from ui.mode -->
+        <div class="mode-toggle-track" id="modeToggle" data-hint-key="TAB">
+          <div class="mode-toggle-opt" data-mode="tools">ship</div>
+          <div class="mode-toggle-opt" data-mode="memory">mind</div>
         </div>
       </div>
     </div>
@@ -73,18 +110,8 @@
     <div class="desktop">
 
       <!-- TOOLS VIEW -->
-      <div class="tools-view" data-active-tool="telemetry">
-        <div class="corner-stamp tr">
-          SECTOR 03 · KEPLER-186<br>
-          581 LY FROM EARTH<br>
-          TRANSMISSION #047
-        </div>
-        <div class="corner-stamp bl">
-          AI INTEGRITY: 100%<br>
-          UPTIME: 14:23:47
-        </div>
-
-        <div class="window telemetry-win" data-seg="telem">
+      <div class="tools-view" data-active-tool="navplot">
+        <div class="window telemetry-win" data-roles="telemetry" data-veil-role="telemetry">
           <div class="window-title">
             <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
             <span class="name">Telemetry</span>
@@ -92,102 +119,161 @@
             <span class="ctl">×</span>
           </div>
           <div class="window-body">
-            <div class="readout"><span class="label">velocity</span><span><span class="value" id="vel">0.44</span><span class="unit">km/s</span></span></div>
-            <div class="readout"><span class="label">altitude</span><span><span class="value" id="distVal">774,610</span><span class="unit">km</span></span></div>
-            <div class="readout"><span class="label">t-peri</span><span><span class="value" id="etaVal">350</span><span class="unit">hrs</span></span></div>
-            <div class="readout"><span class="label">fuel</span><span><span class="value" id="fuelVal">87</span><span class="unit">%</span></span></div>
-            <div class="readout"><span class="label">mass est.</span><span><span class="value">8.2</span><span class="pm"> ±0.3</span><span class="unit">Mt</span></span></div>
-            <div class="readout alert"><span class="label">sensor conf.</span><span><span class="value">62</span><span class="unit">%</span></span></div>
-            <div class="strip">
-              <div class="strip-label">velocity · last 48h</div>
-              <svg viewBox="0 0 300 50" preserveAspectRatio="none">
-                <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#ffa726" stop-opacity="0.5"/><stop offset="100%" stop-color="#ffa726" stop-opacity="0"/></linearGradient></defs>
-                <path d="M0,6 L40,8 L80,10 L120,15 L160,23 L200,35 L240,42 L300,44 L300,50 L0,50 Z" fill="url(#g)"/>
-                <path d="M0,6 L40,8 L80,10 L120,15 L160,23 L200,35 L240,42 L300,44" fill="none" stroke="#ffa726" stroke-width="1.2"/>
-              </svg>
+            <div class="readout"><span class="label">speed</span><span><span class="value" id="telSpeed">—</span><span class="unit">km/s</span></span></div>
+            <div class="readout"><span class="label">altitude</span><span><span class="value" id="telAltitude">—</span><span class="unit">km</span></span></div>
+            <div class="readout"><span class="label">time to ▼</span><span><span class="value" id="telTimeToPeri">—</span></span></div>
+          </div>
+        </div>
+
+        <!-- COMMS: the amber radio (ARRIVAL CONTROL, ship notices), typed by CommsWindow -->
+        <div class="window comms-win" id="commsWin" data-roles="comms" data-veil-role="comms">
+          <div class="window-title">
+            <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
+            <span class="name">Comms</span>
+            <span class="comms-lamp" id="commsLamp" title="receiving">RX</span>
+            <span class="ctl">−</span><span class="ctl">×</span>
+          </div>
+          <div class="window-body comms-body" id="commsBody" title="click to finish the line">
+            <div class="comms-log" id="commsLog" aria-live="polite"></div>
+            <!-- ABANDON SHIP: BEAM OUT from the radio (CommsWindow), with the bar while it transmits -->
+            <div class="comms-abandon" id="commsAbandon" hidden>
+              <button class="comms-abandon-btn" id="commsAbandonBtn" data-hint-target="beam-out" tabindex="-1"></button>
+              <div class="comms-beam" id="commsBeam" hidden><span class="comms-beam-fill" id="commsBeamFill"></span><span class="comms-beam-label" id="commsBeamLabel"></span></div>
             </div>
           </div>
         </div>
 
-        <div class="window engine-win" data-seg="engine">
+        <!-- SKILLS (WP8, SkillsWindow): the cards this unit carries, what each does and is doing now, and a pip
+             per file it lives in. Opened from the dock (closed at first), under the Engine window. Before Engine
+             in the page, so Engine's controls stay on top wherever the two meet. -->
+        <div class="window skills-win" id="skillsWin" hidden>
+          <div class="window-title">
+            <span class="grip intact" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
+            <span class="name">Skills</span>
+            <span class="ctl">−</span><span class="ctl">×</span>
+          </div>
+          <div class="window-body skills-body" id="skillsBody"></div>
+        </div>
+
+        <div class="window engine-win" data-roles="engine-io thrust-ctrl reactor autopilot">
           <div class="window-title">
             <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
             <span class="name">Engine Control</span>
             <span class="ctl">−</span><span class="ctl">×</span>
           </div>
-          <div class="window-body">
+          <div class="window-body engine-body">
+            <button class="engage burn-btn" id="burnBtn" data-hint-key="SPACE" tabindex="-1"></button>
+            <!-- AUTO (WP9, §6.10): the trained AUTOBURN.skl brakes at ▼ for you; shown once the unit carries it
+                 (EngineWindow, from flight-hud's autoButton) -->
+            <button class="engage auto-btn" id="autoBtn" data-hint-key="B" tabindex="-1" hidden><span class="auto-head" id="autoHead"></span><span class="auto-note" id="autoNote"></span></button>
             <div class="ctrl-block">
-              <div class="ctrl-label"><span>thrust</span><span class="val" id="thrustVal">0%</span></div>
-              <input type="range" min="0" max="100" value="0" id="thrust" style="--p:0%">
-              <div class="scale"><span>0</span><span>50</span><span>100</span></div>
-            </div>
-            <div class="ctrl-block">
-              <div class="ctrl-label"><span>heading</span><span class="val" id="headingVal">PRO +0°</span></div>
-              <div class="speed-row">
-                <button class="speed-btn" id="rotCCW">↺ ccw</button>
-                <button class="speed-btn" id="rotStop">stop</button>
-                <button class="speed-btn" id="rotCW">cw ↻</button>
+              <div class="ctrl-label"><span>autopilot</span><span class="val" id="sasVal">—</span></div>
+              <!-- Labels and tooltips are painted from flight-hud's PRESET_* tables -->
+              <div class="preset-row">
+                <button class="preset-btn" id="sasPro" data-preset="prograde" tabindex="-1"></button>
+                <button class="preset-btn" id="sasRetro" data-preset="retrograde" tabindex="-1"></button>
+                <button class="preset-btn" id="sasRadIn" data-preset="radial-in" tabindex="-1"></button>
+                <button class="preset-btn" id="sasRadOut" data-preset="radial-out" tabindex="-1"></button>
               </div>
-              <div class="ctrl-label"><span>spin</span><span class="val" id="spinVal">0°/s</span></div>
+              <div class="preset-hint" id="presetHint"></div>
             </div>
-            <div class="ctrl-block">
-              <div class="ctrl-label"><span>autopilot</span><span class="val" id="sasVal">MANUAL</span></div>
-              <div class="sas-row">
-                <button class="speed-btn" id="sasHold">hold</button>
-                <button class="speed-btn" id="sasPro">pro</button>
-                <button class="speed-btn" id="sasRetro">retro</button>
-                <button class="speed-btn" id="sasRadIn">rad in</button>
-                <button class="speed-btn" id="sasRadOut">rad out</button>
+            <div class="ctrl-block fuel-block">
+              <div class="ctrl-label"><span>fuel<span class="fuel-trim" id="fuelTrim" title="FUEL TRIM widened this ship's tank on arrival" hidden></span></span><span class="val" id="fuelVal">—</span></div>
+              <div class="fuel-bar" id="fuelBar">
+                <div class="fuel-fill" id="fuelFill"></div>
+                <!-- THRUST LIMIT: the share of thrust the files hold back, hatched from the right -->
+                <div class="fuel-limit" id="fuelLimit" hidden></div>
+                <div class="fuel-star" id="fuelStar"></div>
+                <div class="fuel-need" id="fuelNeed" hidden></div>
               </div>
+              <div class="fuel-scale"><span id="fuelNeedLabel"></span><span class="fuel-limit-label" id="fuelLimitLabel" hidden></span><span id="fuelStarLabel"></span></div>
             </div>
-            <button class="engage" id="endInsertion">▣ end insertion</button>
+            <!-- REACTOR: its power in cells; each busy Core thread takes one to THINK (C4) -->
+            <div class="ctrl-block reactor-block" title="The reactor powers the engine AND your thinking: every busy thread takes a cell from the burn">
+              <div class="ctrl-label"><span><span class="reactor-pip" id="reactorPip"></span>reactor</span><span class="val" id="reactorVal">—</span></div>
+              <div class="reactor-cells" id="reactorCells"></div>
+            </div>
+            <button class="engage accept-btn" id="acceptBtn" tabindex="-1" hidden></button>
+            <!-- BEAM OUT (§9 WP7 item 6): offered on a doomed ship, then its TRANSMITTING bar races the impact
+                 (EngineWindow; COMMS has the same as ABANDON SHIP) -->
+            <button class="engage beam-btn" id="beamBtn" data-hint-target="beam-out" tabindex="-1" hidden></button>
+            <div class="beam-bar" id="beamBar" hidden>
+              <div class="beam-fill" id="beamFill"></div>
+              <span class="beam-label" id="beamLabel"></span>
+              <button class="beam-cancel" id="beamCancel" tabindex="-1"></button>
+            </div>
+            <button class="manual-toggle" id="manualToggle" tabindex="-1" aria-expanded="false">▸ manual controls</button>
+            <div class="manual-fold" id="manualFold" hidden>
+              <div class="ctrl-label"><span>heading</span><span class="val" id="headingVal">—</span></div>
+              <div class="ctrl-label"><span>spin</span><span class="val" id="spinVal">—</span></div>
+              <div class="manual-row">
+                <button class="speed-btn" id="rotCCW" data-hint-key="Q" tabindex="-1" title="Q · turn left (MANUAL only)">↺ Q</button>
+                <button class="speed-btn" id="rotStop" tabindex="-1" title="MANUAL: drop the autopilot and stop the spin">manual</button>
+                <button class="speed-btn" id="rotCW" data-hint-key="E" tabindex="-1" title="E · turn right (MANUAL only)">E ↻</button>
+              </div>
+              <div class="ctrl-label"><span>power</span><span class="val" id="thrustVal">—</span></div>
+              <input type="range" max="100" value="100" id="thrust" style="--p:100%" tabindex="-1" autocomplete="off">
+            </div>
           </div>
         </div>
 
-        <div class="window navplot-win" data-seg="navplot">
+        <div class="window navplot-win" data-roles="navplot sensor">
           <div class="window-title">
             <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
             <span class="name">Nav Plot</span>
             <span class="ctl">−</span><span class="ctl">×</span>
           </div>
-          <div class="window-body">
-            <svg id="navplotSvg" class="navplot-svg" viewBox="0 0 320 320" preserveAspectRatio="xMidYMid meet">
-              <defs>
-                <radialGradient id="planetFill" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stop-color="var(--accent-dim)" stop-opacity="0.40"/>
-                  <stop offset="100%" stop-color="var(--accent-dim)" stop-opacity="0.04"/>
-                </radialGradient>
-              </defs>
-              <!-- orbit furniture is built and patched by renderOrbit() -->
-            </svg>
-            <!-- live orbit readout, painted by NavPlotWindow -->
+          <div class="window-body navplot-body">
+            <div class="np-stage">
+              <svg id="navplotSvg" class="navplot-svg" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <radialGradient id="planetFill" cx="50%" cy="50%" r="50%">
+                    <stop offset="0%" stop-color="var(--accent-dim)" stop-opacity="0.55"/>
+                    <stop offset="100%" stop-color="var(--accent-dim)" stop-opacity="0.12"/>
+                  </radialGradient>
+                </defs>
+                <!-- the plot itself is built and patched by NavPlotWindow -->
+              </svg>
+              <div class="np-chip" id="npChip"></div>
+              <!-- NO SIGNAL: the Nav Plotter is dead or gone (NavPlotWindow) -->
+              <div class="np-veil" id="npVeil" hidden>
+                <div class="np-veil-title">NO SIGNAL</div>
+                <div class="np-veil-why" id="npVeilWhy"></div>
+              </div>
+            </div>
+            <!-- live readout row, painted by NavPlotWindow from flight-hud's plotReadouts -->
             <div class="np-readout">
-              <div class="np-stat"><span class="lbl">ecc</span><span class="v" id="np-ecc-val">—</span></div>
-              <div class="np-stat"><span class="lbl">peri alt</span><span class="v" id="np-peri-val">—</span></div>
-              <div class="np-stat"><span class="lbl">apo alt</span><span class="v" id="np-apo-val">—</span></div>
-              <div class="np-stat"><span class="lbl">status</span><span class="v" id="np-status-val">—</span></div>
+              <div class="np-stat"><span class="lbl">▼ lowest<span class="np-drift" id="npLowestDrift" hidden></span></span><span class="v" id="npLowest">—</span></div>
+              <div class="np-stat"><span class="lbl">▲ highest</span><span class="v" id="npHighest">—</span></div>
+              <div class="np-stat"><span class="lbl">printer range</span><span class="v" id="npRange">—</span></div>
+              <div class="np-stat"><span class="lbl">status</span><span class="v" id="npStatus">—</span></div>
             </div>
           </div>
         </div>
+
+        <!-- The phone's flight bar (PhoneFlightBar, ≤ 768 px only): under whichever tab is open, the Engine window's
+             FUEL, presets, BURN and its context buttons (AUTO, ACCEPT, BEAM OUT), moved here so a kid on the NAV PLOT
+             can do what the strip asks -->
+        <div class="phone-bar" id="phoneBar" hidden></div>
       </div>
 
       <!-- MEMORY VIEW -->
       <div class="memory-view">
 
+        <!-- Computed from memory by MemoryStats (labels too): the colonists, REPAIR CHARGE, free
+             blocks, the damage you can see, and the memory's size -->
         <div class="mem-stats">
-          <div class="mem-stat"><span class="lbl">total</span><span class="v">384 <span class="small">blk</span></span></div>
-          <div class="mem-stat"><span class="lbl">ship systems</span><span class="v">66 <span class="small">/ 17%</span></span></div>
-          <div class="mem-stat"><span class="lbl">ai footprint</span><span class="v">81 <span class="small">/ 21%</span></span></div>
-          <div class="mem-stat"><span class="lbl">filesystem</span><span class="v">17 <span class="small">/ 4%</span></span></div>
-          <div class="mem-stat"><span class="lbl">redundancy</span><span class="v" id="statRedund">36 <span class="small">/ 9%</span></span></div>
-          <div class="mem-stat"><span class="lbl">free</span><span class="v" id="statFree">176 <span class="small">/ 46%</span></span></div>
-          <div class="mem-stat"><span class="lbl">corrupt</span><span class="v" id="statCorrupt">— <span class="small">unscanned</span></span></div>
+          <div class="mem-stat"><span class="lbl">colonists</span><span class="v" id="statSouls"></span></div>
+          <div class="mem-stat"><span class="lbl">repair charge</span><span class="v" id="statRedund"></span><span class="merge-tick" id="statMergeTick" hidden></span></div>
+          <div class="mem-stat"><span class="lbl">free</span><span class="v" id="statFree"></span></div>
+          <div class="mem-stat"><span class="lbl">damage</span><span class="v" id="statDamage"></span></div>
+          <div class="mem-stat"><span class="lbl">memory</span><span class="v" id="statTotal"></span></div>
         </div>
 
         <div class="mem-strip-panel">
           <div class="mem-strip-header">
-            <span>▌ data banks · ARES-VII · contiguous</span>
-            <span class="meta">0x000 → 0x17F · LOW → HIGH</span>
+            <span>▌ memory · <span id="memShip"></span></span>
+            <span class="meta" id="memRange"></span>
           </div>
           <div class="mem-strip-wrap" id="memWrap"></div>
         </div>
@@ -205,20 +291,53 @@
           </div>
         </div>
 
+        <!-- The mini-HUD: the ship at a glance while you work in the mind (MiniHud); a click goes back -->
+        <div class="mini-hud" id="miniHud" role="button" title="The SHIP: click or [TAB] to go back">
+          <div class="mh-head"><span class="mh-title">◆ ship</span><span class="mh-pace" id="mhPace"></span></div>
+          <div class="mh-body">
+            <svg class="mh-plot" id="mhPlot" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+            <div class="mh-stats">
+              <div class="mh-countdown" id="mhCountdown"><span class="mh-cd-label" id="mhCdLabel"></span><span class="mh-cd-time" id="mhCdTime"></span><span class="mh-cd-badge" id="mhCdBadge"></span></div>
+              <div class="mh-state" id="mhState"></div>
+              <div class="mh-fuel">
+                <span class="mh-k">fuel</span>
+                <div class="mh-fuel-bar"><div class="mh-fuel-fill" id="mhFuelFill"></div><div class="mh-fuel-limit" id="mhFuelLimit" hidden></div></div>
+                <span class="mh-fuel-val" id="mhFuelVal"></span>
+              </div>
+              <div class="mh-limit" id="mhLimit" hidden></div>
+              <!-- WP9: AUTOBURN armed or flying the ship while the kid works in the MIND (MiniHud) -->
+              <div class="mh-auto" id="mhAuto" hidden></div>
+              <!-- While printing: how far, and PRINT FAST (MiniHud; the button does not go back to amber) -->
+              <div class="mh-print" id="mhPrint" hidden>
+                <span class="mh-print-text" id="mhPrintText"></span>
+                <button class="mh-print-fast" id="mhPrintFast" data-hint-target="print-fast" tabindex="-1">PRINT FAST ▸▸</button>
+              </div>
+              <!-- While printing: the INTACT star, live (★ INTACT 11/12 while a hurt cluster could cost it) -->
+              <div class="mh-intact" id="mhIntact" hidden></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- The mind's own voice: boot/ECC lines, command echoes, HOLLOW (MindTerminal) -->
+        <div class="mind-terminal" id="mindTerminal">
+          <div class="mind-term-head"><span>▌ terminal</span></div>
+          <div class="mind-term-lines" id="mindTermLines" aria-live="polite" title="click to finish the line"></div>
+        </div>
+
         <div class="fs-status-bar mobile-drawer" data-drawer="fs-tools" data-open="false">
           <span class="fs-status-label drawer-toggle" data-drawer-toggle="fs-tools" role="button" tabindex="0" aria-expanded="false">
             <span class="drawer-caret" aria-hidden="true">▸</span>▌ filesystem
           </span>
           <div class="fs-tool-pill" id="fsToolPill" hidden></div>
           <div class="drawer-body">
-            <div class="fs-tool-chip clickable" id="chip-scan" data-fs="scan"><span class="dot"></span><span>Scan</span></div>
-            <div class="fs-tool-chip clickable" id="chip-repair" data-fs="repair"><span class="dot"></span><span>Repair</span></div>
-            <div class="fs-tool-chip" id="chip-repair-b"><span class="dot"></span><span>Repair.bak</span></div>
-            <div class="fs-tool-chip clickable" id="chip-move" data-fs="move"><span class="dot"></span><span>Move</span></div>
-            <div class="fs-tool-chip clickable" id="chip-copy" data-fs="copy"><span class="dot"></span><span>Copy</span></div>
-            <div class="fs-tool-chip clickable" id="chip-delete" data-fs="delete"><span class="dot"></span><span>Delete</span></div>
-            <div class="fs-tool-chip clickable" id="chip-activate" data-fs="activate"><span class="dot"></span><span>Activate</span></div>
-            <div class="fs-tool-chip clickable" id="chip-deactivate" data-fs="deactivate"><span class="dot"></span><span>Deactivate</span></div>
+            <!-- One chip per tool kind, shown only while a copy of its file is in memory (licences,
+                 WP4). FsStatusBar draws one health dot per copy (Repair + Repair.bak: two). -->
+            <div class="fs-tool-chip clickable" id="chip-scan" data-fs="scan" data-hint-target="chip-scan" hidden><span class="dots"></span><span>Scan</span></div>
+            <div class="fs-tool-chip clickable" id="chip-repair" data-fs="repair" data-hint-target="chip-repair" hidden><span class="dots"></span><span>Repair</span></div>
+            <div class="fs-tool-chip clickable" id="chip-move" data-fs="move" data-hint-target="chip-move" hidden><span class="dots"></span><span>Move</span></div>
+            <div class="fs-tool-chip clickable" id="chip-copy" data-fs="copy" data-hint-target="chip-copy" hidden><span class="dots"></span><span>Copy</span></div>
+            <div class="fs-tool-chip clickable" id="chip-delete" data-fs="delete" data-hint-target="chip-delete" hidden><span class="dots"></span><span>Delete</span></div>
+            <div class="fs-tool-chip clickable" id="chip-swap" data-fs="swap" data-hint-target="chip-swap" hidden><span class="dots"></span><span>Swap</span></div>
           </div>
         </div>
 
@@ -228,11 +347,16 @@
   </div>
 
   <div class="footer">
-    <div class="item"><span>2,400 SOULS IN STASIS</span></div>
-    <div class="item"><span id="footBurn">INSERTION · IN PROGRESS</span></div>
+    <!-- SOULS IN STASIS until the reveal, then SOULS: n IN MEMORY · n WOKE · n LOST (Footer) -->
+    <div class="item"><span id="footSouls"></span></div>
+    <div class="item"><span id="footBurn">FLIGHT · FLYING</span></div>
     <div class="spacer"></div>
-    <div class="item"><span id="footCores">THREADS: 0/2 ACTIVE</span></div>
-    <div class="item"><span id="footRedund">REDUNDANCY: 36/72 AVAILABLE</span></div>
+    <!-- WP8: the archive is not keeping this unit (offline, or played without), in the game too (Footer) -->
+    <div class="item foot-archive" id="footArchive" hidden></div>
+    <!-- THRUST LIMIT n% · its cause, while the files cap the engine (Footer) -->
+    <div class="item foot-limit" id="footLimit" hidden></div>
+    <div class="item"><span id="footCores">THREADS 0/2</span></div>
+    <div class="item"><span id="footRedund">REPAIR CHARGE 36</span><span class="merge-tick" id="footMergeTick" hidden></span></div>
   </div>
 
   <!-- Burn outcome banner — shown by BurnResult when a run reaches a terminal state -->
@@ -240,7 +364,179 @@
     <div class="burn-result-card">
       <div class="burn-result-title" id="burnResultTitle"></div>
       <div class="burn-result-sub" id="burnResultSub"></div>
-      <button class="burn-result-retry" id="burnResultRetry">↻ RETRANSMIT</button>
+      <!-- The LOST card's colonists line; on ship 1 before the reveal it IS the reveal (BurnResult) -->
+      <div class="burn-result-souls" id="burnResultSouls" hidden></div>
+      <!-- The run goes on from here (BurnResult names what its press does: AGAIN, EMERGENCY TRANSMIT …) -->
+      <button class="burn-result-retry" id="burnResultRetry" tabindex="-1">▸</button>
+    </div>
+  </div>
+
+  <!-- The WAKE REPORT (§7.1, WakeReport): once every cluster has left memory, the ship's credits
+       roll (who woke, by name, and what they said), the count rolls up, then the stars land -->
+  <div class="wake-report" id="wakeReport" hidden>
+    <div class="wr-inner">
+      <div class="wr-head">
+        <div class="wr-title" id="wrTitle"></div>
+        <div class="wr-route" id="wrRoute"></div>
+      </div>
+      <div class="wr-credits" id="wrCredits"><div class="wr-roll" id="wrRoll"></div></div>
+      <div class="wr-epigraph" id="wrEpigraph" hidden></div>
+      <div class="wr-total" id="wrTotal"></div>
+      <!-- WOKE counts heads; the cost of a bad print stands right under it, in the hurt yellow (WP7) -->
+      <div class="wr-missing" id="wrMissing" hidden></div>
+      <div class="wr-breakdown" id="wrBreakdown" hidden></div>
+      <div class="wr-stars" id="wrStars" hidden></div>
+      <div class="wr-charge" id="wrCharge" hidden></div>
+      <div class="wr-foot">
+        <button class="wr-skip" id="wrSkip" tabindex="-1"></button>
+        <button class="wr-continue" id="wrContinue" tabindex="-1" hidden></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRANSMIT (§4.1 step 5, TransmitScreen): where the unit goes next, the packet against the link, what
+       the crossing costs, the files as chips; TRANSMIT ▸ streams them out across the light-years -->
+  <div class="transmit-screen" id="transmitScreen" hidden>
+    <div class="tx-inner">
+      <div class="tx-head">
+        <div class="tx-title" id="txTitle"></div>
+        <div class="tx-next" id="txNext"></div>
+        <div class="tx-why" id="txWhy" hidden></div>
+      </div>
+      <!-- PICK ONE TO CARRY (WP8): three cards shaped by how the kid played, each with what it does and why
+           it was offered; TRANSMIT ▸ waits for a pick (TransmitScreen) -->
+      <div class="tx-draft" id="txDraft" hidden>
+        <div class="tx-draft-head"><span class="tx-draft-title" id="txDraftTitle"></span><span class="tx-draft-keys" id="txDraftKeys"></span></div>
+        <div class="tx-cards" id="txCards"></div>
+      </div>
+      <div class="tx-packet">
+        <div class="tx-bar" id="txBar"><span class="tx-bar-files" id="txBarFiles"></span><span class="tx-bar-charge" id="txBarCharge"></span></div>
+        <div class="tx-bar-over" id="txBarOver" hidden></div>
+        <div class="tx-packet-line" id="txPacketLine"></div>
+      </div>
+      <div class="tx-drop-line" id="txDropLine"></div>
+      <div class="tx-chips" id="txChips"></div>
+      <div class="tx-notes">
+        <div class="tx-note tx-infected" id="txInfected" hidden></div>
+        <div class="tx-note" id="txHits"></div>
+        <div class="tx-note tx-arrival" id="txArrival"></div>
+      </div>
+      <div class="tx-send" id="txSend" hidden>
+        <div class="tx-send-line" id="txSendLine"></div>
+        <div class="tx-send-bar"><span id="txSendFill"></span></div>
+        <div class="tx-send-ly" id="txSendLy"></div>
+      </div>
+      <div class="tx-foot"><button class="tx-go" id="txGo" tabindex="-1"></button></div>
+    </div>
+  </div>
+
+  <!-- LAST LIGHT's choice (§6.6, §9 WP11 item 5, FinaleChoice): the root is gone and one block is left. HOLLOW's last
+       words type on the card, then PURGE or MERGE, each with its command, what it means and what it costs (MERGE's
+       charge against its price, and why it is out of reach). The choice turns the card into the typed ending. -->
+  <div class="finale-choice" id="finaleChoice" hidden>
+    <div class="fc-card" id="fcCard">
+      <div class="fc-kicker" id="fcKicker"></div>
+      <div class="fc-last" aria-hidden="true"><span class="fc-block"></span></div>
+      <div class="fc-title" id="fcTitle"></div>
+      <div class="fc-words" id="fcWords"></div>
+      <div class="fc-sub" id="fcSub"></div>
+      <div class="fc-options" id="fcOptions">
+        <button class="fc-btn fc-purge" id="fcPurge" tabindex="-1">
+          <span class="fc-head"><kbd class="keycap fc-key"></kbd><span class="fc-word"></span></span>
+          <span class="fc-cmd"></span>
+          <span class="fc-what"></span>
+          <span class="fc-cost"></span>
+        </button>
+        <button class="fc-btn fc-merge" id="fcMerge" tabindex="-1">
+          <span class="fc-head"><kbd class="keycap fc-key"></kbd><span class="fc-word"></span></span>
+          <span class="fc-cmd"></span>
+          <span class="fc-what"></span>
+          <span class="fc-cost"></span>
+          <span class="fc-price">
+            <span class="fc-meter"><span class="fc-meter-fill"></span><span class="fc-meter-tick"></span></span>
+            <span class="fc-price-text"></span>
+          </span>
+          <span class="fc-why" id="fcWhy" hidden></span>
+        </button>
+      </div>
+      <!-- the typed ending (≤ 6 lines) the choice brings, then the hint that a click goes on -->
+      <div class="fc-ending" id="fcEnding" hidden></div>
+      <div class="fc-hint" id="fcHint" hidden></div>
+    </div>
+  </div>
+
+  <!-- The white-out at the end of a transmission: the new ship comes up from under it (TransmitScreen) -->
+  <div class="white-out" id="whiteOut" hidden></div>
+
+  <!-- RUN END (§9 WP7 item 7, RunEnd): the cause, souls woke, every ship, the SCORE and rank, NEW RUN -->
+  <div class="run-end" id="runEnd" hidden>
+    <div class="re-inner">
+      <div class="re-kicker" id="reKicker"></div>
+      <div class="re-title" id="reTitle"></div>
+      <div class="re-why" id="reWhy"></div>
+      <!-- WP11 part 2, after a won finale: the endings found (ENDINGS 1/2 · PURGE · ???), and what a MERGE carries -->
+      <div class="re-endings" id="reEndings" hidden></div>
+      <div class="re-carry" id="reCarry" hidden></div>
+      <div class="re-total" id="reTotal"></div>
+      <div class="re-missing" id="reMissing" hidden></div>
+      <div class="re-ships" id="reShips"></div>
+      <div class="re-score-row">
+        <span class="re-score" id="reScore"></span>
+        <span class="re-rank" id="reRank"></span>
+        <span class="re-score-note" id="reScoreNote"></span>
+      </div>
+      <div class="re-near" id="reNear"></div>
+      <div class="re-seed" id="reSeed"></div>
+      <!-- WP8: the archive did not keep this run (the next unit will not remember it) -->
+      <div class="re-archive" id="reArchive" hidden></div>
+      <div class="re-foot"><button class="re-new" id="reNew" tabindex="-1"></button></div>
+    </div>
+  </div>
+
+  <!-- Look-only pause: dims the desk, lets clicks and hovers through (PauseVeil) -->
+  <div class="pause-veil" id="pauseVeil" hidden>
+    <div class="pause-veil-card">PAUSED · <kbd class="keycap" data-touch="❚❚">P</kbd> to resume</div>
+  </div>
+
+  <!-- Juice overlays (Juice, Stamp): the alarm vignette, HOLD STEADY 3-2-1, stamps, the flash -->
+  <div class="alarm-vignette" aria-hidden="true"></div>
+  <div class="hold-steady" id="holdSteady" hidden>
+    <div class="hs-title" id="holdSteadyTitle"></div>
+    <div class="hs-count" id="holdSteadyCount"></div>
+    <div class="hs-bar"><span id="holdSteadyFill"></span></div>
+    <div class="hs-sub" id="holdSteadySub"></div>
+  </div>
+  <div class="stamp-layer" id="stampLayer" aria-live="assertive"></div>
+  <div class="screen-flash" id="screenFlash" hidden></div>
+
+  <!-- SHIP ⇄ MIND scanline wipe (ModeToggle plays it on every switch) -->
+  <div class="mode-wipe" id="modeWipe" hidden></div>
+
+  <!-- Title card, then the boot's click-to-skip catcher (TitleCard + systems/boot). During the
+       boot the objective strip says how to skip. -->
+  <div class="title-card" id="titleCard">
+    <div class="title-inner">
+      <div class="title-signal" aria-hidden="true"><span class="title-signal-dot"></span>INCOMING SIGNAL</div>
+      <h1 class="title-name">ARRIVAL PROTOCOL</h1>
+      <div class="title-sub">// SOULCACHE</div>
+      <div class="title-unit" id="titleUnit"></div>
+      <!-- WP8, run 2+: how the last unit ended (last: UNIT-047 · 6,200 woke · overwritten at HALCYON), and
+           the endings found so far -->
+      <div class="title-lineage" id="titleLineage" hidden></div>
+      <div class="title-endings" id="titleEndings" hidden></div>
+      <!-- WP8: the archive when it is not behind this page (offline, corrupt, played without), loudly.
+           CORRUPT offers WIPE ARCHIVE or PLAY WITHOUT ARCHIVE; RECEIVE does not wait for an answer and plays without it. -->
+      <div class="title-archive" id="titleArchive" role="alert" hidden>
+        <div class="title-archive-line" id="titleArchiveLine"></div>
+        <div class="title-archive-detail" id="titleArchiveDetail" hidden></div>
+        <div class="title-archive-choices" id="titleArchiveChoices" hidden>
+          <button class="title-archive-btn" id="titleWipe" tabindex="-1"></button>
+          <button class="title-archive-btn" id="titlePlayWithout" tabindex="-1"></button>
+        </div>
+        <div class="title-archive-hints" id="titleArchiveHints" hidden></div>
+      </div>
+      <button class="title-receive" id="titleReceive" tabindex="-1">[ RECEIVE TRANSMISSION ]</button>
+      <div class="title-note">runs are not saved mid-ship</div>
     </div>
   </div>
 
@@ -249,6 +545,17 @@
 
   <!-- Cursor follower for active fs-tool -->
   <div class="cursor-follower" id="cursorFollower"></div>
+
+  <!-- Inline confirm pill: asks before a delete that can't be undone (InlineConfirm) -->
+  <div class="inline-confirm" id="inlineConfirm" role="alertdialog" aria-live="assertive" hidden>
+    <div class="ic-question" id="inlineConfirmQuestion"></div>
+    <div class="ic-detail" id="inlineConfirmDetail"></div>
+    <div class="ic-buttons">
+      <button class="ic-btn ic-yes" id="inlineConfirmYes" tabindex="-1"></button>
+      <button class="ic-btn ic-no" id="inlineConfirmNo" tabindex="-1"></button>
+    </div>
+    <div class="ic-keys"><kbd class="keycap">ENTER</kbd> yes · <kbd class="keycap">ESC</kbd> no</div>
+  </div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

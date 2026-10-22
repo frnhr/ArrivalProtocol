@@ -8,6 +8,10 @@ export default defineConfig({
     target: 'es2022',
     outDir: 'dist',
     sourcemap: true,
+    // The game is one screen that needs every module the moment it opens (title, both layers, all five ships' data
+    // and text), so code-splitting would only add requests: the main chunk is about 540 kB, 190 kB gzipped (WP12).
+    // The limit sits above it with room to grow, so the build still warns if something big lands by accident.
+    chunkSizeWarningLimit: 800,
   },
   resolve: {
     alias: {
@@ -22,5 +26,8 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
+    // .tmp/ is gitignored scratch (tests, screenshots, unpacked snapshots). A copied index.html
+    // or tsconfig.json in there would otherwise force a full reload of every open game tab.
+    watch: { ignored: ['**/.tmp/**'] },
   },
 });

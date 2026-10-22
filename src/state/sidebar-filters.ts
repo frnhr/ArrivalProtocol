@@ -1,27 +1,34 @@
 import type { Segment } from '@/types/segment';
 import type { FilterKey, StatusKey } from './schema';
+import { healthKnown } from './selectors';
 
-export const ALL_FILTER_KEYS: readonly FilterKey[] = ['ai', 'ship', 'filesystem', 'free'];
+export const ALL_FILTER_KEYS: readonly FilterKey[] = ['ai', 'ship', 'souls', 'filesystem', 'free'];
 
 // Maps a segment to its sidebar category. The labels reflect the player's
 // mental model, not the type-system split: AI = the consciousness + its
-// abilities; Ship = vessel subsystems; Filesystem = managed storage entities
-// (fs-tools, redundancy pool, locked archives); Free = unallocated.
+// abilities (upgrade files included: they are what the unit carries); Ship = vessel subsystems;
+// Souls = the colonists (§7.1: the souls filter); Filesystem = managed storage entities (fs-tools,
+// redundancy pool, FIREWALLs, HOLLOW's locked blocks); Free = unallocated. Exhaustive: a new segment
+// type must pick its category here.
 export function categoryOf(seg: Segment): FilterKey {
   switch (seg.type) {
     case 'core':
     case 'tool':
     case 'skill':
+    case 'upgrade':
       return 'ai';
     case 'ship':
     case 'ship-backup':
       return 'ship';
     case 'fs-tool':
-    case 'encrypted':
+    case 'hollow':
     case 'redundancy':
+    case 'firewall':
       return 'filesystem';
     case 'free':
       return 'free';
+    case 'soul':
+      return 'souls';
   }
 }
 
@@ -30,10 +37,12 @@ export function categoryOf(seg: Segment): FilterKey {
 // segment is the interesting thing, but the player thinks "ships with
 // backups").
 export function matchesStatus(seg: Segment, key: StatusKey): boolean {
+  if (key === 'backup') return seg.type === 'ship-backup';
+  // Damage the kid can't see yet (an unscanned ship file, a sealed cluster) is not counted.
+  if (!healthKnown(seg)) return false;
   const state = 'state' in seg ? seg.state : undefined;
   if (key === 'corrupt') return state === 'corrupt';
   if (key === 'partial') return state === 'partial';
-  if (key === 'backup') return seg.type === 'ship-backup';
   return false;
 }
 

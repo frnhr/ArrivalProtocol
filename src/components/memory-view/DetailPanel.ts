@@ -1,14 +1,44 @@
-import type { Segment, FsToolSegment, RedundancySegment } from '@/types/segment';
+import type { Segment, FsToolSegment, SoulSegment, HollowSegment } from '@/types/segment';
 import type { Store } from '@state/store';
-import type { GameState } from '@state/schema';
-import { getFsTool, getRedundancy, selectCorruption } from '@state/selectors';
-import { getActiveOpCount } from '@systems/ops';
-import { TYPE_LABELS } from '@data/type-labels';
+import type { GameState, ClusterOutcome } from '@state/schema';
+import {
+  getFsTool, getRedundancy, getFreeTotal, getSegmentById, selectCorruption, shownIntegrity, isRepairable,
+  healthKnown, soulOutcome, isInfected, revealUnderway, type HealthSegment,
+} from '@state/selectors';
+import {
+  INTEGRITY_MAX, REVEAL_TYPE_CPS, REVEAL_TICK_EVERY_CHARS, REVEAL_LINE_AT_SEC, PRINT_RANGE_FLOOR, PRINT_FAST_FACTOR,
+} from '@data/tuning';
+import { printStatus, printerRange, isPrintable, printFastRefusal, printFastActive } from '@systems/printer';
+import { onPostTick } from '@systems/clock';
+import { onWorldReset } from '@systems/reset';
+import { play } from '@systems/audio';
+import { PRINT_FAST_HINT_TARGET } from '@data/script';
+import { creditName } from '@data/souls';
+import { unitsAt } from '@components/hud/typewriter';
+import { guardPresses } from '@components/dom';
+import { setDrawerOpen } from './MobileDrawers';
+import { MOBILE_MEDIA_QUERY } from '@/utils/viewport';
+import { heartbeatSvg, heartbeatKind } from './SegmentBlock';
+import { onOpsChange, threadsBusy, threadsTotal } from '@systems/ops-core';
+import { findBackup } from '@systems/tool-targets';
+import { totalBlocks } from '@systems/memory-ops';
+import { getLastAppliedTargetId } from '@systems/fs-tools';
+import { onInlineConfirmChange } from '@components/hud/InlineConfirm';
+import { repairChargeEstimate, actionRefusal, setIntegrity } from '@state/actions';
+import { healRatePerSec } from '@systems/hollow';
+import { TYPE_LABELS, segTypeLabel } from '@data/type-labels';
+import { HOLLOW_INSPECT, hollowInspectState, hollowInspectDesc } from '@data/hollow-text';
 import { TOOL_MAX_VERSION } from '@data/fs-tools';
+import { isDebugMode } from '@/debug';
+import { LIVE_REPAIR_PREFIX, shownThreadsTotal } from './SegmentBlock';
+import { visibleDamage } from './MemoryStats';
 
-export type DetailActionId =
-  | 'repair' | 'swap' | 'activate' | 'delete_redund' | 'scan'
-  | 'install' | 'noop';
+// The INSPECT panel: what the selected file is, and buttons for what can be done to it. The
+// buttons ask the actions' own rules (actionRefusal: pause, a usable tool, the target
+// rules, a free thread), so a disabled button says the same reason a click would, and main.ts
+// runs them through the same actions, which re-check everything at the click.
+
+export type DetailActionId = 'repair' | 'delete_charge' | 'scan' | 'print-next' | 'print-fast' | 'noop';
 
 interface ActionOption {
   id: DetailActionId;
@@ -16,20 +46,19 @@ interface ActionOption {
   cost?: string;
   cls?: string;
   disabled?: boolean;
+  hintTarget?: string;  // a strip line can light this button (PRINT FAST ▸▸)
 }
 
-export interface ComputedActions {
+interface ComputedActions {
   primary: ActionOption[];
-  demoHtml: string;
+  notesHtml: string;
 }
 
-export interface ComputeActionsDeps {
-  getFsTool: (kind: 'scan' | 'repair' | 'move' | 'copy' | 'delete') => FsToolSegment | undefined;
-  getRedundancy: () => RedundancySegment | undefined;
-}
-
-export interface RenderDetailDeps extends ComputeActionsDeps {
+interface RenderDetailDeps {
+  state: Readonly<GameState>;
   onAction: (seg: Segment, actionId: DetailActionId) => void;
+  // PRINT FAST ▸▸ is about the whole printer, not the file on show (it is also on the overview).
+  onPrintFast: () => void;
   onCorruptionSliderInput?: (pct: number) => void;
   // current global corruption 0..1, used to initialize the demo slider
   getCorruption?: () => number;
@@ -40,79 +69,282 @@ export interface RenderDetailDeps extends ComputeActionsDeps {
   onVersionSliderInput?: (segId: string, n: number) => void;
 }
 
-export function computeActions(seg: Segment, deps: ComputeActionsDeps): ComputedActions {
-  const out: ComputedActions = { primary: [], demoHtml: '' };
-  const repair = deps.getFsTool('repair');
-  const scan = deps.getFsTool('scan');
-  const redund = deps.getRedundancy();
+function scanOption(state: Readonly<GameState>, seg: Segment, label: string): ActionOption {
+  const refusal = actionRefusal(state, 'scan', seg);
+  return { id: 'scan', label, cost: refusal ?? 'scan', disabled: refusal !== null, cls: refusal ? 'disabled' : '' };
+}
 
-  const state = 'state' in seg ? seg.state : undefined;
-  const integrity = 'integrity' in seg ? seg.integrity : undefined;
-  // Pre-scan segments: don't surface repair / swap / damage-aware buttons.
-  // They would leak the very state the player hasn't discovered yet. Offer
-  // only the Scan action so the discovery path is the obvious next step.
+// How many times faster PRINT FAST prints (×4), as its button says it.
+const PRINT_FAST_SPEEDUP = Math.round(1 / PRINT_FAST_FACTOR);
+
+// PRINT FAST ▸▸ (§6.7): a toggle, offered wherever printing is on screen (a cluster, the overview).
+// While anything is infected it can't be switched on (WP6, §6.7), and a fast printer HOLLOW bites
+// mid-run waits at normal speed until the mind is clear: the button says which.
+function printFastOption(state: Readonly<GameState>): ActionOption {
+  const fast = state.printer.fast;
+  const paused = state.clock.paused;
+  const blocked = !fast && printFastRefusal(state) !== null;
+  const waiting = fast && !printFastActive(state);
+  let cost: string;
+  if (paused) cost = 'PAUSED';
+  else if (blocked) cost = printFastRefusal(state)!;
+  else if (waiting) cost = 'waits · something is infected';
+  else cost = fast ? 'on · click for normal' : `×${PRINT_FAST_SPEEDUP} speed`;
+  return {
+    id: 'print-fast',
+    label: fast ? '▸▸ printing fast' : '▸▸ print fast',
+    cost,
+    cls: paused || blocked ? 'disabled' : fast ? 'print on' : 'print',
+    disabled: paused || blocked,
+    hintTarget: PRINT_FAST_HINT_TARGET,
+  };
+}
+
+// PRINT NEXT: this cluster to the front of the line (again: back to its place).
+function printNextOption(state: Readonly<GameState>, soul: SoulSegment): ActionOption {
+  const pinned = state.printer.printNext === soul.cluster;
+  const paused = state.clock.paused;
+  const waits = !isPrintable(soul);
+  return {
+    id: 'print-next',
+    label: pinned ? '✓ next in line' : '▸ print next',
+    cost: paused ? 'PAUSED' : pinned ? (waits ? 'waits for its op' : 'click to undo') : 'first in line',
+    cls: paused ? 'disabled' : pinned ? 'print on' : 'print',
+    disabled: paused,
+  };
+}
+
+export function computeActions(seg: Segment, state: Readonly<GameState>): ComputedActions {
+  const out: ComputedActions = { primary: [], notesHtml: '' };
+  const segState = 'state' in seg ? seg.state : undefined;
+  // A sealed cluster: nothing to do to it (every tool is refused until the reveal).
+  if (seg.type === 'soul' && seg.sealed) return out;
+  // WP10: the swap button is gone (SWAP is a tool file now, §8): a ship file with a backup says where its job can
+  // go, scanned or not (it names no health), so the kid who followed the THRUST CTRL pip here knows what SWAP is for.
+  if (seg.type === 'ship') {
+    const backup = findBackup(state, seg);
+    if (backup) out.notesHtml += `<div class="detail-note">Backup: ${escapeHtml(backup.name)}. The SWAP tool hands this file's job to it.</div>`;
+  }
+  // Pre-scan segments: don't surface repair / damage-aware buttons. They would leak the
+  // very state the player hasn't discovered yet. Offer only Scan, the obvious next step.
   const knownScanned = 'scanned' in seg ? seg.scanned : true;
-
   if (!knownScanned) {
-    out.primary.push({
-      id: 'scan', label: '◎ scan for integrity',
-      cost: scan ? '1 tick' : 'no scan!',
-      disabled: !scan, cls: scan ? '' : 'disabled',
-    });
+    out.primary.push(scanOption(state, seg, '◎ scan for integrity'));
     return out;
   }
-  // Post-scan: a re-scan refreshes the integrity readout. Useful once files
-  // start degrading over time; currently mostly a no-op but always available.
-  const canRescan = 'scanned' in seg;
+  if (seg.type === 'soul' && state.run.phase === 'printing') {
+    out.primary.push(printNextOption(state, seg), printFastOption(state));
+  }
 
-  const isDamagedAi = (state === 'corrupt' || state === 'partial') &&
-    (seg.type === 'tool' || seg.type === 'skill' || seg.type === 'fs-tool' || seg.type === 'core');
-
-  if (isDamagedAi && integrity !== undefined) {
-    const cost = Math.ceil(((100 - integrity) / 100) * seg.size * 2);
-    const enough = !!redund && redund.used >= cost;
-    const possible = !!repair && enough;
+  if (isRepairable(seg) && seg.integrity < INTEGRITY_MAX) {
+    const repair = getFsTool(state, 'repair');
+    const refusal = actionRefusal(state, 'repair', seg);
+    const estimate = repairChargeEstimate(seg.integrity, seg.size);
     out.primary.push({
-      id: 'repair', label: '▸ repair with redundancy',
-      cost: `cost ${cost}`, disabled: !possible,
-      cls: possible ? '' : 'disabled',
+      id: 'repair', label: '▸ repair', cost: refusal ?? `~${estimate} charge`,
+      disabled: refusal !== null, cls: refusal ? 'disabled' : '',
     });
     if (!repair) {
-      out.demoHtml += `<div style="font-size:10px;color:var(--warn);margin-top:6px;line-height:1.5">⚠ Repair utility is corrupted or missing. Locate Repair.bak or recover before further damage occurs.</div>`;
-    } else if (!enough) {
-      out.demoHtml += `<div style="font-size:10px;color:var(--text-dim);margin-top:6px;line-height:1.5">Insufficient redundancy. Need ${cost}, have ${redund?.used ?? 0}.</div>`;
+      out.notesHtml += `<div class="detail-note warn">⚠ Repair is damaged or missing. Find Repair.bak, or nothing can be healed.</div>`;
+    } else if (!refusal && estimate > (getRedundancy(state)?.used ?? 0)) {
+      out.notesHtml += `<div class="detail-note">REPAIR CHARGE runs out first: the repair stops where the charge ends.</div>`;
     }
   }
 
-  if ((state === 'corrupt' || state === 'partial') && seg.type === 'ship' && seg.backup) {
-    out.primary.push({ id: 'swap', label: '⇄ swap to backup copy', cost: 'free', cls: 'swap' });
-  }
-  if ((state === 'corrupt' || state === 'partial') && seg.type === 'ship' && !seg.backup) {
+  if ((segState === 'corrupt' || segState === 'partial') && seg.type === 'ship' && !seg.backup) {
     out.primary.push({ id: 'noop', label: '⊘ no repair available', cost: '—', disabled: true });
   }
-  if (seg.type === 'ship-backup' && state === 'inactive') {
-    out.primary.push({ id: 'activate', label: '▸ activate (replaces primary)', cost: 'free', cls: 'swap' });
+  if (seg.type === 'hollow' && seg.locked) {
+    // WP11: the last block is no tool's: the finale's choice decides it.
+    out.primary.push({ id: 'noop', label: seg.last ? '⊘ purge or merge' : '⊘ locked', cost: '—', disabled: true });
   }
-  if (seg.type === 'encrypted') {
-    out.primary.push({ id: 'noop', label: '⊘ no decryption key', cost: '—', disabled: true });
-  }
-  if (seg.type === 'free') {
-    out.primary.push({ id: 'install', label: '▸ install tool here', cost: 'free' });
-  }
-  if (canRescan) {
+  if (seg.type === 'redundancy') {
+    const refusal = actionRefusal(state, 'delete', seg);
     out.primary.push({
-      id: 'scan', label: '◎ re-scan',
-      cost: scan ? '1 tick' : 'no scan!',
-      disabled: !scan, cls: scan ? '' : 'disabled',
+      id: 'delete_charge', label: '× delete repair charge', cost: refusal ?? `frees ${seg.size} blk`,
+      disabled: refusal !== null, cls: refusal ? 'disabled' : 'warn',
     });
   }
+  if ('scanned' in seg) out.primary.push(scanOption(state, seg, '◎ re-scan'));
 
   return out;
 }
 
-function renderActionButton(a: ActionOption): string {
-  const cls = `action-btn ${a.cls || ''} ${a.disabled ? 'disabled' : ''}`;
-  return `<button class="${cls}" data-action="${a.id}">${a.label}<span class="cost">${a.cost || ''}</span></button>`;
+function renderActionButton(option: ActionOption): string {
+  const cls = `action-btn ${option.cls || ''} ${option.disabled ? 'disabled' : ''}`;
+  const hint = option.hintTarget ? ` data-hint-target="${option.hintTarget}"` : '';
+  return `<button class="${cls}" data-action="${option.id}"${hint} tabindex="-1">${option.label}<span class="cost">${option.cost || ''}</span></button>`;
+}
+
+// --- Souls (§6.7) --------------------------------------------------------------------------------
+
+// HollowPainter patches the words and the heart in place while HOLLOW drains a cluster across a line
+// (`data-live-outcome`): the panel rebuilds only on a discrete change.
+export const OUTCOME_WORDS: Readonly<Record<ClusterOutcome, { text: string; cls: string }>> = {
+  woke: { text: 'WILL WAKE', cls: 'good' },
+  gaps: { text: 'WILL WAKE WITH GAPS', cls: 'partial' },
+  lost: { text: 'WILL NOT WAKE', cls: 'warn' },
+};
+
+// A size row's words: WP11's last block is the first file of one block (`1 block`, never `1 blocks`).
+function sizeText(size: number): string {
+  return `${size} ${size === 1 ? 'block' : 'blocks'}`;
+}
+
+// The sealed slab: what it is stays hidden (§6.7), and the clue points at STASIS.
+function sealedHtml(seg: SoulSegment): string {
+  return `
+    <div class="detail-title">Sealed block</div>
+    <div class="detail-type">Sealed · contents unknown</div>
+    <div class="detail-row"><span class="k">size</span><span class="v">${sizeText(seg.size)}</span></div>
+    <div class="detail-row"><span class="k">state</span><span class="v unknown">SEALED</span></div>
+    <div class="detail-desc">Locked since launch. It won't say what is inside. The STASIS file might know.</div>`;
+}
+
+// An open cluster: who they are (three people, by name), how the cluster is, and what printing it
+// now would do.
+function soulHtml(seg: SoulSegment, state: Readonly<GameState>): string {
+  const outcome = soulOutcome(seg.integrity);
+  const words = OUTCOME_WORDS[outcome];
+  let stateRow: string;
+  if (seg.state === 'repairing') {
+    stateRow = `<span class="v live" data-live-integrity="${seg.id}" data-live-prefix="${LIVE_REPAIR_PREFIX}REPAIRING · ">${LIVE_REPAIR_PREFIX}REPAIRING · ${shownIntegrity(seg.integrity)}%</span>`;
+  } else if (seg.infected) {
+    stateRow = infectedStateHtml(seg);
+  } else if (seg.state === 'transferring') {
+    stateRow = `<span class="v partial">↻ MOVING · ${shownIntegrity(seg.integrity)}%</span>`;
+  } else {
+    stateRow = `<span class="v ${words.cls}">${shownIntegrity(seg.integrity)}%</span>`;
+  }
+  // A person first, named the way the WAKE REPORT names them (`Ada Okafor, 11, wants to name the
+  // first tree.`: data/souls.ts colonistIntro), in the colonists' colour, then who they are.
+  const people = seg.featured.map((colonist) => `<li class="colonist"><span class="colonist-name">${escapeHtml(creditName(colonist))}</span>`
+    + `<span class="colonist-age">, ${colonist.age},</span> ${escapeHtml(colonist.line)}</li>`).join('');
+  let printing = '';
+  if (state.run.phase === 'printing') {
+    const pinned = state.printer.printNext === seg.cluster;
+    printing = `<div class="detail-row"><span class="k">printer</span><span class="v">${pinned ? 'NEXT IN LINE' : 'IN LINE'}</span></div>`;
+    if (outcome === 'woke' && printerRange() < PRINT_RANGE_FLOOR) {
+      printing += `<div class="detail-note">Low printer range: they may still wake with missing memories.</div>`;
+    }
+  }
+  return `
+    <div class="detail-title soul-title">${seg.cluster} · ${escapeHtml(seg.family.toUpperCase())}</div>
+    <div class="detail-type">Colonists · ${seg.souls} people</div>
+    <div class="soul-heart hb-${heartbeatKind(outcome)}" data-live-outcome="${seg.id}" data-outcome-part="heart">${heartbeatSvg(heartbeatKind(outcome))}</div>
+    <div class="detail-row"><span class="k">health</span>${stateRow}</div>
+    ${infectionRowHtml(seg, state)}
+    <div class="detail-row"><span class="k">if printed now</span><span class="v ${words.cls}" data-live-outcome="${seg.id}" data-outcome-part="words">${words.text}</span></div>
+    ${printing}
+    <ul class="colonists">${people}</ul>`;
+}
+
+// --- HOLLOW (§6.6) ---------------------------------------------------------------------------------
+
+// The prefix of an infected file's live health readout (HollowPainter patches the number).
+const EATEN_PREFIX = 'BEING EATEN · ';
+
+function infectedStateHtml(seg: HealthSegment): string {
+  return `<span class="v warn live" data-live-integrity="${seg.id}" data-live-prefix="${EATEN_PREFIX}">${EATEN_PREFIX}${shownIntegrity(seg.integrity)}%</span>`;
+}
+
+// Which end the red comes in from, and the rule that beats it: a repair before it reaches 0 wins.
+// While a repair fights it, the row says who is winning (the panel rebuilds when the repair starts).
+// Short enough for one line next to its key in the narrowest INSPECT (1280×720): the strip and the
+// file's own text carry the rest.
+function infectionRowHtml(seg: Segment, state: Readonly<GameState>): string {
+  if (!isInfected(seg)) return '';
+  let fix = seg.type === 'ship' || seg.type === 'ship-backup' ? 'can\'t be healed' : 'repair before 0';
+  let cls = 'warn';
+  if (healRatePerSec(state, seg) > 0) {
+    fix = 'repair pushing back';
+    cls = 'good';
+  }
+  return `<div class="detail-row"><span class="k">infected</span><span class="v ${cls}">from the ${seg.infected.side} · ${fix}</span></div>`;
+}
+
+// A hollow block: who it is, and what kind of block (data/hollow-text.ts hollowInspectState: the root, LOCKED or open
+// for LAST LIGHT's duel, the last block its DELETE leaves, a block that ate a file, or a seed it dropped; anything else
+// throws), and the rule a kid can repeat (the open root's own words: hollowInspectDesc).
+function hollowHtml(seg: HollowSegment): string {
+  const stateText = hollowInspectState(seg);
+  const desc = hollowInspectDesc(seg);
+  const stateRow = `<span class="v warn">${escapeHtml(stateText)}</span>`;
+  const kind = seg.root ? ` · ${HOLLOW_INSPECT.rootType}` : seg.last ? ` · ${HOLLOW_INSPECT.lastType}` : seg.seed ? ` · ${HOLLOW_INSPECT.seedType}` : '';
+  return `
+    <div class="detail-title hollow-title">${escapeHtml(seg.name)}</div>
+    <div class="detail-type">${TYPE_LABELS.hollow}${kind}</div>
+    <div class="detail-row"><span class="k">size</span><span class="v">${sizeText(seg.size)}</span></div>
+    <div class="detail-row"><span class="k">state</span>${stateRow}</div>
+    <div class="detail-desc">${escapeHtml(desc)}</div>`;
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// --- The STASIS reveal's lines (§5.1 0:38) ---------------------------------------------------------
+// INSPECT types each line as it lands (REVEAL_TYPE_CPS, a relay tick every REVEAL_TICK_EVERY_CHARS
+// letters). The panel is rebuilt on every discrete change, so the typing lives here, keyed by when
+// each line first appeared (wall clock: it is presentation), and a rebuild picks up where the
+// typing was. (The radio's typewriter queue can't hold it: its jobs paint into elements a rebuild
+// replaces.) Reset with the world (registered in mountDetailPanel).
+
+const revealTyping: { cause: string | null; landedAtMs: number[]; ticked: Set<number> } = { cause: null, landedAtMs: [], ticked: new Set() };
+
+function resetRevealTyping(): void {
+  revealTyping.cause = null;
+  revealTyping.landedAtMs = [];
+  revealTyping.ticked = new Set();
+}
+
+// The line that says where the colonists are (the last one) is drawn in their colour.
+const TRUTH_LINE_INDEX = REVEAL_LINE_AT_SEC.length - 1;
+
+function syncRevealTyping(state: Readonly<GameState>): void {
+  const reveal = state.souls.reveal;
+  if (reveal.cause !== revealTyping.cause || reveal.lines.length < revealTyping.landedAtMs.length) {
+    revealTyping.cause = reveal.cause;
+    revealTyping.landedAtMs = [];
+    revealTyping.ticked = new Set();
+  }
+  while (revealTyping.landedAtMs.length < reveal.lines.length) revealTyping.landedAtMs.push(performance.now());
+}
+
+function typedText(line: string, index: number): string {
+  const landed = revealTyping.landedAtMs[index];
+  if (landed === undefined) return '';
+  return line.slice(0, unitsAt((performance.now() - landed) / 1000, 0, REVEAL_TYPE_CPS, line.length));
+}
+
+function revealLinesHtml(state: Readonly<GameState>): string {
+  const lines = state.souls.reveal.lines;
+  if (lines.length === 0) return '';
+  const rows = lines.map((line, i) => `<div class="reveal-line${i === TRUTH_LINE_INDEX ? ' truth' : ''}" data-reveal-line="${i}">${escapeHtml(typedText(line, i))}</div>`).join('');
+  return `<div class="reveal-lines" aria-live="polite">${rows}</div>`;
+}
+
+// Patches the typed lines in place (every tick while any is still typing) and schedules the line's
+// relay ticks the first time it types. Only on the blue screen: in amber the panel is hidden, and
+// the radio is the one typing the printer's lines there (reveal.ts), so INSPECT stays silent.
+function paintRevealLines(root: HTMLElement, state: Readonly<GameState>): void {
+  const lines = state.souls.reveal.lines;
+  const heard = state.ui.mode === 'memory';
+  root.querySelectorAll<HTMLElement>('[data-reveal-line]').forEach((element) => {
+    const index = Number(element.dataset.revealLine);
+    const line = lines[index];
+    if (line === undefined) return;
+    const text = typedText(line, index);
+    if (element.textContent !== text) element.textContent = text;
+    element.classList.toggle('typing', text.length < line.length);
+    if (!revealTyping.ticked.has(index)) {
+      revealTyping.ticked.add(index);
+      if (!heard) return;
+      for (let i = 0; i < line.length; i += REVEAL_TICK_EVERY_CHARS) {
+        play('typeTick', { voice: 'sys' }, { delaySec: i / REVEAL_TYPE_CPS });
+      }
+    }
+  });
 }
 
 function renderDemoBlock(currentCorruption: number): string {
@@ -144,7 +376,7 @@ function renderVersionDemoBlock(seg: FsToolSegment): string {
       <div style="font-size:10px;color:var(--text);line-height:1.5;margin-bottom:8px">
         ${disabled
           ? 'No upgrade path defined for this tool yet. Future revisions will unlock new behaviours.'
-          : 'Drag to switch this tool between known revisions. Higher versions add capabilities (e.g. Repair v2 compacts the Redundancy segment).'}
+          : 'Drag to switch this tool between known revisions. Higher versions add capabilities (e.g. Repair v2 squeezes the empty blocks out of REPAIR CHARGE).'}
       </div>
       <input type="range" id="demoVersionSlider" data-seg-id="${seg.id}" min="1" max="${Math.max(max, 1)}" value="${cur}" style="--p:${pct}%"${disabled ? ' disabled' : ''}>
       <div class="scale"><span>v1</span>${max > 1 ? `<span>v${max}</span>` : ''}</div>
@@ -165,72 +397,115 @@ function renderCapacityDemoBlock(currentCapacity: number): string {
     <div class="demo-block">
       <div class="demo-label">// demo: core threads</div>
       <div style="font-size:10px;color:var(--text);line-height:1.5;margin-bottom:8px">
-        Concurrency cap. Each running filesystem op claims one thread. Drag to widen or tighten the budget.
+        Concurrency cap. Each running filesystem operation claims one thread. Drag to widen or tighten the budget.
       </div>
       <input type="range" id="demoCapacitySlider" min="${CAPACITY_MIN}" max="${CAPACITY_MAX}" value="${clamped}" style="--p:${pct}%">
       <div class="scale"><span>${CAPACITY_MIN}</span><span>${Math.round((CAPACITY_MIN + CAPACITY_MAX) / 2)}</span><span>${CAPACITY_MAX}</span></div>
     </div>`;
 }
 
-export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: RenderDetailDeps): void {
-  const typeLabel = TYPE_LABELS[seg.type] || seg.type;
+function renderDetailPanel(target: HTMLElement, seg: Segment, deps: RenderDetailDeps): void {
+  if (seg.type === 'soul') {
+    let soulBody = seg.sealed ? sealedHtml(seg) : soulHtml(seg, deps.state);
+    const actions = computeActions(seg, deps.state);
+    if (actions.primary.length) {
+      soulBody += `<div class="action-section"><div class="action-section-label">primary</div>${actions.primary.map(renderActionButton).join('')}</div>`;
+    }
+    soulBody += actions.notesHtml;
+    target.innerHTML = soulBody;
+    bindActionButtons(target, seg, deps);
+    return;
+  }
+  if (seg.type === 'hollow') {
+    let hollowBody = hollowHtml(seg);
+    const actions = computeActions(seg, deps.state);
+    if (actions.primary.length) {
+      hollowBody += `<div class="action-section"><div class="action-section-label">primary</div>${actions.primary.map(renderActionButton).join('')}</div>`;
+    }
+    target.innerHTML = hollowBody;
+    bindActionButtons(target, seg, deps);
+    return;
+  }
+  const typeLabel = segTypeLabel(seg);
   const state = 'state' in seg ? seg.state : undefined;
   const integrity = 'integrity' in seg ? seg.integrity : undefined;
   const knownScanned = 'scanned' in seg ? seg.scanned : true;
 
   let stateClass = '';
   let stateText = (state || 'intact').toUpperCase();
+  let live = '';
   if (!knownScanned) { stateClass = 'unknown'; stateText = 'UNSCANNED'; }
+  else if (state === 'repairing' && integrity !== undefined) {
+    // Patched live by OpBars while the repair heals it.
+    stateClass = 'live';
+    stateText = `${LIVE_REPAIR_PREFIX}REPAIRING · ${shownIntegrity(integrity)}%`;
+    live = ` data-live-integrity="${seg.id}" data-live-prefix="${LIVE_REPAIR_PREFIX}REPAIRING · "`;
+  }
+  else if (isInfected(seg)) {
+    stateClass = 'warn live';
+    stateText = `${EATEN_PREFIX}${shownIntegrity(seg.integrity)}%`;
+    live = ` data-live-integrity="${seg.id}" data-live-prefix="${EATEN_PREFIX}"`;
+  }
   else if (state === 'corrupt') stateClass = 'warn';
   else if (state === 'partial') stateClass = 'partial';
   else if (state === 'intact' || !state) { stateClass = 'good'; stateText = 'INTACT'; }
-  if (knownScanned && integrity !== undefined && (state === 'corrupt' || state === 'partial')) {
-    stateText += ` · ${integrity}%`;
+  if (knownScanned && integrity !== undefined && !isInfected(seg) && (state === 'corrupt' || state === 'partial')) {
+    stateText += ` · ${shownIntegrity(integrity)}%`;
   }
 
   let html = `
     <div class="detail-title">${seg.name}</div>
     <div class="detail-type">${typeLabel}</div>
-    <div class="detail-row"><span class="k">size</span><span class="v">${seg.size} blocks</span></div>
-    <div class="detail-row"><span class="k">state</span><span class="v ${stateClass}">${stateText}</span></div>`;
+    <div class="detail-row"><span class="k">size</span><span class="v">${sizeText(seg.size)}</span></div>
+    <div class="detail-row"><span class="k">state</span><span class="v ${stateClass}"${live}>${stateText}</span></div>`;
+  html += infectionRowHtml(seg, deps.state);
 
   if (seg.type === 'redundancy') {
     const wasted = Math.max(0, seg.size - seg.used);
+    html += `<div class="detail-row"><span class="k">charge left</span><span class="v good">${seg.used}</span></div>`;
     html += `<div class="detail-row"><span class="k">spent</span><span class="v partial">${seg.capacity - seg.used} / ${seg.capacity}</span></div>`;
-    html += `<div class="detail-row"><span class="k">remaining</span><span class="v good">${seg.used} blk</span></div>`;
     html += `<div class="detail-row"><span class="k">footprint</span><span class="v">${seg.size} blk</span></div>`;
     if (wasted > 0) {
-      html += `<div class="detail-row"><span class="k">reclaimable</span><span class="v partial">${wasted} blk · needs Repair v2</span></div>`;
+      html += `<div class="detail-row"><span class="k">empty blocks</span><span class="v partial">${wasted} blk · Repair v2 frees them</span></div>`;
     }
   }
   if (seg.type === 'core') {
-    const inUse = getActiveOpCount();
-    const atCap = inUse >= seg.capacity;
-    html += `<div class="detail-row"><span class="k">threads</span><span class="v ${atCap ? 'warn' : 'good'}">${inUse} / ${seg.capacity}</span></div>`;
+    const busy = threadsBusy();
+    const threads = threadsTotal();
+    const atCap = busy >= threads;
+    html += `<div class="detail-row"><span class="k">threads</span><span class="v ${atCap ? 'warn' : 'good'}">${busy} / ${shownThreadsTotal(threads, busy)}</span></div>`;
     if (atCap) {
-      html += `<div class="detail-row"><span class="k">status</span><span class="v warn">at capacity — new ops refused</span></div>`;
+      html += `<div class="detail-row"><span class="k">status</span><span class="v warn">all busy — new ops wait</span></div>`;
     }
   }
-  if (seg.type === 'ship' && seg.backup) {
+  if (seg.type === 'ship' && findBackup(deps.state, seg)) {
     html += `<div class="detail-row"><span class="k">backup</span><span class="v partial">available ⊃</span></div>`;
   }
   // Pre-scan, the `desc` field (which carries lore about damage / cause) is
   // hidden — descs name specific corruption that the player shouldn't know yet.
   // After scan, the full description reveals the cause along with integrity.
-  if (knownScanned) {
+  // The STASIS file's scan result is the reveal (§5.1): its lines type here, above the file's text,
+  // which waits until the reveal is over (it would give the last line away).
+  const revealing = revealUnderway(deps.state);
+  if (seg.role === 'stasis') {
+    syncRevealTyping(deps.state);
+    html += revealLinesHtml(deps.state);
+  }
+  const descWaits = seg.role === 'stasis' && revealing;
+  if (!descWaits && knownScanned) {
     html += `<div class="detail-desc">${seg.desc || '—'}</div>`;
-  } else {
+  } else if (!descWaits) {
     html += `<div class="detail-desc"><em>Integrity unknown. Scan this segment to inspect its contents.</em></div>`;
   }
 
-  const actions = computeActions(seg, deps);
-  if (actions.primary.length || actions.demoHtml || seg.type === 'core') {
+  const actions = computeActions(seg, deps.state);
+  if (actions.primary.length || actions.notesHtml || seg.type === 'core') {
     if (actions.primary.length) {
       html += `<div class="action-section"><div class="action-section-label">primary</div>`;
-      actions.primary.forEach((a) => { html += renderActionButton(a); });
+      actions.primary.forEach((option) => { html += renderActionButton(option); });
       html += `</div>`;
     }
-    if (actions.demoHtml) html += actions.demoHtml;
+    if (actions.notesHtml) html += actions.notesHtml;
     if (seg.type === 'core' && deps.getCorruption) {
       html += renderDemoBlock(deps.getCorruption());
     }
@@ -243,20 +518,13 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
   }
 
   target.innerHTML = html;
-
-  target.querySelectorAll<HTMLButtonElement>('.action-btn').forEach((btn) => {
-    if (btn.classList.contains('disabled')) return;
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.action as DetailActionId | undefined;
-      if (id) deps.onAction(seg, id);
-    });
-  });
+  bindActionButtons(target, seg, deps);
 
   if (deps.onCorruptionSliderInput) {
     const slider = target.querySelector<HTMLInputElement>('#demoCorruptSlider');
     if (slider) {
-      slider.addEventListener('input', (ev) => {
-        const value = parseInt((ev.target as HTMLInputElement).value, 10);
+      slider.addEventListener('input', (event) => {
+        const value = parseInt((event.target as HTMLInputElement).value, 10);
         deps.onCorruptionSliderInput!(value);
       });
     }
@@ -264,8 +532,8 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
   if (deps.onCapacitySliderInput) {
     const slider = target.querySelector<HTMLInputElement>('#demoCapacitySlider');
     if (slider) {
-      slider.addEventListener('input', (ev) => {
-        const value = parseInt((ev.target as HTMLInputElement).value, 10);
+      slider.addEventListener('input', (event) => {
+        const value = parseInt((event.target as HTMLInputElement).value, 10);
         deps.onCapacitySliderInput!(value);
       });
     }
@@ -273,53 +541,60 @@ export function renderDetailPanel(target: HTMLElement, seg: Segment, deps: Rende
   if (deps.onVersionSliderInput) {
     const slider = target.querySelector<HTMLInputElement>('#demoVersionSlider');
     if (slider && !slider.disabled) {
-      slider.addEventListener('input', (ev) => {
-        const el = ev.target as HTMLInputElement;
-        const value = parseInt(el.value, 10);
-        const segId = el.dataset.segId;
+      slider.addEventListener('input', (event) => {
+        const element = event.target as HTMLInputElement;
+        const value = parseInt(element.value, 10);
+        const segId = element.dataset.segId;
         if (segId) deps.onVersionSliderInput!(segId, value);
       });
     }
   }
 }
 
+function bindActionButtons(target: HTMLElement, seg: Segment, deps: RenderDetailDeps): void {
+  target.querySelectorAll<HTMLButtonElement>('.action-btn').forEach((btn) => {
+    if (btn.classList.contains('disabled')) return;
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.action as DetailActionId | undefined;
+      if (id === 'print-fast') deps.onPrintFast();
+      else if (id) deps.onAction(seg, id);
+    });
+  });
+}
+
 // Renders a memory-bank overview shown when no segment is selected.
 // Aggregates over state.memory: capacity, allocation, known damage, redundancy.
 // "Known" damage excludes unscanned ship segments — the AI can't know their
-// integrity until Scan reveals it.
-function renderOverview(target: HTMLElement, state: GameState): void {
+// integrity until Scan reveals it. The damage is the stats bar's own (MemoryStats visibleDamage),
+// so the two DAMAGE readouts on one screen agree.
+function renderOverview(target: HTMLElement, state: Readonly<GameState>, onPrintFast: () => void): void {
   const memory = state.memory;
-  const total = memory.reduce((acc, m) => acc + m.size, 0);
-  const free = memory.filter((m) => m.type === 'free').reduce((acc, m) => acc + m.size, 0);
+  const total = totalBlocks(memory);
+  const free = getFreeTotal(state);
   const used = total - free;
   const usedPct = total > 0 ? Math.round((used / total) * 100) : 0;
   const freePct = total > 0 ? Math.round((free / total) * 100) : 0;
 
   let corruptCount = 0;
   let partialCount = 0;
-  let damageBlocks = 0;
   let unscannedCount = 0;
   for (const seg of memory) {
     const segState = 'state' in seg ? seg.state : undefined;
-    const integrity = 'integrity' in seg ? seg.integrity : undefined;
-    // Any segment that carries a `scanned` field hides its damage until
-    // scanned — applies uniformly across ship and AI memory.
-    if ('scanned' in seg && !seg.scanned) { unscannedCount++; continue; }
+    // A file whose health the kid can't see yet (an unscanned ship file, a sealed cluster) hides its
+    // damage here too.
+    if (!healthKnown(seg)) { if ('scanned' in seg) unscannedCount++; continue; }
     if (segState === 'corrupt') corruptCount++;
     if (segState === 'partial') partialCount++;
-    if ((segState === 'corrupt' || segState === 'partial') && integrity !== undefined) {
-      damageBlocks += ((100 - integrity) / 100) * seg.size;
-    }
   }
-  damageBlocks = Math.round(damageBlocks);
+  const damageBlocks = visibleDamage(state).blocks;
 
-  const redund = getRedundancy(state);
-  const redundLine = redund
-    ? `<span class="v">${redund.used} / ${redund.capacity}</span>`
+  const charge = getRedundancy(state);
+  const chargeLine = charge
+    ? `<span class="v">${charge.used}</span>`
     : `<span class="v warn">none</span>`;
 
   const damageLine = damageBlocks > 0
-    ? `<span class="v warn">~${damageBlocks} blk</span>`
+    ? `<span class="v warn">${damageBlocks} blk</span>`
     : (unscannedCount > 0
         ? `<span class="v unknown">unknown</span>`
         : `<span class="v good">none known</span>`);
@@ -338,96 +613,124 @@ function renderOverview(target: HTMLElement, state: GameState): void {
     <div class="detail-row"><span class="k">damage</span>${damageLine}</div>
     ${damageDetail}
     ${unscannedLine}
-    <div class="detail-row"><span class="k">redundancy</span>${redundLine}</div>
+    <div class="detail-row"><span class="k">repair charge</span>${chargeLine}</div>
+    ${printingOverviewHtml(state)}
     <div class="detail-desc">Click any segment to inspect. Click again or click outside any block to return here.</div>`;
+  // PRINT FAST works from here too: it is about the whole printer, not one cluster (it refuses
+  // with its reason once printing is over, like everywhere else).
+  target.querySelectorAll<HTMLButtonElement>('.action-btn[data-action="print-fast"]').forEach((btn) => {
+    if (btn.classList.contains('disabled')) return;
+    btn.addEventListener('click', onPrintFast);
+  });
 }
 
-// Mount the detail panel as a store subscriber. Re-renders whenever the store
-// is notified (action functions call store.notify() after in-place segment
-// mutations; store.update() fires it implicitly). Always-false comparator so
-// in-place memory mutations don't get missed.
+// While printing: how far it is, how fast, and PRINT FAST.
+function printingOverviewHtml(state: Readonly<GameState>): string {
+  const status = printStatus(state);
+  if (!status.printing) return '';
+  const pace = status.halted ? '<span class="v warn">NO PRINTER</span>'
+    : `<span class="v">${status.intervalSec.toFixed(1)} s / cluster</span>`;
+  return `
+    <div class="detail-row"><span class="k">printing</span><span class="v good">${status.done} / ${status.total} clusters</span></div>
+    <div class="detail-row"><span class="k">pace</span>${pace}</div>
+    <div class="action-section">${renderActionButton(printFastOption(state))}</div>`;
+}
+
+// Mount the detail panel. It rebuilds its buttons, so it repaints only on a discrete change:
+// memory (memoryRev, which every op start and end bumps), the selection, the tool in hand, an
+// op starting or ending (thread counts), never per tick: a rebuild between mousedown and mouseup
+// swallows the click. Printing changes memory on its own clock, so a rebuild that falls while a
+// press inside the panel is down waits for the click (guardPresses). A repair's climbing integrity
+// is patched live by OpBars instead.
 export function mountDetailPanel(
   store: Store<GameState>,
-  opts: { onAction: (seg: Segment, actionId: DetailActionId) => void },
+  opts: { onAction: (seg: Segment, actionId: DetailActionId) => void; onPrintFast: () => void },
 ): () => void {
   const target = document.getElementById('detailBody');
-  if (!target) return () => {};
+  if (!target) throw new Error('#detailBody missing from index.html');
+  const presses = guardPresses(target, () => paint(store.getState()));
+  const offReset = onWorldReset('detail-reveal-typing', resetRevealTyping,
+    () => ({ cause: revealTyping.cause, landed: revealTyping.landedAtMs.length, ticked: revealTyping.ticked.size }));
 
-  // The demo corruption slider fires `input` per pixel of drag. Each event
-  // does `store.update`, which would re-render this panel via the subscriber
-  // below — destroying the slider DOM node mid-drag and cancelling the
-  // browser's native drag tracking. Set this flag while applying the slider's
-  // own update so paint() skips, leaving the slider intact.
+  // The demo sliders fire `input` per pixel of drag, and their own store updates would rebuild
+  // this panel mid-drag (destroying the slider and the browser's drag tracking). This flag makes
+  // paint() skip while a slider applies its update.
   let sliderActive = false;
+  const fromSlider = (mutator: (draft: GameState) => void): void => {
+    sliderActive = true;
+    try { store.update(mutator); } finally { sliderActive = false; }
+  };
 
-  function paint(state: GameState): void {
-    if (sliderActive) return;
-    const deps: RenderDetailDeps = {
-      getFsTool: (kind) => getFsTool(state, kind),
-      getRedundancy: () => getRedundancy(state),
-      onAction: opts.onAction,
-      onCorruptionSliderInput: (pct) => {
-        sliderActive = true;
-        try {
-          store.update((d) => { d.ai.coreIntegrity = 100 - pct; });
-        } finally {
-          sliderActive = false;
-        }
-      },
-      getCorruption: () => selectCorruption(state),
-      // Demo: live-tweak Core capacity. sliderActive blocks the panel from
-      // re-rendering mid-drag (which would destroy the slider DOM and kill
-      // the browser's native drag tracking). store.update fires the
-      // syncCoreCapacity subscriber → setCoresCapacity → paintCoreThreads,
-      // so the thread row rebuilds with the new dot count immediately.
-      onCapacitySliderInput: (n) => {
-        sliderActive = true;
-        try {
-          store.update((d) => {
-            const core = d.memory.find((m) => m.type === 'core');
-            if (core && core.type === 'core') core.capacity = n;
-          });
-        } finally {
-          sliderActive = false;
-        }
-      },
-      // Demo: bump a specific fs-tool's version. sliderActive blocks the
-      // panel from re-rendering mid-drag (would destroy the slider). The
-      // store update fires all subscribers, so isValidTarget repaints pick
-      // up the v2+ unlock immediately (Redundancy becomes a valid target).
-      onVersionSliderInput: (segId, n) => {
-        sliderActive = true;
-        try {
-          store.update((d) => {
-            const tool = d.memory.find((m) => m.id === segId);
-            if (tool && tool.type === 'fs-tool') tool.version = n;
-          });
-        } finally {
-          sliderActive = false;
-        }
-      },
-    };
+  // The demo sliders are developer tools (§9 WP4): only with ?debug. The corruption slider
+  // writes the Core's own integrity, the glitch's single source of truth.
+  const debugSliders = isDebugMode();
 
-    // Tool-held mode takes precedence over a stale selectedId: once the
-    // player has picked up a tool, the sidebar should track what they're
-    // about to operate ON (picked source) or WITH (the tool's own file).
-    // Falls through to selectedId / overview when nothing is held.
+  function paint(state: Readonly<GameState>): void {
+    if (sliderActive || presses.holds()) return;
+    const deps: RenderDetailDeps = { state, onAction: opts.onAction, onPrintFast: opts.onPrintFast };
+    if (debugSliders) {
+      deps.onCorruptionSliderInput = (pct) => fromSlider((draft) => {
+        const core = draft.memory.find((m) => m.type === 'core');
+        if (core && core.type === 'core') setIntegrity(core, INTEGRITY_MAX - pct);
+        draft.ui.memoryRev++;
+      });
+      deps.getCorruption = () => selectCorruption(state);
+      // Live-tweak Core capacity; the memoryRev bump repaints the Core's thread dots.
+      deps.onCapacitySliderInput = (n) => fromSlider((draft) => {
+        const core = draft.memory.find((m) => m.type === 'core');
+        if (core && core.type === 'core') core.capacity = n;
+        draft.ui.memoryRev++;
+      });
+      // Bump a specific fs-tool's version; the bump repaints the targets (v2 makes REPAIR CHARGE
+      // a Repair target) and the chips.
+      deps.onVersionSliderInput = (segId, n) => fromSlider((draft) => {
+        const tool = draft.memory.find((m) => m.id === segId);
+        if (tool && tool.type === 'fs-tool') tool.version = n;
+        draft.ui.memoryRev++;
+      });
+    }
+
+    // Tool-held mode takes precedence over a stale selectedId: once the player has picked up a
+    // tool, the sidebar tracks what it works ON: the picked move/copy source, else the file the
+    // tool was last used on (the scan result, the climbing repair), else (before its first use)
+    // the tool's own file. Falls through to selectedId / overview when nothing is held.
     const activeTool = state.ui.activeTool;
     if (activeTool) {
-      const pickedId = state.ui.pickedSourceId;
-      const picked = pickedId ? state.memory.find((m) => m.id === pickedId) : null;
-      if (picked) { renderDetailPanel(target!, picked, deps); return; }
-      const toolSeg = state.memory.find((m) => m.id === activeTool.toolSegId);
+      const workedOnId = state.ui.pickedSourceId ?? getLastAppliedTargetId();
+      const workedOn = workedOnId ? getSegmentById(state, workedOnId) : undefined;
+      if (workedOn) { renderDetailPanel(target!, workedOn, deps); return; }
+      const toolSeg = getSegmentById(state, activeTool.toolSegId);
       if (toolSeg) { renderDetailPanel(target!, toolSeg, deps); return; }
     }
 
     const segId = state.ui.selectedId;
-    const seg = segId ? state.memory.find((m) => m.id === segId) : null;
-    if (!seg) { renderOverview(target!, state); return; }
+    const seg = segId ? getSegmentById(state, segId) : undefined;
+    if (!seg) { renderOverview(target!, state, opts.onPrintFast); return; }
     renderDetailPanel(target!, seg, deps);
   }
 
   paint(store.getState());
-  const unsub = store.subscribe((s) => s, (s) => paint(s), () => false);
-  return unsub;
+  // WP5 adds what the souls and the printer show: a reveal line landing, the run phase (PRINT
+  // buttons), PRINT NEXT and PRINT FAST.
+  const unsub = store.subscribe(
+    (s) => [s.ui.memoryRev, s.ui.selectedId, s.ui.activeTool, s.ui.pickedSourceId, s.clock.paused,
+      s.souls.reveal.lines.length, s.souls.reveal.stage, s.run.phase, s.printer.printNext, s.printer.fast] as const,
+    () => paint(store.getState()),
+    (a, b) => a.every((value, i) => value === b[i]),
+  );
+  // The reveal's lines type in place (no rebuild per letter).
+  const offTyping = onPostTick(() => {
+    const state = store.getState();
+    if (state.souls.reveal.lines.length > 0) paintRevealLines(target, state);
+  });
+  // On a phone INSPECT is a drawer, shut by default: the reveal's lines type in it, so it opens
+  // while they play (the TERMINAL above it has nothing of the reveal).
+  const offDrawer = store.subscribe((s) => s.souls.reveal.stage, (stage) => {
+    if (stage === 'playing' && window.matchMedia(MOBILE_MEDIA_QUERY).matches) setDrawerOpen('inspect', true);
+  });
+  const offOps = onOpsChange((change) => { if (change.type !== 'progress') paint(store.getState()); });
+  // A delete question opening is the held tool used on a file (fs-tools remembers it before
+  // asking): INSPECT shows that file at once, so the kid sees what the question is about.
+  const offConfirm = onInlineConfirmChange(() => paint(store.getState()));
+  return () => { unsub(); offOps(); offConfirm(); offTyping(); offDrawer(); offReset(); presses.dispose(); };
 }

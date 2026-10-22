@@ -4,6 +4,8 @@
   /* ── tools mode palette (default) ── */
   --bg: #0a0805;
   --window: rgba(18, 13, 6, 0.92);
+  /* --window without the see-through: for what sits on top of text (the inline confirm) */
+  --window-solid: #120d06;
   --edge: #2a1d0a;
   --edge-bright: #4a3318;
   --accent: #ffa726;
@@ -16,21 +18,32 @@
   --ambient-1: rgba(255,167,38,0.04);
   --ambient-2: rgba(255,167,38,0.025);
   --scan: rgba(255,167,38,0.015);
+  /* the darkest edge of a full-screen card (the title): a vignette darker than the screen */
+  --vignette-edge: #000;
+
+  /* ── layer identity: the same in BOTH modes, because they name a screen (or HOLLOW), not the
+        mode you are in. The ticker paints a line in the colour of the screen it came from. ── */
+  --layer-ship: #ffa726;
+  --layer-mind: #00d4ff;
+  --hollow: #ff6ec7;
+  /* the ship's bright readout colour, for the mini-HUD in blue (the amber accent-bright) */
+  --layer-ship-bright: #ffd180;
 
   /* ── timings ── */
   --t-fast: 0.12s;
   --t-med: 0.18s;
   --t-slow: 0.3s;
-  --t-op-dock: 0.4s;
+
+  /* ── fixed chrome heights (the desk fills what is left: see .desktop-wrap) ── */
+  --header-h: 44px;
+  --objective-h: 28px;
+  --footer-h: 32px;
+  --dock-w: 150px;
 
   /* ── spacing scale ── */
-  --sp-1: 4px;
-  --sp-2: 6px;
   --sp-3: 8px;
   --sp-4: 10px;
-  --sp-5: 12px;
   --sp-6: 16px;
-  --sp-7: 18px;
   --sp-8: 24px;
 
   /* ── segment-type color ramps (mirrors the inline rgba() in legacy-components.css .seg.* rules) ── */
@@ -40,10 +53,30 @@
   --seg-tool-bot:   rgba(0, 212, 255, 0.04);
   --seg-skill-top:  rgba(125, 255, 178, 0.12);
   --seg-skill-bot:  rgba(125, 255, 178, 0.04);
-  --seg-fs-top:     rgba(180, 130, 255, 0.18);
-  --seg-fs-bot:     rgba(180, 130, 255, 0.05);
-  --seg-fs-border:  #b482ff;
-  --seg-fs-text:    #d4baff;
+  /* the filesystem violet (WP8: lifted from the literals the fs-tool chips, the held tool and the
+     placement used): the same on both screens. The -rgb forms are for the see-through washes and glows
+     (rgba(var(--violet-rgb), 0.35)). */
+  --violet-rgb:        180, 130, 255;
+  --violet-bright-rgb: 212, 186, 255;
+  --violet:            #b482ff;
+  --violet-bright:     #d4baff;
+  /* the family's dark body (the held tool, the op's progress pill): the op bar's own colour, see-through */
+  --violet-dark-rgb:   28, 18, 46;
+  --seg-fs-top:     rgba(var(--violet-rgb), 0.18);
+  --seg-fs-bot:     rgba(var(--violet-rgb), 0.05);
+  --seg-fs-border:  var(--violet);
+  --seg-fs-text:    var(--violet-bright);
+  /* the cards' files (WP8). An upgrade file is the violet of the tools that carry it, with a dashed edge
+     (a card, not a licence); a FIREWALL is the green of a WALL, striped like a shield. */
+  --seg-upgrade-top:    rgba(var(--violet-rgb), 0.22);
+  --seg-upgrade-bot:    rgba(var(--violet-rgb), 0.07);
+  --seg-upgrade-border: var(--violet-bright);
+  --firewall:           #7dffb2;
+  --firewall-stripe-a:  rgba(125, 255, 178, 0.10);
+  --firewall-stripe-b:  rgba(125, 255, 178, 0.24);
+  --firewall-glow:      rgba(125, 255, 178, 0.40);
+  /* an op bar's body: solid, so the file name under it never shows through its label */
+  --op-bar-bg:      #1c122e;
   --seg-ship-top:        rgba(74, 144, 168, 0.18);
   --seg-ship-bot:        rgba(74, 144, 168, 0.06);
   --seg-ship-border:     rgba(74, 144, 168, 0.60);
@@ -52,11 +85,68 @@
   --seg-shipbak-stripe-b: rgba(74, 144, 168, 0.12);
   --seg-shipbak-border:   rgba(74, 144, 168, 0.40);
   --seg-free-border:     rgba(74, 122, 144, 0.25);
-  --seg-enc-stripe:      rgba(255, 78, 122, 0.12);
-  --seg-enc-bg:          rgba(255, 78, 122, 0.04);
-  --seg-enc-border:      rgba(255, 78, 122, 0.50);
-  --seg-enc-name:        #ffb3c4;
+
+  /* ── the colonists (WP5): the same on both screens, like the layer colours. Living mint for a
+        cluster that will wake, the hurt yellow for one that would wake with gaps; the sealed slab
+        is cold grey, the colour of something nobody has looked at. ── */
+  --soul: #8dffc4;
+  --soul-dim: rgba(141, 255, 196, 0.38);
+  --soul-bg-top: rgba(141, 255, 196, 0.15);
+  --soul-bg-bot: rgba(141, 255, 196, 0.03);
+  --soul-hurt: #ffce4a;
+  --sealed-a: #161b20;
+  --sealed-b: #20262c;
+  --sealed-edge: #3b444c;
+  --sealed-text: #7f8b95;
+  --print-flash: #ffffff;
+
+  /* ── the WAKE REPORT (WP5 part 2): the same on both screens. A deep night behind the names, the
+        colonists' mint, and stars in warm gold (earned) or a cold outline (missed). ── */
+  --report-bg: #02060b;
+  --report-glow: rgba(141, 255, 196, 0.07);
+  --report-text: #e2f3ff;
+  --report-dim: #6f8c9e;
+  --star: #ffd36e;
+  --star-glow: rgba(255, 211, 110, 0.45);
+  --star-missed: #3e5566;
+
+  /* ── HOLLOW (WP6): the same on both screens, like the colonists. A block it owns is near-black
+        with crawling red static; the red eats into an infected file from the side that faces it. ── */
+  --hollow-bg: #050103;
+  --hollow-edge: #5c0f22;
+  --hollow-red: #ff2a55;
+  --hollow-static: rgba(255, 42, 85, 0.42);
+  --hollow-text: #ff8fa8;
+  --hollow-hatch: rgba(255, 42, 85, 0.22);
+  /* ...and what beats it (WP6 part 2): a WALL's green bracket, a repair's green front pushing the red
+     back in the tug-of-war, and the blue sparkles the red shatters into when the repair wins. */
+  --hollow-wall: #7dffb2;
+  --hollow-wall-glow: rgba(125, 255, 178, 0.45);
+  --tug-heal: #7dffb2;
+  --tug-heal-fill: rgba(125, 255, 178, 0.14);
+  --tug-heal-stripe: rgba(125, 255, 178, 0.28);
+  --cure-spark: #b3f0ff;
+
+  /* ── the run between ships (WP7 part 2): the same on both screens. TRANSMIT is the mind's own blue on
+        the report's night; the white-out a cold, slightly blue white; BEAM OUT's black-out a true black. ── */
+  --transmit-glow: rgba(0, 212, 255, 0.10);
+  --transmit-line: #00d4ff;
+  --transmit-charge: #7dffb2;
+  --white-out: #f2fbff;
+  --blackout: #000000;
+
+  /* ── LAST LIGHT's finale (WP11 part 2): the same on both screens, like the WAKE REPORT. PURGE is a cold, clean
+        white; MERGE runs from HOLLOW's pink into the mind's blue (--hollow → --layer-mind). The card's backdrop dims
+        the desk without hiding it (the printing goes on under it). A sombre RUN END keeps a grey night: no green. ── */
+  --purge: #e8f6ff;
+  --purge-glow: rgba(200, 236, 255, 0.35);
+  --merge-glow: rgba(255, 110, 199, 0.32);
+  --merge-glow-blue: rgba(0, 212, 255, 0.28);
+  --finale-backdrop: rgba(2, 4, 9, 0.8);
+  --report-glow-sombre: rgba(111, 140, 158, 0.06);
 
   /* ── live state knob (set by systems/glitch.ts) ── */
   --corruption: 0;
+  /* WP11: a glitchBurst under reduced motion dims the screen this much (0..1) for its moment (systems/glitch.ts). */
+  --glitch-dim: 0;
 }

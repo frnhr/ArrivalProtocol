@@ -32,10 +32,10 @@ export function mountDimPainter(store: Store<GameState>): () => void {
       }
     }
 
-    document.querySelectorAll<HTMLElement>('.seg').forEach((el) => {
-      const id = el.dataset.id;
+    document.querySelectorAll<HTMLElement>('.seg').forEach((part) => {
+      const id = part.dataset.id;
       if (!id) return;
-      el.classList.toggle('dimmed', dimmedIds.has(id));
+      part.classList.toggle('dimmed', dimmedIds.has(id));
     });
   }
 

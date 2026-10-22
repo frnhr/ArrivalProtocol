@@ -1,72 +1,88 @@
-import type { Segment } from '@/types/segment';
+import type { Segment, FsToolSegment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
+import { isUsableTool } from '@state/selectors';
+import { requireById, replayAnimation } from '@components/dom';
+import { FS_TOOL_KINDS, toolChipId } from '@data/fs-tools';
 
-// Map each fs-tool kind to its primary chip element id.
-const KIND_TO_CHIP_ID: Record<FsToolKind, string> = {
-  scan: 'chip-scan',
-  repair: 'chip-repair',
-  move: 'chip-move',
-  copy: 'chip-copy',
-  delete: 'chip-delete',
-  activate: 'chip-activate',
-  deactivate: 'chip-deactivate',
-};
+// The filesystem chip row (§3.2, TASK 700): one chip per tool kind, shown only while a copy of
+// that tool's file is in memory. A licence installing the files slides its chip in; the last
+// copy deleted (or eaten, WP6) takes it away; the new files glow once where they landed. Chips are found by tool kind, never by a file id:
+// each draws one health dot per copy (Repair and Repair.bak: two), bad when that copy is too
+// damaged to use, and the whole chip turns bad when no copy works (the same line pickUpTool
+// uses, so a chip never looks healthy while the tool can't be picked up). A "vN" badge marks
+// an upgraded copy, so the kid sees a tool upgrade is armed before clicking the chip.
 
-// Patches the chip strip's state classes in place. No remount. Also stamps a
-// "vN" badge on the chip label when the highest healthy copy of that tool kind
-// is past v1, so the player can see at a glance whether a tool upgrade is
-// armed before clicking the chip.
-export function updateFsChips(memory: readonly Segment[]): void {
-  (Object.entries(KIND_TO_CHIP_ID) as Array<[FsToolKind, string]>).forEach(([kind, chipId]) => {
-    const copies = memory.filter(
-      (m): m is Segment & { type: 'fs-tool'; fsTool: FsToolKind; version: number; integrity: number; state?: string } =>
-        m.type === 'fs-tool' && m.fsTool === kind,
-    );
-    const tool = copies[0];
-    const chip = document.getElementById(chipId);
-    if (!chip || !tool) return;
-    const dot = chip.querySelector('.dot');
-    chip.classList.remove('bad');
-    dot?.classList.remove('busy', 'bad');
-    const integrity = tool.integrity;
-    const state = tool.state;
-    if (integrity < 50 || state === 'corrupt') {
-      chip.classList.add('bad');
-      dot?.classList.add('bad');
-    } else if (state === 'busy') {
-      dot?.classList.add('busy');
-    }
-    // Highest version among healthy copies — drives the chip's version badge.
-    let bestVer = 1;
-    for (const c of copies) {
-      if (c.integrity > 50 && c.version > bestVer) bestVer = c.version;
-    }
-    let badge = chip.querySelector<HTMLElement>('.ver');
-    if (bestVer > 1) {
-      if (!badge) {
-        badge = document.createElement('span');
-        badge.className = 'ver';
-        chip.appendChild(badge);
-      }
-      badge.textContent = `v${bestVer}`;
-    } else if (badge) {
-      badge.remove();
-    }
+function chipOf(kind: FsToolKind): HTMLElement {
+  return requireById(toolChipId(kind));
+}
+
+function paintDots(chip: HTMLElement, copies: readonly FsToolSegment[]): void {
+  const dots = chip.querySelector<HTMLElement>('.dots');
+  if (!dots) throw new Error(`#${chip.id} has no .dots in index.html`);
+  while (dots.children.length < copies.length) {
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dots.appendChild(dot);
+  }
+  while (dots.children.length > copies.length) dots.lastElementChild!.remove();
+  copies.forEach((copy, i) => {
+    const dot = dots.children[i] as HTMLElement;
+    dot.classList.toggle('bad', !isUsableTool(copy));
+    dot.title = copy.name;
   });
+}
 
-  // Repair.bak is a special case — second physical chip backed by t_repair_b segment.
-  const bak = memory.find((m) => m.id === 't_repair_b');
-  const bakChip = document.getElementById('chip-repair-b');
-  if (bak && 'integrity' in bak && bakChip) {
-    bakChip.classList.toggle('bad', bak.integrity < 50);
+function paintVersion(chip: HTMLElement, usable: readonly FsToolSegment[]): void {
+  const bestVer = usable.reduce((best, copy) => Math.max(best, copy.version), 1);
+  let badge = chip.querySelector<HTMLElement>('.ver');
+  if (bestVer > 1) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'ver';
+      chip.appendChild(badge);
+    }
+    badge.textContent = `v${bestVer}`;
+  } else if (badge) {
+    badge.remove();
   }
 }
 
-// Mount as store subscriber. Always-false comparator since chip state depends
-// on per-segment integrity/state mutations that don't change the array reference.
+// Patches the chips in place. `animate` slides a newly shown chip in (a licence arriving); the
+// first paint shows the starting tools without ceremony.
+function updateFsChips(memory: readonly Segment[], animate = false): void {
+  for (const kind of FS_TOOL_KINDS) {
+    const chip = chipOf(kind);
+    const copies = memory.filter((seg): seg is FsToolSegment => seg.type === 'fs-tool' && seg.fsTool === kind);
+    const wasHidden = chip.hidden;
+    chip.hidden = copies.length === 0;
+    if (chip.hidden) continue;
+    if (animate && wasHidden) {
+      replayAnimation(chip, 'arriving');
+      // The files that just transmitted in glow once on the strip, so the kid sees where they
+      // landed (this runs after MemoryStrip's rebuild: it mounts later).
+      for (const copy of copies) {
+        document.querySelectorAll(`.seg[data-id="${copy.id}"]`).forEach((part) => replayAnimation(part, 'transmit-in'));
+      }
+    }
+    const usable = copies.filter(isUsableTool);
+    chip.classList.toggle('bad', usable.length === 0);
+    paintDots(chip, copies);
+    paintVersion(chip, usable);
+  }
+}
+
+// Chip state follows the tool files, which only change with a memoryRev bump (a repair's climbing
+// integrity is patched live and lands with the op's final bump; a licence install bumps it too).
 export function mountFsStatusBar(store: Store<GameState>): () => void {
   updateFsChips(store.getState().memory);
-  return store.subscribe((s) => s.memory, (mem) => updateFsChips(mem), () => false);
+  const onArrived = (event: AnimationEvent): void => (event.currentTarget as HTMLElement).classList.remove('arriving');
+  const chips = FS_TOOL_KINDS.map(chipOf);
+  chips.forEach((chip) => chip.addEventListener('animationend', onArrived));
+  const unsub = store.subscribe((s) => s.ui.memoryRev, () => updateFsChips(store.getState().memory, true));
+  return () => {
+    unsub();
+    chips.forEach((chip) => chip.removeEventListener('animationend', onArrived));
+  };
 }

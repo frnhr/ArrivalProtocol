@@ -1,6 +1,7 @@
 body.mode-memory {
   --bg: #04080d;
   --window: rgba(8, 16, 26, 0.92);
+  --window-solid: #08101a;
   --edge: #0e2438;
   --edge-bright: #1d4566;
   --accent: #00d4ff;
@@ -13,4 +14,71 @@ body.mode-memory {
   --ambient-1: rgba(0,212,255,0.05);
   --ambient-2: rgba(0,212,255,0.03);
   --scan: rgba(0,212,255,0.02);
+  --vignette-edge: #000;
+  /* Layer identity colours do not change with the mode (see tokens.css); repeated here so the
+     mode block lists every colour token. */
+  --layer-ship: #ffa726;
+  --layer-mind: #00d4ff;
+  --hollow: #ff6ec7;
+  --layer-ship-bright: #ffd180;
+  /* The fs-tool purple is the same on both screens (see tokens.css). */
+  --op-bar-bg: #1c122e;
+  --violet-rgb: 180, 130, 255;
+  --violet-bright-rgb: 212, 186, 255;
+  --violet: #b482ff;
+  --violet-bright: #d4baff;
+  --violet-dark-rgb: 28, 18, 46;
+  /* The cards' files look the same on both screens (see tokens.css). */
+  --seg-upgrade-top: rgba(var(--violet-rgb), 0.22);
+  --seg-upgrade-bot: rgba(var(--violet-rgb), 0.07);
+  --seg-upgrade-border: var(--violet-bright);
+  --firewall: #7dffb2;
+  --firewall-stripe-a: rgba(125, 255, 178, 0.10);
+  --firewall-stripe-b: rgba(125, 255, 178, 0.24);
+  --firewall-glow: rgba(125, 255, 178, 0.40);
+  /* The colonists look the same on both screens (see tokens.css). */
+  --soul: #8dffc4;
+  --soul-dim: rgba(141, 255, 196, 0.38);
+  --soul-bg-top: rgba(141, 255, 196, 0.15);
+  --soul-bg-bot: rgba(141, 255, 196, 0.03);
+  --soul-hurt: #ffce4a;
+  --sealed-a: #161b20;
+  --sealed-b: #20262c;
+  --sealed-edge: #3b444c;
+  --sealed-text: #7f8b95;
+  --print-flash: #ffffff;
+  /* HOLLOW looks the same on both screens (see tokens.css). */
+  --hollow-bg: #050103;
+  --hollow-edge: #5c0f22;
+  --hollow-red: #ff2a55;
+  --hollow-static: rgba(255, 42, 85, 0.42);
+  --hollow-text: #ff8fa8;
+  --hollow-hatch: rgba(255, 42, 85, 0.22);
+  --hollow-wall: #7dffb2;
+  --hollow-wall-glow: rgba(125, 255, 178, 0.45);
+  --tug-heal: #7dffb2;
+  --tug-heal-fill: rgba(125, 255, 178, 0.14);
+  --tug-heal-stripe: rgba(125, 255, 178, 0.28);
+  --cure-spark: #b3f0ff;
+  /* The WAKE REPORT looks the same on both screens (see tokens.css). */
+  --report-bg: #02060b;
+  --report-glow: rgba(141, 255, 196, 0.07);
+  --report-text: #e2f3ff;
+  --report-dim: #6f8c9e;
+  --star: #ffd36e;
+  --star-glow: rgba(255, 211, 110, 0.45);
+  --star-missed: #3e5566;
+  /* The run between ships (WP7 part 2) looks the same on both screens (see tokens.css). */
+  --transmit-glow: rgba(0, 212, 255, 0.10);
+  --transmit-line: #00d4ff;
+  --transmit-charge: #7dffb2;
+  --white-out: #f2fbff;
+  --blackout: #000000;
+  /* LAST LIGHT's finale (WP11 part 2) looks the same on both screens (see tokens.css). */
+  --purge: #e8f6ff;
+  --purge-glow: rgba(200, 236, 255, 0.35);
+  --merge-glow: rgba(255, 110, 199, 0.32);
+  --merge-glow-blue: rgba(0, 212, 255, 0.28);
+  --finale-backdrop: rgba(2, 4, 9, 0.8);
+  --report-glow-sombre: rgba(111, 140, 158, 0.06);
 }

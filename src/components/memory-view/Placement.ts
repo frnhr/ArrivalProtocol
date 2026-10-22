@@ -2,9 +2,10 @@
 // over the strip and writes the chosen placement (region + column) into
 // state.ui.pendingPlacement. The fs-tools system reads that on apply.
 //
-// For move, valid regions include the source plus any adjacent free chunks
+// For move, valid regions include the source plus any adjacent open free chunks
 // (computeMoveRegion), so a file can slide within its own footprint. For copy,
-// only non-source free chunks of sufficient size qualify.
+// only open free chunks of sufficient size qualify. Free space a running op has
+// reserved around its clone is never a destination (the op owns those blocks).
 //
 // Registers itself with setPlacementBridge so the fs-tools system's mousemove
 // + cancelTool paths drive update/clear. No DOM events of its own.
@@ -12,16 +13,18 @@
 import type { Segment } from '@/types/segment';
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { computeMoveRegion, setPlacementBridge } from '@systems/fs-tools';
+import { setPlacementBridge } from '@systems/fs-tools';
+import { computeMoveRegion, isOpenFree } from '@systems/tool-targets';
+import { partNumber } from '@components/dom';
 
 export function mountPlacement(store: Store<GameState>, memWrap: HTMLElement): () => void {
   function clearPlaceholder(): void {
-    document.querySelectorAll<HTMLElement>('.seg.dest-hover').forEach((el) => {
-      el.classList.remove('dest-hover');
-      el.style.removeProperty('--dest-start-pct');
-      el.style.removeProperty('--dest-end-pct');
+    document.querySelectorAll<HTMLElement>('.seg.dest-hover').forEach((part) => {
+      part.classList.remove('dest-hover');
+      part.style.removeProperty('--dest-start-pct');
+      part.style.removeProperty('--dest-end-pct');
     });
-    store.update((d) => { d.ui.pendingPlacement = null; });
+    if (store.getState().ui.pendingPlacement !== null) store.update((draft) => { draft.ui.pendingPlacement = null; });
   }
 
   // Paints the .dest-hover gradient across each visual part the placeholder
@@ -33,11 +36,11 @@ export function mountPlacement(store: Store<GameState>, memWrap: HTMLElement): (
     pickedSource: Segment,
   ): void {
     const regionIds = new Set(regionSegs.map((s) => s.id));
-    document.querySelectorAll<HTMLElement>('.seg.dest-hover').forEach((el) => {
-      if (!el.dataset.id || !regionIds.has(el.dataset.id)) {
-        el.classList.remove('dest-hover');
-        el.style.removeProperty('--dest-start-pct');
-        el.style.removeProperty('--dest-end-pct');
+    document.querySelectorAll<HTMLElement>('.seg.dest-hover').forEach((part) => {
+      if (!part.dataset.id || !regionIds.has(part.dataset.id)) {
+        part.classList.remove('dest-hover');
+        part.style.removeProperty('--dest-start-pct');
+        part.style.removeProperty('--dest-end-pct');
       }
     });
     const phStart = targetCol;
@@ -48,8 +51,8 @@ export function mountPlacement(store: Store<GameState>, memWrap: HTMLElement): (
         memWrap.querySelectorAll<HTMLElement>(`.seg[data-id="${regSeg.id}"]`),
       );
       parts.forEach((part) => {
-        const partSize = parseInt(part.dataset.partSize ?? '0', 10);
-        const partOffsetInSeg = parseInt(part.dataset.partOffset ?? '0', 10);
+        const partSize = partNumber(part, 'partSize');
+        const partOffsetInSeg = partNumber(part, 'partOffset');
         const partStartInRegion = segOffsetInRegion + partOffsetInSeg;
         const partEndInRegion = partStartInRegion + partSize;
         const iStart = Math.max(phStart, partStartInRegion);
@@ -93,9 +96,7 @@ export function mountPlacement(store: Store<GameState>, memWrap: HTMLElement): (
       if (region && region.segs.includes(seg) && region.totalSize >= pickedSource.size) {
         regionSegs = region.segs;
         totalSize = region.totalSize;
-      } else if (
-        seg.type === 'free' && seg.id !== pickedSource.id && seg.size >= pickedSource.size
-      ) {
+      } else if (isOpenFree(seg) && seg.size >= pickedSource.size) {
         regionSegs = [seg];
         totalSize = seg.size;
       } else {
@@ -103,7 +104,7 @@ export function mountPlacement(store: Store<GameState>, memWrap: HTMLElement): (
         return;
       }
     } else {
-      if (seg.type !== 'free' || seg.id === pickedSource.id || seg.size < pickedSource.size) {
+      if (!isOpenFree(seg) || seg.size < pickedSource.size) {
         clearPlaceholder();
         return;
       }
@@ -112,12 +113,12 @@ export function mountPlacement(store: Store<GameState>, memWrap: HTMLElement): (
     }
 
     let segOffsetInRegion = 0;
-    for (const r of regionSegs) {
-      if (r.id === seg.id) break;
-      segOffsetInRegion += r.size;
+    for (const regionSeg of regionSegs) {
+      if (regionSeg.id === seg.id) break;
+      segOffsetInRegion += regionSeg.size;
     }
-    const partSize = parseInt(partEl.dataset.partSize ?? '0', 10);
-    const partOffsetInSeg = parseInt(partEl.dataset.partOffset ?? '0', 10);
+    const partSize = partNumber(partEl, 'partSize');
+    const partOffsetInSeg = partNumber(partEl, 'partOffset');
     const rect = partEl.getBoundingClientRect();
     const colW = rect.width / partSize;
     const colInPart = Math.floor((clientX - rect.left) / colW);
@@ -126,12 +127,11 @@ export function mountPlacement(store: Store<GameState>, memWrap: HTMLElement): (
     targetCol = Math.max(0, Math.min(maxStartCol, targetCol));
 
     renderPlaceholderInRegion(regionSegs, targetCol, pickedSource);
-    store.update((d) => {
-      d.ui.pendingPlacement = {
-        regionSegIds: regionSegs.map((s) => s.id),
-        col: targetCol,
-      };
-    });
+    // mousemove fires far more often than the placement changes: update only on a change.
+    const regionSegIds = regionSegs.map((regionSeg) => regionSeg.id);
+    const current = state.ui.pendingPlacement;
+    if (current && current.col === targetCol && current.regionSegIds.join('|') === regionSegIds.join('|')) return;
+    store.update((draft) => { draft.ui.pendingPlacement = { regionSegIds, col: targetCol }; });
   }
 
   setPlacementBridge(updatePlaceholderAt, clearPlaceholder);
