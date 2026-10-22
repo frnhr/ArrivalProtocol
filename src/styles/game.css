@@ -2546,10 +2546,13 @@ body.reduced-motion.beamed-out .desktop > .tools-view .window-body { animation: 
 }
 .tx-bar-files { height: 100%; background: color-mix(in srgb, var(--transmit-line) 55%, transparent); transition: width 0.25s ease-out; }
 .tx-bar-charge { height: 100%; background: color-mix(in srgb, var(--transmit-charge) 50%, transparent); transition: width 0.25s ease-out; }
+/* Charge with no room on the link: still charge (the bar's green, faded and dashed: outside the link), in muted
+   words, not the warning red (post-handover: red read as damage; it is only the link being full). Its title says why. */
 .tx-bar-over {
-  padding: 0 6px; height: 18px; line-height: 18px; font-size: 11px; color: var(--warn);
-  border: 1px dashed var(--warn);
-  background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--warn) 18%, transparent) 0 3px, transparent 3px 6px);
+  padding: 0 6px; height: 18px; line-height: 18px; font-size: 10px; letter-spacing: 0.1em; white-space: nowrap;
+  color: var(--report-dim); cursor: help;
+  border: 1px dashed color-mix(in srgb, var(--transmit-charge) 45%, transparent);
+  background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--transmit-charge) 10%, transparent) 0 3px, transparent 3px 6px);
 }
 .tx-bar-over[hidden] { display: none; }
 .tx-packet-line { grid-column: 1 / -1; text-align: center; font-size: 12px; letter-spacing: 0.16em; color: var(--report-dim); }

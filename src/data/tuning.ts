@@ -1336,12 +1336,21 @@ export const RACK_FLASH_MS = 900;
 // The MIND's rack tags (`DEBRIS 03:30` under `RACK C`) and the mini-strip's lit row are patched this often: a
 // countdown in whole seconds needs no more.
 export const RACK_TAG_PAINT_HZ = 4;
-// §7.2 geiger: inside a belt, clicks come as a Poisson stream whose rate rises from the edge to the middle of the
+// §7.2 geiger: inside a belt, ticks come as a Poisson stream whose rate rises from the edge to the middle of the
 // belt (the deeper in, the more it hurts to hear). Per wall second. A belt hit adds a short flurry on top.
-export const GEIGER_EDGE_HZ = 2;
-export const GEIGER_PEAK_HZ = 11;
-export const GEIGER_HIT_CLICKS = 6;
+// Post-handover: the ticks are emphasis now, under the belt's static (below), so sparser than WP9's 2 → 11 Hz and a
+// smaller flurry: at 11 a second the sharp clicks were what Fran found painful on headphones.
+export const GEIGER_EDGE_HZ = 0.7;
+export const GEIGER_PEAK_HZ = 3.5;
+export const GEIGER_HIT_CLICKS = 4;
 export const GEIGER_HIT_SPREAD_SEC = 0.25;
+// The belt's main sound (post-handover): short bursts of static (audio.ts beltStatic, ~0.4 s each), one on the way in,
+// then one every GAP seconds start to start, from the edge's to the middle's, each gap ±JITTER so it never settles
+// into a beat. The shortest gap (1.4 × 0.7 ≈ 1 s) still leaves about half a second of quiet after the longest burst:
+// interference that comes and goes, never a continuous wash.
+export const BELT_STATIC_GAP_EDGE_SEC = 3;
+export const BELT_STATIC_GAP_PEAK_SEC = 1.4;
+export const BELT_STATIC_GAP_JITTER = 0.3;
 // A seed's warning outline blinks this often (§6.6 "a blinking outline for 2 AI-s"): four blinks in the
 // telegraph, each with a blip in HOLLOW's voice, so the warning is heard from the amber screen too.
 export const SEED_BLINK_SEC = 0.5;

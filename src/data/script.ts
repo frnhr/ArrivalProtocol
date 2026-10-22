@@ -738,6 +738,13 @@ export const TRANSMIT_TEXT = {
   },
   gain: (blocks: number): string => `+${blocks} CHARGE`,
   dropped: 'LEFT BEHIND',
+  // The box at the end of the link bar: REPAIR CHARGE held that has no room on the link once the files are in
+  // (the packet line's `→ n LEFT BEHIND`). Post-handover: it was a red `−19`, which Fran read as damage; it is the
+  // link being full, so it says so in words and explains itself on hover.
+  over: (blocks: number): string => `${blocks} LEFT BEHIND`,
+  overTitle: (blocks: number): string => `No room on the link for ${blocks} blocks of REPAIR CHARGE: your files fill the rest, `
+    + 'so this charge stays behind with this ship. Nothing is damaged. Leave a file behind to carry more; '
+    + 'ON ARRIVAL (below) is the charge you will have on the next ship.',
   go: 'TRANSMIT ▸ [SPACE]',
   sending: (unit: string, ship: string): string => `TRANSMITTING ${unit} → ${ship}`,
   distance: (ly: string, total: number): string => `${ly} / ${total} LY`,

@@ -21,7 +21,7 @@ import { beltDepth } from '@systems/zones';
 import { openChoiceEntry, choiceTimerRunning, choiceSecondsLeft } from '@systems/say';
 import {
   GEIGER_EDGE_HZ, GEIGER_PEAK_HZ, GEIGER_HIT_CLICKS, GEIGER_HIT_SPREAD_SEC, SEED_BLINK_SEC, SEED_TELEGRAPH_SEC,
-  CHOICE_URGENT_SEC,
+  CHOICE_URGENT_SEC, BELT_STATIC_GAP_EDGE_SEC, BELT_STATIC_GAP_PEAK_SEC, BELT_STATIC_GAP_JITTER,
 } from '@data/tuning';
 
 // The reveal's last line (the truth: `They're in here.`) has its own ping, the floor dropping away.
@@ -65,8 +65,9 @@ const REVEAL_TRUTH_STEP = REVEAL_LINE_AT_SEC.length - 1;
 //   transitHit with a flurry of Geiger clicks; zone-forecast → the CLEAR OF THE DEBRIS stamp's thud and a chime
 //   when a correction takes the path off the cloud, a sag when a path runs back into it; dodge-lapsed → the
 //   TOO LATE TO DODGE stamp's heavy thud and the sag; seed-telegraph → one seedWarn blip per blink of the outline; seed-landed → seedDrop; AUTOBURN armed → chime; skill-trained →
-//   transmitIn, then the licence's chime as AUTOBURN.skl lands; and every tick inside a belt, the geiger's
-//   Poisson clicks at a rate that rises toward the belt's middle
+//   transmitIn, then the licence's chime as AUTOBURN.skl lands; and every tick inside a belt, spaced-out bursts of
+//   beltStatic (post-handover: the belt's main sound) with the geiger's sparse Poisson ticks on top, both coming
+//   quicker toward the belt's middle
 // • WP10 (VESPER): ghost-start → ghostIgnite (the relay and the whump of the engine lighting by itself; the ship's
 //   first one heavier, under the klaxon its alarm raises; a burst a SKIP flew through too, its only sound); deal → the answer
 //   stamp's thud (an ACCEPT's eaten cluster plays soulLost through hollow-consume); and every whole second of a
@@ -313,12 +314,22 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     nextBeatIn -= dtAi;
   }));
 
-  // The geiger (§7.2, WP9): while the ship is inside a belt and the world runs, clicks at random (exponential)
-  // gaps whose mean follows the depth, scheduled inside the tick like the chirps. Cosmetic randomness.
+  // The belt (§7.2, WP9; post-handover): while the ship is inside a belt and the world runs, bursts of static with
+  // silence between them (the first on the way in), and on top the geiger's ticks at random (exponential) gaps. Both
+  // come quicker with the depth and are scheduled inside the tick like the chirps. A pause keeps both waits (resuming
+  // does not fire a burst at once); leaving the belt resets them, so the next belt starts with a burst. Cosmetic randomness.
   let nextClickIn = 0;
+  let nextStaticIn = 0;
   offs.push(onPostTick((_dtWall, dtAi) => {
-    const depth = dtAi > 0 ? beltDepth(store.getState()) : null;
-    if (depth === null) { nextClickIn = 0; return; }
+    if (dtAi <= 0) return;
+    const depth = beltDepth(store.getState());
+    if (depth === null) { nextClickIn = 0; nextStaticIn = 0; return; }
+    const staticGapSec = BELT_STATIC_GAP_EDGE_SEC + (BELT_STATIC_GAP_PEAK_SEC - BELT_STATIC_GAP_EDGE_SEC) * depth;
+    while (nextStaticIn < dtAi) {
+      play('beltStatic', { depth }, { delaySec: nextStaticIn });
+      nextStaticIn += staticGapSec * (1 + (Math.random() * 2 - 1) * BELT_STATIC_GAP_JITTER);
+    }
+    nextStaticIn -= dtAi;
     const rateHz = GEIGER_EDGE_HZ + (GEIGER_PEAK_HZ - GEIGER_EDGE_HZ) * depth;
     while (nextClickIn < dtAi) {
       play('geiger', undefined, { delaySec: nextClickIn });

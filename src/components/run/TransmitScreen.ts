@@ -156,7 +156,8 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     barCharge.style.width = `${(100 * next.chargeCarried) / next.link}%`;
     const left = next.chargeHeld - next.chargeCarried;
     barOver.hidden = left <= 0;
-    barOver.textContent = left > 0 ? `−${left}` : '';
+    barOver.textContent = left > 0 ? TRANSMIT_TEXT.over(left) : '';
+    barOver.title = left > 0 ? TRANSMIT_TEXT.overTitle(left) : '';
     packetLine.textContent = next.packetLine;
     dropLine.textContent = next.dropLine;
     const chips = next.chips.map(chipNode);

@@ -63,11 +63,13 @@ export interface CueParams {
   transmitSweep: { seconds: number };
   transitHit: undefined;
   nameGlitch: undefined;
-  // WP9: KESTREL. A debris cloud hitting a rack; one Geiger click inside a radiation belt (audio-cues schedules
-  // them as a Poisson stream whose rate follows how deep in the belt the ship is); one blink of a seed's warning
-  // outline in HOLLOW's voice; a seed landing.
+  // WP9: KESTREL. A debris cloud hitting a rack; one Geiger tick inside a radiation belt (audio-cues schedules
+  // them as a sparse Poisson stream whose rate follows how deep in the belt the ship is); one blink of a seed's warning
+  // outline in HOLLOW's voice; a seed landing. Post-handover: one burst of the belt's static (depth 0 at its edge, 1
+  // midway), the belt's main sound, spaced out by audio-cues with the geiger's ticks on top.
   debrisImpact: undefined;
   geiger: undefined;
+  beltStatic: { depth: number };
   seedWarn: undefined;
   seedDrop: undefined;
   // WP10: VESPER. The engine lighting by itself (a ghost burst: the ship's first one louder); one second of THE DEAL's
@@ -406,22 +408,31 @@ function cueTransmitIn(mix: Graph, t0: number): void {
   voice.osc('sine', 1760, bloomAt + 0.1, lockEnd, lockTone);
 }
 
+// 1 ± spread, uniformly: the small per-hit variation that keeps a repeated sound from reading
+// as one sample on a loop.
+function vary(spread: number): number {
+  return 1 + (Math.random() * 2 - 1) * spread;
+}
+
 // A natural-minor scale (A3–G4) for HOLLOW's blips: a wrong, sad little melody per line.
 const HOLLOW_SCALE = [220, 246.94, 261.63, 293.66, 329.63, 349.23, 392];
 
 function cueTypeTick(mix: Graph, t0: number, voiceKind: TypeVoice): void {
   const voice = makeVoice(mix.ctx);
   if (voiceKind === 'sys') {
-    // A dry relay tick per character, ±8% pitch: a wide band of noise (a narrow one never
-    // rings up in a few ms and is not heard) plus a faint woody tock for body.
-    const pitch = 2600 * (1 + (Math.random() * 2 - 1) * 0.08);
+    // A soft key per character: a puff of noise with its top end cut, over a faint sine for a
+    // hint of tone. Both rise over a few ms: the old relay tick jumped to full level in under a
+    // millisecond, a 2.6 kHz click that hurt on headphones at 40 a second (Fran, post-handover). Level,
+    // brightness and pitch vary a little per key, so a typed line patters instead of
+    // machine-gunning. HOLLOW stays the opposite: low, square and in a minor key (below).
     const amp = voice.gain(0, mix.buses.ui);
-    const band = voice.filter('bandpass', pitch, 1.1, amp);
-    const end = pluck(amp.gain, t0, 0.6, 0.0007, 0.011);
-    voice.noise(mix.white, t0, end + 0.005, band);
-    const tock = voice.gain(0, mix.buses.ui);
-    const tockEnd = pluck(tock.gain, t0, 0.05, 0.0005, 0.008);
-    voice.osc('triangle', pitch * 0.62, t0, tockEnd + 0.004, tock);
+    const soft = voice.filter('lowpass', 2000 * vary(0.15), 0.6, amp);
+    const body = voice.filter('highpass', 380, 0.6, soft);
+    const end = swell(amp.gain, t0, 0.2 * vary(0.25), 0.0045, 0.024);
+    voice.noise(mix.white, t0, end + 0.005, body);
+    const tone = voice.gain(0, mix.buses.ui);
+    const toneEnd = swell(tone.gain, t0, 0.016 * vary(0.25), 0.005, 0.05);
+    voice.osc('sine', 988 * vary(0.03), t0, toneEnd + 0.005, tone);
     return;
   }
   if (voiceKind === 'hollow') {
@@ -1125,14 +1136,43 @@ function cueDebrisImpact(mix: Graph, t0: number): void {
   }
 }
 
-// §7.2 geiger: one dry click, a millisecond of bright noise at a random level, like a counter's tube. Played as
-// a Poisson stream (audio-cues), it is the belt's "you are inside something that hurts".
+// §7.2 geiger: one tick of a counter's tube, a few ms of noise in a band around 2.4 kHz at a random level. Played as
+// a sparse Poisson stream (audio-cues) on top of the belt's static, as emphasis. It used to BE the belt's sound: a
+// 0.3 ms step to as loud as −14 dBFS of 1.8 kHz-and-up noise, up to 11 a second, the sharp click Fran found painful
+// on headphones (post-handover). Now it rises over 2.5 ms, sits ~10 dB lower and has no top above ~4 kHz.
 function cueGeiger(mix: Graph, t0: number): void {
   const voice = makeVoice(mix.ctx);
   const amp = voice.gain(0, mix.buses.ambient);
-  const bright = voice.filter('highpass', 1800, 0.7, amp);
-  const end = pluck(amp.gain, t0, 0.55 + Math.random() * 0.5, 0.0003, 0.004);
-  voice.noise(mix.white, t0, end + 0.003, bright);
+  const soft = voice.filter('lowpass', 4200, 0.6, amp);
+  const band = voice.filter('bandpass', 2400 * vary(0.12), 0.9, soft);
+  const end = swell(amp.gain, t0, 0.32 * vary(0.3), 0.0025, 0.008);
+  voice.noise(mix.white, t0, end + 0.004, band);
+}
+
+// The belt's radiation interference (post-handover: the main belt sound, the geiger's ticks only ride on top). One short
+// burst of static, white noise through a band that drifts down like a radio losing its station and flutters at ~20 Hz,
+// faded in and out with no step at either end. audio-cues spaces the bursts out with silence between them (tuning.ts
+// BELT_STATIC_GAP_*), so it is never a wash. depth (0 at a belt's edge, 1 midway) makes it a little louder and brighter.
+function cueBeltStatic(mix: Graph, t0: number, depth: number): void {
+  const voice = makeVoice(mix.ctx);
+  const amp = voice.gain(0, mix.buses.ambient);
+  const soft = voice.filter('lowpass', 3200 + 1400 * depth, 0.6, amp);
+  const band = voice.filter('bandpass', 1400, 0.8, soft);
+  const centre = (1100 + 400 * depth) * vary(0.2);
+  const rise = 0.06;
+  const hold = 0.08 + Math.random() * 0.12;
+  const fall = 0.22;
+  const end = t0 + rise + hold + fall;
+  sweep(band.frequency, t0, centre * 1.3, centre * 0.75, rise + hold + fall);
+  const peak = (0.13 + 0.08 * depth) * vary(0.15);
+  amp.gain.setValueAtTime(0, t0);
+  amp.gain.linearRampToValueAtTime(peak, t0 + rise);
+  amp.gain.setValueAtTime(peak, t0 + rise + hold);
+  amp.gain.linearRampToValueAtTime(0, end);
+  // The flutter: the band's input wobbling between 40% and 100%, so it crackles like interference instead of hissing.
+  const flutter = voice.gain(0.7, band);
+  voice.osc('sine', 20 * vary(0.2), t0, end + 0.01, voice.gain(0.3, flutter.gain));
+  voice.noise(mix.white, t0, end + 0.01, flutter);
 }
 
 // A seed's warning outline blinks (§6.6): one high blip in HOLLOW's own voice (detuned squares, its minor
@@ -1463,6 +1503,7 @@ function playOn(mix: Graph, cue: Cue, params: CueParams[Cue] | undefined, t0: nu
     case 'nameGlitch': cueNameGlitch(mix, t0); return;
     case 'debrisImpact': cueDebrisImpact(mix, t0); return;
     case 'geiger': cueGeiger(mix, t0); return;
+    case 'beltStatic': cueBeltStatic(mix, t0, (params as CueParams['beltStatic']).depth); return;
     case 'seedWarn': cueSeedWarn(mix, t0); return;
     case 'seedDrop': cueSeedDrop(mix, t0); return;
     case 'ghostIgnite': cueGhostIgnite(mix, t0, (params as CueParams['ghostIgnite']).first); return;
@@ -1885,11 +1926,16 @@ function applyDuelTone(mix: Graph, progress: number | null): void {
 // balance the mix by numbers (peaks well under the limiter, payoffs louder than chatter, nothing
 // shrill), since a test can't listen. peakDb: sample peak in dBFS; loudDb: the loudest 50 ms RMS
 // window (what the ear notices); activeSec: from the first to the last sample above −40 dB of the
-// peak; brightHz: zero-crossing rate / 2, a rough "how bright or hissy" (higher = harsher).
+// peak; brightHz: zero-crossing rate / 2, a rough "how bright or hissy" (higher = harsher);
+// attackMs: how fast the cue's loudest moment arrives (below).
 export interface CueMeasure {
   cue: string;
   peakDb: number;
   loudDb: number;
+  // The rise of the loudness envelope (the peak sample in each 0.5 ms) from 10% to 90% of its top. A sharp
+  // click jumps to full level in under a millisecond, which is what hurts on headphones; a soft key or a
+  // burst of static takes several.
+  attackMs: number;
   // The loudness left after a 150 Hz highpass: roughly what laptop and phone speakers play (they
   // give almost nothing below that), so a cue that lives in the sub reads as quiet here.
   speakerLoudDb: number;
@@ -1901,6 +1947,7 @@ const MEASURE_SAMPLE_RATE = 44100;
 const MEASURE_WINDOW_SEC = 0.05;
 const MEASURE_ACTIVE_REL = 0.01;
 const MEASURE_SPEAKER_HP_HZ = 150;
+const MEASURE_ENVELOPE_SEC = 0.0005;
 const toDb = (amplitude: number): number => 20 * Math.log10(Math.max(amplitude, 1e-9));
 
 // A 12 dB/octave highpass (the RBJ cookbook biquad, Q = 1/√2) over rendered samples.
@@ -1969,10 +2016,21 @@ export async function measureCue(
   let crossings = 0;
   for (let i = Math.max(1, first); i <= last; i++) if ((data[i - 1]! < 0) !== (data[i]! < 0)) crossings++;
   const activeSec = first < 0 ? 0 : (last - first + 1) / MEASURE_SAMPLE_RATE;
+  const envelope: number[] = [];
+  const envelopeSize = Math.round(MEASURE_ENVELOPE_SEC * MEASURE_SAMPLE_RATE);
+  for (let start = Math.max(0, first); start <= last; start += envelopeSize) {
+    let max = 0;
+    for (let i = start; i < Math.min(data.length, start + envelopeSize); i++) max = Math.max(max, Math.abs(data[i]!));
+    envelope.push(max);
+  }
+  const envelopeTop = envelope.reduce((top, level) => Math.max(top, level), 0);
+  const riseFrom = envelope.findIndex((level) => level >= envelopeTop * 0.1);
+  const riseTo = envelope.findIndex((level) => level >= envelopeTop * 0.9);
   return {
     cue: params === undefined ? cue : `${cue} ${JSON.stringify(params)}`,
     peakDb: Math.round(toDb(peak) * 10) / 10,
     loudDb: Math.round(toDb(loud) * 10) / 10,
+    attackMs: riseFrom < 0 ? 0 : Math.round((riseTo - riseFrom) * MEASURE_ENVELOPE_SEC * 10000) / 10,
     speakerLoudDb: Math.round(toDb(speakerLoud) * 10) / 10,
     activeSec: Math.round(activeSec * 1000) / 1000,
     brightHz: activeSec > 0 ? Math.round(crossings / 2 / activeSec) : 0,
