@@ -1,0 +1,92 @@
+[
+ {
+  "name": "shrink",
+  "orbit": {
+   "x": 5936.934708187611,
+   "y": -3095.760453859301,
+   "vx": 2.583115509489671,
+   "vy": 2.477385588030771
+  },
+  "fuelPct": 68.21428571428638,
+  "line": "SHRINK THE LOOP — hold [SPACE]",
+  "outcome": "closed",
+  "rp": 6009,
+  "ra": 2497640,
+  "periTac": 2121872
+ },
+ {
+  "name": "low-capture",
+  "orbit": {
+   "x": 2693.2552393247247,
+   "y": -3622.5700037665124,
+   "vx": 3.3479855264415375,
+   "vy": 2.63927462350256
+  },
+  "fuelPct": 78.57142857142891,
+  "line": "KEEP HOLDING — shrink the loop",
+  "outcome": "closed",
+  "rp": 4510,
+  "ra": 93568,
+  "periTac": 3
+ },
+ {
+  "name": "missed-ignored",
+  "orbit": {
+   "x": 4012.860682043038,
+   "y": -4641.798683370644,
+   "vx": 3.2755088303217264,
+   "vy": 2.0713614441315884
+  },
+  "fuelPct": 73.0357142857147,
+  "line": "MISSED ▼ — hold [SPACE] NOW · [F] SKIP",
+  "outcome": "open",
+  "rp": 6009,
+  "ra": null,
+  "periTac": null
+ },
+ {
+  "name": "sliver",
+  "orbit": {
+   "x": -8788.46071565975,
+   "y": -6862.949783292068,
+   "vx": 1.878396477075459,
+   "vy": -2.279782311019913
+  },
+  "fuelPct": 0.17857142857332414,
+  "line": "NOT ENOUGH FUEL — the ship will fly past",
+  "outcome": "open",
+  "rp": 11144,
+  "ra": null,
+  "periTac": 9
+ },
+ {
+  "name": "low-floor",
+  "orbit": {
+   "x": 3719.2473467964282,
+   "y": -1370.5798999578656,
+   "vx": 2.439381019489463,
+   "vy": 3.9673510978265973
+  },
+  "fuelPct": 88.75000000000017,
+  "line": "SHRINK THE LOOP — hold [SPACE]",
+  "outcome": "closed",
+  "rp": 3810,
+  "ra": 13894659,
+  "periTac": 27753698
+ },
+ {
+  "name": "lowfuel-coast",
+  "orbit": {
+   "x": -10068.866162736185,
+   "y": -5839.059260869559,
+   "vx": 2.809536631402439,
+   "vy": -0.7062648834669425
+  },
+  "fuelPct": 10,
+  "line": "NOT ENOUGH FUEL — the ship will fly past · [F] SKIP",
+  "outcome": "open",
+  "rp": 6009,
+  "ra": null,
+  "periTac": 187
+ }
+]

@@ -1,0 +1,200 @@
+// WP7: HollowDef gained `story` and the timed wake `coastLeadSec` (HALCYON's coast-tied wake); the
+// fixtures below spell them out (no story, no coast lead: the WP6 behaviour they test).
+// WP6 part 2: what HOLLOW looks and sounds like, as data (systems/hollow-hud.ts), on the live systems:
+// • NEXT BITE: `?:??` on ship 1 (no timer), `m:ss` from a later ship's wake and bite timer, urgent in the
+//   last HOLLOW_BITE_URGENT_SEC, quiet once it is done for the ship;
+// • its reach: ship 1's root marks C12 as the next bite (C12's right edge, the root's left mouth) and
+//   the 72 free blocks on its right as WALL 72 ✓; HALCYON's rack C has GAP 2 and GAP 1 in red with
+//   arrows to C08 and C09; a bitten file is no longer a target but its gap stays red; a gap next to no
+//   food is not labelled; an eaten block bites on; nothing while dormant;
+// • the mini-strip: 6 racks of 64 blocks, the archive grey while sealed, the colonists mint (C09 hurt
+//   yellow), the root red, rack C's tail and rack D one gap split at the rack border, C12's red share
+//   from the right, an unscanned ship file's share unknown (the hatch), green while a repair fights;
+// • the chew follows the total drain (half for one file at rest, full while the engine burns, silent
+//   when paused); the tug's beat follows the boundary speed (16.5 %/s → 8.25 Hz; slower while a burn
+//   doubles the drain) and its pitch the file's integrity.
+import { check, finish } from '../wp1/harness';
+import { createHarness6 } from './harness6';
+import { biteClock, reachMarks, miniStripRows, chewLevel, tugTone } from '@systems/hollow-hud';
+import { infectNow, cureNow } from '@systems/hollow';
+import { actionRepair, repairRatePerSec } from '@state/actions';
+import { installTool } from '@systems/licences';
+import { setPaused } from '@systems/clock';
+import { isThrustOn } from '@systems/orbit-sim';
+import { buildShipMemory } from '@data/memory';
+import { UNNAMED_HOLLOW } from '@data/hollow-text';
+import { SHIPS, type ShipDef, type HollowDef } from '@data/ships';
+import { childRng } from '@systems/rng';
+import { createHollowState } from '@state/initial';
+import { soulsInMemory } from '@state/selectors';
+import { stateFromElements } from '@/types/orbit';
+import type { Segment } from '@/types/segment';
+import {
+  RACK_BLOCKS, RACK_COUNT, CHEW_FULL_DRAIN, TUG_BEAT_PER_PCT, TUG_PITCH_LOW_HZ, TUG_PITCH_HIGH_HZ, HOLLOW_BITE_URGENT_SEC,
+} from '@data/tuning';
+
+const h = createHarness6(1, { soulsFound: true });
+const state = () => h.store.getState();
+const mem = (): Segment[] => state().memory;
+const near = (a: number, b: number, eps = 1e-6): boolean => Math.abs(a - b) <= eps;
+
+function fresh(): void {
+  h.resetTo('flight');
+  h.noFault();
+  installTool(h.store, 'repair');
+}
+
+// --- Ship 1: NEXT BITE ?:??, C12 marked, WALL 72 ✓ -------------------------------------------------------------
+{
+  fresh();
+  const clock = biteClock(state());
+  check('ship 1 asleep: NEXT BITE ?:?? (no timer, unknown on purpose), not urgent, not quiet',
+    clock.secLeft === null && clock.text === 'NEXT BITE ?:??' && !clock.urgent && !clock.quiet, JSON.stringify(clock));
+  const marks = reachMarks(state());
+  const bite = marks.bites[0];
+  check('ship 1 asleep: the next bite is C12, on its right edge, from the root\'s left mouth', marks.bites.length === 1
+    && bite?.targetId === 'soul_c12' && bite.edge === 'right' && bite.hollowId === 'root' && bite.mouth === 'left' && bite.gapBlocks === 0,
+    JSON.stringify(marks.bites));
+  const wall = marks.gaps[0];
+  check('ship 1: the 72 free blocks right of the root are one WALL (rack C\'s tail and rack D), its left edge on the root',
+    marks.gaps.length === 1 && wall?.kind === 'wall' && wall.blocks === 72 && wall.hollowEdge === 'left'
+    && wall.label === 'WALL 72 ✓' && wall.word === 'WALL' && wall.count === '72 ✓', JSON.stringify(marks.gaps));
+
+  infectNow(h.store, h.soul('C12'));
+  const bitten = reachMarks(state());
+  check('C12 bitten: no longer a target (it is being eaten), the WALL still holds',
+    bitten.bites.length === 0 && bitten.gaps.length === 1 && bitten.gaps[0]!.kind === 'wall');
+  check('ship 1 awake mid-fight: still NEXT BITE ?:?? (it never spreads)', biteClock(state()).text === 'NEXT BITE ?:??' && state().hollow.phase === 'awake');
+
+  cureNow(h.store, h.soul('C12'));
+  h.step();
+  const quiet = reachMarks(state());
+  check('after the fight, dormant: quiet, and no arrows or labels', biteClock(state()).quiet && quiet.bites.length === 0 && quiet.gaps.length === 0,
+    `${state().hollow.phase} ${JSON.stringify(quiet)}`);
+}
+
+// --- The mini-strip on ship 1 -------------------------------------------------------------------------------------
+{
+  fresh();
+  const rows = miniStripRows(state());
+  check('mini-strip: 6 racks, each exactly 64 blocks', rows.length === RACK_COUNT && rows.every((cells) => cells.reduce((sum, cell) => sum + cell.blocks, 0) === RACK_BLOCKS),
+    rows.map((cells) => cells.reduce((sum, cell) => sum + cell.blocks, 0)).join());
+  const rackC = rows[2]!;
+  const rackD = rows[3]!;
+  check('mini-strip: rack C is six clusters (C09 hurt), the red root, then rack C\'s 8 free blocks; rack D is the rest of that gap (64)',
+    rackC.map((cell) => cell.kind).join() === 'soul,soul,soul-hurt,soul,soul,soul,hollow,free' && rackC.at(-1)!.blocks === 8
+    && rackD.length === 1 && rackD[0]!.kind === 'free' && rackD[0]!.blocks === 64 && rackD[0]!.segId === rackC.at(-1)!.segId,
+    rackC.map((cell) => `${cell.kind}:${cell.blocks}`).join(' '));
+  check('mini-strip: C09 at 71% is the hurt yellow', rackC[2]!.kind === 'soul-hurt' && rackC[2]!.segId === 'soul_c09');
+  h.store.update((d) => { for (const soul of soulsInMemory(d)) soul.sealed = true; d.ui.memoryRev++; });
+  check('mini-strip: a sealed archive is grey (nothing leaks before the reveal)',
+    miniStripRows(state())[1]!.filter((cell) => cell.kind === 'sealed').length === 6 && miniStripRows(state())[2]!.filter((cell) => cell.kind === 'sealed').length === 6);
+  h.store.update((d) => { for (const soul of soulsInMemory(d)) soul.sealed = false; d.ui.memoryRev++; });
+
+  infectNow(h.store, h.soul('C12'));
+  h.stepFor(5);
+  const c12 = miniStripRows(state())[2]!.find((cell) => cell.segId === 'soul_c12')!;
+  check('mini-strip: C12 infected from the right, its red share = what was eaten', c12.infected === 'right'
+    && c12.eatenPct !== null && near(c12.eatenPct, 100 - h.soul('C12').integrity) && c12.eatenPct > 5 && !c12.healing, JSON.stringify(c12));
+  const cargo = mem().find((seg) => seg.name === 'Cargo Ctrl')!;
+  infectNow(h.store, cargo);
+  const cargoCell = miniStripRows(state())[0]!.find((cell) => cell.segId === cargo.id)!;
+  check('mini-strip: an infected, unscanned ship file shows no share (the hatch: its health is not known)',
+    cargoCell.infected !== null && cargoCell.eatenPct === null, JSON.stringify(cargoCell));
+}
+
+// --- The chew and the tug ------------------------------------------------------------------------------------------
+{
+  fresh();
+  check('chew: silent with nothing infected', chewLevel(state()) === 0);
+  infectNow(h.store, h.soul('C12'));
+  h.step();
+  check('chew: one file at rest chews at drain 2 / CHEW_FULL_DRAIN', near(chewLevel(state()), 2 / CHEW_FULL_DRAIN), `${chewLevel(state())}`);
+  check('tug: no repair, no beating tones', tugTone(state()) === null);
+  h.keyDown('Space');
+  h.stepFor(0.5);
+  const burning = isThrustOn(state());
+  check('chew: full while the engine delivers thrust (P1: ×2)', burning && chewLevel(state()) === 1, `thrust ${burning}, chew ${chewLevel(state())}`);
+  h.keyUp('Space');
+  h.step();
+
+  check('the repair starts on C12', actionRepair(h.store, h.soul('C12')) === null);
+  h.step();
+  const tone = tugTone(state());
+  const c12 = h.soul('C12');
+  const heal = repairRatePerSec(c12.size, 1);
+  check('tug: led by C12, winning, beating at (heal 18.5 − drain 2) %/s × TUG_BEAT_PER_PCT (8.26 Hz)', tone !== null && tone.segId === c12.id && tone.winning
+    && near(tone.beatHz, (heal - 2) * TUG_BEAT_PER_PCT, 1e-6), JSON.stringify(tone));
+  check('tug: its pitch follows C12\'s integrity', tone !== null
+    && near(tone.pitchHz, TUG_PITCH_LOW_HZ + (TUG_PITCH_HIGH_HZ - TUG_PITCH_LOW_HZ) * c12.integrity / 100, 1e-6), JSON.stringify(tone));
+  const winning = miniStripRows(state())[2]!.find((cell) => cell.segId === 'soul_c12')!;
+  check('mini-strip: green while the repair fights', winning.healing);
+  h.keyDown('Space');
+  h.step();
+  const harder = tugTone(state());
+  check('tug: a burn doubling the drain slows the beat (18.5 − 4 %/s → 7.26 Hz)', isThrustOn(state()) && harder !== null
+    && near(harder.beatHz, (heal - 4) * TUG_BEAT_PER_PCT, 1e-6), JSON.stringify(harder));
+  h.keyUp('Space');
+  setPaused(h.store, true);
+  check('paused: the chew and the tug fall silent', chewLevel(state()) === 0 && tugTone(state()) === null);
+  setPaused(h.store, false);
+  h.stepFor(3);
+  check('cured: the tug is over', tugTone(state()) === null && !h.soul('C12').infected);
+}
+
+// --- HALCYON's rack C: NEXT BITE m:ss, GAP 2 / GAP 1, an eaten block bites on ------------------------------------
+{
+  fresh();
+  const ares = SHIPS[0]!;
+  const cfg: HollowDef = { wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, printMult: 1.5, seed: null, verbs: null, deal: false, story: 'none' };
+  const halcyon: ShipDef = {
+    ...ares,
+    id: 'halcyon-hud-test',
+    memory: {
+      ...ares.memory,
+      racksBD: { B: 'C C C C C C _16', C: 'C C _2 R _1 C C _21', D: '_64' },
+      souls: { familiesSeedStream: 'families', hurt: { cluster: 1, integrity: 90 }, lead: 9, sealed: false, firstRun: null },
+    },
+    hollow: cfg,
+  };
+  const memory = buildShipMemory(halcyon, null, childRng(7, 1, 'families'), false, UNNAMED_HOLLOW);
+  // A quiet closed orbit (never locks, never crashes), as acceptance 4 flies it.
+  const rp = 5500;
+  const ra = 11000;
+  const orbit = stateFromElements(rp, (ra - rp) / (ra + rp), 0, 0, state().level.planet.mu);
+  const wakeAt = state().clock.aiSec + 12;
+  h.store.update((d) => {
+    d.memory = memory;
+    d.hollow = createHollowState(halcyon);
+    d.hollow.cfg.wake = { afterAiSec: wakeAt, coastLeadSec: null };
+    d.orbit = { x: orbit.x, y: orbit.y, vx: orbit.vx, vy: orbit.vy };
+    d.ui.memoryRev++;
+  });
+  const asleep = biteClock(state());
+  check('HALCYON asleep: NEXT BITE 0:12 counts down to the wake (its first bite)', asleep.secLeft !== null && near(asleep.secLeft, 12) && asleep.text === 'NEXT BITE 0:12' && !asleep.urgent,
+    JSON.stringify(asleep));
+  const marks = reachMarks(state());
+  const gapKinds = marks.gaps.map((gap) => `${gap.kind} ${gap.blocks} ${gap.hollowEdge} ${gap.label}`).join(' | ');
+  check('HALCYON: GAP 2 left of the root (its right edge on the root) and GAP 1 right of it, both red',
+    gapKinds === 'gap 2 right GAP 2 | gap 1 left GAP 1', gapKinds);
+  const targets = marks.bites.map((bite) => `${bite.targetId}@${bite.edge}`).join(' ');
+  check('HALCYON: the arrows point at C08 (right edge) and C09 (left edge)', targets === 'soul_c08@right soul_c09@left', targets);
+  h.stepFor(12 - HOLLOW_BITE_URGENT_SEC + 0.2);
+  check('NEXT BITE is urgent in its last seconds', biteClock(state()).urgent);
+  h.stepUntil(() => state().hollow.phase === 'awake', 6);
+  const awake = biteClock(state());
+  check('woken: both bitten, NEXT BITE restarts at the spread timer (0:25)', awake.text === 'NEXT BITE 0:25' && h.soul('C08').infected !== undefined && h.soul('C09').infected !== undefined,
+    JSON.stringify(awake));
+  const bitten = reachMarks(state());
+  check('bitten: no arrows (both are being eaten), the two gaps stay red', bitten.bites.length === 0 && bitten.gaps.filter((gap) => gap.kind === 'gap').length === 2);
+  // Nobody helps: C09 (3.5 %/s) is eaten in about 29 s; the eaten block then reaches C10 at once.
+  h.stepUntil(() => h.maybeSoul('C09') === null, 40);
+  const after = reachMarks(state());
+  const c10 = after.bites.find((bite) => bite.targetId === 'soul_c10');
+  check('C09 eaten: its block bites on (an arrow to C10\'s left edge), and the root\'s 1-block gap to it is no longer labelled (no food)',
+    c10 !== undefined && c10.edge === 'left' && c10.gapBlocks === 0 && !after.gaps.some((gap) => gap.blocks === 1),
+    `${JSON.stringify(after.bites)} ${JSON.stringify(after.gaps.map((gap) => gap.label))}`);
+  h.checkMemory();
+}
+
+finish();

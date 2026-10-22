@@ -1,0 +1,85 @@
+{
+ "hit": {
+  "deadlineTac": 154.2119597750434,
+  "hitTac": 212.31582797712028,
+  "hitAt": {
+   "x": 13854.988697150386,
+   "y": -4562.75654915407
+  },
+  "hits": [
+   {
+    "segId": "soul_c07",
+    "rack": "C",
+    "from": 100,
+    "to": 75
+   },
+   {
+    "segId": "soul_c08",
+    "rack": "C",
+    "from": 100,
+    "to": 75
+   },
+   {
+    "segId": "soul_c09",
+    "rack": "C",
+    "from": 100,
+    "to": 75
+   },
+   {
+    "segId": "soul_c10",
+    "rack": "C",
+    "from": 100,
+    "to": 75
+   },
+   {
+    "segId": "soul_c11",
+    "rack": "C",
+    "from": 100,
+    "to": 75
+   },
+   {
+    "segId": "soul_c12",
+    "rack": "C",
+    "from": 100,
+    "to": 75
+   }
+  ],
+  "spentIds": [
+   "kestrel-debris"
+  ],
+  "forecasts": [],
+  "skipEnds": [
+   {
+    "tac": 138.88137209118216,
+    "pace": "cruise",
+    "refusal": "DODGE THE DEBRIS FIRST"
+   },
+   {
+    "tac": 191.93582797712028,
+    "pace": "cruise",
+    "refusal": "BURN COMING UP"
+   }
+  ],
+  "wall": 68.49999999999825,
+  "status": "approaching"
+ },
+ "dodge": {
+  "deadlineTac": 154.2119597750434,
+  "hitTac": null,
+  "hitAt": null,
+  "hits": [],
+  "spentIds": [],
+  "forecasts": [
+   "hit\u2192clear"
+  ],
+  "skipEnds": [
+   {
+    "tac": 138.88137209118216,
+    "pace": "cruise",
+    "refusal": "DODGE THE DEBRIS FIRST"
+   }
+  ],
+  "wall": 15.300000000000082,
+  "status": "approaching"
+ }
+}

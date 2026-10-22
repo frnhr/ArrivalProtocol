@@ -164,7 +164,7 @@ function freeBeside(memory: readonly Segment[], index: number): [number, number]
 // either under WALL_MIN_BLOCKS (no WALL, so no seed aims there) or so wide that a seed in its middle bites nothing.
 // Without that, a cluster moved out of the belt's racks sat behind a 4-block WALL (beside C16, or beside the AI Core at
 // rack D's end), the next seed landed in it and bit both, again and again: the strip-literal kid reached the choice
-// with MERGE's 20 charge in 57 of 192 runs instead of 154 of 198 (.tmp/final-fix/exp/). null: nowhere is SAFE. Pure.
+// with MERGE's 20 charge in 57 of 192 runs instead of 154 of 198 (the final fix pass's playthrough experiments). null: nowhere is SAFE. Pure.
 export function safestSpot(state: Readonly<GameState>, source: Segment, hazards: readonly RackHazard[]): PendingPlacement | null {
   const memory = state.memory;
   const hollowAddrs = memory.filter(isHollow).map((block) => requireAddr(memory, block));

@@ -66,7 +66,7 @@ const LABEL_SIDE_COS = 0.35;
 // opener), and both labels pointed outward ran into each other (`UNDERGROUNDIMPACT 03:04`). Closer than this, the ▼
 // label turns sideways, to the side away from the ✕.
 const LABEL_CLASH_UNITS = 40;
-// WP12 p3, the labels' collision pass (placeClear; LEAD_NOTES `For WP12`: ▲'s label on the ring's name, ▼'s next to
+// WP12 p3, the labels' collision pass (placeClear; the lead's WP12 notes: ▲'s label on the ring's name, ▼'s next to
 // the ship, START BURN's on ▼'s, HALCYON's far zoom on the ring and the planet, ▲ and the ship under the chip). A label
 // tries its own side first, then that side turned by these angles (degrees), and takes the first that hits nothing;
 // with none clear, the one that hits least. The side it took is kept while it stays clear, and while no other side hits

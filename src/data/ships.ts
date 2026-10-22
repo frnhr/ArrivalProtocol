@@ -172,7 +172,7 @@ export interface ShipDef {
 // Ship 1: the tutorial crash course. rp0 3,000 is underground, so the page opens on a red
 // line and IMPACT 02:43 (3,265 game s at x20). OUT for about 8 tactical s lifts ▼ into the
 // sweet zone, and the capture at ▼ costs about 1.0 of the 2.8 km/s budget, leaving ~36%
-// FUEL for mistakes (probe: .tmp/overhaul/probes/design-final-ship1.mjs).
+// FUEL for mistakes (the design's ship-1 probe, docs/design-v2.md).
 const ARES_VII: ShipDef = {
   id: 'ares-vii',
   name: 'ARES-VII',
@@ -250,7 +250,7 @@ const HALCYON: ShipDef = {
     dvBudgetKmS: 2.4,
     aNominalKmS2: 0.005,
   },
-  // WP7 (the lead's per-ship shrink tuning, swept with .tmp/wp1-rules and .tmp/lead1 under AP_SHIP=1):
+  // WP7 (the lead's per-ship shrink tuning, swept with tests/wp1-rules and tests/lead1 under AP_SHIP=1):
   // • at ×25 a tactical second of RETRO sinks ▼ a quarter faster than on ship 1, and from the ring's inner
   //   edge ▼ reaches the surface in about 2.8 tac s, so the ring-edge hand-over with ship 1's 0.6 s
   //   back-off left 3.2–3.6 s of over-hold before IMPACT (ship 1: 4–5 s). Backing off HALCYON_EDGE_BACK_OFF_TAC
@@ -323,7 +323,7 @@ const KESTREL: ShipDef = {
     dvBudgetKmS: 2.1,
     aNominalKmS2: 0.005,
   },
-  // WP9 (the lead's per-ship shrink tuning, swept with .tmp/wp1-rules and .tmp/lead1 under AP_SHIP=2): see the
+  // WP9 (the lead's per-ship shrink tuning, swept with tests/wp1-rules and tests/lead1 under AP_SHIP=2): see the
   // constants' WHY in tuning.ts.
   shrink: {
     marginTac: SHRINK_MARGIN_TAC, marginMinTac: SHRINK_MARGIN_MIN_TAC, smallLoopFactor: KESTREL_SMALL_LOOP_FACTOR,
@@ -401,7 +401,7 @@ const VESPER: ShipDef = {
     aNominalKmS2: 0.005,
   },
   // WP10 (the lead's item 2: the shrink's constants swept on VESPER with AP_SHIP=3, as after its SWAP; with the ghost
-  // live the same suites are a measurement, PROGRESS.md WP10): see the constants' WHY in tuning.ts.
+  // live the same suites are a measurement, not a gate): see the constants' WHY in tuning.ts.
   shrink: {
     marginTac: SHRINK_MARGIN_TAC, marginMinTac: SHRINK_MARGIN_MIN_TAC, smallLoopFactor: VESPER_SMALL_LOOP_FACTOR,
     reactionTac: SHRINK_REACTION_TAC, edgeBackOffTac: VESPER_EDGE_BACK_OFF_TAC,
@@ -580,7 +580,7 @@ export function validateShipDef(ship: ShipDef): void {
   if (start.r0 <= ring.max) fail('start.r0 must be outside the ring');
   if (cruiseWarp <= tacticalWarp) fail('cruiseWarp must be faster than tacticalWarp');
   // Lines like "Hello, Unit 47! ARES-VII is about to hit a planet. :)" are checked against the
-  // strip width with a name this long (.tmp/wp2/say.test.ts).
+  // strip width with a name this long (tests/wp2/say.test.ts).
   if (ship.name.length > NAME_MAX_CHARS) fail(`name '${ship.name}' is longer than ${NAME_MAX_CHARS} characters`);
   if (!(ship.printBaseSec > 0)) fail(`printBaseSec must be positive (got ${ship.printBaseSec})`);
   const { marginTac, marginMinTac, smallLoopFactor, reactionTac, edgeBackOffTac } = ship.shrink;

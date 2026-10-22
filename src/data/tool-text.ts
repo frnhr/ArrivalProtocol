@@ -4,7 +4,7 @@ import type { FsToolKind } from '@/types/fs-tool';
 // The words the filesystem tools say (WP3): why a click did nothing (shown next to the cursor),
 // the inline confirm's questions, and the TERMINAL's line when a repair runs out of charge.
 // Kept apart from script.ts so the pure targeting rules can import them without pulling in the
-// voice and the director. .tmp/wp3 tests render every one with worst-case names (≤ 70 chars) and
+// voice and the director. tests/wp3 tests render every one with worst-case names (≤ 70 chars) and
 // check them against the §3.5 glossary.
 
 // A refused tool action, in a few words. Every refusal also buzzes.

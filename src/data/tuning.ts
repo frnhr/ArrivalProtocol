@@ -167,7 +167,7 @@ export const SHRINK_RESERVE_WAIT_TAC = 2000;
 // Past it a short tank, or a shrink that ran out of spare FUEL, spent its last FUEL now (`LAST FUEL: SHRINK
 // THE LOOP`) and ended ORBIT ACCEPTED. With the coast SKIP the WAIT costs seconds, so it never decided well:
 // waiting for the trim's apsis and spending the tank there ends on a better loop in every row measured
-// (.tmp/lead2/probes/last-fuel-vs-apsis.ts: 30% FUEL, 84% printer range against the last FUEL's 48%; from
+// (a LEAD-2 probe: 30% FUEL, 84% printer range against the last FUEL's 48%; from
 // 32% it locks), and a paid lock always beats an ACCEPTED one. The last FUEL went with it.)
 
 // A trim the tank can't pay for in full is still offered while the whole tank, spent at its apsis, ends on a
@@ -176,7 +176,7 @@ export const SHRINK_RESERVE_WAIT_TAC = 2000;
 // this much printer range, or the strip says NOT ENOUGH FUEL instead: a kid who obeys a save must never end
 // STRANDED. The real burn is spread over seconds around ▼, but centred on it the loop it ends on matched the
 // impulsive one to 0.01 point on all three ships, for kids reacting at once, 0.3 s and 0.5 s late
-// (.tmp/lead2/probes/strand-promise.ts, 0 promised saves stranded). A tenth of a point is ten times that; the
+// (a LEAD-2 probe: 0 promised saves stranded). A tenth of a point is ten times that; the
 // half point of the last FUEL's LAST_FUEL_RANGE_MARGIN (whose plan drifted between refreshes) turned
 // KESTREL's 28% after an ignored capture, which the last FUEL saved at 11%, into the STRANDED line.
 export const STRAND_LINE_MARGIN = 0.001;
@@ -550,7 +550,7 @@ export const GHOST_ALARM_MIN_SEC = 3;
 // warp (the lead's ruling: "the target event moved by more than a tick"). Eight, not one (a WP10 deviation): a SKIP
 // crosses its whole jump in about 80 ticks at its warp, and a 1 s burst far out on a big loop moves the burn point by
 // 1.2–1.5 of them (it changes the period a little), so at one tick a 1,400 tac s WAIT on VESPER took 12–21 presses of
-// F with the same line on the strip all the way (.tmp/wp10/probes/skip-presses-1tick.log). Eight ticks (a tenth of the
+// F with the same line on the strip all the way (a WP10 probe). Eight ticks (a tenth of the
 // jump) still stop the SKIP when the target is another event: the next pass of ▼, or ▲ instead of ▼, is half a loop or
 // more away, tens of ticks. Measured at eight: one press flies through 34–53 bursts and stops when the plan changes.
 export const SKIP_REPLAN_TICKS = 8;
@@ -683,7 +683,7 @@ export const REACTOR_THREAD_SHARE = 0.25;
 // Thrust Ctrl (C2): a failing controller fires the engine by itself now and then, a dead one
 // as often and sometimes it sticks until SPACE is pressed. Means are in tactical seconds so the
 // rate reads the same at any warp; durTac 1.0 is one clear "whump". ok and degraded: never.
-// WP12 (the 200-seed playthrough, .tmp/wp12; the lead's steer of 03:10 to move a careless kid's losses from the Core
+// WP12 (the 200-seed playthrough, tests/wp12; the lead's steer of 03:10 to move a careless kid's losses from the Core
 // to the flight): at §3.3's 15% every 25 tac s VESPER's bursts were a nuisance, so a kid who never SWAPs still locked
 // VESPER (87.5%), stayed on through its whole tool hunt, and lost REPAIR to the seeds in half the runs; on LAST LIGHT
 // it then had nothing to fight with and the run ended OVERWRITTEN (sloppy runs completed: 63.5%). At 30% every 10 tac
@@ -1030,7 +1030,7 @@ export const TRANSIT_HIT_MAX = 35;
 // start a ship blind or without REPAIR (pillar 5: fair). A second, worse copy can still be hit lower.
 export const TRANSIT_LAST_COPY_FLOOR = 60;
 // The Core takes at most this much from one hit: it is you, and a 35-point hit to the glitch overlay
-// would turn the boot into static. WP12 (the 200-seed playthrough, .tmp/wp12): at 15 the run's 18 crossing hits
+// would turn the boot into static. WP12 (the 200-seed playthrough, tests/wp12): at 15 the run's 18 crossing hits
 // wore the Core of a kid who did not heal it to its CORE_RESET_INTEGRITY floor by LAST LIGHT (one thread), and
 // nothing on the strip asks for a Core REPAIR before it is infected (WP11's TODO), so a competent kid spent its
 // MERGE savings healing it on the coasts: only 81 of 200 competent runs reached the choice with MERGE's 20 (the
@@ -1088,7 +1088,7 @@ export const HALCYON_SMALL_LOOP_FACTOR = 3;
 // the surface in about 2.8 tac s, so ship 1's 0.6 s back-off left 3.2–3.6 s of over-hold before IMPACT;
 // 1.7 s gives ship 1's 4–5 s, and a release up to that late keeps ▼ in the ring (the two-burn fix).
 export const HALCYON_EDGE_BACK_OFF_TAC = 1.7;
-// KESTREL's (WP9, the lead's item: swept on KESTREL with AP_SHIP=2; PROGRESS.md WP9 has the logs). The same
+// KESTREL's (WP9, the lead's item: swept on KESTREL with AP_SHIP=2). The same
 // planet and warp as HALCYON, a ring of 5,000–7,000: "already small" is again ship 1's 22,500 km, here
 // 22,500 / 7,000 ≈ 3.2 × the ring's outer edge...
 export const KESTREL_SMALL_LOOP_FACTOR = 3.2;
@@ -1099,7 +1099,7 @@ export const KESTREL_SMALL_LOOP_FACTOR = 3.2;
 // 20.5%, and the hand-over leaves 5.6 s of over-hold before IMPACT (1.7: 4.9 s).
 export const KESTREL_EDGE_BACK_OFF_TAC = 2.5;
 // VESPER's (WP10, the lead's item 2: swept on VESPER with AP_SHIP=3, its controller swapped: AP_GHOST=quiet; logs in
-// .tmp/wp10/sweeps/). KESTREL's ring and planet, but ×30: a second of over-hold drops ▼ further, so KESTREL's 22,500 km
+// WP10's sweeps). KESTREL's ring and planet, but ×30: a second of over-hold drops ▼ further, so KESTREL's 22,500 km
 // "already small" (3.2) left a capture let go and ignored 60 s handing over at ▲ 27,600 km with only the 3 s margin,
 // and a release 1 s late already turned the fix into three burns (`▼ TOO LOW — at ▲ press [W]`, 20.4% FUEL left).
 // At 5.0 (35,000 km) that hand-over keeps the full 5 s margin: a release 1 s late keeps the two-burn fix (22.5%), 2 s
@@ -1376,8 +1376,7 @@ export const BOOT_AFTER_HOLLOW_LINE_SEC = 1.0;
 // --- WP11: LAST LIGHT, HOLLOW's verbs, the root duel, PURGE or MERGE (§4.2, §6.6, §9 WP11) -------------------------
 
 // LAST LIGHT's own SHRINK THE LOOP numbers (ships.ts, the lead's per-ship tuning; swept on LAST LIGHT with AP_SHIP=4,
-// logs in .tmp/wp11/sweeps/). VESPER's ring and planet at VESPER's ×30, so its numbers are the starting point; see
-// PROGRESS.md WP11 for what the sweep said.
+// WP11's sweeps). VESPER's ring and planet at VESPER's ×30, so its numbers are the starting point.
 export const LAST_LIGHT_SMALL_LOOP_FACTOR = 5.0;
 export const LAST_LIGHT_EDGE_BACK_OFF_TAC = 2.5;
 // HOLLOW's verbs (§6.6 ship 5): the weights are 1 + the last unit's MOVEs (MV) or DELETEs (RM) over this many, so a
@@ -1390,7 +1389,7 @@ export const VERB_MV_NEAR_BLOCKS = 64;
 // A cluster HOLLOW has bitten this many times in the same spot is in a trap (WP11 review, the lead's ruling of 21:30):
 // the strip asks to MOVE it behind a WALL before the next bite, ahead of the quieter lines. On LAST LIGHT the root's
 // 2-block GAPs bit C13 and C14 every 12 s, and repairing them again and again drained the charge MERGE needs. WP12 (the
-// lead's note for part 1, 01:35; .tmp/wp12 LITERAL, the kid who does only what the strip says): at two bites that kid
+// lead's note for part 1, 01:35; tests/wp12 LITERAL, the kid who does only what the strip says): at two bites that kid
 // reached LAST LIGHT's choice with MERGE's 20 charge in 49 of 196 runs (COMPETENT 124 of 200), having paid a second
 // REPAIR on every trapped cluster on every ship; at one, 149 of 199, and its souls woke 95% → 98.5%. The first bite
 // still teaches REPAIR: the ask comes only once that cluster is cured and HOLLOW will bite it there again.

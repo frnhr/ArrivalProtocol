@@ -57,7 +57,7 @@ import {
 
 // Every line the game says or shows outside the flight table (systems/guidance.ts) lives here:
 // ARRIVAL CONTROL's quips, the boot log, the director's rules and hints. Templates take
-// LineVars, never the live state, so .tmp/wp2/say.test.ts can render every one of them with
+// LineVars, never the live state, so tests/wp2/say.test.ts can render every one of them with
 // worst-case placeholders and check it fits the strip (≤ MAX_LINE_CHARS). Words follow the
 // §3.5 glossary: SHIP / MIND, LOWEST POINT ▼, SAFE ORBIT ring, FUEL, REPAIR CHARGE …
 
@@ -1556,7 +1556,7 @@ export const WALL_RULES: readonly GuideRule[] = [
 // where HOLLOW can't reach it. Mind-urgent, so it never stands in front of a flight's NOW / KEEP HOLDING / RELEASE line
 // (director.ts; WP9's rule), and only with MOVE licensed. It also comes before a lesson's lead-in (WP12 p3): on LAST
 // LIGHT the belt lesson's first seconds hid it, the cluster was bitten again and again, and the strip-following kid
-// reached the choice with MERGE's 20 charge in 39 of 198 runs instead of 155 (`.tmp/wp12/p3/E1.log`, `E3.log`). The belt
+// reached the choice with MERGE's 20 charge in 39 of 198 runs instead of 155 (WP12 part 3's playthrough experiments). The belt
 // is up to 90 s away; a cluster bitten every 12 s costs charge now.
 function bittenAgainLive(ctx: DirectorCtx): boolean {
   return spreadingAwake(ctx) && ctx.vars.bittenAgain !== '';

@@ -1,5 +1,5 @@
 // The words of the engine firing by itself (C2, §9 WP10 item 2), apart from script.ts so the DOM-free ghost-thrust
-// system can say them without pulling in the director. .tmp/wp10 renders every one (≤ 70 characters, §3.5 glossary).
+// system can say them without pulling in the director. tests/wp10 renders every one (≤ 70 characters, §3.5 glossary).
 export const GHOST_TEXT = {
   // The ship's first burst: the alarm (the strip's alarm line and the alert's own word for the toggle).
   alarm: 'UNCOMMANDED THRUST',

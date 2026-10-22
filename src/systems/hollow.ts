@@ -277,7 +277,7 @@ function consume(memory: Segment[], index: number, owner: string): HollowSegment
 // (§6.6 says the LARGEST gap that touches a cluster. On every ship the largest is the open rack D or the
 // rack's free tail, where a 2-block seed leaves walls of 30 blocks on both sides: it could never split a wall,
 // and §5.1's "splits the wall into GAP 3 on each side" and acceptance 4's "deleting a seed restores the WALL"
-// could not happen. WP9 deviation, PROGRESS.md.)
+// could not happen. A WP9 deviation.)
 // WP11 (the lead's TODO, WP10 question 3): no spot leaves a tool in `untried` (licensed on this ship, not used here yet:
 // HollowState.untriedTools) within the seed's bite on the gap's other side.
 // Final review: no spot leaves a ship file within the seed's bite either. A cluster the kid moved into rack A's free tail

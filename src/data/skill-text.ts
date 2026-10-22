@@ -1,6 +1,6 @@
 // The words AUTOBURN says (WP9, §6.10): its boot line, its radio lines and why it can't engage. Kept apart from
 // script.ts (like tool-text.ts) so systems/autoburn.ts and guidance can import them without the director.
-// Every line is checked against the strip width with worst-case numbers by .tmp/wp9 tests (≤ 70 chars).
+// Every line is checked against the strip width with worst-case numbers by tests/wp9 tests (≤ 70 chars).
 
 import type { AutoburnEnd } from '@state/schema';
 import { AUTOBURN_WINDOW_TAC, BAND_DEGRADED_MIN } from '@data/tuning';

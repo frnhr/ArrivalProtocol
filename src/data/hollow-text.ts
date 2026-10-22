@@ -2,7 +2,7 @@
 // names itself, its alerts, the ship-1 breach and the lines after the first fight. Kept apart from
 // script.ts (like tool-text.ts) so systems/hollow.ts and the memory builder can import them without
 // pulling in the director and the voice. Every line here is checked against the strip width and the
-// §3.5 glossary by .tmp/wp6 tests (≤ 70 characters with worst-case names).
+// §3.5 glossary by tests/wp6 tests (≤ 70 characters with worst-case names).
 
 import type { LastCause, LastUnit } from '@systems/meta';
 import type { HollowSegment } from '@/types/segment';

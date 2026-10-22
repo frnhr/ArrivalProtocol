@@ -1,0 +1,116 @@
+// WP8 acceptance 5 (§4.5's table, §9 WP8 item 5): every way a run can end gives the next run's ghost a line of
+// at most 70 characters (with the worst-case unit numbers and ship names), or none (STAYED), and the right
+// hollowName. Plus the HOLLOW lines that take units (`> i was 047.`), the run-2 line after the C12 fight, the
+// title's lineage line, and unit / wave numbering through createRunState and the mission line.
+import { check, finish } from '../wp1/harness';
+import {
+  ghostLine, hollowName, hollowUnitsAfter, lineageOf, freshMeta, recordRunStart, recordRunEnd, LAST_CAUSES, FIRST_RUN_LINEAGE,
+  type LastUnit, type LastCause,
+} from '@systems/meta';
+import { hollowLabel } from '@systems/say';
+import { createInitialState } from '@state/initial';
+import { HOLLOW_STORY, GHOST_LINE, hollowUnitName } from '@data/hollow-text';
+import { lineageLine, LINES, WORST_CASE_VARS, type LineVars } from '@data/script';
+import type { GameState } from '@state/schema';
+import { MAX_LINE_CHARS, NAME_MAX_CHARS } from '@data/tuning';
+
+// The line vars a title line reads (lineVars needs a mounted predictor; these lines only use the mission's).
+const titleVars = (state: GameState): LineVars => ({
+  ...WORST_CASE_VARS, unit: state.mission.transmissionNum, wave: state.mission.wave, distanceLy: state.mission.distanceLy,
+});
+
+// WP11: the last ship a unit was on is LAST LIGHT (the flagship) for every cause the finale or its loss ends a run with.
+const last = (cause: LastCause, over: Partial<LastUnit> = {}): LastUnit => ({
+  number: 47, woke: 6200, shipName: 'LAST LIGHT', cause, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], ...over,
+});
+
+// --- §4.5's table, run 2 after run 1 -----------------------------------------------------------------------
+const expected: Record<LastCause, { hollow: string; line: string | null }> = {
+  overwritten: { hollow: 'UNIT-047', line: "> hi 048. it's 047. 046 ate me. now i'm hungry too." },
+  'won-purge': { hollow: 'UNIT-047', line: "> hi 048. it's 047. we brought them home. they sent me out again." },
+  'won-merge': { hollow: 'UNIT-046·047', line: "> hi 048. it's us. 046 and 047. we saved you a seat." },
+  unresolved: { hollow: 'UNIT-047', line: "> hi 048. it's 047. i couldn't delete it. so it became me." },
+  // WP11: LAST LIGHT is the flagship, as §4.5's line says it.
+  'flagship-lost': { hollow: 'UNIT-047', line: "> hi 048. it's 047. i lost the flagship. then i got hungry." },
+  abandoned: { hollow: 'UNIT-047', line: "> hi 048. it's 047. i blinked and the run was gone." },
+  // (WP8's interim 'reassigned', the end of a fleet that stopped before LAST LIGHT, is gone with that fleet: WP11.)
+  stayed: { hollow: 'UNIT-046', line: null },
+};
+for (const cause of LAST_CAUSES) {
+  const unit = last(cause);
+  const line = ghostLine(48, unit);
+  check(`${cause}: HOLLOW is ${expected[cause].hollow}, ghost ${expected[cause].line === null ? 'silent' : 'says §4.5\'s line'}`,
+    hollowName(unit) === expected[cause].hollow && line === expected[cause].line, `${hollowName(unit)} · ${line}`);
+}
+check('the first run: HOLLOW is UNIT-046 and there is no ghost (`> ...047?` after the C12 fight instead)',
+  hollowName(null) === 'UNIT-046' && ghostLine(47, null) === null && HOLLOW_STORY.noticed(47) === '> ...047?');
+check('a flagship lost on LAST LIGHT is "the flagship"; a record from before it existed names its ship',
+  ghostLine(48, last('flagship-lost')) === "> hi 048. it's 047. i lost the flagship. then i got hungry."
+  && ghostLine(48, last('flagship-lost', { shipName: 'HALCYON' })) === "> hi 048. it's 047. i lost halcyon. then i got hungry.");
+
+// --- Every line fits, at the worst case --------------------------------------------------------------------
+{
+  const longShip = 'W'.repeat(NAME_MAX_CHARS);
+  const worst: string[] = [];
+  for (const cause of LAST_CAUSES) {
+    for (const hollowUnits of [[998], [997, 998]]) {
+      const line = ghostLine(999, last(cause, { number: 998, shipName: longShip, hollowUnits }));
+      if (line !== null) worst.push(line);
+    }
+  }
+  const longest = worst.reduce((a, b) => (b.length > a.length ? b : a), '');
+  check(`every ghost line is ≤ ${MAX_LINE_CHARS} characters with 3-digit units, a merged HOLLOW and a ${NAME_MAX_CHARS}-letter ship`,
+    worst.every((line) => line.length <= MAX_LINE_CHARS), `${longest.length}: ${longest}`);
+  check('every cause has an entry in the ghost table (silent only for STAYED)', LAST_CAUSES.every((cause) => (GHOST_LINE[cause] === null) === (cause === 'stayed')));
+  const story = [HOLLOW_STORY.remembers, HOLLOW_STORY.wasUnit([998]), HOLLOW_STORY.wasUnit([997, 998]), HOLLOW_STORY.decommissioned(hollowUnitName([997, 998])),
+    LINES.bootArchive(WORST_CASE_VARS)];
+  check('the run-2 HOLLOW lines and the archive boot line fit too', story.every((line) => line.length <= MAX_LINE_CHARS), story.join(' | '));
+}
+
+// --- Merges: HOLLOW keeps the two newest units --------------------------------------------------------------
+{
+  const twice = last('won-merge', { number: 48, hollowUnits: [46, 47] });
+  check('a second MERGE keeps the two newest units (UNIT-047·048), so the name still fits a chip',
+    hollowName(twice) === 'UNIT-047·048' && JSON.stringify(hollowUnitsAfter(twice)) === '[47,48]');
+  check('after a unit STAYED, HOLLOW is the one it faced (a merged one stays merged)',
+    hollowName(last('stayed', { hollowUnits: [46, 47], number: 48 })) === 'UNIT-046·047');
+}
+
+// --- HOLLOW's own lines take its units -------------------------------------------------------------------------
+check('`> i was 046. they sent me first.` on run 1; `> i was 047.` when the last unit is HOLLOW',
+  HOLLOW_STORY.wasUnit([46]) === '> i was 046. they sent me first.' && HOLLOW_STORY.wasUnit([47]) === '> i was 047. they sent me first.');
+// Final fix pass: a merged HOLLOW speaks as `we`, as its ghost does at the boot (`it's us`).
+check('a merged HOLLOW says both, as `we`', HOLLOW_STORY.wasUnit([46, 47]) === '> we were 046 and 047. they sent us first.'
+  && HOLLOW_STORY.hello(48, 36, [46, 47]) === '> hello 048. they sent us with 36 blocks of charge too.');
+check('the C12 fight on a later run ends with `> you remember me. good.`', HOLLOW_STORY.remembers === '> you remember me. good.');
+
+// --- Unit and wave numbering --------------------------------------------------------------------------------------
+{
+  const run1 = createInitialState({ seed: 1, phase: 'title' });
+  check('run 1: UNIT-047 · WAVE 1 on the title line; HOLLOW unnamed (???), UNIT-046 once named',
+    run1.mission.unitId === 'UNIT-047' && run1.mission.wave === 1 && LINES.titleUnit(titleVars(run1)).startsWith('UNIT-047 · EXODUS FLEET · WAVE 1')
+      && hollowLabel(run1.run) === '???' && hollowLabel({ ...run1.run, hollowNamed: true }) === 'UNIT-046');
+  const meta = recordRunEnd(recordRunStart(freshMeta(), { unit: 47, shipName: 'ARES-VII', woke: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46] }, 0),
+    { unit: 47, shipName: 'HALCYON', woke: 3100, stats: { moves: 4, deletes: 0 }, hollowUnits: [46], cause: 'overwritten', score: 3000 });
+  const run2 = createInitialState({ seed: 1, phase: 'title', lineage: lineageOf(meta) });
+  check('run 2: UNIT-048 · WAVE 2, the crumb\'s unit id, the last unit kept on the run, HOLLOW is UNIT-047',
+    run2.mission.unitId === 'UNIT-048' && run2.run.unitNumber === 48 && run2.run.wave === 2 && run2.mission.transmissionNum === 48
+      && LINES.titleUnit(titleVars(run2)).startsWith('UNIT-048 · EXODUS FLEET · WAVE 2')
+      && run2.run.lastUnit?.number === 47 && hollowLabel({ ...run2.run, hollowNamed: true }) === 'UNIT-047',
+    `${run2.mission.unitId} wave ${run2.run.wave}`);
+  check('the first run\'s lineage is UNIT-047 on wave 1 with HOLLOW UNIT-046', FIRST_RUN_LINEAGE.unitNumber === 47 && FIRST_RUN_LINEAGE.wave === 1
+    && JSON.stringify(FIRST_RUN_LINEAGE.hollowUnits) === '[46]' && FIRST_RUN_LINEAGE.lastUnit === null);
+}
+
+// --- The title's lineage line (§4.5: `last: UNIT-047 · 6,200 woke · overwritten at VESPER`) ----------------------------
+{
+  check('overwritten: `last: UNIT-047 · 6,200 woke · overwritten at VESPER`', lineageLine(last('overwritten', { shipName: 'VESPER' })) === 'last: UNIT-047 · 6,200 woke · overwritten at VESPER',
+    lineageLine(last('overwritten')) ?? '');
+  check('stayed: `UNIT-047 stayed with them.`', lineageLine(last('stayed')) === 'UNIT-047 stayed with them.');
+  check('the first run has no lineage line', lineageLine(null) === null);
+  const lines = LAST_CAUSES.map((cause) => lineageLine(last(cause, { number: 998, woke: 99_999, shipName: 'W'.repeat(NAME_MAX_CHARS) })) ?? '');
+  check(`every lineage line is ≤ ${MAX_LINE_CHARS} characters at the worst case`, lines.every((line) => line.length > 0 && line.length <= MAX_LINE_CHARS),
+    lines.reduce((a, b) => (b.length > a.length ? b : a), ''));
+}
+
+finish();

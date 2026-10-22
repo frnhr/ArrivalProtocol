@@ -1,0 +1,8 @@
+{
+  // Strict tsc over every headless test entry and the harnesses they import (tsx only strips types).
+  // tests/run.sh runs it first as the `tsc-tests` suite.
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "baseUrl": "..", "types": ["node"], "noEmit": true },
+  "include": ["../src", "./**/*.test.ts"],
+  "exclude": ["./.out"]
+}

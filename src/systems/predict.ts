@@ -485,7 +485,7 @@ function shrinkWaitsLong(input: BurnInputs, path: RetroPath, step: number): bool
 // The shrink, or null for none.
 // • A tank that can't pay for the trims gets none: a shrink that leaves the kid unable to finish is not
 //   progress (WP1-rules deviation 2), and the trim, with the whole tank at its apsis, ends on a better loop
-//   than braking now would (LEAD-2, `.tmp/lead2/probes/last-fuel-vs-apsis.ts`: 84% against 48% printer range
+//   than braking now would (a LEAD-2 probe: 84% against 48% printer range
 //   with 30% FUEL after 60 s of ignoring the capture). Its WAIT, hours of game time, is seconds of SKIP.
 // • A hold pressed for the shrink keeps its plan only while the tank still pays for the trims after it:
 //   held past that, the plan just ends (null), F5 says RELEASE, and what the tank pays for after the release
@@ -832,7 +832,7 @@ function propagatePath(
 // taking its share of the reactor. Judged with the threads actually busy, the deadline moved about 2 tactical s each
 // time an op started or ended (review round 2 measured 154.2 → 152.0 → 153.5 → 154.2 under two REPAIRs), and a
 // countdown never jumps (§2 pillar 5). Judged with none busy (round 2's fix), it lied: a kid who started at the last
-// second while two REPAIRs ran was hit (LEAD-2, `.tmp/wp9/verify3/probes/busy-deadline-fine.ts`: 3 broken promises in
+// second while two REPAIRs ran was hit (a LEAD-2 probe: 3 broken promises in
 // the last 0.7 tactical s). At the worst case the deadline holds still through any ops, and every start it promises
 // dodges whatever the threads do; a kid with free threads dodges with room to spare. "Every thread" is the Core's
 // capacity, which a flight never changes (LEAD-2 review round 1): its thread count drops to one below 50% integrity,
@@ -1414,7 +1414,7 @@ export function getPrediction(): Prediction {
 // the 10 Hz cadence kept. A SKIP fixes its warp and end point from it (pace.ts requestSkip; LEAD-2 review round 1):
 // on a loop tens of millions of km across, CRUISE's integrator moves the next ▼ by tens of tactical seconds between two
 // refreshes, a SKIP's end point only ever moves nearer, and one taken from the older refresh landed the SKIP up to 14
-// tactical minutes early (`.tmp/lead2/fix1/probes/far-loop-drift.ts`). The SKIP's own ticks are exact conic jumps, so
+// tactical minutes early (a LEAD-2 probe). The SKIP's own ticks are exact conic jumps, so
 // every refresh after its first agrees with it.
 export function currentPrediction(): Prediction {
   if (!storeRef) throw new Error('currentPrediction: mountPredictor has not run');

@@ -264,7 +264,7 @@ declare global {
 // __ap.hollowDemo(): HOLLOW as ship 2 meets it, on the ship being flown: rack C becomes HALCYON's (§4.2
 // `C C _2 R _1 C C _21`: the root between C08 behind a 2-block GAP and C09 behind a 1-block GAP), the
 // archive is open, MOVE is licensed, and HOLLOW wakes HOLLOW_DEMO_WAKE_SEC from now with HALCYON's numbers
-// and no story. WP6's browser suite (.tmp/wp6/p2-shots.mjs) is built on it; the real HALCYON is
+// and no story. WP6's browser checks were built on it; the real HALCYON is
 // __ap.ship(1) (WP7).
 const HOLLOW_DEMO_RACKS = { B: 'C C C C C C _16', C: 'C C _2 R _1 C C _21', D: '_64' } as const;
 // C09 leads (the cluster right of the root, behind the 1-block GAP).

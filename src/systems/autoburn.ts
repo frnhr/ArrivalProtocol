@@ -90,7 +90,7 @@ export function skillBootDue(state: Readonly<GameState>): SkillBoot {
 // the end of the last one before rack E (rack D's free tail, beside the unit). That second case is real: the star
 // credit and the +12 card can fill racks E–F with REPAIR CHARGE past the link (carry.ts spills it into rack D),
 // leaving no 6 blocks there; licences spill backward the same way (licences.ts installAddress). WP9 review round 1
-// asks Fran to sign this order off (PROGRESS.md). No room anywhere is a layout that can't take its own unit: throws.
+// asks Fran to sign this order off. No room anywhere is a layout that can't take its own unit: throws.
 function skillAddress(memory: readonly Segment[], size: number): number {
   const starts = segmentStarts(memory);
   const fits = (seg: Segment): boolean => isOpenFree(seg) && seg.size >= size;
