@@ -146,7 +146,7 @@ export function createHollowState(ship: ShipDef): HollowState {
     cfg: structuredClone(ship.hollow), phase: 'asleep', story: 'none', revealOwed: false, biteInSec: null, wakeAtAi: null,
     seedInSec: null, seedTelegraph: null, seedMoments: 0, seedsLanded: 0, wakeHeld: false, wakeHoldEndedAtAi: null,
     deal: createDealState(),
-    verbInSec: null, verb: null, verbMoments: 0, verbsLanded: 0, verbsBlocked: 0, untriedTools: [], bitesAt: [],
+    verbInSec: null, verb: null, verbMoments: 0, verbTelegraphs: 0, verbsLanded: 0, verbsBlocked: 0, untriedTools: [], bitesAt: [],
     finale: { phase: 'none', restoredInPlace: [], restoredHalf: [], ending: null, unresolvedUntilAi: null },
   };
 }

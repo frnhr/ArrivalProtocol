@@ -3326,8 +3326,8 @@ body.reduced-motion .fc-words.typing::after, body.reduced-motion .fc-line.typing
 
 /* ── WP11 part 2: HOLLOW's verbs. In the TERMINAL the telegraph counts down live with a pink bar draining under it and
    a flash each second (its last second blinking); once it ends it greys out where it stands, and the outcome line
-   reads BLOCKED in the good green or the landed verb in the warning red. On the strip the target wears a pink dashed
-   outline with `RM 3` on it, and an MV's landing spot is outlined too. ── */
+   reads BLOCKED in the good green or the landed verb in the warning red. On the strip (the unlink pass, after the
+   handover) the target reads at a glance; see below. ── */
 .term-line.verb-countdown { padding-bottom: 2px; }
 /* The counting line is the most urgent line in the pane: pinned while it counts, like an open choice (WP10), so the
    print echoes and bites of the duel scroll under it instead of pushing it out of a 3-line (or a phone's 2-line) pane
@@ -3346,14 +3346,50 @@ body.reduced-motion .fc-words.typing::after, body.reduced-motion .fc-line.typing
 .term-line.tone-danger { color: var(--hollow-red); text-shadow: 0 0 8px var(--hollow-static); }
 body.reduced-motion .term-line.verb-live.verb-tick,
 body.reduced-motion .term-line.verb-live.verb-urgent .term-text { animation: none; }
-.seg.verb-target { outline: 2px dashed var(--hollow); outline-offset: -2px; animation: verb-target-pulse 1s steps(2, jump-none) infinite; }
-.seg.verb-target.verb-urgent { animation-duration: 0.4s; }
-@keyframes verb-target-pulse { 50% { outline-color: color-mix(in srgb, var(--hollow) 30%, transparent); } }
-/* At the chip's bottom left, so the file's name the strip tells you to click stays readable. */
-.seg .hollow-mark.verb-badge {
-  bottom: 2px; left: 2px; z-index: 4; padding: 0 4px;
-  font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; line-height: 14px; letter-spacing: 0.06em;
-  color: var(--hollow-bg); background: var(--hollow); box-shadow: 0 0 8px var(--merge-glow);
+/* The target, one file among forty with 3 s to find it (4 the first time): a solid pink edge inside the chip (its name
+   stays clear of it) with a glow, beating once per countdown second (HollowPainter replays .verb-beat as each second
+   starts), its last second tinted; the calm rest of the strip dims a little so it pops. What is not calm stays bright:
+   an MV's landing spot, the chip the strip line points at, a file HOLLOW is eating, HOLLOW's own blocks (the root and
+   its DELETE's clock in the duel). */
+.seg.verb-target {
+  outline: 3px solid var(--hollow); outline-offset: -3px; z-index: 3;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--hollow) 55%, transparent), inset 0 0 12px color-mix(in srgb, var(--hollow) 28%, transparent);
+}
+.seg.verb-target.verb-urgent { background: color-mix(in srgb, var(--hollow) 16%, var(--bg)); }
+.seg.verb-target.verb-beat { animation: verb-target-beat 0.6s ease-out; }
+@keyframes verb-target-beat {
+  from { box-shadow: 0 0 30px var(--hollow), inset 0 0 22px color-mix(in srgb, var(--hollow) 60%, transparent); }
+}
+.mem-strip-wrap.verb-aiming .seg:not(.verb-target, .hint-pulse, .infected, .hollow, :has(.verb-dest)) {
+  filter: brightness(0.6) saturate(0.7);
+}
+/* The aim, in the fx layer (fixed, placed every tick by HollowPainter: a chip clips its own children): four corner
+   brackets around each part of the target, closing in as the countdown runs, and over it a badge with a tail pointing
+   down at the file (`UNLINK 3`). Both beat with the chip. */
+.verb-aim { position: fixed; box-sizing: border-box; pointer-events: none; }
+.verb-aim[hidden] { display: none; }
+.verb-aim.verb-reticle {
+  --arm: min(14px, 34%);
+  --thick: 3px;
+  --ink: linear-gradient(var(--hollow), var(--hollow));
+  background:
+    var(--ink) top left / var(--arm) var(--thick), var(--ink) top left / var(--thick) var(--arm),
+    var(--ink) top right / var(--arm) var(--thick), var(--ink) top right / var(--thick) var(--arm),
+    var(--ink) bottom left / var(--arm) var(--thick), var(--ink) bottom left / var(--thick) var(--arm),
+    var(--ink) bottom right / var(--arm) var(--thick), var(--ink) bottom right / var(--thick) var(--arm);
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 0 3px var(--hollow));
+}
+.verb-aim.verb-reticle.verb-beat { animation: verb-reticle-beat 0.6s ease-out; }
+@keyframes verb-reticle-beat { from { filter: drop-shadow(0 0 9px var(--hollow)) brightness(1.5); } }
+.verb-aim.verb-aim-badge {
+  transform: translate(-50%, -100%); padding: 1px 8px 0;
+  font-family: 'VT323', monospace; font-size: 22px; line-height: 20px; letter-spacing: 0.1em; white-space: nowrap;
+  color: var(--hollow-bg); background: var(--hollow); box-shadow: 0 0 14px color-mix(in srgb, var(--hollow) 60%, transparent);
+}
+.verb-aim.verb-aim-badge::after {
+  content: ''; position: absolute; top: 100%; left: var(--tail-x, 50%); transform: translateX(-50%);
+  border: 6px solid transparent; border-bottom: 0; border-top-color: var(--hollow);
 }
 .seg .hollow-mark.verb-dest {
   top: 2px; bottom: 2px; z-index: 2;
@@ -3362,7 +3398,9 @@ body.reduced-motion .term-line.verb-live.verb-urgent .term-text { animation: non
   border: 2px dashed var(--hollow); background: color-mix(in srgb, var(--hollow) 12%, transparent);
   animation: seed-blink 0.5s steps(2, jump-none) infinite;
 }
-body.reduced-motion .seg.verb-target, body.reduced-motion .seg .hollow-mark.verb-dest { animation: none; }
+/* Reduced motion: no beat and no closing in (HollowPainter stands the brackets at their tightest): the static marks are
+   strong enough on their own. */
+body.reduced-motion .seg.verb-target, body.reduced-motion .verb-aim, body.reduced-motion .seg .hollow-mark.verb-dest { animation: none; }
 .hollow-fx.verb-blocked-flash {
   border: 2px solid var(--hollow-wall); background: color-mix(in srgb, var(--hollow-wall) 30%, transparent);
   box-shadow: 0 0 22px var(--hollow-wall-glow); animation: fx-flash 0.9s ease-out both;

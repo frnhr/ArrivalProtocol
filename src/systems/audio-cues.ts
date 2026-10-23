@@ -265,8 +265,9 @@ export function mountAudioCues(store: Store<GameState>): () => void {
   }));
 
   // A verb's telegraph (WP11 part 2): a tick for its first second as it starts, and one for every whole second it then
-  // passes (3, 2, 1), on either screen: the countdown is heard from amber too (the strip says TAB). Read from the
-  // telegraph's own clock, which stands still while the flight is at TACTICAL (systems/hollow-verbs.ts).
+  // passes (3, 2, 1; the ship's first verb from 4), on either screen: the countdown is heard from amber too (the strip
+  // says TAB). Read from the telegraph's own clock, which stands still while the flight is at TACTICAL
+  // (systems/hollow-verbs.ts).
   let verbSecond: { targetId: string; second: number } | null = null;
   offs.push(onPostTick(() => {
     const verb = store.getState().hollow.verb;

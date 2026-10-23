@@ -2042,10 +2042,10 @@ const COPY_LESSON_RULES: readonly GuideRule[] = [
 ];
 
 // --- LAST LIGHT (WP11): HOLLOW's verbs, the root duel, the choice, the belt ---------------------------------------------
-// A verb counting down (systems/hollow-verbs.ts) is the most urgent mind line there is: three seconds, and the block is
-// one click (`BLOCK IT — use any tool on REPAIR.BAK (3…)`). It never runs while the flight is at TACTICAL, so it never
-// meets a burn's NOW line; in blue it lights SCAN (an RM: the cheap block) or DELETE (an MV: the only tool that reaches a
-// hollow block) until a tool is in hand.
+// A verb counting down (systems/hollow-verbs.ts) is the most urgent mind line there is: three seconds (the first one
+// four), and the block is one click (`BLOCK IT — use any tool on REPAIR.BAK (3…)`). It never runs while the flight is at
+// TACTICAL, so it never meets a burn's NOW line; in blue it lights SCAN (an RM: the cheap block) or DELETE (an MV: the
+// only tool that reaches a hollow block) until a tool is in hand.
 function verbLive(ctx: DirectorCtx): boolean {
   return isLive(ctx) && ctx.vars.verbKind !== '';
 }

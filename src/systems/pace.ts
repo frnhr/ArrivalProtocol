@@ -275,7 +275,7 @@ export function skipRefusalInZone(kind: ZoneHit['kind']): string {
 
 // A seeding HOLLOW is awake and this ship's first seed has not come yet (hollow.ts counts every seed moment, also
 // one with nowhere to land, so a full memory never holds SKIP for good). WP11: the same for LAST LIGHT's first verb (its
-// coast is the stage for `> rm repair.bak ... 3`; hollow-verbs.ts counts a turn HOLLOW skips as a moment too).
+// coast is the stage for `> unlink repair.bak ... 4`; hollow-verbs.ts counts a turn HOLLOW skips as a moment too).
 function firstSeedComing(state: Readonly<GameState>): boolean {
   const hollow = state.hollow;
   if (hollow.phase !== 'awake') return false;

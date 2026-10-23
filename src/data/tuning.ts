@@ -437,10 +437,10 @@ export const TERMINAL_TYPE_CPS = 40;
 // HOLLOW types one letter at a time (§5.1), noticeably slower than the unit's own lines, so
 // "> ...047?" lands as something reaching out, not as another system message.
 export const HOLLOW_TYPE_CPS = 12;
-// WP11 part 2: a HOLLOW verb's telegraph (`> rm repair.bak ... 3`) jumps the TERMINAL's queue (every line still waiting
-// is shown at once) and rattles in at this speed: its 3 s are the kid's to block it, and in the duel the TERMINAL is
-// busy with print echoes and bites (a browser run saw it type a second late, at `... 2`). Still typed, so it reads as
-// someone typing your commands.
+// WP11 part 2: a HOLLOW verb's telegraph (`> unlink repair.bak ... 3`) jumps the TERMINAL's queue (every line still
+// waiting is shown at once) and rattles in at this speed: its 3 s are the kid's to block it, and in the duel the
+// TERMINAL is busy with print echoes and bites (a browser run saw it type a second late, at `... 2`). Still typed, so it
+// reads as someone typing your commands.
 export const VERB_TELEGRAPH_TYPE_CPS = 160;
 
 // ARRIVAL CONTROL's C-E-G chime plays before its line starts typing; the line waits this long
@@ -1418,6 +1418,16 @@ export const GLITCH_BURST_MS = 400;
 export const BELT_MOVE_HINT_TAC = 90;
 
 // --- WP11 part 2: the verbs' telegraph, the duel's spikes, the choice and the typed endings -----------------------
+
+// A verb's countdown (§6.6: `> unlink repair.bak ... 3`), the AI seconds the kid has to block it with any tool: LAST
+// LIGHT's VerbDef (ships.ts) takes these. The ship's first verb, of either kind, counts from VERB_FIRST_TELEGRAPH_SEC
+// (Fran's call after the handover): that one is where the kid learns the drill (read the TERMINAL, find the marked file,
+// pick a tool, click it), so it gets a second more; every later one is the known drill in VERB_TELEGRAPH_SEC. On the
+// coast the next verb still comes everySec after the first one's start (8 s of calm after it instead of 9), so every
+// later verb keeps its time; in the duel, whose 4 s clock has no room, the extra second pushes the next verb back
+// (systems/hollow-verbs.ts).
+export const VERB_TELEGRAPH_SEC = 3;
+export const VERB_FIRST_TELEGRAPH_SEC = 4;
 
 // The duel's glitch spikes (§9 WP11: "the DELETE duel runs with glitch spikes", §7.3): while the root's DELETE runs,
 // HOLLOW thrashes. A spike every DUEL_SPIKE_EVERY_START_SEC at the DELETE's start, quickening to every

@@ -2,6 +2,7 @@ import type { Store } from '@state/store';
 import type { GameState, VerbTelegraph } from '@state/schema';
 import type { HollowSegment, Segment } from '@/types/segment';
 import type { Rng } from '@systems/rng';
+import type { VerbDef } from '@data/ships';
 import { onAiTick, onPostTick, isLivePhase } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { emit } from '@systems/events';
@@ -26,19 +27,25 @@ import { GLITCH_BURST_LEVEL, GLITCH_BURST_MS } from '@data/tuning';
 //   still while the flight is at TACTICAL (a burn, its last seconds, the belt, an alarm): like every ship's first seed
 //   (WP9, lead-signed), a verb never lands under a NOW / KEEP HOLDING / RELEASE line, so the kid always has the calm to
 //   block it. While printing (the duel) it always runs. One telegraph at a time: the clock counts from one telegraph's
-//   start to the next (ships.ts validates that the countdown fits).
-// • THE TELEGRAPH. For telegraphSec it counts down in your TERMINAL in its pink (`> rm repair.bak ... 3`), the strip says
-//   BLOCK IT (data/script.ts), and a warning holds SKIP. Its countdown stands still under TACTICAL like the clock.
+//   start to the next (ships.ts validates that the countdown fits; in the duel, plus the first countdown's extra
+//   seconds).
+// • THE TELEGRAPH. For telegraphSec it counts down in your TERMINAL in its pink (`> unlink repair.bak ... 3`: RM is
+//   `unlink` on screen), the strip says BLOCK IT (data/script.ts), and a warning holds SKIP. The ship's first verb, of
+//   either kind, counts from firstTelegraphSec instead (`... 4`: the kid is learning the drill, tuning.ts). On the coast
+//   the next verb still comes everySec after its start (12 s have room for the extra second, and every later verb keeps
+//   the time it had: a later verb moved by a second can stand at a burn's start, its countdown frozen there). In the
+//   duel, whose clock has no room, the extra seconds push the next verb back by as much. Its countdown stands still
+//   under TACTICAL like the clock.
 // • THE COUNTER (§6.6). Any op started on the target meanwhile, or one already running on it, blocks the verb at once:
-//   `> rm repair.bak ... BLOCKED` and 'verb-blocked' (the stamp). Any op will do: a SCAN is the cheap one, and a DELETE
-//   on an MV's block also takes the block away. So a verb is only telegraphed while the kid has a thread free to start
-//   that op (the lead's ruling of 20:55, WP11 review: in the duel the root's DELETE held a 1-thread Core's only thread,
-//   and every verb landed under `BLOCK IT`): with none free, HOLLOW skips its turn (no telegraph, no echo) and tries
-//   again at the next one. A thread free at the telegraph that the kid then fills is the kid's choice; a tool click on
-//   the target refused for threads then says how to block it (state/actions.ts).
+//   `> unlink repair.bak ... BLOCKED` and 'verb-blocked' (the stamp). Any op will do: a SCAN is the cheap one, and a
+//   DELETE on an MV's block also takes the block away. So a verb is only telegraphed while the kid has a thread free to
+//   start that op (the lead's ruling of 20:55, WP11 review: in the duel the root's DELETE held a 1-thread Core's only
+//   thread, and every verb landed under `BLOCK IT`): with none free, HOLLOW skips its turn (no telegraph, no echo) and
+//   tries again at the next one. A thread free at the telegraph that the kid then fills is the kid's choice; a tool
+//   click on the target refused for threads then says how to block it (state/actions.ts).
 // • THE VERB. Otherwise it lands when the countdown runs out, re-checked on memory as it is then (landVerb: a file no
 //   longer a fair target, or a block with nowhere left to go, fails: `... FAILED`), as one structural change followed by
-//   the invariants, then the echo `> rm repair.bak   [user: UNIT-046]` and glitchBurst(0.3, 400).
+//   the invariants, then the echo `> unlink repair.bak   [user: UNIT-046]` and glitchBurst(0.3, 400).
 // Once HOLLOW sleeps (its root is gone: systems/finale.ts) a countdown still standing is called off without effect.
 // Runs on the AI tick after HOLLOW's (this tick's bite and seed are in).
 
@@ -67,34 +74,39 @@ function mvWords(block: Readonly<HollowSegment>): { word: string; label: string 
 }
 
 function telegraphOf(verb: Readonly<Verb>, target: Readonly<Segment>, telegraphSec: number): VerbTelegraph {
+  const clock = { totalSec: telegraphSec, leftSec: telegraphSec };
   if (verb.kind === 'rm') {
-    return { kind: 'rm', targetId: target.id, targetWord: echoName(target), targetLabel: fileLabel(target), toAddr: null, leftSec: telegraphSec };
+    return { kind: 'rm', targetId: target.id, targetWord: echoName(target), targetLabel: fileLabel(target), toAddr: null, ...clock };
   }
   if (!isHollow(target)) throw new Error(`hollow-verbs: MV aims at ${target.name}, which is not HOLLOW's`);
   const { word, label } = mvWords(target);
-  return { kind: 'mv', targetId: target.id, targetWord: word, targetLabel: label, toAddr: verb.toAddr, leftSec: telegraphSec };
+  return { kind: 'mv', targetId: target.id, targetWord: word, targetLabel: label, toAddr: verb.toAddr, ...clock };
 }
 
 // Its moment has come: a verb (or none, when nothing is a fair target, or no thread is free to block it with: HOLLOW skips
-// its turn, §6.6 and the lead's ruling). A skipped turn still counts as a moment (SKIP waits only for the first: pace.ts).
-function startVerb(store: Store<GameState>, telegraphSec: number): void {
+// its turn, §6.6 and the lead's ruling). A skipped turn still counts as a moment (SKIP waits only for the first:
+// pace.ts), but not as a telegraph: the ship's first verb the kid sees is the one that counts from firstTelegraphSec.
+function startVerb(store: Store<GameState>, cfg: Readonly<VerbDef>): VerbTelegraph | null {
   const state = store.getState();
   const verb = canStartOp()
     ? chooseVerb(state.memory, rngFor(state), verbWeights(state.run.lastUnit), state.hollow.untriedTools)
     : null;
   const target = verb === null ? undefined : state.memory.find((seg) => seg.id === verb.targetId);
   if (verb !== null && target === undefined) throw new Error(`hollow-verbs: chose ${verb.targetId}, which is not in memory`);
+  const telegraphSec = state.hollow.verbTelegraphs === 0 ? cfg.firstTelegraphSec : cfg.telegraphSec;
   const telegraph = verb === null || target === undefined ? null : telegraphOf(verb, target, telegraphSec);
   store.update((draft) => {
     draft.hollow.verbMoments++;
     draft.hollow.verb = telegraph;
+    if (telegraph !== null) draft.hollow.verbTelegraphs++;
   });
-  if (telegraph === null) return;
+  if (telegraph === null) return null;
   touched = false;
   // The TERMINAL counts this line's number down live (MindTerminal, WP11 part 2) while the verb stands.
   say('hollow-cmd', HOLLOW_VERB.telegraph(telegraph.kind, telegraph.targetWord, verbSecondsLeft(telegraph)), { critical: true, verbCountdown: true });
   raiseAlert(store, { id: VERB_ALERT_ID, layer: 'mind', severity: 'warn', text: HOLLOW_VERB.alert(telegraph.kind), inhibitsSkip: true });
   emit('verb-telegraph', { kind: telegraph.kind, targetId: telegraph.targetId });
+  return telegraph;
 }
 
 function endTelegraph(store: Store<GameState>, landed: boolean | null): void {
@@ -169,12 +181,14 @@ function tick(store: Store<GameState>, dtAi: number): void {
   const duel = rootDeleteRunning(store.getState());
   let inSec = state.hollow.verbInSec ?? cfg.everySec;
   if (!held) inSec -= dtAi;
-  if (duel) inSec = Math.min(inSec, cfg.duelEverySec);
+  // The duel's cap leaves a standing first verb's extra seconds on the clock (see the header: its clock has no room).
+  const standing = store.getState().hollow.verb;
+  if (duel) inSec = Math.min(inSec, cfg.duelEverySec + (standing === null ? 0 : standing.totalSec - cfg.telegraphSec));
   // A countdown never starts on a busy flight, even with the clock already out (a ?debug verbNow, or a clock that ran
   // out on the tick the pace turned TACTICAL): it waits for the calm.
-  if (!held && inSec <= 0 && store.getState().hollow.verb === null && store.getState().hollow.phase === 'awake') {
-    inSec = duel ? cfg.duelEverySec : cfg.everySec;
-    startVerb(store, cfg.telegraphSec);
+  if (!held && inSec <= 0 && standing === null && store.getState().hollow.phase === 'awake') {
+    const started = startVerb(store, cfg);
+    inSec = duel ? cfg.duelEverySec + (started === null ? 0 : started.totalSec - cfg.telegraphSec) : cfg.everySec;
   }
   const next = Math.max(0, inSec);
   store.mutate((draft) => { draft.hollow.verbInSec = next; });

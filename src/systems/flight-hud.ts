@@ -969,7 +969,7 @@ export function choiceTicker(state: Readonly<GameState>, entry: Readonly<LogEntr
   return { text: `${choice.tickerWords} · [TAB] ${formatTac(left)}`, urgent: left <= CHOICE_URGENT_SEC };
 }
 
-// A HOLLOW verb's telegraph as it reads now (`> rm repair.bak ... 2`): its number from the live verb, the way the
+// A HOLLOW verb's telegraph as it reads now (`> unlink repair.bak ... 2`): its number from the live verb, the way the
 // TERMINAL counts it (WP11 part 2) and the ticker shows it from amber (WP11 review: the ticker kept `... 3` while the
 // strip counted 2, 1). null while no verb counts down.
 export function liveVerbText(state: Readonly<GameState>): string | null {

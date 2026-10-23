@@ -28,7 +28,9 @@ import { TOOL_REFUSAL, echoWord } from '@data/tool-text';
 import { soulsInMemory, finalePending, chargeLeft, isInfected } from '@state/selectors';
 import { onAny } from '@systems/events';
 import { followDirector } from '../../wp2/harness2';
-import { ROOT_DELETE_SEC, MERGE_COST_CHARGE, MAX_LINE_CHARS, CORE_LOW_INTEGRITY, BITTEN_AGAIN_COUNT } from '@data/tuning';
+import {
+  ROOT_DELETE_SEC, MERGE_COST_CHARGE, MAX_LINE_CHARS, CORE_LOW_INTEGRITY, BITTEN_AGAIN_COUNT, VERB_TELEGRAPH_SEC, VERB_FIRST_TELEGRAPH_SEC,
+} from '@data/tuning';
 import type { GameState, FinaleEnding } from '@state/schema';
 import type { LastUnit } from '@systems/meta';
 
@@ -224,11 +226,24 @@ setCore(100);
 h.step();
 deleteRoot();
 {
-  h.store.update((d) => { d.hollow.verbInSec = 0; d.hollow.biteInSec = 9999; d.hollow.seedInSec = 9999; });
+  // verbTelegraphs 0: as if every turn on the coast had been skipped (no thread free), so the duel brings the first verb.
+  h.store.update((d) => { d.hollow.verbInSec = 0; d.hollow.biteInSec = 9999; d.hollow.seedInSec = 9999; d.hollow.verbTelegraphs = 0; });
   const end = h.wall() + 3;
   while (state().hollow.verb === null && h.wall() < end) h.step();
   const verb = state().hollow.verb;
   check('two threads, one held by the root\'s DELETE: the duel\'s verb is telegraphed', verb !== null && threadsTotal() === 2, JSON.stringify(verb));
+  // Unlink pass (Fran, after the handover): the ship's first verb counts from 4, and the duel's 4 s clock, which has no
+  // room for the extra second, is pushed back by it: the next verb still waits a second after this one's end (also
+  // while it stands, under the duel's cap).
+  const duelEverySec = state().hollow.cfg.verbs!.duelEverySec;
+  const extraSec = VERB_FIRST_TELEGRAPH_SEC - VERB_TELEGRAPH_SEC;
+  const startInSec = state().hollow.verbInSec;
+  h.stepFor(0.5);
+  const standingInSec = state().hollow.verbInSec;
+  check('…it is the ship\'s first verb (4 s), and it pushes the duel\'s next one back by its extra second',
+    verb?.totalSec === VERB_FIRST_TELEGRAPH_SEC && state().hollow.verbTelegraphs === 1 && state().hollow.verb?.targetId === verb.targetId
+    && startInSec !== null && Math.abs(startInSec - (duelEverySec + extraSec)) < 0.1
+    && standingInSec !== null && standingInSec > duelEverySec, `${JSON.stringify(verb)} in ${startInSec} → ${standingInSec}`);
   if (verb !== null) {
     const owner = 'fix1-kid';
     const held = reserveThread(owner);

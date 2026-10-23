@@ -218,14 +218,14 @@ interface DebugHooks {
   // shows it (null: none, or none with ticker words).
   shakeLog: () => number[];
   choiceTicker: () => { text: string; urgent: boolean } | null;
-  // WP11 (LAST LIGHT): verbs is HOLLOW's verb state (the one counting down, its clock, how many came, landed and were
-  // blocked) with what it would pick now and the tools it spares (licensed here, not used yet); verbNow runs its clock
-  // out (the next tick telegraphs one); finale is the duel's and the choice's state, whether the root can still be
-  // deleted and why MERGE would be refused; choose makes the choice (as FinaleChoice's buttons do); glitch fires a
-  // glitchBurst (level 0..1, ms). WP11 part 2: finale also says whether the typed ending is on screen and for how many
+  // WP11 (LAST LIGHT): verbs is HOLLOW's verb state (the one counting down, its clock, how many came, were telegraphed,
+  // landed and were blocked) with what it would pick now and the tools it spares (licensed here, not used yet); verbNow
+  // runs its clock out (the next tick telegraphs one); finale is the duel's and the choice's state, whether the root can
+  // still be deleted and why MERGE would be refused; choose makes the choice (as FinaleChoice's buttons do); glitch fires
+  // a glitchBurst (level 0..1, ms). WP11 part 2: finale also says whether the typed ending is on screen and for how many
   // AI s more; skipEnding ends it early (as a click on it does); endingLines writes what an ending would say now.
   verbs: () => {
-    verb: GameState['hollow']['verb']; inSec: number | null; moments: number; landed: number; blocked: number;
+    verb: GameState['hollow']['verb']; inSec: number | null; moments: number; telegraphs: number; landed: number; blocked: number;
     wouldPick: Verb | null; weights: VerbWeights; untried: readonly FsToolKind[];
   };
   verbNow: () => void;
@@ -591,8 +591,8 @@ export function mountDebug(store: Store<GameState>): void {
         state.memory, childRng(state.run.seed, state.run.shipIndex, 'debug-verb-look'), weights, hollow.untriedTools,
       );
       return {
-        verb: hollow.verb, inSec: hollow.verbInSec, moments: hollow.verbMoments, landed: hollow.verbsLanded, blocked: hollow.verbsBlocked,
-        wouldPick, weights, untried: hollow.untriedTools,
+        verb: hollow.verb, inSec: hollow.verbInSec, moments: hollow.verbMoments, telegraphs: hollow.verbTelegraphs,
+        landed: hollow.verbsLanded, blocked: hollow.verbsBlocked, wouldPick, weights, untried: hollow.untriedTools,
       };
     },
     verbNow: () => verbNow(store),

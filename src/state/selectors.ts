@@ -310,8 +310,9 @@ export function selectCorruption(state: Readonly<GameState>): number {
   return quantizeCorruption((INTEGRITY_MAX - core.integrity) / INTEGRITY_MAX);
 }
 
-// The whole seconds a verb's countdown shows (`> rm repair.bak ... 3`, the strip's `(3…)`, the `RM 3` badge, its tick):
-// rounded up, and never 0 while it stands. One rule for every readout, so the TERMINAL and the badge never read 3 and 2.
+// The whole seconds a verb's countdown shows (`> unlink repair.bak ... 3`, the strip's `(3…)`, the `UNLINK 3` badge, its
+// tick; from 4 on the ship's first verb): rounded up, and never 0 while it stands. One rule for every readout, so the
+// TERMINAL and the badge never read 3 and 2.
 export function verbSecondsLeft(verb: Readonly<VerbTelegraph>): number {
   return Math.max(1, Math.ceil(verb.leftSec));
 }

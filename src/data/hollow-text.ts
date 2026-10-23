@@ -130,17 +130,21 @@ export const HOLLOW_STORY = {
   lastShip: (unitNumber: number): string => `> last ship, ${unitDigits(unitNumber)}. i'm so tired.`,
 } as const;
 
+// The command each verb types (Fran's call after the handover): RM is `unlink` on screen, a name of HOLLOW's own, apart
+// from the kid's DELETE; MV keeps `mv`. The kind ids stay the design's (§6.6) in the code.
+const VERB_COMMAND: Readonly<Record<VerbKind, string>> = { rm: 'unlink', mv: 'mv' };
+
 // HOLLOW's verbs on LAST LIGHT (§6.6, WP11, systems/hollow-verbs.ts): the countdown it types in your TERMINAL before it
 // does something with your own tools, what it did, and the two ways a verb ends without effect. `target` is the file's
 // echo name (`repair.bak`) or, for MV, the block it moves (`seed`, `c13`: what that block ate); `user` is its name on
 // screen (`[user: UNIT-046]`).
 export const HOLLOW_VERB = {
-  telegraph: (verb: VerbKind, target: string, secLeft: number): string => `> ${verb} ${target} ... ${secLeft}`,
-  done: (verb: VerbKind, target: string, user: string): string => `> ${verb} ${target}   [user: ${user}]`,
+  telegraph: (verb: VerbKind, target: string, secLeft: number): string => `> ${VERB_COMMAND[verb]} ${target} ... ${secLeft}`,
+  done: (verb: VerbKind, target: string, user: string): string => `> ${VERB_COMMAND[verb]} ${target}   [user: ${user}]`,
   // An op touched the target during the countdown (§6.6: the counter).
-  blocked: (verb: VerbKind, target: string): string => `> ${verb} ${target} ... BLOCKED`,
+  blocked: (verb: VerbKind, target: string): string => `> ${VERB_COMMAND[verb]} ${target} ... BLOCKED`,
   // The target was gone, or the move no longer fits, by the time the countdown ran out (a fair verb is re-checked).
-  failed: (verb: VerbKind, target: string, user: string): string => `> ${verb} ${target} ... FAILED   [user: ${user}]`,
+  failed: (verb: VerbKind, target: string, user: string): string => `> ${VERB_COMMAND[verb]} ${target} ... FAILED   [user: ${user}]`,
   // The strip (§6.6: `BLOCK IT — use any tool on repair.bak (3…)`). An RM's target takes any tool; an MV's is a hollow
   // block, which only DELETE reaches (and deleting it is the best block there is).
   stripRm: (label: string, secLeft: number): string => `BLOCK IT — use any tool on ${label} (${secLeft}…)`,
@@ -152,14 +156,14 @@ export const HOLLOW_VERB = {
   mvAteLabel: (ate: string): string => `the block that ATE ${ate}`,
   mvSeedWord: 'seed',
   stamp: 'BLOCKED',
-  // WP11 part 2, on the strip: the badge on the target while it counts (`RM 3`), the mark on an MV's landing spot, and
-  // what a landed verb did there.
-  badge: (verb: VerbKind, secLeft: number): string => `${verb.toUpperCase()} ${secLeft}`,
+  // WP11 part 2, on the strip: the badge over the target while it counts (`UNLINK 3`), the mark on an MV's landing spot,
+  // and what a landed verb did there.
+  badge: (verb: VerbKind, secLeft: number): string => `${VERB_COMMAND[verb].toUpperCase()} ${secLeft}`,
   destMark: 'MV →',
-  deletedLabel: 'DELETED',
+  unlinkedLabel: 'UNLINKED',
   movedLabel: 'MOVED',
   // Its alert while one counts down (a warning that holds SKIP, like a seed's: the world never skips past it).
-  alert: (verb: VerbKind): string => (verb === 'rm' ? 'IT IS DELETING A FILE' : 'IT IS MOVING'),
+  alert: (verb: VerbKind): string => (verb === 'rm' ? 'IT IS UNLINKING A FILE' : 'IT IS MOVING'),
 } as const;
 
 // The echoes the choice makes in the TERMINAL and CONTROL's verdict on the radio, said again as the typed ending's first

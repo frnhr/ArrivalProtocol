@@ -1,5 +1,5 @@
 import type { Store } from '@state/store';
-import type { GameState } from '@state/schema';
+import type { GameState, VerbTelegraph } from '@state/schema';
 import type { InfectionSide } from '@/types/segment';
 import { onPostTick } from '@systems/clock';
 import { on } from '@systems/events';
@@ -9,7 +9,7 @@ import { biteClock, reachMarks, type GapMark, type BiteMark, type ShieldMark } f
 import { infectedSegments, shownIntegrity, healthKnown, soulOutcome, verbSecondsLeft } from '@state/selectors';
 import { stripTier } from '@data/type-labels';
 import { HOLLOW_HUD_TEXT, HOLLOW_VERB } from '@data/hollow-text';
-import { requireById, partNumber } from '@components/dom';
+import { requireById, partNumber, replayAnimation } from '@components/dom';
 import { heartbeatKind, heartbeatSvg, type Heartbeat } from './SegmentBlock';
 import { OUTCOME_WORDS } from './DetailPanel';
 import { segmentStarts } from '@systems/memory-ops';
@@ -34,9 +34,10 @@ import { HOLLOW_PAINT_HZ, INTEGRITY_MAX, HOLLOW_FX_MS, CURE_SPARKS, SEED_BLINK_S
 // • the moments, in a short-lived layer over the strip: the bite's red snap on its target, a WALL
 //   or FIREWALL flashing green as it holds, the cure's blue sparkles and `SAVED`, an eaten block's red flash and
 //   `DID NOT WAKE`;
-// • WP11 part 2, a verb counting down (§6.6: "the target is outlined"): its target pulses in a pink dashed outline
-//   with the verb and its seconds on it (`RM 3`), and an MV's landing spot is outlined too (`MV →`); BLOCKED flashes the
-//   target green with `BLOCKED`; a landed verb flashes where its file was (`DELETED`) or where the block went (`MOVED`).
+// • WP11 part 2, a verb counting down (§6.6: "the target is outlined"; made unmistakable after the handover): its target
+//   in a solid pink edge that beats each second, a reticle closing in around it and a badge over it (`UNLINK 3`), the
+//   rest of the strip dimmed, and an MV's landing spot outlined too (`MV →`); BLOCKED flashes the target green with
+//   `BLOCKED`; a landed verb flashes where its file was (`UNLINKED`) or where the block went (`MOVED`).
 // The marks are rebuilt after every strip rebuild (memoryRev: an infection, a cure, an op, an eaten
 // file all bump it; this subscribes after MemoryStrip); the numbers are patched at most
 // HOLLOW_PAINT_HZ in between. Sparkle scatter uses Math.random: cosmetic, like the glitch jerk.
@@ -45,7 +46,7 @@ const PAINT_EVERY_SEC = 1 / HOLLOW_PAINT_HZ;
 const SEG_MARK_CLASSES = [
   'bite-target', 'bite-at-left', 'bite-at-right', 'bite-urgent', 'mouth-left', 'mouth-right',
   'hollow-gap', 'hollow-wall', 'reach-at-left', 'reach-at-right', 'tug', 'hollow-quiet', 'firewall-holding',
-  'verb-target', 'verb-urgent',
+  'verb-target', 'verb-urgent', 'verb-beat',
 ] as const;
 const HEARTBEATS: readonly Heartbeat[] = ['steady', 'weak', 'flat'];
 // The sparks fly up and out of the chip (px), each a little late (s), so the red seems to shatter.
@@ -54,6 +55,14 @@ const SPARK_RISE_MIN_PX = 8;
 const SPARK_RISE_SPAN_PX = 30;
 const SPARK_DELAY_MAX_SEC = 0.18;
 const ARROW: Readonly<Record<InfectionSide, string>> = { left: '◀', right: '▶' };
+// A verb's reticle stands this far outside its target's chip (px) when the countdown starts, and closes in to the
+// smaller gap as it runs out (under reduced motion it stands there from the start). The badge floats this far above it.
+const RETICLE_GAP_START_PX = 10;
+const RETICLE_GAP_END_PX = 3;
+const AIM_BADGE_LIFT_PX = 7;
+// A target the strip has scrolled out of view (a phone shows two racks of six) is scrolled back in with this much room
+// above it, so its badge is not cut off by the rack above's edge.
+const AIM_SCROLL_ROOM_PX = 34;
 
 function partsOf(root: ParentNode, segId: string): HTMLElement[] {
   const parts = Array.from(root.querySelectorAll<HTMLElement>(`.seg[data-id="${CSS.escape(segId)}"]`));
@@ -264,38 +273,116 @@ function paintTelegraph(root: HTMLElement, state: Readonly<GameState>): void {
   }
 }
 
-// A verb counting down (WP11 part 2): its target outlined with `RM 3` on it, and an MV's landing spot outlined over the
-// free blocks it will take (inside the free part(s) that hold them, like a seed's). Rebuilt when the verb or the strip
-// changes (the key), its number patched in between. The target's last rects are kept for the landed flash (the file is
-// gone from the strip by then).
+// A verb counting down (WP11 part 2; made unmistakable after the handover: the kid has 3 s, the first time 4, to find
+// one file among forty). Its target's chip wears a solid pink edge and glow (`verb-target`) that beats once per
+// countdown second, the rest of the strip dims a little (`verb-aiming` on the strip), and the aim (a reticle of four
+// corner brackets around each part, closing in as the seconds run out, and a badge over the first part: `UNLINK 3`)
+// sits outside the chip, so the file's own name stays readable. An MV's landing spot is outlined over the free blocks
+// it will take (inside the free part(s) that hold them, like a seed's). Rebuilt when the verb or the strip changes (the
+// key), its numbers patched and the aim placed again every tick in between. The target's last rects are kept for the
+// landed flash (the file is gone from the strip by then).
 // Module state of the run (§9 resets): cleared on a world reset too, so a countdown a ship's end or a NEW RUN called
-// off (it emits nothing) leaves no rects from the ship before.
+// off (it emits nothing) leaves no rects, and no aim, from the ship before.
 let lastVerbRects: { kind: 'rm' | 'mv'; rects: DOMRect[] } | null = null;
+
+// The aim lives in the fx layer, fixed to the viewport (a chip clips its own children, and the badge stands over the
+// rack above): one reticle per part of the target, the badge, the whole second last beaten, and whether the strip has
+// shown it yet (the first time it does, a target scrolled out of view is scrolled in).
+interface VerbAim {
+  key: string;
+  reticles: HTMLElement[];
+  badge: HTMLElement;
+  second: number | null;
+  shown: boolean;
+}
+let verbAim: VerbAim | null = null;
+// The fx layer the aim is drawn in (mountHollowPainter's).
+let aimLayer: HTMLElement | null = null;
+
+function aimMark(cls: string): HTMLElement {
+  if (aimLayer === null) throw new Error('HollowPainter: a verb aimed before the painter was mounted');
+  const mark = document.createElement('div');
+  mark.className = `verb-aim ${cls}`;
+  mark.setAttribute('aria-hidden', 'true');
+  aimLayer.appendChild(mark);
+  return mark;
+}
+
+function clearVerbAim(root: HTMLElement): void {
+  root.querySelectorAll('.hollow-mark.verb-dest').forEach((mark) => mark.remove());
+  root.querySelectorAll('.seg.verb-target').forEach((part) => part.classList.remove('verb-target', 'verb-urgent', 'verb-beat'));
+  root.classList.remove('verb-aiming');
+  verbAim?.reticles.forEach((reticle) => reticle.remove());
+  verbAim?.badge.remove();
+  verbAim = null;
+}
 
 function paintVerb(root: HTMLElement, state: Readonly<GameState>): void {
   const verb = state.hollow.verb;
-  const second = verb === null ? 0 : verbSecondsLeft(verb);
   const parts = verb === null ? [] : partsOf(root, verb.targetId);
   const destIndex = verb === null || verb.toAddr === null || parts.length === 0 ? -1 : openFreeHolding(state.memory, verb.toAddr, partsSize(parts));
   const key = verb === null ? '' : `${verb.kind}|${verb.targetId}|${verb.toAddr ?? ''}|${destIndex}|${parts.length}`;
-  const badges = Array.from(root.querySelectorAll<HTMLElement>('.hollow-mark.verb-badge'));
-  const current = badges.length > 0 && badges.every((badge) => badge.dataset.key === key) && parts.every((part) => part.classList.contains('verb-target'));
+  const current = verbAim !== null && verbAim.key === key && parts.every((part) => part.classList.contains('verb-target'));
   if (!current) {
-    root.querySelectorAll('.hollow-mark.verb-badge, .hollow-mark.verb-dest').forEach((mark) => mark.remove());
-    root.querySelectorAll('.seg.verb-target').forEach((part) => part.classList.remove('verb-target', 'verb-urgent'));
+    // A strip rebuilt under a standing countdown keeps its beat and whether the strip has shown it (no second scroll).
+    const kept = verbAim !== null && verbAim.key === key ? { second: verbAim.second, shown: verbAim.shown } : { second: null, shown: false };
+    clearVerbAim(root);
     if (verb === null || parts.length === 0) return;
     parts.forEach((part) => part.classList.add('verb-target'));
-    const badge = addMark(parts[0]!, 'verb-badge');
-    badge.dataset.key = key;
+    root.classList.add('verb-aiming');
+    verbAim = { key, reticles: parts.map(() => aimMark('verb-reticle')), badge: aimMark('verb-aim-badge'), ...kept };
     if (verb.toAddr !== null && destIndex >= 0) paintVerbDest(root, state, verb.toAddr, partsSize(parts), destIndex, key);
   }
-  if (verb === null) return;
-  root.querySelectorAll<HTMLElement>('.hollow-mark.verb-badge').forEach((badge) => patchText(badge, HOLLOW_VERB.badge(verb.kind, second)));
+  if (verb === null || verbAim === null) return;
+  const aim = verbAim;
+  const second = verbSecondsLeft(verb);
+  patchText(aim.badge, HOLLOW_VERB.badge(verb.kind, second));
   parts.forEach((part) => part.classList.toggle('verb-urgent', second <= 1));
+  // One beat per countdown second, the first as it appears (CSS: none under reduced motion).
+  if (aim.second === null || second < aim.second) [...parts, ...aim.reticles].forEach((element) => replayAnimation(element, 'verb-beat'));
+  aim.second = second;
+  placeAim(root, aim, parts, verb, state);
   if (state.ui.mode === 'memory') {
     const rects = parts.map(rectOf).filter((rect): rect is DOMRect => rect !== null);
     if (rects.length > 0) lastVerbRects = { kind: verb.kind, rects };
   }
+}
+
+// The reticles around the parts the strip shows, the badge over the first of them (kept inside the strip's width, its
+// tail pointing at the chip). A part scrolled out of the strip gets none (the layer is fixed: it would draw over the
+// panels around the strip).
+function placeAim(root: HTMLElement, aim: VerbAim, parts: readonly HTMLElement[], verb: Readonly<VerbTelegraph>, state: Readonly<GameState>): void {
+  const inBlue = state.ui.mode === 'memory';
+  const view = root.getBoundingClientRect();
+  const inView = (rect: DOMRect | null): rect is DOMRect => rect !== null && rect.top >= view.top - 1 && rect.bottom <= view.bottom + 1;
+  const rects = parts.map(rectOf);
+  const first = rects[0];
+  if (inBlue && first && !aim.shown) {
+    aim.shown = true;
+    if (!rects.some(inView)) {
+      root.scrollTo({ top: root.scrollTop + first.top - view.top - AIM_SCROLL_ROOM_PX, behavior: state.ui.reducedMotion ? 'auto' : 'smooth' });
+    }
+  }
+  const progress = Math.max(0, Math.min(1, verb.leftSec / verb.totalSec));
+  const gap = state.ui.reducedMotion ? RETICLE_GAP_END_PX : RETICLE_GAP_END_PX + (RETICLE_GAP_START_PX - RETICLE_GAP_END_PX) * progress;
+  aim.reticles.forEach((reticle, index) => {
+    const rect = rects[index] ?? null;
+    reticle.hidden = !inBlue || !inView(rect);
+    if (reticle.hidden || rect === null) return;
+    reticle.style.left = `${rect.left - gap}px`;
+    reticle.style.top = `${rect.top - gap}px`;
+    reticle.style.width = `${rect.width + 2 * gap}px`;
+    reticle.style.height = `${rect.height + 2 * gap}px`;
+  });
+  const anchor = rects.find(inView);
+  aim.badge.hidden = !inBlue || anchor === undefined;
+  if (anchor === undefined) return;
+  const half = aim.badge.offsetWidth / 2;
+  const target = anchor.left + anchor.width / 2;
+  const center = Math.max(view.left + half, Math.min(view.right - half, target));
+  aim.badge.style.left = `${center}px`;
+  aim.badge.style.top = `${anchor.top - gap - AIM_BADGE_LIFT_PX}px`;
+  aim.badge.style.setProperty('--tail-x', `${target - center + half}px`);
 }
 
 // A hollow block's size from its parts (each carries its own size).
@@ -392,6 +479,7 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
   const layer = document.createElement('div');
   layer.className = 'hollow-fx-layer memory-view';
   document.body.appendChild(layer);
+  aimLayer = layer;
   const inBlue = (): boolean => store.getState().ui.mode === 'memory';
 
   paintMarks(memWrap, store.getState());
@@ -403,7 +491,8 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
   // A wall clock, not AI time: a debug bite while paused, or a rebuild while paused, still paints.
   let sincePaint = 0;
   const offTick = onPostTick((dtWall) => {
-    // A verb's badge counts with the TERMINAL's line, every tick (WP11 part 2: the two must never read 3 and 2).
+    // A verb's badge counts with the TERMINAL's line, every tick (WP11 part 2: the two must never read 3 and 2), and
+    // its aim follows the strip as it scrolls.
     if (store.getState().hollow.verb !== null) paintVerb(memWrap, store.getState());
     sincePaint += dtWall;
     if (sincePaint < PAINT_EVERY_SEC) return;
@@ -427,7 +516,7 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
         if (i === 0) fxLabel(layer, 'hollow-fx-label blocked', HOLLOW_VERB.stamp, rect);
       });
     }),
-    // ...it landed: where the file was flashes red (`DELETED`), or the block's new place does (`MOVED`).
+    // ...it landed: where the file was flashes red (`UNLINKED`), or the block's new place does (`MOVED`).
     on('verb-landed', ({ kind, targetId }) => {
       const before = lastVerbRects;
       lastVerbRects = null;
@@ -438,7 +527,7 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
         : before?.rects ?? [];
       rects.forEach((rect, i) => {
         fxBox(layer, 'hollow-fx verb-landed-flash', rect);
-        if (i === 0) fxLabel(layer, 'hollow-fx-label eaten', kind === 'mv' ? HOLLOW_VERB.movedLabel : HOLLOW_VERB.deletedLabel, rect);
+        if (i === 0) fxLabel(layer, 'hollow-fx-label eaten', kind === 'mv' ? HOLLOW_VERB.movedLabel : HOLLOW_VERB.unlinkedLabel, rect);
       });
     }),
     on('verb-failed', () => { lastVerbRects = null; paintVerb(memWrap, store.getState()); }),
@@ -482,14 +571,20 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
     }),
   ];
 
-  const offReset = onWorldReset('hollow-painter-verb', () => { lastVerbRects = null; }, () => ({ rects: lastVerbRects !== null }));
+  const offReset = onWorldReset(
+    'hollow-painter-verb',
+    () => { lastVerbRects = null; clearVerbAim(memWrap); },
+    () => ({ rects: lastVerbRects !== null, aim: verbAim !== null }),
+  );
 
   return () => {
     unsub();
     offTick();
     offReset();
     offs.forEach((off) => off());
+    clearVerbAim(memWrap);
     layer.remove();
+    aimLayer = null;
     lastVerbRects = null;
   };
 }

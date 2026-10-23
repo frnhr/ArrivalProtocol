@@ -35,10 +35,12 @@ check('…§9 WP11 item 1\'s flight: r0 18,000, rp0 3,200, v∞ 1.5, ring 5,000�
   && tacticalWarp === 30 && cruiseWarp === 60 && start.sas === 'radial-out');
 check('…its belt: 9,000–12,000 km on racks A–B', JSON.stringify(ship.zones) === JSON.stringify([{ kind: 'belt', id: 'last-light-belt', rIn: 9000, rOut: 12000, racks: ['A', 'B'] }]));
 const hollow = ship.hollow;
-check('…its HOLLOW: spread 12, drain 5, ×2 / ×1.5, seeds every 35 s in the walls, verbs { 12, 3, 4 }, no deal, the last-ship story',
+// Unlink pass (Fran, after the handover): the ship's first verb counts 4 s (firstTelegraphSec), every later one 3 s.
+check('…its HOLLOW: spread 12, drain 5, ×2 / ×1.5, seeds every 35 s in the walls, verbs { 12, 3 (first 4), 4 }, no deal, the last-ship story',
   hollow.spreadEverySec === 12 && hollow.drainPerSec === 5 && hollow.burnMult === 2 && hollow.printMult === 1.5
   && hollow.seed?.everySec === 35 && hollow.seed.target === 'walls'
-  && JSON.stringify(hollow.verbs) === JSON.stringify({ everySec: 12, telegraphSec: 3, duelEverySec: 4 }) && !hollow.deal && hollow.story === 'last-ship');
+  && JSON.stringify(hollow.verbs) === JSON.stringify({ everySec: 12, telegraphSec: 3, firstTelegraphSec: 4, duelEverySec: 4 })
+  && !hollow.deal && hollow.story === 'last-ship');
 check('…no other ship has verbs (the finale is the flagship\'s)', SHIPS.every((candidate) => (candidate.hollow.verbs !== null) === candidate.flagship));
 
 const h = createHarness11(7);

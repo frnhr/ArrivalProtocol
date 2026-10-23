@@ -405,10 +405,13 @@ export interface HollowState {
   // HOLLOW's verbs (WP11, LAST LIGHT; systems/hollow-verbs.ts): AI seconds to the next one's telegraph (null on a ship
   // without verbs, or while HOLLOW sleeps; it stands still while the flight is at TACTICAL, so a verb never lands under
   // a burn's lines), the one counting down now, and how many have come, landed and been blocked on this ship (SKIP
-  // waits for the first: the coast is its stage). (mutate; the telegraph's start and end are updates)
+  // waits for the first: the coast is its stage). verbTelegraphs counts the verbs actually telegraphed (a turn HOLLOW
+  // skipped is a moment, not a telegraph): the first one counts down from VerbDef.firstTelegraphSec. A new ship (and so
+  // a NEW RUN) starts it at 0 with the rest of HollowState. (mutate; the telegraph's start and end are updates)
   verbInSec: number | null;
   verb: VerbTelegraph | null;
   verbMoments: number;
+  verbTelegraphs: number;
   verbsLanded: number;
   verbsBlocked: number;
   // The tools licensed on this ship that the kid has not used here yet (the lead's WP11 TODO, WP10 question 3): HOLLOW's
@@ -432,17 +435,19 @@ export interface BiteSpot {
 }
 
 // HOLLOW's two verbs on LAST LIGHT (§6.6): MV relocates one of its blocks next to a WALL by your colonists; RM deletes
-// one of your spare files.
+// one of your spare files. The ids are the design's; on screen RM is `unlink` (data/hollow-text.ts VERB_COMMAND).
 export type VerbKind = 'mv' | 'rm';
 
-// A verb counting down in the TERMINAL (`> rm repair.bak ... 3`) before it lands (§6.6: the telegraph). `targetId` is
-// the file it aims at (RM) or the hollow block it moves (MV, to `toAddr`: only an MV has a landing spot, so the two
+// A verb counting down in the TERMINAL (`> unlink repair.bak ... 3`) before it lands (§6.6: the telegraph). `targetId`
+// is the file it aims at (RM) or the hollow block it moves (MV, to `toAddr`: only an MV has a landing spot, so the two
 // kinds are told apart by type, never by a sentinel); any op started on the target meanwhile blocks it (`BLOCKED`).
-// `targetWord` is its name in HOLLOW's echo, `targetLabel` on the strip.
+// `targetWord` is its name in HOLLOW's echo, `targetLabel` on the strip. `totalSec` is the countdown it started from (the
+// ship's first verb counts from VerbDef.firstTelegraphSec, every later one from telegraphSec), `leftSec` what is left.
 interface VerbTelegraphBase {
   targetId: string;
   targetWord: string;
   targetLabel: string;
+  totalSec: number;
   leftSec: number;
 }
 
@@ -640,7 +645,7 @@ export interface LogEntry {
   // A rule between two ships (WP7: the log keeps its history across a transmission): `text` is the
   // new ship's name. Shown at once, never typed, never on the ticker.
   divider?: true;
-  // WP11 part 2: a HOLLOW verb's telegraph (`> rm repair.bak ... 3`): the TERMINAL counts its number down live from
+  // WP11 part 2: a HOLLOW verb's telegraph (`> unlink repair.bak ... 3`): the TERMINAL counts its number down live from
   // hollow.verb while the verb stands, with a draining bar under it, and greys it out once the verb has ended.
   verbCountdown?: true;
   // WP11 part 2: how the TERMINAL colours a line beyond its speaker: a verb BLOCKED is a win ('good'), one that landed

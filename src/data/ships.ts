@@ -7,6 +7,7 @@ import {
   NAME_MAX_CHARS, CLUSTER_BLOCKS, HEAL_BEATS_DRAIN_FACTOR, INTEGRITY_MAX, SHRINK_MARGIN_TAC, SHRINK_MARGIN_MIN_TAC, SHRINK_SMALL_LOOP_FACTOR,
   SHRINK_REACTION_TAC, HALCYON_SMALL_LOOP_FACTOR, HALCYON_EDGE_BACK_OFF_TAC, KESTREL_SMALL_LOOP_FACTOR, KESTREL_EDGE_BACK_OFF_TAC,
   VESPER_SMALL_LOOP_FACTOR, VESPER_EDGE_BACK_OFF_TAC, LAST_LIGHT_SMALL_LOOP_FACTOR, LAST_LIGHT_EDGE_BACK_OFF_TAC,
+  VERB_TELEGRAPH_SEC, VERB_FIRST_TELEGRAPH_SEC,
 } from '@data/tuning';
 import { validateZoneDefs } from '@systems/zones';
 import {
@@ -55,8 +56,9 @@ export interface ShipFlightDef {
 // • deal: ship 4's DEAL (WP10, §6.6, systems/hollow-deal.ts): once, HOLLOW offers to leave the others alone
 //   for the cluster at its front.
 // • verbs: ship 5's verbs (WP11, §6.6, systems/hollow-verbs.ts): every everySec of calm (the clock stands still while
-//   the flight is at TACTICAL) HOLLOW picks MV or RM, counts it down telegraphSec in your TERMINAL, and does it unless an
-//   op touched its target meanwhile (BLOCKED); while the root's DELETE runs, every duelEverySec instead.
+//   the flight is at TACTICAL) HOLLOW picks MV or RM (`unlink` on screen), counts it down telegraphSec in your TERMINAL
+//   (the ship's first one firstTelegraphSec), and does it unless an op touched its target meanwhile (BLOCKED); while the
+//   root's DELETE runs, every duelEverySec instead.
 // • story: what HOLLOW says on this ship (systems/hollow.ts, data/hollow-text.ts). 'notices-you':
 //   ship 1, after the first fight (`> ...047?`). 'names-itself': ship 2, at the wake (`> hello 047…`,
 //   `> i was 046…`, CONTROL, and in printing `> i ran out…`). 'wants-charge': ship 4, the last line of its boot
@@ -69,6 +71,7 @@ export type HollowStoryKind = 'notices-you' | 'names-itself' | 'wants-charge' | 
 export interface VerbDef {
   everySec: number;
   telegraphSec: number;
+  firstTelegraphSec: number;
   duelEverySec: number;
 }
 
@@ -501,7 +504,8 @@ const LAST_LIGHT: ShipDef = {
   // §4.2 LAST LIGHT: it wakes like HALCYON's, 5 AI s into the coast (at the latest 30 s into the flight), bites C13 and
   // C14 at once, then every 12 s at 5 %/s, ×2 while the engine burns, ×1.5 while printing. Seeds every 35 s into your
   // walls (the first 20 s after the wake, and like every ship's first seed only on a calm flight); a verb every 12 s of
-  // calm, counted down 3 s (§6.6), every 4 s while the root's DELETE runs. Its boot closes on HOLLOW's own line.
+  // calm, counted down 3 s (§6.6; the first one 4 s: tuning.ts), every 4 s while the root's DELETE runs. Its boot closes
+  // on HOLLOW's own line.
   hollow: {
     wake: { afterAiSec: 30, coastLeadSec: 5 },
     spreadEverySec: 12,
@@ -509,7 +513,7 @@ const LAST_LIGHT: ShipDef = {
     burnMult: 2,
     printMult: 1.5,
     seed: { everySec: 35, firstAfterSec: 20, target: 'walls' },
-    verbs: { everySec: 12, telegraphSec: 3, duelEverySec: 4 },
+    verbs: { everySec: 12, telegraphSec: VERB_TELEGRAPH_SEC, firstTelegraphSec: VERB_FIRST_TELEGRAPH_SEC, duelEverySec: 4 },
     deal: false,
     story: 'last-ship',
   },
@@ -545,12 +549,15 @@ export function validateHollowDef(id: string, hollow: HollowDef): void {
     if (hollow.wake === 'loop-closed-once') fail('seeds need a timed wake');
   }
   if (hollow.verbs !== null) {
-    const { everySec, telegraphSec, duelEverySec } = hollow.verbs;
+    const { everySec, telegraphSec, firstTelegraphSec, duelEverySec } = hollow.verbs;
     if (!(telegraphSec > 0)) fail(`verbs.telegraphSec must be positive (got ${telegraphSec})`);
-    // A verb's countdown must end before the next one starts: one telegraph at a time, and a gap to breathe in.
-    if (!(everySec > telegraphSec && duelEverySec > telegraphSec)) {
-      fail(`verbs.everySec (${everySec}) and duelEverySec (${duelEverySec}) must be longer than telegraphSec (${telegraphSec})`);
-    }
+    // The first verb is the lesson: never shorter than the drill after it.
+    if (!(firstTelegraphSec >= telegraphSec)) fail(`verbs.firstTelegraphSec (${firstTelegraphSec}) must be at least telegraphSec (${telegraphSec})`);
+    // A verb's countdown must end before the next one starts: one telegraph at a time, and a gap to breathe in. On the
+    // coast that holds for the longer first one too; in the duel its extra seconds push the next verb back instead
+    // (systems/hollow-verbs.ts), so the duel's clock only has to outlast the drill.
+    if (!(everySec > firstTelegraphSec)) fail(`verbs.everySec (${everySec}) must be longer than firstTelegraphSec (${firstTelegraphSec})`);
+    if (!(duelEverySec > telegraphSec)) fail(`verbs.duelEverySec (${duelEverySec}) must be longer than telegraphSec (${telegraphSec})`);
     if (hollow.spreadEverySec === null || hollow.wake === 'loop-closed-once') fail('verbs need a HOLLOW that spreads, with a timed wake');
   }
   // THE DEAL trades a cluster for a pause in the spread: a HOLLOW that never spreads would offer nothing.

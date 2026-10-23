@@ -25,13 +25,14 @@ import { continueAfterReport } from '@systems/run';
 import { say } from '@systems/say';
 import { actionDelete } from '@state/actions';
 import { soulsInMemory, finalePending, quantizeCorruption } from '@state/selectors';
-import { HOLLOW_FINALE, hollowUnitName } from '@data/hollow-text';
+import { HOLLOW_FINALE, HOLLOW_VERB, hollowUnitName } from '@data/hollow-text';
 import { echoWord } from '@data/tool-text';
 import { SHIPS } from '@data/ships';
 import { endingsLine } from '@data/script';
 import {
   MAX_LINE_CHARS, FINALE_ENDING_MAX_LINES, GLITCH_BURST_LEVEL, DUEL_SPIKE_LEVEL_START, DUEL_SPIKE_LEVEL_END, ROOT_DELETE_SEC,
   ROOT_GONE_GLITCH_LEVEL, MERGE_GLITCH_LEVEL, MERGE_COST_CHARGE, DUEL_SPIKE_EVERY_END_SEC, DUEL_SPIKE_EVERY_START_SEC,
+  SEG_NAME_MAX_CHARS, VERB_FIRST_TELEGRAPH_SEC,
 } from '@data/tuning';
 import type { GameState, EndingLine } from '@state/schema';
 import type { SoulSegment } from '@/types/segment';
@@ -62,6 +63,17 @@ const eventsSince = (from: number, name: string): { payload: unknown; wall: numb
   ];
   check('the card\'s words and RUN END\'s lines are one line each (≤ 70 characters)', cardWords.every((text) => text.length <= MAX_LINE_CHARS),
     JSON.stringify(cardWords.map((text) => text.length)));
+  // Unlink pass (Fran, after the handover): HOLLOW's RM types `unlink`, four letters longer than `rm`. Its echoes still fit
+  // one line with a file name as long as a chip allows and the longest name HOLLOW goes by.
+  const worstFile = echoWord('W'.repeat(SEG_NAME_MAX_CHARS));
+  const worstUser = hollowUnitName([999, 998]);
+  const verbLines = [
+    HOLLOW_VERB.telegraph('rm', worstFile, VERB_FIRST_TELEGRAPH_SEC), HOLLOW_VERB.blocked('rm', worstFile),
+    HOLLOW_VERB.done('rm', worstFile, worstUser), HOLLOW_VERB.failed('rm', worstFile, worstUser), HOLLOW_VERB.failed('mv', worstHollow, worstUser),
+  ];
+  check(`HOLLOW's verb echoes fit one line (≤ ${MAX_LINE_CHARS}) with worst-case names, and RM types \`unlink\``,
+    verbLines.every((text) => text.length <= MAX_LINE_CHARS) && verbLines[0]!.startsWith('> unlink ') && HOLLOW_VERB.badge('rm', 4) === 'UNLINK 4',
+    JSON.stringify(verbLines.map((text) => text.length)));
   check('endingsLine: the found ones by name, then ??? for each still to find', endingsLine([], ['purge', 'merge']) === 'ENDINGS 0/2 · ??? · ???'
     && endingsLine(['merge'], ['purge', 'merge']) === 'ENDINGS 1/2 · MERGE · ???'
     && endingsLine(['merge', 'purge'], ['purge', 'merge']) === 'ENDINGS 2/2 · PURGE · MERGE');
@@ -79,8 +91,10 @@ check('the strip-following kid locks LAST LIGHT', h.status() === 'locked', h.sta
   const entries = state().log.entries;
   const telegraphs = entries.filter((entry) => entry.verbCountdown === true);
   const blocked = entries.filter((entry) => / \.\.\. BLOCKED$/.test(entry.text));
-  check('every verb telegraph is said with verbCountdown (the TERMINAL counts it), in HOLLOW\'s command voice', telegraphs.length > 0
-    && telegraphs.every((entry) => entry.speaker === 'hollow-cmd' && /^> (rm|mv) \S+ \.\.\. \d$/.test(entry.text)),
+  // Unlink pass: RM types `unlink`; the ship's first telegraph says 4, every later one 3 (Fran, after the handover).
+  check('every verb telegraph is said with verbCountdown (the TERMINAL counts it), in HOLLOW\'s command voice, the first from 4',
+    telegraphs.length > 1 && telegraphs.every((entry) => entry.speaker === 'hollow-cmd' && /^> (unlink|mv) \S+ \.\.\. \d$/.test(entry.text))
+    && telegraphs[0]!.text.endsWith(' ... 4') && telegraphs.slice(1).every((entry) => entry.text.endsWith(' ... 3')),
     `${telegraphs.length}: ${telegraphs.slice(0, 3).map((entry) => entry.text).join(' | ')}`);
   check('…and every BLOCKED in the good tone', blocked.length > 0 && blocked.every((entry) => entry.tone === 'good' && entry.verbCountdown !== true), String(blocked.length));
 }
@@ -94,14 +108,15 @@ check('the strip-following kid locks LAST LIGHT', h.status() === 'locked', h.sta
   const telegraph = state().hollow.verb;
   const end = h.wall() + 6;
   while (state().hollow.verb !== null && h.wall() < end) h.step();
-  const landedLine = state().log.entries.slice(-6).find((entry) => /\[user: /.test(entry.text) && !/ FAILED /.test(entry.text) && /^> (rm|mv) /.test(entry.text));
+  // Unlink pass: HOLLOW's RM types `unlink` (Fran, after the handover).
+  const landedLine = state().log.entries.slice(-6).find((entry) => /\[user: /.test(entry.text) && !/ FAILED /.test(entry.text) && /^> (unlink|mv) /.test(entry.text));
   const bursts = eventsSince(from, 'glitch-burst').map((event) => (event.payload as { level: number }).level);
   const landed = eventsSince(from, 'verb-landed').length;
   check('a verb left alone lands: its echo in the danger tone and a glitchBurst at GLITCH_BURST_LEVEL', telegraph !== null && landed === 1
     && landedLine?.tone === 'danger' && bursts.includes(quantizeCorruption(GLITCH_BURST_LEVEL)), JSON.stringify({ landedLine, bursts, landed }));
 }
 check('say: a line with a look must be critical (a queued one would count down a verb already gone)', (() => {
-  try { say('hollow-cmd', '> rm test ... 3', { verbCountdown: true }); return false; } catch { return true; }
+  try { say('hollow-cmd', '> unlink test ... 3', { verbCountdown: true }); return false; } catch { return true; }
 })());
 
 // --- The duel's spikes ------------------------------------------------------------------------------------------------

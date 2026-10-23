@@ -68,8 +68,8 @@ export function createHarness11(seed = 1, opts: { soulsFound?: boolean } = {}): 
     const now = state();
     const verb = now.hollow.verb;
     if (verb === null || now.clock.paused || !canStartOp()) return false;
-    const telegraphSec = now.hollow.cfg.verbs?.telegraphSec ?? 0;
-    if (telegraphSec - verb.leftSec < blockAfterSec) return false;
+    // Into the countdown this verb started with (unlink pass: the ship's first verb counts 4 s, every later one 3 s).
+    if (verb.totalSec - verb.leftSec < blockAfterSec) return false;
     const target = now.memory.find((seg) => seg.id === verb.targetId);
     if (!target || getOpsBySeg(target.id).length > 0) return false;
     if (verb.kind === 'mv') return actionDelete(base.store, target) === null;

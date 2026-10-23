@@ -28,11 +28,11 @@ import { TERMINAL_VISIBLE_LINES, LOG_VIEW_KEEP_ROWS, CHOICE_URGENT_SEC, VERB_TEL
 // Its keys are game keys of the blue screen, not a modal (§6.11's 'choice' layer): a deal during a burn must not drop
 // the SPACE the kid is holding, and in amber Y and N do nothing (the ticker says TAB).
 // A click on the lines finishes the typing at once.
-// WP11 part 2 (LAST LIGHT): a HOLLOW verb's telegraph (`> rm repair.bak ... 3`, a line said with verbCountdown) counts
-// its number down live from the verb's own clock (it stands still while the flight is at TACTICAL), with a pink bar
-// draining under it and the line pulsing each second; once the verb has ended (BLOCKED, landed, failed, called off) the
-// line greys out where it stands and the outcome types under it: BLOCKED in the good green, a landed verb in the warning
-// red (the line's tone).
+// WP11 part 2 (LAST LIGHT): a HOLLOW verb's telegraph (`> unlink repair.bak ... 3`, a line said with verbCountdown)
+// counts its number down live from the verb's own clock (it stands still while the flight is at TACTICAL), with a pink
+// bar draining under it and the line pulsing each second; once the verb has ended (BLOCKED, landed, failed, called off)
+// the line greys out where it stands and the outcome types under it: BLOCKED in the good green, a landed verb in the
+// warning red (the line's tone).
 
 interface ChoiceButton {
   option: string;
@@ -131,9 +131,8 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
     const verb = state.hollow.verb;
     const live = liveVerbText(state);
     if (verb === null || live === null) { endVerbRow(); return; }
-    const telegraphSec = state.hollow.cfg.verbs?.telegraphSec;
-    if (telegraphSec === undefined) throw new Error('MindTerminal: a verb counts down on a ship whose HOLLOW has no verbs');
-    verbRow.fill.style.width = `${Math.max(0, Math.min(100, (100 * verb.leftSec) / telegraphSec))}%`;
+    // Drained from the countdown this verb started with (the ship's first one is longer: tuning.ts).
+    verbRow.fill.style.width = `${Math.max(0, Math.min(100, (100 * verb.leftSec) / verb.totalSec))}%`;
     if (!verbRow.typed) return;
     if (verbRow.text.textContent !== live) verbRow.text.textContent = live;
     const second = verbSecondsLeft(verb);
@@ -223,7 +222,8 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
     let verb: VerbRow | null = null;
     if (entry.verbCountdown) {
       endVerbRow();
-      // It jumps the queue: whatever is still waiting to type shows at once, so its 3 s start now (VERB_TELEGRAPH_TYPE_CPS).
+      // It jumps the queue: whatever is still waiting to type shows at once, so its seconds start now
+      // (VERB_TELEGRAPH_TYPE_CPS).
       queue.finishAll();
       row.classList.add('verb-countdown', 'verb-live');
       const timer = document.createElement('span');

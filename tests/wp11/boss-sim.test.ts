@@ -8,8 +8,10 @@
 //    eaten block (never the root or the last block) and never lands closer than 4 free blocks to a soul, nor where it
 //    could bite at the next bite. The checks are written from §6.6 here, not with the module's helpers. Each roll also
 //    spares a random set of tools (licensed on this ship, not used yet: the lead's TODO for WP11), which RM never takes.
-// B. The live counter (systems/hollow-verbs.ts): an unblocked RM lands at the end of its 3 s (the file is gone, the
-//    echo, glitchBurst(0.3, 400)); a SCAN on the target during the telegraph blocks it at once (the file stays,
+// B. The live counter (systems/hollow-verbs.ts): an unblocked RM lands at the end of its countdown (the file is gone,
+//    the echo, glitchBurst(0.3, 400)); the ship's first verb counts 4 s (on the coast the next one still comes everySec
+//    after its start; in the duel its extra second pushes the next one back), every later one counts 3 s, and a new ship
+//    starts over at 4 (the unlink pass, Fran after the handover; on screen RM is `unlink`); a SCAN on the target during the telegraph blocks it at once (the file stays,
 //    `... BLOCKED`); an op started and cancelled within one tick still blocks it; a target already mid-op blocks it at
 //    its start; a DELETE on an MV's seed blocks it; the clock and the countdown stand still while the flight is at
 //    TACTICAL; with nothing fair to aim at HOLLOW skips its turn; the weights follow the last unit's habits.
@@ -35,7 +37,10 @@ import { installTool, isLicensed } from '@systems/licences';
 import type { Segment, HollowSegment, FsToolSegment, ToolSegment, UpgradeSegment, FirewallSegment, SoulSegment } from '@/types/segment';
 import type { GameState } from '@state/schema';
 import type { FsToolKind } from '@/types/fs-tool';
-import { BAND_DEGRADED_MIN, WALL_MIN_BLOCKS, GLITCH_BURST_LEVEL, GLITCH_BURST_MS } from '@data/tuning';
+import {
+  BAND_DEGRADED_MIN, WALL_MIN_BLOCKS, GLITCH_BURST_LEVEL, GLITCH_BURST_MS, VERB_TELEGRAPH_SEC, VERB_FIRST_TELEGRAPH_SEC,
+} from '@data/tuning';
+import { HOLLOW_VERB } from '@data/hollow-text';
 
 // --- A. Fairness, pure ------------------------------------------------------------------------------------------------
 
@@ -360,16 +365,21 @@ check('B: on the coast (CRUISE), HOLLOW awake', state().clock.pace !== 'tactical
 {
   const verb = telegraphNow();
   const target = state().memory.find((seg) => seg.id === verb?.targetId);
-  check('B: verbNow: RM telegraphs, aimed at the spare Repair.bak; the strip says BLOCK IT, the TERMINAL counts down',
-    verb?.kind === 'rm' && target?.name === 'Repair.bak' && /^BLOCK IT/.test(h.shown()?.text ?? '')
-    && h.log().some((entry) => entry.speaker === 'hollow-cmd' && entry.text === '> rm repair.bak ... 3'),
-    `${verb?.kind} ${target?.name} | ${h.shown()?.text}`);
+  // Unlink pass: HOLLOW's RM types `unlink`, and the ship's first verb counts from 4 (VERB_FIRST_TELEGRAPH_SEC).
+  check('B: verbNow: RM telegraphs, aimed at the spare Repair.bak; the strip says BLOCK IT (4…), the TERMINAL counts down from 4',
+    verb?.kind === 'rm' && target?.name === 'Repair.bak' && /^BLOCK IT.*\(4…\)$/.test(h.shown()?.text ?? '')
+    && verb.totalSec === VERB_FIRST_TELEGRAPH_SEC && state().hollow.verbTelegraphs === 1
+    && h.log().some((entry) => entry.speaker === 'hollow-cmd' && entry.text === '> unlink repair.bak ... 4'),
+    `${verb?.kind} ${target?.name} ${verb?.totalSec} | ${h.shown()?.text}`);
+  // On the coast the clock keeps its everySec after the first verb too (only the duel's short clock is pushed back).
+  check('B: …on the coast the next verb still comes everySec after the first one\'s start', state().hollow.verbInSec === ship.hollow.verbs!.everySec,
+    `${state().hollow.verbInSec}`);
   check('B: …and a warning holds SKIP', state().alerts.list.some((alert) => alert.id === 'hollow-verb' && alert.inhibitsSkip));
-  // 3 s of countdown, then the strip's 0.3 s hysteresis before the next line.
-  h.stepFor(3.6);
+  // 4 s of countdown (the first verb), then the strip's 0.3 s hysteresis before the next line.
+  h.stepFor(4.6);
   check('B: unblocked, it lands when the countdown runs out: Repair.bak is gone, the echo names who did it, glitchBurst(0.3, 400)',
     !state().memory.some((seg) => seg.name === 'Repair.bak') && state().hollow.verbsLanded === 1
-    && h.log().some((entry) => /^> rm repair\.bak {3}\[user: /.test(entry.text))
+    && h.log().some((entry) => /^> unlink repair\.bak {3}\[user: /.test(entry.text))
     && h.events.some((event) => event.name === 'glitch-burst' && JSON.stringify(event.payload) === JSON.stringify({ level: GLITCH_BURST_LEVEL, ms: GLITCH_BURST_MS })),
     `landed ${state().hollow.verbsLanded}; burst level ${glitchBurstLevel()}`);
   check('B: …the warning is gone, the strip moves on', !state().alerts.list.some((alert) => alert.id === 'hollow-verb') && !/^BLOCK IT/.test(h.shown()?.text ?? ''));
@@ -377,18 +387,27 @@ check('B: on the coast (CRUISE), HOLLOW awake', state().clock.pace !== 'tactical
     const next = chooseVerb(state().memory, createRng(2), { mv: 1, rm: 1 }, state().hollow.untriedTools);
     return next === null || state().memory.find((seg) => seg.id === next.targetId)?.name !== 'Repair';
   })());
+  // The second verb on the ship: the known drill, 3 s, and the clock back to everySec.
+  const second = telegraphNow();
+  check('B: the ship\'s second verb counts from 3 (`... 3`), and the next one comes everySec after it',
+    second !== null && second.totalSec === VERB_TELEGRAPH_SEC && state().hollow.verbTelegraphs === 2
+    && h.log().some((entry) => entry.speaker === 'hollow-cmd' && entry.text === HOLLOW_VERB.telegraph(second.kind, second.targetWord, 3))
+    && state().hollow.verbInSec === ship.hollow.verbs!.everySec,
+    `${JSON.stringify(second)} in ${state().hollow.verbInSec}`);
 }
 
 coast(12);
 {
   const verb = telegraphNow();
+  check('B: a new ship starts over: its first verb counts from 4 again', verb?.totalSec === VERB_FIRST_TELEGRAPH_SEC && state().hollow.verbTelegraphs === 1,
+    JSON.stringify(verb));
   h.stepFor(1);
   const target = state().memory.find((seg) => seg.id === verb?.targetId)!;
   const refusal = actionScan(h.store, target);
   h.step();
   check('B: a SCAN on its target during the countdown blocks it at once: `... BLOCKED`, verb-blocked',
     refusal === null && state().hollow.verb === null && state().hollow.verbsBlocked === 1 && events('verb-blocked') === 1
-    && h.log().some((entry) => entry.text === '> rm repair.bak ... BLOCKED'), `refusal ${refusal}, blocked ${state().hollow.verbsBlocked}`);
+    && h.log().some((entry) => entry.text === '> unlink repair.bak ... BLOCKED'), `refusal ${refusal}, blocked ${state().hollow.verbsBlocked}`);
   h.stepFor(4);
   check('B: …and Repair.bak is still there after the countdown would have run out', state().memory.some((seg) => seg.id === target.id) && state().hollow.verbsLanded === 0);
 }
@@ -432,8 +451,9 @@ coast(15);
     d.run.lastUnit = { number: 47, woke: 0, shipName: 'X', cause: 'overwritten', stats: { moves: 999, deletes: 0 }, hollowUnits: [46] };
   });
   const verb = telegraphNow();
-  check('B: MV telegraphs on the seed (`> mv seed ... 3`, `BLOCK IT — DELETE its SEED`)', verb?.kind === 'mv' && verb.targetId === seedBlock.id
-    && h.log().some((entry) => entry.text === '> mv seed ... 3') && /DELETE its SEED/.test(h.shown()?.text ?? ''), `${JSON.stringify(verb)} | ${h.shown()?.text}`);
+  // The ship's first verb, an MV this time: it counts from 4 too (the first of either kind).
+  check('B: MV telegraphs on the seed (`> mv seed ... 4`, the ship\'s first verb; `BLOCK IT — DELETE its SEED`)', verb?.kind === 'mv' && verb.targetId === seedBlock.id
+    && h.log().some((entry) => entry.text === '> mv seed ... 4') && /DELETE its SEED/.test(h.shown()?.text ?? ''), `${JSON.stringify(verb)} | ${h.shown()?.text}`);
   const refusal = actionDelete(h.store, state().memory.find((seg) => seg.id === seedBlock.id)!);
   h.step();
   check('B: …a DELETE on the seed blocks it', refusal === null && state().hollow.verb === null && state().hollow.verbsBlocked === 1);
