@@ -29,7 +29,7 @@ npm run dev          # Vite dev server on http://localhost:5173/ (add ?debug for
 npm run build        # type check + production bundle to dist/
 npm test             # unit tier: every headless suite, in parallel (under 5 min)
 npm run test:e2e     # e2e tier: a whole run and every screen played in Chromium (~15 min)
-npm run balance      # the full-resolution sweeps and the 200-seed balance targets (an hour or more)
+npm run balance      # the full-resolution sweeps and the 200-seed balance targets (about two hours)
 ```
 
 The original single-file mockup is preserved at `legacy/prototype.html` as a behavioural reference.

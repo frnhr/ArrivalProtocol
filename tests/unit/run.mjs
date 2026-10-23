@@ -4,8 +4,8 @@
 // • AP_DEPTH=quick (default): the sweeps sample their grids (tests/unit/depth.ts) and the run must finish inside
 //   UNIT_BUDGET_SEC (300: the tier's five-minute promise) with no suite over SUITE_BUDGET_SEC (90), else it FAILs. A
 //   suite that outgrows its share samples more coarsely in quick mode; its full grid stays in `npm run balance`.
-// • --full (or AP_DEPTH=full): every grid at full resolution and the 200-seed balance targets; no time budget (an hour
-//   or more on four cores).
+// • --full (or AP_DEPTH=full): every grid at full resolution and the 200-seed balance targets; no time budget (about
+//   two hours on four cores).
 // • UNIT_WORKERS: parallel suites (default: the machine's cores). A filter keeps only the suites whose path contains
 //   one of the given substrings, a `-substring` filter drops the ones that contain it (the tsc pass always runs).
 // Per-suite wall times are kept in tests/.out/unit-timings.json and order the next run (longest first), so one slow

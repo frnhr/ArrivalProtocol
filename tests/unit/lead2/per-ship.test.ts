@@ -7,7 +7,8 @@
 // own resolution: about 4 minutes a ship instead of 12); the full-resolution runs are logged in tests/unit/lead2/
 // (rule4-sweep-ship1.log, rule4-sweep-ship2.log).
 // Quick depth (tests/unit/depth.ts, npm test): every ship flies the suites marked `quick` (a few seconds a ship); the
-// rest are ship 1's in the unit tier and every ship's in `npm run balance` (about 35 minutes).
+// rest are ship 1's in the unit tier and every ship's in `npm run balance` (about two hours: 32 child runs, one at a
+// time).
 import { spawnSync } from 'node:child_process';
 import { check, finish } from '../wp1/harness';
 import { FULL } from '../depth';

@@ -39,7 +39,7 @@ by HOLLOW, the previous wave's caretaker. Everything is UI: windows, terminals, 
   some. Chromium: `E2E_CHROMIUM`, else `$PLAYWRIGHT_BROWSERS_PATH/chromium`, else the installed Google Chrome.
 - `npm run balance` — not a test suite: the unit tier at full depth (`--full`), every sweep at the resolution its review
   round asked for, every guidance suite on all five ships and the 200-seed balance harness
-  (`tests/unit/wp12/playthrough.test.ts`, whose hard checks are the game's balance targets). An hour or more; run it
+  (`tests/unit/wp12/playthrough.test.ts`, whose hard checks are the game's balance targets). About two hours on four cores (the per-ship sweeps take most of it); run it
   when `tuning.ts` or `ships.ts` change.
 
 Headless suites are `tests/unit/**/*.test.ts` (run with `tsx`; each exits non-zero on failure); generated output goes
