@@ -11,6 +11,8 @@
 // Each ship is checked at its boot, its flight's first seconds, every strip line it showed, its end, its printing, its
 // WAKE REPORT and its TRANSMIT; then RUN END and NEW RUN. About 15 minutes; shots under tests/.out/e2e/shots/play-*.
 // Usage: node tests/e2e/scenarios/playthrough.mjs   (env E2E_BASE_URL, SEED, SHOT_VIEWPORT; tests/e2e/run.mjs runs it)
+// Debugging a ship: PLAY_FROM=5 jumps to LAST LIGHT after the title (__ap.ship, a fresh unit carried in; the earlier
+// ships' checks are skipped), PLAY_TRACE=1 logs every strip line the kid reads, with the time and the screen.
 import { launch, BASE_URL, SHOTS, checker, pageKit, viewportFromEnv } from '../lib.mjs';
 import { join } from 'node:path';
 
@@ -21,6 +23,8 @@ const SHIP_MAX_MS = 6 * 60_000;    // a flight longer than this is stuck (a kid'
 const SCREEN_MAX_MS = 3 * 60_000;  // printing, a report, TRANSMIT
 const POLL_MS = 80;                // the kid's eyes: how often it reads the strip
 const VERBS = ['SCAN', 'REPAIR', 'DELETE', 'COPY', 'SWAP', 'MOVE'];
+const FROM = Number(process.env.PLAY_FROM ?? 1);
+const TRACE = process.env.PLAY_TRACE === '1';
 
 const viewport = viewportFromEnv();
 const browser = await launch();
@@ -57,61 +61,112 @@ const hold = async (on) => {
   if (!on && holding) await page.keyboard.up('Space');
   holding = on;
 };
-const toMode = async (mode, now) => { if (now !== mode) await page.keyboard.press('Tab'); };
+let lastTab = 0;
+const toMode = async (mode, now) => { if (now !== mode) { lastTab = Date.now(); await page.keyboard.press('Tab'); } };
 
 // The block a MIND line names: the longest file name, cluster code or the root the line mentions. `IT` after a cluster
 // code (`C12 WILL BE EATEN … — REPAIR IT`) is that cluster.
 const resolveTarget = (line) => st(({ text, verbs }) => {
   const s = window.__ap.store.getState();
   const upper = text.toUpperCase();
+  // `COPY your Repair`: the kid's own tool file, named for its verb.
+  const own = upper.match(/\bYOUR ([A-Z]+)/)?.[1] ?? null;
+  if (own) {
+    const tool = s.memory.find((seg) => seg.type === 'fs-tool' && seg.name.toUpperCase() === own);
+    if (tool) return { id: tool.id, name: tool.name.toUpperCase(), len: own.length };
+  }
   let best = null;
   for (const seg of s.memory) {
-    if (seg.type === 'free') continue;
+    // HOLLOW's blocks are never a target but for its root and its seeds.
+    if (seg.type === 'free' || (seg.type === 'hollow' && !seg.root && !seg.seed)) continue;
     const names = [seg.name.toUpperCase(), seg.name.split(' · ')[0].toUpperCase()];
     if (seg.type === 'soul') names.push(seg.cluster);
-    if (seg.type === 'hollow' && seg.id === 'root') names.push('THE ROOT', 'ROOT');
-    if (seg.type === 'seed') names.push('SEED', 'ITS SEED');
+    if (seg.type === 'core') names.push('THE CORE');
+    if (seg.type === 'hollow' && seg.root) names.push('THE ROOT', 'ROOT');
+    if (seg.type === 'hollow' && seg.seed) names.push('SEED', 'ITS SEED');
     for (const name of names) {
-      // A tool's own file is named for its verb (Scan, Repair.bak): `REPAIR it` names the tool, not the target.
-      if (name.length < 3 || verbs.some((verb) => name.startsWith(verb)) || !upper.includes(name)) continue;
+      // A tool's own file is named for its verb (Scan, Repair): `REPAIR it` names the tool, not the target. Its
+      // backup (REPAIR.BAK) is a target like any file.
+      if (name.length < 3 || verbs.includes(name) || !upper.includes(name)) continue;
       if (!best || name.length > best.len) best = { id: seg.id, name, len: name.length };
     }
   }
   return best;
 }, { text: line, verbs: VERBS });
 
+let printFastClicks = 0;
+const mindByVerb = {};
 const acted = new Map();   // `${verb}:${target}` → wall ms of the last try, so one line is not clicked every poll
 let mindActions = 0;
 let mindRefused = 0;
+// A click the kid makes on a screen that may be re-rendering under it: a short wait, and a miss is counted, not fatal
+// (the next poll reads the screen again).
+const tap = async (locator, opts = {}) => {
+  try { await locator.click({ force: true, timeout: 2000, ...opts }); return true; } catch { return false; }
+};
+
+// Where a MOVE goes: the kid hovers the free blocks of the rack the line names (any rack if none), reads the MOVE
+// preview's label on each, and clicks the first one it calls SAFE (else the widest it hovered).
+async function placeMove(line) {
+  const rack = line.match(/\bRACK ([A-F])\b/)?.[1] ?? null;
+  const spots = await st((wanted) => [...document.querySelectorAll('.addr-row')]
+    .filter((row) => wanted === null || row.dataset.rack === wanted)
+    .flatMap((row) => [...row.querySelectorAll('.seg.free:not(.reserved)')])
+    .map((el) => el.getBoundingClientRect()).filter((box) => box.width > 8)
+    .sort((a, b) => b.width - a.width).slice(0, 6)
+    .map((box) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 })), rack);
+  for (const spot of spots) {
+    await page.mouse.move(spot.x, spot.y, { steps: 3 });
+    await page.waitForTimeout(250);
+    const label = await st(() => [...document.querySelectorAll('.move-preview-label.dest')].map((el) => el.innerText).join(' '));
+    if (/SAFE/.test(label)) { await page.mouse.click(spot.x, spot.y); return 'safe'; }
+  }
+  if (spots[0]) { await page.mouse.click(spots[0].x, spots[0].y); return 'unsafe'; }
+  await page.keyboard.press('Escape');
+  return 'none';
+}
+
+const firstSeen = new Set();
 async function mindAct(view) {
   const upper = view.line.toUpperCase();
+  // Nothing to do with a tool the line says is spent.
+  if (/NO REPAIR CHARGE LEFT/.test(upper)) return false;
   const verbs = VERBS.map((verb) => ({ verb, at: upper.search(new RegExp(`\\b${verb}\\b`)) })).filter((hit) => hit.at >= 0).sort((a, b) => a.at - b.at);
+  // `BLOCK IT — use any tool on REPAIR.BAK`: SCAN is the cheapest tool there is.
+  if (/USE ANY TOOL ON/.test(upper)) verbs.unshift({ verb: 'SCAN', at: 0 });
   if (verbs.length === 0) return false;
+  const verb = verbs[0].verb;
   const target = await resolveTarget(view.line);
   if (!target) return false;
-  const key = `${verbs[0].verb}:${target.id}`;
+  const key = `${verb}:${target.id}`;
   if (Date.now() - (acted.get(key) ?? 0) < 4000) return false;
   acted.set(key, Date.now());
   await toMode('memory', view.mode);
   await page.waitForTimeout(150);
-  const chip = page.locator(`#chip-${verbs[0].verb.toLowerCase()}`);
-  if (!(await chip.isVisible().catch(() => false))) { mindRefused++; log(`no ${verbs[0].verb} chip for "${view.line}"`); return false; }
+  const chip = page.locator(`#chip-${verb.toLowerCase()}`);
+  if (!(await chip.isVisible().catch(() => false))) { mindRefused++; return false; }
   const held = await st(() => window.__ap.store.getState().ui.activeTool?.kind ?? null);
-  if (held !== verbs[0].verb.toLowerCase()) await chip.click({ force: true });
+  if (held !== verb.toLowerCase() && !(await tap(chip))) { mindRefused++; return false; }
   await page.waitForTimeout(120);
-  const block = page.locator(`.seg[data-id="${target.id}"]`).first();
-  if (!(await block.count())) { mindRefused++; log(`no block ${target.id} on screen for "${view.line}"`); return false; }
-  await block.click({ force: true });
+  if (!(await tap(page.locator(`.seg[data-id="${target.id}"]`).first()))) { mindRefused++; return false; }
+  let placed = '';
+  if (verb === 'MOVE') { await page.waitForTimeout(200); placed = ` → ${await placeMove(view.line)}`; }
+  await page.waitForTimeout(100);
+  // Did a tool start on it (a MOVE's op runs on its clone, and a DELETE can be over at once)?
+  const started = verb === 'MOVE' || await st((id) => window.__ap.ops().some((op) => op.segId === id) || window.__ap.store.getState().memory.every((seg) => seg.id !== id), target.id);
+  if (!started) { mindRefused++; if (TRACE) log(`MIND: ${verb} ${target.name} started nothing ("${view.line}")`); }
   mindActions++;
-  log(`MIND: ${verbs[0].verb} ${target.name} ("${view.line}")`);
+  mindByVerb[verb] = (mindByVerb[verb] ?? 0) + 1;
+  if (!firstSeen.has(key)) { firstSeen.add(key); log(`MIND: ${verb} ${target.name}${placed} ("${view.line}")`); }
   return true;
 }
 
 // One poll of the kid in a flight: the SHIP's keys, or the MIND's clicks when the line asks for a tool.
 async function flyStep(view) {
   const text = view.line;
-  if (/\[TAB\] BACK/.test(text)) { await toMode('tools', view.mode); }
-  else if (/\[TAB\]/.test(text) && view.mode === 'tools' && !/BACK/.test(text)) { await page.keyboard.press('Tab'); return; }
+  // The strip names [TAB] only while the kid is on the wrong screen for what it asks; the strip lags a switch by a
+  // tick or two, so a second TAB waits.
+  if (/\[TAB\]/.test(text) && Date.now() - lastTab > 900) { lastTab = Date.now(); await page.keyboard.press('Tab'); return; }
   if (await mindAct(view)) return;
   if (/RELEASE|TOO EARLY|WAIT|TURN AROUND|HOLD STEADY/.test(text)) await hold(false);
   const preset = text.match(/press \[([WASD])\]/);
@@ -134,7 +189,12 @@ await page.locator('#titleReceive').click();
 
 // --- The ships ----------------------------------------------------------------------------------------------------------
 const run = { lines: new Set(), long: [], unfit: new Set(), shipsFlown: [] };
+if (FROM > 1) {
+  await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 30000);
+  await st((index) => window.__ap.ship(index), FROM - 1);
+}
 for (const [index, name] of SHIPS.entries()) {
+  if (index + 1 < FROM) continue;
   const tag = `${index + 1} ${name}`;
   const errorsBefore = errors.length;
   // Boot: the MIND's terminal types the ship's boot, the strip says how to skip it.
@@ -183,10 +243,14 @@ for (const [index, name] of SHIPS.entries()) {
   let typedSeen = 0;
   let typedMatched = 0;
   const flightStart = Date.now();
+  const recent = [];
   let view = await look();
   let lastLine = '';
   while (Date.now() - flightStart < SHIP_MAX_MS && view.phase === 'flight' && view.status === 'approaching' && !view.lostCard) {
     if (view.line !== lastLine) {
+      if (TRACE) log(`${((Date.now() - flightStart) / 1000).toFixed(1).padStart(6)} ${view.mode.padEnd(6)} ${view.pace.padEnd(8)} ${view.line}`);
+      recent.push(view.line.replace(/\d+:\d\d/g, 'm:ss'));
+      if (recent.length > 40) recent.shift();
       lines.add(view.line);
       run.lines.add(view.line);
       if (view.line.length > MAX_LINE_CHARS) run.long.push(view.line);
@@ -208,7 +272,7 @@ for (const [index, name] of SHIPS.entries()) {
   const outcome = await st(() => window.__ap.store.getState().burn.status);
   run.shipsFlown.push({ name, outcome, flightSec, lines: lines.size });
   check(`${tag}: the flight ends by the strip within ${SHIP_MAX_MS / 60000} minutes (${outcome}, ${flightSec.toFixed(0)} s, ${lines.size} lines)`,
-    !stuck, stuck ? `still flying: "${view.line}"` : '');
+    !stuck, stuck ? `still flying: "${view.line}"; lately: ${[...new Set(recent)].slice(-8).join(' | ')}` : '');
   check(`${tag}: …the strip's lines fit (≤ ${MAX_LINE_CHARS} characters, inside the strip)`, [...lines].every((line) => line.length <= MAX_LINE_CHARS)
     && ![...lines].some((line) => run.unfit.has(line)), [...lines].filter((line) => line.length > MAX_LINE_CHARS || run.unfit.has(line)).join(' | '));
   check(`${tag}: …the strip shows the line the director picked, once typed`, typedSeen > 0 && typedMatched / typedSeen > 0.9, `${typedMatched}/${typedSeen}`);
@@ -232,17 +296,30 @@ for (const [index, name] of SHIPS.entries()) {
   const printStart = Date.now();
   let printView = await look();
   while (Date.now() - printStart < SCREEN_MAX_MS && !['report', 'transmit', 'end'].includes(printView.phase)) {
-    if (printView.lostCard) { await page.locator('#burnResultRetry').click({ force: true }); }
-    else if (printView.choice) { await page.locator('#fcPurge').click(); }
+    if (printView.lostCard) { await tap(page.locator('#burnResultRetry')); }
+    else if (printView.choice) { await tap(page.locator('#fcPurge')); }
     else if (printView.phase === 'printing' || printView.phase === 'flight') {
-      if (!(await mindAct(printView)) && /\[F\]/.test(printView.line)) await page.keyboard.press('KeyF');
+      if (await mindAct(printView)) { /* the MIND's line first: a bite eats a cluster before it prints */ }
+      else if (/PRINT FAST ▸▸ to hurry/.test(printView.line)) {
+        // The button is the MIND's mini-HUD's: [TAB] in, then click it.
+        await toMode('memory', printView.mode);
+        await page.waitForTimeout(150);
+        const fast = page.locator('#mhPrintFast');
+        if (await fast.isVisible().catch(() => false) && !(await fast.evaluate((el) => el.classList.contains('on')).catch(() => true)) && await tap(fast)) printFastClicks++;
+      } else if (/\[TAB\]/.test(printView.line) && Date.now() - lastTab > 900) { lastTab = Date.now(); await page.keyboard.press('Tab'); }
+      else if (/\[F\]/.test(printView.line)) await page.keyboard.press('KeyF');
       if (printView.line && printView.line.length > MAX_LINE_CHARS) run.long.push(printView.line);
       run.lines.add(printView.line);
     }
     await page.waitForTimeout(250);
     printView = await look();
   }
-  check(`${tag}: printing ends in the WAKE REPORT`, printView.phase === 'report', `${printView.phase}: "${printView.line}"`);
+  check(`${tag}: printing ends in the WAKE REPORT (${((Date.now() - printStart) / 1000).toFixed(0)} s)`, printView.phase === 'report', `${printView.phase}: "${printView.line}"`);
+  if (printView.phase === 'end') {
+    // The run ended on this ship (the Core lost, the flagship gone): RUN END is checked below, the rest is not flown.
+    check(`${tag}: the run goes on past ${name}`, index === SHIPS.length - 1, `RUN END after ${name}: "${printView.line}"`);
+    break;
+  }
 
   // The WAKE REPORT.
   await waitFor(() => !document.getElementById('wakeReport').hidden, 5000);
@@ -301,8 +378,9 @@ check('RUN END: a title, n / 12,400 WOKE, the five ships, the SCORE, the rank an
   && end.ships.length === 5 && /^SCORE [\d,]+$/.test(end.score) && /^RANK · /.test(end.rank) && /^SEED [0-9A-F]{8}$/.test(end.seed),
   JSON.stringify({ ...end, model: undefined }));
 check('RUN END: …every ship row names its ship', SHIPS.every((name, i) => end.ships[i]?.includes(name)), end.ships.join(' | '));
-log(`run: ${run.shipsFlown.map((ship) => `${ship.name} ${ship.outcome} ${ship.flightSec.toFixed(0)} s`).join(', ')}; ${run.lines.size} distinct lines, ${mindActions} MIND clicks (${mindRefused} refused)`);
+log(`run: ${run.shipsFlown.map((ship) => `${ship.name} ${ship.outcome} ${ship.flightSec.toFixed(0)} s`).join(', ')}; ${run.lines.size} distinct lines, ${mindActions} MIND actions ${JSON.stringify(mindByVerb)} (${mindRefused} missed)`);
 check(`every strip line of the run fits (${run.lines.size} distinct)`, run.long.length === 0, run.long.slice(0, 3).join(' | '));
+check('PRINT FAST ▸▸ was offered and taken at least once', printFastClicks > 0, `${printFastClicks} clicks`);
 check('the kid followed the MIND by clicks at least once a ship', mindActions >= SHIPS.length, `${mindActions} actions, ${mindRefused} refused`);
 await shot('6-run-end');
 const unitBefore = await st(() => window.__ap.store.getState().run.unitNumber);
