@@ -25,15 +25,25 @@ by HOLLOW, the previous wave's caretaker. Everything is UI: windows, terminals, 
   HALCYON … LAST LIGHT, `__ap.newRun()`, `__ap.archiveClear()`).
 - `npm run typecheck` — strict TypeScript (`tsc --noEmit`).
 - `npm run build` — type check + production bundle to `dist/`.
-- `npm run test:smoke` — the fast headless subset (about 2.5 minutes): strict tsc over the tests, every quick suite,
-  and one whole five-ship run.
-- `npm test` — every headless suite (1.5–3 hours: the per-ship sweeps and the 200-seed playthrough are slow).
-- `npm run test:browser` — scripted browser checks against a running dev server (`TEST_BASE_URL`, default
-  `http://localhost:5173/`).
+- `npm test` — the unit tier (`tests/unit/`, under 5 minutes, enforced): every headless suite plus a strict tsc over
+  them, in parallel on all cores, slowest first. The suites run the real DOM-free systems on a private store (no
+  browser); the sweeps among them fly a coarse sample of their grids (`tests/unit/depth.ts`), and long setups are flown
+  once per process and restored (`flyOnce` in `tests/unit/wp1-rules/flows.ts`). The runner fails the run over 300 s or
+  any suite over 90 s: a suite that outgrows that samples more coarsely in quick depth, it does not raise the budget.
+  `node tests/unit/run.mjs wp9 -sim` runs the suites whose path contains `wp9`, minus those containing `sim`.
+- `npm run test:e2e` — the e2e tier (`tests/e2e/`): Playwright scripts that drive the game in Chromium, against a Vite
+  server the runner starts itself (`E2E_BASE_URL` to use a running one). The playthrough plays a whole run by the
+  strip (keys for the SHIP, clicks for the MIND) and checks every ship's boot, flight, lines, printing, WAKE REPORT and
+  TRANSMIT, then RUN END and NEW RUN; the other scenarios cover every screen, the phone layout and the desk. About
+  15 minutes, a few hundred checks; logs and shots in `tests/.out/e2e/`. `node tests/e2e/run.mjs phone desk` runs
+  some. Chromium: `E2E_CHROMIUM`, else `$PLAYWRIGHT_BROWSERS_PATH/chromium`, else the installed Google Chrome.
+- `npm run balance` — not a test suite: the unit tier at full depth (`--full`), every sweep at the resolution its review
+  round asked for, every guidance suite on all five ships and the 200-seed balance harness
+  (`tests/unit/wp12/playthrough.test.ts`, whose hard checks are the game's balance targets). An hour or more; run it
+  when `tuning.ts` or `ships.ts` change.
 
-Tests live in `tests/` (headless suites are `*.test.ts`, run with `tsx`; each exits non-zero on failure; generated
-output goes to the ignored `tests/.out/`). The 200-seed balance harness is `tests/wp12/playthrough.test.ts`; its hard
-checks are the game's balance targets. `.tmp/` is scratch space and is git-ignored.
+Headless suites are `tests/unit/**/*.test.ts` (run with `tsx`; each exits non-zero on failure); generated output goes
+to the ignored `tests/.out/`. `.tmp/` is scratch space and is git-ignored.
 
 ## Aesthetic constants
 

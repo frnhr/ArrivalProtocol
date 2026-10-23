@@ -1035,7 +1035,7 @@ body.alarm .alarm-vignette { opacity: 1; animation: vignette-pulse 1s ease-in-ou
   .objective-ticker { display: none; }
   /* Two lines on a phone (§9 WP12 item 3): a 390 px row holds about 36 characters, and the strip's lines run to
      MAX_LINE_CHARS (70). The height is always two lines, so the desk does not jump when a line wraps or unwraps.
-     A slightly smaller face fits 41 characters a row (tests/browser/phone.mjs checks the longest lines). HOLLOW's
+     A slightly smaller face fits 41 characters a row (tests/e2e/scenarios/phone.mjs checks the longest lines). HOLLOW's
      amber bite countdown and the typing caret give way: the mode toggle's alert names the bite, and the line itself
      is the instruction. */
   .objective-strip {
@@ -1931,7 +1931,7 @@ body.reduced-motion .mem-stat.souls-flip { animation: souls-flip-fade 1.2s ease-
   .addr-row .seg.tier-wide, .addr-row .seg.tier-narrow { padding-left: 4px; padding-right: 4px; }
   /* A name breaks only at its spaces and at type-labels' soft hyphens here, never inside a word (WP12 review: STASIS, the
      file run 1 asks the kid to SCAN, read STASI / S, and SCAN read SCA / N); a tiny chip's name packs tight enough for a
-     six-letter word in its 4 blocks. (tests/browser/phone.mjs checks every one-word name renders on one line, whole.) */
+     six-letter word in its 4 blocks. (tests/e2e/scenarios/phone.mjs checks every one-word name renders on one line, whole.) */
   .seg .seg-name { letter-spacing: 0.03em; overflow-wrap: normal; }
   /* The face shrinks with the chip (27cqi: six letters of 0.6 em in its width) on a phone narrower than 390 px. */
   .seg.tier-tiny { container-type: inline-size; }
@@ -3458,7 +3458,7 @@ body.reduced-motion .seg.verb-target, body.reduced-motion .verb-aim, body.reduce
 body.reduced-motion .run-end.tone-victory::before { animation: none; opacity: 0.3; }
 
 /* ══ WP12 part 2: the phone (≤ 768 px, §9 WP12 item 3) ════════════════════════════════════════════════════════════
- *    Desktop is untouched above the breakpoint; src/utils/viewport.ts holds the number (tests/wp12/p2/breakpoints.test.ts
+ *    Desktop is untouched above the breakpoint; src/utils/viewport.ts holds the number (tests/unit/wp12/p2/breakpoints.test.ts
  *    keeps every query on it). ── */
 
 /* ── The phone's flight bar (PhoneFlightBar): the Engine window's FUEL, presets, BURN and context buttons under every

@@ -62,7 +62,7 @@ interface Piece {
   phoneDrops?: 'own-gap' | 'dup';
 }
 
-// The pieces of `parts` with the phone's marks (pure: tests/wp12/p2/keycaps.test.ts runs it headless).
+// The pieces of `parts` with the phone's marks (pure: tests/unit/wp12/p2/keycaps.test.ts runs it headless).
 export function capPieces(parts: readonly TextPart[], options: CapOptions = {}): Piece[] {
   const pieces: Piece[] = [];
   let dropNextGap = false;

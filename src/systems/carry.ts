@@ -285,8 +285,8 @@ export function arrivalDamage(segs: readonly Segment[], damage: readonly Arrival
 }
 
 // A fresh unit (ship 1's written racks E–F: SCAN, 36 REPAIR CHARGE) as it would arrive on `ship` with no
-// transit hits and no stars: what the headless suites fly a later ship with on its own (tests/wp1's
-// AP_SHIP harness and tests/wp7's pass it to createInitialState explicitly; the game itself only ever
+// transit hits and no stars: what the headless suites fly a later ship with on its own (tests/unit/wp1's
+// AP_SHIP harness and tests/unit/wp7's pass it to createInitialState explicitly; the game itself only ever
 // carries a real unit). It lives here because it is packUnit and layoutCarried run on the written racks.
 // Throws for a ship nothing transmits to.
 export function freshUnitRacks(ship: ShipDef): CarriedRacks {

@@ -1,0 +1,95 @@
+// The e2e tier's runner: the game in Chromium, driven by browser scripts only (tests/e2e/scenarios/*.mjs, each a
+// standalone Playwright script that prints PASS/FAIL lines and exits non-zero on a failure). It starts a Vite dev server
+// of its own (unless E2E_BASE_URL points at one already running), runs the scenarios, streams their lines prefixed with
+// the scenario's name and adds the checks up.
+// Usage: node tests/e2e/run.mjs [scenario ...]    (npm run test:e2e; names as in SCENARIOS, e.g. `playthrough phone`)
+// Env: E2E_BASE_URL (skip the server), E2E_WORKERS (scenarios at once, default 2: they run in real time, and a starved
+// page misses its countdowns), E2E_CHROMIUM (see lib.mjs). Logs and shots under tests/.out/e2e/.
+import { spawn } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { createServer } from 'vite';
+
+const ROOT = join(import.meta.dirname, '..', '..');
+const OUT = join(ROOT, 'tests', '.out', 'e2e');
+mkdirSync(OUT, { recursive: true });
+
+// Longest first, so the long ones start at once. Each runs in its own Chromium.
+const SCENARIOS = [
+  { name: 'playthrough', file: 'playthrough.mjs', what: 'a whole run played by the strip: five ships, RUN END, NEW RUN' },
+  { name: 'run-flow', file: 'run-flow.mjs', what: 'a run through every screen, BEAM OUT, NEW RUN twice' },
+  { name: 'label-hops', file: 'label-hops.mjs', what: 'NAV PLOT labels never hop, desktop and phone' },
+  { name: 'phone', file: 'phone.mjs', what: 'the phone layout: touch, overflow, every strip line fits' },
+  { name: 'desk', file: 'desk.mjs', what: 'the desk: plot chip, dragged windows across the breakpoint' },
+  { name: 'beam-blue', file: 'beam-blue.mjs', what: 'BEAM OUT from the MIND' },
+];
+const wanted = process.argv.slice(2);
+const unknown = wanted.filter((name) => !SCENARIOS.some((scenario) => scenario.name === name));
+if (unknown.length) { console.error(`no scenario ${unknown.join(', ')} (have: ${SCENARIOS.map((s) => s.name).join(', ')})`); process.exit(2); }
+const chosen = SCENARIOS.filter((scenario) => wanted.length === 0 || wanted.includes(scenario.name));
+const WORKERS = Number(process.env.E2E_WORKERS ?? 2);
+if (!Number.isInteger(WORKERS) || WORKERS < 1) throw new Error(`E2E_WORKERS=${process.env.E2E_WORKERS} is not a worker count`);
+
+let server = null;
+let baseUrl = process.env.E2E_BASE_URL ?? null;
+if (!baseUrl) {
+  // A port of its own (not the 5173 a dev session may hold), the project's vite.config.ts, no browser tab, quiet.
+  server = await createServer({ root: ROOT, configFile: join(ROOT, 'vite.config.ts'), logLevel: 'warn', server: { host: '127.0.0.1', port: 5199, strictPort: false, open: false } });
+  await server.listen();
+  baseUrl = server.resolvedUrls.local[0];
+  // The first load transforms every module: do it once here, not inside the first scenario's timeouts.
+  await fetch(baseUrl).then((res) => res.text());
+  console.log(`---- dev server at ${baseUrl}`);
+}
+
+const started = Date.now();
+const results = [];
+function runScenario(scenario) {
+  return new Promise((resolve) => {
+    const scenarioStarted = Date.now();
+    const child = spawn(process.execPath, [join('tests', 'e2e', 'scenarios', scenario.file)], {
+      cwd: ROOT, env: { ...process.env, E2E_BASE_URL: baseUrl }, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let pass = 0;
+    let fail = 0;
+    let out = '';
+    let partial = '';
+    const onData = (chunk) => {
+      out += chunk;
+      partial += chunk;
+      const lines = partial.split('\n');
+      partial = lines.pop();
+      for (const line of lines) {
+        if (line.startsWith('PASS')) pass++;
+        if (line.startsWith('FAIL')) fail++;
+        if (line.startsWith('FAIL') || process.env.E2E_VERBOSE === '1') console.log(`[${scenario.name}] ${line}`);
+      }
+    };
+    child.stdout.on('data', onData);
+    child.stderr.on('data', onData);
+    child.on('close', (code) => {
+      const sec = (Date.now() - scenarioStarted) / 1000;
+      writeFileSync(join(OUT, `${scenario.name}.log`), out);
+      // A scenario that dies before its checks (a thrown error, a missing element) is a failure with no FAIL line.
+      const ok = code === 0 && fail === 0 && pass > 0;
+      results.push({ ...scenario, ok, pass, fail, sec, code });
+      console.log(`${ok ? 'PASS' : 'FAIL'}  ${sec.toFixed(0).padStart(4)}s  ${scenario.name}: ${pass} checks passed, ${fail} failed`
+        + `${code !== 0 && fail === 0 ? ` (exited ${code}: tests/.out/e2e/${scenario.name}.log)` : ''}  — ${scenario.what}`);
+      if (!ok && fail === 0) console.log(out.trimEnd().split('\n').slice(-15).map((line) => `      ${line}`).join('\n'));
+      resolve();
+    });
+  });
+}
+
+const queue = [...chosen];
+await Promise.all(Array.from({ length: Math.min(WORKERS, queue.length) }, async () => {
+  while (queue.length) await runScenario(queue.shift());
+}));
+await server?.close();
+
+const checks = results.reduce((sum, r) => sum + r.pass + r.fail, 0);
+const failedChecks = results.reduce((sum, r) => sum + r.fail, 0);
+const failed = results.filter((r) => !r.ok);
+console.log(`---- ${checks - failedChecks}/${checks} checks passed in ${results.length} scenarios, ${((Date.now() - started) / 1000).toFixed(0)} s`
+  + `${failed.length ? `; failed: ${failed.map((r) => r.name).join(', ')} (logs in tests/.out/e2e/)` : ''}`);
+process.exit(failed.length === 0 ? 0 : 1);

@@ -5,4 +5,3 @@ dist/
 .vite/
 .tmp/
 tests/.out/
-tests/wp12/p2/strip-corpus.json

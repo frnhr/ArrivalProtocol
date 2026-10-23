@@ -57,7 +57,7 @@ import {
 
 // Every line the game says or shows outside the flight table (systems/guidance.ts) lives here:
 // ARRIVAL CONTROL's quips, the boot log, the director's rules and hints. Templates take
-// LineVars, never the live state, so tests/wp2/say.test.ts can render every one of them with
+// LineVars, never the live state, so tests/unit/wp2/say.test.ts can render every one of them with
 // worst-case placeholders and check it fits the strip (≤ MAX_LINE_CHARS). Words follow the
 // §3.5 glossary: SHIP / MIND, LOWEST POINT ▼, SAFE ORBIT ring, FUEL, REPAIR CHARGE …
 

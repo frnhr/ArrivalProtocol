@@ -1,6 +1,6 @@
 // The phone layout's breakpoint (§9 WP12 item 3): at or below MOBILE_MAX_PX the desk turns into tabs, the strip into
 // rows of 32 blocks, and the amber screen gets its touch flight bar. CSS cannot import this number, so every width
-// media query in src/styles must use it too (`max-width: 768px` / `min-width: 769px`); tests/wp12/p2/breakpoints.test.ts
+// media query in src/styles must use it too (`max-width: 768px` / `min-width: 769px`); tests/unit/wp12/p2/breakpoints.test.ts
 // checks that, so the two never drift apart.
 export const MOBILE_MAX_PX = 768;
 

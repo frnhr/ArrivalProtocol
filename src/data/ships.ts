@@ -253,7 +253,7 @@ const HALCYON: ShipDef = {
     dvBudgetKmS: 2.4,
     aNominalKmS2: 0.005,
   },
-  // WP7 (the lead's per-ship shrink tuning, swept with tests/wp1-rules and tests/lead1 under AP_SHIP=1):
+  // WP7 (the lead's per-ship shrink tuning, swept with tests/unit/wp1-rules and tests/unit/lead1 under AP_SHIP=1):
   // • at ×25 a tactical second of RETRO sinks ▼ a quarter faster than on ship 1, and from the ring's inner
   //   edge ▼ reaches the surface in about 2.8 tac s, so the ring-edge hand-over with ship 1's 0.6 s
   //   back-off left 3.2–3.6 s of over-hold before IMPACT (ship 1: 4–5 s). Backing off HALCYON_EDGE_BACK_OFF_TAC
@@ -326,7 +326,7 @@ const KESTREL: ShipDef = {
     dvBudgetKmS: 2.1,
     aNominalKmS2: 0.005,
   },
-  // WP9 (the lead's per-ship shrink tuning, swept with tests/wp1-rules and tests/lead1 under AP_SHIP=2): see the
+  // WP9 (the lead's per-ship shrink tuning, swept with tests/unit/wp1-rules and tests/unit/lead1 under AP_SHIP=2): see the
   // constants' WHY in tuning.ts.
   shrink: {
     marginTac: SHRINK_MARGIN_TAC, marginMinTac: SHRINK_MARGIN_MIN_TAC, smallLoopFactor: KESTREL_SMALL_LOOP_FACTOR,
@@ -587,7 +587,7 @@ export function validateShipDef(ship: ShipDef): void {
   if (start.r0 <= ring.max) fail('start.r0 must be outside the ring');
   if (cruiseWarp <= tacticalWarp) fail('cruiseWarp must be faster than tacticalWarp');
   // Lines like "Hello, Unit 47! ARES-VII is about to hit a planet. :)" are checked against the
-  // strip width with a name this long (tests/wp2/say.test.ts).
+  // strip width with a name this long (tests/unit/wp2/say.test.ts).
   if (ship.name.length > NAME_MAX_CHARS) fail(`name '${ship.name}' is longer than ${NAME_MAX_CHARS} characters`);
   if (!(ship.printBaseSec > 0)) fail(`printBaseSec must be positive (got ${ship.printBaseSec})`);
   const { marginTac, marginMinTac, smallLoopFactor, reactionTac, edgeBackOffTac } = ship.shrink;

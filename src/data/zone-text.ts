@@ -1,6 +1,6 @@
 // The words the hazard zones say (WP9, §6.8): the TERMINAL's damage lines and the strip's upcoming event.
 // Kept apart from script.ts (like hollow-text.ts) so systems/zones.ts can import them without the director.
-// Every line is checked against the strip width with worst-case names by tests/wp9 tests (≤ 70 chars).
+// Every line is checked against the strip width with worst-case names by tests/unit/wp9 tests (≤ 70 chars).
 
 import { MAX_LINE_CHARS } from '@data/tuning';
 

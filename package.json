@@ -8,10 +8,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "screenshots": "npx -p playwright@1.50.0 node scripts/capture-screenshots.mjs",
-    "test": "bash tests/run.sh",
-    "test:smoke": "bash tests/smoke.sh",
-    "test:browser": "bash tests/browser.sh"
+    "test": "node tests/unit/run.mjs",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "balance": "node tests/unit/run.mjs --full",
+    "screenshots": "npx -p playwright@1.50.0 node scripts/capture-screenshots.mjs"
   },
   "devDependencies": {
     "@types/node": "^25.8.0",

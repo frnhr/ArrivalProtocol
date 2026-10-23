@@ -683,7 +683,7 @@ export const REACTOR_THREAD_SHARE = 0.25;
 // Thrust Ctrl (C2): a failing controller fires the engine by itself now and then, a dead one
 // as often and sometimes it sticks until SPACE is pressed. Means are in tactical seconds so the
 // rate reads the same at any warp; durTac 1.0 is one clear "whump". ok and degraded: never.
-// WP12 (the 200-seed playthrough, tests/wp12; the lead's steer of 03:10 to move a careless kid's losses from the Core
+// WP12 (the 200-seed playthrough, tests/unit/wp12; the lead's steer of 03:10 to move a careless kid's losses from the Core
 // to the flight): at §3.3's 15% every 25 tac s VESPER's bursts were a nuisance, so a kid who never SWAPs still locked
 // VESPER (87.5%), stayed on through its whole tool hunt, and lost REPAIR to the seeds in half the runs; on LAST LIGHT
 // it then had nothing to fight with and the run ended OVERWRITTEN (sloppy runs completed: 63.5%). At 30% every 10 tac
@@ -1030,7 +1030,7 @@ export const TRANSIT_HIT_MAX = 35;
 // start a ship blind or without REPAIR (pillar 5: fair). A second, worse copy can still be hit lower.
 export const TRANSIT_LAST_COPY_FLOOR = 60;
 // The Core takes at most this much from one hit: it is you, and a 35-point hit to the glitch overlay
-// would turn the boot into static. WP12 (the 200-seed playthrough, tests/wp12): at 15 the run's 18 crossing hits
+// would turn the boot into static. WP12 (the 200-seed playthrough, tests/unit/wp12): at 15 the run's 18 crossing hits
 // wore the Core of a kid who did not heal it to its CORE_RESET_INTEGRITY floor by LAST LIGHT (one thread), and
 // nothing on the strip asks for a Core REPAIR before it is infected (WP11's TODO), so a competent kid spent its
 // MERGE savings healing it on the coasts: only 81 of 200 competent runs reached the choice with MERGE's 20 (the
@@ -1389,7 +1389,7 @@ export const VERB_MV_NEAR_BLOCKS = 64;
 // A cluster HOLLOW has bitten this many times in the same spot is in a trap (WP11 review, the lead's ruling of 21:30):
 // the strip asks to MOVE it behind a WALL before the next bite, ahead of the quieter lines. On LAST LIGHT the root's
 // 2-block GAPs bit C13 and C14 every 12 s, and repairing them again and again drained the charge MERGE needs. WP12 (the
-// lead's note for part 1, 01:35; tests/wp12 LITERAL, the kid who does only what the strip says): at two bites that kid
+// lead's note for part 1, 01:35; tests/unit/wp12 LITERAL, the kid who does only what the strip says): at two bites that kid
 // reached LAST LIGHT's choice with MERGE's 20 charge in 49 of 196 runs (COMPETENT 124 of 200), having paid a second
 // REPAIR on every trapped cluster on every ship; at one, 149 of 199, and its souls woke 95% → 98.5%. The first bite
 // still teaches REPAIR: the ask comes only once that cluster is cured and HOLLOW will bite it there again.
