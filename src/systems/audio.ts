@@ -417,22 +417,33 @@ function vary(spread: number): number {
 // A natural-minor scale (A3–G4) for HOLLOW's blips: a wrong, sad little melody per line.
 const HOLLOW_SCALE = [220, 246.94, 261.63, 293.66, 329.63, 349.23, 392];
 
+// The unit's typing, a soft rounded "bloop" per key. Twice a tick of filtered noise was too sharp on headphones (Fran,
+// post-handover: first a 2.6 kHz relay click, then a softened 2 kHz tick), so there is no noise in it at all now: a sine
+// on a major-pentatonic note (A3–A4, so a line patters in a friendly key, unlike HOLLOW's minor squares), rising over
+// 9 ms and sagging 6% in pitch as it fades, over a quieter octave below for body.
+const SYS_KEY_SCALE = [220, 246.94, 277.18, 329.63, 369.99, 440];
+// Fast lines ask for a key every 25 ms; at that rate even a soft sound buzzes, so a key closer than this to the last
+// one is dropped (at most ~20 a second: a patter). Kept per audio context, since offline measurement renders start
+// their own clocks at 0.
+const SYS_KEY_MIN_GAP_SEC = 0.05;
+const lastSysKeyAt = new WeakMap<BaseAudioContext, number>();
+
+function softKey(mix: Graph, voice: Voice, t0: number, scale: readonly number[], peak: number, decay: number): void {
+  const note = scale[Math.floor(Math.random() * scale.length)]!;
+  const amp = voice.gain(0, mix.buses.ui);
+  const end = swell(amp.gain, t0, peak * vary(0.2), 0.009, decay);
+  const tone = voice.osc('sine', note, t0, end + 0.01, amp);
+  sweep(tone.frequency, t0, note, note * 0.94, end - t0);
+  voice.osc('sine', note / 2, t0, end + 0.01, voice.gain(0.35, amp));
+}
+
 function cueTypeTick(mix: Graph, t0: number, voiceKind: TypeVoice): void {
   const voice = makeVoice(mix.ctx);
   if (voiceKind === 'sys') {
-    // A soft key per character: a puff of noise with its top end cut, over a faint sine for a
-    // hint of tone. Both rise over a few ms: the old relay tick jumped to full level in under a
-    // millisecond, a 2.6 kHz click that hurt on headphones at 40 a second (Fran, post-handover). Level,
-    // brightness and pitch vary a little per key, so a typed line patters instead of
-    // machine-gunning. HOLLOW stays the opposite: low, square and in a minor key (below).
-    const amp = voice.gain(0, mix.buses.ui);
-    const soft = voice.filter('lowpass', 2000 * vary(0.15), 0.6, amp);
-    const body = voice.filter('highpass', 380, 0.6, soft);
-    const end = swell(amp.gain, t0, 0.2 * vary(0.25), 0.0045, 0.024);
-    voice.noise(mix.white, t0, end + 0.005, body);
-    const tone = voice.gain(0, mix.buses.ui);
-    const toneEnd = swell(tone.gain, t0, 0.016 * vary(0.25), 0.005, 0.05);
-    voice.osc('sine', 988 * vary(0.03), t0, toneEnd + 0.005, tone);
+    const lastAt = lastSysKeyAt.get(mix.ctx) ?? -Infinity;
+    if (t0 - lastAt < SYS_KEY_MIN_GAP_SEC) return;
+    lastSysKeyAt.set(mix.ctx, t0);
+    softKey(mix, voice, t0, SYS_KEY_SCALE, 0.44, 0.075);
     return;
   }
   if (voiceKind === 'hollow') {
@@ -446,13 +457,9 @@ function cueTypeTick(mix: Graph, t0: number, voiceKind: TypeVoice): void {
     return;
   }
   if (voiceKind === 'strip') {
-    // Softer and lower than the relay tick, so a typed instruction purrs under the engine
-    // instead of clicking over it.
-    const pitch = 1700 * (1 + (Math.random() * 2 - 1) * 0.1);
-    const amp = voice.gain(0, mix.buses.ui);
-    const band = voice.filter('bandpass', pitch, 1, amp);
-    const end = pluck(amp.gain, t0, 0.38, 0.001, 0.009);
-    voice.noise(mix.white, t0, end + 0.005, band);
+    // The objective strip's typing: the unit's soft key an octave lower, quieter and shorter, so a typed instruction
+    // purrs under the engine (it was a 1.7 kHz noise click, the same sharp recipe Fran heard in the TERMINAL).
+    softKey(mix, voice, t0, SYS_KEY_SCALE.map((note) => note / 2), 0.05, 0.05);
     return;
   }
   // ARRIVAL CONTROL: a cheerful C-E-G sine chime before the line, like an airport announcement.
