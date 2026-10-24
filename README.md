@@ -20,6 +20,7 @@ rendering; the readouts carry the drama.
   with HOLLOW and a choice: PURGE or MERGE.
 
 `DESIGN.md` is the short design; `docs/design-v2.md` is the full one; `docs/playtest-checklist.md` walks a full run.
+`docs/PHASE3.md` is the direction for the next phase.
 
 ## Running
 

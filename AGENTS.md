@@ -2,6 +2,7 @@
 
 Project context for coding agents (Claude Code reads this file when there is no CLAUDE.md). Read `DESIGN.md` before
 making non-trivial changes; the full design is `docs/design-v2.md`, which source comments cite by section (`§4.5`).
+The agreed direction for the next phase is `docs/PHASE3.md`.
 
 ## What this project is
 
@@ -100,7 +101,8 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 ## Next logical steps
 
 1. **Fran's playtest**: one full run by `docs/playtest-checklist.md`.
-2. **The story revision** Fran has in mind (angles that allow longer runs), on top of the current mechanics.
+2. **Phase 3** (`docs/PHASE3.md`): landing instead of printing, a galaxy map, a longer run with a calm opening, a skill
+   tree and a software repository, new endings. The direction is agreed; the details come next, area by area.
 3. **The refactors parked until after the playtest** (discuss the split before writing code): `src/data/script.ts`
    into its text and its director rules, `src/styles/game.css` by surface, `tuning.ts` and `script.ts` grouped by
    domain.
