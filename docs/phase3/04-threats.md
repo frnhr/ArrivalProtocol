@@ -120,11 +120,17 @@ Phase 2's fairness rules carry over. HOLLOW spares a tool that arrived on this s
 a tool's first lesson is never eaten (phase 2 keeps that list in `HollowState.untriedTools`). Its verbs never touch the
 Core, Engine I/O, Nav Plotter or the last working copy of a tool kind.
 
-**Proposed, pending Fran: the last working rm is immune to seeds and the tool hunt too.** The verbs already spare it,
-but a seed's bite or the HUNT stage can still eat it, and since no rm means no win (round-2 decision 12), losing it
-late ends the run's chance at the duel: a resend from layer 6 on never arrives (`02-map.md` §3.9), and the `NO RM`
-warning only shows at SET COURSE to the final ship. So seeds skip it as a target (`seedSpot` re-picks), and the tool
-hunt passes it by, as the verbs do. A spare rm stays food. §10 raises this with question 2.
+**The last rm can die** (round 3: "tough"). Only the verbs spare the last working copy of a tool kind; seeds, the
+HUNT stage's tool hunt and anything else that eats tools may take the last rm. No rm means no win (round-2 decision
+12), so the game says so at once, as information, not protection: the strip stamps `LAST rm DELETED · YOU CAN'T DELETE
+THE ROOT WITHOUT ONE`, the TERMINAL echoes it, and the DESK's REPOSITORY window opens on Rm. A kid can still get a new
+rm, where that is possible:
+- **a spare copy** made earlier with cp (the cheap insurance, and the first thing the verbs and the hunt take);
+- **a repository request** that can still arrive before the final ship (the request preview says `IN TIME`, `ARRIVES
+  SHIP n` or `NEVER`, `02-map.md` §3.9; from layer 6 on it is usually never).
+The salvage pool never offers Rm (`02-map.md` §3.10), so a salvage card is no way back.
+If none of those is left, the run can't be won, and the `NO RM · YOU CAN'T DELETE THE ROOT` warning before SET COURSE
+to the final ship says it once more.
 
 **New: the verbs may `unlink` a skill file** (aligned with `03-skills.md`). Skills join the second of phase 2's fair
 target tiers (`rmTargets`: a spare copy first, else an upgrade or skill file, else an unused ship backup). The unlink
@@ -757,6 +763,18 @@ folding. The MERGE Core heal rule is retired, since no Core grows any more (§3.
   every final ship is FULL (3); mid-run HOLLOW is 046 or a relay stranger, and REASSIGNMENT's unit takes only the final
   ship's root (17).
 
+**Settled, round 3:**
+
+- **The last rm is not protected:** seeds and the tool hunt may take it; the game says so loudly, and a spare copy or a
+  request that can still arrive are the only ways back (§3.3). The early `NEEDED FOR THE FINALE` tag is
+  not adopted.
+- **The first seed ship is never a TIGHT ship you would reach with 0 charge** (`02-map.md`'s rule); later TIGHT ships
+  keep the full squeeze, and 0 charge is TIGHT's price.
+- **Accepted:** the physical traces, at most one extra seed per run, MERGE's 18-block final root, and REASSIGNMENT's
+  +15 charge (§5).
+
+No questions remain open.
+
 **Risks**
 
 - **Seeds as chores.** Mitigated by small counts (0–3 per beam), seeds named after files you care about, TRACE as the
@@ -770,29 +788,13 @@ folding. The MERGE Core heal rule is retired, since no Core grows any more (§3.
   blocks, and the final ship (16 pods, root 16) leaves 45 (phase 2's LAST LIGHT had 48). COMPACT and TIGHT ships hold
   the slot and the margin with 8 pods or fewer (L7).
 - **Seeds and no charge on TIGHT ships.** A seedy beam into a TIGHT ship can arrive with 0 charge, and then REPAIR
-  cannot answer a bite: only rm or a MOVE can. Late in a run its seeds land among the pods. That is Fran's intended
-  squeeze, and the card's `SEEDS TAKE ROOM FROM YOUR CHARGE` (01) makes it visible. At depth 3 (the first seeds, maybe
-  no rm yet) it may feel unfair; see question 1.
-- **No rm, no win** makes the repository's Rm request the run's most important choice. The `NO RM` warning only comes
-  before SET COURSE to a final ship, when a late request rarely arrives in time. Question 2.
+  cannot answer a bite: only rm or a MOVE can. Late in a run its seeds land among the pods. That is TIGHT's accepted
+  price, shown by the card's `NO CHARGE ARRIVES` and `SEEDS TAKE ROOM FROM YOUR CHARGE` (01).
+- **No rm, no win** makes the Rm request and a spare copy the run's most important insurance, and a late loss can end
+  the run's chance at the duel. Accepted as "tough" (round 3); the `LAST rm DELETED` line (§3.3) and the warning before
+  SET COURSE keep it readable.
 - **Bigger files against "a started repair always wins"**: the promise holds only with the no-stack rule and the
   12-block cap. Bigger skills would need a smaller per-block REPAIR term, or a gentler final ship.
 - **The persistent arm could pile up residents** if unvisited ones stay. Counting a kept resident toward the run's
   caps (§3.11) prevents that.
 - **The balance harness** breaks in slice 2 (known, PHASE3 §11).
-
-**New questions, each with my recommendation**
-
-1. **Should the first seed ship avoid TIGHT ships?** At depth 3 a kid may have no rm, and a TIGHT ship may arrive
-   with 0 charge, so a seed there has no answer but MOVE. Recommended: yes, a light rule for `02-map.md`: a hop at
-   depth 3 that can roll seeds never leads to a TIGHT ship with an expected charge of 0. Later TIGHT ships keep the
-   full squeeze.
-2. **Should the `NO RM` warning come earlier?** By the time the final ship is one hop away, a request from far out
-   rarely arrives. Recommended: yes, and it costs nothing: from the first desk where TRACE or a forced boarding is on
-   the map, the REPOSITORY tags Rm `NEEDED FOR THE FINALE` while the unit has none. Decision 12 stands; only the
-   warning moves. It covers a kid who never had rm; question 3 covers one who loses it late.
-3. **May the last working rm be immune to seeds and the tool hunt?** (Proposed in §3.3; decision 12 hinders play
-   here.) No rm means no win, yet a late seed or the HUNT stage can eat the only rm when no resend can arrive, so the
-   run is lost through no visible choice. Recommended: yes. The verbs already spare the last copy of a tool kind;
-   extending that to seeds and the hunt is one rule a kid can say ("it never eats your last rm"), and spare copies
-   stay food.

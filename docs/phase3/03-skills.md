@@ -890,11 +890,6 @@ shown at RUN END, no automatic SKIP chaining; they stay working values.
   and the words `WORKS AS v2` should cover it, but it needs a look in the playtest.
 - **Phase-2 tests and the balance harness** assume the old install path (§6).
 
-**New questions, each with a recommendation**
-
-1. **Should MERGE's 20 charge count from the root's unlock instead of being kept through the whole duel?** A long last
-   hop brings about 12–18, and the duel and the last landing want repairs. Recommended: not yet. Keep the price as it
-   is, and look at how often MERGE is earned in the playtest; if it is almost never, count it at the unlock.
-2. **May a TIGHT ship's 0-charge arrival break "a started repair always wins" for skills?** With no charge, REPAIR
-   cannot answer a seed's bite on a skill; only rm or MOVE can. Recommended: accept it as the TIGHT price, shown on the
-   card and the preview (`NO CHARGE ARRIVES`), since the kid chose the ship knowing it.
+**Settled, round 3:** MERGE's 20 charge stays "kept through the duel" until the playtest decides its timing; a TIGHT
+ship's 0-charge arrival is TIGHT's price, even though REPAIR then cannot answer a seed's bite on a skill (rm or MOVE
+can), and the card says `NO CHARGE ARRIVES`. No questions remain open.
