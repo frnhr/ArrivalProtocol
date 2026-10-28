@@ -603,7 +603,8 @@ HOPE (ark) is TOO LATE by 15 years. This run's best routes: 5 ships 13,200, 6 sh
   (`Swap ✗ 4 YRS LATE` or `✓ CATCHES UP HERE`); its history (`REPORTED HOME` or `2ND RUN ON THE CHART`); and `SHIP 4 OF
   YOUR RUN · 2–3 MORE TO THE FINAL SHIP`. A trace place adds one row (`046'S CACHE IS HERE`). **On a final ship, a
   unit with no working rm gets a red row, `NO RM · YOU CAN'T DELETE THE ROOT`,** and the PACKET repeats it above
-  TRANSMIT ▸. No rm means no win (round 2, 12); the warning means it is never lost silently. At the bottom a
+  TRANSMIT ▸. No rm means no win (round 2, 12): the last rm is not protected and gets no earlier tag (round 3), and a
+  new one can only come from the repository. The warning means it is never lost silently. At the bottom a
   TIMELINE strip, `2467 you leave · 2522 you get there · 2625 ▲ approach · 2629 Swap`, marks each file green before ▲
   and red after it.
 - **REPOSITORY** window: AVAILABLE (file, size, effect, the ETA for the selected destination, the recommendation tag), IN
@@ -686,7 +687,7 @@ for a corrupted resident = layers 6–7**, shown `unknown` 1 time in 2, never on
 schedule, which reads "is any final ship in range of this destination" from me (forced boarding on the beam into a ship
 one hop from a final ship); TRACE and HOLLOW start fresh each run; its per-ship record of eaten drivers (for MERGE); its
 boot lines; its save slice; hitchhikers (root, beam seeds, seeds on deliveries) riding free of link room; the final-ship
-traces of `05-story.md` §3.8 (PURGE's wiped seeds and hungrier FINALE, MERGE's thread and bigger root, the extra seed,
+traces of `05-story.md` §3.8 (PURGE's wiped seeds and hungrier FINALE, MERGE's thread and 18-block root, the extra seed,
 REASSIGNMENT's root). Residents on a waiting ship are the same AI next run and count toward that run's caps.
 
 **I need from `05-story.md`:** world, ship, final-ship and colony names, and the ARES series; the six ring distances;
@@ -806,13 +807,6 @@ is a role, one end in v1, always FULL; up to two TIGHT ships per layer from laye
 TIGHT ships; nothing carries to the next unit; decision 7 holds; no rm means no win, with the warning (§4); the launch
 gap is random, 0–35 years (§3.1); hitchhikers ride free.
 
-**Questions, each with my recommendation.**
-1. **The drift limit** (a waiting ship more than 10 years off the new schedule leaves), which the random gap needs: a gap
-   over 10 years clears the arm. *Recommend yes:* the timing rules only hold within those margins, and "the arm moved
-   on while ARRIVAL CONTROL waited" reads well after a long gap (about 2% of launches).
-2. **The time valve as defined** (opens below 63 pods, the fresh roll's 1st percentile, and adds 11 years). *Recommend
-   yes.* It never opened in the simulation, as you expected, but it costs nothing and catches any arm a future rule
-   change might starve.
-3. **Traces become physical** (`05-story.md` §3.8): they act at the next run's final ship or are gifts that already
-   existed, and none changes the restricted list any more, because ARRIVAL CONTROL learns of an ending about 180 years
-   later. *Recommend yes;* 05 Q1 has the details.
+**Settled in round 3:** the drift limit (§3.12, 2); the time valve as defined (§3.12, 6); physical traces with no
+restricted-list changes (`05-story.md` §3.8); the last rm is not protected: once destroyed, the root can't be deleted
+unless a new Rm arrives, and the only warning is the one before SET COURSE to a final ship. No questions remain open.

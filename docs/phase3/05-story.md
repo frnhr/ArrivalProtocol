@@ -336,7 +336,7 @@ names, mail and the lineage can echo longer.
 | Choice | Next run: gain | Next run: cost | Where | Applied by |
 |---|---|---|---|---|
 | PURGE | The dish by the final ship was wiped: the seeds you carry into the final ship are gone when you wake | HOLLOW is hungrier in the FINALE (bite interval × 0.85): the hunger is all its own | final ship | 04-threats |
-| MERGE | 046·047 left a thread in the dish: +1 Core thread from the final ship's boot | They left hungry: the final root is 2 blocks bigger | final ship | 04-threats |
+| MERGE | 046·047 left a thread in the dish: +1 Core thread from the final ship's boot | They left hungry: the final root is 2 blocks bigger (18) | final ship | 04-threats |
 | SPARE | `046'S CACHE` (the spared one hid it on its own way out, long ago; for 046 on a world of its own trail, which never passed Calder): +15 REPAIR CHARGE and the first of THREAD+ and FIREWALL.sys you lack, and that ship's links carry no seeds | One extra seed at the final ship's boot (once per run) | a ship in layers 3–6, or on 046's trail; final ship | 02-map, 04-threats |
 | SUNSET | `UNIT-047 LEFT A CACHE HERE`: at a world of your last route, the receiver holds what you left as you passed: +15 REPAIR CHARGE and one tool file or upgrade you carried there, never a `.skl` | One extra seed at the final ship's boot (once per run) | a ship on the last route; final ship | 02-map, 04-threats |
 | STAY | Your colony, already years old, sends a supply packet: a ship in layers 3–6 it can reach by light shows `<name> · FOUNDED BY UNIT-047`, +15 REPAIR CHARGE and mail | One extra seed at the final ship's boot (once per run) | that ship; final ship | 02-map, 04-threats |
@@ -550,7 +550,7 @@ WHAT BECOMES OF IT?
 [2] MERGE  > merge unit_046 -> unit_047   It becomes part of you.
     COSTS 20 REPAIR CHARGE · you have 26
     NOW: + 2 eaten drivers come back · their pods land on their own
-    NEXT RUN: + 1 thread at the final ship · − its root 2 blocks bigger
+    NEXT RUN: + 1 thread at the final ship · − an 18-block root
 [3] SPARE  > mv unit_046 -> last_light    Give it the empty ship.
     NEEDS FUEL 20% · you have 23% ✓
     NEXT RUN: + 046's cache on the map · − 1 more seed at the final ship
@@ -734,14 +734,6 @@ tally, epilogue, final card); mid-run HOLLOW is 046 or a stranger, and REASSIGNM
 root; letters to the unit ahead; the ARES series stays unexplained; the epilogue header and the bridging line; MERGE
 restores the eaten drivers and their pods land by the normal rules; the launch gap is random, 0–35 years.
 
-**Questions, each with my recommendation.**
-1. **Physical traces** (§3.8): each acts at the next run's final ship or is a gift that already existed. That drops the
-   trust traces (ARRIVAL CONTROL learns of an ending about 180 years later, so the restricted list no longer moves), and
-   the non-compliant cost becomes one extra seed at the final ship's boot. *Recommend yes:* every trace now survives any
-   gap from 0 to 35 years, and the compliant/non-compliant pattern stays readable. The cost is that PURGE and MERGE now
-   change only the finale, not the whole next run.
-2. **REASSIGNMENT's gain** becomes your kept "allowance for the wait" (+15 REPAIR CHARGE at the final ship's boot),
-   instead of a restricted file freed. *Recommend yes:* it is the only physical gift a compliant unit can leave, and it
-   pairs with its cost at the same place: the root that is you.
-3. **MERGE's next-run Core** (+1 thread, 8 blocks bigger, from RUN START) becomes a thread left in the final ship's dish,
-   with a root 2 blocks bigger. *Recommend yes.*
+**Settled in round 3:** physical traces (§3.8), with no restricted-list changes and at most one extra seed per run
+for the non-compliant choices; REASSIGNMENT's +15 REPAIR CHARGE at the final ship; MERGE's trace (+1 thread at the next
+final ship, an 18-block root). No questions remain open.
