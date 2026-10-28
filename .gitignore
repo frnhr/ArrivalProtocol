@@ -5,3 +5,4 @@ dist/
 .vite/
 .tmp/
 tests/.out/
+__pycache__/
