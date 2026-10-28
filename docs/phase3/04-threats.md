@@ -15,7 +15,7 @@ Times are AI seconds ("AI s", the mind's clock) unless they say tactical seconds
 3. Seeds are scouts: every seed still in memory when a ship ends adds 1 to a visible **TRACE** meter. At TRACE 3,
    HOLLOW boards on the next beam. It boards at the latest on the beam to a ship one hop from the final ship, and never
    before ship 4.
-4. HOLLOW rides in your packet (it costs link budget) and lands in the pod bay at every boot. Its root stays locked
+4. HOLLOW rides in your packet (free, like every hitchhiker) and lands in the pod bay at every boot. Its root stays locked
    until the finale. The phase-2 mechanics return in phase-2 order, one stage per ship it has been aboard.
 5. Every run ends on **the final ship**, the ship in an end slot, where the root duel happens. v1 has one end slot;
    run 1's final ship is LAST LIGHT, and later runs bring new ones. The final ship is always FULL.
@@ -52,9 +52,8 @@ SCAN on POD 07 blocks it. Later: `> THIS IS MY SHIP. GIVE ME MV.CP. THIS IS MY S
 (6 seconds while it fires the engine), or REPAIR it (about 12 charge; it wakes confused and grateful).
 
 **It finds you.** TRACE reaches 3, and every destination on the map says `HOLLOW WILL FIND YOU ON THIS BEAM`. On the
-PACKET screen a chip appears that the kid did not put there (`??? · 8 BLOCKS · NOT YOURS · CAN'T DROP`) and squeezes
-the charge. At boot the unpack reads `100% ... 108%`, and a black locked slab drops into the bay with a thud and a
-screen tear, between POD 11 (`GAP 2`) and POD 12 · OKAFOR (`GAP 1`). It shows `NEXT BITE ?:??` and says nothing for
+PACKET screen a chip appears that the kid did not put there (`??? · 8 BLOCKS · NOT YOURS · RIDES FREE`). At boot the
+unpack reads `100% ... 108%`, and a black locked slab drops into the bay with a thud and a screen tear, between POD 11 (`GAP 2`) and POD 12 · OKAFOR (`GAP 1`). It shows `NEXT BITE ?:??` and says nothing for
 the whole approach. When the capture burn closes the loop: `MIND · SOMETHING IS EATING POD 12`. Phase 2's "it waits
 until you brake" has moved to the act where HOLLOW arrives. After the fight: `> ...047?`. On its next ship it names
 itself.
@@ -179,11 +178,15 @@ ships), spilling into the last pod rack's tail (rack D on FULL ships, rack C on 
 overflow does. If no target has room the target is re-picked; if no file has room, the seed lands in the centre of
 the largest free region (a designed rule, signed off).
 
-**On a tight ship** (`01-landing.md`'s TIGHT class: light ships, a one-rack receiver) the room comes out of the
-charge. 01's unpack order is files, the 12-block floor, the seeds behind their targets, then the rest of the charge,
-so a seedy beam into a tight ship arrives with less charge above the floor (lost loudly, phase 2's `CHARGE
-OVERFLOW`), never with less than the floor. Past that, the no-room rule applies, and on a full receiver the largest
-free region is in the pod racks: late in a run, a TIGHT ship's seeds land in the bay, near the drivers.
+**Seeds ride free.** A beam seed, or a seed riding on a delivery, costs no link room (round-2 decision 20: hitchhikers
+ride free; the delivered file itself still does). It takes room only at the boot, in memory.
+
+**On a tight ship** (`01-landing.md`'s TIGHT class: light ships, a one-rack receiver, and no charge floor, round-2
+decision 8) the room comes out of the charge. 01's unpack order is files, the seeds behind their targets, then the
+charge, so a seedy beam into a TIGHT ship can eat the charge down to 0 (lost loudly, phase 2's `CHARGE OVERFLOW`). On
+COMPACT and FULL ships the 12-block floor comes before the seeds and holds. Past that, the no-room rule applies, and
+on a full receiver the largest free region is in the pod racks: a TIGHT ship's seeds land in the bay, among the pods
+(round-2 decision 9).
 
 The bay is HOLLOW's ground: before it boards, seeds threaten what you can do; after, HOLLOW threatens the pods.
 
@@ -257,13 +260,14 @@ a final ship. It then stays for the run.
 - **Readable in advance:** at MAP time every such destination says `HOLLOW WILL FIND YOU ON THIS BEAM`. The surprise is
   what it does, not that it comes.
 
-**How it enters.** It rides in the packet as an uninvited, locked chip that counts against the link budget like a file
-(the charge filling the rest of the link shrinks by its size). **It crosses at the size it will have on the next
+**How it enters.** It rides in the packet as an uninvited, locked chip that costs no link room: hitchhikers ride free
+on every beam (round-2 decision 20, which reverses the root's link cost; TRACE stays a visible meter). The chip is
+there so the kid sees it come along, not to squeeze the charge. **It crosses at the size it will have on the next
 ship**: its next stage's root (§3.9; 10 on a folded ARRIVAL + WALLS ship) plus the blocks it was fed (§3.7), so the
 PACKET chip already shows the new size (`??? 12 BLOCKS · +2: 2 SEEDS FED IT`), and on the beam into the final ship it
 is 16 blocks. At boot it lands in the bay's root slot (L2), between two drivers with GAPs of 1 and 2.
 
-**On a tight ship.** The root lands in the bay, not in the receiver, so it costs link but not the unit's room
+**On a tight ship.** The root lands in the bay, not in the receiver, so it costs neither link nor the unit's room
 (`03-skills.md` §3.4). Its slot (up to 17 blocks before the finale) plus the bay's 40-block margin is needed on every
 memory class HOLLOW can reach, that is, every class allowed from layer 4 (L7). 01's classes all hold it: TIGHT keeps
 two pod racks for this reason, and its light ships carry at most 5 pods.
@@ -326,19 +330,19 @@ bites, no seeds, no verbs, and what it was eating is let go where it stands (as 
 It asks the kid to finish the landing. When the landing ends come the two choices (FINALE: step 1, step 2), then the
 final ship's LANDING REPORT with any ending line, then the RUN TALLY (decision 23; `02-map.md` owns the order,
 `05-story.md` the choices). An ending may change the tally only where the story justifies it, and then as an explicit
-line. **MERGE may restore
-eaten pods again:** this spec keeps a per-ship record of the drivers HOLLOW ate (pod, family name, ship), so
-`05-story.md` can let 046 give them back; which ones count and at what rate is its call. If landing ends before the
-root is deleted, the LANDING REPORT waits (`EVERY POD IS DOWN — now DELETE THE ROOT`, phase 2's printing wait).
-UNRESOLVED (landing over, no working rm) stays as a code path, and PURGE stays (decided).
+line.
 
-**No rm at the finale (proposed, pending Fran; tied to decision 19).** rm is not in the starting kit, late requests
-rarely arrive, and the tool hunt can eat it, so a kid can reach the duel unable to fight it: UNRESOLVED, no step-1
-choice, and until now no warning. `02-map.md` adds a loud warning on the card and the PACKET before SET COURSE to a
-final ship without rm. My recommendation on top: at the root's unlock, if no working DELETE is aboard, ARRIVAL
-CONTROL grants a one-use `RM.ONCE` (`Please delete it. :)`). It works only on the root, takes the duel's normal 12 s,
-and is the last copy of its kind, so the verbs never touch it. The duel then always happens; a kid who brought rm
-loses nothing.
+**MERGE restores the eaten pods' drivers** (round-2 decision 15). This spec keeps a per-ship record of the drivers
+HOLLOW ate (pod, family name, ship) and hands the final ship's list to `01-landing.md` when MERGE is chosen. In 01's
+§3.17 (THE LAST LANDING) the drivers go back to their pods by radio at 80%, and the pods land on their own before the
+final LANDING REPORT, scored by the normal rules on a `RESTORED BY MERGE` row: with AUTODROP (`03-skills.md` §3.8) and a
+good orbit they can earn full points, without it they drop blind. There is no flat bonus. HOLLOW is asleep in its last
+block, so nothing bites them.
+
+If landing ends before the root is deleted, the LANDING REPORT waits (`EVERY POD IS DOWN — now DELETE THE ROOT`, phase
+2's printing wait). **No rm means no win** (round-2 decision 12): without a working rm the duel can't be won, the ship
+is UNRESOLVED, and step 1 becomes `IT FOLLOWED YOU`. That is never a surprise: before SET COURSE to a final ship, the
+card and the PACKET show `NO RM · YOU CAN'T DELETE THE ROOT` (`02-map.md`). PURGE stays (decided).
 
 ### 3.11 Residents: placement and the map line
 
@@ -418,8 +422,11 @@ resident may hide behind `RESIDENT: unknown`, with no clue on the map.
   4. **The starting kit answers it:** SCAN blocks every lock, and REPAIR cures it (about 12 charge). rm deletes it if
      the kid has rm. No answer needs a file the kid could have skipped.
   5. **Never on a crowded or starved ship:** no corrupted resident sits on an ark, and a hidden one never sits on a
-     TIGHT ship, which may arrive on the 12-charge floor while the cure costs about 12. Its ship carries no modifier
-     beyond its template (M4).
+     TIGHT ship, which may arrive with no charge at all while the cure costs about 12. If 02's placement puts the
+     layer 6–7 resident on a TIGHT ship, it is shown (`reported faulty`), never hidden. With up to two TIGHT ships per
+     layer from layer 5 (round-2 decision 7) and one ark in every second layer, at least one of layers 6–7 always has
+     a slot that is neither, so the hide roll always has somewhere to go. Its ship carries no modifier beyond its
+     template (M4).
 - **On the ladder** it is the middle tier come back late: a deletable one-ship foe, now usually beside HOLLOW. One deal
   per ship still holds. It is the late game's one unannounced threat; seeds, TRACE, the boarding and the finale stay
   readable in advance.
@@ -498,7 +505,7 @@ ladder stages fit.
 |---|---|---|
 | Seed size; GAP to target; WALL behind | 2; 1; 4 blocks | `SEED_BLOCKS`, `SEED_TOOL_GAP_BLOCKS`; the WALL makes a seed bite only the file it is named after. |
 | First seed bite; interval; drain (before HOLLOW) | 30 s of calm; 25 s; 2.5 %/s | HALCYON woke at 30 and bit every 25; weaker than HOLLOW's 3.5; worst 2.5 × 2 = 5 (no stacking), and heal 18.5 beats 1.5 × 5. |
-| Root sizes | 8 → 16 (§3.9) | Phase 2's R and R16 with steps between; 16 at most keeps the link workable. |
+| Root sizes | 8 → 16 (§3.9) | Phase 2's R and R16 with steps between; 16 at most keeps the root slot inside the bay's margin. |
 | Resident bursts | every 14 tac s, 25%, 1 tac s | Gentler than a failing Thrust Ctrl (10 s, 30%): it also has a second hand. |
 | Resident locks | from 30 s, every 40 s, 3 s telegraph | Phase 2's verb drill; 40 s leaves room for the flight. |
 | Resident cure | about 12 charge | About one bite fight: a real choice against a 6 s DELETE. |
@@ -564,7 +571,7 @@ keyed by stage instead of by ship.
   - every class allowed from layer 4 holds the root slot (up to 17 blocks) and the bay's 40-block margin, because
     HOLLOW can be aboard from depth 4 (layers 1–3 are reached at depth 3 at most); 01's three classes do;
   - every final ship is FULL (the 16-block root, its walls and 16 pods);
-  - the unpack order files, floor, seeds, rest of the charge on every class (§3.4).
+  - the unpack order files, floor (none on TIGHT ships), seeds, rest of the charge (§3.4).
 
 **From `02-map.md` I need:**
 - **M1 (confirmed).** A hop's noise, 0–3, from the noise clouds its line crosses, and the card lines. My seed table
@@ -577,9 +584,9 @@ keyed by stage instead of by ship.
   (§3.12). For the late surprise: the layer 6–7 corrupted resident's card reads `RESIDENT: unknown` 1 time in 2,
   never on a TIGHT ship, and its ship gets no extra modifier. The map author has agreed to show `unknown` by this
   rule.
-- **M5 (confirmed).** HOLLOW's root counts in the link budget once aboard. `02-map.md` budgets the locked files at about
-  44 blocks against the weakest link of 82; with the root (at most 16) and `046.log` (2) they come to about 62, so they
-  still fit, with about 20 blocks left for charge on that weakest link.
+- **M5.** Hitchhikers ride free (round-2 decision 20): the root, beam seeds and seeds on deliveries cost no link room.
+  The locked unit files (44, plus `046.log` 2) are 46 blocks (54 after MERGE) against the weakest link of 82, so about
+  36 blocks are left for charge or other files on that link.
 - **M6.** The TRACE tally at the ship's end, seeds landing at BOOT, a left resident's leftovers as the SALVAGE draft,
   and the save keeping TRACE, HOLLOW's presence, age, root size and played stages, whether THE DEAL happened, residents'
   fates, whether the sleeper was found, and the drivers HOLLOW ate per ship (for MERGE, §3.10).
@@ -587,7 +594,8 @@ keyed by stage instead of by ship.
 - **M8 (confirmed).** ARRIVAL CONTROL recommends Mv at the first desk and Rm at the second (while you have none), and a
   request from layers 1–2 reaches the next ship about 90% of the time (`02-map.md` is tuning to that). No confirm and no
   guarantee beyond that tag (decision 19).
-- **M9. The persistent arm.** The next run is the next core version on the same arm about a year later, and the arm
+- **M9. The persistent arm.** The next run is the next core version on the same arm, 0–35 years later (2–3 on
+  average; `02-map.md` owns the gap), and the arm
   keeps its state. Threat state is per run (TRACE starts at 0, HOLLOW boards anew). Residents on unvisited ships may
   persist; if so, they count toward that run's caps (§3.11).
 
@@ -623,7 +631,7 @@ eaten drivers (§3.10).
 | SPARE | the links of 046's ship carry no seeds |
 
 Who HOLLOW is on the next run: **mid-run, always a stranger from the relays (UNIT-031 first) or 046,** because the
-last unit is still alive, a year ahead, while the next one meets HOLLOW. REASSIGNMENT's identity applies only to the
+last unit is still alive, a few years ahead, while the next one meets HOLLOW. REASSIGNMENT's identity applies only to the
 final ship's root: by then the last unit's story has caught up. After SUNSET, STAY or CONTACT the final root is a
 stranger too; otherwise phase 2's ghost rules.
 
@@ -632,7 +640,7 @@ damage sources on drivers and instruments; to `03-skills.md`, what SENTRY acts o
 size cap; to `05-story.md`, events (`seed-landed`, `seed-deleted`, `trace-changed`, `hollow-boarding`,
 `hollow-boarded`, the phase-2 HOLLOW events, `resident-lock`, `resident-deleted`, `resident-cured`, `sleeper-woken`,
 `last-block`). Threats never touch the score directly: only through drivers, instruments and fuel. A score effect of
-an ending (MERGE's restored pods) is `05-story.md`'s, shown as its own tally line.
+an ending comes only through landing: MERGE's restored pods land and score by the normal rules (§3.10).
 
 ## 6. Phase 2: reused, changed, removed
 
@@ -650,12 +658,11 @@ an ending (MERGE's restored pods) is `05-story.md`'s, shown as its own tally lin
 - **`faults.ts`**: the ENGINE I/O FAULT stays. **`glitch.ts`**: `glitchBurst` reused for boarding and residents.
 - **`fs-tools.ts`, `tool-targets.ts`**: new targets and refusals (a resident, the sleeper, `sleep.lock`).
 - **`carry.ts`**: transit hits come from `02-map.md`'s formula; `packUnit` (which packs your files for the beam)
-  carries the root as a locked member that counts against the link; `layoutCarried` places beam seeds.
+  carries the root as a locked member outside the link count, and seeds likewise; `layoutCarried` places beam seeds.
   **`transmit.ts`**: the uninvited chip and the TRACE line.
 - **`finale.ts`**: the duel and the sleeping last block stay; printing becomes landing; the choices come when the
-  landing ends, before the final LANDING REPORT and the RUN TALLY (`02-map.md`'s order); the proposed `RM.ONCE` grant.
-  MERGE's restore of eaten clusters becomes a restore of eaten drivers, if `05-story.md` keeps it, from the per-ship
-  record.
+  landing ends, before the final LANDING REPORT and the RUN TALLY (`02-map.md`'s order). MERGE's restore of eaten
+  clusters becomes a restore of eaten drivers from the per-ship record, whose pods then land (`01-landing.md`).
 - **`memory-ops.ts`**: reused as is. **`attitude.ts`**: its seam waits for a later resident.
 - **`src/data/ships.ts`**: `HollowDef` per stage instead of per ship; `validateHollowDef` checks the largest infectable
   file other than the Core (its no-stack bound stays as it is); "every ship has a root" goes; "LAST LIGHT is last"
@@ -691,9 +698,9 @@ only on the final ship.
 5. **Residents**: (a) corrupted (ghost source, locks, its deal, DELETE) and the `RECEIVER CLOSED` line; (b) the REPAIR
    cure; (c) the one that left; (d) the sleeper; (e) the late surprise (needs a and the map's card rule); (f) the
    bypass animation.
-6. **SURVEY**: nothing from this spec. 7. **Endings**: the hand-over at the last block, the proposed `RM.ONCE`, and
-   the eaten-driver record for MERGE. 8. **Rebalance**: seed odds, TRACE threshold, the ladder's numbers, the root's
-   link cost, the surprise share.
+6. **SURVEY**: nothing from this spec. 7. **Endings**: the hand-over at the last block, and the eaten-driver
+   record handed to landing for MERGE. 8. **Rebalance**: seed odds, TRACE threshold, the ladder's numbers, the
+   surprise share.
 
 ## 9. Deviations from PHASE3.md
 
@@ -713,24 +720,28 @@ only on the final ship.
 7. **The final ship is a role, not a place** (Fran's decision 3): FINALE, the forced boarding and short-run folding
    key on it, as does the ending, which now comes before the tally (decision 23).
 8. **§6.2, the bypass**: flavour and a tell, no input, no fail state.
-9. **Additions not in PHASE3**: TRACE as a named meter, the root's link cost, the REPAIR cure, the 12-block cap and
+9. **Additions not in PHASE3**: TRACE as a named meter, the REPAIR cure, the 12-block cap and
    the no-stack drain rule (all in §3.3 or §10).
 
 ## 10. Risks and questions for Fran
 
-**Settled on 2026-10-28** (`DECISIONS.md`), folded into the sections above:
+**Settled, round 1** (`DECISIONS.md`): rm by ship 3 has no confirm and no guarantee (19); REPAIR heals a corrupted
+resident, the sleeper stays, and a late surprise may hide behind `unknown` (21); the final ship is a role (3); the
+ending comes before the tally (23); ship memory varies (9); TRACE is a visible meter (20); the sleeper in about 60% of
+runs and disguised seeds from depth 5 (22); `unlink` on skills (17). Signed off: the no-room seed rule, short-run
+folding, and REPAIR healing a MERGE Core at its 16-block rate.
 
-- **rm by ship 3** (19): no confirm and no guarantee; ARRIVAL CONTROL's `RECOMMENDED FOR YOU` tag is enough. Without rm
-  a seed is still beatable (REPAIR, mv), and it reports home: the fair cost of a visible choice.
-- **Residents** (21): REPAIR heals a corrupted one; the sleeper stays on its ship; a corrupted one may be a late
-  surprise behind `unknown` (§3.12).
-- **The final ship is a role** (3), the ending comes before the tally (23), and ship memory varies (9): §3.8, §3.10,
-  §3.11, L7.
-- **Accepted:** TRACE as a visible meter and the root's link cost, to revisit at the rebalance (20); the sleeper in
-  about 60% of runs and disguised seeds from depth 5 (22); `unlink` on skills (17).
-- **Signed off:** a seed with no room lands in the largest free region; short-run folding (THE DEAL on the final ship,
-  WALLS into HOLLOW's first ship, forced boarding one hop before the final ship); REPAIR heals a MERGE Core at its
-  16-block rate.
+**Settled, round 2**, folded into the sections above:
+
+- **Hitchhikers ride free** (20): the root, beam seeds and delivery seeds cost no link room (§3.4, §3.8, M5).
+- **No charge floor on TIGHT ships** (8): seeds can eat a TIGHT ship's charge down to 0 (§3.4).
+- **No rm means no win** (12): no one-use rm at the finale; the map's `NO RM` warning stays (§3.10).
+- **MERGE** (15): the eaten drivers come back and their pods land, scored by the normal rules (§3.10).
+- **Up to two TIGHT ships per layer from layer 5** (7): the hidden resident still has room (§3.12).
+- **Accepted as specified:** nothing carries to the next unit, threat state included (5); seeds among the pods on a
+  full TIGHT receiver (9); the late surprise resident (11); several final ships may make HOLLOW board earlier, and
+  every final ship is FULL (3); mid-run HOLLOW is 046 or a relay stranger, and REASSIGNMENT's unit takes only the final
+  ship's root (17).
 
 **Risks**
 
@@ -740,20 +751,17 @@ only on the final ship.
   `02-map.md`'s simulations make it rare (on the persistent arm, 5-ship routes are never the best; 7 ships about 58%,
   6 about 42%).
 - **Late ships may overload MIND** (HOLLOW, seeds, a resident and 16 pods), and the late surprise adds one unannounced
-  foe beside HOLLOW. Caps: no resident on a final ship, no surprise on an ark, one deal per ship, the surprise's grace,
-  lock and verb clocks frozen at TACTICAL. AUTODROP (`03-skills.md`) is the other relief. The playtest decides.
-- **Dense bays** (`01-landing.md` risk 5). Pods are capped at 16, and `01-landing.md` §3.16 budgets the biggest
-  HOLLOW bays on FULL ships: a layer 4–7 ark (16 pods) with a 14-block root leaves 47 free blocks, and the final ship
-  (16 pods, root 16) leaves 45 (phase 2's LAST LIGHT had 48). COMPACT and TIGHT ships hold the slot and the margin
-  with 8 pods or fewer (L7).
-- **Tight ships and seeds.** A seedy beam into a TIGHT ship eats the charge above the floor, and late in a run its
-  seeds land among the pods by the no-room rule. **Confirmed for 01:** that is fine. The rule puts a seed in the centre
-  of the largest free region (on TIGHT, the pod racks' 40-block margin), so it starts with free blocks on both sides,
-  is named on the ECC line, and rm or a MOVE answers it before it reaches a driver. It is the intended squeeze, but at
-  depth 3 (the first seeds) it may feel like a double tax. If so, the first seed ship could skip TIGHT ships; I would
-  wait for the playtest.
-- **The root's link cost** squeezes charge, the main resource; question 7 proposes letting it ride free into the
-  final ship now.
+  foe beside HOLLOW. Caps: no resident on a final ship, no corrupted resident on an ark, no hidden one on a TIGHT ship,
+  one deal per ship, the surprise's grace, lock and verb clocks frozen at TACTICAL. AUTODROP is the other relief.
+- **Dense bays** (`01-landing.md` risk 5). On FULL ships a layer 4–7 ark (16 pods) with a 14-block root leaves 47 free
+  blocks, and the final ship (16 pods, root 16) leaves 45 (phase 2's LAST LIGHT had 48). COMPACT and TIGHT ships hold
+  the slot and the margin with 8 pods or fewer (L7).
+- **Seeds and no charge on TIGHT ships.** A seedy beam into a TIGHT ship can arrive with 0 charge, and then REPAIR
+  cannot answer a bite: only rm or a MOVE can. Late in a run its seeds land among the pods. That is Fran's intended
+  squeeze, and the card's `SEEDS TAKE ROOM FROM YOUR CHARGE` (01) makes it visible. At depth 3 (the first seeds, maybe
+  no rm yet) it may feel unfair; see question 1.
+- **No rm, no win** makes the repository's Rm request the run's most important choice. The `NO RM` warning only comes
+  before SET COURSE to a final ship, when a late request rarely arrives in time. Question 2.
 - **Bigger files against "a started repair always wins"**: the promise holds only with the no-stack rule and the
   12-block cap. Bigger skills would need a smaller per-block REPAIR term, or a gentler final ship.
 - **The persistent arm could pile up residents** if unvisited ones stay. Counting a kept resident toward the run's
@@ -762,25 +770,11 @@ only on the final ship.
 
 **New questions, each with my recommendation**
 
-1. **Should "late" also need depth 5?** Two long hops reach layer 6 at depth 4, so a surprise can come one ship after
-   the first seeds' act. Recommended: no, layers only. The card is rolled per slot, the tell, grace and starting kit
-   make it fair at any depth, and depth 4 in layer 6 is already a route an experienced kid chose.
-2. **How common is the surprise?** Recommended: 1 in 2 of the layer 6–7 corrupted residents (at most one per run).
-   A route meets that slot only sometimes, so it stays rare enough to be talked about.
-3. **With several final ships, may HOLLOW board "early"?** A destination one hop from any final ship forces the
-   boarding, even if the kid then goes elsewhere. Recommended: accept it. HOLLOW comes a ship earlier, never later, and
-   no lookahead is needed. The alternative (board before the chosen final ship) needs the route in advance.
-4. **Is every final ship the FULL memory class?** Recommended: yes. The duel needs the 16-block root's slot, walls and
-   16 pods; a smaller final ship would mean a weaker FINALE that no rule could keep fair.
-5. **Does threat state carry across runs on the persistent arm?** Recommended: no. TRACE starts at 0 and HOLLOW boards
-   anew each run; the predecessor's trail and ghost are story (`05-story.md`), and REASSIGNMENT already puts you in
-   the next final ship's root.
-6. **Grant a one-use rm at the finale?** (Tied to decision 19: no rm guarantee.) Without rm the duel cannot be fought:
-   UNRESOLVED, no step-1 choice. Recommended: yes, as proposed in §3.10. ARRIVAL CONTROL grants `RM.ONCE` at the root's
-   unlock if no working DELETE is aboard, on top of `02-map.md`'s warning before SET COURSE. Decision 19 stays as it is
-   everywhere else; only the finale, which every run must be able to finish, gets the safety net.
-7. **Should the root ride free into the final ship now, not at the rebalance?** On the last hop (54 LY, link 87) a
-   skill-carrying unit arrives on the floor charge, yet MERGE needs 20 charge kept through the duel, so the root's 16
-   blocks on that one beam quietly close an ending. Recommended: yes. On the beam into the final ship the root stays a
-   visible chip (`??? 16 · RIDES FREE · IT WANTS YOU THERE`) but costs no link; on every other beam it keeps its cost,
-   where "it rides with you" is the lesson. The rebalance can still tune the mid-run cost.
+1. **Should the first seed ship avoid TIGHT ships?** At depth 3 a kid may have no rm, and a TIGHT ship may arrive
+   with 0 charge, so a seed there has no answer but MOVE. Recommended: yes, a light rule for `02-map.md`: a hop at
+   depth 3 that can roll seeds never leads to a TIGHT ship with an expected charge of 0. Later TIGHT ships keep the
+   full squeeze.
+2. **Should the `NO RM` warning come earlier?** By the time the final ship is one hop away, a request from far out
+   rarely arrives. Recommended: yes, and it costs nothing: from the first desk where TRACE or a forced boarding is on
+   the map, the REPOSITORY tags Rm `NEEDED FOR THE FINALE` while the unit has none. Decision 12 stands; only the
+   warning moves.

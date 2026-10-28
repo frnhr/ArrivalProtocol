@@ -46,7 +46,7 @@ The purchase from one screen earlier is a visible power spike on the very next s
 - **The setup.** CORMORANT is a standard ship with 9 pods, two LZs and POOR site data. The unit carries AUTODROP v2,
   AUTOBURN v1 with LOCK 270, SENTRY v1 and SURVEY v1. HOLLOW boarded on this beam (CORMORANT is one hop from the
   final ship, `04-threats.md` §3.8). Because this first ship is one hop from the final ship, its ARRIVAL stage takes
-  WALLS along (`04-threats.md` §3.9), and its 10-block root rode in the packet.
+  WALLS along (`04-threats.md` §3.9), and its 10-block root rode free in the packet.
 - **The flight:**
   1. Early in the coast the NAV PLOT shows a bright `LOCK` bracket. The kid presses [B] inside it (`AUTOBURN ARMED —
      it brakes at ▼ in 4:10`), presses [F] to SKIP, and TABs into the MIND.
@@ -144,6 +144,9 @@ Each cell shows the price in cycles and the size in blocks.
 - **Lost skills.** A skill file that was eaten, unlinked, deleted or left behind (for a long hop or a tight ship) is
   gone, and its version with it.
   - The next visit offers `RESTORE v3 · 8 CYCLES`: half of what the branch cost, rounded up (decision 16).
+  - **Packed at a lower version** (round-2 decision 10): on the PACKET a skill may cross as a lower version (`PACK AS
+    v1`), a smaller file. Only the versions above it are lost, and restoring them costs half of their price, rounded
+    up (AUTODROP v3 packed as v1: half of 5 + 8, so 7).
   - Skill files cannot be copied (phase 2 already refuses COPY on upgrade files, `src/systems/tool-targets.ts`), so a
     loss is really felt, as PHASE3 §7 wants for AUTODROP.
 
@@ -170,43 +173,44 @@ Each cell shows the price in cycles and the size in blocks.
   less, in `01-landing.md`'s memory classes (whole racks of 64 blocks; FULL stays 384). The **unit room** is what the
   next ship's class gives the unit: in 01's current draft, 152 blocks on FULL and COMPACT ships and 88 on TIGHT (light)
   ships, whose receiver is one rack.
-  - **The rule (01's):** the files must fit the link, and the files plus the 12-block charge floor must fit the unit
-    room. Charge fills what both leave. The floor holds on every class, so "arrives with minimal charge" (Fran's
-    words) means the floor.
+  - **The rule (01's, with round-2 decisions 8 and 20):** the unit's files must fit the link, and the room. On FULL
+    and COMPACT ships the 12-block charge floor must fit the room too; on TIGHT ships there is no floor, so files ≤ 88
+    and the charge may arrive at 0 ("no or minimal REPAIR CHARGE", decision 9). Charge fills what both leave.
+  - **Hitchhikers ride free:** HOLLOW's root, beam seeds and seeds on deliveries cost no link room on any beam (a
+    delivered file itself still does). The root lands in the bay's root slot, so it costs no room either.
   - **On FULL and COMPACT ships only the link binds:** the links run 82–123, and 123 + 12 is well inside 152.
-  - **On a TIGHT ship the room binds** once the files pass 76 blocks. The packet screen and the TRAINING preview show
+  - **On a TIGHT ship the room binds** once the files pass 88 blocks. The packet screen and the TRAINING preview show
     whichever is smaller (§4).
-  - **Legal packets:** the locked unit files (`046.log` included) are 46 blocks, 58 with the floor, which fit every
-    class. HOLLOW's root lands in the bay's root slot, not in the receiver, so it counts against the link only.
+  - **Legal packets:** the locked unit files (`046.log` included) are 46 blocks (54 after a MERGE's bigger Core),
+    which fit every link and every class. On a TIGHT ship the files may take all 88 blocks: the card says `NO CHARGE
+    ARRIVES`, and TRANSMIT ▸ asks `ARRIVE WITH NO REPAIR CHARGE?` (01).
 - **Why tight ships are early ships.** A fresh unit is about 72 blocks with `046.log`, and it grows by up to 34 as the
-  skills reach v3, plus deliveries. At depth 1–3 a TIGHT ship mostly costs charge. Later, every 10 blocks over 76 is
-  roughly one v3 skill, or an AI tool and a .bak, left behind. Fran's intent holds by construction: tight ships are
-  viable early in a run, or they cost files.
+  skills reach v3, plus deliveries. At depth 1–3 a TIGHT ship mostly costs charge, down to none. Later, every 10 blocks
+  over 88 is roughly one v3 skill, or an AI tool and a .bak, left behind. Fran's intent holds by construction: tight
+  ships are viable early in a run, or they cost files.
 - **What a kid leaves for a tight ship.** TIGHT ships are the light ones, with 3–5 pods, so AUTODROP is the natural
   skill to leave behind, and SURVEY when the card says GOOD site data. A left skill is lost until RESTORE (half price),
-  so a tight ship late in a run is a real price. It is never a trap: the card and the AHEAD row show the room before SET
-  COURSE. Q2 in §10 proposes a gentler middle option (packing a skill at a lower version).
+  so a tight ship late in a run is a real price; packing a skill at a lower version (§3.3) is the gentler middle
+  option. It is never a trap: the card and the AHEAD row show the room before SET COURSE.
 - **Why bigger costs**, all from existing rules:
   - **Link budget:** files take the link first, and REPAIR CHARGE fills what is left (§6.9). `02-map.md` sets the link
     at round(146 − 1.1 × d) blocks for a hop of d light-years: 123 at 21 LY, 113 at 30, 86 at 55, and 82 at the 58-LY
     maximum.
-    - **What is locked:** a full phase-2 unit is 70 blocks, 44 of them locked. Phase 3 adds two locked passengers:
-      `046.log` (2 blocks, on every hop, `05-story.md` §3.2), and HOLLOW's root once it is aboard or is forced on this
-      beam (8 to 16 blocks, `04-threats.md` §3.8–3.9). The locked floor is therefore 46, or up to 62 with HOLLOW.
+    - **What is locked:** a full phase-2 unit is 70 blocks, 44 of them locked. Phase 3 adds `046.log` (2 blocks, on
+      every hop, `05-story.md` §3.2), so the locked files are 46. HOLLOW's root is locked too, but rides free.
     - **On a short hop** (113 blocks), a full unit with `046.log` and 23 blocks of skills (95) leaves 18 blocks of
-      charge, or 10 with an 8-block root aboard.
+      charge, with or without HOLLOW aboard.
     - **On a long hop to an ark** (86 blocks), the same unit does not fit at all. The kid must leave 9 or more blocks
       behind before TRANSMIT: for example Telemetry (6) and Repair.bak (4), which leaves 1 charge.
-    - **The floor:** the locked files alone (at most 62) fit the weakest link (82), so a legal packet always exists.
-      With HOLLOW aboard, though, they do not fit together with a full skill set (62 + 34 = 96). The legal packet may
-      then require leaving a skill behind. That is why skills are droppable, with RESTORE as the way back (§3.3).
-      Skills make long hops cost more charge, AI tools or skills, which adds to the long hop's cost in `02-map.md`
-      §3.7.
+    - **The floor:** the locked files alone (46) fit the weakest link (82), so a legal packet always exists. A full
+      unit with a full skill set (72 + 34 = 106) fits no long hop, so skills are droppable or packable at a lower
+      version, with RESTORE as the way back (§3.3). Skills make long hops cost more charge, AI tools or skills, which
+      adds to the long hop's cost in `02-map.md` §3.7.
   - **Transit hits** are weighted by size, and the floor of 60 protects only tool kinds, not skills.
   - **Repair** costs size × 2 ÷ 100 charge per point, so 30 points on a 10-block skill cost 6 charge.
   - **More to bite:** a bigger file is a bigger neighbour for HOLLOW and for seeds.
 - **The packet screen** (`src/systems/transmit.ts`) offers skills last in its safest-to-drop order. Each skill chip
-  names its loss: `AUTODROP.skl v3 (10) → drop pods by hand · RESTORE 8`.
+  names its loss: `AUTODROP.skl v3 (10) → drop pods by hand · RESTORE 8`, with `PACK AS v1 (4) · RESTORE 7` beside it.
 
 ### 3.5 Graded damage
 
@@ -396,6 +400,23 @@ launch. A pass is one orbit, with one window per LZ.
   - On a 16-pod ark (six or seven windows by hand, by `01-landing.md` §3.2's estimate), the gap between v3 and no
     AUTODROP at all is the loss PHASE3 wants "really felt".
 
+**Restored pods after MERGE** (round-2 decision 15; `01-landing.md` §3.17, THE LAST LANDING). After MERGE, the
+drivers HOLLOW ate go back to their pods by radio at 80% integrity, and the pods land on their own before the final
+LANDING REPORT, from the orbit the kid left, with an automatic SKIP between windows ([ENTER] skips it). The kid has no
+hands in it, so the AUTODROP aboard, at its effective version (§3.5), decides how well they land, through 01's §3.14
+hook and the normal drop:
+
+- **v3** plans them like any pods: into the LZs that still need them, through the next windows, centred, and through
+  LOAD NEXT. On a good orbit with healthy instruments they can earn full points.
+- **v2** flies them centred, each into the next window of the LZ that still needs the most; it cannot plan the split
+  across passes, so a late pod may go mislanded.
+- **v1** only centres: each pod leaves at the centre of the next window, whichever LZ that is, so the split is luck.
+- **No AUTODROP** (none aboard, OFF from damage, or no drop solution): they drop blind, as `01-landing.md` §3.17
+  defines (no LZ choice, a wide spread: about 0.75 of a full pod on a GENTLE planet).
+
+They score by the normal rules, on the report's `RESTORED BY MERGE` row. This gives AUTODROP, and keeping it healthy
+through the duel, one more reason: it is the only time a skill acts after the ending is chosen.
+
 ### 3.9 SURVEY v1–v3
 
 `01-landing.md` §3.13 owns how surveying plays. This spec owns what each version unlocks.
@@ -456,9 +477,10 @@ loses versions to damage like any skill. Reasons: §8.5 gives tools to the repos
   four skills. A `.skl` file is never sent by the repository: skills are what make a caretaker independent, so they are
   on §8.5's restricted list permanently. Skill versions are separate from tool versions (`TOOL_MAX_VERSION` in
   `src/data/fs-tools.ts`).
-- **The reset.** The next run is the next core version (UNIT-048), on the same arm about a year later, and the arm
-  keeps its state (`02-map.md` owns that). The unit does not: NEW RUN empties the bank, the skills and the demos
-  (§4.5: meta stays small). A new core is untrained, which is also the fiction.
+- **The reset.** The next run is the next core version (UNIT-048), on the same arm 0–35 years later (2–3 on average),
+  and the arm keeps its state (`02-map.md` owns that). The unit does not: NEW RUN empties the bank, the skills and the
+  demos (§4.5: meta stays small; round-2 decision 5: nothing carries). A new core is untrained, which is also the
+  fiction.
 - **The archive.** `lastUnit` (`src/systems/meta.ts`) records the final skills, their versions and AUTOBURN's accuracy.
   It is used for the REASSIGNMENT trace (next run's final-ship root is you, and hunts your highest-version skill first,
   `04-threats.md` §5) and for the next run's TRAINING flavour line (`LAST UNIT TRAINED: AUTODROP v3 · SENTRY v2`).
@@ -470,44 +492,45 @@ A player who prefers landing, on `02-map.md` §3.14's route.
 - **Ship sizes** are the map's: ARES-VII 3 pods, the standard ships HALCYON 5, KESTREL 6 and CORMORANT 9, the ark
   VESPER 16, and LAST LIGHT 16. The links are the map's for each hop.
 - **"Skills"** is the skill blocks carried on the next hop.
-- **"Room"** is that hop's link minus the files: a 70-block phase-2 unit, `046.log` (2), the skills, and HOLLOW's root
-  once it is aboard. What is left is what the charge gets. The 70-block unit is an upper bound: early in a run the
-  real unit is smaller (65 files at ship 1, 73 at depth 2, `01-landing.md` §3.16), which only adds charge.
+- **"Room"** is that hop's link minus the files: a 70-block phase-2 unit, `046.log` (2) and the skills. HOLLOW's root
+  rides free (round-2 decision 20). What is left is what the charge gets. The 70-block unit is an upper bound: early in
+  a run the real unit is smaller (65 files at ship 1, 73 at depth 2, `01-landing.md` §3.16), which only adds charge.
 - **Memory:** by 01's recommended classes this route has no TIGHT ship (ARES-VII, HALCYON and KESTREL are COMPACT;
   VESPER, CORMORANT and LAST LIGHT are FULL), so only the link binds.
 - **HOLLOW** does not board early on this run, because TRACE stays below 3. It is forced onto the beam into CORMORANT,
   which is one hop from the final ship (LAST LIGHT on this route). A root crosses a beam at the size it will have on
-  the next ship (`04-threats.md`). CORMORANT folds ARRIVAL and WALLS together, so the root rides into CORMORANT at
-  WALLS's 10 blocks, and into LAST LIGHT at the FINALE's 16.
+  the next ship (`04-threats.md`): 10 blocks into CORMORANT (which folds ARRIVAL and WALLS together) and 16 into LAST
+  LIGHT, a visible chip that costs no link room.
 
 | After ship | Pods | Q | Earned | Bank | Opens | Trained | Spent | Left | Skills | Next hop: link → room |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 ARES-VII | 3 | 83% | 1 + 4 = 5 | 5 | the two roots | AUTODROP v1 | 3 | 2 | 4 | 123 → 47 |
 | 2 HALCYON | 5 | 100% | 1 + 5 = 6 | 8 | FLIGHT and LANDING in full | AUTODROP v2, AUTOBURN v1 | 8 | 0 | 13 | 117 → 32 |
 | 3 KESTREL (first seeds) | 6 | 70% | 1 + 3 = 4 | 4 | SENTRY | SENTRY v1, LOCK 270 | 3 | 1 | 17 | 86 → −3: Repair.bak stays behind → 1 |
-| 4 VESPER (ark) | 16 | 85% | 1 + 4 = 5 | 6 | SURVEY (CORMORANT has POOR site data) | SURVEY v1 | 2 | 4 | 20 | 113, root 10 aboard → 15 |
-| 5 CORMORANT | 9 | 80% | 1 + 4 = 5 | 9 | — | AUTODROP v3 | 8 | 1 | 23, 13 carried | 87, root 16 → −20: see below → 0 |
+| 4 VESPER (ark) | 16 | 85% | 1 + 4 = 5 | 6 | SURVEY (CORMORANT has POOR site data) | SURVEY v1 | 2 | 4 | 20 | 113 → 25 (root 10 rides free) |
+| 5 CORMORANT | 9 | 80% | 1 + 4 = 5 | 9 | — | AUTODROP v3 | 8 | 1 | 23, 20 carried | 87 → −4: see below → 3 |
 | 6 LAST LIGHT | 16 | 90% | 5, unspent | — | — | — | — | — | — | — |
 
 This run earns 30 (25 of them spendable) and spends 24 of the tree's 54. The two long hops are where the skills
 press:
 
 - **Before VESPER,** the kid leaves Repair.bak behind to fit the 86-block link.
-- **Before LAST LIGHT,** the packet is 20 blocks over: 68 for the unit and `046.log`, 16 for the root, and 23 for the
-  skills, against a link of 87.
-  - SURVEY.skl stays behind first, because the card shows LAST LIGHT's site data as GOOD. The packet is still 17
-    blocks over.
-  - Then the kid must choose. This lander keeps AUTODROP v3 for the 16-pod finale. It leaves behind AUTOBURN.skl (7, so
-    LAST LIGHT's capture is flown by hand), Telemetry (6, so the digits scramble) and AI Comms (4, so there is no BEAM
-    OUT). The packet then fits exactly, with no charge.
-  - Other legal packets give up AUTODROP.skl (10) and SENTRY.skl (3) instead, with AI tools.
+- **Before LAST LIGHT,** the packet is 4 blocks over: 68 for the unit and `046.log` and 23 for the skills, against a
+  link of 87. The 16-block root rides free beside them.
+  - SURVEY.skl stays behind first, because the card shows LAST LIGHT's site data as GOOD.
+  - Then AI Comms (4): there is no ship after the final one, so losing BEAM OUT costs least here. 3 blocks of charge
+    cross, and AUTODROP v3 and AUTOBURN make the finale with the kid.
 - **Both times almost no charge crosses,** so the unit arrives with the stars' credit (+6 each) or the floor of 12,
-  whichever is more.
+  whichever is more (both are FULL ships). Before the round-2 change the root's 16 blocks made the last hop 20 over
+  and cost AUTOBURN and Telemetry too; that tension is gone. What is left is MERGE's price: 20 charge kept through the
+  duel, against an arrival of 12–18. MERGE still asks for a planned finale (a shorter last hop, a lighter packet, or
+  three stars on the ship before), which is the price working as intended.
 - **Had the route taken a TIGHT ship** (room 88): PETREL, a light ship at depth 2, would cost only charge. 01's
   depth-2 unit (the starting kit, Mv and a 6-block skill: 73 files) arrives with 15 charge; this lander's 4-block
-  AUTODROP leaves 71 files and 17 charge. A light ship at depth 5 instead of
-  CORMORANT would need 68 + 20 + 12 = 100, so 12 blocks stay behind: AUTODROP.skl (7, a 5-pod ship needs it least),
-  SURVEY.skl (3) and Telemetry or AI Comms. The same kind of ship is cheap early and costly late.
+  AUTODROP leaves 71 files and 17 charge. A light ship at depth 5 instead of CORMORANT takes 68 + 20 = 88 blocks of
+  files exactly, so the unit arrives with no charge at all (TIGHT ships have no floor). Any charge means leaving
+  files: AUTODROP.skl (7, a 5-pod ship needs it least) buys 7, or packing it as v1 buys 3. The same kind of ship is
+  cheap early and costly late.
 
 A pilot with the same cycles gets a different run:
 
@@ -519,10 +542,10 @@ A pilot with the same cycles gets a different run:
 - after ship 5: AUTOBURN v3.
 
 That pilot flies the last ships hands-free from the start of the coast, and drops the pods with AUTODROP v1 only. On
-the last hop the pilot's packet is also 20 blocks over (72 + 19 skill blocks + the 16-block root, against 87). The
-likeliest sacrifice is AUTODROP v1 (4) and SENTRY.skl (3), plus Telemetry, Repair.bak and AI Comms (14), which leaves
-1 block of charge. At LAST LIGHT, AUTOBURN v3 then puts the ship where every drop fits, and the pilot drops the 16 pods
-by hand.
+the last hop the pilot's packet is also 4 blocks over (72 + 19 skill blocks against 87; the root rides free). The
+likeliest sacrifice is AI Comms (4), and the packet fits exactly. At LAST LIGHT, AUTOBURN v3 puts the ship where every
+drop fits, and AUTODROP v1 centres the 16 pods while the pilot holds [L]. After a MERGE, v1 centres the restored pods
+too, but leaves their split to luck (§3.8).
 
 ## 4. Screens, UI, audio, juice
 
@@ -549,14 +572,15 @@ packet) → BEAM.
   follows the selection, so trying destinations on the chart shows what each one asks of the skills.
 - **The packet preview** uses the smaller of the selected hop's link and the next ship's unit room, names which one
   binds (`LINK 86` or `ROOM 88 · TIGHT`), and counts everything locked.
-  - **It counts** `046.log` on every hop, and HOLLOW's root when it is aboard or the selected beam forces it (`HOLLOW
-    WILL FIND YOU ON THIS BEAM`, `04-threats.md` §3.8).
-  - **Examples:** `FILES 72 + SKILLS 17 · LINK 86 · 3 BLOCKS OVER` before VESPER. Before LAST LIGHT, the root shows as
-    its own pink term: `FILES 68 + ??? 16 + SKILLS 23 · LINK 87 · 20 BLOCKS OVER`. Into a tight ship the room binds
-    and the root is not in it: `FILES 68 + SKILLS 20 + FLOOR 12 · ROOM 88 · TIGHT · 12 BLOCKS OVER`. With room to
-    spare it reads `… · ROOM FOR 17 CHARGE`.
-  - **Colours:** it turns the warning colour below the arrival floor of 12. It turns red when the files do not fit,
-    and then names the cheapest things to leave behind.
+  - **It counts** `046.log` on every hop. HOLLOW's root, when it is aboard or the selected beam forces it (`HOLLOW
+    WILL FIND YOU ON THIS BEAM`, `04-threats.md` §3.8), shows as a pink chip that adds nothing: hitchhikers ride free.
+  - **Examples:** `FILES 72 + SKILLS 17 · LINK 86 · 3 BLOCKS OVER` before VESPER. Before LAST LIGHT: `FILES 68 +
+    SKILLS 23 · LINK 87 · 4 BLOCKS OVER · ??? 16 RIDES FREE`. Into a tight ship the room binds and there is no floor:
+    `FILES 68 + SKILLS 20 · ROOM 88 · TIGHT · NO CHARGE ARRIVES`. With room to spare it reads `… · ROOM FOR 17
+    CHARGE`.
+  - **Colours:** it turns the warning colour below 12 charge (the floor on FULL and COMPACT ships; on TIGHT ones the
+    charge that would arrive). It turns red when the files do not fit, and then names the cheapest things to leave
+    behind or pack lower.
   - **Why this matters:** the size cost is visible at the moment of the choice, and so is the cost of a long hop.
 - **Controls:** arrow keys and Enter inside the window, keys 1 and 2 on visit 1, and UNDO beside each purchase. On a
   phone (768 px or less) the window is one of the desk's tabs, with one accordion per branch and the newest branch
@@ -627,17 +651,19 @@ On a version loss the badge flickers for 400 ms; with reduced motion it changes 
 1. **The per-ship report** with colonists aboard, landed correctly, mislanded, off-site, not launched, and points.
    Q's denominator is colonists aboard.
 2. **Each manual launch's timing error** against the bracket centre, in tac s, for AUTODROP's demos.
-3. **A pure fit query for a hypothetical orbit:** for a round orbit of radius r, with the current Sensor Interp and
-   Nav Plotter factors and a given driver factor, each LZ's sure length. The window list covers only the current orbit, and AUTOBURN v3's chooser
-   needs the hypothetical one; §3.2's formulas already contain it.
+3. **A pure fit query for a hypothetical orbit:** for a round orbit of radius r, with the current Sensor Interp and Nav
+   Plotter factors and a given driver factor, each LZ's sure length. The window list covers only the current orbit, and
+   AUTOBURN v3's chooser needs the hypothetical one; §3.2's formulas already contain it.
 4. **Guidance slots:** AUTODROP's rows ahead of the manual drop rows and behind the alarms. AUTOBURN v3's `GOES LOWER`
    row takes GO LOWER's place (L9) while v3 is engaged.
 5. **The POD BAY window:** room for AUTODROP's per-LZ rows and plan table, and the AUTODROP key.
 6. **Survey parameters** that SURVEY's versions change: GROUND hidden (`GROUND ?`) below v2, and for v3 the swath
    (`SURVEY_SWATH_DEG` × 2) and the thread hold switched off.
 7. **The memory classes** (decision 9; 01 §3.16, in progress): each class's unit room (152 on FULL and COMPACT, 88 on
-   TIGHT in the current draft), the rule files + 12 ≤ room, the floor on every class, the locked 58 fitting every
-   class, and the final ship always FULL (`04-threats.md` asks the same for the root duel).
+   TIGHT), the rule files + 12 ≤ room on FULL and COMPACT ships and files ≤ 88 on TIGHT ones (no floor there, round-2
+   decision 8), the locked 46 (54 after MERGE) fitting every class, and the final ship always FULL.
+8. **MERGE's restored pods** (round-2 decision 15; answered by 01 §3.17): drivers back at 80%, the automatic SKIP
+   between windows, the blind drop without AUTODROP, and §3.14's hook for AUTODROP's version to fly them (§3.8).
 
 **What this spec needs from `02-map.md`:**
 
@@ -672,8 +698,8 @@ COMPACT ships, E alone on TIGHT ones) and the 24-block tail hold the unit as one
 5. Optional: a seed kind that lands beside the biggest skill file, so that size bites.
 6. **For the packet preview:** the root's size on each beam, and whether the selected beam forces boarding (§3.8
    there). The root crosses at the size it will have on the next ship, as `04-threats.md` states. In §3.12 that is 10
-   into CORMORANT (a ship that folds ARRIVAL and WALLS together) and 16 into the final ship. It lands in the bay, so it
-   counts against the link but not the unit room.
+   into CORMORANT (a ship that folds ARRIVAL and WALLS together) and 16 into the final ship. It rides free and lands
+   in the bay, so it counts against neither the link nor the unit room; the preview only shows it.
 7. **The departed resident's salvage deck** draws its skill card through this spec's grant rules (§5, "What this spec
    provides").
 
@@ -820,14 +846,18 @@ Against PHASE3 §13:
 
 ## 10. Risks and questions for Fran
 
-**Settled on 2026-10-28** (`DECISIONS.md`), folded into the sections above:
+**Settled, round 1** (`DECISIONS.md`): circularize does both (15, §3.6); memory varies by ship (9, §3.4); AUTOBURN v1
+is bought (14); a lost skill is restored at half price (16); `unlink` may delete a skill, telegraphed and blockable
+(17); the first-pick guarantee is signed off. **Deferred** (18): cycles from landing points only, unspent cycles only
+shown at RUN END, no automatic SKIP chaining; they stay working values.
 
-- **Circularize does both** (decision 15): GREEN, then ROUND on a second press (§3.6).
-- **Memory varies by ship** (decision 9): the packet's second limit, the unit room (§3.4).
-- **Accepted:** AUTOBURN v1 is bought (14), a lost skill is restored at half price (16), and HOLLOW's `unlink` may
-  delete a skill file, telegraphed and blockable (17). The first-pick guarantee is signed off.
-- **Deferred** (18): cycles from landing points only, unspent cycles only shown at RUN END, no automatic SKIP
-  chaining. They stay as working values.
+**Settled, round 2**, folded into the sections above:
+
+- **Hitchhikers ride free** (20): HOLLOW's root and seeds cost no link room (§3.4, §3.12, §4).
+- **No charge floor on TIGHT ships** (8): the packet's second limit is files ≤ 88 there, and charge may arrive at 0.
+- **MERGE's restored pods land** (15): the AUTODROP aboard decides how well (§3.8).
+- **PACK AS v1** (10): a skill may cross at a lower version (§3.3).
+- **Nothing carries to the next unit** (5): the tree resets, and the next unit launches 0–35 years later (§3.11).
 
 **Risks**
 
@@ -835,48 +865,36 @@ Against PHASE3 §13:
   already fits STANDARD and WIDE brackets (`01-landing.md` §3.2), so v3 does little more than v2. Its value grows with
   damage and NARROW sites, that is, on the late ships. If that feels too thin for 8 cycles, v3 could also take over
   the decay trims of any orbit.
-- **ROUND may go unpressed.** GREEN is what flight asks for, so a kid may never press [B] a second time. That is fine
-  in flight. In landing, ROUND's value (the same drop width on every pass) shows only where a bracket barely fits. If
-  the playtest shows nobody rounds, the POD BAY window can name it when a fit is marginal.
+- **ROUND may go unpressed.** GREEN is what flight asks for, so a kid may never press [B] a second time. In landing,
+  ROUND's value (the same drop width on every pass) shows only where a bracket barely fits. If the playtest shows
+  nobody rounds, the POD BAY window can name it when a fit is marginal.
 - **Automation can empty the SHIP screen.** With AUTOBURN v3 and AUTODROP v3, little is left to do in amber on the last
   ships. That is intended (the MIND fight grows), and "never steers" keeps the corrections. It is a playtest item.
 - **Snowballing:** good landings pay more cycles, which buy better skills. The narrow range per ship (1 to 6), the floor
   of 1, and a v3 price above any single ship keep the gap between a strong and a weak player at about one version.
-- **The link and memory squeeze.** With the map's link of round(146 − 1.1 × d) and 01's memory classes:
+- **The link and memory squeeze** (map's link round(146 − 1.1 × d), 01's classes, hitchhikers free):
   - **Short hops (20–30 LY, 113–124 blocks)** carry a full unit, `046.log` and 20 skill blocks (92), and still bring
-    21–32 charge into a full-class ship. That is 8–16 less once HOLLOW's root rides along.
+    21–32 charge into a FULL or COMPACT ship, HOLLOW or not.
   - **Long hops (51–58 LY, 82–90 blocks)** leave little or no room. With 20 skill blocks the unit fits none of them,
     and on the 55-LY hop even 15 skill blocks are one block too many. The sample run (§3.12) leaves files behind on
     both of its long hops.
-  - **The worst link case is a long hop into the final ship with HOLLOW aboard.** The root crosses at the FINALE's 16
-    blocks, so even a unit with no skills does not fit 87 blocks (72 + 16 = 88). In the sample, the lander gives up
-    AUTOBURN.skl, Telemetry and AI Comms for the finale.
-  - **Tight ships late in a run** bind on memory instead of the link. The root does not count there (it lands in the
-    bay), but every skill does, and a left skill is lost until RESTORE. A tight ship at depth 5 or later can cost a v3
-    skill and 4–8 cycles to win it back. That is Fran's intent ("viable only early"), but if kids simply stop visiting
-    tight ships after depth 3, those ships become dead nodes on the map. Q2 below is the proposed relief.
-  - **The legal minimum:** the locked files (at most 62 with the root) always fit the weakest link (82), and the
-    locked 58 with the floor fit every class's room (01). A legal packet always exists.
-
-  Recommendation: keep the map's formula and 01's classes, and show the full preview (root, floor and the binding
-  limit) in the TRAINING window. At the rebalance, look first at the last hop: `04-threats.md`'s option of letting the
-  root ride free into the final ship, or the link slope (the map spec's knob).
+  - **The last hop into the final ship** is now an ordinary long hop: in the sample, 4 blocks over instead of 20, paid
+    with SURVEY and AI Comms. What is left of the old tension is MERGE: it needs 20 charge kept through the duel, and
+    a long last hop brings almost none, so the kid arrives with 12–18 (the floor or the stars' credit). MERGE still
+    bites; it asks for a planned finale, which I think is right for its price.
+  - **TIGHT ships late in a run** bind on memory: files ≤ 88 and no floor, so a skill-heavy unit arrives with no
+    charge or leaves skills. That is Fran's intent; packing at a lower version softens it. If kids still stop visiting
+    TIGHT ships after depth 3, they become dead nodes on the map.
+  - **The legal minimum:** the locked 46 fit every link and every class, so a legal packet always exists.
 - **Readability:** health, version and effective version are three numbers on one file. The labelled ticks on the bar
   and the words `WORKS AS v2` should cover it, but it needs a look in the playtest.
 - **Phase-2 tests and the balance harness** assume the old install path (§6).
 
 **New questions, each with a recommendation**
 
-1. **Should the next core version inherit anything of the tree?** The next run is UNIT-048 on the same arm a year
-   later, and the arm keeps its state. Recommended: no. NEW RUN resets the tree, and the archive gives only a flavour
-   line and REASSIGNMENT's final-ship root. A carried tree would snowball across runs, which the persistent arm
-   already risks.
-2. **May a skill be packed at a lower version** for a tight ship or a long hop? The PACKET's skill chip would offer
-   `PACK AS v1` (AUTODROP v3, 10 blocks, crosses as v1, 4 blocks). The higher versions are lost, and RESTORE later
-   costs half of their price (v2 and v3 of AUTODROP: half of 13, so 7). Recommended: yes. It turns an all-or-nothing
-   loss into a graded one, as graded damage already does, and keeps a tight ship late in a run a real choice instead of
-   a skip. It needs no new screen: one button per skill chip.
-3. **Does the charge floor of 12 hold on tight ships?** Decision 9 says a tight ship may mean arriving "with no or
-   minimal REPAIR CHARGE", but the floor of 12 is signed off. Recommended: the floor holds on every class, so
-   "minimal" means the floor. With no charge at all, a seed's first bite on a skill could not be answered by REPAIR,
-   which breaks phase 2's "a started repair always wins".
+1. **Should MERGE's 20 charge count from the root's unlock instead of being kept through the whole duel?** A long last
+   hop brings about 12–18, and the duel and the last landing want repairs. Recommended: not yet. Keep the price as it
+   is, and look at how often MERGE is earned in the playtest; if it is almost never, count it at the unlock.
+2. **May a TIGHT ship's 0-charge arrival break "a started repair always wins" for skills?** With no charge, REPAIR
+   cannot answer a seed's bite on a skill; only rm or MOVE can. Recommended: accept it as the TIGHT price, shown on the
+   card and the preview (`NO CHARGE ARRIVES`), since the kid chose the ship knowing it.
