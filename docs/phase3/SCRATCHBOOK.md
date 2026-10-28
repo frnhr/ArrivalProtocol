@@ -40,8 +40,8 @@ open are in `README.md`.
 
 ## Endings and story
 
-- **The ending is chosen before the score screen** (decision 23), but no ending changes the score in v1: MERGE's
-  returned pods appear only in the epilogue (round 2).
+- **The ending is chosen before the score screen** (decision 23). MERGE restores the eaten pods'
+  drivers, and the pods land on their own (by AUTODROP, or blind), scoring by the normal landing rules (round 2).
 - **Traces under the one-year gap.** An ending can't physically reach the next run before its final ship, so traces
   are game rules no character quotes, and the trace places must not show anything before it could exist
   (`05-story.md` §3.8).

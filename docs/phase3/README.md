@@ -74,7 +74,7 @@ story looks outward. Caretakers left at relay dishes with too little charge star
 
 **The ending** is chosen at the final ship, before the score screen: the FINALE (the root duel, then what becomes of
 HOLLOW, PURGE, MERGE or SPARE, and of you, SUNSET, STAY, REASSIGNMENT, later CONTACT), then the final LANDING REPORT and
-the RUN TALLY. No ending changes the score in v1 (MERGE's returned pods appear only in the epilogue). Each choice has its own epilogue and one trace in the next run.
+the RUN TALLY. MERGE restores the pods HOLLOW ate, which then land (by AUTODROP or blind) and score by their landing. Each choice has its own epilogue and one trace in the next run.
 
 ## Decisions for Fran
 
@@ -83,8 +83,8 @@ hinders good gameplay is raised again with the argument.
 
 **The 20 questions the rework raised were answered on 2026-10-28** (round 2 in `DECISIONS.md`). Several change the
 specs, which have not been updated for them yet: a random launch gap of 0–35 years, hitchhikers (HOLLOW's root and
-seeds) riding free, no charge floor on TIGHT ships, up to two TIGHT ships per late layer, no rm meaning no win, and
-MERGE with no score effect.
+seeds) riding free, no charge floor on TIGHT ships, up to two TIGHT ships per late layer, no rm meaning no win (with a
+warning before the last hop), and MERGE's restored pods landing on their own.
 
 Decision 18 (cycles from points only, unspent only shown, no SKIP chaining) is deferred; the specs keep it as a working
 value.

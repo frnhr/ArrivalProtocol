@@ -108,9 +108,13 @@ The questions are numbered as the README listed them after the rework.
 - **8. Charge on TIGHT ships may be 0.** The arrival floor of 12 is waived on TIGHT ships, as decision 9 said ("no or
   minimal REPAIR CHARGE"). It still holds on COMPACT and FULL ships. This amends the signed-off starting-kit rule.
 - **12. No rm means no win.** There is no one-use DELETE at the finale. Without a working rm the root duel can't be
-  won. This keeps decision 19.
-- **15. MERGE has no score effect.** The pods HOLLOW ate come back only in the epilogue. No ending changes the score in
-  v1; decision 23 still allows one later where the story justifies it.
+  won. This keeps decision 19. The loud warning stays: before SET COURSE to a final ship, the card and PACKET show
+  `NO RM · YOU CAN'T DELETE THE ROOT` when the unit has no working rm.
+- **15. MERGE restores the eaten pods' drivers, and the pods land; the score follows the landing.** After MERGE the
+  drivers HOLLOW ate (the people) come back, and their pods land on their own, before the final LANDING REPORT. With
+  AUTODROP (and a good orbit, healthy instruments, and so on) they can land for full points; without it they drop
+  blind, and they score whatever they land as, by the normal rules. No flat score bonus. (Corrected after first
+  being answered as "no score effect".)
 - **20. Hitchhikers ride free, always.** HOLLOW's root, beam seeds and seeds riding on deliveries cost no link room on
   any beam (the delivered file itself still does). This reverses the link cost in decision 20; TRACE stays a visible
   meter.
