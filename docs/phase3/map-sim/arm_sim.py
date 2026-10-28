@@ -133,13 +133,17 @@ def ark_year(rng, arm, s):
     arm[s]['A'] = earliest - ARK_MARGIN - rng.randint(0, 4)
 
 
-def set_final_year(arm):
+def set_final_year(arm, floor=None):
+    """floor: the last final ship's year + START_GAP, so two final ships never share a year at one end."""
     best = 0
     for s in POS:
         if s != FINAL and arm[s] and D[(s, FINAL)] <= BEAM_RANGE:
             best = max(best, arm[s]['A'] + D[(s, FINAL)])
     y = best + LL_MARGIN
-    arm[FINAL]['A'] = int(math.ceil(y / 5.0) * 5)
+    y = int(math.ceil(y / 5.0) * 5)
+    if floor is not None:
+        y = max(y, floor)
+    arm[FINAL]['A'] = y
 
 
 def check(arm):
@@ -301,7 +305,7 @@ def update_arm(rng, prev, visited, run, start, stats):
                 if plan[s] == 'ark':
                     ark_year(rng, trial, s)
         if plan.get(FINAL):
-            set_final_year(trial)
+            set_final_year(trial, prev[FINAL]['A'] + START_GAP)
         bad = check(trial)
         if not bad:
             stats['attempts'] = attempt
@@ -444,6 +448,7 @@ def chain(seed, runs, policy, persistent=True):
         row['stats'] = stats
         row['authored_left'] = sum(1 for s in AUTHORED if arm[s]['authored'])
         row['final_new'] = arm[FINAL]['born'] == n
+        row['final_year'] = arm[FINAL]['A']
         rows.append(row)
         visited = set(route)
     return rows

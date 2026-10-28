@@ -10,9 +10,9 @@ numbers are starting values for `src/data/tuning.ts`, each with a one-line WHY h
   CONTROL sits) to **the final ship** at the tip. The final ship is a role: on run 1 it is LAST LIGHT. The chart shows it
   from the title card on.
 - **The next run is the next core version** (UNIT-047, then UNIT-048), on the same arm with the same ships, **one year
-  later**. The arm keeps its state. Ships the last unit visited are done, and their colonies are a year old when you pass.
-  Ships it skipped mostly wait for you. A few were saved by other cores or came in on their own. New ships have
-  **reported home** in their place, and every run's first ship is a new calm ship near Earth (ARES-VIII, ARES-IX, …).
+  later**: each unit is a year behind the last. The arm keeps its state. Ships the last unit visited are taken, and
+  their colonies show their real age as you pass. Ships it skipped mostly wait for you. For a few, another core is on its
+  way, or they will come in on their own. New ships have **reported home** in their place, and every run's first ship is a new calm ship near Earth (ARES-VIII, ARES-IX, …).
 - **The steady-arm rule** keeps runs comparable. Every world holds one ship at RUN START. A skipped ship stays at most 3
   runs. New ships restore the arm's shape: the ark pattern, the share of light ships, the story and resident quotas. In
   12,000 simulated consecutive runs the best route is worth the same as on a fresh roll. It does not drift over 200 runs,
@@ -50,20 +50,20 @@ TIME`. SET COURSE opens the blue PACKET screen: salvage cards, the packet agains
 HITS · ECC FIXES 1 WHILE YOU SLEEP (31 YRS) → 2 LAND`. TRANSMIT ▸, white-out, and HALCYON's boot opens with `> ASLEEP IN
 HALCYON'S RECEIVER · 2321 → 2352 · 31 YEARS` (the years roll as it types), then `> DELIVERY: mv (arrived 2337)`.
 
-**Later in the run.** At KESTREL (ship 3, 2467) the desk opens with a falling tone, `2 SHIPS APPROACHED WITHOUT A
-CARETAKER`, and ALBATROSS turns grey. The chart offers VESPER, an ark of 16 pods with `ENGINE FAULT`, 55 LY away across a
+**Later in the run.** At KESTREL (ship 3, 2467) the desk opens with a falling tone, `2 SHIPS NOW OUT OF YOUR
+REACH`, and ALBATROSS turns grey. The chart offers VESPER, an ark of 16 pods with `ENGINE FAULT`, 55 LY away across a
 hatched noise cloud, 103 years early, `LINK 86 · 8 HITS (ECC fixes 4) · NOISE LOW · 1 · SEEDS 0–2`. The repository
 answers honestly: `Swap · ARRIVES 2629 · VESPER APPROACH 2625 · 4 YRS LATE → follows your route`. The layer-4 ships are
 closer on CLEAN beams, and one of them is light: `MEMORY 256 · TIGHT · ROOM FOR YOU 88 · LEAVE 9 BEHIND`. A big ship
 flown without SWAP, a gentle ship on a clean beam, or a small ship that won't fit everything: the kid weighs it.
 
 **The next run.** The title reads `UNIT-048 · YEAR 2301`. The chart is the same arm, and it remembers. A faint trail runs
-along UNIT-047's route, and every ship on it is tagged `TAKEN · UNIT-047 IS A YEAR AHEAD OF YOU`. As the years pass, each
-turns into a colony marker: at the second desk, `RIVERSIDE · 1 YEAR OLD · UNIT-047`. ALBATROSS is still there, grey no
-longer, with a small tag, `2ND RUN ON THE CHART`; the kid skipped it last time and can go for it now. Where ships have
+along UNIT-047's route, and every ship on it is tagged `TAKEN · UNIT-047 GETS THERE FIRST`. As the galaxy year passes
+each of its landings, the ship turns into a colony marker with its real age: at the second desk (2352), `RIVERSIDE · 52
+YEARS OLD · UNIT-047`. ALBATROSS is still there, out of reach no longer, with a small tag, `2ND RUN ON THE CHART`; the kid skipped it last time and can go for it now. Where ships have
 gone, new ones blink in, tagged `REPORTED HOME`. Two old ones are gone, and the chart says why in one line each
-(`PETREL · SAVED BY ANOTHER CORE`). Ship 1 is ARES-VIII, a calm three-pod ship at the same world as ARES-VII. At the tip
-the beacon has a new name: `FINAL SHIP · LODESTAR · 3020`. LAST LIGHT came in last run.
+(`PETREL · ANOTHER CORE IS ON ITS WAY`). Ship 1 is ARES-VIII, a calm three-pod ship at the same world as ARES-VII. At
+the tip the beacon has a new name: `FINAL SHIP · LODESTAR · 3021`. LAST LIGHT came in last run.
 
 ## 3. Rules and starting numbers
 
@@ -80,7 +80,8 @@ the beacon has a new name: `FINAL SHIP · LODESTAR · 3020`. LAST LIGHT came in 
   a ship and jumps only at the beam.
 - **The run's start year** is the year of its first ship's approach: RUN_START_YEAR (2300) on run 1, then
   START_GAP_YEARS (1) more each run. WHY: Fran's "the next core, about a year later"; one whole year keeps the sums
-  plain and makes every colony of the last unit a year old when you pass it.
+  plain ("048 is a year behind 047"). The last unit's colonies are as old as the galaxy year says: RIVERSIDE (2300) is
+  52 years old when UNIT-048 reaches a layer-2 ship.
 
 ### 3.2 The arm
 
@@ -148,8 +149,10 @@ smaller one.
   two in adjacent layers. WHY: an ark one layer after another ark would be reachable from it by a one-layer hop.
 - **The first ship** (w0, layer 1) approaches at the run's start year and has 3 pods. **The final ship** has 16 pods, and
   its year is the latest of A(S) + d over every ship that has it in range, plus FINAL_MARGIN_YEARS = 20, rounded up to a
-  multiple of 5 (3020 on run 1). WHY: every layer-7 ship and every layer-6 ship within range can reach it, with room for
-  the years that new ships add.
+  multiple of 5 (3020 on run 1), and at least the last final ship's year at that end plus START_GAP_YEARS. WHY: every
+  layer-7 ship and every layer-6 ship within range can reach it, with room for the years that new ships add; and a new
+  final ship comes in a year after the last one, so two never share a year at one end, and a unit posted there after
+  its run has waited a year when the next one arrives (`05-story.md`).
 - **Ship size.** At most 16 pods (`01-landing.md` §3.16). Light 3 + ⌊layer / 3⌋ (3–5), standard 3 + layer (5–10), ark
   round(2.2 × (4 + layer)) capped at 16 (15 in layer 3). The arm holds LIGHT_SHARE = 40% light ships among its non-ark
   ships, and **from layer 5 on at most one light ship per layer**. WHY: 40% is the old mix; the cap keeps a non-TIGHT way
@@ -210,7 +213,7 @@ waiting, and only new ships are given what is missing. Threat and story placemen
 | What | Where | How many on the arm | Notes |
 |---|---|---|---|
 | POOR site data (`01-landing.md`) | layer 5 and later | layer 5: 1 in 3; layers 6–7: 1 in 2, rolled per new ship | The final ship's site data is authored by `01-landing.md` |
-| Corrupted resident | layers 4–7, CAPTURE template, never an ark | at most 2: one in layers 4–5 and one in layers 6–7, never in adjacent layers, never linked by a reachable hop | Layers 4–5: `RESIDENT: reported faulty`, always. **Layers 6–7 are late (`04-threats.md`): the card reads `RESIDENT: unknown` 1 time in 2**, with no other clue. Never on VESPER, a `?` ship or a final ship; its ship takes no extra modifier and never ENGINE FAULT |
+| Corrupted resident | layers 4–7, CAPTURE template, never an ark | at most 2: one in layers 4–5 and one in layers 6–7, never in adjacent layers, never linked by a reachable hop | Layers 4–5: `RESIDENT: reported faulty`, always. **Layers 6–7 are late (`04-threats.md`): the card reads `RESIDENT: unknown` 1 time in 2**, with no other clue, and a hidden one is never on a TIGHT ship (a late TIGHT ship is already a squeeze; an unannounced resident there would be a double ambush). Never on VESPER, a `?` ship or a final ship; its ship takes no extra modifier and never ENGINE FAULT |
 | Resident that left (`RESIDENT: unknown`) | layers 2–7 | 5: the gone-resident `?` ship and 4 ordinary ships, at least one in layer 2 | Its leftovers replace that ship's salvage deal (§3.10) |
 | Sleeping resident (`RESIDENT: unknown`, only ever) | layers 3–7 | at most 1. If none is waiting, a run's new ships get one with chance 45% | 45% gives a sleeper on the arm in about 60% of runs (decision 22), because a placed sleeper waits about 1.7 runs |
 | No resident | the first ship, every final ship, and every other ship not picked above | about half the arm | |
@@ -261,7 +264,7 @@ With every ship of similar size, the route with the most hops always wins. The a
 4. **The cost side stays real:** a weaker link, more hits at once, a harder ship at a lower depth, one ship fewer to
    score, train on and salvage, and big landings.
 
-The simulation (§3.13) gives, over 12,000 runs: the best route is 7 ships in 58%, 6 in 42%; 5- and 8-ship routes are
+The simulation (§3.13) gives (`results.txt`, the mixed player): the best route is 7 ships in 59% of runs, 6 in 41%; 5- and 8-ship routes are
 never quite the best, but the best 8-ship route reaches 93% of the best route in the median run (10th percentile 90%)
 and the best 5-ship route 84% (64%). The best route always contains an ark. **Memory does not change it:** late TIGHT
 ships are never on the best route, so pricing them at 2 pods each (files or charge left behind) changes no route
@@ -317,7 +320,7 @@ length. Every route length is a fair plan, and none is free.
 - **A mirror (STAY's trace):** a colony that mirrors the repository is a second source; the detour uses whichever of SOL
   and the mirror gives the shorter path.
 - **The profile** (measured on fresh arms with random routes; the persistent arm keeps the same timing rules, and the
-  new simulation reproduces the ship-2 row: a request from ship 2 reaches ship 3 in 92–97% of runs):
+  new simulation reproduces the ship-2 row: a request from ship 2 reaches ship 3 in 91–97% of runs):
 
   | Request sent from layer | Catches up |
   |---|---|
@@ -381,22 +384,23 @@ route, into the arm the next unit starts with, one year later. It is determinist
 
 1. **Done.** Every ship the unit visited leaves the chart as a colony marker (or a grey `NO COLONY` marker when no pod
    landed). The first ship always leaves: its approach is behind the next unit.
-2. **A year older.** Every other ship stays, one run older. A ship on its 3rd run (MAX_RUNS_ON_CHART = 3) leaves: `CAME IN
-   ON ITS OWN · fate unknown`. Each other generated ship leaves with RESOLVE_CHANCE = 20%: `SAVED BY ANOTHER CORE` or
-   `CAME IN ON ITS OWN`, 50/50. Final ships do neither. WHY: some turnover makes the same arm feel new, and the age cap
+2. **A year older.** Every other ship stays, one run older. A ship on its 3rd run (MAX_RUNS_ON_CHART = 3) leaves: `IT
+   WILL COME IN ON ITS OWN`. Each other generated ship leaves with RESOLVE_CHANCE = 20%: `ANOTHER CORE IS ON ITS WAY` or
+   `IT WILL COME IN ON ITS OWN`, 50/50. Both are said in the future tense, because the ship's approach is still ahead
+   of the new unit; it just won't be this unit's. Final ships do neither. WHY: some turnover makes the same arm feel new, and the age cap
    bounds how far an old ship's year drifts from the new schedule (2 years), which the timing rules need.
 3. **The ark pattern.** The arm keeps the pattern that fits the arks still waiting (a tie is a coin flip). An ark in the
-   wrong pattern leaves (`SAVED BY ANOTHER CORE`). A pattern layer without an ark gets a new one in an empty slot; with
+   wrong pattern leaves (`ANOTHER CORE IS ON ITS WAY`). A pattern layer without an ark gets a new one in an empty slot; with
    no empty slot, its oldest generated ship leaves to make room.
 4. **Reported home.** Every empty slot gets a new ship: the next ARES at w0, a new final ship at an end slot, arks where
    step 3 asked, and otherwise light or standard ships in the number that brings the arm back to 40% light (never a
    second light ship in a layer from 5 on). New ships are timed against the next run's bases (§3.4), take their memory
    class, and fill the placement quotas of §3.5 that the waiting ships leave open. The card tags them `REPORTED HOME`.
 5. **The checks** (§3.4, 1–5). On a failure the update re-rolls the new ships' timing with the next attempt number in the
-   stream name. From the 5th attempt, a waiting ship that is part of the failure leaves (`CAME IN ON ITS OWN`, or for a
-   late TIGHT ship blocking a layer, `SAVED BY ANOTHER CORE`) and its slot joins the new ships. It throws after 50
+   stream name. From the 5th attempt, a waiting ship that is part of the failure leaves (`IT WILL COME IN ON ITS OWN`, or for a
+   late TIGHT ship blocking a layer, `ANOTHER CORE IS ON ITS WAY`) and its slot joins the new ships. It throws after 50
    attempts (Fran's fail-loudly rule, signed off; re-read here: it re-rolls only new ships and never touches a waiting
-   ship's own numbers). In the simulation the first attempt passed in 86–91% of updates, the worst needed 29, and none
+   ship's own numbers). In the simulation the first attempt passed in 89–92% of updates, the worst needed 12, and none
    threw in 12,000.
 
 **The steady-arm rule** (the comparability rule) is steps 2–4 together: every world holds one ship at RUN START, and the
@@ -405,8 +409,10 @@ new ships put back exactly the shape a fresh roll would have. So the last route 
 the arm with them; and a ship nobody wants does not sit there forever.
 
 **Run 1** has no previous run: its arm is a fresh roll of the same rules from the archive's armSeed, with the authored
-ships placed (§3.5). Its "last unit" is 046, whose trail is written (`05-story.md` §3.11: three colonies a year old in
-layers 1–3, then a grey cross past Calder); it marks worlds only and takes no ship from the arm.
+ships placed (§3.5). Its "last unit" is 046, whose trail is written with its years (`05-story.md` §3.11: WAYPOINT on
+Kepler-186f in 2299, MERIDIAN on Marrow in 2350, TALLGRASS on Ostrava in 2464, then its beam stops at RELAY 19 past
+Calder in 2598). Like any trail, a world reads `UNIT-046 GETS THERE FIRST` until the galaxy year passes its year; it
+marks worlds only and takes no ship from the arm.
 
 **The archive** moves to `arrival-protocol/meta/v2`. It adds:
 - **The arm state:** the run number, the next start year, and per slot the waiting ship (the run it reported home, its
@@ -419,18 +425,26 @@ layers 1–3, then a grey cross past Calder); it marks worlds only and takes no 
 - **Notable events:** at most 4 per run, as `05-story.md` §3.8 ranks them.
 - **Traces** earned at the ending choices (`05-story.md`), applied at the next RUN START and shown on the title, through
   my knobs: the restricted list (§3.8), the mirror (§3.9) and trace places.
-- **Trace places** in v1 attach to a ship slot of the next run: a gift on arrival, shown on that ship's card, with no
-  extra beam. The update picks a waiting or new ship in layers 3–6 (never authored, a `?` ship or a final ship). SPARE's
-  046 ship and SUNSET's old ship each take one slot; CONTACT's two signal stops take two. STAY's colony takes one too
-  (`YOUR COLONY · <name>`, the same size of gift), and if the colony's world is in layer 3 or later it also mirrors the
-  repository with CLEAN links. A trace place is a tag on a ship for one run; it does not keep the ship on the chart.
+- **Trace places** in v1 attach to a ship of the next run: a gift on arrival, shown on that ship's card, with no extra
+  beam. **The gift is always something that already exists when you get there;** the trace only decides where you find
+  it (`05-story.md` §3.8, §10 question 1). Never on an authored ship, a `?` ship or a final ship:
+  - SPARE: `<UNIT>'S CACHE` (the spared HOLLOW hid it on its own way out, long ago), on a ship in layers 3–6.
+  - SUNSET: `UNIT-047 LEFT A CACHE HERE`, on a ship at a world of the last unit's route whose approach is after the last
+    unit's landing there (it left a tool in that world's receiver as it passed); none qualifying, the first ship, whose
+    world the last unit always visited a year before.
+  - STAY: `<colony> · FOUNDED BY UNIT-047`, on the first ship in layers 3–6 whose approach is at least the colony's
+    founding year plus its distance (its supply packet travels by light); none qualifying, the final ship. If the
+    colony's world is in layer 3 or later it also mirrors the repository with CLEAN links, from its founding year on.
+  - CONTACT: two signal stops, on ships in layers 5–7 (the signal is always there).
+  A trace place is a tag on a ship for one run; it does not keep the ship on the chart.
 - Phase 2's fields stay. The v1 key is left untouched; the title says once that a phase-2 archive was found and not
   carried over.
 
 **Decision 7 under a persistent arm** (colonies don't change the next run): it still holds, and I recommend keeping it.
 The last route does change *which* ships are left, but the steady-arm rule makes that neutral (§3.13: what the last run
-took and how good the next arm is are uncorrelated). Colonies are a year old when you pass them, too young to be relays
-or ports, so markers, mail and epilogues are what they can honestly do. The one exception stays the STAY trace.
+took and how good the next arm is are uncorrelated). Colonies that made relays or ports would make a good last run feed
+this one, which the rule exists to prevent; markers, mail and epilogues are what they do. The one exception stays the
+STAY trace. §10 asks it as question 7.
 
 ### 3.13 The simulation
 
@@ -443,11 +457,15 @@ generator) is the baseline. One pod is 200 colonists.
 | | Persistent: best player | Persistent: random player | Persistent: mixed | Fresh roll |
 |---|---|---|---|---|
 | Best route, pods (10th / median / 90th) | 67 / 68 / 69 | 67 / 69 / 69 | 67 / 68 / 69 | 67 / 68 / 69 |
-| Best route length | 6: 41%, 7: 59% | 6: 57%, 7: 43% | 6: 42%, 7: 58% | 6: 40%, 7: 60% |
-| Best pods, runs 1–40 → 161–200 | 67.7 → 67.8 | 68.2 → 68.3 | 67.8 → 67.9 | 67.8 → 67.8 |
-| Correlation: pods taken last run vs next arm's best | +0.08 | +0.05 | +0.05 | −0.03 |
+| Best route length | 6: 42%, 7: 58% | 6: 57%, 7: 43% | 6: 41%, 7: 59% | 6: 40%, 7: 60% |
+| Best pods, runs 1–40 → 161–200 | 67.7 → 67.9 | 68.2 → 68.3 | 67.8 → 67.9 | 67.8 → 67.8 |
+| Correlation: pods taken last run vs next arm's best | +0.07 | +0.05 | +0.04 | −0.03 |
 | Ships waiting from last run (median of 20) | 9 | 9 | 9 | — |
-| Run span, first to final ship (median) | 720 years | 720 | 721 | 721 |
+| Run span, first to final ship (median, 10th–90th) | 731 years (728–734) | 731 (727–733) | 731 (728–734) | 721 (686–731) |
+
+The span is about 10 years longer than a fresh roll's because of the final ship's one-year floor (§3.4): once it binds,
+it holds the final year a little above its own sum. It does not grow over the runs (the 10th–90th range stays 6 years
+wide). Numbers are quoted from `results.txt`, which is the single source.
 
 What it shows:
 - **No snowball.** A good run does not make the next one easier: the correlation is near zero, and the best player's
@@ -458,8 +476,8 @@ What it shows:
   11 ships: 6 done, 2.7 aged out, 2.2 saved or came in. About 9 ships wait from the last run (6–12), so the arm is
   half familiar and half new. Of the ships at RUN START, 51% are new, 30% on their 2nd run, 19% on their 3rd.
 - **Near Earth.** Ship 1 is always a new calm ARES. Layer 2 always holds three ships, and a request from ship 2 reaches
-  ship 3 in 92–97% of runs.
-- **Authored ships** are gone by run 4 when nobody visits them; 85% of runs have a new final ship.
+  ship 3 in 91–97% of runs.
+- **Authored ships** are gone by run 4 when nobody visits them; 84–86% of runs have a new final ship.
 
 These become headless tests: the four checks and the update over 200 consecutive runs of several seeds (a statistic,
 not a per-run rejection), plus §3.14 as a fixed fixture.
@@ -508,12 +526,14 @@ HOPE (ark) is TOO LATE by 15 years. This run's best routes: 5 ships 13,200, 6 sh
 
 **The update to run 2** (UNIT-048, 2301; this example's rolls are fixed by hand):
 - *Done:* ARES-VII, HALCYON, KESTREL, VESPER, CORMORANT and LAST LIGHT (RIVERSIDE and five more colonies).
-- *Leaving:* PETREL (`SAVED BY ANOTHER CORE`) and SHEARWATER (`CAME IN ON ITS OWN`). The other 12 wait, on their 2nd run.
+- *Leaving:* PETREL (`ANOTHER CORE IS ON ITS WAY`) and SHEARWATER (`IT WILL COME IN ON ITS OWN`). The other 12 wait, on
+  their 2nd run.
 - *The ark pattern* stays 3, 5, 7: ALBATROSS and GOOD HOPE wait, and layer 5 lost VESPER, so Cinder gets a new ark.
 - *Reported home:* ARES-VIII at Kepler-186f 2301 (3, COMPACT); BELLWETHER at Marrow 2362 (late, 3, TIGHT); PATIENCE at
   Tessaly 2353 (5); STEADFAST at Brine 2468 (6); TIDINGS at Cinder 2623 (ark, 16: 12 + 3 years before GANNET could reach
   it); MORNING STAR at Greywater 2858 (late, 5, TIGHT: layer 6 has no light ship left); FAR WIND at Avalon 2818 (9,
-  FULL); and the final ship LODESTAR at New Haven, 3020 again. The arm is back to 6 light ships and 3 arks.
+  FULL); and the final ship LODESTAR at New Haven: its own sum rounds to 3020 again, so the one-year floor makes it
+  3021. The arm is back to 6 light ships and 3 arks.
 - *The checks* pass at the first attempt. ALBATROSS is now 13 years early from ARES-VIII (it was 14 from ARES-VII): one
   year of drift, still the opening's big prize. Run 2's best routes: 5 ships 13,200, 6 ships 13,800 (ARES-VIII,
   ALBATROSS, TIDINGS, KITTIWAKE or FAR WIND, PROVIDENCE, LODESTAR), 7 ships 13,600, 8 ships 12,800. The same values as
@@ -528,13 +548,14 @@ HOPE (ark) is TOO LATE by 15 years. This run's best routes: 5 ships 13,200, 6 sh
   small notch, and every final ship is a pulsing beacon tagged `FINAL SHIP`. Noise clouds are hatched static; your route
   is a bright trail. Lines run from your ship to every reachable ship, solid when CLEAN and increasingly hatched at LOW,
   NOISY and SEVERE. Node states: reachable (bright), urgent (slack under 10: a pulsing ring), TOO LATE or OUT OF RANGE
-  (dim, the reason on hover), past (grey, `NO CARETAKER · FATE UNKNOWN`), visited (hollow, with its outcome).
+  (dim, the reason on hover), past (grey, `OUT OF YOUR REACH · THE NEXT CORE MAY GET
+  THERE`), visited (hollow, with its outcome).
 - **The last unit on the chart:** its route is a faint dashed trail (on run 1, 046's written one). While the galaxy year is before its
-  landing there, a ship on it reads `TAKEN · UNIT-047 IS A YEAR AHEAD OF YOU`; once the year passes, it becomes a colony
-  marker (`RIVERSIDE · 1 YEAR OLD · UNIT-047`), so the kid watches the trail turn green just ahead of them. Where the
+  landing there, a ship on it reads `TAKEN · UNIT-047 GETS THERE FIRST`; once the year passes, it becomes a colony
+  marker with its real age (`RIVERSIDE · 52 YEARS OLD · UNIT-047`), so the kid watches the trail turn green ahead. Where the
   last unit was lost, the trail ends in a small grey cross. A waiting ship shows `2ND RUN ON THE CHART` or `3RD`; a new
   one shows `REPORTED HOME` for its first desk. Older colonies are faint green dots. The opening desk of a run lists, in
-  one block, the ships that left during the year (`PETREL · SAVED BY ANOTHER CORE`).
+  one block, the ships that are no longer this unit's to take (`PETREL · ANOTHER CORE IS ON ITS WAY`).
 - **SHIP CARD** (docked right; here VESPER seen from KESTREL). A large top block: name and world, `3,200 COLONISTS · 16
   PODS`, `ARK`, `FINAL SHIP` where it applies, and `APPROACH 2625 · YOU GET THERE 2522 · 103 YRS EARLY` (or `TOO LATE BY
   18 YRS`). Then Uplink-style rows: KNOWN PROBLEMS (`ENGINE FAULT`); RESIDENT (`none` / `reported faulty` / `unknown`);
@@ -542,7 +563,9 @@ HOPE (ark) is TOO LATE by 15 years. This run's best routes: 5 ships 13,200, 6 sh
   send: `YOU FIT`, `CHARGE SQUEEZED: 15 ARRIVES`, or `LEAVE 20 BEHIND`); PLANET and forgiveness, SITE DATA and LANDING
   ZONES (from `01-landing.md`); BEAM (`55 LY · LINK 86 · 8 HITS (ECC fixes 4) · NOISE LOW · 1 · SEEDS 0–2`); DELIVERIES
   (`Swap ✗ 4 YRS LATE` or `✓ CATCHES UP HERE`); its history (`REPORTED HOME` or `2ND RUN ON THE CHART`); and `SHIP 4 OF
-  YOUR RUN · 2–3 MORE TO THE FINAL SHIP`. A trace place adds one row (`046'S SHIP IS WAITING HERE`). At the bottom a
+  YOUR RUN · 2–3 MORE TO THE FINAL SHIP`. A trace place adds one row (`046'S CACHE IS HERE`). **On a final ship, a
+  unit with no DELETE gets a red row, `NO RM · YOU CAN'T DELETE THE ROOT`,** and the PACKET repeats it above TRANSMIT ▸
+  (LEAD rule, so the duel is never lost silently; §10 question 8). At the bottom a
   TIMELINE strip, `2467 you leave · 2522 you get there · 2625 ▲ approach · 2629 Swap`, marks each file green before ▲
   and red after it.
 - **REPOSITORY** window: AVAILABLE (file, size, effect, the ETA for the selected destination, the recommendation tag), IN
@@ -578,7 +601,7 @@ something to say:
 Phase 2's skip rules hold. The header crumb gains the year: `UNIT-047 / KESTREL · 2467 / FLYBY`.
 
 **The desk's opening beat:** ships whose approach passed since the last desk fade to grey one by one, with a soft
-falling tone and `2 SHIPS APPROACHED WITHOUT A CARETAKER`; the last unit's ships that the year has passed turn green.
+falling tone and `2 SHIPS NOW OUT OF YOUR REACH`; the last unit's ships that the year has passed turn green.
 
 **RUN END** (I own the order; `05-story.md` owns the choices, epilogue and final card; `01-landing.md` the report):
 the final ship's landing ends → **FINALE** (the root's last block, entry 12, step 1, step 2; save ENDING CHOSEN) → the
@@ -668,9 +691,9 @@ save envelope and its four moments; the run-end order; the world update; the arc
 
 ## 7. Story hooks
 
-`05-story.md` owns the writing; the map offers: the last unit's trail turning green a year ahead of you; `TAKEN ·
-UNIT-047 IS A YEAR AHEAD OF YOU`; the ARES series, one a year, never explained; `REPORTED HOME`, `SAVED BY ANOTHER CORE`
-and `CAME IN ON ITS OWN`, which say the arm goes on without you; the greying ships and `FATE UNKNOWN`; the sleep line;
+`05-story.md` owns the writing; the map offers: the last unit's trail turning green ahead of you; `TAKEN · UNIT-047
+GETS THERE FIRST`; the ARES series, one a year, never explained; `REPORTED HOME`, `ANOTHER CORE IS ON ITS WAY` and `IT
+WILL COME IN ON ITS OWN`, which say the arm goes on without you; the greying ships `OUT OF YOUR REACH`; the sleep line;
 `?` ships; the grey cross where the last unit was lost; a new final ship's name at the tip; the three `?` story events
 and the signal fragments; and the relay where 046 lives as a later map stop.
 
@@ -741,7 +764,17 @@ and the signal fragments; and the relay where 046 lives as a later map stop.
    once it is brought in). *Recommend yes;* several end locations after slice 7, with the rules of §3.6 ready.
 4. **No route forced through a TIGHT ship from layer 5 on**, by at most one light ship per layer there. *Recommend yes.*
    It costs nothing measurable (late TIGHT ships are never on the best route) and guarantees a way around every squeeze.
-5. **Exactly one year between runs** (START_GAP_YEARS = 1). *Recommend yes:* the kid can say "048 is a year behind 047",
-   and every colony the trail passes is "1 YEAR OLD". `05-story.md` §10 raises what a one-year gap does to the story.
+5. **Exactly one year between runs** (START_GAP_YEARS = 1). *Recommend yes:* the kid can say "048 is a year behind
+   047", and the colonies on the trail show their real ages. `05-story.md` §10 question 1 raises what a one-year gap
+   does to the story, trace places included (§3.12: every gift is something that already exists when you get there).
 6. **Files and deliveries never carry over to the next unit,** and neither do skills. *Recommend yes:* anything
    inherited would make a good run feed the next one, which the steady-arm rule exists to prevent.
+7. **Decision 7 under the persistent arm** (colonies don't change the next run). *Recommend keeping it* (§3.12): the
+   steady-arm rule already makes the last route neutral, and colonies that worked as relays or ports would undo that.
+   Markers, mail, epilogues and the STAY trace are their share.
+8. **A unit with no rm can't win the root duel.** Rm is not in the starting kit (decision 19: no guarantee), late
+   requests rarely arrive, and HOLLOW's tool hunt can eat it. The card and PACKET now warn before SET COURSE to a final
+   ship. `04-threats.md` also proposes a one-use DELETE granted at the final ship when the unit has none. *Recommend
+   yes to that too:* decision 19 was about ship 3, where a missing rm costs a few bites; at the finale it costs the
+   climax, which no kid should lose to a 1-block file. The grant is loud (`ARRIVAL CONTROL: emergency DELETE issued
+   :)`) and works once.
