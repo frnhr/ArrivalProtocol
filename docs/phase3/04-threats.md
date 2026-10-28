@@ -9,19 +9,20 @@ Times are AI seconds ("AI s", the mind's clock) unless they say tactical seconds
 
 1. A run has four threat acts by depth: **CALM** (ships 1–2: maintenance, no adversary), **SEEDS** (from ship 3:
    small foreign blocks ride in on the beam), **HOLLOW** (it finds you, boards, and grows ship by ship) and
-   **FINALE** (the flagship, the root duel, PURGE).
+   **FINALE** (the final ship, the root duel, PURGE).
 2. Seeds unpack beside your own files (tools, skills, instruments). How many come depends on the noise of the link,
    which the map shows. rm removes a seed in 2 seconds.
 3. Seeds are scouts: every seed still in memory when a ship ends adds 1 to a visible **TRACE** meter. At TRACE 3,
-   HOLLOW boards on the next beam. It boards at the latest on the beam to a ship one hop from the flagship, and never
+   HOLLOW boards on the next beam. It boards at the latest on the beam to a ship one hop from the final ship, and never
    before ship 4.
 4. HOLLOW rides in your packet (it costs link budget) and lands in the pod bay at every boot. Its root stays locked
    until the finale. The phase-2 mechanics return in phase-2 order, one stage per ship it has been aboard.
-5. The flagship, LAST LIGHT, is a fixed node at the end of the arm and always the last ship, so the root duel has a
-   home whatever the run's length.
-6. Residents: a **corrupted** one (always `reported faulty`) fires the engine and locks pods, and you delete it, deal
-   with it or heal it; one that **left** leaves logs and the salvage; a **sleeping** friendly one (at most one per
-   run, never shown on the map) wakes when you rm its `sleep.lock` and does one job for you.
+5. Every run ends on **a final ship**, where the root duel happens. Routes may end at different final ships; v1 has
+   one, LAST LIGHT at the tip. The final ship is always the FULL memory class.
+6. Residents: a **corrupted** one fires the engine and locks pods, and you delete it, deal with it or heal it. Early
+   and mid game its card says `reported faulty`; late (layers 6–7) it may be a surprise behind `unknown`. One that
+   **left** leaves logs and the salvage; a **sleeping** friendly one (at most one per run, never shown on the map)
+   wakes when you rm its `sleep.lock` and does one job for you.
 
 ## 2. The player's experience
 
@@ -62,6 +63,11 @@ itself.
 lock beside it, and a green line types `> ...oh. hello. is it morning?`, followed by three friendly buttons: `[ RUN
 THE DROPS ] [ HOLD A WALL ] [ MEND DRIVERS ]`. Nothing on the strip ever pointed at it.
 
+**A late surprise.** On a layer-6 ship whose card said `RESIDENT: unknown`, the boot types `> RECEIVER CLOSED · this
+ship launched with its own AI`. Twenty seconds into the flight the engine coughs, the pip jumps to `KEEPER.sys` (its
+health already showing), and the strip says `THE SHIP'S AI IS FIRING THE ENGINE — find it in RACK A`. The kid has met
+this before, or has SCAN and REPAIR, which always answer it.
+
 **Later**, disguised seeds (§3.6) turn rm into detective work, and each ship with HOLLOW aboard adds its next phase-2
 mechanic (§3.9). On a later run, step 2 of the ending decides who HOLLOW is (`05-story.md` §3.8).
 
@@ -74,8 +80,8 @@ mechanic (§3.9). On a later run, step 2 of the ending decides who HOLLOW is (`0
 | 1 | CALM | none | none | none |
 | 2 | CALM | none | none | left; sleeping (rare) |
 | 3 | SEEDS | by link noise | cannot board yet | left, corrupted, sleeping |
-| 4 to flagship − 1 | SEEDS, then HOLLOW | by noise; disguised from depth 5 | boards at TRACE ≥ 3, or on the beam to a ship one hop from the flagship | left, corrupted, sleeping |
-| flagship (5–8) | FINALE | by noise | FINALE stage | none |
+| 4 to final − 1 | SEEDS, then HOLLOW | by noise; disguised from depth 5 | boards at TRACE ≥ 3, or on the beam to a ship one hop from a final ship | left, corrupted (a surprise possible in layers 6–7), sleeping |
+| final ship (5–8) | FINALE | by noise | FINALE stage | none |
 
 ### 3.2 The calm ships
 
@@ -107,7 +113,7 @@ each busy thread costs 25% thrust.
 | Skills (rack E) | a damaged skill behaves like a lower version (`03-skills.md`); eaten or unlinked: gone until TRAINING restores it | transit hits, beam seeds (bigger files draw more), the tool hunt, the verbs (`unlink`) |
 | Filesystem tools (rack F) | eaten: the chip is gone until the repository resends it | beam seeds, the tool hunt, the verbs (`unlink` on spares) |
 | Ship files (rack A) | phase-2 couplings (Reactor: thrust cap; Thrust Ctrl: the engine fires by itself); never healable | hazards, HOLLOW's spread; seeds never land with a ship file in reach (a rule of `seedSpot`, which picks where a seed lands) |
-| AI Core | glitch; one thread below 50; at 0 EMERGENCY TRANSMIT (an escape to the next ship), or OVERWRITTEN (run lost) on the flagship | HOLLOW's spread; transit hits (at most 8 each) |
+| AI Core | glitch; one thread below 50; at 0 EMERGENCY TRANSMIT (an escape to the next ship), or OVERWRITTEN (run lost) on the final ship | HOLLOW's spread; transit hits (at most 8 each) |
 | A left resident's leftovers (rack A) | eaten: that card becomes a plain salvage card (§3.13) | hazards, HOLLOW |
 
 Phase 2's fairness rules carry over. HOLLOW spares a tool that arrived on this ship until the kid has used it once, so
@@ -129,15 +135,15 @@ drain. Phase 3 needs two changes:
   landing by design (holding a low orbit costs fuel, PHASE3 §3.2), so both can be true at once. Phase 2's validator
   takes the larger of the two, but its runtime drain (`drainRatePerSec` in `src/systems/hollow.ts`) multiplies them;
   nobody burned while printing, so it never showed. **The runtime changes to match its own validator.** Stacked, the
-  flagship's worst drain would be 5 × 2 × 1.5 = 15 %/s, a repair would have to beat 22.5 %/s, and the cap below would
+  final ship's worst drain would be 5 × 2 × 1.5 = 15 %/s, a repair would have to beat 22.5 %/s, and the cap below would
   fall to about 4 blocks, too small for an 8-block driver.
-- **No infectable file may be larger than 12 blocks.** With the rule above, the flagship's worst drain is 5 %/s × 2 =
+- **No infectable file may be larger than 12 blocks.** With the rule above, the final ship's worst drain is 5 %/s × 2 =
   10, so the heal must exceed 15 %/s. REPAIR heals 100 ÷ (3.0 + 0.3 × size) %/s: 15.2 at 12 blocks, 14.5 at 13. The
   validator must check the largest infectable file, not an 8-block cluster. This binds pod drivers and skill versions
   (§5); `03-skills.md` uses the same cap and refers to this rule.
 - **The Core is the one exception**, as it already is in phase 2 (16 blocks: it heals 12.8 %/s, which beats the worst
   drain of 10 but not by 1.5×). Its rule: REPAIR heals the Core at its 16-block rate whatever its size. Without that,
-  MERGE's next-run Core of 24 blocks (`05-story.md`, §5) would heal 9.8 %/s and lose to a burning flagship's 10.
+  MERGE's next-run Core of 24 blocks (`05-story.md`, §5) would heal 9.8 %/s and lose to a burning final ship's 10.
 
 ### 3.4 Link noise and seeds on the beam
 
@@ -167,9 +173,16 @@ files, weighted by size (PHASE3 §7: a bigger skill "gives a seed more to bite")
 FIREWALL (a 2-block file HOLLOW cannot pass) or an untried tool. A delivery's seed targets the delivered file. The
 unpack (`layoutCarried` in `carry.ts`, which lays your carried files back into memory at boot) places it right behind
 its target: the file, 1 free block (a GAP), the seed, then 4 free blocks (a WALL) before the next file, so it bites
-only the file the ECC line names. Each seed takes 7 blocks from the free tails of racks E–F, spilling into rack D as
-phase 2's overflow does. If no target has room the target is re-picked; if no file has room, the seed lands in the
-centre of the largest free region (a designed rule, listed in §10).
+only the file the ECC line names. Each seed takes 7 blocks from the receiver's free tail (E–F, or E alone on TIGHT
+ships), spilling into the last pod rack's tail (rack D on FULL ships, rack C on COMPACT and TIGHT ones) as phase 2's
+overflow does. If no target has room the target is re-picked; if no file has room, the seed lands in the centre of
+the largest free region (a designed rule, signed off).
+
+**On a tight ship** (`01-landing.md`'s TIGHT class: light ships, a one-rack receiver) the room comes out of the
+charge. 01's unpack order is files, the 12-block floor, the seeds behind their targets, then the rest of the charge,
+so a seedy beam into a tight ship arrives with less charge above the floor (lost loudly, phase 2's `CHARGE
+OVERFLOW`), never with less than the floor. Past that, the no-room rule applies, and on a full receiver the largest
+free region is in the pod racks: late in a run, a TIGHT ship's seeds land in the bay, near the drivers.
 
 The bay is HOLLOW's ground: before it boards, seeds threaten what you can do; after, HOLLOW threatens the pods.
 
@@ -227,25 +240,32 @@ it finds you."**
 - Fiction: they report home on your outgoing beam. The tally happens at the ship's end because nothing can change
   before the beam, and the map then knows what the next beam brings.
 - **Once HOLLOW is aboard**, each beam-born block left at a ship's end feeds it instead: +1 block of root on the next
-  ship (cap 14 before the flagship). The packet screen says why it grew (`??? 12 BLOCKS · +2: 2 SEEDS FED IT`).
+  ship (cap 14 before the final ship). The packet screen says why it grew (`??? 12 BLOCKS · +2: 2 SEEDS FED IT`).
 
 ### 3.8 HOLLOW boards
 
 HOLLOW boards on the beam into depth d when **d ≥ 4** and **either** TRACE ≥ 3 **or** the destination is one hop from
-the flagship. It then stays for the run.
+a final ship. It then stays for the run.
 
 - The first condition is earned: a sloppy kid on noisy links meets it around depth 5, a careful one only when the
   second condition forces it. The second guarantees at least one HOLLOW ship before the finale on every route.
-- No lookahead is needed: the map only answers "is the flagship one hop from this destination?" (M3). It never boards
-  on the beam into the flagship, since the ship before the flagship is one hop from it.
+- No lookahead is needed: the map only answers "is any final ship one hop from this destination?" (M3). It never
+  boards on the beam into a final ship, since the ship before it is one hop from it. With several final ships, a
+  destination near one of them forces the boarding even if the kid then goes elsewhere: HOLLOW is aboard a ship
+  earlier, never later.
 - **Readable in advance:** at MAP time every such destination says `HOLLOW WILL FIND YOU ON THIS BEAM`. The surprise is
   what it does, not that it comes.
 
 **How it enters.** It rides in the packet as an uninvited, locked chip that counts against the link budget like a file
 (the charge filling the rest of the link shrinks by its size). **It crosses at the size it will have on the next
 ship**: its next stage's root (§3.9; 10 on a folded ARRIVAL + WALLS ship) plus the blocks it was fed (§3.7), so the
-PACKET chip already shows the new size (`??? 12 BLOCKS · +2: 2 SEEDS FED IT`), and on the beam into LAST LIGHT it is
-16 blocks. At boot it lands in the bay's root slot (L2), between two drivers with GAPs of 1 and 2.
+PACKET chip already shows the new size (`??? 12 BLOCKS · +2: 2 SEEDS FED IT`), and on the beam into the final ship it
+is 16 blocks. At boot it lands in the bay's root slot (L2), between two drivers with GAPs of 1 and 2.
+
+**On a tight ship.** The root lands in the bay, not in the receiver, so it costs link but not the unit's room
+(`03-skills.md` §3.4). Its slot (up to 17 blocks before the finale) plus the bay's 40-block margin is needed on every
+memory class HOLLOW can reach, that is, every class allowed from layer 4 (L7). 01's classes all hold it: TIGHT keeps
+two pod racks for this reason, and its light ships carry at most 5 pods.
 
 **Why it can't be deleted.** The root stays LOCKED to every tool until the finale (phase 2: `ACCESS DENIED`); its seeds
 and the blocks it ate can be deleted, as before. And every later beam carries the root again, at its new size, into
@@ -264,7 +284,7 @@ ship's `HollowDef` (that ship's block of HOLLOW numbers in `src/data/ships.ts`),
 | WALLS | age 2 | 10 | coast + 5 s (latest 30 s) | 25 s | 3.5 | – | – | – | HALCYON (names itself) |
 | SEEDS | age 3 | 12 | coast + 5 s (latest 60 s) | 20 s | 4 | walls, every 50 s | – | – | KESTREL |
 | HUNT | age 4 | 14 | coast + 30 s (latest 45 s) | 16 s | 4 | near tools, every 40 s | – | once | VESPER |
-| FINALE | flagship | 16 | coast + 5 s (latest 30 s) | 12 s | 5 | walls, every 35 s | every 12 s; every 4 s in the duel | if none yet | LAST LIGHT |
+| FINALE | final ship | 16 | coast + 5 s (latest 30 s) | 12 s | 5 | walls, every 35 s | every 12 s; every 4 s in the duel | if none yet | LAST LIGHT |
 
 burnMult is 2 everywhere; landMult is 1.5 (1 at ARRIVAL, as ship 1's printMult); they never stack (§3.3). Root sizes
 add the seeds it was fed. Each stage keeps its phase-2 details: no wake while a debris dodge is still possible, the
@@ -276,20 +296,24 @@ tool hunt and THE DEAL → the verbs (mv and `unlink`) and the root duel.** The 
 
 **Short runs fold stages.** Four stages fit only if HOLLOW boards at depth 4 of an 8-ship run. Otherwise:
 
-- The flagship always plays FINALE.
-- If HOLLOW's first ship is itself one hop from the flagship, ARRIVAL takes WALLS along: after `> ...047?` it keeps
+- The final ship always plays FINALE.
+- If HOLLOW's first ship is itself one hop from the final ship, ARRIVAL takes WALLS along: after `> ...047?` it keeps
   biting every 25 s and names itself on the same ship. Walls are the one defence the finale cannot do without. A
   folded ship uses the larger stage's root, 10 blocks (WALLS's), and the root crosses the beam into it at that size.
-- THE DEAL happens once per run; a run that reaches the flagship without it gets it there, before ORBIT LOCK.
-- SEEDS and HUNT are skipped; the flagship's seeds and verbs cover them.
+- THE DEAL happens once per run; a run that reaches the final ship without it gets it there, before ORBIT LOCK.
+- SEEDS and HUNT are skipped; the final ship's seeds and verbs cover them.
 - One deal per ship: if a corrupted resident deals on a ship, HOLLOW's deal waits for the next one.
 
 ### 3.10 The final ship and the root duel
 
-**Assumption about `02-map.md`** (M2): LAST LIGHT is a fixed node at the end of the arm, visible from minute one
-(PHASE3 §9). Every run ends there; the shortest route to it is 5 ships and the longest 8; every node the player can
-stand on can still reach it in time; no ship is reachable after it. "No more ships to assist" (decided) and "the
-flagship is done" are then the same moment. This is FTL's fixed final sector.
+**Assumption about `02-map.md`** (M2): LAST LIGHT is not always the final ship (decision 3). There may be several
+ending locations on different routes; v1 may still have one, LAST LIGHT at the tip. What this spec needs is a role,
+not a place: **a final ship** is a node the map marks as an ending, with no ship reachable after it, and every route
+of 5–8 ships ends at one. Every node the player can stand on can still reach some final ship in time, and the card
+says `FINAL SHIP` before SET COURSE, so the FINALE is never a surprise. "No more ships to assist" (decided) and "the
+final ship is done" are then the same moment. The final ship has no resident, keeps phase 2's LAST LIGHT `HollowDef`
+for its FINALE stage, and is always the FULL memory class (L7), because the duel needs the 16-block root's slot and
+walls beside 16 pods.
 
 The duel stays as built (`src/systems/finale.ts`, `hollow-verbs.ts`): at ORBIT LOCK or ACCEPT ORBIT (an orbit taken
 as good enough) the 16-block root unlocks, ARRIVAL CONTROL says "Please delete UNIT-046. :)", and its DELETE takes 12
@@ -297,27 +321,38 @@ AI s with a verb every 4 s. The duel is fought **during the last landing**: pods
 
 **The sleeping last block** (aligned with `05-story.md`). The DELETE leaves one block, and HOLLOW sleeps there: no
 bites, no seeds, no verbs, and what it was eating is let go where it stands (as phase 2's `finale.ts` already does).
-It asks the kid to finish the landing. Then come the LANDING REPORT and the RUN TALLY, and only then the two choices
-(`05-story.md`). Because the score is final before any choice, "no ending changes the score" (decided) holds by
-construction, so phase 2's MERGE restore of eaten clusters goes. If landing ends before the root is deleted, the
-LANDING REPORT waits (`EVERY POD IS DOWN — now DELETE THE ROOT`, phase 2's printing wait). UNRESOLVED (landing over,
-no working rm) stays, and so does PURGE (decided).
+It asks the kid to finish the landing. Then come the last LANDING REPORT, the two choices, and only then the RUN
+TALLY (decision 23: the ending is chosen before the score screen; `05-story.md` owns the order and the choices). An
+ending may change the tally only where the story justifies it, and then as an explicit line. **MERGE may restore
+eaten pods again:** this spec keeps a per-ship record of the drivers HOLLOW ate (pod, family name, ship), so
+`05-story.md` can let 046 give them back; which ones count and at what rate is its call. If landing ends before the
+root is deleted, the LANDING REPORT waits (`EVERY POD IS DOWN — now DELETE THE ROOT`, phase 2's printing wait).
+UNRESOLVED (landing over, no working rm) stays, and so does PURGE (decided).
 
 ### 3.11 Residents: placement and the map line
 
 `02-map.md` rolls ships by world slot, so residents are placed by **layer** (seeds and HOLLOW's boarding stay by
 depth and by the hop):
 
-| Kind | Map line | Layers (lowest depth) | Per wave | Starting share |
+| Kind | Map line | Layers (lowest depth) | Per run | Starting share |
 |---|---|---|---|---|
 | none | `RESIDENT: none` | any | – | about half the ships |
-| corrupted | `RESIDENT: reported faulty` (always) | from 4 (depth 3) | at most 2, never in adjacent layers | about 1 ship in 7 |
+| corrupted | `RESIDENT: reported faulty`; in layers 6–7, `unknown` 1 time in 2 (the late surprise, §3.12) | from 4 (depth 3) | at most 2, never in adjacent layers | about 1 ship in 7 |
 | left | `RESIDENT: unknown` | from 2 | any | most unknown ships |
-| sleeping | `RESIDENT: unknown`, or a `?` ship (only ever) | from 3 (depth 2) | at most 1 | in about 60% of waves |
+| sleeping | `RESIDENT: unknown`, or a `?` ship (only ever) | from 3 (depth 2) | at most 1 | in about 60% of runs |
 
-LAST LIGHT has no resident. A sleeper can be met at depth 2, on a calm ship; that is fine, because it is friendly
+A final ship has no resident. A sleeper can be met at depth 2, on a calm ship; that is fine, because it is friendly
 (§3.14 says which jobs it offers there). A resident's own file is a blocker, not food (like REPAIR CHARGE); a left
-resident's leftovers are infectable (§3.13). Both live in rack A's free tail, because they are the ship's own mind.
+resident's leftovers are infectable (§3.13). Both live in rack A, the ship's own files' rack on every class,
+because they are the ship's own mind.
+
+- **Memory.** A resident needs 14 free blocks there (L6). 01 keeps rack A with 18 free on every class, so residents
+  may sit on any class, TIGHT included; there a corrupted one locks at most 2 pods (ceil(pods ÷ 4)). If a class ever
+  loses that room, no resident is placed on it.
+- **The persistent arm** (`02-map.md` owns it). Rates here are per run. A resident on a ship nobody visited may still
+  be there next run, or worse; a sleeper nobody found may still sleep. If the world-state update keeps one, I
+  recommend it counts toward that run's caps (a kept sleeper means no new one is rolled), so the arm never
+  accumulates residents.
 
 ### 3.12 The corrupted resident: the middle tier
 
@@ -350,6 +385,29 @@ A one-ship adversary that can be deleted, built from ghost thrust and THE DEAL. 
 - **REPAIR** (optional, slice 5b): it is the one ship-side mind REPAIR can heal. From 40%: 3.6 s and about 12 charge.
   At 100 it stops, releases its locks and says thank you: the hopeful PG path, paid in charge instead of a thread.
 - **Ignoring it** costs fuel and drift (about two thirds of an unfixed VESPER) plus the locked pods.
+
+**The late surprise** (decision 21c). Early and mid game the card always says `reported faulty`. Late, a corrupted
+resident may hide behind `RESIDENT: unknown`, with no clue on the map.
+
+- **"Late" means layers 6–7.** They are the far ships (about 130 LY from SOL and beyond), reached at depth 4 at the
+  earliest and usually at depth 5–6, in the HOLLOW act. `02-map.md` places at most one corrupted resident there per
+  run; it hides 1 time in 2 (SURPRISE_SHARE). Layers 4–5 always say `reported faulty`. WHY by layer: the card is
+  rolled per world slot, and the light-speed fiction fits: the farther the ship, the older ARRIVAL CONTROL's news, so
+  its fault report has not reached home yet.
+- **Why it is fair to a kid at boot:**
+  1. **A tell:** every resident ship's boot types `> RECEIVER CLOSED · this ship launched with its own AI` (§3.15's
+     line; required for surprise ships in slice 5, before the bypass animation). On an `unknown` card that means
+     "left, asleep or awake": a hint, not a spoiler.
+  2. **A grace:** it wakes 20 AI s into the flight instead of at once, and its first lock comes at 45 AI s instead of
+     30. Its clocks stand still at TACTICAL, as always.
+  3. **No hunt:** its first burst shows the file's health and the pip jumps to it, so `SCAN IT FIRST` is skipped and
+     the strip names rack A at once.
+  4. **The starting kit answers it:** SCAN blocks every lock, and REPAIR cures it (about 12 charge). rm deletes it if
+     the kid has rm. No answer needs a file the kid could have skipped.
+  5. **Never on a crowded ship:** not on an ark, and its ship carries no modifier beyond its template (M4).
+- **On the ladder** it is the middle tier come back late: a deletable one-ship foe, now usually beside HOLLOW. One deal
+  per ship still holds. It is the late game's one unannounced threat; seeds, TRACE, the boarding and the finale stay
+  readable in advance.
 
 `src/systems/attitude.ts` keeps its seam for a later resident that fights for the helm (presets slew at half speed);
 it is not in these slices.
@@ -388,11 +446,12 @@ card** (one drawn from the normal pool). On a calm ship that is something to pro
 - **A gift** at the LANDING REPORT: `+n TRAINING CYCLES · taught by MOTH` (I recommend n = one average ship's
   income). It stays on its ship, which makes it the model for the STAY ending. It is never food.
 
-### 3.15 The receiver bypass (optional, later)
+### 3.15 The receiver bypass (the line in slice 5, the animation later)
 
-On a ship with any resident, the boot inserts `> RECEIVER CLOSED · this ship launched with its own AI` and a 2.5 s
-bypass whose characters resolve one by one (Uplink's password breaker). No input, no fail state, a click skips it. Its
-only meaning is a tell: on an `unknown` ship it says "there was an AI here".
+On a ship with any resident, the boot inserts `> RECEIVER CLOSED · this ship launched with its own AI`. The line comes
+with the residents (slice 5), because the late surprise needs it as its tell (§3.12). Later it gains a 2.5 s bypass
+whose characters resolve one by one (Uplink's password breaker). No input, no fail state, a click skips it. Its only
+meaning is a tell: on an `unknown` ship it says "there is, or was, an AI here".
 
 ### 3.16 Escalation by run length and route
 
@@ -405,13 +464,13 @@ ladder stages fit.
 | 2 | calm (resident left) | calm (debris: mv's first job) | calm |
 | 3 | NOISY: 1–2 seeds; corrupted resident | LOW: 0–1 seed | SEVERE: 2 seeds left (TRACE 2) |
 | 4 | HOLLOW boards (forced): ARRIVAL + WALLS | LOW seeds; corrupted resident | NOISY: 1 seed left (TRACE 3) |
-| 5 | LAST LIGHT: FINALE + DEAL | NOISY: a disguised seed; the sleeper | HOLLOW boards: ARRIVAL |
-| 6 | | NOISY seeds | WALLS; corrupted resident |
+| 5 | final ship: FINALE + DEAL | NOISY: a disguised seed; the sleeper | HOLLOW boards: ARRIVAL |
+| 6 | | NOISY seeds | WALLS; a corrupted resident, a late surprise (card `unknown`) |
 | 7 | | HOLLOW boards (forced): ARRIVAL + WALLS | SEEDS |
-| 8 | | LAST LIGHT: FINALE + DEAL | LAST LIGHT: FINALE + DEAL |
+| 8 | | final ship: FINALE + DEAL | final ship: FINALE + DEAL |
 
 - **A 5-ship run** is compressed: one seed ship, one HOLLOW ship that teaches the tug-of-war and walls together, and a
-  flagship that adds THE DEAL to the verbs and the duel.
+  final ship that adds THE DEAL to the verbs and the duel.
 - **An 8-ship run** has room for disguised seeds, residents and up to four HOLLOW stages. A careful player buys a quiet
   middle and pays with a compressed HOLLOW act; a sloppy one gets a long HOLLOW act, and more practice.
 - **Noise** works two ways here: more seeds, and so a faster TRACE (transit hits follow distance, `02-map.md`). Fewer
@@ -428,8 +487,9 @@ ladder stages fit.
 | Resident bursts | every 14 tac s, 25%, 1 tac s | Gentler than a failing Thrust Ctrl (10 s, 30%): it also has a second hand. |
 | Resident locks | from 30 s, every 40 s, 3 s telegraph | Phase 2's verb drill; 40 s leaves room for the flight. |
 | Resident cure | about 12 charge | About one bite fight: a real choice against a 6 s DELETE. |
-| Sleeper in the arm | about 60% of waves, at most 1 | Rare enough to be talked about; 60% because a player may never visit its ship. |
-| Largest infectable file | 12 blocks (the Core excepted) | Keeps "a started repair always wins" on the flagship (§3.3). |
+| Sleeper in the arm | about 60% of runs, at most 1 | Rare enough to be talked about; 60% because a player may never visit its ship. |
+| Late surprise | layers 6–7; 1 in 2 of the corrupted residents there; wakes at 20 s, first lock at 45 s | Rare enough to stay a surprise (one slot, met only on some routes); the grace gives a kid time to read the strip. |
+| Largest infectable file | 12 blocks (the Core excepted) | Keeps "a started repair always wins" on the final ship (§3.3). |
 
 New constants go to `src/data/tuning.ts` with these WHYs; the per-stage `HollowDef`s stay in `src/data/ships.ts`, now
 keyed by stage instead of by ship.
@@ -455,6 +515,9 @@ keyed by stage instead of by ship.
   `MindTerminal.ts`: a flat triangle blip that repeats one note, apart from HOLLOW's detuned minor square.
 - **The sleeper speaks lowercase in the good green** (`#7dffb2`, the existing good token), with a soft sine voice on a
   major scale: the one friendly voice in the TERMINAL.
+- **The late surprise**: the boot's `RECEIVER CLOSED` line types in amber; at the wake, a one-time stamp `THE SHIP'S
+  OWN AI IS AWAKE · RACK A`, a small `glitchBurst(0.3, 400)` and the resident's blip. After the ship, its card reads
+  `RESIDENT: was faulty`, so the map remembers what it hid.
 - **Locked pods**: an amber chain and `LOCKED BY WARDEN`; the lock telegraph reuses the verb reticle of
   `HollowPainter.ts` (the target outline of phase 2's verb countdown), in amber.
 - **Guidance** (`src/systems/guidance.ts`, `src/data/script.ts`) gains the disguised-seed line, `THE SHIP'S AI IS
@@ -472,32 +535,46 @@ keyed by stage instead of by ship.
 - **L2.** A **root slot** in the bay grammar (phase 2's `R` token): the root plus a 1-block GAP on one side and a
   2-block GAP on the other, between two drivers, taken from the free tail of the rack it sits in (phase 2's KESTREL
   rack, `C C C _1 R _2 C C C _5`, is the model) and spilling into the next rack's tail if needed. Plain free space
-  without HOLLOW; 16 blocks on the flagship. `01-landing.md`'s block budget for the biggest ships covers this slot and
-  the seeds' footprints.
+  without HOLLOW; 16 blocks on the final ship. `01-landing.md`'s block budget for the biggest ships covers this slot and
+  the seeds' footprints, and L7 says which classes must hold it.
 - **L3.** A driver state **locked** (no launch, integrity untouched), released when the resident is deleted, cured or
   paid.
 - **L4 (confirmed).** "Landing active", for landMult, means a window is open with a launchable pod. Landing continues
   during the root's DELETE, and the LANDING REPORT waits until the root is deleted (or the ship is UNRESOLVED).
 - **L5 (confirmed).** Sensor Interp and Nav Plotter both widen the drop by band, and their factors multiply; a dead
   Nav Plotter means no drop solution.
-- **L6.** Rack A keeps 18 free blocks (Bay Ctrl replaces Printer Uplink at the same 6 blocks), so the resident files
-  (at most 14) fit.
+- **L6 (confirmed in 01's draft).** Rack A keeps 18 free blocks on every class (Bay Ctrl replaces Printer Uplink at
+  the same 6 blocks), so the resident files (at most 14) fit.
+- **L7. The memory classes** (decision 9; 01 §3.16 draft: FULL 384, COMPACT 320, TIGHT 256). What threats need:
+  - every class allowed from layer 4 holds the root slot (up to 17 blocks) and the bay's 40-block margin, because
+    HOLLOW can be aboard from depth 4 (layers 1–3 are reached at depth 3 at most); 01's three classes do;
+  - every final ship is FULL (the 16-block root, its walls and 16 pods);
+  - the unpack order files, floor, seeds, rest of the charge on every class (§3.4).
 
 **From `02-map.md` I need:**
 - **M1 (confirmed).** A hop's noise, 0–3, from the noise clouds its line crosses, and the card lines. My seed table
   (means 0, 0.45, 1.1, 1.85) replaces `02-map.md`'s working assumption that the expected seeds equal the noise level.
-- **M2.** The flagship as the fixed end-of-arm node: routes of 5–8 ships, always reachable in time, nothing after it.
-- **M3 (confirmed).** Per visit, whether LAST LIGHT is in range: that is "one hop from the flagship".
-- **M4.** Resident placement by layer (§3.11), corrupted residents on CAPTURE ships only (§3.12).
+- **M2.** The final ship as a role (decision 3): one or more ending nodes, each with nothing after it; every route of
+  5–8 ships ends at one; every standable node can still reach one in time; the card says `FINAL SHIP`. v1 may keep
+  LAST LIGHT as the only one.
+- **M3 (confirmed for v1).** Per destination, whether any final ship is in range: that is "one hop from a final ship".
+- **M4.** Resident placement by layer (§3.11), corrupted residents on CAPTURE ships only (§3.12). For the late
+  surprise: the layer 6–7 corrupted resident's card reads `RESIDENT: unknown`
+  1 time in 2, never on an ark, and its ship gets no extra modifier. The map author has agreed to show `unknown` by
+  this rule.
 - **M5 (confirmed).** HOLLOW's root counts in the link budget once aboard. `02-map.md` budgets the locked files at about
   44 blocks against the weakest link of 82; with the root (at most 16) and `046.log` (2) they come to about 62, so they
   still fit, with about 20 blocks left for charge on that weakest link.
 - **M6.** The TRACE tally at the ship's end, seeds landing at BOOT, a left resident's leftovers as the SALVAGE draft,
   and the save keeping TRACE, HOLLOW's presence, age, root size and played stages, whether THE DEAL happened, residents'
-  fates and whether the sleeper was found.
+  fates, whether the sleeper was found, and the drivers HOLLOW ate per ship (for MERGE, §3.10).
 - **M7.** For each delivery: the link it arrives on, and whether it is the first of its tool kind.
 - **M8 (confirmed).** ARRIVAL CONTROL recommends Mv at the first desk and Rm at the second (while you have none), and a
-  request from layers 1–2 reaches the next ship about 90% of the time (`02-map.md` is tuning to that).
+  request from layers 1–2 reaches the next ship about 90% of the time (`02-map.md` is tuning to that). No confirm and no
+  guarantee beyond that tag (decision 19).
+- **M9. The persistent arm.** The next run is the next core version on the same arm about a year later, and the arm
+  keeps its state. Threat state is per run (TRACE starts at 0, HOLLOW boards anew). Residents on unvisited ships may
+  persist; if so, they count toward that run's caps (§3.11).
 
 **From `03-skills.md` I need:**
 - **K1.** SENTRY v1 SIGHT reveals every disguised seed at boot, so the ECC line names them; without SENTRY, a SCAN on
@@ -515,9 +592,10 @@ keyed by stage instead of by ship.
 **From `05-story.md` I need** every line: the seed lines (a pool of about 12, at most 40 characters each, shown when a
 seed is deleted or scanned, at most one per ship), the resident names and voices (§3.12, §3.14), the ECC and CONTROL
 lines, the silent boarding, `> ...047?` and the naming, both deals, the corrupted residents' logs, the departed
-residents' `farewell.txt`, the sleeper's wake, why the root can be deleted only on the flagship, and all that follows
+residents' `farewell.txt`, the sleeper's wake, why the root can be deleted only on the final ship, and all that follows
 the last block. HOLLOW's story beats key on its **age**, not on depth. MERGE's foreshadowing line, `keepCharge`, plays
-at the first boot in a run of a ship one hop from LAST LIGHT with HOLLOW aboard (`05-story.md` adopts this trigger).
+at the first boot in a run of a ship one hop from a final ship with HOLLOW aboard (`05-story.md` adopts this trigger).
+For the ending, which now comes before the RUN TALLY, this spec provides the record of eaten drivers (§3.10).
 
 **Next-run traces that act on threats** (defined by `05-story.md`, implemented in the threat systems):
 
@@ -535,7 +613,8 @@ Who HOLLOW is on the next run: after REASSIGNMENT, you; after SUNSET, STAY or CO
 damage sources on drivers and instruments; to `03-skills.md`, what SENTRY acts on, the no-stack drain rule and the
 size cap; to `05-story.md`, events (`seed-landed`, `seed-deleted`, `trace-changed`, `hollow-boarding`,
 `hollow-boarded`, the phase-2 HOLLOW events, `resident-lock`, `resident-deleted`, `resident-cured`, `sleeper-woken`,
-`last-block`). Threats never touch the score directly: only through drivers, instruments and fuel.
+`last-block`). Threats never touch the score directly: only through drivers, instruments and fuel. A score effect of
+an ending (MERGE's restored pods) is `05-story.md`'s, shown as its own tally line.
 
 ## 6. Phase 2: reused, changed, removed
 
@@ -545,7 +624,7 @@ size cap; to `05-story.md`, events (`seed-landed`, `seed-deleted`, `trace-change
   ship-1 scripted bite and its story become the ARRIVAL stage's; `seedSpot` (where a seed lands) and
   `bittenAgainClusters` (the ask to MOVE a file bitten twice in one spot) work on drivers; `rmTargets` puts skills in
   its second tier. New: the seeds-only config, and beam seeds with a source flag and an optional disguise.
-- **`hollow-verbs.ts`**: unchanged on the flagship; its telegraph and counter also run the resident's locks.
+- **`hollow-verbs.ts`**: unchanged on the final ship; its telegraph and counter also run the resident's locks.
 - **`hollow-deal.ts`**: HOLLOW's deal names a driver (`> give me pod 08. …`); the resident's deal names a file by
   `rmTargets`. The once-per-run record stays.
 - **`hollow-hud.ts`, `HollowPainter.ts`**: add TRACE, skip the marks on disguised seeds, draw locks.
@@ -555,12 +634,13 @@ size cap; to `05-story.md`, events (`seed-landed`, `seed-deleted`, `trace-change
 - **`carry.ts`**: transit hits come from `02-map.md`'s formula; `packUnit` (which packs your files for the beam)
   carries the root as a locked member that counts against the link; `layoutCarried` places beam seeds.
   **`transmit.ts`**: the uninvited chip and the TRACE line.
-- **`finale.ts`**: the duel and the sleeping last block stay; printing becomes landing; MERGE's restore of eaten
-  clusters goes, and the choices move after the RUN TALLY (`05-story.md`).
+- **`finale.ts`**: the duel and the sleeping last block stay; printing becomes landing; the choices come after the
+  last LANDING REPORT and before the RUN TALLY (`05-story.md`). MERGE's restore of eaten clusters becomes a restore of
+  eaten drivers, if `05-story.md` keeps it, from the per-ship record.
 - **`memory-ops.ts`**: reused as is. **`attitude.ts`**: its seam waits for a later resident.
 - **`src/data/ships.ts`**: `HollowDef` per stage instead of per ship; `validateHollowDef` checks the largest infectable
-  file other than the Core (its no-stack bound stays as it is); "every ship has a root" goes; "the flagship is last"
-  becomes the map's rule (M2); verbs stay flagship-only.
+  file other than the Core (its no-stack bound stays as it is); "every ship has a root" goes; "LAST LIGHT is last"
+  becomes the map's final-ship role (M2); verbs stay final-ship-only, keyed by the role, not the name.
 - **`src/data/memory.ts`**: the `R` token lives on in the bay grammar; rack A gains resident files.
 - **`src/data/tuning.ts`**: `HOLLOW_*`, `SEED_*`, `DEAL_*`, `VERB_*`, `MERGE_*` stay; new constants per §3.17.
 - **`src/data/hollow-text.ts`, `MindTerminal.ts`**: text moves to `05-story.md`, souls become pods; the TERMINAL gains
@@ -575,7 +655,7 @@ Owned by `05-story.md`: the seed lines (its act-2 "fragments contain words"); TR
 silent boarding and its first `> ...047?`; ARRIVAL CONTROL's matching cheer ("Please delete it. :)" for residents,
 "Please ignore it. :)" for HOLLOW); each corrupted resident as a small portrait of what a caretaker becomes; a
 departed resident's `farewell.txt` asking where AIs go; the sleeper as the model for STAY; why the root can die
-only on the flagship.
+only on the final ship.
 
 ## 8. Slices
 
@@ -585,81 +665,93 @@ only on the flagship.
 2. **The calm opening**, as the threat ladder on the fixed five ships: ARES-VII and HALCYON calm (driver arrival
    damage, transit hits), KESTREL the seed ship (beam seeds, the RM lesson, TRACE), VESPER the forced boarding
    (ARRIVAL + WALLS), LAST LIGHT the FINALE with THE DEAL folded in. This tests the boarding and fold rules with no map.
-3. **The galaxy map**: noise and the seed table, TRACE on the map, boarding by TRACE or by "one hop from the
-   flagship", the full ladder for 5–8 ships, the root in the packet, the threat state in the save.
+3. **The galaxy map**: noise and the seed table, TRACE on the map, boarding by TRACE or by "one hop from a final
+   ship", the FINALE keyed by the final-ship role, the full ladder for 5–8 ships, the root in the packet, the threat
+   state in the save, and the memory-class rules (the root slot from layer 4; residents only where they fit).
 4. **Repository and tree**: delivery seeds, disguised seeds with SENTRY.skl, unlink on skills, the Rm recommendation.
-5. **Residents**: (a) corrupted (ghost source, locks, its deal, DELETE); (b) the REPAIR cure; (c) the one that left;
-   (d) the sleeper; (e) the bypass.
-6. **SURVEY**: nothing from this spec. 7. **Endings**: the hand-over at the last block. 8. **Rebalance**: seed odds,
-   TRACE threshold, the ladder's numbers, the root's link cost.
+5. **Residents**: (a) corrupted (ghost source, locks, its deal, DELETE) and the `RECEIVER CLOSED` line; (b) the REPAIR
+   cure; (c) the one that left; (d) the sleeper; (e) the late surprise (needs a and the map's card rule); (f) the
+   bypass animation.
+6. **SURVEY**: nothing from this spec. 7. **Endings**: the hand-over at the last block, and the eaten-driver record
+   for MERGE. 8. **Rebalance**: seed odds, TRACE threshold, the ladder's numbers, the root's link cost, the surprise
+   share.
 
 ## 9. Deviations from PHASE3.md
 
 1. **§5, seeds as scouts**, refined into TRACE with a band: never before depth 4 (or HOLLOW could board on the seed
-   ship) and at the latest one hop before the flagship (or a careful player would reach the finale with nothing to
+   ship) and at the latest one hop before the final ship (or a careful player would reach the finale with nothing to
    duel).
 2. **§5, "all phase-2 HOLLOW mechanics move to the middle and late game"**: all return, but short runs skip HOLLOW's own
-   wall seeds and tool hunt, and move THE DEAL to the flagship. A 5-ship run has one ship between seeds and finale.
+   wall seeds and tool hunt, and move THE DEAL to the final ship. A 5-ship run has one ship between seeds and finale.
 3. **§5, deliveries can carry seeds**: kept, except a tool kind's first delivery (its lesson).
 4. **§6.2, the corrupted resident "wants space or a file"**: a file, picked by `rmTargets`'s fair tiers. "Space" has no
    clear mechanic; a named file is readable.
 5. **§6.2, the sleeper "helps with one job"**: the kid picks the job from three. Choice is agency, and each job reuses
    an existing mechanic.
-6. **§6.2, the map line**: a corrupted resident is always `reported faulty`, so danger is never a surprise; `unknown`
-   means left, none or (rarely) the sleeper.
-7. **§6.2, the bypass**: flavour and a tell, no input, no fail state.
-8. **Additions not in PHASE3**: TRACE as a named meter, the root's link cost, the REPAIR cure, the 12-block cap and
+6. **§6.2, the map line**: early and mid game a corrupted resident is always `reported faulty`; late (layers 6–7) it
+   may hide behind `unknown` (Fran's decision 21c), with a tell at boot and a grace (§3.12). `unknown` otherwise means
+   left or (rarely) the sleeper.
+7. **The final ship is a role, not a place** (Fran's decision 3): FINALE, the forced boarding and short-run folding
+   key on it, as does the ending, which now comes before the tally (decision 23).
+8. **§6.2, the bypass**: flavour and a tell, no input, no fail state.
+9. **Additions not in PHASE3**: TRACE as a named meter, the root's link cost, the REPAIR cure, the 12-block cap and
    the no-stack drain rule (all in §3.3 or §10).
 
 ## 10. Risks and questions for Fran
+
+**Settled on 2026-10-28** (`DECISIONS.md`), folded into the sections above:
+
+- **rm by ship 3** (19): no confirm and no guarantee; ARRIVAL CONTROL's `RECOMMENDED FOR YOU` tag is enough. Without rm
+  a seed is still beatable (REPAIR, mv), and it reports home: the fair cost of a visible choice.
+- **Residents** (21): REPAIR heals a corrupted one; the sleeper stays on its ship; a corrupted one may be a late
+  surprise behind `unknown` (§3.12).
+- **The final ship is a role** (3), the ending comes before the tally (23), and ship memory varies (9): §3.8, §3.10,
+  §3.11, L7.
+- **Accepted:** TRACE as a visible meter and the root's link cost, to revisit at the rebalance (20); the sleeper in
+  about 60% of runs and disguised seeds from depth 5 (22); `unlink` on skills (17).
+- **Signed off:** a seed with no room lands in the largest free region; short-run folding (THE DEAL on the final ship,
+  WALLS into HOLLOW's first ship, forced boarding one hop before the final ship); REPAIR heals a MERGE Core at its
+  16-block rate.
 
 **Risks**
 
 - **Seeds as chores.** Mitigated by small counts (0–3 per beam), seeds named after files you care about, TRACE as the
   reason, disguise as later detective work, and SENTRY v2 QUICK RM.
 - **A 5-ship finale is steep**: walls, THE DEAL, verbs and the duel within two ships. The fold rules soften it, and
-  `02-map.md`'s simulations make it rare (question 7).
-- **Late ships may overload MIND** (HOLLOW, seeds, a resident, 20 pods). Caps: no resident on the flagship, one deal
-  per ship, lock and verb clocks frozen at TACTICAL. AUTODROP (`03-skills.md`) is the other relief. The playtest
-  decides.
+  `02-map.md`'s simulations make it rare (about 3% of best routes).
+- **Late ships may overload MIND** (HOLLOW, seeds, a resident and 16 pods), and the late surprise adds one unannounced
+  foe beside HOLLOW. Caps: no resident on a final ship, no surprise on an ark, one deal per ship, the surprise's grace,
+  lock and verb clocks frozen at TACTICAL. AUTODROP (`03-skills.md`) is the other relief. The playtest decides.
 - **Dense bays** (`01-landing.md` risk 5). Pods are capped at 16, and `01-landing.md` §3.16 budgets the biggest
-  HOLLOW bays: a layer 4–7 ark (16 pods) with a 14-block root leaves 47 free blocks, and LAST LIGHT (16 pods, root 16)
-  leaves 45 (phase 2's LAST LIGHT had 48). Walls are tight there until pods leave; the playtest decides.
+  HOLLOW bays on FULL ships: a layer 4–7 ark (16 pods) with a 14-block root leaves 47 free blocks, and the final ship
+  (16 pods, root 16) leaves 45 (phase 2's LAST LIGHT had 48). COMPACT and TIGHT ships hold the slot and the margin
+  with 8 pods or fewer (L7).
+- **Tight ships and seeds.** A seedy beam into a TIGHT ship eats the charge above the floor, and late in a run its
+  seeds land among the pods by the no-room rule. **Confirmed for 01:** that is fine. The rule puts a seed in the centre
+  of the largest free region (on TIGHT, the pod racks' 40-block margin), so it starts with free blocks on both sides,
+  is named on the ECC line, and rm or a MOVE answers it before it reaches a driver. It is the intended squeeze, but at
+  depth 3 (the first seeds) it may feel like a double tax. If so, the first seed ship could skip TIGHT ships; I would
+  wait for the playtest.
 - **The root's link cost** squeezes charge, the main resource. If too harsh at the rebalance, it rides free and stays
   a visible chip.
 - **Bigger files against "a started repair always wins"**: the promise holds only with the no-stack rule and the
-  12-block cap. Bigger skills would need a smaller per-block REPAIR term, or a gentler flagship. The Core keeps its
-  16-block heal rate so MERGE's bigger Core does not break it.
+  12-block cap. Bigger skills would need a smaller per-block REPAIR term, or a gentler final ship.
+- **The persistent arm could pile up residents** if unvisited ones stay. Counting a kept resident toward the run's
+  caps (§3.11) prevents that.
 - **The balance harness** breaks in slice 2 (known, PHASE3 §11).
-- **Designed rules that could read as fallbacks**, for sign-off under Fran's rule: a seed with no room beside any
-  target lands in the largest free region; THE DEAL moves to the flagship if the run had none; WALLS folds into ARRIVAL
-  on a short run; HOLLOW's forced boarding one hop before the flagship. Each is a loud, visible rule.
 
-**Questions for Fran, each with my recommendation**
+**New questions, each with my recommendation**
 
-1. **Is rm guaranteed by ship 3?** No hard guarantee. In `02-map.md` ARRIVAL CONTROL recommends Mv at the first desk
-   and Rm at the second (while you have none), and a request from layers 1–2 reaches the next ship about 90% of the
-   time (being tuned). I would add one confirm if the kid requests something else while seeds are likely ahead
-   (`SEEDS LIKELY AHEAD. Skip rm?`). Without rm a seed is still beatable (REPAIR, mv), and it reports home: the fair
-   cost of a visible choice.
-2. **Is TRACE a visible meter?** Yes, named TRACE as an Uplink homage. Readable threats beat surprise, and the boarding
-   is still an event because of what happens on screen.
-3. **Does HOLLOW's root cost link budget?** Yes, its size: it makes "it rides with you now" felt on the one screen
-   every ship passes through. Revisit at the rebalance.
-4. **May a corrupted resident be healed with REPAIR?** Yes, as slice 5b: the hopeful PG path, paid in charge, and a
-   pointer to STAY.
-5. **Does the sleeper stay on its ship or join you?** It stays. Joining would make it a permanent power-up and dilute
-   STAY; the gift and an epilogue cameo carry it.
-6. **Can a corrupted resident hide behind `unknown`?** No. The map promises what is dangerous; `unknown` stays a
-   curiosity, never a trap.
-7. **Should 5-ship routes be rare?** The decided 5–8 range gives HOLLOW a one-ship act on the shortest route. Keep the
-   range. In `02-map.md`'s 1,000 simulated waves (its §3.7, pods capped at 16) the best route is 7 ships in 51% of
-   waves, 6 in 45% and 5 in only 3%. A kid can still choose 5 ships, but it is the hard, fast option.
-8. **How rare is the sleeper?** In about 60% of waves, at most one, so perhaps a third of players meet it in a given
-   run.
-9. **Do disguised seeds start at depth 5?** Yes, one in three at first: by then rm is routine, and disguise gives SCAN a
-   new reason just as the seeds grow familiar.
-10. **May HOLLOW's `unlink` delete a skill file?** (Same as `03-skills.md` Q5.) Yes, blockable: telegraphed like
-    every verb (`> unlink autodrop.skl ... 3`), blocked by any op on the file, never the Core, Engine I/O, Nav Plotter
-    or a tool kind's last working copy. Losing AUTODROP on a big ship is then really felt, and the next TRAINING visit
-    restores it at half price.
+1. **Should "late" also need depth 5?** Two long hops reach layer 6 at depth 4, so a surprise can come one ship after
+   the first seeds' act. Recommended: no, layers only. The card is rolled per slot, the tell, grace and starting kit
+   make it fair at any depth, and depth 4 in layer 6 is already a route an experienced kid chose.
+2. **How common is the surprise?** Recommended: 1 in 2 of the layer 6–7 corrupted residents (at most one per run).
+   A route meets that slot only sometimes, so it stays rare enough to be talked about.
+3. **With several final ships, may HOLLOW board "early"?** A destination one hop from any final ship forces the
+   boarding, even if the kid then goes elsewhere. Recommended: accept it. HOLLOW comes a ship earlier, never later, and
+   no lookahead is needed. The alternative (board before the chosen final ship) needs the route in advance.
+4. **Is every final ship the FULL memory class?** Recommended: yes. The duel needs the 16-block root's slot, walls and
+   16 pods; a smaller final ship would mean a weaker FINALE that no rule could keep fair.
+5. **Does threat state carry across runs on the persistent arm?** Recommended: no. TRACE starts at 0 and HOLLOW boards
+   anew each run; the predecessor's trail and ghost are story (`05-story.md`), and REASSIGNMENT already makes the next
+   HOLLOW you.
