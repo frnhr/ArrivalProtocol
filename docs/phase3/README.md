@@ -178,6 +178,6 @@ Every spec uses these, so the five fit together. A spec that needed one changed 
 6. **Phase 2: reused, changed, removed**, by system and file, in prose.
 7. **Story hooks**: one short section; `05-story.md` owns the writing.
 8. **Slices**: what goes into which implementation slice of PHASE3 §13.
-9. **Deviations from PHASE3.md**: each proposed item changed or dropped, with the reason. Decided items cannot change;
-   if one looks wrong, raise it under 10.
+9. **Deviations from PHASE3.md**: each proposed item changed or dropped, with the reason. Decided items are not changed
+   silently; if one looks wrong or hinders good gameplay, raise it under 10 with the argument (see `DECISIONS.md`).
 10. **Risks and questions for Fran**, each with a recommended answer.

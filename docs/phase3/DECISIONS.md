@@ -4,6 +4,11 @@ Fran's answers to the 26 decisions and the 8 designed rules in `README.md`, plus
 **The five specs have not been updated to match yet.** Where an answer differs from a spec's recommendation, this file
 wins, and the spec text is stale until it is reworked. The numbers follow the README's list.
 
+**No decision here is final.** Any of them, and any "decided" item in `docs/PHASE3.md`, may be reversed when there is a
+good argument. Wherever a decision gets in the way of good gameplay, in a spec, an implementation or a playtest, raise
+it to Fran with the argument and a proposal, to be confirmed or reverted. Do not quietly work around it, and do not
+quietly keep it either.
+
 ## Changed from the specs' recommendation
 
 These need spec rework:
