@@ -6,14 +6,15 @@ built. Constants named here are new entries for `src/data/tuning.ts` unless said
 ## 1. Summary
 
 - After ORBIT LOCK a new run phase, **LANDING**, replaces `printing`. Each pod carries 200 colonists and is flown by an
-  8-block **pod driver** file in racks B–D (`POD 03 · OKAFOR`).
-- The NAV PLOT draws the pod's arc to a **drop dot** sliding along the planet; each landing zone (LZ) is a **bracket**
-  on the rim, and a new GROUND TRACK strip shows both at readable scale. **[L]** launches while the dot is inside.
-- The **bay** holds 4 pods, fires one every 2 tactical s and reloads one every 20.
-- The dot's width grows with altitude and is multiplied by Sensor Interp, Nav Plotter and driver damage; a failing driver also
-  lands hard. Damage pushes you lower, and a low orbit decays and costs FUEL: pay with REPAIR CHARGE or with FUEL.
-- **The planet does not rotate**: one window per LZ per orbit, SKIP between windows, TACTICAL ×20 inside them, about
-  24–30 real seconds per window. Score per pod = 200 × where × how it landed; a **LANDING REPORT** follows.
+  8-block **pod driver** file in the pod racks (`POD 03 · OKAFOR`).
+- The NAV PLOT draws the pod's arc to a **drop dot** sliding along the planet; each landing zone (LZ) is a **bracket**;
+  a GROUND TRACK strip shows both at readable scale. **[L]** launches while the dot is inside. The **bay** holds 4.
+- The dot widens with altitude and with Sensor Interp, Nav Plotter and driver damage; a failing driver lands hard.
+  Damage pushes you lower, and a low orbit decays and costs FUEL: pay with REPAIR CHARGE or with FUEL.
+- **The planet does not rotate**: one window per LZ per orbit, SKIP between windows, about 24–30 real seconds per
+  window. Score per pod = 200 × where × how it landed; a **LANDING REPORT** follows.
+- **Memory varies by ship** in whole racks: FULL 384, COMPACT 320, TIGHT 256. A TIGHT (light) ship has one receiver
+  rack, room for 88 blocks of you: early that costs REPAIR CHARGE, late it costs files. Pods stay capped at 16.
 
 ## 2. The player's experience
 
@@ -40,8 +41,8 @@ lands with a bell. `+200 LANDED · LZ-A` floats up from the bracket, a `FIRST LA
 taps at the 2-second rhythm land the others. `LZ-A 3/3 ✓` plays a chord, the stamp `ALL PODS DOWN` follows, and then
 the LANDING REPORT. The landing took about 40 seconds.
 
-**Ship 2 (HALCYON at Tessaly, layer 2, a standard ship: 5 pods, LZ-A 3 and LZ-B 2, GENTLE).** Two brackets, and the
-lesson is the split. A transit hit left Sensor
+**Ship 2 (HALCYON at Tessaly, layer 2, a standard COMPACT ship: 5 pods, LZ-A 3 and LZ-B 2, GENTLE).** Two brackets,
+and the lesson is the split. A transit hit left Sensor
 Interp at 62%, so the dot is half again as wide and no longer fits the narrower LZ-B: `DROP TOO WIDE FOR LZ-B —
 REPAIR SENSOR INTERP, or fly lower`. Repairing costs charge the kid will want on ship 3. Flying lower is one RETRO
 burn that the strip times and releases, but below the DRAG line the orbit sinks a little every pass and costs FUEL.
@@ -51,6 +52,13 @@ After three LZ-A pods, `LZ-A FULL — hold the pods for LZ-B` stops the classic 
 LZ-B. HOLLOW bites a driver in the bay, so the kid TABs in mid-window: OVERCLOCK slows the world to a quarter, the
 window waits, the repair wins, and the kid TABs back for the last two pods. With AUTODROP the kid stays in blue while
 the pods go down on their own; without it, a 16-pod ark is 5–7 windows by hand, which Fran wants felt.
+
+**A tight ship, early and late.** At ship 2's DESK the kid looks at PETREL, a light ship with 3 pods. Its card reads
+`MEMORY 256 · TIGHT · ROOM FOR YOU 88` and, under it, `YOU FIT · CHARGE SQUEEZED: 15 ARRIVES`. CONTROL: "Cosy little
+ship! Pack light. :)" The kid goes anyway: a calm ship with three pods needs little charge. At depth 6 the card of
+WAYFARER, a light ship, says `LEAVE 20 BEHIND`. On the PACKET screen a second bar sits under the link, `ROOM AT WAYFARER 88`, and
+TRANSMIT ▸ waits until the kid has left Autopilot, Telemetry, Repair.bak and SURVEY.skl behind. The charge line turns
+red: `CHARGE 38 → 12 ON ARRIVAL · 26 WON'T FIT`. Or the kid picks the 9-pod ship on the noisy link instead.
 
 **Why ships 1–2 are fun with no adversary.** The landing is a new verb with a skill test (dot in the bracket) and
 instant, loud feedback: a streak, a bell, a counter, a voice from the ground. The crash course keeps the flight tense.
@@ -261,8 +269,7 @@ ships. Said out loud: "Land in a bracket with room: full points. Too many in one
 bracket: what the planet allows. A bad driver lands hard: half."
 
 Fran's "400 + 800" case: LZ-A gets 400 (all correct), LZ-B gets 600 correct plus 200 mislanded. This spec counts each
-colonist once: 1,000 × 1 + 200 × 0.75 = 1,150 points, and the report says `LZ-A 200 SHORT`. Question 2 asks about
-"200 + 200".
+colonist once: 1,000 × 1 + 200 × 0.75 = 1,150 points, and the report says `LZ-A 200 SHORT` (decision 11).
 
 **Stars** stay three, and each still carries +6 REPAIR CHARGE (`STAR_CHARGE_BONUS`):
 - ★ ORBIT LOCKED (unchanged);
@@ -279,7 +286,9 @@ IN ORBIT · NOT COUNTED`) ends the landing at any time, the way out when drivers
 **No pod stays aboard.** Whenever a landing ends with the ship in orbit (every pod launched, END LANDING, no pod able
 to launch, STRANDED, or EMERGENCY), the bay releases every pod still aboard, with or without a driver, and parks it in
 the ship's orbit with its beacon on: `POD 07 · PARKED IN ORBIT · fate unknown`. Parked pods are not counted, and the
-ship is empty, which `05-story.md`'s SPARE and SUNSET endings need on the last ship. On the plot they ride the ship's
+ship is empty, which `05-story.md`'s SPARE and SUNSET endings need on the final ship. The result keeps each parked pod
+and why it stayed (driver eaten, dead, or no time), so an ending that restores eaten pods (decision 23, `05-story.md`'s
+call) can count them explicitly, never by a hidden rule. On the plot they ride the ship's
 orbit as small blinking beacons. Only a ship that leaves orbit (ESCAPED, CRASHED, ABANDONED) takes its remaining pods
 with it: `POD 07 · NOT LAUNCHED`. A crash after decay with an empty tank is rare and plays as CRASHED. The result
 record keeps the README's category name, "not launched", for both.
@@ -289,10 +298,11 @@ launch; `PARKED IN ORBIT · fate unknown` after a landing that ended in orbit; `
 orbit with pods aboard. A pod is never called "lost", "offline" or "not recovered". An off-site pod on a HARSH world
 simply scores 0 (05's epilogue says they were fetched).
 
-With the ship empty the landing lingers `LANDING_DONE_LINGER_SEC` 1.5 s, then the report. **On LAST LIGHT the report
-waits for the finale** (04-threats §3.10), as phase 2's printer waited (`finalePending`). If every pod is down or
+With the ship empty the landing lingers `LANDING_DONE_LINGER_SEC` 1.5 s, then the report. **On the final ship the
+report waits for the finale** (04-threats §3.10), as phase 2's printer waited (`finalePending`). If every pod is down or
 parked before the root is deleted, the strip says `EVERY POD IS DOWN — now DELETE THE ROOT` (row L0 in §3.11), and the
-LANDING REPORT comes after the duel.
+LANDING REPORT comes after the duel. The run-end order after it is `02-map.md`'s (decision 23: the ending is chosen
+before the score screen); this spec assumes only that the final ship's report comes after the finale and before both.
 
 ### 3.11 Guidance: the landing table
 
@@ -301,7 +311,7 @@ LANDING REPORT comes after the duel.
 
 | # | Situation | Text | Urgency |
 |---|---|---|---|
-| L0 | LAST LIGHT: the ship is empty and the root is not deleted yet | `EVERY POD IS DOWN — now DELETE THE ROOT` | now |
+| L0 | The final ship: it is empty and the root is not deleted yet | `EVERY POD IS DOWN — now DELETE THE ROOT` | now |
 | L1 | Nav Plotter dead or missing | `NO DROP SOLUTION — TAB, REPAIR NAV PLOTTER` | now |
 | L2 | Thrust delivered, or a trim or GO LOWER burn ≤ 8 tactical s away, or the next window is out of band | the flight table's row (F3–F11, GO LOWER's KEEP HOLDING) | as the F row |
 | L3 | A window is open and its LZ is full | `LZ-A FULL — hold the pods for LZ-B` | now |
@@ -354,7 +364,7 @@ TACTICAL":
 - **Choosing:** click a candidate; a pill offers `SET AS LZ-A (800)` for each LZ whose count fits its ROOM, and the
   guess is dropped. One LZ per site; an LZ can't move once a pod has landed in it.
 - **Without SURVEY** a POOR planet is still playable on the guesses, only worse. A survey ship never blocks the run
-  (question 4).
+  (decision 12).
 - **Candidates:** the LZ count plus 3, with at least one FLAT site with enough ROOM per LZ.
 
 ### 3.14 Hooks for AUTODROP (03 owns its versions)
@@ -377,10 +387,10 @@ inside a SKIP. The friendly resident that "runs the drops" (PHASE3 §6.2) uses t
 ### 3.15 Landing parameters for the map's ship generator
 
 `02-map.md` rolls every world slot's size and pods by slot, never by route: 20 worlds in 8 layers. Its formulas are the
-reference: light 3 + ⌊layer ÷ 3⌋ pods (3–5), standard 3 + layer (5–10), ark round(2.2 × (4 + layer)) capped at 16 by
-§3.16 (15 in layer 3, 16 beyond), ARES-VII 3 and LAST LIGHT 16. The sizes in the layer table below are computed from
-them. This spec's roller turns them into landing parameters. Bay, cadence
-and reload are the same everywhere.
+reference: light 3 + ⌊layer ÷ 3⌋ pods (3–5), standard 3 + layer (5–10), ark round(2.2 × (4 + layer)) capped at 16
+(decision 9; 15 in layer 3, 16 beyond), ARES-VII 3 and the final ship 16 (v1: LAST LIGHT). The sizes in the layer
+table below are computed from them, and the memory class follows from size and pods (§3.16). This spec's roller turns
+them into landing parameters. Bay, cadence and reload are the same everywhere.
 
 **The roller.** It takes (slot, layer, pods) and draws from `childRng(runSeed, slot, 'landing')`, so a ship lands the
 same whatever route led to it. It returns:
@@ -416,7 +426,7 @@ smallest keeps at least one (6 → 4 · 2).
 | 5 | light 4, standard 8, ark 16 | STANDARD, one NARROW | each class 1/3 | 1 | POOR 1 in 3 | as layer 4 | on |
 | 6 | light 5, standard 9, ark 16 | rolled, at least one STANDARD | each class 1/3 | 1–2 | POOR 1 in 2 | as layer 4 | on |
 | 7 | light 5, standard 10, ark 16 | as layer 6 | each class 1/3 | 2 | POOR 1 in 2 | as layer 4 | on |
-| 8 | LAST LIGHT: 16 | STANDARD ×3, NARROW ×1 | GENTLE (New Haven) | 1 | GOOD | as layer 4 | on |
+| 8 | the final ship, 16 (v1: LAST LIGHT) | STANDARD ×3, NARROW ×1 | GENTLE (New Haven) | 1 | GOOD | as layer 4 | on |
 
 **Authored worlds:**
 - ARES-VII is the layer-1 row as written: POD 01 OKAFOR, POD 02 BRANDT at 44%, POD 03 AL-SAYED.
@@ -434,84 +444,118 @@ by a long hop at depth 2 is the opening's big prize: 15 pods, about 6 windows by
 - the class, with a terrain word rolled from the class's examples in §3.6: `PLAINS · off-site pods score half`,
   `ROCKY · off-site pods score a quarter`, `OCEAN · off-site pods score nothing`;
 - `NO-GO ZONES` when the planet has arcs;
-- `LZ: 2 · SET BY ARRIVAL CONTROL`, or `LZ: 3 · SURVEY NEEDED` on POOR planets.
+- `LZ: 2 · SET BY ARRIVAL CONTROL`, or `LZ: 3 · SURVEY NEEDED` on POOR planets;
+- the memory row and its fit line (§3.16): `MEMORY 320`, or `MEMORY 256 · TIGHT · ROOM FOR YOU 88`.
 
 **Placement rules** (unchanged):
 - brackets at least 12° apart edge to edge;
 - from layer 3, one LZ pair may be a double window (12–30° apart, sharing a bay load);
 - no-go arcs within 150 km of a bracket edge;
 - no POOR planet before layer 5;
-- **at most 16 pods on any ship** (§3.16).
+- **at most 16 pods on any ship** (decision 9), and no more than the ship's memory class holds (§3.16).
 
 Two long hops can reach a layer-5 POOR ship at depth 3, before 03's SURVEY can be trained. ARRIVAL CONTROL's guesses
-keep that ship playable (question 4).
+keep that ship playable (decision 12).
 
-### 3.16 The block budget (rack layouts)
+### 3.16 Memory classes and the block budget
 
-This spec owns the rack layouts. The other specs ask for room as follows:
-- **Rack A**: 04 needs at least 14 free blocks on resident ships (WARDEN.sys 10; MOTH.sys 12 plus sleep.lock 1; a
-  left resident's log and leftovers at most 14).
-- **Racks E–F**: 05's locked 2-block `046.log` in rack F. 04's beam seeds take 7 blocks each (GAP 1, seed 2, WALL 4),
-  0–3 per beam, in E–F's free tails. 03's skills total up to 34 blocks. 05's MERGE trace makes the Core 8 blocks
-  bigger next run.
-- **Rack D**: 03 needs 24 or more trailing free blocks for the unit's spill.
-- **Racks B–D**: 04 needs a root slot of the root plus GAPs of 1 and 2 (11–19 blocks; plain free space on ships
-  without HOLLOW aboard).
+This spec owns the memory model and the rack layouts. Decision 9: pods stay capped at 16, and smaller ships have less
+memory, so some are tight for the unit.
 
-Fixed parts:
-- **Rack A** keeps phase 2's 46 blocks of ship files (Bay Ctrl takes Printer Uplink's 6) and 18 free. A resident takes at
-  most 14, which leaves at least 4. No conflict.
-- **Racks E–F hold the unit as one block.** This is a change to `layoutCarried` in `src/systems/carry.ts`.
-  - **The problem today:** rack E's list ends where rack F starts, so a big rack E overflows into rack D while rack F
-    still has free blocks. AI files 52, skills 34 and two FUEL TRIMs make 90 blocks, which puts 26 into rack D before
-    any seed (34 after a MERGE's +8 Core). With seeds behind skills it reaches 55, past the 24-block tail, where
-    `trimTrailingFree` (`src/data/memory.ts`) throws.
-  - **Phase 3's layout:** rack E's list, rack F's list and REPAIR CHARGE go back to back from rack E's start. Skills
-    may run into rack F, and the free space sits after the block, at the end of rack F. Only a block longer than 128 is
-    right-aligned to rack F's end, with its start moving back into rack D's tail. Right-aligning only on overflow keeps
-    the Core at rack E's start on almost every ship, as today; aligning every block right would be a one-line change.
-  - **The order inside the block keeps the arrival floor:** first the files, then the floor's 12 blocks of charge,
-    then each beam seed behind its target (04's GAP 1, seed 2, WALL 4) while there is room, then the rest of the
-    charge.
-- **The worst case on 02's longest link (123 blocks):**
-  - Files are bounded by the link, so at most 123 (a full kit is 114 including `046.log`; a MERGE run's is 122).
-  - A FIREWALL that SENTRY compiles at boot adds 2, and only while fewer than two are owned. The floor adds 12. That
-    makes 137 blocks, 9 into the 24-block tail.
-  - Seeds then have 15 blocks of room: two fit behind their targets. In this corner only, a third seed lands by 04's
-    own rule for a seed with no room (the centre of the largest free region).
-  - Charge above the floor fills what is left, and the rest is lost loudly (phase 2's `CHARGE OVERFLOW`). Nothing
-    throws.
-  - Files, a compiled FIREWALL and the floor fit for any link up to 138 blocks, so 02's links (82–123) and its
-    131-block bound are inside that. A normal mid-run unit (about 100 blocks, one seed) never leaves racks E–F.
-- **Racks B–D** take 8 blocks per pod and the root slot. They must keep **at least 40 free blocks** (the root's gaps
-  not counted): the 24-block tail, plus 16 for walls and MOVEs (phase 2's calm-rack margin).
+**The parts of memory**, in address order, with what the other specs ask of each:
+- **Rack A, the ship's own files:** phase 2's 46 blocks (Bay Ctrl takes Printer Uplink's 6) and 18 free. Every ship
+  has it. 04 needs at least 14 free on resident ships (WARDEN.sys 10; MOTH.sys 12 plus sleep.lock 1; a left resident's
+  log and leftovers at most 14), which leaves at least 4. No conflict.
+- **The pod racks (B, C, and D on big ships):** 8 blocks per driver, and 04's root slot (the root plus GAPs of 1 and 2,
+  11–19 blocks; plain free space with no HOLLOW aboard). They keep **at least 40 free blocks** (the root's gaps not
+  counted): the 24-block **tail** at the end of the last pod rack, which the unit may spill into, plus 16 for walls
+  and MOVEs (phase 2's calm-rack margin).
+- **The receiver (E, and F on all but TIGHT ships):** where the unit lands. It holds 05's locked 2-block `046.log`,
+  03's skills (up to 34 blocks), 04's beam seeds (7 blocks each: GAP 1, seed 2, WALL 4; 0–3 per beam) and the charge.
+  05's MERGE trace makes the Core 8 blocks bigger next run.
 
-| Case | Rack A (64) | Racks B–D (192), as layout strings (`P` a pod driver, `R n` the root slot) | Racks E–F (128) |
-|---|---|---|---|
-| Layer 1, ARES-VII: 3 pods, calm, fresh unit | 46 used, 18 free | B `P P P _40` · C `_64` · D `_64` (168 free) | E 52 + 12 free · F 49 + 15 free |
-| Layer 7, standard: 10 pods, a 14-block root aboard, a resident, 3 seeds, a 123 link | 60 used, 4 free | B `P P P P P P _16` · C `P P _2 R14 _1 P _23` · D `P _56` (95 free; 56 trailing) | 144 needed: E–F full, 16 into the D tail |
-| Layer 8, LAST LIGHT: 16 pods, R16, no resident (a layer 4–7 ark is the same with R14 and 47 free) | 46 used, 18 free | B `P P P P P P P _8` · C `P P P P _2 R16 _1 P _5` · D `P P P P _32` (45 free, 32 of them trailing; phase 2's LAST LIGHT had 48) | up to 144, as above |
-| An uncapped ark (02's first draft): 20 pods, a 14-block root, a resident, 3 seeds | 60 used, 4 free | 160 + 17 = 177 used, 15 free: **25 short** of 40 | 16 spill with nowhere to go |
+**The classes.** Memory comes in whole racks of 64. Racks keep their names on every ship, so rack E is always you.
 
-**A 20-pod ship does not fit in 384 blocks.** The options:
-1. **Cap pods at 16** (the flagship's size). Every case above fits with phase 2's own margins, the memory model is
-   unchanged, and 16 pods are still 5–7 windows by hand, so losing AUTODROP is felt.
-2. **A seventh rack on big ships** (`RACK G · BAY`, after F, "a bigger ship has a bigger computer"). 20 pods fit with
-   79 free. The cost: 384 is a fixed constant in 14 source files today (`MEMORY_TOTAL_BLOCKS`, `RACK_COUNT`), the strip
-   gains a row on desktop and phone, and the bay is split around the unit's racks.
-3. **6-block drivers**: 20 pods fit in 384, but every driver gets cheaper to repair and lands in phase 2's narrow chip
-   rendering (`STRIP_NARROW_MAX_BLOCKS` 6), and HOLLOW gets weaker on every ship.
-4. **Cap at 18**: 7 free blocks outside the tail, so HOLLOW can't be walled. Rejected.
-5. **Skills spill elsewhere**: there is no elsewhere. Rack A has 4 blocks to spare on a resident ship. Rejected.
+| Class | Racks | Blocks | Pod racks | Receiver | Room for you | Most pods | Ships (recommended) |
+|---|---|---|---|---|---|---|---|
+| FULL | A B C D E F | 384 | B–D, 192 | E–F, 128 | 152 | 16 | arks, standard ships with 9–10 pods (layers 6–7), the final ship |
+| COMPACT | A B C E F | 320 | B–C, 128 | E–F, 128 | 152 | 8 | ARES-VII, standard ships with 5–8 pods (layers 2–5) |
+| TIGHT | A B C E | 256 | B–C, 128 | E, 64 | 88 | 8 (light ships have 3–5) | light ships |
 
-**Recommendation: option 1, cap at 16.** PHASE3 §3.1's "later ships may have 20" is an example inside a decided item,
-so it goes to Fran (question 9). If he wants 20, option 2 as a big-ship modifier is the better way: it keeps every
-driver at 8 blocks and gives the map a visible "big ship".
+Why:
+- **Whole racks:** the strip draws one row per rack, the addresses and the dev invariant count in racks, and a kid can
+  count rows. A half rack would need a new strip.
+- **A smaller ship drops rack D first.** Pods fill from rack B, so D is the rack a ship of 8 pods or fewer leaves
+  empty. Eight pods with the largest root slot take 64 + 19 + 40 = 123 of 128 blocks; nine would leave 37 free. A ship
+  of 9 pods or more is FULL even where HOLLOW never boards, because the class belongs to the ship, not to the run.
+- **TIGHT drops rack F.** Only a smaller receiver makes the unit's room smaller, and the unit is what grows over a run.
+  Light ships take it because they carry the fewest pods, so the ship that squeezes you is also the one worth least.
+  The reason reads in one line: "a small ship has a small receiver." TIGHT keeps two pod racks, because a light ship
+  late in a run may still carry HOLLOW's root.
+- **Room for you = the receiver plus the 24-block tail**, even when the pod racks have more free. One fixed number per
+  class goes on the card. Today's `layoutCarried` spills into all of rack D's trailing free; phase 3 caps it at the tail.
 
-The generator's rule for B–D: up to 7 pods in rack B, then rack C with the root slot, then rack D, keeping the 40 free
-blocks with the last 24 trailing in rack D. The slot reads `P _2 R n _1 P`: the root sits between a driver at GAP 2
-and the lead family's driver at GAP 1, which is bitten first (04's `POD 11` at GAP 2, `POD 12 · OKAFOR` at GAP 1). The root's size is known at boot
-because it is carried, so the slot is sized then.
+**What fills the room**, in the order the boot lays it out (the order keeps the signed-off arrival floor):
+1. the files as one block from rack E's start, rack E's list and rack F's list back to back;
+2. the floor's 12 blocks of REPAIR CHARGE;
+3. deliveries that caught up at this ship (02); one that does not fit stays in the receiver, and the PACKET screen
+   shows it as a `SEND ON` chip;
+4. each beam seed behind its target while there is room; a seed with no room lands by 04's signed-off rule, in the
+   centre of the largest free region, which on a full receiver is usually in the pod racks;
+5. the rest of the charge, star credit included. What doesn't fit is lost loudly (phase 2's `CHARGE OVERFLOW`, naming
+   the ship and the number).
+
+Only a block longer than the receiver is right-aligned to the end of memory, its start moving back into the tail, so
+the Core stays at rack E's start on almost every ship, as today. Nothing throws, and no file is ever dropped at the boot.
+
+**The PACKET screen checks the room before the beam.** The packet must fit the link (files plus charge, phase 2) and
+the destination's room: **files + 12 ≤ room**. TRANSMIT ▸ waits until enough files are left behind or sent on, as it
+does for the link, so a TIGHT ship takes at most 76 blocks of files. HOLLOW's root lands in the root slot, not in the
+receiver, so it counts against the link only. The locked files (46 with `046.log`, 58 with the floor) fit every class.
+The charge preview names the loss before it happens: `CHARGE 38 → 12 ON ARRIVAL · 26 WON'T FIT`, and on a noisy link
+`SEEDS TAKE ROOM FROM YOUR CHARGE`.
+
+**Why TIGHT is viable early and painful late.** The rooms are fixed; the unit grows:
+
+| The unit (files, `046.log` included) | Files | + floor | FULL or COMPACT (room 152) | TIGHT (room 88) |
+|---|---|---|---|---|
+| Ship 1: the starting kit (SCAN, REPAIR, Repair.bak) | 65 | 77 | fits (ship 1's written racks E–F) | ship 1 is never TIGHT |
+| Depth 2: + Mv, AUTOBURN v1 (6) | 73 | 85 | fits; a ~120 link caps the charge at 47, not the room | fits, 3 above the floor: arrives with 15 |
+| Depth 4: every filesystem tool, 12 skill blocks | 84 | 96 | fits; 56 above the floor, less 7 per seed | 8 over: leave Repair.bak and Autopilot; arrives with 12, and seeds find no room |
+| Depth 7: 30 skill blocks, a FIREWALL | 104 | 116 | fits; 36 above the floor | 28 over: leave the FIREWALL, Repair.bak and all four optional AI tools, or 28 blocks of skills |
+
+So a TIGHT ship costs charge at depth 1–3, a .bak and a tool in the middle, and skills or instruments late (without
+Sensor Interp every drop is ×2.5 wide; without AI Comms there is no BEAM OUT). No rule says "late"; the unit's growth
+does. **The player sees it coming** on the ship card's memory row and fit line, computed against the unit as it is now
+(`YOU FIT`, `CHARGE SQUEEZED: 15 ARRIVES`, `LEAVE 20 BEHIND`), in TRAINING's AHEAD row (03), and on the PACKET's room
+bar. At the boot the TERMINAL types `> RECEIVER: 1 RACK · ROOM 88`.
+
+**FULL and COMPACT, the worst case on 02's longest link (123 blocks):** files are bounded by the link (a full kit is
+114 with `046.log`, a MERGE run's 122). A FIREWALL that SENTRY compiles at boot adds 2 (only while fewer than two are
+owned) and the floor 12: 137 blocks, 9 into the tail. Seeds then have 15 blocks, so two fit behind their targets and a
+third lands by 04's no-room rule; charge above the floor fills the rest or is lost loudly. Files, a FIREWALL and the
+floor fit any link up to 138, so 02's links (82–123) and its 131-block bound are inside. A normal mid-run unit (about
+100 blocks, one seed) never leaves racks E–F.
+
+| Case | Class | Rack A (64) | Pod racks, as layout strings (`P` a pod driver, `R n` the root slot) | Receiver |
+|---|---|---|---|---|
+| Layer 1, ARES-VII: 3 pods, calm, fresh unit | COMPACT | 46 used, 18 free | B `P P P _40` · C `_64` (104 free) | E 52 + 12 free · F 49 + 15 free |
+| Layer 2, light: 3 pods, calm, the depth-2 unit | TIGHT | 46 used, 18 free | B `P P P _40` · C `_64`, its last 24 taken by the unit | 73 files + 15 charge = 88: E full, 24 in C's tail |
+| Layer 5, standard: 8 pods, R14, a resident, 2 seeds, a 113 link, the depth-4 unit | COMPACT | 60 used, 4 free | B `P P P P P P _16` · C `P _2 R14 _1 P _31` (47 free) | 84 + 12 + 14 = 110 before the rest of the charge: inside E–F |
+| Layer 7, light: 5 pods, R16, the depth-7 unit cut to 76 | TIGHT | 46 used, 18 free | B `P P P _40` · C `P _2 R16 _1 P _29` (69 free) | 76 + 12 = 88: E full, 24 in C's tail; seeds land by the no-room rule |
+| Layer 7, standard: 10 pods, R14, a resident, 3 seeds, a 123 link | FULL | 60 used, 4 free | B `P P P P P P _16` · C `P P _2 R14 _1 P _23` · D `P _56` (95 free) | 144 needed: E–F full, 16 into D's tail |
+| Layer 8, the final ship: 16 pods, R16, no resident (a layer 4–7 ark: R14, 47 free) | FULL | 46 used, 18 free | B `P P P P P P P _8` · C `P P P P _2 R16 _1 P _5` · D `P P P P _32` (45 free; phase 2's LAST LIGHT had 48) | up to 144, as above |
+
+**Beyond 16 pods.** Twenty pods do not fit in 384 blocks: with a 14-block root and a resident they leave 15 free, 25
+short of the 40. Decision 9 caps pods at 16. If 20 come back, a seventh rack on big ships (`RACK G · BAY`) is a fourth
+class: once memory varies by ship it costs little more than splitting the bay around the receiver, it keeps every
+driver at 8 blocks, and it fits 20 pods with 79 free. Shrinking drivers to 6 blocks would weaken HOLLOW everywhere.
+
+**The generator's rule for the pod racks:** pods fill rack B (at most 7, leaving two to flank the root slot in rack C),
+then rack C around the slot, then rack D, keeping the 40 free blocks with 24 trailing in the last pod rack. The slot
+reads `P _2 R n _1 P`: the root sits between a driver at GAP 2 and the lead family's driver at GAP 1, which is bitten
+first (04's `POD 11` at GAP 2, `POD 12 · OKAFOR` at GAP 1). The root's size is known at boot because it is carried, so
+the slot is sized then; with no HOLLOW aboard it is plain free space.
 
 ## 4. Screens, UI, audio, juice
 
@@ -549,11 +593,16 @@ because it is carried, so the slot is sized then.
   credits scroll reused, lead colonist first, each with site and first words (`OKAFOR, ADA (11) · LZ-A · "Is it
   morning?"`), with no line for pods that scored 0 or never launched; the headline `LANDED 1,800 / 2,400` (in an LZ
   with room), the breakdown and the points; the stars, `+18 REPAIR CHARGE ON NEXT SHIP` and 03's training-cycles
-  line; up to two near misses (`POD 05 landed 40 km outside LZ-B`); CONTINUE ▸. On LAST LIGHT it comes after the
+  line; up to two near misses (`POD 05 landed 40 km outside LZ-B`); CONTINUE ▸. On the final ship it comes after the
   finale (§3.10).
 - **Report slots other specs fill**, in this order under the stars: 03's cycles line (`+5 TRAINING CYCLES`); the
   sleeper's `+n TRAINING CYCLES · taught by MOTH` (04) when it was woken; 04's TRACE line (`2 SEEDS LEFT BEHIND · THEY
   REPORT HOME · TRACE …`) when seeds were left; and 05's story line. 05 also supplies the colony name in the header.
+- **Memory classes on screen** (§3.16): the MIND strip draws one row per rack the ship has, 4 to 6, on desktop and
+  phone, and its header reads `MEMORY 256 · TIGHT`. A missing rack is simply absent, never a greyed row. At the boot
+  the TERMINAL types `> RECEIVER: 1 RACK · ROOM 88` on TIGHT ships, and lost charge reads `CHARGE OVERFLOW · 26 LOST ·
+  NO ROOM ON WAYFARER` with `stampHit`. The ship card's memory row and the PACKET's room bar are 02's screens; §3.16
+  gives their numbers and words.
 
 ## 5. Interfaces
 
@@ -562,12 +611,18 @@ because it is carried, so the slot is sized then.
   depth on this route; the flight template (the ring, which is the launch band, plus warps and Δv); links of 82–123
   blocks (§3.16); the ship card rows for §3.15's labels; and the save storing each ship's landing result. 02 §3.7
   re-ran its route check with the cap at 16 and standard ships one pod smaller: the best route is 7 ships in 51% of
-  waves, 6 in 45% and 5 in 3%.
+  simulated arms, 6 in 45% and 5 in 3%. **For memory (§3.16):** each ship's class by the recommended rule (light:
+  TIGHT; standard with 5–8 pods and ARES-VII: COMPACT; 9 pods or more, arks and the final ship: FULL); the card row
+  `MEMORY n` with the fit line against the current unit; the PACKET's room bar, and TRANSMIT ▸ waiting until files +
+  12 fit the room; deliveries that don't fit the room waiting as `SEND ON`; the route check re-run with TIGHT ships
+  costing files; and a validity rule that no route is forced through a TIGHT ship from layer 5 on. Modifiers that
+  name a rack (KESTREL's debris) name one the ship has: rack D exists only on FULL ships.
 - **From `03-skills.md`:** AUTODROP and SURVEY versions on the hooks in §3.13–3.14; the conversion from a landing
   result into training cycles. AUTOBURN v3's PHASE3 wording ("a window on every pass") assumes rotation; with this
   spec's planet, every pass already has every window. This spec's proposal for v3: it picks the highest orbit at which
   every LZ's dot fits, flies GO LOWER for you to get there, and holds that orbit against decay. SURVEY maps from the
-  approach in every version (§3.13). AUTODROP v2 is armed with [G] (§3.14).
+  approach in every version (§3.13). AUTODROP v2 is armed with [G] (§3.14). TRAINING's AHEAD row shows the next
+  ship's room where it binds, with §3.16's words.
 - **From `04-threats.md`:** whether and how HOLLOW and seeds target drivers. Drivers are infectable like souls, and
   THE DEAL names a pod. `printMult` becomes `landMult`, and **this spec's condition is the definition**: landMult
   applies while a window is open with a launchable pod. 04's room requests (rack A, the root slot, beam seeds) are
@@ -577,18 +632,24 @@ because it is carried, so the slot is sized then.
   landings, ARRIVAL CONTROL's site quips, and the report's story line.
 
 **What this spec provides:**
-- **To 02:** §3.15's roller, the classes and card labels, the placement rules, the layouts (§3.16), the stars (phase
-  2's three, +6 REPAIR CHARGE each), and the per-ship result: ship id, slot, depth, outcome, colonists aboard; per LZ
-  its count, landed, mislanded and hard; off-site, no-go and not launched; points, stars, and FUEL at the end. Ranks
-  are 02's: phase 2's absolute thresholds in points (this spec's earlier share-based suggestion is superseded).
-- **To 03:** the hooks, and the result's points, landed-correct count and stars.
+- **To 02:** §3.15's roller, the forgiveness classes and card labels, the placement rules, the memory classes, their rooms and the
+  boot's fill order (§3.16), the stars (phase 2's three, +6 REPAIR CHARGE each), and the per-ship result: ship id,
+  slot, depth, outcome, colonists aboard; per LZ its count, landed, mislanded and hard; off-site, no-go, parked (with
+  why) and not launched; points, stars, and FUEL at the end. Ranks are 02's: phase 2's absolute thresholds in points.
+- **To 03:** the hooks, and the result's points, landed-correct count and stars. **For memory:** the room is 152 blocks
+  on FULL and COMPACT ships and 88 on TIGHT ones; files + the 12-block floor must fit it; HOLLOW's root counts against
+  the link only; the locked 46 (58 with the floor) fit every class. 03 may assume only the link binds on FULL and
+  COMPACT ships.
 - **To 04:** the driver segment, its bands and their effects (§3.8), the Nav Plotter and Sensor Interp factors on the
   drop (so every non-fatal hit on them costs landing quality), the rule that launch removes a driver from memory, the
-  `BAY`/`NEXT` membership, the "actively landing" condition, the root slot with the lead family at GAP 1 (§3.16), and
-  the report's TRACE slot and the flagship's wait for the finale.
+  `BAY`/`NEXT` membership, the "actively landing" condition, the root slot with the lead family at GAP 1 in every
+  class (§3.16), and the report's TRACE slot and the final ship's wait for the finale. Seeds spill into the last pod
+  rack's tail (rack C on COMPACT and TIGHT ships, which have no rack D). On a TIGHT ship whose receiver is full, seeds
+  land by the no-room rule, often among the pods: 04 should say whether that stands (question 11).
 - **To 05:** per ship, the colony's outcome (landed correctly as a share of colonists aboard; ★ ON TARGET at 95% is
-  the STAY condition), the featured colonists and their outcomes for the epilogue, the first-touchdown event, and an
-  empty ship after every landing that ends in orbit (§3.10), which SPARE and SUNSET need.
+  the STAY condition), the featured colonists and their outcomes for the epilogue, the first-touchdown event, an
+  empty ship after every landing that ends in orbit (§3.10), which SPARE and SUNSET need, and the parked pods with
+  why, for an ending that restores eaten pods (decision 23).
 
 ## 6. Phase 2: reused, changed, removed
 
@@ -603,16 +664,26 @@ because it is carried, so the slot is sized then.
 - **`capabilities.ts`:** `printer` becomes `bay` (band, cadence); a new `drop` capability from Sensor Interp and Nav
   Plotter. **`flight-hud.ts`, `flight-controls.ts`:** crumbs, the countdown chip, `ACCEPT · IN BAND n%`, LAUNCH, END
   LANDING. **`zones.ts`:** unchanged; belt hits continue during landing as during printing.
-- **`carry.ts`:** `layoutCarried` packs racks E–F as one block from rack E's start, right-aligned only on overflow, with
-  the floor's charge before the seeds (§3.16); `trimTrailingFree`'s throw (`src/data/memory.ts`) stays as the
+- **Memory size per ship (§3.16).** 384 is a constant today: `MEMORY_TOTAL_BLOCKS` (`src/data/memory.ts`, from
+  `RACK_COUNT` 6 in `tuning.ts`) is imported by about 14 source files, plus the strip components that use `RACK_NAMES`
+  and `rackOf` (`MemoryStrip.ts`, `MemoryStats.ts`, `MiniStrip.ts`, `move-preview.ts`). The ship's class becomes part
+  of its memory: the total, its rack names (A B C E for TIGHT) and where rack E starts (`UNIT_RACKS_START`: 256 on
+  FULL, 192 on the others) are read from the ship instead of the constants. Most of the 14 files use the total only
+  for the dev invariant check (`assertMemoryInvariants`), so they change mechanically. The real work is in
+  `memory.ts` (the builder, `rackOf`, `rackDTrailingFree` becoming the last pod rack's tail), `carry.ts`,
+  `hollow-hud.ts`'s mini strip rows, `ships.ts`'s empty unit, and the strip's row count on desktop and phone.
+- **`carry.ts`:** `layoutCarried` takes the destination's room (receiver plus a tail capped at 24), packs the receiver
+  as one block from rack E's start, right-aligned only on overflow, in §3.16's fill order; `packUnit`'s check gains
+  "files + floor fit the room" beside the link. `trimTrailingFree`'s throw (`src/data/memory.ts`) stays as the
   invariant.
 - **`reveal.ts`:** removed, with the STASIS scan, the sealed slabs, `SOULS IN MEMORY` and `SKIP_REFUSAL_COLONISTS`.
 - **`wake-report.ts` → `landing-report.ts`**, with `creditsOf` reused. **`run-score.ts`:** `runScore` sums ship
   points, `runWoke` becomes `runLanded`, `fleetHome` stays. **`stars.ts`:** §3.9.
 - **`src/data/tuning.ts`:** PRINT_*, REVEAL_*, SOULS_ASK_* and `SOUL_WAKE_INTACT_MIN` go; `WOKE_WITH_GAPS_SCORE`
   becomes `HARD_LANDING_FACTOR` 0.5, `PRINTER_SPEED_BY_BAND` becomes `BAY_CADENCE_BY_BAND`; RANKS keep their point thresholds (02).
-  **`ships.ts`:** `printBaseSec` goes, each ship gains a landing definition, layouts place drivers, and the "every
-  layout has a root" check moves to 04's rules. **`souls.ts`:** pools stay; `GAPS_WORDS_POOL` gives way to the hard
+  New: the three classes, `UNIT_TAIL_BLOCKS` 24 and `POD_RACK_MIN_FREE` 40. **`ships.ts`:** `printBaseSec` goes, each
+  ship gains a landing definition and a memory class, layouts place drivers, and the "every layout has a root" check
+  moves to 04's rules. **`souls.ts`:** pools stay; `GAPS_WORDS_POOL` gives way to the hard
   and off-site pools. **`script.ts`:** printing and reveal text becomes landing text (05 writes it).
 - **`PrintFx.ts`** is reused as the launch flash, **`WakeReport.ts`** as the LANDING REPORT.
 - **v2 §3.3 couplings:** C7 is now Bay Ctrl → cadence. P2 is now orbit fit → band coverage, and altitude → drop width.
@@ -625,11 +696,12 @@ because it is carried, so the slot is sized then.
 
 ## 7. Story hooks
 
-05 owns the writing. The slots: one colony name per ship, carried into the epilogue; parked pods' beacons (a colony
-might recover them decades later, which is 05's call); one radio line from the ground at
-the first touchdown on each ship; ARRIVAL CONTROL's site quips on POOR planets ("LZ-B is in a lake :)"); the
-report's odd line; candidate sites as finds, for example `SITE 5 · ROOM 0 · WRECKAGE · WAVE 1 POD`, which can feed the
-`046.log` mystery; and "fate unknown" for pods that never launched.
+05 owns the writing. The slots: one colony name per ship, carried into the epilogue; parked pods' beacons (the next
+unit, a year behind on the same arm, may find last run's still blinking; 02 and 05's call); one radio line from the
+ground at the first touchdown on each ship; ARRIVAL CONTROL's site quips on POOR planets ("LZ-B is in a lake :)"); the
+report's odd line; candidate sites as finds, for example `SITE 5 · ROOM 0 · WRECKAGE · OLD POD`, which can feed the
+`046.log` mystery; "fate unknown" for pods that never launched; and CONTROL's cheer about tight ships ("Cosy! Pack
+light. :)"), which never says why a caretaker should arrive with so little.
 
 ## 8. Slices
 
@@ -638,7 +710,11 @@ report's odd line; candidate sites as finds, for example `SITE 5 · ROOM 0 · WR
   GROUND TRACK, POD BAY. 1b: the drop width
   model, forgiveness and no-go, Bay Ctrl, the DRAG line and decay, GO LOWER, L8–L10.
 - **Slice 2, the calm opening:** ship 1–2 lessons, driver arrival damage, the first-landing moment.
-- **Slice 3, the map:** §3.15's roller in the generator, and the result in the save.
+- **Slice 3, the map:** §3.15's roller in the generator, and the result in the save. **Variable memory lands here**,
+  with the generator that assigns the classes. First a refactor with no visible change (the size and rack names come
+  from the ship; every ship FULL; the suites unchanged), then COMPACT and TIGHT, the card row, the PACKET's room
+  check and the boot's fill order. Slices 1–2 keep 384 on the five ships; the pooled receiver block (§3.16) needs no
+  class and comes with the drivers in slice 1a.
 - **Slice 4, the tree:** the AUTODROP hooks and AUTOBURN v3's landing orbit.
 - **Slice 5, residents:** the friendly resident's drops through the same hook.
 - **Slice 6, SURVEY:** POOR planets, candidates, the swath, assigning sites.
@@ -655,44 +731,52 @@ report's odd line; candidate sites as finds, for example `SITE 5 · ROOM 0 · WR
 4. **"Launch when the dot is inside the bracket"**: a sure landing needs the whole dot inside; centre-only may miss.
 5. **The descent** plays on AI time (3.5 s) along the true arc, not in the real 2–5 minutes.
 6. **"Some planets need a survey"** becomes POOR site data with ARRIVAL CONTROL's guesses: worse without SURVEY, never
-   blocked. This touches a decided item; see question 4.
+   blocked. This touched a decided item; Fran accepted it (decision 12).
 7. **Faces:** the epilogue payoff stays, plus one radio line per ship at the first touchdown and the report's credits.
 8. **Stars:** "woke intact" becomes ON TARGET; the FUEL star is judged at the end of the landing.
-9. **Pod counts:** "later ships may have 20" becomes at most 16, because 20 do not fit in memory (§3.16). This touches a
-   decided item's example; see question 9.
+9. **Pod counts:** "later ships may have 20" becomes at most 16, because 20 do not fit in 384 blocks (§3.16). Fran
+   accepted this (decision 9); a seventh rack for big ships stays a later option.
+10. **Memory varies by ship** (decision 9; PHASE3 is silent, phase 2 fixed it at 384): three classes of whole racks,
+    and a TIGHT ship's one-rack receiver squeezes the unit (§3.16).
 
 ## 10. Risks and questions for Fran
 
 **Risks**
-1. **The long-hop balance.** 02 sizes ships by slot, so arks reached by long hops pay for skipping smaller ships. The
-   cap at 16 shrinks those arks to 15–16 pods. 02 §3.7 re-ran the check with standard ships one pod smaller: the best
-   route is 7 ships in 51% of waves, 6 in 45%, 5 in 3%, so long hops still pay.
+1. **The long-hop balance.** 02 sizes ships by slot, so arks reached by long hops pay for skipping smaller ships. 02
+   §3.7's check (cap at 16, standard ships one pod smaller) gave 7 ships in 51% of simulated arms, 6 in 45%, 5 in 3%.
+   TIGHT ships now cost files late, so 02 should re-run it with that cost.
 2. **Repetition on big ships.** 16 pods is 5–7 windows and about 3 minutes: intended pressure toward AUTODROP, but
    possibly a chore before it exists. Levers: a bigger bay on big ships, wider brackets.
 3. **Elliptical orbits** give each LZ its own launch altitude, so one LZ's dot fits and another's doesn't. The per-LZ
    readouts and L9 must say so clearly.
 4. **SKIP across drag kicks** needs the conic jump split at each ▼: new code in a sensitive place.
-5. **Dense memory.** The flagship's 45 free blocks in B–D are about phase 2's LAST LIGHT (48), but beam seeds that
-   spill into the rack D tail eat into its wall room. §3.16's budget assumes 02's links (at most 123 blocks), at most 3
-   seeds per beam, and the pooled E–F layout (a change to `carry.ts`). If 02 or 04 raise the links or the seeds, the
-   tail must grow and the pod cap may have to drop.
+5. **Dense memory.** The final ship's 45 free blocks in the pod racks are about phase 2's LAST LIGHT (48), but seeds that
+   spill into the tail eat into its wall room. §3.16 assumes 02's links (at most 123 blocks), at most 3 seeds per beam
+   and the pooled receiver. If 02 or 04 raise either, the tail must grow and the pod cap may drop.
+6. **A late TIGHT ship can feel like a trap.** At depth 7 it asks for 28 blocks: instruments or skills. The card, the
+   AHEAD row and the PACKET all show it before SET COURSE, and the map's validity rule keeps it optional (§5). If kids
+   still feel cheated, the levers are a bigger TIGHT tail (40 blocks: room 104) or COMPACT light ships from layer 6.
+7. **The size refactor** touches about 14 files and the strip. Done first as a refactor with no visible change
+   (slice 3), the memory suites catch what it breaks.
 
-**Questions** (each with my recommendation)
-1. **Does the planet rotate?** Recommended: **no**, for the reasons in §3.1. Rotation can return as a planet modifier.
-2. **"200 + 200 mislanded" in the 400 + 800 case:** two groups of 200, or one? Recommended: count each colonist once.
-   200 are mislanded (in LZ-B, at 0.75), and LZ-A is reported 200 short.
-3. **The factors:** mislanded 0.75, off-site 0.5 / 0.25 / 0 by class, hard ×0.5. Recommended: yes as starting values;
-   mislanded must stay above the best off-site value, as you ruled.
-4. **A POOR planet without SURVEY:** blocked, or ARRIVAL CONTROL's guesses? Recommended: **the guesses**. A blocked
-   ship in a roguelike run is a dead end, and the bad guesses give SURVEY its story reason.
-5. **The pod's descent on AI time (3.5 s)** instead of minutes of game time. Recommended: yes. The arc stays honest;
-   only its playback is fast.
-6. **The launch key:** recommended **[L]**, separate from SPACE, so a held burn can never fire a pod.
-7. **Pod counts by depth or by ship size?** Resolved: `02-map.md` rolls them by slot (layer and size class), and
-   §3.15 is keyed the same way.
-8. **Decay in slice 1** or later? Recommended: slice 1b, after the core drop loop is playable, so the first playtest
-   judges the drop before the orbit choice.
-9. **At most 16 pods per ship?** PHASE3 §3.1 says later ships "may have 20", but 20 pods with HOLLOW aboard, a
-   resident and the other specs' room do not fit in 384 blocks (§3.16). Recommended: **cap at 16**, the flagship's
-   size. If you want 20, a seventh rack as a big-ship modifier ("a bigger ship has a bigger computer") is the better
-   way than shrinking every driver.
+**Decided** (Fran, 2026-10-28): the planet does not rotate (§3.1); mislanded ×0.75, off-site 0.5 / 0.25 / 0, hard
+×0.5, and each colonist counts once in the 400 + 800 case (§3.9); POOR planets are playable on ARRIVAL CONTROL's
+guesses (§3.13); the descent plays in 3.5 s, launch is [L], decay comes in slice 1b; pods are capped at 16 and memory
+varies by ship (§3.16); pod counts follow the slot (02); the role "the final ship" replaces LAST LIGHT, which v1 may
+still use.
+
+**Questions** (new, numbered after the answered 1–9; each with my recommendation)
+
+10. **TIGHT's room: fixed, or whatever the pod racks leave?** Letting the unit use all of the pod racks' free space but
+    16 would give a light ship 104–136 blocks, varying with its pods. Recommended: **fixed at 88** (receiver plus the
+    24-block tail). One number per class on the card is what a 12-year-old can read, and it keeps early ships cheap
+    and late ones costly.
+11. **Seeds on a full TIGHT receiver** land by the signed-off no-room rule, which puts them in the pod racks among the
+    drivers. Recommended: **keep it**, with the PACKET's warning (`SEEDS TAKE ROOM FROM YOUR CHARGE`); a noisy link
+    into a tight ship should be the worst pairing. `04-threats.md` to confirm.
+12. **"No charge" or the floor?** Decision 9 says a tight ship may mean arriving with no or minimal charge, but the
+    signed-off floor of 12 makes "minimal" the least. Recommended: **keep the floor**: with zero charge on a ship with
+    hurt drivers a kid has no move at all, and the floor already makes a tight ship sting.
+13. **Do late light ships stay TIGHT?** Recommended: **yes, everywhere**, with 02's rule that no route is forced
+    through a TIGHT ship from layer 5 on. "Small ship, small receiver" is one rule with no exceptions, and the cost
+    growing over a run is the point of decision 9.
