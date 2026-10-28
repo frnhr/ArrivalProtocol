@@ -64,6 +64,10 @@ run, its own epilogue, and one comparable trace in the next wave on the same arm
 
 ## Decisions for Fran
 
+**Answered on 2026-10-28: see `DECISIONS.md`.** Several answers differ from the recommendations below (most notably
+the timeline: the next run is the next core version on the same arm a year later, not a new wave), and the specs have
+not been reworked to match yet. The list is kept as the record of what was asked.
+
 Collected from the five specs and merged where they overlapped. Each has the specs' recommendation; the spec and
 question number are in brackets.
 
