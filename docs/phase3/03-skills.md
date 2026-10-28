@@ -696,10 +696,10 @@ COMPACT ships, E alone on TIGHT ones) and the 24-block tail hold the unit as one
    (§3.4). Otherwise the 12-block cap shrinks.
 4. HOLLOW's `unlink` verb may target skill files, and phase 2's block still works against it (decision 17).
 5. Optional: a seed kind that lands beside the biggest skill file, so that size bites.
-6. **For the packet preview:** the root's size on each beam, and whether the selected beam forces boarding (§3.8
-   there). The root crosses at the size it will have on the next ship, as `04-threats.md` states. In §3.12 that is 10
-   into CORMORANT (a ship that folds ARRIVAL and WALLS together) and 16 into the final ship. It rides free and lands
-   in the bay, so it counts against neither the link nor the unit room; the preview only shows it.
+6. **For the packet preview:** the root's size on each beam, and whether the selected beam forces boarding (§3.8 there).
+   The root crosses at the size it will have on the next ship, as `04-threats.md` states. In §3.12 that is 10 into
+   CORMORANT (a ship that folds ARRIVAL and WALLS together) and 16 (18 after a MERGE trace) into the final ship. It
+   rides free and lands in the bay, so it counts against neither the link nor the unit room; the preview only shows it.
 7. **The departed resident's salvage deck** draws its skill card through this spec's grant rules (§5, "What this spec
    provides").
 

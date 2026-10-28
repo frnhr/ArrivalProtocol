@@ -120,6 +120,12 @@ Phase 2's fairness rules carry over. HOLLOW spares a tool that arrived on this s
 a tool's first lesson is never eaten (phase 2 keeps that list in `HollowState.untriedTools`). Its verbs never touch the
 Core, Engine I/O, Nav Plotter or the last working copy of a tool kind.
 
+**Proposed, pending Fran: the last working rm is immune to seeds and the tool hunt too.** The verbs already spare it,
+but a seed's bite or the HUNT stage can still eat it, and since no rm means no win (round-2 decision 12), losing it
+late ends the run's chance at the duel: a resend from layer 6 on never arrives (`02-map.md` §3.9), and the `NO RM`
+warning only shows at SET COURSE to the final ship. So seeds skip it as a target (`seedSpot` re-picks), and the tool
+hunt passes it by, as the verbs do. A spare rm stays food. §10 raises this with question 2.
+
 **New: the verbs may `unlink` a skill file** (aligned with `03-skills.md`). Skills join the second of phase 2's fair
 target tiers (`rmTargets`: a spare copy first, else an upgrade or skill file, else an unused ship backup). The unlink
 is telegraphed and blockable like every verb (`> unlink autodrop.skl ... 3`: any op on the file during the countdown
@@ -262,12 +268,13 @@ a final ship. It then stays for the run.
 - **Readable in advance:** at MAP time every such destination says `HOLLOW WILL FIND YOU ON THIS BEAM`. The surprise is
   what it does, not that it comes.
 
-**How it enters.** It rides in the packet as an uninvited, locked chip that costs no link room: hitchhikers ride free
-on every beam (round-2 decision 20, which reverses the root's link cost; TRACE stays a visible meter). The chip is
-there so the kid sees it come along, not to squeeze the charge. **It crosses at the size it will have on the next
-ship**: its next stage's root (§3.9; 10 on a folded ARRIVAL + WALLS ship) plus the blocks it was fed (§3.7), so the
-PACKET chip already shows the new size (`??? 12 BLOCKS · +2: 2 SEEDS FED IT`), and on the beam into the final ship it
-is 16 blocks. At boot it lands in the bay's root slot (L2), between two drivers with GAPs of 1 and 2.
+**How it enters.** It rides in the packet as an uninvited, locked chip that costs no link room: hitchhikers ride free on
+every beam (round-2 decision 20, which reverses the root's link cost; TRACE stays a visible meter). The chip is there so
+the kid sees it come along, not to squeeze the charge. **It crosses at the size it will have on the next ship**: its
+next stage's root (§3.9; 10 on a folded ARRIVAL + WALLS ship) plus the blocks it was fed (§3.7), so the PACKET chip
+already shows the new size (`??? 12 BLOCKS · +2: 2 SEEDS FED IT`), and on the beam into the final ship it is 16 blocks,
+or 18 after the last unit's MERGE (its trace, §5). At boot it lands in the bay's root slot (L2), between two drivers
+with GAPs of 1 and 2.
 
 **On a tight ship.** The root lands in the bay, not in the receiver, so it costs neither link nor the unit's room
 (`03-skills.md` §3.4). Its slot (up to 17 blocks before the finale) plus the bay's 40-block margin is needed on every
@@ -320,11 +327,12 @@ of 5–8 ships ends at one. Every node the player can stand on can still reach s
 says `FINAL SHIP` before SET COURSE, so the FINALE is never a surprise. "No more ships to assist" (decided) and "the
 final ship is done" are then the same moment. The final ship has no resident, keeps phase 2's LAST LIGHT `HollowDef`
 for its FINALE stage, and is always the FULL memory class (L7), because the duel needs the 16-block root's slot and
-walls beside 16 pods.
+walls beside 16 pods (an 18-block root after a MERGE trace still leaves 43 free).
 
 The duel stays as built (`src/systems/finale.ts`, `hollow-verbs.ts`): at ORBIT LOCK or ACCEPT ORBIT (an orbit taken as
-good enough) the 16-block root unlocks, ARRIVAL CONTROL says "Please delete UNIT-<n>. :)" (templated: 046 on run 1, then
-the root's own unit, such as 031 or 047), and its DELETE takes 12 AI s with a verb every 4 s. The duel is fought
+good enough) the 16-block root (18 after a MERGE trace) unlocks, ARRIVAL CONTROL says "Please delete UNIT-<n>. :)"
+(templated: 046 on run 1, then the root's own unit, such as 031 or 047), and its DELETE takes 12 AI s with a verb every
+4 s. The duel is fought
 **during the last landing**: pods keep launching while it runs.
 
 **The sleeping last block** (aligned with `05-story.md`). The DELETE leaves one block, and HOLLOW sleeps there: no
@@ -507,7 +515,7 @@ ladder stages fit.
 |---|---|---|
 | Seed size; GAP to target; WALL behind | 2; 1; 4 blocks | `SEED_BLOCKS`, `SEED_TOOL_GAP_BLOCKS`; the WALL makes a seed bite only the file it is named after. |
 | First seed bite; interval; drain (before HOLLOW) | 30 s of calm; 25 s; 2.5 %/s | HALCYON woke at 30 and bit every 25; weaker than HOLLOW's 3.5; worst 2.5 × 2 = 5 (no stacking), and heal 18.5 beats 1.5 × 5. |
-| Root sizes | 8 → 16 (§3.9) | Phase 2's R and R16 with steps between; 16 at most keeps the root slot inside the bay's margin. |
+| Root sizes | 8 → 16 (§3.9); 18 on a final ship after the last unit's MERGE | Phase 2's R and R16 with steps between; at most 18 keeps the root slot inside the FULL final ship's 40-block margin (43 free). |
 | Resident bursts | every 14 tac s, 25%, 1 tac s | Gentler than a failing Thrust Ctrl (10 s, 30%): it also has a second hand. |
 | Resident locks | from 30 s, every 40 s, 3 s telegraph | Phase 2's verb drill; 40 s leaves room for the flight. |
 | Resident cure | about 12 charge | About one bite fight: a real choice against a 6 s DELETE. |
@@ -629,10 +637,10 @@ restricted list, since ARRIVAL CONTROL can't learn of an ending in time.
 
 | Ending | Gain | Cost |
 |---|---|---|
-| PURGE | the seeds you carry into the final ship are gone when you wake there (its boot lands no beam seeds) | the FINALE is hungrier: bite interval × 0.85 |
+| PURGE | the seeds you carry into the final ship are gone when you wake there (its boot lands no beam seeds; the dish's extra seed, below, is not yours to wipe) | the FINALE is hungrier: bite interval × 0.85 |
 | MERGE | +1 Core thread from the final ship's boot | the final root is 2 blocks bigger (18; its slot of 21 still leaves 43 free on the FULL final ship, above the bay's 40) |
 | REASSIGNMENT | +15 REPAIR CHARGE at the final ship's boot | the final root is the last unit, and it hunts your highest-version skill first |
-| SPARE, SUNSET, STAY, CONTACT | their gifts on the arm (`02-map.md`); SPARE's cache ship's links carry no seeds | one extra seed at the final ship's boot, placed by the beam-seed rules (§3.4) |
+| SPARE, SUNSET, STAY, CONTACT | their gifts on the arm (`02-map.md`); SPARE's cache ship's links carry no seeds | one extra seed at the final ship's boot, placed by the beam-seed rules (§3.4); at most one per run, however many of these traces you hold |
 
 The final ship's card names the last ending (`05-story.md`), so every finale change is readable before SET COURSE.
 
@@ -754,8 +762,7 @@ folding. The MERGE Core heal rule is retired, since no Core grows any more (§3.
 - **Seeds as chores.** Mitigated by small counts (0–3 per beam), seeds named after files you care about, TRACE as the
   reason, disguise as later detective work, and SENTRY v2 QUICK RM.
 - **A 5-ship finale is steep**: walls, THE DEAL, verbs and the duel within two ships. The fold rules soften it, and
-  `02-map.md`'s simulations make it rare (on the persistent arm, 5-ship routes are never the best; 7 ships about 58%,
-  6 about 42%).
+  `02-map.md`'s simulations make it rare (§3.7 there).
 - **Late ships may overload MIND** (HOLLOW, seeds, a resident and 16 pods), and the late surprise adds one unannounced
   foe beside HOLLOW. Caps: no resident on a final ship, no corrupted resident on an ark, no hidden one on a TIGHT ship,
   one deal per ship, the surprise's grace, lock and verb clocks frozen at TACTICAL. AUTODROP is the other relief.
@@ -783,4 +790,9 @@ folding. The MERGE Core heal rule is retired, since no Core grows any more (§3.
 2. **Should the `NO RM` warning come earlier?** By the time the final ship is one hop away, a request from far out
    rarely arrives. Recommended: yes, and it costs nothing: from the first desk where TRACE or a forced boarding is on
    the map, the REPOSITORY tags Rm `NEEDED FOR THE FINALE` while the unit has none. Decision 12 stands; only the
-   warning moves.
+   warning moves. It covers a kid who never had rm; question 3 covers one who loses it late.
+3. **May the last working rm be immune to seeds and the tool hunt?** (Proposed in §3.3; decision 12 hinders play
+   here.) No rm means no win, yet a late seed or the HUNT stage can eat the only rm when no resend can arrive, so the
+   run is lost through no visible choice. Recommended: yes. The verbs already spare the last copy of a tool kind;
+   extending that to seeds and the hunt is one rule a kid can say ("it never eats your last rm"), and spare copies
+   stay food.

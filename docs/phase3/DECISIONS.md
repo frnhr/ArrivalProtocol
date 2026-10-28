@@ -2,8 +2,8 @@
 
 Two rounds of answers. **Round 1:** the 26 decisions and 8 designed rules first collected in `README.md`, plus one extra
 question from `05-story.md`; the specs were reworked to match on 2026-10-28. The numbers follow the list as it was
-asked, kept at the end of this file. **Round 2:** the 20 questions the rework raised (below). **The specs have not been
-updated for round 2 yet:** where an answer differs from a spec, this file wins.
+asked, kept at the end of this file. **Round 2:** the 20 questions the rework raised (below). The specs were updated
+for round 2 on the same day. Where an answer and a spec still differ, this file wins.
 
 **No decision here is final.** Any of them, and any "decided" item in `docs/PHASE3.md`, may be reversed when there is a
 good argument. Wherever a decision gets in the way of good gameplay, in a spec, an implementation or a playtest, raise
@@ -89,7 +89,8 @@ Applied in the 2026-10-28 rework:
 - A seed with no room beside any target lands in the largest free region.
 - Short-run folding: THE DEAL moves to the final ship, WALLS fold into HOLLOW's first ship, HOLLOW boards by force one
   hop before the final ship.
-- After MERGE, REPAIR heals the Core at its 16-block rate.
+- After MERGE, REPAIR heals the Core at its 16-block rate. (Retired after round 2: MERGE no longer makes a later Core
+  bigger, so the rule has nothing to act on.)
 - The worst memory corner: a third seed lands by the no-room rule, and charge above the floor is lost loudly.
 
 ## Round 2: after the rework

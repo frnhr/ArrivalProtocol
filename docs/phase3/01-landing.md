@@ -468,7 +468,8 @@ memory, so some are tight for the unit.
 - **Rack A, the ship's own files:** phase 2's 46 blocks (Bay Ctrl takes Printer Uplink's 6) and 18 free. Every ship
   has it. 04 needs at least 14 free on resident ships (WARDEN.sys 10; MOTH.sys 12 plus sleep.lock 1; a left resident's
   log and leftovers at most 14), which leaves at least 4. No conflict. Rack A is the same in every class; the lead's
-  placement rules still apply: no hidden sleeper on a TIGHT ship, and no corrupted resident on any ark.
+  placement rules still apply: no hidden corrupted resident on a TIGHT ship (a sleeper is allowed there), and no corrupted
+  resident on any ark.
 - **The pod racks (B, C, and D on big ships):** 8 blocks per driver, and 04's root slot (the root plus GAPs of 1 and 2,
   11–19 blocks; plain free space with no HOLLOW aboard). They keep **at least 40 free blocks** (the root's gaps not
   counted): the 24-block **tail** at the end of the last pod rack, which the unit may spill into, plus 16 for walls
@@ -555,6 +556,7 @@ floor fit any link up to 138, so 02's links (82–123) and its 131-block bound a
 | Layer 7, light: 5 pods, R14 (04 caps the root at 14 before the final ship), the depth-7 unit cut to 88 | TIGHT | 46 used, 18 free | B `P P P _40` · C `P _2 R14 _1 P _31` (71 free) | 88 files, 0 charge: E full, 24 in C's tail; seeds land among the pods by the no-room rule (round 2, Q9) |
 | Layer 7, standard: 10 pods, R14, a resident, 3 seeds, a 123 link | FULL | 60 used, 4 free | B `P P P P P P _16` · C `P P _2 R14 _1 P _23` · D `P _56` (95 free) | 144 needed: E–F full, 16 into D's tail |
 | Layer 8, the final ship: 16 pods, R16, no resident (a layer 4–7 ark: R14, 47 free) | FULL | 46 used, 18 free | B `P P P P P P P _8` · C `P P P P _2 R16 _1 P _5` · D `P P P P _32` (45 free; phase 2's LAST LIGHT had 48) | up to 144, as above |
+| The final ship after last run's MERGE trace: R18 (04 §5: slot 21) | FULL | 46 used, 18 free | B as above · C `P P P P _2 R18 _1 P _3` · D `P P P P _32` (43 free, 32 trailing: still above 40) | up to 144, as above |
 
 **Beyond 16 pods.** Twenty pods do not fit in 384 blocks: with a 14-block root and a resident they leave 15 free, 25
 short of the 40. Decision 9 caps pods at 16. If 20 come back, a seventh rack on big ships (`RACK G · BAY`) is a fourth
@@ -587,17 +589,20 @@ REPORT. They score by the normal rules (§3.9); there is no flat bonus. This spe
   under the header `THE LAST LANDING`. The ship does not burn: the pods launch from the orbit the player left it in.
 - **The pace.** SHIP view, no input but [ENTER] (skip to the result, rolled by the same rules). SKIP runs from window
   to window by itself, TACTICAL ×20 inside them, 2.0 s between launches (pods outside the bay still keep the cadence,
-  so the rhythm reads). At most one pass over every LZ for blind drops, at most two orbits with AUTODROP. Restored pods
-  are at most the drivers HOLLOW ate, so this is about 30 s to 2 minutes.
-- **With AUTODROP** (any version the unit still holds, at its graded quality, 03's call): it flies the restored pods
-  through §3.14's hook as it would fly a pass, choosing LZs with room and the moment in each window. Each landing point
+  so the rhythm reads). Blind drops take as many passes as they need (below); AUTODROP gets at most two orbits.
+  Restored pods are at most the drivers HOLLOW ate, so this is about 30 s to 2 minutes.
+- **With AUTODROP** (any version the unit still holds, at its graded quality): it flies the restored pods through
+  §3.14's hook exactly as its version flies a landing (`03-skills.md` §3.8): v1 times each pod but leaves the split to
+  luck, v2 flies a pass and can mislay a late pod, v3 plans the split to the LZs with room. Each landing point
   is the normal one: the dot's centre plus u × s, with s from altitude, Sensor Interp and Nav Plotter (§3.3). With a
   good orbit and healthy instruments every pod lands soft in an LZ with room: full points. A pod AUTODROP can't place
   in two orbits (no sure window) drops blind in the last window.
 - **Without AUTODROP, or with no drop solution** (Nav Plotter dead or missing, the ship out of the band): the pods
   **drop blind**.
   - No LZ choice: the pods take the windows in the order the ship passes over the LZs, one pod per window in turn,
-    whatever the counts, so a full LZ means a mislanded pod.
+    whatever the counts, so a full LZ means a mislanded pod. With more restored pods than LZs the pods keep going
+    round, pass after pass, one per window, until all are down. Why not several per window: one pod per window keeps
+    the blind landings spread over the sites, and each extra pass is only a SKIP of about 6 s.
   - The moment is random: the dot's centre lands uniformly within ±(W ÷ 2 + `BLIND_MARGIN_KM` 150) of the LZ's
     centre, W the bracket's width.
   - The spread is double: s × `BLIND_DROP_MULT` 2.0.
@@ -664,8 +669,7 @@ REPORT. They score by the normal rules (§3.9); there is no flat bonus. This spe
 - **From `02-map.md`:** each ship's slot, layer, size class and pods by 02's formulas (§3.15), rolled by slot, and its
   depth on this route; the flight template (the ring, which is the launch band, plus warps and Δv); links of 82–123
   blocks (§3.16); the ship card rows for §3.15's labels; and the save storing each ship's landing result. 02 §3.7
-  re-ran its route check on the persistent arm with the memory classes (`docs/phase3/map-sim/results.txt`): the best
-  route is 7 ships in about 58% of runs and 6 in about 42%; 5 and 8 are never best.
+  re-ran its route check on the persistent arm with the memory classes; its route shares are 02 §3.7's.
   **For memory (§3.16):** each ship's class by the recommended rule (light: TIGHT; standard with 5–8 pods and
   ARES-VII: COMPACT; 9 pods or more, arks and the final ship: FULL; at most two TIGHT ships per layer from layer 5);
   the card row `MEMORY n` with the fit line against the current unit; the PACKET's room bar, and TRANSMIT ▸ waiting
@@ -760,11 +764,11 @@ REPORT. They score by the normal rules (§3.9); there is no flat bonus. This spe
 ## 7. Story hooks
 
 05 owns the writing. The slots: one colony name per ship, carried into the epilogue; parked pods' beacons (the next
-unit, a year behind on the same arm, may find last run's still blinking; 02 and 05's call); one radio line from the
-ground at the first touchdown on each ship; ARRIVAL CONTROL's site quips on POOR planets ("LZ-B is in a lake :)"); the
-report's odd line; candidate sites as finds, for example `SITE 5 · ROOM 0 · WRECKAGE · OLD POD`, which can feed the
-`046.log` mystery; "fate unknown" for pods that never launched; and CONTROL's cheer about tight ships ("Cosy! Pack
-light. :)"), which never says why a caretaker should arrive with so little.
+unit, launched 0–35 years later, 2.8 on average, on the same arm, may find last run's still blinking; 02 and 05's call);
+one radio line from the ground at the first touchdown on each ship; ARRIVAL CONTROL's site quips on POOR planets ("LZ-B
+is in a lake :)"); the report's odd line; candidate sites as finds, for example `SITE 5 · ROOM 0 · WRECKAGE · OLD POD`,
+which can feed the `046.log` mystery; "fate unknown" for pods that never launched; and CONTROL's cheer about tight ships
+("Cosy! Pack light. :)"), which never says why a caretaker should arrive with so little.
 
 ## 8. Slices
 
@@ -807,8 +811,8 @@ light. :)"), which never says why a caretaker should arrive with so little.
 
 **Risks**
 1. **The long-hop balance.** 02 sizes ships by slot, so arks reached by long hops pay for skipping smaller ships. 02
-   re-ran its check on the persistent arm with the TIGHT cost (`docs/phase3/map-sim/results.txt`): the best route is
-   7 ships in about 58% of runs and 6 in about 42%, 5 and 8 never; no late TIGHT ship is on a best route.
+   re-ran its check on the persistent arm with the TIGHT cost (route shares in 02 §3.7): long hops still pay, and no
+   late TIGHT ship is on a best route.
 2. **Repetition on big ships.** 16 pods is 5–7 windows and about 3 minutes: intended pressure toward AUTODROP, but
    possibly a chore before it exists. Levers: a bigger bay on big ships, wider brackets.
 3. **Elliptical orbits** give each LZ its own launch altitude, so one LZ's dot fits and another's doesn't. The per-LZ

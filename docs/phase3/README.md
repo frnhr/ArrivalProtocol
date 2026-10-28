@@ -18,9 +18,11 @@ owners and fixed. Its verification pass confirmed the majors fixed and found 13 
 
 **Rework, 2026-10-28.** Fran answered the open decisions (`DECISIONS.md`). Three authors reworked the specs to match
 (map and story together, for the new timeline; landing, for per-ship memory; skills and threats), and a second critic
-read all five against the answers: 1 blocker and 6 major findings, routed back and fixed. The map's simulator is now in
-`map-sim/`. The specs are long (about 9,000–11,000 words each); read this page first, then `DECISIONS.md`, then
-`SCRATCHBOOK.md` for the points that are least set in stone.
+read all five against the answers: 1 blocker and 6 major findings, routed back and fixed. Fran then answered the 20
+questions the rework raised (round 2); the same authors applied them, and the critic's verification pass found no
+blocker, 2 majors and 12 minors, all routed and fixed. The map's simulator is in `map-sim/`. The specs are long (about
+9,000–11,000 words each); read this page first, then `DECISIONS.md`, then `SCRATCHBOOK.md` for the points that are least
+set in stone.
 
 ## What a run looks like now
 
@@ -29,20 +31,24 @@ Kepler-186f near Earth to an end slot at the tip. A beam reaches 58 light-years,
 hop means fewer ships (`02-map.md`).
 
 **Runs follow each other on the same arm.** The next run is the next core version (UNIT-047, then UNIT-048), launched
-about a year later. The arm keeps its state: ships the last unit visited are colonies now, ships it skipped are a run
-older (some leave: saved by another core, or came in on their own), and new ships report home. Every run starts at a
-new calm ARES ship (ARES-VII, VIII, …). A "steady arm" rule keeps every run's arm the same shape, so the last route
-decides which ships wait, never how many or how big. You trail your predecessor by a year: its colonies, its trail, its
-letters. **The final ship** is a role, an end slot on the chart; run 1's is LAST LIGHT, and later runs get new ones.
+0–35 years later (mostly 0–2, mean 2.8; the title shows the roll). The arm keeps its state: ships the last unit visited
+are colonies now, ships it skipped are a run older (some leave: saved by another core, or came in on their own), and new
+ships report home. Every run starts at a new calm ARES ship (ARES-VII, VIII, …). A "steady arm" rule keeps every run's
+arm the same shape, so the last route decides which ships wait, never how many or how big. You trail your predecessor by
+that gap: its colonies, its trail, its letters. A ship more than 10 years off the new schedule leaves, so a long gap
+clears the arm, and a time valve can add years if the leftover arm is ever too poor (it never opened in 12,000 simulated
+runs). **The final ship** is a role, an end slot on the chart; run 1's is LAST LIGHT, and later runs get new ones.
 
 **Time is in years.** You arrive at each ship early and sleep in its receiver until its approach; a ship you can't reach
 before its approach is TOO LATE and is never scored. The biggest ships (arks) approach early and only a long hop gets
 there in time; that is why a short route can win. Over 12,000 simulated consecutive runs the best route is 6 or 7
-ships (each 40–60% of runs, depending on how the last unit played), with no drift over 200 runs and no snowball.
+ships (7 ships in about 59%, `02-map.md` §3.7), with no drift over 200 runs and no snowball.
 
 **Ships differ in memory.** FULL ships have phase 2's 384 blocks, COMPACT 320 and TIGHT (light ships) 256, which leaves
-only 88 blocks for the unit you carry. The PACKET checks both the link and the next ship's room, so a tight ship is
-easy early and costs files late, and the card says so before you pick it (`01-landing.md` §3.16).
+only 88 blocks for the unit you carry, with no charge floor: files fill the room first, and you may arrive with no
+REPAIR CHARGE. The PACKET checks both the link and the next ship's room, so a tight ship is easy early and costs files
+or charge late, and the card says so before you pick it (`01-landing.md` §3.16). A skill can be packed at a lower
+version to fit (PACK AS v1). HOLLOW's root and seeds ride free on the beam.
 
 **On each ship** the flight is phase 2's: turn the red line green. Then comes **LANDING** (`01-landing.md`): the pod's
 arc ends in a dot sliding along the planet, each landing zone is a bracket, and [L] launches while the dot is inside.
@@ -51,12 +57,13 @@ Each zone has a count; overfill one and the extra pods are mislanded (¾ points)
 or fly lower (fuel, because a low orbit decays). The pod drivers are files in the MIND: that is where the blue half
 earns its keep.
 
-**Threats grow by act** (`04-threats.md`). Ships 1–2 are calm: repairs under scarcity, no adversary. From ship 3,
-seeds ride in on noisy beams; rm removes one in 2 seconds, but every seed left behind "reports home" on a visible
-TRACE meter. At TRACE 3, or at the latest one hop before a final ship, HOLLOW boards: a locked chip in your packet
-that can't be deleted, and that brings phase 2's HOLLOW mechanics back one per ship, ending in the root duel. Some
-ships carry a **resident AI**: corrupted (fires the engine, locks pods, deletable or healable; announced early, and
-sometimes a surprise in the last layers), gone (logs and salvage), or, rarely and hidden, asleep and friendly.
+**Threats grow by act** (`04-threats.md`). Ships 1–2 are calm: repairs under scarcity, no adversary. From ship 3, seeds
+ride in on noisy beams; rm removes one in 2 seconds, but every seed left behind "reports home" on a visible TRACE meter.
+No rm means no win at the finale, and the card warns before the last hop. At TRACE 3, or at the latest one hop before a
+final ship, HOLLOW boards: a locked chip in your packet that can't be deleted, and that brings phase 2's HOLLOW
+mechanics back one per ship, ending in the root duel. Some ships carry a **resident AI**: corrupted (fires the engine,
+locks pods, deletable or healable; announced early, and sometimes a surprise in the last layers), gone (logs and
+salvage), or, rarely and hidden, asleep and friendly.
 
 **Between ships** comes the LANDING REPORT, then the **DESK**, then the PACKET and the beam. The DESK holds the star
 chart, the ship cards, the repository, TRAINING and the INBOX.
@@ -74,18 +81,32 @@ story looks outward. Caretakers left at relay dishes with too little charge star
 
 **The ending** is chosen at the final ship, before the score screen: the FINALE (the root duel, then what becomes of
 HOLLOW, PURGE, MERGE or SPARE, and of you, SUNSET, STAY, REASSIGNMENT, later CONTACT), then the final LANDING REPORT and
-the RUN TALLY. MERGE restores the pods HOLLOW ate, which then land (by AUTODROP or blind) and score by their landing.
-Each choice has its own epilogue and one trace in the next run.
+the RUN TALLY. MERGE restores the pods HOLLOW ate, which then land in THE LAST LANDING (by AUTODROP or blind) and
+score by their landing. Each choice has its own epilogue and one trace in the next run, which acts at the next unit's
+final ship or is a gift that already exists on the arm (`05-story.md` §3.8).
 
 ## Decisions for Fran
 
 Fran's answers of 2026-10-28 are in `DECISIONS.md`, with the list as it was asked. No decision is final: one that
 hinders good gameplay is raised again with the argument.
 
-**The 20 questions the rework raised were answered on 2026-10-28** (round 2 in `DECISIONS.md`). Several change the
-specs, which have not been updated for them yet: a random launch gap of 0–35 years, hitchhikers (HOLLOW's root and
-seeds) riding free, no charge floor on TIGHT ships, up to two TIGHT ships per late layer, no rm meaning no win (with a
-warning before the last hop), and MERGE's restored pods landing on their own.
+**Open after round 2** (each with the specs' recommendation; the spec and question in brackets):
+1. **The drift limit:** a waiting ship more than 10 years off the new schedule leaves, so a gap over 10 years clears
+   the arm. Recommended: yes. [02]
+2. **The time valve** opens when the next arm's best route is below 63 pods, and adds 11 years. Recommended: yes. [02]
+3. **Physical traces,** which also drops the traces that changed the repository's restricted list; the non-compliant
+   endings cost at most one extra seed per run at the final ship's boot. Recommended: yes. [02, 05]
+4. **REASSIGNMENT's gain** is +15 charge at the next final ship's boot. Recommended: yes. [05]
+5. **MERGE's trace** is +1 thread at the next final ship, whose root is 2 blocks bigger (18). Recommended: yes. [05, 04]
+6. **The blind drop's numbers** (the dot's centre within ±(W/2 + 150 km) of the LZ, double spread) and **restored
+   drivers at 80%.** Recommended: yes, as starting values. [01]
+7. **MERGE's 20 charge** counted from the root's unlock instead of kept through the duel. Recommended: not yet; decide
+   after the playtest. [03]
+8. **0 charge on TIGHT ships breaks "a started repair always wins."** Recommended: accept it as TIGHT's price, but the
+   first seed ship never is a TIGHT ship you'd reach with 0 charge. [03, 04]
+9. **rm late in the run (decision 12 hindering play):** seeds and the tool hunt can eat the last rm when a resend can
+   no longer arrive. Recommended: the last working rm is immune to seeds and the tool hunt, and the repository tags Rm
+   `NEEDED FOR THE FINALE` early. [04]
 
 Decision 18 (cycles from points only, unspent only shown, no SKIP chaining) is deferred; the specs keep it as a working
 value.
@@ -93,11 +114,11 @@ value.
 ## Known tensions for the rebalance
 
 Balance is low priority until the end (PHASE3 §11), but these are already visible:
-- **The last hop into the final ship is tight.** With HOLLOW's root and `046.log` locked in the packet on a long hop's
-  link, the skills spec's sample player leaves AUTOBURN, Telemetry and AI Comms behind and arrives with only the charge
-  floor, and MERGE needs 20 charge kept through the duel. Knobs: the link formula's slope, the root's link cost.
+- **MERGE's charge on the last hop.** HOLLOW's root now rides free, so the last hop's squeeze is small (the sample
+  player leaves AI Comms behind), but a long last hop still brings about 12–18 charge against the 20 MERGE needs kept
+  through the duel. Knob: the link formula's slope (or question 7 above).
 - **Long hops and TIGHT ships squeeze the packet** whenever skills grow to v3 (a full skill set is 34 blocks; a TIGHT
-  ship takes at most 76 blocks of files).
+  ship takes at most 88 blocks of files, and then no charge).
 - **A 5-ship run compresses HOLLOW** into one ship before the finale (never the best route, but a player can choose it).
 - **Late ships may overload the MIND** (HOLLOW, seeds, a resident, possibly a surprise one, and 16 pods at once).
 - **AUTOBURN v3 may be a weak power spike** on healthy ships, where every orbit already fits.

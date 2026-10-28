@@ -16,7 +16,7 @@ numbers are starting values for `src/data/tuning.ts`, each with a one-line WHY h
   way, or they will come in on their own. New ships have **reported home** in their place, and every run's first ship is a new calm ship near Earth (ARES-VIII, ARES-IX, …).
 - **The steady-arm rule** keeps runs comparable. Every world holds one ship at RUN START. A skipped ship stays at most 3
   runs. New ships restore the arm's shape: the ark pattern, the share of light ships, the story and resident quotas. In
-  12,000 simulated consecutive runs (random gaps included) the best route is worth the same as on a fresh roll. It does not drift over 200 runs,
+  12,000 simulated consecutive runs (random gaps included) the best route is worth about a pod more than on a fresh roll, whoever played the last run. It does not drift over 200 runs,
   and it does not depend on how well the last run went.
 - A beam reaches at most **58 LY**, so a hop crosses one or two layers, and every route visits **5–8 ships**. You leave a
   ship at its approach year. A ship you can't reach before its approach is TOO LATE.
@@ -252,7 +252,7 @@ route the kid plans rather than luck.
   can be reached" ends every surviving run there.
 - **v1 has one end slot,** w19 New Haven. Run 1's final ship is LAST LIGHT. Once a unit brings a final ship in, the next
   run's final ship is a new one that reported home there (`05-story.md`'s final-ship names: LODESTAR next). A final ship
-  that nobody reached waits for the next run, like any ship, and does not age out. WHY: the destination is visible from
+  that nobody reached waits for the next run, like any ship, and does not age out (except by the drift limit, §3.12). WHY: the destination is visible from
   minute one, so it must not vanish while nobody has got there.
 - **Several end locations (later; the rules are ready for them).** The arm gains two more end slots, for example one past
   the inner lane, toward the core, and one past the outer lane, toward the signal. Each holds its own final ship. The
@@ -454,14 +454,15 @@ marks worlds only and takes no ship from the arm.
 - **Trace places** attach to a ship of the next run: a gift on arrival, shown on that ship's card, with no extra beam.
   **The gift is something that already exists when you get there;** the trace only decides where you find it. Never on
   an authored ship or a `?` ship:
-  - SPARE: `<UNIT>'S CACHE` (the spared HOLLOW hid it on its own way out, long ago), on a ship in layers 3–6.
+  - SPARE: `<UNIT>'S CACHE` (the spared HOLLOW hid it on its own way out, long ago), on a ship in layers 3–6; for 046,
+    which never passed Calder, on a ship at a world of its own trail (§3.12, Run 1).
   - SUNSET: `UNIT-047 LEFT A CACHE HERE`, on a ship at a world of the last unit's route whose approach is after the last
     unit's landing there (it left a tool in that world's receiver as it passed); none qualifying, the first ship, whose
     world the last unit always visited first.
   - STAY: `<colony> · FOUNDED BY UNIT-047`, on the first ship in layers 3–6 whose approach is at least the colony's
     founding year plus its distance (its supply packet travels by light); none qualifying, the final ship.
   - CONTACT: two signal stops, on ships in layers 5–7 (the signal is always there).
-  - The final ship carries the rest (PURGE, MERGE, REASSIGNMENT and the extra seed of the non-compliant choices), as
+  - The final ship carries the rest (PURGE, MERGE, REASSIGNMENT and the non-compliant choices' extra seed, at most one per run, which PURGE's wipe does not take), as
     `05-story.md` §3.8 lists, shown on its card as one row (`THE LAST UNIT ENDED HERE · PURGE`).
   A trace place is a tag on a ship for one run; it does not keep the ship on the chart.
 - Phase 2's fields stay. The v1 key is left untouched; the title says once that a phase-2 archive was found and not

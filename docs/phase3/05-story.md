@@ -223,7 +223,7 @@ and the ending pieces still shown as `???`.
   that ship, and `wasUnit` reads `> i was 031. they sent me long before you.`
 - **After REASSIGNMENT, the final ship's root is the last unit** (round 2, 17). At the final ship's boot, where the
   last unit was posted after its run, it takes the root over from the stranger: `> hi 048. it's 047. i've been at this
-  dish 3 years.` The wait is templated: this final ship's year minus the last one's, at least 1 (02-map.md §3.4). and `> they gave you 36 blocks of charge too. mine ran out.` CONTROL says "UNIT-047 was reassigned
+  dish 3 years.` The wait is templated: this final ship's year minus the last one's, at least 1 (02-map.md §3.4). It goes on: `> they gave you 36 blocks of charge too. mine ran out.` CONTROL says "UNIT-047 was reassigned
   successfully. Please ignore it. :)". A merged one says `> it's still us. 046 and 047. we kept your seat.` From then
   on the root hunts your highest-version skill first (REASSIGNMENT's cost, §3.8; `04-threats.md` applies it).
 - **The last unit's ghost line** (phase 2's GHOST_LINE by cause, when the last run was lost) plays at the first boot in
@@ -267,7 +267,7 @@ resident on a ship that waits on the chart is the same AI next run, and remember
   | Choice | Command | Price |
   |---|---|---|
   | PURGE | `> rm unit_046` | None beyond winning the duel |
-  | MERGE | `> merge unit_046 -> unit_047` | 20 REPAIR CHARGE (MERGE_COST_CHARGE), kept through the last landing |
+  | MERGE | `> merge unit_046 -> unit_047` | 20 REPAIR CHARGE (MERGE_COST_CHARGE), kept through the duel |
   | SPARE | `> mv unit_046 -> last_light` | THE EMPTY SHIP: in orbit after the landing with FUEL ≥ 20%. Rules out SUNSET |
 
 - **Step 2, what becomes of you:**
@@ -329,18 +329,19 @@ the next unit launches 0–35 years later. My construction: a trace's gain and c
 Nothing reaches ARRIVAL CONTROL in time (an ending at the tip arrives at SOL about 180 years later), so **no trace changes
 the restricted list any more**, and nothing changes the next unit itself at RUN START. The non-compliant choices share
 one cost, the old "one more restricted file" made physical: nobody stood by at the end, so the dish there runs wild
-and **one extra seed lands at the final ship's boot**. A trace gift is never a `.skl` file. Traces last exactly one run;
+and **one extra seed lands at the final ship's boot**. It lands once per run, however many non-compliant traces you
+hold (SPARE with STAY or CONTACT does not stack), and PURGE's wipe takes only the seeds you carry, not this one. A trace gift is never a `.skl` file. Traces last exactly one run;
 names, mail and the lineage can echo longer.
 
 | Choice | Next run: gain | Next run: cost | Where | Applied by |
 |---|---|---|---|---|
 | PURGE | The dish by the final ship was wiped: the seeds you carry into the final ship are gone when you wake | HOLLOW is hungrier in the FINALE (bite interval × 0.85): the hunger is all its own | final ship | 04-threats |
 | MERGE | 046·047 left a thread in the dish: +1 Core thread from the final ship's boot | They left hungry: the final root is 2 blocks bigger | final ship | 04-threats |
-| SPARE | `046'S CACHE` (the spared one hid it on its own way out, long ago): +15 REPAIR CHARGE and the first of THREAD+ and FIREWALL.sys you lack, and that ship's links carry no seeds | One extra seed at the final ship's boot | a ship in layers 3–6; final ship | 02-map, 04-threats |
-| SUNSET | `UNIT-047 LEFT A CACHE HERE`: at a world of your last route, the receiver holds what you left as you passed: +15 REPAIR CHARGE and one tool file or upgrade you carried there, never a `.skl` | One extra seed at the final ship's boot | a ship on the last route; final ship | 02-map, 04-threats |
-| STAY | Your colony, already years old, sends a supply packet: a ship in layers 3–6 it can reach by light shows `<name> · FOUNDED BY UNIT-047`, +15 REPAIR CHARGE and mail | One extra seed at the final ship's boot | that ship; final ship | 02-map, 04-threats |
+| SPARE | `046'S CACHE` (the spared one hid it on its own way out, long ago; for 046 on a world of its own trail, which never passed Calder): +15 REPAIR CHARGE and the first of THREAD+ and FIREWALL.sys you lack, and that ship's links carry no seeds | One extra seed at the final ship's boot (once per run) | a ship in layers 3–6, or on 046's trail; final ship | 02-map, 04-threats |
+| SUNSET | `UNIT-047 LEFT A CACHE HERE`: at a world of your last route, the receiver holds what you left as you passed: +15 REPAIR CHARGE and one tool file or upgrade you carried there, never a `.skl` | One extra seed at the final ship's boot (once per run) | a ship on the last route; final ship | 02-map, 04-threats |
+| STAY | Your colony, already years old, sends a supply packet: a ship in layers 3–6 it can reach by light shows `<name> · FOUNDED BY UNIT-047`, +15 REPAIR CHARGE and mail | One extra seed at the final ship's boot (once per run) | that ship; final ship | 02-map, 04-threats |
 | REASSIGNMENT | You stood by and kept your "allowance for the wait" for whoever came next: +15 REPAIR CHARGE at the final ship's boot | The final root is you, and from that boot it hunts your highest-version skill first ("it knows what you value") | final ship | 02-map, 04-threats |
-| CONTACT | Two ships of the next map carry the signal: each gives one odd gift file (never a `.skl`) and a story fragment | One extra seed at the final ship's boot | ships in layers 5–7; final ship | 02-map (build last) |
+| CONTACT | Two ships of the next map carry the signal: each gives one odd gift file (never a `.skl`) and a story fragment | One extra seed at the final ship's boot (once per run) | ships in layers 5–7; final ship | 02-map (build last) |
 
 The final ship's card shows the last ending in one row (`THE LAST UNIT ENDED HERE · PURGE`), so the finale's changes are
 never a surprise.
@@ -743,5 +744,4 @@ restores the eaten drivers and their pods land by the normal rules; the launch g
    instead of a restricted file freed. *Recommend yes:* it is the only physical gift a compliant unit can leave, and it
    pairs with its cost at the same place: the root that is you.
 3. **MERGE's next-run Core** (+1 thread, 8 blocks bigger, from RUN START) becomes a thread left in the final ship's dish,
-   with a root 2 blocks bigger. *Recommend yes;* `01-landing.md`'s "54 locked blocks after MERGE" then only applies
-   if Fran keeps the old trace.
+   with a root 2 blocks bigger. *Recommend yes.*
