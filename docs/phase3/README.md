@@ -74,7 +74,8 @@ story looks outward. Caretakers left at relay dishes with too little charge star
 
 **The ending** is chosen at the final ship, before the score screen: the FINALE (the root duel, then what becomes of
 HOLLOW, PURGE, MERGE or SPARE, and of you, SUNSET, STAY, REASSIGNMENT, later CONTACT), then the final LANDING REPORT and
-the RUN TALLY. MERGE restores the pods HOLLOW ate, which then land (by AUTODROP or blind) and score by their landing. Each choice has its own epilogue and one trace in the next run.
+the RUN TALLY. MERGE restores the pods HOLLOW ate, which then land (by AUTODROP or blind) and score by their landing.
+Each choice has its own epilogue and one trace in the next run.
 
 ## Decisions for Fran
 
