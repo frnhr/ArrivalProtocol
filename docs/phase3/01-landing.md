@@ -53,12 +53,12 @@ LZ-B. HOLLOW bites a driver in the bay, so the kid TABs in mid-window: OVERCLOCK
 window waits, the repair wins, and the kid TABs back for the last two pods. With AUTODROP the kid stays in blue while
 the pods go down on their own; without it, a 16-pod ark is 5–7 windows by hand, which Fran wants felt.
 
-**A tight ship, early and late.** At ship 2's DESK the kid looks at PETREL, a light ship with 3 pods. Its card reads
+**A tight ship, early and late.** At ship 1's DESK the kid looks at PETREL, a light ship with 3 pods. Its card reads
 `MEMORY 256 · TIGHT · ROOM FOR YOU 88` and, under it, `YOU FIT · CHARGE SQUEEZED: 15 ARRIVES`. CONTROL: "Cosy little
-ship! Pack light. :)" The kid goes anyway: a calm ship with three pods needs little charge. At depth 6 the card of
-WAYFARER, a light ship, says `LEAVE 20 BEHIND`. On the PACKET screen a second bar sits under the link, `ROOM AT WAYFARER 88`, and
-TRANSMIT ▸ waits until the kid has left Autopilot, Telemetry, Repair.bak and SURVEY.skl behind. The charge line turns
-red: `CHARGE 38 → 12 ON ARRIVAL · 26 WON'T FIT`. Or the kid picks the 9-pod ship on the noisy link instead.
+ship! Pack light. :)" The kid goes anyway: a calm ship with three pods needs little charge. At depth 6 the card
+of WAYFARER, a light ship, says `LEAVE 20 BEHIND`. On the PACKET screen a second bar sits under the link, `ROOM AT
+WAYFARER 88`, and TRANSMIT ▸ waits until the kid has left Autopilot, Telemetry, Repair.bak and SURVEY.skl behind.
+The charge line turns red: `CHARGE 38 → 12 ON ARRIVAL · 26 WON'T FIT`. Or the kid picks the 9-pod ship on the noisy link instead.
 
 **Why ships 1–2 are fun with no adversary.** The landing is a new verb with a skill test (dot in the bracket) and
 instant, loud feedback: a streak, a bell, a counter, a voice from the ground. The crash course keeps the flight tense.
@@ -299,10 +299,10 @@ orbit with pods aboard. A pod is never called "lost", "offline" or "not recovere
 simply scores 0 (05's epilogue says they were fetched).
 
 With the ship empty the landing lingers `LANDING_DONE_LINGER_SEC` 1.5 s, then the report. **On the final ship the
-report waits for the finale** (04-threats §3.10), as phase 2's printer waited (`finalePending`). If every pod is down or
-parked before the root is deleted, the strip says `EVERY POD IS DOWN — now DELETE THE ROOT` (row L0 in §3.11), and the
-LANDING REPORT comes after the duel. The run-end order after it is `02-map.md`'s (decision 23: the ending is chosen
-before the score screen); this spec assumes only that the final ship's report comes after the finale and before both.
+report waits for the finale**, as phase 2's printer waited (`finalePending`). If every pod is down or parked before
+the root is deleted, the strip says `EVERY POD IS DOWN — now DELETE THE ROOT` (row L0 in §3.11), and the LANDING REPORT
+comes after the duel. The run-end order is `02-map.md` §4's: the FINALE (with the ending's two steps, decision 23),
+then this final LANDING REPORT, then the RUN TALLY.
 
 ### 3.11 Guidance: the landing table
 
@@ -426,14 +426,15 @@ smallest keeps at least one (6 → 4 · 2).
 | 5 | light 4, standard 8, ark 16 | STANDARD, one NARROW | each class 1/3 | 1 | POOR 1 in 3 | as layer 4 | on |
 | 6 | light 5, standard 9, ark 16 | rolled, at least one STANDARD | each class 1/3 | 1–2 | POOR 1 in 2 | as layer 4 | on |
 | 7 | light 5, standard 10, ark 16 | as layer 6 | each class 1/3 | 2 | POOR 1 in 2 | as layer 4 | on |
-| 8 | the final ship, 16 (v1: LAST LIGHT) | STANDARD ×3, NARROW ×1 | GENTLE (New Haven) | 1 | GOOD | as layer 4 | on |
+| 8 | New Haven's end slot: the final ship, 16 | STANDARD ×3, NARROW ×1 | GENTLE (New Haven) | 1 | GOOD | as layer 4 | on |
 
 **Authored worlds:**
 - ARES-VII is the layer-1 row as written: POD 01 OKAFOR, POD 02 BRANDT at 44%, POD 03 AL-SAYED.
 - HALCYON's Tessaly is GENTLE.
 - KESTREL's Brine (layer 3) is HARSH, an ocean. It may be a calm ship, so its LZs are all WIDE and it has no no-go arcs.
 - VESPER's Cinder (layer 5) is ROUGH, with two lava no-go arcs.
-- LAST LIGHT is the layer-8 row.
+- The layer-8 row is New Haven's end slot alone (v1 has one end slot; run 1's final ship there is LAST LIGHT). The
+  final ship is a role (02 §3.6): each future end slot needs its own authored row.
 Their sizes come from 02's slot rolls like any other ship.
 
 **The calm ships** (depth 1–2) can only be in layers 1–3 (02). Those layers roll no failing drivers, at most one no-go
@@ -465,7 +466,8 @@ memory, so some are tight for the unit.
 **The parts of memory**, in address order, with what the other specs ask of each:
 - **Rack A, the ship's own files:** phase 2's 46 blocks (Bay Ctrl takes Printer Uplink's 6) and 18 free. Every ship
   has it. 04 needs at least 14 free on resident ships (WARDEN.sys 10; MOTH.sys 12 plus sleep.lock 1; a left resident's
-  log and leftovers at most 14), which leaves at least 4. No conflict.
+  log and leftovers at most 14), which leaves at least 4. No conflict. Rack A is the same in every class; the lead's
+  placement rules still apply: no hidden sleeper on a TIGHT ship, and no corrupted resident on any ark.
 - **The pod racks (B, C, and D on big ships):** 8 blocks per driver, and 04's root slot (the root plus GAPs of 1 and 2,
   11–19 blocks; plain free space with no HOLLOW aboard). They keep **at least 40 free blocks** (the root's gaps not
   counted): the 24-block **tail** at the end of the last pod rack, which the unit may spill into, plus 16 for walls
@@ -478,7 +480,7 @@ memory, so some are tight for the unit.
 
 | Class | Racks | Blocks | Pod racks | Receiver | Room for you | Most pods | Ships (recommended) |
 |---|---|---|---|---|---|---|---|
-| FULL | A B C D E F | 384 | B–D, 192 | E–F, 128 | 152 | 16 | arks, standard ships with 9–10 pods (layers 6–7), the final ship |
+| FULL | A B C D E F | 384 | B–D, 192 | E–F, 128 | 152 | 16 | arks, standard ships with 9–10 pods (layers 6–7), the final ship (always) |
 | COMPACT | A B C E F | 320 | B–C, 128 | E–F, 128 | 152 | 8 | ARES-VII, standard ships with 5–8 pods (layers 2–5) |
 | TIGHT | A B C E | 256 | B–C, 128 | E, 64 | 88 | 8 (light ships have 3–5) | light ships |
 
@@ -542,7 +544,7 @@ floor fit any link up to 138, so 02's links (82–123) and its 131-block bound a
 | Layer 1, ARES-VII: 3 pods, calm, fresh unit | COMPACT | 46 used, 18 free | B `P P P _40` · C `_64` (104 free) | E 52 + 12 free · F 49 + 15 free |
 | Layer 2, light: 3 pods, calm, the depth-2 unit | TIGHT | 46 used, 18 free | B `P P P _40` · C `_64`, its last 24 taken by the unit | 73 files + 15 charge = 88: E full, 24 in C's tail |
 | Layer 5, standard: 8 pods, R14, a resident, 2 seeds, a 113 link, the depth-4 unit | COMPACT | 60 used, 4 free | B `P P P P P P _16` · C `P _2 R14 _1 P _31` (47 free) | 84 + 12 + 14 = 110 before the rest of the charge: inside E–F |
-| Layer 7, light: 5 pods, R16, the depth-7 unit cut to 76 | TIGHT | 46 used, 18 free | B `P P P _40` · C `P _2 R16 _1 P _29` (69 free) | 76 + 12 = 88: E full, 24 in C's tail; seeds land by the no-room rule |
+| Layer 7, light: 5 pods, R14 (04 caps the root at 14 before the final ship), the depth-7 unit cut to 76 | TIGHT | 46 used, 18 free | B `P P P _40` · C `P _2 R14 _1 P _31` (71 free) | 76 + 12 = 88: E full, 24 in C's tail; seeds land by the no-room rule |
 | Layer 7, standard: 10 pods, R14, a resident, 3 seeds, a 123 link | FULL | 60 used, 4 free | B `P P P P P P _16` · C `P P _2 R14 _1 P _23` · D `P _56` (95 free) | 144 needed: E–F full, 16 into D's tail |
 | Layer 8, the final ship: 16 pods, R16, no resident (a layer 4–7 ark: R14, 47 free) | FULL | 46 used, 18 free | B `P P P P P P P _8` · C `P P P P _2 R16 _1 P _5` · D `P P P P _32` (45 free; phase 2's LAST LIGHT had 48) | up to 144, as above |
 
@@ -610,13 +612,14 @@ the slot is sized then; with no HOLLOW aboard it is plain free space.
 - **From `02-map.md`:** each ship's slot, layer, size class and pods by 02's formulas (§3.15), rolled by slot, and its
   depth on this route; the flight template (the ring, which is the launch band, plus warps and Δv); links of 82–123
   blocks (§3.16); the ship card rows for §3.15's labels; and the save storing each ship's landing result. 02 §3.7
-  re-ran its route check with the cap at 16 and standard ships one pod smaller: the best route is 7 ships in 51% of
-  simulated arms, 6 in 45% and 5 in 3%. **For memory (§3.16):** each ship's class by the recommended rule (light:
-  TIGHT; standard with 5–8 pods and ARES-VII: COMPACT; 9 pods or more, arks and the final ship: FULL); the card row
-  `MEMORY n` with the fit line against the current unit; the PACKET's room bar, and TRANSMIT ▸ waiting until files +
-  12 fit the room; deliveries that don't fit the room waiting as `SEND ON`; the route check re-run with TIGHT ships
-  costing files; and a validity rule that no route is forced through a TIGHT ship from layer 5 on. Modifiers that
-  name a rack (KESTREL's debris) name one the ship has: rack D exists only on FULL ships.
+  re-ran its route check on the persistent arm with the memory classes (`docs/phase3/map-sim/results.txt`): the best
+  route is 7 ships in about 58% of runs and 6 in about 42%; 5 and 8 are never best.
+  **For memory (§3.16):** each ship's class by the recommended rule (light: TIGHT; standard with 5–8 pods and
+  ARES-VII: COMPACT; 9 pods or more, arks and the final ship: FULL); the card row `MEMORY n` with the fit line against
+  the current unit; the PACKET's room bar, and TRANSMIT ▸ waiting until files + 12 fit the room; deliveries that don't
+  fit the room waiting as `SEND ON`; the route check with TIGHT ships costing files (done: no late TIGHT ship is on a
+  best route); and a validity rule that no route is forced through a TIGHT ship from layer 5 on. Modifiers that name
+  a rack (KESTREL's debris) name one the ship has: rack D exists only on FULL ships.
 - **From `03-skills.md`:** AUTODROP and SURVEY versions on the hooks in §3.13–3.14; the conversion from a landing
   result into training cycles. AUTOBURN v3's PHASE3 wording ("a window on every pass") assumes rotation; with this
   spec's planet, every pass already has every window. This spec's proposal for v3: it picks the highest orbit at which
@@ -632,8 +635,8 @@ the slot is sized then; with no HOLLOW aboard it is plain free space.
   landings, ARRIVAL CONTROL's site quips, and the report's story line.
 
 **What this spec provides:**
-- **To 02:** §3.15's roller, the forgiveness classes and card labels, the placement rules, the memory classes, their rooms and the
-  boot's fill order (§3.16), the stars (phase 2's three, +6 REPAIR CHARGE each), and the per-ship result: ship id,
+- **To 02:** §3.15's roller, the forgiveness classes and card labels, the placement rules, the memory classes, their
+  rooms and the boot's fill order (§3.16), the stars (phase 2's three, +6 REPAIR CHARGE each), and the per-ship result: ship id,
   slot, depth, outcome, colonists aboard; per LZ its count, landed, mislanded and hard; off-site, no-go, parked (with
   why) and not launched; points, stars, and FUEL at the end. Ranks are 02's: phase 2's absolute thresholds in points.
 - **To 03:** the hooks, and the result's points, landed-correct count and stars. **For memory:** the room is 152 blocks
@@ -743,8 +746,8 @@ light. :)"), which never says why a caretaker should arrive with so little.
 
 **Risks**
 1. **The long-hop balance.** 02 sizes ships by slot, so arks reached by long hops pay for skipping smaller ships. 02
-   §3.7's check (cap at 16, standard ships one pod smaller) gave 7 ships in 51% of simulated arms, 6 in 45%, 5 in 3%.
-   TIGHT ships now cost files late, so 02 should re-run it with that cost.
+   re-ran its check on the persistent arm with the TIGHT cost (`docs/phase3/map-sim/results.txt`): the best route is
+   7 ships in about 58% of runs and 6 in about 42%, 5 and 8 never; no late TIGHT ship is on a best route.
 2. **Repetition on big ships.** 16 pods is 5–7 windows and about 3 minutes: intended pressure toward AUTODROP, but
    possibly a chore before it exists. Levers: a bigger bay on big ships, wider brackets.
 3. **Elliptical orbits** give each LZ its own launch altitude, so one LZ's dot fits and another's doesn't. The per-LZ

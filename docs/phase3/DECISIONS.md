@@ -2,7 +2,7 @@
 
 Fran's answers to the 26 decisions and the 8 designed rules in `README.md`, plus one extra question from `05-story.md`.
 **The five specs have not been updated to match yet.** Where an answer differs from a spec's recommendation, this file
-wins, and the spec text is stale until it is reworked. The numbers follow the README's list.
+wins, and the spec text is stale until it is reworked. The numbers follow the list as it was asked, kept at the end of this file.
 
 **No decision here is final.** Any of them, and any "decided" item in `docs/PHASE3.md`, may be reversed when there is a
 good argument. Wherever a decision gets in the way of good gameplay, in a spec, an implementation or a playtest, raise
@@ -89,3 +89,71 @@ These need spec rework:
   hop before the final ship.
 - After MERGE, REPAIR heals the Core at its 16-block rate.
 - The worst memory corner: a third seed lands by the no-room rule, and charge above the floor is lost loudly.
+
+## The list as it was asked
+
+Collected from the five specs and merged where they overlapped. Each has the specs' recommendation; the spec and
+question number are in brackets.
+
+**Structure and time**
+1. **The time scale.** A run spans about 720 galaxy years and waves start about 760 years apart, so the decided
+   "next wave, decades later" holds only at the tip. Keep the big numbers (recommended), or compress the arm (the rules
+   don't change, the light-years shrink). [02 Q3, 05 Q13]
+2. **The truth about Earth:** nobody is awake; ARRIVAL CONTROL is a program left running. Recommended: keep. [05 Q1]
+3. **LAST LIGHT is always the final ship,** at the tip. Recommended: yes. [02 Q5]
+4. **The long-hop answer:** arks reachable only by a long hop, and slack that pays (deliveries catch up, and ECC fixes
+   one transit hit per 25 years asleep). Recommended: yes, both. [02 Q1, Q2; 03 Q6; 04 Q7]
+5. **A reload mid-ship replays that ship** from its boot. Recommended: allow. [02 Q4]
+6. **One hand-placed arm** for everyone, with a new schedule each run. Recommended: yes. [02 Q6]
+7. **Colonies founded don't change the next run,** except through the STAY trace. Recommended: yes. [02 Q7]
+8. **The repository moves into slice 3** with the map, because licences assume the fixed five ships. Recommended:
+   yes. [02 Q8]
+
+**Landing**
+9. **At most 16 pods per ship** (PHASE3 said later ships "may have 20"; 20 does not fit the 384-block memory with
+   everything else). Recommended: cap at 16; if you want 20, a seventh rack as a big-ship modifier. [01 Q9]
+10. **The planet does not rotate.** Recommended: no rotation. [01 Q1]
+11. **Scoring:** mislanded ×0.75, off-site 0.5 / 0.25 / 0 by planet, hard landing ×0.5; in the 400 + 800 case each
+    colonist counts once (200 mislanded, LZ-A reported 200 short). Recommended: yes. [01 Q2, Q3]
+12. **A planet without survey data is still playable** on ARRIVAL CONTROL's guessed sites (worse, never blocked). This
+    touches a decided item ("others need a survey"). Recommended: the guesses. [01 Q4]
+13. **Small ones:** the pod's fall plays in 3.5 s; launch is [L]; orbit decay comes in slice 1b. Recommended: yes.
+    [01 Q5, Q6, Q8]
+
+**Skills**
+14. **AUTOBURN v1 is bought,** no longer free after two manual captures; your captures still set its accuracy.
+    Recommended: yes. [03 Q2]
+15. **"Circularize" means truly round.** Recommended: yes. [03 Q1]
+16. **A lost skill can be restored at half price.** Recommended: yes. [03 Q4]
+17. **HOLLOW's `unlink` may delete a skill file,** telegraphed and blockable. Recommended: yes. [03 Q5 = 04 Q10]
+18. **Cycles from landing points only; unspent cycles only shown at RUN END; no automatic SKIP chaining yet.**
+    Recommended: yes. [03 Q6–Q8]
+
+**Threats**
+19. **rm by ship 3 is not guaranteed:** ARRIVAL CONTROL recommends Mv at the first desk and Rm at the second, and near
+    Earth a request almost always arrives. 04 also proposes a confirm (`SEEDS LIKELY AHEAD. Skip rm?`) when you request
+    something else; 02's recommendation otherwise "judges need only". Recommended: add the confirm. [04 Q1]
+20. **TRACE is a visible meter, and HOLLOW's root costs link budget.** Recommended: yes, revisit the cost at the
+    rebalance. [04 Q2, Q3]
+21. **Residents:** a corrupted one can be healed with REPAIR; the sleeper stays on its ship; a corrupted one is never
+    hidden as `unknown`. Recommended: yes. [04 Q4–Q6]
+22. **The sleeper appears in about 60% of waves; disguised seeds start at depth 5.** Recommended: yes. [04 Q8, Q9]
+
+**Story and endings**
+23. **The choices come after the tally, so MERGE no longer restores eaten pods.** Recommended: accept. [05 Q3, Q4]
+24. **Traces last one run, are balanced by construction until the rebalance, and CONTACT is built last.**
+    Recommended: yes. [05 Q5, Q6, Q12]
+25. **`046.log` opens by distance rings,** not one entry per ship. Recommended: rings. [05 Q2]
+26. **"Outward Bound"** is a registered charity name and a 1923 play; keep it for development and check it before a
+    public release. "Steve" the tree stays. [05 Q10, Q11]
+
+**Designed rules for sign-off** (your fallback rule: each is a visible, loud rule, but please confirm):
+- the wave generator re-rolls an invalid wave and throws after 50 attempts [02];
+- SEND ON: a delivery that doesn't fit the link waits in that ship's receiver and travels with your next hop [02];
+- the starting kit (SCAN, REPAIR, Repair.bak), phase 2's REPAIR renewal at boot, and the arrival charge floor of 12 [02];
+- the first-pick guarantee: after a crashed ship 1, the bank is raised to 3 cycles so the first skill can be bought [03];
+- a seed with no room beside any target lands in the largest free region [04];
+- on short runs THE DEAL moves to the flagship, WALLS fold into HOLLOW's first ship, and HOLLOW boards by force one
+  hop before LAST LIGHT [04];
+- after MERGE (a bigger Core), REPAIR heals the Core at its 16-block rate, so a started repair still wins [04];
+- in the worst memory corner, a third seed lands by the no-room rule and charge above the floor is lost loudly [01].
