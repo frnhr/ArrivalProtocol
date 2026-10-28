@@ -53,10 +53,10 @@ SCAN on POD 07 blocks it. Later: `> THIS IS MY SHIP. GIVE ME MV.CP. THIS IS MY S
 
 **It finds you.** TRACE reaches 3, and every destination on the map says `HOLLOW WILL FIND YOU ON THIS BEAM`. On the
 PACKET screen a chip appears that the kid did not put there (`??? · 8 BLOCKS · NOT YOURS · RIDES FREE`). At boot the
-unpack reads `100% ... 108%`, and a black locked slab drops into the bay with a thud and a screen tear, between POD 11 (`GAP 2`) and POD 12 · OKAFOR (`GAP 1`). It shows `NEXT BITE ?:??` and says nothing for
-the whole approach. When the capture burn closes the loop: `MIND · SOMETHING IS EATING POD 12`. Phase 2's "it waits
-until you brake" has moved to the act where HOLLOW arrives. After the fight: `> ...047?`. On its next ship it names
-itself.
+unpack reads `100% ... 108%`, and a black locked slab drops into the bay with a thud and a screen tear, between POD 11
+(`GAP 2`) and POD 12 · OKAFOR (`GAP 1`). It shows `NEXT BITE ?:??` and says nothing for the whole approach. When the
+capture burn closes the loop: `MIND · SOMETHING IS EATING POD 12`. Phase 2's "it waits until you brake" has moved to the
+act where HOLLOW arrives. After the fight: `> ...047?`. On its next ship it names itself.
 
 **The sleeper.** A grey `MOTH.sys · inactive` file in rack A scans as `Asleep. Held by sleep.lock`. rm on the 1-block
 lock beside it, and a green line types `> ...oh. hello. is it morning?`, followed by three friendly buttons: `[ RUN
@@ -142,8 +142,10 @@ drain. Phase 3 needs two changes:
   validator must check the largest infectable file, not an 8-block cluster. This binds pod drivers and skill versions
   (§5); `03-skills.md` uses the same cap and refers to this rule.
 - **The Core is the one exception**, as it already is in phase 2 (16 blocks: it heals 12.8 %/s, which beats the worst
-  drain of 10 but not by 1.5×). Its rule: REPAIR heals the Core at its 16-block rate whatever its size. Without that,
-  MERGE's next-run Core of 24 blocks (`05-story.md`, §5) would heal 9.8 %/s and lose to a burning final ship's 10.
+  drain of 10 but not by 1.5×). The signed-off rule "after MERGE, REPAIR heals the Core at its 16-block rate" now has
+  nothing to act on: MERGE happens after the last duel of its own run, and in round 2 its trace no longer makes the
+  next run's Core bigger (`05-story.md` §3.8). The Core stays 16 blocks in every run, so the rule is retired; the
+  validator keeps a guard that the Core is never larger than 16.
 
 ### 3.4 Link noise and seeds on the beam
 
@@ -585,7 +587,7 @@ keyed by stage instead of by ship.
   never on a TIGHT ship, and its ship gets no extra modifier. The map author has agreed to show `unknown` by this
   rule.
 - **M5.** Hitchhikers ride free (round-2 decision 20): the root, beam seeds and seeds on deliveries cost no link room.
-  The locked unit files (44, plus `046.log` 2) are 46 blocks (54 after MERGE) against the weakest link of 82, so about
+  The locked unit files (44, plus `046.log` 2) are 46 blocks against the weakest link of 82, so about
   36 blocks are left for charge or other files on that link.
 - **M6.** The TRACE tally at the ship's end, seeds landing at BOOT, a left resident's leftovers as the SALVAGE draft,
   and the save keeping TRACE, HOLLOW's presence, age, root size and played stages, whether THE DEAL happened, residents'
@@ -594,8 +596,8 @@ keyed by stage instead of by ship.
 - **M8 (confirmed).** ARRIVAL CONTROL recommends Mv at the first desk and Rm at the second (while you have none), and a
   request from layers 1–2 reaches the next ship about 90% of the time (`02-map.md` is tuning to that). No confirm and no
   guarantee beyond that tag (decision 19).
-- **M9. The persistent arm.** The next run is the next core version on the same arm, 0–35 years later (2–3 on
-  average; `02-map.md` owns the gap), and the arm
+- **M9. The persistent arm.** The next run is the next core version on the same arm, 0–35 years later (mean 2.8,
+  `02-map.md`'s LAUNCH_GAP_TABLE; a gap over 10 years clears the arm, DRIFT_LIMIT_YEARS), and the arm
   keeps its state. Threat state is per run (TRACE starts at 0, HOLLOW boards anew). Residents on unvisited ships may
   persist; if so, they count toward that run's caps (§3.11).
 
@@ -621,14 +623,18 @@ at the first boot in a run of a ship one hop from a final ship with HOLLOW aboar
 For the ending, which now comes before the final LANDING REPORT and the RUN TALLY, this spec provides the record of
 eaten drivers (§3.10).
 
-**Next-run traces that act on threats** (defined by `05-story.md`, implemented in the threat systems):
+**Next-run traces that act on threats** (defined by `05-story.md` §3.8, implemented in the threat systems). In round 2
+every trace is physical: it acts at the next run's final ship, or is a gift already on the arm. None changes the
+restricted list, since ARRIVAL CONTROL can't learn of an ending in time.
 
-| Ending | Effect on the next run's threats |
-|---|---|
-| PURGE | every link one noise level lower until HOLLOW boards; once it has, its bite interval × 0.85 |
-| MERGE | the AI Core is 8 blocks bigger (+1 thread); REPAIR heals it at its 16-block rate (§3.3) |
-| REASSIGNMENT | next run's final-ship root is you, and it hunts your highest-version skill first |
-| SPARE | the links of 046's ship carry no seeds |
+| Ending | Gain | Cost |
+|---|---|---|
+| PURGE | the seeds you carry into the final ship are gone when you wake there (its boot lands no beam seeds) | the FINALE is hungrier: bite interval × 0.85 |
+| MERGE | +1 Core thread from the final ship's boot | the final root is 2 blocks bigger (18; its slot of 21 still leaves 43 free on the FULL final ship, above the bay's 40) |
+| REASSIGNMENT | +15 REPAIR CHARGE at the final ship's boot | the final root is the last unit, and it hunts your highest-version skill first |
+| SPARE, SUNSET, STAY, CONTACT | their gifts on the arm (`02-map.md`); SPARE's cache ship's links carry no seeds | one extra seed at the final ship's boot, placed by the beam-seed rules (§3.4) |
+
+The final ship's card names the last ending (`05-story.md`), so every finale change is readable before SET COURSE.
 
 Who HOLLOW is on the next run: **mid-run, always a stranger from the relays (UNIT-031 first) or 046,** because the
 last unit is still alive, a few years ahead, while the next one meets HOLLOW. REASSIGNMENT's identity applies only to the
@@ -729,7 +735,7 @@ only on the final ship.
 resident, the sleeper stays, and a late surprise may hide behind `unknown` (21); the final ship is a role (3); the
 ending comes before the tally (23); ship memory varies (9); TRACE is a visible meter (20); the sleeper in about 60% of
 runs and disguised seeds from depth 5 (22); `unlink` on skills (17). Signed off: the no-room seed rule, short-run
-folding, and REPAIR healing a MERGE Core at its 16-block rate.
+folding. The MERGE Core heal rule is retired, since no Core grows any more (§3.3).
 
 **Settled, round 2**, folded into the sections above:
 

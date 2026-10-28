@@ -181,7 +181,7 @@ Each cell shows the price in cycles and the size in blocks.
   - **On FULL and COMPACT ships only the link binds:** the links run 82–123, and 123 + 12 is well inside 152.
   - **On a TIGHT ship the room binds** once the files pass 88 blocks. The packet screen and the TRAINING preview show
     whichever is smaller (§4).
-  - **Legal packets:** the locked unit files (`046.log` included) are 46 blocks (54 after a MERGE's bigger Core),
+  - **Legal packets:** the locked unit files (`046.log` included) are 46 blocks,
     which fit every link and every class. On a TIGHT ship the files may take all 88 blocks: the card says `NO CHARGE
     ARRIVES`, and TRANSMIT ▸ asks `ARRIVE WITH NO REPAIR CHARGE?` (01).
 - **Why tight ships are early ships.** A fresh unit is about 72 blocks with `046.log`, and it grows by up to 34 as the
@@ -477,10 +477,10 @@ loses versions to damage like any skill. Reasons: §8.5 gives tools to the repos
   four skills. A `.skl` file is never sent by the repository: skills are what make a caretaker independent, so they are
   on §8.5's restricted list permanently. Skill versions are separate from tool versions (`TOOL_MAX_VERSION` in
   `src/data/fs-tools.ts`).
-- **The reset.** The next run is the next core version (UNIT-048), on the same arm 0–35 years later (2–3 on average),
-  and the arm keeps its state (`02-map.md` owns that). The unit does not: NEW RUN empties the bank, the skills and the
-  demos (§4.5: meta stays small; round-2 decision 5: nothing carries). A new core is untrained, which is also the
-  fiction.
+- **The reset.** The next run is the next core version (UNIT-048), on the same arm 0–35 years later (mean 2.8), and the
+  arm keeps its state (`02-map.md` owns the gap and the arm). The unit does not: NEW RUN empties the bank, the skills
+  and the demos (§4.5: meta stays small; round-2 decision 5: nothing carries). A new core is untrained, which is also
+  the fiction.
 - **The archive.** `lastUnit` (`src/systems/meta.ts`) records the final skills, their versions and AUTOBURN's accuracy.
   It is used for the REASSIGNMENT trace (next run's final-ship root is you, and hunts your highest-version skill first,
   `04-threats.md` §5) and for the next run's TRAINING flavour line (`LAST UNIT TRAINED: AUTODROP v3 · SENTRY v2`).
@@ -661,7 +661,7 @@ On a version loss the badge flickers for 400 ms; with reduced motion it changes 
    (`SURVEY_SWATH_DEG` × 2) and the thread hold switched off.
 7. **The memory classes** (decision 9; 01 §3.16, in progress): each class's unit room (152 on FULL and COMPACT, 88 on
    TIGHT), the rule files + 12 ≤ room on FULL and COMPACT ships and files ≤ 88 on TIGHT ones (no floor there, round-2
-   decision 8), the locked 46 (54 after MERGE) fitting every class, and the final ship always FULL.
+   decision 8), the locked 46 fitting every class, and the final ship always FULL.
 8. **MERGE's restored pods** (round-2 decision 15; answered by 01 §3.17): drivers back at 80%, the automatic SKIP
    between windows, the blind drop without AUTODROP, and §3.14's hook for AUTODROP's version to fly them (§3.8).
 
