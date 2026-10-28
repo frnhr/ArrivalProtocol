@@ -1,5 +1,6 @@
 """The worked example of 02-map.md section 3.14: run 1's arm and the update to run 2."""
 from arm_sim import *
+GAP_EXAMPLE = 1  # this example rolled a 1-year launch gap (35% of launches)
 
 def ship(slot, kind, A, name, pods=None):
     s = {'slot': slot, 'layer': LAYER[slot], 'kind': kind, 'A': A, 'name': name, 'age': 0,
@@ -30,7 +31,7 @@ run2[11] = ship(11,'ark',0,'TIDINGS'); ark_year(random.Random(0), run2, 11); run
 run2[15] = ship(15,'std',2818,'FAR WIND')
 run2[13] = ship(13,'light',2858,'MORNING STAR')
 run2[19] = ship(19,'final',0,'LODESTAR')
-set_final_year(run2, run1[19]['A'] + START_GAP)
+set_final_year(run2, run1[19]['A'] + max(GAP_EXAMPLE, 1))
 for s in sorted(run2):
     x = run2[s]; print(s, x['name'], x['kind'], x['pods'], x['A'], mem_class(x))
 print('bad', check(run2))

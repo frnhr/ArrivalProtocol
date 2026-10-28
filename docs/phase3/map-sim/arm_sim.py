@@ -44,7 +44,12 @@ LS = {1: 30, 2: 90, 3: 120, 4: 75, 5: 80, 6: 85, 7: 90}  # LAYER_SLACK(k): hop o
 ARK_MARGIN = 12
 LL_MARGIN = 20
 LIGHT_SHARE = 0.4
-START_GAP = 1           # years between runs (DECISIONS: the next core, about a year later)
+# the launch gap (DECISIONS round 2, 4 + 13): 0-35 years, weighted to short gaps, mean 2-3 years
+GAP_TABLE = [(0, 10), (1, 35), (2, 25), (3, 12), (5, 10), (10, 6), (20, 1.5), (35, 0.5)]  # (years, % of launches)
+DRIFT_LIMIT = 10        # a waiting ship more than this many years off the new schedule leaves
+VALVE_YEARS = 11        # the time valve: extra years, so every waiting ship passes DRIFT_LIMIT
+VALVE_FLOOR = 63        # pods: the valve opens when the updated arm's best route is below this (the fresh roll's 1st percentile)
+MAX_LATE_TIGHT = 2      # TIGHT ships per layer from layer 5 (round 2, 7)
 
 # persistent-arm knobs (new)
 MAX_AGE = 3             # a skipped ship stays at most this many runs on the chart
@@ -52,7 +57,6 @@ RESOLVE_CHANCE = 0.2    # per run, a skipped generated ship is saved by another 
 ARK_FROM_NEIGHBOURS = True  # ark year from the real ships of the layer before (needed once ships persist)
 TIGHT_FROM_LAYER = 5
 CHECK_TIGHT = True
-ONE_TIGHT_PER_LAYER = True
 TIGHT_COST = 2          # pods a late TIGHT ship is worth less (files or charge left behind), for the route check
 FAIL_P = 0.15           # share of runs that end before the final ship
 
@@ -91,7 +95,7 @@ def roll_timing(rng, ship, b):
 
 
 def new_ship(rng, slot, kind, b, run):
-    s = {'slot': slot, 'layer': LAYER[slot], 'kind': kind, 'age': 0, 'born': run,
+    s = {'slot': slot, 'layer': LAYER[slot], 'kind': kind, 'age': 0, 'born': run, 'born_start': b[1],
          'authored': False, 'late': False}
     s['pods'] = pods_for(kind, s['layer'])
     if kind == 'first':
@@ -134,7 +138,7 @@ def ark_year(rng, arm, s):
 
 
 def set_final_year(arm, floor=None):
-    """floor: the last final ship's year + START_GAP, so two final ships never share a year at one end."""
+    """floor: the last final ship's year + max(gap, 1), so two final ships never share a year at one end."""
     best = 0
     for s in POS:
         if s != FINAL and arm[s] and D[(s, FINAL)] <= BEAM_RANGE:
@@ -191,8 +195,8 @@ def fresh_arm(rng, run, start):
                     kind = 'ark'
                 else:
                     kind = 'light' if rng.random() < LIGHT_SHARE else 'std'
-                    if kind == 'light' and k >= TIGHT_FROM_LAYER and ONE_TIGHT_PER_LAYER and any(
-                            arm[x] and arm[x]['kind'] == 'light' for x in SLOTS_BY_LAYER[k]):
+                    if kind == 'light' and k >= TIGHT_FROM_LAYER and sum(
+                            1 for x in SLOTS_BY_LAYER[k] if arm[x] and arm[x]['kind'] == 'light') >= MAX_LATE_TIGHT:
                         kind = 'std'
                 arm[s] = new_ship(rng, s, kind, b, run)
             if ark_slot is not None and ARK_FROM_NEIGHBOURS:
@@ -205,7 +209,16 @@ def fresh_arm(rng, run, start):
 
 
 # ---- the update between runs (new) ----
-def update_arm(rng, prev, visited, run, start, stats):
+def roll_gap(rng):
+    r = rng.random() * 100
+    for years, w in GAP_TABLE:
+        if r < w:
+            return years
+        r -= w
+    return GAP_TABLE[-1][0]
+
+
+def update_arm(rng, prev, visited, run, start, stats, gap=1):
     """prev: last run's arm; visited: slots the last unit visited."""
     b = bases(start)
     arm = {}
@@ -229,6 +242,9 @@ def update_arm(rng, prev, visited, run, start, stats):
         ship = dict(ship)
         ship['age'] += 1
         arm[s] = ship
+        if start - ship['born_start'] > DRIFT_LIMIT:
+            resolve(s, 'drifted')
+            continue
         if s == FINAL:
             continue
         if ship['age'] >= MAX_AGE:
@@ -285,8 +301,9 @@ def update_arm(rng, prev, visited, run, start, stats):
         rng.shuffle(open_slots)
         for s in open_slots:
             k = LAYER[s]
-            crowded = ONE_TIGHT_PER_LAYER and k >= TIGHT_FROM_LAYER and any(
-                (arm[x] and arm[x]['kind'] == 'light') or plan.get(x) == 'light' for x in SLOTS_BY_LAYER[k])
+            crowded = k >= TIGHT_FROM_LAYER and sum(
+                1 for x in SLOTS_BY_LAYER[k]
+                if (arm[x] and arm[x]['kind'] == 'light') or plan.get(x) == 'light') >= MAX_LATE_TIGHT
             if need > 0 and not crowded:
                 plan[s] = 'light'
                 need -= 1
@@ -305,7 +322,7 @@ def update_arm(rng, prev, visited, run, start, stats):
                 if plan[s] == 'ark':
                     ark_year(rng, trial, s)
         if plan.get(FINAL):
-            set_final_year(trial, prev[FINAL]['A'] + START_GAP)
+            set_final_year(trial, prev[FINAL]['A'] + max(gap, 1))
         bad = check(trial)
         if not bad:
             stats['attempts'] = attempt
@@ -423,13 +440,23 @@ def chain(seed, runs, policy, persistent=True):
     rng = random.Random(seed)
     rows = []
     arm, att = first_arm(rng, 1, 2300)
+    start = 2300
     for n in range(1, runs + 1):
-        start = 2300 + (n - 1) * START_GAP
-        stats = {'attempts': att, 'refills': 20, 'reasons': {}}
+        stats = {'attempts': att, 'refills': 20, 'reasons': {}, 'gap': 0, 'valve': False}
         if n > 1:
+            gap = roll_gap(rng)
+            stats['gap'] = gap
             if persistent:
-                arm = update_arm(rng, arm, visited, n, start, stats)
+                new = update_arm(rng, arm, visited, n, start + gap, stats, gap)
+                if max(p for _, p in routes(new)) < VALVE_FLOOR:
+                    # the time valve: the next launch waits until every waiting ship has moved on
+                    gap += VALVE_YEARS
+                    stats = {'attempts': 0, 'refills': 20, 'reasons': {}, 'gap': gap, 'valve': True}
+                    new = update_arm(rng, arm, visited, n, start + gap, stats, gap)
+                arm = new
+                start += gap
             else:
+                start += gap
                 arm, att = fresh_arm(rng, n, start)
                 stats['attempts'] = att
         rts = routes(arm)
@@ -449,6 +476,9 @@ def chain(seed, runs, policy, persistent=True):
         row['authored_left'] = sum(1 for s in AUTHORED if arm[s]['authored'])
         row['final_new'] = arm[FINAL]['born'] == n
         row['final_year'] = arm[FINAL]['A']
+        row['gap'] = stats['gap']
+        row['valve'] = stats['valve']
+        row['start'] = start
         rows.append(row)
         visited = set(route)
     return rows
@@ -470,7 +500,7 @@ def report(label, rows_by_chain):
     rows = [r for ch in rows_by_chain for r in ch]
     best = [r['best'] for r in rows]
     print(f'== {label}: {len(rows_by_chain)} chains x {len(rows_by_chain[0])} runs = {len(rows)} runs')
-    print(f'  best route pods: median {st.median(best)}, p10 {pct(best, .1)}, p90 {pct(best, .9)}, '
+    print(f'  best route pods: median {st.median(best)}, p1 {pct(best, .01)}, p10 {pct(best, .1)}, p90 {pct(best, .9)}, '
           f'min {min(best)}, max {max(best)}  (x200 colonists)')
     bl = {}
     for r in rows:
@@ -535,6 +565,12 @@ def report(label, rows_by_chain):
         arks = [r['arks'] for r in rows]
         print(f'  lights per arm: mean {st.mean(lights):.2f}; arks per arm: mean {st.mean(arks):.2f}')
         fn = sum(1 for r in rows if r['final_new'])
+        gaps = [r['gap'] for r in rows if r['stats'].get('reasons')]
+        if gaps:
+            print(f'  launch gap: mean {st.mean(gaps):.2f}, median {st.median(gaps)}, max {max(gaps)};  time valve opened in '
+                f'{100*sum(r["valve"] for r in rows)/len(rows):.2f}% of runs ({sum(r["valve"] for r in rows)} of {len(rows)})')
+        w = [r['final_year'] - r['start'] for r in rows]
+        print(f'  final ship year minus start year: median {st.median(w)}, p10 {pct(w,.1)}, p90 {pct(w,.9)}')
         print(f'  runs with a new final ship: {100*fn/len(rows):.0f}%;  authored ships still waiting at run 10: '
               f'{st.mean(ch[9]["authored_left"] for ch in rows_by_chain):.2f} of 3, at run 50: '
               f'{st.mean(ch[min(49, len(ch)-1)]["authored_left"] for ch in rows_by_chain):.2f}')
