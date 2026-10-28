@@ -1,17 +1,18 @@
 # Phase 3: Fran's decisions (2026-10-28)
 
-Fran's answers to the 26 decisions and the 8 designed rules in `README.md`, plus one extra question from `05-story.md`.
-**The five specs have not been updated to match yet.** Where an answer differs from a spec's recommendation, this file
-wins, and the spec text is stale until it is reworked. The numbers follow the list as it was asked, kept at the end of this file.
+Two rounds of answers. **Round 1:** the 26 decisions and 8 designed rules first collected in `README.md`, plus one extra
+question from `05-story.md`; the specs were reworked to match on 2026-10-28. The numbers follow the list as it was
+asked, kept at the end of this file. **Round 2:** the 20 questions the rework raised (below). **The specs have not been
+updated for round 2 yet:** where an answer differs from a spec, this file wins.
 
 **No decision here is final.** Any of them, and any "decided" item in `docs/PHASE3.md`, may be reversed when there is a
 good argument. Wherever a decision gets in the way of good gameplay, in a spec, an implementation or a playtest, raise
 it to Fran with the argument and a proposal, to be confirmed or reverted. Do not quietly work around it, and do not
 quietly keep it either.
 
-## Changed from the specs' recommendation
+## Round 1: changed from the specs' recommendation
 
-These need spec rework:
+Applied in the 2026-10-28 rework:
 
 - **The timeline (05 Q13; changes 1, 6 and the calendar): adopted now.** There are no more waves about 760 years
   apart. **The next run is the next core version** (UNIT-047 → UNIT-048), launched on **the same arm, with the same
@@ -48,7 +49,7 @@ These need spec rework:
   the story and the player's choices justify it. The specs' "no ending changes the score by construction" no longer
   holds; any score effect must be explicit and justified. MERGE restoring eaten pods is possible again.
 
-## Accepted as recommended
+## Round 1: accepted as recommended
 
 - **1. Time scale:** keep the big light-year numbers. The calendar itself is replaced by the timeline above.
 - **4. The long hop:** both. Arks that only a long hop reaches, and slack that pays (deliveries catch up; ECC fixes one
@@ -66,29 +67,71 @@ These need spec rework:
 - **14. AUTOBURN v1 is bought** with cycles; manual captures set its accuracy.
 - **16. A lost skill is restored at half price.**
 - **17. HOLLOW's `unlink` may delete a skill file,** telegraphed and blockable.
-- **20. TRACE is a visible meter; HOLLOW's root costs link budget.** Revisit the cost at the rebalance.
+- **20. TRACE is a visible meter.** (Its root's link cost was reversed in round 2: hitchhikers ride free.)
 - **21a, 21b.** A corrupted resident can be healed with REPAIR; the sleeper stays on its ship.
 - **22.** The sleeper appears in about 60% of waves, at most one; disguised seeds start at depth 5. Starting values.
 - **24.** Traces last one run, are balanced by construction until the rebalance, and CONTACT is built last.
 - **25. `046.log` opens by distance rings.**
 - **26.** Keep "OUTWARD BOUND" for development and check it before a public release. "Steve" stays.
 
-## Deferred
+## Round 1: deferred
 
 - **18. Training rules:** cycles from landing points only; unspent cycles only shown at RUN END; no automatic SKIP
   chaining. The specs keep these as working values.
 
-## Designed rules: all signed off
+## Round 1: designed rules, all signed off
 
 - The generator re-rolls an invalid wave and throws after 50 attempts (to be re-read under the persistent arm).
 - SEND ON: a delivery that doesn't fit waits in that ship's receiver and travels with the next hop.
-- The starting kit (SCAN, REPAIR, Repair.bak), phase 2's REPAIR renewal at boot, and the arrival charge floor of 12.
+- The starting kit (SCAN, REPAIR, Repair.bak), phase 2's REPAIR renewal at boot, and the arrival charge floor of 12
+  (waived on TIGHT ships in round 2).
 - The first-pick guarantee: after a crashed ship 1, the cycle bank is raised to 3.
 - A seed with no room beside any target lands in the largest free region.
 - Short-run folding: THE DEAL moves to the final ship, WALLS fold into HOLLOW's first ship, HOLLOW boards by force one
   hop before the final ship.
 - After MERGE, REPAIR heals the Core at its 16-block rate.
 - The worst memory corner: a third seed lands by the no-room rule, and charge above the floor is lost loudly.
+
+## Round 2: after the rework
+
+The questions are numbered as the README listed them after the rework.
+
+**Changed from the specs' recommendation** (these need spec rework):
+- **4 + 13. The launch gap is random, and traces fit a short timeline.** The next unit launches 0 to 35 years after
+  the last one, weighted toward short gaps so the average is 2–3 years (not exactly one year). Adapt the next-run
+  traces so they make sense on that shorter timeline.
+- **1. Steady arm: yes, plus a time valve.** If the leftover arm state is problematic for some reason, the
+  anti-snowball check may decide how many in-game years must pass before the next unit launches. Probably not needed,
+  but it is an option, and it fits the random gap above.
+- **7. TIGHT ships: up to two per layer from layer 5** (one felt too artificial). The room stays fixed at 88, light
+  ships stay TIGHT, and no late route is forced through one.
+- **8. Charge on TIGHT ships may be 0.** The arrival floor of 12 is waived on TIGHT ships, as decision 9 said ("no or
+  minimal REPAIR CHARGE"). It still holds on COMPACT and FULL ships. This amends the signed-off starting-kit rule.
+- **12. No rm means no win.** There is no one-use DELETE at the finale. Without a working rm the root duel can't be
+  won. This keeps decision 19.
+- **15. MERGE has no score effect.** The pods HOLLOW ate come back only in the epilogue. No ending changes the score in
+  v1; decision 23 still allows one later where the story justifies it.
+- **20. Hitchhikers ride free, always.** HOLLOW's root, beam seeds and seeds riding on deliveries cost no link room on
+  any beam (the delivered file itself still does). This reverses the link cost in decision 20; TRACE stays a visible
+  meter.
+
+**Accepted as recommended:**
+- **2.** Authored ships (HALCYON, KESTREL, VESPER) age out like any other ship.
+- **3.** The final ship is a role, with one end slot in v1; every final ship is FULL; with several ends, HOLLOW may
+  board earlier on some routes.
+- **5.** Nothing carries to the next unit: files, deliveries, the skill tree and threat state start fresh.
+- **6.** Decision 7 holds under the persistent arm: colonies don't change the next run. Revisit in later phases if the
+  arm state evolves as the game goes on, as a difficulty mechanic.
+- **9.** A seed on a full TIGHT receiver lands among the pods by the no-room rule.
+- **10.** PACK AS v1: a skill may be packed at a lower version.
+- **11.** The late surprise resident as specified (layers 6–7, hidden 1 time in 2, never on TIGHT ships or arks, fair
+  at boot, waking after HOLLOW's first fight on a shared ship).
+- **14.** 046 ran out of charge halfway along the arm.
+- **16.** The run-end order: FINALE, then the final LANDING REPORT, then the RUN TALLY, epilogue and final card.
+- **17.** Mid-run HOLLOW is 046 or a relay stranger; after REASSIGNMENT the last unit takes over only the final ship's
+  root, unnamed until then, and hunts your highest-version skill.
+- **18.** Letters to the unit ahead; the ARES series stays unexplained.
+- **19.** The epilogue header is the final ship's year + 40, with a bridging line on the final card.
 
 ## The list as it was asked
 

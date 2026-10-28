@@ -74,44 +74,17 @@ story looks outward. Caretakers left at relay dishes with too little charge star
 
 **The ending** is chosen at the final ship, before the score screen: the FINALE (the root duel, then what becomes of
 HOLLOW, PURGE, MERGE or SPARE, and of you, SUNSET, STAY, REASSIGNMENT, later CONTACT), then the final LANDING REPORT and
-the RUN TALLY. An ending changes the score only where the story justifies it and the price is paid in the same run
-(MERGE returns eaten pods, scored as mislanded). Each choice has its own epilogue and one trace in the next run.
+the RUN TALLY. No ending changes the score in v1 (MERGE's returned pods appear only in the epilogue). Each choice has its own epilogue and one trace in the next run.
 
 ## Decisions for Fran
 
 Fran's answers of 2026-10-28 are in `DECISIONS.md`, with the list as it was asked. No decision is final: one that
 hinders good gameplay is raised again with the argument.
 
-**Open after the rework** (each with the specs' recommendation; the spec and question in brackets):
-1. **The steady-arm rule** keeps every run's arm the same shape. Recommended: yes. [02]
-2. **Authored ships age out** like any other (an unvisited HALCYON is gone by run 4). Recommended: yes. [02]
-3. **The final ship is a role, one end slot in v1;** every final ship is FULL; with several ends, HOLLOW may board
-   earlier. Recommended: yes. [02, 04]
-4. **Exactly one year between runs.** Recommended: yes. [02]
-5. **Nothing carries to the next unit:** files, deliveries, the skill tree, threat state. Recommended: no carry.
-   [02, 03, 04]
-6. **Decision 7 under the persistent arm:** colonies still don't change the next run. Recommended: keep. [02]
-7. **TIGHT ships:** room fixed at 88; light ships TIGHT in every layer; at most one per layer from layer 5, and no
-   route forced through one. Recommended: yes. [01, 02]
-8. **The charge floor of 12 holds on TIGHT ships,** so "no or minimal charge" (decision 9) means 12. Recommended: keep
-   the floor. [01, 03]
-9. **Seeds on a full TIGHT receiver land among the pods.** Recommended: keep. [01, 04]
-10. **PACK AS v1:** pack a skill at a lower version to save room. Recommended: yes. [03]
-11. **The late surprise resident:** layers 6–7, hidden 1 time in 2, never on TIGHT ships or arks, waking after
-    HOLLOW's first fight when both arrive together. Recommended: yes. [02, 04]
-12. **rm at the finale (decision 19 hindering gameplay):** without rm the root duel can't be won. Recommended: a loud
-    warning before SET COURSE to a final ship, and a one-use DELETE granted there. [02, 04]
-13. **Traces under the one-year gap:** keep them as game rules no character quotes, with the trace places reskinned so
-    nothing appears before it could exist. [05, 02]
-14. **046 ran out of charge halfway** along the arm. Recommended: yes. [05]
-15. **MERGE returns eaten pods at ×0.75,** on the final ship only. Recommended: yes. [05]
-16. **The run-end order:** FINALE, then the final LANDING REPORT, then the RUN TALLY. Recommended: yes. [05, 02]
-17. **After REASSIGNMENT,** HOLLOW stays unnamed until the final ship, and only the final ship's root is the last unit
-    (it hunts your highest-version skill); the mid-run HOLLOW is always a stranger. Recommended: yes. [05, 04]
-18. **Letters to the unit ahead,** and **the ARES series stays unexplained.** Recommended: yes. [05]
-19. **The epilogue header** is the final year + 40, with a bridging line to the next unit. Recommended: yes. [05]
-20. **The root rides free into the final ship** now rather than at the rebalance, so MERGE stays reachable after a
-    long last hop. [04]
+**The 20 questions the rework raised were answered on 2026-10-28** (round 2 in `DECISIONS.md`). Several change the
+specs, which have not been updated for them yet: a random launch gap of 0–35 years, hitchhikers (HOLLOW's root and
+seeds) riding free, no charge floor on TIGHT ships, up to two TIGHT ships per late layer, no rm meaning no win, and
+MERGE with no score effect.
 
 Decision 18 (cycles from points only, unspent only shown, no SKIP chaining) is deferred; the specs keep it as a working
 value.
