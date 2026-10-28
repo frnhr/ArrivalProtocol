@@ -183,8 +183,8 @@ Each cell shows the price in cycles and the size in blocks.
   roughly one v3 skill, or an AI tool and a .bak, left behind. Fran's intent holds by construction: tight ships are
   viable early in a run, or they cost files.
 - **What a kid leaves for a tight ship.** TIGHT ships are the light ones, with 3–5 pods, so AUTODROP is the natural
-  skill to leave behind, and SURVEY when the card says GOOD site data. A left skill is lost until RESTORE (half price), so a
-  tight ship late in a run is a real price. It is never a trap: the card and the AHEAD row show the room before SET
+  skill to leave behind, and SURVEY when the card says GOOD site data. A left skill is lost until RESTORE (half price),
+  so a tight ship late in a run is a real price. It is never a trap: the card and the AHEAD row show the room before SET
   COURSE. Q2 in §10 proposes a gentler middle option (packing a skill at a lower version).
 - **Why bigger costs**, all from existing rules:
   - **Link budget:** files take the link first, and REPAIR CHARGE fills what is left (§6.9). `02-map.md` sets the link
@@ -446,8 +446,9 @@ loses versions to damage like any skill. Reasons: §8.5 gives tools to the repos
   - DELETE can also be aimed at a seed's blinking warning outline (phase 2's 2-second telegraph). The seed is deleted
     the moment it lands, with the stamp `PRE-EMPTED`. The op holds its thread from the click.
 - **v3 FIREWALL:** at every boot, if the unit carries fewer than 2 FIREWALL.sys (phase 2's limit), SENTRY writes one
-  into rack F with the licences' first-fit placement (`src/systems/licences.ts`): `> SENTRY: FIREWALL.sys COMPILED`. You
-  place it with MOVE, as in phase 2. While v3 works, the salvage's FIREWALL card is not dealt.
+  into the receiver with the licences' first-fit placement (`src/systems/licences.ts`):
+  `> SENTRY: FIREWALL.sys COMPILED`. You place it with MOVE, as in phase 2. While v3 works, the salvage's FIREWALL
+  card is not dealt.
 
 ### 3.11 The split, the reset, the archive
 
@@ -458,22 +459,20 @@ loses versions to damage like any skill. Reasons: §8.5 gives tools to the repos
 - **The reset.** The next run is the next core version (UNIT-048), on the same arm about a year later, and the arm
   keeps its state (`02-map.md` owns that). The unit does not: NEW RUN empties the bank, the skills and the demos
   (§4.5: meta stays small). A new core is untrained, which is also the fiction.
-- **The persistent arm.** A skill file left behind stays in that ship's memory as a story fact. Whether a later unit
-  can find it is `02-map.md`'s call; I recommend story only (a line in the ship's log), never a free file, so the reset
-  holds.
 - **The archive.** `lastUnit` (`src/systems/meta.ts`) records the final skills, their versions and AUTOBURN's accuracy.
-  It is used for the REASSIGNMENT trace ("next run's HOLLOW is you, using the skills you trained") and for the next
-  run's TRAINING flavour line (`LAST UNIT TRAINED: AUTODROP v3 · SENTRY v2`).
+  It is used for the REASSIGNMENT trace (next run's final-ship root is you, and hunts your highest-version skill first,
+  `04-threats.md` §5) and for the next run's TRAINING flavour line (`LAST UNIT TRAINED: AUTODROP v3 · SENTRY v2`).
 
 ### 3.12 A sample progression over a 6-ship run
 
-A player who prefers landing, on `02-map.md` §3.13's route.
+A player who prefers landing, on `02-map.md` §3.14's route.
 
 - **Ship sizes** are the map's: ARES-VII 3 pods, the standard ships HALCYON 5, KESTREL 6 and CORMORANT 9, the ark
   VESPER 16, and LAST LIGHT 16. The links are the map's for each hop.
 - **"Skills"** is the skill blocks carried on the next hop.
 - **"Room"** is that hop's link minus the files: a 70-block phase-2 unit, `046.log` (2), the skills, and HOLLOW's root
-  once it is aboard. What is left is what the charge gets.
+  once it is aboard. What is left is what the charge gets. The 70-block unit is an upper bound: early in a run the
+  real unit is smaller (65 files at ship 1, 73 at depth 2, `01-landing.md` §3.16), which only adds charge.
 - **Memory:** by 01's recommended classes this route has no TIGHT ship (ARES-VII, HALCYON and KESTREL are COMPACT;
   VESPER, CORMORANT and LAST LIGHT are FULL), so only the link binds.
 - **HOLLOW** does not board early on this run, because TRACE stays below 3. It is forced onto the beam into CORMORANT,
@@ -504,8 +503,9 @@ press:
   - Other legal packets give up AUTODROP.skl (10) and SENTRY.skl (3) instead, with AI tools.
 - **Both times almost no charge crosses,** so the unit arrives with the stars' credit (+6 each) or the floor of 12,
   whichever is more.
-- **Had the route taken a TIGHT ship** (room 88): PETREL, a light ship at depth 2, would cost only charge, because the
-  unit then carries 4 skill blocks (72 + 4 + 12 = 88: it arrives on the floor). A light ship at depth 5 instead of
+- **Had the route taken a TIGHT ship** (room 88): PETREL, a light ship at depth 2, would cost only charge. 01's
+  depth-2 unit (the starting kit, Mv and a 6-block skill: 73 files) arrives with 15 charge; this lander's 4-block
+  AUTODROP leaves 71 files and 17 charge. A light ship at depth 5 instead of
   CORMORANT would need 68 + 20 + 12 = 100, so 12 blocks stay behind: AUTODROP.skl (7, a 5-pod ship needs it least),
   SURVEY.skl (3) and Telemetry or AI Comms. The same kind of ship is cheap early and costly late.
 
@@ -655,8 +655,6 @@ On a version loss the badge flickers for 400 ms; with reduced motion it changes 
 6. A free lever if long hops need a reason: a "ship weight" on cycles, left at 1 here.
 7. **The ship card's memory class**, as a word the AHEAD row can repeat (`MEMORY 256 · TIGHT`), and the next ship's
    unit room for the packet preview and the PACKET screen.
-8. **The persistent arm:** the tree resets per run (§3.11); whether a skill file left on a ship means anything to a
-   later unit is the map's call.
 
 **What this spec needs from the rack layouts:** answered by `01-landing.md` §3.16: the receiver (E–F on FULL and
 COMPACT ships, E alone on TIGHT ones) and the 24-block tail hold the unit as one block, which covers a full skill set
@@ -768,8 +766,8 @@ lines about training, and the REASSIGNMENT trace.
 - **A `046.log` fragment** could reveal that 046 trained AUTOBURN too, and that this is why it could leave.
 - **A sleeping resident's lesson** uses the grant interface (`> SKILL TRAINED: SURVEY.skl v2 · from the sleeper on
   CURLEW`, a generated ship at Larkspur). VESPER never carries a resident (`02-map.md` §3.5).
-- **Endings:** in REASSIGNMENT, the next HOLLOW flies with your accuracy. A unit with AUTOBURN v3 takes the empty ship
-  out by itself in SUNSET.
+- **Endings:** in REASSIGNMENT, next run's final-ship root is you, and it hunts your highest-version skill first. A
+  unit with AUTOBURN v3 takes the empty ship out by itself in SUNSET.
 
 ## 8. Slices
 
@@ -871,7 +869,8 @@ Against PHASE3 §13:
 
 1. **Should the next core version inherit anything of the tree?** The next run is UNIT-048 on the same arm a year
    later, and the arm keeps its state. Recommended: no. NEW RUN resets the tree, and the archive gives only a flavour
-   line and REASSIGNMENT's HOLLOW. A carried tree would snowball across runs, which the persistent arm already risks.
+   line and REASSIGNMENT's final-ship root. A carried tree would snowball across runs, which the persistent arm
+   already risks.
 2. **May a skill be packed at a lower version** for a tight ship or a long hop? The PACKET's skill chip would offer
    `PACK AS v1` (AUTODROP v3, 10 blocks, crosses as v1, 4 blocks). The higher versions are lost, and RESTORE later
    costs half of their price (v2 and v3 of AUTODROP: half of 13, so 7). Recommended: yes. It turns an all-or-nothing
