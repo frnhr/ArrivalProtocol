@@ -3,7 +3,8 @@
 Two rounds of answers. **Round 1:** the 26 decisions and 8 designed rules first collected in `README.md`, plus one extra
 question from `05-story.md`; the specs were reworked to match on 2026-10-28. The numbers follow the list as it was
 asked, kept at the end of this file. **Round 2:** the 20 questions the rework raised (below). The specs were updated
-for round 2 on the same day. Where an answer and a spec still differ, this file wins.
+for round 2 on the same day. **Round 3:** the 9 questions left after round 2. Where an answer and a spec still differ,
+this file wins.
 
 **No decision here is final.** Any of them, and any "decided" item in `docs/PHASE3.md`, may be reversed when there is a
 good argument. Wherever a decision gets in the way of good gameplay, in a spec, an implementation or a playtest, raise
@@ -137,6 +138,27 @@ The questions are numbered as the README listed them after the rework.
   root, unnamed until then, and hunts your highest-version skill.
 - **18.** Letters to the unit ahead; the ARES series stays unexplained.
 - **19.** The epilogue header is the final ship's year + 40, with a bridging line on the final card.
+
+## Round 3: the last open questions
+
+The questions are numbered as the README listed them after round 2.
+
+**Rejected:**
+- **9. The last working rm is not protected.** Seeds, the tool hunt, and anything else that eats tools may delete the
+  last copy. Then the game can't be won, unless the player puts in the effort to get a new rm, where that is still
+  possible (a request that can still arrive, salvage, a spare copy). Tough, by design. The early `NEEDED FOR THE FINALE`
+  tag was part of the same question and is not adopted either. The warning before SET COURSE to a final ship stays.
+
+**Accepted as recommended:**
+- **1.** The drift limit: a waiting ship more than 10 years off the new schedule leaves.
+- **2.** The time valve: it opens when the next arm's best route is below 63 pods, and adds 11 years.
+- **3.** Physical traces; the restricted-list traces are dropped, and the non-compliant endings cost at most one extra
+  seed per run at the final ship's boot.
+- **4.** REASSIGNMENT's gain: +15 charge at the next final ship's boot.
+- **5.** MERGE's trace: +1 thread at the next final ship, whose root is 18 blocks.
+- **6.** The blind drop's numbers and restored drivers at 80%, as starting values.
+- **7.** MERGE's 20 charge stays "kept through the duel" until a playtest decides.
+- **8.** 0 charge on TIGHT ships is TIGHT's price; the first seed ship never is a TIGHT ship you'd reach with 0 charge.
 
 ## The list as it was asked
 

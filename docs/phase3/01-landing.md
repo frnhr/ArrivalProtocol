@@ -842,11 +842,7 @@ ships per layer from layer 5 and no late route forced through one (Q13; round 2 
 (round 2 Q20); every final ship is FULL (round 2 Q3); the run ends FINALE, final LANDING REPORT, RUN TALLY (round 2
 Q16); MERGE restores the eaten pods' drivers and their pods land, scored by the normal rules (round 2 Q15; §3.17).
 
-**Questions** (Q1–Q13 are answered; each new one has my recommendation)
+**Decided in round 3** (Fran): the blind drop's numbers as starting values (Q14: ±(W ÷ 2 + 150 km), double spread),
+and restored drivers at 80% integrity (Q15; §3.17).
 
-14. **The blind drop's numbers** (§3.17): a centre anywhere within ±(W ÷ 2 + 150 km) and a double spread, so a blind
-    pod is worth about three quarters of a full one on a GENTLE planet and about half on a HARSH one. Recommended:
-    **yes, as starting values**. AUTODROP then turns MERGE from "most of them" into "all of them", which is the
-    skill's last payoff, and blind still beats leaving them parked.
-15. **Restored drivers at 80% integrity**, never landing hard. Recommended: **yes**. The people come back whole; the
-    player's orbit, instruments and AUTODROP decide the landing, which is what you asked for.
+**Questions:** none open. Q1–Q15 are answered.

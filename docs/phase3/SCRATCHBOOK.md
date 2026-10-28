@@ -2,8 +2,8 @@
 
 The specs in this folder read as finished, but these points came out of the spec rounds rather than from Fran's
 decisions. Each is a working answer, not a commitment: expect any of them to change after Fran's review or the first
-playtest. Each item names where the full reasoning lives. Fran's answers are in `DECISIONS.md`; the questions still
-open are in `README.md`.
+playtest. Each item names where the full reasoning lives. Fran's answers are in `DECISIONS.md` (three rounds); nothing
+is open at the moment.
 
 ## Structure and numbers
 
@@ -42,8 +42,8 @@ open are in `README.md`.
 
 - **The late surprise resident:** layers 6–7, hidden 1 time in 2, never on TIGHT ships or arks (`04-threats.md`
   §3.12). The share is a guess until a playtest.
-- **rm at the finale.** Decided: no rm means no win, with a loud warning before the last hop. Still open: the last
-  working rm immune to seeds and the tool hunt, and an early `NEEDED FOR THE FINALE` tag (`04-threats.md` §3.3).
+- **rm at the finale.** Decided: no rm means no win, with a loud warning before the last hop, and the last copy is
+  not protected. Watch in the playtest whether losing it late reads as tough or as unfair (`04-threats.md` §3.3).
 
 ## Endings and story
 

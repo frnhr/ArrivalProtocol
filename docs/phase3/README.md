@@ -59,11 +59,11 @@ earns its keep.
 
 **Threats grow by act** (`04-threats.md`). Ships 1–2 are calm: repairs under scarcity, no adversary. From ship 3, seeds
 ride in on noisy beams; rm removes one in 2 seconds, but every seed left behind "reports home" on a visible TRACE meter.
-No rm means no win at the finale, and the card warns before the last hop. At TRACE 3, or at the latest one hop before a
-final ship, HOLLOW boards: a locked chip in your packet that can't be deleted, and that brings phase 2's HOLLOW
-mechanics back one per ship, ending in the root duel. Some ships carry a **resident AI**: corrupted (fires the engine,
-locks pods, deletable or healable; announced early, and sometimes a surprise in the last layers), gone (logs and
-salvage), or, rarely and hidden, asleep and friendly.
+No rm means no win at the finale, even if the last copy was eaten, and the card warns before the last hop. At TRACE 3,
+or at the latest one hop before a final ship, HOLLOW boards: a locked chip in your packet that can't be deleted, and
+that brings phase 2's HOLLOW mechanics back one per ship, ending in the root duel. Some ships carry a **resident AI**:
+corrupted (fires the engine, locks pods, deletable or healable; announced early, and sometimes a surprise in the last
+layers), gone (logs and salvage), or, rarely and hidden, asleep and friendly.
 
 **Between ships** comes the LANDING REPORT, then the **DESK**, then the PACKET and the beam. The DESK holds the star
 chart, the ship cards, the repository, TRAINING and the INBOX.
@@ -90,23 +90,9 @@ final ship or is a gift that already exists on the arm (`05-story.md` §3.8).
 Fran's answers of 2026-10-28 are in `DECISIONS.md`, with the list as it was asked. No decision is final: one that
 hinders good gameplay is raised again with the argument.
 
-**Open after round 2** (each with the specs' recommendation; the spec and question in brackets):
-1. **The drift limit:** a waiting ship more than 10 years off the new schedule leaves, so a gap over 10 years clears
-   the arm. Recommended: yes. [02]
-2. **The time valve** opens when the next arm's best route is below 63 pods, and adds 11 years. Recommended: yes. [02]
-3. **Physical traces,** which also drops the traces that changed the repository's restricted list; the non-compliant
-   endings cost at most one extra seed per run at the final ship's boot. Recommended: yes. [02, 05]
-4. **REASSIGNMENT's gain** is +15 charge at the next final ship's boot. Recommended: yes. [05]
-5. **MERGE's trace** is +1 thread at the next final ship, whose root is 2 blocks bigger (18). Recommended: yes. [05, 04]
-6. **The blind drop's numbers** (the dot's centre within ±(W/2 + 150 km) of the LZ, double spread) and **restored
-   drivers at 80%.** Recommended: yes, as starting values. [01]
-7. **MERGE's 20 charge** counted from the root's unlock instead of kept through the duel. Recommended: not yet; decide
-   after the playtest. [03]
-8. **0 charge on TIGHT ships breaks "a started repair always wins."** Recommended: accept it as TIGHT's price, but the
-   first seed ship never is a TIGHT ship you'd reach with 0 charge. [03, 04]
-9. **rm late in the run (decision 12 hindering play):** seeds and the tool hunt can eat the last rm when a resend can
-   no longer arrive. Recommended: the last working rm is immune to seeds and the tool hunt, and the repository tags Rm
-   `NEEDED FOR THE FINALE` early. [04]
+**Nothing is open.** Round 3 settled the last nine questions: all as recommended, except that the last working rm is
+not protected (no rm means no win, unless you can still get a new one). Questions that come up during implementation
+or playtests go to Fran the same way.
 
 Decision 18 (cycles from points only, unspent only shown, no SKIP chaining) is deferred; the specs keep it as a working
 value.
@@ -116,7 +102,7 @@ value.
 Balance is low priority until the end (PHASE3 §11), but these are already visible:
 - **MERGE's charge on the last hop.** HOLLOW's root now rides free, so the last hop's squeeze is small (the sample
   player leaves AI Comms behind), but a long last hop still brings about 12–18 charge against the 20 MERGE needs kept
-  through the duel. Knob: the link formula's slope (or question 7 above).
+  through the duel. Knob: the link formula's slope, or counting the charge from the root's unlock (after a playtest).
 - **Long hops and TIGHT ships squeeze the packet** whenever skills grow to v3 (a full skill set is 34 blocks; a TIGHT
   ship takes at most 88 blocks of files, and then no charge).
 - **A 5-ship run compresses HOLLOW** into one ship before the finale (never the best route, but a player can choose it).
