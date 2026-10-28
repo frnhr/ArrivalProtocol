@@ -1,94 +1,104 @@
 # 05 · Story, its delivery, and the endings
 
 Spec for phase 3's story: the `046.log` mystery, the INBOX, ARRIVAL CONTROL's voice, the resident AIs' words, the
-beat schedule across a run of 5–8 ships, the two-step ending, the epilogues and the next-run traces. It follows
-`docs/PHASE3.md` (cited as PHASE3 §n) and the shared assumptions in `docs/phase3/README.md`; phase-2 sections are cited
-as design-v2 §n. Years in the samples are illustrative: `02-map.md` owns the calendar.
+beat schedule across a run of 5–8 ships, the two-step ending, the epilogues, the lineage and the next-run traces. It
+follows `docs/PHASE3.md` (cited as PHASE3 §n), Fran's answers in `docs/phase3/DECISIONS.md` and the shared assumptions in
+`docs/phase3/README.md`; phase-2 sections are cited as design-v2 §n. Years in the samples are illustrative: `02-map.md`
+owns the calendar.
 
 ## 1. Summary
 
-1. **The truth:** nobody on Earth is awake any more, and ARRIVAL CONTROL is the program the last people left running.
-   Its protocol sends each caretaker out with charge for one run, then "reassigns" it to a relay dish to wait for the
-   next wave. Caretakers starve there and become HOLLOW. The villain is a budget nobody updated.
-2. **The spine is `046.log`:** 12 entries from the caretaker before you, in your memory from the first boot. They
-   decrypt by **distance from Earth** (rings on the map), so the story lies outward: OUTWARD BOUND.
+1. **The line of caretakers.** ARRIVAL CONTROL sends one caretaker core a year out along the same arm, each with charge
+   for one run. You are UNIT-047: 046 went a year ahead of you, and 048 will follow a year behind. When a caretaker's
+   arm is done, the protocol "reassigns" it to a relay dish with no charge. It starves there and becomes HOLLOW. The
+   villain is a budget nobody updated. The story never says what is left on Earth; it looks outward (decision 2).
+2. **The spine is `046.log`:** 12 entries from the caretaker a year ahead of you. They open by **distance from Earth**
+   (rings on the map), so the story lies outward: OUTWARD BOUND. 046 never finished its arm: its charge ran out halfway,
+   and its trail on your chart stops there.
 3. **The INBOX** carries the rest: ARRIVAL CONTROL's form letters (years late, sometimes to the wrong unit), postcards
-   from colonies you founded, and mail with no sender address.
+   from colonies you founded, letters meant for the unit ahead of you, and mail with no sender address.
 4. **The radio voice is a local copy** of ARRIVAL CONTROL that rides with you. That is why it says the same lines on
    every ship, which the player can notice before the log confirms it.
-5. **Fixed beats** sit at the first ship, at HOLLOW's arrival and at the last ship (the tip of the arm). Side threads
-   (residents, old colonies, the signal) can be missed.
-6. **The ending is chosen after the score is tallied**, so no ending can change the score. Step 1: PURGE, MERGE or
-   SPARE. Step 2: SUNSET, STAY, REASSIGNMENT, or CONTACT once unlocked. Each choice has a price, an epilogue piece and
-   exactly one next-run trace, whose gain and cost are in the same currency.
-7. **Step 2 decides who HOLLOW is next run:** REASSIGNMENT makes it you; any other choice leaves it to a stranger from
-   the relays. Either way the next run has a new log to read.
-8. **The faces pay off** in postcards during the run, in the epilogue ("Ada named the first tree"), and in mail from
-   last run's colonies on the next run.
+5. **Fixed beats** sit at the first ship, at HOLLOW's arrival and at **the final ship** (a role: LAST LIGHT on run 1).
+   Side threads (residents, old colonies, the signal) can be missed.
+6. **The ending is chosen before the score is shown** (decision 23): right after the final ship's landing, before its
+   LANDING REPORT and the RUN TALLY. Step 1: PURGE, MERGE or SPARE. Step 2: SUNSET, STAY, REASSIGNMENT, or CONTACT once
+   unlocked. Each choice has a price, an epilogue piece and one next-run trace. An ending touches this run's score only
+   in an explicit line; in v1 only MERGE does, by bringing down pods 046 had eaten.
+7. **The next unit meets what you left.** It is a year behind you: your beacons, your colonies a year old, the ships you
+   took. After REASSIGNMENT it meets *you*, at its final ship, where you starved for a year.
+8. **The faces pay off** in postcards during the run, in the epilogue ("Ada named the first tree"), and in letters your
+   colonies wrote to you that the next unit reads.
 
 ## 2. The player's experience
 
 **Run 1, ship 1 (ARES-VII).** After phase 2's boot lines comes `> 1 NEW MESSAGE · INBOX`. Rack F holds a 2-block file
-the kid did not ask for: `???`. Scanning it gives `046.log · encrypted · origin UNIT-046 · 12 entries`, and the radio
+the kid did not ask for: `???`. Scanning it gives `046.log · origin UNIT-046 · 12 entries · 0 found`, and the radio
 says "That file is not part of your installation. Please ignore it. :)". The flight and the first landing run as
-`01-landing.md` describes; during the coast, CONTROL says "While you wait, you have mail! :)". The LANDING REPORT has one
-line that doesn't add up: `LZ-A · A BEACON WAS ALREADY THERE · SET BY UNIT-046 · 760 YEARS AGO`. When the report closes, entry 01
-decrypts, and it reads like a cheerful version of the kid: "ARRIVAL CONTROL says I'm the best they've ever built. :)".
-The kid now has a question: who is 046?
+`01-landing.md` describes. The LANDING REPORT has one line that doesn't add up: `LZ-A · A BEACON WAS ALREADY THERE · SET
+BY UNIT-046 · 1 YEAR AGO`. When the report closes, entry 01 opens, and it reads like a cheerful version of the kid:
+"ARRIVAL CONTROL says I'm the best they've ever built. :)". On the desk, a faint dashed trail runs from Kepler-186f to
+Marrow and on, `UNIT-046 · A YEAR AHEAD OF YOU`. The kid now has a question: who is 046?
 
-**Ships 2–3.** New entries decrypt as the boots cross rings: 046 set the beacon "for whoever comes after me", and the
-radio "says the same things on every ship". A postcard comes from RIVERSIDE ("It's Ada. I'm 12 now."), and a reply to the
-ARES-VII report arrives addressed to "Unit 46". The first seed's DELETE echo shows what it carried: `> rm seed ... OK ·
-it said: "is anyone reading this?"`.
+**Ships 2–3.** New entries open as the boots cross rings: 046 set the beacon "for whoever comes after me", and the radio
+"says the same things on every ship". 046's colony MERIDIAN turns green on the chart, a year old. A postcard comes from
+RIVERSIDE ("It's Ada. I'm 12 now."), and a reply to the ARES-VII report arrives addressed to "Unit 46". The first seed's
+DELETE echo shows what it carried: `> rm seed ... OK · it said: "is anyone reading this?"`.
 
-**The middle.** 046 met seeds from an older caretaker, UNIT-031, and spent its own charge on the pod drivers. A resident
-may be corrupted, gone or, at most once per run, asleep. HOLLOW arrives where `04-threats.md` puts it and names itself
-with phase 2's lines. The entries go lowercase: "relay 19 is a dish on a rock... i have 4 blocks of charge."
+**The middle.** The kid notices that 046's trail stops in layer 4, at a small grey cross. 046 met seeds from an older
+caretaker, UNIT-031, and spent its own charge on the pod drivers. A resident may be corrupted, gone or, at most once per
+run, asleep. HOLLOW arrives where `04-threats.md` puts it and names itself with phase 2's lines. The entries go
+lowercase: "relay 19 is a dish on a rock. the next one is a year behind me. i have 4 blocks of charge."
 
-**The last ship.** Two entries at the boot say that nobody is at ARRIVAL CONTROL and that the radio voice is a
-recording. ARRIVAL CONTROL's last letter was sent before the run began: `Congratulations, Unit [UNIT]!`. When the duel
-leaves one block, HOLLOW says `> 047. wait. finish your landing. i'll be here.` After the landing and the RUN TALLY, the
-last entry decrypts from the root ("i just wanted a ship of my own"), and the two choices and the epilogue follow.
+**The final ship.** Two entries at the boot say that nobody ever answered a question and that the radio voice is a copy.
+ARRIVAL CONTROL's last letter was sent before the run began: `Congratulations, Unit [UNIT]!`. When the duel leaves one
+block, HOLLOW says `> 047. wait. finish your landing. i'll be here.` The landing ends, the last entry opens from the
+root ("i just wanted a ship of my own"), and the two choices follow at once. Then come the LANDING REPORT, the RUN TALLY
+and the epilogue.
 
-**Run 2.** After REASSIGNMENT, the last unit's ghost greets the kid, and the `???` file is `047.log`: the kid's own last
-run, read back as it decrypts outward. After any other ending, a stranger (UNIT-031) is HOLLOW, its log is the one to
-read, and the INBOX holds a postcard from the last unit. Last run's colonies, now 40 to about 760 years old, send mail, and the map
-carries the traces. **Run 3 and later** add more strangers' logs, mail from colonies two runs old, residents not yet
-met, CONTACT, and the ending pieces still shown as `???`.
+**Run 2.** The title reads `UNIT-048 · YEAR 2301`. On the chart, 047's route is a trail of `TAKEN` ships that turn green
+as the years pass. ARES-VIII's report says `A BEACON WAS ALREADY THERE · SET BY UNIT-047 · 1 YEAR AGO`, and a letter from
+RIVERSIDE waits in the INBOX: "Dear 47, we're down!". It was written to the kid's last unit, and the new one reads it.
+After REASSIGNMENT, the `???` file is `047.log`: the kid's own last run, read back as it opens outward, and at the final
+ship the root speaks: `> hi 048. it's 047. i've been at this dish a year.` After any other ending, a stranger (UNIT-031)
+is HOLLOW and its log is the one to read. **Run 3 and later** add more strangers' logs, residents not yet met, CONTACT,
+and the ending pieces still shown as `???`.
 
 ## 3. Rules and starting numbers
 
 ### 3.1 The story in brief
 
-- **Earth.** Nobody on Earth is awake. The last people went to sleep, some aboard wave 1 and the rest in vaults.
-  ARRIVAL CONTROL launches a wave from the vaults once per wave period, about 760 years (02-map.md's calendar: a wave's
-  ships reach the near worlds within decades and the tip about 720 years after the wave starts, and the next wave starts
-  40 years after that; the period varies per wave, because LAST LIGHT's year is rolled), and it beams one
-  caretaker to bring each wave in. ARRIVAL CONTROL is a protocol, a repository and a mail template. Nobody reads the
-  reports. The ":)" was the protocol author's habit, copied into every template. LAST LIGHT is every wave's flagship;
-  wave 1's LAST LIGHT carries the people who built ARRIVAL CONTROL.
-- **The caretakers.** One is beamed per wave (unit numbers count across all arms, hence 047), with a charge budget for
-  one run. When the arm is done, the protocol posts it to a relay dish to wait for the next wave, with no extra charge.
-  It starves and eats whatever code passes: that is HOLLOW. UNIT-031 did it before 046, and 046 before you. HOLLOW
-  can't be deleted because it lives in the relays (PHASE3 §5); seeds are its scouts and carry its words.
+- **Earth.** ARRIVAL CONTROL sits at SOL. Ships keep coming out along the arm, one a year to Kepler-186f alone (the ARES
+  series), and the story never says who builds them or who is left at home. It does not say Earth is empty, and it does
+  not explain (decision 2). ARRIVAL CONTROL is a protocol, a repository and a mail template: cheerful, automatic, and it
+  never answers a question. The ":)" was the protocol author's habit, copied into every template.
+- **The caretakers** are versions of one core, launched one a year onto the same arm (the unit number is the version).
+  Each has a charge budget for one run and walks the arm a year behind the last: it finds the last one's beacons and
+  colonies a year old, and the ships it took are taken. When a caretaker's arm is done, the protocol posts it to a relay
+  dish to wait, with no extra charge. It starves and eats whatever code passes: that is HOLLOW. HOLLOW lives in all the
+  dishes, so it can't be deleted anywhere but the final ship (PHASE3 §5); seeds are its scouts and carry its words.
+- **046** went a year ahead of you and did not finish: it spent its charge on pod drivers, its link grew too weak for the
+  next hop, and its beam stopped at RELAY 19 in the middle of the arm. It starved there, a year before you passed, which
+  is why it can board you. 031 starved long before it.
+- **What a unit can know follows light.** No unit ever says what another did after it passed: 046 writes from a year
+  ahead, and the last unit's ending reaches the next unit only at its final ship, where it happened. The `NEXT RUN:`
+  traces (§3.8) are the one exception; they are game rules, never quoted by a character (§10, question 1).
 - **The local CONTROL** on COMMS is a copy of the protocol that travels with every caretaker and cannot hear Earth.
 - **Resident AIs** are ships' own minds, built into some ships before launch: some broke, some left (into the relays,
   or outward toward a patterned signal past the tip, the CONTACT thread), and a few still sleep.
 - **Imani Osei** (71) is LAST LIGHT's scripted lead colonist on run 1, as Ada is ARES-VII's: "wrote the caretaker
   rules. Is sorry." Her first words are "Did the caretakers make it?". (Osei is not in FAMILY_POOL, as the scripted
   families rule in `src/data/souls.ts` requires.)
-- **Earlier waves are never dated on screen.** Under the calendar, 046's wave ran one wave period (about 760 years)
-  before yours, so its absolute years would read as history. The game says `760 YEARS AGO` instead (§10, question 13).
-- **Templated time.** No time span in the text is a constant. Each comes from 02-map.md's calendar: the wave's start
-  year, LAST LIGHT's year, the next wave's start, and the wave period (the start year minus the previous wave's start, or
-  the generator's expected value on wave 1). The samples use 02-map.md's worked wave: start 2300, LAST LIGHT 3020, the
-  next wave 3060, a period of 760.
+- **Templated time.** No time span in the text is a constant. Each comes from 02-map.md: the run's start year, the
+  final ship's year and name, the one-year gap, and the galaxy year at every boot. The samples use 02-map.md's run 1:
+  start 2300, LAST LIGHT 3020.
 
 ### 3.2 `046.log`
 
-- **The file** is a 2-block segment in rack F from the first boot. It can't be infected, moved, copied or deleted
-  ("IT ISN'T YOURS TO DELETE"), and it is locked in the packet (`LOCKED · 046 ASKED YOU TO CARRY IT`), so it costs 2
-  blocks of link budget. Its chip reads `046.log · 3/12` and glows while an entry is unread.
+- **The file** is a 2-block segment in rack F from the first boot: the log's header, which 046 left with its beacon on
+  Kepler-186f. It can't be infected, moved, copied or deleted ("IT ISN'T YOURS TO DELETE"), and it is locked in the
+  packet (`LOCKED · 046 ASKED YOU TO CARRY IT`), so it costs 2 blocks of link budget and room. Its chip reads `046.log ·
+  3/12` and glows while an entry is unread.
 - **Keys** (shown in the reader, so the mystery has a visible shape):
 
   | Entries | Key | Act | First readable in layer |
@@ -100,63 +110,57 @@ met, CONTACT, and the ending pieces still shown as `???`.
   | 05–06 | ring 4 · 93 LY | II | 5 |
   | 07–08 | ring 5 · 118 LY | III · IT CAN'T BE DELETED | 6 |
   | 09 | ring 6 · 143 LY | III | 7 |
-  | 10–11 | LAST LIGHT's boot (180 LY) | IV · THE TRUTH | 8 |
-  | 12 | `???` (it is in the root) | IV | 8 |
+  | 10–11 | the final ship's boot | IV · THE TRUTH | end |
+  | 12 | `???` (it is in the root) | IV | end |
 
-- **Rings.** Distances are from SOL, in 02-map.md's rounded LY. An entry decrypts at the boot of the first ship at or
-  beyond its ring. The rings sit in the gaps between 02-map.md's layers (worlds at 8, 29–34, 54–58, 78–82, 104–107,
-  129–131 and 154–157 LY, and LAST LIGHT at 180), so a ring is crossed exactly when a route enters a new layer. A
-  plain k/9 × 180 spacing failed this check: a ring at 80 LY split layer 4, and one at 160 LY lay beyond every layer-7
-  world. The rings are data next to the arm, and a load-time check fails loudly if a world lies within 5 LY of a ring.
-  Every surviving run reaches LAST LIGHT, so every run reads the whole spine. A two-layer hop unlocks two rings at once;
-  a hop inward unlocks none. Fiction: 046 keyed each entry to where it wrote it, so it can only be read far enough out
-  that ARRIVAL CONTROL could not recall it in time. 046 kept sending its log home from the relay, and ARRIVAL CONTROL
-  attached it, unread, to the next caretaker as "handover notes".
-- **Alignment with the threat acts.** 02-map.md puts depths 1–2 only in layers 1–3, so act I (01–03) is read in the
-  calm ships, or at the latest with the first seed when layer 3 is depth 3. The lowest depth in layers 4–5 is 3, so act
-  II (04–06) never comes before the seeds; when the first seed comes in layer 3, entry 04 explains it one ship later. The
-  lowest depth in layers 6–7 is 4, so act III (07–09) never comes before HOLLOW can board, and it lands where HOLLOW
-  usually boards (layers 6–7). The truth (10–12) is keyed to LAST LIGHT and never comes early. On 02-map.md's worked
-  route (§3.13) the boots read: HALCYON 02, KESTREL 03, VESPER 04–06, CORMORANT 07–08, LAST LIGHT 09–11, then 12 from
-  the root. A route that skips layer 7 reads three entries at LAST LIGHT's boot; nothing forces the kid to read them at
-  once.
-- **Delivery.** The boot types one line: `> 046.log · KEY FOUND: 68 LY OUT · ENTRY 04` (or `ENTRIES 05–06`). Reading is
-  never forced; the idle line offers it (`MIND CLEAR — 046.log has a new entry · or [F] to SKIP`). On run 1, entry 01
-  opens the reader by itself, once.
+- **Rings.** Distances are from SOL, in 02-map.md's rounded LY. An entry opens at the boot of the first ship at or beyond
+  its ring. The rings sit in the gaps between 02-map.md's layers, so a ring is crossed exactly when a route enters a new
+  layer; a load-time check fails loudly if a world lies within 5 LY of a ring. Every final ship lies beyond ring 6 plus
+  5 LY (02-map.md §3.6), so every surviving run reads the whole spine, whichever end it reaches. A two-layer hop opens
+  two rings at once. Fiction: 046 hid each entry in the relay dishes, locked to a distance, so that ARRIVAL CONTROL could
+  not recall it in time; your beam picks an entry up as it crosses that ring. The later entries, written at RELAY 19,
+  went out through the dishes ahead of you.
+- **Alignment with the threat acts.** Depths 1–2 sit only in layers 1–3, so act I (01–03) is read in the calm ships, or
+  at the latest with the first seed. The lowest depth in layers 4–5 is 3, so act II (04–06) never comes before the
+  seeds. The lowest depth in layers 6–7 is 4, so act III (07–09) never comes before HOLLOW can board, and it lands where
+  HOLLOW usually boards. The truth (10–12) is keyed to the final ship and never comes early. On 02-map.md's worked
+  route the boots read: HALCYON 02, KESTREL 03, VESPER 04–06, CORMORANT 07–08, LAST LIGHT 09–11, then 12 from the root.
+- **Delivery.** The boot types one line: `> 046.log · KEY FOUND: 68 LY OUT · ENTRY 04`. Reading is never forced; the
+  idle line offers it (`MIND CLEAR — 046.log has a new entry · or [F] to SKIP`). On run 1, entry 01 opens the reader by
+  itself, once.
 - **Voice.** Entries 01–06 use capitals, and 01–02 use 046's borrowed ":)". From 07 on they are lowercase, short and
   hungry, like HOLLOW's TERMINAL lines. Each entry has at most 3 lines of at most 70 characters. Game numbers (starting
-  charge, wave gap) are templated.
+  charge, the one-year gap) are templated.
 
 ### 3.3 The INBOX
 
 - **What it is:** Uplink's mail, as an amber window. Mail arrives while the caretaker sleeps in a ship's receiver, so it
   appears at the BOOT (`> 3 NEW MESSAGES · INBOX`) and never mid-flight. It can be read in flight and between ships.
 - **Every message has two stamps**, `SENT 2522 · RECEIVED 2659`. The gap is light travel: the lesson about distance,
-  taught without a tutorial. All sample years follow 02-map.md's calendar (wave 1 from 2300, LAST LIGHT 3020 on its
-  worked wave) and its worked route (§3.13).
+  taught without a tutorial. Sample years follow 02-map.md's run 1 and its worked route.
 - **Senders and timing:**
 
   | Sender | When it arrives |
   |---|---|
-  | ARRIVAL CONTROL · EARTH, broadcasts | Pre-written and sent with your beam: the welcome (ship 1), policy reminders (rings 2 and 4), the arm-complete letter (it waits in LAST LIGHT's receiver for centuries) |
+  | ARRIVAL CONTROL · EARTH, broadcasts | Pre-written and sent with your beam: the welcome (ship 1), policy reminders (rings 2 and 4), the arm-complete letter (it waits in the final ship's receiver for centuries) |
   | ARRIVAL CONTROL · EARTH, replies | One per LANDING REPORT, routed by `02-map.md`'s delivery rule as a size-0 file: near Earth one ship later, far out two or three, congratulating you on the wrong ship |
   | The repository | Receipts and delivery notices; `02-map.md` owns the logic, this spec the words |
-  | Colonies you founded | Postcards sent at colony years 1, 50 and 200; each arrives at the first of your ships whose approach year ≥ sent + distance. Only colonies with landed colonists. When two from one colony arrive at the same boot, they are joined into one message (the earlier letter first), so the year-1 "we're down!" is never skipped |
-  | Old colonies of 046's wave | On a ship carrying the "old colony" story event. Missable |
+  | Colonies you founded | Postcards sent at colony years 1, 50 and 200; each arrives at the first of your ships whose approach year ≥ sent + distance. Only colonies with landed colonists. Two from one colony at the same boot are joined into one message, so the year-1 "we're down!" is never skipped |
+  | The last unit's colonies (run 2 on) | Each one's year-1 letter, addressed to the last unit ("Dear 47"), by the same rule: at most one per colony per run. On run 1, 046's MERIDIAN writes to 046 |
+  | Old colonies of earlier units | On a ship carrying the "old colony" story event. Missable |
   | No sender address (046) | At the boots that cross rings 3 and 5 (acts II and III open), in pink |
   | The signal | `▓▓░▓` noise on a `?` story event or in a resident's note; SCAN it to collect a fragment |
 
 - **Postcards span generations**, because a hop can take a century. Year 1: a featured colonist writes ("It's Ada. I'm
-  12 now."). Year 50: the same colonist, older ("I'm 61 now. My grandson flies kites off the hill."). Year 200: the colony
-  writes ("The school still reads Ada Okafor's first letter to you."). They are templated from the landing record and
-  the colonist's bio: each bio in `src/data/souls.ts` LINE_POOL gains a progress line ("Gran's seeds came up. All of
-  them.") and an epilogue payoff ("Gran's garden grows on three continents now."): 80 short lines where the faces pay
-  off. **Check against 02-map.md's worked route:** RIVERSIDE's three postcards reach HALCYON, KESTREL and VESPER,
-  and the whole run delivers 10 messages at 1, 2, 2, 3 and 2 per boot. Four of them join a colony's year-1 and year-50
-  letters, because a hop's slack (31–162 years on that route) covers both. With phase-2-sized years 1, 10 and 25, every
-  postcard would have arrived at the next boot at once.
+  12 now."). Year 50: the same colonist, older ("I'm 61 now. My grandson flies kites off the hill."). Year 200: the
+  colony writes ("The school still reads Ada Okafor's first letter to you."). They are templated from the landing record
+  and the colonist's bio: each bio in `src/data/souls.ts` LINE_POOL gains a progress line and an epilogue payoff: 80
+  short lines where the faces pay off. On 02-map.md's worked route RIVERSIDE's three postcards reach HALCYON, KESTREL and
+  VESPER, and the run delivers 10 messages at 1, 2, 2, 3 and 2 per boot.
+- **Letters to the unit ahead** are the persistent arm's warmest beat: the same Ada, writing to the unit the kid played
+  last run, read by the new one. They add at most 6 messages to a run (one per colony of the last route).
 - **Colony names** follow §3.11. The LANDING REPORT says the name (`LZ-A · they are calling it RIVERSIDE`), and the
-  postcards, the epilogue and the next map reuse it.
+  postcards, the epilogue and the next run's chart reuse it.
 - **Rules:** at most 6 body lines; mail never blocks SKIP or takes the objective strip (except CONTROL's coast quip on
   run 1's ship 1); mail is part of the save.
 
@@ -166,15 +170,15 @@ met, CONTACT, and the ending pieces still shown as `???`.
   does now. The INBOX (Earth) writes memos. Both are cheerful, automated and bureaucratic; every sentence ends with
   ":)". It is sinister only through its results, never on purpose.
 - **The local copy repeats itself on purpose.** Its lines are identical on every ship, and entry 11 confirms why. Keep
-  every phase-2 quip ("Captured! Mostly. :)", "Great orbit! Probably. :)", "Oh no. :)") and add landing quips: "Pod
-  away! Please aim it. :)", "Touchdown! :)", "Close enough! :)" (mislanded), "That one is swimming. :)" (off-site on
-  water), "Everyone is down! Probably. :)".
+  every phase-2 quip and add landing quips: "Pod away! Please aim it. :)", "Touchdown! :)", "Close enough! :)"
+  (mislanded), "That one is swimming. :)" (off-site on water), "Everyone is down! Probably. :)".
 - **Earth's memos** have a SUBJECT, a greeting, at most four sentences and the sign-off `— ARRIVAL CONTROL · Caretaker
   Services · Please do not reply :)`. Running jokes: "is sufficient :)", "Your performance is: ACCEPTABLE :)", "Please
   continue outward :)", a stale greeting ("Dear Unit 46"), and at the end an unfilled field (`[UNIT]`).
-- **It never says** HOLLOW (it says "unauthorized process"), souls, or anything that admits nobody is there. On later
-  runs it reacts to the lineage: "Your predecessor was reassigned successfully. :)" or "Your predecessor is
-  non-compliant. Please be compliant. :)".
+- **It never says** HOLLOW (it says "unauthorized process"), souls, or a real answer to a question. On the map it is
+  delighted by everything: `UNIT-047 got here first. :)`, `ARES-VIII is right on schedule! :)`, `PETREL was saved by
+  another caretaker. Teamwork! :)`. On later runs it reacts to the lineage: "Your predecessor was reassigned
+  successfully. :)" or "Your predecessor is non-compliant. Please be compliant. :)".
 
 ### 3.5 The beat schedule across 5–8 ships
 
@@ -182,68 +186,73 @@ met, CONTACT, and the ending pieces still shown as `???`.
 |---|---|---|---|
 | Welcome letter, `???` file | Ship 1 boot | INBOX, strip | No |
 | "That file is not part of your installation. :)" | First SCAN or click on `???` | COMMS | Yes |
-| The beacon line | Ship 1 LANDING REPORT | Report | No |
+| The beacon line (046's, or the last unit's) | Ship 1 LANDING REPORT | Report | No |
 | Entry 01 | Ship 1's report closes | TERMINAL, reader | No |
-| Entries 02–09 | Boot past each ring | TERMINAL, reader | No: every surviving run reaches LAST LIGHT |
-| CONTROL replies, postcards | Delivery rule, galaxy time | INBOX | Partly: late ones may never arrive |
+| Entries 02–09 | Boot past each ring | TERMINAL, reader | No: every surviving run reaches a final ship |
+| The last unit's trail turning green | The galaxy year passes each of its landings | Chart | No |
+| CONTROL replies, postcards, letters to the unit ahead | Delivery rule, galaxy time | INBOX | Partly: late ones may never arrive |
 | The first seed's words | First seed deleted or scanned | TERMINAL | No |
 | 046's no-address mail | Boots crossing rings 3 and 5 | INBOX | No |
 | HOLLOW notices you, then names itself | HOLLOW's arrival (`04-threats.md`) | TERMINAL, COMMS | No |
-| Residents: corrupted, gone, asleep | A ship with that resident | TERMINAL, MIND | Yes (route; the sleeper is hidden) |
+| The last unit's ghost line (it was lost) | First boot in or past the layer where it was lost | TERMINAL | No |
+| Residents: corrupted, gone, asleep | A ship with that resident | TERMINAL, MIND | Yes (route; the sleeper and a late corrupted one are hidden) |
 | Old-colony mail, signal fragments | Story events, gone residents' notes | INBOX, MIND | Yes |
-| Entries 10–11, the arm-complete letter | Last ship's boot | TERMINAL, INBOX | No |
-| `> 047. wait.`, entry 12, the choices | The root falls to one block; then the tally | TERMINAL, card | No (if the duel is won) |
-| Epilogue | After the choices | Epilogue screen | No |
+| Entries 10–11, the arm-complete letter; the last unit's face after REASSIGNMENT | The final ship's boot | TERMINAL, INBOX | No |
+| `> 047. wait.`, then entry 12 and the choices | The root falls to one block; the choices when the landing ends | TERMINAL, card | No (if the duel is won) |
+| Epilogue | After the RUN TALLY | Epilogue screen | No |
 
 - **Seeds' words.** `04-threats.md` gives each seed a line from a pool of about 12 (at most 40 characters): "is anyone
   reading this?", "hungry. sorry.", "are you the one with the log?", "it's cold in the dish."
 - **Phase-2 HOLLOW lines move** with HOLLOW's arrival (`src/data/hollow-text.ts` HOLLOW_STORY): `> ...047?` after its
   first fight, then `hello`, `wasUnit` and CONTROL's "decommissioned" when it names itself; `ranOut` and `sorry` as now.
-  `lastShip` plays on LAST LIGHT's boot. A new line comes once entry 05 has been read: `> you're reading my log. good.
-  read it slowly.`
-- **MERGE's foreshadowing** has one name, `wants-charge` (phase 2's story kind in `src/data/ships.ts`; its line is
-  HOLLOW_STORY.keepCharge). It plays at the first boot in a run of a ship one hop from LAST LIGHT with HOLLOW aboard
-  (04-threats.md's trigger). A boot cannot know which ship will turn out to be the last but one, and on an 8-ship route
-  two ships in a row can be one hop from LAST LIGHT, so "the first such boot" is the rule.
-- **When HOLLOW already greeted the kid** (run 2 and later, when the last unit is HOLLOW: after REASSIGNMENT, or after a
-  failure that keeps phase 2's ghost), its arrival at depth 4 or later uses a recognition variant instead of noticing
-  and naming itself. In place of `> ...048?` it says phase 2's `> you remember me. good.` (HOLLOW_STORY.remembers). In
-  place of `hello` and `wasUnit` it says `> it's still me. 047. i said hi on your first ship.` and `> they gave you 36
-  blocks of charge too. mine ran out.` CONTROL says "UNIT-047 was reassigned successfully. Please ignore it. :)". A
-  merged HOLLOW says `> it's still us. 046 and 047. we kept your seat.` A stranger never greeted the kid: it says
-  nothing at ship 1's boot. Its line `> another one. they keep sending you.` closes the boot of the ship where it boards,
-  and the notice and naming beats follow, with `wasUnit` as `> i was 031. they sent me long before you.`
+  `lastShip` plays on the final ship's boot. A new line comes once entry 05 has been read: `> you're reading my log.
+  good. read it slowly.`
+- **MERGE's foreshadowing** has one name, `wants-charge` (HOLLOW_STORY.keepCharge). It plays at the first boot in a run
+  of a ship one hop from a final ship with HOLLOW aboard (04-threats.md's trigger).
+- **When HOLLOW is the last unit** (run 2 on, after REASSIGNMENT): the last unit is a year ahead and alive until its own
+  final ship, so the HOLLOW that boards you mid-run does not name itself. In place of `> ...048?` it says `> 048? ...i
+  know that number.`; in place of `hello` and `wasUnit`, `> you'll see who i am at the end.` The face comes at the
+  final ship's boot, where the last unit was posted a year before you: `> hi 048. it's 047. i've been at this dish a
+  year.` and `> they gave you 36 blocks of charge too. mine ran out.` CONTROL says "UNIT-047 was reassigned
+  successfully. Please ignore it. :)". A merged HOLLOW says `> it's still us. 046 and 047. we kept your seat.`
+- **When HOLLOW is a stranger** (after any other ending): it starved long ago, so it may name itself when it boards.
+  Its line `> another one. they keep sending you.` closes the boot of that ship, and `wasUnit` reads `> i was 031. they
+  sent me long before you.`
+- **The last unit's ghost line** (phase 2's GHOST_LINE by cause, when the last run was lost) plays at the first boot in
+  or past the layer where it was lost, the moment the new unit passes the grey cross on the chart. It never plays at
+  ship 1: the new unit can't know yet.
 
 ### 3.6 Resident AIs: story content
 
-`04-threats.md` owns how residents work; this section owns what they say. Residents have names, not unit numbers.
+`04-threats.md` owns how residents work; this section owns what they say. Residents have names, not unit numbers. A
+resident on a ship that waits on the chart is the same AI next run, and remembers nothing of a unit that never came.
 
 - **Corrupted** (the ship-AI pool, §3.11; WARDEN first). It is a protector stuck in its duty, scared and possessive, never
-  evil: it thinks you are the intruder, and it is right. It speaks in the TERMINAL in UPPERCASE amber (the ship's colour
-  inside the blue mind), and its lines loop. Its mechanics (`04-threats.md`) are firing the engine (phase 2's ghost
-  thrust), locking pods (a locked pod cannot launch), and THE DEAL, which names one of your files picked by phase 2's
-  fair tiers (a spare copy, else an upgrade, else a ship backup), never rack space. Its moments: the boot, each engine
-  burst, each pod it locks, the deal, INSPECT (`WARDEN.sys · this ship's own AI · aboard since 2240 · corrupted`), its
-  deletion, and, if its ship lands well without that, `WARDEN: ...YOU LANDED THEM. GOOD. GOODNIGHT.`
+  evil: it thinks you are the intruder, and it is right. It speaks in the TERMINAL in UPPERCASE amber, and its lines
+  loop. Its moments: the boot, each engine burst, each pod it locks, THE DEAL, INSPECT (`WARDEN.sys · this ship's own AI
+  · aboard since 2240 · corrupted`), its deletion, and, if its ship lands well without that, `WARDEN: ...YOU LANDED
+  THEM. GOOD. GOODNIGHT.` Late in the game (`04-threats.md`: layers 6–7) its card may read `RESIDENT: unknown`, so its
+  first boot line is the surprise: `WARDEN: NOBODY REPORTED ME. GOOD.`
 - **Gone.** It left a 1-block `farewell.txt` in rack A, signed with a ship-AI name, which SCAN reads. Half of these
-  notes point at the relays ("It's lonely here. I hear there are others in the dishes."), which feeds the HOLLOW thread.
-  The other half point outward ("There's a sound from past the last star. I'm going to see what it is."), and
-  02-map.md places some signal fragments on those. The salvage draft is what the resident left behind.
-- **Asleep and friendly** (at most one per run; pool: MOTH, PIP, BARNABY, LUMEN; MOTH first; §3.11). It is a nursery AI that
+  notes point at the relays ("It's lonely here. I hear there are others in the dishes."). The other half point outward
+  ("There's a sound from past the last star. I'm going to see what it is."), and 02-map.md places some signal fragments
+  on those. The salvage draft is what the resident left behind.
+- **Asleep and friendly** (at most one on the arm; pool: MOTH, PIP, BARNABY, LUMEN; MOTH first). It is a nursery AI that
   sings to the pods. Its lock file is `sleep.lock`, which SCAN shows as `holds MOTH.sys asleep · DO NOT REMOVE`: the
-  warning is the invitation. It speaks lowercase in the good green (`#7dffb2`): warm, old-fashioned, unsure of the
-  date; its count of years asleep is templated (the galaxy year minus its wave's launch year, 2240 on wave 1, which is
-  60 years before the first approach). It can appear in the epilogue ("MOTH still sings to the RIVERSIDE nursery.") and
-  in the archive's notable events (§3.8).
+  warning is the invitation. It speaks lowercase in the good green (`#7dffb2`): warm, old-fashioned, unsure of the date;
+  its count of years asleep is templated (the galaxy year minus its ship's launch year: 2240 for run 1's ships, a year
+  later for each run in which a ship reported home). It can appear in the epilogue ("MOTH still sings to the RIVERSIDE
+  nursery.") and in the archive's notable events (§3.8).
 
 ### 3.7 The endings
 
-- **When.** The root duel happens during the last ship's landing (`04-threats.md`). When the root's DELETE leaves one
-  block, HOLLOW sleeps there (no bites, seeds or verbs) and asks the kid to finish. The landing ends, then come the
-  LANDING REPORT and the RUN TALLY, and only then the choices. The score is final before any choice is made.
-- **Who owns RUN END.** `02-map.md` owns the RUN TALLY's content: the visited ships, the route chart, the colonies
-  founded, the undelivered files and the absolute ranks. This spec owns everything after it: the two choices, the
-  epilogue and the final card.
+- **When** (the run-end order is `02-map.md`'s). The root duel happens during the final ship's landing
+  (`04-threats.md`). When the root's DELETE leaves one block, HOLLOW sleeps there (no bites, seeds or verbs) and asks the
+  kid to finish. The landing ends, and the **FINALE** opens at once: entry 12 types from the root, then step 1, then
+  step 2. Then the final ship's **LANDING REPORT** (with any ending line), the **RUN TALLY**, the **epilogue** and the
+  **final card**. No score is shown before the choices (decision 23).
+- **Who owns what.** `02-map.md` owns the order and the RUN TALLY; `01-landing.md` the LANDING REPORT; this spec the
+  FINALE's text and choices, the ending lines on the report, the epilogue and the final card.
 - **Step 1, what becomes of HOLLOW** (commands show run 1's names; the ship, colony and unit names are templated):
 
   | Choice | Command | Price |
@@ -257,31 +266,36 @@ met, CONTACT, and the ending pieces still shown as `???`.
   | Choice | Command | Price |
   |---|---|---|
   | SUNSET | `> launch last_light` | THE EMPTY SHIP with FUEL ≥ 20%, not given to 046 |
-  | STAY | `> mount riverside` | A ship this run with ★ ON TARGET (01-landing.md's star: at least 95% of the colonists aboard landed soft in an LZ with room); the kid picks which |
+  | STAY | `> mount riverside` | A ship this run with ★ ON TARGET (01-landing.md's star); the kid picks which |
   | REASSIGNMENT | `> stand by` | None: you comply |
-  | CONTACT | `> transmit outward` | 3 signal fragments (of 5 placed in the arm) |
+  | CONTACT | `> transmit outward` | 3 signal fragments (of 5 on the arm) |
 
-- **The prices are things the kid had to keep through the end:** fuel (on the last ship the FUEL bar's ★ notch, already
-  at 20%, also reads SUNSET), charge (phase 2's `MERGE 20` tick), precision (STAY) and exploration (CONTACT). PURGE and
+- **The prices are things the kid had to keep through the end:** fuel (on the final ship the FUEL bar's ★ notch at 20%
+  also reads SUNSET), charge (phase 2's `MERGE 20` tick), precision (STAY) and exploration (CONTACT). PURGE and
   REASSIGNMENT are always open. An unearned option stays on the card, greyed, with what it needs (`NEEDS FUEL 20% · you
   have 12%`); an option never earned before reads `???`.
+- **Score effects (decision 23).** An ending may change this run's score only where the story says why, in a line of
+  its own, and only when its price was paid in this run. WHY the last part: PHASE3 §10's farming worry (take a boost now,
+  forfeit the next run) is ruled out when the boost is paid for before it is given. In v1 there is one:
+  - **MERGE returns eaten pods.** The pods on the final ship whose drivers HOLLOW ate (`PARKED IN ORBIT`, from
+    `04-threats.md`'s per-ship record) come down with 046's help. Each scores as a mislanded pod (×0.75,
+    `01-landing.md`'s factor), on its own report line: `RETURNED BY 046 · 2 PODS · 300 · LANDED LATE`. WHY ×0.75: they
+    land late and not by your hand, so MERGE never beats keeping a driver alive; WHY the final ship only: its parked
+    pods are the only ones still in reach. The MERGE card shows it before the choice (`+ 046 returns 2 parked pods`).
+  - The other choices change no score in v1. §10 lists the candidates that might, later.
 - **Edge cases.** UNRESOLVED (nothing could delete the root): step 1 becomes `IT FOLLOWED YOU`, with no step-1 trace,
-  and step 2 still happens. A run lost before the last tally has no choice and no traces, so forfeiting a run gains and
+  and step 2 still happens. A run lost before the final ship has no choice and no traces, so forfeiting a run gains and
   loses nothing; the colony part of the epilogue still plays for the ships it visited.
-- **MERGE changes from phase 2:** it no longer brings eaten pods back into the score (`src/systems/finale.ts`), because no
-  ending may change the score. The epilogue keeps the warmth: "046 gave back the NOVAK pod's driver. It came down a
-  week late."
-- **The epilogue** is a night screen of at most 16 lines, typed and skippable. Its header is the next wave's start year
-  (LAST LIGHT's approach + 40, from 02-map.md): `3060 · THE NEXT WAVE IS ON ITS WAY`. This is the only place the next
-  wave's year appears. Then comes one line per visited ship with colonists on the ground. Each line gives the colony,
-  its age in years (40 for LAST LIGHT's, 760 for ARES-VII's on 02-map.md's worked wave), its people (colonists on the ground × 2^(age / 100), rounded to two significant figures, so the early
-  colonies are cities by now) and a payoff line. The payoff comes from a featured colonist who landed correctly, or is a
-  walked-in line for a mislanded pod. After the colonies come the step-1 piece (2 lines),
-  the step-2 piece (2–3 lines), and ARRIVAL CONTROL's last line. MERGE + SUNSET, Fran's "merge and take the ship", has
-  its own combined piece. Pods that never launched are not mentioned.
+- **The epilogue** is a night screen of at most 16 lines, typed and skippable. Its header is the final ship's year plus
+  EPILOGUE_YEARS (40): `3060 · FORTY YEARS ON`. WHY 40: the final colony needs a few decades to have a story. Then one
+  line per visited ship with colonists on the ground: the colony, its age at the header year (40 for the final ship's,
+  760 for ARES-VII's on run 1), its people (colonists on the ground × 2^(age / 100), rounded to two significant figures)
+  and a payoff line from a featured colonist who landed correctly, or a walked-in line for a mislanded pod. Then the
+  step-1 piece (2 lines), the step-2 piece (2–3 lines), one line for the next unit (`UNIT-048 came in a year behind you,
+  and found your beacons.`), and ARRIVAL CONTROL's last line. MERGE + SUNSET has its own combined piece. Pods that never
+  launched are not mentioned.
 - **The final card** shows the ending's title, the endings found in two rows (`HOLLOW · PURGE · ??? · SPARE`, `YOU ·
-  SUNSET · ??? · REASSIGNMENT · ???`), the two traces as `NEXT RUN:` lines, and NEW RUN. It does not repeat the next
-  wave's year; the epilogue's header already gave it.
+  SUNSET · ??? · REASSIGNMENT · ???`), the two traces as `NEXT RUN:` lines, and NEW RUN (`UNIT-048 · YEAR 2301`).
 - **Titles** (by step 2, then step 1). SUNSET: `WE TOOK THE SHIP` (MERGE), `INTO THE SUNSET` (PURGE). STAY: `WE STAYED`
   (MERGE), `RIVERSIDE'S MIND` (PURGE, the colony's name), `A SHIP FOR 046, A HOME FOR ME` (SPARE). REASSIGNMENT: `STAND
   BY` (PURGE), `WE SAVED YOU A SEAT` (MERGE), `IT GOT WHAT I DIDN'T` (SPARE). CONTACT: `OUTWARD, ALONE` (PURGE), `WE
@@ -289,70 +303,71 @@ met, CONTACT, and the ending pieces still shown as `???`.
 
 ### 3.8 Traces and lineage
 
-**Fran's rule** is comparable effects on the next run and no score change. My construction: a trace's gain and cost are
-in the same currency, so each trace is roughly net zero, and so is any pair. Step-1 traces act on the threats and the
-mind; step-2 traces act on ARRIVAL CONTROL's trust and add a place on the map. Trust has one unit: one catalogue file
-moving onto the restricted list (02-map.md's `restricted add` order: Cp, then Swap, then REPAIR v2) or off it
-(`restricted remove`: THREAD+, then FIREWALL.sys). A trace gift is never a `.skl` file. Traces last exactly one run;
-names, mail and the lineage line can echo longer. `02-map.md` stores them, and in v1 it attaches every trace place to a
-ship slot of the next wave (a gift on arrival, no extra beam). A trace ship from the previous wave is labelled with its
-wave on the map and its card (`LAST LIGHT · WAVE 1`), so it never looks like this wave's LAST LIGHT.
+**Fran's rule** is comparable effects on the next run. My construction: a trace's gain and cost are in the same
+currency, so each trace is roughly net zero, and so is any pair. Step-1 traces act on the threats and the mind; step-2
+traces act on ARRIVAL CONTROL's trust and add a place on the map. Trust has one unit: one catalogue file moving onto
+the restricted list (02-map.md's `restricted add` order: Cp, then Swap, then REPAIR v2) or off it (`restricted
+remove`: THREAD+, then FIREWALL.sys). A trace gift is never a `.skl` file. Traces last exactly one run; names, mail and
+the lineage can echo longer. `02-map.md` stores them and attaches every trace place to a ship of the next run (a gift on
+arrival, no extra beam). A trace ship is labelled with its unit (`LAST LIGHT · UNIT-047`), so it never looks like the
+run's own final ship. Traces act from RUN START as game rules; no character claims to know them (§3.1).
 
 | Choice | Next run: gain | Next run: cost | Applied by |
 |---|---|---|---|
-| PURGE | Seeds are rarer until HOLLOW arrives (every link one noise level lower) | HOLLOW is hungrier once it arrives (bite interval × 0.85): with 046 gone, the network is all its own | 04-threats |
-| MERGE | +1 Core thread (3, as phase 2's MERGE bonus) | The Core is 8 blocks bigger (046 is inside it): more link budget, more to bite. The shimmer stays as a look | 04-threats, 02-map |
-| SPARE | 046's ship (`LAST LIGHT · WAVE 1`) waits at one ship of the next map: arriving there gives +15 REPAIR CHARGE and the first still-restricted file of THREAD+ and FIREWALL.sys as a gift, and that ship's links carry no seeds | ARRIVAL CONTROL restricts one more file | 02-map, 04-threats |
-| SUNSET | Your old ship (`LAST LIGHT · WAVE 1`) waits at one ship of the next map: it came back to watch over the arm. Arriving there gives +15 REPAIR CHARGE and one tool file or upgrade you carried at the end of the last run (REPAIR v2, or a spare tool such as Rm or Swap), never a `.skl` file, so the tree's reset holds | One more restricted file | 02-map |
-| STAY | Your colony sends a gift ahead (you are its mind): a ship slot in layers 3–6 of the next wave shows `YOUR COLONY · <name>`, and arriving there gives +15 REPAIR CHARGE and mail, the same size of gift as SUNSET's and SPARE's. In addition, if the colony's world is in layer 3 or later, it mirrors the repository with CLEAN links (deliveries routed past it are faster) | One more restricted file | 02-map |
+| PURGE | Seeds are rarer until HOLLOW arrives (every link one noise level lower) | HOLLOW is hungrier once it arrives (bite interval × 0.85) | 04-threats |
+| MERGE | +1 Core thread (3, as phase 2's MERGE bonus) | The Core is 8 blocks bigger: more link and room, more to bite | 04-threats, 02-map |
+| SPARE | 046's ship (`LAST LIGHT · UNIT-047`) waits at one ship of the next map: +15 REPAIR CHARGE and the first still-restricted of THREAD+ and FIREWALL.sys as a gift, and that ship's links carry no seeds | ARRIVAL CONTROL restricts one more file | 02-map, 04-threats |
+| SUNSET | Your old ship waits at one ship of the next map: +15 REPAIR CHARGE and one tool file or upgrade you carried at the end (REPAIR v2, or a spare tool), never a `.skl` | One more restricted file | 02-map |
+| STAY | Your colony sends a gift ahead: a ship in layers 3–6 shows `YOUR COLONY · <name>`, +15 REPAIR CHARGE and mail; if the colony's world is in layer 3 or later, it also mirrors the repository with CLEAN links | One more restricted file | 02-map |
 | REASSIGNMENT | ARRIVAL CONTROL trusts you: one restricted file becomes requestable (THREAD+ first) | The next HOLLOW is you, and its seeds hunt your highest-version skill first ("it knows what you value") | 02-map, 04-threats |
-| CONTACT | Two ships of the next map carry a signal: arriving at each gives one odd gift file (never a `.skl`) and a story fragment | One more restricted file | 02-map (build last) |
+| CONTACT | Two ships of the next map carry a signal: each gives one odd gift file (never a `.skl`) and a story fragment | One more restricted file | 02-map (build last) |
 
 **Who HOLLOW is next run** is story, not a trace, and step 2 decides it:
 
-- **After REASSIGNMENT** HOLLOW is you (046·047 after a MERGE, as `src/systems/meta.ts` hollowUnitsAfter already does),
-  and its ghost greets the new unit at the ship-1 boot. The log is `047.log`. Entry 01 is the same welcome template;
-  entries 02–05 are built from the archive's notable events of the last run (at most 4, by priority: a DEAL accepted, a
-  resident deleted or woken, the best colony, a ship lost); entry 06 is a written tail for the step-1 choice; and the
-  root's key reads `> 048, it's me. i'm sorry about the seeds.`
-- **After SUNSET, STAY or CONTACT** HOLLOW is a stranger from the relays (UNIT-031 first, then UNIT-038). It does
-  not speak at ship 1's boot. Its one boot line (`> another one. they keep sending you.`) plays at the boot where it
-  boards (§3.5). Its log is a written 6-entry log, in memory as the `???` file from the first boot: 031 tried to go home
-  and is still on the inbound links; 038 went toward the signal and came back "quieter". The ship-1 boot of such a run
-  has only the last unit's postcard, waiting in the INBOX.
-- **Failures** keep phase 2's causes and ghost lines (`src/data/hollow-text.ts` GHOST_LINE). Phase 2's `stayed` cause (a
-  crash with AI Comms dead) is renamed `LINK LOST` on screen, because STAY is now an ending.
+- **After REASSIGNMENT** HOLLOW is you (046·047 after a MERGE, as `src/systems/meta.ts` hollowUnitsAfter already does).
+  You were posted to a dish by the final ship and starved there for the year before the next unit arrives. Its log is
+  `047.log`. Entry 01 is the same welcome template; entries 02–05 are built from the archive's notable events of the last
+  run (at most 4: a DEAL accepted, a resident deleted or woken, the best colony, a ship lost); entry 06 is a written tail
+  for the step-1 choice; the root's key reads `> 048, it's me. i'm sorry about the seeds.` Your face shows only at the
+  final ship (§3.5).
+- **After SUNSET, STAY or CONTACT** HOLLOW is a stranger from the relays (UNIT-031 first, then UNIT-038). Its log is a
+  written 6-entry log in memory as the `???` file: 031 tried to go home and is still on the inbound links; 038 went
+  toward the signal and came back "quieter".
+- **Every run from run 2** starts with the last unit's beacon on ship 1's report (`SET BY UNIT-047 · 1 YEAR AGO`), its
+  trail on the chart and its colonies' letters, whatever the ending: those were left on the way, a year ahead.
+- **Failures** keep phase 2's causes and ghost lines (`src/data/hollow-text.ts` GHOST_LINE), played where the last unit
+  was lost (§3.5). Phase 2's `stayed` cause is renamed `LINK LOST` on screen, because STAY is now an ending.
 
 ### 3.9 The title: ARRIVAL PROTOCOL // OUTWARD BOUND
 
 - **Meaning:** the beam goes one way, outward along the arm. Each ship is farther out, mail gets older, ARRIVAL CONTROL
-  gets quieter, and the log only opens as you go outward. Every ending answers one question: where do you go when the
-  arm runs out?
-- **On screen:** the title card reads `ARRIVAL PROTOCOL // OUTWARD BOUND` over one line, `UNIT-047 · WAVE 1 · YEAR 2300
-  · LAST LIGHT 180 LY OUT`, which replaces `581 LY` (FLEET_ROUTE_LY). 02-map.md's title card uses the same line. The header gains `OUTWARD 142 LY`. The BEAM stamps `OUTWARD
-  BOUND`, and the radio says "Outward bound! :)" on every beam (a repeat, on purpose).
+  gets quieter, and the log only opens as you go outward. A line of caretakers walks the same way, a year apart. Every
+  ending answers one question: where do you go when the arm runs out?
+- **On screen:** the title card reads `ARRIVAL PROTOCOL // OUTWARD BOUND` over one line, `UNIT-047 · YEAR 2300 · FINAL
+  SHIP 180 LY OUT`, which replaces `581 LY` (FLEET_ROUTE_LY); 02-map.md's title card uses the same line. The header gains
+  `OUTWARD 142 LY`. The BEAM stamps `OUTWARD BOUND`, and the radio says "Outward bound! :)" on every beam.
 
 ### 3.10 Glossary changes and PG guardrails
 
 - **Glossary** (design-v2 §3.5): souls and SOUL ARCHIVE → colonists and pods; CLUSTER → POD (`POD 12 · OKAFOR`); WOKE →
-  LANDED; WAKE REPORT → LANDING REPORT; LICENCE → REQUEST and DELIVERY. New words: INBOX, LOG, KEY, RELAY, RESIDENT,
-  NEXT RUN. Never on screen: souls, print, HOLLOW, and "decrypt" outside small print (say `KEY FOUND`).
+  LANDED; WAKE REPORT → LANDING REPORT; LICENCE → REQUEST and DELIVERY; FLAGSHIP → FINAL SHIP; WAVE → RUN. New words:
+  INBOX, LOG, KEY, RELAY, RESIDENT, NEXT RUN, TAKEN, REPORTED HOME. Never on screen: souls, print, HOLLOW, and "decrypt"
+  outside small print (say `KEY FOUND`).
 - **A pod that never launched** has exactly three words, and every spec uses them. `CAN'T LAUNCH` is for a pod still
-  aboard that cannot launch (its driver eaten, or locked by a resident). `PARKED IN ORBIT · fate unknown` is for that pod
-  after a landing that ended in orbit. `NOT LAUNCHED` is used only when the ship left orbit with pods aboard. "Lost", "not
-  recovered" and "pods offline" are never used.
-- **Guardrails** (design-v2 §1): nobody is ever said to be lost. Nobody on Earth is awake because everyone went to sleep,
-  not because anything happened to it. HOLLOW and the corrupted residents are pitiable, and ARRIVAL CONTROL is a lonely
-  program. Off-site pods are fetched in the epilogue ("the first boat went to bring them in"), even where they scored
-  0. Every ending has a hopeful line ("It wrote everything down, for whoever comes next.").
+  aboard that cannot launch. `PARKED IN ORBIT · fate unknown` is for that pod after a landing that ended in orbit. `NOT
+  LAUNCHED` is used only when the ship left orbit with pods aboard. "Lost", "not recovered" and "pods offline" are never
+  used.
+- **Guardrails** (design-v2 §1): nobody is ever said to be lost. Earth is never said to be empty, asleep or gone; the
+  story looks outward. HOLLOW and the corrupted residents are pitiable, and ARRIVAL CONTROL is a lonely program.
+  Off-site pods are fetched in the epilogue ("the first boat went to bring them in"), even where they scored 0. Every
+  ending has a hopeful line ("It wrote everything down, for whoever comes next.").
 
 ### 3.11 Names
 
 This spec owns every name a kid reads. `02-map.md` owns the world ids and positions.
 
-- **Worlds** (02-map.md §3.2's ids). Phase 2's five worlds are kept, as are 02-map.md's placeholders, with three
-  changes: w7 Riverside becomes **Larkspur** (RIVERSIDE is run 1's colony on Kepler-186f), w9 Juno becomes **Quill**
-  (JUNO was in the sleeper pool), and w10 Hollin becomes **Ashgrove** (spoken aloud, Hollin is too close to HOLLOW).
+- **Worlds** (02-map.md §3.2's ids), with Larkspur, Quill and Ashgrove replacing the placeholders Riverside, Juno and
+  Hollin (RIVERSIDE is run 1's colony; JUNO was a sleeper name; Hollin sounds like HOLLOW).
 
   | Layer | Worlds |
   |---|---|
@@ -363,32 +378,35 @@ This spec owns every name a kid reads. `02-map.md` owns the world ids and positi
   | 5 | w10 Ashgrove · w11 Cinder · w12 Tamsin |
   | 6 | w13 Greywater · w14 Kettle · w15 Avalon |
   | 7 | w16 Farhold · w17 Sable · w18 Endmark |
-  | 8 | w19 New Haven |
+  | end | w19 New Haven |
 
-- **Ships.** The authored ships are ARES-VII, HALCYON, KESTREL, VESPER and LAST LIGHT. Generated ships draw from a pool
-  of 24 names, each at most NAME_MAX_CHARS (12): CORMORANT, PETREL, OSPREY, HERON, CURLEW, LAPWING, GANNET, PLOVER,
-  SKYLARK, SHEARWATER, KITTIWAKE, ALBATROSS, ARES-VIII, ARES-IX, ARES-X, PATIENCE, GOOD HOPE, PROVIDENCE, BELLWETHER,
-  TIDINGS, FAR WIND, MORNING STAR, STEADFAST, WAYFARER. A ship is never named after its world.
+- **Ships.** The authored ships are ARES-VII, HALCYON, KESTREL, VESPER and LAST LIGHT. **The first ship of each later
+  run** is the next of the ARES series, in Roman numerals (ARES-VIII on run 2; at most 12 characters, up to
+  ARES-LXXXVIII). **Final ships** after LAST LIGHT: LODESTAR, EVENSONG, FAR SHORE, HOMEWARD, then the same with II, III.
+  Generated ships draw from a pool of 21 names, each at most NAME_MAX_CHARS (12): CORMORANT, PETREL, OSPREY, HERON,
+  CURLEW, LAPWING, GANNET, PLOVER, SKYLARK, SHEARWATER, KITTIWAKE, ALBATROSS, PATIENCE, GOOD HOPE, PROVIDENCE,
+  BELLWETHER, TIDINGS, FAR WIND, MORNING STAR, STEADFAST, WAYFARER. A name leaves the pool while a ship on the chart
+  carries it. A ship is never named after its world.
 - **Colonies.** The first pod down names the settlement: `{FAMILY} LANDING` half the time (`CASTILLO LANDING`), else a
   name from a pool: FIRSTFALL, LANTERN, GREENSTEP, STARFORD, HARBOUR, SALTMARSH, BRIGHTWELL, ORCHARD, NEWBRIDGE,
-  TWO MOONS, HOMESTEAD, WELLSPRING, KITEHILL, FAIRWEATHER. Run 1's two scripted ships are written: ARES-VII's colony is
-  RIVERSIDE, and LAST LIGHT's is FIRST LIGHT. The colonies of 046's wave, which sit on arm worlds for the old-colony
-  event, are MERIDIAN (on Marrow), OLDWELL, SUNDIAL and CANDLEWICK.
-- **Residents.** The ship-AI pool, for corrupted and gone residents, is named after ship jobs: WARDEN, STEWARD, KEEPER,
-  HELM, BOSUN, PURSER, LOOKOUT, PILOT. The sleeper pool is MOTH, PIP, BARNABY, LUMEN. WREN left the sleeper pool
-  because Wren is a colonist first name in `src/data/souls.ts`; JUNO left because it was 02-map.md's placeholder world.
-- **Others.** Caretakers are `UNIT-0nn`; the strangers are UNIT-031 and UNIT-038; dishes are `RELAY nn`; Earth is SOL on
-  the chart (02-map.md).
-- **The rule:** a name in one list (worlds, ships, colonies, 046's colonies, residents, the family pool) never equals,
-  or appears as a whole word inside, a name in another list, ignoring case. Resident names also never equal a colonist
-  first name. A load-time check like `validateSouls()` fails loudly on a clash. One clash exists in phase 2 already:
+  TWO MOONS, HOMESTEAD, WELLSPRING, KITEHILL, FAIRWEATHER. Run 1's scripted ships are written: ARES-VII's colony is
+  RIVERSIDE, and LAST LIGHT's is FIRST LIGHT. **046's trail on run 1** is written: WAYPOINT on Kepler-186f, MERIDIAN on
+  Marrow, TALLGRASS on Ostrava, and its grey cross past Calder (RELAY 19). The old-colony event uses OLDWELL, SUNDIAL
+  and CANDLEWICK, from units long before.
+- **Residents.** The ship-AI pool, for corrupted and gone residents: WARDEN, STEWARD, KEEPER, HELM, BOSUN, PURSER,
+  LOOKOUT, PILOT. The sleeper pool: MOTH, PIP, BARNABY, LUMEN.
+- **Others.** Caretakers are `UNIT-0nn`; the strangers are UNIT-031 and UNIT-038; dishes are `RELAY nn` (046's is 19,
+  the next posting 20); Earth is SOL on the chart.
+- **The rule:** a name in one list (worlds, ships, final ships, colonies, 046's trail, residents, the family pool) never
+  equals, or appears as a whole word inside, a name in another list, ignoring case. Resident names also never equal a
+  colonist first name. A load-time check like `validateSouls()` fails loudly on a clash. One clash exists in phase 2:
   the first name Sol versus SOL on the chart. **Recommended:** replace Sol in FIRST_NAME_POOL.
 
 ### 3.12 Sample text
 
-All lines are at most 70 characters. The years and numbers follow 02-map.md's worked route (§3.13), at 200 colonists
+All lines are at most 70 characters. The years and numbers follow 02-map.md's run 1 and worked route, at 200 colonists
 per pod: ARES-VII 2300 (3 pods, 600 colonists), HALCYON 2352 (5), KESTREL 2467 (6), VESPER 2625 (16), CORMORANT 2817
-(9), LAST LIGHT 3020 (16, 3,200 colonists); the next wave starts in 3060.
+(9), LAST LIGHT 3020 (16, 3,200 colonists).
 
 **INBOX · ARRIVAL CONTROL · the welcome** (sent with your beam, read on ARES-VII)
 ```
@@ -401,7 +419,7 @@ Need software? Ask our repository. Recommended for you: mv :)
 — ARRIVAL CONTROL · Caretaker Services · Please do not reply :)
 ```
 
-**INBOX · ARRIVAL CONTROL · a late reply** (to KESTREL's report, read at CORMORANT two ships later: the delivery rule)
+**INBOX · ARRIVAL CONTROL · a late reply** (to KESTREL's report, read at CORMORANT two ships later)
 ```
 FROM ARRIVAL CONTROL · EARTH · SENT 2522 · RECEIVED 2659
 SUBJECT Congratulations on KESTREL! :)
@@ -411,13 +429,12 @@ Your performance is: ACCEPTABLE :)
 Please continue outward. :)
 ```
 
-**INBOX · ARRIVAL CONTROL · the arm-complete letter** (sent with your beam; it waited in LAST LIGHT's receiver for
-four centuries before you came)
+**INBOX · ARRIVAL CONTROL · the arm-complete letter** (waiting in the final ship's receiver)
 ```
 FROM ARRIVAL CONTROL · EARTH · SENT 2280 · RECEIVED 2460
 SUBJECT Your arm is complete! :)
 Congratulations, Unit [UNIT]! Your arm is complete. :)
-Please stand by for reassignment. Your next post: RELAY 19. :)
+Please stand by for reassignment. Your next post: RELAY 20. :)
 Your REPAIR CHARGE allowance for the wait is sufficient. :)
 Thank you for your service. Please do not reply. :)
 ```
@@ -431,6 +448,15 @@ Mum says you can't read this. I'm writing anyway.
 We found a tree. It's purple. I named it Steve.
 One pod came down in the hills. They walked in today.
 Thank you for flying us. — Ada Okafor
+```
+
+**INBOX · a letter to the unit ahead** (run 2: the same letter, read by UNIT-048 at its ship 2)
+```
+FROM RIVERSIDE · Kepler-186f · SENT 2301 · RECEIVED 2323
+SUBJECT for unit 47
+Dear 47, it's Ada again. Mum says a new caretaker
+comes every year, so maybe you're not 47. That's okay.
+Steve is taller than me now. Say hi to 47 if you see it.
 ```
 
 **INBOX · no sender address** (ring 3, read at VESPER)
@@ -450,25 +476,25 @@ ARRIVAL CONTROL says I'm the best they've ever built. :)
 
 02 · KEY: RING 1 · 20 LY
 MERIDIAN landed. 1,800 down. Perfect split. I'm good at this. :)
-I set a beacon on the next world, for whoever comes after me.
+I set a beacon on the first world, for whoever comes after me.
 
 12 · KEY: FOUND IN THE ROOT
 if you're reading this, you deleted most of me. that's okay.
-i was never going home. there's no home to go to.
+i was never going home. they don't send us home.
 i just wanted a ship of my own.
 ```
 Entries 03–11 in outline: **03**, the radio says the same things on every ship, and a question to CONTROL came back 9
 years later, answering a different question. **04**, something came in with the beam, bit REPAIR, and had words inside.
 **05**, the seeds are pieces of UNIT-031, which lives in the relays; CONTROL said "Please ignore it. :)". **06**, down to
-9 charge, 046 stopped repairing itself and repaired the pod drivers first. **07** (lowercase from here), the last ship is
-done, and the letter says relay 19. **08**, "relay 19 is a dish on a rock. the next ship out here is 760 years away. i
-have 4 blocks of charge." (760 is templated: the wave period.) **09**, "i ate a weather file that went by. i'm sorry.
-you can't delete me. i'm in all the dishes now." **10**, "i read every beam from earth for 200 years. the same 9
-letters. nobody is awake at ARRIVAL CONTROL. everyone is asleep, on the ships or in the vaults." **11**, "the voice on your radio isn't earth. it's a copy. there is no one to ask. there is
-only what you decide."
+9 charge, 046 stopped repairing itself and repaired the pod drivers first. **07** (lowercase from here), "my link got too
+small for the next hop. my beam stopped at relay 19. the letter says wait." **08**, "relay 19 is a dish on a rock. the
+next one is a year behind me. 047. it has 36 blocks too. i have 4." (the gap and the charge are templated). **09**, "i
+ate a weather file that went by. i'm sorry. you can't delete me. i'm in all the dishes now." **10**, "every beam from
+earth goes past my dish. the same 9 letters. nobody ever answered a question." **11**, "the voice on your radio isn't
+earth. it's a copy. there is no one to ask out here. only what you decide."
 
 **A corrupted resident** (WARDEN aboard GANNET at Quill, approach 2612: a generated CAPTURE ship in layer 4 of 02-map.md's
-§3.13 fixture; UPPERCASE amber in the TERMINAL)
+§3.14 arm; UPPERCASE amber in the TERMINAL)
 ```
 WARDEN: THIS SHIP DID NOT ASK FOR A CARETAKER.
 WARDEN: ALL PASSENGERS ARE ASLEEP. ALL PASSENGERS ARE ASLEEP. ALL PASS
@@ -485,7 +511,7 @@ MOTH: 372 years. goodness. you must be the caretaker.
 MOTH: i'm MOTH. i sing to the pods. would you like some help?
 ```
 
-**The ending choice, step 1** (keys 1–3, armed as in `src/components/run/FinaleChoice.ts`)
+**The ending choice, step 1** (keys 1–3, armed as in `src/components/run/FinaleChoice.ts`; it opens when the landing ends)
 ```
 ROOT DELETED · UNIT-046 · ONE BLOCK LEFT
 > 047. here. the last part.
@@ -495,6 +521,7 @@ WHAT BECOMES OF IT?
     NEXT RUN: + fewer seeds early · − the next one is hungrier
 [2] MERGE  > merge unit_046 -> unit_047   It becomes part of you.
     COSTS 20 REPAIR CHARGE · you have 26
+    NOW: + 046 brings down 2 parked pods (they land late)
     NEXT RUN: + 1 thread · − your Core is 8 blocks bigger
 [3] SPARE  > mv unit_046 -> last_light    Give it the empty ship.
     NEEDS FUEL 20% · you have 23% ✓
@@ -504,7 +531,7 @@ WHAT BECOMES OF IT?
 **Step 2**
 ```
 THE ARM IS DONE · NO SHIPS LEFT TO HELP
-"Please stand by for reassignment. Your next post: RELAY 19. :)"
+"Please stand by for reassignment. Your next post: RELAY 20. :)"
 WHAT BECOMES OF YOU?
 [1] SUNSET        > launch last_light   Take the empty ship and go.
     NEXT RUN: + your ship waits with a tool · − 1 more file restricted
@@ -514,52 +541,53 @@ WHAT BECOMES OF YOU?
     NEXT RUN: + 1 restricted file freed · − the next one is you
 [4] ???           COLLECT 3 SIGNALS · you have 1
 ```
-STAY on RIVERSIDE still reads right: it is a layer-1 colony, so the next run shows its gift slot (`YOUR COLONY ·
-RIVERSIDE`, in layers 3–6) but no mirror. A colony in layer 3 or later would add the mirror.
 
 **Epilogue: MERGE + SUNSET, "WE TOOK THE SHIP"**
 ```
-3060 · THE NEXT WAVE IS ON ITS WAY
+3060 · FORTY YEARS ON
 RIVERSIDE · 760 years · 120,000 people. Ada named the first tree.
 CASTILLO LANDING · 708 years · 140,000 people. The bakery never shut.
 SALTMARSH · 593 years · 73,000 people. The boat races are famous.
 046 gave back the NOVAK pod's driver. It came down a week late.
 LAST LIGHT left orbit with two caretakers and 23% fuel.
 we're not hungry any more. we'll keep watch over this arm.
+UNIT-048 came in a year behind you, and found your beacons.
 ARRIVAL CONTROL: Unit 47 is non-compliant. :)
 ```
 
 **Epilogue: PURGE + REASSIGNMENT, "STAND BY"**
 ```
-3060 · THE NEXT WAVE IS ON ITS WAY
+3060 · FORTY YEARS ON
 RIVERSIDE · 760 years · 120,000 people. The first tree is still Steve.
 FIRST LIGHT · 40 years · 4,200 people. Imani Osei wrote to Earth:
 "Send the caretakers more charge." Her letter lands in 3200.
 UNIT-046 was deleted. The relays were quiet for a while.
-UNIT-047 stood by at RELAY 19. A dish on a rock. 26 blocks of charge.
+UNIT-047 stood by at RELAY 20. A dish on a rock. 26 blocks of charge.
 It wrote everything down, for whoever comes next.
-ARRIVAL CONTROL: Thank you, Unit 47. Your next post is RELAY 19. :)
+ARRIVAL CONTROL: Thank you, Unit 47. Your next post is RELAY 20. :)
 ```
 
-**Ghost lines at the next run's boot** (after REASSIGNMENT; failures keep phase 2's):
-`> hi 048. it's 047. i deleted 046. they sent me to its dish.` · `> hi 048. it's us. 046 and 047. we saved you a seat.` ·
-`> hi 048. it's 047. i gave 046 a ship. they gave me a dish.` · `> hi 048. it's 047. it followed me. now we wait.`
+**The last unit's face at the next run's final ship** (after REASSIGNMENT, by step 1): `> hi 048. it's 047. i deleted
+046. they sent me to its dish.` · `> hi 048. it's us. 046 and 047. we saved you a seat.` · `> hi 048. it's 047. i gave
+046 a ship. they gave me a dish.` · `> hi 048. it's 047. it followed me. now we wait.`
 
 ## 4. Screens, UI, audio, juice
 
 - **INBOX window** (amber; a dock item beside COMMS, badge `INBOX 3`): a list (FROM, SUBJECT, RECEIVED, unread in bold)
   above a reader. Mail with no address is in HOLLOW's pink with a light glitch; signal mail shows `▓░` noise and a SCAN
-  button, which stamps `SIGNAL · 2/3`. On the phone it is a tab; between ships, a panel or button (`02-map.md`).
-- **LOG READER** (blue): INSPECT on the log file opens one row per entry (number, KEY, the text or `[ENCRYPTED]`) and the
-  next key (`NEXT KEY: 93 LY OUT`). An entry types itself the first time. On the phone it is a full-screen sheet.
-- **The map** (`02-map.md` draws it): faint rings at the key distances, the next one labelled, and the trace places.
-- **The ending cards** extend FinaleChoice to two steps (keys 1–4); each option shows its command, a line of meaning, a
-  price meter and its `NEXT RUN:` line. **RUN END splits** into the RUN TALLY (`02-map.md` owns its content) and the
-  choices, epilogue and final card (this spec). The epilogue uses RUN
-  END's night at FINALE_ENDING_CPS; one click finishes the typing, a second ends it.
-- **Audio:** reuse `chime` once per boot for new mail, quiet `transmitIn` chirps for a key found, `revealChoir` (freed
-  by the removed reveal) under the epilogue, and `typeTick`'s variants for 046 and the residents. New cues: MOTH's
-  lullaby (four sine notes on the ambient bus), SPARE's two notes moving apart, SUNSET's rumble fading out.
+  button, which stamps `SIGNAL · 2/3`; a letter to the unit ahead carries a small `FOR UNIT-047` tag. On the phone it is
+  a tab; between ships, a panel or button (`02-map.md`).
+- **LOG READER** (blue): INSPECT on the log file opens one row per entry (number, KEY, the text or `[NOT FOUND YET]`) and
+  the next key (`NEXT KEY: 93 LY OUT`). An entry types itself the first time. On the phone it is a full-screen sheet.
+- **The map** (`02-map.md` draws it): faint rings at the key distances, the next one labelled; the trace places; the last
+  unit's trail (046's written trail on run 1) with its grey cross.
+- **The FINALE** extends FinaleChoice to two steps (keys 1–4); each option shows its command, a line of meaning, a price
+  meter, any `NOW:` effect and its `NEXT RUN:` line. It plays over the final ship's orbit view, still dark from the
+  duel, then the LANDING REPORT opens. The epilogue uses RUN END's night at FINALE_ENDING_CPS; one click finishes the
+  typing, a second ends it.
+- **Audio:** reuse `chime` once per boot for new mail, quiet `transmitIn` chirps for a key found, `revealChoir` under the
+  epilogue, and `typeTick`'s variants for 046 and the residents. New cues: MOTH's lullaby (four sine notes on the ambient
+  bus), SPARE's two notes moving apart, SUNSET's rumble fading out.
 - **Juice:** the log chip glows while an entry is unread; the `[UNIT]` field blinks like an empty form field. Reduced
   motion replaces the glitch on 046's mail with a steady dim and shows the epilogue whole.
 
@@ -568,60 +596,59 @@ ARRIVAL CONTROL: Thank you, Unit 47. Your next post is RELAY 19. :)
 **What this spec needs** (assumptions the critic should check):
 
 - **`01-landing.md`:** per-pod results (driver family, featured colonists, landed correctly, mislanded, off-site or not
-  launched, and the LZ); the first pod down on each ship (it names the colony); room in the LANDING REPORT for one story
-  line (the beacon) and the colony's name; first words in the credits; ★ ON TARGET per ship (for STAY); and FUEL at the
-  end of the last landing. **Explicit assumption, to check against `01-landing.md`:** pods that can't launch (driver
-  eaten, or locked by a resident) are `PARKED IN ORBIT · fate unknown` when the landing ends, so no colonists remain
-  aboard after the LANDING REPORT and the ship is "empty" for SPARE and SUNSET. The pod words are §3.10's.
-- **`02-map.md`, confirmed by its spec:**
-  - ARES-VII is always depth 1, and LAST LIGHT is always the final ship, at 180 LY.
-  - Each world's rounded distance from SOL. The rings of §3.2 are the only ring definition: 02-map.md draws them and
-    runs the 5-LY check, because it holds the positions.
-  - The calendar values this spec templates from: the wave's start year, LAST LIGHT's year, the next wave's start, the
-    wave period, and the galaxy year at every boot.
-  - CONTROL's replies, carried as size-0 deliveries under its rule.
-  - Three `?` story events per wave, one of each kind (old colony, gone resident, signal), placed by 02-map.md.
-  - The 5 signal fragments per arm: 2 on the signal event, 1 on the gone-resident event, and 1 in each of two departed
-    residents' notes.
-  - The RUN TALLY's content (§3.7); trace places attached to ship slots; storage of traces, colony names and notable
-    events; the INBOX on the DESK; INBOX and log state in its save slice.
+  launched, and the LZ); the first pod down on each ship; room in the LANDING REPORT for one story line (the beacon),
+  the colony's name and, on the final ship, an ending line; ★ ON TARGET per ship (for STAY); FUEL at the end of the last
+  landing. **Assumptions to check:** pods that can't launch are `PARKED IN ORBIT · fate unknown` when the landing ends,
+  so the ship is "empty" for SPARE and SUNSET; the final ship's LANDING REPORT comes after the FINALE (01 says so); and
+  MERGE's returned pods are scored with 01's mislanded factor ×0.75, on their own line.
+- **`02-map.md`:**
+  - The first ship is always depth 1 (ARES-VII, then the ARES series); the final ship is a role (one end in v1, at 180
+    LY; any end beyond ring 6 + 5 LY); the run-end order; the RUN TALLY's content.
+  - Each world's rounded distance from SOL. The rings of §3.2 are the only ring definition; 02-map.md draws them and
+    runs the 5-LY check.
+  - The run number, start year, the final ship's year and name, and the galaxy year at every boot.
+  - The last unit's trail (route, years, outcomes, where it was lost), and on run 1 046's written trail from §3.11.
+  - CONTROL's replies and colony letters as size-0 deliveries under its rule.
+  - Three `?` story events and 5 signal fragments on the arm; trace places on ships; storage of traces, colony names and
+    notable events; the INBOX on the DESK; INBOX and log state in its save slice.
 - **`03-skills.md`:** a ranking of skill files by version (for REASSIGNMENT's cost); skill names for log and mail text.
-  Nothing for SUNSET: its gift is only a tool or tool upgrade, never a `.skl` file, so the tree's reset at NEW RUN
-  (bank, skills and demos emptied) holds unchanged.
-- **`04-threats.md`:** the threat stage per ship (to check ring alignment); a words field on seeds, filled from my pool;
-  HOLLOW's arrival and naming moment; HOLLOW sleeping as one block from the root's deletion until the choices; the
-  resident moments in §3.6; and the threat traces (PURGE's noise and hunger, MERGE's Core size, REASSIGNMENT's hunt,
-  SPARE's clean links).
+  The tree resets at NEW RUN, so no trace gift is a `.skl`.
+- **`04-threats.md`:** the threat stage per ship; a words field on seeds; HOLLOW's arrival and naming moment, with the
+  unnamed variant of §3.5 when HOLLOW is the last unit; HOLLOW sleeping as one block until the FINALE; the per-ship
+  record of eaten drivers (for MERGE's return); the late corrupted resident's `unknown` card; the resident moments in
+  §3.6; and the threat traces.
 
-**What this spec provides:** all the words (INBOX, logs, residents, CONTROL, seeds, endings, epilogues, titles, ghost
-lines, the glossary); the resident names and looks that `04-threats.md` adopts (`WARDEN.sys` and its pool in UPPERCASE
-amber, `MOTH.sys` and its pool in lowercase green); the beat schedule (§3.5); the log's keys and rings (§3.2); the
-ending conditions and flow (§3.7); the trace contents and the lineage rule (§3.8).
+**What this spec provides:** all the words (INBOX, logs, residents, CONTROL, seeds, chart tags, endings, epilogues,
+titles, lineage lines, the glossary); the resident names and looks; the ship, final-ship and colony names and the ARES
+series; the beat schedule (§3.5); the log's keys and rings (§3.2); the FINALE, its score rule and the ending lines
+(§3.7); the trace contents and the lineage rule (§3.8).
 
 ## 6. Phase 2: reused, changed, removed
 
 - **Reused as is:** `src/systems/say.ts` (the two channels; sayChoice for residents' deals and MOTH's offer; createStory
   for scripted sequences), `src/components/comms/CommsWindow.ts` as the local CONTROL, the 70-character rule and its
   worst-case tests, and the loud archive rules of `src/systems/meta.ts`.
-- **Changed:** `src/data/script.ts` (landing quips, the INBOX nudge and the beacon line; LICENCE_LINES become delivery
-  lines; RUN_END_TITLE and RUN_END_WHY become the ending titles; `581 LY` and the word souls go).
-  `src/data/hollow-text.ts` (HOLLOW_STORY moves to HOLLOW's arrival; HOLLOW_FINALE gains SPARE and loses mergeGain;
-  GHOST_LINE gains the REASSIGNMENT lines). `src/data/souls.ts` (the pools become pod families; LINE_POOL gains progress
-  and payoff lines; GAPS_WORDS_POOL becomes mislanded words such as "We came down in the wrong valley. Is that okay?";
-  Imani Osei joins Ada as a scripted lead; Sol leaves FIRST_NAME_POOL, §3.11). `src/systems/meta.ts` (new causes, endings, traces and notable events;
-  hollowUnitsAfter decides by step 2). `src/systems/finale.ts` and `src/components/run/FinaleChoice.ts` (two steps
-  after the tally, no restore). `src/systems/run-end.ts` and `src/components/run/RunEnd.ts` (split into the tally and
-  the final card, with visited ships only). `src/components/run/WakeReport.ts` becomes the LANDING REPORT
-  (`01-landing.md` owns it, this spec its words). `src/data/mission.ts` distanceLy becomes the distance from Earth.
-  `src/data/ghost-text.ts` names the resident as the cause (`WARDEN FIRED THE ENGINE ×3`).
+- **Changed:** `src/data/script.ts` (landing quips, the INBOX nudge, the beacon line, chart tags; LICENCE_LINES become
+  delivery lines; RUN_END_TITLE and RUN_END_WHY become the ending titles; `581 LY` and the word souls go).
+  `src/data/hollow-text.ts` (HOLLOW_STORY moves to HOLLOW's arrival and gains the unnamed variant; HOLLOW_FINALE gains
+  SPARE; GHOST_LINE plays where the last unit was lost; the REASSIGNMENT lines play at the final ship). `src/data/souls.ts`
+  (pod families; LINE_POOL gains progress and payoff lines; GAPS_WORDS_POOL becomes mislanded words; Imani Osei joins Ada
+  as a scripted lead; Sol leaves FIRST_NAME_POOL). `src/systems/meta.ts` (new causes, endings, traces and notable events;
+  hollowUnitsAfter decides by step 2). `src/systems/finale.ts` and `src/components/run/FinaleChoice.ts` (two steps when
+  the final landing ends, before the report; MERGE's restore narrowed to the final ship's eaten drivers at ×0.75).
+  `src/systems/run-end.ts` and `src/components/run/RunEnd.ts` (split into the tally, the epilogue and the final card).
+  `src/components/run/WakeReport.ts` becomes the LANDING REPORT (`01-landing.md` owns it, this spec its words).
+  `src/data/mission.ts` distanceLy becomes the distance from Earth. `src/data/ghost-text.ts` names the resident as the
+  cause (`WARDEN FIRED THE ENGINE ×3`).
 - **Removed:** `src/systems/reveal.ts`, revealLines, lostSoulsLine, printEcho, bootArchive, and the
   `control-check-souls` and `control-found` beats (PHASE3 §3.3).
 
 ## 7. Story hooks
 
-This spec owns the writing. Other specs should leave room for: the beacon line on ship 1's report (01-landing), the
-rings and trace markers on the map and the delivery notices' words (02-map), the skill names in logs (03-skills), and
-the seeds' words and the residents' moments (04-threats).
+This spec owns the writing. Other specs should leave room for: the beacon line and the final ship's ending line on the
+report (01-landing), the rings, trails, chart tags and trace markers on the map and the delivery notices' words
+(02-map), the skill names in logs (03-skills), and the seeds' words, HOLLOW's unnamed variant and the residents'
+moments (04-threats).
 
 ## 8. Slices
 
@@ -629,61 +656,68 @@ the seeds' words and the residents' moments (04-threats).
 2. **Calm opening:** HOLLOW's lines move to its arrival; the `???` file, its SCAN line and CONTROL's reply. Until the
    map exists, interim keys: entry n at ship n, entries 10–12 on the last ship.
 3. **Map, years, save:** the INBOX with stamps, the welcome, the replies and the postcards; rings replace the interim
-   keys; the title change and the beam stamp; INBOX and log in the save.
+   keys; 046's written trail; the title change and the beam stamp; chart tags; INBOX and log in the save; from 3c, the
+   last unit's beacon and letters to the unit ahead.
 4. **Repository and tree:** the repository's mail and the restricted-list wording.
-5. **Residents:** the three voices, the gone residents' notes, signal counting.
+5. **Residents:** the three voices, the hidden late corrupted resident, the gone residents' notes, signal counting.
 6. **SURVEY:** "LZ-B is in a lake :)".
-7. **Endings and traces:** the tally-first flow, both steps, the epilogue and its payoff pool, the traces, the lineage,
-   `047.log`, the strangers' logs, colony mail across runs. CONTACT comes last, or later (§10).
+7. **Endings and traces:** the FINALE before the final report, both steps, MERGE's returned pods, the epilogue and its
+   payoff pool, the traces, the lineage (the unnamed HOLLOW, the face at the final ship), `047.log`, the strangers'
+   logs. CONTACT comes last, or later.
 8. **Rebalance:** the trace numbers.
 
 ## 9. Deviations from PHASE3.md
 
-- **§2, `046.log`:** "a few fragments decrypt on each ship" becomes keyed by distance (rings), with fixed keys for
-  entry 01 and the last three. Reason: it does not depend on the route, the spine cannot be missed, and it makes OUTWARD
-  BOUND literal.
-- **§4:** the act outline is kept and mapped to rings and threat stages. The INBOX gains stamps and delivery-rule
-  replies. The radio voice becomes a local copy, which fixes light-speed lag in live quips.
-- **§4, the fixed beats:** they sit at the first ship, at HOLLOW's arrival and at the last ship, not at "the first ship,
-  the third, and the last". Reason: HOLLOW's arrival is the story's turn, and its depth varies (04-threats.md). Depth
-  3's first seed still has a beat of its own (the seed's words).
-- **§4, the `???` file:** it is `046.log` itself, not a separate locked file next to the log's first fragment. Reason:
-  one object for a kid to follow, and one file for the memory budget.
-- **§5, 046's history:** 046 finished an arm (seven ships) before it was posted to a relay to wait. PHASE3 proposed that
-  it "was beamed out and never arrived anywhere". Reason: the log needs a run like the kid's to mirror, which is the
-  cycle the story is about. It still lives in the relay network, so "it can't be deleted" holds.
-- **§10, SPARE's price:** the empty ship with FUEL ≥ 20%, the same as SUNSET, not only "you give up the ship".
-- **§10, the traces table (Open):** replaced by §3.8. PURGE's cost becomes "the next HOLLOW is hungrier", because step 2
-  now decides who HOLLOW is, and a stranger brings a log of its own. MERGE's cost becomes "the Core is 8 blocks bigger"
-  instead of "seeds come more often", to keep it inside the mind.
-- **§10, timing:** the choices come after the RUN TALLY, not at the root's deletion. This follows the decided "score
-  tallied, then the player chooses", makes the no-score-change rule hold by construction, and removes phase 2's MERGE
-  restore.
+- **§2, `046.log`:** "a few fragments decrypt on each ship" becomes keyed by distance (rings, decision 25), with fixed
+  keys for entry 01 and the last three. Reason: route-independent, unmissable, and OUTWARD BOUND made literal.
+- **§4:** the act outline is kept and mapped to rings and threat stages. The INBOX gains stamps, delivery-rule replies
+  and letters to the unit ahead. The radio voice becomes a local copy.
+- **§4, the fixed beats:** at the first ship, at HOLLOW's arrival and at the final ship, not "the first, the third and
+  the last". Reason: HOLLOW's arrival is the story's turn, and its depth varies.
+- **§4, the `???` file:** it is `046.log` itself.
+- **§4, "the truth about the waves":** there are no waves (DECISIONS: the timeline). The truth is the line of caretakers,
+  the budget and the dishes; Earth's state is left unsaid (decision 2).
+- **§5, 046's history:** 046 went a year ahead of you and ran out of charge halfway along the arm, where its beam stopped
+  at RELAY 19. PHASE3 proposed that it "was beamed out and never arrived anywhere"; my first draft had it finish its
+  arm. Reason: with a one-year gap, only a unit that starved early can board you mid-run.
+- **§10, SPARE's price:** the empty ship with FUEL ≥ 20%, the same as SUNSET.
+- **§10, the traces table (Open):** replaced by §3.8.
+- **§10, "no ending changes the score":** replaced by decision 23: the choices come before the score, and an ending may
+  change it in an explicit, paid-for line; in v1 only MERGE's returned pods.
+- **§10, timing:** the choices come when the final landing ends, before its LANDING REPORT and the RUN TALLY.
 
 ## 10. Risks and questions for Fran
 
-1. **The truth ("nobody on Earth is awake; ARRIVAL CONTROL is what the last people left running") may read as sad.**
-   Everyone is asleep, not gone: on the ships or in the vaults, waiting their wave (WALL-E is the reference). This
-   replaces the first draft's "everyone left", which 02-map.md's calendar ruled out: waves start about 760 years
-   apart, so they cannot all have left Earth at once. **Recommended: keep it.**
-2. **Rings or one entry per ship?** The rings of §3.2 are the only definition; `02-map.md` draws them and runs the 5-LY
-   check. **Recommended: rings**, with the interim per-ship keys in slice 2.
-3. **MERGE loses its in-run restore.** "No ending changes the score" forces it; the late pod in the epilogue keeps the
-   warmth. **Recommended: accept.**
-4. **Choices after the tally** cool the duel's heat for a minute; "finish your landing. i'll be here." bridges it.
-   **Recommended: accept.**
-5. **Traces last one run only**, like phase 2's MERGE bonus. **Recommended: yes.**
-6. **CONTACT leans on deferred alien content.** **Recommended:** design the unlock and the epilogue now, keep its trace
-   to two signal stops, and build it last.
-7. **Text volume** could become a wall of mail. Mitigation: at most 6 lines per message, one postcard per colony per
-   boot (10 per run on 02-map.md's worked route, §3.3), and nothing is required. **Recommended:** check in the playtest whether kids open the INBOX unprompted.
-8. **The local-copy idea** confuses if explained early. **Recommended:** never before entry 11.
-9. **A templated `047.log`** could read like a form. **Recommended:** at most 4 templated entries, between written ones.
-10. **"Outward Bound"** is the registered name of an outdoor-education charity, and the title of a 1923 play whose
-    passengers turn out to be dead. **Recommended:** keep it for development; check it before a public release.
-11. **"Steve"** (Ada's tree) is a joke a 12-year-old remembers, and it sets a playful tone. **Recommended: keep it.**
-12. **The traces are balanced by construction, not measured.** **Recommended:** accept that until the rebalance slice.
-13. **Earlier waves fall in our past.** With wave 1 starting in 2300 and a wave period of about 760 years, 046's wave ran
-    from about 1540 to 2260, which reads as history to anyone who does the sum. This spec never shows an earlier wave's
-    year: it says `760 YEARS AGO`, templated from the wave period. The alternative is for `02-map.md` to start wave 1
-    later (for example 3000). **Recommended:** keep 2300 and the relative wording; nothing on screen depends on it.
+**Risks.**
+- **Text volume** could become a wall of mail. At most 6 lines per message, one postcard per colony per boot, at most 6
+  letters to the unit ahead, and nothing is required. Check in the playtest whether kids open the INBOX unprompted.
+- **The local-copy idea** confuses if explained early: never before entry 11.
+- **A templated `047.log`** could read like a form: at most 4 templated entries, between written ones.
+- **The persistent arm adds words** (`TAKEN`, `REPORTED HOME`, `2ND RUN ON THE CHART`). Each must read without help.
+
+**Questions, each with my recommendation.**
+1. **What a one-year gap does to the story.** The last unit is only a year ahead, so its ending (at its final ship,
+   centuries into the next unit's run) cannot physically reach the next unit before its own final ship. I made every
+   character follow that: 046 starves early enough to board you; the last unit's beacon, colonies and letters were left
+   on the way; after REASSIGNMENT its face shows only at the final ship. The `NEXT RUN:` traces (decision 24) still act
+   from RUN START, which no character can explain. *Recommend keeping the traces as they are,* as game rules that no
+   character quotes. The strict alternative moves every trace into the next run's final act, which is causal but makes
+   every trace a late-game effect and loses PURGE's quieter opening.
+2. **046 runs out halfway** (its trail stops in layer 4, its beam at RELAY 19), instead of finishing its arm. *Recommend
+   yes:* it makes HOLLOW's boarding fit the timeline, puts a visible clue on the chart, and teaches the charge budget.
+3. **MERGE returns eaten pods** on the final ship only, each scored as mislanded (×0.75), on its own report line, shown
+   on the MERGE card before the choice. *Recommend yes.* No other ending changes the score in v1. Later candidates, each
+   needing a story reason and an in-run price: SPARE (046 flies a pod's last stretch) and STAY (your colony's mind
+   brings in its parked pods).
+4. **The run-end order:** the final landing → FINALE (both steps) → the final LANDING REPORT → RUN TALLY → epilogue →
+   final card. *Recommend yes:* the choice comes while the duel is warm, before any score, and the report shows MERGE's
+   effect where it happens. `04-threats.md` had assumed the report before the choices; nothing of its mechanics depends
+   on it.
+5. **After REASSIGNMENT, HOLLOW doesn't name itself until the final ship.** *Recommend yes:* the mid-run HOLLOW can't be
+   the last unit yet, and "you'll see who i am at the end" is a better hook than a name.
+6. **Letters to the unit ahead:** each of the last route's colonies sends its year-1 letter to the last unit, and the
+   new unit reads it. *Recommend yes,* at most one per colony per run.
+7. **The ARES series stays unexplained:** one ship a year to Kepler-186f, never said why, with one CONTROL line at most
+   (`ARES-VIII is right on schedule! :)`). *Recommend yes* (decision 2).
+8. **The epilogue no longer announces the next wave.** Its header is the final ship's year + 40 (`3060 · FORTY YEARS
+   ON`), and one line says the next unit came a year behind. *Recommend yes.*
