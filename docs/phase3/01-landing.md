@@ -475,7 +475,7 @@ memory, so some are tight for the unit.
   and MOVEs (phase 2's calm-rack margin).
 - **The receiver (E, and F on all but TIGHT ships):** where the unit lands. It holds 05's locked 2-block `046.log`,
   03's skills (up to 34 blocks), 04's beam seeds (7 blocks each: GAP 1, seed 2, WALL 4; 0–3 per beam) and the charge.
-  05's MERGE trace makes the Core 8 blocks bigger next run.
+  No next-run trace changes the unit's own files (05's MERGE trace acts at the next run's final ship).
 
 **The classes.** Memory comes in whole racks of 64. Racks keep their names on every ship, so rack E is always you.
 
@@ -513,16 +513,16 @@ Why:
 Only a block longer than the receiver is right-aligned to the end of memory, its start moving back into the tail, so
 the Core stays at rack E's start on almost every ship, as today. Nothing throws, and no file is ever dropped at the boot.
 
-**The PACKET screen checks the room before the beam.** The packet must fit the link (files plus charge, phase 2) and
-the destination's room: **files + the floor ≤ room**, that is files ≤ 140 on FULL and COMPACT ships and files ≤ 88 on
-TIGHT ones. TRANSMIT ▸ waits until enough files are left behind or sent on, as it does for the link. Hitchhikers ride
-free (round 2, Q20): HOLLOW's root, beam seeds and seeds on deliveries cost no link room; the root lands in the root
-slot and takes no receiver room, and seeds take receiver room only on arrival. The locked files (46 with `046.log`, 54
-after MERGE) fit every class. The charge preview names the loss before it happens: `CHARGE 38 → 12 ON ARRIVAL · 26
-WON'T FIT`, and on a noisy link `SEEDS TAKE ROOM FROM YOUR CHARGE`. **Arriving with 0 charge is never a surprise:** the
-card's fit line says `NO CHARGE ARRIVES`, the PACKET's charge line reads `→ 0 ON ARRIVAL` in red with `buzz`, ARRIVAL
-CONTROL says "Travelling light! Very light. :)", and TRANSMIT ▸ asks the v2 inline confirm `ARRIVE WITH NO REPAIR
-CHARGE?` (Enter confirms). On a noisy link the line gives the range: `CHARGE → 0–4 · SEEDS FIRST`.
+**The PACKET screen checks the room before the beam.** The packet must fit the link (files plus charge, phase 2) and the
+destination's room: **files + the floor ≤ room**, that is files ≤ 140 on FULL and COMPACT ships and files ≤ 88 on TIGHT
+ones. TRANSMIT ▸ waits until enough files are left behind or sent on, as it does for the link. Hitchhikers ride free
+(round 2, Q20): HOLLOW's root, beam seeds and seeds on deliveries cost no link room; the root lands in the root slot and
+takes no receiver room, and seeds take receiver room only on arrival. The locked files (46 with `046.log`) fit every
+class. The charge preview names the loss before it happens: `CHARGE 38 → 12 ON ARRIVAL · 26 WON'T FIT`, and on a noisy
+link `SEEDS TAKE ROOM FROM YOUR CHARGE`. **Arriving with 0 charge is never a surprise:** the card's fit line says `NO
+CHARGE ARRIVES`, the PACKET's charge line reads `→ 0 ON ARRIVAL` in red with `buzz`, ARRIVAL CONTROL says "Travelling
+light! Very light. :)", and TRANSMIT ▸ asks the v2 inline confirm `ARRIVE WITH NO REPAIR CHARGE?` (Enter confirms). On a
+noisy link the line gives the range: `CHARGE → 0–4 · SEEDS FIRST`.
 
 **Why TIGHT is viable early and painful late.** The rooms are fixed; the unit grows:
 
@@ -541,7 +541,7 @@ on the PACKET's room bar. At the boot the TERMINAL types `> RECEIVER: 1 RACK · 
 `> REPAIR CHARGE 0 · NO ROOM ON WAYFARER`.
 
 **FULL and COMPACT, the worst case on 02's longest link (123 blocks):** files are bounded by the link (a full kit is
-114 with `046.log`, a MERGE run's 122). A FIREWALL that SENTRY compiles at boot adds 2 (only while fewer than two are
+114 with `046.log`). A FIREWALL that SENTRY compiles at boot adds 2 (only while fewer than two are
 owned) and the floor 12: 137 blocks, 9 into the tail. Seeds then have 15 blocks, so two fit behind their targets and a
 third lands by 04's no-room rule; charge above the floor fills the rest or is lost loudly. Files, a FIREWALL and the
 floor fit any link up to 138, so 02's links (82–123) and its 131-block bound are inside. A normal mid-run unit (about
@@ -694,12 +694,12 @@ REPORT. They score by the normal rules (§3.9); there is no flat bonus. This spe
   no-go, restored, parked (with why) and not launched; points, stars, and FUEL at the end. Ranks are 02's. The card's
   `NO CHARGE ARRIVES` and the PACKET's 0-charge confirm (§3.16). THE LAST LANDING sits inside 02 §4's order, between
   the FINALE and the final LANDING REPORT, as the report's lead-in (§3.17).
-- **To 03:** the hooks, and the result's points, landed-correct count and stars. **For memory:** the room is 152 blocks
-  on FULL and COMPACT ships with the 12-block floor, and 88 on TIGHT ones with no floor, so files may take all 88 and
-  the charge may be 0; hitchhikers (the root, seeds) cost no link room; the locked 46 (54 after MERGE) fit every
-  class. 03 may assume only the link binds on FULL and COMPACT ships. **For MERGE:** AUTODROP flies the restored
-  pods through §3.14's hook at its graded version, and its absence means the blind drop (§3.17); 03 says what each
-  version does there (v1 with its key held for it).
+- **To 03:** the hooks, and the result's points, landed-correct count and stars. **For memory:** the room is 152
+  blocks on FULL and COMPACT ships with the 12-block floor, and 88 on TIGHT ones with no floor, so files may take all 88
+  and the charge may be 0; hitchhikers (the root, seeds) cost no link room; the locked 46 fit every class. 03 may assume
+  only the link binds on FULL and COMPACT ships. **For MERGE:** AUTODROP flies the restored pods through §3.14's hook at
+  its graded version, and its absence means the blind drop (§3.17); 03 says what each version does there (v1 with its
+  key held for it).
 - **To 04:** the driver segment, its bands and their effects (§3.8), the Nav Plotter and Sensor Interp factors on the
   drop (so every non-fatal hit on them costs landing quality), the rule that launch removes a driver from memory, the
   `BAY`/`NEXT` membership, the "actively landing" condition, the root slot with the lead family at GAP 1 in every
