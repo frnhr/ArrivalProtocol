@@ -194,7 +194,8 @@ for (const { name, where } of PLANTS) {
   let counted = 0;
   let longest = 0;
   let mostBursts = 0;
-  const seeds = byDepth(3, 8);
+  // Quick depth (tests/unit/depth.ts): 2 seeds a loop (each flies the SKIP and its ×25 reference); full: 8.
+  const seeds = byDepth(2, 8);
   for (let seed = 1; seed <= seeds; seed++) {
     plant(seed, where);
     pastFirstBurst();

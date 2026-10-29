@@ -31,12 +31,18 @@ import { MERGE_COST_CHARGE } from '@data/tuning';
 import type { RunRecord, PlayerId } from './playthrough';
 import { byDepth, FULL } from '../depth';
 
-// Quick depth (tests/unit/depth.ts, npm test): one seed per kid, so the kids' code is flown end to end and every run
-// must end. Full depth (npm run balance): the 200 seeds. The design's targets print INFO at either depth (slice 1a)
-// and are checked only with PT_STRICT=1.
+// Quick depth (tests/unit/depth.ts, npm test): one seed of the COMPETENT kid, so a whole run is flown end to end and must
+// end. SLOPPY and LITERAL fly at full depth only (npm run balance: the 200 seeds of all three kids): on one seed each
+// took 35 s of CPU in its own process (slice 1a, both kids wait out the landing until HOLLOW eats the Core), more than
+// the unit tier's per-suite share, for a check COMPETENT's run already makes (the run ends). PT_PLAYERS brings them
+// back in quick mode. The design's targets print INFO at either depth (slice 1a) and are checked only with PT_STRICT=1.
 const SEEDS = Number(process.env.PT_SEEDS ?? byDepth(1, 200));
 const WORKERS = Number(process.env.PT_WORKERS ?? 4);
-const PLAYERS = (process.env.PT_PLAYERS ?? 'COMPETENT,SLOPPY,LITERAL').split(',') as PlayerId[];
+const ALL_PLAYERS: readonly PlayerId[] = ['COMPETENT', 'SLOPPY', 'LITERAL'];
+const PLAYERS = (process.env.PT_PLAYERS ?? byDepth('COMPETENT', ALL_PLAYERS.join(','))).split(',') as PlayerId[];
+for (const player of ALL_PLAYERS.filter((candidate) => !PLAYERS.includes(candidate))) {
+  console.log(`SKIP  ${player}: every run ends  — full depth only (npm run balance), or PT_PLAYERS=${ALL_PLAYERS.join(',')}`);
+}
 // WP12 fix round 1: a scratch folder by default, so a suite run never overwrites the records PROGRESS.md cites (part 1's
 // in results-part1/, part 3's in p3/results/, the fix round's in fix1/results/: each written with PT_OUT).
 const OUT = process.env.PT_OUT ?? 'tests/.out/playthrough';

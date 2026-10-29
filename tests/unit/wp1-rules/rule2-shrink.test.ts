@@ -24,6 +24,7 @@ import {
   SKIP_DIVISOR, SKIP_RAMP_SEC, SKIP_EASE_OUT_SEC,
 } from '@data/tuning';
 import { text, stepUntil, idle, placeOrbit, releaseAtCapture, captureOffRing, obey, ignoredAtCapture, type ObeyLog } from './flows';
+import { byDepth } from '../depth';
 
 const harness = createHarness(1);
 const state = () => harness.store.getState();
@@ -144,9 +145,11 @@ const windowStart = harness.wall();
 stepUntil(harness, () => text(harness) !== 'HOLD [SPACE] NOW', 120);
 const oneBurnWindowSec = harness.wall() - windowStart;
 const oneBurnIgnoreSec = Math.min(45, Math.floor(0.75 * oneBurnWindowSec));
-for (const ignoreSec of [oneBurnIgnoreSec, 60, 90, 120, 240]) {
-  releaseAtCapture(harness);
-  idle(harness, ignoreSec);
+// Quick depth (tests/unit/depth.ts): every ignore but 90 s (inside the 60–120 s span, which flies the ring-edge rows at
+// both ends). Each capture is flown once per process and restored (flows.ts ignoredAtCapture): 60 s serves the later
+// scenarios too.
+for (const ignoreSec of byDepth([oneBurnIgnoreSec, 60, 120, 240], [oneBurnIgnoreSec, 60, 90, 120, 240])) {
+  ignoredAtCapture(harness, ignoreSec);
   const lineAfterIgnoring = text(harness);
   const paceAfterIgnoring = harness.pace();
   const skipReason = skipBlockReason(state(), getPrediction());
@@ -246,7 +249,8 @@ for (const overHoldSec of [0.5, 1, 2, 3]) {
   const waitTrimPct = computePrediction({ ...state(), burn: { ...state().burn, fuelPct: 0.5 } }).neededPct;
   const results: string[] = [];
   let bad = '';
-  for (const overTrim of [-10, -4, -1, 1, 3, 5, 7, 10, 14, 19]) {
+  // Quick depth: both sides of the trim close in and far out, and a point inside (the full grid steps 2–5 points).
+  for (const overTrim of byDepth([-10, -1, 1, 5, 10, 19], [-10, -4, -1, 1, 3, 5, 7, 10, 14, 19])) {
     const fuelPct = Number((waitTrimPct + overTrim).toFixed(1));
     if (fuelPct > 100) continue;
     ignored60();
@@ -300,7 +304,8 @@ for (const overHoldSec of [0.5, 1, 2, 3]) {
 {
   const results: string[] = [];
   let bad = '';
-  for (const lowestKm of [3450, 3600, 3800, 3950, 4050, 4100, 4300]) {
+  // Quick depth: the band's foot (3,450, where no RETRO may keep the margin), two points inside and its top.
+  for (const lowestKm of byDepth([3450, 3800, 4100, 4300], [3450, 3600, 3800, 3950, 4050, 4100, 4300])) {
     captureOffRing(harness, lowestKm);
     stepUntil(harness, () => /HOLD \[SPACE\] NOW/.test(text(harness)), 120);
     harness.keyDown('Space');
@@ -472,7 +477,9 @@ const sweetLo = sweetZone(ring).lo;
   let violation = '';
   let longest = '';
   const stepTac = SIM_SUBSTEP_MAX_SEC / tacticalWarp;
-  for (let i = 0; i < 3000 && !violation; i++) {
+  // Quick depth: 1,500 random loops (about 250 of them shrink), full depth 3,000.
+  const samples = byDepth(1500, 3000);
+  for (let i = 0; i < samples && !violation; i++) {
     harness.reset();
     // LEAD-2: from the ship's own ring (ship 1: ▼ up to 9,500 km, ▲ from 9,100 km).
     const rp = planet.R + 10 + rng() * (ring.max + 500 - planet.R - 10);
@@ -510,7 +517,7 @@ const sweetLo = sweetZone(ring).lo;
     violation = `rp ${rp.toFixed(0)} ra ${ra.toFixed(0)} nu ${nu.toFixed(2)}: "${objectiveText}" (margin ${retro.marginTac.toFixed(1)} s)`;
   }
   check('target: with a full tank, every long WAIT on the early climb of a too-big loop became SHRINK (bar the margin and the reaction time)',
-    violation === '' && shrinks > 500,
+    violation === '' && shrinks > samples / 6,
     violation || `${shrinks} shrinks; ${longWaits} long WAITs: ${marginBlocked} where the over-hold margin forbids any shrink, `
     + `${reactionBlocked} small loops within the reaction time of the ring's edge (LEAD-1), the rest late in the climb`);
   check(`target: shrink lines fit the strip (≤ ${MAX_LINE_CHARS})`, longest.length <= MAX_LINE_CHARS, `longest ${longest.length}: "${longest}"`);

@@ -16,10 +16,12 @@ import { getPrediction } from '@systems/predict';
 import { integrateStep } from '@systems/orbit-sim';
 import { paceLabel, countdownChip } from '@systems/flight-hud';
 import { propagateConic, stateFromElements, elementsFromState } from '@/types/orbit';
-import { releaseAtCapture, captureOffRing, idle, obey, text, stepUntil, longWait as sharedLongWait } from '../wp1-rules/flows';
+import { releaseAtCapture, captureOffRing, idle, obey, text, stepUntil, flyOnce, longWait as sharedLongWait } from '../wp1-rules/flows';
 import { fullOnly } from '../depth';
 import { resumeHeldThrottle } from '@systems/flight-controls';
-import { pressAutoburn } from '@systems/autoburn';
+import { pressAutoburn, autoburnRefusal } from '@systems/autoburn';
+import { asksToHoldSpace } from '@systems/guidance';
+import { AUTOBURN_REFUSAL } from '@data/skill-text';
 import { on } from '@systems/events';
 import { SKIP_DIVISOR, SKIP_RAMP_SEC, SKIP_EASE_OUT_SEC, SKIP_END_LEAD_TAC } from '@data/tuning';
 
@@ -180,12 +182,15 @@ fullOnly(`${ship}: SHRINK ignored for an hour (LEAD-1 deviation 1)`, () => {
   const rows: string[] = [];
   let bad = '';
   for (const fuelPct of [44, 45, 46]) {
-    captureOffRing(harness, 4300);
-    stepUntil(harness, () => /HOLD \[SPACE\] NOW/.test(text(harness)), 120);
-    harness.keyDown('Space');
-    stepUntil(harness, () => getPrediction().outcome === 'closed', 60);
-    harness.keyUp('Space');
-    idle(harness, 120);
+    // The rows differ only in the FUEL set after the ignore: the capture and the ignore are flown once (flows.ts flyOnce).
+    flyOnce(harness, 'off the ring 4,300 km, ignored 120 s', () => {
+      captureOffRing(harness, 4300);
+      stepUntil(harness, () => /HOLD \[SPACE\] NOW/.test(text(harness)), 120);
+      harness.keyDown('Space');
+      stepUntil(harness, () => getPrediction().outcome === 'closed', 60);
+      harness.keyUp('Space');
+      idle(harness, 120);
+    });
     harness.store.mutate((d) => { d.burn.fuelPct = Math.min(d.burn.fuelPct, fuelPct); });
     for (let i = 0; i < 4; i++) harness.step();
     const flown = flyObeying(400);
@@ -211,6 +216,9 @@ fullOnly(`${ship}: SHRINK ignored for an hour (LEAD-1 deviation 1)`, () => {
     idle(harness, intoSkipSec);
     const farKm = Math.hypot(state().orbit.x, state().orbit.y);
     const skipping = state().clock.skipWarp !== null;
+    // The line under the SKIP does not ask for SPACE (skip-press's round-3 rule burns only under one that does).
+    const objective = harness.objective();
+    const asked = objective !== null && asksToHoldSpace(objective);
     const fuelBefore = state().burn.fuelPct;
     harness.keyDown('Space');
     harness.step();
@@ -225,16 +233,17 @@ fullOnly(`${ship}: SHRINK ignored for an hour (LEAD-1 deviation 1)`, () => {
     const freshFires = state().burn.firing;
     harness.keyUp('Space');
     const flown = flyObeying(400);
-    const row = `${intoSkipSec} s into the SKIP at ${(farKm / 1e6).toFixed(2)}M km: stopped ${stopped}, FUEL ${fuelBefore.toFixed(1)} → `
+    const row = `${intoSkipSec} s into the SKIP at ${(farKm / 1e6).toFixed(2)}M km: asks SPACE ${asked}, stopped ${stopped}, FUEL ${fuelBefore.toFixed(1)} → `
       + `${fuelHeld.toFixed(1)}% after 2 s held, "${lineHeld.replace(/\d+:\d+/, 'm:ss')}", fresh press fires ${freshFires}; `
       + `then ${harness.status()}, longest SKIP ${flown.longestSkipSec.toFixed(1)} s`;
     rows.push(row);
-    const ok = skipping && stopped && fuelHeld === fuelBefore && !firedWhileHeld && /^WAIT — .* · \[F\] SKIP$/.test(lineHeld)
+    const ok = skipping && !asked && stopped && fuelHeld === fuelBefore && !firedWhileHeld && /^WAIT — .* · \[F\] SKIP$/.test(lineHeld)
       && freshFires && ['locked', 'accepted'].includes(harness.status()) && flown.longestSkipSec <= FEW_SKIP_SEC;
     if (!ok) bad ||= row;
   }
-  check(`${ship}: SPACE pressed and held during the long SKIP, far out: the SKIP stops, nothing burns, the strip shows its WAIT; `
-    + 'a fresh press burns; obeyed, the flight locks or is accepted', bad === '', bad || rows.join(' | '));
+  // (tests/unit/lead2/fix3/skip-press.test.ts's check 3, flown here: this suite has the long WAIT already.)
+  check(`${ship}: SPACE pressed and held during the long SKIP, far out, under a line that does not ask for it: the SKIP stops, `
+    + 'nothing burns, the strip shows its WAIT; a fresh press burns; obeyed, the flight locks or is accepted', bad === '', bad || rows.join(' | '));
 }
 {
   // From the MIND: SPACE is refused there (the ship's controls are on the ship), so the SKIP runs on; back on the ship
@@ -260,17 +269,22 @@ fullOnly(`${ship}: SHRINK ignored for an hour (LEAD-1 deviation 1)`, () => {
   harness.press('KeyF');
   harness.step();
   const skippingAgain = state().clock.skipWarp !== null;
+  // [B] is refused for AUTOBURN's own reason (this unit's, never SKIPPING), and pressAutoburn returns that refusal
+  // (tests/unit/lead2/fix3/skip-press.test.ts's check 4, flown here beside the long WAIT).
+  const refusal = autoburnRefusal(state(), getPrediction());
   const refusals: string[] = [];
   const offRefused = on('refused', (payload) => { refusals.push(payload.reason); });
-  pressAutoburn(harness.store);
+  const returned = pressAutoburn(harness.store);
   offRefused();
   harness.step();
   check(`${ship}: SPACE from the MIND is refused and the SKIP runs on; back on the ship the held SPACE stops it without burning; `
-    + '[B] that AUTOBURN refuses here buzzes and the SKIP runs on',
+    + '[B] that AUTOBURN refuses here for its own reason buzzes that reason and the SKIP runs on',
     skippingInMind && stoppedOnShip && quiet && skippingAgain && state().clock.skipWarp !== null
-    && state().burn.auto.phase === 'idle' && refusals.length === 1,
+    && state().burn.auto.phase === 'idle' && refusals.length === 1
+    && refusal !== null && refusal !== AUTOBURN_REFUSAL.skipping && returned === refusal,
     `in the MIND skipping ${skippingInMind}; on the ship stopped ${stoppedOnShip}, quiet ${quiet}; F again ${skippingAgain}; `
-    + `[B]: skipWarp ${state().clock.skipWarp}, AUTOBURN ${state().burn.auto.phase}, refusals ${JSON.stringify(refusals)}`);
+    + `[B]: refusal ${refusal}, returned ${returned}, skipWarp ${state().clock.skipWarp}, AUTOBURN ${state().burn.auto.phase}, `
+    + `refusals ${JSON.stringify(refusals)}`);
 }
 
 finish();

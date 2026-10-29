@@ -133,7 +133,8 @@ for (const fuelPct of [31.5, 32]) {
 // --- From about 32.5%: the shrink, sized to the spare FUEL; every kid locks --------------------------------------
 // LEAD-2: its WAIT used to be bounded by SHRINK_LOCK_WAIT_MAX_TAC / SHRINK_RESERVE_WAIT_TAC tactical s; what matters
 // now is that its SKIP takes a few seconds.
-for (const fuelPct of [32.5, 34, 36, 40]) {
+// Quick depth (tests/unit/depth.ts): the band's foot, a point inside it and its top; 34% flies again below (held late).
+for (const fuelPct of byDepth([32.5, 36, 40], [32.5, 34, 36, 40])) {
   const runs = (['obey', 0.3, 0.5] as const).map((kid) => fly(fuelPct, 60, kid));
   check(`${fuelPct}%: SHRINK THE LOOP; obeyed instantly or at a 0.3 / 0.5 s reaction it locks, every SKIP a few seconds`,
     runs.every((flown) => /^SHRINK THE LOOP/.test(flown.offer) && flown.status === 'locked' && !flown.flipToLast
@@ -149,9 +150,10 @@ for (const fuelPct of [32.5, 34, 36, 40]) {
 {
   const bad: string[] = [];
   let flights = 0;
-  // Quick depth (tests/unit/depth.ts): the band's ends and middle after the shortest and longest ignore.
+  // Quick depth (tests/unit/depth.ts): the band's two ends after the shortest and longest ignore (its inside is flown
+  // above: 32.5–36% after 60 s, three kids each, and 34–35% held late below).
   for (const ignoreSec of byDepth([60, 120], [60, 90, 120])) {
-    for (const fuelPct of byDepth([31.5, 33.5, 35.5], [31.5, 32.5, 33.5, 34.5, 35.5])) {
+    for (const fuelPct of byDepth([31.5, 35.5], [31.5, 32.5, 33.5, 34.5, 35.5])) {
       for (const reaction of ignoreSec === 60 ? [0.3, 0.5] : [0.3]) {
         const flown = fly(fuelPct, ignoreSec, reaction);
         flights++;
@@ -194,7 +196,9 @@ for (const fuelPct of [34, 35]) {
 
 // --- 90–120 s of ignoring: a short tank still gets its brake at ▼ ------------------------------------------------
 // LEAD-2: it was the last FUEL run to the empty tank (it used to stop at the over-hold margin, review round 1).
-for (const [ignoreSec, fuelPct] of [[90, 28], [120, 24], [120, 31]] as const) {
+// Quick depth: the longest ignore only (90 s is the full depth's, and the only row that needs a 90 s capture).
+const shortAfterIgnoring: readonly (readonly [number, number])[] = byDepth([[120, 24], [120, 31]], [[90, 28], [120, 24], [120, 31]]);
+for (const [ignoreSec, fuelPct] of shortAfterIgnoring) {
   const instant = fly(fuelPct, ignoreSec, 'obey');
   const human = fly(fuelPct, ignoreSec, 0.3);
   check(`ignored ${ignoreSec} s, ${fuelPct}%: the brake at ▼, held to the empty tank, ACCEPTED (or locked), a few seconds of SKIP (instant and 0.3 s)`,
