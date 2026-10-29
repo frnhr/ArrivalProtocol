@@ -23,7 +23,9 @@ import {
   STAR_FUEL_PCT, MAX_LINE_CHARS, SIM_SUBSTEP_MAX_SEC, SHRINK_FUEL_RESERVE_FRAC,
   SKIP_DIVISOR, SKIP_RAMP_SEC, SKIP_EASE_OUT_SEC,
 } from '@data/tuning';
-import { text, stepUntil, idle, placeOrbit, releaseAtCapture, captureOffRing, obey, ignoredAtCapture, type ObeyLog } from './flows';
+import {
+  text, stepUntil, idle, idleThrottled, placeOrbit, releaseAtCapture, captureOffRing, obey, ignoredAtCapture, flyOnce, type ObeyLog,
+} from './flows';
 import { byDepth } from '../depth';
 
 const harness = createHarness(1);
@@ -149,7 +151,11 @@ const oneBurnIgnoreSec = Math.min(45, Math.floor(0.75 * oneBurnWindowSec));
 // both ends). Each capture is flown once per process and restored (flows.ts ignoredAtCapture): 60 s serves the later
 // scenarios too.
 for (const ignoreSec of byDepth([oneBurnIgnoreSec, 60, 120, 240], [oneBurnIgnoreSec, 60, 90, 120, 240])) {
-  ignoredAtCapture(harness, ignoreSec);
+  // Four minutes of ignoring are flown at a throttled tab's ticks (flows.ts idleThrottled: long hands-off stretches,
+  // where the predictor re-planning the loop every 50 ms is most of the time); the shorter ignores at 50 ms ticks.
+  if (ignoreSec > RING_EDGE_IGNORE_MAX_SEC) {
+    flyOnce(harness, `ignored ${ignoreSec} s, throttled`, () => { releaseAtCapture(harness); idleThrottled(harness, ignoreSec); });
+  } else ignoredAtCapture(harness, ignoreSec);
   const lineAfterIgnoring = text(harness);
   const paceAfterIgnoring = harness.pace();
   const skipReason = skipBlockReason(state(), getPrediction());

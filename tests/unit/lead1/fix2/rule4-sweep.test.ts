@@ -186,7 +186,8 @@ bad.slice(0, 6).join(' | ') || `${[...outcomes].map(([status, count]) => `${coun
 {
   const lows = byDepth([4300, 4900], [4300, 4700, 4900]);
   const offRingIgnores = byDepth([90], ignores);
-  const offRingStep = Number(process.env.OFFRING_FUEL_STEP ?? byDepth('12', '1'));
+  // Quick depth: every 18% (10, 28, 46: ACCEPT only, ACCEPTED and LOCKED on ship 1); full: every 1%.
+  const offRingStep = Number(process.env.OFFRING_FUEL_STEP ?? byDepth('18', '1'));
   const offRingFuels: number[] = [];
   for (let fuel = 10; fuel <= FUEL_TOP + 1e-9; fuel += offRingStep) offRingFuels.push(Number(fuel.toFixed(1)));
   const offRingSnapshot = (lowestKm: number, ignoreSec: number): GameState => {
