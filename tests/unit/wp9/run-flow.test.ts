@@ -9,8 +9,11 @@
 //   DELETE and `> sorry. i'm so hungry.` on the coast (SKIP waits for it), AUTOBURN flies the capture through to
 //   the lock (WP9 fix round 1: TOO WIDE counts the dodge down; AUTOBURN no longer hands back at loop-closed);
 // • after KESTREL the run goes on to VESPER (WP10: KESTREL is no longer the last ship).
-// Slice 1a: each landing lands instantly (tests/unit/support/landing-instant.ts); the reports are LANDING REPORTs.
+// Slice 1a: KESTREL lands by the strip (tests/unit/landing/harness-landing.ts followLanding); the other landings land
+// instantly (tests/unit/support/landing-instant.ts); the reports are LANDING REPORTs.
 import { check, finish } from '../wp1/harness';
+import { followLanding } from '../landing/harness-landing';
+import { setLandingMode } from '../support/landing-instant';
 import { createHarness9, KESTREL } from './harness9';
 import { receiveTransmission } from '@systems/boot';
 import { continueAfterReport } from '@systems/run';
@@ -68,6 +71,7 @@ check('…AUTOBURN.skl is in rack E', state().memory.some((seg) => seg.type === 
 check('KESTREL flies: blind at first (PATH UNCERTAIN)', h.caps().plot.mode === 'uncertain' && /^PATH UNCERTAIN/.test(h.objective()?.text ?? ''), h.objective()?.text);
 
 // --- KESTREL's flight ------------------------------------------------------------------------------------------
+setLandingMode('manual');
 let pressedAuto = false;
 let sawDodge = false;
 let sawRmLine = false;
@@ -99,13 +103,17 @@ check('…the first seed came on the coast (a WAIT), not mid-capture', firstSeed
 check('AUTOBURN was pressed and flew the capture through (into the ring)', pressedAuto && autoDone && state().burn.auto.end === 'in-ring',
   `${pressedAuto} ${autoDone} ${state().burn.auto.end}`);
 check('KESTREL: locked', h.status() === 'locked', `${h.status()} | ${texts.slice(-6).join(' | ')}`);
-const landingEnd = h.wall() + 400;
-while (state().run.phase !== 'report' && h.wall() < landingEnd) {
-  h.defend9();
-  h.step();
-  if (/RM THE SEED/.test(h.shown()?.text ?? '')) sawRmLine = true;
-}
-check('…to its LANDING REPORT', state().run.phase === 'report', state().run.phase);
+// Slice 1a: KESTREL lands by the strip ([L] when the strip asks; the defender keeps defending); the other ships instantly.
+const byStrip = followLanding(h, {
+  maxWall: 400,
+  onTick: () => {
+    h.defend9();
+    if (/RM THE SEED/.test(h.shown()?.text ?? '')) sawRmLine = true;
+  },
+});
+setLandingMode('instant');
+check('…lands by the strip ([L] at the windows) to its LANDING REPORT', state().run.phase === 'report' && byStrip.launchPresses >= 1 && byStrip.windows >= 1,
+  `${state().run.phase}, ${byStrip.launchPresses} [L], ${byStrip.windows} windows, ${byStrip.wall.toFixed(0)} wall s`);
 // The defender DELETEs a seed that can bite at once, so the lesson may be done before it is ever shown (a seed that
 // lands during the capture burn: the burn's NOW lines come first, and the seed is gone within its 2 s DELETE).
 const lessonDone = state().director.done.some((id) => id === 'hollow-seed-first' || id === 'hollow-seed-first-tab');

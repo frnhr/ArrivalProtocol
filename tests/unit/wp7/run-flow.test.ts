@@ -1,6 +1,7 @@
 // WP7 acceptance 2 (§9 WP7): a whole run, headless. Title → ship 1 flown by the strip (the director-
 // following kid, with a scripted defender who repairs what HOLLOW bites and MOVEs exposed drivers behind a
-// WALL) → locked → LANDING (landed instantly: tests/unit/support/landing-instant.ts) → LANDING REPORT → TRANSMIT →
+// WALL) → locked → LANDING (landed by the strip: [L] at each LZ window, tests/unit/landing/harness-landing.ts; the later
+// ships land instantly, tests/unit/support/landing-instant.ts) → LANDING REPORT → TRANSMIT →
 // ship 2's boot. At the arrival:
 // • no op is running; memory is 384 blocks and valid;
 // • the carried Engine I/O equals its pre-transmit integrity minus the hits the log names;
@@ -33,6 +34,8 @@ import { actionDelete } from '@state/actions';
 import { ROOT_DELETE_SEC } from '@data/tuning';
 import { HOLLOW_STORY } from '@data/hollow-text';
 import { CHARGE_ARRIVAL_FLOOR, STAR_CHARGE_BONUS } from '@data/tuning';
+import { followLanding } from '../landing/harness-landing';
+import { setLandingMode } from '../support/landing-instant';
 
 const SEED = 11;
 const h = createHarness7(SEED, { soulsFound: false });
@@ -49,9 +52,18 @@ check('a NEW RUN opens on the title card, ship 1, run 1', state().run.phase === 
 receiveTransmission(h.store);
 h.stepUntil(() => state().run.phase === 'flight', 15);
 check('RECEIVE TRANSMISSION → boot → flight', state().run.phase === 'flight');
+// Slice 1a: ship 1 lands by the strip (the kid presses [L] when the strip asks, the defender keeps repairing).
+setLandingMode('manual');
 h.flyDefending(600);
 check('ship 1: the strip-following kid locks the orbit', h.status() === 'locked', `${h.status()} at ${h.wall().toFixed(1)} s`);
 check('…and the flight is now LANDING', state().run.phase === 'landing');
+const byStrip = followLanding(h, { maxWall: 400, onTick: () => { h.defend(); } });
+setLandingMode('instant');
+const downInLz = state().landing.pods.filter((record) => record.fate.kind === 'down' && record.fate.touchdown.lz !== null).length;
+check('ship 1 lands by the strip: [L] pressed at the windows, and at least one pod is down in an LZ',
+  byStrip.launchPresses >= 1 && byStrip.windows >= 1 && downInLz >= 1,
+  `${byStrip.launchPresses} [L], ${byStrip.windows} windows, ${downInLz} down in an LZ, ${byStrip.wall.toFixed(0)} wall s; `
+  + state().landing.pods.map((record) => `${record.pod}:${record.fate.kind}`).join(' '));
 check('ship 1 reaches its LANDING REPORT', h.untilPhase('report', 300), state().run.phase);
 
 // --- The hand-over ----------------------------------------------------------------------------------

@@ -26,6 +26,8 @@ import { LINES, WORST_CASE_VARS } from '@data/script';
 import { LANDING_ASKS, hostLine } from '@data/landing-text';
 import { META_STORAGE_KEY, BOOT_GHOST_AT_SEC, HOLLOW_TYPE_CPS } from '@data/tuning';
 import type { GameState } from '@state/schema';
+import { followLanding } from '../landing/harness-landing';
+import { setLandingMode } from '../support/landing-instant';
 
 const data = new Map<string, string>();
 const storage: MetaStorage = {
@@ -148,8 +150,15 @@ const watch = (): void => {
   if (line && shown[shown.length - 1] !== line.text) { shown.push(line.text); ids.push(line.id); }
 };
 const unwatch = h.store.subscribe((s) => s.director.shown?.text ?? '', watch);
+// Slice 1a: this ship lands by the strip ([L] when the strip asks; the defender keeps repairing); the others instantly.
+setLandingMode('manual');
 h.flyDefending(600);
 check('ship 1 on run 2 locks (the strip-following kid with the defender)', h.status() === 'locked', h.status());
+const byStrip = followLanding(h, { maxWall: 400, onTick: () => { h.defend(); } });
+setLandingMode('instant');
+check('…and lands by the strip: [L] pressed, every pod decided, the LANDING REPORT next', byStrip.launchPresses >= 1
+  && state().run.phase === 'report' && state().landing.pods.every((record) => record.fate.kind === 'down' || record.fate.kind === 'parked'),
+  `${byStrip.launchPresses} [L], ${byStrip.wall.toFixed(0)} wall s, ${state().run.phase}; ${state().landing.pods.map((record) => `${record.pod}:${record.fate.kind}`).join(' ')}`);
 h.untilPhase('report', 300);
 unwatch();
 check('the ENGINE I/O FAULT still strikes, and the lesson is one hint: `ENGINE WEAK — REPAIR ENGINE I/O`',
