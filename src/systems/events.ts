@@ -76,11 +76,11 @@ export interface GameEvents {
   // flash the chip (LaunchFx). Then it hit the atmosphere, and touched down where it was decided at launch
   // (`firstOnShip` names the colony and sends the radio line; `firstOfRun` is the first landing's moment).
   'pod-launched': { pod: number; source: LaunchSource; segId: string };
-  'pod-entry': { pod: number };
+  'pod-entry': { pod: number; first: boolean };   // first: run 1's first pod (LaunchRecord.firstOfRun)
   'pod-landed': { pod: number; place: Place; lz: string | null; touch: Touch; points: number; firstOnShip: boolean; firstOfRun: boolean };
   // An LZ reached its count (the chord), every pod is down, pods were parked in orbit, the landing ended (and why).
   'lz-full': { lz: string };
-  'all-pods-down': Record<string, never>;
+  'all-pods-down': { parked: number };   // the ship's last pod is down; `parked`: pods that never launched
   'pods-parked': { count: number };
   'landing-ended': { reason: LandingEnd };
   // WP6: HOLLOW (systems/hollow.ts, §6.6). The bite timer fired; a file was infected from `side`; a

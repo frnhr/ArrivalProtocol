@@ -8,7 +8,7 @@ import { isThrustOn, engineAccel, thrustJitter } from '@systems/orbit-sim';
 import {
   CHIME_AFTER_TRANSMIT_SEC, FAULT_COUGH_AFTER_SEC,
   HEARTBEAT_BED_SEC, HEARTBEAT_BED_HURT_SEC, HEARTBEAT_BED_STRENGTH, HEARTBEAT_BED_INFECTED_SEC,
-  HEARTBEAT_BED_JITTER, ARRIVAL_HIT_STAGGER_SEC, BEAM_OUT_SWEEP_SEC, POD_FIRST_DESCENT_SEC,
+  HEARTBEAT_BED_JITTER, ARRIVAL_HIT_STAGGER_SEC, BEAM_OUT_SWEEP_SEC,
 } from '@data/tuning';
 import { driversInMemory, verbSecondsLeft } from '@state/selectors';
 import { driverTouch } from '@systems/landing-rules';
@@ -112,13 +112,6 @@ function launchingFirstOfRun(state: Readonly<GameState>): boolean {
   return state.run.tutorial && state.run.ships.length === 0 && state.landing.pods.every((record) => record.fate.kind === 'aboard');
 }
 
-// Run 1's first pod once it is falling (the slow, bright descent).
-function isFirstFall(state: Readonly<GameState>, pod: number): boolean {
-  const fate = state.landing.pods.find((record) => record.pod === pod)?.fate;
-  const launch = fate?.kind === 'falling' || fate?.kind === 'down' ? fate.launch : null;
-  return launch !== null && launch.descentSec >= POD_FIRST_DESCENT_SEC;
-}
-
 export function mountAudioCues(store: Store<GameState>): () => void {
   // AI seconds to the heartbeat bed's next beat (see below; the reveal's end sets it too).
   let nextBeatIn = 0;
@@ -175,7 +168,7 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     on('plot-mode', ({ to }) => { if (to === 'exact') play('lineWhoomp', { shape: 'clear' }); }),
     // Slice 1a, the landing (01-landing §4).
     on('pod-launched', () => play('podLaunch', { first: launchingFirstOfRun(store.getState()) })),
-    on('pod-entry', ({ pod }) => play('podEntry', { first: isFirstFall(store.getState(), pod) })),
+    on('pod-entry', ({ first }) => play('podEntry', { first })),
     on('pod-landed', ({ place, lz, touch, firstOfRun }) => {
       const index = lz === null ? 0 : store.getState().landing.lzs.findIndex((candidate) => candidate.label === lz);
       play('printBell', { lz: Math.max(0, index), landing: touchdownSound(place, touch) });
@@ -186,7 +179,9 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     }),
     on('window-sure', () => play('chime', { falling: false })),
     on('lz-full', () => play('capturedChord')),
-    on('all-pods-down', () => {
+    // Only a ship that landed every pod (the ALL PODS DOWN stamp): one that parked some ends quietly.
+    on('all-pods-down', ({ parked }) => {
+      if (parked > 0) return;
       play('lockArp');
       play('stampHit', { heavy: false });
     }),

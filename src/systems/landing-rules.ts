@@ -1,8 +1,8 @@
-import type { GameState, ShipOutcome } from '@state/schema';
+import type { BurnStatus, GameState, ShipOutcome } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {
   DropFactors, DropSolution, ForgivenessClass, LandingTally, LandingView, LandingWindow, LaunchAsk, LaunchRecord, LaunchRefusal,
-  LaunchSource, LzResult, LzState, LzWindow, NoGoArcState, OnTargetTally, ParkReason, Place, PodFate, PodRecord, PodSummary, ShipLandingDef, Touch, Touchdown,
+  LaunchSource, LzResult, LzState, LzWindow, NoGoArcState, OnTargetTally, ParkReason, Place, PodFate, PodFateKind, PodRecord, PodSummary, ShipLandingDef, Touch, Touchdown,
 } from '@/types/landing';
 import type { Capabilities } from '@systems/capabilities';
 import type { Rng } from '@systems/rng';
@@ -38,8 +38,17 @@ export function podRecord(state: Readonly<GameState>, pod: number): PodRecord {
   return record;
 }
 
-export function podsWithFate(state: Readonly<GameState>, kind: PodFate['kind']): PodRecord[] {
+export function podsWithFate(state: Readonly<GameState>, kind: PodFateKind): PodRecord[] {
   return state.landing.pods.filter((record) => record.fate.kind === kind);
+}
+
+// How many pods have each fate now: the one count the sim, pace, the table and the views share.
+export type PodCounts = Record<PodFateKind, number>;
+
+export function podCounts(state: Readonly<GameState>): PodCounts {
+  const counts: PodCounts = { aboard: 0, falling: 0, down: 0, parked: 0, 'not-launched': 0 };
+  for (const record of state.landing.pods) counts[record.fate.kind]++;
+  return counts;
 }
 
 // The launch order (§3.4): LOAD NEXT's pod first if it can launch, then the lowest address that can. Launchable
@@ -233,18 +242,6 @@ export function windowsAsOf(sol: Readonly<DropSolution>, nowTSec: number): LzWin
   }).sort((a, b) => a.openInSec - b.openInSec);
 }
 
-// The window the kid should aim at (§3.2; pace's SKIP, the countdown chip and landing-hud share it): the next in-band
-// span not yet over of an LZ with projected room, else of any LZ, else null. "Next" by its in-band opening (an open one
-// first). Times rebased to `nowTSec`.
-export function targetWindow(state: Readonly<GameState>, sol: Readonly<DropSolution> | null, nowTSec: number): LzWindow | null {
-  if (sol === null || sol.block !== null) return null;
-  const live = windowsAsOf(sol, nowTSec)
-    .filter((w) => w.inBandOpenInSec !== null && w.inBandCloseInSec !== null && secFromNow(sol, w.inBandCloseInSec, nowTSec) > 0)
-    .sort((a, b) => a.inBandOpenInSec! - b.inBandOpenInSec!);
-  const remaining = lzRemaining(state);
-  return live.find((w) => (remaining[w.lz] ?? 0) > 0) ?? live[0] ?? null;
-}
-
 // The moment a window is worth a launch (the guidance table's GET READY and its beeps count down to it), in game s from
 // `nowTSec`: the opening of its sure part inside the in-band span when this pass has one (from there the whole dot fits:
 // LAUNCH NOW), else its in-band opening (a wide drop: LAUNCH — WIDE DROP from the start). null: no in-band span.
@@ -256,6 +253,84 @@ export function launchMomentInSec(sol: Readonly<DropSolution>, w: Readonly<LzWin
     && w.sureOpenInSec < w.inBandCloseInSec && w.sureCloseInSec > w.inBandOpenInSec;
   const at = sureFits ? Math.max(w.inBandOpenInSec, w.sureOpenInSec!) : w.inBandOpenInSec;
   return secFromNow(sol, at, nowTSec);
+}
+
+// --- The launch moment: the one answer for every reader (review M3) ----------------------------------------------------
+
+// One in-band window as of now: the window (its times still relative to the solution's asOfTSec, rolled by
+// windowsAsOf), and in game seconds from now its in-band opening and close and its launch moment (launchMomentInSec).
+export interface MomentWindow {
+  lz: string;
+  window: LzWindow;
+  openInSec: number;      // ≤ 0: the in-band span has opened
+  closeInSec: number;     // > 0 for every window listed (a span that is over rolls on a period)
+  launchInSec: number;    // ≤ 0: the launch moment has come
+  full: boolean;          // its LZ has no projected room: a pod launched in it is MISLANDED
+}
+
+// The window open now (state.landing.window, the ONE "open now"), with its moment when the solution has it.
+export interface MomentOpen {
+  lz: string;
+  sure: boolean;
+  full: boolean;
+  window: MomentWindow | null;  // null only for a solution a tick behind the state
+  launchCome: boolean;          // the launch moment has come (the whole dot fits, or never will this pass)
+  awaited: boolean;             // the landing waits on it (see `target`): TACTICAL, WINDOW OPEN, the chip's OPEN
+}
+
+export interface LandingMoment {
+  // The landing waits on windows: it goes on (LANDING, not ended), and a pod aboard can launch some day.
+  awaited: boolean;
+  canLaunch: boolean;           // a pod can launch right now (nextToLaunch)
+  noBand: boolean;              // windows exist and none is ever in the band on this orbit (L12's twin)
+  roomInBand: boolean;          // an in-band window's LZ has projected room (else: NO ROOM IN THE BAND, L3b)
+  upcoming: MomentWindow[];     // every in-band window, by in-band opening (an open one first): the ground track's list
+  open: MomentOpen | null;
+  // The window the landing waits on next: the next in-band window of an LZ with room, else (no room in the band) the next
+  // in-band window, full (its launch asks LZ-A IS FULL — LAUNCH ANYWAY?, and lands MISLANDED); null while not awaited.
+  target: MomentWindow | null;
+}
+
+// The launch moment for every reader (01-landing §3.2, §3.11, §3.12): pace's TACTICAL lead, WINDOW OPEN and the SKIP's
+// target, the guidance table's GET READY / WAIT / L3, the 5…1 beeps, the countdown chip, the mini-HUD and the ground
+// track all read this, so they can't drift apart again (they did: five copies with different gating). Pure; `sol` is
+// drop-cache's getDropSolution(), `nowTSec` the clock. The seam AUTODROP (4c) and 1b's kicks lean on.
+// Only in-band windows count (risk 13): an LZ whose window is never in the band is not waited on, named or counted
+// down to (review M1: L3 named LZ-B out of band and the strip looped `hold the pods for LZ-B` for ever).
+export function landingMoment(state: Readonly<GameState>, sol: Readonly<DropSolution> | null, nowTSec: number): LandingMoment {
+  const { landing } = state;
+  const awaited = state.run.phase === 'landing' && landing.ended === null && driversThatCanEverLaunch(state).length > 0;
+  const canLaunch = state.run.phase === 'landing' && nextToLaunch(state) !== null;
+  const remaining = lzRemaining(state);
+  const full = (lz: string): boolean => (remaining[lz] ?? 0) <= 0;
+  const solved = sol !== null && sol.block === null ? sol : null;
+  const rolled = solved === null ? [] : windowsAsOf(solved, nowTSec);
+  const upcoming: MomentWindow[] = solved === null ? [] : rolled
+    .flatMap((w): MomentWindow[] => {
+      if (w.inBandOpenInSec === null || w.inBandCloseInSec === null) return [];
+      const closeInSec = secFromNow(solved, w.inBandCloseInSec, nowTSec);
+      const launchInSec = launchMomentInSec(solved, w, nowTSec);
+      if (closeInSec <= 0 || launchInSec === null) return [];
+      return [{ lz: w.lz, window: w, openInSec: secFromNow(solved, w.inBandOpenInSec, nowTSec), closeInSec, launchInSec, full: full(w.lz) }];
+    })
+    .sort((a, b) => a.openInSec - b.openInSec);
+  const roomInBand = upcoming.some((w) => !w.full);
+  const now = landing.window;
+  let open: MomentOpen | null = null;
+  if (now !== null) {
+    const window = upcoming.find((w) => w.lz === now.lz) ?? null;
+    const isFull = full(now.lz);
+    open = {
+      lz: now.lz, sure: now.sure, full: isFull, window,
+      launchCome: now.sure || window === null || window.launchInSec <= 0,
+      awaited: awaited && (!isFull || !roomInBand),
+    };
+  }
+  const target = !awaited ? null : upcoming.find((w) => !w.full) ?? (roomInBand ? null : upcoming[0] ?? null);
+  return {
+    awaited, canLaunch, roomInBand, upcoming, open, target,
+    noBand: solved !== null && rolled.length > 0 && rolled.every((w) => !w.inBand),
+  };
 }
 
 // The driver a launch would take: `pod`'s if named (it must be in memory), else nextToLaunch.
@@ -328,6 +403,14 @@ export function landingView(state: Readonly<GameState>, solution: Readonly<DropS
 }
 
 // --- The ship's result -------------------------------------------------------------------------------------------------
+
+// The outcome of a ship whose landing runs in orbit (§3.10): ORBIT LOCKED, or an ACCEPTed loop ('partial'). The one rule
+// the landing's end, its report and the run's ShipResult (run.ts shipOutcomeOf) share. Any other status has no landing.
+export function inOrbitOutcome(status: BurnStatus): 'locked' | 'partial' {
+  if (status === 'locked') return 'locked';
+  if (status === 'accepted') return 'partial';
+  throw new Error(`inOrbitOutcome: a ship ${status} does not land`);
+}
 
 // Outcomes after which the ship is still in orbit: pods still aboard are released and parked (§3.10). Any other ending
 // (crashed, escaped, abandoned) took them out of orbit with the ship: NOT LAUNCHED.

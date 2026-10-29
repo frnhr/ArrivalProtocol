@@ -1,6 +1,7 @@
 // Slice 1a, Track SIM: the landing from the lock to the LANDING REPORT (01-landing §3.10, plan §5). All five ships from
 // a constructed lock (harness-landing lockOn: no capture flown), landed by the strip (followLanding): every pod down in
-// an LZ with room, the report reached, and the real seconds per window printed as INFO (target 24–30, §3.2). Then the
+// an LZ with room, the report reached, and the real seconds per window printed as INFO (target 24–30, §3.2); a PARTIAL
+// orbit with e > 0 whose second LZ is out of band (review M1) lands too, mislanded into the in-band LZ. Then the
 // soft fails: END LANDING parks; an eaten driver can't launch and ends parked, eaten; a ship that left orbit takes its
 // pods (NOT LAUNCHED); a Core lost while landing parks every pod; HOLLOW's story beat and LAST LIGHT's duel hold the
 // report (the duel's L0 on the strip). Last, the pooled receiver (§3.16) that lays out the unit at the next ship.
@@ -9,6 +10,10 @@ import { followLanding, landInstantly, lockOn } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';
 import { endLanding, forceLandAll } from '@systems/landing';
 import { endFlight } from '@systems/orbit-sim';
+import { getDropSolution } from '@systems/drop-cache';
+import { getPrediction } from '@systems/predict';
+import { countdownChip } from '@systems/flight-hud';
+import { groundTrackModel, miniHudLanding } from '@systems/landing-hud';
 import { landingResult, onTargetTally, canEverLaunch } from '@systems/landing-rules';
 import { shipLost, shipOutcomeOf, shipResultOf } from '@systems/run';
 import { packUnit, layoutCarried, freshUnitRacks, RACK_E_START } from '@systems/carry';
@@ -65,6 +70,37 @@ for (let index = 0; index < SHIPS.length; index++) {
   check(`${name}: about one window per LZ (${result.windows} for ${lzCount})`, result.windows >= lzCount && result.windows <= lzCount + 2,
     `${result.windows} windows, ${result.launchPresses} [L], ${result.skipPresses} [F]`);
   console.log(`INFO  ${name}: ${result.wall.toFixed(1)} real s for ${result.windows} windows = ${(result.wall / result.windows).toFixed(1)} s per window (target 24–30)`);
+}
+
+// --- A PARTIAL orbit, e > 0, with one LZ out of band (review M1, p2) --------------------------------------------------------
+// HALCYON ACCEPTed on ▼ 5,500 km, e 0.4, ω 260°: LZ-A's window is in the band, LZ-B's never is. Once LZ-A is full the strip
+// used to loop `LZ-A FULL — hold the pods for LZ-B` / `WAIT — LZ-A … [F]` for ever. Now it says NO ROOM IN THE BAND and
+// offers the mislanded launch, which the kid takes: every pod comes down in LZ-A (the late ones MISLANDED), none off-site.
+{
+  boardShip(1);
+  lockOn(h, { r: 5500, e: 0.4, argPeriDeg: 260, status: 'accepted' });
+  // Every reader of the launch moment names in-band windows only (review M3): the chip, the mini-HUD, the ground track.
+  const namedB: string[] = [];
+  const onTick = (): void => {
+    if (state().run.phase !== 'landing') return;
+    const sol = getDropSolution();
+    const chip = countdownChip(state(), getPrediction(), sol);
+    const mini = miniHudLanding(state(), sol);
+    const ahead = groundTrackModel(state(), sol).strip.ahead;
+    if (chip?.event.includes('LZ-B')) namedB.push(`chip ${chip.event}`);
+    if (mini?.window?.text.includes('LZ-B')) namedB.push(`mini ${mini.window.text}`);
+    if (ahead.some((item) => item.lz === 'LZ-B')) namedB.push('ground track');
+  };
+  const result = followLanding(h, { maxWall: 300, onTick });
+  const downInA = state().landing.pods.every((record) => record.fate.kind === 'down' && record.fate.touchdown.lz === 'LZ-A');
+  const mislanded = state().landing.pods.filter((record) => record.fate.kind === 'down' && record.fate.touchdown.place === 'mislanded').length;
+  check('HALCYON PARTIAL (e 0.4, LZ-B out of band): landed by the strip to the LANDING REPORT, every pod down in LZ-A',
+    state().run.phase === 'report' && downInA && mislanded > 0, `${state().run.phase} after ${result.wall.toFixed(0)} s · ${fates()}`);
+  check('…the strip said NO ROOM IN THE BAND with the mislanded launch, and never held the pods for the out-of-band LZ-B',
+    result.texts.some((text) => text.startsWith('NO ROOM IN THE BAND — [L]')) && !result.texts.some((text) => text.includes('for LZ-B')),
+    [...new Set(result.texts.map((text) => text.replace(/\d/g, '#')))].join(' | '));
+  check('…the countdown chip, the mini-HUD and the ground track never count down to the out-of-band LZ-B', namedB.length === 0,
+    [...new Set(namedB)].join(', '));
 }
 
 // --- END LANDING parks -----------------------------------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import type { Store } from '@state/store';
-import type { GameState, ShipOutcome } from '@state/schema';
+import type { GameState } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {
   BayState, DropSolution, LandingController, LandingEnd, LandingView, LandingWindow, LaunchIntent, LaunchRecord, LaunchResult,
@@ -18,8 +18,9 @@ import { getPrediction } from '@systems/predict';
 import { requestSkip, skipBlockReason } from '@systems/pace';
 import { activeLandingController, setActiveLandingController } from '@systems/landing-controller';
 import {
-  classifyLanding, colonyName, dropFactors, driverTouch, driversThatCanEverLaunch, isLaunchable, landingView as landingViewOf, launchMomentInSec,
-  launchGuard, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podPoints, targetWindow, touchAtTouchdown,
+  classifyLanding, colonyName, dropFactors, driverTouch, driversThatCanEverLaunch, inOrbitOutcome, isLaunchable, landingMoment,
+  landingView as landingViewOf, launchGuard, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podCounts, podPoints,
+  touchAtTouchdown,
   windowOpenNow,
 } from '@systems/landing-rules';
 import { forgetDriver, parkPodsAboard } from '@state/actions';
@@ -61,22 +62,12 @@ function dropStream(state: Readonly<GameState>): Rng {
   return dropRng;
 }
 
-function podsLeft(state: Readonly<GameState>): { aboard: number; falling: number } {
-  let aboard = 0;
-  let falling = 0;
-  for (const record of state.landing.pods) {
-    if (record.fate.kind === 'aboard') aboard++;
-    else if (record.fate.kind === 'falling') falling++;
-  }
-  return { aboard, falling };
-}
-
 // --- The launch path -----------------------------------------------------------------------------------------------
 
-// Run 1's very first pod falls slower (§4: the first landing's moment): the tutorial run, before any pod has left.
-function descentSecFor(state: Readonly<GameState>): number {
-  const firstOfRun = state.run.tutorial && state.run.ships.length === 0 && state.landing.pods.every((record) => record.fate.kind === 'aboard');
-  return firstOfRun ? POD_FIRST_DESCENT_SEC : POD_DESCENT_SEC;
+// Run 1's very first pod (§4: the first landing's moment): the tutorial run, before any pod has left. It falls slower,
+// and its launch record says so (LaunchRecord.firstOfRun: the entry's flare and sound read that, not the descent time).
+function firstOfRun(state: Readonly<GameState>): boolean {
+  return state.run.tutorial && state.run.ships.length === 0 && state.landing.pods.every((record) => record.fate.kind === 'aboard');
 }
 
 // The driver uploads into its pod and leaves memory (§3.8), as a print did: the moment first (the chip can flash), then
@@ -126,7 +117,8 @@ function launchRecordFor(state: Readonly<GameState>, driver: DriverSegment, sol:
     predictedTouch: driverTouch(driver.integrity),
     driverIntegrity: driver.integrity,
     arc: sol.arc.map((point) => ({ ...point })),
-    descentSec: descentSecFor(state),
+    descentSec: firstOfRun(state) ? POD_FIRST_DESCENT_SEC : POD_DESCENT_SEC,
+    firstOfRun: firstOfRun(state),
   };
 }
 
@@ -206,35 +198,31 @@ function touchDown(store: Store<GameState>, pod: number): void {
 
 // --- The end of the landing ------------------------------------------------------------------------------------------
 
-// Every pod still aboard gets its final fate for `outcome` (§3.10: parked in orbit with why, or NOT LAUNCHED once the
-// ship left orbit). In a draft. run.ts calls it for the in-orbit endings too. Returns how many were parked.
-export function parkAboard(draft: GameState, outcome: ShipOutcome): number {
-  return parkPodsAboard(draft, outcome);
-}
-
 // No more launches (§3.10): END LANDING, the risk-7 auto-end, or every pod away. The pods still aboard are parked in
 // orbit NOW, not when the report opens, so the PARKED words, the beacons and L0 show while the report waits (LAST LIGHT's
-// duel). Pods already falling still come down. MERGE (finale.ts) can reopen it: ended back to null, pods unparked.
+// duel). Pods already falling still come down. FUEL is noted for its star now (§3.9: "at the end of the landing", review
+// N3: not when the report opens, after the linger and the finale's wait). MERGE (finale.ts) can reopen it: ended back
+// to null, pods unparked, the FUEL note cleared.
 function endNow(store: Store<GameState>, reason: LandingEnd): void {
   const state = store.getState();
   if (state.landing.ended !== null) throw new Error(`endNow: the landing already ended (${state.landing.ended})`);
-  const outcome: ShipOutcome = state.burn.status === 'locked' ? 'locked' : 'partial';
+  const outcome = inOrbitOutcome(state.burn.status);
   let parked = 0;
   store.update((draft) => {
     draft.landing.ended = reason;
     draft.landing.window = null;
     draft.landing.noDriverAiSec = 0;
-    parked = parkAboard(draft, outcome);
+    draft.landing.fuelAtEndPct = draft.burn.fuelPct;
+    parked = parkPodsAboard(draft, outcome);
   });
   if (parked > 0) emit('pods-parked', { count: parked });
   emit('landing-ended', { reason });
 }
 
-// The landing is over and the bells have rung out: FUEL is noted for its star (§3.9), and the LANDING REPORT opens.
+// The landing is over and the bells have rung out: the LANDING REPORT opens.
 function finishLanding(store: Store<GameState>): void {
   store.update((draft) => {
     draft.landing.lingerAiSec = null;
-    draft.landing.fuelAtEndPct = draft.burn.fuelPct;
     draft.run.phase = 'report';
   });
 }
@@ -304,8 +292,9 @@ function bayTick(store: Store<GameState>, dtWorld: number): void {
 
 // --- GET READY's beeps (§3.11 L7) -------------------------------------------------------------------------------------
 
-// The 5…1 before the target window's launch moment (landing-rules targetWindow and launchMomentInSec: what GET READY
-// counts down to, the opening of the part where the whole dot fits when there is one), as
+// The 5…1 before the awaited window's launch moment (landing-rules landingMoment: what GET READY counts down to, the
+// opening of the part where the whole dot fits when there is one), only while a pod can launch (GET READY's own
+// condition: a countdown to a launch nobody can make is noise), as
 // 'countdown-beep' kind 'window': the burn's beeps, so the same cue plays. Crossings only, as in flight-events: a
 // countdown that jumps (a SKIP landing 8 s before the window, a fresh target) beeps nothing for the seconds it skipped,
 // and each threshold beeps once per window. The opening itself is 'window-open' (its own chime).
@@ -323,9 +312,9 @@ let beepWatch: BeepWatch = { ...NO_BEEP_WATCH };
 function beepTick(store: Store<GameState>): void {
   const state = store.getState();
   const now = state.clock.tSec;
-  const sol = state.landing.ended === null ? getDropSolution() : null;
-  const target = sol === null ? null : targetWindow(state, sol, now);
-  const opensIn = sol === null || target === null ? null : launchMomentInSec(sol, target, now);
+  const moment = landingMoment(state, getDropSolution(), now);
+  const target = moment.canLaunch ? moment.target : null;
+  const opensIn = target?.launchInSec ?? null;
   const key = target === null || opensIn === null ? null : `${target.lz}|${Math.round(now + opensIn)}`;
   if (key !== beepWatch.key) beepWatch = { ...NO_BEEP_WATCH, key };
   const next = opensIn === null || opensIn <= 0 ? null : opensIn / state.level.tacticalWarp;
@@ -361,7 +350,7 @@ function entryTick(state: Readonly<GameState>): void {
     const fraction = entryFraction(launch.arc, state.level.planet.rAtm);
     if (fraction === null || launch.atAi + fraction * launch.descentSec > state.clock.aiSec) continue;
     entered.add(record.pod);
-    emit('pod-entry', { pod: record.pod });
+    emit('pod-entry', { pod: record.pod, first: launch.firstOfRun });
   }
 }
 
@@ -400,8 +389,11 @@ function tick(store: Store<GameState>, dtAi: number): void {
     .filter((fall) => fall.at <= state.clock.aiSec)
     .sort((a, b) => a.at - b.at);
   for (const fall of due) touchDown(store, fall.pod);
-  if (due.length > 0 && podsLeft(store.getState()).aboard === 0 && podsLeft(store.getState()).falling === 0) {
-    emit('all-pods-down', {});
+  const afterFalls = podCounts(store.getState());
+  // The last pod is down: `parked` says how many never launched (parked or not launched), so a partial ship's end is
+  // not played as a perfect one (audio-cues: lockArp only when none were).
+  if (due.length > 0 && afterFalls.aboard === 0 && afterFalls.falling === 0) {
+    emit('all-pods-down', { parked: afterFalls.parked + afterFalls['not-launched'] });
   }
   // 2. The window open now (state), and its edges; GET READY's beeps.
   trackWindow(store);
@@ -409,14 +401,13 @@ function tick(store: Store<GameState>, dtAi: number): void {
   // 3. The controller (none in 1a).
   controllerTick(store);
   // 4. No more launches: every pod away, or no driver left for the pods aboard (risk 7).
-  if (store.getState().landing.ended === null && podsLeft(store.getState()).aboard === 0) endNow(store, 'all-launched');
+  if (store.getState().landing.ended === null && podCounts(store.getState()).aboard === 0) endNow(store, 'all-launched');
   noneLeftTick(store, dtAi);
   // 5. The end: the landing has ended and nothing is still falling. The last bell rings out (LANDING_DONE_LINGER_SEC),
   // and ship 1's scripted fight (still undecided after an early END LANDING), HOLLOW's story beat and LAST LIGHT's
   // finale are part of this ship: the report waits for them.
   state = store.getState();
-  const left = podsLeft(state);
-  const over = left.falling === 0 && state.landing.ended !== null;
+  const over = podCounts(state).falling === 0 && state.landing.ended !== null;
   if (!over) return;
   const linger = state.landing.lingerAiSec;
   if (linger === null) {
@@ -437,7 +428,8 @@ function tick(store: Store<GameState>, dtAi: number): void {
 // pinned pod that can't launch right now is skipped and stays pinned (landing-rules launchQueue).
 export function setLoadNext(store: Store<GameState>, pod: number): string | null {
   const state = store.getState();
-  const refusal = state.run.phase !== 'landing' ? 'NOT LANDING' : state.clock.paused ? 'PAUSED' : null;
+  const refusal = state.run.phase !== 'landing' ? 'NOT LANDING' : state.landing.ended !== null ? 'LANDING OVER'
+    : state.clock.paused ? 'PAUSED' : null;
   if (refusal) { emit('refused', { reason: refusal }); return refusal; }
   if (!driversInMemory(state).some((driver) => driver.pod === pod)) throw new Error(`setLoadNext: pod ${pod}'s driver is not in memory`);
   store.update((draft) => { draft.landing.loadNext = draft.landing.loadNext === pod ? null : pod; });
@@ -448,7 +440,8 @@ export function setLoadNext(store: Store<GameState>, pod: number): string | null
 // the pods left aboard are parked in orbit and the LANDING REPORT follows.
 export function endLanding(store: Store<GameState>, reason: LandingEnd = 'end-landing'): string | null {
   const state = store.getState();
-  const refusal = state.run.phase !== 'landing' ? 'NOT LANDING' : state.landing.ended !== null ? 'LANDING OVER' : null;
+  const refusal = state.run.phase !== 'landing' ? 'NOT LANDING' : state.landing.ended !== null ? 'LANDING OVER'
+    : state.clock.paused ? 'PAUSED' : null;
   if (refusal) { emit('refused', { reason: refusal }); return refusal; }
   endNow(store, reason);
   return null;
@@ -498,14 +491,14 @@ export function forceLandAll(store: Store<GameState>): number {
       dotRad: lz.centreRad, halfWidthKm: 0, aimLz: lz.label, landingRad: lz.centreRad, predictedTouch: 'soft',
       // The touch is decided at touchdown from this integrity: written soft here, as the dev hook promises.
       driverIntegrity: Math.max(driver.integrity, BAND_DEGRADED_MIN),
-      arc: [], descentSec: 0,
+      arc: [], descentSec: 0, firstOfRun: firstOfRun(state),
     };
     launchDriver(store, driver, launch, false);
     touchDown(store, driver.pod);
     landed++;
   }
   const after = store.getState();
-  if (after.landing.ended === null) endNow(store, podsLeft(after).aboard > 0 ? 'end-landing' : 'all-launched');
+  if (after.landing.ended === null) endNow(store, podCounts(after).aboard > 0 ? 'end-landing' : 'all-launched');
   return landed;
 }
 

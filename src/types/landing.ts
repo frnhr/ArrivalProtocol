@@ -82,6 +82,7 @@ export interface LaunchRecord {
   driverIntegrity: number;
   arc: Vec2[];            // the fixed streak path, world km, launch to touchdown
   descentSec: number;     // AI s: POD_DESCENT_SEC, or POD_FIRST_DESCENT_SEC for run 1's first pod
+  firstOfRun: boolean;    // run 1's very first pod (the slow, bright descent and its sound): said, not inferred
 }
 
 export interface Touchdown {
@@ -187,11 +188,12 @@ export interface LzWindow {
   launchRadius: number;           // at the window's middle
   halfWidthKm: number;
   // The part of the window launched from inside the band (the window intersected with the ship's band crossings): the
-  // first such span that has not ended by the solution's time, or null when none is left this pass. "Open" for the
-  // rules means inside THIS span (landing-rules openInBandWindow).
+  // first such span that has not ended by the solution's time, or null when the window has none (a window whose in-band
+  // part is over this pass is reported as the next pass's: landing-solve windowsFor). "Open" for the rules means inside
+  // THIS span (landing-rules openInBandWindow).
   inBandOpenInSec: number | null;
   inBandCloseInSec: number | null;
-  inBand: boolean;                // inBandOpenInSec !== null
+  inBand: boolean;                // inBandOpenInSec !== null: the LZ can be launched at from inside the band
 }
 
 export interface DropSolution {

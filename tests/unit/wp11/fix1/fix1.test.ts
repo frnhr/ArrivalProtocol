@@ -285,13 +285,11 @@ for (const choice of ['purge', 'merge'] as const) {
   // No driver left: the landing ends by itself after LANDING_NONE_LEFT_SEC (risk 7).
   h.stepFor(LANDING_NONE_LEFT_SEC + 0.6);
   if (choice === 'purge') {
-    // TODO(phase2): WP11 fix round 1 ruled that the waiting strip never says everyone made it when nobody did; slice 1a's
-    // director rule 'finale-waits' (data/script.ts, TODO(slice1a-SIM): the landing table's L0) says L0's EVERY POD IS DOWN
-    // even when every pod is parked, and HOLLOW_FINALE.stripWaitsNobody is never used. Reported to Track SIM; this is a
-    // hard check again once the landing table's L0 lands.
+    // WP11 fix round 1: the waiting strip never says everyone made it when nobody did (the landing table's L0 reads
+    // HOLLOW_FINALE.stripWaitsNobody once any pod is parked).
     const waitsLine = h.shown()?.text ?? '';
-    if (waitsLine === HOLLOW_FINALE.stripWaitsNobody) check('every driver lost before the root: the strip says NO POD LEFT TO LAUNCH, not EVERY POD IS DOWN', true);
-    else console.log(`INFO  every driver lost before the root: the strip says \`${waitsLine}\` (wanted \`${HOLLOW_FINALE.stripWaitsNobody}\`; TODO(phase2))`);
+    check('every driver lost before the root: the strip says NO POD LEFT TO LAUNCH, not EVERY POD IS DOWN',
+      waitsLine === HOLLOW_FINALE.stripWaitsNobody, waitsLine);
   }
   deleteRoot();
   h.stepFor(ROOT_DELETE_SEC + 0.3);

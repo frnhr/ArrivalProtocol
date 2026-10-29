@@ -60,7 +60,7 @@ function launchAt(state: GameState, sol: DropSolution, landingRad: number, atAi:
   return {
     atTSec: state.clock.tSec, atAi, source: 'player', launchRadius: sol.dot!.launchRadius, dotRad: sol.dot!.rad,
     halfWidthKm: sol.dot!.halfWidthKm, aimLz: lzAt(state.landing.lzs, sol.dot!.rad)?.label ?? null, landingRad,
-    predictedTouch: 'soft', driverIntegrity: 100, arc: sol.arc.map((p) => ({ ...p })), descentSec,
+    predictedTouch: 'soft', driverIntegrity: 100, arc: sol.arc.map((p) => ({ ...p })), descentSec, firstOfRun: false,
   };
 }
 

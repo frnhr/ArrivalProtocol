@@ -24,8 +24,7 @@ import { zoneVerdict, zoneRacks, racksText, debrisRack, type Zone, type ZoneHit,
 import { mindZonesBlind } from '@systems/zones';
 import { LANDING_HUD_TEXT, LANDING_REPORT_TEXT, BAND_TEXT, LANDING_PLOT_TEXT } from '@data/landing-text';
 import type { DropSolution } from '@/types/landing';
-import { launchMomentInSec, lzRemaining, targetWindow } from '@systems/landing-rules';
-import { secFromNow } from '@systems/landing-solve';
+import { landingMoment } from '@systems/landing-rules';
 import {
   COUNTDOWN_RED_TAC, LOCK_HOLD_AI_SEC, PLOT_SHIP_MARGIN, PLOT_RING_FACTOR, PLOT_FLYBY_TAG_FRAC,
   STRANDED_RANGE_FRAC, TACTICAL_LEAD_BURN_TAC, UPCOMING_EVENTS_MAX, UPCOMING_HORIZON_TAC,
@@ -155,35 +154,28 @@ const COUNTDOWN_EVENT: Record<Exclude<CountdownKind, 'burn'>, string> = {
   apo: '▲',
 };
 
-// LANDING (01-landing §4: "the countdown chip shows the next window"): `LZ-A IN 00:42` to the next in-band window of an
-// LZ with room (landing-rules targetWindow, the one pace's SKIP aims at), then `LZ-A OPEN 00:06` to its close while it
-// is open (state.landing.window, the one source of "open now") and its LZ has room. Nothing once every pod is away. `sol` is drop-cache's
-// getDropSolution(), passed in so this stays pure; without one the chip is empty.
+// LANDING (01-landing §4: "the countdown chip shows the next window"): `LZ-A IN 00:42` to the launch moment of the window
+// the landing waits on, then `LZ-A OPEN 00:06` to its in-band close once that moment has come (landing-rules
+// landingMoment: the one answer the strip, pace's SKIP and the beeps read, so the chip and the line agree). An open
+// window the landing does not wait on (its LZ full while another in band has room) is no reason to launch: the chip
+// counts on to the awaited one. Nothing once the landing waits on nothing. `sol` is drop-cache's getDropSolution(),
+// passed in so this stays pure; without one the chip is empty.
 function windowChip(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): CountdownChip | null {
-  const { landing } = state;
-  if (sol === null || landing.ended !== null || !landing.pods.some((record) => record.fate.kind === 'aboard')) return null;
-  const now = state.clock.tSec;
+  if (sol === null) return null;
+  const moment = landingMoment(state, sol, state.clock.tSec);
+  if (!moment.awaited) return null;
   const warp = state.level.tacticalWarp;
-  const open = landing.window;
-  const openWindow = open === null ? null : sol.windows.find((w) => w.lz === open.lz && w.inBandCloseInSec !== null) ?? null;
   const chip = (event: string, gameSec: number, urgent: boolean): CountdownChip => ({
     kind: 'window', label: event, event, time: formatCountdown(tac(Math.max(0, gameSec), warp)), urgent,
     fastForward: worldIsFast(state), slow: worldIsSlow(state),
   });
-  // An open window into an LZ already full is no reason to launch: the chip counts to the next one with room. While only
-  // the dot's centre is in and the launch moment (the whole dot in) is still ahead, the chip keeps counting to it, as
-  // GET READY does.
-  const launchAt = openWindow === null ? null : launchMomentInSec(sol, openWindow, now);
-  const launchCome = open !== null && (open.sure || launchAt === null || launchAt <= 0);
-  if (open !== null && openWindow !== null && launchCome && (lzRemaining(state)[open.lz] ?? 0) > 0) {
-    return chip(LANDING_PLOT_TEXT.chipOpen(open.lz), secFromNow(sol, openWindow.inBandCloseInSec!, now), false);
+  const open = moment.open;
+  if (open !== null && open.awaited && open.launchCome && open.window !== null) {
+    return chip(LANDING_PLOT_TEXT.chipOpen(open.lz), open.window.closeInSec, false);
   }
-  // To the window's launch moment (where its whole dot first fits in the band), the one pace's SKIP, GET READY and the
-  // strip count to (landing-rules launchMomentInSec), so the chip and the line agree.
-  const next = targetWindow(state, sol, now);
-  const inSec = next === null ? null : launchMomentInSec(sol, next, now);
-  if (next === null || inSec === null) return null;
-  return chip(LANDING_PLOT_TEXT.chipIn(next.lz), inSec, tac(inSec, warp) <= COUNTDOWN_RED_TAC);
+  const target = moment.target;
+  if (target === null) return null;
+  return chip(LANDING_PLOT_TEXT.chipIn(target.lz), target.launchInSec, tac(target.launchInSec, warp) <= COUNTDOWN_RED_TAC);
 }
 
 export function countdownChip(state: Readonly<GameState>, pred: Prediction, sol: Readonly<DropSolution> | null = null): CountdownChip | null {
