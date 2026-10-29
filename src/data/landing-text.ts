@@ -189,7 +189,6 @@ function landedCount(landed: number, of: number): string {
 
 // RUN END (§9 WP7 item 7, 01-landing §3.9): LANDED counts the colonists who came down in an LZ with room; the run's
 // SCORE is the landing points, shown only here and labelled as one; the rank is by SCORE.
-// TODO(slice1a-UI): RUN END's layout for the landing (per-ship LANDED rows, points); these are its words for now.
 // (Moved here from data/script.ts in the foundation follow-up: it is UI's.)
 export const RUN_END_TEXT = {
   kicker: (unit: string, wave: number): string => `RUN OVER · ${unit} · WAVE ${wave}`,
@@ -198,6 +197,7 @@ export const RUN_END_TEXT = {
   scoreNote: 'the SCORE is the landing points: less for hard, mislanded and off-site pods',
   rank: (rank: string): string => `RANK · ${rank}`,
   shipLanded: landedCount,
+  shipPoints: (points: number): string => `${formatCount(points)} PTS`,
   notReached: 'NOT REACHED',
   // Near misses (§4.4: `▼ was 140 km from a perfect lock`, `41 points short of CARETAKER`). The gap is in SCORE points,
   // so it says points (final review: `41 SCORE short of` read as a typo).
@@ -309,4 +309,75 @@ export const LANDING_STAR_MISSED = {
 // The LOST card's pods line (components/burn/BurnResult.ts): what the lost ship still carried, and what got down first.
 export const LOST_CARD_TEXT = {
   pods: (aboard: number, landed: number): string => `${formatCount(aboard)} colonists aboard · ${formatCount(landed)} landed`,
+  // `3 PODS NOT LAUNCHED`, `2 PODS PARKED IN ORBIT · fate unknown · 400 landed first`
+  podsFate: (pods: number, word: string, landed: number): string =>
+    `${pods} POD${pods === 1 ? '' : 'S'} ${word}${landed > 0 ? ` · ${formatCount(landed)} landed first` : ''}`,
+  allDown: (landed: number): string => `${formatCount(landed)} colonists landed`,
+} as const;
+
+// The GROUND TRACK panel (§4): its header (`KEPLER-186F · RIVERSIDE` once the colony is named), the brackets on the
+// strip (`[ LZ-A · 1/3 ]`), the next LZs waiting at the right edge (`LZ-B ▸ 2:10`) and what it says with no dot.
+export const GROUND_TRACK_TEXT = {
+  header: (world: string, colony: string | null): string => (colony === null ? world.toUpperCase() : `${world.toUpperCase()} · ${colony}`),
+  bracket: (lz: string, down: number, count: number): string => `[ ${lz} · ${down}/${count}${down >= count ? ' ✓' : ''} ]`,
+  ahead: (lz: string, countdown: string): string => `${lz} ▸ ${countdown}`,
+  aheadOpen: (lz: string): string => `${lz} ▸ OPEN`,
+  aheadFull: (lz: string): string => `${lz} ✓`,
+  noSolution: 'NO DROP SOLUTION',
+  noDot: 'NO DROP · THE ORBIT IS OPEN',
+  outOfBand: 'OUT OF BAND',
+  drop: (halfWidthKm: number): string => `DROP ±${Math.round(halfWidthKm)} km`,
+} as const;
+
+// The NAV PLOT's bracket labels (`LZ-A 1/3`) and the header countdown chip in LANDING (the next window: `LZ-A IN`, then
+// `LZ-A OPEN` while it is open).
+export const LANDING_PLOT_TEXT = {
+  bracket: (lz: string, down: number, count: number): string => `${lz} ${down}/${count}${down >= count ? ' ✓' : ''}`,
+  chipIn: (lz: string): string => `${lz} IN`,
+  chipOpen: (lz: string): string => `${lz} OPEN`,
+} as const;
+
+// The POD BAY window's live words beyond POD_BAY_TEXT: why [L] would not launch now, and what it would ask first.
+export const POD_BAY_STATUS_TEXT = {
+  ready: 'READY',
+  offSite: 'DOT OFF-SITE · asks first',
+  full: (lz: string): string => `${lz} FULL · asks first`,
+  allAway: 'ALL PODS AWAY',
+  noNext: 'NO POD READY',
+  cantLaunch: (pods: number): string => `${pods} CAN'T LAUNCH`,
+  endConfirmYes: '✓ END LANDING',
+  endConfirmNo: '✗ KEEP LANDING',
+  phoneLaunch: 'LAUNCH',
+} as const;
+
+// The mini-HUD in blue while landing (§4): the next window and the bay.
+export const MINI_LANDING_TEXT = {
+  windowOpen: (lz: string): string => `${lz} OPEN`,
+  windowIn: (lz: string, countdown: string): string => `${lz} IN ${countdown}`,
+  allAway: 'ALL PODS AWAY',
+  bay: (shown: number, slots: number): string => `BAY ${'▮'.repeat(shown)}${'▯'.repeat(Math.max(0, slots - shown))}`,
+  down: (down: number, total: number): string => `${down}/${total} DOWN`,
+} as const;
+
+// The LANDING REPORT's other words (§4): the skip, the charge the stars carry, the last ship, a credit's line.
+export const LANDING_REPORT_UI_TEXT = {
+  skip: 'SKIP ▸▸ [SPACE]',
+  charge: (bonus: number, perStar: number): string => (bonus > 0
+    ? `+${bonus} REPAIR CHARGE ON NEXT SHIP`
+    : `+0 REPAIR CHARGE ON NEXT SHIP · each ★ is worth +${perStar}`),
+  lastShip: 'THE LAST SHIP · the run ends here',
+  // `OKAFOR, ADA (11) · LZ-A · "Is it morning?"`
+  credit: (name: string, age: number, where: string, words: string): string => `${name.toUpperCase()} (${age}) · ${where} · “${words}”`,
+  creditWhere: (place: Place, lz: string | null, touch: Touch): string => {
+    const hard = touch === 'hard' ? ' · HARD' : '';
+    switch (place) {
+      case 'lz': return `${lz ?? '?'}${hard}`;
+      case 'mislanded': return `${lz ?? '?'} FULL${hard}`;
+      case 'off-site': return `OFF-SITE${hard}`;
+      case 'no-go': return 'NO-GO';
+      default: throw new Error(`creditWhere: unknown place '${String(place)}'`);
+    }
+  },
+  breakdown: (soft: number, hard: number, mislanded: number, offSite: number): string =>
+    `${formatCount(soft)} soft · ${formatCount(hard)} hard · ${formatCount(mislanded)} mislanded · ${formatCount(offSite)} off-site`,
 } as const;

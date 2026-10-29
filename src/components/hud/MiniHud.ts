@@ -5,8 +5,8 @@ import { getPrediction, getSensedPrediction, type Prediction } from '@systems/pr
 import { capabilitiesNow } from '@systems/capabilities';
 import { onOpsChange } from '@systems/ops-core';
 import { setMode } from '@systems/mode';
-import { onTargetTally } from '@systems/landing-rules';
-import { LANDING_HUD_TEXT } from '@data/landing-text';
+import { getDropSolution } from '@systems/drop-cache';
+import { miniHudLanding } from '@systems/landing-hud';
 import {
   countdownChip, plotChip, fuelModel, thrustLimitModel, paceLabel, plotViewRadius, mindChipModel, overclockBadge, plotZones,
   formatCountdown,
@@ -81,10 +81,9 @@ export function mountMiniHud(store: Store<GameState>): () => void {
   const fuelVal = requireById('mhFuelVal');
   const limitEl = requireById('mhLimit');
   const autoEl = requireById('mhAuto');
-  const printRow = requireById('mhPrint');
-  const printText = requireById('mhPrintText');
-  const printFast = requireById<HTMLButtonElement>('mhPrintFast');
-  const intactEl = requireById('mhIntact');
+  const landingRow = requireById('mhLanding');
+  const landingText = requireById('mhLandingText');
+  const onTargetEl = requireById('mhOnTarget');
   const nodes = buildPlot(requireById<SVGSVGElement>('mhPlot'));
   const chip = requireById<HTMLButtonElement>('mindChip');
   const chipDots = requireById('mindChipDots');
@@ -149,14 +148,14 @@ export function mountMiniHud(store: Store<GameState>): () => void {
     const pred = getSensedPrediction();
     patch(paceEl, paceLabel(state));
 
-    // While printing nothing is burning or counting down: the card trades the countdown row and the
-    // THRUST LIMIT line for the printing rows below, and keeps its height (at 1280×720 a taller card
-    // squeezes the strip and INSPECT).
+    // While landing nothing is burning: the card trades the THRUST LIMIT line for the landing rows below, and keeps
+    // its height (at 1280×720 a taller card squeezes the strip and INSPECT); the countdown row counts the next window.
     const landing = state.run.phase === 'landing';
 
     // The header's countdown, with its ▸▸ (fast-forwarding) or ×¼ (OVERCLOCK) badge.
-    const countdown = countdownChip(state, pred);
-    cdEl.hidden = landing && !countdown;
+    const sol = landing ? getDropSolution() : null;
+    const countdown = countdownChip(state, pred, sol);
+
     const badge = countdown?.fastForward ? '▸▸' : countdown?.slow ? overclockBadge() : '';
     patch(cdLabel, countdown ? countdown.label : '—');
     patch(cdTime, countdown ? countdown.time : '');
@@ -198,18 +197,17 @@ export function mountMiniHud(store: Store<GameState>): () => void {
     patch(autoEl, autoText);
     card.classList.toggle('auto-flying', flying);
 
-    // While landing: the pods down, and under it the ON TARGET star as it stands (`★ ON TARGET 5/6`).
-    // TODO(slice1a-UI): miniHudLanding (landing-hud.ts): the next window and the bay.
-    printRow.hidden = !landing;
-    intactEl.hidden = !landing;
-    printFast.hidden = true;
-    if (landing) {
-      const down = state.landing.pods.filter((record) => record.fate.kind === 'down').length;
-      patch(printText, LANDING_HUD_TEXT.crumbLanding(down, state.landing.pods.length));
-      const tally = onTargetTally(state);
-      const tone = tally.earned ? 'good' : tally.possible ? 'risk' : 'lost';
-      patch(intactEl, `${tone === 'lost' ? '☆' : '★'} ${LANDING_HUD_TEXT.onTarget(tally.onTargetPods, tally.pods)}`);
-      if (intactEl.dataset.tone !== tone) intactEl.dataset.tone = tone;
+    // While landing (01-landing §4): the bay and the pods down, and under it the ON TARGET star as it stands
+    // (`★ ON TARGET 5/6`); the countdown row above already counts the next window.
+    const mini = miniHudLanding(state, sol);
+    landingRow.hidden = mini === null;
+    onTargetEl.hidden = mini === null;
+    if (mini) {
+      patch(landingText, `${mini.bay} · ${mini.down}`);
+      patch(onTargetEl, mini.onTarget.text);
+      if (onTargetEl.dataset.tone !== mini.onTarget.tone) onTargetEl.dataset.tone = mini.onTarget.tone;
+      cdEl.hidden = false;
+      if (!countdown) patch(cdLabel, mini.window?.text ?? '—');
     }
 
     paintPlot(state, pred);

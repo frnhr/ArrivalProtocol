@@ -6,6 +6,7 @@ import './styles/base.css';
 import './styles/glitch.css';
 import './styles/legacy-components.css';
 import './styles/game.css';
+import './styles/landing.css';
 import './styles/responsive.css';
 
 import { store } from '@state/instance';
@@ -34,6 +35,8 @@ import { mountTimeControls } from '@components/header/TimeControls';
 import { mountAllWindows } from '@components/window/Window';
 import { mountEngineWindow } from '@components/tools-view/EngineWindow';
 import { mountNavPlotWindow } from '@components/tools-view/NavPlotWindow';
+import { mountGroundTrack } from '@components/tools-view/GroundTrack';
+import { mountPodBayWindow } from '@components/tools-view/PodBayWindow';
 import { mountTelemetryWindow } from '@components/tools-view/TelemetryWindow';
 import { mountToolsTabs } from '@components/tools-view/ToolsTabs';
 import { mountPhoneFlightBar } from '@components/tools-view/PhoneFlightBar';
@@ -80,6 +83,8 @@ import { mountRun } from '@systems/run';
 import { mountTransmitScreen } from '@components/run/TransmitScreen';
 import { mountRunEnd } from '@components/run/RunEnd';
 import { mountMergeTick } from '@components/memory-view/MergeTick';
+import { mountLaunchFx } from '@components/memory-view/LaunchFx';
+import { mountPodTags } from '@components/memory-view/PodTags';
 import { mountFinaleChoice } from '@components/run/FinaleChoice';
 import { mountSkillsWindow } from '@components/run/SkillsWindow';
 import { mountArrivalFlash } from '@components/run/ArrivalFlash';
@@ -169,9 +174,13 @@ mountTimeControls(store);
 mountAllWindows();
 mountToolsTabs();
 mountEngineWindow(store);
+// Slice 1a: the POD BAY window (its launch button is playerLaunch, as [L]), before the phone bar takes that button.
+mountPodBayWindow(store, { confirm: launchConfirm });
 // After the Engine window has wired its controls: on a phone they move into the touch flight bar (WP12).
 mountPhoneFlightBar();
 mountNavPlotWindow(store);
+// Under the NAV PLOT while landing: the GROUND TRACK (01-landing §4).
+mountGroundTrack(store);
 mountTelemetryWindow(store);
 mountCommsWindow(store);
 // WP8: the cards this unit carries (the dock's SYSTEM item).
@@ -231,8 +240,9 @@ memWrap.addEventListener('click', (event) => {
 //      (must subscribe AFTER MemoryStrip so they run after the rebuild)
 //   3. DetailPanel, MemoryStats, FsStatusBar, Footer — independent of .seg classes
 mountMemoryStrip(store, memWrap, segBehavior);
-// After the strip: the bars re-dock onto its rebuilt parts.
+// After the strip: the bars re-dock onto its rebuilt parts, and the drivers' BAY / NEXT tags repaint (slice 1a).
 mountOpBars(store, memWrap);
+mountPodTags(store, memWrap);
 mountFsToolsSystem(store);
 mountSelectionHighlight(store);
 mountDimPainter(store);
@@ -259,6 +269,8 @@ mountPlacement(store, memWrap);
 mountHollowPainter(store);
 // After the strip (WP11 part 2): the MERGE 20 tick on the REPAIR CHARGE pool and the charge readouts (LAST LIGHT).
 mountMergeTick(store, memWrap);
+// A launched driver's chip flash (01-landing §4), read from the strip before it rebuilds without the driver.
+mountLaunchFx(store);
 // After HOLLOW's painter (WP7): its naming decoded on the rebuilt chips, the MOVE preview's labels over the
 // placeholder Placement paints, and the arrival's red flashes on the files the crossing hit.
 mountHollowNameFx(store);

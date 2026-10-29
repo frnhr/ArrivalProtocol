@@ -181,13 +181,19 @@ export function mountSkillsWindow(store: Store<GameState>): () => void {
     toolsView.style.setProperty('--engine-h', `${height}px`);
     const gutter = parseFloat(getComputedStyle(toolsView).getPropertyValue('--gutter'));
     if (!Number.isFinite(gutter)) throw new Error('SkillsWindow: the tools view has no --gutter');
-    const room = toolsView.clientHeight - height - SKILLS_STACK_GUTTERS * gutter;
+    // While landing the POD BAY sits under the Engine window too (landing.css): Skills goes under both, or left.
+    const podBay = toolsView.querySelector<HTMLElement>(':scope > .podbay-win');
+    const podBayH = podBay !== null ? podBay.offsetHeight : 0;
+    toolsView.style.setProperty('--podbay-h', `${podBayH}px`);
+    const room = toolsView.clientHeight - height - SKILLS_STACK_GUTTERS * gutter - (podBayH > 0 ? podBayH + gutter : 0);
     toolsView.dataset.skillsDock = room < SKILLS_RIGHT_MIN_PX ? 'left' : 'right';
   };
   syncEngineHeight();
   const engineObserver = new ResizeObserver(syncEngineHeight);
   engineObserver.observe(engine);
   engineObserver.observe(toolsView);
+  const podBayWin = toolsView.querySelector<HTMLElement>(':scope > .podbay-win');
+  if (podBayWin) engineObserver.observe(podBayWin);
   // Opened (the dock, or a tab on a phone): paint at once, even between ships when no tick runs.
   const shownObserver = new MutationObserver(() => paint());
   shownObserver.observe(win, { attributes: true, attributeFilter: ['hidden'] });

@@ -1,6 +1,6 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { chargeLeft, getFreeTotal, healthKnown, hasIntegrity, driversInMemory } from '@state/selectors';
+import { chargeLeft, getFreeTotal, healthKnown, hasIntegrity } from '@state/selectors';
 import { INTEGRITY_MAX } from '@data/tuning';
 import { onOpsChange } from '@systems/ops-core';
 import { totalBlocks } from '@systems/memory-ops';
@@ -27,7 +27,7 @@ interface MemStat {
 
 // The damage a kid can see, in blocks: (100 − integrity)% of every file they may look at, whatever
 // its health word (Engine I/O at 85% still reads "intact" but is 1.2 blocks short). Unscanned ship
-// files and sealed clusters hide theirs by design (a sealed C09 at 71% must not leak here); `hidden`
+// files hide theirs by design (an unscanned Bay Ctrl at 71% must not leak here); `hidden`
 // says some damage could be out of sight, so a 0 doesn't read as "verified clean". INSPECT's overview
 // reads the same number (DetailPanel; final review: it counted only CORRUPT and PARTIAL files, so the
 // two DAMAGE readouts on one screen disagreed).
@@ -46,14 +46,14 @@ export function visibleDamage(state: Readonly<GameState>): { blocks: number; hid
 // (`CORRUPT 5 blk` beside `0 CORRUPT`).
 export function memStatsModel(state: Readonly<GameState>): Record<MemStatKey, MemStat> {
   const total = totalBlocks(state.memory);
-  const drivers = driversInMemory(state);
-  const people = drivers.reduce((sum, driver) => sum + driver.colonists, 0);
+  // The pods still aboard (01-landing §3.10: aboard until launched, whether or not their driver is still in memory) and
+  // the people in them. The key keeps its phase-2 name: the page's `#statSouls`.
+  const aboard = state.landing.pods.filter((record) => record.fate.kind === 'aboard');
+  const people = aboard.reduce((sum, record) => sum + record.colonists, 0);
   const damage = visibleDamage(state);
   return {
-    // TODO(slice1a-UI): the stat's final words (the key keeps its phase-2 name: the page's `#statSouls`).
     souls: {
-      key: 'souls', label: 'colonists aboard', value: formatCount(people),
-      small: `${drivers.length} ${drivers.length === 1 ? 'pod' : 'pods'}`, tone: 'soul',
+      key: 'souls', label: 'pods aboard', value: String(aboard.length), small: `${formatCount(people)} colonists`, tone: 'soul',
     },
     charge: { key: 'charge', label: 'repair charge', value: String(chargeLeft(state)), small: 'blk', tone: 'plain' },
     free: { key: 'free', label: 'free', value: String(getFreeTotal(state)), small: 'blk', tone: 'plain' },

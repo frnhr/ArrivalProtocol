@@ -9,6 +9,8 @@ const TAB_WINDOWS: Record<string, string> = {
   comms: '.comms-win',
   // WP8: the cards this unit carries (SkillsWindow).
   skills: '.skills-win',
+  // Slice 1a: the POD BAY, while landing (PodBayWindow; its dock item shows only then, body.landing).
+  podbay: '.podbay-win',
 };
 
 // The tab a phone opens on: the NAV PLOT, where the line goes green (the touch flight bar sits under it).

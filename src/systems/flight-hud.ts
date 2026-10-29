@@ -22,7 +22,10 @@ import { AUTO_BUTTON_TEXT, AUTO_BUTTON_REASON } from '@data/skill-text';
 import { autoburnSkill, autoburnRefusal, autoburnArmedInTac, skillFiles } from '@systems/autoburn';
 import { zoneVerdict, zoneRacks, racksText, debrisRack, type Zone, type ZoneHit, type ZoneVerdict } from '@/types/zone';
 import { mindZonesBlind } from '@systems/zones';
-import { LANDING_HUD_TEXT, LANDING_REPORT_TEXT, BAND_TEXT } from '@data/landing-text';
+import { LANDING_HUD_TEXT, LANDING_REPORT_TEXT, BAND_TEXT, LANDING_PLOT_TEXT } from '@data/landing-text';
+import type { DropSolution } from '@/types/landing';
+import { launchMomentInSec, lzRemaining, targetWindow } from '@systems/landing-rules';
+import { secFromNow } from '@systems/landing-solve';
 import {
   COUNTDOWN_RED_TAC, LOCK_HOLD_AI_SEC, PLOT_SHIP_MARGIN, PLOT_RING_FACTOR, PLOT_FLYBY_TAG_FRAC,
   STRANDED_RANGE_FRAC, TACTICAL_LEAD_BURN_TAC, UPCOMING_EVENTS_MAX, UPCOMING_HORIZON_TAC,
@@ -118,7 +121,7 @@ function inBand(radius: number, ring: Ring): boolean {
 // --- Header ---------------------------------------------------------------------------------
 
 export interface CountdownChip {
-  kind: CountdownKind;
+  kind: CountdownKind | 'window';   // 'window': LANDING's next window (01-landing §4)
   label: string;         // `✕ IMPACT`, `▼`, `BRAKE IN`
   event: string;         // the label's bare word, for lines that add their own glyphs (`IMPACT`)
   time: string;
@@ -152,7 +155,39 @@ const COUNTDOWN_EVENT: Record<Exclude<CountdownKind, 'burn'>, string> = {
   apo: '▲',
 };
 
-export function countdownChip(state: Readonly<GameState>, pred: Prediction): CountdownChip | null {
+// LANDING (01-landing §4: "the countdown chip shows the next window"): `LZ-A IN 00:42` to the next in-band window of an
+// LZ with room (landing-rules targetWindow, the one pace's SKIP aims at), then `LZ-A OPEN 00:06` to its close while it
+// is open (state.landing.window, the one source of "open now") and its LZ has room. Nothing once every pod is away. `sol` is drop-cache's
+// getDropSolution(), passed in so this stays pure; without one the chip is empty.
+function windowChip(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): CountdownChip | null {
+  const { landing } = state;
+  if (sol === null || landing.ended !== null || !landing.pods.some((record) => record.fate.kind === 'aboard')) return null;
+  const now = state.clock.tSec;
+  const warp = state.level.tacticalWarp;
+  const open = landing.window;
+  const openWindow = open === null ? null : sol.windows.find((w) => w.lz === open.lz && w.inBandCloseInSec !== null) ?? null;
+  const chip = (event: string, gameSec: number, urgent: boolean): CountdownChip => ({
+    kind: 'window', label: event, event, time: formatCountdown(tac(Math.max(0, gameSec), warp)), urgent,
+    fastForward: worldIsFast(state), slow: worldIsSlow(state),
+  });
+  // An open window into an LZ already full is no reason to launch: the chip counts to the next one with room. While only
+  // the dot's centre is in and the launch moment (the whole dot in) is still ahead, the chip keeps counting to it, as
+  // GET READY does.
+  const launchAt = openWindow === null ? null : launchMomentInSec(sol, openWindow, now);
+  const launchCome = open !== null && (open.sure || launchAt === null || launchAt <= 0);
+  if (open !== null && openWindow !== null && launchCome && (lzRemaining(state)[open.lz] ?? 0) > 0) {
+    return chip(LANDING_PLOT_TEXT.chipOpen(open.lz), secFromNow(sol, openWindow.inBandCloseInSec!, now), false);
+  }
+  // To the window's launch moment (where its whole dot first fits in the band), the one pace's SKIP, GET READY and the
+  // strip count to (landing-rules launchMomentInSec), so the chip and the line agree.
+  const next = targetWindow(state, sol, now);
+  const inSec = next === null ? null : launchMomentInSec(sol, next, now);
+  if (next === null || inSec === null) return null;
+  return chip(LANDING_PLOT_TEXT.chipIn(next.lz), inSec, tac(inSec, warp) <= COUNTDOWN_RED_TAC);
+}
+
+export function countdownChip(state: Readonly<GameState>, pred: Prediction, sol: Readonly<DropSolution> | null = null): CountdownChip | null {
+  if (state.run.phase === 'landing') return windowChip(state, sol);
   const countdown = mainCountdown(state, pred);
   if (!countdown) return null;
   let event: string;
@@ -205,12 +240,13 @@ export function headerCrumbs(state: Readonly<GameState>, pred: Prediction): Head
   const crumbs = (phase: Label): HeaderCrumbs => ({ unit, wave, ship, phase });
   if (state.run.phase === 'title') return crumbs({ text: 'STANDBY', tone: 'plain' });
   if (state.run.phase === 'boot') return crumbs({ text: 'RECEIVING', tone: 'plain' });
-  // 01-landing §4: … ORBIT LOCKED | LANDING · 2/6 DOWN. The outcome stays on the crumb until the first pod is down
-  // (the moment belongs to the lock), then the crumb says what is happening now.
-  // TODO(slice1a-UI): `ALL DOWN`, and the countdown chip's next window.
+  // 01-landing §4: … ORBIT LOCKED | LANDING · 2/6 DOWN | ALL DOWN. The outcome stays on the crumb until the first pod
+  // is down (the moment belongs to the lock), then the crumb says what is happening now, and ALL DOWN once every pod is.
   if (state.run.phase === 'landing') {
     const down = state.landing.pods.filter((record) => record.fate.kind === 'down').length;
-    if (down > 0) return crumbs({ text: LANDING_HUD_TEXT.crumbLanding(down, state.landing.pods.length), tone: 'good' });
+    const total = state.landing.pods.length;
+    if (down > 0 && down === total) return crumbs({ text: LANDING_HUD_TEXT.crumbAllDown, tone: 'good' });
+    if (down > 0) return crumbs({ text: LANDING_HUD_TEXT.crumbLanding(down, total), tone: 'good' });
   }
   if (state.run.phase === 'report') return crumbs({ text: LANDING_REPORT_TEXT.title, tone: 'good' });
   return crumbs(flightPhaseCrumb(state, pred));
@@ -920,7 +956,7 @@ const MIND_ALERT_ROLES: readonly CapabilityRole[] = ['engine-io', 'core', 'navpl
 export function toggleAlert(state: Readonly<GameState>, pred: Prediction): ToggleAlert | null {
   const flying = state.run.phase === 'flight' && state.burn.status === 'approaching';
   // While landing the mind can still call (WP6: HOLLOW eating a driver after the lock): its alerts still point the way
-  // from amber. TODO(slice1a-UI): `◀ SHIP · LZ-A OPEN` from blue during a window.
+  // from amber; and from blue, an open window calls the kid back to launch (01-landing §4: `◀ SHIP · LZ-A OPEN`).
   if (!flying && state.run.phase !== 'landing') return null;
   if (state.run.coreLost) return null;
   if (state.ui.mode === 'tools') {
@@ -937,7 +973,12 @@ export function toggleAlert(state: Readonly<GameState>, pred: Prediction): Toggl
     }
     return null;
   }
-  if (!flying) return null;
+  if (!flying) {
+    const open = state.landing.window;
+    const launchable = state.landing.ended === null && state.landing.pods.some((record) => record.fate.kind === 'aboard');
+    if (open === null || !launchable) return null;
+    return { screen: 'tools', head: '◀ SHIP ·', body: LANDING_PLOT_TEXT.chipOpen(open.lz), severity: 'warn', hollow: false };
+  }
   // WP10: the engine firing by itself for the first time, when it is the ship's only alarm (an IMPACT's countdown
   // outranks it), is named, not a countdown: the kid hacking in blue learns what just happened out there.
   const shipAlarms = state.alerts.list.filter((alert) => alert.layer === 'ship' && alert.severity === 'alarm');

@@ -86,18 +86,13 @@
   --seg-shipbak-border:   rgba(74, 144, 168, 0.40);
   --seg-free-border:     rgba(74, 122, 144, 0.25);
 
-  /* ── the colonists (WP5): the same on both screens, like the layer colours. Living mint for a
-        cluster that will wake, the hurt yellow for one that would wake with gaps; the sealed slab
-        is cold grey, the colour of something nobody has looked at. ── */
+  /* ── the colonists (WP5, the pods' drivers since slice 1a): the same on both screens, like the layer colours. Living
+        mint for a pod that will land soft, the hurt yellow for one that would land hard. ── */
   --soul: #8dffc4;
   --soul-dim: rgba(141, 255, 196, 0.38);
   --soul-bg-top: rgba(141, 255, 196, 0.15);
   --soul-bg-bot: rgba(141, 255, 196, 0.03);
   --soul-hurt: #ffce4a;
-  --sealed-a: #161b20;
-  --sealed-b: #20262c;
-  --sealed-edge: #3b444c;
-  --sealed-text: #7f8b95;
   --print-flash: #ffffff;
 
   /* ── the WAKE REPORT (WP5 part 2): the same on both screens. A deep night behind the names, the
@@ -144,6 +139,13 @@
   --merge-glow-blue: rgba(0, 212, 255, 0.28);
   --finale-backdrop: rgba(2, 4, 9, 0.8);
   --report-glow-sombre: rgba(111, 140, 158, 0.06);
+
+  /* ── the landing (slice 1a, 01-landing §4): the same on both screens. A falling pod's head burns white-hot below the
+        atmosphere line, its entry flare a hot orange; no-go ground is a harder red than the warning. ── */
+  --pod-hot: #fffaf0;
+  --pod-flare: #ffb347;
+  --nogo: #ff3b2f;
+  --nogo-hatch: rgba(255, 59, 47, 0.35);
 
   /* ── live state knob (set by systems/glitch.ts) ── */
   --corruption: 0;
