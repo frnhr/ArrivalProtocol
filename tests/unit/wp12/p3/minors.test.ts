@@ -1,18 +1,17 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP12 part 3: the smaller LEAD_NOTES `Into WP12` items, headless.
-// • WP11 verify 3: PRINT FAST is offered only while a cluster is left to print.
+// • (WP11 verify 3, PRINT FAST offered only while a cluster is left to print: gone with PRINT FAST, slice 1a; what stays
+//   is that with every pod down the finale still holds the LANDING REPORT.)
 // • WP11 verify 4: in the duel with no thread free, the strip does not ask to block a verb that cannot come.
 // • WP11 verify 5: a refused tool counts toward capRefusals in both wordings of a full Core.
 // • WP10 verify: an ACCEPTed DEAL's 60 s pause does not hold SKIP behind `SOMETHING IS COMING`.
-// • WP7 verify: the MOVE preview of a cluster bitten after the pick says STILL INFECTED, not SAFE.
+// • WP7 verify: the MOVE preview of a driver bitten after the pick says STILL INFECTED, not SAFE.
 // • WP8 verify: with two FIREWALLs the placing line lights the one still to place, and is done once both hold.
 // • WP11 TODO: a Core worn below CORE_LOW_INTEGRITY (a thread lost, nothing infected) is named on a quiet coast in blue.
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../../wp11/harness11';
 import { buildDirectorCtx, type DirectorCtx } from '@systems/director';
 import { getPrediction } from '@systems/predict';
-import { GUIDE_RULES, FIREWALL_RULES } from '@data/script';
+import { FIREWALL_RULES } from '@data/script';
 import { theRoot, infectNow } from '@systems/hollow';
 import { actionDelete } from '@state/actions';
 import { canStartOp, threadsTotal } from '@systems/ops-core';
@@ -28,17 +27,14 @@ import type { FreeSegment } from '@/types/segment';
 import { cardFiles } from '@systems/draft';
 import { installAddress } from '@systems/licences';
 import { newSegId, replaceRange, mergeAdjacentFree } from '@systems/memory-ops';
+import { setLandingMode, landInstantly } from '../../support/landing-instant';
 
 const h = createHarness11(5);
+setLandingMode('manual');
 const state = () => h.store.getState();
 const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { events: new Set(), phaseEntered: null, mindQuietSec: 0, flash: null });
-const rule = (id: string) => {
-  const found = GUIDE_RULES.find((candidate) => candidate.id === id);
-  if (!found) throw new Error(`no rule ${id}`);
-  return found;
-};
 
-// --- LAST LIGHT's duel with one thread, then everyone printed ---------------------------------------------------------
+// --- LAST LIGHT's duel with one thread, then every pod down -----------------------------------------------------------
 {
   h.lastLight(5);
   h.flyLastLight(900, { deleteRoot: false });
@@ -67,12 +63,12 @@ const rule = (id: string) => {
     shown?.text);
   check('…the line is HOLLOW_FINALE.stripDeletingAlone', shown?.text === HOLLOW_FINALE.stripDeletingAlone(shown?.text.match(/\d:\d\d/)?.[0] ?? ''));
 
-  // Everyone printed while the root still stands: no PRINT FAST offer.
-  h.store.update((d) => { d.printer.waitAiSec = 0; d.printer.fast = false; });
+  // Every pod down while the root still stands: the finale holds the LANDING REPORT.
+  landInstantly(h.store);
   h.stepUntil(() => driversInMemory(state()).length === 0, 200);
-  check('setup: every cluster printed (or lost), still printing (the finale holds the report)', driversInMemory(state()).length === 0 && state().run.phase === 'landing',
-    `${driversInMemory(state()).length} in memory, ${state().run.phase}`);
-  check('nothing left to print: PRINT FAST is not offered', !rule('print-fast-offer').activeWhen(ctxNow()));
+  h.stepFor(3);
+  check('every pod down (or lost) while the root stands: still landing (the finale holds the report)', driversInMemory(state()).length === 0
+    && state().run.phase === 'landing' && state().landing.ended !== null, `${driversInMemory(state()).length} in memory, ${state().run.phase}`);
 }
 
 // --- capRefusals counts both wordings ---------------------------------------------------------------------------------
@@ -105,14 +101,14 @@ const rule = (id: string) => {
   check('…and held again once the pause is over', skipBlockReason(state(), getPrediction()) === SKIP_REFUSAL_SEED_COMING);
 }
 
-// --- The MOVE preview of a cluster bitten after the pick ---------------------------------------------------------------
+// --- The MOVE preview of a driver bitten after the pick ----------------------------------------------------------------
 {
   const soul = driversInMemory(state()).find((candidate) => !candidate.infected)!;
   const free = state().memory.filter((seg): seg is FreeSegment => seg.type === 'free' && seg.reservedBy === undefined).sort((a, b) => b.size - a.size)[0]!;
   const placement = { regionSegIds: [free.id], col: Math.floor((free.size - soul.size) / 2) };
   // Final fix pass: the preview takes the racks a hazard zone is known to hit; none here (no belt or debris is asked).
   const clean = movePreview(state(), soul, placement, []);
-  check('a clean cluster\'s MOVE preview: not infected', clean !== null && !clean.infected);
+  check('a clean driver\'s MOVE preview: not infected', clean !== null && !clean.infected);
   infectNow(h.store, soul);
   const bitten = movePreview(state(), driversInMemory(state()).find((candidate) => candidate.id === soul.id)!, placement, []);
   check('…bitten after the pick: the preview says it is infected (the painter: STILL INFECTED / REPAIR IT FIRST ✗)', bitten?.infected === true);
