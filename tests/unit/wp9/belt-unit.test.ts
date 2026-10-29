@@ -18,6 +18,7 @@ import { podCode } from '@data/landing-text';
 import { zoneLostLine } from '@data/zone-text';
 import { setLandingMode } from '../support/landing-instant';
 import { segmentStarts } from '@systems/memory-ops';
+import { installTool } from '@systems/licences';
 import { stateFromElements } from '@/types/orbit';
 import { BELT_HIT_MEAN_SEC, BELT_HIT_DAMAGE, RACK_BLOCKS } from '@data/tuning';
 import type { BeltZone } from '@/types/zone';
@@ -125,6 +126,9 @@ check('…control: a belt the orbit lies in keeps hitting while landing (§6.8),
     d.level = { ...d.level, zones: [belt(5500, 6500)] };
     for (const seg of d.memory) if ('integrity' in seg && seg.type !== 'core' && seg.type !== 'tool' && seg.type !== 'fs-tool') seg.integrity = 5;
   });
+  // Slice 1a review (M2): drivers this low launch some day only if a REPAIR can bring them back; without one the landing
+  // would end itself (risk 7) before the belt takes one to 0.
+  if (!state().run.licences.includes('repair')) installTool(h.store, 'repair');
   h.startLanding(1, 'locked');
   let lostEvent = false;
   const end = h.wall() + 120;
