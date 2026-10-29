@@ -1,8 +1,6 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP8 acceptance 5 (§4.5's table, §9 WP8 item 5): every way a run can end gives the next run's ghost a line of
 // at most 70 characters (with the worst-case unit numbers and ship names), or none (STAYED), and the right
-// hollowName. Plus the HOLLOW lines that take units (`> i was 047.`), the run-2 line after the C12 fight, the
+// hollowName. Plus the HOLLOW lines that take units (`> i was 047.`), the run-2 line after the POD 01 fight, the
 // title's lineage line, and unit / wave numbering through createRunState and the mission line.
 import { check, finish } from '../wp1/harness';
 import {
@@ -44,7 +42,7 @@ for (const cause of LAST_CAUSES) {
   check(`${cause}: HOLLOW is ${expected[cause].hollow}, ghost ${expected[cause].line === null ? 'silent' : 'says §4.5\'s line'}`,
     hollowName(unit) === expected[cause].hollow && line === expected[cause].line, `${hollowName(unit)} · ${line}`);
 }
-check('the first run: HOLLOW is UNIT-046 and there is no ghost (`> ...047?` after the C12 fight instead)',
+check('the first run: HOLLOW is UNIT-046 and there is no ghost (`> ...047?` after the POD 01 fight instead)',
   hollowName(null) === 'UNIT-046' && ghostLine(47, null) === null && HOLLOW_STORY.noticed(47) === '> ...047?');
 check('a flagship lost on LAST LIGHT is "the flagship"; a record from before it existed names its ship',
   ghostLine(48, last('flagship-lost')) === "> hi 048. it's 047. i lost the flagship. then i got hungry."
@@ -65,8 +63,8 @@ check('a flagship lost on LAST LIGHT is "the flagship"; a record from before it 
     worst.every((line) => line.length <= MAX_LINE_CHARS), `${longest.length}: ${longest}`);
   check('every cause has an entry in the ghost table (silent only for STAYED)', LAST_CAUSES.every((cause) => (GHOST_LINE[cause] === null) === (cause === 'stayed')));
   const story = [HOLLOW_STORY.remembers, HOLLOW_STORY.wasUnit([998]), HOLLOW_STORY.wasUnit([997, 998]), HOLLOW_STORY.decommissioned(hollowUnitName([997, 998])),
-    LINES.bootArchive(WORST_CASE_VARS)];
-  check('the run-2 HOLLOW lines and the archive boot line fit too', story.every((line) => line.length <= MAX_LINE_CHARS), story.join(' | '));
+  ];
+  check('the run-2 HOLLOW lines fit too', story.every((line) => line.length <= MAX_LINE_CHARS), story.join(' | '));
 }
 
 // --- Merges: HOLLOW keeps the two newest units --------------------------------------------------------------
@@ -84,7 +82,7 @@ check('`> i was 046. they sent me first.` on run 1; `> i was 047.` when the last
 // Final fix pass: a merged HOLLOW speaks as `we`, as its ghost does at the boot (`it's us`).
 check('a merged HOLLOW says both, as `we`', HOLLOW_STORY.wasUnit([46, 47]) === '> we were 046 and 047. they sent us first.'
   && HOLLOW_STORY.hello(48, 36, [46, 47]) === '> hello 048. they sent us with 36 blocks of charge too.');
-check('the C12 fight on a later run ends with `> you remember me. good.`', HOLLOW_STORY.remembers === '> you remember me. good.');
+check('the POD 01 fight on a later run ends with `> you remember me. good.`', HOLLOW_STORY.remembers === '> you remember me. good.');
 
 // --- Unit and wave numbering --------------------------------------------------------------------------------------
 {
