@@ -26,11 +26,15 @@ import { DEAL_REFUSE } from '@systems/hollow-deal';
 import { resetReport } from '@systems/reset';
 import { chargeLeft } from '@state/selectors';
 import { MERGE_COST_CHARGE } from '@data/tuning';
+import { chooseFinale } from '@systems/finale';
 import type { GameState } from '@state/schema';
 import { byDepth } from '../depth';
 import { setLandingMode } from '../support/landing-instant';
+import { followLanding } from '../landing/harness-landing';
 
 const FINAL_LANDING_SEC = Number(process.env.FINAL_LANDING_SEC ?? 48);
+// FINAL_LANDING=strip: LAST LIGHT's landing flown by the strip ([L] at the windows, followLanding) instead of standing.
+const FINAL_STRIP = process.env.FINAL_LANDING === 'strip';
 
 // Quick depth (tests/unit/depth.ts): seeds 1 and 2, one PURGE and one MERGE run; full: 50.
 const SEEDS = Number(process.env.RUN_SEEDS ?? byDepth(2, 50));
@@ -57,7 +61,21 @@ function flyShip(): void {
 
 // Defends through the landing to the LANDING REPORT (on the flagship: through the duel and the choice).
 function toReport(choice: 'purge' | 'merge'): boolean {
-  if (state().run.shipIndex === LAST_LIGHT) {
+  if (state().run.shipIndex === LAST_LIGHT && FINAL_STRIP) {
+    let picked = false;
+    followLanding(h, {
+      maxWall: 900,
+      onTick: () => {
+        h.defend11(defendOpts);
+        if (picked || state().hollow.finale.phase !== 'choice') return;
+        picked = true;
+        chargeAtChoice = chargeLeft(state());
+        const hollow = state().hollow;
+        verbsAtChoice = { moments: hollow.verbMoments, telegraphed: hollow.verbsLanded + hollow.verbsBlocked, landed: hollow.verbsLanded, blocked: hollow.verbsBlocked };
+        chooseFinale(h.store, choice === 'merge' && chargeLeft(state()) >= MERGE_COST_CHARGE ? 'merge' : 'purge');
+      },
+    });
+  } else if (state().run.shipIndex === LAST_LIGHT) {
     const end = h.wall() + 600;
     while (state().hollow.finale.phase !== 'choice' && state().run.phase === 'landing' && !state().run.coreLost && h.wall() < end) {
       h.defend11(defendOpts);
@@ -98,7 +116,7 @@ for (let seed = 1; seed <= SEEDS; seed++) {
   let guard = 0;
   while (state().run.phase !== 'end' && guard++ < 12) {
     if (state().run.phase === 'boot') h.stepUntil(() => state().run.phase !== 'boot', 25);
-    setLandingMode(state().run.shipIndex === LAST_LIGHT && FINAL_LANDING_SEC > 0 ? { after: FINAL_LANDING_SEC } : 'instant');
+    setLandingMode(state().run.shipIndex !== LAST_LIGHT ? 'instant' : FINAL_STRIP ? 'manual' : FINAL_LANDING_SEC > 0 ? { after: FINAL_LANDING_SEC } : 'instant');
     if (state().run.phase === 'flight' && state().burn.status === 'approaching' && !state().run.coreLost) flyShip();
     if (shipLost(state())) {
       // The LOST card's button.

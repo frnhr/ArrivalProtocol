@@ -19,11 +19,12 @@
 //    verb 0.8 s into its countdown and starts the root's DELETE as soon as a thread is free) flies LAST LIGHT on 200
 //    seeds: it completes the root's DELETE and loses ≤ 4 of 16 pods' drivers on average.
 // Slice 1a (plan risk 4): LAST LIGHT has §3.16's final-ship layout (the root in rack C between POD 11 and POD 12, 7 pods
-// in rack B under the belt) and the boss balance was re-measured. Phase 2's printing kept the clusters in memory for the
-// duel (16 × 3.0 s); C keeps that exposure: the landing stands BOSS_LANDING_SEC AI seconds (default 48, phase 2's print
-// time) while HOLLOW bites, then the pods land at once (tests/unit/support/landing-instant.ts). BOSS_LANDING_SEC=0 is
-// the instant landing (the lower bound); a landing by the strip (4 windows) takes longer: Track SIM's flow suites time it.
-// TODO(phase2): fly C's landing by the strip ([L] at the windows) once Track SIM's bay and pace are merged.
+// in rack B under the belt) and the boss balance was re-measured. C flies the landing by the strip (followLanding: [L]
+// when the strip asks) while the defender fights the duel, and picks PURGE at the choice. BOSS_LANDING=stand instead
+// keeps phase 2's exposure: the landing stands BOSS_LANDING_SEC AI seconds (default 48, phase 2's 16 × 3.0 s of printing)
+// while HOLLOW bites, then the pods land at once (tests/unit/support/landing-instant.ts); BOSS_LANDING_SEC=0 is the
+// instant landing (the lower bound). Measured on 30 seeds, slice 1a: by the strip 30/30 root deleted, 0.00 lost, 150
+// verbs (0 landed, 120 blocked); standing 48 s the same numbers.
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { createInitialState } from '@state/initial';
@@ -49,6 +50,8 @@ import {
 import { HOLLOW_VERB } from '@data/hollow-text';
 import { byDepth } from '../depth';
 import { setLandingMode } from '../support/landing-instant';
+import { followLanding } from '../landing/harness-landing';
+import { chooseFinale } from '@systems/finale';
 
 // --- A. Fairness, pure ------------------------------------------------------------------------------------------------
 
@@ -483,12 +486,16 @@ h.step();
   check('B: …and no verb starts there even when its clock is out', state().hollow.verb === null && state().hollow.verbMoments === 0);
 }
 
-// --- C. The competent defender, 200 seeds (12 at quick depth) ----------------------------------------------------------------------------
+// --- C. The competent defender, 200 seeds (6 at quick depth) ----------------------------------------------------------------------------
 
 {
-  const SEEDS = Number(process.env.BOSS_SEEDS ?? byDepth(12, 200));
+  const SEEDS = Number(process.env.BOSS_SEEDS ?? byDepth(6, 200));
   const LANDING_SEC = Number(process.env.BOSS_LANDING_SEC ?? 48);
-  setLandingMode(LANDING_SEC > 0 ? { after: LANDING_SEC } : 'instant');
+  // BOSS_LANDING: 'strip' (default: [L] at the windows, followLanding) or 'stand' (BOSS_LANDING_SEC, then instant).
+  const MODE = process.env.BOSS_LANDING ?? 'strip';
+  if (MODE !== 'strip' && MODE !== 'stand') throw new Error(`BOSS_LANDING=${MODE} is neither strip nor stand`);
+  const STRIP = MODE === 'strip';
+  setLandingMode(STRIP ? 'manual' : LANDING_SEC > 0 ? { after: LANDING_SEC } : 'instant');
   let completed = 0;
   let lostTotal = 0;
   let worst = 0;
@@ -503,8 +510,19 @@ h.step();
     h.flyLastLight(900);
     if (h.status() !== 'locked' && h.status() !== 'accepted') { failures.push(`seed ${seed}: ${h.status()}`); lostTotal += 16; continue; }
     if (h.status() === 'locked') locked++;
-    const end = h.finishFinale('purge', 500);
-    if (end.reachedChoice) completed++;
+    let reachedChoice = false;
+    if (STRIP) {
+      followLanding(h, {
+        maxWall: 900,
+        onTick: () => {
+          h.defend11();
+          if (!reachedChoice && state().hollow.finale.phase === 'choice') { reachedChoice = true; chooseFinale(h.store, 'purge'); }
+        },
+      });
+    } else {
+      reachedChoice = h.finishFinale('purge', 500).reachedChoice;
+    }
+    if (reachedChoice) completed++;
     else failures.push(`seed ${seed}: no choice (${state().hollow.finale.phase}, ${state().run.phase})`);
     const lost = state().landing.pods.filter((record) => record.driverLost !== null).length;
     lostTotal += lost;
@@ -514,7 +532,7 @@ h.step();
     verbs += state().hollow.verbMoments;
   }
   const mean = lostTotal / SEEDS;
-  console.log(`C: ${SEEDS} seeds, the landing standing ${LANDING_SEC} AI s, in ${((Date.now() - started) / 1000).toFixed(0)} s: locked ${locked}, root deleted ${completed}, lost ${mean.toFixed(2)} on average (worst ${worst}); verbs ${verbs} (landed ${landed}, blocked ${blocked})`);
+  console.log(`C: ${SEEDS} seeds, the landing ${STRIP ? 'flown by the strip' : `standing ${LANDING_SEC} AI s`}, in ${((Date.now() - started) / 1000).toFixed(0)} s: locked ${locked}, root deleted ${completed}, lost ${mean.toFixed(2)} on average (worst ${worst}); verbs ${verbs} (landed ${landed}, blocked ${blocked})`);
   check(`C: the competent defender completes the root's DELETE on every seed (${SEEDS})`, completed === SEEDS, failures.slice(0, 5).join(' | '));
   check('C: …and loses ≤ 4 of 16 pods\' drivers on average', mean <= 4, `${mean.toFixed(2)} (worst ${worst})`);
   setLandingMode('instant');

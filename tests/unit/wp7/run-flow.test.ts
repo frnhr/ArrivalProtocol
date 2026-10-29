@@ -73,9 +73,11 @@ const engineBefore = integrityOf('engine-io');
 const chargeBefore = chargeLeft(state());
 const revBefore = state().run.rev;
 // Ship 1's report goes on to the next ship; LAST LIGHT's (the last) says the run ends (below).
-// TODO(phase2): Track UI's LANDING REPORT may say the next ship's charge again (WP7 fix round 1's ON NEXT SHIP line).
+// Track UI's LANDING REPORT says the next ship's charge again (WP7 fix round 1's ON NEXT SHIP line): 6 per ★.
 check('ship 1\'s LANDING REPORT: CONTINUE ▸', landingReportModel(state()).continueText === LANDING_REPORT_TEXT.continue
   && !landingReportModel(state()).finalShip, landingReportModel(state()).continueText);
+check('…and `+N REPAIR CHARGE ON NEXT SHIP`, N = 6 per ★ earned', landingReportModel(state()).charge === earned * STAR_CHARGE_BONUS
+  && landingReportModel(state()).chargeLine.startsWith(`+${earned * STAR_CHARGE_BONUS} REPAIR CHARGE ON NEXT SHIP`), landingReportModel(state()).chargeLine);
 continueAfterReport(h.store);
 const plan = state().run.transit;
 check('CONTINUE → TRANSMIT: the ship\'s result is in the run, the packet is worked out, nothing runs',

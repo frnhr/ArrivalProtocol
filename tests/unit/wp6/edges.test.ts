@@ -205,7 +205,8 @@ const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
 // --- A launch and a bite in the same tick ---------------------------------------------------------------------------
 // The landing's systems tick before HOLLOW (main.ts mounts the landing first, as the harness does): pods launched in a
 // tick are gone before that tick's bite. The launch here is the instant landing's (forceLandAll through the real
-// launch path). TODO(phase2): launch with [L] through requestLaunch once Track SIM's bay ticks.
+// launch path, from an AI tick mounted with the landing): a kid's [L] lands between ticks, so only an in-tick launcher
+// (a future controller, requestLaunch) can race a bite.
 {
   fresh({ wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: 25, drainPerSec: 2, burnMult: 2, landMult: 1, seed: null, verbs: null, deal: false, story: 'none' });
   h.startLanding(1);

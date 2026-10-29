@@ -66,7 +66,7 @@ h.resetTo('flight');
 const crumbs = headerCrumbs(h.store.getState(), getPrediction());
 check('run 1: the crumbs read UNIT-047 and ARES-VII (the title becomes `UNIT-047 · ARES-VII`)',
   crumbs.unit === 'UNIT-047' && crumbs.ship === 'ARES-VII' && `${crumbs.unit} · ${crumbs.ship}` === 'UNIT-047 · ARES-VII', `${crumbs.unit} · ${crumbs.ship}`);
-// TODO(phase2): the footer's final words are Track UI's (`PODS: 8 ABOARD · 3 LANDED · 1 CAN'T LAUNCH`); only the count here.
+// Track UI's footer words (`PODS: 8 ABOARD · 3 LANDED · 1 CAN'T LAUNCH` later in a landing).
 check('run 1 at the start: the footer counts the 3 pods aboard (`PODS: 3 ABOARD · 0 LANDED`, no stasis line)',
   podsLabel(h.store.getState()) === 'PODS: 3 ABOARD · 0 LANDED', podsLabel(h.store.getState()));
 

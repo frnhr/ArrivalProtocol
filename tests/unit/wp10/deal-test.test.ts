@@ -23,6 +23,8 @@ import { offerDealNow, dealFront, DEAL_ACCEPT, DEAL_REFUSE } from '@systems/holl
 import { cureNow, hollowReach } from '@systems/hollow';
 import { actionMove } from '@state/actions';
 import { podRecord } from '@systems/landing-rules';
+import { setLoadNext } from '@systems/landing';
+import { playerLaunch } from '@systems/landing-controls';
 import { isPodCode } from '../support/pod-code';
 import { setLandingMode } from '../support/landing-instant';
 import { endFlight } from '@systems/orbit-sim';
@@ -211,26 +213,30 @@ function toOffer(seed: number): void {
 }
 
 // --- Invalidated: the named pod launches ----------------------------------------------------------------------------
-// TODO(phase2): launch POD 08 alone with LOAD NEXT and [L] once Track SIM's bay ticks; here the instant landing launches
-// every pod (forceLandAll, the real launch path).
+// The kid puts POD 08 first (LOAD NEXT) and presses [L] in an LZ window (landing-controls playerLaunch, the key's own
+// path): only POD 08 goes. The offer's 15 AI s are shorter than the wait for VESPER's first window, so it is made in the
+// window (offerDealNow), with HOLLOW asleep so nothing else touches POD 08 meanwhile.
 {
-  // The wake's offer (naming POD 08) still stands when the orbit locks: the bites cured, then the landing.
-  h.vesper(9);
-  h.stepUntil(() => state().hollow.deal.phase === 'offered', 60);
-  cureNow(h.store, soul('C08')!);
-  cureNow(h.store, soul('C09')!);
+  h.vesper(9, { hollowAsleep: true });
   setLandingMode('manual');
   h.startLanding(1);
+  h.stepUntil(() => state().landing.window !== null, 300);
+  offerDealNow(h.store, soul('C08')!);
+  h.step();
   const entry = dealEntry()!;
-  check('an offer standing into the landing (named POD 08)', state().run.phase === 'landing' && entry.choice?.open === true
-    && state().hollow.deal.pod === 8);
-  setLandingMode('instant');
-  h.stepUntil(() => soul('C08') === undefined || state().hollow.deal.phase === 'done', 30);
+  check('an offer in the landing, in an LZ window (named POD 08)', state().run.phase === 'landing' && state().landing.window !== null
+    && entry.choice?.open === true && state().hollow.deal.pod === 8);
+  const loadNext = setLoadNext(h.store, 8);
+  const launch = playerLaunch(h.store, (_text, onYes) => onYes());
   h.step();
   const fate = podRecord(state(), 8).fate;
-  check('…POD 08 launches: the offer is withdrawn (invalidated)', soul('C08') === undefined && (fate.kind === 'down' || fate.kind === 'falling')
+  const others = state().landing.pods.filter((record) => record.pod !== 8 && record.fate.kind !== 'aboard').map((record) => record.pod);
+  check('…LOAD NEXT POD 08, then [L]: POD 08 launches alone, and the offer is withdrawn (invalidated)',
+    loadNext === null && launch.kind === 'launched' && launch.pod === 8 && soul('C08') === undefined
+    && (fate.kind === 'down' || fate.kind === 'falling') && others.length === 0
     && state().run.stats.deal?.outcome === 'invalidated' && !entry.choice!.open,
-    `${state().run.stats.deal?.outcome} ${fate.kind}`);
+    `${loadNext ?? 'pinned'}, ${launch.kind}, POD 08 ${fate.kind}, others away ${others.join(',') || 'none'}, deal ${state().run.stats.deal?.outcome}`);
+  setLandingMode('instant');
 }
 
 // --- Never twice in a run; a deal during a burn ---------------------------------------------------------------------

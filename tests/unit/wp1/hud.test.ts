@@ -168,8 +168,8 @@ function stepWhile(cond: () => boolean, maxWall = 400): void {
     && plotReadouts(state(), pred).status.text === 'LOCKED' && plotReadouts(state(), pred).range.text === '100%');
   // WP5: a lock goes on into the landing (slice 1a), where the world still coasts at TACTICAL (the plot moves);
   // only a lost ship's pace reads STOPPED.
-  // TODO(phase2): Track UI's countdown chip shows the next LZ window in LANDING and paceLabel gains the landing's words;
-  // this harness mounts no drop cache, so re-check both against the merged flight-hud.ts.
+  // The WP1 harness mounts no landing, so no LZ window is counted here; the chip in a real landing (the next LZ window)
+  // is tests/unit/landing/hud.test.ts's.
   check('locked: BURN shows FLIGHT OVER (disabled), pace TACTICAL while landing, no countdown',
     burnButton(state()).disabled && burnButton(state()).text === 'FLIGHT OVER'
     && state().run.phase === 'landing' && paceLabel(state()) === 'TACTICAL ×20' && countdownChip(state(), pred) === null,
