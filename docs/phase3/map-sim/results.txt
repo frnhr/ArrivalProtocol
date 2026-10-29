@@ -1,0 +1,90 @@
+== persistent arm, player "best": 20 chains x 200 runs = 4000 runs
+  best route pods: median 68.0, p1 65, p10 67, p90 69, min 63, max 69  (x200 colonists)
+  best route length: 5: 0%, 6: 43%, 7: 57%
+  best 5-ship route / run best: median 0.84, p10 0.64  (exists in 100% of runs)
+  best 6-ship route / run best: median 0.99, p10 0.88  (exists in 100% of runs)
+  best 7-ship route / run best: median 1.00, p10 0.99  (exists in 100% of runs)
+  best 8-ship route / run best: median 0.93, p10 0.90  (exists in 100% of runs)
+  with the TIGHT cost, best route length: 5: 0%, 6: 43%, 7: 57%
+  late TIGHT ships per arm: mean 2.74; on the best route: 0% (no cost), 0% (with cost)
+  memory classes: FULL 34%, COMPACT 38%, TIGHT 29%
+  ships on some route: median 20.0, min 20;  routes: median 1012.0, min 667, max 1347
+  run span (first ship to final ship): median 732.0, p10 726, p90 735
+  request from ship 2 reaches ship 3 (route taken): 96%
+  attempts: first try 77.1%, max 12
+  best pods by run block: 1-40: 67.8, 41-80: 67.8, 81-120: 67.8, 121-160: 67.7, 161-200: 67.8
+  corr(pods taken last run, best pods this run): +0.057
+  ships carried over at run start: median 8, p10 5, p90 12 of 20;  new ships per run: median 12.0
+  leaving the chart per run: done 6.17, aged 2.43, resolved 2.02, drifted 1.00, unreachable 0.05, made-room-for-ark 0.03
+  age of ships at run start: 0: 55%, 1: 28%, 2: 17%
+  lights per arm: mean 5.77; arks per arm: mean 2.57
+  launch gap: mean 2.81, median 2.0, max 35;  time valve opened in 0.00% of runs (0 of 4000)
+  final ship year minus start year: median 732.0, p10 726, p90 735
+  runs with a new final ship: 87%;  authored ships still waiting at run 10: 0.00 of 3, at run 50: 0.00
+== persistent arm, player "random": 20 chains x 200 runs = 4000 runs
+  best route pods: median 69.0, p1 65, p10 67, p90 69, min 63, max 69  (x200 colonists)
+  best route length: 5: 0%, 6: 52%, 7: 47%
+  best 5-ship route / run best: median 0.84, p10 0.64  (exists in 100% of runs)
+  best 6-ship route / run best: median 1.00, p10 0.88  (exists in 100% of runs)
+  best 7-ship route / run best: median 0.99, p10 0.99  (exists in 100% of runs)
+  best 8-ship route / run best: median 0.93, p10 0.90  (exists in 100% of runs)
+  with the TIGHT cost, best route length: 5: 0%, 6: 52%, 7: 47%
+  late TIGHT ships per arm: mean 2.61; on the best route: 0% (no cost), 0% (with cost)
+  memory classes: FULL 35%, COMPACT 36%, TIGHT 29%
+  ships on some route: median 20.0, min 20;  routes: median 1012.0, min 667, max 1347
+  run span (first ship to final ship): median 731.0, p10 725, p90 735
+  request from ship 2 reaches ship 3 (route taken): 91%
+  attempts: first try 77.4%, max 12
+  best pods by run block: 1-40: 67.9, 41-80: 68.0, 81-120: 68.1, 121-160: 68.0, 161-200: 68.0
+  corr(pods taken last run, best pods this run): +0.030
+  ships carried over at run start: median 9, p10 6, p90 12 of 20;  new ships per run: median 11.0
+  leaving the chart per run: done 5.88, resolved 2.15, aged 2.11, drifted 0.96, unreachable 0.06, made-room-for-ark 0.01
+  age of ships at run start: 0: 52%, 1: 31%, 2: 17%
+  lights per arm: mean 5.85; arks per arm: mean 2.66
+  launch gap: mean 2.76, median 2.0, max 35;  time valve opened in 0.00% of runs (0 of 4000)
+  final ship year minus start year: median 731.0, p10 725, p90 735
+  runs with a new final ship: 85%;  authored ships still waiting at run 10: 0.00 of 3, at run 50: 0.00
+== persistent arm, player "mix": 20 chains x 200 runs = 4000 runs
+  best route pods: median 68.0, p1 65, p10 67, p90 69, min 63, max 69  (x200 colonists)
+  best route length: 5: 0%, 6: 41%, 7: 59%
+  best 5-ship route / run best: median 0.84, p10 0.64  (exists in 100% of runs)
+  best 6-ship route / run best: median 0.99, p10 0.88  (exists in 100% of runs)
+  best 7-ship route / run best: median 1.00, p10 0.99  (exists in 100% of runs)
+  best 8-ship route / run best: median 0.93, p10 0.90  (exists in 100% of runs)
+  with the TIGHT cost, best route length: 5: 0%, 6: 41%, 7: 58%
+  late TIGHT ships per arm: mean 2.67; on the best route: 0% (no cost), 0% (with cost)
+  memory classes: FULL 34%, COMPACT 37%, TIGHT 29%
+  ships on some route: median 20.0, min 20;  routes: median 1068.0, min 667, max 1347
+  run span (first ship to final ship): median 731.0, p10 725, p90 735
+  request from ship 2 reaches ship 3 (route taken): 93%
+  attempts: first try 78.0%, max 12
+  best pods by run block: 1-40: 67.7, 41-80: 67.9, 81-120: 67.7, 121-160: 67.7, 161-200: 67.9
+  corr(pods taken last run, best pods this run): +0.030
+  ships carried over at run start: median 9, p10 5, p90 12 of 20;  new ships per run: median 11.0
+  leaving the chart per run: done 6.04, resolved 2.16, aged 2.13, drifted 0.91, unreachable 0.05, made-room-for-ark 0.03
+  age of ships at run start: 0: 53%, 1: 31%, 2: 17%
+  lights per arm: mean 5.82; arks per arm: mean 2.55
+  launch gap: mean 2.69, median 2.0, max 35;  time valve opened in 0.00% of runs (0 of 4000)
+  final ship year minus start year: median 731.0, p10 725, p90 735
+  runs with a new final ship: 86%;  authored ships still waiting at run 10: 0.00 of 3, at run 50: 0.00
+== fresh roll every run (old generator), player "mix": 20 chains x 200 runs = 4000 runs
+  best route pods: median 67.0, p1 63, p10 66, p90 69, min 61, max 69  (x200 colonists)
+  best route length: 5: 1%, 6: 40%, 7: 60%
+  best 5-ship route / run best: median 0.83, p10 0.64  (exists in 100% of runs)
+  best 6-ship route / run best: median 0.99, p10 0.88  (exists in 100% of runs)
+  best 7-ship route / run best: median 1.00, p10 0.99  (exists in 100% of runs)
+  best 8-ship route / run best: median 0.93, p10 0.90  (exists in 100% of runs)
+  with the TIGHT cost, best route length: 5: 1%, 6: 40%, 7: 60%
+  late TIGHT ships per arm: mean 2.72; on the best route: 1% (no cost), 0% (with cost)
+  memory classes: FULL 34%, COMPACT 37%, TIGHT 30%
+  ships on some route: median 20.0, min 20;  routes: median 1072.0, min 667, max 1347
+  run span (first ship to final ship): median 721.0, p10 686, p90 732
+  request from ship 2 reaches ship 3 (route taken): 94%
+  attempts: first try 84.7%, max 5
+  best pods by run block: 1-40: 67.6, 41-80: 67.5, 81-120: 67.6, 121-160: 67.6, 161-200: 67.6
+  corr(pods taken last run, best pods this run): +0.021
+  ships carried over at run start: median 0, p10 0, p90 0 of 20;  new ships per run: median 0
+  age of ships at run start: 0: 100%
+  lights per arm: mean 5.94; arks per arm: mean 2.48
+  final ship year minus start year: median 721.0, p10 686, p90 732
+  runs with a new final ship: 100%;  authored ships still waiting at run 10: 0.00 of 3, at run 50: 0.00

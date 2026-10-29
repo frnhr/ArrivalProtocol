@@ -14,6 +14,9 @@ Each item is marked:
   replace these; anything that changes a decided item needs Fran.
 - **Open**: a question that still needs Fran's answer (collected in §12).
 
+Decided does not mean final. Any decision may be reversed when there is a good argument: wherever one gets in the way
+of good gameplay, raise it to Fran to be confirmed or reverted (`docs/phase3/DECISIONS.md`).
+
 ---
 
 ## 1. The shape of the game
