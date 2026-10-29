@@ -2371,9 +2371,8 @@ body.reduced-motion .seg.infected { box-shadow: inset 0 0 12px var(--hollow-stat
 .ms-free { background: color-mix(in srgb, var(--layer-mind) 6%, transparent); }
 .ms-core,
 .ms-charge { background: color-mix(in srgb, var(--layer-mind) 55%, transparent); }
-.ms-soul { background: var(--soul); }
-.ms-soul-hurt { background: var(--soul-hurt); }
-.ms-sealed { background: var(--sealed-edge); }
+.ms-driver { background: var(--soul); }
+.ms-driver-hurt { background: var(--soul-hurt); }
 .ms-hollow { background: var(--hollow-red); animation: ms-hollow 1.4s ease-in-out infinite; }
 @keyframes ms-hollow { 50% { opacity: 0.45; } }
 .ms-infected { outline: 1px solid var(--hollow-red); animation: ms-infected 0.8s steps(2, jump-none) infinite; }

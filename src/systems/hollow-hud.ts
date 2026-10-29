@@ -162,9 +162,9 @@ export function firewallFits(marks: Readonly<ReachMarks>): boolean {
 
 // --- The amber mini-strip (§7.1) ---------------------------------------------------------------------
 
-// What a cell of the mini-strip is: the colonists in their mint (the hurt yellow when they would wake
-// with gaps), the sealed archive grey, HOLLOW red, free space empty, the rest of the files dim.
-export type MiniKind = 'free' | 'file' | 'core' | 'charge' | 'soul' | 'soul-hurt' | 'sealed' | 'hollow';
+// What a cell of the mini-strip is: a pod's driver in the colonists' mint (the hurt yellow while its pod would land
+// hard: 01-landing §3.8), HOLLOW red, free space empty, the rest of the files dim.
+export type MiniKind = 'free' | 'file' | 'core' | 'charge' | 'driver' | 'driver-hurt' | 'hollow';
 
 export interface MiniCell {
   segId: string;
@@ -181,10 +181,8 @@ function miniKind(seg: Segment): MiniKind {
     case 'hollow': return 'hollow';
     case 'core': return 'core';
     case 'redundancy': return 'charge';
-    // TODO(slice1a-UI): the mini kinds become 'driver' / 'driver-hurt' (plan §4 Track UI); until then a driver reads as
-    // the old soul chip, hurt when it would land hard.
     case 'driver':
-      return driverTouch(seg.integrity) === 'soft' ? 'soul' : 'soul-hurt';
+      return driverTouch(seg.integrity) === 'soft' ? 'driver' : 'driver-hurt';
     default: return 'file';
   }
 }
