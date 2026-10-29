@@ -53,10 +53,13 @@ for (const [name, text] of Object.entries(STAMP_TEXT)) {
   check(`stamp ${name}: capitals, no "!"`, text === text.toUpperCase() && !text.includes('!'), text);
 }
 
-// §3.5 glossary: words a kid must never read.
+// §3.5 glossary: words a kid must never read. Slice 1a (01-landing §8): the glossary gains LAUNCH BAND (`IN BAND`,
+// `OUT OF THE LAUNCH BAND`), so a bare "band" is still refused but those are not; and never "scatter", "deorbit",
+// "insertion", or IMPACT for a pod.
 const NEVER_SAY = [
-  /tools mode/i, /memory mode/i, /periapsis/i, /apoapsis/i, /\buplink\b/i, /\bband\b/i, /inserted/i,
+  /tools mode/i, /memory mode/i, /periapsis/i, /apoapsis/i, /\buplink\b/i, /(?<!\b(?:LAUNCH|IN|OF) )\bband\b/i, /inserted/i,
   /BURN LEFT/, /Δv/, /redundancy/i, /\bRDN\b/, /\bcores\b/i, /\bmoat\b/i, /Fleet Office/i, /OKAFOR BLOCK/,
+  /scatter/i, /deorbit/i, /insertion/i, /\bpods?\b.*\bimpact/i, /\bimpact\b.*\bpods?\b/i,
 ];
 for (const { where, text } of rendered) {
   const hit = NEVER_SAY.find((pattern) => pattern.test(text));

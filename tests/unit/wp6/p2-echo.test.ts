@@ -1,14 +1,14 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP7: HollowDef gained `story` and the timed wake `coastLeadSec` (HALCYON's coast-tied wake); the
 // fixtures below spell them out (no story, no coast lead: the WP6 behaviour they test).
+// Slice 1a: pods for clusters (ARES-VII's POD 01 is next to the root, POD 02 arrives hurt, POD 03 is the third), and no
+// sealed archive (no breach line).
 // WP6 part 2, spec item 11: the TERMINAL's command echoes, on the live systems.
 // • Every player op echoes once when it ends (`> repair engine_io ... OK · −10 CHARGE`, `> scan stasis
-//   ... 0 pods`, `> move c09 ... OK`, `> delete ??? ... OK · +8 FREE`, `> swap thrust_controller thrust.alt ... OK` (WP10),
+//   ... 0 pods`, `> move pod02 ... OK`, `> delete ??? ... OK · +8 FREE`, `> swap thrust_controller thrust.alt ... OK` (WP10),
 //   the v2 squeeze); a stopped repair says what it already cost; one HOLLOW ate under it says EATEN and
 //   that the charge is lost; a repair that runs out of charge keeps its one NO CHARGE line.
-// • Every HOLLOW action echoes in its own pink voice with who did it: `> infect c12   [user: ???]`,
-//   `> eat c11 ... DID NOT WAKE   [user: ???]`, `> eat telemetry ... GONE   [user: ???]`; the tag is
+// • Every HOLLOW action echoes in its own pink voice with who did it: `> infect pod01   [user: ???]`,
+//   `> eat pod03 ... DID NOT WAKE   [user: ???]`, `> eat telemetry ... GONE   [user: ???]`; the tag is
 //   LineVars.hollow (`???`, `UNIT-046` once it names itself). On a sealed archive the infect echo comes
 //   before the breach line.
 // • Every echo fits a line (≤ MAX_LINE_CHARS with worst-case names) and says no "never say" word; the
@@ -23,9 +23,9 @@ import { getOps } from '@systems/ops-core';
 import { installTool } from '@systems/licences';
 import { lineVars } from '@data/script';
 import { getPrediction } from '@systems/predict';
-import { getRedundancy, getByRole, driversInMemory } from '@state/selectors';
+import { getRedundancy, getByRole } from '@state/selectors';
 import { OP_ECHO, OP_LINES, echoName, scanFinding } from '@data/tool-text';
-import { HOLLOW_ECHO, HOLLOW_HUD_TEXT, HOLLOW_STORY } from '@data/hollow-text';
+import { HOLLOW_ECHO, HOLLOW_HUD_TEXT } from '@data/hollow-text';
 import type { HollowDef } from '@data/ships';
 import type { Segment, FreeSegment, HollowSegment, ShipSegment, FsToolSegment } from '@/types/segment';
 import { MAX_LINE_CHARS, SEG_NAME_MAX_CHARS } from '@data/tuning';
@@ -59,7 +59,7 @@ function fresh(cfg?: HollowDef): void {
   check('echo names: lowercase, words joined by _, only letters, digits, . and _',
     names.join() === 'engine_io,life_support,thrust_controller,repair.bak,thrust.alt,repair_charge,ai_core', names.join());
   const root = mem().find((seg): seg is HollowSegment => seg.type === 'hollow' && seg.root)!;
-  check('echo names: a cluster by its code, a hollow block by its owner', echoName(h.soul('C12')) === 'c12' && echoName(root) === '???');
+  check('echo names: a pod\'s driver by its tag, a hollow block by its owner', echoName(h.soul('POD 01')) === 'pod01' && echoName(root) === '???');
 }
 
 // --- The player's ops -----------------------------------------------------------------------------------------
@@ -77,7 +77,7 @@ function fresh(cfg?: HollowDef): void {
   const stasis = getByRole(state(), 'stasis')!;
   actionScan(h.store, stasis);
   h.runOps();
-  check('scan STASIS: `> scan stasis ... 0 pods` (§9 WP6 item 11)', said('cmd', '> scan stasis ... 0 pods'), mind().slice(-1).join());
+  check('scan STASIS: `> scan stasis ... 0 pods` (§9 WP6 item 11)', said('cmd', `> scan stasis ... ${scanFinding('stasis', 100)}`), mind().slice(-1).join());
   actionScan(h.store, getByRole(state(), 'life')!);
   h.runOps();
   check('scan Life Support: the colonists\' other clue, `0 breathing`', said('cmd', '> scan life_support ... 0 breathing'), mind().slice(-1).join());
@@ -86,20 +86,20 @@ function fresh(cfg?: HollowDef): void {
   h.runOps();
   check('scan another ship file: its health', said('cmd', `> scan reactor ... ${scanFinding('reactor', 100)}`) && scanFinding('reactor', 100) === '100%', mind().slice(-1).join());
 
-  const c09 = h.soul('C09');
+  const c09 = h.soul('POD 02');
   const beforeCancel = chargeLeft();
   actionRepair(h.store, c09);
   h.stepFor(0.5);
   cancelPlayerOp(h.store, getOps()[0]!.id);
   const paid = beforeCancel - chargeLeft();
-  check('a stopped repair: `> repair c09 ... STOPPED · −n CHARGE` (what it already paid)', paid > 0 && said('cmd', OP_ECHO.repairEnded('c09', paid, 'stopped')),
+  check('a stopped repair: `> repair pod02 ... STOPPED · −n CHARGE` (what it already paid)', paid > 0 && said('cmd', OP_ECHO.repairEnded('pod02', paid, 'stopped')),
     mind().slice(-1).join());
 
-  // MOVE C09 into rack D (a jump), COPY Telemetry into rack F's free space, SWAP the Thrust Controller.
+  // MOVE POD 02 into rack D (a jump), COPY Telemetry into rack F's free space, SWAP the Thrust Controller.
   const rackD = mem().find((seg): seg is FreeSegment => seg.type === 'free' && seg.size >= 64)!;
-  const moved = actionMove(h.store, h.soul('C09'), { regionSegIds: [rackD.id], col: 8 }) === null;
+  const moved = actionMove(h.store, h.soul('POD 02'), { regionSegIds: [rackD.id], col: 8 }) === null;
   h.runOps();
-  check('move: `> move c09 ... OK`', moved && said('cmd', '> move c09 ... OK'), mind().slice(-1).join());
+  check('move: `> move pod02 ... OK`', moved && said('cmd', '> move pod02 ... OK'), mind().slice(-1).join());
   const telemetry = getByRole(state(), 'telemetry')!;
   const spot = [...mem()].reverse().find((seg): seg is FreeSegment => seg.type === 'free' && seg.size >= telemetry.size)!;
   const copied = actionCopy(h.store, telemetry, { regionSegIds: [spot.id], col: 0 }) === null;
@@ -139,48 +139,47 @@ function fresh(cfg?: HollowDef): void {
 // --- HOLLOW's echoes -------------------------------------------------------------------------------------------
 {
   fresh();
-  h.store.update((d) => { for (const soul of driversInMemory(d)) soul.sealed = true; d.hollow.phase = 'asleep'; d.ui.memoryRev++; });
-  infectNow(h.store, h.soul('C12'));
+  h.store.update((d) => { d.hollow.phase = 'asleep'; });
+  infectNow(h.store, h.soul('POD 01'));
   const tag = lineVars(state(), getPrediction()).hollow;
   const lines = mind();
-  const infectAt = lines.indexOf(HOLLOW_ECHO.infect('c12', '???'));
-  const breachAt = lines.indexOf(HOLLOW_STORY.breach('C12', h.soul('C12').family));
-  check('the bite: `> infect c12   [user: ???]` in HOLLOW\'s voice, its tag = LineVars.hollow', said('hollow', '> infect c12   [user: ???]') && tag === '???',
+  const infectAt = lines.indexOf(HOLLOW_ECHO.infect('pod01', '???'));
+  check('the bite: `> infect pod01   [user: ???]` in HOLLOW\'s voice, its tag = LineVars.hollow', said('hollow', '> infect pod01   [user: ???]') && tag === '???',
     lines.slice(-2).join(' / '));
-  check('a sealed archive: the infect echo, then the breach line', infectAt >= 0 && breachAt > infectAt, `${infectAt} ${breachAt}`);
+  check('…once (no breach line any more: the drivers were never sealed)', infectAt >= 0 && lines.filter((line) => line.includes('BREACHED')).length === 0);
 }
 {
   fresh(HUNGRY);
-  infectNow(h.store, h.soul('C11'));
+  infectNow(h.store, h.soul('POD 03'));
   h.stepFor(1);
-  check('a cluster eaten: `> eat c11 ... DID NOT WAKE   [user: ???]`', said('hollow', '> eat c11 ... DID NOT WAKE   [user: ???]'), mind().slice(-1).join());
+  check('a cluster eaten: `> eat pod03 ... DID NOT WAKE   [user: ???]`', said('hollow', '> eat pod03 ... DID NOT WAKE   [user: ???]'), mind().slice(-1).join());
   infectNow(h.store, getByRole(state(), 'telemetry')!);
   h.stepFor(1);
   check('a file eaten: `> eat telemetry ... GONE   [user: ???]`', said('hollow', '> eat telemetry ... GONE   [user: ???]'), mind().slice(-1).join());
-  // DELETE on the block that was C11 (8 blocks): `> delete ??? ... OK · +8 FREE`.
-  const block = mem().find((seg): seg is HollowSegment => seg.type === 'hollow' && seg.ate === `C11 · ${'FONTAINE'}`);
+  // DELETE on the block that was POD 03 (8 blocks): `> delete ??? ... OK · +8 FREE`.
+  const block = mem().find((seg): seg is HollowSegment => seg.type === 'hollow' && seg.atePod === 3);
   const deleted = block ? actionDelete(h.store, block) === null : false;
   h.runOps();
   check('delete an eaten block: `> delete ??? ... OK · +8 FREE`', deleted && said('cmd', '> delete ??? ... OK · +8 FREE'), mind().slice(-1).join());
 }
 {
   fresh({ ...HUNGRY, drainPerSec: 40 });
-  const c10 = h.soul('C10');
+  const c10 = h.soul('POD 03');
   infectNow(h.store, c10);
   h.step();
   const before = chargeLeft();
   actionRepair(h.store, c10);
   h.stepFor(6);
   const lost = before - chargeLeft();
-  check('a repair HOLLOW ate under: `> repair c10 ... EATEN · −n CHARGE LOST`', lost > 0 && said('cmd', OP_ECHO.repairEnded('c10', lost, 'eaten'))
-    && OP_ECHO.repairEnded('c10', lost, 'eaten') === `> repair c10 ... EATEN · −${lost} CHARGE LOST`, mind().slice(-3).join(' / '));
+  check('a repair HOLLOW ate under: `> repair pod03 ... EATEN · −n CHARGE LOST`', lost > 0 && said('cmd', OP_ECHO.repairEnded('pod03', lost, 'eaten'))
+    && OP_ECHO.repairEnded('pod03', lost, 'eaten') === `> repair pod03 ... EATEN · −${lost} CHARGE LOST`, mind().slice(-3).join(' / '));
 }
 {
   fresh();
   nameHollow(h.store);
-  infectNow(h.store, h.soul('C12'));
+  infectNow(h.store, h.soul('POD 01'));
   const tag = lineVars(state(), getPrediction()).hollow;
-  check('named: the tag flips with the name (`[user: UNIT-046]` = LineVars.hollow)', tag === 'UNIT-046' && said('hollow', '> infect c12   [user: UNIT-046]'),
+  check('named: the tag flips with the name (`[user: UNIT-046]` = LineVars.hollow)', tag === 'UNIT-046' && said('hollow', '> infect pod01   [user: UNIT-046]'),
     mind().slice(-1).join());
 }
 
@@ -203,7 +202,7 @@ function fresh(cfg?: HollowDef): void {
     { where: 'eat file', text: HOLLOW_ECHO.eat(longName, false, 'UNIT-999') },
     { where: 'eat copy', text: HOLLOW_ECHO.eatCopy(`${longName}.cp`, 'UNIT-999') },
     { where: 'next bite unknown', text: `${HOLLOW_HUD_TEXT.nextBite} ${HOLLOW_HUD_TEXT.noTimer}` },
-    { where: 'ate tag', text: HOLLOW_HUD_TEXT.ateTag('C99') },
+    { where: 'ate tag', text: HOLLOW_HUD_TEXT.ateTag('POD 16') },
     { where: 'gap title', text: HOLLOW_HUD_TEXT.gapTitle(3) },
     { where: 'wall title', text: HOLLOW_HUD_TEXT.wallTitle(384) },
     { where: 'wall', text: HOLLOW_HUD_TEXT.wall(384) },
@@ -212,7 +211,7 @@ function fresh(cfg?: HollowDef): void {
   ];
   for (const { where, text } of lines) check(`fits: ${where}`, text.length <= MAX_LINE_CHARS, `${text.length}: ${text}`);
   const NEVER_SAY = [
-    /tools mode/i, /memory mode/i, /periapsis/i, /apoapsis/i, /\buplink\b/i, /\bband\b/i, /inserted/i,
+    /tools mode/i, /memory mode/i, /periapsis/i, /apoapsis/i, /\buplink\b/i, /(?<!\b(?:LAUNCH|IN|OF) )\bband\b/i, /inserted/i,
     /BURN LEFT/, /Δv/, /redundancy/i, /\bRDN\b/, /\bcores\b/i, /\bmoat\b/i, /Fleet Office/i, /OKAFOR BLOCK/, /\bHOLLOW\b/,
   ];
   const bad = lines.filter(({ text }) => NEVER_SAY.some((pattern) => pattern.test(text)));

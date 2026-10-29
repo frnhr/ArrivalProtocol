@@ -48,7 +48,7 @@ if (!state().run.licences.includes('repair')) {
   installTool(h.store, 'repair');
   h.store.update((d) => { d.run.licences.push('repair'); });
 }
-h.startPrinting(1, 'locked');
+h.startLanding(1, 'locked');
 check('ship 1 prints its colonists and reaches the WAKE REPORT', h.untilPhase('report', 200), state().run.phase);
 continueAfterReport(h.store);
 check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
@@ -205,7 +205,7 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
 {
   h.newRun(4);
   h.store.update((d) => { d.run.phase = 'flight'; d.ui.mode = 'tools'; openArchive(d); });
-  h.startPrinting(0.6, 'accepted');
+  h.startLanding(0.6, 'accepted');
   const miss = ringMissOf(state());
   const result = shipResultOf(state(), 'partial', 0);
   check('an ACCEPTED loop records how far its far end is from the ring', miss !== null && miss.apsis === '▲' && miss.km > 0

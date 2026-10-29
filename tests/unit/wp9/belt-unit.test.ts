@@ -70,7 +70,7 @@ const belt = (rIn: number, rOut: number): BeltZone => ({ kind: 'belt', id: 'belt
 function printUnder(zone: BeltZone, seconds: number): number {
   h.kestrel(4, { hollowAsleep: true, sensorHealed: true });
   h.store.update((d) => { d.level = { ...d.level, zones: [zone] }; });
-  h.startPrinting(1, 'locked');
+  h.startLanding(1, 'locked');
   // The printer would empty memory in seconds; hold it so the world coasts the whole time with colonists aboard.
   const end = h.wall() + seconds;
   while (h.wall() < end) {
@@ -125,7 +125,7 @@ check('…control: a belt the orbit lies in keeps hitting while printing (§6.8)
     d.level = { ...d.level, zones: [belt(5500, 6500)] };
     for (const seg of d.memory) if ('integrity' in seg && seg.type !== 'core' && seg.type !== 'tool' && seg.type !== 'fs-tool') seg.integrity = 5;
   });
-  h.startPrinting(1, 'locked');
+  h.startLanding(1, 'locked');
   let lostEvent = false;
   const end = h.wall() + 120;
   while (h.wall() < end && !lostEvent) {

@@ -70,7 +70,7 @@ const correctIn = (): void => {
     h.newRun(3);
     h.shipAlone(1, 3);
     state().hollow.phase = 'dormant';
-    h.startPrinting(1, 'locked');
+    h.startLanding(1, 'locked');
     if (!h.untilPhase('report', 300)) throw new Error('fixes: HALCYON never reached its WAKE REPORT');
     h.store.update((d) => {
       const charge = d.memory.find((seg) => seg.type === 'redundancy');

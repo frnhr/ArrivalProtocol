@@ -17,9 +17,9 @@ import type { DriverSegment } from '@/types/segment';
 export interface Harness5 extends Harness4 {
   soul: (code: string) => DriverSegment;
   souls: () => DriverSegment[];
-  // Puts the ship on a closed orbit whose printer range (time-weighted share in the ring) is
-  // `range`, at its ▼, and ends the flight there as `status` (locked or accepted): printing starts.
-  startPrinting: (range: number, status?: 'locked' | 'accepted') => void;
+  // Puts the ship on a closed orbit whose share in band (time-weighted share in the ring) is
+  // `range`, at its ▼, and ends the flight there as `status` (locked or accepted): the landing starts.
+  startLanding: (range: number, status?: 'locked' | 'accepted') => void;
   // Steps until `until` holds or maxWall passes; returns the wall seconds it took.
   stepUntil: (until: () => boolean, maxWall?: number) => number;
 }
@@ -59,7 +59,7 @@ export function createHarness5(seed = 1, opts: { soulsFound?: boolean } = {}): H
       if (!found) throw new Error(`harness5: no pod ${code} in memory`);
       return found;
     },
-    startPrinting(range, status = 'locked') {
+    startLanding(range, status = 'locked') {
       const state = base.store.getState();
       const { rp, ra } = orbitForRange(state.level.ring, range);
       const ecc = (ra - rp) / (ra + rp);

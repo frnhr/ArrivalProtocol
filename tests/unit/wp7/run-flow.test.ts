@@ -149,7 +149,7 @@ h.transmit();
 h.stepUntil(() => state().run.phase === 'flight', 20);
 check('KESTREL boots and flies (ship 3)', state().run.phase === 'flight' && state().level.shipName === 'KESTREL', state().level.shipName);
 state().hollow.phase = 'dormant';
-h.startPrinting(1, 'locked');
+h.startLanding(1, 'locked');
 check('KESTREL (locked at once here) reaches its WAKE REPORT', h.untilPhase('report', 300), state().run.phase);
 // WP10: KESTREL is no longer the last ship either: its report goes on to VESPER (ship 4, flown for real in
 // tests/unit/wp10/run-flow.test.ts), locked at once here too.
@@ -160,7 +160,7 @@ h.transmit();
 h.stepUntil(() => state().run.phase === 'flight', 20);
 check('VESPER boots and flies (ship 4)', state().run.phase === 'flight' && state().level.shipName === 'VESPER', state().level.shipName);
 state().hollow.phase = 'dormant';
-h.startPrinting(1, 'locked');
+h.startLanding(1, 'locked');
 check('VESPER (locked at once here) reaches its WAKE REPORT', h.untilPhase('report', 300), state().run.phase);
 // WP11: VESPER is no longer the last ship either: its report goes on to LAST LIGHT (ship 5, the flagship, flown for real
 // in tests/unit/wp11/full-run.test.ts), locked at once here, its root deleted by hand and PURGE chosen: the run's end.
@@ -171,7 +171,7 @@ h.transmit();
 h.stepUntil(() => state().run.phase === 'flight', 20);
 check('LAST LIGHT boots and flies (ship 5)', state().run.phase === 'flight' && state().level.shipName === 'LAST LIGHT', state().level.shipName);
 state().hollow.phase = 'dormant';
-h.startPrinting(1, 'locked');
+h.startLanding(1, 'locked');
 h.step();
 const root = theRoot(state().memory);
 check('…its ORBIT LOCK opens the root for the duel', root !== null && !root.locked && state().hollow.finale.phase === 'duel');

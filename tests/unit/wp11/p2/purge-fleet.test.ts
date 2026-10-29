@@ -55,7 +55,7 @@ h.stepUntil(() => state().run.phase === 'flight', 15);
 const lockAtOnce = (name: string): void => {
   check(`${name} flies`, state().run.phase === 'flight' && state().level.shipName === name, state().level.shipName);
   h.store.update((d) => { d.hollow.phase = 'dormant'; });
-  h.startPrinting(1, 'locked');
+  h.startLanding(1, 'locked');
   check(`${name} (locked at once) reaches its WAKE REPORT`, h.untilPhase('report', 400), state().run.phase);
   continueAfterReport(h.store);
 };
@@ -80,7 +80,7 @@ h.transmit();
 h.stepUntil(() => state().run.phase === 'flight', 30);
 check('LAST LIGHT flies', state().level.shipName === 'LAST LIGHT', state().level.shipName);
 h.store.update((d) => { d.hollow.phase = 'dormant'; });
-h.startPrinting(1, 'locked');
+h.startLanding(1, 'locked');
 h.step();
 const root = theRoot(state().memory);
 check('…its ORBIT LOCK opens the root', root !== null && !root.locked && state().hollow.finale.phase === 'duel');

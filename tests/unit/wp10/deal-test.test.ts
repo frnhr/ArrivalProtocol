@@ -216,7 +216,7 @@ function toOffer(seed: number): void {
   h.stepUntil(() => state().hollow.deal.phase === 'offered', 60);
   cureNow(h.store, soul('C08')!);
   cureNow(h.store, soul('C09')!);
-  h.startPrinting(1);
+  h.startLanding(1);
   const entry = dealEntry()!;
   check('an offer standing into printing (named C08)', state().run.phase === 'landing' && entry.choice?.open === true
     && state().hollow.deal.cluster === 'C08');

@@ -161,7 +161,7 @@ const memory = h.store.getState().memory;
 {
   h.resetTo('flight', 2);
   h.setIntegrity('printer', 10);
-  h.startPrinting(1);
+  h.startLanding(1);
   const tookSec = h.stepUntil(() => h.store.getState().run.phase === 'report', 60);
   const results = h.store.getState().souls.results;
   check(`NO PRINTER: after ${NO_PRINTER_GIVE_UP_SEC} s the unprinted are lost and the ship goes on to its WAKE REPORT`,
