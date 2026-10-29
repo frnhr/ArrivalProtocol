@@ -29,8 +29,9 @@ import { BAY_RELOAD_TAC, MAX_LINE_CHARS, WINDOW_TACTICAL_LEAD_TAC } from '@data/
 // | L4   | open, the whole dot fits, the bay ready, a pod can launch       | LAUNCH NOW — press [L] · LZ-A 1/3            |
 // | L5   | open, the dot's centre in but its edges out, bay ready, a pod   | LAUNCH — press [L] · WIDE DROP, some may miss|
 // | L6   | open, a pod can launch, the bay not ready                       | RELOADING — next pod in 0:02                 |
-// | L7   | the next awaited window opens within 8 tac s, a pod can launch  | GET READY — LZ-A IN 0:05                     |
-// |      | (or it is open, the dot's edges not in yet but coming this pass): the countdown runs to the sure part           |
+// | L7   | the next window's launch moment within 8 tac s, a pod can launch| GET READY — LZ-A IN 0:05                     |
+// |      | (or it is open, the dot's edges not in yet but coming this pass): GET READY, WAIT and the beeps count to the   |
+// |      | launch moment (landing-rules launchMomentInSec: the sure part's opening, else the opening)                     |
 // | L11  | no pod can launch now, and one aboard needs its driver repaired | POD 07 CAN'T LAUNCH — TAB, REPAIR its driver |
 // | L12  | pods aboard and none can ever launch (no driver left)           | NO POD CAN LAUNCH — END LANDING parks them   |
 // | L12b | no pod aboard: pods falling, or the linger before the report    | ALL PODS AWAY · 2 FALLING                    |
@@ -183,7 +184,7 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
     }
     if (ctx.canLaunch) return line('L6', LANDING_LINES.L6(ctx.bayReadyInTac), [], 'now', 'ship', ctx);
   }
-  if (ctx.aboard > 0 && ctx.canLaunch && ctx.next !== null && ctx.next.inBand && ctx.next.inTac <= WINDOW_TACTICAL_LEAD_TAC) {
+  if (ctx.aboard > 0 && ctx.canLaunch && ctx.next !== null && ctx.next.inBand && ctx.next.launchInTac <= WINDOW_TACTICAL_LEAD_TAC) {
     return line('L7', LANDING_LINES.L7(ctx.next.lz, ctx.next.launchInTac), [], 'now', 'ship', ctx);
   }
   if (ctx.aboard > 0 && ctx.stuckPod !== null) {
@@ -196,7 +197,7 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
   if (ctx.aboard === 0) return line('L12b', LANDING_LINES.L12b(ctx.falling), [], 'wait', 'ship', ctx);
   if (ctx.next !== null) {
     const skip = ctx.skipAvailable && ctx.next.inBand;
-    return line('L13', LANDING_LINES.L13(ctx.next.lz, ctx.next.inTac, skip, !ctx.next.inBand), skip ? ['F'] : [], 'wait', 'ship', ctx);
+    return line('L13', LANDING_LINES.L13(ctx.next.lz, ctx.next.launchInTac, skip, !ctx.next.inBand), skip ? ['F'] : [], 'wait', 'ship', ctx);
   }
   return null;
 }

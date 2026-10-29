@@ -9,8 +9,7 @@ import { capabilitiesNow } from '@systems/capabilities';
 import { registerKeys } from '@systems/input';
 import { emit } from '@systems/events';
 import { getDropSolution } from '@systems/drop-cache';
-import { lzRemaining, targetWindow } from '@systems/landing-rules';
-import { secFromNow } from '@systems/landing-solve';
+import { launchMomentInSec, lzRemaining, targetWindow } from '@systems/landing-rules';
 import { windowRuleHolds } from '@systems/landing-controller';
 import type { DropSolution } from '@/types/landing';
 import { LANDING_SKIP_REFUSAL } from '@data/landing-text';
@@ -147,7 +146,7 @@ function endLeadTac(event: NextEvent): number {
 // windows. A window the landing WAITS ON is one of an LZ with projected room (landing-rules targetWindow's rule), or of
 // any LZ once none has room, and only while a pod is aboard and the landing goes on: a full LZ's window passes at CRUISE
 // and does not hold up a SKIP to the next LZ with room. "Open now" is state.landing.window (landing.ts writes it); the
-// time to the next opening comes from the drop cache's solution, rebased to now.
+// time to the next launch moment comes from the drop cache's solution, rebased to now.
 
 function isLanding(state: Readonly<GameState>): boolean {
   return state.run.phase === 'landing';
@@ -172,20 +171,21 @@ export function awaitedWindowOpen(state: Readonly<GameState>): boolean {
   return open !== null && awaitingWindows(state) && windowAwaited(state, open.lz);
 }
 
-// Game seconds from now until the next awaited window opens in the band (≤ 0: it is open), or null: none (no pod aboard,
-// the landing over, no drop solution, no in-band window on this orbit).
-export function windowOpensInSec(state: Readonly<GameState>, sol: Readonly<DropSolution> | null = getDropSolution()): number | null {
+// Game seconds from now until the next awaited window's launch moment (landing-rules launchMomentInSec: where its whole
+// dot first fits in the band, else its in-band opening; ≤ 0: it has come), or null: none (no pod aboard, the landing
+// over, no drop solution, no in-band window on this orbit). The TACTICAL lead, the SKIP's landing point, GET READY and its
+// beeps all count to this one moment, so the 8 s of GET READY end on LAUNCH NOW (§3.2's 24–30 s per window).
+export function windowLaunchInSec(state: Readonly<GameState>, sol: Readonly<DropSolution> | null = getDropSolution()): number | null {
   if (!awaitingWindows(state) || sol === null) return null;
   const target = targetWindow(state, sol, state.clock.tSec);
-  if (target === null || target.inBandOpenInSec === null) return null;
-  return secFromNow(sol, target.inBandOpenInSec, state.clock.tSec);
+  return target === null ? null : launchMomentInSec(sol, target, state.clock.tSec);
 }
 
 // §3.12: TACTICAL while a pod is falling, with thrust, an alarm or a zone close (the flight's rules), and, by the window
-// rule, while an awaited window is open or opens within WINDOW_TACTICAL_LEAD_TAC. The window rule is for hand drops and
+// rule, while an awaited window is open or its launch moment is within WINDOW_TACTICAL_LEAD_TAC. The window rule is for hand drops and
 // for a controller that holds TACTICAL (§3.14: a higher AUTODROP drops inside a SKIP). The lead is judged one CRUISE
 // tick ahead, as the dodge's is (choosePace), so the world is at TACTICAL by the 8 s mark, never a tick past it; a SKIP
-// needs no look-ahead: it lands WINDOW_TACTICAL_LEAD_TAC before the opening by itself (skipLandsInSec).
+// needs no look-ahead: it lands WINDOW_TACTICAL_LEAD_TAC before the launch moment by itself (skipLandsInSec).
 function landingPace(state: Readonly<GameState>, pred: Prediction, skipActive: boolean, dtWall: number): Pace {
   if (thrustHoldsTactical(state)) return 'tactical';
   if (podsWith(state, 'falling') > 0) return 'tactical';
@@ -193,7 +193,7 @@ function landingPace(state: Readonly<GameState>, pred: Prediction, skipActive: b
   if (zoneClose(state, pred) !== null) return 'tactical';
   if (windowRuleHolds()) {
     if (awaitedWindowOpen(state)) return 'tactical';
-    const toWindow = windowOpensInSec(state);
+    const toWindow = windowLaunchInSec(state);
     const tickAheadSec = skipActive ? 0 : state.level.cruiseWarp * Math.max(dtWall, TICK_MS / 1000);
     if (toWindow !== null && tac(toWindow - tickAheadSec, state.level.tacticalWarp) <= WINDOW_TACTICAL_LEAD_TAC) return 'tactical';
   }
@@ -204,7 +204,7 @@ function landingNextEvent(state: Readonly<GameState>, pred: Prediction): NextEve
   const candidates: NextEvent[] = [];
   const zone = nextZoneEntry(state, pred);
   if (zone !== null) candidates.push({ kind: 'zone', inSec: zone.inSec });
-  const toWindow = windowOpensInSec(state);
+  const toWindow = windowLaunchInSec(state);
   if (toWindow !== null) candidates.push({ kind: 'window', inSec: toWindow });
   if (candidates.length === 0) return null;
   return candidates.reduce((first, candidate) => (candidate.inSec < first.inSec ? candidate : first));

@@ -44,10 +44,10 @@ expect('...in the MIND it says [TAB] first', ctx({ open: open(), inMind: true })
 expect('open, the dot\'s edges out for good (a wide drop)', ctx({ open: open({ sure: false }) }), 'L5', LANDING_LINES.L5, (o) => o.keys.join() === 'L');
 expect('open, the edges coming in this pass: GET READY counts on', ctx({ open: open({ sure: false, sureInTac: 2.4 }) }), 'L7', 'GET READY — LZ-A IN 0:03');
 expect('open, a pod ready, the bay reloading', ctx({ open: open(), bayReady: false, bayReadyInTac: 1.2 }), 'L6', 'RELOADING — next pod in 0:02');
-expect('a window within the lead', ctx({ next: { lz: 'LZ-B', inTac: WINDOW_TACTICAL_LEAD_TAC, launchInTac: 10.3, inBand: true } }), 'L7',
-  'GET READY — LZ-B IN 0:11', (o) => o.urgency === 'now');
+expect('a launch moment within the lead', ctx({ next: { lz: 'LZ-B', inTac: 4.4, launchInTac: WINDOW_TACTICAL_LEAD_TAC, inBand: true } }), 'L7',
+  'GET READY — LZ-B IN 0:08', (o) => o.urgency === 'now');
 expect('...in the MIND', ctx({ inMind: true, next: { lz: 'LZ-B', inTac: 5, launchInTac: 5, inBand: true } }), 'L7', 'GET READY — [TAB], LZ-B IN 0:05');
-expect('a window just past the lead is still WAIT', ctx({ next: { lz: 'LZ-B', inTac: WINDOW_TACTICAL_LEAD_TAC + 0.1, launchInTac: 9, inBand: true } }), 'L13', /^WAIT — LZ-B in 0:09/);
+expect('a launch moment just past the lead is still WAIT, counting to it', ctx({ next: { lz: 'LZ-B', inTac: 5, launchInTac: WINDOW_TACTICAL_LEAD_TAC + 0.1, inBand: true } }), 'L13', /^WAIT — LZ-B in 0:09/);
 expect('no pod can launch now, one needs its driver repaired', ctx({ canLaunch: false, stuckPod: 7, open: open() }), 'L11',
   "POD 07 CAN'T LAUNCH — TAB, REPAIR its driver", (o) => o.urgency === 'soon' && o.layer === 'mind' && o.keys.join() === 'TAB');
 expect('...in the MIND, lighting REPAIR then the driver', ctx({ canLaunch: false, stuckPod: 7, inMind: true }), 'L11', LANDING_LINES.L11Mind(7),
@@ -59,8 +59,8 @@ expect('pods aboard, no LZ ever in the band', ctx({ noBandWindow: true, next: { 
   LANDING_LINES.L12band, (o) => o.id === 'landing-L12-band');
 expect('all launched, two falling', ctx({ aboard: 0, falling: 2 }), 'L12b', 'ALL PODS AWAY · 2 FALLING', (o) => o.urgency === 'wait');
 expect('all down, the linger', ctx({ aboard: 0, falling: 0 }), 'L12b', 'ALL PODS AWAY');
-expect('otherwise WAIT, with the SKIP', ctx(), 'L13', 'WAIT — LZ-A in 2:10 ▸▸ · [F] to SKIP', (o) => o.keys.join() === 'F' && o.nextLz === 'LZ-A');
-expect('...no [F] while a SKIP would not start', ctx({ skipAvailable: false }), 'L13', 'WAIT — LZ-A in 2:10 ▸▸', (o) => o.keys.length === 0);
+expect('otherwise WAIT, with the SKIP', ctx(), 'L13', 'WAIT — LZ-A in 2:12 ▸▸ · [F] to SKIP', (o) => o.keys.join() === 'F' && o.nextLz === 'LZ-A');
+expect('...no [F] while a SKIP would not start', ctx({ skipAvailable: false }), 'L13', 'WAIT — LZ-A in 2:12 ▸▸', (o) => o.keys.length === 0);
 expect('...an out-of-band next window says so, with no SKIP', ctx({ next: { lz: 'LZ-B', inTac: 30, launchInTac: 30, inBand: false } }), 'L13',
   'WAIT — LZ-B in 0:30 ▸▸ · OUT OF BAND', (o) => o.keys.length === 0 && o.nextLz === null);
 

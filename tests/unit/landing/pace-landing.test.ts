@@ -1,7 +1,8 @@
 // Slice 1a, Track SIM: the landing's pace (01-landing §3.12, plan §1.6). On HALCYON (two LZs: LZ-A 3, LZ-B 2) from a
 // constructed lock (the first window is whichever LZ the dot reaches first: `first`, filled; then `other`): the warps switch to LANDING's own at the lock; CRUISE between windows, TACTICAL from
-// WINDOW_TACTICAL_LEAD_TAC before an awaited window, inside it, while a pod falls and with an alarm; a SKIP lands 8 tac s
-// before the target window (straight into GET READY and its 5…1 beeps) as one exact conic jump; WINDOW OPEN and PODS IN
+// WINDOW_TACTICAL_LEAD_TAC before an awaited window's launch moment (where its whole dot first fits), inside it, while a
+// pod falls and with an alarm; a SKIP lands 8 tac s before the target's launch moment (straight into GET READY and its
+// 5…1 beeps, ending on LAUNCH NOW) as one exact conic jump; WINDOW OPEN and PODS IN
 // FLIGHT refuse it; a full LZ's window neither holds TACTICAL nor stops a SKIP; a controller that drops inside a SKIP
 // (holdsTactical false) lifts the window rule; OVERCLOCK covers the landing.
 import { check, finish } from './checks';
@@ -11,11 +12,12 @@ import { createInitialState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
 import { resetWorld } from '@systems/reset';
 import { requestLaunch, setLandingController } from '@systems/landing';
-import { choosePace, isOverclocked, requestSkip, skipBlockReason, windowOpensInSec } from '@systems/pace';
+import { choosePace, isOverclocked, requestSkip, skipBlockReason, windowLaunchInSec } from '@systems/pace';
 import { getPrediction } from '@systems/predict';
 import { getDropSolution } from '@systems/drop-cache';
 import { raiseAlert, clearAlert } from '@systems/alerts';
 import { buildLandingContext, landingObjective } from '@systems/landing-guidance';
+import { launchMomentInSec } from '@systems/landing-rules';
 import { secFromNow } from '@systems/landing-solve';
 import { propagateConic, type OrbitState } from '@/types/orbit';
 import { getShip } from '@data/ships';
@@ -35,7 +37,7 @@ h.store.update((draft) => {
 resetWorld();
 const state = (): GameState => h.store.getState();
 const warp = (): number => state().level.tacticalWarp;
-const toWindowTac = (): number | null => { const sec = windowOpensInSec(state()); return sec === null ? null : sec / warp(); };
+const toWindowTac = (): number | null => { const sec = windowLaunchInSec(state()); return sec === null ? null : sec / warp(); };
 const near = (a: number, b: number, tol: number): boolean => Math.abs(a - b) <= tol;
 const table = (): ReturnType<typeof landingObjective> => landingObjective(buildLandingContext(state(), getDropSolution(), getPrediction()));
 
@@ -119,9 +121,9 @@ const other = state().landing.lzs.find((lz) => lz.label !== first)?.label ?? '?'
 // --- With the first LZ full, its window is not waited for --------------------------------------------------------------
 {
   const sol = getDropSolution();
-  const target = windowOpensInSec(state());
+  const target = windowLaunchInSec(state());
   const otherWindow = sol?.windows.find((w) => w.lz === other);
-  const toOther = sol && otherWindow?.inBandOpenInSec != null ? secFromNow(sol, otherWindow.inBandOpenInSec, state().clock.tSec) : null;
+  const toOther = sol && otherWindow ? launchMomentInSec(sol, otherWindow, state().clock.tSec) : null;
   check(`the SKIP's target is ${other}, the LZ with room`, target !== null && toOther !== null && near(target, toOther, 1e-6),
     `${target?.toFixed(0)} vs ${other} ${toOther?.toFixed(0)} game s`);
   // The full LZ's window as if it were open now: it holds neither TACTICAL nor the SKIP, and the strip says to hold the pods.
@@ -158,7 +160,7 @@ const other = state().landing.lzs.find((lz) => lz.label !== first)?.label ?? '?'
   h.stepUntil(() => state().clock.skipWarp === null && state().clock.pace !== 'skip', 30);
   const left = toWindowTac();
   const sol = getDropSolution();
-  const target = sol ? sol.windows.find((w) => w.inBandOpenInSec !== null && near(secFromNow(sol, w.inBandOpenInSec, state().clock.tSec) / warp(), left ?? NaN, 0.5)) : undefined;
+  const target = sol ? sol.windows.find((w) => near((launchMomentInSec(sol, w, state().clock.tSec) ?? NaN) / warp(), left ?? NaN, 0.5)) : undefined;
   check(`the next SKIP lands 8 tac s before ${other}`, ok && left !== null && near(left, WINDOW_TACTICAL_LEAD_TAC, 0.2) && target?.lz === other,
     `${left?.toFixed(2)} tac s before ${target?.lz}`);
 }
