@@ -2,9 +2,10 @@ import type { Store } from '@state/store';
 import type { GameState, ShipOutcome } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {
-  DropSolution, LandingController, LandingEnd, LandingView, LandingWindow, LaunchIntent, LaunchRecord, LaunchResult, PodRecord,
+  BayState, DropSolution, LandingController, LandingEnd, LandingView, LandingWindow, LaunchIntent, LaunchRecord, LaunchResult,
+  PodRecord,
 } from '@/types/landing';
-import { onAiTick } from '@systems/clock';
+import { onAiTick, onGameTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { emit } from '@systems/events';
 import { say } from '@systems/say';
@@ -13,10 +14,14 @@ import { capabilitiesNow } from '@systems/capabilities';
 import { getOpsBySeg, abortOp } from '@systems/ops-core';
 import { replaceRange, mergeAdjacentFree, requireAddr, freeSegment, assertMemoryInvariants } from '@systems/memory-ops';
 import { currentDropSolution, getDropSolution } from '@systems/drop-cache';
-import { dropHalfWidthKm } from '@systems/landing-solve';
+import { dropHalfWidthKm, secFromNow } from '@systems/landing-solve';
+import { getPrediction } from '@systems/predict';
+import { requestSkip, skipBlockReason } from '@systems/pace';
+import { activeLandingController, setActiveLandingController } from '@systems/landing-controller';
 import {
   classifyLanding, colonyName, dropFactors, driverTouch, finalFateOfAboard, isLaunchable, landingView as landingViewOf,
-  launchGuard, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podPoints, touchAtTouchdown, windowOpenNow,
+  launchGuard, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podPoints, targetWindow, touchAtTouchdown,
+  windowOpenNow,
 } from '@systems/landing-rules';
 import { forgetDriver } from '@state/actions';
 import { driversInMemory, finalePending } from '@state/selectors';
@@ -24,7 +29,8 @@ import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { LANDING_ECHO, LAUNCH_CONFIRM_TEXT, launchRefusalKey } from '@data/landing-text';
 import { IS_DEV } from '@/env';
 import {
-  BAND_DEGRADED_MIN, LANDING_DONE_LINGER_SEC, LANDING_NONE_LEFT_SEC, POD_DESCENT_SEC, POD_FIRST_DESCENT_SEC,
+  BAND_DEGRADED_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEEP_BURN_TAC, BEEP_JUMP_TAC, BEEP_REARM_TAC, LANDING_DONE_LINGER_SEC,
+  LANDING_NONE_LEFT_SEC, POD_DESCENT_SEC, POD_FIRST_DESCENT_SEC,
 } from '@data/tuning';
 
 // The landing (01-landing; plan §1.4): replaces phase 2's printer. DOM-free; the only module besides
@@ -35,17 +41,20 @@ import {
 // and before HOLLOW, so a launch wins a same-tick bite; registerLandingKeys (landing-controls.ts) with
 // { confirm: askInline }.
 //
-// FOUNDATION SKELETON (slice 1a F2 and its follow-up): the final signatures, with the launch path, touchdowns, the
-// window state and its edge events (LandingState.window: the ONE source of truth for "window open"), END LANDING, the
-// risk-7 auto-end, forceLandAll and the end of the landing working, so the run reaches the LANDING REPORT and goes on.
-// Track SIM fills the rest: TODO(slice1a-SIM): the bay's game tick (cadence and reload in world time), the GET READY
-// beeps before a window, the controller hook, 'pod-entry', and the first touchdown's radio line and beats.
+// Two ticks:
+// • the GAME tick (world time) runs the bay: its cadence and its reloads are tactical seconds of WORLD time (§3.4), so a
+//   SKIP refills it and OVERCLOCK stretches it exactly as it stretches the window;
+// • the AI tick runs everything shown on AI time: the descents ('pod-entry', touchdowns), the window state and its edge
+//   events (LandingState.window: the ONE source of truth for "window open"), GET READY's beeps, the controller hook, the
+//   risk-7 auto-end and the end of the landing (the linger, then the report).
+// The first touchdown's CONTROL beat and radio line are the director's (data/script.ts BEATS, on 'pod-landed'), so they
+// are spoken in that order; touchDown names the colony.
 //
-// Readers: only this module, guidance's countdowns and landing-hud read drop-cache; everything else (hollow's landMult,
-// pace, the chips, the alerts, the tests) reads state.landing.
+// Readers of drop-cache: this module (the window state, the beeps, the launch), pace (the SKIP's target and the TACTICAL
+// lead), landing-guidance (the table's countdowns) and landing-hud. Everything else (hollow's landMult, the chips, the
+// alerts, the tests) reads state.landing.window. Only requestLaunch calls currentDropSolution (a fresh solve per call).
 
 let dropRng: Rng | null = null;
-let controller: LandingController | null = null;
 
 // The seeded stream that places each pod inside its dot (§3.3: u uniform in [−1, 1]); one draw per launch.
 function dropStream(state: Readonly<GameState>): Rng {
@@ -126,6 +135,7 @@ function launchRecordFor(state: Readonly<GameState>, driver: DriverSegment, sol:
 // only the controller that is active now.
 function launchesFromMind(intent: LaunchIntent): boolean {
   if (intent.source === 'player') return false;
+  const controller = activeLandingController();
   if (controller === null || controller.source !== intent.source) {
     throw new Error(`requestLaunch: '${intent.source}' asked to launch but is not the active landing controller`);
   }
@@ -268,10 +278,130 @@ function noneLeftTick(store: Store<GameState>, dtAi: number): void {
   endNow(store, 'no-driver-left');
 }
 
+// --- The bay (world time) ---------------------------------------------------------------------------------------------
+
+// §3.4: the cadence counts down and, while a slot is empty, the reload fills it, both in tactical seconds of WORLD time
+// (dtWorld / the tactical warp): a SKIP crosses minutes of world and refills the bay; OVERCLOCK runs the world at a
+// quarter and the bay with it. Pure, for the tests.
+export function bayAfter(bay: Readonly<BayState>, dtTac: number): BayState {
+  if (!(dtTac >= 0)) throw new Error(`bayAfter: a negative or NaN step (${dtTac} tac s)`);
+  let { loaded, reloadTac } = bay;
+  if (loaded < BAY_SLOTS) {
+    reloadTac += dtTac;
+    while (reloadTac >= BAY_RELOAD_TAC && loaded < BAY_SLOTS) {
+      loaded++;
+      reloadTac -= BAY_RELOAD_TAC;
+    }
+    if (loaded >= BAY_SLOTS) reloadTac = 0;
+  }
+  return { loaded, reloadTac, cadenceLeftTac: Math.max(0, bay.cadenceLeftTac - dtTac) };
+}
+
+// Nothing reloads once the landing has ended. A slot filling is a discrete change (the POD BAY window's pips): an update;
+// the running numbers are mutated.
+function bayTick(store: Store<GameState>, dtWorld: number): void {
+  const state = store.getState();
+  if (state.run.phase !== 'landing' || state.landing.ended !== null) return;
+  const before = state.landing.bay;
+  const after = bayAfter(before, dtWorld / state.level.tacticalWarp);
+  if (after.loaded !== before.loaded) store.update((draft) => { draft.landing.bay = after; });
+  else if (after.reloadTac !== before.reloadTac || after.cadenceLeftTac !== before.cadenceLeftTac) {
+    store.mutate((draft) => { draft.landing.bay = after; });
+  }
+}
+
+// --- GET READY's beeps (§3.11 L7) -------------------------------------------------------------------------------------
+
+// The 5…1 before the target window opens (landing-rules targetWindow: the window GET READY counts down to), as
+// 'countdown-beep' kind 'window': the burn's beeps, so the same cue plays. Crossings only, as in flight-events: a
+// countdown that jumps (a SKIP landing 8 s before the window, a fresh target) beeps nothing for the seconds it skipped,
+// and each threshold beeps once per window. The opening itself is 'window-open' (its own chime).
+const WINDOW_BEEPS: readonly number[] = Array.from({ length: BEEP_BURN_TAC }, (_unused, i) => BEEP_BURN_TAC - i);
+
+interface BeepWatch {
+  key: string | null;   // the window counted down to: its LZ and its opening (game s, rounded)
+  last: number | null;  // tactical s to it at the last tick
+  lowestFired: number;
+}
+
+const NO_BEEP_WATCH: BeepWatch = { key: null, last: null, lowestFired: Infinity };
+let beepWatch: BeepWatch = { ...NO_BEEP_WATCH };
+
+function beepTick(store: Store<GameState>): void {
+  const state = store.getState();
+  const now = state.clock.tSec;
+  const sol = state.landing.ended === null ? getDropSolution() : null;
+  const target = sol === null ? null : targetWindow(state, sol, now);
+  const opensIn = sol === null || target === null || target.inBandOpenInSec === null ? null : secFromNow(sol, target.inBandOpenInSec, now);
+  const key = target === null || opensIn === null ? null : `${target.lz}|${Math.round(now + opensIn)}`;
+  if (key !== beepWatch.key) beepWatch = { ...NO_BEEP_WATCH, key };
+  const next = opensIn === null || opensIn <= 0 ? null : opensIn / state.level.tacticalWarp;
+  const prev = beepWatch.last;
+  beepWatch.last = next;
+  if (next !== null && next > beepWatch.lowestFired + BEEP_REARM_TAC) beepWatch.lowestFired = Infinity;
+  if (next === null || prev === null || next >= prev) return;
+  const passed = WINDOW_BEEPS.filter((sec) => prev > sec && next <= sec && sec < beepWatch.lowestFired);
+  if (passed.length === 0) return;
+  beepWatch.lowestFired = Math.min(...passed);
+  if (prev - next > BEEP_JUMP_TAC) return;
+  for (const sec of passed) emit('countdown-beep', { kind: 'window', secLeft: sec, final: false });
+}
+
+// --- The descent's moments (AI time) ----------------------------------------------------------------------------------
+
+// The share of the descent at which the streak reaches the atmosphere: the first arc point inside rAtm, as a fraction of
+// the arc (the streak runs the arc's points evenly over descentSec). null: an arc that never enters (forceLandAll's
+// empty one).
+export function entryFraction(arc: readonly { x: number; y: number }[], rAtm: number): number | null {
+  if (arc.length < 2) return null;
+  const index = arc.findIndex((point) => Math.hypot(point.x, point.y) <= rAtm);
+  return index < 0 ? null : index / (arc.length - 1);
+}
+
+// The pods whose 'pod-entry' has fired on this ship (the flare and the roar play once per pod).
+const entered = new Set<number>();
+
+function entryTick(state: Readonly<GameState>): void {
+  for (const record of state.landing.pods) {
+    if (record.fate.kind !== 'falling' || entered.has(record.pod)) continue;
+    const { launch } = record.fate;
+    const fraction = entryFraction(launch.arc, state.level.planet.rAtm);
+    if (fraction === null || launch.atAi + fraction * launch.descentSec > state.clock.aiSec) continue;
+    entered.add(record.pod);
+    emit('pod-entry', { pod: record.pod });
+  }
+}
+
+// --- The controller hook (§3.14) --------------------------------------------------------------------------------------
+
+// The active controller (AUTODROP 4c, the resident 5, MERGE's landing 7) is asked once per AI tick with the CACHED view
+// (a fresh solve per tick would cost a full solve a tick); a launch it asks for goes through requestLaunch, which
+// decides on the fresh solution like the kid's [L]. A SKIP it asks for is requested only when pace allows it, so a
+// controller asking every tick never buzzes. None in 1a.
+function controllerTick(store: Store<GameState>): void {
+  const controller = activeLandingController();
+  if (controller === null) return;
+  const state = store.getState();
+  if (state.landing.ended !== null || state.clock.paused) return;
+  const sol = getDropSolution();
+  if (sol === null) return;
+  const decision = controller.decide(landingViewOf(state, sol, capabilitiesNow(state).bay.cadenceTac), state);
+  if (decision === null) return;
+  if (decision === 'skip') {
+    if (state.clock.skipWarp === null && skipBlockReason(state, getPrediction()) === null) requestSkip(store);
+    return;
+  }
+  if (decision.source !== controller.source) {
+    throw new Error(`landing controller '${controller.source}' asked for a launch as '${decision.source}'`);
+  }
+  requestLaunch(store, decision);
+}
+
 function tick(store: Store<GameState>, dtAi: number): void {
   let state = store.getState();
   if (state.run.phase !== 'landing') return;
-  // 1. Touchdowns, in the order the pods come down.
+  // 1. The descents: the entry flare, then the touchdowns, in the order the pods come down.
+  entryTick(state);
   const due = state.landing.pods
     .flatMap((record) => (record.fate.kind === 'falling' ? [{ pod: record.pod, at: record.fate.launch.atAi + record.fate.launch.descentSec }] : []))
     .filter((fall) => fall.at <= state.clock.aiSec)
@@ -280,9 +410,11 @@ function tick(store: Store<GameState>, dtAi: number): void {
   if (due.length > 0 && podsLeft(store.getState()).aboard === 0 && podsLeft(store.getState()).falling === 0) {
     emit('all-pods-down', {});
   }
-  // 2. The window open now (state), and its edges.
+  // 2. The window open now (state), and its edges; GET READY's beeps.
   trackWindow(store);
-  // 3. The bay, the controller, the beeps: TODO(slice1a-SIM) (see the header).
+  beepTick(store);
+  // 3. The controller (none in 1a).
+  controllerTick(store);
   // 4. No more launches: every pod away, or no driver left for the pods aboard (risk 7).
   if (store.getState().landing.ended === null && podsLeft(store.getState()).aboard === 0) endNow(store, 'all-launched');
   noneLeftTick(store, dtAi);
@@ -329,20 +461,20 @@ export function endLanding(store: Store<GameState>, reason: LandingEnd = 'end-la
 }
 
 // The seam for AUTODROP (4c), the resident (5) and MERGE's last landing (7): one controller at a time, asked every AI
-// tick (TODO(slice1a-SIM): the hook in tick). null takes it away. Slice 4 should resolve the controller from STATE each
-// tick instead of holding it here: AUTODROP is a file HOLLOW can eat, and a module variable would outlive its file.
+// tick (controllerTick). null takes it away. It is held in landing-controller.ts (pace reads its holdsTactical).
 // requestLaunch accepts a non-player source only from the controller set here (launchesFromMind).
 export function setLandingController(next: LandingController | null): void {
-  controller = next;
+  setActiveLandingController(next);
 }
 
 export function landingController(): LandingController | null {
-  return controller;
+  return activeLandingController();
 }
 
-// Everything a controller may read (§3.14), live: the state, the current drop solution and Bay Ctrl's cadence.
+// Everything a controller may read (§3.14): the state, the drop solution as of its last refresh (never a fresh solve:
+// only requestLaunch decides on currentDropSolution) and Bay Ctrl's cadence.
 export function landingView(state: Readonly<GameState>): LandingView {
-  const sol = currentDropSolution();
+  const sol = getDropSolution();
   if (sol === null) throw new Error('landingView: no drop solution outside LANDING');
   return landingViewOf(state, sol, capabilitiesNow(state).bay.cadenceTac);
 }
@@ -387,19 +519,27 @@ export function forceLandAll(store: Store<GameState>): number {
 
 let mounted = false;
 
+// The world reset (a new ship, NEW RUN, a test's reset): the drop stream, the controller and the per-ship moments.
+function forget(): void {
+  dropRng = null;
+  setActiveLandingController(null);
+  entered.clear();
+  beepWatch = { ...NO_BEEP_WATCH };
+}
+
 export function mountLanding(store: Store<GameState>): () => void {
   if (mounted) throw new Error('mountLanding: already mounted');
   mounted = true;
   const offTick = onAiTick((dtAi) => tick(store, dtAi));
-  const offReset = onWorldReset('landing', () => {
-    dropRng = null;
-    controller = null;
-  }, () => ({ rolled: dropRng !== null, controller: controller !== null }));
+  const offBay = onGameTick((dtWorld) => bayTick(store, dtWorld));
+  const offReset = onWorldReset('landing', forget, () => ({
+    rolled: dropRng !== null, controller: activeLandingController() !== null, entered: entered.size, beep: beepWatch.key,
+  }));
   return () => {
     offTick();
+    offBay();
     offReset();
-    dropRng = null;
-    controller = null;
+    forget();
     mounted = false;
   };
 }
