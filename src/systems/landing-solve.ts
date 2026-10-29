@@ -323,9 +323,10 @@ export function windowsFor(
     const openG = (point: TrackPoint): number => Math.abs(offset(point)) - lz.halfWidthRad;
     const sureG = (point: TrackPoint): number => Math.abs(offset(point)) - (lz.halfWidthRad - halfWidthAt(point.r) / track.R);
     let found: LzWindow | null = null;
-    // Centre crossings (offset − → +) from one orbit back to one orbit ahead: the first whose window has not closed yet.
+    // Centre crossings (offset − → +) from one orbit back to two orbits ahead: the first whose window has not closed yet
+    // (and whose in-band part, if it has one, is not over: the next pass's may be almost two orbits from the last one).
     const first = Math.floor((tauNow - track.periodSec) / step);
-    for (let index = first; index < first + 2 * n + 1 && found === null; index++) {
+    for (let index = first; index < first + 3 * n + 1 && found === null; index++) {
       const a = gridPoint(track, index);
       const b = gridPoint(track, index + 1);
       const offA = offset(a);
