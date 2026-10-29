@@ -115,6 +115,9 @@ export const LANDING_LINES = {
   L6: (inSec: number): string => `RELOADING — next pod in ${minSec(inSec)}`,
   L7: (lz: string, inSec: number): string => `GET READY — ${lz} IN ${minSec(inSec)}`,
   L11: (pod: number): string => `${podCode(pod)} CAN'T LAUNCH — TAB, REPAIR its driver`,
+  // L1 and L11 read in the MIND, where the TAB is done (the flight's F1/F2 do the same).
+  L1Mind: 'NO DROP SOLUTION — REPAIR NAV PLOTTER',
+  L11Mind: (pod: number): string => `${podCode(pod)} CAN'T LAUNCH — REPAIR its driver`,
   L12: 'NO POD CAN LAUNCH — END LANDING parks them in orbit',
   // L12's twin when no LZ ever passes under the dot while the ship is in the band (a PARTIAL orbit whose band arc misses
   // every bracket): with no engine in 1a nothing will change that (plan Deviations, Track SIM).

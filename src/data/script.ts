@@ -32,7 +32,11 @@ import {
   rootDeleteRunning, rootDeleteProgress, bittenAgainDrivers, seedBitesAiFile,
 } from '@systems/hollow';
 import { rootDeletable } from '@systems/finale';
-import { hostLine, podCode, LANDING_ASKS, LANDING_LINES, LAUNCH_REFUSAL_LINES } from '@data/landing-text';
+import {
+  hostLine, podCode, groundRadioLine, LANDING_ASKS, LANDING_BEATS, LAUNCH_REFUSAL_LINES,
+} from '@data/landing-text';
+import { HARD_WORDS_POOL } from '@data/souls';
+import type { PodRecord } from '@/types/landing';
 import { autoburnDropLine, autoburnAvailable } from '@systems/autoburn';
 import { blocksInRack, knownHitRacks } from '@systems/zones';
 import { safestSpot, placementRack } from '@systems/move-preview';
@@ -47,7 +51,7 @@ import { TOOL_HINT_TARGET } from '@data/fs-tools';
 import {
   MIND_CLEAR_IDLE_SEC, MAX_LINE_CHARS, NAME_MAX_CHARS, ENGINE_FAULT_AFTER_TAC, ENGINE_FAULT_INTEGRITY,
   ENGINE_WEAK_MAX_SHOWN_SEC, COUNTDOWN_RED_TAC,
-  SEG_NAME_MAX_CHARS, EATEN_ALARM_CLEAR_SEC, WALL_MIN_BLOCKS,
+  SEG_NAME_MAX_CHARS, EATEN_ALARM_CLEAR_SEC, WALL_MIN_BLOCKS, FAMILY_MAX_CHARS, COLONIST_LINE_MAX_CHARS,
   WALL_RULE_SHOW_SEC, EMERGENCY_EXTRA_HITS, CORE_RESET_INTEGRITY, BEAM_OUT_EXTRA_HITS,
   TRANSIT_HIT_MAX, BAND_DEGRADED_MIN, CORE_LOW_INTEGRITY, FIREWALL_HINT_SHOW_SEC, DEBRIS_MOVE_HINT_TAC, SEED_LESSON_SHOW_SEC,
   AUTOBURN_READY_SHOW_SEC, GHOST_LESSON_AFTER_BURSTS, GHOST_LESSON_SHOW_SEC, COPY_LESSON_SHOW_SEC, MERGE_COST_CHARGE, ROOT_DELETE_SEC,
@@ -112,6 +116,11 @@ export interface LineVars {
   beltPodRacks: string;
   // WP11 part 2: the AI seconds left on the root's DELETE (whole, rounded up; 0 when none runs): the duel's countdown.
   rootSecLeft: number;
+  // Slice 1a. The LZ the next SKIP flies to during the landing ('' none): the landing table's (landing-guidance
+  // LandingObjective.nextLz), filled in by the director, '' from lineVars. The ship's first touchdown's radio line from
+  // the ground (`POD 01 · OKAFOR: "Is it morning?"`, '' before it).
+  nextLz: string;
+  firstDownRadio: string;
 }
 
 // The longest values any template can be rendered with. Later packages add their placeholders
@@ -152,7 +161,28 @@ export const WORST_CASE_VARS: LineVars = {
   beltPodRacks: 'RACKS A–B',
   // ROOT_DELETE_SEC is 12; ten minutes covers every digit.
   rootSecLeft: 599,
+  nextLz: 'LZ-D',
+  firstDownRadio: groundRadioLine(16, 'W'.repeat(FAMILY_MAX_CHARS), 'W'.repeat(COLONIST_LINE_MAX_CHARS)),
 };
+
+// The ship's first touchdown's radio line (01-landing §2, §4: the first pod down on every ship sends one): the pod's lead
+// colonist's first words, or for a pod that came down hard a hard-landing line (souls HARD_WORDS_POOL, picked by pod so
+// it replays). '' before the first touchdown.
+function firstDownRadio(state: Readonly<GameState>): string {
+  let first: { record: PodRecord; atAi: number; hard: boolean } | null = null;
+  for (const record of state.landing.pods) {
+    if (record.fate.kind !== 'down') continue;
+    const { atAi, touch } = record.fate.touchdown;
+    if (first === null || atAi < first.atAi) first = { record, atAi, hard: touch === 'hard' };
+  }
+  if (first === null) return '';
+  const { record, hard } = first;
+  const lead = record.featured[0];
+  if (!lead) throw new Error(`firstDownRadio: pod ${record.pod} has no featured colonist`);
+  const words = hard ? HARD_WORDS_POOL[record.pod % HARD_WORDS_POOL.length] : lead.firstWords;
+  if (words === undefined) throw new Error('firstDownRadio: the hard-landing pool is empty');
+  return groundRadioLine(record.pod, record.family, words);
+}
 
 // The next live debris cloud the TRUE path enters (WP9), with the tactical seconds to its contact, or null.
 export function debrisContact(state: Readonly<GameState>, pred: Prediction): { rack: string; inTac: number } | null {
@@ -241,6 +271,8 @@ export function lineVars(state: Readonly<GameState>, pred: Prediction): LineVars
     ...verbVars(state),
     ...beltVars(state, pred),
     rootSecLeft: rootSecLeft(state),
+    nextLz: '',
+    firstDownRadio: firstDownRadio(state),
   };
 }
 
@@ -955,8 +987,23 @@ export const BEATS: readonly Beat[] = [
     when: (ctx) => ctx.events.has('escaped'),
     lines: [controlQuip(() => "That's… not an orbit. :)", true)],
   },
-  // TODO(slice1a-SIM): the landing's beats (LANDING_BEATS: `Lovely orbit! Let's get them down. :)` at 'landing-start',
-  // `They're down! :)` at the ship's first touchdown).
+  // Slice 1a (01-landing §2): CONTROL at the landing's start, then at the ship's first touchdown with the ground's radio
+  // line after it (the first pod down on every ship sends one). The start waits its turn after the lock's quip; the
+  // touchdown is critical, about this moment. The radio line is the ground's, not a quip: no mind alert holds it back.
+  {
+    id: 'control-landing-start',
+    once: true,
+    perShip: true,
+    when: (ctx) => ctx.events.has('landing-start'),
+    lines: [controlQuip(() => LANDING_BEATS.start)],
+  },
+  {
+    id: 'control-first-down',
+    once: true,
+    perShip: true,
+    when: (ctx) => ctx.events.has('pod-landed') && ctx.vars.firstDownRadio !== '',
+    lines: [controlQuip(() => LANDING_BEATS.firstDown, true), { speaker: 'sys', text: (ctx) => ctx.vars.firstDownRadio, critical: true }],
+  },
 ];
 
 // The beats a new ship hears again (Beat.perShip).
@@ -1796,11 +1843,6 @@ function duelOn(ctx: DirectorCtx): boolean {
   return isLanding(ctx) && ctx.state.hollow.finale.phase === 'duel';
 }
 
-// Every pod is down, parked or gone: nothing is aboard or falling (landing table row L0's condition).
-function noPodAboard(ctx: DirectorCtx): boolean {
-  return !ctx.state.landing.pods.some((record) => record.fate.kind === 'aboard' || record.fate.kind === 'falling');
-}
-
 function rootToDelete(ctx: DirectorCtx): boolean {
   return duelOn(ctx) && !rootDeleteRunning(ctx.state) && rootDeletable(ctx.state);
 }
@@ -1822,16 +1864,8 @@ const FINALE_RULES: readonly GuideRule[] = [
     activeWhen: (ctx) => duelOn(ctx) && !rootDeleteRunning(ctx.state) && !rootDeletable(ctx.state),
     text: () => HOLLOW_FINALE.stripNoDelete,
   },
-  {
-    // TODO(slice1a-SIM): this becomes the landing table's row L0 (landing-guidance.ts); until then the duel says it.
-    id: 'finale-waits',
-    layer: 'mind',
-    priority: 'mind-urgent',
-    outranksLeadIn: true,
-    activeWhen: (ctx) => rootToDelete(ctx) && noPodAboard(ctx),
-    text: () => LANDING_LINES.L0,
-    highlight: (ctx) => (inAmber(ctx) ? null : toolStepTarget('delete', ctx.state.ui.activeTool?.kind ?? null, ROOT_HINT_TARGET)),
-  },
+  // (With every pod down first, the landing table's row L0 says EVERY POD IS DOWN — now DELETE THE ROOT: a landing 'now'
+  // line, above these.)
   {
     id: 'finale-delete-tab',
     layer: 'mind',
@@ -1972,6 +2006,21 @@ export const GUIDE_RULES: readonly GuideRule[] = [
       && ctx.skipAvailable
       && ctx.flight.keys.includes('F'),
     text: (ctx) => `MIND CLEAR — press [F] to SKIP to ${ctx.vars.nextApsis}`,
+    keys: ['F'],
+  },
+  {
+    // The landing's twin (01-landing §3.11): in blue with nothing to do between windows, when the landing table's WAIT
+    // offers the SKIP (its F key), it says where the SKIP goes: `MIND CLEAR — press [F] to SKIP to LZ-B`.
+    id: 'hint-mind-clear-landing',
+    layer: 'mind',
+    priority: 'hint',
+    activeWhen: (ctx) => ctx.mode === 'memory'
+      && ctx.mindQuietSec >= MIND_CLEAR_IDLE_SEC
+      && !ctx.mindAlert
+      && ctx.landing?.urgency === 'wait'
+      && ctx.landing.keys.includes('F')
+      && ctx.vars.nextLz !== '',
+    text: (ctx) => LANDING_ASKS.mindClear(ctx.vars.nextLz),
     keys: ['F'],
   },
 ];

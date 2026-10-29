@@ -204,6 +204,19 @@ export function targetWindow(state: Readonly<GameState>, sol: Readonly<DropSolut
   return live.find((w) => (remaining[w.lz] ?? 0) > 0) ?? live[0] ?? null;
 }
 
+// The moment a window is worth a launch (the guidance table's GET READY and its beeps count down to it), in game s from
+// `nowTSec`: the opening of its sure part inside the in-band span when this pass has one (from there the whole dot fits:
+// LAUNCH NOW), else its in-band opening (a wide drop: LAUNCH — WIDE DROP from the start). null: no in-band span.
+// Why not the opening alone: the centre enters the bracket a few tactical seconds before the dot's edges do, and a kid
+// told to launch at the opening sends the first pod half off-site (plan Deviations, Track SIM).
+export function launchMomentInSec(sol: Readonly<DropSolution>, w: Readonly<LzWindow>, nowTSec: number): number | null {
+  if (w.inBandOpenInSec === null || w.inBandCloseInSec === null) return null;
+  const sureFits = w.sureOpenInSec !== null && w.sureCloseInSec !== null
+    && w.sureOpenInSec < w.inBandCloseInSec && w.sureCloseInSec > w.inBandOpenInSec;
+  const at = sureFits ? Math.max(w.inBandOpenInSec, w.sureOpenInSec!) : w.inBandOpenInSec;
+  return secFromNow(sol, at, nowTSec);
+}
+
 // The driver a launch would take: `pod`'s if named (it must be in memory), else nextToLaunch.
 function driverFor(state: Readonly<GameState>, pod: number | undefined): DriverSegment | null {
   if (pod === undefined) return nextToLaunch(state);

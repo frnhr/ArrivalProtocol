@@ -34,6 +34,12 @@ import {
 // the flight table's callers keep importing it from guidance.
 export type { Urgency };
 
+// The landing's table lives in landing-guidance.ts (01-landing §3.11; a file apart so the two tables stay disjoint and the
+// import cycle stays out); re-exported here, where the spec puts it, so the director reads both tables from guidance.
+export {
+  buildLandingContext, landingObjective, type LandingContext, type LandingObjective, type LandingRow,
+} from '@systems/landing-guidance';
+
 export interface FlightObjective {
   id: string;           // stable per row and variant; the strip re-renders when id or text changes
   text: string;         // ≤ MAX_LINE_CHARS, kid words only

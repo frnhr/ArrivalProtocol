@@ -14,12 +14,12 @@ import { capabilitiesNow } from '@systems/capabilities';
 import { getOpsBySeg, abortOp } from '@systems/ops-core';
 import { replaceRange, mergeAdjacentFree, requireAddr, freeSegment, assertMemoryInvariants } from '@systems/memory-ops';
 import { currentDropSolution, getDropSolution } from '@systems/drop-cache';
-import { dropHalfWidthKm, secFromNow } from '@systems/landing-solve';
+import { dropHalfWidthKm } from '@systems/landing-solve';
 import { getPrediction } from '@systems/predict';
 import { requestSkip, skipBlockReason } from '@systems/pace';
 import { activeLandingController, setActiveLandingController } from '@systems/landing-controller';
 import {
-  classifyLanding, colonyName, dropFactors, driverTouch, finalFateOfAboard, isLaunchable, landingView as landingViewOf,
+  classifyLanding, colonyName, dropFactors, driverTouch, finalFateOfAboard, isLaunchable, landingView as landingViewOf, launchMomentInSec,
   launchGuard, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podPoints, targetWindow, touchAtTouchdown,
   windowOpenNow,
 } from '@systems/landing-rules';
@@ -312,7 +312,8 @@ function bayTick(store: Store<GameState>, dtWorld: number): void {
 
 // --- GET READY's beeps (§3.11 L7) -------------------------------------------------------------------------------------
 
-// The 5…1 before the target window opens (landing-rules targetWindow: the window GET READY counts down to), as
+// The 5…1 before the target window's launch moment (landing-rules targetWindow and launchMomentInSec: what GET READY
+// counts down to, the opening of the part where the whole dot fits when there is one), as
 // 'countdown-beep' kind 'window': the burn's beeps, so the same cue plays. Crossings only, as in flight-events: a
 // countdown that jumps (a SKIP landing 8 s before the window, a fresh target) beeps nothing for the seconds it skipped,
 // and each threshold beeps once per window. The opening itself is 'window-open' (its own chime).
@@ -332,7 +333,7 @@ function beepTick(store: Store<GameState>): void {
   const now = state.clock.tSec;
   const sol = state.landing.ended === null ? getDropSolution() : null;
   const target = sol === null ? null : targetWindow(state, sol, now);
-  const opensIn = sol === null || target === null || target.inBandOpenInSec === null ? null : secFromNow(sol, target.inBandOpenInSec, now);
+  const opensIn = sol === null || target === null ? null : launchMomentInSec(sol, target, now);
   const key = target === null || opensIn === null ? null : `${target.lz}|${Math.round(now + opensIn)}`;
   if (key !== beepWatch.key) beepWatch = { ...NO_BEEP_WATCH, key };
   const next = opensIn === null || opensIn <= 0 ? null : opensIn / state.level.tacticalWarp;
