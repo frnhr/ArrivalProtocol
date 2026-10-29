@@ -23,7 +23,7 @@ import {
   windowOpenNow,
 } from '@systems/landing-rules';
 import { forgetDriver, parkPodsAboard } from '@state/actions';
-import { driversInMemory, finalePending } from '@state/selectors';
+import { driversInMemory, finalePending, scriptFightOpen } from '@state/selectors';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { LANDING_ECHO, LAUNCH_CONFIRM_TEXT, launchRefusalKey } from '@data/landing-text';
 import { IS_DEV } from '@/env';
@@ -413,7 +413,8 @@ function tick(store: Store<GameState>, dtAi: number): void {
   if (store.getState().landing.ended === null && podsLeft(store.getState()).aboard === 0) endNow(store, 'all-launched');
   noneLeftTick(store, dtAi);
   // 5. The end: the landing has ended and nothing is still falling. The last bell rings out (LANDING_DONE_LINGER_SEC),
-  // and HOLLOW's story beat and LAST LIGHT's finale are part of this ship: the report waits for them.
+  // and ship 1's scripted fight (still undecided after an early END LANDING), HOLLOW's story beat and LAST LIGHT's
+  // finale are part of this ship: the report waits for them.
   state = store.getState();
   const left = podsLeft(state);
   const over = left.falling === 0 && state.landing.ended !== null;
@@ -424,7 +425,7 @@ function tick(store: Store<GameState>, dtAi: number): void {
     return;
   }
   const remaining = linger - dtAi;
-  if (remaining > 0 || state.hollow.story === 'pending' || finalePending(state)) {
+  if (remaining > 0 || state.hollow.story === 'pending' || scriptFightOpen(state) || finalePending(state)) {
     store.mutate((draft) => { draft.landing.lingerAiSec = Math.max(0, remaining); });
     return;
   }

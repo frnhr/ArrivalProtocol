@@ -301,6 +301,14 @@ export function verbSecondsLeft(verb: Readonly<VerbTelegraph>): number {
   return Math.max(1, Math.ceil(verb.leftSec));
 }
 
+// Ship 1's scripted fight is still undecided (HollowState.scriptTargetId): the bitten file is in memory and neither
+// cured nor eaten yet. The LANDING REPORT waits for it as for the story it starts (systems/landing.ts). A target that left
+// memory some other way (it never can today: an infected file can't launch or move) does not hold the report for good.
+export function scriptFightOpen(state: Readonly<GameState>): boolean {
+  const id = state.hollow.scriptTargetId;
+  return id !== null && state.memory.some((seg) => seg.id === id);
+}
+
 // LAST LIGHT's finale is still on (WP11, systems/finale.ts): the duel, the choice still to be made, (part 2) the
 // typed ending the choice brought, or UNRESOLVED's last line, until it has typed and been read. The LANDING REPORT waits
 // for it (systems/landing.ts).

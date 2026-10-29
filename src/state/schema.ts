@@ -381,6 +381,11 @@ export interface HollowState {
   cfg: HollowDef;            // this ship's HOLLOW, copied from its ShipDef (like `level`)
   phase: HollowPhase;
   story: HollowStory;
+  // Ship 1's scripted fight ('loop-closed-once'): the file its one bite infected, from the bite until the fight is
+  // decided (cured, or eaten: then `story` turns 'pending'). The LANDING REPORT waits for it (selectors scriptFightOpen),
+  // so END LANDING before the fight is decided still lets `> ...047?` land before the report; in state so a save carries
+  // it. null on every other ship. (update)
+  scriptTargetId: string | null;
   // AI seconds to the next bite (`NEXT BITE m:ss` on every hollow block): one global timer. null
   // while it is not awake or on a ship whose HOLLOW does not spread (ship 1: `NEXT BITE ?:??`). (mutate)
   biteInSec: number | null;

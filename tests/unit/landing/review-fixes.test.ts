@@ -1,7 +1,9 @@
 // Slice 1a, the logic fixes after the full review (plan Deviations, "Review fixes"). Each section is one bug, built
 // straight from a state (lockOn: no capture flown), so the suite stays fast:
 // • a driver lost after the landing ended (HOLLOW, the zones, THE DEAL's ACCEPT, the instant landing) updates its parked
-//   pod instead of throwing, and THE DEAL is never offered, nor left standing, once the landing has ended.
+//   pod instead of throwing, and THE DEAL is never offered, nor left standing, once the landing has ended;
+// • ship 1's scripted fight lives in state (hollow.scriptTargetId), and the LANDING REPORT waits for it after an early
+//   END LANDING, so `> ...047?` is never skipped.
 import { check, finish } from './checks';
 import { lockOn } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';
@@ -12,6 +14,7 @@ import { recordDriverLost, setIntegrity } from '@state/actions';
 import { driversInMemory } from '@state/selectors';
 import { podRecord } from '@systems/landing-rules';
 import { DRIVER_RULES } from '@data/script';
+import { HOLLOW_STORY } from '@data/hollow-text';
 import type { DriverSegment } from '@/types/segment';
 
 const h = createHarness7(5);
@@ -20,7 +23,8 @@ const state = () => h.store.getState();
 // The ship alone, locked in the middle of its ring, its tutorial asks already met (the hurt-driver lesson would pause
 // nothing here, but keeps the strip quiet).
 function landingOn(ship: number, seed = 5): void {
-  h.shipAlone(ship, seed);
+  if (ship === 0) h.newRun(seed);
+  else h.shipAlone(ship, seed);
   h.store.update((draft) => { draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id)); });
   lockOn(h);
   h.stepFor(0.2);
@@ -94,6 +98,24 @@ function untilReport(maxWall: number): string | null {
   h.stepFor(3);
   check('…and never offered once the landing has ended (HOLLOW awake, drivers at its front)',
     state().hollow.deal.phase === 'none' && state().run.stats.deal === null, state().hollow.deal.phase);
+}
+
+// --- 2. Ship 1's undecided scripted fight holds the report (review: END LANDING first skipped `> ...047?`) ------------
+{
+  landingOn(0);
+  const end = h.wall() + 30;
+  while (state().hollow.scriptTargetId === null && h.wall() < end) h.step();
+  const targetId = state().hollow.scriptTargetId;
+  const target = state().memory.find((seg) => seg.id === targetId);
+  check('ARES-VII: the scripted bite records its target in state (hollow.scriptTargetId)', target?.type === 'driver' && target.infected !== undefined,
+    String(targetId));
+  if (target?.type === 'driver') h.store.update((draft) => { setIntegrity(draft.memory.find((seg) => seg.id === targetId) as DriverSegment, 6); });
+  endLanding(h.store);
+  untilReport(60);
+  const said = h.log().some((entry) => entry.text === HOLLOW_STORY.noticed(state().mission.transmissionNum));
+  check('…END LANDING before the fight is decided: the report waits for the fight and its story (`> ...047?` is said first)',
+    state().run.phase === 'report' && state().hollow.story === 'told' && said && state().hollow.scriptTargetId === null,
+    `${state().run.phase}, story ${state().hollow.story}, said ${said}`);
 }
 
 finish();
