@@ -1,6 +1,7 @@
 import type { Store } from '@state/store';
-import type { GameState, RunEndCause, ClusterResult, EndingLine, FinaleEnding } from '@state/schema';
-import type { HollowSegment, Segment, SoulSegment } from '@/types/segment';
+import type { GameState, RunEndCause, EndingLine, FinaleEnding } from '@state/schema';
+import type { HollowSegment, Segment, DriverSegment } from '@/types/segment';
+import type { PodRecord } from '@/types/landing';
 import { onAiTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { emit, NO_PAYLOAD } from '@systems/events';
@@ -11,7 +12,8 @@ import { theRoot, rootDeleteRunning, rootDeleteProgress, nameHollow } from '@sys
 import { clearAlert, VERB_ALERT_ID, SEED_ALERT_ID } from '@systems/alerts';
 import { replaceRange, mergeAdjacentFree, requireAddr, freeSegment, assertMemoryInvariants } from '@systems/memory-ops';
 import { spendCharge, cureInfection } from '@state/actions';
-import { soulsInMemory, getFsTool, chargeLeft, infectedSegments, isHollow, integrityState, soulCounts } from '@state/selectors';
+import { getFsTool, chargeLeft, infectedSegments, isHollow, integrityState } from '@state/selectors';
+import { driverName, driverSegId } from '@data/landing-text';
 import { echoWord, TOOL_REFUSAL } from '@data/tool-text';
 import { getShip, SHIPS } from '@data/ships';
 import { fleetHome } from '@systems/run-score';
@@ -20,34 +22,34 @@ import { HOLLOW_FINALE } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
 import { formatCount } from '@data/format';
 import {
-  MERGE_COST_CHARGE, MERGE_RESTORE_INTEGRITY, CLUSTER_BLOCKS, GLITCH_BURST_LEVEL, GLITCH_BURST_MS,
+  MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, DRIVER_BLOCKS, GLITCH_BURST_LEVEL, GLITCH_BURST_MS,
   DUEL_SPIKE_EVERY_START_SEC, DUEL_SPIKE_EVERY_END_SEC, DUEL_SPIKE_LEVEL_START, DUEL_SPIKE_LEVEL_END, DUEL_SPIKE_MS,
   ROOT_GONE_GLITCH_LEVEL, ROOT_GONE_GLITCH_MS, MERGE_GLITCH_LEVEL, MERGE_GLITCH_MS, FINALE_ENDING_MAX_LINES,
   FINALE_ENDING_CPS, FINALE_ENDING_GAP_SEC, FINALE_ENDING_HOLD_SEC, CONTROL_CHIME_LEAD_SEC,
 } from '@data/tuning';
 
 // LAST LIGHT's finale (§1, §4.3, §6.6, §9 WP11 items 4–5), DOM-free. The flagship's ship ends here, and so does the run.
-// • THE DUEL. As the flagship's orbit is locked or accepted (the ship goes into 'printing'), its root opens: no longer
+// • THE DUEL. As the flagship's orbit is locked or accepted (the ship goes into 'landing'), its root opens: no longer
 //   LOCKED, ARRIVAL CONTROL says "Please delete UNIT-046. :)", and the strip says DELETE THE ROOT. Its DELETE is one
 //   ROOT_DELETE_SEC op (state/actions.ts), during which HOLLOW's verbs come every duelEverySec (systems/hollow-verbs.ts);
-//   the running DELETE keeps its thread whatever the Core does (ops-core never takes a thread back). Printing goes on
-//   meanwhile, and the WAKE REPORT waits for the finale (systems/printer.ts, finalePending): a ship whose colonists
-//   all printed before the root's end waits with `EVERYONE IS PRINTED — now DELETE THE ROOT`.
+//   the running DELETE keeps its thread whatever the Core does (ops-core never takes a thread back). The landing goes on
+//   meanwhile, and the LANDING REPORT waits for the finale (systems/landing.ts, finalePending): a ship whose pods are
+//   all down before the root's end waits with `EVERY POD IS DOWN — now DELETE THE ROOT` (01-landing §3.11 L0).
 // • THE LAST BLOCK. The DELETE leaves one block in the root's middle (data/memory.ts rootRemains). HOLLOW stops: no
 //   more bites, seeds or verbs (it sleeps), and what it was eating it lets go, cured where it stands. (§6.6 says only
 //   that spread and seeds stop; a dead root's teeth drained on while the kid read the choice, which is no choice at
 //   all. WP11 deviation.) In its pink: `> 047. wait.` Then PURGE or MERGE.
-// • PURGE: every block of HOLLOW leaves memory (the last block, its seeds, the blocks it ate: their colonists did not
-//   wake), clean and a little cold: `> rm unit_046 ... OK`, and CONTROL thanks Unit 47 and stands it by for reassignment.
+// • PURGE: every block of HOLLOW leaves memory (the last block, its seeds, the blocks it ate: their pods stay parked),
+//   clean and a little cold: `> rm unit_046 ... OK`, and CONTROL thanks Unit 47 and stands it by for reassignment.
 // • MERGE: needs MERGE_COST_CHARGE REPAIR CHARGE (refused with `NEEDS 20 CHARGE (you have 14)` below it) and costs it.
-//   Every cluster HOLLOW ate on this ship comes back: its block turns back into colonists in place at
-//   MERGE_RESTORE_INTEGRITY if it still stands (moved by an MV or not), and prints like any cluster (waking with missing
-//   memories), else (the kid DELETEd it) it goes into the record straight away as woke with missing memories: half
-//   credit, and nobody HOLLOW ate is dropped. Its other blocks go with it into you: `> merge unit_046 -> unit_047 ...
-//   OK`, and CONTROL calls Unit 47 non-compliant. The next run carries the merge (systems/meta.ts: 'won-merge').
-// • UNRESOLVED (§4.3): printing is over, the root still stands, no DELETE of it is running, and nothing can delete it
+//   1a (plan risk 9; 01-landing §3.17's last landing is slice 7): every driver HOLLOW ate on this ship whose block still
+//   stands (moved by an MV or not) turns back into a driver in place at MERGE_DRIVER_INTEGRITY, its pod launches like any
+//   other, and a landing that had ended resumes. A pod whose block is gone (the kid DELETEd it) stays parked, restorable,
+//   for slice 7 (it scores 0 in 1a). Its other blocks go with it into you: `> merge unit_046 -> unit_047 ... OK`, and
+//   CONTROL calls Unit 47 non-compliant. The next run carries the merge (systems/meta.ts: 'won-merge').
+// • UNRESOLVED (§4.3): the landing is over, the root still stands, no DELETE of it is running, and nothing can delete it
 //   (no working Rm, and none a REPAIR could bring back): the ship ends unresolved. `> you can't delete me now.`
-// RUN END's cause after the flagship's WAKE REPORT is finaleRunCause.
+// RUN END's cause after the flagship's LANDING REPORT is finaleRunCause.
 // WP11 part 2 (the moment's look and sound live in the views; this keeps their timing on AI time, DOM-free):
 // • THE SPIKES. The root opening tears the screen once (a verb's glitchBurst); while its DELETE runs HOLLOW thrashes:
 //   a spike every DUEL_SPIKE_EVERY_START_SEC quickening to DUEL_SPIKE_EVERY_END_SEC, stronger the nearer the DELETE is
@@ -55,7 +57,7 @@ import {
 // • THE ENDING. PURGE and MERGE each write their typed ending (≤ FINALE_ENDING_MAX_LINES lines, from live numbers:
 //   finaleEndingLines) into hollow.finale.ending, in the same store update as the choice's phase (WP11 review: written
 //   one update later, the card saw a chosen finale with no ending, closed, and came back late or never), with the AI
-//   seconds it starts and until which it holds the WAKE REPORT back (finaleEndingSec: the lines' typing at
+//   seconds it starts and until which it holds the LANDING REPORT back (finaleEndingSec: the lines' typing at
 //   FINALE_ENDING_CPS, the gaps, CONTROL's chime and a hold to read). The FinaleChoice card types it on that clock;
 //   skipFinaleEnding (a click or a key) lets the report come at once.
 
@@ -65,7 +67,7 @@ function isFlagship(state: Readonly<GameState>): boolean {
   return getShip(state.run.shipIndex).flagship;
 }
 
-// How the run ends after the flagship's WAKE REPORT (systems/run.ts continueAfterReport).
+// How the run ends after the flagship's LANDING REPORT (systems/run.ts continueAfterReport).
 export function finaleRunCause(state: Readonly<GameState>): RunEndCause {
   switch (state.hollow.finale.phase) {
     case 'purged': return 'won-purge';
@@ -100,44 +102,42 @@ export function finaleChoiceRefusal(state: Readonly<GameState>, choice: FinaleCh
 
 // --- The typed endings (§9 WP11 item 5) ------------------------------------------------------------------------------
 
-// The people on this ship who will wake, everyone HOLLOW did not eat or the belt did not take: printed already (heads)
-// or still in memory (printing only moves them from one to the other, so the number holds while the ending types).
-function soulsInOrbit(state: Readonly<GameState>): number {
-  const counts = soulCounts(state);
-  return counts.heads + counts.inMemory;
+// The people on this ship whose pods still have their drivers, everyone HOLLOW or the belt did not take: down already,
+// falling, or aboard (the landing only moves them from one to the other, so the number holds while the ending types).
+function colonistsInOrbit(state: Readonly<GameState>): number {
+  return state.landing.pods.filter((record) => record.driverLost === null && record.fate.kind !== 'not-launched')
+    .reduce((sum, record) => sum + record.colonists, 0);
 }
 
-// The clusters HOLLOW ate on this ship that are still lost: what MERGE would bring back, and what PURGE leaves lost
-// (FinaleChoice names them on its buttons).
-export function clustersEatenHere(state: Readonly<GameState>): ClusterResult[] {
-  return state.souls.results.filter((result) => result.eaten === true && result.outcome === 'lost');
+// The pods whose drivers HOLLOW ate on this ship and which are not back yet: what MERGE would bring back, and what PURGE
+// leaves parked (FinaleChoice names them on its buttons).
+export function podsEatenHere(state: Readonly<GameState>): PodRecord[] {
+  return state.landing.pods.filter((record) => record.driverLost === 'eaten');
 }
 
-function soulsEatenHere(state: Readonly<GameState>): number {
-  return clustersEatenHere(state).reduce((sum, result) => sum + result.souls, 0);
+function colonistsEatenHere(state: Readonly<GameState>): number {
+  return podsEatenHere(state).reduce((sum, record) => sum + record.colonists, 0);
 }
 
 // The typed ending a choice just made writes, from the world as it is right after it.
 export function finaleEndingLines(state: Readonly<GameState>, choice: FinaleChoice): EndingLine[] {
   const hollowWord = echoWord(hollowLabel(state.run));
-  const inOrbit = soulsInOrbit(state);
+  const inOrbit = colonistsInOrbit(state);
   const shipName = state.level.shipName;
   const unit = state.mission.transmissionNum;
   let lines: EndingLine[];
   if (choice === 'purge') {
-    const eaten = soulsEatenHere(state);
-    // The flagship is in orbit (its finale opens only at a lock or an accept) but not recorded until its WAKE REPORT.
+    const eaten = colonistsEatenHere(state);
+    // The flagship is in orbit (its finale opens only at a lock or an accept) but not recorded until its LANDING REPORT.
     const fleet = fleetHome(state.run.ships, SHIPS.length, state.level.shipId);
     lines = HOLLOW_FINALE.purgeEnding({
       shipName, inOrbit: formatCount(inOrbit), anyoneHome: inOrbit > 0, eaten: eaten > 0 ? formatCount(eaten) : null, hollowWord, unit,
       shipsHome: fleet.home, fleetSize: fleet.total,
     });
   } else {
-    const { restoredInPlace, restoredHalf } = state.hollow.finale;
-    const restoredCodes = new Set([...restoredInPlace, ...restoredHalf]);
-    // Back in memory (in place) or woke at once (half): every one of them is counted in inOrbit now.
-    const restored = state.souls.results.filter((result) => result.merged === true).reduce((sum, result) => sum + result.souls, 0)
-      + soulsInMemory(state).filter((soul) => restoredCodes.has(soul.cluster)).reduce((sum, soul) => sum + soul.souls, 0);
+    // Back in memory in place: every one of them is counted in inOrbit now.
+    const restored = state.landing.pods.filter((record) => state.hollow.finale.restoredInPlace.includes(record.pod))
+      .reduce((sum, record) => sum + record.colonists, 0);
     lines = HOLLOW_FINALE.mergeEnding({
       shipName, inOrbit: formatCount(inOrbit), restored: restored > 0 ? formatCount(restored) : null, hollowWord,
       ours: echoWord(unitName(state.run.unitNumber)), unit,
@@ -174,7 +174,7 @@ function endingFor(state: Readonly<GameState>, choice: FinaleChoice): FinaleEndi
   return { choice, lines, startAi, untilAi: startAi + finaleEndingSec(lines) };
 }
 
-// The kid ended the typed ending early (FinaleChoice: a click, SPACE or ENTER once it has typed): the WAKE REPORT may
+// The kid ended the typed ending early (FinaleChoice: a click, SPACE or ENTER once it has typed): the LANDING REPORT may
 // come now. false when no ending is on.
 export function skipFinaleEnding(store: Store<GameState>): boolean {
   const state = store.getState();
@@ -186,7 +186,7 @@ export function skipFinaleEnding(store: Store<GameState>): boolean {
   return true;
 }
 
-// The typed ending is on screen now (FinaleChoice shows it; the WAKE REPORT waits for it).
+// The typed ending is on screen now (FinaleChoice shows it; the LANDING REPORT waits for it).
 export function finaleEndingShowing(state: Readonly<GameState>): boolean {
   const ending = state.hollow.finale.ending;
   return ending !== null && state.clock.aiSec < ending.untilAi;
@@ -257,9 +257,9 @@ function rootGone(store: Store<GameState>): void {
   say('hollow', HOLLOW_FINALE.lastWords(store.getState().run.unitNumber), { critical: true });
 }
 
-// HOLLOW's last line holds the WAKE REPORT until it has typed in the TERMINAL (after whatever the TERMINAL is still
+// HOLLOW's last line holds the LANDING REPORT until it has typed in the TERMINAL (after whatever the TERMINAL is still
 // typing: the same sum say.ts keeps) and been read, like the typed endings (WP11 review: the report came 1.5 s after the
-// last print and cut it off at `> you can't delete`).
+// last touchdown and cut it off at `> you can't delete`).
 function unresolve(store: Store<GameState>): void {
   const state = store.getState();
   const line = HOLLOW_FINALE.unresolvedLine;
@@ -282,20 +282,19 @@ function removeBlocks(memory: Segment[], blocks: readonly HollowSegment[]): void
   mergeAdjacentFree(memory);
 }
 
-// A cluster HOLLOW ate, back from its record (the people the record kept), at MERGE_RESTORE_INTEGRITY.
-function soulFromRecord(result: Readonly<ClusterResult>): SoulSegment {
+// A driver HOLLOW ate, back from its pod's record (the pod outlived it), at MERGE_DRIVER_INTEGRITY.
+function driverFromRecord(record: Readonly<PodRecord>): DriverSegment {
   return {
-    id: `soul_${result.cluster.toLowerCase()}`,
-    name: `${result.cluster} · ${result.family}`,
-    type: 'soul',
-    size: CLUSTER_BLOCKS,
-    integrity: MERGE_RESTORE_INTEGRITY,
-    state: integrityState(MERGE_RESTORE_INTEGRITY),
-    cluster: result.cluster,
-    family: result.family,
-    souls: result.souls,
-    featured: result.featured,
-    sealed: false,
+    id: driverSegId(record.pod),
+    name: driverName(record.pod, record.family),
+    type: 'driver',
+    size: DRIVER_BLOCKS,
+    integrity: MERGE_DRIVER_INTEGRITY,
+    state: integrityState(MERGE_DRIVER_INTEGRITY),
+    pod: record.pod,
+    family: record.family,
+    colonists: record.colonists,
+    featured: structuredClone(record.featured),
   };
 }
 
@@ -321,36 +320,39 @@ function merge(store: Store<GameState>): void {
   spendCharge(store, MERGE_COST_CHARGE);
   const state = store.getState();
   const memory = state.memory;
-  const eaten = clustersEatenHere(state);
+  const eaten = podsEatenHere(state);
   const blocks = memory.filter(isHollow);
   for (const block of blocks) for (const operation of getOpsBySeg(block.id)) abortOp(operation.id);
-  const inPlace: string[] = [];
-  const half: string[] = [];
-  for (const result of eaten) {
-    const block = memory.find((seg): seg is HollowSegment => isHollow(seg) && seg.ateCluster === result.cluster);
-    if (block === undefined) { half.push(result.cluster); continue; }
-    if (block.size !== CLUSTER_BLOCKS) throw new Error(`finale: ${result.cluster}'s block is ${block.size} blocks, not a cluster's`);
+  const inPlace: number[] = [];
+  const half: number[] = [];
+  for (const record of eaten) {
+    const block = memory.find((seg): seg is HollowSegment => isHollow(seg) && seg.atePod === record.pod);
+    if (block === undefined) { half.push(record.pod); continue; }
+    if (block.size !== DRIVER_BLOCKS) throw new Error(`finale: pod ${record.pod}'s block is ${block.size} blocks, not a driver's`);
     const start = requireAddr(memory, block);
-    replaceRange(memory, start, start + block.size, [soulFromRecord(result)], { opId: null, own: [block] });
-    inPlace.push(result.cluster);
+    replaceRange(memory, start, start + block.size, [driverFromRecord(record)], { opId: null, own: [block] });
+    inPlace.push(record.pod);
   }
   removeBlocks(memory, memory.filter(isHollow));
   if (IS_DEV) assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
   const gone = new Set(blocks.map((block) => block.id));
   store.update((draft) => {
-    // Back in memory: their 'did not wake' records go (they will print). Gone for good: woke, with missing memories.
-    draft.souls.results = draft.souls.results.filter((result) => !(result.eaten === true && inPlace.includes(result.cluster)));
-    for (const result of draft.souls.results) {
-      if (result.eaten !== true || !half.includes(result.cluster)) continue;
-      result.outcome = 'gaps';
-      result.integrity = MERGE_RESTORE_INTEGRITY;
-      result.merged = true;
+    // Back in memory: their pods have drivers again and launch like any other (a pod already parked comes back aboard).
+    // The ones whose blocks are gone stay eaten: parked, restorable, for slice 7's last landing.
+    for (const record of draft.landing.pods) {
+      if (!inPlace.includes(record.pod)) continue;
+      record.driverLost = null;
+      record.restored = true;
+      if (record.fate.kind === 'parked') record.fate = { kind: 'aboard' };
     }
     draft.hollow.finale = { phase: 'merged', restoredInPlace: inPlace, restoredHalf: half, ending: null, unresolvedUntilAi: null };
-    // Its numbers count the clusters just given back (in memory now, or in the record as woke).
+    // Its numbers count the drivers just given back.
     draft.hollow.finale.ending = endingFor(draft, 'merge');
-    // Colonists back in memory: the printer goes on with them (it may have been lingering toward the report).
-    if (inPlace.length > 0) draft.printer.lingerAiSec = null;
+    // Drivers back in memory: the landing goes on with them (it may have ended, or been lingering toward the report).
+    if (inPlace.length > 0) {
+      draft.landing.ended = null;
+      draft.landing.lingerAiSec = null;
+    }
     if (draft.ui.selectedId !== null && gone.has(draft.ui.selectedId)) draft.ui.selectedId = null;
     draft.ui.memoryRev++;
   });
@@ -376,12 +378,12 @@ export function chooseFinale(store: Store<GameState>, choice: FinaleChoice): str
 
 function tick(store: Store<GameState>, dtAi: number): void {
   const state = store.getState();
-  // Before the phase test: the ending's last tick can be the one the printer moves to the WAKE REPORT in.
+  // Before the phase test: the ending's last tick can be the one the landing moves to the LANDING REPORT in.
   if (verdictOwed !== null && !finaleEndingShowing(state)) {
     say('control', verdictOwed, { critical: true });
     verdictOwed = null;
   }
-  if (!isFlagship(state) || state.run.coreLost || state.run.phase !== 'printing') return;
+  if (!isFlagship(state) || state.run.coreLost || state.run.phase !== 'landing') return;
   const phase = state.hollow.finale.phase;
   if (phase === 'none') {
     openRoot(store);
@@ -394,7 +396,12 @@ function tick(store: Store<GameState>, dtAi: number): void {
     return;
   }
   stepSpikes(state, dtAi);
-  if (soulsInMemory(state).length === 0 && !rootDeleteRunning(state) && !rootDeletable(state)) unresolve(store);
+  if (landingOver(state) && !rootDeleteRunning(state) && !rootDeletable(state)) unresolve(store);
+}
+
+// The landing will launch nothing more (UNRESOLVED's "the landing is over"): it was ended, or no pod is aboard or falling.
+function landingOver(state: Readonly<GameState>): boolean {
+  return state.landing.ended !== null || !state.landing.pods.some((record) => record.fate.kind === 'aboard' || record.fate.kind === 'falling');
 }
 
 let mounted = false;

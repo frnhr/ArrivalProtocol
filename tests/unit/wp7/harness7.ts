@@ -16,10 +16,10 @@ import { actionRepair, actionMove } from '@state/actions';
 import { canStartOp, getOpsBySeg } from '@systems/ops-core';
 import { isBusy } from '@systems/tool-targets';
 import { createInitialState } from '@state/initial';
-import { soulsInMemory, isInfected } from '@state/selectors';
+import { driversInMemory, isInfected } from '@state/selectors';
 import { getShip } from '@data/ships';
 import { WALL_MIN_BLOCKS } from '@data/tuning';
-import type { SoulSegment, FreeSegment } from '@/types/segment';
+import type { DriverSegment, FreeSegment } from '@/types/segment';
 
 export interface Harness7 extends Harness6 {
   // A NEW RUN on ship 1's title card (the page's own first state).
@@ -47,7 +47,7 @@ export function createHarness7(seed = 1, opts: { soulsFound?: boolean } = {}): H
     const now = state.clock.aiSec;
     let acted = false;
     if (!state.run.licences.includes('repair') || state.clock.paused) return false;
-    for (const soul of soulsInMemory(state)) {
+    for (const soul of driversInMemory(state)) {
       if (!isInfected(soul)) { infectedSince.delete(soul.id); continue; }
       if (!infectedSince.has(soul.id)) infectedSince.set(soul.id, now);
       if (now - infectedSince.get(soul.id)! < reactSec || getOpsBySeg(soul.id).length > 0 || !canStartOp()) continue;
@@ -59,7 +59,7 @@ export function createHarness7(seed = 1, opts: { soulsFound?: boolean } = {}): H
     // Clean clusters within a GAP of HOLLOW go to the far end of the biggest free space (rack D).
     for (const reach of hollowReach(state.memory, now)) {
       if (reach.gapBlocks >= WALL_MIN_BLOCKS || reach.neighbourId === null) continue;
-      const soul = state.memory.find((seg): seg is SoulSegment => seg.type === 'soul' && seg.id === reach.neighbourId);
+      const soul = state.memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.id === reach.neighbourId);
       if (!soul || isInfected(soul) || isBusy(soul) || !canStartOp()) continue;
       const biggest = state.memory.filter((seg): seg is FreeSegment => seg.type === 'free' && seg.reservedBy === undefined)
         .sort((a, b) => b.size - a.size)[0];

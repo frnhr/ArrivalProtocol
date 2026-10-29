@@ -248,12 +248,12 @@ await st(() => {
   const r = (s.level.ring.min + s.level.ring.max) / 2;
   ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); d.director.done.push('engine-io-fault'); });
 });
-await waitFor(() => window.__ap.store.getState().run.phase === 'printing', 30000);
+await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 30000);
 await waitFor(() => {
   const ap = window.__ap;
-  const c12 = ap.store.getState().memory.find((seg) => seg.type === 'soul' && seg.cluster === 'C12');
+  const c12 = ap.store.getState().memory.find((seg) => seg.type === 'driver' && seg.cluster === 'C12');
   if (c12?.infected) ap.cure('C12');
-  if (ap.store.getState().run.phase === 'printing') ap.printAll();
+  if (ap.store.getState().run.phase === 'landing') ap.printAll();
   return ap.store.getState().run.phase === 'report';
 }, 40000, 400);
 await waitFor(() => !document.getElementById('wrContinue').hidden, 30000, 200);

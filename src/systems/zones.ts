@@ -1,6 +1,6 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import type { Segment, SoulSegment } from '@/types/segment';
+import type { Segment, DriverSegment } from '@/types/segment';
 import type { ShipFlightDef } from '@data/ships';
 import type { Rng } from '@systems/rng';
 import type { Vec2 } from '@/types/orbit';
@@ -16,7 +16,7 @@ import { childRng } from '@systems/rng';
 import { lastTickTrack, type TickTrack } from '@systems/orbit-sim';
 import { getOpsBySeg, abortOp } from '@systems/ops-core';
 import { replaceRange, mergeAdjacentFree, requireAddr, freeSegment, segmentStarts, assertMemoryInvariants } from '@systems/memory-ops';
-import { setIntegrity, recordClusterGone, lostClusterResult } from '@state/actions';
+import { setIntegrity, recordDriverLost } from '@state/actions';
 import { hasIntegrity, fileLabel, type HealthSegment } from '@state/selectors';
 import { stateFromElements, inboundAnomalyAtRadius } from '@/types/orbit';
 import { RACK_NAMES, MEMORY_TOTAL_BLOCKS, rackOf } from '@data/memory';
@@ -39,7 +39,7 @@ import {
 // • mountZones applies the effects on world time, after orbit-sim, from the path the ship swept this tick
 //   (orbit-sim lastTickTrack): a debris contact the first time a sub-step chord enters the circle (a SKIP
 //   cannot tunnel through it), belt hits by the time spent inside (a Poisson process in game time, so the
-//   same seed gives the same hits at ×30 and ×300), also while printing on a loop that clips the belt.
+//   same seed gives the same hits at ×30 and ×300), also while landing on a loop that clips the belt.
 
 // --- Resolving a ship's zones --------------------------------------------------------------------------
 
@@ -168,7 +168,7 @@ export function blocksInRack(start: number, size: number, rack: string): number 
   return Math.max(0, Math.min(start + size, rackStart + RACK_BLOCKS) - Math.max(start, rackStart));
 }
 
-// The files a zone can hurt: everything with a health number (souls, ship files, your tools). HOLLOW, free
+// The files a zone can hurt: everything with a health number (drivers, ship files, your tools). HOLLOW, free
 // space, REPAIR CHARGE and a FIREWALL have none (§6.8 "hollow is excluded").
 const damageable = hasIntegrity;
 
@@ -252,17 +252,18 @@ function beltStream(state: Readonly<GameState>): Rng {
   return beltRng;
 }
 
-// The clusters a plan takes to 0, as they are in `memory`.
-function soulsTakenToZero(memory: readonly Segment[], plan: readonly ZoneDamage[]): SoulSegment[] {
+// The drivers a plan takes to 0, as they are in `memory`.
+function driversTakenToZero(memory: readonly Segment[], plan: readonly ZoneDamage[]): DriverSegment[] {
   return plan.flatMap((item) => {
     const seg = memory.find((candidate) => candidate.id === item.segId);
-    return seg?.type === 'soul' && item.to <= 0 ? [seg] : [];
+    return seg?.type === 'driver' && item.to <= 0 ? [seg] : [];
   });
 }
 
 // Applies a zone's damage in one update: the integrities, the debris cloud spent (with what it did), and every
-// cluster taken to 0 out of memory (§6.8: it did not wake; nothing turns into HOLLOW).
-// An op on a cluster the hit takes to 0 is aborted first (its own onAbort settles it: a MOVE puts its source
+// driver taken to 0 out of memory (01-landing §3.8: its pod stays aboard, CAN'T LAUNCH, and is parked when the landing
+// ends: 'dead', never MERGE's to give back; nothing turns into HOLLOW).
+// An op on a driver the hit takes to 0 is aborted first (its own onAbort settles it: a MOVE puts its source
 // back and drops the clone it was writing), and the plan is made again from the memory that leaves: the hit
 // lands on what is really in the rack, and a jump MOVE's clone that dies leaves its source alive, like HOLLOW's
 // consume (hollow.ts applyEvents). `planFor` makes the plan from a memory; it must not roll dice (the belt's
@@ -270,31 +271,31 @@ function soulsTakenToZero(memory: readonly Segment[], plan: readonly ZoneDamage[
 function applyDamage(store: Store<GameState>, zone: Zone, planFor: (memory: readonly Segment[]) => ZoneDamage[]): void {
   let plan = planFor(store.getState().memory);
   for (;;) {
-    const held = soulsTakenToZero(store.getState().memory, plan).filter((soul) => getOpsBySeg(soul.id).length > 0);
+    const held = driversTakenToZero(store.getState().memory, plan).filter((driver) => getOpsBySeg(driver.id).length > 0);
     if (held.length === 0) break;
-    for (const soul of held) for (const operation of getOpsBySeg(soul.id)) abortOp(operation.id);
+    for (const driver of held) for (const operation of getOpsBySeg(driver.id)) abortOp(operation.id);
     plan = planFor(store.getState().memory);
   }
   const memory = store.getState().memory;
   const starts = segmentStarts(memory);
-  // Where each hit landed, read before a lost cluster leaves memory (the view flashes that rack's rows).
+  // Where each hit landed, read before a dead driver leaves memory (the view flashes that rack's rows).
   const hitRack = new Map<string, string>();
   for (const item of plan) {
     const index = memory.findIndex((candidate) => candidate.id === item.segId);
     if (index < 0 || !damageable(memory[index]!)) throw new Error(`zones: ${item.segId} is not a damageable file in memory`);
     hitRack.set(item.segId, rackOf(starts[index]!));
   }
-  const lost = soulsTakenToZero(memory, plan);
+  const lost = driversTakenToZero(memory, plan);
   store.update((draft) => {
     for (const item of plan) {
       const seg = draft.memory.find((candidate) => candidate.id === item.segId);
       if (!seg || !damageable(seg)) throw new Error(`zones: ${item.segId} left memory before its hit`);
       setIntegrity(seg, item.to);
     }
-    for (const soul of lost) {
-      const start = requireAddr(draft.memory, soul);
-      replaceRange(draft.memory, start, start + soul.size, [freeSegment(soul.size)], { opId: null, own: [soul] });
-      recordClusterGone(draft, soul, lostClusterResult(soul));
+    for (const driver of lost) {
+      const start = requireAddr(draft.memory, driver);
+      replaceRange(draft.memory, start, start + driver.size, [freeSegment(driver.size)], { opId: null, own: [driver] });
+      recordDriverLost(draft, driver, 'dead');
     }
     if (lost.length > 0) mergeAdjacentFree(draft.memory);
     if (zone.kind === 'debris' && !draft.hazards.hitIds.includes(zone.id)) {
@@ -307,11 +308,11 @@ function applyDamage(store: Store<GameState>, zone: Zone, planFor: (memory: read
   const items: ZoneDamageItem[] = plan.map((item) => ({ label: item.label, lost: item.from - item.to }));
   if (zone.kind === 'debris') say('mind-sys', debrisHitLine(zone.rack, items), { critical: true });
   else if (items[0]) say('mind-sys', beltHitLine(items[0]), { critical: true });
-  for (const soul of lost) say('mind-sys', zoneLostLine(soul.cluster), { critical: true });
+  for (const driver of lost) say('mind-sys', zoneLostLine(fileLabel(driver)), { critical: true });
   emit('zone-hit', {
     zoneId: zone.id, kind: zone.kind, racks: [...zoneRacks(zone)],
     hits: plan.map((item) => ({ segId: item.segId, rack: hitRack.get(item.segId)!, from: item.from, to: item.to })),
-    lostClusters: lost.map((soul) => soul.cluster),
+    lostDrivers: lost.map((driver) => driver.pod),
   });
 }
 
@@ -375,9 +376,9 @@ export function mindZonesBlind(plot: Readonly<PlotCaps>): boolean {
 
 // The racks a hazard zone is known to hit: the 'hit' verdict that paints a rack's tag red (flight-hud.ts rackZoneTags,
 // with the same verdict and the same blindness), one entry a rack. The MOVE preview warns about them, and the strip's
-// bitten-again MOVE ask names a rack that is not one of them. Only while the ship is live (flight, printing). Pure.
+// bitten-again MOVE ask names a rack that is not one of them. Only while the ship is live (flight, landing). Pure.
 export function knownHitRacks(state: Readonly<GameState>, pred: Prediction, plot: Readonly<PlotCaps> = capabilitiesNow(state).plot): RackHazard[] {
-  if (state.run.phase !== 'flight' && state.run.phase !== 'printing') return [];
+  if (state.run.phase !== 'flight' && state.run.phase !== 'landing') return [];
   const blind = mindZonesBlind(plot);
   const hazards: RackHazard[] = [];
   for (const zone of state.level.zones) {

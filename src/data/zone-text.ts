@@ -72,7 +72,7 @@ export function beltHitLine(item: ZoneDamageItem): string {
   return `> BELT HIT · ${item.label} −${Math.round(item.lost)}%`;
 }
 
-// A cluster a zone took to 0 (§6.8: no HOLLOW turn; it simply did not wake).
-export function zoneLostLine(cluster: string): string {
-  return `> ${cluster} ... DID NOT WAKE`;
+// A driver a zone took to 0 (§6.8: no HOLLOW turn; its pod stays aboard and CAN'T LAUNCH, 01-landing §3.10's word).
+export function zoneLostLine(pod: string): string {
+  return `> ${pod} ... DRIVER LOST · CAN'T LAUNCH`;
 }

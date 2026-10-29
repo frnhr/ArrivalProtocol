@@ -1,7 +1,7 @@
 import type { Store } from '@state/store';
 import type { GameState, EndingLine, EndingVoice } from '@state/schema';
 import {
-  chooseFinale, finaleChoiceRefusal, finaleEndingShowing, skipFinaleEnding, clustersEatenHere, finaleEndingLineStartsSec,
+  chooseFinale, finaleChoiceRefusal, finaleEndingShowing, skipFinaleEnding, podsEatenHere, finaleEndingLineStartsSec,
   type FinaleChoice,
 } from '@systems/finale';
 import { hollowLabel, unitName } from '@systems/say';
@@ -16,6 +16,7 @@ import { createTypeQueue, unitsAt, type TypeQueue } from '@components/hud/typewr
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import { echoWord } from '@data/tool-text';
 import { formatCount } from '@data/format';
+import { podCode } from '@data/landing-text';
 import {
   MERGE_COST_CHARGE, HOLLOW_TYPE_CPS, FINALE_CHOICE_DELAY_SEC, FINALE_CHOICE_ARM_SEC, FINALE_ENDING_CPS, CONTROL_CHIME_LEAD_SEC,
 } from '@data/tuning';
@@ -136,10 +137,10 @@ export function mountFinaleChoice(store: Store<GameState>): () => void {
     merge.word.textContent = HOLLOW_FINALE.merge;
     merge.cmd.textContent = HOLLOW_FINALE.mergeCmd(hollowWord, echoWord(unitName(state.run.unitNumber)));
     merge.what.textContent = HOLLOW_FINALE.mergeWhat;
-    const eaten = clustersEatenHere(state);
-    const eatenSouls = eaten.reduce((sum, result) => sum + result.souls, 0);
-    purge.cost.textContent = HOLLOW_FINALE.purgeCost(eatenSouls > 0 ? formatCount(eatenSouls) : null);
-    merge.cost.textContent = HOLLOW_FINALE.mergeGain(eaten.length > 0 ? eaten.map((result) => result.cluster).join(' · ') : null);
+    const eaten = podsEatenHere(state);
+    const eatenColonists = eaten.reduce((sum, record) => sum + record.colonists, 0);
+    purge.cost.textContent = HOLLOW_FINALE.purgeCost(eatenColonists > 0 ? formatCount(eatenColonists) : null);
+    merge.cost.textContent = HOLLOW_FINALE.mergeGain(eaten.length > 0 ? eaten.map((record) => podCode(record.pod)).join(' · ') : null);
   }
 
   // MERGE's price against the kid's charge: the meter's scale is the larger of the two, so the MERGE tick sits at the
@@ -359,8 +360,8 @@ export function mountFinaleChoice(store: Store<GameState>): () => void {
   function sync(): void {
     const state = store.getState();
     const finale = state.hollow.finale;
-    if (state.run.phase !== 'printing') {
-      // A NEW RUN, a reset or the WAKE REPORT: nothing of the card stays (the report waited for the ending).
+    if (state.run.phase !== 'landing') {
+      // A NEW RUN, a reset or the LANDING REPORT: nothing of the card stays (the report waited for the ending).
       if (stage !== 'off') closeNow();
       return;
     }

@@ -8,7 +8,7 @@ import { check, finish } from '../../wp1/harness';
 import { createHarness5 } from '../../wp5/harness5';
 import { headerCrumbs } from '@systems/flight-hud';
 import { getPrediction } from '@systems/predict';
-import { soulsLabel } from '@components/footer/Footer';
+import { podsLabel } from '@components/footer/Footer';
 
 const ROOT = join(import.meta.dirname, '..', '..', '..', '..');
 
@@ -66,6 +66,6 @@ h.resetTo('flight');
 const crumbs = headerCrumbs(h.store.getState(), getPrediction());
 check('run 1: the crumbs read UNIT-047 and ARES-VII (the title becomes `UNIT-047 · ARES-VII`)',
   crumbs.unit === 'UNIT-047' && crumbs.ship === 'ARES-VII' && `${crumbs.unit} · ${crumbs.ship}` === 'UNIT-047 · ARES-VII', `${crumbs.unit} · ${crumbs.ship}`);
-check('run 1 before the reveal: the footer reads 2,400 SOULS IN STASIS', soulsLabel(h.store.getState()) === '2,400 SOULS IN STASIS', soulsLabel(h.store.getState()));
+check('run 1 before the reveal: the footer reads 2,400 SOULS IN STASIS', podsLabel(h.store.getState()) === '2,400 SOULS IN STASIS', podsLabel(h.store.getState()));
 
 finish();

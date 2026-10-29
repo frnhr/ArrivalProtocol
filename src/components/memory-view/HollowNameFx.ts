@@ -129,7 +129,7 @@ export function mountHollowNameFx(store: Store<GameState>): () => void {
   // The boot counts (WP8): a returning unit's ghost names HOLLOW while the strip assembles in blue.
   const inMind = (): boolean => {
     const state = store.getState();
-    return state.ui.mode === 'memory' && (state.run.phase === 'boot' || state.run.phase === 'flight' || state.run.phase === 'printing');
+    return state.ui.mode === 'memory' && (state.run.phase === 'boot' || state.run.phase === 'flight' || state.run.phase === 'landing');
   };
 
   const offNamed = on('hollow-named', ({ name }) => {

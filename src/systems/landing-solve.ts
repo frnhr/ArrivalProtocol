@@ -331,10 +331,9 @@ export interface DropSolveInput {
 // open path: the landing only ever happens on a closed orbit.
 export function computeDropSolution(input: DropSolveInput, track: DotTrack | null = null): DropSolution {
   const elements = elementsFromState(input.state, input.mu);
-  if (!(elements.e < 1)) {
-    if (IS_DEV) throw new Error(`computeDropSolution: the landing is on an open path (e = ${elements.e})`);
-    return { asOfTSec: input.tSec, periodSec: Infinity, block: 'no-solution', dot: null, arc: [], windows: [] };
-  }
+  // An open path is a state the game can be in (1b's burns while landing, a dev hook ending the flight on the
+  // approach), not a bug: there is simply no dot and no window until the ship is back on a loop.
+  if (!(elements.e < 1)) return { asOfTSec: input.tSec, periodSec: Infinity, block: null, dot: null, arc: [], windows: [] };
   const periodSec = periodOf(elements, input.mu);
   if (!input.solution) return { asOfTSec: input.tSec, periodSec, block: 'no-solution', dot: null, arc: [], windows: [] };
   const aimRp = POD_AIM_RP_FRAC * input.R;

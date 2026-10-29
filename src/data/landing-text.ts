@@ -259,3 +259,8 @@ export const LANDING_STAR_MISSED = {
   fuelNoLock: 'the FUEL ★ is counted only after ORBIT LOCKED',
   fuelLow: (shownPct: number, starPct: number): string => `FUEL ${shownPct}% at the end of the landing — the ★ notch is at ${starPct}%`,
 } as const;
+
+// The LOST card's pods line (components/burn/BurnResult.ts): what the lost ship still carried, and what got down first.
+export const LOST_CARD_TEXT = {
+  pods: (aboard: number, landed: number): string => `${formatCount(aboard)} colonists aboard · ${formatCount(landed)} landed`,
+} as const;

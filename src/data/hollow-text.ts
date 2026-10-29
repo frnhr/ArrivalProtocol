@@ -192,8 +192,8 @@ export const HOLLOW_FINALE = {
   stripNoDelete: 'NOTHING CAN DELETE THE ROOT NOW — it ate your DELETE',
   // The printing is done but the root is not: the ship waits for it (§9 WP11 edge case). With nobody printed (every
   // cluster lost), the line says so instead of claiming everyone was.
-  stripWaits: 'EVERYONE IS PRINTED — now DELETE THE ROOT',
-  stripWaitsNobody: 'NOBODY LEFT TO PRINT — now DELETE THE ROOT',
+  stripWaits: 'EVERY POD IS DOWN — now DELETE THE ROOT',
+  stripWaitsNobody: 'NO POD LEFT TO LAUNCH — now DELETE THE ROOT',
   stripChoice: 'PURGE OR MERGE — choose what becomes of it',
   // The root's DELETE completed: HOLLOW's last words before the choice, in its pink.
   lastWords: (unitNumber: number): string => `> ${unitDigits(unitNumber)}. wait.`,

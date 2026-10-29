@@ -4,7 +4,7 @@ import { onPreTick, isActivePhase, setPaused } from '@systems/clock';
 import { isBurnHeld, isGhostFiring, ghostDueInSec, laterBurstWindow } from '@systems/orbit-sim';
 import { getPrediction, currentPrediction, secUntil, isFinishingBurn, skipWarp, type Prediction, type ZoneHit } from '@systems/predict';
 import { ZONE_WORD } from '@data/zone-text';
-import { archiveSealed, spreadPaused } from '@state/selectors';
+import { spreadPaused } from '@state/selectors';
 import { capabilitiesNow } from '@systems/capabilities';
 import { registerKeys } from '@systems/input';
 import { emit } from '@systems/events';
@@ -181,8 +181,7 @@ function thrustHoldsTactical(state: Readonly<GameState>): boolean {
 }
 
 // Tactical seconds to the next event a SKIP would run to (the next burn point, a zone entry or a dodge's deadline,
-// or flying away), or null when nothing is coming. The run-1 ask for the colonists waits for a coast this long
-// (script.ts), so the reveal never plays under GET READY.
+// or flying away), or null when nothing is coming.
 export function tacToNextEvent(state: Readonly<GameState>, pred: Prediction): number | null {
   const event = nextEvent(state, pred);
   return event === null ? null : tac(event.inSec, state.level.tacticalWarp);
@@ -194,8 +193,9 @@ function hasAlarm(state: Readonly<GameState>): boolean {
 
 // `dtWall`: the wall seconds of the tick about to run (the clock's pre-tick hands it over).
 export function choosePace(state: Readonly<GameState>, pred: Prediction, skipActive: boolean, dtWall: number): Pace {
-  // Printing is the climax (§6.1): the world coasts in real seconds while the colonists wake.
-  if (state.run.phase === 'printing') return 'tactical';
+  // TODO(slice1a-SIM): the landing's own pace (01-landing §3.12: TACTICAL around windows and falling pods, CRUISE
+  // between them, SKIP to the next window). Until then the landing runs at TACTICAL, as printing did.
+  if (state.run.phase === 'landing') return 'tactical';
   // A held burn counts while its preset is still aligning: thrust starts mid-tick. So does the engine firing by itself
   // on its first (or a sticky) burst (C2, thrustHoldsTactical).
   if (thrustHoldsTactical(state)) return 'tactical';
@@ -232,10 +232,10 @@ function warpFor(level: LevelState, pace: Pace, skipWarp: number | null, overclo
 export function isOverclocked(state: Readonly<GameState>, pace: Pace, pred: Prediction): boolean {
   if (pace !== 'tactical' || state.ui.mode !== 'memory' || state.clock.debugWarp !== null) return false;
   if (state.run.phase === 'flight') return true;
-  // While printing nothing in the world usually needs slowing for you, and the label would only puzzle; but a loop
-  // that clips a hazard zone keeps taking hits there (§6.8: LAST LIGHT's belt, on an accepted loop that reaches it), and
-  // the kid repairing them in blue gets the quarter-speed world the flight would give them (WP5's TODO for WP11).
-  return state.run.phase === 'printing' && zoneStillHits(pred);
+  // While landing, a loop that clips a hazard zone keeps taking hits there (§6.8: LAST LIGHT's belt, on an accepted loop
+  // that reaches it), and the kid repairing them in blue gets the quarter-speed world the flight would give them.
+  // TODO(slice1a-SIM): 01-landing §3.12 overclocks the whole landing (TAB during a window slows the world to ¼).
+  return state.run.phase === 'landing' && zoneStillHits(pred);
 }
 
 // A hazard zone the true path still enters or is inside (a spent debris cloud never hits again).
@@ -243,11 +243,6 @@ function zoneStillHits(pred: Prediction): boolean {
   return pred.zoneHits.some((hit) => !hit.spent && (hit.insideNow || hit.enterInSec !== null));
 }
 
-// SKIP's refusal while the archive is sealed (§6.1, run 1): the coast is for finding the colonists.
-export const SKIP_REFUSAL_COLONISTS = 'CHECK THE COLONISTS FIRST';
-// ...until the ask has stood on the strip SOULS_ASK_HOLD_SEC (LEAD-1): the director then records this
-// id in director.done, and a kid who ignores the colonists gets SKIP back for the rest of the ship.
-export const COLONISTS_HOLD_RELEASED = 'colonists-skip-hold-released';
 // SKIP's refusal when ACCEPT ORBIT is the only way on (Prediction.acceptOnly, LEAD-1 and the lead's Rule 4):
 // no burn the FUEL left can make saves the ship. The strip names ACCEPT ORBIT in the same words.
 export const SKIP_REFUSAL_STRANDED = 'NOT ENOUGH FUEL';
@@ -300,10 +295,6 @@ function skipInhibitor(state: Readonly<GameState>, pred: Prediction): string | n
   if (alarm) return alarm.text;
   const blocker = state.alerts.list.find((alert) => alert.inhibitsSkip);
   if (blocker) return blocker.text;
-  // Run 1: the STASIS reveal comes first. The archive is only ever sealed on the first ship of the
-  // first run (ShipDef souls.sealed; later runs open it at the boot), so this is the run-1 rule. It
-  // holds until the ask has stood long enough to be read and acted on (COLONISTS_HOLD_RELEASED).
-  if (archiveSealed(state) && !state.director.done.includes(COLONISTS_HOLD_RELEASED)) return SKIP_REFUSAL_COLONISTS;
   if (pred.acceptOnly) return SKIP_REFUSAL_STRANDED;
   // A hazard zone is close or the ship is in it (WP9): the world runs TACTICAL there, and a SKIP would
   // only pretend to (it ends as the TACTICAL lead begins, earlier than §6.8's 15 s; see tuning.ts).

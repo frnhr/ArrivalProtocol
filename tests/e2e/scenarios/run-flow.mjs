@@ -27,7 +27,7 @@ const waitFor = async (pred, maxMs, stepMs = 100, arg) => {
   while (Date.now() < end) { if (await page.evaluate(pred, arg)) return true; await page.waitForTimeout(stepMs); }
   return false;
 };
-const segId = (code) => st((cluster) => window.__ap.store.getState().memory.find((seg) => seg.type === 'soul' && seg.cluster === cluster)?.id ?? null, code);
+const segId = (code) => st((cluster) => window.__ap.store.getState().memory.find((seg) => seg.type === 'driver' && seg.cluster === cluster)?.id ?? null, code);
 
 // --- 1. Ship 1 to its WAKE REPORT (shortcut: a circular orbit in the ring, every cluster printed) ------------
 await page.locator('#titleReceive').click();
@@ -39,12 +39,12 @@ await st(() => {
   const r = (s.level.ring.min + s.level.ring.max) / 2;
   ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); d.director.done.push('engine-io-fault'); });
 });
-await waitFor(() => window.__ap.store.getState().run.phase === 'printing', 25000);
+await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 25000);
 const reportUp = await waitFor(() => {
   const ap = window.__ap;
-  const c12 = ap.store.getState().memory.find((seg) => seg.type === 'soul' && seg.cluster === 'C12');
+  const c12 = ap.store.getState().memory.find((seg) => seg.type === 'driver' && seg.cluster === 'C12');
   if (c12?.infected) ap.cure('C12');
-  if (ap.store.getState().run.phase === 'printing') ap.printAll();
+  if (ap.store.getState().run.phase === 'landing') ap.printAll();
   return ap.store.getState().run.phase === 'report';
 }, 40000, 400);
 check('ship 1 reaches its WAKE REPORT', reportUp);
@@ -133,7 +133,7 @@ const woke = await waitFor(() => window.__ap.store.getState().hollow.phase === '
 check('the coast begins and HOLLOW wakes', woke);
 // Both cures won (the kid's REPAIRs, shortened): clean clusters still within a GAP of it.
 await page.waitForTimeout(1500);
-await st(() => { for (const code of ['C08', 'C09']) { const seg = window.__ap.store.getState().memory.find((s) => s.type === 'soul' && s.cluster === code); if (seg?.infected) window.__ap.cure(code); } });
+await st(() => { for (const code of ['C08', 'C09']) { const seg = window.__ap.store.getState().memory.find((s) => s.type === 'driver' && s.cluster === code); if (seg?.infected) window.__ap.cure(code); } });
 await page.waitForTimeout(400);
 const bite = await st(() => ({ hidden: document.getElementById('objectiveBite').hidden, text: document.getElementById('objectiveBite').innerText, mode: window.__ap.store.getState().ui.mode }));
 check('in amber, the strip counts HOLLOW\'s next bite (BITE m:ss) while clusters are in its reach', bite.mode === 'tools' && !bite.hidden && /^BITE \d:\d\d$/.test(bite.text), JSON.stringify(bite));
@@ -220,10 +220,10 @@ await st(() => {
   const r = (s.level.ring.min + s.level.ring.max) / 2;
   ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); });
 });
-await waitFor(() => window.__ap.store.getState().run.phase === 'printing', 25000);
+await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 25000);
 const report2 = await waitFor(() => {
   const ap = window.__ap;
-  if (ap.store.getState().run.phase === 'printing') ap.printAll();
+  if (ap.store.getState().run.phase === 'landing') ap.printAll();
   return ap.store.getState().run.phase === 'report';
 }, 60000, 500);
 check('HALCYON locks, prints, and reaches its WAKE REPORT', report2);
@@ -247,10 +247,10 @@ await st(() => {
   const r = (s.level.ring.min + s.level.ring.max) / 2;
   ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); });
 });
-await waitFor(() => window.__ap.store.getState().run.phase === 'printing', 25000);
+await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 25000);
 const report3 = await waitFor(() => {
   const ap = window.__ap;
-  if (ap.store.getState().run.phase === 'printing') ap.printAll();
+  if (ap.store.getState().run.phase === 'landing') ap.printAll();
   return ap.store.getState().run.phase === 'report';
 }, 60000, 500);
 check('KESTREL (locked at once) prints and reaches its WAKE REPORT', report3);
@@ -274,10 +274,10 @@ await st(() => {
   const r = (s.level.ring.min + s.level.ring.max) / 2;
   ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); });
 });
-await waitFor(() => window.__ap.store.getState().run.phase === 'printing', 25000);
+await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 25000);
 const report4 = await waitFor(() => {
   const ap = window.__ap;
-  if (ap.store.getState().run.phase === 'printing') ap.printAll();
+  if (ap.store.getState().run.phase === 'landing') ap.printAll();
   return ap.store.getState().run.phase === 'report';
 }, 60000, 500);
 check('VESPER (locked at once) prints and reaches its WAKE REPORT', report4);
@@ -312,7 +312,7 @@ check('LAST LIGHT: the root\'s DELETE leaves the choice card', choiceUp);
 await page.locator('#fcPurge').click();
 const report5 = await waitFor(() => {
   const ap = window.__ap;
-  if (ap.store.getState().run.phase === 'printing') ap.printAll();
+  if (ap.store.getState().run.phase === 'landing') ap.printAll();
   return ap.store.getState().run.phase === 'report';
 }, 60000, 500);
 check('LAST LIGHT prints and reaches its WAKE REPORT', report5);

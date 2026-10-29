@@ -103,19 +103,17 @@ export function targetRefusal(seg: Segment, ctx: ValidTargetContext): ToolRefusa
   const { state, activeKind, pickedSource } = ctx;
   if ((activeKind === 'move' || activeKind === 'copy') && pickedSource) return placeRefusal(seg, ctx, pickedSource);
   if (seg.type === 'free') return TOOL_REFUSAL.notAFile;
-  // A sealed slab hides what it is: nothing reaches it until the STASIS reveal (§6.7).
-  if (seg.type === 'soul' && seg.sealed) return TOOL_REFUSAL.sealed;
   if (isBusy(seg)) return TOOL_REFUSAL.busy;
   switch (activeKind) {
     case 'scan':
-      if (seg.type === 'soul') return TOOL_REFUSAL.soulScan;
+      if (seg.type === 'driver') return TOOL_REFUSAL.driverScan;
       if (seg.type === 'firewall') return TOOL_REFUSAL.firewallHealth;
       return 'scanned' in seg ? null : notAFile(seg);
     case 'repair':
       return repairRefusal(seg, state);
     case 'delete':
       if (seg.type === 'core') return TOOL_REFUSAL.coreDelete;
-      if (seg.type === 'soul') return TOOL_REFUSAL.soulDelete;
+      if (seg.type === 'driver') return TOOL_REFUSAL.driverDelete;
       // DELETE cuts HOLLOW back block by block (§6.5); the root stays LOCKED until ship 5's duel.
       if (seg.type === 'hollow' && seg.locked) return TOOL_REFUSAL.locked;
       if (seg.type === 'redundancy' && chargeInUse()) return TOOL_REFUSAL.chargeBusy;
@@ -127,8 +125,8 @@ export function targetRefusal(seg: Segment, ctx: ValidTargetContext): ToolRefusa
       if (seg.type === 'core') return activeKind === 'move' ? TOOL_REFUSAL.coreMove : TOOL_REFUSAL.coreCopy;
       // REPAIR CHARGE stays put (§6.5), and a copy of it would double the repair budget.
       if (seg.type === 'redundancy') return activeKind === 'move' ? TOOL_REFUSAL.moveCharge : TOOL_REFUSAL.copyCharge;
-      // Souls move (a cluster carried behind a gap, §3.2) but are never duplicated.
-      if (seg.type === 'soul' && activeKind === 'copy') return TOOL_REFUSAL.soulCopy;
+      // Drivers move (carried behind a gap, §3.2) but are never duplicated: one pod, one driver.
+      if (seg.type === 'driver' && activeKind === 'copy') return TOOL_REFUSAL.driverCopy;
       // A card's file moves (a FIREWALL is placed with MOVE, §6.9) but is never duplicated: the draft's
       // stacks (FIREWALL ×2, FUEL TRIM ×2) would mean nothing.
       if ((seg.type === 'firewall' || seg.type === 'upgrade') && activeKind === 'copy') return TOOL_REFUSAL.cardCopy;

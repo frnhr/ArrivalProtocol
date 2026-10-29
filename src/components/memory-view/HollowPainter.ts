@@ -6,12 +6,12 @@ import { on } from '@systems/events';
 import { onWorldReset } from '@systems/reset';
 import { hollowReach, healRatePerSec, oppositeSide, openFreeHolding } from '@systems/hollow';
 import { biteClock, reachMarks, type GapMark, type BiteMark, type ShieldMark } from '@systems/hollow-hud';
-import { infectedSegments, shownIntegrity, healthKnown, soulOutcome, verbSecondsLeft } from '@state/selectors';
+import { infectedSegments, shownIntegrity, healthKnown, verbSecondsLeft } from '@state/selectors';
 import { stripTier } from '@data/type-labels';
 import { HOLLOW_HUD_TEXT, HOLLOW_VERB } from '@data/hollow-text';
 import { requireById, partNumber, replayAnimation } from '@components/dom';
 import { heartbeatKind, heartbeatSvg, type Heartbeat } from './SegmentBlock';
-import { OUTCOME_WORDS } from './DetailPanel';
+import { OUTCOME_WORDS, driverOutlook } from './DetailPanel';
 import { segmentStarts } from '@systems/memory-ops';
 import { HOLLOW_PAINT_HZ, INTEGRITY_MAX, HOLLOW_FX_MS, CURE_SPARKS, SEED_BLINK_SEC } from '@data/tuning';
 
@@ -216,11 +216,11 @@ function paintBiteClock(root: HTMLElement, state: Readonly<GameState>): void {
   });
 }
 
-// A cluster the drain pushed across a line keeps the right heartbeat and the right IF PRINTED NOW
+// A driver the drain pushed across a line keeps the right heartbeat and the right IF LAUNCHED NOW
 // (the strip and the panel rebuild only on a discrete change).
 function paintOutcome(root: HTMLElement, segId: string, integrity: number): void {
-  const outcome = soulOutcome(integrity);
-  const kind = heartbeatKind(outcome);
+  const outcome = driverOutlook(integrity);
+  const kind = heartbeatKind(integrity);
   const chip = partsOf(root, segId)[0];
   if (chip && !chip.classList.contains(`hb-${kind}`)) {
     HEARTBEATS.forEach((beat) => chip.classList.toggle(`hb-${beat}`, beat === kind));
@@ -418,7 +418,7 @@ function paintNumbers(root: HTMLElement, state: Readonly<GameState>): void {
     document.querySelectorAll<HTMLElement>(`[data-live-integrity="${CSS.escape(seg.id)}"]`).forEach((element) => {
       patchText(element, `${element.dataset.livePrefix ?? ''}${shown}%`);
     });
-    if (seg.type === 'soul') paintOutcome(root, seg.id, seg.integrity);
+    if (seg.type === 'driver') paintOutcome(root, seg.id, seg.integrity);
   }
 }
 
@@ -560,13 +560,13 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
       if (inBlue()) sparkle(layer, partsOf(memWrap, segId));
     }),
     // An eaten file: the block it became flashes red, with what it means.
-    on('hollow-consume', ({ segId, soul }) => {
+    on('hollow-consume', ({ segId, driver }) => {
       if (!inBlue()) return;
       partsOf(memWrap, segId).forEach((part, i) => {
         const rect = rectOf(part);
         if (!rect) return;
         fxBox(layer, 'hollow-fx eaten-flash', rect);
-        if (i === 0) fxLabel(layer, 'hollow-fx-label eaten', soul ? HOLLOW_HUD_TEXT.lostSoul : HOLLOW_HUD_TEXT.lostFile, rect);
+        if (i === 0) fxLabel(layer, 'hollow-fx-label eaten', driver ? HOLLOW_HUD_TEXT.lostSoul : HOLLOW_HUD_TEXT.lostFile, rect);
       });
     }),
   ];

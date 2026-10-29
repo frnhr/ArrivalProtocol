@@ -72,6 +72,7 @@ function fakeState(opts: FakeOpts): GameState {
     ui: { mode: opts.mode ?? 'tools' },
     burn: { lastTickDvKmS: opts.dv ?? 0 },
     memory: opts.memory,
+    level: { planet: { R } },
     landing,
   } as unknown as GameState;
 }
@@ -227,9 +228,15 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
   check('ON TARGET is still possible only while every undecided pod could land soft', !tally.possible);
   const allDown = fakeState({ lzs, memory: [], pods: [1, 2, 3, 4].map((n) => pod(n, { kind: 'down', launch: launch(90 * DEG), touchdown: { place: 'lz', lz: 'LZ-A', points: 200, missKm: null, atAi: n } })) });
   check('four soft pods in an LZ with room earn ON TARGET', onTargetTally(allDown).earned);
-  let threw = false;
-  try { landingResult(fakeState({ lzs, memory: [], pods: [pod(1, { kind: 'falling', launch: launch(0) })] }), 'locked'); } catch { threw = true; }
-  check('asking for the result while a pod falls throws', threw);
+  // A ship that ends mid-fall counts its falling pods where they come down, in touchdown order.
+  const midFall = fakeState({ lzs: [lz('LZ-A', 90, 1)], memory: [], pods: [
+    pod(1, { kind: 'falling', launch: { ...launch(90 * DEG), atAi: 2 } }),
+    pod(2, { kind: 'falling', launch: { ...launch(91 * DEG), atAi: 1 } }),
+    pod(3, { kind: 'falling', launch: launch(0) }),
+  ] });
+  const settled = landingResult(midFall, 'emergency');
+  check('falling pods count where they land, in touchdown order', settled.points === 200 + 150 + 100
+    && settled.pods[1]?.place === 'lz' && settled.pods[0]?.place === 'mislanded' && settled.pods[2]?.place === 'off-site');
 }
 
 // --- The colony's name ---

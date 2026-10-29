@@ -1,6 +1,6 @@
 import type { Store } from '@state/store';
 import type { GameState, RunEndCause, RunStats, ArchiveStatus, RunState } from '@state/schema';
-import { runScore, runWoke } from '@systems/run-score';
+import { runScore, runLanded } from '@systems/run-score';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { hollowUnitName, GHOST_LINE } from '@data/hollow-text';
 import { SHIPS } from '@data/ships';
@@ -463,7 +463,9 @@ function progressOf(state: Readonly<GameState>): RunProgress {
   return {
     unit: state.run.unitNumber,
     shipName: state.level.shipName,
-    woke: runWoke(state.run.ships),
+    // Risk 10 (no META_VERSION bump): the archive's `woke` field now holds the colonists LANDED (on target). Slice 3's
+    // save replaces the record.
+    woke: runLanded(state.run.ships),
     stats: unitStatsOf(state.run.stats),
     hollowUnits: state.run.hollowUnits,
   };

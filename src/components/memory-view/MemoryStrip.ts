@@ -73,8 +73,6 @@ function renderMemoryStrip(
   let rowSize = 0;  // the blocks (addresses) in the row so far; a folded free tail makes it more than the columns
   let rowsInRack = 1;  // the rows this rack has started, the current one included
   let row = makeRow(0);
-  // The last part drawn was a sealed cluster in this row: the next sealed one joins its slab.
-  let sealedLeft = false;
 
   // What a row starting at `start` can still take after `used` blocks: up to its width, never past its rack.
   const roomAt = (start: number, used: number): number => Math.min(perRow - used, rackEnd(start) - (start + used));
@@ -123,20 +121,17 @@ function renderMemoryStrip(
       spans.pop();
     }
 
-    const sealed = seg.type === 'soul' && seg.sealed;
     let partOffset = 0;
     sizes.forEach((take, partIdx) => {
       if (partIdx > 0) nextRow();
-      const joinsSealedLeft = sealed && rowSize > 0 && sealedLeft;
       const strip = row.querySelector('.mem-strip');
       if (!strip) throw new Error('MemoryStrip: a row without its .mem-strip');
       strip.appendChild(
         renderSegmentPart(seg, {
-          partSize: take, partIdx, totalParts: sizes.length, partOffset, joinsSealedLeft,
+          partSize: take, partIdx, totalParts: sizes.length, partOffset,
           ...(spans[partIdx] !== take ? { spanCols: spans[partIdx] } : {}),
         }, behavior),
       );
-      sealedLeft = sealed;
       rowSize += take;
       partOffset += take;
     });

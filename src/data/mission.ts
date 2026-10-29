@@ -88,8 +88,8 @@ export function createMissionMeta(ship: ShipDef, unitNumber: number, wave: numbe
     distanceLy: FLEET_ROUTE_LY,
     transmissionNum: unitNumber,
     wave,
-    // Counted from the ship's memory by createInitialState (the clusters it was built with).
-    souls: 0,
+    // Counted from the ship's pods by createShipSlices (the drivers its memory was built with).
+    colonists: 0,
   };
 }
 

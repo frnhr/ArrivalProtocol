@@ -6,13 +6,14 @@ import { stepAttitude, isPresetAligning } from '@systems/attitude';
 import { smoothNoise, childSeed, childRng, type Rng } from '@systems/rng';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { capabilitiesNow, thrustCap, planningThrustCap, presetsAvailable, type GhostSpec } from '@systems/capabilities';
+import { beginLanding } from '@state/actions';
 import {
   elementsFromState, ringFit, ringFraction, loopRange, semiMajorAxis, propagateConic,
   type OrbitState, type Ring, type RingFit, type Vec2,
 } from '@/types/orbit';
 import {
   SIM_SUBSTEP_MAX_SEC, SIM_MAX_SUBSTEPS, THRUST_NOISE_PERIOD_TAC, ESCAPE_R_FACTOR,
-  STRANDED_RANGE_FRAC, LOCK_HOLD_AI_SEC, RADIUS_BISECT_STEPS, PRINTER_REACH_SAMPLES,
+  STRANDED_RANGE_FRAC, LOCK_HOLD_AI_SEC, RADIUS_BISECT_STEPS, BAND_REACH_SAMPLES,
   PREDICT_STEP_ORBIT_FRAC, PREDICT_STEP_MIN, PREDICT_STEP_MAX, PREDICT_STEPS_BUDGET,
 } from '@data/tuning';
 
@@ -85,29 +86,29 @@ export function closeLoopDvKmS(radius: number, speed: number, mu: number, escape
   return Math.max(0, speed - boundSpeed);
 }
 
-// The widest ▲ any loop can have and still be ACCEPTED when the tank runs dry (printer range at
-// least STRANDED_RANGE_FRAC, §4.3), whatever its ▼. A tank that cannot bring ▲ inside this can at
-// best strand the ship, which loses the souls just like flying away. Pure geometry of the ring
+// The widest ▲ any loop can have and still be ACCEPTED when the tank runs dry (share in the launch band
+// at least STRANDED_RANGE_FRAC, §4.3), whatever its ▼. A tank that cannot bring ▲ inside this can at
+// best strand the ship, which lands nobody, just like flying away. Pure geometry of the ring
 // (the range is a share of the period), so it is found once per ring by bisection on ▲.
 const reachByRing = new Map<string, number>();
 
-export function printerReachRadius(surfaceR: number, ring: Ring): number {
+export function bandReachRadius(surfaceR: number, ring: Ring): number {
   const key = `${surfaceR}|${ring.min}|${ring.max}`;
   const known = reachByRing.get(key);
   if (known !== undefined) return known;
   const bestRange = (ra: number): number => {
     let best = loopRange(ring.min, ra, ring);
-    for (let i = 0; i <= PRINTER_REACH_SAMPLES; i++) {
-      const rp = surfaceR + ((ring.max - surfaceR) * i) / PRINTER_REACH_SAMPLES;
+    for (let i = 0; i <= BAND_REACH_SAMPLES; i++) {
+      const rp = surfaceR + ((ring.max - surfaceR) * i) / BAND_REACH_SAMPLES;
       best = Math.max(best, loopRange(rp, ra, ring));
     }
     return best;
   };
-  // Double ▲ until the printers no longer reach it, then bisect between the last two.
+  // Double ▲ until the band no longer reaches it, then bisect between the last two.
   let reached = ring.max;
   let missed = 2 * ring.max;
   for (let i = 0; bestRange(missed) >= STRANDED_RANGE_FRAC; i++) {
-    if (i >= RADIUS_BISECT_STEPS) throw new Error(`printerReachRadius: no reach limit for ring ${ring.min}–${ring.max}`);
+    if (i >= RADIUS_BISECT_STEPS) throw new Error(`bandReachRadius: no reach limit for ring ${ring.min}–${ring.max}`);
     reached = missed;
     missed *= 2;
   }
@@ -121,10 +122,10 @@ export function printerReachRadius(surfaceR: number, ring: Ring): number {
 }
 
 // How far out ▲ may lie for the loop to count as closed in the 3b ending (WP1-rules 3b): the
-// escape radius, as the lead specified, widened to the printers' reach so the flight never ends
+// escape radius, as the lead specified, widened to the band's reach so the flight never ends
 // as FLEW AWAY while braking could still bring it home as ACCEPTED (ship 1: 29,046 km).
 export function closeBoundRadius(level: Readonly<LevelState>): number {
-  return Math.max(ESCAPE_R_FACTOR * level.r0, printerReachRadius(level.planet.R, level.ring));
+  return Math.max(ESCAPE_R_FACTOR * level.r0, bandReachRadius(level.planet.R, level.ring));
 }
 
 // --- Engine --------------------------------------------------------------------------------
@@ -285,14 +286,15 @@ export function endGhost(store: Store<GameState>): void {
   emit('ghost-stop', NO_PAYLOAD);
 }
 
-// The outcomes that print the colonists (§4.3): the ship is in some orbit the printers can reach.
-export function printsColonists(status: TerminalStatus): boolean {
+// The outcomes that land the pods (01-landing §3.10): the ship is in an orbit the launch band reaches. A stranded ship
+// is in orbit too, but too little of it is in the band to land anyone: it parks its pods with its result instead.
+export function startsLanding(status: TerminalStatus): boolean {
   return status === 'locked' || status === 'accepted';
 }
 
 // Ends the flight: final status, throttle released so a held SPACE cannot carry into whatever comes
-// next, and a ghost burst cut off. A locked or accepted orbit goes on into 'printing' with the
-// clock running (WP5: the world coasts while the colonists print); a lost ship (crashed, escaped,
+// next, and a ghost burst cut off. A locked or accepted orbit goes on into 'landing' with the clock
+// running (beginLanding in the same update: LANDING's warps, a full bay); a lost ship (crashed, escaped,
 // stranded) stops with the clock paused under its LOST card. The outcome is announced on the event
 // bus (locked / accepted / stranded / escaped / crashed) once the state is final.
 export function endFlight(store: Store<GameState>, status: TerminalStatus): void {
@@ -307,8 +309,10 @@ export function endFlight(store: Store<GameState>, status: TerminalStatus): void
     draft.clock.skipWarp = null;
     draft.clock.skipEndTSec = null;
     draft.clock.skipWaypoint = null;
-    if (printsColonists(status)) draft.run.phase = 'printing';
-    else draft.clock.paused = true;
+    if (startsLanding(status)) {
+      draft.run.phase = 'landing';
+      beginLanding(draft);
+    } else draft.clock.paused = true;
   });
   if (ghostWasFiring) emit('ghost-stop', NO_PAYLOAD);
   emit(status, NO_PAYLOAD);
@@ -316,7 +320,7 @@ export function endFlight(store: Store<GameState>, status: TerminalStatus): void
 
 // Terminal outcome of an empty tank, or null to keep flying:
 // in ring → the lock hold continues; impact → fly until the crash; open → fly until the
-// escape; any other closed loop → accepted at its printer range, stranded below the floor.
+// escape; any other closed loop → accepted at its share in the band, stranded below the floor.
 function fuelOutOutcome(state: Readonly<GameState>, fit: RingFit, outbound: boolean): TerminalStatus | null {
   if (fit.inRing) return null;
   if (isImpactCourse(fit, state.level.planet.R, outbound)) return null;
@@ -481,9 +485,9 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
     trackChordSec.length = 0;
     const state = store.getState();
     const burn = state.burn;
-    // After a lock or accept the ship keeps coasting with nobody on the throttle (§6.2): the plot
-    // animates through printing.
-    if (state.run.phase === 'printing') { coast(store, dtWorld); return; }
+    // After a lock or accept the ship keeps coasting with nobody on the throttle (§6.2): the plot animates through the
+    // landing. TODO(slice1a-SIM): landingCoast (an exact conicCoast during a SKIP, the 1b landingKicks seam).
+    if (state.run.phase === 'landing') { coast(store, dtWorld); return; }
     if (burn.status !== 'approaching') return;
 
     const { planet, ring, r0, dvBudgetKmS, tacticalWarp } = state.level;

@@ -74,8 +74,7 @@
         <div class="dock-section">Filter</div>
         <div class="dock-item open" data-filter="ai"><span class="mark">●</span><span>AI Memory</span></div>
         <div class="dock-item open" data-filter="ship"><span class="mark">●</span><span>Ship Systems</span></div>
-        <!-- Shown once the colonists are found (SidebarFilters): before the reveal it would be a spoiler -->
-        <div class="dock-item open" data-filter="souls" hidden><span class="mark">●</span><span>Colonists</span></div>
+        <div class="dock-item open" data-filter="pods"><span class="mark">●</span><span>Pod Drivers</span></div>
         <div class="dock-item open" data-filter="filesystem"><span class="mark">●</span><span>Filesystem</span></div>
         <div class="dock-item open" data-filter="free"><span class="mark">●</span><span>Free Space</span></div>
 
@@ -371,8 +370,8 @@
     </div>
   </div>
 
-  <!-- The WAKE REPORT (§7.1, WakeReport): once every cluster has left memory, the ship's credits
-       roll (who woke, by name, and what they said), the count rolls up, then the stars land -->
+  <!-- The LANDING REPORT (01-landing §3.11). Slice 1a F2: the placeholder components/run/LandingReport.ts borrows the
+       old WAKE REPORT's card; TODO(slice1a-UI): its own DOM, the LZ rows, the credits and the stars landing -->
   <div class="wake-report" id="wakeReport" hidden>
     <div class="wr-inner">
       <div class="wr-head">

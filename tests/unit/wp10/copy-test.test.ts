@@ -67,9 +67,9 @@ check('WP11: Repair is never spared (the COPY lesson\'s target): REPAIR\'s licen
   !state().hollow.untriedTools.includes('repair') && state().hollow.untriedTools.includes('copy'), state().hollow.untriedTools.join(','));
 {
   const ctx = (picked: Segment | null = null) => ({ state: state(), activeKind: 'copy' as const, pickedSource: picked });
-  const soul = state().memory.find((seg) => seg.type === 'soul')!;
+  const soul = state().memory.find((seg) => seg.type === 'driver')!;
   const root = state().memory.find((seg) => seg.type === 'hollow' && seg.root)!;
-  check('COPY refused on people', targetRefusal(soul, ctx()) === TOOL_REFUSAL.soulCopy);
+  check('COPY refused on people', targetRefusal(soul, ctx()) === TOOL_REFUSAL.driverCopy);
   check('…on REPAIR CHARGE', targetRefusal(segNamed('Repair Charge'), ctx()) === TOOL_REFUSAL.copyCharge);
   check('…on the Core', targetRefusal(segNamed('AI Core'), ctx()) === TOOL_REFUSAL.coreCopy);
   check('…on HOLLOW\'s root (LOCKED)', targetRefusal(root, ctx()) === TOOL_REFUSAL.locked);

@@ -41,7 +41,7 @@ import { mountWindowGrips } from '@components/tools-view/WindowGrip';
 import { mountMemoryStats } from '@components/memory-view/MemoryStats';
 import { mountFooter } from '@components/footer/Footer';
 import { mountBurnResult } from '@components/burn/BurnResult';
-import { mountWakeReport } from '@components/run/WakeReport';
+import { mountLandingReport } from '@components/run/LandingReport';
 import { mountObjectiveStrip } from '@components/hud/ObjectiveStrip';
 import { mountStamps } from '@components/hud/Stamp';
 import { mountJuice } from '@components/hud/Juice';
@@ -67,9 +67,8 @@ import { mountMobileDrawers } from '@components/memory-view/MobileDrawers';
 import { mountFsToolPill } from '@components/memory-view/FsToolPill';
 import { actionScan, actionRepair } from '@state/actions';
 import { mountLicences } from '@systems/licences';
-import { mountReveal } from '@systems/reveal';
-import { mountPrinter, setPrintNext, setPrintFast } from '@systems/printer';
-import { mountPrintFx } from '@components/memory-view/PrintFx';
+import { mountLanding, setLoadNext } from '@systems/landing';
+import { mountDropCache } from '@systems/drop-cache';
 import { mountFaults } from '@systems/faults';
 import { mountHollow } from '@systems/hollow';
 import { mountZones } from '@systems/zones';
@@ -104,13 +103,7 @@ function runAction(shown: Segment, action: DetailActionId): void {
   if (action === 'repair') actionRepair(store, seg);
   else if (action === 'delete_charge') requestDelete(store, seg, toolDeps);
   else if (action === 'scan') actionScan(store, seg);
-  else if (action === 'print-next' && seg.type === 'soul') setPrintNext(store, seg.cluster);
-  else if (action === 'print-fast') throw new Error('runAction: PRINT FAST is the printer\'s, it goes through onPrintFast');
-}
-
-// PRINT FAST ▸▸ toggles the printer, whatever INSPECT shows (it refuses with its reason itself).
-function togglePrintFast(): void {
-  setPrintFast(store, !store.getState().printer.fast);
+  else if (action === 'load-next' && seg.type === 'driver') setLoadNext(store, seg.pod);
 }
 
 // World systems first, in tick order: orbit-sim integrates, the predictor reads the fresh
@@ -124,13 +117,14 @@ mountOrbitSim(store);
 mountFaults(store);
 mountZones(store);
 mountPredictor(store);
+// After the predictor: the live drop solution (the brackets, the dot, the windows) is refreshed at the same PREDICT_HZ.
+mountDropCache(store);
 mountPace(store);
 // The mind's ops, on AI time (WP3).
 mountOpsCore(store);
-// The Soul Archive (WP5): the printer works after the ops each AI tick (a print aborts any op still
-// on its cluster); the reveal advances in the post-tick chain, also while a lost ship is paused.
-mountPrinter(store);
-// HOLLOW (WP6) after the printer: a print beats a bite in the same tick, and a repair heals before
+// The landing (slice 1a) after the ops each tick (a launch aborts any op still on its driver).
+mountLanding(store);
+// HOLLOW (WP6) after the landing: a launch beats a bite in the same tick, and a repair heals before
 // the drain (the ops core ticks first).
 mountHollow(store);
 // WP10: THE DEAL, after HOLLOW (this tick's bite is in before it looks at the front).
@@ -141,7 +135,6 @@ mountHollowVerbs(store);
 mountFinale(store);
 // The run (WP7): the stats, BEAM OUT's bar on world time, and the soft fails' bookkeeping.
 mountRun(store);
-mountReveal(store);
 mountInput(window);
 blurButtonsOnPointerUp(document);
 emitUiClicks(document);
@@ -234,7 +227,7 @@ mountFsToolsSystem(store);
 mountSelectionHighlight(store);
 mountDimPainter(store);
 mountCursorFollower(store);
-mountDetailPanel(store, { onAction: runAction, onPrintFast: togglePrintFast });
+mountDetailPanel(store, { onAction: runAction });
 mountMemoryStats(store);
 mountFsStatusBar(store);
 mountMobileDrawers();
@@ -243,16 +236,14 @@ mountInlineConfirm();
 mountSidebarFilters(store);
 mountFooter(store);
 mountBurnResult(store);
-// The end of a printed ship: the credits, the count and the stars (WP5).
-mountWakeReport(store);
+// The end of a landed ship: the count and the stars (placeholder until the real LANDING REPORT).
+mountLandingReport(store);
 // Between ships and after the run (WP7): the packet for the link, and the run's end.
 mountTransmitScreen(store);
 mountRunEnd(store);
 // WP11: LAST LIGHT's choice, once the root's DELETE has left its last block.
 mountFinaleChoice(store);
 mountPlacement(store, memWrap);
-// After the strip: a print flashes the chip that is about to leave it.
-mountPrintFx(store);
 // After the strip: HOLLOW's reach (NEXT BITE, arrows, GAP/WALL), the infection's crawl and readouts,
 // the tug's green boundary and HOLLOW's moments are painted onto its rebuilt chips.
 mountHollowPainter(store);

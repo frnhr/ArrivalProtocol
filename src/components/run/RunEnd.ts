@@ -43,7 +43,7 @@ function shipRowNode(row: RunEndShipRow): HTMLElement {
     make('span', 're-ship-name', row.shipName),
     make('span', 're-ship-outcome', row.outcomeWord),
     make('span', 're-ship-stars', row.result ? starsText(row.result.stars) : ''),
-    make('span', 're-ship-woke', row.wokeLine),
+    make('span', 're-ship-woke', row.landedLine),
   );
   return node;
 }
@@ -89,8 +89,8 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     const startMs = performance.now();
     const tick = (now: number): void => {
       const fraction = Math.min(1, (now - startMs) / 1000 / RUN_END_COUNT_SEC);
-      const shown = Math.round((report.woke * fraction) / COUNT_STEP_SOULS) * COUNT_STEP_SOULS;
-      totalEl.textContent = RUN_END_TEXT.total(fraction < 1 ? shown : report.woke, report.fleetSouls);
+      const shown = Math.round((report.landed * fraction) / COUNT_STEP_SOULS) * COUNT_STEP_SOULS;
+      totalEl.textContent = RUN_END_TEXT.total(fraction < 1 ? shown : report.landed, report.fleetColonists);
       frame = fraction < 1 ? requestAnimationFrame(tick) : null;
     };
     frame = requestAnimationFrame(tick);
@@ -109,14 +109,13 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     const rows = Array.from(shipsEl.children) as HTMLElement[];
     rows.forEach((row, i) => later(RUN_END_ROW_GAP_SEC * (i + 1), () => {
       row.classList.add('landed');
-      // A ship whose colonists woke lands with a heartbeat; one that lost them all, or was never reached,
-      // lands in silence.
+      // A ship whose colonists landed comes in with a heartbeat; one that landed nobody, or was never reached, in
+      // silence. TODO(slice1a-UI): RUN END's landing rows (points, per-ship LANDED).
       const result = report.ships[i]?.result;
-      if (result && result.woke > 0) play('heartbeat', { strength: REPORT_COUNT_HEARTBEAT[result.half === result.woke ? 'gaps' : 'woke'] });
+      if (result && result.landedOnTarget > 0) play('heartbeat', { strength: REPORT_COUNT_HEARTBEAT.woke });
     }));
     const afterRows = RUN_END_ROW_GAP_SEC * (rows.length + 1);
     later(Math.max(afterRows, RUN_END_COUNT_SEC), () => {
-      missingEl.hidden = report.missingLine === null;
       root.classList.add('scored');
       if (!reducedMotion()) replayAnimation(rankEl, 'land');
       play('stampHit', { heavy: !victory });
@@ -142,8 +141,8 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     endingsEl.textContent = endings ?? '';
     carryEl.hidden = report.carryLine === null;
     carryEl.textContent = report.carryLine ?? '';
-    totalEl.textContent = RUN_END_TEXT.total(0, report.fleetSouls);
-    missingEl.textContent = report.missingLine ?? '';
+    totalEl.textContent = RUN_END_TEXT.total(0, report.fleetColonists);
+    missingEl.textContent = '';
     missingEl.hidden = true;
     shipsEl.replaceChildren(...report.ships.map(shipRowNode));
     scoreEl.textContent = report.scoreLine;

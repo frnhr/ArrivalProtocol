@@ -8,7 +8,7 @@
 // while a RETRO burn can still close the loop, and the line is drawn out to the escape radius.
 import { createHarness, check, finish, TICK } from '../wp1/harness';
 import { computePrediction, getPrediction, secUntil } from '@systems/predict';
-import { integrateStep, closeLoopDvKmS, closeBoundRadius, printerReachRadius } from '@systems/orbit-sim';
+import { integrateStep, closeLoopDvKmS, closeBoundRadius, bandReachRadius } from '@systems/orbit-sim';
 import { skipBlockReason } from '@systems/pace';
 import { plotMarkers } from '@systems/flight-hud';
 import { RESULT_SUB } from '@components/burn/BurnResult';
@@ -70,7 +70,7 @@ const isOutbound = (): boolean => { const o = state().orbit; return o.x * o.vx +
 
 // --- (b) The bound reaches the printers: no loop wider than it can be ACCEPTED ------------------
 {
-  const reach = printerReachRadius(planet.R, ring);
+  const reach = bandReachRadius(planet.R, ring);
   let best = 0;
   for (let i = 0; i <= 200; i++) {
     const rp = planet.R + ((ring.max - planet.R) * i) / 200;

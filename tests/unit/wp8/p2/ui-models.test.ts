@@ -69,7 +69,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
 
 // --- TRANSMIT's cards ------------------------------------------------------------------------------------
 {
-  toTransmit(5, () => { h.store.update((d) => { d.run.stats.clustersLost = 1; }); });
+  toTransmit(5, () => { h.store.update((d) => { d.run.stats.driversLost = 1; }); });
   const model = transmitModel(state());
   check('TRANSMIT shows the 3 cards dealt, keyed 1, 2, 3, none picked yet', model.cards.length === 3
     && model.cards.map((card) => card.key).join() === '1,2,3' && model.pick === null && model.cards.every((card) => !card.picked));

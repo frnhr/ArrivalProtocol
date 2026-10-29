@@ -1,8 +1,8 @@
 import type { GameState, ShipOutcome } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {
-  DropFactors, DropSolution, ForgivenessClass, LandingTally, LaunchAsk, LaunchRefusal, LaunchSource, LzResult, LzState,
-  LzWindow, NoGoArcState, OnTargetTally, ParkReason, Place, PodFate, PodRecord, PodSummary, ShipLandingDef, Touch,
+  DropFactors, DropSolution, ForgivenessClass, LandingTally, LandingView, LaunchAsk, LaunchRefusal, LaunchSource, LzResult, LzState,
+  LzWindow, NoGoArcState, OnTargetTally, ParkReason, Place, PodFate, PodRecord, PodSummary, ShipLandingDef, Touch, Touchdown,
 } from '@/types/landing';
 import type { Capabilities } from '@systems/capabilities';
 import type { Rng } from '@systems/rng';
@@ -225,6 +225,20 @@ export function launchGuard(state: Readonly<GameState>, sol: Readonly<DropSoluti
   return null;
 }
 
+// Everything a controller may read (§3.14: AUTODROP, the resident, MERGE's landing), for the state and its drop solution.
+// `cadenceTac` is Bay Ctrl's (capabilities.bay), passed in so this stays pure.
+export function landingView(state: Readonly<GameState>, solution: Readonly<DropSolution>, cadenceTac: number): LandingView {
+  const pods = state.landing.pods;
+  return {
+    solution: solution as DropSolution,
+    bay: { ...state.landing.bay, cadenceTac, shown: bayShown(state) },
+    queue: launchQueue(state).map((driver) => driver.pod),
+    remaining: lzRemaining(state),
+    aboard: pods.filter((record) => record.fate.kind === 'aboard').length,
+    falling: pods.filter((record) => record.fate.kind === 'falling').length,
+  };
+}
+
 // --- The ship's result -------------------------------------------------------------------------------------------------
 
 // Outcomes after which the ship is still in orbit: pods still aboard are released and parked (§3.10). Any other ending
@@ -245,8 +259,33 @@ export function finalFateOfAboard(record: Readonly<PodRecord>, outcome: ShipOutc
   return { kind: 'parked', why, restorable: why === 'eaten' };
 }
 
+// Where the pods still falling will come down, in touchdown order against the pods already down (§3.5: an LZ fills in
+// touchdown order), exactly as landing.ts touchDown will classify them. Where a pod lands was decided at launch; only
+// the fill order was open. A ship that ends mid-fall (its Core eaten under a streak) counts them here.
+export function pendingTouchdowns(state: Readonly<GameState>): Map<number, Touchdown> {
+  const falling = state.landing.pods
+    .flatMap((record) => (record.fate.kind === 'falling' ? [{ record, launch: record.fate.launch }] : []))
+    .sort((a, b) => (a.launch.atAi + a.launch.descentSec) - (b.launch.atAi + b.launch.descentSec));
+  const touchdowns = new Map<number, Touchdown>();
+  if (falling.length === 0) return touchdowns;
+  const { landing } = state;
+  const fill = lzDownFill(state);
+  for (const { record, launch } of falling) {
+    const placement = classifyLanding(landing.lzs, landing.noGo, launch.landingRad, fill);
+    if (placement.lz !== null) fill[placement.lz] = (fill[placement.lz] ?? 0) + 1;
+    touchdowns.set(record.pod, {
+      place: placement.place,
+      lz: placement.lz,
+      points: podPoints(placement.place, launch.touch, landing.forgiveness, record.colonists),
+      missKm: missKm(landing.lzs, launch.landingRad, state.level.planet.R),
+      atAi: launch.atAi + launch.descentSec,
+    });
+  }
+  return touchdowns;
+}
+
 // The landing half of the ship's result (§5 "To 02"), folded from the pods. Pods still aboard count as they will end
-// (parked or not launched, by `outcome`); a pod still falling has no result yet, so asking then is a bug.
+// (parked or not launched, by `outcome`); pods still falling count where they come down (pendingTouchdowns).
 export function landingResult(state: Readonly<GameState>, outcome: ShipOutcome): LandingTally {
   const { landing } = state;
   const rows = new Map<string, LzResult>();
@@ -255,8 +294,12 @@ export function landingResult(state: Readonly<GameState>, outcome: ShipOutcome):
     colonistsAboard: 0, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: 0, landedOnTarget: 0, points: 0,
     colony: landing.colony, pods: [],
   };
+  const pending = pendingTouchdowns(state);
   for (const record of landing.pods) {
-    const fate = record.fate.kind === 'aboard' ? finalFateOfAboard(record, outcome) : record.fate;
+    const settled = pending.get(record.pod);
+    const fate: PodFate = record.fate.kind === 'aboard' ? finalFateOfAboard(record, outcome)
+      : record.fate.kind === 'falling' && settled ? { kind: 'down', launch: record.fate.launch, touchdown: settled }
+        : record.fate;
     tally.colonistsAboard += record.colonists;
     if (record.restored) tally.restored += record.colonists;
     const summary: PodSummary = {
@@ -265,9 +308,8 @@ export function landingResult(state: Readonly<GameState>, outcome: ShipOutcome):
     };
     switch (fate.kind) {
       case 'falling':
-        throw new Error(`landingResult: ${record.pod} is still falling (landing.ts settles every fall before the result)`);
       case 'aboard':
-        throw new Error('landingResult: a pod aboard was not given its final fate');
+        throw new Error(`landingResult: pod ${record.pod} was not given its final fate (${fate.kind})`);
       case 'parked':
         tally.parked.push({ pod: record.pod, why: fate.why });
         summary.parkedWhy = fate.why;

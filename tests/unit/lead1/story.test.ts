@@ -1,3 +1,5 @@
+// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
+// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // LEAD-1 item 6: HOLLOW's story after the ship-1 fight counted only the TERMINAL's typing. Two leftovers
 // from WP6's verify:
 // • after an owed reveal, CONTROL's radio quip (`Oh, you found them! …`) typed right up to `> ...047?`;

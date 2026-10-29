@@ -46,9 +46,9 @@ export function onPostTick(listener: PostTickListener): () => void {
   return () => { postTickListeners.delete(listener); };
 }
 
-// Phases in which time passes: the flight, and printing (the world coasts, the printer works on AI
-// time). The title, the boot and the WAKE REPORT stop both clocks.
-const ACTIVE_PHASES: ReadonlySet<RunPhase> = new Set<RunPhase>(['flight', 'printing']);
+// Phases in which time passes: the flight, and the landing (the world coasts, the pods fall on AI time). The title,
+// the boot and the LANDING REPORT stop both clocks.
+const ACTIVE_PHASES: ReadonlySet<RunPhase> = new Set<RunPhase>(['flight', 'landing']);
 
 export function isActivePhase(phase: RunPhase): boolean {
   return ACTIVE_PHASES.has(phase);
@@ -153,13 +153,12 @@ export function advance(store: Store<GameState>, dtWallRaw: number): void {
   postTickListeners.forEach((listener) => listener(dtWall, dtAi));
 }
 
-// The ship is still being played: a live flight, or printing after a lock (the colonists are
-// still in memory). A lost ship (crashed, escaped, stranded, or its Core eaten) stays paused under
-// its LOST card, and the WAKE REPORT owns the screen once printing is done.
+// The ship is still being played: a live flight, or the landing after a lock. A lost ship (crashed, escaped, stranded,
+// or its Core eaten) stays paused under its LOST card, and the LANDING REPORT owns the screen once the landing is done.
 export function isLivePhase(state: Readonly<GameState>): boolean {
   // A ship whose Core was eaten (WP6) is over too, whatever its phase: its CORE LOST card owns it.
   if (state.run.coreLost) return false;
-  return state.run.phase === 'printing' || (state.run.phase === 'flight' && state.burn.status === 'approaching');
+  return state.run.phase === 'landing' || (state.run.phase === 'flight' && state.burn.status === 'approaching');
 }
 
 // Look-only pause. Pausing also lets go of the throttle: a burn must never continue, or

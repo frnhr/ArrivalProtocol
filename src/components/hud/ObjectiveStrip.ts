@@ -197,7 +197,7 @@ export function mountObjectiveStrip(store: Store<GameState>): () => void {
     }
     // HOLLOW's next bite while the kid flies (WP7): in blue every hollow block counts it down already. It
     // stays beside the ticker too: HOLLOW's own lines fill the ticker just when its bites matter.
-    const live = state.run.phase === 'flight' || state.run.phase === 'printing';
+    const live = state.run.phase === 'flight' || state.run.phase === 'landing';
     const bite = live && state.ui.mode === 'tools' ? amberBite(state) : null;
     const biteKey = bite ? `${bite.text}|${bite.urgent}` : '';
     if (biteKey !== lastBite) {

@@ -40,7 +40,8 @@ function trackKeyOf(state: Readonly<GameState>): string {
 function recompute(state: Readonly<GameState>): DropSolution {
   const caps = capabilitiesNow(state);
   const { planet, ring } = state.level;
-  if (caps.drop.solution) {
+  const closed = elementsFromState(state.orbit, planet.mu).e < 1;
+  if (caps.drop.solution && closed) {
     const key = trackKeyOf(state);
     if (track === null || key !== trackKey) {
       track = dotTrack(state.orbit, planet.mu, planet.R, POD_AIM_RP_FRAC * planet.R);
@@ -56,7 +57,7 @@ function recompute(state: Readonly<GameState>): DropSolution {
     lzs: state.landing.lzs,
     factors: dropFactors(caps, nextToLaunch(state)),
     solution: caps.drop.solution,
-  }, caps.drop.solution ? track : null);
+  }, caps.drop.solution && closed ? track : null);
   cachedRev = state.run.rev;
   sinceRefreshWall = 0;
   return cached;

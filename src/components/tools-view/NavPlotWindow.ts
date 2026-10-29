@@ -19,6 +19,7 @@ import {
   SVG_NS, svgEl, fmt, setCircle, annulus, circlePath, pathsByColour, hazardPath, bandWidth,
 } from '@components/hud/plot-draw';
 import { PLOT_FUZZ_MIN_UNITS, PLOT_UNCERTAIN_MIN_UNITS, PLOT_PLANET_MIN_UNITS } from '@data/tuning';
+import { BAND_TEXT } from '@data/landing-text';
 
 // NAV PLOT, the hero window (§7.1). Everything on it comes from the predicted path
 // (systems/predict) and the HUD model (systems/flight-hud):
@@ -108,7 +109,8 @@ const CHAR_W_TAG = 5.9;
 // The ring's name runs over the top of the ring, between these angles (degrees, world frame).
 const RING_LABEL_FROM_DEG = 160;
 const RING_LABEL_TO_DEG = 20;
-const RING_LABEL_TEXT = 'SAFE ORBIT · PRINTER RANGE';
+// TODO(slice1a-UI): `LAUNCH BAND` alone while landing (BAND_TEXT.ringLanding).
+const RING_LABEL_TEXT = BAND_TEXT.ringFlight;
 // One character of the ring's name along its arc (game.css .np-ring-label: 6.2 px JetBrains Mono, 0.6 em
 // advance, plus 0.22 em letter-spacing). Zoomed far out (HALCYON's start, r0 30,000 km) the arc is shorter
 // than the name, which the textPath then cut to `RBIT · PRINTER` under the START BURN label: the name is

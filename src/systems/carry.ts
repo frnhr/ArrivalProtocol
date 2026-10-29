@@ -7,7 +7,7 @@ import { hasIntegrity, type HealthSegment } from '@state/selectors';
 import { setIntegrity } from '@state/actions';
 import { FS_TOOL_KINDS } from '@data/fs-tools';
 import {
-  UNIT_RACKS_START, MEMORY_TOTAL_BLOCKS, RACK_NAMES, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, rackDTrailingFree, isUnitFileType,
+  UNIT_RACKS_START, MEMORY_TOTAL_BLOCKS, RACK_NAMES, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, lastPodRackTrailingFree, isUnitFileType,
   freshChargeFile, type CarriedRacks,
 } from '@data/memory';
 import {
@@ -232,12 +232,14 @@ export interface CarriedLayout {
 // The packed files back into memory on `ship` (step 4). Rack E's list starts at rack E and rack F's at
 // rack F, each followed by its free space, like a fresh unit. If rack F's list (with REPAIR CHARGE last)
 // is longer than rack F, it starts earlier, into rack E's free tail, and rack E's list moves back with
-// it, into rack D's free tail if it must (the ship's layout says how much of rack D is free at its
+// it, into the last pod rack's free tail if it must (the ship's layout says how much of it is free at its
 // end). Charge that still does not fit is lost; files that do not fit throw.
+// TODO(slice1a-SIM): 01-landing §3.16's pooled receiver (rack E's and F's lists back to back, the spill capped at
+// UNIT_TAIL_BLOCKS).
 export function layoutCarried(packet: Packet, chargeBlocks: number, ship: ShipDef): CarriedLayout {
   const eBlocks = packet.rackE.reduce((sum, seg) => sum + seg.size, 0);
   const fFiles = packet.rackF.reduce((sum, seg) => sum + seg.size, 0);
-  const lowest = RACK_E_START - rackDTrailingFree(ship);
+  const lowest = RACK_E_START - lastPodRackTrailingFree(ship);
   const room = MEMORY_TOTAL_BLOCKS - lowest;
   const filesTotal = eBlocks + fFiles;
   if (filesTotal > room) throw new Error(`layoutCarried: ${filesTotal} blocks of files do not fit the ${room} blocks from rack D's free tail`);

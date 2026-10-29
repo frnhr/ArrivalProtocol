@@ -161,7 +161,7 @@ function table(results: Map<PlayerId, RunRecord[]>): string {
   row('wall time in 20–32 min', each((records) => pct(records.filter((run) => run.wallSec >= 1200 && run.wallSec <= 1920).length, records.length)));
   row('wall s: flight · printing · screens (median)', each((records) => {
     const phase = (run: RunRecord, keys: string[]): number => keys.reduce((sum, key) => sum + (run.phaseSec[key] ?? 0), 0);
-    return `${median(records.map((run) => phase(run, ['flight']))).toFixed(0)} · ${median(records.map((run) => phase(run, ['printing']))).toFixed(0)} · `
+    return `${median(records.map((run) => phase(run, ['flight']))).toFixed(0)} · ${median(records.map((run) => phase(run, ['landing']))).toFixed(0)} · `
       + `${median(records.map((run) => phase(run, ['title', 'boot', 'report', 'transmit', 'lost']))).toFixed(0)}`;
   }));
   row('wall s in MIND · OVERCLOCKED (median)', each((records) => `${median(records.map((run) => run.mindSec)).toFixed(0)} · ${median(records.map((run) => run.overclockSec)).toFixed(0)}`));

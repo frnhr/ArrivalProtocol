@@ -170,7 +170,7 @@ function stepWhile(cond: () => boolean, maxWall = 400): void {
   // only a lost ship's pace reads STOPPED.
   check('locked: BURN shows FLIGHT OVER (disabled), pace TACTICAL while printing, no countdown',
     burnButton(state()).disabled && burnButton(state()).text === 'FLIGHT OVER'
-    && state().run.phase === 'printing' && paceLabel(state()) === 'TACTICAL ×20' && countdownChip(state(), pred) === null,
+    && state().run.phase === 'landing' && paceLabel(state()) === 'TACTICAL ×20' && countdownChip(state(), pred) === null,
     `${state().run.phase} / ${paceLabel(state())}`);
   check('locked: the strip line', FLIGHT_OVER_LINE[harness.status() as 'locked'] === 'ORBIT LOCKED');
 }

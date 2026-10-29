@@ -77,15 +77,15 @@ export const SEED_HINT_TARGET = 'hollow-seed';
 // DELETE is in hand.
 export const ROOT_HINT_TARGET = 'hollow-root-open';
 
-// The data-hint-target of a soul cluster's chip (`cluster-C09`): clusters have no role, so a strip
-// line that names one (C09 IS HURT) points at it by its code.
-export function clusterHintTarget(code: string): string {
-  return `cluster-${code}`;
+// The data-hint-target of a pod driver's chip (`driver-pod02`): drivers have no role, so a strip line that names one
+// (POD 02 WILL LAND HARD) points at it by the label the strip uses (selectors fileLabel: `POD 02`).
+export function podHintTarget(label: string): string {
+  return `driver-${label.replace(/\s+/g, '').toLowerCase()}`;
 }
 
 // What a "REPAIR <file>" line lights in the mind: the REPAIR chip until the tool is in hand, then
 // the file to click (the ENGINE I/O tutorial, and F1/F2 shown in blue). `target` is the file's own
-// data-hint-target (fileHintTarget for a role, clusterHintTarget for a cluster).
+// data-hint-target (fileHintTarget for a role, podHintTarget for a driver).
 export function repairStepTarget(heldKind: FsToolKind | null, role: SegmentRole): string {
   return toolStepTarget('repair', heldKind, fileHintTarget(role));
 }

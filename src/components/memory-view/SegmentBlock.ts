@@ -1,10 +1,9 @@
-import type { Segment, RedundancySegment, SoulSegment, FreeSegment, HollowSegment } from '@/types/segment';
-import type { ClusterOutcome } from '@state/schema';
-import { shownIntegrity, soulOutcome, isInfected, type HealthSegment } from '@state/selectors';
-import { crackDelaySec } from '@systems/reveal';
-import { REVEAL_CRACK_ANIM_SEC, INTEGRITY_MAX } from '@data/tuning';
+import type { Segment, RedundancySegment, DriverSegment, FreeSegment, HollowSegment } from '@/types/segment';
+import { shownIntegrity, isInfected, integrityBand, fileLabel, type HealthSegment } from '@state/selectors';
+import { INTEGRITY_MAX } from '@data/tuning';
+import { podCode } from '@data/landing-text';
 import {
-  fileHintTarget, clusterHintTarget, toolFileHintTarget, firewallHintTarget, SEED_HINT_TARGET, ROOT_HINT_TARGET,
+  fileHintTarget, podHintTarget, toolFileHintTarget, firewallHintTarget, SEED_HINT_TARGET, ROOT_HINT_TARGET,
 } from '@data/fs-tools';
 import { stripTier, stripName, type StripTier } from '@data/type-labels';
 import { HOLLOW_HUD_TEXT, HOLLOW_FINALE, UNNAMED_HOLLOW } from '@data/hollow-text';
@@ -19,9 +18,6 @@ interface SegmentPartLayout {
   // rack's last few free blocks rather than open a row for them (MemoryStrip, WP12 review). Its painters all measure
   // a part as a share of its width, so its blocks are only drawn narrower.
   spanCols?: number;
-  // A sealed cluster right after another in the same row: the two draw as one grey slab (§6.7),
-  // and only the slab's first part carries its label.
-  joinsSealedLeft?: boolean;
 }
 
 export interface SegmentBehavior {
@@ -106,7 +102,7 @@ function hollowPartHtml(seg: HollowSegment, layout: SegmentPartLayout, tier: Str
   let tag = `<span class="hollow-tag">${seg.size}B</span>`;
   if (seg.locked) tag = '<span class="hollow-tag locked">LOCKED</span>';
   else if (seg.root) tag = `<span class="hollow-tag root">${HOLLOW_FINALE.rootTag(seg.size)}</span>`;
-  else if (seg.ateCluster) tag = `<span class="hollow-tag ate">${HOLLOW_HUD_TEXT.ateTag(seg.ateCluster)}</span>`;
+  else if (seg.atePod !== undefined) tag = `<span class="hollow-tag ate">${HOLLOW_HUD_TEXT.ateTag(podCode(seg.atePod))}</span>`;
   // A seed is a SEED on the strip (WP9): the word the kid is told to DELETE.
   const name = seg.seed ? HOLLOW_HUD_TEXT.seedChip : stripName(seg, layout.partSize);
   return `
@@ -143,11 +139,13 @@ function renderHollowPart(part: HTMLElement, seg: HollowSegment, layout: Segment
   return part;
 }
 
-// --- Soul clusters (§6.7) -------------------------------------------------------------------------
+// --- Pod drivers (01-landing §3.8) ----------------------------------------------------------------
+// TODO(slice1a-UI): driver chips (`POD 03` / `P03` by width, the BAY / NEXT tags); until then a driver draws as the
+// phase-2 colonist chip (its CSS classes `soul`, `soul-family`, `soul-code`), with its pod in the code's place.
 
-// The heartbeat line on a cluster's chip (an ECG trace in a 48×12 box): steady while the cluster
-// would wake intact, ragged and fast while it is hurt, flat at 0. The bright pulse runs along it
-// (CSS); reduced motion keeps the trace and drops the pulse.
+// The heartbeat line on a driver's chip, the pod's stasis monitor (an ECG trace in a 48×12 box): steady while it would
+// land soft, ragged and fast while it would land hard, flat once it can't launch. The bright pulse runs along it (CSS);
+// reduced motion keeps the trace and drops the pulse.
 export type Heartbeat = 'steady' | 'weak' | 'flat';
 const HEARTBEAT_PATH: Readonly<Record<Heartbeat, string>> = {
   steady: 'M0 7 H14 L16 5 L18 7 H21 L23 1 L25 11 L27 6 L28 7 H33 L35 5 L37 7 H48',
@@ -155,13 +153,14 @@ const HEARTBEAT_PATH: Readonly<Record<Heartbeat, string>> = {
   flat: 'M0 7 H48',
 };
 
-// The heartbeat of a cluster that would wake this way (the chip and INSPECT draw the same one).
-export function heartbeatKind(outcome: ClusterOutcome): Heartbeat {
-  return outcome === 'woke' ? 'steady' : outcome === 'gaps' ? 'weak' : 'flat';
+// The heartbeat of a driver at this integrity (the chip and INSPECT draw the same one): by its band.
+export function heartbeatKind(integrity: number): Heartbeat {
+  const band = integrityBand(integrity);
+  return band === 'ok' || band === 'degraded' ? 'steady' : band === 'failing' ? 'weak' : 'flat';
 }
 
-function heartbeatOf(soul: SoulSegment): Heartbeat {
-  return heartbeatKind(soulOutcome(soul.integrity));
+function heartbeatOf(driver: DriverSegment): Heartbeat {
+  return heartbeatKind(driver.integrity);
 }
 
 export function heartbeatSvg(kind: Heartbeat): string {
@@ -170,21 +169,15 @@ export function heartbeatSvg(kind: Heartbeat): string {
     + `<path class="hb-trace" d="${path}" pathLength="100"/><path class="hb-pulse" d="${path}" pathLength="100"/></svg>`;
 }
 
-// A cluster's part on the strip: the sealed slab (grey, no name, no health: nothing leaks before
-// the reveal), or the open chip. The chip reads like every file (name, bar, meta) with people in it:
-// the family on top (the name a kid remembers), the heartbeat where a file has its bar, then the
-// code the strip's lines use (C09) beside the health. Continuation parts of a chip split by a row
-// break show only the ↪ marker.
-function soulPartHtml(soul: SoulSegment, layout: SegmentPartLayout): string {
+// A driver's part on the strip. The chip reads like every file (name, bar, meta) with people behind it: the family on
+// top (the name a kid remembers), the heartbeat where a file has its bar, then the pod the strip's lines use (POD 03)
+// beside the health. Continuation parts of a chip split by a row break show only the ↪ marker.
+function soulPartHtml(soul: DriverSegment, layout: SegmentPartLayout): string {
   const isFirst = layout.partIdx === 0;
-  if (soul.sealed) {
-    if (layout.joinsSealedLeft || !isFirst) return '';
-    return `<div class="slab-label">SEALED</div><div class="slab-sub">no access</div>`;
-  }
   if (!isFirst) return `<div class="seg-cont-marker">↪</div>`;
   const shown = shownIntegrity(soul.integrity);
-  const outcome = soulOutcome(soul.integrity);
-  const healthCls = outcome === 'woke' ? '' : outcome === 'gaps' ? ' partial' : ' warn';
+  const beat = heartbeatOf(soul);
+  const healthCls = beat === 'steady' ? '' : beat === 'weak' ? ' partial' : ' warn';
   let health: string;
   if (soul.state === 'repairing') {
     health = `<span class="health live${soul.infected ? ' warn' : ''}" data-live-integrity="${soul.id}" data-live-prefix="${LIVE_REPAIR_PREFIX}">${LIVE_REPAIR_PREFIX}${shown}%</span>`;
@@ -196,7 +189,7 @@ function soulPartHtml(soul: SoulSegment, layout: SegmentPartLayout): string {
   return `
     <div class="soul-family">${soul.family.toUpperCase()}</div>
     ${heartbeatSvg(heartbeatOf(soul))}
-    <div class="seg-meta"><span class="soul-code">${soul.cluster}<span class="soul-count">${soul.souls}</span></span>${health}</div>`;
+    <div class="seg-meta"><span class="soul-code">${podCode(soul.pod)}<span class="soul-count">${soul.colonists}</span></span>${health}</div>`;
 }
 
 // Builds a single visual part of a memory segment.
@@ -218,7 +211,7 @@ export function renderSegmentPart(
   const tier = stripTier(partSize);
 
   const part = document.createElement('div');
-  if (seg.type === 'soul') return renderSoulPart(part, seg, layout, behavior);
+  if (seg.type === 'driver') return renderSoulPart(part, seg, layout, behavior);
   if (seg.type === 'hollow') return renderHollowPart(part, seg, layout, behavior);
   let cls = `seg ${seg.type} tier-${tier}`;
   const state = 'state' in seg ? seg.state : undefined;
@@ -291,7 +284,7 @@ function freePartHtml(seg: FreeSegment, partSize: number, tier: StripTier): stri
 // A file's first part: its badge, name, health bar (dim until scanned), the Core's thread row, and
 // the meta row (size or badge on the left, health on the right).
 function filePartHtml(
-  seg: Exclude<Segment, SoulSegment | FreeSegment | HollowSegment>,
+  seg: Exclude<Segment, DriverSegment | FreeSegment | HollowSegment>,
   layout: SegmentPartLayout,
   tier: StripTier,
   knownScanned: boolean,
@@ -374,64 +367,21 @@ function stampPart(part: HTMLElement, seg: Segment, layout: SegmentPartLayout): 
   part.dataset.partOffset = String(layout.partOffset);
 }
 
-// When the chip's crack starts, in seconds from now (negative: that far along), for the CSS.
-function setCrackDelay(part: HTMLElement, delaySec: number): void {
-  part.style.setProperty('--crack-delay', `${delaySec.toFixed(3)}s`);
-}
-
-// A chip whose crack is still to play (or still playing: a rebuild mid-crack) gets it, timed by the
-// reveal: the CSS takes its delay and length from here. Once played it drops the class. A TAB away
-// mid-crack cancels the animation instead (no animationend); settleCracks handles the view coming back.
-function playCrack(part: HTMLElement, code: string): string {
-  const delay = crackDelaySec(code);
-  if (delay === null) return '';
-  setCrackDelay(part, delay);
-  part.style.setProperty('--crack-dur', `${REVEAL_CRACK_ANIM_SEC}s`);
-  part.addEventListener('animationend', (event) => {
-    if (event.target === part) part.classList.remove('cracking');
-  });
-  return ' cracking';
-}
-
-// A TAB back into MIND shows the memory view again after display:none, which cancelled every chip's
-// crack animation and now restarts it from its first frame: a kid who TABbed away mid-crack saw it play
-// twice (LEAD-1, from the WP5 verify). Run just before the view is shown (ModeToggle): a chip whose crack
-// has played by now on the reveal's clock (crackDelaySec: null) drops it, and one still mid-crack picks
-// it up where that clock is (a negative delay), so the restart continues instead of replaying.
-export function settleCracks(root: ParentNode): void {
-  root.querySelectorAll<HTMLElement>('.seg.soul.cracking').forEach((chip) => {
-    const code = chip.dataset.cluster;
-    if (code === undefined) throw new Error('settleCracks: a cracking chip without data-cluster');
-    const delay = crackDelaySec(code);
-    if (delay === null) chip.classList.remove('cracking');
-    else setCrackDelay(chip, delay);
-  });
-}
-
 function wire(part: HTMLElement, seg: Segment, behavior: SegmentBehavior): void {
   part.addEventListener('click', (event) => behavior.onClick(seg, event));
   part.addEventListener('mouseenter', () => behavior.onMouseEnter(seg, part));
   part.addEventListener('mouseleave', () => behavior.onMouseLeave(seg, part));
 }
 
-// A cluster's part (see soulPartHtml). It keeps the shared part data (size, index, offset) so the
-// op bars, the split overlay and the hint painter treat it like any file. A chip the reveal just
-// opened plays its crack, staggered by its crack order (playCrack).
-function renderSoulPart(part: HTMLElement, soul: SoulSegment, layout: SegmentPartLayout, behavior: SegmentBehavior): HTMLElement {
+// A driver's part (see soulPartHtml). It keeps the shared part data (size, index, offset) so the
+// op bars, the split overlay and the hint painter treat it like any file.
+function renderSoulPart(part: HTMLElement, soul: DriverSegment, layout: SegmentPartLayout, behavior: SegmentBehavior): HTMLElement {
   const { partIdx, totalParts } = layout;
   const isFirst = partIdx === 0;
-  let cls = 'seg soul';
-  if (soul.sealed) {
-    cls += ' sealed';
-    if (layout.joinsSealedLeft) cls += ' slab-join';
-  } else {
-    cls += ` hb-${heartbeatOf(soul)}`;
-    cls += playCrack(part, soul.cluster);
-  }
+  let cls = `seg soul driver hb-${heartbeatOf(soul)}`;
   if (soul.state === 'transferring') cls += ' transferring';
   if (soul.state === 'repairing') cls += ' repairing';
-  // A sealed cluster bitten through its slab is unsealed at once (systems/hollow.ts breach).
-  cls += infectedClasses(soul, !soul.sealed);
+  cls += infectedClasses(soul, true);
   if (totalParts > 1) {
     cls += ' is-part';
     if (partIdx < totalParts - 1) cls += ' part-continues-right';
@@ -439,10 +389,10 @@ function renderSoulPart(part: HTMLElement, soul: SoulSegment, layout: SegmentPar
   }
   part.className = cls;
   stampPart(part, soul, layout);
-  setEaten(part, soul, !soul.sealed);
-  part.dataset.cluster = soul.cluster;
-  // A strip line can point at a cluster by its code (C09 IS HURT); never at a sealed one.
-  if (isFirst && !soul.sealed) part.dataset.hintTarget = clusterHintTarget(soul.cluster);
+  setEaten(part, soul, true);
+  part.dataset.pod = String(soul.pod);
+  // A strip line can point at a driver by its pod (POD 02 WILL LAND HARD).
+  if (isFirst) part.dataset.hintTarget = podHintTarget(fileLabel(soul));
   part.innerHTML = soulPartHtml(soul, layout);
   wire(part, soul, behavior);
   return part;

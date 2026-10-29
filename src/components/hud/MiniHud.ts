@@ -5,8 +5,8 @@ import { getPrediction, getSensedPrediction, type Prediction } from '@systems/pr
 import { capabilitiesNow } from '@systems/capabilities';
 import { onOpsChange } from '@systems/ops-core';
 import { setMode } from '@systems/mode';
-import { printStatus, setPrintFast, printFastRefusal } from '@systems/printer';
-import { intactTally, intactHudLine } from '@systems/stars';
+import { onTargetTally } from '@systems/landing-rules';
+import { LANDING_HUD_TEXT } from '@data/landing-text';
 import {
   countdownChip, plotChip, fuelModel, thrustLimitModel, paceLabel, plotViewRadius, mindChipModel, overclockBadge, plotZones,
   formatCountdown,
@@ -152,11 +152,11 @@ export function mountMiniHud(store: Store<GameState>): () => void {
     // While printing nothing is burning or counting down: the card trades the countdown row and the
     // THRUST LIMIT line for the printing rows below, and keeps its height (at 1280×720 a taller card
     // squeezes the strip and INSPECT).
-    const print = printStatus(state);
+    const landing = state.run.phase === 'landing';
 
     // The header's countdown, with its ▸▸ (fast-forwarding) or ×¼ (OVERCLOCK) badge.
     const countdown = countdownChip(state, pred);
-    cdEl.hidden = print.printing && !countdown;
+    cdEl.hidden = landing && !countdown;
     const badge = countdown?.fastForward ? '▸▸' : countdown?.slow ? overclockBadge() : '';
     patch(cdLabel, countdown ? countdown.label : '—');
     patch(cdTime, countdown ? countdown.time : '');
@@ -173,7 +173,7 @@ export function mountMiniHud(store: Store<GameState>): () => void {
     // Sensor Interp holds the plot stale (LEAD-2 review round 2).
     const fuel = fuelModel(state, pred);
     const engineLimit = thrustLimitModel(state);
-    const limit = print.printing ? { ...engineLimit, limited: false } : engineLimit;
+    const limit = landing ? { ...engineLimit, limited: false } : engineLimit;
     const barsKey = `${fuel.pct.toFixed(1)}|${fuel.short}|${limit.limited ? limit.capPct : ''}`;
     if (barsKey !== lastBars) {
       lastBars = barsKey;
@@ -198,22 +198,18 @@ export function mountMiniHud(store: Store<GameState>): () => void {
     patch(autoEl, autoText);
     card.classList.toggle('auto-flying', flying);
 
-    // While printing (WP5): the clusters done, the pace, and PRINT FAST ▸▸ one click away; under it
-    // the INTACT star as it stands (★ INTACT 11/12 while C09 still needs a repair).
-    printRow.hidden = !print.printing;
-    intactEl.hidden = !print.printing;
-    if (print.printing) {
-      patch(printText, print.halted ? 'NO PRINTER' : `PRINTING ${print.done}/${print.total}`);
-      printText.classList.toggle('halted', print.halted);
-      patch(printFast, print.fast ? 'FAST ▸▸ ON' : 'PRINT FAST ▸▸');
-      printFast.classList.toggle('on', print.fast);
-      // While HOLLOW eats anything, PRINT FAST waits (WP6): struck out, with the reason on hover.
-      const refusal = state.printer.fast ? null : printFastRefusal(state);
-      printFast.classList.toggle('blocked', refusal !== null);
-      printFast.title = refusal ?? '';
-      const intact = intactHudLine(intactTally(state));
-      patch(intactEl, intact.text);
-      if (intactEl.dataset.tone !== intact.tone) intactEl.dataset.tone = intact.tone;
+    // While landing: the pods down, and under it the ON TARGET star as it stands (`★ ON TARGET 5/6`).
+    // TODO(slice1a-UI): miniHudLanding (landing-hud.ts): the next window and the bay.
+    printRow.hidden = !landing;
+    intactEl.hidden = !landing;
+    printFast.hidden = true;
+    if (landing) {
+      const down = state.landing.pods.filter((record) => record.fate.kind === 'down').length;
+      patch(printText, LANDING_HUD_TEXT.crumbLanding(down, state.landing.pods.length));
+      const tally = onTargetTally(state);
+      const tone = tally.earned ? 'good' : tally.possible ? 'risk' : 'lost';
+      patch(intactEl, `${tone === 'lost' ? '☆' : '★'} ${LANDING_HUD_TEXT.onTarget(tally.onTargetPods, tally.pods)}`);
+      if (intactEl.dataset.tone !== tone) intactEl.dataset.tone = tone;
     }
 
     paintPlot(state, pred);
@@ -237,14 +233,8 @@ export function mountMiniHud(store: Store<GameState>): () => void {
 
   const onCardClick = (): void => setMode(store, 'tools');
   const onChipClick = (): void => setMode(store, 'memory');
-  // PRINT FAST lives on the card but is not a way back to the ship.
-  const onPrintFast = (event: MouseEvent): void => {
-    event.stopPropagation();
-    setPrintFast(store, !store.getState().printer.fast);
-  };
   card.addEventListener('click', onCardClick);
   chip.addEventListener('click', onChipClick);
-  printFast.addEventListener('click', onPrintFast);
 
   const paintVisible = (): void => {
     if (store.getState().ui.mode === 'memory') paintCard();
@@ -255,12 +245,11 @@ export function mountMiniHud(store: Store<GameState>): () => void {
   const offTick = onPostTick(paintVisible);
   // Threads and charge change on AI time, also while the world is paused (no game ticks needed).
   const offOps = onOpsChange(() => paintChip());
-  const unsub = store.subscribe((s) => `${s.ui.memoryRev}|${s.ui.mode}|${s.run.phase}|${s.printer.fast}`, paintVisible);
+  const unsub = store.subscribe((s) => `${s.ui.memoryRev}|${s.ui.mode}|${s.run.phase}`, paintVisible);
 
   return () => {
     card.removeEventListener('click', onCardClick);
     chip.removeEventListener('click', onChipClick);
-    printFast.removeEventListener('click', onPrintFast);
     offTick();
     offOps();
     unsub();

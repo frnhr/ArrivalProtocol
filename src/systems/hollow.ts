@@ -1,6 +1,6 @@
 import type { Store } from '@state/store';
 import type { GameState, HollowState } from '@state/schema';
-import type { Segment, HollowSegment, InfectionSide, SoulSegment } from '@/types/segment';
+import type { Segment, HollowSegment, InfectionSide, DriverSegment } from '@/types/segment';
 import type { HollowDef, SeedDef, SeedTarget } from '@data/ships';
 import type { Rng } from '@systems/rng';
 import { onAiTick, onPostTick, isLivePhase, setPaused } from '@systems/clock';
@@ -12,8 +12,7 @@ import { getOpsBySeg, abortOp, type Op } from '@systems/ops-core';
 import {
   raiseAlert, clearAlert, clearHollowAlerts, INFECTED_ALERT_ID, CORE_ALERT_ID, EATEN_ALERT_PREFIX, SEED_ALERT_ID,
 } from '@systems/alerts';
-import { nextToPrint } from '@systems/printer';
-import { unsealCluster, revealSouls } from '@systems/reveal';
+import { nextToLaunch } from '@systems/landing-rules';
 import { say, hollowLabel, createStory, type Story, type StoryBeat } from '@systems/say';
 import { isFirstRun, type LastUnit } from '@systems/meta';
 import {
@@ -21,22 +20,23 @@ import {
 } from '@systems/memory-ops';
 import { toolKindOf } from '@systems/carry';
 import { childRng } from '@systems/rng';
-import { setIntegrity, cureInfection, recordClusterGone, lostClusterResult } from '@state/actions';
+import { setIntegrity, cureInfection, recordDriverLost } from '@state/actions';
 import { isOpenFree } from '@systems/tool-targets';
 import {
-  isInfectable, isInfected, isHollow, infectedSegments, fileLabel, archiveSealed, effectiveToolVersion, soulsInMemory,
-  revealUnderway, isFirewall, isUsableTool, hasUsableTool, hasIntegrity, integrityBand, spreadPaused, isShipFile, isAiFile,
+  isInfectable, isInfected, isHollow, infectedSegments, fileLabel, effectiveToolVersion, driversInMemory, isDriver,
+  isFirewall, isUsableTool, hasUsableTool, hasIntegrity, integrityBand, spreadPaused, isShipFile, isAiFile,
   type HealthSegment,
 } from '@state/selectors';
 import type { FsToolKind } from '@/types/fs-tool';
 import { repairRatePerSec } from '@data/fs-tools';
 import { MEMORY_TOTAL_BLOCKS, FRESH_UNIT_CHARGE, UNIT_RACKS_START, hexAddr } from '@data/memory';
 import { HOLLOW_ALERT_TEXT, HOLLOW_DESC, HOLLOW_STORY, HOLLOW_ECHO, hollowUnitName } from '@data/hollow-text';
+import { driverName } from '@data/landing-text';
 import { echoName } from '@data/tool-text';
 import { IS_DEV } from '@/env';
 import {
   WALL_MIN_BLOCKS, INTEGRITY_MAX, EATEN_ALARM_SEC, EATEN_ALARM_CLEAR_SEC, HOLLOW_STORY_SILENCE_SEC,
-  WAKE_AFTER_DODGE_SEC, HOLLOW_CONTROL_AFTER_SEC, HOLLOW_SCRIPTED_BITE_DELAY_SEC, HOLLOW_REVEAL_AFTER_FIGHT_SEC, HOLLOW_STORY_READ_SEC,
+  WAKE_AFTER_DODGE_SEC, HOLLOW_CONTROL_AFTER_SEC, HOLLOW_SCRIPTED_BITE_DELAY_SEC, HOLLOW_STORY_READ_SEC,
   HOLLOW_NAME_AFTER_TYPED_SEC, SEED_BLOCKS, SEED_TELEGRAPH_SEC, SEED_TOOL_GAP_BLOCKS, DEAL_REFUSE_INTERVAL_FACTOR,
   DEAL_SEED_CALLED_OFF_SEC, RACK_BLOCKS, VERB_WEIGHT_PER_STAT, VERB_MV_NEAR_BLOCKS, OP_COMPLETE_PCT, BITTEN_AGAIN_COUNT,
 } from '@data/tuning';
@@ -52,11 +52,11 @@ import {
 //   anything else is infected from the side that faces HOLLOW. Racks don't matter: memory is one
 //   line of addresses. hollowReach is that rule as data, so the painter's arrows and GAP/WALL
 //   labels and the bite itself can never disagree.
-// • THE DRAIN. An infected file loses drainPerSec integrity per AI second, × burnMult while the
-//   engine delivers thrust (P1: HOLLOW eats twice as fast while you burn), × printMult while the
-//   printer has a cluster to print.
-// • CONSUME. At 0 the file turns into hollow of the same size, in place (a soul did not wake, a tool
-//   is gone with its capability), and every op on it is aborted. The Core never turns: it hits 0
+// • THE DRAIN. An infected file loses drainPerSec integrity per AI second, × the larger of burnMult while
+//   the engine delivers thrust (P1: HOLLOW eats twice as fast while you burn) and landMult while the
+//   landing is active (01-landing §5: "the larger applies").
+// • CONSUME. At 0 the file turns into hollow of the same size, in place (a pod loses its driver and stays
+//   aboard, a tool is gone with its capability), and every op on it is aborted. The Core never turns: it hits 0
 //   and the ship is lost (core-zero).
 // • THE TUG-OF-WAR. A REPAIR on an infected file keeps healing while the drain keeps subtracting:
 //   one boundary between green and red. At 100 it is cured (the repair's own completion,
@@ -64,9 +64,8 @@ import {
 //   (bites skip it). The design rule (validateHollowDef) makes a started repair always win while
 //   charge lasts; at 0 the repair is aborted and its charge is lost.
 // • WAKE. Ship 1 ('loop-closed-once'): a moment after the loop first closes, one scripted bite on
-//   the cluster next to the root (C12 · OKAFOR: "it waits until you brake"), breaking into it if it is
-//   still sealed. Once that fight is decided it goes dormant: the reveal it owes, 1.5 s of silence,
-//   `> ...047?`, and ARRIVAL CONTROL says to ignore it (advanceStory). Later ships wake afterAiSec
+//   the driver next to the root (POD 01 · OKAFOR: "it waits until you brake"). Once that fight is decided
+//   it goes dormant: 1.5 s of silence, `> ...047?`, and ARRIVAL CONTROL says to ignore it (advanceStory). Later ships wake afterAiSec
 //   into the flight (or soon after the coast begins), bite at once and then on the timer; never while a
 //   debris dodge is open, nor in the WAKE_AFTER_DODGE_SEC after it closes (KESTREL, the lead's ruling).
 // • SEEDS (ship 3+, §6.6). Every seed.everySec (the first seed.firstAfterSec after the wake, counted only
@@ -77,8 +76,8 @@ import {
 //   op reserved; DELETE clears it, and the wall is back.
 //
 // stepHollow is the whole rule, pure: it reshapes the memory array and returns what happened. The
-// mount (mountHollow) runs it on the AI tick (flight and printing; pause stops it, warp never speeds
-// it), after the ops and the printer (a print and a bite in the same tick: the print wins), and turns
+// mount (mountHollow) runs it on the AI tick (flight and landing; pause stops it, warp never speeds
+// it), after the ops and the landing (a launch and a bite in the same tick: the launch wins), and turns
 // its events into one store update, aborted ops, alerts, sounds and the ship-1 script.
 
 export type HollowSide = InfectionSide;
@@ -113,7 +112,7 @@ export type HollowEvent =
 
 export interface HollowStepCtx {
   thrustDelivered: boolean;   // the engine delivers thrust this tick (player, AUTOBURN or ghost)
-  printingActive: boolean;    // the printer has a cluster it can print right now
+  landingActive: boolean;     // the landing is active: landMult applies (drainConditions)
   aiNow: number;              // clock.aiSec
   rng: Rng;                   // seeds and verbs roll here (WP9, WP11)
   // This ship's HOLLOW (the state.hollow slice): its phase and its one bite timer are advanced in
@@ -223,15 +222,15 @@ function spreadBite(memory: readonly Segment[], aiNow: number, events: HollowEve
   }
 }
 
-// Ship 1's one bite (§6.6): the cluster next to the root, by address (C12 · OKAFOR unless it was
-// moved). Only a soul: the scripted bite is about the people. A WALL or a non-soul neighbour means
+// Ship 1's one bite (§6.6): the driver next to the root, by address (POD 01 · OKAFOR unless it was
+// moved). Only a driver: the scripted bite is about the people. A WALL or another neighbour means
 // nothing is bitten, silently (the fizzle is for the timer's bites).
 function scriptedBite(memory: readonly Segment[], aiNow: number, events: HollowEvent[]): void {
   for (const reach of hollowReach(memory, aiNow)) {
     const root = memory.find((seg) => seg.id === reach.hollowId);
     if (!root || !isHollow(root) || !root.root || reach.verdict !== 'bite') continue;
     const target = memory.find((seg) => seg.id === reach.neighbourId);
-    if (!target || target.type !== 'soul') continue;
+    if (!target || target.type !== 'driver') continue;
     const side = oppositeSide(reach.side);
     infect(target, side);
     events.push({ kind: 'infect', segId: target.id, side, scripted: true });
@@ -239,9 +238,9 @@ function scriptedBite(memory: readonly Segment[], aiNow: number, events: HollowE
   }
 }
 
-// What a cluster or a file was, as an eaten block remembers it (INSPECT: `This was C12 · OKAFOR.`).
+// What a driver or a file was, as an eaten block remembers it (INSPECT: `This was POD 01 · OKAFOR.`).
 function eatenName(seg: HealthSegment): string {
-  return seg.type === 'soul' ? `${seg.cluster} · ${seg.family.toUpperCase()}` : seg.name;
+  return seg.type === 'driver' ? driverName(seg.pod, seg.family) : seg.name;
 }
 
 // The file at `index` turns into hollow of the same size, in place (same blocks, a new id).
@@ -260,7 +259,7 @@ function consume(memory: Segment[], index: number, owner: string): HollowSegment
     ate,
     desc: HOLLOW_DESC.eaten(ate),
   };
-  if (eaten.type === 'soul') block.ateCluster = eaten.cluster;
+  if (eaten.type === 'driver') block.atePod = eaten.pod;
   memory[index] = block;
   return block;
 }
@@ -268,11 +267,11 @@ function consume(memory: Segment[], index: number, owner: string): HollowSegment
 // --- Seeds (WP9, §6.6) ------------------------------------------------------------------------------------
 
 // Where the next seed lands (the 'walls' target, §6.6): the centre of a free gap of at least WALL_MIN_BLOCKS
-// next to a soul cluster, the smallest first: the most fragile wall, the one a 2-block seed splits into GAPs
+// next to a pod's driver, the smallest first: the most fragile wall, the one a 2-block seed splits into GAPs
 // HOLLOW can bite across. Of equal gaps, one that stands between colonists and HOLLOW (a WALL the kid built)
 // comes first, then the lower address. With no such gap anywhere, the centre of the largest free region that
 // takes a seed. Space a running op reserved is never used (only open free segments count, and a gap behind a
-// reserved one does not touch the cluster). null: nowhere a seed fits. Pure.
+// reserved one does not touch the driver). null: nowhere a seed fits. Pure.
 //
 // (§6.6 says the LARGEST gap that touches a cluster. On every ship the largest is the open rack D or the
 // rack's free tail, where a 2-block seed leaves walls of 30 blocks on both sides: it could never split a wall,
@@ -308,9 +307,9 @@ export function seedSpot(memory: readonly Segment[], untried: readonly FsToolKin
     if (!isOpenFree(seg) || seg.size < SEED_BLOCKS || sparedInBite(index, seg.size)) return;
     const left = memory[index - 1];
     const right = memory[index + 1];
-    const touchesSoul = left?.type === 'soul' || right?.type === 'soul';
-    if (seg.size >= WALL_MIN_BLOCKS && touchesSoul) {
-      const guards = (left?.type === 'soul' && right?.type === 'hollow') || (left?.type === 'hollow' && right?.type === 'soul');
+    const touchesDriver = left?.type === 'driver' || right?.type === 'driver';
+    if (seg.size >= WALL_MIN_BLOCKS && touchesDriver) {
+      const guards = (left?.type === 'driver' && right?.type === 'hollow') || (left?.type === 'hollow' && right?.type === 'driver');
       walls.push({ index, size: seg.size, guards });
     }
     if (!largest || seg.size > largest.size) largest = { index, size: seg.size, guards: false };
@@ -508,12 +507,12 @@ export function seedBitesAiFile(memory: readonly Segment[], aiNow: number): bool
 // HOLLOW fights with your own tools. Every verbs.everySec of calm (systems/hollow-verbs.ts runs the clock, the
 // countdown and the counter) it picks one of two verbs, pure, here:
 // • MV: its smallest block (never the root or the last block) goes to the open free gap with the most colonists near
-//   it, exactly WALL_MIN_BLOCKS free blocks from the nearest cluster. It respects your WALLs: it never lands where it
+//   it, exactly WALL_MIN_BLOCKS free blocks from the nearest driver. It respects your WALLs: it never lands where it
 //   could bite at the next bite (the far side is a WALL too, or no food). The threat is that the next seed or your
 //   next MOVE breaks the wall it now leans on.
 // • RM: it deletes one of your files that has another working copy of the same kind (a .bak or a .cp first), else an
 //   upgrade file, else a ship backup still in reserve.
-// Fair by rule (the lead's note for WP11): never the last working copy of any kind, never the Core, a soul, Engine I/O
+// Fair by rule (the lead's note for WP11): never the last working copy of any kind, never the Core, a driver, Engine I/O
 // or Nav Plotter (nor REPAIR CHARGE, a FIREWALL, a ship file doing its job, or the root), nor a tool licensed on this
 // ship the kid has not used yet (HollowState.untriedTools, the lead's TODO for WP11); and only a verb the kid can
 // block: an RM's file takes a SCAN or a DELETE, an MV's block only a DELETE, so each needs that tool in working order.
@@ -554,7 +553,7 @@ function worksAsCopy(seg: Readonly<Segment>): boolean {
 
 // The files that never are a verb's: you, the people, the engine's driver and the plot (§6.6), and the ship's root.
 function rmProtected(seg: Readonly<Segment>): boolean {
-  return seg.type === 'core' || seg.type === 'soul' || seg.role === 'engine-io' || seg.role === 'navplot';
+  return seg.type === 'core' || seg.type === 'driver' || seg.role === 'engine-io' || seg.role === 'navplot';
 }
 
 const SPARE_NAME = /\.(bak|cp)$/i;
@@ -590,13 +589,13 @@ export function mvBlock(memory: readonly Segment[]): HollowSegment | null {
   return best;
 }
 
-// The soul blocks within VERB_MV_NEAR_BLOCKS of the blocks [addr, addr + size): MV's pull toward a spot.
-function soulBlocksNear(memory: readonly Segment[], starts: readonly number[], addr: number, size: number): number {
+// The driver blocks within VERB_MV_NEAR_BLOCKS of the blocks [addr, addr + size): MV's pull toward a spot.
+function driverBlocksNear(memory: readonly Segment[], starts: readonly number[], addr: number, size: number): number {
   const from = addr - VERB_MV_NEAR_BLOCKS;
   const to = addr + size + VERB_MV_NEAR_BLOCKS;
   let blocks = 0;
   memory.forEach((seg, index) => {
-    if (seg.type !== 'soul') return;
+    if (seg.type !== 'driver') return;
     const start = starts[index]!;
     blocks += Math.max(0, Math.min(start + seg.size, to) - Math.max(start, from));
   });
@@ -618,15 +617,15 @@ export function mvSpots(memory: readonly Segment[], block: Readonly<HollowSegmen
     if (!isOpenFree(seg)) return;
     for (const side of SIDES) {
       // `side` is where the colonists are: the block sits WALL_MIN_BLOCKS from them, the rest of the gap beyond it.
-      const soul = lifted[i + SIDE_STEP[side]];
-      if (soul?.type !== 'soul') continue;
+      const driver = lifted[i + SIDE_STEP[side]];
+      if (driver?.type !== 'driver') continue;
       const farGap = seg.size - WALL_MIN_BLOCKS - block.size;
       if (farGap < 0) continue;
       const far = lifted[i - SIDE_STEP[side]];
       if (!isWall(farGap) && far !== undefined && isInfectable(far)) continue;
       const addr = side === 'left' ? starts[i]! + WALL_MIN_BLOCKS : starts[i]! + seg.size - WALL_MIN_BLOCKS - block.size;
       if (addr === from) continue;
-      spots.push({ addr, pull: soulBlocksNear(lifted, starts, addr, block.size) });
+      spots.push({ addr, pull: driverBlocksNear(lifted, starts, addr, block.size) });
     }
   });
   spots.sort((a, b) => b.pull - a.pull || a.addr - b.addr);
@@ -681,26 +680,25 @@ export function landVerb(memory: Segment[], verb: Readonly<Verb>, untried: reado
   return true;
 }
 
-// A cluster bitten: where (HollowState.bitesAt). Bitten where it was bitten last, the count goes on; anywhere else (it
+// A driver bitten: where (HollowState.bitesAt). Bitten where it was bitten last, the count goes on; anywhere else (it
 // moved), it starts over.
-function recordBiteSpot(store: Store<GameState>, soul: Readonly<SoulSegment>): void {
-  const addr = requireAddr(store.getState().memory, soul);
+function recordBiteSpot(store: Store<GameState>, driver: Readonly<DriverSegment>): void {
+  const addr = requireAddr(store.getState().memory, driver);
   store.update((draft) => {
-    const spot = draft.hollow.bitesAt.find((candidate) => candidate.cluster === soul.cluster);
-    if (spot === undefined) draft.hollow.bitesAt.push({ cluster: soul.cluster, addr, count: 1 });
+    const spot = draft.hollow.bitesAt.find((candidate) => candidate.pod === driver.pod);
+    if (spot === undefined) draft.hollow.bitesAt.push({ pod: driver.pod, addr, count: 1 });
     else if (spot.addr === addr) spot.count++;
     else { spot.addr = addr; spot.count = 1; }
   });
 }
 
-// The clean clusters HOLLOW will bite again where it has bitten them before (the same spot, at least twice): the ones a
-// REPAIR alone keeps in the trap. In address order, like exposedClusters; a cluster already moving is on its way out.
-export function bittenAgainClusters(state: Readonly<GameState>): string[] {
-  return exposedClusters(state).filter((code) => {
-    const soul = state.memory.find((seg): seg is SoulSegment => seg.type === 'soul' && seg.cluster === code);
-    if (soul === undefined || soul.operating) return false;
-    const spot = state.hollow.bitesAt.find((candidate) => candidate.cluster === code);
-    return spot !== undefined && spot.count >= BITTEN_AGAIN_COUNT && spot.addr === requireAddr(state.memory, soul);
+// The clean drivers HOLLOW will bite again where it has bitten them before (the same spot, at least twice): the ones a
+// REPAIR alone keeps in the trap. In address order, like exposedDrivers; a driver already moving is on its way out.
+export function bittenAgainDrivers(state: Readonly<GameState>): DriverSegment[] {
+  return exposedDrivers(state).filter((driver) => {
+    if (driver.operating) return false;
+    const spot = state.hollow.bitesAt.find((candidate) => candidate.pod === driver.pod);
+    return spot !== undefined && spot.count >= BITTEN_AGAIN_COUNT && spot.addr === requireAddr(state.memory, driver);
   });
 }
 
@@ -727,10 +725,10 @@ export function rootDeleteRunning(state: Readonly<GameState>): boolean {
 // without importing this module. After a REFUSE (or the timer running out) the bite interval is
 // DEAL_REFUSE_INTERVAL_FACTOR as long until its haste ends.
 
-// While THE DEAL is offered HOLLOW holds the cluster it names in its teeth and waits for the answer: that cluster's drain
+// While THE DEAL is offered HOLLOW holds the driver it names in its teeth and waits for the answer: that driver's drain
 // stands still (WP10 review: with the drain running, the named cluster was eaten before the 15 s were up on 6 of 8
 // seeds, the strip's `C08 WILL BE EATEN IN 0:08` contradicted the offer's `0:15`, and the timeout's cost almost never
-// came). The offer's timer is then the one clock on that cluster; every other infected file keeps draining.
+// came). The offer's timer is then the one clock on that driver; every other infected file keeps draining.
 export function dealHolds(hollow: Readonly<HollowState>, seg: Readonly<Segment>): boolean {
   return hollow.deal.phase === 'offered' && hollow.deal.segId === seg.id;
 }
@@ -740,9 +738,10 @@ export function biteIntervalSec(spreadEverySec: number, hollow: Readonly<HollowS
   return hasted ? spreadEverySec * DEAL_REFUSE_INTERVAL_FACTOR : spreadEverySec;
 }
 
-// Integrity points an infected file loses per AI second right now.
-export function drainRatePerSec(cfg: HollowDef, thrustDelivered: boolean, printingActive: boolean): number {
-  return cfg.drainPerSec * (thrustDelivered ? cfg.burnMult : 1) * (printingActive ? cfg.printMult : 1);
+// Integrity points an infected file loses per AI second right now. The larger multiplier applies, never their product
+// (01-landing §5; validateHollowDef checks the heal against the same larger one).
+export function drainRatePerSec(cfg: HollowDef, thrustDelivered: boolean, landingActive: boolean): number {
+  return cfg.drainPerSec * Math.max(thrustDelivered ? cfg.burnMult : 1, landingActive ? cfg.landMult : 1);
 }
 
 // When a timed wake comes (a later ship): afterAiSec into the flight, or coastLeadSec after the coast
@@ -821,9 +820,9 @@ export function stepHollow(memory: Segment[], dtAi: number, cfg: HollowDef, ctx:
   // 2b. Seeds (ship 3+): their telegraph, then the landing. Not while THE DEAL's pause lasts ("i leave the others alone").
   if (cfg.seed !== null && hollow.phase === 'awake' && !dealPaused) stepSeeds(memory, dtAi, cfg.seed, ctx, events);
 
-  // 3. The drain, and what it eats. The Core clamps at 0 and the ship is lost; anything else turns. The cluster THE
+  // 3. The drain, and what it eats. The Core clamps at 0 and the ship is lost; anything else turns. The driver THE
   // DEAL names is held, not eaten, while the offer stands (dealHolds).
-  const rate = drainRatePerSec(cfg, ctx.thrustDelivered, ctx.printingActive);
+  const rate = drainRatePerSec(cfg, ctx.thrustDelivered, ctx.landingActive);
   for (let index = 0; index < memory.length; index++) {
     const seg = memory[index]!;
     if (!isInfected(seg) || dealHolds(hollow, seg)) continue;
@@ -841,17 +840,19 @@ export function stepHollow(memory: Segment[], dtAi: number, cfg: HollowDef, ctx:
 
 // --- What the rest of the game reads -------------------------------------------------------------
 
-// The two multipliers' conditions as the live game has them (P1 and printing).
+// The two multipliers' conditions as the live game has them (P1 and the landing).
 export interface DrainConditions {
   thrustDelivered: boolean;
-  printingActive: boolean;
+  landingActive: boolean;
 }
 
 export function drainConditions(state: Readonly<GameState>): DrainConditions {
   const flying = state.run.phase === 'flight' && state.burn.status === 'approaching' && !state.clock.paused;
   return {
     thrustDelivered: flying && (isThrustOn(state) || isGhostFiring(state)),
-    printingActive: state.run.phase === 'printing' && nextToPrint(state) !== null,
+    // TODO(slice1a-SIM): 01-landing §5's full definition adds "an in-band window is open"
+    // (landing-rules anyInBandWindowOpen(drop-cache getDropSolution())); until then a launchable pod is enough.
+    landingActive: state.run.phase === 'landing' && nextToLaunch(state) !== null,
   };
 }
 
@@ -866,23 +867,23 @@ export function healRatePerSec(state: Readonly<GameState>, seg: HealthSegment): 
 export function netLossPerSec(state: Readonly<GameState>, seg: HealthSegment): number {
   if (!seg.infected) return 0;
   const conditions = drainConditions(state);
-  const drain = dealHolds(state.hollow, seg) ? 0 : drainRatePerSec(state.hollow.cfg, conditions.thrustDelivered, conditions.printingActive);
+  const drain = dealHolds(state.hollow, seg) ? 0 : drainRatePerSec(state.hollow.cfg, conditions.thrustDelivered, conditions.landingActive);
   return drain - healRatePerSec(state, seg);
 }
 
 // The drain a countdown projects with (§2 pillar 5: countdowns never jump): the phase's worst. In
 // flight that is the burn's (burnMult), whether or not the engine fires this moment, so pressing or
 // letting go of SPACE only changes how fast the number falls (a second per second while burning,
-// slower while coasting), never the number itself. While printing it is the printer's (printMult),
-// whether or not a cluster is printable this moment. Only the lock, one discrete moment, moves it.
+// slower while coasting), never the number itself. While landing it is the landing's (landMult),
+// whether or not a window is open this moment. Only the lock, one discrete moment, moves it.
 // (The drain itself, the chew and the tug's beat follow the real rate: drainConditions.)
 export function projectedDrainPerSec(state: Readonly<GameState>): number {
-  const printing = state.run.phase === 'printing';
-  return drainRatePerSec(state.hollow.cfg, !printing, printing);
+  const landing = state.run.phase === 'landing';
+  return drainRatePerSec(state.hollow.cfg, !landing, landing);
 }
 
 // AI seconds until this infected file is eaten at the projected drain (minus a repair's heal);
-// Infinity while a repair is winning (or nothing eats it: THE DEAL holds the cluster it names). The alarm and
+// Infinity while a repair is winning (or nothing eats it: THE DEAL holds the driver it names). The alarm and
 // `WILL BE EATEN IN m:ss` read it.
 export function secondsToEaten(state: Readonly<GameState>, seg: HealthSegment): number {
   if (!seg.infected || dealHolds(state.hollow, seg)) return Infinity;
@@ -891,7 +892,7 @@ export function secondsToEaten(state: Readonly<GameState>, seg: HealthSegment): 
 }
 
 // The infected file a kid should fix first, and how soon it goes: the one losing fastest to zero
-// among those nobody is repairing (a winning tug needs nothing from the kid), and not the cluster THE DEAL holds (the
+// among those nobody is repairing (a winning tug needs nothing from the kid), and not the driver THE DEAL holds (the
 // offer is what to answer there). null: nothing is being eaten unattended.
 export interface Unattended {
   seg: HealthSegment;
@@ -908,14 +909,14 @@ export function mostUrgentUnattended(state: Readonly<GameState>): Unattended | n
   return best;
 }
 
-// The clusters whose alarm is up (`C12 WILL BE EATEN`), soonest first, with their projection.
+// The drivers whose alarm is up (`POD 01 WILL BE EATEN`), soonest first, with their projection.
 export function eatenAlarms(state: Readonly<GameState>): Unattended[] {
   const alarms: Unattended[] = [];
   for (const alert of state.alerts.list) {
     if (!alert.id.startsWith(EATEN_ALERT_PREFIX)) continue;
-    const code = alert.id.slice(EATEN_ALERT_PREFIX.length);
-    const soul = state.memory.find((seg): seg is SoulSegment => seg.type === 'soul' && seg.cluster === code);
-    if (soul) alarms.push({ seg: soul, inSec: secondsToEaten(state, soul) });
+    const pod = Number(alert.id.slice(EATEN_ALERT_PREFIX.length));
+    const driver = state.memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === pod);
+    if (driver) alarms.push({ seg: driver, inSec: secondsToEaten(state, driver) });
   }
   return alarms.sort((a, b) => a.inSec - b.inSec);
 }
@@ -944,16 +945,16 @@ export function nameHollow(store: Store<GameState>): boolean {
   return true;
 }
 
-// The clean clusters HOLLOW bites next (across a GAP, or as soon as their recoil ends), in address
-// order: the ones to MOVE behind a WALL (HALCYON's strip line). Pure.
-export function exposedClusters(state: Readonly<GameState>): string[] {
-  const codes: string[] = [];
+// The clean drivers HOLLOW bites next (across a GAP, or as soon as their recoil ends), in reach order: the ones to
+// MOVE behind a WALL (HALCYON's strip line). One per pod. Pure.
+export function exposedDrivers(state: Readonly<GameState>): DriverSegment[] {
+  const drivers: DriverSegment[] = [];
   for (const reach of hollowReach(state.memory, state.clock.aiSec)) {
     if (reach.verdict !== 'bite' && reach.verdict !== 'recoiling') continue;
     const seg = state.memory.find((candidate) => candidate.id === reach.neighbourId);
-    if (seg?.type === 'soul' && !codes.includes(seg.cluster)) codes.push(seg.cluster);
+    if (seg?.type === 'driver' && !drivers.some((driver) => driver.pod === seg.pod)) drivers.push(seg);
   }
-  return codes;
+  return drivers;
 }
 
 // --- Alerts (§6.6) ------------------------------------------------------------------------------
@@ -979,13 +980,13 @@ function syncAlerts(store: Store<GameState>): void {
   else raiseAlert(store, { id: SEED_ALERT_ID, layer: 'mind', severity: 'warn', text: seedText, inhibitsSkip: true });
   const alarmed = new Set<string>();
   for (const seg of infected) {
-    if (seg.type !== 'soul') continue;
-    const id = `${EATEN_ALERT_PREFIX}${seg.cluster}`;
+    if (seg.type !== 'driver') continue;
+    const id = `${EATEN_ALERT_PREFIX}${seg.pod}`;
     const alreadyRaised = state.alerts.list.some((alert) => alert.id === id);
     const inSec = secondsToEaten(state, seg);
     if ((alreadyRaised && inSec <= EATEN_ALARM_CLEAR_SEC) || (!alreadyRaised && inSec <= EATEN_ALARM_SEC)) {
       alarmed.add(id);
-      raiseAlert(store, { id, layer: 'mind', severity: 'alarm', text: HOLLOW_ALERT_TEXT.eaten(seg.cluster), inhibitsSkip: true });
+      raiseAlert(store, { id, layer: 'mind', severity: 'alarm', text: HOLLOW_ALERT_TEXT.eaten(fileLabel(seg)), inhibitsSkip: true });
     }
   }
   for (const alert of store.getState().alerts.list) {
@@ -998,10 +999,9 @@ function syncAlerts(store: Store<GameState>): void {
 let hollowRng: Rng | null = null;
 // The run's first seed (its telegraph) has been met: `> sorry. i'm so hungry.` is said once a run (director.done).
 export const SEED_SORRY_ID = 'hollow-seed-sorry';
-// Ship 1's script: the cluster the wake bite infected, until its fight is decided; whether the repair
+// Ship 1's script: the driver the wake bite infected, until its fight is decided; whether the repair
 // that won it was just heard on the bus; and the story after the fight (null until it is decided, and
-// again once it is told). Whether the bite broke into a sealed archive is state (hollow.revealOwed):
-// the printer's reveal and the colonists ask wait for it too.
+// again once it is told).
 let scriptTargetId: string | null = null;
 let curedTargetPending = false;
 let story: Story | null = null;
@@ -1034,45 +1034,21 @@ function endCoreLost(store: Store<GameState>): void {
   emit('core-lost', NO_PAYLOAD);
 }
 
-// No reveal is under way: a reveal's own lines (INSPECT, or the radio for the printer's) are not in
-// the log, so the story waits for it by its stage.
-function revealOver(state: Readonly<GameState>): boolean {
-  return !revealUnderway(state);
-}
-
 // Ship 1's story after the fight (§6.6, §7.2), in order, each beat with room of its own (say.ts
 // createStory: a beat waits until both screens have typed everything said before it):
-// 1. the fight's own moment comes first: SAVED or DID NOT WAKE, its sound and its echo;
-// 2. a bite that broke into a sealed archive owes the full reveal (`SEALED BLOCK BREACHED.` first). It
-//    starts HOLLOW_REVEAL_AFTER_FIGHT_SEC after the fight, and only once both screens have been quiet
-//    HOLLOW_STORY_SILENCE_SEC (HOLLOW's slow `> eat c12 ...` takes ≈ 3.3 s; the reveal used to start the
-//    moment it ended), unless the kid's scan started one. The printer's own reveal waits for it
-//    (hollow.revealOwed), so after a fight decided past the lock its find no longer lands on the echo;
-// 3. once no reveal is playing and both screens have been quiet HOLLOW_STORY_SILENCE_SEC (the radio's
-//    `Oh, you found them!` after a reveal among what has to finish first), HOLLOW types `> ...047?` (on a later
-//    run, whose ghost greeted the unit at the boot, `> you remember me. good.`);
-// 4. HOLLOW_CONTROL_AFTER_SEC after it CONTROL says to ignore it, and if anything else spoke in between,
+// 1. the fight's own moment comes first: SAVED or EATEN, its sound and its echo;
+// 2. once both screens have been quiet HOLLOW_STORY_SILENCE_SEC (HOLLOW's slow `> eat pod01 ...` takes a few
+//    seconds), HOLLOW types `> ...047?` (on a later run, whose ghost greeted the unit at the boot,
+//    `> you remember me. good.`);
+// 3. HOLLOW_CONTROL_AFTER_SEC after it CONTROL says to ignore it, and if anything else spoke in between,
 //    only after the same silence;
-// 5. once CONTROL's line has typed and been read (HOLLOW_STORY_READ_SEC) the story is told, and the
-//    printer may open the WAKE REPORT.
-// Each wait ends on its own (a reveal finishes, typing ends, a queued line is said or expires), so the
-// report is never held for good.
-function shipOneStory(owesReveal: boolean): StoryBeat[] {
-  const beats: StoryBeat[] = [];
-  if (owesReveal) {
-    beats.push({
-      afterSec: HOLLOW_REVEAL_AFTER_FIGHT_SEC,
-      silenceSec: HOLLOW_STORY_SILENCE_SEC,
-      tell: (store) => {
-        if (archiveSealed(store.getState())) revealSouls(store, 'breach');
-        store.update((draft) => { draft.hollow.revealOwed = false; });
-      },
-    });
-  }
-  beats.push(
+// 4. once CONTROL's line has typed and been read (HOLLOW_STORY_READ_SEC) the story is told, and the
+//    landing may open the LANDING REPORT.
+// Each wait ends on its own (typing ends, a queued line is said or expires), so the report is never held for good.
+function shipOneStory(): StoryBeat[] {
+  return [
     {
       silenceSec: HOLLOW_STORY_SILENCE_SEC,
-      ready: revealOver,
       // A returning unit was greeted by its ghost at the boot: HOLLOW knows it is known (§5.2).
       tell: (store) => {
         const state = store.getState();
@@ -1088,12 +1064,11 @@ function shipOneStory(owesReveal: boolean): StoryBeat[] {
       silenceSec: HOLLOW_STORY_READ_SEC,
       tell: (store) => { store.update((draft) => { draft.hollow.story = 'told'; }); },
     },
-  );
-  return beats;
+  ];
 }
 
 // HALCYON's story (§1 reveal 2, §5.1 2:50, §9 WP7 item 5): HOLLOW names itself. It starts at the wake,
-// once the bite's own slow echoes (`> infect c08   [user: ???]`, one per bitten cluster) have typed, and
+// once the bite's own slow echoes (`> infect pod04   [user: ???]`, one per bitten driver) have typed, and
 // every beat waits for both screens to be quiet (say.ts createStory), so no two story lines ever type at
 // once, whatever the kid's own repairs echo meanwhile:
 // 1. `> hello 047. they sent me with 36 blocks of charge too.` (in pink, at HOLLOW's slow speed);
@@ -1101,9 +1076,9 @@ function shipOneStory(owesReveal: boolean): StoryBeat[] {
 // 3. the moment that line has typed out, the name flips: `???` becomes UNIT-046 on every hollow block and
 //    in every `[user: …]` tag ('hollow-named');
 // 4. HOLLOW_CONTROL_AFTER_SEC later ARRIVAL CONTROL: `UNIT-046 was decommissioned. Please ignore it. :)`;
-// 5. once printing starts (the walls held, its food is leaving): `> i ran out. then i got so hungry.`, and
-//    when that has been read the story is told. The printer holds while the story is pending in printing,
-//    so its bells and echoes never land on HOLLOW's line (LEAD-1's rule, as on ship 1).
+// 5. once the landing starts (the walls held, its food is leaving): `> i ran out. then i got so hungry.`, and
+//    when that has been read the story is told. The LANDING REPORT waits while the story is pending (LEAD-1's
+//    rule, as on ship 1).
 function namesItselfStory(): StoryBeat[] {
   return [
     {
@@ -1130,7 +1105,7 @@ function namesItselfStory(): StoryBeat[] {
     },
     {
       silenceSec: HOLLOW_STORY_SILENCE_SEC,
-      ready: (state) => state.run.phase === 'printing',
+      ready: (state) => state.run.phase === 'landing',
       tell: () => { say('hollow', HOLLOW_STORY.ranOut, { critical: true }); },
     },
     {
@@ -1151,7 +1126,7 @@ function startWakeStory(store: Store<GameState>): void {
 // and its story starts (advanceStory).
 function decideScript(store: Store<GameState>): void {
   scriptTargetId = null;
-  story = createStory(shipOneStory(store.getState().hollow.revealOwed), store.getState().clock.aiSec);
+  story = createStory(shipOneStory(), store.getState().clock.aiSec);
   store.update((draft) => {
     draft.hollow.phase = 'dormant';
     draft.hollow.story = 'pending';
@@ -1161,16 +1136,6 @@ function decideScript(store: Store<GameState>): void {
 function advanceStory(store: Store<GameState>): void {
   if (story === null || store.getState().hollow.story !== 'pending') return;
   if (story.advance(store)) story = null;
-}
-
-// A bite broke into a sealed cluster (ship 1, never scanned): it opens at once so the kid can see
-// who is being eaten, and the TERMINAL says what happened (§6.6). The scripted bite's fight is always
-// decided (decideScript), so its story owes the full reveal; any other bite (a ?debug one) leaves the
-// colonists to the scan or the printer, as before.
-function breach(store: Store<GameState>, soul: SoulSegment, scripted: boolean): void {
-  if (scripted) store.update((draft) => { draft.hollow.revealOwed = true; });
-  unsealCluster(store, soul.id);
-  say('mind-sys', HOLLOW_STORY.breach(soul.cluster, soul.family), { critical: true });
 }
 
 // What the kid calls HOLLOW right now, as LineVars.hollow does: `???` until it names itself.
@@ -1197,8 +1162,8 @@ function writesCopy(operation: Op, segId: string): boolean {
 
 // Turns one tick's events into the game's reactions: ops on eaten files aborted (their own onAbort
 // settles them: a repair's spent charge is lost, a move hands its reserved space back), ONE store
-// update for the batch (memoryRev, the colonists who did not wake, the selection following an eaten
-// file), then HOLLOW's echoes, the breach, the moments on the event bus, and the ship-1 script.
+// update for the batch (memoryRev, the pods whose drivers were eaten, the selection following an eaten
+// file), then HOLLOW's echoes, the moments on the event bus, and the ship-1 script.
 function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], phaseChanged: boolean): void {
   const memory = store.getState().memory;
   if (IS_DEV) assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
@@ -1209,10 +1174,10 @@ function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], ph
   for (const { eaten } of consumed) {
     for (const operation of getOpsBySeg(eaten.id)) abortOp(operation.id);
   }
-  // A cluster is lost only when no copy of it is left: the clone a jump MOVE was writing can be eaten
+  // A pod loses its driver only when no copy of it is left: the clone a jump MOVE was writing can be eaten
   // while the source survives (the abort above put it back online).
-  const lostSouls = consumed.map(({ eaten }) => eaten).filter((eaten): eaten is SoulSegment => eaten.type === 'soul'
-    && !soulsInMemory(store.getState()).some((soul) => soul.cluster === eaten.cluster));
+  const lostDrivers = consumed.map(({ eaten }) => eaten).filter((eaten): eaten is DriverSegment => eaten.type === 'driver'
+    && !driversInMemory(store.getState()).some((driver) => driver.pod === eaten.pod));
   const structural = events.some((event) => event.kind !== 'bite' && event.kind !== 'wall-held' && event.kind !== 'firewall-held'
     && event.kind !== 'seed-telegraph');
   if (structural || phaseChanged) {
@@ -1220,8 +1185,8 @@ function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], ph
       draft.ui.memoryRev++;
       // The selection follows an eaten file to the hollow block it became.
       for (const { eaten, block } of consumed) {
-        if (eaten.type === 'soul' && lostSouls.includes(eaten)) {
-          recordClusterGone(draft, eaten, lostClusterResult(eaten, true), block.id);
+        if (eaten.type === 'driver' && lostDrivers.includes(eaten)) {
+          recordDriverLost(draft, eaten, 'eaten', block.id);
           continue;
         }
         if (draft.ui.selectedId === eaten.id) draft.ui.selectedId = block.id;
@@ -1240,23 +1205,22 @@ function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], ph
           ?? consumed.find(({ eaten }) => eaten.id === event.segId)?.eaten;
         if (!seg) throw new Error(`hollow: infected ${event.segId}, which is neither in memory nor eaten`);
         if (event.scripted) { scriptTargetId = event.segId; scriptedHit = true; }
-        if (seg.type === 'soul' && store.getState().memory.includes(seg)) recordBiteSpot(store, seg);
+        if (isDriver(seg) && store.getState().memory.includes(seg)) recordBiteSpot(store, seg);
         echoHollow(store, HOLLOW_ECHO.infect(echoName(seg), hollowUser(store.getState())));
-        if (seg.type === 'soul' && seg.sealed) breach(store, seg, event.scripted);
-        emit('hollow-infect', { segId: event.segId, side: event.side, soul: seg.type === 'soul', scripted: event.scripted });
+        emit('hollow-infect', { segId: event.segId, side: event.side, driver: isDriver(seg), scripted: event.scripted });
         break;
       }
       case 'recoil-end':
         emit('hollow-recoil-end', { segId: event.segId });
         break;
       case 'consume': {
-        // A cluster did not wake only when no copy of it is left (lostSouls); a copy that was still being
+        // A pod loses its driver only when no copy of it is left (lostDrivers); a copy that was still being
         // written (a jump MOVE's clone, a COPY) is only a copy gone, and its original lives on.
-        const soulLost = lostSouls.some((soul) => soul === event.eaten);
+        const driverLost = lostDrivers.some((driver) => driver === event.eaten);
         const user = hollowUser(store.getState());
         const target = echoName(event.eaten);
-        echoHollow(store, eatenCopies.has(event.eaten.id) ? HOLLOW_ECHO.eatCopy(target, user) : HOLLOW_ECHO.eat(target, soulLost, user));
-        emit('hollow-consume', { segId: event.block.id, ate: eatenName(event.eaten), soul: soulLost });
+        echoHollow(store, eatenCopies.has(event.eaten.id) ? HOLLOW_ECHO.eatCopy(target, user) : HOLLOW_ECHO.eat(target, driverLost, user));
+        emit('hollow-consume', { segId: event.block.id, ate: eatenName(event.eaten), driver: driverLost });
         if (event.eaten.id === scriptTargetId) decideScript(store);
         break;
       }
@@ -1286,7 +1250,7 @@ function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], ph
         break;
     }
   }
-  // Ship 1's wake found nobody to bite (the cluster next to the root was moved behind a WALL): the
+  // Ship 1's wake found nobody to bite (the driver next to the root was moved behind a WALL): the
   // fight is over before it began, and HOLLOW still notices you.
   if (phaseChanged && store.getState().hollow.cfg.wake === 'loop-closed-once' && !scriptedHit && scriptTargetId === null) {
     decideScript(store);
@@ -1313,8 +1277,8 @@ function tick(store: Store<GameState>, dtAi: number): void {
     aiNow: state.clock.aiSec,
     rng: rngFor(state),
     hollow: state.hollow,
-    // Printing means the orbit was locked or accepted: the loop is closed.
-    loopClosed: state.run.phase === 'printing' || prediction.outcome === 'closed',
+    // Landing means the orbit was locked or accepted: the loop is closed.
+    loopClosed: state.run.phase === 'landing' || prediction.outcome === 'closed',
     coastAtAi: state.burn.coastAtAi,
     owner: hollowUser(state),
     wakeHeld: state.run.phase === 'flight' && prediction.zoneHits.some((hit) => hit.kind === 'debris' && hit.correctionClears === true),
@@ -1345,7 +1309,7 @@ function sideFacingHollow(memory: readonly Segment[], seg: Segment): HollowSide 
   return side;
 }
 
-// Infects a file now, from the side facing HOLLOW (?debug `__ap.infect('C12')`, tests). On a ship
+// Infects a file now, from the side facing HOLLOW (?debug `__ap.infect('POD 01')`, tests). On a ship
 // whose HOLLOW still waits for its scripted bite, this IS that bite: it wakes, and the fight that
 // follows is the ship-1 script's.
 export function infectNow(store: Store<GameState>, seg: Segment): void {
@@ -1364,8 +1328,8 @@ export function infectNow(store: Store<GameState>, seg: Segment): void {
   syncAlerts(store);
 }
 
-// THE DEAL's ACCEPT (WP10, §6.6, systems/hollow-deal.ts): the named cluster is given up, eaten at once in place (it did
-// not wake: the same moment, echo and sound as a bite that ate it), and every file HOLLOW is eating now is let go,
+// THE DEAL's ACCEPT (WP10, §6.6, systems/hollow-deal.ts): the named driver is given up, eaten at once in place (its pod
+// stays aboard to be parked: the same moment, echo and sound as a bite that ate it), and every file HOLLOW is eating now is let go,
 // cured where it stands (no heal: what was eaten stays eaten), each with a cure's recoil and sparkles. One store update
 // for the cure, plus the consume's own.
 // The seeds wait out the pause (stepSeeds does not run during it). A seed's telegraph still blinking is called off:
@@ -1373,12 +1337,12 @@ export function infectNow(store: Store<GameState>, seg: Segment): void {
 // waits for a calm flight, HollowStepCtx.firstSeedHeld), and it comes again DEAL_SEED_CALLED_OFF_SEC of running seed
 // clock after the pause. With none blinking the seed clock stays where it stands: zeroing it (WP10 review) fired the
 // ship's first seed on the tick the pause ended, whatever the flight was doing, skipping WP9's calm-flight wait.
-export function acceptDeal(store: Store<GameState>, soul: SoulSegment): void {
+export function acceptDeal(store: Store<GameState>, driver: DriverSegment): void {
   const state = store.getState();
-  const index = state.memory.indexOf(soul);
-  if (index < 0) throw new Error(`acceptDeal: ${soul.cluster} is not in memory`);
+  const index = state.memory.indexOf(driver);
+  if (index < 0) throw new Error(`acceptDeal: pod ${driver.pod}'s driver is not in memory`);
   const block = consume(state.memory, index, hollowUser(state));
-  applyEvents(store, [{ kind: 'consume', eaten: soul, block }], false);
+  applyEvents(store, [{ kind: 'consume', eaten: driver, block }], false);
   const cured = infectedSegments(store.getState());
   store.update((draft) => {
     for (const seg of cured) cureInfection(seg, draft.clock.aiSec);
@@ -1394,7 +1358,7 @@ export function acceptDeal(store: Store<GameState>, soul: SoulSegment): void {
 }
 
 // Heals an infected file to 100 at once and cures it, exactly as a winning repair would (recoil,
-// sparkles, the ship-1 script): ?debug `__ap.cure('C12')`.
+// sparkles, the ship-1 script): ?debug `__ap.cure('POD 01')`.
 export function cureNow(store: Store<GameState>, seg: Segment): void {
   if (!isInfected(seg)) throw new Error(`cureNow: ${seg.name} is not infected`);
   store.update((draft) => {
@@ -1407,13 +1371,13 @@ export function cureNow(store: Store<GameState>, seg: Segment): void {
 
 let mounted = false;
 
-// Mount after the ops core and the printer (their AI ticks run first: a repair heals before the
-// drain, a print beats a bite in the same tick).
+// Mount after the ops core and the landing (their AI ticks run first: a repair heals before the
+// drain, a launch beats a bite in the same tick).
 export function mountHollow(store: Store<GameState>): () => void {
   if (mounted) throw new Error('mountHollow: already mounted');
   mounted = true;
   const offTick = onAiTick((dtAi) => tick(store, dtAi));
-  // A ship that is over (crashed, escaped, stranded, its Core eaten, printed) has nothing left for
+  // A ship that is over (crashed, escaped, stranded, its Core eaten, landed) has nothing left for
   // HOLLOW to eat: its alerts go. Every tick, also while paused (a lost ship is paused, and the AI
   // tick no longer runs there).
   const offOver = onPostTick(() => { if (!isLivePhase(store.getState())) clearHollowAlerts(store); });

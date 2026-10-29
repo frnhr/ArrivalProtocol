@@ -80,7 +80,7 @@ const resolveTarget = (line) => st(({ text, verbs }) => {
     // HOLLOW's blocks are never a target but for its root and its seeds.
     if (seg.type === 'free' || (seg.type === 'hollow' && !seg.root && !seg.seed)) continue;
     const names = [seg.name.toUpperCase(), seg.name.split(' · ')[0].toUpperCase()];
-    if (seg.type === 'soul') names.push(seg.cluster);
+    if (seg.type === 'driver') names.push(seg.cluster);
     if (seg.type === 'core') names.push('THE CORE');
     if (seg.type === 'hollow' && seg.root) names.push('THE ROOT', 'ROOT');
     if (seg.type === 'hollow' && seg.seed) names.push('SEED', 'ITS SEED');
@@ -298,7 +298,7 @@ for (const [index, name] of SHIPS.entries()) {
   while (Date.now() - printStart < SCREEN_MAX_MS && !['report', 'transmit', 'end'].includes(printView.phase)) {
     if (printView.lostCard) { await tap(page.locator('#burnResultRetry')); }
     else if (printView.choice) { await tap(page.locator('#fcPurge')); }
-    else if (printView.phase === 'printing' || printView.phase === 'flight') {
+    else if (printView.phase === 'landing' || printView.phase === 'flight') {
       if (await mindAct(printView)) { /* the MIND's line first: a bite eats a cluster before it prints */ }
       else if (/PRINT FAST ▸▸ to hurry/.test(printView.line)) {
         // The button is the MIND's mini-HUD's: [TAB] in, then click it.

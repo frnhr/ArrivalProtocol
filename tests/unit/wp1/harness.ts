@@ -5,10 +5,10 @@
 // between scenarios (the in-app reset path: fresh slices + resetWorld()).
 import { createStore, type Store } from '@state/store';
 import type { GameState, Pace } from '@state/schema';
-import { createInitialState, openArchive } from '@state/initial';
+import { createInitialState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
 import { getShip } from '@data/ships';
-import { SOUL_RULES } from '@data/script';
+import { DRIVER_RULES } from '@data/script';
 import { advance } from '@systems/clock';
 import { mountOrbitSim } from '@systems/orbit-sim';
 import { mountPredictor, getPrediction, secUntil, type Prediction } from '@systems/predict';
@@ -90,8 +90,7 @@ export function harnessState(seed: number, soulsFound: boolean): GameState {
     controller.state = integrityState(100);
   }
   if (soulsFound) {
-    openArchive(state);
-    state.director.done.push(...SOUL_RULES.map((rule) => rule.id));
+    state.director.done.push(...DRIVER_RULES.map((rule) => rule.id));
   }
   return state;
 }

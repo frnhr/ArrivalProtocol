@@ -17,12 +17,12 @@ import { isHollowAlert, GHOST_WARN_ID, GHOST_ALARM_ID } from '@systems/alerts';
 import { choiceSecondsLeft, choiceTimerRunning } from '@systems/say';
 import { GHOST_TEXT } from '@data/ghost-text';
 import { ghostCountShown, ghostDriftKm } from '@systems/ghost-thrust';
-import { colonistsAskToggle } from '@data/script';
 import { ZONE_WORD, ZONE_PLOT_TEXT, RACK_TAG_TEXT } from '@data/zone-text';
 import { AUTO_BUTTON_TEXT, AUTO_BUTTON_REASON } from '@data/skill-text';
 import { autoburnSkill, autoburnRefusal, autoburnArmedInTac, skillFiles } from '@systems/autoburn';
 import { zoneVerdict, zoneRacks, racksText, debrisRack, type Zone, type ZoneHit, type ZoneVerdict } from '@/types/zone';
 import { mindZonesBlind } from '@systems/zones';
+import { LANDING_HUD_TEXT, LANDING_REPORT_TEXT, BAND_TEXT } from '@data/landing-text';
 import {
   COUNTDOWN_RED_TAC, LOCK_HOLD_AI_SEC, PLOT_SHIP_MARGIN, PLOT_RING_FACTOR, PLOT_FLYBY_TAG_FRAC,
   STRANDED_RANGE_FRAC, TACTICAL_LEAD_BURN_TAC, UPCOMING_EVENTS_MAX, UPCOMING_HORIZON_TAC,
@@ -205,10 +205,14 @@ export function headerCrumbs(state: Readonly<GameState>, pred: Prediction): Head
   const crumbs = (phase: Label): HeaderCrumbs => ({ unit, wave, ship, phase });
   if (state.run.phase === 'title') return crumbs({ text: 'STANDBY', tone: 'plain' });
   if (state.run.phase === 'boot') return crumbs({ text: 'RECEIVING', tone: 'plain' });
-  // §7.1: … ORBIT LOCKED | PRINTING. The outcome stays on the crumb until the first cluster
-  // prints (the moment belongs to the lock), then the crumb says what is happening now.
-  if (state.run.phase === 'printing' && state.souls.results.length > 0) return crumbs({ text: 'PRINTING', tone: 'good' });
-  if (state.run.phase === 'report') return crumbs({ text: 'WAKE REPORT', tone: 'good' });
+  // 01-landing §4: … ORBIT LOCKED | LANDING · 2/6 DOWN. The outcome stays on the crumb until the first pod is down
+  // (the moment belongs to the lock), then the crumb says what is happening now.
+  // TODO(slice1a-UI): `ALL DOWN`, and the countdown chip's next window.
+  if (state.run.phase === 'landing') {
+    const down = state.landing.pods.filter((record) => record.fate.kind === 'down').length;
+    if (down > 0) return crumbs({ text: LANDING_HUD_TEXT.crumbLanding(down, state.landing.pods.length), tone: 'good' });
+  }
+  if (state.run.phase === 'report') return crumbs({ text: LANDING_REPORT_TEXT.title, tone: 'good' });
   return crumbs(flightPhaseCrumb(state, pred));
 }
 
@@ -293,9 +297,8 @@ const PACE_NAME: Record<Pace, string> = { tactical: 'TACTICAL', cruise: 'CRUISE'
 // override show the live, gliding multiplier, because there the speed itself is the news.
 export function paceLabel(state: Readonly<GameState>): string {
   const { clock, level } = state;
-  // While printing the world still coasts at TACTICAL (the plot moves); otherwise a finished ship
-  // has stopped.
-  if (state.burn.status !== 'approaching' && state.run.phase !== 'printing') return 'STOPPED';
+  // While landing the world still coasts (the plot moves); otherwise a finished ship has stopped.
+  if (state.burn.status !== 'approaching' && state.run.phase !== 'landing') return 'STOPPED';
   if (clock.paused) return 'PAUSED';
   if (clock.debugWarp !== null) return `DEBUG ${formatWarp(clock.speed)}`;
   if (clock.overclock) return `OVERCLOCK ${overclockBadge()}`;
@@ -617,7 +620,7 @@ export interface RackZoneTag {
 }
 
 export function rackZoneTags(state: Readonly<GameState>, pred: Prediction, plot: PlotCaps = capabilitiesNow(state).plot): RackZoneTag[] {
-  if (state.run.phase !== 'flight' && state.run.phase !== 'printing') return [];
+  if (state.run.phase !== 'flight' && state.run.phase !== 'landing') return [];
   const blind = mindZonesBlind(plot);
   const tags: RackZoneTag[] = [];
   for (const zone of state.level.zones) {
@@ -787,7 +790,7 @@ export function acceptLabel(model: AcceptModel, armed: boolean): string {
   const outcome = model.strands ? ' · STRANDED' : '';
   return armed
     ? `CLICK AGAIN TO ACCEPT · ${model.rangePct}%${outcome}`
-    : `ACCEPT · PRINTER RANGE ${model.rangePct}%${outcome}`;
+    : `${BAND_TEXT.accept(model.rangePct)}${outcome}`;
 }
 
 // --- The ship's files on screen (WP4) ---------------------------------------------------------
@@ -916,9 +919,9 @@ const MIND_ALERT_ROLES: readonly CapabilityRole[] = ['engine-io', 'core', 'navpl
 
 export function toggleAlert(state: Readonly<GameState>, pred: Prediction): ToggleAlert | null {
   const flying = state.run.phase === 'flight' && state.burn.status === 'approaching';
-  // While printing the ship has nothing to say, but the mind can (WP6: HOLLOW eating C12 after the
-  // lock): its alerts still point the way from amber.
-  if (!flying && state.run.phase !== 'printing') return null;
+  // While landing the mind can still call (WP6: HOLLOW eating a driver after the lock): its alerts still point the way
+  // from amber. TODO(slice1a-UI): `◀ SHIP · LZ-A OPEN` from blue during a window.
+  if (!flying && state.run.phase !== 'landing') return null;
   if (state.run.coreLost) return null;
   if (state.ui.mode === 'tools') {
     const mindAlerts = state.alerts.list.filter((alert) => alert.layer === 'mind' && alert.severity !== 'info');
@@ -932,8 +935,7 @@ export function toggleAlert(state: Readonly<GameState>, pred: Prediction): Toggl
         return { screen: 'memory', head: 'MIND ▸', body: fileReading(state, role), severity: 'warn', hollow: false };
       }
     }
-    const ask = colonistsAskToggle(state);
-    return ask === null ? null : { screen: 'memory', head: 'MIND ▸', body: ask, severity: 'warn', hollow: false };
+    return null;
   }
   if (!flying) return null;
   // WP10: the engine firing by itself for the first time, when it is the ship's only alarm (an IMPACT's countdown

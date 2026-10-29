@@ -6,11 +6,12 @@ import { registerKeys } from '@systems/input';
 import { getPrediction } from '@systems/predict';
 import { isThrustOn, engineAccel, thrustJitter } from '@systems/orbit-sim';
 import {
-  CHIME_AFTER_TRANSMIT_SEC, FAULT_COUGH_AFTER_SEC, REVEAL_CRACK_STAGGER_SEC, HEARTBEATS_AFTER_REVEAL, HEARTBEAT_GAP_SEC,
-  HEARTBEAT_BED_SEC, HEARTBEAT_BED_HURT_SEC, HEARTBEAT_BED_STRENGTH, SOUL_WAKE_INTACT_MIN, HEARTBEAT_BED_INFECTED_SEC,
-  HEARTBEAT_BED_JITTER, REVEAL_LINE_AT_SEC, ARRIVAL_HIT_STAGGER_SEC, BEAM_OUT_SWEEP_SEC,
+  CHIME_AFTER_TRANSMIT_SEC, FAULT_COUGH_AFTER_SEC,
+  HEARTBEAT_BED_SEC, HEARTBEAT_BED_HURT_SEC, HEARTBEAT_BED_STRENGTH, HEARTBEAT_BED_INFECTED_SEC,
+  HEARTBEAT_BED_JITTER, ARRIVAL_HIT_STAGGER_SEC, BEAM_OUT_SWEEP_SEC,
 } from '@data/tuning';
-import { soulsInMemory, verbSecondsLeft } from '@state/selectors';
+import { driversInMemory, verbSecondsLeft } from '@state/selectors';
+import { driverTouch } from '@systems/landing-rules';
 import { play, setEngineLevel, setLockTone, setChewLevel, setTugTone, setDuelTone, toggleMuted, type WhoompShape } from '@systems/audio';
 import { rootDeleteProgress } from '@systems/hollow';
 import { chewLevel, tugTone } from '@systems/hollow-hud';
@@ -24,8 +25,9 @@ import {
   CHOICE_URGENT_SEC, BELT_STATIC_GAP_EDGE_SEC, BELT_STATIC_GAP_PEAK_SEC, BELT_STATIC_GAP_JITTER,
 } from '@data/tuning';
 
-// The reveal's last line (the truth: `They're in here.`) has its own ping, the floor dropping away.
-const REVEAL_TRUTH_STEP = REVEAL_LINE_AT_SEC.length - 1;
+// The phase-2 reveal's truth ping (its third step: the floor dropping away), kept for HOLLOW naming itself. The reveal
+// itself is gone (01-landing §6), so the step is named here rather than counted from its lines.
+const REVEAL_TRUTH_STEP = 2;
 
 // What the game sounds like (§7.2): the one table from game events and state to cues. Every
 // cue a moment plays is chosen here, so a moment never plays twice from two places. Stamps
@@ -147,30 +149,14 @@ export function mountAudioCues(store: Store<GameState>): () => void {
       if (role === 'engine-io') play('engineCough', undefined, { delaySec: FAULT_COUGH_AFTER_SEC });
     }),
     on('plot-mode', ({ to }) => { if (to === 'exact') play('lineWhoomp', { shape: 'clear' }); }),
-    // WP5: the reveal builds line by line, the slabs open under the choir, and the colonists' hearts
-    // are heard once they are found. The ripple of cracks goes with the picture: at once when the
-    // kid is looking, else on their first look at the mind. A lost ship's LOST card plays its own
-    // choir (BurnResult), so the 'lost' crack is silent here (it has no picture: 'crack-shown'
-    // never comes).
-    on('reveal-line', ({ index }) => play('revealPing', { step: index })),
-    on('souls-unsealed', ({ codes, cause }) => {
-      if (cause !== 'lost' && codes.length > 1) play('revealChoir');
-    }),
-    on('crack-shown', ({ count }) => {
-      for (let i = 0; i < count; i++) play('soulCrack', undefined, { delaySec: i * REVEAL_CRACK_STAGGER_SEC });
-    }),
-    on('reveal-done', ({ cause }) => {
-      if (cause === 'lost') return;
-      HEARTBEATS_AFTER_REVEAL.forEach((strength, i) => play('heartbeat', { strength }, { delaySec: i * HEARTBEAT_GAP_SEC }));
-      // The bed picks the rhythm up after the reveal's own three beats.
-      nextBeatIn = HEARTBEATS_AFTER_REVEAL.length * HEARTBEAT_GAP_SEC;
-    }),
-    on('cluster-printed', ({ outcome }) => { if (outcome !== 'lost') play('printBell', { gaps: outcome === 'gaps' }); }),
+    // 01-landing §4: touchdown is printBell. TODO(slice1a-UI): pitched per LZ, dull when hard, sour when mislanded, a low
+    // bonk off-site; podLaunch, podEntry and the window tone.
+    on('pod-landed', ({ touch, place }) => { if (place !== 'no-go') play('printBell', { gaps: touch === 'hard' }); }),
     // WP6: HOLLOW's moments, once per tick each (a bite on two files is one bite).
     on('hollow-infect', () => onceThisTick('hollowBite')),
     on('hollow-wall', () => onceThisTick('fizzle')),
     on('hollow-firewall', () => onceThisTick('fizzle')),
-    on('hollow-consume', ({ soul }) => onceThisTick(soul ? 'soulLost' : 'hollowBite')),
+    on('hollow-consume', ({ driver }) => onceThisTick(driver ? 'soulLost' : 'hollowBite')),
     on('hollow-cure', () => onceThisTick('clusterSaved')),
     // WP7: HOLLOW names itself (HALCYON, `> i was 046.`): the second turn of the story gets the first one's
     // truth note, the floor dropping away under one high glass note, with HOLLOW's own blips stepping down
@@ -293,20 +279,20 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     nextChirpIn -= dtAi;
   }));
 
-  // The heartbeat bed, on AI time like the chirps: only in blue (the soul racks in view), only once
-  // the colonists are found and while some are still in memory. Scheduled ahead inside the tick so
-  // the beat stays even.
+  // The heartbeat bed, on AI time like the chirps: only in blue (the drivers in view, the pods' stasis monitors), while
+  // some drivers are still in memory. Scheduled ahead inside the tick so the beat stays even.
   offs.push(onPostTick((_dtWall, dtAi) => {
     const state = store.getState();
-    const souls = state.ui.mode === 'memory' && state.souls.reveal.stage === 'revealed' ? soulsInMemory(state) : [];
+    const drivers = state.ui.mode === 'memory' ? driversInMemory(state) : [];
     // Off (amber, paused, nobody left): coming back starts a beat later, not on top of the jack-in.
-    if (dtAi <= 0 || souls.length === 0) {
+    if (dtAi <= 0 || drivers.length === 0) {
       nextBeatIn = Math.max(nextBeatIn, HEARTBEAT_BED_SEC);
       return;
     }
-    // Near infection the hearts race and stumble (§7.2): quicker, and each gap a little off.
-    const infected = souls.some((soul) => soul.infected !== undefined);
-    const hurt = souls.some((soul) => soul.integrity < SOUL_WAKE_INTACT_MIN);
+    // Near infection the hearts race and stumble (§7.2): quicker, and each gap a little off. A driver that would land
+    // hard quickens them.
+    const infected = drivers.some((driver) => driver.infected !== undefined);
+    const hurt = drivers.some((driver) => driverTouch(driver.integrity) === 'hard');
     const period = infected ? HEARTBEAT_BED_INFECTED_SEC : hurt ? HEARTBEAT_BED_HURT_SEC : HEARTBEAT_BED_SEC;
     while (nextBeatIn < dtAi) {
       play('heartbeat', { strength: HEARTBEAT_BED_STRENGTH }, { delaySec: nextBeatIn });
@@ -355,7 +341,7 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     setChewLevel(chewLevel(state));
     setTugTone(tugTone(state));
     // WP11 part 2: the duel's drone follows the root's DELETE (silent while paused: the op stands still then).
-    setDuelTone(state.run.phase === 'printing' && !state.clock.paused ? rootDeleteProgress(state) : null);
+    setDuelTone(state.run.phase === 'landing' && !state.clock.paused ? rootDeleteProgress(state) : null);
   }));
 
   // M mutes for the session (§7.2).

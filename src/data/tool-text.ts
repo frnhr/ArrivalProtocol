@@ -1,5 +1,6 @@
 import type { Segment, SegmentRole } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
+import { podTag, DRIVER_TOOL_TEXT } from '@data/landing-text';
 
 // The words the filesystem tools say (WP3): why a click did nothing (shown next to the cursor),
 // the inline confirm's questions, and the TERMINAL's line when a repair runs out of charge.
@@ -34,17 +35,15 @@ export const TOOL_REFUSAL = {
   noBackup: 'NO BACKUP TO SWAP TO',
   // WP10: SWAP hands a SHIP file's job to its backup; the unit's own files are healed (REPAIR) or copied (COPY).
   swapShipOnly: 'SWAP IS FOR SHIP FILES WITH A BACKUP',
-  // The colonists (§6.5). A sealed slab can't be touched until the reveal; an open cluster needs no
-  // scan (always visible) and is never copied or deleted. The last two are §6.5's own sentences:
-  // people, not files, so not shouted.
-  sealed: 'SEALED — NO ACCESS',
   // HOLLOW (§6.5, §6.6): a file being eaten can't be moved or copied until it is healed, and a block
   // it already ate is no file any more.
   infected: 'STILL INFECTED — REPAIR FIRST',
   eaten: 'THIS FILE WAS EATEN — ONLY DELETE WORKS',
-  soulScan: 'NO SCAN NEEDED — YOU CAN SEE THEM',
-  soulDelete: "You can't delete people.",
-  soulCopy: "Souls can't be copied.",
+  // A pod's driver (01-landing §3.8): always visible, so no scan, and never copied or deleted, so a mistake never costs
+  // a pod. The last two are the spec's own sentences, not shouted.
+  driverScan: DRIVER_TOOL_TEXT.scan,
+  driverDelete: DRIVER_TOOL_TEXT.delete,
+  driverCopy: DRIVER_TOOL_TEXT.copy,
   // The cards' files (WP8): a FIREWALL has no health to scan or heal (nothing can hurt it), and a card is
   // licensed to one unit (a COPY would deal it twice).
   firewallHealth: "NOTHING TO HEAL — NOTHING CAN HURT IT",
@@ -104,7 +103,7 @@ export const DELETE_EFFECT: Readonly<Record<SegmentRole, string>> = {
   navplot: 'The NAV PLOT goes dark.',
   telemetry: 'The numbers scramble.',
   comms: 'No BEAM OUT; a crash ends the run.',
-  printer: 'Nobody can be printed.',
+  bay: 'No effect yet.',
   core: "You can't delete yourself.",
   stasis: NO_FLIGHT_EFFECT,
   life: NO_FLIGHT_EFFECT,
@@ -128,15 +127,15 @@ export const OP_LINES = {
 
 // --- The TERMINAL's command echoes (§9 WP6 item 11) ------------------------------------------------
 // Every op the kid runs is echoed in the TERMINAL as a shell line once it ends, in the shape of the
-// print's echo (`> print c04 ... 200 WOKE`): the verb, the file, what came of it. A repair says what
+// launch's echo (`> launch pod03 ... LZ-A`): the verb, the file, what came of it. A repair says what
 // it cost, so the kid sees where REPAIR CHARGE went. A repair that runs out of charge says so with
 // OP_LINES.noCharge instead (one line per op).
 
 // The name a file goes by in an echo: lowercase, words joined by `_`, nothing but letters, digits,
-// `.` and `_` (`engine_io`, `repair.bak`, `thrust_controller`); a cluster by its code (`c12`); a block
+// `.` and `_` (`engine_io`, `repair.bak`, `thrust_controller`); a driver by its pod (`pod03`); a block
 // HOLLOW owns by its owner's name (`???`, later `unit-046`).
 export function echoName(seg: Segment): string {
-  if (seg.type === 'soul') return seg.cluster.toLowerCase();
+  if (seg.type === 'driver') return podTag(seg.pod);
   if (seg.type === 'hollow') return seg.owner.toLowerCase();
   return echoWord(seg.name);
 }

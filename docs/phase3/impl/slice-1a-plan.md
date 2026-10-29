@@ -619,3 +619,37 @@ New constants, each with a WHY taken from the spec: `BAY_SLOTS` 4, `BAY_RELOAD_T
 17. **Driver chip width.** `POD 03` is twice as long as `C12` on narrow chips and on the phone. UI decides between `P03` and `POD 03` per available width; phone.mjs's whole-word check covers it.
 18. **Angles and travel direction.** LZ labels assume CCW travel. landing-solve must handle `h < 0` (a strong RETRO at a far ▲ can reverse it); add a test.
 19. **Drop-solve cost.** 360 samples with bisection per orbit epoch. The orbit drifts slightly while sub-stepping at CRUISE, so key on the epoch plus elements rounded to about 1 km and 1e-5 in e; never recompute every tick.
+
+---
+
+## Deviations (Foundation, F1 + F2)
+
+What the foundation built differently from §1–§4, and why. Everything else follows the plan as written.
+
+**Math and rules (F1)**
+- **Pod kick in closed form, not bisection.** `podKickState` solves the RETRO kick that puts periapsis at `0.6 R` exactly (`k² = 2μ(1/r − 1/q) / (v² − h²/q²)`); the impact point is the inbound root of the pod's conic. Exact, branch-free and about 100× cheaper than bisecting, so the 360-sample dot track costs well under the 5 ms budget. Retrograde orbits are solved by mirroring (y → −y).
+- **`windowsFor(track, tauNow, lzs, factors, ring)`** takes one `DropFactors` for the whole orbit instead of a `factorsAt(t)` callback, and reads `R` from the track. In 1a the factors are constant (all 1); 1b can widen the signature when sensors start to vary along the orbit.
+- **`validateLandingDef(id, def, pods, planetR)`** has a 4th parameter: the LZ widths are in km, and the ≥ 12° gap rule needs the half-angles, which need the planet's radius.
+- **Extra fields:** `LaunchRecord.aimLz` (the LZ the launch was aimed at, for the report's near-miss line), `PodRecord.restored` (MERGE gave the driver back; the report's `RESTORED BY MERGE`), `LandingState.colonyFirstRun` (the def's run-1 colony name, copied so the slice needs no ShipDef lookup) and `LandingState.noDriverAiSec` (the risk-7 auto-end's timer, for SIM).
+- **`landingResult` resolves falling pods** through `pendingTouchdowns(state)` instead of throwing, so a ship whose Core is eaten mid-descent still scores its pods where they were going to land.
+- **`landingView` lives in landing-rules** as the pure `landingView(state, solution, cadenceTac)`; landing.ts's `landingView(state)` is the live wrapper (drop cache + capabilities). Controllers and tests can build a view without the store.
+- **`podCode` / `podTag` / `driverName` live in data/landing-text.ts** (not data/memory.ts), so the strip, the echoes and the report share one spelling without pulling memory.ts into the pure modules.
+- **`computeDropSolution` on an open path** (e ≥ 1) returns an empty solution (no dot, no windows) instead of throwing in dev: a dev hook can end the flight on the approach, and 1b's burns can open the orbit while landing. The drop cache skips the dot track then.
+- **drop-cache's `getDropSolution()` returns `null` outside LANDING** (not a stale solution), so a caller can't read flight-time windows.
+
+**State and wiring (F2)**
+- **`createLandingState(def, memory, { finalShip, lead, hurt, planetR })`**: the plan's sketch passed the ShipDef; this takes only what the slice needs, so generator-made ships (§1.7) need nothing new. Run 1's written colony name is applied at naming time from `colonyFirstRun` + `run.tutorial`.
+- **orbit-sim's `printsColonists` became `startsLanding`**, not `endsInOrbit`: STRANDED ends in orbit but never lands. `endsInOrbit(outcome)` exists in landing-rules for the report's parked-versus-not-launched fold.
+- **`requestLaunch` is complete in the skeleton** (refusals, guards and the launch itself): forceLandAll goes through the same `launchDriver`/`touchDown`, so the report path is real. Left to SIM: the bay's game tick, window-edge events and beeps, the controller hook, `pod-entry`, the first touchdown's radio line, the risk-7 auto-end (all marked `TODO(slice1a-SIM)` in landing.ts).
+- **`setLoadNext` and `endLanding` return `string | null`** (the refusal, after emitting `refused`), like the tool actions, so the DetailPanel and the POD BAY window can show why.
+- **Boot:** the `archive` boot line is gone with the archive; the REPAIR licence it used to issue now comes on the `host` line (`bootLicensesRepair`, replacing `bootOpensArchive`).
+- **`DRIVER_RULES`** (the hurt-driver lesson: `tut-hurt-driver-tab`, `tut-hurt-driver`, `tut-hurt-driver-known`) replace `SOUL_RULES` already in F2, because the hurt POD 02 at 44% needs its REPAIR lesson for the boot flow to stay playable; SIM owns the words.
+- **`exposedDrivers` / `bittenAgainDrivers` return `DriverSegment[]`**, not codes.
+- **`podHintTarget(label)`** gives `driver-pod02` (from the strip's `POD 02`).
+- **Placeholders beyond the plan's list**, each marked: the MiniHud's print row shows `LANDING · n/N DOWN` and `★ ON TARGET n/N` (`TODO(slice1a-UI)`); the LOST card's souls line is a pods line (`LOST_CARD_TEXT.pods`, `TODO(slice1a-UI)`); the LANDING REPORT placeholder (components/run/LandingReport.ts) borrows the WAKE REPORT's DOM; driver chips keep the old `soul*` CSS classes next to `driver`; audio maps `pod-landed` to `printBell`.
+- **Text switched in F2** because it was wrong on screen: the NAV PLOT ring label (`SAFE ORBIT · LAUNCH BAND`; the landing-only `LAUNCH BAND` is UI's), `ACCEPT · IN BAND n%`, the LOST card's RESULT_SUB lines, HOLLOW_FINALE `stripWaits` / `stripWaitsNobody`.
+- **`__ap` extras:** `loadNext(pod)` and `onTarget()` besides the plan's `pods`, `landing`, `launch(intent)`, `landAll`, `endLanding`, `landingReport`. `hollowDemo()` rebuilds the landing slice with its 10 pods in one LZ.
+
+**Tests (F2)**
+- Besides the five deleted suites and the harness renames (wp1, wp2, wp5, wp6, wp11 harnesses and wp12/playthrough.ts typecheck for real), **46 suites that still read phase-2 APIs** (cluster codes, `souls.results`, `printer`, the reveal) carry a first-line `// @ts-nocheck: TODO(slice1a-TESTS)` so `tsc -p tests/tsconfig.json` stays green until Track TESTS rewrites them per §5. Remove the pragma as each one is moved over: `grep -rl "@ts-nocheck: TODO(slice1a-TESTS)" tests`.
+- `tests/unit/landing/pod-code.ts` maps the old codes onto pods (`C09` → pod 9), so the harnesses' `soul('C09')` lookups keep working.

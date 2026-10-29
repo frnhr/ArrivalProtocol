@@ -88,7 +88,7 @@ export function mountMiniStrip(store: Store<GameState>): () => void {
 
   build();
   const unsub = store.subscribe(
-    (s) => `${s.ui.memoryRev}|${s.ui.mode}|${s.souls.reveal.stage}|${s.hollow.phase}`,
+    (s) => `${s.ui.memoryRev}|${s.ui.mode}|${s.hollow.phase}`,
     () => { if (inAmber()) build(); },
   );
   let sincePaint = 0;

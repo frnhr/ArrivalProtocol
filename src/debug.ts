@@ -1,13 +1,16 @@
 import type { Store } from '@state/store';
-import type { GameState, Speaker, ObjectiveLine, LogEntry, ViewMode, RevealCause, TerminalStatus, EndingLine } from '@state/schema';
+import type { GameState, Speaker, ObjectiveLine, LogEntry, ViewMode, TerminalStatus, EndingLine } from '@state/schema';
 import { getPrediction, getSensedPrediction, type Prediction } from '@systems/predict';
 import { capabilitiesNow, CAPABILITY_ROLES, type Capabilities } from '@systems/capabilities';
 import { installTool } from '@systems/licences';
-import { getByRole, hasIntegrity, soulsInMemory } from '@state/selectors';
-import { revealSouls, lostCardSouls } from '@systems/reveal';
-import { printStatus, setPrintFast, setPrintNext, printCluster, printerRange } from '@systems/printer';
-import { wakeReportModel, type WakeReportModel } from '@systems/wake-report';
-import { intactTally, type IntactTally } from '@systems/stars';
+import { getByRole, hasIntegrity, driversInMemory, colonistCounts, type ColonistCounts } from '@state/selectors';
+import { requestLaunch, forceLandAll, endLanding, setLoadNext } from '@systems/landing';
+import { getDropSolution } from '@systems/drop-cache';
+import { landingResult, onTargetTally } from '@systems/landing-rules';
+import { shipStars, type ShipStar } from '@systems/stars';
+import type { LaunchIntent, LaunchResult, LandingTally, OnTargetTally, DropSolution, LzDef } from '@/types/landing';
+import { createLandingState } from '@state/initial';
+import { shipOutcomeOf } from '@systems/run';
 import { endFlight } from '@systems/orbit-sim';
 import { setIntegrity } from '@state/actions';
 import type { SegmentRole } from '@/types/segment';
@@ -39,10 +42,11 @@ import { biteClock, reachMarks, miniStripRows, chewLevel, tugTone, amberBite } f
 import { transmitModel, toggleDrop, type TransmitModel, type DropRefusal } from '@systems/transmit';
 import { runEndModel, type RunEndModel } from '@systems/run-end';
 import { beamOutView, type BeamOutView } from '@systems/beam-out';
-import { buildShipMemory, clusterCode } from '@data/memory';
+import { buildShipMemory } from '@data/memory';
+import { podCode } from '@data/landing-text';
 import { getShip, type ShipDef, type HollowDef } from '@data/ships';
 import { childRng } from '@systems/rng';
-import { createHollowState, openArchive } from '@state/initial';
+import { createHollowState } from '@state/initial';
 import { getOps, threadsBusy, threadsTotal, cancelOp, abortAll } from '@systems/ops-core';
 import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
@@ -123,22 +127,20 @@ interface DebugHooks {
   // WP4 part 2: the files on screen, as data (window pips, THRUST LIMIT, REACTOR, the toggle's
   // alert, the MIND chip) and the director's line with its highlight.
   files: () => Record<string, unknown>;
-  // WP5: the Soul Archive. revealSouls starts the STASIS reveal (default cause 'debug': the scan's
-  // sequence); souls lists the clusters in memory; printer is the printer's state and pace;
-  // endFlight ends the flight as `status` where the ship is (locked / accepted start printing);
-  // lostCard is the LOST card's colonists line.
-  revealSouls: (cause?: RevealCause) => boolean;
-  souls: () => { cluster: string; family: string; integrity: number; sealed: boolean; state: string | undefined }[];
-  printer: () => Record<string, unknown>;
+  // Slice 1a: the landing. pods lists the drivers in memory; landing is the landing slice with the colonists' counts
+  // and the live drop solution; endFlight ends the flight as `status` where the ship is (locked / accepted start the
+  // landing); launch goes through the one launch path (requestLaunch) as the kid's [L] does; landAll lands every
+  // pod whose driver is in memory at once (forceLandAll), so the LANDING REPORT is a moment away; endLanding is
+  // END LANDING; loadNext is LOAD NEXT; landingReport is the report's tally and stars; onTarget the live ★ ON TARGET.
+  pods: () => { pod: number; code: string; family: string; integrity: number; state: string | undefined }[];
+  landing: () => { state: GameState['landing']; counts: ColonistCounts; solution: DropSolution | null };
   endFlight: (status: TerminalStatus) => void;
-  printFast: (on: boolean) => string | null;
-  printNext: (cluster: string) => string | null;
-  lostCard: () => { line: string; reveals: boolean };
-  // WP5 part 2: prints every cluster that can print right now (at the live printer range), so the
-  // WAKE REPORT is a few seconds away; the report's model once it is up; the live ★ INTACT tally.
-  printAll: () => number;
-  wakeReport: () => WakeReportModel;
-  intact: () => IntactTally;
+  launch: (intent?: Partial<LaunchIntent>) => LaunchResult;
+  landAll: () => number;
+  endLanding: () => string | null;
+  loadNext: (pod: number) => string | null;
+  landingReport: () => { tally: LandingTally; stars: ShipStar[] };
+  onTarget: () => OnTargetTally;
   // WP6: HOLLOW. infect / cure take a cluster code (C12) or a file name (Engine I/O): infect bites it
   // now from the side facing HOLLOW (on ship 1 before the loop closed, that IS the scripted bite);
   // cure heals it to 100 and cures it at once, exactly as a winning repair does (recoil, sparkles, the
@@ -209,10 +211,10 @@ interface DebugHooks {
   // the MIND's rack tags (both from the sensed prediction) and the Engine window's AUTO button.
   zonesHud: () => { plot: PlotZoneModel[]; racks: RackZoneTag[]; auto: AutoButtonModel };
   // WP10 (VESPER). thrust: the controller's band and ghost spec, the bursts so far, the one running, and why a SKIP
-  // last stopped at a burst (null: it flew on); dealNow offers THE DEAL at once (naming `cluster`, or the one at the
+  // last stopped at a burst (null: it flew on); dealNow offers THE DEAL at once (naming `pod`: P03, or the one at the
   // front); deal is its state and what it bought (the pause, the haste, the bite interval now).
   thrust: () => { band: string; ghost: unknown; bursts: number; running: GameState['burn']['ghost']; lastSkipStop: string | null };
-  dealNow: (cluster?: string) => void;
+  dealNow: (pod?: string) => void;
   deal: () => { state: GameState['hollow']['deal']; stats: GameState['run']['stats']['deal']; effect: ReturnType<typeof dealEffectNow> };
   // WP10 part 2: the shakes asked for lately (px, newest last), and the TERMINAL choice standing now as the ticker
   // shows it (null: none, or none with ticker words).
@@ -261,19 +263,18 @@ declare global {
   }
 }
 
-// __ap.hollowDemo(): HOLLOW as ship 2 meets it, on the ship being flown: rack C becomes HALCYON's (§4.2
-// `C C _2 R _1 C C _21`: the root between C08 behind a 2-block GAP and C09 behind a 1-block GAP), the
-// archive is open, MOVE is licensed, and HOLLOW wakes HOLLOW_DEMO_WAKE_SEC from now with HALCYON's numbers
+// __ap.hollowDemo(): HOLLOW as ship 2 meets it, on the ship being flown: rack C becomes `P P _2 R _1 P P _21` (the
+// root between POD 08 behind a 2-block GAP and POD 09 behind a 1-block GAP; one LZ takes all ten pods), MOVE is licensed, and HOLLOW wakes HOLLOW_DEMO_WAKE_SEC from now with HALCYON's numbers
 // and no story. WP6's browser checks were built on it; the real HALCYON is
 // __ap.ship(1) (WP7).
-const HOLLOW_DEMO_RACKS = { B: 'C C C C C C _16', C: 'C C _2 R _1 C C _21', D: '_64' } as const;
-// C09 leads (the cluster right of the root, behind the 1-block GAP).
+const HOLLOW_DEMO_RACKS = { B: 'P P P P P P _16', C: 'P P _2 R _1 P P _21', D: '_64' } as const;
+// POD 09 leads (the pod right of the root, behind the 1-block GAP).
 const HOLLOW_DEMO_LEAD = 9;
 const HOLLOW_DEMO_WAKE_SEC = 12;
 // __ap.archiveAs: the souls a written-in last run woke (HALCYON reached: ship 1's 2,400 and some).
 const DEBUG_ARCHIVE_WOKE = 3400;
 const HOLLOW_DEMO: HollowDef = {
-  wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, printMult: 1.5, seed: null, verbs: null, deal: false,
+  wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, landMult: 1.5, seed: null, verbs: null, deal: false,
   story: 'none',
 };
 
@@ -284,21 +285,24 @@ function hollowDemo(store: Store<GameState>): void {
     ...ship,
     memory: {
       ...ship.memory,
-      racksBD: HOLLOW_DEMO_RACKS,
-      souls: { ...ship.memory.souls, lead: HOLLOW_DEMO_LEAD, sealed: false, firstRun: null },
+      podRacks: HOLLOW_DEMO_RACKS,
+      drivers: { ...ship.memory.drivers, lead: HOLLOW_DEMO_LEAD, hurt: [], firstRun: null },
     },
     hollow: HOLLOW_DEMO,
   };
+  const pods = Object.values(HOLLOW_DEMO_RACKS).join(' ').split(/\s+/).filter((token) => token === 'P').length;
+  const lz: LzDef = { ...ship.landing.lzs[0]!, pods };
+  const landingDef = { ...ship.landing, lzs: [lz] };
   const state = store.getState();
   const owner = hollowLabel(state.run);
-  const memory = buildShipMemory(demo, null, childRng(state.run.seed, 1, 'families'), false, owner);
+  const memory = buildShipMemory(demo, null, childRng(state.run.seed, 1, 'families'), false, owner, []);
+  const landing = createLandingState(landingDef, memory, { finalShip: false, lead: HOLLOW_DEMO_LEAD, hurt: [], planetR: state.level.planet.R });
   store.update((draft) => {
     draft.memory = memory;
-    openArchive(draft);
+    draft.landing = landing;
     draft.hollow = createHollowState(demo);
     draft.hollow.cfg.wake = { afterAiSec: draft.clock.aiSec + HOLLOW_DEMO_WAKE_SEC, coastLeadSec: null };
-    draft.mission.souls = soulsInMemory(draft).reduce((sum, soul) => sum + soul.souls, 0);
-    draft.souls.lead = clusterCode(HOLLOW_DEMO_LEAD);
+    draft.mission.colonists = landing.pods.reduce((sum, record) => sum + record.colonists, 0);
     // The racks were rebuilt for a fresh unit (SCAN only): the licences are issued again below, so
     // their files are back in rack F.
     draft.run.licences = draft.run.licences.filter((kind) => kind === 'scan');
@@ -351,12 +355,17 @@ function debugJump(store: Store<GameState>, index: number): void {
   });
 }
 
-// A cluster by its code (C12) or a file by its on-screen name, for the HOLLOW hooks.
+// A driver by its pod's code (P03, or POD 03) or a file by its on-screen name, for the HOLLOW hooks.
+function isPodName(seg: Segment, wanted: string): boolean {
+  if (seg.type !== 'driver') return false;
+  const code = podCode(seg.pod).toLowerCase();
+  return code === wanted || `p${String(seg.pod).padStart(2, '0')}` === wanted || code.replace(/\s+/g, '') === wanted.replace(/\s+/g, '');
+}
+
 function debugTarget(store: Store<GameState>, target: string): Segment {
   const wanted = target.toLowerCase();
-  const seg = store.getState().memory.find((candidate) => (candidate.type === 'soul' && candidate.cluster.toLowerCase() === wanted)
-    || candidate.name.toLowerCase() === wanted);
-  if (!seg) throw new Error(`__ap: no cluster or file '${target}' in memory`);
+  const seg = store.getState().memory.find((candidate) => isPodName(candidate, wanted) || candidate.name.toLowerCase() === wanted);
+  if (!seg) throw new Error(`__ap: no pod or file '${target}' in memory`);
   return seg;
 }
 
@@ -446,22 +455,17 @@ export function mountDebug(store: Store<GameState>): void {
         strip: state.director.shown,
       };
     },
-    revealSouls: (cause = 'debug') => revealSouls(store, cause),
-    souls: () => soulsInMemory(store.getState()).map((soul) => ({
-      cluster: soul.cluster, family: soul.family, integrity: soul.integrity, sealed: soul.sealed, state: soul.state,
+    pods: () => driversInMemory(store.getState()).map((driver) => ({
+      pod: driver.pod, code: podCode(driver.pod), family: driver.family, integrity: driver.integrity, state: driver.state,
     })),
-    printer: () => ({ ...store.getState().printer, ...printStatus(store.getState()), results: store.getState().souls.results.length }),
+    landing: () => ({ state: store.getState().landing, counts: colonistCounts(store.getState()), solution: getDropSolution() }),
     endFlight: (status) => endFlight(store, status),
-    printFast: (on) => setPrintFast(store, on),
-    printNext: (cluster) => setPrintNext(store, cluster),
-    lostCard: () => lostCardSouls(store.getState()),
-    printAll: () => {
-      const printable = soulsInMemory(store.getState()).filter((soul) => !soul.sealed);
-      printable.forEach((soul) => printCluster(store, soul, printerRange()));
-      return printable.length;
-    },
-    wakeReport: () => wakeReportModel(store.getState()),
-    intact: () => intactTally(store.getState()),
+    launch: (intent = {}) => requestLaunch(store, { source: 'player', ...intent }),
+    landAll: () => forceLandAll(store),
+    endLanding: () => endLanding(store),
+    loadNext: (pod) => setLoadNext(store, pod),
+    landingReport: () => ({ tally: landingResult(store.getState(), shipOutcomeOf(store.getState())), stars: shipStars(store.getState()) }),
+    onTarget: () => onTargetTally(store.getState()),
     infect: (target) => infectNow(store, debugTarget(store, target)),
     cure: (target) => cureNow(store, debugTarget(store, target)),
     hollow: () => {
@@ -489,7 +493,7 @@ export function mountDebug(store: Store<GameState>): void {
     newRun: (seed) => startRun(store, seed ?? newRunSeed(), archiveLineage()),
     movePreview: (name, addr) => {
       const state = store.getState();
-      const source = state.memory.find((seg) => seg.name.toLowerCase() === name.toLowerCase() || (seg.type === 'soul' && seg.cluster.toLowerCase() === name.toLowerCase()));
+      const source = state.memory.find((seg) => seg.name.toLowerCase() === name.toLowerCase() || isPodName(seg, name.toLowerCase()));
       if (!source) throw new Error(`__ap.movePreview: no file '${name}'`);
       const starts = segmentStarts(state.memory);
       const index = state.memory.findIndex((seg, i) => seg.type === 'free' && starts[i]! <= addr && addr < starts[i]! + seg.size);
@@ -568,10 +572,10 @@ export function mountDebug(store: Store<GameState>): void {
       const caps = capabilitiesNow(state);
       return { band: caps.thrustCtrl.band, ghost: caps.thrustCtrl.ghost, bursts: state.burn.ghostBursts, running: state.burn.ghost, lastSkipStop: lastSkipPlanChange() };
     },
-    dealNow: (cluster) => {
-      const soul = cluster === undefined ? undefined : debugTarget(store, cluster);
-      if (soul !== undefined && soul.type !== 'soul') throw new Error(`__ap.dealNow: '${cluster}' is not a cluster`);
-      offerDealNow(store, soul);
+    dealNow: (pod) => {
+      const driver = pod === undefined ? undefined : debugTarget(store, pod);
+      if (driver !== undefined && driver.type !== 'driver') throw new Error(`__ap.dealNow: '${pod}' is not a pod`);
+      offerDealNow(store, driver);
     },
     deal: () => {
       const state = store.getState();

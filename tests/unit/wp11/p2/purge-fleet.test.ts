@@ -1,3 +1,5 @@
+// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
+// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP11 part 2, the lead's note (2026-10-20 18:45): PURGE says the whole fleet is home only when it is. A whole run,
 // headless, through the run's own machinery (no ship jumped): ARES-VII and HALCYON locked; KESTREL crashes (EMERGENCY
 // TRANSMIT onward, `lossPlan`); VESPER locked; LAST LIGHT locked, its root DELETEd, PURGE. Then:

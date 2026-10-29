@@ -7,6 +7,7 @@ import { STAMP_TEXT, FAULT_STAMP } from '@data/script';
 import { ZONE_STAMP_TEXT } from '@data/zone-text';
 import { HOLLOW_DEAL, HOLLOW_VERB } from '@data/hollow-text';
 import { racksText } from '@/types/zone';
+import { podCode } from '@data/landing-text';
 import { STAMP_DEBOUNCE_MS, STAMP_IN_MS, STAMP_SHOW_MS, STAMP_MAX_WIDTH_FRAC } from '@data/tuning';
 
 // Stamps (§7.3): two or three words in VT323 slammed over the middle of the screen on a moment
@@ -89,9 +90,9 @@ export function mountStamps(store: Store<GameState>): () => void {
     // ...and the dodge's countdown running out (WP9 review round 2, the lead's ruling: said once, loudly).
     on('dodge-lapsed', () => { showStamp(ZONE_STAMP_TEXT.tooLate, 'danger'); }),
     // WP10: THE DEAL's answer, with its cost (the lead's note: both answers cost something you can see). An ACCEPT gave
-    // a cluster away; a REFUSE, or no answer, makes it bite faster. A withdrawn offer stamps nothing.
-    on('deal', ({ outcome, cluster }) => {
-      if (outcome === 'accepted') showStamp(HOLLOW_DEAL.stampAccepted(cluster), 'danger');
+    // a pod's driver away; a REFUSE, or no answer, makes it bite faster. A withdrawn offer stamps nothing.
+    on('deal', ({ outcome, pod }) => {
+      if (outcome === 'accepted') showStamp(HOLLOW_DEAL.stampAccepted(podCode(pod)), 'danger');
       else if (outcome === 'refused') showStamp(HOLLOW_DEAL.stampRefused, 'danger');
       else if (outcome === 'timeout') showStamp(HOLLOW_DEAL.stampTimeout, 'danger');
     }),

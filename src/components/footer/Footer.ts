@@ -1,7 +1,9 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { chargeLeft, soulCounts, archiveSealed } from '@state/selectors';
-import { formatCount, ARCHIVE_TEXT } from '@data/script';
+import { chargeLeft, driversInMemory } from '@state/selectors';
+import { isLaunchable } from '@systems/landing-rules';
+import { LANDING_HUD_TEXT } from '@data/landing-text';
+import { ARCHIVE_TEXT } from '@data/script';
 import { onOpsChange, threadsBusy, threadsTotal } from '@systems/ops-core';
 import { onPostTick } from '@systems/clock';
 import { TERMINAL, thrustLimitModel, type Tone } from '@systems/flight-hud';
@@ -24,19 +26,20 @@ function flightLabel(status: GameState['burn']['status']): string {
   return `${TERMINAL[status].word}${TONE_MARK[TERMINAL[status].tone]}`;
 }
 
-// §7.1: `2,400 SOULS IN STASIS` while the archive is sealed (the briefing's lie), then the real
-// count: `SOULS: 2,400 IN MEMORY · 0 WOKE · 0 LOST`. WOKE counts everyone who woke, gaps or not.
-// On a lost ship (crashed, flown away, stranded) nobody left in memory will wake: they count as
-// lost (WP7 carries the accounting into the transmit).
-export function soulsLabel(state: Readonly<GameState>): string {
-  const counts = soulCounts(state);
-  if (archiveSealed(state)) return `${formatCount(counts.inMemory)} SOULS IN STASIS`;
-  const woke = formatCount(counts.heads);
-  const status = state.burn.status;
-  if (status === 'crashed' || status === 'escaped' || status === 'stranded' || status === 'abandoned' || state.run.coreLost) {
-    return `SOULS: ${woke} WOKE · ${formatCount(counts.lost + counts.inMemory)} LOST`;
+// 01-landing §4: `PODS: 8 ABOARD · 3 LANDED · 1 CAN'T LAUNCH`, in pods. CAN'T LAUNCH counts the pods aboard whose
+// driver is gone or can't launch right now (dead, infected, busy). TODO(slice1a-UI): the final footer model.
+export function podsLabel(state: Readonly<GameState>): string {
+  const launchable = new Set(driversInMemory(state).filter(isLaunchable).map((driver) => driver.pod));
+  let aboard = 0;
+  let landed = 0;
+  let cantLaunch = 0;
+  for (const record of state.landing.pods) {
+    if (record.fate.kind === 'down') landed++;
+    if (record.fate.kind !== 'aboard') continue;
+    aboard++;
+    if (!launchable.has(record.pod)) cantLaunch++;
   }
-  return `SOULS: ${formatCount(counts.inMemory)} IN MEMORY · ${woke} WOKE · ${formatCount(counts.lost)} LOST`;
+  return LANDING_HUD_TEXT.footer(aboard, landed, cantLaunch);
 }
 
 export function mountFooter(store: Store<GameState>): () => void {
@@ -81,16 +84,9 @@ export function mountFooter(store: Store<GameState>): () => void {
     limitEl.hidden = text === '';
   }
 
-  // The reveal's footer beat (§1: SOULS IN STASIS → SOULS IN MEMORY): small text flips silently
-  // unless it is lit, so it flashes once as it changes (a fade under reduced motion, game.css).
-  let wasSealed = archiveSealed(store.getState());
   function paintSouls(): void {
-    const state = store.getState();
-    patch(soulsEl, 'souls', soulsLabel(state));
-    const sealed = archiveSealed(state);
-    soulsEl.classList.toggle('revealed', !sealed);
-    if (wasSealed && !sealed) replayAnimation(soulsEl, 'souls-flip');
-    wasSealed = sealed;
+    patch(soulsEl, 'souls', podsLabel(store.getState()));
+    soulsEl.classList.add('revealed');
   }
 
   const paintAll = (): void => { paintSouls(); paintCharge(); paintThreads(); paintBurn(); paintLimit(); };

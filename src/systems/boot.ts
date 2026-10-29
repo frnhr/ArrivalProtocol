@@ -9,7 +9,6 @@ import { setMode } from '@systems/mode';
 import { play } from '@systems/audio';
 import { emit } from '@systems/events';
 import { archiveRunStarted, ghostLine, playWithoutArchive } from '@systems/meta';
-import { revealSouls } from '@systems/reveal';
 import { installBootLicences, renewRepairAtBoot } from '@systems/licences';
 import { nameHollow } from '@systems/hollow';
 import { skillBootDue, trainSkillAtBoot } from '@systems/autoburn';
@@ -218,11 +217,9 @@ function sayNextLine(store: Store<GameState>): void {
   const arrival = state.run.arrival;
   if (kind === 'ecc' && arrival !== null && arrival.hits.length > 0) emit('arrival-hits', { hits: [...arrival.hits] });
   if (kind === 'scripted' && arrival !== null) emit('arrival-hits', { hits: [...arrival.scripted] });
-  // A returning unit knows what the slabs hold: they crack as it says so, and REPAIR is licensed (§5.2).
-  if (kind === 'archive') {
-    revealSouls(store, 'known');
-    installBootLicences(store);
-  }
+  // A returning unit's ship-1 boot licenses REPAIR as it names the host (§5.2; phase 2 did it as the archive opened):
+  // the chip is there before the flight, as on every later ship.
+  if (kind === 'host' && state.run.arrival === null) installBootLicences(store);
   // A unit that crossed with no working REPAIR gets it back with its charge (WP12: licences.ts renewRepairAtBoot).
   if (kind === 'charge') renewRepairAtBoot(store);
   linesSaid++;
