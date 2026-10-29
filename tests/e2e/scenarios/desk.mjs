@@ -3,7 +3,8 @@
 // • the ship marker never sits under the NAV PLOT's chip (LEAD-2's item, its second half: the plot zooms out just
 //   enough while it would): a big captured loop's far end swept across the top of the plot, the chip at its widest;
 // • a window dragged on the desk keeps its spot across the 768 px breakpoint and back (ToolsTabs, the quality review);
-// • no page errors. Shots under tests/.out/e2e/shots/desk-*. Exits non-zero on a FAIL.
+// • no page errors. (Slice 1a: no reveal any more, so the flight is checked as it boots: STASIS stays the ship's file.)
+//   Shots under tests/.out/e2e/shots/desk-*. Exits non-zero on a FAIL.
 import { launch, BASE_URL } from '../lib.mjs';
 
 const [vw, vh] = (process.env.SHOT_VIEWPORT ?? '1440x900').split('x').map(Number);
@@ -29,7 +30,6 @@ await page.waitForTimeout(700);
 await st(() => window.__ap.skipBoot());
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 12000);
 await page.waitForTimeout(600);
-await st(() => window.__ap.revealSouls('debug'));
 
 // A captured loop whose far end (▲, the ship) is `raFactor` ring radii out, the ship at ▲ in direction `angleDeg` (world
 // frame, y up): the plot then rides the ship at its edge.
