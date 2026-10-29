@@ -673,3 +673,57 @@ What the foundation built differently from §1–§4, and why. Everything else f
 - The risk-7 auto-end: pods aboard with none of their drivers in memory end the landing after `LANDING_NONE_LEFT_SEC` (`no-driver-left`).
 
 **Minors done**: `landing-start` emitted from endFlight and `burn.lastTickDvKmS` reset in beginLanding; launch refusals flash a line; `forceLandAll` aborts ops on the drivers aboard, then launches only `isLaunchable` ones; `finale.ts isFlagship` reads `state.landing.finalShip`; `validateLandingDef` moved to `src/data/landing-def.ts` (no SHIPS import) and rejects no-go arcs over a bracket or each other; `PodSummary.featured` (names); `podTag` / `driverSegId` in `src/data/pod-ids.ts`; header and controller comments; drop-cache's "only requestLaunch calls currentDropSolution" note.
+
+## Deviations (Track SIM)
+
+What Track SIM built differently from §1–§6, and why. Everything else follows the plan and the foundation's deviations.
+
+**Pace and SKIP**
+- **The windows the landing waits on.** TACTICAL around a window, WINDOW OPEN and the SKIP's target count only a window
+  of an LZ with projected room (or of any LZ once none has room, never the case in 1a: the counts sum to the pods), and
+  only while a pod is aboard and the landing goes on. A full LZ's window passes at CRUISE and a SKIP flies through it;
+  otherwise HALCYON's kid sat through LZ-A's 24 s window at TACTICAL with SKIP refused after LZ-A was full. The strip
+  still says L3 if the kid meets it. `state.landing.window` stays the one "open now" (landMult, L3, the chips).
+- **pace reads the drop cache** for the time to the next opening (`windowOpensInSec`, exported for UI's countdown chip),
+  as §1.1 allowed; "open now" comes from state. The lead is judged one CRUISE tick ahead, as the dodge's is, so TACTICAL
+  starts by the 8 s mark and never a tick past it.
+- **`holdsTactical`** reads as §3.14 words it: the window rule (TACTICAL around windows, WINDOW OPEN) holds for hand drops
+  and for a controller that holds TACTICAL; a controller with `holdsTactical: false` drops inside a SKIP. It does not
+  force TACTICAL by itself. The controller lives in `systems/landing-controller.ts` so pace reads it without importing
+  landing.ts (which imports pace for a controller's SKIP); landing.ts keeps `setLandingController` / `landingController`.
+- New SKIP refusals: `WINDOW COMING UP` (the "too close" case before GET READY) and `THE LANDING IS OVER`.
+- `landingInSec` is `skipLandsInSec`; no ghost burst is looked for during the landing (the ship only coasts there).
+
+**Guidance**
+- **The launch moment.** GET READY and its 5…1 beeps count down to the window's *sure* opening when this pass has one
+  (`landing-rules launchMomentInSec`), and while the dot's centre is in but its edges are not yet, the row is still L7,
+  not L5. Read literally, L5 (`LAUNCH — WIDE DROP, some may miss`) showed at every window's first seconds and a kid who
+  obeyed sent the first pod half off-site. L5 now shows only for a dot that won't fit this pass. pace's TACTICAL lead and
+  the SKIP still key on the opening (§3.12), so GET READY starts at about 0:10–0:11.
+- **L12's twin** `NO LZ IN THE LAUNCH BAND — END LANDING parks them in orbit` (id `landing-L12-band`): a PARTIAL orbit
+  whose in-band arc never puts the dot on a bracket can't land anyone with the engine closed (risk 1); without it the
+  strip said WAIT forever. followLanding treats both ids as L12.
+- **L11** shows only when no pod can launch now and one aboard needs the kid (its driver is not already being repaired
+  or moved); a busy driver falls through to L13. **L13** offers `· [F] to SKIP` only while a SKIP would start.
+- **The MIND wordings**: L1 and L11 drop their `TAB,` in blue (as F1/F2 do); the ship rows that ask for [L] or the POD
+  BAY (L4–L7, L12) say `[TAB]` first there (the flight's fromMind rule).
+- `windowsAsOf` (landing-rules) rolls a window that closed since the cached solve on by one period; targetWindow and the
+  table use it, so a solution up to a refresh old always has a next window (ARES-VII had no row for one tick).
+- The director composes both phases with one `composeLive(ctx, rules, urgency, line)`; the `'landing'` GuidePriority and
+  the placeholder line are gone. `LineVars` gains `nextLz` (filled by the director from the table) and `firstDownRadio`.
+
+**Landing**
+- **The first touchdown's radio line** is spoken by the director's beat `control-first-down` after CONTROL's `They're
+  down! :)`, so the order is right (a `say` in touchDown would come first). A pod that came down hard sends a line from
+  `HARD_WORDS_POOL` instead of its lead's first words.
+- **`pod-entry`** fires at the share of the descent where the arc first enters `rAtm` (the streak runs the arc's points
+  evenly over descentSec).
+- **The controller hook** asks with the cached view (`landingView` now reads `getDropSolution`); only `requestLaunch`
+  calls `currentDropSolution` (review note).
+- **Parking at the ending.** `parkPodsAboard` (state/actions) writes the pods' final fate the moment the ending is known:
+  `endFlight` for stranded / crashed / escaped / abandoned, and HOLLOW's `endCoreLost` (with `pods-parked`), besides
+  landing.ts's `endNow`. Before, those ships' pods stayed `aboard` in state while their result said parked.
+- `orbit-sim` keeps the flight's sub-steps between SKIPs, as planned; `LandingKick` is `{ atTSec, dvx, dvy }`.
+
+**Not done in 1a (left for UI, 05 or 1b)**: the §3.11 lessons (`◆ PODS LAND WHERE THE DOT IS`, `◆ 2 SITES …`) are text in
+landing-text but not yet guide rules; the no-go ask in the arc's own word is a `TODO(slice1b)` in launchGuard.
