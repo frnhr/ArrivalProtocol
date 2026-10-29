@@ -4,14 +4,16 @@ import { check, finish } from './checks';
 import {
   isLaunchable, driverTouch, launchQueue, nextToLaunch, bayShown, bayMembers, classifyLanding, lzDownFill, lzProjectedFill,
   lzRemaining, podPoints, launchRefusal, launchGuard, landingResult, onTargetTally, colonyName, canEverLaunch, missKm,
+  openInBandWindow, windowOpenNow, targetWindow, touchAtTouchdown,
 } from '@systems/landing-rules';
 import type { GameState, ShipOutcome } from '@state/schema';
 import type { DriverSegment, Segment } from '@/types/segment';
 import type {
-  DropSolution, ForgivenessClass, LandingState, LaunchRecord, LzState, LzWidth, Place, PodFate, PodRecord, Touch,
+  DropSolution, ForgivenessClass, LandingState, LaunchRecord, LzState, LzWidth, LzWindow, Place, PodFate, PodRecord, Touch,
 } from '@/types/landing';
 import { createRng } from '@systems/rng';
-import { SHIPS, validateLandingDef } from '@data/ships';
+import { SHIPS } from '@data/ships';
+import { validateLandingDef } from '@data/landing-def';
 import { shipColonists, shipPodCount, validatePodRacks } from '@data/memory';
 import { LAUNCH_CONFIRM_TEXT, LANDING_REPORT_TEXT, COLONY_NAME_POOL } from '@data/landing-text';
 import { LZ_WIDTH_KM, COLONISTS_PER_POD, PODS_MAX, BAY_SLOTS } from '@data/tuning';
@@ -37,7 +39,7 @@ function pod(n: number, fate: PodFate = { kind: 'aboard' }, driverLost: PodRecor
 
 function launch(rad: number, touch: Touch = 'soft'): LaunchRecord {
   return {
-    atTSec: 0, atAi: 0, source: 'player', launchRadius: 6000, dotRad: rad, halfWidthKm: 78, aimLz: null, landingRad: rad, touch,
+    atTSec: 0, atAi: 0, source: 'player', launchRadius: 6000, dotRad: rad, halfWidthKm: 78, aimLz: null, landingRad: rad, predictedTouch: touch,
     driverIntegrity: touch === 'soft' ? 100 : 40, arc: [], descentSec: 3.5,
   };
 }
@@ -64,7 +66,7 @@ function fakeState(opts: FakeOpts): GameState {
     hurt: [], colonyFirstRun: null, colony: null, pods: opts.pods,
     bay: { loaded: opts.loaded ?? BAY_SLOTS, reloadTac: 0, cadenceLeftTac: opts.cadenceLeftTac ?? 0 },
     loadNext: opts.loadNext ?? null, startedAtTSec: 0, ended: opts.ended ?? null, lingerAiSec: null, noDriverAiSec: 0,
-    fuelAtEndPct: null, orbitEpoch: 0,
+    window: null, fuelAtEndPct: null, orbitEpoch: 0,
   };
   return {
     run: { phase: opts.phase ?? 'landing' },
@@ -135,7 +137,7 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
     const state = fakeState({ lzs, pods, memory: [] });
     const placement = classifyLanding(lzs, [], deg * DEG, lzDownFill(state));
     const points = podPoints(placement.place, 'soft', 'gentle', COLONISTS_PER_POD);
-    pods.push(pod(n, { kind: 'down', launch: launch(deg * DEG), touchdown: { place: placement.place, lz: placement.lz, points, missKm: null, atAi: n } }));
+    pods.push(pod(n, { kind: 'down', launch: launch(deg * DEG), touchdown: { place: placement.place, lz: placement.lz, points, missKm: null, touch: 'soft', atAi: n } }));
   }
   const state = fakeState({ lzs, pods, memory: [] });
   const result = landingResult(state, 'locked');
@@ -144,7 +146,7 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
   check('400 + 800 scores 1,150 (each colonist counted once)', result.points === 1150, `${result.points}`);
   check('400 + 800: LZ-A 400 landed, LZ-B 600 landed and 200 mislanded', rowA.landed === 400 && rowB.landed === 600 && rowB.mislanded === 200);
   check('400 + 800: the report says LZ-A 200 SHORT', LANDING_REPORT_TEXT.short(rowA.lz, rowA.count - rowA.landed - rowA.mislanded) === 'LZ-A 200 SHORT');
-  check('the headline counts colonists in an LZ with room', result.landedOnTarget === 1000 && result.colonistsAboard === 1200);
+  check('the headline counts colonists in an LZ with room', result.landedInLz === 1000 && result.colonistsAboard === 1200);
 
   // Projected fill: pods falling into an LZ count for the guard before they are down (risk 12).
   const falling = fakeState({ lzs, memory: [], pods: [pod(1, { kind: 'falling', launch: launch(60 * DEG) }), pod(2, { kind: 'falling', launch: launch(100 * DEG) })] });
@@ -180,9 +182,11 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
     ['BAY EMPTY', { ...base, loaded: 0 }, solution(90), 'BAY EMPTY'],
     ['clear', base, solution(90), null],
   ];
-  const wrong = cases.filter(([, opts, sol, want]) => launchRefusal(fakeState(opts), sol, 'player') !== want);
-  check('refusals come in the LaunchRefusal union\'s order', wrong.length === 0, wrong.map(([name, opts, sol]) => `${name} → ${launchRefusal(fakeState(opts), sol, 'player')}`).join(' | '));
-  check('SHIP SCREEN is the kid\'s [L] only: a controller may launch from MIND', launchRefusal(fakeState({ ...base, mode: 'memory' }), solution(90), 'autodrop') === null);
+  const kid = { source: 'player', fromMind: false } as const;
+  const wrong = cases.filter(([, opts, sol, want]) => launchRefusal(fakeState(opts), sol, kid) !== want);
+  check('refusals come in the LaunchRefusal union\'s order', wrong.length === 0, wrong.map(([name, opts, sol]) => `${name} → ${launchRefusal(fakeState(opts), sol, kid)}`).join(' | '));
+  check('a controller that launches from MIND may launch there', launchRefusal(fakeState({ ...base, mode: 'memory' }), solution(90), { source: 'autodrop', fromMind: true }) === null);
+  check('…one that does not gets SHIP SCREEN like the kid', launchRefusal(fakeState({ ...base, mode: 'memory' }), solution(90), { source: 'autodrop', fromMind: false }) === 'SHIP SCREEN');
 }
 
 // --- Guards: the inline confirms ---
@@ -204,7 +208,7 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
 {
   const lzs = [lz('LZ-A', 90, 4)];
   const pods = [
-    pod(1, { kind: 'down', launch: launch(90 * DEG), touchdown: { place: 'lz', lz: 'LZ-A', points: 200, missKm: null, atAi: 1 } }),
+    pod(1, { kind: 'down', launch: launch(90 * DEG), touchdown: { place: 'lz', lz: 'LZ-A', points: 200, missKm: null, touch: 'soft', atAi: 1 } }),
     pod(2, { kind: 'aboard' }, 'eaten'),
     pod(3, { kind: 'aboard' }, 'dead'),
     pod(4, { kind: 'aboard' }),
@@ -226,7 +230,7 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
   const tally = onTargetTally(state);
   check('ON TARGET counts unlaunched pods in the denominator', tally.onTargetPods === 1 && tally.pods === 4 && !tally.earned);
   check('ON TARGET is still possible only while every undecided pod could land soft', !tally.possible);
-  const allDown = fakeState({ lzs, memory: [], pods: [1, 2, 3, 4].map((n) => pod(n, { kind: 'down', launch: launch(90 * DEG), touchdown: { place: 'lz', lz: 'LZ-A', points: 200, missKm: null, atAi: n } })) });
+  const allDown = fakeState({ lzs, memory: [], pods: [1, 2, 3, 4].map((n) => pod(n, { kind: 'down', launch: launch(90 * DEG), touchdown: { place: 'lz', lz: 'LZ-A', points: 200, missKm: null, touch: 'soft', atAi: n } })) });
   check('four soft pods in an LZ with room earn ON TARGET', onTargetTally(allDown).earned);
   // A ship that ends mid-fall counts its falling pods where they come down, in touchdown order.
   const midFall = fakeState({ lzs: [lz('LZ-A', 90, 1)], memory: [], pods: [
@@ -285,6 +289,55 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
     ...ares, memory: { ...ares.memory, podRacks: { B: 'R _32 P P P', C: '_64', D: '_48 P P' } },
     landing: { ...ares.landing, lzs: [{ label: 'LZ-A', centreDeg: 160, width: 'wide', pods: 5 }] },
   })));
+}
+
+// --- "Window open now": the in-band span, the window state, the target ---
+{
+  const win = (lz: string, open: number, close: number, bandOpen: number | null, bandClose: number | null, sure: [number, number] | null = null): LzWindow => ({
+    lz, openInSec: open, closeInSec: close, sureOpenInSec: sure?.[0] ?? null, sureCloseInSec: sure?.[1] ?? null,
+    launchRadius: 6000, halfWidthKm: 78, inBandOpenInSec: bandOpen, inBandCloseInSec: bandClose, inBand: bandOpen !== null,
+  });
+  const sol = (windows: LzWindow[]): DropSolution => ({ ...solution(90), windows });
+  // A window open now whose in-band part starts in 5 s (it straddles the band's edge): not open for the rules yet.
+  const straddle = sol([win('LZ-A', -3, 10, 5, 10)]);
+  check('a window open now but out of band until its in-band span is not "open"', openInBandWindow(straddle, 0) === null && windowOpenNow(straddle, 0) === null);
+  check('…and is once the span starts (times rebased from asOfTSec)', openInBandWindow(straddle, 6)?.lz === 'LZ-A');
+  const sureNow = sol([win('LZ-A', -3, 10, -3, 10, [-1, 4])]);
+  check('windowOpenNow says SURE while the whole dot fits', windowOpenNow(sureNow, 0)?.sure === true && windowOpenNow(sureNow, 5)?.sure === false);
+  const lzs = [lz('LZ-A', 90, 1), lz('LZ-B', 200, 1)];
+  const both = sol([win('LZ-A', 20, 30, 20, 30), win('LZ-B', 60, 70, 60, 70), win('LZ-C', 5, 8, null, null)]);
+  const fullA = fakeState({ lzs, memory: [], pods: [pod(1, { kind: 'falling', launch: launch(90 * DEG) }), pod(2)] });
+  check('targetWindow skips an LZ the projected fill has filled', targetWindow(fullA, both, 0)?.lz === 'LZ-B');
+  check('…takes the next in-band window when every LZ has room', targetWindow(fakeState({ lzs, memory: [], pods: [pod(1), pod(2)] }), both, 0)?.lz === 'LZ-A');
+  check('…and never one with no in-band part', targetWindow(fakeState({ lzs, memory: [], pods: [pod(1), pod(2)] }), sol([win('LZ-A', 5, 8, null, null)]), 0) === null);
+}
+
+// --- Touch is decided at touchdown, and the result reads it from there ---
+{
+  const record = { ...launch(90 * DEG, 'soft'), driverIntegrity: 40 };
+  check('touchAtTouchdown reads the driver at launch, not the predicted touch', touchAtTouchdown(record) === 'hard');
+  const lzs = [lz('LZ-A', 90, 1)];
+  const hardDown = fakeState({ lzs, memory: [], pods: [{
+    ...pod(1, { kind: 'down', launch: launch(90 * DEG, 'soft'), touchdown: { place: 'lz', lz: 'LZ-A', points: 100, missKm: null, touch: 'hard', atAi: 1 } }),
+    featured: [{ name: 'Okafor, Ada', age: 11, line: '', firstWords: '' }],
+  }] });
+  const result = landingResult(hardDown, 'locked');
+  check('landingResult counts the touchdown\'s touch (hard), not the launch\'s guess', result.lzs[0]?.hard === COLONISTS_PER_POD && result.pods[0]?.touch === 'hard');
+  check('the pods\' detail keeps the featured names', result.pods[0]?.featured.join('|') === 'Okafor, Ada');
+  check('ON TARGET reads the touchdown\'s touch too', onTargetTally(hardDown).onTargetPods === 0);
+}
+
+// --- No-go arcs in the data ---
+{
+  const ares = SHIPS[0]!;
+  const bad = (fn: () => void): boolean => { try { fn(); return false; } catch { return true; } };
+  check('validateLandingDef throws on a no-go arc over a bracket', bad(() => validateLandingDef('t', { ...ares.landing, noGo: [{ centreDeg: 160, widthDeg: 5, word: 'LAVA' }] }, 3, R)));
+  check('…and on two no-go arcs that overlap', bad(() => validateLandingDef('t', {
+    ...ares.landing, noGo: [{ centreDeg: 300, widthDeg: 6, word: 'LAVA' }, { centreDeg: 304, widthDeg: 4, word: 'CLIFFS' }],
+  }, 3, R)));
+  let clear = true;
+  try { validateLandingDef('t', { ...ares.landing, noGo: [{ centreDeg: 300, widthDeg: 6, word: 'LAVA' }] }, 3, R); } catch { clear = false; }
+  check('…but takes one clear of every bracket', clear);
 }
 
 finish();

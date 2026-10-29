@@ -19,6 +19,9 @@ const TWO_PI = 2 * Math.PI;
 // Bisection steps per window edge (plan §1.5: at most 20): a 1° sample interval of a 6,000 km orbit (39 game s) refined
 // to under a millisecond of game time, far below what any countdown shows.
 const EDGE_REFINE_ITERATIONS = 20;
+// Radius samples at least across one window when looking for its in-band span: a window lasts a few dozen game s and
+// the radius is smooth, so 8 steps can't step over a dip into and out of the band that a kid could act on.
+const BAND_SPAN_STEPS = 8;
 // Newton steps for Kepler's equation: converges in a handful for every e < 1 the landing sees; more means a bug.
 const KEPLER_MAX_ITERATIONS = 50;
 const KEPLER_TOL = 1e-13;
@@ -257,6 +260,51 @@ function edgeFrom(track: DotTrack, g: (point: TrackPoint) => number, from: numbe
   throw new Error('landing-solve: a window edge was not found within one orbit');
 }
 
+// The ship's radius at τ (no dot: the band test needs only where the ship is).
+function radiusAt(track: DotTrack, tau: number): number {
+  const at = shipStateAt(track, positiveModulo(tau, track.periodSec));
+  return Math.hypot(at.x, at.y);
+}
+
+// The first in-band span of [open, close] that ends after τNow (the window intersected with the ship's band crossings),
+// or null. The radius is walked at least BAND_SPAN_STEPS times across the window (and never coarser than the track's
+// own grid), and each crossing of a band edge is refined by bisection, so a window that straddles an edge on a PARTIAL
+// orbit reports exactly the part [L] would take (launchRefusal reads the same radius test for "now").
+function bandSpan(track: DotTrack, ring: Ring, open: number, close: number, tauNow: number): { start: number; end: number } | null {
+  const inBand = (tau: number): boolean => {
+    const r = radiusAt(track, tau);
+    return r >= ring.min && r <= ring.max;
+  };
+  const edge = (from: number, to: number): number => {
+    // from and to disagree on inBand: the crossing between them.
+    const fromIn = inBand(from);
+    let lo = from;
+    let hi = to;
+    for (let i = 0; i < EDGE_REFINE_ITERATIONS; i++) {
+      const mid = (lo + hi) / 2;
+      if (inBand(mid) === fromIn) lo = mid; else hi = mid;
+    }
+    return (lo + hi) / 2;
+  };
+  const gridStep = track.periodSec / track.samples.length;
+  const steps = Math.max(BAND_SPAN_STEPS, Math.ceil((close - open) / gridStep));
+  const dt = (close - open) / steps;
+  let start: number | null = inBand(open) ? open : null;
+  let prev = open;
+  for (let i = 1; i <= steps; i++) {
+    const tau = i === steps ? close : open + i * dt;
+    const now = inBand(tau);
+    if (start === null && now) start = edge(prev, tau);
+    else if (start !== null && !now) {
+      const end = edge(prev, tau);
+      if (end > tauNow) return { start, end };
+      start = null;
+    }
+    prev = tau;
+  }
+  return start !== null && close > tauNow ? { start, end: close } : null;
+}
+
 // Each LZ's window from τNow (§3.2): the current one if it is open now, else the next. OPEN while the dot's centre is in
 // the bracket; SURE while the whole dot (± s) is. Found from the dot's crossing of the bracket's centre (so a sure
 // window narrower than one sample is never missed), then each edge refined on exact evaluations. `factors` are the
@@ -293,6 +341,7 @@ export function windowsFor(
       if (close <= tauNow) continue;
       const open = edgeFrom(track, openG, tauCentre, -1);
       const middle = exactPoint(track, (open + close) / 2);
+      const band = bandSpan(track, ring, open, close, tauNow);
       const fits = sureG(exactPoint(track, tauCentre)) < 0;
       const sureOpen = fits ? edgeFrom(track, sureG, tauCentre, -1) : null;
       const sureClose = fits ? edgeFrom(track, sureG, tauCentre, 1) : null;
@@ -304,7 +353,9 @@ export function windowsFor(
         sureCloseInSec: sureClose === null ? null : sureClose - tauNow,
         launchRadius: middle.r,
         halfWidthKm: halfWidthAt(middle.r),
-        inBand: middle.r >= ring.min && middle.r <= ring.max,
+        inBandOpenInSec: band === null ? null : band.start - tauNow,
+        inBandCloseInSec: band === null ? null : band.end - tauNow,
+        inBand: band !== null,
       };
     }
     if (found === null) throw new Error(`windowsFor: no window for ${lz.label} within an orbit`);

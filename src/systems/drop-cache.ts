@@ -17,6 +17,8 @@ import { PREDICT_HZ, POD_AIM_RP_FRAC } from '@data/tuning';
 //
 // Imports only landing-solve, landing-rules, capabilities, clock and reset (and data), so hollow.ts and pace.ts can read
 // it without closing the import cycle tests/unit/wp12/fix1/entries.test.ts guards. Mount it after mountPredictor.
+// Its readers: landing.ts (the window state, the launch), guidance's countdowns and landing-hud. Everything else reads
+// state.landing.window, never the cache.
 
 let storeRef: Store<GameState> | null = null;
 let cached: DropSolution | null = null;
@@ -103,6 +105,9 @@ export function getDropSolution(): DropSolution | null {
 
 // The drop solution for the state as it is right now (recomputed when the cached one is from an earlier tick, keeping
 // the PREDICT_HZ cadence): what a launch decides on, so [L] never acts on a dot up to 100 ms old.
+// ONLY landing.ts requestLaunch (and its landingView for a controller deciding a launch) may call this: it recomputes on
+// every call whose clock moved, so a per-frame or per-tick reader would pay a full solve each time. Everyone else reads
+// getDropSolution (the cached one) or, better, state.landing.window.
 export function currentDropSolution(): DropSolution | null {
   if (!storeRef) throw new Error('currentDropSolution: mountDropCache has not run');
   const sol = getDropSolution();

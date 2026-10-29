@@ -13,7 +13,8 @@ import {
 } from '@data/tuning';
 import { integrityState } from '@state/selectors';
 import { HOLLOW_DESC } from '@data/hollow-text';
-import { driverName, driverSegId } from '@data/landing-text';
+import { driverName } from '@data/landing-text';
+import { driverSegId } from '@data/pod-ids';
 
 // The ship's memory (§3.2, §4.2, 01-landing §3.16): 384 blocks in 6 RACKS of 64, built from ship data.
 //   A    the ship's files (the same on every ship)

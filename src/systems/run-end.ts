@@ -5,7 +5,8 @@ import { unitName } from '@systems/say';
 import { shownFuelPct } from '@systems/flight-hud';
 import { SHIPS } from '@data/ships';
 import { shipColonists } from '@data/memory';
-import { RUN_END_TITLE, RUN_END_WHY, RUN_END_TEXT, RUN_END_PURGE_SHORT, RUN_END_NOBODY_WOKE, SHIP_OUTCOME_WORD } from '@data/script';
+import { RUN_END_TITLE, RUN_END_WHY, RUN_END_PURGE_SHORT, RUN_END_NOBODY_WOKE, SHIP_OUTCOME_WORD } from '@data/script';
+import { RUN_END_TEXT } from '@data/landing-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import {
   RANKS, RANK_FLEET_COLONISTS, RANK_ROUND_TO, NEAR_MISS_LINES_MAX, NEAR_MISS_FUEL_PCT, STAR_FUEL_PCT, MERGE_BONUS_CORE_CAPACITY,
@@ -126,7 +127,7 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
       result,
       outcome: result?.outcome ?? null,
       outcomeWord: result ? SHIP_OUTCOME_WORD[result.outcome] : RUN_END_TEXT.notReached,
-      landedLine: result ? RUN_END_TEXT.shipLanded(result.landedOnTarget, shipTotal) : '',
+      landedLine: result ? RUN_END_TEXT.shipLanded(result.landedInLz, shipTotal) : '',
     };
   });
   const unit = unitName(run.unitNumber);
@@ -169,5 +170,5 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
 function flagshipLanded(ships: readonly ShipResult[]): number | null {
   const flagship = SHIPS.find((ship) => ship.flagship);
   if (!flagship) throw new Error('runEndModel: the fleet has no flagship');
-  return ships.find((result) => result.shipId === flagship.id)?.landedOnTarget ?? null;
+  return ships.find((result) => result.shipId === flagship.id)?.landedInLz ?? null;
 }

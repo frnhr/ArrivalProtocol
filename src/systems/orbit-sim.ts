@@ -316,6 +316,7 @@ export function endFlight(store: Store<GameState>, status: TerminalStatus): void
   });
   if (ghostWasFiring) emit('ghost-stop', NO_PAYLOAD);
   emit(status, NO_PAYLOAD);
+  if (startsLanding(status)) emit('landing-start', NO_PAYLOAD);
 }
 
 // Terminal outcome of an empty tank, or null to keep flying:

@@ -9,9 +9,9 @@ export function runScore(ships: readonly ShipResult[]): number {
   return ships.reduce((sum, ship) => sum + ship.points, 0);
 }
 
-// LANDED: the colonists who came down in an LZ with room, soft or hard (each ship's headline, landedOnTarget).
+// LANDED: the colonists who came down in an LZ with room, soft or hard (each ship's headline, landedInLz).
 export function runLanded(ships: readonly ShipResult[]): number {
-  return ships.reduce((sum, ship) => sum + ship.landedOnTarget, 0);
+  return ships.reduce((sum, ship) => sum + ship.landedInLz, 0);
 }
 
 // The ships of the fleet that reached orbit (ORBIT LOCKED or ACCEPTED: their pods could land), each counted once, out

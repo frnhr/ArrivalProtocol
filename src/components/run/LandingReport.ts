@@ -1,12 +1,9 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { pushModal, registerKeys } from '@systems/input';
-import { continueAfterReport, shipOutcomeOf } from '@systems/run';
-import { landingResult } from '@systems/landing-rules';
-import { shipStars } from '@systems/stars';
+import { continueAfterReport } from '@systems/run';
+import { landingReportModel } from '@systems/landing-report';
 import { toggleMuted } from '@systems/audio';
-import { getShip, isLastShip } from '@data/ships';
-import { LANDING_REPORT_TEXT } from '@data/landing-text';
 import { requireById, make } from '@components/dom';
 import { REPORT_ADVANCE_LOCK_SEC } from '@data/tuning';
 
@@ -35,25 +32,20 @@ export function mountLandingReport(store: Store<GameState>): () => void {
   let inputFromMs = 0;
 
   function paint(): void {
-    const state = store.getState();
-    const ship = getShip(state.run.shipIndex);
-    const tally = landingResult(state, shipOutcomeOf(state));
-    titleEl.textContent = LANDING_REPORT_TEXT.title;
-    routeEl.textContent = LANDING_REPORT_TEXT.route(ship.name, ship.world, ship.landing.terrain, ship.landing.forgiveness);
+    const model = landingReportModel(store.getState());
+    titleEl.textContent = model.title;
+    routeEl.textContent = model.route;
     creditsEl.hidden = true;
     epigraphEl.hidden = true;
     missingEl.hidden = true;
-    totalEl.textContent = LANDING_REPORT_TEXT.headline(tally.landedOnTarget, tally.colonistsAboard);
+    totalEl.textContent = model.headline;
     breakdownEl.hidden = false;
     breakdownEl.replaceChildren(
-      ...tally.lzs.map((row) => make('div', 'wr-b-row', LANDING_REPORT_TEXT.lzRow(row.lz, row.landed, row.count))),
-      ...(tally.offSite > 0 ? [make('div', 'wr-b-row', LANDING_REPORT_TEXT.offSite(tally.offSite))] : []),
-      ...(tally.noGo > 0 ? [make('div', 'wr-b-row', LANDING_REPORT_TEXT.noGo(tally.noGo))] : []),
-      ...tally.parked.map((parked) => make('div', 'wr-b-row', LANDING_REPORT_TEXT.parked(parked.pod))),
-      ...(tally.colony ? [make('div', 'wr-b-row', LANDING_REPORT_TEXT.colony(tally.colony))] : []),
+      ...[...model.lzRows, ...model.otherRows, ...(model.colonyLine ? [model.colonyLine] : []), ...model.nearMisses.slice(0, 1)]
+        .map((line) => make('div', 'wr-b-row', line)),
     );
     starsEl.hidden = false;
-    starsEl.replaceChildren(...shipStars(state).map((star) => {
+    starsEl.replaceChildren(...model.stars.map((star) => {
       const box = make('div', `wr-star ${star.earned ? 'earned' : 'missed'}`);
       box.dataset.star = star.id;
       box.appendChild(make('div', 'wr-s-glyph', star.earned ? '★' : '☆'));
@@ -62,10 +54,10 @@ export function mountLandingReport(store: Store<GameState>): () => void {
       return box;
     }));
     chargeEl.hidden = false;
-    chargeEl.textContent = LANDING_REPORT_TEXT.points(tally.points);
+    chargeEl.textContent = model.pointsText;
     skipEl.hidden = true;
     continueEl.hidden = false;
-    continueEl.textContent = isLastShip(state.run.shipIndex) ? LANDING_REPORT_TEXT.runEnd : LANDING_REPORT_TEXT.continue;
+    continueEl.textContent = model.continueText;
   }
 
   function show(): void {

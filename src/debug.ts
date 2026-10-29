@@ -6,11 +6,10 @@ import { installTool } from '@systems/licences';
 import { getByRole, hasIntegrity, driversInMemory, colonistCounts, type ColonistCounts } from '@state/selectors';
 import { requestLaunch, forceLandAll, endLanding, setLoadNext } from '@systems/landing';
 import { getDropSolution } from '@systems/drop-cache';
-import { landingResult, onTargetTally } from '@systems/landing-rules';
-import { shipStars, type ShipStar } from '@systems/stars';
-import type { LaunchIntent, LaunchResult, LandingTally, OnTargetTally, DropSolution, LzDef } from '@/types/landing';
+import { onTargetTally } from '@systems/landing-rules';
+import { landingReportModel, type LandingReportModel } from '@systems/landing-report';
+import type { LaunchIntent, LaunchResult, OnTargetTally, DropSolution, LzDef } from '@/types/landing';
 import { createLandingState } from '@state/initial';
-import { shipOutcomeOf } from '@systems/run';
 import { endFlight } from '@systems/orbit-sim';
 import { setIntegrity } from '@state/actions';
 import type { SegmentRole } from '@/types/segment';
@@ -139,7 +138,7 @@ interface DebugHooks {
   landAll: () => number;
   endLanding: () => string | null;
   loadNext: (pod: number) => string | null;
-  landingReport: () => { tally: LandingTally; stars: ShipStar[] };
+  landingReport: () => LandingReportModel;
   onTarget: () => OnTargetTally;
   // WP6: HOLLOW. infect / cure take a cluster code (C12) or a file name (Engine I/O): infect bites it
   // now from the side facing HOLLOW (on ship 1 before the loop closed, that IS the scripted bite);
@@ -464,7 +463,7 @@ export function mountDebug(store: Store<GameState>): void {
     landAll: () => forceLandAll(store),
     endLanding: () => endLanding(store),
     loadNext: (pod) => setLoadNext(store, pod),
-    landingReport: () => ({ tally: landingResult(store.getState(), shipOutcomeOf(store.getState())), stars: shipStars(store.getState()) }),
+    landingReport: () => landingReportModel(store.getState()),
     onTarget: () => onTargetTally(store.getState()),
     infect: (target) => infectNow(store, debugTarget(store, target)),
     cure: (target) => cureNow(store, debugTarget(store, target)),

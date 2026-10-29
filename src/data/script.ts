@@ -32,7 +32,7 @@ import {
   rootDeleteRunning, rootDeleteProgress, bittenAgainDrivers, seedBitesAiFile,
 } from '@systems/hollow';
 import { rootDeletable } from '@systems/finale';
-import { hostLine, podCode, LANDING_ASKS, LANDING_LINES } from '@data/landing-text';
+import { hostLine, podCode, LANDING_ASKS, LANDING_LINES, LAUNCH_REFUSAL_LINES } from '@data/landing-text';
 import { autoburnDropLine, autoburnAvailable } from '@systems/autoburn';
 import { blocksInRack, knownHitRacks } from '@systems/zones';
 import { safestSpot, placementRack } from '@systems/move-preview';
@@ -46,7 +46,7 @@ import { canStartOp, getOps } from '@systems/ops-core';
 import { TOOL_HINT_TARGET } from '@data/fs-tools';
 import {
   MIND_CLEAR_IDLE_SEC, MAX_LINE_CHARS, NAME_MAX_CHARS, ENGINE_FAULT_AFTER_TAC, ENGINE_FAULT_INTEGRITY,
-  ENGINE_WEAK_MAX_SHOWN_SEC, COUNTDOWN_RED_TAC, STAR_FUEL_PCT,
+  ENGINE_WEAK_MAX_SHOWN_SEC, COUNTDOWN_RED_TAC,
   SEG_NAME_MAX_CHARS, EATEN_ALARM_CLEAR_SEC, WALL_MIN_BLOCKS,
   WALL_RULE_SHOW_SEC, EMERGENCY_EXTRA_HITS, CORE_RESET_INTEGRITY, BEAM_OUT_EXTRA_HITS,
   TRANSIT_HIT_MAX, BAND_DEGRADED_MIN, CORE_LOW_INTEGRITY, FIREWALL_HINT_SHOW_SEC, DEBRIS_MOVE_HINT_TAC, SEED_LESSON_SHOW_SEC,
@@ -551,25 +551,6 @@ export const RUN_END_WHY: Readonly<Record<RunEndCause, (ship: string) => string>
   abandoned: () => 'The run was left behind.',
 };
 
-// RUN END (§9 WP7 item 7, 01-landing §3.9): LANDED counts the colonists who came down in an LZ with room; the run's
-// SCORE is the landing points, shown only here and labelled as one; the rank is by SCORE.
-// TODO(slice1a-UI): RUN END's layout for the landing (per-ship LANDED rows, points); these are its words for now.
-export const RUN_END_TEXT = {
-  kicker: (unit: string, wave: number): string => `RUN OVER · ${unit} · WAVE ${wave}`,
-  total: LANDED_TEXT.count,
-  score: (score: number): string => `SCORE ${formatCount(score)}`,
-  scoreNote: 'the SCORE is the landing points: less for hard, mislanded and off-site pods',
-  rank: (rank: string): string => `RANK · ${rank}`,
-  shipLanded: LANDED_TEXT.count,
-  notReached: 'NOT REACHED',
-  // Near misses (§4.4: `▼ was 140 km from a perfect lock`, `41 points short of CARETAKER`). The gap is in SCORE points,
-  // so it says points (final review: `41 SCORE short of` read as a typo).
-  rankGap: (gap: number, rank: string): string => `${formatCount(gap)} points short of ${rank}`,
-  lockMiss: (apsis: string, km: number, ship: string): string => `${apsis} was ${formatCount(km)} km from a perfect lock on ${ship}`,
-  fuelMiss: (pct: number, ship: string): string => `${ship} locked with FUEL ${pct}% — the ★ is at ${STAR_FUEL_PCT}%`,
-  seed: (seed: number): string => `SEED ${seed.toString(16).toUpperCase().padStart(8, '0')}`,
-  newRun: 'NEW RUN ▸ [SPACE]',
-} as const;
 
 // A ship's line on RUN END: how it ended, the word the stamps and cards use.
 export const SHIP_OUTCOME_WORD: Readonly<Record<ShipOutcome, string>> = {
@@ -720,6 +701,8 @@ export const REFUSAL_LINES: Readonly<Record<string, { text: string; keys: readon
   [AUTOPILOT_REFUSAL]: { text: AUTOPILOT_DAMAGED_LINE, keys: ['Q', 'E'] },
   // WP9: a refused [B] (AUTOBURN), under its own keys.
   ...Object.fromEntries(Object.entries(AUTO_REFUSAL_LINES).map(([refusal, line]) => [autoRefusalKey(refusal as AutoburnRefusal), line])),
+  // Slice 1a: a refused [L] (landing-text launchRefusalKey).
+  ...LAUNCH_REFUSAL_LINES,
 };
 
 export interface DamagedFile {

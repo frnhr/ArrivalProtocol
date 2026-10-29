@@ -191,7 +191,7 @@ interface ShipResult {
   outcome: ShipOutcome; colonistsAboard: number;
   lzs: LzResult[]; offSite: number; noGo: number; restored: number;
   parked: { pod: number; why: ParkReason }[]; notLaunched: number;
-  landedOnTarget: number;   // colonists in an LZ with room, soft or hard (the headline; runLanded)
+  landedInLz: number;   // colonists in an LZ with room, soft or hard (the headline; runLanded)
   points: number; stars: number; fuelLeftPct: number; ringMiss: RingMiss | null;
   colony: string | null; pods: PodSummary[];
 }
@@ -354,7 +354,7 @@ L13 adds ` · OUT OF BAND` when the next window is out of band.
   - `continueAfterReport` is unchanged in shape.
   - `shipLost` treats coreLost in landing like flight.
   - In-orbit endings park pods (`parkAboard`) before the report or the card.
-- run-score.ts: `runScore` = Σ points; `runWoke` becomes `runLanded` = Σ `landedOnTarget`; `fleetHome` stays.
+- run-score.ts: `runScore` = Σ points; `runWoke` becomes `runLanded` = Σ `landedInLz`; `fleetHome` stays.
 - stars.ts: `locked`; `onTarget` (≥ `STAR_ON_TARGET_FRAC` 0.95); `fuel` judged on `fuelAtEndPct ?? burn.fuelPct` and requires locked.
 - run-end.ts: `fleetColonists` comes from ShipDef landing.
 - meta.ts: the archive's `woke` field is filled with runLanded (risk 10).
@@ -525,12 +525,15 @@ New constants, each with a WHY taken from the spec: `BAY_SLOTS` 4, `BAY_RELOAD_T
 ### Ownership after the foundation
 
 - `schema.ts`, `types/*`, `ships.ts`, `memory.ts`, `script.ts`: **SIM only.** Others ask SIM (a one-line request in the PR or a message). UI may add pure read models in `landing-hud.ts` without schema changes.
-- `tuning.ts` and `landing-text.ts`: SIM owns them. UI may only **append** inside a block it creates at the end of each file (`// --- Landing UI (slice 1a, Track UI)`). TESTS never edits either.
-- `main.ts`: UI owns it. SIM documents mount order in landing.ts's header: `mountDropCache` after `mountPredictor`; `mountLanding` where `mountPrinter` was (after ops-core, before HOLLOW, so a launch wins a same-tick bite); `registerLandingKeys(store, { confirm: askInline… })`.
+- `tuning.ts`: SIM owns it. UI may only **append** inside a block it creates at the end of the file (`// --- Landing UI (slice 1a, Track UI)`). TESTS never edits it.
+- `landing-text.ts` (foundation follow-up): SIM owns everything above the `// UI` banner; **Track UI owns the UI section below it** (the banner says so; `RUN_END_TEXT` now lives there). TESTS never edits it. Pod ids (`podTag`, `driverSegId`) are in `src/data/pod-ids.ts` (SIM).
+- `main.ts`: UI owns it. SIM documents mount order in landing.ts's header: `mountDropCache` after `mountPredictor`; `mountLanding` where `mountPrinter` was (after ops-core, before HOLLOW, so a launch wins a same-tick bite); `registerLandingKeys(store, { confirm: launchConfirm })` (wired by the foundation, through askInline).
+- `landing-controls.ts` exists (foundation follow-up): `playerLaunch` and `registerLandingKeys`. **SIM owns the key handling inside it**; UI's buttons (POD BAY, the phone bar) call `playerLaunch` only.
+- `landing-report.ts` exists as a stub with the final `LandingReportModel` shape (foundation follow-up). **Track UI owns it** (a pure view model).
 
 ### Track SIM (DOM-free logic)
 
-- New files: `src/systems/landing.ts` (implement), `src/systems/landing-controls.ts`, `src/systems/landing-guidance.ts`, `src/systems/landing-report.ts`.
+- New files: `src/systems/landing.ts` (implement), `src/systems/landing-controls.ts` (exists; SIM owns its key handling), `src/systems/landing-guidance.ts`.
 - Refine: `src/systems/drop-cache.ts`.
 - Modify: `src/systems/pace.ts`, `clock.ts`, `orbit-sim.ts`, `predict.ts` (renames only), `director.ts`, `guidance.ts` (re-export), `hollow.ts`, `hollow-deal.ts`, `hollow-verbs.ts`, `finale.ts`, `zones.ts`, `run.ts`, `run-end.ts`, `run-score.ts`, `stars.ts`, `meta.ts`, `transmit.ts`, `carry.ts`, `capabilities.ts`, `licences.ts`, `boot.ts`, `say.ts`, `tool-targets.ts`, `flight-events.ts`, `move-preview.ts`, `input.ts`, `src/debug.ts`.
 - Data and state: `src/data/{script,landing-text,ships,memory,souls,tuning,tool-text,hollow-text}.ts`, `src/state/*`, `src/types/*`.
@@ -538,7 +541,7 @@ New constants, each with a WHY taken from the spec: `BAY_SLOTS` 4, `BAY_RELOAD_T
 
 ### Track UI
 
-- Models: `src/systems/flight-hud.ts` (crumbs `ORBIT LOCKED | LANDING · 2/6 DOWN | ALL DOWN`; the countdown chip shows the next window; `IN BAND`; `acceptLabel`; `paceLabel`; `toggleAlert` with `◀ SHIP · LZ-A OPEN`), `src/systems/landing-hud.ts` (new), `src/systems/hollow-hud.ts` (mini kinds `driver` and `driver-hurt`).
+- Models: `src/systems/landing-report.ts` (the stub from the foundation: `landingReportModel`), `src/systems/flight-hud.ts` (crumbs `ORBIT LOCKED | LANDING · 2/6 DOWN | ALL DOWN`; the countdown chip shows the next window; `IN BAND`; `acceptLabel`; `paceLabel`; `toggleAlert` with `◀ SHIP · LZ-A OPEN`), `src/systems/landing-hud.ts` (new), `src/systems/hollow-hud.ts` (mini kinds `driver` and `driver-hurt`).
 - Audio: `src/systems/audio.ts` (podLaunch, podEntry, windowTone, pitched printBell), `src/systems/audio-cues.ts`.
 - New components: `PodBayWindow.ts` (`[ L · LAUNCH POD ]`, `▮▮▮▯ 3/4 · RELOAD 0:12`, `NEXT POD 01 · OKAFOR · SOFT · ±78 km`, LZ counters, END LANDING with the inline confirm, the `BAY CTRL` pip), `GroundTrack.ts`, `LandingReport.ts`, `LaunchFx.ts`.
 - Modified components: `NavPlotWindow.ts` (brackets, dot, dotted arc, streaks, landing marks, beacons, ring label), `plot-draw.ts`, `DetailPanel.ts` (driver detail, LOAD NEXT, predicted outcome), `SegmentBlock.ts` (driver chips, `BAY`/`NEXT` tags, chip label `P03` where narrow), `MemoryStrip.ts`, `MemoryStats.ts`, `MiniStrip.ts`, `MiniHud.ts`, `Footer.ts` (`PODS: 8 ABOARD · 3 LANDED · 1 CAN'T LAUNCH`), `ModeToggle.ts`, `PhoneFlightBar.ts` (LAUNCH), `ToolsTabs.ts`, `EngineWindow.ts`, `ObjectiveStrip.ts`, `Stamp.ts` (FIRST LANDING, ALL PODS DOWN), `Juice.ts` (`+200 LANDED · LZ-A`, shake, ring pulse), `BurnResult.ts`, `TransmitScreen.ts`, `RunEnd.ts`, `SidebarFilters.ts`.
@@ -653,3 +656,20 @@ What the foundation built differently from §1–§4, and why. Everything else f
 **Tests (F2)**
 - Besides the five deleted suites and the harness renames (wp1, wp2, wp5, wp6, wp11 harnesses and wp12/playthrough.ts typecheck for real), **46 suites that still read phase-2 APIs** (cluster codes, `souls.results`, `printer`, the reveal) carry a first-line `// @ts-nocheck: TODO(slice1a-TESTS)` so `tsc -p tests/tsconfig.json` stays green until Track TESTS rewrites them per §5. Remove the pragma as each one is moved over: `grep -rl "@ts-nocheck: TODO(slice1a-TESTS)" tests`.
 - `tests/unit/landing/pod-code.ts` maps the old codes onto pods (`C09` → pod 9), so the harnesses' `soul('C09')` lookups keep working.
+
+### Foundation follow-up (after the architecture review of f86ea88..cd6782c)
+
+**Blockers fixed**
+- **One "window open now".** `LzWindow` gains `inBandOpenInSec` / `inBandCloseInSec`: the window intersected with the ship's band crossings (radius roots on the track, bisected like the other edges); `inBand` means that span exists. `openInBandWindow` uses that span, so on a PARTIAL orbit whose window straddles a band edge the rules, the strip and [L]'s OUT OF THE LAUNCH BAND agree. landing.ts's AI tick writes **`LandingState.window: { lz: string; sure: boolean } | null`** (`windowOpenNow`) and emits `window-open` / `window-sure` / `window-closed` on its edges. hollow's `drainConditions` reads `state.landing.window` plus `nextToLaunch` for landMult (§5's definition, TODO removed), so `hollow-hud` needs no mounted cache. Only landing.ts, guidance's countdowns and landing-hud read drop-cache.
+- **`landing-controls.ts`**: `playerLaunch(store, confirm, pod?)` runs the whole requestLaunch → confirm → re-call loop; `registerLandingKeys(store, { confirm })` binds [L] (game layer, no auto-repeat; in the MIND it refuses with SHIP SCREEN), KeyG is reserved; both are in input.ts's PREVENTED_CODES. main.ts wires it with an askInline adapter (`✓ LAUNCH` / `✗ WAIT`).
+- **Ownership seams**: the landing-text UI banner; `RUN_END_TEXT` moved there; `landing-report.ts` stub (`LandingReportModel`, `landingReportModel(state)` on real data; the placeholder screen and `__ap.landingReport()` use it); `targetWindow(state, sol, nowTSec)` in landing-rules for pace's SKIP, the countdown chip and landing-hud.
+
+**Majors fixed**
+- `Touchdown.touch` is final, decided at touchdown (`touchAtTouchdown(launch)` = driverTouch of the driver at launch; SURVEY's grounds later). `LaunchRecord.touch` is now `predictedTouch`. Every reader uses `touchdown.touch`.
+- `launchRecordFor` computes the drop width with `dropFactors(caps, theLaunchedDriver)`.
+- `launchRefusal(state, sol, { source, fromMind }, pod?)`: SHIP SCREEN whenever the screen is the MIND and the asker may not launch from there; `requestLaunch` derives `fromMind` from the active controller (and throws if a non-player source is not the active controller). Only the player's refusals emit 'refused', with a namespaced reason (`LAUNCH|…`) that data/script.ts REFUSAL_LINES flashes as `LAUNCH_REFUSAL_TEXT`.
+- Pods are parked the moment `ended` is set (END LANDING, the auto-end, all launched, forceLandAll: landing.ts `endNow`, which also emits `pods-parked` and `landing-ended`); `finishLanding` only records FUEL and opens the report. MERGE's reopening also unparks pods parked `no-time` (their drivers are in memory).
+- `landedOnTarget` → **`landedInLz`** (types, selectors, ShipResult, run-score, run-end, the archive's `woke`).
+- The risk-7 auto-end: pods aboard with none of their drivers in memory end the landing after `LANDING_NONE_LEFT_SEC` (`no-driver-left`).
+
+**Minors done**: `landing-start` emitted from endFlight and `burn.lastTickDvKmS` reset in beginLanding; launch refusals flash a line; `forceLandAll` aborts ops on the drivers aboard, then launches only `isLaunchable` ones; `finale.ts isFlagship` reads `state.landing.finalShip`; `validateLandingDef` moved to `src/data/landing-def.ts` (no SHIPS import) and rejects no-go arcs over a bracket or each other; `PodSummary.featured` (names); `podTag` / `driverSegId` in `src/data/pod-ids.ts`; header and controller comments; drop-cache's "only requestLaunch calls currentDropSolution" note.

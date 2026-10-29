@@ -850,9 +850,9 @@ export function drainConditions(state: Readonly<GameState>): DrainConditions {
   const flying = state.run.phase === 'flight' && state.burn.status === 'approaching' && !state.clock.paused;
   return {
     thrustDelivered: flying && (isThrustOn(state) || isGhostFiring(state)),
-    // TODO(slice1a-SIM): 01-landing §5's full definition adds "an in-band window is open"
-    // (landing-rules anyInBandWindowOpen(drop-cache getDropSolution())); until then a launchable pod is enough.
-    landingActive: state.run.phase === 'landing' && nextToLaunch(state) !== null,
+    // 01-landing §5: an in-band window open now (LandingState.window, written by landing.ts: STATE, so the HUD's models
+    // need no mounted drop cache) with a launchable pod.
+    landingActive: state.run.phase === 'landing' && state.landing.window !== null && nextToLaunch(state) !== null,
   };
 }
 

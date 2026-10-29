@@ -1,8 +1,8 @@
 import type { GameState, ShipOutcome } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {
-  DropFactors, DropSolution, ForgivenessClass, LandingTally, LandingView, LaunchAsk, LaunchRefusal, LaunchSource, LzResult, LzState,
-  LzWindow, NoGoArcState, OnTargetTally, ParkReason, Place, PodFate, PodRecord, PodSummary, ShipLandingDef, Touch, Touchdown,
+  DropFactors, DropSolution, ForgivenessClass, LandingTally, LandingView, LandingWindow, LaunchAsk, LaunchRecord, LaunchRefusal,
+  LaunchSource, LzResult, LzState, LzWindow, NoGoArcState, OnTargetTally, ParkReason, Place, PodFate, PodRecord, PodSummary, ShipLandingDef, Touch, Touchdown,
 } from '@/types/landing';
 import type { Capabilities } from '@systems/capabilities';
 import type { Rng } from '@systems/rng';
@@ -167,16 +167,41 @@ export function dropFactors(_caps: Readonly<Capabilities>, _driver: Readonly<Dri
   return { sensor: 1, plotter: 1, driver: 1 };
 }
 
-// The in-band window open now (the dot's centre in a bracket while the ship is in the band, risk 13), or null. Times are
-// rebased from the solution's asOfTSec to `nowTSec`.
+// The in-band window open now (the dot's centre in a bracket while the ship is in the band, risk 13), or null: inside the
+// window's in-band span (LzWindow.inBandOpenInSec/inBandCloseInSec, the window intersected with the band crossings), so
+// it agrees with launchRefusal's OUT OF THE LAUNCH BAND on a window that straddles a band edge. Times are rebased from
+// the solution's asOfTSec to `nowTSec`. landing.ts turns this into LandingState.window each AI tick; everything else
+// reads that STATE (windowOpenNow / state.landing.window), never the drop cache.
 export function openInBandWindow(sol: Readonly<DropSolution> | null, nowTSec?: number): LzWindow | null {
   if (sol === null || sol.block !== null) return null;
   const now = nowTSec ?? sol.asOfTSec;
-  return sol.windows.find((w) => w.inBand && secFromNow(sol, w.openInSec, now) <= 0 && secFromNow(sol, w.closeInSec, now) > 0) ?? null;
+  return sol.windows.find((w) => w.inBandOpenInSec !== null && w.inBandCloseInSec !== null
+    && secFromNow(sol, w.inBandOpenInSec, now) <= 0 && secFromNow(sol, w.inBandCloseInSec, now) > 0) ?? null;
 }
 
 export function anyInBandWindowOpen(sol: Readonly<DropSolution> | null, nowTSec?: number): boolean {
   return openInBandWindow(sol, nowTSec) !== null;
+}
+
+// LandingState.window for a solution (landing.ts writes it): the in-band window open now, SURE while the whole dot fits.
+export function windowOpenNow(sol: Readonly<DropSolution> | null, nowTSec: number): LandingWindow | null {
+  const open = openInBandWindow(sol, nowTSec);
+  if (open === null || sol === null) return null;
+  const sure = open.sureOpenInSec !== null && open.sureCloseInSec !== null
+    && secFromNow(sol, open.sureOpenInSec, nowTSec) <= 0 && secFromNow(sol, open.sureCloseInSec, nowTSec) > 0;
+  return { lz: open.lz, sure };
+}
+
+// The window the kid should aim at (§3.2; pace's SKIP, the countdown chip and landing-hud share it): the next in-band
+// span not yet over of an LZ with projected room, else of any LZ, else null. "Next" by its in-band opening (an open one
+// first). Times rebased to `nowTSec`.
+export function targetWindow(state: Readonly<GameState>, sol: Readonly<DropSolution> | null, nowTSec: number): LzWindow | null {
+  if (sol === null || sol.block !== null) return null;
+  const live = sol.windows
+    .filter((w) => w.inBandOpenInSec !== null && w.inBandCloseInSec !== null && secFromNow(sol, w.inBandCloseInSec, nowTSec) > 0)
+    .sort((a, b) => a.inBandOpenInSec! - b.inBandOpenInSec!);
+  const remaining = lzRemaining(state);
+  return live.find((w) => (remaining[w.lz] ?? 0) > 0) ?? live[0] ?? null;
 }
 
 // The driver a launch would take: `pod`'s if named (it must be in memory), else nextToLaunch.
@@ -185,15 +210,22 @@ function driverFor(state: Readonly<GameState>, pod: number | undefined): DriverS
   return driversInMemory(state).find((driver) => driver.pod === pod) ?? null;
 }
 
-// Why a launch can't go now, in the order of the LaunchRefusal union; null: it can. SHIP SCREEN applies to the kid's
-// [L] only: a controller that may launch from MIND (LandingController.launchesFromMind) is asked by landing.ts.
+// Who is asking for a launch: the source, and whether it may launch while the kid is in the MIND (the blue screen).
+// requestLaunch derives fromMind: false for the player, the active controller's launchesFromMind otherwise.
+export interface LaunchFrom {
+  source: LaunchSource;
+  fromMind: boolean;
+}
+
+// Why a launch can't go now, in the order of the LaunchRefusal union; null: it can. SHIP SCREEN applies whenever the
+// screen is the MIND and the asker may not launch from there.
 export function launchRefusal(
-  state: Readonly<GameState>, sol: Readonly<DropSolution> | null, source: LaunchSource, pod?: number,
+  state: Readonly<GameState>, sol: Readonly<DropSolution> | null, from: LaunchFrom, pod?: number,
 ): LaunchRefusal | null {
   if (state.run.phase !== 'landing') return 'NOT LANDING';
   if (state.landing.ended !== null) return 'LANDING OVER';
   if (state.clock.paused) return 'PAUSED';
-  if (source === 'player' && state.ui.mode === 'memory') return 'SHIP SCREEN';
+  if (state.ui.mode === 'memory' && !from.fromMind) return 'SHIP SCREEN';
   if (state.burn.lastTickDvKmS > 0) return 'ENGINE FIRING';
   if (sol === null || sol.block !== null || sol.dot === null) return 'NO DROP SOLUTION';
   if (!sol.dot.inBand) return 'OUT OF THE LAUNCH BAND';
@@ -252,6 +284,12 @@ export function parkReasonOf(record: Readonly<PodRecord>): ParkReason {
   return record.driverLost ?? 'no-time';
 }
 
+// How a pod comes down (Touchdown.touch), decided at touchdown: the driver's integrity at launch for now; SURVEY's
+// grounds (slice 6) will make it depend on where the pod lands too, which is why it is not taken from the launch.
+export function touchAtTouchdown(launch: Readonly<LaunchRecord>): Touch {
+  return driverTouch(launch.driverIntegrity);
+}
+
 // The fate a pod still aboard gets when the ship's landing is over with `outcome` (landing.ts parkAboard writes it).
 export function finalFateOfAboard(record: Readonly<PodRecord>, outcome: ShipOutcome): PodFate {
   if (!endsInOrbit(outcome)) return { kind: 'not-launched' };
@@ -273,11 +311,13 @@ export function pendingTouchdowns(state: Readonly<GameState>): Map<number, Touch
   for (const { record, launch } of falling) {
     const placement = classifyLanding(landing.lzs, landing.noGo, launch.landingRad, fill);
     if (placement.lz !== null) fill[placement.lz] = (fill[placement.lz] ?? 0) + 1;
+    const touch = touchAtTouchdown(launch);
     touchdowns.set(record.pod, {
       place: placement.place,
       lz: placement.lz,
-      points: podPoints(placement.place, launch.touch, landing.forgiveness, record.colonists),
+      points: podPoints(placement.place, touch, landing.forgiveness, record.colonists),
       missKm: missKm(landing.lzs, launch.landingRad, state.level.planet.R),
+      touch,
       atAi: launch.atAi + launch.descentSec,
     });
   }
@@ -291,7 +331,7 @@ export function landingResult(state: Readonly<GameState>, outcome: ShipOutcome):
   const rows = new Map<string, LzResult>();
   for (const lz of landing.lzs) rows.set(lz.label, { lz: lz.label, count: lz.pods * COLONISTS_PER_POD, landed: 0, mislanded: 0, hard: 0 });
   const tally: LandingTally = {
-    colonistsAboard: 0, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: 0, landedOnTarget: 0, points: 0,
+    colonistsAboard: 0, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: 0, landedInLz: 0, points: 0,
     colony: landing.colony, pods: [],
   };
   const pending = pendingTouchdowns(state);
@@ -304,7 +344,7 @@ export function landingResult(state: Readonly<GameState>, outcome: ShipOutcome):
     if (record.restored) tally.restored += record.colonists;
     const summary: PodSummary = {
       pod: record.pod, family: record.family, colonists: record.colonists, fate: fate.kind, place: null, lz: null, touch: null,
-      points: 0, parkedWhy: null, restored: record.restored,
+      points: 0, parkedWhy: null, restored: record.restored, featured: record.featured.map((colonist) => colonist.name),
     };
     switch (fate.kind) {
       case 'falling':
@@ -321,7 +361,7 @@ export function landingResult(state: Readonly<GameState>, outcome: ShipOutcome):
         const { place, lz, points } = fate.touchdown;
         summary.place = place;
         summary.lz = lz;
-        summary.touch = fate.launch.touch;
+        summary.touch = fate.touchdown.touch;
         summary.points = points;
         tally.points += points;
         if (place === 'off-site') tally.offSite += record.colonists;
@@ -329,8 +369,8 @@ export function landingResult(state: Readonly<GameState>, outcome: ShipOutcome):
         else {
           const row = rows.get(lz ?? '');
           if (!row) throw new Error(`landingResult: pod ${record.pod} landed in an unknown LZ '${lz}'`);
-          if (place === 'lz') { row.landed += record.colonists; tally.landedOnTarget += record.colonists; } else row.mislanded += record.colonists;
-          if (fate.launch.touch === 'hard') row.hard += record.colonists;
+          if (place === 'lz') { row.landed += record.colonists; tally.landedInLz += record.colonists; } else row.mislanded += record.colonists;
+          if (fate.touchdown.touch === 'hard') row.hard += record.colonists;
         }
         break;
       }
@@ -354,7 +394,7 @@ export function onTargetTally(state: Readonly<GameState>): OnTargetTally {
   for (const record of state.landing.pods) {
     colonists += record.colonists;
     const { fate } = record;
-    if (fate.kind === 'down' && fate.touchdown.place === 'lz' && fate.launch.touch === 'soft') {
+    if (fate.kind === 'down' && fate.touchdown.place === 'lz' && fate.touchdown.touch === 'soft') {
       onTargetPods++;
       onTargetColonists += record.colonists;
     } else if (fate.kind === 'falling' || (fate.kind === 'aboard' && inMemory.has(record.pod))) {

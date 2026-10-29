@@ -201,7 +201,7 @@ export type ShipOutcome = 'locked' | 'partial' | 'stranded' | 'escaped' | 'crash
 
 // One finished ship (01-landing §5 "To 02"): flat and JSON-safe, ready for slice 3's save. The landing half
 // (LandingTally: per-LZ rows, off-site, no-go, parked, the pods' detail, the points and the headline
-// landedOnTarget) is folded by landing-rules landingResult; slot and depth are the map's (in 1a the ship's
+// landedInLz) is folded by landing-rules landingResult; slot and depth are the map's (in 1a the ship's
 // index and index + 1).
 export interface ShipResult extends LandingTally {
   shipId: string;

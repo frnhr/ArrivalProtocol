@@ -192,6 +192,22 @@ check('the dot leads the ship by 70–88° on circular orbits of 5,000–9,000 k
     sol.windows.map((w) => `${w.lz} r ${w.launchRadius.toFixed(0)} ±${w.halfWidthKm.toFixed(0)}`).join(', '));
   const outOfBand = computeDropSolution({ ...input(ship, [lz('LZ-A', 60, 'standard'), lz('LZ-B', 250, 'standard')]), ring: { min: 5000, max: 6000 } });
   check('a window launched from outside the band says so (inBand false)', outOfBand.windows.some((w) => !w.inBand) && outOfBand.windows.some((w) => w.inBand));
+  // B1: a window that straddles a band edge reports exactly its in-band part (the window ∩ the band crossings), the same
+  // radius test launchRefusal uses for "now".
+  const zones = [lz('LZ-A', 60, 'standard'), lz('LZ-B', 250, 'standard')];
+  const wide = computeDropSolution({ ...input(ship, zones), ring: { min: 1000, max: 20000 } }).windows[0]!;
+  const rAt = (sec: number): number => { const at = propagateConic(ship, MU, sec); return Math.hypot(at.x, at.y); };
+  const rOpen = rAt(wide.openInSec);
+  const rClose = rAt(wide.closeInSec);
+  const edge = (rOpen + rClose) / 2;
+  const ring = rOpen < rClose ? { min: 1000, max: edge } : { min: edge, max: 20000 };
+  const cut = computeDropSolution({ ...input(ship, zones), ring }).windows.find((w) => w.lz === wide.lz)!;
+  check('a window straddling the band edge keeps only its in-band part',
+    cut.inBandOpenInSec !== null && cut.inBandCloseInSec !== null
+      && Math.abs(cut.inBandOpenInSec - wide.openInSec) < 1e-6 && cut.inBandCloseInSec < wide.closeInSec - 1
+      && Math.abs(rAt(cut.inBandCloseInSec) - edge) < 0.5,
+    `window ${wide.openInSec.toFixed(1)}–${wide.closeInSec.toFixed(1)} s, in band ${cut.inBandOpenInSec?.toFixed(1)}–${cut.inBandCloseInSec?.toFixed(1)} s, r ${rOpen.toFixed(0)}→${rClose.toFixed(0)}`);
+  check('a window wholly in band has its whole length in band', wide.inBandOpenInSec === wide.openInSec && wide.inBandCloseInSec === wide.closeInSec);
 }
 {
   // τ is measured against the track's own periapsis: a near-circular orbit's noisy periapsis can't shift the windows.

@@ -13,9 +13,10 @@ import { clearAlert, VERB_ALERT_ID, SEED_ALERT_ID } from '@systems/alerts';
 import { replaceRange, mergeAdjacentFree, requireAddr, freeSegment, assertMemoryInvariants } from '@systems/memory-ops';
 import { spendCharge, cureInfection } from '@state/actions';
 import { getFsTool, chargeLeft, infectedSegments, isHollow, integrityState } from '@state/selectors';
-import { driverName, driverSegId } from '@data/landing-text';
+import { driverName } from '@data/landing-text';
+import { driverSegId } from '@data/pod-ids';
 import { echoWord, TOOL_REFUSAL } from '@data/tool-text';
-import { getShip, SHIPS } from '@data/ships';
+import { SHIPS } from '@data/ships';
 import { fleetHome } from '@systems/run-score';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { HOLLOW_FINALE } from '@data/hollow-text';
@@ -63,8 +64,10 @@ import {
 
 export type FinaleChoice = 'purge' | 'merge';
 
+// From the ship's landing slice (copied from ShipDef.flagship when the ship was built), never a ShipDef lookup: a
+// generator-made final ship needs nothing new here.
 function isFlagship(state: Readonly<GameState>): boolean {
-  return getShip(state.run.shipIndex).flagship;
+  return state.landing.finalShip;
 }
 
 // How the run ends after the flagship's LANDING REPORT (systems/run.ts continueAfterReport).
@@ -349,9 +352,14 @@ function merge(store: Store<GameState>): void {
     // Its numbers count the drivers just given back.
     draft.hollow.finale.ending = endingFor(draft, 'merge');
     // Drivers back in memory: the landing goes on with them (it may have ended, or been lingering toward the report).
+    // The pods parked when it ended reopen too if their driver never left memory (parked 'no-time'): the landing parks
+    // at the moment it ends (landing.ts endNow), so reopening it must unpark them.
     if (inPlace.length > 0) {
       draft.landing.ended = null;
       draft.landing.lingerAiSec = null;
+      for (const record of draft.landing.pods) {
+        if (record.fate.kind === 'parked' && record.fate.why === 'no-time') record.fate = { kind: 'aboard' };
+      }
     }
     if (draft.ui.selectedId !== null && gone.has(draft.ui.selectedId)) draft.ui.selectedId = null;
     draft.ui.memoryRev++;

@@ -236,20 +236,20 @@ export interface ColonistCounts {
   aboard: number;
   falling: number;
   down: number;
-  landedOnTarget: number;
+  landedInLz: number;
   parked: number;
   notLaunched: number;
 }
 
 export function colonistCounts(state: Readonly<GameState>): ColonistCounts {
-  const counts: ColonistCounts = { aboard: 0, falling: 0, down: 0, landedOnTarget: 0, parked: 0, notLaunched: 0 };
+  const counts: ColonistCounts = { aboard: 0, falling: 0, down: 0, landedInLz: 0, parked: 0, notLaunched: 0 };
   for (const record of state.landing.pods) {
     switch (record.fate.kind) {
       case 'aboard': counts.aboard += record.colonists; break;
       case 'falling': counts.falling += record.colonists; break;
       case 'down':
         counts.down += record.colonists;
-        if (record.fate.touchdown.place === 'lz') counts.landedOnTarget += record.colonists;
+        if (record.fate.touchdown.place === 'lz') counts.landedInLz += record.colonists;
         break;
       case 'parked': counts.parked += record.colonists; break;
       case 'not-launched': counts.notLaunched += record.colonists; break;

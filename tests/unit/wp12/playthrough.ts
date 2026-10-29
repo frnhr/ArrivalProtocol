@@ -740,7 +740,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     record.completed = record.cause !== 'overwritten' && record.cause !== 'stayed' && state().run.ships.length === SHIPS.length;
   }
   record.ships = state().run.ships.map((ship, index) => ({
-    ship: ship.shipName, outcome: ship.outcome, woke: ship.landedOnTarget, half: ship.lzs.reduce((sum, row) => sum + row.hard, 0), lost: ship.parked.length, stars: ship.stars,
+    ship: ship.shipName, outcome: ship.outcome, woke: ship.landedInLz, half: ship.lzs.reduce((sum, row) => sum + row.hard, 0), lost: ship.parked.length, stars: ship.stars,
     fuelPct: Math.round(ship.fuelLeftPct * 10) / 10, wallSec: Math.round(shipWall[index] ?? 0),
     ...(diag[index] ?? { chargeIn: -1, coreIn: -1, chargeOut: -1, coreOut: -1, filesEaten: 0, repairLeft: false, repairEaten: [] }),
   }));

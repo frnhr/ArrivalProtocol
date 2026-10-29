@@ -8,7 +8,8 @@ import { pushModal, registerKeys } from '@systems/input';
 import { play, toggleMuted } from '@systems/audio';
 import { requireById, replayAnimation, make } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
-import { RUN_END_TEXT, ARCHIVE_TEXT, endingsLine } from '@data/script';
+import { ARCHIVE_TEXT, endingsLine } from '@data/script';
+import { RUN_END_TEXT } from '@data/landing-text';
 import {
   RUN_END_ARM_SEC, RUN_END_ROW_GAP_SEC, RUN_END_COUNT_SEC, BEAM_OUT_BLACKOUT_SEC, STARS_PER_SHIP, REPORT_COUNT_HEARTBEAT,
 } from '@data/tuning';
@@ -112,7 +113,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
       // A ship whose colonists landed comes in with a heartbeat; one that landed nobody, or was never reached, in
       // silence. TODO(slice1a-UI): RUN END's landing rows (points, per-ship LANDED).
       const result = report.ships[i]?.result;
-      if (result && result.landedOnTarget > 0) play('heartbeat', { strength: REPORT_COUNT_HEARTBEAT.woke });
+      if (result && result.landedInLz > 0) play('heartbeat', { strength: REPORT_COUNT_HEARTBEAT.woke });
     }));
     const afterRows = RUN_END_ROW_GAP_SEC * (rows.length + 1);
     later(Math.max(afterRows, RUN_END_COUNT_SEC), () => {

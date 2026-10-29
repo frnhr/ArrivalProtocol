@@ -1,5 +1,6 @@
-// Every landing type (docs/phase3/01-landing.md, slice 1a). Depends on nothing but types/orbit and types/segment (and
-// the GameState type, for the controller seam): the pure solver, the rules, the sim and the views all speak these.
+// Every landing type (docs/phase3/01-landing.md, slice 1a). Type-only imports: Vec2 (types/orbit), Colonist
+// (types/segment) and GameState (state/schema, for the controller seam; schema imports this file back, which is fine
+// for types). The pure solver, the rules, the sim and the views all speak these.
 //
 // Angles in STATE are world radians (atan2 of a world position: CCW-positive, 0 along +x); angles in DATA are degrees,
 // converted once when the ship's landing slice is built (state/initial.ts createLandingState).
@@ -76,7 +77,8 @@ export interface LaunchRecord {
   halfWidthKm: number;    // the drop width s at launch
   aimLz: string | null;   // the bracket the dot's centre was in at launch (the echo's `... LZ-A`), null off-site
   landingRad: number;     // dot + u × s / R, u uniform in [−1, 1] from childRng(seed, ship, 'drop')
-  touch: Touch;           // from the driver's integrity at launch (driverTouch)
+  predictedTouch: Touch;  // how the driver would land at launch (driverTouch of its integrity): the guard's and the
+                          // echo's guess. The final touch is Touchdown.touch, decided at touchdown (SURVEY's grounds)
   driverIntegrity: number;
   arc: Vec2[];            // the fixed streak path, world km, launch to touchdown
   descentSec: number;     // AI s: POD_DESCENT_SEC, or POD_FIRST_DESCENT_SEC for run 1's first pod
@@ -87,6 +89,7 @@ export interface Touchdown {
   lz: string | null;      // the LZ it counts in ('lz' and 'mislanded'), else null
   points: number;         // podPoints: a whole number
   missKm: number | null;  // off-site or no-go: km to the nearest bracket edge (the report's near misses); else null
+  touch: Touch;           // final, decided at touchdown (landing-rules touchAtTouchdown): every reader uses this one
   atAi: number;
 }
 
@@ -143,8 +146,17 @@ export interface LandingState {
   ended: LandingEnd | null;     // why no more pods will launch (END LANDING, all launched, none left)
   lingerAiSec: number | null;   // AI s left before the LANDING REPORT, once the ship is empty (mutate)
   noDriverAiSec: number;        // AI s with pods aboard and no driver left in memory: the risk-7 auto-end (mutate)
+  window: LandingWindow | null; // the in-band window open NOW (landing.ts writes it each AI tick): the one source of
+                                // truth for "window open" (hollow's landMult, pace, guidance, chips, alerts, tests)
   fuelAtEndPct: number | null;  // FUEL when the landing ended: the FUEL star (§3.9)
   orbitEpoch: number;           // bumped on a discrete orbit change (1b's drag kick, later burns): a drop-cache key
+}
+
+// The window open now (§3.2, risk 13): the dot's centre in `lz`'s bracket while the ship is in the launch band; `sure`
+// while the whole dot is. landing.ts emits window-open / window-sure / window-closed on its edges.
+export interface LandingWindow {
+  lz: string;
+  sure: boolean;
 }
 
 // --- The drop solution (landing-solve computeDropSolution, cached by drop-cache.ts) ---
@@ -174,7 +186,12 @@ export interface LzWindow {
   sureCloseInSec: number | null;
   launchRadius: number;           // at the window's middle
   halfWidthKm: number;
-  inBand: boolean;
+  // The part of the window launched from inside the band (the window intersected with the ship's band crossings): the
+  // first such span that has not ended by the solution's time, or null when none is left this pass. "Open" for the
+  // rules means inside THIS span (landing-rules openInBandWindow).
+  inBandOpenInSec: number | null;
+  inBandCloseInSec: number | null;
+  inBand: boolean;                // inBandOpenInSec !== null
 }
 
 export interface DropSolution {
@@ -246,6 +263,7 @@ export interface PodSummary {
   points: number;
   parkedWhy: ParkReason | null;
   restored: boolean;
+  featured: string[];   // the featured colonists' names ('Okafor, Ada'): rolled from the run's rng, so kept here
 }
 
 // The landing half of a ShipResult (state/schema.ts), folded from the pods by landing-rules landingResult.
@@ -257,7 +275,7 @@ export interface LandingTally {
   restored: number;                         // colonists whose driver MERGE gave back
   parked: { pod: number; why: ParkReason }[];
   notLaunched: number;                      // colonists
-  landedOnTarget: number;                   // colonists in an LZ with room, soft or hard: the headline (runLanded)
+  landedInLz: number;                   // colonists in an LZ with room, soft or hard: the headline (runLanded)
   points: number;
   colony: string | null;
   pods: PodSummary[];

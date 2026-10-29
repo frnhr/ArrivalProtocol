@@ -1,6 +1,7 @@
 import type { Segment, SegmentRole } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
-import { podTag, DRIVER_TOOL_TEXT } from '@data/landing-text';
+import { DRIVER_TOOL_TEXT } from '@data/landing-text';
+import { podTag } from '@data/pod-ids';
 
 // The words the filesystem tools say (WP3): why a click did nothing (shown next to the cursor),
 // the inline confirm's questions, and the TERMINAL's line when a repair runs out of charge.

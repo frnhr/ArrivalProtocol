@@ -8,8 +8,9 @@ import {
   NAME_MAX_CHARS, DRIVER_BLOCKS, HEAL_BEATS_DRAIN_FACTOR, INTEGRITY_MAX, SHRINK_MARGIN_TAC, SHRINK_MARGIN_MIN_TAC, SHRINK_SMALL_LOOP_FACTOR,
   SHRINK_REACTION_TAC, HALCYON_SMALL_LOOP_FACTOR, HALCYON_EDGE_BACK_OFF_TAC, KESTREL_SMALL_LOOP_FACTOR, KESTREL_EDGE_BACK_OFF_TAC,
   VESPER_SMALL_LOOP_FACTOR, VESPER_EDGE_BACK_OFF_TAC, LAST_LIGHT_SMALL_LOOP_FACTOR, LAST_LIGHT_EDGE_BACK_OFF_TAC,
-  VERB_TELEGRAPH_SEC, VERB_FIRST_TELEGRAPH_SEC, LZ_WIDTH_KM, LZ_MIN_GAP_DEG, PODS_MAX,
+  VERB_TELEGRAPH_SEC, VERB_FIRST_TELEGRAPH_SEC,
 } from '@data/tuning';
+import { validateLandingDef } from '@data/landing-def';
 import { validateZoneDefs } from '@systems/zones';
 import {
   RACK_A, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, UNIT_RACKS_START, MEMORY_TOTAL_BLOCKS, buildShipMemory, validatePodRacks,
@@ -624,39 +625,6 @@ export function validateHollowDef(id: string, hollow: HollowDef): void {
   // THE DEAL trades a pod's driver for a pause in the spread: a HOLLOW that never spreads would offer nothing.
   if (hollow.deal && hollow.spreadEverySec === null) fail('THE DEAL needs a HOLLOW that spreads (spreadEverySec)');
   if (hollow.deal && hollow.wake === 'loop-closed-once') fail('THE DEAL needs a timed wake');
-}
-
-// Throws on landing data that breaks 01-landing §3.5–§3.6 and §3.15's placement rules: the LZ counts sum to the ship's
-// `pods`, at most PODS_MAX; labels are unique and follow increasing angle (orbits are CCW, so a kid meets LZ-A first);
-// centres in [0, 360); every two brackets at least LZ_MIN_GAP_DEG apart edge to edge, wrapping round, so two windows
-// never overlap; no-go arcs 3–8° wide. `planetR` turns each bracket's km into degrees. Slice 3's roller checks its own
-// output with it, so a generator-made ship fails as loudly as a written one.
-export function validateLandingDef(id: string, def: ShipLandingDef, pods: number, planetR: number): void {
-  const fail = (why: string): never => { throw new Error(`ShipDef ${id} landing: ${why}`); };
-  if (def.lzs.length === 0) fail('no landing zone');
-  if (!(Number.isInteger(pods) && pods > 0 && pods <= PODS_MAX)) fail(`${pods} pods (at most ${PODS_MAX})`);
-  const sum = def.lzs.reduce((total, lz) => total + lz.pods, 0);
-  if (sum !== pods) fail(`the LZ counts sum to ${sum} pods, not ${pods}`);
-  if (new Set(def.lzs.map((lz) => lz.label)).size !== def.lzs.length) fail('two LZs share a label');
-  const halfDeg = (widthKm: number): number => ((widthKm / 2) / planetR) * (180 / Math.PI);
-  def.lzs.forEach((lz, index) => {
-    if (!(Number.isInteger(lz.pods) && lz.pods > 0)) fail(`${lz.label} holds ${lz.pods} pods`);
-    if (!(lz.centreDeg >= 0 && lz.centreDeg < 360)) fail(`${lz.label} centre ${lz.centreDeg}° is outside [0, 360)`);
-    const previous = def.lzs[index - 1];
-    if (previous && !(lz.centreDeg > previous.centreDeg)) fail(`${lz.label} is not after ${previous.label} in angle`);
-    for (const other of def.lzs.slice(index + 1)) {
-      const apart = Math.abs(lz.centreDeg - other.centreDeg);
-      const centres = Math.min(apart, 360 - apart);
-      const gap = centres - halfDeg(LZ_WIDTH_KM[lz.width]) - halfDeg(LZ_WIDTH_KM[other.width]);
-      if (gap < LZ_MIN_GAP_DEG) fail(`${lz.label} and ${other.label} are ${gap.toFixed(1)}° apart edge to edge (at least ${LZ_MIN_GAP_DEG}°)`);
-    }
-  });
-  for (const arc of def.noGo) {
-    if (!(arc.widthDeg >= 3 && arc.widthDeg <= 8)) fail(`a no-go arc is ${arc.widthDeg}° wide (3–8°)`);
-    if (!(arc.centreDeg >= 0 && arc.centreDeg < 360)) fail(`a no-go arc's centre ${arc.centreDeg}° is outside [0, 360)`);
-    if (arc.word.trim() === '') fail('a no-go arc has no word');
-  }
-  if (def.colonyFirstRun !== null && def.colonyFirstRun.trim() === '') fail('an empty run-1 colony name');
 }
 
 // Throws on any ship whose numbers would make the flight impossible or the rules

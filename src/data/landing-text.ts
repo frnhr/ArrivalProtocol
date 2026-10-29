@@ -1,5 +1,7 @@
 import type { ForgivenessClass, LaunchRefusal, Place, ParkReason, TerrainWord, Touch } from '@/types/landing';
 import { formatCount } from '@data/format';
+import { STAR_FUEL_PCT } from '@data/tuning';
+import { podTag } from '@data/pod-ids';
 
 // Every landing word (docs/phase3/01-landing.md, slice 1a) as a PLACEHOLDER: 05-story owns the final wording, and the
 // state words of §3.10 (CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNCHED) are the decided set. A pod is never
@@ -16,17 +18,9 @@ export function minSec(sec: number): string {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
-// `POD 03` on screen, `pod03` in the TERMINAL's echoes, `driver_pod03` as the segment id.
+// `POD 03` on screen (the TERMINAL's `pod03` and the segment id `driver_pod03` are ids: data/pod-ids.ts).
 export function podCode(pod: number): string {
   return `POD ${String(pod).padStart(2, '0')}`;
-}
-
-export function podTag(pod: number): string {
-  return `pod${String(pod).padStart(2, '0')}`;
-}
-
-export function driverSegId(pod: number): string {
-  return `driver_${podTag(pod)}`;
 }
 
 // The driver's segment name: `POD 03 · OKAFOR`.
@@ -52,12 +46,27 @@ export const LAUNCH_REFUSAL_TEXT: Readonly<Record<LaunchRefusal, string>> = {
   'BAY EMPTY': 'BAY EMPTY — reloading',
 };
 
+// A refused launch's 'refused' event reason (landing.ts requestLaunch, for the player only), namespaced so it can't
+// collide with the tools' refusals ('PAUSED'), and its line on the strip for a moment (data/script.ts REFUSAL_LINES:
+// the buzz alone never says why).
+export function launchRefusalKey(refusal: LaunchRefusal): string {
+  return `LAUNCH|${refusal}`;
+}
+
+export const LAUNCH_REFUSAL_LINES: Readonly<Record<string, { text: string; keys: readonly string[] }>> = Object.fromEntries(
+  (Object.entries(LAUNCH_REFUSAL_TEXT) as [LaunchRefusal, string][]).map(([refusal, text]) => [
+    launchRefusalKey(refusal), { text, keys: refusal === 'SHIP SCREEN' ? ['TAB'] : [] },
+  ]),
+);
+
 // The inline confirms at [L] (§3.3) and END LANDING (§3.10). Enter confirms.
 export const LAUNCH_CONFIRM_TEXT = {
   offSite: (terrain: TerrainWord, points: number): string => `LAUNCH OFF-SITE? ${terrain} · scores ${formatCount(points)}`,
   full: (lz: string, points: number): string => `${lz} IS FULL — LAUNCH ANYWAY? scores ${formatCount(points)}`,
   endLanding: (pods: number): string =>
     pods === 0 ? 'END THE LANDING?' : `${pods} POD${pods === 1 ? '' : 'S'} WILL BE PARKED IN ORBIT · NOT COUNTED`,
+  yes: '✓ LAUNCH',
+  no: '✗ WAIT',
 } as const;
 
 // The TERMINAL's echoes (§3.8): `> launch pod03 ... LZ-A`, then `> pod03 ... LANDED`.
@@ -160,8 +169,36 @@ export function familyColonyName(family: string): string {
 }
 
 // =====================================================================================================================
-// UI
+// UI — everything below this banner is owned by Track UI (slice-1a-plan §4). SIM and TESTS don't edit it; SIM's words
+// stay above.
 // =====================================================================================================================
+
+// `1,200 / 2,400 LANDED` (the same words as data/script.ts LANDED_TEXT.count, which the strip uses).
+function landedCount(landed: number, of: number): string {
+  return `${formatCount(landed)} / ${formatCount(of)} LANDED`;
+}
+
+// RUN END (§9 WP7 item 7, 01-landing §3.9): LANDED counts the colonists who came down in an LZ with room; the run's
+// SCORE is the landing points, shown only here and labelled as one; the rank is by SCORE.
+// TODO(slice1a-UI): RUN END's layout for the landing (per-ship LANDED rows, points); these are its words for now.
+// (Moved here from data/script.ts in the foundation follow-up: it is UI's.)
+export const RUN_END_TEXT = {
+  kicker: (unit: string, wave: number): string => `RUN OVER · ${unit} · WAVE ${wave}`,
+  total: landedCount,
+  score: (score: number): string => `SCORE ${formatCount(score)}`,
+  scoreNote: 'the SCORE is the landing points: less for hard, mislanded and off-site pods',
+  rank: (rank: string): string => `RANK · ${rank}`,
+  shipLanded: landedCount,
+  notReached: 'NOT REACHED',
+  // Near misses (§4.4: `▼ was 140 km from a perfect lock`, `41 points short of CARETAKER`). The gap is in SCORE points,
+  // so it says points (final review: `41 SCORE short of` read as a typo).
+  rankGap: (gap: number, rank: string): string => `${formatCount(gap)} points short of ${rank}`,
+  lockMiss: (apsis: string, km: number, ship: string): string => `${apsis} was ${formatCount(km)} km from a perfect lock on ${ship}`,
+  fuelMiss: (pct: number, ship: string): string => `${ship} locked with FUEL ${pct}% — the ★ is at ${STAR_FUEL_PCT}%`,
+  seed: (seed: number): string => `SEED ${seed.toString(16).toUpperCase().padStart(8, '0')}`,
+  newRun: 'NEW RUN ▸ [SPACE]',
+} as const;
+
 
 // The NAV PLOT's ring and the readouts that named the printer.
 export const BAND_TEXT = {

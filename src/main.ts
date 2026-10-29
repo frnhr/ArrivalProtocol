@@ -68,6 +68,8 @@ import { mountFsToolPill } from '@components/memory-view/FsToolPill';
 import { actionScan, actionRepair } from '@state/actions';
 import { mountLicences } from '@systems/licences';
 import { mountLanding, setLoadNext } from '@systems/landing';
+import { registerLandingKeys, type LaunchConfirm } from '@systems/landing-controls';
+import { LAUNCH_CONFIRM_TEXT } from '@data/landing-text';
 import { mountDropCache } from '@systems/drop-cache';
 import { mountFaults } from '@systems/faults';
 import { mountHollow } from '@systems/hollow';
@@ -91,6 +93,13 @@ import { partNumber } from '@components/dom';
 const toolDeps: ToolDeps = {
   ask: askInline,
 };
+
+// [L]'s guards (LAUNCH OFF-SITE? …, LZ-A IS FULL — LAUNCH ANYWAY? …) through the same inline confirm.
+const launchConfirm: LaunchConfirm = (text, onYes) => askInline({
+  text: { question: text, detail: '' },
+  answers: { yes: LAUNCH_CONFIRM_TEXT.yes, no: LAUNCH_CONFIRM_TEXT.no },
+  onYes,
+});
 
 // DetailPanel action buttons dispatch through this. The actions re-check everything at the click
 // (pause, operating, the target rules, a free thread), exactly as for a tool click. (SWAP is a tool
@@ -122,8 +131,9 @@ mountDropCache(store);
 mountPace(store);
 // The mind's ops, on AI time (WP3).
 mountOpsCore(store);
-// The landing (slice 1a) after the ops each tick (a launch aborts any op still on its driver).
+// The landing (slice 1a) after the ops each tick (a launch aborts any op still on its driver). [L] launches.
 mountLanding(store);
+registerLandingKeys(store, { confirm: launchConfirm });
 // HOLLOW (WP6) after the landing: a launch beats a bite in the same tick, and a repair heals before
 // the drain (the ops core ticks first).
 mountHollow(store);

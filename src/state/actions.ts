@@ -153,6 +153,10 @@ export function beginLanding(draft: GameState): void {
   draft.level.cruiseWarp = LANDING_CRUISE_WARP;
   draft.landing.bay = { loaded: BAY_SLOTS, reloadTac: 0, cadenceLeftTac: 0 };
   draft.landing.startedAtTSec = draft.clock.tSec;
+  draft.landing.window = null;
+  draft.landing.noDriverAiSec = 0;
+  // The lock's last burn tick must not read as ENGINE FIRING on the landing's first [L] (the engine is off from here).
+  draft.burn.lastTickDvKmS = 0;
 }
 
 // The tug-of-war is won (§6.6): a REPAIR healed an infected file back to 100. The infection clears
