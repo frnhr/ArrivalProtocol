@@ -1,13 +1,11 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP11 acceptance 2 (§9 WP11, §6.6): HOLLOW's verbs and the root duel on LAST LIGHT.
 // A. Fairness, pure, over 1,000 seeded verb rolls on memories built from LAST LIGHT's layout and shaken up (tool copies,
 //    spares and originals at random health, copies of every AI tool, upgrade files, FIREWALLs, Thrust.alt in reserve or
-//    in service, files and clusters HOLLOW ate, seeds, the root gone to its last block, no Scan or no Delete at all):
-//    no RM ever takes the last working copy of a kind, the Core, a soul, Engine I/O, Nav Plotter, REPAIR CHARGE, a
+//    in service, files and drivers HOLLOW ate, seeds, the root gone to its last block, no Scan or no Delete at all):
+//    no RM ever takes the last working copy of a kind, the Core, a driver, Engine I/O, Nav Plotter, REPAIR CHARGE, a
 //    FIREWALL, a ship file doing its job or HOLLOW's own; its tiers come in order (spares, then upgrades, then a backup
 //    in reserve); every verb is blockable (RM: a working Scan or Delete; MV: a working Delete); MV moves a seed or an
-//    eaten block (never the root or the last block) and never lands closer than 4 free blocks to a soul, nor where it
+//    eaten block (never the root or the last block) and never lands closer than 4 free blocks to a driver, nor where it
 //    could bite at the next bite. The checks are written from §6.6 here, not with the module's helpers. Each roll also
 //    spares a random set of tools (licensed on this ship, not used yet: the lead's TODO for WP11), which RM never takes.
 // B. The live counter (systems/hollow-verbs.ts): an unblocked RM lands at the end of its countdown (the file is gone,
@@ -19,7 +17,13 @@
 //    TACTICAL; with nothing fair to aim at HOLLOW skips its turn; the weights follow the last unit's habits.
 // C. The competent scripted defender (the strip-following kid, WP7–WP10's defender, and the WP11 one: it blocks every
 //    verb 0.8 s into its countdown and starts the root's DELETE as soon as a thread is free) flies LAST LIGHT on 200
-//    seeds: it completes the root's DELETE and loses ≤ 4 of 16 clusters on average.
+//    seeds: it completes the root's DELETE and loses ≤ 4 of 16 pods' drivers on average.
+// Slice 1a (plan risk 4): LAST LIGHT has §3.16's final-ship layout (the root in rack C between POD 11 and POD 12, 7 pods
+// in rack B under the belt) and the boss balance was re-measured. Phase 2's printing kept the clusters in memory for the
+// duel (16 × 3.0 s); C keeps that exposure: the landing stands BOSS_LANDING_SEC AI seconds (default 48, phase 2's print
+// time) while HOLLOW bites, then the pods land at once (tests/unit/support/landing-instant.ts). BOSS_LANDING_SEC=0 is
+// the instant landing (the lower bound); a landing by the strip (4 windows) takes longer: Track SIM's flow suites time it.
+// TODO(phase2): fly C's landing by the strip ([L] at the windows) once Track SIM's bay and pace are merged.
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { createInitialState } from '@state/initial';
@@ -44,6 +48,7 @@ import {
 } from '@data/tuning';
 import { HOLLOW_VERB } from '@data/hollow-text';
 import { byDepth } from '../depth';
+import { setLandingMode } from '../support/landing-instant';
 
 // --- A. Fairness, pure ------------------------------------------------------------------------------------------------
 
@@ -125,14 +130,14 @@ function shakenMemory(seed: number): Segment[] {
   const roll = rng();
   if (alt && roll < 0.3) alt.role = 'thrust-ctrl';
   else if (alt && roll < 0.45) replaceWith(memory, alt, [freeSegment(alt.size)]);
-  // HOLLOW ate some files and clusters (in place, a block of the same size).
+  // HOLLOW ate some files and drivers (in place, a block of the same size).
   const food = memory.filter((seg) => isInfectable(seg) && seg.type !== 'core');
   const eats = Math.floor(rng() * 4);
   for (let i = 0; i < eats; i++) {
     const seg = food.splice(Math.floor(rng() * food.length), 1)[0];
     if (!seg || !memory.includes(seg)) continue;
     const block: HollowSegment = { id: newSegId('hollow'), name: 'UNIT-046', type: 'hollow', size: seg.size, root: false, locked: false, owner: 'UNIT-046', ate: seg.name };
-    if (seg.type === 'driver') block.atePod = seg.cluster;
+    if (seg.type === 'driver') block.atePod = seg.pod;
     replaceWith(memory, seg, [block]);
   }
   const seeds = Math.floor(rng() * 4);
@@ -186,7 +191,7 @@ function rmProblem(memory: readonly Segment[], target: Segment, untried: readonl
   return `a ${target.type}`;
 }
 
-// Where the moved block stands after landing, and whether it keeps §6.6's distance (4 free blocks to any soul) and
+// Where the moved block stands after landing, and whether it keeps §6.6's distance (4 free blocks to any driver) and
 // can't bite at the next bite (each side a WALL, or no food, or the end of memory).
 function mvProblem(memory: Segment[], verb: Extract<Verb, { kind: 'mv' }>): string | null {
   const block = memory.find((seg) => seg.id === verb.targetId);
@@ -203,11 +208,11 @@ function mvProblem(memory: Segment[], verb: Extract<Verb, { kind: 'mv' }>): stri
     let gap = 0;
     while (cursor >= 0 && cursor < after.length && after[cursor]!.type === 'free') { gap += after[cursor]!.size; cursor += step; }
     const neighbour = after[cursor];
-    if (neighbour?.type === 'driver' && gap < WALL_MIN_BLOCKS) return `${gap} free blocks from ${(neighbour as DriverSegment).cluster}`;
+    if (neighbour?.type === 'driver' && gap < WALL_MIN_BLOCKS) return `${gap} free blocks from POD ${(neighbour as DriverSegment).pod}`;
     if (neighbour?.type === 'driver' && gap === WALL_MIN_BLOCKS) soulSideExact = true;
     if (neighbour && gap < WALL_MIN_BLOCKS && isInfectable(neighbour)) return `a GAP of ${gap} to ${neighbour.name}: it bites at the next bite`;
   }
-  return soulSideExact ? null : 'not exactly 4 free blocks from a cluster';
+  return soulSideExact ? null : 'not exactly 4 free blocks from a driver';
 }
 
 {
@@ -239,9 +244,9 @@ function mvProblem(memory: Segment[], verb: Extract<Verb, { kind: 'mv' }>): stri
       if (problem) problems.push(`roll ${roll}: MV ${verb.targetId}: ${problem}`);
     }
   }
-  check(`A: 1,000 seeded verb rolls: no RM takes the last working copy of a kind, the Core, a soul, Engine I/O, Nav Plotter, a protected file or a tool not used yet (${sparedRolls} rolls spared some); tiers in order; all blockable`,
+  check(`A: 1,000 seeded verb rolls: no RM takes the last working copy of a kind, the Core, a driver, Engine I/O, Nav Plotter, a protected file or a tool not used yet (${sparedRolls} rolls spared some); tiers in order; all blockable`,
     problems.filter((problem) => problem.includes('RM')).length === 0, problems.filter((problem) => problem.includes('RM')).slice(0, 5).join(' | '));
-  check('A: …every MV moves a seed or an eaten block, never closer than 4 free blocks to a soul, never where it could bite',
+  check('A: …every MV moves a seed or an eaten block, never closer than 4 free blocks to a driver, never where it could bite',
     problems.filter((problem) => problem.includes('MV')).length === 0, problems.filter((problem) => problem.includes('MV')).slice(0, 5).join(' | '));
   // (A backup in reserve is RM's third tier: a shaken memory almost always holds a spare or an upgrade first. The tier is
   // checked on its own below.)
@@ -482,6 +487,8 @@ h.step();
 
 {
   const SEEDS = Number(process.env.BOSS_SEEDS ?? byDepth(12, 200));
+  const LANDING_SEC = Number(process.env.BOSS_LANDING_SEC ?? 48);
+  setLandingMode(LANDING_SEC > 0 ? { after: LANDING_SEC } : 'instant');
   let completed = 0;
   let lostTotal = 0;
   let worst = 0;
@@ -499,7 +506,7 @@ h.step();
     const end = h.finishFinale('purge', 500);
     if (end.reachedChoice) completed++;
     else failures.push(`seed ${seed}: no choice (${state().hollow.finale.phase}, ${state().run.phase})`);
-    const lost = state().souls.results.filter((result) => result.outcome === 'lost').length;
+    const lost = state().landing.pods.filter((record) => record.driverLost !== null).length;
     lostTotal += lost;
     worst = Math.max(worst, lost);
     landed += state().hollow.verbsLanded;
@@ -507,9 +514,10 @@ h.step();
     verbs += state().hollow.verbMoments;
   }
   const mean = lostTotal / SEEDS;
-  console.log(`C: ${SEEDS} seeds in ${((Date.now() - started) / 1000).toFixed(0)} s: locked ${locked}, root deleted ${completed}, lost ${mean.toFixed(2)} on average (worst ${worst}); verbs ${verbs} (landed ${landed}, blocked ${blocked})`);
+  console.log(`C: ${SEEDS} seeds, the landing standing ${LANDING_SEC} AI s, in ${((Date.now() - started) / 1000).toFixed(0)} s: locked ${locked}, root deleted ${completed}, lost ${mean.toFixed(2)} on average (worst ${worst}); verbs ${verbs} (landed ${landed}, blocked ${blocked})`);
   check(`C: the competent defender completes the root's DELETE on every seed (${SEEDS})`, completed === SEEDS, failures.slice(0, 5).join(' | '));
-  check('C: …and loses ≤ 4 of 16 clusters on average', mean <= 4, `${mean.toFixed(2)} (worst ${worst})`);
+  check('C: …and loses ≤ 4 of 16 pods\' drivers on average', mean <= 4, `${mean.toFixed(2)} (worst ${worst})`);
+  setLandingMode('instant');
 }
 
 finish();

@@ -1,6 +1,6 @@
 // WP7 headless harness: the WP6 harness (store, clock, orbit-sim, predictor, pace, input router, say,
-// boot, flight events, director, mode keys, ops core, held-tool sync, licences, faults, the reveal, the
-// printer, HOLLOW) plus the run (systems/run.ts), mounted after HOLLOW as main.ts does. Adds the run's
+// boot, flight events, director, mode keys, ops core, held-tool sync, licences, faults, the drop cache, the
+// landing, HOLLOW) plus the run (systems/run.ts), mounted after HOLLOW as main.ts does. Adds the run's
 // own moves (a NEW RUN, a ship of the fleet on its own with a fresh unit carried in) and a defender kid
 // who fights HOLLOW the way the strip teaches: REPAIR what is bitten, MOVE the clusters it can reach
 // behind a WALL. One harness per test file (systems are module singletons).

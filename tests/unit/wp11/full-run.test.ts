@@ -1,5 +1,3 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP11 acceptance 4 (§9 WP11): the whole run, headless, on 50 seeds. Title → ARES-VII → HALCYON → KESTREL → VESPER →
 // LAST LIGHT → RUN END, flown by the strip-following kid with the defenders (WP7's REPAIR and MOVE, WP9's sensor and
 // seeds, WP10's pip → SWAP, WP11's verb blocks and the root's DELETE), [B] when AUTOBURN is offered, THE DEAL refused, the
@@ -8,10 +6,13 @@
 // (won-purge or won-merge, the victory tone) in at least 90% of the seeds. Every module is in its initial state after a
 // NEW RUN. Prints each seed's line.
 // WP11 fix round 1 (the lead's rulings of 20:55 and 21:30): also LAST LIGHT's verbs (telegraphed, landed, blocked, and
-// the turns skipped: no fair target, or no thread free to block with), its clusters lost, and the REPAIR CHARGE at the
+// the turns skipped: no fair target, or no thread free to block with), its drivers lost, and the REPAIR CHARGE at the
 // choice; at least half of the runs that reach the choice must have the 20 MERGE costs (the lead's target; the lever is
-// the guidance, `MOVE it behind a WALL` once a cluster is bitten again in the same spot, and the defender now MOVEs onto
+// the guidance, `MOVE it behind a WALL` once a driver is bitten again in the same spot, and the defender now MOVEs onto
 // a spot the MOVE preview calls SAFE: harness11.ts).
+// Slice 1a: every landing lands at once (tests/unit/support/landing-instant.ts) except LAST LIGHT's, which stands
+// FINAL_LANDING_SEC AI seconds (phase 2's 16 × 3.0 s of printing) while the duel goes on, as boss-sim's C does.
+// TODO(phase2): fly the landings by the strip once Track SIM's bay, pace and landing guidance are merged.
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { receiveTransmission } from '@systems/boot';
@@ -27,6 +28,9 @@ import { chargeLeft } from '@state/selectors';
 import { MERGE_COST_CHARGE } from '@data/tuning';
 import type { GameState } from '@state/schema';
 import { byDepth } from '../depth';
+import { setLandingMode } from '../support/landing-instant';
+
+const FINAL_LANDING_SEC = Number(process.env.FINAL_LANDING_SEC ?? 48);
 
 // Quick depth (tests/unit/depth.ts): seeds 1 and 2, one PURGE and one MERGE run; full: 50.
 const SEEDS = Number(process.env.RUN_SEEDS ?? byDepth(2, 50));
@@ -51,7 +55,7 @@ function flyShip(): void {
   });
 }
 
-// Defends through printing to the WAKE REPORT (on the flagship: through the duel and the choice).
+// Defends through the landing to the LANDING REPORT (on the flagship: through the duel and the choice).
 function toReport(choice: 'purge' | 'merge'): boolean {
   if (state().run.shipIndex === LAST_LIGHT) {
     const end = h.wall() + 600;
@@ -69,13 +73,13 @@ function toReport(choice: 'purge' | 'merge'): boolean {
   }
   const end = h.wall() + 600;
   while (state().run.phase === 'landing' && !state().run.coreLost && h.wall() < end) { h.defend11(defendOpts); h.step(); }
-  if (state().run.shipIndex === LAST_LIGHT) lostOnLastLight = state().souls.results.filter((result) => result.outcome === 'lost').length;
+  if (state().run.shipIndex === LAST_LIGHT) lostOnLastLight = state().landing.pods.filter((record) => record.driverLost !== null).length;
   return state().run.phase === 'report';
 }
 
 interface VerbCounts { moments: number; telegraphed: number; landed: number; blocked: number }
 interface SeedResult {
-  seed: number; cause: string; tone: string; woke: number; ships: string; wall: number; charge: number | null; verbs: VerbCounts | null; lost: number | null;
+  seed: number; cause: string; tone: string; landed: number; ships: string; wall: number; charge: number | null; verbs: VerbCounts | null; lost: number | null;
 }
 let chargeAtChoice: number | null = null;
 let verbsAtChoice: VerbCounts | null = null;
@@ -94,6 +98,7 @@ for (let seed = 1; seed <= SEEDS; seed++) {
   let guard = 0;
   while (state().run.phase !== 'end' && guard++ < 12) {
     if (state().run.phase === 'boot') h.stepUntil(() => state().run.phase !== 'boot', 25);
+    setLandingMode(state().run.shipIndex === LAST_LIGHT && FINAL_LANDING_SEC > 0 ? { after: FINAL_LANDING_SEC } : 'instant');
     if (state().run.phase === 'flight' && state().burn.status === 'approaching' && !state().run.coreLost) flyShip();
     if (shipLost(state())) {
       // The LOST card's button.
@@ -115,7 +120,7 @@ for (let seed = 1; seed <= SEEDS; seed++) {
     seed,
     cause: state().run.endCause ?? `(${state().run.phase} on ${state().level.shipName})`,
     tone: model?.tone ?? '-',
-    woke: model?.woke ?? 0,
+    landed: model?.landed ?? 0,
     ships: state().run.ships.map((ship) => `${ship.shipName}:${ship.outcome}`).join(' '),
     wall: h.wall(),
     charge: chargeAtChoice,
@@ -124,7 +129,7 @@ for (let seed = 1; seed <= SEEDS; seed++) {
   };
   results.push(line);
   const verbText = line.verbs ? `verbs ${line.verbs.telegraphed} (${line.verbs.landed} landed, ${line.verbs.blocked} blocked, ${line.verbs.moments - line.verbs.telegraphed} skipped)` : 'verbs -';
-  console.log(`seed ${String(seed).padStart(2)}: ${line.cause.padEnd(12)} ${line.tone.padEnd(7)} woke ${String(line.woke).padStart(6)} charge at the choice ${String(line.charge ?? '-').padStart(3)} | LAST LIGHT lost ${line.lost ?? '-'} | ${verbText} | ${line.ships}`);
+  console.log(`seed ${String(seed).padStart(2)}: ${line.cause.padEnd(12)} ${line.tone.padEnd(7)} landed ${String(line.landed).padStart(5)} charge at the choice ${String(line.charge ?? '-').padStart(3)} | LAST LIGHT lost ${line.lost ?? '-'} | ${verbText} | ${line.ships}`);
 }
 const victories = results.filter((result) => (result.cause === 'won-purge' || result.cause === 'won-merge') && result.tone === 'victory').length;
 const merges = results.filter((result) => result.cause === 'won-merge').length;
@@ -137,12 +142,13 @@ const lostRuns = results.filter((result) => result.lost !== null);
 console.log(`LAST LIGHT over the ${atChoice.length} runs that reached the choice: REPAIR CHARGE median ${charges[Math.floor(charges.length / 2)]}, `
   + `range ${charges[0]}–${charges[charges.length - 1]}, ≥ ${MERGE_COST_CHARGE} in ${affordable}; verbs per ship ${(sum((verbs) => verbs.telegraphed) / atChoice.length).toFixed(1)} `
   + `(landed ${(sum((verbs) => verbs.landed) / atChoice.length).toFixed(2)}, blocked ${(sum((verbs) => verbs.blocked) / atChoice.length).toFixed(1)}, `
-  + `skipped turns ${(sum((verbs) => verbs.moments - verbs.telegraphed) / atChoice.length).toFixed(1)}); clusters lost `
+  + `skipped turns ${(sum((verbs) => verbs.moments - verbs.telegraphed) / atChoice.length).toFixed(1)}); drivers lost `
   + `${(lostRuns.reduce((total, result) => total + result.lost!, 0) / Math.max(1, lostRuns.length)).toFixed(2)} on average (worst ${Math.max(...lostRuns.map((result) => result.lost!))})`);
 check(`…at least half of the runs reach the choice with the ${MERGE_COST_CHARGE} MERGE costs (the lead's target, 21:30)`,
   affordable * 2 >= atChoice.length, `${affordable}/${atChoice.length}`);
 check(`ships 1–5 end in the victory RUN END in ≥ 90% of ${SEEDS} seeds`, victories >= Math.ceil(0.9 * SEEDS), `${victories}/${SEEDS}`);
 check('…both endings were reached', merges > 0 && victories - merges > 0, `${merges} MERGE, ${victories - merges} PURGE`);
+setLandingMode('instant');
 h.newRun(SEEDS + 1);
 check('NEW RUN: every reset module in its initial state', resetReport().length === 0, JSON.stringify(resetReport()));
 finish();
