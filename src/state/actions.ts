@@ -2,6 +2,8 @@ import type { Store } from './store';
 import type { GameState, PendingPlacement } from './schema';
 import type { Segment, RedundancySegment, SegmentState, DriverSegment } from '@/types/segment';
 import type { DriverLoss } from '@/types/landing';
+import type { ShipOutcome } from './schema';
+import { finalFateOfAboard } from '@systems/landing-rules';
 import type { FsToolKind } from '@/types/fs-tool';
 import {
   getRedundancy, getFsTool, effectiveToolVersion, integrityState, isRepairable, hasIntegrity, shownIntegrity,
@@ -143,6 +145,20 @@ export function recordDriverLost(draft: GameState, driver: Readonly<DriverSegmen
   if (record.fate.kind !== 'aboard') throw new Error(`recordDriverLost: pod ${driver.pod} is ${record.fate.kind}, not aboard`);
   record.driverLost = why;
   forgetDriver(draft, driver, selectInstead);
+}
+
+// The pods still aboard get their final fate for `outcome` (01-landing §3.10): parked in orbit with why when the ship
+// ends in orbit (END LANDING, all launched, STRANDED, a Core lost), NOT LAUNCHED once it left orbit (crashed, escaped,
+// abandoned). Written the moment the ship's ending is known, so the PARKED words, the beacons and the LOST card read the
+// state; the result (landing-rules landingResult) folds the same fate. In a draft; returns how many were parked.
+export function parkPodsAboard(draft: GameState, outcome: ShipOutcome): number {
+  let parked = 0;
+  for (const record of draft.landing.pods) {
+    if (record.fate.kind !== 'aboard') continue;
+    record.fate = finalFateOfAboard(record, outcome);
+    if (record.fate.kind === 'parked') parked++;
+  }
+  return parked;
 }
 
 // The landing begins (01-landing §3.2, §3.4), in the same update that sets phase 'landing' (orbit-sim endFlight): the

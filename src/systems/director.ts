@@ -8,7 +8,9 @@ import { onAny, type GameEventName } from '@systems/events';
 import { getPrediction, getSensedPrediction, type Prediction } from '@systems/predict';
 import {
   buildFlightContext, flightObjective, createObjectiveFilter, releaseHolds, dodgeCountdownEnds, type FlightObjective,
+  buildLandingContext, landingObjective, type LandingObjective,
 } from '@systems/guidance';
+import { getDropSolution } from '@systems/drop-cache';
 import { FLIGHT_OVER_LINE, percentFloor } from '@systems/flight-hud';
 import { getOps } from '@systems/ops-core';
 import { say } from '@systems/say';
@@ -29,11 +31,14 @@ import { getShip } from '@data/ships';
 // the boot and the end of the flight show at once. There is no step counter: every tick the
 // line is recomputed from the situation, first match wins:
 //   1. an active ALARM rule;
-//   2. the flight objective when its urgency is 'now';
+//   2. the live objective when its urgency is 'now';
 //   3. an active MIND-URGENT rule;
 //   4. an active TUTORIAL rule (one-shot, until its doneWhen);
-//   5. the flight objective ('soon' / 'wait');
-//   6. a HINT rule.
+//   5. the live objective when 'soon';
+//   6. a HINT rule;
+//   7. the live objective ('wait').
+// The live objective is the flight table's line in FLIGHT and the landing table's in LANDING (01-landing §3.11:
+// landing-guidance landingObjective in the flight line's places; composeLive is the one composition).
 // A lesson with a lead-in (`leadInSec`) outranks 3 for its first seconds on the strip, so a ship's new rule is read
 // before HOLLOW's eating lines bury it (WP12 p3); a mind-urgent line marked `outranksLeadIn` still comes first.
 // A lesson worded for each screen (its amber `-tab` line and its blue line, GuideRule.lesson) is one lesson: the two
@@ -50,9 +55,7 @@ import { getShip } from '@data/ships';
 // updated only when the shown line changes structurally (objectiveStructure); a countdown's
 // new numbers are mutated in place. Rules and beats live in data/script.ts.
 
-// 'landing': a rule that stands in the landing's base line (the director composes LANDING with these until Track SIM's
-// landing table, 01-landing §3.11, takes the flight objective's places).
-export type GuidePriority = 'alarm' | 'mind-urgent' | 'tutorial' | 'hint' | 'landing';
+export type GuidePriority = 'alarm' | 'mind-urgent' | 'tutorial' | 'hint';
 
 // What templates may read (script.ts renders them with worst-case values in tests).
 export interface TextCtx {
@@ -66,6 +69,7 @@ export interface DirectorCtx extends TextCtx {
   phase: RunPhase;
   mode: ViewMode;
   flight: FlightObjective | null;  // the flight table's line (null outside a live flight)
+  landing: LandingObjective | null;  // the landing table's line (null outside LANDING, and once the Core is lost)
   skipAvailable: boolean;          // F would start a SKIP right now
   bootSkipWaits: boolean;          // the boot's skip waits for the run-2 ghost (systems/boot.ts)
   events: ReadonlySet<GameEventName>;  // what happened since the previous tick
@@ -135,14 +139,6 @@ const RULE_URGENCY: Record<GuidePriority, Urgency> = {
   'mind-urgent': 'now',
   tutorial: 'soon',
   hint: 'wait',
-  landing: 'wait',
-};
-
-// TODO(slice1a-SIM): the landing table (landing-guidance.ts landingObjective, 01-landing §3.11) replaces this placeholder
-// base line, composed like the flight's: alarm, landing `now`, lessons, mind-urgent, tutorial, landing `soon`, hint,
-// landing `wait` (plan §1.6 composeLive).
-const LANDING_PLACEHOLDER_LINE: ObjectiveLine = {
-  id: 'landing-wait', text: 'WAIT — the pods are landing', keys: [], urgency: 'wait', layer: 'ship', highlight: null, source: 'landing',
 };
 
 // A line's layer is the screen its controls are on: ◆ SHIP in amber, ◇ MIND in blue.
@@ -183,6 +179,20 @@ function flightLine(objective: FlightObjective, ctx: DirectorCtx): ObjectiveLine
     highlight: objective.repairs ? repairStepTarget(ctx.state.ui.activeTool?.kind ?? null, objective.repairs) : null,
     source: 'flight',
     warn: objective.warn === true,
+  };
+}
+
+// The landing table's line on the strip: its own layer; a REPAIR row (L1) lights the chip, then the file, as F1 does.
+function landingLine(objective: LandingObjective, ctx: DirectorCtx): ObjectiveLine {
+  const held = ctx.state.ui.activeTool?.kind ?? null;
+  return {
+    id: objective.id,
+    text: objective.text,
+    keys: objective.keys,
+    urgency: objective.urgency,
+    layer: objective.layer,
+    highlight: objective.repairs ? repairStepTarget(held, objective.repairs) : objective.highlight ?? null,
+    source: 'landing',
   };
 }
 
@@ -276,25 +286,31 @@ export function composeObjective(ctx: DirectorCtx, rules: readonly GuideRule[]):
       return { id: 'beam-out-offer', text, keys: inMind ? ['TAB'] : [], urgency: 'now', layer: 'ship', highlight: BEAM_OUT_HINT_TARGET, source: 'flight' };
     }
   }
-  const live = (priority: GuidePriority): GuideRule | undefined =>
-    rules.find((rule) => rule.priority === priority && isRuleLive(rule, ctx));
-
-  // The landing: the flight is over; until the landing table lands (Track SIM) the mind's lines lead and a placeholder
-  // WAIT is the base.
+  // The landing (01-landing §3.11): its table in the flight line's places.
   if (ctx.phase === 'landing') {
-    const top = live('alarm') ?? live('mind-urgent') ?? live('tutorial') ?? live('landing');
-    return top ? ruleLine(top, ctx) : LANDING_PLACEHOLDER_LINE;
+    if (!ctx.landing) throw new Error('composeObjective: no landing objective during the landing');
+    return composeLive(ctx, rules, ctx.landing.urgency, landingLine(ctx.landing, ctx));
   }
 
   // guidance returns null only once the flight is over; anything else is a table bug.
   if (!ctx.flight) throw new Error('composeObjective: no flight objective during a live flight');
+  return composeLive(ctx, rules, ctx.flight.urgency, flightLine(ctx.flight, ctx));
+}
 
+// The composition of a live ship (plan §1.6), the flight's and the landing's alike: alarm, the objective's `now` line (or
+// a preempting tutorial), a lesson's lead-in, mind-urgent, tutorial, the objective's `soon`, hint, the objective's
+// `wait`. `objective` is the table's line, already on the strip's terms.
+export function composeLive(
+  ctx: DirectorCtx, rules: readonly GuideRule[], urgency: Urgency, objective: ObjectiveLine,
+): ObjectiveLine {
+  const live = (priority: GuidePriority): GuideRule | undefined =>
+    rules.find((rule) => rule.priority === priority && isRuleLive(rule, ctx));
   const alarm = live('alarm');
   if (alarm) return ruleLine(alarm, ctx);
-  if (ctx.flight.urgency === 'now') {
+  if (urgency === 'now') {
     const preempting = rules.find((rule) => rule.priority === 'tutorial' && rule.preempts?.(ctx) === true && isRuleLive(rule, ctx));
     if (preempting) return ruleLine(preempting, ctx);
-    return flightLine(ctx.flight, ctx);
+    return objective;
   }
   const lesson = rules.find((rule) => rule.priority === 'tutorial' && rule.leadInSec !== undefined
     && (ctx.leadShownSec.get(lessonOf(rule)) ?? 0) < rule.leadInSec && isRuleLive(rule, ctx));
@@ -305,10 +321,10 @@ export function composeObjective(ctx: DirectorCtx, rules: readonly GuideRule[]):
   if (urgent) return ruleLine(urgent, ctx);
   const tutorial = live('tutorial');
   if (tutorial) return ruleLine(tutorial, ctx);
-  if (ctx.flight.urgency !== 'wait') return flightLine(ctx.flight, ctx);
+  if (urgency !== 'wait') return objective;
   const hint = live('hint');
   if (hint) return ruleLine(hint, ctx);
-  return flightLine(ctx.flight, ctx);
+  return objective;
 }
 
 // The ids of every wording of the lessons in `done` that are not recorded done yet.
@@ -387,6 +403,9 @@ export function buildDirectorCtx(
 ): DirectorCtx {
   const flying = state.run.phase === 'flight';
   const flightCtx = flying ? buildFlightContext(state, sensed) : null;
+  // The landing's table reads the drop cache (mounted with the landing); not once the Core is lost (its card owns it).
+  const landingCtx = state.run.phase === 'landing' && !state.run.coreLost ? buildLandingContext(state, getDropSolution(), sensed) : null;
+  const landing = landingCtx ? landingObjective(landingCtx) : null;
   return {
     state,
     pred,
@@ -394,7 +413,8 @@ export function buildDirectorCtx(
     phase: state.run.phase,
     mode: state.ui.mode,
     flight: flightCtx ? flightObjective(flightCtx) : null,
-    skipAvailable: flightCtx?.skipAvailable ?? false,
+    landing,
+    skipAvailable: flightCtx?.skipAvailable ?? landingCtx?.skipAvailable ?? false,
     bootSkipWaits: bootSkipWaits(state),
     events: inputs.events,
     phaseEntered: inputs.phaseEntered,
@@ -403,7 +423,7 @@ export function buildDirectorCtx(
     mindAlert: mindAlertActive(state),
     flash: inputs.flash,
     done: new Set(state.director.done),
-    vars: lineVars(state, pred),
+    vars: { ...lineVars(state, pred), nextLz: landing?.nextLz ?? '' },
   };
 }
 

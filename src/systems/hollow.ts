@@ -20,7 +20,7 @@ import {
 } from '@systems/memory-ops';
 import { toolKindOf } from '@systems/carry';
 import { childRng } from '@systems/rng';
-import { setIntegrity, cureInfection, recordDriverLost } from '@state/actions';
+import { setIntegrity, cureInfection, recordDriverLost, parkPodsAboard } from '@state/actions';
 import { isOpenFree } from '@systems/tool-targets';
 import {
   isInfectable, isInfected, isHollow, infectedSegments, fileLabel, effectiveToolVersion, driversInMemory, isDriver,
@@ -1023,14 +1023,18 @@ function rngFor(state: Readonly<GameState>): Rng {
 // it; WP7 turns this into EMERGENCY TRANSMIT. The flag goes first, so the ship is already not live
 // when the pause lands (no PAUSED veil over the card).
 function endCoreLost(store: Store<GameState>): void {
+  let parked = 0;
   store.update((draft) => {
     draft.run.coreLost = true;
+    // The ship is lost in orbit (or on its way in): the pods still aboard are parked, as its result says (§3.10).
+    parked = parkPodsAboard(draft, 'emergency');
     draft.clock.skipWarp = null;
     draft.clock.skipEndTSec = null;
     draft.clock.skipWaypoint = null;
   });
   setPaused(store, true);
   endGhost(store);
+  if (parked > 0) emit('pods-parked', { count: parked });
   emit('core-lost', NO_PAYLOAD);
 }
 

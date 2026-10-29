@@ -6,7 +6,7 @@ import { stepAttitude, isPresetAligning } from '@systems/attitude';
 import { smoothNoise, childSeed, childRng, type Rng } from '@systems/rng';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { capabilitiesNow, thrustCap, planningThrustCap, presetsAvailable, type GhostSpec } from '@systems/capabilities';
-import { beginLanding } from '@state/actions';
+import { beginLanding, parkPodsAboard } from '@state/actions';
 import {
   elementsFromState, ringFit, ringFraction, loopRange, semiMajorAxis, propagateConic,
   type OrbitState, type Ring, type RingFit, type Vec2,
@@ -312,7 +312,12 @@ export function endFlight(store: Store<GameState>, status: TerminalStatus): void
     if (startsLanding(status)) {
       draft.run.phase = 'landing';
       beginLanding(draft);
-    } else draft.clock.paused = true;
+    } else {
+      draft.clock.paused = true;
+      // A ship that ends here lands nobody (01-landing §3.10): a stranded one parks its pods in orbit, one that left
+      // orbit (crashed, escaped, abandoned) takes them with it. Written now, before its LOST card.
+      parkPodsAboard(draft, status === 'accepted' ? 'partial' : status);
+    }
   });
   if (ghostWasFiring) emit('ghost-stop', NO_PAYLOAD);
   emit(status, NO_PAYLOAD);
@@ -364,8 +369,9 @@ function trackTo(pos: Vec2, chordSec: number): void {
 // each sample jumped to from the tick's start (no error builds up), about one per PREDICT_STEP_ORBIT_FRAC of the
 // local crossing time (the predictor's own step), never more than about PREDICT_STEPS_BUDGET a tick. Pace only
 // SKIPs a pure coast (no thrust, no ghost burst: it lands on the next one), so there is no thrust to apply here.
-function conicCoast(start: Readonly<OrbitState>, mu: number, dtWorld: number): OrbitState {
-  startTrack(start);
+// `freshTrack`: false appends to the tick's track (the landing's coast, split at a kick).
+function conicCoast(start: Readonly<OrbitState>, mu: number, dtWorld: number, freshTrack = true): OrbitState {
+  if (freshTrack) startTrack(start);
   const stepMax = Math.max(PREDICT_STEP_MAX, dtWorld / PREDICT_STEPS_BUDGET);
   let elapsed = 0;
   let sample: OrbitState = { x: start.x, y: start.y, vx: start.vx, vy: start.vy };
@@ -380,26 +386,69 @@ function conicCoast(start: Readonly<OrbitState>, mu: number, dtWorld: number): O
   return sample;
 }
 
-// Gravity only, the same integrator and sub-steps as the flight. A locked or accepted orbit never
-// reaches the surface (its ▼ is above the atmosphere), so there is nothing to end.
-function coast(store: Store<GameState>, dtWorld: number): void {
-  const state = store.getState();
+// Gravity only, the same integrator and sub-steps as the flight, appended to the tick's track.
+function steppedCoast(start: Readonly<OrbitState>, mu: number, dtWorld: number): OrbitState {
   const nSub = Math.min(SIM_MAX_SUBSTEPS, Math.max(1, Math.ceil(dtWorld / SIM_SUBSTEP_MAX_SEC)));
   const h = dtWorld / nSub;
-  const pos: Vec2 = { x: state.orbit.x, y: state.orbit.y };
-  const vel: Vec2 = { x: state.orbit.vx, y: state.orbit.vy };
-  startTrack(pos);
-  for (let i = 0; i < nSub; i++) {
-    integrateStep(pos, vel, h, state.level.planet.mu, 0, 0);
+  const pos: Vec2 = { x: start.x, y: start.y };
+  const vel: Vec2 = { x: start.vx, y: start.vy };
+  for (let i = 0; i < nSub && dtWorld > 0; i++) {
+    integrateStep(pos, vel, h, mu, 0, 0);
     trackTo(pos, h);
   }
+  return { x: pos.x, y: pos.y, vx: vel.x, vy: vel.y };
+}
+
+// --- The landing's coast (01-landing §3.7, plan §1.6) ------------------------------------------------------------------
+
+// A discrete change to the orbit at one game time, as a Δv (km/s, world axes): 1b's drag kick at each ▼ below the DRAG
+// line (a retrograde Δv of DRAG_DV_MAX_KMS × (line − rp) / (line − ring.min)), later trims.
+export interface LandingKick {
+  atTSec: number;
+  dvx: number;
+  dvy: number;
+}
+
+// 1b SEAM (decay): the kicks due in (t0, t1], in time order. None in 1a: no ship decays yet (risk 1: no engine and no
+// drag in LANDING). 1b reads ShipLandingDef.drag and the DRAG line here, and pace's nextEvent gains a 'kick' so a SKIP
+// stops at each one (§3.7: the exact jumps must stop at each ▼ below the line).
+export function landingKicks(_state: Readonly<GameState>, _t0: number, _t1: number): LandingKick[] {
+  return [];
+}
+
+// After the lock the ship coasts with nobody on the throttle (§6.2); the plot animates through the landing. A SKIP tick
+// is one exact conic jump (no warp is too fast, LEAD-2); any other tick takes the flight's sub-steps. The tick splits at
+// each kick (landingKicks): the coast to it, the Δv, a bump of landing.orbitEpoch (the drop cache keys its dot track on
+// it, so the windows are solved again for the new orbit), then on. A locked or accepted orbit never reaches the surface
+// (its ▼ is above the atmosphere), so there is nothing to end.
+function landingCoast(store: Store<GameState>, dtWorld: number): void {
+  const state = store.getState();
+  const mu = state.level.planet.mu;
+  const exact = state.clock.pace === 'skip';
+  const tEnd = state.clock.tSec;
+  const tStart = tEnd - dtWorld;
+  const stretch = (from: OrbitState, dt: number): OrbitState => (exact ? conicCoast(from, mu, dt, false) : steppedCoast(from, mu, dt));
+  let orbit: OrbitState = { x: state.orbit.x, y: state.orbit.y, vx: state.orbit.vx, vy: state.orbit.vy };
+  let at = tStart;
+  startTrack(orbit);
+  const kicks = landingKicks(state, tStart, tEnd);
+  for (const kick of kicks) {
+    if (!(kick.atTSec > at && kick.atTSec <= tEnd)) {
+      throw new Error(`landingCoast: a kick at ${kick.atTSec} outside the tick's (${at}, ${tEnd}] or out of order`);
+    }
+    orbit = stretch(orbit, kick.atTSec - at);
+    orbit = { ...orbit, vx: orbit.vx + kick.dvx, vy: orbit.vy + kick.dvy };
+    at = kick.atTSec;
+  }
+  orbit = stretch(orbit, tEnd - at);
   store.mutate((draft) => {
-    draft.orbit.x = pos.x;
-    draft.orbit.y = pos.y;
-    draft.orbit.vx = vel.x;
-    draft.orbit.vy = vel.y;
+    draft.orbit.x = orbit.x;
+    draft.orbit.y = orbit.y;
+    draft.orbit.vx = orbit.vx;
+    draft.orbit.vy = orbit.vy;
     draft.burn.lastTickDvKmS = 0;
   });
+  if (kicks.length > 0) store.update((draft) => { draft.landing.orbitEpoch += kicks.length; });
 }
 
 // One sub-step of `h` game seconds with `accelWanted` km/s² along (dirX, dirY): FUEL drains by DELIVERED Δv, so the
@@ -486,9 +535,8 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
     trackChordSec.length = 0;
     const state = store.getState();
     const burn = state.burn;
-    // After a lock or accept the ship keeps coasting with nobody on the throttle (§6.2): the plot animates through the
-    // landing. TODO(slice1a-SIM): landingCoast (an exact conicCoast during a SKIP, the 1b landingKicks seam).
-    if (state.run.phase === 'landing') { coast(store, dtWorld); return; }
+    // After a lock or accept the ship keeps coasting with nobody on the throttle (§6.2): landingCoast.
+    if (state.run.phase === 'landing') { landingCoast(store, dtWorld); return; }
     if (burn.status !== 'approaching') return;
 
     const { planet, ring, r0, dvBudgetKmS, tacticalWarp } = state.level;

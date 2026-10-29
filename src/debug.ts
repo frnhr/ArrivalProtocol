@@ -22,7 +22,10 @@ import { packUnit, layoutCarried } from '@systems/carry';
 import { movePreview, type MovePreview } from '@systems/move-preview';
 import { newRunSeed } from '@systems/rng';
 import { requestSkip, mainCountdown, setDebugWarp, type SkipResult, type Countdown } from '@systems/pace';
-import { buildFlightContext, flightObjective, type FlightObjective } from '@systems/guidance';
+import {
+  buildFlightContext, flightObjective, buildLandingContext, landingObjective, type FlightObjective, type LandingObjective,
+} from '@systems/guidance';
+import { stateFromElements } from '@/types/orbit';
 import {
   countdownChip, paceLabel, skipButton, plotChip, plotReadouts, plotMarkers, burnButton, presetHint,
   fuelModel, acceptModel, telemetryModel, thrustLimitModel, reactorModel, windowPip, toggleAlert, mindChipModel,
@@ -140,6 +143,11 @@ interface DebugHooks {
   loadNext: (pod: number) => string | null;
   landingReport: () => LandingReportModel;
   onTarget: () => OnTargetTally;
+  // The landing table's line now (landing-guidance landingObjective, before the director's composition), null outside
+  // LANDING; lockOn puts the ship straight into an orbit (▼ `r` km, default the ring's middle; eccentricity `e`) and ends
+  // the flight there as `status` (default locked), so a landing starts with no capture flown.
+  landingTable: () => LandingObjective | null;
+  lockOn: (opts?: { r?: number; e?: number; status?: 'locked' | 'accepted' }) => void;
   // WP6: HOLLOW. infect / cure take a cluster code (C12) or a file name (Engine I/O): infect bites it
   // now from the side facing HOLLOW (on ship 1 before the loop closed, that IS the scripted bite);
   // cure heals it to 100 and cures it at once, exactly as a winning repair does (recoil, sparkles, the
@@ -465,6 +473,19 @@ export function mountDebug(store: Store<GameState>): void {
     loadNext: (pod) => setLoadNext(store, pod),
     landingReport: () => landingReportModel(store.getState()),
     onTarget: () => onTargetTally(store.getState()),
+    landingTable: () => {
+      const state = store.getState();
+      if (state.run.phase !== 'landing') return null;
+      return landingObjective(buildLandingContext(state, getDropSolution(), getSensedPrediction()));
+    },
+    lockOn: (opts = {}) => {
+      const state = store.getState();
+      if (state.run.phase !== 'flight' || state.burn.status !== 'approaching') throw new Error('__ap.lockOn: not in a live flight');
+      const { ring, planet } = state.level;
+      const orbit = stateFromElements(opts.r ?? (ring.min + ring.max) / 2, opts.e ?? 0, 0, 0, planet.mu);
+      store.update((draft) => { draft.orbit = { x: orbit.x, y: orbit.y, vx: orbit.vx, vy: orbit.vy }; });
+      endFlight(store, opts.status ?? 'locked');
+    },
     infect: (target) => infectNow(store, debugTarget(store, target)),
     cure: (target) => cureNow(store, debugTarget(store, target)),
     hollow: () => {
