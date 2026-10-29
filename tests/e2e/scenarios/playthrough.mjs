@@ -246,7 +246,7 @@ const landingLook = () => st(() => {
     bay: shown('podBayWin') && !document.getElementById('podBayWin').classList.contains('pb-waiting'),
     bayTitle: document.querySelector('#podBayWin .window-title')?.innerText ?? '',
     launchLabel: document.getElementById('pbLaunchLabel').innerText, bayText: document.getElementById('pbBay').innerText,
-    lzs: [...document.querySelectorAll('#pbLzs .pb-lz')].map((el) => el.innerText),
+    lzs: [...document.querySelectorAll('#pbLzs .pb-lz')].map((el) => el.textContent),
     track: shown('groundTrack'), trackWorld: document.getElementById('gtWorld').innerText, trackDot: shown('gtDot'),
     mini: shown('mhLanding') ? document.getElementById('mhLandingText').innerText : null,
     onTarget: shown('mhOnTarget') ? document.getElementById('mhOnTarget').innerText : null,
@@ -416,7 +416,7 @@ for (const [index, name] of SHIPS.entries()) {
         if (!landView.fits) run.unfit.add(landView.line);
         await landStep(landView, tally);
         const seen = await landingLook();
-        for (const counter of seen.bay ? seen.lzs : []) {
+        for (const counter of seen.lzs) {
           const match = /^(LZ-[A-Z]) (\d+)\/\d+/.exec(counter);
           if (!match) continue;
           if (!lzFirst.has(match[1])) lzFirst.set(match[1], Number(match[2]));
