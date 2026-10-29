@@ -1,0 +1,99 @@
+// Slice 1a, the logic fixes after the full review (plan Deviations, "Review fixes"). Each section is one bug, built
+// straight from a state (lockOn: no capture flown), so the suite stays fast:
+// • a driver lost after the landing ended (HOLLOW, the zones, THE DEAL's ACCEPT, the instant landing) updates its parked
+//   pod instead of throwing, and THE DEAL is never offered, nor left standing, once the landing has ended.
+import { check, finish } from './checks';
+import { lockOn } from './harness-landing';
+import { createHarness7 } from '../wp7/harness7';
+import { endLanding, forceLandAll } from '@systems/landing';
+import { acceptDeal, infectNow } from '@systems/hollow';
+import { offerDealNow } from '@systems/hollow-deal';
+import { recordDriverLost, setIntegrity } from '@state/actions';
+import { driversInMemory } from '@state/selectors';
+import { podRecord } from '@systems/landing-rules';
+import { DRIVER_RULES } from '@data/script';
+import type { DriverSegment } from '@/types/segment';
+
+const h = createHarness7(5);
+const state = () => h.store.getState();
+
+// The ship alone, locked in the middle of its ring, its tutorial asks already met (the hurt-driver lesson would pause
+// nothing here, but keeps the strip quiet).
+function landingOn(ship: number, seed = 5): void {
+  h.shipAlone(ship, seed);
+  h.store.update((draft) => { draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id)); });
+  lockOn(h);
+  h.stepFor(0.2);
+}
+
+function untilReport(maxWall: number): string | null {
+  try {
+    const end = h.wall() + maxWall;
+    while (state().run.phase === 'landing' && h.wall() < end) h.step();
+    return null;
+  } catch (error) {
+    return (error as Error).message;
+  }
+}
+
+// --- 1. A driver lost after the landing ended (review: recordDriverLost threw "pod N is parked, not aboard") ----------
+{
+  // END LANDING with an infected driver near 0: HOLLOW eats it during the linger (p1, HALCYON / KESTREL / VESPER).
+  for (const ship of [1, 3]) {
+    landingOn(ship);
+    const driver = driversInMemory(state())[0]!;
+    infectNow(h.store, driver);
+    h.store.update((draft) => { setIntegrity(draft.memory.find((seg) => seg.id === driver.id) as DriverSegment, 3); });
+    endLanding(h.store);
+    const parkedAtEnd = podRecord(state(), driver.pod).fate;
+    const threw = untilReport(30);
+    const record = podRecord(state(), driver.pod);
+    check(`${state().level.shipName}: END LANDING, then HOLLOW eats a parked pod's driver: no throw, the report opens`,
+      threw === null && state().run.phase === 'report', threw ?? state().run.phase);
+    check('…the pod was parked no-time at the end, and is parked eaten (restorable) once its driver is eaten',
+      parkedAtEnd.kind === 'parked' && parkedAtEnd.why === 'no-time' && record.fate.kind === 'parked' && record.fate.why === 'eaten'
+      && record.fate.restorable && record.driverLost === 'eaten', JSON.stringify(record.fate));
+  }
+  // A zone taking a parked pod's driver to 0 (zones.ts applyDamage), straight on a draft.
+  landingOn(2);
+  endLanding(h.store);
+  const victim = driversInMemory(state())[0]!;
+  h.store.update((draft) => { recordDriverLost(draft, victim, 'dead'); });
+  const dead = podRecord(state(), victim.pod);
+  check('a zone takes a parked pod\'s driver to 0: parked dead, not restorable (MERGE leaves it parked)',
+    dead.fate.kind === 'parked' && dead.fate.why === 'dead' && !dead.fate.restorable && dead.driverLost === 'dead', JSON.stringify(dead.fate));
+  // The test harness's instant landing parks an infected driver's pod, which HOLLOW then eats.
+  landingOn(1);
+  const sick = driversInMemory(state())[0]!;
+  infectNow(h.store, sick);
+  h.store.update((draft) => { setIntegrity(draft.memory.find((seg) => seg.id === sick.id) as DriverSegment, 2); });
+  forceLandAll(h.store);
+  const threw = untilReport(30);
+  check('the instant landing parks an infected driver\'s pod, HOLLOW eats it: no throw, parked eaten',
+    threw === null && podRecord(state(), sick.pod).fate.kind === 'parked' && podRecord(state(), sick.pod).driverLost === 'eaten', threw ?? '');
+}
+
+// --- 1b. THE DEAL and the end of the landing (p3) --------------------------------------------------------------------
+{
+  landingOn(3);
+  const named = driversInMemory(state())[0]!;
+  offerDealNow(h.store, named);
+  endLanding(h.store);
+  h.stepFor(0.1);
+  const deal = state().hollow.deal;
+  check('VESPER: a deal standing when the landing ends is withdrawn (invalidated), not left to answer',
+    deal.phase === 'done' && state().run.stats.deal?.outcome === 'invalidated', `${deal.phase} / ${state().run.stats.deal?.outcome}`);
+  let threw: string | null = null;
+  try { acceptDeal(h.store, driversInMemory(state()).find((driver) => driver.pod === named.pod)!); } catch (error) { threw = (error as Error).message; }
+  check('…and an ACCEPT that lands anyway eats a parked pod\'s driver without throwing (parked eaten)',
+    threw === null && podRecord(state(), named.pod).fate.kind === 'parked' && podRecord(state(), named.pod).driverLost === 'eaten', threw ?? '');
+  // Never offered after the end: HOLLOW awake with a driver at its front, the landing over.
+  landingOn(3, 6);
+  endLanding(h.store);
+  h.store.update((draft) => { draft.hollow.phase = 'awake'; });
+  h.stepFor(3);
+  check('…and never offered once the landing has ended (HOLLOW awake, drivers at its front)',
+    state().hollow.deal.phase === 'none' && state().run.stats.deal === null, state().hollow.deal.phase);
+}
+
+finish();

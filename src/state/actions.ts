@@ -3,7 +3,7 @@ import type { GameState, PendingPlacement } from './schema';
 import type { Segment, RedundancySegment, SegmentState, DriverSegment } from '@/types/segment';
 import type { DriverLoss } from '@/types/landing';
 import type { ShipOutcome } from './schema';
-import { finalFateOfAboard } from '@systems/landing-rules';
+import { finalFateOfAboard, parkedFateOf } from '@systems/landing-rules';
 import type { FsToolKind } from '@/types/fs-tool';
 import {
   getRedundancy, getFsTool, effectiveToolVersion, integrityState, isRepairable, hasIntegrity, shownIntegrity,
@@ -139,11 +139,19 @@ export function forgetDriver(draft: GameState, driver: Readonly<DriverSegment>, 
 // A driver is gone without its pod (01-landing §3.8: HOLLOW ate it, or a hazard zone took it to 0). The pod outlives
 // it: it stays aboard, CAN'T LAUNCH, and is parked in orbit with this reason when the landing ends (§3.10); `eaten` is
 // what MERGE may give back (risk 9, slice 7). In a draft.
+// A pod already PARKED counts too: the landing parks the pods still aboard the moment it ends (landing.ts endNow), but
+// their drivers stay in memory through the linger, the last descents and the finale's wait, where HOLLOW and the zones
+// still reach them. Its parked fate is rewritten with the loss (why, and restorable for an eaten one), so the report,
+// the beacons and MERGE's unpark rule (only 'no-time' pods reopen; an eaten one comes back with its driver) read the
+// truth. Any other fate (falling, down, not launched) has no driver in memory to lose: that throws.
 export function recordDriverLost(draft: GameState, driver: Readonly<DriverSegment>, why: DriverLoss, selectInstead: string | null = null): void {
   const record = draft.landing.pods.find((candidate) => candidate.pod === driver.pod);
   if (!record) throw new Error(`recordDriverLost: no pod ${driver.pod} on this ship`);
-  if (record.fate.kind !== 'aboard') throw new Error(`recordDriverLost: pod ${driver.pod} is ${record.fate.kind}, not aboard`);
+  if (record.fate.kind !== 'aboard' && record.fate.kind !== 'parked') {
+    throw new Error(`recordDriverLost: pod ${driver.pod} is ${record.fate.kind}, not aboard or parked`);
+  }
   record.driverLost = why;
+  if (record.fate.kind === 'parked') record.fate = parkedFateOf(record);
   forgetDriver(draft, driver, selectInstead);
 }
 

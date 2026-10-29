@@ -329,11 +329,15 @@ export function touchAtTouchdown(launch: Readonly<LaunchRecord>): Touch {
   return driverTouch(launch.driverIntegrity);
 }
 
-// The fate a pod still aboard gets when the ship's landing is over with `outcome` (landing.ts parkAboard writes it).
-export function finalFateOfAboard(record: Readonly<PodRecord>, outcome: ShipOutcome): PodFate {
-  if (!endsInOrbit(outcome)) return { kind: 'not-launched' };
+// A pod parked in orbit, with why (§3.10): only a driver HOLLOW ate is MERGE's to give back (restorable).
+export function parkedFateOf(record: Readonly<PodRecord>): Extract<PodFate, { kind: 'parked' }> {
   const why = parkReasonOf(record);
   return { kind: 'parked', why, restorable: why === 'eaten' };
+}
+
+// The fate a pod still aboard gets when the ship's landing is over with `outcome` (state/actions parkPodsAboard writes it).
+export function finalFateOfAboard(record: Readonly<PodRecord>, outcome: ShipOutcome): PodFate {
+  return endsInOrbit(outcome) ? parkedFateOf(record) : { kind: 'not-launched' };
 }
 
 // Where the pods still falling will come down, in touchdown order against the pods already down (§3.5: an LZ fills in

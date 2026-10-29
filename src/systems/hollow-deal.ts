@@ -61,12 +61,19 @@ export function dealFront(memory: readonly Segment[], aiNow: number): DriverSegm
   return best?.driver ?? null;
 }
 
+// Something is still to bargain over: a live ship whose landing has not ended. Once END LANDING (or the auto-end) has
+// parked the pods still aboard, a pod given up would launch nothing anyway; their drivers stay in memory only until the
+// report (01-landing §3.10), so the deal is not offered then, and an offer still standing is withdrawn.
+function dealLive(state: Readonly<GameState>): boolean {
+  return isLivePhase(state) && !(state.run.phase === 'landing' && state.landing.ended !== null);
+}
+
 // The deal may be offered now: a dealing HOLLOW awake on a live ship, nothing offered yet on this ship or in this run,
 // and enough drivers left to bargain over.
 function dealOpen(state: Readonly<GameState>): boolean {
   const hollow = state.hollow;
   return hollow.cfg.deal && hollow.phase === 'awake' && hollow.deal.phase !== 'offered' && hollow.deal.phase !== 'done'
-    && state.run.stats.deal === null && isLivePhase(state) && driversInMemory(state).length >= DEAL_MIN_DRIVERS;
+    && state.run.stats.deal === null && dealLive(state) && driversInMemory(state).length >= DEAL_MIN_DRIVERS;
 }
 
 // Why the named driver can no longer be bargained over (null: the offer still stands): HOLLOW ate it while the kid
@@ -140,19 +147,32 @@ function settle(store: Store<GameState>, picked: string | null): void {
   record(store, picked === null ? 'timeout' : 'refused', pod);
 }
 
+// The offer is taken back unanswered (its buttons go), with HOLLOW's line when it has one to say; the run keeps it
+// 'invalidated'.
+function withdraw(store: Store<GameState>, line: string | null): void {
+  const deal = store.getState().hollow.deal;
+  if (deal.entryId === null || deal.pod === null) throw new Error('hollow-deal: an offer with no TERMINAL line');
+  answer = null;
+  withdrawChoice(deal.entryId);
+  if (line !== null) say('hollow', line, { critical: true });
+  record(store, 'invalidated', deal.pod);
+}
+
 function tick(store: Store<GameState>): void {
   const state = store.getState();
   if (!state.hollow.cfg.deal) return;
   const deal = state.hollow.deal;
   if (deal.phase === 'offered') {
+    // The landing ended under the offer (the ship's own end is the post-tick's): nothing left to bargain over, even if
+    // an answer came in the same moment.
+    if (!dealLive(state)) {
+      withdraw(store, null);
+      return;
+    }
     // A driver that launched, moved or was eaten first voids the offer, even if an answer came in the same moment.
     const voided = dealVoid(state);
     if (voided !== null) {
-      if (deal.entryId === null || deal.pod === null) throw new Error('hollow-deal: an offer with no TERMINAL line');
-      answer = null;
-      withdrawChoice(deal.entryId);
-      say('hollow', voided === 'eaten' ? HOLLOW_DEAL.tookIt : HOLLOW_DEAL.neverMind, { critical: true });
-      record(store, 'invalidated', deal.pod);
+      withdraw(store, voided === 'eaten' ? HOLLOW_DEAL.tookIt : HOLLOW_DEAL.neverMind);
       return;
     }
     if (answer !== null) {
@@ -195,16 +215,14 @@ export function mountHollowDeal(store: Store<GameState>): () => void {
   if (mounted) throw new Error('mountHollowDeal: already mounted');
   mounted = true;
   const offTick = onAiTick(() => tick(store));
-  // A ship that is over (crashed, landed, its Core eaten) takes an open offer with it: nothing is left to bargain over.
-  // The run still keeps that HOLLOW offered (run.stats.deal, 'invalidated'): WP10 review, it read as no deal at all.
+  // A ship that is over (crashed, landed, its Core eaten), or a landing that has ended (dealLive), takes an open offer
+  // with it: nothing is left to bargain over. The run still keeps that HOLLOW offered (run.stats.deal, 'invalidated'):
+  // WP10 review, it read as no deal at all.
   const offOver = onPostTick(() => {
     const state = store.getState();
     const deal = state.hollow.deal;
-    if (deal.phase !== 'offered' || isLivePhase(state)) return;
-    if (deal.entryId === null || deal.pod === null) throw new Error('hollow-deal: an offer with no TERMINAL line');
-    withdrawChoice(deal.entryId);
-    answer = null;
-    record(store, 'invalidated', deal.pod);
+    if (deal.phase !== 'offered' || dealLive(state)) return;
+    withdraw(store, null);
   });
   const offReset = onWorldReset('hollow-deal', resetDeal, () => ({ answer }));
   return () => {
