@@ -161,13 +161,23 @@ function planted(unit: Segment[]): Segment[] {
         ? d.memory.find((seg) => seg.type === 'core')!
         : d.memory.find((seg) => seg.type === 'fs-tool' && seg.fsTool === 'scan')!;
       const starts = segmentStarts(d.memory);
-      // The free space just before the target: one free block, then the seed.
       const index = d.memory.indexOf(target);
-      const before = d.memory[index - 1];
-      if (!before || before.type !== 'free' || before.size < SEED_BLOCKS + 1) throw new Error(`seed-spots: no free space before ${target.name}`);
-      const at = starts[index]! - 1 - SEED_BLOCKS;
       const seed: HollowSegment = { id: newSegId('seed'), name: 'UNIT-046', type: 'hollow', size: SEED_BLOCKS, root: false, locked: false, owner: 'UNIT-046', seed: true };
-      replaceRange(d.memory, at, at + SEED_BLOCKS, [seed], { opId: null, own: [] });
+      if (nextTo === 'core') {
+        // The free space just before the Core (rack D is empty on VESPER): one free block, then the seed.
+        const before = d.memory[index - 1];
+        if (!before || before.type !== 'free' || before.size < SEED_BLOCKS + 1) throw new Error(`seed-spots: no free space before ${target.name}`);
+        const at = starts[index]! - 1 - SEED_BLOCKS;
+        replaceRange(d.memory, at, at + SEED_BLOCKS, [seed], { opId: null, own: [] });
+      } else {
+        // Slice 1a (pooled receiver): Scan sits between AI Comms and REPAIR CHARGE with no free block beside it, so the
+        // seed takes the front of the charge file: Scan, one free block, the seed, the rest of the charge.
+        const after = d.memory[index + 1];
+        if (!after || after.type !== 'redundancy' || after.size < SEED_BLOCKS + 2) throw new Error(`seed-spots: no charge file after ${target.name}`);
+        const at = starts[index]! + target.size;
+        const rest = { ...after, size: after.size - 1 - SEED_BLOCKS };
+        replaceRange(d.memory, at, at + after.size, [freeSegment(1), seed, rest], { opId: null, own: [after] });
+      }
       d.hollow.seedsLanded = 1;
       if (!d.run.licences.includes('delete')) d.run.licences.push('delete');
       d.ui.memoryRev++;
@@ -180,8 +190,7 @@ function planted(unit: Segment[]): Segment[] {
     if (ctx.flight?.urgency === 'now') throw new Error(`seed-spots: the flight line is NOW (${ctx.flight.text}): pick a coast`);
     return composeObjective(ctx, GUIDE_RULES)?.id;
   };
-  // VESPER's opening is a WAIT. Rack D is empty on VESPER, so the blocks before the Core (the start of rack E) are free;
-  // Scan has free space before it once the licences have filled rack F from its end.
+  // VESPER's opening is a WAIT. Rack D is empty on VESPER, so the blocks before the Core (the start of rack E) are free.
   vesperArrived(6);
   setMode(h.store, 'memory');
   plantSeed('tool');

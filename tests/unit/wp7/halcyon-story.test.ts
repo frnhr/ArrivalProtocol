@@ -121,8 +121,10 @@ const long = lines.filter((line) => line.length > MAX_LINE_CHARS);
 check('every WP7 line fits the strip (≤ 70) with worst-case names', long.length === 0, long.join(' | '));
 // WP11: and LAST LIGHT's own hello (the flagship opens on a crash course too; ship 1's hello is the run's first).
 // WP12 p3: and the REPAIR renewal (said on the ship whose boot reissued it).
-check('the per-ship beats are CONTROL\'s reactions (captured, locked, crashed, escaped), the flyby hello, the flagship\'s and the REPAIR renewal',
-  perShipBeatIds(BEATS).sort().join() === ['control-captured', 'control-crashed', 'control-escaped', 'control-hello-flyby', 'control-hello-flagship', 'control-locked', 'control-repair-renewed'].sort().join(),
+// Slice 1a (01-landing §2): and CONTROL at the landing's start and at the ship's first touchdown.
+check('the per-ship beats are CONTROL\'s reactions (captured, locked, crashed, escaped), the flyby hello, the flagship\'s, the REPAIR renewal and the landing\'s two',
+  perShipBeatIds(BEATS).sort().join() === ['control-captured', 'control-crashed', 'control-escaped', 'control-hello-flyby', 'control-hello-flagship', 'control-locked',
+    'control-repair-renewed', 'control-landing-start', 'control-first-down'].sort().join(),
   perShipBeatIds(BEATS).join());
 
 finish();

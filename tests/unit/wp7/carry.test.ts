@@ -6,7 +6,6 @@ import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './harness7';
 import {
   packUnit, packedFiles, dropLock, rollTransitHits, arrivalCharge, layoutCarried, emergencyCoreToll, toolKindOf,
-  RACK_F_START,
 } from '@systems/carry';
 import { createRng } from '@systems/rng';
 import { createInitialState } from '@state/initial';
@@ -18,7 +17,7 @@ import { hasIntegrity } from '@state/selectors';
 import { UNNAMED_HOLLOW } from '@data/hollow-text';
 import {
   TRANSIT_LAST_COPY_FLOOR, TRANSIT_CORE_MAX_HIT, CORE_RESET_INTEGRITY, CHARGE_ARRIVAL_FLOOR, TRANSIT_HIT_MIN, TRANSIT_HIT_MAX,
-  LANDING_NONE_LEFT_SEC, LANDING_DONE_LINGER_SEC,
+  LANDING_NONE_LEFT_SEC, UNIT_TAIL_BLOCKS,
 } from '@data/tuning';
 import { setLandingMode } from '../support/landing-instant';
 import { recordDriverLost } from '@state/actions';
@@ -123,41 +122,49 @@ const memory = h.store.getState().memory;
 }
 
 // --- Arrival charge and the layout -------------------------------------------------------------------------
-// TODO(phase2): Track SIM is building 01-landing §3.16's pooled receiver in layoutCarried (rack E's and F's lists back to
-// back, the spill into the last pod rack capped at UNIT_TAIL_BLOCKS). The layout checks below (rack F from 320, rack F's
-// list starting a block early, the spill into rack D, the overflow) are phase 2's rules and must be rewritten for it
-// after the merge; the arrival charge's two checks do not depend on it.
+// 01-landing §3.16's pooled receiver (layoutCarried): rack E's and F's lists back to back from rack E's start, then REPAIR
+// CHARGE, then the free rest; a block longer than the receiver starts earlier, right-aligned to memory's end, by at most
+// UNIT_TAIL_BLOCKS into the last pod rack (never into more of it than the ship leaves free at its end).
 {
   check('arrival charge: carried + 6 per ★', arrivalCharge(14, 18).blocks === 32 && arrivalCharge(14, 18).floorAdded === 0);
   check('…never below 12 (the floor tops it up)', arrivalCharge(3, 6).blocks === CHARGE_ARRIVAL_FLOOR && arrivalCharge(3, 6).floorAdded === 3);
   const packet = packUnit(memory, link, []);
+  const rackEBlocks = packet.rackE.reduce((sum, seg) => sum + seg.size, 0);
+  const filesBlocks = rackEBlocks + packet.rackF.reduce((sum, seg) => sum + seg.size, 0);
+  const receiver = MEMORY_TOTAL_BLOCKS - UNIT_RACKS_START;
   const layout = layoutCarried(packet, 36 + 12, halcyon);
   const built = buildShipMemory(halcyon, layout.racks, createRng(1), false, UNNAMED_HOLLOW);
   assertMemoryInvariants(built, MEMORY_TOTAL_BLOCKS);
   const starts = segmentStarts(built);
   const addr = (name: string): number => starts[built.findIndex((seg) => seg.name === name)]!;
-  check('layout: rack E from 256 (the Core first), rack F from 320 (Scan first), charge last',
-    addr('AI Core') === UNIT_RACKS_START && addr('Scan') === RACK_F_START && built.find((seg) => seg.type === 'redundancy')?.size === 48,
-    `${addr('AI Core')} ${addr('Scan')}`);
-  // Rack F's list one block too long for rack F (11 blocks of tools + 54 of charge): it starts a block
-  // early, in rack E's free tail; rack E's own files do not move.
-  const snug = layoutCarried(packet, 54, halcyon);
+  const chargeIndex = built.findIndex((seg) => seg.type === 'redundancy');
+  check('layout: from 256 the Core first, rack F\'s list right after rack E\'s (Scan first, no gap), then the charge, then free',
+    addr('AI Core') === UNIT_RACKS_START && addr('Scan') === UNIT_RACKS_START + rackEBlocks
+    && built[chargeIndex]?.size === 48 && starts[chargeIndex] === UNIT_RACKS_START + filesBlocks
+    && built[chargeIndex + 1]?.type === 'free' && chargeIndex + 2 === built.length,
+    `Core ${addr('AI Core')}, Scan ${addr('Scan')}, charge at ${starts[chargeIndex]}`);
+  // A block one longer than the receiver starts a block early, right-aligned to the end of memory.
+  const snug = layoutCarried(packet, receiver - filesBlocks + 1, halcyon);
   const snugMemory = buildShipMemory(halcyon, snug.racks, createRng(1), false, UNNAMED_HOLLOW);
+  assertMemoryInvariants(snugMemory, MEMORY_TOTAL_BLOCKS);
   const snugStarts = segmentStarts(snugMemory);
-  check('…rack F\'s list a block too long starts a block early, into rack E\'s free tail',
-    snugStarts[snugMemory.findIndex((seg) => seg.name === 'Scan')] === RACK_F_START - 1
-    && snugStarts[snugMemory.findIndex((seg) => seg.name === 'AI Core')] === UNIT_RACKS_START);
-  // An overfull packet: charge for 120 blocks after the 63 of files spills into rack D's free tail.
+  check('…a block one longer than the receiver starts a block early (the Core at 255), nothing free after it',
+    snug.racks.startAddr === UNIT_RACKS_START - 1 && snugStarts[snugMemory.findIndex((seg) => seg.name === 'AI Core')] === UNIT_RACKS_START - 1
+    && snugMemory[snugMemory.length - 1]?.type === 'redundancy' && snug.overflowLost === 0, `start ${snug.racks.startAddr}`);
+  // An overfull packet: the tail into rack D (free to its end on HALCYON) is capped at UNIT_TAIL_BLOCKS; the rest is lost.
   const big = layoutCarried(packet, 120, halcyon);
   const spilled = buildShipMemory(halcyon, big.racks, createRng(1), false, UNNAMED_HOLLOW);
   assertMemoryInvariants(spilled, MEMORY_TOTAL_BLOCKS);
-  check('…a packet bigger than racks E–F spills backward into rack D\'s free tail', big.racks.startAddr < UNIT_RACKS_START && big.overflowLost === 0,
-    `start ${big.racks.startAddr}`);
-  // A ship whose rack D is full to its end: the charge that does not fit is lost, loudly.
+  const room = receiver + UNIT_TAIL_BLOCKS;
+  check('…a packet bigger than the receiver takes at most UNIT_TAIL_BLOCKS of rack D, and the charge past that is lost',
+    big.racks.startAddr === UNIT_RACKS_START - UNIT_TAIL_BLOCKS && big.chargeBlocks === room - filesBlocks
+    && big.overflowLost === 120 - (room - filesBlocks), `start ${big.racks.startAddr}, ${big.overflowLost} lost`);
+  // A ship whose rack D is full to its end: no tail at all; the charge that does not fit is lost, loudly.
   const fullD: ShipDef = { ...halcyon, id: 'full-d-test', memory: { ...halcyon.memory, podRacks: { ...halcyon.memory.podRacks, D: '_56 P' } } };
   const lost = layoutCarried(packet, 80, fullD);
-  check('…with rack D full at its end, charge that does not fit is lost (CHARGE OVERFLOW)', lost.overflowLost === 80 - (128 - 63)
-    && lost.chargeBlocks === 128 - 63, `${lost.overflowLost} lost`);
+  check('…with rack D full at its end, charge that does not fit the receiver is lost (CHARGE OVERFLOW)',
+    lost.racks.startAddr === UNIT_RACKS_START && lost.overflowLost === 80 - (receiver - filesBlocks)
+    && lost.chargeBlocks === receiver - filesBlocks, `${lost.overflowLost} lost`);
   let threw = '';
   try { layoutCarried({ ...packet, rackE: [...packet.rackE, ...packet.rackE.map((seg) => ({ ...seg, size: 30 }))] }, 0, fullD); } catch (error) { threw = (error as Error).message; }
   check('…files that do not fit throw', /do not fit/.test(threw), threw);
@@ -178,13 +185,18 @@ const memory = h.store.getState().memory;
     mergeAdjacentFree(d.memory);
     d.ui.memoryRev++;
   });
-  const tookSec = h.stepUntil(() => h.store.getState().run.phase === 'report', 60);
+  // Measured in AI seconds (the risk-7 wait counts AI time). The report then waits for the linger and, on HALCYON, for
+  // HOLLOW's story beat (landing.ts: the report waits for it), so only its arrival is checked.
+  const aiFrom = h.store.getState().clock.aiSec;
+  h.stepUntil(() => h.store.getState().landing.ended !== null, 60);
+  const tookSec = h.store.getState().clock.aiSec - aiFrom;
+  h.stepUntil(() => h.store.getState().run.phase === 'report', 60);
   const state = h.store.getState();
-  check(`no driver left: after ${LANDING_NONE_LEFT_SEC} s the landing ends by itself (no-driver-left), every pod parked eaten, and the LANDING REPORT follows`,
+  check(`no driver left: after ${LANDING_NONE_LEFT_SEC} AI s the landing ends by itself (no-driver-left), every pod parked eaten, and the LANDING REPORT follows`,
     state.run.phase === 'report' && state.landing.ended === 'no-driver-left'
     && state.landing.pods.every((record) => record.fate.kind === 'parked' && record.fate.why === 'eaten')
-    && tookSec >= LANDING_NONE_LEFT_SEC && tookSec <= LANDING_NONE_LEFT_SEC + LANDING_DONE_LINGER_SEC + 2,
-    `${tookSec.toFixed(1)} s, ended ${state.landing.ended}, ${state.landing.pods.map((record) => record.fate.kind).join()}`);
+    && tookSec >= LANDING_NONE_LEFT_SEC - 0.1 && tookSec <= LANDING_NONE_LEFT_SEC + 0.5,
+    `ended after ${tookSec.toFixed(1)} AI s as ${state.landing.ended}, ${state.landing.pods.map((record) => record.fate.kind).join()}, phase ${state.run.phase}`);
   setLandingMode('instant');
 }
 

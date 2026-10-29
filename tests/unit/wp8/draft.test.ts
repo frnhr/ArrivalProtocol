@@ -177,8 +177,11 @@ function pick(id: UpgradeId): void {
   h.transmit();
   const starts = segmentStarts(state().memory);
   const index = state().memory.findIndex(isFirewall);
-  check('HALCYON boots with Firewall.sys in rack F (after the fs-tools), memory valid, the card in run.upgrades',
-    index >= 0 && starts[index]! >= RACK_F_START && memoryValid() && state().run.upgrades.join() === 'firewall'
+  // Slice 1a's pooled receiver: rack F's list follows rack E's with no gap, so the card sits after the fs-tools (in rack E
+  // on a unit this small), then REPAIR CHARGE.
+  const mem = state().memory;
+  check('HALCYON boots with Firewall.sys at the end of rack F\'s list (after the fs-tools, before the charge), memory valid, the card in run.upgrades',
+    index >= 0 && mem[index - 1]?.type === 'fs-tool' && mem[index + 1]?.type === 'redundancy' && memoryValid() && state().run.upgrades.join() === 'firewall'
       && !state().memory[index]!.id.includes(PREVIEW_ID('x').split('~')[1]!), `${index} @ ${starts[index]}`);
   check('the next draft counts it as owned (1 of 2)', ownedUpgrades(state()).firewall === 1);
   const firewall = state().memory[index]!;

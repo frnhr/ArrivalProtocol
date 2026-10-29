@@ -91,9 +91,9 @@ check('no ship-1 file straddles two racks (every chip is whole in its row)', cro
 // --- The stats row -------------------------------------------------------------------------------------
 {
   const stats = memStatsModel(state);
-  // TODO(phase2): the colonists stat's words are Track UI's (MemoryStats.ts `TODO(slice1a-UI)`); only its numbers here.
-  check('stats: 600 colonists aboard in 3 pods (no sealed archive: the drivers are files from the start)', stats.souls.value === '600'
-    && /3 pods/.test(stats.souls.small), JSON.stringify(stats.souls));
+  // Track UI's words: PODS ABOARD 3, `600 colonists` under it.
+  check('stats: 3 pods aboard, 600 colonists (no sealed archive: the drivers are files from the start)', stats.souls.label === 'pods aboard'
+    && stats.souls.value === '3' && stats.souls.small === '600 colonists', JSON.stringify(stats.souls));
   check('stats: REPAIR CHARGE 36 blk, MEMORY 384 blk · 6 racks', stats.charge.value === '36' && stats.total.value === '384' && stats.total.small === 'blk · 6 racks');
   const free = state.memory.filter((seg) => seg.type === 'free').reduce((sum, seg) => sum + seg.size, 0);
   check(`stats: FREE ${free} blk (computed)`, stats.free.value === String(free));

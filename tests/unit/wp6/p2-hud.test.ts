@@ -3,8 +3,7 @@
 // Slice 1a: pods for clusters. ARES-VII's root comes first in rack B (rack A's 18 free blocks a WALL on its left, POD 01
 // right after it), so ship 1's next bite is POD 01's left edge from the root's right mouth; HALCYON's fixture is the real
 // rack-C geometry (GAP 2 and GAP 1 around the root) with one pod more on each side, so an eaten block still bites on.
-// TODO(phase2): Track UI renames the mini-strip's kinds to driver / driver-hurt (hollow-hud.ts); either is accepted here
-// until it merges, then only the new ones.
+// The mini-strip's pod kinds are driver / driver-hurt (Track UI's rename; `sealed` is gone from MiniKind).
 // WP6 part 2: what HOLLOW looks and sounds like, as data (systems/hollow-hud.ts), on the live systems:
 // • NEXT BITE: `?:??` on ship 1 (no timer), `m:ss` from a later ship's wake and bite timer, urgent in the
 //   last HOLLOW_BITE_URGENT_SEC, quiet once it is done for the ship;
@@ -41,9 +40,6 @@ const h = createHarness6(1, { soulsFound: true });
 const state = () => h.store.getState();
 const mem = (): Segment[] => state().memory;
 const near = (a: number, b: number, eps = 1e-6): boolean => Math.abs(a - b) <= eps;
-
-// The mini-strip's word for a cell, with Track UI's rename folded in (soul → driver; see the header's TODO).
-const miniWord = (kind: string): string => kind.replace(/^soul/, 'driver');
 
 function fresh(): void {
   h.resetTo('flight');
@@ -89,13 +85,12 @@ function fresh(): void {
   const rackB = rows[1]!;
   const rackC = rows[2]!;
   const rackD = rows[3]!;
-  const kinds = rackB.map((cell) => miniWord(cell.kind)).join();
+  const kinds = rackB.map((cell) => cell.kind).join();
   check('mini-strip: rack B is the red root, three drivers (POD 02 hurt), then 32 free blocks; racks C and D are the rest of that gap',
     kinds === 'hollow,driver,driver-hurt,driver,free' && rackB.at(-1)!.blocks === 32
     && [rackC, rackD].every((rack) => rack.length === 1 && rack[0]!.kind === 'free' && rack[0]!.blocks === 64 && rack[0]!.segId === rackB.at(-1)!.segId),
     rackB.map((cell) => `${cell.kind}:${cell.blocks}`).join(' '));
-  check('mini-strip: POD 02 at 44% is the hurt yellow', miniWord(rackB[2]!.kind) === 'driver-hurt' && rackB[2]!.segId === 'driver_pod02');
-  check('mini-strip: no grey sealed cells any more (nothing is sealed)', rows.every((cells) => cells.every((cell) => cell.kind !== 'sealed')));
+  check('mini-strip: POD 02 at 44% is the hurt yellow', rackB[2]!.kind === 'driver-hurt' && rackB[2]!.segId === 'driver_pod02');
 
   infectNow(h.store, h.soul('POD 01'));
   h.stepFor(5);
