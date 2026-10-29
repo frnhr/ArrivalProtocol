@@ -83,6 +83,8 @@ import { mountRun } from '@systems/run';
 import { mountTransmitScreen } from '@components/run/TransmitScreen';
 import { mountRunEnd } from '@components/run/RunEnd';
 import { mountMergeTick } from '@components/memory-view/MergeTick';
+import { mountLaunchFx } from '@components/memory-view/LaunchFx';
+import { mountPodTags } from '@components/memory-view/PodTags';
 import { mountFinaleChoice } from '@components/run/FinaleChoice';
 import { mountSkillsWindow } from '@components/run/SkillsWindow';
 import { mountArrivalFlash } from '@components/run/ArrivalFlash';
@@ -238,8 +240,9 @@ memWrap.addEventListener('click', (event) => {
 //      (must subscribe AFTER MemoryStrip so they run after the rebuild)
 //   3. DetailPanel, MemoryStats, FsStatusBar, Footer — independent of .seg classes
 mountMemoryStrip(store, memWrap, segBehavior);
-// After the strip: the bars re-dock onto its rebuilt parts.
+// After the strip: the bars re-dock onto its rebuilt parts, and the drivers' BAY / NEXT tags repaint (slice 1a).
 mountOpBars(store, memWrap);
+mountPodTags(store, memWrap);
 mountFsToolsSystem(store);
 mountSelectionHighlight(store);
 mountDimPainter(store);
@@ -266,6 +269,8 @@ mountPlacement(store, memWrap);
 mountHollowPainter(store);
 // After the strip (WP11 part 2): the MERGE 20 tick on the REPAIR CHARGE pool and the charge readouts (LAST LIGHT).
 mountMergeTick(store, memWrap);
+// A launched driver's chip flash (01-landing §4), read from the strip before it rebuilds without the driver.
+mountLaunchFx(store);
 // After HOLLOW's painter (WP7): its naming decoded on the rebuilt chips, the MOVE preview's labels over the
 // placeholder Placement paints, and the arrival's red flashes on the files the crossing hit.
 mountHollowNameFx(store);

@@ -140,8 +140,9 @@ function renderHollowPart(part: HTMLElement, seg: HollowSegment, layout: Segment
 }
 
 // --- Pod drivers (01-landing §3.8) ----------------------------------------------------------------
-// TODO(slice1a-UI): driver chips (`POD 03` / `P03` by width, the BAY / NEXT tags); until then a driver draws as the
-// phase-2 colonist chip (its CSS classes `soul`, `soul-family`, `soul-code`), with its pod in the code's place.
+// A driver's chip: the family on top, the heartbeat (the pod's stasis monitor), then the pod (`POD 03`, `P03` on a
+// narrow chip: a container query in game.css picks one) and the health, and a corner slot for the bay's BAY / NEXT tag,
+// which PodTags paints from the live bay (it changes without a memory change: a reload, a repair finishing).
 
 // The heartbeat line on a driver's chip, the pod's stasis monitor (an ECG trace in a 48×12 box): steady while it would
 // land soft, ragged and fast while it would land hard, flat once it can't launch. The bright pulse runs along it (CSS);
@@ -172,7 +173,7 @@ export function heartbeatSvg(kind: Heartbeat): string {
 // A driver's part on the strip. The chip reads like every file (name, bar, meta) with people behind it: the family on
 // top (the name a kid remembers), the heartbeat where a file has its bar, then the pod the strip's lines use (POD 03)
 // beside the health. Continuation parts of a chip split by a row break show only the ↪ marker.
-function soulPartHtml(soul: DriverSegment, layout: SegmentPartLayout): string {
+function driverPartHtml(soul: DriverSegment, layout: SegmentPartLayout): string {
   const isFirst = layout.partIdx === 0;
   if (!isFirst) return `<div class="seg-cont-marker">↪</div>`;
   const shown = shownIntegrity(soul.integrity);
@@ -186,10 +187,12 @@ function soulPartHtml(soul: DriverSegment, layout: SegmentPartLayout): string {
   } else {
     health = soul.state === 'transferring' ? `<span class="health partial">↻ XFER</span>` : `<span class="health${healthCls}">${shown}%</span>`;
   }
+  const code = podCode(soul.pod);
   return `
-    <div class="soul-family">${soul.family.toUpperCase()}</div>
+    <span class="drv-tag" data-pod-tag="${soul.pod}"></span>
+    <div class="drv-family">${soul.family.toUpperCase()}</div>
     ${heartbeatSvg(heartbeatOf(soul))}
-    <div class="seg-meta"><span class="soul-code">${podCode(soul.pod)}<span class="soul-count">${soul.colonists}</span></span>${health}</div>`;
+    <div class="seg-meta"><span class="drv-code"><span class="drv-code-long">${code}</span><span class="drv-code-short">${code.replace('POD ', 'P')}</span><span class="drv-count">${soul.colonists}</span></span>${health}</div>`;
 }
 
 // Builds a single visual part of a memory segment.
@@ -211,7 +214,7 @@ export function renderSegmentPart(
   const tier = stripTier(partSize);
 
   const part = document.createElement('div');
-  if (seg.type === 'driver') return renderSoulPart(part, seg, layout, behavior);
+  if (seg.type === 'driver') return renderDriverPart(part, seg, layout, behavior);
   if (seg.type === 'hollow') return renderHollowPart(part, seg, layout, behavior);
   let cls = `seg ${seg.type} tier-${tier}`;
   const state = 'state' in seg ? seg.state : undefined;
@@ -373,12 +376,12 @@ function wire(part: HTMLElement, seg: Segment, behavior: SegmentBehavior): void 
   part.addEventListener('mouseleave', () => behavior.onMouseLeave(seg, part));
 }
 
-// A driver's part (see soulPartHtml). It keeps the shared part data (size, index, offset) so the
+// A driver's part (see driverPartHtml). It keeps the shared part data (size, index, offset) so the
 // op bars, the split overlay and the hint painter treat it like any file.
-function renderSoulPart(part: HTMLElement, soul: DriverSegment, layout: SegmentPartLayout, behavior: SegmentBehavior): HTMLElement {
+function renderDriverPart(part: HTMLElement, soul: DriverSegment, layout: SegmentPartLayout, behavior: SegmentBehavior): HTMLElement {
   const { partIdx, totalParts } = layout;
   const isFirst = partIdx === 0;
-  let cls = `seg soul driver hb-${heartbeatOf(soul)}`;
+  let cls = `seg driver hb-${heartbeatOf(soul)}`;
   if (soul.state === 'transferring') cls += ' transferring';
   if (soul.state === 'repairing') cls += ' repairing';
   cls += infectedClasses(soul, true);
@@ -393,7 +396,7 @@ function renderSoulPart(part: HTMLElement, soul: DriverSegment, layout: SegmentP
   part.dataset.pod = String(soul.pod);
   // A strip line can point at a driver by its pod (POD 02 WILL LAND HARD).
   if (isFirst) part.dataset.hintTarget = podHintTarget(fileLabel(soul));
-  part.innerHTML = soulPartHtml(soul, layout);
+  part.innerHTML = driverPartHtml(soul, layout);
   wire(part, soul, behavior);
   return part;
 }

@@ -337,13 +337,10 @@
               <div class="mh-limit" id="mhLimit" hidden></div>
               <!-- WP9: AUTOBURN armed or flying the ship while the kid works in the MIND (MiniHud) -->
               <div class="mh-auto" id="mhAuto" hidden></div>
-              <!-- While printing: how far, and PRINT FAST (MiniHud; the button does not go back to amber) -->
-              <div class="mh-print" id="mhPrint" hidden>
-                <span class="mh-print-text" id="mhPrintText"></span>
-                <button class="mh-print-fast" id="mhPrintFast" data-hint-target="print-fast" tabindex="-1">PRINT FAST ▸▸</button>
-              </div>
-              <!-- While printing: the INTACT star, live (★ INTACT 11/12 while a hurt cluster could cost it) -->
-              <div class="mh-intact" id="mhIntact" hidden></div>
+              <!-- While landing (01-landing §4): the bay and the pods down (MiniHud) -->
+              <div class="mh-landing" id="mhLanding" hidden><span class="mh-landing-text" id="mhLandingText"></span></div>
+              <!-- While landing: the ON TARGET star, live (★ ON TARGET 5/6, the hurt yellow while it is still at risk) -->
+              <div class="mh-on-target" id="mhOnTarget" hidden></div>
             </div>
           </div>
         </div>
@@ -401,25 +398,27 @@
     </div>
   </div>
 
-  <!-- The LANDING REPORT (01-landing §3.11). Slice 1a F2: the placeholder components/run/LandingReport.ts borrows the
-       old WAKE REPORT's card; TODO(slice1a-UI): its own DOM, the LZ rows, the credits and the stars landing -->
-  <div class="wake-report" id="wakeReport" hidden>
+  <!-- The LANDING REPORT (01-landing §4, LandingReport): the route and the colony, one row per LZ counting up with a pod
+       icon per pod, the OFF-SITE / NO-GO / PARKED / NOT LAUNCHED rows, the credits roll (the lead first), then the
+       headline, the breakdown and the points, the stars, the charge and the near misses, and CONTINUE. It wears the
+       phase-2 WAKE REPORT's night card (.wake-report, game.css) and its roll; its own parts are landing.css's. -->
+  <div class="wake-report landing-report" id="landingReport" hidden>
     <div class="wr-inner">
       <div class="wr-head">
-        <div class="wr-title" id="wrTitle"></div>
-        <div class="wr-route" id="wrRoute"></div>
+        <div class="wr-title" id="lrTitle"></div>
+        <div class="wr-route" id="lrRoute"></div>
+        <div class="lr-colony" id="lrColony" hidden></div>
       </div>
-      <div class="wr-credits" id="wrCredits"><div class="wr-roll" id="wrRoll"></div></div>
-      <div class="wr-epigraph" id="wrEpigraph" hidden></div>
-      <div class="wr-total" id="wrTotal"></div>
-      <!-- WOKE counts heads; the cost of a bad print stands right under it, in the hurt yellow (WP7) -->
-      <div class="wr-missing" id="wrMissing" hidden></div>
-      <div class="wr-breakdown" id="wrBreakdown" hidden></div>
-      <div class="wr-stars" id="wrStars" hidden></div>
-      <div class="wr-charge" id="wrCharge" hidden></div>
+      <div class="lr-rows" id="lrRows"></div>
+      <div class="wr-credits" id="lrCredits"><div class="wr-roll" id="lrRoll"></div></div>
+      <div class="wr-total" id="lrHeadline"></div>
+      <div class="wr-breakdown" id="lrBreakdown" hidden></div>
+      <div class="wr-stars" id="lrStars" hidden></div>
+      <div class="wr-charge" id="lrCharge" hidden></div>
+      <div class="lr-near" id="lrNear" hidden></div>
       <div class="wr-foot">
-        <button class="wr-skip" id="wrSkip" tabindex="-1"></button>
-        <button class="wr-continue" id="wrContinue" tabindex="-1" hidden></button>
+        <button class="wr-skip" id="lrSkip" tabindex="-1"></button>
+        <button class="wr-continue" id="lrContinue" tabindex="-1" hidden></button>
       </div>
     </div>
   </div>

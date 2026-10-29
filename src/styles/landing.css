@@ -271,3 +271,82 @@ body.reduced-motion .pb-launch[data-look="go"] { animation: none; }
 .gt-blocked { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; letter-spacing: 0.2em; color: var(--warn); background: color-mix(in srgb, var(--bg) 60%, transparent); }
 .gt-blocked[hidden] { display: none; }
 .ground-track.out-of-band .gt-strip { border-style: dashed; }
+
+/* ── MIND: a driver's chip (SegmentBlock): `POD 03` where it fits, `P03` on a narrow chip (plan risk 17), and the bay's
+ *    BAY / NEXT tag in its corner (PodTags) ── */
+.seg.driver { position: relative; container-type: inline-size; }
+.seg.driver .drv-code-short { display: none; }
+@container (max-width: 70px) {
+  .seg.driver .drv-code-long { display: none; }
+  .seg.driver .drv-code-short { display: inline; }
+  .seg.driver .drv-count { display: none; }
+}
+.seg.driver .drv-tag {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  padding: 0 3px;
+  font-size: 7.5px;
+  line-height: 11px;
+  letter-spacing: 0.12em;
+  pointer-events: none;
+}
+.seg.driver .drv-tag:empty { display: none; }
+.seg.driver .drv-tag.tag-bay { color: var(--soul); border: 1px solid var(--soul-dim); }
+.seg.driver .drv-tag.tag-next { color: var(--bg); background: var(--soul); box-shadow: 0 0 6px var(--soul-dim); }
+.seg.driver:has(.drv-tag.tag-next) { border-color: var(--soul); }
+
+/* ── The LANDING REPORT (LandingReport): the WAKE REPORT's night card (game.css .wake-report, its roll and stars),
+ *    with the colony line, the rows counting up with their pod icons, the credits' outcome colours and the near misses ── */
+.lr-colony { margin-top: 8px; font-family: 'VT323', monospace; font-size: 22px; letter-spacing: 0.08em; color: var(--soul); }
+.lr-colony[hidden] { display: none; }
+.lr-rows { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; width: min(100%, 560px); }
+.lr-row {
+  display: grid;
+  grid-template-columns: 7em 1fr auto;
+  align-items: baseline;
+  column-gap: 14px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+}
+.lr-row.landed { opacity: 1; transform: none; }
+.lr-label { font-size: 11px; letter-spacing: 0.18em; color: var(--report-dim); text-transform: uppercase; white-space: nowrap; }
+.lr-icons { display: flex; gap: 4px; font-family: 'JetBrains Mono', monospace; font-size: 20px; line-height: 1; min-width: 0; flex-wrap: wrap; }
+.lr-icon { opacity: 0.12; transition: opacity 0.15s ease-out, text-shadow 0.15s; }
+.lr-icon.on { opacity: 1; }
+.lr-icon.icon-soft { color: var(--soul); }
+.lr-icon.icon-soft.on { text-shadow: 0 0 8px var(--soul-dim); }
+.lr-icon.icon-hard { color: var(--soul-hurt); }
+.lr-icon.icon-mislanded { color: var(--accent); }
+.lr-icon.icon-mislanded-hard { color: var(--accent); filter: saturate(0.6); }
+.lr-icon.icon-empty { color: var(--report-dim); }
+.lr-icon.icon-off-site { color: var(--report-dim); }
+.lr-icon.icon-no-go { color: var(--nogo); }
+.lr-icon.icon-parked { color: var(--accent-bright); animation: np-beacon 1.1s steps(2) infinite; }
+.lr-icon.icon-not-launched { color: var(--star-missed); }
+.lr-text { font-family: 'VT323', monospace; font-size: 22px; line-height: 1; letter-spacing: 0.06em; white-space: nowrap; text-align: right; }
+.lr-row.tone-good .lr-text { color: var(--soul); }
+.lr-row.tone-short .lr-text { color: var(--soul-hurt); }
+.lr-row.tone-plain .lr-text { color: var(--report-text); }
+.lr-row.tone-muted .lr-text { color: var(--report-dim); font-size: 17px; }
+.lr-why { grid-column: 2 / 4; font-size: 10px; letter-spacing: 0.06em; color: var(--report-dim); }
+.wr-credit.lr-outcome-hard .wr-c-status,
+.wr-credit.lr-outcome-hard .wr-c-words,
+.wr-lead.lr-outcome-hard .wr-l-words { color: var(--soul-hurt); text-shadow: none; }
+.wr-credit.lr-outcome-mislanded .wr-c-status { color: var(--accent); }
+.wr-credit.lr-outcome-off-site .wr-c-status { color: var(--report-dim); }
+.lr-near { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; letter-spacing: 0.06em; color: var(--report-dim); animation: wr-in 0.5s ease-out both; }
+.lr-near[hidden] { display: none; }
+body.reduced-motion .lr-row { transition: none; }
+body.reduced-motion .lr-icon.icon-parked { animation: none; }
+@media (max-width: 768px) {
+  .lr-row { grid-template-columns: 5.5em 1fr auto; column-gap: 8px; }
+  .lr-text { font-size: 18px; }
+  .lr-icons { font-size: 16px; }
+  .lr-colony { font-size: 18px; }
+}
+@media (max-height: 800px) {
+  .lr-text { font-size: 19px; }
+  .lr-colony { font-size: 19px; margin-top: 4px; }
+}

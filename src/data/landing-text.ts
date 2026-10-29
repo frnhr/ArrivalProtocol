@@ -343,6 +343,7 @@ export const MINI_LANDING_TEXT = {
   windowIn: (lz: string, countdown: string): string => `${lz} IN ${countdown}`,
   allAway: 'ALL PODS AWAY',
   bay: (shown: number, slots: number): string => `BAY ${'▮'.repeat(shown)}${'▯'.repeat(Math.max(0, slots - shown))}`,
+  down: (down: number, total: number): string => `${down}/${total} DOWN`,
 } as const;
 
 // The LANDING REPORT's other words (§4): the skip, the charge the stars carry, the last ship, a credit's line.

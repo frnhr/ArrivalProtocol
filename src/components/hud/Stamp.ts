@@ -7,7 +7,7 @@ import { STAMP_TEXT, FAULT_STAMP } from '@data/script';
 import { ZONE_STAMP_TEXT } from '@data/zone-text';
 import { HOLLOW_DEAL, HOLLOW_VERB } from '@data/hollow-text';
 import { racksText } from '@/types/zone';
-import { podCode } from '@data/landing-text';
+import { podCode, LANDING_STAMP_TEXT } from '@data/landing-text';
 import { STAMP_DEBOUNCE_MS, STAMP_IN_MS, STAMP_SHOW_MS, STAMP_MAX_WIDTH_FRAC } from '@data/tuning';
 
 // Stamps (§7.3): two or three words in VT323 slammed over the middle of the screen on a moment
@@ -98,6 +98,12 @@ export function mountStamps(store: Store<GameState>): () => void {
     }),
     // WP11 part 2: a HOLLOW verb stopped by the kid's tool in its last seconds (§3.5's BLOCKED, §5.3 moment 13).
     on('verb-blocked', () => { showStamp(HOLLOW_VERB.stamp, 'good'); }),
+    // Slice 1a (01-landing §2, §4): the run's first pod down, and every pod of a ship down (not on a ship that parked
+    // some: that one ends quietly, its report says what happened).
+    on('pod-landed', ({ firstOfRun }) => { if (firstOfRun) showStamp(LANDING_STAMP_TEXT.firstLanding, 'good'); }),
+    on('all-pods-down', () => {
+      if (store.getState().landing.pods.every((record) => record.fate.kind === 'down')) showStamp(LANDING_STAMP_TEXT.allDown, 'good');
+    }),
   ];
 
   return () => {

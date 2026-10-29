@@ -599,7 +599,7 @@ export function miniHudLanding(state: Readonly<GameState>, sol: Readonly<DropSol
   return {
     window,
     bay: MINI_LANDING_TEXT.bay(bayShown(state), BAY_SLOTS),
-    down: LANDING_HUD_TEXT.crumbLanding(down, landing.pods.length),
+    down: MINI_LANDING_TEXT.down(down, landing.pods.length),
     onTarget: { text: `${tone === 'lost' ? '☆' : '★'} ${LANDING_HUD_TEXT.onTarget(tally.onTargetPods, tally.pods)}`, tone },
   };
 }

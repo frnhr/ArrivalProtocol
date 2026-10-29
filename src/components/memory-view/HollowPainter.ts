@@ -229,7 +229,7 @@ function paintOutcome(root: HTMLElement, segId: string, integrity: number): void
   document.querySelectorAll<HTMLElement>(`[data-live-outcome="${CSS.escape(segId)}"]`).forEach((readout) => {
     if (readout.dataset.outcomePart === 'heart') {
       if (readout.classList.contains(`hb-${kind}`)) return;
-      readout.className = `soul-heart hb-${kind}`;
+      readout.className = `driver-heart hb-${kind}`;
       readout.innerHTML = heartbeatSvg(kind);
       return;
     }
