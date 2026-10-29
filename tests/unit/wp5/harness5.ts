@@ -1,12 +1,14 @@
 // WP5 headless harness: the WP4 harness (store, clock, orbit-sim, predictor, pace, input router, say,
 // boot, flight events, director, mode keys, ops core, held-tool sync, licences, faults) plus the
 // landing's DOM-free systems (slice 1a: the drop cache and the landing replace the reveal and the printer). Pods are
-// found by the old cluster codes (`C09` is pod 9, tests/unit/landing/pod-code.ts).
+// found by the old cluster codes (`C09` is pod 9, tests/unit/support/pod-code.ts). Every pod lands as the landing begins
+// (tests/unit/support/landing-instant.ts), unless the suite sets another landing mode.
 // One harness per test file (systems are module singletons); resetTo() between scenarios.
 import { createHarness4, type Harness4 } from '../wp4/harness4';
 import { mountLanding } from '@systems/landing';
 import { mountDropCache } from '@systems/drop-cache';
-import { isPodCode } from '../landing/pod-code';
+import { isPodCode } from '../support/pod-code';
+import { mountInstantLanding } from '../support/landing-instant';
 import { endFlight } from '@systems/orbit-sim';
 import { driversInMemory } from '@state/selectors';
 import { stateFromElements, ringFraction, type Ring } from '@/types/orbit';
@@ -45,6 +47,9 @@ export function createHarness5(seed = 1, opts: { soulsFound?: boolean } = {}): H
   const base = createHarness4(seed, { soulsFound: opts.soulsFound ?? false });
   mountDropCache(base.store);
   mountLanding(base.store);
+  // After the landing, so its tick sees this tick's touchdowns first: the run-flow loops written against printing reach
+  // the report.
+  mountInstantLanding(base.store);
   const souls = (): DriverSegment[] => driversInMemory(base.store.getState());
   return {
     ...base,

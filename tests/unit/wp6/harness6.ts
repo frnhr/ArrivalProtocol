@@ -10,7 +10,7 @@ import { mountHollowDeal } from '@systems/hollow-deal';
 import { mountHollowVerbs } from '@systems/hollow-verbs';
 import { mountFinale } from '@systems/finale';
 import { assertMemoryInvariants } from '@systems/memory-ops';
-import { isPodCode } from '../landing/pod-code';
+import { isPodCode } from '../support/pod-code';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import type { Segment, DriverSegment } from '@/types/segment';
 
