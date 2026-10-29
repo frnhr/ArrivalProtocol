@@ -11,6 +11,7 @@ import {
   buildLandingContext, landingObjective, type LandingObjective,
 } from '@systems/guidance';
 import { getDropSolution } from '@systems/drop-cache';
+import { skipBlockReason } from '@systems/pace';
 import { FLIGHT_OVER_LINE, percentFloor } from '@systems/flight-hud';
 import { getOps } from '@systems/ops-core';
 import { say } from '@systems/say';
@@ -404,7 +405,7 @@ export function buildDirectorCtx(
   const flying = state.run.phase === 'flight';
   const flightCtx = flying ? buildFlightContext(state, sensed) : null;
   // The landing's table reads the drop cache (mounted with the landing); not once the Core is lost (its card owns it).
-  const landingCtx = state.run.phase === 'landing' && !state.run.coreLost ? buildLandingContext(state, getDropSolution(), sensed) : null;
+  const landingCtx = state.run.phase === 'landing' && !state.run.coreLost ? buildLandingContext(state, getDropSolution(), skipBlockReason(state, sensed) === null) : null;
   const landing = landingCtx ? landingObjective(landingCtx) : null;
   return {
     state,

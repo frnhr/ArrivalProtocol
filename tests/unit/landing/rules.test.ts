@@ -116,7 +116,16 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
     && bayShown(fakeState({ lzs, pods, memory, loaded: 2 })) === 2);
   const members = bayMembers(fakeState({ lzs, pods, memory, loaded: 2, loadNext: 3 }));
   check('BAY tags the next loaded drivers, NEXT the first', members.bay.join(',') === '3,1' && members.next === 3);
-  check('a pod can ever launch while its driver is in memory (a dead one can be repaired)', canEverLaunch(plain, 2) && !canEverLaunch(fakeState({ lzs, pods, memory: [driver(1)] }), 2));
+  check('a pod can ever launch while its driver is in memory and not dead', canEverLaunch(plain, 1) && canEverLaunch(plain, 4)
+    && !canEverLaunch(fakeState({ lzs, pods, memory: [driver(1)] }), 2));
+  // Review M2: a dead driver (below the failing band) can launch some day only if a REPAIR can bring it back.
+  const repair: Segment = { id: 'repair', name: 'Repair', type: 'fs-tool', size: 4, integrity: 100, scanned: true, fsTool: 'repair', version: 1 };
+  const charge = (used: number): Segment => ({ id: 'charge', name: 'Repair Charge', type: 'redundancy', size: 36, used, capacity: 72 } as Segment);
+  const withRepair = (extra: Segment[]): GameState => fakeState({ lzs, pods, memory: [...memory, ...extra] });
+  check('…a dead driver only with a usable Repair and charge ≥ 1 (or a repair already running on it)',
+    !canEverLaunch(plain, 2) && canEverLaunch(withRepair([repair, charge(5)]), 2) && !canEverLaunch(withRepair([repair, charge(0)]), 2)
+    && !canEverLaunch(withRepair([{ ...repair, integrity: 10 } as Segment, charge(5)]), 2)
+    && canEverLaunch(fakeState({ lzs, pods, memory: [driver(2, 10, { state: 'repairing' })] }), 2));
 }
 
 // --- Classification, fill in touchdown order, the 400 + 800 case ---

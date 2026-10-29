@@ -24,7 +24,7 @@ import { setIntegrity, cureInfection, recordDriverLost, parkPodsAboard } from '@
 import { isOpenFree } from '@systems/tool-targets';
 import {
   isInfectable, isInfected, isHollow, infectedSegments, fileLabel, effectiveToolVersion, driversInMemory, isDriver,
-  isFirewall, isUsableTool, hasUsableTool, hasIntegrity, integrityBand, spreadPaused, isShipFile, isAiFile,
+  isFirewall, isUsableTool, hasUsableTool, hasIntegrity, integrityBand, spreadPaused, isShipFile, isAiFile, rootBlock, rootDeleteRunning,
   type HealthSegment,
 } from '@state/selectors';
 import type { FsToolKind } from '@/types/fs-tool';
@@ -704,7 +704,7 @@ export function bittenAgainDrivers(state: Readonly<GameState>): DriverSegment[] 
 
 // HOLLOW's root (the ship's `R` token; LAST LIGHT's is the one the duel deletes), or null once it is gone.
 export function theRoot(memory: readonly Segment[]): HollowSegment | null {
-  return memory.find((seg): seg is HollowSegment => isHollow(seg) && seg.root) ?? null;
+  return rootBlock(memory);
 }
 
 // How far the root's DELETE is (0..1), or null when none runs (LAST LIGHT's duel, WP11). The strip counts it down
@@ -716,10 +716,8 @@ export function rootDeleteProgress(state: Readonly<GameState>): number | null {
   return operation === undefined ? null : Math.max(0, Math.min(1, operation.pct / OP_COMPLETE_PCT));
 }
 
-// The root's DELETE is running: the verbs come every duelEverySec meanwhile.
-export function rootDeleteRunning(state: Readonly<GameState>): boolean {
-  return rootDeleteProgress(state) !== null;
-}
+// The root's DELETE is running: the verbs come every duelEverySec meanwhile (state/selectors rootDeleteRunning).
+export { rootDeleteRunning };
 
 // THE DEAL's hold on the spread: spreadPaused lives in state/selectors.ts (WP12 review) so pace.ts can read it
 // without importing this module. After a REFUSE (or the timer running out) the bite interval is

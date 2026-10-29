@@ -301,6 +301,33 @@ export function verbSecondsLeft(verb: Readonly<VerbTelegraph>): number {
   return Math.max(1, Math.ceil(verb.leftSec));
 }
 
+// A REPAIR could still be started on something: a usable Repair file, and at least one point of REPAIR CHARGE. What
+// "repairable" means for the landing (a driver below the failing band can launch some day only if a REPAIR can bring it
+// back: landing-rules canEverLaunch) and for the root's duel (a broken Rm a REPAIR could bring back: rootDeletable).
+export function repairPossible(state: Readonly<GameState>): boolean {
+  return getFsTool(state, 'repair') !== undefined && chargeLeft(state) >= 1;
+}
+
+// HOLLOW's root (the ship's `R` token; LAST LIGHT's is the one the duel deletes), or null once it is gone.
+export function rootBlock(memory: readonly Segment[]): HollowSegment | null {
+  return memory.find((seg): seg is HollowSegment => isHollow(seg) && seg.root) ?? null;
+}
+
+// The root's DELETE is running (LAST LIGHT's duel, WP11): read from the root's own `operating` flag, which every op sets
+// on its target for as long as it runs (state/actions.ts), and only DELETE can target a hollow block
+// (tool-targets.ts). A selector rather than an ops-core lookup, so the landing's pure guidance table reads it with no
+// stateful import (systems/hollow.ts rootDeleteProgress keeps the op's own progress).
+export function rootDeleteRunning(state: Readonly<GameState>): boolean {
+  return rootBlock(state.memory)?.operating === true;
+}
+
+// Something can still delete the root: a working Rm, or an Rm a REPAIR can bring back (repairPossible).
+export function rootDeletable(state: Readonly<GameState>): boolean {
+  if (getFsTool(state, 'delete')) return true;
+  const anyRm = state.memory.some((seg) => seg.type === 'fs-tool' && seg.fsTool === 'delete');
+  return anyRm && repairPossible(state);
+}
+
 // Ship 1's scripted fight is still undecided (HollowState.scriptTargetId): the bitten file is in memory and neither
 // cured nor eaten yet. The LANDING REPORT waits for it as for the story it starts (systems/landing.ts). A target that left
 // memory some other way (it never can today: an infected file can't launch or move) does not hold the report for good.

@@ -18,7 +18,7 @@ import { getPrediction } from '@systems/predict';
 import { requestSkip, skipBlockReason } from '@systems/pace';
 import { activeLandingController, setActiveLandingController } from '@systems/landing-controller';
 import {
-  classifyLanding, colonyName, dropFactors, driverTouch, isLaunchable, landingView as landingViewOf, launchMomentInSec,
+  classifyLanding, colonyName, dropFactors, driverTouch, driversThatCanEverLaunch, isLaunchable, landingView as landingViewOf, launchMomentInSec,
   launchGuard, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podPoints, targetWindow, touchAtTouchdown,
   windowOpenNow,
 } from '@systems/landing-rules';
@@ -251,14 +251,13 @@ function trackWindow(store: Store<GameState>): void {
   if (now !== null && now.sure && !(before?.lz === now.lz && before.sure)) emit('window-sure', { lz: now.lz });
 }
 
-// Risk 7: pods aboard and none of their drivers in memory (eaten, dead) means nothing can launch any more; after
-// LANDING_NONE_LEFT_SEC the landing ends by itself, so headless kids and AFK players never stall.
+// Risk 7: pods aboard and none of them can ever launch (their drivers eaten, taken to 0, or dead with no REPAIR left to
+// bring them back: landing-rules driverCanEverLaunch) means nothing can launch any more; after LANDING_NONE_LEFT_SEC
+// the landing ends by itself, so headless kids and AFK players never stall.
 function noneLeftTick(store: Store<GameState>, dtAi: number): void {
   const state = store.getState();
   if (state.landing.ended !== null) return;
-  const inMemory = new Set(driversInMemory(state).map((driver) => driver.pod));
-  const stuck = state.landing.pods.some((record) => record.fate.kind === 'aboard')
-    && !state.landing.pods.some((record) => record.fate.kind === 'aboard' && inMemory.has(record.pod));
+  const stuck = state.landing.pods.some((record) => record.fate.kind === 'aboard') && driversThatCanEverLaunch(state).length === 0;
   if (!stuck) {
     if (state.landing.noDriverAiSec !== 0) store.mutate((draft) => { draft.landing.noDriverAiSec = 0; });
     return;

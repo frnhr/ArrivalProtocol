@@ -3,18 +3,22 @@
 // • a driver lost after the landing ended (HOLLOW, the zones, THE DEAL's ACCEPT, the instant landing) updates its parked
 //   pod instead of throwing, and THE DEAL is never offered, nor left standing, once the landing has ended;
 // • ship 1's scripted fight lives in state (hollow.scriptTargetId), and the LANDING REPORT waits for it after an early
-//   END LANDING, so `> ...047?` is never skipped.
+//   END LANDING, so `> ...047?` is never skipped;
+// • drivers that can't launch and can't be repaired end the landing (L12, then the risk-7 auto-end), and the root's
+//   DELETE is read from a selector (the pure table imports no stateful module).
 import { check, finish } from './checks';
 import { lockOn } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';
 import { endLanding, forceLandAll } from '@systems/landing';
-import { acceptDeal, infectNow } from '@systems/hollow';
+import { acceptDeal, infectNow, rootDeleteProgress, theRoot } from '@systems/hollow';
+import { actionDelete } from '@state/actions';
 import { offerDealNow } from '@systems/hollow-deal';
 import { recordDriverLost, setIntegrity } from '@state/actions';
-import { driversInMemory } from '@state/selectors';
+import { driversInMemory, rootDeleteRunning, rootDeletable, repairPossible } from '@state/selectors';
 import { podRecord } from '@systems/landing-rules';
 import { DRIVER_RULES } from '@data/script';
 import { HOLLOW_STORY } from '@data/hollow-text';
+import { LANDING_NONE_LEFT_SEC } from '@data/tuning';
 import type { DriverSegment } from '@/types/segment';
 
 const h = createHarness7(5);
@@ -116,6 +120,35 @@ function untilReport(maxWall: number): string | null {
   check('…END LANDING before the fight is decided: the report waits for the fight and its story (`> ...047?` is said first)',
     state().run.phase === 'report' && state().hollow.story === 'told' && said && state().hollow.scriptTargetId === null,
     `${state().run.phase}, story ${state().hollow.story}, said ${said}`);
+}
+
+// --- 5. Drivers that can never launch end the landing (review M2, p4) -----------------------------------------------
+{
+  landingOn(1);
+  h.store.update((draft) => {
+    for (const seg of draft.memory) if (seg.type === 'driver') setIntegrity(seg, 10);
+    for (const seg of draft.memory) if (seg.type === 'redundancy') seg.used = 0;
+  });
+  h.step();
+  const shown = h.shown();
+  check('HALCYON, every driver at 10% and no REPAIR CHARGE: the strip says L12 (NO POD CAN LAUNCH), not L11 or WAIT',
+    !repairPossible(state()) && shown?.id === 'landing-L12', `${shown?.id}: ${shown?.text}`);
+  h.stepFor(LANDING_NONE_LEFT_SEC + 0.5);
+  check('…and the landing ends by itself after LANDING_NONE_LEFT_SEC (no-driver-left)', state().landing.ended === 'no-driver-left',
+    String(state().landing.ended));
+}
+
+// --- N6. The root's DELETE from a selector (LAST LIGHT's duel) ------------------------------------------------------
+{
+  landingOn(4);
+  h.stepFor(0.2);
+  const root = theRoot(state().memory);
+  check('LAST LIGHT: the duel opens, the root is deletable, its DELETE not running', state().hollow.finale.phase === 'duel' && root !== null
+    && rootDeletable(state()) && !rootDeleteRunning(state()), state().hollow.finale.phase);
+  const refused = root === null ? 'no root' : actionDelete(h.store, root);
+  h.step();
+  check('…DELETE on the root: selectors rootDeleteRunning agrees with the op\'s own progress', refused === null && rootDeleteRunning(state())
+    && rootDeleteProgress(state()) !== null, String(refused));
 }
 
 finish();

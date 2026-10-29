@@ -2,15 +2,11 @@ import type { GameState, GuideLayer, Urgency } from '@state/schema';
 import type { DropSolution, LzWindow } from '@/types/landing';
 import type { CapabilityRole } from '@systems/capabilities';
 import type { FsToolKind } from '@/types/fs-tool';
-import type { Prediction } from '@systems/predict';
-import { skipBlockReason } from '@systems/pace';
-import { rootDeleteRunning } from '@systems/hollow';
-import { rootDeletable } from '@systems/finale';
 import { secFromNow } from '@systems/landing-solve';
 import {
-  isLaunchable, launchMomentInSec, lzDownFill, lzRemaining, nextToLaunch, targetWindow, windowsAsOf,
+  driversThatCanEverLaunch, isLaunchable, launchMomentInSec, lzDownFill, lzRemaining, nextToLaunch, targetWindow, windowsAsOf,
 } from '@systems/landing-rules';
-import { driversInMemory } from '@state/selectors';
+import { rootDeletable, rootDeleteRunning } from '@state/selectors';
 import { podHintTarget, toolStepTarget, ROOT_HINT_TARGET } from '@data/fs-tools';
 import { LANDING_LINES, podCode } from '@data/landing-text';
 import { IS_DEV } from '@/env';
@@ -73,7 +69,7 @@ export interface LandingContext {
   bayReady: boolean;        // a slot loaded and the cadence run out
   bayReadyInTac: number;    // tactical s until the bay can launch again (0 when ready)
   stuckPod: number | null;  // no pod can launch now and this one's driver needs a REPAIR (L11)
-  anyCanEver: boolean;      // a pod aboard still has its driver in memory
+  anyCanEver: boolean;      // a pod aboard can launch some day (landing-rules driverCanEverLaunch)
   // The next window: the target (in band), else the next one (out of band). `inTac`: to its opening; `launchInTac`: to
   // its launch moment (landing-rules launchMomentInSec: the sure part's opening when it has one).
   next: { lz: string; inTac: number; launchInTac: number; inBand: boolean } | null;
@@ -98,14 +94,15 @@ function nextWindow(state: Readonly<GameState>, sol: Readonly<DropSolution>): La
   return { lz: ahead.lz, inTac, launchInTac: inTac, inBand: false };
 }
 
-export function buildLandingContext(state: Readonly<GameState>, sol: Readonly<DropSolution> | null, pred: Prediction): LandingContext {
+// `skipAvailable`: whether [F] would start a SKIP now (pace skipBlockReason, read by the caller), so this module imports
+// nothing stateful.
+export function buildLandingContext(state: Readonly<GameState>, sol: Readonly<DropSolution> | null, skipAvailable: boolean): LandingContext {
   if (state.run.phase !== 'landing') throw new Error(`buildLandingContext: not landing (phase ${state.run.phase})`);
   if (sol === null) throw new Error('buildLandingContext: no drop solution in LANDING');
   const { landing } = state;
   const aboard = landing.pods.filter((record) => record.fate.kind === 'aboard');
   const falling = landing.pods.filter((record) => record.fate.kind === 'falling').length;
-  const inMemory = driversInMemory(state);
-  const aboardDrivers = inMemory.filter((driver) => aboard.some((record) => record.pod === driver.pod));
+  const canEver = driversThatCanEverLaunch(state);
   const canLaunch = nextToLaunch(state) !== null;
   const remaining = lzRemaining(state);
   const down = lzDownFill(state);
@@ -125,9 +122,10 @@ export function buildLandingContext(state: Readonly<GameState>, sol: Readonly<Dr
   const nextWithRoom = target !== null && hasRoom(target.lz) ? target.lz : landing.lzs.find((lz) => hasRoom(lz.label))?.label ?? null;
   const { bay } = landing;
   const bayReadyInTac = bay.loaded >= 1 ? bay.cadenceLeftTac : Math.max(bay.cadenceLeftTac, BAY_RELOAD_TAC - bay.reloadTac);
-  // A driver that needs the kid: in memory, aboard, unable to launch, and nobody working on it (a repair or a move
-  // already running finishes by itself, and the next window will take it).
-  const stuck = canLaunch ? undefined : aboardDrivers.find((driver) => !isLaunchable(driver) && !driver.operating
+  // A driver that needs the kid: in memory, aboard, unable to launch, nobody working on it (a repair or a move already
+  // running finishes by itself, and the next window will take it), and able to launch some day (L11 never asks for a
+  // REPAIR that can't be started: that is L12).
+  const stuck = canLaunch ? undefined : canEver.find((driver) => !isLaunchable(driver) && !driver.operating
     && driver.state !== 'repairing' && driver.state !== 'transferring');
   const heldKind = state.ui.activeTool?.kind ?? null;
   return {
@@ -145,10 +143,10 @@ export function buildLandingContext(state: Readonly<GameState>, sol: Readonly<Dr
     bayReady: bay.loaded >= 1 && bay.cadenceLeftTac <= 0,
     bayReadyInTac,
     stuckPod: stuck?.pod ?? null,
-    anyCanEver: aboardDrivers.length > 0,
+    anyCanEver: canEver.length > 0,
     next: sol.block === null ? nextWindow(state, sol) : null,
     noBandWindow: aboard.length > 0 && sol.block === null && sol.windows.length > 0 && sol.windows.every((w) => !w.inBand),
-    skipAvailable: skipBlockReason(state, pred) === null,
+    skipAvailable,
   };
 }
 

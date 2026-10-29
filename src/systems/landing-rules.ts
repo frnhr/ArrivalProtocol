@@ -6,7 +6,7 @@ import type {
 } from '@/types/landing';
 import type { Capabilities } from '@systems/capabilities';
 import type { Rng } from '@systems/rng';
-import { driversInMemory } from '@state/selectors';
+import { driversInMemory, repairPossible } from '@state/selectors';
 import { angleDelta, secFromNow } from '@systems/landing-solve';
 import { COLONY_NAME_POOL, familyColonyName } from '@data/landing-text';
 import {
@@ -65,9 +65,26 @@ export function bayMembers(state: Readonly<GameState>): { bay: number[]; next: n
   return { bay: queue.slice(0, bayShown(state)).map((driver) => driver.pod), next: queue[0]?.pod ?? null };
 }
 
-// A pod can still launch some day: it is aboard and its driver is in memory (a dead one can be repaired).
+// A driver in memory can launch some day (review M2): at or above the failing band it only waits for what holds it (an
+// infection is cured or eats it, an op ends); below it (dead) it needs a REPAIR: one already running on it, or one the
+// kid can still start (selectors repairPossible: a usable Repair and charge ≥ 1, as the root's duel judges its Rm).
+// Without that its pod can never launch, so L12 and the risk-7 auto-end take over instead of a landing open for good.
+export function driverCanEverLaunch(state: Readonly<GameState>, driver: Readonly<DriverSegment>): boolean {
+  if (driver.integrity >= BAND_FAILING_MIN || driver.state === 'repairing') return true;
+  return repairPossible(state);
+}
+
+// A pod can still launch some day: it is aboard and its driver is in memory and can launch some day.
 export function canEverLaunch(state: Readonly<GameState>, pod: number): boolean {
-  return podRecord(state, pod).fate.kind === 'aboard' && driversInMemory(state).some((driver) => driver.pod === pod);
+  if (podRecord(state, pod).fate.kind !== 'aboard') return false;
+  const driver = driversInMemory(state).find((candidate) => candidate.pod === pod);
+  return driver !== undefined && driverCanEverLaunch(state, driver);
+}
+
+// The drivers of the pods aboard that can launch some day (the table's anyCanEver, the auto-end, the moment's `awaited`).
+export function driversThatCanEverLaunch(state: Readonly<GameState>): DriverSegment[] {
+  const aboard = new Set(state.landing.pods.filter((record) => record.fate.kind === 'aboard').map((record) => record.pod));
+  return driversInMemory(state).filter((driver) => aboard.has(driver.pod) && driverCanEverLaunch(state, driver));
 }
 
 // --- Where a pod lands -------------------------------------------------------------------------------------------------
