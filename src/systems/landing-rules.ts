@@ -289,6 +289,8 @@ export function launchGuard(state: Readonly<GameState>, sol: Readonly<DropSoluti
   const touch = driverTouch(driver.integrity);
   const placement = classifyLanding(landing.lzs, landing.noGo, sol.dot.rad, lzProjectedFill(state));
   const points = podPoints(placement.place, touch, landing.forgiveness, driver.colonists);
+  // TODO(slice1b): a dot over a no-go arc asks in the arc's own word (`LAUNCH INTO LAVA? scores 0`, NoGoArcState.word);
+  // every ship's no-go list is empty in 1a, so it shares the off-site ask.
   if (placement.place === 'off-site' || placement.place === 'no-go') return { ask: 'off-site', points, lz: null };
   if (placement.place === 'mislanded') return { ask: 'full', points, lz: placement.lz };
   return null;
