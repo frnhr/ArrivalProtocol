@@ -1450,3 +1450,29 @@ export const MERGE_DRIVER_INTEGRITY = 80;
 // The ranks' thresholds were authored against the phase-2 fleet's 12,400 colonists; they scale by the fleet's real
 // colonists (9,600 in slice 1a), so perfect landings are now needed for the top ranks (risk 11).
 export const RANK_FLEET_COLONISTS = 12400;
+
+// --- Landing UI (slice 1a, Track UI) ---------------------------------------------------------------------------------
+
+// A falling pod's streak shows this share of its arc behind the head (§4 "a streak with a trail"): long enough to read as
+// motion along the arc, short enough that two pods 2 s apart are two streaks, not one line.
+export const STREAK_TRAIL_FRAC = 0.3;
+// Pods parked in orbit ride the ship's orbit as beacons (§3.10), this share of a period apart behind the ship: a short
+// string of blinking dots that reads as "left up here", clear of the ship's own glyph.
+export const BEACON_LAG_FRAC = 0.03;
+// The GROUND TRACK names at most this many LZs waiting past its right edge (`LZ-B ▸ 2:10`): the next one and the one
+// after are a plan; more is a list nobody reads in a 56 px panel.
+export const GROUND_TRACK_AHEAD_MAX = 2;
+// `+200 LANDED · LZ-A` floats up from the bracket this long (wall ms): the bell's decay, so the words and the sound end
+// together.
+export const TOUCHDOWN_FLOAT_MS = 1600;
+// The screen kicks this much per launch (§4 juice "2 px shake per launch"): felt at the 2-second rhythm, never tiring.
+export const SHAKE_LAUNCH_PX = 2;
+// The LANDING REPORT counts its LZ rows up one after another, this far apart (wall s), each with a heartbeat: the rows
+// are the ship's result, so they get a beat each before the credits roll.
+export const REPORT_LZ_ROW_GAP_SEC = 0.45;
+// Each pod icon in a counting row lands this far after the previous one (wall s): a ship of 4 pods per LZ fills a row in
+// under a second.
+export const REPORT_POD_ICON_GAP_SEC = 0.12;
+// The POD BAY window slides in this long after ORBIT LOCK (wall ms): after the lock's stamp has hit, so the two moments
+// don't land on the same frame.
+export const POD_BAY_OPEN_DELAY_MS = 900;

@@ -1,8 +1,7 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { chargeLeft, driversInMemory } from '@state/selectors';
-import { isLaunchable } from '@systems/landing-rules';
-import { LANDING_HUD_TEXT } from '@data/landing-text';
+import { chargeLeft } from '@state/selectors';
+import { footerPods } from '@systems/landing-hud';
 import { ARCHIVE_TEXT } from '@data/script';
 import { onOpsChange, threadsBusy, threadsTotal } from '@systems/ops-core';
 import { onPostTick } from '@systems/clock';
@@ -26,20 +25,9 @@ function flightLabel(status: GameState['burn']['status']): string {
   return `${TERMINAL[status].word}${TONE_MARK[TERMINAL[status].tone]}`;
 }
 
-// 01-landing §4: `PODS: 8 ABOARD · 3 LANDED · 1 CAN'T LAUNCH`, in pods. CAN'T LAUNCH counts the pods aboard whose
-// driver is gone or can't launch right now (dead, infected, busy). TODO(slice1a-UI): the final footer model.
+// 01-landing §4: `PODS: 8 ABOARD · 3 LANDED · 1 CAN'T LAUNCH`, in pods (landing-hud footerPods).
 export function podsLabel(state: Readonly<GameState>): string {
-  const launchable = new Set(driversInMemory(state).filter(isLaunchable).map((driver) => driver.pod));
-  let aboard = 0;
-  let landed = 0;
-  let cantLaunch = 0;
-  for (const record of state.landing.pods) {
-    if (record.fate.kind === 'down') landed++;
-    if (record.fate.kind !== 'aboard') continue;
-    aboard++;
-    if (!launchable.has(record.pod)) cantLaunch++;
-  }
-  return LANDING_HUD_TEXT.footer(aboard, landed, cantLaunch);
+  return footerPods(state).text;
 }
 
 export function mountFooter(store: Store<GameState>): () => void {
@@ -92,7 +80,9 @@ export function mountFooter(store: Store<GameState>): () => void {
   const paintAll = (): void => { paintSouls(); paintCharge(); paintThreads(); paintBurn(); paintLimit(); };
   paintAll();
 
-  const unsubStore = store.subscribe((s) => `${s.ui.memoryRev}|${s.burn.status}|${s.run.phase}`, paintAll);
+  // A pod's fate (launched, down, parked) changes without a memory change at touchdown: it is part of the key.
+  const unsubStore = store.subscribe(
+    (s) => `${s.ui.memoryRev}|${s.burn.status}|${s.run.phase}|${s.landing.pods.map((record) => record.fate.kind).join()}`, paintAll);
 
   function paintArchive(status: GameState['archive']['status'], prev: GameState['archive']['status'] | null): void {
     const text = status === 'ok' || status === 'none' ? '' : ARCHIVE_TEXT.footer[status];

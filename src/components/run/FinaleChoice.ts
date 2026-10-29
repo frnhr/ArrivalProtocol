@@ -35,7 +35,7 @@ import {
 //   The delay and the arming are AI seconds (§3.4: story timers stand still while paused).
 // • THE ENDING. The choice (systems/finale.ts) writes its typed ending in the same update as its phase; the card clears
 //   and types it, line by line, on the ending's own AI clock: every line from finaleEndingLineStartsSec after the
-//   ending's startAi, the very schedule the WAKE REPORT waits for, so the card can't fall behind the report or be cut
+//   ending's startAi, the very schedule the LANDING REPORT waits for, so the card can't fall behind the report or be cut
 //   off by it, and pause holds both (WP11 review: on its own wall-clock copy of the schedule it opened late and lost
 //   CONTROL's last line). The command echo, the narration, MERGE's merged voice (`> hi. it's us.`, pink into blue) and
 //   ARRIVAL CONTROL's verdict after its chime; every line's room is kept from the start, so nothing on the card moves
@@ -314,7 +314,7 @@ export function mountFinaleChoice(store: Store<GameState>): () => void {
     close();
   }
 
-  // Gone at once, no fade: the run moved on (the WAKE REPORT is up, a NEW RUN began).
+  // Gone at once, no fade: the run moved on (the LANDING REPORT is up, a NEW RUN began).
   function closeNow(): void {
     stopFade();
     wordsQueue?.clear();
@@ -413,7 +413,7 @@ export function mountFinaleChoice(store: Store<GameState>): () => void {
     store.subscribe((s) => s.ui.memoryRev, sync),
     store.subscribe((s) => s.clock.paused, () => { lastPrice = ''; sync(); }),
   ];
-  // The card's delay, its arming and the ending are AI time (the WAKE REPORT waits on the same clock), and a repair
+  // The card's delay, its arming and the ending are AI time (the LANDING REPORT waits on the same clock), and a repair
   // spends charge in place: all are read per tick.
   const offTick = onPostTick(() => {
     if (stage === 'waiting' && aiNow() >= showAtAi) showCard();

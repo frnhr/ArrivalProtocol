@@ -18,8 +18,13 @@ import { createScrambler } from '@components/hud/scrambler';
 import {
   SVG_NS, svgEl, fmt, setCircle, annulus, circlePath, pathsByColour, hazardPath, bandWidth,
 } from '@components/hud/plot-draw';
-import { PLOT_FUZZ_MIN_UNITS, PLOT_UNCERTAIN_MIN_UNITS, PLOT_PLANET_MIN_UNITS } from '@data/tuning';
-import { BAND_TEXT } from '@data/landing-text';
+import { PLOT_FUZZ_MIN_UNITS, PLOT_UNCERTAIN_MIN_UNITS, PLOT_PLANET_MIN_UNITS, TOUCHDOWN_FLOAT_MS } from '@data/tuning';
+import { BAND_TEXT, TOUCHDOWN_FLOAT_TEXT } from '@data/landing-text';
+import { on } from '@systems/events';
+import { getDropSolution } from '@systems/drop-cache';
+import { plotLandingModel, ringLabel } from '@systems/landing-hud';
+import { replayAnimation } from '@components/dom';
+import { createPlotLandingLayer } from './plot-landing';
 
 // NAV PLOT, the hero window (§7.1). Everything on it comes from the predicted path
 // (systems/predict) and the HUD model (systems/flight-hud):
@@ -109,7 +114,7 @@ const CHAR_W_TAG = 5.9;
 // The ring's name runs over the top of the ring, between these angles (degrees, world frame).
 const RING_LABEL_FROM_DEG = 160;
 const RING_LABEL_TO_DEG = 20;
-// TODO(slice1a-UI): `LAUNCH BAND` alone while landing (BAND_TEXT.ringLanding).
+// The ring's name: `SAFE ORBIT · LAUNCH BAND` in flight, `LAUNCH BAND` while landing (landing-hud ringLabel).
 const RING_LABEL_TEXT = BAND_TEXT.ringFlight;
 // One character of the ring's name along its arc (game.css .np-ring-label: 6.2 px JetBrains Mono, 0.6 em
 // advance, plus 0.22 em letter-spacing). Zoomed far out (HALCYON's start, r0 30,000 km) the arc is shorter
@@ -172,6 +177,7 @@ interface ZoneNodes {
 }
 
 interface PlotNodes {
+  ringText: SVGTextPathElement;
   zones: SVGGElement;
   zoneLabels: SVGGElement;
   hazard: SVGPathElement;
@@ -228,6 +234,7 @@ function build(svg: SVGSVGElement): PlotNodes {
 
   const marker = (glyph: MarkerNodes['glyph'], cls: string): MarkerNodes => ({ glyph, label: svgEl('text', `np-label ${cls}`) });
   const nodes: PlotNodes = {
+    ringText,
     zones: svgEl('g', 'np-zones'),
     zoneLabels: svgEl('g', 'np-zone-labels'),
     hazard: svgEl('path', 'np-hazard'),
@@ -629,6 +636,9 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
   svg.setAttribute('viewBox', `0 0 ${VIEWBOX} ${VIEWBOX}`);
   const nodes = build(svg);
   const half = VIEWBOX / 2;
+  // 01-landing §4: the brackets on the rim, the pod arc, the dot, the streaks, the marks and the beacons (plot-landing).
+  const landingLayer = createPlotLandingLayer(svg, nodes.surface, nodes.startBurn.glyph);
+  let ringText: string = RING_LABEL_TEXT;
   let lastPred: Prediction | null = null;
   let lastViewR = 0;
   let lastPlotKey = '';
@@ -637,7 +647,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
   const zoneNodes = new Map<string, ZoneNodes>();
   // World positions the ship passed, oldest first (the trail).
   const trail: Vec2[] = [];
-  const offReset = onWorldReset('navplot-trail', () => { trail.length = 0; }, () => ({ trail: trail.length }));
+  const offReset = onWorldReset('navplot-trail', () => { trail.length = 0; landingLayer.clear(); }, () => ({ trail: trail.length }));
 
   // The side each marker's label last took (an index into LABEL_TRY_TURNS_DEG) and when it moved there (performance.now()
   // ms), kept as LABEL_TRY_TURNS_DEG says.
@@ -906,6 +916,12 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     const scale = proj.scale;
     const blind = plot.mode === 'uncertain';
     const noSignal = plot.mode === 'no-signal';
+    const wantRing = ringLabel(state);
+    if (wantRing !== ringText) {
+      ringText = wantRing;
+      nodes.ringText.textContent = ringText;
+      lastViewR = -1;  // the name's length decides whether it fits its arc
+    }
 
     // Furniture and the path only change with the prediction (≤ 10 Hz; a stale sensor every few
     // seconds), the scale, or what the instruments can show.
@@ -921,7 +937,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
       const ringMidR = ((ring.min + ring.max) / 2) * scale;
       nodes.ringArc.setAttribute('d', topArc(half, half, ringMidR));
       const arcLength = (ringMidR * (RING_LABEL_FROM_DEG - RING_LABEL_TO_DEG) * Math.PI) / 180;
-      show(nodes.ringLabel, arcLength >= RING_LABEL_TEXT.length * RING_LABEL_CHAR_ALONG * ringScale);
+      show(nodes.ringLabel, arcLength >= ringText.length * RING_LABEL_CHAR_ALONG * ringScale);
       const paths = pathsByColour(pred, proj);
       // Blind or dark, the coloured line is not drawn at all: a grey band (or nothing) instead.
       const colours = !blind && !noSignal;
@@ -974,7 +990,14 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
 
     // What the labels keep off (placeClear): every glyph and the ship first, the ring's name while it is drawn, the
     // chip, the zones' labels, and each label placed before (in this order: IMPACT, ▼, ▲, START BURN, FLYBY).
-    const obstacles: Obstacles = { boxes: [boxAround(shipAt, SHIP_TIP + OBSTACLE_PAD)], labels: [...zoneLabelBoxes], ring: smallRing };
+    // The landing's layer first (01-landing §4): its brackets' names are obstacles for the markers' labels.
+    const planetUnits = Math.max(planet.R * scale, PLOT_PLANET_MIN_UNITS);
+    const landingModel = noSignal ? null : plotLandingModel(state, state.run.phase === 'landing' ? getDropSolution() : null);
+    const bracketBoxes = landingLayer.paint(landingModel, proj, half, half, planetUnits);
+    const obstacles: Obstacles = {
+      boxes: [boxAround(shipAt, SHIP_TIP + OBSTACLE_PAD), ...bracketBoxes.map((box) => padded(box, OBSTACLE_PAD))],
+      labels: [...zoneLabelBoxes], ring: smallRing,
+    };
     for (const marker of [markers.impact, markers.peri, apo]) {
       if (marker) obstacles.boxes.push(boxAround(proj.project(marker.pos), MARK_SIZE + OBSTACLE_PAD));
     }
@@ -1036,6 +1059,22 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     paintLabel(statusEl, readouts.status);
   }
 
+  // A touchdown (01-landing §4): `+200 LANDED · LZ-A` floats up from its bracket (from the landing point off-site) and
+  // the launch band's ring pulses once.
+  const offLanded = on('pod-landed', ({ pod, place, lz, touch, points }) => {
+    const state = store.getState();
+    const record = state.landing.pods.find((candidate) => candidate.pod === pod);
+    const bracket = lz === null ? undefined : state.landing.lzs.find((candidate) => candidate.label === lz);
+    const rad = bracket?.centreRad ?? (record && (record.fate.kind === 'down' || record.fate.kind === 'falling') ? record.fate.launch.landingRad : null);
+    if (rad === null || rad === undefined) return;
+    const text = place === 'lz' ? TOUCHDOWN_FLOAT_TEXT.lz(points, lz ?? '?', touch)
+      : place === 'mislanded' ? TOUCHDOWN_FLOAT_TEXT.mislanded(points, lz ?? '?')
+        : place === 'off-site' ? TOUCHDOWN_FLOAT_TEXT.offSite(points, touch) : TOUCHDOWN_FLOAT_TEXT.noGo;
+    const tone = place === 'lz' ? (touch === 'hard' ? 'hard' : 'good') : place === 'mislanded' ? 'mislanded' : 'off';
+    landingLayer.float(text, rad, tone, TOUCHDOWN_FLOAT_MS);
+    if (!state.ui.reducedMotion) replayAnimation(nodes.ring, 'pulse');
+  });
+
   // Game ticks paint the live plot. Ticks stop while paused and after a terminal status, so
   // pause, status and firing changes repaint directly (the final frame, a flame that went out).
   const offTick = onGameTick(() => redraw());
@@ -1049,6 +1088,8 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     offTick();
     unsub();
     offReset();
+    offLanded();
+    landingLayer.clear();
     resizeObserver.disconnect();
   };
 }

@@ -15,13 +15,13 @@ import {
 } from '@data/tuning';
 
 // RUN END (§9 WP7 item 7, §4.4): the night screen after the last ship, or after a run lost on the way.
-// Top to bottom: the run and unit, the cause as a title with one line of why, the souls that woke (heads,
-// rolling up; the hurt yellow line under it for missing memories), every ship of the fleet landing one by
-// one with how it ended, its stars and its souls (a ship the run never reached says so), then §4.4's
+// Top to bottom: the run and unit, the cause as a title with one line of why, the colonists who landed
+// (rolling up), every ship of the fleet landing one by
+// one with how it ended, its stars, its LANDED and its points (a ship the run never reached says so), then §4.4's
 // half-credit number as the run's SCORE (labelled, with what it counts) and the rank it earns, up to two
 // near misses, the seed, and NEW RUN ▸, which starts a fresh run in the page (systems/run.ts startRun: the
 // title card again, never a reload). When the archive did not keep the run (OFFLINE, PLAY WITHOUT) the last
-// line says the next unit will not remember it (WP8). Presentation on wall time, like the WAKE REPORT; the world is
+// line says the next unit will not remember it (WP8). Presentation on wall time, like the LANDING REPORT; the world is
 // stopped. After a BEAM OUT it waits for the old ship's windows to go black first.
 // Reduced motion: the rows and lines fade in place and the count is shown whole.
 // WP11 part 2 (the lead's item 2: the tone is the cause's): a won finale is the only celebratory screen. Its title takes
@@ -45,6 +45,8 @@ function shipRowNode(row: RunEndShipRow): HTMLElement {
     make('span', 're-ship-outcome', row.outcomeWord),
     make('span', 're-ship-stars', row.result ? starsText(row.result.stars) : ''),
     make('span', 're-ship-woke', row.landedLine),
+    // Slice 1a: the ship's landing points beside its LANDED (the run's SCORE is their sum).
+    make('span', 're-ship-points', row.result ? RUN_END_TEXT.shipPoints(row.result.points) : ''),
   );
   return node;
 }
@@ -81,7 +83,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     frame = null;
   };
 
-  // The count rolls up to the run's WOKE (heads), then the missing-memories line lands under it.
+  // The count rolls up to the run's LANDED (colonists in an LZ with room).
   function rollCount(report: RunEndModel): void {
     if (reducedMotion()) {
       totalEl.textContent = report.totalLine;
@@ -111,7 +113,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     rows.forEach((row, i) => later(RUN_END_ROW_GAP_SEC * (i + 1), () => {
       row.classList.add('landed');
       // A ship whose colonists landed comes in with a heartbeat; one that landed nobody, or was never reached, in
-      // silence. TODO(slice1a-UI): RUN END's landing rows (points, per-ship LANDED).
+      // silence.
       const result = report.ships[i]?.result;
       if (result && result.landedInLz > 0) play('heartbeat', { strength: REPORT_COUNT_HEARTBEAT.woke });
     }));

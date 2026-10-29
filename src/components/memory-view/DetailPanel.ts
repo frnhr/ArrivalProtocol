@@ -7,10 +7,11 @@ import {
 } from '@state/selectors';
 import { INTEGRITY_MAX, BAND_FAILING_MIN } from '@data/tuning';
 import { isLaunchable, driverTouch, dropFactors } from '@systems/landing-rules';
-import { dropHalfWidthKm } from '@systems/landing-solve';
+import { driverLanding } from '@systems/landing-hud';
+import { getDropSolution } from '@systems/drop-cache';
 import { capabilitiesNow } from '@systems/capabilities';
 import { creditName } from '@data/souls';
-import { podCode, DRIVER_DETAIL_TEXT } from '@data/landing-text';
+import { podCode, DRIVER_DETAIL_TEXT, POD_STATE_TEXT } from '@data/landing-text';
 import { guardPresses } from '@components/dom';
 import { heartbeatSvg, heartbeatKind } from './SegmentBlock';
 import { onOpsChange, threadsBusy, threadsTotal } from '@systems/ops-core';
@@ -67,7 +68,6 @@ function scanOption(state: Readonly<GameState>, seg: Segment, label: string): Ac
 }
 
 // LOAD NEXT (PRINT NEXT renamed, 01-landing §3.8): this pod to the front of the launch queue (again: back to its place).
-// TODO(slice1a-UI): the driver's detail (BAY / NEXT tag, the predicted outcome with the drop width).
 function loadNextOption(state: Readonly<GameState>, driver: DriverSegment): ActionOption {
   const pinned = state.landing.loadNext === driver.pod;
   const paused = state.clock.paused;
@@ -76,7 +76,7 @@ function loadNextOption(state: Readonly<GameState>, driver: DriverSegment): Acti
     id: 'load-next',
     label: pinned ? '✓ next in line' : `▸ ${DRIVER_DETAIL_TEXT.loadNext.toLowerCase()}`,
     cost: paused ? 'PAUSED' : pinned ? (waits ? "waits: can't launch yet" : 'click to undo') : 'first in line',
-    cls: paused ? 'disabled' : pinned ? 'print on' : 'print',
+    cls: paused ? 'disabled' : pinned ? 'load-next on' : 'load-next',
     disabled: paused,
   };
 }
@@ -179,21 +179,23 @@ function driverHtml(seg: DriverSegment, state: Readonly<GameState>): string {
   // data/souls.ts colonistIntro), in the colonists' colour, then who they are.
   const people = seg.featured.map((colonist) => `<li class="colonist"><span class="colonist-name">${escapeHtml(creditName(colonist))}</span>`
     + `<span class="colonist-age">, ${colonist.age},</span> ${escapeHtml(colonist.line)}</li>`).join('');
-  // The drop width this pod would get from where the ship is now (01-landing §3.3).
-  const radius = Math.hypot(state.orbit.x, state.orbit.y);
-  const halfWidthKm = radius > state.level.planet.R
-    ? dropHalfWidthKm(radius, state.level.planet.R, dropFactors(capabilitiesNow(state), seg))
-    : null;
-  const outlookText = outlook === 'soft' && halfWidthKm !== null ? DRIVER_DETAIL_TEXT.soft(halfWidthKm) : words.text;
+  // How this pod would land if it launched now (01-landing §3.8): soft with its drop width from the live drop solution
+  // (from the ship's radius before the landing), hard, or not at all; and where it stands in the bay's line.
+  const sol = state.run.phase === 'landing' ? getDropSolution() : null;
+  const outlookModel = driverLanding(state, seg, sol, dropFactors(capabilitiesNow(state), seg));
+  const outlookText = outlookModel.text;
   let landing = '';
-  if (state.run.phase === 'landing') {
+  if (state.run.phase === 'landing' && state.landing.ended === null) {
     const pinned = state.landing.loadNext === seg.pod;
-    landing = `<div class="detail-row"><span class="k">bay</span><span class="v">${pinned ? 'NEXT IN LINE' : 'IN LINE'}</span></div>`;
+    const bayWord = outlookModel.tag === 'NEXT' ? 'NEXT · launches on [L]' : outlookModel.tag === 'BAY' ? 'IN THE BAY'
+      : outlook === 'cant' || !isLaunchable(seg) ? POD_STATE_TEXT.cantLaunch : 'IN LINE';
+    const tagCls = outlookModel.tag === 'NEXT' ? 'good' : outlookModel.tag === 'BAY' ? '' : outlook === 'cant' ? 'warn' : '';
+    landing = `<div class="detail-row"><span class="k">bay</span><span class="v ${tagCls}">${bayWord}${pinned ? ' · LOAD NEXT' : ''}</span></div>`;
   }
   return `
-    <div class="detail-title soul-title">${podCode(seg.pod)} · ${escapeHtml(seg.family.toUpperCase())}</div>
+    <div class="detail-title driver-title">${podCode(seg.pod)} · ${escapeHtml(seg.family.toUpperCase())}</div>
     <div class="detail-type">Pod driver · ${seg.colonists} colonists</div>
-    <div class="soul-heart hb-${heartbeatKind(seg.integrity)}" data-live-outcome="${seg.id}" data-outcome-part="heart">${heartbeatSvg(heartbeatKind(seg.integrity))}</div>
+    <div class="driver-heart hb-${heartbeatKind(seg.integrity)}" data-live-outcome="${seg.id}" data-outcome-part="heart">${heartbeatSvg(heartbeatKind(seg.integrity))}</div>
     <div class="detail-row"><span class="k">health</span>${stateRow}</div>
     ${infectionRowHtml(seg, state)}
     <div class="detail-row"><span class="k">if launched now</span><span class="v ${words.cls}" data-live-outcome="${seg.id}" data-outcome-part="words">${outlookText}</span></div>
@@ -580,7 +582,7 @@ export function mountDetailPanel(
   // The landing adds what a driver shows: the run phase (LOAD NEXT) and the pinned pod.
   const unsub = store.subscribe(
     (s) => [s.ui.memoryRev, s.ui.selectedId, s.ui.activeTool, s.ui.pickedSourceId, s.clock.paused,
-      s.run.phase, s.landing.loadNext] as const,
+      s.run.phase, s.landing.loadNext, s.landing.ended, s.landing.bay.loaded] as const,
     () => paint(store.getState()),
     (a, b) => a.every((value, i) => value === b[i]),
   );

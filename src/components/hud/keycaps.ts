@@ -35,6 +35,8 @@ const TOUCH_CAP_LABEL: Readonly<Record<string, string>> = {
   Q: '↺',
   E: '↻',
   TAB: '⇄',
+  // 01-landing §4: on a phone LAUNCH is in the flight bar.
+  L: 'LAUNCH',
   ...PRESET_TOUCH,
 };
 
