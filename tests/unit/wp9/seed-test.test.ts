@@ -1,5 +1,3 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP9 acceptance 4 (§6.6, §9 WP9 items 3–4): HOLLOW's seeds and DELETE.
 // • The 'walls' targeting (systems/hollow.ts seedSpot): the centre of the smallest free gap of ≥ 4 blocks next to
 //   a cluster (of equal ones a WALL between colonists and HOLLOW first, then the lower address); with no such gap,
@@ -16,7 +14,10 @@
 // • ShipDef validation: seeds need a spreading HOLLOW with a timed wake; 'near-tools' is VESPER's (built in WP10).
 // • WP11 (the lead's TODO): no seed lands within bite of a tool licensed on this ship and not used yet; the pure calls
 //   above it pass `[]` (every tool tried).
+// Slice 1a: KESTREL's racks are phase 2's with `C` → `P`; the old cluster codes below name the pods where those
+// clusters sat (`C08` is POD 08, tests/unit/support/pod-code.ts). Bay Ctrl took Printer Uplink's 6 blocks.
 import { check, finish } from '../wp1/harness';
+import { isPodCode } from '../support/pod-code';
 import { createHarness9, KESTREL } from './harness9';
 import { seedSpot, hollowReach, seedsInMemory, threateningSeeds } from '@systems/hollow';
 import { actionDelete, actionMove } from '@state/actions';
@@ -49,7 +50,7 @@ function kestrelMemory(): Segment[] {
 
 // Takes clusters out of a memory (as a MOVE away would), leaving free space, merged.
 function without(memory: Segment[], clusters: readonly string[]): Segment[] {
-  const out = memory.map((seg) => (seg.type === 'driver' && clusters.includes(seg.cluster) ? freeSegment(seg.size) : structuredClone(seg)));
+  const out = memory.map((seg) => (seg.type === 'driver' && clusters.some((code) => isPodCode(seg.pod, code)) ? freeSegment(seg.size) : structuredClone(seg)));
   mergeAdjacentFree(out);
   assertMemoryInvariants(out, MEMORY_TOTAL_BLOCKS);
   return out;
@@ -57,7 +58,7 @@ function without(memory: Segment[], clusters: readonly string[]): Segment[] {
 
 const addrOf = (memory: readonly Segment[], seg: Segment): number => segmentStarts(memory)[memory.indexOf(seg)]!;
 const soul = (memory: readonly Segment[], code: string): DriverSegment =>
-  memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.cluster === code)!;
+  memory.find((seg): seg is DriverSegment => seg.type === 'driver' && isPodCode(seg.pod, code))!;
 
 // --- The targeting, pure -------------------------------------------------------------------------------------------
 {
@@ -231,7 +232,7 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
   // A FIREWALL at the far end of the 9-block wall, against the root (where a kid MOVEs it): [C08][7 free][FW][R].
   h.store.update((d) => {
     d.memory = without(d.memory, ['C09', 'C10']);
-    const c08 = d.memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.cluster === 'C08')!;
+    const c08 = d.memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 8)!;
     const index = d.memory.indexOf(c08) + 1;
     const gap = d.memory[index]!;
     d.memory.splice(index, 1, freeSegment(gap.size - 2), { id: 'fw-test', name: 'Firewall.sys', type: 'firewall', size: 2 });
@@ -272,14 +273,15 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
   const named = (name: string): Segment => state().memory.find((seg) => seg.name === name)!;
   const cargo = deleteQuestion(state(), named('Cargo Ctrl'));
   const thrust = deleteQuestion(state(), named('Thrust Controller'));
-  const printer = deleteQuestion(state(), named('Printer Uplink'));
+  const bay = deleteQuestion(state(), named('Bay Ctrl'));
   check('DELETE on a ship file asks first, with its consequence: `DELETE CARGO CTRL? No flight effect. Leaves a 6-block gap.`',
     cargo?.question === 'DELETE CARGO CTRL?' && cargo.detail === 'No flight effect. Leaves a 6-block gap.', JSON.stringify(cargo));
   // WP10 review fix round 1: a ship file whose backup is still in memory says what a SWAP undoes (the healthy backup
   // can now be put into service after its primary is gone), so DELETE never reads as the cure.
-  check('…Thrust Controller: the engine stops till a SWAP; Printer Uplink: nobody can be printed',
+  // Bay Ctrl's damage effect comes with slice 1b (slice-1a-plan §1.3: honest about 1a).
+  check('…Thrust Controller: the engine stops till a SWAP; Bay Ctrl: no effect yet',
     thrust?.detail === 'The engine stops till you SWAP in Thrust.alt. Leaves an 8-block gap.'
-    && printer?.detail === 'Nobody can be printed. Leaves a 6-block gap.', `${thrust?.detail} | ${printer?.detail}`);
+    && bay?.question === 'DELETE BAY CTRL?' && bay.detail === 'No effect yet. Leaves a 6-block gap.', `${thrust?.detail} | ${bay?.detail}`);
   const seedSeg: HollowSegment = { id: 'seed-x', name: '???', type: 'hollow', size: 2, root: false, locked: false, owner: '???', seed: true, desc: 'd' };
   check('…a seed needs no question (it is HOLLOW, nothing of yours), and DELETE may target it', deleteQuestion(state(), seedSeg) === null
     && targetRefusal(seedSeg, { state: state(), activeKind: 'delete', pickedSource: null }) === null);

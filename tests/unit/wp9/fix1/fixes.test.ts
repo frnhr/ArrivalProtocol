@@ -1,5 +1,3 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP9 review fixes, round 1: one check (or a few) per finding fixed, headless, on the real systems.
 // • TRANSMIT ▸ to KESTREL with no Sensor Interp (left behind on the TRANSMIT screen, or eaten): no throw; KESTREL
 //   flies blind (the missing file is its own state) and its arrival damage names nothing.
@@ -9,8 +7,8 @@
 //   explicit hold, checked in tests/unit/wp9/fix2.)
 // • The first seed: SKIP waits for it (SOMETHING IS COMING); a seed moment with nowhere to land counts too.
 // • The debris hit: a rack the kid emptied tags `HIT` / `NOTHING` (the TERMINAL says NOTHING THERE), a real hit
-//   `HIT` / `−25%`; a cluster at 10% being moved into the rack (its clone hit) does not throw and is not lost; a
-//   picked-up MOVE source that the hit takes out leaves no stale pickedSourceId (nor does a print).
+//   `HIT` / `−25%`; a driver at 10% being moved into the rack (its clone hit) does not throw and is not lost; a
+//   picked-up MOVE source that the hit takes out leaves no stale pickedSourceId (nor does a launch: slice 1a).
 // • AUTOBURN flies the capture through while the kid fights HOLLOW in blue; a refused [B] says why on the strip.
 // • The quality items: isCorrectionRow knows every F6–F8 row the table makes; debrisRack throws on anything but a
 //   one-rack cloud; AUTOBURN.skl's chip breaks at its dot; AUTOBURN.skl goes to rack D's tail when racks E–F are full;
@@ -25,7 +23,7 @@ import { requestSkip, SKIP_REFUSAL_DODGE, SKIP_REFUSAL_BLIND_DODGE, SKIP_REFUSAL
 import { rackZoneTags } from '@systems/flight-hud';
 import { flightObjective, isCorrectionRow, type FlightContext } from '@systems/guidance';
 import { engageAutoburn, trainSkillAtBoot, skillFiles } from '@systems/autoburn';
-import { printCluster } from '@systems/printer';
+import { podRecord } from '@systems/landing-rules';
 import { setMode } from '@systems/mode';
 import { installTool } from '@systems/licences';
 import { actionMove, actionRepair, actionDelete } from '@state/actions';
@@ -64,14 +62,14 @@ const correctIn = (): void => {
   const noSensor: Segment[] = [{ id: 'core', name: 'AI Core', type: 'core', role: 'core', size: 16, integrity: 100, state: 'intact' } as Segment];
   check('arrivalDamage: a unit with no file of the role is not damaged by that rule (no throw)', arrivalDamage(noSensor, ship.arrival!.damage).length === 0);
 
-  // HALCYON to its WAKE REPORT with more charge than the link carries beside the files, so leaving a file behind
+  // HALCYON to its LANDING REPORT with more charge than the link carries beside the files, so leaving a file behind
   // carries more charge and the chip can be dropped (the review's repro).
   const toTransmit = (): void => {
     h.newRun(3);
     h.shipAlone(1, 3);
     state().hollow.phase = 'dormant';
     h.startLanding(1, 'locked');
-    if (!h.untilPhase('report', 300)) throw new Error('fixes: HALCYON never reached its WAKE REPORT');
+    if (!h.untilPhase('report', 300)) throw new Error('fixes: HALCYON never reached its LANDING REPORT');
     h.store.update((d) => {
       const charge = d.memory.find((seg) => seg.type === 'redundancy');
       const free = d.memory.filter((seg) => seg.type === 'free').sort((a, b) => b.size - a.size)[0];
@@ -169,10 +167,10 @@ const correctIn = (): void => {
   ensureTool('repair');
   ensureTool('move');
   correctIn();
-  // Walls first (the kid's MOVEs: C09 and C10 out of reach), then HOLLOW wakes now.
+  // Walls first (the kid's MOVEs: POD 09 and POD 10 out of reach), then HOLLOW wakes now.
   h.store.update((d) => {
     const starts = segmentStarts(d.memory);
-    d.memory = d.memory.map((seg, i) => (seg.type === 'driver' && (seg.cluster === 'C09' || seg.cluster === 'C10') && starts[i]! < 192 ? freeSegment(seg.size) : seg));
+    d.memory = d.memory.map((seg, i) => (seg.type === 'driver' && (seg.pod === 9 || seg.pod === 10) && starts[i]! < 192 ? freeSegment(seg.size) : seg));
     mergeAdjacentFree(d.memory);
     d.hollow.cfg = { ...d.hollow.cfg, wake: { afterAiSec: 0, coastLeadSec: null } };
     d.ui.memoryRev++;
@@ -197,11 +195,11 @@ const correctIn = (): void => {
   ensureTool('repair');
   ensureTool('move');
   correctIn();
-  // Round 2: C09 and C10 walled off too (as above). Bitten, they would raise the eaten-soon alarm, whose TACTICAL pace
+  // Round 2: POD 09 and POD 10 walled off too (as above). Bitten, they would raise the eaten-soon alarm, whose TACTICAL pace
   // holds the first seed's clock (it waits for a calm flight).
   h.store.update((d) => {
     const starts = segmentStarts(d.memory);
-    d.memory = d.memory.map((seg, i) => (seg.type === 'driver' && (seg.cluster === 'C09' || seg.cluster === 'C10') && starts[i]! < 192 ? freeSegment(seg.size) : seg));
+    d.memory = d.memory.map((seg, i) => (seg.type === 'driver' && (seg.pod === 9 || seg.pod === 10) && starts[i]! < 192 ? freeSegment(seg.size) : seg));
     mergeAdjacentFree(d.memory);
     for (const seg of d.memory) if (seg.type === 'free') seg.reservedBy = -1;  // an op id no real op has
     d.hollow.cfg = { ...d.hollow.cfg, wake: { afterAiSec: 0, coastLeadSec: null } };
@@ -239,14 +237,14 @@ const correctIn = (): void => {
   const hitTag = rackZoneTags(state(), getSensedPrediction()).find((candidate) => candidate.rack === 'C');
   check('…a real hit tags `HIT` / `−25%`', JSON.stringify(hitTag?.lines) === JSON.stringify(['HIT', '−25%']), JSON.stringify(hitTag?.lines));
 
-  // The review's forced case: C01 at 10% being MOVEd from rack B into rack C's tail when the cloud hits.
+  // The review's forced case: POD 01 at 10% being MOVEd from rack B into rack C's tail when the cloud hits.
   h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
   const toEntryTac = (): number => {
     const hit = debrisHit();
     return hit.enterInSec === null ? Infinity : (hit.enterInSec - (state().clock.tSec - getPrediction().asOfTSec)) / warp();
   };
   h.stepUntil(() => toEntryTac() <= 1.5, 400);
-  const c01 = driversInMemory(state()).find((soul) => soul.cluster === 'C01')!;
+  const c01 = driversInMemory(state()).find((soul) => soul.pod === 1)!;
   h.store.update((d) => { const seg = d.memory.find((candidate) => candidate.id === c01.id); if (seg && seg.type === 'driver') seg.integrity = 10; });
   const starts = segmentStarts(state().memory);
   const destIndex = state().memory.findIndex((seg, i) => seg.type === 'free' && starts[i]! >= 2 * RACK_BLOCKS && starts[i]! < 3 * RACK_BLOCKS && seg.size >= 8);
@@ -254,16 +252,16 @@ const correctIn = (): void => {
   const refusal = actionMove(h.store, c01, { regionSegIds: [state().memory[destIndex]!.id], col: 0 });
   let threw: string | null = null;
   try { h.stepUntil(() => state().hazards.hitIds.length > 0, 10); } catch (error) { threw = (error as Error).message; }
-  const c01After = driversInMemory(state()).find((soul) => soul.cluster === 'C01');
-  check('a cluster at 10% moved into the rack as the cloud hits: no throw; its move aborted, it lives on in rack B (not lost)',
-    refusal === null && threw === null && c01After !== undefined && !state().souls.results.some((result) => result.cluster === 'C01')
+  const c01After = driversInMemory(state()).find((soul) => soul.pod === 1);
+  check('a driver at 10% moved into the rack as the cloud hits: no throw; its move aborted, it lives on in rack B (not lost)',
+    refusal === null && threw === null && c01After !== undefined && podRecord(state(), 1).driverLost === null
     && segmentStarts(state().memory)[state().memory.indexOf(c01After)]! < 2 * RACK_BLOCKS, `${refusal} ${threw}`);
 
-  // A picked-up MOVE source the hit takes out (the strip's `MOVE souls out of it`, HOLLOW had chewed it to 20%).
+  // A picked-up MOVE source the hit takes out (the strip's `MOVE drivers out of it`, HOLLOW had chewed it to 20%).
   h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
   ensureTool('move');
   const moveTool = state().memory.find((seg) => seg.type === 'fs-tool' && seg.fsTool === 'move')!;
-  const c08 = driversInMemory(state()).find((soul) => soul.cluster === 'C08')!;
+  const c08 = driversInMemory(state()).find((soul) => soul.pod === 8)!;
   h.store.update((d) => {
     const soul = d.memory.find((seg) => seg.id === c08.id);
     if (soul && soul.type === 'driver') soul.integrity = 20;
@@ -271,14 +269,16 @@ const correctIn = (): void => {
     d.ui.pickedSourceId = c08.id;
   });
   h.stepUntil(() => state().hazards.hitIds.length > 0, 400);
-  check('a picked-up MOVE source the hit takes out leaves no stale pickedSourceId (it did not wake)',
+  check('a picked-up MOVE source the hit takes out leaves no stale pickedSourceId (its driver is lost, dead)',
     !state().memory.some((seg) => seg.id === c08.id) && state().ui.pickedSourceId === null
-    && state().souls.results.some((result) => result.cluster === 'C08' && result.outcome === 'lost'), String(state().ui.pickedSourceId));
-  // ...nor a print (the shared recordClusterGone).
-  const c02 = driversInMemory(state()).find((soul) => soul.cluster === 'C02')!;
+    && podRecord(state(), 8).driverLost === 'dead', String(state().ui.pickedSourceId));
+  // ...nor a launch (the shared forgetDriver): the pods land at once as the landing begins (forceLandAll's real launch).
+  const c02 = driversInMemory(state()).find((soul) => soul.pod === 2)!;
   h.store.update((d) => { d.ui.pickedSourceId = c02.id; });
-  printCluster(h.store, c02, 1);
-  check('…nor a picked-up cluster that prints', state().ui.pickedSourceId === null);
+  h.startLanding(1, 'locked');
+  h.step();
+  check('…nor a picked-up driver whose pod launches', podRecord(state(), 2).fate.kind !== 'aboard' && state().ui.pickedSourceId === null,
+    `${podRecord(state(), 2).fate.kind} ${String(state().ui.pickedSourceId)}`);
 }
 
 // --- AUTOBURN: it flies the capture through while the kid fights HOLLOW in blue; a refused [B] says why --------------

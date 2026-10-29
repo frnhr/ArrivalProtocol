@@ -1,5 +1,3 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP9 acceptance 6 (§9 WP9): the run flow now plays 3 ships, headless. Title → ARES-VII → HALCYON → KESTREL →
 // RUN END, flown by the strip-following kid with the defender (WP7), on KESTREL also repairing the blind Sensor
 // Interp and DELETEing seeds that can bite, and pressing [B] when AUTOBURN is offered. On KESTREL:
@@ -11,6 +9,7 @@
 //   DELETE and `> sorry. i'm so hungry.` on the coast (SKIP waits for it), AUTOBURN flies the capture through to
 //   the lock (WP9 fix round 1: TOO WIDE counts the dodge down; AUTOBURN no longer hands back at loop-closed);
 // • after KESTREL the run goes on to VESPER (WP10: KESTREL is no longer the last ship).
+// Slice 1a: each landing lands instantly (tests/unit/support/landing-instant.ts); the reports are LANDING REPORTs.
 import { check, finish } from '../wp1/harness';
 import { createHarness9, KESTREL } from './harness9';
 import { receiveTransmission } from '@systems/boot';
@@ -36,14 +35,14 @@ receiveTransmission(h.store);
 h.stepUntil(() => state().run.phase === 'flight', 15);
 h.flyDefending9(600);
 check('ARES-VII: locked', h.status() === 'locked', h.status());
-check('…to its WAKE REPORT', h.untilPhase('report', 300));
+check('…to its LANDING REPORT', h.untilPhase('report', 300));
 continueAfterReport(h.store);
 h.transmit();
 h.stepUntil(() => state().run.phase === 'flight', 20);
 check('HALCYON boots and flies', state().level.shipName === 'HALCYON' && state().run.phase === 'flight');
 h.flyDefending9(900);
 check('HALCYON: locked', h.status() === 'locked', h.status());
-check('…to its WAKE REPORT', h.untilPhase('report', 300));
+check('…to its LANDING REPORT', h.untilPhase('report', 300));
 const demos = state().run.stats.demos.length;
 check('two manual captures recorded (the skill\'s training)', demos === 2 && state().run.stats.manualCaptures === 2, JSON.stringify(state().run.stats.demos));
 continueAfterReport(h.store);
@@ -100,20 +99,21 @@ check('…the first seed came on the coast (a WAIT), not mid-capture', firstSeed
 check('AUTOBURN was pressed and flew the capture through (into the ring)', pressedAuto && autoDone && state().burn.auto.end === 'in-ring',
   `${pressedAuto} ${autoDone} ${state().burn.auto.end}`);
 check('KESTREL: locked', h.status() === 'locked', `${h.status()} | ${texts.slice(-6).join(' | ')}`);
-const printEnd = h.wall() + 400;
-while (state().run.phase !== 'report' && h.wall() < printEnd) {
+const landingEnd = h.wall() + 400;
+while (state().run.phase !== 'report' && h.wall() < landingEnd) {
   h.defend9();
   h.step();
   if (/RM THE SEED/.test(h.shown()?.text ?? '')) sawRmLine = true;
 }
-check('…to its WAKE REPORT', state().run.phase === 'report', state().run.phase);
+check('…to its LANDING REPORT', state().run.phase === 'report', state().run.phase);
 // The defender DELETEs a seed that can bite at once, so the lesson may be done before it is ever shown (a seed that
 // lands during the capture burn: the burn's NOW lines come first, and the seed is gone within its 2 s DELETE).
 const lessonDone = state().director.done.some((id) => id === 'hollow-seed-first' || id === 'hollow-seed-first-tab');
 check('…the first seed: its lesson is done (shown as RM THE SEED, or the seed DELETEd before it could be)', lessonDone
   && state().hollow.seedsLanded >= 1, `seeds ${state().hollow.seedsLanded}, shown ${sawRmLine}`);
-const results = state().souls.results;
-check('…all twelve clusters left memory', results.length === 12, results.map((result) => `${result.cluster}:${result.outcome}`).join(' '));
+const pods = state().landing.pods;
+check('…all twelve pods are decided (none aboard: down, or parked)', pods.length === 12 && pods.every((record) => record.fate.kind === 'down' || record.fate.kind === 'parked'),
+  pods.map((record) => `${record.pod}:${record.fate.kind}`).join(' '));
 
 // --- On to VESPER ----------------------------------------------------------------------------------------------
 // WP10: KESTREL is no longer the last ship: its CONTINUE transmits to VESPER (ship 4; the four-ship run to RUN END is

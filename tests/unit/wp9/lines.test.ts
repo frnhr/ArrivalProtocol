@@ -11,6 +11,7 @@ import { skipRefusalZoneAhead, skipRefusalInZone } from '@systems/pace';
 import { flightObjective, type FlightContext } from '@systems/guidance';
 import { HOLLOW_INSPECT, HOLLOW_DESC, HOLLOW_STORY, HOLLOW_ECHO, HOLLOW_ALERT_TEXT, hollowUnitName } from '@data/hollow-text';
 import { UPGRADE_FILE_TEXT } from '@data/upgrades';
+import { podCode } from '@data/landing-text';
 import { MAX_LINE_CHARS, SEG_NAME_MAX_CHARS } from '@data/tuning';
 
 const fits = (line: string): boolean => line.length <= MAX_LINE_CHARS;
@@ -18,15 +19,16 @@ const long = 'W'.repeat(SEG_NAME_MAX_CHARS);
 
 // --- The zones' TERMINAL lines -------------------------------------------------------------------------------
 {
-  const sixteen = Array.from({ length: 16 }, (_unused, i) => ({ label: `C${String(i + 1).padStart(2, '0')}`, lost: 25 }));
-  const mixed = [{ label: long, lost: 25 }, { label: 'C07', lost: 12.5 }, { label: long, lost: 25 }];
-  check('the debris line names the rack and the clusters, `+n` for the rest, ≤ 70', fits(debrisHitLine('C', sixteen))
-    && /^> DEBRIS HIT RACK C: C01 .* \+\d+ −25%$/.test(debrisHitLine('C', sixteen)), debrisHitLine('C', sixteen));
+  // Slice 1a: files are named by fileLabel, a pod's driver `POD 07`.
+  const sixteen = Array.from({ length: 16 }, (_unused, i) => ({ label: podCode(i + 1), lost: 25 }));
+  const mixed = [{ label: long, lost: 25 }, { label: 'POD 07', lost: 12.5 }, { label: long, lost: 25 }];
+  check('the debris line names the rack and the pods, `+n` for the rest, ≤ 70', fits(debrisHitLine('C', sixteen))
+    && /^> DEBRIS HIT RACK C: POD 01 .* \+\d+ −25%$/.test(debrisHitLine('C', sixteen)), debrisHitLine('C', sixteen));
   check('…worst-case names and a straddling file\'s own loss, ≤ 70', fits(debrisHitLine('B', mixed)), debrisHitLine('B', mixed));
-  check('…KESTREL\'s rack C in full', debrisHitLine('C', ['C07', 'C08', 'C09', 'C10', 'C11', 'C12'].map((label) => ({ label, lost: 25 })))
-    === '> DEBRIS HIT RACK C: C07 C08 C09 C10 C11 C12 −25%');
-  check('the belt\'s line and a cluster that did not wake, ≤ 70', fits(beltHitLine({ label: long, lost: 8 })) && fits(zoneLostLine('C16'))
-    && zoneLostLine('C03') === '> C03 ... DID NOT WAKE');
+  check('…KESTREL\'s rack C: as many pods as fit, then +n', debrisHitLine('C', [7, 8, 9, 10, 11, 12].map((pod) => ({ label: podCode(pod), lost: 25 })))
+    === '> DEBRIS HIT RACK C: POD 07 POD 08 POD 09 POD 10 POD 11 POD 12 −25%', debrisHitLine('C', [7, 8, 9, 10, 11, 12].map((pod) => ({ label: podCode(pod), lost: 25 }))));
+  check('the belt\'s line and a driver the zone took to 0, ≤ 70', fits(beltHitLine({ label: long, lost: 8 })) && fits(zoneLostLine('POD 16'))
+    && zoneLostLine('POD 03') === '> POD 03 ... DRIVER LOST · CAN\'T LAUNCH', zoneLostLine('POD 03'));
 }
 
 // --- The arrival damage's line -----------------------------------------------------------------------------------
@@ -60,7 +62,7 @@ const long = 'W'.repeat(SEG_NAME_MAX_CHARS);
   check('every WP9 strip rule fits with worst-case vars', bad.length === 0 && rendered.length === 8, bad.join(' | ') || rendered.join(' | '));
   check('…and all of them are in GUIDE_RULES', rules.every((rule) => GUIDE_RULES.includes(rule)));
   check('the debris rule names the rack and the countdown', DEBRIS_RULES[0]!.text({ vars: { ...WORST_CASE_VARS, debrisRack: 'C', debrisInTac: 70 } })
-    === 'DEBRIS HITS RACK C IN 1:10 — [TAB], MOVE souls out of it');
+    === 'DEBRIS HITS RACK C IN 1:10 — [TAB], MOVE drivers out of it', DEBRIS_RULES[0]!.text({ vars: { ...WORST_CASE_VARS, debrisRack: 'C', debrisInTac: 70 } }));
 }
 
 // --- TOO WIDE's dodge and the capture's AUTO tail, every variant ---------------------------------------------------
