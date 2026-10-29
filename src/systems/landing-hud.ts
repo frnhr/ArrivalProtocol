@@ -8,7 +8,7 @@ import { driversInMemory } from '@state/selectors';
 import { angleDelta, dropHalfWidthKm, secFromNow } from '@systems/landing-solve';
 import {
   bayMembers, bayShown, driverTouch, isLaunchable, launchGuard, launchRefusal, lzAt, lzDownFill, lzProjectedFill, nextToLaunch,
-  onTargetTally, targetWindow,
+  launchMomentInSec, onTargetTally, targetWindow,
 } from '@systems/landing-rules';
 import {
   BAND_TEXT, GROUND_TRACK_TEXT, LANDING_HUD_TEXT, LANDING_PLOT_TEXT, LAUNCH_REFUSAL_TEXT, MINI_LANDING_TEXT, POD_BAY_STATUS_TEXT,
@@ -394,7 +394,8 @@ export function groundTrackModel(state: Readonly<GameState>, sol: Readonly<DropS
   if (sol !== null && sol.block === null) {
     const counters = lzCounters(state);
     const waiting = sol.windows
-      .map((w) => ({ w, inSec: secFromNow(sol, w.openInSec, now) }))
+      // To the launch moment where there is one (the strip's and the chip's count), else to the opening.
+      .map((w) => ({ w, inSec: launchMomentInSec(sol, w, now) ?? secFromNow(sol, w.openInSec, now) }))
       .filter(({ w }) => {
         const bracket = stripBrackets.find((b) => b.lz === w.lz);
         return bracket !== undefined && bracket.from >= 1;
@@ -589,9 +590,8 @@ export function miniHudLanding(state: Readonly<GameState>, sol: Readonly<DropSol
   else if (landing.window !== null) window = { text: MINI_LANDING_TEXT.windowOpen(landing.window.lz), open: true };
   else {
     const next = targetWindow(state, sol, now);
-    if (next !== null && sol !== null && next.inBandOpenInSec !== null) {
-      window = { text: MINI_LANDING_TEXT.windowIn(next.lz, minSec(tacOf(state, secFromNow(sol, next.inBandOpenInSec, now)))), open: false };
-    }
+    const inSec = next === null || sol === null ? null : launchMomentInSec(sol, next, now);
+    if (next !== null && inSec !== null) window = { text: MINI_LANDING_TEXT.windowIn(next.lz, minSec(tacOf(state, inSec))), open: false };
   }
   const down = landing.pods.filter((record) => record.fate.kind === 'down').length;
   const tally = onTargetTally(state);

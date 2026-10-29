@@ -24,7 +24,7 @@ import { zoneVerdict, zoneRacks, racksText, debrisRack, type Zone, type ZoneHit,
 import { mindZonesBlind } from '@systems/zones';
 import { LANDING_HUD_TEXT, LANDING_REPORT_TEXT, BAND_TEXT, LANDING_PLOT_TEXT } from '@data/landing-text';
 import type { DropSolution } from '@/types/landing';
-import { lzRemaining, targetWindow } from '@systems/landing-rules';
+import { launchMomentInSec, lzRemaining, targetWindow } from '@systems/landing-rules';
 import { secFromNow } from '@systems/landing-solve';
 import {
   COUNTDOWN_RED_TAC, LOCK_HOLD_AI_SEC, PLOT_SHIP_MARGIN, PLOT_RING_FACTOR, PLOT_FLYBY_TAG_FRAC,
@@ -174,9 +174,11 @@ function windowChip(state: Readonly<GameState>, sol: Readonly<DropSolution> | nu
   if (open !== null && openWindow !== null && (lzRemaining(state)[open.lz] ?? 0) > 0) {
     return chip(LANDING_PLOT_TEXT.chipOpen(open.lz), secFromNow(sol, openWindow.inBandCloseInSec!, now), false);
   }
+  // To the window's launch moment (where its whole dot first fits in the band), the one pace's SKIP, GET READY and the
+  // strip count to (landing-rules launchMomentInSec), so the chip and the line agree.
   const next = targetWindow(state, sol, now);
-  if (next === null || next.inBandOpenInSec === null) return null;
-  const inSec = secFromNow(sol, next.inBandOpenInSec, now);
+  const inSec = next === null ? null : launchMomentInSec(sol, next, now);
+  if (next === null || inSec === null) return null;
   return chip(LANDING_PLOT_TEXT.chipIn(next.lz), inSec, tac(inSec, warp) <= COUNTDOWN_RED_TAC);
 }
 
