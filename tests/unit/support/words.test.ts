@@ -17,7 +17,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { check, finish } from '../landing/checks';
 import { HOLLOW_DEAL, HOLLOW_ECHO, HOLLOW_FINALE, HOLLOW_HUD_TEXT } from '@data/hollow-text';
-import { POD_STATE_TEXT } from '@data/landing-text';
+import { POD_STATE_TEXT, LANDING_LINES } from '@data/landing-text';
 import { lineageLine, RUN_END_NOBODY_WOKE } from '@data/script';
 import { scanFinding } from '@data/tool-text';
 import { MAX_LINE_CHARS } from '@data/tuning';
@@ -151,5 +151,11 @@ check('RUN END over an empty flagship: nobody LANDED', /LANDED/.test(RUN_END_NOB
 const lineage = lineageLine({ number: 47, woke: 6200, shipName: 'VESPER', cause: 'overwritten', stats: { moves: 0, deletes: 0 }, hollowUnits: [46] });
 check("the title's lineage counts the colonists landed", lineage === 'last: UNIT-047 · 6,200 landed · overwritten at VESPER', String(lineage));
 check('SCAN STASIS finds the sleepers, not `0 pods`', scanFinding('stasis', 100) !== '0 pods' && /sleeper/.test(scanFinding('stasis', 100)));
+
+// The no-room rows the review round added (landing-text SIM: L3b, L13noRoom), rendered with worst-case values: every
+// rule above, and one strip line.
+const noRoom = [LANDING_LINES.L3b(0.75), LANDING_LINES.L3b(0.6), LANDING_LINES.L13noRoom('LZ-D', 5999, true)];
+check(`the no-room rows say no never-say word and fit the strip (≤ ${MAX_LINE_CHARS})`,
+  noRoom.every((text) => text.length <= MAX_LINE_CHARS && !RULES.some((rule) => rule.re.test(text))), JSON.stringify(noRoom));
 
 finish();
