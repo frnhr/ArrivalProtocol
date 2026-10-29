@@ -1,5 +1,3 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP10, the lead's item 4 (two LEAD-2 round-3 leftovers in flight-controls.ts, the lead's rulings), on ship 1 and on
 // KESTREL with AUTOBURN.skl (harness9):
 //  1. a hold whose press only stopped a SKIP does not go live on `AUTOBURN BRAKING — [SPACE] takes over` (an offer, not
@@ -16,9 +14,7 @@ import { autoburnAvailable } from '@systems/autoburn';
 import { setPaused } from '@systems/clock';
 import { skipBlockReason } from '@systems/pace';
 import { text, stepUntil } from '../wp1-rules/flows';
-import { openArchive } from '@state/initial';
-import { SOUL_RULES } from '@data/script';
-import { COLONISTS_HOLD_RELEASED } from '@systems/pace';
+import { DRIVER_RULES } from '@data/script';
 
 const h = createHarness9(3);
 const state = () => h.store.getState();
@@ -64,11 +60,8 @@ const state = () => h.store.getState();
 // --- 2. A pause clears a dropped hold ------------------------------------------------------------------------------
 function toSkipToCapture(seed: number): void {
   h.resetTo('flight', seed);
-  // The colonists already found (run 1's STASIS step would hold SKIP).
-  h.store.update((d) => {
-    openArchive(d);
-    d.director.done.push(...SOUL_RULES.map((rule) => rule.id), COLONISTS_HOLD_RELEASED);
-  });
+  // The hurt-driver lesson already taken (slice 1a: nothing holds SKIP for the colonists any more).
+  h.store.update((d) => { d.director.done.push(...DRIVER_RULES.map((rule) => rule.id)); });
   h.keyDown('Space');
   stepUntil(h, () => /^RELEASE/.test(text(h)), 30);
   h.keyUp('Space');
