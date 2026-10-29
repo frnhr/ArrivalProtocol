@@ -401,7 +401,7 @@ export function mountDebug(store: Store<GameState>): void {
       const state = store.getState();
       const pred = getSensedPrediction();
       return {
-        countdownChip: countdownChip(state, pred),
+        countdownChip: countdownChip(state, pred, getDropSolution()),
         pace: paceLabel(state),
         skip: skipButton(state, pred),
         plotChip: plotChip(state, pred),
