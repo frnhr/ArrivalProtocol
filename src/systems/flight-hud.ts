@@ -170,8 +170,12 @@ function windowChip(state: Readonly<GameState>, sol: Readonly<DropSolution> | nu
     kind: 'window', label: event, event, time: formatCountdown(tac(Math.max(0, gameSec), warp)), urgent,
     fastForward: worldIsFast(state), slow: worldIsSlow(state),
   });
-  // An open window into an LZ already full is no reason to launch: the chip counts to the next one with room.
-  if (open !== null && openWindow !== null && (lzRemaining(state)[open.lz] ?? 0) > 0) {
+  // An open window into an LZ already full is no reason to launch: the chip counts to the next one with room. While only
+  // the dot's centre is in and the launch moment (the whole dot in) is still ahead, the chip keeps counting to it, as
+  // GET READY does.
+  const launchAt = openWindow === null ? null : launchMomentInSec(sol, openWindow, now);
+  const launchCome = open !== null && (open.sure || launchAt === null || launchAt <= 0);
+  if (open !== null && openWindow !== null && launchCome && (lzRemaining(state)[open.lz] ?? 0) > 0) {
     return chip(LANDING_PLOT_TEXT.chipOpen(open.lz), secFromNow(sol, openWindow.inBandCloseInSec!, now), false);
   }
   // To the window's launch moment (where its whole dot first fits in the band), the one pace's SKIP, GET READY and the

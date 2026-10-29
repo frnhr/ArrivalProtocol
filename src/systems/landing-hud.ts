@@ -587,11 +587,15 @@ export function miniHudLanding(state: Readonly<GameState>, sol: Readonly<DropSol
   const aboard = podsAboard(state).length;
   let window: MiniHudLanding['window'] = null;
   if (aboard === 0 || landing.ended !== null) window = { text: MINI_LANDING_TEXT.allAway, open: false };
-  else if (landing.window !== null) window = { text: MINI_LANDING_TEXT.windowOpen(landing.window.lz), open: true };
   else {
+    // Counting to the launch moment (the strip's GET READY), OPEN once it has come.
     const next = targetWindow(state, sol, now);
     const inSec = next === null || sol === null ? null : launchMomentInSec(sol, next, now);
-    if (next !== null && inSec !== null) window = { text: MINI_LANDING_TEXT.windowIn(next.lz, minSec(tacOf(state, inSec))), open: false };
+    if (landing.window !== null && (landing.window.sure || inSec === null || inSec <= 0)) {
+      window = { text: MINI_LANDING_TEXT.windowOpen(landing.window.lz), open: true };
+    } else if (next !== null && inSec !== null) {
+      window = { text: MINI_LANDING_TEXT.windowIn(next.lz, minSec(tacOf(state, inSec))), open: false };
+    }
   }
   const down = landing.pods.filter((record) => record.fate.kind === 'down').length;
   const tally = onTargetTally(state);
