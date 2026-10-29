@@ -8,11 +8,16 @@ import { isThrustOn, engineAccel, thrustJitter } from '@systems/orbit-sim';
 import {
   CHIME_AFTER_TRANSMIT_SEC, FAULT_COUGH_AFTER_SEC,
   HEARTBEAT_BED_SEC, HEARTBEAT_BED_HURT_SEC, HEARTBEAT_BED_STRENGTH, HEARTBEAT_BED_INFECTED_SEC,
-  HEARTBEAT_BED_JITTER, ARRIVAL_HIT_STAGGER_SEC, BEAM_OUT_SWEEP_SEC,
+  HEARTBEAT_BED_JITTER, ARRIVAL_HIT_STAGGER_SEC, BEAM_OUT_SWEEP_SEC, POD_FIRST_DESCENT_SEC,
 } from '@data/tuning';
 import { driversInMemory, verbSecondsLeft } from '@state/selectors';
 import { driverTouch } from '@systems/landing-rules';
-import { play, setEngineLevel, setLockTone, setChewLevel, setTugTone, setDuelTone, toggleMuted, type WhoompShape } from '@systems/audio';
+import {
+  play, setEngineLevel, setLockTone, setChewLevel, setTugTone, setDuelTone, toggleMuted, type TouchdownSound, type WhoompShape,
+} from '@systems/audio';
+import type { Place, Touch } from '@/types/landing';
+import { getDropSolution } from '@systems/drop-cache';
+import { windowToneFraction } from '@systems/landing-hud';
 import { rootDeleteProgress } from '@systems/hollow';
 import { chewLevel, tugTone } from '@systems/hollow-hud';
 import { getOps } from '@systems/ops-core';
@@ -24,10 +29,6 @@ import {
   GEIGER_EDGE_HZ, GEIGER_PEAK_HZ, GEIGER_HIT_CLICKS, GEIGER_HIT_SPREAD_SEC, SEED_BLINK_SEC, SEED_TELEGRAPH_SEC,
   CHOICE_URGENT_SEC, BELT_STATIC_GAP_EDGE_SEC, BELT_STATIC_GAP_PEAK_SEC, BELT_STATIC_GAP_JITTER,
 } from '@data/tuning';
-
-// The phase-2 reveal's truth ping (its third step: the floor dropping away), kept for HOLLOW naming itself. The reveal
-// itself is gone (01-landing §6), so the step is named here rather than counted from its lines.
-const REVEAL_TRUTH_STEP = 2;
 
 // What the game sounds like (§7.2): the one table from game events and state to cues. Every
 // cue a moment plays is chosen here, so a moment never plays twice from two places. Stamps
@@ -52,13 +53,16 @@ const REVEAL_TRUTH_STEP = 2;
 // • plot-mode       → lineWhoomp 'clear' when the instruments see exactly again (Sensor Interp
 //                     or Nav Plotter repaired)
 // • while ops run in blue: opChirp at OP_CHIRP_HZ (the mind at work)
-// • reveal-line     → revealPing (empty ping, rescanning sweep, the floor dropping away); the
-//                     slabs cracking → soulCrack per chip (60 ms apart) + revealChoir; the end of
-//                     the reveal → three heartbeats; cluster-printed → printBell (lower with gaps)
-// • while the found colonists are in memory and the kid is in blue: the heartbeat bed, quicker
-//   while a cluster is hurt (WP5 part 2), quicker still and uneven while anything is infected (WP6)
+// • the landing (slice 1a, 01-landing §4): pod-launched → podLaunch (a thump and a hiss); pod-entry → podEntry (the
+//   roar at the atmosphere); pod-landed → printBell pitched per LZ (LZ-B a fifth above LZ-A), dull when hard, sour when
+//   mislanded, a low bonk off-site or in a no-go arc, and on the run's first landing the choir and the FIRST LANDING
+//   stamp's thud; window-sure → chime (the bracket turns green); lz-full → capturedChord; all-pods-down → lockArp and
+//   the ALL PODS DOWN stamp's thud; pods-parked → sag; and every tick while a window is open, the lock tone follows
+//   how centred the dot is in its bracket (landing-hud windowToneFraction)
+// • while drivers are in memory and the kid is in blue: the heartbeat bed (the pods' stasis monitors), quicker while
+//   a pod would land hard, quicker still and uneven while anything is infected (WP6)
 // • HOLLOW (WP6): hollow-infect → hollowBite; hollow-wall → fizzle; hollow-consume → soulLost when a
-//   cluster did not wake, else hollowBite (a file or a half-written copy gone: nobody was lost);
+//   pod's driver was eaten, else hollowBite (a file or a half-written copy gone: nobody was lost);
 //   hollow-cure → clusterSaved (several in one tick sound once: one bite timer, one moment); and
 //   every tick the chew follows the total drain and the tug's beating tones follow the boundary
 // • WP7: hollow-name-shown → the truth note + nameGlitch; arrival-hits → transitHit per hit (staggered);
@@ -94,6 +98,26 @@ function whoompFor(from: LineState, to: LineState): WhoompShape | null {
 }
 
 type HollowCue = 'hollowBite' | 'fizzle' | 'soulLost' | 'clusterSaved';
+
+// The touchdown bell's colour for how a pod came down (§4).
+function touchdownSound(place: Place, touch: Touch): TouchdownSound {
+  if (place === 'off-site' || place === 'no-go') return 'off-site';
+  if (place === 'mislanded') return 'mislanded';
+  return touch === 'hard' ? 'hard' : 'soft';
+}
+
+// 'pod-launched' comes while the pod is still aboard: the run's first launch is the tutorial run's first ship with every
+// pod still aboard (landing.ts gives that one POD_FIRST_DESCENT_SEC).
+function launchingFirstOfRun(state: Readonly<GameState>): boolean {
+  return state.run.tutorial && state.run.ships.length === 0 && state.landing.pods.every((record) => record.fate.kind === 'aboard');
+}
+
+// Run 1's first pod once it is falling (the slow, bright descent).
+function isFirstFall(state: Readonly<GameState>, pod: number): boolean {
+  const fate = state.landing.pods.find((record) => record.pod === pod)?.fate;
+  const launch = fate?.kind === 'falling' || fate?.kind === 'down' ? fate.launch : null;
+  return launch !== null && launch.descentSec >= POD_FIRST_DESCENT_SEC;
+}
 
 export function mountAudioCues(store: Store<GameState>): () => void {
   // AI seconds to the heartbeat bed's next beat (see below; the reveal's end sets it too).
@@ -149,9 +173,24 @@ export function mountAudioCues(store: Store<GameState>): () => void {
       if (role === 'engine-io') play('engineCough', undefined, { delaySec: FAULT_COUGH_AFTER_SEC });
     }),
     on('plot-mode', ({ to }) => { if (to === 'exact') play('lineWhoomp', { shape: 'clear' }); }),
-    // 01-landing §4: touchdown is printBell. TODO(slice1a-UI): pitched per LZ, dull when hard, sour when mislanded, a low
-    // bonk off-site; podLaunch, podEntry and the window tone.
-    on('pod-landed', ({ touch, place }) => { if (place !== 'no-go') play('printBell', { gaps: touch === 'hard' }); }),
+    // Slice 1a, the landing (01-landing §4).
+    on('pod-launched', () => play('podLaunch', { first: launchingFirstOfRun(store.getState()) })),
+    on('pod-entry', ({ pod }) => play('podEntry', { first: isFirstFall(store.getState(), pod) })),
+    on('pod-landed', ({ place, lz, touch, firstOfRun }) => {
+      const index = lz === null ? 0 : store.getState().landing.lzs.findIndex((candidate) => candidate.label === lz);
+      play('printBell', { lz: Math.max(0, index), landing: touchdownSound(place, touch) });
+      if (firstOfRun) {
+        play('revealChoir');
+        play('stampHit', { heavy: false });
+      }
+    }),
+    on('window-sure', () => play('chime', { falling: false })),
+    on('lz-full', () => play('capturedChord')),
+    on('all-pods-down', () => {
+      play('lockArp');
+      play('stampHit', { heavy: false });
+    }),
+    on('pods-parked', () => play('lineWhoomp', { shape: 'sag' })),
     // WP6: HOLLOW's moments, once per tick each (a bite on two files is one bite).
     on('hollow-infect', () => onceThisTick('hollowBite')),
     on('hollow-wall', () => onceThisTick('fizzle')),
@@ -163,7 +202,7 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     // through static as `???` decodes into UNIT-046. Heard with the picture: at once in blue, else on the
     // kid's first look (components/memory-view/HollowNameFx, 'hollow-name-shown').
     on('hollow-name-shown', () => {
-      play('revealPing', { step: REVEAL_TRUTH_STEP });
+      play('truthNote');
       play('nameGlitch');
     }),
     // WP7 part 2: the run. The arrival's hits crackle one by one with their red flashes (ArrivalFlash runs
@@ -335,7 +374,9 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     setEngineLevel(level, thrustJitter(state));
     const pred = getPrediction();
     const nearRing = live && pred.outcome === 'closed' && (thrust || pred.fit.inRing);
-    setLockTone(nearRing ? (pred.fit.inRing ? 1 : pred.greenFraction) : null);
+    // While landing the same tone sings the window (01-landing §4): pitched by how centred the dot is in its bracket.
+    if (state.run.phase === 'landing') setLockTone(windowToneFraction(state, getDropSolution()));
+    else setLockTone(nearRing ? (pred.fit.inRing ? 1 : pred.greenFraction) : null);
     // HOLLOW (WP6): the chew while anything drains (louder while the engine fires: P1), and the
     // tug's beating tones while a repair fights it. Both are heard on either screen.
     setChewLevel(chewLevel(state));
