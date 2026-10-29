@@ -10,9 +10,10 @@
 // choice; at least half of the runs that reach the choice must have the 20 MERGE costs (the lead's target; the lever is
 // the guidance, `MOVE it behind a WALL` once a driver is bitten again in the same spot, and the defender now MOVEs onto
 // a spot the MOVE preview calls SAFE: harness11.ts).
-// Slice 1a: every landing lands at once (tests/unit/support/landing-instant.ts) except LAST LIGHT's, which stands
-// FINAL_LANDING_SEC AI seconds (phase 2's 16 × 3.0 s of printing) while the duel goes on, as boss-sim's C does.
-// TODO(phase2): fly the landings by the strip once Track SIM's bay, pace and landing guidance are merged.
+// Slice 1a: every landing lands at once (tests/unit/support/landing-instant.ts) except LAST LIGHT's, which the kid flies
+// by the strip ([L] when the strip asks, followLanding) while the duel goes on, as boss-sim's C does. FINAL_LANDING=stand
+// instead keeps phase 2's exposure: LAST LIGHT's landing stands FINAL_LANDING_SEC AI seconds (phase 2's 16 × 3.0 s of
+// printing), then lands at once.
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { receiveTransmission } from '@systems/boot';
@@ -33,8 +34,10 @@ import { setLandingMode } from '../support/landing-instant';
 import { followLanding } from '../landing/harness-landing';
 
 const FINAL_LANDING_SEC = Number(process.env.FINAL_LANDING_SEC ?? 48);
-// FINAL_LANDING=strip: LAST LIGHT's landing flown by the strip ([L] at the windows, followLanding) instead of standing.
-const FINAL_STRIP = process.env.FINAL_LANDING === 'strip';
+// FINAL_LANDING: 'strip' (default: LAST LIGHT's landing by the strip) or 'stand' (FINAL_LANDING_SEC, then instant).
+const FINAL_LANDING = process.env.FINAL_LANDING ?? 'strip';
+if (FINAL_LANDING !== 'strip' && FINAL_LANDING !== 'stand') throw new Error(`FINAL_LANDING=${FINAL_LANDING} is neither strip nor stand`);
+const FINAL_STRIP = FINAL_LANDING === 'strip';
 
 // Quick depth (tests/unit/depth.ts): seeds 1 and 2, one PURGE and one MERGE run; full: 50.
 const SEEDS = Number(process.env.RUN_SEEDS ?? byDepth(2, 50));
