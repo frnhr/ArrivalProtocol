@@ -52,7 +52,7 @@ const stasisCode = texts.flatMap((file) => file.text.split('\n')
   .filter(({ line }) => /SOULS IN STASIS|archiveSealed/.test(line) && !/^\s*(\/\/|\/\*|\*|<!--)/.test(line.trim())));
 check('no `SOULS IN STASIS` and no archiveSealed in code any more (the sealed archive is gone)', stasisCode.length === 0,
   stasisCode.map((hit) => hit.where).join(', '));
-check('the footer has no static souls text in index.html', !/id="footSouls"[^>]*>[^<]+</.test(texts.find((file) => file.path === 'index.html')?.text ?? ''));
+check('the footer has no static pods text in index.html', !/id="footPods"[^>]*>[^<]+</.test(texts.find((file) => file.path === 'index.html')?.text ?? ''));
 
 // The live title: TimeControls writes document.title from the crumbs; index.html's static title names no unit or ship.
 const timeControls = texts.find((file) => file.path === 'src/components/header/TimeControls.ts')?.text ?? '';

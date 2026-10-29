@@ -93,7 +93,7 @@
   --soul-bg-top: rgba(141, 255, 196, 0.15);
   --soul-bg-bot: rgba(141, 255, 196, 0.03);
   --soul-hurt: #ffce4a;
-  --print-flash: #ffffff;
+  --flash-white: #ffffff;
 
   /* ── the WAKE REPORT (WP5 part 2): the same on both screens. A deep night behind the names, the
         colonists' mint, and stars in warm gold (earned) or a cold outline (missed). ── */
@@ -132,7 +132,7 @@
 
   /* ── LAST LIGHT's finale (WP11 part 2): the same on both screens, like the WAKE REPORT. PURGE is a cold, clean
         white; MERGE runs from HOLLOW's pink into the mind's blue (--hollow → --layer-mind). The card's backdrop dims
-        the desk without hiding it (the printing goes on under it). A sombre RUN END keeps a grey night: no green. ── */
+        the desk without hiding it (the landing goes on under it). A sombre RUN END keeps a grey night: no green. ── */
   --purge: #e8f6ff;
   --purge-glow: rgba(200, 236, 255, 0.35);
   --merge-glow: rgba(255, 110, 199, 0.32);

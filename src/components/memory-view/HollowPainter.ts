@@ -33,7 +33,7 @@ import { HOLLOW_PAINT_HZ, INTEGRITY_MAX, HOLLOW_FX_MS, CURE_SPARKS, SEED_BLINK_S
 //   numbers);
 // • the moments, in a short-lived layer over the strip: the bite's red snap on its target, a WALL
 //   or FIREWALL flashing green as it holds, the cure's blue sparkles and `SAVED`, an eaten block's red flash and
-//   `DID NOT WAKE`;
+//   `CAN'T LAUNCH` (an eaten driver) or `EATEN`;
 // • WP11 part 2, a verb counting down (§6.6: "the target is outlined"; made unmistakable after the handover): its target
 //   in a solid pink edge that beats each second, a reticle closing in around it and a badge over it (`UNLINK 3`), the
 //   rest of the strip dimmed, and an MV's landing spot outlined too (`MV →`); BLOCKED flashes the target green with
@@ -566,7 +566,7 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
         const rect = rectOf(part);
         if (!rect) return;
         fxBox(layer, 'hollow-fx eaten-flash', rect);
-        if (i === 0) fxLabel(layer, 'hollow-fx-label eaten', driver ? HOLLOW_HUD_TEXT.lostSoul : HOLLOW_HUD_TEXT.lostFile, rect);
+        if (i === 0) fxLabel(layer, 'hollow-fx-label eaten', driver ? HOLLOW_HUD_TEXT.lostDriver : HOLLOW_HUD_TEXT.lostFile, rect);
       });
     }),
   ];

@@ -599,7 +599,7 @@ kbd.keycap[hidden] { display: none; }
   color: var(--text-dim);
 }
 /* A returning unit (WP8): the one before it, in HOLLOW's pink (that unit is what waits in the memory), and
-   the endings found. A unit that stayed with its colonists became no HOLLOW: its line is the souls' green. */
+   the endings found. A unit that stayed with its colonists became no HOLLOW: its line is the colonists' green. */
 .title-lineage {
   margin-top: -2px;
   font-size: 12px;
@@ -1742,27 +1742,25 @@ body.reduced-motion .mode-toggle-opt.alerting:not(.unread) { color: var(--alerti
 
 /* ── A launch (01-landing §3.8, LaunchFx): the driver's chip flashes white (solid at first, so the FREE label the strip
  *    draws under it does not show through), and `POD 03 · LAUNCHED` floats up from where it was, on its own backing ── */
-.print-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; }
-.print-fx-layer .print-flash {
-  position: fixed; box-sizing: border-box; border: 1px solid var(--print-flash);
-  background: var(--print-flash);
-  animation: print-flash 1.2s ease-out both;
+.launch-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; }
+.launch-fx-layer .launch-flash {
+  position: fixed; box-sizing: border-box; border: 1px solid var(--flash-white);
+  background: var(--flash-white);
+  animation: launch-flash 1.2s ease-out both;
 }
-.print-fx-layer .print-flash.outcome-gaps { border-color: var(--soul-hurt); }
-@keyframes print-flash {
-  0% { opacity: 0; } 8% { opacity: 1; background: var(--print-flash); } 25% { background: var(--print-flash); }
+@keyframes launch-flash {
+  0% { opacity: 0; } 8% { opacity: 1; background: var(--flash-white); } 25% { background: var(--flash-white); }
   50% { background: color-mix(in srgb, var(--soul) 25%, transparent); }
   100% { opacity: 0; background: transparent; }
 }
-.print-fx-layer .print-woke {
+.launch-fx-layer .launch-label {
   position: fixed; transform: translate(-50%, -4px); padding: 0 5px;
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   font-family: 'VT323', monospace; font-size: 18px; letter-spacing: 0.08em; white-space: nowrap;
   color: var(--soul); text-shadow: 0 0 8px var(--soul);
-  animation: print-woke 1.35s ease-out both;
+  animation: launch-label 1.35s ease-out both;
 }
-.print-fx-layer .print-woke.outcome-gaps { color: var(--soul-hurt); text-shadow: 0 0 8px var(--soul-hurt); }
-@keyframes print-woke {
+@keyframes launch-label {
   0% { opacity: 0; transform: translate(-50%, 6px); } 12% { opacity: 1; }
   75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -30px); }
 }
@@ -1780,11 +1778,11 @@ body.reduced-motion .mode-toggle-opt.alerting:not(.unread) { color: var(--alerti
 .action-btn.load-next.on { background: color-mix(in srgb, var(--soul) 14%, transparent); border-color: var(--soul); }
 
 /* ── The footer's pods ── */
-#footSouls.revealed { color: var(--soul); }
+#footPods.revealed { color: var(--soul); }
 
 /* ── The LOST card's pods line ── */
-.burn-result-souls { font-size: 14px; letter-spacing: 0.06em; color: var(--text); margin: -10px 0 var(--sp-8); min-height: 1.4em; }
-.burn-result-souls[hidden] { display: none; }
+.burn-result-pods { font-size: 14px; letter-spacing: 0.06em; color: var(--text); margin: -10px 0 var(--sp-8); min-height: 1.4em; }
+.burn-result-pods[hidden] { display: none; }
 
 /* ── The mini-HUD while landing ── */
 .mh-landing { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
@@ -1796,9 +1794,9 @@ body.reduced-motion .mode-toggle-opt.alerting:not(.unread) { color: var(--alerti
 /* ── Reduced motion: no running pulse (the trace still says steady / hurt / flat), and the launch flash fades in place
  *    without flashing or moving ── */
 body.reduced-motion .heartbeat .hb-pulse { animation: none; display: none; }
-body.reduced-motion .print-fx-layer .print-flash { animation-name: print-fade; background: transparent; }
-body.reduced-motion .print-fx-layer .print-woke { animation-name: print-fade; transform: translate(-50%, -4px); }
-@keyframes print-fade { 0% { opacity: 0; } 15% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+body.reduced-motion .launch-fx-layer .launch-flash { animation-name: fx-fade; background: transparent; }
+body.reduced-motion .launch-fx-layer .launch-label { animation-name: fx-fade; transform: translate(-50%, -4px); }
+@keyframes fx-fade { 0% { opacity: 0; } 15% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
 
 /* ══ WP5 part 2: racks on the strip, the computed stats, the WAKE REPORT ═════════════════════════ */
 
@@ -2069,8 +2067,8 @@ body.reduced-motion .wr-star.landed { animation: wr-in 0.3s ease-out both; }
 body.reduced-motion .wr-total.bump,
 body.reduced-motion .wr-continue { animation: none; }
 
-/* ── The mini-HUD's INTACT star while printing: gold on track; the hurt yellow, breathing and naming
- *    the cluster (`· REPAIR C09`) while a repair could still save it (the two colours alone are
+/* ── The mini-HUD's ON TARGET star while landing: gold on track; the hurt yellow, breathing and naming
+ *    the driver (`· REPAIR POD 09`) while a repair could still save it (the two colours alone are
  *    too close to tell apart); a dim hollow ☆ once it is gone ── */
 .mh-on-target { font-family: 'VT323', monospace; font-size: 15px; letter-spacing: 0.06em; white-space: nowrap; color: var(--star); }
 .mh-on-target[data-tone="risk"] { color: var(--soul-hurt); animation: mh-intact-risk 1.2s ease-in-out infinite; }
@@ -2171,7 +2169,7 @@ body.reduced-motion .seg.infected { box-shadow: inset 0 0 12px var(--hollow-stat
   padding: 0 3px; background: var(--hollow-bg);
 }
 .seg.hollow.bite-urgent .hollow-bite .bite-t { animation: bite-urgent 0.5s ease-in-out infinite; }
-@keyframes bite-urgent { 50% { color: var(--print-flash); text-shadow: 0 0 12px var(--hollow-red); } }
+@keyframes bite-urgent { 50% { color: var(--flash-white); text-shadow: 0 0 12px var(--hollow-red); } }
 .seg.hollow.hollow-quiet .hollow-static { opacity: 0.2; animation-duration: 3.2s; }
 .seg.hollow.hollow-quiet .hollow-bite { visibility: hidden; }
 @media (max-height: 800px) and (min-width: 769px) {
@@ -2269,7 +2267,7 @@ body.reduced-motion .seg.infected { box-shadow: inset 0 0 12px var(--hollow-stat
 /* ── HOLLOW's moments (HollowPainter, a fixed layer that hides with the blue screen): the bite snaps
  *    red onto its target's edge; a WALL flashes green as it holds; the cure flashes and the red
  *    shatters into blue sparkles with `SAVED`; an eaten block flashes red and flatlines with
- *    `DID NOT WAKE`. ── */
+ *    `CAN'T LAUNCH` (a driver) or `EATEN`. ── */
 .hollow-fx-layer { position: fixed; inset: 0; pointer-events: none; z-index: 60; }
 .hollow-fx { position: fixed; box-sizing: border-box; pointer-events: none; }
 .hollow-fx.bite-flash { animation: fx-flash 0.7s ease-out both; }
@@ -2279,7 +2277,7 @@ body.reduced-motion .seg.infected { box-shadow: inset 0 0 12px var(--hollow-stat
 .hollow-fx.cure-flash { background: color-mix(in srgb, var(--cure-spark) 55%, transparent); border: 1px solid var(--cure-spark); animation: fx-flash 0.6s ease-out both; }
 .hollow-fx.eaten-flash { background: color-mix(in srgb, var(--hollow-red) 60%, transparent); animation: fx-flash 1.2s ease-out both; }
 /* The flatline across an eaten block. */
-.hollow-fx.eaten-flash::after { content: ''; position: absolute; left: 6%; right: 6%; top: 50%; border-top: 2px solid var(--print-flash); }
+.hollow-fx.eaten-flash::after { content: ''; position: absolute; left: 6%; right: 6%; top: 50%; border-top: 2px solid var(--flash-white); }
 @keyframes fx-flash { 0% { opacity: 0; } 10% { opacity: 1; } 100% { opacity: 0; } }
 .cure-spark {
   position: fixed; width: 4px; height: 4px; margin: -2px 0 0 -2px;
@@ -2343,9 +2341,9 @@ body.reduced-motion .gap-mark,
 body.reduced-motion .tug-front,
 body.reduced-motion .ms-hollow,
 body.reduced-motion .ms-infected { animation: none; }
-body.reduced-motion .seg.hollow.bite-urgent .hollow-bite .bite-t { color: var(--print-flash); }
+body.reduced-motion .seg.hollow.bite-urgent .hollow-bite .bite-t { color: var(--flash-white); }
 body.reduced-motion .cure-spark { display: none; }
-body.reduced-motion .hollow-fx-label { animation-name: print-fade; transform: translate(-50%, -4px); }
+body.reduced-motion .hollow-fx-label { animation-name: fx-fade; transform: translate(-50%, -4px); }
 
 /* ══ WP7 part 1: the log keeps its history across ships ══════════════════════════════════════════ */
 /* The named HOLLOW (HALCYON): `UNIT-046` does not fit beside a tag on an 8-block chip with the NEXT BITE
@@ -2698,7 +2696,7 @@ body.reduced-motion.beamed-out .desktop > .tools-view .window-body { animation: 
 
 /* ── HOLLOW names itself: `???` decodes into UNIT-046 through static on every hollow block, which pulses
  *    pink; the strip jolts once; the TERMINAL's old `[user: ???]` tags flicker into the name. ── */
-.seg.hollow .seg-name.name-decoding { color: var(--print-flash); text-shadow: 0 0 8px var(--hollow), 0 0 2px var(--hollow); }
+.seg.hollow .seg-name.name-decoding { color: var(--flash-white); text-shadow: 0 0 8px var(--hollow), 0 0 2px var(--hollow); }
 .seg.hollow .seg-name.name-still { color: var(--hollow); text-shadow: 0 0 10px var(--hollow); transition: text-shadow 1.1s ease-out; }
 /* CORE LOST (BurnResult): the card sits above the glitch overlay (z 200), so it can be read over the static. */
 .burn-result.over-static { z-index: 201; }
@@ -2716,7 +2714,7 @@ body.tool-active .seg.hollow.invalid-target.naming { opacity: 1; }
 }
 .term-line.renamed { animation: term-renamed 0.9s steps(6) both; }
 @keyframes term-renamed {
-  0%, 30%, 60% { color: var(--print-flash); text-shadow: 0 0 8px var(--hollow); }
+  0%, 30%, 60% { color: var(--flash-white); text-shadow: 0 0 8px var(--hollow); }
   15%, 45% { opacity: 0.4; }
   100% { text-shadow: none; }
 }
@@ -2786,7 +2784,7 @@ body.tool-active .seg.hollow.invalid-target.naming { opacity: 1; }
 .re-ship-name { font-family: 'VT323', monospace; font-size: 22px; letter-spacing: 0.08em; }
 .re-ship-outcome { font-size: 11px; letter-spacing: 0.14em; color: var(--soul); }
 .re-ship-stars { font-size: 16px; color: var(--star); letter-spacing: 0.08em; text-shadow: 0 0 8px var(--star-glow); }
-.re-ship-woke { font-size: 11px; letter-spacing: 0.08em; text-align: right; color: var(--report-text); }
+.re-ship-landed { font-size: 11px; letter-spacing: 0.08em; text-align: right; color: var(--report-text); }
 .re-ship.outcome-partial .re-ship-outcome { color: var(--soul-hurt); }
 .re-ship.outcome-stranded .re-ship-outcome,
 .re-ship.outcome-escaped .re-ship-outcome,
@@ -2827,7 +2825,7 @@ body.tool-active .seg.hollow.invalid-target.naming { opacity: 1; }
 @media (max-width: 768px) {
   .re-title { font-size: 30px; }
   .re-ship { grid-template-columns: 18px minmax(0, 1fr) auto; }
-  .re-ship-stars, .re-ship-woke { grid-column: 2 / -1; text-align: left; }
+  .re-ship-stars, .re-ship-landed { grid-column: 2 / -1; text-align: left; }
 }
 .run-end.reduced .re-ship.landed,
 .run-end.reduced.scored .re-score-row,
@@ -3117,7 +3115,7 @@ body.reduced-motion .term-line.urgent .term-clock,
 body.reduced-motion .objective-ticker.urgent { animation: none; }
 
 /* ── WP11 part 2: LAST LIGHT's choice and its typed ending (FinaleChoice). The card comes up over a dimmed desk (the
-   printing goes on under it): ROOT DELETED, the last block pulsing, the title in HOLLOW's pink, its last words typing,
+   landing goes on under it): ROOT DELETED, the last block pulsing, the title in HOLLOW's pink, its last words typing,
    then PURGE (cold white) and MERGE (pink into blue) with what each runs, means and costs. The choice clears the card
    and types the ending in it. Every colour from tokens; reduced motion keeps every word and drops the pulses. ── */
 .finale-choice {

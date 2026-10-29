@@ -52,20 +52,20 @@ export interface CueParams {
   // The truth note (WP5's reveal, kept for HOLLOW naming itself); the choir (the first landing of a run, RUN END's
   // victory); the pods' stasis heartbeat.
   truthNote: undefined;
-  revealChoir: undefined;
+  arrivalChoir: undefined;
   heartbeat: { strength: number };
   // Slice 1a, the landing (01-landing §4): a pod leaving the bay (a low thump and a pneumatic hiss; `first`: run 1's
   // first pod, which ducks the ambience for its long fall), its entry roar at the atmosphere, and the touchdown bell,
   // pitched per LZ (`lz`: its index, LZ-A 0) and coloured by how it came down.
   podLaunch: { first: boolean };
   podEntry: { first: boolean };
-  printBell: { lz: number; landing: TouchdownSound };
-  // WP6: HOLLOW. The bite landing on a file; a bite held by a WALL; a cluster (or file) eaten; a
-  // repair winning the tug-of-war.
+  touchdownBell: { lz: number; landing: TouchdownSound };
+  // WP6: HOLLOW. The bite landing on a file; a bite held by a WALL; a driver eaten (the sombre fall, also a sombre RUN
+  // END's); a repair winning the tug-of-war.
   hollowBite: undefined;
   fizzle: undefined;
-  soulLost: undefined;
-  clusterSaved: undefined;
+  sombreFall: undefined;
+  driverSaved: undefined;
   // WP7: the run. TRANSMIT's rising FM sweep into the white-out (and BEAM OUT's moment of leaving); one
   // transit hit landing on a file as the boot names it; HOLLOW's name decoding out of `???`.
   transmitSweep: { seconds: number };
@@ -832,9 +832,9 @@ function cueTruthNote(mix: Graph, t0: number): void {
   voice.osc('sine', 2637, t0 + 0.35, glassEnd, voice.gain(0.25, glass));
 }
 
-// §7.2 revealChoir: four detuned saws through a 900 Hz lowpass, a 2 s swell, then a long fade. A
+// §7.2 arrivalChoir: four detuned saws through a 900 Hz lowpass, a 2 s swell, then a long fade. A
 // major chord over an open fifth (A, E, A, C♯): not triumph, people.
-function cueRevealChoir(mix: Graph, t0: number): void {
+function cueArrivalChoir(mix: Graph, t0: number): void {
   const voice = makeVoice(mix.ctx);
   duck(mix, t0);
   const out = voice.gain(1, mix.buses.chord);
@@ -926,15 +926,15 @@ const BELL_BASE_HZ = 784;
 const BELL_LZ_RATIO = [1, 3 / 2, 5 / 4, 15 / 8];
 
 function bellHz(lz: number): number {
-  if (!(Number.isInteger(lz) && lz >= 0)) throw new Error(`printBell: LZ index ${lz}`);
+  if (!(Number.isInteger(lz) && lz >= 0)) throw new Error(`touchdownBell: LZ index ${lz}`);
   const ratio = BELL_LZ_RATIO[lz % BELL_LZ_RATIO.length]!;
   return BELL_BASE_HZ * ratio / 2 ** Math.floor(lz / BELL_LZ_RATIO.length);
 }
 
-// §7.2 printBell, the touchdown (§4): the bell (a 1.5× partial, a 1.5 s decay) at its LZ's pitch. HARD: duller (a low
+// §7.2 touchdownBell, the touchdown (§4): the bell (a 1.5× partial, a 1.5 s decay) at its LZ's pitch. HARD: duller (a low
 // lowpass, a shorter ring, a thud under it). MISLANDED: a second bell a minor second above beating against it, sour.
 // OFF-SITE: no bell, a low bonk (a triangle dropping in pitch).
-function cuePrintBell(mix: Graph, t0: number, lz: number, landing: TouchdownSound): void {
+function cueTouchdownBell(mix: Graph, t0: number, lz: number, landing: TouchdownSound): void {
   const voice = makeVoice(mix.ctx);
   const out = voice.gain(1, mix.buses.chord);
   if (landing === 'off-site') {
@@ -1021,9 +1021,9 @@ function cueFizzle(mix: Graph, t0: number): void {
   voice.noise(mix.white, t0, end, band);
 }
 
-// §7.2 soulLost: a sine sweeping 880 → 220 Hz over a long fall, doubled a few cents flat so it
+// §7.2 sombreFall: a sine sweeping 880 → 220 Hz over a long fall, doubled a few cents flat so it
 // wavers, and a soft low tone under it. Not a crash or a scream (PG): something going out.
-function cueSoulLost(mix: Graph, t0: number): void {
+function cueSombreFall(mix: Graph, t0: number): void {
   const voice = makeVoice(mix.ctx);
   duck(mix, t0);
   const out = voice.gain(1, mix.buses.chord);
@@ -1039,9 +1039,9 @@ function cueSoulLost(mix: Graph, t0: number): void {
   voice.osc('triangle', 110, t0 + 0.2, underEnd, under);
 }
 
-// §7.2 clusterSaved: two notes rising a fourth (E5 → A5, triangles with an octave shimmer), then the
+// §7.2 driverSaved: two notes rising a fourth (E5 → A5, triangles with an octave shimmer), then the
 // red "shatters into blue sparkles": a few high glassy pings scattered over half a second.
-function cueClusterSaved(mix: Graph, t0: number): void {
+function cueDriverSaved(mix: Graph, t0: number): void {
   const voice = makeVoice(mix.ctx);
   duck(mix, t0);
   const out = voice.gain(1, mix.buses.chord);
@@ -1530,19 +1530,19 @@ function playOn(mix: Graph, cue: Cue, params: CueParams[Cue] | undefined, t0: nu
     case 'opChirp': cueOpChirp(mix, t0); return;
     case 'opDone': cueOpDone(mix, t0); return;
     case 'truthNote': cueTruthNote(mix, t0); return;
-    case 'revealChoir': cueRevealChoir(mix, t0); return;
+    case 'arrivalChoir': cueArrivalChoir(mix, t0); return;
     case 'heartbeat': cueHeartbeat(mix, t0, (params as CueParams['heartbeat']).strength); return;
     case 'podLaunch': cuePodLaunch(mix, t0, (params as CueParams['podLaunch']).first); return;
     case 'podEntry': cuePodEntry(mix, t0, (params as CueParams['podEntry']).first); return;
-    case 'printBell': {
-      const bell = params as CueParams['printBell'];
-      cuePrintBell(mix, t0, bell.lz, bell.landing);
+    case 'touchdownBell': {
+      const bell = params as CueParams['touchdownBell'];
+      cueTouchdownBell(mix, t0, bell.lz, bell.landing);
       return;
     }
     case 'hollowBite': cueHollowBite(mix, t0); return;
     case 'fizzle': cueFizzle(mix, t0); return;
-    case 'soulLost': cueSoulLost(mix, t0); return;
-    case 'clusterSaved': cueClusterSaved(mix, t0); return;
+    case 'sombreFall': cueSombreFall(mix, t0); return;
+    case 'driverSaved': cueDriverSaved(mix, t0); return;
     case 'transmitSweep': cueTransmitSweep(mix, t0, (params as CueParams['transmitSweep']).seconds); return;
     case 'transitHit': cueTransitHit(mix, t0); return;
     case 'nameGlitch': cueNameGlitch(mix, t0); return;

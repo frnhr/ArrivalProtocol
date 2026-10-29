@@ -7,12 +7,12 @@
 //   (nothing changes then).
 // • RUN END after it is 'won-merge', the victory tone; the archive keeps mergeBonus and endingsSeen ['merge']; the next run
 //   starts with a Core of 3 threads and the corruption floor 0.05 (the jerk dice still roll on the Core alone).
-// • PURGE: every block of HOLLOW leaves memory; the eaten stay lost (parked); 'won-purge'; endingsSeen gains 'purge' and the
+// • PURGE: every block of HOLLOW leaves memory; the eaten pods stay parked; 'won-purge'; endingsSeen gains 'purge' and the
 //   bonus is used up (mergeBonus false).
 // • The root's DELETE: 12 AI s, its last block standing in the root's middle; HOLLOW stops (no bites, seeds or verbs) and
 //   lets go of what it was eating; INSPECT's words for the open root and the last block; the last block is locked.
 // • UNRESOLVED: with every Rm gone (and none to repair), the landing ends with the root standing: the ship ends unresolved,
-//   RUN END 'unresolved', sombre. A flagship that woke nobody never gets the victory tone, even after a PURGE.
+//   RUN END 'unresolved', sombre. A flagship that landed nobody never gets the victory tone, even after a PURGE.
 // • §9 WP11's edge cases: the Core worn below 50 mid-duel (the running DELETE keeps its thread); the flagship lost before
 //   the duel (BEAM OUT, an escape, stranded, a crash with comms up: FLAGSHIP LOST; the Core eaten: OVERWRITTEN).
 // The landing stands while a scenario sets itself up ('manual' landing mode, tests/unit/support/landing-instant.ts) and
@@ -269,7 +269,7 @@ check('…the landing ended with the root standing: the ship ends unresolved, th
 continueAfterReport(h.store);
 check('…RUN END unresolved, sombre', state().run.endCause === 'unresolved' && runEndModel(state()).tone === 'sombre');
 
-// --- The tone: a flagship that woke nobody ----------------------------------------------------------------------------------
+// --- The tone: a flagship that landed nobody ----------------------------------------------------------------------------------
 toTheDuel(53);
 // Every driver lost (as if HOLLOW and the belt had them all), the root deleted, PURGE: no victory screen.
 h.store.update((d) => {
@@ -294,7 +294,7 @@ const zeroEnd = h.wall() + 30;
 while (state().run.phase === 'landing' && h.wall() < zeroEnd) h.step();
 continueAfterReport(h.store);
 // WP11 fix round 1 (the review): the words too, not only the tone: never THE FLEET IS HOME over an empty flagship.
-check('…then PURGE: won-purge, but the flagship woke nobody: the sombre tone and words (`LAST LIGHT · NOBODY WOKE`), never the victory ones',
+check('…then PURGE: won-purge, but the flagship landed nobody: the sombre tone and words (`LAST LIGHT · NOBODY LANDED`), never the victory ones',
   state().run.endCause === 'won-purge' && runEndModel(state()).tone === 'sombre' && runEndModel(state()).title === RUN_END_NOBODY_WOKE.title
   && runEndModel(state()).why === RUN_END_NOBODY_WOKE.why['won-purge'],
   `${state().run.endCause} ${runEndModel(state()).tone} ${runEndModel(state()).title} | ${runEndModel(state()).why}`);

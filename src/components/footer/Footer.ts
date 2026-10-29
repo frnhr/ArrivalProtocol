@@ -31,7 +31,7 @@ export function podsLabel(state: Readonly<GameState>): string {
 }
 
 export function mountFooter(store: Store<GameState>): () => void {
-  const soulsEl = requireById('footSouls');
+  const podsEl = requireById('footPods');
   const chargeEl = requireById('footRedund');
   const coresEl = requireById('footCores');
   const burnEl = requireById('footBurn');
@@ -39,7 +39,7 @@ export function mountFooter(store: Store<GameState>): () => void {
   const archiveEl = requireById('footArchive');
   archiveEl.title = ARCHIVE_TEXT.footerTitle;
 
-  const last = { souls: '', charge: '', threads: '', burn: '', limit: '' };
+  const last = { pods: '', charge: '', threads: '', burn: '', limit: '' };
   const patch = (element: HTMLElement, key: keyof typeof last, text: string): void => {
     if (last[key] === text) return;
     last[key] = text;
@@ -72,12 +72,12 @@ export function mountFooter(store: Store<GameState>): () => void {
     limitEl.hidden = text === '';
   }
 
-  function paintSouls(): void {
-    patch(soulsEl, 'souls', podsLabel(store.getState()));
-    soulsEl.classList.add('revealed');
+  function paintPods(): void {
+    patch(podsEl, 'pods', podsLabel(store.getState()));
+    podsEl.classList.add('revealed');
   }
 
-  const paintAll = (): void => { paintSouls(); paintCharge(); paintThreads(); paintBurn(); paintLimit(); };
+  const paintAll = (): void => { paintPods(); paintCharge(); paintThreads(); paintBurn(); paintLimit(); };
   paintAll();
 
   // A pod's fate (launched, down, parked) changes without a memory change at touchdown: it is part of the key.

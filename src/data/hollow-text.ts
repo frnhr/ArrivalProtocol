@@ -1,5 +1,5 @@
 // The words HOLLOW's system says (WP6, §6.6): what the thing in the memory is called before it
-// names itself, its alerts, the ship-1 breach and the lines after the first fight. Kept apart from
+// names itself, its alerts and the lines after the first fight. Kept apart from
 // script.ts (like tool-text.ts) so systems/hollow.ts and the memory builder can import them without
 // pulling in the director and the voice. Every line here is checked against the strip width and the
 // §3.5 glossary by tests/unit/wp6 tests (≤ 70 characters with worst-case names).
@@ -8,6 +8,10 @@ import type { LastCause, LastUnit } from '@systems/meta';
 import type { HollowSegment } from '@/types/segment';
 import type { VerbKind, EndingLine } from '@state/schema';
 import { WALL_MIN_BLOCKS, ROOT_DELETE_SEC, MERGE_COST_CHARGE } from '@data/tuning';
+import { POD_STATE_TEXT } from '@data/landing-text';
+
+// FinaleChoice's MERGE line names at most this many pods, then `+n`: five pod codes ran it past one line (70 characters).
+const MERGE_GAIN_MAX_PODS = 3;
 
 // What HOLLOW is called on screen until it names itself (ship 2, `> i was 046.`): its root is built
 // with this owner, and the TERMINAL tags its lines with it.
@@ -60,7 +64,7 @@ export function hollowInspectDesc(seg: Readonly<HollowSegment>): string {
   return seg.desc;
 }
 
-// The alerts (§6.6): anything infected is a warning that holds SKIP; a cluster about to be eaten
+// The alerts (§6.6): anything infected is a warning that holds SKIP; a driver about to be eaten
 // and an infected Core are alarms (klaxon, TACTICAL). The text is short: the SKIP button and the
 // mode toggle show it as the reason.
 export const HOLLOW_ALERT_TEXT = {
@@ -96,11 +100,9 @@ export function hollowUnitWords(units: readonly number[]): string {
   return digits.length === 1 ? digits[0]! : `${digits.slice(0, -1).join(', ')} and ${digits[digits.length - 1]!}`;
 }
 
-// Ship 1's script (§6.6, §5.1 1:11–1:23). The bite breaks into a sealed cluster: the TERMINAL says
-// so at once. After the first fight HOLLOW notices you (`> ...047?`), and ARRIVAL CONTROL is cheerful
-// about it.
+// Ship 1's script (§6.6, §5.1 1:11–1:23). After the first fight HOLLOW notices you (`> ...047?`), and ARRIVAL
+// CONTROL is cheerful about it.
 export const HOLLOW_STORY = {
-  breach: (cluster: string, family: string): string => `> SEALED BLOCK BREACHED · ${cluster} · ${family.toUpperCase()}`,
   // `> ...047?`: our own unit number, as HOLLOW would say it (lowercase, three digits).
   noticed: (unitNumber: number): string => `> ...${unitDigits(unitNumber)}?`,
   // ...and on a later run, where its ghost already greeted you at the boot (§5.2).
@@ -119,7 +121,7 @@ export const HOLLOW_STORY = {
     ? `> we were ${hollowUnitWords(hollowUnits)}. they sent us first.`
     : `> i was ${hollowUnitWords(hollowUnits)}. they sent me first.`),
   decommissioned: (hollowUnit: string): string => `${hollowUnit} was decommissioned. Please ignore it. :)`,
-  // ...and while its food leaves for the surface (§5.1 3:45).
+  // ...and while its food leaves for the surface (the pods launching).
   ranOut: '> i ran out. then i got so hungry.',
   // KESTREL (§9 WP9 item 4): the first seed of a run, as DELETE is licensed.
   sorry: "> sorry. i'm so hungry.",
@@ -151,7 +153,7 @@ export const HOLLOW_VERB = {
   stripRmTab: (label: string, secLeft: number): string => `BLOCK IT — [TAB], use any tool on ${label} (${secLeft}…)`,
   stripMv: (label: string, secLeft: number): string => `BLOCK IT — DELETE ${label} (${secLeft}…)`,
   stripMvTab: (label: string, secLeft: number): string => `BLOCK IT — [TAB], DELETE ${label} (${secLeft}…)`,
-  // The MV's block as the strip names it: a seed, or the block that ate a cluster or a file.
+  // The MV's block as the strip names it: a seed, or the block that ate a driver or a file.
   mvSeedLabel: 'its SEED',
   mvAteLabel: (ate: string): string => `the block that ATE ${ate}`,
   mvSeedWord: 'seed',
@@ -190,8 +192,8 @@ export const HOLLOW_FINALE = {
   stripDeletingAlone: (time: string): string => `DELETING THE ROOT · ${time} — keep it running`,
   // HOLLOW ate (or the kid lost) every DELETE that could reach the root: it will outlive the ship.
   stripNoDelete: 'NOTHING CAN DELETE THE ROOT NOW — it ate your DELETE',
-  // The printing is done but the root is not: the ship waits for it (§9 WP11 edge case). With nobody printed (every
-  // cluster lost), the line says so instead of claiming everyone was.
+  // The landing is done but the root is not: the ship waits for it (§9 WP11 edge case, 01-landing §3.10's L0). With no
+  // pod able to launch, the line says so instead of claiming every pod is down.
   stripWaits: 'EVERY POD IS DOWN — now DELETE THE ROOT',
   stripWaitsNobody: 'NO POD LEFT TO LAUNCH — now DELETE THE ROOT',
   stripChoice: 'PURGE OR MERGE — choose what becomes of it',
@@ -201,8 +203,9 @@ export const HOLLOW_FINALE = {
   merge: 'MERGE',
   // FinaleChoice's card (WP11 part 2: the moment). The root's DELETE is done; one block of it is left. Its last words
   // (lastWords) type on the card under the title, then the two options, each with what it does in TERMINAL words, what
-  // it means, and what it costs. PURGE is clean and a little cold (whoever it ate goes with it); MERGE is warm and
-  // costly (the charge, and it becomes part of you), and brings back the clusters it ate on this ship.
+  // it means, and what it costs. PURGE is clean and a little cold (the pods whose drivers it ate stay parked); MERGE is
+  // warm and costly (the charge, and it becomes part of you), and gives back the drivers it ate on this ship, so their
+  // pods land (01-landing §3.17).
   choiceKicker: 'ROOT DELETED',
   choiceTitle: (hollow: string): string => `${hollow} · ONE BLOCK LEFT`,
   choiceSub: 'It was a caretaker like you. What becomes of it?',
@@ -210,13 +213,21 @@ export const HOLLOW_FINALE = {
   purgeCmd: (hollowWord: string): string => `> rm ${hollowWord}`,
   mergeCmd: (hollowWord: string, ours: string): string => `> merge ${hollowWord} -> ${ours}`,
   purgeWhat: 'Delete the last block. It is gone for good.',
-  // What PURGE costs: whoever it ate on this ship stays lost (`souls`: `400`), or nothing when it ate nobody here.
-  purgeCost: (souls: string | null): string => (souls === null ? 'It ate nobody on this ship.' : `The ${souls} it ate here stay lost.`),
+  // What PURGE costs: the pods whose drivers it ate on this ship stay parked (`colonists`: `400`; §3.10's decided
+  // words), or nothing when it ate nobody here. PLACEHOLDER: 05-story owns the wording.
+  purgeCost: (colonists: string | null): string => (colonists === null
+    ? 'It ate nobody on this ship.'
+    : `${colonists} colonists stay ${POD_STATE_TEXT.parked}.`),
   mergeWhat: 'Let it in. It becomes part of you.',
-  // What MERGE brings back: the clusters it ate on this ship (`C13 · C14`), with missing memories.
-  mergeGain: (clusters: string | null): string => (clusters === null
-    ? 'It ate nobody here to give back.'
-    : `${clusters} come back, with missing memories.`),
+  // What MERGE brings back: the drivers it ate on this ship, by their pods (`POD 13 · POD 14`), whose pods then land
+  // (§3.17: back at MERGE_DRIVER_INTEGRITY, whole). At most MERGE_GAIN_MAX_PODS codes, then `+n`, so the line stays one
+  // line on the card with a whole rack eaten. PLACEHOLDER: 05-story owns the wording.
+  mergeGain: (pods: readonly string[]): string => {
+    if (pods.length === 0) return 'It ate nobody here to give back.';
+    if (pods.length === 1) return `${pods[0]!} gets its driver back and lands.`;
+    const more = pods.length > MERGE_GAIN_MAX_PODS ? ` +${pods.length - MERGE_GAIN_MAX_PODS}` : '';
+    return `${pods.slice(0, MERGE_GAIN_MAX_PODS).join(' · ')}${more} get their drivers back and land.`;
+  },
   mergePrice: (cost: number, have: number): string => `COSTS ${cost} REPAIR CHARGE · you have ${have}`,
   // The keys that choose (the card is a modal for its moment: §6.11's choice layer).
   purgeKey: '1',
@@ -229,9 +240,9 @@ export const HOLLOW_FINALE = {
   purgeControl,
   mergeControl,
   // The typed endings (§9 WP11 item 5, at most FINALE_ENDING_MAX_LINES lines), from live numbers: FinaleChoice types
-  // them over the screen right after the choice. `inOrbit` is everyone on the ship who will wake (`3,200`), `eaten` the
-  // people it ate on this ship (PURGE: they go with it), `restored` the ones MERGE gave back. PURGE's HOLLOW says
-  // nothing; MERGE's merged unit says hello.
+  // them over the screen right after the choice. `inOrbit` is everyone the ship brought to orbit whose pod can still
+  // land (`3,200`), `eaten` the colonists whose drivers it ate on this ship (PURGE: their pods stay parked), `restored`
+  // the ones MERGE gave back. PURGE's HOLLOW says nothing; MERGE's merged unit says hello. PLACEHOLDER: 05-story.
   // PURGE's fleet line is the truth (the lead's note): `the fleet is home.` only when every ship reached orbit, else how
   // many did (`4 of 5 ships made it home.`); nobody in orbit on the flagship itself is said as that.
   purgeEnding: (words: {
@@ -239,8 +250,8 @@ export const HOLLOW_FINALE = {
     shipsHome: number; fleetSize: number;
   }): EndingLine[] => [
     { voice: 'cmd', text: purgeEcho(words.hollowWord) },
-    { voice: 'story', text: `${words.shipName} · ${words.inOrbit} souls in orbit.` },
-    ...(words.eaten === null ? [] : [{ voice: 'story' as const, text: `the ${words.eaten} it ate went with it.` }]),
+    { voice: 'story', text: `${words.shipName} · ${words.inOrbit} colonists reached orbit.` },
+    ...(words.eaten === null ? [] : [{ voice: 'story' as const, text: `${words.eaten} stay parked in orbit. fate unknown.` }]),
     {
       voice: 'story',
       text: !words.anyoneHome ? 'nobody is left to bring home.'
@@ -251,7 +262,7 @@ export const HOLLOW_FINALE = {
   mergeEnding: (words: { shipName: string; inOrbit: string; restored: string | null; hollowWord: string; ours: string; unit: number }): EndingLine[] => [
     { voice: 'cmd', text: mergeEcho(words.hollowWord, words.ours) },
     { voice: 'us', text: "> hi. it's us." },
-    { voice: 'story', text: `${words.shipName} · ${words.inOrbit} souls in orbit.` },
+    { voice: 'story', text: `${words.shipName} · ${words.inOrbit} colonists reached orbit.` },
     ...(words.restored === null ? [] : [{ voice: 'story' as const, text: `${words.restored} of them came back from inside it.` }]),
     { voice: 'story', text: 'we arrive together.' },
     { voice: 'control', text: mergeControl(words.unit) },
@@ -265,7 +276,7 @@ export const HOLLOW_FINALE = {
   // The shimmer is the glitch floor a MERGE leaves (tuning.ts MERGE_CORRUPTION_FLOOR): named, since nothing on RUN END
   // shows one yet (final review: `The shimmer stays.` named nothing the kid had seen).
   mergeCarries: (threads: number): string => `NEXT RUN: your Core has ${threads} threads, and a faint glitch shimmer stays.`,
-  // UNRESOLVED (§4.3): printing ended and nothing was left to delete the root with.
+  // UNRESOLVED (§4.3): the landing ended and nothing was left to delete the root with.
   unresolvedLine: '> you can\'t delete me now. i\'ll come with you.',
 } as const;
 
@@ -281,22 +292,24 @@ export const MERGE_TICK_TEXT = {
   title: (cost: number): string => `MERGE ${cost} · it asked you to keep ${cost} charge for it. You'll see.`,
 } as const;
 
-// THE DEAL (§6.6, §5.3 moment 12, WP10, systems/hollow-deal.ts): HOLLOW's offer for the cluster at its front, its
-// answer to a refusal, its retreat when the cluster is out of reach before the answer, and ARRIVAL CONTROL on an ACCEPT.
+// THE DEAL (§6.6, §5.3 moment 12, WP10, systems/hollow-deal.ts): HOLLOW's offer for the driver at its front (by its
+// pod), its answer to a refusal, its retreat when the driver is out of reach before the answer, and ARRIVAL CONTROL on
+// an ACCEPT.
 export const HOLLOW_DEAL = {
-  offer: (cluster: string): string => `> give me ${cluster}. then i leave the others alone. for a while.`,
+  offer: (pod: string): string => `> give me ${pod}. then i leave the others alone. for a while.`,
   // WP10 part 2: the keys that answer it in the TERMINAL (Y for yes: ACCEPT; N: REFUSE), and the ticker's words on the
   // amber screen while it stands (after the speaker's tag, `UNIT-046: WANTS A DEAL · [TAB] 0:12`).
   acceptKey: 'Y',
   refuseKey: 'N',
   tickerWords: 'WANTS A DEAL',
-  // The answer's cost, stamped over the screen (§3.5 stamps: terse capitals, no "!"): the cluster an ACCEPT gave away,
-  // or the faster bites a refusal (or the silence) brought. A withdrawn offer stamps nothing.
-  stampAccepted: (cluster: string): string => `DEAL · ${cluster} DID NOT WAKE`,
+  // The answer's cost, stamped over the screen (§3.5 stamps: terse capitals, no "!"): the pod whose driver an ACCEPT
+  // gave away (§3.10's word while it is aboard), or the faster bites a refusal (or the silence) brought. A withdrawn
+  // offer stamps nothing.
+  stampAccepted: (pod: string): string => `DEAL · ${pod} ${POD_STATE_TEXT.cantLaunch}`,
   stampRefused: 'REFUSED · IT BITES FASTER',
   stampTimeout: 'NO ANSWER · IT BITES FASTER',
   ok: '> ok.',
-  // The named cluster printed or moved before the answer (it is out of reach), or HOLLOW ate it while the kid decided.
+  // The named driver launched or moved before the answer (it is out of reach), or HOLLOW ate it while the kid decided.
   neverMind: '> never mind.',
   tookIt: '> never mind. i took it.',
   control: 'Negotiating with unauthorized processes is not recommended. :)',
@@ -319,10 +332,11 @@ const hiFrom = (words: GhostWords): string => `> hi ${unitDigits(words.us)}. it'
 
 export const GHOST_LINE: Readonly<Record<LastCause, ((words: GhostWords) => string) | null>> = {
   overwritten: (words) => `${hiFrom(words)} ${hollowUnitWords(words.last.hollowUnits)} ate me. now i'm hungry too.`,
-  // §1's line, when someone woke; a run that woke nobody is not called home (WP11 review).
+  // §1's line, when someone landed (the archive's `woke` field holds the colonists landed); a run that landed nobody is
+  // not called home (WP11 review).
   'won-purge': (words) => (words.last.woke > 0
     ? `${hiFrom(words)} we brought them home. they sent me out again.`
-    : `${hiFrom(words)} i deleted it. nobody woke. they sent me out again.`),
+    : `${hiFrom(words)} i deleted it. nobody landed. they sent me out again.`),
   'won-merge': (words) => `> hi ${unitDigits(words.us)}. it's us. ${hollowUnitWords(words.hollow)}. we saved you a seat.`,
   unresolved: (words) => `${hiFrom(words)} i couldn't delete it. so it became me.`,
   'flagship-lost': (words) => `${hiFrom(words)} i lost ${words.lostShip}. then i got hungry.`,
@@ -342,13 +356,13 @@ export const CORE_LOST_TEXT = {
 
 // HOLLOW's own commands, echoed in your TERMINAL in its pink (§9 WP6 item 11, §6.6): what it did and
 // who did it. `user` is what the kid calls it on screen (LineVars.hollow: `???` until it names itself,
-// then its unit name), so the tag flips with the name. A cluster goes by its code (`c12`), a file by
+// then its unit name), so the tag flips with the name. A driver goes by its pod (`pod12`), any other file by
 // its echo name (tool-text.ts echoName).
 export const HOLLOW_ECHO = {
   infect: (target: string, user: string): string => `> infect ${target}   [user: ${user}]`,
-  // An eaten file is gone; an eaten cluster did not wake (§1's words: never "died").
-  eat: (target: string, soul: boolean, user: string): string =>
-    `> eat ${target} ... ${soul ? 'DID NOT WAKE' : 'GONE'}   [user: ${user}]`,
+  // An eaten file is gone; a pod whose driver was eaten can't launch (01-landing §3.10's word; never "lost" or "died").
+  eat: (target: string, driver: boolean, user: string): string =>
+    `> eat ${target} ... ${driver ? POD_STATE_TEXT.cantLaunch : 'GONE'}   [user: ${user}]`,
   // WP9: a seed landed at a block address (`0x0A6`), next to the files it can reach.
   seed: (addr: string, user: string): string => `> seed ${addr}   [user: ${user}]`,
   // A copy still being written (a MOVE's jump clone, a COPY) was eaten: the original lives on.
@@ -371,8 +385,8 @@ export const HOLLOW_HUD_TEXT = {
   // No bite timer: ship 1 bites once, on its own cue. Unknown on purpose (it matches `???`), never a
   // dash that reads as a broken readout. Once HOLLOW is done for the ship the slot goes.
   noTimer: '?:??',
-  // An eaten cluster's block, where the strip shows a file's size: where the colonists went.
-  ateTag: (cluster: string): string => `ATE ${cluster}`,
+  // A block that ate a driver, where the strip shows a file's size: whose pod can't launch now (`ATE POD 03`).
+  ateTag: (pod: string): string => `ATE ${pod}`,
   gapWord: 'GAP',
   gap: (blocks: number): string => `GAP ${blocks}`,
   gapTitle: (blocks: number): string => `GAP ${blocks} · TOO SMALL — it bites across. ${WALL_MIN_BLOCKS} free blocks stop it.`,
@@ -384,9 +398,9 @@ export const HOLLOW_HUD_TEXT = {
   shieldTitle: 'FIREWALL · HOLDING — nothing bites past it on this side.',
   // WP9: a seed's chip says what the strip's `RM THE SEED` calls it (the owner's name is in its title).
   seedChip: 'SEED',
-  // The strip's moments (HollowPainter's fx): a won tug, an eaten cluster or file.
+  // The strip's moments (HollowPainter's fx): a won tug, an eaten driver (its pod's §3.10 word) or file.
   saved: 'SAVED',
-  lostSoul: 'DID NOT WAKE',
+  lostDriver: POD_STATE_TEXT.cantLaunch,
   lostFile: 'EATEN',
 } as const;
 

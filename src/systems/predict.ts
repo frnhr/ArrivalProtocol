@@ -28,7 +28,7 @@ import {
 // plus a cached instance refreshed from the game tick (mountPredictor / getPrediction).
 //
 // Scalars come from exact two-body (Kepler) math: event times, rp/ra, the ring fit and the
-// printer range. That makes every countdown exact and monotonic. The numeric propagation,
+// band coverage. That makes every countdown exact and monotonic. The numeric propagation,
 // with the same integrator the sim uses, only produces the drawn points and their colour
 // spans (and is the seam where drag will go, so the line never lies).
 
@@ -112,20 +112,20 @@ export interface Prediction {
   // On an impact course, the preset that lifts ▼ out of the planet (liftPreset, guidance's F4); null otherwise.
   liftPreset: PresetMode | null;
   fit: RingFit;
-  greenFraction: number;     // printer range: time-weighted fraction of the loop in the ring
+  greenFraction: number;     // band coverage: time-weighted fraction of the loop in the ring
   burnPoint: BurnPoint | null; // null on an impact course, in the ring, with an empty tank, or cannotClose
   neededPct: number;         // FUEL % the next burn costs (0 when none)
   // The tank is short of that burn, judged on the same snapshot as the plan (LEAD-2: against the live FUEL the 10 Hz
   // NEEDED went stale between refreshes, and a held trim's KEEP HOLDING line flickered at the boundary).
   fuelShort: boolean;
   // ACCEPT ORBIT is the only way on: the plan's next burn is a trim the tank can't pay for in full (for a
-  // first of two, both trims), and even the whole tank spent on it at its apsis leaves a loop the printers
+  // first of two, both trims), and even the whole tank spent on it at its apsis leaves a loop the launch band
   // can't reach (the lead's Rule 4, LEAD-1 review rounds 1–3; LEAD-2: only the FUEL is ever to blame, since
   // the coast SKIP crosses any WAIT in seconds). Decided only while nothing burns (a held burn's plan changes
   // under it), then latched for the rest of the flight (burn.acceptOnly): the strip names ACCEPT ORBIT, SKIP
   // is refused, and no countdown points at the burn that was dropped.
   acceptOnly: boolean;
-  // ...and that ACCEPT strands the ship (§4.3): the strip says no burn reaches the printers. While a burn
+  // ...and that ACCEPT strands the ship (§4.3): the strip says no burn reaches the launch band. While a burn
   // still saves the ship, the strip keeps its WAIT and SKIP, and names ACCEPT only when that does not strand.
   strandedAnyway: boolean;
 }
@@ -485,7 +485,7 @@ function shrinkWaitsLong(input: BurnInputs, path: RetroPath, step: number): bool
 // The shrink, or null for none.
 // • A tank that can't pay for the trims gets none: a shrink that leaves the kid unable to finish is not
 //   progress (WP1-rules deviation 2), and the trim, with the whole tank at its apsis, ends on a better loop
-//   than braking now would (a LEAD-2 probe: 84% against 48% printer range
+//   than braking now would (a LEAD-2 probe: 84% against 48% band coverage
 //   with 30% FUEL after 60 s of ignoring the capture). Its WAIT, hours of game time, is seconds of SKIP.
 // • A hold pressed for the shrink keeps its plan only while the tank still pays for the trims after it:
 //   held past that, the plan just ends (null), F5 says RELEASE, and what the tank pays for after the release
@@ -528,7 +528,7 @@ interface ApsisBurn {
   dvKmS: number;
 }
 
-// Would the whole tank, burned at once at the trim's apsis, still leave a loop the printers can't reach
+// Would the whole tank, burned at once at the trim's apsis, still leave a loop out of the launch band
 // (or one into the planet)? Impulsive, at the apsis the trim is centred on. Only asked of a trim the tank
 // can't pay for, so the burn stops short of the trim's own aim and the loop stays closed. The strand line is
 // cleared by STRAND_LINE_MARGIN: the real burn is spread around the apsis and ends a little short of the
@@ -565,10 +565,10 @@ function secondTrimOf(fit: RingFit, first: BurnPoint, ring: Ring, mu: number): A
 }
 
 // The tank falls short of the trim's whole fix, and even the whole tank spent on it at its apsis leaves a loop
-// the printers can't reach (Rule 4: the FUEL is to blame, so ACCEPT ORBIT is the only way on). For the first of
+// out of the launch band (Rule 4: the FUEL is to blame, so ACCEPT ORBIT is the only way on). For the first of
 // two trims the fix is both burns (LEAD-1 review round 3): the first does not lock the orbit by itself. After a
 // capture with ▼ under the ring, the PRO at ▲ cost 0.1% and the RETRO at ▼ after it 31%; with 10–30% FUEL the
-// first counted as paid. A tank short of the fix whose burn still reaches the printers keeps its trim and WAIT:
+// first counted as paid. A tank short of the fix whose burn still reaches the launch band keeps its trim and WAIT:
 // held to the empty tank at the apsis it ends ORBIT ACCEPTED (§6.2's fuel-out on a closed loop).
 function unpaidFixStrands(fit: RingFit, trim: BurnPoint, fuelDvKmS: number, mu: number, ring: Ring, surfaceR: number): boolean {
   if (trim.event === 'now') throw new Error(`unpaidFixStrands: the ${trim.reason} burn is not a trim`);
@@ -1429,7 +1429,7 @@ export function currentPrediction(): Prediction {
 
 // --- What the instruments show (WP4, §3.3 C3, §6.2) ----------------------------------------------
 //
-// Damage never alters the TRUE prediction: the lock, the printer range, pace and the moments
+// Damage never alters the TRUE prediction: the lock, the band coverage, pace and the moments
 // (flight-events) read getPrediction(). Everything the kid reads, and guidance, read the SENSED
 // one, which is the true prediction as the Sensor Interp file can report it:
 // • exact (ok): the true prediction itself;

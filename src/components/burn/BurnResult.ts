@@ -43,7 +43,7 @@ export function mountBurnResult(store: Store<GameState>): () => void {
   const root = requireById('burnResult');
   const titleEl = requireById('burnResultTitle');
   const subEl = requireById('burnResultSub');
-  const soulsEl = requireById('burnResultSouls');
+  const podsEl = requireById('burnResultPods');
   const retryEl = requireById('burnResultRetry');
 
   // Cosmetic, wall clock: the card is presentation, and the flight is already over.
@@ -56,14 +56,14 @@ export function mountBurnResult(store: Store<GameState>): () => void {
   // The pods line (01-landing §3.10, one word per state): the pods still aboard are NOT LAUNCHED when the ship left
   // orbit with them, PARKED IN ORBIT when it ended there (a Core eaten mid-landing, STRANDED), and the colonists who
   // made it down first are counted after them.
-  function showSouls(): void {
+  function showPods(): void {
     const state = store.getState();
     const tally = landingResult(state, shipOutcomeOf(state));
     const notLaunched = tally.pods.filter((pod) => pod.fate === 'not-launched').length;
     const parked = tally.parked.length;
     const landed = tally.pods.filter((pod) => pod.fate === 'down').reduce((sum, pod) => sum + pod.colonists, 0);
-    soulsEl.hidden = false;
-    soulsEl.textContent = notLaunched > 0 ? LOST_CARD_TEXT.podsFate(notLaunched, POD_STATE_TEXT.notLaunched, landed)
+    podsEl.hidden = false;
+    podsEl.textContent = notLaunched > 0 ? LOST_CARD_TEXT.podsFate(notLaunched, POD_STATE_TEXT.notLaunched, landed)
       : parked > 0 ? LOST_CARD_TEXT.podsFate(parked, POD_STATE_TEXT.parked, landed) : LOST_CARD_TEXT.allDown(landed);
   }
 
@@ -72,15 +72,15 @@ export function mountBurnResult(store: Store<GameState>): () => void {
     titleEl.textContent = title;
     root.dataset.outcome = outcome;
     subEl.textContent = sub;
-    soulsEl.hidden = true;
+    podsEl.hidden = true;
     showTimer = setTimeout(() => {
       root.hidden = false;
       showTimer = null;
-      showSouls();
+      showPods();
     }, RESULT_BANNER_DELAY_MS);
   }
 
-  // CORE LOST (WP6): HOLLOW ate the AI Core, in flight or while printing; its button is EMERGENCY TRANSMIT
+  // CORE LOST (WP6): HOLLOW ate the AI Core, in flight or while landing; its button is EMERGENCY TRANSMIT
   // (or the run's end on the last ship).
   function render(phase: RunPhase, status: BurnStatus, coreLost: boolean): void {
     const state = store.getState();

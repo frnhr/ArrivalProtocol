@@ -3,7 +3,8 @@
 // guidance → pace → hollow → printer → data/script → flight-controls → guidance; flight-controls and script read
 // imported values at load (PRESET_KEY, SHIP_SCREEN_REFUSAL), so an entry reaching the cycle through guidance, director
 // or flight-controls threw a ReferenceError, and the game only loaded because main.ts imports pace first.
-// Each module runs in its own tsx process (module singletons and load order are per process), 8 at a time.
+// Each module runs in its own process (module singletons and load order are per process), 4 at a time (the unit tier's
+// workers), under `node --import tsx` rather than the tsx CLI, which would start a second node process per module.
 import { spawn } from 'node:child_process';
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { check, finish } from '../../wp1/harness';
@@ -11,7 +12,7 @@ import { check, finish } from '../../wp1/harness';
 // Modules that touch the browser at load (the store instance reads window): not DOM-free, so not loadable headless by design.
 const BROWSER_ONLY = new Set(['state/instance.ts']);
 const DIRS = ['systems', 'data', 'state'];
-const PARALLEL = 8;
+const PARALLEL = 4;
 const ENTRY_DIR = 'tests/.out/entries';
 mkdirSync(ENTRY_DIR, { recursive: true });
 
@@ -22,7 +23,9 @@ function load(module: string): Promise<string | null> {
   const entry = `${ENTRY_DIR}/${module.replace(/[/.]/g, '_')}.ts`;
   writeFileSync(entry, `import * as loaded from '@/${module.replace(/\.ts$/, '')}';\nconsole.log(Object.keys(loaded).length);\n`);
   return new Promise((resolve) => {
-    const child = spawn('node_modules/.bin/tsx', ['--tsconfig', 'tsconfig.json', entry], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, ['--import', 'tsx', entry], {
+      stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, TSX_TSCONFIG_PATH: 'tsconfig.json' },
+    });
     let err = '';
     child.stderr.on('data', (chunk: Buffer) => { err += chunk.toString(); });
     child.on('close', (code) => resolve(code === 0 ? null : (err.split('\n').find((line) => /Error/.test(line)) ?? `exit ${code}`)));

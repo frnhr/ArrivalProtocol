@@ -1,6 +1,13 @@
 // Slice 1a, Track UI: the landing's screen models (src/systems/landing-hud.ts, the landing parts of flight-hud.ts and
 // hollow-hud.ts). Pure: a world from the foundation's constructors (createInitialState, beginLanding), the ship put on a
 // circular orbit by hand, the drop solved by landing-solve directly (no store, no mounts, nothing flown).
+//
+// The words: 05-story rewrites the landing's placeholder text (data/landing-text.ts), so this suite pins exactly only
+// what is decided: §3.10's state words (CAN'T LAUNCH, PARKED IN ORBIT, NOT LAUNCHED), the key hint on the launch button
+// ([L]), the numbers and their formats (`0/3`, `3/4`, `±78 km`, `0:12`, `mm:ss`, the bay's ▮▯ glyphs, ★ and ✓), the
+// names the data gives (LZ-A, POD 01, OKAFOR, KEPLER-186F), the decided flight words (ORBIT LOCKED) and the refusals by
+// their key. Every other line is checked by its structure (`says`): it holds the LZ, the counts and the numbers it is
+// about, fits its cap, and uses none of the never-say words.
 import { check, finish } from './checks';
 import type { GameState } from '@state/schema';
 import type { DropSolution, LaunchRecord, PodFate } from '@/types/landing';
@@ -18,8 +25,23 @@ import {
 import { countdownChip, headerCrumbs, toggleAlert } from '@systems/flight-hud';
 import { miniStripRows } from '@systems/hollow-hud';
 import { isDriver } from '@state/selectors';
-import { BAND_TEXT } from '@data/landing-text';
-import { BAY_SLOTS, GROUND_TRACK_SPAN_KM } from '@data/tuning';
+import { BAND_TEXT, DRIVER_DETAIL_TEXT, LAUNCH_REFUSAL_TEXT, MINI_LANDING_TEXT, LANDING_HUD_TEXT, POD_STATE_TEXT } from '@data/landing-text';
+import { BAY_SLOTS, GROUND_TRACK_SPAN_KM, MAX_LINE_CHARS } from '@data/tuning';
+
+// A chip's cap (brackets, counters, the countdown chip, the mini-HUD, the bay's tags): these sit on the NAV PLOT's rim,
+// the GROUND TRACK and the narrow mini-HUD, where today's longest (`[ LZ-A · 0/3 ]`) is 14. 24 leaves 05 room.
+const CHIP_CHARS = 24;
+// The landing spec's never-say words (01-landing §3.10, §6): no phase-2 words, no IMPACT, a pod is never lost.
+const NEVER_SAY = /\b(?:woke|wake|souls?|clusters?|print\w*|scatter|deorbit|insertion|impact|lost|offline|not recovered)\b/i;
+const CANT = POD_STATE_TEXT.cantLaunch;
+
+// A placeholder line by its structure: it holds every part (a string or a pattern), fits `cap`, says no never-say word.
+function says(name: string, text: string | null | undefined, parts: readonly (string | RegExp)[], cap = MAX_LINE_CHARS): void {
+  const t = text ?? '';
+  const missing = parts.filter((part) => (typeof part === 'string' ? !t.includes(part) : !part.test(t)));
+  check(name, text != null && missing.length === 0 && t.length <= cap && !NEVER_SAY.test(t),
+    `${JSON.stringify(t)} (${t.length}/${cap})${missing.length > 0 ? ` missing ${missing.map(String).join(', ')}` : ''}`);
+}
 
 const DEG = Math.PI / 180;
 const NO_PRED = {} as Prediction;   // the landing's chip and alert read the drop solution, not the flight's prediction
@@ -77,6 +99,11 @@ function down(state: GameState, sol: DropSolution, pod: number, place: 'lz' | 'm
   setFate(state, pod, { kind: 'down', launch, touchdown: { place, lz, points: 200, missKm: null, touch, atAi: 3.5 } });
 }
 
+// --- The decided words (§3.10: one word per state; 05 may not reword these) ---
+
+check("the state words: CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNCHED", POD_STATE_TEXT.cantLaunch === "CAN'T LAUNCH"
+  && POD_STATE_TEXT.parked === 'PARKED IN ORBIT · fate unknown' && POD_STATE_TEXT.notLaunched === 'NOT LAUNCHED');
+
 // --- ARES-VII, LZ-A at 160° (WIDE), the dot dead centre ---
 
 {
@@ -85,9 +112,12 @@ function down(state: GameState, sol: DropSolution, pod: number, place: 'lz' | 'm
   const sol = aim(state, lzA.centreRad);
   check('window: the dot in LZ-A at 6,000 km is a sure window', state.landing.window?.lz === 'LZ-A' && state.landing.window.sure,
     JSON.stringify(state.landing.window));
-  check('counters: LZ-A 0/3', lzCounters(state).map((c) => c.text).join() === 'LZ-A 0/3');
+  const counters = lzCounters(state);
+  check('counters: one, LZ-A, 0 of 3', counters.length === 1 && counters[0]!.lz === 'LZ-A' && counters[0]!.down === 0 && counters[0]!.count === 3);
+  says('counters: the text holds LZ-A 0/3', counters[0]?.text, ['LZ-A', '0/3'], CHIP_CHARS);
   const brackets = bracketModels(state, sol);
-  check('brackets: LZ-A sure (green) while the whole dot fits', brackets[0]?.look === 'sure' && brackets[0].label === 'LZ-A 0/3');
+  check('brackets: LZ-A sure (green) while the whole dot fits', brackets[0]?.look === 'sure');
+  says('brackets: the label holds LZ-A 0/3', brackets[0]?.label, ['LZ-A', '0/3'], CHIP_CHARS);
   const dot = dropDotModel(state, sol)!;
   check('dot: ±78 km at 6,000 km, whole in LZ-A, centred', Math.round(dot.halfWidthKm) === 78 && dot.fits === 'whole'
     && dot.lz === 'LZ-A' && dot.centredness! > 0.98, `±${dot.halfWidthKm.toFixed(1)} ${dot.fits} ${dot.centredness?.toFixed(3)}`);
@@ -100,32 +130,41 @@ function down(state: GameState, sol: DropSolution, pod: number, place: 'lz' | 'm
     && Math.abs((bracket.from + bracket.to) / 2 - 0.5) < 0.01, JSON.stringify(bracket));
   check('ground track: the bracket is 500 km of the 3,000 km strip', bracket !== undefined
     && Math.abs((bracket.to - bracket.from) * GROUND_TRACK_SPAN_KM - 500) < 1);
-  check('ground track: `[ LZ-A · 0/3 ]`, sure', bracket?.label === '[ LZ-A · 0/3 ]' && bracket.look === 'sure');
-  check('ground track: the dot reads DROP ±78 km', track.strip.dot?.text === 'DROP ±78 km' && track.strip.dot.fits === 'whole');
+  check('ground track: the bracket is sure', bracket?.look === 'sure');
+  says('ground track: the bracket holds LZ-A 0/3', bracket?.label, ['LZ-A', '0/3'], CHIP_CHARS);
+  check('ground track: the dot fits whole', track.strip.dot?.fits === 'whole');
+  says('ground track: the dot reads its width, ±78 km', track.strip.dot?.text, [/±78 km/], CHIP_CHARS);
   check('ground track: plains glyph', track.strip.terrain[0]?.glyph === terrainGlyph('PLAINS') && terrainGlyph('OCEAN') === '≈');
   check('ground track: the planet line holds the strip around the dot', track.planet.dot !== null
     && track.planet.view.from < track.planet.dot && track.planet.view.to > track.planet.dot);
   state.landing.colony = 'RIVERSIDE';
-  check('ground track: header names the colony once it has one', groundTrackModel(state, sol).header === 'KEPLER-186F · RIVERSIDE');
+  says('ground track: header names the colony once it has one', groundTrackModel(state, sol).header, [/^KEPLER-186F\b/, 'RIVERSIDE']);
 
   const bay = bayWindowModel(state, sol);
-  check('bay: [ L · LAUNCH POD ] goes', bay.launch.label === '[ L · LAUNCH POD ]' && bay.launch.look === 'go', bay.launch.status);
+  check('bay: the launch button goes', bay.launch.look === 'go', bay.launch.status);
+  says('bay: the launch button carries its key, [L]', bay.launch.label, [/\[\s*L\b/]);
   // Four slots loaded, three pods: the bay shows what could go (§2: `BAY ▮▮▮▯ 3/4` at ORBIT LOCK).
-  check('bay: BAY ▮▮▮▯ 3/4 with three pods', bay.bay.text === 'BAY ▮▮▮▯ 3/4' && bay.bay.loaded === BAY_SLOTS, bay.bay.text);
-  check('bay: NEXT POD 01 · OKAFOR · SOFT · ±78 km', bay.nextText === 'NEXT POD 01 · OKAFOR · SOFT · ±78 km', bay.nextText);
-  check('bay: END LANDING asks about the 3 pods', bay.endLanding.confirm === '3 PODS WILL BE PARKED IN ORBIT · NOT COUNTED');
+  check('bay: all four slots loaded', bay.bay.loaded === BAY_SLOTS && bay.bay.shown === 3, JSON.stringify(bay.bay));
+  says('bay: ▮▮▮▯ 3/4 with three pods, no reload', bay.bay.text, ['▮▮▮▯ 3/4', /^(?!.*\d:\d\d)/]);
+  says('bay: NEXT names POD 01 · OKAFOR, SOFT, ±78 km', bay.nextText, ['POD 01', 'OKAFOR', /\bSOFT\b/, '±78 km']);
+  says('bay: END LANDING asks about the 3 pods, PARKED IN ORBIT', bay.endLanding.confirm, ['3 PODS', 'PARKED IN ORBIT']);
 
   const chip = countdownChip(state, NO_PRED, sol);
-  check('chip: `LZ-A OPEN` counts to the close', chip?.kind === 'window' && chip.label === 'LZ-A OPEN' && /^\d\d:\d\d$/.test(chip.time),
-    JSON.stringify(chip));
+  check('chip: a window chip counting mm:ss to the close', chip?.kind === 'window' && /^\d\d:\d\d$/.test(chip.time), JSON.stringify(chip));
+  const openWord = chip?.label.replace('LZ-A', '').trim() ?? '';
+  says('chip: names LZ-A (open)', chip?.label, ['LZ-A'], CHIP_CHARS);
   state.ui.mode = 'memory';
   const alert = toggleAlert(state, NO_PRED);
-  check('toggle: `◀ SHIP · LZ-A OPEN` from blue during a window', alert?.head === '◀ SHIP ·' && alert.body === 'LZ-A OPEN', JSON.stringify(alert));
+  check('toggle: from blue during a window, an alert back to the SHIP', alert !== null && alert.screen === 'tools', JSON.stringify(alert));
+  says('toggle: says LZ-A is open, as the chip does', alert === null ? null : `${alert.head} ${alert.body}`, ['LZ-A', openWord], CHIP_CHARS);
   const bayHidden = bayWindowModel(state, sol);
   check('bay: from blue the button still reads what [L] does in amber', bayHidden.launch.look === 'go');
   state.ui.mode = 'tools';
   check('ring: LAUNCH BAND while landing', ringLabel(state) === BAND_TEXT.ringLanding);
-  check('mini-HUD: LZ-A OPEN, BAY ▮▮▮▮', miniHudLanding(state, sol)?.window?.text === 'LZ-A OPEN' && miniHudLanding(state, sol)?.bay === 'BAY ▮▮▮▯');
+  const mini = miniHudLanding(state, sol);
+  check('mini-HUD: the window is open', mini?.window?.open === true);
+  says('mini-HUD: the window names LZ-A', mini?.window?.text, ['LZ-A', openWord], CHIP_CHARS);
+  says('mini-HUD: the bay shows ▮▮▮▯', mini?.bay, ['▮▮▮▯'], CHIP_CHARS);
 }
 
 // --- The dot ahead of LZ-A: waiting for the window ---
@@ -138,12 +177,16 @@ function down(state: GameState, sol: DropSolution, pod: number, place: 'lz' | 'm
   check('away: LZ-A is the target bracket', bracketModels(state, sol)[0]?.look === 'target');
   check('away: no window tone', windowToneFraction(state, sol) === null);
   const track = groundTrackModel(state, sol);
-  check('away: LZ-A is off the strip, waiting at the right edge with its countdown',
-    track.strip.brackets.length === 0 && /^LZ-A ▸ \d+:\d\d$/.test(track.strip.ahead[0]?.text ?? ''), JSON.stringify(track.strip.ahead));
+  check('away: LZ-A is off the strip, waiting at the right edge', track.strip.brackets.length === 0 && track.strip.ahead.length >= 1,
+    JSON.stringify(track.strip.ahead));
+  says('away: the waiting LZ-A shows its m:ss countdown', track.strip.ahead[0]?.text, [/^LZ-A\b/, /\b\d+:\d\d$/], CHIP_CHARS);
   const chip = countdownChip(state, NO_PRED, sol);
-  check('away: chip `LZ-A IN mm:ss`', chip?.label === 'LZ-A IN' && chip.time !== '00:00', JSON.stringify(chip));
+  check('away: the chip counts mm:ss to the window, not yet 00:00', chip !== null && /^\d\d:\d\d$/.test(chip.time) && chip.time !== '00:00',
+    JSON.stringify(chip));
+  says('away: the chip names LZ-A, and is not the open chip', chip?.label, ['LZ-A', /^(?!.*\bOPEN\b)/], CHIP_CHARS);
   check('away: the bay asks first (off-site)', bayWindowModel(state, sol).launch.look === 'asks');
-  check('away: mini-HUD `LZ-A IN m:ss`', /^LZ-A IN \d+:\d\d$/.test(miniHudLanding(state, sol)?.window?.text ?? ''));
+  check('away: the mini-HUD window is not open', miniHudLanding(state, sol)?.window?.open === false);
+  says('away: the mini-HUD names LZ-A with an m:ss countdown', miniHudLanding(state, sol)?.window?.text, [/^LZ-A\b/, /\b\d+:\d\d$/], CHIP_CHARS);
   // Nearer: inside the strip, ahead of the dot (to the right).
   const near = aim(state, lzA.centreRad - 8 * DEG);
   const nearBracket = groundTrackModel(state, near).strip.brackets[0];
@@ -157,8 +200,8 @@ function down(state: GameState, sol: DropSolution, pod: number, place: 'lz' | 'm
   const high = aim(state, lzA.centreRad, state.level.ring.max + 2000);
   check('out of band: no window, the dot greys', state.landing.window === null && groundTrackModel(state, high).outOfBand
     && dropDotModel(state, high)?.inBand === false);
-  check('out of band: the bay refuses with the words', bayWindowModel(state, high).launch.look === 'blocked'
-    && bayWindowModel(state, high).launch.status === 'OUT OF THE LAUNCH BAND', bayWindowModel(state, high).launch.status);
+  check('out of band: the bay refuses with the refusal\'s words', bayWindowModel(state, high).launch.look === 'blocked'
+    && bayWindowModel(state, high).launch.status === LAUNCH_REFUSAL_TEXT['OUT OF THE LAUNCH BAND'], bayWindowModel(state, high).launch.status);
 }
 
 // --- Reload, BAY / NEXT, LOAD NEXT, the hurt driver ---
@@ -168,25 +211,30 @@ function down(state: GameState, sol: DropSolution, pod: number, place: 'lz' | 'm
   const sol = aim(state, state.landing.lzs[0]!.centreRad);
   state.landing.bay = { loaded: 3, reloadTac: 8, cadenceLeftTac: 1.2 };
   const bay = bayWindowModel(state, sol);
-  check('reload: BAY ▮▮▮▯ 3/4 · RELOAD 0:12', bay.bay.text === 'BAY ▮▮▮▯ 3/4 · RELOAD 0:12', bay.bay.text);
-  check('cadence: the button waits, RELOADING', bay.launch.look === 'blocked' && bay.launch.status === 'RELOADING', bay.launch.status);
+  // 8 tactical s into the reload: BAY_RELOAD_TAC (20) minus 8 leaves 0:12.
+  says('reload: ▮▮▮▯ 3/4 and the reload\'s 0:12', bay.bay.text, ['▮▮▮▯ 3/4', /\b0:12\b/]);
+  check('cadence: the button waits with the RELOADING refusal\'s words', bay.launch.look === 'blocked'
+    && bay.launch.status === LAUNCH_REFUSAL_TEXT.RELOADING, bay.launch.status);
   const tags = podTags(state);
-  check('tags: three in the BAY, POD 01 NEXT', tags.get(1) === 'NEXT' && tags.get(2) === 'BAY' && tags.get(3) === 'BAY', JSON.stringify([...tags]));
+  const { tagNext, tagBay } = DRIVER_DETAIL_TEXT;
+  check('tags: three in the bay, POD 01 next', tags.get(1) === tagNext && tags.get(2) === tagBay && tags.get(3) === tagBay
+    && (tagNext as string) !== tagBay && [tagNext, tagBay].every((tag) => tag.length <= CHIP_CHARS), JSON.stringify([...tags]));
   state.landing.loadNext = 3;
-  check('LOAD NEXT: POD 03 is NEXT', podTags(state).get(3) === 'NEXT' && bayWindowModel(state, sol).next?.pod === 3);
+  check('LOAD NEXT: POD 03 is next', podTags(state).get(3) === tagNext && bayWindowModel(state, sol).next?.pod === 3);
   state.landing.loadNext = null;
   const brandt = state.memory.find((seg) => isDriver(seg) && seg.pod === 2);
   if (!brandt || !isDriver(brandt)) throw new Error('no POD 02');
-  check('detail: POD 02 at 44% WILL LAND HARD, in the BAY', driverLanding(state, brandt, sol).text === 'WILL LAND HARD'
-    && driverLanding(state, brandt, sol).tag === 'BAY');
+  check('detail: POD 02 at 44% is in the bay', driverLanding(state, brandt, sol).tag === tagBay);
+  says('detail: POD 02 at 44% will land HARD', driverLanding(state, brandt, sol).text, [/\bHARD\b/, /^(?!.*\bSOFT\b)/]);
   const okafor = state.memory.find((seg) => isDriver(seg) && seg.pod === 1);
   if (!okafor || !isDriver(okafor)) throw new Error('no POD 01');
-  check('detail: POD 01 WILL LAND SOFT · DROP ±78 km, NEXT', driverLanding(state, okafor, sol).text === 'WILL LAND SOFT · DROP ±78 km'
-    && driverLanding(state, okafor, sol).tag === 'NEXT');
+  check('detail: POD 01 is next', driverLanding(state, okafor, sol).tag === tagNext);
+  says('detail: POD 01 will land SOFT, its drop ±78 km', driverLanding(state, okafor, sol).text, [/\bSOFT\b/, '±78 km']);
   brandt.integrity = 10;
-  check('detail: dead, CAN\'T LAUNCH — REPAIR IT', driverLanding(state, brandt, sol).text === "CAN'T LAUNCH — REPAIR IT");
-  check('footer: PODS: 3 ABOARD · 0 LANDED · 1 CAN\'T LAUNCH', footerPods(state).text === "PODS: 3 ABOARD · 0 LANDED · 1 CAN'T LAUNCH",
-    footerPods(state).text);
+  says("detail: dead, CAN'T LAUNCH (§3.10's word), and what to do", driverLanding(state, brandt, sol).text, [CANT, /REPAIR/]);
+  const foot = footerPods(state);
+  check('footer: 3 aboard, 0 landed, 1 can\'t launch', foot.aboard === 3 && foot.landed === 0 && foot.cantLaunch === 1, JSON.stringify(foot));
+  says("footer: the counts in order, 1 CAN'T LAUNCH", foot.text, [/\b3\b.*\b0\b.*\b1 CAN'T LAUNCH\b/]);
   const rows = miniStripRows(state);
   check('mini-strip: drivers are driver / driver-hurt', rows.flat().filter((cell) => cell.kind === 'driver').length === 2
     && rows.flat().filter((cell) => cell.kind === 'driver-hurt').length === 1);
@@ -211,7 +259,7 @@ function down(state: GameState, sol: DropSolution, pod: number, place: 'lz' | 'm
   check('plot: the arc is drawn while pods are aboard', plotLandingModel(state, sol)?.arc?.inBand === true);
   check('crumb: ORBIT LOCKED until the first pod is down', headerCrumbs(state, NO_PRED).phase.text === 'ORBIT LOCKED');
   down(state, sol, 1, 'lz', 'LZ-A');
-  check('crumb: LANDING · 1/3 DOWN', headerCrumbs(state, NO_PRED).phase.text === 'LANDING · 1/3 DOWN');
+  says('crumb: 1/3 down once the first pod is down', headerCrumbs(state, NO_PRED).phase.text, ['1/3', /^(?!ORBIT LOCKED)/], CHIP_CHARS);
   check('marks: ◘ for the pod down', landMarks(state).length === 1 && landMarks(state)[0]!.place === 'lz');
   check('ground track: the mark is on the strip', groundTrackModel(state, sol).strip.marks.length === 1);
   setFate(state, 2, { kind: 'parked', why: 'no-time', restorable: false });
@@ -221,12 +269,14 @@ function down(state: GameState, sol: DropSolution, pod: number, place: 'lz' | 'm
     && beacons.every((beacon) => Math.abs(Math.hypot(beacon.pos.x, beacon.pos.y) - 6000) < 1));
   check('plot: no arc and no dot once no pod is aboard', plotLandingModel(state, sol)?.arc === null && plotLandingModel(state, sol)?.dot === null);
   check('chip: nothing to count once every pod is away', countdownChip(state, NO_PRED, sol) === null);
-  check('mini-HUD: ALL PODS AWAY', miniHudLanding(state, sol)?.window?.text === 'ALL PODS AWAY');
+  check('mini-HUD: every pod away', miniHudLanding(state, sol)?.window?.text === MINI_LANDING_TEXT.allAway && miniHudLanding(state, sol)?.window?.open === false);
   down(state, sol, 2, 'lz', 'LZ-A');
   down(state, sol, 3, 'lz', 'LZ-A');
-  check('crumb: ALL DOWN', headerCrumbs(state, NO_PRED).phase.text === 'ALL DOWN');
-  check('brackets: LZ-A full', bracketModels(state, sol)[0]?.look === 'full' && bracketModels(state, sol)[0]?.label === 'LZ-A 3/3 ✓');
-  check('mini-HUD: ★ ON TARGET 3/3', miniHudLanding(state, sol)?.onTarget.text === '★ ON TARGET 3/3' && miniHudLanding(state, sol)?.onTarget.tone === 'good');
+  check('crumb: all down', headerCrumbs(state, NO_PRED).phase.text === LANDING_HUD_TEXT.crumbAllDown);
+  check('brackets: LZ-A full', bracketModels(state, sol)[0]?.look === 'full');
+  says('brackets: the full label holds LZ-A 3/3 ✓', bracketModels(state, sol)[0]?.label, ['LZ-A', '3/3', '✓'], CHIP_CHARS);
+  check('mini-HUD: on target, good', miniHudLanding(state, sol)?.onTarget.tone === 'good');
+  says('mini-HUD: ★ and 3/3 on target', miniHudLanding(state, sol)?.onTarget.text, [/^★/, '3/3'], CHIP_CHARS);
   state.run.phase = 'flight';
   check('flight: no landing layer, SAFE ORBIT · LAUNCH BAND', plotLandingModel(state, sol) === null && ringLabel(state) === BAND_TEXT.ringFlight);
 }
@@ -242,10 +292,15 @@ function down(state: GameState, sol: DropSolution, pod: number, place: 'lz' | 'm
   down(state, sol, 2, 'lz', 'LZ-A');
   down(state, sol, 3, 'lz', 'LZ-A');
   const bay = bayWindowModel(state, sol);
-  check('full: LZ-A FULL asks first', bay.launch.look === 'asks' && bay.launch.status === 'LZ-A FULL · asks first', bay.launch.status);
-  check('full: counters LZ-A 3/3 ✓, LZ-B 0/2', bay.lzs.map((c) => c.text).join(' | ') === 'LZ-A 3/3 ✓ | LZ-B 0/2');
+  check('full: [L] asks first', bay.launch.look === 'asks', bay.launch.status);
+  says('full: the bay says LZ-A is FULL', bay.launch.status, ['LZ-A', /\bFULL\b/]);
+  check('full: counters LZ-A full 3 of 3, LZ-B 0 of 2', bay.lzs.length === 2 && bay.lzs[0]!.lz === 'LZ-A' && bay.lzs[0]!.full
+    && bay.lzs[0]!.down === 3 && bay.lzs[1]!.lz === 'LZ-B' && !bay.lzs[1]!.full && bay.lzs[1]!.down === 0 && bay.lzs[1]!.count === 2);
+  says('full: LZ-A\'s counter 3/3 ✓', bay.lzs[0]?.text, ['LZ-A', '3/3', '✓'], CHIP_CHARS);
+  says('full: LZ-B\'s counter 0/2, no ✓', bay.lzs[1]?.text, ['LZ-B', '0/2', /^[^✓]*$/], CHIP_CHARS);
   const chip = countdownChip(state, NO_PRED, solve(state));
-  check('full: the chip aims at LZ-B (the LZ with room)', chip?.label === 'LZ-B IN', JSON.stringify(chip));
+  check('full: the chip counts to a window', chip !== null && /^\d\d:\d\d$/.test(chip.time), JSON.stringify(chip));
+  says('full: the chip aims at LZ-B (the LZ with room)', chip?.label, ['LZ-B', /^(?!.*LZ-A)/], CHIP_CHARS);
 }
 
 finish();

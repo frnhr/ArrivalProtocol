@@ -1,3 +1,4 @@
+// The colonist name pools for the pods' sleepers (the file keeps its phase-2 name: many modules import it).
 import type { Colonist } from '@/types/segment';
 import type { Rng } from '@systems/rng';
 import {

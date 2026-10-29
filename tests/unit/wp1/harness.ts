@@ -25,6 +25,8 @@ import { elementsFromState, ringFit } from '@/types/orbit';
 import { hasIntegrity, integrityState } from '@state/selectors';
 
 export const TICK = 0.05;
+// Every harness tick stepped in this process (AP_CHECK_TIMES prints it beside each check).
+let ticksStepped = 0;
 
 export interface Harness {
   store: Store<GameState>;
@@ -132,6 +134,7 @@ export function createHarness(seed = 1, opts: HarnessOpts = {}): Harness {
       wall = 0;
     },
     step(dtWall = TICK) {
+      ticksStepped++;
       advance(store, dtWall);
       wall += dtWall;
       // The strip the kid reads: the objective through the hysteresis filter, on AI time.
@@ -199,9 +202,15 @@ export function followStrip(h: Harness, reactionSec: number, maxWall: number, on
 // Tiny assertion kit: collect results, print PASS/FAIL lines, exit non-zero on any failure.
 const results: { name: string; ok: boolean; detail: string }[] = [];
 
+// AP_CHECK_TIMES=1 starts each line with the seconds since the suite started and the harness ticks stepped so far, to
+// find where a slow suite spends its time (the unit tier's budget: tests/unit/run.mjs). The ticks do not depend on how
+// busy the machine is.
+const STAMP_CHECKS = process.env.AP_CHECK_TIMES === '1';
+
 export function check(name: string, ok: boolean, detail = ''): void {
   results.push({ name, ok, detail });
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`);
+  const stamp = STAMP_CHECKS ? `[${process.uptime().toFixed(1).padStart(5)} s ${String(ticksStepped).padStart(7)} t] ` : '';
+  console.log(`${stamp}${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`);
 }
 
 // A suite that ran no check at all is a broken suite (a filter that matched nothing, an early return), not a pass

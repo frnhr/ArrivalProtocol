@@ -109,7 +109,7 @@ const launchConfirm: LaunchConfirm = (text, onYes) => askInline({
 // DetailPanel action buttons dispatch through this. The actions re-check everything at the click
 // (pause, operating, the target rules, a free thread), exactly as for a tool click. (SWAP is a tool
 // file since WP10: it is picked up like any tool, not a button here.) A panel rebuild can wait for a
-// press to land (guardPresses), so the file may have left memory under the button (printed): the
+// press to land (guardPresses), so the file may have left memory under the button (launched): the
 // click then has nothing to act on.
 function runAction(shown: Segment, action: DetailActionId): void {
   const seg = getSegmentById(store.getState(), shown.id);
@@ -204,7 +204,7 @@ const splitOverlay = mountSplitOverlay(memWrap);
 // Click decides apply-vs-select; hover drives split-overlay. Placement updates
 // flow through the fs-tools system's mousemove → placement bridge.
 // The strip holds a rebuild while a press is down (guardPresses), so a click can land on a chip
-// whose file left memory under it (printed, merged free space): it is resolved by id first.
+// whose file left memory under it (launched, merged free space): it is resolved by id first.
 const segBehavior = {
   onClick: (shown: Segment, event: MouseEvent): void => {
     const seg = getSegmentById(store.getState(), shown.id);

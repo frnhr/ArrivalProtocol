@@ -12,7 +12,8 @@ import { requireById, requireIn } from '@components/dom';
 // with it in blue.
 
 // The parts that ride in the bar, in the bar's order (top to bottom): the Engine window's, and (slice 1a, 01-landing §4
-// "LAUNCH joins PhoneFlightBar") the POD BAY's launch button, shown only while landing (body.landing).
+// "LAUNCH joins PhoneFlightBar") the POD BAY's launch button, shown only while landing (body.landing: its own rule in
+// landing.css, since the bar is outside the .landing-only window).
 const BAR_PARTS = [
   { window: '.engine-win', part: ':scope .engine-body > .fuel-block' },
   { window: '.engine-win', part: ':scope .engine-body .preset-row' },

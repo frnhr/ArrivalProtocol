@@ -35,7 +35,7 @@ function starsText(earned: number): string {
 }
 
 // The count rolls up in steps this big, so it reads as people arriving, not as a blur of digits.
-const COUNT_STEP_SOULS = 100;
+const COUNT_STEP_COLONISTS = 100;
 
 function shipRowNode(row: RunEndShipRow): HTMLElement {
   const node = make('div', `re-ship outcome-${row.outcome ?? 'none'}`);
@@ -44,7 +44,7 @@ function shipRowNode(row: RunEndShipRow): HTMLElement {
     make('span', 're-ship-name', row.shipName),
     make('span', 're-ship-outcome', row.outcomeWord),
     make('span', 're-ship-stars', row.result ? starsText(row.result.stars) : ''),
-    make('span', 're-ship-woke', row.landedLine),
+    make('span', 're-ship-landed', row.landedLine),
     // Slice 1a: the ship's landing points beside its LANDED (the run's SCORE is their sum).
     make('span', 're-ship-points', row.result ? RUN_END_TEXT.shipPoints(row.result.points) : ''),
   );
@@ -92,7 +92,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     const startMs = performance.now();
     const tick = (now: number): void => {
       const fraction = Math.min(1, (now - startMs) / 1000 / RUN_END_COUNT_SEC);
-      const shown = Math.round((report.landed * fraction) / COUNT_STEP_SOULS) * COUNT_STEP_SOULS;
+      const shown = Math.round((report.landed * fraction) / COUNT_STEP_COLONISTS) * COUNT_STEP_COLONISTS;
       totalEl.textContent = RUN_END_TEXT.total(fraction < 1 ? shown : report.landed, report.fleetColonists);
       frame = fraction < 1 ? requestAnimationFrame(tick) : null;
     };
@@ -107,7 +107,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     root.classList.toggle('tone-sombre', !victory);
     root.classList.toggle('ending-purge', report.ending === 'purge');
     root.classList.toggle('ending-merge', report.ending === 'merge');
-    play(victory ? 'revealChoir' : 'soulLost');
+    play(victory ? 'arrivalChoir' : 'sombreFall');
     rollCount(report);
     const rows = Array.from(shipsEl.children) as HTMLElement[];
     rows.forEach((row, i) => later(RUN_END_ROW_GAP_SEC * (i + 1), () => {

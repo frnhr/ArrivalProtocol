@@ -52,7 +52,9 @@ const jobs = [
   ...suites(join(ROOT, 'tests', 'unit'))
     .filter((file) => includes.length === 0 || includes.some((filter) => file.includes(filter)))
     .filter((file) => !excludes.some((filter) => file.includes(filter)))
-    .map((file) => ({ label: file, cmd: 'node_modules/.bin/tsx', args: ['--tsconfig', 'tsconfig.json', file] })),
+    // tsx's loader in the suite's own process (`node --import tsx`, the tsconfig from TSX_TSCONFIG_PATH below), not the
+    // tsx CLI, which starts a second node process to run the file: about 0.1 s of CPU a suite.
+    .map((file) => ({ label: file, cmd: process.execPath, args: ['--import', 'tsx', file] })),
 ];
 // Longest first by the last run's times; a suite never timed goes first (it may be slow).
 jobs.sort((a, b) => (known[b.label] ?? Infinity) - (known[a.label] ?? Infinity));
@@ -60,7 +62,7 @@ if (jobs.length < 2) { console.error(`no suite matches ${filterArgs.join(' ')}`)
 
 const started = Date.now();
 const results = [];
-const env = { ...process.env, AP_DEPTH: DEPTH };
+const env = { ...process.env, AP_DEPTH: DEPTH, TSX_TSCONFIG_PATH: 'tsconfig.json' };
 
 function runJob(job) {
   return new Promise((resolve) => {

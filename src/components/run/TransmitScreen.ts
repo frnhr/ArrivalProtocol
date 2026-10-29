@@ -17,7 +17,7 @@ import {
 } from '@data/tuning';
 
 // The TRANSMIT screen (§4.1 step 5, §6.9, §9 WP7 item 4): between two ships, the unit packed for the link.
-// Mostly information, in the mind's own blue: where it goes (`NEXT: HALCYON · 2,000 SOULS · 22 LY`), how
+// Mostly information, in the mind's own blue: where it goes (`NEXT: HALCYON · 2,000 COLONISTS · 22 LY`), how
 // it was left (an EMERGENCY's toll, BEAM OUT's extra hits), the packet against the link (a bar and `LINK 120
 // · FILES 63 · CHARGE 14 → FITS`), the files as chips (safest to leave behind first, each with what leaving
 // it does; locked ones say why; an infected one warns it will arrive infected), what the crossing costs and

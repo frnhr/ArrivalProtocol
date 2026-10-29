@@ -13,7 +13,7 @@ import { BOOT_ASSEMBLE_SEC, BOOT_ASSEMBLE_SETTLE_SEC } from '@data/tuning';
 // and starts the boot. During the boot the card turns into a transparent click catcher (any
 // click skips) while the memory strip assembles rack by rack, one soft tick per row. The logic
 // (phases, timing, keys) is in systems/boot.ts; this is the view.
-// The archive on the title (§4.5, §7.1, WP8): a returning unit's lineage line (`last: UNIT-047 · 6,200 woke ·
+// The archive on the title (§4.5, §7.1, WP8): a returning unit's lineage line (`last: UNIT-047 · 6,200 landed ·
 // overwritten at HALCYON`, in HOLLOW's pink: that unit is what is waiting in the memory) and ENDINGS n/2. When
 // the archive is not behind the page it says so in the warning red: OFFLINE (the browser will not keep
 // anything), PLAYING WITHOUT ARCHIVE, or CORRUPT, which offers WIPE ARCHIVE or PLAY WITHOUT ARCHIVE; RECEIVE

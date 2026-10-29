@@ -20,7 +20,9 @@ const harness = createHarness(1);
 const state = () => harness.store.getState();
 const ship = `ship ${HARNESS_SHIP + 1}`;
 const FEW_SKIP_SEC = SKIP_RAMP_SEC + SKIP_DIVISOR + SKIP_EASE_OUT_SEC + 1;
-const kids = ['obey', 0.3, 0.5] as const;
+const KIDS = ['obey', 0.3, 0.5] as const;
+// Quick depth (tests/unit/depth.ts): the instant and the slowest kid (as the other sweeps); full: all three.
+const kids = byDepth<readonly typeof KIDS[number][]>(['obey', 0.5], KIDS);
 
 function restore(snapshot: GameState, fuelPct: number): void {
   harness.reset(1);
@@ -31,7 +33,7 @@ function restore(snapshot: GameState, fuelPct: number): void {
 
 interface Flown { status: string; longestSkipSec: number; lines: string[] }
 
-function fly(kid: typeof kids[number]): Flown {
+function fly(kid: typeof KIDS[number]): Flown {
   let run = 0;
   let longest = 0;
   const lines: string[] = [];
@@ -57,7 +59,8 @@ function fly(kid: typeof kids[number]): Flown {
   const snapshot = structuredClone(state());
   const rows: string[] = [];
   let bad = '';
-  for (const fuelPct of [30, 32, 34, 38, 44]) {
+  // Quick depth: the band's ends and its middle; full: two more points.
+  for (const fuelPct of byDepth([30, 34, 44], [30, 32, 34, 38, 44])) {
     restore(snapshot, fuelPct);
     const pred = getPrediction();
     const offer = text(harness);
@@ -111,7 +114,7 @@ function fly(kid: typeof kids[number]): Flown {
       }
     }
   }
-  check(`${ship}: across the strand line (${(lineFuel - 2).toFixed(1)}–${(lineFuel + 2).toFixed(1)}% FUEL × 3 kids): every save the strip `
+  check(`${ship}: across the strand line (${(lineFuel - 2).toFixed(1)}–${(lineFuel + 2).toFixed(1)}% FUEL × ${kids.length} kids): every save the strip `
     + 'promises ends ACCEPTED or LOCKED, and the STRANDED line is shown only where the brake at ▼ really strands',
   bad === '' && saves > 0 && strandedLines > 0, bad || `${saves} saves flown, ${strandedLines} STRANDED lines`);
 }

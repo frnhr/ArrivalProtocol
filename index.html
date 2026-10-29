@@ -293,7 +293,7 @@
         <!-- Computed from memory by MemoryStats (labels too): the colonists, REPAIR CHARGE, free
              blocks, the damage you can see, and the memory's size -->
         <div class="mem-stats">
-          <div class="mem-stat"><span class="lbl">colonists</span><span class="v" id="statSouls"></span></div>
+          <div class="mem-stat"><span class="lbl">colonists</span><span class="v" id="statPods"></span></div>
           <div class="mem-stat"><span class="lbl">repair charge</span><span class="v" id="statRedund"></span><span class="merge-tick" id="statMergeTick" hidden></span></div>
           <div class="mem-stat"><span class="lbl">free</span><span class="v" id="statFree"></span></div>
           <div class="mem-stat"><span class="lbl">damage</span><span class="v" id="statDamage"></span></div>
@@ -375,7 +375,7 @@
 
   <div class="footer">
     <!-- PODS: 8 ABOARD · 3 LANDED · 1 CAN'T LAUNCH (Footer, landing-hud footerPods) -->
-    <div class="item"><span id="footSouls"></span></div>
+    <div class="item"><span id="footPods"></span></div>
     <div class="item"><span id="footBurn">FLIGHT · FLYING</span></div>
     <div class="spacer"></div>
     <!-- WP8: the archive is not keeping this unit (offline, or played without), in the game too (Footer) -->
@@ -392,7 +392,7 @@
       <div class="burn-result-title" id="burnResultTitle"></div>
       <div class="burn-result-sub" id="burnResultSub"></div>
       <!-- The LOST card's colonists line; on ship 1 before the reveal it IS the reveal (BurnResult) -->
-      <div class="burn-result-souls" id="burnResultSouls" hidden></div>
+      <div class="burn-result-pods" id="burnResultPods" hidden></div>
       <!-- The run goes on from here (BurnResult names what its press does: AGAIN, EMERGENCY TRANSMIT …) -->
       <button class="burn-result-retry" id="burnResultRetry" tabindex="-1">▸</button>
     </div>
@@ -549,7 +549,7 @@
       <h1 class="title-name">ARRIVAL PROTOCOL</h1>
       <div class="title-sub">// SOULCACHE</div>
       <div class="title-unit" id="titleUnit"></div>
-      <!-- WP8, run 2+: how the last unit ended (last: UNIT-047 · 6,200 woke · overwritten at HALCYON), and
+      <!-- WP8, run 2+: how the last unit ended (last: UNIT-047 · 6,200 landed · overwritten at HALCYON), and
            the endings found so far -->
       <div class="title-lineage" id="titleLineage" hidden></div>
       <div class="title-endings" id="titleEndings" hidden></div>

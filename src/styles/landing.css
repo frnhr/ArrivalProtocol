@@ -94,6 +94,9 @@ body.reduced-motion .navplot-svg .np-float { animation-name: np-float-still; }
 
 /* ── Landing-only furniture: the POD BAY window, its dock item (body.landing: PodBayWindow) ── */
 body:not(.landing) .landing-only { display: none !important; }
+/* The POD BAY's LAUNCH button leaves its window on a phone (PhoneFlightBar moves it into #phoneBar), so it is hidden by
+   its own rule wherever it lives: in the flight it was an empty 54 px box in the bar that took height from the NAV PLOT. */
+body:not(.landing) #podLaunchBtn { display: none !important; }
 
 /* While landing the plot window also holds the GROUND TRACK: the plot's square gives it the room (--plot-chrome-h).
    The Engine window's inert controls fold away (1a has no engine in LANDING, plan risk 1; 1b opens it again), so the

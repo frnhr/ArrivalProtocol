@@ -14,6 +14,7 @@ import { getPrediction, secUntil } from '@systems/predict';
 import { fuelModel } from '@systems/flight-hud';
 import { releaseAtCapture, idle, obey, stepUntil, text, ignoredAtCapture, flyOnce } from '../../wp1-rules/flows';
 import { SKIP_END_LEAD_TAC } from '@data/tuning';
+import { byDepth } from '../../depth';
 
 const harness = createHarness(1);
 const state = () => harness.store.getState();
@@ -113,7 +114,8 @@ const FAR_RING_RADII = 20;
   const rows: string[] = [];
   let mismatches = 0;
   let useItAll = false;
-  for (const fuel of [30, 31, 31.5, 32, 33]) {
+  // Quick depth (tests/unit/depth.ts): both ends and the trim's own price (31.4% on ship 1); full: every half point.
+  for (const fuel of byDepth([30, 31.5, 33], [30, 31, 31.5, 32, 33])) {
     ignoredAtCapture(harness, 60);        // flown once (flows.ts)
     harness.store.mutate((d) => { d.burn.fuelPct = fuel; });
     let rowMismatches = 0;
