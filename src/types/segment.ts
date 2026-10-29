@@ -12,7 +12,7 @@ export type SegmentType =
   | 'free'
   | 'hollow'
   | 'redundancy'
-  | 'soul'
+  | 'driver'
   | 'upgrade'
   | 'firewall';
 
@@ -42,7 +42,7 @@ export type SegmentRole =
   | 'core'
   | 'stasis'
   | 'life'
-  | 'printer'
+  | 'bay'
   | 'cargo'
   | 'redundancy';
 
@@ -141,7 +141,8 @@ export interface FreeSegment extends SegmentBase {
 // LOCKED to every tool until ship 5's duel. Every file it eats turns into one more hollow block of
 // the same size, in place, and bites too. `owner` is what it is called on screen (`???` until it
 // names itself); `ate` is the file an eaten block used to be, so INSPECT can say what was lost, and
-// `ateCluster` the cluster's code when it was colonists, so the strip can say where they went (ATE C12).
+// `atePod` the pod number when it was a pod's driver, so the strip can say whose it was (ATE POD 01) and MERGE can
+// give it back in place.
 // `seed` marks a 2-block seed it dropped into free space (ship 3+, §6.6): it bites like any hollow block,
 // and DELETE clears it. `last` marks the single block LAST LIGHT's root leaves when its DELETE completes (WP11, §6.6):
 // HOLLOW stops there, and PURGE or MERGE decides what becomes of it (locked to every tool meanwhile).
@@ -151,7 +152,7 @@ export interface HollowSegment extends SegmentBase {
   locked: boolean;
   owner: string;
   ate?: string;
-  ateCluster?: string;
+  atePod?: number;
   seed?: true;
   last?: true;
 }
@@ -162,9 +163,8 @@ export interface RedundancySegment extends SegmentBase {
   capacity: number;
 }
 
-// One of the people a soul cluster holds, as the INSPECT panel and the WAKE REPORT name them
-// (§6.7). `line` is who they are (≤ COLONIST_LINE_MAX_CHARS), `firstWords` what they say when
-// they wake.
+// One of the people a pod carries, as INSPECT and the LANDING REPORT name them (§6.7, 01-landing §3.8). `line` is who
+// they are (≤ COLONIST_LINE_MAX_CHARS), `firstWords` what they say on the ground.
 export interface Colonist {
   name: string;        // 'Okafor, Ada': family, then first name
   age: number;
@@ -172,20 +172,19 @@ export interface Colonist {
   firstWords: string;  // 'Is it morning?'
 }
 
-// A soul cluster (§1, §6.7): 200 colonists stored as one 8-block file in the SOUL ARCHIVE. They are
-// not in pods; they are in the same memory as you. Always visible once the archive is unsealed
-// (no scan needed). Sealed, the cluster is part of a grey slab that hides everything about it,
-// health included, until the STASIS reveal (systems/reveal.ts). Printing turns it into free space
-// and a line in the WAKE REPORT.
-export interface SoulSegment extends SegmentBase, Infectable {
-  type: 'soul';
+// A pod driver (01-landing §3.8): the 8-block file that flies one pod of 200 colonists down. The colonists sleep in the
+// pod; the driver is what HOLLOW can eat and REPAIR can heal, and its integrity decides how the pod lands (a failing
+// driver lands hard, a dead one can't launch). Always visible (no scan needed): the drivers are the stakes. At launch
+// it uploads into its pod and leaves memory; the pod (state.landing.pods) outlives it either way. Named `POD 03 ·
+// OKAFOR`, id `driver_pod03`.
+export interface DriverSegment extends SegmentBase, Infectable {
+  type: 'driver';
   integrity: number;
-  cluster: string;     // 'C12': numbered in address order when the ship's memory is built
-  family: string;      // 'Okafor' (proper case; the strip shows it in capitals)
-  souls: number;       // colonists in the cluster (SOULS_PER_CLUSTER)
-  featured: Colonist[];
-  sealed: boolean;
   state?: SegmentState;
+  pod: number;         // 1-based, numbered in address order when memory is built
+  family: string;      // 'Okafor' (proper case; the strip shows it in capitals)
+  colonists: number;   // COLONISTS_PER_POD
+  featured: Colonist[];
 }
 
 // A carried upgrade file (§6.9, WP8): a card picked between ships that works only while its file does.
@@ -219,6 +218,6 @@ export type Segment =
   | FreeSegment
   | HollowSegment
   | RedundancySegment
-  | SoulSegment
+  | DriverSegment
   | UpgradeSegment
   | FirewallSegment;

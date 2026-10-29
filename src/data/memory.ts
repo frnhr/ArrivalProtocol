@@ -1,6 +1,6 @@
 import type {
   Segment, ShipSegment, ShipBackupSegment, CoreSegment, ToolSegment, SkillSegment, FsToolSegment,
-  RedundancySegment, SoulSegment, HollowSegment, SegmentRole,
+  RedundancySegment, DriverSegment, HollowSegment, SegmentRole,
 } from '@/types/segment';
 import type { ShipDef } from '@data/ships';
 import type { Rng } from '@systems/rng';
@@ -8,20 +8,23 @@ import { assertMemoryInvariants, freeSegment, mergeAdjacentFree, segmentStarts, 
 import { createToolFiles } from '@data/fs-tools';
 import { rollRoster, rollChildAge, type ScriptedRoster } from '@data/souls';
 import {
-  SEG_NAME_MAX_CHARS, RACK_BLOCKS, RACK_COUNT, CLUSTER_BLOCKS, ROOT_BLOCKS, SOULS_PER_CLUSTER, INTEGRITY_MAX, LAST_BLOCK_SIZE,
+  SEG_NAME_MAX_CHARS, RACK_BLOCKS, RACK_COUNT, DRIVER_BLOCKS, ROOT_BLOCKS, COLONISTS_PER_POD, INTEGRITY_MAX, LAST_BLOCK_SIZE,
+  POD_RACK_MIN_FREE, UNIT_TAIL_BLOCKS, WALL_MIN_BLOCKS,
 } from '@data/tuning';
 import { integrityState } from '@state/selectors';
 import { HOLLOW_DESC } from '@data/hollow-text';
+import { driverName, driverSegId } from '@data/landing-text';
 
-// The ship's memory (§3.2, §4.2): 384 blocks in 6 RACKS of 64, built from ship data.
+// The ship's memory (§3.2, §4.2, 01-landing §3.16): 384 blocks in 6 RACKS of 64, built from ship data.
 //   A    the ship's files (the same on every ship)
-//   B–D  the SOUL ARCHIVE and HOLLOW's root, from a layout string per ship
-//   E    your AI files            F  your filesystem tools and REPAIR CHARGE
+//   B–D  the pod racks: the pods' drivers and HOLLOW's root, from a layout string per rack
+//   E    your AI files            F  your filesystem tools and REPAIR CHARGE (E–F: the receiver)
 // Racks are places: debris hits RACK C, the belt racks A–B, and the address labels name them. A
 // segment's address is the running sum of the sizes before it (systems/memory-ops.ts); a rack is
 // address / 64. Every visible file either does something or says it doesn't (§8). The AI's own
-// files (Core, tools, fs-tools) are always visible; ship files hide their health until scanned,
-// and on ship 1 the archive arrives as sealed grey slabs until the STASIS reveal.
+// files (Core, tools, fs-tools) and the drivers are always visible; ship files hide their health
+// until scanned. Every ship is FULL (384) until slice 3's memory classes: new code must not add
+// uses of MEMORY_TOTAL_BLOCKS beyond assertMemoryInvariants.
 
 export const MEMORY_TOTAL_BLOCKS = RACK_BLOCKS * RACK_COUNT;
 export const RACK_NAMES: readonly string[] = ['A', 'B', 'C', 'D', 'E', 'F'];
@@ -35,32 +38,36 @@ export type ShipFileSpec = ShipSegment | ShipBackupSegment;
 export type AiFileSpec = CoreSegment | ToolSegment | SkillSegment | FsToolSegment | RedundancySegment;
 export type RackItem<Spec> = Spec | FreeSpec;
 
-// A cluster that arrives hurt (§5.1: C09 at 71%). Cluster numbers are 1-based, as on screen (C09 → 9).
-export interface HurtCluster {
-  cluster: number;
+// A driver that arrives hurt (01-landing §3.8: run 1's POD 02 at 44%). Pod numbers are 1-based, as on screen.
+export interface HurtDriver {
+  pod: number;
   integrity: number;
 }
 
-// The soul archive's people on one ship (§6.7). Cluster numbers are 1-based, as on screen (C09 → 9).
-export interface ShipSoulsDef {
+// The pods' people and drivers on one ship (§6.7, 01-landing §3.8). Pod numbers are 1-based, as on screen.
+export interface ShipDriversDef {
   familiesSeedStream: string;          // childRng stream for the seeded families and colonists
-  // The cluster that arrives hurt (§5.1: C09 at 71%), or null when every cluster arrives whole. On a later
-  // run of a ship whose first run is written (firstRun below), the hurt cluster is reseeded (hurtClusterFor).
-  hurt: HurtCluster | null;
-  lead: number;                        // the story's cluster: selected at the reveal, first in the credits
-  sealed: boolean;                     // the archive arrives as sealed slabs (ship 1: the STASIS reveal)
+  // The drivers that arrive hurt (a list, so slice 2's rolled arrival damage needs no type change). On a later run of
+  // a ship whose first run is written (firstRun below), they are reseeded among the other pods (hurtDriversFor).
+  hurt: readonly HurtDriver[];
+  lead: number;                        // the story's pod: first in the credits, HOLLOW's first bite on ARES-VII
   firstRun: ScriptedRoster | null;     // the families and lead colonist the first run always meets
 }
 
+// The pod racks by their letter (01-landing §3.16). Keyed by rack so slice 3's smaller memory classes can leave rack D
+// out (the field becomes Partial); code walks POD_RACK_KEYS and the racks present, never assumes all three.
+export const POD_RACK_KEYS = ['B', 'C', 'D'] as const;
+export type PodRackKey = (typeof POD_RACK_KEYS)[number];
+
 export interface ShipMemoryDef {
   rackA: readonly RackItem<ShipFileSpec>[];
-  // Racks B–D as layout strings (§4.2): `C` an 8-block soul cluster, `R` the 8-block root (`R16`:
+  // The pod racks as layout strings (§4.2, 01-landing §3.16): `P` an 8-block pod driver, `R` the 8-block root (`R16`:
   // 16 blocks), `_n` n free blocks; space-separated, each rack summing to RACK_BLOCKS.
-  racksBD: { B: string; C: string; D: string };
+  podRacks: Record<PodRackKey, string>;
   // Racks E and F as written for a unit that arrives fresh (ship 1). Later ships hold whatever the
   // unit carried (systems/carry.ts), so theirs is null.
   aiFiles: { E: readonly RackItem<AiFileSpec>[]; F: readonly RackItem<AiFileSpec>[] } | null;
-  souls: ShipSoulsDef;
+  drivers: ShipDriversDef;
 }
 
 // --- Rack A: the same on every ship (§4.2) --------------------------------------------------------
@@ -76,11 +83,12 @@ export const RACK_A: readonly RackItem<ShipFileSpec>[] = [
   { id: 'thrust_b', name: 'Thrust.alt', type: 'ship-backup', size: 8, integrity: 100, scanned: false,
     backs: { role: 'thrust-ctrl', name: 'Thrust Controller' },
     desc: 'Redundant copy installed by the original engineers. Inactive. Can be swapped in to replace the primary thrust controller. Costs no REPAIR CHARGE.' },
-  // The reveal's pointer (§1): its scan says where the colonists really are (systems/reveal.ts).
   { id: 'stasis', name: 'Stasis', type: 'ship', role: 'stasis', size: 4, integrity: 100, scanned: false,
-    desc: 'Built to hold the colonists\' sleeping pods. 0 pods detected: the colonists are files, in this memory. No flight effect.' },
-  { id: 'printer', name: 'Printer Uplink', type: 'ship', role: 'printer', size: 6, integrity: 100, scanned: false,
-    desc: 'Talks to the bio-printers on the surface. Damage slows printing; without it nothing prints.' },
+    desc: 'Keeps the pods\' sleepers cold. No flight effect.' },
+  // Bay Ctrl (01-landing §3.4) takes Printer Uplink's 6 blocks. 1a: honest about what it does; its damage effect (the
+  // cadence by band, BAY OFFLINE) comes with slice 1b.
+  { id: 'bay', name: 'Bay Ctrl', type: 'ship', role: 'bay', size: 6, integrity: 100, scanned: false,
+    desc: 'Runs the pod bay\'s launch rails.' },
   { id: 'cargo', name: 'Cargo Ctrl', type: 'ship', role: 'cargo', size: 6, integrity: 100, scanned: false,
     desc: 'Holds inventory. No flight effect.' },
   { free: 18 },
@@ -194,27 +202,30 @@ function buildWrittenRack<Spec extends Segment>(
   return segs;
 }
 
-// One rack of the B–D layout as tokens; the clusters and roots are filled in by the caller.
-type LayoutToken = { kind: 'cluster' } | { kind: 'root'; size: number } | { kind: 'free'; size: number };
+// One pod rack's layout as tokens; the drivers and roots are filled in by the caller.
+export type LayoutToken = { kind: 'driver' } | { kind: 'root'; size: number } | { kind: 'free'; size: number };
 
 export function parseRackLayout(rack: string, layout: string, fail: (why: string) => never): LayoutToken[] {
   const tokens: LayoutToken[] = [];
   for (const word of layout.trim().split(/\s+/)) {
     let match: RegExpExecArray | null;
-    if (word === 'C') tokens.push({ kind: 'cluster' });
+    if (word === 'P') tokens.push({ kind: 'driver' });
     else if (word === 'R') tokens.push({ kind: 'root', size: ROOT_BLOCKS });
     else if ((match = /^R(\d+)$/.exec(word))) tokens.push({ kind: 'root', size: Number(match[1]) });
     else if ((match = /^_(\d+)$/.exec(word))) tokens.push({ kind: 'free', size: Number(match[1]) });
     else fail(`unknown token '${word}' in rack ${rack}`);
   }
-  const sum = tokens.reduce((total, token) => total + (token.kind === 'cluster' ? CLUSTER_BLOCKS : token.size), 0);
-  if (tokens.some((token) => token.kind !== 'cluster' && !(token.size > 0))) fail(`rack ${rack} has an empty token`);
+  const sum = tokens.reduce((total, token) => total + (token.kind === 'driver' ? DRIVER_BLOCKS : token.size), 0);
+  if (tokens.some((token) => token.kind !== 'driver' && !(token.size > 0))) fail(`rack ${rack} has an empty token`);
   if (sum !== RACK_BLOCKS) fail(`rack ${rack} sums to ${sum}, not ${RACK_BLOCKS}`);
   return tokens;
 }
 
-export function clusterCode(number: number): string {
-  return `C${String(number).padStart(2, '0')}`;
+// The pod racks a ship has, in address order, each parsed.
+export function podRackLayouts(ship: ShipDef): { rack: PodRackKey; tokens: LayoutToken[] }[] {
+  const fail = failFor(ship);
+  return POD_RACK_KEYS.filter((rack) => ship.memory.podRacks[rack] !== undefined)
+    .map((rack) => ({ rack, tokens: parseRackLayout(rack, ship.memory.podRacks[rack], fail) }));
 }
 
 // The roles a fresh layout may hold only once (§9: segments are looked up by role, so a second
@@ -232,7 +243,7 @@ function assertSingleRoles(segs: readonly Segment[], fail: (why: string) => neve
 }
 
 // The unit's own files: what carries from ship to ship (§6.9): the Core, the AI tools and skills, the
-// fs-tools, the upgrade files and FIREWALLs picked between ships, REPAIR CHARGE. Ship files, souls and
+// fs-tools, the upgrade files and FIREWALLs picked between ships, REPAIR CHARGE. Ship files, drivers and
 // HOLLOW stay.
 export function isUnitFileType(seg: Segment): boolean {
   return seg.type === 'core' || seg.type === 'tool' || seg.type === 'skill' || seg.type === 'fs-tool' || seg.type === 'redundancy'
@@ -241,7 +252,8 @@ export function isUnitFileType(seg: Segment): boolean {
 
 // The unit's own files as they arrive on a later ship (systems/carry.ts packs them): the segments
 // from `startAddr` to the end of memory, free fillers included. They start at rack E (256) unless the
-// packet was too big for racks E–F, when they spill back into rack D's trailing free blocks (§6.9).
+// packet was too big for racks E–F, when they spill back into the last pod rack's trailing free blocks
+// (§6.9; 01-landing §3.16 caps that tail at UNIT_TAIL_BLOCKS).
 export interface CarriedRacks {
   startAddr: number;
   segs: Segment[];
@@ -250,83 +262,82 @@ export interface CarriedRacks {
 // Rack E's first address: where a unit's own files start (§4.2).
 export const UNIT_RACKS_START = RACK_BLOCKS * RACK_NAMES.indexOf('E');
 
-// How many soul clusters a ship's layout holds (racks B–D's `C` tokens).
-export function shipClusterCount(ship: ShipDef): number {
-  let clusters = 0;
-  for (const rack of ['B', 'C', 'D'] as const) {
-    clusters += parseRackLayout(rack, ship.memory.racksBD[rack], failFor(ship)).filter((token) => token.kind === 'cluster').length;
-  }
-  return clusters;
+// How many pods a ship's layout holds (the pod racks' `P` tokens).
+export function shipPodCount(ship: ShipDef): number {
+  return podRackLayouts(ship).reduce((pods, { tokens }) => pods + tokens.filter((token) => token.kind === 'driver').length, 0);
 }
 
-// The cluster a ship arrives with hurt on this run (§5.1, §5.2). The ship's written one, except on a later
-// run of a ship whose first run is written (ARES-VII): its families are reseeded, and so is the hurt
-// cluster, drawn from `rng` (its own stream) among every cluster but the lead (C12 keeps HOLLOW's bite).
-export function hurtClusterFor(ship: ShipDef, firstRun: boolean, rng: Rng): HurtCluster | null {
-  const written = ship.memory.souls.hurt;
-  if (written === null || firstRun || ship.memory.souls.firstRun === null) return written;
+// The drivers a ship arrives with hurt on this run (01-landing §3.8). The ship's written ones, except on a later run of a
+// ship whose first run is written (ARES-VII): its families are reseeded, and so are the hurt drivers, each drawn from
+// `rng` (its own stream) among the pods that are not the lead (POD 01 keeps HOLLOW's bite) and not already hurt.
+export function hurtDriversFor(ship: ShipDef, firstRun: boolean, rng: Rng): HurtDriver[] {
+  const written = ship.memory.drivers.hurt;
+  if (written.length === 0 || firstRun || ship.memory.drivers.firstRun === null) return written.map((hurt) => ({ ...hurt }));
   const candidates: number[] = [];
-  for (let number = 1; number <= shipClusterCount(ship); number++) if (number !== ship.memory.souls.lead) candidates.push(number);
-  const cluster = candidates[Math.floor(rng() * candidates.length)];
-  if (cluster === undefined) throw new Error(`hurtClusterFor ${ship.id}: no cluster besides the lead to hurt`);
-  return { cluster, integrity: written.integrity };
+  for (let pod = 1; pod <= shipPodCount(ship); pod++) if (pod !== ship.memory.drivers.lead) candidates.push(pod);
+  return written.map((hurt) => {
+    const index = Math.floor(rng() * candidates.length);
+    const pod = candidates[index];
+    if (pod === undefined) throw new Error(`hurtDriversFor ${ship.id}: no pod besides the lead left to hurt`);
+    candidates.splice(index, 1);
+    return { pod, integrity: hurt.integrity };
+  });
 }
 
-// The ship's racks A–D as segments, in address order: the ship's own files, then the SOUL ARCHIVE and
-// HOLLOW's root from the layout strings. `rng` is the ship's families stream; `firstRun` keeps the
-// families the first run always meets; `hollowOwner` names the roots; `hurt` is the cluster that arrives hurt.
+// The ship's racks A–D as segments, in address order: the ship's own files, then the pod racks (drivers and HOLLOW's
+// root) from the layout strings. `rng` is the ship's families stream; `firstRun` keeps the families the first run always
+// meets; `hollowOwner` names the roots; `hurt` are the drivers that arrive hurt.
 function buildShipRacks(
-  ship: ShipDef, rng: Rng, firstRun: boolean, hollowOwner: string, hurt: HurtCluster | null, fail: (why: string) => never,
+  ship: ShipDef, rng: Rng, firstRun: boolean, hollowOwner: string, hurt: readonly HurtDriver[], fail: (why: string) => never,
 ): Segment[] {
   const def = ship.memory;
   const rackA = buildWrittenRack('A', def.rackA, fail);
   damageShipFiles(rackA, ship, fail);
-  const layouts = { B: parseRackLayout('B', def.racksBD.B, fail), C: parseRackLayout('C', def.racksBD.C, fail), D: parseRackLayout('D', def.racksBD.D, fail) };
-  const clusterCount = [...layouts.B, ...layouts.C, ...layouts.D].filter((token) => token.kind === 'cluster').length;
-  const souls = def.souls;
-  if (hurt !== null) {
-    if (hurt.cluster < 1 || hurt.cluster > clusterCount) fail(`hurt cluster ${hurt.cluster} is not one of ${clusterCount}`);
-    if (!(hurt.integrity > 0 && hurt.integrity < INTEGRITY_MAX)) fail(`hurt integrity ${hurt.integrity} is not hurt`);
+  const layouts = podRackLayouts(ship);
+  const podCount = layouts.reduce((pods, { tokens }) => pods + tokens.filter((token) => token.kind === 'driver').length, 0);
+  const drivers = def.drivers;
+  for (const driver of hurt) {
+    if (driver.pod < 1 || driver.pod > podCount) fail(`hurt pod ${driver.pod} is not one of ${podCount}`);
+    if (!(driver.integrity > 0 && driver.integrity < INTEGRITY_MAX)) fail(`hurt integrity ${driver.integrity} is not hurt`);
   }
-  if (souls.lead < 1 || souls.lead > clusterCount) fail(`lead cluster ${souls.lead} is not one of ${clusterCount}`);
-  const roster = rollRoster(clusterCount, rng, firstRun ? souls.firstRun : null);
-  // A later run of a ship whose first run is written (§5.2: "C12 keeps a featured colonist"): the families are
-  // reseeded, and the lead cluster's first colonist (named at the reveal, first in the credits) is a child,
-  // the way Ada was. Drawn last, so the rest of the roster is the seed's as before.
-  if (!firstRun && souls.firstRun !== null) {
-    const lead = roster[souls.lead - 1]?.featured[0];
-    if (!lead) fail(`lead cluster ${souls.lead} has no colonist to feature`);
+  if (new Set(hurt.map((driver) => driver.pod)).size !== hurt.length) fail('a pod is listed hurt twice');
+  if (drivers.lead < 1 || drivers.lead > podCount) fail(`lead pod ${drivers.lead} is not one of ${podCount}`);
+  const roster = rollRoster(podCount, rng, firstRun ? drivers.firstRun : null);
+  // A later run of a ship whose first run is written (§5.2: the lead pod keeps a featured colonist): the families are
+  // reseeded, and the lead pod's first colonist (first in the credits) is a child, the way Ada was. Drawn last, so the
+  // rest of the roster is the seed's as before.
+  if (!firstRun && drivers.firstRun !== null) {
+    const lead = roster[drivers.lead - 1]?.featured[0];
+    if (!lead) fail(`lead pod ${drivers.lead} has no colonist to feature`);
     lead.age = rollChildAge(rng);
   }
 
-  let clusterIndex = 0;
+  let podIndex = 0;
   let rootIndex = 0;
-  const archive: Segment[] = [];
-  for (const rack of ['B', 'C', 'D'] as const) {
-    for (const token of layouts[rack]) {
-      if (token.kind === 'free') { archive.push(freeSegment(token.size)); continue; }
-      if (token.kind === 'root') { archive.push(rootSegment(token.size, rootIndex++, hollowOwner)); continue; }
-      const number = clusterIndex + 1;
-      const people = roster[clusterIndex++]!;
-      const integrity = hurt !== null && number === hurt.cluster ? hurt.integrity : INTEGRITY_MAX;
-      const code = clusterCode(number);
-      const soul: SoulSegment = {
-        id: `soul_${code.toLowerCase()}`,
-        name: `${code} · ${people.family}`,
-        type: 'soul',
-        size: CLUSTER_BLOCKS,
+  const podRacks: Segment[] = [];
+  for (const { tokens } of layouts) {
+    for (const token of tokens) {
+      if (token.kind === 'free') { podRacks.push(freeSegment(token.size)); continue; }
+      if (token.kind === 'root') { podRacks.push(rootSegment(token.size, rootIndex++, hollowOwner)); continue; }
+      const pod = podIndex + 1;
+      const people = roster[podIndex++]!;
+      const integrity = hurt.find((driver) => driver.pod === pod)?.integrity ?? INTEGRITY_MAX;
+      const driver: DriverSegment = {
+        id: driverSegId(pod),
+        name: driverName(pod, people.family),
+        type: 'driver',
+        size: DRIVER_BLOCKS,
         integrity,
         state: integrityState(integrity),
-        cluster: code,
+        pod,
         family: people.family,
-        souls: SOULS_PER_CLUSTER,
+        colonists: COLONISTS_PER_POD,
         featured: people.featured,
-        sealed: souls.sealed,
       };
-      archive.push(soul);
+      podRacks.push(driver);
     }
   }
-  return [...rackA, ...archive];
+  return [...rackA, ...podRacks];
 }
 
 // The ship's own files that arrive damaged (§6.9, WP10: VESPER's Thrust Ctrl at 31%; "rack A belongs to the ship"):
@@ -344,32 +355,58 @@ function damageShipFiles(rackA: Segment[], ship: ShipDef, fail: (why: string) =>
   }
 }
 
-// The free blocks at the very end of the ship's rack D (§6.9: the room an oversized packet may spill
-// back into before rack E). Pure layout: the free tokens that close the D string.
-export function rackDTrailingFree(ship: ShipDef): number {
-  const tokens = parseRackLayout('D', ship.memory.racksBD.D, failFor(ship));
+// The free blocks at the very end of the ship's last pod rack (§6.9, 01-landing §3.16: the room an oversized packet may
+// spill back into before rack E). Pure layout: the free tokens that close the last pod rack's string.
+export function lastPodRackTrailingFree(ship: ShipDef): number {
+  const last = podRackLayouts(ship).at(-1);
+  if (!last) throw new Error(`lastPodRackTrailingFree ${ship.id}: the ship has no pod rack`);
   let free = 0;
-  for (let i = tokens.length - 1; i >= 0; i--) {
-    const token = tokens[i]!;
+  for (let i = last.tokens.length - 1; i >= 0; i--) {
+    const token = last.tokens[i]!;
     if (token.kind !== 'free') break;
     free += token.size;
   }
   return free;
 }
 
-// The colonists a ship carries (§4.2: 2,000 on HALCYON), from its layout alone: the TRANSMIT screen
-// names the next ship's before it is built, and RUN END totals the fleet.
-export function shipSouls(ship: ShipDef): number {
-  return shipClusterCount(ship) * SOULS_PER_CLUSTER;
+// The colonists a ship carries (01-landing §3.5: the LZ counts sum to everyone aboard), from its landing data alone: the
+// TRANSMIT screen names the next ship's before it is built, and RUN END totals the fleet.
+export function shipColonists(ship: ShipDef): number {
+  return ship.landing.lzs.reduce((sum, lz) => sum + lz.pods, 0) * COLONISTS_PER_POD;
+}
+
+// Throws on pod racks that break 01-landing §3.16's budget, run for every ship at load (data/ships.ts):
+// • at least POD_RACK_MIN_FREE free blocks across the pod racks, not counting the root's GAPs (free tokens shorter than
+//   WALL_MIN_BLOCKS right next to an `R`), so walls and MOVEs always have room;
+// • at least UNIT_TAIL_BLOCKS trailing free in the last pod rack: the tail the unit may spill into;
+// • one driver per pod, the pods summing to the LZ counts.
+// It walks the racks the ship has, so slice 3's smaller classes need no change here.
+export function validatePodRacks(ship: ShipDef): void {
+  const fail = failFor(ship);
+  let free = 0;
+  for (const { tokens } of podRackLayouts(ship)) {
+    tokens.forEach((token, index) => {
+      if (token.kind !== 'free') return;
+      const nextToRoot = tokens[index - 1]?.kind === 'root' || tokens[index + 1]?.kind === 'root';
+      if (nextToRoot && token.size < WALL_MIN_BLOCKS) return;
+      free += token.size;
+    });
+  }
+  if (free < POD_RACK_MIN_FREE) fail(`the pod racks hold ${free} free blocks (root gaps not counted), under ${POD_RACK_MIN_FREE}`);
+  const tail = lastPodRackTrailingFree(ship);
+  if (tail < UNIT_TAIL_BLOCKS) fail(`the last pod rack ends in ${tail} free blocks, under the unit's ${UNIT_TAIL_BLOCKS}-block tail`);
+  const pods = shipPodCount(ship);
+  const lzPods = ship.landing.lzs.reduce((sum, lz) => sum + lz.pods, 0);
+  if (pods !== lzPods) fail(`${pods} drivers in the pod racks, but the LZ counts sum to ${lzPods} pods`);
 }
 
 // Cuts `blocks` free blocks off the end of `segs` (racks A–D): the room a spilled packet takes. They
-// must be free (rackDTrailingFree checked it when the packet was laid out); anything else throws.
+// must be free (lastPodRackTrailingFree checked it when the packet was laid out); anything else throws.
 function trimTrailingFree(segs: Segment[], blocks: number, fail: (why: string) => never): void {
   let left = blocks;
   while (left > 0) {
     const last = segs[segs.length - 1];
-    if (!last || last.type !== 'free') return fail(`the carried files spill ${blocks} blocks into rack D, but its tail is not free`);
+    if (!last || last.type !== 'free') return fail(`the carried files spill ${blocks} blocks into the last pod rack, but its tail is not free`);
     if (last.size <= left) {
       left -= last.size;
       segs.pop();
@@ -381,16 +418,16 @@ function trimTrailingFree(segs: Segment[], blocks: number, fail: (why: string) =
 }
 
 // The ship's memory as segments, in address order (§4.2, §9 WP5 item 1). `rng` is the ship's families
-// stream (souls.familiesSeedStream); `firstRun` keeps the families the first run always meets (the
+// stream (drivers.familiesSeedStream); `firstRun` keeps the families the first run always meets (the
 // run-1 ARES-VII of §6.7). `carried` is the unit's own files from the last ship (systems/carry.ts packs
-// them: racks E–F, maybe spilling into rack D); a fresh unit (ship 1) uses the ship's written aiFiles,
+// them: racks E–F, maybe spilling into the last pod rack); a fresh unit (ship 1) uses the ship's written aiFiles,
 // and a ship with written aiFiles never takes carried ones (ship 1 always meets a fresh unit). Throws
 // on a rack that does not fill 64 blocks, an unknown layout token, a role written twice, a name too
-// long, no owner, or a ship whose racks E–F have no source. `hurt` is the cluster that arrives hurt on this
-// run (state/initial.ts passes hurtClusterFor's); left out, the ship's written one (the layout suites).
+// long, no owner, or a ship whose racks E–F have no source. `hurt` are the drivers that arrive hurt on this
+// run (state/initial.ts passes hurtDriversFor's); left out, the ship's written ones (the layout suites).
 export function buildShipMemory(
   ship: ShipDef, carried: CarriedRacks | null, rng: Rng, firstRun: boolean, hollowOwner: string,
-  hurt: HurtCluster | null = ship.memory.souls.hurt,
+  hurt: readonly HurtDriver[] = ship.memory.drivers.hurt,
 ): Segment[] {
   const fail = failFor(ship);
   if (typeof hollowOwner !== 'string' || hollowOwner === '') fail('HOLLOW\'s root needs an owner name (say.ts hollowLabel)');
@@ -412,7 +449,7 @@ export function buildShipMemory(
     if (seg.name.length > SEG_NAME_MAX_CHARS) fail(`'${seg.name}' is longer than ${SEG_NAME_MAX_CHARS} chars`);
   }
   // Free space written at the end of one rack and the start of the next is one gap in memory
-  // (rack C's tail and the empty rack D on ship 1).
+  // (rack B's tail and the empty racks C–D on ship 1).
   mergeAdjacentFree(memory);
   assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
   return memory;

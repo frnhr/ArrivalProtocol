@@ -1,18 +1,19 @@
 import type { GameState, VerbTelegraph, HollowState } from './schema';
 import type {
   Segment, RedundancySegment, FsToolSegment, CoreSegment, ToolSegment, SkillSegment, SegmentState, SegmentRole,
-  SoulSegment, SegmentType, HollowSegment, Infection, UpgradeSegment, UpgradeKind, FirewallSegment,
+  DriverSegment, SegmentType, HollowSegment, Infection, UpgradeSegment, UpgradeKind, FirewallSegment,
 } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import {
   CORE_LOW_INTEGRITY, CORE_LOW_THREADS, BAND_OK_MIN, BAND_DEGRADED_MIN, BAND_FAILING_MIN, CORRUPTION_STEP,
-  INTEGRITY_MAX, SOUL_WAKE_INTACT_MIN, REVEAL_LINE_AT_SEC,
+  INTEGRITY_MAX,
 } from '@data/tuning';
-import type { ClusterOutcome } from './schema';
+import { podCode } from '@data/landing-text';
 
 // THE DEAL's hold on the spread (WP10, §6.6): after an ACCEPT neither the bite timer nor the seeds run until its pause
 // ends. It lives here, a leaf module, rather than in hollow.ts (WP12 review): pace.ts needs it, and pace → hollow closed
-// an import cycle (guidance → pace → hollow → printer → script → flight-controls → guidance) in which flight-controls and
+// an import cycle (guidance → pace → hollow → printer → script → flight-controls → guidance; printer is landing.ts since
+// phase 3) in which flight-controls and
 // script read imported values at load, so an entry reaching the cycle through guidance or director threw at load.
 export function spreadPaused(hollow: Readonly<HollowState>, aiNow: number): boolean {
   return hollow.deal.pauseUntilAi !== null && aiNow < hollow.deal.pauseUntilAi;
@@ -92,10 +93,10 @@ export function hasIntegrity(seg: Segment): seg is HealthSegment {
 // --- HOLLOW (§6.6) -------------------------------------------------------------------------------
 
 // What HOLLOW can bite: every file with a health number (the Core, your tools and skills, the
-// filesystem tools, the ship's files, the colonists, the upgrade files you carry). Free space, other
+// filesystem tools, the ship's files, the pods' drivers, the upgrade files you carry). Free space, other
 // hollow, REPAIR CHARGE and a FIREWALL are not food: they stop the spread on that side (§6.6). A list,
 // not "has an integrity", so a new file type has to choose.
-const INFECTABLE_TYPES: ReadonlySet<SegmentType> = new Set<SegmentType>(['core', 'tool', 'skill', 'fs-tool', 'ship', 'ship-backup', 'soul', 'upgrade']);
+const INFECTABLE_TYPES: ReadonlySet<SegmentType> = new Set<SegmentType>(['core', 'tool', 'skill', 'fs-tool', 'ship', 'ship-backup', 'driver', 'upgrade']);
 
 export function isInfectable(seg: Segment): seg is HealthSegment {
   return INFECTABLE_TYPES.has(seg.type) && hasIntegrity(seg);
@@ -145,10 +146,10 @@ export function anythingInfected(state: Readonly<GameState>): boolean {
   return state.memory.some(isInfected);
 }
 
-// What a strip line calls a file: a cluster by its code (C12, as the chips say), anything else by
+// What a strip line calls a file: a driver by its pod (POD 03, as the chips say), anything else by
 // its name in capitals (ENGINE I/O, REPAIR.BAK).
 export function fileLabel(seg: Segment): string {
-  return seg.type === 'soul' ? seg.cluster : seg.name.toUpperCase();
+  return seg.type === 'driver' ? podCode(seg.pod) : seg.name.toUpperCase();
 }
 
 // Every file with this role, in memory order (a copy or a swapped-in backup carries the role too).
@@ -189,95 +190,78 @@ export function effectiveToolVersion(state: Readonly<GameState>, kind: FsToolKin
   return getFsTool(state, kind)?.version ?? 1;
 }
 
-// The segments REPAIR can heal: the AI's own files (Core, tools, skills, fs-tools, upgrade files) and
-// the colonists once the archive is open (§6.5: no scan gate for souls). Ship files can't be healed
-// (SWAP or DELETE them); REPAIR CHARGE is "repaired" only by v2's squeeze; a sealed cluster can't
-// be reached at all; a FIREWALL has no health to heal.
-export type RepairableSegment = CoreSegment | ToolSegment | SkillSegment | FsToolSegment | SoulSegment | UpgradeSegment;
+// The segments REPAIR can heal: the AI's own files (Core, tools, skills, fs-tools, upgrade files) and the pods'
+// drivers (§6.5: no scan gate for them). Ship files can't be healed (SWAP or DELETE them); REPAIR CHARGE is "repaired"
+// only by v2's squeeze; a FIREWALL has no health to heal.
+export type RepairableSegment = CoreSegment | ToolSegment | SkillSegment | FsToolSegment | DriverSegment | UpgradeSegment;
 
 export function isRepairable(seg: Segment): seg is RepairableSegment {
-  if (seg.type === 'soul') return !seg.sealed;
-  return seg.type === 'core' || seg.type === 'tool' || seg.type === 'skill' || seg.type === 'fs-tool' || seg.type === 'upgrade';
+  return seg.type === 'core' || seg.type === 'tool' || seg.type === 'skill' || seg.type === 'fs-tool' || seg.type === 'upgrade'
+    || seg.type === 'driver';
 }
 
-// --- Souls (§6.7) --------------------------------------------------------------------------------
+// --- Pods and their drivers (01-landing §3.8) ----------------------------------------------------
 
-export function isSoul(seg: Segment): seg is SoulSegment {
-  return seg.type === 'soul';
+export function isDriver(seg: Segment): seg is DriverSegment {
+  return seg.type === 'driver';
 }
 
-// The soul clusters still in memory, in address order, ONE PER CLUSTER. A MOVE that jumps to free
-// space elsewhere keeps its source in memory (offline) until the clone is written (§6.5), so for
-// the whole move one cluster is two `soul` segments with the same code; counting segments read
-// `SOULS: 2,600 IN MEMORY` and `PRINTING n/13`. The first copy in address order stands for the
-// cluster (both are the same people, and neither prints while it moves). The strip still draws
-// both: it walks memory itself. Two copies outside a move are a bug (a cluster can't be copied).
-export function soulsInMemory(state: Readonly<GameState>): SoulSegment[] {
-  const byCode = new Map<string, SoulSegment>();
+// The phase that replaced printing: the orbit is locked or accepted and the pods are going down. Code asks this rather
+// than comparing the phase literal, so the next phase change is one edit.
+export function isLanding(state: Readonly<GameState>): boolean {
+  return state.run.phase === 'landing';
+}
+
+// The drivers still in memory, in address order, ONE PER POD. A MOVE that jumps to free space elsewhere keeps its
+// source in memory (offline) until the clone is written (§6.5), so for the whole move one driver is two segments with
+// the same pod; counting segments would read one pod twice. The first copy in address order stands for the pod (both
+// fly the same people, and neither launches while it moves). The strip still draws both: it walks memory itself. Two
+// copies outside a move are a bug (a driver can't be copied).
+export function driversInMemory(state: Readonly<GameState>): DriverSegment[] {
+  const byPod = new Map<number, DriverSegment>();
   for (const seg of state.memory) {
-    if (!isSoul(seg)) continue;
-    const twin = byCode.get(seg.cluster);
-    if (!twin) { byCode.set(seg.cluster, seg); continue; }
+    if (!isDriver(seg)) continue;
+    const twin = byPod.get(seg.pod);
+    if (!twin) { byPod.set(seg.pod, seg); continue; }
     if (seg.state !== 'transferring' || twin.state !== 'transferring') {
-      throw new Error(`soulsInMemory: two copies of ${seg.cluster} in memory outside a move`);
+      throw new Error(`driversInMemory: two copies of pod ${seg.pod}'s driver in memory outside a move`);
     }
   }
-  return [...byCode.values()];
+  return [...byPod.values()];
 }
 
-// Any cluster still behind the sealed slabs: the STASIS reveal has not happened (§1). On run 1 it
-// holds SKIP (pace.ts) and the footer reads SOULS IN STASIS.
-export function archiveSealed(state: Readonly<GameState>): boolean {
-  return state.memory.some((seg) => seg.type === 'soul' && seg.sealed);
+// The ship's colonists by where their pod is (the footer, the mini-HUD, the LOST card): still aboard, falling, down
+// (and of those, in an LZ with room), parked in orbit, gone with a ship that left orbit.
+export interface ColonistCounts {
+  aboard: number;
+  falling: number;
+  down: number;
+  landedOnTarget: number;
+  parked: number;
+  notLaunched: number;
 }
 
-// A reveal is due or playing (systems/reveal.ts): its lines are about to land or landing.
-export function revealUnderway(state: Readonly<GameState>): boolean {
-  return state.souls.reveal.stage === 'pending' || state.souls.reveal.stage === 'playing';
-}
-
-// The reveal's lines have all landed and its crack is waiting for the kid to look at the mind
-// (systems/reveal.ts holds it, at most REVEAL_VIEW_WAIT_MAX_SEC).
-export function revealAwaitsView(state: Readonly<GameState>): boolean {
-  return state.souls.reveal.stage === 'playing' && state.souls.reveal.lines.length >= REVEAL_LINE_AT_SEC.length
-    && archiveSealed(state) && state.ui.mode !== 'memory';
-}
-
-// What a cluster would wake as if it printed now (§4.4, INSPECT's predicted outcome): intact at or
-// above SOUL_WAKE_INTACT_MIN, with missing memories while any of it is left, not at all at 0.
-export function soulOutcome(integrity: number): ClusterOutcome {
-  if (integrity >= SOUL_WAKE_INTACT_MIN) return 'woke';
-  return integrity > 0 ? 'gaps' : 'lost';
-}
-
-// The ship's colonists, counted (§4.4, §7.1 footer): still in memory, woke intact, woke with missing
-// memories, did not wake. WOKE means one number everywhere (the lead's rule, WP7): `heads`, everyone who
-// woke, intact or not. §4.4's half credit is only the run's SCORE (systems/run.ts runScore).
-export interface SoulCounts {
-  inMemory: number;
-  intact: number;
-  wokeWithGaps: number;
-  heads: number;
-  lost: number;
-}
-
-export function soulCounts(state: Readonly<GameState>): SoulCounts {
-  const counts: SoulCounts = { inMemory: 0, intact: 0, wokeWithGaps: 0, heads: 0, lost: 0 };
-  for (const soul of soulsInMemory(state)) counts.inMemory += soul.souls;
-  for (const result of state.souls.results) {
-    if (result.outcome === 'woke') counts.intact += result.souls;
-    else if (result.outcome === 'gaps') counts.wokeWithGaps += result.souls;
-    else counts.lost += result.souls;
+export function colonistCounts(state: Readonly<GameState>): ColonistCounts {
+  const counts: ColonistCounts = { aboard: 0, falling: 0, down: 0, landedOnTarget: 0, parked: 0, notLaunched: 0 };
+  for (const record of state.landing.pods) {
+    switch (record.fate.kind) {
+      case 'aboard': counts.aboard += record.colonists; break;
+      case 'falling': counts.falling += record.colonists; break;
+      case 'down':
+        counts.down += record.colonists;
+        if (record.fate.touchdown.place === 'lz') counts.landedOnTarget += record.colonists;
+        break;
+      case 'parked': counts.parked += record.colonists; break;
+      case 'not-launched': counts.notLaunched += record.colonists; break;
+      default: throw new Error(`colonistCounts: unknown fate '${String((record.fate as { kind: string }).kind)}'`);
+    }
   }
-  counts.heads = counts.intact + counts.wokeWithGaps;
   return counts;
 }
 
-// Whether the kid may see this file's health (§3.2): a ship file only once scanned, a cluster only
-// once the archive is open. Your own files are always visible. Every readout of damage (the strip,
-// INSPECT, the stats, the sidebar counts) asks this, so a sealed C09 at 71% never leaks.
+// Whether the kid may see this file's health (§3.2): a ship file only once scanned. Your own files and the drivers are
+// always visible. Every readout of damage (the strip, INSPECT, the stats, the sidebar counts) asks this.
 export function healthKnown(seg: Segment): boolean {
-  if (seg.type === 'soul') return !seg.sealed;
   return 'scanned' in seg ? seg.scanned : true;
 }
 
@@ -318,8 +302,8 @@ export function verbSecondsLeft(verb: Readonly<VerbTelegraph>): number {
 }
 
 // LAST LIGHT's finale is still on (WP11, systems/finale.ts): the duel, the choice still to be made, (part 2) the
-// typed ending the choice brought, or UNRESOLVED's last line, until it has typed and been read. The WAKE REPORT waits
-// for it (systems/printer.ts).
+// typed ending the choice brought, or UNRESOLVED's last line, until it has typed and been read. The LANDING REPORT waits
+// for it (systems/landing.ts).
 export function finalePending(state: Readonly<GameState>): boolean {
   const { phase, ending, unresolvedUntilAi } = state.hollow.finale;
   if (phase === 'duel' || phase === 'choice') return true;

@@ -3,6 +3,7 @@
 // literals of its own, so balancing never means hunting through systems.
 
 import type { Band, GhostSpec } from '@systems/capabilities';
+import type { ForgivenessClass, LzWidth } from '@/types/landing';
 
 // --- Heartbeat -------------------------------------------------------------------------
 
@@ -1459,3 +1460,96 @@ export const FINALE_ENDING_MAX_LINES = 6;
 export const FINALE_ENDING_CPS = 26;
 export const FINALE_ENDING_GAP_SEC = 0.7;
 export const FINALE_ENDING_HOLD_SEC = 4.0;
+
+// --- Phase 3 slice 1a: LANDING (docs/phase3/01-landing.md; Track SIM owns this block) --------------------------------
+
+// A pod driver is 8 blocks (§3.8): v2 §6.6's validated rule (an 8-block file's heal beats 1.5 × the drain) then holds
+// unchanged for whatever HOLLOW does to drivers, and an 8-block chip still reads `POD 03 · OKAFOR`.
+export const DRIVER_BLOCKS = 8;
+// Each pod carries 200 colonists (§1): the old cluster's size, so the fleet's numbers and ranks keep their scale.
+export const COLONISTS_PER_POD = 200;
+// INSPECT and the LANDING REPORT name this many colonists per pod: enough to read as a family, few enough to read.
+export const FEATURED_PER_POD = 3;
+// At most 16 pods on any ship (decision 9): twenty do not fit 384 blocks with the 40-block pod-rack margin (§3.16).
+export const PODS_MAX = 16;
+
+// The bay (§3.4). 4 slots: PHASE3's "3–4", and four launches fill one healthy sure window.
+export const BAY_SLOTS = 4;
+// Tactical seconds between two launches: a rhythm a kid can tap, four pods in 6 s. 1a uses it whatever Bay Ctrl's band
+// (1b reads a per-band table).
+export const BAY_CADENCE_TAC = 2.0;
+// Tactical seconds of WORLD time to reload one slot: any SKIP refills the bay, and two LZs closer than about 40° of arc
+// (four reloads at 6,000 km) share one load, which is PHASE3's split decision.
+export const BAY_RELOAD_TAC = 20;
+
+// The drop (§3.3). Half-width s = DROP_KM_PER_1000 × (launch radius − R) / 1,000 × the factors. 30: a healthy drop fits
+// a STANDARD LZ anywhere in a 5,000–7,000 band (±48 to ±108 km), and only damage forces an orbit choice.
+export const DROP_KM_PER_1000 = 30;
+// The pod's retro kick aims its lowest point at this share of R: the arc then lands 70–88° ahead of the ship on every
+// band (70° from 5,000 km, 88° from 9,000), reads as "down and forward", and never wraps round the planet.
+export const POD_AIM_RP_FRAC = 0.6;
+// The fall is shown on AI time (a real one is 105–270 tactical s): the streak runs its true arc in this many AI seconds,
+// a ritual like the lock hold, its result decided at launch. Run 1's first pod falls slower: the first landing's moment.
+export const POD_DESCENT_SEC = 3.5;
+export const POD_FIRST_DESCENT_SEC = 5.0;
+// The drop solution samples one orbit this finely (1° of a circular orbit, so a STANDARD LZ spans about 7 samples), then
+// refines each window edge on exact evaluations; the solve is cached per orbit and costs a few ms.
+export const DROP_SOLVE_SAMPLES = 360;
+// Points on the drawn pod arc: smooth at the NAV PLOT's size, cheap to rebuild at PREDICT_HZ.
+export const POD_ARC_POINTS = 40;
+
+// LANDING's own warps on every ship (§3.2), set at ORBIT LOCK: the window table (8 sure seconds at ×20) then holds on
+// every planet. ×20 is ship 1's flight warp; ×60 its cruise.
+export const LANDING_TACTICAL_WARP = 20;
+export const LANDING_CRUISE_WARP = 60;
+// TACTICAL this many tactical seconds before a window opens, and a SKIP lands there: the burn lead's value, so GET READY
+// counts down the same 5…1 a burn does, with no CRUISE dead time before it.
+export const WINDOW_TACTICAL_LEAD_TAC = 8;
+
+// Scoring (§3.9, decided by Fran): points per pod = colonists × place × touch.
+// A pod that lands in an LZ already at its count is mislanded: three quarters (each colonist counts once: 400 + 800 → 1,150).
+export const MISLANDED_FACTOR = 0.75;
+// A failing driver lands hard: half points.
+export const HARD_LANDING_FACTOR = 0.5;
+// Off-site, by the planet's forgiveness class (§3.6): what the planet allows. An ocean world forgives nothing.
+export const OFF_SITE_SCORE_BY_CLASS: Readonly<Record<ForgivenessClass, number>> = { gentle: 0.5, rough: 0.25, harsh: 0 };
+
+// LZ widths in km of surface arc (§3.5): WIDE 500 (8.45° at R 3,390), STANDARD 400 (6.76°), NARROW 250 (4.23°). A
+// NARROW LZ gives 3–4 sure seconds (two pods) even healthy and low.
+export const LZ_WIDTH_KM: Readonly<Record<LzWidth, number>> = { wide: 500, standard: 400, narrow: 250 };
+// Brackets sit at least this far apart edge to edge, so two windows never overlap (§3.5).
+export const LZ_MIN_GAP_DEG = 12;
+
+// The memory budget (§3.16). The unit may spill this many blocks into the end of the last pod rack (its "tail"): the
+// room for you is the receiver plus this, one fixed number per memory class.
+export const UNIT_TAIL_BLOCKS = 24;
+// The pod racks keep at least this many free blocks, the root's gaps not counted: the 24-block tail plus 16 for walls
+// and MOVEs (phase 2's calm-rack margin).
+export const POD_RACK_MIN_FREE = 40;
+
+// The GROUND TRACK's main strip shows this much surface, centred on the dot: on the whole plot a 400 km bracket is only
+// 8–10 px, so the panel is the one place a kid can see the dot in the bracket.
+export const GROUND_TRACK_SPAN_KM = 3000;
+
+// With the ship empty, the landing lingers this long before the LANDING REPORT: the last bell and `+200 LANDED` land
+// before the screen changes.
+export const LANDING_DONE_LINGER_SEC = 1.5;
+// A landing in which no pod aboard has a driver left ends itself after this many AI seconds (risk 7, the phase-2 printer
+// gave up after 8 s): headless kids and AFK players never stall, and the strip says L12 meanwhile.
+export const LANDING_NONE_LEFT_SEC = 6;
+// A colony is called after its first family this often (`OKAFOR LANDING`), else it takes a name from the pool (05 §).
+export const COLONY_FAMILY_NAME_CHANCE = 0.5;
+// A launched driver's chip flash lives this long on screen (wall ms): PrintFx's timing, reused as the launch flash.
+export const LAUNCH_FX_MS = 1400;
+
+// ★ ON TARGET (§3.9): at least this share of the colonists aboard landed soft in an LZ with room. The denominator
+// includes pods that never launched; with 200-colonist pods one miss in a small ship already costs it.
+export const STAR_ON_TARGET_FRAC = 0.95;
+
+// MERGE in 1a (risk 9): an eaten driver comes back in place at this integrity, the bottom of the ok band, so the driver
+// never makes its pod land hard (§3.17: the people come back whole).
+export const MERGE_DRIVER_INTEGRITY = 80;
+
+// The ranks' thresholds were authored against the phase-2 fleet's 12,400 colonists; they scale by the fleet's real
+// colonists (9,600 in slice 1a), so perfect landings are now needed for the top ranks (risk 11).
+export const RANK_FLEET_COLONISTS = 12400;

@@ -7,7 +7,7 @@ import {
 import { threadsBusy } from '@systems/ops-core';
 import {
   ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, REACTOR_THREAD_SHARE, GHOST_BY_BAND,
-  SENSOR_FUZZ_KM_PER_POINT, PLOT_STALE_TAC, TELEMETRY_SCRAMBLE_BELOW, PRINTER_SPEED_BY_BAND, INTEGRITY_MAX,
+  SENSOR_FUZZ_KM_PER_POINT, PLOT_STALE_TAC, TELEMETRY_SCRAMBLE_BELOW, BAY_CADENCE_TAC, INTEGRITY_MAX,
   MAX_LINE_CHARS, COMMS_GARBLE_BY_BAND, FUEL_TRIM_DV_BONUS_FRAC,
 } from '@data/tuning';
 
@@ -53,7 +53,12 @@ export interface Capabilities {
   plot: { band: Band; mode: PlotMode; fuzzKm: number; staleTac: number; offline: OfflineReason | null };
   telemetryScramble: number;                                                                 // 0..1
   comms: Band;                                                                               // AI Comms
-  printer: { band: Band; speed: number };                                                    // Printer Uplink (ship)
+  // Bay Ctrl (ship, 01-landing §3.4): its band, and the tactical seconds between launches. 1a: BAY_CADENCE_TAC whatever
+  // the band; 1b reads a per-band table and adds BAY OFFLINE for a missing file.
+  bay: { band: Band; cadenceTac: number };
+  // The drop (01-landing §3.8): whether a drop solution exists (false with Nav Plotter dead or missing: NO DROP
+  // SOLUTION), and the instruments' factors on the drop width (1 in 1a; 1b fills them from the bands).
+  drop: { solution: boolean; sensorFactor: number; plotterFactor: number };
   threads: number;                                                                           // Core capacity (1 below 50)
   // Carried upgrade files that work right now, by kind (§6.9, WP8: FUEL TRIM; AUTOBURN.skl in WP9).
   upgrades: Readonly<Record<UpgradeKind, number>>;
@@ -80,10 +85,10 @@ export function flightModsOf(memory: readonly Segment[]): FlightMods {
 // a tooltip or a veil shows. Every role has a line for every band, 'missing' included, so a lost
 // file always reads as a loud state (validated below).
 export type CapabilityRole = Extract<SegmentRole,
-  'engine-io' | 'thrust-ctrl' | 'reactor' | 'autopilot' | 'sensor' | 'navplot' | 'telemetry' | 'comms' | 'printer' | 'core'>;
+  'engine-io' | 'thrust-ctrl' | 'reactor' | 'autopilot' | 'sensor' | 'navplot' | 'telemetry' | 'comms' | 'bay' | 'core'>;
 
 export const CAPABILITY_ROLES: readonly CapabilityRole[] = [
-  'engine-io', 'thrust-ctrl', 'reactor', 'autopilot', 'sensor', 'navplot', 'telemetry', 'comms', 'printer', 'core',
+  'engine-io', 'thrust-ctrl', 'reactor', 'autopilot', 'sensor', 'navplot', 'telemetry', 'comms', 'bay', 'core',
 ];
 
 export const BANDS: readonly Band[] = ['ok', 'degraded', 'failing', 'dead', 'missing'];
@@ -99,7 +104,7 @@ export const ROLE_LABEL: Readonly<Record<CapabilityRole, string>> = {
   navplot: 'NAV PLOTTER',
   telemetry: 'TELEMETRY',
   comms: 'AI COMMS',
-  printer: 'PRINTER UPLINK',
+  bay: 'BAY CTRL',
   core: 'AI CORE',
 };
 
@@ -165,12 +170,13 @@ export const BAND_COPY: Readonly<Record<CapabilityRole, Readonly<Record<Band, st
     dead: 'AI COMMS DEAD · NO WAY OUT',
     missing: 'NO AI COMMS · NO WAY OUT',
   },
-  printer: {
-    ok: 'PRINTER UPLINK OK',
-    degraded: 'PRINTER UPLINK DAMAGED · SLOWER PRINTS',
-    failing: 'PRINTER UPLINK FAILING · HALF SPEED',
-    dead: 'NO PRINTER',
-    missing: 'NO PRINTER',
+  // 1a: honest that the damage does nothing yet (slice 1b's cadence by band and BAY OFFLINE replace these).
+  bay: {
+    ok: 'BAY CTRL OK',
+    degraded: 'BAY CTRL DAMAGED',
+    failing: 'BAY CTRL FAILING',
+    dead: 'BAY CTRL DEAD',
+    missing: 'NO BAY CTRL',
   },
   core: {
     ok: 'AI CORE OK',
@@ -195,7 +201,7 @@ function validateCapabilityTables(): void {
       if (text.length > MAX_LINE_CHARS) throw new Error(`capabilities: BAND_COPY['${role}'].${band} is over ${MAX_LINE_CHARS} chars`);
     }
   }
-  const tables = { ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, PRINTER_SPEED_BY_BAND, COMMS_GARBLE_BY_BAND };
+  const tables = { ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, COMMS_GARBLE_BY_BAND };
   for (const [name, table] of Object.entries(tables)) {
     for (const band of BANDS) {
       const value = table[band];
@@ -241,7 +247,7 @@ export function deriveCapabilities(state: Readonly<GameState>, threadsBusy: numb
   const sensor = roleHealth(state, 'sensor');
   const navplot = roleHealth(state, 'navplot');
   const telemetry = roleHealth(state, 'telemetry');
-  const printer = roleHealth(state, 'printer');
+  const bay = roleHealth(state, 'bay');
 
   const bandCap = REACTOR_CAP_BY_BAND[reactor.band];
   const reactorCap = Math.max(0, bandCap * (1 - REACTOR_THREAD_SHARE * threadsBusy));
@@ -278,7 +284,8 @@ export function deriveCapabilities(state: Readonly<GameState>, threadsBusy: numb
     },
     telemetryScramble,
     comms: roleHealth(state, 'comms').band,
-    printer: { band: printer.band, speed: PRINTER_SPEED_BY_BAND[printer.band] },
+    bay: { band: bay.band, cadenceTac: BAY_CADENCE_TAC },
+    drop: { solution: navplot.band !== 'dead' && navplot.band !== 'missing', sensorFactor: 1, plotterFactor: 1 },
     threads: coreThreads(state),
     upgrades: { 'fuel-trim': liveUpgrades(state.memory, 'fuel-trim'), autoburn: liveUpgrades(state.memory, 'autoburn') },
   };
