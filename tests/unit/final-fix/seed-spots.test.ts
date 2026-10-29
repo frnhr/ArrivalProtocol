@@ -1,9 +1,7 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // Final fix pass (the final review's LAST LIGHT and VESPER majors): where a seed lands, judged by the files it would
 // really bite, and the strip's RM THE SEED ahead of a lesson's lead-in when the seed's bite reaches the AI Core.
-// • seedSpot ('walls', LAST LIGHT): a cluster moved into rack A's free tail beside Cargo Ctrl (the strip's old SAFE spot)
-//   no longer pulls the next seed in beside a ship file. The 4-block gap between Cargo Ctrl and the cluster is the
+// • seedSpot ('walls', LAST LIGHT): a pod's driver moved into rack A's free tail beside Cargo Ctrl (the strip's old SAFE spot)
+//   no longer pulls the next seed in beside a ship file. The 4-block gap between Cargo Ctrl and the driver is the
 //   smallest WALL touching a soul at the lowest address, the one the rule picked before; now no gap that touches a ship
 //   file is used.
 // • nearToolsSeedSpot ('near-tools', VESPER): the file on the tool side must BE a filesystem tool, and no spot whose bite
@@ -54,13 +52,13 @@ function bittenBy(memory: readonly Segment[], spot: SeedSpot): Segment[] {
     .map((reach) => find(after, (seg) => seg.id === reach.neighbourId, 'bitten file'));
 }
 
-// --- LAST LIGHT: a cluster moved into rack A's free tail --------------------------------------------------------------
+// --- LAST LIGHT: a driver moved into rack A's free tail --------------------------------------------------------------
 {
   h.lastLight(5, { hollowAsleep: true });
   const memory = clone(state().memory);
-  const c13 = find(memory, (seg) => seg.type === 'driver' && seg.cluster === 'C13', 'C13') as DriverSegment;
+  const c13 = find(memory, (seg) => seg.type === 'driver' && seg.pod === 13, 'POD 13') as DriverSegment;
   const cargo = find(memory, (seg) => seg.type === 'ship' && seg.role === 'cargo', 'Cargo Ctrl');
-  // C13's old place becomes free space; rack A's free tail (after Cargo Ctrl) becomes [4 free, C13, the rest free].
+  // POD 13's old place becomes free space; rack A's free tail (after Cargo Ctrl) becomes [4 free, POD 13, the rest free].
   const tailIndex = memory.indexOf(cargo) + 1;
   const tail = memory[tailIndex]!;
   if (tail.type !== 'free' || tail.size < c13.size + 4) throw new Error(`seed-spots: rack A's tail is ${tail.type} ${tail.size}`);
@@ -68,9 +66,9 @@ function bittenBy(memory: readonly Segment[], spot: SeedSpot): Segment[] {
   memory.splice(tailIndex, 1, freeSegment(4), c13, freeSegment(tail.size - 4 - c13.size));
   mergeAdjacentFree(memory);
   const spot = seedSpot(memory, []);
-  check('LAST LIGHT, C13 moved beside Cargo Ctrl: a seed still has a spot', spot !== null);
+  check('LAST LIGHT, POD 13 moved beside Cargo Ctrl: a seed still has a spot', spot !== null);
   const sides = spot === null ? null : gapAround(memory, spot);
-  check('…in a gap that touches no ship file (not the 4 blocks between Cargo Ctrl and C13)',
+  check('…in a gap that touches no ship file (not the 4 blocks between Cargo Ctrl and POD 13)',
     sides !== null && !(sides.left !== undefined && isShipFile(sides.left)) && !(sides.right !== undefined && isShipFile(sides.right)),
     sides === null ? 'none' : `${sides.left?.name} | ${sides.right?.name}`);
   check('…and it bites no ship file', spot !== null && bittenBy(memory, spot).every((seg) => !isShipFile(seg)),
