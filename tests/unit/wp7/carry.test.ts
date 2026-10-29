@@ -1,9 +1,7 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP7 item 3 (§6.9): systems/carry.ts, pure. The packing order and the drop locks, what travels with a
 // file (integrity, infection; never a recoil), the transit hits' floors over many seeds, the arrival
-// charge's star credit and floor, the spill into rack D and the loud overflow. Plus the printer's way out
-// of NO PRINTER (WP5's TODO for WP7).
+// charge's star credit and floor, the spill into rack D and the loud overflow. Plus, slice 1a: a landing left with no
+// driver to launch ends by itself (plan risk 7), as phase 2's NO PRINTER gave up.
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './harness7';
 import {
@@ -20,8 +18,12 @@ import { hasIntegrity } from '@state/selectors';
 import { UNNAMED_HOLLOW } from '@data/hollow-text';
 import {
   TRANSIT_LAST_COPY_FLOOR, TRANSIT_CORE_MAX_HIT, CORE_RESET_INTEGRITY, CHARGE_ARRIVAL_FLOOR, TRANSIT_HIT_MIN, TRANSIT_HIT_MAX,
-  NO_PRINTER_GIVE_UP_SEC, LANDING_DONE_LINGER_SEC,
+  LANDING_NONE_LEFT_SEC, LANDING_DONE_LINGER_SEC,
 } from '@data/tuning';
+import { setLandingMode } from '../support/landing-instant';
+import { recordDriverLost } from '@state/actions';
+import { driversInMemory } from '@state/selectors';
+import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 
 
 const halcyon = getShip(1);
@@ -121,6 +123,10 @@ const memory = h.store.getState().memory;
 }
 
 // --- Arrival charge and the layout -------------------------------------------------------------------------
+// TODO(phase2): Track SIM is building 01-landing §3.16's pooled receiver in layoutCarried (rack E's and F's lists back to
+// back, the spill into the last pod rack capped at UNIT_TAIL_BLOCKS). The layout checks below (rack F from 320, rack F's
+// list starting a block early, the spill into rack D, the overflow) are phase 2's rules and must be rewritten for it
+// after the merge; the arrival charge's two checks do not depend on it.
 {
   check('arrival charge: carried + 6 per ★', arrivalCharge(14, 18).blocks === 32 && arrivalCharge(14, 18).floorAdded === 0);
   check('…never below 12 (the floor tops it up)', arrivalCharge(3, 6).blocks === CHARGE_ARRIVAL_FLOOR && arrivalCharge(3, 6).floorAdded === 3);
@@ -148,7 +154,7 @@ const memory = h.store.getState().memory;
   check('…a packet bigger than racks E–F spills backward into rack D\'s free tail', big.racks.startAddr < UNIT_RACKS_START && big.overflowLost === 0,
     `start ${big.racks.startAddr}`);
   // A ship whose rack D is full to its end: the charge that does not fit is lost, loudly.
-  const fullD: ShipDef = { ...halcyon, id: 'full-d-test', memory: { ...halcyon.memory, podRacks: { ...halcyon.memory.podRacks, D: '_56 C' } } };
+  const fullD: ShipDef = { ...halcyon, id: 'full-d-test', memory: { ...halcyon.memory, podRacks: { ...halcyon.memory.podRacks, D: '_56 P' } } };
   const lost = layoutCarried(packet, 80, fullD);
   check('…with rack D full at its end, charge that does not fit is lost (CHARGE OVERFLOW)', lost.overflowLost === 80 - (128 - 63)
     && lost.chargeBlocks === 128 - 63, `${lost.overflowLost} lost`);
@@ -157,16 +163,29 @@ const memory = h.store.getState().memory;
   check('…files that do not fit throw', /do not fit/.test(threw), threw);
 }
 
-// --- NO PRINTER gives up (WP5's TODO) ---------------------------------------------------------------------
+// --- No driver left: the landing ends by itself (plan risk 7) ------------------------------------------------
 {
   h.resetTo('flight', 2);
-  h.setIntegrity('printer', 10);
+  setLandingMode('manual');
   h.startLanding(1);
+  h.step();
+  // Every driver gone (eaten), the pods still aboard: nothing can launch any more.
+  h.store.update((d) => {
+    for (const driver of driversInMemory(d)) {
+      recordDriverLost(d, driver, 'eaten');
+      d.memory[d.memory.indexOf(driver)] = freeSegment(driver.size);
+    }
+    mergeAdjacentFree(d.memory);
+    d.ui.memoryRev++;
+  });
   const tookSec = h.stepUntil(() => h.store.getState().run.phase === 'report', 60);
-  const results = h.store.getState().souls.results;
-  check(`NO PRINTER: after ${NO_PRINTER_GIVE_UP_SEC} s the unprinted are lost and the ship goes on to its WAKE REPORT`,
-    h.store.getState().run.phase === 'report' && results.length === 12 && results.every((result) => result.outcome === 'lost')
-    && tookSec <= NO_PRINTER_GIVE_UP_SEC + LANDING_DONE_LINGER_SEC + 1, `${tookSec.toFixed(1)} s, ${results.length} results`);
+  const state = h.store.getState();
+  check(`no driver left: after ${LANDING_NONE_LEFT_SEC} s the landing ends by itself (no-driver-left), every pod parked eaten, and the LANDING REPORT follows`,
+    state.run.phase === 'report' && state.landing.ended === 'no-driver-left'
+    && state.landing.pods.every((record) => record.fate.kind === 'parked' && record.fate.why === 'eaten')
+    && tookSec >= LANDING_NONE_LEFT_SEC && tookSec <= LANDING_NONE_LEFT_SEC + LANDING_DONE_LINGER_SEC + 2,
+    `${tookSec.toFixed(1)} s, ended ${state.landing.ended}, ${state.landing.pods.map((record) => record.fate.kind).join()}`);
+  setLandingMode('instant');
 }
 
 // --- createInitialState refuses a later ship with no unit -----------------------------------------------
