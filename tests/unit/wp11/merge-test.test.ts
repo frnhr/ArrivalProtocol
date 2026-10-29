@@ -37,7 +37,7 @@ import { segmentStarts, assertMemoryInvariants } from '@systems/memory-ops';
 import { selectCorruption, chargeLeft, driversInMemory, isHollow } from '@state/selectors';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { getShip } from '@data/ships';
-import { RUN_END_NOBODY_WOKE } from '@data/script';
+import { RUN_END_NOBODY_LANDED } from '@data/script';
 import { LANDING_NONE_LEFT_SEC, ROOT_DELETE_SEC, MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, MERGE_BONUS_CORE_CAPACITY, MERGE_CORRUPTION_FLOOR } from '@data/tuning';
 import type { GameState } from '@state/schema';
 import type { HollowSegment, DriverSegment } from '@/types/segment';
@@ -295,8 +295,8 @@ while (state().run.phase === 'landing' && h.wall() < zeroEnd) h.step();
 continueAfterReport(h.store);
 // WP11 fix round 1 (the review): the words too, not only the tone: never THE FLEET IS HOME over an empty flagship.
 check('…then PURGE: won-purge, but the flagship landed nobody: the sombre tone and words (`LAST LIGHT · NOBODY LANDED`), never the victory ones',
-  state().run.endCause === 'won-purge' && runEndModel(state()).tone === 'sombre' && runEndModel(state()).title === RUN_END_NOBODY_WOKE.title
-  && runEndModel(state()).why === RUN_END_NOBODY_WOKE.why['won-purge'],
+  state().run.endCause === 'won-purge' && runEndModel(state()).tone === 'sombre' && runEndModel(state()).title === RUN_END_NOBODY_LANDED.title
+  && runEndModel(state()).why === RUN_END_NOBODY_LANDED.why['won-purge'],
   `${state().run.endCause} ${runEndModel(state()).tone} ${runEndModel(state()).title} | ${runEndModel(state()).why}`);
 
 check('LAST LIGHT is the flagship and the last ship', getShip(4).flagship);

@@ -23,7 +23,7 @@ import { runEndModel } from '@systems/run-end';
 import { actionDelete, actionRepair, actionRefusal } from '@state/actions';
 import { reserveThread, releaseThread, threadsTotal, canStartOp, getOps, cancelOp } from '@systems/ops-core';
 import { typingSec } from '@systems/say';
-import { lineageLine, RUN_END_NOBODY_WOKE, RUN_END_PURGE_SHORT } from '@data/script';
+import { lineageLine, RUN_END_NOBODY_LANDED, RUN_END_PURGE_SHORT } from '@data/script';
 import { HOLLOW_FINALE, MERGE_TICK_TEXT, GHOST_LINE } from '@data/hollow-text';
 import { TOOL_REFUSAL, echoWord } from '@data/tool-text';
 import { driversInMemory, finalePending, chargeLeft, isInfected } from '@state/selectors';
@@ -299,11 +299,11 @@ for (const choice of ['purge', 'merge'] as const) {
   continueAfterReport(h.store);
   const model = runEndModel(state());
   const cause = choice === 'purge' ? 'won-purge' : 'won-merge';
-  check(`${choice.toUpperCase()} over a flagship that landed nobody: RUN END says so (\`${RUN_END_NOBODY_WOKE.title}\`), sombre`,
-    refusal === null && state().run.endCause === cause && model.title === RUN_END_NOBODY_WOKE.title && model.why === RUN_END_NOBODY_WOKE.why[cause]
+  check(`${choice.toUpperCase()} over a flagship that landed nobody: RUN END says so (\`${RUN_END_NOBODY_LANDED.title}\`), sombre`,
+    refusal === null && state().run.endCause === cause && model.title === RUN_END_NOBODY_LANDED.title && model.why === RUN_END_NOBODY_LANDED.why[cause]
     && model.tone === 'sombre', `${refusal} ${model.title} | ${model.why} | ${model.tone}`);
 }
-check('the nobody-landed words fit one line', [RUN_END_NOBODY_WOKE.title, ...Object.values(RUN_END_NOBODY_WOKE.why)].every((text) => text.length <= MAX_LINE_CHARS));
+check('the nobody-landed words fit one line', [RUN_END_NOBODY_LANDED.title, ...Object.values(RUN_END_NOBODY_LANDED.why)].every((text) => text.length <= MAX_LINE_CHARS));
 
 // --- The lineage and the ghost -----------------------------------------------------------------------------------------
 {

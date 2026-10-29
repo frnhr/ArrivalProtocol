@@ -38,7 +38,7 @@ import { offerDealNow } from '@systems/hollow-deal';
 import { recordDriverLost, setIntegrity } from '@state/actions';
 import { driversInMemory, rootDeleteRunning, rootDeletable, repairPossible } from '@state/selectors';
 import { podRecord } from '@systems/landing-rules';
-import { DRIVER_RULES, RUN_END_NOBODY_WOKE } from '@data/script';
+import { DRIVER_RULES, RUN_END_NOBODY_LANDED } from '@data/script';
 import { HOLLOW_STORY, HOLLOW_FINALE } from '@data/hollow-text';
 import { LANDING_NONE_LEFT_SEC } from '@data/tuning';
 import { isAiFile } from '@state/selectors';
@@ -322,10 +322,10 @@ function forceLandAllButFirst(): void {
   world.run.endCause = 'won-purge';
   const model = runEndModel(world);
   check('RUN END: a won PURGE over a LAST LIGHT whose pods all came down mislanded is not NOBODY WOKE (victory)',
-    model.title !== RUN_END_NOBODY_WOKE.title && model.tone === 'victory', `${model.title} · ${model.tone}`);
+    model.title !== RUN_END_NOBODY_LANDED.title && model.tone === 'victory', `${model.title} · ${model.tone}`);
   for (const record of world.landing.pods) record.fate = { kind: 'parked', why: 'eaten', restorable: true };
   world.run.ships = [shipResultOf(world, 'locked', 0)];
-  check('…and one whose pods were all parked still is', runEndModel(world).title === RUN_END_NOBODY_WOKE.title, runEndModel(world).title);
+  check('…and one whose pods were all parked still is', runEndModel(world).title === RUN_END_NOBODY_LANDED.title, runEndModel(world).title);
 }
 
 // --- Issue 5. VESPER's tool-hunting seed borders a tool on a fresh unit ------------------------------------------------

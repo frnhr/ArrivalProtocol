@@ -566,7 +566,7 @@ export const RUN_END_PURGE_SHORT = {
 // runEndTone, from the same count), and its words are too, as the typed ending's `nobody is left to bring home.` was.
 // Never `THE FLEET IS HOME` over an empty ship. PLACEHOLDER: 05-story owns the words. (The export keeps its phase-2
 // name: systems/run-end.ts imports it, outside this module's owner.)
-export const RUN_END_NOBODY_WOKE = {
+export const RUN_END_NOBODY_LANDED = {
   title: 'LAST LIGHT · NOBODY LANDED',
   why: {
     'won-purge': 'You deleted it. Nobody on the flagship landed.',

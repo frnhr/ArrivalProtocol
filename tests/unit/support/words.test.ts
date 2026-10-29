@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { check, finish } from '../landing/checks';
 import { HOLLOW_DEAL, HOLLOW_ECHO, HOLLOW_FINALE, HOLLOW_HUD_TEXT } from '@data/hollow-text';
 import { POD_STATE_TEXT, LANDING_LINES } from '@data/landing-text';
-import { lineageLine, RUN_END_NOBODY_WOKE } from '@data/script';
+import { lineageLine, RUN_END_NOBODY_LANDED } from '@data/script';
 import { scanFinding } from '@data/tool-text';
 import { MAX_LINE_CHARS } from '@data/tuning';
 
@@ -146,8 +146,8 @@ const endings = [
 ].map((line) => line.text);
 check('the typed endings count colonists, never souls', endings.some((text) => text.includes('3,200 colonists')) && !endings.some((text) => /souls/i.test(text)),
   JSON.stringify(endings));
-check('RUN END over an empty flagship: nobody LANDED', /LANDED/.test(RUN_END_NOBODY_WOKE.title)
-  && Object.values(RUN_END_NOBODY_WOKE.why).every((text) => /landed/.test(text) && !/woke/i.test(text)));
+check('RUN END over an empty flagship: nobody LANDED', /LANDED/.test(RUN_END_NOBODY_LANDED.title)
+  && Object.values(RUN_END_NOBODY_LANDED.why).every((text) => /landed/.test(text) && !/woke/i.test(text)));
 const lineage = lineageLine({ number: 47, woke: 6200, shipName: 'VESPER', cause: 'overwritten', stats: { moves: 0, deletes: 0 }, hollowUnits: [46] });
 check("the title's lineage counts the colonists landed", lineage === 'last: UNIT-047 · 6,200 landed · overwritten at VESPER', String(lineage));
 check('SCAN STASIS finds the sleepers, not `0 pods`', scanFinding('stasis', 100) !== '0 pods' && /sleeper/.test(scanFinding('stasis', 100)));

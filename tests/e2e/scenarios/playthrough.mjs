@@ -487,9 +487,15 @@ for (const [index, name] of SHIPS.entries()) {
     && rows.rows.length === model.rows.length && model.lzRows.every((lzRow) => rows.rows.some((row) => row.includes(lzRow.split(' ')[0]))),
     JSON.stringify({ ...rows, lzRows: model.lzRows }));
   await shot(`${index + 1}d-report`);
-  await page.keyboard.press('Space');
-  await page.waitForTimeout(1100);
-  const credits = await st(() => ({ shown: !document.getElementById('lrCredits').hidden, names: [...document.querySelectorAll('#lrRoll > *')].map((el) => el.innerText.split('\n')[0]) }));
+  // The roll may already be showing (ship 1's short report) or wait for one Space; read it whenever it shows, so a
+  // Space never skips past it before it is read.
+  const readCredits = () => st(() => ({ shown: !document.getElementById('lrCredits').hidden, names: [...document.querySelectorAll('#lrRoll > *')].map((el) => el.innerText.split('\n')[0]) }));
+  let credits = await readCredits();
+  if (!credits.shown) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(1100);
+    credits = await readCredits();
+  }
   check(`${tag}: …the credits roll names a colonist per pod that scored (${model.credits.length})`, model.credits.length === 0
     ? credits.names.length === 0 : credits.shown && credits.names.length === model.credits.length, credits.names.slice(0, 3).join(' | '));
   if (byStrip) check(`${tag}: …the kid's landing put colonists down in an LZ`, model.landed > 0, model.headline);

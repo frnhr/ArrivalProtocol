@@ -1,12 +1,13 @@
-# Unit tier: known failures during slice 1a (Track TESTS)
+# Unit tier: known failures during slice 1a
 
-The regression signal for slice 1a. A suite that fails and is NOT listed here is a regression. At the first commit
-(a185afb, from the foundation's c885639) 51 of Track TESTS' suites failed (76 passed, 51 failed in 237 s). Every one has
-since been fixed or rewritten for the current design, on the state with Tracks SIM (d9d484a) and UI (004039d) merged.
-No test file switches the type checker off (tests/unit/support/no-ts-nocheck.test.ts guards it).
+The regression signal for slice 1a: a suite that fails and is NOT listed here is a regression. During the slice, 51
+suites failed after the switch-over; every one has since been fixed or rewritten for the landing design. No test file
+switches the type checker off (`tests/unit/support/no-ts-nocheck.test.ts` guards it), and no phase-2 word for a pod is
+left in the game's text (`tests/unit/support/words.test.ts`).
 
-Last measured on the merged state (004039d merged): `npm test` on 4 workers, **135 passed, 0 failed in 270 s**; the
-slowest suite took 47 s (lead1/low-tank).
+At the end of slice 1a (all tracks, the review fixes and the tier trims merged): `npm test` on 4 workers, **137 passed,
+0 failed in 231 s**; the slowest suite took 39 s (lead2/coast-skip). The e2e tier: 317 of 319 checks in 1,120 s, see
+the end of this page.
 
 ## Track TESTS' suites
 
@@ -22,3 +23,11 @@ it by its fastest run, and it passed in the last run.
 | Suite | What it prints, and why it does not fail |
 |---|---|
 | wp12/playthrough | Every design target (souls woke, ships locked, wall time, Core never lost, MERGE availability, SLOPPY's endings) prints INFO with its number; `PT_STRICT=1` makes them checks. The kids were written for phase 2; only "each kid's run ends" is a hard check. |
+
+## e2e (one full run at the end of slice 1a)
+
+- `playthrough`, ship 1: "the credits roll names a colonist per pod that scored" read the roll after a SPACE had
+  skipped it (a test timing flaw; the report was right). Fixed in the scenario after the run; not re-run.
+- `playthrough`, LAST LIGHT: "the flight ends by the strip within 6 minutes" timed out at 360 s while the kid, out of
+  REPAIR CHARGE, could not act on `MOVE POD 10 behind a WALL`. It fails the same way on the phase-2 tree (2cc8f49), so
+  it predates slice 1a; the kid's MOVE handling or the limit needs a look with the rebalance.

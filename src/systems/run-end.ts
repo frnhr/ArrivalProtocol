@@ -5,7 +5,7 @@ import { unitName } from '@systems/say';
 import { shownFuelPct } from '@systems/flight-hud';
 import { SHIPS } from '@data/ships';
 import { shipColonists } from '@data/memory';
-import { RUN_END_TITLE, RUN_END_WHY, RUN_END_PURGE_SHORT, RUN_END_NOBODY_WOKE, SHIP_OUTCOME_WORD } from '@data/script';
+import { RUN_END_TITLE, RUN_END_WHY, RUN_END_PURGE_SHORT, RUN_END_NOBODY_LANDED, SHIP_OUTCOME_WORD } from '@data/script';
 import { RUN_END_TEXT } from '@data/landing-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import {
@@ -139,8 +139,8 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
   let title = RUN_END_TITLE[cause](unit, lastShip);
   let why = RUN_END_WHY[cause](lastShip);
   if ((cause === 'won-purge' || cause === 'won-merge') && landedOnFlagship === 0) {
-    title = RUN_END_NOBODY_WOKE.title;
-    why = RUN_END_NOBODY_WOKE.why[cause];
+    title = RUN_END_NOBODY_LANDED.title;
+    why = RUN_END_NOBODY_LANDED.why[cause];
   } else if (cause === 'won-purge' && !fleet.all) {
     title = RUN_END_PURGE_SHORT.title(fleet.home, fleet.total);
     why = RUN_END_PURGE_SHORT.why(fleet.home, fleet.total);
