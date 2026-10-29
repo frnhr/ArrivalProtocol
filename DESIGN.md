@@ -4,6 +4,10 @@ The game's concepts, short. The code is the source of truth for numbers (`src/da
 The original brainstorm (a braking-burn sim with LLM-trained skills) was replaced in the 2026-10 overhaul; what was kept
 and what was cut is listed at the end.
 
+**Phase 3 has begun.** Slice 1a replaced printing with LANDING: colonists sleep in pods flown by 8-block driver files,
+and you land them on the planet's landing zones (`docs/phase3/01-landing.md`). Where this page speaks of printing,
+souls, the reveal and the WAKE REPORT, read pods, drivers, LANDING and the LANDING REPORT; the rest still holds.
+
 ---
 
 ## Premise

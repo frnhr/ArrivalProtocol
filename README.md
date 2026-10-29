@@ -9,13 +9,13 @@ rendering; the readouts carry the drama.
 
 ## The game
 
-- **SHIP (amber):** fly a two-body orbital capture. Turn the predicted path green, inside the ring where the bio-printers
-  can reach. Presets, hold SPACE to burn, a guidance line that always names the next step, and a director that paces
+- **SHIP (amber):** fly a two-body orbital capture. Turn the predicted path green, inside the launch band, then
+  land the colony's pods on the planet's landing zones. Presets, hold SPACE to burn, a guidance line that always names the next step, and a director that paces
   time (CRUISE, TACTICAL, SKIP).
 - **MIND (blue):** 384 blocks of memory in six racks. Your tools are files (SCAN, REPAIR, MOVE, DELETE, COPY, SWAP).
   HOLLOW eats the file next to it; four free blocks stop it.
 - The two halves pull on each other: burning feeds HOLLOW, damaged files weaken the engine and the instruments, and the
-  orbit's fit decides how many colonists can be printed.
+  orbit's fit decides where the pods can be launched from.
 - One run is five ships (ARES-VII, HALCYON, KESTREL, VESPER, LAST LIGHT), each adding one rule, and it ends in a duel
   with HOLLOW and a choice: PURGE or MERGE.
 
