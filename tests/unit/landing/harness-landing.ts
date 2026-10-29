@@ -6,8 +6,8 @@
 // • a line that names [L] (LAUNCH NOW, LAUNCH — WIDE DROP) presses KeyL, once per reaction: [L] is matched FIRST, before
 //   any rule that reads `NOW` as "hold SPACE" (followDirector's), because LAUNCH NOW contains NOW;
 // • a line that names [F] (L13's WAIT, the MIND CLEAR hint) presses KeyF while no SKIP runs;
-// • L12 (NO POD CAN LAUNCH, and its twin NO LZ IN THE LAUNCH BAND) presses END LANDING (landing.ts endLanding, the POD BAY
-//   window's button after its inline confirm);
+// • L12 (NO POD CAN LAUNCH, and its twin NO LZ IN THE LAUNCH BAND; never L12b) presses END LANDING (landing.ts
+//   endLanding, the POD BAY window's button after its inline confirm);
 // • an inline confirm at [L] (off-site, or an LZ already full) is answered by `confirm` (default yes: Enter).
 // [L] goes through the real key path (landing-controls registerLandingKeys, registered once per store here), so the
 // refusals, the guards and SHIP SCREEN in the MIND are the game's own.
@@ -44,6 +44,11 @@ export interface FollowLandingResult {
   wall: number;           // wall seconds of landing
   windows: number;        // windows the landing used (a window-open edge followed by a launch in it)
 }
+
+// The strip rows that ask for END LANDING: L12 and its twin NO LZ IN THE LAUNCH BAND, exactly. Not L12b (`landing-L12b`,
+// ALL PODS AWAY · n FALLING: pods still falling must come down), and not NO ROOM IN THE BAND (`landing-L13-noroom`: its
+// [F] and L3b's [L] land the pods mislanded; END LANDING there is the kid's choice, not the strip's ask).
+const END_LANDING_ROWS: ReadonlySet<string> = new Set(['landing-L12', 'landing-L12-band']);
 
 function namesKey(line: ObjectiveLine | null, key: string): boolean {
   return line !== null && line.text.includes(`[${key}]`);
@@ -82,7 +87,7 @@ export function followLanding(h: Harness2, opts: FollowLandingOpts = {}): Follow
       result.launchPresses++;
       lastPressAt = h.wall();
       if (windowOpen && !launchedThisWindow) { launchedThisWindow = true; result.windows++; }
-    } else if (line?.id.startsWith('landing-L12')) {
+    } else if (line !== null && END_LANDING_ROWS.has(line.id)) {
       if (endLanding(h.store) === null) result.endedByStrip = true;
       lastPressAt = h.wall();
     } else if (namesKey(line, 'F') && state.clock.skipWarp === null) {
