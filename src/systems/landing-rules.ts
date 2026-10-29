@@ -192,12 +192,36 @@ export function windowOpenNow(sol: Readonly<DropSolution> | null, nowTSec: numbe
   return { lz: open.lz, sure };
 }
 
+// The solution's windows as they stand at `nowTSec` (times still relative to its asOfTSec): one that has closed since
+// the solution was solved comes round again a period later, because the orbit repeats exactly between kicks (and a kick
+// bumps orbitEpoch, which re-solves). Without it a cache up to a refresh old shows no next window for that LZ for a tick
+// after its window closed (ARES-VII, one LZ: the strip had no row for that tick). Likewise an in-band span that is
+// over while the window is still open: the next in-band span is a period later.
+export function windowsAsOf(sol: Readonly<DropSolution>, nowTSec: number): LzWindow[] {
+  const elapsed = nowTSec - sol.asOfTSec;
+  const period = sol.periodSec;
+  if (!(period > 0)) return [...sol.windows];
+  const turns = (closeInSec: number): number => (closeInSec > elapsed ? 0 : Math.floor((elapsed - closeInSec) / period) + 1);
+  const shift = (sec: number | null, k: number): number | null => (sec === null ? null : sec + k * period);
+  return sol.windows.map((w) => {
+    const k = turns(w.closeInSec);
+    const moved: LzWindow = k === 0 ? w : {
+      ...w, openInSec: w.openInSec + k * period, closeInSec: w.closeInSec + k * period,
+      sureOpenInSec: shift(w.sureOpenInSec, k), sureCloseInSec: shift(w.sureCloseInSec, k),
+      inBandOpenInSec: shift(w.inBandOpenInSec, k), inBandCloseInSec: shift(w.inBandCloseInSec, k),
+    };
+    if (moved.inBandCloseInSec === null || moved.inBandCloseInSec > elapsed) return moved;
+    const j = turns(moved.inBandCloseInSec);
+    return { ...moved, inBandOpenInSec: shift(moved.inBandOpenInSec, j), inBandCloseInSec: shift(moved.inBandCloseInSec, j) };
+  }).sort((a, b) => a.openInSec - b.openInSec);
+}
+
 // The window the kid should aim at (§3.2; pace's SKIP, the countdown chip and landing-hud share it): the next in-band
 // span not yet over of an LZ with projected room, else of any LZ, else null. "Next" by its in-band opening (an open one
 // first). Times rebased to `nowTSec`.
 export function targetWindow(state: Readonly<GameState>, sol: Readonly<DropSolution> | null, nowTSec: number): LzWindow | null {
   if (sol === null || sol.block !== null) return null;
-  const live = sol.windows
+  const live = windowsAsOf(sol, nowTSec)
     .filter((w) => w.inBandOpenInSec !== null && w.inBandCloseInSec !== null && secFromNow(sol, w.inBandCloseInSec, nowTSec) > 0)
     .sort((a, b) => a.inBandOpenInSec! - b.inBandOpenInSec!);
   const remaining = lzRemaining(state);

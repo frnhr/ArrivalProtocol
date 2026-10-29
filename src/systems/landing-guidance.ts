@@ -7,7 +7,9 @@ import { skipBlockReason } from '@systems/pace';
 import { rootDeleteRunning } from '@systems/hollow';
 import { rootDeletable } from '@systems/finale';
 import { secFromNow } from '@systems/landing-solve';
-import { isLaunchable, launchMomentInSec, lzDownFill, lzRemaining, nextToLaunch, targetWindow } from '@systems/landing-rules';
+import {
+  isLaunchable, launchMomentInSec, lzDownFill, lzRemaining, nextToLaunch, targetWindow, windowsAsOf,
+} from '@systems/landing-rules';
 import { driversInMemory } from '@state/selectors';
 import { podHintTarget, toolStepTarget, ROOT_HINT_TARGET } from '@data/fs-tools';
 import { LANDING_LINES, podCode } from '@data/landing-text';
@@ -89,7 +91,7 @@ function nextWindow(state: Readonly<GameState>, sol: Readonly<DropSolution>): La
     const inTac = Math.max(0, secFromNow(sol, target.inBandOpenInSec, now)) / warp;
     return { lz: target.lz, inTac, launchInTac: Math.max(0, launchAt) / warp, inBand: true };
   }
-  const ahead: LzWindow | undefined = sol.windows.find((w) => secFromNow(sol, w.closeInSec, now) > 0);
+  const ahead: LzWindow | undefined = windowsAsOf(sol, now).find((w) => secFromNow(sol, w.closeInSec, now) > 0);
   if (ahead === undefined) return null;
   const inTac = Math.max(0, secFromNow(sol, ahead.openInSec, now)) / warp;
   return { lz: ahead.lz, inTac, launchInTac: inTac, inBand: false };
