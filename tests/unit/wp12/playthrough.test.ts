@@ -1,5 +1,5 @@
 // WP12 acceptance 3 (§9 WP12 spec item 1): the 200-seed playthrough. Runs tests/unit/wp12/playthrough.ts for the COMPETENT
-// and the SLOPPY kid on seeds 1–PT_SEEDS (default 200 at full depth, 1 in the unit tier: see SEEDS), in PT_WORKERS
+// and the SLOPPY kid on seeds 1–PT_SEEDS (200 at full depth; the unit tier flies COMPETENT on 1: see SEEDS), in PT_WORKERS
 // parallel shards (default 4: one harness per process, since the systems are module singletons), prints the results
 // table and checks the design's targets:
 // • COMPETENT: ≥ 85% of the souls woke; every ship locked in ≥ 90% of the seeds; simulated wall time 20–32 min; never

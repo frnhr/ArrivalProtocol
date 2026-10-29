@@ -17,7 +17,7 @@ import { integrateStep } from '@systems/orbit-sim';
 import { paceLabel, countdownChip } from '@systems/flight-hud';
 import { propagateConic, stateFromElements, elementsFromState } from '@/types/orbit';
 import { releaseAtCapture, captureOffRing, idle, obey, text, stepUntil, flyOnce, longWait as sharedLongWait } from '../wp1-rules/flows';
-import { fullOnly } from '../depth';
+import { fullOnly, byDepth } from '../depth';
 import { resumeHeldThrottle } from '@systems/flight-controls';
 import { pressAutoburn, autoburnRefusal } from '@systems/autoburn';
 import { asksToHoldSpace } from '@systems/guidance';
@@ -210,7 +210,8 @@ fullOnly(`${ship}: SHRINK ignored for an hour (LEAD-1 deviation 1)`, () => {
 {
   const rows: string[] = [];
   let bad = '';
-  for (const intoSkipSec of [2, 3.5, 5]) {
+  // Quick depth (tests/unit/depth.ts): early and late in the SKIP; full: and its middle.
+  for (const intoSkipSec of byDepth([2, 5], [2, 3.5, 5])) {
     longWait();
     harness.press('KeyF');
     idle(harness, intoSkipSec);
