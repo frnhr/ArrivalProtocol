@@ -1,8 +1,7 @@
 // Slice 1a: POD 01 OKAFOR is HOLLOW's first bite (right after the root, so bitten from the left); the landing stands
 // while the fight goes on ('manual' landing mode), and is landed instantly once the fight is decided; an eaten driver's
 // pod is parked (eaten, restorable). PRINT FAST and the print-tug line are gone with the printer.
-// TODO(phase2): Track SIM's director lines in LANDING (01-landing §3.11) decide what the strip says while a repair
-// wins a tug-of-war; re-add that check after the merge.
+// While a repair wins a tug-of-war in LANDING, the strip shows the landing table's own line (01-landing §3.11).
 // WP6 acceptance 3: ship 1 (ARES-VII), flown by the WP1 literal follower (the capture timings of the
 // flight table, reaction 0.4 s), with HOLLOW mounted as on the page. The loop closes mid-capture and
 // HOLLOW bites C12 (Ada's family); the capture burn doubles its drain (P1), and the fight comes after
@@ -155,10 +154,12 @@ function checkStory(label: string, fightEcho: RegExp): void {
   let lowest = pod1.integrity;
   const repairFrom = h.wall();
   let alarmWhileWinning = false;
+  const tugLines = new Set<string>();
   h.stepUntil(() => {
     lowest = Math.min(lowest, h.maybeSoul('POD 01')?.integrity ?? 0);
     // Past the strip's hysteresis: the alarm cleared at once (the repair wins).
     if (getOps().length > 0 && h.wall() - repairFrom > 0.5 && h.store.getState().alerts.list.some((alert) => alert.id === 'eaten:1')) alarmWhileWinning = true;
+    if (getOps().length > 0 && h.wall() - repairFrom > 0.5) tugLines.add(h.shown()?.id ?? 'none');
     return getOps().length === 0;
   }, 20);
   const after = h.maybeSoul('POD 01');
@@ -167,6 +168,10 @@ function checkStory(label: string, fightEcho: RegExp): void {
     `${report(flight)}; repair from ${at.toFixed(1)}%, lowest ${lowest.toFixed(1)}%`);
   check('…the green pushed the red back from the first tick (never lower than where it started)', lowest >= at - 0.2);
   check('while it fought, no WILL BE EATEN alarm (the repair is winning)', !alarmWhileWinning);
+  // The landing's own line holds the strip while the repair wins (01-landing §3.11): it never asks for POD 01's REPAIR
+  // again (L11 skips a driver being repaired), nor sounds an alarm.
+  check('while it fought, the strip showed the landing\'s line (WAIT), never L11 or an alarm', tugLines.size > 0
+    && [...tugLines].every((id) => id.startsWith('landing-') && id !== 'landing-L11'), [...tugLines].join(', '));
   check('the cure is heard (hollow-cure)', h.events.some((event) => event.name === 'hollow-cure'));
   checkStory('saved late', /^> repair pod01 \.\.\. OK/);
   const result = podRecord(h.store.getState(), 1).fate;
