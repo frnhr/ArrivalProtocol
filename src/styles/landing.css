@@ -11,6 +11,12 @@
 .np-lz.look-full { stroke: var(--soul); opacity: 0.55; }
 .np-lz.look-candidate { stroke: var(--accent-bright); stroke-dasharray: 1 1.6; opacity: 0.7; }
 .np-lz.out-of-band { stroke-dasharray: 0.8 0.8; opacity: 0.6; }
+.np-lz-ticks { fill: none; stroke-width: 1.1; stroke-linecap: square; vector-effect: non-scaling-stroke; stroke: var(--accent-dim); }
+.np-lz-ticks.look-target { stroke: var(--accent); }
+.np-lz-ticks.look-open { stroke: var(--accent-bright); }
+.np-lz-ticks.look-sure { stroke: var(--good); }
+.np-lz-ticks.look-full { stroke: var(--soul); opacity: 0.55; }
+.np-lz-ticks.look-candidate { stroke: var(--accent-bright); opacity: 0.7; }
 .np-nogo { fill: none; stroke: var(--nogo); stroke-dasharray: 0.9 0.9; opacity: 0.85; }
 .navplot-svg .np-lz-label { letter-spacing: 0.08em; }
 .navplot-svg .np-lz-label.look-idle { fill: var(--accent-dim); }
@@ -349,4 +355,26 @@ body.reduced-motion .lr-icon.icon-parked { animation: none; }
 @media (max-height: 800px) {
   .lr-text { font-size: 19px; }
   .lr-colony { font-size: 19px; margin-top: 4px; }
+}
+
+/* ── RUN END: each ship's landing points after its LANDED ── */
+.re-ship { grid-template-columns: 22px minmax(0, 1fr) auto 64px 150px 72px; }
+.re-ship-points { font-size: 11px; letter-spacing: 0.08em; text-align: right; color: var(--star); white-space: nowrap; }
+@media (max-width: 768px) {
+  .re-ship { grid-template-columns: 18px minmax(0, 1fr) auto; }
+  .re-ship-points { grid-column: 2 / -1; text-align: left; }
+}
+
+/* ── Phone (≤ 768 px, §4): while landing the GROUND TRACK takes the readout row's place under the plot, and the flight
+ *    bar trades the inert presets and BURN (no engine in LANDING in 1a) for the POD BAY's LAUNCH button ── */
+@media (max-width: 768px) {
+  body.landing .tools-view.tools-tabs-mode .np-readout { display: none; }
+  body.landing .phone-bar .preset-row,
+  body.landing .phone-bar #burnBtn { display: none; }
+  .phone-bar .pb-launch { min-height: 54px; }
+  .phone-bar .pb-launch-label { font-size: 24px; }
+  .tools-view.tools-tabs-mode .ground-track { flex: none; margin-top: 6px; }
+  .gt-head { font-size: 8.5px; letter-spacing: 0.1em; }
+  .gt-b-label { font-size: 14px; }
+  .gt-ahead-item { font-size: 14px; }
 }

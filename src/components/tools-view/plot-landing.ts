@@ -16,11 +16,13 @@ import { svgEl, fmt, setCircle } from '@components/hud/plot-draw';
 
 const BRACKET_WIDTH = 4.6;     // viewBox units: §4 "at least 4"
 const BRACKET_GAP = 0.4;       // between the surface line and the bracket's inner edge
+const TICK_IN = 1.2;           // the bracket's end ticks reach this far inside the surface line...
+const TICK_OUT = 2.4;          // ...and this far past the rim arc
 const LABEL_OUT = 10;          // the bracket label's distance outside the rim
 const LABEL_SIDE_COS = 0.35;
 const LABEL_LINE_H = 8.5;
 const LABEL_CHAR_W = 4.6;
-const DOT_RADIUS = 2.6;
+const DOT_RADIUS = 2.2;
 const HEAD_RADIUS = 2.2;
 const HOT_HEAD_RADIUS = 2.8;
 const MARK_LIFT = 0.2;         // the ◘ glyph's centre above the surface line
@@ -36,6 +38,7 @@ export interface LabelBox {
 
 interface BracketNodes {
   arc: SVGPathElement;
+  ticks: SVGPathElement;
   label: SVGTextElement;
 }
 
@@ -100,8 +103,8 @@ export function createPlotLandingLayer(svg: SVGSVGElement, below: SVGElement, ab
   function bracketNodes(lz: string): BracketNodes {
     let found = brackets.get(lz);
     if (!found) {
-      found = { arc: svgEl('path', 'np-lz'), label: svgEl('text', 'np-label np-lz-label') };
-      rim.appendChild(found.arc);
+      found = { arc: svgEl('path', 'np-lz'), ticks: svgEl('path', 'np-lz-ticks'), label: svgEl('text', 'np-label np-lz-label') };
+      rim.append(found.arc, found.ticks);
       labels.appendChild(found.label);
       brackets.set(lz, found);
     }
@@ -115,6 +118,16 @@ export function createPlotLandingLayer(svg: SVGSVGElement, below: SVGElement, ab
     nodes.arc.setAttribute('stroke-width', fmt(BRACKET_WIDTH));
     const cls = `np-lz look-${model.look}${model.outOfBand ? ' out-of-band' : ''}`;
     if (nodes.arc.getAttribute('class') !== cls) nodes.arc.setAttribute('class', cls);
+    // The bracket's ends: thin radial ticks standing out past the rim arc, so even a 10-unit bracket reads `[ ]`.
+    let ticks = '';
+    for (const end of [model.centreRad - model.halfWidthRad, model.centreRad + model.halfWidthRad]) {
+      const from = polar(cx, cy, planetR - TICK_IN, end);
+      const to = polar(cx, cy, planetR + BRACKET_GAP + BRACKET_WIDTH + TICK_OUT, end);
+      ticks += `M${fmt(from.x)},${fmt(from.y)}L${fmt(to.x)},${fmt(to.y)}`;
+    }
+    nodes.ticks.setAttribute('d', ticks);
+    const tickCls = `np-lz-ticks look-${model.look}`;
+    if (nodes.ticks.getAttribute('class') !== tickCls) nodes.ticks.setAttribute('class', tickCls);
     const at = polar(cx, cy, planetR + BRACKET_WIDTH + LABEL_OUT, model.centreRad);
     const cos = Math.cos(model.centreRad);
     const sin = Math.sin(model.centreRad);
@@ -162,7 +175,7 @@ export function createPlotLandingLayer(svg: SVGSVGElement, below: SVGElement, ab
   }
 
   function clear(): void {
-    for (const nodes of brackets.values()) { nodes.arc.remove(); nodes.label.remove(); }
+    for (const nodes of brackets.values()) { nodes.arc.remove(); nodes.ticks.remove(); nodes.label.remove(); }
     brackets.clear();
     noGo.forEach((node) => node.remove());
     noGo.length = 0;
@@ -190,6 +203,7 @@ export function createPlotLandingLayer(svg: SVGSVGElement, below: SVGElement, ab
     for (const [lz, nodes] of brackets) {
       if (live.has(lz)) continue;
       nodes.arc.remove();
+      nodes.ticks.remove();
       nodes.label.remove();
       brackets.delete(lz);
     }
@@ -216,7 +230,7 @@ export function createPlotLandingLayer(svg: SVGSVGElement, below: SVGElement, ab
     if (model.dot) {
       const at = polar(cx, cy, planetR, model.dot.rad);
       setCircle(dot, at.x, at.y, DOT_RADIUS);
-      setCircle(dotHalo, at.x, at.y, Math.max(DOT_RADIUS * 2.2, model.dot.halfWidthRad * planetR));
+      setCircle(dotHalo, at.x, at.y, Math.max(DOT_RADIUS * 1.7, model.dot.halfWidthRad * planetR));
       const look = !model.dot.inBand ? 'out-of-band' : model.dot.fits === 'whole' ? 'whole' : model.dot.fits === 'centre' ? 'centre' : 'none';
       dot.setAttribute('class', `np-drop-dot fits-${look}`);
       dotHalo.setAttribute('class', `np-drop-halo fits-${look}`);

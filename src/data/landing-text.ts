@@ -180,7 +180,6 @@ function landedCount(landed: number, of: number): string {
 
 // RUN END (§9 WP7 item 7, 01-landing §3.9): LANDED counts the colonists who came down in an LZ with room; the run's
 // SCORE is the landing points, shown only here and labelled as one; the rank is by SCORE.
-// TODO(slice1a-UI): RUN END's layout for the landing (per-ship LANDED rows, points); these are its words for now.
 // (Moved here from data/script.ts in the foundation follow-up: it is UI's.)
 export const RUN_END_TEXT = {
   kicker: (unit: string, wave: number): string => `RUN OVER · ${unit} · WAVE ${wave}`,
@@ -189,6 +188,7 @@ export const RUN_END_TEXT = {
   scoreNote: 'the SCORE is the landing points: less for hard, mislanded and off-site pods',
   rank: (rank: string): string => `RANK · ${rank}`,
   shipLanded: landedCount,
+  shipPoints: (points: number): string => `${formatCount(points)} PTS`,
   notReached: 'NOT REACHED',
   // Near misses (§4.4: `▼ was 140 km from a perfect lock`, `41 points short of CARETAKER`). The gap is in SCORE points,
   // so it says points (final review: `41 SCORE short of` read as a typo).
@@ -300,6 +300,10 @@ export const LANDING_STAR_MISSED = {
 // The LOST card's pods line (components/burn/BurnResult.ts): what the lost ship still carried, and what got down first.
 export const LOST_CARD_TEXT = {
   pods: (aboard: number, landed: number): string => `${formatCount(aboard)} colonists aboard · ${formatCount(landed)} landed`,
+  // `3 PODS NOT LAUNCHED`, `2 PODS PARKED IN ORBIT · fate unknown · 400 landed first`
+  podsFate: (pods: number, word: string, landed: number): string =>
+    `${pods} POD${pods === 1 ? '' : 'S'} ${word}${landed > 0 ? ` · ${formatCount(landed)} landed first` : ''}`,
+  allDown: (landed: number): string => `${formatCount(landed)} colonists landed`,
 } as const;
 
 // The GROUND TRACK panel (§4): its header (`KEPLER-186F · RIVERSIDE` once the colony is named), the brackets on the

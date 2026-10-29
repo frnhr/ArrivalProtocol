@@ -150,7 +150,7 @@ function renderMemoryStrip(
 // (SelectionHighlight, fs-tools target classes) — those repaint after every
 // store.update, and need to run AFTER MemoryStrip's rebuild wipes the DOM.
 //
-// Printing changes memory on its own clock (a cluster every 2.5 s), so a rebuild can fall between
+// The landing changes memory on its own clock (a launch every 2 s), so a rebuild can fall between
 // a press on a chip and its release, and the click would be lost. A rebuild while a press inside
 // the strip is down waits for the click to land; it then comes back as one more memoryRev bump,
 // so every painter keyed on the rebuild (bars, highlights, target classes) repaints with it.

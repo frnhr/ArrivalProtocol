@@ -1,13 +1,13 @@
 import type { Store } from '@state/store';
 import type { GameState, BurnStatus, RunPhase, TerminalStatus } from '@state/schema';
 import { TERMINAL } from '@systems/flight-hud';
-import { colonistCounts } from '@state/selectors';
-import { shipLost, lossPlan, continueAfterLoss, type LossPlan } from '@systems/run';
+import { shipLost, lossPlan, continueAfterLoss, shipOutcomeOf, type LossPlan } from '@systems/run';
+import { landingResult } from '@systems/landing-rules';
 import { requireById } from '@components/dom';
 import { getShip } from '@data/ships';
 import { LOSS_BUTTON } from '@data/script';
 import { RESULT_BANNER_DELAY_MS } from '@data/tuning';
-import { LOST_CARD_TEXT } from '@data/landing-text';
+import { LOST_CARD_TEXT, POD_STATE_TEXT } from '@data/landing-text';
 import { CORE_LOST_TEXT } from '@data/hollow-text';
 
 // The card's outcome name for a ship lost to an eaten Core (the CSS colours it like a crash).
@@ -53,13 +53,18 @@ export function mountBurnResult(store: Store<GameState>): () => void {
     if (showTimer !== null) { clearTimeout(showTimer); showTimer = null; }
   };
 
-  // The pods line: who is still aboard, and who made it down before the ship was lost (a Core eaten mid-landing).
-  // TODO(slice1a-UI): the pods line's final words and look (it reuses the old souls line's element).
+  // The pods line (01-landing §3.10, one word per state): the pods still aboard are NOT LAUNCHED when the ship left
+  // orbit with them, PARKED IN ORBIT when it ended there (a Core eaten mid-landing, STRANDED), and the colonists who
+  // made it down first are counted after them.
   function showSouls(): void {
-    const counts = colonistCounts(store.getState());
+    const state = store.getState();
+    const tally = landingResult(state, shipOutcomeOf(state));
+    const notLaunched = tally.pods.filter((pod) => pod.fate === 'not-launched').length;
+    const parked = tally.parked.length;
+    const landed = tally.pods.filter((pod) => pod.fate === 'down').reduce((sum, pod) => sum + pod.colonists, 0);
     soulsEl.hidden = false;
-    soulsEl.classList.remove('reveal');
-    soulsEl.textContent = LOST_CARD_TEXT.pods(counts.aboard + counts.falling + counts.parked, counts.down);
+    soulsEl.textContent = notLaunched > 0 ? LOST_CARD_TEXT.podsFate(notLaunched, POD_STATE_TEXT.notLaunched, landed)
+      : parked > 0 ? LOST_CARD_TEXT.podsFate(parked, POD_STATE_TEXT.parked, landed) : LOST_CARD_TEXT.allDown(landed);
   }
 
   // The card shows its outcome after RESULT_BANNER_DELAY_MS (the outcome's stamp and chord first).

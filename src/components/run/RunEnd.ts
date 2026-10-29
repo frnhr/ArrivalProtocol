@@ -45,6 +45,8 @@ function shipRowNode(row: RunEndShipRow): HTMLElement {
     make('span', 're-ship-outcome', row.outcomeWord),
     make('span', 're-ship-stars', row.result ? starsText(row.result.stars) : ''),
     make('span', 're-ship-woke', row.landedLine),
+    // Slice 1a: the ship's landing points beside its LANDED (the run's SCORE is their sum).
+    make('span', 're-ship-points', row.result ? RUN_END_TEXT.shipPoints(row.result.points) : ''),
   );
   return node;
 }
@@ -111,7 +113,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     rows.forEach((row, i) => later(RUN_END_ROW_GAP_SEC * (i + 1), () => {
       row.classList.add('landed');
       // A ship whose colonists landed comes in with a heartbeat; one that landed nobody, or was never reached, in
-      // silence. TODO(slice1a-UI): RUN END's landing rows (points, per-ship LANDED).
+      // silence.
       const result = report.ships[i]?.result;
       if (result && result.landedInLz > 0) play('heartbeat', { strength: REPORT_COUNT_HEARTBEAT.woke });
     }));
