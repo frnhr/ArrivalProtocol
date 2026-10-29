@@ -133,8 +133,9 @@ for (const fuelPct of [31.5, 32]) {
 // --- From about 32.5%: the shrink, sized to the spare FUEL; every kid locks --------------------------------------
 // LEAD-2: its WAIT used to be bounded by SHRINK_LOCK_WAIT_MAX_TAC / SHRINK_RESERVE_WAIT_TAC tactical s; what matters
 // now is that its SKIP takes a few seconds.
-// Quick depth (tests/unit/depth.ts): the band's foot, a point inside it and its top; 34% flies again below (held late).
-for (const fuelPct of byDepth([32.5, 36, 40], [32.5, 34, 36, 40])) {
+// Quick depth (tests/unit/depth.ts): the band's foot and its top; inside it, 34–35% fly below (held late), 31.5–35.5% in
+// the band sweep.
+for (const fuelPct of byDepth([32.5, 40], [32.5, 34, 36, 40])) {
   const runs = (['obey', 0.3, 0.5] as const).map((kid) => fly(fuelPct, 60, kid));
   check(`${fuelPct}%: SHRINK THE LOOP; obeyed instantly or at a 0.3 / 0.5 s reaction it locks, every SKIP a few seconds`,
     runs.every((flown) => /^SHRINK THE LOOP/.test(flown.offer) && flown.status === 'locked' && !flown.flipToLast
