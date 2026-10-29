@@ -253,7 +253,8 @@ export function mountLandingReport(store: Store<GameState>): () => void {
     hurrying = false;
     lockInput(REPORT_ADVANCE_LOCK_SEC);
     creditsEl.hidden = true;
-    breakdownEl.textContent = `${report.breakdown} · ${report.pointsText}`;
+    // Each figure stays with its word when the line wraps (a phone): `1,000 soft`, never `1,000 / soft`.
+    breakdownEl.textContent = `${report.breakdown} · ${report.pointsText}`.replace(/(\d) /g, '$1\u00a0').replace(/-/g, '\u2011');
     breakdownEl.hidden = false;
     starsEl.replaceChildren(...report.stars.map(starNode));
     starsEl.hidden = false;

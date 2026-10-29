@@ -1775,9 +1775,9 @@ body.reduced-motion .mode-toggle-opt.alerting:not(.unread) { color: var(--alerti
 .colonists .colonist { font-size: 11px; line-height: 1.45; color: var(--text); padding-left: 10px; border-left: 2px solid var(--soul-dim); }
 .colonists .colonist-name { color: var(--soul); letter-spacing: 0.04em; }
 .colonists .colonist-age { color: var(--text-dim); }
-.action-btn.print { border-color: var(--soul-dim); color: var(--soul); }
-.action-btn.print:hover { background: color-mix(in srgb, var(--soul) 8%, transparent); }
-.action-btn.print.on { background: color-mix(in srgb, var(--soul) 14%, transparent); border-color: var(--soul); }
+.action-btn.load-next { border-color: var(--soul-dim); color: var(--soul); }
+.action-btn.load-next:hover { background: color-mix(in srgb, var(--soul) 8%, transparent); }
+.action-btn.load-next.on { background: color-mix(in srgb, var(--soul) 14%, transparent); border-color: var(--soul); }
 
 /* ── The footer's pods ── */
 #footSouls.revealed { color: var(--soul); }

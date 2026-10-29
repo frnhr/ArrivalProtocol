@@ -23,7 +23,7 @@ import {
 // it does; locked ones say why; an infected one warns it will arrive infected), what the crossing costs and
 // the REPAIR CHARGE waiting on arrival. A chip can be clicked to leave its file behind only while charge is
 // left behind (systems/transmit.ts says so on the screen).
-// TRANSMIT ▸ (or SPACE / ENTER, once armed) is the crossing itself, on wall time like the WAKE REPORT: the
+// TRANSMIT ▸ (or SPACE / ENTER, once armed) is the crossing itself, on wall time like the LANDING REPORT: the
 // chips stream out one after another while the light-years tick past under a rising FM sweep, then the
 // screen floods white; at full white the packet really goes (systems/run.ts transmitNext: the hits, the
 // charge, the next ship's world), and the new ship's boot comes up from under the white as it fades. After
@@ -34,7 +34,7 @@ import {
 // lost a pod's driver to HOLLOW`, in the star's gold when it answers how the kid played). A click or [1] [2] [3]
 // picks one (a chime; the others dim; a file card's new file joins the packet's chips and bar); the pick can
 // change until the send. TRANSMIT ▸ waits for it: without one it says PICK A CARD FIRST, buzzes and nudges
-// the cards. Picks wait for the same arm delay as the send, so a click meant for the WAKE REPORT's CONTINUE
+// the cards. Picks wait for the same arm delay as the send, so a click meant for the LANDING REPORT's CONTINUE
 // never picks a card by accident.
 
 function chipNode(chip: PacketChip): HTMLButtonElement {

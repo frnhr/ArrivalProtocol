@@ -76,7 +76,7 @@ function loadNextOption(state: Readonly<GameState>, driver: DriverSegment): Acti
     id: 'load-next',
     label: pinned ? '✓ next in line' : `▸ ${DRIVER_DETAIL_TEXT.loadNext.toLowerCase()}`,
     cost: paused ? 'PAUSED' : pinned ? (waits ? "waits: can't launch yet" : 'click to undo') : 'first in line',
-    cls: paused ? 'disabled' : pinned ? 'print on' : 'print',
+    cls: paused ? 'disabled' : pinned ? 'load-next on' : 'load-next',
     disabled: paused,
   };
 }

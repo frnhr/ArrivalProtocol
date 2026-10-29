@@ -25,7 +25,7 @@ import { HOLLOW_PAINT_HZ, INTEGRITY_MAX, HOLLOW_FX_MS, CURE_SPARKS, SEED_BLINK_S
 //   number). All of it comes from hollowReach (systems/hollow-hud reachMarks), so a label can never disagree
 //   with the bite. Nothing while it is done for the ship;
 // • the drain: each infected chip's red crawl from the side that faces HOLLOW (--eaten), its live
-//   readouts, and its heartbeat and INSPECT's IF PRINTED NOW as the drain crosses a line;
+//   readouts, and its heartbeat and INSPECT's IF LAUNCHED NOW as the drain crosses a line;
 // • the tug-of-war: while a repair fights it, the chip's healthy share turns green with stripes
 //   marching toward the red, and one bright green boundary that moves as the green wins;
 // • a seed coming (WP9, §6.6): a red outline blinking over the free blocks where it will land, for the 2 AI s of

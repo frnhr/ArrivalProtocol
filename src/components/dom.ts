@@ -14,7 +14,7 @@ export function requireIn<T extends Element = HTMLElement>(root: ParentNode, sel
   return element;
 }
 
-// A new element with its class and, optionally, its text: the run's screens (WAKE REPORT, TRANSMIT, RUN
+// A new element with its class and, optionally, its text: the run's screens (LANDING REPORT, TRANSMIT, RUN
 // END) build their rows with it.
 export function make<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
