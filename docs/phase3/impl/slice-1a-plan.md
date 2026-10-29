@@ -684,8 +684,8 @@ What Track SIM built differently from §1–§6, and why. Everything else follow
   only while a pod is aboard and the landing goes on. A full LZ's window passes at CRUISE and a SKIP flies through it;
   otherwise HALCYON's kid sat through LZ-A's 24 s window at TACTICAL with SKIP refused after LZ-A was full. The strip
   still says L3 if the kid meets it. `state.landing.window` stays the one "open now" (landMult, L3, the chips).
-- **pace reads the drop cache** for the time to the next opening (`windowOpensInSec`, exported for UI's countdown chip),
-  as §1.1 allowed; "open now" comes from state. The lead is judged one CRUISE tick ahead, as the dodge's is, so TACTICAL
+- **pace reads the drop cache** for the time to the next launch moment (`windowLaunchInSec`, exported for UI's countdown
+  chip), as §1.1 allowed; "open now" comes from state. The lead is judged one CRUISE tick ahead, as the dodge's is, so TACTICAL
   starts by the 8 s mark and never a tick past it.
 - **`holdsTactical`** reads as §3.14 words it: the window rule (TACTICAL around windows, WINDOW OPEN) holds for hand drops
   and for a controller that holds TACTICAL; a controller with `holdsTactical: false` drops inside a SKIP. It does not
@@ -695,11 +695,14 @@ What Track SIM built differently from §1–§6, and why. Everything else follow
 - `landingInSec` is `skipLandsInSec`; no ghost burst is looked for during the landing (the ship only coasts there).
 
 **Guidance**
-- **The launch moment.** GET READY and its 5…1 beeps count down to the window's *sure* opening when this pass has one
-  (`landing-rules launchMomentInSec`), and while the dot's centre is in but its edges are not yet, the row is still L7,
-  not L5. Read literally, L5 (`LAUNCH — WIDE DROP, some may miss`) showed at every window's first seconds and a kid who
-  obeyed sent the first pod half off-site. L5 now shows only for a dot that won't fit this pass. pace's TACTICAL lead and
-  the SKIP still key on the opening (§3.12), so GET READY starts at about 0:10–0:11.
+- **The launch moment.** "The window" the landing counts to is its *sure* opening when this pass has one (where the whole
+  dot first fits; else the opening: `landing-rules launchMomentInSec`). The TACTICAL lead, the SKIP's landing point
+  (8 tac s before it), L13's WAIT, L7's GET READY and the 5…1 beeps all count to it, so GET READY's 8 s end on LAUNCH
+  NOW; while the dot's centre is in but its edges are not yet, the row is still L7, not L5. Read literally, L5 (`LAUNCH —
+  WIDE DROP, some may miss`) showed at every window's first seconds and a kid who obeyed sent the first pod half
+  off-site; keyed to the opening, the strip jumped from `WAIT 0:09` to `GET READY 0:13`. L5 now shows only for a dot that
+  won't fit this pass. "Open" (WINDOW OPEN, landMult, L3) stays the centre-in span. Real seconds per window by the strip:
+  23.7–26.9 (ARES-VII 24.7 with its 5 s first descent, HALCYON 23.9, KESTREL 26.9, VESPER 23.7, LAST LIGHT 23.8).
 - **L12's twin** `NO LZ IN THE LAUNCH BAND — END LANDING parks them in orbit` (id `landing-L12-band`): a PARTIAL orbit
   whose in-band arc never puts the dot on a bracket can't land anyone with the engine closed (risk 1); without it the
   strip said WAIT forever. followLanding treats both ids as L12.
