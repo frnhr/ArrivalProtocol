@@ -11,15 +11,17 @@ import { requireById, requireIn } from '@components/dom';
 // disagree. Each part leaves a comment node at home to come back to. The bar is inside the amber view, so it hides
 // with it in blue.
 
-// The Engine window's parts that ride in the bar, in the bar's order (top to bottom).
+// The parts that ride in the bar, in the bar's order (top to bottom): the Engine window's, and (slice 1a, 01-landing §4
+// "LAUNCH joins PhoneFlightBar") the POD BAY's launch button, shown only while landing (body.landing).
 const BAR_PARTS = [
-  ':scope .engine-body > .fuel-block',
-  ':scope .engine-body .preset-row',
-  '#burnBtn',
-  '#autoBtn',
-  '#acceptBtn',
-  '#beamBtn',
-  '#beamBar',
+  { window: '.engine-win', part: ':scope .engine-body > .fuel-block' },
+  { window: '.engine-win', part: ':scope .engine-body .preset-row' },
+  { window: '.podbay-win', part: '#podLaunchBtn' },
+  { window: '.engine-win', part: '#burnBtn' },
+  { window: '.engine-win', part: '#autoBtn' },
+  { window: '.engine-win', part: '#acceptBtn' },
+  { window: '.engine-win', part: '#beamBtn' },
+  { window: '.engine-win', part: '#beamBar' },
 ] as const;
 
 export function mountPhoneFlightBar(): () => void {
@@ -27,8 +29,9 @@ export function mountPhoneFlightBar(): () => void {
   const engine = requireIn<HTMLElement>(document, '.desktop > .tools-view > .engine-win', '.engine-win');
   if (bar.parentElement !== engine.parentElement) throw new Error('#phoneBar must sit in the tools view beside .engine-win');
 
-  const parts = BAR_PARTS.map((selector) => {
-    const element = requireIn<HTMLElement>(engine, selector, `${selector} in .engine-win`);
+  const parts = BAR_PARTS.map(({ window: windowSelector, part: selector }) => {
+    const host = requireIn<HTMLElement>(document, `.desktop > .tools-view > ${windowSelector}`, windowSelector);
+    const element = requireIn<HTMLElement>(host, selector, `${selector} in ${windowSelector}`);
     const home = document.createComment(`phone flight bar: ${selector}`);
     element.before(home);
     return { element, home };

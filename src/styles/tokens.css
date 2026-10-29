@@ -145,6 +145,13 @@
   --finale-backdrop: rgba(2, 4, 9, 0.8);
   --report-glow-sombre: rgba(111, 140, 158, 0.06);
 
+  /* ── the landing (slice 1a, 01-landing §4): the same on both screens. A falling pod's head burns white-hot below the
+        atmosphere line, its entry flare a hot orange; no-go ground is a harder red than the warning. ── */
+  --pod-hot: #fffaf0;
+  --pod-flare: #ffb347;
+  --nogo: #ff3b2f;
+  --nogo-hatch: rgba(255, 59, 47, 0.35);
+
   /* ── live state knob (set by systems/glitch.ts) ── */
   --corruption: 0;
   /* WP11: a glitchBurst under reduced motion dims the screen this much (0..1) for its moment (systems/glitch.ts). */
