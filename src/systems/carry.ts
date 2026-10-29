@@ -12,7 +12,7 @@ import {
 } from '@data/memory';
 import {
   RACK_BLOCKS, TRANSIT_HIT_MIN, TRANSIT_HIT_MAX, TRANSIT_LAST_COPY_FLOOR, TRANSIT_CORE_MAX_HIT, CORE_RESET_INTEGRITY,
-  CHARGE_ARRIVAL_FLOOR, UNIT_TAIL_BLOCKS,
+  CHARGE_ARRIVAL_FLOOR, UNIT_TAIL_BLOCKS, SEED_BLOCKS, SEED_TOOL_GAP_BLOCKS, WALL_MIN_BLOCKS,
 } from '@data/tuning';
 
 // Transmission and carry (§6.9), pure and DOM-free: what of the unit crosses the link to the next
@@ -31,7 +31,8 @@ import {
 // 3. arrivalCharge: +6 per ★ of the last ship, +12 for the charge card, and never fewer than 12 blocks
 //    (§6.5's floor).
 // 4. layoutCarried: the files back into memory, 01-landing §3.16's pooled receiver: rack E's list and rack F's
-//    list as one block from rack E's start, then the charge; a block longer than the receiver spills backward
+//    list as one block from rack E's start (with a hunting ground between them on a ship whose seeds hunt tools), then
+//    the charge; a block longer than the receiver spills backward
 //    into the last pod rack's tail (at most UNIT_TAIL_BLOCKS), and REPAIR CHARGE that still does not fit is lost,
 //    loudly (any other overflow throws). A unit that spent its last point of charge before TRANSMIT has no pool
 //    file left: its arrival charge is written into a fresh one (the floor is a guarantee).
@@ -229,13 +230,28 @@ export interface CarriedLayout {
   overflowLost: number;     // charge that did not fit memory
 }
 
+// The hunting ground (review issue 5): on a ship whose seeds hunt your tools ('near-tools', VESPER, §6.6), rack E's list
+// and rack F's list are laid out with a free run between them: a WALL off your AI files, then room for a seed
+// SEED_TOOL_GAP_BLOCKS from the first filesystem tool (hollow.ts nearToolsSeedSpot lands it there). That is phase 2's
+// geometry (rack E's free tail, then the tools from rack F's start), which the pooled receiver had packed away: every tool
+// sat back to back between the AI files and REPAIR CHARGE, no free gap bordered one until a licence was written on the
+// ship (and that tool is untried, so spared), and the seed fell back to the middle of rack D. The WALL keeps a chain
+// that eats the tools away from the AI files and the Core. Only when the receiver has the room: it never costs charge,
+// and never spills the block into the tail.
+function huntingGapBlocks(ship: ShipDef, packet: Packet, filesBlocks: number, chargeBlocks: number, receiver: number): number {
+  const hunts = ship.hollow.seed?.target === 'near-tools';
+  if (!hunts || packet.rackE.length === 0 || !packet.rackF.some((seg) => seg.type === 'fs-tool')) return 0;
+  const gap = WALL_MIN_BLOCKS + SEED_BLOCKS + SEED_TOOL_GAP_BLOCKS;
+  return filesBlocks + gap + chargeBlocks <= receiver ? gap : 0;
+}
+
 // The packed files back into memory on `ship` (step 4): 01-landing §3.16's pooled receiver. The files go as one block
-// from rack E's start, rack E's list and rack F's list back to back (no gap at rack F), then REPAIR CHARGE, then the
-// free rest of the receiver. The room for the unit is the receiver plus the tail: only a block longer than the receiver
-// starts earlier, right-aligned to the end of memory, by at most UNIT_TAIL_BLOCKS into the last pod rack (and never into
-// more of it than the ship's layout leaves free at its end), so the Core stays at rack E's start on almost every ship.
-// Charge that still does not fit is lost, loudly (the caller's CHARGE OVERFLOW); files that do not fit throw (the
-// PACKET screen checks the room before the beam).
+// from rack E's start, rack E's list and rack F's list back to back (no gap at rack F, but the hunting ground above on
+// VESPER), then REPAIR CHARGE, then the free rest of the receiver. The room for the unit is the receiver plus the tail:
+// only a block longer than the receiver starts earlier, right-aligned to the end of memory, by at most UNIT_TAIL_BLOCKS
+// into the last pod rack (and never into more of it than the ship's layout leaves free at its end), so the Core stays at
+// rack E's start on almost every ship. Charge that still does not fit is lost, loudly (the caller's CHARGE OVERFLOW);
+// files that do not fit throw (the PACKET screen checks the room before the beam).
 export function layoutCarried(packet: Packet, chargeBlocks: number, ship: ShipDef): CarriedLayout {
   const files = [...packet.rackE, ...packet.rackF];
   const filesBlocks = files.reduce((sum, seg) => sum + seg.size, 0);
@@ -247,9 +263,11 @@ export function layoutCarried(packet: Packet, chargeBlocks: number, ship: ShipDe
   }
   const charge = Math.max(0, Math.min(chargeBlocks, room - filesBlocks));
   const overflowLost = chargeBlocks - charge;
-  const block = filesBlocks + charge;
+  const hunting = huntingGapBlocks(ship, packet, filesBlocks, charge, receiver);
+  const block = filesBlocks + hunting + charge;
   const startAddr = Math.min(RACK_E_START, MEMORY_TOTAL_BLOCKS - block);
   const segs: Segment[] = [...files];
+  if (hunting > 0) segs.splice(packet.rackE.length, 0, freeSegment(hunting));
   if (charge > 0) segs.push(chargeSegment(packet.charge, charge));
   const free = MEMORY_TOTAL_BLOCKS - (startAddr + block);
   if (free > 0) segs.push(freeSegment(free));

@@ -114,16 +114,15 @@ check('WP11: Repair is never spared (the COPY lesson\'s target): REPAIR\'s licen
 // --- near-tools targeting, pure ---------------------------------------------------------------------------------
 {
   h.vesper(14, { hollowAsleep: true });
-  // Slice 1a's pooled receiver (01-landing §3.16): the unit's files sit back to back from rack E's start (… AI Comms, Scan,
-  // REPAIR CHARGE, free), so on VESPER as it arrives no free block borders a tool: the seed takes §6.6's no-wall
-  // fallback, the centre of the largest free region (rack D's, before the Core), and bites nothing.
+  // Slice 1a's pooled receiver (01-landing §3.16) packs the unit's files back to back from rack E's start; on VESPER it
+  // leaves a hunting ground before the first tool (carry.ts huntingGapBlocks, review issue 5: a WALL off the AI files,
+  // then room for the seed), so as it arrives the seed already borders a tool (Scan) and bites no AI file.
   const arrived = state().memory;
   const arrivedSpot = nearToolsSeedSpot(arrived, [])!;
-  const regions = arrived.filter((seg): seg is FreeSegment => seg.type === 'free');
-  const largest = regions.reduce((best, seg) => (seg.size > best.size ? seg : best), regions[0]!);
-  check('VESPER as it arrives (pooled receiver: no gap beside a tool): the seed takes the centre of the largest free region',
-    arrivedSpot.gapId === largest.id && arrivedSpot.startAddr === addrOf(arrived, largest) + Math.floor((largest.size - SEED_BLOCKS) / 2)
-    && bittenBy(arrived, arrivedSpot.startAddr).length === 0, `seed at ${arrivedSpot.startAddr} in ${arrivedSpot.gapId}`);
+  const arrivedBites = bittenBy(arrived, arrivedSpot.startAddr);
+  check('VESPER as it arrives (pooled receiver, its hunting ground): the seed borders a tool and bites it, no AI file',
+    arrivedBites.some((seg) => seg.type === 'fs-tool') && arrivedBites.every((seg) => seg.type === 'fs-tool'),
+    `seed at ${arrivedSpot.startAddr} in ${arrivedSpot.gapId}, bites ${arrivedBites.map((seg) => seg.name).join(', ')}`);
   // Its licences written (the flight's first ticks: Mv, Rm and Cp after REPAIR CHARGE, then the free tail): the seed aims
   // one free block after the last of them (the gap next to it, the end that faces it).
   h.step();

@@ -204,10 +204,18 @@ function eat(pod: number): void {
     const firstFree = segs.findIndex((seg) => seg.type === 'free');
     return firstFree < 0 || segs.slice(firstFree).every((seg) => seg.type === 'free');
   };
+  // A ship whose seeds hunt tools (VESPER) keeps one free run inside the block: the hunting ground before its first tool
+  // (carry.ts huntingGapBlocks, review issue 5).
+  const withoutHuntingGround = (segs: readonly Segment[]): Segment[] => {
+    const firstTool = segs.findIndex((seg) => seg.type === 'fs-tool');
+    return segs.filter((seg, index) => !(index === firstTool - 1 && seg.type === 'free'));
+  };
   for (const ship of SHIPS.filter((candidate) => candidate.arrival)) {
     const racks = freshUnitRacks(ship);
-    check(`${ship.name}: the unit lands as one block from rack E's start, files then charge, then free`,
-      racks.startAddr === RACK_E_START && contiguous(racks.segs) && racks.segs.some((seg) => seg.type === 'redundancy')
+    const hunts = ship.hollow.seed?.target === 'near-tools';
+    check(`${ship.name}: the unit lands as one block from rack E's start, files then charge, then free${hunts ? ' (a hunting ground before the tools)' : ''}`,
+      racks.startAddr === RACK_E_START && contiguous(hunts ? withoutHuntingGround(racks.segs) : racks.segs)
+      && hunts === (racks.segs.length !== withoutHuntingGround(racks.segs).length) && racks.segs.some((seg) => seg.type === 'redundancy')
       && racks.segs.reduce((sum, seg) => sum + seg.size, 0) === MEMORY_TOTAL_BLOCKS - RACK_E_START,
       racks.segs.map((seg) => `${seg.type}:${seg.size}`).join(' '));
   }

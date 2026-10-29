@@ -147,12 +147,23 @@ function line(): string {
   // larger gap at the far end of rack E facing a tool at the start of rack F (across the row), and a smaller one right
   // after that tool, on its own row. Before the fix the larger gap won and the seed sat a row away from the tool it hunted.
   const memory = state().memory;
+  // Slice 1a review (issue 5): VESPER's receiver leaves a hunting ground (a WALL, then room for a seed) before its first
+  // tool; this check plants its own gaps, so Scan goes back right after the AI files first.
+  {
+    const at = memory.findIndex((seg) => seg.type === 'fs-tool' && seg.fsTool === 'scan');
+    const hunting = memory[at - 1];
+    if (hunting?.type === 'free') {
+      const from = segmentStarts(memory)[at - 1]!;
+      const scanSeg = memory[at]!;
+      replaceRange(memory, from, from + hunting.size + scanSeg.size, [scanSeg, freeSegment(hunting.size)], { opId: null, own: [hunting, scanSeg] });
+    }
+  }
   const starts = segmentStarts(memory);
   const scanIndex = memory.findIndex((seg) => seg.type === 'fs-tool' && seg.fsTool === 'scan');
   const scanEnd = starts[scanIndex]! + memory[scanIndex]!.size;
   const memEnd = starts[memory.length - 1]! + memory[memory.length - 1]!.size;
   const rowF = 5 * RACK_BLOCKS;
-  const charge = memory[scanIndex + 1]!;
+  const charge = memory.find((seg) => seg.type === 'redundancy')!;
   const tool: FsToolSegment = {
     id: 'filler', name: 'Filler', type: 'fs-tool', size: 3, integrity: 100, scanned: true, fsTool: 'scan', version: 1,
   };
