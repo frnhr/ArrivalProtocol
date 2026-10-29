@@ -23,7 +23,7 @@ import { archiveShipStarted, archiveRunEnded, archiveTutorialDone, type RunLinea
 import { finaleRunCause } from '@systems/finale';
 import { newSegId } from '@systems/memory-ops';
 import { createRunState, createShipSlices, createUiState, createRunStats } from '@state/initial';
-import { landingResult } from '@systems/landing-rules';
+import { inOrbitOutcome, landingResult } from '@systems/landing-rules';
 import { getShip, isLastShip, SHIPS } from '@data/ships';
 import { BEATS, LINES, perShipBeatIds } from '@data/script';
 import { TOOL_REFUSAL } from '@data/tool-text';
@@ -64,8 +64,8 @@ import {
 export function shipOutcomeOf(state: Readonly<GameState>): ShipOutcome {
   if (state.run.coreLost) return 'emergency';
   switch (state.burn.status) {
-    case 'locked': return 'locked';
-    case 'accepted': return 'partial';
+    case 'locked':
+    case 'accepted': return inOrbitOutcome(state.burn.status);
     case 'stranded': return 'stranded';
     case 'escaped': return 'escaped';
     case 'crashed': return 'crashed';

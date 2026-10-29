@@ -349,10 +349,11 @@ function merge(store: Store<GameState>): void {
     draft.hollow.finale.ending = endingFor(draft, 'merge');
     // Drivers back in memory: the landing goes on with them (it may have ended, or been lingering toward the report).
     // The pods parked when it ended reopen too if their driver never left memory (parked 'no-time'): the landing parks
-    // at the moment it ends (landing.ts endNow), so reopening it must unpark them.
+    // at the moment it ends (landing.ts endNow), so reopening it must unpark them; FUEL is noted again when it ends again.
     if (inPlace.length > 0) {
       draft.landing.ended = null;
       draft.landing.lingerAiSec = null;
+      draft.landing.fuelAtEndPct = null;
       for (const record of draft.landing.pods) {
         if (record.fate.kind === 'parked' && record.fate.why === 'no-time') record.fate = { kind: 'aboard' };
       }

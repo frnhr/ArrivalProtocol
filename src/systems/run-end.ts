@@ -61,9 +61,9 @@ export interface RunEndModel {
 // its title, total and music never wear the green 'good' glow.
 export type RunEndTone = 'victory' | 'sombre';
 
-export function runEndTone(cause: RunEndCause, flagshipLanded: number | null): RunEndTone {
+export function runEndTone(cause: RunEndCause, flagshipDown: number | null): RunEndTone {
   const won = cause === 'won-purge' || cause === 'won-merge';
-  return won && flagshipLanded !== null && flagshipLanded > 0 ? 'victory' : 'sombre';
+  return won && flagshipDown !== null && flagshipDown > 0 ? 'victory' : 'sombre';
 }
 
 // Every ship's colonists together: what the run could have landed.
@@ -134,7 +134,7 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
   // The words and the mood follow one count: a won finale over a flagship that landed nobody is sombre (runEndTone) and
   // says so (the lead's item 2, WP11 review). Otherwise a PURGE claims the whole fleet only when every ship reached
   // orbit, and else says how many did (the lead's note).
-  const landedOnFlagship = flagshipLanded(run.ships);
+  const landedOnFlagship = flagshipDown(state);
   const fleet = fleetHome(run.ships, SHIPS.length);
   let title = RUN_END_TITLE[cause](unit, lastShip);
   let why = RUN_END_WHY[cause](lastShip);
@@ -166,9 +166,14 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
   };
 }
 
-// How many landed on the flagship (null: the run never finished it).
-function flagshipLanded(ships: readonly ShipResult[]): number | null {
-  const flagship = SHIPS.find((ship) => ship.flagship);
-  if (!flagship) throw new Error('runEndModel: the fleet has no flagship');
-  return ships.find((result) => result.shipId === flagship.id)?.landedInLz ?? null;
+// How many came down alive on the flagship (null: the run never finished it): every colonist of a pod down with points,
+// wherever it landed (an LZ with room, mislanded, off-site), since NOBODY WOKE means nobody reached the ground (review N2:
+// counting only landedInLz read an all-mislanded or off-site LAST LIGHT as nobody). A no-go landing scores 0 and does
+// not count. The flagship is the ship the run ended on (a won finale only ever ends on it), read from the state that
+// ended it (LandingState.finalShip), never from SHIPS.
+function flagshipDown(state: Readonly<GameState>): number | null {
+  if (!state.landing.finalShip) return null;
+  const result = state.run.ships.find((ship) => ship.shipId === state.level.shipId);
+  if (!result) return null;
+  return result.pods.filter((pod) => pod.fate === 'down' && pod.points > 0).reduce((sum, pod) => sum + pod.colonists, 0);
 }

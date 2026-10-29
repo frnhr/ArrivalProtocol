@@ -1,12 +1,11 @@
-import type { GameState, ShipOutcome } from '@state/schema';
+import type { GameState } from '@state/schema';
 import type { Colonist } from '@/types/segment';
 import type { LandingTally, Place, PodSummary, Touch } from '@/types/landing';
-import { landingResult } from '@systems/landing-rules';
+import { inOrbitOutcome, landingResult } from '@systems/landing-rules';
 import { angleDelta } from '@systems/landing-solve';
 import { shipStars, starCharge, type ShipStar } from '@systems/stars';
 import { LANDING_REPORT_TEXT, LANDING_REPORT_UI_TEXT, PARK_REASON_TEXT, podCode } from '@data/landing-text';
 import { HARD_WORDS_POOL } from '@data/souls';
-import { getShip, isLastShip } from '@data/ships';
 import { COLONISTS_PER_POD, STAR_CHARGE_BONUS } from '@data/tuning';
 
 // The LANDING REPORT's view model (01-landing §4, plan §1.4), pure: everything the screen shows, from landingResult and
@@ -69,11 +68,6 @@ export interface LandingReportModel {
   charge: number;             // REPAIR CHARGE the stars carry
   chargeLine: string;         // `+18 REPAIR CHARGE ON NEXT SHIP`, or the last ship's line
   lastShip: boolean;
-}
-
-// The report opens only for a ship that ended its landing in orbit: locked, or accepted.
-function reportOutcome(state: Readonly<GameState>): ShipOutcome {
-  return state.burn.status === 'locked' ? 'locked' : 'partial';
 }
 
 function podIcon(pod: PodSummary): PodIcon {
@@ -174,10 +168,11 @@ function credits(state: Readonly<GameState>, tally: LandingTally): LandingReport
   });
 }
 
+// Read from the state alone (the ship's name and world, the final ship), never from SHIPS: a generator-made ship (§1.7)
+// needs nothing new here. The report opens only for a ship whose landing ran in orbit (locked or accepted).
 export function landingReportModel(state: Readonly<GameState>): LandingReportModel {
-  const ship = getShip(state.run.shipIndex);
   const { landing } = state;
-  const tally = landingResult(state, reportOutcome(state));
+  const tally = landingResult(state, inOrbitOutcome(state.burn.status));
   const rows = reportRows(tally);
   // Near misses: pods down off-site or in a no-go arc, by their km to the nearest bracket edge, naming that LZ.
   const misses: { km: number; text: string }[] = [];
@@ -191,23 +186,26 @@ export function landingReportModel(state: Readonly<GameState>): LandingReportMod
     misses.push({ km, text: LANDING_REPORT_TEXT.nearMiss(record.pod, km, nearest.label) });
   }
   misses.sort((a, b) => a.km - b.km);
+  // `soft · hard · mislanded · off-site`: each colonist down counted once (review: a mislanded pod was counted in soft or
+  // hard too). Soft and hard are the pods down in an LZ with room; MISLANDED says nothing of the touch.
   let soft = 0;
   let hard = 0;
   let mislanded = 0;
   for (const pod of tally.pods) {
     if (pod.fate !== 'down') continue;
     if (pod.place === 'mislanded') mislanded += pod.colonists;
-    if (pod.place === 'lz' || pod.place === 'mislanded') {
+    else if (pod.place === 'lz') {
       if (pod.touch === 'hard') hard += pod.colonists;
       else soft += pod.colonists;
     }
   }
   const stars = shipStars(state);
   const charge = starCharge(stars);
-  const lastShip = isLastShip(state.run.shipIndex);
+  // The final ship's report ends the run (RUN END ▸): LandingState.finalShip, copied from the def when the ship was built.
+  const lastShip = landing.finalShip;
   return {
     title: LANDING_REPORT_TEXT.title,
-    route: LANDING_REPORT_TEXT.route(ship.name, ship.world, landing.terrain, landing.forgiveness),
+    route: LANDING_REPORT_TEXT.route(state.level.shipName, state.mission.destination, landing.terrain, landing.forgiveness),
     headline: LANDING_REPORT_TEXT.headline(tally.landedInLz, tally.colonistsAboard),
     landed: tally.landedInLz,
     aboard: tally.colonistsAboard,
