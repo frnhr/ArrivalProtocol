@@ -114,6 +114,12 @@ await shot('03-amber');
 await overflow('amber');
 check('amber opens on the NAV PLOT tab', await st(() => !document.querySelector('.navplot-win').hidden && document.querySelector('.engine-win').hidden));
 check('the BURN button rides in the phone bar', await st(() => document.getElementById('burnBtn').closest('#phoneBar') !== null));
+// Slice 1a: the POD BAY's LAUNCH rides in the bar only while landing (PhoneFlightBar: `shown only while landing`); in
+// the flight it takes no room from the plot.
+const flightLaunch = await st(() => { const btn = document.getElementById('podLaunchBtn'); const box = btn.getBoundingClientRect();
+  return { landing: document.body.classList.contains('landing'), display: getComputedStyle(btn).display, height: Math.round(box.height) }; });
+check('in the flight the phone bar shows no LAUNCH button (it is the landing\'s)', !flightLaunch.landing && (flightLaunch.display === 'none' || flightLaunch.height === 0),
+  JSON.stringify(flightLaunch));
 await onScreen('amber', '#burnBtn');
 await onScreen('amber', '#sasRadOut');
 await onScreen('amber', '.phone-bar .fuel-bar');
