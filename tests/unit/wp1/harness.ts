@@ -12,6 +12,7 @@ import { DRIVER_RULES } from '@data/script';
 import { advance } from '@systems/clock';
 import { mountOrbitSim } from '@systems/orbit-sim';
 import { mountPredictor, getPrediction, secUntil, type Prediction } from '@systems/predict';
+import { mountDropCache } from '@systems/drop-cache';
 import { mountPace, registerTimeKeys, mainCountdown, type Countdown } from '@systems/pace';
 import { mountGhostThrust } from '@systems/ghost-thrust';
 import { mountInput } from '@systems/input';
@@ -100,6 +101,9 @@ export function createHarness(seed = 1, opts: HarnessOpts = {}): Harness {
   const store = createStore<GameState>(harnessState(seed, soulsFound));
   mountOrbitSim(store);
   mountPredictor(store);
+  // Slice 1a: pace reads the landing's drop solution once a flight locks, so every harness has the drop cache (once per
+  // store: a second mount throws), right after the predictor as main.ts mounts it.
+  mountDropCache(store);
   mountPace(store);
   // WP10: the engine firing by itself (the first burst's alarm, the counter, a SKIP re-planned after a later burst):
   // inert on a ship whose Thrust Ctrl is healthy (ships 1–3), live on VESPER (AP_SHIP=3).

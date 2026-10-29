@@ -61,7 +61,7 @@ add('L7', LANDING_LINES.L7('LZ-D', 5999));
 add('L11', LANDING_LINES.L11(16));
 add('L12', LANDING_LINES.L12);
 add('L12b', LANDING_LINES.L12b(16));
-add('L13', LANDING_LINES.L13('LZ-D', 5999, true));
+add('L13', LANDING_LINES.L13('LZ-D', 5999, true, true));
 for (const [key, text] of Object.entries(LANDING_SKIP_REFUSAL)) add(`LANDING_SKIP_REFUSAL.${key}`, text);
 add('ask hurtDriver', LANDING_ASKS.hurtDriver(16));
 add('ask mindClear', LANDING_ASKS.mindClear('LZ-D'));

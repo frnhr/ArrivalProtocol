@@ -5,7 +5,8 @@
 // forceLandAll as the landing begins: the real launch and touchdown path, soft, into an LZ with room, so the LANDING
 // REPORT, the run and TRANSMIT follow as they did after printing.
 //
-// The landing suites (tests/unit/landing/) fly the landing for real; a suite that wants the landing to stand (HOLLOW
+// The landing suites (tests/unit/landing/) fly the landing for real (the instant landing starts off there, below); a
+// suite that wants the landing to stand (HOLLOW
 // biting in LANDING, THE DEAL standing into it, the finale's wait) sets the mode first:
 // • 'instant' (default): land on the landing's first AI tick, unless a driver aboard is infected or below the failing
 //   band (it can't launch yet: forceLandAll would park it), then as soon as none is, or after INFECTED_GRACE_AI_SEC
@@ -26,7 +27,11 @@ export type LandingMode = 'instant' | 'manual' | { after: number };
 // AI seconds an unlaunchable driver may hold the instant landing (a defender's REPAIR of a bite takes about 10).
 export const INFECTED_GRACE_AI_SEC = 20;
 
-let mode: LandingMode = 'instant';
+// The landing suites (tests/unit/landing/, Track SIM's) fly the landing themselves with the WP5+ harnesses
+// (harness-landing followLanding, lockOn, requestLaunch), so a suite run from there starts with the instant landing off;
+// every other suite starts with it on. Either may set the mode.
+const IN_LANDING_SUITE = process.argv.some((arg) => /tests[\\/]unit[\\/]landing[\\/]/.test(arg));
+let mode: LandingMode = IN_LANDING_SUITE ? 'manual' : 'instant';
 let landingAiSec = 0;
 let mounted = false;
 
