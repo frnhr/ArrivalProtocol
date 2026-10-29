@@ -4,11 +4,11 @@
 // sealed archive (no breach line).
 // WP6 part 2, spec item 11: the TERMINAL's command echoes, on the live systems.
 // • Every player op echoes once when it ends (`> repair engine_io ... OK · −10 CHARGE`, `> scan stasis
-//   ... 0 pods`, `> move pod02 ... OK`, `> delete ??? ... OK · +8 FREE`, `> swap thrust_controller thrust.alt ... OK` (WP10),
+//   ... sleepers cold`, `> move pod02 ... OK`, `> delete ??? ... OK · +8 FREE`, `> swap thrust_controller thrust.alt ... OK` (WP10),
 //   the v2 squeeze); a stopped repair says what it already cost; one HOLLOW ate under it says EATEN and
 //   that the charge is lost; a repair that runs out of charge keeps its one NO CHARGE line.
 // • Every HOLLOW action echoes in its own pink voice with who did it: `> infect pod01   [user: ???]`,
-//   `> eat pod03 ... DID NOT WAKE   [user: ???]`, `> eat telemetry ... GONE   [user: ???]`; the tag is
+//   `> eat pod03 ... CAN'T LAUNCH   [user: ???]`, `> eat telemetry ... GONE   [user: ???]`; the tag is
 //   LineVars.hollow (`???`, `UNIT-046` once it names itself). On a sealed archive the infect echo comes
 //   before the breach line.
 // • Every echo fits a line (≤ MAX_LINE_CHARS with worst-case names) and says no "never say" word; the
@@ -77,7 +77,8 @@ function fresh(cfg?: HollowDef): void {
   const stasis = getByRole(state(), 'stasis')!;
   actionScan(h.store, stasis);
   h.runOps();
-  check('scan STASIS: `> scan stasis ... 0 pods` (§9 WP6 item 11)', said('cmd', `> scan stasis ... ${scanFinding('stasis', 100)}`), mind().slice(-1).join());
+  check('scan STASIS: `> scan stasis ... sleepers cold` (§9 WP6 item 11; the Stasis file keeps the pods\' sleepers cold)',
+    said('cmd', `> scan stasis ... ${scanFinding('stasis', 100)}`) && scanFinding('stasis', 100) !== '100%', mind().slice(-1).join());
   actionScan(h.store, getByRole(state(), 'life')!);
   h.runOps();
   check('scan Life Support: the colonists\' other clue, `0 breathing`', said('cmd', '> scan life_support ... 0 breathing'), mind().slice(-1).join());
@@ -152,7 +153,7 @@ function fresh(cfg?: HollowDef): void {
   fresh(HUNGRY);
   infectNow(h.store, h.soul('POD 03'));
   h.stepFor(1);
-  check('a cluster eaten: `> eat pod03 ... DID NOT WAKE   [user: ???]`', said('hollow', '> eat pod03 ... DID NOT WAKE   [user: ???]'), mind().slice(-1).join());
+  check("a driver eaten: `> eat pod03 ... CAN'T LAUNCH   [user: ???]`", said('hollow', "> eat pod03 ... CAN'T LAUNCH   [user: ???]"), mind().slice(-1).join());
   infectNow(h.store, getByRole(state(), 'telemetry')!);
   h.stepFor(1);
   check('a file eaten: `> eat telemetry ... GONE   [user: ???]`', said('hollow', '> eat telemetry ... GONE   [user: ???]'), mind().slice(-1).join());
@@ -207,7 +208,7 @@ function fresh(cfg?: HollowDef): void {
     { where: 'wall title', text: HOLLOW_HUD_TEXT.wallTitle(384) },
     { where: 'wall', text: HOLLOW_HUD_TEXT.wall(384) },
     { where: 'next bite', text: `${HOLLOW_HUD_TEXT.nextBite} 59:59` },
-    { where: 'fx', text: `${HOLLOW_HUD_TEXT.saved} ${HOLLOW_HUD_TEXT.lostSoul} ${HOLLOW_HUD_TEXT.lostFile}` },
+    { where: 'fx', text: `${HOLLOW_HUD_TEXT.saved} ${HOLLOW_HUD_TEXT.lostDriver} ${HOLLOW_HUD_TEXT.lostFile}` },
   ];
   for (const { where, text } of lines) check(`fits: ${where}`, text.length <= MAX_LINE_CHARS, `${text.length}: ${text}`);
   const NEVER_SAY = [

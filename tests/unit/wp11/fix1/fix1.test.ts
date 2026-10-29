@@ -9,7 +9,7 @@
 //   block it (`ALL THREADS BUSY — × AN OP TO BLOCK IT`), any other click the plain words.
 // • A won finale over a flagship where nobody woke: RUN END's title and line say so (PURGE and MERGE), sombre; the
 //   waiting strip says NO POD LEFT TO LAUNCH, never EVERY POD IS DOWN.
-// • The lineage line never claims the fleet; the ghost after a PURGE that woke nobody does not say `we brought them home`.
+// • The lineage line never claims the fleet; the ghost after a PURGE that landed nobody does not say `we brought them home`.
 // • The words: `unit_046_047`, the chip's `M20`, the open root's `ROOT · 16`, the short PURGE title on one line.
 // • THE TRAP (the lead's ruling of 21:30): a driver bitten twice in the same spot gets `MOVE it behind a WALL` on the strip
 //   once it is cured, never in front of a flight NOW line; a driver that moved starts its count over.
@@ -278,7 +278,7 @@ deleteRoot();
   for (const owner of owners) releaseThread(owner);
 }
 
-// --- A won finale over a flagship where nobody woke ------------------------------------------------------------------
+// --- A won finale over a flagship where nobody landed ------------------------------------------------------------------
 for (const choice of ['purge', 'merge'] as const) {
   toTheDuel(choice === 'purge' ? 109 : 113);
   loseEveryone();
@@ -301,21 +301,21 @@ for (const choice of ['purge', 'merge'] as const) {
   continueAfterReport(h.store);
   const model = runEndModel(state());
   const cause = choice === 'purge' ? 'won-purge' : 'won-merge';
-  check(`${choice.toUpperCase()} over a flagship that woke nobody: RUN END says so (\`${RUN_END_NOBODY_WOKE.title}\`), sombre`,
+  check(`${choice.toUpperCase()} over a flagship that landed nobody: RUN END says so (\`${RUN_END_NOBODY_WOKE.title}\`), sombre`,
     refusal === null && state().run.endCause === cause && model.title === RUN_END_NOBODY_WOKE.title && model.why === RUN_END_NOBODY_WOKE.why[cause]
     && model.tone === 'sombre', `${refusal} ${model.title} | ${model.why} | ${model.tone}`);
 }
-check('the nobody-woke words fit one line', [RUN_END_NOBODY_WOKE.title, ...Object.values(RUN_END_NOBODY_WOKE.why)].every((text) => text.length <= MAX_LINE_CHARS));
+check('the nobody-landed words fit one line', [RUN_END_NOBODY_WOKE.title, ...Object.values(RUN_END_NOBODY_WOKE.why)].every((text) => text.length <= MAX_LINE_CHARS));
 
 // --- The lineage and the ghost -----------------------------------------------------------------------------------------
 {
   const unit = (woke: number): LastUnit => ({ number: 47, woke, shipName: 'LAST LIGHT', cause: 'won-purge', stats: { moves: 0, deletes: 0 }, hollowUnits: [46] });
   const lineage = lineageLine(unit(3200));
-  check('the title\'s lineage after a PURGE names what the unit did, never the fleet', lineage === 'last: UNIT-047 · 3,200 woke · deleted it at LAST LIGHT'
+  check('the title\'s lineage after a PURGE names what the unit did, never the fleet', lineage === 'last: UNIT-047 · 3,200 landed · deleted it at LAST LIGHT'
     && !/fleet/.test(lineage ?? ''), String(lineage));
   const ghostWords = (woke: number): string => GHOST_LINE['won-purge']!({ us: 48, last: unit(woke), hollow: [47], lostShip: 'the flagship' });
-  check('the ghost after a PURGE: `we brought them home` when someone woke, never when nobody did', /we brought them home/.test(ghostWords(3200))
-    && !/brought them home/.test(ghostWords(0)) && /nobody woke/.test(ghostWords(0)), `${ghostWords(3200)} | ${ghostWords(0)}`);
+  check('the ghost after a PURGE: `we brought them home` when someone landed, never when nobody did', /we brought them home/.test(ghostWords(3200))
+    && !/brought them home/.test(ghostWords(0)) && /nobody landed/.test(ghostWords(0)), `${ghostWords(3200)} | ${ghostWords(0)}`);
 }
 
 // --- The words -------------------------------------------------------------------------------------------------------

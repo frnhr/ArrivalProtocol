@@ -13,7 +13,7 @@
 // • one Core thread busy the whole flight (THRUST LIMIT 75%): C12 ≥ 45% at the lock.
 // Plus: pause stops HOLLOW, the alerts (C12 INFECTED warns and holds SKIP; C12 WILL BE EATEN is an
 // alarm ≤ 10 s out), the strip lines, the ship-1 script (dormant, `> ...047?`, CONTROL), the eaten
-// cluster in the results (DID NOT WAKE) and PRINT FAST's gate.
+// driver in the results (CAN'T LAUNCH, then parked) and PRINT FAST's gate.
 import { check, finish, followStrip } from '../wp1/harness';
 import { createHarness6 } from './harness6';
 import { actionRepair } from '@state/actions';
@@ -137,7 +137,7 @@ function checkStory(label: string, fightEcho: RegExp): void {
   check('POD 01\'s driver was eaten: recorded on its pod, and its 8 blocks are hollow now (ATE POD 01 · OKAFOR)',
     podRecord(after, 1).driverLost === 'eaten' && h.hollowBlocks().some((seg) => seg.type === 'hollow' && seg.ate === 'POD 01 · OKAFOR' && seg.atePod === 1));
   check('the alarms cleared with it', !after.alerts.list.some((alert) => alert.id.startsWith('eaten:') || alert.id === 'hollow-infected'));
-  checkStory('lost', /^> eat pod01 \.\.\. DID NOT WAKE/);
+  checkStory('lost', /^> eat pod01 \.\.\. CAN'T LAUNCH/);
   const pod1 = podRecord(h.store.getState(), 1).fate;
   check('the landing ends in the LANDING REPORT: the two others landed (400), POD 01 parked (eaten, restorable)', h.store.getState().run.phase === 'report'
     && colonistCounts(h.store.getState()).landedInLz === 400 && pod1.kind === 'parked' && pod1.why === 'eaten' && pod1.restorable,

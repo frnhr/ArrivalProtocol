@@ -368,7 +368,7 @@ export const LINES = {
 
 // --- The archive on the title (WP8, §4.5, §7.1) --------------------------------------------------------------
 
-// How the last unit's run ended, as the title's lineage line says it (`last: UNIT-047 · 6,200 woke ·
+// How the last unit's run ended, as the title's lineage line says it (`last: UNIT-047 · 6,200 landed ·
 // overwritten at VESPER`). A unit that stayed with its colonists gets a line of its own. A MERGE names the
 // unit it merged with (never the design's word HOLLOW, which a kid never reads: hollow-text.ts).
 const LINEAGE_END: Readonly<Record<LastCause, (last: Readonly<LastUnit>) => string>> = {
@@ -387,7 +387,8 @@ const LINEAGE_END: Readonly<Record<LastCause, (last: Readonly<LastUnit>) => stri
 export function lineageLine(lastUnit: Readonly<LastUnit> | null): string | null {
   if (lastUnit === null) return null;
   if (lastUnit.cause === 'stayed') return `${unitName(lastUnit.number)} stayed with them.`;
-  return `last: ${unitName(lastUnit.number)} · ${formatCount(lastUnit.woke)} woke · ${LINEAGE_END[lastUnit.cause](lastUnit)}`;
+  // The archive's `woke` field holds the colonists landed (systems/meta.ts, risk 10: no META_VERSION bump).
+  return `last: ${unitName(lastUnit.number)} · ${formatCount(lastUnit.woke)} landed · ${LINEAGE_END[lastUnit.cause](lastUnit)}`;
 }
 
 // The endings found so far (the title, §4.5's `ENDINGS 0/2`, and a won RUN END, WP11 part 2): the count, then every
@@ -561,14 +562,15 @@ export const RUN_END_PURGE_SHORT = {
   why: (home: number, total: number): string => `You deleted it. ${home} of ${total} ships made it home.`,
 } as const;
 
-// A won finale over a flagship where nobody woke (every cluster lost before the end; WP11 review, the lead's item 2):
-// the screen is sombre (run-end.ts runEndTone, from the same count), and its words are too, as the typed ending's
-// `nobody is left to bring home.` was. Never `THE FLEET IS HOME` over an empty ship.
+// A won finale over a flagship that landed nobody (WP11 review, the lead's item 2): the screen is sombre (run-end.ts
+// runEndTone, from the same count), and its words are too, as the typed ending's `nobody is left to bring home.` was.
+// Never `THE FLEET IS HOME` over an empty ship. PLACEHOLDER: 05-story owns the words. (The export keeps its phase-2
+// name: systems/run-end.ts imports it, outside this module's owner.)
 export const RUN_END_NOBODY_WOKE = {
-  title: 'LAST LIGHT · NOBODY WOKE',
+  title: 'LAST LIGHT · NOBODY LANDED',
   why: {
-    'won-purge': 'You deleted it. Nobody on the flagship woke.',
-    'won-merge': 'You let it in. Nobody on the flagship woke.',
+    'won-purge': 'You deleted it. Nobody on the flagship landed.',
+    'won-merge': 'You let it in. Nobody on the flagship landed.',
   },
 } as const;
 

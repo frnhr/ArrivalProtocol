@@ -7,9 +7,9 @@
 //   DUEL_SPIKE_LEVEL_END ('duel-spike' carries the progress, rising); none after the root is gone, whose end is the
 //   biggest tear (ROOT_GONE_GLITCH_LEVEL).
 // • The typed endings (§9 WP11 item 5): ≤ FINALE_ENDING_MAX_LINES lines, each ≤ MAX_LINE_CHARS also with worst-case names,
-//   the design's words (`> rm unit_046 ... OK` / `LAST LIGHT · n souls in orbit.` / `the fleet is home.` / CONTROL's
+//   the design's words (`> rm unit_046 ... OK` / `LAST LIGHT · n colonists reached orbit.` / `the fleet is home.` / CONTROL's
 //   reassignment; `> merge unit_046 -> unit_047 ... OK` / `> hi. it's us.` / `we arrive together.` / non-compliant), with
-//   what PURGE leaves lost and what MERGE brought back; the LANDING REPORT waits for the ending's time (finaleEndingSec),
+//   what PURGE leaves parked and what MERGE brought back; the LANDING REPORT waits for the ending's time (finaleEndingSec),
 //   skipFinaleEnding lets it come at once; MERGE's glitch.
 // • The MERGE tick (mergeTickCharge) from LAST LIGHT's boot to the choice, never on another ship.
 // • RUN END: the ending and MERGE's carry line; endingsLine (`ENDINGS 1/2 · MERGE · ???`).
@@ -62,12 +62,12 @@ const eventsSince = (from: number, name: string): { payload: unknown; wall: numb
     JSON.stringify([...purge, ...merge].map((line) => line.text.length)));
   check('…PURGE says nothing in HOLLOW\'s voice; MERGE\'s merged voice says hello', !purge.some((line) => line.voice === 'us')
     && merge.some((line) => line.voice === 'us' && line.text === "> hi. it's us."));
-  // TODO(phase2): phase 2 checked six cluster codes here (`C01 · … · C06`); pod codes are twice as long, so FinaleChoice's
-  // MERGE line passes 70 characters from five eaten pods (it lists them all, uncapped), and its words still promise
-  // `with missing memories` (1a restores a driver at 80 and lands it normally). Reported for Track UI / 05-story.
+  // MERGE's line with a whole rack of eaten pods (16, the most a ship carries): it names a few and counts the rest.
+  const sixteenPods = Array.from({ length: 16 }, (_, i) => `POD ${String(i + 1).padStart(2, '0')}`);
   const cardWords = [
     HOLLOW_FINALE.choiceTitle(hollowUnitName([999, 998])), HOLLOW_FINALE.purgeCmd(worstHollow), HOLLOW_FINALE.mergeCmd(worstHollow, ours),
-    HOLLOW_FINALE.purgeCost('3,200'), HOLLOW_FINALE.mergeGain('POD 11 · POD 12 · POD 13 · POD 14'), HOLLOW_FINALE.mergePrice(MERGE_COST_CHARGE, 999),
+    HOLLOW_FINALE.purgeCost('3,200'), HOLLOW_FINALE.mergeGain(sixteenPods), HOLLOW_FINALE.mergeGain(sixteenPods.slice(0, 5)),
+    HOLLOW_FINALE.mergePrice(MERGE_COST_CHARGE, 999),
     HOLLOW_FINALE.mergeNeeds(19), HOLLOW_FINALE.mergeCarries(3), endingsLine(['purge', 'merge'], ['purge', 'merge']),
   ];
   check('the card\'s words and RUN END\'s lines are one line each (≤ 70 characters)', cardWords.every((text) => text.length <= MAX_LINE_CHARS),
@@ -202,7 +202,7 @@ check('say: a line with a look must be critical (a queued one would count down a
   check('PURGE writes its typed ending', refusal === null && ending !== null && ending.choice === 'purge', String(refusal));
   if (!ending) throw new Error('views-test: no ending');
   const lines = ending.lines.map((line) => line.text);
-  check('…the design\'s words, from live numbers', /^> rm unit_\d+ \.\.\. OK$/.test(lines[0]!) && /^LAST LIGHT · [\d,]+ souls in orbit\.$/.test(lines[1]!)
+  check('…the design\'s words, from live numbers', /^> rm unit_\d+ \.\.\. OK$/.test(lines[0]!) && /^LAST LIGHT · [\d,]+ colonists reached orbit\.$/.test(lines[1]!)
     && lines.includes('the fleet is home.') && /^Thank you, Unit \d+\. Please stand by for reassignment\. :\)$/.test(lines[lines.length - 1]!)
     && ending.lines[ending.lines.length - 1]!.voice === 'control', JSON.stringify(lines));
   check('…its time on screen is its lines typed in turn plus the hold', Math.abs(ending.untilAi - state().clock.aiSec - finaleEndingSec(ending.lines)) < 1e-6
@@ -253,9 +253,9 @@ check('say: a line with a look must be critical (a queued one would count down a
   const refusal = chooseFinale(h.store, 'merge');
   const ending = state().hollow.finale.ending;
   const lines = ending?.lines.map((line) => line.text) ?? [];
-  check('MERGE writes its typed ending: the echo, `> hi. it\'s us.`, the souls in orbit, the 400 it gave back, `we arrive together.`, CONTROL',
+  check('MERGE writes its typed ending: the echo, `> hi. it\'s us.`, the colonists in orbit, the 400 it gave back, `we arrive together.`, CONTROL',
     refusal === null && ending?.choice === 'merge' && /^> merge unit_\d+ -> unit_\d+ \.\.\. OK$/.test(lines[0]!) && lines[1] === "> hi. it's us."
-    && /^LAST LIGHT · [\d,]+ souls in orbit\.$/.test(lines[2]!) && lines[3] === '400 of them came back from inside it.'
+    && /^LAST LIGHT · [\d,]+ colonists reached orbit\.$/.test(lines[2]!) && lines[3] === '400 of them came back from inside it.'
     && lines[4] === 'we arrive together.' && /^Unit \d+ is non-compliant\. :\)$/.test(lines[5]!), JSON.stringify(lines));
   const bursts = eventsSince(from, 'glitch-burst').map((event) => (event.payload as { level: number }).level);
   check('…and it comes into you: a glitch burst at MERGE_GLITCH_LEVEL', bursts.includes(quantizeCorruption(MERGE_GLITCH_LEVEL)), bursts.join(' '));

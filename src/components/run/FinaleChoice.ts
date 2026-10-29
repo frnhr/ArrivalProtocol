@@ -40,10 +40,10 @@ import {
 //   CONTROL's last line). The command echo, the narration, MERGE's merged voice (`> hi. it's us.`, pink into blue) and
 //   ARRIVAL CONTROL's verdict after its chime; every line's room is kept from the start, so nothing on the card moves
 //   as the next line comes. A click, SPACE or ENTER finishes the typing; once typed, one more ends it
-//   (skipFinaleEnding). When its time is up the card fades and the printing (MERGE's returned clusters among it)
+//   (skipFinaleEnding). When its time is up the card fades and the landing (MERGE's restored pods among it)
 //   finishes under the kid's eyes.
 // The choice's sounds (the hold under the card, PURGE's cold tone, MERGE's converging chord) are cued here and in
-// systems/audio-cues.ts ('finale-chosen'); printing and the world go on underneath throughout (AI time).
+// systems/audio-cues.ts ('finale-chosen'); the landing and the world go on underneath throughout (AI time).
 
 type Stage = 'off' | 'waiting' | 'choosing' | 'ending' | 'closing';
 
@@ -140,7 +140,7 @@ export function mountFinaleChoice(store: Store<GameState>): () => void {
     const eaten = podsEatenHere(state);
     const eatenColonists = eaten.reduce((sum, record) => sum + record.colonists, 0);
     purge.cost.textContent = HOLLOW_FINALE.purgeCost(eatenColonists > 0 ? formatCount(eatenColonists) : null);
-    merge.cost.textContent = HOLLOW_FINALE.mergeGain(eaten.length > 0 ? eaten.map((record) => podCode(record.pod)).join(' · ') : null);
+    merge.cost.textContent = HOLLOW_FINALE.mergeGain(eaten.map((record) => podCode(record.pod)));
   }
 
   // MERGE's price against the kid's charge: the meter's scale is the larger of the two, so the MERGE tick sits at the

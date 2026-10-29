@@ -102,9 +102,9 @@ check('the POD 01 fight on a later run ends with `> you remember me. good.`', HO
     && JSON.stringify(FIRST_RUN_LINEAGE.hollowUnits) === '[46]' && FIRST_RUN_LINEAGE.lastUnit === null);
 }
 
-// --- The title's lineage line (§4.5: `last: UNIT-047 · 6,200 woke · overwritten at VESPER`) ----------------------------
+// --- The title's lineage line (§4.5: `last: UNIT-047 · 6,200 landed · overwritten at VESPER`) ----------------------------
 {
-  check('overwritten: `last: UNIT-047 · 6,200 woke · overwritten at VESPER`', lineageLine(last('overwritten', { shipName: 'VESPER' })) === 'last: UNIT-047 · 6,200 woke · overwritten at VESPER',
+  check('overwritten: `last: UNIT-047 · 6,200 landed · overwritten at VESPER`', lineageLine(last('overwritten', { shipName: 'VESPER' })) === 'last: UNIT-047 · 6,200 landed · overwritten at VESPER',
     lineageLine(last('overwritten')) ?? '');
   check('stayed: `UNIT-047 stayed with them.`', lineageLine(last('stayed')) === 'UNIT-047 stayed with them.');
   check('the first run has no lineage line', lineageLine(null) === null);

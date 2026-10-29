@@ -147,10 +147,11 @@ export function echoWord(name: string): string {
   return name.toLowerCase().replace(/·/g, ' ').replace(/[^a-z0-9._ -]/g, '').trim().replace(/[ -]+/g, '_');
 }
 
-// What a scan found, in a word or two: the colonists' clue on the two files that hold it (§1: STASIS
-// has no pods, Life Support keeps nobody breathing), else the file's health.
+// What a scan found, in a word or two: the colonists' clue on the two files that hold it (Stasis keeps the pods'
+// sleepers cold, Life Support keeps nobody breathing: they sleep in the pods), else the file's health.
+// PLACEHOLDER: 05-story owns the words.
 const SCAN_FINDS: Partial<Readonly<Record<SegmentRole, string>>> = {
-  stasis: '0 pods',
+  stasis: 'sleepers cold',
   life: '0 breathing',
 };
 

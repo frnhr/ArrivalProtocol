@@ -148,8 +148,8 @@ const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
   check('jump MOVE, source eaten mid-move: the half-written clone goes, POD 03\'s driver is eaten (no copy left)',
     getOps().length === 0 && h.maybeSoul('POD 03') === null && lostPods().includes(3)
       && driversInMemory(state()).length === 2, `${driversInMemory(state()).length} drivers`);
-  check('…HOLLOW echoes `> eat pod03 ... DID NOT WAKE`, and the eaten event is a lost driver',
-    hollowLines(logFrom).includes('> eat pod03 ... DID NOT WAKE   [user: ???]') && consumeSouls(eventFrom).join() === 'true',
+  check("…HOLLOW echoes `> eat pod03 ... CAN'T LAUNCH`, and the eaten event is an eaten driver",
+    hollowLines(logFrom).includes("> eat pod03 ... CAN'T LAUNCH   [user: ???]") && consumeSouls(eventFrom).join() === 'true',
     `${hollowLines(logFrom).join(' | ')}; soul ${consumeSouls(eventFrom).join()}`);
   h.checkMemory();
 }
