@@ -22,4 +22,3 @@ it by its fastest run, and it passed in the last run.
 | Suite | What it prints, and why it does not fail |
 |---|---|
 | wp12/playthrough | Every design target (souls woke, ships locked, wall time, Core never lost, MERGE availability, SLOPPY's endings) prints INFO with its number; `PT_STRICT=1` makes them checks. The kids were written for phase 2; only "each kid's run ends" is a hard check. |
-| wp11/fix1/fix1 | `stripWaitsNobody`: with every driver lost before the root, the strip waits on `finale-waits`, which says L0's `EVERY POD IS DOWN` though no pod is down (data/script.ts, Track SIM's). |

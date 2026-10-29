@@ -9,7 +9,7 @@ import { capabilitiesNow } from '@systems/capabilities';
 import { registerKeys } from '@systems/input';
 import { emit } from '@systems/events';
 import { getDropSolution } from '@systems/drop-cache';
-import { launchMomentInSec, lzRemaining, targetWindow } from '@systems/landing-rules';
+import { landingMoment, podCounts, type LandingMoment } from '@systems/landing-rules';
 import { windowRuleHolds } from '@systems/landing-controller';
 import type { DropSolution } from '@/types/landing';
 import { LANDING_SKIP_REFUSAL } from '@data/landing-text';
@@ -143,42 +143,34 @@ function endLeadTac(event: NextEvent): number {
 
 // --- The landing's pace (01-landing §3.12) ----------------------------------------------------------------------------
 // No burn, no dodge and no escape after the lock (risk 1: no engine in LANDING in 1a): the landing's events are its
-// windows. A window the landing WAITS ON is one of an LZ with projected room (landing-rules targetWindow's rule), or of
-// any LZ once none has room, and only while a pod is aboard and the landing goes on: a full LZ's window passes at CRUISE
-// and does not hold up a SKIP to the next LZ with room. "Open now" is state.landing.window (landing.ts writes it); the
-// time to the next launch moment comes from the drop cache's solution, rebased to now.
+// windows. The window the landing WAITS ON, and when its launch moment comes, are landing-rules landingMoment's (the one
+// answer pace, the table, the beeps and the chips share): an in-band window of an LZ with projected room, or, once no
+// in-band window has room, the next in-band one (its launch lands MISLANDED: L3b), and only while the landing goes on
+// with a pod aboard that can launch some day. A full LZ's window passes at CRUISE while another in band has room, and
+// does not hold up a SKIP to it. "Open now" is state.landing.window (landing.ts writes it); the times come from the drop
+// cache's solution, rebased to now.
 
 function isLanding(state: Readonly<GameState>): boolean {
   return state.run.phase === 'landing';
 }
 
-function podsWith(state: Readonly<GameState>, kind: 'aboard' | 'falling'): number {
-  return state.landing.pods.filter((record) => record.fate.kind === kind).length;
-}
-
-function windowAwaited(state: Readonly<GameState>, lz: string): boolean {
-  const remaining = lzRemaining(state);
-  return (remaining[lz] ?? 0) > 0 || !Object.values(remaining).some((left) => left > 0);
-}
-
-function awaitingWindows(state: Readonly<GameState>): boolean {
-  return isLanding(state) && state.landing.ended === null && podsWith(state, 'aboard') > 0;
+function momentNow(state: Readonly<GameState>, sol: Readonly<DropSolution> | null = getDropSolution()): LandingMoment {
+  return landingMoment(state, sol, state.clock.tSec);
 }
 
 // The window the landing waits on is open now (state.landing.window).
 export function awaitedWindowOpen(state: Readonly<GameState>): boolean {
-  const open = state.landing.window;
-  return open !== null && awaitingWindows(state) && windowAwaited(state, open.lz);
+  return isLanding(state) && momentNow(state).open?.awaited === true;
 }
 
-// Game seconds from now until the next awaited window's launch moment (landing-rules launchMomentInSec: where its whole
-// dot first fits in the band, else its in-band opening; ≤ 0: it has come), or null: none (no pod aboard, the landing
-// over, no drop solution, no in-band window on this orbit). The TACTICAL lead, the SKIP's landing point, GET READY and its
-// beeps all count to this one moment, so the 8 s of GET READY end on LAUNCH NOW (§3.2's 24–30 s per window).
+// Game seconds from now until the awaited window's launch moment (landing-rules launchMomentInSec: where its whole dot
+// first fits in the band, else its in-band opening; ≤ 0: it has come), or null: none (the landing over, no pod aboard
+// that can launch some day, no drop solution, no in-band window on this orbit). The TACTICAL lead, the SKIP's landing
+// point, GET READY and its beeps all count to this one moment, so the 8 s of GET READY end on LAUNCH NOW (§3.2's
+// 24–30 s per window).
 export function windowLaunchInSec(state: Readonly<GameState>, sol: Readonly<DropSolution> | null = getDropSolution()): number | null {
-  if (!awaitingWindows(state) || sol === null) return null;
-  const target = targetWindow(state, sol, state.clock.tSec);
-  return target === null ? null : launchMomentInSec(sol, target, state.clock.tSec);
+  if (!isLanding(state)) return null;
+  return momentNow(state, sol).target?.launchInSec ?? null;
 }
 
 // §3.12: TACTICAL while a pod is falling, with thrust, an alarm or a zone close (the flight's rules), and, by the window
@@ -188,7 +180,7 @@ export function windowLaunchInSec(state: Readonly<GameState>, sol: Readonly<Drop
 // needs no look-ahead: it lands WINDOW_TACTICAL_LEAD_TAC before the launch moment by itself (skipLandsInSec).
 function landingPace(state: Readonly<GameState>, pred: Prediction, skipActive: boolean, dtWall: number): Pace {
   if (thrustHoldsTactical(state)) return 'tactical';
-  if (podsWith(state, 'falling') > 0) return 'tactical';
+  if (podCounts(state).falling > 0) return 'tactical';
   if (hasAlarm(state)) return 'tactical';
   if (zoneClose(state, pred) !== null) return 'tactical';
   if (windowRuleHolds()) {
@@ -212,7 +204,7 @@ function landingNextEvent(state: Readonly<GameState>, pred: Prediction): NextEve
 
 // Why SKIP can't run during the landing, beyond the inhibitors it shares with the flight (null: none of these).
 function landingSkipInhibitor(state: Readonly<GameState>): string | null {
-  const falling = podsWith(state, 'falling') > 0;
+  const falling = podCounts(state).falling > 0;
   if (state.landing.ended !== null) return falling ? LANDING_SKIP_REFUSAL.podsInFlight : LANDING_SKIP_REFUSAL.over;
   if (windowRuleHolds() && awaitedWindowOpen(state)) return LANDING_SKIP_REFUSAL.windowOpen;
   if (falling) return LANDING_SKIP_REFUSAL.podsInFlight;

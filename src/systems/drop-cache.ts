@@ -23,20 +23,30 @@ import { PREDICT_HZ, POD_AIM_RP_FRAC } from '@data/tuning';
 let storeRef: Store<GameState> | null = null;
 let cached: DropSolution | null = null;
 let cachedRev: number | null = null;
+let cachedEpoch: number | null = null;
 let sinceRefreshWall = 0;
 let track: DotTrack | null = null;
 let trackKey: string | null = null;
 
 // Rounding of the track's key (risk 19): about 1 km in ▼ and 1e-5 in e. Finer than any window edge a kid can see move.
+// Where ▼ lies (the argument of periapsis, review N4) is keyed as the eccentricity vector scaled by ▼, in km (e·rp·cos ω,
+// e·rp·sin ω): the same 1 km, and steady on a near-circular orbit, where ω alone is noise.
 const KEY_RP_KM = 1;
 const KEY_E = 1e-5;
 
 function trackKeyOf(state: Readonly<GameState>): string {
   const el = elementsFromState(state.orbit, state.level.planet.mu);
   const h = state.orbit.x * state.orbit.vy - state.orbit.y * state.orbit.vx;
+  const periKm = el.e * el.rp;
   return [
     state.run.rev, state.landing.orbitEpoch, h >= 0 ? '+' : '-', Math.round(el.rp / KEY_RP_KM), Math.round(el.e / KEY_E),
+    Math.round((periKm * Math.cos(el.omega)) / KEY_RP_KM), Math.round((periKm * Math.sin(el.omega)) / KEY_RP_KM),
   ].join('|');
+}
+
+// The cached solution is for this world and this orbit epoch (a discrete orbit change re-solves at once, review N4).
+function fresh(state: Readonly<GameState>): boolean {
+  return cached !== null && cachedRev === state.run.rev && cachedEpoch === state.landing.orbitEpoch;
 }
 
 function recompute(state: Readonly<GameState>): DropSolution {
@@ -61,6 +71,7 @@ function recompute(state: Readonly<GameState>): DropSolution {
     solution: caps.drop.solution,
   }, caps.drop.solution && closed ? track : null);
   cachedRev = state.run.rev;
+  cachedEpoch = state.landing.orbitEpoch;
   sinceRefreshWall = 0;
   return cached;
 }
@@ -68,6 +79,7 @@ function recompute(state: Readonly<GameState>): DropSolution {
 function clear(): void {
   cached = null;
   cachedRev = null;
+  cachedEpoch = null;
   sinceRefreshWall = 0;
   track = null;
   trackKey = null;
@@ -76,7 +88,9 @@ function clear(): void {
 export function mountDropCache(store: Store<GameState>): () => void {
   if (storeRef) throw new Error('mountDropCache: already mounted');
   storeRef = store;
-  const offReset = onWorldReset('drop-cache', clear, () => ({ cached: cached !== null, cachedRev, sinceRefreshWall, track: track !== null, trackKey }));
+  const offReset = onWorldReset('drop-cache', clear, () => ({
+    cached: cached !== null, cachedRev, cachedEpoch, sinceRefreshWall, track: track !== null, trackKey,
+  }));
   const offTick = onGameTick((_dtWorld, dtWall) => {
     const state = store.getState();
     if (state.run.phase !== 'landing') {
@@ -84,7 +98,7 @@ export function mountDropCache(store: Store<GameState>): () => void {
       return;
     }
     sinceRefreshWall += dtWall;
-    if (cached === null || cachedRev !== state.run.rev || sinceRefreshWall >= 1 / PREDICT_HZ) recompute(state);
+    if (!fresh(state) || sinceRefreshWall >= 1 / PREDICT_HZ) recompute(state);
   });
   return () => {
     offTick();
@@ -100,7 +114,7 @@ export function getDropSolution(): DropSolution | null {
   if (!storeRef) throw new Error('getDropSolution: mountDropCache has not run');
   const state = storeRef.getState();
   if (state.run.phase !== 'landing') return null;
-  return cached !== null && cachedRev === state.run.rev ? cached : recompute(state);
+  return fresh(state) ? cached : recompute(state);
 }
 
 // The drop solution for the state as it is right now (recomputed when the cached one is from an earlier tick, keeping

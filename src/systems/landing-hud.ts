@@ -1,14 +1,14 @@
 import type { GameState } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {
-  DropFactors, DropSolution, LzState, LzWindow, NoGoArcState, Place, PodRecord, Touch, TerrainWord,
+  DropFactors, DropSolution, LzState, LzWindow, NoGoArcState, Place, Touch, TerrainWord,
 } from '@/types/landing';
 import { elementsFromState, propagateConic, semiMajorAxis, type Vec2 } from '@/types/orbit';
 import { driversInMemory } from '@state/selectors';
-import { angleDelta, dropHalfWidthKm, secFromNow } from '@systems/landing-solve';
+import { angleDelta, dropHalfWidthKm } from '@systems/landing-solve';
 import {
   bayMembers, bayShown, driverTouch, isLaunchable, launchGuard, launchRefusal, lzAt, lzDownFill, lzProjectedFill, nextToLaunch,
-  launchMomentInSec, onTargetTally, targetWindow,
+  landingMoment, onTargetTally, podCounts, podsWithFate,
 } from '@systems/landing-rules';
 import {
   BAND_TEXT, GROUND_TRACK_TEXT, LANDING_HUD_TEXT, LANDING_PLOT_TEXT, LAUNCH_REFUSAL_TEXT, MINI_LANDING_TEXT, POD_BAY_STATUS_TEXT,
@@ -84,7 +84,7 @@ function windowOf(sol: Readonly<DropSolution> | null, lz: string): LzWindow | nu
 
 export function bracketModels(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): BracketModel[] {
   const { landing } = state;
-  const target = targetWindow(state, sol, state.clock.tSec);
+  const target = landingMoment(state, sol, state.clock.tSec).target;
   const counters = lzCounters(state);
   return landing.lzs.map((lz, i) => {
     const counter = counters[i]!;
@@ -388,27 +388,21 @@ export function groundTrackModel(state: Readonly<GameState>, sol: Readonly<DropS
     GROUND_TRACK_TEXT.bracket(model.lz, model.down, model.count)));
   const onStrip = (span: Span): boolean => span.to > 0 && span.from < 1;
 
-  // The next LZs past the right edge, soonest window first, with its countdown.
-  const now = state.clock.tSec;
+  // The next LZs past the right edge, soonest launch moment first, with its countdown: the in-band windows as of now
+  // (landing-rules landingMoment, the strip's and the chip's count); an LZ never in the band is hatched, not listed.
   const ahead: GroundAhead[] = [];
-  if (sol !== null && sol.block === null) {
-    const counters = lzCounters(state);
-    const waiting = sol.windows
-      // To the launch moment where there is one (the strip's and the chip's count), else to the opening.
-      .map((w) => ({ w, inSec: launchMomentInSec(sol, w, now) ?? secFromNow(sol, w.openInSec, now) }))
-      .filter(({ w }) => {
-        const bracket = stripBrackets.find((b) => b.lz === w.lz);
-        return bracket !== undefined && bracket.from >= 1;
-      })
-      .sort((a, b) => a.inSec - b.inSec)
-      .slice(0, GROUND_TRACK_AHEAD_MAX);
-    for (const { w, inSec } of waiting) {
-      const full = counters.find((counter) => counter.lz === w.lz)?.full ?? false;
-      const open = inSec <= 0;
-      const text = full ? GROUND_TRACK_TEXT.aheadFull(w.lz)
-        : open ? GROUND_TRACK_TEXT.aheadOpen(w.lz) : GROUND_TRACK_TEXT.ahead(w.lz, minSec(tacOf(state, inSec)));
-      ahead.push({ lz: w.lz, text, open, full });
-    }
+  const waiting = landingMoment(state, sol, state.clock.tSec).upcoming
+    .filter((w) => {
+      const bracket = stripBrackets.find((b) => b.lz === w.lz);
+      return bracket !== undefined && bracket.from >= 1;
+    })
+    .sort((a, b) => a.launchInSec - b.launchInSec)
+    .slice(0, GROUND_TRACK_AHEAD_MAX);
+  for (const w of waiting) {
+    const open = w.launchInSec <= 0;
+    const text = w.full ? GROUND_TRACK_TEXT.aheadFull(w.lz)
+      : open ? GROUND_TRACK_TEXT.aheadOpen(w.lz) : GROUND_TRACK_TEXT.ahead(w.lz, minSec(tacOf(state, w.launchInSec)));
+    ahead.push({ lz: w.lz, text, open, full: w.full });
   }
 
   const blocked = sol !== null && sol.block !== null ? GROUND_TRACK_TEXT.noSolution
@@ -461,17 +455,13 @@ export interface BayWindowModel {
   endLanding: { label: string; confirm: string; enabled: boolean };
 }
 
-function podsAboard(state: Readonly<GameState>): PodRecord[] {
-  return state.landing.pods.filter((record) => record.fate.kind === 'aboard');
-}
-
 export function bayWindowModel(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): BayWindowModel {
   const { landing } = state;
   const shown = bayShown(state);
   const reloading = landing.bay.loaded < BAY_SLOTS;
   const reloadTac = reloading ? Math.max(0, BAY_RELOAD_TAC - landing.bay.reloadTac) : null;
   const refusal = launchRefusal(state, sol, { source: 'player', fromMind: false });
-  const aboard = podsAboard(state);
+  const aboard = podsWithFate(state, 'aboard');
   let look: LaunchLook = 'blocked';
   let status = refusal === null ? POD_BAY_STATUS_TEXT.ready : LAUNCH_REFUSAL_TEXT[refusal];
   // In the MIND the window isn't on screen; the button still says what it would do from amber.
@@ -502,7 +492,7 @@ export function bayWindowModel(state: Readonly<GameState>, sol: Readonly<DropSol
     aboard: aboard.length,
     endLanding: {
       label: POD_BAY_TEXT.endLanding, confirm: LAUNCH_CONFIRM_TEXT.endLanding(aboard.length),
-      enabled: landing.ended === null && state.run.phase === 'landing',
+      enabled: landing.ended === null && state.run.phase === 'landing' && !state.clock.paused,
     },
   };
 }
@@ -583,18 +573,17 @@ export interface MiniHudLanding {
 export function miniHudLanding(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): MiniHudLanding | null {
   if (state.run.phase !== 'landing') return null;
   const { landing } = state;
-  const now = state.clock.tSec;
-  const aboard = podsAboard(state).length;
+  const aboard = podCounts(state).aboard;
   let window: MiniHudLanding['window'] = null;
   if (aboard === 0 || landing.ended !== null) window = { text: MINI_LANDING_TEXT.allAway, open: false };
   else {
-    // Counting to the launch moment (the strip's GET READY), OPEN once it has come.
-    const next = targetWindow(state, sol, now);
-    const inSec = next === null || sol === null ? null : launchMomentInSec(sol, next, now);
-    if (landing.window !== null && (landing.window.sure || inSec === null || inSec <= 0)) {
-      window = { text: MINI_LANDING_TEXT.windowOpen(landing.window.lz), open: true };
-    } else if (next !== null && inSec !== null) {
-      window = { text: MINI_LANDING_TEXT.windowIn(next.lz, minSec(tacOf(state, inSec))), open: false };
+    // Counting to the awaited window's launch moment (the strip's GET READY, the chip: landing-rules landingMoment), OPEN
+    // once it has come.
+    const moment = landingMoment(state, sol, state.clock.tSec);
+    if (moment.open !== null && moment.open.awaited && moment.open.launchCome) {
+      window = { text: MINI_LANDING_TEXT.windowOpen(moment.open.lz), open: true };
+    } else if (moment.target !== null) {
+      window = { text: MINI_LANDING_TEXT.windowIn(moment.target.lz, minSec(tacOf(state, moment.target.launchInSec))), open: false };
     }
   }
   const down = landing.pods.filter((record) => record.fate.kind === 'down').length;

@@ -12,7 +12,7 @@ import { theRoot, rootDeleteRunning, rootDeleteProgress, nameHollow } from '@sys
 import { clearAlert, VERB_ALERT_ID, SEED_ALERT_ID } from '@systems/alerts';
 import { replaceRange, mergeAdjacentFree, requireAddr, freeSegment, assertMemoryInvariants } from '@systems/memory-ops';
 import { spendCharge, cureInfection } from '@state/actions';
-import { getFsTool, chargeLeft, infectedSegments, isHollow, integrityState } from '@state/selectors';
+import { chargeLeft, infectedSegments, isHollow, integrityState, rootDeletable } from '@state/selectors';
 import { driverName } from '@data/landing-text';
 import { driverSegId } from '@data/pod-ids';
 import { echoWord, TOOL_REFUSAL } from '@data/tool-text';
@@ -88,12 +88,8 @@ export function mergeTickCharge(state: Readonly<GameState>): number | null {
   return phase === 'none' || phase === 'duel' || phase === 'choice' ? MERGE_COST_CHARGE : null;
 }
 
-// Something can still delete the root: a working Rm, or an Rm a REPAIR can bring back (a working Repair and charge).
-export function rootDeletable(state: Readonly<GameState>): boolean {
-  if (getFsTool(state, 'delete')) return true;
-  const anyRm = state.memory.some((seg) => seg.type === 'fs-tool' && seg.fsTool === 'delete');
-  return anyRm && getFsTool(state, 'repair') !== undefined && chargeLeft(state) >= 1;
-}
+// Something can still delete the root: state/selectors rootDeletable (the landing's pure table reads it there too).
+export { rootDeletable };
 
 // Why a choice can't be made now (null: it can). MERGE needs its price (§9 WP11 item 5).
 export function finaleChoiceRefusal(state: Readonly<GameState>, choice: FinaleChoice): string | null {
@@ -353,10 +349,11 @@ function merge(store: Store<GameState>): void {
     draft.hollow.finale.ending = endingFor(draft, 'merge');
     // Drivers back in memory: the landing goes on with them (it may have ended, or been lingering toward the report).
     // The pods parked when it ended reopen too if their driver never left memory (parked 'no-time'): the landing parks
-    // at the moment it ends (landing.ts endNow), so reopening it must unpark them.
+    // at the moment it ends (landing.ts endNow), so reopening it must unpark them; FUEL is noted again when it ends again.
     if (inPlace.length > 0) {
       draft.landing.ended = null;
       draft.landing.lingerAiSec = null;
+      draft.landing.fuelAtEndPct = null;
       for (const record of draft.landing.pods) {
         if (record.fate.kind === 'parked' && record.fate.why === 'no-time') record.fate = { kind: 'aboard' };
       }

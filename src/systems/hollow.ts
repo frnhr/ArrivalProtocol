@@ -24,7 +24,7 @@ import { setIntegrity, cureInfection, recordDriverLost, parkPodsAboard } from '@
 import { isOpenFree } from '@systems/tool-targets';
 import {
   isInfectable, isInfected, isHollow, infectedSegments, fileLabel, effectiveToolVersion, driversInMemory, isDriver,
-  isFirewall, isUsableTool, hasUsableTool, hasIntegrity, integrityBand, spreadPaused, isShipFile, isAiFile,
+  isFirewall, isUsableTool, hasUsableTool, hasIntegrity, integrityBand, spreadPaused, isShipFile, isAiFile, rootBlock, rootDeleteRunning,
   type HealthSegment,
 } from '@state/selectors';
 import type { FsToolKind } from '@/types/fs-tool';
@@ -704,7 +704,7 @@ export function bittenAgainDrivers(state: Readonly<GameState>): DriverSegment[] 
 
 // HOLLOW's root (the ship's `R` token; LAST LIGHT's is the one the duel deletes), or null once it is gone.
 export function theRoot(memory: readonly Segment[]): HollowSegment | null {
-  return memory.find((seg): seg is HollowSegment => isHollow(seg) && seg.root) ?? null;
+  return rootBlock(memory);
 }
 
 // How far the root's DELETE is (0..1), or null when none runs (LAST LIGHT's duel, WP11). The strip counts it down
@@ -716,10 +716,8 @@ export function rootDeleteProgress(state: Readonly<GameState>): number | null {
   return operation === undefined ? null : Math.max(0, Math.min(1, operation.pct / OP_COMPLETE_PCT));
 }
 
-// The root's DELETE is running: the verbs come every duelEverySec meanwhile.
-export function rootDeleteRunning(state: Readonly<GameState>): boolean {
-  return rootDeleteProgress(state) !== null;
-}
+// The root's DELETE is running: the verbs come every duelEverySec meanwhile (state/selectors rootDeleteRunning).
+export { rootDeleteRunning };
 
 // THE DEAL's hold on the spread: spreadPaused lives in state/selectors.ts (WP12 review) so pace.ts can read it
 // without importing this module. After a REFUSE (or the timer running out) the bite interval is
@@ -999,17 +997,14 @@ function syncAlerts(store: Store<GameState>): void {
 let hollowRng: Rng | null = null;
 // The run's first seed (its telegraph) has been met: `> sorry. i'm so hungry.` is said once a run (director.done).
 export const SEED_SORRY_ID = 'hollow-seed-sorry';
-// Ship 1's script: the driver the wake bite infected, until its fight is decided; whether the repair
-// that won it was just heard on the bus; and the story after the fight (null until it is decided, and
-// again once it is told).
-let scriptTargetId: string | null = null;
+// Ship 1's script (the fight's target is HollowState.scriptTargetId): whether the repair that won it was just heard on
+// the bus; and the story after the fight (null until it is decided, and again once it is told).
 let curedTargetPending = false;
 let story: Story | null = null;
 
 function resetHollow(): void {
   curedTargetPending = false;
   hollowRng = null;
-  scriptTargetId = null;
   story = null;
 }
 
@@ -1129,9 +1124,9 @@ function startWakeStory(store: Store<GameState>): void {
 // The fight the ship-1 bite started is decided (cured or eaten): HOLLOW goes quiet for this ship,
 // and its story starts (advanceStory).
 function decideScript(store: Store<GameState>): void {
-  scriptTargetId = null;
   story = createStory(shipOneStory(), store.getState().clock.aiSec);
   store.update((draft) => {
+    draft.hollow.scriptTargetId = null;
     draft.hollow.phase = 'dormant';
     draft.hollow.story = 'pending';
   });
@@ -1208,7 +1203,10 @@ function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], ph
         const seg = store.getState().memory.find((candidate) => candidate.id === event.segId)
           ?? consumed.find(({ eaten }) => eaten.id === event.segId)?.eaten;
         if (!seg) throw new Error(`hollow: infected ${event.segId}, which is neither in memory nor eaten`);
-        if (event.scripted) { scriptTargetId = event.segId; scriptedHit = true; }
+        if (event.scripted) {
+          store.update((draft) => { draft.hollow.scriptTargetId = event.segId; });
+          scriptedHit = true;
+        }
         if (isDriver(seg) && store.getState().memory.includes(seg)) recordBiteSpot(store, seg);
         echoHollow(store, HOLLOW_ECHO.infect(echoName(seg), hollowUser(store.getState())));
         emit('hollow-infect', { segId: event.segId, side: event.side, driver: isDriver(seg), scripted: event.scripted });
@@ -1225,7 +1223,7 @@ function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], ph
         const target = echoName(event.eaten);
         echoHollow(store, eatenCopies.has(event.eaten.id) ? HOLLOW_ECHO.eatCopy(target, user) : HOLLOW_ECHO.eat(target, driverLost, user));
         emit('hollow-consume', { segId: event.block.id, ate: eatenName(event.eaten), driver: driverLost });
-        if (event.eaten.id === scriptTargetId) decideScript(store);
+        if (event.eaten.id === store.getState().hollow.scriptTargetId) decideScript(store);
         break;
       }
       case 'wall-held':
@@ -1256,7 +1254,7 @@ function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], ph
   }
   // Ship 1's wake found nobody to bite (the driver next to the root was moved behind a WALL): the
   // fight is over before it began, and HOLLOW still notices you.
-  if (phaseChanged && store.getState().hollow.cfg.wake === 'loop-closed-once' && !scriptedHit && scriptTargetId === null) {
+  if (phaseChanged && store.getState().hollow.cfg.wake === 'loop-closed-once' && !scriptedHit && store.getState().hollow.scriptTargetId === null) {
     decideScript(store);
   }
   // A timed wake (HALCYON): its story begins now, after this tick's bite echoes.
@@ -1385,9 +1383,9 @@ export function mountHollow(store: Store<GameState>): () => void {
   // HOLLOW to eat: its alerts go. Every tick, also while paused (a lost ship is paused, and the AI
   // tick no longer runs there).
   const offOver = onPostTick(() => { if (!isLivePhase(store.getState())) clearHollowAlerts(store); });
-  const offCure = on('hollow-cure', ({ segId }) => { if (segId === scriptTargetId) curedTargetPending = true; });
+  const offCure = on('hollow-cure', ({ segId }) => { if (segId === store.getState().hollow.scriptTargetId) curedTargetPending = true; });
   const offReset = onWorldReset('hollow', resetHollow, () => ({
-    curedTargetPending, rolled: hollowRng !== null, scriptTargetId, story: story !== null,
+    curedTargetPending, rolled: hollowRng !== null, story: story !== null,
   }));
   return () => {
     offTick();

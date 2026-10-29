@@ -329,23 +329,12 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     return actionCopy(harness.store, repair, { regionSegIds: [biggest.id], col: Math.floor((biggest.size - repair.size) / 2) }) === null;
   };
 
-  const stasisAsk = (): boolean => {
-    const id = shownId();
-    // Slice 1a: no sealed archive any more; the STASIS scan lesson stands only while its line is shown.
-    return id === 'tut-scan-stasis';
-  };
-  const scanStasis = (): boolean => {
-    const stasis = getByRole(state(), 'stasis');
-    if (!stasis || getOpsBySeg(stasis.id).length > 0 || !canStartOp()) return false;
-    return actionScan(harness.store, stasis) === null;
-  };
 
   // What COMPETENT's MIND has to do now (null: nothing). Urgent reasons come from an alarm the kid can see; proactive
   // ones are its own plan (a WALL, a worn Core, a FIREWALL).
   const competentWork = (): { reason: string; urgent: boolean } | null => {
     const now = state();
     if (now.clock.paused) return null;
-    if (shownId() === 'reveal-look' || stasisAsk()) return { reason: 'colonists', urgent: true };
     if (copyAsk()) return { reason: 'copy', urgent: true };
     // VESPER's ghost lesson: the THRUST CTRL pip, then SWAP (defend10's pipSwap does the pip's jump and comes back). The
     // lesson is a SHIP line, so without this reason the kid swapped only when it happened to be in the MIND already.
@@ -377,16 +366,16 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     return null;
   };
 
-  // The hurt cluster's triage (`C09 IS HURT — REPAIR it before it prints`): the clusters the line names.
+  // The hurt driver's lesson (`POD 02 WILL LAND HARD — REPAIR its driver`, DRIVER_RULES' tut-hurt-driver*): the drivers
+  // the line names.
   const hurtAsked = (): Segment[] => {
     const line = state().director.shown;
-    if (!line || !line.id.startsWith('tut-hurt-cluster')) return [];
+    if (!line || !line.id.startsWith('tut-hurt-driver')) return [];
     return namedIn(line.text, state().memory.filter((seg) => seg.type === 'driver' && getOpsBySeg(seg.id).length === 0));
   };
 
   const competentAct = (): boolean => {
     let acted = false;
-    if (stasisAsk() && scanStasis()) acted = true;
     for (const seg of hurtAsked()) if (canStartOp() && actionRepair(harness.store, seg) === null) acted = true;
     if (harness.defend11(defendOpts)) acted = true;
     if (copyAsk() && copyRepair()) acted = true;
@@ -422,7 +411,6 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     const text = line?.text ?? '';
     const repair = (seg: Segment) => (): boolean => canStartOp() && actionRepair(harness.store, seg) === null;
     if (id === 'reveal-look') tasks.push({ reason: 'colonists', run: () => false });
-    if (stasisAsk()) tasks.push({ reason: 'colonists', run: scanStasis });
     if (copyAsk()) tasks.push({ reason: 'copy', run: copyRepair });
     if (!now.run.licences.includes('repair')) return tasks;
     const infected = now.memory.filter((seg) => isInfected(seg) && (seg.type === 'driver' || isRepairable(seg)) && hasIntegrity(seg) && idle(seg));
@@ -432,7 +420,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
       if (asks) for (const seg of namedIn(text, infected)) tasks.push({ reason: `repair:${seg.id}`, run: repair(seg) });
       const core = now.memory.find((seg) => seg.type === 'core');
       if (id.startsWith('alarm-core') && id !== 'alarm-core-repairing' && core && idle(core)) tasks.push({ reason: 'repair:core', run: repair(core) });
-      if (id.startsWith('tut-hurt-cluster')) {
+      if (id.startsWith('tut-hurt-driver')) {
         const hurt = now.memory.filter((seg) => seg.type === 'driver' && idle(seg));
         for (const seg of namedIn(text, hurt)) tasks.push({ reason: `repair:${seg.id}`, run: repair(seg) });
       }

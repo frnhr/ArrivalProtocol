@@ -208,6 +208,31 @@ check('the dot leads the ship by 70–88° on circular orbits of 5,000–9,000 k
       && Math.abs(rAt(cut.inBandCloseInSec) - edge) < 0.5,
     `window ${wide.openInSec.toFixed(1)}–${wide.closeInSec.toFixed(1)} s, in band ${cut.inBandOpenInSec?.toFixed(1)}–${cut.inBandCloseInSec?.toFixed(1)} s, r ${rOpen.toFixed(0)}→${rClose.toFixed(0)}`);
   check('a window wholly in band has its whole length in band', wide.inBandOpenInSec === wide.openInSec && wide.inBandCloseInSec === wide.closeInSec);
+  // Review M1: once the in-band part is over (the window still open, out of band), the LZ's window is the next pass's,
+  // still in band: an LZ is never taken for out of band for the rest of a window it can launch into.
+  if (cut.inBandCloseInSec !== null && cut.inBandCloseInSec + 1 < wide.closeInSec) {
+    const after = cut.inBandCloseInSec + 1;
+    const rolled = computeDropSolution({ ...input(propagateConic(ship, MU, after), zones), ring }).windows.find((w) => w.lz === wide.lz)!;
+    check('…and once that part is over, the LZ\'s window is the next pass\'s, in band (not OUT OF BAND for the rest of it)',
+      rolled.inBand && rolled.openInSec > 0 && rolled.inBandOpenInSec !== null && rolled.inBandOpenInSec > 0,
+      `open in ${rolled.openInSec.toFixed(0)} s, in band from ${rolled.inBandOpenInSec?.toFixed(0)} s`);
+  }
+}
+{
+  // Review M1 (p2): a PARTIAL orbit (▼ 5,500 km, e 0.4) solved round the whole orbit: always a window per LZ, and an
+  // in-band one's span always still ahead (or running).
+  const ship = stateFromElements(5500, 0.4, 260 * DEG, 0, MU);
+  const zones = [lz('LZ-A', 40, 'standard'), lz('LZ-B', 200, 'standard')];
+  const period = dotTrack(ship, MU, R, AIM).periodSec;
+  let bad = '';
+  for (let i = 0; i < 48 && bad === ''; i++) {
+    try {
+      const sol = computeDropSolution({ ...input(propagateConic(ship, MU, (i / 48) * period), zones), ring: { min: 5000, max: 7000 } });
+      const stale = sol.windows.find((w) => w.inBand && (w.inBandCloseInSec ?? 0) <= 0);
+      if (sol.windows.length !== zones.length || stale) bad = `t ${i}/48: ${sol.windows.length} windows, ${stale?.lz ?? ''}`;
+    } catch (error) { bad = `t ${i}/48: ${(error as Error).message}`; }
+  }
+  check('a PARTIAL orbit solved round the orbit: a window per LZ, never one in band whose span is over', bad === '', bad);
 }
 {
   // τ is measured against the track's own periapsis: a near-circular orbit's noisy periapsis can't shift the windows.

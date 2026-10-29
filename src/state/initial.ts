@@ -177,7 +177,7 @@ export function createLandingState(def: ShipLandingDef, memory: readonly Segment
 // HOLLOW sleeps in its root until the ship's wake (systems/hollow.ts).
 export function createHollowState(ship: ShipDef): HollowState {
   return {
-    cfg: structuredClone(ship.hollow), phase: 'asleep', story: 'none', biteInSec: null, wakeAtAi: null,
+    cfg: structuredClone(ship.hollow), phase: 'asleep', story: 'none', scriptTargetId: null, biteInSec: null, wakeAtAi: null,
     seedInSec: null, seedTelegraph: null, seedMoments: 0, seedsLanded: 0, wakeHeld: false, wakeHoldEndedAtAi: null,
     deal: createDealState(),
     verbInSec: null, verb: null, verbMoments: 0, verbTelegraphs: 0, verbsLanded: 0, verbsBlocked: 0, untriedTools: [], bitesAt: [],

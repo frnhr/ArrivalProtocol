@@ -23,7 +23,7 @@ function world(shipIndex: number): GameState {
 function launch(rad: number, touch: Touch): LaunchRecord {
   return {
     atTSec: 0, atAi: 0, source: 'player', launchRadius: 6000, dotRad: rad, halfWidthKm: 78, aimLz: null, landingRad: rad,
-    predictedTouch: touch, driverIntegrity: touch === 'soft' ? 100 : 40, arc: [], descentSec: 3.5,
+    predictedTouch: touch, driverIntegrity: touch === 'soft' ? 100 : 40, arc: [], descentSec: 3.5, firstOfRun: false,
   };
 }
 
@@ -103,6 +103,10 @@ function lzRad(state: GameState, label: string): number {
   check('credits: the mislanded pod names its full LZ', model.credits.find((credit) => credit.pod === 4)?.where === 'LZ-A FULL');
   check('headline: LANDED 600 / 1,000 (mislanded is not on target)', model.headline === 'LANDED 600 / 1,000', model.headline);
   check('points: 600 + 150', model.points === 750);
+  check('breakdown: each colonist once (review: the mislanded pod was in soft too)',
+    model.breakdown === '600 soft · 0 hard · 200 mislanded · 0 off-site', model.breakdown);
+  check('the report reads the state (ship name, destination, final ship), not SHIPS', model.route.startsWith(`${state.level.shipName} → ${state.mission.destination}`)
+    && !model.lastShip);
 
   // POD 04 comes down 40 km past LZ-B's far edge instead: off-site, half points on a GENTLE world, a near miss.
   down(state, 4, 'off-site', null, lzB.centreRad + lzB.halfWidthRad + 40 / R, 'soft', 10, 40);

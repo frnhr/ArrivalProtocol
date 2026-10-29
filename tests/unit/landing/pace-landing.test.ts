@@ -39,7 +39,7 @@ const state = (): GameState => h.store.getState();
 const warp = (): number => state().level.tacticalWarp;
 const toWindowTac = (): number | null => { const sec = windowLaunchInSec(state()); return sec === null ? null : sec / warp(); };
 const near = (a: number, b: number, tol: number): boolean => Math.abs(a - b) <= tol;
-const table = (): ReturnType<typeof landingObjective> => landingObjective(buildLandingContext(state(), getDropSolution(), getPrediction()));
+const table = (): ReturnType<typeof landingObjective> => landingObjective(buildLandingContext(state(), getDropSolution(), skipBlockReason(state(), getPrediction()) === null));
 
 // --- The lock -----------------------------------------------------------------------------------------------------------
 const flightWarps = [state().level.tacticalWarp, state().level.cruiseWarp];
@@ -131,7 +131,7 @@ const other = state().landing.lzs.find((lz) => lz.label !== first)?.label ?? '?'
   const open: GameState = { ...state(), landing: { ...state().landing, window: { lz: first, sure: true } } };
   check('a full LZ\'s open window passes at CRUISE', choosePace(open, pred, false, 0.05) === 'cruise', choosePace(open, pred, false, 0.05));
   check('...does not refuse a SKIP', skipBlockReason(open, pred) !== LANDING_SKIP_REFUSAL.windowOpen, String(skipBlockReason(open, pred)));
-  const line = landingObjective(buildLandingContext(open, getDropSolution(), pred));
+  const line = landingObjective(buildLandingContext(open, getDropSolution(), skipBlockReason(open, pred) === null));
   check(`...and the strip says ${first} FULL — hold the pods for ${other}`, line.row === 'L3'
     && line.text === `${first} FULL — hold the pods for ${other}`, line.text);
 }

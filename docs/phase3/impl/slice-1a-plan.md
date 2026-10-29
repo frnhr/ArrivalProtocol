@@ -730,3 +730,82 @@ What Track SIM built differently from §1–§6, and why. Everything else follow
 
 **Not done in 1a (left for UI, 05 or 1b)**: the §3.11 lessons (`◆ PODS LAND WHERE THE DOT IS`, `◆ 2 SITES …`) are text in
 landing-text but not yet guide rules; the no-go ask in the arc's own word is a `TODO(slice1b)` in launchGuard.
+
+## Deviations (Review fixes)
+
+What the logic fixes after the full review changed, and the design choices made. The regression checks are in
+`tests/unit/landing/review-fixes.test.ts` (states built directly, about 4 s) unless named otherwise.
+
+**Pods parked while their drivers are still in memory**
+- **The choice: `recordDriverLost` updates a parked pod** (over "parking provisional until finishLanding"). endNow keeps
+  parking at the moment the landing ends, so the PARKED words, the beacons and L0 still show through the linger and the
+  finale's wait, and a driver HOLLOW or a zone takes afterwards rewrites the parked fate with the loss
+  (`landing-rules parkedFateOf`: why `eaten` or `dead`, `restorable` for eaten) and sets `driverLost`. MERGE's unpark rule
+  stays right: only `no-time` pods reopen, and an eaten one comes back with its driver. Provisional parking would have
+  meant a second "aboard but over" state that every reader (report, beacons, L0, the LOST card) had to learn.
+- **THE DEAL** (`hollow-deal dealLive`): not offered once the landing has ended, and an offer standing at the end is
+  withdrawn silently (`invalidated`, as for a ship that is over), also when an answer came in the same tick.
+
+**Ship 1's scripted fight**: `HollowState.scriptTargetId` holds the bitten file until the fight is decided (a save can
+carry it); the report waits while `selectors scriptFightOpen` (the target still in memory), so END LANDING before the
+fight still lets `> ...047?` land first. A target that left memory some other way never holds the report for good.
+
+**The launch moment (M3)**: `landing-rules landingMoment(state, sol, nowTSec)` returns `{ awaited, canLaunch, noBand,
+roomInBand, upcoming, open, target }`: `upcoming` the in-band windows as of now (rolled by windowsAsOf) with their
+in-band opening, close and launch moment in game s from now; `open` the state's window with `launchCome` and
+`awaited`; `target` the window the landing waits on. Pace (TACTICAL, WINDOW OPEN, the SKIP), the table, the beeps,
+the countdown chip, the mini-HUD and the ground track read it; `targetWindow` is gone. Gating, once for all:
+- **awaited**: LANDING, not ended, and a pod aboard that can launch some day (M2's rule); nothing counts down otherwise.
+- **the beeps** count only while a pod can launch now (GET READY's own condition).
+- **the chip's and the mini-HUD's OPEN** only for an awaited window whose launch moment has come.
+- **the ground track** lists in-band windows only, soonest launch moment first.
+- **landing-solve**: a window still open whose in-band part is over this pass is reported as the next pass's (the
+  crossing search now reaches two orbits ahead), so `LzWindow.inBand` means "this LZ can be launched at from the band
+  at all". Before, such an LZ read as out of band for the rest of its window.
+
+**No room in the band (M1)**: only LZs whose window is in the band are named, waited on or counted down to.
+`roomInBand` false (every in-band LZ full) with pods that can launch: the target is the next in-band window, full, and
+- **L3b** (`landing-L3b`, keys [L]) while it is open, its launch moment come and the bay ready: `NO ROOM IN THE BAND —
+  [L] lands in a full LZ (¾), or END LANDING` (the factor from MISLANDED_FACTOR). [L] goes through the `full` confirm.
+- **L13's twin** (`landing-L13-noroom`) until then: `NO ROOM IN THE BAND — LZ-A in 2:10 · [F] to SKIP, or END LANDING`,
+  never with [L] (a press between windows would ask the off-site confirm). Pace and SKIP target that window.
+- L3 (`hold the pods for LZ-B`) names only an in-band LZ with room; L7 never counts to a full window.
+- `tests/unit/landing/flow.test.ts` flies HALCYON ACCEPTed at ▼ 5,500 km, e 0.4, ω 260° by the strip (p2).
+
+**Pods that can never launch (M2)**: `landing-rules driverCanEverLaunch`: a driver at or above the failing band always
+can (it waits for an infection or an op); below it only with a repair running on it, or `selectors repairPossible` (a
+usable Repair and charge ≥ 1, the rule `rootDeletable` uses for its Rm). The table's anyCanEver, L11 (never asks for a
+REPAIR that can't start), the risk-7 auto-end and the moment's `awaited` share it.
+
+**L0 and 'all-pods-down' (item 3)**: L0 says `EVERY POD IS DOWN — now DELETE THE ROOT` only when every pod is down,
+else `HOLLOW_FINALE.stripWaitsNobody`. `'all-pods-down'` carries `{ parked }` (pods that never launched); audio-cues
+plays lockArp and the stamp's thud only for 0, as the stamp shows only then.
+
+**VESPER's hunting ground (issue 5)**: on a ship whose seeds hunt tools, `carry.ts layoutCarried` lays out rack E's
+list, then `WALL_MIN_BLOCKS + SEED_BLOCKS + SEED_TOOL_GAP_BLOCKS` (7) free blocks, then rack F's list, the charge and
+the free rest, when the receiver has the room (it never costs charge or spills into the tail). The seed lands one block
+from the first tool with a WALL behind it: phase 2's geometry (rack E's free tail, the tools from rack F's start). A gap
+after the last tool instead would let a chain that eats the tools run on into AI Comms and the Core. Other ships keep
+§3.16's back-to-back block.
+
+**Minors**
+- N2: RUN END's NOBODY WOKE and its tone count the flagship's colonists down with points (mislanded and off-site
+  included, no-go not), from the state that ended the run (`landing.finalShip`, the run's result for `level.shipId`).
+- N3: FUEL is noted at endNow; MERGE's reopening clears it.
+- N4: the drop cache is fresh only for the current `orbitEpoch`; the dot track's key adds `e·rp·cos ω`, `e·rp·sin ω`
+  rounded to 1 km (steady on a near-circular orbit, where ω alone is noise).
+- N5: `landing-rules inOrbitOutcome(status)`; landing-report reads the ship name, destination and final ship from state.
+- N6: `rootDeletable`, `rootDeleteRunning` (the root's `operating` flag: only DELETE targets a hollow block) and
+  `repairPossible` live in selectors (hollow.ts and finale.ts re-export them); `buildLandingContext(state, sol,
+  skipAvailable)` takes the SKIP's availability from its caller, so the table imports no stateful module.
+- N7: `setLoadNext` refuses `LANDING OVER`, `endLanding` refuses `PAUSED`; the POD BAY's END LANDING is disabled while
+  paused.
+- `podCounts` / `podsWithFate` in landing-rules replace the four pod-count helpers; `parkAboard` is gone.
+- The report's breakdown counts a mislanded pod once. Run 1's first pod is `LaunchRecord.firstOfRun` and rides on
+  `'pod-entry'` (`first`).
+
+**Edits outside Track SIM's files** (each a mechanical consequence): `src/debug.ts` (the new buildLandingContext
+argument), `src/systems/audio-cues.ts` (lockArp gated on `parked`; `first` from the event), `landing-hud.ts` and
+`flight-hud.ts` (the landingMoment readers; END LANDING disabled while paused), `tests/unit/wp10/copy-test.test.ts` and
+`wp10/fix1/fixes.test.ts` (VESPER's hunting ground), `wp11/fix1/fix1.test.ts` (stripWaitsNobody is a check),
+`wp6/hollow-sim.test.ts` (the tug line), `wp12/playthrough.ts` (the rule ids), `tests/unit/KNOWN-FAILING-slice1a.md`.

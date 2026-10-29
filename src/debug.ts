@@ -21,7 +21,7 @@ import {
 import { packUnit, layoutCarried } from '@systems/carry';
 import { movePreview, type MovePreview } from '@systems/move-preview';
 import { newRunSeed } from '@systems/rng';
-import { requestSkip, mainCountdown, setDebugWarp, type SkipResult, type Countdown } from '@systems/pace';
+import { requestSkip, mainCountdown, setDebugWarp, skipBlockReason, type SkipResult, type Countdown } from '@systems/pace';
 import {
   buildFlightContext, flightObjective, buildLandingContext, landingObjective, type FlightObjective, type LandingObjective,
 } from '@systems/guidance';
@@ -476,7 +476,7 @@ export function mountDebug(store: Store<GameState>): void {
     landingTable: () => {
       const state = store.getState();
       if (state.run.phase !== 'landing') return null;
-      return landingObjective(buildLandingContext(state, getDropSolution(), getSensedPrediction()));
+      return landingObjective(buildLandingContext(state, getDropSolution(), skipBlockReason(state, getSensedPrediction()) === null));
     },
     lockOn: (opts = {}) => {
       const state = store.getState();

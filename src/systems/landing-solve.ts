@@ -305,7 +305,8 @@ function bandSpan(track: DotTrack, ring: Ring, open: number, close: number, tauN
   return start !== null && close > tauNow ? { start, end: close } : null;
 }
 
-// Each LZ's window from τNow (§3.2): the current one if it is open now, else the next. OPEN while the dot's centre is in
+// Each LZ's window from τNow (§3.2): the current one if it is open now (unless its in-band part is already over: then
+// the next), else the next. `inBand` therefore says whether the LZ can be launched at from inside the band at all. OPEN while the dot's centre is in
 // the bracket; SURE while the whole dot (± s) is. Found from the dot's crossing of the bracket's centre (so a sure
 // window narrower than one sample is never missed), then each edge refined on exact evaluations. `factors` are the
 // drop width's multipliers for the pod that would launch (landing-rules dropFactors). Sorted by openInSec.
@@ -322,9 +323,10 @@ export function windowsFor(
     const openG = (point: TrackPoint): number => Math.abs(offset(point)) - lz.halfWidthRad;
     const sureG = (point: TrackPoint): number => Math.abs(offset(point)) - (lz.halfWidthRad - halfWidthAt(point.r) / track.R);
     let found: LzWindow | null = null;
-    // Centre crossings (offset − → +) from one orbit back to one orbit ahead: the first whose window has not closed yet.
+    // Centre crossings (offset − → +) from one orbit back to two orbits ahead: the first whose window has not closed yet
+    // (and whose in-band part, if it has one, is not over: the next pass's may be almost two orbits from the last one).
     const first = Math.floor((tauNow - track.periodSec) / step);
-    for (let index = first; index < first + 2 * n + 1 && found === null; index++) {
+    for (let index = first; index < first + 3 * n + 1 && found === null; index++) {
       const a = gridPoint(track, index);
       const b = gridPoint(track, index + 1);
       const offA = offset(a);
@@ -340,8 +342,12 @@ export function windowsFor(
       const close = edgeFrom(track, openG, tauCentre, 1);
       if (close <= tauNow) continue;
       const open = edgeFrom(track, openG, tauCentre, -1);
-      const middle = exactPoint(track, (open + close) / 2);
       const band = bandSpan(track, ring, open, close, tauNow);
+      // A window still open whose in-band part is already over this pass is over for launching: the LZ's next window
+      // is the next pass's (review M1). Reported as this pass's it read as never in band (`inBand` false) until it
+      // closed, and the rules took the LZ for out of band. A window with no in-band part at all stays: it is.
+      if (band === null && bandSpan(track, ring, open, close, -Infinity) !== null) continue;
+      const middle = exactPoint(track, (open + close) / 2);
       const fits = sureG(exactPoint(track, tauCentre)) < 0;
       const sureOpen = fits ? edgeFrom(track, sureG, tauCentre, -1) : null;
       const sureClose = fits ? edgeFrom(track, sureG, tauCentre, 1) : null;

@@ -105,6 +105,12 @@ export const PARK_REASON_TEXT: Readonly<Record<ParkReason, string>> = {
   'no-time': 'no time',
 };
 
+// A score factor as the strip says it: `¾`, else `×0.6`.
+function scoreFraction(factor: number): string {
+  const glyph: Readonly<Record<number, string>> = { 0.25: '¼', 0.5: '½', 0.75: '¾' };
+  return glyph[factor] ?? `×${factor}`;
+}
+
 // The landing guidance table (§3.11), rows L0–L7 and L11–L13 (plus L12b). landing-guidance.ts (Track SIM) picks the row.
 export const LANDING_LINES = {
   L0: 'EVERY POD IS DOWN — now DELETE THE ROOT',
@@ -123,6 +129,12 @@ export const LANDING_LINES = {
   // every bracket): with no engine in 1a nothing will change that (plan Deviations, Track SIM).
   L12band: 'NO LZ IN THE LAUNCH BAND — END LANDING parks them in orbit',
   L12b: (falling: number): string => (falling > 0 ? `ALL PODS AWAY · ${falling} FALLING` : 'ALL PODS AWAY'),
+  // L3's twin when no LZ whose window is in the band has room left (review M1: a PARTIAL orbit whose other LZ is out of
+  // band): the launch the kid still has is into a full LZ, at the mislanded score (`factor`: MISLANDED_FACTOR), and
+  // END LANDING parks the rest. While that window is open: [L]; until it is: the wait to it.
+  L3b: (factor: number): string => `NO ROOM IN THE BAND — [L] lands in a full LZ (${scoreFraction(factor)}), or END LANDING`,
+  L13noRoom: (lz: string, inSec: number, skip: boolean): string =>
+    `NO ROOM IN THE BAND — ${lz} in ${minSec(inSec)}${skip ? ' · [F] to SKIP' : ''}, or END LANDING`,
   // `· [F] to SKIP` only while a SKIP would start (as the flight's WAIT rows offer it).
   L13: (lz: string, inSec: number, skip: boolean, outOfBand: boolean): string =>
     `WAIT — ${lz} in ${minSec(inSec)} ▸▸${skip ? ' · [F] to SKIP' : ''}${outOfBand ? ' · OUT OF BAND' : ''}`,
