@@ -79,8 +79,8 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
   check('each card says what kind of thing it is (FILE · 2 BLOCKS, UPGRADE, AI CORE, ON ARRIVAL)', model.cards.every((card) => card.tag === tags[card.id]),
     model.cards.map((card) => `${card.id}=${card.tag}`).join(' '));
   const firewall = model.cards.find((card) => card.id === 'firewall');
-  check('after a cluster lost to HOLLOW, FIREWALL.sys is boosted and says why, naming it as the strip does (`because you lost a cluster to ???`)',
-    firewall !== undefined && firewall.boosted && DRAFT_TEXT.why(firewall.why) === 'because you lost a cluster to ???',
+  check('after a driver lost to HOLLOW, FIREWALL.sys is boosted and says why, naming it as the strip does (`because you lost a driver to ???`)',
+    firewall !== undefined && firewall.boosted && DRAFT_TEXT.why(firewall.why) === 'because you lost a driver to ???',
     model.cards.map((card) => `${card.id}: ${card.why}`).join(' | '));
   check('every card line on the screen is ≤ 70 characters', model.cards.every((card) => [card.title, card.effect, DRAFT_TEXT.why(card.why), card.tag].every(lineOk)));
   check('…and no file card is shown in the packet before a pick', model.cardFile === null);
@@ -136,7 +136,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
     held.length >= 1 && (held[0]!.payload as { firewallId: string; side: string }).firewallId === holder.id
       && (held[0]!.payload as { side: string }).side === 'left', JSON.stringify(held.map((event) => event.payload)));
   // The kid DELETEs it (as the DELETE op ends: the file's blocks become free space; here between the
-  // root and C08, so no free neighbour to merge with).
+  // root and POD 04, so no free neighbour to merge with).
   const index = state().memory.findIndex(isFirewall);
   h.store.update((d) => {
     const free: FreeSegment = { id: newSegId('free'), name: 'free', type: 'free', size: FIREWALL_BLOCKS };

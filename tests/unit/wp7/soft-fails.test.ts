@@ -1,5 +1,3 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP7 acceptance 3 (§4.3, §9 WP7 item 6): the soft fails, headless, on the real systems.
 // • run 1, ship 1: the first crash is "a simulation" (ship 1 starts over, once); the second crash with
 //   AI Comms usable is an EMERGENCY TRANSMIT: the next ship, Core −25 and 3 extra transit hits;
@@ -16,7 +14,7 @@ import { continueAfterLoss, lossPlan, startBeamOut, cancelBeamOut } from '@syste
 import { beamOutRefusal, beamOutProgress, shipDoomed } from '@systems/beam-out';
 import { infectNow } from '@systems/hollow';
 import { getPrediction } from '@systems/predict';
-import { getByRole, hasIntegrity, archiveSealed } from '@state/selectors';
+import { getByRole, hasIntegrity } from '@state/selectors';
 import { LINES } from '@data/script';
 import { BEAM_OUT_TAC, BEAM_OUT_EXTRA_HITS, EMERGENCY_EXTRA_HITS, EMERGENCY_CORE_HIT, CORE_RESET_INTEGRITY } from '@data/tuning';
 import { getShip } from '@data/ships';
@@ -58,8 +56,8 @@ function bootToFlight(): void {
     state().run.phase === 'boot' && state().run.shipIndex === 0 && state().run.rev === rev + 1 && state().run.ships.length === 0
     && state().run.simulationRetryUsed, `${state().run.phase} ${state().run.shipIndex}`);
   check('…CONTROL: "That was a simulation. :) Again."', state().log.entries.some((entry) => entry.speaker === 'control' && entry.text === LINES.simulation()));
-  check('…the archive the LOST card opened stays open (the kid knows), the licences start over (fresh unit)',
-    !archiveSealed(state()) && state().run.licences.join() === 'scan');
+  check('…the licences start over (fresh unit), the pods all aboard again',
+    state().run.licences.join() === 'scan' && state().landing.pods.every((record) => record.fate.kind === 'aboard'));
   bootToFlight();
   const coreBefore = integrity('core');
   crashNow();
@@ -68,8 +66,9 @@ function bootToFlight(): void {
     return plan.kind === 'transmit' && plan.extraHits === EMERGENCY_EXTRA_HITS && plan.coreHit === EMERGENCY_CORE_HIT;
   })(), JSON.stringify(lossPlan(state())));
   continueAfterLoss(h.store);
-  check('…the run goes to TRANSMIT with ship 1 recorded as crashed', state().run.phase === 'transmit'
-    && state().run.ships[0]?.outcome === 'crashed' && state().run.ships[0]?.lost === 2400, JSON.stringify(state().run.ships[0]));
+  check('…the run goes to TRANSMIT with ship 1 recorded as crashed, its 600 colonists NOT LAUNCHED', state().run.phase === 'transmit'
+    && state().run.ships[0]?.outcome === 'crashed' && state().run.ships[0]?.notLaunched === 600 && state().run.ships[0]?.landedInLz === 0,
+    JSON.stringify(state().run.ships[0]));
   h.transmit();
   const hits = state().run.arrival?.hits ?? [];
   const toll = hits[0];

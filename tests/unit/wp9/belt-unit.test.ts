@@ -1,12 +1,10 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP9 acceptance 3 (§6.8, §9 WP9 item 1): the radiation belt's effect, built and tested here for LAST LIGHT (WP11).
 // • A 1,080 game-s crossing gives 5.4 ± 0.5 hits on average over 500 seeds, at both ×30 and ×300 (the clock is a
 //   Poisson process in time spent inside, at most one hit a tick: warp-invariant).
-// • An orbit with ra ≤ 7,000 under a belt starting at 9,000: 0 hits during printing (and, as a control, a belt the
-//   orbit does clip keeps hitting while printing).
+// • An orbit with ra ≤ 7,000 under a belt starting at 9,000: 0 hits during the landing (and, as a control, a belt the
+//   orbit does clip keeps hitting while the pods wait aboard; the landing stands: 'manual' landing mode).
 // • Hits land on a random damageable file in the belt's racks that no op holds (drawn again once), −8 each; a
-//   cluster taken to 0 did not wake and leaves memory (no HOLLOW turn); the predictor's zoneHits counts the time
+//   driver taken to 0 leaves memory (no HOLLOW turn) and its pod stays aboard, its driver lost 'dead' (CAN'T LAUNCH); the predictor's zoneHits counts the time
 //   inside and the expected hits; pace is TACTICAL inside and SKIP is refused there.
 import { check, finish } from '../wp1/harness';
 import { createHarness9 } from './harness9';
@@ -15,6 +13,10 @@ import { getPrediction } from '@systems/predict';
 import { requestSkip } from '@systems/pace';
 import { createRng, childRng } from '@systems/rng';
 import { driversInMemory } from '@state/selectors';
+import { podRecord } from '@systems/landing-rules';
+import { podCode } from '@data/landing-text';
+import { zoneLostLine } from '@data/zone-text';
+import { setLandingMode } from '../support/landing-instant';
 import { segmentStarts } from '@systems/memory-ops';
 import { stateFromElements } from '@/types/orbit';
 import { BELT_HIT_MEAN_SEC, BELT_HIT_DAMAGE, RACK_BLOCKS } from '@data/tuning';
@@ -62,27 +64,25 @@ for (const warp of [30, 300]) {
   })());
 }
 
-// --- The sim: printing on a loop under the belt, and one that clips it -----------------------------------------
+// --- The sim: the landing on a loop under the belt, and one that clips it -----------------------------------------
 const h = createHarness9(4);
+// The pods wait aboard the whole time (nobody launches), so the belt has drivers to hit.
+setLandingMode('manual');
 const state = () => h.store.getState();
 const belt = (rIn: number, rOut: number): BeltZone => ({ kind: 'belt', id: 'belt-test', rIn, rOut, racks: ['A', 'B'] });
 
 function printUnder(zone: BeltZone, seconds: number): number {
   h.kestrel(4, { hollowAsleep: true, sensorHealed: true });
   h.store.update((d) => { d.level = { ...d.level, zones: [zone] }; });
-  h.startPrinting(1, 'locked');
-  // The printer would empty memory in seconds; hold it so the world coasts the whole time with colonists aboard.
+  h.startLanding(1, 'locked');
   const end = h.wall() + seconds;
-  while (h.wall() < end) {
-    h.store.mutate((d) => { d.printer.waitAiSec = 10; });
-    h.step();
-  }
+  while (h.wall() < end) h.step();
   return h.zoneHits().length;
 }
 
-check('a locked orbit inside the ring (ra ≤ 7,000) under a belt from 9,000 to 12,000: 0 hits while printing', printUnder(belt(9000, 12000), 60) === 0);
+check('a locked orbit inside the ring (ra ≤ 7,000) under a belt from 9,000 to 12,000: 0 hits while landing', printUnder(belt(9000, 12000), 60) === 0);
 const clipped = printUnder(belt(5500, 6500), 60);
-check('…control: a belt the orbit lies in keeps hitting while printing (§6.8), at about one a 200 game s',
+check('…control: a belt the orbit lies in keeps hitting while landing (§6.8), at about one a 200 game s',
   clipped >= 2, `${clipped} hits in 60 wall s at ×${state().level.tacticalWarp} (${(60 * state().level.tacticalWarp / BELT_HIT_MEAN_SEC).toFixed(1)} expected)`);
 {
   const memory = state().memory;
@@ -111,35 +111,35 @@ check('…control: a belt the orbit lies in keeps hitting while printing (§6.8)
     const seg = memory.find((candidate) => candidate.id === id)!;
     return starts[memory.indexOf(seg)]! < 2 * RACK_BLOCKS && 'integrity' in seg;
   });
-  check('beltTarget picks damageable files in racks A–B only (ship files and rack B\'s clusters)', allInRacks && [...picks].some((id) => id.startsWith('soul_'))
-    && [...picks].some((id) => !id.startsWith('soul_')), [...picks].join(','));
+  check('beltTarget picks damageable files in racks A–B only (ship files and rack B\'s drivers)', allInRacks && [...picks].some((id) => id.startsWith('driver_'))
+    && [...picks].some((id) => !id.startsWith('driver_')), [...picks].join(','));
   const busy: Segment[] = memory.map((seg) => (seg.type === 'driver' || seg.type === 'ship' || seg.type === 'ship-backup'
     ? { ...structuredClone(seg), operating: true } : structuredClone(seg)));
   check('…a file an op holds is not hit (drawn again once, then the hit is lost)', beltTarget(busy, ['A', 'B'], createRng(3)) === null);
 }
 
-// --- A cluster taken to 0 did not wake (no HOLLOW turn) -----------------------------------------------------------
+// --- A driver taken to 0: gone, its pod aboard and CAN'T LAUNCH (no HOLLOW turn) ------------------------------------
 {
   h.kestrel(4, { hollowAsleep: true, sensorHealed: true });
   h.store.update((d) => {
     d.level = { ...d.level, zones: [belt(5500, 6500)] };
     for (const seg of d.memory) if ('integrity' in seg && seg.type !== 'core' && seg.type !== 'tool' && seg.type !== 'fs-tool') seg.integrity = 5;
   });
-  h.startPrinting(1, 'locked');
+  h.startLanding(1, 'locked');
   let lostEvent = false;
   const end = h.wall() + 120;
   while (h.wall() < end && !lostEvent) {
-    h.store.mutate((d) => { d.printer.waitAiSec = 10; });
     h.step();
-    lostEvent = h.events.some((event) => event.name === 'zone-hit' && (event.payload as { lostClusters: string[] }).lostClusters.length > 0);
+    lostEvent = h.events.some((event) => event.name === 'zone-hit' && (event.payload as { lostDrivers: number[] }).lostDrivers.length > 0);
   }
-  const lost = h.events.filter((event) => event.name === 'zone-hit').flatMap((event) => (event.payload as { lostClusters: string[] }).lostClusters);
-  const code = lost[0];
-  check('a cluster the belt takes to 0 did not wake: it leaves memory as a lost result, and no HOLLOW block appears',
-    code !== undefined && !driversInMemory(state()).some((soul) => soul.cluster === code)
-    && state().souls.results.some((result) => result.cluster === code && result.outcome === 'lost')
+  const lost = h.events.filter((event) => event.name === 'zone-hit').flatMap((event) => (event.payload as { lostDrivers: number[] }).lostDrivers);
+  const pod = lost[0];
+  const record = pod === undefined ? null : podRecord(state(), pod);
+  check('a driver the belt takes to 0 leaves memory; its pod stays aboard with its driver lost \'dead\' (never MERGE\'s), and no HOLLOW block appears',
+    pod !== undefined && !driversInMemory(state()).some((driver) => driver.pod === pod)
+    && record?.driverLost === 'dead' && record.fate.kind === 'aboard'
     && state().memory.filter((seg) => seg.type === 'hollow').length === 1, `${lost.join(',')}`);
-  check('…the TERMINAL says so', state().log.entries.some((entry) => entry.text === `> ${code} ... DID NOT WAKE`));
+  check('…the TERMINAL says so', pod !== undefined && state().log.entries.some((entry) => entry.text === zoneLostLine(podCode(pod))));
   h.checkMemory();
 }
 

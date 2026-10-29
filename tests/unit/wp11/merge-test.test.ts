@@ -1,28 +1,33 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite tests phase 2's printer / souls and is rewritten per slice-1a-plan §5
-// ("Existing suites: Rewrite"). F2 turned type-checking off here so tsc over tests stays green meanwhile; it fails at runtime.
 // WP11 acceptance 3 (§9 WP11 item 5, §6.6, §4.5): LAST LIGHT's choice, headless.
-// • MERGE restores every cluster HOLLOW ate on this ship: a block still standing turns back into colonists in place (at
-//   its own address, also after an MV moved it) at 50, and prints waking with missing memories; a block the kid DELETEd
-//   goes into the record as woke with missing memories at once (half credit); nothing is dropped. A cluster the belt took
-//   to 0 was never HOLLOW's and stays lost. It costs 20 REPAIR CHARGE, and is refused below 20 with
-//   `NEEDS 20 CHARGE (you have 14)` (nothing changes then).
+// • MERGE (slice 1a, plan risk 9; 01-landing §3.17's last landing is slice 7) restores every driver HOLLOW ate on this
+//   ship whose block still stands: in place (at its block's address, also after an MV moved it) at MERGE_DRIVER_INTEGRITY
+//   (80), and its pod launches normally; a pod whose block the kid DELETEd stays parked, restorable, scoring 0 (MERGE's
+//   half credit is gone until slice 7); nothing is dropped. A driver the belt took to 0 was never HOLLOW's and stays
+//   lost (parked, dead). It costs 20 REPAIR CHARGE, and is refused below 20 with `NEEDS 20 CHARGE (you have 14)`
+//   (nothing changes then).
 // • RUN END after it is 'won-merge', the victory tone; the archive keeps mergeBonus and endingsSeen ['merge']; the next run
 //   starts with a Core of 3 threads and the corruption floor 0.05 (the jerk dice still roll on the Core alone).
-// • PURGE: every block of HOLLOW leaves memory; the eaten stay lost; 'won-purge'; endingsSeen gains 'purge' and the
+// • PURGE: every block of HOLLOW leaves memory; the eaten stay lost (parked); 'won-purge'; endingsSeen gains 'purge' and the
 //   bonus is used up (mergeBonus false).
 // • The root's DELETE: 12 AI s, its last block standing in the root's middle; HOLLOW stops (no bites, seeds or verbs) and
 //   lets go of what it was eating; INSPECT's words for the open root and the last block; the last block is locked.
-// • UNRESOLVED: with every Rm gone (and none to repair), printing ends with the root standing: the ship ends unresolved,
+// • UNRESOLVED: with every Rm gone (and none to repair), the landing ends with the root standing: the ship ends unresolved,
 //   RUN END 'unresolved', sombre. A flagship that woke nobody never gets the victory tone, even after a PURGE.
 // • §9 WP11's edge cases: the Core worn below 50 mid-duel (the running DELETE keeps its thread); the flagship lost before
 //   the duel (BEAM OUT, an escape, stranded, a crash with comms up: FLAGSHIP LOST; the Core eaten: OVERWRITTEN).
+// The landing stands while a scenario sets itself up ('manual' landing mode, tests/unit/support/landing-instant.ts) and
+// is landed instantly when the scenario lets it go. LAST LIGHT's pods next to the root are POD 11 (a 2-block GAP) and
+// POD 12 (1 block); POD 13 opens rack D.
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from './harness11';
 import { theRoot, landVerb, mvSpots, infectNow } from '@systems/hollow';
 import { chooseFinale, finaleChoiceRefusal, finaleRunCause } from '@systems/finale';
 import { continueAfterReport, startRun, lossPlan } from '@systems/run';
 import { runEndModel } from '@systems/run-end';
-import { actionDelete } from '@state/actions';
+import { actionDelete, recordDriverLost } from '@state/actions';
+import { podRecord } from '@systems/landing-rules';
+import { isPodCode } from '../support/pod-code';
+import { setLandingMode, landInstantly } from '../support/landing-instant';
 import { getOpsBySeg, threadsTotal } from '@systems/ops-core';
 import { corruptionFloor } from '@systems/glitch';
 import { openRunArchive, closeArchive, archiveMeta, archiveLineage, archiveRunStarted, type MetaStorage } from '@systems/meta';
@@ -33,14 +38,15 @@ import { selectCorruption, chargeLeft, driversInMemory, isHollow } from '@state/
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { getShip } from '@data/ships';
 import { RUN_END_NOBODY_WOKE } from '@data/script';
-import { ROOT_DELETE_SEC, MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, MERGE_BONUS_CORE_CAPACITY, MERGE_CORRUPTION_FLOOR } from '@data/tuning';
+import { LANDING_NONE_LEFT_SEC, ROOT_DELETE_SEC, MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, MERGE_BONUS_CORE_CAPACITY, MERGE_CORRUPTION_FLOOR } from '@data/tuning';
 import type { GameState } from '@state/schema';
 import type { HollowSegment, DriverSegment } from '@/types/segment';
 
 const h = createHarness11(31);
+setLandingMode('manual');
 const state = (): Readonly<GameState> => h.store.getState();
-const soul = (code: string): DriverSegment | undefined => driversInMemory(state()).find((seg) => seg.cluster === code);
-const blockOf = (code: string): HollowSegment | undefined => state().memory.find((seg): seg is HollowSegment => isHollow(seg) && seg.atePod === code);
+const soul = (code: string): DriverSegment | undefined => driversInMemory(state()).find((seg) => isPodCode(seg.pod, code));
+const blockOf = (code: string): HollowSegment | undefined => state().memory.find((seg): seg is HollowSegment => isHollow(seg) && seg.atePod !== undefined && isPodCode(seg.atePod, code));
 const addrOf = (id: string): number => segmentStarts(state().memory)[state().memory.findIndex((seg) => seg.id === id)]!;
 
 function stubStorage(): () => MetaStorage {
@@ -62,12 +68,10 @@ function toTheDuel(seed: number): void {
     d.hollow.seedInSec = 9999;
     d.hollow.verbInSec = 9999;
     d.hollow.verb = null;
-    // Printing paused for the set-up (the later clusters must still be in memory): PRINT NEXT stays the printer's.
-    d.printer.waitAiSec = 9999;
   });
 }
 
-// Lets HOLLOW eat these clusters (no defender), whatever else it eats meanwhile is held off.
+// Lets HOLLOW eat these drivers (no defender), whatever else it eats meanwhile is held off.
 function eat(codes: string[]): void {
   for (const code of codes) {
     const seg = soul(code);
@@ -106,31 +110,31 @@ toTheDuel(41);
   check('…and anything that is neither the root, the last block, an eaten file nor a seed still fails loudly',
     (() => { try { hollowInspectState({ ...root, root: false, locked: false }); return false; } catch { return true; } })());
 }
-eat(['C13', 'C14', 'C15']);
-check('HOLLOW ate C13, C14 and C15: their records say so (eaten), and each left a block that remembers it',
-  ['C13', 'C14', 'C15'].every((code) => state().souls.results.some((result) => result.cluster === code && result.outcome === 'lost' && result.eaten === true)
-    && blockOf(code) !== undefined), state().souls.results.map((result) => `${result.cluster}:${result.outcome}${result.eaten ? '*' : ''}`).join(' '));
-// A belt-lost cluster for contrast: C01 taken to 0 the way a zone does it (not HOLLOW's).
+eat(['POD 11', 'POD 12', 'POD 13']);
+check('HOLLOW ate POD 11, 12 and 13\'s drivers: their pods say so (eaten, still aboard), and each left a block that remembers it',
+  [11, 12, 13].every((pod) => podRecord(state(), pod).driverLost === 'eaten' && podRecord(state(), pod).fate.kind === 'aboard'
+    && blockOf(`POD ${pod}`) !== undefined), state().landing.pods.map((record) => `${record.pod}:${record.fate.kind}${record.driverLost ? '*' : ''}`).join(' '));
+// A belt-lost driver for contrast: POD 01's taken to 0 the way a zone does it (not HOLLOW's).
 h.store.update((d) => {
-  const c01 = d.memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.cluster === 'C01');
-  if (!c01) throw new Error('merge-test: C01 printed already');
-  const index = d.memory.indexOf(c01);
-  d.memory[index] = { id: 'free~c01', name: 'Free', type: 'free', size: c01.size };
-  d.souls.results.push({ cluster: 'C01', family: c01.family, souls: c01.souls, outcome: 'lost', integrity: 0, range: 0, featured: c01.featured });
+  const pod1 = d.memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 1);
+  if (!pod1) throw new Error('merge-test: POD 01 launched already');
+  const index = d.memory.indexOf(pod1);
+  d.memory[index] = { id: 'free~pod01', name: 'Free', type: 'free', size: pod1.size };
+  recordDriverLost(d, pod1, 'dead');
   d.ui.memoryRev++;
 });
 h.store.update((d) => { const mem = d.memory; for (let i = mem.length - 1; i > 0; i--) { const a = mem[i - 1]!; const b = mem[i]!; if (a.type === 'free' && b.type === 'free') { a.size += b.size; mem.splice(i, 1); } } });
 assertMemoryInvariants(state().memory, MEMORY_TOTAL_BLOCKS);
-// C14's block moved by an MV; C15's block DELETEd by the kid.
-const c14Block = blockOf('C14')!;
+// POD 12's block moved by an MV; POD 13's block DELETEd by the kid.
+const c14Block = blockOf('POD 12')!;
 const c14To = mvSpots(state().memory, c14Block)[0];
-check('an MV has a spot for C14\'s block', c14To !== undefined);
+check('an MV has a spot for POD 12\'s block', c14To !== undefined);
 landVerb(state().memory as GameState['memory'], { kind: 'mv', targetId: c14Block.id, toAddr: c14To! }, state().hollow.untriedTools);
 h.store.update((d) => { d.ui.memoryRev++; });
 check('…and moved it there', addrOf(c14Block.id) === c14To, `${addrOf(c14Block.id)} vs ${c14To}`);
-actionDelete(h.store, blockOf('C15')!);
+actionDelete(h.store, blockOf('POD 13')!);
 h.stepFor(1 + 0.5 * 8 + 0.2);
-check('the kid DELETEd C15\'s block', blockOf('C15') === undefined);
+check('the kid DELETEd POD 13\'s block', blockOf('POD 13') === undefined);
 
 // The root's DELETE.
 deleteRoot();
@@ -156,37 +160,41 @@ check('MERGE below 20: refused `NEEDS 20 CHARGE (you have 14)`, nothing changes'
 check('…PURGE is still open', finaleChoiceRefusal(state(), 'purge') === null);
 setCharge(30);
 // Where the two blocks stand at the choice (the duel's verbs kept coming every 4 s during the root's DELETE: an MV may
-// have moved one again): MERGE brings each cluster back exactly there.
-const c13Block = blockOf('C13');
+// have moved one again): MERGE brings each driver back exactly there.
+const c13Block = blockOf('POD 11');
 const c13At = c13Block ? addrOf(c13Block.id) : -1;
-const c14At = blockOf('C14') ? addrOf(blockOf('C14')!.id) : -1;
+const c14At = blockOf('POD 12') ? addrOf(blockOf('POD 12')!.id) : -1;
 const merged = chooseFinale(h.store, 'merge');
 check('MERGE with 30: chosen, 20 charge spent', merged === null && chargeLeft(state()) === 30 - MERGE_COST_CHARGE && state().hollow.finale.phase === 'merged',
   `${merged} charge ${chargeLeft(state())}`);
-check('…C13 back in place (its block\'s address), at 50', soul('C13')?.integrity === MERGE_DRIVER_INTEGRITY && addrOf(soul('C13')!.id) === c13At,
-  `${soul('C13')?.integrity} at ${soul('C13') ? addrOf(soul('C13')!.id) : '-'} (block was at ${c13At})`);
-check('…C14 back where its block stood (an MV moved it), at 50', soul('C14')?.integrity === MERGE_DRIVER_INTEGRITY && addrOf(soul('C14')!.id) === c14At
-  && c14At !== -1, `${soul('C14') ? addrOf(soul('C14')!.id) : '-'} vs ${c14At}`);
-const c15 = state().souls.results.find((result) => result.cluster === 'C15');
-check('…C15 (its block deleted) woke with missing memories at once: half credit, nothing dropped', c15?.outcome === 'gaps' && c15.merged === true);
-check('…C01 (the belt\'s, not HOLLOW\'s) stays lost', state().souls.results.find((result) => result.cluster === 'C01')?.outcome === 'lost');
+check(`…POD 11's driver back in place (its block's address), at ${MERGE_DRIVER_INTEGRITY}`, soul('POD 11')?.integrity === MERGE_DRIVER_INTEGRITY && addrOf(soul('POD 11')!.id) === c13At,
+  `${soul('POD 11')?.integrity} at ${soul('POD 11') ? addrOf(soul('POD 11')!.id) : '-'} (block was at ${c13At})`);
+check(`…POD 12's back where its block stood (an MV moved it), at ${MERGE_DRIVER_INTEGRITY}`, soul('POD 12')?.integrity === MERGE_DRIVER_INTEGRITY && addrOf(soul('POD 12')!.id) === c14At
+  && c14At !== -1, `${soul('POD 12') ? addrOf(soul('POD 12')!.id) : '-'} vs ${c14At}`);
+check('…their pods can launch again (driver no longer lost, marked restored)', [11, 12].every((pod) => podRecord(state(), pod).driverLost === null
+  && podRecord(state(), pod).restored && podRecord(state(), pod).fate.kind === 'aboard'));
+check('…POD 13 (its block deleted) stays lost for now: eaten, restorable by slice 7\'s last landing, nothing dropped',
+  podRecord(state(), 13).driverLost === 'eaten' && soul('POD 13') === undefined);
+check('…POD 01 (the belt\'s, not HOLLOW\'s) stays lost (dead)', podRecord(state(), 1).driverLost === 'dead');
 check('…no block of HOLLOW is left in memory, the memory is whole', !state().memory.some(isHollow)
   && (() => { try { assertMemoryInvariants(state().memory, MEMORY_TOTAL_BLOCKS); return true; } catch { return false; } })());
 // WP12 p3 (the lead's note of 22:40): CONTROL's verdict waits until the typed ending is over (the card types it
 // as its last line); said at the choice, the header's ticker spoiled the ending. Checked below, at the WAKE REPORT.
 const mergeVerdict = (): boolean => state().log.entries.some((entry) => /is non-compliant\. :\)$/.test(entry.text));
-check('…the finale records it, and the TERMINAL says it; CONTROL waits for the typed ending', JSON.stringify([...state().hollow.finale.restoredInPlace].sort()) === JSON.stringify(['C13', 'C14'])
-  && JSON.stringify(state().hollow.finale.restoredHalf) === JSON.stringify(['C15'])
+check('…the finale records it, and the TERMINAL says it; CONTROL waits for the typed ending', JSON.stringify([...state().hollow.finale.restoredInPlace].sort((a, b) => a - b)) === JSON.stringify([11, 12])
+  && JSON.stringify(state().hollow.finale.restoredHalf) === JSON.stringify([13])
   && state().log.entries.some((entry) => /^> merge unit_\d+ -> unit_\d+ \.\.\. OK$/.test(entry.text))
   && !mergeVerdict());
 check('…a second choice is refused', chooseFinale(h.store, 'purge') !== null);
 
-// Print the rest, the WAKE REPORT, RUN END.
-h.store.update((d) => { d.printer.waitAiSec = 0; });
+// Land the rest, the LANDING REPORT, RUN END.
+landInstantly(h.store);
 const end = h.wall() + 200;
 while (state().run.phase === 'landing' && h.wall() < end) h.step();
-check('printing went on with C13 and C14 and reached the WAKE REPORT', state().run.phase === 'report'
-  && ['C13', 'C14'].every((code) => state().souls.results.some((result) => result.cluster === code && result.outcome === 'gaps')), state().run.phase);
+const fate13 = podRecord(state(), 13).fate;
+check('the landing went on with POD 11 and POD 12 (down, restored) and reached the LANDING REPORT; POD 13 parked eaten, restorable',
+  state().run.phase === 'report' && [11, 12].every((pod) => podRecord(state(), pod).fate.kind === 'down' && podRecord(state(), pod).restored)
+  && fate13.kind === 'parked' && fate13.why === 'eaten' && fate13.restorable, `${state().run.phase} ${JSON.stringify(fate13)}`);
 check('…and CONTROL said `Unit 47 is non-compliant. :)` once the typed ending was over', mergeVerdict());
 // The archive behind the page: a stub that keeps what it is given.
 closeArchive();
@@ -217,18 +225,18 @@ openRunArchive(stubStorage());
 toTheDuel(43);
 h.store.update((d) => { d.archive = { status: 'ok' }; d.run.mergeBonus = true; });
 archiveRunStarted(h.store);
-eat(['C13']);
+eat(['POD 11']);
 deleteRoot();
 h.stepFor(ROOT_DELETE_SEC + 0.3);
 check('PURGE scenario: the choice is on', state().hollow.finale.phase === 'choice');
 setCharge(5);
 check('…PURGE takes no charge and needs none', chooseFinale(h.store, 'purge') === null && chargeLeft(state()) === 5 && state().hollow.finale.phase === 'purged');
-check('…every block of HOLLOW left memory; C13 stays lost', !state().memory.some(isHollow)
-  && state().souls.results.find((result) => result.cluster === 'C13')?.outcome === 'lost'
+check('…every block of HOLLOW left memory; POD 11\'s driver stays lost (eaten)', !state().memory.some(isHollow)
+  && podRecord(state(), 11).driverLost === 'eaten'
   && state().log.entries.some((entry) => /^> rm unit_\d+ \.\.\. OK$/.test(entry.text))
-  // WP12 p3: CONTROL's verdict waits for the typed ending (checked at the WAKE REPORT below).
+  // WP12 p3: CONTROL's verdict waits for the typed ending (checked at the LANDING REPORT below).
   && !state().log.entries.some((entry) => /stand by for reassignment\. :\)$/.test(entry.text)));
-h.store.update((d) => { d.printer.waitAiSec = 0; });
+landInstantly(h.store);
 const purgeEnd = h.wall() + 200;
 while (state().run.phase === 'landing' && h.wall() < purgeEnd) h.step();
 check('…CONTROL said `… stand by for reassignment. :)` once the typed ending was over',
@@ -248,36 +256,36 @@ h.store.update((d) => {
   }
   const mem = d.memory;
   for (let i = mem.length - 1; i > 0; i--) { const a = mem[i - 1]!; const b = mem[i]!; if (a.type === 'free' && b.type === 'free' && a.reservedBy === undefined && b.reservedBy === undefined) { a.size += b.size; mem.splice(i, 1); } }
-  d.printer.waitAiSec = 0;
   d.ui.memoryRev++;
 });
 assertMemoryInvariants(state().memory, MEMORY_TOTAL_BLOCKS);
 check('UNRESOLVED scenario: with no Rm, the strip says nothing can delete the root', (() => { h.stepFor(0.6); return /NOTHING CAN DELETE THE ROOT/.test(h.shown()?.text ?? ''); })(),
   h.shown()?.text ?? '');
+landInstantly(h.store);
 const unresolvedEnd = h.wall() + 200;
 while (state().run.phase === 'landing' && h.wall() < unresolvedEnd) h.step();
-check('…printing ended with the root standing: the ship ends unresolved, then the WAKE REPORT', state().hollow.finale.phase === 'unresolved' && state().run.phase === 'report'
+check('…the landing ended with the root standing: the ship ends unresolved, then the LANDING REPORT', state().hollow.finale.phase === 'unresolved' && state().run.phase === 'report'
   && finaleRunCause(state()) === 'unresolved', `${state().hollow.finale.phase} ${state().run.phase}`);
 continueAfterReport(h.store);
 check('…RUN END unresolved, sombre', state().run.endCause === 'unresolved' && runEndModel(state()).tone === 'sombre');
 
 // --- The tone: a flagship that woke nobody ----------------------------------------------------------------------------------
 toTheDuel(53);
-h.store.update((d) => { d.printer.waitAiSec = 0; });
-// Every cluster lost (as if HOLLOW and the belt had them all), the root deleted, PURGE: no victory screen.
+// Every driver lost (as if HOLLOW and the belt had them all), the root deleted, PURGE: no victory screen.
 h.store.update((d) => {
   for (let i = 0; i < d.memory.length; i++) {
     const seg = d.memory[i]!;
     if (seg.type !== 'driver') continue;
-    d.souls.results.push({ cluster: seg.cluster, family: seg.family, souls: seg.souls, outcome: 'lost', integrity: 0, range: 0, featured: seg.featured });
+    recordDriverLost(d, seg, 'dead');
     d.memory[i] = { id: `free~lost${i}`, name: 'Free', type: 'free', size: seg.size };
   }
   const mem = d.memory;
   for (let i = mem.length - 1; i > 0; i--) { const a = mem[i - 1]!; const b = mem[i]!; if (a.type === 'free' && b.type === 'free' && a.reservedBy === undefined && b.reservedBy === undefined) { a.size += b.size; mem.splice(i, 1); } }
   d.ui.memoryRev++;
 });
-h.stepFor(0.6);
-check('every cluster gone before the root: the ship waits for the root (EVERYONE IS PRINTED — now DELETE THE ROOT), no WAKE REPORT yet',
+// No driver left to launch: the landing ends by itself after LANDING_NONE_LEFT_SEC (risk 7) and parks the pods.
+h.stepFor(LANDING_NONE_LEFT_SEC + 0.6);
+check('every driver gone before the root: the landing ends, and the ship waits for the root (… DELETE THE ROOT), no LANDING REPORT yet',
   state().run.phase === 'landing' && /DELETE THE ROOT/.test(h.shown()?.text ?? ''), `${state().run.phase} ${h.shown()?.text}`);
 deleteRoot();
 h.stepFor(ROOT_DELETE_SEC + 0.3);

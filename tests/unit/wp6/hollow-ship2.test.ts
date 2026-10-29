@@ -1,16 +1,15 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP7: HollowDef gained `story` and the timed wake `coastLeadSec` (HALCYON's coast-tied wake); the
 // fixtures below spell them out (no story, no coast lead: the WP6 behaviour they test).
 // WP6 acceptance 4: the HOLLOW rules on a ship-2 config (§4.2 HALCYON: spreads every 25 s, drain
-// 3.5/s, ×1.5 while printing, wakes 30 AI s into the flight; rack C `C C _2 R _1 C C _21`, so the
-// root sits between C08 (a 2-block gap) and C09 (a 1-block gap)). HALCYON itself arrives with WP7;
+// 3.5/s, ×1.5 while landing, wakes 30 AI s into the flight). Slice 1a: HALCYON's real pod racks (`P P P _40`,
+// `P _2 R _1 P _37`), so the root sits between POD 04 (a 2-block gap) and POD 05 (a 1-block gap), with a WALL past
+// each (rack B's 40 free blocks, rack C's 37). HALCYON itself arrives with WP7;
 // here ship 1's state carries HALCYON's memory and HOLLOW, on a quiet closed orbit (no lock, no
 // crash) for 180 AI s, with the real tools: REPAIR, MOVE, 2 threads and 32 REPAIR CHARGE.
 // • an active scripted defender (MOVE licensed at 25 s; from 1 s after the wake: REPAIR what is
-//   bitten, then MOVE the clusters next to HOLLOW out to rack D, so both sides become WALLs) loses
-//   ≤ 1 cluster;
-// • an idle defender loses ≥ 3.
+//   bitten, then MOVE the drivers next to HOLLOW out to rack D, so both sides become WALLs) loses
+//   no pod's driver;
+// • an idle defender loses both (POD 04 and POD 05), and the spread stops at the WALLs.
 import { check, finish } from '../wp1/harness';
 import { createHarness6 } from './harness6';
 import { hollowReach } from '@systems/hollow';
@@ -22,7 +21,7 @@ import { buildShipMemory } from '@data/memory';
 import { UNNAMED_HOLLOW } from '@data/hollow-text';
 import { SHIPS, type ShipDef, type HollowDef } from '@data/ships';
 import { childRng } from '@systems/rng';
-import { createHollowState } from '@state/initial';
+import { createHollowState, createLandingState } from '@state/initial';
 import { driversInMemory, getRedundancy, isInfected } from '@state/selectors';
 import { stateFromElements } from '@/types/orbit';
 import type { DriverSegment, FreeSegment } from '@/types/segment';
@@ -38,9 +37,10 @@ const HALCYON: ShipDef = {
   name: 'HALCYON',
   memory: {
     ...ares.memory,
-    podRacks: { B: 'C C C C C C _16', C: 'C C _2 R _1 C C _21', D: '_64' },
-    souls: { familiesSeedStream: 'families', hurt: { cluster: 1, integrity: 90 }, lead: 9, sealed: false, firstRun: null },
+    podRacks: SHIPS[1]!.memory.podRacks,
+    drivers: SHIPS[1]!.memory.drivers,
   },
+  landing: SHIPS[1]!.landing,
   hollow: HALCYON_HOLLOW,
 };
 const CHARGE = 32;
@@ -63,7 +63,8 @@ function setUp(): void {
   h.store.update((d) => {
     d.memory = memory;
     d.hollow = createHollowState(HALCYON);
-    d.mission.souls = driversInMemory(d).reduce((sum, soul) => sum + soul.souls, 0);
+    d.landing = createLandingState(HALCYON.landing, memory, { finalShip: false, lead: 5, hurt: [], planetR: d.level.planet.R });
+    d.mission.colonists = d.landing.pods.reduce((sum, record) => sum + record.colonists, 0);
     d.orbit = { x: orbit.x, y: orbit.y, vx: orbit.vx, vy: orbit.vy };
     d.ui.memoryRev++;
   });
@@ -74,7 +75,7 @@ function setUp(): void {
 }
 
 interface Outcome {
-  lost: string[];
+  lost: number[];
   chargeLeft: number;
   firstBiteAt: number | null;
   fizzles: number;
@@ -114,7 +115,7 @@ function run(defend: boolean): Outcome {
   const events = h.events.slice(start);
   const firstBite = events.find((event) => event.name === 'hollow-infect');
   return {
-    lost: h.store.getState().souls.results.filter((result) => result.outcome === 'lost').map((result) => result.cluster),
+    lost: h.store.getState().landing.pods.filter((record) => record.driverLost === 'eaten').map((record) => record.pod),
     chargeLeft: getRedundancy(h.store.getState())?.used ?? 0,
     firstBiteAt: firstBite ? firstBite.wall : null,
     fizzles: events.filter((event) => event.name === 'hollow-wall').length,
@@ -123,16 +124,15 @@ function run(defend: boolean): Outcome {
 
 {
   const idle = run(false);
-  check('the layout: the root between C08 (gap 2) and C09 (gap 1); HOLLOW wakes at 30 AI s and bites both at once',
+  check('the layout: the root between POD 04 (gap 2) and POD 05 (gap 1); HOLLOW wakes at 30 AI s and bites both at once',
     idle.firstBiteAt !== null && Math.abs(idle.firstBiteAt - 30) < 0.1, `first bite at ${idle.firstBiteAt}`);
-  check(`an idle defender loses ≥ 3 clusters in ${RUN_SEC} s`, idle.lost.length >= 3, idle.lost.join(', '));
-  check('…and the spread stops at the WALLs (C06 behind rack B\'s 16 free blocks, rack D past C10): exactly C07–C10',
-    idle.lost.slice().sort().join() === 'C07,C08,C09,C10', idle.lost.join(', '));
+  check(`an idle defender loses both pods' drivers next to the root in ${RUN_SEC} s, and the spread stops at the WALLs (POD 03 behind rack B's 40 free blocks, rack C's 37 past POD 05): exactly POD 04 and POD 05`,
+    idle.lost.slice().sort().join() === '4,5', idle.lost.join(', '));
 }
 {
   const active = run(true);
-  check(`an active defender (REPAIR, then MOVE behind a WALL) with ${CHARGE} charge loses ≤ 1 cluster in ${RUN_SEC} s`,
-    active.lost.length <= 1, `lost: [${active.lost.join(', ')}], charge left ${active.chargeLeft}, ${active.fizzles} fizzles`);
+  check(`an active defender (REPAIR, then MOVE behind a WALL) with ${CHARGE} charge loses no pod's driver in ${RUN_SEC} s`,
+    active.lost.length === 0, `lost: [${active.lost.join(', ')}], charge left ${active.chargeLeft}, ${active.fizzles} fizzles`);
   check('…the walls held: later bites fizzle on both sides', active.fizzles >= 2, `${active.fizzles} fizzles`);
   check('…and the fight cost charge, but not all of it', active.chargeLeft > 0 && active.chargeLeft < CHARGE, `${active.chargeLeft} left`);
 }

@@ -1,5 +1,3 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP10 acceptance 5 (§9 WP10): the run flow now plays 4 ships, headless. Title → ARES-VII → HALCYON → KESTREL → VESPER →
 // RUN END, flown by the strip-following kid with the defenders (WP7's REPAIR and MOVE, WP9's sensor and seeds, [B] when
 // AUTOBURN is offered) and on VESPER the pip → SWAP the strip teaches. On VESPER:
@@ -8,8 +6,11 @@
 // • COPY licensed at the flight's first moment; the engine fires by itself (the first burst's alarm, SWAP licensed with
 //   it); the kid follows the lesson (the THRUST CTRL pip, SWAP to Thrust.alt), and the engine falls silent;
 // • HOLLOW wakes and bites, THE DEAL is offered (the kid refuses), its first seed hunts a tool;
-// • locked, printed, and (WP11) TRANSMIT on to LAST LIGHT with 4 ship results; a NEW RUN resets every module.
+// • locked, landed by the strip (followLanding; the other ships land instantly: tests/unit/support/landing-instant.ts),
+//   and (WP11) TRANSMIT on to LAST LIGHT with 4 ship results; a NEW RUN resets every module.
 import { check, finish } from '../wp1/harness';
+import { followLanding } from '../landing/harness-landing';
+import { setLandingMode } from '../support/landing-instant';
 import { createHarness10, VESPER } from './harness10';
 import { receiveTransmission } from '@systems/boot';
 import { continueAfterReport } from '@systems/run';
@@ -49,7 +50,7 @@ for (const name of ['ARES-VII', 'HALCYON', 'KESTREL']) {
   check(`${name} flies`, state().level.shipName === name && state().run.phase === 'flight', `${state().level.shipName} ${state().run.phase}`);
   flyShip(1200);
   check(`${name}: locked`, h.status() === 'locked', h.status());
-  check('…to its WAKE REPORT', h.untilPhase('report', 400), state().run.phase);
+  check('…to its LANDING REPORT', h.untilPhase('report', 400), state().run.phase);
   continueAfterReport(h.store);
   check(`…not the last ship: CONTINUE → TRANSMIT`, state().run.phase === 'transmit', state().run.phase);
   if (state().run.phase !== 'transmit') break;
@@ -74,6 +75,7 @@ check('…its boot: the crossing\'s ECC line, the charge, nothing about THRUST',
   && !bootLines.some((line) => /THRUST/.test(line)), bootLines.join(' | '));
 
 // --- VESPER's flight ---------------------------------------------------------------------------------------------------
+setLandingMode('manual');
 let alarmSeen = false;
 let refused = false;
 let sawLesson = false;
@@ -87,7 +89,7 @@ const texts = followDirector(h, {
     const shown = state().director.shown?.id ?? '';
     if (shown.startsWith('tut-ghost')) sawLesson = true;
     if (shown.startsWith('tut-copy-repair')) copyLine = true;
-    // The kid refuses THE DEAL the moment it is offered (before the defender's MOVE of the named cluster withdraws it).
+    // The kid refuses THE DEAL the moment it is offered (before the defender's MOVE of the named driver withdraws it).
     const deal = state().hollow.deal;
     if (!refused && deal.phase === 'offered' && deal.entryId !== null) refused = pickChoice(deal.entryId, DEAL_REFUSE);
     if (state().burn.auto.phase === 'idle' && autoburnAvailable(state(), getPrediction())) h.press('KeyB');
@@ -101,16 +103,22 @@ check('…the lesson stood, and the kid swapped: Thrust.old, the engine silent',
 check('HOLLOW woke and bit; THE DEAL was offered and refused', h.events.some((event) => event.name === 'hollow-infect') && refused
   && state().run.stats.deal?.outcome === 'refused', JSON.stringify(state().run.stats.deal));
 check('VESPER: locked', h.status() === 'locked', `${h.status()} | ${texts.slice(-6).join(' | ')}`);
-const printEnd = h.wall() + 400;
-while (state().run.phase !== 'report' && h.wall() < printEnd) {
-  h.defend10();
-  h.step();
-  if ((state().director.shown?.id ?? '').startsWith('tut-copy-repair')) copyLine = true;
-}
-check('…to its WAKE REPORT', state().run.phase === 'report', state().run.phase);
+// Slice 1a: VESPER lands by the strip ([L] when the strip asks; the defender keeps defending); the other ships instantly.
+const byStrip = followLanding(h, {
+  maxWall: 400,
+  onTick: () => {
+    h.defend10();
+    if ((state().director.shown?.id ?? '').startsWith('tut-copy-repair')) copyLine = true;
+  },
+});
+setLandingMode('instant');
+check('…lands by the strip ([L] at the windows) to its LANDING REPORT', state().run.phase === 'report' && byStrip.launchPresses >= 1 && byStrip.windows >= 1,
+  `${state().run.phase}, ${byStrip.launchPresses} [L], ${byStrip.windows} windows, ${byStrip.wall.toFixed(0)} wall s`);
 check('…a seed came for the tools (and the COPY lesson stood, or a seed\'s RM line came first)', state().hollow.seedMoments > 0
   && (copyLine || state().hollow.seedsLanded > 0), `moments ${state().hollow.seedMoments} landed ${state().hollow.seedsLanded} copy line ${copyLine}`);
-check('…all twelve clusters left memory', state().souls.results.length === 12, state().souls.results.map((result) => `${result.cluster}:${result.outcome}`).join(' '));
+check('…all twelve pods are decided (none aboard: down, or parked)', state().landing.pods.length === 12
+  && state().landing.pods.every((record) => record.fate.kind === 'down' || record.fate.kind === 'parked'),
+  state().landing.pods.map((record) => `${record.pod}:${record.fate.kind}`).join(' '));
 
 // --- On to LAST LIGHT ------------------------------------------------------------------------------------------------
 // WP11: VESPER is no longer the last ship: its report transmits to LAST LIGHT (ship 5, flown on in

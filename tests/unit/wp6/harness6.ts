@@ -1,6 +1,6 @@
 // WP6 headless harness: the WP5 harness (store, clock, orbit-sim, predictor, pace, input router, say,
-// boot, flight events, director, mode keys, ops core, held-tool sync, licences, faults, the reveal and
-// the printer) plus HOLLOW (systems/hollow.ts), mounted after the printer exactly as main.ts does.
+// boot, flight events, director, mode keys, ops core, held-tool sync, licences, faults, the drop cache and
+// the landing) plus HOLLOW (systems/hollow.ts), mounted after the landing exactly as main.ts does.
 // One harness per test file (systems are module singletons); resetTo() between scenarios.
 import { createHarness5, type Harness5 } from '../wp5/harness5';
 import { mountHollow } from '@systems/hollow';
@@ -10,7 +10,7 @@ import { mountHollowDeal } from '@systems/hollow-deal';
 import { mountHollowVerbs } from '@systems/hollow-verbs';
 import { mountFinale } from '@systems/finale';
 import { assertMemoryInvariants } from '@systems/memory-ops';
-import { isPodCode } from '../landing/pod-code';
+import { isPodCode } from '../support/pod-code';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import type { Segment, DriverSegment } from '@/types/segment';
 

@@ -8,7 +8,8 @@
 // • `near-tools` (nearToolsSeedSpot): the free gap nearest a filesystem tool's file, the end that faces the tool, one free
 //   block from it (a GAP: the seed bites that tool at its next bite); ties to the larger gap; never space a running op
 //   reserved; a gap just the seed's size takes it next to the tool; with no tool file left, the largest free region's
-//   centre. On VESPER as it arrives, the seed lands next to Scan.
+//   centre. On VESPER as it arrives (slice 1a pooled receiver) no gap borders a tool: that centre; once its licences
+//   are written, next to the last of them.
 // • Live on VESPER: the first seed is telegraphed 25 AI s after HOLLOW's wake (and THE DEAL, which holds the seeds while
 //   it stands), next to a tool, and bites it unless it is DELETEd.
 // • WP11 (the lead's TODO, WP10 question 3): a tool licensed on this ship that the kid has not used here yet
@@ -113,11 +114,27 @@ check('WP11: Repair is never spared (the COPY lesson\'s target): REPAIR\'s licen
 // --- near-tools targeting, pure ---------------------------------------------------------------------------------
 {
   h.vesper(14, { hollowAsleep: true });
+  // Slice 1a's pooled receiver (01-landing §3.16): the unit's files sit back to back from rack E's start (… AI Comms, Scan,
+  // REPAIR CHARGE, free), so on VESPER as it arrives no free block borders a tool: the seed takes §6.6's no-wall
+  // fallback, the centre of the largest free region (rack D's, before the Core), and bites nothing.
+  const arrived = state().memory;
+  const arrivedSpot = nearToolsSeedSpot(arrived, [])!;
+  const regions = arrived.filter((seg): seg is FreeSegment => seg.type === 'free');
+  const largest = regions.reduce((best, seg) => (seg.size > best.size ? seg : best), regions[0]!);
+  check('VESPER as it arrives (pooled receiver: no gap beside a tool): the seed takes the centre of the largest free region',
+    arrivedSpot.gapId === largest.id && arrivedSpot.startAddr === addrOf(arrived, largest) + Math.floor((largest.size - SEED_BLOCKS) / 2)
+    && bittenBy(arrived, arrivedSpot.startAddr).length === 0, `seed at ${arrivedSpot.startAddr} in ${arrivedSpot.gapId}`);
+  // Its licences written (the flight's first ticks: Mv, Rm and Cp after REPAIR CHARGE, then the free tail): the seed aims
+  // one free block after the last of them (the gap next to it, the end that faces it).
+  h.step();
+  h.step();
   const memory = state().memory;
-  const scan = segNamed('Scan');
   const spot = nearToolsSeedSpot(memory, [])!;
-  check('VESPER as it arrives: the seed aims one free block before Scan (the gap next to it, the end that faces it)',
-    spot.startAddr + SEED_BLOCKS + 1 === addrOf(memory, scan), `seed at ${spot.startAddr}, Scan at ${addrOf(memory, scan)}`);
+  const gapIndex = memory.findIndex((seg) => seg.id === spot.gapId);
+  const facing = memory[gapIndex - 1];
+  check('VESPER with its licences in memory: the seed aims one free block after the last licence file (the end that faces it)',
+    facing?.type === 'fs-tool' && spot.startAddr === addrOf(memory, facing) + facing.size + 1,
+    `seed at ${spot.startAddr}, ${facing?.name} at ${facing === undefined ? '-' : addrOf(memory, facing)}`);
   check('…seedSpotFor dispatches on the ship\'s rule', seedSpotFor(memory, 'near-tools', [])?.startAddr === spot.startAddr);
 
   // Tools on both sides of two gaps at the same distance: the larger gap wins.
@@ -137,14 +154,12 @@ check('WP11: Repair is never spared (the COPY lesson\'s target): REPAIR\'s licen
   const snugSpot = nearToolsSeedSpot(snug, [])!;
   check('a gap just the seed\'s size next to a tool: the seed fills it (no block between)', snugSpot.startAddr === 3, `${snugSpot.startAddr}`);
 
-  // Reserved space is never used: a MOVE reserving the gap before Scan sends the seed elsewhere (MOVE comes with the
+  // Reserved space is never used: a MOVE reserving the gap the seed aims at sends the seed elsewhere (MOVE comes with the
   // flight's first tick: HALCYON's licence, issued at a later ship's start).
-  h.step();
-  h.step();
   const thrust = segNamed('Cargo Ctrl');
-  const gapBeforeScan = state().memory[state().memory.indexOf(scan) - 1]!;
-  const moveRefusal = gapBeforeScan.type === 'free' ? actionMove(h.store, thrust, { regionSegIds: [gapBeforeScan.id], col: 0 }) : 'no gap';
-  check('a MOVE into the gap next to Scan', moveRefusal === null, String(moveRefusal));
+  const huntedGap = state().memory.find((seg) => seg.id === spot.gapId)!;
+  const moveRefusal = huntedGap.type === 'free' ? actionMove(h.store, thrust, { regionSegIds: [huntedGap.id], col: 0 }) : 'no gap';
+  check('a MOVE into the gap the seed aims at (next to the last licence file)', moveRefusal === null, String(moveRefusal));
   const movingSpot = nearToolsSeedSpot(state().memory, [])!;
   const reserved = state().memory.filter((seg) => seg.type === 'free' && seg.reservedBy !== undefined).map((seg) => seg.id);
   check('…the seed never aims at the space the MOVE reserved', !reserved.includes(movingSpot.gapId), `${movingSpot.gapId} vs ${reserved.join(',')}`);
@@ -217,8 +232,10 @@ const toolsIn = (segs: readonly Segment[]): FsToolSegment['fsTool'][] => segs.fl
   const huntedKind = toolsIn(bittenBy(memory, nearToolsSeedSpot(memory, [])!.startAddr))[0];
   const spared: SeedSpot = nearToolsSeedSpot(memory, huntedKind === undefined ? [] : [huntedKind])!;
   const sparedBites = toolsIn(bittenBy(memory, spared.startAddr));
-  check('WP11: VESPER, the hunted tool spared: the seed hunts another tool, and the spared one is not within its bite',
-    huntedKind !== undefined && !sparedBites.includes(huntedKind) && sparedBites.length > 0, `hunted ${huntedKind} → spared: bites ${sparedBites.join(',')}`);
+  // Slice 1a's pooled receiver: the hunted licence (Cp, the last before the free tail) is the only tool beside free space,
+  // so with it spared the seed falls back to a spot that bites no tool at all (phase 2: it hunted another tool).
+  check('WP11: VESPER, the hunted tool spared: the spared one is not within the seed\'s bite (on the pooled unit it bites no tool)',
+    huntedKind !== undefined && !sparedBites.includes(huntedKind), `hunted ${huntedKind} → spared: bites ${sparedBites.join(',') || 'no tool'}`);
   // A gap of three between Scan and Swap: a seed one block from Scan touches Swap on its far side.
   const filler = { id: 'filler2', name: 'Filler', type: 'ship', size: 4, integrity: 100, scanned: true } as Segment;
   const swapFiles = createToolFiles('swap');

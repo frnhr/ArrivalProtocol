@@ -1,5 +1,3 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP7: HollowDef gained `story` and the timed wake `coastLeadSec` (HALCYON's coast-tied wake); the
 // fixtures below spell them out (no story, no coast lead: the WP6 behaviour they test).
 // WP8 acceptance 3 is added here: FIREWALL.sys blocks the spread on its side (next to the root, and inside a
@@ -16,6 +14,8 @@
 // an unscanned ship file is bitten like any file, ship 1's scripted bite takes the cluster next to
 // the root by address (C12 moved away: the one now adjacent), and the reach reads as the painter
 // will draw it (GAP 3 vs WALL 4, edge, blocked, recoiling).
+// Slice 1a: the fixtures are pod drivers (`soul('C12')` is pod 12's driver, its old name kept as the fixture's label);
+// an eaten driver's block remembers `POD 12 · TEST` and its pod (atePod) for MERGE.
 import { check, finish } from '../wp1/harness';
 import { stepHollow, hollowReach, type HollowEvent, type HollowStepCtx } from '@systems/hollow';
 import { cureInfection } from '@state/actions';
@@ -27,6 +27,7 @@ import type {
   Segment, HollowSegment, DriverSegment, CoreSegment, RedundancySegment, ShipSegment, FirewallSegment, UpgradeSegment,
 } from '@/types/segment';
 import { isInfectable } from '@state/selectors';
+import { podNumber } from '../support/pod-code';
 import { HOLLOW_RECOIL_SEC, WALL_MIN_BLOCKS, HOLLOW_SCRIPTED_BITE_DELAY_SEC } from '@data/tuning';
 import { createDealState, createHollowState } from '@state/initial';
 
@@ -40,7 +41,7 @@ const SHIP1 = SHIPS[0]!.hollow;
 
 const root = (id = 'root'): HollowSegment => ({ id, name: '???', type: 'hollow', size: 8, root: true, locked: true, owner: '???' });
 const soul = (code: string, integrity = 100): DriverSegment => ({
-  id: `soul_${code}`, name: `${code} · TEST`, type: 'driver', size: 8, integrity, cluster: code, family: 'Test', souls: 200, featured: [], sealed: false,
+  id: `soul_${code}`, name: `${code} · TEST`, type: 'driver', size: 8, integrity, pod: podNumber(code), family: 'Test', colonists: 200, featured: [],
 });
 const core = (integrity = 100): CoreSegment => ({ id: 'core', name: 'AI Core', type: 'core', size: 16, integrity, scanned: true, capacity: 2 });
 const charge = (): RedundancySegment => ({ id: 'redund', name: 'Repair Charge', type: 'redundancy', size: 36, used: 36, capacity: 72 });
@@ -119,7 +120,7 @@ for (const firing of [false, true]) {
     eaten !== undefined && Math.abs(eaten.at - expected) <= 0.1, `${eaten?.at.toFixed(3)} s`);
   const block = run.memory[1]!;
   check(`…and turns hollow in place: same blocks, not the root, unlocked, remembers what it ate${firing ? ' (firing)' : ''}`,
-    block.type === 'hollow' && block.size === 8 && !block.root && !block.locked && block.ate === 'C12 · TEST' && run.memory.length === 4);
+    block.type === 'hollow' && block.size === 8 && !block.root && !block.locked && block.ate === 'POD 12 · TEST' && block.atePod === 12 && run.memory.length === 4);
   check(`…integrity clamps at 0 (the eaten soul object reads 0, never negative)${firing ? ' (firing)' : ''}`,
     eaten?.event.kind === 'consume' && eaten.event.eaten.integrity === 0);
 }

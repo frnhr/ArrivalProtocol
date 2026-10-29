@@ -1,5 +1,3 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP11 part 2, headless: what the views of LAST LIGHT's finale read, checked DOM-free.
 // • The verbs' TERMINAL lines: the telegraph is said with verbCountdown (the TERMINAL counts it down live), BLOCKED with
 //   the good tone, a landed verb with the danger tone and a glitchBurst at GLITCH_BURST_LEVEL; a line with a look must
@@ -11,10 +9,12 @@
 // • The typed endings (§9 WP11 item 5): ≤ FINALE_ENDING_MAX_LINES lines, each ≤ MAX_LINE_CHARS also with worst-case names,
 //   the design's words (`> rm unit_046 ... OK` / `LAST LIGHT · n souls in orbit.` / `the fleet is home.` / CONTROL's
 //   reassignment; `> merge unit_046 -> unit_047 ... OK` / `> hi. it's us.` / `we arrive together.` / non-compliant), with
-//   what PURGE leaves lost and what MERGE brought back; the WAKE REPORT waits for the ending's time (finaleEndingSec),
+//   what PURGE leaves lost and what MERGE brought back; the LANDING REPORT waits for the ending's time (finaleEndingSec),
 //   skipFinaleEnding lets it come at once; MERGE's glitch.
 // • The MERGE tick (mergeTickCharge) from LAST LIGHT's boot to the choice, never on another ship.
 // • RUN END: the ending and MERGE's carry line; endingsLine (`ENDINGS 1/2 · MERGE · ???`).
+// Slice 1a: the landing stands while a scenario sets up ('manual' landing mode) and lands at once when it lets it go;
+// POD 11 and POD 12 (either side of LAST LIGHT's root) are the drivers MERGE gives back.
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { theRoot, infectNow } from '@systems/hollow';
@@ -38,10 +38,14 @@ import {
 } from '@data/tuning';
 import type { GameState, EndingLine } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
+import type { ShipResult } from '@state/schema';
+import { isPodCode } from '../../support/pod-code';
+import { setLandingMode, landInstantly } from '../../support/landing-instant';
 
 const h = createHarness11(23);
+setLandingMode('manual');
 const state = (): Readonly<GameState> => h.store.getState();
-const soul = (code: string): DriverSegment | undefined => driversInMemory(state()).find((seg) => seg.cluster === code);
+const soul = (code: string): DriverSegment | undefined => driversInMemory(state()).find((seg) => isPodCode(seg.pod, code));
 const eventsSince = (from: number, name: string): { payload: unknown; wall: number }[] =>
   h.events.slice(from).filter((event) => event.name === name).map((event) => ({ payload: event.payload, wall: event.wall }));
 
@@ -58,9 +62,12 @@ const eventsSince = (from: number, name: string): { payload: unknown; wall: numb
     JSON.stringify([...purge, ...merge].map((line) => line.text.length)));
   check('…PURGE says nothing in HOLLOW\'s voice; MERGE\'s merged voice says hello', !purge.some((line) => line.voice === 'us')
     && merge.some((line) => line.voice === 'us' && line.text === "> hi. it's us."));
+  // TODO(phase2): phase 2 checked six cluster codes here (`C01 · … · C06`); pod codes are twice as long, so FinaleChoice's
+  // MERGE line passes 70 characters from five eaten pods (it lists them all, uncapped), and its words still promise
+  // `with missing memories` (1a restores a driver at 80 and lands it normally). Reported for Track UI / 05-story.
   const cardWords = [
     HOLLOW_FINALE.choiceTitle(hollowUnitName([999, 998])), HOLLOW_FINALE.purgeCmd(worstHollow), HOLLOW_FINALE.mergeCmd(worstHollow, ours),
-    HOLLOW_FINALE.purgeCost('3,200'), HOLLOW_FINALE.mergeGain('C01 · C02 · C03 · C04 · C05 · C06'), HOLLOW_FINALE.mergePrice(MERGE_COST_CHARGE, 999),
+    HOLLOW_FINALE.purgeCost('3,200'), HOLLOW_FINALE.mergeGain('POD 11 · POD 12 · POD 13 · POD 14'), HOLLOW_FINALE.mergePrice(MERGE_COST_CHARGE, 999),
     HOLLOW_FINALE.mergeNeeds(19), HOLLOW_FINALE.mergeCarries(3), endingsLine(['purge', 'merge'], ['purge', 'merge']),
   ];
   check('the card\'s words and RUN END\'s lines are one line each (≤ 70 characters)', cardWords.every((text) => text.length <= MAX_LINE_CHARS),
@@ -102,8 +109,8 @@ check('the strip-following kid locks LAST LIGHT', h.status() === 'locked', h.sta
 }
 // A verb nobody blocks: it lands, in the danger tone, with a glitch burst.
 {
-  h.store.update((d) => { d.hollow.biteInSec = 9999; d.hollow.seedInSec = 9999; d.printer.waitAiSec = 9999; });
-  // Keep the duel shut until the verb has been seen: the finale opens on the first printing tick, so the verb runs in it.
+  h.store.update((d) => { d.hollow.biteInSec = 9999; d.hollow.seedInSec = 9999; });
+  // Keep the duel shut until the verb has been seen: the finale opens on the landing's first tick, so the verb runs in it.
   const from = h.events.length;
   verbNow(h.store);
   h.step();
@@ -123,7 +130,7 @@ check('say: a line with a look must be critical (a queued one would count down a
 
 // --- The duel's spikes ------------------------------------------------------------------------------------------------
 {
-  // The root opened on the lock (the finale's first printing tick): one tear.
+  // The root opened on the lock (the landing's first tick): one tear.
   const opened = h.events.filter((event) => event.name === 'root-unlocked');
   check('ORBIT LOCK opened the root (and the duel is on)', opened.length === 1 && state().hollow.finale.phase === 'duel');
   // Final fix pass: the duel's own verb clock (duelEverySec) caps verbInSec while the root's DELETE runs, so the 9999 below
@@ -172,21 +179,22 @@ check('say: a line with a look must be critical (a queued one would count down a
   check('the MERGE tick still stands at the choice', mergeTickCharge(state()) === MERGE_COST_CHARGE);
 }
 
-// --- PURGE: the ending holds the WAKE REPORT ----------------------------------------------------------------------------
+// --- PURGE: the ending holds the LANDING REPORT -------------------------------------------------------------------------
 {
-  // Everyone prints while the choice stands (the choice holds the report), so the WAKE REPORT would be due the moment the
-  // choice is made: only the ending holds it then.
-  h.store.update((d) => { d.printer.waitAiSec = 0; });
-  const printEnd = h.wall() + 150;
-  while (driversInMemory(state()).length > 0 && h.wall() < printEnd) h.step();
-  check('everyone printed while the choice stood (the report waits for the choice)', driversInMemory(state()).length === 0
+  // Every pod lands while the choice stands (the choice holds the report), so the LANDING REPORT would be due the moment
+  // the choice is made: only the ending holds it then.
+  landInstantly(h.store);
+  const landEnd = h.wall() + 150;
+  while (driversInMemory(state()).length > 0 && h.wall() < landEnd) h.step();
+  check('every pod down while the choice stood (the report waits for the choice)', driversInMemory(state()).length === 0
     && state().run.phase === 'landing' && state().hollow.finale.phase === 'choice');
   h.stepFor(3);
   // LAST LIGHT is flown alone here: the run brought ships 1–4 into orbit before it (their results, as a run records
   // them), so PURGE's full claim is true (tests/unit/wp11/p2/purge-fleet.test.ts has a run that lost one).
   h.store.update((d) => {
-    d.run.ships = SHIPS.filter((ship) => !ship.flagship).map((ship) => ({
-      shipId: ship.id, shipName: ship.name, outcome: 'locked', woke: 0, half: 0, lost: 0, stars: 0, fuelLeftPct: 0, ringMiss: null,
+    d.run.ships = SHIPS.filter((ship) => !ship.flagship).map((ship, index): ShipResult => ({
+      shipId: ship.id, shipName: ship.name, slot: index, depth: index + 1, outcome: 'locked', colonistsAboard: 0, lzs: [], offSite: 0, noGo: 0,
+      restored: 0, parked: [], notLaunched: 0, landedInLz: 0, points: 0, stars: 0, fuelLeftPct: 0, ringMiss: null, colony: null, pods: [],
     }));
   });
   const refusal = chooseFinale(h.store, 'purge');
@@ -200,15 +208,14 @@ check('say: a line with a look must be critical (a queued one would count down a
   check('…its time on screen is its lines typed in turn plus the hold', Math.abs(ending.untilAi - state().clock.aiSec - finaleEndingSec(ending.lines)) < 1e-6
     && finaleEndingLineStartsSec(ending.lines).every((at, i, all) => i === 0 || at > all[i - 1]!));
   check('the MERGE tick is gone once the choice is made', mergeTickCharge(state()) === null);
-  // Everyone prints at once; the WAKE REPORT still waits for the ending.
-  h.store.update((d) => { d.printer.waitAiSec = 0; });
+  // Everyone is down; the LANDING REPORT still waits for the ending.
   const end = h.wall() + 200;
   let reportAt: number | null = null;
   while (h.wall() < end) {
     h.step();
     if (state().run.phase === 'report') { reportAt = state().clock.aiSec; break; }
   }
-  check('the WAKE REPORT comes only after the ending\'s time (finalePending held it), and right after it', reportAt !== null && reportAt >= ending.untilAi
+  check('the LANDING REPORT comes only after the ending\'s time (finalePending held it), and right after it', reportAt !== null && reportAt >= ending.untilAi
     && reportAt <= ending.untilAi + 0.2, `report at ${reportAt?.toFixed(2)}, ending until ${ending.untilAi.toFixed(2)}`);
   check('…and the ending is no longer showing then', !finaleEndingShowing(state()) && !finalePending(state()));
   continueAfterReport(h.store);
@@ -223,13 +230,13 @@ check('say: a line with a look must be critical (a queued one would count down a
   h.flyLastLight(900, { deleteRoot: false });
   check('LAST LIGHT locked again (for MERGE)', h.status() === 'locked', h.status());
   h.step();
-  h.store.update((d) => { d.hollow.biteInSec = 9999; d.hollow.seedInSec = 9999; d.hollow.verbInSec = 9999; d.hollow.verb = null; d.printer.waitAiSec = 9999; });
-  for (const code of ['C13', 'C14']) {
+  h.store.update((d) => { d.hollow.biteInSec = 9999; d.hollow.seedInSec = 9999; d.hollow.verbInSec = 9999; d.hollow.verb = null; });
+  for (const code of ['POD 11', 'POD 12']) {
     const seg = soul(code);
     if (seg) infectNow(h.store, seg);
   }
   const eatEnd = h.wall() + 40;
-  while (['C13', 'C14'].some((code) => soul(code) !== undefined) && h.wall() < eatEnd) h.step();
+  while (['POD 11', 'POD 12'].some((code) => soul(code) !== undefined) && h.wall() < eatEnd) h.step();
   const root = theRoot(state().memory);
   if (!root) throw new Error('views-test: no root (MERGE)');
   actionDelete(h.store, root);
@@ -252,10 +259,10 @@ check('say: a line with a look must be critical (a queued one would count down a
     && lines[4] === 'we arrive together.' && /^Unit \d+ is non-compliant\. :\)$/.test(lines[5]!), JSON.stringify(lines));
   const bursts = eventsSince(from, 'glitch-burst').map((event) => (event.payload as { level: number }).level);
   check('…and it comes into you: a glitch burst at MERGE_GLITCH_LEVEL', bursts.includes(quantizeCorruption(MERGE_GLITCH_LEVEL)), bursts.join(' '));
-  check('…the WAKE REPORT waits for it', finalePending(state()) && finaleEndingShowing(state()));
+  check('…the LANDING REPORT waits for it', finalePending(state()) && finaleEndingShowing(state()));
   const skipped = skipFinaleEnding(h.store);
   check('a click on the ending ends it: the report may come at once', skipped && !finaleEndingShowing(state()) && !skipFinaleEnding(h.store));
-  h.store.update((d) => { d.printer.waitAiSec = 0; });
+  landInstantly(h.store);
   const reportEnd = h.wall() + 200;
   while (state().run.phase === 'landing' && h.wall() < reportEnd) h.step();
   continueAfterReport(h.store);

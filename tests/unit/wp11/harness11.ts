@@ -14,7 +14,7 @@
 //   its file (RM) or a DELETE on its block (MV), `blockAfterSec` into the countdown; and once the duel is on, the root's
 //   DELETE is started whenever a thread is free;
 // • flyLastLight(maxWall): the strip-following kid with that defender (and [B] when AUTOBURN is offered);
-// • finish(choice, maxWall): defends through the duel to the choice, makes it, and steps to the WAKE REPORT.
+// • finish(choice, maxWall): defends through the duel to the choice, makes it, and steps to the LANDING REPORT.
 // One harness per test file (systems are module singletons).
 import { createHarness10, type Harness10 } from '../wp10/harness10';
 import { followDirector } from '../wp2/harness2';
@@ -56,7 +56,7 @@ export interface Harness11 extends Harness10 {
   lastLight: (seed: number, opts?: LastLightOpts) => void;
   defend11: (opts?: DefendOpts) => boolean;
   flyLastLight: (maxWall: number, opts?: DefendOpts) => string[];
-  // Defends until the finale's choice stands (or maxWall), makes `choice`, then defends on to the WAKE REPORT.
+  // Defends until the finale's choice stands (or maxWall), makes `choice`, then defends on to the LANDING REPORT.
   finishFinale: (choice: FinaleChoice, maxWall: number, opts?: DefendOpts) => { reachedChoice: boolean; refusal: string | null; reported: boolean };
 }
 

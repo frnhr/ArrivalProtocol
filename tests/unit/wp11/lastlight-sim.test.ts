@@ -1,12 +1,11 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP11 spec item 1 (§4.2, §9 WP11): LAST LIGHT as data and as flown, headless.
 // • the flight: an impact opener (IMPACT about 03:04 at ×30) with OUT engaged; ring 5,000–7,000; FUEL 2.5 km/s; ×30 / ×60;
 // • the belt (WP9's belt kind) on racks A–B, drawn on the predicted path with its inside time and expected hits, and hits
 //   that land only on files in racks A–B while the ship is inside;
-// • the layout: 16 clusters, the 16-block root in rack D between C13 and C14 with a 2-block GAP each side, 12 free at
-//   rack D's end; the flagship, the last ship, with link 96 and 6 transit hits;
-// • HOLLOW: spread 12, drain 5, ×2 burning, ×1.5 printing, seeds every 35 s into the walls, verbs every 12 s (3 s
+// • the layout (slice 1a: 01-landing §3.16's final-ship layout): 16 pods, the 16-block root in rack C between POD 11
+//   (a 2-block GAP) and POD 12 (a 1-block GAP), POD 13–16 at rack D's start and 32 free at its end; the flagship, the
+//   last ship, with link 96 and 6 transit hits;
+// • HOLLOW: spread 12, drain 5, ×2 burning, ×1.5 landing, seeds every 35 s into the walls, verbs every 12 s (3 s
 //   countdown, every 4 s in the duel); its boot ends on `> last ship, 047. i'm so tired.`; CONTROL's own hello;
 //   the MERGE 20 tick's data;
 // • the lead's WP9 context: a verb's clock and its countdown, and the first seed, wait while the flight is at TACTICAL
@@ -28,7 +27,7 @@ import { MERGE_COST_CHARGE } from '@data/tuning';
 import type { GameState } from '@state/schema';
 
 const ship = getShip(LAST_LIGHT);
-check('LAST LIGHT is ship 5: the flagship and the last ship; 3,200 souls in 16 clusters; link 96, 6 hits, no arrival damage',
+check('LAST LIGHT is ship 5: the flagship and the last ship; 3,200 colonists in 16 pods; link 96, 6 hits, no arrival damage',
   ship.name === 'LAST LIGHT' && ship.flagship && isLastShip(LAST_LIGHT) && SHIPS.filter((candidate) => candidate.flagship).length === 1
   && shipColonists(ship) === 3200 && ship.arrival?.linkBlocks === 96 && ship.arrival.transitHits === 6 && ship.arrival.damage.length === 0);
 const { start, ring, tacticalWarp, cruiseWarp, dvBudgetKmS } = ship.flight;
@@ -54,14 +53,16 @@ h.lastLight(7);
   const at = (id: string): number => starts[memory.findIndex((seg) => seg.id === id)]!;
   const souls = memory.filter((seg) => seg.type === 'driver');
   const root = memory.find((seg) => isHollow(seg) && seg.root)!;
+  const rackC = 128;
   const rackD = 192;
-  const c13 = souls.find((seg) => seg.type === 'driver' && seg.cluster === 'C13')!;
-  const c14 = souls.find((seg) => seg.type === 'driver' && seg.cluster === 'C14')!;
-  check('the layout: 16 clusters; the 16-block root in rack D, 2 free blocks from C13 and 2 from C14',
-    souls.length === 16 && root.size === 16 && at(root.id) >= rackD && at(root.id) < rackD + 64
-    && at(root.id) - (at(c13.id) + 8) === 2 && at(c14.id) - (at(root.id) + 16) === 2 && at(c13.id) === rackD,
-    `root at ${at(root.id)}, C13 at ${at(c13.id)}, C14 at ${at(c14.id)}`);
-  check('…C14 (right of the root) leads the credits', state().souls.lead === 'C14');
+  const pod11 = souls.find((seg) => seg.type === 'driver' && seg.pod === 11)!;
+  const pod12 = souls.find((seg) => seg.type === 'driver' && seg.pod === 12)!;
+  const pod13 = souls.find((seg) => seg.type === 'driver' && seg.pod === 13)!;
+  check('the layout: 16 pods; the 16-block root in rack C, 2 free blocks from POD 11 and 1 from POD 12; POD 13 opens rack D',
+    souls.length === 16 && root.size === 16 && at(root.id) >= rackC && at(root.id) < rackC + 64
+    && at(root.id) - (at(pod11.id) + 8) === 2 && at(pod12.id) - (at(root.id) + 16) === 1 && at(pod13.id) === rackD,
+    `root at ${at(root.id)}, POD 11 at ${at(pod11.id)}, POD 12 at ${at(pod12.id)}, POD 13 at ${at(pod13.id)}`);
+  check('…POD 12 (right of the root) leads the credits', state().landing.lead === 12);
   check('…its boot plan closes on HOLLOW\'s line, which is `> last ship, 047. i\'m so tired.`',
     bootLinePlan({ ...state(), run: { ...state().run, arrival: { hits: [], chargeCarried: 0, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0, chargeOverflowLost: 0, scripted: [] } } }, false).at(-1) === 'hollow'
     && HOLLOW_STORY.lastShip(47) === "> last ship, 047. i'm so tired.");

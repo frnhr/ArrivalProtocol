@@ -1,9 +1,9 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP4 acceptance 2: the capabilities table (§6.4), pure. Every band boundary (79/80, 49/50,
 // 24/25) of every capability role, the offline states, the Core exemption, missing → 'missing',
 // and no ghost thrust while Thrust Ctrl is at 50 or better. Plus the derived numbers each band
 // sets, the reactor's thread share, two copies of one role, and the loud copy table.
+// Slice 1a: Bay Ctrl's `bay` role in Printer Uplink's place (its band only: the cadence by band and BAY OFFLINE are
+// slice 1b), and the drop: no DROP SOLUTION with Nav Plotter dead or missing (01-landing §3.8), the factors all 1.
 import { check, finish } from '../wp1/harness';
 import { createInitialState } from '@state/initial';
 import type { GameState } from '@state/schema';
@@ -14,7 +14,7 @@ import {
 } from '@systems/capabilities';
 import { hasIntegrity, coreThreads } from '@state/selectors';
 import {
-  ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, GHOST_BY_BAND, PRINTER_SPEED_BY_BAND,
+  ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, GHOST_BY_BAND, BAY_CADENCE_TAC,
   SENSOR_FUZZ_KM_PER_POINT, PLOT_STALE_TAC, MAX_LINE_CHARS,
 } from '@data/tuning';
 
@@ -129,9 +129,15 @@ for (const role of CAPABILITY_ROLES) {
 
   check('comms bands follow AI Comms', caps(withIntegrity('comms', 49)).comms === 'failing' && caps(without('comms')).comms === 'missing');
 
-  const printerAt = (integrity: number) => caps(withIntegrity('printer', integrity)).printer.speed;
-  check('printer speed 1.0 / 0.75 / 0.5 / 0', printerAt(80) === 1 && printerAt(79) === 0.75 && printerAt(49) === 0.5 && printerAt(24) === 0);
-  check('printer missing: 0, NO PRINTER', caps(without('printer')).printer.speed === 0 && BAND_COPY.printer.missing === 'NO PRINTER');
+  const bayAt = (integrity: number) => caps(withIntegrity('bay', integrity)).bay;
+  check('Bay Ctrl: its band follows the file (ok / degraded / failing / dead), the cadence 2.0 tac s in every band (1a)',
+    bayAt(80).band === 'ok' && bayAt(79).band === 'degraded' && bayAt(49).band === 'failing' && bayAt(24).band === 'dead'
+    && [80, 79, 49, 24].every((integrity) => bayAt(integrity).cadenceTac === BAY_CADENCE_TAC) && BAY_CADENCE_TAC === 2);
+  check('Bay Ctrl missing: NO BAY CTRL', caps(without('bay')).bay.band === 'missing' && BAND_COPY.bay.missing === 'NO BAY CTRL');
+  const dropAt = (integrity: number) => caps(withIntegrity('navplot', integrity)).drop;
+  check('the drop: a solution while Nav Plotter lives (failing included), none dead or missing (NO DROP SOLUTION); factors 1',
+    dropAt(80).solution && dropAt(25).solution && !dropAt(24).solution && !caps(without('navplot')).drop.solution
+    && dropAt(80).sensorFactor === 1 && dropAt(80).plotterFactor === 1, JSON.stringify(dropAt(24)));
 
   check('core: threads 2 at 50, 1 at 49', caps(withIntegrity('core', 50)).threads === 2 && caps(withIntegrity('core', 49)).threads === 1);
 }
@@ -176,7 +182,7 @@ for (const role of CAPABILITY_ROLES) {
   check('BAND_COPY: every role has a line for every band, missing included', missing.length === 0, missing.join(' '));
   const long = CAPABILITY_ROLES.flatMap((role) => BANDS.map((band) => BAND_COPY[role][band])).filter((text) => text.length > MAX_LINE_CHARS);
   check('BAND_COPY: every line fits the strip', long.length === 0, long.join(' | '));
-  const tables = [ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, PRINTER_SPEED_BY_BAND];
+  const tables = [ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND];
   check('band tables: a number for every band', tables.every((table) => BANDS.every((band) => typeof table[band] === 'number')));
 }
 

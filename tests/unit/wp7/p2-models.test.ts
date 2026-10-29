@@ -1,5 +1,3 @@
-// @ts-nocheck: TODO(slice1a-TESTS): this suite still reads phase 2's souls / printer (cluster codes, print results) and is
-// moved onto the landing per slice-1a-plan §5. F2 turned type-checking off here so tsc over tests stays green meanwhile.
 // WP7 part 2, headless: the models behind the run's screens and HUD, on the real systems.
 // • TRANSMIT (§6.9, item 4): the headline, the packet line, the chips safest-to-drop first with their
 //   notes, the locks, drops offered only while charge is left behind (a tight link: +4 CHARGE for
@@ -8,15 +6,18 @@
 // • BEAM OUT (item 6): what the Engine button, COMMS and the strip show (offered, offered-paused, beaming,
 //   hidden on the tutorial ship), and the strip's two BEAM OUT lines (the hopeless offer, the race);
 // • the amber BITE slot (WP6's TODO): HOLLOW awake with something to bite, quiet once it is walled off;
-// • RUN END (item 7): the fleet's souls, the rank steps (scaled to the fleet, §4.4's exactly at 12,400),
-//   the near misses in order, a whole model; an accepted ship's distance from a perfect lock;
+// • RUN END (item 7): the fleet's colonists (slice 1a: 9,600 in pods), the rank steps (scaled to the fleet, §4.4's
+//   exactly at the 12,400 reference), the near misses in order, a whole model (LANDED, the landing points as SCORE); an
+//   accepted ship's distance from a perfect lock;
+// TODO(phase2): RUN END's words are Track UI's (RUN_END_TEXT below landing-text's UI banner); the lines are checked
+// through its functions, so a rewording needs no change here, a new layout may.
 // • every new line fits the strip (≤ 70) with worst-case values.
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './harness7';
 import { continueAfterReport, continueAfterLoss, startBeamOut, cancelBeamOut, shipResultOf, ringMissOf } from '@systems/run';
 import { pushModal, activeLayer } from '@systems/input';
 import { transmitModel, toggleDrop } from '@systems/transmit';
-import { runEndModel, rankSteps, rankOf, nearMisses, fleetSouls } from '@systems/run-end';
+import { runEndModel, rankSteps, rankOf, nearMisses, fleetColonists } from '@systems/run-end';
 import { beamOutView, hopelessWhy } from '@systems/beam-out';
 import { amberBite } from '@systems/hollow-hud';
 import { exposedDrivers, cureNow, infectNow } from '@systems/hollow';
@@ -24,16 +25,27 @@ import { getPrediction } from '@systems/predict';
 import { installTool } from '@systems/licences';
 import { setPaused } from '@systems/clock';
 import { on } from '@systems/events';
-import { openArchive } from '@state/initial';
 import { hasIntegrity, infectedSegments } from '@state/selectors';
 import {
-  TRANSMIT_TEXT, RUN_END_TEXT, RUN_END_TITLE, RUN_END_WHY, LINES, BEAM_OUT_TEXT, SHIP_OUTCOME_WORD, formatCount,
+  TRANSMIT_TEXT, RUN_END_TITLE, RUN_END_WHY, LINES, BEAM_OUT_TEXT, SHIP_OUTCOME_WORD,
 } from '@data/script';
+import { RUN_END_TEXT } from '@data/landing-text';
+import { formatCount } from '@data/format';
 import { MOVE_PREVIEW_TEXT, HOLLOW_HUD_TEXT } from '@data/hollow-text';
 import { MAX_LINE_CHARS, NAME_MAX_CHARS } from '@data/tuning';
 import type { ShipResult, TransitHit } from '@state/schema';
 
 const h = createHarness7(21, { soulsFound: false });
+
+// A ship result for RUN END's model: what the fold of a landing gives (one LZ, the colonists landed in it, nothing else).
+function shipResult(fields: Pick<ShipResult, 'shipId' | 'shipName' | 'slot' | 'outcome' | 'colonistsAboard' | 'landedInLz' | 'points' | 'stars' | 'fuelLeftPct' | 'ringMiss'>): ShipResult {
+  return {
+    ...fields, depth: fields.slot + 1,
+    lzs: [{ lz: 'LZ-A', count: fields.colonistsAboard, landed: fields.landedInLz, mislanded: 0, hard: 0 }],
+    offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: fields.colonistsAboard - fields.landedInLz,
+    colony: null, pods: [],
+  };
+}
 const state = () => h.store.getState();
 
 function plunge(altitudeKm: number, speed: number, sideways = 0.05): void {
@@ -43,20 +55,20 @@ function plunge(altitudeKm: number, speed: number, sideways = 0.05): void {
 
 // --- Ship 1 to TRANSMIT -------------------------------------------------------------------------------
 h.newRun(21);
-h.store.update((d) => { d.run.phase = 'flight'; d.ui.mode = 'tools'; openArchive(d); });
+h.store.update((d) => { d.run.phase = 'flight'; d.ui.mode = 'tools'; });
 if (!state().run.licences.includes('repair')) {
   installTool(h.store, 'repair');
   h.store.update((d) => { d.run.licences.push('repair'); });
 }
-h.startPrinting(1, 'locked');
-check('ship 1 prints its colonists and reaches the WAKE REPORT', h.untilPhase('report', 200), state().run.phase);
+h.startLanding(1, 'locked');
+check('ship 1 lands its pods and reaches the LANDING REPORT', h.untilPhase('report', 200), state().run.phase);
 continueAfterReport(h.store);
 check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
 
 {
   const model = transmitModel(state());
-  check('TRANSMIT: NEXT: HALCYON · 2,000 SOULS · 22 LY', model.headline === 'NEXT: HALCYON · 2,000 SOULS · 22 LY', model.headline);
-  check('…no why line after a ship that printed', model.why === null);
+  check('TRANSMIT: NEXT: HALCYON · 1,000 COLONISTS · 22 LY', model.headline === 'NEXT: HALCYON · 1,000 COLONISTS · 22 LY', model.headline);
+  check('…no why line after a ship that landed', model.why === null);
   check('…the packet line: LINK 120 · FILES n · CHARGE n → FITS', /^LINK 120 · FILES \d+ · CHARGE \d+ → FITS$/.test(model.packetLine), model.packetLine);
   const names = model.chips.map((chip) => chip.name);
   check('…the chips, safest to drop first: the spare REPAIRs, Telemetry, Autopilot, Sensor Interp, AI Comms, then the locked',
@@ -188,7 +200,7 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
   h.stepUntil(() => state().hollow.phase === 'awake', 60);
   check('…awake, with both its neighbours already bitten: quiet (the eaten alarms say what matters)', amberBite(state()) === null,
     JSON.stringify(amberBite(state())));
-  // Both cures won: the clusters are clean (recoiling) and right next to it again.
+  // Both cures won: the drivers are clean (recoiling) and right next to it again.
   for (const seg of infectedSegments(state())) cureNow(h.store, seg);
   h.step();
   const bite = amberBite(state());
@@ -204,8 +216,8 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
 // --- An accepted ship's distance from a perfect lock --------------------------------------------------------
 {
   h.newRun(4);
-  h.store.update((d) => { d.run.phase = 'flight'; d.ui.mode = 'tools'; openArchive(d); });
-  h.startPrinting(0.6, 'accepted');
+  h.store.update((d) => { d.run.phase = 'flight'; d.ui.mode = 'tools'; });
+  h.startLanding(0.6, 'accepted');
   const miss = ringMissOf(state());
   const result = shipResultOf(state(), 'partial', 0);
   check('an ACCEPTED loop records how far its far end is from the ring', miss !== null && miss.apsis === '▲' && miss.km > 0
@@ -215,16 +227,16 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
 
 // --- RUN END -------------------------------------------------------------------------------------------
 {
-  // WP9: the fleet that exists grew by KESTREL (2,400); WP10 by VESPER (2,400); WP11 by LAST LIGHT (3,200): §4.2's whole
-  // 12,400. The rank arithmetic below keeps its explicit 4,400.
-  check('RUN END: the fleet has 12,400 souls (ARES-VII 2,400 + HALCYON 2,000 + KESTREL 2,400 + VESPER 2,400 + LAST LIGHT 3,200)', fleetSouls() === 12400, String(fleetSouls()));
-  check('…§4.4\'s rank steps at 12,400 souls exactly', JSON.stringify(rankSteps(12400).map((step) => step.minScore)) === '[0,3000,6800,10700]');
+  // Slice 1a: 200 colonists a pod, 3 + 5 + 12 + 12 + 16 pods. The ranks keep the 12,400 reference they were authored
+  // against (RANK_FLEET_COLONISTS) and scale to the fleet; the rank arithmetic below keeps its explicit 4,400.
+  check('RUN END: the fleet has 9,600 colonists (ARES-VII 600 + HALCYON 1,000 + KESTREL 2,400 + VESPER 2,400 + LAST LIGHT 3,200)', fleetColonists() === 9600, String(fleetColonists()));
+  check('…§4.4\'s rank steps at the 12,400 reference exactly', JSON.stringify(rankSteps(12400).map((step) => step.minScore)) === '[0,3000,6800,10700]');
   check('…scaled to the 4,400 the fleet has (rounded to 100)', JSON.stringify(rankSteps(4400).map((step) => step.minScore)) === '[0,1100,2400,3800]',
     JSON.stringify(rankSteps(4400)));
   check('…rankOf: 2,000 is SHEPHERD with CARETAKER next; 4,100 is ARK ANGEL, the top', rankOf(2000, 4400).rank.name === 'SHEPHERD'
     && rankOf(2000, 4400).next?.name === 'CARETAKER' && rankOf(4100, 4400).rank.name === 'ARK ANGEL' && rankOf(4100, 4400).next === null);
-  const ares: ShipResult = { shipId: 'ares-vii', shipName: 'ARES-VII', outcome: 'locked', woke: 2400, half: 200, lost: 0, stars: 2, fuelLeftPct: 17.4, ringMiss: null };
-  const halcyon: ShipResult = { shipId: 'halcyon', shipName: 'HALCYON', outcome: 'partial', woke: 1800, half: 0, lost: 200, stars: 1, fuelLeftPct: 3, ringMiss: { apsis: '▼', km: 140.4 } };
+  const ares = shipResult({ shipId: 'ares-vii', shipName: 'ARES-VII', slot: 0, outcome: 'locked', colonistsAboard: 600, landedInLz: 600, points: 600, stars: 2, fuelLeftPct: 17.4, ringMiss: null });
+  const halcyon = shipResult({ shipId: 'halcyon', shipName: 'HALCYON', slot: 1, outcome: 'partial', colonistsAboard: 1000, landedInLz: 800, points: 800, stars: 1, fuelLeftPct: 3, ringMiss: { apsis: '▼', km: 140.4 } });
   check('…near misses: the next rank first, then a nearly locked loop, then a FUEL ★ just missed (two at most)',
     JSON.stringify(nearMisses([ares, halcyon], 2000, 4400)) === JSON.stringify([RUN_END_TEXT.rankGap(400, 'CARETAKER'), RUN_END_TEXT.lockMiss('▼', 140, 'HALCYON')]),
     JSON.stringify(nearMisses([ares, halcyon], 2000, 4400)));
@@ -233,20 +245,19 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
   // WP11: WP7's interim END OF THE FLEET is gone (the fleet ends with the flagship): the run here ends FLAGSHIP LOST.
   h.store.update((d) => { d.run.ships = [ares, halcyon]; d.run.phase = 'end'; d.run.endCause = 'flagship-lost'; });
   const model = runEndModel(state());
-  check('…the whole model: FLAGSHIP LOST, 4,200 / 12,400 WOKE (heads), 200 with missing memories, sombre',
-    model.title === 'FLAGSHIP LOST' && model.totalLine === '4,200 / 12,400 WOKE' && model.missingLine === '200 WITH MISSING MEMORIES' && model.tone === 'sombre',
-    `${model.title} | ${model.totalLine} | ${model.missingLine} | ${model.tone}`);
-  // WP11: of 12,400 souls, 4,100 is SHEPHERD (CARETAKER starts at 6,800).
-  check('…the SCORE counts missing memories half (4,100), and the rank is by it (SHEPHERD of 12,400)', model.score === 4100 && model.scoreLine === 'SCORE 4,100'
-    && model.rank === rankOf(4100, 12400).rank.name && model.rank === 'SHEPHERD', `${model.scoreLine} ${model.rank}`);
-  check('…every ship of the fleet, with its outcome word and souls (KESTREL not reached)', model.ships.map((row) => `${row.shipName}:${row.outcomeWord}:${row.wokeLine}`).join(' | ')
-    .startsWith(`ARES-VII:${SHIP_OUTCOME_WORD.locked}:2,400 / 2,400 WOKE | HALCYON:${SHIP_OUTCOME_WORD.partial}:1,800 / 2,000 WOKE | KESTREL:${RUN_END_TEXT.notReached}`),
-    model.ships.map((row) => `${row.shipName}:${row.outcomeWord}:${row.wokeLine}`).join(' | '));
-  h.store.update((d) => { d.run.ships = [{ ...ares, outcome: 'crashed', woke: 0, half: 0, lost: 2400, stars: 0 }]; d.run.endCause = 'stayed'; });
+  check('…the whole model: FLAGSHIP LOST, 1,400 / 9,600 LANDED, sombre',
+    model.title === 'FLAGSHIP LOST' && model.landed === 1400 && model.fleetColonists === 9600 && model.totalLine === RUN_END_TEXT.total(1400, 9600)
+    && model.tone === 'sombre', `${model.title} | ${model.totalLine} | ${model.tone}`);
+  check('…the SCORE is the landing points (1,400), and the rank is by it (of 9,600)', model.score === 1400 && model.scoreLine === RUN_END_TEXT.score(1400)
+    && model.rank === rankOf(1400, 9600).rank.name, `${model.scoreLine} ${model.rank}`);
+  check('…every ship of the fleet, with its outcome word and colonists landed (KESTREL not reached)', model.ships.map((row) => `${row.shipName}:${row.outcomeWord}:${row.landedLine}`).join(' | ')
+    .startsWith(`ARES-VII:${SHIP_OUTCOME_WORD.locked}:${RUN_END_TEXT.shipLanded(600, 600)} | HALCYON:${SHIP_OUTCOME_WORD.partial}:${RUN_END_TEXT.shipLanded(800, 1000)} | KESTREL:${RUN_END_TEXT.notReached}`),
+    model.ships.map((row) => `${row.shipName}:${row.outcomeWord}:${row.landedLine}`).join(' | '));
+  h.store.update((d) => { d.run.ships = [{ ...ares, outcome: 'crashed', landedInLz: 0, notLaunched: 600, points: 0, stars: 0 }]; d.run.endCause = 'stayed'; });
   const stayed = runEndModel(state());
-  check('…a run that STAYED on ship 1: its title and why, HALCYON NOT REACHED, DRIFTER, no missing line',
+  check('…a run that STAYED on ship 1: its title and why, HALCYON NOT REACHED, DRIFTER, sombre',
     stayed.title === 'YOU STAYED WITH THEM' && /ARES-VII/.test(stayed.why) && stayed.ships[1]?.outcomeWord === RUN_END_TEXT.notReached
-    && stayed.rank === 'DRIFTER' && stayed.missingLine === null && stayed.tone === 'sombre', `${stayed.why} | ${stayed.ships[1]?.outcomeWord}`);
+    && stayed.rank === 'DRIFTER' && stayed.tone === 'sombre', `${stayed.why} | ${stayed.ships[1]?.outcomeWord}`);
   check('…the seed in hex', /^SEED [0-9A-F]{8}$/.test(model.seedLine), model.seedLine);
 }
 
@@ -285,7 +296,7 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
     TRANSMIT_TEXT.why.abandoned(ship), TRANSMIT_TEXT.why.escaped(ship), TRANSMIT_TEXT.why.stranded(ship), TRANSMIT_TEXT.hits(99),
     TRANSMIT_TEXT.arrival(999, 99, 3, 99, 999), TRANSMIT_TEXT.infected(99), TRANSMIT_TEXT.fits, TRANSMIT_TEXT.tight,
     TRANSMIT_TEXT.sending('UNIT-999', ship), TRANSMIT_TEXT.go, ...Object.values(TRANSMIT_TEXT.without), ...Object.values(TRANSMIT_TEXT.locked).map((value) => (typeof value === 'string' ? value : value('DELETE'))),
-    RUN_END_TEXT.kicker('UNIT-999', 99), RUN_END_TEXT.total(99_999, 99_999), RUN_END_TEXT.missing(99_999), RUN_END_TEXT.rankGap(99_999, 'ARK ANGEL'),
+    RUN_END_TEXT.kicker('UNIT-999', 99), RUN_END_TEXT.total(99_999, 99_999), RUN_END_TEXT.score(99_999), RUN_END_TEXT.rankGap(99_999, 'ARK ANGEL'),
     RUN_END_TEXT.lockMiss('▲', 99_999, ship), RUN_END_TEXT.fuelMiss(19, ship), RUN_END_TEXT.seed(0xffffffff),
     ...Object.values(RUN_END_TITLE).map((title) => title('UNIT-999', ship)), ...Object.values(RUN_END_WHY).map((why) => why(ship)),
     LINES.beamOutOffer('fuel'), LINES.beamOutOffer('too-late'), LINES.beamOutOffer('no-engine'), LINES.beaming(100, 599),
