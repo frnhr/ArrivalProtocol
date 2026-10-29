@@ -75,7 +75,7 @@ export interface FlightContext {
   outOfFuel: boolean;         // the tank is dry: no burn can happen any more
   fuelShort: boolean;         // the FUEL left is less than the next burn needs (Prediction.fuelShort)
   acceptOnly: boolean;        // ACCEPT ORBIT is the only way on (predict.ts, the lead's Rule 4; latched)
-  strandedAnyway: boolean;    // ...and that ACCEPT strands the ship: no burn the FUEL left can make reaches the printers
+  strandedAnyway: boolean;    // ...and that ACCEPT strands the ship: no burn the FUEL left can make reaches the launch band
   cannotClose: boolean;       // a flyby the tank can no longer catch, even at ▼ (WP1-rules 3b)
   presetsAvailable: boolean;  // false when the Autopilot file is failing or worse → Q/E hints
   plotFault: PlotFault | null;      // why the NAV PLOT can't show the path, or null (Sensor Interp, Nav Plotter)
@@ -118,7 +118,7 @@ export function canAccept(state: Readonly<GameState>, pred: Prediction): boolean
     && (pred.acceptOnly || state.burn.fuelPct < pred.neededPct || state.burn.closedIdleAiSec >= ACCEPT_IDLE_AI_SEC);
 }
 
-// Accepting this loop would strand the ship: the printers could not reach it (§4.3).
+// Accepting this loop would strand the ship: too little of it is in the launch band to land anyone (§4.3).
 export function acceptStrands(pred: Prediction): boolean {
   return pred.greenFraction < STRANDED_RANGE_FRAC;
 }
@@ -233,8 +233,8 @@ function fixWithTail(
 
 const EVENT_GLYPH = { peri: '▼', apo: '▲', now: '▼' } as const;
 // F11 when ACCEPT ORBIT is the only way on (acceptOnly) and it strands the ship (strandedAnyway)...
-export const STRANDED_LINE = 'NOT ENOUGH FUEL to reach the printers — ACCEPT ORBIT';
-// ...and when that ACCEPT still reaches the printers (the lead's Rule 4 lists it first).
+export const STRANDED_LINE = 'NOT ENOUGH FUEL to reach the launch band — ACCEPT ORBIT';
+// ...and when that ACCEPT still reaches the launch band (the lead's Rule 4 lists it first).
 export const ACCEPT_ONLY_LINE = 'NOT ENOUGH FUEL to lock the orbit — ACCEPT ORBIT';
 // F11 held for a trim the tank can't pay for in full: it runs to the empty tank (then ORBIT ACCEPTED), or, a band
 // of about a FUEL point under the trim's price, into the ring after all, where the strip says RELEASE and the
