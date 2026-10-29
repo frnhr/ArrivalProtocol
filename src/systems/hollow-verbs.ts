@@ -155,7 +155,7 @@ function land(store: Store<GameState>, telegraph: Readonly<VerbTelegraph>): void
   emit('verb-landed', { kind: telegraph.kind, targetId: telegraph.targetId });
 }
 
-// The flight is busy (TACTICAL): the verbs wait (see the header). Printing is never "busy" here: the duel is fought there.
+// The flight is busy (TACTICAL): the verbs wait (see the header). The landing is never "busy" here: the duel is fought there.
 function verbsHeld(state: Readonly<GameState>): boolean {
   return state.run.phase === 'flight' && state.clock.pace === 'tactical';
 }

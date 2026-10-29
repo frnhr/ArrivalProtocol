@@ -8,6 +8,7 @@ import { check, finish } from './checks';
 import { followLanding, landInstantly, lockOn } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';
 import { endLanding, forceLandAll } from '@systems/landing';
+import { endFlight } from '@systems/orbit-sim';
 import { landingResult, onTargetTally, canEverLaunch } from '@systems/landing-rules';
 import { shipLost, shipOutcomeOf, shipResultOf } from '@systems/run';
 import { packUnit, layoutCarried, freshUnitRacks, RACK_E_START } from '@systems/carry';
@@ -121,6 +122,16 @@ function eat(pod: number): void {
   const result = shipResultOf(state(), outcome, 0);
   check('a Core lost while landing: the ship is lost, and its result parks every pod', shipLost(state()) && outcome === 'emergency'
     && result.parked.length === state().landing.pods.length && result.notLaunched === 0, `${outcome} · parked ${result.parked.length}`);
+}
+
+{
+  // The ending is written into the pods the moment it is known (before the LOST card), not only into the result.
+  boardShip(1, 8);
+  endFlight(h.store, 'stranded');
+  check('STRANDED parks the pods aboard in orbit at once', state().landing.pods.every((record) => record.fate.kind === 'parked'), fates());
+  boardShip(1, 8);
+  endFlight(h.store, 'crashed');
+  check('CRASHED: the pods aboard are NOT LAUNCHED at once', state().landing.pods.every((record) => record.fate.kind === 'not-launched'), fates());
 }
 
 // --- HOLLOW's story and the finale hold the report ----------------------------------------------------------------------

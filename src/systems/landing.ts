@@ -3,7 +3,6 @@ import type { GameState, ShipOutcome } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {
   BayState, DropSolution, LandingController, LandingEnd, LandingView, LandingWindow, LaunchIntent, LaunchRecord, LaunchResult,
-  PodRecord,
 } from '@/types/landing';
 import { onAiTick, onGameTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
@@ -19,11 +18,11 @@ import { getPrediction } from '@systems/predict';
 import { requestSkip, skipBlockReason } from '@systems/pace';
 import { activeLandingController, setActiveLandingController } from '@systems/landing-controller';
 import {
-  classifyLanding, colonyName, dropFactors, driverTouch, finalFateOfAboard, isLaunchable, landingView as landingViewOf, launchMomentInSec,
+  classifyLanding, colonyName, dropFactors, driverTouch, isLaunchable, landingView as landingViewOf, launchMomentInSec,
   launchGuard, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podPoints, targetWindow, touchAtTouchdown,
   windowOpenNow,
 } from '@systems/landing-rules';
-import { forgetDriver } from '@state/actions';
+import { forgetDriver, parkPodsAboard } from '@state/actions';
 import { driversInMemory, finalePending } from '@state/selectors';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { LANDING_ECHO, LAUNCH_CONFIRM_TEXT, launchRefusalKey } from '@data/landing-text';
@@ -210,13 +209,7 @@ function touchDown(store: Store<GameState>, pod: number): void {
 // Every pod still aboard gets its final fate for `outcome` (§3.10: parked in orbit with why, or NOT LAUNCHED once the
 // ship left orbit). In a draft. run.ts calls it for the in-orbit endings too. Returns how many were parked.
 export function parkAboard(draft: GameState, outcome: ShipOutcome): number {
-  let parked = 0;
-  for (const record of draft.landing.pods) {
-    if (record.fate.kind !== 'aboard') continue;
-    record.fate = finalFateOfAboard(record as Readonly<PodRecord>, outcome);
-    if (record.fate.kind === 'parked') parked++;
-  }
-  return parked;
+  return parkPodsAboard(draft, outcome);
 }
 
 // No more launches (§3.10): END LANDING, the risk-7 auto-end, or every pod away. The pods still aboard are parked in

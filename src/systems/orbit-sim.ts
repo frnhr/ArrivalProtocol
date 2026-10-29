@@ -6,7 +6,7 @@ import { stepAttitude, isPresetAligning } from '@systems/attitude';
 import { smoothNoise, childSeed, childRng, type Rng } from '@systems/rng';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { capabilitiesNow, thrustCap, planningThrustCap, presetsAvailable, type GhostSpec } from '@systems/capabilities';
-import { beginLanding } from '@state/actions';
+import { beginLanding, parkPodsAboard } from '@state/actions';
 import {
   elementsFromState, ringFit, ringFraction, loopRange, semiMajorAxis, propagateConic,
   type OrbitState, type Ring, type RingFit, type Vec2,
@@ -312,7 +312,12 @@ export function endFlight(store: Store<GameState>, status: TerminalStatus): void
     if (startsLanding(status)) {
       draft.run.phase = 'landing';
       beginLanding(draft);
-    } else draft.clock.paused = true;
+    } else {
+      draft.clock.paused = true;
+      // A ship that ends here lands nobody (01-landing §3.10): a stranded one parks its pods in orbit, one that left
+      // orbit (crashed, escaped, abandoned) takes them with it. Written now, before its LOST card.
+      parkPodsAboard(draft, status === 'accepted' ? 'partial' : status);
+    }
   });
   if (ghostWasFiring) emit('ghost-stop', NO_PAYLOAD);
   emit(status, NO_PAYLOAD);
