@@ -192,16 +192,53 @@ export function windowOpenNow(sol: Readonly<DropSolution> | null, nowTSec: numbe
   return { lz: open.lz, sure };
 }
 
+// The solution's windows as they stand at `nowTSec` (times still relative to its asOfTSec): one that has closed since
+// the solution was solved comes round again a period later, because the orbit repeats exactly between kicks (and a kick
+// bumps orbitEpoch, which re-solves). Without it a cache up to a refresh old shows no next window for that LZ for a tick
+// after its window closed (ARES-VII, one LZ: the strip had no row for that tick). Likewise an in-band span that is
+// over while the window is still open: the next in-band span is a period later.
+export function windowsAsOf(sol: Readonly<DropSolution>, nowTSec: number): LzWindow[] {
+  const elapsed = nowTSec - sol.asOfTSec;
+  const period = sol.periodSec;
+  if (!(period > 0)) return [...sol.windows];
+  const turns = (closeInSec: number): number => (closeInSec > elapsed ? 0 : Math.floor((elapsed - closeInSec) / period) + 1);
+  const shift = (sec: number | null, k: number): number | null => (sec === null ? null : sec + k * period);
+  return sol.windows.map((w) => {
+    const k = turns(w.closeInSec);
+    const moved: LzWindow = k === 0 ? w : {
+      ...w, openInSec: w.openInSec + k * period, closeInSec: w.closeInSec + k * period,
+      sureOpenInSec: shift(w.sureOpenInSec, k), sureCloseInSec: shift(w.sureCloseInSec, k),
+      inBandOpenInSec: shift(w.inBandOpenInSec, k), inBandCloseInSec: shift(w.inBandCloseInSec, k),
+    };
+    if (moved.inBandCloseInSec === null || moved.inBandCloseInSec > elapsed) return moved;
+    const j = turns(moved.inBandCloseInSec);
+    return { ...moved, inBandOpenInSec: shift(moved.inBandOpenInSec, j), inBandCloseInSec: shift(moved.inBandCloseInSec, j) };
+  }).sort((a, b) => a.openInSec - b.openInSec);
+}
+
 // The window the kid should aim at (§3.2; pace's SKIP, the countdown chip and landing-hud share it): the next in-band
 // span not yet over of an LZ with projected room, else of any LZ, else null. "Next" by its in-band opening (an open one
 // first). Times rebased to `nowTSec`.
 export function targetWindow(state: Readonly<GameState>, sol: Readonly<DropSolution> | null, nowTSec: number): LzWindow | null {
   if (sol === null || sol.block !== null) return null;
-  const live = sol.windows
+  const live = windowsAsOf(sol, nowTSec)
     .filter((w) => w.inBandOpenInSec !== null && w.inBandCloseInSec !== null && secFromNow(sol, w.inBandCloseInSec, nowTSec) > 0)
     .sort((a, b) => a.inBandOpenInSec! - b.inBandOpenInSec!);
   const remaining = lzRemaining(state);
   return live.find((w) => (remaining[w.lz] ?? 0) > 0) ?? live[0] ?? null;
+}
+
+// The moment a window is worth a launch (the guidance table's GET READY and its beeps count down to it), in game s from
+// `nowTSec`: the opening of its sure part inside the in-band span when this pass has one (from there the whole dot fits:
+// LAUNCH NOW), else its in-band opening (a wide drop: LAUNCH — WIDE DROP from the start). null: no in-band span.
+// Why not the opening alone: the centre enters the bracket a few tactical seconds before the dot's edges do, and a kid
+// told to launch at the opening sends the first pod half off-site (plan Deviations, Track SIM).
+export function launchMomentInSec(sol: Readonly<DropSolution>, w: Readonly<LzWindow>, nowTSec: number): number | null {
+  if (w.inBandOpenInSec === null || w.inBandCloseInSec === null) return null;
+  const sureFits = w.sureOpenInSec !== null && w.sureCloseInSec !== null
+    && w.sureOpenInSec < w.inBandCloseInSec && w.sureCloseInSec > w.inBandOpenInSec;
+  const at = sureFits ? Math.max(w.inBandOpenInSec, w.sureOpenInSec!) : w.inBandOpenInSec;
+  return secFromNow(sol, at, nowTSec);
 }
 
 // The driver a launch would take: `pod`'s if named (it must be in memory), else nextToLaunch.
@@ -252,6 +289,8 @@ export function launchGuard(state: Readonly<GameState>, sol: Readonly<DropSoluti
   const touch = driverTouch(driver.integrity);
   const placement = classifyLanding(landing.lzs, landing.noGo, sol.dot.rad, lzProjectedFill(state));
   const points = podPoints(placement.place, touch, landing.forgiveness, driver.colonists);
+  // TODO(slice1b): a dot over a no-go arc asks in the arc's own word (`LAUNCH INTO LAVA? scores 0`, NoGoArcState.word);
+  // every ship's no-go list is empty in 1a, so it shares the off-site ask.
   if (placement.place === 'off-site' || placement.place === 'no-go') return { ask: 'off-site', points, lz: null };
   if (placement.place === 'mislanded') return { ask: 'full', points, lz: placement.lz };
   return null;

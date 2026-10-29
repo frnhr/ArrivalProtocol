@@ -115,16 +115,25 @@ export const LANDING_LINES = {
   L6: (inSec: number): string => `RELOADING — next pod in ${minSec(inSec)}`,
   L7: (lz: string, inSec: number): string => `GET READY — ${lz} IN ${minSec(inSec)}`,
   L11: (pod: number): string => `${podCode(pod)} CAN'T LAUNCH — TAB, REPAIR its driver`,
+  // L1 and L11 read in the MIND, where the TAB is done (the flight's F1/F2 do the same).
+  L1Mind: 'NO DROP SOLUTION — REPAIR NAV PLOTTER',
+  L11Mind: (pod: number): string => `${podCode(pod)} CAN'T LAUNCH — REPAIR its driver`,
   L12: 'NO POD CAN LAUNCH — END LANDING parks them in orbit',
+  // L12's twin when no LZ ever passes under the dot while the ship is in the band (a PARTIAL orbit whose band arc misses
+  // every bracket): with no engine in 1a nothing will change that (plan Deviations, Track SIM).
+  L12band: 'NO LZ IN THE LAUNCH BAND — END LANDING parks them in orbit',
   L12b: (falling: number): string => (falling > 0 ? `ALL PODS AWAY · ${falling} FALLING` : 'ALL PODS AWAY'),
-  L13: (lz: string, inSec: number, outOfBand: boolean): string =>
-    `WAIT — ${lz} in ${minSec(inSec)} ▸▸ · [F] to SKIP${outOfBand ? ' · OUT OF BAND' : ''}`,
+  // `· [F] to SKIP` only while a SKIP would start (as the flight's WAIT rows offer it).
+  L13: (lz: string, inSec: number, skip: boolean, outOfBand: boolean): string =>
+    `WAIT — ${lz} in ${minSec(inSec)} ▸▸${skip ? ' · [F] to SKIP' : ''}${outOfBand ? ' · OUT OF BAND' : ''}`,
 } as const;
 
-// The landing's SKIP inhibitors (§3.12).
+// The landing's SKIP inhibitors (§3.12), and its "too close" refusal (the window's GET READY is about to start).
 export const LANDING_SKIP_REFUSAL = {
   windowOpen: 'WINDOW OPEN',
   podsInFlight: 'PODS IN FLIGHT',
+  windowSoon: 'WINDOW COMING UP',
+  over: 'THE LANDING IS OVER',
 } as const;
 
 // The strip's asks and hints around a landing (§3.11, plan §1.6).

@@ -12,7 +12,7 @@ import {
 } from '@data/memory';
 import {
   RACK_BLOCKS, TRANSIT_HIT_MIN, TRANSIT_HIT_MAX, TRANSIT_LAST_COPY_FLOOR, TRANSIT_CORE_MAX_HIT, CORE_RESET_INTEGRITY,
-  CHARGE_ARRIVAL_FLOOR,
+  CHARGE_ARRIVAL_FLOOR, UNIT_TAIL_BLOCKS,
 } from '@data/tuning';
 
 // Transmission and carry (§6.9), pure and DOM-free: what of the unit crosses the link to the next
@@ -30,11 +30,11 @@ import {
 //    (25). A crash adds 3 hits and Core −25, BEAM OUT 2 hits (run.ts passes them in).
 // 3. arrivalCharge: +6 per ★ of the last ship, +12 for the charge card, and never fewer than 12 blocks
 //    (§6.5's floor).
-// 4. layoutCarried: the files back into memory: rack E's list from rack E, rack F's from rack F, each
-//    with its free space after it; a packet too big for its racks spills backward into rack D's free
-//    tail, and REPAIR CHARGE that still does not fit is lost, loudly (any other overflow throws). A unit
-//    that spent its last point of charge before TRANSMIT has no pool file left: its arrival charge is
-//    written into a fresh one (the floor is a guarantee).
+// 4. layoutCarried: the files back into memory, 01-landing §3.16's pooled receiver: rack E's list and rack F's
+//    list as one block from rack E's start, then the charge; a block longer than the receiver spills backward
+//    into the last pod rack's tail (at most UNIT_TAIL_BLOCKS), and REPAIR CHARGE that still does not fit is lost,
+//    loudly (any other overflow throws). A unit that spent its last point of charge before TRANSMIT has no pool
+//    file left: its arrival charge is written into a fresh one (the floor is a guarantee).
 // 5. arrivalDamage: the ship's own scripted damage (KESTREL, VESPER), named like a hit.
 
 // The order rack E is packed in (§6.9): the Core, then the AI tools by their job.
@@ -229,33 +229,31 @@ export interface CarriedLayout {
   overflowLost: number;     // charge that did not fit memory
 }
 
-// The packed files back into memory on `ship` (step 4). Rack E's list starts at rack E and rack F's at
-// rack F, each followed by its free space, like a fresh unit. If rack F's list (with REPAIR CHARGE last)
-// is longer than rack F, it starts earlier, into rack E's free tail, and rack E's list moves back with
-// it, into the last pod rack's free tail if it must (the ship's layout says how much of it is free at its
-// end). Charge that still does not fit is lost; files that do not fit throw.
-// TODO(slice1a-SIM): 01-landing §3.16's pooled receiver (rack E's and F's lists back to back, the spill capped at
-// UNIT_TAIL_BLOCKS).
+// The packed files back into memory on `ship` (step 4): 01-landing §3.16's pooled receiver. The files go as one block
+// from rack E's start, rack E's list and rack F's list back to back (no gap at rack F), then REPAIR CHARGE, then the
+// free rest of the receiver. The room for the unit is the receiver plus the tail: only a block longer than the receiver
+// starts earlier, right-aligned to the end of memory, by at most UNIT_TAIL_BLOCKS into the last pod rack (and never into
+// more of it than the ship's layout leaves free at its end), so the Core stays at rack E's start on almost every ship.
+// Charge that still does not fit is lost, loudly (the caller's CHARGE OVERFLOW); files that do not fit throw (the
+// PACKET screen checks the room before the beam).
 export function layoutCarried(packet: Packet, chargeBlocks: number, ship: ShipDef): CarriedLayout {
-  const eBlocks = packet.rackE.reduce((sum, seg) => sum + seg.size, 0);
-  const fFiles = packet.rackF.reduce((sum, seg) => sum + seg.size, 0);
-  const lowest = RACK_E_START - lastPodRackTrailingFree(ship);
-  const room = MEMORY_TOTAL_BLOCKS - lowest;
-  const filesTotal = eBlocks + fFiles;
-  if (filesTotal > room) throw new Error(`layoutCarried: ${filesTotal} blocks of files do not fit the ${room} blocks from rack D's free tail`);
-  const charge = Math.min(chargeBlocks, room - filesTotal);
+  const files = [...packet.rackE, ...packet.rackF];
+  const filesBlocks = files.reduce((sum, seg) => sum + seg.size, 0);
+  const receiver = MEMORY_TOTAL_BLOCKS - RACK_E_START;
+  const tail = Math.min(UNIT_TAIL_BLOCKS, lastPodRackTrailingFree(ship));
+  const room = receiver + tail;
+  if (filesBlocks > room) {
+    throw new Error(`layoutCarried: ${filesBlocks} blocks of files do not fit ${ship.name}'s room (${receiver} + a tail of ${tail})`);
+  }
+  const charge = Math.max(0, Math.min(chargeBlocks, room - filesBlocks));
   const overflowLost = chargeBlocks - charge;
-  const fBlocks = fFiles + charge;
-  const fStart = Math.min(RACK_F_START, MEMORY_TOTAL_BLOCKS - fBlocks);
-  const eStart = Math.min(RACK_E_START, fStart - eBlocks);
-  const segs: Segment[] = [];
-  const pushFree = (size: number): void => { if (size > 0) segs.push(freeSegment(size)); };
-  segs.push(...packet.rackE);
-  pushFree(fStart - (eStart + eBlocks));
-  segs.push(...packet.rackF);
+  const block = filesBlocks + charge;
+  const startAddr = Math.min(RACK_E_START, MEMORY_TOTAL_BLOCKS - block);
+  const segs: Segment[] = [...files];
   if (charge > 0) segs.push(chargeSegment(packet.charge, charge));
-  pushFree(MEMORY_TOTAL_BLOCKS - (fStart + fBlocks));
-  return { racks: { startAddr: eStart, segs }, chargeBlocks: charge, overflowLost };
+  const free = MEMORY_TOTAL_BLOCKS - (startAddr + block);
+  if (free > 0) segs.push(freeSegment(free));
+  return { racks: { startAddr, segs }, chargeBlocks: charge, overflowLost };
 }
 
 // REPAIR CHARGE as it arrives: `points` of charge in as many blocks (the blocks a repair had spent
