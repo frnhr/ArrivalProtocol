@@ -500,9 +500,9 @@ export const BEAM_OUT_TEXT = {
   abandon: 'ABANDON SHIP ▸ BEAM OUT',
   question: 'BEAM OUT?',
   // On the last ship nothing is transmitted (there is no next ship), so the cost said is the run's end.
-  detail: (ship: string, souls: number, lastShip: boolean): string => (lastShip
-    ? `${formatCount(souls)} colonists stay on ${ship}. The run ends.`
-    : `${formatCount(souls)} colonists stay on ${ship}. +${BEAM_OUT_EXTRA_HITS} transit hits.`),
+  detail: (ship: string, colonists: number, lastShip: boolean): string => (lastShip
+    ? `${formatCount(colonists)} colonists stay on ${ship}. The run ends.`
+    : `${formatCount(colonists)} colonists stay on ${ship}. +${BEAM_OUT_EXTRA_HITS} transit hits.`),
   yes: '✓ BEAM OUT',
   no: '✗ STAY',
   bar: (pct: number): string => `TRANSMITTING ${pct}%`,

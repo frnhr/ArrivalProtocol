@@ -46,7 +46,7 @@ body.mode-memory {
   --sealed-b: #20262c;
   --sealed-edge: #3b444c;
   --sealed-text: #7f8b95;
-  --print-flash: #ffffff;
+  --flash-white: #ffffff;
   /* HOLLOW looks the same on both screens (see tokens.css). */
   --hollow-bg: #050103;
   --hollow-edge: #5c0f22;

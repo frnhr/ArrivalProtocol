@@ -306,13 +306,13 @@ function renderCapacityDemoBlock(currentCapacity: number): string {
 
 function renderDetailPanel(target: HTMLElement, seg: Segment, deps: RenderDetailDeps): void {
   if (seg.type === 'driver') {
-    let soulBody = driverHtml(seg, deps.state);
+    let driverBody = driverHtml(seg, deps.state);
     const actions = computeActions(seg, deps.state);
     if (actions.primary.length) {
-      soulBody += `<div class="action-section"><div class="action-section-label">primary</div>${actions.primary.map(renderActionButton).join('')}</div>`;
+      driverBody += `<div class="action-section"><div class="action-section-label">primary</div>${actions.primary.map(renderActionButton).join('')}</div>`;
     }
-    soulBody += actions.notesHtml;
-    target.innerHTML = soulBody;
+    driverBody += actions.notesHtml;
+    target.innerHTML = driverBody;
     bindActionButtons(target, seg, deps);
     return;
   }

@@ -54,16 +54,16 @@ import {
 //                     or Nav Plotter repaired)
 // • while ops run in blue: opChirp at OP_CHIRP_HZ (the mind at work)
 // • the landing (slice 1a, 01-landing §4): pod-launched → podLaunch (a thump and a hiss); pod-entry → podEntry (the
-//   roar at the atmosphere); pod-landed → printBell pitched per LZ (LZ-B a fifth above LZ-A), dull when hard, sour when
+//   roar at the atmosphere); pod-landed → touchdownBell pitched per LZ (LZ-B a fifth above LZ-A), dull when hard, sour when
 //   mislanded, a low bonk off-site or in a no-go arc, and on the run's first landing the choir and the FIRST LANDING
 //   stamp's thud; window-sure → chime (the bracket turns green); lz-full → capturedChord; all-pods-down → lockArp and
 //   the ALL PODS DOWN stamp's thud; pods-parked → sag; and every tick while a window is open, the lock tone follows
 //   how centred the dot is in its bracket (landing-hud windowToneFraction)
 // • while drivers are in memory and the kid is in blue: the heartbeat bed (the pods' stasis monitors), quicker while
 //   a pod would land hard, quicker still and uneven while anything is infected (WP6)
-// • HOLLOW (WP6): hollow-infect → hollowBite; hollow-wall → fizzle; hollow-consume → soulLost when a
+// • HOLLOW (WP6): hollow-infect → hollowBite; hollow-wall → fizzle; hollow-consume → sombreFall when a
 //   pod's driver was eaten, else hollowBite (a file or a half-written copy gone: nobody was lost);
-//   hollow-cure → clusterSaved (several in one tick sound once: one bite timer, one moment); and
+//   hollow-cure → driverSaved (several in one tick sound once: one bite timer, one moment); and
 //   every tick the chew follows the total drain and the tug's beating tones follow the boundary
 // • WP7: hollow-name-shown → the truth note + nameGlitch; arrival-hits → transitHit per hit (staggered);
 //   beam-out-start → transmitIn; beam-out-cancel → sag; abandoned → a short transmitSweep
@@ -76,7 +76,7 @@ import {
 //   quicker toward the belt's middle
 // • WP10 (VESPER): ghost-start → ghostIgnite (the relay and the whump of the engine lighting by itself; the ship's
 //   first one heavier, under the klaxon its alarm raises; a burst a SKIP flew through too, its only sound); deal → the answer
-//   stamp's thud (an ACCEPT's eaten cluster plays soulLost through hollow-consume); and every whole second of a
+//   stamp's thud (an ACCEPT's eaten cluster plays sombreFall through hollow-consume); and every whole second of a
 //   standing TERMINAL choice's clock (THE DEAL), once it runs: dealTick, higher in its last CHOICE_URGENT_SEC
 // • WP11 part 2 (LAST LIGHT): a verb's telegraph → verbTick for each whole second it counts (3, 2, 1, climbing; it
 //   stands still under TACTICAL like the countdown); verb-blocked → verbBlocked + the BLOCKED stamp's thud;
@@ -97,7 +97,7 @@ function whoompFor(from: LineState, to: LineState): WhoompShape | null {
   return 'sag';
 }
 
-type HollowCue = 'hollowBite' | 'fizzle' | 'soulLost' | 'clusterSaved';
+type HollowCue = 'hollowBite' | 'fizzle' | 'sombreFall' | 'driverSaved';
 
 // The touchdown bell's colour for how a pod came down (§4).
 function touchdownSound(place: Place, touch: Touch): TouchdownSound {
@@ -178,9 +178,9 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     on('pod-entry', ({ pod }) => play('podEntry', { first: isFirstFall(store.getState(), pod) })),
     on('pod-landed', ({ place, lz, touch, firstOfRun }) => {
       const index = lz === null ? 0 : store.getState().landing.lzs.findIndex((candidate) => candidate.label === lz);
-      play('printBell', { lz: Math.max(0, index), landing: touchdownSound(place, touch) });
+      play('touchdownBell', { lz: Math.max(0, index), landing: touchdownSound(place, touch) });
       if (firstOfRun) {
-        play('revealChoir');
+        play('arrivalChoir');
         play('stampHit', { heavy: false });
       }
     }),
@@ -195,8 +195,8 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     on('hollow-infect', () => onceThisTick('hollowBite')),
     on('hollow-wall', () => onceThisTick('fizzle')),
     on('hollow-firewall', () => onceThisTick('fizzle')),
-    on('hollow-consume', ({ driver }) => onceThisTick(driver ? 'soulLost' : 'hollowBite')),
-    on('hollow-cure', () => onceThisTick('clusterSaved')),
+    on('hollow-consume', ({ driver }) => onceThisTick(driver ? 'sombreFall' : 'hollowBite')),
+    on('hollow-cure', () => onceThisTick('driverSaved')),
     // WP7: HOLLOW names itself (HALCYON, `> i was 046.`): the second turn of the story gets the first one's
     // truth note, the floor dropping away under one high glass note, with HOLLOW's own blips stepping down
     // through static as `???` decodes into UNIT-046. Heard with the picture: at once in blue, else on the

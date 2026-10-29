@@ -6,7 +6,7 @@ import { isLivePhase } from '@systems/clock';
 // The look-only pause (§6.1): a dim veil over the desk with `PAUSED · P to resume`. It lets
 // pointer events through, so the kid can still hover, select and read everything; the
 // refusals themselves (SPACE, presets, SKIP) live in the systems. Once the ship is lost or done
-// its card owns the screen, so the veil only shows while the ship is live (flight or printing).
+// its card owns the screen, so the veil only shows while the ship is live (flight or landing).
 // It spans from the objective strip's bottom edge to the footer's top edge, measured: on a phone the header wraps
 // to two rows and the strip to two lines, so the desktop's fixed heights (game.css) would put the card over the
 // strip (WP1 deferral, WP12).

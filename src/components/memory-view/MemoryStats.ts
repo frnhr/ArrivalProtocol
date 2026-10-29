@@ -14,7 +14,7 @@ import { requireById } from '@components/dom';
 // the kid can see, and the memory's size. Repainted when memory changes (memoryRev) and while a
 // repair spends charge point by point (op progress, without a store update).
 
-type MemStatKey = 'souls' | 'charge' | 'free' | 'damage' | 'total';
+type MemStatKey = 'pods' | 'charge' | 'free' | 'damage' | 'total';
 type MemStatTone = 'plain' | 'soul' | 'warn' | 'unknown' | 'good';
 
 interface MemStat {
@@ -47,13 +47,13 @@ export function visibleDamage(state: Readonly<GameState>): { blocks: number; hid
 export function memStatsModel(state: Readonly<GameState>): Record<MemStatKey, MemStat> {
   const total = totalBlocks(state.memory);
   // The pods still aboard (01-landing §3.10: aboard until launched, whether or not their driver is still in memory) and
-  // the people in them. The key keeps its phase-2 name: the page's `#statSouls`.
+  // the people in them. (The tone names the colonists' green, the --soul colour token.)
   const aboard = state.landing.pods.filter((record) => record.fate.kind === 'aboard');
   const people = aboard.reduce((sum, record) => sum + record.colonists, 0);
   const damage = visibleDamage(state);
   return {
-    souls: {
-      key: 'souls', label: 'pods aboard', value: String(aboard.length), small: `${formatCount(people)} colonists`, tone: 'soul',
+    pods: {
+      key: 'pods', label: 'pods aboard', value: String(aboard.length), small: `${formatCount(people)} colonists`, tone: 'soul',
     },
     charge: { key: 'charge', label: 'repair charge', value: String(chargeLeft(state)), small: 'blk', tone: 'plain' },
     free: { key: 'free', label: 'free', value: String(getFreeTotal(state)), small: 'blk', tone: 'plain' },
@@ -73,7 +73,7 @@ export function stripRangeLabel(state: Readonly<GameState>): string {
 }
 
 const STAT_IDS: Readonly<Record<MemStatKey, string>> = {
-  souls: 'statSouls',
+  pods: 'statPods',
   charge: 'statRedund',
   free: 'statFree',
   damage: 'statDamage',

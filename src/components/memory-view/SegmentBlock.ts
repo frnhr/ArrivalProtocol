@@ -173,26 +173,26 @@ export function heartbeatSvg(kind: Heartbeat): string {
 // A driver's part on the strip. The chip reads like every file (name, bar, meta) with people behind it: the family on
 // top (the name a kid remembers), the heartbeat where a file has its bar, then the pod the strip's lines use (POD 03)
 // beside the health. Continuation parts of a chip split by a row break show only the ↪ marker.
-function driverPartHtml(soul: DriverSegment, layout: SegmentPartLayout): string {
+function driverPartHtml(driver: DriverSegment, layout: SegmentPartLayout): string {
   const isFirst = layout.partIdx === 0;
   if (!isFirst) return `<div class="seg-cont-marker">↪</div>`;
-  const shown = shownIntegrity(soul.integrity);
-  const beat = heartbeatOf(soul);
+  const shown = shownIntegrity(driver.integrity);
+  const beat = heartbeatOf(driver);
   const healthCls = beat === 'steady' ? '' : beat === 'weak' ? ' partial' : ' warn';
   let health: string;
-  if (soul.state === 'repairing') {
-    health = `<span class="health live${soul.infected ? ' warn' : ''}" data-live-integrity="${soul.id}" data-live-prefix="${LIVE_REPAIR_PREFIX}">${LIVE_REPAIR_PREFIX}${shown}%</span>`;
-  } else if (soul.infected) {
-    health = infectedHealthHtml(soul, '');
+  if (driver.state === 'repairing') {
+    health = `<span class="health live${driver.infected ? ' warn' : ''}" data-live-integrity="${driver.id}" data-live-prefix="${LIVE_REPAIR_PREFIX}">${LIVE_REPAIR_PREFIX}${shown}%</span>`;
+  } else if (driver.infected) {
+    health = infectedHealthHtml(driver, '');
   } else {
-    health = soul.state === 'transferring' ? `<span class="health partial">↻ XFER</span>` : `<span class="health${healthCls}">${shown}%</span>`;
+    health = driver.state === 'transferring' ? `<span class="health partial">↻ XFER</span>` : `<span class="health${healthCls}">${shown}%</span>`;
   }
-  const code = podCode(soul.pod);
+  const code = podCode(driver.pod);
   return `
-    <span class="drv-tag" data-pod-tag="${soul.pod}"></span>
-    <div class="drv-family">${soul.family.toUpperCase()}</div>
-    ${heartbeatSvg(heartbeatOf(soul))}
-    <div class="seg-meta"><span class="drv-code"><span class="drv-code-long">${code}</span><span class="drv-code-short">${code.replace('POD ', 'P')}</span><span class="drv-count">${soul.colonists}</span></span>${health}</div>`;
+    <span class="drv-tag" data-pod-tag="${driver.pod}"></span>
+    <div class="drv-family">${driver.family.toUpperCase()}</div>
+    ${heartbeatSvg(heartbeatOf(driver))}
+    <div class="seg-meta"><span class="drv-code"><span class="drv-code-long">${code}</span><span class="drv-code-short">${code.replace('POD ', 'P')}</span><span class="drv-count">${driver.colonists}</span></span>${health}</div>`;
 }
 
 // Builds a single visual part of a memory segment.
@@ -378,25 +378,25 @@ function wire(part: HTMLElement, seg: Segment, behavior: SegmentBehavior): void 
 
 // A driver's part (see driverPartHtml). It keeps the shared part data (size, index, offset) so the
 // op bars, the split overlay and the hint painter treat it like any file.
-function renderDriverPart(part: HTMLElement, soul: DriverSegment, layout: SegmentPartLayout, behavior: SegmentBehavior): HTMLElement {
+function renderDriverPart(part: HTMLElement, driver: DriverSegment, layout: SegmentPartLayout, behavior: SegmentBehavior): HTMLElement {
   const { partIdx, totalParts } = layout;
   const isFirst = partIdx === 0;
-  let cls = `seg driver hb-${heartbeatOf(soul)}`;
-  if (soul.state === 'transferring') cls += ' transferring';
-  if (soul.state === 'repairing') cls += ' repairing';
-  cls += infectedClasses(soul, true);
+  let cls = `seg driver hb-${heartbeatOf(driver)}`;
+  if (driver.state === 'transferring') cls += ' transferring';
+  if (driver.state === 'repairing') cls += ' repairing';
+  cls += infectedClasses(driver, true);
   if (totalParts > 1) {
     cls += ' is-part';
     if (partIdx < totalParts - 1) cls += ' part-continues-right';
     if (!isFirst) cls += ' part-continues-left';
   }
   part.className = cls;
-  stampPart(part, soul, layout);
-  setEaten(part, soul, true);
-  part.dataset.pod = String(soul.pod);
+  stampPart(part, driver, layout);
+  setEaten(part, driver, true);
+  part.dataset.pod = String(driver.pod);
   // A strip line can point at a driver by its pod (POD 02 WILL LAND HARD).
-  if (isFirst) part.dataset.hintTarget = podHintTarget(fileLabel(soul));
-  part.innerHTML = driverPartHtml(soul, layout);
-  wire(part, soul, behavior);
+  if (isFirst) part.dataset.hintTarget = podHintTarget(fileLabel(driver));
+  part.innerHTML = driverPartHtml(driver, layout);
+  wire(part, driver, behavior);
   return part;
 }

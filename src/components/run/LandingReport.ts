@@ -200,7 +200,7 @@ export function mountLandingReport(store: Store<GameState>): () => void {
     rollEl.style.transform = `translateY(${offset.toFixed(1)}px)`;
     choirIn -= dtSec;
     if (choirIn <= 0) {
-      play('revealChoir');
+      play('arrivalChoir');
       choirIn = REPORT_CHOIR_EVERY_SEC;
     }
     if (holdLeft <= 0 && offset <= endOffset) { showStars(); return; }
@@ -219,10 +219,10 @@ export function mountLandingReport(store: Store<GameState>): () => void {
     const nodes = report.credits.map((entry, i) => (i === 0 && entry.lead ? leadCredit(entry) : credit(entry)));
     rollEl.replaceChildren(...nodes);
     creditsEl.classList.toggle('still', reducedMotion());
-    play('revealChoir');
+    play('arrivalChoir');
     choirIn = REPORT_CHOIR_EVERY_SEC;
     const first = report.credits[0]!;
-    play('printBell', { lz: Math.max(0, report.tally.lzs.findIndex((row) => row.lz === first.lz)), landing: touchdownSound(first) });
+    play('touchdownBell', { lz: Math.max(0, report.tally.lzs.findIndex((row) => row.lz === first.lz)), landing: touchdownSound(first) });
     if (reducedMotion()) {
       rollEl.style.transform = '';
       later(REPORT_LEAD_HOLD_SEC + nodes.length / CREDITS_LINES_PER_SEC, showStars);
