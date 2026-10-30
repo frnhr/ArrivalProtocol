@@ -169,9 +169,10 @@ function stepWhile(cond: () => boolean, maxWall = 400): void {
   // WP5: a lock goes on into the landing (slice 1a), where the world still coasts at TACTICAL (the plot moves);
   // only a lost ship's pace reads STOPPED.
   // The WP1 harness mounts no landing, so no LZ window is counted here; the chip in a real landing (the next LZ window)
-  // is tests/unit/landing/hud.test.ts's.
-  check('locked: BURN shows FLIGHT OVER (disabled), pace TACTICAL while landing, no countdown',
-    burnButton(state()).disabled && burnButton(state()).text === 'FLIGHT OVER'
+  // is tests/unit/landing/hud.test.ts's. Slice 1b opens the engine in the landing (selectors engineOpen): BURN stays live
+  // after the lock, and reads LANDING OVER only once the landing ends (landing/hud.test.ts).
+  check('locked: BURN stays live in the landing, pace TACTICAL while landing, no countdown',
+    !burnButton(state()).disabled && burnButton(state()).look === 'ready'
     && state().run.phase === 'landing' && paceLabel(state()) === 'TACTICAL ×20' && countdownChip(state(), pred) === null,
     `${state().run.phase} / ${paceLabel(state())}`);
   check('locked: the strip line', FLIGHT_OVER_LINE[harness.status() as 'locked'] === 'ORBIT LOCKED');
