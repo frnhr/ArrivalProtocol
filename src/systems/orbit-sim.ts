@@ -407,7 +407,7 @@ function periodOf(orbit: Readonly<OrbitState>, mu: number): number {
 // Far more kicks than one tick can hold (two per orbit): a loop that asks for more is a broken kick rule, not decay.
 const MAX_KICKS_PER_TICK = 10_000;
 
-interface KickedCoast {
+export interface KickedCoast {
   end: OrbitState;
   kicks: DragKick[];
   decay: DecayState;
@@ -418,7 +418,7 @@ interface KickedCoast {
 // sub-steps would, kick for kick. Kicks do not stop the SKIP: its end only moves nearer (pace) and the drop cache
 // re-solves on the epoch. With `drag` false (the flight, ARES-VII) it is conicCoast itself, to the bit: `coastSec` is a
 // duration, not an end time, so a jump with no kick takes exactly the flight's arithmetic.
-function coastWithKicks(
+export function coastWithKicks(
   start: Readonly<OrbitState>, mu: number, ring: Ring, fromTSec: number, coastSec: number, decay0: Readonly<DecayState>, drag: boolean,
 ): KickedCoast {
   startTrack(start);

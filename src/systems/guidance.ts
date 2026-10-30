@@ -10,7 +10,7 @@ import {
   type Prediction, type PredictOutcome, type BurnPoint, type BurnEvent, type TrimReason,
 } from '@systems/predict';
 import { skipBlockReason } from '@systems/pace';
-import { dragLineKm, goLowReleased, landingBurnOffer, launchRadiusRate } from '@systems/landing-orbit';
+import { goLowReleased, landingBurnOffer, launchRadiusRate } from '@systems/landing-orbit';
 import { LANDING_FLIGHT_LINES } from '@data/landing-text';
 import { spareFor } from '@systems/tool-targets';
 import { isUsableTool, toolFilesOf } from '@state/selectors';
@@ -21,7 +21,7 @@ import { IS_DEV } from '@/env';
 import {
   EARLY_BURN_GUARD_TAC, LATE_CAPTURE_TAC, TACTICAL_LEAD_BURN_TAC, COUNTDOWN_RED_TAC,
   ACCEPT_IDLE_AI_SEC, OBJECTIVE_HYSTERESIS_SEC, MAX_LINE_CHARS, STRANDED_RANGE_FRAC, AUTOBURN_DONE_LINE_SEC,
-  DODGE_WARN_TAC, RELEASE_LEAD_TAC, RP_RATE_PROBE_SEC, DRAG_LIFT_MARGIN_KM,
+  DODGE_WARN_TAC, RELEASE_LEAD_TAC, RP_RATE_PROBE_SEC, LANDING_RELEASE_LEAD_TAC,
 } from '@data/tuning';
 
 // Flight guidance: the objective that is never wrong (§6.3). flightObjective is a PURE
@@ -855,12 +855,12 @@ function goLowRows(ctx: FlightContext, burnPoint: TimedBurn): FlightObjective {
   return timeline.text.length <= MAX_LINE_CHARS ? timeline : burnTimeline('GO-LOW', burnPoint, ctx, '');
 }
 
-// The 'lift' burn (risk 3; L10's key): F11's shape, PRO at ▲ lifting ▼ back over the DRAG line. Its RELEASE is F6's rule:
-// once ▼, projected RELEASE_LEAD_TAC ahead at its rate, reaches the line plus DRAG_LIFT_MARGIN_KM.
+// The 'lift' burn (risk 3; L10's key): F11's shape, PRO at ▲ lifting ▼ back over the DRAG line (first PRO at ▼ when ▲
+// is under the target too: predict plans it in two). Its RELEASE comes once the burn it still needs, at the thrust it
+// has, is LANDING_RELEASE_LEAD_TAC or less (the plan's own Δv, so it holds for either half; tuning.ts says why not F6's lead).
 function liftRows(ctx: FlightContext, burnPoint: TimedBurn): FlightObjective {
   if (ctx.firing && ctx.sasMode === 'prograde' && (burnPoint.inTac <= EARLY_BURN_GUARD_TAC || isFinishingBurn(burnPoint, ctx.firing, ctx.sasMode))) {
-    const projected = ctx.rp + Math.max(0, ctx.rpRateTac) * RELEASE_LEAD_TAC;
-    if (projected >= dragLineKm(ctx.ring) + DRAG_LIFT_MARGIN_KM) {
+    if (burnPoint.burnTac <= LANDING_RELEASE_LEAD_TAC) {
       return make('LIFT-release', LANDING_FLIGHT_LINES.liftRelease, ['SPACE'], 'now', ctx);
     }
     return make('LIFT-keep', LANDING_FLIGHT_LINES.liftKeep, ['SPACE'], 'now', ctx);

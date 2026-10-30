@@ -10,7 +10,7 @@ import { capabilitiesNow, deriveCapabilities, thrustCap, type Capabilities } fro
 import { zoneContains, zoneCrossings, chordInsideFrac, chordClosest, chordEntryFrac } from '@systems/zones';
 import { presetHeading } from '@systems/attitude';
 import { getAiCore } from '@state/selectors';
-import { dragLineKm, goLowDvKmS, timeToAngle } from '@systems/landing-orbit';
+import { decayForecast, dragLineKm, goLowDvKmS, timeToAngle } from '@systems/landing-orbit';
 import { decayWarnOrbits } from '@systems/landing-rules';
 import { zoneRacks, type Zone, type ZoneHit, type HazardSpan } from '@/types/zone';
 import {
@@ -24,7 +24,7 @@ import {
   LATE_TRIM_TAC, LATE_TRIM_DV_FACTOR, SIM_SUBSTEP_MAX_SEC, SHRINK_WAIT_TAC, SHRINK_MIN_APO_FRAC,
   SHRINK_FUEL_RESERVE_FRAC, RADIUS_BISECT_STEPS, RP_RATE_PROBE_SEC,
   SHRINK_RESERVE_WAIT_TAC, STRANDED_RANGE_FRAC, STRAND_LINE_MARGIN, SKIP_DIVISOR, BELT_HIT_MEAN_SEC,
-  DODGE_PROMISE_MARGIN_KM, DODGE_DEADLINE_RESOLUTION_TAC, DODGE_MEMO_RP_DECIMALS, DODGE_MEMO_ANGLE_DECIMALS,
+  DODGE_PROMISE_MARGIN_KM, DODGE_DEADLINE_RESOLUTION_TAC, DODGE_MEMO_RP_DECIMALS, DODGE_MEMO_ANGLE_DECIMALS, DECAY_WARN_ORBITS,
   DRAG_LIFT_MARGIN_KM,
 } from '@data/tuning';
 
@@ -354,9 +354,10 @@ function apsisTimesOf(conic: KeplerConic, sinceRp: number): ApsisTimes {
 function planTrim(
   input: BurnInputs, reason: TrimReason | 'lift', apsisTimes: ApsisTimes, firstOfTwo: boolean,
   targetRadius: number = trimTarget(reason === 'lift' ? 'rp-low' : reason, input.ring),
+  liftAt: 'apo' | 'peri' = 'apo',
 ): BurnPoint {
   const { mu, fit, aEff, lateTrimSec } = input;
-  const fixesLowest = reason === 'rp-low' || reason === 'rp-high' || reason === 'lift';
+  const fixesLowest = reason === 'rp-low' || reason === 'rp-high' || (reason === 'lift' && liftAt === 'apo');
   const event = fixesLowest ? 'apo' : 'peri';
   const signedDvKmS = trimDvKmS(mu, fit, fixesLowest ? fit.ra : fit.rp, targetRadius);
   const preset = signedDvKmS > 0 ? 'prograde' : 'retrograde';
@@ -709,10 +710,26 @@ function landingInRingBurn(state: Readonly<GameState>, input: BurnInputs): BurnP
     if (goLow !== null) return goLow;
   }
   // The one decay-warning rule (landing-rules decayWarnOrbits): L10 and L9 read it too, so the burn and the lines agree.
-  if (decayWarnOrbits(state) === null) return null;
+  // A lift the kid is holding is planned on to its target even once it has lifted the orbit out of the warning (else
+  // the plan, the KEEP HOLDING and the RELEASE vanished a few tenths of a second into the burn: decay.test).
+  // And a lift's ▲ half (one PRO at ▲, once ▲ is over the target) is planned while the decay is within twice the
+  // warning: the warning comes when ▲ has mostly sunk already, so the lift usually takes two halves, and raising ▲ lifts
+  // the orbit out of the warning; planned on the warning alone, the ▲ half was never offered before the kicks undid the
+  // first (decay.test). A deviation from "lift when warned" (Track ORBIT): after a GO LOWER under the DRAG line it is
+  // offered sooner (declinable, as every lift).
+  const holdingLift = state.burn.firing && state.burn.firingFor !== null && state.burn.firingFor.startsWith('lift|');
+  const target = dragLineKm(input.ring) + DRAG_LIFT_MARGIN_KM;
+  const orbitsToLeave = decayForecast(input.orbit, input.mu, input.ring, landing.drag).orbitsToLeave;
+  const raHalf = input.fit.ra >= target && orbitsToLeave !== null && orbitsToLeave <= 2 * DECAY_WARN_ORBITS;
+  if (decayWarnOrbits(state) === null && !holdingLift && !raHalf) return null;
   const { periInSec, apoInSec, periodSec } = input;
   if (periInSec === null || apoInSec === null || periodSec === null) throw new Error('landingInRingBurn: a loop without apsis times');
-  return planTrim(input, 'lift', { peri: periInSec, apo: apoInSec, period: periodSec }, false, dragLineKm(input.ring) + DRAG_LIFT_MARGIN_KM);
+  // ▼ rises only as high as ▲ is: a decaying loop whose ▲ is under the target too (a near-circle below the line) is lifted
+  // in two, as a ring trim with both ends out: first PRO at ▼ to take ▲ a margin over the target (firstOfTwo), then PRO
+  // at ▲ to bring ▼ up to it.
+  const times = { peri: periInSec, apo: apoInSec, period: periodSec };
+  if (input.fit.ra < target) return planTrim(input, 'lift', times, true, target + DRAG_LIFT_MARGIN_KM, 'peri');
+  return planTrim(input, 'lift', times, false, target);
 }
 
 // What the drawn path does with one zone, as propagatePath walks it (game s after the start).

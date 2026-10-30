@@ -10,7 +10,7 @@ import {
 import { IS_DEV } from '@/env';
 import {
   DRAG_LINE_FRAC, DRAG_DV_MAX_KMS, DRAG_KICK_MIN_GAP_FRAC, DRAG_KICK_CATCH_UP_FRAC, GO_LOW_FLOOR_MARGIN_KM, LANDING_SURE_MIN_TAC,
-  DROP_SOLVE_MAX_E, POD_AIM_RP_FRAC, GO_LOW_RELEASE_LEAD_TAC,
+  DROP_SOLVE_MAX_E, POD_AIM_RP_FRAC, LANDING_RELEASE_LEAD_TAC,
 } from '@data/tuning';
 
 // The landing's orbit math (01-landing §3.7, slice-1b-plan §1.1, §1.4): the DRAG line and its kicks, the decay forecast,
@@ -171,8 +171,8 @@ export interface DecayForecast {
   nextDvKmS: number;
 }
 
-// Kicks the forecast follows at most: a ▼ just under the line takes kicks of a few cm/s for hundreds of orbits, which is
-// "never" for the strip (L10 warns at DECAY_WARN_ORBITS); the band is left within a handful whenever it matters.
+// Kicks the forecast follows at most: a ▼ just under the line takes kicks of a few cm/s for hundreds of orbits, far past
+// DECAY_WARN_ORBITS; the band is left within a handful whenever it matters. Past it the forecast is a lower bound.
 const FORECAST_MAX_KICKS = 200;
 
 // The kicks as impulses on the loop's (▼, ▲), in time: a kick at ▼ lowers the far side, and a strong one turns its own
@@ -205,7 +205,8 @@ export function decayForecast(orbit: Readonly<OrbitState>, mu: number, ring: Rea
     const period = TWO_PI * Math.sqrt(Math.pow((rp + ra) / 2, 3) / mu);
     elapsed += turned ? period / 2 : period;
   }
-  return { orbitsToLeave: null, nextDvKmS };
+  // Still in the band after FORECAST_MAX_KICKS: at least this long (a lower bound, far past any warning), not "never".
+  return { orbitsToLeave: elapsed / periodNow, nextDvKmS };
 }
 
 // --- GO LOWER (§3.7) ---------------------------------------------------------------------------------------------------
@@ -388,12 +389,12 @@ export function launchRadiusRate(
   return (radiusAtAngle(pushed, mu, launchRad) - radiusAtAngle(orbit, mu, launchRad)) / probeSec;
 }
 
-// The held aim is done (RELEASE): the radius at aim.launchRad on the live conic, projected GO_LOW_RELEASE_LEAD_TAC ahead
+// The held aim is done (RELEASE): the radius at aim.launchRad on the live conic, projected LANDING_RELEASE_LEAD_TAC ahead
 // at `rateKmPerTac` (how fast that radius moves under the thrust delivered now, km per tactical s; F6's rule with its own
 // lead, see tuning.ts), is at or below aim.targetRadiusKm or aim.floorKm, or ▼ itself is at or below the floor (an
 // eccentric loop whose ▼ is not at the launch point: the band's hard stop holds anyway).
 export function goLowReleased(orbit: Readonly<OrbitState>, mu: number, aim: Readonly<GoLowAim>, rateKmPerTac: number): boolean {
-  const projected = radiusAtAngle(orbit, mu, aim.launchRad) + Math.min(0, rateKmPerTac) * GO_LOW_RELEASE_LEAD_TAC;
+  const projected = radiusAtAngle(orbit, mu, aim.launchRad) + Math.min(0, rateKmPerTac) * LANDING_RELEASE_LEAD_TAC;
   return projected <= aim.targetRadiusKm || projected <= aim.floorKm || elementsFromState(orbit, mu).rp <= aim.floorKm;
 }
 
