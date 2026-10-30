@@ -218,6 +218,11 @@ function toOffer(seed: number): void {
 // window (offerDealNow), with HOLLOW asleep so nothing else touches POD 08 meanwhile.
 {
   h.vesper(9, { hollowAsleep: true });
+  // Slice 1b (risk 5): the engine is open in landing, and VESPER's failing Thrust Ctrl fires there too; unswapped, its
+  // bursts sink the orbit before the first window. This kid SWAPped it in flight, as the tutorial asks.
+  h.store.update((draft) => {
+    for (const seg of draft.memory) if (seg.role === 'thrust-ctrl' && 'integrity' in seg) seg.integrity = 100;
+  });
   setLandingMode('manual');
   h.startLanding(1);
   h.stepUntil(() => state().landing.window !== null, 300);
