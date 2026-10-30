@@ -278,7 +278,7 @@ function landingEndHeld(): boolean {
 function noneLeftTick(store: Store<GameState>, dtAi: number): void {
   const state = store.getState();
   if (state.landing.ended !== null) return;
-  const stuck = landingStuck(state);
+  const stuck = landingStuck(state, getDropSolution());
   if (stuck === null) {
     if (state.landing.noDriverAiSec !== 0) store.mutate((draft) => { draft.landing.noDriverAiSec = 0; });
     return;

@@ -12,7 +12,7 @@ import type { FlightObjective } from '@systems/guidance';
 import {
   LANDING_LINES, LANDING_ASKS, LANDING_LESSONS, LANDING_BEATS, LANDING_SKIP_REFUSAL, LAUNCH_REFUSAL_TEXT, LAUNCH_CONFIRM_TEXT,
   LANDING_ECHO, POD_STATE_TEXT, groundRadioLine, LANDING_DROP_LINES, LANDING_DECAY_LINES, LANDING_FLIGHT_LINES, LANDING_END_TEXT,
-  LANDING_LESSONS_1B, DRAG_STAMP_TEXT,
+  LANDING_LESSONS_1B, DRAG_STAMP_TEXT, LANDING_NODROP_LINES, END_LANDING_REFUSAL_TEXT,
 } from '@data/landing-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import { createRng, type Rng } from '@systems/rng';
@@ -30,6 +30,7 @@ function ctx(over: Partial<LandingContext> = {}): LandingContext {
     thrust: false, open: null, nextWithRoom: 'LZ-B', roomInBand: true, canLaunch: true, bayReady: true, bayReadyInTac: 0, stuckPod: null,
     anyCanEver: true, next: next('LZ-A', 130, 132), noBandWindow: false, skipAvailable: true,
     noDrop: false, firing: false, flight: null, flightBurnInTac: null, uncertain: null, tooWide: null, decay: null, bayOffline: false, lavaInReach: null,
+    impact: false, tankShort: false,
     ...over,
   };
 }
@@ -156,6 +157,16 @@ expect('B1: no dot, no flight row: L13-nodrop', ctx({ noDrop: true, next: null, 
   'NO DROP DOT ON THIS PATH — fly back into the launch band', (o) => o.id === 'landing-L13-nodrop' && o.urgency === 'wait');
 expect('B1: no dot, the capture 30 tac s away: L2 leads (F10-wait)', ctx({ noDrop: true, next: null, nextWithRoom: null, roomInBand: false,
   flight: capture, flightBurnInTac: 30 }), 'L2', capture.text, (o) => o.id === 'F10-wait');
+// Review M1: no dot and no burn can bring one back (an empty or short tank): L12's twin says END LANDING; not on a path
+// into the planet (END LANDING is refused there, the flight's row leads); a flight row that can't pay its burn yields.
+expect('M1: no dot, the tank empty: L12-nodrop', ctx({ noDrop: true, tankShort: true, next: null, nextWithRoom: null, roomInBand: false }), 'L12',
+  LANDING_NODROP_LINES.L12noDrop, (o) => o.id === 'landing-L12-nodrop' && o.urgency === 'now');
+expect('M1: …the tank short of the trim: the unpaid trim yields to it', ctx({ noDrop: true, tankShort: true, next: null, nextWithRoom: null,
+  roomInBand: false, flight: capture, flightBurnInTac: 30 }), 'L12', LANDING_NODROP_LINES.L12noDrop);
+expect('M1: …on a path into the planet the flight\'s row leads', ctx({ noDrop: true, tankShort: true, impact: true, next: null, nextWithRoom: null,
+  roomInBand: false, flight: capture, flightBurnInTac: 30 }), 'L2', capture.text);
+expect('M1: …in the MIND it says [TAB] first', ctx({ inMind: true, noDrop: true, tankShort: true, next: null, nextWithRoom: null, roomInBand: false }),
+  'L12', /^NO DROP DOT ON THIS ORBIT — \[TAB\], END LANDING/);
 expect('B1: no dot and every pod away: still L12b', ctx({ noDrop: true, next: null, aboard: 0, falling: 1 }), 'L12b', 'ALL PODS AWAY · 1 FALLING');
 // M2: an offered burn within the lead yields to an open window a pod can launch in.
 const ready: FlightObjective = { ...trim, id: 'F11-ready', text: 'GET READY — BURN IN 0:05', keys: [], urgency: 'now' };
@@ -232,12 +243,13 @@ expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true },
       tooWide: solved && maybe(rng, 0.3) ? { lz: pick(rng, lzs), repair, goLower } : null,
       decay: maybe(rng, 0.15) ? { orbits: 1 + Math.floor(rng() * 2) } : null, bayOffline,
       lavaInReach: solved && openWin !== null && maybe(rng, 0.3) ? pick(rng, ['LAVA', 'CLIFFS']) : null,
+      impact: maybe(rng, 0.1), tankShort: maybe(rng, 0.3),
     });
   };
   const rng = createRng(1813);
   const failures: string[] = [];
   const rows = new Set<string>();
-  const DRAWS = 400;
+  const DRAWS = 600;
   for (let i = 0; i < DRAWS; i++) {
     const c = draw(rng);
     try {
@@ -251,7 +263,7 @@ expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true },
   }
   check(`fuzz: ${DRAWS} crafted contexts each match a row that fits the strip`, failures.length === 0, failures.slice(0, 3).join(' | '));
   const wanted = ['landing-L1', 'landing-L4', 'landing-L5', 'landing-L5-nogo', 'landing-L8', 'landing-L8-missing', 'landing-L9', 'landing-L10',
-    'landing-L11', 'landing-L12', 'landing-L12-bay', 'landing-L12b', 'landing-L13', 'landing-L13-nodrop', 'F11-rp-low'];
+    'landing-L11', 'landing-L12', 'landing-L12-bay', 'landing-L12-nodrop', 'landing-L12b', 'landing-L13', 'landing-L13-nodrop', 'F11-rp-low'];
   const unseen = wanted.filter((id) => !rows.has(id));
   check('fuzz: …and the draws reach every kind of row (the pass is not vacuous)', unseen.length === 0, `unseen: ${unseen.join(', ')}`);
 }
@@ -301,6 +313,7 @@ expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true },
       worst({ decay: { orbits: 2 } }),
       worst({ bayOffline: true }),
       worst({ noDrop: true, next: null }),
+      worst({ noDrop: true, next: null, tankShort: true }),
       LANDING_DROP_LINES.L9(longLz, 'SENSOR INTERP', true, true) + LANDING_DROP_LINES.L9skip,
       LANDING_DROP_LINES.L9(longLz, 'NAV PLOTTER', true, true) + LANDING_DROP_LINES.L9skip,
       LANDING_DROP_LINES.L9(longLz, 'POD 16', true, true) + LANDING_DROP_LINES.L9skip,
@@ -321,7 +334,7 @@ expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true },
     LANDING_ECHO.launch(PODS_MAX, null), LANDING_ECHO.touchdown(3, 'off-site', null, 'hard'), LANDING_ECHO.parked(3),
     groundRadioLine(PODS_MAX, 'Okafor', 'Is it morning?'),
     LAUNCH_CONFIRM_TEXT.noGo('CLIFFS', 0), DRAG_STAMP_TEXT.kick('▲', 1234), LANDING_DECAY_LINES.L10(1),
-    ...Object.values(LANDING_END_TEXT).filter((text): text is string => text !== null), ...Object.values(LANDING_LESSONS_1B),
+    ...Object.values(LANDING_END_TEXT).filter((text): text is string => text !== null), ...Object.values(LANDING_LESSONS_1B), END_LANDING_REFUSAL_TEXT,
   ];
   const banned = words.filter((text) => /scatter|deorbit|insertion|impact/i.test(text) || /\blost\b|offline|not recovered/i.test(text));
   check('none of the never-say words (scatter, deorbit, insertion, IMPACT; a pod is never lost, offline or not recovered)',

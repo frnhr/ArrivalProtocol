@@ -130,8 +130,9 @@ export interface BayState {
 // BAY OFFLINE: a ship file with no backup never comes back on this ship, so it auto-ends like no-driver-left;
 // landing-rules landingStuck names both), or the ship left orbit during the landing ('ship-lost': with the engine open
 // in 1b a dry tank under decay can crash and a wild burn can escape; ORBIT's endLandingLost writes it, the pods aboard
-// go NOT LAUNCHED and the falling ones still score; landing-rules landingOutcome reads burn.status for the outcome).
-export type LandingEnd = 'all-launched' | 'end-landing' | 'no-driver-left' | 'bay-offline' | 'ship-lost';
+// go NOT LAUNCHED and the falling ones still score; landing-rules landingOutcome reads burn.status for the outcome), or
+// no drop dot on this orbit with an empty tank ('no-drop', review M1: nothing can bring a window back).
+export type LandingEnd = 'all-launched' | 'end-landing' | 'no-driver-left' | 'bay-offline' | 'ship-lost' | 'no-drop';
 
 // --- Decay and GO LOWER (§3.7, slice 1b; landing-orbit.ts is the math, orbit-sim and landing.ts write the state) ---
 

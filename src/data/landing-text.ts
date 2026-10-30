@@ -233,6 +233,10 @@ export const LANDING_DECAY_LINES = {
 // back. Normally L2's flight row (F9/F10, a trim) says what to burn; this covers the moments it has nothing to say.
 export const LANDING_NODROP_LINES = {
   L13noDrop: 'NO DROP DOT ON THIS PATH — fly back into the launch band',
+  // L12's twin (`landing-L12-nodrop`, review M1): no drop dot and no burn can bring one back (the tank is empty, or
+  // short of the burn the plan needs), so nothing will change; END LANDING is the way on, and the landing ends by itself
+  // once the tank is empty (landing-rules landingStuck 'no-drop').
+  L12noDrop: 'NO DROP DOT ON THIS ORBIT — END LANDING parks them in orbit',
 } as const;
 
 // The drag kick's stamp on the NAV PLOT (§3.7), from DRAG_STAMP_MIN_KM: the far apsis that moved, and by how much.
@@ -277,6 +281,7 @@ export const LANDING_END_TEXT: Readonly<Record<LandingEnd, string | null>> = {
   'no-driver-left': null,
   'bay-offline': 'NO BAY CTRL — the pods still aboard were parked in orbit',
   'ship-lost': null,   // the LOST card says it (run shipLost)
+  'no-drop': 'NO DROP DOT ON THIS ORBIT — the pods still aboard were parked in orbit',
 };
 
 // The two lessons tied to 1b's mechanics (§3.11, risk 14), once each, said by data/script.ts (Track DROP is its editor).

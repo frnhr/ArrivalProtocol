@@ -881,7 +881,10 @@ function liftRows(ctx: FlightContext, burnPoint: TimedBurn): FlightObjective {
 // landing-guidance stays pure and imports no guidance values.
 export function landingFlightOf(state: Readonly<GameState>, pred: Prediction): LandingFlight {
   const ctx = buildFlightContext(state, pred);
-  return { row: landingFlightRow(ctx), burnInTac: ctx.offer?.inTac ?? null };
+  return {
+    row: landingFlightRow(ctx), burnInTac: ctx.offer?.inTac ?? null, impact: pred.outcome === 'impact',
+    tankShort: state.burn.fuelPct <= 0 || pred.fuelShort,
+  };
 }
 
 // Hysteresis for the strip: a new objective must persist OBJECTIVE_HYSTERESIS_SEC before it

@@ -6,7 +6,7 @@
 //   (a file, a pod's driver `POD 02`, the root, a seed);
 // • the landing (slice 1a) by keys and the POD BAY: [L] when the line names [L] (LAUNCH NOW, LAUNCH — WIDE DROP; an
 //   inline confirm after it is answered yes with Enter), [F] when it offers SKIP, and on L12 (NO POD CAN LAUNCH, NO LZ IN
-//   THE LAUNCH BAND) END LANDING in the POD BAY window plus Enter on its confirm;
+//   THE LAUNCH BAND, NO BAY CTRL, NO DROP DOT ON THIS ORBIT) END LANDING in the POD BAY window plus Enter on its confirm;
 // • the screens between ships by their keys and buttons (SPACE on the boot and the LANDING REPORT, [1] and TRANSMIT ▸ on
 //   TRANSMIT, the LOST card's button, PURGE on the finale's card, SPACE for NEW RUN on RUN END).
 // The page's ?debug hooks (window.__ap) are read to judge what the kid saw, never to play, with two exceptions: a ship
@@ -210,8 +210,9 @@ async function landStep(view, tally) {
     }
     return;
   }
-  // L12 and its twin (landing-L12-band); not L12b (ALL PODS AWAY), which only waits.
-  if (/^landing-L12(-band)?$/.test(view.lineId)) {
+  // L12 and its twins (landing-L12-band, -bay, -nodrop: every row that says END LANDING); not L12b (ALL PODS AWAY), which
+  // only waits.
+  if (/^landing-L12(-band|-bay|-nodrop)?$/.test(view.lineId)) {
     if (Date.now() - lastEnd < 3000) return;
     lastEnd = Date.now();
     // END LANDING is the POD BAY window's, on the SHIP screen; its inline confirm takes Enter.

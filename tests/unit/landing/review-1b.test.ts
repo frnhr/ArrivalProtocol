@@ -11,18 +11,21 @@ import { endLanding } from '@systems/landing';
 import { getPrediction } from '@systems/predict';
 import { getDropSolution } from '@systems/drop-cache';
 import { bayWindowModel } from '@systems/landing-hud';
-import { landingResult } from '@systems/landing-rules';
+import { landingResult, landingStuck } from '@systems/landing-rules';
 import { lossPlan, shipLost } from '@systems/run';
 import { stateFromElements } from '@/types/orbit';
 import { DRIVER_RULES } from '@data/script';
-import { END_LANDING_REFUSAL_TEXT } from '@data/landing-text';
+import { END_LANDING_REFUSAL_TEXT, LANDING_NODROP_LINES } from '@data/landing-text';
+import { LANDING_NONE_LEFT_SEC } from '@data/tuning';
 import type { GameState } from '@state/schema';
 
+const ARES = 0;
 const KESTREL = 2;
 const LAST_LIGHT = 4;
 const h = createHarness7(1);
 const state = (): GameState => h.store.getState();
 const mu = (): number => state().level.planet.mu;
+const shown = (): { id: string; text: string } | null => h.shown();
 const fates = (): string => state().landing.pods.map((record) => record.fate.kind).join(',');
 
 // A ship alone, HOLLOW asleep, the lessons done, every file at 100 (no ghost thrust, all drop factors 1).
@@ -95,6 +98,29 @@ crashAfterEnd(LAST_LIGHT, 'LAST LIGHT');
 {
   const plan = lossPlan(state());
   check('…LAST LIGHT\'s card ends the run: flagship-lost', plan.kind === 'end' && plan.cause === 'flagship-lost', JSON.stringify(plan));
+}
+
+// --- M1: no drop dot with no fuel: L12-nodrop, then the landing ends by itself ('no-drop') -------------------------------
+{
+  board(ARES);
+  lockOn(h);
+  // An e 0.7 loop is outside the drop solver's domain (no dot), and the tank is dry: nothing brings a window back.
+  putOn(5600, 0.7, 0.3);
+  h.store.update((draft) => { draft.burn.fuelPct = 0; });
+  h.stepFor(0.5);
+  const row = shown();
+  check('M1: no dot, no fuel: the strip says NO DROP DOT ON THIS ORBIT — END LANDING (L12-nodrop)',
+    row?.id === 'landing-L12-nodrop' && row.text === LANDING_NODROP_LINES.L12noDrop, `${row?.id} '${row?.text}'`);
+  check('…landingStuck names it', landingStuck(state(), getDropSolution()) === 'no-drop');
+  h.stepUntil(() => state().landing.ended !== null, LANDING_NONE_LEFT_SEC + 3);
+  check(`…and after ${LANDING_NONE_LEFT_SEC} s the landing ends by itself ('no-drop'), the pods parked in orbit`,
+    state().landing.ended === 'no-drop' && fates().split(',').every((fate) => fate === 'parked'), `${state().landing.ended} · ${fates()}`);
+  board(ARES);
+  lockOn(h);
+  putOn(5600, 0.7, 0.3);
+  h.stepFor(0.5);
+  check('…with FUEL left the landing does not end itself (a burn can still bring a dot back)',
+    landingStuck(state(), getDropSolution()) === null && shown()?.id !== 'landing-L12-nodrop', `${shown()?.id}`);
 }
 
 finish();

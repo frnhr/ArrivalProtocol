@@ -180,8 +180,8 @@ function dotAt(deg: number, halfWidthKm = 78, block: DropSolution['block'] = nul
   check('…a dead Bay Ctrl still launches (one pod at a time), a healthy one too', launchRefusal(fake({ bay: 10 }), dotAt(90), kid) === null
     && launchRefusal(fake(), dotAt(90), kid) === null && !bayOfflineIn(fake({ bay: 10 })));
   check('landingStuck: Bay Ctrl gone with pods aboard ends the landing \'bay-offline\' (before \'no-driver-left\')',
-    landingStuck(fake({ bay: null })) === 'bay-offline' && landingStuck(fake({ bay: null, memory: [driver(1, 10)] })) === 'bay-offline'
-    && landingStuck(fake({ memory: [driver(1, 10)] })) === 'no-driver-left' && landingStuck(fake()) === null);
+    landingStuck(fake({ bay: null }), null) === 'bay-offline' && landingStuck(fake({ bay: null, memory: [driver(1, 10)] }), null) === 'bay-offline'
+    && landingStuck(fake({ memory: [driver(1, 10)] }), null) === 'no-driver-left' && landingStuck(fake(), null) === null);
   check('…and with Bay Ctrl gone nothing is awaited and no pod can launch (no TACTICAL, WINDOW OPEN or GET READY)', (() => {
     const moment = landingMoment(fake({ bay: null }), dotAt(90), 0, true);
     return !moment.awaited && !moment.canLaunch && moment.target === null;

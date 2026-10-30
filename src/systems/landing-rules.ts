@@ -336,12 +336,16 @@ export function endLandingRefusal(state: Readonly<GameState>, outcome: PredictOu
 
 // Why the landing must end by itself (landing.ts noneLeftTick waits LANDING_NONE_LEFT_SEC, then ends it with this
 // reason), or null: pods aboard and Bay Ctrl missing ('bay-offline': a ship file with no backup never comes back on this
-// ship; first, as L12-bay leads the table), or no driver that can ever launch ('no-driver-left', risk 7).
-export function landingStuck(state: Readonly<GameState>): LandingEnd | null {
+// ship; first, as L12-bay leads the table), no driver that can ever launch ('no-driver-left', risk 7), or no drop dot on
+// this orbit with the tank empty ('no-drop', review M1: an open path or an orbit outside the solver's domain that no
+// burn can change; L12-nodrop says END LANDING). `sol`: drop-cache's solution (null outside the landing).
+// landing.ts holds every auto-end while the ship is on a path into the planet (review B1).
+export function landingStuck(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): LandingEnd | null {
   const aboard = state.landing.pods.some((record) => record.fate.kind === 'aboard');
   if (!aboard) return null;
   if (bayOfflineIn(state)) return 'bay-offline';
   if (driversThatCanEverLaunch(state).length === 0) return 'no-driver-left';
+  if (sol !== null && sol.block === null && sol.dot === null && state.burn.fuelPct <= 0) return 'no-drop';
   return null;
 }
 

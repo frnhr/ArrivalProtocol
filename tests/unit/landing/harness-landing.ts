@@ -49,7 +49,7 @@ export interface FollowLandingResult {
 // exactly. Not L12b (`landing-L12b`, ALL PODS AWAY · n FALLING: pods still falling must come down), and not NO ROOM IN THE
 // BAND (`landing-L13-noroom`: its [F] and L3b's [L] land the pods mislanded; END LANDING there is the kid's choice, not
 // the strip's ask).
-const END_LANDING_ROWS: ReadonlySet<string> = new Set(['landing-L12', 'landing-L12-band', 'landing-L12-bay']);
+const END_LANDING_ROWS: ReadonlySet<string> = new Set(['landing-L12', 'landing-L12-band', 'landing-L12-bay', 'landing-L12-nodrop']);
 
 function namesKey(line: ObjectiveLine | null, key: string): boolean {
   return line !== null && line.text.includes(`[${key}]`);

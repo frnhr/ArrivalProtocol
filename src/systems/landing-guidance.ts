@@ -55,14 +55,17 @@ import {
 // | L10  | decay takes ▼ out of the band within DECAY_WARN_ORBITS orbits    | ORBIT DECAYING — out of the band in 2 orbits |
 // | L11  | no pod can launch now, and one aboard needs its driver repaired | POD 07 CAN'T LAUNCH — TAB, REPAIR its driver |
 // | L12  | (`landing-L12-bay`, right after L2) Bay Ctrl missing            | NO BAY CTRL — END LANDING parks them in orbit|
+// | L12  | (`landing-L12-nodrop`, next) no drop dot, the tank empty or     | NO DROP DOT ON THIS ORBIT — END LANDING ...  |
+// |      | short, not on a path into the planet (review M1)                |                                              |
 // | L12  | pods aboard and none can ever launch (no driver left, or dead   | NO POD CAN LAUNCH — END LANDING parks them   |
 // |      | with no REPAIR left)                                            |                                              |
 // | L12b | no pod aboard: pods falling, or the linger before the report    | ALL PODS AWAY · 2 FALLING                    |
 // | L13  | otherwise                                                        | WAIT — LZ-B in 2:10 ▸▸ · [F] to SKIP         |
-// The order: L0, L1, L2, L12-bay, L3, L3b, L4, L5, L6, (L2 for a near offered burn), L7, L10, L8, L9, L11, L12, L12-band,
+// The order: L0, L1, L2, L12-bay, L12-nodrop, L3, L3b, L4, L5, L6, (L2 for a near offered burn), L7, L10, L8, L9, L11, L12, L12-band,
 // L13-noroom, L13-nodrop, L12b, L13 (foundation review: L12-bay before any window row, since [L] refuses BAY OFFLINE;
 // L10 before L8/L9, since a sinking orbit undoes the repair or GO LOWER they ask for).
-// L13-nodrop (`landing-L13-nodrop`): no drop dot (an open path, an orbit outside dropSolvable) and no flight row leads.
+// L13-nodrop (`landing-L13-nodrop`): no drop dot (an open path, an orbit outside dropSolvable) and no flight row leads,
+// while a burn could still bring a dot back (else L12-nodrop).
 // L12's twin (L12, id `landing-L12-band`): no LZ ever passes under the dot while the ship is in the band (a PARTIAL orbit
 // whose band arc misses every bracket); once the engine is open (1b) L2 shows the trim first, so this is reached with no
 // fuel or the trim declined, and END LANDING is the way on.
@@ -127,14 +130,20 @@ export interface LandingContext {
   decay: { orbits: number } | null;     // L10: ▼ leaves the band in this many orbits (≤ DECAY_WARN_ORBITS)
   bayOffline: boolean;                  // L12-bay: Bay Ctrl missing (capabilities bay.offline)
   lavaInReach: string | null;           // L5's twin: the word of the no-go arc the dot's span reaches (landing-rules noGoInReach)
+  // --- Slice 1b review fixes ---
+  impact: boolean;          // the ship is on a path into the planet: the flight's row leads (F4, or the empty tank's)
+  tankShort: boolean;       // no burn can change the orbit: the tank is empty, or short of the plan's burn (L12-nodrop)
 }
 
 // The flight's part of the landing table, handed in by the caller (guidance landingFlightOf builds it from the flight
 // context), so this module imports no guidance values. `row`: landingFlightRow's line, null when no flight row applies;
-// `burnInTac`: tactical s to the offered burn's START BURN, null with no offer.
+// `burnInTac`: tactical s to the offered burn's START BURN, null with no offer; `impact` and `tankShort`: the prediction's
+// outcome and the tank against the plan's burn (review fixes B1, M1).
 export interface LandingFlight {
   row: FlightObjective | null;
   burnInTac: number | null;
+  impact: boolean;          // the prediction hits the planet
+  tankShort: boolean;       // FUEL is 0, or less than the plan's burn needs (Prediction.fuelShort)
 }
 
 // The next window as L13 names it: the awaited window (landing-rules landingMoment's target), else the next window of any
@@ -234,6 +243,8 @@ export function buildLandingContext(
     decay: decayOf(state),
     bayOffline: caps.bay.offline,
     lavaInReach: sol.dot === null ? null : noGoInReach(landing.noGo, sol.dot, state.level.planet.R)?.word ?? null,
+    impact: flight.impact,
+    tankShort: flight.tankShort,
   };
 }
 
@@ -253,10 +264,12 @@ function flightLine(flight: FlightObjective, ctx: LandingContext): LandingObject
   return flight.warn === true ? { ...objective, warn: true } : objective;
 }
 
-// When the flight's row leads (L2) whatever the window does: a burn is happening, an impact course (F4), no drop dot,
-// or the landing can't go on without a burn (the next window out of band, no window in band).
+// When the flight's row leads (L2) whatever the window does: a burn is happening, an impact course (F4, or the empty
+// tank's row), no drop dot while a burn can still bring one back (with the tank short, L12-nodrop says END LANDING:
+// review M1), or the landing can't go on without a burn (the next window out of band, no window in band).
 function flightLeads(flight: FlightObjective, ctx: LandingContext): boolean {
-  return ctx.thrust || ctx.firing || ctx.noDrop || ctx.next?.inBand === false || ctx.noBandWindow || flight.id.startsWith('F4');
+  return ctx.thrust || ctx.firing || ctx.impact || flight.id.startsWith('F4') || (ctx.noDrop && !ctx.tankShort)
+    || ctx.next?.inBand === false || ctx.noBandWindow;
 }
 
 // The offered burn's START BURN is within the lead: L2 leads too, except over an open window a pod can launch in (L3,
@@ -331,6 +344,11 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
   if (flight !== null && flightLeads(flight, ctx)) return flightLine(flight, ctx);
   // L12-bay: with Bay Ctrl missing no window and no REPAIR helps (landingMoment's canLaunch and awaited are false).
   if (ctx.aboard > 0 && ctx.bayOffline) return line('L12', LANDING_DROP_LINES.L12bay, [], 'now', 'ship', ctx, { id: 'landing-L12-bay' });
+  // L12-nodrop (review M1): no drop dot and no burn can bring one back. Not on a path into the planet: END LANDING is
+  // refused there, and the flight's row says what saves the ship.
+  if (ctx.aboard > 0 && ctx.noDrop && ctx.tankShort && !ctx.impact) {
+    return line('L12', LANDING_NODROP_LINES.L12noDrop, [], 'now', 'ship', ctx, { id: 'landing-L12-nodrop' });
+  }
   const open = ctx.open;
   const burnNear = flightBurnNear(ctx);
   if (flight !== null && burnNear && !(open !== null && ctx.aboard > 0 && ctx.canLaunch)) return flightLine(flight, ctx);
