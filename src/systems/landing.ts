@@ -5,6 +5,7 @@ import type {
   BayState, DropSolution, GoLowAim, LandingController, LandingEnd, LandingView, LandingWindow, LaunchIntent, LaunchRecord, LaunchResult,
 } from '@/types/landing';
 import { onAiTick, onGameTick, onPostTick } from '@systems/clock';
+import { fliesAlong } from '@systems/attitude';
 import { onWorldReset } from '@systems/reset';
 import { emit } from '@systems/events';
 import { say } from '@systems/say';
@@ -445,9 +446,11 @@ function aimMoved(before: Readonly<GoLowAim>, after: Readonly<GoLowAim>): boolea
 }
 
 // The aim's lifecycle (LandingState.goLow, the one writer): OFFERED while goLowAimNow has one (kept current, so predict
-// times the ◇ burn on it); HELD from the moment the kid's thrust is delivered for the offered go-low burn (RETRO, due
-// within the early-burn guard): from then the aim is kept as it is while the burn reshapes the windows under it; done
-// (RELEASED) when the kid lets go of the held burn. The words for each phase are landingFlightRow's; 'go-low' marks them.
+// times the ◇ burn on it); HELD from the moment the kid's thrust is delivered for the offered go-low burn (the throttle
+// held, the ship flying RETRO by its preset or by hand under MANUAL: attitude fliesAlong, review minor 7; due within the
+// early-burn guard; a ghost burst is not the kid's): from then the aim is kept as it is while the burn reshapes the
+// windows under it; done (RELEASED) when the kid lets go of the held burn. The words for each phase are
+// landingFlightRow's; 'go-low' marks them.
 function goLowTick(store: Store<GameState>): void {
   const state = store.getState();
   const aim = state.landing.goLow;
@@ -458,7 +461,8 @@ function goLowTick(store: Store<GameState>): void {
     }
     return;
   }
-  if (aim !== null && state.burn.lastTickDvKmS > 0 && state.burn.sasMode === 'retrograde') {
+  if (aim !== null && state.burn.lastTickDvKmS > 0 && state.burn.firing
+    && fliesAlong('retrograde', state.burn.sasMode, state.burn.heading, state.orbit)) {
     const pred = getPrediction();
     const offer = landingBurnOffer(state, pred);
     const dueTac = offer === null ? null : secUntil(pred, offer.inSec, state.clock.tSec) / state.level.tacticalWarp;

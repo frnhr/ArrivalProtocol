@@ -230,6 +230,45 @@ crashAfterEnd(LAST_LIGHT, 'LAST LIGHT');
   check('…a declined trim still ends on any launch', any && state().landing.declined === null, JSON.stringify(state().landing.declined));
 }
 
+// --- Minor 7: GO LOWER held by hand under MANUAL (a failing Autopilot) ---------------------------------------------------
+{
+  board(ARES);
+  h.store.update((draft) => {
+    const lz = draft.landing.lzs[0]!;
+    lz.widthKm = 330;
+    lz.halfWidthRad = 165 / draft.level.planet.R;
+    for (const seg of draft.memory) if (seg.role === 'autopilot' && 'integrity' in seg) seg.integrity = 20;
+  });
+  lockOn(h, { r: 8950 });
+  // A perfect hand on Q/E: the heading kept RETRO, no preset.
+  const pointRetro = (): void => h.store.update((draft) => {
+    draft.burn.heading = Math.atan2(-draft.orbit.vy, -draft.orbit.vx);
+    draft.burn.omega = 0;
+  });
+  let held = false;
+  let keep = false;
+  let releaseRow = false;
+  let holding = false;
+  const rows: string[] = [];
+  const end = h.wall() + 200;
+  while (h.wall() < end) {
+    pointRetro();
+    h.step();
+    const line = h.shown();
+    if (rows[rows.length - 1] !== line?.id) rows.push(line?.id ?? '');
+    if (state().landing.goLow?.held === true) held = true;
+    if (line?.id === 'GO-LOW-keep') keep = true;
+    if (holding && line?.id === 'GO-LOW-release') { releaseRow = true; h.keyUp('Space'); holding = false; break; }
+    if (holding) continue;
+    if ((line?.text ?? '').includes('HOLD [SPACE] NOW')) { h.keyDown('Space'); holding = true; }
+    else if (line?.keys.includes('F') && state().clock.skipWarp === null) h.press('KeyF');
+  }
+  if (holding) h.keyUp('Space');
+  h.stepFor(1);
+  check('minor 7: under MANUAL (Autopilot failing), pointed RETRO by hand, GO LOWER is held: KEEP HOLDING, then RELEASE',
+    state().burn.sasMode === 'off' && held && keep && releaseRow && state().landing.goLow?.held !== true, rows.join(' > '));
+}
+
 // --- M2: ghost thrust in the landing ---------------------------------------------------------------------------------
 {
   // The landing's first burst is a SKIP's stop and a TACTICAL moment, though the flight had its bursts (keyed per phase).

@@ -70,8 +70,10 @@ import {
 // L13-nodrop (`landing-L13-nodrop`): no drop dot (an open path, an orbit outside dropSolvable) and no flight row leads,
 // while a burn could still bring a dot back (else L12-nodrop).
 // L12's twin (L12, id `landing-L12-band`): no LZ ever passes under the dot while the ship is in the band (a PARTIAL orbit
-// whose band arc misses every bracket); once the engine is open (1b) L2 shows the trim first, so this is reached with no
-// fuel or the trim declined, and END LANDING is the way on.
+// whose band arc misses every bracket); once the engine is open (1b) L2 leads with the trim whenever a flight row
+// applies, so this is reached only with no flight row: a closed loop on an empty tank. A declined trim still leads as L2
+// (flightLeads reads the plan's row, not the offer; review minor 6, kept so: that trim is the only way to land anyone
+// here, and the decline only stops pace and the SKIP from pulling the kid to it), and END LANDING is the way on.
 // L13's twin (id `landing-L13-noroom`): no in-band LZ has room, and the full window L3b launches in is not here yet:
 // `NO ROOM IN THE BAND — LZ-A in 2:10 · [F] to SKIP, or END LANDING` (pace and the SKIP wait on that window).
 // Only LZs whose window is in the band are named, waited on or counted down to (review M1). "Open" is

@@ -1,6 +1,7 @@
 import type { GameState, BurnStatus, SasMode, PresetMode, Urgency, GuideLayer, AutoburnPhase, AutoburnEnd } from '@state/schema';
 import type { Ring } from '@/types/orbit';
 import { isThrustOn, engineAccel } from '@systems/orbit-sim';
+import { fliesAlong } from '@systems/attitude';
 import {
   capabilitiesNow, engineFault, plotFault, presetsAvailable, ROLE_LABEL,
   type CapabilityRole, type EngineFault, type PlotFault, type Capabilities,
@@ -96,9 +97,10 @@ export interface FlightContext {
   // In LANDING: the burn the landing offers (landing-orbit landingBurnOffer: pace, L2's lead, the beeps), in the same
   // shape; null outside the landing and with no offer.
   offer: (BurnPoint & { inTac: number; burnTac: number }) | null;
-  // In LANDING: GO LOWER's aim (state.landing.goLow): its LZ, whether the kid holds it, and whether its RELEASE has come
-  // (landing-orbit goLowReleased at the rate the launch point moves now); null outside the landing and with no aim.
-  goLow: { lz: string; held: boolean; released: boolean } | null;
+  // In LANDING: GO LOWER's aim (state.landing.goLow): its LZ, whether the kid holds it, whether its RELEASE has come
+  // (landing-orbit goLowReleased at the rate the launch point moves now), and whether the ship flies RETRO (its preset,
+  // or by hand under MANUAL: attitude fliesAlong); null outside the landing and with no aim.
+  goLow: { lz: string; held: boolean; released: boolean; retro: boolean } | null;
   periTac: number | null;
   showAccept: boolean;        // suggest ACCEPT ORBIT (offered, and it would not strand the ship)
   // WP9: a debris cloud the (sensed) path will enter while the ▼ correction applies, and the instruments can tell:
@@ -203,7 +205,10 @@ function goLowOf(state: Readonly<GameState>): FlightContext['goLow'] {
   const mu = state.level.planet.mu;
   const accel = isThrustOn(state) ? engineAccel(state) : 0;
   const rateTac = launchRadiusRate(state.orbit, mu, aim.launchRad, accel, state.burn.heading, RP_RATE_PROBE_SEC) * state.level.tacticalWarp;
-  return { lz: aim.lz, held: aim.held, released: goLowReleased(state.orbit, mu, aim, rateTac) };
+  return {
+    lz: aim.lz, held: aim.held, released: goLowReleased(state.orbit, mu, aim, rateTac),
+    retro: fliesAlong('retrograde', state.burn.sasMode, state.burn.heading, state.orbit),
+  };
 }
 
 // A debris cloud the path enters while the ▼ correction applies (predict.ts debrisDodge), while the plot can say so
@@ -818,7 +823,7 @@ function evaluateLanding(ctx: FlightContext): FlightObjective | null {
     const aim = ctx.goLow;
     const goLow = burnPoint?.reason === 'go-low' ? burnPoint : null;
     // The held GO LOWER keeps its rows to the end, also once its plan is done (the launch point reached the target).
-    if (aim !== null && ctx.firing && ctx.sasMode === 'retrograde' && (aim.held || (goLow !== null && goLow.inTac <= EARLY_BURN_GUARD_TAC))) {
+    if (aim !== null && ctx.firing && aim.retro && (aim.held || (goLow !== null && goLow.inTac <= EARLY_BURN_GUARD_TAC))) {
       if (aim.released) return make('GO-LOW-release', LANDING_FLIGHT_LINES.goLowRelease, ['SPACE'], 'now', ctx);
       return make('GO-LOW-keep', LANDING_FLIGHT_LINES.goLowKeep(aim.lz), ['SPACE'], 'now', ctx);
     }
@@ -839,7 +844,8 @@ type TimedBurn = NonNullable<FlightContext['burnPoint']>;
 function goLowRows(ctx: FlightContext, burnPoint: TimedBurn): FlightObjective {
   const early = earlyBurnRow(ctx, burnPoint);
   if (early) return early;
-  if (ctx.sasMode !== 'retrograde') {
+  // Pointed RETRO by hand under MANUAL counts as the preset (review minor 7): the timeline, not `turn to RETRO`.
+  if (ctx.sasMode !== 'retrograde' && ctx.goLow?.retro !== true) {
     if (burnPoint.inTac <= 0) return fixWith('GO-LOW', LANDING_FLIGHT_LINES.goLowProblem, 'retrograde', 'now', ctx, ' NOW');
     const press = pressPreset('retrograde', ctx);
     const urgency: Urgency = burnPoint.inTac <= TACTICAL_LEAD_BURN_TAC ? 'now' : 'soon';
