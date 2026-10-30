@@ -866,7 +866,7 @@ export function fuelModel(state: Readonly<GameState>, pred: Prediction, offer: R
   // No NEEDED tick once ACCEPT ORBIT is the only way on (Prediction.acceptOnly): the burn it would price
   // is no option (LEAD-1 review round 2: `NEXT BURN NEEDS 31%` stood beside `NOT ENOUGH FUEL`).
   const flying = state.burn.status === 'approaching' && pred.burnPoint && !pred.acceptOnly;
-  const landingOffer = state.run.phase === 'landing' && engineOpen(state) && offer !== null;
+  const landingOffer = state.run.phase === 'landing' && engineOpen(state) && offer !== null && pred.burnPoint !== null;
   const neededPct = flying || landingOffer ? pred.neededPct : null;
   // The tank is short of the next burn by the plan's own snapshot (Prediction.fuelShort), as the strip judges it: the
   // live FUEL against the 10 Hz NEEDED disagreed with it for seconds during a held trim (LEAD-2 review round 1). A

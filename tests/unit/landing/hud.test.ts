@@ -427,14 +427,25 @@ function offerOf(reason: BurnPoint['reason'], inSec: number, extra: Partial<Burn
   const state = world();
   const sol = aim(state, state.landing.lzs[0]!.centreRad);
   const caps = capabilitiesNow(state);
+  const bayFile = state.memory.find((seg) => seg.role === 'bay');
+  if (!bayFile || bayFile.type !== 'ship') throw new Error('Bay Ctrl is a ship file');
+  const hurtCaps = { ...caps, bay: { band: 'degraded' as const, cadenceTac: 2.7, offline: false } };
+  bayFile.scanned = false;
+  const unscanned = bayWindowModel(state, sol, hurtCaps);
+  check('bay ctrl: not scanned yet, its damage stays hidden (?)', unscanned.ctrl.band === 'unknown' && unscanned.ctrl.text === 'BAY CTRL',
+    JSON.stringify(unscanned.ctrl));
+  bayFile.scanned = true;
   const ok = bayWindowModel(state, sol, caps);
   check('bay ctrl: ok, the pip just names the file', ok.ctrl.band === 'ok' && !ok.ctrl.offline && ok.launch.look === 'go');
-  const hurt = bayWindowModel(state, sol, { ...caps, bay: { band: 'degraded', cadenceTac: 2.7, offline: false } });
+  const hurt = bayWindowModel(state, sol, hurtCaps);
   check('bay ctrl: degraded, in BAND_COPY.bay\'s words', hurt.ctrl.band === 'degraded' && hurt.ctrl.text === BAND_COPY.bay.degraded
     && hurt.launch.look === 'go');
   const gone = bayWindowModel(state, sol, { ...caps, bay: { band: 'missing', cadenceTac: null, offline: true } });
   check('NO BAY CTRL: LAUNCH disabled with the refusal\'s words', gone.launch.look === 'blocked'
     && gone.launch.status === LAUNCH_REFUSAL_TEXT['BAY OFFLINE'], gone.launch.status);
+  bayFile.scanned = false;
+  check('NO BAY CTRL: loud even unscanned', bayWindowModel(state, sol, { ...caps, bay: { band: 'missing', cadenceTac: null, offline: true } })
+    .ctrl.band === 'missing');
   check('NO BAY CTRL: the pip says NO BAY CTRL', gone.ctrl.offline && gone.ctrl.band === 'missing' && gone.ctrl.text === 'NO BAY CTRL');
   says('NO BAY CTRL: the button\'s words hold NO BAY CTRL, never "offline"', gone.launch.status, ['NO BAY CTRL']);
   state.clock.paused = true;
@@ -476,7 +487,7 @@ function offerOf(reason: BurnPoint['reason'], inSec: number, extra: Partial<Burn
     && Math.hypot(tick.pos.x - sample.pos.x, tick.pos.y - sample.pos.y) < 1e-6);
   check('offer: the raw plan alone draws no START BURN in the landing',
     plotMarkers(state, { ...pred, burnPoint: goLow }, capabilitiesNow(state).plot, null).startBurn === null);
-  const priced = { ...pred, neededPct: 12, fuelShort: false } as Prediction;
+  const priced = { ...pred, burnPoint: goLow, neededPct: 12, fuelShort: false } as Prediction;
   check('offer: FUEL prices the offered burn', fuelModel(state, priced, goLow).neededPct === 12 && fuelModel(state, priced, null).neededPct === null);
 }
 

@@ -216,12 +216,13 @@ body.reduced-motion .podbay-win.pb-arrive { animation: none; }
 @keyframes pb-go { 50% { box-shadow: 0 0 6px color-mix(in srgb, var(--good) 20%, transparent), inset 0 0 4px transparent; } }
 body.reduced-motion .pb-launch[data-look="go"] { animation: none; }
 
-.pb-bay-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.pb-bay-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 8px; min-width: 0; }
 .pb-bay { font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 1; letter-spacing: 0.08em; color: var(--accent-bright); white-space: nowrap; }
 .pb-bay[data-full="false"] { color: var(--accent); }
 .pb-bay.offline { color: var(--text-dim); text-decoration: line-through; text-decoration-color: var(--warn); }
 /* Bay Ctrl's pip (slice 1b): its band's words (BAND_COPY.bay) in the band's colour, NO BAY CTRL red and blinking. */
-.pb-ctrl { font-size: 9px; letter-spacing: 0.12em; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pb-ctrl { margin-left: auto; font-size: 9px; letter-spacing: 0.1em; color: var(--text-dim); white-space: nowrap; }
+.pb-ctrl[data-band="unknown"]::before { content: '? '; }
 .pb-ctrl::before { content: '● '; }
 .pb-ctrl[data-band="ok"] { color: var(--accent-dim); }
 .pb-ctrl[data-band="ok"]::before { color: var(--good); }

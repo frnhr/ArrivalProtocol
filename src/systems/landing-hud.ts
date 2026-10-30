@@ -5,7 +5,7 @@ import type {
 } from '@/types/landing';
 import type { BurnPoint, Prediction } from '@systems/predict';
 import { elementsFromState, propagateConic, semiMajorAxis, type OrbitState, type Vec2 } from '@/types/orbit';
-import { driversInMemory } from '@state/selectors';
+import { driversInMemory, getByRole } from '@state/selectors';
 import { angleDelta, dropHalfWidthKm } from '@systems/landing-solve';
 import { capabilitiesNow, BAND_COPY, type Band, type Capabilities } from '@systems/capabilities';
 import { dragLineKm } from '@systems/landing-orbit';
@@ -610,11 +610,12 @@ export function groundTrackModel(state: Readonly<GameState>, sol: Readonly<DropS
 // (the dot off-site, or its LZ full), `blocked` with the refusal's words otherwise.
 export type LaunchLook = 'go' | 'asks' | 'blocked';
 
-// The BAY CTRL pip in the window (§3.4, slice 1b): Bay Ctrl's band, in BAND_COPY.bay's words (`BAY CTRL DAMAGED`), and
-// `offline` with the file missing: then no pod can launch, said `NO BAY CTRL` (§3.10: "offline" never stands next to
-// pods; BAND_COPY.bay.missing). `look` is the pip's colour: ok, the band, or missing.
+// The BAY CTRL pip in the window (§3.4, slice 1b): Bay Ctrl's band, in BAND_COPY.bay's words (`BAY CTRL DAMAGED · …`),
+// and `offline` with the file missing: then no pod can launch, said `NO BAY CTRL` (§3.10: "offline" never stands next to
+// pods; BAND_COPY.bay.missing). `unknown` while Bay Ctrl is a ship file the kid has not scanned: its damage stays hidden
+// (§3.2), as the window's title pip says `?` (flight-hud windowPip). A missing file is loud whether scanned or not.
 export interface BayCtrlModel {
-  band: Band;
+  band: Band | 'unknown';
   offline: boolean;
   text: string;
 }
@@ -678,14 +679,19 @@ export function bayWindowModel(
   const nextLanding = nextDriver === null ? null : driverLanding(state, nextDriver, sol, dropFactors(caps, nextDriver));
   const next = nextLanding === null ? null : { ...nextLanding, halfWidthKm: sol?.dot?.halfWidthKm ?? nextLanding.halfWidthKm };
   const approx = sol?.uncertain === true;
-  const ctrlBand: Band = ctrlOffline ? 'missing' : caps.bay.band;
+  const bayFile = getByRole(state, 'bay');
+  const bayHidden = bayFile !== null && (bayFile.type === 'ship' || bayFile.type === 'ship-backup') && !bayFile.scanned;
+  const ctrlBand: Band | 'unknown' = ctrlOffline ? 'missing' : bayHidden ? 'unknown' : caps.bay.band;
   const noGoWords = [...new Set(landing.noGo.map((arc) => arc.word))];
   const launchable = new Set(driversInMemory(state).filter(isLaunchable).map((driver) => driver.pod));
   const cantLaunch = aboard.filter((record) => !launchable.has(record.pod)).length;
   return {
     launch: { label: POD_BAY_TEXT.launch, look, status },
     bay: { shown, loaded: landing.bay.loaded, slots: BAY_SLOTS, reloadTac, text: POD_BAY_TEXT.bay(shown, BAY_SLOTS, reloadTac) },
-    ctrl: { band: ctrlBand, offline: ctrlOffline, text: ctrlBand === 'ok' ? POD_BAY_TEXT.bayCtrl : BAND_COPY.bay[ctrlBand] },
+    ctrl: {
+      band: ctrlBand, offline: ctrlOffline,
+      text: ctrlBand === 'ok' || ctrlBand === 'unknown' ? POD_BAY_TEXT.bayCtrl : BAND_COPY.bay[ctrlBand],
+    },
     cls: {
       text: POD_BAY_TEXT.classLine(landing.terrain, landing.forgiveness),
       noGo: noGoWords.length === 0 ? null : POD_BAY_TEXT.noGoLine(noGoWords),
