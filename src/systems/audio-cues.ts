@@ -10,7 +10,7 @@ import {
   HEARTBEAT_BED_SEC, HEARTBEAT_BED_HURT_SEC, HEARTBEAT_BED_STRENGTH, HEARTBEAT_BED_INFECTED_SEC,
   HEARTBEAT_BED_JITTER, ARRIVAL_HIT_STAGGER_SEC, BEAM_OUT_SWEEP_SEC,
 } from '@data/tuning';
-import { driversInMemory, verbSecondsLeft } from '@state/selectors';
+import { driversInMemory, verbSecondsLeft, engineOpen } from '@state/selectors';
 import { driverTouch } from '@systems/landing-rules';
 import {
   play, setEngineLevel, setLockTone, setChewLevel, setTugTone, setDuelTone, toggleMuted, type TouchdownSound, type WhoompShape,
@@ -21,7 +21,7 @@ import { windowToneFraction } from '@systems/landing-hud';
 import { rootDeleteProgress } from '@systems/hollow';
 import { chewLevel, tugTone } from '@systems/hollow-hud';
 import { getOps } from '@systems/ops-core';
-import { OP_CHIRP_HZ } from '@data/tuning';
+import { OP_CHIRP_HZ, DRAG_STAMP_MIN_KM } from '@data/tuning';
 import type { LineState } from '@systems/flight-events';
 import { beltDepth } from '@systems/zones';
 import { openChoiceEntry, choiceTimerRunning, choiceSecondsLeft } from '@systems/say';
@@ -99,9 +99,10 @@ function whoompFor(from: LineState, to: LineState): WhoompShape | null {
 
 type HollowCue = 'hollowBite' | 'fizzle' | 'sombreFall' | 'driverSaved';
 
-// The touchdown bell's colour for how a pod came down (§4).
+// The touchdown bell's colour for how a pod came down (§4; slice 1b: a no-go arc's own, lower bonk).
 function touchdownSound(place: Place, touch: Touch): TouchdownSound {
-  if (place === 'off-site' || place === 'no-go') return 'off-site';
+  if (place === 'no-go') return 'no-go';
+  if (place === 'off-site') return 'off-site';
   if (place === 'mislanded') return 'mislanded';
   return touch === 'hard' ? 'hard' : 'soft';
 }
@@ -178,6 +179,9 @@ export function mountAudioCues(store: Store<GameState>): () => void {
       }
     }),
     on('window-sure', () => play('chime', { falling: false })),
+    // Slice 1b: a drag kick's soft hiss, for the kicks that stamp (DRAG_STAMP_MIN_KM: the stamp, the hiss and the lesson
+    // share it; smaller kicks are noise).
+    on('drag-kick', ({ dropKm }) => { if (dropKm >= DRAG_STAMP_MIN_KM) play('dragHiss'); }),
     on('lz-full', () => play('capturedChord')),
     // Only a ship that landed every pod (the ALL PODS DOWN stamp): one that parked some ends quietly.
     on('all-pods-down', ({ parked }) => {
@@ -362,7 +366,8 @@ export function mountAudioCues(store: Store<GameState>): () => void {
   // The continuous voices, every tick (also while paused, so they fall silent at once).
   offs.push(onPostTick(() => {
     const state = store.getState();
-    const live = state.run.phase === 'flight' && state.burn.status === 'approaching' && !state.clock.paused;
+    // The engine is open in the flight and, from slice 1b, in the landing until it ends (selectors engineOpen).
+    const live = engineOpen(state) && !state.clock.paused;
     const thrust = live && isThrustOn(state);
     const ghost = live && state.burn.ghost ? state.burn.ghost.amp : 0;
     const level = (thrust ? engineAccel(state) / state.level.aNominalKmS2 : 0) + ghost;
