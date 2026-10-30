@@ -1,5 +1,6 @@
-// Slice 1a, Track SIM: the bay (01-landing §3.4, plan §1.4). Its cadence (BAY_CADENCE_TAC 2.0) and its reload
-// (BAY_RELOAD_TAC 20 per slot) run in tactical seconds of WORLD time: at TACTICAL ×20 a tactical second is a real one,
+// Slice 1a, Track SIM: the bay (01-landing §3.4, plan §1.4). Its cadence (BAY_CADENCE_TAC 2.0; slice 1b: by Bay Ctrl's
+// band, 2.7 degraded) and its reload (BAY_RELOAD_TAC 20 per slot) run in tactical seconds of WORLD time: at TACTICAL
+// ×20 a tactical second is a real one,
 // OVERCLOCK (TAB during a window) runs the world and the bay at a quarter, and a SKIP crosses minutes of world and
 // refills the bay. What the bay shows is min(loaded, launchable). Pure rules first, then ARES-VII from a constructed
 // lock (harness-landing lockOn: no capture flown).
@@ -11,7 +12,7 @@ import { bayShown } from '@systems/landing-rules';
 import { requestSkip } from '@systems/pace';
 import { setMode } from '@systems/mode';
 import { driversInMemory } from '@state/selectors';
-import { BAY_CADENCE_TAC, BAY_RELOAD_TAC, BAY_SLOTS, OVERCLOCK_FACTOR } from '@data/tuning';
+import { BAY_CADENCE_BY_BAND, BAY_CADENCE_TAC, BAY_RELOAD_TAC, BAY_SLOTS, OVERCLOCK_FACTOR } from '@data/tuning';
 import type { BayState } from '@/types/landing';
 
 const near = (a: number, b: number, tol: number): boolean => Math.abs(a - b) <= tol;
@@ -74,8 +75,17 @@ check('a second launch inside the cadence is refused RELOADING',
 }
 
 // OVERCLOCK: TAB during the window (a pod still falling holds TACTICAL) slows the world, and the bay with it, to ¼.
+// Slice 1b: the cadence by Bay Ctrl's band (§3.4): this launch goes with Bay Ctrl degraded, so the next waits 2.7 tac s.
 {
-  requestLaunch(h.store, { source: 'player' });
+  const setBay = (integrity: number): void => h.store.update((draft) => {
+    const file = draft.memory.find((seg) => seg.role === 'bay');
+    if (file && 'integrity' in file) file.integrity = integrity;
+  });
+  setBay(60);
+  const second = requestLaunch(h.store, { source: 'player' });
+  check('a launch with Bay Ctrl degraded starts a 2.7 tac s cadence (slice 1b)', second.kind === 'launched'
+    && near(state().landing.bay.cadenceLeftTac, BAY_CADENCE_BY_BAND.degraded!, 1e-9), JSON.stringify(state().landing.bay));
+  setBay(100);
   setMode(h.store, 'memory');
   h.step();
   const before = state().landing.bay.cadenceLeftTac;

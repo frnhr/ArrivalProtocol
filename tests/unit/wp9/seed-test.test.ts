@@ -281,7 +281,7 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
   // Bay Ctrl's damage effect comes with slice 1b (slice-1a-plan §1.3: honest about 1a).
   check('…Thrust Controller: the engine stops till a SWAP; Bay Ctrl: no effect yet',
     thrust?.detail === 'The engine stops till you SWAP in Thrust.alt. Leaves an 8-block gap.'
-    && bay?.question === 'DELETE BAY CTRL?' && bay.detail === 'No effect yet. Leaves a 6-block gap.', `${thrust?.detail} | ${bay?.detail}`);
+    && bay?.question === 'DELETE BAY CTRL?' && bay.detail === 'No pod can launch. Leaves a 6-block gap.', `${thrust?.detail} | ${bay?.detail}`);
   const seedSeg: HollowSegment = { id: 'seed-x', name: '???', type: 'hollow', size: 2, root: false, locked: false, owner: '???', seed: true, desc: 'd' };
   check('…a seed needs no question (it is HOLLOW, nothing of yours), and DELETE may target it', deleteQuestion(state(), seedSeg) === null
     && targetRefusal(seedSeg, { state: state(), activeKind: 'delete', pickedSource: null }) === null);

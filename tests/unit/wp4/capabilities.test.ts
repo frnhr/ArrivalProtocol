@@ -2,8 +2,8 @@
 // 24/25) of every capability role, the offline states, the Core exemption, missing → 'missing',
 // and no ghost thrust while Thrust Ctrl is at 50 or better. Plus the derived numbers each band
 // sets, the reactor's thread share, two copies of one role, and the loud copy table.
-// Slice 1a: Bay Ctrl's `bay` role in Printer Uplink's place (its band only: the cadence by band and BAY OFFLINE are
-// slice 1b), and the drop: no DROP SOLUTION with Nav Plotter dead or missing (01-landing §3.8), the factors all 1.
+// Slice 1a: Bay Ctrl's `bay` role in Printer Uplink's place, and the drop: no DROP SOLUTION with Nav Plotter dead or
+// missing (01-landing §3.8). Slice 1b: Bay Ctrl's cadence by band and BAY OFFLINE, the drop factors and `uncertain`.
 import { check, finish } from '../wp1/harness';
 import { createInitialState } from '@state/initial';
 import type { GameState } from '@state/schema';
@@ -130,14 +130,30 @@ for (const role of CAPABILITY_ROLES) {
   check('comms bands follow AI Comms', caps(withIntegrity('comms', 49)).comms === 'failing' && caps(without('comms')).comms === 'missing');
 
   const bayAt = (integrity: number) => caps(withIntegrity('bay', integrity)).bay;
-  check('Bay Ctrl: its band follows the file (ok / degraded / failing / dead), the cadence 2.0 tac s in every band (1a)',
-    bayAt(80).band === 'ok' && bayAt(79).band === 'degraded' && bayAt(49).band === 'failing' && bayAt(24).band === 'dead'
-    && [80, 79, 49, 24].every((integrity) => bayAt(integrity).cadenceTac === BAY_CADENCE_TAC) && BAY_CADENCE_TAC === 2);
-  check('Bay Ctrl missing: NO BAY CTRL', caps(without('bay')).bay.band === 'missing' && BAND_COPY.bay.missing === 'NO BAY CTRL');
+  check('Bay Ctrl: its band follows the file (ok / degraded / failing / dead)',
+    bayAt(80).band === 'ok' && bayAt(79).band === 'degraded' && bayAt(49).band === 'failing' && bayAt(24).band === 'dead');
+  // Slice 1b (§3.4): the cadence by band, 2.0 / 2.7 / 4.0 / 10.0 tac s, and BAY OFFLINE (no cadence) with the file missing.
+  check('Bay Ctrl: the cadence 2.0 / 2.7 / 4.0 / 10.0 tac s by band, online in every band it exists in (slice 1b)',
+    [80, 79, 49, 24].map((integrity) => bayAt(integrity).cadenceTac).join() === '2,2.7,4,10' && BAY_CADENCE_TAC === 2
+    && [80, 79, 49, 24].every((integrity) => !bayAt(integrity).offline));
+  check('…moved (offline for the op) it counts as dead: one pod at a time, not BAY OFFLINE',
+    caps(withIntegrity('bay', 100, 'transferring')).bay.cadenceTac === 10 && !caps(withIntegrity('bay', 100, 'transferring')).bay.offline);
+  check('Bay Ctrl missing: BAY OFFLINE, no cadence, NO BAY CTRL', caps(without('bay')).bay.band === 'missing' && caps(without('bay')).bay.offline
+    && caps(without('bay')).bay.cadenceTac === null && BAND_COPY.bay.missing === 'NO BAY CTRL' && BAND_COPY.bay.dead === 'BAY CTRL DEAD · ONE POD AT A TIME');
   const dropAt = (integrity: number) => caps(withIntegrity('navplot', integrity)).drop;
-  check('the drop: a solution while Nav Plotter lives (failing included), none dead or missing (NO DROP SOLUTION); factors 1',
-    dropAt(80).solution && dropAt(25).solution && !dropAt(24).solution && !caps(without('navplot')).drop.solution
-    && dropAt(80).sensorFactor === 1 && dropAt(80).plotterFactor === 1, JSON.stringify(dropAt(24)));
+  check('the drop: a solution while Nav Plotter lives (failing included), none dead or missing (NO DROP SOLUTION)',
+    dropAt(80).solution && dropAt(25).solution && !dropAt(24).solution && !caps(without('navplot')).drop.solution, JSON.stringify(dropAt(24)));
+  // Slice 1b (§3.8): the instruments' factors on the drop width, and the grey dot with Sensor Interp failing or worse.
+  check('Nav Plotter\'s drop factor: ok 1, degraded 1.25, failing 1.5 (dead and missing: moot, 1)',
+    [80, 79, 49, 24].map((integrity) => dropAt(integrity).plotterFactor).join() === '1,1.25,1.5,1' && caps(without('navplot')).drop.plotterFactor === 1);
+  const sensorAt = (integrity: number) => caps(withIntegrity('sensor', integrity)).drop;
+  check('Sensor Interp\'s drop factor: ok 1, degraded 1.5, failing / dead / missing 2.5',
+    [80, 79, 49, 24].map((integrity) => sensorAt(integrity).sensorFactor).join() === '1,1.5,2.5,2.5' && caps(without('sensor')).drop.sensorFactor === 2.5);
+  check('…uncertain (the grey dot) exactly when the plot is: failing, dead, repairing or missing',
+    !sensorAt(80).uncertain && !sensorAt(79).uncertain && sensorAt(49).uncertain && sensorAt(24).uncertain && caps(without('sensor')).drop.uncertain
+    && caps(withIntegrity('sensor', 100, 'repairing')).drop.uncertain
+    && [80, 79, 49, 24].every((integrity) => sensorAt(integrity).uncertain === (caps(withIntegrity('sensor', integrity)).plot.mode === 'uncertain')));
+  check('the ship as it arrives: Sensor Interp at 78 widens the drop ×1.5 (risk 7)', caps(fresh()).drop.sensorFactor === 1.5);
 
   check('core: threads 2 at 50, 1 at 49', caps(withIntegrity('core', 50)).threads === 2 && caps(withIntegrity('core', 49)).threads === 1);
 }
