@@ -1556,6 +1556,9 @@ export const GO_LOW_FLOOR_MARGIN_KM = 100;
 // stop being monotonic. 0.6 is far beyond any orbit the band holds (a 5,000–9,000 band's widest loop is e ≈ 0.29), so
 // only a wild burn in landing leaves it: then there is no dot until the orbit is back (landing-orbit dropSolvable).
 export const DROP_SOLVE_MAX_E = 0.6;
+// The `BELOW THE DRAG LINE THE ORBIT SINKS` lesson (§3.11, risk 14) stands this many AI s from the first kick that moved
+// the far side DRAG_STAMP_MIN_KM, while ▼ is still below the line: the stamp's moment, read twice, then the landing's line.
+export const DRAG_LESSON_SEC = 5;
 // GO LOWER's RELEASE (landing-orbit goLowReleased) says RELEASE once the launch point's radius, projected this many
 // tactical s ahead at its current rate, reaches the target (F6's rule). MEASUREMENT PENDING (risk 1).
 export const GO_LOW_RELEASE_LEAD_TAC = RELEASE_LEAD_TAC;

@@ -32,6 +32,7 @@ import {
   rootDeleteRunning, rootDeleteProgress, bittenAgainDrivers, seedBitesAiFile,
 } from '@systems/hollow';
 import { rootDeletable } from '@systems/finale';
+import { dragLineKm } from '@systems/landing-orbit';
 import {
   hostLine, podCode, groundRadioLine, LANDING_ASKS, LANDING_BEATS, LAUNCH_REFUSAL_LINES, LANDING_LESSONS_1B,
 } from '@data/landing-text';
@@ -55,7 +56,7 @@ import {
   WALL_RULE_SHOW_SEC, EMERGENCY_EXTRA_HITS, CORE_RESET_INTEGRITY, BEAM_OUT_EXTRA_HITS,
   TRANSIT_HIT_MAX, BAND_DEGRADED_MIN, CORE_LOW_INTEGRITY, FIREWALL_HINT_SHOW_SEC, DEBRIS_MOVE_HINT_TAC, SEED_LESSON_SHOW_SEC,
   AUTOBURN_READY_SHOW_SEC, GHOST_LESSON_AFTER_BURSTS, GHOST_LESSON_SHOW_SEC, COPY_LESSON_SHOW_SEC, MERGE_COST_CHARGE, ROOT_DELETE_SEC,
-  BELT_MOVE_HINT_TAC, LESSON_LEAD_IN_SEC, DOT_WIDE_LESSON_SEC,
+  BELT_MOVE_HINT_TAC, LESSON_LEAD_IN_SEC, DOT_WIDE_LESSON_SEC, DRAG_LESSON_SEC, DRAG_STAMP_MIN_KM,
 } from '@data/tuning';
 
 // Every line the game says or shows outside the flight table (systems/guidance.ts) lives here:
@@ -1185,6 +1186,22 @@ export const DROP_LESSON_RULES: readonly GuideRule[] = [
     maxShownSec: DOT_WIDE_LESSON_SEC,
     activeWhen: (ctx) => isLanding(ctx) && ctx.landing?.row === 'L9',
     text: () => LANDING_LESSONS_1B.dotWide,
+  },
+  {
+    // Track ORBIT (slice 1b, §3.7): the first drag kick worth a stamp (it moved the far side DRAG_STAMP_MIN_KM). Active
+    // from that kick for as long as ▼ is still below the DRAG line (the kick is one tick: a rule active only then would
+    // retire after a tick), shown DRAG_LESSON_SEC.
+    id: 'lesson-drag-sinks',
+    layer: 'ship',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: DRAG_LESSON_SEC,
+    activeWhen: (ctx) => {
+      if (!isLanding(ctx) || ctx.state.landing.ended !== null) return false;
+      const kick = ctx.state.landing.decay.last;
+      return kick !== null && kick.dropKm >= DRAG_STAMP_MIN_KM && ctx.pred.rp < dragLineKm(ctx.state.level.ring);
+    },
+    text: () => LANDING_LESSONS_1B.dragSinks,
   },
 ];
 

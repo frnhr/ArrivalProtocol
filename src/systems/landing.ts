@@ -16,10 +16,10 @@ import { currentDropSolution, getDropSolution } from '@systems/drop-cache';
 import { dropHalfWidthKm } from '@systems/landing-solve';
 import { getPrediction, secUntil } from '@systems/predict';
 import { requestSkip, skipBlockReason } from '@systems/pace';
-import { declineKey, decayForecast, goLowerFit, landingBurnOffer, travelSign } from '@systems/landing-orbit';
+import { declineKey, goLowerFit, landingBurnOffer, travelSign } from '@systems/landing-orbit';
 import { activeLandingController, setActiveLandingController } from '@systems/landing-controller';
 import {
-  classifyLanding, colonyName, dropFactors, driverTouch, isLaunchable, landingMoment, landingOutcome, landingStuck,
+  classifyLanding, colonyName, dropFactors, dropTooWide, driverTouch, isLaunchable, landingMoment, landingOutcome, landingStuck,
   landingView as landingViewOf, launchGuard, launchGuardText, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podCounts, podPoints,
   touchAtTouchdown,
   windowOpenNow,
@@ -31,7 +31,7 @@ import { LANDING_ECHO, launchRefusalKey } from '@data/landing-text';
 import { IS_DEV } from '@/env';
 import {
   BAND_DEGRADED_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEEP_BURN_TAC, BEEP_JUMP_TAC, BEEP_REARM_TAC, LANDING_DONE_LINGER_SEC,
-  LANDING_NONE_LEFT_SEC, POD_DESCENT_SEC, POD_FIRST_DESCENT_SEC, DECAY_WARN_ORBITS, EARLY_BURN_GUARD_TAC,
+  LANDING_NONE_LEFT_SEC, POD_DESCENT_SEC, POD_FIRST_DESCENT_SEC, EARLY_BURN_GUARD_TAC,
 } from '@data/tuning';
 
 // The landing (01-landing; plan §1.4): replaces phase 2's printer. DOM-free; the only module besides
@@ -398,19 +398,19 @@ function controllerTick(store: Store<GameState>): void {
 
 // --- GO LOWER's aim and the declined burn (slice 1b, plan §1.4; landing-orbit is the math) ----------------------------
 
-// The aim GO LOWER would take now (§3.7), or null: the landing goes on with a pod aboard, the window it waits on has no
-// sure part (the whole dot never fits this pass), the orbit is not decaying out of the band (L10 first: going lower would
-// sink it faster, review M4), and landing-orbit goLowerFit finds a launch radius that fits it: the same call, with the
-// same inputs, as L9's "or fly lower" (landing-rules dropTooWide), so the line and the burn the strip times agree.
+// The aim GO LOWER would take now (§3.7), or null: exactly when L9 says "or fly lower" (landing-rules dropTooWide's
+// goLower: the window the landing waits on has no sure part in the band, the orbit is not decaying out of the band
+// (decayWarnOrbits, L10 first: going lower would sink it faster, review M4), and goLowerFit fits it), with a pod aboard
+// and a dot to drop by. The aim is then goLowerFit's answer from the same inputs dropTooWide used, so the line and the
+// burn the strip times always agree (Track DROP's request).
 function goLowAimNow(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): GoLowAim | null {
   const { landing, level } = state;
   if (landing.ended !== null || sol === null || sol.block !== null || sol.dot === null) return null;
   if (podCounts(state).aboard === 0) return null;
   const caps = capabilitiesNow(state);
+  if (dropTooWide(state, sol, caps)?.goLower !== true) return null;
   const target = landingMoment(state, sol, state.clock.tSec, caps.bay.offline).target;
-  if (target === null || target.window.sureOpenInSec !== null) return null;
-  const forecast = decayForecast(state.orbit, level.planet.mu, level.ring, landing.drag).orbitsToLeave;
-  if (forecast !== null && forecast <= DECAY_WARN_ORBITS) return null;
+  if (target === null) throw new Error('goLowAimNow: L9 offers GO LOWER with no awaited window');
   const lz = landing.lzs.find((candidate) => candidate.label === target.lz);
   if (!lz) throw new Error(`goLowAimNow: the awaited LZ '${target.lz}' is not on this ship`);
   const launchRad = target.window.launchRad;
