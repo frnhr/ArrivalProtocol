@@ -468,8 +468,10 @@ const VESPER: ShipDef = {
       firstRun: null,
     },
   },
-  // Cinder: ROUGH volcanic ground, three sites at 5 · 4 · 3 (the NARROW LZ takes the smallest count, §3.15). Its two lava
-  // no-go arcs are 1b's (5° at 187.4°, 89 km past LZ-B's edge; 6° at 293.4°, 89 km before LZ-C's): empty in 1a.
+  // Cinder: ROUGH volcanic ground, three sites at 5 · 4 · 3 (the NARROW LZ takes the smallest count, §3.15). Two lava
+  // no-go arcs on the dot's path (slice 1b, plan §2.1): 5° at 187.4°, 90 km past LZ-B's edge (a late launch or a wide dot),
+  // and 6° at 293.4°, 88 km before NARROW LZ-C (an early one). A healthy sure launch at 6,000 km (±78 km) never reaches
+  // them; a degraded Sensor Interp (±117 km) or a failing driver does: §3.6's "a wide dot is a real risk".
   landing: {
     lzs: [
       { label: 'LZ-A', centreDeg: 60, width: 'standard', pods: 5 },
@@ -478,7 +480,7 @@ const VESPER: ShipDef = {
     ],
     forgiveness: 'rough',
     terrain: 'VOLCANIC',
-    noGo: [],
+    noGo: [{ centreDeg: 187.4, widthDeg: 5, word: 'LAVA' }, { centreDeg: 293.4, widthDeg: 6, word: 'LAVA' }],
     colonyFirstRun: null,
     drag: true,
   },
@@ -548,7 +550,8 @@ const LAST_LIGHT: ShipDef = {
     },
   },
   // New Haven: GENTLE plains, the final ship's 16 pods over four sites, STANDARD ×3 and NARROW ×1 (§3.15's layer 8). The
-  // tutorial run calls its colony FIRST LIGHT. Its cliff no-go arc is 1b's (6° at 286.6°, 89 km past LZ-D): empty in 1a.
+  // tutorial run calls its colony FIRST LIGHT. Its cliffs (slice 1b, plan §2.1): 6° at 286.6°, 88 km past NARROW LZ-D's
+  // edge, so the guard reads `LAUNCH INTO CLIFFS? scores 0`.
   landing: {
     lzs: [
       { label: 'LZ-A', centreDeg: 10, width: 'standard', pods: 4 },
@@ -558,7 +561,7 @@ const LAST_LIGHT: ShipDef = {
     ],
     forgiveness: 'gentle',
     terrain: 'PLAINS',
-    noGo: [],
+    noGo: [{ centreDeg: 286.6, widthDeg: 6, word: 'CLIFFS' }],
     colonyFirstRun: 'FIRST LIGHT',
     drag: true,
   },

@@ -212,6 +212,16 @@ export function isLanding(state: Readonly<GameState>): boolean {
   return state.run.phase === 'landing';
 }
 
+// The engine answers the throttle (slice-1b-plan §1.4): during a live approach, and during a landing that has not ended
+// (trims, GO LOWER, the 'lift' burn). Its readers: flight-controls' refusal (FLIGHT OVER / LANDING OVER), flight-hud's
+// burn button, hollow's drain, flight-events' thrust and beeps, audio-cues' engine loop, orbit-sim. ACCEPT ORBIT, the lock
+// hold, faults' FILE_FAULTS and closedIdleAiSec stay flight-only (status === 'approaching').
+// Track ORBIT owns it; defined by the foundation and not read yet.
+export function engineOpen(state: Readonly<GameState>): boolean {
+  if (state.run.phase === 'flight') return state.burn.status === 'approaching';
+  return state.run.phase === 'landing' && state.landing.ended === null;
+}
+
 // The drivers still in memory, in address order, ONE PER POD. A MOVE that jumps to free space elsewhere keeps its
 // source in memory (offline) until the clone is written (§6.5), so for the whole move one driver is two segments with
 // the same pod; counting segments would read one pod twice. The first copy in address order stands for the pod (both

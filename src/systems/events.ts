@@ -1,7 +1,7 @@
 import type {
   FiringSource, ViewMode, TransitHit, AutoburnPhase, AutoburnEnd, DealOutcome, VerbKind,
 } from '@state/schema';
-import type { LandingEnd, LaunchSource, Place, Touch } from '@/types/landing';
+import type { DragKick, LandingEnd, LaunchSource, Place, Touch } from '@/types/landing';
 import type { SegmentRole, InfectionSide } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { LineState } from '@systems/flight-events';
@@ -83,6 +83,11 @@ export interface GameEvents {
   'all-pods-down': { parked: number };   // the ship's last pod is down; `parked`: pods that never launched
   'pods-parked': { count: number };
   'landing-ended': { reason: LandingEnd };
+  // Slice 1b (orbit-sim, landing.ts): a drag kick took Δv at a ▼ below the DRAG line (the stamp, the hiss and the drag
+  // lesson read `dropKm` against DRAG_STAMP_MIN_KM); GO LOWER was offered for `lz`, the kid fired for it (held), and the
+  // strip said RELEASE (released).
+  'drag-kick': DragKick;
+  'go-low': { lz: string; phase: 'offered' | 'held' | 'released' };
   // WP6: HOLLOW (systems/hollow.ts, §6.6). The bite timer fired; a file was infected from `side`; a
   // WALL held a bite (the fizzle); a repair won the tug-of-war (sparkles, clusterSaved) and its
   // recoil ran out; a file was eaten and turned hollow (`driver`: a pod's driver, the pod stays aboard to be parked);

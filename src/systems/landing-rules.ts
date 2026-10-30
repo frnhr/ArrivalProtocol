@@ -1,14 +1,15 @@
 import type { BurnStatus, GameState, ShipOutcome } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {
-  DropFactors, DropSolution, ForgivenessClass, LandingTally, LandingView, LandingWindow, LaunchAsk, LaunchRecord, LaunchRefusal,
-  LaunchSource, LzResult, LzState, LzWindow, NoGoArcState, OnTargetTally, ParkReason, Place, PodFate, PodFateKind, PodRecord, PodSummary, ShipLandingDef, Touch, Touchdown,
+  DropDot, DropFactors, DropSolution, ForgivenessClass, LandingEnd, LandingTally, LandingView, LandingWindow, LaunchAsk, LaunchRecord,
+  LaunchRefusal, LaunchSource, LzResult, LzState, LzWindow, NoGoArcState, OnTargetTally, ParkReason, Place, PodFate, PodFateKind,
+  PodRecord, PodSummary, RepairHint, ShipLandingDef, TerrainWord, TooWide, Touch, Touchdown,
 } from '@/types/landing';
 import type { Capabilities } from '@systems/capabilities';
 import type { Rng } from '@systems/rng';
 import { driversInMemory, repairPossible } from '@state/selectors';
 import { angleDelta, secFromNow } from '@systems/landing-solve';
-import { COLONY_NAME_POOL, familyColonyName } from '@data/landing-text';
+import { COLONY_NAME_POOL, LAUNCH_CONFIRM_TEXT, familyColonyName } from '@data/landing-text';
 import {
   BAND_DEGRADED_MIN, BAND_FAILING_MIN, COLONISTS_PER_POD, COLONY_FAMILY_NAME_CHANCE, HARD_LANDING_FACTOR, MISLANDED_FACTOR,
   OFF_SITE_SCORE_BY_CLASS, STAR_ON_TARGET_FRAC,
@@ -187,10 +188,48 @@ export function podPoints(place: Place, touch: Touch, cls: ForgivenessClass, col
 
 // --- The launch path's checks (§3.3) -----------------------------------------------------------------------------------
 
-// The drop width's multipliers for `driver` (§3.8). All 1 in 1a: 1b fills the Sensor Interp and Nav Plotter factors
-// from `caps.drop` and the driver's from its band. Only the factor sources change then (plan §1.7).
+// The drop width's multipliers for `driver` (§3.8): caps.drop's Sensor Interp and Nav Plotter factors, and the driver's
+// from its band (DRIVER_DROP_FACTOR_BY_BAND; 1 for null). Only the factor sources change in 1b (plan §1.3).
+// TODO(slice1b-DROP): the real factors; all 1 until then.
 export function dropFactors(_caps: Readonly<Capabilities>, _driver: Readonly<DriverSegment> | null): DropFactors {
   return { sensor: 1, plotter: 1, driver: 1 };
+}
+
+// --- Slice 1b: L9, the no-go reach, the stuck landing (Track DROP; the foundation's stubs, final signatures) ----------
+
+// L9 (§3.11, plan §1.5): the awaited LZ (landingMoment's target) has no sure window this pass (sureOpenInSec null), and
+// a REPAIR (bestRepairForDrop) or GO LOWER (landing-orbit goLowerFit !== null) would give one; null otherwise, and with
+// neither (then L5 shows at the window).
+export function dropTooWide(_state: Readonly<GameState>, _sol: Readonly<DropSolution>, _caps: Readonly<Capabilities>): TooWide | null {
+  // TODO(slice1b-DROP): the L9 rule.
+  return null;
+}
+
+// The REPAIR that gives `lz` a sure window from `launchRadius` (plan §1.5): the largest factor > 1 among the next pod's
+// driver (when it is repairable and selectors repairPossible), Sensor Interp, then Nav Plotter, ties in that order. A
+// repair "gives one" when the width with that factor at 1 is below the LZ's half-width. null: no single repair does.
+export function bestRepairForDrop(
+  _state: Readonly<GameState>, _caps: Readonly<Capabilities>, _lz: Readonly<LzState>, _launchRadius: number,
+): RepairHint | null {
+  // TODO(slice1b-DROP): the pick.
+  return null;
+}
+
+// The no-go arc the dot's span (centre ± halfWidthKm) reaches, or null (risk 13: L5's `WIDE DROP, LAVA in reach`): a
+// centre-based guard can't warn of a wide dot's edge. AUTODROP (4c) reads it to hold a launch.
+export function noGoInReach(_noGo: readonly NoGoArcState[], _dot: Readonly<DropDot>, _R: number): NoGoArcState | null {
+  // TODO(slice1b-DROP): the span test.
+  return null;
+}
+
+// Why the landing must end by itself (landing.ts noneLeftTick waits LANDING_NONE_LEFT_SEC, then ends it with this
+// reason), or null: pods aboard and no driver that can ever launch ('no-driver-left', risk 7), or Bay Ctrl missing with
+// pods aboard ('bay-offline': a ship file with no backup never comes back on this ship).
+// TODO(slice1b-DROP): 'bay-offline' (caps.bay.offline); 1a's rule until then.
+export function landingStuck(state: Readonly<GameState>): LandingEnd | null {
+  const aboard = state.landing.pods.some((record) => record.fate.kind === 'aboard');
+  if (aboard && driversThatCanEverLaunch(state).length === 0) return 'no-driver-left';
+  return null;
 }
 
 // The in-band window open now (the dot's centre in a bracket while the ship is in the band, risk 13), or null: inside the
@@ -369,6 +408,7 @@ export interface LaunchGuard {
   ask: LaunchAsk;
   points: number;
   lz: string | null;   // the full LZ ('full'), else null
+  word: string | null; // the no-go arc's word ('no-go': `LAUNCH INTO LAVA?`), else null
 }
 
 // The inline confirm a launch needs first (§3.3), or null: the dot outside every bracket asks `LAUNCH OFF-SITE? …
@@ -381,16 +421,30 @@ export function launchGuard(state: Readonly<GameState>, sol: Readonly<DropSoluti
   const touch = driverTouch(driver.integrity);
   const placement = classifyLanding(landing.lzs, landing.noGo, sol.dot.rad, lzProjectedFill(state));
   const points = podPoints(placement.place, touch, landing.forgiveness, driver.colonists);
-  // TODO(slice1b): a dot over a no-go arc asks in the arc's own word (`LAUNCH INTO LAVA? scores 0`, NoGoArcState.word);
-  // every ship's no-go list is empty in 1a, so it shares the off-site ask.
-  if (placement.place === 'off-site' || placement.place === 'no-go') return { ask: 'off-site', points, lz: null };
-  if (placement.place === 'mislanded') return { ask: 'full', points, lz: placement.lz };
+  // TODO(slice1b-DROP): a dot over a no-go arc asks 'no-go' in the arc's own word (`LAUNCH INTO LAVA? scores 0`,
+  // noGoAt(...).word); until then it shares the off-site ask (VESPER and LAST LIGHT have arcs now).
+  if (placement.place === 'off-site' || placement.place === 'no-go') return { ask: 'off-site', points, lz: null, word: null };
+  if (placement.place === 'mislanded') return { ask: 'full', points, lz: placement.lz, word: null };
   return null;
 }
 
+// The inline confirm's words for a guard (requestLaunch shows them), so a new ask never needs a change in landing.ts.
+export function launchGuardText(guard: Readonly<LaunchGuard>, terrain: TerrainWord): string {
+  switch (guard.ask) {
+    case 'off-site': return LAUNCH_CONFIRM_TEXT.offSite(terrain, guard.points);
+    case 'full':
+      if (guard.lz === null) throw new Error('launchGuardText: a full-LZ ask without its LZ');
+      return LAUNCH_CONFIRM_TEXT.full(guard.lz, guard.points);
+    case 'no-go':
+      if (guard.word === null) throw new Error('launchGuardText: a no-go ask without its word');
+      return LAUNCH_CONFIRM_TEXT.noGo(guard.word, guard.points);
+    default: throw new Error(`launchGuardText: unknown ask '${String(guard.ask)}'`);
+  }
+}
+
 // Everything a controller may read (§3.14: AUTODROP, the resident, MERGE's landing), for the state and its drop solution.
-// `cadenceTac` is Bay Ctrl's (capabilities.bay), passed in so this stays pure.
-export function landingView(state: Readonly<GameState>, solution: Readonly<DropSolution>, cadenceTac: number): LandingView {
+// `cadenceTac` is Bay Ctrl's (capabilities.bay; null: BAY OFFLINE), passed in so this stays pure.
+export function landingView(state: Readonly<GameState>, solution: Readonly<DropSolution>, cadenceTac: number | null): LandingView {
   const pods = state.landing.pods;
   return {
     solution: solution as DropSolution,

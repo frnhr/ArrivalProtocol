@@ -23,7 +23,8 @@ export interface LzDef {
   pods: number;         // the LZ's count, in pods (× COLONISTS_PER_POD colonists)
 }
 
-// A no-go arc (§3.6: lava, cliffs, a lake). 1b fills them; every ship's list is empty in 1a.
+// A no-go arc (§3.6: lava, cliffs, a lake): VESPER's lava and LAST LIGHT's cliffs (slice 1b, plan §2.1). A ship with arcs
+// has one within NO_GO_NEAR_EDGE_KM of a bracket edge (validateLandingDef), so a wide dot is a real risk.
 export interface NoGoArcDef {
   centreDeg: number;
   widthDeg: number;
@@ -37,7 +38,7 @@ export interface ShipLandingDef {
   noGo: readonly NoGoArcDef[];
   // The colony's written name on the tutorial run (RIVERSIDE on ARES-VII), else null: colonyName rolls one.
   colonyFirstRun: string | null;
-  drag: boolean;        // the DRAG line and decay (read by 1b; false on layer 1)
+  drag: boolean;        // the DRAG line and decay (§3.7; false on layer 1: ARES-VII never decays)
 }
 
 // --- Runtime: copied from the def when the ship is built and never re-read from SHIPS. SURVEY edits these in place. ---
@@ -125,7 +126,50 @@ export interface BayState {
   cadenceLeftTac: number;
 }
 
-export type LandingEnd = 'all-launched' | 'end-landing' | 'no-driver-left';
+// Why no more pods launch: every pod away, END LANDING, the risk-7 auto-end (no driver left), or Bay Ctrl missing
+// (§3.4's BAY OFFLINE: a ship file with no backup never comes back on this ship, so it auto-ends like no-driver-left;
+// landing-rules landingStuck names both).
+export type LandingEnd = 'all-launched' | 'end-landing' | 'no-driver-left' | 'bay-offline';
+
+// --- Decay and GO LOWER (§3.7, slice 1b; landing-orbit.ts is the math, orbit-sim and landing.ts write the state) ---
+
+// One drag kick (§3.7): a retrograde Δv at a ▼ below the DRAG line. `apsis` and `dropKm` are the far apsis that moved and
+// by how much, for the stamp (`DRAG · ▲ −110 km`, shown from DRAG_STAMP_MIN_KM); `rad` is where it happened (world rad,
+// the stamp's place on the plot); `rpKm` the ▼ it was applied at.
+export interface DragKick {
+  atTSec: number;
+  rpKm: number;
+  dvKmS: number;
+  rad: number;
+  apsis: '▲' | '▼';
+  dropKm: number;
+}
+
+// The decay so far on this ship (orbit-sim writes it with every kick, in the same update as orbitEpoch).
+export interface DecayState {
+  lastKickTSec: number | null;  // the kick-timing rule's gap (plan §1.4: at most one kick per DRAG_KICK_MIN_GAP_FRAC period)
+  kicks: number;
+  last: DragKick | null;        // the stamp, the hiss and the drag lesson read this
+}
+
+// GO LOWER (§3.7): the aim the strip offers and, once the kid fires for it, keeps (`held`) until landing-orbit
+// goLowReleased. Built by landing.ts from landing-orbit goLowerFit, the same call L9's "or fly lower" asks, so the two
+// always agree. AUTOBURN v3 (slice 4) flies the same aim.
+export interface GoLowAim {
+  lz: string;               // the LZ whose dot should fit (KEEP HOLDING — until LZ-B's dot fits)
+  launchRad: number;        // the ship's world angle at that LZ's launch point (LzWindow.launchRad)
+  burnRad: number;          // launchRad − π·sign: the RETRO burn is centred half an orbit before it
+  targetRadiusKm: number;   // the radius at launchRad where the sure window reaches LANDING_SURE_MIN_TAC
+  floorKm: number;          // ring.min + GO_LOW_FLOOR_MARGIN_KM: the hard stop
+  held: boolean;            // the kid fired for it: kept until goLowReleased, even if the plan moves
+}
+
+// An offered burn (landing-orbit landingBurnOffer) that passed with no Δv delivered for it (risk 2): it stops neither a
+// SKIP nor pace again until a launch, `untilLz`'s window closing, or a new reason (landing.ts clears it).
+export interface DeclinedBurn {
+  key: string;              // predict burnKey of the declined burn
+  untilLz: string | null;   // the LZ whose window ends the decline (null: until a launch or a new reason)
+}
 
 // GameState.landing: replaces the phase-2 souls and printer slices. Built by state/initial.ts createLandingState from
 // the ship's def and memory alone (no getShip at runtime, so generator-made ships need nothing new).
@@ -150,7 +194,12 @@ export interface LandingState {
   window: LandingWindow | null; // the in-band window open NOW (landing.ts writes it each AI tick): the one source of
                                 // truth for "window open" (hollow's landMult, pace, guidance, chips, alerts, tests)
   fuelAtEndPct: number | null;  // FUEL when the landing ended: the FUEL star (§3.9)
-  orbitEpoch: number;           // bumped on a discrete orbit change (1b's drag kick, later burns): a drop-cache key
+  orbitEpoch: number;           // bumped on a discrete orbit change (a drag kick, the end of a burn): a drop-cache key
+  // Slice 1b (plan §1.2). orbit-sim writes `decay`; landing.ts writes `goLow` and `declined`. predict reads goLow and
+  // decay from here (never from the drop cache), so it stays independent of the cache's mount order.
+  decay: DecayState;
+  goLow: GoLowAim | null;
+  declined: DeclinedBurn | null;
 }
 
 // The window open now (§3.2, risk 13): the dot's centre in `lz`'s bracket while the ship is in the launch band; `sure`
@@ -162,7 +211,8 @@ export interface LandingWindow {
 
 // --- The drop solution (landing-solve computeDropSolution, cached by drop-cache.ts) ---
 
-// The drop width's multipliers (§3.8): Sensor Interp, Nav Plotter, the driver. All 1 in 1a (landing-rules dropFactors).
+// The drop width's multipliers (§3.8): Sensor Interp, Nav Plotter, the driver (landing-rules dropFactors; MERGE's blind
+// drop multiplies their product by BLIND_DROP_MULT in slice 7).
 export interface DropFactors {
   sensor: number;
   plotter: number;
@@ -175,6 +225,7 @@ export interface DropDot {
   halfWidthKm: number;
   launchRadius: number;
   inBand: boolean;
+  uncertain: boolean;     // Sensor Interp failing, dead or missing (§3.8): the grey dot, `≈` labels, DROP UNCERTAIN
 }
 
 // One LZ's next window, in game seconds from the solution's asOfTSec. A window is OPEN while the dot's centre is in the
@@ -194,6 +245,7 @@ export interface LzWindow {
   inBandOpenInSec: number | null;
   inBandCloseInSec: number | null;
   inBand: boolean;                // inBandOpenInSec !== null: the LZ can be launched at from inside the band
+  launchRad: number;              // the ship's world angle when the dot crosses the LZ's centre: GO LOWER's aim point
 }
 
 export interface DropSolution {
@@ -203,21 +255,28 @@ export interface DropSolution {
   dot: DropDot | null;
   arc: Vec2[];                    // world km, from the ship to the dot
   windows: LzWindow[];            // sorted by openInSec
+  uncertain: boolean;             // as DropDot.uncertain, also when there is no dot
+  // Game time of the next drag kick (landing-orbit nextDragKick over one period), null with none due: windows after it
+  // are a forecast, solved again at the kick (orbitEpoch). AUTODROP (4c) reads it to trust a window or wait.
+  validUntilTSec: number | null;
 }
 
 // --- The launch path: the player and every future controller share it (landing.ts requestLaunch) ---
 
+// The inline confirms at [L] (§3.3, §3.6): the dot outside every bracket, a full LZ, the dot's centre over a no-go arc
+// (`LAUNCH INTO LAVA? scores 0`, in the arc's own word).
+export type LaunchAsk = 'off-site' | 'full' | 'no-go';
+
 export interface LaunchIntent {
   source: LaunchSource;
   pod?: number;                    // a specific pod, else nextToLaunch
-  confirmed?: 'off-site' | 'full'; // the inline confirm was answered for this ask
+  confirmed?: LaunchAsk;           // the inline confirm was answered for this ask
 }
 
-// In the order launchRefusal checks them.
-export type LaunchRefusal = 'NOT LANDING' | 'LANDING OVER' | 'PAUSED' | 'SHIP SCREEN' | 'ENGINE FIRING'
+// In the order launchRefusal checks them. BAY OFFLINE: Bay Ctrl missing (§3.4); its words on screen avoid "offline"
+// (§3.10: next to pods it would read as theirs), see LAUNCH_REFUSAL_TEXT.
+export type LaunchRefusal = 'NOT LANDING' | 'LANDING OVER' | 'PAUSED' | 'SHIP SCREEN' | 'BAY OFFLINE' | 'ENGINE FIRING'
   | 'NO DROP SOLUTION' | 'OUT OF THE LAUNCH BAND' | 'NO POD READY' | 'RELOADING' | 'BAY EMPTY';
-
-export type LaunchAsk = 'off-site' | 'full';
 
 export type LaunchResult =
   | { kind: 'launched'; pod: number }
@@ -227,7 +286,7 @@ export type LaunchResult =
 // §3.14: everything AUTODROP may read.
 export interface LandingView {
   solution: DropSolution;
-  bay: BayState & { cadenceTac: number; shown: number };
+  bay: BayState & { cadenceTac: number | null; shown: number };   // cadenceTac null: Bay Ctrl missing (BAY OFFLINE)
   queue: number[];                    // pods in launch order (LOAD NEXT first)
   remaining: Record<string, number>;  // per LZ label: pods it still has room for (projected fill)
   aboard: number;
@@ -240,6 +299,23 @@ export interface LandingController {
   holdsTactical: boolean;              // §3.14: a higher version may drop inside a SKIP
   launchesFromMind: boolean;           // like AUTOBURN, the only launch allowed from MIND
   decide(view: LandingView, state: Readonly<GameState>): LaunchIntent | 'skip' | null;
+}
+
+// --- L9: DROP TOO WIDE (§3.11, plan §1.5; landing-rules dropTooWide and bestRepairForDrop) ---
+
+// The file whose REPAIR gives the awaited LZ a sure window: the next pod's driver, Sensor Interp or Nav Plotter, with the
+// factor it takes off the drop width (> 1). The L9 line names it; the MIND lights it.
+export type RepairHint =
+  | { file: 'driver'; pod: number; factor: number }
+  | { file: 'sensor'; factor: number }
+  | { file: 'navplot'; factor: number };
+
+// The awaited LZ has no sure window, and a REPAIR or GO LOWER would give one (with neither there is no L9: L5 shows at
+// the window). `goLower`: landing-orbit goLowerFit found a target above the floor.
+export interface TooWide {
+  lz: string;
+  repair: RepairHint | null;
+  goLower: boolean;
 }
 
 // --- The per-ship result (§5 "To 02"): flat and JSON-safe, ready for slice 3's save ---

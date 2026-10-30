@@ -476,3 +476,78 @@ The budget is 137 suites in 231 s on 4 workers, with a 300 s cap. **New suites m
 - /home/user/ArrivalProtocol/src/systems/landing-rules.ts
 - /home/user/ArrivalProtocol/src/systems/capabilities.ts
 - /home/user/ArrivalProtocol/src/types/landing.ts (new: /home/user/ArrivalProtocol/src/systems/landing-orbit.ts)
+
+---
+
+## Deviations (foundation)
+
+The foundation (§3.0 items 1–8) is in. Typecheck and the tests' tsc are green. The full unit tier passes (137 suites in 161 s, quick depth, 4 workers). Nothing changes behaviour except that VESPER and LAST LIGHT now have their no-go arcs, so a pod landing in one scores 0. No unit suite pinned points that changed. Each deviation below is listed with its reason.
+
+**Interfaces**
+1. **`buildLandingContext(state, sol, skipAvailable, flight: LandingFlight)`.** The fourth argument is `{ row: FlightObjective | null; burnInTac: number | null }`, not the bare flight row.
+   - Why: L2's `flightBurnInTac ≤ 8` needs the offered burn's START BURN. landing-guidance can't compute that without importing predict or guidance values, which would bring back the load-order cycle.
+   - `guidance.landingFlightOf(state, pred)` builds the argument: `buildFlightContext`, then `landingFlightRow`, plus `ctx.burnPoint?.inTac`. The director's one line, `debug.ts` and pace-landing.test call it.
+2. **`LandingContext.firing`** (`state.burn.firing`) is new. L2's "thrust, firing, …" needs it, and §3.0's field list left it out.
+3. **`FlightContext.landing: boolean`** is added now (§1.4 lists it).
+   - In LANDING, `buildFlightContext` takes `burnPoint` from `landingBurnOffer(state, pred)` (a stub returning null) instead of the raw plan. That makes "ctx.burnPoint is the offer" true from the start.
+   - Only `landingFlightOf` builds a flight context in landing, so nothing else changes.
+4. **The landing table's fields are wired to stub functions, not left for the tracks to wire.** Each track fills its own function and the row comes alive, without either track editing landing-guidance.ts. The wiring:
+   - `uncertain`: built from `caps.drop.uncertain`, the awaited window and `plotFault`.
+   - `tooWide`: `landing-rules.dropTooWide`.
+   - `decay`: `landing-orbit.decayForecast`.
+   - `bayOffline`: `caps.bay.offline`.
+   - `lavaInReach`: a new DROP stub, `landing-rules.noGoInReach(noGo, dot, R): NoGoArcState | null`. The plan computes it but names no function, and AUTODROP will want the same answer.
+5. **`landingStuck` is already called** by landing.ts `noneLeftTick` (`endNow(store, stuck)`). The plan gave that wiring to ORBIT. With it in place, DROP's `'bay-offline'` takes effect without touching landing.ts. The stub keeps 1a's rule.
+6. **`launchGuardText(guard, terrain)`** in landing-rules, with `LaunchGuard.word: string | null`. `requestLaunch` now asks it for the confirm's words.
+   - Why: the old ternary sent any ask that was not `'off-site'` to the full-LZ text, so DROP's `'no-go'` ask would have needed an edit in ORBIT's landing.ts.
+   - `launchGuard` still returns `'off-site'` for a no-go dot (TODO DROP).
+7. **landing-orbit signatures beyond §1.1's names.** The plan named these functions without full signatures:
+   - `dropSolvable(orbit, planet: PlanetParams)`, not `(elements)`: it needs mu, R and rAtm, and the pod-kick check needs the state.
+   - `goLowDvKmS(atBurn, launchRad, targetRadiusKm, mu)` takes `launchRad` explicitly, so the sign never has to be inferred.
+   - `goLowReleased(orbit, mu, aim, rateKmPerTac)` takes the rate as an argument. It is F6's rule, and the rate comes from the thrust state, which is not pure.
+   - `decayForecast(orbit, mu, ring, drag)` returns `DecayForecast { orbitsToLeave: number | null; nextDvKmS }`.
+   - `goLowerFit` is exactly the frozen shape, with named types `GoLowerInput` and `GoLowerFit`.
+8. **Two landing-orbit functions do real work, the rest are stubs:**
+   - `dragLineKm(ring)` is real: one line of §3.7, and UI's DRAG circle can use it now.
+   - `LzWindow.launchRad` is computed for real in `windowsFor`: the ship's world angle at the centre crossing. A placeholder value would be a trap for DROP's `goLowerFit` call.
+   - `DropSolution.validUntilTSec` is null, with a TODO for ORBIT in drop-cache.
+
+**Types**
+9. **`TooWide` and `RepairHint`** live in types/landing.ts, so DROP, the table and UI share them. `RepairHint` is `{ file: 'driver'; pod; factor } | { file: 'sensor' | 'navplot'; factor }`.
+10. **`TrimReason` is spelled out** as the four ring reasons. `BurnReason` is built from it plus `'go-low' | 'lift'`. Three flight-only places were adjusted to match:
+    - predict `isTrim` tests membership of the four;
+    - `loopProblem` uses `isTrim`;
+    - `unpaidFixStrands` refuses `'point'`.
+
+    guidance's flight table throws on a `'go-low'` or `'lift'` burn during the flight, because those are landing-only. `EVENT_GLYPH` is now a `Record<BurnEvent, string>` with `point: '◇'`.
+
+**Words**
+11. **On screen, BAY OFFLINE reads `NO BAY CTRL`.**
+    - `LAUNCH_REFUSAL_TEXT['BAY OFFLINE']` is `NO BAY CTRL — no pod can launch`.
+    - L12-bay is `NO BAY CTRL — END LANDING parks them in orbit`.
+    - Why: §3.10 rules out "offline" next to pods, and both `support/words.test` and `landing/table.test` reject it in landing-text. `NO BAY CTRL` is already `BAND_COPY.bay.missing`.
+    - The refusal key `'BAY OFFLINE'` and the ending `'bay-offline'` keep the plan's names.
+12. **The report's words for the `bay-offline` ending** are a new `LANDING_END_TEXT: Record<LandingEnd, string | null>` under the DROP banner. Before this, no `Record<LandingEnd>` existed. The other three endings are null, so the report is unchanged. Parked pods' own reason still reads `no time`, and UI decides whether the report shows this line.
+13. **L8 has four wordings, not three.**
+    - Moving says `IS MOVING…`, not `IS REPAIRING…` (`landing-L8-busy`).
+    - The missing variant (`landing-L8-missing`, urgency wait) keeps the SKIP's ` · [F]` tail through the same helper as L9 (risk 12), so a row that shadows L13 never takes the SKIP away.
+14. **L9 and L10 details.**
+    - L9 is a mind-layer row when it names a REPAIR: it lights Sensor Interp's or Nav Plotter's chip (`repairs`), or the driver in the MIND (`highlight`). It is a ship-layer row for GO LOWER alone.
+    - L10 carries the flight row's keys ("plus the trim's key") while one is offered.
+    - New row ids: `landing-L5-nogo`, `landing-L8-busy`, `landing-L8-missing`, `landing-L12-bay`.
+
+**Tuning**
+15. **Two names beyond the §2.2 list:**
+    - `DRAG_LINE_FRAC = SWEET_ZONE_FRAC`: an alias with the WHY, so the line's rule has a name.
+    - `DRAG_KICK_CATCH_UP_FRAC` 1.5: §1.4's "missed kick after 1.5 × period", a number that belongs in tuning.
+
+    `BAY_CADENCE_BY_BAND.ok` is `BAY_CADENCE_TAC`.
+
+**Tests changed**
+- `landing/table`: the thrust-throws check became L2 checks. Added checks for L5-nogo, L8 ×4, L9 ×3, L10, L12-bay and their order, plus worst-case lengths and never-say words over every 1b string, `[TAB]` wordings included.
+- `landing/rules`: the "clear arc" case moved to 168.7°, within 150 km of LZ-A. A new check that an arc 300° away throws. The fake state and the drop literals gained the new fields.
+- These suites only needed the new required fields added:
+  - drop literals in `landing/solve`, `landing/hud` and `landing/review-fixes`;
+  - `FlightContext` literals in `lead1/f1-yield`, `wp9/lines` and `wp9/fix1/fixes`;
+  - `landing/pace-landing` passes `landingFlightOf`.
+- `landing/harness-landing`: `END_LANDING_ROWS` gains `landing-L12-bay`.

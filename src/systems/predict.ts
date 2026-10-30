@@ -49,10 +49,14 @@ export interface PathSpan {
 
 // Why the next burn is needed. capture: close an open path at ▼. missed: ▼ is behind us,
 // close the loop now. shrink: climbing away on a loop that is too big, with the next trim far
-// off: brake now to shrink it first (WP1-rules 2). The rest trim a closed loop into the ring.
-export type BurnReason = 'capture' | 'missed' | 'shrink' | 'rp-low' | 'rp-high' | 'ra-high' | 'ra-low';
-export type TrimReason = Exclude<BurnReason, 'capture' | 'missed' | 'shrink'>;
-export type BurnEvent = 'peri' | 'apo' | 'now';
+// off: brake now to shrink it first (WP1-rules 2). The ring reasons trim a closed loop into the ring.
+// Slice 1b (landing only, plan §1.4): go-low: GO LOWER's RETRO burn, centred on an orbit angle ('point') half an orbit
+// before the awaited LZ's launch point; lift: PRO at ▲ to bring a decaying ▼ back above the DRAG line (L10's key).
+// Neither is a trim (isTrim): TRIM_PROBLEM and trimTarget stay the ring's four.
+export type TrimReason = 'rp-low' | 'rp-high' | 'ra-high' | 'ra-low';
+export type BurnReason = 'capture' | 'missed' | 'shrink' | TrimReason | 'go-low' | 'lift';
+// 'point': centred on an orbit angle rather than an apsis (GO LOWER's ◇).
+export type BurnEvent = 'peri' | 'apo' | 'now' | 'point';
 
 export interface BurnPoint {
   reason: BurnReason;
@@ -69,6 +73,8 @@ export interface BurnPoint {
   // A trim with the other end of the loop out of the ring too (WP1-rules 1): it fixes its own
   // end only, and a second trim at the other apsis follows.
   firstOfTwo: boolean;
+  // go-low: the LZ named in KEEP HOLDING (`until LZ-B's dot fits`); absent on every other burn.
+  aimLz?: string;
 }
 
 // Which burn a burn point is, across recomputes: its reason, the apsis it is centred on, and
@@ -192,7 +198,7 @@ export function trimReasons(fit: RingFit, ring: Ring): TrimReason[] {
 export function loopProblem(pred: Prediction, ring: Ring): TrimReason {
   const reason = pred.burnPoint?.reason;
   if (reason === 'shrink') return 'ra-high';
-  if (reason !== undefined && reason !== 'capture' && reason !== 'missed') return reason;
+  if (reason !== undefined && isTrim(reason)) return reason;
   const first = trimReasons(pred.fit, ring)[0];
   if (first === undefined) throw new Error('loopProblem: the loop is in the ring');
   return first;
@@ -547,7 +553,7 @@ function tankAtTrimStrands(trim: ApsisBurn, fuelDvKmS: number, mu: number, ring:
 }
 
 function isTrim(reason: BurnReason): reason is TrimReason {
-  return reason !== 'capture' && reason !== 'missed' && reason !== 'shrink';
+  return reason === 'rp-low' || reason === 'rp-high' || reason === 'ra-high' || reason === 'ra-low';
 }
 
 // The second trim of a first of two (WP1-rules 1). The first moves the far apsis to its target, which lies
@@ -571,7 +577,7 @@ function secondTrimOf(fit: RingFit, first: BurnPoint, ring: Ring, mu: number): A
 // first counted as paid. A tank short of the fix whose burn still reaches the launch band keeps its trim and WAIT:
 // held to the empty tank at the apsis it ends ORBIT ACCEPTED (§6.2's fuel-out on a closed loop).
 function unpaidFixStrands(fit: RingFit, trim: BurnPoint, fuelDvKmS: number, mu: number, ring: Ring, surfaceR: number): boolean {
-  if (trim.event === 'now') throw new Error(`unpaidFixStrands: the ${trim.reason} burn is not a trim`);
+  if (trim.event === 'now' || trim.event === 'point') throw new Error(`unpaidFixStrands: the ${trim.reason} burn is not a trim`);
   if (fuelDvKmS < trim.dvKmS) {
     const atApsis: ApsisBurn = { loop: fit, event: trim.event, preset: trim.preset, dvKmS: trim.dvKmS };
     return tankAtTrimStrands(atApsis, fuelDvKmS, mu, ring, surfaceR);

@@ -18,15 +18,15 @@ import { getPrediction } from '@systems/predict';
 import { requestSkip, skipBlockReason } from '@systems/pace';
 import { activeLandingController, setActiveLandingController } from '@systems/landing-controller';
 import {
-  classifyLanding, colonyName, dropFactors, driverTouch, driversThatCanEverLaunch, inOrbitOutcome, isLaunchable, landingMoment,
-  landingView as landingViewOf, launchGuard, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podCounts, podPoints,
+  classifyLanding, colonyName, dropFactors, driverTouch, inOrbitOutcome, isLaunchable, landingMoment, landingStuck,
+  landingView as landingViewOf, launchGuard, launchGuardText, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podCounts, podPoints,
   touchAtTouchdown,
   windowOpenNow,
 } from '@systems/landing-rules';
 import { forgetDriver, parkPodsAboard } from '@state/actions';
 import { driversInMemory, finalePending, scriptFightOpen } from '@state/selectors';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
-import { LANDING_ECHO, LAUNCH_CONFIRM_TEXT, launchRefusalKey } from '@data/landing-text';
+import { LANDING_ECHO, launchRefusalKey } from '@data/landing-text';
 import { IS_DEV } from '@/env';
 import {
   BAND_DEGRADED_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEEP_BURN_TAC, BEEP_JUMP_TAC, BEEP_REARM_TAC, LANDING_DONE_LINGER_SEC,
@@ -82,6 +82,7 @@ function launchDriver(store: Store<GameState>, driver: DriverSegment, launch: La
   mergeAdjacentFree(memory);
   if (IS_DEV) assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
   const cadenceTac = capabilitiesNow(store.getState()).bay.cadenceTac;
+  if (spendBay && cadenceTac === null) throw new Error('launchDriver: Bay Ctrl is missing (launchRefusal says BAY OFFLINE)');
   store.update((draft) => {
     const record = draft.landing.pods.find((candidate) => candidate.pod === driver.pod);
     if (!record || record.fate.kind !== 'aboard') throw new Error(`launchDriver: pod ${driver.pod} is not aboard`);
@@ -89,7 +90,7 @@ function launchDriver(store: Store<GameState>, driver: DriverSegment, launch: La
     if (spendBay) {
       if (draft.landing.bay.loaded < 1) throw new Error('launchDriver: the bay is empty');
       draft.landing.bay.loaded--;
-      draft.landing.bay.cadenceLeftTac = cadenceTac;
+      draft.landing.bay.cadenceLeftTac = cadenceTac ?? 0;
     }
     forgetDriver(draft, driver);
     draft.ui.memoryRev++;
@@ -147,10 +148,7 @@ export function requestLaunch(store: Store<GameState>, intent: LaunchIntent): La
   if (sol === null) throw new Error('requestLaunch: no drop solution in LANDING');
   const guard = launchGuard(state, sol, intent.pod);
   if (guard !== null && intent.confirmed !== guard.ask) {
-    const text = guard.ask === 'off-site'
-      ? LAUNCH_CONFIRM_TEXT.offSite(state.landing.terrain, guard.points)
-      : LAUNCH_CONFIRM_TEXT.full(guard.lz ?? '?', guard.points);
-    return { kind: 'confirm', ask: guard.ask, points: guard.points, text };
+    return { kind: 'confirm', ask: guard.ask, points: guard.points, text: launchGuardText(guard, state.landing.terrain) };
   }
   const driver = intent.pod === undefined ? nextToLaunch(state) : driversInMemory(state).find((candidate) => candidate.pod === intent.pod);
   if (!driver) throw new Error('requestLaunch: no driver to launch (launchRefusal said NO POD READY otherwise)');
@@ -240,13 +238,14 @@ function trackWindow(store: Store<GameState>): void {
 }
 
 // Risk 7: pods aboard and none of them can ever launch (their drivers eaten, taken to 0, or dead with no REPAIR left to
-// bring them back: landing-rules driverCanEverLaunch) means nothing can launch any more; after LANDING_NONE_LEFT_SEC
-// the landing ends by itself, so headless kids and AFK players never stall.
+// bring them back: landing-rules driverCanEverLaunch), or Bay Ctrl gone (1b's BAY OFFLINE), means nothing can launch any
+// more; after LANDING_NONE_LEFT_SEC the landing ends by itself with landing-rules landingStuck's reason, so headless
+// kids and AFK players never stall.
 function noneLeftTick(store: Store<GameState>, dtAi: number): void {
   const state = store.getState();
   if (state.landing.ended !== null) return;
-  const stuck = state.landing.pods.some((record) => record.fate.kind === 'aboard') && driversThatCanEverLaunch(state).length === 0;
-  if (!stuck) {
+  const stuck = landingStuck(state);
+  if (stuck === null) {
     if (state.landing.noDriverAiSec !== 0) store.mutate((draft) => { draft.landing.noDriverAiSec = 0; });
     return;
   }
@@ -255,7 +254,7 @@ function noneLeftTick(store: Store<GameState>, dtAi: number): void {
     store.mutate((draft) => { draft.landing.noDriverAiSec = waited; });
     return;
   }
-  endNow(store, 'no-driver-left');
+  endNow(store, stuck);
 }
 
 // --- The bay (world time) ---------------------------------------------------------------------------------------------

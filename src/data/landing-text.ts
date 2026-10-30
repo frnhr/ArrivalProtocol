@@ -1,4 +1,4 @@
-import type { ForgivenessClass, LaunchRefusal, Place, ParkReason, TerrainWord, Touch } from '@/types/landing';
+import type { ForgivenessClass, LandingEnd, LaunchRefusal, Place, ParkReason, TerrainWord, Touch } from '@/types/landing';
 import { formatCount } from '@data/format';
 import { STAR_FUEL_PCT } from '@data/tuning';
 import { podTag } from '@data/pod-ids';
@@ -38,6 +38,9 @@ export const LAUNCH_REFUSAL_TEXT: Readonly<Record<LaunchRefusal, string>> = {
   'LANDING OVER': 'THE LANDING IS OVER',
   'PAUSED': 'PAUSED',
   'SHIP SCREEN': 'SHIP CONTROLS ARE ON THE AMBER SCREEN — [TAB]',
+  // Bay Ctrl missing (§3.4's BAY OFFLINE). Said as BAND_COPY.bay.missing says it: "offline" next to pods would read as
+  // theirs (§3.10). Slice 1b, Track DROP's to reword.
+  'BAY OFFLINE': 'NO BAY CTRL — no pod can launch',
   'ENGINE FIRING': "ENGINE FIRING — can't launch under thrust",
   'NO DROP SOLUTION': 'NO DROP SOLUTION — REPAIR NAV PLOTTER',
   'OUT OF THE LAUNCH BAND': 'OUT OF THE LAUNCH BAND',
@@ -63,6 +66,8 @@ export const LAUNCH_REFUSAL_LINES: Readonly<Record<string, { text: string; keys:
 export const LAUNCH_CONFIRM_TEXT = {
   offSite: (terrain: TerrainWord, points: number): string => `LAUNCH OFF-SITE? ${terrain} · scores ${formatCount(points)}`,
   full: (lz: string, points: number): string => `${lz} IS FULL — LAUNCH ANYWAY? scores ${formatCount(points)}`,
+  // The dot's centre over a no-go arc (§3.6), in the arc's own word: `LAUNCH INTO LAVA? scores 0` (slice 1b).
+  noGo: (word: string, points: number): string => `LAUNCH INTO ${word}? scores ${formatCount(points)}`,
   endLanding: (pods: number): string =>
     pods === 0 ? 'END THE LANDING?' : `${pods} POD${pods === 1 ? '' : 'S'} WILL BE PARKED IN ORBIT · NOT COUNTED`,
   yes: '✓ LAUNCH',
@@ -188,6 +193,78 @@ export const COLONY_NAME_POOL: readonly string[] = [
 export function familyColonyName(family: string): string {
   return `${family.toUpperCase()} LANDING`;
 }
+
+// --- 1b ORBIT ----------------------------------------------------------------------------------------------------------
+// Slice 1b's ORBIT words (slice-1b-plan §3.0 item 4): owned by Track ORBIT; DROP and UI don't edit them. PLACEHOLDERS
+// that keep §3.10's word rules (05-story owns the final wording); every line fits MAX_LINE_CHARS with worst-case values,
+// [TAB] wordings included (tests/unit/landing/table.test.ts).
+
+// The flight table's rows in landing (guidance landingFlightRow, shown as L2): GO LOWER's timeline (§3.7, the START BURN
+// shape with the ◇ point), the 'lift' burn's rows (L10's key: F11's shape), and the L2 wrapper that names the LZ a burn
+// is for when it fits. `press` is guidance's preset hint (`press [S] (RETRO)`, or the Q/E wording).
+export const LANDING_FLIGHT_LINES = {
+  goLow: (press: string): string => `GO LOWER — at ◇ ${press}`,
+  goLowKeep: (lz: string): string => `KEEP HOLDING — until ${lz}'s dot fits`,
+  goLowRelease: 'RELEASE [SPACE]',
+  liftProblem: 'ORBIT SINKING',                                           // `ORBIT SINKING — at ▲ press [W] (PRO) and burn`
+  liftKeep: 'KEEP HOLDING — lift ▼ above the DRAG line',
+  // L2's wrapper: the tail naming the LZ a burn is for (GO LOWER's WAIT, a trim that brings an LZ back in band).
+  forLz: (lz: string): string => ` · for ${lz}`,
+} as const;
+
+// L10 (§3.11): decay takes ▼ out of the band within DECAY_WARN_ORBITS orbits; the row carries the 'lift' burn's key.
+export const LANDING_DECAY_LINES = {
+  L10: (orbits: number): string => {
+    const whole = Math.max(1, Math.ceil(orbits));
+    return `ORBIT DECAYING — out of the band in ${whole} orbit${whole === 1 ? '' : 's'}`;
+  },
+} as const;
+
+// The drag kick's stamp on the NAV PLOT (§3.7), from DRAG_STAMP_MIN_KM: the far apsis that moved, and by how much.
+export const DRAG_STAMP_TEXT = {
+  kick: (apsis: '▲' | '▼', dropKm: number): string => `DRAG · ${apsis} −${formatCount(Math.round(dropKm))} km`,
+} as const;
+
+// --- 1b DROP -----------------------------------------------------------------------------------------------------------
+// Slice 1b's DROP words (slice-1b-plan §3.0 item 4): owned by Track DROP; ORBIT and UI don't edit them. PLACEHOLDERS
+// under §3.10's word rules (a pod is never lost, offline or not recovered); every line fits MAX_LINE_CHARS with
+// worst-case values, [TAB] wordings included.
+
+export const LANDING_DROP_LINES = {
+  // L8 (§3.11): Sensor Interp failing or worse with the next window close. By plotFault's cause: hurt asks for the REPAIR
+  // (from the ship with TAB, as L1), a repair or move the kid started is only waited out, a missing file has no fix.
+  L8: 'DROP UNCERTAIN — TAB, REPAIR SENSOR INTERP',
+  L8Mind: 'DROP UNCERTAIN — REPAIR SENSOR INTERP',
+  L8busy: (cause: 'repairing' | 'moving'): string => `DROP UNCERTAIN — SENSOR INTERP IS ${cause === 'repairing' ? 'REPAIRING' : 'MOVING'}…`,
+  L8missing: 'DROP UNCERTAIN — NO SENSOR INTERP',
+  // L9 (§3.11): the awaited LZ has no sure window. `file`: the REPAIR that gives one (`POD 05`, `SENSOR INTERP`, `NAV
+  // PLOTTER`), null when only GO LOWER does; `lower`: GO LOWER would (L2 times the burn). L9skip: the SKIP tail (risk 12),
+  // added only when the line still fits.
+  L9: (lz: string, file: string | null, lower: boolean): string => {
+    if (file === null) return `DROP TOO WIDE FOR ${lz} — fly lower`;
+    return `DROP TOO WIDE FOR ${lz} — REPAIR ${file}${lower ? ', or fly lower' : ''}`;
+  },
+  L9skip: ' · [F]',
+  // L5's variant (risk 13): the dot's span overlaps a no-go arc, so a wide dot can land in it (the arc's own word).
+  L5noGo: (word: string): string => `LAUNCH — press [L] · WIDE DROP, ${word} in reach`,
+  // L12-bay (§3.4): Bay Ctrl missing, no pod can launch; the landing auto-ends ('bay-offline') after LANDING_NONE_LEFT_SEC.
+  L12bay: 'NO BAY CTRL — END LANDING parks them in orbit',
+} as const;
+
+// Why the landing ended, for the LANDING REPORT and the TERMINAL (null: nothing to say, the pods' own rows tell it).
+// Only the bay's ending needs words: its parked pods' own reason reads `no time` (landing-rules parkReasonOf).
+export const LANDING_END_TEXT: Readonly<Record<LandingEnd, string | null>> = {
+  'all-launched': null,
+  'end-landing': null,
+  'no-driver-left': null,
+  'bay-offline': 'NO BAY CTRL — the pods still aboard were parked in orbit',
+};
+
+// The two lessons tied to 1b's mechanics (§3.11, risk 14), once each, said by data/script.ts (Track DROP is its editor).
+export const LANDING_LESSONS_1B = {
+  dragSinks: '◆ BELOW THE DRAG LINE THE ORBIT SINKS',
+  dotWide: '◆ THE DOT IS WIDE — REPAIR, or fly lower',
+} as const;
 
 // =====================================================================================================================
 // UI — everything below this banner is owned by Track UI (slice-1a-plan §4). SIM and TESTS don't edit it; SIM's words

@@ -1476,3 +1476,82 @@ export const REPORT_POD_ICON_GAP_SEC = 0.12;
 // The POD BAY window slides in this long after ORBIT LOCK (wall ms): after the lock's stamp has hit, so the two moments
 // don't land on the same frame.
 export const POD_BAY_OPEN_DELAY_MS = 900;
+
+// =====================================================================================================================
+// --- Phase 3 slice 1b: drop width, no-go arcs, Bay Ctrl, drag and decay, the engine in landing, GO LOWER
+// (docs/phase3/01-landing.md §3.3–§3.12, docs/phase3/impl/slice-1b-plan.md §2.2). Three sub-blocks, each owned by one
+// track: a track edits only its own. Every 1b number is here, so the rebalance (slice 8) has one place to look.
+// =====================================================================================================================
+
+// --- 1b DROP (owned by Track DROP): the drop width's factors, Bay Ctrl, no-go arcs, DROP UNCERTAIN --------------------
+
+// Sensor Interp's factor on the drop width, by band (§3.8): it reads the ship's own state, so a damaged one blurs where
+// the pod is let go. failing / dead / missing all ×2.5 (and the grey dot): the plot is already PATH UNCERTAIN there, and
+// a blind drop must be wide enough that REPAIR SENSOR INTERP is plainly the fix (±195 km at 6,000 km: STANDARD misses).
+export const SENSOR_DROP_FACTOR_BY_BAND: Readonly<Record<Band, number>> = {
+  ok: 1, degraded: 1.5, failing: 2.5, dead: 2.5, missing: 2.5,
+};
+// Nav Plotter's factor (§3.8), gentler than Sensor Interp's: Sensor Interp already greys the whole plot when it fails, so
+// the plotter's hits read as "a bit sloppier", and only its death stops the drop. dead / missing are moot (NO DROP
+// SOLUTION: drop.solution is false), so 1, never a silent widening of a dot nobody sees.
+export const PLOTTER_DROP_FACTOR_BY_BAND: Readonly<Record<Band, number>> = {
+  ok: 1, degraded: 1.25, failing: 1.5, dead: 1, missing: 1,
+};
+// A pod's driver's factor, by its integrity band (§3.8 table): a degraded driver still lands soft but wider, a failing
+// one lands hard AND wide (×2), which is what makes ship 1's POD 02 worth its REPAIR. dead never launches; its 2.0 is
+// for the DetailPanel's display only (it calls dropFactors for every driver, so the table must cover it).
+export const DRIVER_DROP_FACTOR_BY_BAND: Readonly<Record<Exclude<Band, 'missing'>, number>> = {
+  ok: 1, degraded: 1.5, failing: 2.0, dead: 2.0,
+};
+// Bay Ctrl's cadence between launches by band, tactical s (§3.4, C7's shape): ok is BAY_CADENCE_TAC (four pods in 6 s),
+// degraded 2.7 and failing 4.0 cost a pod or two of a sure window, dead 10.0 is one pod per window (`BAY CTRL DEAD · ONE
+// POD AT A TIME`), and missing is null: BAY OFFLINE, no launch at all (a ship file with no backup, risk 8).
+export const BAY_CADENCE_BY_BAND: Readonly<Record<Band, number | null>> = {
+  ok: BAY_CADENCE_TAC, degraded: 2.7, failing: 4.0, dead: 10.0, missing: null,
+};
+// A ship with no-go arcs has at least one within this many km of a bracket edge (§3.6, §3.15): close enough that a wide
+// dot (a degraded Sensor Interp at 6,000 km reaches ±117 km) or a late launch can land in it, far enough that a healthy
+// sure launch never does. validateLandingDef checks it, so slice 3's generator is held to it too.
+export const NO_GO_NEAR_EDGE_KM = 150;
+// L8 (DROP UNCERTAIN) shows when the next awaited window is at most this many tactical s away (§3.11): a minute is enough
+// for a Sensor Interp REPAIR (a few s) and the walk back to the ship, and earlier it would nag through a long WAIT.
+export const DROP_UNCERTAIN_LEAD_TAC = 60;
+
+// --- 1b ORBIT (owned by Track ORBIT): the DRAG line and decay, GO LOWER, the drop solver's domain --------------------
+
+// The DRAG line sits at the sweet zone's lower edge (§3.7): ring.min + this share of the band. It IS SWEET_ZONE_FRAC on
+// purpose, not a second number: phase-2 corrections aim for the sweet zone, so an ordinary lock sits on or above the line
+// and never decays; going low is a choice (6,000 km on ship 1's band, 5,500 km on a 5,000–7,000 band).
+export const DRAG_LINE_FRAC = SWEET_ZONE_FRAC;
+// A drag kick's retrograde Δv at ▼ is this × (line − rp) / (line − ring.min), km/s (§3.7). 0.030: felt over a long
+// landing (a circular 5,250 km orbit on a 5,000–7,000 band leaves the band after three orbits: kicks of 15, 22, 24 m/s),
+// never ruinous (holding that orbit costs about 1% of a 2.1 km/s tank per orbit).
+export const DRAG_DV_MAX_KMS = 0.030;
+// At most one kick per this share of a period (plan §1.4): on a near-circular orbit ▼'s place is noise under CRUISE
+// sub-stepping, and without a gap a ▼ that wobbles back and forth across a tick boundary would kick twice.
+export const DRAG_KICK_MIN_GAP_FRAC = 0.5;
+// A kick still owed after this many periods since the last one (▼ still below the line) is applied at once (plan §1.4):
+// the catch-up for a ▼ the sampling stepped over, so decay never silently stops.
+export const DRAG_KICK_CATCH_UP_FRAC = 1.5;
+// The stamp (`DRAG · ▲ −110 km`), the hiss and the drag lesson show only for kicks that moved the far apsis at least this
+// far (risk 15): a ▼ a few km under the line kicks under 1 m/s every orbit, and stamping that is noise. Physics stays
+// continuous below it.
+export const DRAG_STAMP_MIN_KM = 10;
+// L10 (ORBIT DECAYING) and the 'lift' burn come up when decay takes ▼ out of the band within this many orbits (§3.7):
+// about two SKIPs (≈ 12 real s), time to read the line and act, and late enough not to nag on a slow sink.
+export const DECAY_WARN_ORBITS = 2;
+// The 'lift' burn (risk 3) raises ▼ to the DRAG line plus this margin, km: a little above the line, so the next ▼ is
+// clear of it and the kicks stop instead of starting again an orbit later.
+export const DRAG_LIFT_MARGIN_KM = 50;
+// GO LOWER (§3.7) aims for the radius where the awaited LZ's sure window lasts this many tactical s: three pods at the
+// healthy cadence (2.0 s apart), the smallest window worth a burn.
+export const LANDING_SURE_MIN_TAC = 4;
+// ...but never takes ▼ closer than this to the band's floor, km (§3.7's "▼ is 100 km above the band floor"): the hard
+// stop that keeps a late release (risk 1) inside the band.
+export const GO_LOW_FLOOR_MARGIN_KM = 100;
+// The drop solver's domain (risk 9): above this eccentricity the pod's kick can fail (steep paths) or the dot track
+// stop being monotonic. 0.6 is far beyond any orbit the band holds (a 5,000–9,000 band's widest loop is e ≈ 0.29), so
+// only a wild burn in landing leaves it: then there is no dot until the orbit is back (landing-orbit dropSolvable).
+export const DROP_SOLVE_MAX_E = 0.6;
+
+// --- 1b UI (owned by Track UI): the views' numbers, appended below -----------------------------------------------------

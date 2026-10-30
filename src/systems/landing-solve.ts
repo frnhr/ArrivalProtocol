@@ -348,6 +348,9 @@ export function windowsFor(
       // closed, and the rules took the LZ for out of band. A window with no in-band part at all stays: it is.
       if (band === null && bandSpan(track, ring, open, close, -Infinity) !== null) continue;
       const middle = exactPoint(track, (open + close) / 2);
+      // The ship's world angle at the centre crossing (GO LOWER's aim point): its CCW angle, mirrored back.
+      const atCentre = shipStateAt(track, positiveModulo(tauCentre, track.periodSec));
+      const launchRad = track.sign * Math.atan2(atCentre.y, atCentre.x);
       const fits = sureG(exactPoint(track, tauCentre)) < 0;
       const sureOpen = fits ? edgeFrom(track, sureG, tauCentre, -1) : null;
       const sureClose = fits ? edgeFrom(track, sureG, tauCentre, 1) : null;
@@ -362,6 +365,7 @@ export function windowsFor(
         inBandOpenInSec: band === null ? null : band.start - tauNow,
         inBandCloseInSec: band === null ? null : band.end - tauNow,
         inBand: band !== null,
+        launchRad,
       };
     }
     if (found === null) throw new Error(`windowsFor: no window for ${lz.label} within an orbit`);
@@ -381,6 +385,9 @@ export interface DropSolveInput {
   lzs: readonly LzState[];
   factors: DropFactors;
   solution: boolean;            // capabilities.drop.solution: false with Nav Plotter dead or missing (L1)
+  uncertain: boolean;           // capabilities.drop.uncertain: Sensor Interp failing, dead or missing (the grey dot)
+  // The next drag kick's game time (landing-orbit nextDragKick over one period; drop-cache asks), null with none due.
+  validUntilTSec: number | null;
 }
 
 // The drop solution for the ship as it is (§3.3, §3.14): the dot now, the pod's arc, and every LZ's next window.
@@ -390,9 +397,12 @@ export function computeDropSolution(input: DropSolveInput, track: DotTrack | nul
   const elements = elementsFromState(input.state, input.mu);
   // An open path is a state the game can be in (1b's burns while landing, a dev hook ending the flight on the
   // approach), not a bug: there is simply no dot and no window until the ship is back on a loop.
-  if (!(elements.e < 1)) return { asOfTSec: input.tSec, periodSec: Infinity, block: null, dot: null, arc: [], windows: [] };
+  const { uncertain, validUntilTSec } = input;
+  if (!(elements.e < 1)) {
+    return { asOfTSec: input.tSec, periodSec: Infinity, block: null, dot: null, arc: [], windows: [], uncertain, validUntilTSec };
+  }
   const periodSec = periodOf(elements, input.mu);
-  if (!input.solution) return { asOfTSec: input.tSec, periodSec, block: 'no-solution', dot: null, arc: [], windows: [] };
+  if (!input.solution) return { asOfTSec: input.tSec, periodSec, block: 'no-solution', dot: null, arc: [], windows: [], uncertain, validUntilTSec };
   const aimRp = POD_AIM_RP_FRAC * input.R;
   const solved = track ?? dotTrack(input.state, input.mu, input.R, aimRp);
   const launchRadius = Math.hypot(input.state.x, input.state.y);
@@ -401,6 +411,7 @@ export function computeDropSolution(input: DropSolveInput, track: DotTrack | nul
     halfWidthKm: dropHalfWidthKm(launchRadius, input.R, input.factors),
     launchRadius,
     inBand: launchRadius >= input.ring.min && launchRadius <= input.ring.max,
+    uncertain,
   };
   return {
     asOfTSec: input.tSec,
@@ -409,6 +420,8 @@ export function computeDropSolution(input: DropSolveInput, track: DotTrack | nul
     dot,
     arc: podArc(input.state, input.mu, input.R, aimRp),
     windows: windowsFor(solved, tauOf(solved, input.state), input.lzs, input.factors, input.ring),
+    uncertain,
+    validUntilTSec,
   };
 }
 

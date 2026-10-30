@@ -171,6 +171,9 @@ export function createLandingState(def: ShipLandingDef, memory: readonly Segment
     window: null,
     fuelAtEndPct: null,
     orbitEpoch: 0,
+    decay: { lastKickTSec: null, kicks: 0, last: null },
+    goLow: null,
+    declined: null,
   };
 }
 

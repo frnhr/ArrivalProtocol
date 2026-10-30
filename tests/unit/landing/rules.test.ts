@@ -66,7 +66,7 @@ function fakeState(opts: FakeOpts): GameState {
     hurt: [], colonyFirstRun: null, colony: null, pods: opts.pods,
     bay: { loaded: opts.loaded ?? BAY_SLOTS, reloadTac: 0, cadenceLeftTac: opts.cadenceLeftTac ?? 0 },
     loadNext: opts.loadNext ?? null, startedAtTSec: 0, ended: opts.ended ?? null, lingerAiSec: null, noDriverAiSec: 0,
-    window: null, fuelAtEndPct: null, orbitEpoch: 0,
+    window: null, fuelAtEndPct: null, orbitEpoch: 0, decay: { lastKickTSec: null, kicks: 0, last: null }, goLow: null, declined: null,
   };
   return {
     run: { phase: opts.phase ?? 'landing' },
@@ -82,8 +82,8 @@ function fakeState(opts: FakeOpts): GameState {
 function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = null): DropSolution {
   return {
     asOfTSec: 0, periodSec: 14000, block,
-    dot: block ? null : { rad: dotDeg * DEG, halfWidthKm: 78, launchRadius: 6000, inBand },
-    arc: [], windows: [],
+    dot: block ? null : { rad: dotDeg * DEG, halfWidthKm: 78, launchRadius: 6000, inBand, uncertain: false },
+    arc: [], windows: [], uncertain: false, validUntilTSec: null,
   };
 }
 
@@ -304,7 +304,7 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
 {
   const win = (lz: string, open: number, close: number, bandOpen: number | null, bandClose: number | null, sure: [number, number] | null = null): LzWindow => ({
     lz, openInSec: open, closeInSec: close, sureOpenInSec: sure?.[0] ?? null, sureCloseInSec: sure?.[1] ?? null,
-    launchRadius: 6000, halfWidthKm: 78, inBandOpenInSec: bandOpen, inBandCloseInSec: bandClose, inBand: bandOpen !== null,
+    launchRadius: 6000, halfWidthKm: 78, inBandOpenInSec: bandOpen, inBandCloseInSec: bandClose, inBand: bandOpen !== null, launchRad: 0,
   });
   const sol = (windows: LzWindow[]): DropSolution => ({ ...solution(90), windows });
   // A window open now whose in-band part starts in 5 s (it straddles the band's edge): not open for the rules yet.
@@ -371,9 +371,13 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
   check('…and on two no-go arcs that overlap', bad(() => validateLandingDef('t', {
     ...ares.landing, noGo: [{ centreDeg: 300, widthDeg: 6, word: 'LAVA' }, { centreDeg: 304, widthDeg: 4, word: 'CLIFFS' }],
   }, 3, R)));
+  // Slice 1b: a ship with arcs has one within NO_GO_NEAR_EDGE_KM (150) of a bracket edge. LZ-A (WIDE) ends at 164.2°, so
+  // a 6° arc centred at 168.7° starts 1.5° (89 km) past it; one at 300° is thousands of km from any bracket.
   let clear = true;
-  try { validateLandingDef('t', { ...ares.landing, noGo: [{ centreDeg: 300, widthDeg: 6, word: 'LAVA' }] }, 3, R); } catch { clear = false; }
-  check('…but takes one clear of every bracket', clear);
+  try { validateLandingDef('t', { ...ares.landing, noGo: [{ centreDeg: 168.7, widthDeg: 6, word: 'LAVA' }] }, 3, R); } catch { clear = false; }
+  check('…but takes one clear of every bracket, within 150 km of an edge', clear);
+  check('…and throws when no arc lies within 150 km of a bracket edge (slice 1b)',
+    bad(() => validateLandingDef('t', { ...ares.landing, noGo: [{ centreDeg: 300, widthDeg: 6, word: 'LAVA' }] }, 3, R)));
 }
 
 finish();

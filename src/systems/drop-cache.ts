@@ -69,6 +69,10 @@ function recompute(state: Readonly<GameState>): DropSolution {
     lzs: state.landing.lzs,
     factors: dropFactors(caps, nextToLaunch(state)),
     solution: caps.drop.solution,
+    uncertain: caps.drop.uncertain,
+    // TODO(slice1b-ORBIT): the next drag kick over one period (landing-orbit nextDragKick), so windows after it read as
+    // a forecast; null (nothing decays) until then.
+    validUntilTSec: null,
   }, caps.drop.solution && closed ? track : null);
   cachedRev = state.run.rev;
   cachedEpoch = state.landing.orbitEpoch;

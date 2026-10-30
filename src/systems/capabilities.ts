@@ -53,12 +53,15 @@ export interface Capabilities {
   plot: { band: Band; mode: PlotMode; fuzzKm: number; staleTac: number; offline: OfflineReason | null };
   telemetryScramble: number;                                                                 // 0..1
   comms: Band;                                                                               // AI Comms
-  // Bay Ctrl (ship, 01-landing §3.4): its band, and the tactical seconds between launches. 1a: BAY_CADENCE_TAC whatever
-  // the band; 1b reads a per-band table and adds BAY OFFLINE for a missing file.
-  bay: { band: Band; cadenceTac: number };
+  // Bay Ctrl (ship, 01-landing §3.4): its band, and the tactical seconds between launches (BAY_CADENCE_BY_BAND); with
+  // the file missing, cadenceTac is null and `offline` is true (BAY OFFLINE: no launch, L12-bay, the auto-end).
+  // TODO(slice1b-DROP): the per-band cadence and `offline`; until then BAY_CADENCE_TAC whatever the band.
+  bay: { band: Band; cadenceTac: number | null; offline: boolean };
   // The drop (01-landing §3.8): whether a drop solution exists (false with Nav Plotter dead or missing: NO DROP
-  // SOLUTION), and the instruments' factors on the drop width (1 in 1a; 1b fills them from the bands).
-  drop: { solution: boolean; sensorFactor: number; plotterFactor: number };
+  // SOLUTION), the instruments' factors on the drop width (SENSOR_ / PLOTTER_DROP_FACTOR_BY_BAND), and `uncertain`
+  // (Sensor Interp failing, dead or missing: the grey dot, DROP UNCERTAIN). TODO(slice1b-DROP): factors 1 and
+  // `uncertain` false until DROP fills them from the bands.
+  drop: { solution: boolean; sensorFactor: number; plotterFactor: number; uncertain: boolean };
   threads: number;                                                                           // Core capacity (1 below 50)
   // Carried upgrade files that work right now, by kind (§6.9, WP8: FUEL TRIM; AUTOBURN.skl in WP9).
   upgrades: Readonly<Record<UpgradeKind, number>>;
@@ -284,8 +287,8 @@ export function deriveCapabilities(state: Readonly<GameState>, threadsBusy: numb
     },
     telemetryScramble,
     comms: roleHealth(state, 'comms').band,
-    bay: { band: bay.band, cadenceTac: BAY_CADENCE_TAC },
-    drop: { solution: navplot.band !== 'dead' && navplot.band !== 'missing', sensorFactor: 1, plotterFactor: 1 },
+    bay: { band: bay.band, cadenceTac: BAY_CADENCE_TAC, offline: false },
+    drop: { solution: navplot.band !== 'dead' && navplot.band !== 'missing', sensorFactor: 1, plotterFactor: 1, uncertain: false },
     threads: coreThreads(state),
     upgrades: { 'fuel-trim': liveUpgrades(state.memory, 'fuel-trim'), autoburn: liveUpgrades(state.memory, 'autoburn') },
   };

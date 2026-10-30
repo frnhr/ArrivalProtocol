@@ -23,7 +23,7 @@ import { movePreview, type MovePreview } from '@systems/move-preview';
 import { newRunSeed } from '@systems/rng';
 import { requestSkip, mainCountdown, setDebugWarp, skipBlockReason, type SkipResult, type Countdown } from '@systems/pace';
 import {
-  buildFlightContext, flightObjective, buildLandingContext, landingObjective, type FlightObjective, type LandingObjective,
+  buildFlightContext, flightObjective, buildLandingContext, landingObjective, landingFlightOf, type FlightObjective, type LandingObjective,
 } from '@systems/guidance';
 import { stateFromElements } from '@/types/orbit';
 import {
@@ -476,7 +476,8 @@ export function mountDebug(store: Store<GameState>): void {
     landingTable: () => {
       const state = store.getState();
       if (state.run.phase !== 'landing') return null;
-      return landingObjective(buildLandingContext(state, getDropSolution(), skipBlockReason(state, getSensedPrediction()) === null));
+      const sensed = getSensedPrediction();
+      return landingObjective(buildLandingContext(state, getDropSolution(), skipBlockReason(state, sensed) === null, landingFlightOf(state, sensed)));
     },
     lockOn: (opts = {}) => {
       const state = store.getState();

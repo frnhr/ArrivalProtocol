@@ -8,7 +8,7 @@ import { onAny, type GameEventName } from '@systems/events';
 import { getPrediction, getSensedPrediction, type Prediction } from '@systems/predict';
 import {
   buildFlightContext, flightObjective, createObjectiveFilter, releaseHolds, dodgeCountdownEnds, type FlightObjective,
-  buildLandingContext, landingObjective, type LandingObjective,
+  buildLandingContext, landingObjective, landingFlightOf, type LandingObjective,
 } from '@systems/guidance';
 import { getDropSolution } from '@systems/drop-cache';
 import { skipBlockReason } from '@systems/pace';
@@ -405,7 +405,9 @@ export function buildDirectorCtx(
   const flying = state.run.phase === 'flight';
   const flightCtx = flying ? buildFlightContext(state, sensed) : null;
   // The landing's table reads the drop cache (mounted with the landing); not once the Core is lost (its card owns it).
-  const landingCtx = state.run.phase === 'landing' && !state.run.coreLost ? buildLandingContext(state, getDropSolution(), skipBlockReason(state, sensed) === null) : null;
+  // Its L2 is the flight's row in landing (slice 1b: the engine is open), handed in so landing-guidance stays pure.
+  const landingCtx = state.run.phase === 'landing' && !state.run.coreLost
+    ? buildLandingContext(state, getDropSolution(), skipBlockReason(state, sensed) === null, landingFlightOf(state, sensed)) : null;
   const landing = landingCtx ? landingObjective(landingCtx) : null;
   return {
     state,

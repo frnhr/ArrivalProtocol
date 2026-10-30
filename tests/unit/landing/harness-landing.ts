@@ -45,10 +45,11 @@ export interface FollowLandingResult {
   windows: number;        // windows the landing used (a window-open edge followed by a launch in it)
 }
 
-// The strip rows that ask for END LANDING: L12 and its twin NO LZ IN THE LAUNCH BAND, exactly. Not L12b (`landing-L12b`,
-// ALL PODS AWAY · n FALLING: pods still falling must come down), and not NO ROOM IN THE BAND (`landing-L13-noroom`: its
-// [F] and L3b's [L] land the pods mislanded; END LANDING there is the kid's choice, not the strip's ask).
-const END_LANDING_ROWS: ReadonlySet<string> = new Set(['landing-L12', 'landing-L12-band']);
+// The strip rows that ask for END LANDING: L12 and its twins NO LZ IN THE LAUNCH BAND and NO BAY CTRL (1b's L12-bay),
+// exactly. Not L12b (`landing-L12b`, ALL PODS AWAY · n FALLING: pods still falling must come down), and not NO ROOM IN THE
+// BAND (`landing-L13-noroom`: its [F] and L3b's [L] land the pods mislanded; END LANDING there is the kid's choice, not
+// the strip's ask).
+const END_LANDING_ROWS: ReadonlySet<string> = new Set(['landing-L12', 'landing-L12-band', 'landing-L12-bay']);
 
 function namesKey(line: ObjectiveLine | null, key: string): boolean {
   return line !== null && line.text.includes(`[${key}]`);

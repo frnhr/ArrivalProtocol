@@ -291,7 +291,7 @@ function forceLandAllButFirst(): void {
   const now = state();
   const fresh = computeDropSolution({
     state: now.orbit, tSec: now.clock.tSec, mu: now.level.planet.mu, R: now.level.planet.R, ring: now.level.ring, lzs: now.landing.lzs,
-    factors: dropFactors(capabilitiesNow(now), nextToLaunch(now)), solution: true,
+    factors: dropFactors(capabilitiesNow(now), nextToLaunch(now)), solution: true, uncertain: false, validUntilTSec: null,
   });
   const same = cached.windows.length === fresh.windows.length && cached.windows.every((w, i) => w.lz === fresh.windows[i]!.lz
     && Math.abs(cached.asOfTSec + w.openInSec - (fresh.asOfTSec + fresh.windows[i]!.openInSec)) < 1);

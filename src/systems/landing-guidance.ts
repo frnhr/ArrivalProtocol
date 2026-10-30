@@ -1,61 +1,86 @@
 import type { GameState, GuideLayer, Urgency } from '@state/schema';
-import type { DropSolution, LzWindow } from '@/types/landing';
-import type { CapabilityRole } from '@systems/capabilities';
+import type { DropSolution, LzWindow, RepairHint, TooWide } from '@/types/landing';
+import type { Capabilities, CapabilityRole, PlotFaultCause } from '@systems/capabilities';
 import type { FsToolKind } from '@/types/fs-tool';
+import type { FlightObjective } from '@systems/guidance';
 import { secFromNow } from '@systems/landing-solve';
 import {
-  driversThatCanEverLaunch, isLaunchable, landingMoment, lzDownFill, lzRemaining, podCounts, windowsAsOf, type LandingMoment,
+  driversThatCanEverLaunch, dropTooWide, isLaunchable, landingMoment, lzDownFill, lzRemaining, noGoInReach, podCounts, windowsAsOf,
+  type LandingMoment,
 } from '@systems/landing-rules';
+import { decayForecast } from '@systems/landing-orbit';
+import { capabilitiesNow, plotFault, ROLE_LABEL } from '@systems/capabilities';
 import { rootDeletable, rootDeleteRunning } from '@state/selectors';
 import { podHintTarget, toolStepTarget, ROOT_HINT_TARGET } from '@data/fs-tools';
-import { LANDING_LINES, podCode } from '@data/landing-text';
+import { LANDING_DECAY_LINES, LANDING_DROP_LINES, LANDING_LINES, podCode } from '@data/landing-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
-import { BAY_RELOAD_TAC, MAX_LINE_CHARS, MISLANDED_FACTOR, WINDOW_TACTICAL_LEAD_TAC } from '@data/tuning';
+import {
+  BAY_RELOAD_TAC, DECAY_WARN_ORBITS, DROP_UNCERTAIN_LEAD_TAC, MAX_LINE_CHARS, MISLANDED_FACTOR, TACTICAL_LEAD_BURN_TAC,
+  WINDOW_TACTICAL_LEAD_TAC,
+} from '@data/tuning';
 
 // The landing's guidance table (01-landing §3.11, plan §1.5): the one line that names the next step while the pods go
 // down, as flightObjective does for the flight. PURE: buildLandingContext reduces the state and the drop solution to
 // "now" and to tactical seconds, and landingObjective picks the first matching row. No match throws in dev (v2 §6.3).
-// A separate file from guidance.ts (which re-exports it) so the two tables stay disjoint and the import cycle stays out.
+// A separate file from guidance.ts (which re-exports it) so the two tables stay disjoint and the import cycle stays out:
+// it imports guidance's TYPES only; the flight's row in landing (L2) is handed in by the caller (guidance landingFlightOf).
+//
+// Slice 1b (slice-1b-plan §3.0 item 6): every row below is wired to its context field. Track DROP owns this file after
+// the foundation (Track ORBIT asks it for row changes); the fields' sources are the stubs in landing-rules (DROP) and
+// landing-orbit (ORBIT), so a track fills its function and the row comes alive without editing this file.
 //
 // | Row  | Situation                                                       | Line                                         |
 // | L0   | the final ship is empty and the root can be deleted (the duel)  | EVERY POD IS DOWN — now DELETE THE ROOT      |
 // |      | (some parked or never launched: HOLLOW_FINALE.stripWaitsNobody, NO POD LEFT TO LAUNCH — now DELETE THE ROOT)    |
 // | L1   | Nav Plotter dead or missing                                     | NO DROP SOLUTION — TAB, REPAIR NAV PLOTTER   |
-// | L2   | 1b: thrust, a trim or GO LOWER ahead (asserted absent in 1a)    | the flight table's row                       |
+// | L2   | a flight row applies (guidance landingFlightRow) and: thrust,   | the flight table's row, its id kept          |
+// |      | the throttle held, the offered burn ≤ 8 tac s away, the next    | (F11-…, GO-LOW-keep, LIFT-…, F4-…)           |
+// |      | window out of band, no window in band, or an impact course (F4) |                                              |
 // | L3   | a window is open, its LZ full, another LZ in the band has room  | LZ-A FULL — hold the pods for LZ-B           |
 // | L3b  | open, its LZ full, NO in-band LZ has room, launch moment come,  | NO ROOM IN THE BAND — [L] lands in a full LZ |
 // |      | bay ready, a pod can launch (the mislanded launch, review M1)   | (¾), or END LANDING                          |
 // | L4   | open, the whole dot fits, the bay ready, a pod can launch       | LAUNCH NOW — press [L] · LZ-A 1/3            |
 // | L5   | open, the dot's centre in but its edges out, bay ready, a pod   | LAUNCH — press [L] · WIDE DROP, some may miss|
+// |      | (its twin `landing-L5-nogo`: the dot's span reaches a no-go arc)| LAUNCH — press [L] · WIDE DROP, LAVA in reach|
 // | L6   | open, a pod can launch, the bay not ready                       | RELOADING — next pod in 0:02                 |
 // | L7   | the next window's launch moment within 8 tac s, a pod can launch| GET READY — LZ-A IN 0:05                     |
 // |      | (or it is open, the dot's edges not in yet but coming this pass): GET READY, WAIT and the beeps count to the   |
 // |      | launch moment (landing-rules landingMoment: the sure part's opening, else the opening)                         |
+// | L8   | Sensor Interp failing or worse, the awaited window ≤ 60 tac s   | DROP UNCERTAIN — TAB, REPAIR SENSOR INTERP   |
+// |      | (by plotFault's cause: `-busy` while it repairs or moves, `-missing` with no file)                             |
+// | L9   | the awaited LZ has no sure window, a REPAIR or GO LOWER gives one | DROP TOO WIDE FOR LZ-B — REPAIR POD 05, or |
+// |      | (landing-rules dropTooWide); ` · [F]` when a SKIP starts and it fits | fly lower                               |
+// | L10  | decay takes ▼ out of the band within DECAY_WARN_ORBITS orbits    | ORBIT DECAYING — out of the band in 2 orbits |
 // | L11  | no pod can launch now, and one aboard needs its driver repaired | POD 07 CAN'T LAUNCH — TAB, REPAIR its driver |
+// | L12  | (`landing-L12-bay`) Bay Ctrl missing: no pod can ever launch    | NO BAY CTRL — END LANDING parks them in orbit|
 // | L12  | pods aboard and none can ever launch (no driver left, or dead   | NO POD CAN LAUNCH — END LANDING parks them   |
 // |      | with no REPAIR left)                                            |                                              |
 // | L12b | no pod aboard: pods falling, or the linger before the report    | ALL PODS AWAY · 2 FALLING                    |
 // | L13  | otherwise                                                        | WAIT — LZ-B in 2:10 ▸▸ · [F] to SKIP         |
+// The order: L0, L1, L2, L3, L3b, L4, L5, L6, L7, L8, L9, L10, L11, L12-bay, L12, L12-band, L13-noroom, L12b, L13.
 // L12's twin (L12, id `landing-L12-band`): no LZ ever passes under the dot while the ship is in the band (a PARTIAL orbit
-// whose band arc misses every bracket); with no engine in 1a nothing changes that, so END LANDING is the way on.
+// whose band arc misses every bracket); once the engine is open (1b) L2 shows the trim first, so this is reached with no
+// fuel or the trim declined, and END LANDING is the way on.
 // L13's twin (id `landing-L13-noroom`): no in-band LZ has room, and the full window L3b launches in is not here yet:
 // `NO ROOM IN THE BAND — LZ-A in 2:10 · [F] to SKIP, or END LANDING` (pace and the SKIP wait on that window).
 // Only LZs whose window is in the band are named, waited on or counted down to (review M1). "Open" is
 // state.landing.window (landing.ts writes it from the in-band span, risk 13); L13 names an out-of-band window only when
 // the landing waits on nothing in band (OUT OF BAND).
 
-export type LandingRow = 'L0' | 'L1' | 'L3' | 'L3b' | 'L4' | 'L5' | 'L6' | 'L7' | 'L11' | 'L12' | 'L12b' | 'L13';
+export type LandingRow = 'L0' | 'L1' | 'L2' | 'L3' | 'L3b' | 'L4' | 'L5' | 'L6' | 'L7' | 'L8' | 'L9' | 'L10' | 'L11' | 'L12' | 'L12b' | 'L13';
 
 export interface LandingObjective {
-  id: string;             // `landing-L4` (twins: `landing-L12-band`, `landing-L13-noroom`): stable per row, the strip retypes on a new id
+  // `landing-L4` (twins: `landing-L12-band`, `landing-L12-bay`, `landing-L13-noroom`, `landing-L5-nogo`, `landing-L8-busy`,
+  // `landing-L8-missing`): stable per row, the strip retypes on a new id. L2 keeps the flight row's own id (`F11-rp-low`).
+  id: string;
   row: LandingRow;
   text: string;           // ≤ MAX_LINE_CHARS
   keys: string[];
   urgency: Urgency;
   layer: GuideLayer;      // the screen whose controls do it: ◆ ship, ◇ mind (L0, L1, L11)
-  repairs?: CapabilityRole;     // L1: the file whose REPAIR is the fix (the director lights the chip, then the file)
-  highlight?: string | null;    // L0 (the root), L11 (the driver), in the MIND
+  repairs?: CapabilityRole;     // L1, L8, L9: the file whose REPAIR is the fix (the director lights the chip, then the file)
+  highlight?: string | null;    // L0 (the root), L9 and L11 (the driver), in the MIND
   nextLz: string | null;        // the LZ the next SKIP flies to (the MIND CLEAR hint), null when none
 }
 
@@ -69,7 +94,8 @@ export interface LandingContext {
   aboard: number;
   falling: number;
   block: boolean;           // NO DROP SOLUTION (L1)
-  thrust: boolean;          // the engine delivered thrust this tick (L2: never in 1a)
+  thrust: boolean;          // the engine delivered thrust this tick (L2)
+  firing: boolean;          // the throttle is held (the kid's or AUTOBURN's; L2)
   // The window open now; `sureInTac`: tactical s until its whole dot fits when that is still ahead this pass (then GET
   // READY counts down to it), else null (it fits now, or never will: a wide drop).
   open: { lz: string; sure: boolean; sureInTac: number | null; full: boolean; down: number; count: number } | null;
@@ -85,6 +111,22 @@ export interface LandingContext {
   next: { lz: string; inTac: number; launchInTac: number; inBand: boolean; full: boolean } | null;
   noBandWindow: boolean;    // pods aboard, and no LZ's window is ever in the band on this orbit (L12's twin)
   skipAvailable: boolean;   // F would start a SKIP now
+  // --- Slice 1b ---
+  flight: FlightObjective | null;       // the flight's row in landing (guidance landingFlightRow), L2's line
+  flightBurnInTac: number | null;       // tactical s to the offered burn's START BURN (landing-orbit landingBurnOffer)
+  uncertain: { cause: PlotFaultCause } | null;  // L8: Sensor Interp failing or worse, the awaited window ≤ 60 tac s
+  tooWide: TooWide | null;              // L9 (landing-rules dropTooWide)
+  decay: { orbits: number } | null;     // L10: ▼ leaves the band in this many orbits (≤ DECAY_WARN_ORBITS)
+  bayOffline: boolean;                  // L12-bay: Bay Ctrl missing (capabilities bay.offline)
+  lavaInReach: string | null;           // L5's twin: the word of the no-go arc the dot's span reaches (landing-rules noGoInReach)
+}
+
+// The flight's part of the landing table, handed in by the caller (guidance landingFlightOf builds it from the flight
+// context), so this module imports no guidance values. `row`: landingFlightRow's line, null when no flight row applies;
+// `burnInTac`: tactical s to the offered burn's START BURN, null with no offer.
+export interface LandingFlight {
+  row: FlightObjective | null;
+  burnInTac: number | null;
 }
 
 // The next window as L13 names it: the awaited window (landing-rules landingMoment's target), else the next window of any
@@ -105,9 +147,28 @@ function nextWindow(state: Readonly<GameState>, sol: Readonly<DropSolution>, mom
   return { lz: ahead.lz, inTac, launchInTac: inTac, inBand: false, full: (lzRemaining(state)[ahead.lz] ?? 0) === 0 };
 }
 
-// `skipAvailable`: whether [F] would start a SKIP now (pace skipBlockReason, read by the caller), so this module imports
-// nothing stateful.
-export function buildLandingContext(state: Readonly<GameState>, sol: Readonly<DropSolution> | null, skipAvailable: boolean): LandingContext {
+// L8's state (§3.11): Sensor Interp failing or worse (the grey dot), the window the landing waits on at most
+// DROP_UNCERTAIN_LEAD_TAC away, and the blinding file is Sensor Interp (plotFault): its cause picks the wording.
+function uncertainOf(caps: Readonly<Capabilities>, moment: LandingMoment, warp: number): LandingContext['uncertain'] {
+  if (!caps.drop.uncertain || moment.target === null) return null;
+  if (Math.max(0, moment.target.openInSec) / warp > DROP_UNCERTAIN_LEAD_TAC) return null;
+  const fault = plotFault(caps);
+  return fault !== null && fault.role === 'sensor' ? { cause: fault.cause } : null;
+}
+
+// L10's state (§3.7): decay takes ▼ out of the band within DECAY_WARN_ORBITS orbits (landing-orbit decayForecast).
+function decayOf(state: Readonly<GameState>): LandingContext['decay'] {
+  const { landing, level } = state;
+  if (!landing.drag || landing.ended !== null) return null;
+  const orbits = decayForecast(state.orbit, level.planet.mu, level.ring, landing.drag).orbitsToLeave;
+  return orbits !== null && orbits <= DECAY_WARN_ORBITS ? { orbits } : null;
+}
+
+// `skipAvailable`: whether [F] would start a SKIP now (pace skipBlockReason, read by the caller); `flight`: the flight's
+// row in landing (guidance landingFlightOf, read by the caller). So this module imports no guidance or pace values.
+export function buildLandingContext(
+  state: Readonly<GameState>, sol: Readonly<DropSolution> | null, skipAvailable: boolean, flight: Readonly<LandingFlight>,
+): LandingContext {
   if (state.run.phase !== 'landing') throw new Error(`buildLandingContext: not landing (phase ${state.run.phase})`);
   if (sol === null) throw new Error('buildLandingContext: no drop solution in LANDING');
   const { landing } = state;
@@ -134,6 +195,8 @@ export function buildLandingContext(state: Readonly<GameState>, sol: Readonly<Dr
   const stuck = moment.canLaunch ? undefined : canEver.find((driver) => !isLaunchable(driver) && !driver.operating
     && driver.state !== 'repairing' && driver.state !== 'transferring');
   const heldKind = state.ui.activeTool?.kind ?? null;
+  const caps = capabilitiesNow(state);
+  const solved = sol.block === null;
   return {
     inMind: state.ui.mode === 'memory',
     heldTool: heldKind,
@@ -144,6 +207,7 @@ export function buildLandingContext(state: Readonly<GameState>, sol: Readonly<Dr
     falling: counts.falling,
     block: sol.block !== null,
     thrust: state.burn.lastTickDvKmS > 0,
+    firing: state.burn.firing,
     open,
     nextWithRoom,
     roomInBand: moment.roomInBand,
@@ -152,9 +216,16 @@ export function buildLandingContext(state: Readonly<GameState>, sol: Readonly<Dr
     bayReadyInTac,
     stuckPod: stuck?.pod ?? null,
     anyCanEver: canEver.length > 0,
-    next: sol.block === null ? nextWindow(state, sol, moment) : null,
+    next: solved ? nextWindow(state, sol, moment) : null,
     noBandWindow: counts.aboard > 0 && moment.noBand,
     skipAvailable,
+    flight: flight.row,
+    flightBurnInTac: flight.burnInTac,
+    uncertain: solved ? uncertainOf(caps, moment, state.level.tacticalWarp) : null,
+    tooWide: solved ? dropTooWide(state, sol, caps) : null,
+    decay: decayOf(state),
+    bayOffline: caps.bay.offline,
+    lavaInReach: sol.dot === null ? null : noGoInReach(landing.noGo, sol.dot, state.level.planet.R)?.word ?? null,
   };
 }
 
@@ -163,6 +234,64 @@ function line(
   extra: Partial<Pick<LandingObjective, 'repairs' | 'highlight' | 'id'>> = {},
 ): LandingObjective {
   return { id: extra.id ?? `landing-${row}`, row, text, keys, urgency, layer, nextLz: ctx.next?.inBand ? ctx.next.lz : null, ...extra };
+}
+
+// L2: the flight's row as it is (its id, words, keys, urgency and layer), so the director's filter, isReleaseRow,
+// followDirector and flight-controls' lineAsks read the same step they read in flight.
+function flightLine(flight: FlightObjective, ctx: LandingContext): LandingObjective {
+  const extra: Partial<Pick<LandingObjective, 'repairs' | 'id'>> = { id: flight.id };
+  if (flight.repairs !== undefined) extra.repairs = flight.repairs;
+  return line('L2', flight.text, flight.keys, flight.urgency, flight.layer ?? 'ship', ctx, extra);
+}
+
+// When the flight's row leads (L2): a burn is happening or near, or the landing can't go on without one (the next window
+// out of band, no window in band, an impact course).
+function flightLeads(flight: FlightObjective, ctx: LandingContext): boolean {
+  const burnNear = ctx.flightBurnInTac !== null && ctx.flightBurnInTac <= TACTICAL_LEAD_BURN_TAC;
+  return ctx.thrust || ctx.firing || burnNear || ctx.next?.inBand === false || ctx.noBandWindow || flight.id.startsWith('F4');
+}
+
+// A waiting row's SKIP tail (risk 12): ` · [F]` when a SKIP would start and the line still fits, else [F] as a key alone,
+// so a row that shadows L13's `[F] to SKIP` never takes the SKIP away.
+function withSkip(text: string, ctx: LandingContext): { text: string; keys: string[] } {
+  if (!ctx.skipAvailable) return { text, keys: [] };
+  const tailed = text + LANDING_DROP_LINES.L9skip;
+  return { text: tailed.length <= MAX_LINE_CHARS ? tailed : text, keys: ['F'] };
+}
+
+// L9's REPAIR as the strip names the file, and what lights in the MIND.
+function repairLabel(hint: RepairHint): string {
+  switch (hint.file) {
+    case 'driver': return podCode(hint.pod);
+    case 'sensor': return ROLE_LABEL.sensor;
+    case 'navplot': return ROLE_LABEL.navplot;
+    default: throw new Error(`repairLabel: unknown file '${String((hint as RepairHint).file)}'`);
+  }
+}
+
+function tooWideLine(wide: TooWide, ctx: LandingContext): LandingObjective {
+  const repair = wide.repair;
+  const { text, keys } = withSkip(LANDING_DROP_LINES.L9(wide.lz, repair === null ? null : repairLabel(repair), wide.goLower), ctx);
+  if (repair === null) return line('L9', text, keys, 'soon', 'ship', ctx);
+  if (repair.file !== 'driver') return line('L9', text, keys, 'soon', 'mind', ctx, { repairs: repair.file });
+  const highlight = ctx.inMind ? toolStepTarget('repair', ctx.heldTool, podHintTarget(podCode(repair.pod))) : null;
+  return line('L9', text, keys, 'soon', 'mind', ctx, { highlight });
+}
+
+function uncertainLine(cause: PlotFaultCause, ctx: LandingContext): LandingObjective {
+  switch (cause) {
+    case 'hurt':
+      return line('L8', ctx.inMind ? LANDING_DROP_LINES.L8Mind : LANDING_DROP_LINES.L8, ctx.inMind ? [] : ['TAB'], 'soon', 'mind', ctx,
+        { repairs: 'sensor' });
+    case 'repairing':
+    case 'moving':
+      return line('L8', LANDING_DROP_LINES.L8busy(cause), [], 'soon', 'mind', ctx, { id: 'landing-L8-busy' });
+    case 'missing': {
+      const { text, keys } = withSkip(LANDING_DROP_LINES.L8missing, ctx);
+      return line('L8', text, keys, 'wait', 'ship', ctx, { id: 'landing-L8-missing' });
+    }
+    default: throw new Error(`uncertainLine: unknown cause '${String(cause)}'`);
+  }
 }
 
 function evaluate(ctx: LandingContext): LandingObjective | null {
@@ -176,9 +305,9 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
   if (ctx.block) {
     return line('L1', ctx.inMind ? LANDING_LINES.L1Mind : LANDING_LINES.L1, ctx.inMind ? [] : ['TAB'], 'now', 'mind', ctx, { repairs: 'navplot' });
   }
-  // L2 (1a STUB, risk 1): the engine cannot fire during the landing, so thrust here is a bug. 1b opens the engine and
-  // this row becomes the flight table's F3–F11 (trims, GO LOWER's KEEP HOLDING).
-  if (ctx.thrust && IS_DEV) throw new Error('landingObjective: thrust during the landing (the engine is closed in 1a: L2 is 1b)');
+  // L2: the engine is open in LANDING (1b): the flight's row leads while a burn happens or is near, or while the landing
+  // needs one (trims, GO LOWER's KEEP HOLDING, the 'lift' burn, DON'T HIT THE PLANET).
+  if (ctx.flight !== null && flightLeads(ctx.flight, ctx)) return flightLine(ctx.flight, ctx);
   const open = ctx.open;
   if (open !== null && ctx.aboard > 0) {
     if (open.full && ctx.roomInBand) return line('L3', LANDING_LINES.L3(open.lz, ctx.nextWithRoom), [], 'now', 'ship', ctx);
@@ -193,6 +322,9 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
       if (ctx.canLaunch && open.sureInTac !== null) return line('L7', LANDING_LINES.L7(open.lz, open.sureInTac), [], 'now', 'ship', ctx);
       if (ctx.canLaunch && ctx.bayReady) {
         if (open.sure) return line('L4', LANDING_LINES.L4(open.lz, open.down, open.count), ['L'], 'now', 'ship', ctx);
+        if (ctx.lavaInReach !== null) {
+          return line('L5', LANDING_DROP_LINES.L5noGo(ctx.lavaInReach), ['L'], 'now', 'ship', ctx, { id: 'landing-L5-nogo' });
+        }
         return line('L5', LANDING_LINES.L5, ['L'], 'now', 'ship', ctx);
       }
       if (ctx.canLaunch) return line('L6', LANDING_LINES.L6(ctx.bayReadyInTac), [], 'now', 'ship', ctx);
@@ -202,11 +334,18 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
   if (ctx.aboard > 0 && ctx.canLaunch && next !== null && next.inBand && !next.full && next.launchInTac <= WINDOW_TACTICAL_LEAD_TAC) {
     return line('L7', LANDING_LINES.L7(next.lz, next.launchInTac), [], 'now', 'ship', ctx);
   }
+  if (ctx.aboard > 0 && ctx.uncertain !== null) return uncertainLine(ctx.uncertain.cause, ctx);
+  if (ctx.aboard > 0 && ctx.tooWide !== null) return tooWideLine(ctx.tooWide, ctx);
+  // L10 carries the 'lift' burn's key while the flight's row offers it (it leads as L2 once the burn is near).
+  if (ctx.aboard > 0 && ctx.decay !== null) {
+    return line('L10', LANDING_DECAY_LINES.L10(ctx.decay.orbits), ctx.flight?.keys ?? [], 'soon', 'ship', ctx);
+  }
   if (ctx.aboard > 0 && ctx.stuckPod !== null) {
     const highlight = ctx.inMind ? toolStepTarget('repair', ctx.heldTool, podHintTarget(podCode(ctx.stuckPod))) : null;
     const text = ctx.inMind ? LANDING_LINES.L11Mind(ctx.stuckPod) : LANDING_LINES.L11(ctx.stuckPod);
     return line('L11', text, ctx.inMind ? [] : ['TAB'], 'soon', 'mind', ctx, { highlight });
   }
+  if (ctx.aboard > 0 && ctx.bayOffline) return line('L12', LANDING_DROP_LINES.L12bay, [], 'now', 'ship', ctx, { id: 'landing-L12-bay' });
   if (ctx.aboard > 0 && !ctx.anyCanEver) return line('L12', LANDING_LINES.L12, [], 'now', 'ship', ctx);
   if (ctx.aboard > 0 && ctx.noBandWindow) return line('L12', LANDING_LINES.L12band, [], 'now', 'ship', ctx, { id: 'landing-L12-band' });
   if (ctx.aboard > 0 && !ctx.roomInBand && next !== null && next.inBand) {

@@ -1,5 +1,5 @@
 import type { ShipLandingDef } from '@/types/landing';
-import { LZ_MIN_GAP_DEG, LZ_WIDTH_KM, PODS_MAX } from '@data/tuning';
+import { LZ_MIN_GAP_DEG, LZ_WIDTH_KM, NO_GO_NEAR_EDGE_KM, PODS_MAX } from '@data/tuning';
 
 // The landing data's own rules, apart from data/ships.ts (no SHIPS import), so slice 3's map generator can check what it
 // rolls with exactly the checks the written ships pass.
@@ -8,7 +8,9 @@ import { LZ_MIN_GAP_DEG, LZ_WIDTH_KM, PODS_MAX } from '@data/tuning';
 // `pods`, at most PODS_MAX; labels are unique and follow increasing angle (orbits are CCW, so a kid meets LZ-A first);
 // centres in [0, 360); every two brackets at least LZ_MIN_GAP_DEG apart edge to edge, wrapping round, so two windows
 // never overlap; no-go arcs 3–8° wide, never overlapping a bracket or each other (a pod in both would be scored twice
-// over: landing-rules classifyLanding reads the bracket first). `planetR` turns each bracket's km into degrees.
+// over: landing-rules classifyLanding reads the bracket first), and on a ship that has arcs at least one within
+// NO_GO_NEAR_EDGE_KM of a bracket edge (§3.6, §3.15: so a wide dot is a real risk; slice 1b). `planetR` turns each
+// bracket's km into degrees.
 export function validateLandingDef(id: string, def: ShipLandingDef, pods: number, planetR: number): void {
   const fail = (why: string): never => { throw new Error(`ShipDef ${id} landing: ${why}`); };
   if (def.lzs.length === 0) fail('no landing zone');
@@ -46,5 +48,14 @@ export function validateLandingDef(id: string, def: ShipLandingDef, pods: number
       }
     }
   });
+  // Edge to edge, in km of surface: the arc's nearest edge to the bracket's nearest edge (both measured from the centres).
+  const edgeGapKm = (arc: ShipLandingDef['noGo'][number], lzCentreDeg: number, lzWidthKm: number): number =>
+    ((apartDeg(arc.centreDeg, lzCentreDeg) - arc.widthDeg / 2 - halfDeg(lzWidthKm)) * Math.PI / 180) * planetR;
+  if (def.noGo.length > 0) {
+    const nearest = Math.min(...def.noGo.flatMap((arc) => def.lzs.map((lz) => edgeGapKm(arc, lz.centreDeg, LZ_WIDTH_KM[lz.width]))));
+    if (!(nearest <= NO_GO_NEAR_EDGE_KM)) {
+      fail(`no no-go arc lies within ${NO_GO_NEAR_EDGE_KM} km of a bracket edge (the nearest is ${nearest.toFixed(0)} km)`);
+    }
+  }
   if (def.colonyFirstRun !== null && def.colonyFirstRun.trim() === '') fail('an empty run-1 colony name');
 }

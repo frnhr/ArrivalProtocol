@@ -2,11 +2,15 @@
 // contexts: each row L0–L7, L11, L12 (and its NO LZ IN THE LAUNCH BAND twin), L12b and L13 with its first-match order;
 // the MIND wordings; every line within MAX_LINE_CHARS with worst-case values; none of the never-say words; and a context
 // no row matches throws. Pure: no store.
+// Slice 1b foundation: L2 (the flight's row) replaces 1a's thrust throw, and the new rows L5-nogo, L8, L9, L10 and
+// L12-bay are wired to their context fields (Track DROP extends this suite with the fuzz pass).
 import { check, finish } from './checks';
 import { landingObjective, type LandingContext, type LandingObjective, type LandingRow } from '@systems/landing-guidance';
+import type { FlightObjective } from '@systems/guidance';
 import {
   LANDING_LINES, LANDING_ASKS, LANDING_LESSONS, LANDING_BEATS, LANDING_SKIP_REFUSAL, LAUNCH_REFUSAL_TEXT, LAUNCH_CONFIRM_TEXT,
-  LANDING_ECHO, POD_STATE_TEXT, groundRadioLine,
+  LANDING_ECHO, POD_STATE_TEXT, groundRadioLine, LANDING_DROP_LINES, LANDING_DECAY_LINES, LANDING_FLIGHT_LINES, LANDING_END_TEXT,
+  LANDING_LESSONS_1B, DRAG_STAMP_TEXT,
 } from '@data/landing-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import { MAX_LINE_CHARS, PODS_MAX, WINDOW_TACTICAL_LEAD_TAC } from '@data/tuning';
@@ -21,7 +25,9 @@ function ctx(over: Partial<LandingContext> = {}): LandingContext {
   return {
     inMind: false, heldTool: null, finalShip: false, rootToDelete: false, everyPodDown: false, aboard: 3, falling: 0, block: false,
     thrust: false, open: null, nextWithRoom: 'LZ-B', roomInBand: true, canLaunch: true, bayReady: true, bayReadyInTac: 0, stuckPod: null,
-    anyCanEver: true, next: next('LZ-A', 130, 132), noBandWindow: false, skipAvailable: true, ...over,
+    anyCanEver: true, next: next('LZ-A', 130, 132), noBandWindow: false, skipAvailable: true,
+    firing: false, flight: null, flightBurnInTac: null, uncertain: null, tooWide: null, decay: null, bayOffline: false, lavaInReach: null,
+    ...over,
   };
 }
 const open = (over: Partial<NonNullable<LandingContext['open']>> = {}): LandingContext['open'] => (
@@ -92,12 +98,42 @@ expect('L3 before L4 (a full LZ never says LAUNCH NOW)', ctx({ open: open({ full
 expect('L4–L6 need a pod that can launch: else L11', ctx({ open: open(), canLaunch: false, stuckPod: 2 }), 'L11', /POD 02/);
 expect('a driver being repaired asks nothing: WAIT', ctx({ canLaunch: false, stuckPod: null }), 'L13', /^WAIT/);
 
-// --- L2 (1b) is asserted absent ---------------------------------------------------------------------------------------
-{
-  let threw = false;
-  try { landingObjective(ctx({ thrust: true })); } catch { threw = true; }
-  check('L2: thrust during the landing throws in dev (the engine is closed in 1a)', threw);
-}
+// --- Slice 1b's rows (the foundation's wiring) ------------------------------------------------------------------------
+// A flight row as guidance landingFlightRow would hand it in (a trim at ▲, 12 tac s away).
+const trim: FlightObjective = { id: 'F11-rp-low', text: '▼ TOO LOW — at ▲ press [W] (PRO) and burn', keys: ['W'], urgency: 'soon', showAccept: false };
+const isFlight = (o: LandingObjective): boolean => o.id === trim.id && o.text === trim.text && o.keys.join() === 'W' && o.urgency === 'soon';
+expect('L2: thrust shows the flight row, its id kept', ctx({ flight: trim, thrust: true, open: open() }), 'L2', trim.text, isFlight);
+expect('L2: the throttle held', ctx({ flight: trim, firing: true }), 'L2', trim.text, isFlight);
+expect('L2: the offered burn within the lead', ctx({ flight: trim, flightBurnInTac: 8 }), 'L2', trim.text, isFlight);
+expect('L2: the next window out of band', ctx({ flight: trim, next: next('LZ-B', 30, 30, false) }), 'L2', trim.text, isFlight);
+expect('L2: no window in the band', ctx({ flight: trim, noBandWindow: true }), 'L2', trim.text, isFlight);
+expect('L2: an impact course (F4) leads whatever else', ctx({ flight: { ...trim, id: 'F4-press', urgency: 'now' }, open: open() }), 'L2', trim.text);
+expect('...a flight row with nothing near does not lead: L13', ctx({ flight: trim, flightBurnInTac: 8.1 }), 'L13', /^WAIT/);
+expect('...thrust with no flight row no longer throws (1a\'s stub): the landing\'s own row', ctx({ thrust: true, open: open() }), 'L4', /^LAUNCH NOW/);
+expect('L5\'s twin: the wide dot reaches a no-go arc', ctx({ open: open({ sure: false }), lavaInReach: 'LAVA' }), 'L5',
+  'LAUNCH — press [L] · WIDE DROP, LAVA in reach', (o) => o.id === 'landing-L5-nogo' && o.keys.join() === 'L');
+expect('L8: Sensor Interp hurt', ctx({ uncertain: { cause: 'hurt' } }), 'L8', LANDING_DROP_LINES.L8,
+  (o) => o.urgency === 'soon' && o.layer === 'mind' && o.repairs === 'sensor' && o.keys.join() === 'TAB');
+expect('...in the MIND', ctx({ uncertain: { cause: 'hurt' }, inMind: true }), 'L8', LANDING_DROP_LINES.L8Mind, (o) => o.keys.length === 0);
+expect('...repairing: waited out', ctx({ uncertain: { cause: 'repairing' } }), 'L8', 'DROP UNCERTAIN — SENSOR INTERP IS REPAIRING…',
+  (o) => o.id === 'landing-L8-busy' && o.keys.length === 0);
+expect('...missing: no fix, the SKIP kept', ctx({ uncertain: { cause: 'missing' } }), 'L8', 'DROP UNCERTAIN — NO SENSOR INTERP · [F]',
+  (o) => o.id === 'landing-L8-missing' && o.keys.join() === 'F' && o.urgency === 'wait');
+expect('L9: a driver\'s REPAIR, or fly lower, with the SKIP tail', ctx({ tooWide: { lz: 'LZ-B', repair: { file: 'driver', pod: 5, factor: 2 }, goLower: true } }),
+  'L9', 'DROP TOO WIDE FOR LZ-B — REPAIR POD 05, or fly lower · [F]', (o) => o.urgency === 'soon' && o.keys.join() === 'F' && o.layer === 'mind');
+expect('...Sensor Interp\'s REPAIR lights its chip', ctx({ tooWide: { lz: 'LZ-B', repair: { file: 'sensor', factor: 1.5 }, goLower: false }, skipAvailable: false }),
+  'L9', 'DROP TOO WIDE FOR LZ-B — REPAIR SENSOR INTERP', (o) => o.repairs === 'sensor' && o.keys.length === 0);
+expect('...GO LOWER alone', ctx({ tooWide: { lz: 'LZ-C', repair: null, goLower: true } }), 'L9', 'DROP TOO WIDE FOR LZ-C — fly lower · [F]',
+  (o) => o.layer === 'ship');
+expect('L10: decay leaves the band in 2 orbits', ctx({ decay: { orbits: 2 } }), 'L10', 'ORBIT DECAYING — out of the band in 2 orbits',
+  (o) => o.urgency === 'soon');
+expect('L12-bay: Bay Ctrl missing', ctx({ bayOffline: true, canLaunch: false }), 'L12', LANDING_DROP_LINES.L12bay,
+  (o) => o.id === 'landing-L12-bay' && o.urgency === 'now');
+expect('...before L12', ctx({ bayOffline: true, canLaunch: false, anyCanEver: false }), 'L12', LANDING_DROP_LINES.L12bay);
+expect('order: L8 before L9, L10 and L11', ctx({ uncertain: { cause: 'hurt' }, tooWide: { lz: 'LZ-B', repair: null, goLower: true },
+  decay: { orbits: 1 }, canLaunch: false, stuckPod: 3 }), 'L8', LANDING_DROP_LINES.L8);
+expect('...L9 before L10', ctx({ tooWide: { lz: 'LZ-B', repair: null, goLower: true }, decay: { orbits: 1 } }), 'L9', /^DROP TOO WIDE/);
+expect('...L10 before L11', ctx({ decay: { orbits: 1 }, canLaunch: false, stuckPod: 3 }), 'L10', 'ORBIT DECAYING — out of the band in 1 orbit');
 
 // --- No match throws --------------------------------------------------------------------------------------------------
 {
@@ -132,6 +168,21 @@ expect('a driver being repaired asks nothing: WAIT', ctx({ canLaunch: false, stu
       worst({ next: next(longLz, worstTac, worstTac) }),
       worst({ next: next(longLz, worstTac, worstTac, false) }),
       LANDING_LINES.L13(longLz, worstTac, true, true),
+      worst({ open: open({ lz: longLz, sure: false }), lavaInReach: 'CLIFFS' }),
+      worst({ uncertain: { cause: 'hurt' } }),
+      worst({ uncertain: { cause: 'repairing' } }),
+      worst({ uncertain: { cause: 'moving' } }),
+      worst({ uncertain: { cause: 'missing' } }),
+      worst({ tooWide: { lz: longLz, repair: { file: 'sensor', factor: 2.5 }, goLower: true } }),
+      worst({ tooWide: { lz: longLz, repair: { file: 'navplot', factor: 1.5 }, goLower: true } }),
+      worst({ tooWide: { lz: longLz, repair: { file: 'driver', pod: PODS_MAX, factor: 2 }, goLower: true } }),
+      worst({ tooWide: { lz: longLz, repair: null, goLower: true } }),
+      worst({ decay: { orbits: 2 } }),
+      worst({ bayOffline: true }),
+      LANDING_DROP_LINES.L9(longLz, 'SENSOR INTERP', true) + LANDING_DROP_LINES.L9skip,
+      LANDING_FLIGHT_LINES.goLow('turn to RETRO with [Q]/[E]') + LANDING_FLIGHT_LINES.forLz(longLz),
+      LANDING_FLIGHT_LINES.goLowKeep(longLz), LANDING_FLIGHT_LINES.goLowRelease,
+      `${LANDING_FLIGHT_LINES.liftProblem} — at ▲ turn to PRO with [Q]/[E] and burn`, LANDING_FLIGHT_LINES.liftKeep,
     );
   }
   const long = lines.filter((text) => text.length > MAX_LINE_CHARS);
@@ -145,6 +196,8 @@ expect('a driver being repaired asks nothing: WAIT', ctx({ canLaunch: false, stu
     LAUNCH_CONFIRM_TEXT.offSite('PLAINS', 100), LAUNCH_CONFIRM_TEXT.full(longLz, 150), LAUNCH_CONFIRM_TEXT.endLanding(3),
     LANDING_ECHO.launch(PODS_MAX, null), LANDING_ECHO.touchdown(3, 'off-site', null, 'hard'), LANDING_ECHO.parked(3),
     groundRadioLine(PODS_MAX, 'Okafor', 'Is it morning?'),
+    LAUNCH_CONFIRM_TEXT.noGo('CLIFFS', 0), DRAG_STAMP_TEXT.kick('▲', 1234), LANDING_DECAY_LINES.L10(1),
+    ...Object.values(LANDING_END_TEXT).filter((text): text is string => text !== null), ...Object.values(LANDING_LESSONS_1B),
   ];
   const banned = words.filter((text) => /scatter|deorbit|insertion|impact/i.test(text) || /\blost\b|offline|not recovered/i.test(text));
   check('none of the never-say words (scatter, deorbit, insertion, IMPACT; a pod is never lost, offline or not recovered)',
