@@ -289,6 +289,11 @@ function landedCount(landed: number, of: number): string {
   return `${formatCount(landed)} / ${formatCount(of)} LANDED`;
 }
 
+// A drop's width as every readout prints it: `±78 km`, or `≈±195 km` from a failing Sensor Interp (§3.8's `≈` labels).
+function dropWidth(halfWidthKm: number, approx: boolean): string {
+  return `${approx ? '≈' : ''}±${Math.round(halfWidthKm)} km`;
+}
+
 // RUN END (§9 WP7 item 7, 01-landing §3.9): LANDED counts the colonists who came down in an LZ with room; the run's
 // SCORE is the landing points, shown only here and labelled as one; the rank is by SCORE.
 // (Moved here from data/script.ts in the foundation follow-up: it is UI's.)
@@ -325,11 +330,16 @@ export const POD_BAY_TEXT = {
   launch: '[ L · LAUNCH POD ]',
   bay: (loaded: number, slots: number, reloadSec: number | null): string =>
     `BAY ${'▮'.repeat(loaded)}${'▯'.repeat(Math.max(0, slots - loaded))} ${loaded}/${slots}${reloadSec === null ? '' : ` · RELOAD ${minSec(reloadSec)}`}`,
-  next: (pod: number, family: string, touch: Touch, halfWidthKm: number): string =>
-    `NEXT ${driverName(pod, family)} · ${touch === 'soft' ? 'SOFT' : 'HARD'} · ±${Math.round(halfWidthKm)} km`,
+  // `approx`: a failing Sensor Interp's drop (§3.8 `≈` labels): `≈±195 km`.
+  next: (pod: number, family: string, touch: Touch, halfWidthKm: number, approx = false): string =>
+    `NEXT ${driverName(pod, family)} · ${touch === 'soft' ? 'SOFT' : 'HARD'} · ${dropWidth(halfWidthKm, approx)}`,
   lzCounter: (lz: string, down: number, count: number): string => `${lz} ${down}/${count}${down >= count ? ' ✓' : ''}`,
   endLanding: 'END LANDING',
   bayCtrl: 'BAY CTRL',
+  // The card's class line (slice 1b; the ship card proper is slice 3): the ground and what a pod outside every bracket
+  // scores, `PLAINS · off-site pods score half`; and the no-go arcs by their words, `NO-GO: LAVA`.
+  classLine: (terrain: TerrainWord, cls: ForgivenessClass): string => `${terrain} · ${FORGIVENESS_TEXT[cls].offSite}`,
+  noGoLine: (words: readonly string[]): string => `NO-GO: ${words.join(', ')}`,
 } as const;
 
 // The header's crumbs and the footer (§4).
@@ -344,7 +354,7 @@ export const LANDING_HUD_TEXT = {
 
 // The detail panel on a driver (§3.8).
 export const DRIVER_DETAIL_TEXT = {
-  soft: (halfWidthKm: number): string => `WILL LAND SOFT · DROP ±${Math.round(halfWidthKm)} km`,
+  soft: (halfWidthKm: number, approx = false): string => `WILL LAND SOFT · DROP ${dropWidth(halfWidthKm, approx)}`,
   hard: 'WILL LAND HARD',
   cantLaunch: "CAN'T LAUNCH — REPAIR IT",
   loadNext: 'LOAD NEXT',
@@ -357,7 +367,8 @@ export const TOUCHDOWN_FLOAT_TEXT = {
   lz: (points: number, lz: string, touch: Touch): string => `+${points} ${touch === 'hard' ? 'HARD' : 'LANDED'} · ${lz}`,
   mislanded: (points: number, lz: string): string => `+${points} MISLANDED · ${lz} FULL`,
   offSite: (points: number, touch: Touch): string => `+${points} ${touch === 'hard' ? 'HARD · ' : ''}OFF-SITE`,
-  noGo: '+0 NO-GO ZONE',
+  // In the arc's own word (slice 1b): `+0 LAVA`, `+0 CLIFFS`.
+  noGo: (word: string): string => `+0 ${word}`,
 } as const;
 
 export const LANDING_STAMP_TEXT = {
@@ -425,10 +436,12 @@ export const GROUND_TRACK_TEXT = {
   ahead: (lz: string, countdown: string): string => `${lz} ▸ ${countdown}`,
   aheadOpen: (lz: string): string => `${lz} ▸ OPEN`,
   aheadFull: (lz: string): string => `${lz} ✓`,
+  // An LZ whose next window is launched from outside the band (a PARTIAL orbit, decay: slice 1b), at the right edge too.
+  aheadOutOfBand: (lz: string): string => `${lz} ▸ OUT OF BAND`,
   noSolution: 'NO DROP SOLUTION',
   noDot: 'NO DROP · THE ORBIT IS OPEN',
   outOfBand: 'OUT OF BAND',
-  drop: (halfWidthKm: number): string => `DROP ±${Math.round(halfWidthKm)} km`,
+  drop: (halfWidthKm: number, approx = false): string => `DROP ${dropWidth(halfWidthKm, approx)}`,
 } as const;
 
 // The NAV PLOT's bracket labels (`LZ-A 1/3`) and the header countdown chip in LANDING (the next window: `LZ-A IN`, then
@@ -437,6 +450,24 @@ export const LANDING_PLOT_TEXT = {
   bracket: (lz: string, down: number, count: number): string => `${lz} ${down}/${count}${down >= count ? ' ✓' : ''}`,
   chipIn: (lz: string): string => `${lz} IN`,
   chipOpen: (lz: string): string => `${lz} OPEN`,
+  // Slice 1b. The DRAG line's name on its faint dashed circle (§3.7); the grey dot's width (§3.8: `≈` labels); GO
+  // LOWER's ◇ at its burn point (`◇ 00:42` over `GO LOWER`, as ▼ reads `▼ 08:23` over `LOWEST …`) and the LZ its target
+  // tick is the launch point of.
+  dragLine: 'DRAG',
+  dotWidth: (halfWidthKm: number): string => dropWidth(halfWidthKm, true),
+  goLowPoint: (countdown: string | null): string => (countdown === null ? '◇' : `◇ ${countdown}`),
+  goLowWord: 'GO LOWER',
+  goLowTarget: (lz: string): string => `${lz} ▸`,
+} as const;
+
+// The decay chip on the NAV PLOT (slice 1b, §3.7's forecast): whole orbits until ▼ leaves the band if nobody burns, and
+// the 'lift' burn's key while that burn is offered (`DECAY · OUT OF BAND IN 2 ORBITS · [W]`).
+export const DECAY_CHIP_TEXT = {
+  chip: (orbits: number): string => {
+    const whole = Math.max(1, Math.ceil(orbits));
+    return `DECAY · OUT OF BAND IN ${whole} ORBIT${whole === 1 ? '' : 'S'}`;
+  },
+  key: (key: string): string => ` · [${key}]`,
 } as const;
 
 // The POD BAY window's live words beyond POD_BAY_TEXT: why [L] would not launch now, and what it would ask first.

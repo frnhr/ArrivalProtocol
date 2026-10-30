@@ -1558,3 +1558,15 @@ export const GO_LOW_FLOOR_MARGIN_KM = 100;
 export const DROP_SOLVE_MAX_E = 0.6;
 
 // --- 1b UI (owned by Track UI): the views' numbers, appended below -----------------------------------------------------
+
+// The GROUND TRACK's terrain rows (01-landing §4, slice 1b terrainStretches): the planet's ground is cut into stretches
+// this many degrees wide (≈ 180 km on a 3,390 km planet), each in the terrain's main glyph or its second one, so a
+// volcanic world reads `^^^ ··· ^^^` instead of one glyph everywhere. Six or so stretches cross the 3,000 km strip:
+// variety the eye follows as it scrolls, never noise.
+export const TERRAIN_STRETCH_DEG = 3;
+// The share of those stretches drawn in the terrain's second glyph (VOLCANIC `·` between its `^`): a minority, so the
+// world keeps its one character.
+export const TERRAIN_ALT_SHARE = 0.35;
+// The drag stamp's life on the NAV PLOT (`DRAG · ▲ −110 km`, §3.7), wall ms: long enough to read the number at a SKIP's
+// speed (a kick lands once an orbit, a few real seconds apart), gone before the next.
+export const DRAG_STAMP_MS = 2600;

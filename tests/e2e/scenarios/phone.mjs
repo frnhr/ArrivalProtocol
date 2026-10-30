@@ -291,8 +291,9 @@ const landingView = await st(() => {
 });
 check('landing: the GROUND TRACK shows on the NAV PLOT tab in the readout row\'s place', landingView.navplot && landingView.track && landingView.dot
   && landingView.readouts === 0, JSON.stringify(landingView));
-check('landing: LAUNCH rides in the phone bar, BURN and the presets give way (no engine while landing)', landingView.launchInBar && landingView.launch
-  && !landingView.burn && !landingView.presets, JSON.stringify(landingView));
+// Slice 1b opens the engine in the landing: BURN and the presets stay in the bar, LAUNCH beside BURN.
+check('landing: LAUNCH rides in the phone bar beside BURN, the presets stay (the engine is open in landing)', landingView.launchInBar
+  && landingView.launch && landingView.burn && landingView.presets, JSON.stringify(landingView));
 await onScreen('landing', '#podLaunchBtn');
 await onScreen('landing', '#groundTrack');
 await overflow('landing');

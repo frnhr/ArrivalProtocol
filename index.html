@@ -228,9 +228,11 @@
           </div>
           <div class="window-body podbay-body">
             <button class="engage pb-launch" id="podLaunchBtn" data-hint-key="L" tabindex="-1"><span class="pb-launch-label" id="pbLaunchLabel"></span><span class="pb-launch-status" id="pbLaunchStatus"></span></button>
-            <div class="pb-bay" id="pbBay"></div>
+            <div class="pb-bay-row"><div class="pb-bay" id="pbBay"></div><span class="pb-ctrl" id="pbCtrl"></span></div>
             <div class="pb-next" id="pbNext"></div>
             <div class="pb-lzs" id="pbLzs"></div>
+            <!-- the class line (slice 1b): `PLAINS · off-site pods score half`, and `NO-GO: LAVA` on ships with no-go arcs -->
+            <div class="pb-class"><span class="pb-class-text" id="pbClass"></span><span class="pb-nogo" id="pbNoGo" hidden></span></div>
             <div class="pb-foot"><span class="pb-cant" id="pbCant" hidden></span><button class="pb-end" id="pbEnd" tabindex="-1"></button></div>
           </div>
         </div>
@@ -253,6 +255,8 @@
                 <!-- the plot itself is built and patched by NavPlotWindow -->
               </svg>
               <div class="np-chip" id="npChip"></div>
+              <!-- DECAY (slice 1b, LANDING): orbits until ▼ leaves the band, under the chip (NavPlotWindow, flight-hud decayChip) -->
+              <div class="np-decay" id="npDecay" hidden></div>
               <!-- NO SIGNAL: the Nav Plotter is dead or gone (NavPlotWindow) -->
               <div class="np-veil" id="npVeil" hidden>
                 <div class="np-veil-title">NO SIGNAL</div>

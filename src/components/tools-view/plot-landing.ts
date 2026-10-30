@@ -1,6 +1,7 @@
 import type { Projector, Vec2 } from '@/types/orbit';
 import type { BracketModel, PlotLandingModel, LandMark } from '@systems/landing-hud';
 import { svgEl, fmt, setCircle } from '@components/hud/plot-draw';
+import { LANDING_PLOT_TEXT } from '@data/landing-text';
 
 // The landing's layer on the NAV PLOT (01-landing §4), drawn from landing-hud's plotLandingModel:
 // • the LZ brackets as thick rim arcs (BRACKET_WIDTH ≥ 4 viewBox units, sitting on the surface) in their look's colour,
@@ -10,7 +11,11 @@ import { svgEl, fmt, setCircle } from '@components/hud/plot-draw';
 // • each falling pod's streak along its fixed arc, a fading trail behind a bright head that turns white-hot below the
 //   atmosphere line (a flare at the crossing), and the `◘` mark where each pod landed, in its place's colour;
 // • the pods parked in orbit as small blinking beacons on the ship's orbit;
-// • the touchdown float (`+200 LANDED · LZ-A`) rising from the bracket, and the ring's pulse (NavPlotWindow).
+// • the touchdown float (`+200 LANDED · LZ-A`) rising from the bracket, and the ring's pulse (NavPlotWindow);
+// • slice 1b: the faint dashed DRAG circle (§3.7) with its name, the no-go arcs hatched red through an SVG <pattern> with
+//   their end ticks, the grey DROP UNCERTAIN dot and arc with `≈±195 km` inside the planet under it (§3.8), and the drag
+//   stamp `DRAG · ▲ −110 km` where a kick happened, fading (NavPlotWindow calls stamp() on 'drag-kick').
+//   GO LOWER's ◇ and target tick are the plot's markers (NavPlotWindow), so its label collision pass places them.
 // Nodes are kept per LZ and per pod and patched in place. Returns the label boxes, so the plot's other labels keep off
 // the brackets' names.
 
@@ -28,6 +33,13 @@ const HOT_HEAD_RADIUS = 2.8;
 const MARK_LIFT = 0.2;         // the ◘ glyph's centre above the surface line
 const BEACON_RADIUS = 1.6;
 const TRAIL_SEGMENTS = 8;      // the trail fades over this many pieces
+const NOGO_HATCH_ID = 'npNoGoHatch';
+const NOGO_HATCH_PERIOD = 2.2; // viewBox units between the red stripes: about two stripes across a 4.6-unit rim arc
+const NOGO_HATCH_STRIPE = 0.9;
+const DOT_LABEL_IN = 6;        // the grey dot's `≈±195 km` starts this far inside the surface, under the dot
+const DRAG_LABEL_DEG = 212;    // the DRAG circle's name, lower left: clear of the ring's name (top) and the chip (top left)
+const DRAG_LABEL_GAP = 2.5;    // inside the circle by this much
+const STAMP_OUT = 7;           // the drag stamp's distance outside the kick's ▼
 
 export interface LabelBox {
   left: number;
@@ -73,30 +85,69 @@ export interface PlotLandingLayer {
   paint(model: PlotLandingModel | null, proj: Projector, cx: number, cy: number, planetR: number): LabelBox[];
   // `+200 LANDED · LZ-A` rising from a bracket (or the landing point), in the tone of how the pod came down.
   float(text: string, rad: number, tone: string, ms: number): void;
+  // The drag stamp (`DRAG · ▲ −110 km`) at a kick's ▼ (world km), for `ms`; `garble` re-renders its text each paint
+  // (Telemetry below 60 scrambles its number, C3).
+  stamp(text: string, pos: Vec2, ms: number, garble: (text: string) => string): void;
   // Everything off (a new world, or out of LANDING).
   clear(): void;
 }
 
+// The no-go hatch (§3.6 "drawn red-hatched"): diagonal red stripes, user-space so every arc's stripes line up.
+function addNoGoHatch(svg: SVGSVGElement): void {
+  const defs = svg.querySelector('defs');
+  if (!defs) throw new Error('plot-landing: #navplotSvg <defs> missing');
+  if (defs.querySelector(`#${NOGO_HATCH_ID}`)) return;
+  const pattern = svgEl('pattern', '');
+  pattern.id = NOGO_HATCH_ID;
+  pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+  pattern.setAttribute('width', fmt(NOGO_HATCH_PERIOD));
+  pattern.setAttribute('height', fmt(NOGO_HATCH_PERIOD));
+  pattern.setAttribute('patternTransform', 'rotate(45)');
+  const stripe = svgEl('rect', 'np-nogo-stripe');
+  stripe.setAttribute('width', fmt(NOGO_HATCH_STRIPE));
+  stripe.setAttribute('height', fmt(NOGO_HATCH_PERIOD));
+  pattern.appendChild(stripe);
+  defs.appendChild(pattern);
+}
+
+interface StampNode {
+  node: SVGTextElement;
+  text: string;
+  pos: Vec2;
+  garble: (text: string) => string;
+}
+
 export function createPlotLandingLayer(svg: SVGSVGElement, below: SVGElement, above: SVGElement): PlotLandingLayer {
+  addNoGoHatch(svg);
+  const dragLine = svgEl('circle', 'np-drag-line');
+  const dragLabel = svgEl('text', 'np-drag-label');
+  dragLabel.textContent = LANDING_PLOT_TEXT.dragLine;
+  dragLabel.setAttribute('text-anchor', 'middle');
   const rim = svgEl('g', 'np-landing-rim');
   const arcPath = svgEl('path', 'np-pod-arc');
   const dot = svgEl('circle', 'np-drop-dot');
   const dotHalo = svgEl('circle', 'np-drop-halo');
+  const dotLabel = svgEl('text', 'np-dot-label');
+  dotLabel.setAttribute('text-anchor', 'middle');
+  dotLabel.setAttribute('dominant-baseline', 'central');
+  const stampLayer = svgEl('g', 'np-stamps');
   const streaks = svgEl('g', 'np-streaks');
   const marks = svgEl('g', 'np-marks');
   const beacons = svgEl('g', 'np-beacons');
   const labels = svgEl('g', 'np-lz-labels');
   const floats = svgEl('g', 'np-floats');
-  below.after(rim);
-  above.before(arcPath, dotHalo, dot, marks, beacons, streaks);
-  svg.append(labels, floats);
+  below.after(dragLine, dragLabel, rim);
+  above.before(arcPath, dotHalo, dot, dotLabel, marks, beacons, streaks);
+  svg.append(labels, floats, stampLayer);
+  const stamps = new Set<StampNode>();
 
   const brackets = new Map<string, BracketNodes>();
-  const noGo: SVGPathElement[] = [];
+  const noGo: { arc: SVGPathElement; ends: SVGPathElement }[] = [];
   const streakNodes = new Map<number, StreakNodes>();
   const markNodes = new Map<number, SVGTextElement>();
   const beaconNodes = new Map<number, SVGCircleElement>();
   let geometry = { cx: 0, cy: 0, planetR: 0 };
+  let lastProj: Projector | null = null;
 
   const show = (node: SVGElement, visible: boolean): void => { node.style.display = visible ? '' : 'none'; };
 
@@ -177,8 +228,13 @@ export function createPlotLandingLayer(svg: SVGSVGElement, below: SVGElement, ab
   function clear(): void {
     for (const nodes of brackets.values()) { nodes.arc.remove(); nodes.ticks.remove(); nodes.label.remove(); }
     brackets.clear();
-    noGo.forEach((node) => node.remove());
+    noGo.forEach((nodes) => { nodes.arc.remove(); nodes.ends.remove(); });
     noGo.length = 0;
+    show(dragLine, false);
+    show(dragLabel, false);
+    show(dotLabel, false);
+    for (const stampNode of stamps) stampNode.node.remove();
+    stamps.clear();
     prune(streakNodes, new Set(), (nodes) => { nodes.trail.forEach((piece) => piece.remove()); nodes.head.remove(); });
     prune(markNodes, new Set(), (node) => node.remove());
     prune(beaconNodes, new Set(), (node) => node.remove());
@@ -191,11 +247,26 @@ export function createPlotLandingLayer(svg: SVGSVGElement, below: SVGElement, ab
   function paint(model: PlotLandingModel | null, proj: Projector, cx: number, cy: number, planetR: number): LabelBox[] {
     geometry = { cx, cy, planetR };
     if (model === null) {
-      if (brackets.size > 0 || streakNodes.size > 0 || markNodes.size > 0 || beaconNodes.size > 0) clear();
+      if (brackets.size > 0 || streakNodes.size > 0 || markNodes.size > 0 || beaconNodes.size > 0 || stamps.size > 0) clear();
       show(dot, false);
       show(dotHalo, false);
+      show(dotLabel, false);
+      show(dragLine, false);
+      show(dragLabel, false);
       arcPath.setAttribute('d', '');
       return [];
+    }
+    // The DRAG line (§3.7): a faint dashed circle at its radius, named at the lower left.
+    show(dragLine, model.dragLineKm !== null);
+    show(dragLabel, model.dragLineKm !== null);
+    if (model.dragLineKm !== null) {
+      const radius = model.dragLineKm * proj.scale;
+      setCircle(dragLine, cx, cy, radius);
+      const at = polar(cx, cy, radius - DRAG_LABEL_GAP, (DRAG_LABEL_DEG * Math.PI) / 180);
+      dragLabel.setAttribute('x', fmt(at.x));
+      dragLabel.setAttribute('y', fmt(at.y));
+      const tilt = 90 - DRAG_LABEL_DEG;
+      dragLabel.setAttribute('transform', `rotate(${fmt(tilt)} ${fmt(at.x)} ${fmt(at.y)})`);
     }
     // Brackets and their labels.
     const boxes: LabelBox[] = [];
@@ -208,33 +279,61 @@ export function createPlotLandingLayer(svg: SVGSVGElement, below: SVGElement, ab
       brackets.delete(lz);
     }
     for (const bracket of model.brackets) boxes.push(paintBracket(bracket, cx, cy, planetR));
-    // No-go arcs (1b): red-hatched rim arcs, no label.
+    // No-go arcs (1b): red-hatched rim arcs (the pattern's stripes in the arc's stroke) with red end ticks, no label (the
+    // GROUND TRACK names them, and the POD BAY's NO-GO line).
     while (noGo.length < model.noGo.length) {
-      const node = svgEl('path', 'np-nogo');
-      rim.appendChild(node);
-      noGo.push(node);
+      const nodes = { arc: svgEl('path', 'np-nogo'), ends: svgEl('path', 'np-nogo-ends') };
+      nodes.arc.setAttribute('stroke', `url(#${NOGO_HATCH_ID})`);
+      rim.append(nodes.arc, nodes.ends);
+      noGo.push(nodes);
     }
-    noGo.forEach((node, i) => {
+    noGo.forEach((nodes, i) => {
       const arc = model.noGo[i];
-      show(node, arc !== undefined);
+      show(nodes.arc, arc !== undefined);
+      show(nodes.ends, arc !== undefined);
       if (!arc) return;
-      node.setAttribute('d', rimArc(cx, cy, planetR + BRACKET_GAP + BRACKET_WIDTH / 2, arc.centreRad, arc.halfWidthRad));
-      node.setAttribute('stroke-width', fmt(BRACKET_WIDTH));
+      nodes.arc.setAttribute('d', rimArc(cx, cy, planetR + BRACKET_GAP + BRACKET_WIDTH / 2, arc.centreRad, arc.halfWidthRad));
+      nodes.arc.setAttribute('stroke-width', fmt(BRACKET_WIDTH));
+      let ends = '';
+      for (const end of [arc.centreRad - arc.halfWidthRad, arc.centreRad + arc.halfWidthRad]) {
+        const from = polar(cx, cy, planetR - TICK_IN * 0.5, end);
+        const to = polar(cx, cy, planetR + BRACKET_GAP + BRACKET_WIDTH + TICK_IN, end);
+        ends += `M${fmt(from.x)},${fmt(from.y)}L${fmt(to.x)},${fmt(to.y)}`;
+      }
+      nodes.ends.setAttribute('d', ends);
     });
 
     // The pod arc and the dot.
     arcPath.setAttribute('d', model.arc ? polyline(model.arc.points, proj) : '');
     arcPath.classList.toggle('out-of-band', model.arc !== null && !model.arc.inBand);
+    arcPath.classList.toggle('uncertain', model.arc !== null && model.arc.uncertain);
     show(dot, model.dot !== null);
     show(dotHalo, model.dot !== null);
+    show(dotLabel, model.dot !== null && model.dotLabel !== null);
     if (model.dot) {
       const at = polar(cx, cy, planetR, model.dot.rad);
       setCircle(dot, at.x, at.y, DOT_RADIUS);
       setCircle(dotHalo, at.x, at.y, Math.max(DOT_RADIUS * 1.7, model.dot.halfWidthRad * planetR));
-      const look = !model.dot.inBand ? 'out-of-band' : model.dot.fits === 'whole' ? 'whole' : model.dot.fits === 'centre' ? 'centre' : 'none';
-      dot.setAttribute('class', `np-drop-dot fits-${look}`);
-      dotHalo.setAttribute('class', `np-drop-halo fits-${look}`);
+      // The grey dot (§3.8) whatever it fits: an uncertain drop can't promise the bracket.
+      const look = !model.dot.inBand ? 'out-of-band' : model.dot.uncertain ? 'uncertain'
+        : model.dot.fits === 'whole' ? 'whole' : model.dot.fits === 'centre' ? 'centre' : 'none';
+      const dotCls = `np-drop-dot fits-${look}`;
+      if (dot.getAttribute('class') !== dotCls) dot.setAttribute('class', dotCls);
+      const haloCls = `np-drop-halo fits-${look}`;
+      if (dotHalo.getAttribute('class') !== haloCls) dotHalo.setAttribute('class', haloCls);
+      if (model.dotLabel !== null) {
+        // Inside the planet, reading inward from the dot (clear of the bracket's label outside the rim and its ticks).
+        const under = polar(cx, cy, planetR - DOT_LABEL_IN, model.dot.rad);
+        const cos = Math.cos(model.dot.rad);
+        dotLabel.setAttribute('text-anchor', cos > LABEL_SIDE_COS ? 'end' : cos < -LABEL_SIDE_COS ? 'start' : 'middle');
+        dotLabel.setAttribute('x', fmt(under.x));
+        dotLabel.setAttribute('y', fmt(under.y + Math.sin(model.dot.rad) * DOT_LABEL_IN * 0.4));
+        if (dotLabel.textContent !== model.dotLabel) dotLabel.textContent = model.dotLabel;
+      }
     }
+    // The drag stamps: re-projected each paint (the plot zooms), their words re-garbled.
+    lastProj = proj;
+    for (const stampNode of stamps) placeStamp(stampNode, proj, cx, cy);
 
     // Streaks.
     const falling = new Set(model.streaks.map((streak) => streak.pod));
@@ -311,5 +410,28 @@ export function createPlotLandingLayer(svg: SVGSVGElement, below: SVGElement, ab
     setTimeout(() => node.remove(), ms);
   }
 
-  return { paint, float, clear };
+  // Just outside the kick's ▼, away from the planet, reading outward.
+  function placeStamp(entry: StampNode, proj: Projector, cx: number, cy: number): void {
+    const spot = proj.project(entry.pos);
+    const out = Math.hypot(spot.x - cx, spot.y - cy) || 1;
+    entry.node.setAttribute('x', fmt(spot.x + ((spot.x - cx) / out) * STAMP_OUT));
+    entry.node.setAttribute('y', fmt(spot.y + ((spot.y - cy) / out) * STAMP_OUT));
+    entry.node.setAttribute('text-anchor', spot.x >= cx ? 'start' : 'end');
+    const text = entry.garble(entry.text);
+    if (entry.node.textContent !== text) entry.node.textContent = text;
+  }
+
+  function stamp(text: string, pos: Vec2, ms: number, garble: (text: string) => string): void {
+    const node = svgEl('text', 'np-drag-stamp');
+    node.setAttribute('dominant-baseline', 'central');
+    node.style.animationDuration = `${ms}ms`;
+    const entry: StampNode = { node, text, pos: { ...pos }, garble };
+    stamps.add(entry);
+    stampLayer.appendChild(node);
+    // Placed at once: a kick can land while the world is paused (no paint until it runs again).
+    if (lastProj !== null) placeStamp(entry, lastProj, geometry.cx, geometry.cy);
+    setTimeout(() => { node.remove(); stamps.delete(entry); }, ms);
+  }
+
+  return { paint, float, stamp, clear };
 }

@@ -24,6 +24,9 @@ import { POD_BAY_OPEN_DELAY_MS } from '@data/tuning';
 // lock's stamp with the modem handshake (transmitIn). This module also marks the page as landing (body.landing), which
 // the landing-only furniture keys on (the GROUND TRACK, the dock's POD BAY item, the phone bar, the Engine's inert
 // controls). Telemetry below 60 garbles the counters, the drop width and the reload countdown (C3).
+// Slice 1b: beside the bay, Bay Ctrl's pip in its band (BAND_COPY.bay's words: `BAY CTRL DAMAGED`), and with the file
+// missing `NO BAY CTRL` in red with LAUNCH disabled (never "offline" next to pods, §3.10); under the counters the class
+// line (`PLAINS · off-site pods score half`) and the no-go arcs' words (`NO-GO: LAVA`).
 
 export interface PodBayDeps {
   confirm: LaunchConfirm;
@@ -35,6 +38,9 @@ export function mountPodBayWindow(store: Store<GameState>, deps: PodBayDeps): ()
   const launchLabel = requireById('pbLaunchLabel');
   const launchStatus = requireById('pbLaunchStatus');
   const bayEl = requireById('pbBay');
+  const ctrlEl = requireById('pbCtrl');
+  const classEl = requireById('pbClass');
+  const noGoEl = requireById('pbNoGo');
   const nextEl = requireById('pbNext');
   const lzsEl = requireById('pbLzs');
   const cantEl = requireById('pbCant');
@@ -70,6 +76,12 @@ export function mountPodBayWindow(store: Store<GameState>, deps: PodBayDeps): ()
     launchBtn.disabled = model.launch.look === 'blocked';
     patch(bayEl, scramblers.bay.apply(model.bay.text, scramble));
     bayEl.dataset.full = String(model.bay.reloadTac === null);
+    bayEl.classList.toggle('offline', model.ctrl.offline);
+    patch(ctrlEl, model.ctrl.text);
+    if (ctrlEl.dataset.band !== model.ctrl.band) ctrlEl.dataset.band = model.ctrl.band;
+    patch(classEl, model.cls.text);
+    noGoEl.hidden = model.cls.noGo === null;
+    patch(noGoEl, model.cls.noGo ?? '');
     patch(nextEl, scramblers.next.apply(model.nextText, scramble));
     nextEl.classList.toggle('hard', model.next?.touch === 'hard');
     nextEl.classList.toggle('none', model.next === null);
