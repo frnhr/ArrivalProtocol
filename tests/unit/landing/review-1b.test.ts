@@ -13,12 +13,12 @@ import { getPrediction } from '@systems/predict';
 import { getDropSolution } from '@systems/drop-cache';
 import { bayWindowModel } from '@systems/landing-hud';
 import { dropTooWide, landingMoment, landingResult, landingStuck } from '@systems/landing-rules';
-import { landingBurnOffer } from '@systems/landing-orbit';
+import { decayForecast, decayLiftAhead, dragLineKm, landingBurnOffer, offerInTac } from '@systems/landing-orbit';
 import { lossPlan, shipLost } from '@systems/run';
-import { stateFromElements } from '@/types/orbit';
+import { elementsFromState, stateFromElements } from '@/types/orbit';
 import { DRIVER_RULES } from '@data/script';
 import { END_LANDING_REFUSAL_TEXT, LANDING_GHOST_LINES, LANDING_NODROP_LINES } from '@data/landing-text';
-import { LANDING_BURN_POWER, LANDING_NONE_LEFT_SEC } from '@data/tuning';
+import { DECAY_WARN_ORBITS, LANDING_BURN_POWER, LANDING_NONE_LEFT_SEC } from '@data/tuning';
 import { on } from '@systems/events';
 import { capabilitiesNow } from '@systems/capabilities';
 import { actionSwap } from '@state/actions';
@@ -267,6 +267,58 @@ crashAfterEnd(LAST_LIGHT, 'LAST LIGHT');
   h.stepFor(1);
   check('minor 7: under MANUAL (Autopilot failing), pointed RETRO by hand, GO LOWER is held: KEEP HOLDING, then RELEASE',
     state().burn.sasMode === 'off' && held && keep && releaseRow && state().landing.goLow?.held !== true, rows.join(' > '));
+}
+
+// --- GO LOWER under the DRAG line on a drag ship: when does the lift come? ----------------------------------------------
+{
+  // KESTREL (band 5,000–7,000, the DRAG line at 5,500) from a circular 6,800 km, one LZ 190 km wide: GO LOWER's target is
+  // the floor (5,100 km), under the line. One LZ, so the go-low's ◇ comes before the window it is for.
+  board(KESTREL);
+  h.store.update((draft) => {
+    draft.landing.lzs = [{ ...draft.landing.lzs[0]!, pods: draft.landing.pods.length, widthKm: 190, halfWidthRad: 95 / draft.level.planet.R }];
+  });
+  lockOn(h, { r: 6800 });
+  const events: string[] = [];
+  const offEvents = [
+    on('go-low', ({ phase }) => { if (phase === 'released') events.push('released'); }),
+    on('window-closed', () => { events.push('closed'); }),
+  ];
+  let holding = false;
+  let releaseAt: number | null = null;
+  let lift: { orbits: number | null; closedBefore: number; windowAtBurn: boolean | null; burnAt: number } | null = null;
+  const end = h.wall() + 400;
+  while (h.wall() < end && state().run.phase === 'landing') {
+    h.step();
+    const pred = getPrediction();
+    if (lift === null && landingBurnOffer(state(), pred)?.reason === 'lift') {
+      const released = events.indexOf('released');
+      lift = {
+        orbits: decayForecast(state().orbit, mu(), state().level.ring, true).orbitsToLeave,
+        closedBefore: released < 0 ? -1 : events.slice(released).filter((event) => event === 'closed').length,
+        windowAtBurn: null,
+        burnAt: state().clock.tSec + offerInTac(state(), pred)! * state().level.tacticalWarp,
+      };
+    }
+    if (lift !== null && lift.windowAtBurn === null && state().clock.tSec >= lift.burnAt) { lift.windowAtBurn = state().landing.window !== null; break; }
+    const line = h.shown();
+    const text = line?.text ?? '';
+    if (releaseAt !== null && h.wall() >= releaseAt - 1e-9) { h.keyUp('Space'); holding = false; releaseAt = null; continue; }
+    if (holding && /^RELEASE/.test(text) && releaseAt === null) releaseAt = h.wall() + 0.3;
+    if (holding) continue;
+    const goLowRow = (line?.id ?? '').startsWith('GO-LOW');
+    if (goLowRow && text.includes('press [S]')) h.press('KeyS');
+    if (goLowRow && (text.includes('HOLD [SPACE] NOW') || text.includes('hold [SPACE]'))) { h.keyDown('Space'); holding = true; }
+    else if (line?.keys.includes('L')) h.press('KeyL');
+    else if (line?.keys.includes('F') && state().clock.skipWarp === null) h.press('KeyF');
+  }
+  for (const off of offEvents) off();
+  const rp = elementsFromState(state().orbit, mu()).rp;
+  check('GO LOWER under the DRAG line: flown and released (▼ under the line, in the band)', events.includes('released')
+    && rp < dragLineKm(state().level.ring), `▼ ${rp.toFixed(0)} km · ${events.slice(0, 4).join(',')}`);
+  check('…the lift is offered while ▼ is still in the band, from twice the warning (not before decay matters)',
+    lift !== null && lift.orbits !== null && lift.orbits > DECAY_WARN_ORBITS && decayLiftAhead(lift.orbits), JSON.stringify(lift));
+  check('…not before the window the GO LOWER was for has had its pods, and its START BURN falls between windows',
+    lift !== null && lift.closedBefore >= 1 && lift.windowAtBurn === false, JSON.stringify(lift));
 }
 
 // --- M2: ghost thrust in the landing ---------------------------------------------------------------------------------

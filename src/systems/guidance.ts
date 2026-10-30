@@ -11,7 +11,7 @@ import {
   type Prediction, type PredictOutcome, type BurnPoint, type BurnEvent, type TrimReason,
 } from '@systems/predict';
 import { skipBlockReason } from '@systems/pace';
-import { goLowReleased, landingBurnOffer, launchRadiusRate } from '@systems/landing-orbit';
+import { goLowReleased, landingBurnOffer, launchRadiusRate, offerInTac } from '@systems/landing-orbit';
 import { LANDING_FLIGHT_LINES } from '@data/landing-text';
 import { controllerSwapOf } from '@systems/tool-targets';
 import { autoburnAvailable, autoburnArmedInTac } from '@systems/autoburn';
@@ -883,7 +883,7 @@ function liftRows(ctx: FlightContext, burnPoint: TimedBurn): FlightObjective {
 export function landingFlightOf(state: Readonly<GameState>, pred: Prediction): LandingFlight {
   const ctx = buildFlightContext(state, pred);
   return {
-    row: landingFlightRow(ctx), burnInTac: ctx.offer?.inTac ?? null, impact: pred.outcome === 'impact',
+    row: landingFlightRow(ctx), burnInTac: offerInTac(state, pred), impact: pred.outcome === 'impact',
     tankShort: state.burn.fuelPct <= 0 || pred.fuelShort,
   };
 }

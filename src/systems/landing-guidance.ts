@@ -130,7 +130,7 @@ export interface LandingContext {
   skipAvailable: boolean;   // F would start a SKIP now
   // --- Slice 1b ---
   flight: FlightObjective | null;       // the flight's row in landing (guidance landingFlightRow), L2's line
-  flightBurnInTac: number | null;       // tactical s to the offered burn's START BURN (landing-orbit landingBurnOffer)
+  flightBurnInTac: number | null;       // tactical s to the offered burn's START BURN (landing-orbit offerInTac)
   uncertain: { cause: PlotFaultCause } | null;  // L8: Sensor Interp failing or worse, the awaited window ≤ 60 tac s
   tooWide: TooWide | null;              // L9 (landing-rules dropTooWide)
   decay: { orbits: number } | null;     // L10: ▼ leaves the band in this many orbits (≤ DECAY_WARN_ORBITS)

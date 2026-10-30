@@ -246,18 +246,24 @@ function goLower(reactionSec: number): GoLowRun {
   board(VESPER, false);
   lockOn(h);
   let burst = false;
-  let refusedWhileBurst = false;
+  let delivering = false;
+  let refusal = '';
   const off = on('ghost-start', () => { burst = true; });
   const end = h.wall() + 90;
   while (h.wall() < end && !burst) h.step();
-  if (burst) {
+  // A tick that delivered the burst's thrust (review nit: the check passed vacuously on a tick with none).
+  const until = h.wall() + 2;
+  while (burst && h.wall() < until && !delivering) {
     h.step();
+    delivering = state().burn.lastTickDvKmS > 0;
+  }
+  if (delivering) {
     const result = requestLaunch(h.store, { source: 'player' });
-    refusedWhileBurst = result.kind === 'refused' && (result.reason === 'ENGINE FIRING' || state().burn.lastTickDvKmS === 0);
+    refusal = result.kind === 'refused' ? result.reason : result.kind;
   }
   off();
-  check('VESPER (Thrust Ctrl failing): the engine fires by itself during the landing, still in orbit, [L] refused while it fires',
-    burst && state().burn.status === 'locked' && refusedWhileBurst, `burst ${burst}`);
+  check('VESPER (Thrust Ctrl failing): the engine fires by itself during the landing, still in orbit, [L] refused ENGINE FIRING while it fires',
+    burst && delivering && state().burn.status === 'locked' && refusal === 'ENGINE FIRING', `burst ${burst} · delivering ${delivering} · ${refusal}`);
 }
 
 finish();

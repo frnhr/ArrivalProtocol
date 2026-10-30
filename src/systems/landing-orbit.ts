@@ -366,16 +366,20 @@ function widestRadius(lo: number, hi: number, sure: (radiusKm: number) => number
   return refined >= bestSure ? { radiusKm, sure: refined } : { radiusKm: hi - step * bestI, sure: bestSure };
 }
 
-// AUTOBURN v3's seam (slice 4): the highest launch radius at which every LZ in `lzs` gets a sure window of at least
-// LANDING_SURE_MIN_TAC with `factors`, from a circular orbit inside `ring`; null when none does. GO LOWER's target is its
-// one-LZ case: both are defined through sureTacAt (and the same scan), never dotTrack.
+// AUTOBURN v3's seam (slice 4): the highest launch radius in [floorKm, ring.max] at which every LZ in `lzs` gets a sure
+// window of at least LANDING_SURE_MIN_TAC with `factors`, from a circular orbit; null when none does. `floorKm`: the
+// lowest radius v3 may pick (review nit): ring.min for the whole band, or max(dragLineKm(ring), …) to hold the orbit
+// without decay. GO LOWER's target is its one-LZ case: both are defined through sureTacAt (and the same scan), never
+// dotTrack. One difference at the seam: goLowerFit returns null when the launch point already fits (nothing to go lower
+// for) and when the tank can't pay, where this returns the radius (ring.max when the top fits).
 export function highestFittingRadius(
-  lzs: readonly LzState[], factors: Readonly<DropFactors>, ring: Readonly<Ring>, R: number, mu: number, warp: number,
+  lzs: readonly LzState[], factors: Readonly<DropFactors>, ring: Readonly<Ring>, R: number, mu: number, warp: number, floorKm: number,
 ): number | null {
   if (lzs.length === 0) return null;
+  if (!(floorKm >= ring.min && floorKm <= ring.max)) throw new Error(`highestFittingRadius: floor ${floorKm} km outside the band ${ring.min}–${ring.max}`);
   const fits = (radiusKm: number): boolean =>
     lzs.every((lz) => sureTacAt(radiusKm, Math.sqrt(mu / radiusKm), lz, factors, R, warp) >= LANDING_SURE_MIN_TAC);
-  return highestRadius(ring.min, ring.max, fits);
+  return highestRadius(floorKm, ring.max, fits);
 }
 
 // GO LOWER's RETRO Δv, km/s, for the ship at its burn point (`atBurn`, half an orbit before `launchRad`; or the ship now
@@ -454,6 +458,16 @@ export function landingBurnOffer(state: Readonly<GameState>, pred: Readonly<Pred
   if (ringTrim && state.burn.acceptOnly) return null;
   if (state.landing.declined?.key === declineKey(burnPoint)) return null;
   return burnPoint;
+}
+
+// Tactical s from now to the START BURN of the burn the landing offers (landingBurnOffer), or null: the ONE countdown
+// pace's TACTICAL lead and SKIP stop, HOLLOW's projected drain and L2's near-burn lead read (review nit). `aheadSec`:
+// game s of look-ahead (pace judges the lead one CRUISE tick ahead). The offer's times are game s after pred.asOfTSec,
+// rebased to the clock here as predict secUntil does (this module may not import predict's values).
+export function offerInTac(state: Readonly<GameState>, pred: Readonly<Prediction>, aheadSec = 0): number | null {
+  const offer = landingBurnOffer(state, pred);
+  if (offer === null) return null;
+  return (offer.inSec - (state.clock.tSec - pred.asOfTSec) - aheadSec) / state.level.tacticalWarp;
 }
 
 // The drop solver's domain (risk 9): a closed orbit with e < DROP_SOLVE_MAX_E, ▼ above the atmosphere, and the pod's kick

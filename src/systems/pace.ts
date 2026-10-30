@@ -11,7 +11,7 @@ import { emit } from '@systems/events';
 import { getDropSolution } from '@systems/drop-cache';
 import { landingMoment, podCounts, type LandingMoment } from '@systems/landing-rules';
 import { windowRuleHolds } from '@systems/landing-controller';
-import { landingBurnOffer } from '@systems/landing-orbit';
+import { offerInTac } from '@systems/landing-orbit';
 import type { DropSolution } from '@/types/landing';
 import { LANDING_SKIP_REFUSAL } from '@data/landing-text';
 import {
@@ -190,20 +190,14 @@ function landingPace(state: Readonly<GameState>, pred: Prediction, skipActive: b
   if (zoneClose(state, pred) !== null) return 'tactical';
   if (pred.outcome === 'impact' && state.landing.ended === null) return 'tactical';
   const tickAheadSec = skipActive ? 0 : state.level.cruiseWarp * Math.max(dtWall, TICK_MS / 1000);
-  const toBurn = offerInSec(state, pred);
-  if (toBurn !== null && tac(toBurn - tickAheadSec, state.level.tacticalWarp) <= TACTICAL_LEAD_BURN_TAC) return 'tactical';
+  const toBurnTac = offerInTac(state, pred, tickAheadSec);
+  if (toBurnTac !== null && toBurnTac <= TACTICAL_LEAD_BURN_TAC) return 'tactical';
   if (windowRuleHolds()) {
     if (awaitedWindowOpen(state)) return 'tactical';
     const toWindow = windowLaunchInSec(state);
     if (toWindow !== null && tac(toWindow - tickAheadSec, state.level.tacticalWarp) <= WINDOW_TACTICAL_LEAD_TAC) return 'tactical';
   }
   return skipActive ? 'skip' : 'cruise';
-}
-
-// Game seconds from now to the START BURN of the burn the landing offers (landing-orbit landingBurnOffer), or null.
-export function offerInSec(state: Readonly<GameState>, pred: Prediction): number | null {
-  const offer = landingBurnOffer(state, pred);
-  return offer === null ? null : secUntil(pred, offer.inSec, state.clock.tSec);
 }
 
 // The landing's SKIP stops at its window, a zone, the offered burn (SKIP_END_LEAD_TAC before its START BURN, as a flight
@@ -214,8 +208,8 @@ function landingNextEvent(state: Readonly<GameState>, pred: Prediction): NextEve
   if (zone !== null) candidates.push({ kind: 'zone', inSec: zone.inSec });
   const toWindow = windowLaunchInSec(state);
   if (toWindow !== null) candidates.push({ kind: 'window', inSec: toWindow });
-  const toBurn = offerInSec(state, pred);
-  if (toBurn !== null) candidates.push({ kind: 'burn', inSec: toBurn });
+  const toBurnTac = offerInTac(state, pred);
+  if (toBurnTac !== null) candidates.push({ kind: 'burn', inSec: toBurnTac * state.level.tacticalWarp });
   if (candidates.length > 0) return candidates.reduce((first, candidate) => (candidate.inSec < first.inSec ? candidate : first));
   if (pred.escapeInSec !== null) return { kind: 'escape', inSec: secUntil(pred, pred.escapeInSec, state.clock.tSec) };
   return null;

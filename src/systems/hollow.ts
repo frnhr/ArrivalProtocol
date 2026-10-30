@@ -6,8 +6,8 @@ import type { Rng } from '@systems/rng';
 import { onAiTick, onPostTick, isLivePhase, setPaused } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { on, emit, NO_PAYLOAD } from '@systems/events';
-import { getPrediction, secUntil } from '@systems/predict';
-import { landingBurnOffer } from '@systems/landing-orbit';
+import { getPrediction } from '@systems/predict';
+import { offerInTac } from '@systems/landing-orbit';
 import { isThrustOn, isGhostFiring, endGhost } from '@systems/orbit-sim';
 import { getOpsBySeg, abortOp, type Op } from '@systems/ops-core';
 import {
@@ -894,9 +894,8 @@ export function projectedDrainPerSec(state: Readonly<GameState>): number {
 function landingBurnProjected(state: Readonly<GameState>): boolean {
   if (!engineOpen(state)) return false;
   if (drainConditions(state).thrustDelivered) return true;
-  const pred = getPrediction();
-  const offer = landingBurnOffer(state, pred);
-  return offer !== null && secUntil(pred, offer.inSec, state.clock.tSec) / state.level.tacticalWarp <= TACTICAL_LEAD_BURN_TAC;
+  const toBurnTac = offerInTac(state, getPrediction());
+  return toBurnTac !== null && toBurnTac <= TACTICAL_LEAD_BURN_TAC;
 }
 
 // AI seconds until this infected file is eaten at the projected drain (minus a repair's heal);
