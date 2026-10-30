@@ -91,7 +91,9 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 - LANDING (phase 3 slice 1a, `docs/phase3/01-landing.md`): after ORBIT LOCK each pod (200 colonists, flown by an
   8-block driver file in the MIND) is launched with [L] while the drop dot is inside a landing zone's bracket; the bay
   holds 4, SKIP jumps to the next window, a GROUND TRACK and a POD BAY window show it, and a LANDING REPORT scores
-  every pod by where and how it landed. Pods that can't land are parked in orbit.
+  every pod by where and how it landed. Pods that can't land are parked in orbit. Damage widens the drop (Sensor
+  Interp, Nav Plotter, the drivers), lava and cliffs score 0, Bay Ctrl sets the cadence, a low orbit decays below the
+  DRAG line, and the engine stays open: trims, GO LOWER and the lift.
 - Couplings both ways: files drive the engine and instruments, threads take thrust, burning feeds HOLLOW, the orbit's
   fit is the launch band; the AI Core drives the glitch overlay.
 - A phone layout (≤ 768 px), reduced motion, synthesized audio.
@@ -105,9 +107,9 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 ## Next logical steps
 
 1. **Fran's playtest**: one full run by `docs/playtest-checklist.md`.
-2. **Phase 3** (`docs/PHASE3.md`, specs in `docs/phase3/`): landing instead of printing (slice 1a built; plan and
-   deviations in `docs/phase3/impl/slice-1a-plan.md`), then slice 1b (the drop-width model, forgiveness and no-go arcs,
-   Bay Ctrl, drag and GO LOWER), the calm opening, the galaxy map, the skill tree and repository, new endings.
+2. **Phase 3** (`docs/PHASE3.md`, specs in `docs/phase3/`): landing instead of printing (slices 1a and 1b built; plans and
+   deviations in `docs/phase3/impl/`), then slice 2 (the calm opening), the galaxy map, the skill tree and repository,
+   new endings.
 3. **The refactors parked until after the playtest** (discuss the split before writing code): `src/data/script.ts`
    into its text and its director rules, `src/styles/game.css` by surface, `tuning.ts` and `script.ts` grouped by
    domain.

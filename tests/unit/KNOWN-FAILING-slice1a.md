@@ -24,10 +24,12 @@ it by its fastest run, and it passed in the last run.
 |---|---|
 | wp12/playthrough | Every design target (souls woke, ships locked, wall time, Core never lost, MERGE availability, SLOPPY's endings) prints INFO with its number; `PT_STRICT=1` makes them checks. The kids were written for phase 2; only "each kid's run ends" is a hard check. |
 
-## e2e (one full run at the end of slice 1a)
+## e2e
 
-- `playthrough`, ship 1: "the credits roll names a colonist per pod that scored" read the roll after a SPACE had
-  skipped it (a test timing flaw; the report was right). Fixed in the scenario after the run; not re-run.
-- `playthrough`, LAST LIGHT: "the flight ends by the strip within 6 minutes" timed out at 360 s while the kid, out of
-  REPAIR CHARGE, could not act on `MOVE POD 10 behind a WALL`. It fails the same way on the phase-2 tree (2cc8f49), so
-  it predates slice 1a; the kid's MOVE handling or the limit needs a look with the rebalance.
+- End of slice 1a: 317 of 319 checks. The ship-1 credits read was a test timing flaw (fixed in the scenario); LAST
+  LIGHT's 6-minute flight limit timed out as it also did on the phase-2 tree.
+- End of slice 1b (9135439): **318 of 318 checks in 1,063 s**, both of the above passing.
+
+## Unit tier at the end of slice 1b
+
+141 suites, 0 failed, in 159 s on 4 workers.
