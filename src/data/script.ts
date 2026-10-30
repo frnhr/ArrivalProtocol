@@ -33,7 +33,7 @@ import {
 } from '@systems/hollow';
 import { rootDeletable } from '@systems/finale';
 import {
-  hostLine, podCode, groundRadioLine, LANDING_ASKS, LANDING_BEATS, LAUNCH_REFUSAL_LINES,
+  hostLine, podCode, groundRadioLine, LANDING_ASKS, LANDING_BEATS, LAUNCH_REFUSAL_LINES, LANDING_LESSONS_1B,
 } from '@data/landing-text';
 import { HARD_WORDS_POOL } from '@data/souls';
 import type { PodRecord } from '@/types/landing';
@@ -55,7 +55,7 @@ import {
   WALL_RULE_SHOW_SEC, EMERGENCY_EXTRA_HITS, CORE_RESET_INTEGRITY, BEAM_OUT_EXTRA_HITS,
   TRANSIT_HIT_MAX, BAND_DEGRADED_MIN, CORE_LOW_INTEGRITY, FIREWALL_HINT_SHOW_SEC, DEBRIS_MOVE_HINT_TAC, SEED_LESSON_SHOW_SEC,
   AUTOBURN_READY_SHOW_SEC, GHOST_LESSON_AFTER_BURSTS, GHOST_LESSON_SHOW_SEC, COPY_LESSON_SHOW_SEC, MERGE_COST_CHARGE, ROOT_DELETE_SEC,
-  BELT_MOVE_HINT_TAC, LESSON_LEAD_IN_SEC,
+  BELT_MOVE_HINT_TAC, LESSON_LEAD_IN_SEC, DOT_WIDE_LESSON_SEC,
 } from '@data/tuning';
 
 // Every line the game says or shows outside the flight table (systems/guidance.ts) lives here:
@@ -1170,6 +1170,24 @@ export const DRIVER_RULES: readonly GuideRule[] = [
   },
 ];
 
+// --- Slice 1b's drop lesson (01-landing §3.11, risk 14) ------------------------------------------------------------
+// THE DOT IS WIDE — REPAIR, or fly lower: once a run, the first time the landing table shows L9 (DROP TOO WIDE FOR
+// LZ-B …), in front of it for DOT_WIDE_LESSON_SEC; then L9 itself names the LZ and the file (or GO LOWER). The general
+// rule before the particular one, as the flight's lessons do. A ship-layer line (§3.11's ◆; the strip draws the glyph).
+// Every run, not run 1 only: a returning unit meets it on its first wide drop just the same, and it is one short line
+// (§5.2's "one hint each"). Done when L9 stops showing, or after its seconds.
+export const DROP_LESSON_RULES: readonly GuideRule[] = [
+  {
+    id: 'lesson-dot-wide',
+    layer: 'ship',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: DOT_WIDE_LESSON_SEC,
+    activeWhen: (ctx) => isLanding(ctx) && ctx.landing?.row === 'L9',
+    text: () => LANDING_LESSONS_1B.dotWide,
+  },
+];
+
 // --- HOLLOW on the strip (WP6, §6.3, §6.6) ----------------------------------------------------------
 // The alarms outrank everything, even a burn's NOW (§6.3 composition 1), except a crash course and a
 // RELEASE (see alarmLive): a driver about to be eaten or an infected Core is the moment to choose
@@ -1979,6 +1997,8 @@ export const GUIDE_RULES: readonly GuideRule[] = [
   ...AUTOBURN_RULES.filter((rule) => rule.priority !== 'alarm'),
   ...ENGINE_BEAT_RULES,
   ...DRIVER_RULES,
+  // Slice 1b: the wide-drop lesson after the hurt driver's (POD 02 WILL LAND HARD names the same REPAIR, and comes first).
+  ...DROP_LESSON_RULES,
   {
     // WP12 p3 (WP11's TODO): the crossings wear the Core with transit hits, and below CORE_LOW_INTEGRITY it runs one
     // thread fewer (§3.3 C5) while nothing is infected, so no alarm ever says so; a kid reached LAST LIGHT with one

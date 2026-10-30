@@ -1516,6 +1516,9 @@ export const NO_GO_NEAR_EDGE_KM = 150;
 // L8 (DROP UNCERTAIN) shows when the next awaited window is at most this many tactical s away (§3.11): a minute is enough
 // for a Sensor Interp REPAIR (a few s) and the walk back to the ship, and earlier it would nag through a long WAIT.
 export const DROP_UNCERTAIN_LEAD_TAC = 60;
+// The `THE DOT IS WIDE — REPAIR, or fly lower` lesson (§3.11, risk 14) stands in front of the first L9 for this many AI s:
+// long enough to read twice, short enough that L9's own line (which LZ, which file) and its SKIP come back quickly.
+export const DOT_WIDE_LESSON_SEC = 5;
 
 // --- 1b ORBIT (owned by Track ORBIT): the DRAG line and decay, GO LOWER, the drop solver's domain --------------------
 

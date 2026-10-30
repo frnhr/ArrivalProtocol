@@ -169,9 +169,10 @@ function checkStory(label: string, fightEcho: RegExp): void {
   check('…the green pushed the red back from the first tick (never lower than where it started)', lowest >= at - 0.2);
   check('while it fought, no WILL BE EATEN alarm (the repair is winning)', !alarmWhileWinning);
   // The landing's own line holds the strip while the repair wins (01-landing §3.11): it never asks for POD 01's REPAIR
-  // again (L11 skips a driver being repaired), nor sounds an alarm.
+  // again (L11 skips a driver being repaired), nor sounds an alarm. Slice 1b: the next pod is then POD 02 (44, ×2) with
+  // Sensor Interp at 78 (×1.5), too wide for LZ-A, so L9 and its one-time lesson (THE DOT IS WIDE) may hold it too.
   check('while it fought, the strip showed the landing\'s line (WAIT), never L11 or an alarm', tugLines.size > 0
-    && [...tugLines].every((id) => id.startsWith('landing-') && id !== 'landing-L11'), [...tugLines].join(', '));
+    && [...tugLines].every((id) => (id.startsWith('landing-') && id !== 'landing-L11') || id === 'lesson-dot-wide'), [...tugLines].join(', '));
   check('the cure is heard (hollow-cure)', h.events.some((event) => event.name === 'hollow-cure'));
   checkStory('saved late', /^> repair pod01 \.\.\. OK/);
   const result = podRecord(h.store.getState(), 1).fate;

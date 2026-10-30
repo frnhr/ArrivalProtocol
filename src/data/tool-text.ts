@@ -104,7 +104,7 @@ export const DELETE_EFFECT: Readonly<Record<SegmentRole, string>> = {
   navplot: 'The NAV PLOT goes dark.',
   telemetry: 'The numbers scramble.',
   comms: 'No BEAM OUT; a crash ends the run.',
-  bay: 'No effect yet.',
+  bay: 'No pod can launch.',
   core: "You can't delete yourself.",
   stasis: NO_FLIGHT_EFFECT,
   life: NO_FLIGHT_EFFECT,

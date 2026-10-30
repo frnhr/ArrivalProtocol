@@ -1,7 +1,8 @@
 // Slice 1a, Track SIM: the landing from the lock to the LANDING REPORT (01-landing §3.10, plan §5). All five ships from
-// a constructed lock (harness-landing lockOn: no capture flown), landed by the strip (followLanding): every pod down in
-// an LZ with room, the report reached, and the real seconds per window printed as INFO (target 24–30, §3.2); a PARTIAL
-// orbit with e > 0 whose second LZ is out of band (review M1) lands too, mislanded into the in-band LZ. Then the
+// a constructed lock (harness-landing lockOn: no capture flown), landed by the strip (followLanding): every pod down (in
+// an LZ with room, or off-site after a WIDE DROP once slice 1b widened the drop), the report reached, and the real
+// seconds per window printed as INFO (target 24–30, §3.2); a PARTIAL orbit with e > 0 whose second LZ is out of band
+// (review M1) lands too, mislanded into the in-band LZ. Then the
 // soft fails: END LANDING parks; an eaten driver can't launch and ends parked, eaten; a ship that left orbit takes its
 // pods (NOT LAUNCHED); a Core lost while landing parks every pod; HOLLOW's story beat and LAST LIGHT's duel hold the
 // report (the duel's L0 on the strip). Last, the pooled receiver (§3.16) that lays out the unit at the next ship.
@@ -57,14 +58,22 @@ for (let index = 0; index < SHIPS.length; index++) {
   lockOn(h);
   const name = state().level.shipName;
   const result = followLanding(h, { maxWall: 600 });
-  const allInLz = state().landing.pods.every((record) => record.fate.kind === 'down' && record.fate.touchdown.place === 'lz');
+  // Slice 1b: the drop is as wide as the files make it (every ship arrives with Sensor Interp at 78, ×1.5, and some with
+  // hurt drivers), so a sure window may take fewer pods than the bay holds and the strip's next launch is L5's `WIDE
+  // DROP, some may miss`. Ends and rows, not points (plan §4): every pod down, a miss only after a WIDE DROP line, and
+  // never most of them.
+  const pods = state().landing.pods;
+  const missed = pods.filter((record) => record.fate.kind === 'down' && record.fate.touchdown.lz === null);
+  const allDown = pods.every((record) => record.fate.kind === 'down');
+  const wideSaid = result.texts.some((text) => text.includes('WIDE DROP'));
   // The hurt drivers (ARES-VII's POD 02 at 44 on run 1) were left unrepaired: they land hard, every other pod soft.
   const hurt = new Set(state().landing.hurt);
-  const touchOk = state().landing.pods.every((record) => record.fate.kind === 'down'
+  const touchOk = pods.every((record) => record.fate.kind === 'down'
     && record.fate.touchdown.touch === (hurt.has(record.pod) ? 'hard' : 'soft'));
   const tally = onTargetTally(state());
-  check(`${name}: landed by the strip, every pod in an LZ with room, the LANDING REPORT reached`,
-    state().run.phase === 'report' && allInLz && touchOk && tally.earned === (hurt.size === 0), `${state().run.phase} · ${fates()}`);
+  check(`${name}: landed by the strip to the LANDING REPORT, every pod down, a miss only after WIDE DROP (${missed.length} missed)`,
+    state().run.phase === 'report' && allDown && touchOk && (missed.length === 0 || wideSaid) && missed.length <= pods.length / 4
+    && !(tally.earned && hurt.size > 0), `${state().run.phase} · ${fates()}`);
   check(`${name}: the strip never said IMPACT, scatter or deorbit`, !result.texts.some((text) => /impact|scatter|deorbit/i.test(text)));
   const lzCount = state().landing.lzs.length;
   check(`${name}: about one window per LZ (${result.windows} for ${lzCount})`, result.windows >= lzCount && result.windows <= lzCount + 2,
@@ -75,7 +84,8 @@ for (let index = 0; index < SHIPS.length; index++) {
 // --- A PARTIAL orbit, e > 0, with one LZ out of band (review M1, p2) --------------------------------------------------------
 // HALCYON ACCEPTed on ▼ 5,500 km, e 0.4, ω 260°: LZ-A's window is in the band, LZ-B's never is. Once LZ-A is full the strip
 // used to loop `LZ-A FULL — hold the pods for LZ-B` / `WAIT — LZ-A … [F]` for ever. Now it says NO ROOM IN THE BAND and
-// offers the mislanded launch, which the kid takes: every pod comes down in LZ-A (the late ones MISLANDED), none off-site.
+// offers the mislanded launch, which the kid takes: the pods come down in LZ-A (the late ones MISLANDED), never in LZ-B.
+// Slice 1b: the drop is wider (Sensor Interp at 78), so one of the late launches may come down off-site beside LZ-A.
 {
   boardShip(1);
   lockOn(h, { r: 5500, e: 0.4, argPeriDeg: 260, status: 'accepted' });
@@ -92,10 +102,12 @@ for (let index = 0; index < SHIPS.length; index++) {
     if (ahead.some((item) => item.lz === 'LZ-B')) namedB.push('ground track');
   };
   const result = followLanding(h, { maxWall: 300, onTick });
-  const downInA = state().landing.pods.every((record) => record.fate.kind === 'down' && record.fate.touchdown.lz === 'LZ-A');
+  const pods = state().landing.pods;
+  const downNotB = pods.every((record) => record.fate.kind === 'down' && record.fate.touchdown.lz !== 'LZ-B')
+    && pods.filter((record) => record.fate.kind === 'down' && record.fate.touchdown.lz === null).length <= 1;
   const mislanded = state().landing.pods.filter((record) => record.fate.kind === 'down' && record.fate.touchdown.place === 'mislanded').length;
-  check('HALCYON PARTIAL (e 0.4, LZ-B out of band): landed by the strip to the LANDING REPORT, every pod down in LZ-A',
-    state().run.phase === 'report' && downInA && mislanded > 0, `${state().run.phase} after ${result.wall.toFixed(0)} s · ${fates()}`);
+  check('HALCYON PARTIAL (e 0.4, LZ-B out of band): landed by the strip to the LANDING REPORT, every pod down by LZ-A, none in LZ-B',
+    state().run.phase === 'report' && downNotB && mislanded > 0, `${state().run.phase} after ${result.wall.toFixed(0)} s · ${fates()}`);
   check('…the strip said NO ROOM IN THE BAND with the mislanded launch, and never held the pods for the out-of-band LZ-B',
     result.texts.some((text) => text.startsWith('NO ROOM IN THE BAND — [L]')) && !result.texts.some((text) => text.includes('for LZ-B')),
     [...new Set(result.texts.map((text) => text.replace(/\d/g, '#')))].join(' | '));
