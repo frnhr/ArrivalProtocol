@@ -4,7 +4,7 @@ import { check, finish } from './checks';
 import {
   isLaunchable, driverTouch, launchQueue, nextToLaunch, bayShown, bayMembers, classifyLanding, lzDownFill, lzProjectedFill,
   lzRemaining, podPoints, launchRefusal, launchGuard, landingResult, onTargetTally, colonyName, canEverLaunch, missKm,
-  openInBandWindow, windowOpenNow, landingMoment, touchAtTouchdown,
+  openInBandWindow, windowOpenNow, landingMoment, touchAtTouchdown, launchGuardText,
 } from '@systems/landing-rules';
 import type { GameState, ShipOutcome } from '@state/schema';
 import type { DriverSegment, Segment } from '@/types/segment';
@@ -57,12 +57,19 @@ interface FakeOpts {
   paused?: boolean;
   mode?: GameState['ui']['mode'];
   dv?: number;
+  noGo?: LandingState['noGo'];
+  bay?: number | null;   // Bay Ctrl's integrity (default 100); null: no Bay Ctrl file (BAY OFFLINE, slice 1b)
+}
+
+// Bay Ctrl, a ship file in rack A: the rules read its band (slice 1b's BAY OFFLINE), so every fake ship carries one.
+function bayCtrl(integrity: number): Segment {
+  return { id: 'bay', name: 'Bay Ctrl', type: 'ship', role: 'bay', size: 6, integrity, scanned: false } as Segment;
 }
 
 // Only the slices the rules read; the cast is the point (a pure rule must not reach for anything else).
 function fakeState(opts: FakeOpts): GameState {
   const landing: LandingState = {
-    lzs: opts.lzs, noGo: [], forgiveness: opts.forgiveness ?? 'gentle', terrain: 'PLAINS', drag: false, finalShip: false, lead: 1,
+    lzs: opts.lzs, noGo: opts.noGo ?? [], forgiveness: opts.forgiveness ?? 'gentle', terrain: 'PLAINS', drag: false, finalShip: false, lead: 1,
     hurt: [], colonyFirstRun: null, colony: null, pods: opts.pods,
     bay: { loaded: opts.loaded ?? BAY_SLOTS, reloadTac: 0, cadenceLeftTac: opts.cadenceLeftTac ?? 0 },
     loadNext: opts.loadNext ?? null, startedAtTSec: 0, ended: opts.ended ?? null, lingerAiSec: null, noDriverAiSec: 0,
@@ -73,7 +80,7 @@ function fakeState(opts: FakeOpts): GameState {
     clock: { paused: opts.paused ?? false, tSec: 0 },
     ui: { mode: opts.mode ?? 'tools' },
     burn: { lastTickDvKmS: opts.dv ?? 0 },
-    memory: opts.memory,
+    memory: opts.bay === null ? opts.memory : [...opts.memory, bayCtrl(opts.bay ?? 100)],
     level: { planet: { R } },
     landing,
   } as unknown as GameState;
@@ -182,7 +189,9 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
     ['NOT LANDING', { ...base, phase: 'flight', ended: 'end-landing', paused: true }, null, 'NOT LANDING'],
     ['LANDING OVER', { ...base, ended: 'end-landing', paused: true }, null, 'LANDING OVER'],
     ['PAUSED', { ...base, paused: true, mode: 'memory' }, null, 'PAUSED'],
-    ['SHIP SCREEN', { ...base, mode: 'memory', dv: 0.01 }, null, 'SHIP SCREEN'],
+    ['SHIP SCREEN', { ...base, mode: 'memory', dv: 0.01, bay: null }, null, 'SHIP SCREEN'],
+    ['BAY OFFLINE (slice 1b)', { ...base, dv: 0.01, bay: null }, solution(0, true, 'no-solution'), 'BAY OFFLINE'],
+    ['…a dead Bay Ctrl still launches (one pod at a time)', { ...base, bay: 10 }, solution(90), null],
     ['ENGINE FIRING', { ...base, dv: 0.01 }, null, 'ENGINE FIRING'],
     ['NO DROP SOLUTION', base, solution(0, true, 'no-solution'), 'NO DROP SOLUTION'],
     ['OUT OF THE LAUNCH BAND', { ...base, memory: [] }, solution(90, false), 'OUT OF THE LAUNCH BAND'],
@@ -211,6 +220,12 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
   const hardOff = launchGuard(fakeState({ lzs, pods: [pod(1)], memory: [driver(1, 40)], forgiveness: 'rough' }), solution(120));
   check('a hard driver off-site on a ROUGH world scores 25', hardOff?.points === 25);
   check('no guard with the dot in a bracket with room', launchGuard(fakeState({ lzs, pods: [pod(1)], memory: [driver(1)] }), solution(90)) === null);
+  // Slice 1b: the dot's centre over a no-go arc asks in the arc's own word, and the pod would score 0 (any class).
+  const cliffs = [{ centreRad: 120 * DEG, halfWidthRad: 3 * DEG, word: 'CLIFFS' }];
+  const noGo = launchGuard(fakeState({ lzs, pods: [pod(1)], memory: [driver(1)], noGo: cliffs }), solution(121));
+  check('[L] over a no-go arc asks `LAUNCH INTO CLIFFS? scores 0` (slice 1b)', noGo?.ask === 'no-go' && noGo.word === 'CLIFFS' && noGo.points === 0
+    && launchGuardText(noGo, 'PLAINS') === 'LAUNCH INTO CLIFFS? scores 0', JSON.stringify(noGo));
+  check('…beside the arc it is the plain off-site ask', launchGuard(fakeState({ lzs, pods: [pod(1)], memory: [driver(1)], noGo: cliffs }), solution(126))?.ask === 'off-site');
 }
 
 // --- The result: parked versus not launched, ON TARGET ---

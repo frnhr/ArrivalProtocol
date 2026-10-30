@@ -3,7 +3,9 @@
 // the MIND wordings; every line within MAX_LINE_CHARS with worst-case values; none of the never-say words; and a context
 // no row matches throws. Pure: no store.
 // Slice 1b foundation: L2 (the flight's row) replaces 1a's thrust throw, and the new rows L5-nogo, L8, L9, L10 and
-// L12-bay are wired to their context fields (Track DROP extends this suite with the fuzz pass).
+// L12-bay are wired to their context fields. Track DROP: L9 says TAB from the ship when it names a REPAIR (as L1, L8 and
+// L11 do), its GO LOWER alone says [TAB] from the MIND; and a fuzz pass of crafted contexts (every one, drawn under the
+// context's own invariants, matches a row that fits the strip).
 import { check, finish } from './checks';
 import { landingObjective, type LandingContext, type LandingObjective, type LandingRow } from '@systems/landing-guidance';
 import type { FlightObjective } from '@systems/guidance';
@@ -13,6 +15,7 @@ import {
   LANDING_LESSONS_1B, DRAG_STAMP_TEXT,
 } from '@data/landing-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
+import { createRng, type Rng } from '@systems/rng';
 import { MAX_LINE_CHARS, PODS_MAX, WINDOW_TACTICAL_LEAD_TAC } from '@data/tuning';
 
 // The next window: in band with room unless said otherwise.
@@ -119,12 +122,23 @@ expect('...repairing: waited out', ctx({ uncertain: { cause: 'repairing' } }), '
   (o) => o.id === 'landing-L8-busy' && o.keys.length === 0);
 expect('...missing: no fix, the SKIP kept', ctx({ uncertain: { cause: 'missing' } }), 'L8', 'DROP UNCERTAIN — NO SENSOR INTERP · [F]',
   (o) => o.id === 'landing-L8-missing' && o.keys.join() === 'F' && o.urgency === 'wait');
-expect('L9: a driver\'s REPAIR, or fly lower, with the SKIP tail', ctx({ tooWide: { lz: 'LZ-B', repair: { file: 'driver', pod: 5, factor: 2 }, goLower: true } }),
-  'L9', 'DROP TOO WIDE FOR LZ-B — REPAIR POD 05, or fly lower · [F]', (o) => o.urgency === 'soon' && o.keys.join() === 'F' && o.layer === 'mind');
+const podRepair = { lz: 'LZ-B', repair: { file: 'driver', pod: 5, factor: 2 }, goLower: true } as const;
+expect('L9: a driver\'s REPAIR (TAB from the ship), or fly lower, with the SKIP tail', ctx({ tooWide: podRepair }),
+  'L9', 'DROP TOO WIDE FOR LZ-B — TAB, REPAIR POD 05, or fly lower · [F]',
+  (o) => o.urgency === 'soon' && o.keys.join() === 'TAB,F' && o.layer === 'mind');
+expect('...in the MIND: no TAB, the driver lit once REPAIR is in hand', ctx({ tooWide: podRepair, inMind: true, heldTool: 'repair' }),
+  'L9', 'DROP TOO WIDE FOR LZ-B — REPAIR POD 05, or fly lower · [F]', (o) => o.keys.join() === 'F' && o.highlight === 'driver-pod05');
 expect('...Sensor Interp\'s REPAIR lights its chip', ctx({ tooWide: { lz: 'LZ-B', repair: { file: 'sensor', factor: 1.5 }, goLower: false }, skipAvailable: false }),
-  'L9', 'DROP TOO WIDE FOR LZ-B — REPAIR SENSOR INTERP', (o) => o.repairs === 'sensor' && o.keys.length === 0);
+  'L9', 'DROP TOO WIDE FOR LZ-B — TAB, REPAIR SENSOR INTERP', (o) => o.repairs === 'sensor' && o.keys.join() === 'TAB');
+expect('...Nav Plotter\'s, in the MIND', ctx({ tooWide: { lz: 'LZ-A', repair: { file: 'navplot', factor: 1.5 }, goLower: false }, inMind: true }),
+  'L9', 'DROP TOO WIDE FOR LZ-A — REPAIR NAV PLOTTER · [F]', (o) => o.repairs === 'navplot' && o.keys.join() === 'F');
 expect('...GO LOWER alone', ctx({ tooWide: { lz: 'LZ-C', repair: null, goLower: true } }), 'L9', 'DROP TOO WIDE FOR LZ-C — fly lower · [F]',
-  (o) => o.layer === 'ship');
+  (o) => o.layer === 'ship' && o.keys.join() === 'F');
+expect('...GO LOWER alone from the MIND says [TAB] first (the burn is flown from amber)', ctx({ tooWide: { lz: 'LZ-C', repair: null, goLower: true }, inMind: true }),
+  'L9', 'DROP TOO WIDE FOR LZ-C — [TAB], fly lower · [F]', (o) => o.keys.join() === 'TAB,F');
+expect('...no SKIP: no tail, no [F]', ctx({ tooWide: { lz: 'LZ-C', repair: null, goLower: true }, skipAvailable: false }), 'L9',
+  'DROP TOO WIDE FOR LZ-C — fly lower', (o) => o.keys.length === 0);
+expect('...a window open now comes first (L5 at the window, risk 12)', ctx({ tooWide: podRepair, open: open({ sure: false }) }), 'L5', LANDING_LINES.L5);
 expect('L10: decay leaves the band in 2 orbits', ctx({ decay: { orbits: 2 } }), 'L10', 'ORBIT DECAYING — out of the band in 2 orbits',
   (o) => o.urgency === 'soon');
 expect('L12-bay: Bay Ctrl missing', ctx({ bayOffline: true, canLaunch: false }), 'L12', LANDING_DROP_LINES.L12bay,
@@ -169,6 +183,77 @@ expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true },
   let threw = false;
   try { landingObjective(ctx({ tooWide: { lz: 'LZ-B', repair: null, goLower: false } })); } catch { threw = true; }
   check('L9 with neither a REPAIR nor GO LOWER throws', threw);
+}
+
+// --- The fuzz pass (Track DROP): crafted contexts under the context's own invariants all match a row -------------------
+// Each draw is a situation the game can be in (buildLandingContext's shape): no solution or no dot means no window and no
+// next; with a solution and a dot every LZ has a next window; dropTooWide never hands L9 neither fix; Bay Ctrl missing
+// means no pod can launch; an open window counting to its sure part is not sure yet. Every one must match a row (never
+// the dev throw), fit the strip, and keep L2's id from the flight row.
+{
+  const flights: (FlightObjective | null)[] = [
+    null, trim, capture, ready,
+    { id: 'F4-press', text: "DON'T HIT THE PLANET — press [W] (PRO) and burn", keys: ['W'], urgency: 'now', showAccept: false },
+    { id: 'LIFT-apo', text: `${LANDING_FLIGHT_LINES.liftProblem} — at ▲ press [W] (PRO) and burn`, keys: ['W'], urgency: 'soon', showAccept: false },
+    { id: 'GO-LOW-keep', text: LANDING_FLIGHT_LINES.goLowKeep('LZ-D'), keys: ['SPACE'], urgency: 'now', showAccept: false },
+  ];
+  const pick = <T>(rng: Rng, items: readonly T[]): T => items[Math.floor(rng() * items.length)]!;
+  const maybe = (rng: Rng, p = 0.5): boolean => rng() < p;
+  const lzs = ['LZ-A', 'LZ-B', 'LZ-C', 'LZ-D'];
+  type Hint = NonNullable<LandingContext['tooWide']>['repair'];
+  const draw = (rng: Rng): LandingContext => {
+    const drop = pick(rng, ['solved', 'solved', 'solved', 'block', 'no-dot'] as const);
+    const solved = drop === 'solved';
+    const aboard = maybe(rng, 0.85) ? 1 + Math.floor(rng() * PODS_MAX) : 0;
+    const bayOffline = maybe(rng, 0.1);
+    const anyCanEver = maybe(rng, 0.85);
+    const canLaunch = !bayOffline && anyCanEver && maybe(rng, 0.75);
+    const sure = maybe(rng);
+    const openWin = solved && maybe(rng, 0.4) ? open({
+      lz: pick(rng, lzs), sure, sureInTac: !sure && maybe(rng) ? rng() * 6 : null, full: maybe(rng, 0.2),
+      down: Math.floor(rng() * 4), count: 4,
+    }) : null;
+    const inBand = maybe(rng, 0.85);
+    const tac = rng() * 400;
+    const goLower = maybe(rng);
+    const repairs: Hint[] = [null, { file: 'driver', pod: 1 + Math.floor(rng() * PODS_MAX), factor: 2 }, { file: 'sensor', factor: 2.5 },
+      { file: 'navplot', factor: 1.5 }];
+    const repair = goLower ? pick(rng, repairs) : pick(rng, repairs.slice(1));
+    return ctx({
+      inMind: maybe(rng, 0.3), heldTool: maybe(rng, 0.2) ? 'repair' : null, finalShip: maybe(rng, 0.15), rootToDelete: maybe(rng, 0.3),
+      everyPodDown: maybe(rng, 0.3), aboard, falling: Math.floor(rng() * 3), block: drop === 'block', noDrop: drop === 'no-dot',
+      thrust: maybe(rng, 0.1), firing: maybe(rng, 0.1), open: openWin, nextWithRoom: maybe(rng) ? pick(rng, lzs) : null,
+      roomInBand: maybe(rng, 0.8), canLaunch, bayReady: maybe(rng, 0.7), bayReadyInTac: rng() * 20,
+      stuckPod: !canLaunch && anyCanEver && maybe(rng, 0.4) ? 1 + Math.floor(rng() * PODS_MAX) : null, anyCanEver,
+      next: solved ? next(pick(rng, lzs), tac, tac + rng() * 5, inBand, maybe(rng, 0.2)) : null,
+      noBandWindow: solved && !inBand && maybe(rng, 0.5), skipAvailable: maybe(rng, 0.6),
+      flight: pick(rng, flights), flightBurnInTac: maybe(rng) ? rng() * 20 : null,
+      uncertain: solved && maybe(rng, 0.2) ? { cause: pick(rng, ['hurt', 'repairing', 'moving', 'missing'] as const) } : null,
+      tooWide: solved && maybe(rng, 0.3) ? { lz: pick(rng, lzs), repair, goLower } : null,
+      decay: maybe(rng, 0.15) ? { orbits: 1 + Math.floor(rng() * 2) } : null, bayOffline,
+      lavaInReach: solved && openWin !== null && maybe(rng, 0.3) ? pick(rng, ['LAVA', 'CLIFFS']) : null,
+    });
+  };
+  const rng = createRng(1813);
+  const failures: string[] = [];
+  const rows = new Set<string>();
+  const DRAWS = 400;
+  for (let i = 0; i < DRAWS; i++) {
+    const c = draw(rng);
+    try {
+      const o = landingObjective(c);
+      rows.add(o.id);
+      if (o.text.length > MAX_LINE_CHARS) failures.push(`#${i} '${o.text}' is ${o.text.length} chars`);
+      if (o.row === 'L2' && o.id !== c.flight?.id) failures.push(`#${i} L2 lost the flight row's id (${o.id})`);
+    } catch (error) {
+      failures.push(`#${i} ${(error as Error).message.slice(0, 160)}`);
+    }
+  }
+  check(`fuzz: ${DRAWS} crafted contexts each match a row that fits the strip`, failures.length === 0, failures.slice(0, 3).join(' | '));
+  const wanted = ['landing-L1', 'landing-L4', 'landing-L5', 'landing-L5-nogo', 'landing-L8', 'landing-L8-missing', 'landing-L9', 'landing-L10',
+    'landing-L11', 'landing-L12', 'landing-L12-bay', 'landing-L12b', 'landing-L13', 'landing-L13-nodrop', 'F11-rp-low'];
+  const unseen = wanted.filter((id) => !rows.has(id));
+  check('fuzz: …and the draws reach every kind of row (the pass is not vacuous)', unseen.length === 0, `unseen: ${unseen.join(', ')}`);
 }
 
 // --- No match throws --------------------------------------------------------------------------------------------------
@@ -216,7 +301,9 @@ expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true },
       worst({ decay: { orbits: 2 } }),
       worst({ bayOffline: true }),
       worst({ noDrop: true, next: null }),
-      LANDING_DROP_LINES.L9(longLz, 'SENSOR INTERP', true) + LANDING_DROP_LINES.L9skip,
+      LANDING_DROP_LINES.L9(longLz, 'SENSOR INTERP', true, true) + LANDING_DROP_LINES.L9skip,
+      LANDING_DROP_LINES.L9(longLz, 'NAV PLOTTER', true, true) + LANDING_DROP_LINES.L9skip,
+      LANDING_DROP_LINES.L9(longLz, 'POD 16', true, true) + LANDING_DROP_LINES.L9skip,
       LANDING_FLIGHT_LINES.goLow('turn to RETRO with [Q]/[E]') + LANDING_FLIGHT_LINES.forLz(longLz),
       LANDING_FLIGHT_LINES.goLowKeep(longLz), LANDING_FLIGHT_LINES.goLowRelease,
       `${LANDING_FLIGHT_LINES.liftProblem} — at ▲ turn to PRO with [Q]/[E] and burn`, LANDING_FLIGHT_LINES.liftKeep,
