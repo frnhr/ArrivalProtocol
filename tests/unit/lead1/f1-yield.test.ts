@@ -112,7 +112,7 @@ function toCapture(): void {
   const ring = { min: 5000, max: 7000 } as FlightContext['ring'];
   const base: FlightContext = {
     // LEAD-2 review round 2: the context carries F4's lift preset (null off an impact course).
-    status: 'approaching', landing: false, outcome: 'open', rp: 4200, inRing: false, outbound: false, liftPreset: null, ring,
+    status: 'approaching', landing: false, offer: null, outcome: 'open', rp: 4200, inRing: false, outbound: false, liftPreset: null, ring,
     sweetLo: 5600, sweetHi: 6400, sasMode: 'retrograde', firing: false, firingFor: null, thrustOn: false,
     outOfFuel: false, fuelShort: false, acceptOnly: false, strandedAnyway: false, cannotClose: false, presetsAvailable: true,
     plotFault: { role: 'sensor', cause: 'repairing' }, engineFault: null, inMind: false, skipAvailable: false,

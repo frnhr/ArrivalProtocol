@@ -386,6 +386,9 @@ export interface DropSolveInput {
   factors: DropFactors;
   solution: boolean;            // capabilities.drop.solution: false with Nav Plotter dead or missing (L1)
   uncertain: boolean;           // capabilities.drop.uncertain: Sensor Interp failing, dead or missing (the grey dot)
+  // landing-orbit dropSolvable(state, planet), asked by the caller (this module never imports landing-orbit, which
+  // imports it): false outside the solver's domain (risk 9), and then there is no dot and no window, as on an open path.
+  solvable: boolean;
   // The next drag kick's game time (landing-orbit nextDragKick over one period; drop-cache asks), null with none due.
   validUntilTSec: number | null;
 }
@@ -403,6 +406,8 @@ export function computeDropSolution(input: DropSolveInput, track: DotTrack | nul
   }
   const periodSec = periodOf(elements, input.mu);
   if (!input.solution) return { asOfTSec: input.tSec, periodSec, block: 'no-solution', dot: null, arc: [], windows: [], uncertain, validUntilTSec };
+  // Outside the solver's domain (risk 9): no dot and no window, as on an open path (L2's rows or L13-nodrop say why).
+  if (!input.solvable) return { asOfTSec: input.tSec, periodSec, block: null, dot: null, arc: [], windows: [], uncertain, validUntilTSec };
   const aimRp = POD_AIM_RP_FRAC * input.R;
   const solved = track ?? dotTrack(input.state, input.mu, input.R, aimRp);
   const launchRadius = Math.hypot(input.state.x, input.state.y);

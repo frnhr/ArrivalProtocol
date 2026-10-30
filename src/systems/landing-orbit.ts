@@ -2,6 +2,7 @@ import type { OrbitState, PlanetParams, Ring } from '@/types/orbit';
 import type { DecayState, DragKick, DropFactors, GoLowAim, LzState } from '@/types/landing';
 import type { GameState } from '@state/schema';
 import type { BurnPoint, Prediction } from '@systems/predict';
+import { dropHalfWidthKm } from '@systems/landing-solve';
 import { DRAG_LINE_FRAC } from '@data/tuning';
 
 // The landing's orbit math (01-landing §3.7, slice-1b-plan §1.1, §1.4): the DRAG line and its kicks, the decay forecast,
@@ -11,7 +12,9 @@ import { DRAG_LINE_FRAC } from '@data/tuning';
 //
 // Imports: types, data/tuning and landing-solve only, and predict as TYPES ONLY. Never predict's values: predict reads
 // this module (the 'go-low' and 'lift' burn points), and a value import back would close a load-order cycle
-// (tests/unit/wp12/fix1/entries.test.ts loads every module first in a fresh process).
+// (tests/unit/wp12/fix1/entries.test.ts loads every module first in a fresh process). NEVER landing-rules either:
+// landing-rules (Track DROP) imports this module (goLowerFit for L9), so that edge must stay one-way. And landing-solve
+// must never import this module back (computeDropSolution takes dropSolvable's answer as DropSolveInput.solvable).
 //
 // Track ORBIT owns this file. The foundation laid down the final signatures; every body below that says
 // TODO(slice1b-ORBIT) returns its neutral value (no kick, no forecast, no fit, no offer), so nothing changes behaviour
@@ -62,6 +65,23 @@ export function decayForecast(_orbit: Readonly<OrbitState>, _mu: number, _ring: 
 
 // --- GO LOWER (§3.7) ---------------------------------------------------------------------------------------------------
 
+// THE shared primitive of GO LOWER and AUTOBURN v3 (foundation review): the sure window, in tactical s, of `lz` for a
+// pod launched at `radiusKm` with the ship moving at `speedKmS` and the next pod's `factors`. The whole dot (± s,
+// landing-solve dropHalfWidthKm) fits while its centre is within (half-width − s) of the bracket's centre, and the dot
+// sweeps the surface at the ship's angular rate (speedKmS / radiusKm, exact on a circle, where the pod's lead angle is
+// constant). 0 when the dot never fits. Closed form, so the callers below can bisect on it every frame.
+// CAVEAT for ORBIT: the pod's lead angle shrinks with altitude (§3.3: 88° from 9,000 km, 70° from 5,000), so after a
+// GO LOWER burn the true launch point moves; engine-landing.test checks the 4 s margin against the re-solved window.
+export function sureTacAt(
+  radiusKm: number, speedKmS: number, lz: Readonly<LzState>, factors: Readonly<DropFactors>, R: number, warp: number,
+): number {
+  if (!(radiusKm > R && speedKmS > 0 && warp > 0)) throw new Error(`sureTacAt: radius ${radiusKm}, speed ${speedKmS}, warp ${warp}`);
+  const roomKm = lz.widthKm / 2 - dropHalfWidthKm(radiusKm, R, factors);
+  if (roomKm <= 0) return 0;
+  const sweepRadPerSec = speedKmS / radiusKm;
+  return ((2 * roomKm) / R / sweepRadPerSec) / warp;
+}
+
 // Everything goLowerFit reads: the awaited LZ, the next pod's drop factors, the band, the planet, the landing's tactical
 // warp (the sure window is judged in tactical s), the ship now, and the ship's world angle at the LZ's launch point
 // (LzWindow.launchRad of the awaited window).
@@ -87,13 +107,17 @@ export interface GoLowerFit {
 // FROZEN INTERFACE between Track DROP (L9 calls it: `goLower = goLowerFit(...) !== null`) and Track ORBIT (implements it;
 // landing.ts builds GoLowAim from the same call), so L9's "or fly lower" and the burn the strip times always agree.
 // null: even the floor can't fit the LZ's dot, so L9 names the REPAIR alone.
+// Defined through sureTacAt (the target is where sureTacAt reaches LANDING_SURE_MIN_TAC), as highestFittingRadius is:
+// GO LOWER is AUTOBURN v3's one-LZ case by construction. MUST be closed-form or memoised: L9 calls it every director
+// frame, so it may bisect on sureTacAt but never run landing-solve dotTrack inside a bisection.
 export function goLowerFit(_input: Readonly<GoLowerInput>): GoLowerFit | null {
   // TODO(slice1b-ORBIT): the target radius (until then L9 is repair-only).
   return null;
 }
 
 // AUTOBURN v3's seam (slice 4): the highest launch radius at which every LZ in `lzs` gets a sure window of at least
-// LANDING_SURE_MIN_TAC with `factors`, inside `ring`; null when none does. GO LOWER's target is its one-LZ case.
+// LANDING_SURE_MIN_TAC with `factors`, inside `ring`; null when none does. GO LOWER's target is its one-LZ case: both are
+// defined through sureTacAt. Closed-form or memoised, like goLowerFit (never dotTrack inside a bisection).
 export function highestFittingRadius(
   _lzs: readonly LzState[], _factors: Readonly<DropFactors>, _ring: Readonly<Ring>, _R: number, _mu: number, _warp: number,
 ): number | null {
@@ -118,10 +142,21 @@ export function goLowReleased(_orbit: Readonly<OrbitState>, _mu: number, _aim: R
 
 // --- The burn offer and the solver's domain ----------------------------------------------------------------------------
 
-// The burn the landing offers now (plan §1.4), or null: the ONE answer read by pace (TACTICAL, the SKIP's stop), L2
-// (FlightContext.burnPoint in landing), the START BURN marker, the countdown chip and the beeps. The plan's burn point
-// while the landing goes on, when its reason is 'go-low', 'lift', or a ring trim the tank pays for (!pred.fuelShort, not
-// acceptOnly), and it is not the burn the kid declined (state.landing.declined, by burnKey).
+// Which burn a burn point is for the decline (DeclinedBurn.key): its reason and the event it is centred on, plus the LZ
+// for go-low. Not predict burnKey: its due|ahead part flips as the apsis passes, so the next pass's replan of the burn the
+// kid just declined would not match and be offered again (flight-events keys its beeps the same way).
+export function declineKey(burnPoint: Readonly<Pick<BurnPoint, 'reason' | 'event' | 'aimLz'>>): string {
+  const base = `${burnPoint.reason}|${burnPoint.event}`;
+  return burnPoint.reason === 'go-low' ? `${base}|${burnPoint.aimLz ?? ''}` : base;
+}
+
+// The burn the landing offers now (plan §1.4), or null: the ONE answer read by pace (TACTICAL, the SKIP's stop), L2's
+// lead (FlightContext.offer in landing; FlightContext.burnPoint stays the raw plan, which the flight rows need on an open
+// path), the START BURN marker, the countdown chip and the beeps. The plan's burn point while the landing goes on, when:
+// • its reason is 'capture', 'missed' or 'shrink': safety burns (an open path or a runaway loop in landing), always
+//   offered and never declinable;
+// • or 'go-low', 'lift', or a ring trim the tank pays for (!pred.fuelShort, not acceptOnly), and it is not the burn the
+//   kid declined (state.landing.declined.key === declineKey(bp)).
 export function landingBurnOffer(_state: Readonly<GameState>, _pred: Readonly<Prediction>): BurnPoint | null {
   // TODO(slice1b-ORBIT): the offer.
   return null;

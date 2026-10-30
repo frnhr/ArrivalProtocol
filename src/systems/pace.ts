@@ -155,7 +155,7 @@ function isLanding(state: Readonly<GameState>): boolean {
 }
 
 function momentNow(state: Readonly<GameState>, sol: Readonly<DropSolution> | null = getDropSolution()): LandingMoment {
-  return landingMoment(state, sol, state.clock.tSec);
+  return landingMoment(state, sol, state.clock.tSec, capabilitiesNow(state).bay.offline);
 }
 
 // The window the landing waits on is open now (state.landing.window).

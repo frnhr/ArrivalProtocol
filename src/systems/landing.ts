@@ -18,7 +18,7 @@ import { getPrediction } from '@systems/predict';
 import { requestSkip, skipBlockReason } from '@systems/pace';
 import { activeLandingController, setActiveLandingController } from '@systems/landing-controller';
 import {
-  classifyLanding, colonyName, dropFactors, driverTouch, inOrbitOutcome, isLaunchable, landingMoment, landingStuck,
+  classifyLanding, colonyName, dropFactors, driverTouch, isLaunchable, landingMoment, landingOutcome, landingStuck,
   landingView as landingViewOf, launchGuard, launchGuardText, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podCounts, podPoints,
   touchAtTouchdown,
   windowOpenNow,
@@ -204,7 +204,7 @@ function touchDown(store: Store<GameState>, pod: number): void {
 function endNow(store: Store<GameState>, reason: LandingEnd): void {
   const state = store.getState();
   if (state.landing.ended !== null) throw new Error(`endNow: the landing already ended (${state.landing.ended})`);
-  const outcome = inOrbitOutcome(state.burn.status);
+  const outcome = landingOutcome(state.burn.status);
   let parked = 0;
   store.update((draft) => {
     draft.landing.ended = reason;
@@ -311,7 +311,7 @@ let beepWatch: BeepWatch = { ...NO_BEEP_WATCH };
 function beepTick(store: Store<GameState>): void {
   const state = store.getState();
   const now = state.clock.tSec;
-  const moment = landingMoment(state, getDropSolution(), now);
+  const moment = landingMoment(state, getDropSolution(), now, capabilitiesNow(state).bay.offline);
   const target = moment.canLaunch ? moment.target : null;
   const opensIn = target?.launchInSec ?? null;
   const key = target === null || opensIn === null ? null : `${target.lz}|${Math.round(now + opensIn)}`;

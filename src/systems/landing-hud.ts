@@ -6,6 +6,7 @@ import type {
 import { elementsFromState, propagateConic, semiMajorAxis, type Vec2 } from '@/types/orbit';
 import { driversInMemory } from '@state/selectors';
 import { angleDelta, dropHalfWidthKm } from '@systems/landing-solve';
+import { capabilitiesNow } from '@systems/capabilities';
 import {
   bayMembers, bayShown, driverTouch, isLaunchable, launchGuard, launchRefusal, lzAt, lzDownFill, lzProjectedFill, nextToLaunch,
   landingMoment, onTargetTally, podCounts, podsWithFate,
@@ -84,7 +85,7 @@ function windowOf(sol: Readonly<DropSolution> | null, lz: string): LzWindow | nu
 
 export function bracketModels(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): BracketModel[] {
   const { landing } = state;
-  const target = landingMoment(state, sol, state.clock.tSec).target;
+  const target = landingMoment(state, sol, state.clock.tSec, capabilitiesNow(state).bay.offline).target;
   const counters = lzCounters(state);
   return landing.lzs.map((lz, i) => {
     const counter = counters[i]!;
@@ -391,7 +392,7 @@ export function groundTrackModel(state: Readonly<GameState>, sol: Readonly<DropS
   // The next LZs past the right edge, soonest launch moment first, with its countdown: the in-band windows as of now
   // (landing-rules landingMoment, the strip's and the chip's count); an LZ never in the band is hatched, not listed.
   const ahead: GroundAhead[] = [];
-  const waiting = landingMoment(state, sol, state.clock.tSec).upcoming
+  const waiting = landingMoment(state, sol, state.clock.tSec, capabilitiesNow(state).bay.offline).upcoming
     .filter((w) => {
       const bracket = stripBrackets.find((b) => b.lz === w.lz);
       return bracket !== undefined && bracket.from >= 1;
@@ -579,7 +580,7 @@ export function miniHudLanding(state: Readonly<GameState>, sol: Readonly<DropSol
   else {
     // Counting to the awaited window's launch moment (the strip's GET READY, the chip: landing-rules landingMoment), OPEN
     // once it has come.
-    const moment = landingMoment(state, sol, state.clock.tSec);
+    const moment = landingMoment(state, sol, state.clock.tSec, capabilitiesNow(state).bay.offline);
     if (moment.open !== null && moment.open.awaited && moment.open.launchCome) {
       window = { text: MINI_LANDING_TEXT.windowOpen(moment.open.lz), open: true };
     } else if (moment.target !== null) {

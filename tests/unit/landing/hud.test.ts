@@ -63,7 +63,7 @@ function circle(state: GameState, angleRad: number, r: number, retro = false): v
 function solve(state: GameState): DropSolution {
   return computeDropSolution({
     state: state.orbit, tSec: state.clock.tSec, mu: state.level.planet.mu, R: state.level.planet.R, ring: state.level.ring,
-    lzs: state.landing.lzs, factors: { sensor: 1, plotter: 1, driver: 1 }, solution: true, uncertain: false, validUntilTSec: null,
+    lzs: state.landing.lzs, factors: { sensor: 1, plotter: 1, driver: 1 }, solution: true, uncertain: false, validUntilTSec: null, solvable: true,
   });
 }
 

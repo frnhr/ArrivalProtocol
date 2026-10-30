@@ -199,7 +199,9 @@ export function dropFactors(_caps: Readonly<Capabilities>, _driver: Readonly<Dri
 
 // L9 (§3.11, plan §1.5): the awaited LZ (landingMoment's target) has no sure window this pass (sureOpenInSec null), and
 // a REPAIR (bestRepairForDrop) or GO LOWER (landing-orbit goLowerFit !== null) would give one; null otherwise, and with
-// neither (then L5 shows at the window).
+// neither (then L5 shows at the window). Never `{ repair: null, goLower: false }`: that is null (the table throws on it).
+// `goLower` is false while decay is warned (landing-orbit decayForecast ≤ DECAY_WARN_ORBITS: L10's 'lift' burn goes up,
+// and GO LOWER would fight it); L10 sits above L9 in the table anyway.
 export function dropTooWide(_state: Readonly<GameState>, _sol: Readonly<DropSolution>, _caps: Readonly<Capabilities>): TooWide | null {
   // TODO(slice1b-DROP): the L9 rule.
   return null;
@@ -336,10 +338,14 @@ export interface LandingMoment {
 // drop-cache's getDropSolution(), `nowTSec` the clock. The seam AUTODROP (4c) and 1b's kicks lean on.
 // Only in-band windows count (risk 13): an LZ whose window is never in the band is not waited on, named or counted
 // down to (review M1: L3 named LZ-B out of band and the strip looped `hold the pods for LZ-B` for ever).
-export function landingMoment(state: Readonly<GameState>, sol: Readonly<DropSolution> | null, nowTSec: number): LandingMoment {
+// `bayOffline` (capabilities bay.offline, passed in so this stays pure): with Bay Ctrl missing no pod can launch, so
+// nothing is awaited (no TACTICAL, no WINDOW OPEN, no GET READY) and canLaunch is false; the table shows L12-bay.
+export function landingMoment(
+  state: Readonly<GameState>, sol: Readonly<DropSolution> | null, nowTSec: number, bayOffline: boolean,
+): LandingMoment {
   const { landing } = state;
-  const awaited = state.run.phase === 'landing' && landing.ended === null && driversThatCanEverLaunch(state).length > 0;
-  const canLaunch = state.run.phase === 'landing' && nextToLaunch(state) !== null;
+  const awaited = state.run.phase === 'landing' && landing.ended === null && !bayOffline && driversThatCanEverLaunch(state).length > 0;
+  const canLaunch = state.run.phase === 'landing' && !bayOffline && nextToLaunch(state) !== null;
   const remaining = lzRemaining(state);
   const full = (lz: string): boolean => (remaining[lz] ?? 0) <= 0;
   const solved = sol !== null && sol.block === null ? sol : null;
@@ -457,6 +463,14 @@ export function landingView(state: Readonly<GameState>, solution: Readonly<DropS
 }
 
 // --- The ship's result -------------------------------------------------------------------------------------------------
+
+// The outcome of the ship whose landing is ending (§3.10), from burn.status: in orbit (inOrbitOutcome), or, with the
+// engine open in 1b, crashed or escaped during the landing (LandingEnd 'ship-lost': pods aboard go NOT LAUNCHED,
+// finalFateOfAboard). endNow, the LANDING REPORT and the LOST card share it. Any other status never had a landing.
+export function landingOutcome(status: BurnStatus): ShipOutcome {
+  if (status === 'crashed' || status === 'escaped') return status;
+  return inOrbitOutcome(status);
+}
 
 // The outcome of a ship whose landing runs in orbit (§3.10): ORBIT LOCKED, or an ACCEPTed loop ('partial'). The one rule
 // the landing's end, its report and the run's ShipResult (run.ts shipOutcomeOf) share. Any other status has no landing.

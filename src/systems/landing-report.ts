@@ -1,7 +1,7 @@
 import type { GameState } from '@state/schema';
 import type { Colonist } from '@/types/segment';
 import type { LandingTally, Place, PodSummary, Touch } from '@/types/landing';
-import { inOrbitOutcome, landingResult } from '@systems/landing-rules';
+import { landingOutcome, landingResult } from '@systems/landing-rules';
 import { angleDelta } from '@systems/landing-solve';
 import { shipStars, starCharge, type ShipStar } from '@systems/stars';
 import { LANDING_REPORT_TEXT, LANDING_REPORT_UI_TEXT, PARK_REASON_TEXT, podCode } from '@data/landing-text';
@@ -169,10 +169,11 @@ function credits(state: Readonly<GameState>, tally: LandingTally): LandingReport
 }
 
 // Read from the state alone (the ship's name and world, the final ship), never from SHIPS: a generator-made ship (§1.7)
-// needs nothing new here. The report opens only for a ship whose landing ran in orbit (locked or accepted).
+// needs nothing new here. The report opens for a ship whose landing ran in orbit (locked or accepted); a ship lost during
+// the landing (1b's 'ship-lost') gets the LOST card, but its outcome still reads (landingOutcome) rather than throws.
 export function landingReportModel(state: Readonly<GameState>): LandingReportModel {
   const { landing } = state;
-  const tally = landingResult(state, inOrbitOutcome(state.burn.status));
+  const tally = landingResult(state, landingOutcome(state.burn.status));
   const rows = reportRows(tally);
   // Near misses: pods down off-site or in a no-go arc, by their km to the nearest bracket edge, naming that LZ.
   const misses: { km: number; text: string }[] = [];

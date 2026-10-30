@@ -26,7 +26,7 @@ function ctx(over: Partial<LandingContext> = {}): LandingContext {
     inMind: false, heldTool: null, finalShip: false, rootToDelete: false, everyPodDown: false, aboard: 3, falling: 0, block: false,
     thrust: false, open: null, nextWithRoom: 'LZ-B', roomInBand: true, canLaunch: true, bayReady: true, bayReadyInTac: 0, stuckPod: null,
     anyCanEver: true, next: next('LZ-A', 130, 132), noBandWindow: false, skipAvailable: true,
-    firing: false, flight: null, flightBurnInTac: null, uncertain: null, tooWide: null, decay: null, bayOffline: false, lavaInReach: null,
+    noDrop: false, firing: false, flight: null, flightBurnInTac: null, uncertain: null, tooWide: null, decay: null, bayOffline: false, lavaInReach: null,
     ...over,
   };
 }
@@ -130,10 +130,46 @@ expect('L10: decay leaves the band in 2 orbits', ctx({ decay: { orbits: 2 } }), 
 expect('L12-bay: Bay Ctrl missing', ctx({ bayOffline: true, canLaunch: false }), 'L12', LANDING_DROP_LINES.L12bay,
   (o) => o.id === 'landing-L12-bay' && o.urgency === 'now');
 expect('...before L12', ctx({ bayOffline: true, canLaunch: false, anyCanEver: false }), 'L12', LANDING_DROP_LINES.L12bay);
-expect('order: L8 before L9, L10 and L11', ctx({ uncertain: { cause: 'hurt' }, tooWide: { lz: 'LZ-B', repair: null, goLower: true },
-  decay: { orbits: 1 }, canLaunch: false, stuckPod: 3 }), 'L8', LANDING_DROP_LINES.L8);
-expect('...L9 before L10', ctx({ tooWide: { lz: 'LZ-B', repair: null, goLower: true }, decay: { orbits: 1 } }), 'L9', /^DROP TOO WIDE/);
+expect('order: L8 before L9 and L11', ctx({ uncertain: { cause: 'hurt' }, tooWide: { lz: 'LZ-B', repair: null, goLower: true },
+  canLaunch: false, stuckPod: 3 }), 'L8', LANDING_DROP_LINES.L8);
+expect('...L9 before L11', ctx({ tooWide: { lz: 'LZ-B', repair: null, goLower: true }, canLaunch: false, stuckPod: 3 }), 'L9', /^DROP TOO WIDE/);
 expect('...L10 before L11', ctx({ decay: { orbits: 1 }, canLaunch: false, stuckPod: 3 }), 'L10', 'ORBIT DECAYING — out of the band in 1 orbit');
+
+// --- The foundation review's cases (its probe: .tmp/rev1b/probe.ts) ----------------------------------------------------
+// B1: no drop dot (an open path, an orbit outside dropSolvable): no window, no next; the table never throws.
+const capture: FlightObjective = { id: 'F10-wait', text: 'WAIT — brake at ▼ in 0:30', keys: [], urgency: 'soon', layer: 'ship', showAccept: false };
+expect('B1: no dot, no flight row: L13-nodrop', ctx({ noDrop: true, next: null, nextWithRoom: null, roomInBand: false }), 'L13',
+  'NO DROP DOT ON THIS PATH — fly back into the launch band', (o) => o.id === 'landing-L13-nodrop' && o.urgency === 'wait');
+expect('B1: no dot, the capture 30 tac s away: L2 leads (F10-wait)', ctx({ noDrop: true, next: null, nextWithRoom: null, roomInBand: false,
+  flight: capture, flightBurnInTac: 30 }), 'L2', capture.text, (o) => o.id === 'F10-wait');
+expect('B1: no dot and every pod away: still L12b', ctx({ noDrop: true, next: null, aboard: 0, falling: 1 }), 'L12b', 'ALL PODS AWAY · 1 FALLING');
+// M2: an offered burn within the lead yields to an open window a pod can launch in.
+const ready: FlightObjective = { ...trim, id: 'F11-ready', text: 'GET READY — BURN IN 0:05', keys: [], urgency: 'now' };
+expect('M2: open sure window, a trim 5 tac s away: LAUNCH NOW first', ctx({ open: open(), flight: ready, flightBurnInTac: 5 }), 'L4', /^LAUNCH NOW/);
+expect('M2: ...the bay reloading: RELOADING first', ctx({ open: open(), bayReady: false, bayReadyInTac: 1, flight: ready, flightBurnInTac: 5 }), 'L6', /^RELOADING/);
+expect('M2: ...no pod can launch: the burn leads', ctx({ open: open(), canLaunch: false, stuckPod: 2, flight: ready, flightBurnInTac: 5 }), 'L2', ready.text);
+expect('M2: ...the dot not sure yet (GET READY to it): the burn leads', ctx({ open: open({ sure: false, sureInTac: 3 }), flight: ready, flightBurnInTac: 5 }),
+  'L2', ready.text);
+expect('M2: ...firing still leads over the window', ctx({ open: open(), flight: ready, flightBurnInTac: 5, firing: true }), 'L2', ready.text);
+// M3: Bay Ctrl missing comes before any window row ([L] refuses BAY OFFLINE) and before L11.
+expect('M3: bay offline over an open sure window: L12-bay, never LAUNCH NOW', ctx({ bayOffline: true, open: open() }), 'L12', LANDING_DROP_LINES.L12bay,
+  (o) => o.id === 'landing-L12-bay');
+expect('M3: ...and before a driver REPAIR that can\'t help', ctx({ bayOffline: true, canLaunch: false, stuckPod: 4 }), 'L12', LANDING_DROP_LINES.L12bay);
+// M4: L10 above L8 and L9; its key only from a LIFT-* row.
+expect('M4: decaying with a wide dot: L10, not `fly lower`', ctx({ next: next('LZ-B', 60, 60), decay: { orbits: 1 },
+  tooWide: { lz: 'LZ-B', repair: null, goLower: true } }), 'L10', 'ORBIT DECAYING — out of the band in 1 orbit');
+expect('M4: ...over DROP UNCERTAIN too', ctx({ decay: { orbits: 2 }, uncertain: { cause: 'hurt' } }), 'L10', /^ORBIT DECAYING/);
+expect('M4: ...a GO-LOW row\'s [S] is not L10\'s key', ctx({ decay: { orbits: 1 }, flight: { ...capture, id: 'GO-LOW-wait', keys: ['S'] }, flightBurnInTac: 40 }),
+  'L10', /^ORBIT DECAYING/, (o) => o.keys.length === 0);
+expect('M4: ...a LIFT row\'s [W] is', ctx({ decay: { orbits: 1 }, flight: { ...capture, id: 'LIFT-apo', keys: ['W'] }, flightBurnInTac: 40 }),
+  'L10', /^ORBIT DECAYING/, (o) => o.keys.join() === 'W');
+// The warning colour of a flight row survives L2; an L9 with neither fix throws (dropTooWide returns null then).
+expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true }, thrust: true }), 'L2', trim.text, (o) => o.warn === true);
+{
+  let threw = false;
+  try { landingObjective(ctx({ tooWide: { lz: 'LZ-B', repair: null, goLower: false } })); } catch { threw = true; }
+  check('L9 with neither a REPAIR nor GO LOWER throws', threw);
+}
 
 // --- No match throws --------------------------------------------------------------------------------------------------
 {
@@ -179,6 +215,7 @@ expect('...L10 before L11', ctx({ decay: { orbits: 1 }, canLaunch: false, stuckP
       worst({ tooWide: { lz: longLz, repair: null, goLower: true } }),
       worst({ decay: { orbits: 2 } }),
       worst({ bayOffline: true }),
+      worst({ noDrop: true, next: null }),
       LANDING_DROP_LINES.L9(longLz, 'SENSOR INTERP', true) + LANDING_DROP_LINES.L9skip,
       LANDING_FLIGHT_LINES.goLow('turn to RETRO with [Q]/[E]') + LANDING_FLIGHT_LINES.forLz(longLz),
       LANDING_FLIGHT_LINES.goLowKeep(longLz), LANDING_FLIGHT_LINES.goLowRelease,

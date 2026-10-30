@@ -194,6 +194,7 @@ function landingLine(objective: LandingObjective, ctx: DirectorCtx): ObjectiveLi
     layer: objective.layer,
     highlight: objective.repairs ? repairStepTarget(held, objective.repairs) : objective.highlight ?? null,
     source: 'landing',
+    warn: objective.warn === true,   // L2's flight row in its warning colour (slice 1b)
   };
 }
 

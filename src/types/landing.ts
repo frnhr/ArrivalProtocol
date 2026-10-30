@@ -126,10 +126,12 @@ export interface BayState {
   cadenceLeftTac: number;
 }
 
-// Why no more pods launch: every pod away, END LANDING, the risk-7 auto-end (no driver left), or Bay Ctrl missing
-// (§3.4's BAY OFFLINE: a ship file with no backup never comes back on this ship, so it auto-ends like no-driver-left;
-// landing-rules landingStuck names both).
-export type LandingEnd = 'all-launched' | 'end-landing' | 'no-driver-left' | 'bay-offline';
+// Why no more pods launch: every pod away, END LANDING, the risk-7 auto-end (no driver left), Bay Ctrl missing (§3.4's
+// BAY OFFLINE: a ship file with no backup never comes back on this ship, so it auto-ends like no-driver-left;
+// landing-rules landingStuck names both), or the ship left orbit during the landing ('ship-lost': with the engine open
+// in 1b a dry tank under decay can crash and a wild burn can escape; ORBIT's endLandingLost writes it, the pods aboard
+// go NOT LAUNCHED and the falling ones still score; landing-rules landingOutcome reads burn.status for the outcome).
+export type LandingEnd = 'all-launched' | 'end-landing' | 'no-driver-left' | 'bay-offline' | 'ship-lost';
 
 // --- Decay and GO LOWER (§3.7, slice 1b; landing-orbit.ts is the math, orbit-sim and landing.ts write the state) ---
 
@@ -167,7 +169,9 @@ export interface GoLowAim {
 // An offered burn (landing-orbit landingBurnOffer) that passed with no Δv delivered for it (risk 2): it stops neither a
 // SKIP nor pace again until a launch, `untilLz`'s window closing, or a new reason (landing.ts clears it).
 export interface DeclinedBurn {
-  key: string;              // predict burnKey of the declined burn
+  // landing-orbit declineKey of the declined burn: reason|event (+ the aim LZ for go-low), NOT predict burnKey, whose
+  // due|ahead part changes when the burn's apsis passes, so the next pass's replan of the same burn would never match.
+  key: string;
   untilLz: string | null;   // the LZ whose window ends the decline (null: until a launch or a new reason)
 }
 

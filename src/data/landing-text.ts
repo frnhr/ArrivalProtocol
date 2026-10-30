@@ -220,6 +220,13 @@ export const LANDING_DECAY_LINES = {
   },
 } as const;
 
+// The landing table's fallback when there is no drop dot and no flight row leads (`landing-L13-nodrop`): an open path or
+// an orbit outside the drop solver's domain (landing-orbit dropSolvable), so no window can be named until the orbit is
+// back. Normally L2's flight row (F9/F10, a trim) says what to burn; this covers the moments it has nothing to say.
+export const LANDING_NODROP_LINES = {
+  L13noDrop: 'NO DROP DOT ON THIS PATH — fly back into the launch band',
+} as const;
+
 // The drag kick's stamp on the NAV PLOT (§3.7), from DRAG_STAMP_MIN_KM: the far apsis that moved, and by how much.
 export const DRAG_STAMP_TEXT = {
   kick: (apsis: '▲' | '▼', dropKm: number): string => `DRAG · ${apsis} −${formatCount(Math.round(dropKm))} km`,
@@ -258,6 +265,7 @@ export const LANDING_END_TEXT: Readonly<Record<LandingEnd, string | null>> = {
   'end-landing': null,
   'no-driver-left': null,
   'bay-offline': 'NO BAY CTRL — the pods still aboard were parked in orbit',
+  'ship-lost': null,   // the LOST card says it (run shipLost)
 };
 
 // The two lessons tied to 1b's mechanics (§3.11, risk 14), once each, said by data/script.ts (Track DROP is its editor).

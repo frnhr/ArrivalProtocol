@@ -328,6 +328,7 @@ The word `CLIFFS` makes the guard read `LAUNCH INTO CLIFFS? scores 0`. Update th
   - `landing-orbit.ts`, `orbit-sim.ts`, `predict.ts`, `pace.ts`, `guidance.ts`, `flight-controls.ts`, `flight-events.ts`, `autoburn.ts`;
   - `landing.ts` (goLow lifecycle, declined; it calls DROP's `landingStuck`), `landing-solve.ts`, `drop-cache.ts`;
   - `hollow.ts` (`drainConditions` only), `run.ts` (landing lost), `state/selectors.ts` (`engineOpen`), `director.ts` (the L2 plumbing after the foundation);
+  - `ghost-thrust.ts` (risk 5: ghost thrust in landing), and `tests/unit/landing/harness-landing.ts` (DROP and UI send it patches; added by the foundation review);
   - the `1b ORBIT` text and tuning sub-blocks;
   - `script.ts`'s drag lesson rule (`◆ BELOW THE DRAG LINE THE ORBIT SINKS`, on `decay.last.dropKm ≥ DRAG_STAMP_MIN_KM` the first time).
 - **Order:**
@@ -341,7 +342,7 @@ The word `CLIFFS` makes the guard read `LAUNCH INTO CLIFFS? scores 0`. Update th
 ### Track DROP (factors, Bay Ctrl, no-go, L8/L9, the table)
 
 - **Owns:**
-  - `capabilities.ts`, `landing-rules.ts`, `landing-guidance.ts` (after the foundation; ORBIT asks for row changes);
+  - `capabilities.ts`, `landing-rules.ts`, `landing-guidance.ts` (after the foundation and its review follow-up; ORBIT asks for row changes);
   - `data/ships.ts`, `data/landing-def.ts`, `data/memory.ts` (Bay Ctrl desc), `data/tool-text.ts`;
   - the `1b DROP` text and tuning sub-blocks;
   - `script.ts` (DROP is its only editor in 1b; ORBIT sends its one rule as a patch or request): the `◆ THE DOT IS WIDE — REPAIR, or fly lower` lesson on the first L9.
@@ -551,3 +552,44 @@ The foundation (§3.0 items 1–8) is in. Typecheck and the tests' tsc are green
   - `FlightContext` literals in `lead1/f1-yield`, `wp9/lines` and `wp9/fix1/fixes`;
   - `landing/pace-landing` passes `landingFlightOf`.
 - `landing/harness-landing`: `END_LANDING_ROWS` gains `landing-L12-bay`.
+
+### Deviations (foundation, review follow-up)
+
+An independent review of `abf886b` checked the import graph and the seams. Its findings were applied in one more commit; the foundation's own deviations above still stand where these don't replace them.
+
+**Blockers**
+- **B1, no drop dot.** With the engine open, an open path or an orbit outside `dropSolvable` gives `block === null`, `dot === null`, no windows. `LandingContext.noDrop` (that condition) makes L2 lead, and a fallback row `landing-L13-nodrop` (`LANDING_NODROP_LINES.L13noDrop`, ORBIT banner: `NO DROP DOT ON THIS PATH — fly back into the launch band`, urgency wait) covers it with no flight row. Both probe cases are in table.test. (The probe's own `ctx` predates `noDrop`, so it still throws there by construction.)
+- **B2, the offer no longer replaces `burnPoint`.** In landing `FlightContext.burnPoint` is the raw plan again (evaluatePath needs one on an open path and an out-of-ring loop; F9/F10 and a declined trim with the next window out of band are named from it). `FlightContext.offer: (BurnPoint & { inTac; burnTac }) | null` is `landingBurnOffer` in landing, null in flight. `landingFlightOf.burnInTac` reads the offer only. `landingBurnOffer`'s doc now says capture, missed and shrink are safety burns, always offered and never declinable.
+- **B3, a ship lost during the landing.** `LandingEnd` gains `'ship-lost'` (`LANDING_END_TEXT` null: the LOST card says it). New `landing-rules.landingOutcome(status)` returns crashed / escaped, else `inOrbitOutcome`; `endNow` and the LANDING REPORT use it, so ORBIT's `endLandingLost` can end through `endNow(store, 'ship-lost')` and the pods aboard go NOT LAUNCHED. `engineOpen` in landing also requires `burn.status` locked or accepted.
+
+**Majors**
+- **M1.** `landing-orbit.declineKey(bp)` = `reason|event` (+ `|aimLz` for go-low), documented on `DeclinedBurn.key`; predict `burnKey`'s due|ahead would never match the next pass's replan (flight-events keys its beeps the same way).
+- **M2.** A near offered burn (`flightBurnInTac ≤ 8`) as L2's only trigger yields to L3, L3b, L4, L5 and L6 while a window is open and a pod can launch. It still beats GET READY (both L7s). Thrust, firing, F4, `noDrop`, the next window out of band and no window in band still lead outright.
+- **M3.** L12-bay moved to just after L2. `landingMoment(state, sol, now, bayOffline)` takes a fourth argument (callers pass `capabilitiesNow(state).bay.offline`): with Bay Ctrl missing `canLaunch` and `awaited` are false, so no TACTICAL, WINDOW OPEN or GET READY. Callers updated: pace, landing.ts, landing-hud ×3, flight-hud, landing-guidance, rules.test.
+- **M4.** L10 sits above L8 and L9, and takes keys only from a `LIFT-*` row. `dropTooWide`'s doc says `goLower` is false while decay is warned, and that it never returns `{ repair: null, goLower: false }`; `tooWideLine` throws on that.
+- **M5, not applied (rejected for the foundation; handed to ORBIT).** Projecting max(burnMult, landMult) in landing (`drainRatePerSec(cfg, engineOpen(state), true)`) was tried and broke `wp6/hollow-sim`: ship 1's tutorial alarm `POD 01 WILL BE EATEN IN 0:10` came 20 s before the eat instead of 10 (ARES-VII: landMult 1, burnMult 2). In the foundation nothing can burn in landing (flight-controls still refuses), so the projection would be wrong for every landing until ORBIT opens the throttle, and the brief says nothing changes behaviour yet. It belongs with ORBIT's engine opening, and it is a design trade for Fran either way: projecting the burn makes every landing countdown (the tutorial's scripted bite included) run at half speed while coasting, as flight's do; projecting landMult makes it jump when the kid burns. See ORBIT's notes.
+
+**Minors**
+- `landing-orbit.sureTacAt(radiusKm, speedKmS, lz, factors, R, warp): number` is real (closed form: (2·(half-width − s) / R) / (v / r) / warp, 0 when the dot never fits). `goLowerFit` and `highestFittingRadius` are documented as defined through it (GO LOWER is v3's one-LZ case by construction), as closed-form or memoised (L9 calls them every director frame; never `dotTrack` inside a bisection), and with the caveat that the pod's lead angle shrinks with altitude, so ORBIT tests the 4 s margin against the re-solved window.
+- **The solver's domain gate, done differently than asked.** The review asked for `DropSolveInput` to gain the planet so `computeDropSolution` could call `dropSolvable`. That would make landing-solve import landing-orbit, which already imports landing-solve (for `sureTacAt`'s drop width): a two-way edge the project keeps out. Instead `DropSolveInput.solvable: boolean` carries the caller's `dropSolvable(state, planet)` answer: drop-cache's `recompute` asks it once and gates both `dotTrack` and the solve on it; `computeDropSolution` returns the empty solution (no dot, no windows, the real period) when it is false, after the NO DROP SOLUTION check so L1 still wins.
+- landing-orbit's header says it never imports landing-rules (DROP's landing-rules → landing-orbit stays one-way), and landing-solve never imports landing-orbit.
+- `LandingObjective.warn` is new; L2 keeps the flight row's warning colour, and the director's `landingLine` passes it to the strip.
+
+### Notes for the tracks (foundation review)
+
+**ORBIT**
+- predict's in-landing order (§1.4): impact, ring trims, `'go-low'`, `'lift'`. `'lift'` goes through `planTrim` with a target override (`dragLine + DRAG_LIFT_MARGIN_KM`), not `trimTarget`, which stays the ring's.
+- Hold the window's edge events (window-open / sure / closed) steady during thrust: the 1 km element key re-solves at 10 Hz under a burn and an edge can flicker.
+- MERGE's reopen (finale.ts sets `ended` back to null) must also reset `goLow` and `declined`.
+- run.ts `lossPlan`'s simulated retry is flight-only; a ship lost in landing ('ship-lost') must not offer it.
+- Decide whether a go-low burn the tank can't pay for (`fuelShort`) is offered; say so in `landingBurnOffer`'s doc.
+- `endLandingLost` ends through `endNow(store, 'ship-lost')` (B3).
+- M5 (not applied by the foundation): once thrust counts in landing, `hollow.projectedDrainPerSec` should project `drainRatePerSec(cfg, engineOpen(state), true)` so `WILL BE EATEN IN` doesn't jump on a burn. It moves `wp6/hollow-sim`'s tutorial alarm from 10 s to 20 s before the eat on ARES-VII; raise it to Fran with the slice (or keep landMult and accept the jump).
+
+**UI**
+- flight-hud reads `pred.burnPoint` at about lines 187, 217, 302, 557 and 794 (the START BURN tick, the countdown chip, the beeps' readers). In landing they should read the offer: pass an injected `offer` parameter (landing-orbit `landingBurnOffer`), not the raw plan.
+
+**DROP**
+- L9's words have no TAB from the ship (§3.11's text); decide whether a REPAIR-naming L9 says `TAB, REPAIR …` as L1 and L8 do.
+- MERGE's blind drop (slice 7) wants the product of the factors: consider a `DropFactors` product helper (`dropFactorProduct`) beside `dropFactors`, so `s × BLIND_DROP_MULT` has one place.
+- `dropTooWide` must return `goLower: false` while decay is warned, and never `{ repair: null, goLower: false }` (M4).

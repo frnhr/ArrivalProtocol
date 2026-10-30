@@ -12,7 +12,7 @@ import { decayForecast } from '@systems/landing-orbit';
 import { capabilitiesNow, plotFault, ROLE_LABEL } from '@systems/capabilities';
 import { rootDeletable, rootDeleteRunning } from '@state/selectors';
 import { podHintTarget, toolStepTarget, ROOT_HINT_TARGET } from '@data/fs-tools';
-import { LANDING_DECAY_LINES, LANDING_DROP_LINES, LANDING_LINES, podCode } from '@data/landing-text';
+import { LANDING_DECAY_LINES, LANDING_DROP_LINES, LANDING_LINES, LANDING_NODROP_LINES, podCode } from '@data/landing-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
 import {
@@ -34,9 +34,10 @@ import {
 // | L0   | the final ship is empty and the root can be deleted (the duel)  | EVERY POD IS DOWN — now DELETE THE ROOT      |
 // |      | (some parked or never launched: HOLLOW_FINALE.stripWaitsNobody, NO POD LEFT TO LAUNCH — now DELETE THE ROOT)    |
 // | L1   | Nav Plotter dead or missing                                     | NO DROP SOLUTION — TAB, REPAIR NAV PLOTTER   |
-// | L2   | a flight row applies (guidance landingFlightRow) and: thrust,   | the flight table's row, its id kept          |
-// |      | the throttle held, the offered burn ≤ 8 tac s away, the next    | (F11-…, GO-LOW-keep, LIFT-…, F4-…)           |
-// |      | window out of band, no window in band, or an impact course (F4) |                                              |
+// | L2   | a flight row applies (guidance landingFlightRow) and: thrust,   | the flight table's row, its id and warn kept |
+// |      | the throttle held, no drop dot, the next window out of band, no | (F11-…, GO-LOW-keep, LIFT-…, F4-…, F10-…)    |
+// |      | window in band, an impact course (F4); or the OFFERED burn ≤ 8 tac s away, except over an open window a pod  |
+// |      | can launch in (L3–L6 first)                                                                                    |
 // | L3   | a window is open, its LZ full, another LZ in the band has room  | LZ-A FULL — hold the pods for LZ-B           |
 // | L3b  | open, its LZ full, NO in-band LZ has room, launch moment come,  | NO ROOM IN THE BAND — [L] lands in a full LZ |
 // |      | bay ready, a pod can launch (the mislanded launch, review M1)   | (¾), or END LANDING                          |
@@ -53,12 +54,15 @@ import {
 // |      | (landing-rules dropTooWide); ` · [F]` when a SKIP starts and it fits | fly lower                               |
 // | L10  | decay takes ▼ out of the band within DECAY_WARN_ORBITS orbits    | ORBIT DECAYING — out of the band in 2 orbits |
 // | L11  | no pod can launch now, and one aboard needs its driver repaired | POD 07 CAN'T LAUNCH — TAB, REPAIR its driver |
-// | L12  | (`landing-L12-bay`) Bay Ctrl missing: no pod can ever launch    | NO BAY CTRL — END LANDING parks them in orbit|
+// | L12  | (`landing-L12-bay`, right after L2) Bay Ctrl missing            | NO BAY CTRL — END LANDING parks them in orbit|
 // | L12  | pods aboard and none can ever launch (no driver left, or dead   | NO POD CAN LAUNCH — END LANDING parks them   |
 // |      | with no REPAIR left)                                            |                                              |
 // | L12b | no pod aboard: pods falling, or the linger before the report    | ALL PODS AWAY · 2 FALLING                    |
 // | L13  | otherwise                                                        | WAIT — LZ-B in 2:10 ▸▸ · [F] to SKIP         |
-// The order: L0, L1, L2, L3, L3b, L4, L5, L6, L7, L8, L9, L10, L11, L12-bay, L12, L12-band, L13-noroom, L12b, L13.
+// The order: L0, L1, L2, L12-bay, L3, L3b, L4, L5, L6, (L2 for a near offered burn), L7, L10, L8, L9, L11, L12, L12-band,
+// L13-noroom, L13-nodrop, L12b, L13 (foundation review: L12-bay before any window row, since [L] refuses BAY OFFLINE;
+// L10 before L8/L9, since a sinking orbit undoes the repair or GO LOWER they ask for).
+// L13-nodrop (`landing-L13-nodrop`): no drop dot (an open path, an orbit outside dropSolvable) and no flight row leads.
 // L12's twin (L12, id `landing-L12-band`): no LZ ever passes under the dot while the ship is in the band (a PARTIAL orbit
 // whose band arc misses every bracket); once the engine is open (1b) L2 shows the trim first, so this is reached with no
 // fuel or the trim declined, and END LANDING is the way on.
@@ -72,7 +76,7 @@ export type LandingRow = 'L0' | 'L1' | 'L2' | 'L3' | 'L3b' | 'L4' | 'L5' | 'L6' 
 
 export interface LandingObjective {
   // `landing-L4` (twins: `landing-L12-band`, `landing-L12-bay`, `landing-L13-noroom`, `landing-L5-nogo`, `landing-L8-busy`,
-  // `landing-L8-missing`): stable per row, the strip retypes on a new id. L2 keeps the flight row's own id (`F11-rp-low`).
+  // `landing-L8-missing`, `landing-L13-nodrop`): stable per row, the strip retypes on a new id. L2 keeps the flight row's own id (`F11-rp-low`).
   id: string;
   row: LandingRow;
   text: string;           // ≤ MAX_LINE_CHARS
@@ -81,6 +85,7 @@ export interface LandingObjective {
   layer: GuideLayer;      // the screen whose controls do it: ◆ ship, ◇ mind (L0, L1, L11)
   repairs?: CapabilityRole;     // L1, L8, L9: the file whose REPAIR is the fix (the director lights the chip, then the file)
   highlight?: string | null;    // L0 (the root), L9 and L11 (the driver), in the MIND
+  warn?: boolean;               // L2: the flight row's warning colour (a dodge's last seconds), kept
   nextLz: string | null;        // the LZ the next SKIP flies to (the MIND CLEAR hint), null when none
 }
 
@@ -94,6 +99,9 @@ export interface LandingContext {
   aboard: number;
   falling: number;
   block: boolean;           // NO DROP SOLUTION (L1)
+  // No drop dot with Nav Plotter working: an open path, or an orbit outside the solver's domain (landing-orbit
+  // dropSolvable). No window can be named, so L2 leads whenever it has a row, else `landing-L13-nodrop`.
+  noDrop: boolean;
   thrust: boolean;          // the engine delivered thrust this tick (L2)
   firing: boolean;          // the throttle is held (the kid's or AUTOBURN's; L2)
   // The window open now; `sureInTac`: tactical s until its whole dot fits when that is still ahead this pass (then GET
@@ -174,7 +182,8 @@ export function buildLandingContext(
   const { landing } = state;
   const counts = podCounts(state);
   const canEver = driversThatCanEverLaunch(state);
-  const moment = landingMoment(state, sol, state.clock.tSec);
+  const caps = capabilitiesNow(state);
+  const moment = landingMoment(state, sol, state.clock.tSec, caps.bay.offline);
   const down = lzDownFill(state);
   const window = landing.window;
   const openLz = window === null ? undefined : landing.lzs.find((lz) => lz.label === window.lz);
@@ -195,7 +204,6 @@ export function buildLandingContext(
   const stuck = moment.canLaunch ? undefined : canEver.find((driver) => !isLaunchable(driver) && !driver.operating
     && driver.state !== 'repairing' && driver.state !== 'transferring');
   const heldKind = state.ui.activeTool?.kind ?? null;
-  const caps = capabilitiesNow(state);
   const solved = sol.block === null;
   return {
     inMind: state.ui.mode === 'memory',
@@ -206,6 +214,7 @@ export function buildLandingContext(
     aboard: counts.aboard,
     falling: counts.falling,
     block: sol.block !== null,
+    noDrop: sol.block === null && sol.dot === null,
     thrust: state.burn.lastTickDvKmS > 0,
     firing: state.burn.firing,
     open,
@@ -241,14 +250,20 @@ function line(
 function flightLine(flight: FlightObjective, ctx: LandingContext): LandingObjective {
   const extra: Partial<Pick<LandingObjective, 'repairs' | 'id'>> = { id: flight.id };
   if (flight.repairs !== undefined) extra.repairs = flight.repairs;
-  return line('L2', flight.text, flight.keys, flight.urgency, flight.layer ?? 'ship', ctx, extra);
+  const objective = line('L2', flight.text, flight.keys, flight.urgency, flight.layer ?? 'ship', ctx, extra);
+  return flight.warn === true ? { ...objective, warn: true } : objective;
 }
 
-// When the flight's row leads (L2): a burn is happening or near, or the landing can't go on without one (the next window
-// out of band, no window in band, an impact course).
+// When the flight's row leads (L2) whatever the window does: a burn is happening, an impact course (F4), no drop dot,
+// or the landing can't go on without a burn (the next window out of band, no window in band).
 function flightLeads(flight: FlightObjective, ctx: LandingContext): boolean {
-  const burnNear = ctx.flightBurnInTac !== null && ctx.flightBurnInTac <= TACTICAL_LEAD_BURN_TAC;
-  return ctx.thrust || ctx.firing || burnNear || ctx.next?.inBand === false || ctx.noBandWindow || flight.id.startsWith('F4');
+  return ctx.thrust || ctx.firing || ctx.noDrop || ctx.next?.inBand === false || ctx.noBandWindow || flight.id.startsWith('F4');
+}
+
+// The offered burn's START BURN is within the lead: L2 leads too, except over an open window a pod can launch in (L3,
+// L3b, L4, L5, L6 first: the launch is the moment; the burn waits a pass or is declined, landing.ts).
+function flightBurnNear(ctx: LandingContext): boolean {
+  return ctx.flight !== null && ctx.flightBurnInTac !== null && ctx.flightBurnInTac <= TACTICAL_LEAD_BURN_TAC;
 }
 
 // A waiting row's SKIP tail (risk 12): ` · [F]` when a SKIP would start and the line still fits, else [F] as a key alone,
@@ -271,6 +286,7 @@ function repairLabel(hint: RepairHint): string {
 
 function tooWideLine(wide: TooWide, ctx: LandingContext): LandingObjective {
   const repair = wide.repair;
+  if (repair === null && !wide.goLower) throw new Error(`tooWideLine: L9 for ${wide.lz} with neither a REPAIR nor GO LOWER (dropTooWide returns null then)`);
   const { text, keys } = withSkip(LANDING_DROP_LINES.L9(wide.lz, repair === null ? null : repairLabel(repair), wide.goLower), ctx);
   if (repair === null) return line('L9', text, keys, 'soon', 'ship', ctx);
   if (repair.file !== 'driver') return line('L9', text, keys, 'soon', 'mind', ctx, { repairs: repair.file });
@@ -305,10 +321,15 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
   if (ctx.block) {
     return line('L1', ctx.inMind ? LANDING_LINES.L1Mind : LANDING_LINES.L1, ctx.inMind ? [] : ['TAB'], 'now', 'mind', ctx, { repairs: 'navplot' });
   }
-  // L2: the engine is open in LANDING (1b): the flight's row leads while a burn happens or is near, or while the landing
-  // needs one (trims, GO LOWER's KEEP HOLDING, the 'lift' burn, DON'T HIT THE PLANET).
-  if (ctx.flight !== null && flightLeads(ctx.flight, ctx)) return flightLine(ctx.flight, ctx);
+  // L2: the engine is open in LANDING (1b): the flight's row leads while a burn happens, or while the landing needs one
+  // (trims, GO LOWER's KEEP HOLDING, the 'lift' burn, DON'T HIT THE PLANET, F9/F10 on an open path).
+  const flight = ctx.flight;
+  if (flight !== null && flightLeads(flight, ctx)) return flightLine(flight, ctx);
+  // L12-bay: with Bay Ctrl missing no window and no REPAIR helps (landingMoment's canLaunch and awaited are false).
+  if (ctx.aboard > 0 && ctx.bayOffline) return line('L12', LANDING_DROP_LINES.L12bay, [], 'now', 'ship', ctx, { id: 'landing-L12-bay' });
   const open = ctx.open;
+  const burnNear = flightBurnNear(ctx);
+  if (flight !== null && burnNear && !(open !== null && ctx.aboard > 0 && ctx.canLaunch)) return flightLine(flight, ctx);
   if (open !== null && ctx.aboard > 0) {
     if (open.full && ctx.roomInBand) return line('L3', LANDING_LINES.L3(open.lz, ctx.nextWithRoom), [], 'now', 'ship', ctx);
     // No in-band LZ has room (review M1): this full window is the one launch left, at the mislanded score. Until its
@@ -319,7 +340,10 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
     } else {
       // The centre is in but the edges are not yet, and they will be this pass: GET READY counts on to the sure part
       // (landingMoment's launch moment), so the first pod never goes half off-site. L5 is for a dot that won't fit at all.
-      if (ctx.canLaunch && open.sureInTac !== null) return line('L7', LANDING_LINES.L7(open.lz, open.sureInTac), [], 'now', 'ship', ctx);
+      if (ctx.canLaunch && open.sureInTac !== null) {
+        if (flight !== null && burnNear) return flightLine(flight, ctx);
+        return line('L7', LANDING_LINES.L7(open.lz, open.sureInTac), [], 'now', 'ship', ctx);
+      }
       if (ctx.canLaunch && ctx.bayReady) {
         if (open.sure) return line('L4', LANDING_LINES.L4(open.lz, open.down, open.count), ['L'], 'now', 'ship', ctx);
         if (ctx.lavaInReach !== null) {
@@ -330,28 +354,32 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
       if (ctx.canLaunch) return line('L6', LANDING_LINES.L6(ctx.bayReadyInTac), [], 'now', 'ship', ctx);
     }
   }
+  if (flight !== null && burnNear) return flightLine(flight, ctx);
   const next = ctx.next;
   if (ctx.aboard > 0 && ctx.canLaunch && next !== null && next.inBand && !next.full && next.launchInTac <= WINDOW_TACTICAL_LEAD_TAC) {
     return line('L7', LANDING_LINES.L7(next.lz, next.launchInTac), [], 'now', 'ship', ctx);
   }
+  // L10 above L8 and L9: a sinking orbit undoes any repair or GO LOWER. It carries the 'lift' burn's key only (a LIFT-*
+  // row; never GO LOWER's [S], which would sink it faster); the row leads as L2 once that burn is near.
+  if (ctx.aboard > 0 && ctx.decay !== null) {
+    const keys = flight !== null && flight.id.startsWith('LIFT') ? flight.keys : [];
+    return line('L10', LANDING_DECAY_LINES.L10(ctx.decay.orbits), keys, 'soon', 'ship', ctx);
+  }
   if (ctx.aboard > 0 && ctx.uncertain !== null) return uncertainLine(ctx.uncertain.cause, ctx);
   if (ctx.aboard > 0 && ctx.tooWide !== null) return tooWideLine(ctx.tooWide, ctx);
-  // L10 carries the 'lift' burn's key while the flight's row offers it (it leads as L2 once the burn is near).
-  if (ctx.aboard > 0 && ctx.decay !== null) {
-    return line('L10', LANDING_DECAY_LINES.L10(ctx.decay.orbits), ctx.flight?.keys ?? [], 'soon', 'ship', ctx);
-  }
   if (ctx.aboard > 0 && ctx.stuckPod !== null) {
     const highlight = ctx.inMind ? toolStepTarget('repair', ctx.heldTool, podHintTarget(podCode(ctx.stuckPod))) : null;
     const text = ctx.inMind ? LANDING_LINES.L11Mind(ctx.stuckPod) : LANDING_LINES.L11(ctx.stuckPod);
     return line('L11', text, ctx.inMind ? [] : ['TAB'], 'soon', 'mind', ctx, { highlight });
   }
-  if (ctx.aboard > 0 && ctx.bayOffline) return line('L12', LANDING_DROP_LINES.L12bay, [], 'now', 'ship', ctx, { id: 'landing-L12-bay' });
   if (ctx.aboard > 0 && !ctx.anyCanEver) return line('L12', LANDING_LINES.L12, [], 'now', 'ship', ctx);
   if (ctx.aboard > 0 && ctx.noBandWindow) return line('L12', LANDING_LINES.L12band, [], 'now', 'ship', ctx, { id: 'landing-L12-band' });
   if (ctx.aboard > 0 && !ctx.roomInBand && next !== null && next.inBand) {
     const skip = ctx.skipAvailable;
     return line('L13', LANDING_LINES.L13noRoom(next.lz, next.launchInTac, skip), skip ? ['F'] : [], 'wait', 'ship', ctx, { id: 'landing-L13-noroom' });
   }
+  // No drop dot and no flight row to lead (B1 of the foundation review): say why no window is named, never throw.
+  if (ctx.aboard > 0 && ctx.noDrop) return line('L13', LANDING_NODROP_LINES.L13noDrop, [], 'wait', 'ship', ctx, { id: 'landing-L13-nodrop' });
   if (ctx.aboard === 0) return line('L12b', LANDING_LINES.L12b(ctx.falling), [], 'wait', 'ship', ctx);
   if (next !== null) {
     const skip = ctx.skipAvailable && next.inBand;

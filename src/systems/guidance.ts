@@ -61,7 +61,8 @@ export interface FlightObjective {
 export interface FlightContext {
   status: BurnStatus;
   // LANDING (slice 1b): the engine is open during the landing (selectors engineOpen), and the flight's rows run there as
-  // landingFlightRow (L2). In landing, `burnPoint` is the offered burn (landing-orbit landingBurnOffer), not the raw plan.
+  // landingFlightRow (L2). `burnPoint` stays the raw plan everywhere (the rows need it on an open path: F9/F10, and a
+  // declined trim is still named when the next window is out of band); `offer` is the burn the landing offers.
   landing: boolean;
   outcome: PredictOutcome;
   rp: number;
@@ -92,6 +93,9 @@ export interface FlightContext {
   skipAvailable: boolean;     // pressing F now would start a SKIP
   // inTac: tactical s to START BURN; burnTac: tactical s of burning the planned burn still takes.
   burnPoint: (BurnPoint & { inTac: number; burnTac: number }) | null;
+  // In LANDING: the burn the landing offers (landing-orbit landingBurnOffer: pace, L2's lead, the beeps), in the same
+  // shape; null outside the landing and with no offer.
+  offer: (BurnPoint & { inTac: number; burnTac: number }) | null;
   periTac: number | null;
   showAccept: boolean;        // suggest ACCEPT ORBIT (offered, and it would not strand the ship)
   // WP9: a debris cloud the (sensed) path will enter while the ▼ correction applies, and the instruments can tell:
@@ -142,8 +146,10 @@ export function buildFlightContext(state: Readonly<GameState>, pred: Prediction)
   const now = state.clock.tSec;
   const warp = state.level.tacticalWarp;
   const sweet = sweetZone(state.level.ring);
-  // In LANDING the strip names only the burn the landing offers (a declined or unpaid one is not asked for again).
-  const burnPoint = state.run.phase === 'landing' ? landingBurnOffer(state, pred) : pred.burnPoint;
+  const burnPoint = pred.burnPoint;
+  const offer = state.run.phase === 'landing' ? landingBurnOffer(state, pred) : null;
+  const timed = (bp: BurnPoint): BurnPoint & { inTac: number; burnTac: number } => (
+    { ...bp, inTac: secUntil(pred, bp.inSec, now) / warp, burnTac: bp.estBurnSec / warp });
   const caps = capabilitiesNow(state);
   return {
     status: state.burn.status,
@@ -172,7 +178,8 @@ export function buildFlightContext(state: Readonly<GameState>, pred: Prediction)
     spareController: spareControllerOf(state),
     inMind: state.ui.mode === 'memory',
     skipAvailable: state.clock.skipWarp === null && skipBlockReason(state, pred) === null,
-    burnPoint: burnPoint ? { ...burnPoint, inTac: secUntil(pred, burnPoint.inSec, now) / warp, burnTac: burnPoint.estBurnSec / warp } : null,
+    burnPoint: burnPoint ? timed(burnPoint) : null,
+    offer: offer ? timed(offer) : null,
     periTac: pred.periInSec === null ? null : secUntil(pred, pred.periInSec, now) / warp,
     // Never point the kid at an ACCEPT that strands the ship while a burn can still save it; the button
     // says STRANDED itself. When nothing is left but ACCEPT (acceptOnly), F11 names it anyway (LEAD-1).
@@ -767,10 +774,11 @@ export function landingFlightRow(_ctx: FlightContext): FlightObjective | null {
 }
 
 // What the landing table's L2 reads of the flight, for landing-guidance buildLandingContext: the row above, and how far
-// the offered burn's START BURN is (tactical s). Built here so landing-guidance stays pure and imports no guidance values.
+// the OFFERED burn's START BURN is (tactical s; a declined or unpaid burn never pulls L2 forward). Built here so
+// landing-guidance stays pure and imports no guidance values.
 export function landingFlightOf(state: Readonly<GameState>, pred: Prediction): LandingFlight {
   const ctx = buildFlightContext(state, pred);
-  return { row: landingFlightRow(ctx), burnInTac: ctx.burnPoint?.inTac ?? null };
+  return { row: landingFlightRow(ctx), burnInTac: ctx.offer?.inTac ?? null };
 }
 
 // Hysteresis for the strip: a new objective must persist OBJECTIVE_HYSTERESIS_SEC before it

@@ -31,7 +31,7 @@ function lz(label: string, centreDeg: number, width: LzWidth, pods = 3): LzState
 }
 
 function input(state: OrbitState, lzs: LzState[], factors: DropFactors = ONE): DropSolveInput {
-  return { state, tSec: 0, mu: MU, R, ring: RING, lzs, factors, solution: true, uncertain: false, validUntilTSec: null };
+  return { state, tSec: 0, mu: MU, R, ring: RING, lzs, factors, solution: true, uncertain: false, validUntilTSec: null, solvable: true };
 }
 
 function dotRad(state: OrbitState): number {

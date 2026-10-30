@@ -162,7 +162,7 @@ const COUNTDOWN_EVENT: Record<Exclude<CountdownKind, 'burn'>, string> = {
 // passed in so this stays pure; without one the chip is empty.
 function windowChip(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): CountdownChip | null {
   if (sol === null) return null;
-  const moment = landingMoment(state, sol, state.clock.tSec);
+  const moment = landingMoment(state, sol, state.clock.tSec, capabilitiesNow(state).bay.offline);
   if (!moment.awaited) return null;
   const warp = state.level.tacticalWarp;
   const chip = (event: string, gameSec: number, urgent: boolean): CountdownChip => ({

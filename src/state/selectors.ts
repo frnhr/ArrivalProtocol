@@ -216,10 +216,12 @@ export function isLanding(state: Readonly<GameState>): boolean {
 // (trims, GO LOWER, the 'lift' burn). Its readers: flight-controls' refusal (FLIGHT OVER / LANDING OVER), flight-hud's
 // burn button, hollow's drain, flight-events' thrust and beeps, audio-cues' engine loop, orbit-sim. ACCEPT ORBIT, the lock
 // hold, faults' FILE_FAULTS and closedIdleAiSec stay flight-only (status === 'approaching').
-// Track ORBIT owns it; defined by the foundation and not read yet.
+// In landing the ship must still be in orbit (locked or accepted): a crash or escape during the landing closes it at
+// once, before endLandingLost writes ended = 'ship-lost'. Track ORBIT owns it; defined by the foundation, not read yet.
 export function engineOpen(state: Readonly<GameState>): boolean {
   if (state.run.phase === 'flight') return state.burn.status === 'approaching';
-  return state.run.phase === 'landing' && state.landing.ended === null;
+  const inOrbit = state.burn.status === 'locked' || state.burn.status === 'accepted';
+  return state.run.phase === 'landing' && state.landing.ended === null && inOrbit;
 }
 
 // The drivers still in memory, in address order, ONE PER POD. A MOVE that jumps to free space elsewhere keeps its

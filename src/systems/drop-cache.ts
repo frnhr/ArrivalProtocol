@@ -6,6 +6,7 @@ import { onWorldReset } from '@systems/reset';
 import { capabilitiesNow } from '@systems/capabilities';
 import { computeDropSolution, dotTrack, type DotTrack } from '@systems/landing-solve';
 import { dropFactors, nextToLaunch } from '@systems/landing-rules';
+import { dropSolvable } from '@systems/landing-orbit';
 import { elementsFromState } from '@/types/orbit';
 import { PREDICT_HZ, POD_AIM_RP_FRAC } from '@data/tuning';
 
@@ -52,8 +53,9 @@ function fresh(state: Readonly<GameState>): boolean {
 function recompute(state: Readonly<GameState>): DropSolution {
   const caps = capabilitiesNow(state);
   const { planet, ring } = state.level;
-  const closed = elementsFromState(state.orbit, planet.mu).e < 1;
-  if (caps.drop.solution && closed) {
+  // The solver's domain (landing-orbit dropSolvable, risk 9) gates dotTrack too: outside it the track would throw.
+  const solvable = elementsFromState(state.orbit, planet.mu).e < 1 && dropSolvable(state.orbit, planet);
+  if (caps.drop.solution && solvable) {
     const key = trackKeyOf(state);
     if (track === null || key !== trackKey) {
       track = dotTrack(state.orbit, planet.mu, planet.R, POD_AIM_RP_FRAC * planet.R);
@@ -70,10 +72,11 @@ function recompute(state: Readonly<GameState>): DropSolution {
     factors: dropFactors(caps, nextToLaunch(state)),
     solution: caps.drop.solution,
     uncertain: caps.drop.uncertain,
+    solvable,
     // TODO(slice1b-ORBIT): the next drag kick over one period (landing-orbit nextDragKick), so windows after it read as
     // a forecast; null (nothing decays) until then.
     validUntilTSec: null,
-  }, caps.drop.solution && closed ? track : null);
+  }, caps.drop.solution && solvable ? track : null);
   cachedRev = state.run.rev;
   cachedEpoch = state.landing.orbitEpoch;
   sinceRefreshWall = 0;

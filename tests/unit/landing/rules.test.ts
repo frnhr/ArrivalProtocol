@@ -317,35 +317,35 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
   const both = sol([win('LZ-A', 20, 30, 20, 30), win('LZ-B', 60, 70, 60, 70), win('LZ-C', 5, 8, null, null)]);
   const fullA = fakeState({ lzs, memory: [driver(2)], pods: [pod(1, { kind: 'falling', launch: launch(90 * DEG) }), pod(2)] });
   const roomy = fakeState({ lzs, memory: [driver(1), driver(2)], pods: [pod(1), pod(2)] });
-  check('landingMoment: the target skips an LZ the projected fill has filled', landingMoment(fullA, both, 0).target?.lz === 'LZ-B');
-  check('…takes the next in-band window when every LZ has room', landingMoment(roomy, both, 0).target?.lz === 'LZ-A');
+  check('landingMoment: the target skips an LZ the projected fill has filled', landingMoment(fullA, both, 0, false).target?.lz === 'LZ-B');
+  check('…takes the next in-band window when every LZ has room', landingMoment(roomy, both, 0, false).target?.lz === 'LZ-A');
   const outOnly = sol([win('LZ-A', 5, 8, null, null)]);
   check('…and never one with no in-band part (none in band at all: noBand, L12\'s twin)',
-    landingMoment(roomy, outOnly, 0).target === null && landingMoment(roomy, outOnly, 0).noBand && !landingMoment(roomy, both, 0).noBand);
+    landingMoment(roomy, outOnly, 0, false).target === null && landingMoment(roomy, outOnly, 0, false).noBand && !landingMoment(roomy, both, 0, false).noBand);
   // Review M1 (p2): LZ-A in the band and full, LZ-B with room but never in the band. The moment names only in-band LZs:
   // no room in the band, and the landing waits on LZ-A's window (a launch there is MISLANDED), never on LZ-B's.
   const partial = sol([win('LZ-A', 20, 30, 20, 30), win('LZ-B', 60, 70, null, null)]);
-  const partialMoment = landingMoment(fullA, partial, 0);
+  const partialMoment = landingMoment(fullA, partial, 0, false);
   check('…no in-band LZ with room (LZ-B out of band): roomInBand false, the target is LZ-A\'s window, full',
     !partialMoment.roomInBand && partialMoment.target?.lz === 'LZ-A' && partialMoment.target.full
     && partialMoment.upcoming.every((w) => w.lz !== 'LZ-B'), JSON.stringify(partialMoment.target));
   const openFull = { ...fullA, landing: { ...fullA.landing, window: { lz: 'LZ-A', sure: true } } } as GameState;
-  const openPartial = landingMoment(openFull, sol([win('LZ-A', -2, 30, -2, 30), win('LZ-B', 60, 70, null, null)]), 0).open;
+  const openPartial = landingMoment(openFull, sol([win('LZ-A', -2, 30, -2, 30), win('LZ-B', 60, 70, null, null)]), 0, false).open;
   check('…and its open window is awaited (TACTICAL, WINDOW OPEN), its launch moment come', openPartial?.awaited === true && openPartial.launchCome && openPartial.full);
-  const openFullRoomB = landingMoment(openFull, sol([win('LZ-A', -2, 30, -2, 30), win('LZ-B', 60, 70, 60, 70)]), 0);
+  const openFullRoomB = landingMoment(openFull, sol([win('LZ-A', -2, 30, -2, 30), win('LZ-B', 60, 70, 60, 70)]), 0, false);
   check('…while an in-band LZ has room a full open window is not awaited (it passes at CRUISE)', openFullRoomB.open?.awaited === false
     && openFullRoomB.target?.lz === 'LZ-B');
   // The launch moment: the sure part's opening while it is still ahead.
   const opening = { ...roomy, landing: { ...roomy.landing, window: { lz: 'LZ-A', sure: false } } } as GameState;
-  const sureAhead = landingMoment(opening, sol([win('LZ-A', -2, 30, -2, 30, [3, 25])]), 0);
+  const sureAhead = landingMoment(opening, sol([win('LZ-A', -2, 30, -2, 30, [3, 25])]), 0, false);
   check('…an open window whose whole dot fits in 3 s: its launch moment has not come (GET READY counts to it)',
     sureAhead.open?.launchCome === false && sureAhead.target?.launchInSec === 3, JSON.stringify(sureAhead.target?.launchInSec));
   // Awaited only while the landing goes on with a pod that can launch some day.
   check('…nothing is awaited once the landing has ended, or when no pod aboard can ever launch',
-    landingMoment(fakeState({ lzs, memory: [driver(1), driver(2)], pods: [pod(1), pod(2)], ended: 'end-landing' }), both, 0).target === null
-    && landingMoment(fakeState({ lzs, memory: [driver(1, 10), driver(2, 10)], pods: [pod(1), pod(2)] }), both, 0).awaited === false);
-  check('…canLaunch reads nextToLaunch (the beeps and GET READY need it)', landingMoment(roomy, both, 0).canLaunch
-    && !landingMoment(fakeState({ lzs, memory: [driver(1, 100, { infected: { side: 'left' } })], pods: [pod(1), pod(2)] }), both, 0).canLaunch);
+    landingMoment(fakeState({ lzs, memory: [driver(1), driver(2)], pods: [pod(1), pod(2)], ended: 'end-landing' }), both, 0, false).target === null
+    && landingMoment(fakeState({ lzs, memory: [driver(1, 10), driver(2, 10)], pods: [pod(1), pod(2)] }), both, 0, false).awaited === false);
+  check('…canLaunch reads nextToLaunch (the beeps and GET READY need it)', landingMoment(roomy, both, 0, false).canLaunch
+    && !landingMoment(fakeState({ lzs, memory: [driver(1, 100, { infected: { side: 'left' } })], pods: [pod(1), pod(2)] }), both, 0, false).canLaunch);
 }
 
 // --- Touch is decided at touchdown, and the result reads it from there ---
