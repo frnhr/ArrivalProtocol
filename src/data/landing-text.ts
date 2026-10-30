@@ -281,6 +281,9 @@ export const LANDING_DROP_LINES = {
   L9skip: ' · [F]',
   // L5's variant (risk 13): the dot's span overlaps a no-go arc, so a wide dot can land in it (the arc's own word).
   L5noGo: (word: string): string => `LAUNCH — press [L] · WIDE DROP, ${word} in reach`,
+  // L3b's twin (`landing-L3b-wide`, review minor 8): the one launch left is into a full LZ, and the dot does not fit it
+  // either, so some may land outside it (L5's WIDE DROP, said the same way).
+  L3bWide: 'NO ROOM IN THE BAND — [L] lands in a full LZ, WIDE DROP',
   // L12-bay (§3.4): Bay Ctrl missing, no pod can launch; the landing auto-ends ('bay-offline') after LANDING_NONE_LEFT_SEC.
   L12bay: 'NO BAY CTRL — END LANDING parks them in orbit',
 } as const;

@@ -63,6 +63,11 @@ expect('open, full, no room in the band, the launch moment come: the mislanded l
   next: next('LZ-A', 0, 0, true, true) }), 'L3b', LANDING_LINES.L3b(0.75), (o) => o.keys.join() === 'L' && o.id === 'landing-L3b' && /¾/.test(o.text));
 expect('...in the MIND it says [TAB] first', ctx({ inMind: true, open: open({ full: true }), nextWithRoom: null, roomInBand: false,
   next: next('LZ-A', 0, 0, true, true) }), 'L3b', /^NO ROOM IN THE BAND — \[TAB\]/, (o) => o.keys.join() === 'TAB,L');
+// Review minor 8: the full LZ's dot does not fit either: the twin says WIDE DROP.
+expect('minor 8: …the dot never fits this pass: WIDE DROP', ctx({ open: open({ full: true, sure: false }), nextWithRoom: null, roomInBand: false,
+  next: next('LZ-A', 0, 0, true, true) }), 'L3b', LANDING_DROP_LINES.L3bWide, (o) => o.keys.join() === 'L' && o.id === 'landing-L3b-wide');
+expect('minor 8: …in the MIND it says [TAB] first', ctx({ inMind: true, open: open({ full: true, sure: false }), nextWithRoom: null, roomInBand: false,
+  next: next('LZ-A', 0, 0, true, true) }), 'L3b', /^NO ROOM IN THE BAND — \[TAB\], \[L\] lands in a full LZ, WIDE DROP$/);
 expect('...the bay reloading: RELOADING', ctx({ open: open({ full: true }), roomInBand: false, bayReady: false, bayReadyInTac: 1.2,
   next: next('LZ-A', 0, 0, true, true) }), 'L6', 'RELOADING — next pod in 0:02');
 expect('...the whole dot not in yet: the wait counts to it, no [L]', ctx({ open: open({ full: true, sure: false, sureInTac: 3 }), roomInBand: false,
@@ -333,6 +338,7 @@ expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true },
       worst({ bayOffline: true }),
       worst({ noDrop: true, next: null }),
       worst({ noDrop: true, next: null, tankShort: true }),
+      worst({ open: open({ lz: longLz, full: true, sure: false }), roomInBand: false, nextWithRoom: null, next: next(longLz, 0, 0, true, true) }),
       worst({ ghostSwap: { name: 'X'.repeat(SEG_NAME_MAX_CHARS), swapReady: true } }),
       worst({ ghostSwap: { name: 'X'.repeat(SEG_NAME_MAX_CHARS), swapReady: false } }),
       LANDING_DROP_LINES.L9(longLz, 'SENSOR INTERP', true, true) + LANDING_DROP_LINES.L9skip,

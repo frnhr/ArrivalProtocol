@@ -193,6 +193,11 @@ check("the state words: CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNC
   check('away: LZ-A is off the strip, waiting at the right edge', track.strip.brackets.length === 0 && track.strip.ahead.length >= 1,
     JSON.stringify(track.strip.ahead));
   says('away: the waiting LZ-A shows its m:ss countdown', track.strip.ahead[0]?.text, [/^LZ-A\b/, /\b\d+:\d\d$/], CHIP_CHARS);
+  // Review minor 9: with NO BAY CTRL nothing is awaited, so the edge counts down to nothing.
+  const noBay = structuredClone(state);
+  for (const seg of noBay.memory) if (seg.role === 'bay') delete seg.role;
+  check('minor 9: NO BAY CTRL: no countdown at the right edge', capabilitiesNow(noBay).bay.offline && groundTrackModel(noBay, sol).strip.ahead.length === 0,
+    JSON.stringify(groundTrackModel(noBay, sol).strip.ahead));
   const chip = countdownChip(state, NO_PRED, sol);
   check('away: the chip counts mm:ss to the window, not yet 00:00', chip !== null && /^\d\d:\d\d$/.test(chip.time) && chip.time !== '00:00',
     JSON.stringify(chip));

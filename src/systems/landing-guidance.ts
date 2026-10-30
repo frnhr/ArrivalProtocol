@@ -42,6 +42,7 @@ import {
 // | L3   | a window is open, its LZ full, another LZ in the band has room  | LZ-A FULL — hold the pods for LZ-B           |
 // | L3b  | open, its LZ full, NO in-band LZ has room, launch moment come,  | NO ROOM IN THE BAND — [L] lands in a full LZ |
 // |      | bay ready, a pod can launch (the mislanded launch, review M1)   | (¾), or END LANDING                          |
+// |      | (its twin `landing-L3b-wide`: the dot never fits this pass)     | NO ROOM … in a full LZ, WIDE DROP            |
 // | L4   | open, the whole dot fits, the bay ready, a pod can launch       | LAUNCH NOW — press [L] · LZ-A 1/3            |
 // | L5   | open, the dot's centre in but its edges out, bay ready, a pod   | LAUNCH — press [L] · WIDE DROP, some may miss|
 // |      | (its twin `landing-L5-nogo`: the dot's span reaches a no-go arc)| LAUNCH — press [L] · WIDE DROP, LAVA in reach|
@@ -380,7 +381,11 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
     // No in-band LZ has room (review M1): this full window is the one launch left, at the mislanded score. Until its
     // launch moment the wait row below counts to it (as GET READY would); RELOADING as usual.
     if (open.full) {
-      if (ctx.canLaunch && open.sureInTac === null && ctx.bayReady) return line('L3b', LANDING_LINES.L3b(MISLANDED_FACTOR), ['L'], 'now', 'ship', ctx);
+      if (ctx.canLaunch && open.sureInTac === null && ctx.bayReady) {
+        // Its twin when the dot never fits this pass (review minor 8): WIDE DROP, as L5 says it.
+        if (!open.sure) return line('L3b', LANDING_DROP_LINES.L3bWide, ['L'], 'now', 'ship', ctx, { id: 'landing-L3b-wide' });
+        return line('L3b', LANDING_LINES.L3b(MISLANDED_FACTOR), ['L'], 'now', 'ship', ctx);
+      }
       if (ctx.canLaunch && open.sureInTac === null) return line('L6', LANDING_LINES.L6(ctx.bayReadyInTac), [], 'now', 'ship', ctx);
     } else {
       // The centre is in but the edges are not yet, and they will be this pass: GET READY counts on to the sure part

@@ -537,8 +537,11 @@ export function groundTrackModel(state: Readonly<GameState>, sol: Readonly<DropS
 
   // The next LZs past the right edge, soonest launch moment first, with its countdown: the in-band windows as of now
   // (landing-rules landingMoment, the strip's and the chip's count); an LZ never in the band is hatched, not listed.
+  // Only while the landing waits on windows (moment.awaited, review minor 9): with NO BAY CTRL (or no driver that can
+  // ever launch) nothing is counted down to, and a countdown at the edge read as "wait for it".
   const ahead: GroundAhead[] = [];
-  const waiting = landingMoment(state, sol, state.clock.tSec, capabilitiesNow(state).bay.offline).upcoming
+  const moment = landingMoment(state, sol, state.clock.tSec, capabilitiesNow(state).bay.offline);
+  const waiting = (moment.awaited ? moment.upcoming : [])
     .filter((w) => {
       const bracket = stripBrackets.find((b) => b.lz === w.lz);
       return bracket !== undefined && bracket.from >= 1;
