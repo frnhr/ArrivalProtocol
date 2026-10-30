@@ -154,14 +154,18 @@ export function requestLaunch(store: Store<GameState>, intent: LaunchIntent): La
   }
   const driver = intent.pod === undefined ? nextToLaunch(state) : driversInMemory(state).find((candidate) => candidate.pod === intent.pod);
   if (!driver) throw new Error('requestLaunch: no driver to launch (launchRefusal said NO POD READY otherwise)');
-  launchDriver(store, driver, launchRecordFor(state, driver, sol, intent), true);
-  // A launch ends a decline (risk 2): the next burn the landing offers is offered again. And GO LOWER's aim (not held: a
-  // launch is refused under thrust) is let go: the window it was for has had its pod, and goLowTick builds it again next
-  // tick if the next pod's L9 still says fly lower (the plot's ◇ reads the aim, UI's contract).
+  const launch = launchRecordFor(state, driver, sol, intent);
+  launchDriver(store, driver, launch, true);
+  // A launch ends a decline (risk 2): the next burn the landing offers is offered again. A declined GO LOWER only on a
+  // launch into its own LZ (review minor 4: a pod sent elsewhere leaves that LZ's dot as wide as it was, and clearing it
+  // brought the declined burn back every orbit). And GO LOWER's aim (not held: a launch is refused under thrust) is let
+  // go: the window it was for has had its pod, and goLowTick builds it again next tick if the next pod's L9 still says
+  // fly lower (the plot's ◇ reads the aim, UI's contract).
   const after = store.getState().landing;
-  if (after.declined !== null || (after.goLow !== null && !after.goLow.held)) {
+  const endsDecline = after.declined !== null && (after.declined.untilLz === null || after.declined.untilLz === launch.aimLz);
+  if (endsDecline || (after.goLow !== null && !after.goLow.held)) {
     store.update((draft) => {
-      draft.landing.declined = null;
+      if (endsDecline) draft.landing.declined = null;
       if (draft.landing.goLow !== null && !draft.landing.goLow.held) draft.landing.goLow = null;
     });
   }
@@ -200,6 +204,8 @@ function touchDown(store: Store<GameState>, pod: number): void {
       },
     };
     draft.landing.colony = colony;
+    // A GO LOWER declined for this LZ ends when it fills (review minor 4): nothing is left to go lower for there.
+    if (fillsLz && draft.landing.declined !== null && draft.landing.declined.untilLz === lzDef?.label) draft.landing.declined = null;
   });
   emit('pod-landed', { pod, place: placement.place, lz: placement.lz, touch, points, firstOnShip, firstOfRun });
   if (fillsLz && lzDef) emit('lz-full', { lz: lzDef.label });
@@ -231,6 +237,8 @@ function endNow(store: Store<GameState>, reason: LandingEnd): void {
     draft.landing.declined = null;
     parked = parkPodsAboard(draft, outcome);
   });
+  // The burn being watched for a decline goes with the engine (review minor 5): MERGE's reopen starts its offers afresh.
+  dueWatch = { ...NO_DUE_WATCH };
   if (parked > 0) emit('pods-parked', { count: parked });
   emit('landing-ended', { reason });
 }
@@ -255,11 +263,8 @@ function trackWindow(store: Store<GameState>): void {
   const now: LandingWindow | null = !ended ? windowOpenNow(getDropSolution(), state.clock.tSec) : null;
   if (before?.lz === now?.lz && before?.sure === now?.sure) return;
   store.mutate((draft) => { draft.landing.window = now; });
-  if (before !== null && before.lz !== now?.lz) {
-    // The window a decline waited out has passed (risk 2): that burn is offered again.
-    if (state.landing.declined?.untilLz === before.lz) store.update((draft) => { draft.landing.declined = null; });
-    emit('window-closed', { lz: before.lz });
-  }
+  // (A declined GO LOWER outlives its LZ's window, review minor 4: it ends on a launch into that LZ or when it fills.)
+  if (before !== null && before.lz !== now?.lz) emit('window-closed', { lz: before.lz });
   if (now !== null && before?.lz !== now.lz) emit('window-open', { lz: now.lz });
   if (now !== null && now.sure && !(before?.lz === now.lz && before.sure)) emit('window-sure', { lz: now.lz });
 }
@@ -489,8 +494,8 @@ let dueWatch: DueWatch = { ...NO_DUE_WATCH };
 
 // LandingState.declined (risk 2, plan §1.4): an offered burn (a ring trim, GO LOWER, the 'lift' burn; never a safety
 // burn) the kid let pass with no Δv delivered for it is declined: pace no longer holds TACTICAL for it or stops a SKIP on
-// it until a launch (requestLaunch), the window it waited on closing (trackWindow; GO LOWER's LZ), or a new reason (the
-// plan's burn is another: cleared here). "Let pass": its START BURN came, and then either the plan moved it to the next
+// it until a launch (requestLaunch; for GO LOWER a launch into its LZ), GO LOWER's LZ filling (touchDown), or a new
+// reason (the plan's burn is another: cleared here). "Let pass": its START BURN came, and then either the plan moved it to the next
 // pass (its apsis or ◇ went by) or it stood due for LATE_TRIM_TAC (a trim whose late burn still lands stays due now for
 // most of a climb: measured on HALCYON's PARTIAL orbit, 56 real s of TACTICAL under HOLD [SPACE] NOW), unburned.
 function declineTick(store: Store<GameState>): void {

@@ -168,12 +168,13 @@ export interface GoLowAim {
 }
 
 // An offered burn (landing-orbit landingBurnOffer) that passed with no Δv delivered for it (risk 2): it stops neither a
-// SKIP nor pace again until a launch, `untilLz`'s window closing, or a new reason (landing.ts clears it).
+// SKIP nor pace again until a launch (for a GO LOWER, a launch into `untilLz`), `untilLz` filling, or a new reason
+// (landing.ts clears it).
 export interface DeclinedBurn {
   // landing-orbit declineKey of the declined burn: reason|event (+ the aim LZ for go-low), NOT predict burnKey, whose
   // due|ahead part changes when the burn's apsis passes, so the next pass's replan of the same burn would never match.
   key: string;
-  untilLz: string | null;   // the LZ whose window ends the decline (null: until a launch or a new reason)
+  untilLz: string | null;   // GO LOWER's LZ: a launch into it or its filling ends the decline (null: any launch, a new reason)
 }
 
 // GameState.landing: replaces the phase-2 souls and printer slices. Built by state/initial.ts createLandingState from

@@ -7,11 +7,12 @@
 import { check, finish } from './checks';
 import { lockOn, ensureLandingKeys } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';
-import { endLanding } from '@systems/landing';
+import { endLanding, requestLaunch } from '@systems/landing';
+import { resetReport } from '@systems/reset';
 import { getPrediction } from '@systems/predict';
 import { getDropSolution } from '@systems/drop-cache';
 import { bayWindowModel } from '@systems/landing-hud';
-import { dropTooWide, landingResult, landingStuck } from '@systems/landing-rules';
+import { dropTooWide, landingMoment, landingResult, landingStuck } from '@systems/landing-rules';
 import { landingBurnOffer } from '@systems/landing-orbit';
 import { lossPlan, shipLost } from '@systems/run';
 import { stateFromElements } from '@/types/orbit';
@@ -158,6 +159,75 @@ crashAfterEnd(LAST_LIGHT, 'LAST LIGHT');
   h.stepFor(1);
   check('…a tank 10 % short of the go-low burn: no `fly lower` either', needKmS !== null && wide() === null && state().landing.goLow === null,
     `need ${needKmS?.toFixed(4)} km/s · ${h.shown()?.text}`);
+}
+
+// --- Minor 5: the burn watched for a decline is forgotten when the landing ends (MERGE's reopen starts afresh) ----------
+{
+  board(ARES);
+  h.store.update((draft) => { const lz = draft.landing.lzs[0]!; lz.widthKm = 330; lz.halfWidthRad = 165 / draft.level.planet.R; });
+  lockOn(h, { r: 8950 });
+  h.stepFor(1);
+  const due = (): unknown => {
+    const drift = resetReport().find((entry) => entry.name === 'landing');
+    return drift === undefined ? null : (JSON.parse(drift.now) as { due: unknown }).due;
+  };
+  const watched = due();
+  endLanding(h.store);
+  check('minor 5: GO LOWER\'s offer is watched for a decline, and END LANDING forgets it', watched === 'go-low|point|LZ-A' && due() === null,
+    `${String(watched)} → ${String(due())}`);
+}
+
+// --- Minor 4: a declined GO LOWER outlives its LZ's window; a launch into that LZ ends it -------------------------------
+{
+  board(KESTREL);
+  lockOn(h);
+  h.stepFor(0.3);
+  // A GO LOWER declined for the LZ whose window comes second (crafted: the decline's lifetime is under test, not how it
+  // came about).
+  const first = landingMoment(state(), getDropSolution(), state().clock.tSec, false).target?.lz;
+  const other = state().landing.lzs.find((lz) => lz.label !== first)!.label;
+  h.store.update((draft) => { draft.landing.declined = { key: `go-low|point|${other}`, untilLz: other }; });
+  const closed: string[] = [];
+  const off = on('window-closed', ({ lz }) => { closed.push(lz); });
+  let launched: string | null = null;
+  const end = h.wall() + 120;
+  while (h.wall() < end && launched === null) {
+    h.step();
+    const open = state().landing.window;
+    if (open !== null && open.sure && state().landing.bay.cadenceLeftTac <= 0) {
+      const result = requestLaunch(h.store, { source: 'player' });
+      if (result.kind === 'launched') launched = open.lz;
+    }
+    if (state().clock.skipWarp === null && h.shown()?.keys.includes('F')) h.press('KeyF');
+  }
+  const afterOther = state().landing.declined;
+  check('minor 4: a launch into another LZ keeps its LZ\'s declined GO LOWER', launched !== null && launched !== other && afterOther?.untilLz === other,
+    `launched into ${launched} · ${JSON.stringify(afterOther)}`);
+  while (h.wall() < end + 240 && !closed.includes(other)) {
+    h.step();
+    if (state().clock.skipWarp === null && h.shown()?.keys.includes('F')) h.press('KeyF');
+  }
+  check('…its LZ\'s window closing keeps it too (it came back every orbit)', closed.includes(other) && state().landing.declined?.untilLz === other,
+    `closed ${closed.join(',')} · ${JSON.stringify(state().landing.declined)}`);
+  let intoB = false;
+  while (h.wall() < end + 600 && !intoB) {
+    h.step();
+    const open = state().landing.window;
+    if (open?.lz === other && open.sure && state().landing.bay.cadenceLeftTac <= 0) intoB = requestLaunch(h.store, { source: 'player' }).kind === 'launched';
+    if (state().clock.skipWarp === null && h.shown()?.keys.includes('F')) h.press('KeyF');
+  }
+  off();
+  check('…a launch into its LZ ends it', intoB && state().landing.declined === null, JSON.stringify(state().landing.declined));
+  // A declined trim (no LZ) still ends on any launch (risk 2).
+  h.store.update((draft) => { draft.landing.declined = { key: 'rp-low|peri', untilLz: null }; });
+  let any = false;
+  while (h.wall() < end + 900 && !any && state().landing.ended === null) {
+    h.step();
+    const open = state().landing.window;
+    if (open !== null && open.sure && state().landing.bay.cadenceLeftTac <= 0) any = requestLaunch(h.store, { source: 'player' }).kind === 'launched';
+    if (state().clock.skipWarp === null && h.shown()?.keys.includes('F')) h.press('KeyF');
+  }
+  check('…a declined trim still ends on any launch', any && state().landing.declined === null, JSON.stringify(state().landing.declined));
 }
 
 // --- M2: ghost thrust in the landing ---------------------------------------------------------------------------------
