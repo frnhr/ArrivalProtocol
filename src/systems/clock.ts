@@ -158,7 +158,9 @@ export function advance(store: Store<GameState>, dtWallRaw: number): void {
 export function isLivePhase(state: Readonly<GameState>): boolean {
   // A ship whose Core was eaten (WP6) is over too, whatever its phase: its CORE LOST card owns it.
   if (state.run.coreLost) return false;
-  return state.run.phase === 'landing' || (state.run.phase === 'flight' && state.burn.status === 'approaching');
+  // Slice 1b: a ship that left orbit during its landing (crashed, escaped) is lost under its card as in flight.
+  if (state.run.phase === 'landing') return state.burn.status === 'locked' || state.burn.status === 'accepted';
+  return state.run.phase === 'flight' && state.burn.status === 'approaching';
 }
 
 // Look-only pause. Pausing also lets go of the throttle: a burn must never continue, or

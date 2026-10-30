@@ -259,7 +259,9 @@ export function composeObjective(ctx: DirectorCtx, rules: readonly GuideRule[]):
   if (ctx.phase === 'report') {
     return { id: 'report', text: LINES.landingDone(), keys: [], urgency: 'now', layer: 'mind', highlight: null, source: 'over' };
   }
-  if (ctx.phase === 'flight' && status !== 'approaching') {
+  // A ship lost in flight, or during its landing (slice 1b: crashed or escaped with the engine open there).
+  const lostLanding = ctx.phase === 'landing' && (status === 'crashed' || status === 'escaped');
+  if ((ctx.phase === 'flight' && status !== 'approaching') || lostLanding) {
     return { id: `over-${status}`, text: FLIGHT_OVER_LINE[status], keys: [], urgency: 'now', layer: 'ship', highlight: null, source: 'over' };
   }
   if (ctx.flash) {
@@ -407,7 +409,9 @@ export function buildDirectorCtx(
   const flightCtx = flying ? buildFlightContext(state, sensed) : null;
   // The landing's table reads the drop cache (mounted with the landing); not once the Core is lost (its card owns it).
   // Its L2 is the flight's row in landing (slice 1b: the engine is open), handed in so landing-guidance stays pure.
-  const landingCtx = state.run.phase === 'landing' && !state.run.coreLost
+  // Nor once the ship has left orbit during it (crashed, escaped): its LOST card owns it too.
+  const landingLive = state.burn.status === 'locked' || state.burn.status === 'accepted';
+  const landingCtx = state.run.phase === 'landing' && !state.run.coreLost && landingLive
     ? buildLandingContext(state, getDropSolution(), skipBlockReason(state, sensed) === null, landingFlightOf(state, sensed)) : null;
   const landing = landingCtx ? landingObjective(landingCtx) : null;
   return {

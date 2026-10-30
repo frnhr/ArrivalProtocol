@@ -204,10 +204,12 @@ export function familyColonyName(family: string): string {
 // is for when it fits. `press` is guidance's preset hint (`press [S] (RETRO)`, or the Q/E wording).
 export const LANDING_FLIGHT_LINES = {
   goLow: (press: string): string => `GO LOWER — at ◇ ${press}`,
+  goLowProblem: 'GO LOWER',                                               // due now: `GO LOWER — press [S] (RETRO), hold [SPACE] NOW`
   goLowKeep: (lz: string): string => `KEEP HOLDING — until ${lz}'s dot fits`,
   goLowRelease: 'RELEASE [SPACE]',
   liftProblem: 'ORBIT SINKING',                                           // `ORBIT SINKING — at ▲ press [W] (PRO) and burn`
   liftKeep: 'KEEP HOLDING — lift ▼ above the DRAG line',
+  liftRelease: 'RELEASE [SPACE]',
   // L2's wrapper: the tail naming the LZ a burn is for (GO LOWER's WAIT, a trim that brings an LZ back in band).
   forLz: (lz: string): string => ` · for ${lz}`,
 } as const;

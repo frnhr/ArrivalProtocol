@@ -142,6 +142,9 @@ function captureInTac(state: Readonly<GameState>, pred: Prediction): number | nu
 }
 
 // Why B can't engage AUTOBURN right now (§6.10), or null when it can. Pure (reads the ops core's threads).
+// Slice 1b: the engine is open during the landing (selectors engineOpen), but AUTOBURN v2 only flies captures, so it
+// refuses there (AUTOBURN_REFUSAL.over). THE SEAM for AUTOBURN v3 (slice 4): it opens this one line to the landing and
+// flies landing-orbit's 'go-low' and 'lift' BurnPoints (and highestFittingRadius), with the flight-only end below.
 export function autoburnRefusal(state: Readonly<GameState>, pred: Prediction): AutoburnRefusal | null {
   if (state.run.phase !== 'flight' || state.burn.status !== 'approaching') return AUTOBURN_REFUSAL.over;
   if (state.clock.paused) return AUTOBURN_REFUSAL.paused;

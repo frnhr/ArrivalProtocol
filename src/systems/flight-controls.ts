@@ -5,13 +5,14 @@ import { endFlight, endGhost } from '@systems/orbit-sim';
 import { capabilitiesNow, engineFault, presetsAvailable } from '@systems/capabilities';
 import { getPrediction, getSensedPrediction, burnKey } from '@systems/predict';
 import {
-  canAccept, PRESET_KEY, asksToHoldSpace, buildFlightContext, flightObjective,
+  canAccept, PRESET_KEY, asksToHoldSpace, buildFlightContext, shipObjective,
 } from '@systems/guidance';
 import { registerKeys } from '@systems/input';
 import { onWorldReset } from '@systems/reset';
 import { onPostTick } from '@systems/clock';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { stopSkipOnPress } from '@systems/pace';
+import { engineOpen, isLanding } from '@state/selectors';
 import { STRANDED_RANGE_FRAC, POWER_MIN_PCT } from '@data/tuning';
 
 // Player actions on the ship, DOM-free. Keys (through the input router), the Engine window
@@ -30,8 +31,13 @@ export const SHIP_SCREEN_REFUSAL: Refusal = 'SHIP SCREEN';
 // go of the preset (orbit-sim) and the kid turns by hand with Q/E in MANUAL.
 export const AUTOPILOT_REFUSAL: Refusal = 'AUTOPILOT DAMAGED';
 
+// The engine after the landing has ended (slice 1b): the pods are away or parked, nothing is left to burn for.
+export const LANDING_OVER_REFUSAL: Refusal = 'LANDING OVER';
+
+// The engine answers while it is open (selectors engineOpen, slice 1b): a live approach, or a landing going on (trims,
+// GO LOWER, the 'lift' burn). Once the landing has ended its words are the landing's.
 function flightRefusal(state: Readonly<GameState>): Refusal | null {
-  if (state.burn.status !== 'approaching') return 'FLIGHT OVER';
+  if (!engineOpen(state)) return isLanding(state) && state.landing.ended !== null ? LANDING_OVER_REFUSAL : 'FLIGHT OVER';
   if (state.clock.paused) return 'PAUSED';
   return null;
 }
@@ -86,8 +92,9 @@ const skipStopHolds = new Set<PlayerHold>();
 // then does what the flight needs, which is what its own line would have asked.
 // For a fresh press and for a hold kept down from before (a dropped hold going live) alike: AUTOBURN's `[SPACE] takes
 // over` is an offer, not an ask (WP10, the lead's ruling), and its row names no SPACE key (guidance asksToHoldSpace).
+// In LANDING the ship's line is the flight's rows there (guidance landingFlightRow, the landing table's L2).
 function lineAsks(state: Readonly<GameState>): boolean {
-  const objective = flightObjective(buildFlightContext(state, getSensedPrediction()));
+  const objective = shipObjective(buildFlightContext(state, getSensedPrediction()));
   return objective !== null && asksToHoldSpace(objective);
 }
 

@@ -341,8 +341,13 @@ function freshLanding(seedNo: number, extra: (draft: GameState) => void = () => 
   const then = h.shown();
   check('the strip: the lesson THE DOT IS WIDE first, once…', first?.id === 'lesson-dot-wide' && first.text === LANDING_LESSONS_1B.dotWide,
     `${first?.id} '${first?.text}'`);
-  check('…then L9 itself, with the TAB and the SKIP', then?.id === 'landing-L9' && then.text === 'DROP TOO WIDE FOR LZ-A — TAB, REPAIR POD 02 · [F]',
-    `${then?.id} '${then?.text}'`);
+  // Track ORBIT: goLowerFit is real, so 7,000 → the floor fits POD 02's ×3 dot too: L9 adds `or fly lower`, and GO LOWER is
+  // offered on exactly that LZ (landing.ts builds its aim only when dropTooWide says goLower).
+  check('…then L9 itself, with the TAB and the SKIP', then?.id === 'landing-L9'
+    && then.text === 'DROP TOO WIDE FOR LZ-A — TAB, REPAIR POD 02, or fly lower · [F]', `${then?.id} '${then?.text}'`);
+  check('…and GO LOWER is offered for LZ-A exactly while L9 says or fly lower',
+    dropTooWide(state(), getDropSolution()!, deriveCapabilities(state(), 0))?.goLower === true && state().landing.goLow?.lz === 'LZ-A',
+    JSON.stringify(state().landing.goLow));
   // Repaired, the drop is ×1.5 (±162 km): it fits LZ-A, and L9 goes.
   h.store.update((draft) => {
     const pod2 = draft.memory.find((seg) => seg.type === 'driver' && seg.pod === 2);

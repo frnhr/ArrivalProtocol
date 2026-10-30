@@ -6,7 +6,7 @@ import { onWorldReset } from '@systems/reset';
 import { capabilitiesNow } from '@systems/capabilities';
 import { computeDropSolution, dotTrack, type DotTrack } from '@systems/landing-solve';
 import { dropFactors, nextToLaunch } from '@systems/landing-rules';
-import { dropSolvable } from '@systems/landing-orbit';
+import { dropSolvable, nextDragKick } from '@systems/landing-orbit';
 import { elementsFromState } from '@/types/orbit';
 import { PREDICT_HZ, POD_AIM_RP_FRAC } from '@data/tuning';
 
@@ -50,6 +50,18 @@ function fresh(state: Readonly<GameState>): boolean {
   return cached !== null && cachedRev === state.run.rev && cachedEpoch === state.landing.orbitEpoch;
 }
 
+// The game time of the next drag kick within one period (landing-orbit nextDragKick), or null with none due (no drag on
+// this ship, ▼ above the DRAG line, the landing over): the windows after it are a forecast, solved again at the kick
+// (its orbitEpoch bump makes fresh() false). DropSolution.validUntilTSec, for AUTODROP (4c) and the views.
+function nextKickTSec(state: Readonly<GameState>): number | null {
+  if (!state.landing.drag || state.landing.ended !== null) return null;
+  const { planet, ring } = state.level;
+  const now = state.clock.tSec;
+  const el = elementsFromState(state.orbit, planet.mu);
+  const periodSec = 2 * Math.PI * Math.sqrt(Math.pow(el.rp / (1 - el.e), 3) / planet.mu);
+  return nextDragKick(state.orbit, planet.mu, ring, now, now + periodSec, state.landing.decay)?.atTSec ?? null;
+}
+
 function recompute(state: Readonly<GameState>): DropSolution {
   const caps = capabilitiesNow(state);
   const { planet, ring } = state.level;
@@ -73,9 +85,7 @@ function recompute(state: Readonly<GameState>): DropSolution {
     solution: caps.drop.solution,
     uncertain: caps.drop.uncertain,
     solvable,
-    // TODO(slice1b-ORBIT): the next drag kick over one period (landing-orbit nextDragKick), so windows after it read as
-    // a forecast; null (nothing decays) until then.
-    validUntilTSec: null,
+    validUntilTSec: solvable ? nextKickTSec(state) : null,
   }, caps.drop.solution && solvable ? track : null);
   cachedRev = state.run.rev;
   cachedEpoch = state.landing.orbitEpoch;

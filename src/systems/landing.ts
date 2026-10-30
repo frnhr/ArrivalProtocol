@@ -2,9 +2,9 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {
-  BayState, DropSolution, LandingController, LandingEnd, LandingView, LandingWindow, LaunchIntent, LaunchRecord, LaunchResult,
+  BayState, DropSolution, GoLowAim, LandingController, LandingEnd, LandingView, LandingWindow, LaunchIntent, LaunchRecord, LaunchResult,
 } from '@/types/landing';
-import { onAiTick, onGameTick } from '@systems/clock';
+import { onAiTick, onGameTick, onPostTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { emit } from '@systems/events';
 import { say } from '@systems/say';
@@ -14,11 +14,12 @@ import { getOpsBySeg, abortOp } from '@systems/ops-core';
 import { replaceRange, mergeAdjacentFree, requireAddr, freeSegment, assertMemoryInvariants } from '@systems/memory-ops';
 import { currentDropSolution, getDropSolution } from '@systems/drop-cache';
 import { dropHalfWidthKm } from '@systems/landing-solve';
-import { getPrediction } from '@systems/predict';
+import { getPrediction, secUntil } from '@systems/predict';
 import { requestSkip, skipBlockReason } from '@systems/pace';
+import { declineKey, goLowerFit, landingBurnOffer, travelSign } from '@systems/landing-orbit';
 import { activeLandingController, setActiveLandingController } from '@systems/landing-controller';
 import {
-  classifyLanding, colonyName, dropFactors, driverTouch, isLaunchable, landingMoment, landingOutcome, landingStuck,
+  classifyLanding, colonyName, dropFactors, dropTooWide, driverTouch, isLaunchable, landingMoment, landingOutcome, landingStuck,
   landingView as landingViewOf, launchGuard, launchGuardText, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podCounts, podPoints,
   touchAtTouchdown,
   windowOpenNow,
@@ -30,7 +31,7 @@ import { LANDING_ECHO, launchRefusalKey } from '@data/landing-text';
 import { IS_DEV } from '@/env';
 import {
   BAND_DEGRADED_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEEP_BURN_TAC, BEEP_JUMP_TAC, BEEP_REARM_TAC, LANDING_DONE_LINGER_SEC,
-  LANDING_NONE_LEFT_SEC, POD_DESCENT_SEC, POD_FIRST_DESCENT_SEC,
+  LANDING_NONE_LEFT_SEC, POD_DESCENT_SEC, POD_FIRST_DESCENT_SEC, EARLY_BURN_GUARD_TAC, LATE_TRIM_TAC,
 } from '@data/tuning';
 
 // The landing (01-landing; plan §1.4): replaces phase 2's printer. DOM-free; the only module besides
@@ -153,6 +154,16 @@ export function requestLaunch(store: Store<GameState>, intent: LaunchIntent): La
   const driver = intent.pod === undefined ? nextToLaunch(state) : driversInMemory(state).find((candidate) => candidate.pod === intent.pod);
   if (!driver) throw new Error('requestLaunch: no driver to launch (launchRefusal said NO POD READY otherwise)');
   launchDriver(store, driver, launchRecordFor(state, driver, sol, intent), true);
+  // A launch ends a decline (risk 2): the next burn the landing offers is offered again. And GO LOWER's aim (not held: a
+  // launch is refused under thrust) is let go: the window it was for has had its pod, and goLowTick builds it again next
+  // tick if the next pod's L9 still says fly lower (the plot's ◇ reads the aim, UI's contract).
+  const after = store.getState().landing;
+  if (after.declined !== null || (after.goLow !== null && !after.goLow.held)) {
+    store.update((draft) => {
+      draft.landing.declined = null;
+      if (draft.landing.goLow !== null && !draft.landing.goLow.held) draft.landing.goLow = null;
+    });
+  }
   return { kind: 'launched', pod: driver.pod };
 }
 
@@ -211,6 +222,12 @@ function endNow(store: Store<GameState>, reason: LandingEnd): void {
     draft.landing.window = null;
     draft.landing.noDriverAiSec = 0;
     draft.landing.fuelAtEndPct = draft.burn.fuelPct;
+    // The engine closes with the landing (selectors engineOpen): a held throttle lets go, and no burn is offered.
+    draft.burn.firing = false;
+    draft.burn.firingSource = null;
+    draft.burn.firingFor = null;
+    draft.landing.goLow = null;
+    draft.landing.declined = null;
     parked = parkPodsAboard(draft, outcome);
   });
   if (parked > 0) emit('pods-parked', { count: parked });
@@ -226,13 +243,22 @@ function finishLanding(store: Store<GameState>): void {
 }
 
 // LandingState.window from the drop solution, with its edge events (window-open, window-sure, window-closed).
+// Slice 1b (foundation review note): held steady while thrust is delivered. Under a burn the drop cache re-solves on its
+// 1 km element key at 10 Hz and an edge can flicker open, shut and open again; launches are refused then anyway (ENGINE
+// FIRING), and the first quiet tick (the burn's end bumps orbitEpoch: a fresh solve) sets the window as it now is.
 function trackWindow(store: Store<GameState>): void {
   const state = store.getState();
   const before = state.landing.window;
-  const now: LandingWindow | null = state.landing.ended === null ? windowOpenNow(getDropSolution(), state.clock.tSec) : null;
+  const ended = state.landing.ended !== null;
+  if (!ended && state.burn.lastTickDvKmS > 0) return;
+  const now: LandingWindow | null = !ended ? windowOpenNow(getDropSolution(), state.clock.tSec) : null;
   if (before?.lz === now?.lz && before?.sure === now?.sure) return;
   store.mutate((draft) => { draft.landing.window = now; });
-  if (before !== null && before.lz !== now?.lz) emit('window-closed', { lz: before.lz });
+  if (before !== null && before.lz !== now?.lz) {
+    // The window a decline waited out has passed (risk 2): that burn is offered again.
+    if (state.landing.declined?.untilLz === before.lz) store.update((draft) => { draft.landing.declined = null; });
+    emit('window-closed', { lz: before.lz });
+  }
   if (now !== null && before?.lz !== now.lz) emit('window-open', { lz: now.lz });
   if (now !== null && now.sure && !(before?.lz === now.lz && before.sure)) emit('window-sure', { lz: now.lz });
 }
@@ -378,6 +404,136 @@ function controllerTick(store: Store<GameState>): void {
   requestLaunch(store, decision);
 }
 
+// --- GO LOWER's aim and the declined burn (slice 1b, plan §1.4; landing-orbit is the math) ----------------------------
+
+// The aim GO LOWER would take now (§3.7), or null: exactly when L9 says "or fly lower" (landing-rules dropTooWide's
+// goLower: the window the landing waits on has no sure part in the band, the orbit is not decaying out of the band
+// (decayWarnOrbits, L10 first: going lower would sink it faster, review M4), and goLowerFit fits it), with a pod aboard
+// and a dot to drop by. The aim is then goLowerFit's answer from the same inputs dropTooWide used, so the line and the
+// burn the strip times always agree (Track DROP's request).
+function goLowAimNow(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): GoLowAim | null {
+  const { landing, level } = state;
+  if (landing.ended !== null || sol === null || sol.block !== null || sol.dot === null) return null;
+  if (podCounts(state).aboard === 0) return null;
+  const caps = capabilitiesNow(state);
+  if (dropTooWide(state, sol, caps)?.goLower !== true) return null;
+  const target = landingMoment(state, sol, state.clock.tSec, caps.bay.offline).target;
+  if (target === null) throw new Error('goLowAimNow: L9 offers GO LOWER with no awaited window');
+  const lz = landing.lzs.find((candidate) => candidate.label === target.lz);
+  if (!lz) throw new Error(`goLowAimNow: the awaited LZ '${target.lz}' is not on this ship`);
+  const launchRad = target.window.launchRad;
+  const fit = goLowerFit({
+    lz, factors: dropFactors(caps, nextToLaunch(state)), ring: level.ring, R: level.planet.R, mu: level.planet.mu,
+    warp: level.tacticalWarp, orbit: state.orbit, launchRad,
+  });
+  if (fit === null) return null;
+  const burnRad = launchRad - Math.PI * travelSign(state.orbit);
+  return { lz: lz.label, launchRad, burnRad, targetRadiusKm: fit.targetRadiusKm, floorKm: fit.floorKm, held: false };
+}
+
+// The aim moved enough to be worth writing (the drop cache re-solves at 10 Hz and the launch point drifts a hair on a
+// sub-stepped coast): about 0.3 km of the ship's arc, or a km of target radius.
+const AIM_RAD_EPS = 5e-5;
+const AIM_KM_EPS = 1;
+
+function aimMoved(before: Readonly<GoLowAim>, after: Readonly<GoLowAim>): boolean {
+  return Math.abs(after.launchRad - before.launchRad) > AIM_RAD_EPS || Math.abs(after.targetRadiusKm - before.targetRadiusKm) > AIM_KM_EPS;
+}
+
+// The aim's lifecycle (LandingState.goLow, the one writer): OFFERED while goLowAimNow has one (kept current, so predict
+// times the ◇ burn on it); HELD from the moment the kid's thrust is delivered for the offered go-low burn (RETRO, due
+// within the early-burn guard): from then the aim is kept as it is while the burn reshapes the windows under it; done
+// (RELEASED) when the kid lets go of the held burn. The words for each phase are landingFlightRow's; 'go-low' marks them.
+function goLowTick(store: Store<GameState>): void {
+  const state = store.getState();
+  const aim = state.landing.goLow;
+  if (aim?.held) {
+    if (!state.burn.firing && state.burn.lastTickDvKmS === 0) {
+      store.update((draft) => { draft.landing.goLow = null; });
+      emit('go-low', { lz: aim.lz, phase: 'released' });
+    }
+    return;
+  }
+  if (aim !== null && state.burn.lastTickDvKmS > 0 && state.burn.sasMode === 'retrograde') {
+    const pred = getPrediction();
+    const offer = landingBurnOffer(state, pred);
+    const dueTac = offer === null ? null : secUntil(pred, offer.inSec, state.clock.tSec) / state.level.tacticalWarp;
+    if (offer?.reason === 'go-low' && dueTac !== null && dueTac <= EARLY_BURN_GUARD_TAC) {
+      store.update((draft) => { if (draft.landing.goLow) draft.landing.goLow.held = true; });
+      emit('go-low', { lz: aim.lz, phase: 'held' });
+      return;
+    }
+  }
+  const next = goLowAimNow(state, getDropSolution());
+  if (next === null) {
+    if (aim !== null) store.update((draft) => { draft.landing.goLow = null; });
+    return;
+  }
+  if (aim === null || aim.lz !== next.lz) {
+    store.update((draft) => { draft.landing.goLow = next; });
+    emit('go-low', { lz: next.lz, phase: 'offered' });
+    return;
+  }
+  if (aimMoved(aim, next)) store.mutate((draft) => { draft.landing.goLow = next; });
+}
+
+// The offered burn the kid is being watched on (risk 2): its decline key, whether its START BURN has come (due), and
+// whether thrust was delivered while it was.
+interface DueWatch {
+  key: string | null;
+  dueSinceTSec: number | null;  // game time its START BURN came (null: not due yet)
+  burned: boolean;
+}
+
+const NO_DUE_WATCH: DueWatch = { key: null, dueSinceTSec: null, burned: false };
+let dueWatch: DueWatch = { ...NO_DUE_WATCH };
+
+// LandingState.declined (risk 2, plan §1.4): an offered burn (a ring trim, GO LOWER, the 'lift' burn; never a safety
+// burn) the kid let pass with no Δv delivered for it is declined: pace no longer holds TACTICAL for it or stops a SKIP on
+// it until a launch (requestLaunch), the window it waited on closing (trackWindow; GO LOWER's LZ), or a new reason (the
+// plan's burn is another: cleared here). "Let pass": its START BURN came, and then either the plan moved it to the next
+// pass (its apsis or ◇ went by) or it stood due for LATE_TRIM_TAC (a trim whose late burn still lands stays due now for
+// most of a climb: measured on HALCYON's PARTIAL orbit, 56 real s of TACTICAL under HOLD [SPACE] NOW), unburned.
+function declineTick(store: Store<GameState>): void {
+  const state = store.getState();
+  if (state.landing.ended !== null) return;
+  const pred = getPrediction();
+  const declined = state.landing.declined;
+  if (declined !== null && pred.burnPoint !== null && declineKey(pred.burnPoint) !== declined.key) {
+    store.update((draft) => { draft.landing.declined = null; });
+  }
+  const offer = landingBurnOffer(store.getState(), pred);
+  if (offer === null || offer.reason === 'capture' || offer.reason === 'missed') {
+    dueWatch = { ...NO_DUE_WATCH };
+    return;
+  }
+  const key = declineKey(offer);
+  if (key !== dueWatch.key) dueWatch = { ...NO_DUE_WATCH, key };
+  const now = state.clock.tSec;
+  const due = secUntil(pred, offer.inSec, now) <= 0;
+  if (due) {
+    dueWatch.dueSinceTSec ??= now;
+    if (state.burn.lastTickDvKmS > 0 || state.burn.firing) dueWatch.burned = true;
+  }
+  const passed = dueWatch.dueSinceTSec !== null
+    && (!due || now - dueWatch.dueSinceTSec >= LATE_TRIM_TAC * state.level.tacticalWarp);
+  if (!passed) return;
+  if (!dueWatch.burned) {
+    const untilLz = offer.reason === 'go-low' ? offer.aimLz ?? null : null;
+    store.update((draft) => { draft.landing.declined = { key, untilLz }; });
+  }
+  dueWatch = { ...NO_DUE_WATCH, key };
+}
+
+// The ship left orbit during the landing (orbit-sim endLandingLost: crashed or escaped, the clock paused): the landing
+// ends here in the same frame, through endNow ('ship-lost', review B3), so the pods aboard go NOT LAUNCHED. A post-tick,
+// because the clock is paused and no AI tick runs under the LOST card.
+function shipLostTick(store: Store<GameState>): void {
+  const state = store.getState();
+  if (state.run.phase !== 'landing' || state.landing.ended !== null) return;
+  if (state.burn.status === 'crashed' || state.burn.status === 'escaped') endNow(store, 'ship-lost');
+}
+
 function tick(store: Store<GameState>, dtAi: number): void {
   let state = store.getState();
   if (state.run.phase !== 'landing') return;
@@ -397,6 +553,9 @@ function tick(store: Store<GameState>, dtAi: number): void {
   // 2. The window open now (state), and its edges; GET READY's beeps.
   trackWindow(store);
   beepTick(store);
+  // 2b. The burns the landing offers (slice 1b): GO LOWER's aim, and a decline when an offered burn passed unburned.
+  goLowTick(store);
+  declineTick(store);
   // 3. The controller (none in 1a).
   controllerTick(store);
   // 4. No more launches: every pod away, or no driver left for the pods aboard (risk 7).
@@ -511,6 +670,7 @@ function forget(): void {
   setActiveLandingController(null);
   entered.clear();
   beepWatch = { ...NO_BEEP_WATCH };
+  dueWatch = { ...NO_DUE_WATCH };
 }
 
 export function mountLanding(store: Store<GameState>): () => void {
@@ -518,12 +678,15 @@ export function mountLanding(store: Store<GameState>): () => void {
   mounted = true;
   const offTick = onAiTick((dtAi) => tick(store, dtAi));
   const offBay = onGameTick((dtWorld) => bayTick(store, dtWorld));
+  const offLost = onPostTick(() => shipLostTick(store));
   const offReset = onWorldReset('landing', forget, () => ({
     rolled: dropRng !== null, controller: activeLandingController() !== null, entered: entered.size, beep: beepWatch.key,
+    due: dueWatch.key,
   }));
   return () => {
     offTick();
     offBay();
+    offLost();
     offReset();
     forget();
     mounted = false;
