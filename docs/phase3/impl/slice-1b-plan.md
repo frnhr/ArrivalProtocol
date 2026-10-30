@@ -886,11 +886,31 @@ behave. Each item with its root cause and what changed.
 - `landing/table`'s fuzz draws 2,000 contexts (was 400): with the new fields, 400 draws missed L5-nogo or L8 on most
   seeds.
 
-**Noticed, not changed (for Fran)**
-- On a ship whose LZs are less than half an orbit apart (KESTREL's three), GO LOWER's ◇ (half an orbit before the launch
-  point) always comes after the awaited window, so the kid launches wide drops first and GO LOWER is never flown before
-  the window it is for; the aim then moves to the next LZ. GO LOWER only reaches its burn on a one-LZ approach (ARES-VII)
-  or when the kid lets windows pass. Worth a look with AUTOBURN v3's landing orbit.
-- After GO LOWER under the DRAG line, the lift (offered from twice the warning) takes ▼ back over the line, where the dot
-  is too wide again, so L9 offers GO LOWER again: the two can alternate. Holding the orbit at max(DRAG line, …) is the
-  floor v3 can now pass to `highestFittingRadius`.
+**Follow-up fixes (the lead's decisions on the two findings above, both behaviour bugs)**
+1. **GO LOWER after its window.** The ◇ sits half an orbit before the launch point, so on a ship whose LZs are less than
+   half an orbit apart (KESTREL) the ◇ of the awaited window always came after that window, and GO LOWER was never
+   flown in time; the aim then moved to the next LZ, and so on. `landing-rules.goLowerChoice` picks the soonest window
+   (this pass or the same LZ's next pass) of an in-band LZ with room and no sure part whose ◇ still comes before it, that
+   `goLowerFit` fits and the tank pays for (not while decay is warned). GO LOWER's aim is built from it (`goLowAimNow`),
+   and `dropTooWide`'s `or fly lower` is that same choice when it is the awaited LZ: the kid is never told to fly lower
+   for a window the burn can't reach. On a one-LZ approach the choice is the next pass, on KESTREL usually the LZ further
+   round. What the strip shows on KESTREL from 6,800 km: `WAIT — LZ-B in 2:14` (LZ-B's wide drops in its window), then at
+   LZ-A's ◇ `GO LOWER — at ◇ press [S] (RETRO)`, `GET READY — BRAKE IN 0:08`, `HOLD [SPACE] NOW`, `KEEP HOLDING — until
+   LZ-A's dot fits`, `RELEASE [SPACE]`; every later window then opens SURE (`LAUNCH NOW`). Two goLowerFit calls a frame
+   again (the director's L9 and goLowTick), each only for the windows whose ◇ is ahead. Check (review-1b): the ◇ before
+   its window, WINDOW SURE on that window after the burn, never `fly lower` for an LZ GO LOWER is not aimed at, all pods
+   down.
+2. **GO LOWER ↔ lift.** After a GO LOWER under the DRAG line, the lift took ▼ back over the line, the dot was too wide
+   again, and L9 sent the kid down again (a scripted kid on KESTREL, one LZ 125 km wide, three pods: GO LOWER held three
+   times). `landing-rules.liftHold`: while an LZ with room would have no sure part from the normal lift's height (circular,
+   `sureTacAt`), the lift holds the low orbit: ▼ no lower than the band floor + GO_LOW_FLOOR_MARGIN_KM or the highest
+   radius where those LZs get GO LOWER's sure window (`highestFittingRadius` with its new floor), whichever is higher;
+   and ▲ no lower than the middle of the band. Under the DRAG line each kick at ▼ takes the far side down (KESTREL at
+   5,100 km: about 24 m/s, ~1 % of FUEL, §3.7's "about 1% per orbit"), so the hold is mostly a PRO burn at ▼ putting ▲
+   back every few orbits (`ORBIT SINKING — at ▼ press [W] (PRO) and burn`), before the loop turns and ▼ sinks out of the
+   band; ▼ is lifted (PRO at ▲) only if it sank under its mark. Each only when LIFT_HOLD_SLACK_KM (20, new tuning)
+   short; a held lift that reached them shows RELEASE. Once no LZ with room needs the low orbit, the normal lift (over
+   the DRAG line) is back. A deviation from the decision's wording: holding ▼ at the floor alone does nothing (kicks at ▼
+   lower ▲, not ▼), so the hold also keeps ▲ up. `liftKeep` reads `KEEP HOLDING — lift ▼ until the orbit holds` (it no
+   longer always goes over the DRAG line). Check (review-1b): that kid now holds GO LOWER once, flies the lift, never
+   sees GO LOWER again, lands all three pods in the LZ with ▼ ≥ 5,088 km.
