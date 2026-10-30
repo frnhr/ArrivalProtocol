@@ -83,16 +83,24 @@ function trueAnomalyOf(mean: number, e: number): number {
 export function podKickState(state: OrbitState, mu: number, aimRp: number): OrbitState {
   const r = Math.hypot(state.x, state.y);
   if (!(aimRp > 0 && aimRp < r)) throw new Error(`podKickState: aim ${aimRp} km must be below the ship's ${r.toFixed(0)} km`);
+  const k2 = podKickFactorSq(state, mu, aimRp);
+  if (k2 === null) throw new Error(`podKickState: no retro kick puts ▼ at ${aimRp.toFixed(0)} km from r ${r.toFixed(0)} km`);
+  const k = Math.sqrt(k2);
+  return { x: state.x, y: state.y, vx: state.vx * k, vy: state.vy * k };
+}
+
+// k² of podKickState, or null when no retro kick reaches aimRp from `state` (aimRp at or above the ship, or a path so
+// steep no scaled copy dips that low). The drop solver's domain (landing-orbit dropSolvable, risk 9) asks this rather
+// than catching podKickState's throw: outside the domain is a state the open engine can reach, not a bug.
+export function podKickFactorSq(state: OrbitState, mu: number, aimRp: number): number | null {
+  const r = Math.hypot(state.x, state.y);
+  if (!(aimRp > 0 && aimRp < r)) return null;
   const v2 = state.vx * state.vx + state.vy * state.vy;
   const h = state.x * state.vy - state.y * state.vx;
   const numerator = 2 * mu * (1 / r - 1 / aimRp);
   const denominator = v2 - (h * h) / (aimRp * aimRp);
   const k2 = numerator / denominator;
-  if (!(denominator < 0) || !(k2 > 0 && k2 < 1)) {
-    throw new Error(`podKickState: no retro kick puts ▼ at ${aimRp.toFixed(0)} km from r ${r.toFixed(0)} km (k² = ${k2})`);
-  }
-  const k = Math.sqrt(k2);
-  return { x: state.x, y: state.y, vx: state.vx * k, vy: state.vy * k };
+  return denominator < 0 && k2 > 0 && k2 < 1 ? k2 : null;
 }
 
 export interface PodImpact {
