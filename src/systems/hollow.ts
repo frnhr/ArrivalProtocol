@@ -6,7 +6,8 @@ import type { Rng } from '@systems/rng';
 import { onAiTick, onPostTick, isLivePhase, setPaused } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { on, emit, NO_PAYLOAD } from '@systems/events';
-import { getPrediction } from '@systems/predict';
+import { getPrediction, secUntil } from '@systems/predict';
+import { landingBurnOffer } from '@systems/landing-orbit';
 import { isThrustOn, isGhostFiring, endGhost } from '@systems/orbit-sim';
 import { getOpsBySeg, abortOp, type Op } from '@systems/ops-core';
 import {
@@ -24,7 +25,7 @@ import { setIntegrity, cureInfection, recordDriverLost, parkPodsAboard } from '@
 import { isOpenFree } from '@systems/tool-targets';
 import {
   isInfectable, isInfected, isHollow, infectedSegments, fileLabel, effectiveToolVersion, driversInMemory, isDriver,
-  isFirewall, isUsableTool, hasUsableTool, hasIntegrity, integrityBand, spreadPaused, isShipFile, isAiFile, rootBlock, rootDeleteRunning,
+  isFirewall, isUsableTool, hasUsableTool, hasIntegrity, integrityBand, spreadPaused, isShipFile, isAiFile, rootBlock, rootDeleteRunning, engineOpen,
   type HealthSegment,
 } from '@state/selectors';
 import type { FsToolKind } from '@/types/fs-tool';
@@ -39,6 +40,7 @@ import {
   WAKE_AFTER_DODGE_SEC, HOLLOW_CONTROL_AFTER_SEC, HOLLOW_SCRIPTED_BITE_DELAY_SEC, HOLLOW_STORY_READ_SEC,
   HOLLOW_NAME_AFTER_TYPED_SEC, SEED_BLOCKS, SEED_TELEGRAPH_SEC, SEED_TOOL_GAP_BLOCKS, DEAL_REFUSE_INTERVAL_FACTOR,
   DEAL_SEED_CALLED_OFF_SEC, RACK_BLOCKS, VERB_WEIGHT_PER_STAT, VERB_MV_NEAR_BLOCKS, OP_COMPLETE_PCT, BITTEN_AGAIN_COUNT,
+  TACTICAL_LEAD_BURN_TAC,
 } from '@data/tuning';
 
 // HOLLOW (§1, §6.6, §9 WP6): the caretaker of the previous wave, starving in the same memory as you.
@@ -844,8 +846,10 @@ export interface DrainConditions {
   landingActive: boolean;
 }
 
+// Thrust counts wherever the engine is open (selectors engineOpen: a live approach, and since slice 1b a landing going
+// on), so a burn in an open window drains at the larger multiplier of the two, never their product (drainRatePerSec).
 export function drainConditions(state: Readonly<GameState>): DrainConditions {
-  const flying = state.run.phase === 'flight' && state.burn.status === 'approaching' && !state.clock.paused;
+  const flying = engineOpen(state) && !state.clock.paused;
   return {
     thrustDelivered: flying && (isThrustOn(state) || isGhostFiring(state)),
     // 01-landing §5: an in-band window open now (LandingState.window, written by landing.ts: STATE, so the HUD's models
@@ -875,9 +879,24 @@ export function netLossPerSec(state: Readonly<GameState>, seg: HealthSegment): n
 // slower while coasting), never the number itself. While landing it is the landing's (landMult),
 // whether or not a window is open this moment. Only the lock, one discrete moment, moves it.
 // (The drain itself, the chew and the tug's beat follow the real rate: drainConditions.)
+// Slice 1b (the lead's decision on M5): the engine is open in the landing, and a burn there drains at burnMult. The
+// landing projects it (drainRatePerSec with thrust: the larger of burnMult and landMult) only while thrust is delivered
+// or the burn the landing offers is due within TACTICAL_LEAD_BURN_TAC (the strip is asking for it: GET READY, HOLD
+// [SPACE] NOW), and the landing's coast rate (landMult, as 1a) otherwise. WHY: projecting the burn all landing long would
+// run every landing countdown at half speed while coasting (ship 1's scripted bite came 20 s early, not 10), and never
+// projecting it would make a countdown jump at every burn the strip asks for. So a countdown jumps only when the kid
+// fires uninvited.
 export function projectedDrainPerSec(state: Readonly<GameState>): number {
   const landing = state.run.phase === 'landing';
-  return drainRatePerSec(state.hollow.cfg, !landing, landing);
+  return drainRatePerSec(state.hollow.cfg, landing ? landingBurnProjected(state) : true, landing);
+}
+
+function landingBurnProjected(state: Readonly<GameState>): boolean {
+  if (!engineOpen(state)) return false;
+  if (drainConditions(state).thrustDelivered) return true;
+  const pred = getPrediction();
+  const offer = landingBurnOffer(state, pred);
+  return offer !== null && secUntil(pred, offer.inSec, state.clock.tSec) / state.level.tacticalWarp <= TACTICAL_LEAD_BURN_TAC;
 }
 
 // AI seconds until this infected file is eaten at the projected drain (minus a repair's heal);

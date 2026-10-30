@@ -316,7 +316,7 @@ const correctIn = (): void => {
 {
   const ring = { min: 5000, max: 7000 };
   const base: FlightContext = {
-    status: 'approaching', landing: false, offer: null, outcome: 'open', rp: 9000, inRing: false, outbound: false, ring,
+    status: 'approaching', landing: false, offer: null, goLow: null, outcome: 'open', rp: 9000, inRing: false, outbound: false, ring,
     // WP12 p3 (strict test tsc): the fields added after this test (F4's lift preset, WP10's spare controller), none here.
     liftPreset: null, spareController: null,
     // WP12 p3: ▼'s rate under thrust (F6's early RELEASE); 0 keeps this test's rows as written.

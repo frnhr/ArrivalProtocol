@@ -7,7 +7,8 @@ import { on } from '@systems/events';
 import { raiseAlert, clearAlert, GHOST_ALARM_ID, GHOST_WARN_ID } from '@systems/alerts';
 import { capabilitiesNow } from '@systems/capabilities';
 import { getPrediction, currentPrediction, sensePrediction, type Prediction, type PredictOutcome } from '@systems/predict';
-import { buildFlightContext, flightObjective } from '@systems/guidance';
+import { buildFlightContext, shipObjective } from '@systems/guidance';
+import { engineOpen } from '@state/selectors';
 import { skipTarget, stopSkip, replanSkip, type SkipTarget } from '@systems/pace';
 import { GHOST_TEXT } from '@data/ghost-text';
 import { GHOST_ALARM_MIN_SEC, SKIP_REPLAN_TICKS, TICK_MS, GHOST_DRIFT_SHOW_SEC, GHOST_DRIFT_MIN_KM } from '@data/tuning';
@@ -53,7 +54,7 @@ export function skipPlanOf(state: Readonly<GameState>, pred: Prediction): SkipPl
   const sensed = sensePrediction(pred, capabilitiesNow(state).plot, state.level.planet.R);
   const burnPoint = pred.burnPoint;
   return {
-    lineId: flightObjective(buildFlightContext(state, sensed))?.id ?? null,
+    lineId: shipObjective(buildFlightContext(state, sensed))?.id ?? null,
     outcome: pred.outcome,
     target: skipTarget(state, pred),
     burnKind: burnPoint === null ? null : `${burnPoint.reason}|${burnPoint.preset}|${burnPoint.event}|${burnPoint.firstOfTwo}`,
@@ -142,8 +143,10 @@ export function lastSkipPlanChange(): PlanChange | null {
   return lastChange;
 }
 
+// The engine is open (selectors engineOpen): a live approach, or since slice 1b a landing going on (risk 5: a failing
+// Thrust Ctrl fires there too, and its alarm, counter and SKIP re-plan are the same).
 function flying(state: Readonly<GameState>): boolean {
-  return state.run.phase === 'flight' && isLivePhase(state);
+  return engineOpen(state) && isLivePhase(state);
 }
 
 // The first burst's alarm: up from its start until the burst is over and the line has stood GHOST_ALARM_MIN_SEC.

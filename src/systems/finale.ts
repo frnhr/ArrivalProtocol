@@ -354,6 +354,9 @@ function merge(store: Store<GameState>): void {
       draft.landing.ended = null;
       draft.landing.lingerAiSec = null;
       draft.landing.fuelAtEndPct = null;
+      // Slice 1b: the reopened landing starts its burn offers afresh (no GO LOWER aim, no burn declined before the end).
+      draft.landing.goLow = null;
+      draft.landing.declined = null;
       for (const record of draft.landing.pods) {
         if (record.fate.kind === 'parked' && record.fate.why === 'no-time') record.fate = { kind: 'aboard' };
       }

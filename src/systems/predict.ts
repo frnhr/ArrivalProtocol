@@ -1,5 +1,6 @@
 import type { Store } from '@state/store';
 import type { GameState, BurnStatus, PresetMode, SasMode } from '@state/schema';
+import type { GoLowAim } from '@/types/landing';
 import { onGameTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import {
@@ -9,10 +10,11 @@ import { capabilitiesNow, deriveCapabilities, thrustCap, type Capabilities } fro
 import { zoneContains, zoneCrossings, chordInsideFrac, chordClosest, chordEntryFrac } from '@systems/zones';
 import { presetHeading } from '@systems/attitude';
 import { getAiCore } from '@state/selectors';
+import { decayForecast, dragLineKm, goLowDvKmS, timeToAngle } from '@systems/landing-orbit';
 import { zoneRacks, type Zone, type ZoneHit, type HazardSpan } from '@/types/zone';
 import {
   elementsFromState, ringFit, ringFraction, loopRange, semiMajorAxis, keplerConic, radialSigma, universalAnomaly,
-  timeFromPeriapsis, orbitalPeriod, inboundSigmaAtRadius, positiveModulo,
+  timeFromPeriapsis, orbitalPeriod, inboundSigmaAtRadius, positiveModulo, propagateConic,
   type KeplerConic, type OrbitState, type Ring, type RingFit, type Vec2,
 } from '@/types/orbit';
 import {
@@ -21,7 +23,8 @@ import {
   LATE_TRIM_TAC, LATE_TRIM_DV_FACTOR, SIM_SUBSTEP_MAX_SEC, SHRINK_WAIT_TAC, SHRINK_MIN_APO_FRAC,
   SHRINK_FUEL_RESERVE_FRAC, RADIUS_BISECT_STEPS, RP_RATE_PROBE_SEC,
   SHRINK_RESERVE_WAIT_TAC, STRANDED_RANGE_FRAC, STRAND_LINE_MARGIN, SKIP_DIVISOR, BELT_HIT_MEAN_SEC,
-  DODGE_PROMISE_MARGIN_KM, DODGE_DEADLINE_RESOLUTION_TAC, DODGE_MEMO_RP_DECIMALS, DODGE_MEMO_ANGLE_DECIMALS,
+  DODGE_PROMISE_MARGIN_KM, DODGE_DEADLINE_RESOLUTION_TAC, DODGE_MEMO_RP_DECIMALS, DODGE_MEMO_ANGLE_DECIMALS, DECAY_WARN_ORBITS,
+  DRAG_LIFT_MARGIN_KM,
 } from '@data/tuning';
 
 // The predicted path: what happens if nobody touches the throttle. Pure (computePrediction)
@@ -340,12 +343,16 @@ function apsisTimesOf(conic: KeplerConic, sinceRp: number): ApsisTimes {
 }
 
 // One trim of a closed loop: fix ▼ by burning at ▲, or ▲ by burning at ▼, aiming the moved
-// apsis at its target (trimTarget).
-function planTrim(input: BurnInputs, reason: TrimReason, apsisTimes: ApsisTimes, firstOfTwo: boolean): BurnPoint {
-  const { mu, ring, fit, aEff, lateTrimSec } = input;
-  const fixesLowest = reason === 'rp-low' || reason === 'rp-high';
+// apsis at its target (trimTarget). Slice 1b's 'lift' (landing only, risk 3) is the same burn with a target override:
+// PRO at ▲ lifting a decaying ▼ to the DRAG line + DRAG_LIFT_MARGIN_KM. Its loop is already in the ring, so "a late burn
+// still lands the loop in the ring" (lateTrimLands) says nothing for it: it is due now only within LATE_TRIM_TAC of ▲.
+function planTrim(
+  input: BurnInputs, reason: TrimReason | 'lift', apsisTimes: ApsisTimes, firstOfTwo: boolean,
+  targetRadius: number = trimTarget(reason === 'lift' ? 'rp-low' : reason, input.ring),
+): BurnPoint {
+  const { mu, fit, aEff, lateTrimSec } = input;
+  const fixesLowest = reason === 'rp-low' || reason === 'rp-high' || reason === 'lift';
   const event = fixesLowest ? 'apo' : 'peri';
-  const targetRadius = trimTarget(reason, ring);
   const signedDvKmS = trimDvKmS(mu, fit, fixesLowest ? fit.ra : fit.rp, targetRadius);
   const preset = signedDvKmS > 0 ? 'prograde' : 'retrograde';
   const dvKmS = Math.abs(signedDvKmS);
@@ -357,7 +364,7 @@ function planTrim(input: BurnInputs, reason: TrimReason, apsisTimes: ApsisTimes,
   const sinceEventSec = apsisTimes.period - nextEventInSec;
   const departing = sinceEventSec < nextEventInSec;
   const dueNow = departing
-    && (sinceEventSec <= lateTrimSec || lateTrimLands(input, preset, event, targetRadius, dvKmS));
+    && (sinceEventSec <= lateTrimSec || (reason !== 'lift' && lateTrimLands(input, preset, event, targetRadius, dvKmS)));
   return toBurnPoint({
     reason, preset, event, dvKmS, firstOfTwo,
     eventInSec: dueNow ? -sinceEventSec : nextEventInSec,
@@ -659,6 +666,48 @@ function computeBurnPoint(input: BurnInputs): BurnPoint | null {
     if (shrink) return shrink;
   }
   return trim;
+}
+
+// --- The landing's in-ring burns (slice 1b, plan §1.4) ------------------------------------------------------------------
+// computeBurnPoint has nothing for a loop in the ring. During the landing two burns may still be planned there, after
+// the impact and the ring trims (which computeBurnPoint plans as in flight, on a PARTIAL orbit): GO LOWER on the aim
+// landing.ts keeps (state.landing.goLow), then the 'lift' burn when decay will take ▼ out of the band within
+// DECAY_WARN_ORBITS. Whether either is OFFERED (pace, L2's lead, the beeps) is landing-orbit landingBurnOffer's call.
+
+// GO LOWER's RETRO burn, centred on the ◇ (aim.burnRad, half an orbit before the LZ's launch point): `eventInSec` is the
+// time to that angle on the conic, and the Δv the one that brings the launch point's radius to the aim's target
+// (landing-orbit goLowDvKmS, from the ship at the ◇, or from where it is while the burn is due). Due now just past the
+// ◇ as a trim is (LATE_TRIM_TAC), and for as long as the kid holds it (aim.held: the burn is under way, centred or not).
+// null once the launch point is already at the target.
+function planGoLow(input: BurnInputs, aim: Readonly<GoLowAim>): BurnPoint | null {
+  const { orbit, mu, aEff, lateTrimSec, periodSec } = input;
+  if (periodSec === null) throw new Error('planGoLow: a loop in the ring without a period');
+  const nextInSec = timeToAngle(orbit, mu, aim.burnRad);
+  const sinceSec = periodSec - nextInSec;
+  const departing = sinceSec < nextInSec;
+  const dueNow = departing && (aim.held || sinceSec <= lateTrimSec);
+  const atBurn = dueNow ? orbit : propagateConic(orbit, mu, nextInSec);
+  const dvKmS = goLowDvKmS(atBurn, aim.launchRad, aim.targetRadiusKm, mu);
+  if (!(dvKmS > 0)) return null;
+  return toBurnPoint({
+    reason: 'go-low', preset: 'retrograde', event: 'point', dvKmS, firstOfTwo: false, aimLz: aim.lz,
+    eventInSec: dueNow ? -sinceSec : nextInSec,
+    approaching: !departing,
+  }, aEff);
+}
+
+function landingInRingBurn(state: Readonly<GameState>, input: BurnInputs): BurnPoint | null {
+  const { landing } = state;
+  if (state.run.phase !== 'landing' || landing.ended !== null || !input.fit.inRing) return null;
+  if (landing.goLow !== null) {
+    const goLow = planGoLow(input, landing.goLow);
+    if (goLow !== null) return goLow;
+  }
+  const orbitsToLeave = decayForecast(input.orbit, input.mu, input.ring, landing.drag).orbitsToLeave;
+  if (orbitsToLeave === null || orbitsToLeave > DECAY_WARN_ORBITS) return null;
+  const { periInSec, apoInSec, periodSec } = input;
+  if (periInSec === null || apoInSec === null || periodSec === null) throw new Error('landingInRingBurn: a loop without apsis times');
+  return planTrim(input, 'lift', { peri: periInSec, apo: apoInSec, period: periodSec }, false, dragLineKm(input.ring) + DRAG_LIFT_MARGIN_KM);
 }
 
 // What the drawn path does with one zone, as propagatePath walks it (game s after the start).
@@ -1268,7 +1317,7 @@ export function computePrediction(state: Readonly<GameState>): Prediction {
   // A hand's reaction of burning at the ship's full thrust (trimFlyable's allowance, and F4's margin before the loop
   // opens): fixed, so neither verdict moves with the POWER slider or a busy Core thread (LEAD-2 review round 1).
   const flyableReactionDvKmS = shrink.reactionTac * tacticalWarp * state.level.aNominalKmS2;
-  const burnPoint = impact || outOfFuel || cannotClose ? null : computeBurnPoint({
+  const burnInputs: BurnInputs = {
     orbit, mu, ring, fit, radius, speed, outbound, periInSec, apoInSec, periodSec, aEff,
     fuelDvKmS,
     surfaceR: planet.R,
@@ -1286,7 +1335,9 @@ export function computePrediction(state: Readonly<GameState>): Prediction {
     smallLoopFactor: shrink.smallLoopFactor,
     reserveWaitSec: SHRINK_RESERVE_WAIT_TAC * tacticalWarp,
     holdingShrink: state.burn.firing && state.burn.firingFor === SHRINK_KEY,
-  });
+  };
+  const burnPoint = impact || outOfFuel || cannotClose ? null
+    : computeBurnPoint(burnInputs) ?? landingInRingBurn(state, burnInputs);
   const greenFraction = outcome === 'closed' ? ringFraction(semiMajorAxis(elements), elements.e, ring) : 0;
   // ACCEPT ORBIT only (see Prediction.acceptOnly). Judged only while nothing burns: under a held burn the
   // plan ends early on purpose (a shrink held past its stop says RELEASE and lets the tank decide after the
@@ -1298,7 +1349,9 @@ export function computePrediction(state: Readonly<GameState>): Prediction {
   const atRest = !state.burn.firing && state.burn.ghost === null;
   const unpaidTrimStrands = burnPoint !== null && isTrim(burnPoint.reason)
     && unpaidFixStrands(fit, burnPoint, fuelDvKmS, mu, ring, planet.R);
-  const acceptOnly = outcome === 'closed' && !fit.inRing && burnPoint !== null
+  // The flight's only (plan §1.4): it latches while approaching, and an accepted orbit lands; in the landing a trim the
+  // tank can't pay for is simply not offered (landing-orbit landingBurnOffer).
+  const acceptOnly = state.run.phase !== 'landing' && outcome === 'closed' && !fit.inRing && burnPoint !== null
     && (state.burn.acceptOnly || (atRest && unpaidTrimStrands));
   const strandedAnyway = acceptOnly && greenFraction < STRANDED_RANGE_FRAC;
 

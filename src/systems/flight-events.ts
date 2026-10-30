@@ -2,7 +2,9 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { onPostTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
-import { getPrediction, getSensedPrediction, secUntil, type Prediction } from '@systems/predict';
+import { getPrediction, getSensedPrediction, secUntil, type BurnPoint, type Prediction } from '@systems/predict';
+import { landingBurnOffer } from '@systems/landing-orbit';
+import { engineOpen } from '@state/selectors';
 import { isThrustOn } from '@systems/orbit-sim';
 import { emit, NO_PAYLOAD, type ZoneForecast } from '@systems/events';
 import { raiseAlert, clearAlert } from '@systems/alerts';
@@ -194,14 +196,15 @@ function detectThrust(state: Readonly<GameState>): void {
   else emit('firing-stop', NO_PAYLOAD);
 }
 
-function detectCountdowns(store: Store<GameState>, state: Readonly<GameState>, pred: Prediction): void {
+// `burnPoint`: the burn counted down to (the plan's in flight; in LANDING the burn the landing offers, landing-orbit
+// landingBurnOffer: a declined trim or GO LOWER beeps no second time).
+function detectCountdowns(store: Store<GameState>, state: Readonly<GameState>, pred: Prediction, burnPoint: BurnPoint | null): void {
   const now = state.clock.tSec;
   const warp = state.level.tacticalWarp;
 
   // The START BURN countdown. A different burn (a trim after the capture) starts a fresh
   // count. It stays silent while the throttle is held: the kid is already burning, and the
   // re-estimated tick drifting under a running burn must not beep again.
-  const burnPoint = pred.burnPoint;
   const key = burnPoint ? `${burnPoint.reason}|${burnPoint.event}` : null;
   if (key !== burnKey) {
     burnKey = key;
@@ -237,6 +240,20 @@ export function mountFlightEvents(store: Store<GameState>): () => void {
   mounted = true;
   const offTick = onPostTick(() => {
     const state = store.getState();
+    // LANDING (slice 1b): the engine is open there, so thrust starting and stopping, the offered burn's beeps and the
+    // impact countdown (a wild burn) are heard as in flight. The line's moments, HOLD STEADY and the instruments' are
+    // the flight's only.
+    if (state.run.phase === 'landing') {
+      if (!engineOpen(state)) {
+        clearAlert(store, IMPACT_ALERT_ID);
+        if (lastThrust) { lastThrust = false; emit('firing-stop', NO_PAYLOAD); }
+        return;
+      }
+      const pred = getPrediction();
+      detectThrust(state);
+      detectCountdowns(store, state, pred, landingBurnOffer(state, pred));
+      return;
+    }
     if (state.run.phase !== 'flight') return;
     if (state.burn.status !== 'approaching') {
       clearAlert(store, IMPACT_ALERT_ID);
@@ -247,7 +264,7 @@ export function mountFlightEvents(store: Store<GameState>): () => void {
     const pred = getPrediction();
     detectThrust(state);
     detectLine(state, pred);
-    detectCountdowns(store, state, pred);
+    detectCountdowns(store, state, pred, pred.burnPoint);
     detectLockCount(state);
     detectPlotMode(state);
     detectZoneForecast(state);

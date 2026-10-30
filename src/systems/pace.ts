@@ -11,6 +11,7 @@ import { emit } from '@systems/events';
 import { getDropSolution } from '@systems/drop-cache';
 import { landingMoment, podCounts, type LandingMoment } from '@systems/landing-rules';
 import { windowRuleHolds } from '@systems/landing-controller';
+import { landingBurnOffer } from '@systems/landing-orbit';
 import type { DropSolution } from '@/types/landing';
 import { LANDING_SKIP_REFUSAL } from '@data/landing-text';
 import {
@@ -178,28 +179,46 @@ export function windowLaunchInSec(state: Readonly<GameState>, sol: Readonly<Drop
 // for a controller that holds TACTICAL (§3.14: a higher AUTODROP drops inside a SKIP). The lead is judged one CRUISE
 // tick ahead, as the dodge's is (choosePace), so the world is at TACTICAL by the 8 s mark, never a tick past it; a SKIP
 // needs no look-ahead: it lands WINDOW_TACTICAL_LEAD_TAC before the launch moment by itself (skipLandsInSec).
+// Slice 1b (§3.12, plan §1.4): with the engine open, also TACTICAL on an impact course and while the OFFERED burn's START
+// BURN is within TACTICAL_LEAD_BURN_TAC (or due), judged one CRUISE tick ahead like the window lead. Only the offer
+// (landing-orbit landingBurnOffer): a declined trim or GO LOWER costs no second TACTICAL pass (risk 2). No 'kick' event:
+// a drag kick stops neither pace nor a SKIP (risk 4; orbit-sim splits the SKIP's jump exactly at each kick).
 function landingPace(state: Readonly<GameState>, pred: Prediction, skipActive: boolean, dtWall: number): Pace {
   if (thrustHoldsTactical(state)) return 'tactical';
   if (podCounts(state).falling > 0) return 'tactical';
   if (hasAlarm(state)) return 'tactical';
   if (zoneClose(state, pred) !== null) return 'tactical';
+  if (pred.outcome === 'impact' && state.landing.ended === null) return 'tactical';
+  const tickAheadSec = skipActive ? 0 : state.level.cruiseWarp * Math.max(dtWall, TICK_MS / 1000);
+  const toBurn = offerInSec(state, pred);
+  if (toBurn !== null && tac(toBurn - tickAheadSec, state.level.tacticalWarp) <= TACTICAL_LEAD_BURN_TAC) return 'tactical';
   if (windowRuleHolds()) {
     if (awaitedWindowOpen(state)) return 'tactical';
     const toWindow = windowLaunchInSec(state);
-    const tickAheadSec = skipActive ? 0 : state.level.cruiseWarp * Math.max(dtWall, TICK_MS / 1000);
     if (toWindow !== null && tac(toWindow - tickAheadSec, state.level.tacticalWarp) <= WINDOW_TACTICAL_LEAD_TAC) return 'tactical';
   }
   return skipActive ? 'skip' : 'cruise';
 }
 
+// Game seconds from now to the START BURN of the burn the landing offers (landing-orbit landingBurnOffer), or null.
+export function offerInSec(state: Readonly<GameState>, pred: Prediction): number | null {
+  const offer = landingBurnOffer(state, pred);
+  return offer === null ? null : secUntil(pred, offer.inSec, state.clock.tSec);
+}
+
+// The landing's SKIP stops at its window, a zone, the offered burn (SKIP_END_LEAD_TAC before its START BURN, as a flight
+// burn) and, on an open path, the escape (as in flight: nothing else is ahead of a ship leaving).
 function landingNextEvent(state: Readonly<GameState>, pred: Prediction): NextEvent | null {
   const candidates: NextEvent[] = [];
   const zone = nextZoneEntry(state, pred);
   if (zone !== null) candidates.push({ kind: 'zone', inSec: zone.inSec });
   const toWindow = windowLaunchInSec(state);
   if (toWindow !== null) candidates.push({ kind: 'window', inSec: toWindow });
-  if (candidates.length === 0) return null;
-  return candidates.reduce((first, candidate) => (candidate.inSec < first.inSec ? candidate : first));
+  const toBurn = offerInSec(state, pred);
+  if (toBurn !== null) candidates.push({ kind: 'burn', inSec: toBurn });
+  if (candidates.length > 0) return candidates.reduce((first, candidate) => (candidate.inSec < first.inSec ? candidate : first));
+  if (pred.escapeInSec !== null) return { kind: 'escape', inSec: secUntil(pred, pred.escapeInSec, state.clock.tSec) };
+  return null;
 }
 
 // Why SKIP can't run during the landing, beyond the inhibitors it shares with the flight (null: none of these).
@@ -229,10 +248,10 @@ function nextEvent(state: Readonly<GameState>, pred: Prediction): NextEvent | nu
 // when that comes first, with no lead (the alarm moment the kid must see; orbit-sim.ts ghostDueInSec draws it exactly
 // as the sim would, so asking moves nothing). A later burst is no landing (WP10, the lead's ruling): the SKIP flies
 // through it (skipWaypointTSec). null: nothing to land on. (Named apart from the LANDING phase: this is where a SKIP
-// lands. No ghost burst during the landing: the ship only coasts there.)
+// lands. The landing has its ghost bursts too since 1b: its engine is open.)
 export function skipLandsInSec(state: Readonly<GameState>, pred: Prediction): number | null {
   const event = nextEvent(state, pred);
-  const ghostInSec = !isLanding(state) && state.burn.ghostBursts === 0 ? ghostDueInSec(state) : null;
+  const ghostInSec = state.burn.ghostBursts === 0 ? ghostDueInSec(state) : null;
   const toEvent = event === null ? null : event.inSec - endLeadTac(event) * state.level.tacticalWarp;
   if (ghostInSec === null) return toEvent;
   return toEvent === null ? ghostInSec : Math.min(toEvent, ghostInSec);
@@ -584,7 +603,7 @@ export function mountPace(store: Store<GameState>): () => void {
         const endTSec = state.clock.tSec + toEnd;
         skipEndTSec = skipEndTSec === null ? endTSec : Math.min(skipEndTSec, endTSec);
         // WP10: a later ghost burst before the end point is flown through: the tick that reaches it lands on its end.
-        const burst = isLanding(state) ? null : laterBurstWindow(state);
+        const burst = laterBurstWindow(state);
         skipWaypoint = burst !== null && burst.endTSec < skipEndTSec ? burst : null;
       }
     }

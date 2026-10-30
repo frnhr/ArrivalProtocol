@@ -114,8 +114,11 @@ export type LossPlan =
 
 // A lost ship is waiting under its card: the flight ended without reaching orbit, or HOLLOW ate the Core (in flight or
 // during the landing: the pods still aboard are parked in orbit by its result).
+// Slice 1b: with the engine open during the landing, the ship can leave orbit there too (crashed, escaped: orbit-sim
+// endLandingLost); the landing closed with 'ship-lost' and its LOST card is the flight's.
 export function shipLost(state: Readonly<GameState>): boolean {
   if (state.run.coreLost) return state.run.phase === 'flight' || state.run.phase === 'landing';
+  if (state.run.phase === 'landing') return state.burn.status === 'crashed' || state.burn.status === 'escaped';
   return state.run.phase === 'flight' && state.burn.status !== 'approaching';
 }
 
@@ -129,7 +132,8 @@ export function lossPlan(state: Readonly<GameState>): LossPlan {
     return { kind: 'transmit', outcome, extraHits: EMERGENCY_EXTRA_HITS, coreHit: 0, coreReset: true };
   }
   if (outcome === 'crashed') {
-    if (isTutorialShip(state) && !state.run.simulationRetryUsed) return { kind: 'simulation' };
+    // The simulation's retry replays the tutorial FLIGHT: a ship lost during its landing (pods already down) goes on.
+    if (isTutorialShip(state) && !state.run.simulationRetryUsed && state.run.phase === 'flight') return { kind: 'simulation' };
     if (!commsUsable(state)) return { kind: 'end', outcome, cause: 'stayed' };
     if (flagship) return { kind: 'end', outcome, cause: 'flagship-lost' };
     return { kind: 'transmit', outcome, extraHits: EMERGENCY_EXTRA_HITS, coreHit: EMERGENCY_CORE_HIT, coreReset: false };
