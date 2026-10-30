@@ -3,7 +3,9 @@ import type { GameState } from '@state/schema';
 import { onGameTick } from '@systems/clock';
 import { capabilitiesNow } from '@systems/capabilities';
 import { getDropSolution } from '@systems/drop-cache';
-import { groundTrackModel, type GroundBracket, type GroundMark, type GroundTrackModel, type Span } from '@systems/landing-hud';
+import {
+  groundTrackModel, terrainAt, type GroundBracket, type GroundMark, type GroundTrackModel, type Span,
+} from '@systems/landing-hud';
 import { requireById, make } from '@components/dom';
 import { createScrambler } from '@components/hud/scrambler';
 
@@ -17,6 +19,9 @@ import { createScrambler } from '@components/hud/scrambler';
 //   fits, bright dashed while only its centre is in; the next LZs wait at the right edge with their countdowns
 //   (`LZ-B ▸ 2:10`); pods down leave marks.
 // Telemetry below 60 garbles the counters, the drop width and the countdowns (C3, like the plot's readouts).
+// Slice 1b: the glyph rows follow the planet's stretches (landing-hud terrainStretches: VOLCANIC `^^^ ···`, OCEAN `≈`
+// with `·` under the brackets, nothing under a no-go arc, which is hatched red with its word); LZs out of the band wait
+// at the right edge as `LZ-B ▸ OUT OF BAND`; the dot greys and its width reads `≈±195 km` while the drop is uncertain.
 // While it shows (body.landing, PodBayWindow) the plot gives the panel its height, and on a phone the panel takes the
 // readout row's place (landing.css).
 // Painted per game tick while the panel shows; the glyph rows are rebuilt from the ground under the dot, so the
@@ -166,17 +171,24 @@ export function mountGroundTrack(store: Store<GameState>): () => void {
   }
 
   // The terrain rows, scrolled by the ground under the dot: a cell's place on the ground is fixed, so as the dot
-  // moves forward the glyphs slide left.
+  // moves forward the glyphs slide left. Each cell takes the glyph of the stretch under its middle (terrainAt).
   function paintGlyphs(model: GroundTrackModel, width: number): void {
-    const glyph = model.strip.terrain[0]?.glyph ?? '·';
     const pxPerKm = width / model.strip.spanKm;
     const groundPx = model.strip.groundKm * pxPerKm;
     const firstCell = Math.floor((groundPx - width / 2) / CELL_PX);
     const offset = firstCell * CELL_PX - (groundPx - width / 2);
     const cells = Math.ceil(width / CELL_PX) + 2;
+    const glyphs: string[] = [];
+    for (let i = 0; i < cells; i++) {
+      const at = (offset + (i + 0.5) * CELL_PX) / width;
+      glyphs.push(terrainAt(model.strip.terrain, at)?.glyph ?? '');
+    }
     glyphRows.forEach((line, row) => {
       let text = '';
-      for (let i = 0; i < cells; i++) text += cellHash(firstCell + i, row) < GLYPH_DENSITY[row]! ? glyph : ' ';
+      for (let i = 0; i < cells; i++) {
+        const glyph = glyphs[i]!;
+        text += glyph !== '' && cellHash(firstCell + i, row) < GLYPH_DENSITY[row]! ? glyph : ' ';
+      }
       patchText(line, text);
       line.style.transform = `translateX(${offset.toFixed(1)}px)`;
     });
@@ -207,19 +219,24 @@ export function mountGroundTrack(store: Store<GameState>): () => void {
     dotEl.hidden = dot === null;
     if (dot !== null) {
       dotEl.style.setProperty('--gt-dot-half', pct(dot.half));
-      dotEl.className = `gt-dot fits-${dot.inBand ? dot.fits : 'out-of-band'}`;
+      dotEl.className = `gt-dot fits-${!dot.inBand ? 'out-of-band' : dot.uncertain ? 'uncertain' : dot.fits}`;
     }
     patchText(dotLabel, dot === null ? '' : garble('drop', dot.text, scramble));
     blockedEl.hidden = model.blocked === null;
     patchText(blockedEl, model.blocked ?? '');
-    while (aheadEl.children.length > model.strip.ahead.length) aheadEl.lastElementChild?.remove();
-    model.strip.ahead.forEach((entry, i) => {
+    const listed = [
+      ...model.strip.ahead.map((entry) => ({ entry, outOfBand: false })),
+      ...model.strip.outOfBandAhead.map((entry) => ({ entry, outOfBand: true })),
+    ];
+    while (aheadEl.children.length > listed.length) aheadEl.lastElementChild?.remove();
+    listed.forEach(({ entry, outOfBand }, i) => {
       let node = aheadEl.children[i] as HTMLElement | undefined;
       if (!node) { node = make('span', 'gt-ahead-item'); aheadEl.appendChild(node); }
       patchText(node, garble(`ahead-${i}`, entry.text, scramble));
-      node.className = `gt-ahead-item${entry.open ? ' open' : ''}${entry.full ? ' full' : ''}`;
+      node.className = `gt-ahead-item${entry.open ? ' open' : ''}${entry.full ? ' full' : ''}${outOfBand ? ' out-of-band' : ''}`;
     });
     root.classList.toggle('out-of-band', model.outOfBand);
+    root.classList.toggle('uncertain', dot?.uncertain === true);
   }
 
   const offTick = onGameTick(() => paint());

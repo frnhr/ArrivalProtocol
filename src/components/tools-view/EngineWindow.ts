@@ -11,6 +11,7 @@ import {
 } from '@systems/flight-hud';
 import { pressAutoburn } from '@systems/autoburn';
 import { capabilitiesNow, presetsAvailable } from '@systems/capabilities';
+import { landingBurnOffer } from '@systems/landing-orbit';
 import { onOpsChange } from '@systems/ops-core';
 import { renderKeyCaps } from '@components/hud/keycaps';
 import { askBeamOut } from '@components/hud/BeamOutAsk';
@@ -208,7 +209,10 @@ export function mountEngineWindow(store: Store<GameState>): () => void {
   function paintFuel(): void {
     // The sensed prediction, as the strip reads it (§6.2: every player-facing number), so `short` is the strip's own
     // verdict even while a failing Sensor Interp holds the plot stale (LEAD-2 review round 2).
-    const model = fuelModel(store.getState(), getSensedPrediction());
+    // While landing the NEEDED tick prices the burn the landing offers (slice 1b), none while nothing is offered.
+    const state = store.getState();
+    const pred = getSensedPrediction();
+    const model = fuelModel(state, pred, state.run.phase === 'landing' ? landingBurnOffer(state, pred) : null);
     const key = `${model.pct.toFixed(1)}|${model.neededPct?.toFixed(1)}|${model.short}`;
     if (key === lastFuel) return;
     lastFuel = key;

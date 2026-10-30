@@ -663,3 +663,57 @@ tests' tsc are green; the full unit tier passes (see the track's report for the 
 **Noticed, not changed**
 - L3b (`NO ROOM IN THE BAND — [L] lands in a full LZ`) offers the mislanded launch with a dot that may not be sure, and
   says nothing about its width; HALCYON PARTIAL's off-site pod in flow.test is one. A `WIDE DROP` variant could follow L5's.
+
+### Deviations (Track UI)
+
+Built against the foundation's ORBIT stubs and DROP as merged (17f44e9). ORBIT's answers reach the views as injected
+values, as the foundation review asked: `landingBurnOffer` (the offer) and `decayForecast` (the forecast) are called by
+the components and passed into the pure models, so `hud.test` pins the views with crafted offers, forecasts,
+`landing.goLow`, `landing.decay.last`, an uncertain solution and Bay Ctrl's capabilities.
+
+**Interfaces**
+1. **The offer, injected.** `countdownChip(state, pred, sol, offer)`, `plotMarkers(state, pred, plot, offer)`,
+   `fuelModel(state, pred, offer)`, `plotLandingModel(state, sol, pred, offer)`, `goLowMarks(state, pred, offer)` and
+   `decayChip(state, forecast, offer)`. In landing the START BURN tick is the offer's only; the chip shows `BRAKE IN`
+   while the offer's START BURN comes before the window's launch moment; FUEL's NEEDED prices the offer with
+   `pred.neededPct`, so it assumes the offer IS the plan's burn point (landingBurnOffer's doc says so).
+2. **Out-of-band LZs at the right edge** are `strip.outOfBandAhead`, apart from `strip.ahead`: `ahead` still lists only
+   what the landing counts down to (review M3, and flow.test's "never count down to the out-of-band LZ-B").
+3. **`bayWindowModel(state, sol, caps = capabilitiesNow(state))`.** NO BAY CTRL is read from `caps.bay.offline` as well
+   as launchRefusal (in its order: NOT LANDING, LANDING OVER and PAUSED outrank it). The window's BAY CTRL pip says `?`
+   while Bay Ctrl is an unscanned ship file (§3.2, as the title pip), and is loud when missing either way.
+4. **The POD BAY's NEXT width** is the solved dot's (drop-cache solves it for that very pod with every factor), else
+   `driverLanding` with `dropFactors(caps, driver)`; 1a passed all-1 factors.
+5. **`TOUCHDOWN_FLOAT_TEXT.noGo(word)`** is a function (`+0 LAVA`), the word from `noGoAt` at the landing point.
+6. **`plotChip` and the readout's STATUS in landing** say IMPACT / FLYBY and BURNING (or the engine firing by itself)
+   while the engine is open; the lock's word otherwise.
+
+**Screens**
+7. **The DRAG circle shows in LANDING only** (on ships with drag), named `DRAG` at the lower left inside it.
+8. **The decay chip** sits under the plot's line-state chip whenever the forecast has ▼ leaving the band (any number of
+   orbits), urgent (yellow, pulsing) at `DECAY_WARN_ORBITS`; the 'lift' offer adds its key cap. The labels' collision
+   pass treats the two chips as one box.
+9. **GO LOWER's ◇** counts mm:ss to the burn's centre (`eventInSec`, `◇ 00:42` over `GO LOWER`) only while the go-low burn
+   for that LZ is the offer; green once `held`. The target tick at `launchRad` reads `LZ-B ▸`.
+10. **The grey dot's width** (`≈±196 km`) is written inside the planet, reading inward from the dot (outside the rim
+    it ran into the bracket's label); the dot is ringed and its halo dashed so it reads on an amber bracket.
+11. **No-go cells in the GROUND TRACK's glyph rows are blank**: the red hatch with its word is the `////` of §4.
+12. **The Engine in LANDING**: BURN, presets, their tip, FUEL and MANUAL are back; the REACTOR row stays folded (its cost
+    shows as the THRUST LIMIT hatch). On a short desk (≤ 800 px high) the landing also folds the preset tip and the MANUAL
+    toggle and lowers BURN, so the POD BAY with its class line fits 1280×720. On a phone LAUNCH and BURN share a row.
+13. **Audio**: the hiss plays from DRAG_STAMP_MIN_KM like the stamp; the engine rumble follows `engineOpen`.
+
+**Tests changed outside hud.test** (consequences of the engine opening in landing, both one check)
+- `wp1/hud`: `locked: BURN shows FLIGHT OVER` became `BURN stays live in the landing`.
+- e2e `phone.mjs`: the landing bar keeps BURN and the presets (not run; the e2e run at the end will).
+
+**Noticed, not changed**
+- With NO BAY CTRL the GROUND TRACK still counts the in-band windows at its right edge (`landingMoment.upcoming` lists
+  them though nothing is awaited). Honest (the windows come), but it may read as "wait for it"; dim them if Fran agrees.
+
+**Requests to ORBIT**
+- `landingBurnOffer` returns the plan's own BurnPoint (times relative to the same `pred.asOfTSec`), so FUEL's
+  `pred.neededPct` prices it; a 'go-low' point's `eventInSec` is the time to `burnRad` and carries `aimLz`.
+- `decayForecast` is called every plot frame in landing: keep it closed-form.
+- `'drag-kick'`'s `rad` and `rpKm` are where the kick happened (the stamp is drawn there).
+- Clearing `landing.goLow` on release/launch/MERGE's reopen hides the ◇ (the views draw it whenever it is non-null).

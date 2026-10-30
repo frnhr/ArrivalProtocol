@@ -6,6 +6,7 @@ import { capabilitiesNow } from '@systems/capabilities';
 import { onOpsChange } from '@systems/ops-core';
 import { setMode } from '@systems/mode';
 import { getDropSolution } from '@systems/drop-cache';
+import { landingBurnOffer } from '@systems/landing-orbit';
 import { miniHudLanding } from '@systems/landing-hud';
 import {
   countdownChip, plotChip, fuelModel, thrustLimitModel, paceLabel, plotViewRadius, mindChipModel, overclockBadge, plotZones,
@@ -154,7 +155,9 @@ export function mountMiniHud(store: Store<GameState>): () => void {
 
     // The header's countdown, with its ▸▸ (fast-forwarding) or ×¼ (OVERCLOCK) badge.
     const sol = landing ? getDropSolution() : null;
-    const countdown = countdownChip(state, pred, sol);
+    // Slice 1b: the burn the landing offers counts here too when it comes before the window, as on the header's chip.
+    const offer = landing ? landingBurnOffer(state, pred) : null;
+    const countdown = countdownChip(state, pred, sol, offer);
 
     const badge = countdown?.fastForward ? '▸▸' : countdown?.slow ? overclockBadge() : '';
     patch(cdLabel, countdown ? countdown.label : '—');
@@ -170,7 +173,7 @@ export function mountMiniHud(store: Store<GameState>): () => void {
     // FUEL and its NEEDED as the Engine window shows them: from the sensed prediction, as the strip reads it (§6.2:
     // every player-facing number), so its USE IT ALL and the strip's WAIT come from one snapshot even while a failing
     // Sensor Interp holds the plot stale (LEAD-2 review round 2).
-    const fuel = fuelModel(state, pred);
+    const fuel = fuelModel(state, pred, offer);
     const engineLimit = thrustLimitModel(state);
     const limit = landing ? { ...engineLimit, limited: false } : engineLimit;
     const barsKey = `${fuel.pct.toFixed(1)}|${fuel.short}|${limit.limited ? limit.capPct : ''}`;

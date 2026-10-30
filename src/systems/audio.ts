@@ -27,8 +27,8 @@ import {
 export type TypeVoice = 'sys' | 'hollow' | 'control' | 'strip';
 export type WhoompShape = 'rise' | 'shimmer' | 'fall' | 'sag' | 'clear';
 // How a pod came down, as the touchdown bell says it (§4): clean, dull (hard), a minor second sour (mislanded, its LZ
-// already full), or a low bonk (off-site; a no-go arc too).
-export type TouchdownSound = 'soft' | 'hard' | 'mislanded' | 'off-site';
+// already full), a low bonk (off-site), or a lower, heavier bonk for a no-go arc (slice 1b: the pod scored nothing).
+export type TouchdownSound = 'soft' | 'hard' | 'mislanded' | 'off-site' | 'no-go';
 
 export interface CueParams {
   transmitIn: undefined;
@@ -60,6 +60,8 @@ export interface CueParams {
   podLaunch: { first: boolean };
   podEntry: { first: boolean };
   touchdownBell: { lz: number; landing: TouchdownSound };
+  // Slice 1b: a drag kick (§4 "a drag kick a soft hiss"): air on the hull at ▼, for the kicks that stamp.
+  dragHiss: undefined;
   // WP6: HOLLOW. The bite landing on a file; a bite held by a WALL; a driver eaten (the sombre fall, also a sombre RUN
   // END's); a repair winning the tug-of-war.
   hollowBite: undefined;
@@ -920,6 +922,21 @@ function cuePodEntry(mix: Graph, t0: number, first: boolean): void {
   voice.noise(mix.white, t0, t0 + 1.6, voice.gain(0.35, amp));
 }
 
+// A drag kick (slice 1b, §4): a soft hiss, air on the hull for a moment at ▼. White noise through a bandpass that slides
+// down (2,400 → 900 Hz) as it swells and fades over 0.7 s; quiet, on the ambient bus, so a kick every orbit through a
+// long SKIP is felt, never a chore.
+function cueDragHiss(mix: Graph, t0: number): void {
+  const voice = makeVoice(mix.ctx);
+  const out = voice.gain(1, mix.buses.ambient);
+  const band = voice.filter('bandpass', 2400, 0.9, out);
+  sweep(band.frequency, t0, 2400, 900, 0.65);
+  const amp = voice.gain(0, band);
+  amp.gain.setValueAtTime(0, t0);
+  amp.gain.linearRampToValueAtTime(0.14, t0 + 0.18);
+  amp.gain.exponentialRampToValueAtTime(SILENT, t0 + 0.7);
+  voice.noise(mix.white, t0, t0 + 0.75, amp);
+}
+
 // The touchdown bell's pitch per LZ (§4: LZ-B a fifth above LZ-A, so a split is audible), just ratios over G5: A 1,
 // B 3/2 (the fifth), C 5/4, D 15/8; a fifth LZ wraps an octave down.
 const BELL_BASE_HZ = 784;
@@ -937,6 +954,19 @@ function bellHz(lz: number): number {
 function cueTouchdownBell(mix: Graph, t0: number, lz: number, landing: TouchdownSound): void {
   const voice = makeVoice(mix.ctx);
   const out = voice.gain(1, mix.buses.chord);
+  // NO-GO (slice 1b): the off-site bonk a fourth lower and longer, with a dull knock of rock under it: the same family of
+  // "not where it should be", heavier, because this pod scored nothing.
+  if (landing === 'no-go') {
+    const amp = voice.gain(0, voice.filter('lowpass', 620, 0.8, out));
+    const end = pluck(amp.gain, t0, 0.36, 0.004, 0.6);
+    const bonk = voice.osc('triangle', 147, t0, end, amp);
+    sweep(bonk.frequency, t0, 147, 62, 0.45);
+    voice.osc('sine', 73, t0, end, voice.gain(0.7, amp));
+    const knock = voice.gain(0, out);
+    const knockEnd = pluck(knock.gain, t0, 0.2, 0.002, 0.08);
+    voice.noise(mix.brown, t0, knockEnd, voice.filter('lowpass', 400, 0.7, knock));
+    return;
+  }
   if (landing === 'off-site') {
     const amp = voice.gain(0, voice.filter('lowpass', 900, 0.8, out));
     const end = pluck(amp.gain, t0, 0.32, 0.004, 0.42);
@@ -1539,6 +1569,7 @@ function playOn(mix: Graph, cue: Cue, params: CueParams[Cue] | undefined, t0: nu
       cueTouchdownBell(mix, t0, bell.lz, bell.landing);
       return;
     }
+    case 'dragHiss': cueDragHiss(mix, t0); return;
     case 'hollowBite': cueHollowBite(mix, t0); return;
     case 'fizzle': cueFizzle(mix, t0); return;
     case 'sombreFall': cueSombreFall(mix, t0); return;

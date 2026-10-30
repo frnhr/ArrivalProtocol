@@ -1,23 +1,25 @@
 import type { GameState } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {
-  DropFactors, DropSolution, LzState, LzWindow, NoGoArcState, Place, Touch, TerrainWord,
+  DragKick, DropFactors, DropSolution, LandingState, LzState, LzWindow, NoGoArcState, Place, Touch, TerrainWord,
 } from '@/types/landing';
-import { elementsFromState, propagateConic, semiMajorAxis, type Vec2 } from '@/types/orbit';
-import { driversInMemory } from '@state/selectors';
+import type { BurnPoint, Prediction } from '@systems/predict';
+import { elementsFromState, propagateConic, semiMajorAxis, type OrbitState, type Vec2 } from '@/types/orbit';
+import { driversInMemory, getByRole } from '@state/selectors';
 import { angleDelta, dropHalfWidthKm } from '@systems/landing-solve';
-import { capabilitiesNow } from '@systems/capabilities';
+import { capabilitiesNow, BAND_COPY, type Band, type Capabilities } from '@systems/capabilities';
+import { dragLineKm } from '@systems/landing-orbit';
 import {
-  bayMembers, bayShown, driverTouch, isLaunchable, launchGuard, launchRefusal, lzAt, lzDownFill, lzProjectedFill, nextToLaunch,
+  bayMembers, bayShown, driverTouch, dropFactors, isLaunchable, launchGuard, launchRefusal, lzAt, lzDownFill, lzProjectedFill, nextToLaunch,
   landingMoment, onTargetTally, podCounts, podsWithFate,
 } from '@systems/landing-rules';
 import {
   BAND_TEXT, GROUND_TRACK_TEXT, LANDING_HUD_TEXT, LANDING_PLOT_TEXT, LAUNCH_REFUSAL_TEXT, MINI_LANDING_TEXT, POD_BAY_STATUS_TEXT,
-  POD_BAY_TEXT, DRIVER_DETAIL_TEXT, LAUNCH_CONFIRM_TEXT, minSec,
+  POD_BAY_TEXT, DRIVER_DETAIL_TEXT, LAUNCH_CONFIRM_TEXT, DRAG_STAMP_TEXT, minSec,
 } from '@data/landing-text';
 import {
-  BAND_FAILING_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEACON_LAG_FRAC, GROUND_TRACK_AHEAD_MAX, GROUND_TRACK_SPAN_KM, POD_FIRST_DESCENT_SEC,
-  STREAK_TRAIL_FRAC,
+  BAND_FAILING_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEACON_LAG_FRAC, DRAG_STAMP_MIN_KM, GROUND_TRACK_AHEAD_MAX, GROUND_TRACK_SPAN_KM,
+  POD_FIRST_DESCENT_SEC, STREAK_TRAIL_FRAC, TERRAIN_ALT_SHARE, TERRAIN_STRETCH_DEG,
 } from '@data/tuning';
 
 // What the landing's own screens show (01-landing §4), as plain data: the NAV PLOT's brackets, dot, pod arc, streaks,
@@ -30,7 +32,13 @@ import {
 //
 // Extendable as data (later slices fill what 1a leaves empty): no-go arcs (1b), out-of-band stretches (the windows a
 // PARTIAL orbit can't use; 1b's decay), survey candidate brackets, drawn dashed (slice 6, `candidate`), and terrain
-// glyphs per stretch of ground (slice 6's mapped terrain; 1a draws the planet's one terrain word everywhere).
+// glyphs per stretch of ground (terrainStretches: 1b's pattern per terrain word; slice 6's survey maps more).
+//
+// Slice 1b (plan §3 Track UI): the DRAG line, the grey DROP UNCERTAIN dot (`≈` widths), GO LOWER's ◇ and its target tick,
+// the drag stamp, out-of-band windows at the right edge, Bay Ctrl's pip and NO BAY CTRL, the class line. ORBIT's answers
+// that were still the foundation's stubs when this was written (the burn offer, the decay forecast) come in as
+// parameters, as in flight-hud, so this module is tested against crafted states (landing.decay.last, landing.goLow,
+// sol.uncertain, an injected offer).
 
 // --- Shared pieces ------------------------------------------------------------------------------------------------------
 
@@ -113,6 +121,7 @@ export interface DotModel {
   lz: string | null;
   fits: 'none' | 'centre' | 'whole';
   centredness: number | null;
+  uncertain: boolean;     // Sensor Interp failing or worse (§3.8): the grey dot, `≈` on its width
 }
 
 export function dropDotModel(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): DotModel | null {
@@ -128,7 +137,10 @@ export function dropDotModel(state: Readonly<GameState>, sol: Readonly<DropSolut
     fits = off + halfWidthRad <= lz.halfWidthRad ? 'whole' : 'centre';
     centredness = Math.max(0, Math.min(1, 1 - off / lz.halfWidthRad));
   }
-  return { rad: dot.rad, halfWidthKm: dot.halfWidthKm, halfWidthRad, inBand: dot.inBand, lz: lz?.label ?? null, fits, centredness };
+  return {
+    rad: dot.rad, halfWidthKm: dot.halfWidthKm, halfWidthRad, inBand: dot.inBand, lz: lz?.label ?? null, fits, centredness,
+    uncertain: dot.uncertain || sol.uncertain,
+  };
 }
 
 // The window tone (§4: lockTone(fraction), fraction = how centred the dot is), or null: silent unless a window is open
@@ -251,27 +263,103 @@ export function ringLabel(state: Readonly<GameState>): string {
   return state.run.phase === 'landing' ? BAND_TEXT.ringLanding : BAND_TEXT.ringFlight;
 }
 
+// The radius of the live conic at world angle `rad` (r = p / (1 + e·cos(rad − ω)), either direction of travel), or null
+// on an open path: GO LOWER's marks sit on the orbit the kid is flying now.
+function conicRadiusAt(orbit: Readonly<OrbitState>, mu: number, rad: number): number | null {
+  const el = elementsFromState(orbit, mu);
+  if (!(el.e < 1)) return null;
+  const radius = (el.rp * (1 + el.e)) / (1 + el.e * Math.cos(rad - el.omega));
+  return Number.isFinite(radius) && radius > 0 ? radius : null;
+}
+
+function polarKm(radius: number, rad: number): Vec2 {
+  return { x: radius * Math.cos(rad), y: radius * Math.sin(rad) };
+}
+
+// GO LOWER on the plot (§3.7, landing.goLow): the ◇ where the RETRO burn is centred (half an orbit before the launch
+// point), with its countdown while the burn is the one offered (`◇ 00:42` over `GO LOWER`, as ▼ reads `▼ 08:23` over
+// `LOWEST …`), and a small target tick at the launch point of the LZ it is for (`LZ-B ▸`). `offer`: landing-orbit
+// landingBurnOffer's answer, injected (its times are game s after `pred.asOfTSec`); without it the marks show
+// uncounted (an aim the kid declined, or one not offered yet).
+export interface GoLowMarks {
+  lz: string;
+  held: boolean;
+  point: { pos: Vec2; lines: string[]; countdown: string | null };
+  target: { pos: Vec2; rad: number; label: string };
+}
+
+export function goLowMarks(
+  state: Readonly<GameState>, pred: Readonly<Prediction> | null, offer: Readonly<BurnPoint> | null,
+): GoLowMarks | null {
+  const aim = state.landing.goLow;
+  if (state.run.phase !== 'landing' || state.landing.ended !== null || aim === null) return null;
+  const { mu } = state.level.planet;
+  const pointR = conicRadiusAt(state.orbit, mu, aim.burnRad);
+  const targetR = conicRadiusAt(state.orbit, mu, aim.launchRad);
+  if (pointR === null || targetR === null) return null;
+  let countdown: string | null = null;
+  if (pred !== null && offer !== null && offer.reason === 'go-low' && (offer.aimLz ?? aim.lz) === aim.lz) {
+    const gameSec = Math.max(0, offer.eventInSec - (state.clock.tSec - pred.asOfTSec));
+    countdown = minSec(tacOf(state, gameSec)).padStart(5, '0');   // mm:ss, as the plot's ▼ and ▲ count
+  }
+  return {
+    lz: aim.lz,
+    held: aim.held,
+    point: {
+      pos: polarKm(pointR, aim.burnRad), countdown,
+      lines: [LANDING_PLOT_TEXT.goLowPoint(countdown), LANDING_PLOT_TEXT.goLowWord],
+    },
+    target: { pos: polarKm(targetR, aim.launchRad), rad: aim.launchRad, label: LANDING_PLOT_TEXT.goLowTarget(aim.lz) },
+  };
+}
+
+// The drag stamp (§3.7, risk 15): `DRAG · ▲ −110 km` where the kick happened (its ▼: `rad`, `rpKm`), only for a kick that
+// moved the far apsis at least DRAG_STAMP_MIN_KM (the hiss and the lesson share the threshold); null for a smaller one.
+export interface DragStamp {
+  text: string;
+  pos: Vec2;
+  rad: number;
+}
+
+export function dragStamp(kick: Readonly<DragKick> | null): DragStamp | null {
+  if (kick === null || kick.dropKm < DRAG_STAMP_MIN_KM) return null;
+  return { text: DRAG_STAMP_TEXT.kick(kick.apsis, kick.dropKm), pos: polarKm(kick.rpKm, kick.rad), rad: kick.rad };
+}
+
 export interface PlotLandingModel {
   brackets: BracketModel[];
   noGo: NoGoModel[];
   dot: DotModel | null;
-  arc: { points: Vec2[]; inBand: boolean } | null;   // dotted bright amber, grey outside the band
+  // The pod arc: dotted bright amber, grey outside the band, grey and dim while the drop is uncertain (§3.8).
+  arc: { points: Vec2[]; inBand: boolean; uncertain: boolean } | null;
+  dotLabel: string | null;          // the grey dot's `≈±195 km` (§3.8); null for a sure dot (the GROUND TRACK says its width)
+  dragLineKm: number | null;        // the faint dashed DRAG circle (§3.7), on ships with drag only
+  goLow: GoLowMarks | null;
   streaks: StreakModel[];
   marks: LandMark[];
   beacons: Beacon[];
 }
 
-// Everything the landing adds to the NAV PLOT, or null outside LANDING.
-export function plotLandingModel(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): PlotLandingModel | null {
+// Everything the landing adds to the NAV PLOT, or null outside LANDING. `pred` and `offer` (landing-orbit
+// landingBurnOffer, injected) only time GO LOWER's ◇; without them its marks show uncounted.
+export function plotLandingModel(
+  state: Readonly<GameState>, sol: Readonly<DropSolution> | null,
+  pred: Readonly<Prediction> | null = null, offer: Readonly<BurnPoint> | null = null,
+): PlotLandingModel | null {
   if (state.run.phase !== 'landing') return null;
   const dot = dropDotModel(state, sol);
   const aboard = state.landing.ended === null && state.landing.pods.some((record) => record.fate.kind === 'aboard');
-  const arc = dot !== null && aboard && sol !== null && sol.arc.length >= 2 ? { points: sol.arc, inBand: dot.inBand } : null;
+  const arc = dot !== null && aboard && sol !== null && sol.arc.length >= 2
+    ? { points: sol.arc, inBand: dot.inBand, uncertain: dot.uncertain } : null;
+  const shownDot = aboard ? dot : null;
   return {
     brackets: bracketModels(state, sol),
     noGo: noGoModels(state.landing.noGo),
-    dot: aboard ? dot : null,
+    dot: shownDot,
     arc,
+    dotLabel: shownDot !== null && shownDot.uncertain ? LANDING_PLOT_TEXT.dotWidth(shownDot.halfWidthKm) : null,
+    dragLineKm: state.landing.drag ? dragLineKm(state.level.ring) : null,
+    goLow: goLowMarks(state, pred, offer),
     streaks: podStreaks(state),
     marks: landMarks(state),
     beacons: parkedBeacons(state),
@@ -302,26 +390,81 @@ export interface GroundMark {
 
 export interface GroundAhead {
   lz: string;
-  text: string;           // `LZ-B ▸ 2:10`
+  text: string;           // `LZ-B ▸ 2:10`; in strip.outOfBandAhead `LZ-B ▸ OUT OF BAND`
   open: boolean;
   full: boolean;
 }
 
-// The terrain glyph rows (§4: `≈` water, `·` plains, `^` rock, red `////` no-go). A stretch of the strip and its glyph;
-// in 1a one stretch with the planet's terrain word everywhere, slice 6's survey maps more.
-export interface TerrainStretch extends Span {
-  glyph: string;
+// The terrain glyph rows (§4: `≈` water, `·` plains, `^` rock, red `////` no-go), by terrain word: the ground's main
+// glyph, the second one some stretches take (TERRAIN_ALT_SHARE), and the glyph under an LZ's bracket (an LZ is flat
+// ground: OCEAN's brackets are its islands, `·` among the `≈`). No-go arcs draw no glyph: the strip hatches them red with
+// their word over them (gt-nogo).
+export interface TerrainPattern {
+  ground: string;
+  alt: string;
+  site: string;
 }
 
-const TERRAIN_GLYPH: Readonly<Record<TerrainWord, string>> = {
-  PLAINS: '·',
-  GRASSLAND: '"',
-  OCEAN: '≈',
-  VOLCANIC: '^',
+export const TERRAIN_PATTERN: Readonly<Record<TerrainWord, TerrainPattern>> = {
+  PLAINS: { ground: '·', alt: '"', site: '·' },
+  GRASSLAND: { ground: '"', alt: '·', site: '·' },
+  OCEAN: { ground: '≈', alt: '≈', site: '·' },
+  VOLCANIC: { ground: '^', alt: '·', site: '·' },
 };
 
 export function terrainGlyph(terrain: TerrainWord): string {
-  return TERRAIN_GLYPH[terrain];
+  return TERRAIN_PATTERN[terrain].ground;
+}
+
+// One stretch of the planet's ground, in world angles (from < to, possibly past ±π: callers take angleDelta).
+export type TerrainKind = 'no-go' | 'site' | 'ground';
+
+export interface TerrainArc {
+  fromRad: number;
+  toRad: number;
+  glyph: string;          // '' for no-go: hatched, not glyphed
+  kind: TerrainKind;
+  word: string | null;    // the no-go arc's word (LAVA), else null
+}
+
+// The same ground always reads the same: a fixed hash of a stretch's index picks its glyph.
+function stretchHash(index: number): number {
+  let h = Math.imul(index ^ 0x5bd1e995, 0x27d4eb2d);
+  h = Math.imul(h ^ (h >>> 15), 0x165667b1);
+  return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
+}
+
+// The planet's ground as stretches, highest priority first (the first that covers a place gives its glyph): the no-go
+// arcs, the LZs' brackets, then the ground in TERRAIN_STRETCH_DEG stretches of the terrain's main or second glyph. Pure,
+// from the landing's own data, so slice 6's survey can hand mapped stretches through the same shape.
+export function terrainStretches(landing: Readonly<Pick<LandingState, 'terrain' | 'lzs' | 'noGo'>>): TerrainArc[] {
+  const pattern = TERRAIN_PATTERN[landing.terrain];
+  const arcs: TerrainArc[] = [
+    ...landing.noGo.map((arc): TerrainArc => ({
+      fromRad: arc.centreRad - arc.halfWidthRad, toRad: arc.centreRad + arc.halfWidthRad, glyph: '', kind: 'no-go', word: arc.word,
+    })),
+    ...landing.lzs.map((lz): TerrainArc => ({
+      fromRad: lz.centreRad - lz.halfWidthRad, toRad: lz.centreRad + lz.halfWidthRad, glyph: pattern.site, kind: 'site', word: null,
+    })),
+  ];
+  const count = Math.round(360 / TERRAIN_STRETCH_DEG);
+  const step = (2 * Math.PI) / count;
+  for (let i = 0; i < count; i++) {
+    const glyph = stretchHash(i) < TERRAIN_ALT_SHARE ? pattern.alt : pattern.ground;
+    arcs.push({ fromRad: i * step, toRad: (i + 1) * step, glyph, kind: 'ground', word: null });
+  }
+  return arcs;
+}
+
+// A stretch of the strip and its glyph (terrainStretches mapped onto the strip, in the same priority order).
+export interface TerrainStretch extends Span {
+  glyph: string;
+  kind: TerrainKind;
+}
+
+// A place on the strip's terrain row: the first stretch (by priority) that covers it, or null.
+export function terrainAt(terrain: readonly TerrainStretch[], at: number): TerrainStretch | null {
+  return terrain.find((stretch) => at >= stretch.from && at < stretch.to) ?? null;
 }
 
 export interface GroundTrackModel {
@@ -343,8 +486,11 @@ export interface GroundTrackModel {
     brackets: GroundBracket[];
     noGo: (Span & { word: string })[];
     marks: GroundMark[];
-    dot: { half: number; inBand: boolean; fits: DotModel['fits']; text: string } | null;
+    dot: { half: number; inBand: boolean; fits: DotModel['fits']; uncertain: boolean; text: string } | null;
     ahead: GroundAhead[];
+    // Slice 1b: the LZs whose next window is launched from outside the band, named after `ahead` at the right edge with no
+    // countdown (`LZ-B ▸ OUT OF BAND`). Kept apart from `ahead`, which lists only what the landing counts down to (M3).
+    outOfBandAhead: GroundAhead[];
   };
   blocked: string | null;       // NO DROP SOLUTION (and nothing on the strip but the ground)
   outOfBand: boolean;           // the ship is outside the launch band now: the dot greys
@@ -405,9 +551,26 @@ export function groundTrackModel(state: Readonly<GameState>, sol: Readonly<DropS
       : open ? GROUND_TRACK_TEXT.aheadOpen(w.lz) : GROUND_TRACK_TEXT.ahead(w.lz, minSec(tacOf(state, w.launchInSec)));
     ahead.push({ lz: w.lz, text, open, full: w.full });
   }
+  // Slice 1b: an LZ whose next window is launched from outside the band (a PARTIAL orbit, or one decay has sunk) is still
+  // named at the edge after the in-band ones, `LZ-B ▸ OUT OF BAND`: the kid sees the site is there and why it isn't
+  // counted down (the strip's L2 names the burn that brings it back). Not one on the strip already, nor a full one.
+  const counters = new Map(lzCounters(state).map((counter) => [counter.lz, counter]));
+  const outOfBandAhead: GroundAhead[] = [];
+  for (const bracket of brackets) {
+    if (ahead.length + outOfBandAhead.length >= GROUND_TRACK_AHEAD_MAX) break;
+    if (!bracket.outOfBand || counters.get(bracket.lz)?.full === true || ahead.some((entry) => entry.lz === bracket.lz)) continue;
+    const onStripNow = stripBrackets.find((b) => b.lz === bracket.lz);
+    if (onStripNow !== undefined && onStrip(onStripNow)) continue;
+    outOfBandAhead.push({ lz: bracket.lz, text: GROUND_TRACK_TEXT.aheadOutOfBand(bracket.lz), open: false, full: false });
+  }
 
   const blocked = sol !== null && sol.block !== null ? GROUND_TRACK_TEXT.noSolution
     : dot === null ? GROUND_TRACK_TEXT.noDot : null;
+  // The terrain under the strip: the planet's stretches that reach it, in priority order (terrainAt takes the first).
+  const terrain: TerrainStretch[] = terrainStretches(landing).flatMap((arc): TerrainStretch[] => {
+    const span = stripSpan((arc.fromRad + arc.toRad) / 2, (arc.toRad - arc.fromRad) / 2);
+    return onStrip(span) ? [{ ...span, glyph: arc.glyph, kind: arc.kind }] : [];
+  });
   const viewHalf = spanKm / 2 / R;
   const viewMid = planetFrac(centreRad, sign);
   const viewHalfFrac = viewHalf / (2 * Math.PI);
@@ -424,15 +587,17 @@ export function groundTrackModel(state: Readonly<GameState>, sol: Readonly<DropS
     strip: {
       spanKm,
       groundKm: sign * centreRad * R,
-      terrain: [{ from: 0, to: 1, glyph: terrainGlyph(landing.terrain) }],
+      terrain,
       brackets: stripBrackets.filter(onStrip),
       noGo: landing.noGo.map((arc) => ({ ...stripSpan(arc.centreRad, arc.halfWidthRad), word: arc.word })).filter(onStrip),
       marks: marks.map((mark) => ({ pod: mark.pod, at: stripAt(mark.rad), place: mark.place, touch: mark.touch }))
         .filter((mark) => mark.at >= 0 && mark.at <= 1),
       dot: dot === null ? null : {
-        half: dot.halfWidthKm / spanKm, inBand: dot.inBand, fits: dot.fits, text: GROUND_TRACK_TEXT.drop(dot.halfWidthKm),
+        half: dot.halfWidthKm / spanKm, inBand: dot.inBand, fits: dot.fits, uncertain: dot.uncertain,
+        text: GROUND_TRACK_TEXT.drop(dot.halfWidthKm, dot.uncertain),
       },
       ahead,
+      outOfBandAhead,
     },
     blocked,
     outOfBand: dot !== null && !dot.inBand,
@@ -445,9 +610,32 @@ export function groundTrackModel(state: Readonly<GameState>, sol: Readonly<DropS
 // (the dot off-site, or its LZ full), `blocked` with the refusal's words otherwise.
 export type LaunchLook = 'go' | 'asks' | 'blocked';
 
+// The BAY CTRL pip in the window (§3.4, slice 1b): Bay Ctrl's band, in BAND_COPY.bay's words (`BAY CTRL DAMAGED · …`),
+// and `offline` with the file missing: then no pod can launch, said `NO BAY CTRL` (§3.10: "offline" never stands next to
+// pods; BAND_COPY.bay.missing). `unknown` while Bay Ctrl is a ship file the kid has not scanned: its damage stays hidden
+// (§3.2), as the window's title pip says `?` (flight-hud windowPip). A missing file is loud whether scanned or not.
+export interface BayCtrlModel {
+  band: Band | 'unknown';
+  offline: boolean;
+  text: string;
+}
+
+// The class line (the card labels 1a's risk 5 left; the ship card proper is slice 3): `PLAINS · off-site pods score half`,
+// and the no-go arcs by their words, `NO-GO: LAVA` (null on a ship without arcs).
+export interface BayClassModel {
+  text: string;
+  noGo: string | null;
+}
+
+// The refusals that outrank BAY OFFLINE in launchRefusal's order (the LaunchRefusal union's): the window shows those
+// words, and NO BAY CTRL over every later one.
+const OUTRANKS_BAY_OFFLINE: ReadonlySet<string> = new Set(['NOT LANDING', 'LANDING OVER', 'PAUSED']);
+
 export interface BayWindowModel {
   launch: { label: string; look: LaunchLook; status: string };
   bay: { shown: number; loaded: number; slots: number; reloadTac: number | null; text: string };
+  ctrl: BayCtrlModel;
+  cls: BayClassModel;
   next: { pod: number; family: string; touch: Touch; halfWidthKm: number | null; text: string } | null;
   nextText: string;                 // the NEXT line, or why there is none
   lzs: LzCounter[];
@@ -456,7 +644,10 @@ export interface BayWindowModel {
   endLanding: { label: string; confirm: string; enabled: boolean };
 }
 
-export function bayWindowModel(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): BayWindowModel {
+// `caps` (default: now) is a parameter so a test can hand in Bay Ctrl's state directly.
+export function bayWindowModel(
+  state: Readonly<GameState>, sol: Readonly<DropSolution> | null, caps: Readonly<Capabilities> = capabilitiesNow(state),
+): BayWindowModel {
   const { landing } = state;
   const shown = bayShown(state);
   const reloading = landing.bay.loaded < BAY_SLOTS;
@@ -473,21 +664,44 @@ export function bayWindowModel(state: Readonly<GameState>, sol: Readonly<DropSol
     look = guard === null ? 'go' : 'asks';
     if (guard !== null) status = guard.ask === 'full' && guard.lz !== null ? POD_BAY_STATUS_TEXT.full(guard.lz) : POD_BAY_STATUS_TEXT.offSite;
   }
+  // NO BAY CTRL (§3.4's BAY OFFLINE): LAUNCH disabled with its words, in launchRefusal's order. landing-rules says it too;
+  // read here from capabilities as well, so the window can never offer a launch the bay has no file to make.
+  const ctrlOffline = caps.bay.offline;
+  if (ctrlOffline && (refusal === null || !OUTRANKS_BAY_OFFLINE.has(refusal))) {
+    look = 'blocked';
+    status = LAUNCH_REFUSAL_TEXT['BAY OFFLINE'];
+  }
   if (aboard.length === 0) status = POD_BAY_STATUS_TEXT.allAway;
 
   const nextDriver = nextToLaunch(state);
-  const next = nextDriver === null ? null : driverLanding(state, nextDriver, sol);
+  // The NEXT pod's drop (risk 19: LOAD NEXT changes the dot): the solved dot's own width, which drop-cache solves for
+  // this very pod with every factor (§3.8), else the driver's at the ship's radius through landing-rules dropFactors.
+  const nextLanding = nextDriver === null ? null : driverLanding(state, nextDriver, sol, dropFactors(caps, nextDriver));
+  const next = nextLanding === null ? null : { ...nextLanding, halfWidthKm: sol?.dot?.halfWidthKm ?? nextLanding.halfWidthKm };
+  const approx = sol?.uncertain === true;
+  const bayFile = getByRole(state, 'bay');
+  const bayHidden = bayFile !== null && (bayFile.type === 'ship' || bayFile.type === 'ship-backup') && !bayFile.scanned;
+  const ctrlBand: Band | 'unknown' = ctrlOffline ? 'missing' : bayHidden ? 'unknown' : caps.bay.band;
+  const noGoWords = [...new Set(landing.noGo.map((arc) => arc.word))];
   const launchable = new Set(driversInMemory(state).filter(isLaunchable).map((driver) => driver.pod));
   const cantLaunch = aboard.filter((record) => !launchable.has(record.pod)).length;
   return {
     launch: { label: POD_BAY_TEXT.launch, look, status },
     bay: { shown, loaded: landing.bay.loaded, slots: BAY_SLOTS, reloadTac, text: POD_BAY_TEXT.bay(shown, BAY_SLOTS, reloadTac) },
+    ctrl: {
+      band: ctrlBand, offline: ctrlOffline,
+      text: ctrlBand === 'ok' || ctrlBand === 'unknown' ? POD_BAY_TEXT.bayCtrl : BAND_COPY.bay[ctrlBand],
+    },
+    cls: {
+      text: POD_BAY_TEXT.classLine(landing.terrain, landing.forgiveness),
+      noGo: noGoWords.length === 0 ? null : POD_BAY_TEXT.noGoLine(noGoWords),
+    },
     next: nextDriver === null || next === null ? null : {
       pod: nextDriver.pod, family: nextDriver.family, touch: driverTouch(nextDriver.integrity), halfWidthKm: next.halfWidthKm,
-      text: POD_BAY_TEXT.next(nextDriver.pod, nextDriver.family, driverTouch(nextDriver.integrity), next.halfWidthKm ?? 0),
+      text: POD_BAY_TEXT.next(nextDriver.pod, nextDriver.family, driverTouch(nextDriver.integrity), next.halfWidthKm ?? 0, approx),
     },
     nextText: nextDriver === null ? (aboard.length === 0 ? POD_BAY_STATUS_TEXT.allAway : POD_BAY_STATUS_TEXT.noNext)
-      : POD_BAY_TEXT.next(nextDriver.pod, nextDriver.family, driverTouch(nextDriver.integrity), next?.halfWidthKm ?? 0),
+      : POD_BAY_TEXT.next(nextDriver.pod, nextDriver.family, driverTouch(nextDriver.integrity), next?.halfWidthKm ?? 0, approx),
     lzs: lzCounters(state),
     cantLaunch,
     aboard: aboard.length,
@@ -534,7 +748,7 @@ export function driverLanding(
   const halfWidthKm = radius > R ? dropHalfWidthKm(radius, R, factors) : null;
   const text = outlook === 'cant' ? DRIVER_DETAIL_TEXT.cantLaunch
     : outlook === 'hard' ? DRIVER_DETAIL_TEXT.hard
-      : halfWidthKm === null ? 'WILL LAND SOFT' : DRIVER_DETAIL_TEXT.soft(halfWidthKm);
+      : halfWidthKm === null ? 'WILL LAND SOFT' : DRIVER_DETAIL_TEXT.soft(halfWidthKm, sol?.uncertain === true);
   return { outlook, halfWidthKm, text, tag: podTags(state).get(driver.pod) ?? null };
 }
 
