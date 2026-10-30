@@ -154,8 +154,16 @@ export function requestLaunch(store: Store<GameState>, intent: LaunchIntent): La
   const driver = intent.pod === undefined ? nextToLaunch(state) : driversInMemory(state).find((candidate) => candidate.pod === intent.pod);
   if (!driver) throw new Error('requestLaunch: no driver to launch (launchRefusal said NO POD READY otherwise)');
   launchDriver(store, driver, launchRecordFor(state, driver, sol, intent), true);
-  // A launch ends a decline (risk 2): the next burn the landing offers is offered again.
-  if (store.getState().landing.declined !== null) store.update((draft) => { draft.landing.declined = null; });
+  // A launch ends a decline (risk 2): the next burn the landing offers is offered again. And GO LOWER's aim (not held: a
+  // launch is refused under thrust) is let go: the window it was for has had its pod, and goLowTick builds it again next
+  // tick if the next pod's L9 still says fly lower (the plot's ◇ reads the aim, UI's contract).
+  const after = store.getState().landing;
+  if (after.declined !== null || (after.goLow !== null && !after.goLow.held)) {
+    store.update((draft) => {
+      draft.landing.declined = null;
+      if (draft.landing.goLow !== null && !draft.landing.goLow.held) draft.landing.goLow = null;
+    });
+  }
   return { kind: 'launched', pod: driver.pod };
 }
 

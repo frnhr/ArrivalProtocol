@@ -564,6 +564,8 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
     const mu = planet.mu;
     // The landing's decay (§3.7): drag kicks at each ▼ under the DRAG line, on every ship whose def has drag.
     const drag = landing && state.landing.drag;
+    // Read before the mutate below, which writes this tick's in place.
+    const prevTickDvKmS = burn.lastTickDvKmS;
     let decay: DecayState = state.landing.decay;
     const kicks: DragKick[] = [];
 
@@ -747,7 +749,7 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
     // The landing's discrete orbit changes, in one update (plan §1.3): each drag kick, and the end of a burn (the falling
     // edge of the delivered Δv, once: during the burn the drop cache re-solves on its 1 km element key, and a bump per
     // thrust tick would cost a solve every frame). The epoch is the drop cache's key, so the windows are solved again.
-    const burnEnded = landing && burn.lastTickDvKmS > 0 && delivered === 0;
+    const burnEnded = landing && prevTickDvKmS > 0 && delivered === 0;
     if (kicks.length > 0 || burnEnded) {
       store.update((draft) => {
         draft.landing.orbitEpoch += kicks.length + (burnEnded ? 1 : 0);
