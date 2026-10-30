@@ -279,11 +279,13 @@ function runtimeOf(def: ShipLandingDef): { lzs: LzState[]; noGo: NoGoArcState[] 
     && dropHalfWidthKm(7000, R, { sensor: 1.5, plotter: 1, driver: 2 }) > 250);
 
   const hint = { file: 'driver', pod: 2, factor: 2 } as const;
-  check('L9\'s verdict: a REPAIR and GO LOWER', JSON.stringify(tooWideVerdict('LZ-B', hint, true, false)) === JSON.stringify({ lz: 'LZ-B', repair: hint, goLower: true }));
-  check('…GO LOWER alone', JSON.stringify(tooWideVerdict('LZ-B', null, true, false)) === JSON.stringify({ lz: 'LZ-B', repair: null, goLower: true }));
-  check('…decay warned: never GO LOWER (L10\'s lift goes up), the REPAIR alone', tooWideVerdict('LZ-B', hint, true, true)?.goLower === false
-    && tooWideVerdict('LZ-B', null, true, true) === null);
-  check('…neither: null, never { repair: null, goLower: false }', tooWideVerdict('LZ-B', null, false, false) === null);
+  const fit = { targetRadiusKm: 7000, floorKm: 5100, sureTacAtTarget: 4 };
+  check('L9\'s verdict: a REPAIR and GO LOWER (the fit carried)', JSON.stringify(tooWideVerdict('LZ-B', 1, hint, fit, false))
+    === JSON.stringify({ lz: 'LZ-B', repair: hint, goLower: fit, launchRad: 1 }));
+  check('…GO LOWER alone', JSON.stringify(tooWideVerdict('LZ-B', 1, null, fit, false)) === JSON.stringify({ lz: 'LZ-B', repair: null, goLower: fit, launchRad: 1 }));
+  check('…decay warned: never GO LOWER (L10\'s lift goes up), the REPAIR alone', tooWideVerdict('LZ-B', 1, hint, fit, true)?.goLower === null
+    && tooWideVerdict('LZ-B', 1, null, fit, true) === null);
+  check('…neither: null, never { repair: null, goLower: null }', tooWideVerdict('LZ-B', 1, null, null, false) === null);
 }
 
 // --- Every DROP line fits the strip, with worst-case values -----------------------------------------------------------
@@ -346,7 +348,7 @@ function freshLanding(seedNo: number, extra: (draft: GameState) => void = () => 
   check('…then L9 itself, with the TAB and the SKIP', then?.id === 'landing-L9'
     && then.text === 'DROP TOO WIDE FOR LZ-A — TAB, REPAIR POD 02, or fly lower · [F]', `${then?.id} '${then?.text}'`);
   check('…and GO LOWER is offered for LZ-A exactly while L9 says or fly lower',
-    dropTooWide(state(), getDropSolution()!, deriveCapabilities(state(), 0))?.goLower === true && state().landing.goLow?.lz === 'LZ-A',
+    (dropTooWide(state(), getDropSolution()!, deriveCapabilities(state(), 0))?.goLower ?? null) !== null && state().landing.goLow?.lz === 'LZ-A',
     JSON.stringify(state().landing.goLow));
   // Repaired, the drop is ×1.5 (±162 km): it fits LZ-A, and L9 goes.
   h.store.update((draft) => {

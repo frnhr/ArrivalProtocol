@@ -1,5 +1,5 @@
 import type { OrbitState, PlanetParams, Ring } from '@/types/orbit';
-import type { DecayState, DragKick, DropFactors, GoLowAim, LzState } from '@/types/landing';
+import type { DecayState, DragKick, DropFactors, GoLowAim, GoLowerFit, LzState } from '@/types/landing';
 import type { GameState } from '@state/schema';
 import type { BurnPoint, Prediction } from '@systems/predict';
 import { dropHalfWidthKm, podImpact, podKickFactorSq, podKickState } from '@systems/landing-solve';
@@ -229,7 +229,9 @@ export function sureTacAt(
 }
 
 // Steps of the scan from the top of a radius range down (highestRadius), then halvings between the last miss and the
-// first fit: 40 × 40 sureTacAt calls, a few µs, so L9 can ask every director frame with no memo.
+// first fit: up to 40 + 40 sureTacAt calls. goLowerFit judges each with dotSweepAtPeri (two pod impacts), so one call
+// costs 0.26–0.40 ms (review p2: ARES-VII, LZs 330 / 250 / 180 km wide); L9 asks once a director frame (landing.ts reuses
+// its answer, TooWide.goLower), with no memo.
 const RADIUS_SCAN_STEPS = 40;
 const RADIUS_BISECT_STEPS = 40;
 
@@ -273,8 +275,8 @@ export function dotSweepAtPeri(rpKm: number, raKm: number, mu: number, R: number
 }
 
 // Everything goLowerFit reads: the awaited LZ, the next pod's drop factors, the band, the planet, the landing's tactical
-// warp (the sure window is judged in tactical s), the ship now, and the ship's world angle at the LZ's launch point
-// (LzWindow.launchRad of the awaited window).
+// warp (the sure window is judged in tactical s), the ship now, the ship's world angle at the LZ's launch point
+// (LzWindow.launchRad of the awaited window), and the Δv the tank holds (FUEL × the budget).
 export interface GoLowerInput {
   lz: Readonly<LzState>;
   factors: Readonly<DropFactors>;
@@ -284,20 +286,18 @@ export interface GoLowerInput {
   warp: number;
   orbit: Readonly<OrbitState>;
   launchRad: number;
+  fuelDvKmS: number;
 }
 
-// The radius at launchRad where the sure window reaches LANDING_SURE_MIN_TAC (`targetRadiusKm`, never below `floorKm`,
-// ring.min + GO_LOW_FLOOR_MARGIN_KM), and the sure tactical s it gives there.
-export interface GoLowerFit {
-  targetRadiusKm: number;
-  floorKm: number;
-  sureTacAtTarget: number;
-}
+// The fit's shape lives in types/landing.ts (TooWide carries it).
+export type { GoLowerFit };
 
 // FROZEN INTERFACE between Track DROP (L9 calls it: `goLower = goLowerFit(...) !== null`) and Track ORBIT (implements it;
 // landing.ts builds GoLowAim from the same call), so L9's "or fly lower" and the burn the strip times always agree.
-// null: even the floor can't fit the LZ's dot (L9 names the REPAIR alone), or the launch point already gives the LZ its
-// LANDING_SURE_MIN_TAC (nothing to go lower for).
+// null: even the floor can't fit the LZ's dot (L9 names the REPAIR alone), the launch point already gives the LZ its
+// LANDING_SURE_MIN_TAC (nothing to go lower for), or the tank can't pay for the burn (review minor 1: L9 said `fly lower`
+// on an empty tank; the burn's Δv is goLowDvKmS at its point, as predict's 'go-low' BurnPoint prices it, so L9's offer
+// and landingBurnOffer's fuelShort agree).
 // The burn is RETRO half an orbit before launchRad, so the launch point becomes the new ▼ and the burn point (its radius
 // now, `far`) the new ▲: the ship passes the launch point at ▼'s speed of that loop, which sureTacAt is judged with. The
 // target is the HIGHEST such radius with LANDING_SURE_MIN_TAC (the least burn, the least FUEL), else the floor when the
@@ -305,7 +305,8 @@ export interface GoLowerFit {
 // Defined through sureTacAt, as highestFittingRadius is: GO LOWER is AUTOBURN v3's one-LZ case by construction. Closed
 // form: L9 calls it every director frame, and no landing-solve dotTrack runs inside the scan.
 export function goLowerFit(input: Readonly<GoLowerInput>): GoLowerFit | null {
-  const { lz, factors, ring, R, mu, warp, orbit, launchRad } = input;
+  const { lz, factors, ring, R, mu, warp, orbit, launchRad, fuelDvKmS } = input;
+  if (!(fuelDvKmS > 0)) return null;
   const floorKm = ring.min + GO_LOW_FLOOR_MARGIN_KM;
   const top = Math.min(radiusAtAngle(orbit, mu, launchRad), ring.max);
   const far = radiusAtAngle(orbit, mu, launchRad + Math.PI);
@@ -314,9 +315,13 @@ export function goLowerFit(input: Readonly<GoLowerInput>): GoLowerFit | null {
     sureTacAt(radiusKm, dotSweepAtPeri(radiusKm, far, mu, R) * radiusKm, lz, factors, R, warp);
   if (sure(top) >= LANDING_SURE_MIN_TAC) return null;
   const target = highestRadius(floorKm, top, (radiusKm) => sure(radiusKm) >= LANDING_SURE_MIN_TAC);
-  if (target !== null) return { targetRadiusKm: target, floorKm, sureTacAtTarget: sure(target) };
-  const best = widestRadius(floorKm, top, sure);
-  return best.sure > 0 ? { targetRadiusKm: best.radiusKm, floorKm, sureTacAtTarget: best.sure } : null;
+  const fit = target !== null ? { targetRadiusKm: target, floorKm, sureTacAtTarget: sure(target) } : (() => {
+    const best = widestRadius(floorKm, top, sure);
+    return best.sure > 0 ? { targetRadiusKm: best.radiusKm, floorKm, sureTacAtTarget: best.sure } : null;
+  })();
+  if (fit === null) return null;
+  const atBurn = propagateConic(orbit, mu, timeToAngle(orbit, mu, launchRad - Math.PI * travelSign(orbit)));
+  return goLowDvKmS(atBurn, launchRad, fit.targetRadiusKm, mu) <= fuelDvKmS ? fit : null;
 }
 
 // Halvings of the bracket around the scan's best radius (widestRadius).

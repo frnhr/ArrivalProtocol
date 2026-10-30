@@ -318,12 +318,24 @@ export type RepairHint =
   | { file: 'sensor'; factor: number }
   | { file: 'navplot'; factor: number };
 
+// GO LOWER's fit (landing-orbit goLowerFit): the radius at the launch point where the sure window reaches
+// LANDING_SURE_MIN_TAC (`targetRadiusKm`, never below `floorKm`, ring.min + GO_LOW_FLOOR_MARGIN_KM), and the sure tactical
+// s it gives there.
+export interface GoLowerFit {
+  targetRadiusKm: number;
+  floorKm: number;
+  sureTacAtTarget: number;
+}
+
 // The awaited LZ has no sure window, and a REPAIR or GO LOWER would give one (with neither there is no L9: L5 shows at
-// the window). `goLower`: landing-orbit goLowerFit found a target above the floor.
+// the window). `goLower`: landing-orbit goLowerFit's fit (a target above the floor that the tank pays for), carried so
+// landing.ts builds GO LOWER's aim from this very answer (review minor 1: L9's `or fly lower` and the burn agree by
+// construction, and the fit is worked out once a frame); `launchRad`: the awaited window's (LzWindow.launchRad).
 export interface TooWide {
   lz: string;
   repair: RepairHint | null;
-  goLower: boolean;
+  goLower: GoLowerFit | null;
+  launchRad: number;
 }
 
 // --- The per-ship result (§5 "To 02"): flat and JSON-safe, ready for slice 3's save ---

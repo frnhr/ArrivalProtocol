@@ -11,7 +11,8 @@ import { endLanding } from '@systems/landing';
 import { getPrediction } from '@systems/predict';
 import { getDropSolution } from '@systems/drop-cache';
 import { bayWindowModel } from '@systems/landing-hud';
-import { landingResult, landingStuck } from '@systems/landing-rules';
+import { dropTooWide, landingResult, landingStuck } from '@systems/landing-rules';
+import { landingBurnOffer } from '@systems/landing-orbit';
 import { lossPlan, shipLost } from '@systems/run';
 import { stateFromElements } from '@/types/orbit';
 import { DRIVER_RULES } from '@data/script';
@@ -125,6 +126,38 @@ crashAfterEnd(LAST_LIGHT, 'LAST LIGHT');
   h.stepFor(0.5);
   check('…with FUEL left the landing does not end itself (a burn can still bring a dot back)',
     landingStuck(state(), getDropSolution()) === null && shown()?.id !== 'landing-L12-nodrop', `${shown()?.id}`);
+}
+
+// --- Minor 1: L9 says `fly lower` only when the tank pays for the burn; the aim is L9's own fit ------------------------
+{
+  // ARES-VII from a circular 8,950 km with LZ-A widened to 330 km: no sure window up there, GO LOWER's target ≈ 7,100 km.
+  const widen = (): void => {
+    board(ARES);
+    h.store.update((draft) => { const lz = draft.landing.lzs[0]!; lz.widthKm = 330; lz.halfWidthRad = 165 / draft.level.planet.R; });
+    lockOn(h, { r: 8950 });
+  };
+  const wide = (): ReturnType<typeof dropTooWide> => dropTooWide(state(), getDropSolution()!, capabilitiesNow(state()));
+  widen();
+  h.stepFor(1);
+  const full = wide();
+  const aim = state().landing.goLow;
+  const offer = landingBurnOffer(state(), getPrediction());
+  // (The aim is rewritten when it moves over 1 km or 5e-5 rad: landing.ts aimMoved.)
+  check('minor 1: a full tank: L9 offers GO LOWER, and the aim is its very fit', full?.goLower !== null && full?.goLower !== undefined
+    && aim !== null && Math.abs(aim.targetRadiusKm - full.goLower.targetRadiusKm) <= 1 && Math.abs(aim.launchRad - full.launchRad) <= 5e-5
+    && h.shown()?.id === 'landing-L9'
+    && /fly lower/.test(h.shown()?.text ?? ''), `${JSON.stringify(full)} · aim ${aim?.targetRadiusKm}`);
+  const needKmS = offer?.reason === 'go-low' ? offer.dvKmS : null;
+  widen();
+  h.store.update((draft) => { draft.burn.fuelPct = 0; });
+  h.stepFor(1);
+  check('…an empty tank: no `fly lower` (no L9 with neither fix), no aim, no offer', wide() === null && state().landing.goLow === null
+    && !/fly lower/.test(h.shown()?.text ?? '') && landingBurnOffer(state(), getPrediction()) === null, `${h.shown()?.id} '${h.shown()?.text}'`);
+  widen();
+  if (needKmS !== null) h.store.update((draft) => { draft.burn.fuelPct = (0.9 * needKmS / draft.level.dvBudgetKmS) * 100; });
+  h.stepFor(1);
+  check('…a tank 10 % short of the go-low burn: no `fly lower` either', needKmS !== null && wide() === null && state().landing.goLow === null,
+    `need ${needKmS?.toFixed(4)} km/s · ${h.shown()?.text}`);
 }
 
 // --- M2: ghost thrust in the landing ---------------------------------------------------------------------------------

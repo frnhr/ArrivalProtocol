@@ -308,9 +308,9 @@ function repairLabel(hint: RepairHint): string {
 // from the MIND fromMind adds the [TAB]). Both keep the SKIP (risk 12): L9 shadows L13's `[F] to SKIP`.
 function tooWideLine(wide: TooWide, ctx: LandingContext): LandingObjective {
   const repair = wide.repair;
-  if (repair === null && !wide.goLower) throw new Error(`tooWideLine: L9 for ${wide.lz} with neither a REPAIR nor GO LOWER (dropTooWide returns null then)`);
+  if (repair === null && wide.goLower === null) throw new Error(`tooWideLine: L9 for ${wide.lz} with neither a REPAIR nor GO LOWER (dropTooWide returns null then)`);
   const tab = repair !== null && !ctx.inMind;
-  const { text, keys } = withSkip(LANDING_DROP_LINES.L9(wide.lz, repair === null ? null : repairLabel(repair), wide.goLower, tab), ctx);
+  const { text, keys } = withSkip(LANDING_DROP_LINES.L9(wide.lz, repair === null ? null : repairLabel(repair), wide.goLower !== null, tab), ctx);
   if (repair === null) return line('L9', text, keys, 'soon', 'ship', ctx);
   const withTab = tab ? ['TAB', ...keys] : keys;
   if (repair.file !== 'driver') return line('L9', text, withTab, 'soon', 'mind', ctx, { repairs: repair.file });

@@ -16,7 +16,7 @@ import { currentDropSolution, getDropSolution } from '@systems/drop-cache';
 import { dropHalfWidthKm } from '@systems/landing-solve';
 import { getPrediction, secUntil } from '@systems/predict';
 import { requestSkip, skipBlockReason } from '@systems/pace';
-import { declineKey, goLowerFit, landingBurnOffer, travelSign } from '@systems/landing-orbit';
+import { declineKey, landingBurnOffer, travelSign } from '@systems/landing-orbit';
 import { activeLandingController, setActiveLandingController } from '@systems/landing-controller';
 import {
   classifyLanding, colonyName, dropFactors, dropTooWide, driverTouch, endLandingRefusal, isLaunchable, landingMoment, landingOutcome,
@@ -416,27 +416,18 @@ function controllerTick(store: Store<GameState>): void {
 
 // The aim GO LOWER would take now (§3.7), or null: exactly when L9 says "or fly lower" (landing-rules dropTooWide's
 // goLower: the window the landing waits on has no sure part in the band, the orbit is not decaying out of the band
-// (decayWarnOrbits, L10 first: going lower would sink it faster, review M4), and goLowerFit fits it), with a pod aboard
-// and a dot to drop by. The aim is then goLowerFit's answer from the same inputs dropTooWide used, so the line and the
-// burn the strip times always agree (Track DROP's request).
+// (decayWarnOrbits, L10 first: going lower would sink it faster, review M4), goLowerFit fits it and the tank pays for
+// it), with a pod aboard and a dot to drop by. The aim is built from that very fit (TooWide.goLower, review minor 1), so
+// the line and the burn the strip times agree by construction.
 function goLowAimNow(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): GoLowAim | null {
-  const { landing, level } = state;
+  const { landing } = state;
   if (landing.ended !== null || sol === null || sol.block !== null || sol.dot === null) return null;
   if (podCounts(state).aboard === 0) return null;
-  const caps = capabilitiesNow(state);
-  if (dropTooWide(state, sol, caps)?.goLower !== true) return null;
-  const target = landingMoment(state, sol, state.clock.tSec, caps.bay.offline).target;
-  if (target === null) throw new Error('goLowAimNow: L9 offers GO LOWER with no awaited window');
-  const lz = landing.lzs.find((candidate) => candidate.label === target.lz);
-  if (!lz) throw new Error(`goLowAimNow: the awaited LZ '${target.lz}' is not on this ship`);
-  const launchRad = target.window.launchRad;
-  const fit = goLowerFit({
-    lz, factors: dropFactors(caps, nextToLaunch(state)), ring: level.ring, R: level.planet.R, mu: level.planet.mu,
-    warp: level.tacticalWarp, orbit: state.orbit, launchRad,
-  });
-  if (fit === null) return null;
-  const burnRad = launchRad - Math.PI * travelSign(state.orbit);
-  return { lz: lz.label, launchRad, burnRad, targetRadiusKm: fit.targetRadiusKm, floorKm: fit.floorKm, held: false };
+  const wide = dropTooWide(state, sol, capabilitiesNow(state));
+  const fit = wide?.goLower ?? null;
+  if (wide === null || fit === null) return null;
+  const burnRad = wide.launchRad - Math.PI * travelSign(state.orbit);
+  return { lz: wide.lz, launchRad: wide.launchRad, burnRad, targetRadiusKm: fit.targetRadiusKm, floorKm: fit.floorKm, held: false };
 }
 
 // The aim moved enough to be worth writing (the drop cache re-solves at 10 Hz and the launch point drifts a hair on a

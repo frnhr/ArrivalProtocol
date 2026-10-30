@@ -23,6 +23,9 @@ function next(lz: string, inTac: number, launchInTac: number, inBand = true, ful
   return { lz, inTac, launchInTac, inBand, full };
 }
 
+// GO LOWER's fit when L9 offers it (its numbers are not read by the table).
+const FIT = { targetRadiusKm: 7000, floorKm: 5100, sureTacAtTarget: 4 } as const;
+
 // A quiet moment between windows on a two-LZ ship: L13.
 function ctx(over: Partial<LandingContext> = {}): LandingContext {
   return {
@@ -123,21 +126,21 @@ expect('...repairing: waited out', ctx({ uncertain: { cause: 'repairing' } }), '
   (o) => o.id === 'landing-L8-busy' && o.keys.length === 0);
 expect('...missing: no fix, the SKIP kept', ctx({ uncertain: { cause: 'missing' } }), 'L8', 'DROP UNCERTAIN — NO SENSOR INTERP · [F]',
   (o) => o.id === 'landing-L8-missing' && o.keys.join() === 'F' && o.urgency === 'wait');
-const podRepair = { lz: 'LZ-B', repair: { file: 'driver', pod: 5, factor: 2 }, goLower: true } as const;
+const podRepair = { lz: 'LZ-B', repair: { file: 'driver', pod: 5, factor: 2 }, goLower: FIT, launchRad: 0 } as const;
 expect('L9: a driver\'s REPAIR (TAB from the ship), or fly lower, with the SKIP tail', ctx({ tooWide: podRepair }),
   'L9', 'DROP TOO WIDE FOR LZ-B — TAB, REPAIR POD 05, or fly lower · [F]',
   (o) => o.urgency === 'soon' && o.keys.join() === 'TAB,F' && o.layer === 'mind');
 expect('...in the MIND: no TAB, the driver lit once REPAIR is in hand', ctx({ tooWide: podRepair, inMind: true, heldTool: 'repair' }),
   'L9', 'DROP TOO WIDE FOR LZ-B — REPAIR POD 05, or fly lower · [F]', (o) => o.keys.join() === 'F' && o.highlight === 'driver-pod05');
-expect('...Sensor Interp\'s REPAIR lights its chip', ctx({ tooWide: { lz: 'LZ-B', repair: { file: 'sensor', factor: 1.5 }, goLower: false }, skipAvailable: false }),
+expect('...Sensor Interp\'s REPAIR lights its chip', ctx({ tooWide: { lz: 'LZ-B', repair: { file: 'sensor', factor: 1.5 }, goLower: null, launchRad: 0 }, skipAvailable: false }),
   'L9', 'DROP TOO WIDE FOR LZ-B — TAB, REPAIR SENSOR INTERP', (o) => o.repairs === 'sensor' && o.keys.join() === 'TAB');
-expect('...Nav Plotter\'s, in the MIND', ctx({ tooWide: { lz: 'LZ-A', repair: { file: 'navplot', factor: 1.5 }, goLower: false }, inMind: true }),
+expect('...Nav Plotter\'s, in the MIND', ctx({ tooWide: { lz: 'LZ-A', repair: { file: 'navplot', factor: 1.5 }, goLower: null, launchRad: 0 }, inMind: true }),
   'L9', 'DROP TOO WIDE FOR LZ-A — REPAIR NAV PLOTTER · [F]', (o) => o.repairs === 'navplot' && o.keys.join() === 'F');
-expect('...GO LOWER alone', ctx({ tooWide: { lz: 'LZ-C', repair: null, goLower: true } }), 'L9', 'DROP TOO WIDE FOR LZ-C — fly lower · [F]',
+expect('...GO LOWER alone', ctx({ tooWide: { lz: 'LZ-C', repair: null, goLower: FIT, launchRad: 0 } }), 'L9', 'DROP TOO WIDE FOR LZ-C — fly lower · [F]',
   (o) => o.layer === 'ship' && o.keys.join() === 'F');
-expect('...GO LOWER alone from the MIND says [TAB] first (the burn is flown from amber)', ctx({ tooWide: { lz: 'LZ-C', repair: null, goLower: true }, inMind: true }),
+expect('...GO LOWER alone from the MIND says [TAB] first (the burn is flown from amber)', ctx({ tooWide: { lz: 'LZ-C', repair: null, goLower: FIT, launchRad: 0 }, inMind: true }),
   'L9', 'DROP TOO WIDE FOR LZ-C — [TAB], fly lower · [F]', (o) => o.keys.join() === 'TAB,F');
-expect('...no SKIP: no tail, no [F]', ctx({ tooWide: { lz: 'LZ-C', repair: null, goLower: true }, skipAvailable: false }), 'L9',
+expect('...no SKIP: no tail, no [F]', ctx({ tooWide: { lz: 'LZ-C', repair: null, goLower: FIT, launchRad: 0 }, skipAvailable: false }), 'L9',
   'DROP TOO WIDE FOR LZ-C — fly lower', (o) => o.keys.length === 0);
 expect('...a window open now comes first (L5 at the window, risk 12)', ctx({ tooWide: podRepair, open: open({ sure: false }) }), 'L5', LANDING_LINES.L5);
 expect('L10: decay leaves the band in 2 orbits', ctx({ decay: { orbits: 2 } }), 'L10', 'ORBIT DECAYING — out of the band in 2 orbits',
@@ -145,9 +148,9 @@ expect('L10: decay leaves the band in 2 orbits', ctx({ decay: { orbits: 2 } }), 
 expect('L12-bay: Bay Ctrl missing', ctx({ bayOffline: true, canLaunch: false }), 'L12', LANDING_DROP_LINES.L12bay,
   (o) => o.id === 'landing-L12-bay' && o.urgency === 'now');
 expect('...before L12', ctx({ bayOffline: true, canLaunch: false, anyCanEver: false }), 'L12', LANDING_DROP_LINES.L12bay);
-expect('order: L8 before L9 and L11', ctx({ uncertain: { cause: 'hurt' }, tooWide: { lz: 'LZ-B', repair: null, goLower: true },
+expect('order: L8 before L9 and L11', ctx({ uncertain: { cause: 'hurt' }, tooWide: { lz: 'LZ-B', repair: null, goLower: FIT, launchRad: 0 },
   canLaunch: false, stuckPod: 3 }), 'L8', LANDING_DROP_LINES.L8);
-expect('...L9 before L11', ctx({ tooWide: { lz: 'LZ-B', repair: null, goLower: true }, canLaunch: false, stuckPod: 3 }), 'L9', /^DROP TOO WIDE/);
+expect('...L9 before L11', ctx({ tooWide: { lz: 'LZ-B', repair: null, goLower: FIT, launchRad: 0 }, canLaunch: false, stuckPod: 3 }), 'L9', /^DROP TOO WIDE/);
 expect('...L10 before L11', ctx({ decay: { orbits: 1 }, canLaunch: false, stuckPod: 3 }), 'L10', 'ORBIT DECAYING — out of the band in 1 orbit');
 
 // --- The foundation review's cases (its probe: .tmp/rev1b/probe.ts) ----------------------------------------------------
@@ -196,7 +199,7 @@ expect('M3: bay offline over an open sure window: L12-bay, never LAUNCH NOW', ct
 expect('M3: ...and before a driver REPAIR that can\'t help', ctx({ bayOffline: true, canLaunch: false, stuckPod: 4 }), 'L12', LANDING_DROP_LINES.L12bay);
 // M4: L10 above L8 and L9; its key only from a LIFT-* row.
 expect('M4: decaying with a wide dot: L10, not `fly lower`', ctx({ next: next('LZ-B', 60, 60), decay: { orbits: 1 },
-  tooWide: { lz: 'LZ-B', repair: null, goLower: true } }), 'L10', 'ORBIT DECAYING — out of the band in 1 orbit');
+  tooWide: { lz: 'LZ-B', repair: null, goLower: FIT, launchRad: 0 } }), 'L10', 'ORBIT DECAYING — out of the band in 1 orbit');
 expect('M4: ...over DROP UNCERTAIN too', ctx({ decay: { orbits: 2 }, uncertain: { cause: 'hurt' } }), 'L10', /^ORBIT DECAYING/);
 expect('M4: ...a GO-LOW row\'s [S] is not L10\'s key', ctx({ decay: { orbits: 1 }, flight: { ...capture, id: 'GO-LOW-wait', keys: ['S'] }, flightBurnInTac: 40 }),
   'L10', /^ORBIT DECAYING/, (o) => o.keys.length === 0);
@@ -206,7 +209,7 @@ expect('M4: ...a LIFT row\'s [W] is', ctx({ decay: { orbits: 1 }, flight: { ...c
 expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true }, thrust: true }), 'L2', trim.text, (o) => o.warn === true);
 {
   let threw = false;
-  try { landingObjective(ctx({ tooWide: { lz: 'LZ-B', repair: null, goLower: false } })); } catch { threw = true; }
+  try { landingObjective(ctx({ tooWide: { lz: 'LZ-B', repair: null, goLower: null, launchRad: 0 } })); } catch { threw = true; }
   check('L9 with neither a REPAIR nor GO LOWER throws', threw);
 }
 
@@ -254,7 +257,7 @@ expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true },
       noBandWindow: solved && !inBand && maybe(rng, 0.5), skipAvailable: maybe(rng, 0.6),
       flight: pick(rng, flights), flightBurnInTac: maybe(rng) ? rng() * 20 : null,
       uncertain: solved && maybe(rng, 0.2) ? { cause: pick(rng, ['hurt', 'repairing', 'moving', 'missing'] as const) } : null,
-      tooWide: solved && maybe(rng, 0.3) ? { lz: pick(rng, lzs), repair, goLower } : null,
+      tooWide: solved && maybe(rng, 0.3) ? { lz: pick(rng, lzs), repair, goLower: goLower ? FIT : null, launchRad: 0 } : null,
       decay: maybe(rng, 0.15) ? { orbits: 1 + Math.floor(rng() * 2) } : null, bayOffline,
       lavaInReach: solved && openWin !== null && maybe(rng, 0.3) ? pick(rng, ['LAVA', 'CLIFFS']) : null,
       impact: maybe(rng, 0.1), tankShort: maybe(rng, 0.3),
@@ -321,10 +324,10 @@ expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true },
       worst({ uncertain: { cause: 'repairing' } }),
       worst({ uncertain: { cause: 'moving' } }),
       worst({ uncertain: { cause: 'missing' } }),
-      worst({ tooWide: { lz: longLz, repair: { file: 'sensor', factor: 2.5 }, goLower: true } }),
-      worst({ tooWide: { lz: longLz, repair: { file: 'navplot', factor: 1.5 }, goLower: true } }),
-      worst({ tooWide: { lz: longLz, repair: { file: 'driver', pod: PODS_MAX, factor: 2 }, goLower: true } }),
-      worst({ tooWide: { lz: longLz, repair: null, goLower: true } }),
+      worst({ tooWide: { lz: longLz, repair: { file: 'sensor', factor: 2.5 }, goLower: FIT, launchRad: 0 } }),
+      worst({ tooWide: { lz: longLz, repair: { file: 'navplot', factor: 1.5 }, goLower: FIT, launchRad: 0 } }),
+      worst({ tooWide: { lz: longLz, repair: { file: 'driver', pod: PODS_MAX, factor: 2 }, goLower: FIT, launchRad: 0 } }),
+      worst({ tooWide: { lz: longLz, repair: null, goLower: FIT, launchRad: 0 } }),
       worst({ decay: { orbits: 2 } }),
       worst({ bayOffline: true }),
       worst({ noDrop: true, next: null }),

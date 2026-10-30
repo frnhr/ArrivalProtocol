@@ -1,7 +1,7 @@
 import type { BurnStatus, GameState, ShipOutcome } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {
-  DropDot, DropFactors, DropSolution, ForgivenessClass, LandingEnd, LandingTally, LandingView, LandingWindow, LaunchAsk, LaunchRecord,
+  DropDot, DropFactors, DropSolution, ForgivenessClass, GoLowerFit, LandingEnd, LandingTally, LandingView, LandingWindow, LaunchAsk, LaunchRecord,
   LaunchRefusal, LaunchSource, LzResult, LzState, LzWindow, NoGoArcState, OnTargetTally, ParkReason, Place, PodFate, PodFateKind,
   PodRecord, PodSummary, RepairHint, ShipLandingDef, TerrainWord, TooWide, Touch, Touchdown,
 } from '@/types/landing';
@@ -240,7 +240,7 @@ function sureInBand(w: Readonly<LzWindow>): boolean {
 
 // L9 (§3.11, plan §1.5): the awaited LZ (landingMoment's target) has no sure window this pass (no sure part inside its
 // in-band span), and a REPAIR (bestRepairForDrop) or GO LOWER (landing-orbit goLowerFit !== null) would give one; null
-// otherwise, and with neither (then L5 shows at the window). Never `{ repair: null, goLower: false }`: that is null (the
+// otherwise, and with neither (then L5 shows at the window). Never `{ repair: null, goLower: null }`: that is null (the
 // table throws on it). `goLower` is false while decay is warned (decayWarnOrbits: L10's 'lift' burn goes up, and GO
 // LOWER would fight it); L10 sits above L9 in the table anyway. The factors are the next pod's (dropFactors with
 // nextToLaunch), the ones drop-cache solved the window with.
@@ -254,19 +254,21 @@ export function dropTooWide(state: Readonly<GameState>, sol: Readonly<DropSoluti
   const repair = bestRepairForDrop(state, caps, lz, window.launchRadius);
   const { level } = state;
   const decayWarned = decayWarnOrbits(state) !== null;
-  const fits = !decayWarned && goLowerFit({
+  const fit = decayWarned ? null : goLowerFit({
     lz, factors: dropFactors(caps, nextToLaunch(state)), ring: level.ring, R: level.planet.R, mu: level.planet.mu,
-    warp: level.tacticalWarp, orbit: state.orbit, launchRad: window.launchRad,
-  }) !== null;
-  return tooWideVerdict(lz.label, repair, fits, decayWarned);
+    warp: level.tacticalWarp, orbit: state.orbit, launchRad: window.launchRad, fuelDvKmS: (state.burn.fuelPct / 100) * level.dvBudgetKmS,
+  });
+  return tooWideVerdict(lz.label, window.launchRad, repair, fit, decayWarned);
 }
 
 // L9's verdict from its parts (dropTooWide's last step; its own function so the GO LOWER cases are tested on crafted
 // inputs whatever goLowerFit returns): GO LOWER counts only while decay is not warned (L10's 'lift' burn goes up), and
-// with neither a REPAIR nor GO LOWER there is no L9 (null, never `{ repair: null, goLower: false }`).
-export function tooWideVerdict(lz: string, repair: RepairHint | null, goLowerFits: boolean, decayWarned: boolean): TooWide | null {
-  const goLower = goLowerFits && !decayWarned;
-  return repair === null && !goLower ? null : { lz, repair, goLower };
+// with neither a REPAIR nor GO LOWER there is no L9 (null, never `{ repair: null, goLower: null }`).
+export function tooWideVerdict(
+  lz: string, launchRad: number, repair: RepairHint | null, fit: GoLowerFit | null, decayWarned: boolean,
+): TooWide | null {
+  const goLower = decayWarned ? null : fit;
+  return repair === null && goLower === null ? null : { lz, repair, goLower, launchRad };
 }
 
 // An instrument whose REPAIR the kid can start now: its file is there and online (not already repairing or moving: L8
