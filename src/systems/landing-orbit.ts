@@ -2,7 +2,7 @@ import type { OrbitState, PlanetParams, Ring } from '@/types/orbit';
 import type { DecayState, DragKick, DropFactors, GoLowAim, LzState } from '@/types/landing';
 import type { GameState } from '@state/schema';
 import type { BurnPoint, Prediction } from '@systems/predict';
-import { dropHalfWidthKm, podKickFactorSq } from '@systems/landing-solve';
+import { dropHalfWidthKm, podImpact, podKickFactorSq, podKickState } from '@systems/landing-solve';
 import {
   elementsFromState, keplerConic, orbitalPeriod, positiveModulo, propagateConic, radialSigma, stateFromElements, timeFromPeriapsis,
   universalAnomaly,
@@ -214,7 +214,7 @@ export function decayForecast(orbit: Readonly<OrbitState>, mu: number, ring: Rea
 // pod launched at `radiusKm` with the ship moving at `speedKmS` and the next pod's `factors`. The whole dot (± s,
 // landing-solve dropHalfWidthKm) fits while its centre is within (half-width − s) of the bracket's centre, and the dot
 // sweeps the surface at the ship's angular rate (speedKmS / radiusKm, exact on a circle, where the pod's lead angle is
-// constant, and at an apsis to first order). 0 when the dot never fits. Closed form, so the callers below can scan it.
+// constant; past an ellipse's ▼ goLowerFit passes dotSweepAtPeri × r instead). 0 when the dot never fits. Closed form.
 // The pod's lead angle shrinks with altitude (§3.3: 88° from 9,000 km, 70° from 5,000), so after a GO LOWER burn the true
 // launch point moves on a little; engine-landing.test checks the 4 s against the re-solved window.
 export function sureTacAt(
@@ -248,6 +248,27 @@ function highestRadius(lo: number, hi: number, fits: (radiusKm: number) => boole
     return fit;
   }
   return null;
+}
+
+// True anomaly either side of ▼ the dot's sweep is differenced over (dotSweepAtPeri): about a sure window's span.
+const SWEEP_PROBE_NU = 0.01;
+
+// How fast the drop dot sweeps the surface, rad per game s, as the ship passes ▼ of the loop ▼ `rpKm` × ▲ `raKm`: the
+// ship's angular rate plus how fast the pod's lead angle grows there. On a circle the lead is constant and this is v / r;
+// past an ellipse's ▼ the ship turns from falling to climbing, and a pod let go while climbing flies further, so the dot
+// runs ahead faster (measured: sureTacAt with v / r promised 4.0 s where the re-solved window gave 3.2). Closed form:
+// two pod impacts (landing-solve podKickState and podImpact), no dotTrack.
+export function dotSweepAtPeri(rpKm: number, raKm: number, mu: number, R: number): number {
+  const lo = Math.min(rpKm, raKm);
+  const hi = Math.max(rpKm, raKm);
+  const e = (hi - lo) / (hi + lo);
+  const aimRp = POD_AIM_RP_FRAC * R;
+  const nu0 = rpKm <= raKm ? 0 : Math.PI;
+  const dotAt = (nu: number): number => podImpact(podKickState(stateFromElements(lo, e, 0, nu, mu), mu, aimRp), mu, R).rad;
+  const sweep = wrapPi(dotAt(nu0 + SWEEP_PROBE_NU) - dotAt(nu0 - SWEEP_PROBE_NU));
+  const period = TWO_PI * Math.sqrt(Math.pow((lo + hi) / 2, 3) / mu);
+  const dt = (positiveModulo(meanAnomalyOf(nu0 + SWEEP_PROBE_NU, e) - meanAnomalyOf(nu0 - SWEEP_PROBE_NU, e), TWO_PI) / TWO_PI) * period;
+  return sweep / dt;
 }
 
 // Everything goLowerFit reads: the awaited LZ, the next pod's drop factors, the band, the planet, the landing's tactical
@@ -289,12 +310,41 @@ export function goLowerFit(input: Readonly<GoLowerInput>): GoLowerFit | null {
   const far = radiusAtAngle(orbit, mu, launchRad + Math.PI);
   if (!(top > floorKm) || !Number.isFinite(far)) return null;
   const sure = (radiusKm: number): number =>
-    sureTacAt(radiusKm, Math.sqrt(mu * (2 / radiusKm - 2 / (radiusKm + far))), lz, factors, R, warp);
+    sureTacAt(radiusKm, dotSweepAtPeri(radiusKm, far, mu, R) * radiusKm, lz, factors, R, warp);
   if (sure(top) >= LANDING_SURE_MIN_TAC) return null;
   const target = highestRadius(floorKm, top, (radiusKm) => sure(radiusKm) >= LANDING_SURE_MIN_TAC);
   if (target !== null) return { targetRadiusKm: target, floorKm, sureTacAtTarget: sure(target) };
-  const atFloor = sure(floorKm);
-  return atFloor > 0 ? { targetRadiusKm: floorKm, floorKm, sureTacAtTarget: atFloor } : null;
+  const best = widestRadius(floorKm, top, sure);
+  return best.sure > 0 ? { targetRadiusKm: best.radiusKm, floorKm, sureTacAtTarget: best.sure } : null;
+}
+
+// Halvings of the bracket around the scan's best radius (widestRadius).
+const WIDEST_REFINE_STEPS = 30;
+
+// The radius in [lo, hi] with the widest sure window, when none reaches LANDING_SURE_MIN_TAC (Track ORBIT's deviation
+// from §3.7's "or ▼ is 100 km above the band floor"): lower is NOT always wider. The dot narrows by 30 km per 1,000 km
+// of altitude, but past a deep ▼ it also sweeps faster (dotSweepAtPeri), and from about 1,500 km above the floor down the
+// sweep wins: measured on ARES-VII from 8,500 km, the re-solved sure window was 3.28 s at 5,800 km and 3.14 s at the
+// floor. Aiming there also keeps a slow release (1.2 s) in the band. A scan, then a ternary search between the best
+// sample's neighbours.
+function widestRadius(lo: number, hi: number, sure: (radiusKm: number) => number): { radiusKm: number; sure: number } {
+  const step = (hi - lo) / RADIUS_SCAN_STEPS;
+  let bestI = 0;
+  let bestSure = -Infinity;
+  for (let i = 0; i <= RADIUS_SCAN_STEPS; i++) {
+    const value = sure(hi - step * i);
+    if (value > bestSure) { bestSure = value; bestI = i; }
+  }
+  let a = Math.max(lo, hi - step * (bestI + 1));
+  let b = Math.min(hi, hi - step * (bestI - 1));
+  for (let i = 0; i < WIDEST_REFINE_STEPS; i++) {
+    const m1 = a + (b - a) / 3;
+    const m2 = b - (b - a) / 3;
+    if (sure(m1) < sure(m2)) a = m1; else b = m2;
+  }
+  const radiusKm = (a + b) / 2;
+  const refined = sure(radiusKm);
+  return refined >= bestSure ? { radiusKm, sure: refined } : { radiusKm: hi - step * bestI, sure: bestSure };
 }
 
 // AUTOBURN v3's seam (slice 4): the highest launch radius at which every LZ in `lzs` gets a sure window of at least
@@ -357,17 +407,17 @@ export function declineKey(burnPoint: Readonly<Pick<BurnPoint, 'reason' | 'event
   return burnPoint.reason === 'go-low' ? `${base}|${burnPoint.aimLz ?? ''}` : base;
 }
 
-// The burns the landing may never decline: an open path's capture or missed ▼, and a runaway loop's shrink (an orbit the
-// band can't hold at all). Everything else (a ring trim, GO LOWER, the 'lift' burn) is the kid's choice.
+// The burns the landing may never decline: an open path's capture or missed ▼. Everything else (a ring trim, GO LOWER,
+// the 'lift' burn) is the kid's choice. (No shrink is planned in landing: predict gives a too-big loop its ring trim.)
 function safetyBurn(reason: BurnPoint['reason']): boolean {
-  return reason === 'capture' || reason === 'missed' || reason === 'shrink';
+  return reason === 'capture' || reason === 'missed';
 }
 
 // The burn the landing offers now (plan §1.4), or null: the ONE answer read by pace (TACTICAL, the SKIP's stop), L2's
 // lead (FlightContext.offer in landing; FlightContext.burnPoint stays the raw plan, which the flight rows need on an open
 // path), the START BURN marker, the countdown chip, the beeps and HOLLOW's projected drain. The plan's burn point while the
 // landing goes on (and the ship is in orbit), when:
-// • its reason is 'capture', 'missed' or 'shrink': safety burns (an open path or a runaway loop in landing), always
+// • its reason is 'capture' or 'missed': safety burns (an open path in landing), always
 //   offered and never declinable;
 // • or 'go-low', 'lift', or a ring trim the tank pays for (!pred.fuelShort; a trim also not after ACCEPT ORBIT's latch,
 //   burn.acceptOnly), and it is not the burn the kid declined (state.landing.declined.key === declineKey(bp)).

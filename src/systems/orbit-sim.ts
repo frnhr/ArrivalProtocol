@@ -17,7 +17,7 @@ import {
 import {
   SIM_SUBSTEP_MAX_SEC, SIM_MAX_SUBSTEPS, THRUST_NOISE_PERIOD_TAC, ESCAPE_R_FACTOR,
   STRANDED_RANGE_FRAC, LOCK_HOLD_AI_SEC, RADIUS_BISECT_STEPS, BAND_REACH_SAMPLES,
-  PREDICT_STEP_ORBIT_FRAC, PREDICT_STEP_MIN, PREDICT_STEP_MAX, PREDICT_STEPS_BUDGET,
+  PREDICT_STEP_ORBIT_FRAC, PREDICT_STEP_MIN, PREDICT_STEP_MAX, PREDICT_STEPS_BUDGET, LANDING_BURN_POWER,
 } from '@data/tuning';
 
 // 2D two-body flight. The ship arrives on a hyperbola and the player steers it with presets
@@ -148,13 +148,20 @@ export function thrustJitter(state: Readonly<GameState>): number {
 // What a burn delivers right now at the selected POWER and current caps, before jitter.
 // The burn-point estimate and the sim both use it.
 export function engineAccel(state: Readonly<GameState>): number {
-  return state.level.aNominalKmS2 * (state.burn.thrustPct / 100) * thrustCapFactor(state);
+  return state.level.aNominalKmS2 * (state.burn.thrustPct / 100) * thrustCapFactor(state) * landingPower(state);
+}
+
+// Slice 1b (risk 1, the lead's decision): the landing's burns run at LANDING_BURN_POWER of the flight's, so GO LOWER,
+// the 'lift' burn and a trim are a held burn a kid can release, not a twitch (see tuning.ts for the measurement). A
+// ghost burst is the controller's fault, not the kid's burn: it keeps its own push (orbit-sim's sub-steps).
+function landingPower(state: Readonly<GameState>): number {
+  return state.run.phase === 'landing' ? LANDING_BURN_POWER : 1;
 }
 
 // The accel the flight plan places START BURN with (capabilities.ts planningThrustCap): engineAccel, except while the
 // engine driver is offline for the kid's own REPAIR or MOVE of it.
 export function planningAccel(state: Readonly<GameState>): number {
-  return state.level.aNominalKmS2 * (state.burn.thrustPct / 100) * planningThrustCap(state, capabilitiesNow(state));
+  return state.level.aNominalKmS2 * (state.burn.thrustPct / 100) * planningThrustCap(state, capabilitiesNow(state)) * landingPower(state);
 }
 
 // The throttle is held while the engine is open (a live flight, or a landing going on: selectors engineOpen, slice 1b)

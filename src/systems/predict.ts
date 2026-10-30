@@ -269,6 +269,10 @@ interface BurnInputs {
   reserveWaitSec: number; // SHRINK_RESERVE_WAIT_TAC in game seconds
   smallLoopFactor: number; // the ship's shrink.smallLoopFactor (WP7: "already small" per ring)
   holdingShrink: boolean; // the throttle is held for a shrink (burn.firingFor)
+  // LANDING (slice 1b): no shrink. It is the capture's tool (a just-captured loop days across); a landing's loop is one
+  // the band reaches, and its too-big ▲ gets the ring trim at ▼, which the kid may decline (a shrink is "now" for the
+  // whole climb, so it could never be declined, and held TACTICAL and the strip until ▲).
+  landing: boolean;
 }
 
 // A burn along PRO (+1) or RETRO (−1) flown from the current state one SIM_SUBSTEP_MAX_SEC step
@@ -662,7 +666,7 @@ function computeBurnPoint(input: BurnInputs): BurnPoint | null {
   // FUEL was to blame for that SKIP could not cross in two minutes was dropped for ACCEPT ORBIT, the lead's
   // Rule 4, and LEAD-1's deviation 1 left a six-hour SKIP for a lock the tank paid for).
   const earlyClimb = outbound && apoInSec > SHRINK_MIN_APO_FRAC * periodSec;
-  if ((earlyClimb || (outbound && input.holdingShrink)) && fit.ra > ring.max && trim.inSec > shrinkWaitSec) {
+  if (!input.landing && (earlyClimb || (outbound && input.holdingShrink)) && fit.ra > ring.max && trim.inSec > shrinkWaitSec) {
     const shrink = planShrink(input);
     if (shrink) return shrink;
   }
@@ -1336,6 +1340,7 @@ export function computePrediction(state: Readonly<GameState>): Prediction {
     smallLoopFactor: shrink.smallLoopFactor,
     reserveWaitSec: SHRINK_RESERVE_WAIT_TAC * tacticalWarp,
     holdingShrink: state.burn.firing && state.burn.firingFor === SHRINK_KEY,
+    landing: state.run.phase === 'landing',
   };
   const burnPoint = impact || outOfFuel || cannotClose ? null
     : computeBurnPoint(burnInputs) ?? landingInRingBurn(state, burnInputs);

@@ -31,7 +31,7 @@ import { LANDING_ECHO, launchRefusalKey } from '@data/landing-text';
 import { IS_DEV } from '@/env';
 import {
   BAND_DEGRADED_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEEP_BURN_TAC, BEEP_JUMP_TAC, BEEP_REARM_TAC, LANDING_DONE_LINGER_SEC,
-  LANDING_NONE_LEFT_SEC, POD_DESCENT_SEC, POD_FIRST_DESCENT_SEC, EARLY_BURN_GUARD_TAC,
+  LANDING_NONE_LEFT_SEC, POD_DESCENT_SEC, POD_FIRST_DESCENT_SEC, EARLY_BURN_GUARD_TAC, LATE_TRIM_TAC,
 } from '@data/tuning';
 
 // The landing (01-landing; plan §1.4): replaces phase 2's printer. DOM-free; the only module besides
@@ -473,18 +473,19 @@ function goLowTick(store: Store<GameState>): void {
 // whether thrust was delivered while it was.
 interface DueWatch {
   key: string | null;
-  due: boolean;
+  dueSinceTSec: number | null;  // game time its START BURN came (null: not due yet)
   burned: boolean;
 }
 
-const NO_DUE_WATCH: DueWatch = { key: null, due: false, burned: false };
+const NO_DUE_WATCH: DueWatch = { key: null, dueSinceTSec: null, burned: false };
 let dueWatch: DueWatch = { ...NO_DUE_WATCH };
 
 // LandingState.declined (risk 2, plan §1.4): an offered burn (a ring trim, GO LOWER, the 'lift' burn; never a safety
-// burn) whose due span passed with no Δv delivered for it is declined: pace no longer holds TACTICAL for it or stops a
-// SKIP on it until a launch (requestLaunch), the window it waited on closing (trackWindow; GO LOWER's LZ), or a new reason
-// (the plan's burn is another: cleared here). "Its due span passed": START BURN came, then the plan moved it to the next
-// pass (its apsis or ◇ went by and LATE_TRIM_TAC with it) while the kid never burned.
+// burn) the kid let pass with no Δv delivered for it is declined: pace no longer holds TACTICAL for it or stops a SKIP on
+// it until a launch (requestLaunch), the window it waited on closing (trackWindow; GO LOWER's LZ), or a new reason (the
+// plan's burn is another: cleared here). "Let pass": its START BURN came, and then either the plan moved it to the next
+// pass (its apsis or ◇ went by) or it stood due for LATE_TRIM_TAC (a trim whose late burn still lands stays due now for
+// most of a climb: measured on HALCYON's PARTIAL orbit, 56 real s of TACTICAL under HOLD [SPACE] NOW), unburned.
 function declineTick(store: Store<GameState>): void {
   const state = store.getState();
   if (state.landing.ended !== null) return;
@@ -494,18 +495,22 @@ function declineTick(store: Store<GameState>): void {
     store.update((draft) => { draft.landing.declined = null; });
   }
   const offer = landingBurnOffer(store.getState(), pred);
-  if (offer === null || offer.reason === 'capture' || offer.reason === 'missed' || offer.reason === 'shrink') {
+  if (offer === null || offer.reason === 'capture' || offer.reason === 'missed') {
     dueWatch = { ...NO_DUE_WATCH };
     return;
   }
   const key = declineKey(offer);
   if (key !== dueWatch.key) dueWatch = { ...NO_DUE_WATCH, key };
-  if (secUntil(pred, offer.inSec, state.clock.tSec) <= 0) {
-    dueWatch.due = true;
-    if (state.burn.lastTickDvKmS > 0) dueWatch.burned = true;
-    return;
+  const now = state.clock.tSec;
+  const due = secUntil(pred, offer.inSec, now) <= 0;
+  if (due) {
+    dueWatch.dueSinceTSec ??= now;
+    if (state.burn.lastTickDvKmS > 0 || state.burn.firing) dueWatch.burned = true;
   }
-  if (dueWatch.due && !dueWatch.burned) {
+  const passed = dueWatch.dueSinceTSec !== null
+    && (!due || now - dueWatch.dueSinceTSec >= LATE_TRIM_TAC * state.level.tacticalWarp);
+  if (!passed) return;
+  if (!dueWatch.burned) {
     const untilLz = offer.reason === 'go-low' ? offer.aimLz ?? null : null;
     store.update((draft) => { draft.landing.declined = { key, untilLz }; });
   }
