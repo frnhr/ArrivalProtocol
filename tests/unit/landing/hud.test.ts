@@ -520,18 +520,23 @@ function offerOf(reason: BurnPoint['reason'], inSec: number, extra: Partial<Burn
 {
   const state = world(1);
   aim(state, state.landing.lzs[0]!.centreRad);
-  const two = decayChip(state, { orbitsToLeave: 1.6, nextDvKmS: 0.02 }, null);
+  const two = decayChip(state, { orbitsToLeave: 1.6, nextDvKmS: 0.02, lowerBound: false }, null);
   says('decay: DECAY · out of band in 2 orbits (1.6 rounds up)', two?.text, ['DECAY', 'OUT OF BAND', /\b2 ORBITS\b/]);
   check('decay: urgent at DECAY_WARN_ORBITS', two?.urgent === true && two.orbits === 1.6);
-  const five = decayChip(state, { orbitsToLeave: 5, nextDvKmS: 0.01 }, null);
+  const five = decayChip(state, { orbitsToLeave: 5, nextDvKmS: 0.01, lowerBound: false }, null);
   check('decay: calm further out', five !== null && !five.urgent && five.text.includes('5 ORBITS'));
-  says('decay: the lift burn\'s key while it is offered', decayChip(state, { orbitsToLeave: 2, nextDvKmS: 0.02 }, offerOf('lift', 40))?.text,
+  says('decay: the lift burn\'s key while it is offered', decayChip(state, { orbitsToLeave: 2, nextDvKmS: 0.02, lowerBound: false }, offerOf('lift', 40))?.text,
     ['DECAY', '[W]']);
-  check('decay: no key for another burn', !(decayChip(state, { orbitsToLeave: 2, nextDvKmS: 0.02 }, offerOf('rp-low', 40))?.text.includes('[')));
-  check('decay: nothing with ▼ above the line', decayChip(state, { orbitsToLeave: null, nextDvKmS: 0 }, null) === null
+  check('decay: no key for another burn', !(decayChip(state, { orbitsToLeave: 2, nextDvKmS: 0.02, lowerBound: false }, offerOf('rp-low', 40))?.text.includes('[')));
+  check('decay: nothing with ▼ above the line', decayChip(state, { orbitsToLeave: null, nextDvKmS: 0, lowerBound: false }, null) === null
     && decayChip(state, null, null) === null);
+  // Review minors 2 and 3: ▼ already under the band, and a forecast that is only a lower bound.
+  const under = decayChip(state, { orbitsToLeave: 0, nextDvKmS: 0.03, lowerBound: false }, null);
+  check('decay: ▼ under the band already says so, urgent (not `in 1 orbit`)', under?.text === 'DECAY · ▼ OUT OF BAND' && under.urgent, under?.text);
+  says('decay: a lower bound reads N+', decayChip(state, { orbitsToLeave: 96.4, nextDvKmS: 0.001, lowerBound: true }, null)?.text,
+    [/IN 97\+ ORBITS/]);
   const ares = world();
-  check('decay: nothing on ARES-VII (no drag)', decayChip(ares, { orbitsToLeave: 2, nextDvKmS: 0.02 }, null) === null);
+  check('decay: nothing on ARES-VII (no drag)', decayChip(ares, { orbitsToLeave: 2, nextDvKmS: 0.02, lowerBound: false }, null) === null);
   const kick: DragKick = { atTSec: 100, rpKm: 5400, dvKmS: 0.022, rad: 1.2, apsis: '▲', dropKm: 110 };
   state.landing.decay = { lastKickTSec: 100, kicks: 1, last: kick };
   const stamp = dragStamp(state.landing.decay.last);

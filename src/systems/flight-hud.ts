@@ -1,7 +1,7 @@
 import type { GameState, Pace, PresetMode, TerminalStatus, LogEntry } from '@state/schema';
 import type { Ring, Vec2 } from '@/types/orbit';
 import { secUntil, samplePath, loopProblem, type BurnPoint, type Prediction } from '@systems/predict';
-import type { DecayForecast } from '@systems/landing-orbit';
+import { decayWarned, type DecayForecast } from '@systems/landing-orbit';
 import { tac, mainCountdown, skipBlockReason, apsisTimesHidden, type CountdownKind } from '@systems/pace';
 import {
   canAccept, acceptStrands, burnVerb, formatTac, PRESET_KEY, PRESET_NAME, TRIM_PROBLEM,
@@ -29,7 +29,7 @@ import { landingMoment } from '@systems/landing-rules';
 import {
   COUNTDOWN_RED_TAC, LOCK_HOLD_AI_SEC, PLOT_SHIP_MARGIN, PLOT_RING_FACTOR, PLOT_FLYBY_TAG_FRAC,
   STRANDED_RANGE_FRAC, TACTICAL_LEAD_BURN_TAC, UPCOMING_EVENTS_MAX, UPCOMING_HORIZON_TAC,
-  OVERCLOCK_FACTOR, REACTOR_THREAD_SHARE, CHOICE_URGENT_SEC, GHOST_DRIFT_ROUND_KM, DECAY_WARN_ORBITS,
+  OVERCLOCK_FACTOR, REACTOR_THREAD_SHARE, CHOICE_URGENT_SEC, GHOST_DRIFT_ROUND_KM,
 } from '@data/tuning';
 
 // What the flight HUD shows, as plain data: the header countdown chip, pace label and SKIP
@@ -249,7 +249,10 @@ export function decayChip(
   const orbits = forecast?.orbitsToLeave ?? null;
   if (orbits === null || !Number.isFinite(orbits)) return null;
   const key = offer !== null && offer.reason === 'lift' ? DECAY_CHIP_TEXT.key(PRESET_KEY[offer.preset]) : '';
-  return { text: `${DECAY_CHIP_TEXT.chip(orbits)}${key}`, orbits, urgent: Math.max(1, Math.ceil(orbits)) <= DECAY_WARN_ORBITS };
+  // Its urgent look is L10's moment (landing-orbit decayWarned, the one threshold); a forecast past its kick limit is a
+  // lower bound (`N+`, review minor 3); ▼ already under the band says so (minor 2).
+  const lowerBound = forecast?.lowerBound === true;
+  return { text: `${DECAY_CHIP_TEXT.chip(orbits, lowerBound)}${key}`, orbits, urgent: decayWarned(orbits) };
 }
 
 // The header crumbs (§7.1): UNIT-047 · WAVE 1 / ARES-VII / what is happening right now, in the words the

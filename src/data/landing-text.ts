@@ -221,8 +221,10 @@ export const LANDING_FLIGHT_LINES = {
 } as const;
 
 // L10 (§3.11): decay takes ▼ out of the band within DECAY_WARN_ORBITS orbits; the row carries the 'lift' burn's key.
+// At 0 orbits ▼ is under the band already (review minor 2: it read `in 1 orbit`).
 export const LANDING_DECAY_LINES = {
   L10: (orbits: number): string => {
+    if (orbits <= 0) return 'ORBIT DECAYED — ▼ is out of the band';
     const whole = Math.max(1, Math.ceil(orbits));
     return `ORBIT DECAYING — out of the band in ${whole} orbit${whole === 1 ? '' : 's'}`;
   },
@@ -485,10 +487,13 @@ export const LANDING_PLOT_TEXT = {
 
 // The decay chip on the NAV PLOT (slice 1b, §3.7's forecast): whole orbits until ▼ leaves the band if nobody burns, and
 // the 'lift' burn's key while that burn is offered (`DECAY · OUT OF BAND IN 2 ORBITS · [W]`).
+// `lowerBound`: the forecast stopped at its kick limit, so the count is at least this (`IN 97+ ORBITS`, review minor 3); at
+// 0 orbits ▼ is under the band already (minor 2).
 export const DECAY_CHIP_TEXT = {
-  chip: (orbits: number): string => {
+  chip: (orbits: number, lowerBound = false): string => {
+    if (orbits <= 0) return 'DECAY · ▼ OUT OF BAND';
     const whole = Math.max(1, Math.ceil(orbits));
-    return `DECAY · OUT OF BAND IN ${whole} ORBIT${whole === 1 ? '' : 'S'}`;
+    return `DECAY · OUT OF BAND IN ${whole}${lowerBound ? '+' : ''} ORBIT${whole === 1 && !lowerBound ? '' : 'S'}`;
   },
   key: (key: string): string => ` · [${key}]`,
 } as const;

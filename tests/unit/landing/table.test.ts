@@ -201,6 +201,7 @@ expect('M3: ...and before a driver REPAIR that can\'t help', ctx({ bayOffline: t
 expect('M4: decaying with a wide dot: L10, not `fly lower`', ctx({ next: next('LZ-B', 60, 60), decay: { orbits: 1 },
   tooWide: { lz: 'LZ-B', repair: null, goLower: FIT, launchRad: 0 } }), 'L10', 'ORBIT DECAYING — out of the band in 1 orbit');
 expect('M4: ...over DROP UNCERTAIN too', ctx({ decay: { orbits: 2 }, uncertain: { cause: 'hurt' } }), 'L10', /^ORBIT DECAYING/);
+expect('minor 2: ▼ already under the band: ORBIT DECAYED, not `in 1 orbit`', ctx({ decay: { orbits: 0 } }), 'L10', 'ORBIT DECAYED — ▼ is out of the band');
 expect('M4: ...a GO-LOW row\'s [S] is not L10\'s key', ctx({ decay: { orbits: 1 }, flight: { ...capture, id: 'GO-LOW-wait', keys: ['S'] }, flightBurnInTac: 40 }),
   'L10', /^ORBIT DECAYING/, (o) => o.keys.length === 0);
 expect('M4: ...a LIFT row\'s [W] is', ctx({ decay: { orbits: 1 }, flight: { ...capture, id: 'LIFT-apo', keys: ['W'] }, flightBurnInTac: 40 }),

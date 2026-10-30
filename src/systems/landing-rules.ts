@@ -12,10 +12,10 @@ import type { Rng } from '@systems/rng';
 import { driversInMemory, filesWithRole, integrityBand, repairPossible } from '@state/selectors';
 import { bayCapability, roleHealth } from '@systems/capabilities';
 import { angleDelta, dropHalfWidthKm, secFromNow } from '@systems/landing-solve';
-import { decayForecast, goLowerFit } from '@systems/landing-orbit';
+import { decayForecast, decayWarned, goLowerFit } from '@systems/landing-orbit';
 import { COLONY_NAME_POOL, LAUNCH_CONFIRM_TEXT, familyColonyName } from '@data/landing-text';
 import {
-  BAND_DEGRADED_MIN, BAND_FAILING_MIN, COLONISTS_PER_POD, COLONY_FAMILY_NAME_CHANCE, DECAY_WARN_ORBITS, DRIVER_DROP_FACTOR_BY_BAND,
+  BAND_DEGRADED_MIN, BAND_FAILING_MIN, COLONISTS_PER_POD, COLONY_FAMILY_NAME_CHANCE, DRIVER_DROP_FACTOR_BY_BAND,
   HARD_LANDING_FACTOR, MISLANDED_FACTOR, OFF_SITE_SCORE_BY_CLASS, STAR_ON_TARGET_FRAC,
 } from '@data/tuning';
 
@@ -228,7 +228,7 @@ export function decayWarnOrbits(state: Readonly<GameState>): number | null {
   const { landing, level } = state;
   if (!landing.drag || landing.ended !== null) return null;
   const orbits = decayForecast(state.orbit, level.planet.mu, level.ring, landing.drag).orbitsToLeave;
-  return orbits !== null && orbits <= DECAY_WARN_ORBITS ? orbits : null;
+  return decayWarned(orbits) ? orbits : null;
 }
 
 // The window has a sure part (the whole dot inside the bracket) inside its in-band span: a launch there lands in the LZ

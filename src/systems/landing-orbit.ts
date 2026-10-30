@@ -10,7 +10,7 @@ import {
 import { IS_DEV } from '@/env';
 import {
   DRAG_LINE_FRAC, DRAG_DV_MAX_KMS, DRAG_KICK_MIN_GAP_FRAC, DRAG_KICK_CATCH_UP_FRAC, GO_LOW_FLOOR_MARGIN_KM, LANDING_SURE_MIN_TAC,
-  DROP_SOLVE_MAX_E, POD_AIM_RP_FRAC, LANDING_RELEASE_LEAD_TAC,
+  DROP_SOLVE_MAX_E, POD_AIM_RP_FRAC, LANDING_RELEASE_LEAD_TAC, DECAY_WARN_ORBITS,
 } from '@data/tuning';
 
 // The landing's orbit math (01-landing §3.7, slice-1b-plan §1.1, §1.4): the DRAG line and its kicks, the decay forecast,
@@ -165,10 +165,23 @@ export function decayAfter(decay: Readonly<DecayState>, kick: Readonly<DragKick>
 }
 
 // What decay will do to the orbit through `orbit` if nobody burns (closed-form, cheap): the whole orbits until ▼ leaves
-// the band (null: it never does, ▼ at or above the DRAG line, or no drag on this ship), and the next kick's Δv.
+// the band (null: it never does, ▼ at or above the DRAG line, or no drag on this ship; 0: ▼ is under the band already),
+// the next kick's Δv, and whether `orbitsToLeave` is only a lower bound (past FORECAST_MAX_KICKS: the chip says `N+`).
 export interface DecayForecast {
   orbitsToLeave: number | null;
   nextDvKmS: number;
+  lowerBound: boolean;
+}
+
+// The decay thresholds, named in one place (review nit): the warning (L10, L9's GO LOWER held back, the chip's urgent
+// look, the 'lift' burn) comes when decay takes ▼ out of the band within DECAY_WARN_ORBITS orbits, unrounded; the lift's
+// ▲ half is planned from twice that (predict landingInRingBurn: the warning comes when ▲ has mostly sunk already).
+export function decayWarned(orbitsToLeave: number | null): boolean {
+  return orbitsToLeave !== null && orbitsToLeave <= DECAY_WARN_ORBITS;
+}
+
+export function decayLiftAhead(orbitsToLeave: number | null): boolean {
+  return orbitsToLeave !== null && orbitsToLeave <= 2 * DECAY_WARN_ORBITS;
 }
 
 // Kicks the forecast follows at most: a ▼ just under the line takes kicks of a few cm/s for hundreds of orbits, far past
@@ -181,10 +194,10 @@ const FORECAST_MAX_KICKS = 200;
 // strip rounds it up (`out of the band in 2 orbits`).
 export function decayForecast(orbit: Readonly<OrbitState>, mu: number, ring: Readonly<Ring>, drag: boolean): DecayForecast {
   const el = elementsFromState(orbit, mu);
-  if (!drag || !(el.e < 1)) return { orbitsToLeave: null, nextDvKmS: 0 };
+  if (!drag || !(el.e < 1)) return { orbitsToLeave: null, nextDvKmS: 0, lowerBound: false };
   const nextDvKmS = dragDvKmS(el.rp, ring);
-  if (!(nextDvKmS > 0)) return { orbitsToLeave: null, nextDvKmS };
-  if (el.rp < ring.min) return { orbitsToLeave: 0, nextDvKmS };
+  if (!(nextDvKmS > 0)) return { orbitsToLeave: null, nextDvKmS, lowerBound: false };
+  if (el.rp < ring.min) return { orbitsToLeave: 0, nextDvKmS, lowerBound: false };
   const conic = keplerConic(orbit, mu, el);
   const periodNow = orbitalPeriod(conic);
   const sinceRp = timeFromPeriapsis(conic, universalAnomaly(conic, Math.hypot(orbit.x, orbit.y), radialSigma(orbit, mu)));
@@ -193,7 +206,7 @@ export function decayForecast(orbit: Readonly<OrbitState>, mu: number, ring: Rea
   let ra = (el.rp * (1 + el.e)) / (1 - el.e);
   for (let kick = 0; kick < FORECAST_MAX_KICKS; kick++) {
     const dv = dragDvKmS(rp, ring);
-    if (!(dv > 0)) return { orbitsToLeave: null, nextDvKmS };
+    if (!(dv > 0)) return { orbitsToLeave: null, nextDvKmS, lowerBound: false };
     const speed = Math.sqrt(mu * (2 / rp - 2 / (rp + ra))) - dv;
     const inverseA = 2 / rp - (speed * speed) / mu;
     if (!(inverseA > 0)) throw new Error(`decayForecast: a ${dv} km/s kick opened the loop`);
@@ -201,12 +214,12 @@ export function decayForecast(orbit: Readonly<OrbitState>, mu: number, ring: Rea
     const turned = far < rp;
     ra = Math.max(rp, far);
     rp = Math.min(rp, far);
-    if (rp < ring.min) return { orbitsToLeave: elapsed / periodNow, nextDvKmS };
+    if (rp < ring.min) return { orbitsToLeave: elapsed / periodNow, nextDvKmS, lowerBound: false };
     const period = TWO_PI * Math.sqrt(Math.pow((rp + ra) / 2, 3) / mu);
     elapsed += turned ? period / 2 : period;
   }
   // Still in the band after FORECAST_MAX_KICKS: at least this long (a lower bound, far past any warning), not "never".
-  return { orbitsToLeave: elapsed / periodNow, nextDvKmS };
+  return { orbitsToLeave: elapsed / periodNow, nextDvKmS, lowerBound: true };
 }
 
 // --- GO LOWER (§3.7) ---------------------------------------------------------------------------------------------------

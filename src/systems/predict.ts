@@ -10,7 +10,7 @@ import { capabilitiesNow, deriveCapabilities, thrustCap, type Capabilities } fro
 import { zoneContains, zoneCrossings, chordInsideFrac, chordClosest, chordEntryFrac } from '@systems/zones';
 import { presetHeading } from '@systems/attitude';
 import { getAiCore } from '@state/selectors';
-import { decayForecast, dragLineKm, goLowDvKmS, timeToAngle } from '@systems/landing-orbit';
+import { decayForecast, decayLiftAhead, dragLineKm, goLowDvKmS, timeToAngle } from '@systems/landing-orbit';
 import { decayWarnOrbits } from '@systems/landing-rules';
 import { zoneRacks, type Zone, type ZoneHit, type HazardSpan } from '@/types/zone';
 import {
@@ -24,7 +24,7 @@ import {
   LATE_TRIM_TAC, LATE_TRIM_DV_FACTOR, SIM_SUBSTEP_MAX_SEC, SHRINK_WAIT_TAC, SHRINK_MIN_APO_FRAC,
   SHRINK_FUEL_RESERVE_FRAC, RADIUS_BISECT_STEPS, RP_RATE_PROBE_SEC,
   SHRINK_RESERVE_WAIT_TAC, STRANDED_RANGE_FRAC, STRAND_LINE_MARGIN, SKIP_DIVISOR, BELT_HIT_MEAN_SEC,
-  DODGE_PROMISE_MARGIN_KM, DODGE_DEADLINE_RESOLUTION_TAC, DODGE_MEMO_RP_DECIMALS, DODGE_MEMO_ANGLE_DECIMALS, DECAY_WARN_ORBITS,
+  DODGE_PROMISE_MARGIN_KM, DODGE_DEADLINE_RESOLUTION_TAC, DODGE_MEMO_RP_DECIMALS, DODGE_MEMO_ANGLE_DECIMALS,
   DRAG_LIFT_MARGIN_KM,
 } from '@data/tuning';
 
@@ -720,7 +720,7 @@ function landingInRingBurn(state: Readonly<GameState>, input: BurnInputs): BurnP
   const holdingLift = state.burn.firing && state.burn.firingFor !== null && state.burn.firingFor.startsWith('lift|');
   const target = dragLineKm(input.ring) + DRAG_LIFT_MARGIN_KM;
   const orbitsToLeave = decayForecast(input.orbit, input.mu, input.ring, landing.drag).orbitsToLeave;
-  const raHalf = input.fit.ra >= target && orbitsToLeave !== null && orbitsToLeave <= 2 * DECAY_WARN_ORBITS;
+  const raHalf = input.fit.ra >= target && decayLiftAhead(orbitsToLeave);
   if (decayWarnOrbits(state) === null && !holdingLift && !raHalf) return null;
   const { periInSec, apoInSec, periodSec } = input;
   if (periInSec === null || apoInSec === null || periodSec === null) throw new Error('landingInRingBurn: a loop without apsis times');
