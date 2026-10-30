@@ -3,7 +3,7 @@ import type { DriverSegment } from '@/types/segment';
 import type {
   DragKick, DropFactors, DropSolution, LandingState, LzState, LzWindow, NoGoArcState, Place, Touch, TerrainWord,
 } from '@/types/landing';
-import type { BurnPoint, Prediction } from '@systems/predict';
+import type { BurnPoint, Prediction, PredictOutcome } from '@systems/predict';
 import { elementsFromState, propagateConic, semiMajorAxis, type OrbitState, type Vec2 } from '@/types/orbit';
 import { driversInMemory, getByRole } from '@state/selectors';
 import { angleDelta, dropHalfWidthKm } from '@systems/landing-solve';
@@ -11,11 +11,11 @@ import { capabilitiesNow, BAND_COPY, type Band, type Capabilities } from '@syste
 import { dragLineKm } from '@systems/landing-orbit';
 import {
   bayMembers, bayShown, driverTouch, dropFactors, isLaunchable, launchGuard, launchRefusal, lzAt, lzDownFill, lzProjectedFill, nextToLaunch,
-  landingMoment, onTargetTally, podCounts, podsWithFate,
+  endLandingRefusal, landingMoment, onTargetTally, podCounts, podsWithFate,
 } from '@systems/landing-rules';
 import {
   BAND_TEXT, GROUND_TRACK_TEXT, LANDING_HUD_TEXT, LANDING_PLOT_TEXT, LAUNCH_REFUSAL_TEXT, MINI_LANDING_TEXT, POD_BAY_STATUS_TEXT,
-  POD_BAY_TEXT, DRIVER_DETAIL_TEXT, LAUNCH_CONFIRM_TEXT, DRAG_STAMP_TEXT, minSec,
+  POD_BAY_TEXT, DRIVER_DETAIL_TEXT, LAUNCH_CONFIRM_TEXT, DRAG_STAMP_TEXT, END_LANDING_REFUSAL_TEXT, minSec,
 } from '@data/landing-text';
 import {
   BAND_FAILING_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEACON_LAG_FRAC, DRAG_STAMP_MIN_KM, GROUND_TRACK_AHEAD_MAX, GROUND_TRACK_SPAN_KM,
@@ -644,9 +644,11 @@ export interface BayWindowModel {
   endLanding: { label: string; confirm: string; enabled: boolean };
 }
 
+// `outcome`: the prediction's (getPrediction().outcome; END LANDING is refused on a path into the planet, review B1).
 // `caps` (default: now) is a parameter so a test can hand in Bay Ctrl's state directly.
 export function bayWindowModel(
-  state: Readonly<GameState>, sol: Readonly<DropSolution> | null, caps: Readonly<Capabilities> = capabilitiesNow(state),
+  state: Readonly<GameState>, sol: Readonly<DropSolution> | null, outcome: PredictOutcome,
+  caps: Readonly<Capabilities> = capabilitiesNow(state),
 ): BayWindowModel {
   const { landing } = state;
   const shown = bayShown(state);
@@ -685,6 +687,7 @@ export function bayWindowModel(
   const noGoWords = [...new Set(landing.noGo.map((arc) => arc.word))];
   const launchable = new Set(driversInMemory(state).filter(isLaunchable).map((driver) => driver.pod));
   const cantLaunch = aboard.filter((record) => !launchable.has(record.pod)).length;
+  const endRefusal = endLandingRefusal(state, outcome);
   return {
     launch: { label: POD_BAY_TEXT.launch, look, status },
     bay: { shown, loaded: landing.bay.loaded, slots: BAY_SLOTS, reloadTac, text: POD_BAY_TEXT.bay(shown, BAY_SLOTS, reloadTac) },
@@ -705,9 +708,11 @@ export function bayWindowModel(
     lzs: lzCounters(state),
     cantLaunch,
     aboard: aboard.length,
+    // Refused on a path into the planet: the button says why in place of its label (landing-rules endLandingRefusal).
     endLanding: {
-      label: POD_BAY_TEXT.endLanding, confirm: LAUNCH_CONFIRM_TEXT.endLanding(aboard.length),
-      enabled: landing.ended === null && state.run.phase === 'landing' && !state.clock.paused,
+      label: endRefusal === 'IMPACT' ? END_LANDING_REFUSAL_TEXT : POD_BAY_TEXT.endLanding,
+      confirm: LAUNCH_CONFIRM_TEXT.endLanding(aboard.length),
+      enabled: endRefusal === null,
     },
   };
 }

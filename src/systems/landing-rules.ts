@@ -7,6 +7,7 @@ import type {
 } from '@/types/landing';
 import type { SegmentRole } from '@/types/segment';
 import type { Capabilities } from '@systems/capabilities';
+import type { PredictOutcome } from '@systems/predict';
 import type { Rng } from '@systems/rng';
 import { driversInMemory, filesWithRole, integrityBand, repairPossible } from '@state/selectors';
 import { bayCapability, roleHealth } from '@systems/capabilities';
@@ -316,6 +317,21 @@ export function noGoInReach(noGo: readonly NoGoArcState[], dot: Readonly<DropDot
     }
   }
   return best;
+}
+
+// Why END LANDING can't end the landing now, in this order; null: it can (§3.10, review B1). 'IMPACT': the ship is on a
+// path into the planet (the prediction's outcome, passed in so this stays pure). Ending there parked the pods in orbit
+// and scored the ship as in orbit a moment before it hit the ground (p1: KESTREL, ▼ at 1,000 km); the strip's F4 names
+// the burn that saves it, and the landing ends by itself once the ship is safe, or lost ('ship-lost'). The auto-ends
+// (every pod away, landingStuck's) hold while it is 'IMPACT' too (landing.ts landingEndHeld).
+export type EndLandingRefusal = 'NOT LANDING' | 'LANDING OVER' | 'PAUSED' | 'IMPACT';
+
+export function endLandingRefusal(state: Readonly<GameState>, outcome: PredictOutcome): EndLandingRefusal | null {
+  if (state.run.phase !== 'landing') return 'NOT LANDING';
+  if (state.landing.ended !== null) return 'LANDING OVER';
+  if (state.clock.paused) return 'PAUSED';
+  if (outcome === 'impact') return 'IMPACT';
+  return null;
 }
 
 // Why the landing must end by itself (landing.ts noneLeftTick waits LANDING_NONE_LEFT_SEC, then ends it with this
@@ -648,9 +664,12 @@ export function landingResult(state: Readonly<GameState>, outcome: ShipOutcome):
   const pending = pendingTouchdowns(state);
   for (const record of landing.pods) {
     const settled = pending.get(record.pod);
+    // A pod parked when the landing ended rode the ship's orbit: a ship that then left it (a crash during the linger,
+    // review B1) took it along, NOT LAUNCHED (orbit-sim endLandingLost rewrites the state the same way).
     const fate: PodFate = record.fate.kind === 'aboard' ? finalFateOfAboard(record, outcome)
-      : record.fate.kind === 'falling' && settled ? { kind: 'down', launch: record.fate.launch, touchdown: settled }
-        : record.fate;
+      : record.fate.kind === 'parked' && !endsInOrbit(outcome) ? { kind: 'not-launched' }
+        : record.fate.kind === 'falling' && settled ? { kind: 'down', launch: record.fate.launch, touchdown: settled }
+          : record.fate;
     tally.colonistsAboard += record.colonists;
     if (record.restored) tally.restored += record.colonists;
     const summary: PodSummary = {

@@ -153,7 +153,7 @@ check("the state words: CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNC
   state.landing.colony = 'RIVERSIDE';
   says('ground track: header names the colony once it has one', groundTrackModel(state, sol).header, [/^KEPLER-186F\b/, 'RIVERSIDE']);
 
-  const bay = bayWindowModel(state, sol);
+  const bay = bayWindowModel(state, sol, 'closed');
   check('bay: the launch button goes', bay.launch.look === 'go', bay.launch.status);
   says('bay: the launch button carries its key, [L]', bay.launch.label, [/\[\s*L\b/]);
   // Four slots loaded, three pods: the bay shows what could go (§2: `BAY ▮▮▮▯ 3/4` at ORBIT LOCK).
@@ -170,7 +170,7 @@ check("the state words: CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNC
   const alert = toggleAlert(state, NO_PRED);
   check('toggle: from blue during a window, an alert back to the SHIP', alert !== null && alert.screen === 'tools', JSON.stringify(alert));
   says('toggle: says LZ-A is open, as the chip does', alert === null ? null : `${alert.head} ${alert.body}`, ['LZ-A', openWord], CHIP_CHARS);
-  const bayHidden = bayWindowModel(state, sol);
+  const bayHidden = bayWindowModel(state, sol, 'closed');
   check('bay: from blue the button still reads what [L] does in amber', bayHidden.launch.look === 'go');
   state.ui.mode = 'tools';
   check('ring: LAUNCH BAND while landing', ringLabel(state) === BAND_TEXT.ringLanding);
@@ -197,7 +197,7 @@ check("the state words: CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNC
   check('away: the chip counts mm:ss to the window, not yet 00:00', chip !== null && /^\d\d:\d\d$/.test(chip.time) && chip.time !== '00:00',
     JSON.stringify(chip));
   says('away: the chip names LZ-A, and is not the open chip', chip?.label, ['LZ-A', /^(?!.*\bOPEN\b)/], CHIP_CHARS);
-  check('away: the bay asks first (off-site)', bayWindowModel(state, sol).launch.look === 'asks');
+  check('away: the bay asks first (off-site)', bayWindowModel(state, sol, 'closed').launch.look === 'asks');
   check('away: the mini-HUD window is not open', miniHudLanding(state, sol)?.window?.open === false);
   says('away: the mini-HUD names LZ-A with an m:ss countdown', miniHudLanding(state, sol)?.window?.text, [/^LZ-A\b/, /\b\d+:\d\d$/], CHIP_CHARS);
   // Nearer: inside the strip, ahead of the dot (to the right).
@@ -213,8 +213,8 @@ check("the state words: CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNC
   const high = aim(state, lzA.centreRad, state.level.ring.max + 2000);
   check('out of band: no window, the dot greys', state.landing.window === null && groundTrackModel(state, high).outOfBand
     && dropDotModel(state, high)?.inBand === false);
-  check('out of band: the bay refuses with the refusal\'s words', bayWindowModel(state, high).launch.look === 'blocked'
-    && bayWindowModel(state, high).launch.status === LAUNCH_REFUSAL_TEXT['OUT OF THE LAUNCH BAND'], bayWindowModel(state, high).launch.status);
+  check('out of band: the bay refuses with the refusal\'s words', bayWindowModel(state, high, 'closed').launch.look === 'blocked'
+    && bayWindowModel(state, high, 'closed').launch.status === LAUNCH_REFUSAL_TEXT['OUT OF THE LAUNCH BAND'], bayWindowModel(state, high, 'closed').launch.status);
 }
 
 // --- Reload, BAY / NEXT, LOAD NEXT, the hurt driver ---
@@ -223,7 +223,7 @@ check("the state words: CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNC
   const state = world();
   const sol = aim(state, state.landing.lzs[0]!.centreRad);
   state.landing.bay = { loaded: 3, reloadTac: 8, cadenceLeftTac: 1.2 };
-  const bay = bayWindowModel(state, sol);
+  const bay = bayWindowModel(state, sol, 'closed');
   // 8 tactical s into the reload: BAY_RELOAD_TAC (20) minus 8 leaves 0:12.
   says('reload: ▮▮▮▯ 3/4 and the reload\'s 0:12', bay.bay.text, ['▮▮▮▯ 3/4', /\b0:12\b/]);
   check('cadence: the button waits with the RELOADING refusal\'s words', bay.launch.look === 'blocked'
@@ -233,7 +233,7 @@ check("the state words: CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNC
   check('tags: three in the bay, POD 01 next', tags.get(1) === tagNext && tags.get(2) === tagBay && tags.get(3) === tagBay
     && (tagNext as string) !== tagBay && [tagNext, tagBay].every((tag) => tag.length <= CHIP_CHARS), JSON.stringify([...tags]));
   state.landing.loadNext = 3;
-  check('LOAD NEXT: POD 03 is next', podTags(state).get(3) === tagNext && bayWindowModel(state, sol).next?.pod === 3);
+  check('LOAD NEXT: POD 03 is next', podTags(state).get(3) === tagNext && bayWindowModel(state, sol, 'closed').next?.pod === 3);
   state.landing.loadNext = null;
   const brandt = state.memory.find((seg) => isDriver(seg) && seg.pod === 2);
   if (!brandt || !isDriver(brandt)) throw new Error('no POD 02');
@@ -304,7 +304,7 @@ check("the state words: CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNC
   down(state, sol, 1, 'lz', 'LZ-A');
   down(state, sol, 2, 'lz', 'LZ-A');
   down(state, sol, 3, 'lz', 'LZ-A');
-  const bay = bayWindowModel(state, sol);
+  const bay = bayWindowModel(state, sol, 'closed');
   check('full: [L] asks first', bay.launch.look === 'asks', bay.launch.status);
   says('full: the bay says LZ-A is FULL', bay.launch.status, ['LZ-A', /\bFULL\b/]);
   check('full: counters LZ-A full 3 of 3, LZ-B 0 of 2', bay.lzs.length === 2 && bay.lzs[0]!.lz === 'LZ-A' && bay.lzs[0]!.full
@@ -355,8 +355,8 @@ function offerOf(reason: BurnPoint['reason'], inSec: number, extra: Partial<Burn
   check('uncertain: the plot labels the dot ≈±196 km', plot?.dotLabel === wide, String(plot?.dotLabel));
   says('uncertain: the GROUND TRACK reads ≈±196 km', groundTrackModel(state, sol).strip.dot?.text, [wide], CHIP_CHARS);
   check('uncertain: the GROUND TRACK\'s dot is grey', groundTrackModel(state, sol).strip.dot?.uncertain === true);
-  says('uncertain: the POD BAY\'s NEXT reads the solved dot, ≈±196 km', bayWindowModel(state, sol).nextText, [wide]);
-  says('a sure drop: no ≈ on NEXT', bayWindowModel(state, sure).nextText, [/±78 km/, /^[^≈]*$/]);
+  says('uncertain: the POD BAY\'s NEXT reads the solved dot, ≈±196 km', bayWindowModel(state, sol, 'closed').nextText, [wide]);
+  says('a sure drop: no ≈ on NEXT', bayWindowModel(state, sure, 'closed').nextText, [/±78 km/, /^[^≈]*$/]);
   const lead = state.memory.find((seg) => isDriver(seg) && seg.integrity >= 80);
   if (!lead || !isDriver(lead)) throw new Error('VESPER has a healthy driver');
   says('uncertain: the detail panel\'s drop is ≈', driverLanding(state, lead, sol, { sensor: 2.5, plotter: 1, driver: 1 }).text, [wide]);
@@ -379,11 +379,11 @@ function offerOf(reason: BurnPoint['reason'], inSec: number, extra: Partial<Burn
   check('no-go: the terrain row draws no glyph over the lava (it is hatched)', terrainAt(track.strip.terrain, 0.5)?.kind === 'no-go'
     && terrainAt(track.strip.terrain, 0.5)?.glyph === '');
   check('float: +0 LAVA, in the arc\'s word', TOUCHDOWN_FLOAT_TEXT.noGo('LAVA') === '+0 LAVA');
-  const cls = bayWindowModel(state, sol).cls;
+  const cls = bayWindowModel(state, sol, 'closed').cls;
   says('class line: VOLCANIC and what off-site scores', cls.text, [/^VOLCANIC\b/, 'off-site']);
   says('class line: NO-GO names LAVA once', cls.noGo, ['NO-GO', 'LAVA', /^(?!.*LAVA.*LAVA)/]);
   const ares = world();
-  check('class line: no NO-GO on ARES-VII', bayWindowModel(ares, aim(ares, ares.landing.lzs[0]!.centreRad)).cls.noGo === null);
+  check('class line: no NO-GO on ARES-VII', bayWindowModel(ares, aim(ares, ares.landing.lzs[0]!.centreRad), 'closed').cls.noGo === null);
 }
 
 // Terrain stretches (§4's glyph rows): the pattern per terrain word, the brackets flat, no-go first.
@@ -431,25 +431,25 @@ function offerOf(reason: BurnPoint['reason'], inSec: number, extra: Partial<Burn
   if (!bayFile || bayFile.type !== 'ship') throw new Error('Bay Ctrl is a ship file');
   const hurtCaps = { ...caps, bay: { band: 'degraded' as const, cadenceTac: 2.7, offline: false } };
   bayFile.scanned = false;
-  const unscanned = bayWindowModel(state, sol, hurtCaps);
+  const unscanned = bayWindowModel(state, sol, 'closed', hurtCaps);
   check('bay ctrl: not scanned yet, its damage stays hidden (?)', unscanned.ctrl.band === 'unknown' && unscanned.ctrl.text === 'BAY CTRL',
     JSON.stringify(unscanned.ctrl));
   bayFile.scanned = true;
-  const ok = bayWindowModel(state, sol, caps);
+  const ok = bayWindowModel(state, sol, 'closed', caps);
   check('bay ctrl: ok, the pip just names the file', ok.ctrl.band === 'ok' && !ok.ctrl.offline && ok.launch.look === 'go');
-  const hurt = bayWindowModel(state, sol, hurtCaps);
+  const hurt = bayWindowModel(state, sol, 'closed', hurtCaps);
   check('bay ctrl: degraded, in BAND_COPY.bay\'s words', hurt.ctrl.band === 'degraded' && hurt.ctrl.text === BAND_COPY.bay.degraded
     && hurt.launch.look === 'go');
-  const gone = bayWindowModel(state, sol, { ...caps, bay: { band: 'missing', cadenceTac: null, offline: true } });
+  const gone = bayWindowModel(state, sol, 'closed', { ...caps, bay: { band: 'missing', cadenceTac: null, offline: true } });
   check('NO BAY CTRL: LAUNCH disabled with the refusal\'s words', gone.launch.look === 'blocked'
     && gone.launch.status === LAUNCH_REFUSAL_TEXT['BAY OFFLINE'], gone.launch.status);
   bayFile.scanned = false;
-  check('NO BAY CTRL: loud even unscanned', bayWindowModel(state, sol, { ...caps, bay: { band: 'missing', cadenceTac: null, offline: true } })
+  check('NO BAY CTRL: loud even unscanned', bayWindowModel(state, sol, 'closed', { ...caps, bay: { band: 'missing', cadenceTac: null, offline: true } })
     .ctrl.band === 'missing');
   check('NO BAY CTRL: the pip says NO BAY CTRL', gone.ctrl.offline && gone.ctrl.band === 'missing' && gone.ctrl.text === 'NO BAY CTRL');
   says('NO BAY CTRL: the button\'s words hold NO BAY CTRL, never "offline"', gone.launch.status, ['NO BAY CTRL']);
   state.clock.paused = true;
-  check('NO BAY CTRL: PAUSED still outranks it', bayWindowModel(state, sol, { ...caps, bay: { band: 'missing', cadenceTac: null, offline: true } })
+  check('NO BAY CTRL: PAUSED still outranks it', bayWindowModel(state, sol, 'closed', { ...caps, bay: { band: 'missing', cadenceTac: null, offline: true } })
     .launch.status === LAUNCH_REFUSAL_TEXT.PAUSED);
 }
 

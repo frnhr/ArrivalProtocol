@@ -19,7 +19,8 @@ import { requestSkip, skipBlockReason } from '@systems/pace';
 import { declineKey, goLowerFit, landingBurnOffer, travelSign } from '@systems/landing-orbit';
 import { activeLandingController, setActiveLandingController } from '@systems/landing-controller';
 import {
-  classifyLanding, colonyName, dropFactors, dropTooWide, driverTouch, isLaunchable, landingMoment, landingOutcome, landingStuck,
+  classifyLanding, colonyName, dropFactors, dropTooWide, driverTouch, endLandingRefusal, isLaunchable, landingMoment, landingOutcome,
+  landingStuck,
   landingView as landingViewOf, launchGuard, launchGuardText, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podCounts, podPoints,
   touchAtTouchdown,
   windowOpenNow,
@@ -27,7 +28,7 @@ import {
 import { forgetDriver, parkPodsAboard } from '@state/actions';
 import { driversInMemory, finalePending, scriptFightOpen } from '@state/selectors';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
-import { LANDING_ECHO, launchRefusalKey } from '@data/landing-text';
+import { END_LANDING_REFUSAL_KEY, LANDING_ECHO, launchRefusalKey } from '@data/landing-text';
 import { IS_DEV } from '@/env';
 import {
   BAND_DEGRADED_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEEP_BURN_TAC, BEEP_JUMP_TAC, BEEP_REARM_TAC, LANDING_DONE_LINGER_SEC,
@@ -263,6 +264,13 @@ function trackWindow(store: Store<GameState>): void {
   if (now !== null && now.sure && !(before?.lz === now.lz && before.sure)) emit('window-sure', { lz: now.lz });
 }
 
+// The auto-ends (every pod away, landingStuck's) wait while the ship is on a path into the planet (review B1): ending
+// then would park the pods in orbit a moment before the crash. The ship is saved (the end comes on the next tick) or
+// lost (orbit-sim endLandingLost: 'ship-lost').
+function landingEndHeld(): boolean {
+  return getPrediction().outcome === 'impact';
+}
+
 // Risk 7: pods aboard and none of them can ever launch (their drivers eaten, taken to 0, or dead with no REPAIR left to
 // bring them back: landing-rules driverCanEverLaunch), or Bay Ctrl gone (1b's BAY OFFLINE), means nothing can launch any
 // more; after LANDING_NONE_LEFT_SEC the landing ends by itself with landing-rules landingStuck's reason, so headless
@@ -276,7 +284,7 @@ function noneLeftTick(store: Store<GameState>, dtAi: number): void {
     return;
   }
   const waited = state.landing.noDriverAiSec + dtAi;
-  if (waited < LANDING_NONE_LEFT_SEC) {
+  if (waited < LANDING_NONE_LEFT_SEC || landingEndHeld()) {
     store.mutate((draft) => { draft.landing.noDriverAiSec = waited; });
     return;
   }
@@ -559,7 +567,7 @@ function tick(store: Store<GameState>, dtAi: number): void {
   // 3. The controller (none in 1a).
   controllerTick(store);
   // 4. No more launches: every pod away, or no driver left for the pods aboard (risk 7).
-  if (store.getState().landing.ended === null && podCounts(store.getState()).aboard === 0) endNow(store, 'all-launched');
+  if (store.getState().landing.ended === null && podCounts(store.getState()).aboard === 0 && !landingEndHeld()) endNow(store, 'all-launched');
   noneLeftTick(store, dtAi);
   // 5. The end: the landing has ended and nothing is still falling. The last bell rings out (LANDING_DONE_LINGER_SEC),
   // and ship 1's scripted fight (still undecided after an early END LANDING), HOLLOW's story beat and LAST LIGHT's
@@ -595,12 +603,14 @@ export function setLoadNext(store: Store<GameState>, pod: number): string | null
 }
 
 // END LANDING (§3.10, after the POD BAY window's inline confirm): no more launches; pods still falling come down, then
-// the pods left aboard are parked in orbit and the LANDING REPORT follows.
+// the pods left aboard are parked in orbit and the LANDING REPORT follows. Refused on a path into the planet (review B1,
+// landing-rules endLandingRefusal 'IMPACT': the POD BAY's button says DON'T HIT THE PLANET first).
 export function endLanding(store: Store<GameState>, reason: LandingEnd = 'end-landing'): string | null {
-  const state = store.getState();
-  const refusal = state.run.phase !== 'landing' ? 'NOT LANDING' : state.landing.ended !== null ? 'LANDING OVER'
-    : state.clock.paused ? 'PAUSED' : null;
-  if (refusal) { emit('refused', { reason: refusal }); return refusal; }
+  const refusal = endLandingRefusal(store.getState(), getPrediction().outcome);
+  if (refusal) {
+    emit('refused', { reason: refusal === 'IMPACT' ? END_LANDING_REFUSAL_KEY : refusal });
+    return refusal;
+  }
   endNow(store, reason);
   return null;
 }

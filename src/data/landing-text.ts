@@ -62,6 +62,12 @@ export const LAUNCH_REFUSAL_LINES: Readonly<Record<string, { text: string; keys:
   ]),
 );
 
+// END LANDING refused on a path into the planet (review B1, landing-rules endLandingRefusal 'IMPACT'): the landing can't
+// end (and park the pods in orbit) while the ship is about to leave it through the ground. The POD BAY's END LANDING
+// button says it in place of its label, and the 'refused' event flashes it on the strip (END_LANDING_REFUSAL_KEY).
+export const END_LANDING_REFUSAL_TEXT = "DON'T HIT THE PLANET first";
+export const END_LANDING_REFUSAL_KEY = 'END|IMPACT';
+
 // The inline confirms at [L] (§3.3) and END LANDING (§3.10). Enter confirms.
 export const LAUNCH_CONFIRM_TEXT = {
   offSite: (terrain: TerrainWord, points: number): string => `LAUNCH OFF-SITE? ${terrain} · scores ${formatCount(points)}`,

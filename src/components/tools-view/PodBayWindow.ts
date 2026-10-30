@@ -5,6 +5,7 @@ import { on } from '@systems/events';
 import { play } from '@systems/audio';
 import { capabilitiesNow } from '@systems/capabilities';
 import { getDropSolution } from '@systems/drop-cache';
+import { getPrediction } from '@systems/predict';
 import { endLanding } from '@systems/landing';
 import { playerLaunch, type LaunchConfirm } from '@systems/landing-controls';
 import { bayWindowModel, type BayWindowModel } from '@systems/landing-hud';
@@ -68,7 +69,7 @@ export function mountPodBayWindow(store: Store<GameState>, deps: PodBayDeps): ()
     const landing = state.run.phase === 'landing';
     document.body.classList.toggle('landing', landing);
     if (!landing) return;
-    const model = bayWindowModel(state, getDropSolution());
+    const model = bayWindowModel(state, getDropSolution(), getPrediction().outcome);
     const scramble = capabilitiesNow(state).telemetryScramble;
     patch(launchLabel, model.launch.label);
     patch(launchStatus, model.launch.status);
@@ -102,7 +103,7 @@ export function mountPodBayWindow(store: Store<GameState>, deps: PodBayDeps): ()
   // END LANDING asks first: the pods still aboard are parked in orbit and not counted (§3.10).
   const onEnd = (event: MouseEvent): void => {
     event.stopPropagation();
-    const model = bayWindowModel(store.getState(), getDropSolution());
+    const model = bayWindowModel(store.getState(), getDropSolution(), getPrediction().outcome);
     if (!model.endLanding.enabled) return;
     askInline({
       text: { question: model.endLanding.confirm, detail: '' },

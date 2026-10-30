@@ -35,6 +35,7 @@ import { rootDeletable } from '@systems/finale';
 import { dragLineKm } from '@systems/landing-orbit';
 import {
   hostLine, podCode, groundRadioLine, LANDING_ASKS, LANDING_BEATS, LAUNCH_REFUSAL_LINES, LANDING_LESSONS_1B,
+  END_LANDING_REFUSAL_KEY, END_LANDING_REFUSAL_TEXT,
 } from '@data/landing-text';
 import { HARD_WORDS_POOL } from '@data/souls';
 import type { PodRecord } from '@/types/landing';
@@ -738,6 +739,8 @@ export const REFUSAL_LINES: Readonly<Record<string, { text: string; keys: readon
   ...Object.fromEntries(Object.entries(AUTO_REFUSAL_LINES).map(([refusal, line]) => [autoRefusalKey(refusal as AutoburnRefusal), line])),
   // Slice 1a: a refused [L] (landing-text launchRefusalKey).
   ...LAUNCH_REFUSAL_LINES,
+  // Slice 1b (review B1): END LANDING refused on a path into the planet.
+  [END_LANDING_REFUSAL_KEY]: { text: END_LANDING_REFUSAL_TEXT, keys: [] },
 };
 
 export interface DamagedFile {

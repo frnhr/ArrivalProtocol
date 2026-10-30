@@ -169,6 +169,12 @@ export function parkPodsAboard(draft: GameState, outcome: ShipOutcome): number {
   return parked;
 }
 
+// The ship left orbit after its landing had ended (review B1: a crash during the linger): the pods parked in orbit rode
+// it, so they are NOT LAUNCHED, as the result folds them (landing-rules landingResult). In a draft.
+export function leaveOrbitWithParked(draft: GameState): void {
+  for (const record of draft.landing.pods) if (record.fate.kind === 'parked') record.fate = { kind: 'not-launched' };
+}
+
 // The landing begins (01-landing §3.2, §3.4), in the same update that sets phase 'landing' (orbit-sim endFlight): the
 // world switches to LANDING's own warps on every ship, so the window table holds on every planet (risk 14: the only
 // writer of level.tacticalWarp / cruiseWarp after createFlight), and the bay starts full. In a draft.

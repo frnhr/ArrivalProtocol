@@ -7,7 +7,7 @@ import { stepAttitude, isPresetAligning } from '@systems/attitude';
 import { smoothNoise, childSeed, childRng, type Rng } from '@systems/rng';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { capabilitiesNow, thrustCap, planningThrustCap, presetsAvailable, type GhostSpec } from '@systems/capabilities';
-import { beginLanding, parkPodsAboard } from '@state/actions';
+import { beginLanding, leaveOrbitWithParked, parkPodsAboard } from '@state/actions';
 import { engineOpen } from '@state/selectors';
 import { nextDragKick, dragKickAt, decayAfter, retroKicked } from '@systems/landing-orbit';
 import {
@@ -445,11 +445,15 @@ export function coastWithKicks(
 // cut off, the SKIP dropped and the clock paused under the LOST card (run shipLost). landing.ts closes the landing in
 // the same frame (its post-tick: endNow 'ship-lost', so the pods aboard go NOT LAUNCHED and the falling ones still score
 // through landing-rules pendingTouchdowns): listeners must not write state, so the close is not done on the event.
+// Review B1: also after the landing ended, while the ship still coasts toward the report (endNow is not run again):
+// the pods it parked rode the orbit with it, so they go NOT LAUNCHED here (state/actions leaveOrbitWithParked), as landing-rules
+// landingResult folds them for a ship that left orbit.
 export function endLandingLost(store: Store<GameState>, status: 'crashed' | 'escaped'): void {
   const state = store.getState();
   if (state.run.phase !== 'landing') throw new Error(`endLandingLost: not landing (phase ${state.run.phase})`);
   const ghostWasFiring = state.burn.ghost !== null;
   store.update((draft) => {
+    if (draft.landing.ended !== null) leaveOrbitWithParked(draft);
     draft.burn.status = status;
     draft.burn.firing = false;
     draft.burn.firingSource = null;
@@ -806,9 +810,11 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
     if (aligning !== burn.presetAligning) {
       store.update((draft) => { draft.burn.presetAligning = aligning; });
     }
+    // In landing the check runs while the ship coasts after the landing ended too (review B1): a sinking orbit can still
+    // take it into the ground before the report opens, and the result must say so.
     if (!landing) {
       if (outcome) endFlight(store, outcome);
-    } else if (live && (outcome === 'crashed' || outcome === 'escaped')) {
+    } else if (outcome === 'crashed' || outcome === 'escaped') {
       endLandingLost(store, outcome);
     }
   });
