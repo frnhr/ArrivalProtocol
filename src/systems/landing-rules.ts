@@ -5,14 +5,17 @@ import type {
   LaunchRefusal, LaunchSource, LzResult, LzState, LzWindow, NoGoArcState, OnTargetTally, ParkReason, Place, PodFate, PodFateKind,
   PodRecord, PodSummary, RepairHint, ShipLandingDef, TerrainWord, TooWide, Touch, Touchdown,
 } from '@/types/landing';
+import type { SegmentRole } from '@/types/segment';
 import type { Capabilities } from '@systems/capabilities';
 import type { Rng } from '@systems/rng';
-import { driversInMemory, repairPossible } from '@state/selectors';
-import { angleDelta, secFromNow } from '@systems/landing-solve';
+import { driversInMemory, filesWithRole, integrityBand, repairPossible } from '@state/selectors';
+import { bayCapability, roleHealth } from '@systems/capabilities';
+import { angleDelta, dropHalfWidthKm, secFromNow } from '@systems/landing-solve';
+import { decayForecast, goLowerFit } from '@systems/landing-orbit';
 import { COLONY_NAME_POOL, LAUNCH_CONFIRM_TEXT, familyColonyName } from '@data/landing-text';
 import {
-  BAND_DEGRADED_MIN, BAND_FAILING_MIN, COLONISTS_PER_POD, COLONY_FAMILY_NAME_CHANCE, HARD_LANDING_FACTOR, MISLANDED_FACTOR,
-  OFF_SITE_SCORE_BY_CLASS, STAR_ON_TARGET_FRAC,
+  BAND_DEGRADED_MIN, BAND_FAILING_MIN, COLONISTS_PER_POD, COLONY_FAMILY_NAME_CHANCE, DECAY_WARN_ORBITS, DRIVER_DROP_FACTOR_BY_BAND,
+  HARD_LANDING_FACTOR, MISLANDED_FACTOR, OFF_SITE_SCORE_BY_CLASS, STAR_ON_TARGET_FRAC,
 } from '@data/tuning';
 
 // The landing's rules (01-landing §3.3–§3.10), pure: they read GameState (or plain data) and change nothing, so the sim
@@ -188,49 +191,141 @@ export function podPoints(place: Place, touch: Touch, cls: ForgivenessClass, col
 
 // --- The launch path's checks (§3.3) -----------------------------------------------------------------------------------
 
-// The drop width's multipliers for `driver` (§3.8): caps.drop's Sensor Interp and Nav Plotter factors, and the driver's
-// from its band (DRIVER_DROP_FACTOR_BY_BAND; 1 for null). Only the factor sources change in 1b (plan §1.3).
-// TODO(slice1b-DROP): the real factors; all 1 until then.
-export function dropFactors(_caps: Readonly<Capabilities>, _driver: Readonly<DriverSegment> | null): DropFactors {
-  return { sensor: 1, plotter: 1, driver: 1 };
+// A driver's own factor on the drop width (§3.8's table, DRIVER_DROP_FACTOR_BY_BAND): ok 1, degraded 1.5, failing 2. A
+// dead driver never launches, but DetailPanel asks for every driver, so dead has a (display-only) factor too.
+export function driverDropFactor(integrity: number): number {
+  return DRIVER_DROP_FACTOR_BY_BAND[integrityBand(integrity)];
 }
 
-// --- Slice 1b: L9, the no-go reach, the stuck landing (Track DROP; the foundation's stubs, final signatures) ----------
+// The drop width's multipliers for `driver` (§3.8): caps.drop's Sensor Interp and Nav Plotter factors, and the driver's
+// from its band (driverDropFactor; 1 for null: no pod named). Never throws, whatever the bands: DetailPanel calls it for
+// every driver in memory, the dead ones included, and drop-cache, launchRecordFor and L9 for the next pod.
+// The three factors stay separate (not one product) because L9 asks what each REPAIR would take off (bestRepairForDrop).
+// Their product is taken in exactly one place, landing-solve dropHalfWidthKm, so MERGE's blind drop (slice 7) is one
+// more factor there (an optional `DropFactors.blind`, 1 when absent), not a change to every DropFactors literal.
+export function dropFactors(caps: Readonly<Capabilities>, driver: Readonly<DriverSegment> | null): DropFactors {
+  return {
+    sensor: caps.drop.sensorFactor,
+    plotter: caps.drop.plotterFactor,
+    driver: driver === null ? 1 : driverDropFactor(driver.integrity),
+  };
+}
 
-// L9 (§3.11, plan §1.5): the awaited LZ (landingMoment's target) has no sure window this pass (sureOpenInSec null), and
-// a REPAIR (bestRepairForDrop) or GO LOWER (landing-orbit goLowerFit !== null) would give one; null otherwise, and with
-// neither (then L5 shows at the window). Never `{ repair: null, goLower: false }`: that is null (the table throws on it).
-// `goLower` is false while decay is warned (landing-orbit decayForecast ≤ DECAY_WARN_ORBITS: L10's 'lift' burn goes up,
-// and GO LOWER would fight it); L10 sits above L9 in the table anyway.
-export function dropTooWide(_state: Readonly<GameState>, _sol: Readonly<DropSolution>, _caps: Readonly<Capabilities>): TooWide | null {
-  // TODO(slice1b-DROP): the L9 rule.
-  return null;
+// Bay Ctrl is missing (§3.4's BAY OFFLINE): no pod can launch on this ship any more (a ship file with no backup, risk 8).
+// Read from the file's health directly through capabilities bayCapability (the one rule), so the pure rules below need
+// no Capabilities passed in and never depend on the ops core's threads.
+export function bayOfflineIn(state: Readonly<GameState>): boolean {
+  return bayCapability(roleHealth(state, 'bay').band).offline;
+}
+
+// --- Slice 1b: L9, the no-go reach, the stuck landing (Track DROP) ----------------------------------------------------
+
+// Whole orbits until decay takes ▼ out of the band, when that is within DECAY_WARN_ORBITS (L10's warning), else null:
+// the landing goes on, the ship has drag, and the forecast says so (landing-orbit decayForecast). L10 and L9's
+// `goLower` read this one rule, so GO LOWER is never offered while L10 asks for the 'lift' burn.
+export function decayWarnOrbits(state: Readonly<GameState>): number | null {
+  const { landing, level } = state;
+  if (!landing.drag || landing.ended !== null) return null;
+  const orbits = decayForecast(state.orbit, level.planet.mu, level.ring, landing.drag).orbitsToLeave;
+  return orbits !== null && orbits <= DECAY_WARN_ORBITS ? orbits : null;
+}
+
+// The window has a sure part (the whole dot inside the bracket) inside its in-band span: a launch there lands in the LZ
+// whatever u rolls. The one test launchMomentInSec and L9 share.
+function sureInBand(w: Readonly<LzWindow>): boolean {
+  return w.inBandOpenInSec !== null && w.inBandCloseInSec !== null && w.sureOpenInSec !== null && w.sureCloseInSec !== null
+    && w.sureOpenInSec < w.inBandCloseInSec && w.sureCloseInSec > w.inBandOpenInSec;
+}
+
+// L9 (§3.11, plan §1.5): the awaited LZ (landingMoment's target) has no sure window this pass (no sure part inside its
+// in-band span), and a REPAIR (bestRepairForDrop) or GO LOWER (landing-orbit goLowerFit !== null) would give one; null
+// otherwise, and with neither (then L5 shows at the window). Never `{ repair: null, goLower: false }`: that is null (the
+// table throws on it). `goLower` is false while decay is warned (decayWarnOrbits: L10's 'lift' burn goes up, and GO
+// LOWER would fight it); L10 sits above L9 in the table anyway. The factors are the next pod's (dropFactors with
+// nextToLaunch), the ones drop-cache solved the window with.
+export function dropTooWide(state: Readonly<GameState>, sol: Readonly<DropSolution>, caps: Readonly<Capabilities>): TooWide | null {
+  if (sol.block !== null || caps.bay.offline) return null;
+  const target = landingMoment(state, sol, state.clock.tSec, caps.bay.offline).target;
+  if (target === null || sureInBand(target.window)) return null;
+  const lz = state.landing.lzs.find((candidate) => candidate.label === target.lz);
+  if (lz === undefined) throw new Error(`dropTooWide: the awaited LZ '${target.lz}' is not on this ship`);
+  const { window } = target;
+  const repair = bestRepairForDrop(state, caps, lz, window.launchRadius);
+  const { level } = state;
+  const decayWarned = decayWarnOrbits(state) !== null;
+  const fits = !decayWarned && goLowerFit({
+    lz, factors: dropFactors(caps, nextToLaunch(state)), ring: level.ring, R: level.planet.R, mu: level.planet.mu,
+    warp: level.tacticalWarp, orbit: state.orbit, launchRad: window.launchRad,
+  }) !== null;
+  return tooWideVerdict(lz.label, repair, fits, decayWarned);
+}
+
+// L9's verdict from its parts (dropTooWide's last step; its own function so the GO LOWER cases are tested on crafted
+// inputs whatever goLowerFit returns): GO LOWER counts only while decay is not warned (L10's 'lift' burn goes up), and
+// with neither a REPAIR nor GO LOWER there is no L9 (null, never `{ repair: null, goLower: false }`).
+export function tooWideVerdict(lz: string, repair: RepairHint | null, goLowerFits: boolean, decayWarned: boolean): TooWide | null {
+  const goLower = goLowerFits && !decayWarned;
+  return repair === null && !goLower ? null : { lz, repair, goLower };
+}
+
+// An instrument whose REPAIR the kid can start now: its file is there and online (not already repairing or moving: L8
+// and the plot say so), not a ship file (REPAIR refuses those: SWAP only), and a REPAIR with charge is at hand.
+function instrumentRepairable(state: Readonly<GameState>, role: Extract<SegmentRole, 'sensor' | 'navplot'>): boolean {
+  const health = roleHealth(state, role);
+  if (health.band === 'missing' || health.offline !== null || !repairPossible(state)) return false;
+  return filesWithRole(state, role).some((seg) => seg.type !== 'ship' && seg.type !== 'ship-backup');
 }
 
 // The REPAIR that gives `lz` a sure window from `launchRadius` (plan §1.5): the largest factor > 1 among the next pod's
 // driver (when it is repairable and selectors repairPossible), Sensor Interp, then Nav Plotter, ties in that order. A
 // repair "gives one" when the width with that factor at 1 is below the LZ's half-width. null: no single repair does.
+// The largest factor leaves the narrowest dot, so if it gives no sure window no smaller one does; "gives one" is still
+// tested per candidate, so a repair that can't help is never named.
 export function bestRepairForDrop(
-  _state: Readonly<GameState>, _caps: Readonly<Capabilities>, _lz: Readonly<LzState>, _launchRadius: number,
+  state: Readonly<GameState>, caps: Readonly<Capabilities>, lz: Readonly<LzState>, launchRadius: number,
 ): RepairHint | null {
-  // TODO(slice1b-DROP): the pick.
-  return null;
+  const driver = nextToLaunch(state);
+  const factors = dropFactors(caps, driver);
+  const R = state.level.planet.R;
+  const gives = (without: Partial<DropFactors>): boolean => dropHalfWidthKm(launchRadius, R, { ...factors, ...without }) < lz.widthKm / 2;
+  const candidates: RepairHint[] = [];
+  if (driver !== null && factors.driver > 1 && repairPossible(state) && gives({ driver: 1 })) {
+    candidates.push({ file: 'driver', pod: driver.pod, factor: factors.driver });
+  }
+  if (factors.sensor > 1 && instrumentRepairable(state, 'sensor') && gives({ sensor: 1 })) candidates.push({ file: 'sensor', factor: factors.sensor });
+  if (factors.plotter > 1 && instrumentRepairable(state, 'navplot') && gives({ plotter: 1 })) {
+    candidates.push({ file: 'navplot', factor: factors.plotter });
+  }
+  let best: RepairHint | null = null;
+  for (const candidate of candidates) if (best === null || candidate.factor > best.factor) best = candidate;
+  return best;
 }
 
 // The no-go arc the dot's span (centre ± halfWidthKm) reaches, or null (risk 13: L5's `WIDE DROP, LAVA in reach`): a
-// centre-based guard can't warn of a wide dot's edge. AUTODROP (4c) reads it to hold a launch.
-export function noGoInReach(_noGo: readonly NoGoArcState[], _dot: Readonly<DropDot>, _R: number): NoGoArcState | null {
-  // TODO(slice1b-DROP): the span test.
-  return null;
+// centre-based guard can't warn of a wide dot's edge. The nearest one when two are in reach. AUTODROP (4c) reads it to
+// hold a launch.
+export function noGoInReach(noGo: readonly NoGoArcState[], dot: Readonly<DropDot>, R: number): NoGoArcState | null {
+  const spanRad = dot.halfWidthKm / R;
+  let best: NoGoArcState | null = null;
+  let bestGap = Infinity;
+  for (const arc of noGo) {
+    const gap = Math.abs(angleDelta(arc.centreRad, dot.rad)) - arc.halfWidthRad;
+    if (gap <= spanRad && gap < bestGap) {
+      best = arc;
+      bestGap = gap;
+    }
+  }
+  return best;
 }
 
 // Why the landing must end by itself (landing.ts noneLeftTick waits LANDING_NONE_LEFT_SEC, then ends it with this
-// reason), or null: pods aboard and no driver that can ever launch ('no-driver-left', risk 7), or Bay Ctrl missing with
-// pods aboard ('bay-offline': a ship file with no backup never comes back on this ship).
-// TODO(slice1b-DROP): 'bay-offline' (caps.bay.offline); 1a's rule until then.
+// reason), or null: pods aboard and Bay Ctrl missing ('bay-offline': a ship file with no backup never comes back on this
+// ship; first, as L12-bay leads the table), or no driver that can ever launch ('no-driver-left', risk 7).
 export function landingStuck(state: Readonly<GameState>): LandingEnd | null {
   const aboard = state.landing.pods.some((record) => record.fate.kind === 'aboard');
-  if (aboard && driversThatCanEverLaunch(state).length === 0) return 'no-driver-left';
+  if (!aboard) return null;
+  if (bayOfflineIn(state)) return 'bay-offline';
+  if (driversThatCanEverLaunch(state).length === 0) return 'no-driver-left';
   return null;
 }
 
@@ -290,9 +385,7 @@ export function windowsAsOf(sol: Readonly<DropSolution>, nowTSec: number): LzWin
 // told to launch at the opening sends the first pod half off-site (plan Deviations, Track SIM).
 export function launchMomentInSec(sol: Readonly<DropSolution>, w: Readonly<LzWindow>, nowTSec: number): number | null {
   if (w.inBandOpenInSec === null || w.inBandCloseInSec === null) return null;
-  const sureFits = w.sureOpenInSec !== null && w.sureCloseInSec !== null
-    && w.sureOpenInSec < w.inBandCloseInSec && w.sureCloseInSec > w.inBandOpenInSec;
-  const at = sureFits ? Math.max(w.inBandOpenInSec, w.sureOpenInSec!) : w.inBandOpenInSec;
+  const at = sureInBand(w) ? Math.max(w.inBandOpenInSec, w.sureOpenInSec!) : w.inBandOpenInSec;
   return secFromNow(sol, at, nowTSec);
 }
 
@@ -392,7 +485,8 @@ export interface LaunchFrom {
 }
 
 // Why a launch can't go now, in the order of the LaunchRefusal union; null: it can. SHIP SCREEN applies whenever the
-// screen is the MIND and the asker may not launch from there.
+// screen is the MIND and the asker may not launch from there. BAY OFFLINE (Bay Ctrl missing) comes next: nothing done on
+// the ship screen changes it, so it outranks every flight and drop reason.
 export function launchRefusal(
   state: Readonly<GameState>, sol: Readonly<DropSolution> | null, from: LaunchFrom, pod?: number,
 ): LaunchRefusal | null {
@@ -400,6 +494,7 @@ export function launchRefusal(
   if (state.landing.ended !== null) return 'LANDING OVER';
   if (state.clock.paused) return 'PAUSED';
   if (state.ui.mode === 'memory' && !from.fromMind) return 'SHIP SCREEN';
+  if (bayOfflineIn(state)) return 'BAY OFFLINE';
   if (state.burn.lastTickDvKmS > 0) return 'ENGINE FIRING';
   if (sol === null || sol.block !== null || sol.dot === null) return 'NO DROP SOLUTION';
   if (!sol.dot.inBand) return 'OUT OF THE LAUNCH BAND';
@@ -417,9 +512,11 @@ export interface LaunchGuard {
   word: string | null; // the no-go arc's word ('no-go': `LAUNCH INTO LAVA?`), else null
 }
 
-// The inline confirm a launch needs first (§3.3), or null: the dot outside every bracket asks `LAUNCH OFF-SITE? …
-// scores 100`, a bracket already full by the projected fill asks `LZ-A IS FULL — LAUNCH ANYWAY? scores 150`. The
-// points are what the pod would score landing at the dot's centre.
+// The inline confirm a launch needs first (§3.3), or null: the dot's centre over a no-go arc asks in the arc's own word
+// (`LAUNCH INTO LAVA? scores 0`, §3.6), the dot outside every bracket asks `LAUNCH OFF-SITE? … scores 100`, a bracket
+// already full by the projected fill asks `LZ-A IS FULL — LAUNCH ANYWAY? scores 150`. The points are what the pod would
+// score landing at the dot's centre. A wide dot whose EDGE reaches an arc asks nothing here (its centre is in a
+// bracket): L5's `WIDE DROP, LAVA in reach` (noGoInReach) says so before the [L].
 export function launchGuard(state: Readonly<GameState>, sol: Readonly<DropSolution>, pod?: number): LaunchGuard | null {
   const driver = driverFor(state, pod);
   if (driver === null || sol.dot === null) return null;
@@ -427,9 +524,12 @@ export function launchGuard(state: Readonly<GameState>, sol: Readonly<DropSoluti
   const touch = driverTouch(driver.integrity);
   const placement = classifyLanding(landing.lzs, landing.noGo, sol.dot.rad, lzProjectedFill(state));
   const points = podPoints(placement.place, touch, landing.forgiveness, driver.colonists);
-  // TODO(slice1b-DROP): a dot over a no-go arc asks 'no-go' in the arc's own word (`LAUNCH INTO LAVA? scores 0`,
-  // noGoAt(...).word); until then it shares the off-site ask (VESPER and LAST LIGHT have arcs now).
-  if (placement.place === 'off-site' || placement.place === 'no-go') return { ask: 'off-site', points, lz: null, word: null };
+  if (placement.place === 'no-go') {
+    const arc = noGoAt(landing.noGo, sol.dot.rad);
+    if (arc === null) throw new Error('launchGuard: a no-go placement with no arc under the dot');
+    return { ask: 'no-go', points, lz: null, word: arc.word };
+  }
+  if (placement.place === 'off-site') return { ask: 'off-site', points, lz: null, word: null };
   if (placement.place === 'mislanded') return { ask: 'full', points, lz: placement.lz, word: null };
   return null;
 }

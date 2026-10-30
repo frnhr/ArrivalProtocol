@@ -5,10 +5,10 @@ import type { FsToolKind } from '@/types/fs-tool';
 import type { FlightObjective } from '@systems/guidance';
 import { secFromNow } from '@systems/landing-solve';
 import {
-  driversThatCanEverLaunch, dropTooWide, isLaunchable, landingMoment, lzDownFill, lzRemaining, noGoInReach, podCounts, windowsAsOf,
+  decayWarnOrbits, driversThatCanEverLaunch, dropTooWide, isLaunchable, landingMoment, lzDownFill, lzRemaining, noGoInReach, podCounts,
+  windowsAsOf,
   type LandingMoment,
 } from '@systems/landing-rules';
-import { decayForecast } from '@systems/landing-orbit';
 import { capabilitiesNow, plotFault, ROLE_LABEL } from '@systems/capabilities';
 import { rootDeletable, rootDeleteRunning } from '@state/selectors';
 import { podHintTarget, toolStepTarget, ROOT_HINT_TARGET } from '@data/fs-tools';
@@ -16,7 +16,7 @@ import { LANDING_DECAY_LINES, LANDING_DROP_LINES, LANDING_LINES, LANDING_NODROP_
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
 import {
-  BAY_RELOAD_TAC, DECAY_WARN_ORBITS, DROP_UNCERTAIN_LEAD_TAC, MAX_LINE_CHARS, MISLANDED_FACTOR, TACTICAL_LEAD_BURN_TAC,
+  BAY_RELOAD_TAC, DROP_UNCERTAIN_LEAD_TAC, MAX_LINE_CHARS, MISLANDED_FACTOR, TACTICAL_LEAD_BURN_TAC,
   WINDOW_TACTICAL_LEAD_TAC,
 } from '@data/tuning';
 
@@ -50,8 +50,8 @@ import {
 // |      | launch moment (landing-rules landingMoment: the sure part's opening, else the opening)                         |
 // | L8   | Sensor Interp failing or worse, the awaited window ≤ 60 tac s   | DROP UNCERTAIN — TAB, REPAIR SENSOR INTERP   |
 // |      | (by plotFault's cause: `-busy` while it repairs or moves, `-missing` with no file)                             |
-// | L9   | the awaited LZ has no sure window, a REPAIR or GO LOWER gives one | DROP TOO WIDE FOR LZ-B — REPAIR POD 05, or |
-// |      | (landing-rules dropTooWide); ` · [F]` when a SKIP starts and it fits | fly lower                               |
+// | L9   | the awaited LZ has no sure window, a REPAIR or GO LOWER gives one | DROP TOO WIDE FOR LZ-B — TAB, REPAIR POD 05,|
+// |      | (landing-rules dropTooWide); ` · [F]` when a SKIP starts and it fits | or fly lower (no TAB in the MIND)        |
 // | L10  | decay takes ▼ out of the band within DECAY_WARN_ORBITS orbits    | ORBIT DECAYING — out of the band in 2 orbits |
 // | L11  | no pod can launch now, and one aboard needs its driver repaired | POD 07 CAN'T LAUNCH — TAB, REPAIR its driver |
 // | L12  | (`landing-L12-bay`, right after L2) Bay Ctrl missing            | NO BAY CTRL — END LANDING parks them in orbit|
@@ -164,12 +164,11 @@ function uncertainOf(caps: Readonly<Capabilities>, moment: LandingMoment, warp: 
   return fault !== null && fault.role === 'sensor' ? { cause: fault.cause } : null;
 }
 
-// L10's state (§3.7): decay takes ▼ out of the band within DECAY_WARN_ORBITS orbits (landing-orbit decayForecast).
+// L10's state (§3.7): decay takes ▼ out of the band within DECAY_WARN_ORBITS orbits (landing-rules decayWarnOrbits, the
+// rule L9's `goLower` reads too).
 function decayOf(state: Readonly<GameState>): LandingContext['decay'] {
-  const { landing, level } = state;
-  if (!landing.drag || landing.ended !== null) return null;
-  const orbits = decayForecast(state.orbit, level.planet.mu, level.ring, landing.drag).orbitsToLeave;
-  return orbits !== null && orbits <= DECAY_WARN_ORBITS ? { orbits } : null;
+  const orbits = decayWarnOrbits(state);
+  return orbits === null ? null : { orbits };
 }
 
 // `skipAvailable`: whether [F] would start a SKIP now (pace skipBlockReason, read by the caller); `flight`: the flight's
@@ -284,14 +283,19 @@ function repairLabel(hint: RepairHint): string {
   }
 }
 
+// L9: a REPAIR-naming line is a MIND row (it lights Sensor Interp's or Nav Plotter's chip, or the driver once REPAIR is
+// in hand) and says TAB from the ship, as L1, L8 and L11 do; GO LOWER alone is a ship row (the burn is timed by L2, and
+// from the MIND fromMind adds the [TAB]). Both keep the SKIP (risk 12): L9 shadows L13's `[F] to SKIP`.
 function tooWideLine(wide: TooWide, ctx: LandingContext): LandingObjective {
   const repair = wide.repair;
   if (repair === null && !wide.goLower) throw new Error(`tooWideLine: L9 for ${wide.lz} with neither a REPAIR nor GO LOWER (dropTooWide returns null then)`);
-  const { text, keys } = withSkip(LANDING_DROP_LINES.L9(wide.lz, repair === null ? null : repairLabel(repair), wide.goLower), ctx);
+  const tab = repair !== null && !ctx.inMind;
+  const { text, keys } = withSkip(LANDING_DROP_LINES.L9(wide.lz, repair === null ? null : repairLabel(repair), wide.goLower, tab), ctx);
   if (repair === null) return line('L9', text, keys, 'soon', 'ship', ctx);
-  if (repair.file !== 'driver') return line('L9', text, keys, 'soon', 'mind', ctx, { repairs: repair.file });
+  const withTab = tab ? ['TAB', ...keys] : keys;
+  if (repair.file !== 'driver') return line('L9', text, withTab, 'soon', 'mind', ctx, { repairs: repair.file });
   const highlight = ctx.inMind ? toolStepTarget('repair', ctx.heldTool, podHintTarget(podCode(repair.pod))) : null;
-  return line('L9', text, keys, 'soon', 'mind', ctx, { highlight });
+  return line('L9', text, withTab, 'soon', 'mind', ctx, { highlight });
 }
 
 function uncertainLine(cause: PlotFaultCause, ctx: LandingContext): LandingObjective {
@@ -389,8 +393,9 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
 }
 
 // A ship row that asks for [L] (or counts down to it, or names the POD BAY's END LANDING) says [TAB] first in the MIND,
-// as the flight's fromMind does: `LAUNCH NOW — [TAB], press [L] · LZ-A 1/3`. [L] there only buzzes SHIP SCREEN.
-const SHIP_ACTION_ROWS: ReadonlySet<LandingRow> = new Set<LandingRow>(['L3b', 'L4', 'L5', 'L6', 'L7', 'L12']);
+// as the flight's fromMind does: `LAUNCH NOW — [TAB], press [L] · LZ-A 1/3`. [L] there only buzzes SHIP SCREEN. L9's
+// GO LOWER alone (a ship row: the burn is flown from the amber screen) does too: `DROP TOO WIDE FOR LZ-C — [TAB], fly lower`.
+const SHIP_ACTION_ROWS: ReadonlySet<LandingRow> = new Set<LandingRow>(['L3b', 'L4', 'L5', 'L6', 'L7', 'L9', 'L12']);
 const HEAD_SEPARATOR = ' — ';
 
 function fromMind(objective: LandingObjective, ctx: LandingContext): LandingObjective {

@@ -57,7 +57,7 @@ const drivers = (memory: readonly Segment[]): DriverSegment[] => memory.filter((
     'sensor', 'navplot', 'telemetry', 'comms', 'redundancy'].every((role) => roles.includes(role as never)) && !roles.includes('printer' as never));
   const bay = memory.find((seg) => seg.role === 'bay');
   check('Bay Ctrl: 6 blocks in rack A, honest about 1a (no damage effect claimed)', bay?.name === 'Bay Ctrl' && bay.size === 6
-    && rackOf(starts[memory.indexOf(bay)]!) === 'A' && 'desc' in bay && bay.desc === 'Runs the pod bay\'s launch rails.', bay?.name);
+    && rackOf(starts[memory.indexOf(bay)]!) === 'A' && 'desc' in bay && bay.desc === 'Runs the pod bay\'s launch rails. Damaged, pods launch further apart; gone, no pod can launch.', bay?.name);
 
   const pods = drivers(memory);
   const rootIndex = memory.findIndex((seg) => seg.type === 'hollow' && seg.root);

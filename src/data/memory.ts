@@ -86,10 +86,10 @@ export const RACK_A: readonly RackItem<ShipFileSpec>[] = [
     desc: 'Redundant copy installed by the original engineers. Inactive. Can be swapped in to replace the primary thrust controller. Costs no REPAIR CHARGE.' },
   { id: 'stasis', name: 'Stasis', type: 'ship', role: 'stasis', size: 4, integrity: 100, scanned: false,
     desc: 'Keeps the pods\' sleepers cold. No flight effect.' },
-  // Bay Ctrl (01-landing §3.4) takes Printer Uplink's 6 blocks. 1a: honest about what it does; its damage effect (the
-  // cadence by band, BAY OFFLINE) comes with slice 1b.
+  // Bay Ctrl (01-landing §3.4) takes Printer Uplink's 6 blocks. Its damage spaces the launches out (capabilities
+  // BAY_CADENCE_BY_BAND); without it no pod can launch (BAY OFFLINE, said `NO BAY CTRL`). A ship file with no backup.
   { id: 'bay', name: 'Bay Ctrl', type: 'ship', role: 'bay', size: 6, integrity: 100, scanned: false,
-    desc: 'Runs the pod bay\'s launch rails.' },
+    desc: 'Runs the pod bay\'s launch rails. Damaged, pods launch further apart; gone, no pod can launch.' },
   { id: 'cargo', name: 'Cargo Ctrl', type: 'ship', role: 'cargo', size: 6, integrity: 100, scanned: false,
     desc: 'Holds inventory. No flight effect.' },
   { free: 18 },

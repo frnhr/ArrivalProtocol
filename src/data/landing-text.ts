@@ -39,7 +39,7 @@ export const LAUNCH_REFUSAL_TEXT: Readonly<Record<LaunchRefusal, string>> = {
   'PAUSED': 'PAUSED',
   'SHIP SCREEN': 'SHIP CONTROLS ARE ON THE AMBER SCREEN — [TAB]',
   // Bay Ctrl missing (§3.4's BAY OFFLINE). Said as BAND_COPY.bay.missing says it: "offline" next to pods would read as
-  // theirs (§3.10). Slice 1b, Track DROP's to reword.
+  // theirs (§3.10).
   'BAY OFFLINE': 'NO BAY CTRL — no pod can launch',
   'ENGINE FIRING': "ENGINE FIRING — can't launch under thrust",
   'NO DROP SOLUTION': 'NO DROP SOLUTION — REPAIR NAV PLOTTER',
@@ -247,11 +247,14 @@ export const LANDING_DROP_LINES = {
   L8busy: (cause: 'repairing' | 'moving'): string => `DROP UNCERTAIN — SENSOR INTERP IS ${cause === 'repairing' ? 'REPAIRING' : 'MOVING'}…`,
   L8missing: 'DROP UNCERTAIN — NO SENSOR INTERP',
   // L9 (§3.11): the awaited LZ has no sure window. `file`: the REPAIR that gives one (`POD 05`, `SENSOR INTERP`, `NAV
-  // PLOTTER`), null when only GO LOWER does; `lower`: GO LOWER would (L2 times the burn). L9skip: the SKIP tail (risk 12),
-  // added only when the line still fits.
-  L9: (lz: string, file: string | null, lower: boolean): string => {
+  // PLOTTER`), null when only GO LOWER does; `lower`: GO LOWER would (L2 times the burn). `tab`: said from the ship, so
+  // a REPAIR names the TAB first as L1, L8 and L11 do (§3.11's L9 text has none; every other row that asks for a REPAIR
+  // from the ship says how to get there, and a kid who reads `REPAIR POD 05` in amber must not have to guess). The
+  // worst case still fits with the SKIP tail: `DROP TOO WIDE FOR LZ-D — TAB, REPAIR SENSOR INTERP, or fly lower · [F]`
+  // is 70. L9skip: the SKIP tail (risk 12), added only when the line still fits.
+  L9: (lz: string, file: string | null, lower: boolean, tab: boolean): string => {
     if (file === null) return `DROP TOO WIDE FOR ${lz} — fly lower`;
-    return `DROP TOO WIDE FOR ${lz} — REPAIR ${file}${lower ? ', or fly lower' : ''}`;
+    return `DROP TOO WIDE FOR ${lz} — ${tab ? 'TAB, ' : ''}REPAIR ${file}${lower ? ', or fly lower' : ''}`;
   },
   L9skip: ' · [F]',
   // L5's variant (risk 13): the dot's span overlaps a no-go arc, so a wide dot can land in it (the arc's own word).
@@ -271,9 +274,11 @@ export const LANDING_END_TEXT: Readonly<Record<LandingEnd, string | null>> = {
 };
 
 // The two lessons tied to 1b's mechanics (§3.11, risk 14), once each, said by data/script.ts (Track DROP is its editor).
+// §3.11 writes them `◆ …`: the ◆ is the strip's ship-layer glyph (ObjectiveStrip draws it from the rule's layer), so it
+// is not part of the text; with it the strip read `◆ ◆ THE DOT IS WIDE`.
 export const LANDING_LESSONS_1B = {
-  dragSinks: '◆ BELOW THE DRAG LINE THE ORBIT SINKS',
-  dotWide: '◆ THE DOT IS WIDE — REPAIR, or fly lower',
+  dragSinks: 'BELOW THE DRAG LINE THE ORBIT SINKS',
+  dotWide: 'THE DOT IS WIDE — REPAIR, or fly lower',
 } as const;
 
 // =====================================================================================================================

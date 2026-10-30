@@ -593,3 +593,73 @@ An independent review of `abf886b` checked the import graph and the seams. Its f
 - L9's words have no TAB from the ship (§3.11's text); decide whether a REPAIR-naming L9 says `TAB, REPAIR …` as L1 and L8 do.
 - MERGE's blind drop (slice 7) wants the product of the factors: consider a `DropFactors` product helper (`dropFactorProduct`) beside `dropFactors`, so `s × BLIND_DROP_MULT` has one place.
 - `dropTooWide` must return `goLower: false` while decay is warned, and never `{ repair: null, goLower: false }` (M4).
+
+### Deviations (Track DROP)
+
+Track DROP's slice (plan §3 "Track DROP") is in, on top of the foundation and its review follow-up. Typecheck and the
+tests' tsc are green; the full unit tier passes (see the track's report for the timing). Each deviation with its reason.
+
+**Decisions the plan left open**
+1. **L9 says TAB from the ship when it names a REPAIR** (plan Notes, DROP): `DROP TOO WIDE FOR LZ-B — TAB, REPAIR POD 05,
+   or fly lower · [F]`, keys `TAB` (+ `F` with a SKIP). Why: L1, L8 and L11, every other row that asks for a REPAIR from
+   the amber screen, say how to get there, and a kid reading `REPAIR POD 05` in amber should not have to guess the TAB.
+   §3.11's L9 text has none; it is the only change to it. In the MIND the TAB is dropped (as L1Mind, L8Mind, L11Mind).
+   The worst case, `DROP TOO WIDE FOR LZ-D — TAB, REPAIR SENSOR INTERP, or fly lower · [F]`, is exactly 70, so the
+   SKIP tail (risk 12) always fits. `LANDING_DROP_LINES.L9` gains a fourth argument, `tab`.
+2. **GO LOWER alone from the MIND says `[TAB]`**: L9 joins `SHIP_ACTION_ROWS`, so its ship-layer variant reads
+   `DROP TOO WIDE FOR LZ-C — [TAB], fly lower · [F]` in blue (the burn is flown from amber), as L4–L7 do.
+3. **No `dropFactorProduct` helper** (plan Notes, DROP). The product is already taken in exactly one place,
+   landing-solve `dropHalfWidthKm` (ORBIT's), and `bestRepairForDrop` asks it for the width with one factor set to 1, so
+   the factors must stay separate anyway. MERGE's blind drop (slice 7) is one more factor there, an optional
+   `DropFactors.blind` multiplied in `dropHalfWidthKm` (1 when absent): no `DropFactors` literal changes. Documented on
+   `dropFactors`. A helper in landing-rules could not be used by landing-solve (landing-rules imports landing-solve).
+4. **`DELETE_EFFECT.bay` is `No pod can launch.`**, not `NO POD CAN LAUNCH`: the confirm reads it as a sentence before
+   `Leaves a 6-block gap.`, like every other role's effect (`The engine stops.`).
+5. **BAND_COPY.bay**: ok `BAY CTRL OK`, degraded `BAY CTRL DAMAGED · PODS LAUNCH SLOWER`, failing `BAY CTRL FAILING · PODS
+   LAUNCH SLOWLY`, dead §3.4's `BAY CTRL DEAD · ONE POD AT A TIME`, missing `NO BAY CTRL` (BAY OFFLINE, §3.10's word rule).
+
+**Rules**
+6. **BAY OFFLINE is read from Bay Ctrl's health in the rules** (`landing-rules.bayOfflineIn(state)` →
+   `capabilities.bayCapability(roleHealth(state, 'bay').band).offline`), so `launchRefusal` and `landingStuck` keep their
+   signatures and never depend on the ops core's threads. `bayCapability` is the one rule (`capabilities.bay` is built by
+   it); a Bay Ctrl that is moved counts as dead (10 s, one pod at a time), never offline.
+7. **L9's "no sure window" is "no sure part inside the in-band span"** (`sureInBand`, shared with `launchMomentInSec`),
+   not only `sureOpenInSec === null`: a sure part that lies outside the band can't be launched in either.
+8. **`tooWideVerdict(lz, repair, goLowerFits, decayWarned)`** is `dropTooWide`'s last step, exported so the GO LOWER cases
+   (offered, never while decay is warned, never neither fix) are tested on crafted inputs while `goLowerFit` is ORBIT's
+   stub. `dropTooWide` skips `goLowerFit` while decay is warned.
+9. **`decayWarnOrbits(state)`** (landing-rules) is the one rule for "decay leaves the band within DECAY_WARN_ORBITS":
+   landing-guidance's L10 and L9's `goLower` both read it (L10 used its own copy).
+10. **`landingStuck` ends `'bay-offline'` before `'no-driver-left'`**, as L12-bay leads the table.
+11. **`bestRepairForDrop` names an instrument only when its REPAIR can start now**: the file is there, online (a repair or
+    move already running is L8's `-busy`), not a ship file, and `repairPossible`. The driver needs `repairPossible` too.
+12. **`noGoInReach` returns the nearest arc** in reach when two are; it also answers for a dot centred over an arc (the
+    guard's case), which AUTODROP will want.
+
+**Words**
+13. **The 1b lessons lose §3.11's `◆`**: the strip draws the layer glyph from the rule (ObjectiveStrip `LAYER_GLYPH`), so
+    the text `◆ THE DOT IS WIDE …` showed `◆ ◆`. `LANDING_LESSONS_1B` is `THE DOT IS WIDE — REPAIR, or fly lower` and
+    `BELOW THE DRAG LINE THE ORBIT SINKS` (ORBIT's rule should use layer `'ship'`). 1a's `LANDING_LESSONS` (slice 2's) still
+    carry it; whoever wires them should drop it the same way.
+14. **The wide-drop lesson** (`DROP_LESSON_RULES`, id `lesson-dot-wide`) is a ship-layer tutorial, once a run, active
+    while the landing row is L9, retired after `DOT_WIDE_LESSON_SEC` (5 AI s, a new DROP tuning number) or when L9 goes.
+    Every run, not run 1 only (§5.2's "one hint each": it is already one short line). It sits after DRIVER_RULES, so
+    `POD 02 WILL LAND HARD` (the same REPAIR) comes first.
+
+**Tests changed**
+- New `landing/drop-model.test.ts` (about 1 s): the plan's list, plus ARES-VII's POD 02 too wide for LZ-A (lesson then L9)
+  and Bay Ctrl gone (refused, L12-bay, the auto-end, the report).
+- `landing/table`: L9 with TAB, its MIND wordings, GO LOWER's `[TAB]`, no-SKIP and open-window cases; a 400-context fuzz
+  pass under the context's invariants that reaches every row kind.
+- `landing/rules`: fake ships carry a Bay Ctrl; BAY OFFLINE in the refusal order; the no-go guard (`LAUNCH INTO CLIFFS?`).
+- `landing/bay`: a launch with Bay Ctrl degraded starts a 2.7 s cadence. `wp4/capabilities`: cadence by band, BAY
+  OFFLINE, both factor tables, `uncertain`, the ship arriving ×1.5.
+- `landing/flow`: every ship arrives with Sensor Interp at 78 (×1.5), so a sure window may take fewer pods than the bay and
+  the strip's next launch is L5's WIDE DROP; VESPER and LAST LIGHT now land 1–2 pods off-site, HALCYON PARTIAL one. The
+  checks assert ends and rows: every pod down, a miss only after a WIDE DROP line, at most a quarter missed.
+- `wp6/hollow-sim`: during the ship-1 repair fight the next pod is POD 02 (×3), so L9 and its lesson may hold the strip.
+- `wp5/layout`, `wp9/seed-test`: Bay Ctrl's new desc and DELETE effect.
+
+**Noticed, not changed**
+- L3b (`NO ROOM IN THE BAND — [L] lands in a full LZ`) offers the mislanded launch with a dot that may not be sure, and
+  says nothing about its width; HALCYON PARTIAL's off-site pod in flow.test is one. A `WIDE DROP` variant could follow L5's.
