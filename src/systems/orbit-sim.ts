@@ -8,7 +8,7 @@ import { smoothNoise, childSeed, childRng, type Rng } from '@systems/rng';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { capabilitiesNow, thrustCap, planningThrustCap, presetsAvailable, type GhostSpec } from '@systems/capabilities';
 import { beginLanding, leaveOrbitWithParked, parkPodsAboard } from '@state/actions';
-import { engineOpen } from '@state/selectors';
+import { engineOpen, ghostBurstsThisPhase } from '@state/selectors';
 import { nextDragKick, dragKickAt, decayAfter, retroKicked } from '@systems/landing-orbit';
 import {
   elementsFromState, ringFit, ringFraction, loopRange, semiMajorAxis, propagateConic, keplerConic, orbitalPeriod,
@@ -153,9 +153,16 @@ export function engineAccel(state: Readonly<GameState>): number {
 
 // Slice 1b (risk 1, the lead's decision): the landing's burns run at LANDING_BURN_POWER of the flight's, so GO LOWER,
 // the 'lift' burn and a trim are a held burn a kid can release, not a twitch (see tuning.ts for the measurement). A
-// ghost burst is the controller's fault, not the kid's burn: it keeps its own push (orbit-sim's sub-steps).
+// ghost burst in the landing too (review M2, ghostAccel): the engine is the same engine, and at the flight's push an
+// unswapped VESPER's bursts took ▼ under the planet within about 90 s of a passive landing.
 function landingPower(state: Readonly<GameState>): number {
   return state.run.phase === 'landing' ? LANDING_BURN_POWER : 1;
+}
+
+// A ghost burst's acceleration while it runs, km/s² (before its overlap with a sub-step): the burst's amplitude of the
+// nominal push, at the landing's power during the landing.
+function ghostAccel(state: Readonly<GameState>, burst: Readonly<GhostBurst>): number {
+  return state.level.aNominalKmS2 * burst.amp * landingPower(state);
 }
 
 // The accel the flight plan places START BURN with (capabilities.ts planningThrustCap): engineAccel, except while the
@@ -278,14 +285,14 @@ export function ghostDueInSec(state: Readonly<GameState>): number | null {
   return ensureGhostSchedule(state, spec, state.clock.tSec) - state.clock.tSec;
 }
 
-// The window of the next ghost burst a SKIP flies through, when it is a LATER burst of this ship (the first one is a
-// landing: ghostDueInSec), or null (no burst is coming, a healthy controller, or none has fired yet). Its end is the same
+// The window of the next ghost burst a SKIP flies through, when it is a LATER burst of this flight or this landing (the
+// first of each is a landing: ghostDueInSec; selectors ghostBurstsThisPhase), or null (no burst is coming, a healthy controller, or none has fired yet). Its end is the same
 // sum dueGhost makes for the burst (its start plus its length), so the tick lands on exactly the game time the burst
 // ends, to the last bit. A sticky burst's end is not known until it starts (the stick is rolled then): the window
 // assumes its nominal length, and a burst that sticks is still running when the SKIP's tick ends there, which ends the
 // SKIP (pace: ENGINE FIRING).
 export function laterBurstWindow(state: Readonly<GameState>): SkipWaypoint | null {
-  if (state.burn.ghostBursts === 0 || ghostDueInSec(state) === null) return null;
+  if (ghostBurstsThisPhase(state) === 0 || ghostDueInSec(state) === null) return null;
   const spec = capabilitiesNow(state).thrustCtrl.ghost;
   if (spec === null || nextGhostTSec === null) throw new Error('laterBurstWindow: a burst is due without a schedule');
   return { startTSec: nextGhostTSec, endTSec: nextGhostTSec + spec.durTac * state.level.tacticalWarp };
@@ -532,7 +539,7 @@ function flySkipBurst(
   for (let i = 0; i < nSub; i++) {
     const from = ghost.startTSec + i * h;
     if (i > 0) attitude = stepAttitude(attitude, burn.sasMode, burn.rotInput, { x: pos.x, y: pos.y, vx: vel.x, vy: vel.y }, h);
-    const accel = fuelDv > 0 ? (state.level.aNominalKmS2 * ghost.amp * ghostOverlap(ghost, from, from + h)) / h : 0;
+    const accel = fuelDv > 0 ? (ghostAccel(state, ghost) * ghostOverlap(ghost, from, from + h)) / h : 0;
     if (accel > 0) thrustSec += h;
     const step = thrustSubStep(pos, vel, h, mu, R, accel, Math.cos(attitude.heading), Math.sin(attitude.heading), fuelDv);
     fuelDv = step.fuelDv;
@@ -652,8 +659,8 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
       if (aBase > 0 || burn.ghost !== null) {
         throw new Error(`orbit-sim: a SKIP tick with ${aBase > 0 ? 'thrust' : 'a ghost burst running'}: pace must end the SKIP first`);
       }
-      if (ghost !== null && state.burn.ghostBursts === 0) {
-        throw new Error('orbit-sim: the ship\'s first ghost burst inside a SKIP tick: pace must land the SKIP on its start');
+      if (ghost !== null && ghostBurstsThisPhase(state) === 0) {
+        throw new Error('orbit-sim: the first ghost burst of the flight or the landing inside a SKIP tick: pace must land the SKIP on its start');
       }
       const coastSec = ghost === null ? dtWorld : ghost.startTSec - tStart;
       // During the landing the jump splits exactly at each drag kick (coastWithKicks); in flight it is conicCoast's.
@@ -692,7 +699,7 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
         accel = aBase * (1 + jitter * smoothNoise(seed, tStart + (i + 0.5) * h, noisePeriod));
       }
       if (fuelDv > 0) {
-        for (const burst of bursts) accel += (state.level.aNominalKmS2 * burst.amp * ghostOverlap(burst, tStart + i * h, tStart + (i + 1) * h)) / h;
+        for (const burst of bursts) accel += (ghostAccel(state, burst) * ghostOverlap(burst, tStart + i * h, tStart + (i + 1) * h)) / h;
       }
       if (accel > 0) thrustSec += h;
       const step = thrustSubStep(pos, vel, h, mu, planet.R, accel, dirX, dirY, fuelDv);
@@ -768,6 +775,7 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
       store.update((draft) => {
         draft.burn.ghost = started;
         draft.burn.ghostBursts++;
+        if (landing) draft.landing.ghostBursts++;
       });
       const count = store.getState().burn.ghostBursts;
       emit('ghost-start', { sticky: started.sticky, first: count === 1, count, inSkip: skipTick });

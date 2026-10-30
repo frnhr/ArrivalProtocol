@@ -12,8 +12,7 @@ import {
 import { skipBlockReason } from '@systems/pace';
 import { goLowReleased, landingBurnOffer, launchRadiusRate } from '@systems/landing-orbit';
 import { LANDING_FLIGHT_LINES } from '@data/landing-text';
-import { spareFor } from '@systems/tool-targets';
-import { isUsableTool, toolFilesOf } from '@state/selectors';
+import { controllerSwapOf } from '@systems/tool-targets';
 import { autoburnAvailable, autoburnArmedInTac } from '@systems/autoburn';
 import { AUTOBURN_TEXT } from '@data/skill-text';
 import { debrisRack } from '@/types/zone';
@@ -136,14 +135,10 @@ export function acceptStrands(pred: Prediction): boolean {
   return pred.greenFraction < STRANDED_RANGE_FRAC;
 }
 
-// The backup a SWAP could put into service for a lost Thrust Ctrl, and whether the Swap file can do it now (WP12 p3, WP10
-// verify: the strip asked for `SWAP in Thrust.alt` with the Swap file eaten). No Swap file at all: nothing to name.
+// The backup a SWAP could put into service for a lost Thrust Ctrl (tool-targets controllerSwapOf: with no controller in
+// memory it is the orphaned spare), and whether the Swap file can do it now. F2 reads it only with the controller gone.
 function spareControllerOf(state: Readonly<GameState>): FlightContext['spareController'] {
-  if (!state.run.licences.includes('swap')) return null;
-  const spare = spareFor(state, 'thrust-ctrl');
-  const swapFiles = toolFilesOf(state.memory, 'swap');
-  if (spare === null || swapFiles.length === 0) return null;
-  return { name: spare.name, swapReady: swapFiles.some(isUsableTool) };
+  return controllerSwapOf(state);
 }
 
 export function buildFlightContext(state: Readonly<GameState>, pred: Prediction): FlightContext {

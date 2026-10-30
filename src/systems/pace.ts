@@ -4,7 +4,7 @@ import { onPreTick, isActivePhase, setPaused } from '@systems/clock';
 import { isBurnHeld, isGhostFiring, ghostDueInSec, laterBurstWindow } from '@systems/orbit-sim';
 import { getPrediction, currentPrediction, secUntil, isFinishingBurn, skipWarp, type Prediction, type ZoneHit } from '@systems/predict';
 import { ZONE_WORD } from '@data/zone-text';
-import { spreadPaused } from '@state/selectors';
+import { ghostBurstsThisPhase, spreadPaused } from '@state/selectors';
 import { capabilitiesNow } from '@systems/capabilities';
 import { registerKeys } from '@systems/input';
 import { emit } from '@systems/events';
@@ -244,14 +244,14 @@ function nextEvent(state: Readonly<GameState>, pred: Prediction): NextEvent | nu
   return null;
 }
 
-// Game seconds from now to where a running SKIP lands: its event's end lead, or the ship's FIRST ghost burst's start
-// when that comes first, with no lead (the alarm moment the kid must see; orbit-sim.ts ghostDueInSec draws it exactly
+// Game seconds from now to where a running SKIP lands: its event's end lead, or the FIRST ghost burst of the flight or of
+// the landing (review M2: selectors ghostBurstsThisPhase) when that comes first, with no lead (the alarm moment the kid must see; orbit-sim.ts ghostDueInSec draws it exactly
 // as the sim would, so asking moves nothing). A later burst is no landing (WP10, the lead's ruling): the SKIP flies
 // through it (skipWaypointTSec). null: nothing to land on. (Named apart from the LANDING phase: this is where a SKIP
 // lands. The landing has its ghost bursts too since 1b: its engine is open.)
 export function skipLandsInSec(state: Readonly<GameState>, pred: Prediction): number | null {
   const event = nextEvent(state, pred);
-  const ghostInSec = state.burn.ghostBursts === 0 ? ghostDueInSec(state) : null;
+  const ghostInSec = ghostBurstsThisPhase(state) === 0 ? ghostDueInSec(state) : null;
   const toEvent = event === null ? null : event.inSec - endLeadTac(event) * state.level.tacticalWarp;
   if (ghostInSec === null) return toEvent;
   return toEvent === null ? ghostInSec : Math.min(toEvent, ghostInSec);
@@ -270,12 +270,12 @@ export function skipTarget(state: Readonly<GameState>, pred: Prediction): SkipTa
 }
 
 // The thrust that holds the world at TACTICAL (§6.1): the kid's or AUTOBURN's held burn, and the engine firing by itself
-// on the ship's FIRST burst (the alarm moment) or on a sticky one (it runs until the kid presses SPACE). A later burst
+// on the FIRST burst of the flight or of the landing (the alarm moment) or on a sticky one (it runs until the kid presses SPACE). A later burst
 // changes no pace (§9 WP10 item 2): at CRUISE it lasts a third of a second, and a SKIP flies through it.
 function thrustHoldsTactical(state: Readonly<GameState>): boolean {
   if (isBurnHeld(state)) return true;
   const ghost = state.burn.ghost;
-  return ghost !== null && (ghost.sticky || state.burn.ghostBursts <= 1);
+  return ghost !== null && (ghost.sticky || ghostBurstsThisPhase(state) <= 1);
 }
 
 // Tactical seconds to the next event a SKIP would run to (the next burn point, a zone entry or a dodge's deadline,

@@ -66,7 +66,7 @@ export const LAUNCH_REFUSAL_LINES: Readonly<Record<string, { text: string; keys:
 // end (and park the pods in orbit) while the ship is about to leave it through the ground. The POD BAY's END LANDING
 // button says it in place of its label, and the 'refused' event flashes it on the strip (END_LANDING_REFUSAL_KEY).
 export const END_LANDING_REFUSAL_TEXT = "DON'T HIT THE PLANET first";
-export const END_LANDING_REFUSAL_KEY = 'END|IMPACT';
+export const END_LANDING_REFUSAL_KEY = 'END|HITS THE PLANET';
 
 // The inline confirms at [L] (§3.3) and END LANDING (§3.10). Enter confirms.
 export const LAUNCH_CONFIRM_TEXT = {
@@ -237,6 +237,16 @@ export const LANDING_NODROP_LINES = {
   // short of the burn the plan needs), so nothing will change; END LANDING is the way on, and the landing ends by itself
   // once the tank is empty (landing-rules landingStuck 'no-drop').
   L12noDrop: 'NO DROP DOT ON THIS ORBIT — END LANDING parks them in orbit',
+} as const;
+
+// L7b (review M2): the engine fires by itself during the landing (a failing Thrust Ctrl), and a SWAP fixes it. The flight
+// table's F2 words a SWAP the same way (`[TAB], SWAP …` from the ship; `REPAIR Swap first` while the Swap file is too
+// damaged); in the MIND it reads as the VESPER lesson (GHOST_TEXT.swapLesson) with the backup's name.
+export const LANDING_GHOST_LINES = {
+  swap: 'THE ENGINE FIRES BY ITSELF — [TAB], SWAP THRUST CTRL',
+  swapMind: (spare: string): string => `THE ENGINE FIRES BY ITSELF — SWAP THRUST CTRL to ${spare}`,
+  fixSwap: 'THE ENGINE FIRES BY ITSELF — [TAB], REPAIR Swap first',
+  fixSwapMind: 'THE ENGINE FIRES BY ITSELF — REPAIR Swap, then SWAP THRUST CTRL',
 } as const;
 
 // The drag kick's stamp on the NAV PLOT (§3.7), from DRAG_STAMP_MIN_KM: the far apsis that moved, and by how much.

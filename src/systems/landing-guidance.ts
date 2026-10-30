@@ -11,8 +11,9 @@ import {
 } from '@systems/landing-rules';
 import { capabilitiesNow, plotFault, ROLE_LABEL } from '@systems/capabilities';
 import { rootDeletable, rootDeleteRunning } from '@state/selectors';
-import { podHintTarget, toolStepTarget, ROOT_HINT_TARGET } from '@data/fs-tools';
-import { LANDING_DECAY_LINES, LANDING_DROP_LINES, LANDING_LINES, LANDING_NODROP_LINES, podCode } from '@data/landing-text';
+import { controllerSwapOf, type ControllerSwap } from '@systems/tool-targets';
+import { fileHintTarget, podHintTarget, toolStepTarget, ROOT_HINT_TARGET } from '@data/fs-tools';
+import { LANDING_DECAY_LINES, LANDING_DROP_LINES, LANDING_GHOST_LINES, LANDING_LINES, LANDING_NODROP_LINES, podCode } from '@data/landing-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
 import {
@@ -48,6 +49,8 @@ import {
 // | L7   | the next window's launch moment within 8 tac s, a pod can launch| GET READY — LZ-A IN 0:05                     |
 // |      | (or it is open, the dot's edges not in yet but coming this pass): GET READY, WAIT and the beeps count to the   |
 // |      | launch moment (landing-rules landingMoment: the sure part's opening, else the opening)                         |
+// | L7b  | the engine fires by itself (Thrust Ctrl failing), it has fired | THE ENGINE FIRES BY ITSELF — [TAB], SWAP     |
+// |      | in this landing, and a SWAP can hand the job to its backup      | THRUST CTRL (`-fixswap`: REPAIR Swap first)  |
 // | L8   | Sensor Interp failing or worse, the awaited window ≤ 60 tac s   | DROP UNCERTAIN — TAB, REPAIR SENSOR INTERP   |
 // |      | (by plotFault's cause: `-busy` while it repairs or moves, `-missing` with no file)                             |
 // | L9   | the awaited LZ has no sure window, a REPAIR or GO LOWER gives one | DROP TOO WIDE FOR LZ-B — TAB, REPAIR POD 05,|
@@ -61,7 +64,7 @@ import {
 // |      | with no REPAIR left)                                            |                                              |
 // | L12b | no pod aboard: pods falling, or the linger before the report    | ALL PODS AWAY · 2 FALLING                    |
 // | L13  | otherwise                                                        | WAIT — LZ-B in 2:10 ▸▸ · [F] to SKIP         |
-// The order: L0, L1, L2, L12-bay, L12-nodrop, L3, L3b, L4, L5, L6, (L2 for a near offered burn), L7, L10, L8, L9, L11, L12, L12-band,
+// The order: L0, L1, L2, L12-bay, L12-nodrop, L3, L3b, L4, L5, L6, (L2 for a near offered burn), L7, L7b, L10, L8, L9, L11, L12, L12-band,
 // L13-noroom, L13-nodrop, L12b, L13 (foundation review: L12-bay before any window row, since [L] refuses BAY OFFLINE;
 // L10 before L8/L9, since a sinking orbit undoes the repair or GO LOWER they ask for).
 // L13-nodrop (`landing-L13-nodrop`): no drop dot (an open path, an orbit outside dropSolvable) and no flight row leads,
@@ -75,7 +78,7 @@ import {
 // state.landing.window (landing.ts writes it from the in-band span, risk 13); L13 names an out-of-band window only when
 // the landing waits on nothing in band (OUT OF BAND).
 
-export type LandingRow = 'L0' | 'L1' | 'L2' | 'L3' | 'L3b' | 'L4' | 'L5' | 'L6' | 'L7' | 'L8' | 'L9' | 'L10' | 'L11' | 'L12' | 'L12b' | 'L13';
+export type LandingRow = 'L0' | 'L1' | 'L2' | 'L3' | 'L3b' | 'L4' | 'L5' | 'L6' | 'L7' | 'L7b' | 'L8' | 'L9' | 'L10' | 'L11' | 'L12' | 'L12b' | 'L13';
 
 export interface LandingObjective {
   // `landing-L4` (twins: `landing-L12-band`, `landing-L12-bay`, `landing-L13-noroom`, `landing-L5-nogo`, `landing-L8-busy`,
@@ -133,6 +136,9 @@ export interface LandingContext {
   // --- Slice 1b review fixes ---
   impact: boolean;          // the ship is on a path into the planet: the flight's row leads (F4, or the empty tank's)
   tankShort: boolean;       // no burn can change the orbit: the tank is empty, or short of the plan's burn (L12-nodrop)
+  // L7b (review M2): the engine fires by itself (a failing Thrust Ctrl), it has done so in this landing, and a SWAP can
+  // hand the job to its backup (tool-targets controllerSwapOf: the backup's name, and whether the Swap file can do it now).
+  ghostSwap: ControllerSwap | null;
 }
 
 // The flight's part of the landing table, handed in by the caller (guidance landingFlightOf builds it from the flight
@@ -245,6 +251,7 @@ export function buildLandingContext(
     lavaInReach: sol.dot === null ? null : noGoInReach(landing.noGo, sol.dot, state.level.planet.R)?.word ?? null,
     impact: flight.impact,
     tankShort: flight.tankShort,
+    ghostSwap: caps.thrustCtrl.ghost !== null && landing.ghostBursts > 0 ? controllerSwapOf(state) : null,
   };
 }
 
@@ -309,6 +316,20 @@ function tooWideLine(wide: TooWide, ctx: LandingContext): LandingObjective {
   if (repair.file !== 'driver') return line('L9', text, withTab, 'soon', 'mind', ctx, { repairs: repair.file });
   const highlight = ctx.inMind ? toolStepTarget('repair', ctx.heldTool, podHintTarget(podCode(repair.pod))) : null;
   return line('L9', text, withTab, 'soon', 'mind', ctx, { highlight });
+}
+
+// L7b: SWAP Thrust Ctrl to its backup, as the flight's F2 words a SWAP (from the ship [TAB] first; in the MIND the SWAP
+// chip, then the file, lit as the VESPER lesson does), or REPAIR the Swap file first when it is too damaged to pick up.
+// It keeps the SKIP (risk 12: it shadows L13's `[F] to SKIP`).
+function ghostLine(swap: ControllerSwap, ctx: LandingContext): LandingObjective {
+  const tab = ctx.inMind ? [] : ['TAB'];
+  if (!swap.swapReady) {
+    const { text, keys } = withSkip(ctx.inMind ? LANDING_GHOST_LINES.fixSwapMind : LANDING_GHOST_LINES.fixSwap, ctx);
+    return line('L7b', text, [...tab, ...keys], 'soon', 'mind', ctx, { id: 'landing-L7b-fixswap' });
+  }
+  const { text, keys } = withSkip(ctx.inMind ? LANDING_GHOST_LINES.swapMind(swap.name) : LANDING_GHOST_LINES.swap, ctx);
+  const highlight = ctx.inMind ? toolStepTarget('swap', ctx.heldTool, fileHintTarget('thrust-ctrl')) : null;
+  return line('L7b', text, [...tab, ...keys], 'soon', 'mind', ctx, { highlight });
 }
 
 function uncertainLine(cause: PlotFaultCause, ctx: LandingContext): LandingObjective {
@@ -381,6 +402,9 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
   if (ctx.aboard > 0 && ctx.canLaunch && next !== null && next.inBand && !next.full && next.launchInTac <= WINDOW_TACTICAL_LEAD_TAC) {
     return line('L7', LANDING_LINES.L7(next.lz, next.launchInTac), [], 'now', 'ship', ctx);
   }
+  // L7b (review M2): the engine fires by itself. Its bursts sink ▼ under the planet in minutes, mostly unseen inside
+  // SKIPs (only the landing's first stops one), so the strip names the cause and its fix before any wait.
+  if (ctx.aboard > 0 && ctx.ghostSwap !== null) return ghostLine(ctx.ghostSwap, ctx);
   // L10 above L8 and L9: a sinking orbit undoes any repair or GO LOWER. It carries the 'lift' burn's key only (a LIFT-*
   // row; never GO LOWER's [S], which would sink it faster); the row leads as L2 once that burn is near.
   if (ctx.aboard > 0 && ctx.decay !== null) {

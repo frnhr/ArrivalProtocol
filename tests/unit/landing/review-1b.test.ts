@@ -15,12 +15,16 @@ import { landingResult, landingStuck } from '@systems/landing-rules';
 import { lossPlan, shipLost } from '@systems/run';
 import { stateFromElements } from '@/types/orbit';
 import { DRIVER_RULES } from '@data/script';
-import { END_LANDING_REFUSAL_TEXT, LANDING_NODROP_LINES } from '@data/landing-text';
-import { LANDING_NONE_LEFT_SEC } from '@data/tuning';
+import { END_LANDING_REFUSAL_TEXT, LANDING_GHOST_LINES, LANDING_NODROP_LINES } from '@data/landing-text';
+import { LANDING_BURN_POWER, LANDING_NONE_LEFT_SEC } from '@data/tuning';
+import { on } from '@systems/events';
+import { capabilitiesNow } from '@systems/capabilities';
+import { actionSwap } from '@state/actions';
 import type { GameState } from '@state/schema';
 
 const ARES = 0;
 const KESTREL = 2;
+const VESPER = 3;
 const LAST_LIGHT = 4;
 const h = createHarness7(1);
 const state = (): GameState => h.store.getState();
@@ -121,6 +125,55 @@ crashAfterEnd(LAST_LIGHT, 'LAST LIGHT');
   h.stepFor(0.5);
   check('…with FUEL left the landing does not end itself (a burn can still bring a dot back)',
     landingStuck(state(), getDropSolution()) === null && shown()?.id !== 'landing-L12-nodrop', `${shown()?.id}`);
+}
+
+// --- M2: ghost thrust in the landing ---------------------------------------------------------------------------------
+{
+  // The landing's first burst is a SKIP's stop and a TACTICAL moment, though the flight had its bursts (keyed per phase).
+  board(VESPER, false);
+  h.store.update((draft) => { draft.burn.ghostBursts = 5; });
+  lockOn(h);
+  h.stepFor(0.3);
+  const starts: { inSkip: boolean; count: number }[] = [];
+  const off = on('ghost-start', (payload) => { starts.push({ inSkip: payload.inSkip, count: payload.count }); });
+  let skipped = false;
+  let paceAtBurst: string | null = null;
+  let accelRatio: number | null = null;
+  const end = h.wall() + 60;
+  while (h.wall() < end && state().landing.ghostBursts === 0) {
+    if (state().clock.skipWarp === null && !skipped && h.shown()?.keys.includes('F')) { h.press('KeyF'); skipped = state().clock.skipWarp !== null; }
+    h.step();
+  }
+  if (state().landing.ghostBursts > 0) {
+    h.step();
+    paceAtBurst = state().clock.pace;
+    // A tick wholly inside the burst: the Δv it delivered against the burst's own push at the landing's power.
+    const t0 = state().clock.tSec;
+    h.step();
+    const ghost = state().burn.ghost;
+    const dt = state().clock.tSec - t0;
+    if (ghost !== null && ghost.startTSec <= t0 && ghost.endTSec >= state().clock.tSec && dt > 0) {
+      accelRatio = state().burn.lastTickDvKmS / dt / (state().level.aNominalKmS2 * ghost.amp);
+    }
+  }
+  off();
+  const first = starts[0];
+  check('M2: a SKIP during the landing stops on the landing\'s FIRST burst (not flown through), though the flight had 5',
+    skipped && first !== undefined && !first.inSkip && first.count === 6 && state().landing.ghostBursts >= 1, JSON.stringify(starts.slice(0, 2)));
+  check('…and that burst runs at TACTICAL', paceAtBurst === 'tactical', String(paceAtBurst));
+  check(`…at LANDING_BURN_POWER (${LANDING_BURN_POWER}) of its push`, accelRatio !== null && Math.abs(accelRatio - LANDING_BURN_POWER) < 0.02,
+    String(accelRatio?.toFixed(3)));
+  // From the first burst on, the strip names the cause and its fix.
+  h.stepFor(4);
+  const row = h.shown();
+  check('M2: …then the strip says THE ENGINE FIRES BY ITSELF — [TAB], SWAP THRUST CTRL (L7b)',
+    row?.id === 'landing-L7b' && row.text.startsWith(LANDING_GHOST_LINES.swap) && row.keys.includes('TAB'), `${row?.id} '${row?.text}'`);
+  const controller = state().memory.find((seg) => seg.role === 'thrust-ctrl');
+  const refusal = controller === undefined ? 'no controller' : actionSwap(h.store, controller);
+  h.stepUntil(() => capabilitiesNow(state()).thrustCtrl.ghost === null, 20);
+  h.stepFor(3);
+  check('…a SWAP to Thrust.alt silences it, and the row goes', refusal === null && capabilitiesNow(state()).thrustCtrl.ghost === null
+    && !(h.shown()?.id ?? '').startsWith('landing-L7b'), `${refusal} · ${h.shown()?.id}`);
 }
 
 finish();

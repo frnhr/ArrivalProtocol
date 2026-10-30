@@ -2,7 +2,7 @@ import type { GameState } from '@state/schema';
 import type { Segment, FreeSegment, ShipSegment, ShipBackupSegment, SegmentRole } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import {
-  getRedundancy, isRepairable, isUsableTool, effectiveToolVersion, filesWithRole, isInfected,
+  getRedundancy, isRepairable, isUsableTool, effectiveToolVersion, filesWithRole, isInfected, toolFilesOf,
 } from '@state/selectors';
 import { getOps } from '@systems/ops-core';
 import {
@@ -237,6 +237,24 @@ export function orphanedBackup(state: Readonly<GameState>, backup: ShipBackupSeg
 export function spareFor(state: Readonly<GameState>, role: SegmentRole): ShipBackupSegment | null {
   return state.memory.find((seg): seg is ShipBackupSegment =>
     seg.type === 'ship-backup' && seg.backs?.role === role && orphanedBackup(state, seg)) ?? null;
+}
+
+// What a SWAP of Thrust Ctrl would put into service, and whether a Swap file can do it now (WP12 p3, WP10 verify: the
+// strip asked for `SWAP in Thrust.alt` with the Swap file eaten), or null: no SWAP licence, no backup, or no Swap file at
+// all. The backup is the orphaned spare when the controller is gone (guidance's F2 NO THRUST CONTROLLER), else the
+// controller's own backup (the landing's ghost-thrust row, review M2: the controller is there and fires by itself).
+export interface ControllerSwap {
+  name: string;
+  swapReady: boolean;
+}
+
+export function controllerSwapOf(state: Readonly<GameState>): ControllerSwap | null {
+  if (!state.run.licences.includes('swap')) return null;
+  const controller = filesWithRole(state, 'thrust-ctrl').find((seg): seg is ShipSegment => seg.type === 'ship');
+  const spare = controller === undefined ? spareFor(state, 'thrust-ctrl') : findBackup(state, controller) ?? null;
+  const swapFiles = toolFilesOf(state.memory, 'swap');
+  if (spare === null || swapFiles.length === 0) return null;
+  return { name: spare.name, swapReady: swapFiles.some(isUsableTool) };
 }
 
 // Why a ship file can't be swapped to its backup right now (the SWAP tool, WP10). Only a ship file that has a backup

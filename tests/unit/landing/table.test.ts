@@ -12,11 +12,11 @@ import type { FlightObjective } from '@systems/guidance';
 import {
   LANDING_LINES, LANDING_ASKS, LANDING_LESSONS, LANDING_BEATS, LANDING_SKIP_REFUSAL, LAUNCH_REFUSAL_TEXT, LAUNCH_CONFIRM_TEXT,
   LANDING_ECHO, POD_STATE_TEXT, groundRadioLine, LANDING_DROP_LINES, LANDING_DECAY_LINES, LANDING_FLIGHT_LINES, LANDING_END_TEXT,
-  LANDING_LESSONS_1B, DRAG_STAMP_TEXT, LANDING_NODROP_LINES, END_LANDING_REFUSAL_TEXT,
+  LANDING_LESSONS_1B, DRAG_STAMP_TEXT, LANDING_NODROP_LINES, END_LANDING_REFUSAL_TEXT, LANDING_GHOST_LINES,
 } from '@data/landing-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import { createRng, type Rng } from '@systems/rng';
-import { MAX_LINE_CHARS, PODS_MAX, WINDOW_TACTICAL_LEAD_TAC } from '@data/tuning';
+import { MAX_LINE_CHARS, PODS_MAX, SEG_NAME_MAX_CHARS, WINDOW_TACTICAL_LEAD_TAC } from '@data/tuning';
 
 // The next window: in band with room unless said otherwise.
 function next(lz: string, inTac: number, launchInTac: number, inBand = true, full = false): NonNullable<LandingContext['next']> {
@@ -30,7 +30,7 @@ function ctx(over: Partial<LandingContext> = {}): LandingContext {
     thrust: false, open: null, nextWithRoom: 'LZ-B', roomInBand: true, canLaunch: true, bayReady: true, bayReadyInTac: 0, stuckPod: null,
     anyCanEver: true, next: next('LZ-A', 130, 132), noBandWindow: false, skipAvailable: true,
     noDrop: false, firing: false, flight: null, flightBurnInTac: null, uncertain: null, tooWide: null, decay: null, bayOffline: false, lavaInReach: null,
-    impact: false, tankShort: false,
+    impact: false, tankShort: false, ghostSwap: null,
     ...over,
   };
 }
@@ -167,6 +167,20 @@ expect('M1: …on a path into the planet the flight\'s row leads', ctx({ noDrop:
   roomInBand: false, flight: capture, flightBurnInTac: 30 }), 'L2', capture.text);
 expect('M1: …in the MIND it says [TAB] first', ctx({ inMind: true, noDrop: true, tankShort: true, next: null, nextWithRoom: null, roomInBand: false }),
   'L12', /^NO DROP DOT ON THIS ORBIT — \[TAB\], END LANDING/);
+// Review M2: the engine fires by itself in the landing and a SWAP fixes it: L7b, after the window rows and GET READY,
+// before L10's decay and the waits.
+const swap = { name: 'Thrust.alt', swapReady: true };
+expect('M2: the engine fires by itself: SWAP THRUST CTRL, [TAB] from the ship', ctx({ ghostSwap: swap, skipAvailable: false }), 'L7b',
+  LANDING_GHOST_LINES.swap, (o) => o.keys.join() === 'TAB' && o.layer === 'mind' && o.urgency === 'soon');
+expect('M2: …it keeps the SKIP (risk 12: it shadows L13)', ctx({ ghostSwap: swap }), 'L7b', LANDING_GHOST_LINES.swap + LANDING_DROP_LINES.L9skip,
+  (o) => o.keys.join() === 'TAB,F');
+expect('M2: …in the MIND the backup by name, the SWAP chip lit', ctx({ ghostSwap: swap, inMind: true, skipAvailable: false }), 'L7b',
+  LANDING_GHOST_LINES.swapMind('Thrust.alt'), (o) => o.keys.length === 0 && (o.highlight ?? '').length > 0);
+expect('M2: …the Swap file too damaged: REPAIR Swap first', ctx({ ghostSwap: { ...swap, swapReady: false }, skipAvailable: false }), 'L7b',
+  LANDING_GHOST_LINES.fixSwap, (o) => o.id === 'landing-L7b-fixswap' && o.keys.join() === 'TAB');
+expect('M2: …ahead of L10 (the decay)', ctx({ ghostSwap: swap, decay: { orbits: 1 } }), 'L7b', /^THE ENGINE FIRES BY ITSELF/);
+expect('M2: …behind LAUNCH NOW', ctx({ ghostSwap: swap, open: open() }), 'L4', /^LAUNCH NOW/);
+expect('M2: …behind GET READY', ctx({ ghostSwap: swap, next: next('LZ-A', 5, 5) }), 'L7', /^GET READY/);
 expect('B1: no dot and every pod away: still L12b', ctx({ noDrop: true, next: null, aboard: 0, falling: 1 }), 'L12b', 'ALL PODS AWAY · 1 FALLING');
 // M2: an offered burn within the lead yields to an open window a pod can launch in.
 const ready: FlightObjective = { ...trim, id: 'F11-ready', text: 'GET READY — BURN IN 0:05', keys: [], urgency: 'now' };
@@ -244,12 +258,13 @@ expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true },
       decay: maybe(rng, 0.15) ? { orbits: 1 + Math.floor(rng() * 2) } : null, bayOffline,
       lavaInReach: solved && openWin !== null && maybe(rng, 0.3) ? pick(rng, ['LAVA', 'CLIFFS']) : null,
       impact: maybe(rng, 0.1), tankShort: maybe(rng, 0.3),
+      ghostSwap: maybe(rng, 0.1) ? { name: 'Thrust.alt', swapReady: maybe(rng, 0.7) } : null,
     });
   };
   const rng = createRng(1813);
   const failures: string[] = [];
   const rows = new Set<string>();
-  const DRAWS = 600;
+  const DRAWS = 2000;
   for (let i = 0; i < DRAWS; i++) {
     const c = draw(rng);
     try {
@@ -263,7 +278,7 @@ expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true },
   }
   check(`fuzz: ${DRAWS} crafted contexts each match a row that fits the strip`, failures.length === 0, failures.slice(0, 3).join(' | '));
   const wanted = ['landing-L1', 'landing-L4', 'landing-L5', 'landing-L5-nogo', 'landing-L8', 'landing-L8-missing', 'landing-L9', 'landing-L10',
-    'landing-L11', 'landing-L12', 'landing-L12-bay', 'landing-L12-nodrop', 'landing-L12b', 'landing-L13', 'landing-L13-nodrop', 'F11-rp-low'];
+    'landing-L11', 'landing-L12', 'landing-L12-bay', 'landing-L12-nodrop', 'landing-L7b', 'landing-L12b', 'landing-L13', 'landing-L13-nodrop', 'F11-rp-low'];
   const unseen = wanted.filter((id) => !rows.has(id));
   check('fuzz: …and the draws reach every kind of row (the pass is not vacuous)', unseen.length === 0, `unseen: ${unseen.join(', ')}`);
 }
@@ -314,6 +329,8 @@ expect('L2 keeps the flight row\'s warn', ctx({ flight: { ...trim, warn: true },
       worst({ bayOffline: true }),
       worst({ noDrop: true, next: null }),
       worst({ noDrop: true, next: null, tankShort: true }),
+      worst({ ghostSwap: { name: 'X'.repeat(SEG_NAME_MAX_CHARS), swapReady: true } }),
+      worst({ ghostSwap: { name: 'X'.repeat(SEG_NAME_MAX_CHARS), swapReady: false } }),
       LANDING_DROP_LINES.L9(longLz, 'SENSOR INTERP', true, true) + LANDING_DROP_LINES.L9skip,
       LANDING_DROP_LINES.L9(longLz, 'NAV PLOTTER', true, true) + LANDING_DROP_LINES.L9skip,
       LANDING_DROP_LINES.L9(longLz, 'POD 16', true, true) + LANDING_DROP_LINES.L9skip,

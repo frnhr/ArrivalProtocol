@@ -205,6 +205,9 @@ export interface LandingState {
   decay: DecayState;
   goLow: GoLowAim | null;
   declined: DeclinedBurn | null;
+  // Review M2: ghost bursts fired during this landing (orbit-sim counts them with burn.ghostBursts): its first is a SKIP's
+  // stop (selectors ghostBurstsThisPhase), and from then the strip's SWAP THRUST CTRL row stands while the engine fires.
+  ghostBursts: number;
 }
 
 // The window open now (§3.2, risk 13): the dot's centre in `lz`'s bracket while the ship is in the launch band; `sure`

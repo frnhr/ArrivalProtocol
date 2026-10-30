@@ -1562,6 +1562,8 @@ export const DROP_SOLVE_MAX_E = 0.6;
 // and a 1.2 s release is about 1,000 km, and no single RELEASE lead lands both near the target. At 0.5 the spread is
 // about 530 km and, with LANDING_RELEASE_LEAD_TAC below, both keep the band and a sure window of at least 4 s (4.01, 4.36).
 // Raise it with Fran: §3.7's "one RETRO burn the strip times and releases" holds only at this power.
+// A ghost burst in the landing runs at it too (review M2): at full push an unswapped VESPER's passive landing had ▼ under
+// the planet 79–110 real s after the lock (seeds 1–3); at 0.5, 95–193 s, with the strip's SWAP row up 3 s after the first.
 export const LANDING_BURN_POWER = 0.5;
 // The `BELOW THE DRAG LINE THE ORBIT SINKS` lesson (§3.11, risk 14) stands this many AI s from the first kick that moved
 // the far side DRAG_STAMP_MIN_KM, while ▼ is still below the line: the stamp's moment, read twice, then the landing's line.

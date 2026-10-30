@@ -224,6 +224,13 @@ export function engineOpen(state: Readonly<GameState>): boolean {
   return state.run.phase === 'landing' && state.landing.ended === null && inOrbit;
 }
 
+// The ghost bursts of the phase the ship is in (review M2): the landing counts its own (LandingState.ghostBursts), so its
+// FIRST burst is a SKIP's stop and a TACTICAL moment as the flight's first is (pace skipLandsInSec, thrustHoldsTactical):
+// the kid sees the engine fire by itself once in the landing, not only inside SKIPs. burn.ghostBursts is the ship's.
+export function ghostBurstsThisPhase(state: Readonly<GameState>): number {
+  return state.run.phase === 'landing' ? state.landing.ghostBursts : state.burn.ghostBursts;
+}
+
 // The drivers still in memory, in address order, ONE PER POD. A MOVE that jumps to free space elsewhere keeps its
 // source in memory (offline) until the clone is written (§6.5), so for the whole move one driver is two segments with
 // the same pod; counting segments would read one pod twice. The first copy in address order stands for the pod (both

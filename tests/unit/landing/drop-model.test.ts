@@ -154,7 +154,7 @@ function fake(opts: Fake = {}): GameState {
     pods: memory.filter((seg): seg is DriverSegment => seg.type === 'driver').map((d) => ({ pod: d.pod, family: d.family, colonists: d.colonists,
       featured: [], driverLost: null, restored: false, fate: { kind: 'aboard' } })),
     bay: { loaded: BAY_SLOTS, reloadTac: 0, cadenceLeftTac: 0 }, loadNext: null, startedAtTSec: 0, ended: null, lingerAiSec: null,
-    noDriverAiSec: 0, window: null, fuelAtEndPct: null, orbitEpoch: 0, decay: { lastKickTSec: null, kicks: 0, last: null }, goLow: null, declined: null,
+    noDriverAiSec: 0, window: null, fuelAtEndPct: null, orbitEpoch: 0, decay: { lastKickTSec: null, kicks: 0, last: null }, goLow: null, declined: null, ghostBursts: 0,
   };
   return {
     run: { phase: 'landing' }, clock: { paused: false, tSec: 0 }, ui: { mode: opts.mode ?? 'tools' }, burn: { lastTickDvKmS: opts.dv ?? 0 },
