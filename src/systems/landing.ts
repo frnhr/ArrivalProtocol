@@ -20,7 +20,7 @@ import { requestSkip, skipBlockReason } from '@systems/pace';
 import { declineKey, landingBurnOffer, travelSign } from '@systems/landing-orbit';
 import { activeLandingController, setActiveLandingController } from '@systems/landing-controller';
 import {
-  classifyLanding, colonyName, dropFactors, dropTooWide, driverTouch, endLandingRefusal, isLaunchable, landingMoment, landingOutcome,
+  classifyLanding, colonyName, dropFactors, goLowerChoice, driverTouch, endLandingRefusal, isLaunchable, landingMoment, landingOutcome,
   landingStuck,
   landingView as landingViewOf, launchGuard, launchGuardText, launchRefusal, lzAt, lzDownFill, lzRemaining, missKm, nextToLaunch, podCounts, podPoints,
   touchAtTouchdown,
@@ -420,20 +420,19 @@ function controllerTick(store: Store<GameState>): void {
 
 // --- GO LOWER's aim and the declined burn (slice 1b, plan §1.4; landing-orbit is the math) ----------------------------
 
-// The aim GO LOWER would take now (§3.7), or null: exactly when L9 says "or fly lower" (landing-rules dropTooWide's
-// goLower: the window the landing waits on has no sure part in the band, the orbit is not decaying out of the band
-// (decayWarnOrbits, L10 first: going lower would sink it faster, review M4), goLowerFit fits it and the tank pays for
-// it), with a pod aboard and a dot to drop by. The aim is built from that very fit (TooWide.goLower, review minor 1), so
-// the line and the burn the strip times agree by construction.
+// The aim GO LOWER would take now (§3.7), or null: landing-rules goLowerChoice (the soonest too-wide window of an LZ with
+// room whose ◇ still comes before it, review fix 1; not while decay is warned, review M4; goLowerFit fits it and the
+// tank pays for it), with a pod aboard and a dot to drop by. dropTooWide's `or fly lower` is the same choice for the
+// awaited LZ (review minor 1: the line and the burn agree by construction).
 function goLowAimNow(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): GoLowAim | null {
   const { landing } = state;
   if (landing.ended !== null || sol === null || sol.block !== null || sol.dot === null) return null;
   if (podCounts(state).aboard === 0) return null;
-  const wide = dropTooWide(state, sol, capabilitiesNow(state));
-  const fit = wide?.goLower ?? null;
-  if (wide === null || fit === null) return null;
-  const burnRad = wide.launchRad - Math.PI * travelSign(state.orbit);
-  return { lz: wide.lz, launchRad: wide.launchRad, burnRad, targetRadiusKm: fit.targetRadiusKm, floorKm: fit.floorKm, held: false };
+  const choice = goLowerChoice(state, sol, capabilitiesNow(state));
+  if (choice === null) return null;
+  const { fit, launchRad } = choice;
+  const burnRad = launchRad - Math.PI * travelSign(state.orbit);
+  return { lz: choice.lz, launchRad, burnRad, targetRadiusKm: fit.targetRadiusKm, floorKm: fit.floorKm, held: false };
 }
 
 // The aim moved enough to be worth writing (the drop cache re-solves at 10 Hz and the launch point drifts a hair on a

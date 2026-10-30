@@ -214,7 +214,7 @@ export const LANDING_FLIGHT_LINES = {
   goLowKeep: (lz: string): string => `KEEP HOLDING — until ${lz}'s dot fits`,
   goLowRelease: 'RELEASE [SPACE]',
   liftProblem: 'ORBIT SINKING',                                           // `ORBIT SINKING — at ▲ press [W] (PRO) and burn`
-  liftKeep: 'KEEP HOLDING — lift ▼ above the DRAG line',
+  liftKeep: 'KEEP HOLDING — lift ▼ until the orbit holds',   // over the DRAG line, or just over the floor (liftTargetKm)
   liftRelease: 'RELEASE [SPACE]',
   // L2's wrapper: the tail naming the LZ a burn is for (GO LOWER's WAIT, a trim that brings an LZ back in band).
   forLz: (lz: string): string => ` · for ${lz}`,

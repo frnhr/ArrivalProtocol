@@ -11,7 +11,7 @@ import { zoneContains, zoneCrossings, chordInsideFrac, chordClosest, chordEntryF
 import { presetHeading } from '@systems/attitude';
 import { getAiCore } from '@state/selectors';
 import { decayForecast, decayLiftAhead, dragLineKm, goLowDvKmS, timeToAngle } from '@systems/landing-orbit';
-import { decayWarnOrbits } from '@systems/landing-rules';
+import { decayWarnOrbits, liftHold } from '@systems/landing-rules';
 import { zoneRacks, type Zone, type ZoneHit, type HazardSpan } from '@/types/zone';
 import {
   elementsFromState, ringFit, ringFraction, loopRange, semiMajorAxis, keplerConic, radialSigma, universalAnomaly,
@@ -25,7 +25,7 @@ import {
   SHRINK_FUEL_RESERVE_FRAC, RADIUS_BISECT_STEPS, RP_RATE_PROBE_SEC,
   SHRINK_RESERVE_WAIT_TAC, STRANDED_RANGE_FRAC, STRAND_LINE_MARGIN, SKIP_DIVISOR, BELT_HIT_MEAN_SEC,
   DODGE_PROMISE_MARGIN_KM, DODGE_DEADLINE_RESOLUTION_TAC, DODGE_MEMO_RP_DECIMALS, DODGE_MEMO_ANGLE_DECIMALS,
-  DRAG_LIFT_MARGIN_KM,
+  DRAG_LIFT_MARGIN_KM, LIFT_HOLD_SLACK_KM,
 } from '@data/tuning';
 
 // The predicted path: what happens if nobody touches the throttle. Pure (computePrediction)
@@ -55,7 +55,7 @@ export interface PathSpan {
 // close the loop now. shrink: climbing away on a loop that is too big, with the next trim far
 // off: brake now to shrink it first (WP1-rules 2). The ring reasons trim a closed loop into the ring.
 // Slice 1b (landing only, plan §1.4): go-low: GO LOWER's RETRO burn, centred on an orbit angle ('point') half an orbit
-// before the awaited LZ's launch point; lift: PRO at ▲ to bring a decaying ▼ back above the DRAG line (L10's key).
+// before the awaited LZ's launch point; lift: PRO at ▲ to bring a decaying ▼ back up (landing-rules liftTargetKm; L10's key).
 // Neither is a trim (isTrim): TRIM_PROBLEM and trimTarget stay the ring's four.
 export type TrimReason = 'rp-low' | 'rp-high' | 'ra-high' | 'ra-low';
 export type BurnReason = 'capture' | 'missed' | 'shrink' | TrimReason | 'go-low' | 'lift';
@@ -718,16 +718,31 @@ function landingInRingBurn(state: Readonly<GameState>, input: BurnInputs): BurnP
   // first (decay.test). A deviation from "lift when warned" (Track ORBIT): after a GO LOWER under the DRAG line it is
   // offered sooner (declinable, as every lift).
   const holdingLift = state.burn.firing && state.burn.firingFor !== null && state.burn.firingFor.startsWith('lift|');
-  const target = dragLineKm(input.ring) + DRAG_LIFT_MARGIN_KM;
   const orbitsToLeave = decayForecast(input.orbit, input.mu, input.ring, landing.drag).orbitsToLeave;
-  const raHalf = input.fit.ra >= target && decayLiftAhead(orbitsToLeave);
-  if (decayWarnOrbits(state) === null && !holdingLift && !raHalf) return null;
+  const warned = decayWarnOrbits(state) !== null;
+  if (!warned && !holdingLift && !decayLiftAhead(orbitsToLeave)) return null;
   const { periInSec, apoInSec, periodSec } = input;
   if (periInSec === null || apoInSec === null || periodSec === null) throw new Error('landingInRingBurn: a loop without apsis times');
+  const times = { peri: periInSec, apo: apoInSec, period: periodSec };
+  // While an LZ with room still needs the low orbit GO LOWER flew to (landing-rules liftHold, review fix 2), the lift
+  // holds it in the band instead of taking ▼ back over the DRAG line: ▼ back up to the hold's floor if it sank under it
+  // (PRO at ▲; first PRO at ▼ when ▲ is under it too), else ▲ back up to the middle of the band (PRO at ▼), each only
+  // when LIFT_HOLD_SLACK_KM short. Nothing else: a held lift that reached them shows RELEASE (F3).
+  const hold = liftHold(state);
+  if (hold !== null) {
+    if (input.fit.rp < hold.rpKm - LIFT_HOLD_SLACK_KM) {
+      if (input.fit.ra < hold.rpKm) return planTrim(input, 'lift', times, true, hold.raKm, 'peri');
+      return planTrim(input, 'lift', times, false, hold.rpKm);
+    }
+    if (input.fit.ra < hold.raKm - LIFT_HOLD_SLACK_KM) return planTrim(input, 'lift', times, false, hold.raKm, 'peri');
+    return null;
+  }
+  const target = dragLineKm(input.ring) + DRAG_LIFT_MARGIN_KM;
+  const raHalf = input.fit.ra >= target && decayLiftAhead(orbitsToLeave);
+  if (!warned && !holdingLift && !raHalf) return null;
   // ▼ rises only as high as ▲ is: a decaying loop whose ▲ is under the target too (a near-circle below the line) is lifted
   // in two, as a ring trim with both ends out: first PRO at ▼ to take ▲ a margin over the target (firstOfTwo), then PRO
   // at ▲ to bring ▼ up to it.
-  const times = { peri: periInSec, apo: apoInSec, period: periodSec };
   if (input.fit.ra < target) return planTrim(input, 'lift', times, true, target + DRAG_LIFT_MARGIN_KM, 'peri');
   return planTrim(input, 'lift', times, false, target);
 }

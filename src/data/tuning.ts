@@ -1546,6 +1546,10 @@ export const DECAY_WARN_ORBITS = 2;
 // The 'lift' burn (risk 3) raises ▼ to the DRAG line plus this margin, km: a little above the line, so the next ▼ is
 // clear of it and the kicks stop instead of starting again an orbit later.
 export const DRAG_LIFT_MARGIN_KM = 50;
+// The lift's HOLD (review fix 2, landing-rules liftHold: the low orbit GO LOWER flew to, kept in the band) burns only once
+// ▼ or ▲ is this far under its mark, km: a release a few tenths of a second early or late leaves it within this, and a
+// lift of a few km is not worth a TACTICAL pass (one kick under the DRAG line takes ▲ down by well over 100 km).
+export const LIFT_HOLD_SLACK_KM = 20;
 // GO LOWER (§3.7) aims for the radius where the awaited LZ's sure window lasts this many tactical s: three pods at the
 // healthy cadence (2.0 s apart), the smallest window worth a burn.
 export const LANDING_SURE_MIN_TAC = 4;

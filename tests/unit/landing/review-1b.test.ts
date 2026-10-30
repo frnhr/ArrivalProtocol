@@ -1,5 +1,5 @@
 // Slice 1b's review fixes (docs/phase3/impl/slice-1b-plan.md "Deviations (review fixes)"), each from a small state built
-// here: B1 (END LANDING and the auto-ends on a path into the planet; a crash after the landing ended, LAST LIGHT too), M1
+// here (and the two follow-up fixes: GO LOWER aimed at a window its ◇ precedes, the lift holding a needed low orbit): B1 (END LANDING and the auto-ends on a path into the planet; a crash after the landing ended, LAST LIGHT too), M1
 // (no drop dot with no fuel: L12-nodrop and its auto-end), M2 (ghost thrust in landing: the SWAP row, the SKIP's stop on
 // the landing's first burst, the bursts at LANDING_BURN_POWER), and the minors' checks (L9 with an empty tank, the decay
 // chip and L10 at 0 orbits, a declined GO LOWER's lifetime, GO LOWER held by hand under MANUAL, L3b's WIDE DROP twin, the
@@ -12,13 +12,13 @@ import { resetReport } from '@systems/reset';
 import { getPrediction } from '@systems/predict';
 import { getDropSolution } from '@systems/drop-cache';
 import { bayWindowModel } from '@systems/landing-hud';
-import { dropTooWide, landingMoment, landingResult, landingStuck } from '@systems/landing-rules';
+import { dropTooWide, landingMoment, landingResult, landingStuck, liftHold } from '@systems/landing-rules';
 import { decayForecast, decayLiftAhead, dragLineKm, landingBurnOffer, offerInTac } from '@systems/landing-orbit';
 import { lossPlan, shipLost } from '@systems/run';
 import { elementsFromState, stateFromElements } from '@/types/orbit';
 import { DRIVER_RULES } from '@data/script';
 import { END_LANDING_REFUSAL_TEXT, LANDING_GHOST_LINES, LANDING_NODROP_LINES } from '@data/landing-text';
-import { DECAY_WARN_ORBITS, LANDING_BURN_POWER, LANDING_NONE_LEFT_SEC } from '@data/tuning';
+import { DECAY_WARN_ORBITS, GO_LOW_FLOOR_MARGIN_KM, LANDING_BURN_POWER, LANDING_NONE_LEFT_SEC } from '@data/tuning';
 import { on } from '@systems/events';
 import { capabilitiesNow } from '@systems/capabilities';
 import { actionSwap } from '@state/actions';
@@ -319,6 +319,94 @@ crashAfterEnd(LAST_LIGHT, 'LAST LIGHT');
     lift !== null && lift.orbits !== null && lift.orbits > DECAY_WARN_ORBITS && decayLiftAhead(lift.orbits), JSON.stringify(lift));
   check('…not before the window the GO LOWER was for has had its pods, and its START BURN falls between windows',
     lift !== null && lift.closedBefore >= 1 && lift.windowAtBurn === false, JSON.stringify(lift));
+}
+
+// A kid who follows the strip through GO LOWER, its release (0.3 s after RELEASE), the lift and the launches, pressing
+// [F] when offered; `onTick` sees every tick. Returns the GO LOWER holds per LZ, the lifts flown and the lowest ▼.
+function followThroughGoLower(maxWall: number, onTick: () => void = () => {}): { held: Record<string, number>; lifts: number; minRp: number } {
+  const held: Record<string, number> = {};
+  const off = on('go-low', ({ lz, phase }) => { if (phase === 'held') held[lz] = (held[lz] ?? 0) + 1; });
+  let holding = false;
+  let releaseAt: number | null = null;
+  let lifts = 0;
+  let minRp = Infinity;
+  const end = h.wall() + maxWall;
+  while (h.wall() < end && state().run.phase === 'landing') {
+    h.step();
+    onTick();
+    minRp = Math.min(minRp, elementsFromState(state().orbit, mu()).rp);
+    const line = h.shown();
+    const text = line?.text ?? '';
+    if (releaseAt !== null && h.wall() >= releaseAt - 1e-9) { h.keyUp('Space'); holding = false; releaseAt = null; continue; }
+    if (holding && /^RELEASE/.test(text) && releaseAt === null) releaseAt = h.wall() + 0.3;
+    if (holding) continue;
+    const preset = text.match(/press \[([WASD])\]/);
+    if (preset) h.press(`Key${preset[1]}`);
+    if (/HOLD \[SPACE\] NOW|hold \[SPACE\]/.test(text)) {
+      h.keyDown('Space');
+      holding = true;
+      if ((line?.id ?? '').startsWith('LIFT')) lifts++;
+    } else if (line?.keys.includes('L')) h.press('KeyL');
+    else if (line?.keys.includes('F') && state().clock.skipWarp === null) h.press('KeyF');
+  }
+  if (holding) h.keyUp('Space');
+  off();
+  return { held, lifts, minRp };
+}
+
+// --- Review fix 1: GO LOWER aims at a window its ◇ comes before (KESTREL: three LZs less than half an orbit apart) ----
+{
+  // From 6,800 km every LZ's dot is too wide; the ◇ of the next window (half an orbit before its launch point) always
+  // came after that window, so GO LOWER was never flown. Now it aims at the soonest window its ◇ still precedes.
+  board(KESTREL);
+  h.store.update((draft) => { for (const lz of draft.landing.lzs) { lz.widthKm = 190; lz.halfWidthRad = 95 / draft.level.planet.R; } });
+  lockOn(h, { r: 6800 });
+  let flyLowerElsewhere = '';
+  let heldFor: { lz: string; windowInSec: number } | null = null;
+  let sureAfter = false;
+  const offSure = on('window-sure', ({ lz }) => { if (heldFor !== null && lz === heldFor.lz) sureAfter = true; });
+  const offHeld = on('go-low', ({ lz, phase }) => {
+    if (phase !== 'held' || heldFor !== null) return;
+    const w = landingMoment(state(), getDropSolution(), state().clock.tSec, false).upcoming.find((candidate) => candidate.lz === lz);
+    heldFor = { lz, windowInSec: w?.launchInSec ?? -1 };
+  });
+  followThroughGoLower(400, () => {
+    // The rule: `or fly lower` only for the LZ GO LOWER is aimed at (whose ◇ comes before its window).
+    const text = h.shown()?.text ?? '';
+    const named = /^DROP TOO WIDE FOR (LZ-[A-Z])\b.*fly lower/.exec(text)?.[1];
+    if (named !== undefined && state().landing.goLow?.lz !== named) flyLowerElsewhere ||= `${text} (aim ${state().landing.goLow?.lz})`;
+  });
+  offSure();
+  offHeld();
+  const fixed = heldFor as { lz: string; windowInSec: number } | null;
+  check('fix 1: KESTREL, three LZs: GO LOWER is flown, its ◇ before the window it is for', fixed !== null && fixed.windowInSec > 0,
+    JSON.stringify(fixed));
+  check('…and flying it gives that window a sure fit (WINDOW SURE)', sureAfter, String(sureAfter));
+  check('…L9 never says `fly lower` for a window GO LOWER is not aimed at', flyLowerElsewhere === '', flyLowerElsewhere);
+  check('…every pod down', state().landing.pods.every((record) => record.fate.kind === 'down'), fates());
+}
+
+// --- Review fix 2: after GO LOWER under the DRAG line the lift holds the low orbit (no GO LOWER ↔ lift turns) -----------
+{
+  // KESTREL from a circular 6,000 km, one LZ 125 km wide holding three pods: its dot only fits under the DRAG line (from
+  // the normal lift's 5,550 km it has no sure part), so the lift must hold ▼ low; before, it took ▼ back over the line
+  // and L9 sent the kid down again (GO LOWER held three times).
+  board(KESTREL);
+  h.store.update((draft) => {
+    draft.landing.lzs = [{ ...draft.landing.lzs[0]!, pods: 3, widthKm: 125, halfWidthRad: 62.5 / draft.level.planet.R }];
+    draft.landing.pods.forEach((record, i) => { if (i >= 3) record.fate = { kind: 'not-launched' }; });
+  });
+  lockOn(h, { r: 6000 });
+  const hold = liftHold(state());
+  const run = followThroughGoLower(400);
+  const placed = state().landing.pods.slice(0, 3).map((record) => (record.fate.kind === 'down' ? record.fate.touchdown.place : record.fate.kind));
+  check('fix 2: with an LZ that needs the low orbit, the lift holds it (▼ ≥ floor + margin, ▲ mid-band), not the DRAG line',
+    hold !== null && hold.rpKm === state().level.ring.min + GO_LOW_FLOOR_MARGIN_KM && hold.raKm === 6000, JSON.stringify(hold));
+  check('…a kid following the strip flies GO LOWER once, the lift at least once, and never sees GO LOWER again',
+    run.held['LZ-A'] === 1 && Object.keys(run.held).length === 1 && run.lifts >= 1, JSON.stringify(run));
+  check('…every pod lands in the LZ, ▼ in the band throughout', placed.every((place) => place === 'lz') && run.minRp >= state().level.ring.min,
+    `${placed.join(',')} · ▼ ≥ ${run.minRp.toFixed(0)} km`);
+  check('…and the landing over, the normal lift is back (no LZ with room needs the low orbit)', liftHold(state()) === null);
 }
 
 // --- M2: ghost thrust in the landing ---------------------------------------------------------------------------------

@@ -10,12 +10,14 @@ import type { Capabilities } from '@systems/capabilities';
 import type { PredictOutcome } from '@systems/predict';
 import type { Rng } from '@systems/rng';
 import { driversInMemory, filesWithRole, integrityBand, repairPossible } from '@state/selectors';
-import { bayCapability, roleHealth } from '@systems/capabilities';
+import { bayCapability, capabilitiesNow, roleHealth } from '@systems/capabilities';
 import { angleDelta, dropHalfWidthKm, secFromNow } from '@systems/landing-solve';
-import { decayForecast, decayWarned, goLowerFit } from '@systems/landing-orbit';
+import {
+  decayForecast, decayWarned, dragLineKm, goLowerFit, highestFittingRadius, sureTacAt, timeToAngle, travelSign,
+} from '@systems/landing-orbit';
 import { COLONY_NAME_POOL, LAUNCH_CONFIRM_TEXT, familyColonyName } from '@data/landing-text';
 import {
-  BAND_DEGRADED_MIN, BAND_FAILING_MIN, COLONISTS_PER_POD, COLONY_FAMILY_NAME_CHANCE, DRIVER_DROP_FACTOR_BY_BAND,
+  BAND_DEGRADED_MIN, BAND_FAILING_MIN, COLONISTS_PER_POD, COLONY_FAMILY_NAME_CHANCE, DRAG_LIFT_MARGIN_KM, DRIVER_DROP_FACTOR_BY_BAND, GO_LOW_FLOOR_MARGIN_KM,
   HARD_LANDING_FACTOR, MISLANDED_FACTOR, OFF_SITE_SCORE_BY_CLASS, STAR_ON_TARGET_FRAC,
 } from '@data/tuning';
 
@@ -244,6 +246,39 @@ function sureInBand(w: Readonly<LzWindow>): boolean {
 // table throws on it). `goLower` is false while decay is warned (decayWarnOrbits: L10's 'lift' burn goes up, and GO
 // LOWER would fight it); L10 sits above L9 in the table anyway. The factors are the next pod's (dropFactors with
 // nextToLaunch), the ones drop-cache solved the window with.
+// The 'lift' burn's HOLD (review fix 2; predict landingInRingBurn plans to it), or null for the normal lift (▼ back over
+// the DRAG line plus DRAG_LIFT_MARGIN_KM, and the kicks stop). The lift's job is to keep the orbit in the band (§3.7:
+// "holding that orbit costs about 1% per orbit"), not to undo a GO LOWER the landing still needs. While an LZ with
+// room would have no sure part from the normal lift's height (its L9 and GO LOWER would come back: GO LOWER and the
+// lift took turns), the lift HOLDS the low orbit instead:
+// - ▼ no lower than `rpKm`: the band floor plus GO_LOW_FLOOR_MARGIN_KM, or the highest radius where those LZs get GO
+//   LOWER's sure window (landing-orbit highestFittingRadius, GO LOWER's target on a circle), whichever is higher, never
+//   over the normal target;
+// - ▲ no lower than `raKm`, the middle of the band: under the DRAG line each kick at ▼ takes the far side down (KESTREL
+//   from 5,100 km: about 24 m/s, ~1% of FUEL, a kick), and a PRO burn at ▼ puts it back, every few orbits, before the
+//   loop turns and ▼ sinks out of the band.
+// Once no LZ with room needs the low orbit (filled, or none too wide from the line), the normal lift applies again.
+export interface LiftHold {
+  rpKm: number;
+  raKm: number;
+}
+
+export function liftHold(state: Readonly<GameState>): LiftHold | null {
+  const { ring, planet, tacticalWarp } = state.level;
+  const normal = dragLineKm(ring) + DRAG_LIFT_MARGIN_KM;
+  if (!state.landing.pods.some((record) => record.fate.kind === 'aboard')) return null;
+  const remaining = lzRemaining(state);
+  const factors = dropFactors(capabilitiesNow(state), nextToLaunch(state));
+  const needLow = state.landing.lzs.filter((lz) => (remaining[lz.label] ?? 0) > 0
+    && sureTacAt(normal, Math.sqrt(planet.mu / normal), lz, factors, planet.R, tacticalWarp) <= 0);
+  if (needLow.length === 0) return null;
+  const floorKm = ring.min + GO_LOW_FLOOR_MARGIN_KM;
+  const fitting = highestFittingRadius(needLow, factors, { min: ring.min, max: normal }, planet.R, planet.mu, tacticalWarp, floorKm);
+  return { rpKm: Math.min(normal, Math.max(floorKm, fitting ?? floorKm)), raKm: Math.max(normal, (ring.min + ring.max) / 2) };
+}
+
+// L9 says `or fly lower` only when GO LOWER's choice (goLowerChoice) is this very LZ (this pass's window, or its next pass
+// when the ◇ comes after this one), so the line never asks for a burn that can't reach its window in time (review fix 1).
 export function dropTooWide(state: Readonly<GameState>, sol: Readonly<DropSolution>, caps: Readonly<Capabilities>): TooWide | null {
   if (sol.block !== null || caps.bay.offline) return null;
   const target = landingMoment(state, sol, state.clock.tSec, caps.bay.offline).target;
@@ -252,13 +287,49 @@ export function dropTooWide(state: Readonly<GameState>, sol: Readonly<DropSoluti
   if (lz === undefined) throw new Error(`dropTooWide: the awaited LZ '${target.lz}' is not on this ship`);
   const { window } = target;
   const repair = bestRepairForDrop(state, caps, lz, window.launchRadius);
-  const { level } = state;
   const decayWarned = decayWarnOrbits(state) !== null;
-  const fit = decayWarned ? null : goLowerFit({
-    lz, factors: dropFactors(caps, nextToLaunch(state)), ring: level.ring, R: level.planet.R, mu: level.planet.mu,
-    warp: level.tacticalWarp, orbit: state.orbit, launchRad: window.launchRad, fuelDvKmS: (state.burn.fuelPct / 100) * level.dvBudgetKmS,
-  });
-  return tooWideVerdict(lz.label, window.launchRad, repair, fit, decayWarned);
+  const choice = decayWarned ? null : goLowerChoice(state, sol, caps);
+  return tooWideVerdict(lz.label, window.launchRad, repair, choice?.lz === lz.label ? choice.fit : null, decayWarned);
+}
+
+// GO LOWER's window (§3.7, review fix 1): the burn is RETRO at the ◇, half an orbit before the launch point, so it only
+// helps a window whose launch moment comes after the ◇. With LZs less than half an orbit apart (KESTREL) the ◇ of the
+// window the landing awaits always came after that window, and GO LOWER could never be flown in time. The choice: the
+// soonest window, this pass or the next, of an in-band LZ with room and no sure part, whose ◇ is still ahead of it,
+// that goLowerFit fits and the tank pays for. Usually another LZ further round this pass, or the same LZ's next pass
+// (one LZ). null: none, the landing not waiting on windows, or decay warned (L10's lift goes up first).
+// landing.ts builds GO LOWER's aim from it; dropTooWide's `or fly lower` is the same answer for the awaited LZ.
+export interface GoLowerChoice {
+  lz: string;
+  launchRad: number;
+  fit: GoLowerFit;
+  launchInSec: number;   // game s from now to that window's launch moment (the pass the burn is for)
+}
+
+export function goLowerChoice(state: Readonly<GameState>, sol: Readonly<DropSolution>, caps: Readonly<Capabilities>): GoLowerChoice | null {
+  if (sol.block !== null || caps.bay.offline || decayWarnOrbits(state) !== null) return null;
+  const moment = landingMoment(state, sol, state.clock.tSec, caps.bay.offline);
+  if (!moment.awaited) return null;
+  const { level, orbit } = state;
+  const mu = level.planet.mu;
+  const passes = sol.periodSec > 0 ? [0, sol.periodSec] : [0];
+  const candidates = moment.upcoming
+    .filter((w) => !w.full && !sureInBand(w.window))
+    .flatMap((w) => passes.map((extra) => ({ w, at: w.launchInSec + extra })))
+    .sort((a, b) => a.at - b.at);
+  const factors = dropFactors(caps, nextToLaunch(state));
+  const fuelDvKmS = (state.burn.fuelPct / 100) * level.dvBudgetKmS;
+  for (const { w, at } of candidates) {
+    const launchRad = w.window.launchRad;
+    if (!(timeToAngle(orbit, mu, launchRad - Math.PI * travelSign(orbit)) < at)) continue;
+    const lz = state.landing.lzs.find((candidate) => candidate.label === w.lz);
+    if (lz === undefined) throw new Error(`goLowerChoice: the window's LZ '${w.lz}' is not on this ship`);
+    const fit = goLowerFit({
+      lz, factors, ring: level.ring, R: level.planet.R, mu, warp: level.tacticalWarp, orbit, launchRad, fuelDvKmS,
+    });
+    if (fit !== null) return { lz: lz.label, launchRad, fit, launchInSec: at };
+  }
+  return null;
 }
 
 // L9's verdict from its parts (dropTooWide's last step; its own function so the GO LOWER cases are tested on crafted
