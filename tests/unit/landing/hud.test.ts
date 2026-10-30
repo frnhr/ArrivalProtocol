@@ -1,4 +1,4 @@
-// Slice 1a, Track UI: the landing's screen models (src/systems/landing-hud.ts, the landing parts of flight-hud.ts and
+// Slice 1a and 1b, Track UI: the landing's screen models (src/systems/landing-hud.ts, the landing parts of flight-hud.ts and
 // hollow-hud.ts). Pure: a world from the foundation's constructors (createInitialState, beginLanding), the ship put on a
 // circular orbit by hand, the drop solved by landing-solve directly (no store, no mounts, nothing flown).
 //
@@ -8,10 +8,14 @@
 // names the data gives (LZ-A, POD 01, OKAFOR, KEPLER-186F), the decided flight words (ORBIT LOCKED) and the refusals by
 // their key. Every other line is checked by its structure (`says`): it holds the LZ, the counts and the numbers it is
 // about, fits its cap, and uses none of the never-say words.
+//
+// Slice 1b (plan §3 Track UI): ORBIT's and DROP's answers that were stubs when the views were written are set directly
+// here (landing.goLow, landing.decay.last, an injected burn offer and decay forecast, a solution solved uncertain,
+// Bay Ctrl's capabilities handed in), so the views are pinned whatever those stubs return.
 import { check, finish } from './checks';
 import type { GameState } from '@state/schema';
-import type { DropSolution, LaunchRecord, PodFate } from '@/types/landing';
-import type { Prediction } from '@systems/predict';
+import type { DragKick, DropSolution, LaunchRecord, PodFate } from '@/types/landing';
+import { computePrediction, samplePath, type BurnPoint, type Prediction } from '@systems/predict';
 import { createInitialState } from '@state/initial';
 import { beginLanding } from '@state/actions';
 import { freshUnitRacks } from '@systems/carry';
@@ -21,12 +25,17 @@ import { windowOpenNow, lzAt } from '@systems/landing-rules';
 import {
   lzCounters, bracketModels, dropDotModel, windowToneFraction, groundTrackModel, bayWindowModel, podTags, footerPods,
   miniHudLanding, podStreaks, landMarks, parkedBeacons, plotLandingModel, ringLabel, driverLanding, terrainGlyph,
+  goLowMarks, dragStamp, terrainStretches, terrainAt, TERRAIN_PATTERN,
 } from '@systems/landing-hud';
-import { countdownChip, headerCrumbs, toggleAlert } from '@systems/flight-hud';
+import { countdownChip, headerCrumbs, toggleAlert, decayChip, burnButton, fuelModel, plotMarkers } from '@systems/flight-hud';
+import { capabilitiesNow, BAND_COPY } from '@systems/capabilities';
+import { dragLineKm } from '@systems/landing-orbit';
 import { miniStripRows } from '@systems/hollow-hud';
 import { isDriver } from '@state/selectors';
-import { BAND_TEXT, DRIVER_DETAIL_TEXT, LAUNCH_REFUSAL_TEXT, MINI_LANDING_TEXT, LANDING_HUD_TEXT, POD_STATE_TEXT } from '@data/landing-text';
-import { BAY_SLOTS, GROUND_TRACK_SPAN_KM, MAX_LINE_CHARS } from '@data/tuning';
+import {
+  BAND_TEXT, DRIVER_DETAIL_TEXT, LAUNCH_REFUSAL_TEXT, MINI_LANDING_TEXT, LANDING_HUD_TEXT, POD_STATE_TEXT, TOUCHDOWN_FLOAT_TEXT,
+} from '@data/landing-text';
+import { BAY_SLOTS, DRAG_LINE_FRAC, DRAG_STAMP_MIN_KM, GROUND_TRACK_SPAN_KM, MAX_LINE_CHARS } from '@data/tuning';
 
 // A chip's cap (brackets, counters, the countdown chip, the mini-HUD, the bay's tags): these sit on the NAV PLOT's rim,
 // the GROUND TRACK and the narrow mini-HUD, where today's longest (`[ LZ-A · 0/3 ]`) is 14. 24 leaves 05 room.
@@ -60,20 +69,23 @@ function circle(state: GameState, angleRad: number, r: number, retro = false): v
   state.orbit = { x: r * Math.cos(angleRad), y: r * Math.sin(angleRad), vx: -v * Math.sin(angleRad), vy: v * Math.cos(angleRad) };
 }
 
-function solve(state: GameState): DropSolution {
+// `sensor`: Sensor Interp's factor on the drop; above 2 it is failing or worse, so the solution is uncertain (§3.8: the
+// grey dot), as DROP's capabilities will pass it.
+function solve(state: GameState, sensor = 1): DropSolution {
   return computeDropSolution({
     state: state.orbit, tSec: state.clock.tSec, mu: state.level.planet.mu, R: state.level.planet.R, ring: state.level.ring,
-    lzs: state.landing.lzs, factors: { sensor: 1, plotter: 1, driver: 1 }, solution: true, uncertain: false, validUntilTSec: null, solvable: true,
+    lzs: state.landing.lzs, factors: { sensor, plotter: 1, driver: 1 }, solution: true, uncertain: sensor > 2, validUntilTSec: null,
+    solvable: true,
   });
 }
 
 // The ship on a circle of radius r, placed so the dot's centre sits at `dotRad`; the window state written as landing.ts
 // writes it each AI tick.
-function aim(state: GameState, dotRad: number, r = 6000, retro = false): DropSolution {
+function aim(state: GameState, dotRad: number, r = 6000, retro = false, sensor = 1): DropSolution {
   circle(state, 0, r, retro);
   const lead = angleDelta(0, solve(state).dot!.rad);
   circle(state, dotRad - lead, r, retro);
-  const sol = solve(state);
+  const sol = solve(state, sensor);
   state.landing.window = windowOpenNow(sol, state.clock.tSec);
   return sol;
 }
@@ -134,7 +146,8 @@ check("the state words: CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNC
   says('ground track: the bracket holds LZ-A 0/3', bracket?.label, ['LZ-A', '0/3'], CHIP_CHARS);
   check('ground track: the dot fits whole', track.strip.dot?.fits === 'whole');
   says('ground track: the dot reads its width, ±78 km', track.strip.dot?.text, [/±78 km/], CHIP_CHARS);
-  check('ground track: plains glyph', track.strip.terrain[0]?.glyph === terrainGlyph('PLAINS') && terrainGlyph('OCEAN') === '≈');
+  check('ground track: plains under the dot, ≈ the ocean\'s glyph', terrainAt(track.strip.terrain, 0.5)?.glyph === TERRAIN_PATTERN.PLAINS.site
+    && terrainGlyph('PLAINS') === '·' && terrainGlyph('OCEAN') === '≈');
   check('ground track: the planet line holds the strip around the dot', track.planet.dot !== null
     && track.planet.view.from < track.planet.dot && track.planet.view.to > track.planet.dot);
   state.landing.colony = 'RIVERSIDE';
@@ -301,6 +314,220 @@ check("the state words: CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNC
   const chip = countdownChip(state, NO_PRED, solve(state));
   check('full: the chip counts to a window', chip !== null && /^\d\d:\d\d$/.test(chip.time), JSON.stringify(chip));
   says('full: the chip aims at LZ-B (the LZ with room)', chip?.label, ['LZ-B', /^(?!.*LZ-A)/], CHIP_CHARS);
+}
+
+// --- Slice 1b ---------------------------------------------------------------------------------------------------------
+
+// A burn the landing offers (landing-orbit landingBurnOffer's shape), injected: `inSec` game s to its START BURN.
+function offerOf(reason: BurnPoint['reason'], inSec: number, extra: Partial<BurnPoint> = {}): BurnPoint {
+  return {
+    reason, preset: reason === 'lift' ? 'prograde' : 'retrograde', event: reason === 'go-low' ? 'point' : reason === 'lift' ? 'apo' : 'peri',
+    eventInSec: inSec + 10, inSec, dvKmS: 0.05, estBurnSec: 20, approaching: true, firstOfTwo: false, ...extra,
+  };
+}
+
+// The DRAG line (§3.7): only on ships with drag, at the sweet zone's lower edge.
+{
+  const ares = world();
+  check('DRAG: none on ARES-VII (layer 1 never decays)', plotLandingModel(ares, aim(ares, ares.landing.lzs[0]!.centreRad))?.dragLineKm === null);
+  const halcyon = world(1);
+  const ring = halcyon.level.ring;
+  const line = plotLandingModel(halcyon, aim(halcyon, halcyon.landing.lzs[0]!.centreRad))?.dragLineKm ?? null;
+  check('DRAG: HALCYON\'s circle at ring.min + ¼ of the band', line !== null && line === dragLineKm(ring)
+    && Math.abs(line - (ring.min + DRAG_LINE_FRAC * (ring.max - ring.min))) < 1e-9 && DRAG_LINE_FRAC === 0.25, `${line} on ${ring.min}–${ring.max}`);
+  halcyon.run.phase = 'flight';
+  check('DRAG: no landing layer in the flight', plotLandingModel(halcyon, null) === null);
+}
+
+// The grey DROP UNCERTAIN dot (§3.8): grey dot and arc, `≈` on every drop width.
+{
+  const state = world(3);
+  const lzA = state.landing.lzs[0]!;
+  const sure = aim(state, lzA.centreRad);
+  check('uncertain: a sure solution is not', dropDotModel(state, sure)?.uncertain === false && plotLandingModel(state, sure)?.dotLabel === null);
+  const sol = aim(state, lzA.centreRad, 6000, false, 2.5);
+  const dot = dropDotModel(state, sol);
+  const wide = `≈±${Math.round(sol.dot!.halfWidthKm)} km`;
+  check('uncertain: the dot is grey (uncertain), ×2.5 the sure one', sol.uncertain && dot?.uncertain === true
+    && Math.abs(sol.dot!.halfWidthKm / sure.dot!.halfWidthKm - 2.5) < 1e-6 && Math.round(sol.dot!.halfWidthKm) === 196, wide);
+  const plot = plotLandingModel(state, sol);
+  check('uncertain: the pod arc greys with it', plot?.arc?.uncertain === true);
+  check('uncertain: the plot labels the dot ≈±196 km', plot?.dotLabel === wide, String(plot?.dotLabel));
+  says('uncertain: the GROUND TRACK reads ≈±196 km', groundTrackModel(state, sol).strip.dot?.text, [wide], CHIP_CHARS);
+  check('uncertain: the GROUND TRACK\'s dot is grey', groundTrackModel(state, sol).strip.dot?.uncertain === true);
+  says('uncertain: the POD BAY\'s NEXT reads the solved dot, ≈±196 km', bayWindowModel(state, sol).nextText, [wide]);
+  says('a sure drop: no ≈ on NEXT', bayWindowModel(state, sure).nextText, [/±78 km/, /^[^≈]*$/]);
+  const lead = state.memory.find((seg) => isDriver(seg) && seg.integrity >= 80);
+  if (!lead || !isDriver(lead)) throw new Error('VESPER has a healthy driver');
+  says('uncertain: the detail panel\'s drop is ≈', driverLanding(state, lead, sol, { sensor: 2.5, plotter: 1, driver: 1 }).text, [wide]);
+}
+
+// No-go arcs (§3.6): VESPER's lava, hatched on the plot, on both GROUND TRACK lines with its word, in the class line.
+{
+  const state = world(3);
+  const [lava] = state.landing.noGo;
+  if (!lava) throw new Error('VESPER has no-go arcs');
+  const sol = aim(state, lava.centreRad);
+  const plot = plotLandingModel(state, sol);
+  check('no-go: two LAVA arcs on the plot', plot?.noGo.length === 2 && plot.noGo.every((arc) => arc.word === 'LAVA'));
+  const track = groundTrackModel(state, sol);
+  check('no-go: both on the planet line', track.planet.noGo.length === 2);
+  const span = track.strip.noGo[0];
+  check('no-go: the lava under the dot on the strip, centred, 5° wide', span !== undefined && span.word === 'LAVA'
+    && Math.abs((span.from + span.to) / 2 - 0.5) < 0.01
+    && Math.abs((span.to - span.from) * GROUND_TRACK_SPAN_KM - 5 * DEG * state.level.planet.R) < 1, JSON.stringify(span));
+  check('no-go: the terrain row draws no glyph over the lava (it is hatched)', terrainAt(track.strip.terrain, 0.5)?.kind === 'no-go'
+    && terrainAt(track.strip.terrain, 0.5)?.glyph === '');
+  check('float: +0 LAVA, in the arc\'s word', TOUCHDOWN_FLOAT_TEXT.noGo('LAVA') === '+0 LAVA');
+  const cls = bayWindowModel(state, sol).cls;
+  says('class line: VOLCANIC and what off-site scores', cls.text, [/^VOLCANIC\b/, 'off-site']);
+  says('class line: NO-GO names LAVA once', cls.noGo, ['NO-GO', 'LAVA', /^(?!.*LAVA.*LAVA)/]);
+  const ares = world();
+  check('class line: no NO-GO on ARES-VII', bayWindowModel(ares, aim(ares, ares.landing.lzs[0]!.centreRad)).cls.noGo === null);
+}
+
+// Terrain stretches (§4's glyph rows): the pattern per terrain word, the brackets flat, no-go first.
+{
+  const vesper = world(3).landing;
+  const arcs = terrainStretches(vesper);
+  const ground = arcs.filter((arc) => arc.kind === 'ground');
+  check('terrain: no-go first, then the brackets, then the ground', arcs[0]?.kind === 'no-go' && arcs[1]?.kind === 'no-go'
+    && arcs[2]?.kind === 'site' && arcs.slice(2 + vesper.lzs.length).every((arc) => arc.kind === 'ground'));
+  check('terrain: VOLCANIC ground is ^ with stretches of ·', ground.some((arc) => arc.glyph === '^') && ground.some((arc) => arc.glyph === '·')
+    && ground.every((arc) => arc.glyph === '^' || arc.glyph === '·')
+    && ground.filter((arc) => arc.glyph === '^').length > ground.length / 2);
+  check('terrain: the ground covers the planet once', Math.abs(ground.reduce((sum, arc) => sum + arc.toRad - arc.fromRad, 0) - 2 * Math.PI) < 1e-9);
+  check('terrain: the same planet reads the same', JSON.stringify(terrainStretches(vesper)) === JSON.stringify(arcs));
+  const kestrel = world(2);
+  const lzA = kestrel.landing.lzs[0]!;
+  const strip = groundTrackModel(kestrel, aim(kestrel, lzA.centreRad)).strip.terrain;
+  check('terrain: OCEAN reads · under the bracket, ≈ off it', terrainAt(strip, 0.5)?.glyph === '·' && terrainAt(strip, 0.5)?.kind === 'site'
+    && terrainAt(strip, 0.02)?.glyph === '≈' && terrainAt(strip, 0.98)?.glyph === '≈');
+}
+
+// An LZ out of the band (§3.7: a PARTIAL orbit, decay): named at the right edge, never counted down, its bracket hatched.
+{
+  const state = world(1);
+  const [lzA, lzB] = state.landing.lzs;
+  if (!lzA || !lzB) throw new Error('HALCYON has two LZs');
+  const sol = aim(state, lzA.centreRad - 40 * DEG);
+  const crafted: DropSolution = {
+    ...sol, windows: sol.windows.map((w) => (w.lz === 'LZ-B' ? { ...w, inBand: false, inBandOpenInSec: null, inBandCloseInSec: null } : w)),
+  };
+  check('out of band: LZ-B\'s bracket is hatched', bracketModels(state, crafted).find((b) => b.lz === 'LZ-B')?.outOfBand === true);
+  const strip = groundTrackModel(state, crafted).strip;
+  const oob = strip.outOfBandAhead.find((entry) => entry.lz === 'LZ-B');
+  says('out of band: LZ-B ▸ OUT OF BAND at the right edge, no countdown', oob?.text, [/^LZ-B\b/, 'OUT OF BAND', /^[^:]*$/], CHIP_CHARS);
+  check('out of band: never in the counted list', !strip.ahead.some((entry) => entry.lz === 'LZ-B') && strip.ahead.some((entry) => entry.lz === 'LZ-A'));
+  check('in band: nothing listed out of band', groundTrackModel(state, sol).strip.outOfBandAhead.length === 0);
+}
+
+// Bay Ctrl (§3.4): the pip in BAND_COPY.bay's words, and NO BAY CTRL with LAUNCH disabled (never "offline" by the pods).
+{
+  const state = world();
+  const sol = aim(state, state.landing.lzs[0]!.centreRad);
+  const caps = capabilitiesNow(state);
+  const ok = bayWindowModel(state, sol, caps);
+  check('bay ctrl: ok, the pip just names the file', ok.ctrl.band === 'ok' && !ok.ctrl.offline && ok.launch.look === 'go');
+  const hurt = bayWindowModel(state, sol, { ...caps, bay: { band: 'degraded', cadenceTac: 2.7, offline: false } });
+  check('bay ctrl: degraded, in BAND_COPY.bay\'s words', hurt.ctrl.band === 'degraded' && hurt.ctrl.text === BAND_COPY.bay.degraded
+    && hurt.launch.look === 'go');
+  const gone = bayWindowModel(state, sol, { ...caps, bay: { band: 'missing', cadenceTac: null, offline: true } });
+  check('NO BAY CTRL: LAUNCH disabled with the refusal\'s words', gone.launch.look === 'blocked'
+    && gone.launch.status === LAUNCH_REFUSAL_TEXT['BAY OFFLINE'], gone.launch.status);
+  check('NO BAY CTRL: the pip says NO BAY CTRL', gone.ctrl.offline && gone.ctrl.band === 'missing' && gone.ctrl.text === 'NO BAY CTRL');
+  says('NO BAY CTRL: the button\'s words hold NO BAY CTRL, never "offline"', gone.launch.status, ['NO BAY CTRL']);
+  state.clock.paused = true;
+  check('NO BAY CTRL: PAUSED still outranks it', bayWindowModel(state, sol, { ...caps, bay: { band: 'missing', cadenceTac: null, offline: true } })
+    .launch.status === LAUNCH_REFUSAL_TEXT.PAUSED);
+}
+
+// The engine in LANDING (§1.4): BURN while the landing goes on, LANDING OVER once it ends.
+{
+  const state = world(1);
+  aim(state, state.landing.lzs[0]!.centreRad);
+  const live = burnButton(state);
+  check('burn: the BURN button is live in the landing', live.look === 'ready' && !live.disabled, live.text);
+  state.landing.ended = 'end-landing';
+  const over = burnButton(state);
+  check('burn: LANDING OVER once the landing ends', over.disabled && over.text === 'LANDING OVER', over.text);
+}
+
+// The offer (plan §1.4, foundation review): the chip, the START BURN tick and FUEL's NEEDED read the offer, not the plan.
+{
+  const state = world(1);
+  const lzA = state.landing.lzs[0]!;
+  const sol = aim(state, lzA.centreRad - 60 * DEG);
+  const pred = computePrediction(state);
+  const warp = state.level.tacticalWarp;
+  const windowChip = countdownChip(state, pred, sol);
+  check('offer: with none, the chip counts to the window', windowChip?.kind === 'window', JSON.stringify(windowChip));
+  const soon = offerOf('rp-low', 12 * warp);
+  const chip = countdownChip(state, pred, sol, soon);
+  check('offer: a burn before the window takes the chip, mm:ss to its START BURN', chip?.kind === 'burn' && chip.time === '00:12', JSON.stringify(chip));
+  says('offer: the chip names the burn (BRAKE IN), not the LZ', chip?.label, [/\bIN$/, /^(?!.*LZ-)/], CHIP_CHARS);
+  const late = offerOf('rp-low', 1e6);
+  check('offer: a burn after the window leaves the chip to the window', countdownChip(state, pred, sol, late)?.kind === 'window');
+  const quarter = (2 * Math.PI * Math.sqrt(6000 ** 3 / state.level.planet.mu)) / 4;
+  const goLow = offerOf('go-low', quarter - 20, { eventInSec: quarter, aimLz: 'LZ-A' });
+  const tick = plotMarkers(state, pred, capabilitiesNow(state).plot, goLow).startBurn;
+  const sample = samplePath(pred, goLow.inSec);
+  check('offer: the START BURN tick sits at the offer\'s START BURN', tick !== null && sample !== null
+    && Math.hypot(tick.pos.x - sample.pos.x, tick.pos.y - sample.pos.y) < 1e-6);
+  check('offer: the raw plan alone draws no START BURN in the landing',
+    plotMarkers(state, { ...pred, burnPoint: goLow }, capabilitiesNow(state).plot, null).startBurn === null);
+  const priced = { ...pred, neededPct: 12, fuelShort: false } as Prediction;
+  check('offer: FUEL prices the offered burn', fuelModel(state, priced, goLow).neededPct === 12 && fuelModel(state, priced, null).neededPct === null);
+}
+
+// GO LOWER's marks (§3.7): the ◇ half an orbit before the launch point, counted while it is the offer; the target tick.
+{
+  const state = world(1);
+  const lzA = state.landing.lzs[0]!;
+  aim(state, lzA.centreRad - 120 * DEG, 6500);
+  const launchRad = lzA.centreRad - 70 * DEG;
+  state.landing.goLow = { lz: 'LZ-A', launchRad, burnRad: launchRad - Math.PI, targetRadiusKm: 5600, floorKm: 5100, held: false };
+  const pred = computePrediction(state);
+  const quiet = goLowMarks(state, pred, null);
+  check('◇: at the burn point on the orbit (6,500 km)', quiet !== null
+    && Math.abs(Math.hypot(quiet.point.pos.x, quiet.point.pos.y) - 6500) < 1
+    && Math.abs(angleDelta(launchRad - Math.PI, Math.atan2(quiet.point.pos.y, quiet.point.pos.x))) < 1e-9);
+  check('◇: the target tick at the launch point, for LZ-A', quiet !== null && quiet.target.label.includes('LZ-A')
+    && Math.abs(angleDelta(launchRad, Math.atan2(quiet.target.pos.y, quiet.target.pos.x))) < 1e-9);
+  check('◇: no countdown while it is not the offer', quiet?.point.countdown === null && quiet.point.lines[0] === '◇');
+  says('◇: the word under it names GO LOWER', quiet?.point.lines[1], ['GO LOWER'], CHIP_CHARS);
+  const warp = state.level.tacticalWarp;
+  const offered = goLowMarks(state, pred, offerOf('go-low', 30 * warp, { eventInSec: 42 * warp, aimLz: 'LZ-A' }));
+  check('◇: counted to the point while offered, ◇ 00:42', offered?.point.lines[0] === '◇ 00:42', JSON.stringify(offered?.point.lines));
+  check('◇: another LZ\'s offer does not count it', goLowMarks(state, pred, offerOf('go-low', 30, { aimLz: 'LZ-B' }))?.point.countdown === null);
+  check('◇: on the plot model', plotLandingModel(state, null, pred, null)?.goLow?.lz === 'LZ-A');
+  state.landing.ended = 'end-landing';
+  check('◇: gone once the landing ends', goLowMarks(state, pred, null) === null);
+}
+
+// The decay chip (§3.7's forecast) and the drag stamp: from injected forecasts and a crafted landing.decay.last.
+{
+  const state = world(1);
+  aim(state, state.landing.lzs[0]!.centreRad);
+  const two = decayChip(state, { orbitsToLeave: 1.6, nextDvKmS: 0.02 }, null);
+  says('decay: DECAY · out of band in 2 orbits (1.6 rounds up)', two?.text, ['DECAY', 'OUT OF BAND', /\b2 ORBITS\b/]);
+  check('decay: urgent at DECAY_WARN_ORBITS', two?.urgent === true && two.orbits === 1.6);
+  const five = decayChip(state, { orbitsToLeave: 5, nextDvKmS: 0.01 }, null);
+  check('decay: calm further out', five !== null && !five.urgent && five.text.includes('5 ORBITS'));
+  says('decay: the lift burn\'s key while it is offered', decayChip(state, { orbitsToLeave: 2, nextDvKmS: 0.02 }, offerOf('lift', 40))?.text,
+    ['DECAY', '[W]']);
+  check('decay: no key for another burn', !(decayChip(state, { orbitsToLeave: 2, nextDvKmS: 0.02 }, offerOf('rp-low', 40))?.text.includes('[')));
+  check('decay: nothing with ▼ above the line', decayChip(state, { orbitsToLeave: null, nextDvKmS: 0 }, null) === null
+    && decayChip(state, null, null) === null);
+  const ares = world();
+  check('decay: nothing on ARES-VII (no drag)', decayChip(ares, { orbitsToLeave: 2, nextDvKmS: 0.02 }, null) === null);
+  const kick: DragKick = { atTSec: 100, rpKm: 5400, dvKmS: 0.022, rad: 1.2, apsis: '▲', dropKm: 110 };
+  state.landing.decay = { lastKickTSec: 100, kicks: 1, last: kick };
+  const stamp = dragStamp(state.landing.decay.last);
+  says('stamp: DRAG · ▲ −110 km', stamp?.text, ['DRAG', '▲', '−110 km'], CHIP_CHARS);
+  check('stamp: at the kick\'s ▼', stamp !== null && Math.abs(Math.hypot(stamp.pos.x, stamp.pos.y) - 5400) < 1e-9
+    && Math.abs(Math.atan2(stamp.pos.y, stamp.pos.x) - 1.2) < 1e-9);
+  check('stamp: none under DRAG_STAMP_MIN_KM', dragStamp({ ...kick, dropKm: DRAG_STAMP_MIN_KM - 0.5 }) === null && dragStamp(null) === null);
 }
 
 finish();

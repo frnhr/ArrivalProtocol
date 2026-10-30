@@ -1,6 +1,7 @@
 import type { GameState, Pace, PresetMode, TerminalStatus, LogEntry } from '@state/schema';
 import type { Ring, Vec2 } from '@/types/orbit';
-import { secUntil, samplePath, loopProblem, type Prediction } from '@systems/predict';
+import { secUntil, samplePath, loopProblem, type BurnPoint, type Prediction } from '@systems/predict';
+import type { DecayForecast } from '@systems/landing-orbit';
 import { tac, mainCountdown, skipBlockReason, apsisTimesHidden, type CountdownKind } from '@systems/pace';
 import {
   canAccept, acceptStrands, burnVerb, formatTac, PRESET_KEY, PRESET_NAME, TRIM_PROBLEM,
@@ -10,7 +11,7 @@ import {
   capabilitiesNow, engineFault, presetsAvailable, roleHealth, thrustCap, BAND_COPY, ROLE_LABEL, AUTOPILOT_DAMAGED_LINE,
   type EngineFault, type Capabilities, type Band, type CapabilityRole,
 } from '@systems/capabilities';
-import { getByRole, shownIntegrity, chargeLeft, verbSecondsLeft } from '@state/selectors';
+import { getByRole, shownIntegrity, chargeLeft, verbSecondsLeft, engineOpen } from '@state/selectors';
 import { HOLLOW_VERB } from '@data/hollow-text';
 import { threadsBusy, threadsTotal } from '@systems/ops-core';
 import { isHollowAlert, GHOST_WARN_ID, GHOST_ALARM_ID } from '@systems/alerts';
@@ -22,13 +23,13 @@ import { AUTO_BUTTON_TEXT, AUTO_BUTTON_REASON } from '@data/skill-text';
 import { autoburnSkill, autoburnRefusal, autoburnArmedInTac, skillFiles } from '@systems/autoburn';
 import { zoneVerdict, zoneRacks, racksText, debrisRack, type Zone, type ZoneHit, type ZoneVerdict } from '@/types/zone';
 import { mindZonesBlind } from '@systems/zones';
-import { LANDING_HUD_TEXT, LANDING_REPORT_TEXT, BAND_TEXT, LANDING_PLOT_TEXT } from '@data/landing-text';
+import { LANDING_HUD_TEXT, LANDING_REPORT_TEXT, BAND_TEXT, LANDING_PLOT_TEXT, DECAY_CHIP_TEXT } from '@data/landing-text';
 import type { DropSolution } from '@/types/landing';
 import { landingMoment } from '@systems/landing-rules';
 import {
   COUNTDOWN_RED_TAC, LOCK_HOLD_AI_SEC, PLOT_SHIP_MARGIN, PLOT_RING_FACTOR, PLOT_FLYBY_TAG_FRAC,
   STRANDED_RANGE_FRAC, TACTICAL_LEAD_BURN_TAC, UPCOMING_EVENTS_MAX, UPCOMING_HORIZON_TAC,
-  OVERCLOCK_FACTOR, REACTOR_THREAD_SHARE, CHOICE_URGENT_SEC, GHOST_DRIFT_ROUND_KM,
+  OVERCLOCK_FACTOR, REACTOR_THREAD_SHARE, CHOICE_URGENT_SEC, GHOST_DRIFT_ROUND_KM, DECAY_WARN_ORBITS,
 } from '@data/tuning';
 
 // What the flight HUD shows, as plain data: the header countdown chip, pace label and SKIP
@@ -39,6 +40,12 @@ import {
 // only patch the DOM with what comes back. The ones that depend on busy Core threads (THRUST
 // LIMIT, REACTOR, the MIND chip, and the plot models' default capabilities) also read the ops
 // core's live thread count, so a test mounts the ops core for them.
+//
+// LANDING (slice 1b: the engine is open in the landing). Where the flight reads the plan's burn point (pred.burnPoint:
+// the countdown chip, the START BURN tick, the FUEL bar's NEEDED tick), the landing reads the OFFER instead
+// (landing-orbit landingBurnOffer: the one answer pace, the strip and the beeps read), passed in as `offer` so these
+// stay pure and a test can hand one in. A ring trim the tank can't pay for, or a burn the kid declined, is in the plan
+// but not offered, and nothing on screen may count down to it.
 
 // unknown: what a blind instrument can't tell (PATH UNCERTAIN, NO SIGNAL), in the dim grey.
 export type Tone = 'plain' | 'good' | 'danger' | 'flyby' | 'ghost' | 'unknown';
@@ -178,8 +185,32 @@ function windowChip(state: Readonly<GameState>, sol: Readonly<DropSolution> | nu
   return chip(LANDING_PLOT_TEXT.chipIn(target.lz), target.launchInSec, tac(target.launchInSec, warp) <= COUNTDOWN_RED_TAC);
 }
 
-export function countdownChip(state: Readonly<GameState>, pred: Prediction, sol: Readonly<DropSolution> | null = null): CountdownChip | null {
-  if (state.run.phase === 'landing') return windowChip(state, sol);
+// LANDING with a burn offered (slice 1b): the offer's START BURN (`BRAKE IN 00:12`) while it comes before the window's
+// launch moment (the window first once its moment has come, or comes sooner); null when the window comes first. The
+// offer is not counted once it is due (the strip's HOLD [SPACE] NOW says that).
+function offerChip(state: Readonly<GameState>, pred: Prediction, sol: Readonly<DropSolution> | null, offer: Readonly<BurnPoint>): CountdownChip | null {
+  const now = state.clock.tSec;
+  const warp = state.level.tacticalWarp;
+  const burnInSec = secUntil(pred, offer.inSec, now);
+  if (burnInSec <= 0) return null;
+  if (sol !== null) {
+    const moment = landingMoment(state, sol, now, capabilitiesNow(state).bay.offline);
+    const open = moment.open;
+    if (open !== null && open.awaited && open.launchCome) return null;
+    if (moment.target !== null && moment.target.launchInSec <= burnInSec) return null;
+  }
+  const event = `${burnVerb(offer).toUpperCase()} IN`;
+  const tacSec = tac(burnInSec, warp);
+  return {
+    kind: 'burn', label: event, event, time: formatCountdown(tacSec), urgent: tacSec <= COUNTDOWN_RED_TAC,
+    fastForward: worldIsFast(state), slow: worldIsSlow(state),
+  };
+}
+
+export function countdownChip(
+  state: Readonly<GameState>, pred: Prediction, sol: Readonly<DropSolution> | null = null, offer: Readonly<BurnPoint> | null = null,
+): CountdownChip | null {
+  if (state.run.phase === 'landing') return (offer === null ? null : offerChip(state, pred, sol, offer)) ?? windowChip(state, sol);
   const countdown = mainCountdown(state, pred);
   if (!countdown) return null;
   let event: string;
@@ -198,6 +229,27 @@ export function countdownChip(state: Readonly<GameState>, pred: Prediction, sol:
     fastForward: worldIsFast(state),
     slow: worldIsSlow(state),
   };
+}
+
+// The decay chip on the NAV PLOT (slice 1b, §3.7): while drag is sinking the orbit (▼ under the DRAG line), how many
+// orbits until ▼ leaves the band if nobody burns (`DECAY · OUT OF BAND IN 2 ORBITS`), urgent from DECAY_WARN_ORBITS
+// (L10's moment), with the 'lift' burn's key while that burn is offered (`· [W]`: PRO at ▲). `forecast` is
+// landing-orbit decayForecast's answer for the live orbit and `offer` landingBurnOffer's, both injected. Null outside a
+// landing that goes on, on a ship without drag, or with ▼ at or above the line.
+export interface DecayChip {
+  text: string;       // may contain a [KEY] cap
+  orbits: number;
+  urgent: boolean;
+}
+
+export function decayChip(
+  state: Readonly<GameState>, forecast: Readonly<DecayForecast> | null, offer: Readonly<BurnPoint> | null = null,
+): DecayChip | null {
+  if (state.run.phase !== 'landing' || state.landing.ended !== null || !state.landing.drag) return null;
+  const orbits = forecast?.orbitsToLeave ?? null;
+  if (orbits === null || !Number.isFinite(orbits)) return null;
+  const key = offer !== null && offer.reason === 'lift' ? DECAY_CHIP_TEXT.key(PRESET_KEY[offer.preset]) : '';
+  return { text: `${DECAY_CHIP_TEXT.chip(orbits)}${key}`, orbits, urgent: Math.max(1, Math.ceil(orbits)) <= DECAY_WARN_ORBITS };
 }
 
 // The header crumbs (§7.1): UNIT-047 · WAVE 1 / ARES-VII / what is happening right now, in the words the
@@ -392,6 +444,12 @@ export function noSignalReason(state: Readonly<GameState>): string {
 // says DON'T HIT THE PLANET).
 export function plotChip(state: Readonly<GameState>, pred: Prediction, plot: PlotCaps = capabilitiesNow(state).plot): Label {
   const status = state.burn.status;
+  // LANDING with the engine open (slice 1b): the lock's word stays on the chip, unless a burn has put the path on the
+  // planet or flung it open, which the plot must say as the flight does (the line under the chip is red or dashed).
+  if (status !== 'approaching' && engineOpen(state) && plot.mode !== 'no-signal') {
+    if (pred.outcome === 'impact') return { text: 'IMPACT', tone: 'danger' };
+    if (pred.outcome === 'open') return { text: 'FLYBY', tone: 'flyby' };
+  }
   if (status !== 'approaching') return { text: TERMINAL[status].word, tone: TERMINAL[status].tone };
   if (plot.mode === 'no-signal') return { text: BAND_COPY.navplot.dead, tone: 'danger' };
   if (pred.outcome === 'impact') return { text: 'IMPACT', tone: 'danger' };
@@ -421,7 +479,10 @@ export interface PlotReadouts {
 
 function flightStatus(state: Readonly<GameState>): Label {
   const burn = state.burn;
-  if (burn.status !== 'approaching') return { text: TERMINAL[burn.status].short, tone: TERMINAL[burn.status].tone };
+  // LANDING (slice 1b): the engine is open, so BURNING and the engine firing by itself read as in the flight.
+  if (burn.status !== 'approaching' && !(engineOpen(state) && (isThrustOn(state) || isGhostFiring(state)))) {
+    return { text: TERMINAL[burn.status].short, tone: TERMINAL[burn.status].tone };
+  }
   if (isThrustOn(state)) return { text: 'BURNING', tone: 'flyby' };
   // WP10: the engine firing by itself (C2), named where the kid reads what the ship is doing: not their burn.
   if (isGhostFiring(state)) return { text: GHOST_TEXT.status, tone: 'danger' };
@@ -503,15 +564,18 @@ const NO_APSIS_TIME = '—';
 
 // A ≈ sensor puts ≈ on the altitudes. A blind one (PATH UNCERTAIN) keeps only ✕ IMPACT: no ▼/▲,
 // no START BURN, no FLYBY tag, because none of them can be trusted. No signal: nothing.
-export function plotMarkers(state: Readonly<GameState>, pred: Prediction, plot: PlotCaps = capabilitiesNow(state).plot): PlotMarkers {
+// In LANDING the START BURN tick is the offer's (`offer`, landing-orbit landingBurnOffer), never the raw plan's.
+export function plotMarkers(
+  state: Readonly<GameState>, pred: Prediction, plot: PlotCaps = capabilitiesNow(state).plot, offer: Readonly<BurnPoint> | null = null,
+): PlotMarkers {
   const none: PlotMarkers = { impact: null, peri: null, apo: null, startBurn: null, flyby: null };
   if (plot.mode === 'no-signal') return none;
-  const markers = trueMarkers(state, pred, plot);
+  const markers = trueMarkers(state, pred, plot, offer);
   if (plot.mode === 'uncertain') return { ...none, impact: markers.impact };
   return markers;
 }
 
-function trueMarkers(state: Readonly<GameState>, pred: Prediction, plot: PlotCaps): PlotMarkers {
+function trueMarkers(state: Readonly<GameState>, pred: Prediction, plot: PlotCaps, offer: Readonly<BurnPoint> | null): PlotMarkers {
   const rough = plot.mode === 'approx' ? APPROX : '';
   const { planet, ring, tacticalWarp } = state.level;
   const now = state.clock.tSec;
@@ -554,8 +618,9 @@ function trueMarkers(state: Readonly<GameState>, pred: Prediction, plot: PlotCap
   // behind the ship, where it reads as a burn just missed. None once ACCEPT ORBIT is the only way on:
   // that burn is no option any more (Prediction.acceptOnly).
   let startBurn: PlotMarkers['startBurn'] = null;
-  const burnPoint = pred.burnPoint;
-  if (burnPoint && burnPoint.approaching && !pred.acceptOnly && secUntil(pred, burnPoint.inSec, now) > 0) {
+  const landing = state.run.phase === 'landing';
+  const burnPoint = landing ? offer : pred.burnPoint;
+  if (burnPoint && burnPoint.approaching && (landing || !pred.acceptOnly) && secUntil(pred, burnPoint.inSec, now) > 0) {
     const sample = samplePath(pred, burnPoint.inSec);
     if (sample) startBurn = { pos: sample.pos, dir: sample.dir, lines: ['START BURN'], tone: 'plain' };
   }
@@ -705,9 +770,16 @@ const ENGINE_FAULT_BUTTON: Record<EngineFault, string> = {
   dead: BAND_COPY['engine-io'].dead,
 };
 
+// The engine closed (selectors engineOpen): the flight is over, or in LANDING the landing is (slice 1b: the engine is
+// open for the landing's burns until it ends).
+const ENGINE_CLOSED_TEXT = { flight: 'FLIGHT OVER', landing: 'LANDING OVER' } as const;
+
 export function burnButton(state: Readonly<GameState>): BurnButtonModel {
   const burn = state.burn;
-  if (burn.status !== 'approaching') return { text: 'FLIGHT OVER', look: 'blocked', disabled: true };
+  if (!engineOpen(state)) {
+    const over = state.run.phase === 'landing' && state.landing.ended !== null ? ENGINE_CLOSED_TEXT.landing : ENGINE_CLOSED_TEXT.flight;
+    return { text: over, look: 'blocked', disabled: true };
+  }
   if (state.clock.paused) return { text: 'PAUSED · [P] TO RESUME', look: 'blocked', disabled: true };
   if (burn.fuelPct <= 0) return { text: 'FUEL EMPTY', look: 'blocked', disabled: true };
   const fault = engineFault(capabilitiesNow(state));
@@ -787,11 +859,15 @@ export interface FuelModel {
   needText: string;          // the line under the bar ('' when no burn is planned)
 }
 
-export function fuelModel(state: Readonly<GameState>, pred: Prediction): FuelModel {
+// In LANDING the NEEDED tick prices the offer (`offer`: landing-orbit landingBurnOffer, which is the plan's own burn point
+// when one is offered, so pred.neededPct is its price); nothing while no burn is offered.
+export function fuelModel(state: Readonly<GameState>, pred: Prediction, offer: Readonly<BurnPoint> | null = null): FuelModel {
   const pct = Math.max(0, Math.min(100, state.burn.fuelPct));
   // No NEEDED tick once ACCEPT ORBIT is the only way on (Prediction.acceptOnly): the burn it would price
   // is no option (LEAD-1 review round 2: `NEXT BURN NEEDS 31%` stood beside `NOT ENOUGH FUEL`).
-  const neededPct = state.burn.status === 'approaching' && pred.burnPoint && !pred.acceptOnly ? pred.neededPct : null;
+  const flying = state.burn.status === 'approaching' && pred.burnPoint && !pred.acceptOnly;
+  const landingOffer = state.run.phase === 'landing' && engineOpen(state) && offer !== null;
+  const neededPct = flying || landingOffer ? pred.neededPct : null;
   // The tank is short of the next burn by the plan's own snapshot (Prediction.fuelShort), as the strip judges it: the
   // live FUEL against the 10 Hz NEEDED disagreed with it for seconds during a held trim (LEAD-2 review round 1). A
   // short tank whose burn is still the plan (ACCEPT ORBIT is not the only way on) spends it all: saying NOT ENOUGH
