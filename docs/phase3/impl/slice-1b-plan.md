@@ -785,3 +785,112 @@ To Fran with the slice.
     DRAG_STAMP_MIN_KM while ▼ is under the line, shown DRAG_LESSON_SEC (5, ORBIT's tuning block).
 16. **FlightContext.goLow** (aim, held, released) is new; three test literals gained `goLow: null`. `shipObjective(ctx)` picks
     the flight table or landingFlightRow (flight-controls' lineAsks, ghost-thrust's SKIP plan).
+
+### Deviations (review fixes)
+
+The independent review of the merged slice (probes p1–p5) found two blockers-in-effect, two majors, nine minors and a few
+nits. All are fixed, each with a regression check built from a small state: most in the new `landing/review-1b.test.ts`
+(about 8 s), the table's in `landing/table.test.ts`, the views' in `landing/hud.test.ts`. The reviewer's p1, p4 and p5 now
+behave. Each item with its root cause and what changed.
+
+**B1. END LANDING (or an auto-end) on an impact course dodged the crash** (p1: KESTREL, ▼ at 1,000 km, scored as in orbit).
+- Root cause: `endLanding` and the auto-ends parked the pods whatever the path did, and orbit-sim's crash / escape check
+  ran only while the engine was open (`live`), so a ship coasting after the landing ended could not crash.
+- (a) `landing-rules.endLandingRefusal(state, outcome)` adds `'IMPACT'` after NOT LANDING / LANDING OVER / PAUSED.
+  `endLanding` refuses with it (the 'refused' key `END|HITS THE PLANET` flashes `DON'T HIT THE PLANET first`, a new
+  `END_LANDING_REFUSAL_TEXT`), and `bayWindowModel(state, sol, outcome, caps?)` (a new third parameter) shows those
+  words on the disabled END LANDING button. The all-launched and `landingStuck` auto-ends hold while the prediction hits
+  the planet (`landing.ts landingEndHeld`); the landing ends by itself once the ship is safe, or as 'ship-lost'.
+- (b) orbit-sim runs the crash / escape check whenever the ship moves in LANDING; after the landing ended,
+  `endLandingLost` writes the status and pauses as before, does not re-run endNow, and turns the parked pods NOT
+  LAUNCHED (`state/actions.leaveOrbitWithParked`). `landingResult` folds a parked pod as not launched for an outcome
+  that left orbit, so the LOST card, `shipOutcomeOf` and the result agree.
+- Checks: the refusal and the button; the held all-launched end and its release on a safe orbit; a crash in the linger
+  on KESTREL (transmit) and on LAST LIGHT (`flagship-lost`, no report under the card).
+- Also: the flight's row now leads L2 on any impact course (`LandingContext.impact`), not only for an `F4…` id, so the
+  empty tank's NOFUEL-impact row leads too.
+
+**M1. No fuel and no drop dot: a strip you could not follow, and no end** (p5: ARES-VII, e 0.7, fuel 0).
+- Root cause: guidance returns no flight row for a closed loop on an empty tank, so the table fell to L13-nodrop (`fly
+  back into the launch band`), and nothing ended the landing.
+- `landing-L12-nodrop` (`LANDING_NODROP_LINES.L12noDrop`: `NO DROP DOT ON THIS ORBIT — END LANDING parks them in
+  orbit`), right after L12-bay, when there is no dot, the tank is empty or short of the plan's burn
+  (`LandingContext.tankShort`, from `LandingFlight.tankShort`), and the path does not hit the planet. While a burn can
+  still help, L2 leads as before (`flightLeads`: `noDrop && !tankShort`); with the tank short, an unpaid trim yields.
+- `landingStuck(state, sol)` gains `'no-drop'` (no dot, FUEL 0): `LandingEnd` and `LANDING_END_TEXT` have it. Held
+  on an impact course like every auto-end.
+- The id joins `END_LANDING_ROWS` (harness-landing) and the e2e kid's END LANDING regex, which now also has
+  `landing-L12-bay` (it was missing).
+
+**M2. Ghost thrust in the landing was a trap.** Lead decision, all three done.
+- (1) Row L7b (`landing-L7b`, 'soon', layer mind, after L7 and before L10) while `caps.thrustCtrl.ghost !== null`
+  and a burst has fired in this landing (`LandingState.ghostBursts`, new): `THE ENGINE FIRES BY ITSELF — [TAB], SWAP
+  THRUST CTRL`; in the MIND `… — SWAP THRUST CTRL to Thrust.alt` with the SWAP chip, then the file, lit (as the VESPER
+  lesson); with the Swap file too damaged, `landing-L7b-fixswap` (`— [TAB], REPAIR Swap first` / `— REPAIR Swap, then
+  SWAP THRUST CTRL`). `LANDING_GHOST_LINES` in landing-text; worst cases (a 20-char backup name) fit 70.
+  - `spareControllerOf` became `tool-targets.controllerSwapOf`: the orphaned spare when the controller is gone (F2,
+    unchanged), else the controller's own backup (L7b). Without a SWAP licence, a backup or a Swap file there is no row.
+  - It keeps the SKIP (` · [F]` when it fits, else the key): risk 12, it shadows L13. A choice: the row names the fix, and
+    taking the SKIP from a kid who can't SWAP yet would leave them nothing to press.
+- (2) The first burst is keyed per phase (`selectors.ghostBurstsThisPhase`): pace's `skipLandsInSec`,
+  `thrustHoldsTactical`, orbit-sim's SKIP-tick assertion and `laterBurstWindow` read it, so the landing's first burst
+  ends a SKIP and runs at TACTICAL even after the flight's. The alarm stays the ship's first only.
+- (3) Ghost bursts in the landing push at `LANDING_BURN_POWER` (`orbit-sim.ghostAccel`, both the sub-steps and a SKIP's
+  flown burst).
+- **The measurement** (a probe, VESPER with Thrust Ctrl failing, locked at the ring's middle, seeds 1–3, real seconds
+  from the lock): passive (no key), ▼ under the planet at 79 / 95 / 110 s before, 129 / 193 / 95 s after; the crash
+  210–227 s before, 199–349 s after. A kid who presses every offered [F] and nothing else: 70–98 s before, 51–150 s
+  after (the landing's SKIPs fly further through the later bursts). L7b is on the strip 3.3–3.4 s after the landing's
+  first burst (2–6 s after the lock), so the kid has about 45–190 s with the fix named before ▼ is under the planet.
+  The checks: the SKIP's stop and TACTICAL on the landing's first burst with 5 flight bursts before it, the burst's push
+  at 0.5, L7b up, and a SWAP silencing it with the row gone.
+
+**Minors**
+1. **L9 said `fly lower` on an empty or short tank** (p4). `goLowerFit` takes `fuelDvKmS` and returns null when the
+   go-low burn (`goLowDvKmS` at its point, predict's own price) costs more than the tank holds. `TooWide.goLower` is the
+   `GoLowerFit` itself (moved to types/landing) with `TooWide.launchRad`; `goLowAimNow` builds the aim from it, so L9
+   and the burn agree by construction and the fit is worked out once a frame. `tooWideVerdict(lz, launchRad, repair,
+   fit, decayWarned)`. The cost comment now says 0.26–0.40 ms a call (p2).
+2. **L10 and the chip said `in 1 orbit` with ▼ already under the band.** At 0 orbits L10 reads `ORBIT DECAYED — ▼ is out of
+   the band` (keeping the lift's key) and the chip `DECAY · ▼ OUT OF BAND`, urgent.
+3. **The chip printed a lower bound as exact.** `DecayForecast.lowerBound` (past FORECAST_MAX_KICKS): `IN 97+ ORBITS`.
+4. **A declined GO LOWER came back every orbit.** A go-low decline now ends on a launch into its LZ or that LZ filling
+   (touchDown), not when its window closes or on a launch elsewhere; a declined trim still ends on any launch.
+5. **`dueWatch` outlived the landing.** endNow resets it (MERGE's reopen starts its offers afresh). Checked through the
+   world-reset report's `due`.
+6. **L12-band's header comment** was wrong: a declined trim still leads as L2 (flightLeads reads the plan's row). Kept
+   so, and the comment says why: that trim is the only way to land anyone there, and the decline already stops pace and
+   the SKIP from pulling the kid to it. L12-band is reached with no flight row (a closed loop on an empty tank).
+7. **GO LOWER could not be held under MANUAL.** `attitude.fliesAlong(mode, sasMode, heading, orbit)`: the preset, or with
+   none held the heading within PRESET_ALIGN_DEG. `goLowTick` holds on the kid's own thrust (`burn.firing`: a ghost
+   burst no longer counts) while the ship flies RETRO either way; `FlightContext.goLow.retro` drives GO-LOW-keep and
+   GO LOWER's timeline (no `turn to RETRO` once pointed by hand).
+8. **L3b's twin** `landing-L3b-wide`: `NO ROOM IN THE BAND — [L] lands in a full LZ, WIDE DROP` when the dot never fits
+   this pass.
+9. **The GROUND TRACK counted down with NO BAY CTRL.** `strip.ahead` lists windows only while `moment.awaited` (no Bay
+   Ctrl, no driver that can ever launch, the landing over: nothing is counted down to). `outOfBandAhead` is unchanged.
+
+**Nits**
+- `landing-orbit.offerInTac(state, pred, aheadSec = 0)`: the one countdown to the offered burn for pace (TACTICAL lead
+  with its tick of look-ahead, the SKIP's stop), `hollow.landingBurnProjected` and `landingFlightOf.burnInTac` (L2's
+  near-burn lead). pace's `offerInSec` is gone. It rebases with the prediction's `asOfTSec` itself, as predict
+  secUntil does, since landing-orbit may not import predict's values.
+- `landing-orbit.decayWarned` (≤ DECAY_WARN_ORBITS, unrounded) and `decayLiftAhead` (≤ 2×): decayWarnOrbits, the chip's
+  urgent look and predict's lift read them.
+- `highestFittingRadius(…, floorKm)`, validated inside the band; its doc notes where `goLowerFit` returns null (the
+  launch point already fits, or the tank can't pay).
+- engine-landing's ghost check asserts ENGINE FIRING on a tick that delivered thrust (it accepted a quiet tick).
+- New checks: GO LOWER under KESTREL's DRAG line (one LZ 190 km wide from 6,800 km: the target is the floor, 5,100 km)
+  with the lift offered from twice the warning (4.0 orbits out), after the window the GO LOWER was for, its START BURN
+  between windows; B1; M1; L9 with an empty and a 10 % short tank.
+- `landing/table`'s fuzz draws 2,000 contexts (was 400): with the new fields, 400 draws missed L5-nogo or L8 on most
+  seeds.
+
+**Noticed, not changed (for Fran)**
+- On a ship whose LZs are less than half an orbit apart (KESTREL's three), GO LOWER's ◇ (half an orbit before the launch
+  point) always comes after the awaited window, so the kid launches wide drops first and GO LOWER is never flown before
+  the window it is for; the aim then moves to the next LZ. GO LOWER only reaches its burn on a one-LZ approach (ARES-VII)
+  or when the kid lets windows pass. Worth a look with AUTOBURN v3's landing orbit.
+- After GO LOWER under the DRAG line, the lift (offered from twice the warning) takes ▼ back over the line, where the dot
+  is too wide again, so L9 offers GO LOWER again: the two can alternate. Holding the orbit at max(DRAG line, …) is the
+  floor v3 can now pass to `highestFittingRadius`.
