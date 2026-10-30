@@ -6,7 +6,7 @@ import { getSensedPrediction, type Prediction } from '@systems/predict';
 import { isThrustOn, isGhostFiring } from '@systems/orbit-sim';
 import { capabilitiesNow } from '@systems/capabilities';
 import {
-  plotViewRadius, plotChip, plotReadouts, plotMarkers, plotZones, noSignalReason, type Label, type PlotMarker, type Tone,
+  plotViewRadius, plotChip, plotReadouts, plotMarkers, plotZones, noSignalReason, decayChip, type Label, type PlotMarker, type Tone,
   type PlotZoneModel,
 } from '@systems/flight-hud';
 import { makeProjector, type Projector, type Vec2 } from '@/types/orbit';
@@ -18,11 +18,13 @@ import { createScrambler } from '@components/hud/scrambler';
 import {
   SVG_NS, svgEl, fmt, setCircle, annulus, circlePath, pathsByColour, hazardPath, bandWidth,
 } from '@components/hud/plot-draw';
-import { PLOT_FUZZ_MIN_UNITS, PLOT_UNCERTAIN_MIN_UNITS, PLOT_PLANET_MIN_UNITS, TOUCHDOWN_FLOAT_MS } from '@data/tuning';
+import { PLOT_FUZZ_MIN_UNITS, PLOT_UNCERTAIN_MIN_UNITS, PLOT_PLANET_MIN_UNITS, TOUCHDOWN_FLOAT_MS, DRAG_STAMP_MS } from '@data/tuning';
 import { BAND_TEXT, TOUCHDOWN_FLOAT_TEXT } from '@data/landing-text';
 import { on } from '@systems/events';
 import { getDropSolution } from '@systems/drop-cache';
-import { plotLandingModel, ringLabel } from '@systems/landing-hud';
+import { plotLandingModel, ringLabel, dragStamp, type GoLowMarks } from '@systems/landing-hud';
+import { landingBurnOffer, decayForecast } from '@systems/landing-orbit';
+import { noGoAt } from '@systems/landing-rules';
 import { replayAnimation } from '@components/dom';
 import { createPlotLandingLayer } from './plot-landing';
 
@@ -47,6 +49,11 @@ import { createPlotLandingLayer } from './plot-landing';
 // file scrambles the readout row's digits.
 // Nodes are built once and patched in place at the game tick. Colours are CSS tokens (the
 // classes live in game.css), so the plot reskins with the mode like everything else.
+// LANDING (slice 1b, the engine open): the START BURN tick is the burn the landing OFFERS (landing-orbit
+// landingBurnOffer), GO LOWER's ◇ (its countdown) and target tick are markers like ▼ and ▲, the decay chip sits under the
+// line-state chip (`DECAY · OUT OF BAND IN 2 ORBITS`), and a drag kick stamps `DRAG · ▲ −110 km` where it happened. The
+// landing layer (plot-landing) draws the DRAG circle, the hatched no-go arcs and the grey uncertain dot. Telemetry below
+// 60 garbles the stamp, the decay chip and the ◇'s countdown, as it does the readouts.
 
 const VIEWBOX = 320;     // the svg's viewBox is set to "0 0 320 320" at mount
 const MARGIN = 14;       // viewBox units kept clear around the plot radius
@@ -193,6 +200,8 @@ interface PlotNodes {
   pathGreen: SVGPathElement;
   pathImpact: SVGPathElement;
   startBurn: MarkerNodes;
+  goLow: MarkerNodes;
+  goLowTarget: MarkerNodes;
   impact: MarkerNodes;
   peri: MarkerNodes;
   apo: MarkerNodes;
@@ -250,6 +259,8 @@ function build(svg: SVGSVGElement): PlotNodes {
     pathGreen: svgEl('path', 'np-path np-path-green'),
     pathImpact: svgEl('path', 'np-path np-path-impact'),
     startBurn: marker(svgEl('line', 'np-burn-tick'), 'np-burn-label'),
+    goLow: marker(svgEl('polygon', 'np-golow'), 'np-golow-label'),
+    goLowTarget: marker(svgEl('line', 'np-golow-target'), 'np-golow-target-label'),
     impact: marker(svgEl('path', 'np-impact-mark'), 'np-impact-label'),
     peri: marker(svgEl('polygon', 'np-apsis np-peri'), 'np-peri-label'),
     apo: marker(svgEl('polygon', 'np-apsis np-apo'), 'np-apo-label'),
@@ -265,9 +276,10 @@ function build(svg: SVGSVGElement): PlotNodes {
   svg.append(
     nodes.planet, nodes.surface, nodes.atm, nodes.ring, nodes.ringLabel, nodes.zones,
     nodes.band, nodes.pathFlyby, nodes.pathGreen, nodes.pathImpact, nodes.hazardCasing, nodes.hazard,
-    nodes.startBurn.glyph, nodes.impact.glyph, nodes.peri.glyph, nodes.apo.glyph,
+    nodes.startBurn.glyph, nodes.goLowTarget.glyph, nodes.goLow.glyph, nodes.impact.glyph, nodes.peri.glyph, nodes.apo.glyph,
     ...nodes.trail, nodes.flame, nodes.ship,
-    nodes.zoneLabels, nodes.startBurn.label, nodes.impact.label, nodes.peri.label, nodes.apo.label, nodes.flyby,
+    nodes.zoneLabels, nodes.startBurn.label, nodes.goLow.label, nodes.goLowTarget.label, nodes.impact.label, nodes.peri.label,
+    nodes.apo.label, nodes.flyby,
   );
   return nodes;
 }
@@ -503,6 +515,13 @@ function triangle(spot: Vec2, pointsDown: boolean): string {
   return `${fmt(spot.x - MARK_SIZE)},${fmt(baseY)} ${fmt(spot.x + MARK_SIZE)},${fmt(baseY)} ${fmt(spot.x)},${fmt(tipY)}`;
 }
 
+// GO LOWER's ◇ (§3.7): a diamond on the orbit where the RETRO burn is centred.
+function diamond(spot: Vec2): string {
+  const size = MARK_SIZE;
+  return `${fmt(spot.x)},${fmt(spot.y - size)} ${fmt(spot.x + size * 0.75)},${fmt(spot.y)} `
+    + `${fmt(spot.x)},${fmt(spot.y + size)} ${fmt(spot.x - size * 0.75)},${fmt(spot.y)}`;
+}
+
 function cross(spot: Vec2): string {
   const size = MARK_SIZE;
   return `M${fmt(spot.x - size)},${fmt(spot.y - size)}L${fmt(spot.x + size)},${fmt(spot.y + size)}`
@@ -631,7 +650,11 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
   const statusEl = requireById('npStatus');
   const veilEl = requireById('npVeil');
   const veilWhyEl = requireById('npVeilWhy');
-  const scramblers = { lowest: createScrambler(), highest: createScrambler(), range: createScrambler() };
+  const decayEl = requireById('npDecay');
+  const scramblers = {
+    lowest: createScrambler(), highest: createScrambler(), range: createScrambler(), decay: createScrambler(),
+    goLow: createScrambler(), stamp: createScrambler(),
+  };
 
   svg.setAttribute('viewBox', `0 0 ${VIEWBOX} ${VIEWBOX}`);
   const nodes = build(svg);
@@ -685,13 +708,19 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
 
   // The chip over the plot's corner (HTML), in viewBox units (through the svg's screen matrix, so a phone's letterboxed
   // square maps right too): the labels keep off it, and the ship is kept out from under it.
+  // With the decay chip under it (LANDING, slice 1b) the box covers both.
   function chipBox(): Box | null {
     if (chipEl.textContent === '' || geometry.width <= 0) return null;
-    const key = `${chipEl.textContent}|${chipEl.className}|${geometry.width}|${geometry.height}`;
+    const key = `${chipEl.textContent}|${chipEl.className}|${decayEl.hidden ? '' : decayEl.textContent}|${geometry.width}|${geometry.height}`;
     if (key === geometry.chipKey) return geometry.chip;
     geometry.chipKey = key;
     const matrix = svg.getScreenCTM();
-    const chipRect = chipEl.getBoundingClientRect();
+    const ownRect = chipEl.getBoundingClientRect();
+    const decayRect = decayEl.hidden ? null : decayEl.getBoundingClientRect();
+    const chipRect = decayRect === null || decayRect.width <= 0 ? ownRect : {
+      left: Math.min(ownRect.left, decayRect.left), top: Math.min(ownRect.top, decayRect.top),
+      right: Math.max(ownRect.right, decayRect.right), bottom: Math.max(ownRect.bottom, decayRect.bottom), width: ownRect.width,
+    };
     if (matrix === null || chipRect.width <= 0) {
       geometry.chip = null;
       return null;
@@ -905,17 +934,23 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     const plot = caps.plot;
     const { planet, ring } = state.level;
     const ship: Vec2 = { x: state.orbit.x, y: state.orbit.y };
+    const noSignal = plot.mode === 'no-signal';
     // The chip first: its box is this frame's (the labels keep off it, the ship is zoomed out from under it).
     const chip = plotChip(state, pred, plot);
     if (chipEl.textContent !== chip.text) chipEl.textContent = chip.text;
     const chipCls = `np-chip tone-${chip.tone}`;
     if (chipEl.className !== chipCls) chipEl.className = chipCls;
+    // LANDING (slice 1b): the burn the landing offers (the START BURN tick, GO LOWER's countdown, the decay chip's key)
+    // and the decay forecast, from landing-orbit.
+    const landing = state.run.phase === 'landing';
+    const offer = landing ? landingBurnOffer(state, pred) : null;
+    const forecast = landing && state.landing.drag ? decayForecast(state.orbit, planet.mu, ring, true) : null;
+    paintDecay(noSignal ? null : decayChip(state, forecast, offer), caps.telemetryScramble);
     const chipArea = chipBox();
     const viewR = clearOfChip(plotViewRadius(state), ship, chipArea);
     const proj = makeProjector(viewR, VIEWBOX, MARGIN);
     const scale = proj.scale;
     const blind = plot.mode === 'uncertain';
-    const noSignal = plot.mode === 'no-signal';
     const wantRing = ringLabel(state);
     if (wantRing !== ringText) {
       ringText = wantRing;
@@ -982,7 +1017,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     const smallRing = ringOuterUnits < SMALL_RING_UNITS ? { cx: half, cy: half, radius: ringOuterUnits + OBSTACLE_PAD } : null;
     const zoneLabelBoxes = paintZones(plotZones(state, pred, plot), proj, pred, path, smallRing);
 
-    const markers = plotMarkers(state, pred, plot);
+    const markers = plotMarkers(state, pred, plot, offer);
     // ▲ only while it fits the frame; a just-captured loop's far end can be way off the plot.
     const apo = markers.apo && Math.hypot(markers.apo.pos.x, markers.apo.pos.y) <= viewR ? markers.apo : null;
     const burn = markers.startBurn;
@@ -992,7 +1027,8 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     // chip, the zones' labels, and each label placed before (in this order: IMPACT, ▼, ▲, START BURN, FLYBY).
     // The landing's layer first (01-landing §4): its brackets' names are obstacles for the markers' labels.
     const planetUnits = Math.max(planet.R * scale, PLOT_PLANET_MIN_UNITS);
-    const landingModel = noSignal ? null : plotLandingModel(state, state.run.phase === 'landing' ? getDropSolution() : null);
+    const landingModel = noSignal ? null : plotLandingModel(state, landing ? getDropSolution() : null, pred, offer);
+    const goLow = landingModel?.goLow ?? null;
     const bracketBoxes = landingLayer.paint(landingModel, proj, half, half, planetUnits);
     const obstacles: Obstacles = {
       boxes: [boxAround(shipAt, SHIP_TIP + OBSTACLE_PAD), ...bracketBoxes.map((box) => padded(box, OBSTACLE_PAD))],
@@ -1002,6 +1038,10 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
       if (marker) obstacles.boxes.push(boxAround(proj.project(marker.pos), MARK_SIZE + OBSTACLE_PAD));
     }
     if (burn) obstacles.boxes.push(boxAround(proj.project(burn.pos), TICK_HALF + OBSTACLE_PAD));
+    if (goLow) {
+      obstacles.boxes.push(boxAround(proj.project(goLow.point.pos), MARK_SIZE + OBSTACLE_PAD));
+      obstacles.boxes.push(boxAround(proj.project(goLow.target.pos), TICK_HALF + OBSTACLE_PAD));
+    }
     const ringMidUnits = ((ring.min + ring.max) / 2) * scale;
     if (nodes.ringLabel.style.display !== 'none') obstacles.boxes.push(...ringNameBoxes(half, half, ringMidUnits, ringScale));
     if (chipArea) obstacles.boxes.push(chipArea);
@@ -1013,6 +1053,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
       periAway(markers.peri?.pos ?? null, markers.impact?.pos ?? null, proj), undefined, path);
     paintMarker(nodes.apo, apo, proj, 'np-apsis np-apo', 'np-label np-apo-label',
       (spot) => nodes.apo.glyph.setAttribute('points', triangle(spot, false)), obstacles, undefined, undefined, path);
+    paintGoLow(goLow, proj, obstacles, path, caps.telemetryScramble);
 
     // START BURN: a tick across the path; its label goes on the planet side of the line so it
     // stays clear of the ▼ label, which points away from the planet (the collision pass turns it when it can't).
@@ -1059,18 +1100,63 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     paintLabel(statusEl, readouts.status);
   }
 
+  // The decay chip under the line-state chip (slice 1b): its key cap rendered, its number garbled by a damaged Telemetry.
+  let lastDecay = '';
+  function paintDecay(model: ReturnType<typeof decayChip>, scramble: number): void {
+    decayEl.hidden = model === null;
+    if (model === null) { lastDecay = ''; return; }
+    const text = scramblers.decay.apply(model.text, scramble);
+    const key = `${text}|${model.urgent}`;
+    if (key === lastDecay) return;
+    lastDecay = key;
+    renderKeyCaps(decayEl, text);
+    decayEl.classList.toggle('urgent', model.urgent);
+  }
+
+  // GO LOWER's marks (§3.7): the ◇ on the orbit where the burn is centred (its countdown garbled by a damaged Telemetry),
+  // and the target tick across the orbit at the launch point, both placed by the collision pass like ▼ and ▲.
+  function paintGoLow(model: GoLowMarks | null, proj: Projector, obstacles: Obstacles, path: PathObstacle | null, scramble: number): void {
+    const point: PlotMarker | null = model === null ? null : {
+      pos: model.point.pos,
+      lines: model.point.lines.map((line, i) => (i === 0 ? scramblers.goLow.apply(line, scramble) : line)),
+      tone: model.held ? 'good' : 'plain',
+    };
+    paintMarker(nodes.goLow, point, proj, 'np-golow', 'np-label np-golow-label',
+      (spot) => nodes.goLow.glyph.setAttribute('points', diamond(spot)), obstacles, undefined, undefined, path);
+    const target: PlotMarker | null = model === null ? null : { pos: model.target.pos, lines: [model.target.label], tone: 'plain' };
+    paintMarker(nodes.goLowTarget, target, proj, 'np-golow-target', 'np-label np-golow-target-label', (spot) => {
+      const out = outwardFrom(half, spot);
+      const tick = nodes.goLowTarget.glyph as SVGLineElement;
+      tick.setAttribute('x1', fmt(spot.x - out.x * TICK_HALF * 0.6));
+      tick.setAttribute('y1', fmt(spot.y - out.y * TICK_HALF * 0.6));
+      tick.setAttribute('x2', fmt(spot.x + out.x * TICK_HALF * 0.6));
+      tick.setAttribute('y2', fmt(spot.y + out.y * TICK_HALF * 0.6));
+    }, obstacles, undefined, undefined, path);
+  }
+
+  // A drag kick (§3.7, 'drag-kick'): `DRAG · ▲ −110 km` stamped where it happened, from DRAG_STAMP_MIN_KM (dragStamp).
+  const offKick = on('drag-kick', (kick) => {
+    const stamp = dragStamp(kick);
+    if (stamp === null) return;
+    landingLayer.stamp(stamp.text, stamp.pos, DRAG_STAMP_MS,
+      (text) => scramblers.stamp.apply(text, capabilitiesNow(store.getState()).telemetryScramble));
+  });
+
   // A touchdown (01-landing §4): `+200 LANDED · LZ-A` floats up from its bracket (from the landing point off-site) and
-  // the launch band's ring pulses once.
+  // the launch band's ring pulses once. A pod in a no-go arc floats `+0 LAVA`, in the arc's own word (slice 1b).
   const offLanded = on('pod-landed', ({ pod, place, lz, touch, points }) => {
     const state = store.getState();
     const record = state.landing.pods.find((candidate) => candidate.pod === pod);
     const bracket = lz === null ? undefined : state.landing.lzs.find((candidate) => candidate.label === lz);
     const rad = bracket?.centreRad ?? (record && (record.fate.kind === 'down' || record.fate.kind === 'falling') ? record.fate.launch.landingRad : null);
     if (rad === null || rad === undefined) return;
+    const noGoWord = place === 'no-go' ? noGoAt(state.landing.noGo, rad)?.word ?? null : null;
+    if (place === 'no-go' && noGoWord === null) throw new Error(`pod-landed: POD ${pod} in a no-go arc with no arc under it`);
     const text = place === 'lz' ? TOUCHDOWN_FLOAT_TEXT.lz(points, lz ?? '?', touch)
       : place === 'mislanded' ? TOUCHDOWN_FLOAT_TEXT.mislanded(points, lz ?? '?')
-        : place === 'off-site' ? TOUCHDOWN_FLOAT_TEXT.offSite(points, touch) : TOUCHDOWN_FLOAT_TEXT.noGo;
-    const tone = place === 'lz' ? (touch === 'hard' ? 'hard' : 'good') : place === 'mislanded' ? 'mislanded' : 'off';
+        : place === 'off-site' ? TOUCHDOWN_FLOAT_TEXT.offSite(points, touch) : TOUCHDOWN_FLOAT_TEXT.noGo(noGoWord ?? '');
+    const tone = place === 'lz' ? (touch === 'hard' ? 'hard' : 'good') : place === 'mislanded' ? 'mislanded'
+      : place === 'no-go' ? 'nogo' : 'off';
     landingLayer.float(text, rad, tone, TOUCHDOWN_FLOAT_MS);
     if (!state.ui.reducedMotion) replayAnimation(nodes.ring, 'pulse');
   });
@@ -1089,6 +1175,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     unsub();
     offReset();
     offLanded();
+    offKick();
     landingLayer.clear();
     resizeObserver.disconnect();
   };
