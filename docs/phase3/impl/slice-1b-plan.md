@@ -717,3 +717,71 @@ the components and passed into the pure models, so `hud.test` pins the views wit
 - `decayForecast` is called every plot frame in landing: keep it closed-form.
 - `'drag-kick'`'s `rad` and `rpKm` are where the kick happened (the stamp is drawn there).
 - Clearing `landing.goLow` on release/launch/MERGE's reopen hides the ◇ (the views draw it whenever it is non-null).
+
+### Deviations (Track ORBIT)
+
+Track ORBIT's scope (§3) is in, merged with DROP (17f44e9) and UI (30be309). Each deviation with its reason.
+
+**Risk 1, measured (the lead's decision).** engine-landing.test's scripted kid (holds on `HOLD [SPACE] NOW`, lets go 0.3 s after
+`RELEASE`), ARES-VII from a circular 8,950 km with LZ-A widened to 330 km (GO LOWER's target 7,096 km), the sure window
+read from the re-solved drop solution:
+
+| power | release lead | 0.3 s kid | 1.2 s kid |
+|---|---|---|---|
+| 1.0 | 0.7 (F6's) | 3.17 s at 7,686 km | 4.35 s at 6,576 km |
+| 1.0 | 0.3 | 3.98 s at 7,105 km | 4.43 s at 6,093 km |
+| 0.5 | 0.7 | 3.68 s at 7,356 km | 4.23 s at 6,805 km |
+| 0.5 | 0.3 | **4.01 s at 7,074 km** | **4.36 s at 6,548 km** |
+
+At full thrust the launch point moves about 1,100 km per real second, so the 0.3–1.2 s spread is about 1,000 km. Adopted:
+`LANDING_BURN_POWER` 0.5 (every landing burn, the plan's accel too; ghost bursts keep theirs) and a new
+`LANDING_RELEASE_LEAD_TAC` 0.3 for GO LOWER's and the lift's RELEASE: their targets are floors (the sure window, ▼ over the
+DRAG line), not F6's middle, so the lead is the quick kid's reaction. Both are tuning numbers with the table in their WHY.
+To Fran with the slice.
+
+1. **goLowerFit judges the dot's real sweep.** sureTacAt with v / r promised 4.0 s where the re-solved window gave 3.2: past an
+   ellipse's ▼ the pod's lead angle grows (a climbing ship's pod flies further), so the dot runs ahead faster.
+   `dotSweepAtPeri(rp, ra)` (two pod impacts, closed form) gives the sweep; goLowerFit passes `sweep × r` to sureTacAt.
+2. **When no radius gives 4 s, the target is the WIDEST window, not the floor** (§3.7 says "or ▼ is 100 km above the band
+   floor"). Lower is not always wider: measured 3.28 s at 5,800 km against 3.14 s at the floor (8,500 km start, a 280 km LZ).
+   Aiming there also kept a 1.2 s kid in the band (aiming at the floor, it left it at 4,728 km). The floor stays the hard
+   stop of goLowReleased (also on ▼ itself, for an eccentric loop).
+3. **The aim is built only when DROP's `dropTooWide(...).goLower` is true** (DROP's request), then from goLowerFit with the
+   same inputs, so L9's `or fly lower` and the offer always agree (a check in drop-model.test, whose L9 text now ends `,
+   or fly lower` since goLowerFit is real). Decay uses DROP's `decayWarnOrbits` (predict's lift too).
+4. **No shrink in landing.** A PARTIAL orbit's shrink is "now" for the whole climb, so it could never be declined and held
+   TACTICAL and the strip (HALCYON p2 looped at `SHRINK THE LOOP` for 300 s). The loop's ring trim takes its place.
+   landingBurnOffer's safety burns are capture and missed only.
+5. **A declined burn also when it stands due for LATE_TRIM_TAC unburned**, not only when the plan moves it to the next pass: a
+   late trim that still lands stays due for most of a climb (56 real s of `HOLD [SPACE] NOW` at TACTICAL on HALCYON p2).
+6. **The lift in two halves.** ▼ rises only as high as ▲ is, so a near-circle under the line is lifted PRO at ▼ first
+   (`firstOfTwo`, ▲ to the target + DRAG_LIFT_MARGIN_KM), then PRO at ▲. The plan is kept while the kid holds a lift, and the
+   ▲ half is planned while the decay is within 2 × DECAY_WARN_ORBITS (raising ▲ lifts the orbit out of the warning, and
+   with the warning alone the ▲ half came only after the kicks had undone the first). Its RELEASE: the burn it still needs
+   is LANDING_RELEASE_LEAD_TAC or less. Side effect for Fran: after a GO LOWER under the DRAG line the lift is offered
+   sooner (declinable).
+7. **decayForecast past 200 kicks returns its elapsed time** (a lower bound, far over the warning), not null ("never"): null
+   is kept for ▼ at or above the line, no drag, an open path.
+8. **dragDvKmS is capped at DRAG_DV_MAX_KMS** under the band floor (the name's promise). Kicks come every half orbit when a
+   strong kick turns its ▼ into ▲ (the worked example's 15/22/24 m/s take one orbit, not three; decay.test checks the
+   numbers and 4,973 km). The gap rule allows that half orbit with a 0.1 period slack (`KICK_GAP_SLACK_FRAC`, a CRUISE kick
+   lands up to a sub-step after its ▼).
+9. **coastWithKicks is exported** (decay.test compares a 3-orbit jump with sub-steps: ▼ 5,363.3 km both, 5 kicks both).
+10. **The ship lost in landing.** orbit-sim `endLandingLost` writes the status and pauses; landing.ts closes the landing in the
+    same frame from a post-tick (`endNow('ship-lost')`: listeners must not write state). clock `isLivePhase` and the
+    director's over line treat a crashed/escaped landing as lost (two small edits outside the list, flagged). endNow also
+    lets go of the throttle and clears goLow / declined. lossPlan's simulation retry is flight-only.
+11. **The burn's end bumps orbitEpoch from the tick's own start value** (the store's mutate writes in place: reading
+    `burn.lastTickDvKmS` after it never saw the falling edge).
+12. **GO LOWER's aim is let go on a launch** (UI's contract; rebuilt next tick if L9 still says fly lower) and on release.
+    Its window edge events are held during thrust (trackWindow).
+13. **M5 as implemented:** in landing `projectedDrainPerSec` = drainRatePerSec(cfg, thrust delivered OR the offered burn's START
+    BURN within TACTICAL_LEAD_BURN_TAC, true): landMult stays projected as in 1a (hollow-landing's "countdowns never jump"
+    check), burnMult only when thrusting or asked to. wp6/hollow-sim unchanged.
+14. **Ghost thrust in landing (risk 5) is harsh:** an unswapped VESPER's RETRO bursts take ▼ under the planet in about 90 s of a
+    passive landing. flow.test and wp10/deal-test now have their kid SWAP (heal) Thrust Ctrl before the landing;
+    engine-landing.test covers a burst in landing. Raise with Fran; the e2e VESPER run needs a look.
+15. **The drag lesson** is in script.ts (`lesson-drag-sinks`, DROP_LESSON_RULES): active from the first kick with dropKm ≥
+    DRAG_STAMP_MIN_KM while ▼ is under the line, shown DRAG_LESSON_SEC (5, ORBIT's tuning block).
+16. **FlightContext.goLow** (aim, held, released) is new; three test literals gained `goLow: null`. `shipObjective(ctx)` picks
+    the flight table or landingFlightRow (flight-controls' lineAsks, ghost-thrust's SKIP plan).
