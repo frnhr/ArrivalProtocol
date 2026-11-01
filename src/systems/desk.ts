@@ -1,20 +1,19 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import type { NoiseCloud, ShipKind } from '@/types/map';
+import type { NoiseCloud, ShipKind, DeskWindowId } from '@/types/map';
 import type { LinkNoise } from '@/types/threat';
-import { currentSlot, shipDefAt } from '@systems/map-run';
+import { currentSlot, shipSummaryAt } from '@systems/map-run';
 import { hopBetween, reachableFrom } from '@systems/map-hop';
-import { shipColonists } from '@data/memory';
 import { MAP_TEXT } from '@data/map-text';
+
+export type { DeskWindowId };
 
 // The DESK's models (02-map §3.10, §4; slice-3a-plan §2.1, §5.2), pure in the state, and its one UI action (selectShip).
 // The flow's actions (openDesk, setCourse, backToChart) are systems/run.ts's: the desk only says which ship and how it
-// reads. FOUNDATION STUB (F2): the types are final; the models return what the minimal desk needs (the ships in reach,
-// the card's top line, the two guidance steps) and typed empty rows for the rest. Track DESK owns this file after the
+// reads. It reads ships only through systems/map-run.ts shipSummaryAt (never a built ShipDef: an arm ship is built only
+// when the unit arrives). FOUNDATION STUB (F2): the types are final; the models return what the minimal desk needs (the
+// ships in reach, the card's top line, the two guidance steps) and typed empty rows for the rest. Track DESK owns this file after the
 // foundation (the chart's nodes, lines and states, the card's rows, the opening beat; the RUN TALLY is run-end.ts's).
-
-// The desk's windows (02 §3.10). 3b adds the repository and the INBOX, slice 4 TRAINING (slice-3a-plan §2.10).
-export type DeskWindowId = 'chart' | 'card' | 'repository' | 'training' | 'inbox';
 
 // A node's state on the STAR CHART (02 §4).
 export type ChartNodeState = 'current' | 'reachable' | 'urgent' | 'too-late' | 'out-of-range' | 'past' | 'visited';
@@ -101,13 +100,12 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
 // timeline (from hopBetween, roomFit, the landing def, seedRange, planThreat's boards, shipsLeft).
 export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   const map = state.run.map;
-  const ship = shipDefAt(map, slot);
-  const from = currentSlot(state.run);
-  hopBetween(map, from, slot);
+  const ship = shipSummaryAt(map, slot);
+  hopBetween(map, currentSlot(state.run), slot);
   return {
     slot,
     reachable: deskCandidates(state).includes(slot),
-    top: MAP_TEXT.card.top(ship.name, ship.world, shipColonists(ship), ship.pods),
+    top: MAP_TEXT.card.top(ship.name, ship.world, ship.colonists, ship.pods),
     tags: [...(ship.kind === 'ark' ? [MAP_TEXT.card.ark] : []), ...(ship.final ? [MAP_TEXT.card.finalShip] : [])],
     schedule: null,
     rows: [],
@@ -120,7 +118,7 @@ export function deskSteps(state: Readonly<GameState>): DeskStep[] {
   const selected = state.ui.deskSelected;
   return [
     { id: 'pick-ship', text: MAP_TEXT.desk.pickShip, done: selected !== null },
-    { id: 'set-course', text: selected === null ? MAP_TEXT.desk.setCourse('…') : MAP_TEXT.desk.setCourse(shipDefAt(state.run.map, selected).name), done: false },
+    { id: 'set-course', text: MAP_TEXT.desk.setCourse(selected === null ? '…' : shipSummaryAt(state.run.map, selected).name), done: false },
   ];
 }
 

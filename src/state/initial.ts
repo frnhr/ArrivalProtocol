@@ -251,5 +251,6 @@ export function createUiState(phase: RunPhase, reducedMotion: boolean): GameStat
     reducedMotion,
     logReader: null,
     deskSelected: null,
+    deskWindow: null,
   };
 }

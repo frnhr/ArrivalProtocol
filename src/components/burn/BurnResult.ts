@@ -4,7 +4,7 @@ import { TERMINAL } from '@systems/flight-hud';
 import { shipLost, lossPlan, continueAfterLoss, shipOutcomeOf, type LossPlan } from '@systems/run';
 import { landingResult } from '@systems/landing-rules';
 import { requireById } from '@components/dom';
-import { shipDefAt, currentSlot } from '@systems/map-run';
+import { shipSummaryAt, currentSlot } from '@systems/map-run';
 import { MAP_TEXT } from '@data/map-text';
 import { LOSS_BUTTON } from '@data/script';
 import { RESULT_BANNER_DELAY_MS } from '@data/tuning';
@@ -32,7 +32,8 @@ function lossButtonText(state: Readonly<GameState>, plan: LossPlan): string {
   const emergency = plan.outcome === 'crashed' || plan.outcome === 'emergency';
   if (emergency) return LOSS_BUTTON.emergency;
   // The classic world has one next ship; on the arm the kid picks it at the desk.
-  return state.run.map.world === 'classic' ? LOSS_BUTTON.transmit(shipDefAt(state.run.map, currentSlot(state.run) + 1).name) : MAP_TEXT.lossToChart;
+  if (state.run.map.world !== 'classic') return MAP_TEXT.lossToChart;
+  return LOSS_BUTTON.transmit(shipSummaryAt(state.run.map, currentSlot(state.run) + 1).name);
 }
 
 // The LOST card (§9 WP5 item 6) over a crashed, escaped, stranded or abandoned ship, or one whose Core

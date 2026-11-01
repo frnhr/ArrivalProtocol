@@ -5,6 +5,7 @@ import { MAP_TEXT, MODIFIER_LABEL, NOISE_WORD } from '@data/map-text';
 import { GENERATED_SHIP_NAMES, AUTHORED_SHIP_NAMES, FINAL_SHIP_NAMES } from '@data/ship-names';
 import { WORLDS } from '@data/arm';
 import { MAX_LINE_CHARS } from '@data/tuning';
+import type { RoomFit } from '@/types/map';
 
 const longest = (names: readonly string[]): string => names.reduce((a, b) => (b.length > a.length ? b : a));
 const SHIP = longest([...GENERATED_SHIP_NAMES, ...AUTHORED_SHIP_NAMES, ...FINAL_SHIP_NAMES]);
@@ -14,6 +15,9 @@ const YEAR = 3999;
 const SLACK = 199;   // years: the arm's slack is at most 162 on run 1; a fresh roll's at most LAYER_SLACK + jitter
 const LY = 58;
 const C = 3200;      // colonists: 16 pods
+const FIT: RoomFit = {
+  files: 199, room: 152, floor: 12, carried: 99, wanted: 99, chargeArrives: 0, chargeArrivesMin: 0, linkLost: 99, roomLost: 0, over: 0, word: 'fits',
+};
 
 const lines: [string, string][] = [
   ['title.logo', MAP_TEXT.title.logo],
@@ -37,8 +41,8 @@ const lines: [string, string][] = [
   ['card.late', MAP_TEXT.card.late(YEAR, YEAR, SLACK)],
   ['card.problems', MAP_TEXT.card.problems([MODIFIER_LABEL['too-wide'], MODIFIER_LABEL['sensor-damage'], MODIFIER_LABEL.debris])],
   ['card.memory', MAP_TEXT.card.memory(384, 'COMPACT', 152)],
-  ['card.fit squeezed', MAP_TEXT.card.fit({ files: 99, room: 152, floor: 12, chargeArrives: 99, chargeLost: 99, over: 0, word: 'squeezed' })],
-  ['card.fit leave', MAP_TEXT.card.fit({ files: 199, room: 152, floor: 12, chargeArrives: 0, chargeLost: 99, over: 199, word: 'leave' })],
+  ['card.fit squeezed', MAP_TEXT.card.fit({ ...FIT, chargeArrives: 99, roomLost: 99, word: 'squeezed' })],
+  ['card.fit leave', MAP_TEXT.card.fit({ ...FIT, over: 199, word: 'leave' })],
   ['card.planet', MAP_TEXT.card.planet('GRASSLAND', 'off-site pods score a quarter')],
   ['card.noGo', MAP_TEXT.card.noGo(['LAVA', 'CLIFFS'])],
   ['card.lzs', MAP_TEXT.card.lzs(4)],

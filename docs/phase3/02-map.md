@@ -146,6 +146,10 @@ the unit. Files plus the 12-block charge floor must fit both, and charge above t
 smaller one. **On a TIGHT ship there is no floor** (round 2, 8): files must fit its 88 blocks, and charge may arrive
 at 0. The floor of 12 holds on COMPACT and FULL ships.
 
+*Amended by slice 3a (slice-3a-plan, Deviations (foundation, review follow-up) M2):* "fit both" reads as `01-landing.md`
+§3.16 has it: files plus the floor must fit the next ship's **room**; the **link** limits files plus charge, as phase 2's
+packet does, and the floor is ARRIVAL CONTROL's top-up on arrival, not carried.
+
 ### 3.4 Ship timing, size and memory
 
 - **Layer base years** for a run starting in year Y: B1 = Y. B(k+1) = B(k) + the axis gap (22, then 25) +

@@ -4,7 +4,7 @@ import type { FsToolKind } from '@/types/fs-tool';
 import type { PlanetParams, Ring } from '@/types/orbit';
 import type { Zone } from '@/types/zone';
 import type { ShrinkTuning } from '@data/ships';
-import type { MemoryClass, RunMapState, Hop } from '@/types/map';
+import type { MemoryClass, RunMapState, Hop, DeskWindowId } from '@/types/map';
 import type { HollowDef, RunThreatState, ShipThreat } from '@/types/threat';
 import type { UpgradeId, DraftCard } from '@data/upgrades';
 import type { LastUnit } from '@systems/meta';
@@ -295,6 +295,9 @@ export interface ArrivalReport {
   chargeFloorAdded: number; // the floor's top-up (§6.5: never fewer than 12 blocks on arrival)
   chargeOverflowLost: number; // charge that did not fit memory and was lost (loudly)
   scripted: TransitHit[];   // the ship's own arrival damage (§6.9: KESTREL's sensor, VESPER's Thrust Ctrl)
+  // Phase 3 slice 3a: the hits ECC corrected while the unit slept (02 §3.3: the hop's transit hits plus the extras, minus
+  // what landed). 0 on the classic world (no slack) and on ship 1; the boot's ECC block says it (systems/map-boot.ts).
+  eccCorrected: number;
   // Phase 3 slice 2 (04 §3.4, §3.8): the beam seeds laid out behind their targets (the boot's ECC seeds line names each),
   // and HOLLOW's root when it boarded on this beam (the 108% unpack line, the boarding moment). Empty / null otherwise.
   seeds: ArrivalSeed[];
@@ -728,6 +731,9 @@ export interface UiState {
   // The ship the kid is looking at on the DESK (its slot; the SHIP CARD shows it, SET COURSE goes there), or null before
   // the first pick (phase 3 slice 3a, systems/desk.ts selectShip). A world reset clears it (createUiState).
   deskSelected: number | null;
+  // The desk window open beside the chart and card (02 §3.10: R / T / I; 3b's repository and INBOX, slice 4's TRAINING),
+  // or null. The PACKET's TIGHT confirm (`ARRIVE WITH NO REPAIR CHARGE?`) is the inline confirm's, not state here.
+  deskWindow: DeskWindowId | null;
 }
 
 // The archive behind this page (§4.5, systems/meta.ts). 'ok': loaded (or empty) and written at the run's

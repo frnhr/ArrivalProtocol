@@ -408,6 +408,7 @@ export function transmitNext(store: Store<GameState>): void {
     chargeFloorAdded: charge.floorAdded,
     chargeOverflowLost: layout.overflowLost,
     scripted,
+    eccCorrected: plan.hop.transitHits + plan.extraHits - landing,
     // The root lands in the slot as the ship is built (createShipSlices, from the verdict's rootBlocks).
     seeds: layout.seeds,
     boarded: boardedBy(plan.threat),

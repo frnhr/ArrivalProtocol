@@ -5,6 +5,10 @@ import { validateShipDef } from '@data/ships';
 import { FLIGHT_TEMPLATES } from '@data/flight-templates';
 import { RACK_A, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, rootSlotRack } from '@data/memory';
 import { ARES_RUN1_FAMILIES, ADA } from '@data/souls';
+import { WORLDS } from '@data/arm';
+import { CLASSIC_WORLD_SLOTS, CLASSIC_FINAL_INDEX } from '@data/classic-slots';
+
+export { CLASSIC_WORLD_SLOTS, CLASSIC_FINAL_INDEX } from '@data/classic-slots';
 
 // THE CLASSIC FIVE: a frozen fixture (slice-3a-plan §2.3). Lead only: no track edits this file.
 // Phase 2's five hand-written ships (ARES-VII, HALCYON, KESTREL, VESPER, LAST LIGHT) exactly as they were before the
@@ -385,13 +389,16 @@ function beamBringsSeeds(seeds: BeamSeedSource): boolean {
 function validateClassicFive(): void {
   CLASSIC_FIVE.forEach(validateShipDef);
   const n = CLASSIC_FIVE.length;
-  if (CLASSIC_HOPS.length !== n || CLASSIC_FACTS.length !== n || CLASSIC_LICENCES.length !== n) {
+  const lists = [CLASSIC_HOPS, CLASSIC_FACTS, CLASSIC_LICENCES, CLASSIC_WORLD_SLOTS];
+  if (lists.some((list) => list.length !== n)) {
     throw new Error('classic five: the hops, facts and licences must list one entry per ship');
   }
   CLASSIC_FIVE.forEach((ship, index) => {
     const fail = (why: string): never => { throw new Error(`classic ship ${ship.id}: ${why}`); };
     if (ship.slot !== index) fail(`slot ${ship.slot} at index ${index} (the classic world's slot is its index)`);
-    if (ship.final !== (index === n - 1)) fail('the final ship is the last of the five, and only it');
+    if (ship.final !== (index === n - 1) || ship.final !== (index === CLASSIC_FINAL_INDEX)) fail('the final ship is the last, and only it');
+    const worldSlot = CLASSIC_WORLD_SLOTS[index];
+    if (worldSlot === undefined || WORLDS[worldSlot]?.name !== ship.world) fail(`sits on ${ship.world}, not on w${worldSlot}`);
     const hop = CLASSIC_HOPS[index];
     if ((hop === null) !== (ship.kind === 'first')) fail('a ship meets a fresh unit exactly when nothing arrives by transmission');
     if (hop) {

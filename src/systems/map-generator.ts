@@ -1,6 +1,7 @@
 import type { ArmShip, MemoryClass, ShipKind, TemplateId, ModifierId, Reservations, ShipKey, PodRackName } from '@/types/map';
 import type { ShipLandingDef } from '@/types/landing';
-import { RUN1_ROWS, RUN1_AUTHORED } from '@data/run1-arm';
+import { RUN1_ROWS, RUN1_AUTHORED, type AuthoredOverride } from '@data/run1-arm';
+import { armShipId } from '@systems/map-streams';
 import { RESIDENT_NAMES, SLEEPER_NAMES } from '@data/ship-names';
 import { FLIGHT_TEMPLATES } from '@data/flight-templates';
 import { END_SLOTS, WORLDS, LAYER_COUNT } from '@data/arm';
@@ -18,6 +19,10 @@ import {
 // FOUNDATION STUB (F2): the signatures are final; the timing rules, pods and class are real (they are the table's
 // arithmetic); the rolls and checks throw TODO(3a-GEN); assembleRun1Arm returns §3.14's table with placeholder details.
 // Track GEN owns this file after the foundation.
+
+// The generator's own version (beside data/arm.ts ARM_CONTENT_VERSION): bump when a rule or a stream changes what an arm
+// rolls, so 3c's save refuses an arm state another generator made.
+export const MAP_GENERATOR_VERSION = 1;
 
 // The layer base years for a run starting in `start` (02 §3.4): index = layer (1–8); index 0 unused. Run 1: 2300, 2352,
 // 2467, 2612, 2712, 2817, 2927.
@@ -101,10 +106,22 @@ export function freshArm(armSeed: number, run: number, start: number): ArmShip[]
   throw new Error(`TODO(3a-GEN): freshArm (seed ${armSeed}, run ${run}, start ${start})`);
 }
 
-// TODO(3a-GEN): a generated ship's details from its ShipKey: template (allowed by layer), extra modifiers, omega0, the
-// landing (systems/landing-roller.ts), the pod layout (systems/pod-layout.ts) and its reservations' streams.
-export function rollShipDetails(key: Readonly<ShipKey>, kind: ShipKind, layer: number): Pick<ArmShip, 'template' | 'modifiers' | 'omega0' | 'landing' | 'podRacks' | 'lead'> {
-  throw new Error(`TODO(3a-GEN): rollShipDetails (slot ${key.slot}, ${kind}, layer ${layer})`);
+// What a caller has already fixed for a ship before its details roll: run 1's table (the slot, pods, class) and a
+// corrupted resident's CAPTURE template (02 §3.5). Rolled otherwise.
+export interface FixedDetails {
+  slot?: number;
+  template?: TemplateId;
+  pods?: number;
+  memoryClass?: MemoryClass;
+}
+
+// TODO(3a-GEN): a generated ship's details from its ShipKey (each from its own named stream, keyRng(key, …)): template
+// (allowed by layer) unless fixed, extra modifiers, omega0, the debris rack, the landing (systems/landing-roller.ts;
+// POOR site data on keyRng(key, 'site')), the pod layout (systems/pod-layout.ts) and its reservations' streams.
+export function rollShipDetails(
+  key: Readonly<ShipKey>, kind: ShipKind, layer: number, fixed: Readonly<FixedDetails> = {},
+): Pick<ArmShip, 'template' | 'modifiers' | 'omega0' | 'debrisRack' | 'landing' | 'podRacks' | 'lead'> {
+  throw new Error(`TODO(3a-GEN): rollShipDetails (slot ${key.slot}, ${kind}, layer ${layer}, ${JSON.stringify(fixed)})`);
 }
 
 // --- Run 1 (slice-3a-plan §2.3) -----------------------------------------------------------------------------------------
@@ -121,11 +138,20 @@ const INHERENT: Readonly<Record<TemplateId, readonly ModifierId[]>> = {
   'impact-a': ['impact-course'], 'wide': ['too-wide'], 'wide-b': ['too-wide'], 'capture': [], 'impact-b': ['impact-course'],
 };
 
-// PLACEHOLDER(3a-GEN): one WIDE site for every pod on a GENTLE plain, until the roller.
-function placeholderLanding(pods: number, layer: number): ShipLandingDef {
+// PLACEHOLDER(3a-GEN): until the roller, one WIDE site for every pod on a GENTLE plain, or an authored ship's written
+// parts (its class, terrain, LZ split evenly spaced from 60°, all WIDE or STANDARD with the last of three NARROW, its
+// no-go arcs), so the card's facts for HALCYON, KESTREL and VESPER are already the authored ones.
+function placeholderLanding(pods: number, layer: number, authored: Readonly<AuthoredOverride> | null): ShipLandingDef {
+  const split = authored?.lzPods ?? [pods];
+  const step = 360 / split.length;
   return {
-    lzs: [{ label: 'LZ-A', centreDeg: 90, width: 'wide', pods }],
-    forgiveness: 'gentle', terrain: 'PLAINS', noGo: [], colonyFirstRun: null, drag: layer > 1,
+    lzs: split.map((count, index) => ({
+      label: `LZ-${String.fromCharCode(65 + index)}`, centreDeg: (60 + index * step) % 360, pods: count,
+      width: split.length === 1 || authored?.allWide ? 'wide' : index === 2 ? 'narrow' : 'standard',
+    })),
+    forgiveness: authored?.forgiveness ?? 'gentle', terrain: authored?.terrain ?? 'PLAINS',
+    noGo: Array.isArray(authored?.noGo) ? authored.noGo.map((arc) => ({ ...arc })) : [],
+    colonyFirstRun: null, drag: layer > 1,
   };
 }
 
@@ -146,10 +172,10 @@ function placeholderPodRacks(pods: number, racks: readonly PodRackName[]): Parti
 // `?` ships) from ShipKey(armSeed, 1, slot, 0) and the authored overrides (RUN1_AUTHORED). Until then the details are
 // placeholders (PLACEHOLDER(3a-GEN)): the years, sizes and classes the desk and the hop math read are real.
 export function assembleRun1Arm(armSeed: number): ArmShip[] {
-  void armSeed;
   return RUN1_ROWS.map((entry): ArmShip => {
     const layer = WORLDS[entry.slot]!.layer;
-    const authored = entry.authored === null ? null : RUN1_AUTHORED[entry.authored];
+    // A copy: RUN1_AUTHORED is shared (its landings are the classic five's objects), and the store mutates what it holds.
+    const authored = entry.authored === null ? null : structuredClone(RUN1_AUTHORED[entry.authored]) as AuthoredOverride;
     const template = entry.template ?? placeholderTemplate(layer);
     const residentRow = entry.reserved.resident ?? null;
     const resident: Reservations['resident'] = residentRow === null ? null : {
@@ -158,12 +184,14 @@ export function assembleRun1Arm(armSeed: number): ArmShip[] {
     };
     const podRackNames: readonly PodRackName[] = entry.memoryClass === 'FULL' ? ['B', 'C', 'D'] : ['B', 'C'];
     return {
-      slot: entry.slot, id: `run1-${entry.slot}`, name: entry.name, kind: entry.kind, template, pods: entry.pods,
+      slot: entry.slot, id: armShipId({ armSeed, reportedRun: 1, slot: entry.slot, attempt: 0 }), name: entry.name,
+      kind: entry.kind, template, pods: entry.pods,
       memoryClass: entry.memoryClass, approachYear: entry.approachYear, late: entry.late,
       timedAgainstStart: RUN_START_YEAR, reportedRun: 1, runsOnChart: 1, attempt: 0,
       modifiers: [...INHERENT[template], ...(authored?.modifiers ?? [])],
       omega0: FLIGHT_TEMPLATES[template].flight.start.omega0,
-      landing: authored?.landing ?? placeholderLanding(entry.pods, layerOf(entry.slot)),
+      debrisRack: authored?.debrisRack ?? null,
+      landing: authored?.landing ?? placeholderLanding(entry.pods, layerOf(entry.slot), authored),
       podRacks: authored?.podRacks ?? placeholderPodRacks(entry.pods, podRackNames),
       lead: authored?.lead ?? entry.pods,
       authored: entry.authored,

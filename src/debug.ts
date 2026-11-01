@@ -400,7 +400,7 @@ function debugJump(store: Store<GameState>, index: number, threat: ShipThreat = 
   });
   startShip(store, index, layout.racks, {
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0,
-    chargeOverflowLost: 0, scripted, seeds: layout.seeds, boarded: boardedBy(threat),
+    chargeOverflowLost: 0, scripted, eccCorrected: 0, seeds: layout.seeds, boarded: boardedBy(threat),
   }, threat);
 }
 

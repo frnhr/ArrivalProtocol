@@ -665,7 +665,11 @@ Owns: `tests/unit/**`, `tests/e2e/**`, `tests/unit/run.mjs` timings.
 | `tuning.ts` | F2 creates blocks | each track only inside its own block |
 | `script.ts` | DESK | GEN's boot conditions live in `map-boot` (`mapBootLines`), already called |
 | `schema.ts` | F2 (all 3a fields) | a later field: lead-approved one-line additions |
-| `classic-five.ts` | frozen | lead only |
+| `classic-five.ts`, `classic-slots.ts` | frozen | lead only |
+| `map-streams.ts` | F2 → GEN | the leaf readers (worldSlotOf, isEndSlot, the streams): every track imports, GEN edits |
+| `desk.ts`, `components/desk/*`, `map-text.ts` | F2 → DESK | GEN adds `MAP_TEXT.boot` lines; desk models read `shipSummaryAt` only |
+| `log-selectors.ts` (`bootLogKeys`), `map-boot.ts` | F2 → GEN | script.ts (DESK) calls them, never re-derives their rules |
+| `tests/unit/support/classic-flow.ts`, `tests/unit/map/*` | F2 → TESTS | the classic suites' pass through the classic desk |
 | `debug.ts` | GEN | DESK and TESTS request helpers |
 
 **Order:**
@@ -842,3 +846,58 @@ Recorded by the foundation agent (F1 `Slice 3a F1`, F2 `Slice 3a F2`). Each is a
     lists the ships in reach with SET COURSE ▸ [ENTER], ← → and click to pick, and ESC on the PACKET for ◀ CHART. DESK
     replaces it; `styles/desk.css` is empty and imported.
 22. **`RING_CLEARANCE_LY` reads "within 5 LY" as < 5** (the arm clears every ring by 9 LY or more either way).
+
+## Deviations (foundation, review follow-up)
+
+The independent review of `31c8a35` and `1a64f42` confirmed the hop math against 02 §3.14, the classic rng keys and that
+`RunMapState` round-trips through JSON. Its items, as applied in `Slice 3a F2 review follow-up`:
+
+- **B1 `shipSummaryAt(map, slot): ShipSummary`** (map-run.ts; type in types/map.ts): `slot, worldSlot, name, world,
+  kind, template, modifiers, layer, pods, colonists, memoryClass, final, approachYear, late, lzCount, forgiveness,
+  terrain, noGoWords, debrisRack, authored, reserved`. The classic world reads its ShipDef (approachYear = its fixture
+  year, reserved null); the arm reads ArmShip plus WORLDS, so nothing that shows a ship needs it built. The desk models,
+  DeskScreen, the director's TRANSMITTING line, the PACKET's headline (transmit.ts) and BurnResult read only it.
+  `assembleRun1Arm`'s placeholder landings now honour the authored class, terrain, LZ split and arcs, so the card's
+  facts for HALCYON, KESTREL and VESPER are already the authored ones.
+- **B2 classic world slots** are not arm world ids: `CLASSIC_WORLD_SLOTS = [0, 2, 5, 11, 19]` and `CLASSIC_FINAL_INDEX`
+  live in a leaf `data/classic-slots.ts`, re-exported and validated (world names) by classic-five.ts. Deviation from the
+  review's wording: not *defined* in classic-five.ts, because map-streams (a leaf, imported under data/ships.ts) can't
+  import classic-five without the ships → zones → map-streams → classic-five → ships cycle (F1 deviation 2).
+  `worldSlotOf(map, slot)` (map-streams) converts every slot passed to geometry; the classic rng keys stay index-based.
+  Pinned: classic SOL distances 8/29/55/107/180.
+- **M1 `roomFit`** now matches the PACKET: `UnitLoad { files, charge, bonus?: { starCredit, card }, seedBlocksMax? }`;
+  `RoomFit { files, room, floor, carried, wanted, chargeArrives, chargeArrivesMin, linkLost, roomLost, over, word }`.
+  `wanted = max(floor, carried + starCredit + card)` (arrivalCharge); the room lays out files, the floor, the seeds,
+  the rest (SEEDS FIRST: `chargeArrivesMin` with `seedBlocksMax` of seeds); `squeezed` only when `roomLost > 0`;
+  `no-charge` whenever `chargeArrives` is 0 (an empty unit on a TIGHT ship included). `chargeLost` is gone (the link's
+  and the room's losses are apart).
+- **M2 spec amendment of 02 §3.3** ("files plus the floor must fit both"): it reads as 01 §3.16 has it. Files plus the
+  floor must fit the next ship's **room** (files alone on TIGHT); the **link** limits files plus charge as phase 2's
+  packUnit does; the floor is ARRIVAL CONTROL's top-up on arrival, not carried. 02-map.md §3.3 carries a one-line note.
+  **For GEN:** `transmitNext` asserts `roomFit(...).over === 0` (the PACKET's TRANSMIT ▸ waits while it is not).
+- **M3** keeps GEN out of DESK's script.ts: `bootLogKeys(state)` (log-selectors, GEN) is what the boot plan calls;
+  `ArrivalReport.eccCorrected` (transit + extra − landing, filled in transmitNext, 0 on the classic world) plans the
+  boot line `'ecc-sleep'` through `mapBootLines` / `mapBootLineText('ecc-sleep', …)` (map-boot, GEN: real for it now,
+  `> ECC: n TRANSIT HITS CORRECTED WHILE ASLEEP`, before the hits line).
+- **M4** `isEndSlot(map, slot)` (map-streams; the classic world's LAST LIGHT) in map-route and map-facts: the classic
+  world has 1 route of 5 ships (pinned), and `shipsLeft` works there.
+- **M5** `ArmShip.id = armShipId(key)` = `armSeed:reportedRun:slot:attempt` (map-streams); `ARM_CONTENT_VERSION`
+  (arm.ts) and `MAP_GENERATOR_VERSION` (map-generator.ts) version what made it. `ArmShip.debrisRack` joins the stored
+  rolls; ArmShip's comment lists everything shipDefOf reads (it has no armSeed to roll again). **For GEN:** key any
+  shipDefOf cache on `id`, never a WeakMap of the ArmShip (`mapAtShip` clones the map).
+- **Minors:** `assembleRun1Arm` structured-clones RUN1_AUTHORED (pinned: mutating an arm leaves LAST LIGHT and the table
+  alone); `rollShipDetails(key, kind, layer, fixed?: { slot, template, pods, memoryClass })`; POOR site data is
+  `keyRng(key, 'site')` (landing-roller's contract); the noise clouds roll from `noiseRng(run.seed)` (a `noise-clouds:`
+  namespace, not `childRng(seed, 0, 'noise')`, which shares visitRng's key space: §4.4's note is superseded);
+  `Hop.inRange` (distance ≤ BEAM_RANGE_LY: DESK prints the BEAM row only then); `ui.deskWindow: DeskWindowId | null`
+  for 3b's repository and INBOX and slice 4's TRAINING (the PACKET's TIGHT confirm is the inline confirm's, not state).
+
+**Notes for the tracks:**
+- **GEN:** always switch on `world` before `currentStop` (classic suites set `run.shipIndex` by hand; `currentSlot` and
+  `isEndSlot` already switch). Route geometry through `worldSlotOf`.
+- **DESK:** switch BurnResult's classic `TRANSMIT ▸ X` wording (it already reads `MAP_TEXT.lossToChart` on the arm) when
+  GEN flips the page's world; read ships only through `shipSummaryAt`.
+- **TESTS:** keep the pins for B2, M4, M1 and M5 (`map/world-slots`, `map/room-fit`); add `shipDefAt` differing across
+  two arm seeds once shipDefOf lands. In 3c, assert that a `world: 'classic'` map is never saved.
+- **3c:** the save needs a version field on the map (beside ARM_CONTENT_VERSION and MAP_GENERATOR_VERSION).
+- **Slice 7:** widen `Reservations.tracePlace` (today `null` only).

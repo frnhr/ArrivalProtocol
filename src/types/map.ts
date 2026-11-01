@@ -1,4 +1,4 @@
-import type { ShipLandingDef } from '@/types/landing';
+import type { ShipLandingDef, ForgivenessClass, TerrainWord } from '@/types/landing';
 import type { LinkNoise } from '@/types/threat';
 
 // The galaxy map's types (phase 3 slice 3a, docs/phase3/02-map.md; slice-3a-plan §2.2). Everything a run stores here is
@@ -58,10 +58,13 @@ export interface Reservations {
 }
 
 // One ship on the arm, as the generator rolls it and run.map stores it: flat and JSON-safe (3c's save). The runtime
-// ShipDef is built from it by data/ships.ts shipDefOf (pure, memoized) and never stored.
+// ShipDef is built from it by data/ships.ts shipDefOf (pure, memoized ON `id`, never on the object: mapAtShip clones
+// the map) and never stored. shipDefOf has no armSeed, so EVERY roll it needs is stored here: the template, modifiers,
+// omega0, the landing, the pod layout and lead, the debris rack; the per-run rolls (families, hurt drivers, the zone's
+// written-run choice, the flight's start) stay the runtime's, on shipRng(run, slot, …).
 export interface ArmShip {
   slot: number;
-  id: string;
+  id: string;           // armShipId(key): `armSeed:reportedRun:slot:attempt`, unique across runs and rolls
   name: string;
   kind: ShipKind;
   template: TemplateId;
@@ -77,6 +80,7 @@ export interface ArmShip {
   attempt: number;
   modifiers: ModifierId[];
   omega0: number;
+  debrisRack: PodRackName | null;   // the rack a DEBRIS modifier's cloud names (02 §3.5: a rack the ship has), else null
   landing: ShipLandingDef;
   podRacks: Partial<Record<PodRackName, string>>;
   lead: number;
@@ -107,6 +111,7 @@ export interface Hop {
   approachYear: number;         // the destination's approach year
   slackYears: number;           // approach − arrive: ≥ 0 when reachable (TOO LATE below)
   noise: LinkNoise;
+  inRange: boolean;             // distance ≤ BEAM_RANGE_LY: the card prints the BEAM row only then
   memoryClass: MemoryClass;     // the destination's
   room: number;                 // the destination's roomForUnit
   chargeFloor: number;          // the destination's chargeFloor
@@ -142,13 +147,47 @@ export interface RunMapState {
 }
 
 // The card's fit line and the PACKET's room bar (01 §3.16; systems/map-hop.ts roomFit): how the unit's files and
-// charge meet a destination's room.
+// charge meet a destination's room. Charge in blocks: what the link lets cross, plus the star credit and the +12 card
+// (arrivalCharge), never below the floor; then the room: files, the floor, the beam seeds, the rest (SEEDS FIRST).
 export interface RoomFit {
   files: number;
   room: number;
   floor: number;
-  chargeArrives: number;
-  chargeLost: number;
+  carried: number;              // the charge the link lets cross (min(charge, link − files))
+  wanted: number;               // what would arrive with room to spare: max(floor, carried + star credit + card)
+  chargeArrives: number;        // with no beam seeds
+  chargeArrivesMin: number;     // with seedBlocksMax of beam seeds laid out first
+  linkLost: number;             // charge the link leaves behind (the PACKET's link bar)
+  roomLost: number;             // charge the room has no space for (no seeds): `CHARGE 38 → 12 · 26 WON'T FIT`
   over: number;                 // files + floor − room, when positive: the unit does not fit until files are left
   word: 'fits' | 'squeezed' | 'leave' | 'no-charge';
+}
+
+// The desk's windows (02 §3.10). 3b adds the repository and the INBOX, slice 4 TRAINING (slice-3a-plan §2.10).
+export type DeskWindowId = 'chart' | 'card' | 'repository' | 'training' | 'inbox';
+
+// What the desk, the PACKET and the strip may read of a ship before it is built (review follow-up B1;
+// systems/map-run.ts shipSummaryAt): the classic ShipDef's, or an ArmShip's plus its world. JSON-safe.
+export interface ShipSummary {
+  slot: number;
+  worldSlot: number;            // the arm world it sits on (geometry: systems/map-geometry.ts)
+  name: string;
+  world: string;
+  kind: ShipKind;
+  template: TemplateId;
+  modifiers: readonly ModifierId[];
+  layer: number;
+  pods: number;
+  colonists: number;
+  memoryClass: MemoryClass;
+  final: boolean;
+  approachYear: number;         // the classic world's fixture year, or the arm ship's approach
+  late: boolean;
+  lzCount: number;
+  forgiveness: ForgivenessClass;
+  terrain: TerrainWord;
+  noGoWords: readonly string[];
+  debrisRack: PodRackName | null;
+  authored: ArmShip['authored'];
+  reserved: Reservations | null;  // null on the classic world (it has no reservations)
 }

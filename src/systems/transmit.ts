@@ -5,8 +5,7 @@ import { unitFilesIn, dropLock, toolKindOf, arrivalCharge, crashCoreToll, type D
 import { planPacket, pickCharge, cardFiles, PREVIEW_ID } from '@systems/draft';
 import { getUpgrade, type DraftCard, type UpgradeId } from '@data/upgrades';
 import { hasIntegrity, isInfected, getAiCore } from '@state/selectors';
-import { shipDefAt } from '@systems/map-run';
-import { shipColonists } from '@data/memory';
+import { shipSummaryAt } from '@systems/map-run';
 import { TOOL_WORD } from '@data/fs-tools';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
 import { LOG_TEXT } from '@data/log-text';
@@ -227,7 +226,7 @@ function whyLine(outcome: ShipOutcome, ship: string, coreToll: number): string |
 
 export function transmitModel(state: Readonly<GameState>): TransmitModel {
   const plan = requirePlan(state);
-  const ship = shipDefAt(state.run.map, plan.toSlot);
+  const ship = shipSummaryAt(state.run.map, plan.toSlot);
   const live = unitFilesIn(state.memory).filter((seg) => seg.type !== 'redundancy');
   const kept = live.filter((seg) => !plan.dropped.includes(seg.id));
   // The picked card's file is in the packet too (WP8): it takes link room like the unit's own files.
@@ -271,7 +270,7 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
     toShipIndex: plan.toShipIndex,
     shipName: ship.name,
     distanceLy: plan.hop.distanceLy,
-    headline: TRANSMIT_TEXT.next(ship.name, shipColonists(ship), plan.hop.distanceLy),
+    headline: TRANSMIT_TEXT.next(ship.name, ship.colonists, plan.hop.distanceLy),
     why: whyLine(outcome, fromShip, crashCoreToll(core.integrity, plan.coreHit)),
     emergency: outcome === 'crashed' || outcome === 'emergency',
     link: plan.linkBlocks,

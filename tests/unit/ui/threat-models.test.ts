@@ -107,7 +107,7 @@ function removeBeamSeeds(store: Store<GameState>): void {
   // The beam into this ship brought a seed (the arrival report THREAT's transmitNext writes; a ship built alone has none).
   store.update((draft) => {
     draft.run.arrival = {
-      hits: [], chargeCarried: 0, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0, chargeOverflowLost: 0,
+      hits: [], chargeCarried: 0, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0, chargeOverflowLost: 0, eccCorrected: 0,
       scripted: [], seeds: [{ segId: 'beam-seed-c', targetName: 'Telemetry' }], boarded: null,
     };
   });

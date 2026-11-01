@@ -13,7 +13,9 @@ export interface RolledLanding extends ShipLandingDef {
 }
 
 // TODO(3a-GEN): the roll. `authored` is an authored ship's written parts (data/run1-arm.ts RUN1_AUTHORED), honoured over
-// the roll.
+// the roll. Streams (each its own, so a later slice reading one never moves another): keyRng(key, 'landing') for the
+// LZs, widths, class, terrain and arcs; keyRng(key, 'site') for POOR site data (02 §3.5's odds by layer: tuning.ts
+// POOR_SITE_ODDS_*). The result is stored on the ArmShip (shipDefOf has no armSeed to roll it again).
 export function rollLanding(key: Readonly<ShipKey>, layer: number, pods: number, authored: Readonly<AuthoredOverride> | null): RolledLanding {
   void authored;
   throw new Error(`TODO(3a-GEN): rollLanding (slot ${key.slot}, layer ${layer}, ${pods} pods)`);

@@ -3,6 +3,7 @@ import type { RunThreatState } from '@/types/threat';
 import type { ShipThreatFacts } from '@systems/threat-plan';
 import { END_SLOTS } from '@data/arm';
 import { hopBetween, reachable } from '@systems/map-hop';
+import { isEndSlot } from '@systems/map-streams';
 import { fixedShipFacts, createRunThreat, applyThreat, planThreat, threatInputFor } from '@systems/threat-plan';
 import { SEEDS_MIN_DEPTH } from '@data/tuning';
 
@@ -30,7 +31,7 @@ export function mapFacts(map: Readonly<RunMapState>, from: number, to: number, d
   const hop = hopBetween(map, from, to);
   return {
     depth,
-    isFinal: END_SLOTS.includes(to),
+    isFinal: isEndSlot(map, to),
     oneHopFromFinal: oneHopFromFinal(map, to),
     beamSeeds: depth === SEEDS_MIN_DEPTH
       ? { kind: 'scripted', firstRun: [{ role: 'telemetry' }], later: hop.noise }

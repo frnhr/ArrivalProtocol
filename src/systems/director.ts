@@ -25,7 +25,7 @@ import {
 import { repairStepTarget } from '@data/fs-tools';
 import { REFUSAL_FLASH_SEC } from '@data/tuning';
 import { CORE_LOST_TEXT } from '@data/hollow-text';
-import { shipDefAt } from '@systems/map-run';
+import { shipSummaryAt } from '@systems/map-run';
 import { deskSteps } from '@systems/desk';
 
 // The director (§6.3) composes the one line the objective strip shows and speaks the story
@@ -255,7 +255,7 @@ export function composeObjective(ctx: DirectorCtx, rules: readonly GuideRule[]):
   if (ctx.phase === 'transmit') {
     const plan = ctx.state.run.transit;
     if (!plan) throw new Error('composeObjective: TRANSMIT with no transit plan');
-    return { id: 'transmit', text: LINES.transmitting(shipDefAt(ctx.state.run.map, plan.toSlot).name), keys: [], urgency: 'now', layer: 'mind', highlight: null, source: 'over' };
+    return { id: 'transmit', text: LINES.transmitting(shipSummaryAt(ctx.state.run.map, plan.toSlot).name), keys: [], urgency: 'now', layer: 'mind', highlight: null, source: 'over' };
   }
   if (ctx.phase === 'end') {
     return { id: 'run-over', text: LINES.runOver(), keys: [], urgency: 'now', layer: 'mind', highlight: null, source: 'over' };

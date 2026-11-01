@@ -7,9 +7,10 @@ import { BEAM_SEED_ODDS, LINK_NOISE_MAX, SEEDS_MIN_DEPTH } from '@data/tuning';
 // Space weather (02-map §3.3; slice-3a-plan §4.4, risk 14): the noise clouds rolled per run, a hop's link noise, and the
 // card's seed range. Pure. Track GEN owns this file after the foundation.
 
-// The run's noise clouds (rolled at RUN START from childRng(run.seed, 0, 'noise')): four, three of strength 1 and one of
-// 2, radius 12–18 LY, centres 45–167 LY from SOL along the arm's bend, at most 16 LY to either side, no two centres
-// closer than 20 LY (tuning.ts 3a GEN). TODO(3a-GEN): the roll. Until then a run has no clouds: every hop is CLEAN.
+// The run's noise clouds, rolled at RUN START from systems/map-streams.ts noiseRng(run.seed): a namespace of its own
+// (not childRng(seed, 0, 'noise'), which shares visitRng's key space). Four, three of strength 1 and one of 2, radius
+// 12–18 LY, centres 45–167 LY from SOL along the arm's bend, at most 16 LY to either side, no two centres closer than
+// 20 LY (tuning.ts 3a GEN). TODO(3a-GEN): the roll. Until then a run has no clouds: every hop is CLEAN.
 export function rollNoiseClouds(rng: Rng): NoiseCloud[] {
   void rng;
   return [];

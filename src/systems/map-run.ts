@@ -1,15 +1,17 @@
 import type { GameState } from '@state/schema';
 import type { RunLineage } from '@systems/meta';
 import type { ShipDef } from '@data/ships';
-import type { Hop, RouteStop, RunMapState } from '@/types/map';
+import type { Hop, RouteStop, RunMapState, ShipSummary } from '@/types/map';
 import type { LinkNoise } from '@/types/threat';
 import { CLASSIC_FIVE, CLASSIC_HOPS, CLASSIC_FACTS, classicShip } from '@data/classic-five';
-import { layoutFor } from '@data/memory';
-import { RUN_START_YEAR } from '@data/tuning';
-import { currentSlot, armShipAt } from '@systems/map-streams';
+import { layoutFor, shipColonists, POD_RACK_KEYS } from '@data/memory';
+import { WORLDS } from '@data/arm';
+import { RUN_START_YEAR, COLONISTS_PER_POD } from '@data/tuning';
+import { currentSlot, armShipAt, worldSlotOf } from '@systems/map-streams';
 
 export {
-  currentStop, currentSlot, armShipAt, shipKeyOf, keyRng, shipRng, visitRng, hopRng,
+  currentStop, currentSlot, armShipAt, armShipId, shipKeyOf, keyRng, shipRng, visitRng, hopRng, worldSlotOf, isEndSlot,
+  noiseRng,
 } from '@systems/map-streams';
 
 // The run on its map (phase 3 slice 3a, slice-3a-plan §2.2, §2.5): which ship the unit is on and how a ship's ShipDef is
@@ -37,7 +39,7 @@ export function classicHop(from: number, to: number, leaveYear: number): Hop {
   const arriveYear = leaveYear + def.distanceLy;
   return {
     from, to, distanceLy: def.distanceLy, linkBlocks: def.linkBlocks, transitHits: def.transitHits, eccFixes: 0,
-    leaveYear, arriveYear, approachYear: arriveYear, slackYears: 0, noise: classicNoise(to),
+    leaveYear, arriveYear, approachYear: arriveYear, slackYears: 0, noise: classicNoise(to), inRange: true,
     memoryClass: layout.cls, room: layout.roomForUnit, chargeFloor: layout.chargeFloor,
   };
 }
@@ -67,7 +69,7 @@ export function classicRunMap(seed: number, shipIndex: number, run: number): Run
 // The map a NEW RUN starts on (systems/run.ts startRun): the one place 3c swaps "run ≥ 2 = a fresh roll" for "the
 // archive's updated arm" (slice-3a-plan §2.10). The run number is the lineage's wave (1 on run 1).
 // TODO(3a-GEN): run 1 → the run-1 arm (map-generator assembleRun1Arm(seed), its noise clouds from
-// childRng(seed, 0, 'noise')); run ≥ 2 → freshArm(seed, run, RUN_START_YEAR) with ARES-(VI+run) at w0 and
+// noiseRng(seed)); run ≥ 2 → freshArm(seed, run, RUN_START_YEAR) with ARES-(VI+run) at w0 and
 // finalShipName(run) at w19 (risk 4). Until then every run is the classic world, so the page plays the five.
 export function createRunMap(lineage: Readonly<Pick<RunLineage, 'wave'>>, seed: number): RunMapState {
   return classicRunMap(seed, 0, lineage.wave);
@@ -107,6 +109,38 @@ export function shipDefAt(map: Readonly<RunMapState>, slot: number): ShipDef {
   if (map.world === 'classic') return classicShip(slot);
   armShipAt(map, slot);
   throw new Error('TODO(3a-GEN): shipDefAt on the arm (data/ships.ts shipDefOf)');
+}
+
+// What the desk, the PACKET, the strip and the RUN TALLY may read of the ship in `slot` (review follow-up B1): on the
+// classic world from its ShipDef, on the arm from its ArmShip and world, so nothing that shows a ship needs it built
+// (shipDefAt on the arm waits for Track GEN's shipDefOf). The desk models read only this.
+export function shipSummaryAt(map: Readonly<RunMapState>, slot: number): ShipSummary {
+  const worldSlot = worldSlotOf(map, slot);
+  const world = WORLDS[worldSlot]!;
+  if (map.world === 'classic') {
+    const ship = classicShip(slot);
+    return {
+      slot, worldSlot, name: ship.name, world: ship.world, kind: ship.kind, template: ship.template,
+      modifiers: [...ship.modifiers],
+      layer: ship.layer, pods: ship.pods, colonists: shipColonists(ship), memoryClass: ship.memoryClass, final: ship.final,
+      approachYear: classicRoute(slot, map.startYear).at(-1)!.hop?.approachYear ?? map.startYear, late: false,
+      lzCount: ship.landing.lzs.length, forgiveness: ship.landing.forgiveness, terrain: ship.landing.terrain,
+      noGoWords: ship.landing.noGo.map((arc) => arc.word),
+      debrisRack: ship.zones.flatMap((zone) => (zone.kind === 'debris' ? POD_RACK_KEYS.filter((rack) => rack === zone.rack) : []))[0]
+        ?? null,
+      authored: null, reserved: null,
+    };
+  }
+  const ship = armShipAt(map, slot);
+  return {
+    slot, worldSlot, name: ship.name, world: world.name, kind: ship.kind, template: ship.template,
+    modifiers: [...ship.modifiers],
+    layer: world.layer, pods: ship.pods, colonists: ship.pods * COLONISTS_PER_POD, memoryClass: ship.memoryClass,
+    final: ship.kind === 'final', approachYear: ship.approachYear, late: ship.late,
+    lzCount: ship.landing.lzs.length, forgiveness: ship.landing.forgiveness, terrain: ship.landing.terrain,
+    noGoWords: ship.landing.noGo.map((arc) => arc.word), debrisRack: ship.debrisRack, authored: ship.authored,
+    reserved: structuredClone(ship.reserved),
+  };
 }
 
 // The ship being flown.

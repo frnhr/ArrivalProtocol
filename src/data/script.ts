@@ -43,7 +43,7 @@ import { THREAT_RULES } from '@data/threat-rules';
 import { copyLessonDue, hollowAboard } from '@state/threat-selectors';
 import { THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
 import { LOG_TEXT, LOG_HINT_TARGET } from '@data/log-text';
-import { logEntriesAtBoot, logKnown } from '@state/log-selectors';
+import { bootLogKeys, logKnown } from '@state/log-selectors';
 import type { PodRecord } from '@/types/landing';
 import { autoburnDropLine, autoburnAvailable } from '@systems/autoburn';
 import { blocksInRack, knownHitRacks } from '@systems/zones';
@@ -861,15 +861,17 @@ export function scriptedDamageLine(hits: readonly TransitHit[]): string {
 // is made once, at the boot's first tick; systems/boot.ts emits 'log-key' as the line is said, and story-log marks the
 // entries found on that event (no tick-order or world-reset dependency). 'seeds' and 'board' stay empty until Track
 // THREAT fills arrival.seeds (arrival.boarded is filled from the verdict already).
-// Phase 3 slice 3a: 'sleep' (`> ASLEEP IN KESTREL'S RECEIVER · …`, first) and 'receiver' (`> RECEIVER: 1 RACK · ROOM 88`,
-// after the host line) are the galaxy map's, planned and worded by systems/map-boot.ts (Track GEN); 3b adds 'delivery'.
+// Phase 3 slice 3a: 'sleep' (`> ASLEEP IN KESTREL'S RECEIVER · …`, first), 'receiver' (`> RECEIVER: 1 RACK · ROOM 88`,
+// after the host line) and 'ecc-sleep' (`> ECC: 3 TRANSIT HITS CORRECTED WHILE ASLEEP`, before the hits line) are the
+// galaxy map's, planned and worded by systems/map-boot.ts (Track GEN); 3b adds 'delivery'.
 export type BootLineKind =
-  | 'sleep' | 'unpack' | 'board' | 'host' | 'receiver' | 'ecc' | 'seeds' | 'scripted' | 'charge' | 'overflow' | 'skill' | 'log' | 'hollow';
+  | 'sleep' | 'unpack' | 'board' | 'host' | 'receiver' | 'ecc-sleep' | 'ecc' | 'seeds' | 'scripted' | 'charge' | 'overflow'
+  | 'skill' | 'log' | 'hollow';
 
 // The entries this boot's keys open (05 §3.2, the interim keys of state/log-selectors.ts logEntriesAtBoot) that the run has
 // not found yet. Pure in the state: the boot plans its 'log' line from it, before anything marks them found.
 export function bootLogEntries(state: Readonly<GameState>): number[] {
-  const keys = logEntriesAtBoot(state.run.shipIndex, currentShip(state).final);
+  const keys = bootLogKeys(state);
   return keys.filter((entry) => !state.run.log.found.includes(entry));
 }
 
@@ -890,8 +892,10 @@ export function bootLinePlan(state: Readonly<GameState>, skill: boolean): BootLi
   const map = mapBootLines(state);
   const sleep: BootLineKind[] = map.includes('sleep') ? ['sleep'] : [];
   const receiver: BootLineKind[] = map.includes('receiver') ? ['receiver'] : [];
+  const eccSleep: BootLineKind[] = map.includes('ecc-sleep') ? ['ecc-sleep'] : [];
   if (arrival === null) return [...sleep, 'unpack', 'host', ...receiver, 'ecc', ...log, ...hollow];
-  const plan: BootLineKind[] = [...sleep, arrival.boarded !== null ? 'board' : 'unpack', 'host', ...receiver, 'ecc'];
+  const unpack: BootLineKind = arrival.boarded !== null ? 'board' : 'unpack';
+  const plan: BootLineKind[] = [...sleep, unpack, 'host', ...receiver, ...eccSleep, 'ecc'];
   if (arrival.seeds.length > 0) plan.push('seeds');
   if (arrival.scripted.length > 0) plan.push('scripted');
   plan.push('charge');
@@ -924,7 +928,8 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
   const arrival = state.run.arrival;
   switch (kind) {
     case 'sleep':
-    case 'receiver': return mapBootLineText(kind, state);
+    case 'receiver':
+    case 'ecc-sleep': return mapBootLineText(kind, state);
     case 'unpack': return LINES.bootUnpack(vars);
     case 'board': return THREAT_TEXT.boardUnpack(unitName(vars.unit));
     case 'host': return LINES.bootHost(vars);
