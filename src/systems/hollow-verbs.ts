@@ -156,12 +156,19 @@ function land(store: Store<GameState>, telegraph: Readonly<VerbTelegraph>): void
 }
 
 // The flight is busy (TACTICAL): the verbs wait (see the header). The landing is never "busy" here: the duel is fought there.
-// THE DEAL folded into the final ship (phase 3 slice 2, risk 13): the verbs' clock and a standing countdown also stand
-// still while the offer stands and through the pause an ACCEPT buys (DEAL_PAUSE_SEC), as the seeds already do, so
-// HOLLOW's one personal moment is never talked over by `> unlink …`, and "i leave the others alone" holds for the verbs.
+// THE DEAL folded into the final ship (phase 3 slice 2, risk 13): on the flight the verbs' clock and a standing countdown
+// also stand still while the offer stands and through the pause an ACCEPT buys (DEAL_PAUSE_SEC), as the seeds already do,
+// so HOLLOW's one personal moment is never talked over by `> unlink …`, and "i leave the others alone" holds for the verbs.
+// Never past ORBIT LOCK (the review's M2): the lock withdraws a standing offer and ends the pause (hollow-deal.ts), so the
+// duel is never fought unopposed. The first verb's lesson is not lost to the pause: verbTelegraphs counts telegraphs, so
+// whichever verb is the ship's first, on the coast or after the lock, counts from firstTelegraphSec, and in the duel its
+// extra seconds push the next verb back (see the header). Its clock stood still at the offer, so it comes a full
+// everySec after the lock, or duelEverySec after the root's DELETE starts: never on the lock's own tick, under
+// CONTROL's DELETE line.
 export function verbsHeld(state: Readonly<GameState>): boolean {
-  if (state.hollow.deal.phase === 'offered' || spreadPaused(state.hollow, state.clock.aiSec)) return true;
-  return state.run.phase === 'flight' && state.clock.pace === 'tactical';
+  const flight = state.run.phase === 'flight';
+  if (flight && (state.hollow.deal.phase === 'offered' || spreadPaused(state.hollow, state.clock.aiSec))) return true;
+  return flight && state.clock.pace === 'tactical';
 }
 
 function tick(store: Store<GameState>, dtAi: number): void {

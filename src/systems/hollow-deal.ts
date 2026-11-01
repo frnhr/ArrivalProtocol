@@ -16,30 +16,33 @@ import {
 } from '@data/tuning';
 
 // THE DEAL (§1, §5.3 moment 12, §6.6, §9 WP10 item 5): HOLLOW's most personal moment so far. On a ship whose HOLLOW
-// deals (the HUNT stage; folded into the final ship when the run had none, and offered there before ORBIT LOCK), once,
-// when one of its fronts stands within DEAL_FRONT_BLOCKS free blocks of a pod's driver and at least DEAL_MIN_DRIVERS
-// drivers are still in memory, it offers, in the TERMINAL, with ACCEPT and REFUSE buttons and a DEAL_TIMEOUT_SEC timer
-// on AI time (say.ts sayChoice; it starts once the line has typed):
+// deals (the HUNT stage, which the fixed five never reach; and folded into the final ship when the run had none, 04
+// §3.9: on the fixed five that is LAST LIGHT, offered only before ORBIT LOCK), once, when one of its fronts stands within
+// DEAL_FRONT_BLOCKS free blocks of a pod's driver and at least DEAL_MIN_DRIVERS drivers are still in memory, it offers,
+// in the TERMINAL, with ACCEPT and REFUSE buttons and a DEAL_TIMEOUT_SEC timer on AI time (say.ts sayChoice; it starts
+// once the line has typed):
 //   `> give me pod08. then i leave the others alone. for a while.`
 // • ACCEPT: the named driver is eaten at once (its pod can't launch: parked in orbit), every infection is cured, and
-//   the spread stands still for DEAL_PAUSE_SEC (no bites, no seeds). CONTROL: "Negotiating with unauthorized processes
-//   is not recommended. :)". The cost is the pod, named and counted.
+//   the spread stands still for DEAL_PAUSE_SEC (no bites, no seeds, no verbs: hollow-verbs.ts verbsHeld). CONTROL:
+//   "Negotiating with unauthorized processes is not recommended. :)". The cost is the pod, named and counted. On a ship
+//   with verbs the pause ends at ORBIT LOCK: the duel is never fought unopposed.
 // • REFUSE, or the timer running out: `> ok.`, and the bites come DEAL_REFUSE_INTERVAL_FACTOR as often for
 //   DEAL_HASTE_SEC, starting with the one already counting down (NEXT BITE drops: the refusal's cost is seen at once).
 // • The offer is withdrawn if the named driver launches, moves (a MOVE starting on it, or it no longer standing where it
-//   was) or is eaten before the answer: `> never mind.` (eaten: `> never mind. i took it.`).
+//   was) or is eaten before the answer: `> never mind.` (eaten: `> never mind. i took it.`). On a ship with verbs it is
+//   also withdrawn, silently, at ORBIT LOCK (dealLive): the duel's lines and FinaleChoice never share the screen with it.
 // • While the offer stands HOLLOW holds the named driver in its teeth: its drain stands still (hollow.ts dealHolds),
 //   so the offer's 15 s are the one clock on it, and a kid who freezes gets the timeout's cost, not a driver eaten
 //   mid-offer (WP10 review: with the drain running, C08 was eaten before the timer ran out on 6 of 8 seeds). Every
 //   other bite and drain goes on: that, and the clock, are the pressure.
 // It is never offered twice: not on this ship (deal.phase), nor in this run (run.stats.deal records how it ended, also
 // an offer the ship's end cut short).
-// It is offered the tick the front stands (on VESPER, HOLLOW's wake: it bites C08 and C09, then bargains): the TERMINAL
-// types its lines in order, so the offer types right after the bite's echoes, and its timer starts once it has typed. (A
-// wait for both screens to be quiet first let a kid who walls fast move the driver out of reach before the offer came,
-// and the moment never happened.) It can come during a burn (a choice is critical), and its timer runs on AI time
-// (pause freezes it, OVERCLOCK does not stretch it). Runs on the AI tick after HOLLOW's (its bite of this tick is in),
-// DOM-free.
+// It is offered the tick the front stands (on LAST LIGHT, HOLLOW's wake: it bites both drivers beside the root, then
+// bargains): the TERMINAL types its lines in order, so the offer types right after the bite's echoes, and its timer
+// starts once it has typed. (A wait for both screens to be quiet first let a kid who walls fast move the driver out of
+// reach before the offer came, and the moment never happened.) It can come during a burn (a choice is critical), and its
+// timer runs on AI time (pause freezes it, OVERCLOCK does not stretch it). Runs on the AI tick after HOLLOW's (its bite of
+// this tick is in), DOM-free.
 
 export const DEAL_ACCEPT = 'ACCEPT';
 export const DEAL_REFUSE = 'REFUSE';
@@ -65,16 +68,18 @@ export function dealFront(memory: readonly Segment[], aiNow: number): DriverSegm
 // Something is still to bargain over: a live ship whose landing has not ended. Once END LANDING (or the auto-end) has
 // parked the pods still aboard, a pod given up would launch nothing anyway; their drivers stay in memory only until the
 // report (01-landing §3.10), so the deal is not offered then, and an offer still standing is withdrawn.
+// On a ship whose HOLLOW has verbs (THE DEAL folded into the final ship, 04 §3.9: "before ORBIT LOCK") the bargain lives
+// only while the flight is on: at the lock the root opens for the duel, so an offer is never made after it, and one still
+// standing is withdrawn there (the review's M2: its buttons stood beside FinaleChoice).
 function dealLive(state: Readonly<GameState>): boolean {
+  if (state.hollow.cfg.verbs !== null && state.run.phase !== 'flight') return false;
   return isLivePhase(state) && !(state.run.phase === 'landing' && state.landing.ended !== null);
 }
 
-// The deal may be offered now: a dealing HOLLOW awake on a live ship, nothing offered yet on this ship or in this run,
-// and enough drivers left to bargain over. Folded into the final ship (phase 3 slice 2, 04 §3.9: "before ORBIT LOCK"),
-// only while the flight is on: at the lock the root opens for the duel, and a bargain over a pod then would talk over it.
+// The deal may be offered now: a dealing HOLLOW awake on a live ship (dealLive), nothing offered yet on this ship or in
+// this run, and enough drivers left to bargain over.
 function dealOpen(state: Readonly<GameState>): boolean {
   const hollow = state.hollow;
-  if (hollow.cfg.verbs !== null && state.run.phase !== 'flight') return false;
   return hollow.cfg.deal && hollow.phase === 'awake' && hollow.deal.phase !== 'offered' && hollow.deal.phase !== 'done'
     && state.run.stats.deal === null && dealLive(state) && driversInMemory(state).length >= DEAL_MIN_DRIVERS;
 }
@@ -165,6 +170,11 @@ function tick(store: Store<GameState>): void {
   const state = store.getState();
   if (!state.hollow.cfg.deal) return;
   const deal = state.hollow.deal;
+  // An ACCEPT's pause ends at ORBIT LOCK on a ship with verbs (the review's M2): "i leave the others alone" was a bargain
+  // for the flight, and the duel is never fought unopposed (the verbs, the bites and the seeds all wait on the pause).
+  if (state.hollow.cfg.verbs !== null && state.run.phase !== 'flight' && deal.pauseUntilAi !== null && deal.pauseUntilAi > state.clock.aiSec) {
+    store.update((draft) => { draft.hollow.deal.pauseUntilAi = draft.clock.aiSec; });
+  }
   if (deal.phase === 'offered') {
     // The landing ended under the offer (the ship's own end is the post-tick's): nothing left to bargain over, even if
     // an answer came in the same moment.
