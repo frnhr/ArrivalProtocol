@@ -10,6 +10,11 @@ import { shipColonists } from '@data/memory';
 import { TOOL_WORD } from '@data/fs-tools';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
 import { LOG_TEXT } from '@data/log-text';
+import { THREAT_TEXT } from '@data/threat-text';
+import { noWorkingRm } from '@state/threat-selectors';
+import { hollowLabel } from '@systems/say';
+import { logChip } from '@systems/log-view';
+import { TRACE_BOARD_AT } from '@data/tuning';
 
 // The TRANSMIT screen's model (§4.1 step 5, §6.9, §9 WP7 item 4), pure and DOM-free. Mostly information:
 // where the unit goes next (`NEXT: HALCYON · 2,000 SOULS · 22 LY`), how the packet fits the link
@@ -22,6 +27,13 @@ import { LOG_TEXT } from '@data/log-text';
 // toggleDrop is the one write: run.transit.dropped, with the packet's numbers worked out again. The cards dealt
 // for the crossing (WP8, PICK ONE TO CARRY) are listed with the pick; the picked card's file is in the packet's
 // numbers (systems/draft.ts planPacket), and its charge in the arrival line.
+// Phase 3 slice 2 (04 §3.3, §3.7, §3.8, §4; 05 §3.2): the threat the beam carries, read from TransitPlan.threat (the
+// ladder's verdict for the next ship) and the tally the last ship's end applied (run.threat):
+// • the uninvited chip when HOLLOW rides this beam (`??? · 10 BLOCKS · NOT YOURS · RIDES FREE`): it crosses at the size
+//   it will have (threat.rootBlocks), costs no link room, and says why it grew (`+2: 2 SEEDS FED IT`, lastTally.left);
+// • 046.log's chip as `046.log · 3/12`, locked, glowing while an entry is unread (a click opens the LOG READER);
+// • `NO RM · YOU CAN'T DELETE THE ROOT` before the beam to the final ship when no working rm is aboard (information);
+// • the TRACE line: the meter, `1 MORE AND IT FINDS YOU`, or `HOLLOW WILL FIND YOU ON THIS BEAM` on a boarding beam.
 
 export interface PacketChip {
   segId: string;
@@ -38,6 +50,26 @@ export interface PacketChip {
   note: string;
   // REPAIR CHARGE leaving it behind carries (kept: would carry; dropped: carries now).
   chargeGain: number;
+  // 046.log (slice 2): its chip glows while an entry is unread, and a click opens the LOG READER instead of a drop.
+  log: boolean;
+  glow: boolean;
+}
+
+// HOLLOW riding this beam (04 §3.8): a locked chip that costs no link room, at the size it will land with.
+export interface UninvitedChip {
+  owner: string;          // ??? until it named itself
+  blocks: number;
+  fed: number;            // beam-born blocks the last ship's end fed it (0: none)
+  boards: boolean;        // it boards on this beam (the boarding moment: the stutter in the sweep)
+  text: string;           // ??? · 10 BLOCKS · NOT YOURS · RIDES FREE
+  note: string;           // NOT YOURS · RIDES FREE
+  fedText: string | null; // ??? 12 BLOCKS · +2: 2 SEEDS FED IT
+}
+
+// The PACKET's TRACE line: the meter (`TRACE ■■□ · 1 MORE AND IT FINDS YOU`), or the boarding beam's warning.
+export interface PacketTraceLine {
+  text: string;
+  tone: 'quiet' | 'warn' | 'boards';
 }
 
 // A card dealt for this crossing, as the screen shows it (WP8 part 2): what it is, what it does, why it was
@@ -77,6 +109,41 @@ export interface TransmitModel {
   cards: DraftCardView[];
   pick: UpgradeId | null;
   cardFile: CardFileChip | null;
+  // Slice 2: the threat the beam carries.
+  uninvited: UninvitedChip | null;
+  noRm: string | null;
+  trace: PacketTraceLine | null;
+}
+
+// The chip's words after the owner (THREAT_TEXT.uninvitedChip reads `owner · n BLOCKS · NOT YOURS · RIDES FREE`).
+const UNINVITED_NOTE_FROM = ' BLOCKS · ';
+
+function uninvitedChip(state: Readonly<GameState>, plan: TransitPlan): UninvitedChip | null {
+  const blocks = plan.threat.rootBlocks;
+  if (blocks === null) return null;
+  const owner = hollowLabel(state.run);
+  const tally = state.run.threat.lastTally;
+  const fed = tally !== null && tally.fed ? tally.left : 0;
+  const text = THREAT_TEXT.uninvitedChip(owner, blocks);
+  const cut = text.indexOf(UNINVITED_NOTE_FROM);
+  if (cut < 0) throw new Error(`uninvitedChip: the chip's words changed shape: ${text}`);
+  return {
+    owner, blocks, fed, boards: plan.threat.boards !== null, text, note: text.slice(cut + UNINVITED_NOTE_FROM.length),
+    fedText: fed > 0 ? THREAT_TEXT.uninvitedFed(owner, blocks, fed) : null,
+  };
+}
+
+// HOLLOW boarding on this beam is said outright (the map card's line, 04 §3.8: the surprise is what it does, not that it
+// comes); a beam it already rides needs no line (its chip is there). Otherwise the meter, once TRACE has counted or the
+// last ship's end tallied a seed; nothing on a run that has met no seed.
+function packetTraceLine(state: Readonly<GameState>, plan: TransitPlan): PacketTraceLine | null {
+  const trace = state.run.threat.trace;
+  if (plan.threat.boards !== null) return { text: `${THREAT_TEXT.trace(trace)} · ${THREAT_TEXT.willFindYou}`, tone: 'boards' };
+  if (plan.threat.rootBlocks !== null) return null;
+  const tallied = (state.run.threat.lastTally?.left ?? 0) > 0;
+  if (trace === 0 && !tallied) return null;
+  if (trace === TRACE_BOARD_AT - 1) return { text: `${THREAT_TEXT.trace(trace)} · ${THREAT_TEXT.traceOneMore}`, tone: 'warn' };
+  return { text: THREAT_TEXT.trace(trace), tone: trace >= TRACE_BOARD_AT ? 'warn' : 'quiet' };
 }
 
 // The order a file is offered in, safest to leave behind first (§6.9); locked files last.
@@ -162,15 +229,17 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
   const carriedWith = (dropped: readonly string[]): number => planPacket(state.memory, { ...plan, dropped }).chargeCarried;
   const chargeShort = packet.chargeHeld > packet.chargeCarried;
 
+  const log = logChip(state);
   const chips = live.map((seg): PacketChip & { order: number } => {
     const dropped = plan.dropped.includes(seg.id);
+    const isLog = seg.type === 'log';
     const lock = dropped ? null : dropLock(kept, seg);
     const chargeGain = dropped
       ? packet.chargeCarried - carriedWith(plan.dropped.filter((id) => id !== seg.id))
       : lock === null ? carriedWith([...plan.dropped, seg.id]) - packet.chargeCarried : 0;
     return {
       segId: seg.id,
-      name: seg.name,
+      name: isLog ? log.label : seg.name,
       blocks: seg.size,
       integrity: hasIntegrity(seg) ? seg.integrity : null,
       infected: isInfected(seg),
@@ -179,6 +248,8 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
       toggleable: dropped || (lock === null && chargeGain > 0),
       note: lock !== null ? lockNote(lock, seg) : effectNote(kept, seg),
       chargeGain,
+      log: isLog,
+      glow: isLog && log.glow,
       order: dropped ? 0 : dropOrder(kept, seg),
     };
   });
@@ -216,6 +287,9 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
     }),
     pick: plan.pick,
     cardFile: cardFileChip(plan.pick),
+    uninvited: uninvitedChip(state, plan),
+    noRm: plan.threat.isFinal && noWorkingRm(state) ? THREAT_TEXT.noRmPacket : null,
+    trace: packetTraceLine(state, plan),
   };
 }
 
