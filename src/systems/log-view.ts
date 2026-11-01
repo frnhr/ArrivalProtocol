@@ -2,6 +2,7 @@ import type { GameState } from '@state/schema';
 import type { LogSegment, Segment } from '@/types/segment';
 import { LOG_ENTRIES, LOG_ENTRY_COUNT, LOG_NAME, LOG_TEXT, logEntryLines } from '@data/log-text';
 import { FRESH_UNIT_CHARGE } from '@data/memory';
+import { logKnown } from '@state/log-selectors';
 
 // 046.log as the screens show it (05-story §3.2, §4; slice-2-plan §5.3), pure and DOM-free, so the headless tests check
 // what a kid would read: the chip (`046.log · 3/12`, glowing while an entry is unread) on the strip, in INSPECT and on
@@ -34,20 +35,14 @@ export interface LogChipModel {
   label: string;        // 046.log · 3/12, or ??? before it is known
 }
 
-// The kid knows the file once SCAN read its header or a boot found a key (risk 5), or once story-log renamed it.
-export function logKnown(state: Readonly<GameState>, seg?: Readonly<LogSegment>): boolean {
-  const log = state.run.log;
-  return log.scanned || log.found.length > 0 || seg?.name === LOG_NAME.known;
-}
-
 export function logSegment(memory: readonly Segment[]): LogSegment | null {
   return (memory.find((seg) => seg.type === 'log') as LogSegment | undefined) ?? null;
 }
 
 export function logChip(state: Readonly<GameState>): LogChipModel {
   const log = state.run.log;
-  const seg = logSegment(state.memory) ?? undefined;
-  const known = logKnown(state, seg);
+  // The one rule (state/log-selectors.ts): scanned, or a key found; story-log renames the segment from it.
+  const known = logKnown(log);
   const found = log.found.length;
   const unread = log.found.filter((n) => !log.read.includes(n)).length;
   const count = `${found}/${LOG_ENTRY_COUNT}`;

@@ -6,7 +6,7 @@ import { buildShipMemory, type CarriedRacks, type HurtDriver } from '@data/memor
 import { hurtDriversFor } from '@data/driver-damage';
 import { getShip } from '@data/ships';
 import { nominalRunThreat, nominalShipThreat, createRunThreat, applyThreat } from '@systems/threat-plan';
-import { createRunLog } from '@systems/story-log';
+import { createRunLog } from '@state/log-selectors';
 import { isDriver } from '@state/selectors';
 import { createFlight, createMissionMeta, createClockState } from '@data/mission';
 import { childRng } from '@systems/rng';

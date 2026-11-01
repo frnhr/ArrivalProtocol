@@ -42,7 +42,7 @@ import { THREAT_RULES } from '@data/threat-rules';
 import { copyLessonDue, hollowAboard } from '@state/threat-selectors';
 import { THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
 import { LOG_TEXT, LOG_HINT_TARGET } from '@data/log-text';
-import { logEntriesAtBoot, logKnown } from '@systems/story-log';
+import { logEntriesAtBoot, logKnown } from '@state/log-selectors';
 import type { PodRecord } from '@/types/landing';
 import { autoburnDropLine, autoburnAvailable } from '@systems/autoburn';
 import { blocksInRack, knownHitRacks } from '@systems/zones';
@@ -856,13 +856,13 @@ export function scriptedDamageLine(hits: readonly TransitHit[]): string {
 // Phase 3 slice 2 (slice-2-plan §2.5): 'board' types HOLLOW's 108% unpack in place of 'unpack' when it boarded on this
 // beam (arrival.boarded; systems/boot.ts emits 'hollow-boarded' as it is said); 'seeds' names the beam seeds and their
 // targets right after the ECC line (arrival.seeds); 'log' types `> 046.log · KEY FOUND · ENTRY 0n` for the entries this
-// boot's keys open that the run has not found yet (systems/story-log.ts logEntriesAtBoot minus run.log.found). The plan
+// boot's keys open that the run has not found yet (state/log-selectors.ts logEntriesAtBoot minus run.log.found). The plan
 // is made once, at the boot's first tick; systems/boot.ts emits 'log-key' as the line is said, and story-log marks the
 // entries found on that event (no tick-order or world-reset dependency). 'seeds' and 'board' stay empty until Track
 // THREAT fills arrival.seeds (arrival.boarded is filled from the verdict already).
 export type BootLineKind = 'unpack' | 'board' | 'host' | 'ecc' | 'seeds' | 'scripted' | 'charge' | 'overflow' | 'skill' | 'log' | 'hollow';
 
-// The entries this boot's keys open (05 §3.2, the interim keys of systems/story-log.ts logEntriesAtBoot) that the run has
+// The entries this boot's keys open (05 §3.2, the interim keys of state/log-selectors.ts logEntriesAtBoot) that the run has
 // not found yet. Pure in the state: the boot plans its 'log' line from it, before anything marks them found.
 export function bootLogEntries(state: Readonly<GameState>): number[] {
   const keys = logEntriesAtBoot(state.run.shipIndex, getShip(state.run.shipIndex).flagship);
@@ -1236,7 +1236,7 @@ export const DRIVER_RULES: readonly GuideRule[] = [
 // The `???` file is ship 1's SCAN lesson now that HOLLOW is gone from it: on run 1, once POD 02 no longer lands hard (the
 // coast's REPAIR is done) and the flight is in a WAIT, `◇ A FILE YOU DIDN'T PACK — SCAN it`, worded for the screen the
 // kid is on. The beat is missable (05 §3.5): a one-shot that steps aside after LOG_SCAN_ASK_SEC and never blocks the
-// flight. Done when the run knows the file (story-log logKnown: scanned, or a key found). A returning unit gets one
+// flight. Done when the run knows the file (state/log-selectors.ts logKnown: scanned, or a key found). A returning unit gets one
 // hint and no lesson.
 
 function logAskLive(ctx: DirectorCtx): boolean {

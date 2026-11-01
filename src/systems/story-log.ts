@@ -1,6 +1,6 @@
 import type { Store } from '@state/store';
-import type { GameState, RunLogState } from '@state/schema';
-import type { LogSegment } from '@/types/segment';
+import type { GameState } from '@state/schema';
+import { logDisplayName } from '@state/log-selectors';
 import { onPostTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { on } from '@systems/events';
@@ -13,34 +13,8 @@ import { LOG_ENTRY_COUNT, LOG_NAME, LOG_DESC, LOG_TEXT, logEntryLines } from '@d
 // at the boots (`> 046.log · KEY FOUND · ENTRY 0n`), the SCAN reaction (the header, CONTROL's ignore line, the file
 // renamed `046.log`), the reader opening by itself on entry 01 after ship 1's LANDING REPORT (run 1, once), and entry
 // 12 typing from the root at its last block. Track OPENING owns this file; it reacts to run.phase changes and events,
-// so systems/run.ts needs no edit for it. Slice 3 replaces logEntriesAtBoot with the rings (05 §3.2: an entry opens at
-// the boot of the first ship at or beyond its ring).
-
-// A run's log before anything is found.
-export function createRunLog(): RunLogState {
-  return { scanned: false, found: [], read: [], autoOpened: false };
-}
-
-// The kid knows what the file is (slice-2-plan risk 5): scanned, or a key found. The chip's name derives from this, not
-// the other way round: the segment is rebuilt with `???` by the simulation retry and copied through every packet, so
-// the run's log is the one truth and story-log brings the segment in line with it every tick.
-export function logKnown(log: Readonly<RunLogState>): boolean {
-  return log.scanned || log.found.length > 0;
-}
-
-export function logDisplayName(log: Readonly<RunLogState>): LogSegment['name'] {
-  return logKnown(log) ? LOG_NAME.known : LOG_NAME.unknown;
-}
-
-// The entries whose keys a boot finds (05 §8.2's interim keys: "entry n at ship n, entries 10–12 on the last ship"):
-// 02, 03 and 04 at the boots of ships 2, 3 and 4, 10 and 11 at the final ship's. Entry 01 opens when ship 1's LANDING
-// REPORT closes and entry 12 at the root's last block, so no boot finds them.
-export function logEntriesAtBoot(shipIndex: number, isFinal: boolean): number[] {
-  if (!(Number.isInteger(shipIndex) && shipIndex >= 0)) throw new Error(`logEntriesAtBoot: ship index ${shipIndex}`);
-  if (isFinal) return [10, 11];
-  if (shipIndex >= 1 && shipIndex <= 3) return [shipIndex + 1];
-  return [];
-}
+// so systems/run.ts needs no edit for it. The pure rules (createRunLog, logKnown, logEntriesAtBoot) are
+// state/log-selectors.ts's.
 
 // --- The LOG READER's actions (05 §4): story-log opens it, the reader view (Track UI) closes it and records what it typed.
 
