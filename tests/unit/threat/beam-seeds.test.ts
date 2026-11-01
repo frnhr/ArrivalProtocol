@@ -191,6 +191,9 @@ check('…KESTREL runs the seeds-only config, with no root', JSON.stringify(s().
 h.untilPhase('flight', 60);
 const ecc = eccSeedsLine(['Telemetry']);
 check(`the boot's ECC line names the seed and its target: ${ecc}`, s().log.entries.some((entry) => entry.text === ecc), ecc);
+const landed = h.events.filter((event) => event.name === 'seed-landed-beam').map((event) => event.payload as { segId: string; targetId: string });
+check('…and \'seed-landed-beam\' fires once for it, as that line is said, naming Telemetry', landed.length === 1 && landed[0]!.segId === beamSeed?.id
+  && s().memory.find((seg) => seg.id === landed[0]!.targetId)?.role === 'telemetry', JSON.stringify(landed));
 for (let i = 0; i < 20; i++) h.step();
 const seedAlert = s().alerts.list.find((alert) => alert.id === SEED_ALERT_ID);
 check('the seeds-only alert names the file and holds SKIP', seedAlert?.text === THREAT_TEXT.seedNextTo('Telemetry') && seedAlert.inhibitsSkip === true

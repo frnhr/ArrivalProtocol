@@ -925,6 +925,9 @@ Track THREAT (§5.1) as built on branch `threat-2`, where it differs from §1–
 22. **The COPY lesson's re-keyed trigger** is `copyLessonDue(state)` in threat-selectors.ts (a hollow block's reach beside
     a filesystem tool with no spare, `huntedToolWithoutSpare`, or a HUNT stage's seeds); wiring it is a one-line patch to
     script.ts, which is OPENING's (requested with this track's report).
+23. **`seed-landed-beam`** is emitted by boot.ts (OPENING's) as the boot's `seeds` line is said, once per seed still in
+    memory, its target found behind it (`beamSeedTarget`): a three-line edit made after OPENING merged, at the lead's
+    request for Track UI.
 
 ## Deviations (Track UI)
 
