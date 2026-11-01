@@ -21,19 +21,20 @@ import { installTool } from '@systems/licences';
 import { isBusy } from '@systems/tool-targets';
 import { buildShipMemory } from '@data/memory';
 import { UNNAMED_HOLLOW } from '@data/hollow-text';
-import { SHIPS, type ShipDef, type HollowDef } from '@data/ships';
+import type { ShipDef, HollowDef } from '@data/ships';
 import { childRng } from '@systems/rng';
 import { createHollowState, createLandingState } from '@state/initial';
 import { driversInMemory, getRedundancy, isInfected } from '@state/selectors';
 import { stateFromElements } from '@/types/orbit';
 import type { DriverSegment, FreeSegment } from '@/types/segment';
 import { WALL_MIN_BLOCKS, ROOT_BLOCKS } from '@data/tuning';
+import { CLASSIC_FIVE } from '@data/classic-five';
 import { phase2HalcyonDef } from '../support/hollow-world';
 
 const HALCYON_HOLLOW: HollowDef = {
   wake: { afterAiSec: 30, coastLeadSec: null }, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, landMult: 1.5, seed: null, verbs: null, deal: false, story: 'none',
 };
-const ares = SHIPS[0]!;
+const ares = CLASSIC_FIVE[0]!;
 const HALCYON: ShipDef = {
   ...ares,
   id: 'halcyon-test',
@@ -41,9 +42,9 @@ const HALCYON: ShipDef = {
   memory: {
     ...ares.memory,
     podRacks: phase2HalcyonDef().memory.podRacks,
-    drivers: SHIPS[1]!.memory.drivers,
+    drivers: CLASSIC_FIVE[1]!.memory.drivers,
   },
-  landing: SHIPS[1]!.landing,
+  landing: CLASSIC_FIVE[1]!.landing,
 };
 const CHARGE = 32;
 const RUN_SEC = 180;

@@ -24,10 +24,10 @@ import { segmentStarts, requireAddr } from '@systems/memory-ops';
 import { GUIDE_RULES, WORST_CASE_VARS } from '@data/script';
 import { MOVE_PREVIEW_TEXT } from '@data/hollow-text';
 import { ZONE_WORD } from '@data/zone-text';
-import { RACK_NAMES } from '@data/memory';
 import { BITTEN_AGAIN_COUNT, MAX_LINE_CHARS, RACK_BLOCKS } from '@data/tuning';
 import type { GameState, PendingPlacement } from '@state/schema';
 import type { Segment, DriverSegment } from '@/types/segment';
+import { MEMORY_LAYOUTS } from '@data/memory';
 
 const h = createHarness11(5);
 const state = (): Readonly<GameState> => h.store.getState();
@@ -66,7 +66,7 @@ const starts = segmentStarts(memory);
 const c13 = memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 12)!;
 // Rack A's free tail (the ship files end before it) and the open rack D.
 const freeIn = (rack: string, size: number): PendingPlacement => {
-  const rackStart = RACK_NAMES.indexOf(rack) * RACK_BLOCKS;
+  const rackStart = (MEMORY_LAYOUTS.FULL.racks as readonly string[]).indexOf(rack) * RACK_BLOCKS;
   const index = memory.findIndex((seg, i) => seg.type === 'free' && starts[i]! >= rackStart && starts[i]! + size <= rackStart + RACK_BLOCKS
     && seg.size >= size);
   if (index < 0) throw new Error(`move-hazard: no free run of ${size} in rack ${rack}`);

@@ -19,7 +19,6 @@ import { computePrediction, samplePath, type BurnPoint, type Prediction } from '
 import { createInitialState } from '@state/initial';
 import { beginLanding } from '@state/actions';
 import { freshUnitRacks } from '@systems/carry';
-import { getShip } from '@data/ships';
 import { computeDropSolution, angleDelta } from '@systems/landing-solve';
 import { windowOpenNow, lzAt } from '@systems/landing-rules';
 import {
@@ -36,6 +35,7 @@ import {
   BAND_TEXT, DRIVER_DETAIL_TEXT, LAUNCH_REFUSAL_TEXT, MINI_LANDING_TEXT, LANDING_HUD_TEXT, POD_STATE_TEXT, TOUCHDOWN_FLOAT_TEXT,
 } from '@data/landing-text';
 import { BAY_SLOTS, DRAG_LINE_FRAC, DRAG_STAMP_MIN_KM, GROUND_TRACK_SPAN_KM, MAX_LINE_CHARS } from '@data/tuning';
+import { classicShip } from '@data/classic-five';
 
 // A chip's cap (brackets, counters, the countdown chip, the mini-HUD, the bay's tags): these sit on the NAV PLOT's rim,
 // the GROUND TRACK and the narrow mini-HUD, where today's longest (`[ LZ-A · 0/3 ]`) is 14. 24 leaves 05 room.
@@ -56,7 +56,7 @@ const DEG = Math.PI / 180;
 const NO_PRED = {} as Prediction;   // the landing's chip and alert read the drop solution, not the flight's prediction
 
 function world(shipIndex = 0): GameState {
-  const state = createInitialState({ seed: 7, shipIndex, carried: shipIndex === 0 ? null : freshUnitRacks(getShip(shipIndex)) });
+  const state = createInitialState({ seed: 7, shipIndex, carried: shipIndex === 0 ? null : freshUnitRacks(classicShip(shipIndex)) });
   state.run.phase = 'landing';
   state.ui.mode = 'tools';
   state.burn.status = 'locked';

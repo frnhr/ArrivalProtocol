@@ -17,7 +17,7 @@ import { getPrediction } from '@systems/predict';
 import { getByRole, hasIntegrity } from '@state/selectors';
 import { LINES } from '@data/script';
 import { BEAM_OUT_TAC, BEAM_OUT_EXTRA_HITS, EMERGENCY_EXTRA_HITS, EMERGENCY_CORE_HIT, CORE_RESET_INTEGRITY } from '@data/tuning';
-import { getShip } from '@data/ships';
+import { CLASSIC_HOPS } from '@data/classic-five';
 import type { SegmentRole } from '@/types/segment';
 
 const h = createHarness7(5, { soulsFound: false });
@@ -75,7 +75,7 @@ function bootToFlight(): void {
   const coreHits = hits.slice(1).filter((hit) => hit.role === 'core').reduce((sum, hit) => sum + hit.from - hit.to, 0);
   check('…next ship (HALCYON), the Core −25 first in the log, then the 3 + 3 transit hits',
     state().run.shipIndex === 1 && toll?.role === 'core' && toll.from === coreBefore && toll.to === coreBefore - EMERGENCY_CORE_HIT
-    && hits.length === 1 + getShip(1).arrival!.transitHits + EMERGENCY_EXTRA_HITS, JSON.stringify(hits));
+    && hits.length === 1 + CLASSIC_HOPS[1]!.transitHits + EMERGENCY_EXTRA_HITS, JSON.stringify(hits));
   check('…the Core arrives at 100 − 25 − its transit hits', Math.abs(integrity('core') - (coreBefore - EMERGENCY_CORE_HIT - coreHits)) < 1e-9,
     `${integrity('core')}`);
 }
@@ -200,7 +200,7 @@ function bootToFlight(): void {
     state().run.phase === 'transmit' && state().run.ships[0]?.outcome === 'abandoned' && state().run.transit?.extraHits === BEAM_OUT_EXTRA_HITS,
     `${state().run.phase} ${JSON.stringify(state().run.transit)}`);
   h.transmit();
-  check('…HALCYON arrives with 3 + 2 transit hits', (state().run.arrival?.hits.length ?? 0) === getShip(1).arrival!.transitHits + BEAM_OUT_EXTRA_HITS,
+  check('…HALCYON arrives with 3 + 2 transit hits', (state().run.arrival?.hits.length ?? 0) === CLASSIC_HOPS[1]!.transitHits + BEAM_OUT_EXTRA_HITS,
     `${state().run.arrival?.hits.length}`);
   check('the progress readout is null when not beaming', beamOutProgress(state()) === null);
 }

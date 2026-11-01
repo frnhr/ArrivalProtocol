@@ -20,7 +20,6 @@ import {
   newSegId, segmentStarts, assertMemoryInvariants, replaceRange, freeSegment, mergeAdjacentFree, requireAddr,
 } from '@systems/memory-ops';
 import { toolKindOf } from '@systems/carry';
-import { childRng } from '@systems/rng';
 import { setIntegrity, cureInfection, recordDriverLost, parkPodsAboard } from '@state/actions';
 import { isOpenFree } from '@systems/tool-targets';
 import {
@@ -31,7 +30,7 @@ import {
 } from '@state/selectors';
 import type { FsToolKind } from '@/types/fs-tool';
 import { repairRatePerSec } from '@data/fs-tools';
-import { MEMORY_TOTAL_BLOCKS, FRESH_UNIT_CHARGE, UNIT_RACKS_START, hexAddr } from '@data/memory';
+import { FRESH_UNIT_CHARGE, hexAddr, layoutOf, layoutOfMemory } from '@data/memory';
 import { HOLLOW_ALERT_TEXT, HOLLOW_DESC, HOLLOW_STORY, HOLLOW_ECHO, hollowUnitName } from '@data/hollow-text';
 import { SEEDS_ONLY_DEF } from '@data/threats';
 import { THREAT_TEXT } from '@data/threat-text';
@@ -46,6 +45,7 @@ import {
   DEAL_SEED_CALLED_OFF_SEC, RACK_BLOCKS, VERB_WEIGHT_PER_STAT, VERB_MV_NEAR_BLOCKS, OP_COMPLETE_PCT, BITTEN_AGAIN_COUNT,
   TACTICAL_LEAD_BURN_TAC, MERGE_COST_CHARGE,
 } from '@data/tuning';
+import { visitRng } from '@systems/map-streams';
 
 // HOLLOW (§1, §6.6, §9 WP6): the caretaker of the previous wave, starving in the same memory as you.
 // One rule a kid can repeat: "It eats the file next to it. An eaten file turns into HOLLOW too.
@@ -355,7 +355,8 @@ function sparedFromToolHunt(memory: readonly Segment[], starts: readonly number[
   if (seg === undefined || !isAiFile(seg)) return false;
   if (seg.type === 'core') return true;
   const start = starts[index]!;
-  return start < UNIT_RACKS_START + RACK_BLOCKS && start + seg.size > UNIT_RACKS_START;
+  const { unitStart } = layoutOfMemory(memory);
+  return start < unitStart + RACK_BLOCKS && start + seg.size > unitStart;
 }
 
 // Where the next seed lands on a ship whose seeds hunt your tools ('near-tools', the HUNT stage, §6.6, WP10): a free gap with a
@@ -1102,7 +1103,7 @@ function resetHollow(): void {
 }
 
 function rngFor(state: Readonly<GameState>): Rng {
-  if (!hollowRng) hollowRng = childRng(state.run.seed, state.run.shipIndex, 'hollow');
+  if (!hollowRng) hollowRng = visitRng(state.run, 'hollow');
   return hollowRng;
 }
 
@@ -1320,7 +1321,7 @@ function writesCopy(operation: Op, segId: string): boolean {
 // file), then HOLLOW's echoes, the moments on the event bus, and the ARRIVAL stage's script.
 function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], phaseChanged: boolean): void {
   const memory = store.getState().memory;
-  if (IS_DEV) assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  if (IS_DEV) assertMemoryInvariants(memory, layoutOf(store.getState()).totalBlocks);
   const consumed = events.filter((event): event is Extract<HollowEvent, { kind: 'consume' }> => event.kind === 'consume');
   // Read before the aborts below end the ops that say which eaten files were copies being written.
   const eatenCopies = new Set(consumed.filter(({ eaten }) => getOpsBySeg(eaten.id).some((operation) => writesCopy(operation, eaten.id)))

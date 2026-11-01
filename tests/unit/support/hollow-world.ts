@@ -11,11 +11,12 @@ import { HOLLOW_STAGES } from '@data/threats';
 import { HOLLOW_DESC, UNNAMED_HOLLOW } from '@data/hollow-text';
 import { RACK_BLOCKS, ROOT_BLOCKS } from '@data/tuning';
 import { segmentStarts, assertMemoryInvariants, freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
-import { MEMORY_TOTAL_BLOCKS, UNIT_RACKS_START, buildShipMemory } from '@data/memory';
+import { buildShipMemory, MEMORY_LAYOUTS } from '@data/memory';
 import { createHollowState, createLandingState } from '@state/initial';
 import { hollowLabel } from '@systems/say';
 import { childRng } from '@systems/rng';
-import { SHIPS, type ShipDef } from '@data/ships';
+import type { ShipDef } from '@data/ships';
+import { CLASSIC_FIVE } from '@data/classic-five';
 
 // Phase 2's ship index → the stage its HollowDef became.
 export const PHASE2_STAGE_OF_SHIP: readonly HollowStage[] = ['arrival', 'walls', 'seeds', 'hunt', 'finale'];
@@ -55,7 +56,7 @@ export function plantRoot(memory: Segment[], addr: number, blocks = ROOT_BLOCKS,
   };
   memory.splice(at, 0, root);
   mergeAdjacentFree(memory);
-  assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(memory, MEMORY_LAYOUTS.FULL.totalBlocks);
   return root;
 }
 
@@ -71,7 +72,7 @@ export const PHASE2_HALCYON_RACKS = PHASE2_RACKS[1];
 
 // The ship with phase 2's pod racks (its own pods and LZs).
 export function phase2ShipDef(index: 1 | 2): ShipDef {
-  const ship = SHIPS[index]!;
+  const ship = CLASSIC_FIVE[index]!;
   return { ...ship, memory: { ...ship.memory, podRacks: { ...PHASE2_RACKS[index] } } };
 }
 
@@ -91,10 +92,10 @@ export function phase2Halcyon(store: Store<GameState>, cfg: HollowDef = phase2Ho
 export function phase2Ship(store: Store<GameState>, index: 1 | 2, cfg: HollowDef = phase2HollowOf(index)): void {
   const state = store.getState();
   const starts = segmentStarts(state.memory);
-  const unitAt = starts.indexOf(UNIT_RACKS_START);
+  const unitAt = starts.indexOf(MEMORY_LAYOUTS.FULL.unitStart);
   if (unitAt < 0) throw new Error('phase2Ship: the unit\'s files do not start at rack E');
   const ship = phase2ShipDef(index);
-  const carried = { startAddr: UNIT_RACKS_START, segs: state.memory.slice(unitAt).map((seg) => structuredClone(seg)) };
+  const carried = { startAddr: MEMORY_LAYOUTS.FULL.unitStart, segs: state.memory.slice(unitAt).map((seg) => structuredClone(seg)) };
   const memory = buildShipMemory(ship, carried, childRng(state.run.seed, index, ship.memory.drivers.familiesSeedStream), false, hollowLabel(state.run), { blocks: ROOT_BLOCKS }, []);
   const landing = createLandingState(ship.landing, memory, { finalShip: false, lead: ship.memory.drivers.lead, hurt: [], planetR: state.level.planet.R });
   store.update((draft) => {

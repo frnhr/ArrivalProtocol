@@ -64,11 +64,11 @@ import {
 } from '@state/selectors';
 import { isBusy } from '@systems/tool-targets';
 import { podCode } from '@data/landing-text';
-import { SHIPS } from '@data/ships';
 import { BAND_OK_MIN, MERGE_COST_CHARGE } from '@data/tuning';
 import type { GameState, ObjectiveLine, PendingPlacement, ShipOutcome } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import type { UpgradeId } from '@data/upgrades';
+import { CLASSIC_FIVE } from '@data/classic-five';
 
 export type PlayerId = 'COMPETENT' | 'SLOPPY' | 'LITERAL';
 
@@ -725,7 +725,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     record.woke = model.landed;
     record.souls = model.fleetColonists;
     record.score = runScore(state().run.ships);
-    record.completed = record.cause !== 'overwritten' && record.cause !== 'stayed' && state().run.ships.length === SHIPS.length;
+    record.completed = record.cause !== 'overwritten' && record.cause !== 'stayed' && state().run.ships.length === CLASSIC_FIVE.length;
   }
   record.ships = state().run.ships.map((ship, index) => ({
     ship: ship.shipName, outcome: ship.outcome, woke: ship.landedInLz, half: ship.lzs.reduce((sum, row) => sum + row.hard, 0), lost: ship.parked.length, stars: ship.stars,

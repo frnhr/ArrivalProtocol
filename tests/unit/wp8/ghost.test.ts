@@ -16,7 +16,7 @@ import { HOLLOW_STORY, GHOST_LINE, hollowUnitName } from '@data/hollow-text';
 import { lineageLine, LINES, WORST_CASE_VARS, type LineVars } from '@data/script';
 import type { GameState } from '@state/schema';
 import { MAX_LINE_CHARS, NAME_MAX_CHARS } from '@data/tuning';
-import { SHIPS } from '@data/ships';
+import { CLASSIC_FIVE } from '@data/classic-five';
 
 // The line vars a title line reads (lineVars needs a mounted predictor; these lines only use the mission's).
 const titleVars = (state: GameState): LineVars => ({
@@ -54,7 +54,7 @@ check('a flagship lost on LAST LIGHT is "the flagship"; a record from before it 
 
 // --- Where the ghost speaks (05 §3.5: at the first boot in or past where it was lost, never at ship 1) ---------------
 {
-  const names = SHIPS.map((ship) => ship.name);
+  const names = CLASSIC_FIVE.map((ship) => ship.name);
   const finalShip = names.length - 1;
   const wrong: string[] = [];
   for (const cause of LAST_CAUSES) {

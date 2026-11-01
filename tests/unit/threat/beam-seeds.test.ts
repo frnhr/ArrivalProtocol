@@ -23,11 +23,10 @@ import { skipBlockReason } from '@systems/pace';
 import { getPrediction } from '@systems/predict';
 import { createRng } from '@systems/rng';
 import { createInitialState, createHollowState } from '@state/initial';
-import { buildShipMemory, MEMORY_TOTAL_BLOCKS, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F } from '@data/memory';
+import { buildShipMemory, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, MEMORY_LAYOUTS } from '@data/memory';
 import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
 import { tallyPreview, beamSeedsInMemory } from '@state/threat-selectors';
 import { integrityState } from '@state/selectors';
-import { getShip } from '@data/ships';
 import { nominalShipThreat } from '@systems/threat-plan';
 import { SEEDS_ONLY_DEF } from '@data/threats';
 import { SEED_WORDS_POOL, THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
@@ -43,17 +42,18 @@ import type { Segment, HollowSegment } from '@/types/segment';
 import type { GameState, ArrivalReport } from '@state/schema';
 import { bootLine, type LineVars } from '@data/script';
 import { rackOf } from '@data/memory';
+import { classicShip, CLASSIC_HOPS, CLASSIC_FACTS } from '@data/classic-five';
 import type { LinkNoise } from '@/types/threat';
 
 const KESTREL = 2;
-const kestrel = getShip(KESTREL);
+const kestrel = classicShip(KESTREL);
 
 // A fresh unit's files packed for KESTREL's link (the packet a beam carries).
 function freshPacket(): Packet {
   const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item))
     .map((item) => structuredClone(item) as Segment);
-  return packUnit(files, kestrel.arrival!.linkBlocks, []);
+  return packUnit(files, CLASSIC_HOPS[kestrel.slot]!.linkBlocks, []);
 }
 
 // --- The roll ---------------------------------------------------------------------------------------------------------
@@ -75,15 +75,15 @@ function freshPacket(): Packet {
   check('targets: the packed infectable files, never the Core, Engine I/O, Nav Plotter, REPAIR CHARGE or 046.log',
     !targets.some((name) => ['AI Core', 'Engine I/O', 'Nav Plotter', 'REPAIR CHARGE', '???', '046.log'].includes(name)) && targets.includes('Telemetry'),
     targets.join(', '));
-  const scripted = rollBeamSeeds(packet, kestrel.threat.beamSeeds, true, createRng(7));
+  const scripted = rollBeamSeeds(packet, CLASSIC_FACTS[KESTREL]!.beamSeeds, true, createRng(7));
   check('the tutorial run\'s beam into KESTREL: one seed, next to Telemetry, with words from 05\'s pool',
     scripted.length === 1 && scripted[0]!.targetName === 'Telemetry' && SEED_WORDS_POOL.includes(scripted[0]!.words), JSON.stringify(scripted));
   const noTelemetry = { ...packet, rackE: packet.rackE.filter((seg) => seg.role !== 'telemetry') };
-  const fallback = rollBeamSeeds(noTelemetry, kestrel.threat.beamSeeds, true, createRng(7));
+  const fallback = rollBeamSeeds(noTelemetry, CLASSIC_FACTS[KESTREL]!.beamSeeds, true, createRng(7));
   check('…Telemetry left behind on the TRANSMIT screen: the seed rides behind a rolled target instead',
     fallback.length === 1 && targets.includes(fallback[0]!.targetName) && fallback[0]!.targetName !== 'Telemetry', JSON.stringify(fallback));
   let laterSeeds = 0;
-  const distinct = Array.from({ length: 200 }, (_, i) => rollBeamSeeds(packet, kestrel.threat.beamSeeds, false, createRng(i))).every((plans) => {
+  const distinct = Array.from({ length: 200 }, (_, i) => rollBeamSeeds(packet, CLASSIC_FACTS[KESTREL]!.beamSeeds, false, createRng(i))).every((plans) => {
     laterSeeds += plans.length;
     return new Set(plans.map((plan) => plan.targetId)).size === plans.length;
   });
@@ -98,7 +98,7 @@ function freshPacket(): Packet {
   const packet = freshPacket();
   const filesBefore = packet.filesBlocks;
   const chargeBefore = packet.chargeCarried;
-  packet.seeds = rollBeamSeeds(packet, kestrel.threat.beamSeeds, true, createRng(7));
+  packet.seeds = rollBeamSeeds(packet, CLASSIC_FACTS[KESTREL]!.beamSeeds, true, createRng(7));
   check('seeds ride free: neither the files\' blocks nor the charge that crosses change', packet.filesBlocks === filesBefore && packet.chargeCarried === chargeBefore);
   const layout = layoutCarried(packet, packet.chargeCarried, kestrel, nominalShipThreat(KESTREL), '???');
   const segs = layout.racks.segs;
@@ -110,7 +110,7 @@ function freshPacket(): Packet {
   check('…the arrival names it (ArrivalReport.seeds) and the charge laid out is all that crossed',
     layout.seeds.length === 1 && layout.seeds[0]!.segId === seed?.id && layout.seeds[0]!.targetName === 'Telemetry' && layout.chargeBlocks === packet.chargeCarried);
   const memory = buildShipMemory(kestrel, layout.racks, createRng(1), true, '???', null, []);
-  assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(memory, MEMORY_LAYOUTS.FULL.totalBlocks);
   const reach = hollowReach(memory, 0).filter((r) => r.hollowId === seed!.id);
   check('…so it bites only Telemetry: a bite on its left, a WALL on its right',
     reach.find((r) => r.side === 'left')?.verdict === 'bite' && memory.find((s) => s.id === reach.find((r) => r.side === 'left')?.neighbourId)?.name === 'Telemetry'
@@ -118,7 +118,7 @@ function freshPacket(): Packet {
   check('beamSeedTarget finds the file a seed rides behind', beamSeedTarget(memory, seed!.id)?.name === 'Telemetry');
 
   // The no-room rule: a receiver with no room left after the files and the charge floor.
-  const room = MEMORY_TOTAL_BLOCKS - 256 + 24;
+  const room = MEMORY_LAYOUTS.FULL.totalBlocks - 256 + 24;
   const crowded: Packet = { ...packet, seeds: [...packet.seeds, { targetId: packet.rackE.find((s) => s.role === 'autopilot')!.id, targetName: 'Autopilot', words: 'x' }] };
   const filler: Segment = { id: 'big-skill', name: 'Filler', type: 'skill', size: room - packet.filesBlocks - CHARGE_ARRIVAL_FLOOR - BEAM_SEED_LAYOUT_BLOCKS - 2, integrity: 100 } as unknown as Segment;
   crowded.rackE = [...crowded.rackE, filler];
@@ -127,7 +127,7 @@ function freshPacket(): Packet {
     tight.chargeBlocks >= CHARGE_ARRIVAL_FLOOR && tight.racks.segs.filter((s) => s.type === 'hollow').length === 1, `charge ${tight.chargeBlocks}`);
   check('…the seed with no room is a stray (the no-room rule)', tight.racks.strays?.length === 1 && tight.seeds.length === 2);
   const tightMemory = buildShipMemory(kestrel, tight.racks, createRng(1), true, '???', null, []);
-  assertMemoryInvariants(tightMemory, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(tightMemory, MEMORY_LAYOUTS.FULL.totalBlocks);
   const stray = tightMemory.find((s) => s.id === tight.racks.strays![0]!.id)!;
   const starts = segmentStarts(tightMemory);
   const strayAt = starts[tightMemory.indexOf(stray)]!;
@@ -140,7 +140,7 @@ function freshPacket(): Packet {
   const strayState = createInitialState({ seed: 5, shipIndex: KESTREL, carried: tight.racks });
   const withArrival = { ...strayState, run: { ...strayState.run, arrival: { seeds: tight.seeds } as unknown as ArrivalReport } } as GameState;
   const strayLine = bootLine('seeds', withArrival, {} as LineVars);
-  check(`…the ECC line: \`${strayLine}\``, strayLine === `> ECC: 2 FOREIGN BLOCKS · NEXT TO TELEMETRY · 1 LOOSE IN RACK ${rackOf(strayAt)}`, strayLine);
+  check(`…the ECC line: \`${strayLine}\``, strayLine === `> ECC: 2 FOREIGN BLOCKS · NEXT TO TELEMETRY · 1 LOOSE IN RACK ${rackOf(strayAt, MEMORY_LAYOUTS.FULL)}`, strayLine);
   check('…a stray alone: `> ECC: 1 FOREIGN BLOCK · LOOSE IN RACK D`', eccSeedsLine([], ['D']) === '> ECC: 1 FOREIGN BLOCK · LOOSE IN RACK D'
     && eccSeedsLine(['Telemetry']) === '> ECC: 1 FOREIGN BLOCK IN PACKET · NEXT TO TELEMETRY');
 }
@@ -151,7 +151,7 @@ function freshPacket(): Packet {
   const memory = state.memory;
   const telemetry = memory.find((seg) => seg.role === 'telemetry')!;
   const seed = plantBeamSeed(memory, telemetry.id, 'hungry. sorry.', '???');
-  assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(memory, MEMORY_LAYOUTS.FULL.totalBlocks);
   const hollow = createHollowState(SEEDS_ONLY_DEF);
   const ctx = (aiNow: number, tactical: boolean): HollowStepCtx => ({
     thrustDelivered: false, landingActive: false, aiNow, rng: createRng(1), hollow, loopClosed: false, coastAtAi: 0, owner: '???',
@@ -319,7 +319,7 @@ h.untilPhase('flight', 60);
   const free = memory[region]!;
   const block = beamSeedSegment({ targetId: 'x', targetName: 'x', words: 'x' }, memory.find((seg) => seg.type === 'hollow')!.name);
   memory.splice(region, 1, { ...free, size: free.size - block.size }, block);
-  assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(memory, MEMORY_LAYOUTS.FULL.totalBlocks);
 }
 const fedPreview = tallyPreview(s());
 endShip(h.store, 'locked');

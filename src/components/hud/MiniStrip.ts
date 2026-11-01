@@ -3,7 +3,8 @@ import type { GameState } from '@state/schema';
 import { onPostTick } from '@systems/clock';
 import { miniStripRows, type MiniCell } from '@systems/hollow-hud';
 import { requireById } from '@components/dom';
-import { RACK_NAMES } from '@data/memory';
+import { layoutOf } from '@data/memory';
+import type { MemoryLayout } from '@/types/map';
 import { MINI_STRIP_PAINT_HZ } from '@data/tuning';
 import { IS_DEV } from '@/env';
 
@@ -41,9 +42,9 @@ function makeCell(cell: MiniCell): HTMLElement {
   return cellElement;
 }
 
-function rackName(rack: number): string {
-  const name = RACK_NAMES[rack];
-  if (name === undefined) throw new Error(`MiniStrip: no RACK_NAMES entry for rack ${rack}`);
+function rackName(rack: number, layout: Readonly<MemoryLayout>): string {
+  const name = layout.racks[rack];
+  if (name === undefined) throw new Error(`MiniStrip: a ${layout.cls} memory has no rack ${rack}`);
   return name;
 }
 
@@ -53,10 +54,11 @@ export function mountMiniStrip(store: Store<GameState>): () => void {
 
   function build(): void {
     const rows = miniStripRows(store.getState());
+    const layout = layoutOf(store.getState());
     root.replaceChildren(...rows.map((cells, rack) => {
       const row = document.createElement('span');
       row.className = 'ms-row';
-      row.dataset.rack = rackName(rack);
+      row.dataset.rack = rackName(rack, layout);
       row.append(...cells.map(makeCell));
       return row;
     }));
@@ -73,14 +75,15 @@ export function mountMiniStrip(store: Store<GameState>): () => void {
 
   function patch(): void {
     const rows = miniStripRows(store.getState());
+    const layout = layoutOf(store.getState());
     const rowElements = root.children;
     for (let rack = 0; rack < rows.length; rack++) {
       const cells = rows[rack]!;
       const cellElements = rowElements[rack]?.children;
-      if (!cellElements || cellElements.length !== cells.length) { missedRebuild(`rack ${rackName(rack)} has a new cell count`); return; }
+      if (!cellElements || cellElements.length !== cells.length) { missedRebuild(`rack ${rackName(rack, layout)} has a new cell count`); return; }
       for (let i = 0; i < cells.length; i++) {
         const cellElement = cellElements[i] as HTMLElement;
-        if (cellElement.dataset.id !== cells[i]!.segId) { missedRebuild(`rack ${rackName(rack)} has a new file at cell ${i}`); return; }
+        if (cellElement.dataset.id !== cells[i]!.segId) { missedRebuild(`rack ${rackName(rack, layout)} has a new file at cell ${i}`); return; }
         paintCell(cellElement, cells[i]!);
       }
     }

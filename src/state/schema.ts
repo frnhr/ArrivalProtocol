@@ -4,6 +4,7 @@ import type { FsToolKind } from '@/types/fs-tool';
 import type { PlanetParams, Ring } from '@/types/orbit';
 import type { Zone } from '@/types/zone';
 import type { ShrinkTuning } from '@data/ships';
+import type { MemoryClass, RunMapState, Hop } from '@/types/map';
 import type { HollowDef, RunThreatState, ShipThreat } from '@/types/threat';
 import type { UpgradeId, DraftCard } from '@data/upgrades';
 import type { LastUnit } from '@systems/meta';
@@ -167,6 +168,9 @@ export interface LevelState {
   // The hazard zones of this flight, resolved for this run (systems/zones.ts resolveZones, WP9): KESTREL's
   // debris cloud with its centre on the arrival path and the rack it hits.
   zones: readonly Zone[];
+  // The ship's memory class (ShipDef.memoryClass, 01 §3.16): data/memory.ts layoutOf(state) reads its racks, size and
+  // receiver from it.
+  memoryClass: MemoryClass;
 }
 
 // What the hazard zones have done this flight (WP9, systems/zones.ts): the debris clouds already hit (each
@@ -307,8 +311,10 @@ export interface ArrivalSeed {
 // into it, and the extra hits of the way the last ship ended (BEAM OUT +2, EMERGENCY +3 and Core −25).
 // The TRANSMIT screen (WP7 part 2) reads it; transmitNext sends it.
 export interface TransitPlan {
-  toShipIndex: number;
-  linkBlocks: number;
+  toShipIndex: number;      // the destination's position on the route (its depth − 1)
+  toSlot: number;           // the destination's slot (systems/map-run.ts shipDefAt): the classic world's index
+  hop: Hop;                 // the beam to it (systems/map-hop.ts): its link, hits, ECC, years and the destination's room
+  linkBlocks: number;       // hop.linkBlocks (the draft and the PACKET read it here)
   filesBlocks: number;
   chargeHeld: number;
   chargeCarried: number;
@@ -342,7 +348,7 @@ export interface RunState {
   // per-ship things between ticks (a trail, cached geometry, the log's divider) key on it.
   rev: number;
   phase: RunPhase;
-  seed: number;             // the one entropy source; every roll is childRng(seed, shipIndex, stream)
+  seed: number;             // the one entropy source; every roll is a stream of it (systems/map-run.ts shipRng, hopRng)
   unitNumber: number;       // 47 on run 1 (UNIT-047), 47 + runs after (WP8: the archive counts them)
   wave: number;             // the fleet wave: 1 on run 1, runs + 1 after
   // How the last unit's run ended, from the archive (§4.5; null on the first run): its ghost greets this
@@ -365,7 +371,11 @@ export interface RunState {
   // it flew ARES-VII through (the archive's tutorialDone). Not the wave: a run left two seconds in counts as a
   // wave but taught nothing, so the next one still gets the STASIS step and the ENGINE I/O lesson.
   tutorial: boolean;
+  // The unit's position on the route (depth − 1): 0 on ship 1 (the tutorial checks). Which ship that is lives in
+  // `map` (systems/map-run.ts currentShip); on the classic world it is also the slot.
   shipIndex: number;
+  // The run's map (phase 3 slice 3a, types/map.ts): the world, the arm, the route so far, the galaxy year.
+  map: RunMapState;
   // The fs-tools ARRIVAL CONTROL has licensed this run (§3.2, §6.5). A licence installs the tool's
   // files once; they carry with the unit, so a licence is never issued twice.
   licences: FsToolKind[];

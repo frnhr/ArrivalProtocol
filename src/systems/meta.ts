@@ -3,7 +3,7 @@ import type { GameState, RunEndCause, RunStats, ArchiveStatus, RunState } from '
 import { runScore, runLanded } from '@systems/run-score';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { hollowUnitName, GHOST_LINE } from '@data/hollow-text';
-import { SHIPS } from '@data/ships';
+import { CLASSIC_FIVE } from '@data/classic-five';
 import {
   META_STORAGE_KEY, META_VERSION, FIRST_UNIT_NUMBER, HOLLOW_NAME_MAX_UNITS,
 } from '@data/tuning';
@@ -375,9 +375,10 @@ export function playsTutorial(run: Readonly<Pick<RunState, 'tutorial'>>): boolea
 // How HOLLOW names a ship it lost (the flagship-lost ghost line): LAST LIGHT is `the flagship`. Only a flagship's loss
 // ends a run that way now (systems/run.ts lossPlan); a record from before LAST LIGHT existed named its last ship, and
 // is read as HOLLOW would say any other ship's name, lowercase.
+// TODO(3a-GEN): the arm's final ships have their own names (FINAL_NAMES); the lookup reads the classic five until then.
 function lostShipWords(shipName: string): string {
-  const ship = SHIPS.find((candidate) => candidate.name === shipName);
-  return ship?.flagship === true ? 'the flagship' : shipName.toLowerCase();
+  const ship = CLASSIC_FIVE.find((candidate) => candidate.name === shipName);
+  return ship?.final === true ? 'the flagship' : shipName.toLowerCase();
 }
 
 // The ghost's line for a unit `us` whose last unit was `lastUnit` (§4.5's table), or null: the first run has
@@ -395,7 +396,7 @@ export function ghostLine(us: number, lastUnit: LastUnit | null): string | null 
 // one, once (run.ghostSpoken; systems/boot.ts), so a ship skipped or lost before it never makes it vanish or repeat.
 // Slice 3's seam: the galaxy map replaces "ship index" with the layer where the last unit was lost, and the boot's "at or
 // past" with the moment the new unit passes the grey cross on the chart.
-export function ghostShipIndex(lastUnit: Readonly<Pick<LastUnit, 'shipName'>>, shipNames: readonly string[] = SHIPS.map((ship) => ship.name)): number {
+export function ghostShipIndex(lastUnit: Readonly<Pick<LastUnit, 'shipName'>>, shipNames: readonly string[] = CLASSIC_FIVE.map((ship) => ship.name)): number {
   if (shipNames.length < 2) throw new Error(`ghostShipIndex: a fleet of ${shipNames.length} ship(s) has no ship past ship 1 for the ghost`);
   const at = shipNames.indexOf(lastUnit.shipName);
   return Math.max(1, at < 0 ? shipNames.length - 1 : at);

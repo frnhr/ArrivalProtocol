@@ -29,15 +29,17 @@ import { setPaused } from '@systems/clock';
 import { isThrustOn } from '@systems/orbit-sim';
 import { buildShipMemory } from '@data/memory';
 import { UNNAMED_HOLLOW } from '@data/hollow-text';
-import { SHIPS, type ShipDef, type HollowDef } from '@data/ships';
+import type { ShipDef, HollowDef } from '@data/ships';
 import { childRng } from '@systems/rng';
 import { createHollowState, createLandingState } from '@state/initial';
 import { phase2ShipOne } from '../support/hollow-world';
 import { ROOT_BLOCKS } from '@data/tuning';
+import { CLASSIC_FIVE } from '@data/classic-five';
+import { MEMORY_LAYOUTS } from '@data/memory';
 import { stateFromElements } from '@/types/orbit';
 import type { Segment } from '@/types/segment';
 import {
-  RACK_BLOCKS, RACK_COUNT, CHEW_FULL_DRAIN, TUG_BEAT_PER_PCT, TUG_PITCH_LOW_HZ, TUG_PITCH_HIGH_HZ, HOLLOW_BITE_URGENT_SEC,
+  RACK_BLOCKS, CHEW_FULL_DRAIN, TUG_BEAT_PER_PCT, TUG_PITCH_LOW_HZ, TUG_PITCH_HIGH_HZ, HOLLOW_BITE_URGENT_SEC,
 } from '@data/tuning';
 
 const h = createHarness6(1, { soulsFound: true });
@@ -85,7 +87,7 @@ function fresh(): void {
 {
   fresh();
   const rows = miniStripRows(state());
-  check('mini-strip: 6 racks, each exactly 64 blocks', rows.length === RACK_COUNT && rows.every((cells) => cells.reduce((sum, cell) => sum + cell.blocks, 0) === RACK_BLOCKS),
+  check('mini-strip: 6 racks, each exactly 64 blocks', rows.length === MEMORY_LAYOUTS.FULL.racks.length && rows.every((cells) => cells.reduce((sum, cell) => sum + cell.blocks, 0) === RACK_BLOCKS),
     rows.map((cells) => cells.reduce((sum, cell) => sum + cell.blocks, 0)).join());
   const rackB = rows[1]!;
   const rackC = rows[2]!;
@@ -151,7 +153,7 @@ function fresh(): void {
 // --- HALCYON's rack C: NEXT BITE m:ss, GAP 2 / GAP 1, an eaten block bites on ------------------------------------
 {
   fresh();
-  const ares = SHIPS[0]!;
+  const ares = CLASSIC_FIVE[0]!;
   const cfg: HollowDef = { wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, landMult: 1.5, seed: null, verbs: null, deal: false, story: 'none' };
   const halcyon: ShipDef = {
     ...ares,

@@ -2,18 +2,18 @@ import type { Store } from '@state/store';
 import type { GameState, TransitPlan } from '@state/schema';
 import type { Segment, FirewallSegment, UpgradeSegment } from '@/types/segment';
 import { packUnit, type Packet } from '@systems/carry';
-import { childRng } from '@systems/rng';
 import { chargeLeft, upgradeFiles, isFirewall } from '@state/selectors';
 import { hollowLabel } from '@systems/say';
 import { draftCards, UPGRADE_FILE_TEXT, type UpgradeId, type DraftContext, type DraftCard } from '@data/upgrades';
 import {
   REPAIR_V2_VERSION, THREAD_PLUS_THREADS, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, FUEL_TRIM_BLOCKS, INTEGRITY_MAX,
 } from '@data/tuning';
+import { visitRng } from '@systems/map-streams';
 
 // PICK ONE TO CARRY (§6.9, §9 WP8 items 1–2), the systems half: the draft dealt at TRANSMIT from the run's
 // seed and stats, the pick, and what the picked card does to the packet. DOM-free; the TRANSMIT screen shows
 // the cards (WP8 part 2) and systems/run.ts sends the packet with the pick applied.
-// • The deal: childRng(seed, shipIndex, 'draft'), the ship being left, so the same run deals the same cards
+// • The deal: visitRng(run, 'draft'): the run seed and the slot of the ship being left, so the same run deals the same cards
 //   at the same TRANSMIT whatever was clicked on the screen; dealt once (goTransmit) and kept in the plan.
 // • Owned is what the unit really carries: FIREWALLs and FUEL TRIMs by their files in memory (one deleted or
 //   eaten can be drafted again), REPAIR v2 by a Repair copy at v2, THREAD+ by the cards picked this run (it
@@ -51,7 +51,7 @@ export function draftContext(state: Readonly<GameState>, linkBlocks: number): Dr
 
 // The cards for the TRANSMIT now being prepared (goTransmit), seeded by the ship being left.
 export function dealDraft(state: Readonly<GameState>, linkBlocks: number): DraftCard[] {
-  return draftCards(draftContext(state, linkBlocks), childRng(state.run.seed, state.run.shipIndex, 'draft'));
+  return draftCards(draftContext(state, linkBlocks), visitRng(state.run, 'draft'));
 }
 
 // The new file a file card adds to the packet, with an id from `makeId` (the real send mints one; the

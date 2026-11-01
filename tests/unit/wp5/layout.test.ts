@@ -1,6 +1,6 @@
 // WP5 acceptance 2, slice 1a: the ship's memory is built from ship data (§4.2, 01-landing §3.16, slice-1a-plan §2) and
 // validated.
-// • buildShipMemory(SHIPS[0]) totals 384, each rack holds exactly 64 blocks with no file straddling a rack, roles are
+// • buildShipMemory(CLASSIC_FIVE[0]) totals 384, each rack holds exactly 64 blocks with no file straddling a rack, roles are
 //   unique (Bay Ctrl's `bay` in Printer Uplink's place), and ARES-VII's pod rack is `P P P _40` (slice 2: a calm ship,
 //   no root slot): POD 01 OKAFOR, POD 02 BRANDT at 44 and POD 03 AL-SAYED;
 // • a rack sum of 63, an unknown token, a duplicate role and a hurt pod the ship does not have each throw;
@@ -8,9 +8,10 @@
 // createInitialState makes of it (600 colonists in 3 pods, aboard, one LZ).
 import { check, finish } from '../wp1/harness';
 import {
-  buildShipMemory, hurtDriversFor, MEMORY_TOTAL_BLOCKS, RACK_A, rackOf, racksLabel, shipColonists, shipPodCount, type ShipMemoryDef,
+  buildShipMemory, hurtDriversFor, RACK_A, rackOf, racksLabel, shipColonists, shipPodCount, type ShipMemoryDef,
+  MEMORY_LAYOUTS,
 } from '@data/memory';
-import { SHIPS, type ShipDef } from '@data/ships';
+import type { ShipDef } from '@data/ships';
 import { ARES_RUN1_FAMILIES, FAMILY_POOL, colonistIntro } from '@data/souls';
 import { createInitialState } from '@state/initial';
 import { driverTouch } from '@systems/landing-rules';
@@ -18,9 +19,10 @@ import { childRng, createRng } from '@systems/rng';
 import { UNNAMED_HOLLOW } from '@data/hollow-text';
 import { segmentStarts, assertMemoryInvariants } from '@systems/memory-ops';
 import type { Segment, DriverSegment } from '@/types/segment';
-import { RACK_BLOCKS, RACK_COUNT, DRIVER_BLOCKS, COLONISTS_PER_POD, FEATURED_PER_POD, MAX_LINE_CHARS } from '@data/tuning';
+import { RACK_BLOCKS, DRIVER_BLOCKS, COLONISTS_PER_POD, FEATURED_PER_POD, MAX_LINE_CHARS } from '@data/tuning';
+import { CLASSIC_FIVE } from '@data/classic-five';
 
-const ship = SHIPS[0]!;
+const ship = CLASSIC_FIVE[0]!;
 const build = (def: ShipDef = ship, firstRun = true, seed = 1): Segment[] => buildShipMemory(def, null, childRng(seed, 0, 'families'), firstRun, UNNAMED_HOLLOW, null);
 const drivers = (memory: readonly Segment[]): DriverSegment[] => memory.filter((seg): seg is DriverSegment => seg.type === 'driver');
 
@@ -28,23 +30,23 @@ const drivers = (memory: readonly Segment[]): DriverSegment[] => memory.filter((
 {
   const memory = build();
   const total = memory.reduce((sum, seg) => sum + seg.size, 0);
-  check('384 blocks in 6 racks of 64', total === 384 && MEMORY_TOTAL_BLOCKS === RACK_BLOCKS * RACK_COUNT && MEMORY_TOTAL_BLOCKS === 384, `${total}`);
+  check('384 blocks in 6 racks of 64', total === 384 && MEMORY_LAYOUTS.FULL.totalBlocks === RACK_BLOCKS * MEMORY_LAYOUTS.FULL.racks.length && MEMORY_LAYOUTS.FULL.totalBlocks === 384, `${total}`);
   let invariants = true;
-  try { assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS); } catch { invariants = false; }
+  try { assertMemoryInvariants(memory, MEMORY_LAYOUTS.FULL.totalBlocks); } catch { invariants = false; }
   check('the memory invariants hold', invariants);
 
   const starts = segmentStarts(memory);
-  const perRack = new Array<number>(RACK_COUNT).fill(0);
+  const perRack = new Array<number>(MEMORY_LAYOUTS.FULL.racks.length).fill(0);
   const straddlers: string[] = [];
   memory.forEach((seg, i) => {
     const start = starts[i]!;
     for (let addr = start; addr < start + seg.size; addr++) perRack[Math.floor(addr / RACK_BLOCKS)]!++;
-    if (seg.type !== 'free' && rackOf(start) !== rackOf(start + seg.size - 1)) straddlers.push(seg.name);
+    if (seg.type !== 'free' && rackOf(start, MEMORY_LAYOUTS.FULL) !== rackOf(start + seg.size - 1, MEMORY_LAYOUTS.FULL)) straddlers.push(seg.name);
   });
   check('each rack sums to 64', perRack.every((blocks) => blocks === RACK_BLOCKS), perRack.join(','));
   check('no file straddles two racks (only free space runs across)', straddlers.length === 0, straddlers.join(', '));
 
-  const firstOf = (rack: string): Segment | undefined => memory.find((_seg, i) => rackOf(starts[i]!) === rack && starts[i]! % RACK_BLOCKS === 0);
+  const firstOf = (rack: string): Segment | undefined => memory.find((_seg, i) => rackOf(starts[i]!, MEMORY_LAYOUTS.FULL) === rack && starts[i]! % RACK_BLOCKS === 0);
   const rackBFirst = firstOf('B');
   check('rack A starts with Life Support, B with POD 01 (no root on a calm ship), E with the AI Core, F with Scan',
     firstOf('A')?.name === 'Life Support' && rackBFirst?.type === 'driver' && rackBFirst.pod === 1
@@ -57,7 +59,7 @@ const drivers = (memory: readonly Segment[]): DriverSegment[] => memory.filter((
     'sensor', 'navplot', 'telemetry', 'comms', 'redundancy'].every((role) => roles.includes(role as never)) && !roles.includes('printer' as never));
   const bay = memory.find((seg) => seg.role === 'bay');
   check('Bay Ctrl: 6 blocks in rack A, honest about 1a (no damage effect claimed)', bay?.name === 'Bay Ctrl' && bay.size === 6
-    && rackOf(starts[memory.indexOf(bay)]!) === 'A' && 'desc' in bay && bay.desc === 'Runs the pod bay\'s launch rails. Damaged, pods launch further apart; gone, no pod can launch.', bay?.name);
+    && rackOf(starts[memory.indexOf(bay)]!, MEMORY_LAYOUTS.FULL) === 'A' && 'desc' in bay && bay.desc === 'Runs the pod bay\'s launch rails. Damaged, pods launch further apart; gone, no pod can launch.', bay?.name);
 
   const pods = drivers(memory);
   const podIndex = memory.findIndex((seg) => seg.type === 'driver' && seg.pod === 1);

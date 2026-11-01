@@ -768,10 +768,10 @@ export const MINI_PLOT_VIEWBOX = 100;
 
 // --- WP5: the Soul Archive (§4.2 racks, §6.7 souls, the reveal and printing) ---------------------
 
-// Memory is 6 RACKS (A–F) of 64 blocks: one rack is one row of the strip on desktop, and a rack is
-// a place the game can name (debris hits RACK C, the belt racks A–B). 64 keeps the old 0x40 rows.
+// Memory is RACKS of 64 blocks (six on a FULL ship, A–F; the classes' rack lists are data/memory.ts MEMORY_LAYOUTS): one
+// rack is one row of the strip on desktop, and a rack is a place the game can name (debris hits RACK C, the belt racks
+// A–B). 64 keeps the old 0x40 rows.
 export const RACK_BLOCKS = 64;
-export const RACK_COUNT = 6;
 
 // Phase 2's root size (its written `R` token, gone since slice 2): what debug.ts's hollowDemo and the test fixtures plant (the
 // ARRIVAL stage's root is HOLLOW_STAGES.arrival.rootBlocks, the same 8).
@@ -1637,6 +1637,10 @@ export const TRACE_CELLS = TRACE_BOARD_AT;
 // HOLLOW never boards below this depth (04 §3.8), so depths 1–3 are calm and seeds: the first three ships teach the ship,
 // the landing and rm before anything hunts the pods.
 export const BOARD_MIN_DEPTH = 4;
+// Every ship from this layer on has a root slot (slice-3a-plan §1.1 item 18, the slice-2 foundation note): HOLLOW may
+// board on any beam from BOARD_MIN_DEPTH, and every hop moves out at least one layer, so a layer-k ship is at most depth
+// k: layers 1–3 never reach depth 4, and any ship from layer 4 on may (data/ships.ts validateShipDef).
+export const ROOT_SLOT_FROM_LAYER = 4;
 // Beam seeds start at this depth (04 §3.1, §3.4: "no seeds before depth 3", decided): ships 1–2 are calm.
 export const SEEDS_MIN_DEPTH = 3;
 // The root before the final ship is its stage's plus the beam-born blocks it was fed, capped here (04 §3.7: cap 14, the
@@ -1698,3 +1702,10 @@ export const SEED_LAND_FX_MS = 700;
 // The LOG READER types an entry the first time at this many characters a second (05 §4: "an entry types itself"): a
 // little slower than the TERMINAL's lines, so a 3-line entry (≤ 210 characters) reads in about 5 s.
 export const LOG_READER_CPS = 42;
+
+// --- Phase 3 slice 3a GEN (owned by Track GEN): the arm, years, the beam's numbers, the generator --------------------
+// (docs/phase3/02-map.md §3.1–§3.6; slice-3a-plan §4.2). Foundation F1 opens the block with what the classic world needs.
+
+// The galaxy year a run starts in (02 §3.1: `UNIT-047 · YEAR 2300`): ARES-n's approach, the first ship's year. The
+// classic world counts its fixture years from it too (systems/map-run.ts classicRoute), so the two read alike.
+export const RUN_START_YEAR = 2300;

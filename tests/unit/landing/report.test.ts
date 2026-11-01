@@ -6,14 +6,14 @@ import type { LaunchRecord, Place, PodFate, Touch } from '@/types/landing';
 import { createInitialState } from '@state/initial';
 import { beginLanding } from '@state/actions';
 import { freshUnitRacks } from '@systems/carry';
-import { getShip } from '@data/ships';
 import { podPoints } from '@systems/landing-rules';
 import { landingReportModel } from '@systems/landing-report';
 import { isDriver } from '@state/selectors';
 import { HARD_WORDS_POOL } from '@data/souls';
+import { classicShip } from '@data/classic-five';
 
 function world(shipIndex: number): GameState {
-  const state = createInitialState({ seed: 11, shipIndex, carried: shipIndex === 0 ? null : freshUnitRacks(getShip(shipIndex)) });
+  const state = createInitialState({ seed: 11, shipIndex, carried: shipIndex === 0 ? null : freshUnitRacks(classicShip(shipIndex)) });
   state.run.phase = 'report';
   state.burn.status = 'locked';
   beginLanding(state);
@@ -105,7 +105,7 @@ function lzRad(state: GameState, label: string): number {
   check('points: 600 + 150', model.points === 750);
   check('breakdown: each colonist once (review: the mislanded pod was in soft too)',
     model.breakdown === '600 soft · 0 hard · 200 mislanded · 0 off-site', model.breakdown);
-  check('the report reads the state (ship name, destination, final ship), not SHIPS', model.route.startsWith(`${state.level.shipName} → ${state.mission.destination}`)
+  check('the report reads the state (ship name, destination, final ship), not CLASSIC_FIVE', model.route.startsWith(`${state.level.shipName} → ${state.mission.destination}`)
     && !model.lastShip);
 
   // POD 04 comes down 40 km past LZ-B's far edge instead: off-site, half points on a GENTLE world, a near miss.

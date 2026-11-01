@@ -10,7 +10,6 @@
 // • A write failing mid-run: one TERMINAL line `ARCHIVE OFFLINE — this unit's memory will not be kept`.
 // • A FIREWALL to place: the strip's line (`MOVE your FIREWALL (FW) into the GAP next to ???`, the MOVE chip,
 //   then the FW chip), the MOVE preview's `SEALS THIS SIDE ✓` over the GAP, and the line done once it holds.
-import { SHIPS } from '@data/ships';
 import { phase2Halcyon } from '../../support/hollow-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../../wp7/harness7';
@@ -34,6 +33,7 @@ import { ARES_RUN1_FAMILIES } from '@data/souls';
 import { ARCHIVE_TEXT, FIREWALL_RULES, LICENCE_LINES, LINES, bootLicensesRepair } from '@data/script';
 import { TOOL_HINT_TARGET, firewallHintTarget } from '@data/fs-tools';
 import { META_STORAGE_KEY } from '@data/tuning';
+import { CLASSIC_FIVE } from '@data/classic-five';
 import type { GameState } from '@state/schema';
 import type { FreeSegment } from '@/types/segment';
 
@@ -136,7 +136,7 @@ h.stepUntil(() => state().run.phase === 'flight', 20);
 // To HALCYON by EMERGENCY, then on by another each ship, to the last one (WP9: KESTREL; WP10: VESPER, read off the
 // fleet), where the Core eaten ends the run: OVERWRITTEN on the last ship.
 h.store.update((d) => { d.run.simulationRetryUsed = true; });
-while (state().run.shipIndex < SHIPS.length - 1) {
+while (state().run.shipIndex < CLASSIC_FIVE.length - 1) {
   h.store.mutate((d) => { d.orbit.x = d.level.planet.R + 20; d.orbit.y = 0; d.orbit.vx = -3; d.orbit.vy = 0.05; });
   h.stepUntil(() => h.status() !== 'approaching', 10);
   continueAfterLoss(h.store);

@@ -21,7 +21,7 @@ import { stepHollow, hollowReach, type HollowEvent, type HollowStepCtx } from '@
 import { cureInfection } from '@state/actions';
 import { freeSegment } from '@systems/memory-ops';
 import { createRng } from '@systems/rng';
-import { validateHollowDef, SHIPS, type HollowDef } from '@data/ships';
+import { validateHollowDef, type HollowDef } from '@data/ships';
 import type { HollowState } from '@state/schema';
 import type {
   Segment, HollowSegment, DriverSegment, CoreSegment, RedundancySegment, ShipSegment, FirewallSegment, UpgradeSegment,
@@ -29,6 +29,7 @@ import type {
 import { isInfectable } from '@state/selectors';
 import { podNumber } from '../support/pod-code';
 import { HOLLOW_RECOIL_SEC, WALL_MIN_BLOCKS, HOLLOW_SCRIPTED_BITE_DELAY_SEC } from '@data/tuning';
+import { CLASSIC_FIVE } from '@data/classic-five';
 import { createDealState, createHollowState } from '@state/initial';
 import { phase2HollowOf } from '../support/hollow-world';
 
@@ -271,7 +272,7 @@ for (const firing of [false, true]) {
 // --- The design rule (§6.6) ---------------------------------------------------------------------------------------
 {
   const throws = (cfg: HollowDef): string | null => { try { validateHollowDef('test', cfg); return null; } catch (error) { return (error as Error).message; } };
-  check('every ship passes the heal rule: heal(8) = 18.5%/s > 1.5 × drain × max(burn, print)', SHIPS.every((_ship, index) => throws(phase2HollowOf(index)) === null));
+  check('every ship passes the heal rule: heal(8) = 18.5%/s > 1.5 × drain × max(burn, print)', CLASSIC_FIVE.every((_ship, index) => throws(phase2HollowOf(index)) === null));
   check('a drain the heal cannot beat by 1.5× throws (drain 6.5, burn ×2)', throws({ ...SPREAD, drainPerSec: 6.5 }) !== null, throws({ ...SPREAD, drainPerSec: 6.5 }) ?? '');
   check('the ship-2 config of the sim passes (drain 3.5, print ×1.5)', throws({ ...SPREAD, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, landMult: 1.5 }) === null);
   // WP12 p3 (strict test tsc): this check was written before WP9 built seeds, and it passed only because its seed had no

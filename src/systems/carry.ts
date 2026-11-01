@@ -8,14 +8,13 @@ import { beamSeedSegment } from '@systems/beam-seeds';
 import { hasIntegrity, type HealthSegment } from '@state/selectors';
 import { setIntegrity } from '@state/actions';
 import { FS_TOOL_KINDS } from '@data/fs-tools';
-import { SHIPS } from '@data/ships';
+import { CLASSIC_FIVE, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat } from '@systems/threat-plan';
 import {
-  UNIT_RACKS_START, MEMORY_TOTAL_BLOCKS, RACK_NAMES, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, lastPodRackTrailingFree, isUnitFileType,
-  freshChargeFile, type CarriedRacks,
+  FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, lastPodRackTrailingFree, isUnitFileType, freshChargeFile, layoutFor, type CarriedRacks,
 } from '@data/memory';
 import {
-  RACK_BLOCKS, TRANSIT_HIT_MIN, TRANSIT_HIT_MAX, TRANSIT_LAST_COPY_FLOOR, TRANSIT_CORE_MAX_HIT, CORE_RESET_INTEGRITY,
+  TRANSIT_HIT_MIN, TRANSIT_HIT_MAX, TRANSIT_LAST_COPY_FLOOR, TRANSIT_CORE_MAX_HIT, CORE_RESET_INTEGRITY,
   CHARGE_ARRIVAL_FLOOR, UNIT_TAIL_BLOCKS, SEED_BLOCKS, SEED_TOOL_GAP_BLOCKS, WALL_MIN_BLOCKS, SEED_GAP_TO_TARGET_BLOCKS,
 } from '@data/tuning';
 
@@ -45,9 +44,6 @@ import {
 
 // The order rack E is packed in (§6.9): the Core, then the AI tools by their job.
 const RACK_E_ROLE_ORDER: readonly SegmentRole[] = ['core', 'engine-io', 'autopilot', 'sensor', 'navplot', 'telemetry', 'comms'];
-
-export const RACK_E_START = UNIT_RACKS_START;
-export const RACK_F_START = RACK_BLOCKS * RACK_NAMES.indexOf('F');
 
 // The unit's own live files in memory, in address order: what can cross the link.
 export function unitFilesIn(memory: readonly Segment[]): Segment[] {
@@ -282,7 +278,8 @@ export function layoutCarried(
 ): CarriedLayout {
   const files = [...packet.rackE, ...packet.rackF];
   const filesBlocks = files.reduce((sum, seg) => sum + seg.size, 0);
-  const receiver = MEMORY_TOTAL_BLOCKS - RACK_E_START;
+  const layout = layoutFor(ship.memoryClass);
+  const receiver = layout.receiverBlocks;
   const tail = Math.min(UNIT_TAIL_BLOCKS, lastPodRackTrailingFree(ship));
   const room = receiver + tail;
   if (filesBlocks > room) {
@@ -300,7 +297,7 @@ export function layoutCarried(
   const overflowLost = chargeBlocks - charge;
   const hunting = huntingGapBlocks(threat, packet, filesBlocks + seedsBlocks, charge, receiver);
   const block = filesBlocks + seedsBlocks + hunting + charge;
-  const startAddr = Math.min(RACK_E_START, MEMORY_TOTAL_BLOCKS - block);
+  const startAddr = Math.min(layout.unitStart, layout.totalBlocks - block);
   const seedSegs = packet.seeds.map((plan) => beamSeedSegment(plan, owner!));
   const segs: Segment[] = [];
   files.forEach((seg, index) => {
@@ -311,7 +308,7 @@ export function layoutCarried(
     segs.push(freeSegment(SEED_GAP_TO_TARGET_BLOCKS), seedSegs[seedIndex]!, freeSegment(WALL_MIN_BLOCKS));
   });
   if (charge > 0) segs.push(chargeSegment(packet.charge, charge));
-  const free = MEMORY_TOTAL_BLOCKS - (startAddr + block);
+  const free = layout.totalBlocks - (startAddr + block);
   if (free > 0) segs.push(freeSegment(free));
   const strays = seedSegs.slice(placed);
   const seeds = packet.seeds.map((plan, index): ArrivalSeed => ({
@@ -354,16 +351,19 @@ export function arrivalDamage(segs: readonly Segment[], damage: readonly Arrival
 // A fresh unit (ship 1's written racks E–F: SCAN, 36 REPAIR CHARGE) as it would arrive on `ship` with no
 // transit hits and no stars: what the headless suites fly a later ship with on its own (tests/unit/wp1's
 // AP_SHIP harness and tests/unit/wp7's pass it to createInitialState explicitly; the game itself only ever
-// carries a real unit). It lives here because it is packUnit and layoutCarried run on the written racks. Laid out for
-// the nominal run's threat on that ship (systems/threat-plan.ts nominalShipThreat), with no beam seeds (risk 14: the
-// flight sims stay seed-free). Throws for a ship nothing transmits to.
-export function freshUnitRacks(ship: ShipDef): CarriedRacks {
-  if (!ship.arrival) throw new Error(`freshUnitRacks: ${ship.name} meets a fresh unit by itself (no link)`);
+// carries a real unit). It lives here because it is packUnit and layoutCarried run on the written racks. Packed for
+// `linkBlocks` and laid out for `threat`: left out, a classic ship's (data/classic-five.ts: its link, and the nominal
+// run's verdict on it, systems/threat-plan.ts nominalShipThreat), with no beam seeds (risk 14: the flight sims stay
+// seed-free). Throws for a first ship (nothing transmits to it) and, without both, for a ship that is not classic.
+export function freshUnitRacks(ship: ShipDef, linkBlocks?: number, threat?: Readonly<ShipThreat>): CarriedRacks {
+  if (ship.kind === 'first') throw new Error(`freshUnitRacks: ${ship.name} meets a fresh unit by itself (no link)`);
+  const classic = CLASSIC_FIVE[ship.slot]?.id === ship.id;
+  if (!classic && (linkBlocks === undefined || threat === undefined)) {
+    throw new Error(`freshUnitRacks: ${ship.name} is not a classic ship: pass its link and verdict`);
+  }
   const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item))
     .map((item) => structuredClone(item) as Segment);
-  const packet = packUnit(files, ship.arrival.linkBlocks, []);
-  const index = SHIPS.findIndex((candidate) => candidate.id === ship.id);
-  if (index < 0) throw new Error(`freshUnitRacks: ${ship.name} is not one of the fleet's ships`);
-  return layoutCarried(packet, packet.chargeCarried, ship, nominalShipThreat(index)).racks;
+  const packet = packUnit(files, linkBlocks ?? CLASSIC_HOPS[ship.slot]!.linkBlocks, []);
+  return layoutCarried(packet, packet.chargeCarried, ship, threat ?? nominalShipThreat(ship.slot)).racks;
 }

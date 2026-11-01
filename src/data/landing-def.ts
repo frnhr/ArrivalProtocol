@@ -1,7 +1,7 @@
 import type { ShipLandingDef } from '@/types/landing';
 import { LZ_MIN_GAP_DEG, LZ_WIDTH_KM, NO_GO_NEAR_EDGE_KM, PODS_MAX } from '@data/tuning';
 
-// The landing data's own rules, apart from data/ships.ts (no SHIPS import), so slice 3's map generator can check what it
+// The landing data's own rules, apart from data/ships.ts (no ship list import), so slice 3's map generator can check what it
 // rolls with exactly the checks the written ships pass.
 
 // Throws on landing data that breaks 01-landing §3.5–§3.6 and §3.15's placement rules: the LZ counts sum to the ship's

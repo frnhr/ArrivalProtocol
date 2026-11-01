@@ -8,10 +8,11 @@ import { computePrediction } from '@systems/predict';
 import { integrateStep } from '@systems/orbit-sim';
 import { presetHeading } from '@systems/attitude';
 import { createRng, childRng, smoothNoise } from '@systems/rng';
-import { validateShipDef, SHIPS, type ShipDef } from '@data/ships';
+import { validateShipDef, type ShipDef } from '@data/ships';
 import { stateFromElements, elementsFromState, type Vec2 } from '@/types/orbit';
 import type { PresetMode, SasMode } from '@state/schema';
 import { MAX_LINE_CHARS } from '@data/tuning';
+import { CLASSIC_FIVE } from '@data/classic-five';
 
 const harness = createHarness(21);
 const store = harness.store;
@@ -179,7 +180,7 @@ check('formatTac rounds up to whole seconds', formatTac(163.25) === '2:44' && fo
 
 // --- Ship validation ---------------------------------------------------------------------------
 {
-  const base = SHIPS[0]!;
+  const base = CLASSIC_FIVE[0]!;
   const broken = (patch: (ship: ShipDef) => void): boolean => {
     const ship = structuredClone(base) as ShipDef;
     patch(ship);

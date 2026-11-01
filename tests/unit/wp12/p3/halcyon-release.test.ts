@@ -7,11 +7,11 @@
 import { check, finish, TICK } from '../../wp1/harness';
 import { createHarness7 } from '../../wp7/harness7';
 import { sweetZone } from '@systems/predict';
-import { getShip } from '@data/ships';
+import { classicShip } from '@data/classic-five';
 
 const HALCYON = 1;
 const h = createHarness7(1);
-const ship = getShip(HALCYON);
+const ship = classicShip(HALCYON);
 const ring = ship.flight.ring;
 const sweet = sweetZone(ring);
 const line = (): string => h.store.getState().director.shown?.text ?? '';

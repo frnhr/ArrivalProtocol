@@ -4,12 +4,11 @@ import type { LandingState, PodRecord, ShipLandingDef } from '@/types/landing';
 import type { HollowDef, ShipThreat } from '@/types/threat';
 import { buildShipMemory, type CarriedRacks, type HurtDriver } from '@data/memory';
 import { hurtDriversFor } from '@data/driver-damage';
-import { getShip } from '@data/ships';
+import { classicRunMap, shipDefAt, currentSlot, shipRng } from '@systems/map-run';
 import { nominalRunThreat, nominalShipThreat, createRunThreat, applyThreat } from '@systems/threat-plan';
 import { createRunLog } from '@state/log-selectors';
 import { isDriver } from '@state/selectors';
 import { createFlight, createMissionMeta, createClockState } from '@data/mission';
-import { childRng } from '@systems/rng';
 import { hollowLabel } from '@systems/say';
 import { flightModsOf } from '@systems/capabilities';
 import { resolveZones } from '@systems/zones';
@@ -67,6 +66,9 @@ export function createRunState(
     upgrades: [],
     tutorial: !lineage.tutorialDone,
     shipIndex,
+    // The classic world (data/classic-five.ts): `shipIndex` is classic ship n, as it always meant here. The page's runs
+    // get their map from systems/run.ts startRun.
+    map: classicRunMap(seed, shipIndex, lineage.wave),
     licences: ['scan'],
     hollowNamed: false,
     coreLost: false,
@@ -97,14 +99,15 @@ export function createRunState(
 export type ShipSlices = Pick<GameState, 'mission' | 'memory' | 'clock' | 'burn' | 'orbit' | 'level' | 'landing' | 'hollow' | 'hazards'>;
 
 export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks | null, threat: Readonly<ShipThreat>): ShipSlices {
-  const ship = getShip(run.shipIndex);
+  const slot = currentSlot(run);
+  const ship = shipDefAt(run.map, slot);
   const mission = createMissionMeta(ship, run.unitNumber, run.wave);
   // The tutorial run always meets the same ARES-VII families and its hurt POD 02 (01-landing §2); a returning unit
   // meets ship 1 reseeded, the hurt driver too (never the lead, §5.2).
   const firstRun = playsTutorial(run);
-  const hurt = hurtDriversFor(ship, firstRun, childRng(run.seed, run.shipIndex, 'hurt'));
+  const hurt = hurtDriversFor(ship, firstRun, shipRng(run, slot, 'hurt'));
   const memory = buildShipMemory(
-    ship, carried, childRng(run.seed, run.shipIndex, ship.memory.drivers.familiesSeedStream), firstRun,
+    ship, carried, shipRng(run, slot, ship.memory.drivers.familiesSeedStream), firstRun,
     hollowLabel(run), threat.rootBlocks === null ? null : { blocks: threat.rootBlocks }, hurt,
   );
   // The run after a MERGE (§4.5, WP11): the fresh unit's Core comes with the unit it merged with, a thread more. Set on
@@ -115,11 +118,11 @@ export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks 
     core.capacity = MERGE_BONUS_CORE_CAPACITY;
   }
   // The ship's hazard zones for this run (WP9): the written debris rack on the tutorial run, a seeded one later.
-  const zones = resolveZones(ship.zones, ship.flight, firstRun, childRng(run.seed, run.shipIndex, 'zones'));
+  const zones = resolveZones(ship.zones, ship.flight, firstRun, shipRng(run, slot, 'zones'));
   // The carried upgrade files that work on arrival widen this ship's flight (FUEL TRIM, §6.9).
-  const flight = createFlight(ship, childRng(run.seed, run.shipIndex, 'flight'), flightModsOf(memory), zones);
+  const flight = createFlight(ship, shipRng(run, slot, 'flight'), flightModsOf(memory), zones);
   const landing = createLandingState(ship.landing, memory, {
-    finalShip: ship.flagship, lead: ship.memory.drivers.lead, hurt, planetR: ship.flight.planet.R,
+    finalShip: ship.final, lead: ship.memory.drivers.lead, hurt, planetR: ship.flight.planet.R,
   });
   mission.colonists = landing.pods.reduce((sum, record) => sum + record.colonists, 0);
   return {
@@ -146,7 +149,7 @@ export function createHazardsState(): HazardsState {
 // the bay is filled by actions.ts beginLanding at the lock. Angles turn from the def's degrees into world radians and
 // widths into half-angles over the planet's radius here, once.
 export interface LandingSliceOpts {
-  finalShip: boolean;               // ShipDef.flagship
+  finalShip: boolean;               // ShipDef.final
   lead: number;                     // the story pod (ShipDef.memory.drivers.lead)
   hurt: readonly HurtDriver[];      // the drivers the memory was built hurt with
   planetR: number;

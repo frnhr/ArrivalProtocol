@@ -26,18 +26,18 @@ import { on } from '@systems/events';
 import { lastSkipPlanChange, skipPlanOf, planChange, skipTickSec, type PlanChange, type SkipPlan } from '@systems/ghost-thrust';
 import { GHOST_WARN_ID } from '@systems/alerts';
 import { GHOST_TEXT } from '@data/ghost-text';
+import { classicShip } from '@data/classic-five';
 import { createInitialState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
 import { resetWorld } from '@systems/reset';
 import { stateFromElements, elementsFromState, ringFit } from '@/types/orbit';
-import { getShip } from '@data/ships';
 import type { SasMode } from '@state/schema';
 import { byDepth } from '../depth';
 
 const VESPER = 3;
 const h = createHarness(1);
 const state = () => h.store.getState();
-const warp = getShip(VESPER).flight.tacticalWarp;
+const warp = classicShip(VESPER).flight.tacticalWarp;
 const TICK = 0.05;
 
 // The wp1 harness has no stepUntil: step until `until` holds or `maxWall` passes.
@@ -49,7 +49,7 @@ function stepUntil(until: () => boolean, maxWall: number): void {
 function vesper(seed: number): void {
   h.reset(seed);
   h.store.update((d) => {
-    Object.assign(d, createInitialState({ seed, shipIndex: VESPER, carried: freshUnitRacks(getShip(VESPER)) }));
+    Object.assign(d, createInitialState({ seed, shipIndex: VESPER, carried: freshUnitRacks(classicShip(VESPER)) }));
     d.hollow.phase = 'dormant';
   });
   resetWorld();

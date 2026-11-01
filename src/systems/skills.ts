@@ -1,7 +1,7 @@
 import type { GameState } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import { getUpgrade, UPGRADES, type UpgradeId } from '@data/upgrades';
-import { getShip } from '@data/ships';
+import { currentShip } from '@systems/map-run';
 import { isFirewall, upgradeFiles, integrityBand, getAiCore, coreThreads, shownIntegrity, type HealthSegment } from '@state/selectors';
 import { liveUpgrades, offlineReason, type Band } from '@systems/capabilities';
 import { reachMarks } from '@systems/hollow-hud';
@@ -60,7 +60,7 @@ const PIP_GLYPH: Readonly<Record<SkillPipLook, string>> = {
 // The extra FUEL this ship's tank got at its arrival from the unit's working FUEL TRIMs (createFlight's
 // mods), in whole percent: the flight's budget against the ship's stock one.
 export function arrivalFuelTrimPct(state: Readonly<GameState>): number {
-  const stock = getShip(state.run.shipIndex).flight.dvBudgetKmS;
+  const stock = currentShip(state).flight.dvBudgetKmS;
   return Math.round((state.level.dvBudgetKmS / stock - 1) * 100);
 }
 

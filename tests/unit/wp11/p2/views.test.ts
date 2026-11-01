@@ -29,8 +29,8 @@ import { actionDelete } from '@state/actions';
 import { driversInMemory, finalePending, quantizeCorruption } from '@state/selectors';
 import { HOLLOW_FINALE, HOLLOW_VERB, hollowUnitName } from '@data/hollow-text';
 import { echoWord } from '@data/tool-text';
-import { SHIPS } from '@data/ships';
 import { endingsLine } from '@data/script';
+import { CLASSIC_FIVE } from '@data/classic-five';
 import {
   MAX_LINE_CHARS, FINALE_ENDING_MAX_LINES, GLITCH_BURST_LEVEL, DUEL_SPIKE_LEVEL_START, DUEL_SPIKE_LEVEL_END, ROOT_DELETE_SEC,
   ROOT_GONE_GLITCH_LEVEL, MERGE_GLITCH_LEVEL, MERGE_COST_CHARGE, DUEL_SPIKE_EVERY_END_SEC, DUEL_SPIKE_EVERY_START_SEC,
@@ -192,7 +192,7 @@ check('say: a line with a look must be critical (a queued one would count down a
   // LAST LIGHT is flown alone here: the run brought ships 1–4 into orbit before it (their results, as a run records
   // them), so PURGE's full claim is true (tests/unit/wp11/p2/purge-fleet.test.ts has a run that lost one).
   h.store.update((d) => {
-    d.run.ships = SHIPS.filter((ship) => !ship.flagship).map((ship, index): ShipResult => ({
+    d.run.ships = CLASSIC_FIVE.filter((ship) => !ship.final).map((ship, index): ShipResult => ({
       shipId: ship.id, shipName: ship.name, slot: index, depth: index + 1, outcome: 'locked', colonistsAboard: 0, lzs: [], offSite: 0, noGo: 0,
       restored: 0, parked: [], notLaunched: 0, landedInLz: 0, points: 0, stars: 0, fuelLeftPct: 0, ringMiss: null, colony: null, pods: [],
     }));

@@ -11,8 +11,8 @@ import { mountHollowVerbs } from '@systems/hollow-verbs';
 import { mountFinale } from '@systems/finale';
 import { assertMemoryInvariants } from '@systems/memory-ops';
 import { isPodCode } from '../support/pod-code';
-import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import type { Segment, DriverSegment } from '@/types/segment';
+import { MEMORY_LAYOUTS } from '@data/memory';
 
 export interface Harness6 extends Harness5 {
   // A cluster by code, or null once it has left memory (printed, or eaten: then it is hollow).
@@ -31,7 +31,7 @@ export function createHarness6(seed = 1, opts: { soulsFound?: boolean } = {}): H
   return {
     ...base,
     maybeSoul: (code) => base.souls().find((soul) => isPodCode(soul.pod, code)) ?? null,
-    checkMemory: () => assertMemoryInvariants(base.store.getState().memory, MEMORY_TOTAL_BLOCKS),
+    checkMemory: () => assertMemoryInvariants(base.store.getState().memory, MEMORY_LAYOUTS.FULL.totalBlocks),
     hollowBlocks: () => base.store.getState().memory.filter((seg) => seg.type === 'hollow'),
   };
 }

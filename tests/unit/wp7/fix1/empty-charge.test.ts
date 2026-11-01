@@ -16,14 +16,14 @@ import { assertMemoryInvariants } from '@systems/memory-ops';
 import { actionRepair } from '@state/actions';
 import { chargeLeft, getByRole, getRedundancy } from '@state/selectors';
 import { transmitModel } from '@systems/transmit';
-import { getShip } from '@data/ships';
-import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { CHARGE_ARRIVAL_FLOOR, STAR_CHARGE_BONUS } from '@data/tuning';
+import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat } from '@systems/threat-plan';
+import { MEMORY_LAYOUTS } from '@data/memory';
 
 const h = createHarness7(5, { soulsFound: false });
 const state = () => h.store.getState();
-const halcyon = getShip(1);
+const halcyon = classicShip(1);
 
 // Spends the pool for real: one point left, a REPAIR on a hurt file, the op ends with NO CHARGE and the
 // pool's blocks become free space.
@@ -41,7 +41,7 @@ function spendAllCharge(): void {
 }
 
 const memoryValid = (): boolean => {
-  try { assertMemoryInvariants(state().memory, MEMORY_TOTAL_BLOCKS); return true; } catch { return false; }
+  try { assertMemoryInvariants(state().memory, MEMORY_LAYOUTS.FULL.totalBlocks); return true; } catch { return false; }
 };
 
 // --- The layout on its own --------------------------------------------------------------------------
@@ -50,7 +50,7 @@ const memoryValid = (): boolean => {
   h.store.update((d) => { d.run.phase = 'flight'; d.run.simulationRetryUsed = true; });
   spendAllCharge();
   check('the pool is gone from memory once its last point is spent', getRedundancy(state()) === undefined);
-  const packet = packUnit(state().memory, halcyon.arrival!.linkBlocks, []);
+  const packet = packUnit(state().memory, CLASSIC_HOPS[halcyon.slot]!.linkBlocks, []);
   check('…the packet carries no pool (charge null, 0 carried)', packet.charge === null && packet.chargeCarried === 0);
   const blocks = arrivalCharge(packet.chargeCarried, STAR_CHARGE_BONUS).blocks;
   let layoutError = '';

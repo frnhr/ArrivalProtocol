@@ -15,7 +15,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { check, finish } from '../wp1/harness';
 import { SKIP_END_LEAD_TAC, ZONE_TACTICAL_LEAD_TAC, DODGE_DEADLINE_RESOLUTION_TAC } from '@data/tuning';
-import { getShip } from '@data/ships';
+import { classicShip } from '@data/classic-five';
 
 interface Outcome {
   deadlineTac: number | null;
@@ -46,11 +46,11 @@ function fly(tree: 'lead2' | 'base', mode: 'hit' | 'dodge'): Outcome {
   return JSON.parse(line) as Outcome;
 }
 
-const warp = getShip(2).flight.tacticalWarp;
+const warp = classicShip(2).flight.tacticalWarp;
 // One TACTICAL tick (50 ms at the ship's tactical warp), in tactical seconds.
 const TICK_TAC = 0.05;
 // A SKIP's recorded stop is the tick after it lands (CRUISE ×80 there: 0.16 tac s on KESTREL).
-const CRUISE_TICK_TAC = (0.05 * getShip(2).flight.cruiseWarp) / warp;
+const CRUISE_TICK_TAC = (0.05 * classicShip(2).flight.cruiseWarp) / warp;
 
 // --- MODE=hit -------------------------------------------------------------------------------------------------------
 {

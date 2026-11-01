@@ -28,9 +28,9 @@ import { actionSwap, actionScan } from '@state/actions';
 import { on } from '@systems/events';
 import { getByRole, hasIntegrity, filesWithRole, type HealthSegment } from '@state/selectors';
 import { elementsFromState } from '@/types/orbit';
-import { getShip } from '@data/ships';
 import { TOOL_REFUSAL } from '@data/tool-text';
 import { SWAP_SEC, GHOST_BY_BAND } from '@data/tuning';
+import { classicShip } from '@data/classic-five';
 import { byDepth } from '../depth';
 
 // WP12 part 1 (the 200-seed playthrough) retuned the failing controller from §3.3's 15% every 25 tac s to
@@ -48,7 +48,7 @@ const TICK = 0.05;
 // 50. A multiple of 10: the 10th–90th detail indexes by it.
 const SEEDS = byDepth(10, 200);
 const SWAP_SEEDS = byDepth(5, 50);
-const ship = getShip(VESPER);
+const ship = classicShip(VESPER);
 const CRUISE = ship.flight.cruiseWarp;
 
 const store = createStore<GameState>(createInitialState({ seed: 1, shipIndex: VESPER, carried: freshUnitRacks(ship) }));

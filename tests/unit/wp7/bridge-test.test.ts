@@ -12,12 +12,12 @@ import { createHarness7 } from './harness7';
 import { movePreview, memoryAfterMove, reachesRackE, hollowReachAll } from '@systems/move-preview';
 import { freeSegment, segmentStarts, assertMemoryInvariants } from '@systems/memory-ops';
 import { installTool } from '@systems/licences';
-import { MEMORY_TOTAL_BLOCKS, UNIT_RACKS_START } from '@data/memory';
 import type { Segment, DriverSegment, HollowSegment, FreeSegment } from '@/types/segment';
 import type { GameState } from '@state/schema';
 import type { RackHazard } from '@/types/zone';
 import { isPodCode, podNumber } from '../support/pod-code';
 import { phase2Halcyon } from '../support/hollow-world';
+import { MEMORY_LAYOUTS } from '@data/memory';
 
 // Final fix pass: the preview also takes the racks a hazard zone is known to hit (the MIND's red rack tags); HALCYON has
 // no hazard zones, so none. The hazard warning has its own suite (tests/unit/final-fix/move-hazard.test.ts).
@@ -46,7 +46,7 @@ const addrOf = (memory: readonly Segment[], seg: Segment): number => segmentStar
 {
   const memory = state().memory;
   const c09 = soul('POD 05');
-  const toRackDEnd = at(memory, UNIT_RACKS_START - c09.size);
+  const toRackDEnd = at(memory, MEMORY_LAYOUTS.FULL.unitStart - c09.size);
   const preview = movePreview(state(), c09, toRackDEnd, NO_HAZARDS);
   // The 1-block GAP, POD 05's 8 blocks, and the 37 + 64 free after it less the 8 it lands on: 102.
   check('MOVE POD 05 to the end of rack D: the space it leaves is WALL 102 ✓ (the GAP, its blocks and the free run up to where it lands)',
@@ -70,7 +70,7 @@ const addrOf = (memory: readonly Segment[], seg: Segment): number => segmentStar
     movePreview(state(), c07, { regionSegIds: [c10.id], col: 0 }, NO_HAZARDS) === null);
   const after = memoryAfterMove(memory, c09, toRackDEnd)!;
   let valid = true;
-  try { assertMemoryInvariants(after, MEMORY_TOTAL_BLOCKS); } catch { valid = false; }
+  try { assertMemoryInvariants(after, MEMORY_LAYOUTS.FULL.totalBlocks); } catch { valid = false; }
   check('the previewed memory is a valid 384-block strip and the real one is untouched',
     valid && state().memory === memory && memory.includes(c09) && addrOf(memory, c09) === 147, `POD 05 at ${addrOf(memory, c09)}`);
 }
@@ -88,23 +88,23 @@ const root = (): HollowSegment => ({ id: `t_root_${nextId++}`, name: '???', type
 
 // `bridged`: C05 closes the WALL (3 free from C04, then C05 against rack E): HOLLOW already reaches rack E.
 function planted(bridged = false): GameState['memory'] {
-  const unit = state().memory.filter((_seg, i) => segmentStarts(state().memory)[i]! >= UNIT_RACKS_START);
+  const unit = state().memory.filter((_seg, i) => segmentStarts(state().memory)[i]! >= MEMORY_LAYOUTS.FULL.unitStart);
   const tail: Segment[] = bridged ? [freeOf(3), cluster('C05')] : [freeOf(8)];
   const before: Segment[] = [freeOf(bridged ? 196 : 199), root(), freeOf(2), cluster('C01'), freeOf(3), cluster('C02'), freeOf(3), cluster('C03'),
     freeOf(1), cluster('C04'), ...tail];
   const sum = before.reduce((total, seg) => total + seg.size, 0);
-  if (sum !== UNIT_RACKS_START) throw new Error(`planted racks A–D sum to ${sum}`);
+  if (sum !== MEMORY_LAYOUTS.FULL.unitStart) throw new Error(`planted racks A–D sum to ${sum}`);
   return [...before, ...unit.map((seg) => structuredClone(seg))];
 }
 
 {
   const memory = planted();
-  assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(memory, MEMORY_LAYOUTS.FULL.totalBlocks);
   h.store.update((d) => { d.memory = memory; d.ui.memoryRev++; });
   check('the planted strip: HOLLOW reaches C01–C04 across gaps of 2, 3, 3, 1, but not rack E (an 8-block WALL)',
     hollowReachAll(memory).size === 5 && !reachesRackE(memory), `${hollowReachAll(memory).size} reached`);
   const mv = state().memory.find((seg) => seg.type === 'fs-tool' && seg.fsTool === 'move')!;
-  const wallStart = UNIT_RACKS_START - 8;
+  const wallStart = MEMORY_LAYOUTS.FULL.unitStart - 8;
   const bridge = movePreview(state(), mv, at(memory, wallStart + 3), NO_HAZARDS);
   check('dropping a 2-block file into the middle of that WALL (3 + 3 left): ⚠ BRIDGES HOLLOW TO YOUR CORE',
     bridge?.bridges === true && bridge.dest.exposed === true, JSON.stringify(bridge));
@@ -116,7 +116,7 @@ function planted(bridged = false): GameState['memory'] {
 
   // A strip that is already bridged: a move that keeps the bridge does not claim to make it.
   const bridged = planted(true);
-  assertMemoryInvariants(bridged, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(bridged, MEMORY_LAYOUTS.FULL.totalBlocks);
   h.store.update((d) => { d.memory = bridged; d.ui.memoryRev++; });
   check('a strip already bridged (C05 sits 0 blocks from rack E, 3 from C04)', reachesRackE(bridged));
   const mvTool = state().memory.find((seg) => seg.type === 'fs-tool' && seg.fsTool === 'move')!;

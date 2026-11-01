@@ -46,7 +46,8 @@ import { runEndModel, type RunEndModel } from '@systems/run-end';
 import { beamOutView, type BeamOutView } from '@systems/beam-out';
 import { buildShipMemory } from '@data/memory';
 import { podCode } from '@data/landing-text';
-import { getShip, type ShipDef, type HollowDef } from '@data/ships';
+import type { ShipDef, HollowDef } from '@data/ships';
+import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat, nominalRunThreat, planThreat, threatInputFor, fixedShipFacts } from '@systems/threat-plan';
 import { rollBeamSeeds, plantBeamSeed, seedTargetsOf } from '@systems/beam-seeds';
 import { beamSourceOf } from '@systems/run';
@@ -58,7 +59,7 @@ import { childRng } from '@systems/rng';
 import { createHollowState } from '@state/initial';
 import { getOps, threadsBusy, threadsTotal, cancelOp, abortAll } from '@systems/ops-core';
 import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
-import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
+import { layoutOf } from '@data/memory';
 import { META_STORAGE_KEY, ROOT_BLOCKS } from '@data/tuning';
 import type { Segment } from '@/types/segment';
 import { showStamp, type StampTone } from '@components/hud/Stamp';
@@ -90,6 +91,7 @@ import { nextZoneEntry, zoneInside } from '@systems/pace';
 import type { Zone, ZoneHit } from '@/types/zone';
 import { offerDealNow, dealEffectNow } from '@systems/hollow-deal';
 import { lastSkipPlanChange } from '@systems/ghost-thrust';
+import { visitRng, currentShip, classicRunMap } from '@systems/map-run';
 
 // Debug hooks on window.__ap, installed ONLY with ?debug in the URL. Screenshot scripts and
 // manual poking use them; the shipped game never depends on them. Each package adds its own.
@@ -297,7 +299,7 @@ const HOLLOW_DEMO: HollowDef = {
 };
 
 function hollowDemo(store: Store<GameState>): void {
-  const ship = getShip(store.getState().run.shipIndex);
+  const ship = currentShip(store.getState());
   if (!ship.memory.aiFiles) throw new Error('__ap.hollowDemo: only on a ship that meets a fresh unit (ship 1); HALCYON is __ap.ship(1)');
   const demo: ShipDef = {
     ...ship,
@@ -342,7 +344,7 @@ function giveCard(store: Store<GameState>, id: UpgradeId): Segment[] {
     replaceRange(memory, addr, addr + file.size, [file], { opId: null, own: [] });
   }
   mergeAdjacentFree(memory);
-  assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(memory, layoutOf(store.getState()).totalBlocks);
   store.update((draft) => {
     for (const seg of draft.memory) {
       if (id === 'repair-v2' && seg.type === 'fs-tool' && seg.fsTool === 'repair') seg.version = REPAIR_V2_VERSION;
@@ -361,18 +363,28 @@ function giveCard(store: Store<GameState>, id: UpgradeId): Segment[] {
 // it flown with TRACE 0, so VESPER gets HOLLOW's forced boarding and its 10-block root, LAST LIGHT the FINALE.
 // The beam's seeds are rolled as transmitNext rolls them (KESTREL's next to Telemetry on the tutorial run), so the RM
 // lesson can be reached in one call. `threat` replaces the nominal verdict (__ap.board).
+// The jump always lands on the classic world (data/classic-five.ts: the fixture five, slice-3a-plan §2.3), whatever world
+// the run was on: the map becomes the classic route to that ship.
 function debugJump(store: Store<GameState>, index: number, threat: ShipThreat = nominalShipThreat(index)): void {
-  const ship = getShip(index);
-  if (!ship.arrival) throw new Error(`__ap.ship(${index}): ${ship.name} meets a fresh unit; use __ap.newRun()`);
+  const ship = classicShip(index);
+  const hop = CLASSIC_HOPS[index];
+  if (!hop) throw new Error(`__ap.ship(${index}): ${ship.name} meets a fresh unit; use __ap.newRun()`);
   abortAll();
   const state = store.getState();
-  const packet = packUnit(state.memory, ship.arrival.linkBlocks, []);
+  const packet = packUnit(state.memory, hop.linkBlocks, []);
   packet.seeds = rollBeamSeeds(packet, beamSourceOf(threat), playsTutorial(state.run), childRng(state.run.seed, index, 'beam-seeds'));
   const layout = layoutCarried(packet, packet.chargeCarried, ship, threat, hollowLabel(state.run));
   // The ship's own arrival damage still applies (WP9: KESTREL's Sensor Interp at 45%, PATH UNCERTAIN).
-  const scripted = arrivalDamage(layout.racks.segs, ship.arrival.damage);
-  // The run's threat memory as the nominal run had it before this ship (startShip applies the ship's verdict on top).
-  store.update((draft) => { draft.run.threat = nominalRunThreat(index - 1); });
+  const scripted = arrivalDamage(layout.racks.segs, ship.arrivalDamage);
+  // The run's threat memory as the nominal run had it before this ship (startShip applies the ship's verdict on top), on
+  // the classic world.
+  store.update((draft) => {
+    draft.run.threat = nominalRunThreat(index - 1);
+    if (draft.run.map.world !== 'classic') {
+      draft.run.map = classicRunMap(draft.run.seed, index - 1, draft.run.wave);
+      draft.run.shipIndex = index - 1;
+    }
+  });
   startShip(store, index, layout.racks, {
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0,
     chargeOverflowLost: 0, scripted, seeds: layout.seeds, boarded: boardedBy(threat),
@@ -387,7 +399,7 @@ function debugBoard(store: Store<GameState>): ShipThreat {
   const facts = { ...fixedShipFacts(index), oneHopFromFinal: true };
   const before = { ...nominalRunThreat(index - 1), aboard: false, age: 0 };
   const threat = planThreat(threatInputFor(before, facts, store.getState().run.stats.deal !== null));
-  if (threat.boards === null) throw new Error(`__ap.board: HOLLOW never boards on the beam into ${getShip(index).name} (depth ${facts.depth})`);
+  if (threat.boards === null) throw new Error(`__ap.board: HOLLOW never boards on the beam into ${classicShip(index).name} (depth ${facts.depth})`);
   debugJump(store, index, threat);
   return threat;
 }
@@ -404,7 +416,7 @@ function debugSeed(store: Store<GameState>, target: string): string {
   // In the update (the review's nit: the memory was mutated outside it, so subscribers never heard the change).
   store.update((draft) => {
     seedId = plantBeamSeed(draft.memory, seg.id, words, hollowLabel(draft.run)).id;
-    assertMemoryInvariants(draft.memory, MEMORY_TOTAL_BLOCKS);
+    assertMemoryInvariants(draft.memory, layoutOf(draft).totalBlocks);
     if (draft.hollow.cfg.wake === 'never') draft.hollow.cfg = structuredClone(SEEDS_ONLY_DEF);
     draft.ui.memoryRev++;
   });
@@ -485,7 +497,7 @@ export function mountDebug(store: Store<GameState>): void {
     ops: () => getOps().map((operation) => ({ id: operation.id, kind: operation.kind, segId: operation.segId, pct: operation.pct, aiSec: operation.aiSec })),
     threads: () => ({ busy: threadsBusy(), total: threadsTotal() }),
     cancelOp,
-    checkMemory: () => { assertMemoryInvariants(store.getState().memory, MEMORY_TOTAL_BLOCKS); return true; },
+    checkMemory: () => { assertMemoryInvariants(store.getState().memory, layoutOf(store.getState()).totalBlocks); return true; },
     seg: (name) => store.getState().memory.find((seg) => seg.name.toLowerCase() === name.toLowerCase()),
     caps: () => capabilitiesNow(store.getState()),
     sensed: getSensedPrediction,
@@ -586,7 +598,7 @@ export function mountDebug(store: Store<GameState>): void {
       // UNIT-047's run as the archive keeps it: started, ARES-VII flown through (the next run is a returning
       // unit), then ended with `cause` on HALCYON.
       const first = lineageOf(freshMeta());
-      const progress = { unit: first.unitNumber, shipName: getShip(1).name, woke, stats: { moves: 0, deletes: 0 }, hollowUnits: first.hollowUnits };
+      const progress = { unit: first.unitNumber, shipName: classicShip(1).name, woke, stats: { moves: 0, deletes: 0 }, hollowUnits: first.hollowUnits };
       const started = recordTutorialDone(recordRunStart(freshMeta(), progress, Date.now()));
       const meta = recordRunEnd(started, { ...progress, cause, score: woke });
       if (saveMeta(browserStorage, meta) !== 'ok') throw new Error('__ap.archiveAs: the archive could not be written');
@@ -664,7 +676,7 @@ export function mountDebug(store: Store<GameState>): void {
       const weights = verbWeights(state.run.lastUnit);
       // A look with a throwaway stream: the game's own verb stream is not advanced by asking.
       const wouldPick = chooseVerb(
-        state.memory, childRng(state.run.seed, state.run.shipIndex, 'debug-verb-look'), weights, hollow.untriedTools,
+        state.memory, visitRng(state.run, 'debug-verb-look'), weights, hollow.untriedTools,
       );
       return {
         verb: hollow.verb, inSec: hollow.verbInSec, moments: hollow.verbMoments, telegraphs: hollow.verbTelegraphs,

@@ -4,7 +4,7 @@ import { TERMINAL } from '@systems/flight-hud';
 import { shipLost, lossPlan, continueAfterLoss, shipOutcomeOf, type LossPlan } from '@systems/run';
 import { landingResult } from '@systems/landing-rules';
 import { requireById } from '@components/dom';
-import { getShip } from '@data/ships';
+import { shipDefAt, currentSlot } from '@systems/map-run';
 import { LOSS_BUTTON } from '@data/script';
 import { RESULT_BANNER_DELAY_MS } from '@data/tuning';
 import { LOST_CARD_TEXT, POD_STATE_TEXT } from '@data/landing-text';
@@ -29,7 +29,7 @@ function lossButtonText(state: Readonly<GameState>, plan: LossPlan): string {
   if (plan.kind === 'simulation') return LOSS_BUTTON.simulation;
   if (plan.kind === 'end') return LOSS_BUTTON.end;
   const emergency = plan.outcome === 'crashed' || plan.outcome === 'emergency';
-  return emergency ? LOSS_BUTTON.emergency : LOSS_BUTTON.transmit(getShip(state.run.shipIndex + 1).name);
+  return emergency ? LOSS_BUTTON.emergency : LOSS_BUTTON.transmit(shipDefAt(state.run.map, currentSlot(state.run) + 1).name);
 }
 
 // The LOST card (§9 WP5 item 6) over a crashed, escaped, stranded or abandoned ship, or one whose Core

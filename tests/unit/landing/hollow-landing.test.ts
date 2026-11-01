@@ -15,10 +15,11 @@ import { createInitialState } from '@state/initial';
 import { recordDriverLost } from '@state/actions';
 import { driversInMemory, chargeLeft } from '@state/selectors';
 import { freshUnitRacks } from '@systems/carry';
-import { getShip, type HollowDef } from '@data/ships';
+import type { HollowDef } from '@data/ships';
 import { driverName } from '@data/landing-text';
 import { DRIVER_RULES } from '@data/script';
 import { MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY } from '@data/tuning';
+import { classicShip } from '@data/classic-five';
 import type { GameState } from '@state/schema';
 import type { HollowSegment } from '@/types/segment';
 
@@ -36,7 +37,7 @@ import type { HollowSegment } from '@/types/segment';
 // --- landMult's condition (§5): a window open in the band AND a pod that can launch ---------------------------------------
 {
   const KESTREL = 2;
-  const base = createInitialState({ seed: 3, shipIndex: KESTREL, carried: freshUnitRacks(getShip(KESTREL)) });
+  const base = createInitialState({ seed: 3, shipIndex: KESTREL, carried: freshUnitRacks(classicShip(KESTREL)) });
   const landing = (over: Partial<GameState['landing']>, phase: GameState['run']['phase'] = 'landing'): GameState =>
     ({ ...base, run: { ...base.run, phase }, landing: { ...base.landing, ...over } });
   const withWindow = landing({ window: { lz: 'LZ-A', sure: true } });

@@ -35,12 +35,12 @@ import { hollowInspectState, hollowInspectDesc, HOLLOW_DESC, HOLLOW_INSPECT } fr
 import { targetRefusal } from '@systems/tool-targets';
 import { segmentStarts, assertMemoryInvariants } from '@systems/memory-ops';
 import { selectCorruption, chargeLeft, driversInMemory, isHollow } from '@state/selectors';
-import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
-import { getShip } from '@data/ships';
 import { RUN_END_NOBODY_LANDED } from '@data/script';
 import { LANDING_NONE_LEFT_SEC, ROOT_DELETE_SEC, MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, MERGE_BONUS_CORE_CAPACITY, MERGE_CORRUPTION_FLOOR } from '@data/tuning';
+import { classicShip } from '@data/classic-five';
 import type { GameState } from '@state/schema';
 import type { HollowSegment, DriverSegment } from '@/types/segment';
+import { MEMORY_LAYOUTS } from '@data/memory';
 
 const h = createHarness11(31);
 setLandingMode('manual');
@@ -124,7 +124,7 @@ h.store.update((d) => {
   d.ui.memoryRev++;
 });
 h.store.update((d) => { const mem = d.memory; for (let i = mem.length - 1; i > 0; i--) { const a = mem[i - 1]!; const b = mem[i]!; if (a.type === 'free' && b.type === 'free') { a.size += b.size; mem.splice(i, 1); } } });
-assertMemoryInvariants(state().memory, MEMORY_TOTAL_BLOCKS);
+assertMemoryInvariants(state().memory, MEMORY_LAYOUTS.FULL.totalBlocks);
 // POD 12's block moved by an MV; POD 13's block DELETEd by the kid.
 const c14Block = blockOf('POD 12')!;
 const c14To = mvSpots(state().memory, c14Block)[0];
@@ -177,7 +177,7 @@ check('…POD 13 (its block deleted) stays lost for now: eaten, restorable by sl
   podRecord(state(), 13).driverLost === 'eaten' && soul('POD 13') === undefined);
 check('…POD 01 (the belt\'s, not HOLLOW\'s) stays lost (dead)', podRecord(state(), 1).driverLost === 'dead');
 check('…no block of HOLLOW is left in memory, the memory is whole', !state().memory.some(isHollow)
-  && (() => { try { assertMemoryInvariants(state().memory, MEMORY_TOTAL_BLOCKS); return true; } catch { return false; } })());
+  && (() => { try { assertMemoryInvariants(state().memory, MEMORY_LAYOUTS.FULL.totalBlocks); return true; } catch { return false; } })());
 // WP12 p3 (the lead's note of 22:40): CONTROL's verdict waits until the typed ending is over (the card types it
 // as its last line); said at the choice, the header's ticker spoiled the ending. Checked below, at the WAKE REPORT.
 const mergeVerdict = (): boolean => state().log.entries.some((entry) => /is non-compliant\. :\)$/.test(entry.text));
@@ -258,7 +258,7 @@ h.store.update((d) => {
   for (let i = mem.length - 1; i > 0; i--) { const a = mem[i - 1]!; const b = mem[i]!; if (a.type === 'free' && b.type === 'free' && a.reservedBy === undefined && b.reservedBy === undefined) { a.size += b.size; mem.splice(i, 1); } }
   d.ui.memoryRev++;
 });
-assertMemoryInvariants(state().memory, MEMORY_TOTAL_BLOCKS);
+assertMemoryInvariants(state().memory, MEMORY_LAYOUTS.FULL.totalBlocks);
 check('UNRESOLVED scenario: with no Rm, the strip says nothing can delete the root', (() => { h.stepFor(0.6); return /NOTHING CAN DELETE THE ROOT/.test(h.shown()?.text ?? ''); })(),
   h.shown()?.text ?? '');
 landInstantly(h.store);
@@ -299,7 +299,7 @@ check('…then PURGE: won-purge, but the flagship landed nobody: the sombre tone
   && runEndModel(state()).why === RUN_END_NOBODY_LANDED.why['won-purge'],
   `${state().run.endCause} ${runEndModel(state()).tone} ${runEndModel(state()).title} | ${runEndModel(state()).why}`);
 
-check('LAST LIGHT is the flagship and the last ship', getShip(4).flagship);
+check('LAST LIGHT is the flagship and the last ship', classicShip(4).final);
 
 // --- §9 WP11's edge cases -----------------------------------------------------------------------------------------------
 // The Core worn below its low mark mid-duel: fewer threads, but the running DELETE keeps its own (ops-core never takes a

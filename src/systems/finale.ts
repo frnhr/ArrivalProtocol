@@ -16,9 +16,9 @@ import { chargeLeft, infectedSegments, isHollow, integrityState, rootDeletable }
 import { driverName } from '@data/landing-text';
 import { driverSegId } from '@data/pod-ids';
 import { echoWord, TOOL_REFUSAL } from '@data/tool-text';
-import { SHIPS } from '@data/ships';
+import { fleetOf } from '@systems/map-run';
 import { fleetHome } from '@systems/run-score';
-import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
+import { layoutOf } from '@data/memory';
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
 import { formatCount } from '@data/format';
@@ -64,7 +64,7 @@ import {
 
 export type FinaleChoice = 'purge' | 'merge';
 
-// From the ship's landing slice (copied from ShipDef.flagship when the ship was built), never a ShipDef lookup: a
+// From the ship's landing slice (copied from ShipDef.final when the ship was built), never a ShipDef lookup: a
 // generator-made final ship needs nothing new here.
 function isFlagship(state: Readonly<GameState>): boolean {
   return state.landing.finalShip;
@@ -128,7 +128,7 @@ export function finaleEndingLines(state: Readonly<GameState>, choice: FinaleChoi
   if (choice === 'purge') {
     const eaten = colonistsEatenHere(state);
     // The flagship is in orbit (its finale opens only at a lock or an accept) but not recorded until its LANDING REPORT.
-    const fleet = fleetHome(state.run.ships, SHIPS.length, state.level.shipId);
+    const fleet = fleetHome(state.run.ships, fleetOf(state.run.map).length, state.level.shipId);
     lines = HOLLOW_FINALE.purgeEnding({
       shipName, inOrbit: formatCount(inOrbit), anyoneHome: inOrbit > 0, eaten: eaten > 0 ? formatCount(eaten) : null, hollowWord, unit,
       shipsHome: fleet.home, fleetSize: fleet.total,
@@ -302,7 +302,7 @@ function purge(store: Store<GameState>): void {
   const memory = store.getState().memory;
   const blocks = memory.filter(isHollow);
   removeBlocks(memory, blocks);
-  if (IS_DEV) assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  if (IS_DEV) assertMemoryInvariants(memory, layoutOf(store.getState()).totalBlocks);
   const gone = new Set(blocks.map((block) => block.id));
   store.update((draft) => {
     draft.hollow.finale.phase = 'purged';
@@ -334,7 +334,7 @@ function merge(store: Store<GameState>): void {
     inPlace.push(record.pod);
   }
   removeBlocks(memory, memory.filter(isHollow));
-  if (IS_DEV) assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  if (IS_DEV) assertMemoryInvariants(memory, layoutOf(store.getState()).totalBlocks);
   const gone = new Set(blocks.map((block) => block.id));
   store.update((draft) => {
     // Back in memory: their pods have drivers again and launch like any other (a pod already parked comes back aboard).

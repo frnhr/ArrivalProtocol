@@ -12,7 +12,6 @@
 //   (never under a NOW / KEEP HOLDING / RELEASE line); SKIP waits for the first verb (the coast is its stage).
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
-import { getShip, SHIPS, isLastShip } from '@data/ships';
 import { shipColonists } from '@data/memory';
 import { mergeTickCharge } from '@systems/finale';
 import { skipBlockReason } from '@systems/pace';
@@ -24,13 +23,14 @@ import { secUntil } from '@systems/predict';
 import { onPostTick } from '@systems/clock';
 import { isHollow } from '@state/selectors';
 import { MERGE_COST_CHARGE } from '@data/tuning';
+import { classicShip, CLASSIC_FIVE, CLASSIC_HOPS } from '@data/classic-five';
 import type { GameState } from '@state/schema';
 import { phase2HollowOf } from '../support/hollow-world';
 
-const ship = getShip(LAST_LIGHT);
+const ship = classicShip(LAST_LIGHT);
 check('LAST LIGHT is ship 5: the flagship and the last ship; 3,200 colonists in 16 pods; link 98, 6 hits, no arrival damage',
-  ship.name === 'LAST LIGHT' && ship.flagship && isLastShip(LAST_LIGHT) && SHIPS.filter((candidate) => candidate.flagship).length === 1
-  && shipColonists(ship) === 3200 && ship.arrival?.linkBlocks === 98 && ship.arrival.transitHits === 6 && ship.arrival.damage.length === 0);
+  ship.name === 'LAST LIGHT' && ship.final && (LAST_LIGHT === CLASSIC_FIVE.length - 1) && CLASSIC_FIVE.filter((candidate) => candidate.final).length === 1
+  && shipColonists(ship) === 3200 && CLASSIC_HOPS[ship.slot]!.linkBlocks === 98 && CLASSIC_HOPS[ship.slot]!.transitHits === 6 && ship.arrivalDamage.length === 0);
 const { start, ring, tacticalWarp, cruiseWarp, dvBudgetKmS } = ship.flight;
 check('…§9 WP11 item 1\'s flight: r0 18,000, rp0 3,200, v∞ 1.5, ring 5,000–7,000, FUEL 2.5, ×30 / ×60, OUT engaged',
   start.r0 === 18000 && start.rp0 === 3200 && start.vInf === 1.5 && ring.min === 5000 && ring.max === 7000 && dvBudgetKmS === 2.5
@@ -43,7 +43,7 @@ check('…its HOLLOW: spread 12, drain 5, ×2 / ×1.5, seeds every 35 s in the w
   && hollow.seed?.everySec === 35 && hollow.seed.target === 'walls'
   && JSON.stringify(hollow.verbs) === JSON.stringify({ everySec: 12, telegraphSec: 3, firstTelegraphSec: 4, duelEverySec: 4 })
   && !hollow.deal && hollow.story === 'last-ship');
-check('…no other ship has verbs (the finale is the flagship\'s)', SHIPS.every((candidate, index) => (phase2HollowOf(index).verbs !== null) === candidate.flagship));
+check('…no other ship has verbs (the finale is the flagship\'s)', CLASSIC_FIVE.every((candidate, index) => (phase2HollowOf(index).verbs !== null) === candidate.final));
 
 const h = createHarness11(7);
 const state = (): Readonly<GameState> => h.store.getState();

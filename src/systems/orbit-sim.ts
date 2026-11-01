@@ -4,7 +4,7 @@ import type { DecayState, DragKick } from '@/types/landing';
 import { onGameTick, onAiTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { stepAttitude, isPresetAligning } from '@systems/attitude';
-import { smoothNoise, childSeed, childRng, type Rng } from '@systems/rng';
+import { smoothNoise, childSeed, type Rng } from '@systems/rng';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { capabilitiesNow, thrustCap, planningThrustCap, presetsAvailable, type GhostSpec } from '@systems/capabilities';
 import { beginLanding, leaveOrbitWithParked, parkPodsAboard } from '@state/actions';
@@ -19,6 +19,7 @@ import {
   STRANDED_RANGE_FRAC, LOCK_HOLD_AI_SEC, RADIUS_BISECT_STEPS, BAND_REACH_SAMPLES,
   PREDICT_STEP_ORBIT_FRAC, PREDICT_STEP_MIN, PREDICT_STEP_MAX, PREDICT_STEPS_BUDGET, LANDING_BURN_POWER,
 } from '@data/tuning';
+import { visitRng, currentSlot } from '@systems/map-streams';
 
 // 2D two-body flight. The ship arrives on a hyperbola and the player steers it with presets
 // and a held throttle. Terminal outcomes are physical (crash, escape), earned (ORBIT LOCK
@@ -190,7 +191,7 @@ export function isThrustOn(state: Readonly<GameState>): boolean {
 }
 
 function noiseSeed(state: Readonly<GameState>): number {
-  return childSeed(state.run.seed, state.run.shipIndex, 'thrust-noise');
+  return childSeed(state.run.seed, currentSlot(state.run), 'thrust-noise');
 }
 
 // --- Ghost thrust (C2, §6.4) ------------------------------------------------------------------
@@ -220,7 +221,7 @@ let nextGhostTSec: number | null = null;   // game time the next burst is due (n
 let scheduledFor: GhostSpec | null = null; // the spec that gap was drawn for (a new band redraws)
 
 function ghostStream(state: Readonly<GameState>): Rng {
-  if (!ghostRng) ghostRng = childRng(state.run.seed, state.run.shipIndex, 'ghost');
+  if (!ghostRng) ghostRng = visitRng(state.run, 'ghost');
   return ghostRng;
 }
 

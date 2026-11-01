@@ -27,7 +27,6 @@ import { runEndModel } from '@systems/run-end';
 import { shipResultOf } from '@systems/run';
 import { createInitialState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
-import { getShip } from '@data/ships';
 import { stateFromElements } from '@/types/orbit';
 import { freeSegment, mergeAdjacentFree, segmentStarts } from '@systems/memory-ops';
 import { packUnit, layoutCarried } from '@systems/carry';
@@ -43,6 +42,7 @@ import { podRecord } from '@systems/landing-rules';
 import { DRIVER_RULES, RUN_END_NOBODY_LANDED } from '@data/script';
 import { HOLLOW_STORY, HOLLOW_FINALE } from '@data/hollow-text';
 import { LANDING_NONE_LEFT_SEC } from '@data/tuning';
+import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import { isAiFile } from '@state/selectors';
 import type { DriverSegment } from '@/types/segment';
 import { nominalShipThreat } from '@systems/threat-plan';
@@ -315,7 +315,7 @@ function forceLandAllButFirst(): void {
 // --- N2. NOBODY WOKE is judged on pods down, not on landedInLz ---------------------------------------------------------
 {
   const LAST = 4;
-  const world = createInitialState({ seed: 3, shipIndex: LAST, carried: freshUnitRacks(getShip(LAST)) });
+  const world = createInitialState({ seed: 3, shipIndex: LAST, carried: freshUnitRacks(classicShip(LAST)) });
   world.burn.status = 'locked';
   const lz = world.landing.lzs[0]!;
   // Every pod down, all MISLANDED (worth 150 each): people woke, though nobody landed in an LZ with room.
@@ -349,8 +349,8 @@ function forceLandAllButFirst(): void {
   const hunt: ShipThreat = { ...nominalShipThreat(VESPER), stage: 'hunt', folded: [], hollow: phase2HollowOf(VESPER), rootBlocks: 14 };
   const freshFiles = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item)).map((item) => structuredClone(item) as Segment);
-  const huntPacket = packUnit(freshFiles, getShip(VESPER).arrival!.linkBlocks, []);
-  const carried = layoutCarried(huntPacket, huntPacket.chargeCarried, getShip(VESPER), hunt).racks;
+  const huntPacket = packUnit(freshFiles, CLASSIC_HOPS[VESPER]!.linkBlocks, []);
+  const carried = layoutCarried(huntPacket, huntPacket.chargeCarried, classicShip(VESPER), hunt).racks;
   const world = createInitialState({ seed: 4, shipIndex: VESPER, carried, threat: hunt });
   const memory = world.memory;
   const starts = segmentStarts(memory);
@@ -368,7 +368,7 @@ function forceLandAllButFirst(): void {
   const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item)).map((item) => structuredClone(item) as Segment);
   const packet = packUnit(files, 120, []);
-  const halcyon = layoutCarried(packet, packet.chargeCarried, getShip(1), nominalShipThreat(1)).racks.segs;
+  const halcyon = layoutCarried(packet, packet.chargeCarried, classicShip(1), nominalShipThreat(1)).racks.segs;
   check('…and HALCYON\'s unit is still laid out back to back (no free run before the charge)',
     halcyon.findIndex((seg) => seg.type === 'free') > halcyon.findIndex((seg) => seg.type === 'redundancy'));
 }

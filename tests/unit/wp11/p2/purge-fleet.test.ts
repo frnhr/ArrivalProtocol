@@ -4,7 +4,7 @@
 // • the typed ending's fleet line names how many ships made it (`4 of 5 ships made it home.`), not `the fleet is home.`;
 // • RUN END's title and line say the same in PURGE's voice (`LAST LIGHT · 4 OF 5 HOME`, `You deleted it. 4 of 5
 //   ships made it home.`), still the victory tone (the flagship's colonists landed); (WP11 fix round 1: the title was
-//   `… 4 OF 5 SHIPS MADE IT`, which broke onto two lines; and the title's lineage after it never claims the fleet);
+//   `… 4 OF 5 CLASSIC_FIVE MADE IT`, which broke onto two lines; and the title's lineage after it never claims the fleet);
 // • the words fit one line with the worst numbers; a fleet that all made it keeps the full claim (the model alone).
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
@@ -18,8 +18,8 @@ import { chooseFinale } from '@systems/finale';
 import { actionDelete } from '@state/actions';
 import { RUN_END_PURGE_SHORT, RUN_END_TITLE, RUN_END_WHY, lineageLine } from '@data/script';
 import { HOLLOW_FINALE } from '@data/hollow-text';
-import { SHIPS } from '@data/ships';
 import { ROOT_DELETE_SEC, MAX_LINE_CHARS } from '@data/tuning';
+import { CLASSIC_FIVE } from '@data/classic-five';
 import type { GameState, ShipResult } from '@state/schema';
 
 const SEED = 19;
@@ -28,7 +28,7 @@ const state = (): Readonly<GameState> => h.store.getState();
 
 // A ship result with only its outcome mattering (fleetHome reads the outcome and the ship).
 function result(index: number, outcome: ShipResult['outcome']): ShipResult {
-  const ship = SHIPS[index]!;
+  const ship = CLASSIC_FIVE[index]!;
   return {
     shipId: ship.id, shipName: ship.name, slot: index, depth: index + 1, outcome, colonistsAboard: 0, lzs: [], offSite: 0, noGo: 0,
     restored: 0, parked: [], notLaunched: 0, landedInLz: 0, points: 0, stars: 0, fuelLeftPct: 0, ringMiss: null, colony: null, pods: [],
@@ -42,14 +42,14 @@ function result(index: number, outcome: ShipResult['outcome']): ShipResult {
     ...HOLLOW_FINALE.purgeEnding({ shipName: 'LAST LIGHT', inOrbit: '3,200', anyoneHome: true, eaten: '3,200', hollowWord: 'unit_999998', unit: 999, shipsHome: 99, fleetSize: 99 }).map((line) => line.text),
   ];
   check(`PURGE's short-fleet words fit one line (≤ ${MAX_LINE_CHARS})`, worst.every((text) => text.length <= MAX_LINE_CHARS), worst.map((text) => text.length).join(' '));
-  const home = (outcomes: ShipResult['outcome'][]): ReturnType<typeof fleetHome> => fleetHome(outcomes.map((outcome, i) => result(i, outcome)), SHIPS.length);
+  const home = (outcomes: ShipResult['outcome'][]): ReturnType<typeof fleetHome> => fleetHome(outcomes.map((outcome, i) => result(i, outcome)), CLASSIC_FIVE.length);
   const all = home(['locked', 'partial', 'locked', 'locked', 'locked']);
   const lost = home(['locked', 'locked', 'crashed', 'locked', 'locked']);
   const stranded = home(['escaped', 'stranded', 'abandoned', 'emergency', 'locked']);
   check('fleetHome: ORBIT LOCKED and ACCEPTED count as home; CRASHED, FLEW AWAY, STRANDED, BEAMED OUT, CORE LOST do not',
     all.all && all.home === 5 && !lost.all && lost.home === 4 && !stranded.all && stranded.home === 1, JSON.stringify({ all, lost, stranded }));
-  check('…the flagship still landing counts once (its result is not recorded yet)', fleetHome([], SHIPS.length, SHIPS[4]!.id).home === 1
-    && fleetHome(SHIPS.map((_ship, i) => result(i, 'locked')), SHIPS.length, SHIPS[4]!.id).home === 5);
+  check('…the flagship still landing counts once (its result is not recorded yet)', fleetHome([], CLASSIC_FIVE.length, CLASSIC_FIVE[4]!.id).home === 1
+    && fleetHome(CLASSIC_FIVE.map((_ship, i) => result(i, 'locked')), CLASSIC_FIVE.length, CLASSIC_FIVE[4]!.id).home === 5);
 }
 
 // --- The run --------------------------------------------------------------------------------------------------------

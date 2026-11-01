@@ -53,12 +53,12 @@ import { theRoot } from '@systems/hollow';
 import { runScore, runLanded } from '@systems/run-score';
 import { beamSeedsInMemory } from '@state/threat-selectors';
 import { getByRole, hasIntegrity } from '@state/selectors';
-import { getShip } from '@data/ships';
-import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { LINES, transitEccLine, scriptedDamageLine } from '@data/script';
 import { LOG_TEXT } from '@data/log-text';
 import { eccSeedsLine } from '@data/threat-text';
 import { STAR_CHARGE_BONUS, BAND_OK_MIN } from '@data/tuning';
+import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
+import { MEMORY_LAYOUTS } from '@data/memory';
 
 const FINAL_LANDING_SEC = Number(process.env.FINAL_LANDING_SEC ?? 48);
 // FINAL_LANDING: 'strip' (default: LAST LIGHT's landing by the strip) or 'stand' (FINAL_LANDING_SEC, then instant).
@@ -114,9 +114,9 @@ function transmitChecked(): void {
   logAtBoot = state().log.entries.length;
   h.transmit();
   const arrival = state().run.arrival!;
-  const ship = getShip(state().run.shipIndex);
+  const ship = classicShip(state().run.shipIndex);
   let memoryOk = true;
-  try { assertMemoryInvariants(state().memory, MEMORY_TOTAL_BLOCKS); } catch { memoryOk = false; }
+  try { assertMemoryInvariants(state().memory, MEMORY_LAYOUTS.FULL.totalBlocks); } catch { memoryOk = false; }
   expect('every hand-over: no op running, memory 384 and valid, every reset module in its initial state',
     getOps().length === 0 && memoryOk && resetReport().length === 0, `${ship.name}: ${JSON.stringify(resetReport())}`);
   const engineHits = arrival.hits.filter((hit) => hit.role === 'engine-io').reduce((sum, hit) => sum + (hit.from - hit.to), 0);
@@ -128,8 +128,8 @@ function transmitChecked(): void {
     arrival.chargeCarried === crossed && arrival.starCredit === credit && credit === STAR_CHARGE_BONUS * stars && chargeLeft(state()) === total,
     `${ship.name}: held ${plan.chargeHeld}, link ${plan.linkBlocks} − files ${plan.filesBlocks} → ${arrival.chargeCarried}; ★ ${stars} → ${arrival.starCredit}; total ${total} vs ${chargeLeft(state())}`);
   if (plan.extraHits === 0 && plan.coreHit === 0 && !plan.coreReset) {
-    expect('every hand-over (no emergency): the crossing dealt the ship\'s transit hits', arrival.hits.length === ship.arrival!.transitHits,
-      `${ship.name}: ${arrival.hits.length} of ${ship.arrival!.transitHits}`);
+    expect('every hand-over (no emergency): the crossing dealt the ship\'s transit hits', arrival.hits.length === CLASSIC_HOPS[ship.slot]!.transitHits,
+      `${ship.name}: ${arrival.hits.length} of ${CLASSIC_HOPS[ship.slot]!.transitHits}`);
   }
   const dividers = state().log.entries.filter((entry) => entry.divider && entry.text === LINES.logDivider(ship.name));
   expect('every hand-over: the log keeps its history, with a divider naming the ship on both screens', dividers.length === 2
@@ -139,7 +139,7 @@ function transmitChecked(): void {
 // The boot just ended: its lines, then the ship's opening state.
 function bootChecked(): void {
   const index = state().run.shipIndex;
-  const ship = getShip(index);
+  const ship = classicShip(index);
   const arrival = state().run.arrival;
   const lines = said(logAtBoot);
   if (arrival !== null) {
@@ -147,7 +147,7 @@ function bootChecked(): void {
       lines.includes(transitEccLine(arrival.hits)) && lines.some((text) => text.startsWith('> +')),
       `${ship.name}: ${lines.slice(0, 6).join(' | ')}`);
   }
-  const keys = logEntriesAtBoot(index, ship.flagship);
+  const keys = logEntriesAtBoot(index, ship.final);
   if (keys.length > 0) {
     expect('every boot past ship 1: `> 046.log · KEY FOUND`, and the run finds its entries (02, 03, 04, 10–11)',
       lines.includes(LOG_TEXT.keyFound(keys)) && keys.every((entry) => state().run.log.found.includes(entry)),
@@ -179,7 +179,7 @@ function bootChecked(): void {
 
 // The ship's landing is over (its LANDING REPORT is up, or it was lost): what its flight did.
 function shipChecked(): void {
-  const ship = getShip(state().run.shipIndex);
+  const ship = classicShip(state().run.shipIndex);
   const events = h.events.slice(eventsAtBoot);
   const licences = state().run.licences;
   expect('every ship locks and reaches its LANDING REPORT', state().run.phase === 'report' && state().burn.status === 'locked',

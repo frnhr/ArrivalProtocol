@@ -26,11 +26,11 @@ import { getPrediction } from '@systems/predict';
 import { GUIDE_RULES } from '@data/script';
 import { createInitialState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
-import { getShip } from '@data/ships';
 import { installTool } from '@systems/licences';
 import { HOLLOW_STORY, HOLLOW_DEAL } from '@data/hollow-text';
 import { foldArrivalWalls } from '@data/threats';
 import { MERGE_COST_CHARGE, DEAL_PAUSE_SEC } from '@data/tuning';
+import { classicShip } from '@data/classic-five';
 import type { GameState, LogEntry } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 
@@ -141,8 +141,8 @@ check('…bites every 25 s at 3.5 %/s after the fight', s().hollow.cfg.spreadEve
 
 // The review's minor 6: keepCharge is keyed on the current verdict's facts (run.threat.current), not on the story kind.
 {
-  const vesper = createInitialState({ seed: 3, shipIndex: VESPER, carried: freshUnitRacks(getShip(VESPER)) });
-  const lastLight = createInitialState({ seed: 3, shipIndex: LAST_LIGHT, carried: freshUnitRacks(getShip(LAST_LIGHT)) });
+  const vesper = createInitialState({ seed: 3, shipIndex: VESPER, carried: freshUnitRacks(classicShip(VESPER)) });
+  const lastLight = createInitialState({ seed: 3, shipIndex: LAST_LIGHT, carried: freshUnitRacks(classicShip(LAST_LIGHT)) });
   const first = createInitialState({ seed: 3, shipIndex: 0 });
   const notOneHop = { ...vesper, run: { ...vesper.run, threat: { ...vesper.run.threat, current: { ...vesper.run.threat.current!, oneHopFromFinal: false } } } };
   const told = { ...vesper, run: { ...vesper.run, threat: { ...vesper.run.threat, told: { noticed: true, keepCharge: true } } } };

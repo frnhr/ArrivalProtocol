@@ -168,7 +168,7 @@ function credits(state: Readonly<GameState>, tally: LandingTally): LandingReport
   });
 }
 
-// Read from the state alone (the ship's name and world, the final ship), never from SHIPS: a generator-made ship (§1.7)
+// Read from the state alone (the ship's name and world, the final ship), never from a ShipDef: a generator-made ship (§1.7)
 // needs nothing new here. The report opens for a ship whose landing ran in orbit (locked or accepted); a ship lost during
 // the landing (1b's 'ship-lost') gets the LOST card, but its outcome still reads (landingOutcome) rather than throws.
 export function landingReportModel(state: Readonly<GameState>): LandingReportModel {

@@ -48,6 +48,7 @@ export function createFlight(ship: ShipDef, rng: Rng, mods: FlightMods, zones: r
     aNominalKmS2: ship.flight.aNominalKmS2,
     shrink: { ...ship.shrink },
     zones: structuredClone(zones),
+    memoryClass: ship.memoryClass,
   };
 
   // The start preset is engaged and already aligned: the very first SPACE fires the right way.

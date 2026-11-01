@@ -41,7 +41,7 @@ export interface ShipLandingDef {
   drag: boolean;        // the DRAG line and decay (§3.7; false on layer 1: ARES-VII never decays)
 }
 
-// --- Runtime: copied from the def when the ship is built and never re-read from SHIPS. SURVEY edits these in place. ---
+// --- Runtime: copied from the def when the ship is built and never re-read from a ShipDef. SURVEY edits these in place. ---
 
 export interface LzState {
   label: string;
@@ -178,14 +178,14 @@ export interface DeclinedBurn {
 }
 
 // GameState.landing: replaces the phase-2 souls and printer slices. Built by state/initial.ts createLandingState from
-// the ship's def and memory alone (no getShip at runtime, so generator-made ships need nothing new).
+// the ship's def and memory alone (no ShipDef lookup at runtime, so generator-made ships need nothing new).
 export interface LandingState {
   lzs: LzState[];
   noGo: NoGoArcState[];
   forgiveness: ForgivenessClass;
   terrain: TerrainWord;
   drag: boolean;
-  finalShip: boolean;           // ShipDef.flagship, copied: L0 and the finale's wait
+  finalShip: boolean;           // ShipDef.final, copied: L0 and the finale's wait
   lead: number;                 // the story pod: credits first, the scripted bite's target beside the root (VESPER's POD 09)
   hurt: number[];               // pods built hurt (run 1's POD 02)
   colonyFirstRun: string | null; // the def's written colony name, copied (null: colonyName rolls one)

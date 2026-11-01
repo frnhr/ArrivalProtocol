@@ -32,10 +32,10 @@ import { resetWorld } from '@systems/reset';
 import { childRng, createRng } from '@systems/rng';
 import { driverArrivalDamage, hurtDriversFor, rootSlotNeighbours } from '@data/driver-damage';
 import { rootSlotRack } from '@data/memory';
-import { SHIPS, getShip } from '@data/ships';
 import { LOG_TEXT, LOG_NAME, LOG_HINT_TARGET, logEntryLines } from '@data/log-text';
 import { LANDING_LESSONS, LANDING_BEATS, LANDING_STAMP_TEXT, groundRadioLine } from '@data/landing-text';
 import { TOOL_HINT_TARGET } from '@data/fs-tools';
+import { classicShip, CLASSIC_FIVE, CLASSIC_LICENCES } from '@data/classic-five';
 import { stateFromElements } from '@/types/orbit';
 import {
   DRIVER_ROLLED_MIN, DRIVER_ROLLED_MAX, DRIVER_FAILING_MIN, DRIVER_FAILING_MAX, POD_FIRST_DESCENT_SEC, BAND_DEGRADED_MIN,
@@ -63,18 +63,18 @@ function stepUntil(done: () => boolean, maxWall: number): boolean {
 
 // --- Calm ships, as data ------------------------------------------------------------------------------------------------
 {
-  const calm = [0, 1].map((index) => ({ ship: getShip(index), threat: nominalShipThreat(index) }));
+  const calm = [0, 1].map((index) => ({ ship: classicShip(index), threat: nominalShipThreat(index) }));
   check('ARES-VII and HALCYON have no root slot, and the ladder plays them calm with no root',
     calm.every(({ ship, threat }) => rootSlotRack(ship) === null && threat.act === 'calm' && threat.rootBlocks === null),
     calm.map(({ ship, threat }) => `${ship.id}: ${threat.act} root ${threat.rootBlocks}`).join(' · '));
   check('the calm ships\' layouts: `P P P _40` on ARES-VII, `P P P P P _24` on HALCYON (01-landing §3.16)',
-    getShip(0).memory.podRacks.B === 'P P P _40' && getShip(1).memory.podRacks.B === 'P P P P P _24');
+    classicShip(0).memory.podRacks.B === 'P P P _40' && classicShip(1).memory.podRacks.B === 'P P P P P _24');
   check('HALCYON\'s Sensor Interp arrives at 62 at most, scripted (risk 10)',
-    JSON.stringify(getShip(1).arrival?.damage) === JSON.stringify([{ role: 'sensor', maxIntegrity: 62 }]));
+    JSON.stringify(classicShip(1).arrivalDamage) === JSON.stringify([{ role: 'sensor', maxIntegrity: 62 }]));
   const kinds = (index: number) => licenceSchedule(index).length;
-  const kestrel = getShip(2).licences;
+  const kestrel = CLASSIC_LICENCES[2]!;
   check('licences re-flowed (§3.2): none on HALCYON; KESTREL DELETE at its start and MOVE at its coast; MOVE is nowhere earlier',
-    getShip(1).licences.length === 0 && getShip(0).licences.length === 0
+    CLASSIC_LICENCES[1]!.length === 0 && CLASSIC_LICENCES[0]!.length === 0
       && kestrel.some((licence) => licence.kind === 'delete' && licence.afterAiSec === 0)
       && kestrel.some((licence) => licence.kind === 'move' && licence.atCoast && licence.afterAiSec === null)
       && kinds(1) === 1,
@@ -83,7 +83,7 @@ function stepUntil(done: () => boolean, maxWall: number): boolean {
 
 // --- Driver arrival damage per layer --------------------------------------------------------------------------------------
 {
-  const rolled = SHIPS.map((ship, index) => ({ ship, hurt: hurtDriversFor(ship, true, childRng(7, index, 'hurt')) }));
+  const rolled = CLASSIC_FIVE.map((ship, index) => ({ ship, hurt: hurtDriversFor(ship, true, childRng(7, index, 'hurt')) }));
   check('ARES-VII on run 1: the scripted POD 02 at 44', JSON.stringify(rolled[0]!.hurt) === JSON.stringify([{ pod: 2, integrity: 44 }]));
   const expectCount = (pods: number, layer: number): { degraded: number; failing: number } =>
     ({ degraded: Math.ceil(pods / 5), failing: layer >= 4 ? 1 : 0 });
@@ -101,7 +101,7 @@ function stepUntil(done: () => boolean, maxWall: number): boolean {
   let avoidOk = true;
   let stable = true;
   for (let seed = 0; seed < 200; seed++) {
-    for (const [index, ship] of SHIPS.entries()) {
+    for (const [index, ship] of CLASSIC_FIVE.entries()) {
       for (const firstRun of [true, false]) {
         const hurt = hurtDriversFor(ship, firstRun, childRng(seed, index, 'hurt'));
         const avoid = rootSlotNeighbours(ship);
@@ -112,11 +112,11 @@ function stepUntil(done: () => boolean, maxWall: number): boolean {
     }
   }
   check('200 seeds: never the lead nor the drivers flanking the root slot (VESPER 8–9, LAST LIGHT 11–12), never a pod twice',
-    avoidOk && JSON.stringify(rootSlotNeighbours(getShip(3))) === '[8,9]' && JSON.stringify(rootSlotNeighbours(getShip(4))) === '[11,12]');
+    avoidOk && JSON.stringify(rootSlotNeighbours(classicShip(3))) === '[8,9]' && JSON.stringify(rootSlotNeighbours(classicShip(4))) === '[11,12]');
   check('…and the same seed hurts the same pods by the same amounts', stable);
-  const later = hurtDriversFor(getShip(0), false, childRng(3, 0, 'hurt'));
+  const later = hurtDriversFor(classicShip(0), false, childRng(3, 0, 'hurt'));
   check('a returning unit\'s ARES-VII: one driver at 44, reseeded, never the lead', later.length === 1 && later[0]!.integrity === 44
-    && later[0]!.pod !== getShip(0).memory.drivers.lead);
+    && later[0]!.pod !== classicShip(0).memory.drivers.lead);
   let threw = false;
   try { driverArrivalDamage({ layer: 4, pods: 3, lead: 1, avoid: [2, 3], firstRun: true, scripted: null }, createRng(1)); } catch { threw = true; }
   check('a ship with no pod left to hurt fails loudly', threw);
@@ -287,12 +287,12 @@ stepUntil(() => state().run.phase === 'flight', 30);
 // --- The other boots' keys, entry 12 from the root ---------------------------------------------------------------------------
 {
   check('the interim keys (05 §8.2): 02, 03, 04 at ships 2–4, 10–11 at the final ship',
-    JSON.stringify([0, 1, 2, 3, 4].map((index) => logEntriesAtBoot(index, getShip(index).flagship))) === '[[],[2],[3],[4],[10,11]]');
+    JSON.stringify([0, 1, 2, 3, 4].map((index) => logEntriesAtBoot(index, classicShip(index).final))) === '[[],[2],[3],[4],[10,11]]');
   for (const [index, entries] of [[2, [3]], [3, [4]], [4, [10, 11]]] as const) {
     h.shipAlone(index, 5);
     h.store.update((draft) => { draft.run.phase = 'boot'; draft.clock.paused = false; });
     stepUntil(() => state().run.phase === 'flight', 30);
-    check(`${getShip(index).name}'s boot types \`${LOG_TEXT.keyFound(entries)}\` and finds ${entries.join(', ')}`,
+    check(`${classicShip(index).name}'s boot types \`${LOG_TEXT.keyFound(entries)}\` and finds ${entries.join(', ')}`,
       logTexts().includes(LOG_TEXT.keyFound(entries)) && entries.every((entry) => state().run.log.found.includes(entry))
         && logSeg()?.name === LOG_NAME.known,
       `${JSON.stringify(state().run.log.found)} ${logSeg()?.name}`);

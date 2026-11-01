@@ -9,17 +9,17 @@ import { emit } from '@systems/events';
 import { onOpsChange, getOpsBySeg, canStartOp } from '@systems/ops-core';
 import { raiseAlert, clearAlert, VERB_ALERT_ID } from '@systems/alerts';
 import { say, hollowLabel } from '@systems/say';
-import { childRng } from '@systems/rng';
 import { glitchBurst } from '@systems/glitch';
 import { chooseVerb, landVerb, verbWeights, rootDeleteRunning, type Verb } from '@systems/hollow';
 import { assertMemoryInvariants } from '@systems/memory-ops';
 import { fileLabel, isHollow, verbSecondsLeft, spreadPaused, toolFilesOf, isUsableTool } from '@state/selectors';
 import { echoName, echoWord } from '@data/tool-text';
-import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
+import { layoutOf } from '@data/memory';
 import { HOLLOW_VERB } from '@data/hollow-text';
 import { podCode } from '@data/landing-text';
 import { IS_DEV } from '@/env';
 import { GLITCH_BURST_LEVEL, GLITCH_BURST_MS } from '@data/tuning';
+import { visitRng } from '@systems/map-streams';
 
 // HOLLOW's verbs (§1 finale, §5.3 moment 13, §6.6, §9 WP11 item 2), DOM-free: on a ship whose HOLLOW has verbs (LAST
 // LIGHT) it fights with your own tools.
@@ -61,7 +61,7 @@ function resetVerbs(): void {
 }
 
 function rngFor(state: Readonly<GameState>): Rng {
-  if (!verbRng) verbRng = childRng(state.run.seed, state.run.shipIndex, 'verbs');
+  if (!verbRng) verbRng = visitRng(state.run, 'verbs');
   return verbRng;
 }
 
@@ -142,7 +142,7 @@ function land(store: Store<GameState>, telegraph: Readonly<VerbTelegraph>): void
     : { kind: 'mv', targetId: telegraph.targetId, toAddr: telegraph.toAddr };
   const memory = store.getState().memory;
   const landed = landVerb(memory, verb, store.getState().hollow.untriedTools);
-  if (IS_DEV) assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  if (IS_DEV) assertMemoryInvariants(memory, layoutOf(store.getState()).totalBlocks);
   if (landed) {
     store.update((draft) => {
       draft.ui.memoryRev++;

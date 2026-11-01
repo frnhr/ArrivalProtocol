@@ -3,13 +3,15 @@ import type {
   RedundancySegment, DriverSegment, HollowSegment, LogSegment, SegmentRole,
 } from '@/types/segment';
 import type { ShipDef } from '@data/ships';
+import type { GameState } from '@state/schema';
+import type { MemoryClass, MemoryLayout, RackName, PodRackName } from '@/types/map';
 import type { Rng } from '@systems/rng';
 import { assertMemoryInvariants, freeSegment, mergeAdjacentFree, segmentStarts, newSegId } from '@systems/memory-ops';
 import { createToolFiles } from '@data/fs-tools';
 import { rollRoster, rollChildAge, type ScriptedRoster } from '@data/souls';
 import {
-  SEG_NAME_MAX_CHARS, RACK_BLOCKS, RACK_COUNT, DRIVER_BLOCKS, COLONISTS_PER_POD, INTEGRITY_MAX, LAST_BLOCK_SIZE,
-  POD_RACK_MIN_FREE, UNIT_TAIL_BLOCKS, WALL_MIN_BLOCKS, PRE_FINAL_ROOT_CAP, FINAL_ROOT_MAX_BLOCKS,
+  SEG_NAME_MAX_CHARS, RACK_BLOCKS, DRIVER_BLOCKS, COLONISTS_PER_POD, INTEGRITY_MAX, LAST_BLOCK_SIZE,
+  POD_RACK_MIN_FREE, UNIT_TAIL_BLOCKS, WALL_MIN_BLOCKS, PRE_FINAL_ROOT_CAP, FINAL_ROOT_MAX_BLOCKS, CHARGE_ARRIVAL_FLOOR,
 } from '@data/tuning';
 import { integrityState } from '@state/selectors';
 import { HOLLOW_DESC } from '@data/hollow-text';
@@ -17,19 +19,79 @@ import { driverName } from '@data/landing-text';
 import { driverSegId } from '@data/pod-ids';
 import { LOG_FILE } from '@data/log-text';
 
-// The ship's memory (§3.2, §4.2, 01-landing §3.16): 384 blocks in 6 RACKS of 64, built from ship data.
+// The ship's memory (§3.2, §4.2, 01-landing §3.16): RACKS of 64 blocks, built from ship data. A FULL ship has six:
 //   A    the ship's files (the same on every ship)
 //   B–D  the pod racks: the pods' drivers and the root slot HOLLOW's root lands in, from a layout string per rack
 //   E    your AI files            F  your filesystem tools and REPAIR CHARGE (E–F: the receiver)
 // Racks are places: debris hits RACK C, the belt racks A–B, and the address labels name them. A
 // segment's address is the running sum of the sizes before it (systems/memory-ops.ts); a rack is
-// address / 64. Every visible file either does something or says it doesn't (§8). The AI's own
+// address / 64, named by the ship's memory layout (MEMORY_LAYOUTS: a smaller class leaves racks out, so the letters
+// are not an alphabet). Every visible file either does something or says it doesn't (§8). The AI's own
 // files (Core, tools, fs-tools) and the drivers are always visible; ship files hide their health
-// until scanned. Every ship is FULL (384) until slice 3's memory classes: new code must not add
-// uses of MEMORY_TOTAL_BLOCKS beyond assertMemoryInvariants.
+// until scanned.
 
-export const MEMORY_TOTAL_BLOCKS = RACK_BLOCKS * RACK_COUNT;
-export const RACK_NAMES: readonly string[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+// --- Memory classes (01 §3.16, 02 §3.4; slice-3a-plan §2.7) ---------------------------------------------------------
+// One layout per class. Every reader of a ship's size, rack names, unit start or receiver asks the ship's layout
+// (layoutOf(state) with a store; layoutFor(ship.memoryClass) with a ShipDef; layoutForTotal(total) for a pure helper
+// that only holds segments), so a smaller class is data, not a code change. Foundation step 1 (F1): FULL only, every
+// ship FULL, nothing on screen moves. Track GEN adds COMPACT and TIGHT here (step 2), with their validators.
+
+function makeLayout(
+  cls: MemoryClass, racks: readonly RackName[], podRacks: readonly PodRackName[], chargeFloor: number, maxPods: number,
+): MemoryLayout {
+  const unitIndex = racks.indexOf('E');
+  if (unitIndex < 0) throw new Error(`memory layout ${cls}: no rack E (the receiver starts there)`);
+  if (podRacks.some((rack) => !racks.includes(rack))) throw new Error(`memory layout ${cls}: a pod rack it does not have`);
+  const totalBlocks = racks.length * RACK_BLOCKS;
+  const unitStart = unitIndex * RACK_BLOCKS;
+  const receiverBlocks = totalBlocks - unitStart;
+  return {
+    cls, racks, totalBlocks, podRacks, unitStart, receiverBlocks,
+    // The receiver plus the tail an oversized packet may spill into, at the end of the last pod rack (01 §3.16).
+    roomForUnit: receiverBlocks + UNIT_TAIL_BLOCKS,
+    chargeFloor,
+    maxPods,
+  };
+}
+
+// FULL holds 16 pods: the most any ship carries (02 §3.4: an ark or the final ship), 7 + 5 + 4 with the root slot's
+// GAPs and the 40-free rule (LAST LIGHT's `P×7 _8 / P P P P _2 S _1 P _21 / P P P P _32`).
+export const MEMORY_LAYOUTS: { readonly FULL: MemoryLayout } & Readonly<Partial<Record<MemoryClass, MemoryLayout>>> = {
+  FULL: makeLayout('FULL', ['A', 'B', 'C', 'D', 'E', 'F'], ['B', 'C', 'D'], CHARGE_ARRIVAL_FLOOR, 16),
+};
+
+// The layout of a memory class; a class with no layout yet throws (fail loudly: never a quiet FULL).
+export function layoutFor(cls: MemoryClass): MemoryLayout {
+  const layout = MEMORY_LAYOUTS[cls];
+  if (layout === undefined) throw new Error(`layoutFor: no memory layout for class ${cls}`);
+  return layout;
+}
+
+// The ship being flown's layout (level.memoryClass, copied from the ShipDef by data/mission.ts createFlight).
+export function layoutOf(state: Readonly<Pick<GameState, 'level'>>): MemoryLayout {
+  return layoutFor(state.level.memoryClass);
+}
+
+// The layout a memory of `total` blocks has, for the pure helpers that hold only segments (racksLabel, the strip's
+// rows). The classes' sizes map one-to-one onto them (384 / 320 / 256), so the total names the class; anything else
+// is a broken memory and throws.
+export function layoutForTotal(total: number): MemoryLayout {
+  const layout = Object.values(MEMORY_LAYOUTS).find((candidate) => candidate.totalBlocks === total);
+  if (layout === undefined) throw new Error(`layoutForTotal: no memory class has ${total} blocks`);
+  return layout;
+}
+
+// The layout of a whole memory (its segments' sizes summed).
+export function layoutOfMemory(memory: readonly Segment[]): MemoryLayout {
+  return layoutForTotal(memory.reduce((sum, seg) => sum + seg.size, 0));
+}
+
+// The first address of a rack the layout has; a rack it does not have throws.
+export function rackStartOf(rack: RackName, layout: MemoryLayout): number {
+  const index = layout.racks.indexOf(rack);
+  if (index < 0) throw new Error(`rackStartOf: a ${layout.cls} memory has no rack ${rack}`);
+  return index * RACK_BLOCKS;
+}
 
 // A run of free blocks in a written rack.
 export interface FreeSpec {
@@ -60,10 +122,10 @@ export interface ShipDriversDef {
   firstRun: ScriptedRoster | null;     // the families and lead colonist the first run always meets
 }
 
-// The pod racks by their letter (01-landing §3.16). Keyed by rack so slice 3's smaller memory classes can leave rack D
-// out (the field becomes Partial); code walks POD_RACK_KEYS and the racks present, never assumes all three.
-export const POD_RACK_KEYS = ['B', 'C', 'D'] as const;
-export type PodRackKey = (typeof POD_RACK_KEYS)[number];
+// The pod racks by their letter (01-landing §3.16). Keyed by rack so the smaller memory classes leave rack D out (the
+// field is Partial); code walks POD_RACK_KEYS and the racks present, never assumes all three.
+export const POD_RACK_KEYS: readonly PodRackName[] = ['B', 'C', 'D'];
+export type PodRackKey = PodRackName;
 
 export interface ShipMemoryDef {
   rackA: readonly RackItem<ShipFileSpec>[];
@@ -72,7 +134,7 @@ export interface ShipMemoryDef {
   // rack's trailing free; without one the slot is nothing, and the free tokens around it are plain free space), `_n` n
   // free blocks; space-separated, each rack summing to RACK_BLOCKS. Phase 2's written root `R` is gone (slice 2): a root
   // only ever comes from the ladder, through `S`; test fixtures plant theirs (tests/unit/support/hollow-world.ts).
-  podRacks: Record<PodRackKey, string>;
+  podRacks: Partial<Record<PodRackKey, string>>;
   // Racks E and F as written for a unit that arrives fresh (ship 1). Later ships hold whatever the
   // unit carried (systems/carry.ts), so theirs is null.
   aiFiles: { E: readonly RackItem<AiFileSpec>[]; F: readonly RackItem<AiFileSpec>[] } | null;
@@ -246,8 +308,10 @@ function tokenBlocks(token: LayoutToken): number {
 // The pod racks a ship has, in address order, each parsed.
 export function podRackLayouts(ship: ShipDef): { rack: PodRackKey; tokens: LayoutToken[] }[] {
   const fail = failFor(ship);
-  return POD_RACK_KEYS.filter((rack) => ship.memory.podRacks[rack] !== undefined)
-    .map((rack) => ({ rack, tokens: parseRackLayout(rack, ship.memory.podRacks[rack], fail) }));
+  return POD_RACK_KEYS.flatMap((rack) => {
+    const layout = ship.memory.podRacks[rack];
+    return layout === undefined ? [] : [{ rack, tokens: parseRackLayout(rack, layout, fail) }];
+  });
 }
 
 // The pod rack that holds the ship's root slot (`S`), or null for a ship HOLLOW can't board (a calm or seeds ship's
@@ -261,7 +325,7 @@ export function rootSlotRack(ship: ShipDef): PodRackKey | null {
 // The largest root this ship's slot must ever hold (04 §3.7, §3.10): a final ship's FINALE root plus a MERGE trace
 // (slice 7), PRE_FINAL_ROOT_CAP anywhere else (a stage's root plus what it was fed, capped).
 export function maxRootFor(ship: ShipDef): number {
-  return ship.flagship ? FINAL_ROOT_MAX_BLOCKS : PRE_FINAL_ROOT_CAP;
+  return ship.final ? FINAL_ROOT_MAX_BLOCKS : PRE_FINAL_ROOT_CAP;
 }
 
 // The free blocks that close a rack's tokens (the slot's rack gives a root its blocks from there).
@@ -317,7 +381,7 @@ export function isUnitFileType(seg: Segment): boolean {
 }
 
 // The unit's own files as they arrive on a later ship (systems/carry.ts packs them): the segments
-// from `startAddr` to the end of memory, free fillers included. They start at rack E (256) unless the
+// from `startAddr` to the end of memory, free fillers included. They start at rack E (the layout's unitStart) unless the
 // packet was too big for racks E–F, when they spill back into the last pod rack's trailing free blocks
 // (§6.9; 01-landing §3.16 caps that tail at UNIT_TAIL_BLOCKS).
 export interface CarriedRacks {
@@ -327,9 +391,6 @@ export interface CarriedRacks {
   // lands each in the centre of the largest free region of the whole memory once the ship is built.
   strays?: HollowSegment[];
 }
-
-// Rack E's first address: where a unit's own files start (§4.2).
-export const UNIT_RACKS_START = RACK_BLOCKS * RACK_NAMES.indexOf('E');
 
 // How many pods a ship's layout holds (the pod racks' `P` tokens).
 export function shipPodCount(ship: ShipDef): number {
@@ -405,7 +466,7 @@ function buildShipRacks(
 // is the unit's file (KESTREL's Sensor Interp), which systems/carry.ts cuts on arrival; a role the ship holds twice
 // would make "which copy" an accident, so it throws.
 function damageShipFiles(rackA: Segment[], ship: ShipDef, fail: (why: string) => never): void {
-  for (const rule of ship.arrival?.damage ?? []) {
+  for (const rule of ship.arrivalDamage) {
     const files = rackA.filter((seg) => seg.role === rule.role && (seg.type === 'ship' || seg.type === 'ship-backup'));
     if (files.length > 1) fail(`arrival damage to '${rule.role}' matches ${files.length} ship files`);
     const file = files[0];
@@ -499,6 +560,7 @@ export function buildShipMemory(
 ): Segment[] {
   const fail = failFor(ship);
   if (typeof hollowOwner !== 'string' || hollowOwner === '') fail('HOLLOW\'s root needs an owner name (say.ts hollowLabel)');
+  const layout = layoutFor(ship.memoryClass);
   const aiFiles = ship.memory.aiFiles;
   const shipRacks = buildShipRacks(ship, rng, firstRun, hollowOwner, root, hurt, fail);
   let unitRacks: Segment[];
@@ -507,8 +569,8 @@ export function buildShipMemory(
     unitRacks = [...buildWrittenRack('E', aiFiles.E, fail), ...buildWrittenRack('F', aiFiles.F, fail)];
   } else {
     if (aiFiles) return fail('this ship meets a fresh unit (it has written racks E–F): nothing is carried to it');
-    if (carried.startAddr > UNIT_RACKS_START) fail(`carried files start at ${carried.startAddr}, after rack E`);
-    trimTrailingFree(shipRacks, UNIT_RACKS_START - carried.startAddr, fail);
+    if (carried.startAddr > layout.unitStart) fail(`carried files start at ${carried.startAddr}, after rack E`);
+    trimTrailingFree(shipRacks, layout.unitStart - carried.startAddr, fail);
     unitRacks = carried.segs.map((seg) => structuredClone(seg));
   }
   const memory = [...shipRacks, ...unitRacks];
@@ -520,7 +582,7 @@ export function buildShipMemory(
   // (rack B's tail and the empty racks C–D on ship 1).
   mergeAdjacentFree(memory);
   for (const stray of carried?.strays ?? []) landStray(memory, structuredClone(stray), fail);
-  assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(memory, layout.totalBlocks);
   return memory;
 }
 
@@ -540,10 +602,10 @@ function landStray(memory: Segment[], seed: HollowSegment, fail: (why: string) =
 
 // --- Racks on screen ---------------------------------------------------------------------------------
 
-// The rack an address is in: 0x000–0x03F is A, 0x040–0x07F is B, …
-export function rackOf(addr: number): string {
-  const rack = RACK_NAMES[Math.floor(addr / RACK_BLOCKS)];
-  if (rack === undefined) throw new Error(`rackOf: address ${addr} is outside the ${MEMORY_TOTAL_BLOCKS}-block strip`);
+// The rack an address is in, in the ship's layout: on a FULL ship 0x000–0x03F is A, 0x040–0x07F is B, …
+export function rackOf(addr: number, layout: MemoryLayout): RackName {
+  const rack = layout.racks[Math.floor(addr / RACK_BLOCKS)];
+  if (rack === undefined || addr < 0) throw new Error(`rackOf: address ${addr} is outside the ${layout.totalBlocks}-block strip`);
   return rack;
 }
 
@@ -554,20 +616,21 @@ export function hexAddr(addr: number): string {
 
 // The strip's label for the rack that starts at `addr` (§9 WP5 item 5): `RACK C` over `0x080`.
 // MemoryStrip draws the two parts stacked; rackLabel is the same label as one line of text.
-export function rackLabelParts(addr: number): { name: string; addr: string } {
+export function rackLabelParts(addr: number, layout: MemoryLayout): { name: string; addr: string } {
   if (addr % RACK_BLOCKS !== 0) throw new Error(`rackLabel: ${hexAddr(addr)} is not the start of a rack`);
-  return { name: `RACK ${rackOf(addr)}`, addr: hexAddr(addr) };
+  return { name: `RACK ${rackOf(addr, layout)}`, addr: hexAddr(addr) };
 }
 
 export const RACK_LABEL_SEP = ' · ';
 
-export function rackLabel(addr: number): string {
-  const parts = rackLabelParts(addr);
+export function rackLabel(addr: number, layout: MemoryLayout): string {
+  const parts = rackLabelParts(addr, layout);
   return `${parts.name}${RACK_LABEL_SEP}${parts.addr}`;
 }
 
 // The racks that hold any of `segs`, as a kid reads them: `RACK C`, `RACKS B–C`, `RACKS B–D`.
 export function racksLabel(memory: readonly Segment[], segs: readonly Segment[]): string {
+  const layout = layoutOfMemory(memory);
   const starts = segmentStarts(memory);
   const racks = new Set<number>();
   segs.forEach((seg) => {
@@ -578,7 +641,7 @@ export function racksLabel(memory: readonly Segment[], segs: readonly Segment[])
   });
   const sorted = [...racks].sort((a, b) => a - b);
   if (sorted.length === 0) throw new Error('racksLabel: no segments');
-  const first = RACK_NAMES[sorted[0]!]!;
-  const last = RACK_NAMES[sorted[sorted.length - 1]!]!;
+  const first = layout.racks[sorted[0]!]!;
+  const last = layout.racks[sorted[sorted.length - 1]!]!;
   return first === last ? `RACK ${first}` : `RACKS ${first}–${last}`;
 }

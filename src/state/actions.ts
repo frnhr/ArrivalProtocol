@@ -19,7 +19,7 @@ import { emit, NO_PAYLOAD } from '@systems/events';
 import { LOG_TEXT } from '@data/log-text';
 import { say } from '@systems/say';
 import { TOOL_ICONS, repairRatePerSec } from '@data/fs-tools';
-import { MEMORY_TOTAL_BLOCKS, rootRemains } from '@data/memory';
+import { rootRemains, layoutOf } from '@data/memory';
 import {
   TOOL_REFUSAL, OP_LINES, OP_ECHO, SWAP_DESC, echoName, echoWord, scanFinding, type ToolRefusal, type OpEnding,
 } from '@data/tool-text';
@@ -75,8 +75,8 @@ export function actionRefusal(
   return null;
 }
 
-function checkMemory(memory: readonly Segment[]): void {
-  if (IS_DEV) assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+function checkMemory(store: Store<GameState>, memory: readonly Segment[]): void {
+  if (IS_DEV) assertMemoryInvariants(memory, layoutOf(store.getState()).totalBlocks);
 }
 
 function bumpMemory(store: Store<GameState>): void {
@@ -318,7 +318,7 @@ function retireEmptyCharge(store: Store<GameState>): void {
   const start = requireAddr(memory, charge);
   replaceRange(memory, start, start + charge.size, [freeSegment(charge.size)], { opId: null, own: [charge] });
   mergeAdjacentFree(memory);
-  checkMemory(memory);
+  checkMemory(store, memory);
 }
 
 // Heals continuously (§6.5): integrity climbs at repairRatePerSec while REPAIR CHARGE ticks down
@@ -430,7 +430,7 @@ function actionCompact(store: Store<GameState>, charge: RedundancySegment): Tool
     freed = reclaim;
     memory.splice(memory.indexOf(charge) + 1, 0, freeSegment(reclaim));
     mergeAdjacentFree(memory);
-    checkMemory(memory);
+    checkMemory(store, memory);
   }, () => OP_ECHO.squeeze(echoName(charge), freed));
   return null;
 }
@@ -465,7 +465,7 @@ export function actionDelete(store: Store<GameState>, seg: Segment): ToolRefusal
     lastBlockId = remains.find((part) => part.type === 'hollow')?.id ?? null;
     replaceRange(memory, start, start + seg.size, remains, { opId: null, own: [seg] });
     mergeAdjacentFree(memory);
-    checkMemory(memory);
+    checkMemory(store, memory);
     store.update((draft) => {
       // The selection follows the root to the block it left (INSPECT then says what that block is).
       if (draft.ui.selectedId === seg.id) draft.ui.selectedId = lastBlockId;
@@ -613,7 +613,7 @@ export function actionMove(store: Store<GameState>, source: Segment, placement: 
       setOperating(source, false);
     }
     mergeAdjacentFree(mem);
-    checkMemory(mem);
+    checkMemory(store, mem);
     bumpMemory(store);
   };
 
@@ -638,7 +638,7 @@ export function actionMove(store: Store<GameState>, source: Segment, placement: 
         clone.id = source.id;
       }
       mergeAdjacentFree(mem);
-      checkMemory(mem);
+      checkMemory(store, mem);
       store.update((draft) => { draft.ui.selectedId = clone.id; draft.ui.memoryRev++; });
       echo(OP_ECHO.done('move', name));
       emit('op-done', { kind: 'move', result: 'done' });
@@ -663,7 +663,7 @@ export function actionMove(store: Store<GameState>, source: Segment, placement: 
     setState(source, 'transferring');
     setOperating(source, true);
   }
-  checkMemory(memory);
+  checkMemory(store, memory);
   bumpMemory(store);
   return null;
 }
@@ -699,7 +699,7 @@ export function actionCopy(store: Store<GameState>, source: Segment, placement: 
     else releaseReservations(mem, operation.id);
     setOperating(source, false);
     mergeAdjacentFree(mem);
-    checkMemory(mem);
+    checkMemory(store, mem);
     bumpMemory(store);
   };
 
@@ -718,7 +718,7 @@ export function actionCopy(store: Store<GameState>, source: Segment, placement: 
       setOperating(copy, false);
       setOperating(source, false);
       mergeAdjacentFree(mem);
-      checkMemory(mem);
+      checkMemory(store, mem);
       store.update((draft) => { draft.ui.selectedId = copy.id; draft.ui.memoryRev++; });
       echo(OP_ECHO.done('copy', name));
       emit('op-done', { kind: 'copy', result: 'done' });
@@ -738,7 +738,7 @@ export function actionCopy(store: Store<GameState>, source: Segment, placement: 
   setOperating(copy, true);
   originals = replaceRange(memory, dest.regionStart, dest.regionEnd, carve(dest, copy, operation.id), { opId: null, own: [] });
   setOperating(source, true);
-  checkMemory(memory);
+  checkMemory(store, memory);
   bumpMemory(store);
   return null;
 }

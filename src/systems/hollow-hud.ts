@@ -7,6 +7,7 @@ import { formatTac } from '@systems/guidance';
 import { dealEffectNow } from '@systems/hollow-deal';
 import { isLivePhase } from '@systems/clock';
 import { segmentStarts } from '@systems/memory-ops';
+import { layoutOf } from '@data/memory';
 import { infectedSegments, healthKnown, isInfected, isFirewall, type InfectedSegment } from '@state/selectors';
 import { driverTouch } from '@systems/landing-rules';
 import { HOLLOW_HUD_TEXT } from '@data/hollow-text';
@@ -14,7 +15,7 @@ import { THREAT_TEXT, traceCells } from '@data/threat-text';
 import { traceFill, tallyPreview, beamSeedsInMemory } from '@state/threat-selectors';
 import { hollowLabel } from '@systems/say';
 import {
-  RACK_BLOCKS, RACK_COUNT, INTEGRITY_MAX, HOLLOW_BITE_URGENT_SEC, CHEW_FULL_DRAIN, TUG_BEAT_PER_PCT, TUG_BEAT_MIN_HZ,
+  RACK_BLOCKS, INTEGRITY_MAX, HOLLOW_BITE_URGENT_SEC, CHEW_FULL_DRAIN, TUG_BEAT_PER_PCT, TUG_BEAT_MIN_HZ,
   TUG_BEAT_MAX_HZ, TUG_PITCH_LOW_HZ, TUG_PITCH_HIGH_HZ, FIREWALL_BLOCKS, TRACE_BOARD_AT,
 } from '@data/tuning';
 
@@ -297,7 +298,8 @@ function miniCell(state: Readonly<GameState>, seg: Segment, blocks: number): Min
 // One row per rack, its cells in address order; a segment that crosses a rack border is a cell in
 // each rack (rack C's tail and the empty rack D are one gap in memory).
 export function miniStripRows(state: Readonly<GameState>): MiniCell[][] {
-  const rows: MiniCell[][] = Array.from({ length: RACK_COUNT }, () => []);
+  const rackCount = layoutOf(state).racks.length;
+  const rows: MiniCell[][] = Array.from({ length: rackCount }, () => []);
   const starts = segmentStarts(state.memory);
   state.memory.forEach((seg, index) => {
     let addr = starts[index]!;
@@ -305,7 +307,7 @@ export function miniStripRows(state: Readonly<GameState>): MiniCell[][] {
     while (left > 0) {
       const rack = Math.floor(addr / RACK_BLOCKS);
       const row = rows[rack];
-      if (!row) throw new Error(`miniStripRows: block ${addr} of ${seg.name} is past rack ${RACK_COUNT}`);
+      if (!row) throw new Error(`miniStripRows: block ${addr} of ${seg.name} is past rack ${rackCount}`);
       const take = Math.min(left, RACK_BLOCKS - (addr % RACK_BLOCKS));
       row.push(miniCell(state, seg, take));
       addr += take;

@@ -27,8 +27,8 @@ import { infectNow } from '@systems/hollow';
 import { segmentStarts } from '@systems/memory-ops';
 import { ringFit, elementsFromState } from '@/types/orbit';
 import { AUTOBURN_TEXT, AUTOBURN_REFUSAL } from '@data/skill-text';
-import { UNIT_RACKS_START } from '@data/memory';
 import { AUTOBURN_LOST_ALARM_SEC, AUTOBURN_SKILL_BLOCKS, MAX_LINE_CHARS } from '@data/tuning';
+import { MEMORY_LAYOUTS } from '@data/memory';
 
 const h = createHarness9(5);
 const state = () => h.store.getState();
@@ -58,8 +58,8 @@ const closed = (): boolean => ringFit(elementsFromState(state().orbit, state().l
   // Slice 1a: 01-landing §3.16's pooled receiver lays racks E and F out back to back, so the first free run in the unit's
   // racks (where the skill goes) is after REPAIR CHARGE, in rack F on a fresh unit.
   check('it installs AUTOBURN.skl (6 blocks, in the unit\'s racks E–F: the first free run there), and the boot says so', line === AUTOBURN_TEXT.trained(2, 84) && file !== undefined
-    && file.size === AUTOBURN_SKILL_BLOCKS && file.name === 'AUTOBURN.skl' && at >= UNIT_RACKS_START && at < UNIT_RACKS_START + 128
-    && state().memory.slice(0, state().memory.indexOf(file)).every((seg, i) => segmentStarts(state().memory)[i]! < UNIT_RACKS_START || seg.type !== 'free'), `${line} @${at}`);
+    && file.size === AUTOBURN_SKILL_BLOCKS && file.name === 'AUTOBURN.skl' && at >= MEMORY_LAYOUTS.FULL.unitStart && at < MEMORY_LAYOUTS.FULL.unitStart + 128
+    && state().memory.slice(0, state().memory.indexOf(file)).every((seg, i) => segmentStarts(state().memory)[i]! < MEMORY_LAYOUTS.FULL.unitStart || seg.type !== 'free'), `${line} @${at}`);
   check('…and moments later nothing more is due', skillBootDue(state()) === null && state().run.skillTrainedOn === 2);
   h.store.update((d) => { d.run.stats.demos.push({ offsetTac: 1 }); });
   check('a third capture retrains it at the next boot (the file stays)', skillBootDue(state()) === 'retrain'

@@ -2,7 +2,7 @@ import type { GameState, PendingPlacement } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import { resolvePlacement } from '@state/actions';
 import { freeSegment, mergeAdjacentFree, segmentStarts, requireAddr } from '@systems/memory-ops';
-import { UNIT_RACKS_START, RACK_NAMES, rackOf } from '@data/memory';
+import { rackOf, layoutOf, layoutOfMemory } from '@data/memory';
 import { freeRunFrom, isWall, hollowReach } from '@systems/hollow';
 import { blocksInRack } from '@systems/zones';
 import { isOpenFree } from '@systems/tool-targets';
@@ -92,13 +92,14 @@ export function hollowReachAll(memory: readonly Segment[]): Map<number, ReachedV
 
 // HOLLOW can reach a file in rack E (your Core and your AI files).
 export function reachesRackE(memory: readonly Segment[]): boolean {
-  const rackEEnd = RACK_BLOCKS * (RACK_NAMES.indexOf('E') + 1);
+  const { unitStart } = layoutOfMemory(memory);
+  const rackEEnd = unitStart + RACK_BLOCKS;
   const starts = segmentStarts(memory);
   for (const [index] of hollowReachAll(memory)) {
     const seg = memory[index]!;
     if (isHollow(seg)) continue;
     const start = starts[index]!;
-    if (start < rackEEnd && start + seg.size > UNIT_RACKS_START) return true;
+    if (start < rackEEnd && start + seg.size > unitStart) return true;
   }
   return false;
 }
@@ -133,7 +134,7 @@ export function movePreview(
   const destAddr = segmentStarts(after)[destIndex]!;
   // A zone hurts only files with a health number (zones.ts damageable): a FIREWALL in the belt's rack is fine.
   const hazard = hasIntegrity(source)
-    ? hazards.find((candidate) => blocksInRack(destAddr, source.size, candidate.rack) > 0) ?? null
+    ? hazards.find((candidate) => blocksInRack(destAddr, source.size, candidate.rack, layoutOf(state)) > 0) ?? null
     : null;
   return {
     source: sourceGap(after, sourceStart, source.size),
@@ -192,5 +193,5 @@ export function safestSpot(state: Readonly<GameState>, source: Segment, hazards:
 export function placementRack(memory: readonly Segment[], placement: PendingPlacement): string {
   const region = memory.find((seg) => seg.id === placement.regionSegIds[0]);
   if (!region) throw new Error(`placementRack: no segment '${placement.regionSegIds[0]}' in memory`);
-  return rackOf(requireAddr(memory, region) + placement.col);
+  return rackOf(requireAddr(memory, region) + placement.col, layoutOfMemory(memory));
 }

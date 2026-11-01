@@ -17,9 +17,9 @@ import { canStartOp, getOpsBySeg } from '@systems/ops-core';
 import { isBusy } from '@systems/tool-targets';
 import { createInitialState } from '@state/initial';
 import { driversInMemory, isInfected } from '@state/selectors';
-import { getShip } from '@data/ships';
 import { DRIVER_RULES } from '@data/script';
 import { WALL_MIN_BLOCKS } from '@data/tuning';
+import { classicShip } from '@data/classic-five';
 import type { DriverSegment, FreeSegment } from '@/types/segment';
 
 export interface Harness7 extends Harness6 {
@@ -80,7 +80,7 @@ export function createHarness7(seed = 1, opts: { soulsFound?: boolean } = {}): H
     },
     shipAlone(index, nextSeed) {
       base.resetTo('flight', nextSeed);
-      const state = createInitialState({ seed: nextSeed, shipIndex: index, carried: freshUnitRacks(getShip(index)) });
+      const state = createInitialState({ seed: nextSeed, shipIndex: index, carried: freshUnitRacks(classicShip(index)) });
       // A later ship is reached through ship 1, where the driver lessons were met (as harnessState marks them for found
       // colonists): slice 2's rolled arrival damage gives later ships failing drivers too, and a ship alone must not
       // replay run 1's POD 02 lesson there.

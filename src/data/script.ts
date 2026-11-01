@@ -13,7 +13,7 @@ import { unitName, hollowLabel } from '@systems/say';
 import { hollowUnitName, HOLLOW_STORY, HOLLOW_VERB, HOLLOW_FINALE } from '@data/hollow-text';
 import { playsTutorial, type LastCause, type LastUnit, type Ending } from '@systems/meta';
 import type { UpgradeForm } from '@data/upgrades';
-import { getShip } from '@data/ships';
+import { currentShip } from '@systems/map-run';
 import { SHIP_SCREEN_REFUSAL, AUTOPILOT_REFUSAL } from '@systems/flight-controls';
 import {
   TOOL_WORD, repairStepTarget, toolStepTarget, fileHintTarget, podHintTarget, firewallHintTarget, SEED_HINT_TARGET,
@@ -53,7 +53,7 @@ import {
   AUTOBURN_TEXT, AUTOBURN_DROP_TEXT, AUTOBURN_DROP_TAB, AUTO_REFUSAL_LINES, autoRefusalKey, type AutoburnRefusal,
 } from '@data/skill-text';
 import { segmentStarts } from '@systems/memory-ops';
-import { rackOf } from '@data/memory';
+import { rackOf, layoutOf } from '@data/memory';
 import { canStartOp, getOps } from '@systems/ops-core';
 import { TOOL_HINT_TARGET } from '@data/fs-tools';
 import {
@@ -325,7 +325,7 @@ function beltVars(state: Readonly<GameState>, pred: Prediction): Pick<LineVars, 
   if (contact === null) return { beltRacks: '', beltInTac: 0, beltPodRacks: '' };
   const starts = segmentStarts(state.memory);
   const podRacks = contact.racks.filter((rack) => state.memory.some((seg, index) =>
-    seg.type === 'driver' && blocksInRack(starts[index]!, seg.size, rack) > 0));
+    seg.type === 'driver' && blocksInRack(starts[index]!, seg.size, rack, layoutOf(state)) > 0));
   return { beltRacks: racksText(contact.racks), beltInTac: contact.inTac, beltPodRacks: podRacks.length > 0 ? racksText(podRacks) : '' };
 }
 
@@ -865,7 +865,7 @@ export type BootLineKind = 'unpack' | 'board' | 'host' | 'ecc' | 'seeds' | 'scri
 // The entries this boot's keys open (05 §3.2, the interim keys of state/log-selectors.ts logEntriesAtBoot) that the run has
 // not found yet. Pure in the state: the boot plans its 'log' line from it, before anything marks them found.
 export function bootLogEntries(state: Readonly<GameState>): number[] {
-  const keys = logEntriesAtBoot(state.run.shipIndex, getShip(state.run.shipIndex).flagship);
+  const keys = logEntriesAtBoot(state.run.shipIndex, currentShip(state).final);
   return keys.filter((entry) => !state.run.log.found.includes(entry));
 }
 
@@ -897,7 +897,7 @@ export function bootLinePlan(state: Readonly<GameState>, skill: boolean): BootLi
 // The rack a stray beam seed landed in (the ECC seeds line's `LOOSE IN RACK D`), or null once it is gone.
 function looseSeedRack(state: Readonly<GameState>, segId: string): string | null {
   const index = state.memory.findIndex((seg) => seg.id === segId);
-  return index < 0 ? null : rackOf(segmentStarts(state.memory)[index]!);
+  return index < 0 ? null : rackOf(segmentStarts(state.memory)[index]!, layoutOf(state));
 }
 
 // Who says a boot line: HOLLOW its own (slow, pink), the unit every other.
@@ -972,7 +972,7 @@ export const BEATS: readonly Beat[] = [
   {
     id: 'control-hello',
     once: true,
-    when: (ctx) => ctx.phaseEntered === 'flight' && ctx.pred.outcome === 'impact' && !getShip(ctx.state.run.shipIndex).flagship,
+    when: (ctx) => ctx.phaseEntered === 'flight' && ctx.pred.outcome === 'impact' && !currentShip(ctx.state).final,
     // Critical: it is the mission briefing, typed on the radio the moment the screen cuts to
     // amber. Queued, it would wait out the boot lines' spacing and arrive after the first burn.
     lines: [controlQuip((ctx) => `Hello, Unit ${ctx.vars.unit}! ${ctx.vars.ship} is about to hit a planet. :)`, true)],
@@ -990,7 +990,7 @@ export const BEATS: readonly Beat[] = [
     id: 'control-hello-flagship',
     once: true,
     perShip: true,
-    when: (ctx) => ctx.phaseEntered === 'flight' && getShip(ctx.state.run.shipIndex).flagship,
+    when: (ctx) => ctx.phaseEntered === 'flight' && currentShip(ctx.state).final,
     lines: [controlQuip((ctx) => `Hello, Unit ${ctx.vars.unit}! The flagship is about to hit a planet. :)`, true)],
   },
   // WP7. A ship that arrives on a flyby (HALCYON: TOO WIDE) gets its own hello, like ship 1's crash.
@@ -1788,7 +1788,7 @@ function debrisMoveLive(ctx: DirectorCtx): boolean {
   if (mode !== 'exact' && mode !== 'approx') return false;
   if (ctx.flight === null || isCorrectionRow(ctx.flight.id) || ctx.vars.debrisInTac > DEBRIS_MOVE_HINT_TAC) return false;
   const starts = segmentStarts(ctx.state.memory);
-  return ctx.state.memory.some((seg, index) => seg.type === 'driver' && blocksInRack(starts[index]!, seg.size, ctx.vars.debrisRack) > 0);
+  return ctx.state.memory.some((seg, index) => seg.type === 'driver' && blocksInRack(starts[index]!, seg.size, ctx.vars.debrisRack, layoutOf(ctx.state)) > 0);
 }
 
 const debrisHead = (ctx: TextCtx): string => `DEBRIS HITS RACK ${ctx.vars.debrisRack} IN ${formatTac(ctx.vars.debrisInTac)}`;

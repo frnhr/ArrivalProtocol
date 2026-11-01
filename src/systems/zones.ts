@@ -12,19 +12,20 @@ import { onGameTick, isLivePhase } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { emit } from '@systems/events';
 import { say } from '@systems/say';
-import { childRng } from '@systems/rng';
 import { lastTickTrack, type TickTrack } from '@systems/orbit-sim';
 import { getOpsBySeg, abortOp } from '@systems/ops-core';
 import { replaceRange, mergeAdjacentFree, requireAddr, freeSegment, segmentStarts, assertMemoryInvariants } from '@systems/memory-ops';
 import { setIntegrity, recordDriverLost } from '@state/actions';
 import { hasIntegrity, fileLabel, type HealthSegment } from '@state/selectors';
 import { stateFromElements, inboundAnomalyAtRadius } from '@/types/orbit';
-import { RACK_NAMES, MEMORY_TOTAL_BLOCKS, rackOf } from '@data/memory';
+import { rackOf, layoutOf, layoutOfMemory } from '@data/memory';
+import type { MemoryLayout } from '@/types/map';
 import { debrisHitLine, beltHitLine, zoneLostLine, type ZoneDamageItem } from '@data/zone-text';
 import { IS_DEV } from '@/env';
 import {
   RACK_BLOCKS, DEBRIS_HIT_DAMAGE, BELT_HIT_MEAN_SEC, BELT_HIT_DAMAGE, BELT_TARGET_REROLLS,
 } from '@data/tuning';
+import { visitRng } from '@systems/map-streams';
 
 // Hazard zones (§3.3 P3, §6.8, §9 WP9): where the physical layer reaches into the mind. The ship's flight
 // sweeps through space; a debris cloud it enters hits a rack of memory once, a radiation belt peppers two
@@ -56,10 +57,13 @@ export function inboundPoint(flight: Readonly<ShipFlightDef>, radius: number): V
 
 // Throws on zone data that could not work: an unknown rack, a cloud off the arrival path or touching the
 // planet, a belt inside the planet, two zones with one id. Runs for every ship at load (ships.ts).
-export function validateZoneDefs(shipId: string, defs: readonly ZoneDef[], flight: Readonly<ShipFlightDef>): void {
+export function validateZoneDefs(
+  shipId: string, defs: readonly ZoneDef[], flight: Readonly<ShipFlightDef>, layout: Readonly<MemoryLayout>,
+): void {
   const fail = (why: string): never => { throw new Error(`ShipDef ${shipId} zones: ${why}`); };
   const ids = new Set<string>();
-  const rackKnown = (rack: string): boolean => RACK_NAMES.includes(rack);
+  // A zone may only name a rack the ship's memory class has (a COMPACT ship has no rack D).
+  const rackKnown = (rack: string): boolean => (layout.racks as readonly string[]).includes(rack);
   for (const def of defs) {
     if (ids.has(def.id)) fail(`duplicate zone id '${def.id}'`);
     ids.add(def.id);
@@ -161,10 +165,12 @@ export function chordClosest(from: Vec2, to: Vec2, point: Vec2): { distance: num
 
 // --- The effects ---------------------------------------------------------------------------------------
 
-// The blocks of a segment (starting at `start`, `size` long) that lie in rack `rack` (the strip's lines ask it too).
-export function blocksInRack(start: number, size: number, rack: string): number {
-  const rackStart = RACK_NAMES.indexOf(rack) * RACK_BLOCKS;
-  if (rackStart < 0) throw new Error(`zones: unknown rack '${rack}'`);
+// The blocks of a segment (starting at `start`, `size` long) that lie in rack `rack` of `layout` (the strip's lines ask it
+// too). A rack the layout does not have throws (validateZoneDefs keeps zones to the ship's racks).
+export function blocksInRack(start: number, size: number, rack: string, layout: Readonly<MemoryLayout>): number {
+  const index = (layout.racks as readonly string[]).indexOf(rack);
+  if (index < 0) throw new Error(`zones: a ${layout.cls} memory has no rack '${rack}'`);
+  const rackStart = index * RACK_BLOCKS;
   return Math.max(0, Math.min(start + size, rackStart + RACK_BLOCKS) - Math.max(start, rackStart));
 }
 
@@ -186,9 +192,10 @@ export interface ZoneDamage {
 // loses DEBRIS_HIT_DAMAGE × (its blocks in the rack ÷ its size). Pure.
 export function debrisDamagePlan(memory: readonly Segment[], rack: string): ZoneDamage[] {
   const starts = segmentStarts(memory);
+  const layout = layoutOfMemory(memory);
   const plan: ZoneDamage[] = [];
   memory.forEach((seg, index) => {
-    const blocks = blocksInRack(starts[index]!, seg.size, rack);
+    const blocks = blocksInRack(starts[index]!, seg.size, rack, layout);
     if (blocks === 0 || !damageable(seg)) return;
     if (seg.type === 'core') throw new Error(`zones: the AI Core sits in rack ${rack}, which debris hits`);
     const lost = DEBRIS_HIT_DAMAGE * (blocks / seg.size);
@@ -201,8 +208,9 @@ export function debrisDamagePlan(memory: readonly Segment[], rack: string): Zone
 // drawn again BELT_TARGET_REROLLS times, then the hit is lost (the op's file is busy, not hidden). Pure.
 export function beltTarget(memory: readonly Segment[], racks: readonly string[], rng: Rng): HealthSegment | null {
   const starts = segmentStarts(memory);
+  const layout = layoutOfMemory(memory);
   const candidates = memory.filter((seg, index): seg is HealthSegment =>
-    damageable(seg) && racks.some((rack) => blocksInRack(starts[index]!, seg.size, rack) > 0));
+    damageable(seg) && racks.some((rack) => blocksInRack(starts[index]!, seg.size, rack, layout) > 0));
   if (candidates.length === 0) return null;
   for (let roll = 0; roll <= BELT_TARGET_REROLLS; roll++) {
     const pick = candidates[Math.floor(rng() * candidates.length)]!;
@@ -248,7 +256,7 @@ function resetZones(): void {
 }
 
 function beltStream(state: Readonly<GameState>): Rng {
-  if (!beltRng) beltRng = childRng(state.run.seed, state.run.shipIndex, 'belt');
+  if (!beltRng) beltRng = visitRng(state.run, 'belt');
   return beltRng;
 }
 
@@ -283,7 +291,7 @@ function applyDamage(store: Store<GameState>, zone: Zone, planFor: (memory: read
   for (const item of plan) {
     const index = memory.findIndex((candidate) => candidate.id === item.segId);
     if (index < 0 || !damageable(memory[index]!)) throw new Error(`zones: ${item.segId} is not a damageable file in memory`);
-    hitRack.set(item.segId, rackOf(starts[index]!));
+    hitRack.set(item.segId, rackOf(starts[index]!, layoutOf(store.getState())));
   }
   const lost = driversTakenToZero(memory, plan);
   store.update((draft) => {
@@ -304,7 +312,7 @@ function applyDamage(store: Store<GameState>, zone: Zone, planFor: (memory: read
     }
     draft.ui.memoryRev++;
   });
-  if (IS_DEV) assertMemoryInvariants(store.getState().memory, MEMORY_TOTAL_BLOCKS);
+  if (IS_DEV) assertMemoryInvariants(store.getState().memory, layoutOf(store.getState()).totalBlocks);
   const items: ZoneDamageItem[] = plan.map((item) => ({ label: item.label, lost: item.from - item.to }));
   if (zone.kind === 'debris') say('mind-sys', debrisHitLine(zone.rack, items), { critical: true });
   else if (items[0]) say('mind-sys', beltHitLine(items[0]), { critical: true });

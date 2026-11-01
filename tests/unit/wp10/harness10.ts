@@ -18,8 +18,8 @@ import { packUnit, layoutCarried } from '@systems/carry';
 import { resetWorld } from '@systems/reset';
 import { createInitialState } from '@state/initial';
 import { nominalShipThreat } from '@systems/threat-plan';
-import { getShip } from '@data/ships';
 import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F } from '@data/memory';
+import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import type { ShipThreat } from '@/types/threat';
 import type { Segment } from '@/types/segment';
 import { phase2HollowOf } from '../support/hollow-world';
@@ -81,11 +81,11 @@ export function createHarness10(seed = 1, opts: { soulsFound?: boolean } = {}): 
       base.shipAlone(VESPER, nextSeed);
       if (vesperOpts.hunt) {
         const threat = huntVerdict();
-        const ship = getShip(VESPER);
+        const ship = classicShip(VESPER);
         const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
           .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item))
           .map((item) => structuredClone(item) as Segment);
-        const packet = packUnit(files, ship.arrival!.linkBlocks, []);
+        const packet = packUnit(files, CLASSIC_HOPS[ship.slot]!.linkBlocks, []);
         const carried = layoutCarried(packet, packet.chargeCarried, ship, threat).racks;
         const fresh = createInitialState({ seed: nextSeed, shipIndex: VESPER, carried, threat });
         // What shipAlone marked done (run 1's driver lessons) stays done.

@@ -18,7 +18,6 @@ import type { GameState } from '@state/schema';
 import type { HollowSegment, Segment } from '@/types/segment';
 import { createInitialState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
-import { getShip } from '@data/ships';
 import { traceMeter, reportTraceLine, biteClock, TRACE_UI_TEXT } from '@systems/hollow-hud';
 import { transmitModel } from '@systems/transmit';
 import { endShip, goTransmit } from '@systems/run';
@@ -32,13 +31,14 @@ import { THREAT_TEXT } from '@data/threat-text';
 import { LOG_TEXT, LOG_ENTRY_COUNT } from '@data/log-text';
 import { HOLLOW_HUD_TEXT, UNNAMED_HOLLOW } from '@data/hollow-text';
 import { BEAM_SEED_FIRST_BITE_CALM_SEC, MAX_LINE_CHARS } from '@data/tuning';
+import { classicShip } from '@data/classic-five';
 
 const KESTREL = 2;
 const VESPER = 3;
 
 function world(shipIndex: number, seed = 7): Store<GameState> {
   // A later ship meets a fresh unit carried in (the way the harnesses build a ship alone); ship 1 writes its own racks.
-  const carried = shipIndex === 0 ? null : freshUnitRacks(getShip(shipIndex));
+  const carried = shipIndex === 0 ? null : freshUnitRacks(classicShip(shipIndex));
   return createStore(createInitialState({ seed, shipIndex, carried }));
 }
 

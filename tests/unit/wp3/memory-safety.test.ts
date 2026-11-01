@@ -21,7 +21,7 @@ import { actionMove, actionCopy, actionDelete, actionScan, cancelPlayerOp, moveS
 import { computeMoveRegion, isOpenFree, targetRefusal } from '@systems/tool-targets';
 import { assertMemoryInvariants, mergeAdjacentFree, replaceRange, freeSegment, splitFreeAt } from '@systems/memory-ops';
 import { createRng, type Rng } from '@systems/rng';
-import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
+import { MEMORY_LAYOUTS } from '@data/memory';
 
 const TICK = 0.05;
 const SEQUENCES = 2000;
@@ -137,13 +137,13 @@ for (let sequence = 0; sequence < SEQUENCES; sequence++) {
         ticks(1 + Math.floor(rng() * 40));
         counts.completed += Math.max(0, before - getOps().length);
       }
-      assertMemoryInvariants(memory(), MEMORY_TOTAL_BLOCKS);
+      assertMemoryInvariants(memory(), MEMORY_LAYOUTS.FULL.totalBlocks);
       const problem = consistency();
       if (problem) note(problem);
     }
     // Let everything finish (or cancel the rest), then nothing may be left half-done.
     if (rng() < 0.5) ticks(400); else getOps().forEach((operation) => cancelOp(operation.id));
-    assertMemoryInvariants(memory(), MEMORY_TOTAL_BLOCKS);
+    assertMemoryInvariants(memory(), MEMORY_LAYOUTS.FULL.totalBlocks);
     const leftover = settled();
     if (leftover) note(leftover);
   } catch (err) {
@@ -219,7 +219,7 @@ check('the sequences really exercised every op', counts.move > 1000 && counts.sl
   check('edge: a neighbour of the move region was deleted while the move ran', deleted && moveOp !== undefined && layoutOf(store.getState()) !== before);
   if (moveOp) cancelPlayerOp(store, moveOp.id);
   let ok = true;
-  try { assertMemoryInvariants(memory(), MEMORY_TOTAL_BLOCKS); } catch { ok = false; }
+  try { assertMemoryInvariants(memory(), MEMORY_LAYOUTS.FULL.totalBlocks); } catch { ok = false; }
   const commsBack = memory().includes(comms) && !comms.operating && (!('state' in comms) || comms.state !== 'transferring');
   // The restored free space merged with the deleted neighbour's: one free run from the neighbour's start.
   const merged = memory().find((seg) => seg.type === 'free' && freeAddr(seg) === regionStart - (neighbour?.size ?? 0));
@@ -273,7 +273,7 @@ check('the sequences really exercised every op', counts.move > 1000 && counts.sl
   const throws = (mutate: (copy: Segment[]) => void): boolean => {
     const copy = structuredClone(createInitialState({ seed: 1 }).memory);
     mutate(copy);
-    try { assertMemoryInvariants(copy, MEMORY_TOTAL_BLOCKS); return false; } catch { return true; }
+    try { assertMemoryInvariants(copy, MEMORY_LAYOUTS.FULL.totalBlocks); return false; } catch { return true; }
   };
   check('invariants: a wrong total throws', throws((copy) => { copy[0]!.size += 1; }));
   check('invariants: a zero size throws', throws((copy) => { copy.splice(1, 0, { id: 'zero', name: 'Free', type: 'free', size: 0 }); }));

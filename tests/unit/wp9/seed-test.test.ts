@@ -25,14 +25,14 @@ import { installTool } from '@systems/licences';
 import { deleteQuestion, targetRefusal } from '@systems/tool-targets';
 import { mergeAdjacentFree, freeSegment, segmentStarts, assertMemoryInvariants } from '@systems/memory-ops';
 import { freshUnitRacks } from '@systems/carry';
-import { getShip, validateHollowDef, type HollowDef } from '@data/ships';
+import { validateHollowDef, type HollowDef } from '@data/ships';
 import { hollowInspectState, HOLLOW_INSPECT, HOLLOW_STORY } from '@data/hollow-text';
-import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { SEED_BLOCKS, SEED_TELEGRAPH_SEC, WALL_MIN_BLOCKS, WAKE_AFTER_DODGE_SEC, ROOT_BLOCKS } from '@data/tuning';
 import { createToolFiles } from '@data/fs-tools';
 import type { Segment, DriverSegment, HollowSegment } from '@/types/segment';
 import { phase2HollowOf, phase2ShipDef } from '../support/hollow-world';
-import { buildShipMemory } from '@data/memory';
+import { buildShipMemory, MEMORY_LAYOUTS } from '@data/memory';
+import { classicShip } from '@data/classic-five';
 import { createRng } from '@systems/rng';
 
 const h = createHarness9(3);
@@ -48,14 +48,14 @@ const correctIn = (): void => {
 
 // Phase 3 slice 2: KESTREL as phase 2 had it (its root between POD 09 and POD 10), where these seeds were tuned.
 function kestrelMemory(): Segment[] {
-  return buildShipMemory(phase2ShipDef(KESTREL), freshUnitRacks(getShip(KESTREL)), createRng(3), false, '???', { blocks: ROOT_BLOCKS }, []);
+  return buildShipMemory(phase2ShipDef(KESTREL), freshUnitRacks(classicShip(KESTREL)), createRng(3), false, '???', { blocks: ROOT_BLOCKS }, []);
 }
 
 // Takes clusters out of a memory (as a MOVE away would), leaving free space, merged.
 function without(memory: Segment[], clusters: readonly string[]): Segment[] {
   const out = memory.map((seg) => (seg.type === 'driver' && clusters.some((code) => isPodCode(seg.pod, code)) ? freeSegment(seg.size) : structuredClone(seg)));
   mergeAdjacentFree(out);
-  assertMemoryInvariants(out, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(out, MEMORY_LAYOUTS.FULL.totalBlocks);
   return out;
 }
 
@@ -108,7 +108,7 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
   const swapFiles = createToolFiles('swap');
   const filler = { id: 'filler-ship', name: 'Filler', type: 'ship', size: 4, integrity: 100, scanned: true } as Segment;
   const swapSize = swapFiles.reduce((sum, seg) => sum + seg.size, 0);
-  const beside: Segment[] = [cluster, freeSegment(5), ...swapFiles, filler, freeSegment(MEMORY_TOTAL_BLOCKS - cluster.size - 5 - swapSize - filler.size)];
+  const beside: Segment[] = [cluster, freeSegment(5), ...swapFiles, filler, freeSegment(MEMORY_LAYOUTS.FULL.totalBlocks - cluster.size - 5 - swapSize - filler.size)];
   const triedSpot = seedSpot(beside, [])!;
   const sparedSpot = seedSpot(beside, ['swap'])!;
   check('WP11: a wall beside an untried Swap is not seeded (Swap would be within the seed\'s bite); with Swap used, it is',

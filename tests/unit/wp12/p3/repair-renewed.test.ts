@@ -6,12 +6,12 @@ import { check, finish } from '../../wp1/harness';
 import { createHarness7, type Harness7 } from '../../wp7/harness7';
 import { startShip } from '@systems/run';
 import { packUnit, layoutCarried, arrivalDamage } from '@systems/carry';
-import { getShip } from '@data/ships';
 import { installTool, isLicensed, hasWorkingTool } from '@systems/licences';
 import { replaceRange, freeSegment, requireAddr, mergeAdjacentFree } from '@systems/memory-ops';
 import { infectNow } from '@systems/hollow';
 import { getFsTool } from '@state/selectors';
 import { LICENCE_RENEWED_REPAIR } from '@data/script';
+import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import type { FsToolSegment } from '@/types/segment';
 import { nominalShipThreat } from '@systems/threat-plan';
 
@@ -41,11 +41,11 @@ function dropFiles(files: readonly FsToolSegment[]): void {
 
 // The crossing to ship `index` with the unit as it is now, then the boot until the flight starts.
 function crossTo(harness: Harness7, index: number): void {
-  const ship = getShip(index);
-  if (!ship.arrival) throw new Error(`${ship.name} has no link`);
-  const packet = packUnit(harness.store.getState().memory, ship.arrival.linkBlocks, []);
+  const ship = classicShip(index);
+  if (!CLASSIC_HOPS[ship.slot]) throw new Error(`${ship.name} has no link`);
+  const packet = packUnit(harness.store.getState().memory, CLASSIC_HOPS[ship.slot]!.linkBlocks, []);
   const layout = layoutCarried(packet, packet.chargeCarried, ship, nominalShipThreat(index));
-  const scripted = arrivalDamage(layout.racks.segs, ship.arrival.damage);
+  const scripted = arrivalDamage(layout.racks.segs, ship.arrivalDamage);
   startShip(harness.store, index, layout.racks, {
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0,
     chargeOverflowLost: 0, scripted, seeds: [], boarded: null,

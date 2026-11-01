@@ -3,7 +3,8 @@ import { runScore, runLanded } from '@systems/run';
 import { fleetHome } from '@systems/run-score';
 import { unitName } from '@systems/say';
 import { shownFuelPct } from '@systems/flight-hud';
-import { SHIPS } from '@data/ships';
+import { fleetOf, classicRunMap } from '@systems/map-run';
+import type { RunMapState } from '@/types/map';
 import { shipColonists } from '@data/memory';
 import { RUN_END_TITLE, RUN_END_WHY, RUN_END_PURGE_SHORT, RUN_END_NOBODY_LANDED, SHIP_OUTCOME_WORD } from '@data/script';
 import { RUN_END_TEXT } from '@data/landing-text';
@@ -66,9 +67,12 @@ export function runEndTone(cause: RunEndCause, flagshipDown: number | null): Run
   return won && flagshipDown !== null && flagshipDown > 0 ? 'victory' : 'sombre';
 }
 
-// Every ship's colonists together: what the run could have landed.
-export function fleetColonists(): number {
-  return SHIPS.reduce((sum, ship) => sum + shipColonists(ship), 0);
+const CLASSIC_MAP: RunMapState = classicRunMap(0, 0, 1);
+
+// Every ship's colonists together: what the run could have landed (systems/map-run.ts fleetOf: the classic five, or on
+// the arm the ships visited). Left out, the classic world's.
+export function fleetColonists(map: Readonly<RunMapState> = CLASSIC_MAP): number {
+  return fleetOf(map).reduce((sum, ship) => sum + shipColonists(ship), 0);
 }
 
 // §4.4's rank thresholds for a fleet of `colonists` (scaled from the reference fleet's RANK_FLEET_COLONISTS; see RANKS).
@@ -110,12 +114,12 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
   const run = state.run;
   if (run.phase !== 'end' || run.endCause === null) throw new Error(`runEndModel: the run is not over (phase ${run.phase})`);
   const cause = run.endCause;
-  const colonists = fleetColonists();
+  const colonists = fleetColonists(run.map);
   const landed = runLanded(run.ships);
   const score = runScore(run.ships);
   const { rank } = rankOf(score, colonists);
   const lastShip = run.ships[run.ships.length - 1]?.shipName ?? state.level.shipName;
-  const ships = SHIPS.map((ship, index): RunEndShipRow => {
+  const ships = fleetOf(run.map).map((ship, index): RunEndShipRow => {
     // By id, not by position: a ship can be flown twice (the run-1 simulation keeps no record of its first
     // go) or, with ?debug, skipped.
     const result = run.ships.find((candidate) => candidate.shipId === ship.id) ?? null;
@@ -135,7 +139,7 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
   // says so (the lead's item 2, WP11 review). Otherwise a PURGE claims the whole fleet only when every ship reached
   // orbit, and else says how many did (the lead's note).
   const landedOnFlagship = flagshipDown(state);
-  const fleet = fleetHome(run.ships, SHIPS.length);
+  const fleet = fleetHome(run.ships, fleetOf(run.map).length);
   let title = RUN_END_TITLE[cause](unit, lastShip);
   let why = RUN_END_WHY[cause](lastShip);
   if ((cause === 'won-purge' || cause === 'won-merge') && landedOnFlagship === 0) {
@@ -170,7 +174,7 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
 // wherever it landed (an LZ with room, mislanded, off-site), since NOBODY WOKE means nobody reached the ground (review N2:
 // counting only landedInLz read an all-mislanded or off-site LAST LIGHT as nobody). A no-go landing scores 0 and does
 // not count. The flagship is the ship the run ended on (a won finale only ever ends on it), read from the state that
-// ended it (LandingState.finalShip), never from SHIPS.
+// ended it (LandingState.finalShip), never from a fleet list.
 function flagshipDown(state: Readonly<GameState>): number | null {
   if (!state.landing.finalShip) return null;
   const result = state.run.ships.find((ship) => ship.shipId === state.level.shipId);

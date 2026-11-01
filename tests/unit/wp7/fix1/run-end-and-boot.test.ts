@@ -19,7 +19,7 @@ import { biteClock } from '@systems/hollow-hud';
 import { setIntegrity } from '@state/actions';
 import { transitEccLine, TRANSMIT_TEXT, BEAM_OUT_TEXT } from '@data/script';
 import { HOLLOW_HUD_TEXT } from '@data/hollow-text';
-import { SHIPS, getShip } from '@data/ships';
+import { classicShip, CLASSIC_FIVE } from '@data/classic-five';
 import {
   BOOT_SKIP_GRACE_SEC, BOOT_LINE_AT_SEC, ARRIVAL_HIT_STAGGER_SEC, ARRIVAL_HIT_SEEN_SEC, EMERGENCY_EXTRA_HITS,
 } from '@data/tuning';
@@ -37,14 +37,14 @@ function crash(): void {
 // WP9: the last ship was KESTREL (ship 3); WP10: it is VESPER (ship 4). Read off the fleet, so the next ship changes nothing.
 // WP11: the last ship is LAST LIGHT, the flagship: its loss is §4.3's FLAGSHIP LOST (WP7's interim 'last-ship-lost' and
 // its `… LOST · END OF THE FLEET` title are gone with the fleet that ended early), and RUN END's tone is sombre.
-const LAST = SHIPS.length - 1;
-const LAST_NAME = getShip(LAST).name;
+const LAST = CLASSIC_FIVE.length - 1;
+const LAST_NAME = classicShip(LAST).name;
 {
   h.shipAlone(LAST, 9);
   crash();
   const plan = lossPlan(state());
   check(`a crash on ${LAST_NAME} (the last ship, the flagship, comms up): the run ends as flagship-lost`, plan.kind === 'end'
-    && plan.cause === 'flagship-lost' && getShip(LAST).flagship, JSON.stringify(plan));
+    && plan.cause === 'flagship-lost' && classicShip(LAST).final, JSON.stringify(plan));
   continueAfterLoss(h.store);
   const model = runEndModel(state());
   check('…RUN END is sombre: FLAGSHIP LOST', model.title === 'FLAGSHIP LOST' && model.tone === 'sombre' && model.cause === 'flagship-lost',

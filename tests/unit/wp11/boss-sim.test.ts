@@ -34,13 +34,12 @@ import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { createInitialState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
-import { getShip } from '@data/ships';
 import { createRng, type Rng } from '@systems/rng';
 import { chooseVerb, landVerb, verbWeights, type Verb } from '@systems/hollow';
 import { verbNow } from '@systems/hollow-verbs';
 import { replaceRange, mergeAdjacentFree, assertMemoryInvariants, newSegId, segmentStarts, freeSegment } from '@systems/memory-ops';
 import { createToolFiles, FS_TOOL_KINDS } from '@data/fs-tools';
-import { MEMORY_TOTAL_BLOCKS, rootRemains } from '@data/memory';
+import { rootRemains, MEMORY_LAYOUTS } from '@data/memory';
 import { actionScan, actionDelete, actionMove } from '@state/actions';
 import { cancelOp, getOps, getOpsBySeg } from '@systems/ops-core';
 import { isInfectable, isHollow } from '@state/selectors';
@@ -53,6 +52,7 @@ import {
   BAND_DEGRADED_MIN, WALL_MIN_BLOCKS, GLITCH_BURST_LEVEL, GLITCH_BURST_MS, VERB_TELEGRAPH_SEC, VERB_FIRST_TELEGRAPH_SEC,
 } from '@data/tuning';
 import { HOLLOW_VERB } from '@data/hollow-text';
+import { classicShip } from '@data/classic-five';
 import { byDepth } from '../depth';
 import { setLandingMode } from '../support/landing-instant';
 import { followLanding } from '../landing/harness-landing';
@@ -61,7 +61,7 @@ import { phase2HollowOf } from '../support/hollow-world';
 
 // --- A. Fairness, pure ------------------------------------------------------------------------------------------------
 
-const ship = getShip(LAST_LIGHT);
+const ship = classicShip(LAST_LIGHT);
 
 function openFreeSpots(memory: readonly Segment[], size: number): { addr: number }[] {
   const starts = segmentStarts(memory);
@@ -157,7 +157,7 @@ function shakenMemory(seed: number): Segment[] {
   // The duel done: the root is its last block.
   const root = memory.find((seg): seg is HollowSegment => isHollow(seg) && seg.root);
   if (root && rng() < 0.25) replaceWith(memory, root, rootRemains(root));
-  assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(memory, MEMORY_LAYOUTS.FULL.totalBlocks);
   return memory;
 }
 
@@ -209,7 +209,7 @@ function mvProblem(memory: Segment[], verb: Extract<Verb, { kind: 'mv' }>): stri
   if (!hasWorking(memory, 'delete')) return 'unblockable (no working Delete)';
   const after = structuredClone(memory);
   if (!landVerb(after, verb, [])) return 'it chose a move it can\'t land';
-  assertMemoryInvariants(after, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(after, MEMORY_LAYOUTS.FULL.totalBlocks);
   const index = after.findIndex((seg) => seg.id === verb.targetId);
   let soulSideExact = false;
   for (const step of [-1, 1]) {

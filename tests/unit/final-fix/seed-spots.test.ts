@@ -19,11 +19,11 @@ import { getPrediction } from '@systems/predict';
 import { setMode } from '@systems/mode';
 import { installTool } from '@systems/licences';
 import { GUIDE_RULES } from '@data/script';
-import { UNIT_RACKS_START } from '@data/memory';
 import { isShipFile, isAiFile } from '@state/selectors';
 import { RACK_BLOCKS, SEED_BLOCKS } from '@data/tuning';
 import type { Segment, DriverSegment, HollowSegment } from '@/types/segment';
 import type { GameState } from '@state/schema';
+import { MEMORY_LAYOUTS } from '@data/memory';
 
 const h = createHarness11(5);
 const state = (): Readonly<GameState> => h.store.getState();
@@ -88,9 +88,9 @@ function vesperArrived(seed: number): void {
 }
 vesperArrived(5);
 const vesper = clone(state().memory);
-const unitStart = segmentStarts(vesper).findIndex((start) => start >= UNIT_RACKS_START);
+const unitStart = segmentStarts(vesper).findIndex((start) => start >= MEMORY_LAYOUTS.FULL.unitStart);
 const prefix = vesper.slice(0, unitStart);
-if (segmentStarts(vesper)[unitStart] !== UNIT_RACKS_START) throw new Error('seed-spots: racks A–D do not end at rack E');
+if (segmentStarts(vesper)[unitStart] !== MEMORY_LAYOUTS.FULL.unitStart) throw new Error('seed-spots: racks A–D do not end at rack E');
 const pick = (test: (seg: Segment) => boolean, what: string): Segment => structuredClone(find(vesper, test, what));
 const core = pick((seg) => seg.type === 'core', 'AI Core');
 const engine = pick((seg) => seg.type === 'tool' && seg.role === 'engine-io', 'Engine I/O');

@@ -21,17 +21,17 @@ import { landingFlightOf } from '@systems/guidance';
 import { launchMomentInSec } from '@systems/landing-rules';
 import { secFromNow } from '@systems/landing-solve';
 import { propagateConic, type OrbitState } from '@/types/orbit';
-import { getShip } from '@data/ships';
 import { DRIVER_RULES } from '@data/script';
 import { LANDING_SKIP_REFUSAL } from '@data/landing-text';
 import { LANDING_CRUISE_WARP, LANDING_TACTICAL_WARP, WINDOW_TACTICAL_LEAD_TAC } from '@data/tuning';
+import { classicShip } from '@data/classic-five';
 import type { GameState } from '@state/schema';
 
 const SHIP = 1;  // HALCYON
 const h = createHarness5(1, { soulsFound: true });
 h.resetTo('flight', 1);
 h.store.update((draft) => {
-  Object.assign(draft, createInitialState({ seed: 1, shipIndex: SHIP, carried: freshUnitRacks(getShip(SHIP)) }));
+  Object.assign(draft, createInitialState({ seed: 1, shipIndex: SHIP, carried: freshUnitRacks(classicShip(SHIP)) }));
   draft.hollow.phase = 'dormant';
   draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id), 'engine-io-fault');
 });

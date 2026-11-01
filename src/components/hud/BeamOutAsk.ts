@@ -5,7 +5,7 @@ import { startBeamOut } from '@systems/run';
 import { colonistCounts } from '@state/selectors';
 import { play } from '@systems/audio';
 import { askInline, answerInlineConfirm, currentInlineConfirm, onInlineConfirmChange } from '@components/hud/InlineConfirm';
-import { isLastShip } from '@data/ships';
+import { currentShip } from '@systems/map-run';
 import { BEAM_OUT_TEXT } from '@data/script';
 
 // BEAM OUT's question (§9 WP7 item 6: "with the inline confirm"), asked by the Engine window's button and
@@ -24,7 +24,7 @@ export function askBeamOut(store: Store<GameState>): void {
   const state = store.getState();
   const aboard = colonistCounts(state).aboard;
   const request: ConfirmRequest = {
-    text: { question: BEAM_OUT_TEXT.question, detail: BEAM_OUT_TEXT.detail(state.level.shipName, aboard, isLastShip(state.run.shipIndex)) },
+    text: { question: BEAM_OUT_TEXT.question, detail: BEAM_OUT_TEXT.detail(state.level.shipName, aboard, currentShip(state).final) },
     answers: { yes: BEAM_OUT_TEXT.yes, no: BEAM_OUT_TEXT.no },
     onYes: () => { if (startBeamOut(store) !== null) play('buzz'); },
   };

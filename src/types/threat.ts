@@ -87,7 +87,7 @@ export type LinkNoise = 0 | 1 | 2 | 3;
 export type SeedTargetPick = { role: SegmentRole } | { fsTool: FsToolKind };
 
 // What the beam INTO a ship carries. Slice 3 replaces every source with { kind: 'noise', noise: hopNoise }: the fixed
-// five ships write theirs in ShipDef.threat until the map's hops exist.
+// five ships write theirs in data/classic-five.ts CLASSIC_FACTS; the arm's come from the hop's noise (systems/map-facts.ts).
 export type BeamSeedSource =
   | { kind: 'none' }
   // KESTREL: the RM lesson's seed. firstRun: the seeds the tutorial run always meets (risk 4: next to Telemetry, which
@@ -95,7 +95,7 @@ export type BeamSeedSource =
   | { kind: 'scripted'; firstRun: readonly SeedTargetPick[]; later: LinkNoise }
   | { kind: 'noise'; noise: LinkNoise };
 
-// A ship's threat facts that the map will supply in slice 3 (ShipDef.threat until then).
+// A classic ship's threat facts (data/classic-five.ts CLASSIC_FACTS; phase 2's ShipDef.threat).
 export interface ShipThreatDef {
   beamSeeds: BeamSeedSource;
   oneHopFromFinal: boolean;     // the stand-in for 02-map M3 (VESPER: true)
@@ -106,9 +106,9 @@ export interface ShipThreatDef {
 // M3, the beam's seeds) come from threat-plan.ts fixedShipFacts on the fixed five; slice 3 replaces only that function.
 export interface ThreatInput {
   depth: number;              // the ship's depth on the route (the ship index + 1 on the fixed five)
-  isFinal: boolean;           // a final ship (ShipDef.flagship on the fixed five)
+  isFinal: boolean;           // a final ship (ShipDef.final)
   oneHopFromFinal: boolean;   // 02-map M3: a final ship is one hop from this destination
-  beamSeeds: BeamSeedSource;  // what the beam into this ship carries (ShipDef.threat.beamSeeds; slice 3: the hop's noise)
+  beamSeeds: BeamSeedSource;  // what the beam into this ship carries (CLASSIC_FACTS on the classic world; the arm: the hop's noise)
   trace: number;              // TRACE before this ship (RunThreatState.trace)
   aboard: boolean;            // HOLLOW was aboard the ship before this one
   age: number;                // ships HOLLOW has been aboard BEFORE this one
@@ -122,7 +122,7 @@ export interface ThreatInput {
 // The ladder's verdict for one ship. Copied into the world when the ship is built: hollow into HollowState.cfg, the root
 // into the bay's root slot. It echoes the ship's facts it was planned from (depth, final, M3, the beam's seeds), so
 // TransitPlan.threat carries everything the beam does: transmitNext's seed roll and hollow.ts's keepCharge trigger read
-// them here, never ShipDef.threat.
+// them here, never the map's facts again.
 export interface ShipThreat {
   depth: number;
   isFinal: boolean;

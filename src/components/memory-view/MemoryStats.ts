@@ -5,7 +5,7 @@ import { INTEGRITY_MAX } from '@data/tuning';
 import { onOpsChange } from '@systems/ops-core';
 import { totalBlocks } from '@systems/memory-ops';
 import { formatCount } from '@data/script';
-import { RACK_NAMES, hexAddr } from '@data/memory';
+import { hexAddr, layoutOf } from '@data/memory';
 import { requireById } from '@components/dom';
 
 // The stats row over the strip (§7.1: a computed `.mem-stats`) and the strip's header. Every number
@@ -62,14 +62,15 @@ export function memStatsModel(state: Readonly<GameState>): Record<MemStatKey, Me
       : damage.hidden
         ? { key: 'damage', label: 'damage', value: '—', small: 'unscanned', tone: 'unknown' }
         : { key: 'damage', label: 'damage', value: '0', small: 'blk', tone: 'good' },
-    total: { key: 'total', label: 'memory', value: String(total), small: `blk · ${RACK_NAMES.length} racks`, tone: 'plain' },
+    total: { key: 'total', label: 'memory', value: String(total), small: `blk · ${layoutOf(state).racks.length} racks`, tone: 'plain' },
   };
 }
 
 // The strip header's address range, rack by rack: `RACK A → F · 0x000 → 0x17F`.
 export function stripRangeLabel(state: Readonly<GameState>): string {
   const total = totalBlocks(state.memory);
-  return `RACK ${RACK_NAMES[0]} → ${RACK_NAMES[RACK_NAMES.length - 1]} · ${hexAddr(0)} → ${hexAddr(total - 1)}`;
+  const racks = layoutOf(state).racks;
+  return `RACK ${racks[0]} → ${racks[racks.length - 1]} · ${hexAddr(0)} → ${hexAddr(total - 1)}`;
 }
 
 const STAT_IDS: Readonly<Record<MemStatKey, string>> = {

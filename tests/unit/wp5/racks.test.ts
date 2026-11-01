@@ -10,9 +10,10 @@
 // The DOM side (six rows, labels, nothing clipped, no console errors) is the e2e tier.
 import { check, finish, harnessState } from '../wp1/harness';
 import {
-  rackLabel, hexAddr, RACK_NAMES, podRackLayouts, shipPodCount, lastPodRackTrailingFree, validatePodRacks, rootSlotRack, maxRootFor,
+  rackLabel, hexAddr, podRackLayouts, shipPodCount, lastPodRackTrailingFree, validatePodRacks, rootSlotRack,
+  maxRootFor, MEMORY_LAYOUTS,
 } from '@data/memory';
-import { SHIPS, type ShipDef } from '@data/ships';
+import type { ShipDef } from '@data/ships';
 import { stripTier, stripName } from '@data/type-labels';
 import { memStatsModel, stripRangeLabel } from '@components/memory-view/MemoryStats';
 import { onTargetTally } from '@systems/landing-rules';
@@ -22,12 +23,13 @@ import { freshUnitRacks } from '@systems/carry';
 import type { GameState } from '@state/schema';
 import type { LaunchRecord, Touchdown } from '@/types/landing';
 import { POD_RACK_MIN_FREE, RACK_BLOCKS, UNIT_TAIL_BLOCKS, WALL_MIN_BLOCKS } from '@data/tuning';
+import { CLASSIC_FIVE } from '@data/classic-five';
 
 // --- Rack labels -------------------------------------------------------------------------------------
-check('rack labels: RACK A · 0x000 … RACK F · 0x140', RACK_NAMES.map((_, i) => rackLabel(i * RACK_BLOCKS)).join()
+check('rack labels: RACK A · 0x000 … RACK F · 0x140', MEMORY_LAYOUTS.FULL.racks.map((_, i) => rackLabel(i * RACK_BLOCKS, MEMORY_LAYOUTS.FULL)).join()
   === 'RACK A · 0x000,RACK B · 0x040,RACK C · 0x080,RACK D · 0x0C0,RACK E · 0x100,RACK F · 0x140');
 let threw = false;
-try { rackLabel(0x41); } catch { threw = true; }
+try { rackLabel(0x41, MEMORY_LAYOUTS.FULL); } catch { threw = true; }
 check('a label off a rack border throws', threw);
 check('hexAddr pads and capitalises', hexAddr(0x17f) === '0x17F' && hexAddr(5) === '0x005');
 
@@ -106,7 +108,7 @@ check('no ship-1 file straddles two racks (every chip is whole in its row)', cro
 // --- Every ship's pod racks ----------------------------------------------------------------------------------
 // A ship's built memory (ship 1 as the harness builds it; a later ship with a fresh unit carried in).
 function builtMemory(ship: ShipDef): GameState['memory'] {
-  const index = SHIPS.indexOf(ship);
+  const index = CLASSIC_FIVE.indexOf(ship);
   return index === 0 ? harnessState(1, false).memory : createInitialState({ seed: 1, shipIndex: index, carried: freshUnitRacks(ship) }).memory;
 }
 {
@@ -125,7 +127,7 @@ function builtMemory(ship: ShipDef): GameState['memory'] {
     const nextToRoot = isRoot(tokens[index - 1]) || isRoot(tokens[index + 1]);
     return rackSum + (nextToRoot && token.size < WALL_MIN_BLOCKS ? 0 : token.size);
   }, 0), 0) - (rootSlotRack(ship) === null ? 0 : maxRootFor(ship));
-  for (const ship of SHIPS) {
+  for (const ship of CLASSIC_FIVE) {
     const want = expected[ship.name];
     const lzPods = ship.landing.lzs.reduce((sum, lz) => sum + lz.pods, 0);
     const racks = [ship.memory.podRacks.B, ship.memory.podRacks.C, ship.memory.podRacks.D];
@@ -147,16 +149,16 @@ function builtMemory(ship: ShipDef): GameState['memory'] {
       return { ok: pattern.test(message), message };
     }
   };
-  const lastLight = SHIPS[4]!;
+  const lastLight = CLASSIC_FIVE[4]!;
   const tooFull = throws(lastLight, { B: 'P P P P P P P P', D: 'P P P P P _24' }, /27 free blocks \(root gaps and the largest root not counted\), under 40/);
   check('validatePodRacks: under 40 free blocks in the pod racks throws', tooFull.ok, tooFull.message);
   // VESPER with racks B and D full: only rack C's 21 trailing free blocks count, less its largest root (14), not the slot's
   // GAPs of 2 and 1.
-  const gapsOnly = throws(SHIPS[3]!, { B: 'P P P P P P P P', D: 'P P P P P P P P' }, /7 free blocks \(root gaps and the largest root not counted\), under 40/);
+  const gapsOnly = throws(CLASSIC_FIVE[3]!, { B: 'P P P P P P P P', D: 'P P P P P P P P' }, /7 free blocks \(root gaps and the largest root not counted\), under 40/);
   check('…the root\'s GAPs (shorter than a WALL, next to an R) do not count as room', gapsOnly.ok, gapsOnly.message);
   const shortTail = throws(lastLight, { D: '_16 P P P P _16' }, /ends in 16 free blocks, under the unit's 24-block tail/);
   check('validatePodRacks: a last pod rack ending in fewer than 24 free blocks throws', shortTail.ok, shortTail.message);
-  const extraPod = throws(SHIPS[0]!, { B: 'P P P P _32' }, /4 drivers in the pod racks, but the LZ counts sum to 3 pods/);
+  const extraPod = throws(CLASSIC_FIVE[0]!, { B: 'P P P P _32' }, /4 drivers in the pod racks, but the LZ counts sum to 3 pods/);
   check('validatePodRacks: a driver more than the LZ counts throws', extraPod.ok, extraPod.message);
 }
 

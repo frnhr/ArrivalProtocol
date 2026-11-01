@@ -28,16 +28,15 @@ import { reachMarks } from '@systems/hollow-hud';
 import { actionMove, setIntegrity } from '@state/actions';
 import { chargeLeft, getAiCore, coreThreads, effectiveToolVersion, upgradeFiles, isFirewall } from '@state/selectors';
 import { repairRatePerSec } from '@data/fs-tools';
-import { getShip } from '@data/ships';
 import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
-import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { TOOL_REFUSAL } from '@data/tool-text';
-import { RACK_F_START } from '@systems/carry';
+import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import {
   MAX_LINE_CHARS, DRAFT_CARDS, FUEL_TRIM_DV_BONUS_FRAC, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, REPAIR_V2_VERSION, CHARGE_ARRIVAL_FLOOR,
 } from '@data/tuning';
 import type { Segment, DriverSegment, FreeSegment, UpgradeSegment } from '@/types/segment';
 import { plantHalcyonRoot } from '../support/hollow-world';
+import { MEMORY_LAYOUTS, rackStartOf } from '@data/memory';
 
 const none: Record<UpgradeId, number> = { firewall: 0, 'repair-v2': 0, 'thread-plus': 0, charge: 0, 'fuel-trim': 0 };
 // The base context has no sign of trouble at all (a fresh unit's 36 charge, most of the FUEL left): every card
@@ -131,8 +130,8 @@ const ever = (context: DraftContext, id: UpgradeId, seeds = 1000): boolean => {
 // --- The cards in the run ------------------------------------------------------------------------------------
 const h = createHarness7(21, { soulsFound: true });
 const state = () => h.store.getState();
-const halcyon = getShip(1);
-const memoryValid = (): boolean => { try { assertMemoryInvariants(state().memory, MEMORY_TOTAL_BLOCKS); return true; } catch { return false; } };
+const halcyon = classicShip(1);
+const memoryValid = (): boolean => { try { assertMemoryInvariants(state().memory, MEMORY_LAYOUTS.FULL.totalBlocks); return true; } catch { return false; } };
 
 // Ship 1, run 1, the simulation already used: a crash goes to EMERGENCY TRANSMIT (TRANSMIT in a few ticks).
 // `prepare` runs on ship 1 before the crash (licences, damage).
@@ -158,9 +157,9 @@ function pick(id: UpgradeId): void {
   toTransmit(5);
   const offer = state().run.transit!.offer;
   check('TRANSMIT deals 3 cards, seeded by the ship being left (the same state deals the same)', offer.length === DRAFT_CARDS
-    && ids(dealDraft(state(), halcyon.arrival!.linkBlocks)) === ids(offer), ids(offer));
+    && ids(dealDraft(state(), CLASSIC_HOPS[halcyon.slot]!.linkBlocks)) === ids(offer), ids(offer));
   check('…with no REPAIR licensed yet (a crash before the first look inside), REPAIR v2 is not among them',
-    !offer.some((card) => card.id === 'repair-v2') && !draftContext(state(), halcyon.arrival!.linkBlocks).hasRepair);
+    !offer.some((card) => card.id === 'repair-v2') && !draftContext(state(), CLASSIC_HOPS[halcyon.slot]!.linkBlocks).hasRepair);
   let threw = '';
   try { transmitNext(h.store); } catch (error) { threw = (error as Error).message; }
   check('the pick is mandatory: TRANSMIT ▸ with no card picked throws, and the unit stays', /no card picked/.test(threw) && state().run.phase === 'transmit', threw);
@@ -226,7 +225,7 @@ function pick(id: UpgradeId): void {
 // REPAIR v2: every Repair copy bumped; the held tool heals twice as fast.
 {
   toTransmit(5, () => { installTool(h.store, 'repair'); });
-  check('with REPAIR licensed, REPAIR v2 can be offered (the draft sees a Repair to bump)', draftContext(state(), halcyon.arrival!.linkBlocks).hasRepair);
+  check('with REPAIR licensed, REPAIR v2 can be offered (the draft sees a Repair to bump)', draftContext(state(), CLASSIC_HOPS[halcyon.slot]!.linkBlocks).hasRepair);
   pick('repair-v2');
   h.transmit();
   const repairs = state().memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair');
@@ -270,7 +269,7 @@ function pick(id: UpgradeId): void {
   h.transmit();
   const trims = upgradeFiles(state().memory, 'fuel-trim');
   check('FUEL TRIM arrives as a 2-block upgrade file in rack E, and works (caps.upgrades)', trims.length === 1
-    && segmentStarts(state().memory)[state().memory.indexOf(trims[0]!)]! < RACK_F_START && capabilitiesNow(state()).upgrades['fuel-trim'] === 1);
+    && segmentStarts(state().memory)[state().memory.indexOf(trims[0]!)]! < rackStartOf('F', MEMORY_LAYOUTS.FULL) && capabilitiesNow(state()).upgrades['fuel-trim'] === 1);
   check('…HALCYON\'s Δv budget is +15% (FUEL 100% is worth more)', Math.abs(state().level.dvBudgetKmS - halcyon.flight.dvBudgetKmS * (1 + FUEL_TRIM_DV_BONUS_FRAC)) < 1e-9,
     `${state().level.dvBudgetKmS} km/s`);
   const trim = trims[0]! as UpgradeSegment;

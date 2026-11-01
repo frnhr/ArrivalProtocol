@@ -5,7 +5,7 @@ import { unitFilesIn, dropLock, toolKindOf, arrivalCharge, crashCoreToll, type D
 import { planPacket, pickCharge, cardFiles, PREVIEW_ID } from '@systems/draft';
 import { getUpgrade, type DraftCard, type UpgradeId } from '@data/upgrades';
 import { hasIntegrity, isInfected, getAiCore } from '@state/selectors';
-import { getShip } from '@data/ships';
+import { shipDefAt } from '@systems/map-run';
 import { shipColonists } from '@data/memory';
 import { TOOL_WORD } from '@data/fs-tools';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
@@ -227,8 +227,7 @@ function whyLine(outcome: ShipOutcome, ship: string, coreToll: number): string |
 
 export function transmitModel(state: Readonly<GameState>): TransmitModel {
   const plan = requirePlan(state);
-  const ship = getShip(plan.toShipIndex);
-  if (!ship.arrival) throw new Error(`transmitModel: ${ship.name} has no link`);
+  const ship = shipDefAt(state.run.map, plan.toSlot);
   const live = unitFilesIn(state.memory).filter((seg) => seg.type !== 'redundancy');
   const kept = live.filter((seg) => !plan.dropped.includes(seg.id));
   // The picked card's file is in the packet too (WP8): it takes link room like the unit's own files.
@@ -271,8 +270,8 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
   return {
     toShipIndex: plan.toShipIndex,
     shipName: ship.name,
-    distanceLy: ship.arrival.distanceLy,
-    headline: TRANSMIT_TEXT.next(ship.name, shipColonists(ship), ship.arrival.distanceLy),
+    distanceLy: plan.hop.distanceLy,
+    headline: TRANSMIT_TEXT.next(ship.name, shipColonists(ship), plan.hop.distanceLy),
     why: whyLine(outcome, fromShip, crashCoreToll(core.integrity, plan.coreHit)),
     emergency: outcome === 'crashed' || outcome === 'emergency',
     link: plan.linkBlocks,
@@ -280,7 +279,7 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
     chargeHeld: packet.chargeHeld,
     chargeCarried: packet.chargeCarried,
     packetLine: TRANSMIT_TEXT.packet(plan.linkBlocks, packet.filesBlocks, packet.chargeHeld, packet.chargeCarried),
-    hitsLine: TRANSMIT_TEXT.hits(ship.arrival.transitHits + plan.extraHits),
+    hitsLine: TRANSMIT_TEXT.hits(plan.hop.transitHits + plan.extraHits),
     arrivalLine: TRANSMIT_TEXT.arrival(
       packet.chargeCarried, state.run.pendingStarCredit, state.run.pendingStars, charge.floorAdded, charge.blocks, pickCharge(plan.pick),
     ),

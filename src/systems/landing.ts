@@ -9,7 +9,7 @@ import { fliesAlong } from '@systems/attitude';
 import { onWorldReset } from '@systems/reset';
 import { emit } from '@systems/events';
 import { say } from '@systems/say';
-import { childRng, type Rng } from '@systems/rng';
+import type { Rng } from '@systems/rng';
 import { capabilitiesNow } from '@systems/capabilities';
 import { getOpsBySeg, abortOp } from '@systems/ops-core';
 import { replaceRange, mergeAdjacentFree, requireAddr, freeSegment, assertMemoryInvariants } from '@systems/memory-ops';
@@ -28,13 +28,14 @@ import {
 } from '@systems/landing-rules';
 import { forgetDriver, parkPodsAboard } from '@state/actions';
 import { driversInMemory, finalePending, scriptFightOpen } from '@state/selectors';
-import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
+import { layoutOf } from '@data/memory';
 import { END_LANDING_REFUSAL_KEY, LANDING_ECHO, launchRefusalKey } from '@data/landing-text';
 import { IS_DEV } from '@/env';
 import {
   BAND_DEGRADED_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEEP_BURN_TAC, BEEP_JUMP_TAC, BEEP_REARM_TAC, LANDING_DONE_LINGER_SEC,
   LANDING_NONE_LEFT_SEC, POD_DESCENT_SEC, POD_FIRST_DESCENT_SEC, EARLY_BURN_GUARD_TAC, LATE_TRIM_TAC,
 } from '@data/tuning';
+import { visitRng } from '@systems/map-streams';
 
 // The landing (01-landing; plan §1.4): replaces phase 2's printer. DOM-free; the only module besides
 // landing-controls.ts that changes landing state. The pure rules are landing-rules.ts, the math landing-solve.ts, the
@@ -61,7 +62,7 @@ let dropRng: Rng | null = null;
 
 // The seeded stream that places each pod inside its dot (§3.3: u uniform in [−1, 1]); one draw per launch.
 function dropStream(state: Readonly<GameState>): Rng {
-  if (!dropRng) dropRng = childRng(state.run.seed, state.run.shipIndex, 'drop');
+  if (!dropRng) dropRng = visitRng(state.run, 'drop');
   return dropRng;
 }
 
@@ -83,7 +84,7 @@ function launchDriver(store: Store<GameState>, driver: DriverSegment, launch: La
   const start = requireAddr(memory, driver);
   replaceRange(memory, start, start + driver.size, [freeSegment(driver.size)], { opId: null, own: [driver] });
   mergeAdjacentFree(memory);
-  if (IS_DEV) assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  if (IS_DEV) assertMemoryInvariants(memory, layoutOf(store.getState()).totalBlocks);
   const cadenceTac = capabilitiesNow(store.getState()).bay.cadenceTac;
   if (spendBay && cadenceTac === null) throw new Error('launchDriver: Bay Ctrl is missing (launchRefusal says BAY OFFLINE)');
   store.update((draft) => {
@@ -190,7 +191,7 @@ function touchDown(store: Store<GameState>, pod: number): void {
   const firstOnShip = !landing.pods.some((candidate) => candidate.fate.kind === 'down');
   const firstOfRun = firstOnShip && !state.run.ships.some((ship) => ship.pods.some((summary) => summary.fate === 'down'));
   const colony = landing.colony ?? (firstOnShip
-    ? colonyName(landing, record.family, childRng(state.run.seed, state.run.shipIndex, 'colony'), state.run.tutorial)
+    ? colonyName(landing, record.family, visitRng(state.run, 'colony'), state.run.tutorial)
     : null);
   const lzDef = placement.lz === null ? undefined : landing.lzs.find((lz) => lz.label === placement.lz);
   const fillsLz = placement.place === 'lz' && lzDef !== undefined && (fill[lzDef.label] ?? 0) + 1 === lzDef.pods;

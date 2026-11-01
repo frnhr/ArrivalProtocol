@@ -2,6 +2,7 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
+import type { RunMapState } from '@/types/map';
 import { onPostTick, isLivePhase } from '@systems/clock';
 import { replaceRange, mergeAdjacentFree, segmentStarts, assertMemoryInvariants, newSegId } from '@systems/memory-ops';
 import { isOpenFree } from '@systems/tool-targets';
@@ -9,12 +10,28 @@ import { say } from '@systems/say';
 import { emit } from '@systems/events';
 import { mindAlertActive } from '@systems/alerts';
 import { createToolFiles, TOOL_HINT_TARGET } from '@data/fs-tools';
-import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
+import { layoutOf } from '@data/memory';
 import { LICENCE_LINES } from '@data/script';
-import { SHIPS } from '@data/ships';
+import { CLASSIC_LICENCES } from '@data/classic-five';
 import { IS_DEV } from '@/env';
 import { playsTutorial } from '@systems/meta';
 import { hasUsableTool } from '@state/selectors';
+
+// A licence ARRIVAL CONTROL issues on a ship this many AI seconds into the flight (§6.5: MOVE at
+// HALCYON boot + 25 s), or, with atCoast, as soon as the coast begins if that is sooner (the strip's
+// first WAIT: the tool arrives for the fight it is for, WP7), or, with atFirstSeed, at the first seed's
+// telegraph (§6.5: DELETE at KESTREL's first seed, WP9: the tool arrives with the thing it removes).
+// afterAiSec null: only the moment issues it. A licence never issued by then (the ship was lost first) is
+// issued at the next ship's start: the tools a later ship expects are always there. With atFirstGhost, at the
+// ship's first uncommanded burst (§6.5: SWAP at VESPER's first ghost onset, WP10: the fix arrives with the problem).
+// Phase 2's ShipDef.licences; the classic five's are data/classic-five.ts CLASSIC_LICENCES (slice-3a-plan §2.2).
+export interface TimedLicence {
+  kind: FsToolKind;
+  afterAiSec: number | null;
+  atCoast: boolean;
+  atFirstSeed: boolean;
+  atFirstGhost: boolean;
+}
 
 // Licences (§3.2, §6.5, TASK 700): a filesystem tool exists only while a live copy of its file
 // does, and ARRIVAL CONTROL issues new tools as files during the run. Installing a licence is
@@ -50,7 +67,7 @@ function writeToolFiles(store: Store<GameState>, kind: FsToolKind, freshIds: boo
     replaceRange(memory, addr, addr + file.size, [file], { opId: null, own: [] });
   }
   mergeAdjacentFree(memory);
-  if (IS_DEV) assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+  if (IS_DEV) assertMemoryInvariants(memory, layoutOf(store.getState()).totalBlocks);
   return files;
 }
 
@@ -82,7 +99,7 @@ function grantLicence(store: Store<GameState>, kind: FsToolKind): Segment[] {
 // jacks in during a flight, or the first moment something needs it from amber: a line on the strip
 // pointing at the REPAIR chip, or a mind alert (an infection, WP6; the only cure is a repair). That is
 // ship 1 in a normal run, but any ship if it never happened there (a crash before the kid looked inside).
-// Then each ship's own timed licences (ShipDef.licences, re-flowed by slice-2-plan §3.2: DELETE at KESTREL's start, MOVE
+// Then each ship's own timed licences (the classic five's CLASSIC_LICENCES, re-flowed by slice-2-plan §3.2: DELETE at KESTREL's start, MOVE
 // at its coast, COPY at VESPER's boot, SWAP at its first uncommanded burst): on their ship once that many AI seconds of
 // the flight have passed, as the coast begins, as the first seed is telegraphed, or as the engine first fires by
 // itself, and at the start of any later ship if that ship was lost before (so a later ship never lacks a tool it
@@ -104,12 +121,15 @@ const REPAIR_RULE: LicenceRule = {
     || mindAlertActive(state),
 };
 
-// Every licence due on the ship being flown, in order: REPAIR's own rule, then every ship's timed ones.
-export function licenceSchedule(shipIndex: number): LicenceRule[] {
+// Every licence due on the ship being flown, in order: REPAIR's own rule, then every ship's timed ones. `world` is the
+// run's map (run.map.world): the classic five's schedule is CLASSIC_LICENCES by ship index; the arm issues its licences
+// by act (slice-3a-plan §2.8, Track GEN: TODO(3a-GEN), REPAIR only until then).
+export function licenceSchedule(shipIndex: number, world: RunMapState['world'] = 'classic'): LicenceRule[] {
   const rules: LicenceRule[] = [REPAIR_RULE];
-  SHIPS.forEach((ship, index) => {
+  if (world !== 'classic') return rules;
+  CLASSIC_LICENCES.forEach((licences, index) => {
     if (index > shipIndex) return;
-    for (const licence of ship.licences) {
+    for (const licence of licences) {
       rules.push({
         kind: licence.kind,
         due: (state) => index < shipIndex
@@ -173,7 +193,7 @@ export function mountLicences(store: Store<GameState>): () => void {
   const offTick = onPostTick(() => {
     const state = store.getState();
     if (!isLivePhase(state) || state.clock.paused) return;
-    for (const rule of licenceSchedule(state.run.shipIndex)) {
+    for (const rule of licenceSchedule(state.run.shipIndex, state.run.map.world)) {
       if (isLicensed(store.getState(), rule.kind)) continue;
       if (rule.due(store.getState())) installTool(store, rule.kind);
     }

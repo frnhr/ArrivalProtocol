@@ -1,6 +1,6 @@
 import type { ThreatInput, ShipThreat, HollowStage, RunThreatState, BeamSeedSource } from '@/types/threat';
 import { HOLLOW_STAGES, SEEDS_ONLY_DEF, CALM_DEF, foldArrivalWalls } from '@data/threats';
-import { SHIPS, getShip, type ShipDef } from '@data/ships';
+import { CLASSIC_FIVE, CLASSIC_FACTS, classicShip } from '@data/classic-five';
 import { BOARD_MIN_DEPTH, TRACE_BOARD_AT, SEEDS_MIN_DEPTH, PRE_FINAL_ROOT_CAP } from '@data/tuning';
 
 // The threat ladder (docs/phase3/04-threats.md §3.1, §3.8, §3.9; slice-2-plan §2.4), pure and DOM-free: planThreat is the
@@ -95,9 +95,10 @@ export function createRunThreat(): RunThreatState {
   };
 }
 
-// What the map knows about a ship of the fixed five: its depth is its index + 1, the flagship is the final ship, and
-// ShipDef.threat says whether a final ship is one hop away and what the beam into it carries. Slice 3 replaces only
-// fixedShipFacts (the route's depth, the M3 query, the hop's noise); nothing downstream reads ShipDef.threat.
+// What the map knows about a ship of the classic five (data/classic-five.ts): its depth is its index + 1, LAST LIGHT is
+// the final ship, and CLASSIC_FACTS says whether a final ship is one hop away and what the beam into it carries. The
+// arm's facts come from systems/map-facts.ts mapFacts (the route's depth, the M3 query, the hop's noise) in the same
+// shape; nothing downstream reads where they came from.
 export interface ShipThreatFacts {
   depth: number;
   isFinal: boolean;
@@ -106,10 +107,11 @@ export interface ShipThreatFacts {
 }
 
 export function fixedShipFacts(index: number): ShipThreatFacts {
-  const ship: ShipDef = getShip(index);
+  const ship = classicShip(index);
+  const facts = CLASSIC_FACTS[index]!;
   return {
-    depth: index + 1, isFinal: ship.flagship, oneHopFromFinal: ship.threat.oneHopFromFinal,
-    beamSeeds: structuredClone(ship.threat.beamSeeds) as BeamSeedSource,
+    depth: index + 1, isFinal: ship.final, oneHopFromFinal: facts.oneHopFromFinal,
+    beamSeeds: structuredClone(facts.beamSeeds) as BeamSeedSource,
   };
 }
 
@@ -143,11 +145,11 @@ export function applyThreat(prev: Readonly<RunThreatState>, plan: Readonly<ShipT
   return next;
 }
 
-// The run's threat during ship `shipIndex` of the fixed five as if every ship before it had been flown with TRACE 0 and
+// The run's threat during ship `shipIndex` of the classic five as if every ship before it had been flown with TRACE 0 and
 // no DEAL (slice-2-plan risk 14): what createInitialState({ shipIndex }), the debug warp and the headless harnesses
 // start a later ship with. Throws on an index the fleet does not have.
 export function nominalRunThreat(shipIndex: number): RunThreatState {
-  if (!(Number.isInteger(shipIndex) && shipIndex >= 0 && shipIndex < SHIPS.length)) throw new Error(`nominalRunThreat: no ship ${shipIndex}`);
+  if (!(Number.isInteger(shipIndex) && shipIndex >= 0 && shipIndex < CLASSIC_FIVE.length)) throw new Error(`nominalRunThreat: no ship ${shipIndex}`);
   let threat = createRunThreat();
   for (let index = 0; index <= shipIndex; index++) {
     const facts = fixedShipFacts(index);

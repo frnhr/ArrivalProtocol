@@ -10,11 +10,12 @@ import {
 import { createRng } from '@systems/rng';
 import { createInitialState } from '@state/initial';
 import { installTool } from '@systems/licences';
-import { buildShipMemory, UNIT_RACKS_START, MEMORY_TOTAL_BLOCKS } from '@data/memory';
-import { getShip, type ShipDef } from '@data/ships';
+import { buildShipMemory, MEMORY_LAYOUTS } from '@data/memory';
+import type { ShipDef } from '@data/ships';
 import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
 import { hasIntegrity } from '@state/selectors';
 import { UNNAMED_HOLLOW } from '@data/hollow-text';
+import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import {
   TRANSIT_LAST_COPY_FLOOR, TRANSIT_CORE_MAX_HIT, CORE_RESET_INTEGRITY, CHARGE_ARRIVAL_FLOOR, TRANSIT_HIT_MIN, TRANSIT_HIT_MAX,
   LANDING_NONE_LEFT_SEC, UNIT_TAIL_BLOCKS,
@@ -26,8 +27,8 @@ import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { nominalShipThreat } from '@systems/threat-plan';
 
 
-const halcyon = getShip(1);
-const link = halcyon.arrival!.linkBlocks;
+const halcyon = classicShip(1);
+const link = CLASSIC_HOPS[halcyon.slot]!.linkBlocks;
 
 // A ship-1 unit with REPAIR licensed, as it leaves ARES-VII.
 const h = createHarness7(1, { soulsFound: true });
@@ -134,39 +135,39 @@ const memory = h.store.getState().memory;
   const packet = packUnit(memory, link, []);
   const rackEBlocks = packet.rackE.reduce((sum, seg) => sum + seg.size, 0);
   const filesBlocks = rackEBlocks + packet.rackF.reduce((sum, seg) => sum + seg.size, 0);
-  const receiver = MEMORY_TOTAL_BLOCKS - UNIT_RACKS_START;
+  const receiver = MEMORY_LAYOUTS.FULL.totalBlocks - MEMORY_LAYOUTS.FULL.unitStart;
   const layout = layoutCarried(packet, 36 + 12, halcyon, nominalShipThreat(1));
   const built = buildShipMemory(halcyon, layout.racks, createRng(1), false, UNNAMED_HOLLOW, null);
-  assertMemoryInvariants(built, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(built, MEMORY_LAYOUTS.FULL.totalBlocks);
   const starts = segmentStarts(built);
   const addr = (name: string): number => starts[built.findIndex((seg) => seg.name === name)]!;
   const chargeIndex = built.findIndex((seg) => seg.type === 'redundancy');
   check('layout: from 256 the Core first, rack F\'s list right after rack E\'s (Scan first, no gap), then the charge, then free',
-    addr('AI Core') === UNIT_RACKS_START && addr('Scan') === UNIT_RACKS_START + rackEBlocks
-    && built[chargeIndex]?.size === 48 && starts[chargeIndex] === UNIT_RACKS_START + filesBlocks
+    addr('AI Core') === MEMORY_LAYOUTS.FULL.unitStart && addr('Scan') === MEMORY_LAYOUTS.FULL.unitStart + rackEBlocks
+    && built[chargeIndex]?.size === 48 && starts[chargeIndex] === MEMORY_LAYOUTS.FULL.unitStart + filesBlocks
     && built[chargeIndex + 1]?.type === 'free' && chargeIndex + 2 === built.length,
     `Core ${addr('AI Core')}, Scan ${addr('Scan')}, charge at ${starts[chargeIndex]}`);
   // A block one longer than the receiver starts a block early, right-aligned to the end of memory.
   const snug = layoutCarried(packet, receiver - filesBlocks + 1, halcyon, nominalShipThreat(1));
   const snugMemory = buildShipMemory(halcyon, snug.racks, createRng(1), false, UNNAMED_HOLLOW, null);
-  assertMemoryInvariants(snugMemory, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(snugMemory, MEMORY_LAYOUTS.FULL.totalBlocks);
   const snugStarts = segmentStarts(snugMemory);
   check('…a block one longer than the receiver starts a block early (the Core at 255), nothing free after it',
-    snug.racks.startAddr === UNIT_RACKS_START - 1 && snugStarts[snugMemory.findIndex((seg) => seg.name === 'AI Core')] === UNIT_RACKS_START - 1
+    snug.racks.startAddr === MEMORY_LAYOUTS.FULL.unitStart - 1 && snugStarts[snugMemory.findIndex((seg) => seg.name === 'AI Core')] === MEMORY_LAYOUTS.FULL.unitStart - 1
     && snugMemory[snugMemory.length - 1]?.type === 'redundancy' && snug.overflowLost === 0, `start ${snug.racks.startAddr}`);
   // An overfull packet: the tail into rack D (free to its end on HALCYON) is capped at UNIT_TAIL_BLOCKS; the rest is lost.
   const big = layoutCarried(packet, 120, halcyon, nominalShipThreat(1));
   const spilled = buildShipMemory(halcyon, big.racks, createRng(1), false, UNNAMED_HOLLOW, null);
-  assertMemoryInvariants(spilled, MEMORY_TOTAL_BLOCKS);
+  assertMemoryInvariants(spilled, MEMORY_LAYOUTS.FULL.totalBlocks);
   const room = receiver + UNIT_TAIL_BLOCKS;
   check('…a packet bigger than the receiver takes at most UNIT_TAIL_BLOCKS of rack D, and the charge past that is lost',
-    big.racks.startAddr === UNIT_RACKS_START - UNIT_TAIL_BLOCKS && big.chargeBlocks === room - filesBlocks
+    big.racks.startAddr === MEMORY_LAYOUTS.FULL.unitStart - UNIT_TAIL_BLOCKS && big.chargeBlocks === room - filesBlocks
     && big.overflowLost === 120 - (room - filesBlocks), `start ${big.racks.startAddr}, ${big.overflowLost} lost`);
   // A ship whose rack D is full to its end: no tail at all; the charge that does not fit is lost, loudly.
   const fullD: ShipDef = { ...halcyon, id: 'full-d-test', memory: { ...halcyon.memory, podRacks: { ...halcyon.memory.podRacks, D: '_56 P' } } };
   const lost = layoutCarried(packet, 80, fullD, nominalShipThreat(1));
   check('…with rack D full at its end, charge that does not fit the receiver is lost (CHARGE OVERFLOW)',
-    lost.racks.startAddr === UNIT_RACKS_START && lost.overflowLost === 80 - (receiver - filesBlocks)
+    lost.racks.startAddr === MEMORY_LAYOUTS.FULL.unitStart && lost.overflowLost === 80 - (receiver - filesBlocks)
     && lost.chargeBlocks === receiver - filesBlocks, `${lost.overflowLost} lost`);
   let threw = '';
   try { layoutCarried({ ...packet, rackE: [...packet.rackE, ...packet.rackE.map((seg) => ({ ...seg, size: 30 }))] }, 0, fullD, nominalShipThreat(1)); } catch (error) { threw = (error as Error).message; }

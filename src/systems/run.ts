@@ -4,6 +4,7 @@ import type {
 } from '@state/schema';
 import type { CarriedRacks } from '@data/memory';
 import type { ShipThreat, BeamSeedSource } from '@/types/threat';
+import type { Hop } from '@/types/map';
 import { onGameTick, onPostTick } from '@systems/clock';
 import { onWorldReset, resetWorld } from '@systems/reset';
 import { on, emit, NO_PAYLOAD } from '@systems/events';
@@ -16,7 +17,6 @@ import {
 import { logDivider, say, hollowLabel } from '@systems/say';
 import { rollBeamSeeds } from '@systems/beam-seeds';
 import { tallyPreview } from '@state/threat-selectors';
-import { childRng } from '@systems/rng';
 import { shipStars, starCharge } from '@systems/stars';
 import {
   packUnit, packedFiles, rollTransitHits, emergencyCoreToll, arrivalCharge, layoutCarried, arrivalDamage,
@@ -28,7 +28,9 @@ import { newSegId } from '@systems/memory-ops';
 import { createRunState, createShipSlices, createUiState, createRunStats } from '@state/initial';
 import { planThreat, threatInputFor, applyThreat, fixedShipFacts, nominalShipThreat, nominalRunThreat } from '@systems/threat-plan';
 import { inOrbitOutcome, landingResult } from '@systems/landing-rules';
-import { getShip, isLastShip, SHIPS } from '@data/ships';
+import {
+  currentShip, currentSlot, shipDefAt, mapAtShip, mapAtFirstShip, classicHop, hopRng,
+} from '@systems/map-run';
 import { BEATS, LINES, perShipBeatIds } from '@data/script';
 import { TOOL_REFUSAL } from '@data/tool-text';
 import { elementsFromState, ringFit } from '@/types/orbit';
@@ -81,12 +83,12 @@ export function shipOutcomeOf(state: Readonly<GameState>): ShipOutcome {
 
 // The ship's result (01-landing §5 "To 02"): who it was, how it ended, and its landing folded from the pods
 // (landing-rules landingResult: pods still aboard are parked when the ship ends in orbit, NOT LAUNCHED when it left).
-// Slot and depth are the map's; in 1a every ship has its fixed slot, so both follow its index.
+// Slot and depth are the map's (the route's position is depth − 1; on the classic world the slot is the index too).
 export function shipResultOf(state: Readonly<GameState>, outcome: ShipOutcome, stars: number): ShipResult {
   return {
     shipId: state.level.shipId,
     shipName: state.level.shipName,
-    slot: state.run.shipIndex,
+    slot: currentSlot(state.run),
     depth: state.run.shipIndex + 1,
     outcome,
     ...landingResult(state, outcome),
@@ -129,8 +131,8 @@ export function shipLost(state: Readonly<GameState>): boolean {
 export function lossPlan(state: Readonly<GameState>): LossPlan {
   if (!shipLost(state)) throw new Error(`lossPlan: no lost ship (phase ${state.run.phase}, ${state.burn.status})`);
   const outcome = shipOutcomeOf(state);
-  // The flagship is the fleet's last ship (data/ships.ts validateFleet): nothing to transmit to after it.
-  const flagship = getShip(state.run.shipIndex).flagship;
+  // The final ship ends the run (02-map §3.6): nothing to transmit to after it.
+  const flagship = currentShip(state).final;
   if (outcome === 'emergency') {
     if (flagship) return { kind: 'end', outcome, cause: 'overwritten' };
     return { kind: 'transmit', outcome, extraHits: EMERGENCY_EXTRA_HITS, coreHit: 0, coreReset: true };
@@ -205,21 +207,25 @@ export function startRun(store: Store<GameState>, seed: number, lineage: Readonl
   });
 }
 
-// The unit arrives on ship `index` (its boot plays, then the flight). `threat` is the ladder's verdict for it (the
+// The unit arrives on the ship in `slot` (its boot plays, then the flight), by `hop` (null on a first ship, and on the
+// classic world's jumps, whose route is fixed: systems/map-run.ts mapAtShip). `threat` is the ladder's verdict for it (the
 // TRANSMIT's plan, TransitPlan.threat): the run's threat memory takes it in here, as the ship starts.
 export function startShip(
-  store: Store<GameState>, index: number, carried: CarriedRacks | null, arrival: ArrivalReport | null, threat: ShipThreat,
+  store: Store<GameState>, slot: number, carried: CarriedRacks | null, arrival: ArrivalReport | null, threat: ShipThreat,
+  hop: Hop | null = null,
 ): void {
   const state = store.getState();
-  if (index < 0 || index >= SHIPS.length) throw new Error(`startShip: no ship ${index}`);
+  shipDefAt(state.run.map, slot);
   // The verdict the beam planned for this ship (TransitPlan.threat), when a beam planned one: not a stand-in's.
   const transit = state.run.transit;
-  if (transit !== null && (transit.toShipIndex !== index || transit.threat.depth !== threat.depth)) {
-    throw new Error(`startShip: a verdict for depth ${threat.depth} on ship ${index}, but the beam planned depth ${transit.threat.depth} on ship ${transit.toShipIndex}`);
+  if (transit !== null && (transit.toSlot !== slot || transit.threat.depth !== threat.depth)) {
+    throw new Error(`startShip: a verdict for depth ${threat.depth} on slot ${slot}, but the beam planned depth ${transit.threat.depth} on slot ${transit.toSlot}`);
   }
+  const map = mapAtShip(state.run.map, slot, hop);
   const run: RunState = {
     ...state.run,
-    shipIndex: index,
+    shipIndex: map.route.length - 1,
+    map,
     arrival,
     transit: null,
     pendingStarCredit: 0,
@@ -258,17 +264,21 @@ export function endShip(store: Store<GameState>, outcome: ShipOutcome, stars = 0
 // is dealt (§6.9: PICK ONE TO CARRY; seeded by the ship being left, weighted by the run's stats).
 export function goTransmit(store: Store<GameState>, extra: { extraHits: number; coreHit: number; coreReset: boolean }): void {
   const state = store.getState();
-  if (isLastShip(state.run.shipIndex)) throw new Error('goTransmit: the last ship has no next ship (endRun)');
+  if (currentShip(state).final) throw new Error('goTransmit: the final ship has no next ship (endRun)');
+  if (state.run.map.world !== 'classic') throw new Error('TODO(3a-F2): goTransmit on the arm (the desk picks the slot)');
   abortAll();
+  const fromSlot = currentSlot(state.run);
   const toShipIndex = state.run.shipIndex + 1;
-  const arrivalDef = getShip(toShipIndex).arrival;
-  if (!arrivalDef) throw new Error(`goTransmit: ship ${toShipIndex} has no link (ShipDef.arrival)`);
-  const packet = packUnit(store.getState().memory, arrivalDef.linkBlocks, []);
+  const toSlot = fromSlot + 1;
+  const hop = classicHop(fromSlot, toSlot, state.run.map.galaxyYear);
+  const packet = packUnit(store.getState().memory, hop.linkBlocks, []);
   // The ladder's verdict for the next ship, from the run's threat once this ship's tally is done (Track THREAT's endShip).
-  const threat = planThreat(threatInputFor(state.run.threat, fixedShipFacts(toShipIndex), state.run.stats.deal !== null));
+  const threat = planThreat(threatInputFor(state.run.threat, fixedShipFacts(toSlot), state.run.stats.deal !== null));
   const plan: TransitPlan = {
     toShipIndex,
-    linkBlocks: arrivalDef.linkBlocks,
+    toSlot,
+    hop,
+    linkBlocks: hop.linkBlocks,
     filesBlocks: packet.filesBlocks,
     chargeHeld: packet.chargeHeld,
     chargeCarried: packet.chargeCarried,
@@ -276,7 +286,7 @@ export function goTransmit(store: Store<GameState>, extra: { extraHits: number; 
     coreHit: extra.coreHit,
     coreReset: extra.coreReset,
     dropped: [],
-    offer: dealDraft(store.getState(), arrivalDef.linkBlocks),
+    offer: dealDraft(store.getState(), hop.linkBlocks),
     pick: null,
     threat,
   };
@@ -301,25 +311,27 @@ export function transmitNext(store: Store<GameState>): void {
   const plan = state.run.transit;
   if (state.run.phase !== 'transmit' || !plan) throw new Error(`transmitNext: nothing to transmit (phase ${state.run.phase})`);
   if (plan.offer.length > 0 && plan.pick === null) throw new Error('transmitNext: no card picked (PICK ONE TO CARRY is mandatory)');
-  const ship = getShip(plan.toShipIndex);
-  const link = ship.arrival;
-  if (!link) throw new Error(`transmitNext: ${ship.name} has no link`);
+  const ship = shipDefAt(state.run.map, plan.toSlot);
+  const fromSlot = currentSlot(state.run);
   const packet = planPacket(state.memory, plan, newSegId);
   applyPickToPacket(packet, plan.pick);
   // The beam's hitchhikers (04 §3.4), rolled on the packet as it crosses (after the card's file is in it, before the
-  // transit hits): they ride free, and land behind their targets at the boot. From the verdict, never ShipDef.threat.
-  packet.seeds = rollBeamSeeds(packet, beamSourceOf(plan.threat), playsTutorial(state.run), childRng(state.run.seed, plan.toShipIndex, 'beam-seeds'));
+  // transit hits): they ride free, and land behind their targets at the boot. From the verdict, never the map's facts again.
+  packet.seeds = rollBeamSeeds(packet, beamSourceOf(plan.threat), playsTutorial(state.run), hopRng(state.run, fromSlot, plan.toSlot, 'beam-seeds'));
   const files = packedFiles(packet);
   const hits: TransitHit[] = [];
   if (plan.coreHit > 0 || plan.coreReset) {
     const toll = emergencyCoreToll(files, plan.coreHit, plan.coreReset);
     if (toll) hits.push(toll);
   }
-  hits.push(...rollTransitHits(files, link.transitHits + plan.extraHits, childRng(state.run.seed, plan.toShipIndex, 'transit')));
+  // ECC repairs hits while the unit sleeps (02 §3.3), counted after the extra ones (BEAM OUT, EMERGENCY): none on the classic
+  // world (no slack).
+  const landing = Math.max(0, plan.hop.transitHits + plan.extraHits - plan.hop.eccFixes);
+  hits.push(...rollTransitHits(files, landing, hopRng(state.run, fromSlot, plan.toSlot, 'transit')));
   const cardCharge = pickCharge(plan.pick);
   const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, cardCharge);
   const layout = layoutCarried(packet, charge.blocks, ship, plan.threat, hollowLabel(state.run));
-  const scripted = arrivalDamage(layout.racks.segs, link.damage);
+  const scripted = arrivalDamage(layout.racks.segs, ship.arrivalDamage);
   const arrival: ArrivalReport = {
     hits,
     chargeCarried: packet.chargeCarried,
@@ -339,7 +351,7 @@ export function transmitNext(store: Store<GameState>): void {
     const picked = plan.pick;
     store.update((draft) => { draft.run.upgrades.push(picked); });
   }
-  startShip(store, plan.toShipIndex, layout.racks, arrival, plan.threat);
+  startShip(store, plan.toSlot, layout.racks, arrival, plan.threat, plan.hop);
 }
 
 // What the beam into a ship carries, from the ladder's verdict (04 §3.4): nothing into a calm ship ("no seeds before
@@ -381,7 +393,7 @@ export function continueAfterReport(store: Store<GameState>): void {
   const earned = stars.filter((star) => star.earned).length;
   endShip(store, shipOutcomeOf(state), earned);
   store.update((draft) => { draft.run.pendingStarCredit = starCharge(stars); });
-  if (isLastShip(state.run.shipIndex)) endRun(store, finaleRunCause(store.getState()));
+  if (currentShip(state).final) endRun(store, finaleRunCause(store.getState()));
   else goTransmit(store, { extraHits: 0, coreHit: 0, coreReset: false });
 }
 
@@ -393,6 +405,7 @@ export function continueAfterLoss(store: Store<GameState>): LossPlan {
     const run: RunState = {
       ...state.run,
       shipIndex: 0,
+      map: mapAtFirstShip(state.run.map),
       // A fresh unit meets ship 1 (its written racks E–F): the licences go with the old memory. HOLLOW is
       // unnamed again (the simulation is run 1's: no ghost has named it; it names itself on the ship it boards, VESPER).
       licences: ['scan'],

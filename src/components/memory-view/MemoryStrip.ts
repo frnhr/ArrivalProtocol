@@ -2,7 +2,8 @@ import type { Segment } from '@/types/segment';
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { getMemoryBlocksPerRow } from '@/utils/viewport';
-import { rackOf, rackLabelParts, RACK_LABEL_SEP } from '@data/memory';
+import { rackOf, rackLabelParts, layoutOfMemory, RACK_LABEL_SEP } from '@data/memory';
+import type { MemoryLayout } from '@/types/map';
 import { RACK_BLOCKS } from '@data/tuning';
 import { renderSegmentPart, type SegmentBehavior } from './SegmentBlock';
 import { guardPresses } from '@components/dom';
@@ -12,16 +13,16 @@ import { guardPresses } from '@components/dom';
 // (the rack's name over its address); a rack's second row on a phone has an empty label, so the
 // racks read as places, not as a hex dump. `data-rack` lets a later package flash a rack's rows
 // (debris hits RACK C, WP9).
-function makeRow(addr: number): HTMLElement {
+function makeRow(addr: number, layout: Readonly<MemoryLayout>): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'addr-row';
-  wrap.dataset.rack = rackOf(addr);
+  wrap.dataset.rack = rackOf(addr, layout);
   const label = document.createElement('div');
   label.className = 'addr-label';
   if (addr % RACK_BLOCKS === 0) {
     wrap.classList.add('rack-start');
     // The label is data/memory.ts rackLabel, drawn in parts (the separator hidden when stacked).
-    const parts = rackLabelParts(addr);
+    const parts = rackLabelParts(addr, layout);
     label.innerHTML = `<span class="rack-name">${parts.name}</span>`
       + `<span class="rack-sep">${RACK_LABEL_SEP}</span><span class="rack-addr">${parts.addr}</span>`;
   }
@@ -72,7 +73,8 @@ function renderMemoryStrip(
   let rowStart = 0;
   let rowSize = 0;  // the blocks (addresses) in the row so far; a folded free tail makes it more than the columns
   let rowsInRack = 1;  // the rows this rack has started, the current one included
-  let row = makeRow(0);
+  const layout = layoutOfMemory(memory);
+  let row = makeRow(0, layout);
 
   // What a row starting at `start` can still take after `used` blocks: up to its width, never past its rack.
   const roomAt = (start: number, used: number): number => Math.min(perRow - used, rackEnd(start) - (start + used));
@@ -82,7 +84,7 @@ function renderMemoryStrip(
     rowsInRack = sameRack ? rowsInRack + 1 : 1;
     rowStart += rowSize;
     rowSize = 0;
-    row = makeRow(rowStart);
+    row = makeRow(rowStart, layout);
   };
 
   for (const seg of memory) {

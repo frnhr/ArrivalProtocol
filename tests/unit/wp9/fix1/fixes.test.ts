@@ -33,13 +33,13 @@ import { getOpsBySeg, canStartOp } from '@systems/ops-core';
 import { seedsInMemory } from '@systems/hollow';
 import { stripName } from '@data/type-labels';
 import { debrisRack, type ZoneHit } from '@/types/zone';
-import { getShip } from '@data/ships';
 import { AUTOBURN_TEXT, AUTO_REFUSAL_LINES, AUTOBURN_REFUSAL, AUTO_MINI_TEXT } from '@data/skill-text';
 import { RACK_TAG_TEXT } from '@data/zone-text';
-import { UNIT_RACKS_START } from '@data/memory';
 import { MAX_LINE_CHARS, RACK_BLOCKS, WAKE_AFTER_DODGE_SEC } from '@data/tuning';
+import { classicShip } from '@data/classic-five';
 import type { Segment } from '@/types/segment';
 import { phase2HollowOf } from '../../support/hollow-world';
+import { MEMORY_LAYOUTS } from '@data/memory';
 
 const h = createHarness9(5);
 const state = () => h.store.getState();
@@ -59,9 +59,9 @@ const correctIn = (): void => {
 
 // --- TRANSMIT ▸ to KESTREL with no Sensor Interp ------------------------------------------------------------
 {
-  const ship = getShip(KESTREL);
+  const ship = classicShip(KESTREL);
   const noSensor: Segment[] = [{ id: 'core', name: 'AI Core', type: 'core', role: 'core', size: 16, integrity: 100, state: 'intact' } as Segment];
-  check('arrivalDamage: a unit with no file of the role is not damaged by that rule (no throw)', arrivalDamage(noSensor, ship.arrival!.damage).length === 0);
+  check('arrivalDamage: a unit with no file of the role is not damaged by that rule (no throw)', arrivalDamage(noSensor, ship.arrivalDamage).length === 0);
 
   // HALCYON to its LANDING REPORT with more charge than the link carries beside the files, so leaving a file behind
   // carries more charge and the chip can be dropped (the review's repro).
@@ -369,7 +369,7 @@ const correctIn = (): void => {
     if (!charge || charge.type !== 'redundancy') throw new Error('fixes: no charge');
     let grow = 0;
     d.memory = d.memory.filter((seg, i) => {
-      if (seg.type !== 'free' || starts[i]! < UNIT_RACKS_START) return true;
+      if (seg.type !== 'free' || starts[i]! < MEMORY_LAYOUTS.FULL.unitStart) return true;
       grow += seg.size;
       return false;
     });
@@ -380,7 +380,7 @@ const correctIn = (): void => {
   trainSkillAtBoot(h.store);
   const placed = skillFiles(state().memory)[0]!;
   const at = segmentStarts(state().memory)[state().memory.indexOf(placed)]!;
-  check('racks E–F full: AUTOBURN.skl goes to the end of rack D\'s free tail, beside the unit', at + placed.size === UNIT_RACKS_START, String(at));
+  check('racks E–F full: AUTOBURN.skl goes to the end of rack D\'s free tail, beside the unit', at + placed.size === MEMORY_LAYOUTS.FULL.unitStart, String(at));
 
   const lines = [
     'KEEP HOLDING — dodge DEBRIS C', SKIP_REFUSAL_DODGE, SKIP_REFUSAL_BLIND_DODGE, SKIP_REFUSAL_SEED_COMING, AUTO_MINI_TEXT.ready,

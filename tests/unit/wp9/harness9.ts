@@ -15,9 +15,9 @@ import { canStartOp, getOpsBySeg } from '@systems/ops-core';
 import { getByRole, hasIntegrity } from '@state/selectors';
 import { capabilitiesNow } from '@systems/capabilities';
 import { followDirector } from '../wp2/harness2';
-import { getShip } from '@data/ships';
 import type { Segment } from '@/types/segment';
 import { phase2Ship } from '../support/hollow-world';
+import { classicShip } from '@data/classic-five';
 
 export const KESTREL = 2;
 
@@ -73,9 +73,9 @@ export function createHarness9(seed = 1, opts: { soulsFound?: boolean } = {}): H
     ...base,
     kestrel(nextSeed, kestrelOpts = {}) {
       base.resetTo('flight', nextSeed);
-      const ship = getShip(KESTREL);
+      const ship = classicShip(KESTREL);
       const carried = freshUnitRacks(ship);
-      if (kestrelOpts.arrivalDamage) arrivalDamage(carried.segs, ship.arrival!.damage);
+      if (kestrelOpts.arrivalDamage) arrivalDamage(carried.segs, ship.arrivalDamage);
       const fresh = createInitialState({ seed: nextSeed, shipIndex: KESTREL, carried });
       if (kestrelOpts.sensorHealed) {
         const sensor = fresh.memory.find((seg) => seg.role === 'sensor');

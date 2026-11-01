@@ -20,10 +20,10 @@ import { requestSkip } from '@systems/pace';
 import { driversInMemory } from '@state/selectors';
 import { segmentStarts, freeSegment } from '@systems/memory-ops';
 import { createRng, childRng } from '@systems/rng';
-import { getShip } from '@data/ships';
 import { podCode } from '@data/landing-text';
 import { debrisHitLine } from '@data/zone-text';
 import { RACK_BLOCKS, SKIP_END_LEAD_TAC } from '@data/tuning';
+import { classicShip } from '@data/classic-five';
 import type { Segment, DriverSegment } from '@/types/segment';
 
 const h = createHarness9(1);
@@ -38,7 +38,7 @@ const RACK_C_PODS = [7, 8, 9, 10, 11, 12];
 // --- The pilot who never corrects ------------------------------------------------------------------------------
 {
   h.kestrel(1, { hollowAsleep: true, sensorHealed: true });
-  const ship = getShip(2);
+  const ship = classicShip(2);
   check('KESTREL: r0 25,000, ▼ 9,000 (TOO WIDE), ring 5,000–7,000, Δv 2.1, ×25 / ×80, IN engaged',
     state().level.r0 === 25000 && Math.round(h.rp()) === 9000 && state().level.ring.min === 5000 && state().level.ring.max === 7000
     && state().level.dvBudgetKmS === 2.1 && state().level.tacticalWarp === 25 && state().level.cruiseWarp === 80 && state().burn.sasMode === 'radial-in');
@@ -229,7 +229,7 @@ const STRADDLE_AT = 11;
 
 // --- Later runs: the rack is seeded, B or C ---------------------------------------------------------------------
 {
-  const ship = getShip(2);
+  const ship = classicShip(2);
   const racks = new Set<string>();
   for (let seed = 1; seed <= 200; seed++) {
     const zone = resolveZones(ship.zones, ship.flight, false, childRng(seed, 2, 'zones'))[0]!;

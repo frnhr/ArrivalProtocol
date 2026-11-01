@@ -14,7 +14,7 @@ import { raiseAlert, clearAlert } from '@systems/alerts';
 import { replaceRange, segmentStarts, newSegId, assertMemoryInvariants } from '@systems/memory-ops';
 import { upgradeFiles } from '@state/selectors';
 import { isOpenFree } from '@systems/tool-targets';
-import { UNIT_RACKS_START, MEMORY_TOTAL_BLOCKS } from '@data/memory';
+import { layoutOf, layoutOfMemory } from '@data/memory';
 import { UPGRADE_FILE_TEXT } from '@data/upgrades';
 import {
   AUTOBURN_TEXT, AUTOBURN_DROP_TEXT, AUTOBURN_DROP_TAB, AUTOBURN_REFUSAL, autoRefusalKey, type AutoburnRefusal,
@@ -93,12 +93,13 @@ export function skillBootDue(state: Readonly<GameState>): SkillBoot {
 // asks Fran to sign this order off. No room anywhere is a layout that can't take its own unit: throws.
 function skillAddress(memory: readonly Segment[], size: number): number {
   const starts = segmentStarts(memory);
+  const { unitStart } = layoutOfMemory(memory);
   const fits = (seg: Segment): boolean => isOpenFree(seg) && seg.size >= size;
   for (let i = 0; i < memory.length; i++) {
-    if (starts[i]! >= UNIT_RACKS_START && fits(memory[i]!)) return starts[i]!;
+    if (starts[i]! >= unitStart && fits(memory[i]!)) return starts[i]!;
   }
   for (let i = memory.length - 1; i >= 0; i--) {
-    if (fits(memory[i]!)) return Math.max(starts[i]!, Math.min(starts[i]! + memory[i]!.size, UNIT_RACKS_START) - size);
+    if (fits(memory[i]!)) return Math.max(starts[i]!, Math.min(starts[i]! + memory[i]!.size, unitStart) - size);
   }
   throw new Error(`autoburn: no free space for the ${size}-block skill file`);
 }
@@ -118,7 +119,7 @@ export function trainSkillAtBoot(store: Store<GameState>): string {
       size: AUTOBURN_SKILL_BLOCKS, integrity: INTEGRITY_MAX, state: 'intact', scanned: true, desc: UPGRADE_FILE_TEXT.autoburn.desc,
     };
     replaceRange(memory, addr, addr + file.size, [file], { opId: null, own: [] });
-    if (IS_DEV) assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
+    if (IS_DEV) assertMemoryInvariants(memory, layoutOf(state).totalBlocks);
   }
   store.update((draft) => {
     draft.run.skillTrainedOn = skill.demos;
