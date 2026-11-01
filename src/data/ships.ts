@@ -16,6 +16,12 @@ import { UNNAMED_HOLLOW } from '@data/hollow-text';
 import { HOLLOW_STAGES } from '@data/threats';
 import { HARD_WORDS_POOL } from '@data/souls';
 import { hurtDriversFor, rootSlotNeighbours } from '@data/driver-damage';
+import type { ArmShip } from '@/types/map';
+import { FLIGHT_TEMPLATES, DEBRIS_CLOUD, RADIATION_BELT } from '@data/flight-templates';
+import { RACK_A, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, POD_RACK_KEYS } from '@data/memory';
+import { ARES_RUN1_FAMILIES, ADA } from '@data/souls';
+import { WORLDS } from '@data/arm';
+import { IS_DEV } from '@/env';
 
 // The runtime ship (phase 3 slice 3a, slice-3a-plan §2.2): everything one ship's world is built from (state/initial.ts
 // createShipSlices, data/memory.ts buildShipMemory, systems/carry.ts layoutCarried, the landing slice). It is never
@@ -224,4 +230,88 @@ export function validateShipDef(ship: ShipDef): void {
       }
     }
   }
+}
+
+// --- A ship of the arm (slice-3a-plan §2.2) ------------------------------------------------------------------------------
+
+// The ShipDef of an arm ship: its template's flight block with omega0 replaced, the modifiers as zones (DEBRIS: the
+// template's cloud on the debris rack; RADIATION BELT: its belt) and arrival damage (stored on the ArmShip), the landing,
+// the class and the pod layout it rolled, rack A as every ship has it, and racks E–F written only on a first ship (ARES-n
+// meets a fresh unit). The first ship's drivers are ARES-VII's written ones (POD 02 at 44%, Ada's family first in the
+// credits on the tutorial run; data/driver-damage.ts reseeds them on a returning unit); every other ship's are rolled by
+// its layer. Pure and memoized ON `armShip.id` (never on the object: systems/map-run.ts mapAtShip clones the map, and a
+// JSON round trip of the save would too); in dev a cheap fingerprint guards against two different ships sharing an id.
+const SHIP_DEF_CACHE = new Map<string, { fingerprint: string; ship: ShipDef }>();
+
+function fingerprintOf(arm: Readonly<ArmShip>): string {
+  return `${arm.slot}|${arm.name}|${arm.kind}|${arm.template}|${arm.pods}|${arm.memoryClass}|${arm.modifiers.join(',')}|${arm.omega0}`;
+}
+
+// The ShipDef id of an arm ship (map-generator shipIdFor says the same): an authored ship keeps its own ('kestrel'), every
+// other its name's ('good-hope').
+function armShipDefId(arm: Readonly<ArmShip>): string {
+  return arm.authored ?? arm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+}
+
+export function shipDefOf(arm: Readonly<ArmShip>): ShipDef {
+  const cached = SHIP_DEF_CACHE.get(arm.id);
+  if (cached !== undefined) {
+    if (IS_DEV && cached.fingerprint !== fingerprintOf(arm)) {
+      throw new Error(`shipDefOf: two arm ships share the id ${arm.id} (${cached.ship.name} and ${arm.name})`);
+    }
+    return cached.ship;
+  }
+  const world = WORLDS[arm.slot];
+  if (!world) throw new Error(`shipDefOf: ${arm.name} in slot ${arm.slot}, which the arm does not have`);
+  const template = FLIGHT_TEMPLATES[arm.template];
+  const id = armShipDefId(arm);
+  const zones: ZoneDef[] = [];
+  if (arm.modifiers.includes('debris')) {
+    if (arm.debrisRack === null) throw new Error(`shipDefOf: ${arm.name} has DEBRIS and no debris rack`);
+    zones.push({
+      kind: 'debris', id: `${id}-debris`, centre: { onInboundAtR: DEBRIS_CLOUD.onInboundAtR }, r: DEBRIS_CLOUD.r,
+      rack: arm.debrisRack, laterRacks: [arm.debrisRack],
+    });
+  }
+  if (arm.modifiers.includes('radiation-belt')) {
+    zones.push({ kind: 'belt', id: `${id}-belt`, rIn: RADIATION_BELT.rIn, rOut: RADIATION_BELT.rOut, racks: [...RADIATION_BELT.racks] });
+  }
+  const first = arm.kind === 'first';
+  const podRacks: ShipMemoryDef['podRacks'] = {};
+  for (const rack of POD_RACK_KEYS) {
+    const layout = arm.podRacks[rack];
+    if (layout !== undefined) podRacks[rack] = layout;
+  }
+  const ship: ShipDef = {
+    id,
+    name: arm.name,
+    world: world.name,
+    slot: arm.slot,
+    layer: world.layer,
+    approachYear: arm.approachYear,
+    kind: arm.kind,
+    template: arm.template,
+    modifiers: [...arm.modifiers],
+    memoryClass: arm.memoryClass,
+    pods: arm.pods,
+    final: arm.kind === 'final',
+    flight: { ...structuredClone(template.flight), start: { ...template.flight.start, omega0: arm.omega0 } },
+    shrink: { ...template.shrink },
+    arrivalDamage: arm.arrivalDamage.map((rule) => ({ ...rule })),
+    zones,
+    memory: {
+      rackA: RACK_A,
+      podRacks,
+      aiFiles: first ? { E: FRESH_UNIT_RACK_E, F: FRESH_UNIT_RACK_F } : null,
+      drivers: first
+        ? {
+          familiesSeedStream: 'families', damage: 'scripted', hurt: [{ pod: 2, integrity: 44 }], lead: arm.lead,
+          firstRun: { families: ARES_RUN1_FAMILIES, leadIndex: arm.lead - 1, lead: ADA },
+        }
+        : { familiesSeedStream: 'families', damage: 'rolled', hurt: [], lead: arm.lead, firstRun: null },
+    },
+    landing: structuredClone(arm.landing) as ShipLandingDef,
+  };
+  SHIP_DEF_CACHE.set(arm.id, { fingerprint: fingerprintOf(arm), ship });
+  return ship;
 }
