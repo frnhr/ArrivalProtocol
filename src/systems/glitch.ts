@@ -3,8 +3,8 @@ import type { GameState } from '@state/schema';
 import { selectCorruption, quantizeCorruption } from '@state/selectors';
 import { onPostTick, isActivePhase } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
-import { emit } from '@systems/events';
-import { MERGE_CORRUPTION_FLOOR } from '@data/tuning';
+import { emit, on } from '@systems/events';
+import { MERGE_CORRUPTION_FLOOR, BOARD_TEAR_LEVEL, BOARD_TEAR_MS } from '@data/tuning';
 
 // --- glitchBurst (§7.3, §9 WP11 item 3) -----------------------------------------------------------------------
 // A moment's spike of the glitch overlay on top of the Core's own corruption: a verb landing, HALCYON's naming, the
@@ -270,6 +270,8 @@ export function mountGlitchDriver(store: Store<GameState>): () => void {
       document.documentElement.style.setProperty('--glitch-dim', String(dim));
     }
   });
+  // Phase 3 slice 2 (04 §4): the boarding moment's screen tear, as HOLLOW's root lands in the bay (the boot's 108% line).
+  const offBoard = on('hollow-boarded', () => glitchBurst(BOARD_TEAR_LEVEL, BOARD_TEAR_MS));
   // A burst belongs to the moment that made it: a new ship (or a NEW RUN) starts without one.
   const offReset = onWorldReset('glitch-burst', () => { burst = null; }, () => ({ burst: burst !== null }));
   const unsubClock = store.subscribe((s) => s.clock.speedTarget, (next) => applyClock(next));
@@ -281,6 +283,7 @@ export function mountGlitchDriver(store: Store<GameState>): () => void {
 
   return () => {
     offTick();
+    offBoard();
     offReset();
     burst = null;
     document.documentElement.style.removeProperty('--glitch-dim');
