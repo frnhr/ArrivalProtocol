@@ -747,9 +747,9 @@ export function drainRatePerSec(cfg: HollowDef, thrustDelivered: boolean, landin
 // When a timed wake comes (a later ship): afterAiSec into the flight, or coastLeadSec after the coast
 // began if that is sooner (HALCYON: the fight belongs to the coast, WP7); and never before WAKE_AFTER_DODGE_SEC
 // after a debris dodge's hold ended (`holdEndedAtAi`, HollowState.wakeHoldEndedAtAi; while the hold lasts there is
-// no wake at all). null for ship 1's scripted wake.
+// no wake at all). null for ship 1's scripted wake and a calm ship's 'never'.
 export function timedWakeAtAi(cfg: HollowDef, coastAtAi: number | null, holdEndedAtAi: number | null): number | null {
-  if (cfg.wake === 'loop-closed-once') return null;
+  if (typeof cfg.wake === 'string') return null;
   const lead = cfg.wake.coastLeadSec;
   const timed = lead === null || coastAtAi === null ? cfg.wake.afterAiSec : Math.min(cfg.wake.afterAiSec, coastAtAi + lead);
   return holdEndedAtAi === null ? timed : Math.max(timed, holdEndedAtAi + WAKE_AFTER_DODGE_SEC);
@@ -763,6 +763,7 @@ export function settledWakeAtAi(
   cfg: HollowDef, coastAtAi: number | null, aiNow: number, hollow: Pick<HollowState, 'wakeHeld' | 'wakeHoldEndedAtAi'>,
 ): number | null {
   if (cfg.wake === 'loop-closed-once') throw new Error('settledWakeAtAi: ship 1\'s wake is scripted, not timed');
+  if (cfg.wake === 'never') return null;
   if (hollow.wakeHeld) return null;
   const { afterAiSec, coastLeadSec } = cfg.wake;
   const couldComeSooner = coastLeadSec !== null && coastAtAi === null && aiNow + coastLeadSec < afterAiSec;
@@ -771,8 +772,11 @@ export function settledWakeAtAi(
 
 // Ship 1 bites HOLLOW_SCRIPTED_BITE_DELAY_SEC after the true path first closes (the CAPTURED moment
 // first, then the bite as a beat of its own); later ships at their timed wake, unless a debris dodge holds
-// it. Marks ship 1's bite time in ctx.hollow the first time the loop is closed.
-function woken(cfg: HollowDef, ctx: HollowStepCtx): boolean {
+// it. Marks ship 1's bite time in ctx.hollow the first time the loop is closed. A calm ship ('never') never wakes, and
+// nothing wakes with no hollow block in memory (phase 3 slice 2: a seeds-only ship whose beam brought no seed): there is
+// nobody to bite, and a wake would start a NEXT BITE clock and lines for nothing.
+function woken(memory: readonly Segment[], cfg: HollowDef, ctx: HollowStepCtx): boolean {
+  if (cfg.wake === 'never' || !memory.some(isHollow)) return false;
   if (cfg.wake !== 'loop-closed-once' && ctx.hollow.wakeHeld) return false;
   const timed = timedWakeAtAi(cfg, ctx.coastAtAi, ctx.hollow.wakeHoldEndedAtAi);
   if (timed !== null) return ctx.aiNow >= timed;
@@ -803,7 +807,7 @@ export function stepHollow(memory: Segment[], dtAi: number, cfg: HollowDef, ctx:
   // 2. The bite: at the wake, then on the timer. THE DEAL (WP10) can pause it (ACCEPT: the timer stands still) or
   // hasten it (REFUSE: the next intervals are shorter, biteIntervalSec).
   const dealPaused = spreadPaused(hollow, aiNow);
-  if (hollow.phase === 'asleep' && woken(cfg, ctx)) {
+  if (hollow.phase === 'asleep' && woken(memory, cfg, ctx)) {
     hollow.phase = 'awake';
     if (cfg.wake === 'loop-closed-once') scriptedBite(memory, aiNow, events);
     else spreadBite(memory, aiNow, events);

@@ -12,6 +12,8 @@
 //   and END LANDING refusals (N7), RUN END's NOBODY WOKE judged on pods down (N2);
 // • issue 5: on a fresh unit VESPER's tool-hunting seed borders a tool (the pooled receiver's hunting ground).
 import { check, finish } from './checks';
+import { phase2HollowOf } from '../support/hollow-world';
+import type { ShipThreat } from '@/types/threat';
 import { lockOn } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';
 import { endLanding, forceLandAll, setLoadNext } from '@systems/landing';
@@ -43,6 +45,7 @@ import { HOLLOW_STORY, HOLLOW_FINALE } from '@data/hollow-text';
 import { LANDING_NONE_LEFT_SEC } from '@data/tuning';
 import { isAiFile } from '@state/selectors';
 import type { DriverSegment } from '@/types/segment';
+import { nominalShipThreat } from '@systems/threat-plan';
 
 const h = createHarness7(5);
 const state = () => h.store.getState();
@@ -69,8 +72,9 @@ function untilReport(maxWall: number): string | null {
 
 // --- 1. A driver lost after the landing ended (review: recordDriverLost threw "pod N is parked, not aboard") ----------
 {
-  // END LANDING with an infected driver near 0: HOLLOW eats it during the linger (p1, HALCYON / KESTREL / VESPER).
-  for (const ship of [1, 3]) {
+  // END LANDING with an infected driver near 0: HOLLOW eats it during the linger (p1; slice 2: VESPER, the one ship before
+  // the finale with HOLLOW aboard).
+  for (const ship of [3]) {
     landingOn(ship);
     const driver = driversInMemory(state())[0]!;
     infectNow(h.store, driver);
@@ -94,7 +98,7 @@ function untilReport(maxWall: number): string | null {
   check('a zone takes a parked pod\'s driver to 0: parked dead, not restorable (MERGE leaves it parked)',
     dead.fate.kind === 'parked' && dead.fate.why === 'dead' && !dead.fate.restorable && dead.driverLost === 'dead', JSON.stringify(dead.fate));
   // The test harness's instant landing parks an infected driver's pod, which HOLLOW then eats.
-  landingOn(1);
+  landingOn(3);
   const sick = driversInMemory(state())[0]!;
   infectNow(h.store, sick);
   h.store.update((draft) => { setIntegrity(draft.memory.find((seg) => seg.id === sick.id) as DriverSegment, 2); });
@@ -105,8 +109,12 @@ function untilReport(maxWall: number): string | null {
 }
 
 // --- 1b. THE DEAL and the end of the landing (p3) --------------------------------------------------------------------
+// Slice 2: VESPER plays ARRIVAL + WALLS now (THE DEAL folds into the finale); the HUNT stage's config (phase 2's VESPER,
+// which deals) is set on it here, so this stays a test of the deal at the landing's end.
+const huntOnVesper = (): void => { h.store.update((draft) => { draft.hollow.cfg = phase2HollowOf(3); }); };
 {
   landingOn(3);
+  huntOnVesper();
   const named = driversInMemory(state())[0]!;
   offerDealNow(h.store, named);
   endLanding(h.store);
@@ -120,6 +128,7 @@ function untilReport(maxWall: number): string | null {
     threw === null && podRecord(state(), named.pod).fate.kind === 'parked' && podRecord(state(), named.pod).driverLost === 'eaten', threw ?? '');
   // Never offered after the end: HOLLOW awake with a driver at its front, the landing over.
   landingOn(3, 6);
+  huntOnVesper();
   endLanding(h.store);
   h.store.update((draft) => { draft.hollow.phase = 'awake'; });
   h.stepFor(3);
@@ -127,14 +136,15 @@ function untilReport(maxWall: number): string | null {
     state().hollow.deal.phase === 'none' && state().run.stats.deal === null, state().hollow.deal.phase);
 }
 
-// --- 2. Ship 1's undecided scripted fight holds the report (review: END LANDING first skipped `> ...047?`) ------------
+// --- 2. The undecided scripted fight holds the report (review: END LANDING first skipped `> ...047?`) ------------------
+// Slice 2: the scripted fight is ARRIVAL's, on the ship HOLLOW boards (VESPER), no longer ARES-VII's.
 {
-  landingOn(0);
+  landingOn(3);
   const end = h.wall() + 30;
   while (state().hollow.scriptTargetId === null && h.wall() < end) h.step();
   const targetId = state().hollow.scriptTargetId;
   const target = state().memory.find((seg) => seg.id === targetId);
-  check('ARES-VII: the scripted bite records its target in state (hollow.scriptTargetId)', target?.type === 'driver' && target.infected !== undefined,
+  check('VESPER: the scripted bite records its target in state (hollow.scriptTargetId)', target?.type === 'driver' && target.infected !== undefined,
     String(targetId));
   if (target?.type === 'driver') h.store.update((draft) => { setIntegrity(draft.memory.find((seg) => seg.id === targetId) as DriverSegment, 6); });
   endLanding(h.store);
@@ -329,9 +339,16 @@ function forceLandAllButFirst(): void {
 }
 
 // --- Issue 5. VESPER's tool-hunting seed borders a tool on a fresh unit ------------------------------------------------
+// Slice 2: the hunting ground is the HUNT stage's (keyed by the ladder's verdict, not the ship); VESPER is given that
+// stage here, as phase 2's VESPER played it.
 {
   const VESPER = 3;
-  const world = createInitialState({ seed: 4, shipIndex: VESPER, carried: freshUnitRacks(getShip(VESPER)) });
+  const hunt: ShipThreat = { ...nominalShipThreat(VESPER), stage: 'hunt', folded: [], hollow: phase2HollowOf(VESPER), rootBlocks: 14 };
+  const freshFiles = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
+    .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item)).map((item) => structuredClone(item) as Segment);
+  const huntPacket = packUnit(freshFiles, getShip(VESPER).arrival!.linkBlocks, []);
+  const carried = layoutCarried(huntPacket, huntPacket.chargeCarried, getShip(VESPER), hunt).racks;
+  const world = createInitialState({ seed: 4, shipIndex: VESPER, carried, threat: hunt });
   const memory = world.memory;
   const starts = segmentStarts(memory);
   const spot = nearToolsSeedSpot(memory, []);
@@ -348,7 +365,7 @@ function forceLandAllButFirst(): void {
   const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item)).map((item) => structuredClone(item) as Segment);
   const packet = packUnit(files, 120, []);
-  const halcyon = layoutCarried(packet, packet.chargeCarried, getShip(1)).racks.segs;
+  const halcyon = layoutCarried(packet, packet.chargeCarried, getShip(1), nominalShipThreat(1)).racks.segs;
   check('…and HALCYON\'s unit is still laid out back to back (no free run before the charge)',
     halcyon.findIndex((seg) => seg.type === 'free') > halcyon.findIndex((seg) => seg.type === 'redundancy'));
 }

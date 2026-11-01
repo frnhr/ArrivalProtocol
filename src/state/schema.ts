@@ -3,7 +3,8 @@ import type { LandingState, LandingTally } from '@/types/landing';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { PlanetParams, Ring } from '@/types/orbit';
 import type { Zone } from '@/types/zone';
-import type { HollowDef, ShrinkTuning } from '@data/ships';
+import type { ShrinkTuning } from '@data/ships';
+import type { HollowDef, RunThreatState, ShipThreat } from '@/types/threat';
 import type { UpgradeId, DraftCard } from '@data/upgrades';
 import type { LastUnit } from '@systems/meta';
 
@@ -288,6 +289,10 @@ export interface ArrivalReport {
   chargeFloorAdded: number; // the floor's top-up (§6.5: never fewer than 12 blocks on arrival)
   chargeOverflowLost: number; // charge that did not fit memory and was lost (loudly)
   scripted: TransitHit[];   // the ship's own arrival damage (§6.9: KESTREL's sensor, VESPER's Thrust Ctrl)
+  // Phase 3 slice 2 (04 §3.4, §3.8): the beam seeds laid out behind their targets (the boot's ECC seeds line names each),
+  // and HOLLOW's root when it boarded on this beam (the 108% unpack line, the boarding moment). Empty / null otherwise.
+  seeds: { segId: string; targetName: string }[];
+  boarded: { blocks: number; cause: 'trace' | 'forced' } | null;
 }
 
 // The transmission being prepared ('transmit'): the next ship, the link and how the unit's files pack
@@ -308,6 +313,20 @@ export interface TransitPlan {
   // stats, fixed once dealt), and the one picked. The pick is mandatory: transmitNext refuses without it.
   offer: DraftCard[];
   pick: UpgradeId | null;
+  // The ladder's verdict for the ship being beamed to (systems/threat-plan.ts planThreat, from run.threat after this
+  // ship's tally): the PACKET's uninvited chip reads `boards` and `rootBlocks`; transmitNext builds the ship with it.
+  threat: ShipThreat;
+}
+
+// 046.log's progress through the run (05 §3.2; systems/story-log.ts): kept on the run, not the segment, because the
+// segment is copied through every packet. `scanned`: SCAN has read its header (it reads `046.log` from then on);
+// `found`: the entries whose key was found (01 after ship 1's report, then at the boots); `read`: the entries the reader
+// has typed out; `autoOpened`: entry 01 opened the reader by itself, once a run (run 1 only).
+export interface RunLogState {
+  scanned: boolean;
+  found: number[];
+  read: number[];
+  autoOpened: boolean;
 }
 
 export interface RunState {
@@ -362,6 +381,11 @@ export interface RunState {
   transit: TransitPlan | null;
   arrival: ArrivalReport | null;
   endCause: RunEndCause | null;
+  // The threat ladder's memory (phase 3 slice 2, 04 §3.7–§3.9; systems/threat-plan.ts): TRACE, whether HOLLOW is aboard
+  // and for how many ships, what it was fed. During a ship it already counts that ship (its plan applied).
+  threat: RunThreatState;
+  // 046.log's progress (05 §3.2).
+  log: RunLogState;
 }
 
 // --- HOLLOW (systems/hollow.ts, §6.6) -----------------------------------------------------------
@@ -378,7 +402,7 @@ export type HollowPhase = 'asleep' | 'awake' | 'dormant';
 export type HollowStory = 'none' | 'pending' | 'told';
 
 export interface HollowState {
-  cfg: HollowDef;            // this ship's HOLLOW, copied from its ShipDef (like `level`)
+  cfg: HollowDef;            // this ship's HOLLOW, from the threat ladder's verdict (ShipThreat.hollow; like `level`)
   phase: HollowPhase;
   story: HollowStory;
   // Ship 1's scripted fight ('loop-closed-once'): the file its one bite infected, from the bite until the fight is
@@ -430,6 +454,9 @@ export interface HollowState {
   bitesAt: BiteSpot[];
   // LAST LIGHT's finale (WP11, systems/finale.ts). (update)
   finale: FinaleState;
+  // AI seconds of calm flight on this ship (phase 3 slice 2): the clock a calm-only wake counts (HollowWake calmOnly, the
+  // seeds-only config's first bite, 04 §3.5). It stands still at TACTICAL, as the first seed's clock does. (mutate)
+  calmAiSec: number;
 }
 
 export interface BiteSpot {

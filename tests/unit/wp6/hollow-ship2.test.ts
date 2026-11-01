@@ -41,7 +41,6 @@ const HALCYON: ShipDef = {
     drivers: SHIPS[1]!.memory.drivers,
   },
   landing: SHIPS[1]!.landing,
-  hollow: HALCYON_HOLLOW,
 };
 const CHARGE = 32;
 const RUN_SEC = 180;
@@ -53,7 +52,7 @@ const h = createHarness6(7, { soulsFound: true });
 function setUp(): void {
   h.resetTo('flight');
   h.noFault();
-  const memory = buildShipMemory(HALCYON, null, childRng(7, 1, 'families'), false, UNNAMED_HOLLOW);
+  const memory = buildShipMemory(HALCYON, null, childRng(7, 1, 'families'), false, UNNAMED_HOLLOW, null);
   const state = h.store.getState();
   // A closed loop that pokes out of the ring (▼ 5,500 km inside, ▲ 11,000 km outside): it never
   // locks and never crashes, and nobody burns, so 180 AI s pass on a quiet flight.
@@ -62,7 +61,7 @@ function setUp(): void {
   const orbit = stateFromElements(rp, (ra - rp) / (ra + rp), 0, 0, state.level.planet.mu);
   h.store.update((d) => {
     d.memory = memory;
-    d.hollow = createHollowState(HALCYON);
+    d.hollow = createHollowState(HALCYON_HOLLOW);
     d.landing = createLandingState(HALCYON.landing, memory, { finalShip: false, lead: 5, hurt: [], planetR: d.level.planet.R });
     d.mission.colonists = d.landing.pods.reduce((sum, record) => sum + record.colonists, 0);
     d.orbit = { x: orbit.x, y: orbit.y, vx: orbit.vx, vy: orbit.vy };

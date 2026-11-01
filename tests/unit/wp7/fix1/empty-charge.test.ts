@@ -19,6 +19,7 @@ import { transmitModel } from '@systems/transmit';
 import { getShip } from '@data/ships';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { CHARGE_ARRIVAL_FLOOR, STAR_CHARGE_BONUS } from '@data/tuning';
+import { nominalShipThreat } from '@systems/threat-plan';
 
 const h = createHarness7(5, { soulsFound: false });
 const state = () => h.store.getState();
@@ -55,7 +56,7 @@ const memoryValid = (): boolean => {
   let layoutError = '';
   let pool: ReturnType<typeof getRedundancy> | null = null;
   try {
-    const layout = layoutCarried(packet, blocks, halcyon);
+    const layout = layoutCarried(packet, blocks, halcyon, nominalShipThreat(1));
     const found = layout.racks.segs.find((seg) => seg.type === 'redundancy');
     pool = found && found.type === 'redundancy' ? found : null;
   } catch (error) { layoutError = (error as Error).message; }

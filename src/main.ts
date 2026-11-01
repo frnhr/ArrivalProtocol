@@ -80,6 +80,7 @@ import { mountZones } from '@systems/zones';
 import { mountAutoburn, registerAutoburnKeys } from '@systems/autoburn';
 import { mountHollowPainter } from '@components/memory-view/HollowPainter';
 import { mountRun } from '@systems/run';
+import { mountStoryLog } from '@systems/story-log';
 import { mountTransmitScreen } from '@components/run/TransmitScreen';
 import { mountRunEnd } from '@components/run/RunEnd';
 import { mountMergeTick } from '@components/memory-view/MergeTick';
@@ -150,6 +151,8 @@ mountHollowVerbs(store);
 mountFinale(store);
 // The run (WP7): the stats, BEAM OUT's bar on world time, and the soft fails' bookkeeping.
 mountRun(store);
+// Phase 3 slice 2: 046.log through the run (the keys at the boots, the SCAN, the reader after ship 1's report).
+mountStoryLog(store);
 mountInput(window);
 blurButtonsOnPointerUp(document);
 emitUiClicks(document);

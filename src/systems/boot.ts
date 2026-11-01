@@ -217,6 +217,9 @@ function sayNextLine(store: Store<GameState>): void {
   const arrival = state.run.arrival;
   if (kind === 'ecc' && arrival !== null && arrival.hits.length > 0) emit('arrival-hits', { hits: [...arrival.hits] });
   if (kind === 'scripted' && arrival !== null) emit('arrival-hits', { hits: [...arrival.scripted] });
+  // HOLLOW boarded on this beam (phase 3 slice 2, 04 §4): its 108% unpack is the boarding moment (the shake, the tear,
+  // the hollowBoard cue hang on the event; Track UI).
+  if (kind === 'board' && arrival !== null && arrival.boarded !== null) emit('hollow-boarded', { ...arrival.boarded });
   // A returning unit's ship-1 boot licenses REPAIR as it names the host (§5.2; phase 2 did it as the archive opened):
   // the chip is there before the flight, as on every later ship.
   if (kind === 'host' && state.run.arrival === null) installBootLicences(store);

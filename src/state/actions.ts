@@ -16,6 +16,7 @@ import {
 } from '@systems/memory-ops';
 import { targetRefusal, isOpenFree, chargeInUse, swapPair, type SwapPair } from '@systems/tool-targets';
 import { emit, NO_PAYLOAD } from '@systems/events';
+import { LOG_TEXT } from '@data/log-text';
 import { say } from '@systems/say';
 import { TOOL_ICONS, repairRatePerSec } from '@data/fs-tools';
 import { MEMORY_TOTAL_BLOCKS, rootRemains } from '@data/memory';
@@ -104,9 +105,9 @@ function stateOf(seg: Segment): SegmentState | undefined {
 }
 
 // Sets (or clears, with undefined) a segment's state. Only the types that carry one are touched:
-// REPAIR CHARGE, free space, HOLLOW and a FIREWALL have none.
+// REPAIR CHARGE, free space, HOLLOW, a FIREWALL and 046.log have none.
 function setState(seg: Segment, state: SegmentState | undefined): void {
-  if (seg.type === 'free' || seg.type === 'redundancy' || seg.type === 'hollow' || seg.type === 'firewall') return;
+  if (seg.type === 'free' || seg.type === 'redundancy' || seg.type === 'hollow' || seg.type === 'firewall' || seg.type === 'log') return;
   if (state === undefined) delete seg.state;
   else seg.state = state;
 }
@@ -287,6 +288,13 @@ function runQuickOp(
 export function actionScan(store: Store<GameState>, seg: Segment): ToolRefusal | null {
   const refusal = actionRefusal(store.getState(), 'scan', seg);
   if (refusal) return refuse(refusal);
+  // 046.log has no health to reveal: its scan reads the log's header (05 §3.2), and systems/story-log.ts reacts to the
+  // event (the name, CONTROL's line).
+  if (seg.type === 'log') {
+    runQuickOp(store, seg, 'scan', 'scan', scanSec(seg.size), () => { emit('log-scanned', NO_PAYLOAD); },
+      () => OP_ECHO.scan(echoName(seg), LOG_TEXT.scan(store.getState().run.log.found.length)));
+    return null;
+  }
   runQuickOp(store, seg, 'scan', 'scan', scanSec(seg.size), () => {
     if (!('scanned' in seg)) return;
     seg.scanned = true;

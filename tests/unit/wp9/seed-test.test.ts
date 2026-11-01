@@ -32,6 +32,7 @@ import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { SEED_BLOCKS, SEED_TELEGRAPH_SEC, WALL_MIN_BLOCKS, WAKE_AFTER_DODGE_SEC } from '@data/tuning';
 import { createToolFiles } from '@data/fs-tools';
 import type { Segment, DriverSegment, HollowSegment } from '@/types/segment';
+import { phase2HollowOf } from '../support/hollow-world';
 
 const h = createHarness9(3);
 const state = () => h.store.getState();
@@ -124,7 +125,7 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
     d.hollow.cfg.wake = { afterAiSec: 0, coastLeadSec: null };
     d.ui.memoryRev++;
   });
-  const firstAfter = getShip(KESTREL).hollow.seed!.firstAfterSec;
+  const firstAfter = phase2HollowOf(KESTREL).seed!.firstAfterSec;
   // WP9 review round 2: a timed wake also waits WAKE_AFTER_DODGE_SEC after the debris dodge closed (here: when the
   // correction took the path off the cloud).
   h.stepUntil(() => state().hollow.phase === 'awake', WAKE_AFTER_DODGE_SEC + 2);
@@ -289,7 +290,7 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
 
 // --- ShipDef validation -----------------------------------------------------------------------------------------
 {
-  const kestrel = getShip(KESTREL).hollow;
+  const kestrel = phase2HollowOf(KESTREL);
   const throws = (def: HollowDef): boolean => { try { validateHollowDef('test', def); return false; } catch { return true; } };
   check('KESTREL\'s HOLLOW validates (seeds every 50 s at the walls, the first 30 s after the wake)', !throws(kestrel)
     && kestrel.seed?.everySec === 50 && kestrel.seed.target === 'walls' && kestrel.spreadEverySec === 20 && kestrel.drainPerSec === 4);

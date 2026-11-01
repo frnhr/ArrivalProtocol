@@ -76,6 +76,7 @@ function repairRefusal(seg: Segment, state: Readonly<GameState>): ToolRefusal | 
   }
   if (seg.type === 'ship' || seg.type === 'ship-backup') return TOOL_REFUSAL.shipFile;
   if (seg.type === 'firewall') return TOOL_REFUSAL.firewallHealth;
+  if (seg.type === 'log') return TOOL_REFUSAL.logRepair;
   if (!isRepairable(seg)) return notAFile(seg);
   // No scan gate: the AI's own files are always visible (§3.2), so a hurt Engine I/O is one
   // click from a repair. Only ship files hide their health, and those can't be healed anyway.
@@ -108,12 +109,15 @@ export function targetRefusal(seg: Segment, ctx: ValidTargetContext): ToolRefusa
     case 'scan':
       if (seg.type === 'driver') return TOOL_REFUSAL.driverScan;
       if (seg.type === 'firewall') return TOOL_REFUSAL.firewallHealth;
+      // 046.log: SCAN reads its header (05 §3.2), the one tool that works on it.
+      if (seg.type === 'log') return null;
       return 'scanned' in seg ? null : notAFile(seg);
     case 'repair':
       return repairRefusal(seg, state);
     case 'delete':
       if (seg.type === 'core') return TOOL_REFUSAL.coreDelete;
       if (seg.type === 'driver') return TOOL_REFUSAL.driverDelete;
+      if (seg.type === 'log') return TOOL_REFUSAL.logDelete;
       // DELETE cuts HOLLOW back block by block (§6.5); the root stays LOCKED until ship 5's duel.
       if (seg.type === 'hollow' && seg.locked) return TOOL_REFUSAL.locked;
       if (seg.type === 'redundancy' && chargeInUse()) return TOOL_REFUSAL.chargeBusy;
@@ -123,6 +127,7 @@ export function targetRefusal(seg: Segment, ctx: ValidTargetContext): ToolRefusa
       // Stage 1: the source.
       if (seg.type === 'hollow') return notAFile(seg);
       if (seg.type === 'core') return activeKind === 'move' ? TOOL_REFUSAL.coreMove : TOOL_REFUSAL.coreCopy;
+      if (seg.type === 'log') return activeKind === 'move' ? TOOL_REFUSAL.logMove : TOOL_REFUSAL.logCopy;
       // REPAIR CHARGE stays put (§6.5), and a copy of it would double the repair budget.
       if (seg.type === 'redundancy') return activeKind === 'move' ? TOOL_REFUSAL.moveCharge : TOOL_REFUSAL.copyCharge;
       // Drivers move (carried behind a gap, §3.2) but are never duplicated: one pod, one driver.

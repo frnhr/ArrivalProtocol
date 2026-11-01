@@ -39,6 +39,7 @@ import { RACK_TAG_TEXT } from '@data/zone-text';
 import { UNIT_RACKS_START } from '@data/memory';
 import { MAX_LINE_CHARS, RACK_BLOCKS, WAKE_AFTER_DODGE_SEC } from '@data/tuning';
 import type { Segment } from '@/types/segment';
+import { phase2HollowOf } from '../../support/hollow-world';
 
 const h = createHarness9(5);
 const state = () => h.store.getState();
@@ -207,7 +208,7 @@ const correctIn = (): void => {
   });
   // Round 2: a timed wake also waits WAKE_AFTER_DODGE_SEC after the dodge closed (the correction cleared the cloud).
   h.stepUntil(() => state().hollow.phase === 'awake', WAKE_AFTER_DODGE_SEC + 3);
-  const firstAfter = getShip(KESTREL).hollow.seed!.firstAfterSec;
+  const firstAfter = phase2HollowOf(KESTREL).seed!.firstAfterSec;
   h.stepFor(firstAfter + 1);
   check('a seed moment with nowhere to land counts (no telegraph, seedMoments 1)', state().hollow.seedMoments === 1
     && state().hollow.seedTelegraph === null && state().hollow.seedsLanded === 0, `${state().hollow.seedMoments}`);

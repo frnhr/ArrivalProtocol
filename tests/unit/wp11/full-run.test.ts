@@ -117,7 +117,13 @@ for (let seed = 1; seed <= SEEDS; seed++) {
   verbsAtChoice = null;
   lostOnLastLight = null;
   let guard = 0;
+  // Fail fast (slice 2 foundation): a pass of the loop that moves the run on nowhere (same ship, phase and flight status)
+  // would only repeat its long maxWall waits up to the guard (a stuck flight spun this suite for minutes); stop the seed.
+  let progress = '';
   while (state().run.phase !== 'end' && guard++ < 12) {
+    const here = `${state().run.shipIndex}:${state().run.phase}:${state().burn.status}:${state().hollow.finale.phase}`;
+    if (here === progress) break;
+    progress = here;
     if (state().run.phase === 'boot') h.stepUntil(() => state().run.phase !== 'boot', 25);
     setLandingMode(state().run.shipIndex !== LAST_LIGHT ? 'instant' : FINAL_STRIP ? 'manual' : FINAL_LANDING_SEC > 0 ? { after: FINAL_LANDING_SEC } : 'instant');
     if (state().run.phase === 'flight' && state().burn.status === 'approaching' && !state().run.coreLost) flyShip();

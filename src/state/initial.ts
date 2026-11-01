@@ -1,8 +1,11 @@
 import type { GameState, RunPhase, RunState, HollowState, RunStats, ArchiveState, HazardsState } from './schema';
 import type { Segment } from '@/types/segment';
 import type { LandingState, PodRecord, ShipLandingDef } from '@/types/landing';
+import type { HollowDef, ShipThreat } from '@/types/threat';
 import { buildShipMemory, hurtDriversFor, type CarriedRacks, type HurtDriver } from '@data/memory';
-import { getShip, type ShipDef } from '@data/ships';
+import { getShip } from '@data/ships';
+import { nominalRunThreat, nominalShipThreat } from '@systems/threat-plan';
+import { createRunLog } from '@systems/story-log';
 import { isDriver } from '@state/selectors';
 import { createFlight, createMissionMeta, createClockState } from '@data/mission';
 import { childRng } from '@systems/rng';
@@ -24,6 +27,10 @@ export interface InitialStateOpts {
   // systems/carry.ts laid out. Required there (buildShipMemory throws without it); a test that flies a
   // later ship alone passes carry.ts freshUnitRacks(ship) explicitly.
   carried?: CarriedRacks | null;
+  // The ship's threat (systems/threat-plan.ts): left out, the nominal run's for shipIndex (every ship before it flown
+  // with TRACE 0 and no DEAL, slice-2-plan risk 14), which run.threat matches. A suite that wants another verdict (a
+  // seeds-only ship with seeds, a HUNT stage) passes its own.
+  threat?: ShipThreat;
   // Who this run's unit is, from the archive (WP8, systems/meta.ts): the page passes the archive's; a
   // headless world without one flies the first run (FIRST_RUN_LINEAGE), as an empty archive would.
   lineage?: Readonly<RunLineage>;
@@ -39,7 +46,8 @@ export function createRunStats(): RunStats {
 // wave 1 the first time), and the tutorial until a unit has flown ARES-VII through. SCAN comes with the
 // unit; every other tool is licensed during the run
 // (systems/licences). HOLLOW starts unnamed on every run: on a later run its ghost names it during the
-// ship-1 boot (systems/boot.ts), on the first HALCYON does.
+// ship-1 boot (systems/boot.ts), on the first HALCYON does. The threat ladder's memory starts as the nominal run's for
+// `shipIndex` (ship 1: nothing reported, HOLLOW not aboard; a later ship built alone: as if flown with TRACE 0).
 export function createRunState(seed: number, phase: RunPhase, shipIndex: number, lineage: Readonly<RunLineage>): RunState {
   return {
     rev: 0,
@@ -67,15 +75,19 @@ export function createRunState(seed: number, phase: RunPhase, shipIndex: number,
     transit: null,
     arrival: null,
     endCause: null,
+    threat: nominalRunThreat(shipIndex),
+    log: createRunLog(),
   };
 }
 
 // The slices that belong to one ship (§9 WP7 item 2: systems/run.ts resetWorldForShip assigns them in
 // one update): the mission line, memory, both clocks, the flight, the pods and their landing, and HOLLOW.
-// `run` gives the seed, the ship, the unit and what HOLLOW is called by now.
+// `run` gives the seed, the ship, the unit and what HOLLOW is called by now. `threat` is the ladder's verdict for this
+// ship (systems/threat-plan.ts planThreat): HOLLOW's config, and its root in the layout's slot (slice 2's THREAT track
+// carries the root in the Packet; the verdict's rootBlocks is the same number).
 export type ShipSlices = Pick<GameState, 'mission' | 'memory' | 'clock' | 'burn' | 'orbit' | 'level' | 'landing' | 'hollow' | 'hazards'>;
 
-export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks | null): ShipSlices {
+export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks | null, threat: Readonly<ShipThreat>): ShipSlices {
   const ship = getShip(run.shipIndex);
   const mission = createMissionMeta(ship, run.unitNumber, run.wave);
   // The tutorial run always meets the same ARES-VII families and its hurt POD 02 (01-landing §2); a returning unit
@@ -84,7 +96,7 @@ export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks 
   const hurt = hurtDriversFor(ship, firstRun, childRng(run.seed, run.shipIndex, 'hurt'));
   const memory = buildShipMemory(
     ship, carried, childRng(run.seed, run.shipIndex, ship.memory.drivers.familiesSeedStream), firstRun,
-    hollowLabel(run), hurt,
+    hollowLabel(run), threat.rootBlocks === null ? null : { blocks: threat.rootBlocks }, hurt,
   );
   // The run after a MERGE (§4.5, WP11): the fresh unit's Core comes with the unit it merged with, a thread more. Set on
   // the unit ARRIVAL CONTROL builds (ship 1, and ship 1 again after the simulation); later ships carry this very Core.
@@ -109,7 +121,7 @@ export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks 
     orbit: flight.orbit,
     level: flight.level,
     landing,
-    hollow: createHollowState(ship),
+    hollow: createHollowState(threat.hollow),
     hazards: createHazardsState(),
   };
 }
@@ -178,14 +190,16 @@ export function createLandingState(def: ShipLandingDef, memory: readonly Segment
   };
 }
 
-// HOLLOW sleeps in its root until the ship's wake (systems/hollow.ts).
-export function createHollowState(ship: ShipDef): HollowState {
+// HOLLOW sleeps in its root until the ship's wake (systems/hollow.ts). `cfg` is the ladder's config for the ship
+// (ShipThreat.hollow), copied.
+export function createHollowState(cfg: Readonly<HollowDef>): HollowState {
   return {
-    cfg: structuredClone(ship.hollow), phase: 'asleep', story: 'none', scriptTargetId: null, biteInSec: null, wakeAtAi: null,
+    cfg: structuredClone(cfg) as HollowDef, phase: 'asleep', story: 'none', scriptTargetId: null, biteInSec: null, wakeAtAi: null,
     seedInSec: null, seedTelegraph: null, seedMoments: 0, seedsLanded: 0, wakeHeld: false, wakeHoldEndedAtAi: null,
     deal: createDealState(),
     verbInSec: null, verb: null, verbMoments: 0, verbTelegraphs: 0, verbsLanded: 0, verbsBlocked: 0, untriedTools: [], bitesAt: [],
     finale: { phase: 'none', restoredInPlace: [], restoredHalf: [], ending: null, unresolvedUntilAi: null },
+    calmAiSec: 0,
   };
 }
 
@@ -200,7 +214,7 @@ export function createInitialState(opts: InitialStateOpts): GameState {
   const phase = opts.phase ?? 'flight';
   const run = createRunState(opts.seed, phase, opts.shipIndex ?? 0, opts.lineage ?? FIRST_RUN_LINEAGE);
   return {
-    ...createShipSlices(run, opts.carried ?? null),
+    ...createShipSlices(run, opts.carried ?? null, opts.threat ?? nominalShipThreat(run.shipIndex)),
     run,
     alerts: { list: [], rev: 0 },
     log: { entries: [], rev: 0 },

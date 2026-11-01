@@ -23,6 +23,7 @@ import { setLandingMode } from '../support/landing-instant';
 import { recordDriverLost } from '@state/actions';
 import { driversInMemory } from '@state/selectors';
 import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
+import { nominalShipThreat } from '@systems/threat-plan';
 
 
 const halcyon = getShip(1);
@@ -132,8 +133,8 @@ const memory = h.store.getState().memory;
   const rackEBlocks = packet.rackE.reduce((sum, seg) => sum + seg.size, 0);
   const filesBlocks = rackEBlocks + packet.rackF.reduce((sum, seg) => sum + seg.size, 0);
   const receiver = MEMORY_TOTAL_BLOCKS - UNIT_RACKS_START;
-  const layout = layoutCarried(packet, 36 + 12, halcyon);
-  const built = buildShipMemory(halcyon, layout.racks, createRng(1), false, UNNAMED_HOLLOW);
+  const layout = layoutCarried(packet, 36 + 12, halcyon, nominalShipThreat(1));
+  const built = buildShipMemory(halcyon, layout.racks, createRng(1), false, UNNAMED_HOLLOW, null);
   assertMemoryInvariants(built, MEMORY_TOTAL_BLOCKS);
   const starts = segmentStarts(built);
   const addr = (name: string): number => starts[built.findIndex((seg) => seg.name === name)]!;
@@ -144,16 +145,16 @@ const memory = h.store.getState().memory;
     && built[chargeIndex + 1]?.type === 'free' && chargeIndex + 2 === built.length,
     `Core ${addr('AI Core')}, Scan ${addr('Scan')}, charge at ${starts[chargeIndex]}`);
   // A block one longer than the receiver starts a block early, right-aligned to the end of memory.
-  const snug = layoutCarried(packet, receiver - filesBlocks + 1, halcyon);
-  const snugMemory = buildShipMemory(halcyon, snug.racks, createRng(1), false, UNNAMED_HOLLOW);
+  const snug = layoutCarried(packet, receiver - filesBlocks + 1, halcyon, nominalShipThreat(1));
+  const snugMemory = buildShipMemory(halcyon, snug.racks, createRng(1), false, UNNAMED_HOLLOW, null);
   assertMemoryInvariants(snugMemory, MEMORY_TOTAL_BLOCKS);
   const snugStarts = segmentStarts(snugMemory);
   check('…a block one longer than the receiver starts a block early (the Core at 255), nothing free after it',
     snug.racks.startAddr === UNIT_RACKS_START - 1 && snugStarts[snugMemory.findIndex((seg) => seg.name === 'AI Core')] === UNIT_RACKS_START - 1
     && snugMemory[snugMemory.length - 1]?.type === 'redundancy' && snug.overflowLost === 0, `start ${snug.racks.startAddr}`);
   // An overfull packet: the tail into rack D (free to its end on HALCYON) is capped at UNIT_TAIL_BLOCKS; the rest is lost.
-  const big = layoutCarried(packet, 120, halcyon);
-  const spilled = buildShipMemory(halcyon, big.racks, createRng(1), false, UNNAMED_HOLLOW);
+  const big = layoutCarried(packet, 120, halcyon, nominalShipThreat(1));
+  const spilled = buildShipMemory(halcyon, big.racks, createRng(1), false, UNNAMED_HOLLOW, null);
   assertMemoryInvariants(spilled, MEMORY_TOTAL_BLOCKS);
   const room = receiver + UNIT_TAIL_BLOCKS;
   check('…a packet bigger than the receiver takes at most UNIT_TAIL_BLOCKS of rack D, and the charge past that is lost',
@@ -161,12 +162,12 @@ const memory = h.store.getState().memory;
     && big.overflowLost === 120 - (room - filesBlocks), `start ${big.racks.startAddr}, ${big.overflowLost} lost`);
   // A ship whose rack D is full to its end: no tail at all; the charge that does not fit is lost, loudly.
   const fullD: ShipDef = { ...halcyon, id: 'full-d-test', memory: { ...halcyon.memory, podRacks: { ...halcyon.memory.podRacks, D: '_56 P' } } };
-  const lost = layoutCarried(packet, 80, fullD);
+  const lost = layoutCarried(packet, 80, fullD, nominalShipThreat(1));
   check('…with rack D full at its end, charge that does not fit the receiver is lost (CHARGE OVERFLOW)',
     lost.racks.startAddr === UNIT_RACKS_START && lost.overflowLost === 80 - (receiver - filesBlocks)
     && lost.chargeBlocks === receiver - filesBlocks, `${lost.overflowLost} lost`);
   let threw = '';
-  try { layoutCarried({ ...packet, rackE: [...packet.rackE, ...packet.rackE.map((seg) => ({ ...seg, size: 30 }))] }, 0, fullD); } catch (error) { threw = (error as Error).message; }
+  try { layoutCarried({ ...packet, rackE: [...packet.rackE, ...packet.rackE.map((seg) => ({ ...seg, size: 30 }))] }, 0, fullD, nominalShipThreat(1)); } catch (error) { threw = (error as Error).message; }
   check('…files that do not fit throw', /do not fit/.test(threw), threw);
 }
 

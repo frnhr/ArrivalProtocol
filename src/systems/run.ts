@@ -3,6 +3,7 @@ import type {
   GameState, RunPhase, RunState, ShipOutcome, ShipResult, RunEndCause, ArrivalReport, TransitPlan, TransitHit, RingMiss,
 } from '@state/schema';
 import type { CarriedRacks } from '@data/memory';
+import type { ShipThreat } from '@/types/threat';
 import { onGameTick, onPostTick } from '@systems/clock';
 import { onWorldReset, resetWorld } from '@systems/reset';
 import { on, emit, NO_PAYLOAD } from '@systems/events';
@@ -23,6 +24,7 @@ import { archiveShipStarted, archiveRunEnded, archiveTutorialDone, type RunLinea
 import { finaleRunCause } from '@systems/finale';
 import { newSegId } from '@systems/memory-ops';
 import { createRunState, createShipSlices, createUiState, createRunStats } from '@state/initial';
+import { planThreat, threatInputFor, applyThreat, fixedShipFacts, nominalShipThreat, nominalRunThreat } from '@systems/threat-plan';
 import { inOrbitOutcome, landingResult } from '@systems/landing-rules';
 import { getShip, isLastShip, SHIPS } from '@data/ships';
 import { BEATS, LINES, perShipBeatIds } from '@data/script';
@@ -149,6 +151,9 @@ export interface WorldReset {
   // The run as the new world starts it: the ship to fly, and everything the run keeps.
   run: RunState;
   carried: CarriedRacks | null;
+  // The threat ladder's verdict for the ship (systems/threat-plan.ts): HOLLOW's config and its root. run.threat already
+  // has it applied (startShip).
+  threat: ShipThreat;
   // NEW RUN: the log starts over. A ship change keeps it, with a divider naming the ship.
   freshLog: boolean;
   // The one-shot rules and beats already done, as the new world keeps them.
@@ -159,7 +164,7 @@ export interface WorldReset {
 
 export function resetWorldForShip(store: Store<GameState>, reset: WorldReset): void {
   resetWorld();
-  const slices = createShipSlices(reset.run, reset.carried);
+  const slices = createShipSlices(reset.run, reset.carried, reset.threat);
   const before = store.getState();
   const oldAiSec = before.clock.aiSec;
   store.update((draft) => {
@@ -193,11 +198,16 @@ function doneForNextShip(state: Readonly<GameState>): string[] {
 // suite passes FIRST_RUN_LINEAGE or a built one). Always explicit: a NEW RUN that quietly forgot the archive
 // would be run 1 again with nobody noticing.
 export function startRun(store: Store<GameState>, seed: number, lineage: Readonly<RunLineage>): void {
-  resetWorldForShip(store, { phase: 'title', run: createRunState(seed, 'title', 0, lineage), carried: null, freshLog: true, done: [] });
+  resetWorldForShip(store, {
+    phase: 'title', run: createRunState(seed, 'title', 0, lineage), carried: null, threat: nominalShipThreat(0), freshLog: true, done: [],
+  });
 }
 
-// The unit arrives on ship `index` (its boot plays, then the flight).
-export function startShip(store: Store<GameState>, index: number, carried: CarriedRacks | null, arrival: ArrivalReport | null): void {
+// The unit arrives on ship `index` (its boot plays, then the flight). `threat` is the ladder's verdict for it (the
+// TRANSMIT's plan, TransitPlan.threat): the run's threat memory takes it in here, as the ship starts.
+export function startShip(
+  store: Store<GameState>, index: number, carried: CarriedRacks | null, arrival: ArrivalReport | null, threat: ShipThreat,
+): void {
   const state = store.getState();
   if (index < 0 || index >= SHIPS.length) throw new Error(`startShip: no ship ${index}`);
   const run: RunState = {
@@ -207,8 +217,9 @@ export function startShip(store: Store<GameState>, index: number, carried: Carri
     transit: null,
     pendingStarCredit: 0,
     pendingStars: 0,
+    threat: applyThreat(state.run.threat, threat, fixedShipFacts(index).depth),
   };
-  resetWorldForShip(store, { phase: 'boot', run, carried, freshLog: false, done: doneForNextShip(state) });
+  resetWorldForShip(store, { phase: 'boot', run, carried, threat, freshLog: false, done: doneForNextShip(state) });
   // The archive's run in progress says where the unit is now (a run left on this ship is 'abandoned' here).
   archiveShipStarted(store);
 }
@@ -237,6 +248,8 @@ export function goTransmit(store: Store<GameState>, extra: { extraHits: number; 
   const arrivalDef = getShip(toShipIndex).arrival;
   if (!arrivalDef) throw new Error(`goTransmit: ship ${toShipIndex} has no link (ShipDef.arrival)`);
   const packet = packUnit(store.getState().memory, arrivalDef.linkBlocks, []);
+  // The ladder's verdict for the next ship, from the run's threat once this ship's tally is done (Track THREAT's endShip).
+  const threat = planThreat(threatInputFor(state.run.threat, fixedShipFacts(toShipIndex), state.run.stats.deal !== null));
   const plan: TransitPlan = {
     toShipIndex,
     linkBlocks: arrivalDef.linkBlocks,
@@ -249,6 +262,7 @@ export function goTransmit(store: Store<GameState>, extra: { extraHits: number; 
     dropped: [],
     offer: dealDraft(store.getState(), arrivalDef.linkBlocks),
     pick: null,
+    threat,
   };
   store.update((draft) => {
     draft.run.phase = 'transmit';
@@ -285,7 +299,7 @@ export function transmitNext(store: Store<GameState>): void {
   hits.push(...rollTransitHits(files, link.transitHits + plan.extraHits, childRng(state.run.seed, plan.toShipIndex, 'transit')));
   const cardCharge = pickCharge(plan.pick);
   const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, cardCharge);
-  const layout = layoutCarried(packet, charge.blocks, ship);
+  const layout = layoutCarried(packet, charge.blocks, ship, plan.threat);
   const scripted = arrivalDamage(layout.racks.segs, link.damage);
   const arrival: ArrivalReport = {
     hits,
@@ -297,13 +311,23 @@ export function transmitNext(store: Store<GameState>): void {
     chargeFloorAdded: charge.floorAdded,
     chargeOverflowLost: layout.overflowLost,
     scripted,
+    // Beam seeds are Track THREAT's (systems/beam-seeds.ts rollBeamSeeds); the root lands in the slot as the ship is built.
+    seeds: [],
+    boarded: boardedBy(plan.threat),
   };
   // The card goes with the unit: the run remembers it (the Skills window lists it, THREAD+ is owned by it).
   if (plan.pick !== null) {
     const picked = plan.pick;
     store.update((draft) => { draft.run.upgrades.push(picked); });
   }
-  startShip(store, plan.toShipIndex, layout.racks, arrival);
+  startShip(store, plan.toShipIndex, layout.racks, arrival, plan.threat);
+}
+
+// HOLLOW's boarding as the arrival reports it (the boot's 108% unpack), from the ladder's verdict.
+export function boardedBy(threat: Readonly<ShipThreat>): ArrivalReport['boarded'] {
+  if (threat.boards === null) return null;
+  if (threat.rootBlocks === null) throw new Error('boardedBy: HOLLOW boards with no root');
+  return { blocks: threat.rootBlocks, cause: threat.boards };
 }
 
 // The run is over (RUN END, WP7 part 2). The world stops where it is, and the archive keeps how it ended
@@ -351,8 +375,10 @@ export function continueAfterLoss(store: Store<GameState>): LossPlan {
       simulationRetryUsed: true,
       arrival: null,
       transit: null,
+      // Ship 1 again, as the run began it (nothing can have reported home on a calm ship).
+      threat: nominalRunThreat(0),
     };
-    resetWorldForShip(store, { phase: 'boot', run, carried: null, freshLog: false, done: doneForNextShip(state) });
+    resetWorldForShip(store, { phase: 'boot', run, carried: null, threat: nominalShipThreat(0), freshLog: false, done: doneForNextShip(state) });
     say('control', LINES.simulation(), { critical: true });
     return plan;
   }

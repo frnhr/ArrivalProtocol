@@ -364,7 +364,7 @@ function firstSeedComing(state: Readonly<GameState>): boolean {
 // HOLLOW sleeps, the coast has begun, and its wake is tied to the coast (ShipDef wake.coastLeadSec).
 function hollowWaking(state: Readonly<GameState>): boolean {
   const wake = state.hollow.cfg.wake;
-  if (state.hollow.phase !== 'asleep' || wake === 'loop-closed-once' || wake.coastLeadSec === null) return false;
+  if (state.hollow.phase !== 'asleep' || typeof wake === 'string' || wake.coastLeadSec === null) return false;
   return state.burn.coastAtAi !== null;
 }
 

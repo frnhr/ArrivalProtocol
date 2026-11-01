@@ -38,6 +38,10 @@ import {
   END_LANDING_REFUSAL_KEY, END_LANDING_REFUSAL_TEXT,
 } from '@data/landing-text';
 import { HARD_WORDS_POOL } from '@data/souls';
+import { THREAT_RULES } from '@data/threat-rules';
+import { THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
+import { LOG_TEXT } from '@data/log-text';
+import { logEntriesAtBoot } from '@systems/story-log';
 import type { PodRecord } from '@/types/landing';
 import { autoburnDropLine, autoburnAvailable } from '@systems/autoburn';
 import { blocksInRack, knownHitRacks } from '@systems/zones';
@@ -832,11 +836,23 @@ export function scriptedDamageLine(hits: readonly TransitHit[]): string {
 // WP10: on a ship whose HOLLOW asks for charge (VESPER), its line closes the boot, in its pink, right after the
 // unit has counted the charge it arrived with: `> keep 20 charge for me, 047. you'll see.` (MERGE's price, §1).
 // WP11: LAST LIGHT's boot closes the same way: `> last ship, 047. i'm so tired.`
-export type BootLineKind = 'unpack' | 'host' | 'ecc' | 'scripted' | 'charge' | 'overflow' | 'skill' | 'hollow';
+// Phase 3 slice 2 (slice-2-plan §2.5): 'board' types HOLLOW's 108% unpack in place of 'unpack' when it boarded on this
+// beam (arrival.boarded; systems/boot.ts emits 'hollow-boarded' as it is said); 'seeds' names the beam seeds and their
+// targets right after the ECC line (arrival.seeds); 'log' types `> 046.log · KEY FOUND · ENTRY 0n` when this boot's keys
+// opened entries (run.log.found holds them: systems/story-log.ts). All three are empty until Tracks THREAT and OPENING
+// fill arrival.seeds, arrival.boarded and run.log.
+export type BootLineKind = 'unpack' | 'board' | 'host' | 'ecc' | 'seeds' | 'scripted' | 'charge' | 'overflow' | 'skill' | 'log' | 'hollow';
 
-// The boot line HOLLOW closes this ship's boot with (its story's), or null.
+// The entries this boot's keys opened (05 §3.2, the interim keys of systems/story-log.ts logEntriesAtBoot), once the log
+// has them as found; none before.
+export function bootLogEntries(state: Readonly<GameState>): number[] {
+  const keys = logEntriesAtBoot(state.run.shipIndex, getShip(state.run.shipIndex).flagship);
+  return keys.filter((entry) => state.run.log.found.includes(entry));
+}
+
+// The boot line HOLLOW closes this ship's boot with (its story's: the threat ladder's config for this ship), or null.
 function bootHollowLine(state: Readonly<GameState>): string | null {
-  const story = getShip(state.run.shipIndex).hollow.story;
+  const story = state.hollow.cfg.story;
   if (story === 'wants-charge') return HOLLOW_STORY.keepCharge(state.run.unitNumber, MERGE_COST_CHARGE);
   if (story === 'last-ship') return HOLLOW_STORY.lastShip(state.run.unitNumber);
   return null;
@@ -845,13 +861,15 @@ function bootHollowLine(state: Readonly<GameState>): string | null {
 export function bootLinePlan(state: Readonly<GameState>, skill: boolean): BootLineKind[] {
   const arrival = state.run.arrival;
   const hollow: BootLineKind[] = bootHollowLine(state) !== null ? ['hollow'] : [];
-  if (arrival === null) return ['unpack', 'host', 'ecc', ...hollow];
-  const plan: BootLineKind[] = ['unpack', 'host', 'ecc'];
+  const log: BootLineKind[] = bootLogEntries(state).length > 0 ? ['log'] : [];
+  if (arrival === null) return ['unpack', 'host', 'ecc', ...log, ...hollow];
+  const plan: BootLineKind[] = [arrival.boarded !== null ? 'board' : 'unpack', 'host', 'ecc'];
+  if (arrival.seeds.length > 0) plan.push('seeds');
   if (arrival.scripted.length > 0) plan.push('scripted');
   plan.push('charge');
   if (arrival.chargeOverflowLost > 0) plan.push('overflow');
   if (skill) plan.push('skill');
-  plan.push(...hollow);
+  plan.push(...log, ...hollow);
   return plan;
 }
 
@@ -872,8 +890,17 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
   const arrival = state.run.arrival;
   switch (kind) {
     case 'unpack': return LINES.bootUnpack(vars);
+    case 'board': return THREAT_TEXT.boardUnpack(unitName(vars.unit));
     case 'host': return LINES.bootHost(vars);
     case 'ecc': return arrival === null ? eccLine(damagedAiFiles(state)) : transitEccLine(arrival.hits);
+    case 'seeds':
+      if (arrival === null || arrival.seeds.length === 0) throw new Error('bootLine: a seeds line with no beam seeds');
+      return eccSeedsLine(arrival.seeds.map((seed) => seed.targetName));
+    case 'log': {
+      const entries = bootLogEntries(state);
+      if (entries.length === 0) throw new Error('bootLine: a log line with no key found');
+      return LOG_TEXT.keyFound(entries);
+    }
     case 'scripted':
       if (arrival === null) throw new Error('bootLine: arrival damage on a ship nothing transmitted to');
       return scriptedDamageLine(arrival.scripted);
@@ -891,8 +918,9 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
     }
   }
 }
-// The most a boot ever says (a later ship with arrival damage, an overflow, a skill trained and HOLLOW's line).
-export const BOOT_LINE_MAX = 8;
+// The most a boot ever says (a later ship with the beam's seeds, arrival damage, an overflow, a skill trained, a log key
+// and HOLLOW's line).
+export const BOOT_LINE_MAX = 10;
 
 // --- Beats: lines spoken on a moment (§6.3) ---------------------------------------------------
 
@@ -2006,7 +2034,9 @@ export const GUIDE_RULES: readonly GuideRule[] = [
   // ...and while the root's DELETE runs, HOLLOW's eating lines come before "keep it running".
   ...FINALE_RUNNING_RULES,
   // WP9: a seed after HOLLOW's eating lines (a driver being eaten comes first), the debris and AUTOBURN's
-  // lesson after the WALL tutorials.
+  // lesson after the WALL tutorials. Phase 3 slice 2: the beam seeds' rules (data/threat-rules.ts, Track THREAT's) just
+  // before phase 2's seed lines.
+  ...THREAT_RULES,
   ...SEED_RULES,
   // WP11 review: a driver bitten again in the same spot is MOVEd behind a WALL, after a seed's one-click DELETE.
   ...BITTEN_AGAIN_RULES,

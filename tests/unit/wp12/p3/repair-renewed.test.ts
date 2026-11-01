@@ -13,6 +13,7 @@ import { infectNow } from '@systems/hollow';
 import { getFsTool } from '@state/selectors';
 import { LICENCE_RENEWED_REPAIR } from '@data/script';
 import type { FsToolSegment } from '@/types/segment';
+import { nominalShipThreat } from '@systems/threat-plan';
 
 const h = createHarness7(1);
 const state = () => h.store.getState();
@@ -43,12 +44,12 @@ function crossTo(harness: Harness7, index: number): void {
   const ship = getShip(index);
   if (!ship.arrival) throw new Error(`${ship.name} has no link`);
   const packet = packUnit(harness.store.getState().memory, ship.arrival.linkBlocks, []);
-  const layout = layoutCarried(packet, packet.chargeCarried, ship);
+  const layout = layoutCarried(packet, packet.chargeCarried, ship, nominalShipThreat(index));
   const scripted = arrivalDamage(layout.racks.segs, ship.arrival.damage);
   startShip(harness.store, index, layout.racks, {
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0,
-    chargeOverflowLost: 0, scripted,
-  });
+    chargeOverflowLost: 0, scripted, seeds: [], boarded: null,
+  }, nominalShipThreat(index));
   for (let i = 0; i < 400 && harness.store.getState().run.phase !== 'flight'; i++) harness.step();
   for (let i = 0; i < 40; i++) harness.step();
 }

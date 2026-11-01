@@ -2,6 +2,7 @@ import type { Segment, SegmentRole } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import { DRIVER_TOOL_TEXT } from '@data/landing-text';
 import { podTag } from '@data/pod-ids';
+import { LOG_TEXT } from '@data/log-text';
 
 // The words the filesystem tools say (WP3): why a click did nothing (shown next to the cursor),
 // the inline confirm's questions, and the TERMINAL's line when a repair runs out of charge.
@@ -49,6 +50,11 @@ export const TOOL_REFUSAL = {
   // licensed to one unit (a COPY would deal it twice).
   firewallHealth: "NOTHING TO HEAL — NOTHING CAN HURT IT",
   cardCopy: "A CARD IS ONE UNIT'S — IT CAN'T BE COPIED",
+  // 046.log (phase 3 slice 2, 05 §3.2): it can't be infected, moved, copied or deleted. SCAN reads it.
+  logDelete: LOG_TEXT.refuseDelete,
+  logMove: LOG_TEXT.refuseMove,
+  logCopy: LOG_TEXT.refuseCopy,
+  logRepair: LOG_TEXT.refuseRepair,
 } as const;
 
 export type ToolRefusal = (typeof TOOL_REFUSAL)[keyof typeof TOOL_REFUSAL];

@@ -27,6 +27,7 @@ import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, MEMORY_TOTAL_BLOCKS, lastPodRackT
 import { UNIT_TAIL_BLOCKS } from '@data/tuning';
 import type { GameState, ShipOutcome } from '@state/schema';
 import type { HollowSegment, Segment } from '@/types/segment';
+import { nominalShipThreat } from '@systems/threat-plan';
 
 const h = createHarness7(1);
 const state = (): GameState => h.store.getState();
@@ -229,7 +230,7 @@ function eat(pod: number): void {
   };
   for (const ship of SHIPS.filter((candidate) => candidate.arrival)) {
     const racks = freshUnitRacks(ship);
-    const hunts = ship.hollow.seed?.target === 'near-tools';
+    const hunts = nominalShipThreat(SHIPS.indexOf(ship)).hollow.seed?.target === 'near-tools';
     check(`${ship.name}: the unit lands as one block from rack E's start, files then charge, then free${hunts ? ' (a hunting ground before the tools)' : ''}`,
       racks.startAddr === RACK_E_START && contiguous(hunts ? withoutHuntingGround(racks.segs) : racks.segs)
       && hunts === (racks.segs.length !== withoutHuntingGround(racks.segs).length) && racks.segs.some((seg) => seg.type === 'redundancy')
@@ -241,14 +242,14 @@ function eat(pod: number): void {
   const receiver = MEMORY_TOTAL_BLOCKS - RACK_E_START;
   const tail = Math.min(UNIT_TAIL_BLOCKS, lastPodRackTrailingFree(ship));
   const files = packet.filesBlocks;
-  const fits = layoutCarried(packet, receiver - files + 10, ship);
+  const fits = layoutCarried(packet, receiver - files + 10, ship, nominalShipThreat(4));
   check(`a block 10 longer than the receiver starts 10 blocks into the last pod rack's tail`, fits.racks.startAddr === RACK_E_START - 10
     && fits.overflowLost === 0, `start ${fits.racks.startAddr}`);
-  const over = layoutCarried(packet, receiver - files + tail + 7, ship);
+  const over = layoutCarried(packet, receiver - files + tail + 7, ship, nominalShipThreat(4));
   check(`...never more than the tail (${tail}): the rest of the charge is lost, loudly`, over.racks.startAddr === RACK_E_START - tail
     && over.overflowLost === 7 && over.chargeBlocks === receiver + tail - files, `start ${over.racks.startAddr}, lost ${over.overflowLost}`);
   let threw = false;
-  try { layoutCarried({ ...packet, rackF: [...packet.rackF, { id: 'x', name: 'Huge', type: 'skill', size: receiver + tail } as unknown as Segment] }, 0, ship); } catch { threw = true; }
+  try { layoutCarried({ ...packet, rackF: [...packet.rackF, { id: 'x', name: 'Huge', type: 'skill', size: receiver + tail } as unknown as Segment] }, 0, ship, nominalShipThreat(4)); } catch { threw = true; }
   check('files that do not fit the room throw', threw);
 }
 

@@ -1,6 +1,6 @@
 import type {
   Segment, ShipSegment, ShipBackupSegment, CoreSegment, ToolSegment, SkillSegment, FsToolSegment,
-  RedundancySegment, DriverSegment, HollowSegment, SegmentRole,
+  RedundancySegment, DriverSegment, HollowSegment, LogSegment, SegmentRole,
 } from '@/types/segment';
 import type { ShipDef } from '@data/ships';
 import type { Rng } from '@systems/rng';
@@ -9,16 +9,17 @@ import { createToolFiles } from '@data/fs-tools';
 import { rollRoster, rollChildAge, type ScriptedRoster } from '@data/souls';
 import {
   SEG_NAME_MAX_CHARS, RACK_BLOCKS, RACK_COUNT, DRIVER_BLOCKS, ROOT_BLOCKS, COLONISTS_PER_POD, INTEGRITY_MAX, LAST_BLOCK_SIZE,
-  POD_RACK_MIN_FREE, UNIT_TAIL_BLOCKS, WALL_MIN_BLOCKS,
+  POD_RACK_MIN_FREE, UNIT_TAIL_BLOCKS, WALL_MIN_BLOCKS, PRE_FINAL_ROOT_CAP, FINAL_ROOT_MAX_BLOCKS,
 } from '@data/tuning';
 import { integrityState } from '@state/selectors';
 import { HOLLOW_DESC } from '@data/hollow-text';
 import { driverName } from '@data/landing-text';
 import { driverSegId } from '@data/pod-ids';
+import { LOG_FILE } from '@data/log-text';
 
 // The ship's memory (§3.2, §4.2, 01-landing §3.16): 384 blocks in 6 RACKS of 64, built from ship data.
 //   A    the ship's files (the same on every ship)
-//   B–D  the pod racks: the pods' drivers and HOLLOW's root, from a layout string per rack
+//   B–D  the pod racks: the pods' drivers and the root slot HOLLOW's root lands in, from a layout string per rack
 //   E    your AI files            F  your filesystem tools and REPAIR CHARGE (E–F: the receiver)
 // Racks are places: debris hits RACK C, the belt racks A–B, and the address labels name them. A
 // segment's address is the running sum of the sizes before it (systems/memory-ops.ts); a rack is
@@ -36,7 +37,7 @@ export interface FreeSpec {
 }
 
 export type ShipFileSpec = ShipSegment | ShipBackupSegment;
-export type AiFileSpec = CoreSegment | ToolSegment | SkillSegment | FsToolSegment | RedundancySegment;
+export type AiFileSpec = CoreSegment | ToolSegment | SkillSegment | FsToolSegment | RedundancySegment | LogSegment;
 export type RackItem<Spec> = Spec | FreeSpec;
 
 // A driver that arrives hurt (01-landing §3.8: run 1's POD 02 at 44%). Pod numbers are 1-based, as on screen.
@@ -48,6 +49,10 @@ export interface HurtDriver {
 // The pods' people and drivers on one ship (§6.7, 01-landing §3.8). Pod numbers are 1-based, as on screen.
 export interface ShipDriversDef {
   familiesSeedStream: string;          // childRng stream for the seeded families and colonists
+  // How the drivers arrive hurt (01-landing §3.8, §3.15): 'scripted', the written `hurt` list (ARES-VII's POD 02 at 44%);
+  // 'rolled', by the ship's layer (data/driver-damage.ts driverArrivalDamage: ceil(pods ÷ 5) degraded, one failing from
+  // layer 4), with `hurt` empty.
+  damage: 'scripted' | 'rolled';
   // The drivers that arrive hurt (a list, so slice 2's rolled arrival damage needs no type change). On a later run of
   // a ship whose first run is written (firstRun below), they are reseeded among the other pods (hurtDriversFor).
   hurt: readonly HurtDriver[];
@@ -62,8 +67,11 @@ export type PodRackKey = (typeof POD_RACK_KEYS)[number];
 
 export interface ShipMemoryDef {
   rackA: readonly RackItem<ShipFileSpec>[];
-  // The pod racks as layout strings (§4.2, 01-landing §3.16): `P` an 8-block pod driver, `R` the 8-block root (`R16`:
-  // 16 blocks), `_n` n free blocks; space-separated, each rack summing to RACK_BLOCKS.
+  // The pod racks as layout strings (§4.2, 01-landing §3.16): `P` an 8-block pod driver, `S` the root slot (0 blocks in
+  // the layout: when the threat ladder brings a root, buildShipMemory writes it there and takes its blocks off the slot
+  // rack's trailing free; without one the slot is nothing, and the free tokens around it are plain free space), `_n` n
+  // free blocks; space-separated, each rack summing to RACK_BLOCKS. `R` (an 8-block root, `R16`: 16 blocks) is phase 2's
+  // written root, kept for the test fixtures' layouts only: a ShipDef may not write one (validateShipDef).
   podRacks: Record<PodRackKey, string>;
   // Racks E and F as written for a unit that arrives fresh (ship 1). Later ships hold whatever the
   // unit carried (systems/carry.ts), so theirs is null.
@@ -120,10 +128,13 @@ export const FRESH_UNIT_RACK_E: readonly RackItem<AiFileSpec>[] = [
 // rack (systems/licences.ts), next to REPAIR CHARGE.
 export const FRESH_UNIT_RACK_F: readonly RackItem<AiFileSpec>[] = [
   ...createToolFiles('scan'),
+  // 046.log (05 §3.2): in the unit's memory from the first boot, carried in every packet. Before REPAIR CHARGE, where
+  // carry.ts packs it too (after the tools), so the licences still land next to the charge.
+  structuredClone(LOG_FILE),
   // REPAIR CHARGE (the old Quantum Redundancy pool): spent by repairs, one point at a time.
   { id: 'redund', name: 'Repair Charge', type: 'redundancy', role: 'redundancy', size: 36, used: 36, capacity: 72,
     desc: 'Transmitted alongside the AI. Every point a Repair heals costs charge (bigger files cost more). Spent blocks stay empty until Repair v2 squeezes them out; when the last point is spent the blocks become free space. Deleting it frees the space and loses the charge.' },
-  { free: 25 },
+  { free: 23 },
 ];
 
 const FRESH_CHARGE_FILE: RedundancySegment = (() => {
@@ -204,22 +215,34 @@ function buildWrittenRack<Spec extends Segment>(
 }
 
 // One pod rack's layout as tokens; the drivers and roots are filled in by the caller.
-export type LayoutToken = { kind: 'driver' } | { kind: 'root'; size: number } | { kind: 'free'; size: number };
+export type LayoutToken = { kind: 'driver' } | { kind: 'root'; size: number } | { kind: 'free'; size: number } | { kind: 'slot' };
 
 export function parseRackLayout(rack: string, layout: string, fail: (why: string) => never): LayoutToken[] {
   const tokens: LayoutToken[] = [];
   for (const word of layout.trim().split(/\s+/)) {
     let match: RegExpExecArray | null;
     if (word === 'P') tokens.push({ kind: 'driver' });
+    else if (word === 'S') tokens.push({ kind: 'slot' });
     else if (word === 'R') tokens.push({ kind: 'root', size: ROOT_BLOCKS });
     else if ((match = /^R(\d+)$/.exec(word))) tokens.push({ kind: 'root', size: Number(match[1]) });
     else if ((match = /^_(\d+)$/.exec(word))) tokens.push({ kind: 'free', size: Number(match[1]) });
     else fail(`unknown token '${word}' in rack ${rack}`);
   }
-  const sum = tokens.reduce((total, token) => total + (token.kind === 'driver' ? DRIVER_BLOCKS : token.size), 0);
-  if (tokens.some((token) => token.kind !== 'driver' && !(token.size > 0))) fail(`rack ${rack} has an empty token`);
+  const sum = tokens.reduce((total, token) => total + tokenBlocks(token), 0);
+  if (tokens.some((token) => (token.kind === 'root' || token.kind === 'free') && !(token.size > 0))) fail(`rack ${rack} has an empty token`);
+  if (tokens.filter((token) => token.kind === 'slot').length > 1) fail(`rack ${rack} has more than one root slot`);
   if (sum !== RACK_BLOCKS) fail(`rack ${rack} sums to ${sum}, not ${RACK_BLOCKS}`);
   return tokens;
+}
+
+// A layout token's blocks in the static rack sum: the slot is 0 (a root takes its blocks off the rack's trailing free).
+function tokenBlocks(token: LayoutToken): number {
+  switch (token.kind) {
+    case 'driver': return DRIVER_BLOCKS;
+    case 'slot': return 0;
+    case 'root':
+    case 'free': return token.size;
+  }
 }
 
 // The pod racks a ship has, in address order, each parsed.
@@ -227,6 +250,50 @@ export function podRackLayouts(ship: ShipDef): { rack: PodRackKey; tokens: Layou
   const fail = failFor(ship);
   return POD_RACK_KEYS.filter((rack) => ship.memory.podRacks[rack] !== undefined)
     .map((rack) => ({ rack, tokens: parseRackLayout(rack, ship.memory.podRacks[rack], fail) }));
+}
+
+// The pod rack that holds the ship's root slot (`S`), or null for a ship HOLLOW can't board (a calm or seeds ship's
+// layout, 01-landing §3.16). At most one slot per ship (more would make "where does the root land" an accident).
+export function rootSlotRack(ship: ShipDef): PodRackKey | null {
+  const racks = podRackLayouts(ship).filter(({ tokens }) => tokens.some((token) => token.kind === 'slot')).map(({ rack }) => rack);
+  if (racks.length > 1) failFor(ship)(`root slots in racks ${racks.join(', ')}: a ship has at most one`);
+  return racks[0] ?? null;
+}
+
+// The largest root this ship's slot must ever hold (04 §3.7, §3.10): a final ship's FINALE root plus a MERGE trace
+// (slice 7), PRE_FINAL_ROOT_CAP anywhere else (a stage's root plus what it was fed, capped).
+export function maxRootFor(ship: ShipDef): number {
+  return ship.flagship ? FINAL_ROOT_MAX_BLOCKS : PRE_FINAL_ROOT_CAP;
+}
+
+// The free blocks that close a rack's tokens (the slot's rack gives a root its blocks from there).
+function trailingFree(tokens: readonly LayoutToken[]): number {
+  let free = 0;
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const token = tokens[i]!;
+    if (token.kind !== 'free') break;
+    free += token.size;
+  }
+  return free;
+}
+
+// A rack's tokens with the root written into its slot: the slot becomes a root token of `blocks`, and the same blocks
+// come off the rack's trailing free, so the rack still sums to RACK_BLOCKS. Without a root the slot is dropped.
+function placeRoot(tokens: readonly LayoutToken[], root: { blocks: number } | null, fail: (why: string) => never): LayoutToken[] {
+  const out: LayoutToken[] = tokens.filter((token) => token.kind !== 'slot' || root !== null)
+    .map((token) => (token.kind === 'slot' && root !== null ? { kind: 'root', size: root.blocks } : { ...token }));
+  if (root === null || !tokens.some((token) => token.kind === 'slot')) return out;
+  if (!(Number.isInteger(root.blocks) && root.blocks > 0)) fail(`a root of ${root.blocks} blocks`);
+  if (trailingFree(tokens) < root.blocks) fail(`the root slot's rack ends in ${trailingFree(tokens)} free blocks, too few for a ${root.blocks}-block root`);
+  let left = root.blocks;
+  for (let i = out.length - 1; i >= 0 && left > 0; i--) {
+    const token = out[i]!;
+    if (token.kind !== 'free') break;
+    const take = Math.min(left, token.size);
+    token.size -= take;
+    left -= take;
+  }
+  return out.filter((token) => token.kind !== 'free' || token.size > 0);
 }
 
 // The roles a fresh layout may hold only once (§9: segments are looked up by role, so a second
@@ -244,11 +311,11 @@ function assertSingleRoles(segs: readonly Segment[], fail: (why: string) => neve
 }
 
 // The unit's own files: what carries from ship to ship (§6.9): the Core, the AI tools and skills, the
-// fs-tools, the upgrade files and FIREWALLs picked between ships, REPAIR CHARGE. Ship files, drivers and
-// HOLLOW stay.
+// fs-tools, the upgrade files and FIREWALLs picked between ships, REPAIR CHARGE, and 046.log (05 §3.2: locked in the
+// packet). Ship files, drivers and HOLLOW stay.
 export function isUnitFileType(seg: Segment): boolean {
   return seg.type === 'core' || seg.type === 'tool' || seg.type === 'skill' || seg.type === 'fs-tool' || seg.type === 'redundancy'
-    || seg.type === 'upgrade' || seg.type === 'firewall';
+    || seg.type === 'upgrade' || seg.type === 'firewall' || seg.type === 'log';
 }
 
 // The unit's own files as they arrive on a later ship (systems/carry.ts packs them): the segments
@@ -286,15 +353,18 @@ export function hurtDriversFor(ship: ShipDef, firstRun: boolean, rng: Rng): Hurt
 }
 
 // The ship's racks A–D as segments, in address order: the ship's own files, then the pod racks (drivers and HOLLOW's
-// root) from the layout strings. `rng` is the ship's families stream; `firstRun` keeps the families the first run always
-// meets; `hollowOwner` names the roots; `hurt` are the drivers that arrive hurt.
+// root in its slot) from the layout strings. `rng` is the ship's families stream; `firstRun` keeps the families the first
+// run always meets; `hollowOwner` names the roots; `root` is the root the threat ladder brings (null: none); `hurt` are
+// the drivers that arrive hurt.
 function buildShipRacks(
-  ship: ShipDef, rng: Rng, firstRun: boolean, hollowOwner: string, hurt: readonly HurtDriver[], fail: (why: string) => never,
+  ship: ShipDef, rng: Rng, firstRun: boolean, hollowOwner: string, root: { blocks: number } | null, hurt: readonly HurtDriver[],
+  fail: (why: string) => never,
 ): Segment[] {
   const def = ship.memory;
   const rackA = buildWrittenRack('A', def.rackA, fail);
   damageShipFiles(rackA, ship, fail);
-  const layouts = podRackLayouts(ship);
+  if (root !== null && rootSlotRack(ship) === null) fail(`a ${root.blocks}-block root, but the layout has no root slot (S)`);
+  const layouts = podRackLayouts(ship).map(({ rack, tokens }) => ({ rack, tokens: placeRoot(tokens, root, fail) }));
   const podCount = layouts.reduce((pods, { tokens }) => pods + tokens.filter((token) => token.kind === 'driver').length, 0);
   const drivers = def.drivers;
   for (const driver of hurt) {
@@ -320,6 +390,7 @@ function buildShipRacks(
     for (const token of tokens) {
       if (token.kind === 'free') { podRacks.push(freeSegment(token.size)); continue; }
       if (token.kind === 'root') { podRacks.push(rootSegment(token.size, rootIndex++, hollowOwner)); continue; }
+      if (token.kind === 'slot') return fail('a root slot left after placeRoot');
       const pod = podIndex + 1;
       const people = roster[podIndex++]!;
       const integrity = hurt.find((driver) => driver.pod === pod)?.integrity ?? INTEGRITY_MAX;
@@ -357,17 +428,13 @@ function damageShipFiles(rackA: Segment[], ship: ShipDef, fail: (why: string) =>
 }
 
 // The free blocks at the very end of the ship's last pod rack (§6.9, 01-landing §3.16: the room an oversized packet may
-// spill back into before rack E). Pure layout: the free tokens that close the last pod rack's string.
+// spill back into before rack E). Pure layout: the free tokens that close the last pod rack's string, less the largest
+// root the slot may hold when the slot is in that rack (the root takes its blocks from there; slice 3's smaller classes).
 export function lastPodRackTrailingFree(ship: ShipDef): number {
   const last = podRackLayouts(ship).at(-1);
   if (!last) throw new Error(`lastPodRackTrailingFree ${ship.id}: the ship has no pod rack`);
-  let free = 0;
-  for (let i = last.tokens.length - 1; i >= 0; i--) {
-    const token = last.tokens[i]!;
-    if (token.kind !== 'free') break;
-    free += token.size;
-  }
-  return free;
+  const slotHere = last.tokens.some((token) => token.kind === 'slot');
+  return Math.max(0, trailingFree(last.tokens) - (slotHere ? maxRootFor(ship) : 0));
 }
 
 // The colonists a ship carries (01-landing §3.5: the LZ counts sum to everyone aboard), from its landing data alone: the
@@ -378,7 +445,9 @@ export function shipColonists(ship: ShipDef): number {
 
 // Throws on pod racks that break 01-landing §3.16's budget, run for every ship at load (data/ships.ts):
 // • at least POD_RACK_MIN_FREE free blocks across the pod racks, not counting the root's GAPs (free tokens shorter than
-//   WALL_MIN_BLOCKS right next to an `R`), so walls and MOVEs always have room;
+//   WALL_MIN_BLOCKS right next to an `R` or the `S` slot) nor the largest root the slot may hold (maxRootFor), so walls
+//   and MOVEs always have room;
+// • a slot's rack ends in at least maxRootFor free blocks: the root takes its blocks from there (slice-2-plan §4);
 // • at least UNIT_TAIL_BLOCKS trailing free in the last pod rack: the tail the unit may spill into;
 // • one driver per pod, the pods summing to the LZ counts.
 // It walks the racks the ship has, so slice 3's smaller classes need no change here.
@@ -388,12 +457,19 @@ export function validatePodRacks(ship: ShipDef): void {
   for (const { tokens } of podRackLayouts(ship)) {
     tokens.forEach((token, index) => {
       if (token.kind !== 'free') return;
-      const nextToRoot = tokens[index - 1]?.kind === 'root' || tokens[index + 1]?.kind === 'root';
+      const isRoot = (near: LayoutToken | undefined): boolean => near?.kind === 'root' || near?.kind === 'slot';
+      const nextToRoot = isRoot(tokens[index - 1]) || isRoot(tokens[index + 1]);
       if (nextToRoot && token.size < WALL_MIN_BLOCKS) return;
       free += token.size;
     });
   }
-  if (free < POD_RACK_MIN_FREE) fail(`the pod racks hold ${free} free blocks (root gaps not counted), under ${POD_RACK_MIN_FREE}`);
+  const slot = rootSlotRack(ship);
+  if (slot !== null) {
+    const tokens = podRackLayouts(ship).find(({ rack }) => rack === slot)!.tokens;
+    if (trailingFree(tokens) < maxRootFor(ship)) fail(`rack ${slot}'s root slot needs ${maxRootFor(ship)} trailing free blocks, it has ${trailingFree(tokens)}`);
+    free -= maxRootFor(ship);
+  }
+  if (free < POD_RACK_MIN_FREE) fail(`the pod racks hold ${free} free blocks (root gaps and the largest root not counted), under ${POD_RACK_MIN_FREE}`);
   const tail = lastPodRackTrailingFree(ship);
   if (tail < UNIT_TAIL_BLOCKS) fail(`the last pod rack ends in ${tail} free blocks, under the unit's ${UNIT_TAIL_BLOCKS}-block tail`);
   const pods = shipPodCount(ship);
@@ -424,16 +500,19 @@ function trimTrailingFree(segs: Segment[], blocks: number, fail: (why: string) =
 // them: racks E–F, maybe spilling into the last pod rack); a fresh unit (ship 1) uses the ship's written aiFiles,
 // and a ship with written aiFiles never takes carried ones (ship 1 always meets a fresh unit). Throws
 // on a rack that does not fill 64 blocks, an unknown layout token, a role written twice, a name too
-// long, no owner, or a ship whose racks E–F have no source. `hurt` are the drivers that arrive hurt on this
-// run (state/initial.ts passes hurtDriversFor's); left out, the ship's written ones (the layout suites).
+// long, no owner, or a ship whose racks E–F have no source. `root` is HOLLOW's root as the threat ladder brings it
+// (systems/threat-plan.ts ShipThreat.rootBlocks; slice 2's THREAT track carries it in the Packet): written into the
+// layout's `S` slot, and a root on a ship with no slot throws; null on a ship HOLLOW is not aboard. `hurt` are the
+// drivers that arrive hurt on this run (state/initial.ts passes hurtDriversFor's); left out, the ship's written ones
+// (the layout suites).
 export function buildShipMemory(
-  ship: ShipDef, carried: CarriedRacks | null, rng: Rng, firstRun: boolean, hollowOwner: string,
+  ship: ShipDef, carried: CarriedRacks | null, rng: Rng, firstRun: boolean, hollowOwner: string, root: { blocks: number } | null,
   hurt: readonly HurtDriver[] = ship.memory.drivers.hurt,
 ): Segment[] {
   const fail = failFor(ship);
   if (typeof hollowOwner !== 'string' || hollowOwner === '') fail('HOLLOW\'s root needs an owner name (say.ts hollowLabel)');
   const aiFiles = ship.memory.aiFiles;
-  const shipRacks = buildShipRacks(ship, rng, firstRun, hollowOwner, hurt, fail);
+  const shipRacks = buildShipRacks(ship, rng, firstRun, hollowOwner, root, hurt, fail);
   let unitRacks: Segment[];
   if (carried === null) {
     if (!aiFiles) return fail('a ship without written racks E–F (aiFiles) needs the unit\'s carried files');

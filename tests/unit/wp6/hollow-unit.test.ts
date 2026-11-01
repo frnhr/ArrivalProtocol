@@ -30,6 +30,7 @@ import { isInfectable } from '@state/selectors';
 import { podNumber } from '../support/pod-code';
 import { HOLLOW_RECOIL_SEC, WALL_MIN_BLOCKS, HOLLOW_SCRIPTED_BITE_DELAY_SEC } from '@data/tuning';
 import { createDealState, createHollowState } from '@state/initial';
+import { phase2HollowOf } from '../support/hollow-world';
 
 const DT = 0.05;
 
@@ -37,7 +38,7 @@ const SPREAD: HollowDef = {
   wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: 20, drainPerSec: 2, burnMult: 2, landMult: 1, seed: null, verbs: null, deal: false, story: 'none',
 };
 const NO_SPREAD: HollowDef = { ...SPREAD, spreadEverySec: null };
-const SHIP1 = SHIPS[0]!.hollow;
+const SHIP1 = phase2HollowOf(0);
 
 const root = (id = 'root'): HollowSegment => ({ id, name: '???', type: 'hollow', size: 8, root: true, locked: true, owner: '???' });
 const soul = (code: string, integrity = 100): DriverSegment => ({
@@ -60,7 +61,7 @@ function newRun(memory: Segment[], cfg: HollowDef, phase: HollowState['phase'] =
     memory,
     // WP10: THE DEAL's state (none offered: no pause, no haste).
     // WP12 p3 (strict test tsc): a whole HollowState (the fields later packages added at their fresh values).
-    hollow: { ...createHollowState(SHIPS[0]!), cfg, phase, story: 'none', biteInSec: phase === 'awake' ? cfg.spreadEverySec : null, wakeAtAi: null, wakeHeld: false, wakeHoldEndedAtAi: null, deal: createDealState() },
+    hollow: { ...createHollowState(phase2HollowOf(0)), cfg, phase, story: 'none', biteInSec: phase === 'awake' ? cfg.spreadEverySec : null, wakeAtAi: null, wakeHeld: false, wakeHoldEndedAtAi: null, deal: createDealState() },
     aiNow: 0,
     events: [],
   };
@@ -270,7 +271,7 @@ for (const firing of [false, true]) {
 // --- The design rule (§6.6) ---------------------------------------------------------------------------------------
 {
   const throws = (cfg: HollowDef): string | null => { try { validateHollowDef('test', cfg); return null; } catch (error) { return (error as Error).message; } };
-  check('every ship passes the heal rule: heal(8) = 18.5%/s > 1.5 × drain × max(burn, print)', SHIPS.every((ship) => throws(ship.hollow) === null));
+  check('every ship passes the heal rule: heal(8) = 18.5%/s > 1.5 × drain × max(burn, print)', SHIPS.every((_ship, index) => throws(phase2HollowOf(index)) === null));
   check('a drain the heal cannot beat by 1.5× throws (drain 6.5, burn ×2)', throws({ ...SPREAD, drainPerSec: 6.5 }) !== null, throws({ ...SPREAD, drainPerSec: 6.5 }) ?? '');
   check('the ship-2 config of the sim passes (drain 3.5, print ×1.5)', throws({ ...SPREAD, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, landMult: 1.5 }) === null);
   // WP12 p3 (strict test tsc): this check was written before WP9 built seeds, and it passed only because its seed had no

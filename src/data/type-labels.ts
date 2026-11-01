@@ -4,6 +4,7 @@ import { RACK_A, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F } from '@data/memory';
 import { STRIP_NARROW_MAX_BLOCKS, STRIP_TINY_MAX_BLOCKS, STRIP_MICRO_MAX_BLOCKS } from '@data/tuning';
 import { HOLLOW_TYPE_LABEL } from '@data/hollow-text';
 import { UPGRADE_FILE_TEXT } from '@data/upgrades';
+import { LOG_TYPE_LABEL } from '@data/log-text';
 
 export const TYPE_LABELS: Record<SegmentType, string> = {
   core: 'AI · Core Process',
@@ -18,6 +19,7 @@ export const TYPE_LABELS: Record<SegmentType, string> = {
   driver: 'Colonists · pod driver',
   upgrade: 'AI · Upgrade file',
   firewall: 'Firewall · nothing bites past it',
+  log: LOG_TYPE_LABEL,
 };
 
 // INSPECT's type line for one file. A SWAP (WP10) leaves a pair the plain type labels misname: the backup now doing

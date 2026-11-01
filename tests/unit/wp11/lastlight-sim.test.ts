@@ -25,6 +25,7 @@ import { onPostTick } from '@systems/clock';
 import { isHollow } from '@state/selectors';
 import { MERGE_COST_CHARGE } from '@data/tuning';
 import type { GameState } from '@state/schema';
+import { phase2HollowOf } from '../support/hollow-world';
 
 const ship = getShip(LAST_LIGHT);
 check('LAST LIGHT is ship 5: the flagship and the last ship; 3,200 colonists in 16 pods; link 96, 6 hits, no arrival damage',
@@ -35,14 +36,14 @@ check('…§9 WP11 item 1\'s flight: r0 18,000, rp0 3,200, v∞ 1.5, ring 5,000�
   start.r0 === 18000 && start.rp0 === 3200 && start.vInf === 1.5 && ring.min === 5000 && ring.max === 7000 && dvBudgetKmS === 2.5
   && tacticalWarp === 30 && cruiseWarp === 60 && start.sas === 'radial-out');
 check('…its belt: 9,000–12,000 km on racks A–B', JSON.stringify(ship.zones) === JSON.stringify([{ kind: 'belt', id: 'last-light-belt', rIn: 9000, rOut: 12000, racks: ['A', 'B'] }]));
-const hollow = ship.hollow;
+const hollow = phase2HollowOf(4);
 // Unlink pass (Fran, after the handover): the ship's first verb counts 4 s (firstTelegraphSec), every later one 3 s.
 check('…its HOLLOW: spread 12, drain 5, ×2 / ×1.5, seeds every 35 s in the walls, verbs { 12, 3 (first 4), 4 }, no deal, the last-ship story',
   hollow.spreadEverySec === 12 && hollow.drainPerSec === 5 && hollow.burnMult === 2 && hollow.landMult === 1.5
   && hollow.seed?.everySec === 35 && hollow.seed.target === 'walls'
   && JSON.stringify(hollow.verbs) === JSON.stringify({ everySec: 12, telegraphSec: 3, firstTelegraphSec: 4, duelEverySec: 4 })
   && !hollow.deal && hollow.story === 'last-ship');
-check('…no other ship has verbs (the finale is the flagship\'s)', SHIPS.every((candidate) => (candidate.hollow.verbs !== null) === candidate.flagship));
+check('…no other ship has verbs (the finale is the flagship\'s)', SHIPS.every((candidate, index) => (phase2HollowOf(index).verbs !== null) === candidate.flagship));
 
 const h = createHarness11(7);
 const state = (): Readonly<GameState> => h.store.getState();
@@ -64,7 +65,7 @@ h.lastLight(7);
     `root at ${at(root.id)}, POD 11 at ${at(pod11.id)}, POD 12 at ${at(pod12.id)}, POD 13 at ${at(pod13.id)}`);
   check('…POD 12 (right of the root) leads the credits', state().landing.lead === 12);
   check('…its boot plan closes on HOLLOW\'s line, which is `> last ship, 047. i\'m so tired.`',
-    bootLinePlan({ ...state(), run: { ...state().run, arrival: { hits: [], chargeCarried: 0, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0, chargeOverflowLost: 0, scripted: [] } } }, false).at(-1) === 'hollow'
+    bootLinePlan({ ...state(), run: { ...state().run, arrival: { hits: [], chargeCarried: 0, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0, chargeOverflowLost: 0, scripted: [], seeds: [], boarded: null } } }, false).at(-1) === 'hollow'
     && HOLLOW_STORY.lastShip(47) === "> last ship, 047. i'm so tired.");
   check('…the MERGE 20 tick\'s data on the flagship (and none elsewhere)', mergeTickCharge(state()) === MERGE_COST_CHARGE);
 }

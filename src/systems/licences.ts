@@ -92,9 +92,14 @@ interface LicenceRule {
   due(state: Readonly<GameState>): boolean;
 }
 
+// Phase 3 slice 2: ships 1–2 are calm, so the scripted bite's mind alert no longer guarantees REPAIR on ship 1; like
+// every ship's own licences, a REPAIR never issued on an earlier ship comes at the start of the next one the unit is
+// transmitted to (a kid who never looked inside would otherwise reach KESTREL's PATH UNCERTAIN with no way to heal the
+// sensor). A later ship built alone (a headless world, run.arrival null) keeps the old rule.
 const REPAIR_RULE: LicenceRule = {
   kind: 'repair',
-  due: (state) => state.ui.mode === 'memory'
+  due: (state) => state.run.arrival !== null
+    || state.ui.mode === 'memory'
     || state.director.shown?.highlight === TOOL_HINT_TARGET.repair
     || mindAlertActive(state),
 };

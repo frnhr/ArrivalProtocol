@@ -14,7 +14,8 @@ export type SegmentType =
   | 'redundancy'
   | 'driver'
   | 'upgrade'
-  | 'firewall';
+  | 'firewall'
+  | 'log';
 
 export type SegmentState =
   | 'intact'
@@ -64,6 +65,9 @@ export type InfectionSide = 'left' | 'right';
 
 export interface Infection {
   side: InfectionSide;   // the end the red crawls in from (the side that faces HOLLOW)
+  // The bite came from a beam-born block (04 §3.5, §3.7): the file it becomes when eaten is beam-born too, so "a seed
+  // that ate reports twice", and an infection carried to the next ship keeps its source (systems/hollow.ts consume).
+  beam?: true;
 }
 
 interface Infectable {
@@ -144,7 +148,10 @@ export interface FreeSegment extends SegmentBase {
 // `atePod` the pod number when it was a pod's driver, so the strip can say whose it was (ATE POD 01) and MERGE can
 // give it back in place.
 // `seed` marks a 2-block seed it dropped into free space (ship 3+, §6.6): it bites like any hollow block,
-// and DELETE clears it. `last` marks the single block LAST LIGHT's root leaves when its DELETE completes (WP11, §6.6):
+// and DELETE clears it. `beam` marks a beam-born block (phase 3 slice 2, 04 §3.4–§3.7): a seed that rode the beam in
+// behind its target, or a block such a seed (or another beam-born block) made by eating a file; each one left in memory
+// at a ship's end adds to TRACE (or feeds HOLLOW's next root once it is aboard). `words` is a beam seed's line from
+// 05 §3.5's pool, said when it is deleted (at most SEED_WORDS_PER_SHIP a ship). Slice 4d adds `disguise`. `last` marks the single block LAST LIGHT's root leaves when its DELETE completes (WP11, §6.6):
 // HOLLOW stops there, and PURGE or MERGE decides what becomes of it (locked to every tool meanwhile).
 export interface HollowSegment extends SegmentBase {
   type: 'hollow';
@@ -154,6 +161,8 @@ export interface HollowSegment extends SegmentBase {
   ate?: string;
   atePod?: number;
   seed?: true;
+  beam?: true;
+  words?: string;
   last?: true;
 }
 
@@ -208,6 +217,18 @@ export interface FirewallSegment extends SegmentBase {
   type: 'firewall';
 }
 
+// `046.log` (05 §3.2, slice 2): the log UNIT-046 left with its beacon, a locked 2-block file in the unit's rack F from
+// the first boot, carried in every packet (`LOCKED · 046 ASKED YOU TO CARRY IT`). It has no integrity, so nothing can
+// infect it, and every tool refuses it but SCAN (`IT ISN'T YOURS TO DELETE`). It reads `???` until scanned (or until the
+// first key is found), `046.log` after. What has been read lives in run.log, not here: segments are copied through
+// packets, and the log's progress belongs to the run.
+// `id` is always 'log046' and `size` always 2 (data/log-text.ts LOG_FILE); typed wide so code that copies a segment with
+// a new id or size (a test's gap split) still type-checks over the union.
+export interface LogSegment extends SegmentBase {
+  type: 'log';
+  name: '???' | '046.log';
+}
+
 export type Segment =
   | CoreSegment
   | ToolSegment
@@ -220,4 +241,5 @@ export type Segment =
   | RedundancySegment
   | DriverSegment
   | UpgradeSegment
-  | FirewallSegment;
+  | FirewallSegment
+  | LogSegment;

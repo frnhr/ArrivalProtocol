@@ -84,7 +84,7 @@ export function hasUsableTool(memory: readonly Segment[], kind: FsToolKind, infe
 
 // A segment that carries a health number (everything but free space, HOLLOW, REPAIR CHARGE and a
 // FIREWALL, which is a wall, not something with health).
-export type HealthSegment = Exclude<Segment, { type: 'free' | 'hollow' | 'redundancy' | 'firewall' }>;
+export type HealthSegment = Exclude<Segment, { type: 'free' | 'hollow' | 'redundancy' | 'firewall' | 'log' }>;
 
 export function hasIntegrity(seg: Segment): seg is HealthSegment {
   return 'integrity' in seg;

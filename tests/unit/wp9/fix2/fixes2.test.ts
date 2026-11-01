@@ -29,11 +29,11 @@ import { getByRole, hasIntegrity } from '@state/selectors';
 import { segmentStarts, mergeAdjacentFree, freeSegment } from '@systems/memory-ops';
 import { objectiveStructure } from '@systems/director';
 import { ZONE_STAMP_TEXT } from '@data/zone-text';
-import { getShip } from '@data/ships';
 import {
   SKIP_END_LEAD_TAC, DODGE_TACTICAL_LEAD_TAC, DODGE_WARN_TAC, WAKE_AFTER_DODGE_SEC, MAX_LINE_CHARS, TICK_MS,
 } from '@data/tuning';
 import { KESTREL } from '../harness9';
+import { phase2HollowOf } from '../../support/hollow-world';
 
 const h = createHarness9(5);
 const state = () => h.store.getState();
@@ -151,7 +151,7 @@ for (const kid of ['still-amber', 'still-blue', 'tapper'] as const) {
   h.press('KeyS');
   h.stepUntil(() => state().hollow.phase === 'awake', 60);
   const coastAt = state().burn.coastAtAi;
-  const lead = getShip(KESTREL).hollow.wake;
+  const lead = phase2HollowOf(KESTREL).wake;
   const coastLead = typeof lead === 'string' ? 0 : lead.coastLeadSec ?? 0;
   const expected = Math.max((coastAt ?? Infinity) + coastLead, (ended ?? -Infinity) + WAKE_AFTER_DODGE_SEC);
   check('the early dodger: HOLLOW wakes at the later of coast + 5 s and the dodge\'s close + WAKE_AFTER_DODGE_SEC',

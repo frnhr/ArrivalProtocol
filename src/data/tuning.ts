@@ -4,6 +4,7 @@
 
 import type { Band, GhostSpec } from '@systems/capabilities';
 import type { ForgivenessClass, LzWidth } from '@/types/landing';
+import type { LinkNoise } from '@/types/threat';
 
 // --- Heartbeat -------------------------------------------------------------------------
 
@@ -393,9 +394,11 @@ export const BEEP_JUMP_TAC = 1.5;
 // by BOOT_KLAXON_AFTER_LAST_LINE_SEC whatever their number, and the cut to amber BOOT_END_AFTER_KLAXON_SEC
 // after it (ship 1: 4.5 s and 4.9 s, as before). KESTREL (WP9) can say two more again: its own arrival damage
 // (`> ECC: SENSOR INTERP 45% — PATH UNCERTAIN`) and AUTOBURN.skl trained from the kid's captures. VESPER (WP10) closes
-// its boot with HOLLOW's own line, which types slowly: the klaxon waits for it (BOOT_AFTER_HOLLOW_LINE_SEC).
+// its boot with HOLLOW's own line, which types slowly: the klaxon waits for it (BOOT_AFTER_HOLLOW_LINE_SEC). Phase 3
+// slice 2 adds up to two more at the same rhythm: the beam seeds' ECC line or HOLLOW's 108% unpack, and `046.log · KEY
+// FOUND` (data/script.ts BOOT_LINE_MAX 10).
 export const BOOT_ASSEMBLE_SEC = 1.5;
-export const BOOT_LINE_AT_SEC: readonly number[] = [0.5, 1.8, 3.1, 4.4, 5.7, 7.0, 8.3, 9.6];
+export const BOOT_LINE_AT_SEC: readonly number[] = [0.5, 1.8, 3.1, 4.4, 5.7, 7.0, 8.3, 9.6, 10.9, 12.2];
 export const BOOT_KLAXON_AFTER_LAST_LINE_SEC = 1.4;
 export const BOOT_END_AFTER_KLAXON_SEC = 0.4;
 
@@ -1596,3 +1599,67 @@ export const TERRAIN_ALT_SHARE = 0.35;
 // The drag stamp's life on the NAV PLOT (`DRAG · ▲ −110 km`, §3.7), wall ms: long enough to read the number at a SKIP's
 // speed (a kick lands once an orbit, a few real seconds apart), gone before the next.
 export const DRAG_STAMP_MS = 2600;
+
+// =====================================================================================================================
+// --- Phase 3 slice 2: the calm opening (docs/phase3/04-threats.md §3.1–§3.10, 01-landing.md §3.8, 05-story.md §3.2;
+// docs/phase3/impl/slice-2-plan.md §4). Three sub-blocks, each owned by one track: a track edits only its own.
+// =====================================================================================================================
+
+// --- 2 THREAT (owned by Track THREAT): beam seeds, TRACE, the boarding, the root's sizes --------------------------------
+
+// Beam seeds before HOLLOW boards (04 §3.5, §3.17) run on SEEDS_ONLY_DEF (data/threats.ts): the first bite after this many
+// AI s of calm flight (the clock stands still at TACTICAL, as phase 2's first seed waited for a calm flight), so a seed
+// never bites under a burn's lines and the kid has the RM lesson's time to answer it. HALCYON's HOLLOW woke at 30.
+export const BEAM_SEED_FIRST_BITE_CALM_SEC = 30;
+// Then a bite every 25 AI s: HALCYON's WALLS rhythm, the one a kid already met as "HOLLOW's" pace.
+export const BEAM_SEED_BITE_EVERY_SEC = 25;
+// 2.5 %/s: weaker than HOLLOW's own 3.5, so a seed is a tax, not a fight; the worst 2.5 × 2 = 5 (the multipliers never
+// stack), and heal(8) 18.5 still beats 1.5 × 5 (validateHollowDef).
+export const BEAM_SEED_DRAIN_PER_SEC = 2.5;
+// The unpack lays a beam seed out right behind its target (04 §3.4): the file, this GAP, the seed, then a WALL of
+// WALL_MIN_BLOCKS free before the next file, so it bites only the file the ECC line names. One block, as SEED_TOOL_GAP_BLOCKS:
+// a GAP under a WALL, so it bites at its first bite, with a block between them so the seed reads as a separate thing.
+export const SEED_GAP_TO_TARGET_BLOCKS = 1;
+// Seeds per beam by link noise (04 §3.4's table): the chance of 0, 1, 2 and 3 seeds. Slice 2 reads it for KESTREL's later
+// runs (noise 2) and for VESPER and LAST LIGHT (noise 0: none, risk 2); slice 3's hops read it for every beam.
+export const BEAM_SEED_ODDS: Readonly<Record<LinkNoise, readonly [number, number, number, number]>> = {
+  0: [1, 0, 0, 0],
+  1: [0.6, 0.35, 0.05, 0],
+  2: [0.25, 0.45, 0.25, 0.05],
+  3: [0.05, 0.3, 0.4, 0.25],
+};
+// HOLLOW boards on the beam into a ship once TRACE reaches this (04 §3.7: "Three, and it finds you").
+export const TRACE_BOARD_AT = 3;
+// The TRACE meter's cells (04 §4: `TRACE ■■□`): as many as it takes to board, so a full meter means "it finds you"; more
+// reports show as `■■■ +1`.
+export const TRACE_CELLS = TRACE_BOARD_AT;
+// HOLLOW never boards below this depth (04 §3.8), so depths 1–3 are calm and seeds: the first three ships teach the ship,
+// the landing and rm before anything hunts the pods.
+export const BOARD_MIN_DEPTH = 4;
+// Beam seeds start at this depth (04 §3.1, §3.4: "no seeds before depth 3", decided): ships 1–2 are calm.
+export const SEEDS_MIN_DEPTH = 3;
+// The root before the final ship is its stage's plus the beam-born blocks it was fed, capped here (04 §3.7: cap 14, the
+// HUNT stage's root): a sloppy kid meets a bigger HOLLOW, never one whose slot outgrows the bay's margin.
+export const PRE_FINAL_ROOT_CAP = 14;
+// The largest root a final ship's slot must hold (04 §3.10, §3.17): the FINALE's 16 plus a MERGE trace's 2 (slice 7).
+// validatePodRacks checks the slot's rack can take it, so slice 7 needs no layout change.
+export const FINAL_ROOT_MAX_BLOCKS = 18;
+// A deleted seed says one line from 05 §3.5's pool at most this often per ship (04 §3.6): a voice, not a chorus.
+export const SEED_WORDS_PER_SHIP = 1;
+
+// --- 2 OPENING (owned by Track OPENING): driver arrival damage, the calm ships, the log -------------------------------
+
+// Rolled driver arrival damage (01-landing §3.8, §3.15): drivers that sat for decades arrive DEGRADED, 55–79%: a wider
+// dot and a REPAIR worth its charge, never a hard landing on its own (the failing band starts under 50).
+export const DRIVER_ROLLED_MIN = 55;
+export const DRIVER_ROLLED_MAX = 79;
+// ceil(pods ÷ this) drivers arrive degraded: one on a 5-pod ship, three on 12, four on 16. Enough MIND work for a calm
+// ship's coast, few enough that charge still covers the instruments.
+export const DRIVER_ROLLED_PER_PODS = 5;
+// From layer DRIVER_FAILING_FROM_LAYER one more driver arrives FAILING, 30–45%: it would land hard (half points), so the
+// deep ships open with a real triage (01-landing §3.8: "plus one at 30–45% from layer 4").
+export const DRIVER_FAILING_MIN = 30;
+export const DRIVER_FAILING_MAX = 45;
+export const DRIVER_FAILING_FROM_LAYER = 4;
+
+// --- 2 UI (owned by Track UI): the TRACE meter, the chips, the boarding moment, the LOG READER -------------------------

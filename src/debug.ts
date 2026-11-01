@@ -16,7 +16,7 @@ import type { SegmentRole } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import { resetWorld, listResets, resetReport, type ResetDrift } from '@systems/reset';
 import {
-  startShip, startRun, continueAfterLoss, continueAfterReport, transmitNext, startBeamOut, cancelBeamOut, type LossPlan,
+  startShip, boardedBy, startRun, continueAfterLoss, continueAfterReport, transmitNext, startBeamOut, cancelBeamOut, type LossPlan,
 } from '@systems/run';
 import { packUnit, layoutCarried } from '@systems/carry';
 import { movePreview, type MovePreview } from '@systems/move-preview';
@@ -47,6 +47,7 @@ import { beamOutView, type BeamOutView } from '@systems/beam-out';
 import { buildShipMemory } from '@data/memory';
 import { podCode } from '@data/landing-text';
 import { getShip, type ShipDef, type HollowDef } from '@data/ships';
+import { nominalShipThreat, nominalRunThreat } from '@systems/threat-plan';
 import { childRng } from '@systems/rng';
 import { createHollowState } from '@state/initial';
 import { getOps, threadsBusy, threadsTotal, cancelOp, abortAll } from '@systems/ops-core';
@@ -295,19 +296,18 @@ function hollowDemo(store: Store<GameState>): void {
       podRacks: HOLLOW_DEMO_RACKS,
       drivers: { ...ship.memory.drivers, lead: HOLLOW_DEMO_LEAD, hurt: [], firstRun: null },
     },
-    hollow: HOLLOW_DEMO,
   };
   const pods = Object.values(HOLLOW_DEMO_RACKS).join(' ').split(/\s+/).filter((token) => token === 'P').length;
   const lz: LzDef = { ...ship.landing.lzs[0]!, pods };
   const landingDef = { ...ship.landing, lzs: [lz] };
   const state = store.getState();
   const owner = hollowLabel(state.run);
-  const memory = buildShipMemory(demo, null, childRng(state.run.seed, 1, 'families'), false, owner, []);
+  const memory = buildShipMemory(demo, null, childRng(state.run.seed, 1, 'families'), false, owner, null, []);
   const landing = createLandingState(landingDef, memory, { finalShip: false, lead: HOLLOW_DEMO_LEAD, hurt: [], planetR: state.level.planet.R });
   store.update((draft) => {
     draft.memory = memory;
     draft.landing = landing;
-    draft.hollow = createHollowState(demo);
+    draft.hollow = createHollowState(HOLLOW_DEMO);
     draft.hollow.cfg.wake = { afterAiSec: draft.clock.aiSec + HOLLOW_DEMO_WAKE_SEC, coastLeadSec: null };
     draft.mission.colonists = landing.pods.reduce((sum, record) => sum + record.colonists, 0);
     // The racks were rebuilt for a fresh unit (SCAN only): the licences are issued again below, so
@@ -347,19 +347,23 @@ function giveCard(store: Store<GameState>, id: UpgradeId): Segment[] {
 // __ap.ship(index): jumps to ship `index` now, the way a transmission would bring the unit there (its own
 // files packed for that ship's link, the charge that fits, the ship's own arrival damage), but with no transit
 // hits and no stars: a quick way to reach HALCYON or KESTREL for a look (WP7 replaces WP6's hollowDemo). The
-// run's licences stay.
+// run's licences stay. The threat is the nominal run's (systems/threat-plan.ts, slice-2-plan risk 14): the ships before
+// it flown with TRACE 0, so VESPER gets HOLLOW's forced boarding and its 10-block root, LAST LIGHT the FINALE.
 function debugJump(store: Store<GameState>, index: number): void {
   const ship = getShip(index);
   if (!ship.arrival) throw new Error(`__ap.ship(${index}): ${ship.name} meets a fresh unit; use __ap.newRun()`);
   abortAll();
+  const threat = nominalShipThreat(index);
   const packet = packUnit(store.getState().memory, ship.arrival.linkBlocks, []);
-  const layout = layoutCarried(packet, packet.chargeCarried, ship);
+  const layout = layoutCarried(packet, packet.chargeCarried, ship, threat);
   // The ship's own arrival damage still applies (WP9: KESTREL's Sensor Interp at 45%, PATH UNCERTAIN).
   const scripted = arrivalDamage(layout.racks.segs, ship.arrival.damage);
+  // The run's threat memory as the nominal run had it before this ship (startShip applies the ship's verdict on top).
+  store.update((draft) => { draft.run.threat = nominalRunThreat(index - 1); });
   startShip(store, index, layout.racks, {
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0,
-    chargeOverflowLost: 0, scripted,
-  });
+    chargeOverflowLost: 0, scripted, seeds: [], boarded: boardedBy(threat),
+  }, threat);
 }
 
 // A driver by its pod's code (P03, or POD 03) or a file by its on-screen name, for the HOLLOW hooks.

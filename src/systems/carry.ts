@@ -1,11 +1,14 @@
 import type { Segment, RedundancySegment, SegmentRole } from '@/types/segment';
 import type { TransitHit } from '@state/schema';
 import type { ShipDef, ArrivalDamage } from '@data/ships';
+import type { ShipThreat } from '@/types/threat';
 import type { Rng } from '@systems/rng';
 import { freeSegment, newSegId } from '@systems/memory-ops';
 import { hasIntegrity, type HealthSegment } from '@state/selectors';
 import { setIntegrity } from '@state/actions';
 import { FS_TOOL_KINDS } from '@data/fs-tools';
+import { SHIPS } from '@data/ships';
+import { nominalShipThreat } from '@systems/threat-plan';
 import {
   UNIT_RACKS_START, MEMORY_TOTAL_BLOCKS, RACK_NAMES, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, lastPodRackTrailingFree, isUnitFileType,
   freshChargeFile, type CarriedRacks,
@@ -64,10 +67,12 @@ export function toolKindOf(seg: Segment): string | null {
 // examples (`Autopilot → no W/A/S/D presets`, `AI Comms → no BEAM OUT; a crash ends the run`). REPAIR
 // CHARGE is never "dropped": it fills whatever the files leave. `files` is the unit's files that are
 // still going (dropping one copy of Repair makes the other its last).
-export type DropLock = 'core' | 'engine' | 'navplot' | 'last-copy' | 'charge';
+// 046.log is locked too (05 §3.2: `LOCKED · 046 ASKED YOU TO CARRY IT`).
+export type DropLock = 'core' | 'engine' | 'navplot' | 'last-copy' | 'charge' | 'log';
 
 export function dropLock(files: readonly Segment[], seg: Segment): DropLock | null {
   if (seg.type === 'core') return 'core';
+  if (seg.type === 'log') return 'log';
   if (seg.type === 'redundancy') return 'charge';
   if (seg.role === 'engine-io') return 'engine';
   if (seg.role === 'navplot') return 'navplot';
@@ -82,13 +87,15 @@ function rackESortKey(seg: Segment): number {
   return roleIndex >= 0 ? roleIndex : RACK_E_ROLE_ORDER.length;
 }
 
-// Rack F: the fs-tools by kind, then FIREWALLs (§6.9).
+// Rack F: the fs-tools by kind, then FIREWALLs (§6.9), then 046.log (as the fresh unit's rack F has it, before REPAIR
+// CHARGE).
 function rackFSortKey(seg: Segment): number {
-  return seg.type === 'fs-tool' ? FS_TOOL_KINDS.indexOf(seg.fsTool) : FS_TOOL_KINDS.length;
+  if (seg.type === 'fs-tool') return FS_TOOL_KINDS.indexOf(seg.fsTool);
+  return seg.type === 'log' ? FS_TOOL_KINDS.length + 1 : FS_TOOL_KINDS.length;
 }
 
 function packsInRackF(seg: Segment): boolean {
-  return seg.type === 'fs-tool' || seg.type === 'firewall';
+  return seg.type === 'fs-tool' || seg.type === 'firewall' || seg.type === 'log';
 }
 
 // A packed copy of a file: integrity and infection travel, the op flags and the recoil do not.
@@ -230,7 +237,8 @@ export interface CarriedLayout {
   overflowLost: number;     // charge that did not fit memory
 }
 
-// The hunting ground (review issue 5): on a ship whose seeds hunt your tools ('near-tools', VESPER, §6.6), rack E's list
+// The hunting ground (review issue 5): on a ship whose seeds hunt your tools ('near-tools': the HUNT stage, phase 2's
+// VESPER, §6.6; keyed by the ladder's verdict for the ship since slice 2), rack E's list
 // and rack F's list are laid out with a free run between them: a WALL off your AI files, then room for a seed
 // SEED_TOOL_GAP_BLOCKS from the first filesystem tool (hollow.ts nearToolsSeedSpot lands it there). That is phase 2's
 // geometry (rack E's free tail, then the tools from rack F's start), which the pooled receiver had packed away: every tool
@@ -238,8 +246,8 @@ export interface CarriedLayout {
 // ship (and that tool is untried, so spared), and the seed fell back to the middle of rack D. The WALL keeps a chain
 // that eats the tools away from the AI files and the Core. Only when the receiver has the room: it never costs charge,
 // and never spills the block into the tail.
-function huntingGapBlocks(ship: ShipDef, packet: Packet, filesBlocks: number, chargeBlocks: number, receiver: number): number {
-  const hunts = ship.hollow.seed?.target === 'near-tools';
+function huntingGapBlocks(threat: Readonly<ShipThreat>, packet: Packet, filesBlocks: number, chargeBlocks: number, receiver: number): number {
+  const hunts = threat.hollow.seed?.target === 'near-tools';
   if (!hunts || packet.rackE.length === 0 || !packet.rackF.some((seg) => seg.type === 'fs-tool')) return 0;
   const gap = WALL_MIN_BLOCKS + SEED_BLOCKS + SEED_TOOL_GAP_BLOCKS;
   return filesBlocks + gap + chargeBlocks <= receiver ? gap : 0;
@@ -251,8 +259,10 @@ function huntingGapBlocks(ship: ShipDef, packet: Packet, filesBlocks: number, ch
 // only a block longer than the receiver starts earlier, right-aligned to the end of memory, by at most UNIT_TAIL_BLOCKS
 // into the last pod rack (and never into more of it than the ship's layout leaves free at its end), so the Core stays at
 // rack E's start on almost every ship. Charge that still does not fit is lost, loudly (the caller's CHARGE OVERFLOW);
-// files that do not fit throw (the PACKET screen checks the room before the beam).
-export function layoutCarried(packet: Packet, chargeBlocks: number, ship: ShipDef): CarriedLayout {
+// files that do not fit throw (the PACKET screen checks the room before the beam). `threat` is the ladder's verdict for
+// `ship` (TransitPlan.threat): it says whether HOLLOW's seeds hunt tools there. Track THREAT adds the beam seeds behind
+// their targets here.
+export function layoutCarried(packet: Packet, chargeBlocks: number, ship: ShipDef, threat: Readonly<ShipThreat>): CarriedLayout {
   const files = [...packet.rackE, ...packet.rackF];
   const filesBlocks = files.reduce((sum, seg) => sum + seg.size, 0);
   const receiver = MEMORY_TOTAL_BLOCKS - RACK_E_START;
@@ -263,7 +273,7 @@ export function layoutCarried(packet: Packet, chargeBlocks: number, ship: ShipDe
   }
   const charge = Math.max(0, Math.min(chargeBlocks, room - filesBlocks));
   const overflowLost = chargeBlocks - charge;
-  const hunting = huntingGapBlocks(ship, packet, filesBlocks, charge, receiver);
+  const hunting = huntingGapBlocks(threat, packet, filesBlocks, charge, receiver);
   const block = filesBlocks + hunting + charge;
   const startAddr = Math.min(RACK_E_START, MEMORY_TOTAL_BLOCKS - block);
   const segs: Segment[] = [...files];
@@ -305,13 +315,16 @@ export function arrivalDamage(segs: readonly Segment[], damage: readonly Arrival
 // A fresh unit (ship 1's written racks E–F: SCAN, 36 REPAIR CHARGE) as it would arrive on `ship` with no
 // transit hits and no stars: what the headless suites fly a later ship with on its own (tests/unit/wp1's
 // AP_SHIP harness and tests/unit/wp7's pass it to createInitialState explicitly; the game itself only ever
-// carries a real unit). It lives here because it is packUnit and layoutCarried run on the written racks.
-// Throws for a ship nothing transmits to.
+// carries a real unit). It lives here because it is packUnit and layoutCarried run on the written racks. Laid out for
+// the nominal run's threat on that ship (systems/threat-plan.ts nominalShipThreat), with no beam seeds (risk 14: the
+// flight sims stay seed-free). Throws for a ship nothing transmits to.
 export function freshUnitRacks(ship: ShipDef): CarriedRacks {
   if (!ship.arrival) throw new Error(`freshUnitRacks: ${ship.name} meets a fresh unit by itself (no link)`);
   const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item))
     .map((item) => structuredClone(item) as Segment);
   const packet = packUnit(files, ship.arrival.linkBlocks, []);
-  return layoutCarried(packet, packet.chargeCarried, ship).racks;
+  const index = SHIPS.findIndex((candidate) => candidate.id === ship.id);
+  if (index < 0) throw new Error(`freshUnitRacks: ${ship.name} is not one of the fleet's ships`);
+  return layoutCarried(packet, packet.chargeCarried, ship, nominalShipThreat(index)).racks;
 }

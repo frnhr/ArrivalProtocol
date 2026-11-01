@@ -9,6 +9,7 @@ import { getShip } from '@data/ships';
 import { shipColonists } from '@data/memory';
 import { TOOL_WORD } from '@data/fs-tools';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
+import { LOG_TEXT } from '@data/log-text';
 
 // The TRANSMIT screen's model (§4.1 step 5, §6.9, §9 WP7 item 4), pure and DOM-free. Mostly information:
 // where the unit goes next (`NEXT: HALCYON · 2,000 SOULS · 22 LY`), how the packet fits the link
@@ -106,6 +107,7 @@ function lockNote(lock: DropLock, seg: Segment): string {
       if (seg.type !== 'fs-tool') throw new Error(`lockNote: ${seg.name} is a last copy but not a filesystem tool`);
       return TRANSMIT_TEXT.locked.lastCopy(TOOL_WORD[seg.fsTool]);
     case 'charge': throw new Error('lockNote: REPAIR CHARGE is not a chip (it fills the link)');
+    case 'log': return LOG_TEXT.packetLock;
   }
 }
 

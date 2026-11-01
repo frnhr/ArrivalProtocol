@@ -18,8 +18,8 @@ import { WALL_RULES, perShipBeatIds, BEATS, transitEccLine, chargeLine, LINES, L
 import { RUN_END_TEXT } from '@data/landing-text';
 import { WORST_CASE_VARS } from '@data/script';
 import { HOLLOW_NAME_AFTER_TYPED_SEC, MAX_LINE_CHARS } from '@data/tuning';
-import { getShip } from '@data/ships';
 import type { GameState, LogEntry } from '@state/schema';
+import { phase2HollowOf } from '../support/hollow-world';
 
 const h = createHarness7(2, { soulsFound: true });
 const s = () => h.store.getState();
@@ -34,7 +34,7 @@ let wakeAt: number | null = null;
 let wakeLine = '';
 let moveLine = '';
 let bitten: number[] = [];
-const hollowDef = getShip(1).hollow;
+const hollowDef = phase2HollowOf(1);
 const lead = typeof hollowDef.wake === 'string' ? null : hollowDef.wake.coastLeadSec;
 followDirector(h, {
   reactionSec: 0.4, maxWall: 900,
@@ -108,9 +108,9 @@ const lines = [
   // WP7 part 2: a hit names its file's id too (the boot's red flash finds the chip by it).
   transitEccLine([{ segId: 'w', fileName: 'W'.repeat(20), role: null, from: 100, to: 65 }, { segId: 'x', fileName: 'X'.repeat(20), role: null, from: 100, to: 65 },
     { segId: 'y', fileName: 'Y'.repeat(20), role: null, from: 100, to: 65 }, { segId: 'z', fileName: 'Z'.repeat(20), role: null, from: 100, to: 65 }]),
-  chargeLine({ hits: [], chargeCarried: 99, starCredit: 18, stars: 3, card: null, cardCharge: 0, chargeFloorAdded: 12, chargeOverflowLost: 0, scripted: [] }, 999),
+  chargeLine({ hits: [], chargeCarried: 99, starCredit: 18, stars: 3, card: null, cardCharge: 0, chargeFloorAdded: 12, chargeOverflowLost: 0, scripted: [], seeds: [], boarded: null }, 999),
   // WP8: an arrival names its card and the card's charge (with +12 from the card the floor never adds any).
-  chargeLine({ hits: [], chargeCarried: 99, starCredit: 18, stars: 3, card: 'charge', cardCharge: 12, chargeFloorAdded: 0, chargeOverflowLost: 0, scripted: [] }, 999),
+  chargeLine({ hits: [], chargeCarried: 99, starCredit: 18, stars: 3, card: 'charge', cardCharge: 12, chargeFloorAdded: 0, chargeOverflowLost: 0, scripted: [], seeds: [], boarded: null }, 999),
   LINES.logDivider('W'.repeat(12)), LINES.transmitting('W'.repeat(12)), LINES.simulation(), LINES.runOver(),
   LOSS_BUTTON.transmit('W'.repeat(12)), LOSS_BUTTON.emergency, ...Object.values(RUN_END_TITLE).map((title) => title('UNIT-998', 'W'.repeat(12))),
   // WP7 part 2: RUN END replaced the interim card's one-line count (its lines are checked in p2-models).

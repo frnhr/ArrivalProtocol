@@ -4,22 +4,22 @@ import type { FsToolKind } from '@/types/fs-tool';
 import type { SegmentRole } from '@/types/segment';
 import type { ZoneDef } from '@/types/zone';
 import type { ShipLandingDef } from '@/types/landing';
+import type { ShipThreatDef } from '@/types/threat';
 import {
-  NAME_MAX_CHARS, DRIVER_BLOCKS, HEAL_BEATS_DRAIN_FACTOR, INTEGRITY_MAX, SHRINK_MARGIN_TAC, SHRINK_MARGIN_MIN_TAC, SHRINK_SMALL_LOOP_FACTOR,
+  NAME_MAX_CHARS, INTEGRITY_MAX, SHRINK_MARGIN_TAC, SHRINK_MARGIN_MIN_TAC, SHRINK_SMALL_LOOP_FACTOR,
   SHRINK_REACTION_TAC, HALCYON_SMALL_LOOP_FACTOR, HALCYON_EDGE_BACK_OFF_TAC, KESTREL_SMALL_LOOP_FACTOR, KESTREL_EDGE_BACK_OFF_TAC,
   VESPER_SMALL_LOOP_FACTOR, VESPER_EDGE_BACK_OFF_TAC, LAST_LIGHT_SMALL_LOOP_FACTOR, LAST_LIGHT_EDGE_BACK_OFF_TAC,
-  VERB_TELEGRAPH_SEC, VERB_FIRST_TELEGRAPH_SEC,
 } from '@data/tuning';
 import { validateLandingDef } from '@data/landing-def';
 import { validateZoneDefs } from '@systems/zones';
 import {
   RACK_A, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, UNIT_RACKS_START, MEMORY_TOTAL_BLOCKS, buildShipMemory, validatePodRacks,
-  type ShipMemoryDef,
+  rootSlotRack, maxRootFor, type ShipMemoryDef,
 } from '@data/memory';
 import { freeSegment } from '@systems/memory-ops';
-import { repairRatePerSec } from '@data/fs-tools';
 import { createRng } from '@systems/rng';
 import { UNNAMED_HOLLOW } from '@data/hollow-text';
+import { HOLLOW_STAGES } from '@data/threats';
 import { ARES_RUN1_FAMILIES, ADA, HARD_WORDS_POOL } from '@data/souls';
 
 // Per-ship flight data. Units: km, km/s, km/s², μ in km³/s²; radii from the planet centre.
@@ -43,59 +43,11 @@ export interface ShipFlightDef {
   aNominalKmS2: number;  // engine acceleration at full POWER with no caps
 }
 
-// HOLLOW on one ship (§4.2, §6.6), all in AI seconds and integrity points per AI second.
-// • wake: 'loop-closed-once' (ship 1: one scripted bite on the driver next to the root, the first
-//   time the loop closes, then it goes dormant) or { afterAiSec, coastLeadSec } (later ships: wakes
-//   this long into the flight, bites at once, then every spreadEverySec). With coastLeadSec it wakes
-//   sooner if the coast begins first: that many AI seconds after the strip first says WAIT (WP7), so
-//   the fight is the coast's, and a kid who SKIPs at once does not meet it mid-capture instead.
-// • spreadEverySec: the one global bite timer (NEXT BITE m:ss); null: it never spreads (ship 1).
-// • drainPerSec: what an infected file loses, × the larger of burnMult while the engine delivers thrust (P1) and
-//   landMult while the landing is active: an in-band window open with a launchable pod (01-landing §5: that condition
-//   is the definition; it gets desperate as its food leaves).
-// • seed: ship 3's seeds (WP9, §6.6): every everySec a 2-block seed is telegraphed, then lands; the first
-//   one firstAfterSec after the wake (so the first lands on the coast, between two bites). 'walls' aims at
-//   the walls that guard the colonists (systems/hollow.ts seedSpot); 'near-tools' (VESPER, WP10) at your
-//   filesystem tools.
-// • deal: ship 4's DEAL (WP10, §6.6, systems/hollow-deal.ts): once, HOLLOW offers to leave the others alone
-//   for the pod whose driver is at its front.
-// • verbs: ship 5's verbs (WP11, §6.6, systems/hollow-verbs.ts): every everySec of calm (the clock stands still while
-//   the flight is at TACTICAL) HOLLOW picks MV or RM (`unlink` on screen), counts it down telegraphSec in your TERMINAL
-//   (the ship's first one firstTelegraphSec), and does it unless an op touched its target meanwhile (BLOCKED); while the
-//   root's DELETE runs, every duelEverySec instead.
-// • story: what HOLLOW says on this ship (systems/hollow.ts, data/hollow-text.ts). 'notices-you':
-//   ship 1, after the first fight (`> ...047?`). 'names-itself': ship 2, at the wake (`> hello 047…`,
-//   `> i was 046…`, CONTROL, and in landing `> i ran out…`). 'wants-charge': ship 4, the last line of its boot
-//   (`> keep 20 charge for me, 047. you'll see.`, WP10: MERGE's price, foreshadowed). 'last-ship': ship 5, the last
-//   line of its boot (`> last ship, 047. i'm so tired.`, WP11). 'none': nothing beyond its echoes.
-export type HollowWake = 'loop-closed-once' | { afterAiSec: number; coastLeadSec: number | null };
-export type SeedTarget = 'walls' | 'near-tools';
-export type HollowStoryKind = 'notices-you' | 'names-itself' | 'wants-charge' | 'last-ship' | 'none';
-
-export interface VerbDef {
-  everySec: number;
-  telegraphSec: number;
-  firstTelegraphSec: number;
-  duelEverySec: number;
-}
-
-export interface SeedDef {
-  everySec: number;
-  firstAfterSec: number;
-  target: SeedTarget;
-}
-
-export interface HollowDef {
-  wake: HollowWake;
-  spreadEverySec: number | null;
-  drainPerSec: number;
-  burnMult: number;
-  landMult: number;
-  seed: SeedDef | null;
-  verbs: VerbDef | null;
-  deal: boolean;
-  story: HollowStoryKind;
-}
+// HOLLOW's config is no longer the ship's (phase 3 slice 2): it is chosen per ship by the threat ladder
+// (systems/threat-plan.ts planThreat) from data/threats.ts's stages. The types and the validator are re-exported here so
+// phase 2's callers keep their imports.
+export type { HollowDef, HollowWake, SeedTarget, HollowStoryKind, VerbDef, SeedDef } from '@/types/threat';
+export { validateHollowDef } from '@data/threats';
 
 // Scripted damage on arrival (§6.9: KESTREL's Sensor Interp to at most 45%, VESPER's Thrust Ctrl at 31%). A role the
 // unit carries (Sensor Interp) is cut after the transit hits and named on the boot's own ECC line (systems/carry.ts);
@@ -173,7 +125,14 @@ export interface ShipDef {
   // arcs, the run-1 colony name, drag. Copied into state.landing when the ship is built (never re-read at runtime), and
   // checked by validateLandingDef, which slice 3's roller reuses.
   landing: ShipLandingDef;
-  hollow: HollowDef;
+  // The ship's layer on the arm (01-landing §3.15's table): it sets the rolled driver arrival damage (data/driver-damage.ts:
+  // one more FAILING driver from DRIVER_FAILING_FROM_LAYER). Slice 3's map gives every generated ship its layer; the fixed
+  // five carry theirs (1, 2, 3, 5, 8: the run-1 route's).
+  layer: number;
+  // What the map will supply in slice 3 (04 §3.4, §3.8): the seeds the beam INTO this ship carries, and whether a final ship
+  // is one hop from it (02-map M3). HOLLOW's config, stage and root are not here: the ladder (systems/threat-plan.ts
+  // planThreat) decides them per run from these facts, the depth, TRACE and HOLLOW's age.
+  threat: ShipThreatDef;
 }
 
 // Ship 1: the tutorial crash course. rp0 3,000 is underground, so the page opens on a red
@@ -206,15 +165,16 @@ const ARES_VII: ShipDef = {
   // that needs it), on whichever ship that happens.
   licences: [],
   flagship: false,
-  // 01-landing §2 (plan §2): three pods in rack B with the root first, so the scripted bite takes POD 01 OKAFOR (Ada's
-  // family; rack A's 18 trailing free blocks are a WALL on the root's left). POD 02 BRANDT arrives at 44% (it would land
-  // hard: the coast's one REPAIR). This keeps the phase-2 HOLLOW instead of §3.16's calm COMPACT row (risk 3).
+  // A calm ship (phase 3 slice 2, 04 §3.2, 01-landing §3.16): three pods at the start of rack B and no root slot (no
+  // HOLLOW aboard). POD 01 OKAFOR is Ada's family, first in the credits. POD 02 BRANDT arrives at 44% (it would land hard:
+  // the coast's one REPAIR, 01-landing §3.8's scripted damage). Still FULL 384 (memory classes are slice 3).
   memory: {
     rackA: RACK_A,
-    podRacks: { B: 'R P P P _32', C: '_64', D: '_64' },
+    podRacks: { B: 'P P P _40', C: '_64', D: '_64' },
     aiFiles: { E: FRESH_UNIT_RACK_E, F: FRESH_UNIT_RACK_F },
     drivers: {
       familiesSeedStream: 'families',
+      damage: 'scripted',
       hurt: [{ pod: 2, integrity: 44 }],
       lead: 1,
       firstRun: { families: ARES_RUN1_FAMILIES, leadIndex: 0, lead: ADA },
@@ -230,28 +190,16 @@ const ARES_VII: ShipDef = {
     colonyFirstRun: 'RIVERSIDE',
     drag: false,
   },
-  // §4.2 ship 1: no spread. It waits until you brake: the first time the loop closes it bites POD 01
-  // (Ada's family, right next to the root) and eats 2%/s, 4%/s while the engine fires, so the
-  // capture burn costs Ada's family's driver about a third and the fight comes after the lock. After that one
-  // fight it goes quiet for this ship (`> ...047?`).
-  hollow: {
-    wake: 'loop-closed-once',
-    spreadEverySec: null,
-    drainPerSec: 2,
-    burnMult: 2,
-    landMult: 1,
-    seed: null,
-    verbs: null,
-    deal: false,
-    story: 'notices-you',
-  },
+  // Layer 1 (01-landing §3.15): calm, no beam seeds (04 §3.1: depth 1), and no final ship one hop away.
+  layer: 1,
+  threat: { beamSeeds: { kind: 'none' }, oneHopFromFinal: false },
 };
 
 // Ship 2: steer IN (§4.2, §5.1 2:20). The path arrives far too wide (▼ at 14,000 km, the ring is
 // 5,000–7,500): a dashed FLYBY that passes outside the ring, `TOO WIDE — hold [SPACE]` with IN already
 // engaged. About 5 s of IN pulls ▼ into the ring, then the long coast (≈166 s at CRUISE without SKIP)
-// is the hacking phase: MOVE arrives as the coast begins and HOLLOW wakes 5 s later and names itself (at
-// the latest 25 s and 30 s into the flight; measured: the coast at 5.8 s, the wake at 10.8 s). The ring is
+// is the MIND's maintenance phase: a calm ship since phase 3 slice 2 (04 §3.2: no adversary), whose work is the transit
+// hits, Sensor Interp arriving at 62 at most (risk 10) and one degraded driver. The ring is
 // narrower than ship 1's, and FUEL a little tighter (2.4 km/s for a 1.73 km/s need).
 const HALCYON: ShipDef = {
   id: 'halcyon',
@@ -277,21 +225,24 @@ const HALCYON: ShipDef = {
     marginTac: SHRINK_MARGIN_TAC, marginMinTac: SHRINK_MARGIN_MIN_TAC, smallLoopFactor: HALCYON_SMALL_LOOP_FACTOR,
     reactionTac: SHRINK_REACTION_TAC, edgeBackOffTac: HALCYON_EDGE_BACK_OFF_TAC,
   },
-  arrival: { linkBlocks: 120, transitHits: 3, distanceLy: 22, damage: [] },
+  // §6.9's link and hits; then the ship's own scripted arrival damage (slice-2-plan risk 10): Sensor Interp to at most 62,
+  // so ship 2's lesson (a degraded sensor widens the dot, and LZ-B's STANDARD bracket shows it) never hangs on a seeded
+  // transit hit missing it.
+  arrival: { linkBlocks: 120, transitHits: 3, distanceLy: 22, damage: [{ role: 'sensor', maxIntegrity: 62 }] },
   zones: [],
-  // MOVE as the coast begins (at the latest 25 s in), HOLLOW 5 s after it (at the latest 30 s in: §4.2's
-  // boot + 25 / + 30): the licence chime, CONTROL's line, then the bite, with the coast still ahead.
-  licences: [{ kind: 'move', afterAiSec: 25, atCoast: true, atFirstSeed: false, atFirstGhost: false }],
+  // No licence (slice-2-plan §3.2): with no HOLLOW here MOVE would have no job until KESTREL's debris, so it moved there
+  // ("the tool arrives for the fight it is for", WP7).
+  licences: [],
   flagship: false,
-  // Five pods (plan §2): the root sits in rack C between POD 04 (a 2-block GAP) and POD 05 (a 1-block GAP), so HOLLOW
-  // bites both at its wake, as it bit C08 and C09; rack D is empty: the room to MOVE them behind a WALL. The families
-  // are seeded; POD 05, right of the root, leads the credits. Nobody arrives hurt: HOLLOW is the whole fight here.
+  // A calm ship (01-landing §3.16): five pods at the start of rack B, no root slot; the families are seeded, and
+  // ceil(5 ÷ 5) = 1 driver arrives degraded (data/driver-damage.ts). POD 05 leads the credits.
   memory: {
     rackA: RACK_A,
-    podRacks: { B: 'P P P _40', C: 'P _2 R _1 P _37', D: '_64' },
+    podRacks: { B: 'P P P P P _24', C: '_64', D: '_64' },
     aiFiles: null,
     drivers: {
       familiesSeedStream: 'families',
+      damage: 'rolled',
       hurt: [],
       lead: 5,
       firstRun: null,
@@ -309,21 +260,9 @@ const HALCYON: ShipDef = {
     colonyFirstRun: null,
     drag: true,
   },
-  // §4.2 HALCYON: it wakes 5 AI s after the coast begins (at the latest 30 s into the flight) and bites at
-  // once, then every 25 s; 3.5 %/s, twice
-  // that while the engine burns, ×1.5 while a window is open with a pod to launch (it gets desperate as its food
-  // leaves). A repair still wins: heal(8) 18.5 %/s against at most 7 %/s.
-  hollow: {
-    wake: { afterAiSec: 30, coastLeadSec: 5 },
-    spreadEverySec: 25,
-    drainPerSec: 3.5,
-    burnMult: 2,
-    landMult: 1.5,
-    seed: null,
-    verbs: null,
-    deal: false,
-    story: 'names-itself',
-  },
+  // Layer 2: calm (04 §3.1: depth 2), nothing rides the beam in.
+  layer: 2,
+  threat: { beamSeeds: { kind: 'none' }, oneHopFromFinal: false },
 };
 
 // Ship 3: flying blind, debris ahead (§4.2, §5.1 4:40, §9 WP9). The path arrives too wide (▼ at 9,000 km,
@@ -333,8 +272,8 @@ const HALCYON: ShipDef = {
 // pulls ▼ into the ring and, because it is early, off the cloud (the design's probe: started by 80 tac s it
 // clears it by 160+ km; WP9 review round 1: held through the sweet zone as the strip asks, it still dodges from
 // up to about 152 tac s in, judged with both Core threads busy (LEAD-2), and the strip counts that down). FUEL 2.1 km/s for a 1.56–1.67 need.
-// HOLLOW bites every 20 s at 4 %/s (heal 18.5 %/s still beats 1.5 × its worst 8), and drops a 2-block seed
-// into your walls every 50 s: DELETE arrives with the first one.
+// Since phase 3 slice 2 HOLLOW is not aboard (04 §3.1: depth 3 is the SEEDS act): the beam brings seeds instead, laid out
+// behind the files they rode with (run 1: one next to Telemetry, the RM lesson), and DELETE is licensed at the start.
 const KESTREL: ShipDef = {
   id: 'kestrel',
   name: 'KESTREL',
@@ -358,19 +297,24 @@ const KESTREL: ShipDef = {
   arrival: { linkBlocks: 112, transitHits: 4, distanceLy: 27, damage: [{ role: 'sensor', maxIntegrity: 45 }] },
   // §4.2: rack C on the written run (the story's C07–C12), rack B or C (seeded) on a later one.
   zones: [{ kind: 'debris', id: 'kestrel-debris', centre: { onInboundAtR: 14000 }, r: 900, rack: 'C', laterRacks: ['B', 'C'] }],
-  // §6.5: DELETE at KESTREL's first seed (its telegraph): the tool arrives with the thing it removes.
-  licences: [{ kind: 'delete', afterAiSec: null, atCoast: false, atFirstSeed: true, atFirstGhost: false }],
+  // Slice-2-plan §3.2: DELETE at the flight's first tick (the beam seeds are already in memory by then: the tool arrives
+  // with the thing it removes), MOVE as the coast begins (its first job is the debris lesson, `DEBRIS HITS RACK C`, so it
+  // is known before VESPER's walls).
+  licences: [
+    { kind: 'delete', afterAiSec: 0, atCoast: false, atFirstSeed: false, atFirstGhost: false },
+    { kind: 'move', afterAiSec: null, atCoast: true, atFirstSeed: false, atFirstGhost: false },
+  ],
   flagship: false,
-  // §4.2 KESTREL, with drivers in the clusters' places (plan §2: the DEAL, the seeds and the debris on rack C keep their
-  // geometry): twelve pods; the root sits in rack C between POD 09 (a 1-block GAP) and POD 10 (a 2-block GAP), so its
-  // wake bites both; rack D is empty (room to MOVE them behind a WALL, and out of the debris's rack). POD 10, right of
-  // the root, leads the credits. Nobody arrives hurt: the debris is what can hurt them.
+  // Twelve pods, six in rack B and six in rack C (the debris's rack on the written run: the story's C07–C12), no root
+  // slot (01-landing §3.16: HOLLOW never boards before depth 4); rack D is empty (room to MOVE them out of the debris's
+  // rack). POD 10 leads the credits. ceil(12 ÷ 5) = 3 drivers arrive degraded (data/driver-damage.ts).
   memory: {
     rackA: RACK_A,
-    podRacks: { B: 'P P P P P P _16', C: 'P P P _1 R _2 P P P _5', D: '_64' },
+    podRacks: { B: 'P P P P P P _16', C: 'P P P P P P _16', D: '_64' },
     aiFiles: null,
     drivers: {
       familiesSeedStream: 'families',
+      damage: 'rolled',
       hurt: [],
       lead: 10,
       firstRun: null,
@@ -390,29 +334,10 @@ const KESTREL: ShipDef = {
     colonyFirstRun: null,
     drag: true,
   },
-  // §4.2 KESTREL: it wakes like HALCYON's, 5 AI s into the coast, and bites at once, then every 20 s at 4 %/s; the
-  // first seed 30 s after the wake (between the second and third bites; SKIP waits for it, pace.ts, and its clock stands
-  // still while the flight is at TACTICAL, so it never lands under a burn's lines, systems/hollow.ts), then one every
-  // 50 s, aimed at the walls you built. HOLLOW already said who it is on HALCYON: on this ship its one new line is
-  // the first seed's (`> sorry. i'm so hungry.`, systems/hollow.ts).
-  // It never wakes inside the debris dodge's window (the lead's ruling for WP9 fix round 1): the IN correction
-  // dodges the cloud until about 152 tactical s in (judged with both Core threads busy, LEAD-2), and a wake inside
-  // that window buried TOO WIDE's countdown under HOLLOW's lines for a kid who repaired the sensor late. Since review
-  // round 2 that is an explicit rule (systems/hollow.ts: a timed wake waits while the dodge is open, and
-  // WAKE_AFTER_DODGE_SEC after it closes), so it holds at any pace (the window's TACTICAL end, OVERCLOCK in blue, a
-  // kid tapping the engine). The 60 s cap is round 1's: at CRUISE the window closes at about 55 AI s, so the hold,
-  // not the cap, sets a never-corrector's wake.
-  hollow: {
-    wake: { afterAiSec: 60, coastLeadSec: 5 },
-    spreadEverySec: 20,
-    drainPerSec: 4,
-    burnMult: 2,
-    landMult: 1.5,
-    seed: { everySec: 50, firstAfterSec: 30, target: 'walls' },
-    verbs: null,
-    deal: false,
-    story: 'none',
-  },
+  // Layer 3, depth 3: the SEEDS act (04 §3.1). The tutorial run's beam carries one seed next to Telemetry (risk 4: it
+  // garbles, it never strands); a later run rolls NOISY (2) odds.
+  layer: 3,
+  threat: { beamSeeds: { kind: 'scripted', firstRun: [{ role: 'telemetry' }], later: 2 }, oneHopFromFinal: false },
 };
 
 // Ship 4: the engine fires by itself (§4.2, §5.3 moment 11, §9 WP10). The path arrives already in the ring (▼ at
@@ -423,8 +348,8 @@ const KESTREL: ShipDef = {
 // coast: a kid who never SWAPs loses VESPER (STRANDED, or FLEW AWAY on an empty tank), while one who follows the pip
 // lesson after the second burst locks it. FUEL 1.8 km/s for a 1.32 need plus the drift fixes. The first burst is the
 // alarm (UNCOMMANDED THRUST, SWAP is licensed with it), and the cure is a file: SWAP to Thrust.alt.
-// HOLLOW bites every 16 s at 4 %/s (heal 18.5 %/s beats 1.5 × its worst 8), drops a 2-block seed next to your tools
-// every 40 s (COPY your Repair: it arrives at the boot), and once offers THE DEAL.
+// Since phase 3 slice 2 HOLLOW boards on the beam into VESPER (04 §3.8: depth 4, one hop from the final ship), a 10-block
+// root in the bay's slot, and plays ARRIVAL with WALLS folded in (04 §3.9): silent until the loop closes, then the fight.
 const VESPER: ShipDef = {
   id: 'vesper',
   name: 'VESPER',
@@ -454,15 +379,18 @@ const VESPER: ShipDef = {
     { kind: 'swap', afterAiSec: null, atCoast: false, atFirstSeed: false, atFirstGhost: true },
   ],
   flagship: false,
-  // §4.2 VESPER, with drivers in the clusters' places: twelve pods; the root sits in rack C between POD 08 (a 1-block
-  // GAP) and POD 09 (a 3-block GAP), so its wake bites both, and both stand at its front (THE DEAL names the nearer).
-  // Rack D is empty: room to MOVE them behind a WALL. POD 09, right of the root, leads the credits. Nobody arrives hurt.
+  // Twelve pods (01-landing §3.16): six in rack B, five in rack C around the root slot `S` (POD 08 a 2-block GAP on its
+  // left, POD 09 a 1-block GAP on its right, so the scripted bite takes POD 09), and POD 12 in rack D, whose 56 free
+  // blocks are the room to MOVE drivers behind a WALL. The slot's rack ends in 21 free: the 10-block root lands there
+  // (it takes its blocks off that tail), and a fed root up to PRE_FINAL_ROOT_CAP still fits. POD 09 leads the credits.
+  // ceil(12 ÷ 5) = 3 drivers arrive degraded and one failing (layer 5), never POD 09 or the slot's neighbours.
   memory: {
     rackA: RACK_A,
-    podRacks: { B: 'P P P P P P _16', C: 'P P _1 R _3 P P P P _4', D: '_64' },
+    podRacks: { B: 'P P P P P P _16', C: 'P P _2 S _1 P P P _21', D: 'P _56' },
     aiFiles: null,
     drivers: {
       familiesSeedStream: 'families',
+      damage: 'rolled',
       hurt: [],
       lead: 9,
       firstRun: null,
@@ -484,22 +412,10 @@ const VESPER: ShipDef = {
     colonyFirstRun: null,
     drag: true,
   },
-  // §4.2 VESPER: it wakes 30 AI s into the coast (which begins at the flight's start: the path arrives in the ring), so
-  // the engine firing by itself is the ship's first lesson and HOLLOW its second, then bites every 16 s at 4 %/s, ×2
-  // while the engine burns (ghost bursts included: P1), ×1.5 while the landing is active. Its first seed 25 s after the wake (after
-  // THE DEAL's 15 s), then one every 40 s, next to your filesystem tools; its first seed waits for a calm flight like
-  // every ship's (systems/hollow.ts).
-  hollow: {
-    wake: { afterAiSec: 45, coastLeadSec: 30 },
-    spreadEverySec: 16,
-    drainPerSec: 4,
-    burnMult: 2,
-    landMult: 1.5,
-    seed: { everySec: 40, firstAfterSec: 25, target: 'near-tools' },
-    verbs: null,
-    deal: true,
-    story: 'wants-charge',
-  },
+  // Layer 5, depth 4, one hop from LAST LIGHT: HOLLOW boards here whatever TRACE says (04 §3.8). A clean beam (noise 0,
+  // slice-2-plan risk 2): one ship of HOLLOW before the finale is already full of first-time mechanics.
+  layer: 5,
+  threat: { beamSeeds: { kind: 'noise', noise: 0 }, oneHopFromFinal: true },
 };
 
 // Ship 5: LAST LIGHT, the flagship, the climax (§4.2, §9 WP11). It opens like ship 1, on a crash course (▼ at 3,200
@@ -507,9 +423,10 @@ const VESPER: ShipDef = {
 // asks again; then the coast crosses a radiation belt (9,000–12,000 km, about 0:36 inside at TACTICAL) that peppers
 // racks A–B (§6.8: −8 to a random file in them about every 200 game s, ≈5 hits): the ship's files and rack B's seven
 // drivers, so the kid moves drivers out of rack B before it, or REPAIRs them after. FUEL 2.5 km/s for a 1.76 need.
-// HOLLOW is at its worst: the root is 16 blocks in rack C between POD 11 and POD 12 (GAPs of 2 and 1), it bites
-// every 12 s at 5 %/s (heal 18.5 %/s still beats 1.5 × its worst 10), drops a seed into your walls every 35 s, and
-// uses your own verbs (MV, RM) every 12 s of calm. Its ORBIT LOCK opens the root for the duel.
+// HOLLOW is at its worst, the FINALE stage (data/threats.ts; THE DEAL folded in when the run has not had it): the root is
+// 16 blocks in rack C's slot between POD 11 and POD 12 (GAPs of 2 and 1), it bites every 12 s at 5 %/s (heal 18.5 %/s
+// still beats 1.5 × its worst 10), drops a seed into your walls every 35 s, and uses your own verbs (MV, RM) every 12 s of
+// calm. Its ORBIT LOCK opens the root for the duel.
 const LAST_LIGHT: ShipDef = {
   id: 'last-light',
   name: 'LAST LIGHT',
@@ -536,14 +453,18 @@ const LAST_LIGHT: ShipDef = {
   licences: [],
   flagship: true,
   // 01-landing §3.16's final-ship layout (plan §2, risk 4: it moves the boss geometry, so boss-sim is re-measured):
-  // sixteen pods, seven in rack B (the belt hits A–B), the 16-block root in rack C between POD 11 (a 2-block GAP) and
-  // POD 12 (a 1-block GAP, bitten first), and four in rack D with its last 32 blocks free. POD 12 leads the credits.
+  // sixteen pods, seven in rack B (the belt hits A–B), the root slot `S` in rack C between POD 11 (a 2-block GAP) and
+  // POD 12 (a 1-block GAP, bitten first), and four in rack D with its last 32 blocks free. The slot's rack ends in 21 free:
+  // the 16-block root takes its blocks off that tail (5 left, as phase 2's `R16 _1 P _5`), and slice 7's 18-block MERGE
+  // root still fits (FINAL_ROOT_MAX_BLOCKS). POD 12 leads the credits. Layer 8: four drivers arrive degraded and one
+  // failing (data/driver-damage.ts), never POD 12 or the slot's neighbours.
   memory: {
     rackA: RACK_A,
-    podRacks: { B: 'P P P P P P P _8', C: 'P P P P _2 R16 _1 P _5', D: 'P P P P _32' },
+    podRacks: { B: 'P P P P P P P _8', C: 'P P P P _2 S _1 P _21', D: 'P P P P _32' },
     aiFiles: null,
     drivers: {
       familiesSeedStream: 'families',
+      damage: 'rolled',
       hurt: [],
       lead: 12,
       firstRun: null,
@@ -565,70 +486,10 @@ const LAST_LIGHT: ShipDef = {
     colonyFirstRun: 'FIRST LIGHT',
     drag: true,
   },
-  // §4.2 LAST LIGHT: it wakes like HALCYON's, 5 AI s into the coast (at the latest 30 s into the flight), bites the two
-  // drivers beside the root at once, then every 12 s at 5 %/s, ×2 while the engine burns, ×1.5 while the landing is active. Seeds every 35 s into your
-  // walls (the first 20 s after the wake, and like every ship's first seed only on a calm flight); a verb every 12 s of
-  // calm, counted down 3 s (§6.6; the first one 4 s: tuning.ts), every 4 s while the root's DELETE runs. Its boot closes
-  // on HOLLOW's own line.
-  hollow: {
-    wake: { afterAiSec: 30, coastLeadSec: 5 },
-    spreadEverySec: 12,
-    drainPerSec: 5,
-    burnMult: 2,
-    landMult: 1.5,
-    seed: { everySec: 35, firstAfterSec: 20, target: 'walls' },
-    verbs: { everySec: 12, telegraphSec: VERB_TELEGRAPH_SEC, firstTelegraphSec: VERB_FIRST_TELEGRAPH_SEC, duelEverySec: 4 },
-    deal: false,
-    story: 'last-ship',
-  },
+  // Layer 8, the final ship (flagship): it plays FINALE whatever came before (04 §3.9). A clean beam (risk 2).
+  layer: 8,
+  threat: { beamSeeds: { kind: 'noise', noise: 0 }, oneHopFromFinal: false },
 };
-
-// Throws on a HOLLOW whose numbers break the design's promise (§6.6): a repair started before a file
-// hits zero always wins, so the heal on an 8-block driver must beat the fastest drain by
-// HEAL_BEATS_DRAIN_FACTOR. Losses then come from reach, threads and charge, never from a started
-// repair being outrun. Exported for tests and for later ships' configs.
-export function validateHollowDef(id: string, hollow: HollowDef): void {
-  const fail = (why: string): never => { throw new Error(`ShipDef ${id} hollow: ${why}`); };
-  if (!(hollow.drainPerSec > 0)) fail(`drainPerSec must be positive (got ${hollow.drainPerSec})`);
-  if (!(hollow.burnMult >= 1)) fail(`burnMult must be at least 1 (got ${hollow.burnMult})`);
-  if (!(hollow.landMult >= 1)) fail(`landMult must be at least 1 (got ${hollow.landMult})`);
-  if (hollow.spreadEverySec !== null && !(hollow.spreadEverySec > 0)) fail(`spreadEverySec must be positive or null (got ${hollow.spreadEverySec})`);
-  if (typeof hollow.wake !== 'string' && !(hollow.wake.afterAiSec >= 0)) fail(`wake.afterAiSec must be ≥ 0 (got ${hollow.wake.afterAiSec})`);
-  if (typeof hollow.wake !== 'string' && hollow.wake.coastLeadSec !== null && !(hollow.wake.coastLeadSec >= 0)) {
-    fail(`wake.coastLeadSec must be ≥ 0 or null (got ${hollow.wake.coastLeadSec})`);
-  }
-  const heal = repairRatePerSec(DRIVER_BLOCKS, 1);
-  // The larger multiplier applies (01-landing §5), never their product: the worst drain is the larger of the two.
-  const worstDrain = hollow.drainPerSec * Math.max(hollow.burnMult, hollow.landMult);
-  if (!(heal > HEAL_BEATS_DRAIN_FACTOR * worstDrain)) {
-    fail(`a repair heals ${heal.toFixed(1)}%/s, which must beat ${HEAL_BEATS_DRAIN_FACTOR} × the worst drain (${worstDrain}%/s)`);
-  }
-  if (hollow.story === 'notices-you' && hollow.wake !== 'loop-closed-once') fail('the "notices you" story follows the scripted first fight (loop-closed-once)');
-  if (hollow.story === 'names-itself' && hollow.wake === 'loop-closed-once') fail('the "names itself" story is told at a timed wake');
-  if (hollow.seed !== null) {
-    const { everySec, firstAfterSec } = hollow.seed;
-    if (!(everySec > 0)) fail(`seed.everySec must be positive (got ${everySec})`);
-    if (!(firstAfterSec >= 0)) fail(`seed.firstAfterSec must be ≥ 0 (got ${firstAfterSec})`);
-    // A seed grows by the bite rule: on a HOLLOW that never bites it would be a black block that does nothing.
-    if (hollow.spreadEverySec === null) fail('seeds need a HOLLOW that spreads (spreadEverySec)');
-    if (hollow.wake === 'loop-closed-once') fail('seeds need a timed wake');
-  }
-  if (hollow.verbs !== null) {
-    const { everySec, telegraphSec, firstTelegraphSec, duelEverySec } = hollow.verbs;
-    if (!(telegraphSec > 0)) fail(`verbs.telegraphSec must be positive (got ${telegraphSec})`);
-    // The first verb is the lesson: never shorter than the drill after it.
-    if (!(firstTelegraphSec >= telegraphSec)) fail(`verbs.firstTelegraphSec (${firstTelegraphSec}) must be at least telegraphSec (${telegraphSec})`);
-    // A verb's countdown must end before the next one starts: one telegraph at a time, and a gap to breathe in. On the
-    // coast that holds for the longer first one too; in the duel its extra seconds push the next verb back instead
-    // (systems/hollow-verbs.ts), so the duel's clock only has to outlast the drill.
-    if (!(everySec > firstTelegraphSec)) fail(`verbs.everySec (${everySec}) must be longer than firstTelegraphSec (${firstTelegraphSec})`);
-    if (!(duelEverySec > telegraphSec)) fail(`verbs.duelEverySec (${duelEverySec}) must be longer than telegraphSec (${telegraphSec})`);
-    if (hollow.spreadEverySec === null || hollow.wake === 'loop-closed-once') fail('verbs need a HOLLOW that spreads, with a timed wake');
-  }
-  // THE DEAL trades a pod's driver for a pause in the spread: a HOLLOW that never spreads would offer nothing.
-  if (hollow.deal && hollow.spreadEverySec === null) fail('THE DEAL needs a HOLLOW that spreads (spreadEverySec)');
-  if (hollow.deal && hollow.wake === 'loop-closed-once') fail('THE DEAL needs a timed wake');
-}
 
 // Throws on any ship whose numbers would make the flight impossible or the rules
 // contradictory. Runs for every entry at module load: bad data fails the page loudly
@@ -668,7 +529,10 @@ export function validateShipDef(ship: ShipDef): void {
   if ((ship.arrival === null) !== (ship.memory.aiFiles !== null)) fail('a ship meets a fresh unit (written racks E–F) exactly when nothing arrives by transmission');
   for (const licence of ship.licences) {
     if (licence.afterAiSec !== null && !(licence.afterAiSec >= 0)) fail(`licence ${licence.kind} afterAiSec must be ≥ 0 (got ${licence.afterAiSec})`);
-    if (licence.atFirstSeed && ship.hollow.seed === null) fail(`licence ${licence.kind} waits for a seed on a ship whose HOLLOW drops none`);
+    // A licence that waits for a seed needs a ship whose threat brings seeds (beam seeds, or a HOLLOW stage that drops its
+    // own: the ladder decides those per run, so only the beam is checkable here), or another moment that issues it.
+    const otherMoment = licence.afterAiSec !== null || licence.atCoast || licence.atFirstGhost;
+    if (licence.atFirstSeed && !beamBringsSeeds(ship) && !otherMoment) fail(`licence ${licence.kind} waits for a seed on a ship whose beam brings none`);
     if (licence.afterAiSec === null && !licence.atCoast && !licence.atFirstSeed && !licence.atFirstGhost) {
       fail(`licence ${licence.kind} has no moment that issues it`);
     }
@@ -689,21 +553,38 @@ export function validateShipDef(ship: ShipDef): void {
   // ship. A ship whose racks E–F are carried in is built with those racks empty (carry.ts packs the
   // real ones on arrival, and throws if they do not fit).
   const emptyUnit = { startAddr: UNIT_RACKS_START, segs: [freeSegment(MEMORY_TOTAL_BLOCKS - UNIT_RACKS_START)] };
+  // A ship with a root slot is built both empty and holding the largest root it may ever get (maxRootFor), so a slot
+  // that can't take it fails here too.
+  const roots: ({ blocks: number } | null)[] = rootSlotRack(ship) === null ? [null] : [null, { blocks: maxRootFor(ship) }];
   for (const firstRun of [true, false]) {
-    const memory = buildShipMemory(ship, ship.memory.aiFiles ? null : emptyUnit, createRng(0), firstRun, UNNAMED_HOLLOW);
-    const drivers = memory.filter((seg) => seg.type === 'driver').length;
-    // The LANDING REPORT never repeats a hard-landing line on one ship.
-    if (drivers > HARD_WORDS_POOL.length) fail(`${drivers} pods, but only ${HARD_WORDS_POOL.length} hard-landing lines`);
-    // Every ship has HOLLOW (§4.2): its layout must hold the root it grows from; the flagship's finale deletes one root,
-    // so its layout must hold exactly one (counted in the memory just built, not by re-reading the layout's tokens).
-    const roots = memory.filter((seg) => seg.type === 'hollow' && seg.root).length;
-    if (roots === 0) fail('the rack layout has no HOLLOW root (an R token)');
-    if (ship.flagship && roots !== 1) fail(`the flagship's finale deletes one root: its layout holds ${roots}`);
+    for (const root of roots) {
+      const memory = buildShipMemory(ship, ship.memory.aiFiles ? null : emptyUnit, createRng(0), firstRun, UNNAMED_HOLLOW, root);
+      const drivers = memory.filter((seg) => seg.type === 'driver').length;
+      // The LANDING REPORT never repeats a hard-landing line on one ship.
+      if (drivers > HARD_WORDS_POOL.length) fail(`${drivers} pods, but only ${HARD_WORDS_POOL.length} hard-landing lines`);
+      // A root comes from the ladder now, into the layout's `S` slot (01-landing §3.16); a written `R` would be a HOLLOW
+      // the ladder never chose, so no layout may hold one, and the built memory holds exactly the root it was given.
+      const built = memory.filter((seg) => seg.type === 'hollow' && seg.root).length;
+      if (built !== (root === null ? 0 : 1)) fail(`the rack layout holds ${built} HOLLOW root(s) for ${root === null ? 'no' : 'one'} root: roots come from the threat ladder into an S slot`);
+    }
   }
-  validateHollowDef(ship.id, ship.hollow);
-  // The finale is the flagship's (§9 WP11): its verbs, its duel. A verb-wielding HOLLOW anywhere else would fight a duel
-  // that never comes; a flagship whose HOLLOW has none would make the climax a bite like any other.
-  if (ship.flagship !== (ship.hollow.verbs !== null)) fail('HOLLOW uses its verbs on the flagship, and only there');
+  // The flagship's finale deletes one root in its duel: its layout must have the slot, and the ladder's FINALE (the stage
+  // every final ship plays) must bring the verbs (data/threats.ts validates the stages).
+  if (ship.flagship && rootSlotRack(ship) === null) fail('the flagship has no root slot (an S token) for the FINALE\'s root');
+  if (ship.flagship && HOLLOW_STAGES.finale.hollow.verbs === null) fail('the FINALE stage has no verbs for the flagship\'s duel');
+  // A ship one hop from a final ship is where HOLLOW is forced aboard (04 §3.8): its root needs a slot.
+  if (ship.threat.oneHopFromFinal && rootSlotRack(ship) === null) fail('HOLLOW boards here (one hop from the final ship), but the layout has no root slot');
+  if (!(Number.isInteger(ship.layer) && ship.layer >= 1)) fail(`layer must be a whole number ≥ 1 (got ${ship.layer})`);
+  const seeds = ship.threat.beamSeeds;
+  if (seeds.kind === 'scripted' && seeds.firstRun.length === 0) fail('a scripted beam seed source with no first-run seed (use { kind: \'none\' })');
+}
+
+// The beam into this ship can bring seeds at all (04 §3.4): a scripted source, or noise above CLEAN.
+export function beamBringsSeeds(ship: ShipDef): boolean {
+  const seeds = ship.threat.beamSeeds;
+  if (seeds.kind === 'none') return false;
+  if (seeds.kind === 'noise') return seeds.noise > 0;
+  return true;
 }
 
 // The fleet as a whole: it ends with its one flagship (§4.2: LAST LIGHT is ship 5). A run ends after the last ship,

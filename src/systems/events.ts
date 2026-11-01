@@ -160,6 +160,21 @@ export interface GameEvents {
   'duel-spike': { progress: number };
   'root-deleted': Record<string, never>;
   'finale-chosen': { choice: 'purge' | 'merge'; restoredInPlace: number; restoredHalf: number };
+  // Phase 3 slice 2 (04 §3.4–§3.8, 05 §3.2). A beam seed landed behind its target at the boot (the ECC seeds line, the
+  // `seedLand` thunk); a seed was deleted (`beam`: a beam seed, whose `words` it may say, at most once a ship); TRACE went
+  // up at a ship's end.
+  'seed-landed-beam': { segId: string; targetId: string };
+  'seed-deleted': { segId: string; beam: boolean; words: string | null };
+  'trace-changed': { from: number; to: number };
+  // HOLLOW rides the beam into the next ship (the PACKET's uninvited chip, the transmitSweep stutter), then landed in the
+  // root slot as the boot's 108% unpack was said (the shake, the tear, the hollowBoard cue).
+  'hollow-boarding': { blocks: number; cause: 'trace' | 'forced' };
+  'hollow-boarded': { blocks: number; cause: 'trace' | 'forced' };
+  // 046.log: a boot's keys opened these entries; SCAN read its header (it reads `046.log` from now on).
+  'log-key': { entries: number[] };
+  'log-scanned': Record<string, never>;
+  // The unit's last working rm was deleted or eaten (04 §3.3): the stamp and echo, information only.
+  'last-rm-lost': Record<string, never>;
 }
 
 export type ZoneForecast = 'hit' | 'clear' | 'unknown';

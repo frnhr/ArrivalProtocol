@@ -548,3 +548,152 @@ Notes on the table:
 - /home/user/ArrivalProtocol/src/systems/carry.ts
 - /home/user/ArrivalProtocol/src/data/memory.ts
 - /home/user/ArrivalProtocol/src/data/script.ts
+
+---
+
+## Deviations (foundation)
+
+The foundation (§5.0) as built, where it differs from §2–§5 or fills a gap the plan left open. Each item has its reason.
+
+**Types and module seams**
+
+1. **HollowDef and its parts live in `src/types/threat.ts`**, not `data/ships.ts` (`HollowDef`, `HollowWake`, `SeedTarget`,
+   `HollowStoryKind`, `VerbDef`, `SeedDef`), and **`validateHollowDef` moved to `data/threats.ts`**; ships.ts re-exports
+   both, so phase 2's imports still work. Why: ships.ts now imports threats.ts (the flagship check reads the FINALE
+   stage), and threats.ts needs the types; with the types in data/ships.ts the two data modules would import each other.
+   Validator messages read `HollowDef <id>: …` (they used to read `ShipDef <id> hollow: …`).
+2. **`HOLLOW_STAGES[stage]` is `{ hollow, rootBlocks }`** (`HollowStageDef`), so re-keyed fixtures read
+   `HOLLOW_STAGES.walls.hollow`. `validateHollowStages` runs at load: every def passes the drain rule, roots grow stage
+   by stage, nothing before the finale is over `PRE_FINAL_ROOT_CAP`, and the verbs are the FINALE's alone (this replaces
+   validateShipDef's old "verbs only on the flagship").
+3. **`rootBlocksFor(stage, folded, fed)`**: the folded stages are an argument (04 §3.9: "a folded ship uses the larger
+   stage's root"). The FINALE returns its own 16 whatever it was fed. Slice 7 appends `traces`.
+4. **`run.threat` is the state DURING a ship**: the ship's verdict is applied as it starts. `threat-plan.ts` adds
+   `createRunThreat`, `fixedShipFacts(index)` (the fixed five's depth, final and M3 facts: slice 3's map replaces it),
+   `threatInputFor(prev, facts, dealDone)`, `applyThreat(prev, plan, depth)` and `nominalShipThreat(index)`, next to
+   `nominalRunThreat(index)`. Why: `RunThreatState.age` counts the current ship (§2.2), so the next ship's input is read
+   from the previous ship's state after its tally. Re-planning from run.threat inside `createShipSlices` would count
+   the same ship twice.
+5. **The verdict is passed in explicitly, not re-planned when the ship is built**:
+   - `createShipSlices(run, carried, threat)`;
+   - `WorldReset.threat`;
+   - `startShip(store, index, carried, arrival, threat)`, which applies the verdict to run.threat;
+   - `createInitialState({ threat? })`, defaulting to `nominalShipThreat(shipIndex)`, with run.threat =
+     `nominalRunThreat(shipIndex)`.
+
+   **`goTransmit` already computes `TransitPlan.threat`**, using `run.stats.deal !== null` as dealDone, and
+   `transmitNext` builds the next ship from it. The simulation retry rebuilds ship 1 with `nominalRunThreat(0)`.
+
+   THREAT's `endShip` tally then feeds the next ship's plan with no further plumbing.
+6. **`ArrivalReport.boarded` is filled now**, from the verdict (`boardedBy(threat)` in run.ts, used by `transmitNext` and
+   the debug warp). `seeds` stays `[]` until THREAT. Why: the root is already laid out from the verdict, so a boot that
+   didn't say so would describe a different world than the strip. VESPER's boot therefore types the 108% line and emits
+   `hollow-boarded` today; the shake, tear and cue are UI's.
+7. **`layoutCarried(packet, chargeBlocks, ship, threat)`**: the hunting gap reads `threat.hollow.seed?.target`, not
+   `ShipDef.hollow`. `freshUnitRacks(ship)` lays out for `nominalShipThreat` of the ship found by id. On the fixed five
+   no ship hunts any more (VESPER plays ARRIVAL + WALLS), so the gap only appears where a fixture gives a ship the HUNT
+   stage (landing/review-fixes issue 5 does).
+8. **`Packet` is unchanged.** `root` and `seeds` are THREAT's to add along with the code that fills them; adding empty
+   fields now would only move the work.
+9. **`LogSegment.id` and `.size` are typed `string` and `number`**, not the literals `'log046'` and `2`. Why: phase-2
+   code and tests copy a `Segment` with a new id or size (`{ ...gap, id, size }`), which fails to type-check over a
+   union that holds literal ids. `LOG_FILE` fixes the values, and `name` keeps its `'???' | '046.log'` literal.
+10. **`isUnitFileType` includes `'log'`**, so 046.log packs, carries and costs 2 link blocks (risk 7). It packs into rack
+    F after the fs-tools and FIREWALLs, before REPAIR CHARGE. In the fresh rack F it sits between Scan and the charge
+    (free 25 → 23), so licences still land beside the charge. `DropLock` gains `'log'`, and its chip note is
+    `LOG_TEXT.packetLock`. `HealthSegment` excludes `'log'`, which has no integrity and so is never infectable or hit in
+    transit.
+11. **SCAN works on 046.log already.** `tool-targets` lets SCAN target it, and the op emits `log-scanned` and echoes
+    `LOG_TEXT.scan(found)` (`046.log · origin UNIT-046 · 12 entries · 0 found`). The rename, CONTROL's line and
+    `run.log.scanned` are story-log's (OPENING), on that event. DELETE, MOVE, COPY and REPAIR refuse it with
+    `TOOL_REFUSAL.logDelete` and its siblings (`IT ISN'T YOURS TO DELETE` …).
+12. **The events' payloads** (none were given): `seed-landed-beam {segId, targetId}`, `seed-deleted {segId, beam, words}`,
+    `trace-changed {from, to}`, `hollow-boarding` / `hollow-boarded {blocks, cause}`, `log-key {entries}`, `log-scanned`,
+    `last-rm-lost`.
+13. **The `S` slot** is a zero-block token. With a root, `placeRoot` turns it into the root and takes the root's blocks
+    off the slot rack's trailing free. Without one it is dropped, and the flanking GAPs merge into plain free space.
+    Several rules guard it:
+    - at most one slot per ship (`rootSlotRack`);
+    - a root with no slot throws;
+    - `validatePodRacks` checks the slot rack's trailing free is at least `maxRootFor(ship)` (`FINAL_ROOT_MAX_BLOCKS` 18
+      on the flagship, `PRE_FINAL_ROOT_CAP` 14 elsewhere), and leaves that root out of the 40-block margin (LAST LIGHT:
+      61 − 18 = 43, 04 §3.10's number);
+    - `lastPodRackTrailingFree` subtracts `maxRootFor` when the slot is in the last rack.
+
+    **The `R` token stays in the parser** for test fixtures, but a ShipDef may not write it: validateShipDef builds every
+    ship with no root and, where it has a slot, with its largest root, and checks the root count each way.
+14. **validateShipDef's other new checks**:
+    - the flagship must have a slot;
+    - a ship with `oneHopFromFinal` must have a slot, because HOLLOW is forced aboard there;
+    - `layer` is a whole number ≥ 1;
+    - a scripted beam-seed source names at least one seed;
+    - `atFirstSeed` needs `beamBringsSeeds(ship)` or another moment that issues the licence. The ladder decides HOLLOW's
+      own seeds per run, so only the beam can be checked at load.
+15. **`CALM_DEF` drains at the seeds-only rate** (2.5 %/s, ×2 / ×1.5) rather than some arbitrary positive number. Why:
+    `validateHollowDef` wants a positive drain, and an infection carried into a calm ship (04 §3.5 "infection travels")
+    should keep draining at a believable rate.
+16. **Nothing wakes with no hollow block in memory** (`woken()` in hollow.ts), and `'never'` never wakes. Why: KESTREL's
+    seeds-only config has a timed wake, and until THREAT lays out beam seeds there is nothing to bite; a wake would
+    start a NEXT BITE clock and a phase change for nothing. This is the plan's "stepHollow is a no-op" made explicit.
+    `calmOnly` is typed and `HollowState.calmAiSec` starts at 0, but the clock is THREAT's: until it lands, a calm-only
+    wake counts plain AI seconds.
+17. **THE DEAL's fold is live on LAST LIGHT now**: `cfg.deal = true` when `run.stats.deal === null`, per the ladder. Phase
+    2's deal code therefore runs on the final ship today. The verbs don't wait for the deal yet; that is THREAT's (risk
+    13).
+18. **VESPER's folded def runs phase 2's ARRIVAL code**:
+    - silent until the loop closes;
+    - the scripted bite on POD 09, and the bite timer starts at 25 s;
+    - `> ...047?`;
+    - then dormant.
+
+    `'arrives'` keeps biting after the fight and names itself only once THREAT teaches decideScript.
+
+**Data**
+
+19. **Leads**: HALCYON's stays POD 05 and KESTREL's POD 10, though neither has a root to sit beside now. VESPER's becomes
+    POD 09 (GAP 1), as §4 says, and LAST LIGHT's stays POD 12.
+20. **KESTREL's MOVE is `atCoast` only** (`afterAiSec: null`). If the coast never comes, the next ship's start issues it,
+    as every timed licence's does. DELETE is `afterAiSec: 0`.
+21. **REPAIR's licence also comes at the start of any ship the unit was transmitted to** (`licences.ts` `REPAIR_RULE`,
+    `run.arrival !== null`; a later ship built alone in a headless world keeps the old rule).
+    Why: in phase 2, ship 1's scripted bite raised a mind alert that guaranteed REPAIR there. With ships 1–2 calm, a kid
+    who never TABbed and never got the REPAIR highlight reached KESTREL's PATH UNCERTAIN with no REPAIR. The headless
+    full-run kid did exactly that, and spun for 445 s. This is the same rule the ship-timed licences already follow
+    ("a later ship never lacks a tool it expects"). OPENING owns licences.ts and may tune it.
+22. **The driver-damage stub returns the written list**, and `hurtDriversFor` is unchanged. So in the foundation the
+    rolled ships (HALCYON, KESTREL, VESPER, LAST LIGHT) arrive with no hurt drivers, HALCYON's sensor at 62 is its only
+    scripted damage, and ARES-VII keeps POD 02 at 44.
+
+**Text and wiring**
+
+23. **Interim key lines**: `LOG_TEXT.keyFound(entries)` takes a list, so the final ship's two read `ENTRIES 10–11`.
+    `bootLinePlan` emits `'log'` when `run.log.found` holds any of `logEntriesAtBoot(shipIndex, flagship)`. So
+    story-log (OPENING) marks the boot's keys found at the world reset, before the boot's first tick plans its lines. Plan
+    order: `board|unpack, host, ecc, seeds, scripted, charge, overflow, skill, log, hollow`. `bootHollowLine` reads
+    `state.hollow.cfg.story`, not the ShipDef.
+24. **`mountStoryLog` is already mounted** in main.ts after mountRun, so OPENING never edits main.ts for it.
+25. **Text placement**:
+    - `SEED_WORDS_MAX_CHARS` (40) and the seed-words pool live in threat-text.ts, validated at load. Four lines are 05's;
+      eight are drafted and marked TODO(05).
+    - `LOG_TYPE_LABEL` lives in log-text.ts.
+    - log-text validates at load: twelve entries, at most 3 lines of at most 70 characters each.
+    - Entry 01's `36` is templated (`LogVars.charge`). log-text can't import memory.ts, which imports it.
+26. **Not created by the foundation** (§5.0 does not list them): `src/state/threat-selectors.ts` (THREAT) and
+    `components/memory-view/LogReader.ts` (UI). `src/data/threat-rules.ts` exists with `THREAT_RULES = []`, spread just
+    before `SEED_RULES` in `GUIDE_RULES`.
+27. **The optional "largest infectable file ≤ 12 blocks" guard** (§2.4) is not added.
+
+**Tests**
+
+28. **`tests/unit/support/hollow-world.ts`** has `phase2HollowOf(index)` (phase 2's ship-n HollowDef, now a stage) and
+    `PHASE2_STAGE_OF_SHIP`. THREAT adds `plantRoot` there.
+29. **Tests touched only to compile** against the new signatures: `buildShipMemory`'s root, `layoutCarried`'s threat,
+    `startShip`'s threat, `createHollowState(cfg)`, `ArrivalReport.seeds/boarded`, `drivers.damage`, and
+    `ShipDef.hollow → phase2HollowOf`. Their assertions are untouched, and KNOWN-FAILING-slice2.md lists the ones that
+    now fail.
+30. **landing/review-fixes passes again**:
+    - its HOLLOW sections fly VESPER instead of HALCYON and ARES-VII;
+    - its deal sections give VESPER the HUNT config;
+    - issue 5 builds VESPER with a HUNT verdict.
+31. **wp11/full-run fails fast**: a pass of its per-seed loop that changes neither the ship, the phase, the flight status
+    nor the finale phase ends the seed. It used to repeat its maxWall waits up to the guard.

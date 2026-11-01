@@ -155,11 +155,10 @@ function fresh(): void {
       ...ares.memory,
       // HALCYON's pod racks with one pod more on each side of the root: POD 05 | GAP 2 | root | GAP 1 | POD 06, POD 07.
       podRacks: { B: 'P P P _40', C: 'P P _2 R _1 P P _21', D: '_64' },
-      drivers: { familiesSeedStream: 'families', hurt: [{ pod: 1, integrity: 90 }], lead: 5, firstRun: null },
+      drivers: { familiesSeedStream: 'families', damage: 'scripted', hurt: [{ pod: 1, integrity: 90 }], lead: 5, firstRun: null },
     },
-    hollow: cfg,
   };
-  const memory = buildShipMemory(halcyon, null, childRng(7, 1, 'families'), false, UNNAMED_HOLLOW);
+  const memory = buildShipMemory(halcyon, null, childRng(7, 1, 'families'), false, UNNAMED_HOLLOW, null);
   // A quiet closed orbit (never locks, never crashes), as acceptance 4 flies it.
   const rp = 5500;
   const ra = 11000;
@@ -170,7 +169,7 @@ function fresh(): void {
     // The landing slice follows the memory (one record per driver: HOLLOW records an eaten driver on its pod).
     d.landing = createLandingState({ ...halcyon.landing, lzs: [{ label: 'LZ-A', centreDeg: 160, width: 'wide', pods: 7 }] }, memory,
       { finalShip: false, lead: 5, hurt: halcyon.memory.drivers.hurt, planetR: d.level.planet.R });
-    d.hollow = createHollowState(halcyon);
+    d.hollow = createHollowState(cfg);
     d.hollow.cfg.wake = { afterAiSec: wakeAt, coastLeadSec: null };
     d.orbit = { x: orbit.x, y: orbit.y, vx: orbit.vx, vy: orbit.vy };
     d.ui.memoryRev++;

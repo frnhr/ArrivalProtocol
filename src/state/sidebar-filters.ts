@@ -8,7 +8,7 @@ export const ALL_FILTER_KEYS: readonly FilterKey[] = ['ai', 'ship', 'pods', 'fil
 // mental model, not the type-system split: AI = the consciousness + its
 // abilities (upgrade files included: they are what the unit carries); Ship = vessel subsystems;
 // Pods = the pods' drivers (the colonists' filter); Filesystem = managed storage entities (fs-tools,
-// redundancy pool, FIREWALLs, HOLLOW's locked blocks); Free = unallocated. Exhaustive: a new segment
+// redundancy pool, FIREWALLs, HOLLOW's locked blocks, 046.log); Free = unallocated. Exhaustive: a new segment
 // type must pick its category here.
 export function categoryOf(seg: Segment): FilterKey {
   switch (seg.type) {
@@ -24,6 +24,7 @@ export function categoryOf(seg: Segment): FilterKey {
     case 'hollow':
     case 'redundancy':
     case 'firewall':
+    case 'log':
       return 'filesystem';
     case 'free':
       return 'free';

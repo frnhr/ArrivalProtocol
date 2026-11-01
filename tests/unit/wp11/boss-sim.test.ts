@@ -52,6 +52,7 @@ import { byDepth } from '../depth';
 import { setLandingMode } from '../support/landing-instant';
 import { followLanding } from '../landing/harness-landing';
 import { chooseFinale } from '@systems/finale';
+import { phase2HollowOf } from '../support/hollow-world';
 
 // --- A. Fairness, pure ------------------------------------------------------------------------------------------------
 
@@ -383,7 +384,7 @@ check('B: on the coast (CRUISE), HOLLOW awake', state().clock.pace !== 'tactical
     && h.log().some((entry) => entry.speaker === 'hollow-cmd' && entry.text === '> unlink repair.bak ... 4'),
     `${verb?.kind} ${target?.name} ${verb?.totalSec} | ${h.shown()?.text}`);
   // On the coast the clock keeps its everySec after the first verb too (only the duel's short clock is pushed back).
-  check('B: …on the coast the next verb still comes everySec after the first one\'s start', state().hollow.verbInSec === ship.hollow.verbs!.everySec,
+  check('B: …on the coast the next verb still comes everySec after the first one\'s start', state().hollow.verbInSec === phase2HollowOf(4).verbs!.everySec,
     `${state().hollow.verbInSec}`);
   check('B: …and a warning holds SKIP', state().alerts.list.some((alert) => alert.id === 'hollow-verb' && alert.inhibitsSkip));
   // 4 s of countdown (the first verb), then the strip's 0.3 s hysteresis before the next line.
@@ -403,7 +404,7 @@ check('B: on the coast (CRUISE), HOLLOW awake', state().clock.pace !== 'tactical
   check('B: the ship\'s second verb counts from 3 (`... 3`), and the next one comes everySec after it',
     second !== null && second.totalSec === VERB_TELEGRAPH_SEC && state().hollow.verbTelegraphs === 2
     && h.log().some((entry) => entry.speaker === 'hollow-cmd' && entry.text === HOLLOW_VERB.telegraph(second.kind, second.targetWord, 3))
-    && state().hollow.verbInSec === ship.hollow.verbs!.everySec,
+    && state().hollow.verbInSec === phase2HollowOf(4).verbs!.everySec,
     `${JSON.stringify(second)} in ${state().hollow.verbInSec}`);
 }
 

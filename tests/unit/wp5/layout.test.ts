@@ -21,7 +21,7 @@ import type { Segment, DriverSegment } from '@/types/segment';
 import { RACK_BLOCKS, RACK_COUNT, DRIVER_BLOCKS, COLONISTS_PER_POD, FEATURED_PER_POD, MAX_LINE_CHARS } from '@data/tuning';
 
 const ship = SHIPS[0]!;
-const build = (def: ShipDef = ship, firstRun = true, seed = 1): Segment[] => buildShipMemory(def, null, childRng(seed, 0, 'families'), firstRun, UNNAMED_HOLLOW);
+const build = (def: ShipDef = ship, firstRun = true, seed = 1): Segment[] => buildShipMemory(def, null, childRng(seed, 0, 'families'), firstRun, UNNAMED_HOLLOW, null);
 const drivers = (memory: readonly Segment[]): DriverSegment[] => memory.filter((seg): seg is DriverSegment => seg.type === 'driver');
 
 // --- The ship-1 layout -------------------------------------------------------------------------------
@@ -114,7 +114,7 @@ const drivers = (memory: readonly Segment[]): DriverSegment[] => memory.filter((
 function throwsWith(memory: Partial<ShipMemoryDef>, pattern: RegExp): { ok: boolean; message: string } {
   const def: ShipDef = { ...ship, memory: { ...ship.memory, ...memory } };
   try {
-    buildShipMemory(def, null, createRng(0), true, UNNAMED_HOLLOW);
+    buildShipMemory(def, null, createRng(0), true, UNNAMED_HOLLOW, null);
     return { ok: false, message: 'did not throw' };
   } catch (error) {
     const message = String((error as Error).message);
@@ -138,7 +138,7 @@ function throwsWith(memory: Partial<ShipMemoryDef>, pattern: RegExp): { ok: bool
   let carried = '';
   // WP7 packs the carried files (systems/carry.ts); ship 1 always meets a fresh unit, so carried files
   // given to it still throw loudly.
-  try { buildShipMemory(ship, { startAddr: 256, segs: [] }, createRng(0), true, UNNAMED_HOLLOW); } catch (error) { carried = String((error as Error).message); }
+  try { buildShipMemory(ship, { startAddr: 256, segs: [] }, createRng(0), true, UNNAMED_HOLLOW, null); } catch (error) { carried = String((error as Error).message); }
   check('carried files given to ship 1 throw loudly (it meets a fresh unit)', /fresh unit/.test(carried), carried);
 }
 
