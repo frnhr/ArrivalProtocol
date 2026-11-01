@@ -1,6 +1,7 @@
 import type {
-  FiringSource, ViewMode, RevealCause, ClusterOutcome, TransitHit, AutoburnPhase, AutoburnEnd, DealOutcome, VerbKind,
+  FiringSource, ViewMode, TransitHit, AutoburnPhase, AutoburnEnd, DealOutcome, VerbKind,
 } from '@state/schema';
+import type { DragKick, LandingEnd, LaunchSource, Place, Touch } from '@/types/landing';
 import type { SegmentRole, InfectionSide } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { LineState } from '@systems/flight-events';
@@ -36,8 +37,9 @@ export interface GameEvents {
   'abandoned': Record<string, never>;
   // The START BURN tick: 'ready' when its countdown reaches GET READY, 'now' when it is due.
   'burn-point': { stage: 'ready' | 'now' };
-  // A countdown passed a whole second worth a beep. secLeft 0 is the burn's "go" (final).
-  'countdown-beep': { kind: 'burn' | 'impact'; secLeft: number; final: boolean };
+  // A countdown passed a whole second worth a beep. secLeft 0 is the burn's "go" (final). 'window': GET READY's 5…1
+  // before a landing window opens (01-landing §3.11 L7).
+  'countdown-beep': { kind: 'burn' | 'impact' | 'window'; secLeft: number; final: boolean };
   // HOLD STEADY counted down to a new number (3, 2, 1) on the way to ORBIT LOCKED.
   'lock-count': { count: number };
   'mode-change': { from: ViewMode; to: ViewMode };
@@ -62,35 +64,46 @@ export interface GameEvents {
   // What the NAV PLOT can show changed (Sensor Interp, Nav Plotter): a repair back to 'exact'
   // clears the line with a whoomp.
   'plot-mode': { from: PlotMode; to: PlotMode };
-  // WP5. A scan finished on a file (STASIS's scan sets the reveal off).
+  // WP5. A scan finished on a file.
   'scanned': { segId: string; role: SegmentRole | null };
-  // The STASIS reveal (systems/reveal.ts): one of its lines landed, then the sealed slabs cracked
-  // into these clusters (in crack order), then the lead cluster was selected and it was over.
-  'reveal-line': { index: number; cause: RevealCause };
-  'souls-unsealed': { codes: string[]; cause: RevealCause };
-  // The crack came into view: the chips play it now (at once when the kid was looking at the mind,
-  // else on their first look), so its ripple of cracks is heard with the picture.
-  'crack-shown': { count: number };
-  'reveal-done': { cause: RevealCause };
-  // A cluster is printing (§6.7): emitted while its chip is still on the strip, just before it
-  // leaves memory, so the view can flash it and pop `+200 WOKE` where it was.
-  'cluster-printed': { segId: string; cluster: string; outcome: ClusterOutcome; souls: number };
+  // The landing (01-landing, systems/landing.ts). It began (ORBIT LOCK or ACCEPT); an LZ's window opened (the dot's
+  // centre entered its bracket from inside the band), became sure (the whole dot fits) and closed.
+  'landing-start': Record<string, never>;
+  'window-open': { lz: string };
+  'window-sure': { lz: string };
+  'window-closed': { lz: string };
+  // A pod launched: emitted while its driver is still on the strip, just before it leaves memory, so the view can
+  // flash the chip (LaunchFx). Then it hit the atmosphere, and touched down where it was decided at launch
+  // (`firstOnShip` names the colony and sends the radio line; `firstOfRun` is the first landing's moment).
+  'pod-launched': { pod: number; source: LaunchSource; segId: string };
+  'pod-entry': { pod: number; first: boolean };   // first: run 1's first pod (LaunchRecord.firstOfRun)
+  'pod-landed': { pod: number; place: Place; lz: string | null; touch: Touch; points: number; firstOnShip: boolean; firstOfRun: boolean };
+  // An LZ reached its count (the chord), every pod is down, pods were parked in orbit, the landing ended (and why).
+  'lz-full': { lz: string };
+  'all-pods-down': { parked: number };   // the ship's last pod is down; `parked`: pods that never launched
+  'pods-parked': { count: number };
+  'landing-ended': { reason: LandingEnd };
+  // Slice 1b (orbit-sim, landing.ts): a drag kick took Δv at a ▼ below the DRAG line (the stamp, the hiss and the drag
+  // lesson read `dropKm` against DRAG_STAMP_MIN_KM); GO LOWER was offered for `lz`, the kid fired for it (held), and the
+  // strip said RELEASE (released).
+  'drag-kick': DragKick;
+  'go-low': { lz: string; phase: 'offered' | 'held' | 'released' };
   // WP6: HOLLOW (systems/hollow.ts, §6.6). The bite timer fired; a file was infected from `side`; a
   // WALL held a bite (the fizzle); a repair won the tug-of-war (sparkles, clusterSaved) and its
-  // recoil ran out; a file was eaten and turned hollow (`soul`: a cluster did not wake); and the AI
-  // Core was eaten to 0, which loses the ship (the CORE LOST card).
+  // recoil ran out; a file was eaten and turned hollow (`driver`: a pod's driver, the pod stays aboard to be parked);
+  // and the AI Core was eaten to 0, which loses the ship (the CORE LOST card).
   'hollow-bite': Record<string, never>;
-  // `soul`: the bitten file is a colonist cluster (the run's stats count those bites for the draft, WP8).
+  // `driver`: the bitten file is a pod's driver (the run's stats count those bites for the draft, WP8).
   // `scripted`: ship 1's one scripted bite (the story's), not one HOLLOW chose.
-  'hollow-infect': { segId: string; side: InfectionSide; soul: boolean; scripted: boolean };
+  'hollow-infect': { segId: string; side: InfectionSide; driver: boolean; scripted: boolean };
   'hollow-wall': { hollowId: string; side: InfectionSide; gapBlocks: number };
   // WP8: a FIREWALL.sys held a bite (`side`: the way HOLLOW looked, so the FIREWALL's edge that faces it is
   // the opposite one): the same fizzle, and its green edge flashes.
   'hollow-firewall': { firewallId: string; side: InfectionSide };
   'hollow-cure': { segId: string };
   'hollow-recoil-end': { segId: string };
-  // `soul`: a cluster did not wake (its last copy was eaten), not merely a soul file gone.
-  'hollow-consume': { segId: string; ate: string; soul: boolean };
+  // `driver`: a pod lost its driver (its last copy was eaten), not merely one copy of it gone.
+  'hollow-consume': { segId: string; ate: string; driver: boolean };
   'core-lost': Record<string, never>;
   // WP7: HOLLOW said who it is (HALCYON, `> i was 046.`): every hollow block now carries `name`.
   'hollow-named': { name: string };
@@ -107,14 +120,14 @@ export interface GameEvents {
   // says so once (a TERMINAL line and a buzz); the footer's tag stays.
   'archive-lost': Record<string, never>;
   // WP9: a hazard zone hit memory (systems/zones.ts): a debris contact (every file in its rack at once) or one
-  // belt hit. `hits` are the files, the rack each was in, and their integrity before and after; `lostClusters`
-  // did not wake. The thud, shake, rack flash and `HIT · RACK C` stamp hang on it.
+  // belt hit. `hits` are the files, the rack each was in, and their integrity before and after; `lostDrivers`
+  // are the pods whose drivers it took to 0. The thud, shake, rack flash and `HIT · RACK C` stamp hang on it.
   'zone-hit': {
     zoneId: string;
     kind: 'debris' | 'belt';
     racks: string[];
     hits: { segId: string; rack: string; from: number; to: number }[];
-    lostClusters: string[];
+    lostDrivers: number[];
   };
   // WP9: what the instruments say a debris cloud will do changed (flight-events, from the SENSED path): 'hit'
   // (the path enters it), 'clear' (it misses), 'unknown' (PATH UNCERTAIN). The first look sets the baseline.
@@ -127,9 +140,9 @@ export interface GameEvents {
   'seed-landed': { segId: string; startAddr: number };
   // WP9: AUTOBURN changed phase (systems/autoburn.ts), and why an engagement ended.
   'autoburn': { from: AutoburnPhase; to: AutoburnPhase; end: AutoburnEnd | null };
-  // WP10: THE DEAL (systems/hollow-deal.ts) was offered in the TERMINAL, naming `cluster`; and how it ended.
-  'deal-offered': { cluster: string };
-  'deal': { outcome: DealOutcome; cluster: string };
+  // WP10: THE DEAL (systems/hollow-deal.ts) was offered in the TERMINAL, naming `pod`; and how it ended.
+  'deal-offered': { pod: number };
+  'deal': { outcome: DealOutcome; pod: number };
   // WP9: AUTOBURN.skl was trained at this boot from the kid's captures (installed, or retrained with more).
   'skill-trained': { demos: number; accuracy: number; retrained: boolean };
   // WP11: a glitchBurst (systems/glitch.ts): the overlay spikes to `level` for `ms` (a dim pulse under reduced motion).

@@ -17,6 +17,7 @@ import { fileLabel, isHollow, verbSecondsLeft } from '@state/selectors';
 import { echoName, echoWord } from '@data/tool-text';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { HOLLOW_VERB } from '@data/hollow-text';
+import { podCode } from '@data/landing-text';
 import { IS_DEV } from '@/env';
 import { GLITCH_BURST_LEVEL, GLITCH_BURST_MS } from '@data/tuning';
 
@@ -64,11 +65,11 @@ function rngFor(state: Readonly<GameState>): Rng {
   return verbRng;
 }
 
-// The words an MV's block goes by: in HOLLOW's echo (`seed`, `c13`: what it ate) and on the strip (`its SEED`, `the
-// block that ATE C13`).
+// The words an MV's block goes by: in HOLLOW's echo (`seed`, `pod_12`: what it ate) and on the strip (`its SEED`, `the
+// block that ATE POD 12`).
 function mvWords(block: Readonly<HollowSegment>): { word: string; label: string } {
   if (block.seed) return { word: HOLLOW_VERB.mvSeedWord, label: HOLLOW_VERB.mvSeedLabel };
-  const ate = block.ateCluster ?? block.ate;
+  const ate = block.atePod !== undefined ? podCode(block.atePod) : block.ate;
   if (ate === undefined) throw new Error(`hollow-verbs: MV's block ${block.id} is neither a seed nor an eaten file`);
   return { word: echoWord(ate), label: HOLLOW_VERB.mvAteLabel(ate.toUpperCase()) };
 }
@@ -154,7 +155,7 @@ function land(store: Store<GameState>, telegraph: Readonly<VerbTelegraph>): void
   emit('verb-landed', { kind: telegraph.kind, targetId: telegraph.targetId });
 }
 
-// The flight is busy (TACTICAL): the verbs wait (see the header). Printing is never "busy" here: the duel is fought there.
+// The flight is busy (TACTICAL): the verbs wait (see the header). The landing is never "busy" here: the duel is fought there.
 function verbsHeld(state: Readonly<GameState>): boolean {
   return state.run.phase === 'flight' && state.clock.pace === 'tactical';
 }

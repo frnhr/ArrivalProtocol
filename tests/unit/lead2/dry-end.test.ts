@@ -19,9 +19,10 @@ import { byDepth } from '../depth';
 const harness = createHarness(1);
 const state = () => harness.store.getState();
 const KIDS = ['obey', 'f0.3', 'f0.5'] as const;
-// Quick depth (tests/unit/depth.ts): every 3% of each band, the instant and the slowest kid; full: the check's own rows.
+// Quick depth (tests/unit/depth.ts): every 4% of each band (18–30% and 30–34%: both ends of the second), the instant and
+// the slowest kid; full: the check's own rows.
 const kids = byDepth<readonly typeof KIDS[number][]>(['obey', 'f0.5'], KIDS);
-const FUEL_STEP = byDepth(3, 0.25);
+const FUEL_STEP = byDepth(4, 0.25);
 
 function snapshotOffRing(periKm: number, ignoreSec: number): GameState {
   captureOffRing(harness, periKm);

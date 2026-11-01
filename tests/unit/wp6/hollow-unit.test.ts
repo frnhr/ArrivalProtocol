@@ -14,6 +14,8 @@
 // an unscanned ship file is bitten like any file, ship 1's scripted bite takes the cluster next to
 // the root by address (C12 moved away: the one now adjacent), and the reach reads as the painter
 // will draw it (GAP 3 vs WALL 4, edge, blocked, recoiling).
+// Slice 1a: the fixtures are pod drivers (`soul('C12')` is pod 12's driver, its old name kept as the fixture's label);
+// an eaten driver's block remembers `POD 12 · TEST` and its pod (atePod) for MERGE.
 import { check, finish } from '../wp1/harness';
 import { stepHollow, hollowReach, type HollowEvent, type HollowStepCtx } from '@systems/hollow';
 import { cureInfection } from '@state/actions';
@@ -22,23 +24,24 @@ import { createRng } from '@systems/rng';
 import { validateHollowDef, SHIPS, type HollowDef } from '@data/ships';
 import type { HollowState } from '@state/schema';
 import type {
-  Segment, HollowSegment, SoulSegment, CoreSegment, RedundancySegment, ShipSegment, FirewallSegment, UpgradeSegment,
+  Segment, HollowSegment, DriverSegment, CoreSegment, RedundancySegment, ShipSegment, FirewallSegment, UpgradeSegment,
 } from '@/types/segment';
 import { isInfectable } from '@state/selectors';
+import { podNumber } from '../support/pod-code';
 import { HOLLOW_RECOIL_SEC, WALL_MIN_BLOCKS, HOLLOW_SCRIPTED_BITE_DELAY_SEC } from '@data/tuning';
 import { createDealState, createHollowState } from '@state/initial';
 
 const DT = 0.05;
 
 const SPREAD: HollowDef = {
-  wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: 20, drainPerSec: 2, burnMult: 2, printMult: 1, seed: null, verbs: null, deal: false, story: 'none',
+  wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: 20, drainPerSec: 2, burnMult: 2, landMult: 1, seed: null, verbs: null, deal: false, story: 'none',
 };
 const NO_SPREAD: HollowDef = { ...SPREAD, spreadEverySec: null };
 const SHIP1 = SHIPS[0]!.hollow;
 
 const root = (id = 'root'): HollowSegment => ({ id, name: '???', type: 'hollow', size: 8, root: true, locked: true, owner: '???' });
-const soul = (code: string, integrity = 100): SoulSegment => ({
-  id: `soul_${code}`, name: `${code} · TEST`, type: 'soul', size: 8, integrity, cluster: code, family: 'Test', souls: 200, featured: [], sealed: false,
+const soul = (code: string, integrity = 100): DriverSegment => ({
+  id: `soul_${code}`, name: `${code} · TEST`, type: 'driver', size: 8, integrity, pod: podNumber(code), family: 'Test', colonists: 200, featured: [],
 });
 const core = (integrity = 100): CoreSegment => ({ id: 'core', name: 'AI Core', type: 'core', size: 16, integrity, scanned: true, capacity: 2 });
 const charge = (): RedundancySegment => ({ id: 'redund', name: 'Repair Charge', type: 'redundancy', size: 36, used: 36, capacity: 72 });
@@ -64,13 +67,13 @@ function newRun(memory: Segment[], cfg: HollowDef, phase: HollowState['phase'] =
 }
 
 // Steps `run` for `seconds` (or until `until` holds), DT at a time, like the AI tick.
-function step(run: Run, seconds: number, opts: Partial<Pick<HollowStepCtx, 'thrustDelivered' | 'printingActive' | 'loopClosed'>> = {}, until?: () => boolean): void {
+function step(run: Run, seconds: number, opts: Partial<Pick<HollowStepCtx, 'thrustDelivered' | 'landingActive' | 'loopClosed'>> = {}, until?: () => boolean): void {
   const end = run.aiNow + seconds;
   while (run.aiNow < end - 1e-9) {
     run.aiNow += DT;
     const events = stepHollow(run.memory, DT, run.hollow.cfg, {
       thrustDelivered: opts.thrustDelivered ?? false,
-      printingActive: opts.printingActive ?? false,
+      landingActive: opts.landingActive ?? false,
       aiNow: run.aiNow,
       rng: createRng(1),
       hollow: run.hollow,
@@ -92,11 +95,11 @@ const infectedAt = (run: Run, id: string): number | null => run.events.find(({ e
   const three = newRun([root(), freeSegment(WALL_MIN_BLOCKS - 1), soul('C01'), freeSegment(40)], SPREAD);
   step(three, DT);
   check('a 3-block gap lets the infection through (bitten at the wake, from the left)',
-    (find(three, 'soul_C01') as SoulSegment).infected?.side === 'left', JSON.stringify(three.events.map((entry) => entry.event.kind)));
+    (find(three, 'soul_C01') as DriverSegment).infected?.side === 'left', JSON.stringify(three.events.map((entry) => entry.event.kind)));
   const four = newRun([root(), freeSegment(WALL_MIN_BLOCKS), soul('C01'), freeSegment(40)], SPREAD);
   step(four, DT);
   check('a 4-block gap is a WALL: nothing bitten, the bite fizzles (wall-held, gap 4)',
-    !(find(four, 'soul_C01') as SoulSegment).infected
+    !(find(four, 'soul_C01') as DriverSegment).infected
       && four.events.some(({ event }) => event.kind === 'wall-held' && event.side === 'right' && event.gapBlocks === WALL_MIN_BLOCKS));
   const reach = hollowReach(three.memory, 0);
   check('reach: left is the edge of memory, right a 3-block GAP to C01 (already infected now)',
@@ -117,7 +120,7 @@ for (const firing of [false, true]) {
     eaten !== undefined && Math.abs(eaten.at - expected) <= 0.1, `${eaten?.at.toFixed(3)} s`);
   const block = run.memory[1]!;
   check(`…and turns hollow in place: same blocks, not the root, unlocked, remembers what it ate${firing ? ' (firing)' : ''}`,
-    block.type === 'hollow' && block.size === 8 && !block.root && !block.locked && block.ate === 'C12 · TEST' && run.memory.length === 4);
+    block.type === 'hollow' && block.size === 8 && !block.root && !block.locked && block.ate === 'POD 12 · TEST' && block.atePod === 12 && run.memory.length === 4);
   check(`…integrity clamps at 0 (the eaten soul object reads 0, never negative)${firing ? ' (firing)' : ''}`,
     eaten?.event.kind === 'consume' && eaten.event.eaten.integrity === 0);
 }
@@ -138,7 +141,7 @@ for (const firing of [false, true]) {
   const run = newRun([freeSegment(56), root(), soul('C01'), freeSegment(312)], SPREAD);
   step(run, DT);
   check('the spread crosses rack boundaries: a root at the end of rack A bites C01 at the start of rack B',
-    (find(run, 'soul_C01') as SoulSegment).infected?.side === 'left');
+    (find(run, 'soul_C01') as DriverSegment).infected?.side === 'left');
 }
 
 // --- A cure grants 10 s of recoil -------------------------------------------------------------------------
@@ -169,7 +172,7 @@ for (const firing of [false, true]) {
   step(run, 30);
   const reach = hollowReach(run.memory, run.aiNow);
   check('REPAIR CHARGE blocks the spread: C01 behind it is never bitten (reach: blocked)',
-    !(find(run, 'soul_C01') as SoulSegment).infected && reach.find((entry) => entry.hollowId === 'root' && entry.side === 'left')?.verdict === 'blocked');
+    !(find(run, 'soul_C01') as DriverSegment).infected && reach.find((entry) => entry.hollowId === 'root' && entry.side === 'left')?.verdict === 'blocked');
   check('other hollow is no food either: the two roots never infect each other, but root2 bites C02',
     reach.find((entry) => entry.hollowId === 'root' && entry.side === 'right')?.verdict === 'blocked'
       && infectedAt(run, 'soul_C02') !== null);
@@ -188,7 +191,7 @@ for (const firing of [false, true]) {
   const reach = hollowReach(run.memory, run.aiNow);
   const left = reach.find((entry) => entry.hollowId === 'root' && entry.side === 'left');
   check('a FIREWALL next to the root blocks that side: the cluster behind it is never bitten in 45 s (two bites)',
-    !(find(run, 'soul_C01') as SoulSegment).infected && left?.verdict === 'blocked' && left.neighbourId === 'fw'
+    !(find(run, 'soul_C01') as DriverSegment).infected && left?.verdict === 'blocked' && left.neighbourId === 'fw'
       && find(run, 'fw')?.type === 'firewall', JSON.stringify(left));
   check('…while the open side bites on: C02 across GAP 1 is infected at the wake', infectedAt(run, 'soul_C02') !== null);
   check('…and the FIREWALL is never bitten or consumed (no event names it)',
@@ -197,7 +200,7 @@ for (const firing of [false, true]) {
   const gapped = newRun([root(), freeSegment(1), firewall('fw2'), freeSegment(1), soul('C03'), freeSegment(40)], SPREAD);
   step(gapped, 25);
   check('a FIREWALL placed inside a GAP stops the bite: the cluster past it stays clean (HOLLOW can\'t bite past it)',
-    !(find(gapped, 'soul_C03') as SoulSegment).infected
+    !(find(gapped, 'soul_C03') as DriverSegment).infected
       && hollowReach(gapped.memory, gapped.aiNow).find((entry) => entry.side === 'right')?.verdict === 'blocked');
   // An upgrade file is food (§6.6 INFECTABLE: upgrade), like the AI's own files.
   const food = newRun([root(), freeSegment(2), trim(), freeSegment(40)], SPREAD);
@@ -235,10 +238,10 @@ for (const firing of [false, true]) {
   const closedAt = run.aiNow + DT;
   step(run, HOLLOW_SCRIPTED_BITE_DELAY_SEC - DT, { loopClosed: true });
   check(`the loop closes: nothing yet for ${HOLLOW_SCRIPTED_BITE_DELAY_SEC} s (CAPTURED has its moment first)`,
-    run.hollow.phase === 'asleep' && run.events.length === 0 && !(find(run, 'soul_C12') as SoulSegment).infected);
+    run.hollow.phase === 'asleep' && run.events.length === 0 && !(find(run, 'soul_C12') as DriverSegment).infected);
   // (+1 tick: the AI clock adds up 0.05 s steps, so the moment can fall one tick late.)
   step(run, 3 * DT, { loopClosed: true });
-  const c12 = find(run, 'soul_C12') as SoulSegment;
+  const c12 = find(run, 'soul_C12') as DriverSegment;
   const bitAt = infectedAt(run, 'soul_C12');
   check(`…then C12 (next to the root) is bitten from the right, once, ${HOLLOW_SCRIPTED_BITE_DELAY_SEC} s after the loop closed; the WALL on the right stays silent`,
     c12.infected?.side === 'right' && run.events.filter(({ event }) => event.kind === 'infect').length === 1
@@ -246,7 +249,7 @@ for (const firing of [false, true]) {
       && !run.events.some(({ event }) => event.kind === 'wall-held') && run.hollow.biteInSec === null,
     `closed ${closedAt.toFixed(2)}, bitten ${bitAt?.toFixed(2)}`);
   step(run, 10, { loopClosed: true });
-  check('ship 1 never spreads (C11 stays clean), NEXT BITE — (no timer)', !(find(run, 'soul_C11') as SoulSegment).infected && run.hollow.biteInSec === null);
+  check('ship 1 never spreads (C11 stays clean), NEXT BITE — (no timer)', !(find(run, 'soul_C11') as DriverSegment).infected && run.hollow.biteInSec === null);
 }
 {
   // The bite lands HOLLOW_SCRIPTED_BITE_DELAY_SEC after the FIRST close, even if the path opens again
@@ -254,14 +257,14 @@ for (const firing of [false, true]) {
   const run = newRun([soul('C11'), soul('C12'), root(), freeSegment(72)], SHIP1);
   step(run, DT, { loopClosed: true });
   step(run, HOLLOW_SCRIPTED_BITE_DELAY_SEC, { loopClosed: false });
-  check('the bite still lands when the path opened again after closing', (find(run, 'soul_C12') as SoulSegment).infected?.side === 'right');
+  check('the bite still lands when the path opened again after closing', (find(run, 'soul_C12') as DriverSegment).infected?.side === 'right');
 }
 {
   // C12 moved away before the bite: the cluster now next to the root (C11, 2 free blocks between) is bitten.
   const run = newRun([soul('C11'), freeSegment(2), root(), freeSegment(72), soul('C12')], SHIP1);
   step(run, HOLLOW_SCRIPTED_BITE_DELAY_SEC + DT, { loopClosed: true });
   check('C12 moved away: the bite targets whichever cluster is adjacent by address (C11 across a 2-block gap)',
-    (find(run, 'soul_C11') as SoulSegment).infected?.side === 'right' && !(find(run, 'soul_C12') as SoulSegment).infected);
+    (find(run, 'soul_C11') as DriverSegment).infected?.side === 'right' && !(find(run, 'soul_C12') as DriverSegment).infected);
 }
 
 // --- The design rule (§6.6) ---------------------------------------------------------------------------------------
@@ -269,7 +272,7 @@ for (const firing of [false, true]) {
   const throws = (cfg: HollowDef): string | null => { try { validateHollowDef('test', cfg); return null; } catch (error) { return (error as Error).message; } };
   check('every ship passes the heal rule: heal(8) = 18.5%/s > 1.5 × drain × max(burn, print)', SHIPS.every((ship) => throws(ship.hollow) === null));
   check('a drain the heal cannot beat by 1.5× throws (drain 6.5, burn ×2)', throws({ ...SPREAD, drainPerSec: 6.5 }) !== null, throws({ ...SPREAD, drainPerSec: 6.5 }) ?? '');
-  check('the ship-2 config of the sim passes (drain 3.5, print ×1.5)', throws({ ...SPREAD, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, printMult: 1.5 }) === null);
+  check('the ship-2 config of the sim passes (drain 3.5, print ×1.5)', throws({ ...SPREAD, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, landMult: 1.5 }) === null);
   // WP12 p3 (strict test tsc): this check was written before WP9 built seeds, and it passed only because its seed had no
   // firstAfterSec (undefined ≥ 0 is false). Seeds exist now; what it exercises is that a bad first-seed time throws.
   check('a seed with a bad first-seed time throws loudly instead of being ignored', throws({ ...SPREAD, seed: { everySec: 50, firstAfterSec: -1, target: 'walls' } }) !== null);

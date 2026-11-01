@@ -15,7 +15,7 @@ export const TYPE_LABELS: Record<SegmentType, string> = {
   free: 'Unallocated',
   hollow: HOLLOW_TYPE_LABEL,
   redundancy: 'Repair currency · redundancy pool',
-  soul: 'Colonists · soul cluster',
+  driver: 'Colonists · pod driver',
   upgrade: 'AI · Upgrade file',
   firewall: 'Firewall · nothing bites past it',
 };

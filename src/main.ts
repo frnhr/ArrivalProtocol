@@ -6,6 +6,7 @@ import './styles/base.css';
 import './styles/glitch.css';
 import './styles/legacy-components.css';
 import './styles/game.css';
+import './styles/landing.css';
 import './styles/responsive.css';
 
 import { store } from '@state/instance';
@@ -34,6 +35,8 @@ import { mountTimeControls } from '@components/header/TimeControls';
 import { mountAllWindows } from '@components/window/Window';
 import { mountEngineWindow } from '@components/tools-view/EngineWindow';
 import { mountNavPlotWindow } from '@components/tools-view/NavPlotWindow';
+import { mountGroundTrack } from '@components/tools-view/GroundTrack';
+import { mountPodBayWindow } from '@components/tools-view/PodBayWindow';
 import { mountTelemetryWindow } from '@components/tools-view/TelemetryWindow';
 import { mountToolsTabs } from '@components/tools-view/ToolsTabs';
 import { mountPhoneFlightBar } from '@components/tools-view/PhoneFlightBar';
@@ -41,7 +44,7 @@ import { mountWindowGrips } from '@components/tools-view/WindowGrip';
 import { mountMemoryStats } from '@components/memory-view/MemoryStats';
 import { mountFooter } from '@components/footer/Footer';
 import { mountBurnResult } from '@components/burn/BurnResult';
-import { mountWakeReport } from '@components/run/WakeReport';
+import { mountLandingReport } from '@components/run/LandingReport';
 import { mountObjectiveStrip } from '@components/hud/ObjectiveStrip';
 import { mountStamps } from '@components/hud/Stamp';
 import { mountJuice } from '@components/hud/Juice';
@@ -67,9 +70,10 @@ import { mountMobileDrawers } from '@components/memory-view/MobileDrawers';
 import { mountFsToolPill } from '@components/memory-view/FsToolPill';
 import { actionScan, actionRepair } from '@state/actions';
 import { mountLicences } from '@systems/licences';
-import { mountReveal } from '@systems/reveal';
-import { mountPrinter, setPrintNext, setPrintFast } from '@systems/printer';
-import { mountPrintFx } from '@components/memory-view/PrintFx';
+import { mountLanding, setLoadNext } from '@systems/landing';
+import { registerLandingKeys, type LaunchConfirm } from '@systems/landing-controls';
+import { LAUNCH_CONFIRM_TEXT } from '@data/landing-text';
+import { mountDropCache } from '@systems/drop-cache';
 import { mountFaults } from '@systems/faults';
 import { mountHollow } from '@systems/hollow';
 import { mountZones } from '@systems/zones';
@@ -79,6 +83,8 @@ import { mountRun } from '@systems/run';
 import { mountTransmitScreen } from '@components/run/TransmitScreen';
 import { mountRunEnd } from '@components/run/RunEnd';
 import { mountMergeTick } from '@components/memory-view/MergeTick';
+import { mountLaunchFx } from '@components/memory-view/LaunchFx';
+import { mountPodTags } from '@components/memory-view/PodTags';
 import { mountFinaleChoice } from '@components/run/FinaleChoice';
 import { mountSkillsWindow } from '@components/run/SkillsWindow';
 import { mountArrivalFlash } from '@components/run/ArrivalFlash';
@@ -93,10 +99,17 @@ const toolDeps: ToolDeps = {
   ask: askInline,
 };
 
+// [L]'s guards (LAUNCH OFF-SITE? …, LZ-A IS FULL — LAUNCH ANYWAY? …) through the same inline confirm.
+const launchConfirm: LaunchConfirm = (text, onYes) => askInline({
+  text: { question: text, detail: '' },
+  answers: { yes: LAUNCH_CONFIRM_TEXT.yes, no: LAUNCH_CONFIRM_TEXT.no },
+  onYes,
+});
+
 // DetailPanel action buttons dispatch through this. The actions re-check everything at the click
 // (pause, operating, the target rules, a free thread), exactly as for a tool click. (SWAP is a tool
 // file since WP10: it is picked up like any tool, not a button here.) A panel rebuild can wait for a
-// press to land (guardPresses), so the file may have left memory under the button (printed): the
+// press to land (guardPresses), so the file may have left memory under the button (launched): the
 // click then has nothing to act on.
 function runAction(shown: Segment, action: DetailActionId): void {
   const seg = getSegmentById(store.getState(), shown.id);
@@ -104,13 +117,7 @@ function runAction(shown: Segment, action: DetailActionId): void {
   if (action === 'repair') actionRepair(store, seg);
   else if (action === 'delete_charge') requestDelete(store, seg, toolDeps);
   else if (action === 'scan') actionScan(store, seg);
-  else if (action === 'print-next' && seg.type === 'soul') setPrintNext(store, seg.cluster);
-  else if (action === 'print-fast') throw new Error('runAction: PRINT FAST is the printer\'s, it goes through onPrintFast');
-}
-
-// PRINT FAST ▸▸ toggles the printer, whatever INSPECT shows (it refuses with its reason itself).
-function togglePrintFast(): void {
-  setPrintFast(store, !store.getState().printer.fast);
+  else if (action === 'load-next' && seg.type === 'driver') setLoadNext(store, seg.pod);
 }
 
 // World systems first, in tick order: orbit-sim integrates, the predictor reads the fresh
@@ -124,13 +131,15 @@ mountOrbitSim(store);
 mountFaults(store);
 mountZones(store);
 mountPredictor(store);
+// After the predictor: the live drop solution (the brackets, the dot, the windows) is refreshed at the same PREDICT_HZ.
+mountDropCache(store);
 mountPace(store);
 // The mind's ops, on AI time (WP3).
 mountOpsCore(store);
-// The Soul Archive (WP5): the printer works after the ops each AI tick (a print aborts any op still
-// on its cluster); the reveal advances in the post-tick chain, also while a lost ship is paused.
-mountPrinter(store);
-// HOLLOW (WP6) after the printer: a print beats a bite in the same tick, and a repair heals before
+// The landing (slice 1a) after the ops each tick (a launch aborts any op still on its driver). [L] launches.
+mountLanding(store);
+registerLandingKeys(store, { confirm: launchConfirm });
+// HOLLOW (WP6) after the landing: a launch beats a bite in the same tick, and a repair heals before
 // the drain (the ops core ticks first).
 mountHollow(store);
 // WP10: THE DEAL, after HOLLOW (this tick's bite is in before it looks at the front).
@@ -141,7 +150,6 @@ mountHollowVerbs(store);
 mountFinale(store);
 // The run (WP7): the stats, BEAM OUT's bar on world time, and the soft fails' bookkeeping.
 mountRun(store);
-mountReveal(store);
 mountInput(window);
 blurButtonsOnPointerUp(document);
 emitUiClicks(document);
@@ -166,9 +174,13 @@ mountTimeControls(store);
 mountAllWindows();
 mountToolsTabs();
 mountEngineWindow(store);
+// Slice 1a: the POD BAY window (its launch button is playerLaunch, as [L]), before the phone bar takes that button.
+mountPodBayWindow(store, { confirm: launchConfirm });
 // After the Engine window has wired its controls: on a phone they move into the touch flight bar (WP12).
 mountPhoneFlightBar();
 mountNavPlotWindow(store);
+// Under the NAV PLOT while landing: the GROUND TRACK (01-landing §4).
+mountGroundTrack(store);
 mountTelemetryWindow(store);
 mountCommsWindow(store);
 // WP8: the cards this unit carries (the dock's SYSTEM item).
@@ -192,7 +204,7 @@ const splitOverlay = mountSplitOverlay(memWrap);
 // Click decides apply-vs-select; hover drives split-overlay. Placement updates
 // flow through the fs-tools system's mousemove → placement bridge.
 // The strip holds a rebuild while a press is down (guardPresses), so a click can land on a chip
-// whose file left memory under it (printed, merged free space): it is resolved by id first.
+// whose file left memory under it (launched, merged free space): it is resolved by id first.
 const segBehavior = {
   onClick: (shown: Segment, event: MouseEvent): void => {
     const seg = getSegmentById(store.getState(), shown.id);
@@ -228,13 +240,14 @@ memWrap.addEventListener('click', (event) => {
 //      (must subscribe AFTER MemoryStrip so they run after the rebuild)
 //   3. DetailPanel, MemoryStats, FsStatusBar, Footer — independent of .seg classes
 mountMemoryStrip(store, memWrap, segBehavior);
-// After the strip: the bars re-dock onto its rebuilt parts.
+// After the strip: the bars re-dock onto its rebuilt parts, and the drivers' BAY / NEXT tags repaint (slice 1a).
 mountOpBars(store, memWrap);
+mountPodTags(store, memWrap);
 mountFsToolsSystem(store);
 mountSelectionHighlight(store);
 mountDimPainter(store);
 mountCursorFollower(store);
-mountDetailPanel(store, { onAction: runAction, onPrintFast: togglePrintFast });
+mountDetailPanel(store, { onAction: runAction });
 mountMemoryStats(store);
 mountFsStatusBar(store);
 mountMobileDrawers();
@@ -243,21 +256,21 @@ mountInlineConfirm();
 mountSidebarFilters(store);
 mountFooter(store);
 mountBurnResult(store);
-// The end of a printed ship: the credits, the count and the stars (WP5).
-mountWakeReport(store);
+// The end of a landed ship: the count and the stars (placeholder until the real LANDING REPORT).
+mountLandingReport(store);
 // Between ships and after the run (WP7): the packet for the link, and the run's end.
 mountTransmitScreen(store);
 mountRunEnd(store);
 // WP11: LAST LIGHT's choice, once the root's DELETE has left its last block.
 mountFinaleChoice(store);
 mountPlacement(store, memWrap);
-// After the strip: a print flashes the chip that is about to leave it.
-mountPrintFx(store);
 // After the strip: HOLLOW's reach (NEXT BITE, arrows, GAP/WALL), the infection's crawl and readouts,
 // the tug's green boundary and HOLLOW's moments are painted onto its rebuilt chips.
 mountHollowPainter(store);
 // After the strip (WP11 part 2): the MERGE 20 tick on the REPAIR CHARGE pool and the charge readouts (LAST LIGHT).
 mountMergeTick(store, memWrap);
+// A launched driver's chip flash (01-landing §4), read from the strip before it rebuilds without the driver.
+mountLaunchFx(store);
 // After HOLLOW's painter (WP7): its naming decoded on the rebuilt chips, the MOVE preview's labels over the
 // placeholder Placement paints, and the arrival's red flashes on the files the crossing hit.
 mountHollowNameFx(store);

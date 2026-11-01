@@ -1,31 +1,29 @@
+// The colonist name pools for the pods' sleepers (the file keeps its phase-2 name: many modules import it).
 import type { Colonist } from '@/types/segment';
 import type { Rng } from '@systems/rng';
 import {
-  FEATURED_PER_CLUSTER, COLONIST_LINE_MAX_CHARS, FAMILY_MAX_CHARS, MAX_LINE_CHARS,
+  FEATURED_PER_POD, COLONIST_LINE_MAX_CHARS, FAMILY_MAX_CHARS, MAX_LINE_CHARS,
 } from '@data/tuning';
 
-// The colonists (§6.7). Every soul cluster is a family of 200 people, and INSPECT and the WAKE
-// REPORT name three of them. They must read as people, not data: a name, an age, one line about
-// who they are (what they packed, what they want to do first) and the first thing they say when
-// they wake. The run-1 ship-1 families are fixed (§6.7), so the story the design tells, Ada in
-// C12 next to the thing in the memory, is the one every first run plays. Everything else is drawn
-// from the pools below with the ship's seeded stream (ShipDef.memory.souls.familiesSeedStream).
+// The colonists (§6.7, 01-landing §3.8). Every pod carries a family of 200 people, and INSPECT and the
+// LANDING REPORT name three of them. They must read as people, not data: a name, an age, one line about
+// who they are (what they packed, what they want to do first) and the first thing they say on the
+// ground. The run-1 ship-1 families are fixed (§6.7), so the story the design tells, Ada in POD 01
+// next to the thing in the memory, is the one every first run plays. Everything else is drawn from
+// the pools below with the ship's seeded stream (ShipDef.memory.drivers.familiesSeedStream).
 
-// One cluster's people: its family and the colonists INSPECT names.
-export interface ClusterRoster {
+// One pod's people: its family and the colonists INSPECT names.
+export interface PodRoster {
   family: string;
   featured: Colonist[];
 }
 
-// The first run's ARES-VII, in address order C01–C12 (§6.7). C12 is the story's cluster: the one
-// next to HOLLOW's root.
-export const ARES_RUN1_FAMILIES: readonly string[] = [
-  'Al-Sayed', 'Brandt', 'Cho', 'Duarte', 'Ivanov', 'Nakamura',
-  'Mensah', 'Lindqvist', 'Reyes', 'Kapoor', 'Fontaine', 'Okafor',
-];
+// The first run's ARES-VII, in pod order POD 01–03 (01-landing §2). POD 01 is the story's pod: its
+// driver sits right after HOLLOW's root, and POD 02 BRANDT arrives hurt.
+export const ARES_RUN1_FAMILIES: readonly string[] = ['Okafor', 'Brandt', 'Al-Sayed'];
 
-// The person the first run is about (§1): selected the moment the colonists are found, first in
-// the WAKE REPORT. Her first words are the only line in the game nobody else says.
+// The person the first run is about (§1): her family's pod is HOLLOW's first bite, and she is first
+// in the LANDING REPORT's credits. Her first words are the only line in the game nobody else says.
 export const ADA: Readonly<Omit<Colonist, 'name'> & { first: string }> = {
   first: 'Ada',
   age: 11,
@@ -33,11 +31,11 @@ export const ADA: Readonly<Omit<Colonist, 'name'> & { first: string }> = {
   firstWords: 'Is it morning?',
 };
 
-// A ship whose first families are written down (ship 1 on run 1): the family per cluster in order,
-// and the lead cluster's first colonist.
+// A ship whose first families are written down (ship 1 on run 1): the family per pod in order,
+// and the lead pod's first colonist.
 export interface ScriptedRoster {
   families: readonly string[];
-  leadIndex: number;  // 0-based cluster index of the lead cluster (C12 → 11)
+  leadIndex: number;  // 0-based pod index of the lead pod (POD 01 → 0)
   lead: typeof ADA;
 }
 
@@ -107,7 +105,7 @@ export const LINE_POOL: readonly string[] = [
   'brought a photo of the old house.',
 ];
 
-// The first thing they say when they wake (the WAKE REPORT's credits). "Is it morning?" is Ada's
+// The first thing they say on the ground (the LANDING REPORT's credits, the first touchdown's radio line). "Is it morning?" is Ada's
 // alone.
 export const FIRST_WORDS_POOL: readonly string[] = [
   'Did we make it?',
@@ -132,29 +130,27 @@ export const FIRST_WORDS_POOL: readonly string[] = [
   'Is the sun bigger here?',
 ];
 
-// What someone says when they wake with missing memories (§4.4: WOKE, MISSING MEMORIES). Gentle,
-// never frightening (§1 tone guardrails): something is gone, and they notice. The WAKE REPORT says
-// these in place of the colonist's own first words, so an unrepaired cluster is heard, not just
-// counted. No two credits on a ship say the same line, so there are at least as many as the
-// biggest ship has clusters (16 on LAST LIGHT; data/ships.ts checks every ship against it).
-// A cluster starts at its own number, so ship 1's hurt C09 REYES says the ninth line.
-export const GAPS_WORDS_POOL: readonly string[] = [
-  'What was my dog called?',
-  'There was a song. How did it go?',
-  'Did I have a brother?',
-  'What was I going to do here?',
-  "I can't remember the ship.",
-  'Something is missing. What was it?',
-  'I remember rain. Only rain.',
-  'Have we met before?',
-  'I know your face. I think.',
-  'Is this where we were going?',
-  "I had a word for this. It's gone.",
-  'Who packed my bag?',
-  'I think I used to draw.',
-  'Did we say goodbye to someone?',
-  'I remember a kitchen. Whose?',
-  'My name is… give me a second.',
+// What someone says after a HARD landing (a failing driver, §3.8): gentle, never frightening (§1 tone guardrails).
+// PLACEHOLDER: 05-story writes the hard and off-site pools. The LANDING REPORT says these in place of the colonist's
+// own first words, so a hard landing is heard, not just counted; no two credits on a ship say the same line, so there
+// are at least PODS_MAX of them (data/ships.ts checks every ship's pod count against it).
+export const HARD_WORDS_POOL: readonly string[] = [
+  'That was a bumpy one!',
+  'Is everyone all right?',
+  'My ears are still ringing.',
+  'I think I bit my tongue.',
+  'Remind me to walk next time.',
+  'Did we bounce?',
+  'That was louder than I thought.',
+  'I can still feel the thump.',
+  'Who was driving?',
+  'Everything is upside down.',
+  'My bag went flying.',
+  'Was that the ground?',
+  'Hold on, the room is spinning.',
+  'We made it. Just.',
+  'I dropped my pebble!',
+  'Can we do that more softly?',
 ];
 
 // Ages: a ship carries whole families, so a third of the people INSPECT names are children (the
@@ -178,7 +174,7 @@ function shuffled<T>(items: readonly T[], rng: Rng): T[] {
 }
 
 // Deals from a shuffled pool, reshuffling when it runs out: lines and first words may repeat
-// across a big ship, never next to each other in one cluster's three.
+// across a big ship, never next to each other in one pod's three.
 function dealer<T>(pool: readonly T[], rng: Rng): () => T {
   let deck: T[] = [];
   return () => {
@@ -199,7 +195,7 @@ function rollAge(rng: Rng): number {
   return band.min + Math.floor(rng() * (band.max - band.min + 1));
 }
 
-// A child's age (the first age band): a returning unit's ship 1 has no Ada, but its lead cluster's first
+// A child's age (the first age band): a returning unit's ship 1 has no Ada, but its lead pod's first
 // colonist is still a kid (data/memory.ts), so the bite next to the root is still about someone like her.
 export function rollChildAge(rng: Rng): number {
   const band = AGE_BANDS[0]!;
@@ -210,19 +206,18 @@ export function colonistName(family: string, first: string): string {
   return `${family}, ${first}`;
 }
 
-// The roster of a ship's `clusterCount` clusters, in address order. A scripted ship keeps its
-// written families and lead colonist; everything else is seeded. First names never repeat within a
-// ship (60 names cover the 16 clusters × 3 of the biggest ship), so every person INSPECT names is
-// someone else.
-export function rollRoster(clusterCount: number, rng: Rng, scripted: ScriptedRoster | null): ClusterRoster[] {
-  if (scripted && scripted.families.length !== clusterCount) {
-    throw new Error(`rollRoster: the script names ${scripted.families.length} families for ${clusterCount} clusters`);
+// The roster of a ship's `podCount` pods, in address order. A scripted ship keeps its written
+// families and lead colonist; everything else is seeded. First names never repeat within a ship (60
+// names cover the 16 pods × 3 of the biggest ship), so every person INSPECT names is someone else.
+export function rollRoster(podCount: number, rng: Rng, scripted: ScriptedRoster | null): PodRoster[] {
+  if (scripted && scripted.families.length !== podCount) {
+    throw new Error(`rollRoster: the script names ${scripted.families.length} families for ${podCount} pods`);
   }
-  const families = scripted ? [...scripted.families] : shuffled(FAMILY_POOL, rng).slice(0, clusterCount);
-  if (families.length < clusterCount) throw new Error(`rollRoster: only ${FAMILY_POOL.length} families for ${clusterCount} clusters`);
+  const families = scripted ? [...scripted.families] : shuffled(FAMILY_POOL, rng).slice(0, podCount);
+  if (families.length < podCount) throw new Error(`rollRoster: only ${FAMILY_POOL.length} families for ${podCount} pods`);
   const firstNames = shuffled(FIRST_NAME_POOL.filter((name) => name !== scripted?.lead.first), rng);
-  if (firstNames.length < clusterCount * FEATURED_PER_CLUSTER) {
-    throw new Error(`rollRoster: ${firstNames.length} first names for ${clusterCount * FEATURED_PER_CLUSTER} colonists`);
+  if (firstNames.length < podCount * FEATURED_PER_POD) {
+    throw new Error(`rollRoster: ${firstNames.length} first names for ${podCount * FEATURED_PER_POD} colonists`);
   }
   const nextLine = dealer(LINE_POOL.filter((line) => line !== scripted?.lead.line), rng);
   const nextWords = dealer(FIRST_WORDS_POOL, rng);
@@ -240,7 +235,7 @@ export function rollRoster(clusterCount: number, rng: Rng, scripted: ScriptedRos
       while (featured.some((colonist) => taken(colonist) === pick)) pick = deal();
       return pick;
     };
-    while (featured.length < FEATURED_PER_CLUSTER) {
+    while (featured.length < FEATURED_PER_POD) {
       featured.push({
         name: colonistName(family, firstNames.pop()!),
         age: rollAge(rng),
@@ -252,7 +247,7 @@ export function rollRoster(clusterCount: number, rng: Rng, scripted: ScriptedRos
   });
 }
 
-// How the game names a colonist, in INSPECT and in the WAKE REPORT: first name first, like a
+// How the game names a colonist, in INSPECT and in the LANDING REPORT: first name first, like a
 // person and not a record (`Ada Okafor`). Names are stored `Family, First` (colonistName).
 export function creditName(colonist: Colonist): string {
   const comma = colonist.name.indexOf(', ');
@@ -268,7 +263,7 @@ export function colonistIntro(colonist: Colonist): string {
 
 // The pools are checked once at load: every name fits its chip and every intro fits a line, with
 // the longest family and first name together, and nothing repeats. A bad entry would surface as a
-// cut-off name in the middle of the WAKE REPORT; here it fails the page instead.
+// cut-off name in the middle of the LANDING REPORT; here it fails the page instead.
 function validateSouls(): void {
   const fail = (why: string): never => { throw new Error(`data/souls.ts: ${why}`); };
   const unique = (name: string, list: readonly string[]): void => {
@@ -279,8 +274,8 @@ function validateSouls(): void {
   unique('FIRST_NAME_POOL', FIRST_NAME_POOL);
   unique('LINE_POOL', LINE_POOL);
   unique('FIRST_WORDS_POOL', FIRST_WORDS_POOL);
-  unique('GAPS_WORDS_POOL', GAPS_WORDS_POOL);
-  for (const words of [...FIRST_WORDS_POOL, ...GAPS_WORDS_POOL, ADA.firstWords]) {
+  unique('HARD_WORDS_POOL', HARD_WORDS_POOL);
+  for (const words of [...FIRST_WORDS_POOL, ...HARD_WORDS_POOL, ADA.firstWords]) {
     if (words.length > COLONIST_LINE_MAX_CHARS) fail(`first words '${words}' are longer than ${COLONIST_LINE_MAX_CHARS}`);
   }
   for (const family of [...FAMILY_POOL, ...ARES_RUN1_FAMILIES]) {
@@ -293,9 +288,9 @@ function validateSouls(): void {
     if (line.length > COLONIST_LINE_MAX_CHARS) fail(`line '${line}' is longer than ${COLONIST_LINE_MAX_CHARS}`);
   }
   if (FIRST_WORDS_POOL.includes(ADA.firstWords)) fail(`Ada's first words are hers alone`);
-  // A gaps line must never be someone's own first words: the credits tell them apart by the words.
-  for (const words of GAPS_WORDS_POOL) {
-    if (FIRST_WORDS_POOL.includes(words) || words === ADA.firstWords) fail(`'${words}' is both a gaps line and someone's first words`);
+  // A hard-landing line must never be someone's own first words: the credits tell them apart by the words.
+  for (const words of HARD_WORDS_POOL) {
+    if (FIRST_WORDS_POOL.includes(words) || words === ADA.firstWords) fail(`'${words}' is both a hard-landing line and someone's first words`);
   }
   const longest = (list: readonly string[]): string => list.reduce((a, b) => (b.length > a.length ? b : a), '');
   const worst = colonistIntro({

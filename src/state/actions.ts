@@ -1,6 +1,9 @@
 import type { Store } from './store';
-import type { GameState, PendingPlacement, ClusterResult } from './schema';
-import type { Segment, RedundancySegment, SegmentState, SoulSegment } from '@/types/segment';
+import type { GameState, PendingPlacement } from './schema';
+import type { Segment, RedundancySegment, SegmentState, DriverSegment } from '@/types/segment';
+import type { DriverLoss } from '@/types/landing';
+import type { ShipOutcome } from './schema';
+import { finalFateOfAboard, parkedFateOf } from '@systems/landing-rules';
 import type { FsToolKind } from '@/types/fs-tool';
 import {
   getRedundancy, getFsTool, effectiveToolVersion, integrityState, isRepairable, hasIntegrity, shownIntegrity,
@@ -24,7 +27,7 @@ import {
   SCAN_BASE_SEC, SCAN_PER_BLOCK_SEC, MOVE_BASE_SEC, MOVE_PER_BLOCK_SEC, COPY_BASE_SEC,
   COPY_PER_BLOCK_SEC, DELETE_SEC, COMPACT_SEC, REPAIR_CHARGE_PER_POINT_PER_BLOCK, INTEGRITY_MAX,
   OP_COMPLETE_PCT, FLOAT_SLACK, DELETE_HOLLOW_BASE_SEC, DELETE_HOLLOW_PER_BLOCK_SEC, HOLLOW_RECOIL_SEC, SWAP_SEC,
-  SEG_NAME_MAX_CHARS, ROOT_DELETE_SEC,
+  SEG_NAME_MAX_CHARS, ROOT_DELETE_SEC, BAY_SLOTS, LANDING_TACTICAL_WARP, LANDING_CRUISE_WARP,
 } from '@data/tuning';
 
 // A ship file's backup copy is called `<name>.alt` (Thrust.alt); a swapped-out primary `<name>.old` (§6.5).
@@ -123,26 +126,67 @@ export function setIntegrity(seg: HealthSegment, integrity: number): void {
   if (isHealthLabel(seg.state)) seg.state = integrityState(seg.integrity);
 }
 
-// A cluster left memory (printed, eaten for good by HOLLOW, or taken to 0 by a hazard zone): its result goes
-// into the ship's record, and nothing the kid pointed at it stays pointed at a file that is gone: PRINT NEXT,
-// the selection (HOLLOW's eaten block takes it over, `selectInstead`), and a MOVE picked up from it (a stale
-// pickedSourceId keeps the hand at MOVE's second step). One helper for the three ways out, so they cannot
-// drift apart again. In a draft (inside store.update).
-export function recordClusterGone(draft: GameState, soul: SoulSegment, result: ClusterResult, selectInstead: string | null = null): void {
-  draft.souls.results.push(result);
-  if (draft.printer.printNext === soul.cluster) draft.printer.printNext = null;
-  if (draft.ui.selectedId === soul.id) draft.ui.selectedId = selectInstead;
-  if (draft.ui.pickedSourceId === soul.id) draft.ui.pickedSourceId = null;
+// A driver left memory (launched with its pod, eaten for good by HOLLOW, or taken to 0 by a hazard zone): nothing the
+// kid pointed at it stays pointed at a file that is gone: LOAD NEXT, the selection (HOLLOW's eaten block takes it over,
+// `selectInstead`), and a MOVE picked up from it (a stale pickedSourceId keeps the hand at MOVE's second step). One
+// helper for every way out, so they cannot drift apart again. In a draft (inside store.update).
+export function forgetDriver(draft: GameState, driver: Readonly<DriverSegment>, selectInstead: string | null = null): void {
+  if (draft.landing.loadNext === driver.pod) draft.landing.loadNext = null;
+  if (draft.ui.selectedId === driver.id) draft.ui.selectedId = selectInstead;
+  if (draft.ui.pickedSourceId === driver.id) draft.ui.pickedSourceId = null;
 }
 
-// The record of a cluster that did not wake (HOLLOW ate it, or a hazard zone took it to 0). `eaten`: HOLLOW did it
-// (WP11: MERGE brings back exactly those).
-export function lostClusterResult(soul: SoulSegment, eaten = false): ClusterResult {
-  const result: ClusterResult = {
-    cluster: soul.cluster, family: soul.family, souls: soul.souls, outcome: 'lost', integrity: 0, range: 0, featured: soul.featured,
-  };
-  if (eaten) result.eaten = true;
-  return result;
+// A driver is gone without its pod (01-landing §3.8: HOLLOW ate it, or a hazard zone took it to 0). The pod outlives
+// it: it stays aboard, CAN'T LAUNCH, and is parked in orbit with this reason when the landing ends (§3.10); `eaten` is
+// what MERGE may give back (risk 9, slice 7). In a draft.
+// A pod already PARKED counts too: the landing parks the pods still aboard the moment it ends (landing.ts endNow), but
+// their drivers stay in memory through the linger, the last descents and the finale's wait, where HOLLOW and the zones
+// still reach them. Its parked fate is rewritten with the loss (why, and restorable for an eaten one), so the report,
+// the beacons and MERGE's unpark rule (only 'no-time' pods reopen; an eaten one comes back with its driver) read the
+// truth. Any other fate (falling, down, not launched) has no driver in memory to lose: that throws.
+export function recordDriverLost(draft: GameState, driver: Readonly<DriverSegment>, why: DriverLoss, selectInstead: string | null = null): void {
+  const record = draft.landing.pods.find((candidate) => candidate.pod === driver.pod);
+  if (!record) throw new Error(`recordDriverLost: no pod ${driver.pod} on this ship`);
+  if (record.fate.kind !== 'aboard' && record.fate.kind !== 'parked') {
+    throw new Error(`recordDriverLost: pod ${driver.pod} is ${record.fate.kind}, not aboard or parked`);
+  }
+  record.driverLost = why;
+  if (record.fate.kind === 'parked') record.fate = parkedFateOf(record);
+  forgetDriver(draft, driver, selectInstead);
+}
+
+// The pods still aboard get their final fate for `outcome` (01-landing §3.10): parked in orbit with why when the ship
+// ends in orbit (END LANDING, all launched, STRANDED, a Core lost), NOT LAUNCHED once it left orbit (crashed, escaped,
+// abandoned). Written the moment the ship's ending is known, so the PARKED words, the beacons and the LOST card read the
+// state; the result (landing-rules landingResult) folds the same fate. In a draft; returns how many were parked.
+export function parkPodsAboard(draft: GameState, outcome: ShipOutcome): number {
+  let parked = 0;
+  for (const record of draft.landing.pods) {
+    if (record.fate.kind !== 'aboard') continue;
+    record.fate = finalFateOfAboard(record, outcome);
+    if (record.fate.kind === 'parked') parked++;
+  }
+  return parked;
+}
+
+// The ship left orbit after its landing had ended (review B1: a crash during the linger): the pods parked in orbit rode
+// it, so they are NOT LAUNCHED, as the result folds them (landing-rules landingResult). In a draft.
+export function leaveOrbitWithParked(draft: GameState): void {
+  for (const record of draft.landing.pods) if (record.fate.kind === 'parked') record.fate = { kind: 'not-launched' };
+}
+
+// The landing begins (01-landing §3.2, §3.4), in the same update that sets phase 'landing' (orbit-sim endFlight): the
+// world switches to LANDING's own warps on every ship, so the window table holds on every planet (risk 14: the only
+// writer of level.tacticalWarp / cruiseWarp after createFlight), and the bay starts full. In a draft.
+export function beginLanding(draft: GameState): void {
+  draft.level.tacticalWarp = LANDING_TACTICAL_WARP;
+  draft.level.cruiseWarp = LANDING_CRUISE_WARP;
+  draft.landing.bay = { loaded: BAY_SLOTS, reloadTac: 0, cadenceLeftTac: 0 };
+  draft.landing.startedAtTSec = draft.clock.tSec;
+  draft.landing.window = null;
+  draft.landing.noDriverAiSec = 0;
+  // The lock's last burn tick must not read as ENGINE FIRING on the landing's first [L] (the engine is off from here).
+  draft.burn.lastTickDvKmS = 0;
 }
 
 // The tug-of-war is won (§6.6): a REPAIR healed an infected file back to 100. The infection clears

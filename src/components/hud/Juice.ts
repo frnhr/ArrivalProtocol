@@ -8,7 +8,7 @@ import { screenFocus } from './focus';
 import { LINES, BEAM_OUT_TEXT } from '@data/script';
 import {
   LOCK_HOLD_AI_SEC, SHAKE_BURN_PX, SHAKE_FAULT_PX, SHAKE_CRASH_PX, SHAKE_DEBRIS_PX, SHAKE_MS_PER_PX, SHAKE_MIN_MS, SHAKE_MAX_MS, SHAKE_STEPS,
-  LINE_TWEEN_MS, SCREEN_FLASH_MS, SHAKE_GHOST_FIRST_PX, SHAKE_GHOST_PX,
+  LINE_TWEEN_MS, SCREEN_FLASH_MS, SHAKE_GHOST_FIRST_PX, SHAKE_GHOST_PX, SHAKE_LAUNCH_PX,
 } from '@data/tuning';
 
 // Juice (§7.3): the feel, never the information.
@@ -125,6 +125,9 @@ export function mountJuice(store: Store<GameState>): () => void {
       else if (!inSkip) shake(SHAKE_GHOST_PX);
     }),
     on('crashed', () => { shake(SHAKE_CRASH_PX); flash('danger'); }),
+    // Slice 1a (01-landing §4): a kick per launch, felt at the 2-second rhythm. The streak, the entry flare, the ring's
+    // pulse and the touchdown float are the NAV PLOT's (plot-landing.ts), the chip flash LaunchFx's.
+    on('pod-launched', () => shake(SHAKE_LAUNCH_PX)),
     on('locked', () => flash('good')),
     on('line-state', ({ from }) => {
       plot.dataset.tweenFrom = from;

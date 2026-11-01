@@ -1,19 +1,23 @@
 import type { Store } from '@state/store';
 import type { GameState, LevelState, TerminalStatus, GhostBurst, SkipWaypoint } from '@state/schema';
+import type { DecayState, DragKick } from '@/types/landing';
 import { onGameTick, onAiTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { stepAttitude, isPresetAligning } from '@systems/attitude';
 import { smoothNoise, childSeed, childRng, type Rng } from '@systems/rng';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { capabilitiesNow, thrustCap, planningThrustCap, presetsAvailable, type GhostSpec } from '@systems/capabilities';
+import { beginLanding, leaveOrbitWithParked, parkPodsAboard } from '@state/actions';
+import { engineOpen, ghostBurstsThisPhase } from '@state/selectors';
+import { nextDragKick, dragKickAt, decayAfter, retroKicked } from '@systems/landing-orbit';
 import {
-  elementsFromState, ringFit, ringFraction, loopRange, semiMajorAxis, propagateConic,
+  elementsFromState, ringFit, ringFraction, loopRange, semiMajorAxis, propagateConic, keplerConic, orbitalPeriod,
   type OrbitState, type Ring, type RingFit, type Vec2,
 } from '@/types/orbit';
 import {
   SIM_SUBSTEP_MAX_SEC, SIM_MAX_SUBSTEPS, THRUST_NOISE_PERIOD_TAC, ESCAPE_R_FACTOR,
-  STRANDED_RANGE_FRAC, LOCK_HOLD_AI_SEC, RADIUS_BISECT_STEPS, PRINTER_REACH_SAMPLES,
-  PREDICT_STEP_ORBIT_FRAC, PREDICT_STEP_MIN, PREDICT_STEP_MAX, PREDICT_STEPS_BUDGET,
+  STRANDED_RANGE_FRAC, LOCK_HOLD_AI_SEC, RADIUS_BISECT_STEPS, BAND_REACH_SAMPLES,
+  PREDICT_STEP_ORBIT_FRAC, PREDICT_STEP_MIN, PREDICT_STEP_MAX, PREDICT_STEPS_BUDGET, LANDING_BURN_POWER,
 } from '@data/tuning';
 
 // 2D two-body flight. The ship arrives on a hyperbola and the player steers it with presets
@@ -85,29 +89,29 @@ export function closeLoopDvKmS(radius: number, speed: number, mu: number, escape
   return Math.max(0, speed - boundSpeed);
 }
 
-// The widest ▲ any loop can have and still be ACCEPTED when the tank runs dry (printer range at
-// least STRANDED_RANGE_FRAC, §4.3), whatever its ▼. A tank that cannot bring ▲ inside this can at
-// best strand the ship, which loses the souls just like flying away. Pure geometry of the ring
+// The widest ▲ any loop can have and still be ACCEPTED when the tank runs dry (share in the launch band
+// at least STRANDED_RANGE_FRAC, §4.3), whatever its ▼. A tank that cannot bring ▲ inside this can at
+// best strand the ship, which lands nobody, just like flying away. Pure geometry of the ring
 // (the range is a share of the period), so it is found once per ring by bisection on ▲.
 const reachByRing = new Map<string, number>();
 
-export function printerReachRadius(surfaceR: number, ring: Ring): number {
+export function bandReachRadius(surfaceR: number, ring: Ring): number {
   const key = `${surfaceR}|${ring.min}|${ring.max}`;
   const known = reachByRing.get(key);
   if (known !== undefined) return known;
   const bestRange = (ra: number): number => {
     let best = loopRange(ring.min, ra, ring);
-    for (let i = 0; i <= PRINTER_REACH_SAMPLES; i++) {
-      const rp = surfaceR + ((ring.max - surfaceR) * i) / PRINTER_REACH_SAMPLES;
+    for (let i = 0; i <= BAND_REACH_SAMPLES; i++) {
+      const rp = surfaceR + ((ring.max - surfaceR) * i) / BAND_REACH_SAMPLES;
       best = Math.max(best, loopRange(rp, ra, ring));
     }
     return best;
   };
-  // Double ▲ until the printers no longer reach it, then bisect between the last two.
+  // Double ▲ until the band no longer reaches it, then bisect between the last two.
   let reached = ring.max;
   let missed = 2 * ring.max;
   for (let i = 0; bestRange(missed) >= STRANDED_RANGE_FRAC; i++) {
-    if (i >= RADIUS_BISECT_STEPS) throw new Error(`printerReachRadius: no reach limit for ring ${ring.min}–${ring.max}`);
+    if (i >= RADIUS_BISECT_STEPS) throw new Error(`bandReachRadius: no reach limit for ring ${ring.min}–${ring.max}`);
     reached = missed;
     missed *= 2;
   }
@@ -121,10 +125,10 @@ export function printerReachRadius(surfaceR: number, ring: Ring): number {
 }
 
 // How far out ▲ may lie for the loop to count as closed in the 3b ending (WP1-rules 3b): the
-// escape radius, as the lead specified, widened to the printers' reach so the flight never ends
+// escape radius, as the lead specified, widened to the band's reach so the flight never ends
 // as FLEW AWAY while braking could still bring it home as ACCEPTED (ship 1: 29,046 km).
 export function closeBoundRadius(level: Readonly<LevelState>): number {
-  return Math.max(ESCAPE_R_FACTOR * level.r0, printerReachRadius(level.planet.R, level.ring));
+  return Math.max(ESCAPE_R_FACTOR * level.r0, bandReachRadius(level.planet.R, level.ring));
 }
 
 // --- Engine --------------------------------------------------------------------------------
@@ -144,22 +148,36 @@ export function thrustJitter(state: Readonly<GameState>): number {
 // What a burn delivers right now at the selected POWER and current caps, before jitter.
 // The burn-point estimate and the sim both use it.
 export function engineAccel(state: Readonly<GameState>): number {
-  return state.level.aNominalKmS2 * (state.burn.thrustPct / 100) * thrustCapFactor(state);
+  return state.level.aNominalKmS2 * (state.burn.thrustPct / 100) * thrustCapFactor(state) * landingPower(state);
+}
+
+// Slice 1b (risk 1, the lead's decision): the landing's burns run at LANDING_BURN_POWER of the flight's, so GO LOWER,
+// the 'lift' burn and a trim are a held burn a kid can release, not a twitch (see tuning.ts for the measurement). A
+// ghost burst in the landing too (review M2, ghostAccel): the engine is the same engine, and at the flight's push an
+// unswapped VESPER's bursts took ▼ under the planet within about 90 s of a passive landing.
+function landingPower(state: Readonly<GameState>): number {
+  return state.run.phase === 'landing' ? LANDING_BURN_POWER : 1;
+}
+
+// A ghost burst's acceleration while it runs, km/s² (before its overlap with a sub-step): the burst's amplitude of the
+// nominal push, at the landing's power during the landing.
+function ghostAccel(state: Readonly<GameState>, burst: Readonly<GhostBurst>): number {
+  return state.level.aNominalKmS2 * burst.amp * landingPower(state);
 }
 
 // The accel the flight plan places START BURN with (capabilities.ts planningThrustCap): engineAccel, except while the
 // engine driver is offline for the kid's own REPAIR or MOVE of it.
 export function planningAccel(state: Readonly<GameState>): number {
-  return state.level.aNominalKmS2 * (state.burn.thrustPct / 100) * planningThrustCap(state, capabilitiesNow(state));
+  return state.level.aNominalKmS2 * (state.burn.thrustPct / 100) * planningThrustCap(state, capabilitiesNow(state)) * landingPower(state);
 }
 
-// The throttle is held on a live flight with fuel and power: thrust is being delivered, or
-// will be the moment the preset is aligned. Pace and SKIP ask this, so a held burn is never
-// fast-forwarded: a preset can finish aligning inside one huge SKIP tick and would then fire
-// for that whole tick.
+// The throttle is held while the engine is open (a live flight, or a landing going on: selectors engineOpen, slice 1b)
+// with fuel and power: thrust is being delivered, or will be the moment the preset is aligned. Pace and SKIP ask this, so
+// a held burn is never fast-forwarded: a preset can finish aligning inside one huge SKIP tick and would then fire for
+// that whole tick.
 export function isBurnHeld(state: Readonly<GameState>): boolean {
   const burn = state.burn;
-  return burn.status === 'approaching'
+  return engineOpen(state)
     && burn.firing
     && burn.fuelPct > 0
     && engineAccel(state) > 0;
@@ -257,22 +275,24 @@ export function isGhostFiring(state: Readonly<GameState>): boolean {
 // When no gap is drawn yet, it is drawn here exactly as the sim's next tick would draw it: under the same
 // conditions, from the same moment (the next tick starts at clock.tSec), from the same seeded stream. So asking
 // never moves a burst, and the bursts land at the same game times at ×25, at ×200 and through a SKIP.
+// Slice 1b (risk 5): the engine is open during the landing too, so a failing Thrust Ctrl fires there as well (§3.3 lists
+// ghost thrust among ENGINE FIRING's causes; SWAP Thrust.alt is the fix the ship already teaches).
 export function ghostDueInSec(state: Readonly<GameState>): number | null {
   const burn = state.burn;
-  if (state.run.phase !== 'flight' || burn.status !== 'approaching' || burn.ghost !== null || burn.fuelPct <= 0) return null;
+  if (!engineOpen(state) || burn.ghost !== null || burn.fuelPct <= 0) return null;
   const spec = capabilitiesNow(state).thrustCtrl.ghost;
   if (spec === null) return null;
   return ensureGhostSchedule(state, spec, state.clock.tSec) - state.clock.tSec;
 }
 
-// The window of the next ghost burst a SKIP flies through, when it is a LATER burst of this ship (the first one is a
-// landing: ghostDueInSec), or null (no burst is coming, a healthy controller, or none has fired yet). Its end is the same
+// The window of the next ghost burst a SKIP flies through, when it is a LATER burst of this flight or this landing (the
+// first of each is a landing: ghostDueInSec; selectors ghostBurstsThisPhase), or null (no burst is coming, a healthy controller, or none has fired yet). Its end is the same
 // sum dueGhost makes for the burst (its start plus its length), so the tick lands on exactly the game time the burst
 // ends, to the last bit. A sticky burst's end is not known until it starts (the stick is rolled then): the window
 // assumes its nominal length, and a burst that sticks is still running when the SKIP's tick ends there, which ends the
 // SKIP (pace: ENGINE FIRING).
 export function laterBurstWindow(state: Readonly<GameState>): SkipWaypoint | null {
-  if (state.burn.ghostBursts === 0 || ghostDueInSec(state) === null) return null;
+  if (ghostBurstsThisPhase(state) === 0 || ghostDueInSec(state) === null) return null;
   const spec = capabilitiesNow(state).thrustCtrl.ghost;
   if (spec === null || nextGhostTSec === null) throw new Error('laterBurstWindow: a burst is due without a schedule');
   return { startTSec: nextGhostTSec, endTSec: nextGhostTSec + spec.durTac * state.level.tacticalWarp };
@@ -285,14 +305,15 @@ export function endGhost(store: Store<GameState>): void {
   emit('ghost-stop', NO_PAYLOAD);
 }
 
-// The outcomes that print the colonists (§4.3): the ship is in some orbit the printers can reach.
-export function printsColonists(status: TerminalStatus): boolean {
+// The outcomes that land the pods (01-landing §3.10): the ship is in an orbit the launch band reaches. A stranded ship
+// is in orbit too, but too little of it is in the band to land anyone: it parks its pods with its result instead.
+export function startsLanding(status: TerminalStatus): boolean {
   return status === 'locked' || status === 'accepted';
 }
 
 // Ends the flight: final status, throttle released so a held SPACE cannot carry into whatever comes
-// next, and a ghost burst cut off. A locked or accepted orbit goes on into 'printing' with the
-// clock running (WP5: the world coasts while the colonists print); a lost ship (crashed, escaped,
+// next, and a ghost burst cut off. A locked or accepted orbit goes on into 'landing' with the clock
+// running (beginLanding in the same update: LANDING's warps, a full bay); a lost ship (crashed, escaped,
 // stranded) stops with the clock paused under its LOST card. The outcome is announced on the event
 // bus (locked / accepted / stranded / escaped / crashed) once the state is final.
 export function endFlight(store: Store<GameState>, status: TerminalStatus): void {
@@ -307,16 +328,24 @@ export function endFlight(store: Store<GameState>, status: TerminalStatus): void
     draft.clock.skipWarp = null;
     draft.clock.skipEndTSec = null;
     draft.clock.skipWaypoint = null;
-    if (printsColonists(status)) draft.run.phase = 'printing';
-    else draft.clock.paused = true;
+    if (startsLanding(status)) {
+      draft.run.phase = 'landing';
+      beginLanding(draft);
+    } else {
+      draft.clock.paused = true;
+      // A ship that ends here lands nobody (01-landing §3.10): a stranded one parks its pods in orbit, one that left
+      // orbit (crashed, escaped, abandoned) takes them with it. Written now, before its LOST card.
+      parkPodsAboard(draft, status === 'accepted' ? 'partial' : status);
+    }
   });
   if (ghostWasFiring) emit('ghost-stop', NO_PAYLOAD);
   emit(status, NO_PAYLOAD);
+  if (startsLanding(status)) emit('landing-start', NO_PAYLOAD);
 }
 
 // Terminal outcome of an empty tank, or null to keep flying:
 // in ring → the lock hold continues; impact → fly until the crash; open → fly until the
-// escape; any other closed loop → accepted at its printer range, stranded below the floor.
+// escape; any other closed loop → accepted at its share in the band, stranded below the floor.
 function fuelOutOutcome(state: Readonly<GameState>, fit: RingFit, outbound: boolean): TerminalStatus | null {
   if (fit.inRing) return null;
   if (isImpactCourse(fit, state.level.planet.R, outbound)) return null;
@@ -359,8 +388,8 @@ function trackTo(pos: Vec2, chordSec: number): void {
 // each sample jumped to from the tick's start (no error builds up), about one per PREDICT_STEP_ORBIT_FRAC of the
 // local crossing time (the predictor's own step), never more than about PREDICT_STEPS_BUDGET a tick. Pace only
 // SKIPs a pure coast (no thrust, no ghost burst: it lands on the next one), so there is no thrust to apply here.
+// Appends to the tick's track, which its caller starts (coastWithKicks: one jump, or its legs between drag kicks).
 function conicCoast(start: Readonly<OrbitState>, mu: number, dtWorld: number): OrbitState {
-  startTrack(start);
   const stepMax = Math.max(PREDICT_STEP_MAX, dtWorld / PREDICT_STEPS_BUDGET);
   let elapsed = 0;
   let sample: OrbitState = { x: start.x, y: start.y, vx: start.vx, vy: start.vy };
@@ -375,26 +404,76 @@ function conicCoast(start: Readonly<OrbitState>, mu: number, dtWorld: number): O
   return sample;
 }
 
-// Gravity only, the same integrator and sub-steps as the flight. A locked or accepted orbit never
-// reaches the surface (its ▼ is above the atmosphere), so there is nothing to end.
-function coast(store: Store<GameState>, dtWorld: number): void {
-  const state = store.getState();
-  const nSub = Math.min(SIM_MAX_SUBSTEPS, Math.max(1, Math.ceil(dtWorld / SIM_SUBSTEP_MAX_SEC)));
-  const h = dtWorld / nSub;
-  const pos: Vec2 = { x: state.orbit.x, y: state.orbit.y };
-  const vel: Vec2 = { x: state.orbit.vx, y: state.orbit.vy };
-  startTrack(pos);
-  for (let i = 0; i < nSub; i++) {
-    integrateStep(pos, vel, h, state.level.planet.mu, 0, 0);
-    trackTo(pos, h);
+// --- The landing's coast and its drag kicks (01-landing §3.7, slice-1b-plan §1.4) ---------------------------------------
+
+// A loop's period, for the kick gap's assertion (landing-orbit decayAfter).
+function periodOf(orbit: Readonly<OrbitState>, mu: number): number {
+  return orbitalPeriod(keplerConic(orbit, mu, elementsFromState(orbit, mu)));
+}
+
+// Far more kicks than one tick can hold (two per orbit): a loop that asks for more is a broken kick rule, not decay.
+const MAX_KICKS_PER_TICK = 10_000;
+
+export interface KickedCoast {
+  end: OrbitState;
+  kicks: DragKick[];
+  decay: DecayState;
+}
+
+// A SKIP's exact jump (plan §1.4, risk 4): the conic legs split at each drag kick (landing-orbit nextDragKick: coast to
+// it, apply its retrograde Δv, look for the next from the new conic), so a jump over several orbits lands where CRUISE's
+// sub-steps would, kick for kick. Kicks do not stop the SKIP: its end only moves nearer (pace) and the drop cache
+// re-solves on the epoch. With `drag` false (the flight, ARES-VII) it is conicCoast itself, to the bit: `coastSec` is a
+// duration, not an end time, so a jump with no kick takes exactly the flight's arithmetic.
+export function coastWithKicks(
+  start: Readonly<OrbitState>, mu: number, ring: Ring, fromTSec: number, coastSec: number, decay0: Readonly<DecayState>, drag: boolean,
+): KickedCoast {
+  startTrack(start);
+  let orbit: OrbitState = { x: start.x, y: start.y, vx: start.vx, vy: start.vy };
+  let decay: DecayState = { ...decay0 };
+  let at = fromTSec;
+  const kicks: DragKick[] = [];
+  for (;;) {
+    const kick = drag ? nextDragKick(orbit, mu, ring, at, fromTSec + coastSec, decay) : null;
+    if (kick === null) break;
+    if (kicks.length >= MAX_KICKS_PER_TICK) throw new Error(`coastWithKicks: over ${MAX_KICKS_PER_TICK} kicks in one ${coastSec} s jump`);
+    orbit = conicCoast(orbit, mu, kick.atTSec - at);
+    decay = decayAfter(decay, kick, periodOf(orbit, mu));
+    orbit = retroKicked(orbit, kick.dvKmS);
+    kicks.push(kick);
+    at = kick.atTSec;
   }
-  store.mutate((draft) => {
-    draft.orbit.x = pos.x;
-    draft.orbit.y = pos.y;
-    draft.orbit.vx = vel.x;
-    draft.orbit.vy = vel.y;
-    draft.burn.lastTickDvKmS = 0;
+  const rest = kicks.length === 0 ? coastSec : fromTSec + coastSec - at;
+  return { end: conicCoast(orbit, mu, rest), kicks, decay };
+}
+
+// The ship left orbit during the landing (risk 6, review B3): a crash (a dry tank under decay, a wild burn) or an escape
+// (the flight's cannotClose rule). As endFlight does for a lost flight: the status, the throttle released, a ghost burst
+// cut off, the SKIP dropped and the clock paused under the LOST card (run shipLost). landing.ts closes the landing in
+// the same frame (its post-tick: endNow 'ship-lost', so the pods aboard go NOT LAUNCHED and the falling ones still score
+// through landing-rules pendingTouchdowns): listeners must not write state, so the close is not done on the event.
+// Review B1: also after the landing ended, while the ship still coasts toward the report (endNow is not run again):
+// the pods it parked rode the orbit with it, so they go NOT LAUNCHED here (state/actions leaveOrbitWithParked), as landing-rules
+// landingResult folds them for a ship that left orbit.
+export function endLandingLost(store: Store<GameState>, status: 'crashed' | 'escaped'): void {
+  const state = store.getState();
+  if (state.run.phase !== 'landing') throw new Error(`endLandingLost: not landing (phase ${state.run.phase})`);
+  const ghostWasFiring = state.burn.ghost !== null;
+  store.update((draft) => {
+    if (draft.landing.ended !== null) leaveOrbitWithParked(draft);
+    draft.burn.status = status;
+    draft.burn.firing = false;
+    draft.burn.firingSource = null;
+    draft.burn.firingFor = null;
+    draft.burn.ghost = null;
+    draft.burn.rotInput = 0;
+    draft.clock.skipWarp = null;
+    draft.clock.skipEndTSec = null;
+    draft.clock.skipWaypoint = null;
+    draft.clock.paused = true;
   });
+  if (ghostWasFiring) emit('ghost-stop', NO_PAYLOAD);
+  emit(status, NO_PAYLOAD);
 }
 
 // One sub-step of `h` game seconds with `accelWanted` km/s² along (dirX, dirY): FUEL drains by DELIVERED Δv, so the
@@ -460,7 +539,7 @@ function flySkipBurst(
   for (let i = 0; i < nSub; i++) {
     const from = ghost.startTSec + i * h;
     if (i > 0) attitude = stepAttitude(attitude, burn.sasMode, burn.rotInput, { x: pos.x, y: pos.y, vx: vel.x, vy: vel.y }, h);
-    const accel = fuelDv > 0 ? (state.level.aNominalKmS2 * ghost.amp * ghostOverlap(ghost, from, from + h)) / h : 0;
+    const accel = fuelDv > 0 ? (ghostAccel(state, ghost) * ghostOverlap(ghost, from, from + h)) / h : 0;
     if (accel > 0) thrustSec += h;
     const step = thrustSubStep(pos, vel, h, mu, R, accel, Math.cos(attitude.heading), Math.sin(attitude.heading), fuelDv);
     fuelDv = step.fuelDv;
@@ -481,13 +560,25 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
     trackChordSec.length = 0;
     const state = store.getState();
     const burn = state.burn;
-    // After a lock or accept the ship keeps coasting with nobody on the throttle (§6.2): the plot
-    // animates through printing.
-    if (state.run.phase === 'printing') { coast(store, dtWorld); return; }
-    if (burn.status !== 'approaching') return;
+    // ONE game tick for the flight and the landing (slice-1b-plan §1.4): the engine answers the throttle while it is open
+    // (selectors engineOpen: a live approach, or a landing going on), with the landing's differences marked below. Once
+    // the landing has ended the ship still coasts in its orbit (with its drag kicks) until the report: the same tick with
+    // no thrust and no ghost. A lost ship, or a ship past its flight, does not move.
+    const live = engineOpen(state);
+    const landing = state.run.phase === 'landing';
+    const inOrbit = burn.status === 'locked' || burn.status === 'accepted';
+    if (!live && !(landing && inOrbit)) return;
+    // A burst still running when the landing ended falls silent with the engine.
+    if (!live && burn.ghost !== null) endGhost(store);
 
     const { planet, ring, r0, dvBudgetKmS, tacticalWarp } = state.level;
     const mu = planet.mu;
+    // The landing's decay (§3.7): drag kicks at each ▼ under the DRAG line, on every ship whose def has drag.
+    const drag = landing && state.landing.drag;
+    // Read before the mutate below, which writes this tick's in place.
+    const prevTickDvKmS = burn.lastTickDvKmS;
+    let decay: DecayState = state.landing.decay;
+    const kicks: DragKick[] = [];
 
     // A damaged Autopilot (C3, failing or worse) lets go of the preset: the ship holds the heading
     // it has and the kid turns by hand (MANUAL, Q/E). A discrete change, so an update; the Engine
@@ -509,7 +600,7 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
     );
     let aligning = isPresetAligning(burn.sasMode, attitude.heading, state.orbit);
 
-    const thrusting = burn.firing && !aligning && burn.fuelPct > 0;
+    const thrusting = live && burn.firing && !aligning && burn.fuelPct > 0;
     const aBase = thrusting ? engineAccel(state) : 0;
     const jitter = thrustJitter(state);
     const seed = noiseSeed(state);
@@ -526,8 +617,8 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
 
     // Ghost thrust: a fixed (or swapped) controller silences a running burst at once; otherwise
     // a quiet engine rolls for a new one.
-    const ghostSpec = caps.thrustCtrl.ghost;
-    let ghost = burn.ghost;
+    const ghostSpec = live ? caps.thrustCtrl.ghost : null;
+    let ghost = live ? burn.ghost : null;
     let ghostStarted = false;
     let ghostSilenced = false;
     if (ghostSpec === null) {
@@ -568,11 +659,15 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
       if (aBase > 0 || burn.ghost !== null) {
         throw new Error(`orbit-sim: a SKIP tick with ${aBase > 0 ? 'thrust' : 'a ghost burst running'}: pace must end the SKIP first`);
       }
-      if (ghost !== null && state.burn.ghostBursts === 0) {
-        throw new Error('orbit-sim: the ship\'s first ghost burst inside a SKIP tick: pace must land the SKIP on its start');
+      if (ghost !== null && ghostBurstsThisPhase(state) === 0) {
+        throw new Error('orbit-sim: the first ghost burst of the flight or the landing inside a SKIP tick: pace must land the SKIP on its start');
       }
       const coastSec = ghost === null ? dtWorld : ghost.startTSec - tStart;
-      const end = conicCoast(state.orbit, mu, coastSec);
+      // During the landing the jump splits exactly at each drag kick (coastWithKicks); in flight it is conicCoast's.
+      const coast = coastWithKicks(state.orbit, mu, ring, tStart, coastSec, decay, drag);
+      const end = coast.end;
+      decay = coast.decay;
+      kicks.push(...coast.kicks);
       Object.assign(pos, { x: end.x, y: end.y });
       Object.assign(vel, { x: end.vx, y: end.vy });
       attitude = stepAttitude({ heading: burn.heading, omega: burn.omega }, burn.sasMode, burn.rotInput, end, coastSec);
@@ -592,6 +687,10 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
       startTrack(pos);
     }
 
+    // The landing's kick due in this sub-stepped tick (at most one: the gap is half an orbit, a tick a second or two),
+    // from the start-of-tick conic, applied at the first sub-step boundary at or after its time, from the state there.
+    let dueKick = drag && subSteps > 0 ? nextDragKick(state.orbit, mu, ring, tStart, tEnd, decay) : null;
+
     for (let i = 0; i < subSteps; i++) {
       // Fuel drains by DELIVERED Δv inside the sub-step loop, so no warp can overspend it:
       // the sub-step where the tank empties delivers only its fuelled fraction, then a = 0.
@@ -600,7 +699,7 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
         accel = aBase * (1 + jitter * smoothNoise(seed, tStart + (i + 0.5) * h, noisePeriod));
       }
       if (fuelDv > 0) {
-        for (const burst of bursts) accel += (state.level.aNominalKmS2 * burst.amp * ghostOverlap(burst, tStart + i * h, tStart + (i + 1) * h)) / h;
+        for (const burst of bursts) accel += (ghostAccel(state, burst) * ghostOverlap(burst, tStart + i * h, tStart + (i + 1) * h)) / h;
       }
       if (accel > 0) thrustSec += h;
       const step = thrustSubStep(pos, vel, h, mu, planet.R, accel, dirX, dirY, fuelDv);
@@ -619,6 +718,19 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
         crashed = true; break;
       }
       rDotVPrev = rDotVNow;
+      const boundary = i === subSteps - 1 ? tEnd : tStart + (i + 1) * h;
+      if (dueKick !== null && boundary >= dueKick.atTSec) {
+        const here: OrbitState = { x: pos.x, y: pos.y, vx: vel.x, vy: vel.y };
+        const kick = dragKickAt(here, mu, ring, boundary);
+        if (kick !== null) {
+          decay = decayAfter(decay, kick, periodOf(here, mu));
+          const kicked = retroKicked(here, kick.dvKmS);
+          vel.x = kicked.vx;
+          vel.y = kicked.vy;
+          kicks.push(kick);
+        }
+        dueKick = null;
+      }
     }
 
     const radius = Math.hypot(pos.x, pos.y);
@@ -627,7 +739,8 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
     // ▼ is behind on an open path: how long the kid has let that ride without a burn held
     // (WP1-rules 3a; pace stops holding TACTICAL for it after IGNORED_NOW_TAC).
     const missedOpen = !fit.closed && outbound;
-    const missedIdleTac = missedOpen && !isBurnHeld(state) ? burn.missedIdleTac + dtWorld / tacticalWarp : 0;
+    // (The flight's only: the landing has no capture to have missed, so it never lets a missed ▼ ride.)
+    const missedIdleTac = !landing && missedOpen && !isBurnHeld(state) ? burn.missedIdleTac + dtWorld / tacticalWarp : 0;
 
     store.mutate((draft) => {
       draft.orbit.x = pos.x;
@@ -644,12 +757,25 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
       if (delivered > 0) draft.burn.thrustTac += thrustSec / tacticalWarp;
     });
 
+    // The landing's discrete orbit changes, in one update (plan §1.3): each drag kick, and the end of a burn (the falling
+    // edge of the delivered Δv, once: during the burn the drop cache re-solves on its 1 km element key, and a bump per
+    // thrust tick would cost a solve every frame). The epoch is the drop cache's key, so the windows are solved again.
+    const burnEnded = landing && prevTickDvKmS > 0 && delivered === 0;
+    if (kicks.length > 0 || burnEnded) {
+      store.update((draft) => {
+        draft.landing.orbitEpoch += kicks.length + (burnEnded ? 1 : 0);
+        draft.landing.decay = decay;
+      });
+      for (const kick of kicks) emit('drag-kick', kick);
+    }
+
     // A burst that started this tick is announced once the tick's physics is in; one whose
     // window closed inside this tick (or that ran the tank dry) ends here, and the one that followed it starts.
     const announceStart = (started: GhostBurst): void => {
       store.update((draft) => {
         draft.burn.ghost = started;
         draft.burn.ghostBursts++;
+        if (landing) draft.landing.ghostBursts++;
       });
       const count = store.getState().burn.ghostBursts;
       emit('ghost-start', { sticky: started.sticky, first: count === 1, count, inSkip: skipTick });
@@ -686,12 +812,19 @@ export function mountOrbitSim(store: Store<GameState>): () => void {
     let outcome: TerminalStatus | null = null;
     if (crashed) outcome = 'crashed';
     else if (missedOpen && (radius > escapeRadius || cannotClose)) outcome = 'escaped';
-    else if (fuelDv <= 0) outcome = fuelOutOutcome(after, fit, outbound);
+    // An empty tank ends nothing in landing (the landing goes on; L2's rows say what the orbit does).
+    else if (!landing && fuelDv <= 0) outcome = fuelOutOutcome(after, fit, outbound);
 
     if (aligning !== burn.presetAligning) {
       store.update((draft) => { draft.burn.presetAligning = aligning; });
     }
-    if (outcome) endFlight(store, outcome);
+    // In landing the check runs while the ship coasts after the landing ended too (review B1): a sinking orbit can still
+    // take it into the ground before the report opens, and the result must say so.
+    if (!landing) {
+      if (outcome) endFlight(store, outcome);
+    } else if (outcome === 'crashed' || outcome === 'escaped') {
+      endLandingLost(store, outcome);
+    }
   });
 
   // HOLD STEADY: the loop must stay in the ring with the engine quiet for LOCK_HOLD_AI_SEC

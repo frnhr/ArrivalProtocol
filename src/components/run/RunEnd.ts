@@ -8,19 +8,20 @@ import { pushModal, registerKeys } from '@systems/input';
 import { play, toggleMuted } from '@systems/audio';
 import { requireById, replayAnimation, make } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
-import { RUN_END_TEXT, ARCHIVE_TEXT, endingsLine } from '@data/script';
+import { ARCHIVE_TEXT, endingsLine } from '@data/script';
+import { RUN_END_TEXT } from '@data/landing-text';
 import {
   RUN_END_ARM_SEC, RUN_END_ROW_GAP_SEC, RUN_END_COUNT_SEC, BEAM_OUT_BLACKOUT_SEC, STARS_PER_SHIP, REPORT_COUNT_HEARTBEAT,
 } from '@data/tuning';
 
 // RUN END (§9 WP7 item 7, §4.4): the night screen after the last ship, or after a run lost on the way.
-// Top to bottom: the run and unit, the cause as a title with one line of why, the souls that woke (heads,
-// rolling up; the hurt yellow line under it for missing memories), every ship of the fleet landing one by
-// one with how it ended, its stars and its souls (a ship the run never reached says so), then §4.4's
+// Top to bottom: the run and unit, the cause as a title with one line of why, the colonists who landed
+// (rolling up), every ship of the fleet landing one by
+// one with how it ended, its stars, its LANDED and its points (a ship the run never reached says so), then §4.4's
 // half-credit number as the run's SCORE (labelled, with what it counts) and the rank it earns, up to two
 // near misses, the seed, and NEW RUN ▸, which starts a fresh run in the page (systems/run.ts startRun: the
 // title card again, never a reload). When the archive did not keep the run (OFFLINE, PLAY WITHOUT) the last
-// line says the next unit will not remember it (WP8). Presentation on wall time, like the WAKE REPORT; the world is
+// line says the next unit will not remember it (WP8). Presentation on wall time, like the LANDING REPORT; the world is
 // stopped. After a BEAM OUT it waits for the old ship's windows to go black first.
 // Reduced motion: the rows and lines fade in place and the count is shown whole.
 // WP11 part 2 (the lead's item 2: the tone is the cause's): a won finale is the only celebratory screen. Its title takes
@@ -34,7 +35,7 @@ function starsText(earned: number): string {
 }
 
 // The count rolls up in steps this big, so it reads as people arriving, not as a blur of digits.
-const COUNT_STEP_SOULS = 100;
+const COUNT_STEP_COLONISTS = 100;
 
 function shipRowNode(row: RunEndShipRow): HTMLElement {
   const node = make('div', `re-ship outcome-${row.outcome ?? 'none'}`);
@@ -43,7 +44,9 @@ function shipRowNode(row: RunEndShipRow): HTMLElement {
     make('span', 're-ship-name', row.shipName),
     make('span', 're-ship-outcome', row.outcomeWord),
     make('span', 're-ship-stars', row.result ? starsText(row.result.stars) : ''),
-    make('span', 're-ship-woke', row.wokeLine),
+    make('span', 're-ship-landed', row.landedLine),
+    // Slice 1a: the ship's landing points beside its LANDED (the run's SCORE is their sum).
+    make('span', 're-ship-points', row.result ? RUN_END_TEXT.shipPoints(row.result.points) : ''),
   );
   return node;
 }
@@ -80,7 +83,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     frame = null;
   };
 
-  // The count rolls up to the run's WOKE (heads), then the missing-memories line lands under it.
+  // The count rolls up to the run's LANDED (colonists in an LZ with room).
   function rollCount(report: RunEndModel): void {
     if (reducedMotion()) {
       totalEl.textContent = report.totalLine;
@@ -89,8 +92,8 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     const startMs = performance.now();
     const tick = (now: number): void => {
       const fraction = Math.min(1, (now - startMs) / 1000 / RUN_END_COUNT_SEC);
-      const shown = Math.round((report.woke * fraction) / COUNT_STEP_SOULS) * COUNT_STEP_SOULS;
-      totalEl.textContent = RUN_END_TEXT.total(fraction < 1 ? shown : report.woke, report.fleetSouls);
+      const shown = Math.round((report.landed * fraction) / COUNT_STEP_COLONISTS) * COUNT_STEP_COLONISTS;
+      totalEl.textContent = RUN_END_TEXT.total(fraction < 1 ? shown : report.landed, report.fleetColonists);
       frame = fraction < 1 ? requestAnimationFrame(tick) : null;
     };
     frame = requestAnimationFrame(tick);
@@ -104,19 +107,18 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     root.classList.toggle('tone-sombre', !victory);
     root.classList.toggle('ending-purge', report.ending === 'purge');
     root.classList.toggle('ending-merge', report.ending === 'merge');
-    play(victory ? 'revealChoir' : 'soulLost');
+    play(victory ? 'arrivalChoir' : 'sombreFall');
     rollCount(report);
     const rows = Array.from(shipsEl.children) as HTMLElement[];
     rows.forEach((row, i) => later(RUN_END_ROW_GAP_SEC * (i + 1), () => {
       row.classList.add('landed');
-      // A ship whose colonists woke lands with a heartbeat; one that lost them all, or was never reached,
-      // lands in silence.
+      // A ship whose colonists landed comes in with a heartbeat; one that landed nobody, or was never reached, in
+      // silence.
       const result = report.ships[i]?.result;
-      if (result && result.woke > 0) play('heartbeat', { strength: REPORT_COUNT_HEARTBEAT[result.half === result.woke ? 'gaps' : 'woke'] });
+      if (result && result.landedInLz > 0) play('heartbeat', { strength: REPORT_COUNT_HEARTBEAT.woke });
     }));
     const afterRows = RUN_END_ROW_GAP_SEC * (rows.length + 1);
     later(Math.max(afterRows, RUN_END_COUNT_SEC), () => {
-      missingEl.hidden = report.missingLine === null;
       root.classList.add('scored');
       if (!reducedMotion()) replayAnimation(rankEl, 'land');
       play('stampHit', { heavy: !victory });
@@ -142,8 +144,8 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     endingsEl.textContent = endings ?? '';
     carryEl.hidden = report.carryLine === null;
     carryEl.textContent = report.carryLine ?? '';
-    totalEl.textContent = RUN_END_TEXT.total(0, report.fleetSouls);
-    missingEl.textContent = report.missingLine ?? '';
+    totalEl.textContent = RUN_END_TEXT.total(0, report.fleetColonists);
+    missingEl.textContent = '';
     missingEl.hidden = true;
     shipsEl.replaceChildren(...report.ships.map(shipRowNode));
     scoreEl.textContent = report.scoreLine;

@@ -34,8 +34,8 @@ by HOLLOW, the previous wave's caretaker. Everything is UI: windows, terminals, 
   `node tests/unit/run.mjs wp9 -sim` runs the suites whose path contains `wp9`, minus those containing `sim`.
 - `npm run test:e2e` — the e2e tier (`tests/e2e/`): Playwright scripts that drive the game in Chromium, against a Vite
   server the runner starts itself (`E2E_BASE_URL` to use a running one). The playthrough plays a whole run by the
-  strip (keys for the SHIP, clicks for the MIND) and checks every ship's boot, flight, lines, printing, WAKE REPORT and
-  TRANSMIT, then RUN END and NEW RUN; the other scenarios cover every screen, the phone layout and the desk. About
+  strip (keys for the SHIP, clicks for the MIND) and checks every ship's boot, flight, lines, landing (ships 1, 2 and 5 by the strip), LANDING
+  REPORT and TRANSMIT, then RUN END and NEW RUN; the other scenarios cover every screen, the phone layout and the desk. About
   15 minutes, a few hundred checks; logs and shots in `tests/.out/e2e/`. `node tests/e2e/run.mjs phone desk` runs
   some. Chromium: `E2E_CHROMIUM`, else `$PLAYWRIGHT_BROWSERS_PATH/chromium`, else the installed Google Chrome.
 - `npm run balance` — not a test suite: the unit tier at full depth (`--full`), every sweep at the resolution its review
@@ -87,9 +87,15 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 - SHIP: a two-body orbital capture with a predicted path coloured by outcome, presets, hold-to-burn, a guidance line
   that always names the next step, director-paced time (CRUISE / TACTICAL / SKIP), hazard zones (debris, a belt).
 - MIND: 384 blocks in six racks, tools that are files (SCAN, REPAIR, MOVE, DELETE, COPY, SWAP, licensed through the
-  run), REPAIR CHARGE, HOLLOW (bites, walls, seeds, THE DEAL, verbs, the root duel), the colonist reveal and printing.
+  run), REPAIR CHARGE, HOLLOW (bites, walls, seeds, THE DEAL, verbs, the root duel), and the pod drivers.
+- LANDING (phase 3 slice 1a, `docs/phase3/01-landing.md`): after ORBIT LOCK each pod (200 colonists, flown by an
+  8-block driver file in the MIND) is launched with [L] while the drop dot is inside a landing zone's bracket; the bay
+  holds 4, SKIP jumps to the next window, a GROUND TRACK and a POD BAY window show it, and a LANDING REPORT scores
+  every pod by where and how it landed. Pods that can't land are parked in orbit. Damage widens the drop (Sensor
+  Interp, Nav Plotter, the drivers), lava and cliffs score 0, Bay Ctrl sets the cadence, a low orbit decays below the
+  DRAG line, and the engine stays open: trims, GO LOWER and the lift.
 - Couplings both ways: files drive the engine and instruments, threads take thrust, burning feeds HOLLOW, the orbit's
-  fit is the printer range; the AI Core drives the glitch overlay.
+  fit is the launch band; the AI Core drives the glitch overlay.
 - A phone layout (≤ 768 px), reduced motion, synthesized audio.
 
 ## Designed but not built (deliberately deferred)
@@ -101,8 +107,9 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 ## Next logical steps
 
 1. **Fran's playtest**: one full run by `docs/playtest-checklist.md`.
-2. **Phase 3** (`docs/PHASE3.md`): landing instead of printing, a galaxy map, a longer run with a calm opening, a skill
-   tree and a software repository, new endings. The direction is agreed; the details come next, area by area.
+2. **Phase 3** (`docs/PHASE3.md`, specs in `docs/phase3/`): landing instead of printing (slices 1a and 1b built; plans and
+   deviations in `docs/phase3/impl/`), then slice 2 (the calm opening), the galaxy map, the skill tree and repository,
+   new endings.
 3. **The refactors parked until after the playtest** (discuss the split before writing code): `src/data/script.ts`
    into its text and its director rules, `src/styles/game.css` by surface, `tuning.ts` and `script.ts` grouped by
    domain.

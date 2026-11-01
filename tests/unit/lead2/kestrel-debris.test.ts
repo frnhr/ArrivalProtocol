@@ -30,6 +30,11 @@ interface Outcome {
 }
 
 const REFERENCE = JSON.parse(readFileSync('tests/unit/lead2/scenarios/kestrel-debris.reference.json', 'utf8')) as Record<'hit' | 'dodge', Outcome>;
+// Slice 1a: the reference was flown with phase 2's clusters (`soul_c07`); a pod's driver sits where its cluster sat
+// (KESTREL's racks are phase 2's with C → P), so the reference's ids are read as the drivers' (`driver_pod07`).
+for (const outcome of Object.values(REFERENCE)) {
+  for (const hit of outcome.hits) hit.segId = hit.segId.replace(/^soul_c(\d\d)$/, 'driver_pod$1');
+}
 
 function fly(tree: 'lead2' | 'base', mode: 'hit' | 'dodge'): Outcome {
   if (tree === 'base') return REFERENCE[mode];

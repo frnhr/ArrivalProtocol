@@ -1,21 +1,20 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { chargeLeft, getFreeTotal, healthKnown, hasIntegrity, archiveSealed, soulsInMemory } from '@state/selectors';
+import { chargeLeft, getFreeTotal, healthKnown, hasIntegrity } from '@state/selectors';
 import { INTEGRITY_MAX } from '@data/tuning';
 import { onOpsChange } from '@systems/ops-core';
 import { totalBlocks } from '@systems/memory-ops';
 import { formatCount } from '@data/script';
 import { RACK_NAMES, hexAddr } from '@data/memory';
-import { requireById, replayAnimation } from '@components/dom';
+import { requireById } from '@components/dom';
 
 // The stats row over the strip (§7.1: a computed `.mem-stats`) and the strip's header. Every number
-// is read from memory, nothing is written in the page: the colonists (while the archive is sealed
-// the stat tells the briefing's story, `COLONISTS 2,400 in stasis`, like the footer; the reveal
-// flips it to SOULS IN MEMORY with a flash), the REPAIR CHARGE left, the free blocks, the damage
+// is read from memory, nothing is written in the page: the colonists whose drivers are still in memory (pods aboard),
+// the REPAIR CHARGE left, the free blocks, the damage
 // the kid can see, and the memory's size. Repainted when memory changes (memoryRev) and while a
 // repair spends charge point by point (op progress, without a store update).
 
-type MemStatKey = 'souls' | 'charge' | 'free' | 'damage' | 'total';
+type MemStatKey = 'pods' | 'charge' | 'free' | 'damage' | 'total';
 type MemStatTone = 'plain' | 'soul' | 'warn' | 'unknown' | 'good';
 
 interface MemStat {
@@ -28,7 +27,7 @@ interface MemStat {
 
 // The damage a kid can see, in blocks: (100 − integrity)% of every file they may look at, whatever
 // its health word (Engine I/O at 85% still reads "intact" but is 1.2 blocks short). Unscanned ship
-// files and sealed clusters hide theirs by design (a sealed C09 at 71% must not leak here); `hidden`
+// files hide theirs by design (an unscanned Bay Ctrl at 71% must not leak here); `hidden`
 // says some damage could be out of sight, so a 0 doesn't read as "verified clean". INSPECT's overview
 // reads the same number (DetailPanel; final review: it counted only CORRUPT and PARTIAL files, so the
 // two DAMAGE readouts on one screen disagreed).
@@ -47,16 +46,15 @@ export function visibleDamage(state: Readonly<GameState>): { blocks: number; hid
 // (`CORRUPT 5 blk` beside `0 CORRUPT`).
 export function memStatsModel(state: Readonly<GameState>): Record<MemStatKey, MemStat> {
   const total = totalBlocks(state.memory);
-  const souls = soulsInMemory(state);
-  const people = souls.reduce((sum, soul) => sum + soul.souls, 0);
+  // The pods still aboard (01-landing §3.10: aboard until launched, whether or not their driver is still in memory) and
+  // the people in them. (The tone names the colonists' green, the --soul colour token.)
+  const aboard = state.landing.pods.filter((record) => record.fate.kind === 'aboard');
+  const people = aboard.reduce((sum, record) => sum + record.colonists, 0);
   const damage = visibleDamage(state);
   return {
-    souls: archiveSealed(state)
-      ? { key: 'souls', label: 'colonists', value: formatCount(people), small: 'in stasis', tone: 'plain' }
-      : {
-        key: 'souls', label: 'souls in memory', value: formatCount(people),
-        small: `${souls.length} ${souls.length === 1 ? 'cluster' : 'clusters'}`, tone: 'soul',
-      },
+    pods: {
+      key: 'pods', label: 'pods aboard', value: String(aboard.length), small: `${formatCount(people)} colonists`, tone: 'soul',
+    },
     charge: { key: 'charge', label: 'repair charge', value: String(chargeLeft(state)), small: 'blk', tone: 'plain' },
     free: { key: 'free', label: 'free', value: String(getFreeTotal(state)), small: 'blk', tone: 'plain' },
     damage: damage.blocks > 0
@@ -75,7 +73,7 @@ export function stripRangeLabel(state: Readonly<GameState>): string {
 }
 
 const STAT_IDS: Readonly<Record<MemStatKey, string>> = {
-  souls: 'statSouls',
+  pods: 'statPods',
   charge: 'statRedund',
   free: 'statFree',
   damage: 'statDamage',
@@ -96,7 +94,6 @@ export function mountMemoryStats(store: Store<GameState>): () => void {
   const rangeEl = requireById('memRange');
 
   const lastHtml = new Map<MemStatKey, string>();
-  let wasSealed = archiveSealed(store.getState());
   function paint(state: Readonly<GameState>): void {
     const model = memStatsModel(state);
     for (const key of Object.keys(model) as MemStatKey[]) {
@@ -109,13 +106,6 @@ export function mountMemoryStats(store: Store<GameState>): () => void {
       element.className = stat.tone === 'plain' ? 'v' : `v ${stat.tone}`;
       element.innerHTML = html;
     }
-    // The reveal's beat on the stats row: the colonists' stat turns into SOULS IN MEMORY with a flash.
-    const sealed = archiveSealed(state);
-    if (wasSealed && !sealed) {
-      const stat = statEls.souls.parentElement;
-      if (stat) replayAnimation(stat, 'souls-flip');
-    }
-    wasSealed = sealed;
     if (shipEl.textContent !== state.level.shipName) shipEl.textContent = state.level.shipName;
     const range = stripRangeLabel(state);
     if (rangeEl.textContent !== range) rangeEl.textContent = range;

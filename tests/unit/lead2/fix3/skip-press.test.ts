@@ -10,9 +10,11 @@
 //  2. the SKIP to FLEW AWAY after an ignored MISSED ▼: SPACE held during it brakes at once (TACTICAL), and obeyed
 //     from there the ship does not fly away;
 //  3. the WAIT-line case round 2 fixed stays fixed: far out on the long WAIT a held SPACE stops the SKIP and burns
-//     nothing (coast-skip check 4 and far-lift check 1 fly the full grids);
+//     nothing — checked in tests/unit/lead2/coast-skip.test.ts (check 4, three points into the SKIP; far-lift check 1
+//     flies the full grid), which flies the long WAIT anyway: it is half an hour of hands-off flight to set up, too
+//     long to fly in a second process for two checks;
 //  4. [B] during a SKIP when it can't engage AUTOBURN (this unit's refusal, not SKIPPING) buzzes that refusal and the
-//     SKIP runs on (the verifier's minor: it used to cut the SKIP short in silence);
+//     SKIP runs on (the verifier's minor: it used to cut the SKIP short in silence) — in coast-skip too, beside 3;
 //  5. a hold that only stopped a SKIP (SPACE pressed under WAIT as the SKIP to the capture lands) burns once the line
 //     asks for SPACE: held through GET READY, it burns at `HOLD [SPACE] NOW` (before: the strip said HOLD [SPACE] NOW,
 //     then MISSED ▼, over a held SPACE that burned nothing, and ship 1 flew away with 73% FUEL;
@@ -20,10 +22,7 @@
 import { createHarness, check, finish, HARNESS_SHIP } from '../../wp1/harness';
 import { getPrediction } from '@systems/predict';
 import { asksToHoldSpace, isReleaseRow } from '@systems/guidance';
-import { pressAutoburn, autoburnRefusal } from '@systems/autoburn';
-import { on } from '@systems/events';
-import { AUTOBURN_REFUSAL } from '@data/skill-text';
-import { flyToCapture, idle, obey, text, stepUntil, longWait } from '../../wp1-rules/flows';
+import { flyToCapture, idle, obey, text, stepUntil } from '../../wp1-rules/flows';
 
 const harness = createHarness(1);
 const state = () => harness.store.getState();
@@ -130,42 +129,7 @@ function openingUnderSpaceLine(): void {
     + `${firingAtPress}, TACTICAL and burning a tick later ${tactical}; obeyed: ${harness.status()} with ${state().burn.fuelPct.toFixed(1)}% FUEL`);
 }
 
-// --- 3. Under a WAIT the press still only stops the SKIP ----------------------------------------------------------
-{
-  longWait(harness);
-  harness.press('KeyF');
-  idle(harness, 2);
-  const skipping = state().clock.skipWarp !== null;
-  const asked = asksSpace();
-  const fuelBefore = state().burn.fuelPct;
-  harness.keyDown('Space');
-  harness.step();
-  const stopped = state().clock.skipWarp === null;
-  idle(harness, 1);
-  const quiet = !state().burn.firing && state().burn.fuelPct === fuelBefore;
-  harness.keyUp('Space');
-  check(`${ship}: under the long WAIT a SPACE held during the SKIP still only stops it (nothing burns)`,
-    skipping && !asked && stopped && quiet, `skipping ${skipping}, asks SPACE ${asked}, stopped ${stopped}, quiet ${quiet}, "${text(harness)}"`);
-}
-
-// --- 4. [B] that can't engage AUTOBURN during a SKIP --------------------------------------------------------------
-{
-  longWait(harness);
-  harness.press('KeyF');
-  idle(harness, 2);
-  const skipping = state().clock.skipWarp !== null;
-  const refusal = autoburnRefusal(state(), getPrediction());
-  const refusals: string[] = [];
-  const offRefused = on('refused', (payload) => { refusals.push(payload.reason); });
-  const returned = pressAutoburn(harness.store);
-  offRefused();
-  harness.step();
-  check(`${ship}: [B] during a SKIP that AUTOBURN refuses for its own reason buzzes it, and the SKIP runs on`,
-    skipping && refusal !== null && refusal !== AUTOBURN_REFUSAL.skipping && returned === refusal && refusals.length === 1
-    && state().clock.skipWarp !== null && state().burn.auto.phase === 'idle',
-    `skipping ${skipping}, refusal ${refusal}, [B] returned ${returned}, buzzed ${JSON.stringify(refusals)}, `
-    + `skipWarp after ${state().clock.skipWarp}, AUTOBURN ${state().burn.auto.phase}`);
-}
+// --- 3 and 4 (the long WAIT's SKIP: a held SPACE only stops it; [B] refused for its own reason) are coast-skip's ---
 
 // --- 5. A hold that only stopped a SKIP burns once the line asks for SPACE ---------------------------------------
 {

@@ -14,9 +14,7 @@ import { autoburnAvailable } from '@systems/autoburn';
 import { setPaused } from '@systems/clock';
 import { skipBlockReason } from '@systems/pace';
 import { text, stepUntil } from '../wp1-rules/flows';
-import { openArchive } from '@state/initial';
-import { SOUL_RULES } from '@data/script';
-import { COLONISTS_HOLD_RELEASED } from '@systems/pace';
+import { DRIVER_RULES } from '@data/script';
 
 const h = createHarness9(3);
 const state = () => h.store.getState();
@@ -62,11 +60,8 @@ const state = () => h.store.getState();
 // --- 2. A pause clears a dropped hold ------------------------------------------------------------------------------
 function toSkipToCapture(seed: number): void {
   h.resetTo('flight', seed);
-  // The colonists already found (run 1's STASIS step would hold SKIP).
-  h.store.update((d) => {
-    openArchive(d);
-    d.director.done.push(...SOUL_RULES.map((rule) => rule.id), COLONISTS_HOLD_RELEASED);
-  });
+  // The hurt-driver lesson already taken (slice 1a: nothing holds SKIP for the colonists any more).
+  h.store.update((d) => { d.director.done.push(...DRIVER_RULES.map((rule) => rule.id)); });
   h.keyDown('Space');
   stepUntil(h, () => /^RELEASE/.test(text(h)), 30);
   h.keyUp('Space');

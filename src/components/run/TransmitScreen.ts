@@ -17,13 +17,13 @@ import {
 } from '@data/tuning';
 
 // The TRANSMIT screen (§4.1 step 5, §6.9, §9 WP7 item 4): between two ships, the unit packed for the link.
-// Mostly information, in the mind's own blue: where it goes (`NEXT: HALCYON · 2,000 SOULS · 22 LY`), how
+// Mostly information, in the mind's own blue: where it goes (`NEXT: HALCYON · 2,000 COLONISTS · 22 LY`), how
 // it was left (an EMERGENCY's toll, BEAM OUT's extra hits), the packet against the link (a bar and `LINK 120
 // · FILES 63 · CHARGE 14 → FITS`), the files as chips (safest to leave behind first, each with what leaving
 // it does; locked ones say why; an infected one warns it will arrive infected), what the crossing costs and
 // the REPAIR CHARGE waiting on arrival. A chip can be clicked to leave its file behind only while charge is
 // left behind (systems/transmit.ts says so on the screen).
-// TRANSMIT ▸ (or SPACE / ENTER, once armed) is the crossing itself, on wall time like the WAKE REPORT: the
+// TRANSMIT ▸ (or SPACE / ENTER, once armed) is the crossing itself, on wall time like the LANDING REPORT: the
 // chips stream out one after another while the light-years tick past under a rising FM sweep, then the
 // screen floods white; at full white the packet really goes (systems/run.ts transmitNext: the hits, the
 // charge, the next ship's world), and the new ship's boot comes up from under the white as it fades. After
@@ -31,10 +31,10 @@ import {
 // Reduced motion: the chips do not fly and the white-out is a slow fade through the night instead of a flash.
 // PICK ONE TO CARRY (WP8 part 2, §6.9) sits under the headline, before the packet: the decision first, the
 // information after. Three cards, each with what it does in one line and why it was offered (`because you
-// lost a cluster to HOLLOW`, in the star's gold when it answers how the kid played). A click or [1] [2] [3]
+// lost a pod's driver to HOLLOW`, in the star's gold when it answers how the kid played). A click or [1] [2] [3]
 // picks one (a chime; the others dim; a file card's new file joins the packet's chips and bar); the pick can
 // change until the send. TRANSMIT ▸ waits for it: without one it says PICK A CARD FIRST, buzzes and nudges
-// the cards. Picks wait for the same arm delay as the send, so a click meant for the WAKE REPORT's CONTINUE
+// the cards. Picks wait for the same arm delay as the send, so a click meant for the LANDING REPORT's CONTINUE
 // never picks a card by accident.
 
 function chipNode(chip: PacketChip): HTMLButtonElement {

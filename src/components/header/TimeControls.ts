@@ -2,6 +2,8 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { onGameTick } from '@systems/clock';
 import { getPrediction, getSensedPrediction } from '@systems/predict';
+import { getDropSolution } from '@systems/drop-cache';
+import { landingBurnOffer } from '@systems/landing-orbit';
 import { togglePause, requestSkip, registerTimeKeys, setDebugWarp } from '@systems/pace';
 import { countdownChip, paceLabel, skipButton, formatWarp, headerCrumbs, overclockBadge, nextHazard } from '@systems/flight-hud';
 import { toggleMuted, isMuted, onMuteChange } from '@systems/audio';
@@ -146,7 +148,10 @@ export function mountTimeControls(store: Store<GameState>): () => void {
       last.pace = pace;
     }
 
-    const chip = countdownChip(state, pred);
+    // While landing the chip counts the next window (01-landing §4), from the drop solution, or the burn the landing
+    // offers when that comes first (slice 1b: landing-orbit landingBurnOffer).
+    const landing = state.run.phase === 'landing';
+    const chip = countdownChip(state, pred, landing ? getDropSolution() : null, landing ? landingBurnOffer(state, pred) : null);
     const chipKey = chip ? `${chip.label}|${chip.time}|${chip.urgent}|${chip.fastForward}|${chip.slow}|${chip.kind}` : '';
     if (chipKey !== last.chip) {
       last.chip = chipKey;

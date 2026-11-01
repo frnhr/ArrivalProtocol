@@ -14,17 +14,17 @@
 //   its file (RM) or a DELETE on its block (MV), `blockAfterSec` into the countdown; and once the duel is on, the root's
 //   DELETE is started whenever a thread is free;
 // • flyLastLight(maxWall): the strip-following kid with that defender (and [B] when AUTOBURN is offered);
-// • finish(choice, maxWall): defends through the duel to the choice, makes it, and steps to the WAKE REPORT.
+// • finish(choice, maxWall): defends through the duel to the choice, makes it, and steps to the LANDING REPORT.
 // One harness per test file (systems are module singletons).
 import { createHarness10, type Harness10 } from '../wp10/harness10';
 import { followDirector } from '../wp2/harness2';
 import { actionScan, actionDelete, actionRepair, actionMove } from '@state/actions';
-import { getByRole, isInfected, isRepairable, integrityBand, soulsInMemory } from '@state/selectors';
-import { exposedClusters } from '@systems/hollow';
+import { getByRole, isInfected, isRepairable, integrityBand } from '@state/selectors';
+import { exposedDrivers } from '@systems/hollow';
 import { safestSpot } from '@systems/move-preview';
 import { isBusy } from '@systems/tool-targets';
 import type { PendingPlacement } from '@state/schema';
-import type { SoulSegment } from '@/types/segment';
+import type { DriverSegment } from '@/types/segment';
 import { canStartOp, getOpsBySeg, cancelOp } from '@systems/ops-core';
 import { theRoot, rootDeleteRunning, hollowReach } from '@systems/hollow';
 import { chooseFinale, type FinaleChoice } from '@systems/finale';
@@ -56,7 +56,7 @@ export interface Harness11 extends Harness10 {
   lastLight: (seed: number, opts?: LastLightOpts) => void;
   defend11: (opts?: DefendOpts) => boolean;
   flyLastLight: (maxWall: number, opts?: DefendOpts) => string[];
-  // Defends until the finale's choice stands (or maxWall), makes `choice`, then defends on to the WAKE REPORT.
+  // Defends until the finale's choice stands (or maxWall), makes `choice`, then defends on to the LANDING REPORT.
   finishFinale: (choice: FinaleChoice, maxWall: number, opts?: DefendOpts) => { reachedChoice: boolean; refusal: string | null; reported: boolean };
 }
 
@@ -101,7 +101,7 @@ export function createHarness11(seed = 1, opts: { soulsFound?: boolean } = {}): 
       for (const operation of getOpsBySeg(core.id)) if (operation.kind === 'repair') cancelOp(operation.id);
     }
     const wanted = [
-      ...now.memory.filter((seg) => seg.type !== 'soul' && isInfected(seg) && isRepairable(seg)),
+      ...now.memory.filter((seg) => seg.type !== 'driver' && isInfected(seg) && isRepairable(seg)),
       ...(wornCore ? [wornCore] : []),
       ...(weakEngine ? [weakEngine] : []),
     ];
@@ -133,7 +133,7 @@ export function createHarness11(seed = 1, opts: { soulsFound?: boolean } = {}): 
   // of an open free region big enough; the one farthest from HOLLOW's nearest block. null: nowhere is SAFE.
   // Final fix pass: the rule moved into the game (move-preview.ts safestSpot), since the strip's bitten-again ask names
   // its rack now; it also skips a spot the preview says a hazard zone will hit (`⚠ BELT HITS RACK A`).
-  const safeSpot = (soul: SoulSegment): PendingPlacement | null => {
+  const safeSpot = (soul: DriverSegment): PendingPlacement | null => {
     const now = state();
     return safestSpot(now, soul, knownHitRacks(now, getSensedPrediction()));
   };
@@ -141,9 +141,8 @@ export function createHarness11(seed = 1, opts: { soulsFound?: boolean } = {}): 
   const moveBehindWall = (): boolean => {
     const now = state();
     if (now.clock.paused || !now.run.licences.includes('move') || now.hollow.phase !== 'awake' || !canStartOp()) return false;
-    for (const code of exposedClusters(now)) {
-      const soul = soulsInMemory(now).find((candidate) => candidate.cluster === code);
-      if (!soul || isInfected(soul) || isBusy(soul)) continue;
+    for (const soul of exposedDrivers(now)) {
+      if (isInfected(soul) || isBusy(soul)) continue;
       const spot = safeSpot(soul);
       if (spot !== null && actionMove(base.store, soul, spot) === null) return true;
     }
@@ -181,13 +180,13 @@ export function createHarness11(seed = 1, opts: { soulsFound?: boolean } = {}): 
     },
     finishFinale(choice, maxWall, defendOpts = {}) {
       const end = base.wall() + maxWall;
-      while (state().hollow.finale.phase !== 'choice' && state().run.phase === 'printing' && base.wall() < end) {
+      while (state().hollow.finale.phase !== 'choice' && state().run.phase === 'landing' && base.wall() < end) {
         defend11(defendOpts);
         base.step();
       }
       const reachedChoice = state().hollow.finale.phase === 'choice';
       const refusal = reachedChoice ? chooseFinale(base.store, choice) : null;
-      while (state().run.phase === 'printing' && base.wall() < end) {
+      while (state().run.phase === 'landing' && base.wall() < end) {
         defend11(defendOpts);
         base.step();
       }

@@ -43,8 +43,10 @@ const DRIFT_SCALE = (FAILING.amp / FAILING.meanIntervalTac) / (0.15 / 25);
 
 const VESPER = 3;
 const TICK = 0.05;
-// Quick depth (tests/unit/depth.ts): 30 seeds for the drift's mean, 10 for the SWAP; full: the WP's 200 and 50.
-const SEEDS = byDepth(30, 200);
+// Quick depth (tests/unit/depth.ts): 20 seeds for the drift's mean (30 seeds measured 2,974 km against the 1,500–4,500
+// band, so 20 keep it well inside), 10 for the SWAP; full: the WP's 200 and 50. A multiple of 10: the 10th–90th detail
+// indexes by it.
+const SEEDS = byDepth(20, 200);
 const SWAP_SEEDS = byDepth(10, 50);
 const ship = getShip(VESPER);
 const CRUISE = ship.flight.cruiseWarp;

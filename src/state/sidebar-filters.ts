@@ -2,12 +2,12 @@ import type { Segment } from '@/types/segment';
 import type { FilterKey, StatusKey } from './schema';
 import { healthKnown } from './selectors';
 
-export const ALL_FILTER_KEYS: readonly FilterKey[] = ['ai', 'ship', 'souls', 'filesystem', 'free'];
+export const ALL_FILTER_KEYS: readonly FilterKey[] = ['ai', 'ship', 'pods', 'filesystem', 'free'];
 
 // Maps a segment to its sidebar category. The labels reflect the player's
 // mental model, not the type-system split: AI = the consciousness + its
 // abilities (upgrade files included: they are what the unit carries); Ship = vessel subsystems;
-// Souls = the colonists (§7.1: the souls filter); Filesystem = managed storage entities (fs-tools,
+// Pods = the pods' drivers (the colonists' filter); Filesystem = managed storage entities (fs-tools,
 // redundancy pool, FIREWALLs, HOLLOW's locked blocks); Free = unallocated. Exhaustive: a new segment
 // type must pick its category here.
 export function categoryOf(seg: Segment): FilterKey {
@@ -27,8 +27,8 @@ export function categoryOf(seg: Segment): FilterKey {
       return 'filesystem';
     case 'free':
       return 'free';
-    case 'soul':
-      return 'souls';
+    case 'driver':
+      return 'pods';
   }
 }
 
@@ -38,7 +38,7 @@ export function categoryOf(seg: Segment): FilterKey {
 // backups").
 export function matchesStatus(seg: Segment, key: StatusKey): boolean {
   if (key === 'backup') return seg.type === 'ship-backup';
-  // Damage the kid can't see yet (an unscanned ship file, a sealed cluster) is not counted.
+  // Damage the kid can't see yet (an unscanned ship file) is not counted.
   if (!healthKnown(seg)) return false;
   const state = 'state' in seg ? seg.state : undefined;
   if (key === 'corrupt') return state === 'corrupt';

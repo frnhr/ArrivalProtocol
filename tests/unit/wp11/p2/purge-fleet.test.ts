@@ -3,7 +3,7 @@
 // TRANSMIT onward, `lossPlan`); VESPER locked; LAST LIGHT locked, its root DELETEd, PURGE. Then:
 // • the typed ending's fleet line names how many ships made it (`4 of 5 ships made it home.`), not `the fleet is home.`;
 // • RUN END's title and line say the same in PURGE's voice (`LAST LIGHT · 4 OF 5 HOME`, `You deleted it. 4 of 5
-//   ships made it home.`), still the victory tone (the flagship's colonists woke); (WP11 fix round 1: the title was
+//   ships made it home.`), still the victory tone (the flagship's colonists landed); (WP11 fix round 1: the title was
 //   `… 4 OF 5 SHIPS MADE IT`, which broke onto two lines; and the title's lineage after it never claims the fleet);
 // • the words fit one line with the worst numbers; a fleet that all made it keeps the full claim (the model alone).
 import { check, finish } from '../../wp1/harness';
@@ -26,6 +26,15 @@ const SEED = 19;
 const h = createHarness11(SEED, { soulsFound: false });
 const state = (): Readonly<GameState> => h.store.getState();
 
+// A ship result with only its outcome mattering (fleetHome reads the outcome and the ship).
+function result(index: number, outcome: ShipResult['outcome']): ShipResult {
+  const ship = SHIPS[index]!;
+  return {
+    shipId: ship.id, shipName: ship.name, slot: index, depth: index + 1, outcome, colonistsAboard: 0, lzs: [], offSite: 0, noGo: 0,
+    restored: 0, parked: [], notLaunched: 0, landedInLz: 0, points: 0, stars: 0, fuelLeftPct: 0, ringMiss: null, colony: null, pods: [],
+  };
+}
+
 // --- The words ------------------------------------------------------------------------------------------------------
 {
   const worst = [
@@ -33,17 +42,14 @@ const state = (): Readonly<GameState> => h.store.getState();
     ...HOLLOW_FINALE.purgeEnding({ shipName: 'LAST LIGHT', inOrbit: '3,200', anyoneHome: true, eaten: '3,200', hollowWord: 'unit_999998', unit: 999, shipsHome: 99, fleetSize: 99 }).map((line) => line.text),
   ];
   check(`PURGE's short-fleet words fit one line (≤ ${MAX_LINE_CHARS})`, worst.every((text) => text.length <= MAX_LINE_CHARS), worst.map((text) => text.length).join(' '));
-  const home = (outcomes: ShipResult['outcome'][]): ReturnType<typeof fleetHome> => fleetHome(outcomes.map((outcome, i) => ({
-    shipId: SHIPS[i]!.id, shipName: SHIPS[i]!.name, outcome, woke: 0, half: 0, lost: 0, stars: 0, fuelLeftPct: 0, ringMiss: null,
-  })), SHIPS.length);
+  const home = (outcomes: ShipResult['outcome'][]): ReturnType<typeof fleetHome> => fleetHome(outcomes.map((outcome, i) => result(i, outcome)), SHIPS.length);
   const all = home(['locked', 'partial', 'locked', 'locked', 'locked']);
   const lost = home(['locked', 'locked', 'crashed', 'locked', 'locked']);
   const stranded = home(['escaped', 'stranded', 'abandoned', 'emergency', 'locked']);
   check('fleetHome: ORBIT LOCKED and ACCEPTED count as home; CRASHED, FLEW AWAY, STRANDED, BEAMED OUT, CORE LOST do not',
     all.all && all.home === 5 && !lost.all && lost.home === 4 && !stranded.all && stranded.home === 1, JSON.stringify({ all, lost, stranded }));
-  check('…the flagship still printing counts once (its result is not recorded yet)', fleetHome([], SHIPS.length, SHIPS[4]!.id).home === 1
-    && fleetHome(SHIPS.map((ship) => ({ shipId: ship.id, shipName: ship.name, outcome: 'locked' as const, woke: 0, half: 0, lost: 0, stars: 0, fuelLeftPct: 0, ringMiss: null })),
-      SHIPS.length, SHIPS[4]!.id).home === 5);
+  check('…the flagship still landing counts once (its result is not recorded yet)', fleetHome([], SHIPS.length, SHIPS[4]!.id).home === 1
+    && fleetHome(SHIPS.map((_ship, i) => result(i, 'locked')), SHIPS.length, SHIPS[4]!.id).home === 5);
 }
 
 // --- The run --------------------------------------------------------------------------------------------------------
@@ -53,8 +59,8 @@ h.stepUntil(() => state().run.phase === 'flight', 15);
 const lockAtOnce = (name: string): void => {
   check(`${name} flies`, state().run.phase === 'flight' && state().level.shipName === name, state().level.shipName);
   h.store.update((d) => { d.hollow.phase = 'dormant'; });
-  h.startPrinting(1, 'locked');
-  check(`${name} (locked at once) reaches its WAKE REPORT`, h.untilPhase('report', 400), state().run.phase);
+  h.startLanding(1, 'locked');
+  check(`${name} (locked at once) reaches its LANDING REPORT`, h.untilPhase('report', 400), state().run.phase);
   continueAfterReport(h.store);
 };
 lockAtOnce('ARES-VII');
@@ -78,7 +84,7 @@ h.transmit();
 h.stepUntil(() => state().run.phase === 'flight', 30);
 check('LAST LIGHT flies', state().level.shipName === 'LAST LIGHT', state().level.shipName);
 h.store.update((d) => { d.hollow.phase = 'dormant'; });
-h.startPrinting(1, 'locked');
+h.startLanding(1, 'locked');
 h.step();
 const root = theRoot(state().memory);
 check('…its ORBIT LOCK opens the root', root !== null && !root.locked && state().hollow.finale.phase === 'duel');
@@ -90,7 +96,7 @@ check('…its DELETE leaves the choice, PURGE is taken', state().hollow.finale.p
   check('the typed ending says how many ships made it, not that the fleet is home', lines.includes('4 of 5 ships made it home.')
     && !lines.includes('the fleet is home.'), JSON.stringify(lines));
 }
-check('LAST LIGHT reaches its WAKE REPORT', h.untilPhase('report', 400), state().run.phase);
+check('LAST LIGHT reaches its LANDING REPORT', h.untilPhase('report', 400), state().run.phase);
 continueAfterReport(h.store);
 {
   const model = runEndModel(state());
@@ -99,10 +105,10 @@ continueAfterReport(h.store);
     model.title === RUN_END_PURGE_SHORT.title(4, 5) && model.why === RUN_END_PURGE_SHORT.why(4, 5)
     && model.title !== RUN_END_TITLE['won-purge']('UNIT-047', 'LAST LIGHT') && model.why !== RUN_END_WHY['won-purge']('LAST LIGHT'),
     `${model.title} | ${model.why} | ${outcomes}`);
-  check('…still the victory tone (the flagship woke), the PURGE ending', model.tone === 'victory' && model.ending === 'purge', model.tone);
+  check('…still the victory tone (the flagship landed), the PURGE ending', model.tone === 'victory' && model.ending === 'purge', model.tone);
   // WP11 fix round 1 (the experience review): the next title's lineage line said `brought the fleet home` after this run.
   const lineage = lineageLine({
-    number: state().run.unitNumber, woke: model.woke, shipName: 'LAST LIGHT', cause: 'won-purge', stats: { moves: 0, deletes: 0 }, hollowUnits: [46],
+    number: state().run.unitNumber, woke: model.landed, shipName: 'LAST LIGHT', cause: 'won-purge', stats: { moves: 0, deletes: 0 }, hollowUnits: [46],
   });
   check('…and the next title\'s lineage names what the unit did, never the fleet (`deleted it at LAST LIGHT`)',
     lineage !== null && lineage.endsWith('· deleted it at LAST LIGHT') && !/fleet/.test(lineage), String(lineage));

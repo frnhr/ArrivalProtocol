@@ -24,7 +24,7 @@ import { getPrediction, getSensedPrediction } from '@systems/predict';
 import { plotMarkers, plotReadouts } from '@systems/flight-hud';
 import { ghostDriftKm } from '@systems/ghost-thrust';
 import { nearToolsSeedSpot, threateningSeeds } from '@systems/hollow';
-import { segmentStarts, replaceRange } from '@systems/memory-ops';
+import { segmentStarts, replaceRange, freeSegment } from '@systems/memory-ops';
 import { SEED_ALERT_ID } from '@systems/alerts';
 import { GHOST_TEXT } from '@data/ghost-text';
 import { HOLLOW_ALERT_TEXT } from '@data/hollow-text';
@@ -142,23 +142,41 @@ function line(): string {
 {
   h.vesper(23, { hollowAsleep: true });
   h.step();
-  // Rack F's free tail made smaller than rack E's (12 blocks, next to Scan across the row): before the fix the larger
-  // gap won and the seed sat at the far end of rack E, a row away from the tool it hunted.
+  // Slice 1a (pooled receiver): racks E–F hold the carried files back to back (Scan near the end of rack E, then REPAIR
+  // CHARGE, then the free tail), so a fresh unit has no gap beside a tool. Everything after Scan is laid out again: a
+  // larger gap at the far end of rack E facing a tool at the start of rack F (across the row), and a smaller one right
+  // after that tool, on its own row. Before the fix the larger gap won and the seed sat a row away from the tool it hunted.
   const memory = state().memory;
+  // Slice 1a review (issue 5): VESPER's receiver leaves a hunting ground (a WALL, then room for a seed) before its first
+  // tool; this check plants its own gaps, so Scan goes back right after the AI files first.
+  {
+    const at = memory.findIndex((seg) => seg.type === 'fs-tool' && seg.fsTool === 'scan');
+    const hunting = memory[at - 1];
+    if (hunting?.type === 'free') {
+      const from = segmentStarts(memory)[at - 1]!;
+      const scanSeg = memory[at]!;
+      replaceRange(memory, from, from + hunting.size + scanSeg.size, [scanSeg, freeSegment(hunting.size)], { opId: null, own: [hunting, scanSeg] });
+    }
+  }
   const starts = segmentStarts(memory);
-  const tailIndex = memory.findIndex((seg, index) => seg.type === 'free' && starts[index]! >= 5 * RACK_BLOCKS);
-  const tail = memory[tailIndex]!;
-  const filler: FsToolSegment = {
-    id: 'filler', name: 'Filler', type: 'fs-tool', size: tail.size - 6, integrity: 100, scanned: true, fsTool: 'scan', version: 1,
+  const scanIndex = memory.findIndex((seg) => seg.type === 'fs-tool' && seg.fsTool === 'scan');
+  const scanEnd = starts[scanIndex]! + memory[scanIndex]!.size;
+  const memEnd = starts[memory.length - 1]! + memory[memory.length - 1]!.size;
+  const rowF = 5 * RACK_BLOCKS;
+  const charge = memory.find((seg) => seg.type === 'redundancy')!;
+  const tool: FsToolSegment = {
+    id: 'filler', name: 'Filler', type: 'fs-tool', size: 3, integrity: 100, scanned: true, fsTool: 'scan', version: 1,
   };
-  replaceRange(memory, starts[tailIndex]!, starts[tailIndex]! + filler.size, [filler], { opId: null, own: [] });
-  const freeE = memory.find((seg, index) => seg.type === 'free' && segmentStarts(memory)[index]! < 5 * RACK_BLOCKS && segmentStarts(memory)[index]! >= 4 * RACK_BLOCKS)!;
-  const freeF = memory.find((seg, index) => seg.type === 'free' && segmentStarts(memory)[index]! >= 5 * RACK_BLOCKS)!;
+  const freeE: FreeSegment = { ...freeSegment(8), id: 'gap-e' };
+  const freeF: FreeSegment = { ...freeSegment(6), id: 'gap-f' };
+  const head = { ...charge, id: 'charge-head', size: rowF - freeE.size - scanEnd } as Segment;
+  const tail = { ...charge, id: 'charge-tail', size: memEnd - rowF - tool.size - freeF.size } as Segment;
+  replaceRange(memory, scanEnd, memEnd, [head, freeE, tool, freeF, tail], { opId: null, own: memory.slice(scanIndex + 1) });
   // WP11: every tool tried (nearToolsSeedSpot's `untried`; the copy-test checks the spared ones).
   const spot = nearToolsSeedSpot(memory, [])!;
   check('a seed that hunts tools takes the gap on its tool\'s own rack row over a larger one across the row',
-    freeE.size > freeF.size && Math.floor(spot.startAddr / RACK_BLOCKS) === 5 && spot.gapId === freeF.id,
-    `E ${freeE.size}, F ${freeF.size}, spot ${spot.startAddr.toString(16)}`);
+    head.size > 0 && tail.size > 0 && Math.floor(spot.startAddr / RACK_BLOCKS) === 5 && spot.gapId === freeF.id,
+    `E ${freeE.size}, F ${freeF.size}, spot ${spot.startAddr.toString(16)} in ${spot.gapId}`);
 }
 
 {

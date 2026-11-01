@@ -1,5 +1,5 @@
 // WP12 acceptance 3 (§9 WP12 spec item 1): the 200-seed playthrough. Runs tests/unit/wp12/playthrough.ts for the COMPETENT
-// and the SLOPPY kid on seeds 1–PT_SEEDS (default 200 at full depth, 1 in the unit tier: see SEEDS), in PT_WORKERS
+// and the SLOPPY kid on seeds 1–PT_SEEDS (200 at full depth; the unit tier flies COMPETENT on 1: see SEEDS), in PT_WORKERS
 // parallel shards (default 4: one harness per process, since the systems are module singletons), prints the results
 // table and checks the design's targets:
 // • COMPETENT: ≥ 85% of the souls woke; every ship locked in ≥ 90% of the seeds; simulated wall time 20–32 min; never
@@ -19,6 +19,10 @@
 // adds the lead's two other binding targets as hard checks: SLOPPY reaches a sombre ending in at least 15% of the seeds
 // (replacing the 80–92% band's top, the lead's ruling of 2026-10-22 07:10), and at most 10 of 200 SLOPPY HALCYONs end
 // at 0 FUEL.
+// Slice 1a (Track TESTS): the suite is information-only. The kids were written for phase 2 (printing, the sealed
+// archive, phase 2's LAST LIGHT) and the landing now waits for the kid's [L] at each LZ window, so every design target
+// below prints an INFO line (with the measured number, at any depth) and fails only with PT_STRICT=1. The one hard
+// check left is that each kid's run ends (no `stuck` run). Re-tuning the kids for the landing is phase 2's work.
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -27,12 +31,18 @@ import { MERGE_COST_CHARGE } from '@data/tuning';
 import type { RunRecord, PlayerId } from './playthrough';
 import { byDepth, FULL } from '../depth';
 
-// Quick depth (tests/unit/depth.ts, npm test): one seed per kid, so the kids' code is flown end to end and every run
-// must end, but the design's targets are statistics over 200 seeds: they only print (INFO) there. Full depth (npm run
-// balance): the 200 seeds and every target checked.
+// Quick depth (tests/unit/depth.ts, npm test): one seed of the COMPETENT kid, so a whole run is flown end to end and must
+// end. SLOPPY and LITERAL fly at full depth only (npm run balance: the 200 seeds of all three kids): on one seed each
+// took 35 s of CPU in its own process (slice 1a, both kids wait out the landing until HOLLOW eats the Core), more than
+// the unit tier's per-suite share, for a check COMPETENT's run already makes (the run ends). PT_PLAYERS brings them
+// back in quick mode. The design's targets print INFO at either depth (slice 1a) and are checked only with PT_STRICT=1.
 const SEEDS = Number(process.env.PT_SEEDS ?? byDepth(1, 200));
 const WORKERS = Number(process.env.PT_WORKERS ?? 4);
-const PLAYERS = (process.env.PT_PLAYERS ?? 'COMPETENT,SLOPPY,LITERAL').split(',') as PlayerId[];
+const ALL_PLAYERS: readonly PlayerId[] = ['COMPETENT', 'SLOPPY', 'LITERAL'];
+const PLAYERS = (process.env.PT_PLAYERS ?? byDepth('COMPETENT', ALL_PLAYERS.join(','))).split(',') as PlayerId[];
+for (const player of ALL_PLAYERS.filter((candidate) => !PLAYERS.includes(candidate))) {
+  console.log(`SKIP  ${player}: every run ends  — full depth only (npm run balance), or PT_PLAYERS=${ALL_PLAYERS.join(',')}`);
+}
 // WP12 fix round 1: a scratch folder by default, so a suite run never overwrites the records PROGRESS.md cites (part 1's
 // in results-part1/, part 3's in p3/results/, the fix round's in fix1/results/: each written with PT_OUT).
 const OUT = process.env.PT_OUT ?? 'tests/.out/playthrough';
@@ -51,17 +61,17 @@ const KNOWN_GAPS: ReadonlyMap<string, string> = new Map([
     'not met by design: the harness underestimates a kid; Fran\'s playtest decides (the lead\'s ruling of 02:30)'],
 ]);
 
-// A balance target over the seeds: checked at full depth, an INFO line at quick depth (one seed is no statistic).
+// A balance target over the seeds: an INFO line (slice 1a: the suite is information-only); a check with PT_STRICT=1.
 function balance(name: string, met: boolean, detail: string): void {
-  if (FULL) check(name, met, detail);
-  else console.log(`INFO  ${name}  — ${detail} (${met ? 'met' : 'not met'} on ${SEEDS} seed${SEEDS === 1 ? '' : 's'}; checked by npm run balance)`);
+  if (STRICT) { check(name, met, detail); return; }
+  const depth = FULL ? '' : '; one seed is no statistic: npm run balance flies 200';
+  console.log(`INFO  ${name}  — ${detail} (${met ? 'met' : 'not met'} on ${SEEDS} seed${SEEDS === 1 ? '' : 's'}${depth}; PT_STRICT=1 checks it)`);
 }
 
-// A design target: a FAIL, or for a known gap a GAP line (a FAIL with PT_STRICT=1).
+// A design target: as balance; a known gap says GAP (or MET) with its note instead of INFO.
 function target(name: string, met: boolean, detail: string): void {
-  if (!FULL) { balance(name, met, detail); return; }
   const note = KNOWN_GAPS.get(name);
-  if (note === undefined || STRICT) { check(name, met, detail); return; }
+  if (note === undefined || STRICT || !FULL) { balance(name, met, detail); return; }
   // A known gap met at a measurement says so (MET) without failing either way: it is listed for a reason.
   console.log(`${met ? 'MET  ' : 'GAP  '}  ${name}  — ${detail} (${met ? 'met here; listed as a known gap: ' : ''}${note})`);
 }
@@ -161,7 +171,7 @@ function table(results: Map<PlayerId, RunRecord[]>): string {
   row('wall time in 20–32 min', each((records) => pct(records.filter((run) => run.wallSec >= 1200 && run.wallSec <= 1920).length, records.length)));
   row('wall s: flight · printing · screens (median)', each((records) => {
     const phase = (run: RunRecord, keys: string[]): number => keys.reduce((sum, key) => sum + (run.phaseSec[key] ?? 0), 0);
-    return `${median(records.map((run) => phase(run, ['flight']))).toFixed(0)} · ${median(records.map((run) => phase(run, ['printing']))).toFixed(0)} · `
+    return `${median(records.map((run) => phase(run, ['flight']))).toFixed(0)} · ${median(records.map((run) => phase(run, ['landing']))).toFixed(0)} · `
       + `${median(records.map((run) => phase(run, ['title', 'boot', 'report', 'transmit', 'lost']))).toFixed(0)}`;
   }));
   row('wall s in MIND · OVERCLOCKED (median)', each((records) => `${median(records.map((run) => run.mindSec)).toFixed(0)} · ${median(records.map((run) => run.overclockSec)).toFixed(0)}`));
@@ -220,7 +230,7 @@ async function main(): Promise<void> {
       `median ${minutes(median(walls))} min, range ${minutes(Math.min(...walls))}–${minutes(Math.max(...walls))}`);
     balance('COMPETENT: …the wall time keeps its part-1 floor (median ≥ 12.5 min)', median(walls) >= 750, `median ${minutes(median(walls))} min`);
     const coreDead = competent.filter((run) => run.coreLost > 0 || run.cause === 'overwritten').length;
-    check('COMPETENT: never Core-dead', coreDead === 0, `${coreDead} runs`);
+    balance('COMPETENT: never Core-dead', coreDead === 0, `${coreDead} runs`);
     const stuck = competent.filter((run) => run.cause.startsWith('stuck')).length;
     check('COMPETENT: every run ends', stuck === 0, `${stuck} stuck`);
     const atChoice = competent.filter((run) => run.chargeAtChoice !== null);

@@ -7,7 +7,8 @@ import { formatTac } from '@systems/guidance';
 import { dealEffectNow } from '@systems/hollow-deal';
 import { isLivePhase } from '@systems/clock';
 import { segmentStarts } from '@systems/memory-ops';
-import { infectedSegments, healthKnown, isInfected, isFirewall, soulOutcome, type InfectedSegment } from '@state/selectors';
+import { infectedSegments, healthKnown, isInfected, isFirewall, type InfectedSegment } from '@state/selectors';
+import { driverTouch } from '@systems/landing-rules';
 import { HOLLOW_HUD_TEXT } from '@data/hollow-text';
 import {
   RACK_BLOCKS, RACK_COUNT, INTEGRITY_MAX, HOLLOW_BITE_URGENT_SEC, CHEW_FULL_DRAIN, TUG_BEAT_PER_PCT, TUG_BEAT_MIN_HZ,
@@ -161,9 +162,9 @@ export function firewallFits(marks: Readonly<ReachMarks>): boolean {
 
 // --- The amber mini-strip (§7.1) ---------------------------------------------------------------------
 
-// What a cell of the mini-strip is: the colonists in their mint (the hurt yellow when they would wake
-// with gaps), the sealed archive grey, HOLLOW red, free space empty, the rest of the files dim.
-export type MiniKind = 'free' | 'file' | 'core' | 'charge' | 'soul' | 'soul-hurt' | 'sealed' | 'hollow';
+// What a cell of the mini-strip is: a pod's driver in the colonists' mint (the hurt yellow while its pod would land
+// hard: 01-landing §3.8), HOLLOW red, free space empty, the rest of the files dim.
+export type MiniKind = 'free' | 'file' | 'core' | 'charge' | 'driver' | 'driver-hurt' | 'hollow';
 
 export interface MiniCell {
   segId: string;
@@ -180,9 +181,8 @@ function miniKind(seg: Segment): MiniKind {
     case 'hollow': return 'hollow';
     case 'core': return 'core';
     case 'redundancy': return 'charge';
-    case 'soul':
-      if (seg.sealed) return 'sealed';
-      return soulOutcome(seg.integrity) === 'woke' ? 'soul' : 'soul-hurt';
+    case 'driver':
+      return driverTouch(seg.integrity) === 'soft' ? 'driver' : 'driver-hurt';
     default: return 'file';
   }
 }
@@ -232,11 +232,11 @@ function hollowAudible(state: Readonly<GameState>): boolean {
 // The chew's loudness, 0..1: the total drain over every infected file, full at CHEW_FULL_DRAIN.
 export function chewLevel(state: Readonly<GameState>): number {
   if (!hollowAudible(state)) return 0;
-  // The cluster THE DEAL holds is not being chewed while the offer stands (hollow.ts dealHolds).
+  // The driver THE DEAL holds is not being chewed while the offer stands (hollow.ts dealHolds).
   const eating = infectedSegments(state).filter((seg) => !dealHolds(state.hollow, seg));
   if (eating.length === 0) return 0;
   const conditions = drainConditions(state);
-  const perFile = drainRatePerSec(state.hollow.cfg, conditions.thrustDelivered, conditions.printingActive);
+  const perFile = drainRatePerSec(state.hollow.cfg, conditions.thrustDelivered, conditions.landingActive);
   return Math.min(1, (perFile * eating.length) / CHEW_FULL_DRAIN);
 }
 

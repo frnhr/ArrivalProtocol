@@ -6,7 +6,7 @@ import { planPacket, pickCharge, cardFiles, PREVIEW_ID } from '@systems/draft';
 import { getUpgrade, type DraftCard, type UpgradeId } from '@data/upgrades';
 import { hasIntegrity, isInfected, getAiCore } from '@state/selectors';
 import { getShip } from '@data/ships';
-import { shipSouls } from '@data/memory';
+import { shipColonists } from '@data/memory';
 import { TOOL_WORD } from '@data/fs-tools';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
 
@@ -192,7 +192,7 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
     toShipIndex: plan.toShipIndex,
     shipName: ship.name,
     distanceLy: ship.arrival.distanceLy,
-    headline: TRANSMIT_TEXT.next(ship.name, shipSouls(ship), ship.arrival.distanceLy),
+    headline: TRANSMIT_TEXT.next(ship.name, shipColonists(ship), ship.arrival.distanceLy),
     why: whyLine(outcome, fromShip, crashCoreToll(core.integrity, plan.coreHit)),
     emergency: outcome === 'crashed' || outcome === 'emergency',
     link: plan.linkBlocks,

@@ -4,13 +4,19 @@ import { onPreTick, isActivePhase, setPaused } from '@systems/clock';
 import { isBurnHeld, isGhostFiring, ghostDueInSec, laterBurstWindow } from '@systems/orbit-sim';
 import { getPrediction, currentPrediction, secUntil, isFinishingBurn, skipWarp, type Prediction, type ZoneHit } from '@systems/predict';
 import { ZONE_WORD } from '@data/zone-text';
-import { archiveSealed, spreadPaused } from '@state/selectors';
+import { ghostBurstsThisPhase, spreadPaused } from '@state/selectors';
 import { capabilitiesNow } from '@systems/capabilities';
 import { registerKeys } from '@systems/input';
 import { emit } from '@systems/events';
+import { getDropSolution } from '@systems/drop-cache';
+import { landingMoment, podCounts, type LandingMoment } from '@systems/landing-rules';
+import { windowRuleHolds } from '@systems/landing-controller';
+import { offerInTac } from '@systems/landing-orbit';
+import type { DropSolution } from '@/types/landing';
+import { LANDING_SKIP_REFUSAL } from '@data/landing-text';
 import {
   TICK_MS, TACTICAL_LEAD_BURN_TAC, SKIP_END_LEAD_TAC, SKIP_MIN_JUMP_TAC, SKIP_LANDING_TOLERANCE_SEC, DEBUG_WARP_MAX,
-  OVERCLOCK_FACTOR, IGNORED_NOW_TAC, ZONE_TACTICAL_LEAD_TAC, DODGE_TACTICAL_LEAD_TAC,
+  OVERCLOCK_FACTOR, IGNORED_NOW_TAC, ZONE_TACTICAL_LEAD_TAC, DODGE_TACTICAL_LEAD_TAC, WINDOW_TACTICAL_LEAD_TAC,
 } from '@data/tuning';
 
 // The director's pace (§6.1). A kid should never have to discover time warp: the game runs
@@ -118,23 +124,108 @@ function dodgeDeadlineInSec(state: Readonly<GameState>, pred: Prediction): numbe
 
 // What SKIP jumps to: the START BURN tick, or a debris dodge's deadline or a hazard zone's entry when that comes
 // first (§6.1: SKIP ends before it), or, when no burn is possible on an open path (an empty tank, or a missed ▼ the
-// kid let ride), the escape. null when there is nothing ahead. A ghost burst (C2) is not a plan: it only stops a
-// SKIP on its way (landingInSec).
+// kid let ride), the escape. During the LANDING: the next awaited window (01-landing §3.12), or a zone's entry first.
+// null when there is nothing ahead. A ghost burst (C2) is not a plan: it only stops a SKIP on its way (skipLandsInSec).
 interface NextEvent {
-  kind: 'burn' | 'escape' | 'zone' | 'dodge';
+  kind: 'burn' | 'escape' | 'zone' | 'dodge' | 'window';
   inSec: number;  // game seconds from now
 }
 
 // How far ahead of an event SKIP ends, in tactical seconds: SKIP_END_LEAD_TAC, or for a zone its TACTICAL lead
 // (the world must already be at real-second speed there, so the SKIP must not run into the lead by a tick). A dodge's
-// TACTICAL lead is shorter than SKIP_END_LEAD_TAC today; the max keeps that true if either is retuned.
+// TACTICAL lead is shorter than SKIP_END_LEAD_TAC today; the max keeps that true if either is retuned. A window's is its
+// TACTICAL lead: the SKIP lands straight into GET READY, with no CRUISE dead time before it (§3.12).
 function endLeadTac(event: NextEvent): number {
   if (event.kind === 'zone') return ZONE_TACTICAL_LEAD_TAC;
   if (event.kind === 'dodge') return Math.max(SKIP_END_LEAD_TAC, DODGE_TACTICAL_LEAD_TAC);
+  if (event.kind === 'window') return WINDOW_TACTICAL_LEAD_TAC;
   return SKIP_END_LEAD_TAC;
 }
 
+// --- The landing's pace (01-landing §3.12) ----------------------------------------------------------------------------
+// No burn, no dodge and no escape after the lock (risk 1: no engine in LANDING in 1a): the landing's events are its
+// windows. The window the landing WAITS ON, and when its launch moment comes, are landing-rules landingMoment's (the one
+// answer pace, the table, the beeps and the chips share): an in-band window of an LZ with projected room, or, once no
+// in-band window has room, the next in-band one (its launch lands MISLANDED: L3b), and only while the landing goes on
+// with a pod aboard that can launch some day. A full LZ's window passes at CRUISE while another in band has room, and
+// does not hold up a SKIP to it. "Open now" is state.landing.window (landing.ts writes it); the times come from the drop
+// cache's solution, rebased to now.
+
+function isLanding(state: Readonly<GameState>): boolean {
+  return state.run.phase === 'landing';
+}
+
+function momentNow(state: Readonly<GameState>, sol: Readonly<DropSolution> | null = getDropSolution()): LandingMoment {
+  return landingMoment(state, sol, state.clock.tSec, capabilitiesNow(state).bay.offline);
+}
+
+// The window the landing waits on is open now (state.landing.window).
+export function awaitedWindowOpen(state: Readonly<GameState>): boolean {
+  return isLanding(state) && momentNow(state).open?.awaited === true;
+}
+
+// Game seconds from now until the awaited window's launch moment (landing-rules launchMomentInSec: where its whole dot
+// first fits in the band, else its in-band opening; ≤ 0: it has come), or null: none (the landing over, no pod aboard
+// that can launch some day, no drop solution, no in-band window on this orbit). The TACTICAL lead, the SKIP's landing
+// point, GET READY and its beeps all count to this one moment, so the 8 s of GET READY end on LAUNCH NOW (§3.2's
+// 24–30 s per window).
+export function windowLaunchInSec(state: Readonly<GameState>, sol: Readonly<DropSolution> | null = getDropSolution()): number | null {
+  if (!isLanding(state)) return null;
+  return momentNow(state, sol).target?.launchInSec ?? null;
+}
+
+// §3.12: TACTICAL while a pod is falling, with thrust, an alarm or a zone close (the flight's rules), and, by the window
+// rule, while an awaited window is open or its launch moment is within WINDOW_TACTICAL_LEAD_TAC. The window rule is for hand drops and
+// for a controller that holds TACTICAL (§3.14: a higher AUTODROP drops inside a SKIP). The lead is judged one CRUISE
+// tick ahead, as the dodge's is (choosePace), so the world is at TACTICAL by the 8 s mark, never a tick past it; a SKIP
+// needs no look-ahead: it lands WINDOW_TACTICAL_LEAD_TAC before the launch moment by itself (skipLandsInSec).
+// Slice 1b (§3.12, plan §1.4): with the engine open, also TACTICAL on an impact course and while the OFFERED burn's START
+// BURN is within TACTICAL_LEAD_BURN_TAC (or due), judged one CRUISE tick ahead like the window lead. Only the offer
+// (landing-orbit landingBurnOffer): a declined trim or GO LOWER costs no second TACTICAL pass (risk 2). No 'kick' event:
+// a drag kick stops neither pace nor a SKIP (risk 4; orbit-sim splits the SKIP's jump exactly at each kick).
+function landingPace(state: Readonly<GameState>, pred: Prediction, skipActive: boolean, dtWall: number): Pace {
+  if (thrustHoldsTactical(state)) return 'tactical';
+  if (podCounts(state).falling > 0) return 'tactical';
+  if (hasAlarm(state)) return 'tactical';
+  if (zoneClose(state, pred) !== null) return 'tactical';
+  if (pred.outcome === 'impact' && state.landing.ended === null) return 'tactical';
+  const tickAheadSec = skipActive ? 0 : state.level.cruiseWarp * Math.max(dtWall, TICK_MS / 1000);
+  const toBurnTac = offerInTac(state, pred, tickAheadSec);
+  if (toBurnTac !== null && toBurnTac <= TACTICAL_LEAD_BURN_TAC) return 'tactical';
+  if (windowRuleHolds()) {
+    if (awaitedWindowOpen(state)) return 'tactical';
+    const toWindow = windowLaunchInSec(state);
+    if (toWindow !== null && tac(toWindow - tickAheadSec, state.level.tacticalWarp) <= WINDOW_TACTICAL_LEAD_TAC) return 'tactical';
+  }
+  return skipActive ? 'skip' : 'cruise';
+}
+
+// The landing's SKIP stops at its window, a zone, the offered burn (SKIP_END_LEAD_TAC before its START BURN, as a flight
+// burn) and, on an open path, the escape (as in flight: nothing else is ahead of a ship leaving).
+function landingNextEvent(state: Readonly<GameState>, pred: Prediction): NextEvent | null {
+  const candidates: NextEvent[] = [];
+  const zone = nextZoneEntry(state, pred);
+  if (zone !== null) candidates.push({ kind: 'zone', inSec: zone.inSec });
+  const toWindow = windowLaunchInSec(state);
+  if (toWindow !== null) candidates.push({ kind: 'window', inSec: toWindow });
+  const toBurnTac = offerInTac(state, pred);
+  if (toBurnTac !== null) candidates.push({ kind: 'burn', inSec: toBurnTac * state.level.tacticalWarp });
+  if (candidates.length > 0) return candidates.reduce((first, candidate) => (candidate.inSec < first.inSec ? candidate : first));
+  if (pred.escapeInSec !== null) return { kind: 'escape', inSec: secUntil(pred, pred.escapeInSec, state.clock.tSec) };
+  return null;
+}
+
+// Why SKIP can't run during the landing, beyond the inhibitors it shares with the flight (null: none of these).
+function landingSkipInhibitor(state: Readonly<GameState>): string | null {
+  const falling = podCounts(state).falling > 0;
+  if (state.landing.ended !== null) return falling ? LANDING_SKIP_REFUSAL.podsInFlight : LANDING_SKIP_REFUSAL.over;
+  if (windowRuleHolds() && awaitedWindowOpen(state)) return LANDING_SKIP_REFUSAL.windowOpen;
+  if (falling) return LANDING_SKIP_REFUSAL.podsInFlight;
+  return null;
+}
+
 function nextEvent(state: Readonly<GameState>, pred: Prediction): NextEvent | null {
+  if (isLanding(state)) return landingNextEvent(state, pred);
   const toBurn = isMissedBurnIgnored(state, pred) ? null : burnPointInSec(state, pred);
   const zone = nextZoneEntry(state, pred);
   const toDodge = dodgeDeadlineInSec(state, pred);
@@ -147,13 +238,14 @@ function nextEvent(state: Readonly<GameState>, pred: Prediction): NextEvent | nu
   return null;
 }
 
-// Game seconds from now to where a running SKIP lands: its event's end lead, or the ship's FIRST ghost burst's start
-// when that comes first, with no lead (the alarm moment the kid must see; orbit-sim.ts ghostDueInSec draws it exactly
+// Game seconds from now to where a running SKIP lands: its event's end lead, or the FIRST ghost burst of the flight or of
+// the landing (review M2: selectors ghostBurstsThisPhase) when that comes first, with no lead (the alarm moment the kid must see; orbit-sim.ts ghostDueInSec draws it exactly
 // as the sim would, so asking moves nothing). A later burst is no landing (WP10, the lead's ruling): the SKIP flies
-// through it (skipWaypointTSec). null: nothing to land on.
-export function landingInSec(state: Readonly<GameState>, pred: Prediction): number | null {
+// through it (skipWaypointTSec). null: nothing to land on. (Named apart from the LANDING phase: this is where a SKIP
+// lands. The landing has its ghost bursts too since 1b: its engine is open.)
+export function skipLandsInSec(state: Readonly<GameState>, pred: Prediction): number | null {
   const event = nextEvent(state, pred);
-  const ghostInSec = state.burn.ghostBursts === 0 ? ghostDueInSec(state) : null;
+  const ghostInSec = ghostBurstsThisPhase(state) === 0 ? ghostDueInSec(state) : null;
   const toEvent = event === null ? null : event.inSec - endLeadTac(event) * state.level.tacticalWarp;
   if (ghostInSec === null) return toEvent;
   return toEvent === null ? ghostInSec : Math.min(toEvent, ghostInSec);
@@ -172,17 +264,16 @@ export function skipTarget(state: Readonly<GameState>, pred: Prediction): SkipTa
 }
 
 // The thrust that holds the world at TACTICAL (§6.1): the kid's or AUTOBURN's held burn, and the engine firing by itself
-// on the ship's FIRST burst (the alarm moment) or on a sticky one (it runs until the kid presses SPACE). A later burst
+// on the FIRST burst of the flight or of the landing (the alarm moment) or on a sticky one (it runs until the kid presses SPACE). A later burst
 // changes no pace (§9 WP10 item 2): at CRUISE it lasts a third of a second, and a SKIP flies through it.
 function thrustHoldsTactical(state: Readonly<GameState>): boolean {
   if (isBurnHeld(state)) return true;
   const ghost = state.burn.ghost;
-  return ghost !== null && (ghost.sticky || state.burn.ghostBursts <= 1);
+  return ghost !== null && (ghost.sticky || ghostBurstsThisPhase(state) <= 1);
 }
 
 // Tactical seconds to the next event a SKIP would run to (the next burn point, a zone entry or a dodge's deadline,
-// or flying away), or null when nothing is coming. The run-1 ask for the colonists waits for a coast this long
-// (script.ts), so the reveal never plays under GET READY.
+// or flying away), or null when nothing is coming.
 export function tacToNextEvent(state: Readonly<GameState>, pred: Prediction): number | null {
   const event = nextEvent(state, pred);
   return event === null ? null : tac(event.inSec, state.level.tacticalWarp);
@@ -194,8 +285,8 @@ function hasAlarm(state: Readonly<GameState>): boolean {
 
 // `dtWall`: the wall seconds of the tick about to run (the clock's pre-tick hands it over).
 export function choosePace(state: Readonly<GameState>, pred: Prediction, skipActive: boolean, dtWall: number): Pace {
-  // Printing is the climax (§6.1): the world coasts in real seconds while the colonists wake.
-  if (state.run.phase === 'printing') return 'tactical';
+  // The landing has its own rules (01-landing §3.12): phase 2's "in the ring, so TACTICAL" must not hold there.
+  if (isLanding(state)) return landingPace(state, pred, skipActive, dtWall);
   // A held burn counts while its preset is still aligning: thrust starts mid-tick. So does the engine firing by itself
   // on its first (or a sticky) burst (C2, thrustHoldsTactical).
   if (thrustHoldsTactical(state)) return 'tactical';
@@ -211,7 +302,7 @@ export function choosePace(state: Readonly<GameState>, pred: Prediction, skipAct
   // deadline is judged one CRUISE tick ahead: this tick's real length, at least a nominal tick. Not at the speed the
   // world runs now (LEAD-2 review round 1): that is the pace this rule chooses, so it fed back on itself (TACTICAL,
   // CRUISE, TACTICAL at 0:10), and during a SKIP it reached far ahead and dropped the SKIP for a tick. A SKIP needs
-  // no look-ahead: it lands SKIP_END_LEAD_TAC before the deadline by itself (landingInSec).
+  // no look-ahead: it lands SKIP_END_LEAD_TAC before the deadline by itself (skipLandsInSec).
   const toDodge = dodgeDeadlineInSec(state, pred);
   const tickAheadSec = skipActive ? 0 : state.level.cruiseWarp * Math.max(dtWall, TICK_MS / 1000);
   if (toDodge !== null && tac(toDodge - tickAheadSec, state.level.tacticalWarp) <= DODGE_TACTICAL_LEAD_TAC) return 'tactical';
@@ -228,26 +319,14 @@ function warpFor(level: LevelState, pace: Pace, skipWarp: number | null, overclo
 // OVERCLOCK (§3.2, §6.1): jacking in while something is happening slows the WORLD to a quarter
 // of the tactical warp; the mind's ops run on AI time, so they keep full speed. In CRUISE and
 // SKIP blue runs the world at full speed (hacking a coast never stretches it), and jacking in
-// never cancels a SKIP. The ?debug ladder overrides it like every pace.
-export function isOverclocked(state: Readonly<GameState>, pace: Pace, pred: Prediction): boolean {
+// never cancels a SKIP. The ?debug ladder overrides it like every pace. The landing overclocks like the flight
+// (01-landing §3.12): TAB during a window slows the world to ¼, so the window (and the bay's reload with it, both world
+// time) lasts four times as long in real seconds while the kid repairs; the descents run on AI time and do not stretch.
+export function isOverclocked(state: Readonly<GameState>, pace: Pace, _pred: Prediction): boolean {
   if (pace !== 'tactical' || state.ui.mode !== 'memory' || state.clock.debugWarp !== null) return false;
-  if (state.run.phase === 'flight') return true;
-  // While printing nothing in the world usually needs slowing for you, and the label would only puzzle; but a loop
-  // that clips a hazard zone keeps taking hits there (§6.8: LAST LIGHT's belt, on an accepted loop that reaches it), and
-  // the kid repairing them in blue gets the quarter-speed world the flight would give them (WP5's TODO for WP11).
-  return state.run.phase === 'printing' && zoneStillHits(pred);
+  return state.run.phase === 'flight' || state.run.phase === 'landing';
 }
 
-// A hazard zone the true path still enters or is inside (a spent debris cloud never hits again).
-function zoneStillHits(pred: Prediction): boolean {
-  return pred.zoneHits.some((hit) => !hit.spent && (hit.insideNow || hit.enterInSec !== null));
-}
-
-// SKIP's refusal while the archive is sealed (§6.1, run 1): the coast is for finding the colonists.
-export const SKIP_REFUSAL_COLONISTS = 'CHECK THE COLONISTS FIRST';
-// ...until the ask has stood on the strip SOULS_ASK_HOLD_SEC (LEAD-1): the director then records this
-// id in director.done, and a kid who ignores the colonists gets SKIP back for the rest of the ship.
-export const COLONISTS_HOLD_RELEASED = 'colonists-skip-hold-released';
 // SKIP's refusal when ACCEPT ORBIT is the only way on (Prediction.acceptOnly, LEAD-1 and the lead's Rule 4):
 // no burn the FUEL left can make saves the ship. The strip names ACCEPT ORBIT in the same words.
 export const SKIP_REFUSAL_STRANDED = 'NOT ENOUGH FUEL';
@@ -293,18 +372,18 @@ function hollowWaking(state: Readonly<GameState>): boolean {
 // rule, which only matters when a skip is requested. null = nothing in the way. A pause is
 // not in here: it freezes a running skip instead of ending it (see mountPace).
 function skipInhibitor(state: Readonly<GameState>, pred: Prediction): string | null {
-  if (state.burn.status !== 'approaching') return 'FLIGHT OVER';
+  const landing = isLanding(state);
+  if (!landing && state.burn.status !== 'approaching') return 'FLIGHT OVER';
   if (isBurnHeld(state) || isGhostFiring(state)) return 'ENGINE FIRING';
-  if (pred.outcome === 'impact') return 'IMPACT COURSE';
+  if (!landing && pred.outcome === 'impact') return 'IMPACT COURSE';
   const alarm = state.alerts.list.find((alert) => alert.severity === 'alarm');
   if (alarm) return alarm.text;
   const blocker = state.alerts.list.find((alert) => alert.inhibitsSkip);
   if (blocker) return blocker.text;
-  // Run 1: the STASIS reveal comes first. The archive is only ever sealed on the first ship of the
-  // first run (ShipDef souls.sealed; later runs open it at the boot), so this is the run-1 rule. It
-  // holds until the ask has stood long enough to be read and acted on (COLONISTS_HOLD_RELEASED).
-  if (archiveSealed(state) && !state.director.done.includes(COLONISTS_HOLD_RELEASED)) return SKIP_REFUSAL_COLONISTS;
-  if (pred.acceptOnly) return SKIP_REFUSAL_STRANDED;
+  // The landing (§3.12): WINDOW OPEN and PODS IN FLIGHT. ACCEPT ORBIT's latch is the flight's (an accepted orbit lands).
+  const landingRefusal = landing ? landingSkipInhibitor(state) : null;
+  if (landingRefusal !== null) return landingRefusal;
+  if (!landing && pred.acceptOnly) return SKIP_REFUSAL_STRANDED;
   // A hazard zone is close or the ship is in it (WP9): the world runs TACTICAL there, and a SKIP would
   // only pretend to (it ends as the TACTICAL lead begins, earlier than §6.8's 15 s; see tuning.ts).
   const inside = zoneInside(state, pred);
@@ -328,7 +407,7 @@ function skipInhibitor(state: Readonly<GameState>, pred: Prediction): string | n
 
 // The full refusal for a new SKIP request (null = allowed).
 export function skipBlockReason(state: Readonly<GameState>, pred: Prediction): string | null {
-  if (state.burn.status === 'approaching' && state.clock.paused) return 'PAUSED';
+  if ((state.burn.status === 'approaching' || isLanding(state)) && state.clock.paused) return 'PAUSED';
   const inhibitor = skipInhibitor(state, pred);
   if (inhibitor) return inhibitor;
   const event = nextEvent(state, pred);
@@ -336,6 +415,12 @@ export function skipBlockReason(state: Readonly<GameState>, pred: Prediction): s
   if (event.inSec - endLeadTac(event) * state.level.tacticalWarp <= SKIP_MIN_JUMP_TAC * state.level.tacticalWarp) {
     if (event.kind === 'escape') return 'NOTHING TO SKIP TO';
     if (event.kind === 'dodge') return dodgeRefusal(state);
+    if (event.kind === 'window') return LANDING_SKIP_REFUSAL.windowSoon;
+    if (event.kind === 'zone' && isLanding(state)) {
+      const zone = nextZoneEntry(state, pred);
+      if (zone === null) throw new Error('skipBlockReason: a zone event with no zone ahead');
+      return skipRefusalZoneAhead(zone.hit.kind);
+    }
     return event.inSec <= 0 ? 'BURN NOW' : 'BURN COMING UP';
   }
   return null;
@@ -404,7 +489,7 @@ function sameWaypoint(before: SkipWaypoint | null, after: SkipWaypoint | null): 
 export function replanSkip(store: Store<GameState>, pred: Prediction): void {
   const state = store.getState();
   if (state.clock.skipWarp === null) return;
-  const toEnd = landingInSec(state, pred);
+  const toEnd = skipLandsInSec(state, pred);
   store.mutate((draft) => {
     draft.clock.skipEndTSec = toEnd === null ? null : draft.clock.tSec + toEnd;
     draft.clock.skipWaypoint = null;
@@ -492,7 +577,7 @@ export function mountPace(store: Store<GameState>): () => void {
     const state = store.getState();
     const pred = getPrediction();
 
-    // SKIP lives until something inhibits it or it has landed on its end point (landingInSec), which is
+    // SKIP lives until something inhibits it or it has landed on its end point (skipLandsInSec), which is
     // kept in clock.skipEndTSec: the clock never carries the world past it, so the last tick lands on it
     // exactly. With no warp ceiling one tick can be days of game time, so the old "end a tick early" was
     // no longer near enough. The end only ever moves nearer (a burst drawn or a zone found on the way):
@@ -502,7 +587,7 @@ export function mountPace(store: Store<GameState>): () => void {
     let skipEndTSec = skipWarp === null ? null : state.clock.skipEndTSec;
     let skipWaypoint: SkipWaypoint | null = skipWarp === null ? null : state.clock.skipWaypoint;
     if (skipWarp !== null && !state.clock.paused) {
-      const toEnd = landingInSec(state, pred);
+      const toEnd = skipLandsInSec(state, pred);
       const landed = skipEndTSec !== null && state.clock.tSec >= skipEndTSec;
       if (landed || skipInhibitor(state, pred) !== null || toEnd === null || toEnd <= SKIP_LANDING_TOLERANCE_SEC) {
         skipWarp = null;

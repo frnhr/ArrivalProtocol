@@ -51,7 +51,7 @@ import { transmitNext } from '@systems/run';
 import { chooseFinale } from '@systems/finale';
 import { getOps, getOpsBySeg, canStartOp } from '@systems/ops-core';
 import {
-  exposedClusters, threateningSeeds, theRoot, rootDeleteRunning, hollowReach,
+  exposedDrivers, threateningSeeds, theRoot, rootDeleteRunning, hollowReach,
 } from '@systems/hollow';
 import { reachMarks, firewallFits } from '@systems/hollow-hud';
 import { movePreview, safestSpot } from '@systems/move-preview';
@@ -59,11 +59,11 @@ import { capabilitiesNow } from '@systems/capabilities';
 import { childRng } from '@systems/rng';
 import { actionRepair, actionScan, actionDelete, actionMove, actionCopy } from '@state/actions';
 import {
-  getByRole, isInfected, isRepairable, integrityBand, chargeLeft, archiveSealed, isHollow, isFirewall,
+  getByRole, isInfected, isRepairable, integrityBand, chargeLeft, isHollow, isFirewall,
   hasIntegrity, isUsableTool,
 } from '@state/selectors';
 import { isBusy } from '@systems/tool-targets';
-import { COLONISTS_ASK_ID } from '@data/script';
+import { podCode } from '@data/landing-text';
 import { SHIPS } from '@data/ships';
 import { BAND_OK_MIN, MERGE_COST_CHARGE } from '@data/tuning';
 import type { GameState, ObjectiveLine, PendingPlacement, ShipOutcome } from '@state/schema';
@@ -262,7 +262,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     const now = state();
     const tickSec = 0.05;
     record.phaseSec[phaseKey] = (record.phaseSec[phaseKey] ?? 0) + tickSec;
-    if ((now.run.phase === 'flight' || now.run.phase === 'printing') && !now.clock.paused) {
+    if ((now.run.phase === 'flight' || now.run.phase === 'landing') && !now.clock.paused) {
       if (now.ui.mode === 'memory') record.mindSec += tickSec;
       if (now.clock.overclock) record.overclockSec += tickSec;
       if (now.clock.pace === 'tactical') record.tacticalSec += tickSec;
@@ -329,22 +329,12 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     return actionCopy(harness.store, repair, { regionSegIds: [biggest.id], col: Math.floor((biggest.size - repair.size) / 2) }) === null;
   };
 
-  const stasisAsk = (): boolean => {
-    const id = shownId();
-    return (id === COLONISTS_ASK_ID || id === 'tut-scan-stasis') && archiveSealed(state());
-  };
-  const scanStasis = (): boolean => {
-    const stasis = getByRole(state(), 'stasis');
-    if (!stasis || getOpsBySeg(stasis.id).length > 0 || !canStartOp()) return false;
-    return actionScan(harness.store, stasis) === null;
-  };
 
   // What COMPETENT's MIND has to do now (null: nothing). Urgent reasons come from an alarm the kid can see; proactive
   // ones are its own plan (a WALL, a worn Core, a FIREWALL).
   const competentWork = (): { reason: string; urgent: boolean } | null => {
     const now = state();
     if (now.clock.paused) return null;
-    if (shownId() === 'reveal-look' || stasisAsk()) return { reason: 'colonists', urgent: true };
     if (copyAsk()) return { reason: 'copy', urgent: true };
     // VESPER's ghost lesson: the THRUST CTRL pip, then SWAP (defend10's pipSwap does the pip's jump and comes back). The
     // lesson is a SHIP line, so without this reason the kid swapped only when it happened to be in the MIND already.
@@ -354,7 +344,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     if (now.hollow.verb !== null) return { reason: 'verb', urgent: true };
     if (now.hollow.finale.phase === 'duel' && !rootDeleteRunning(now)) return { reason: 'root', urgent: true };
     const idle = (seg: Segment): boolean => getOpsBySeg(seg.id).length === 0;
-    if (now.memory.some((seg) => isInfected(seg) && (seg.type === 'soul' || isRepairable(seg)) && idle(seg))) return { reason: 'infected', urgent: true };
+    if (now.memory.some((seg) => isInfected(seg) && (seg.type === 'driver' || isRepairable(seg)) && idle(seg))) return { reason: 'infected', urgent: true };
     if (now.run.licences.includes('delete') && threateningSeeds(now.memory, now.clock.aiSec).some(idle)) return { reason: 'seed', urgent: true };
     if (capabilitiesNow(now).plot.mode === 'uncertain') {
       const sensor = getByRole(now, 'sensor');
@@ -366,7 +356,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     }
     const core = now.memory.find((seg) => seg.type === 'core');
     if (core && hasIntegrity(core) && core.integrity < (defendOpts.coreHealBelow ?? BAND_OK_MIN) && idle(core)) return { reason: 'core', urgent: false };
-    if (now.run.licences.includes('move') && now.hollow.phase === 'awake' && exposedClusters(now).length > 0) return { reason: 'wall', urgent: false };
+    if (now.run.licences.includes('move') && now.hollow.phase === 'awake' && exposedDrivers(now).length > 0) return { reason: 'wall', urgent: false };
     if (firewallSpot() !== null) return { reason: 'firewall', urgent: false };
     if (now.run.licences.includes('delete') && core) {
       const biting = hollowReach(now.memory, now.clock.aiSec).some((reach) => reach.neighbourId === core.id
@@ -376,16 +366,16 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     return null;
   };
 
-  // The hurt cluster's triage (`C09 IS HURT — REPAIR it before it prints`): the clusters the line names.
+  // The hurt driver's lesson (`POD 02 WILL LAND HARD — REPAIR its driver`, DRIVER_RULES' tut-hurt-driver*): the drivers
+  // the line names.
   const hurtAsked = (): Segment[] => {
     const line = state().director.shown;
-    if (!line || !line.id.startsWith('tut-hurt-cluster')) return [];
-    return namedIn(line.text, state().memory.filter((seg) => seg.type === 'soul' && !seg.sealed && getOpsBySeg(seg.id).length === 0));
+    if (!line || !line.id.startsWith('tut-hurt-driver')) return [];
+    return namedIn(line.text, state().memory.filter((seg) => seg.type === 'driver' && getOpsBySeg(seg.id).length === 0));
   };
 
   const competentAct = (): boolean => {
     let acted = false;
-    if (stasisAsk() && scanStasis()) acted = true;
     for (const seg of hurtAsked()) if (canStartOp() && actionRepair(harness.store, seg) === null) acted = true;
     if (harness.defend11(defendOpts)) acted = true;
     if (copyAsk() && copyRepair()) acted = true;
@@ -406,7 +396,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
   };
   // The file or cluster a strip line names: a cluster by its code (`C13`), a file by its name in capitals.
   const namedIn = (text: string, candidates: readonly Segment[]): Segment[] => candidates.filter((seg) => {
-    if (seg.type === 'soul') return new RegExp(`\\b${seg.cluster}\\b`).test(text);
+    if (seg.type === 'driver') return text.includes(podCode(seg.pod));
     return text.includes(seg.name.toUpperCase());
   });
 
@@ -421,22 +411,21 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
     const text = line?.text ?? '';
     const repair = (seg: Segment) => (): boolean => canStartOp() && actionRepair(harness.store, seg) === null;
     if (id === 'reveal-look') tasks.push({ reason: 'colonists', run: () => false });
-    if (stasisAsk()) tasks.push({ reason: 'colonists', run: scanStasis });
     if (copyAsk()) tasks.push({ reason: 'copy', run: copyRepair });
     if (!now.run.licences.includes('repair')) return tasks;
-    const infected = now.memory.filter((seg) => isInfected(seg) && (seg.type === 'soul' || isRepairable(seg)) && hasIntegrity(seg) && idle(seg));
+    const infected = now.memory.filter((seg) => isInfected(seg) && (seg.type === 'driver' || isRepairable(seg)) && hasIntegrity(seg) && idle(seg));
     if (player.literalMind) {
       // LITERAL: the REPAIR the line asks for, at once (the eating alarms, the Core's, a hurt cluster's triage).
       const asks = (id.startsWith('hollow-eating') && !id.startsWith('hollow-eating-ship')) || id.startsWith('alarm-eaten');
       if (asks) for (const seg of namedIn(text, infected)) tasks.push({ reason: `repair:${seg.id}`, run: repair(seg) });
       const core = now.memory.find((seg) => seg.type === 'core');
       if (id.startsWith('alarm-core') && id !== 'alarm-core-repairing' && core && idle(core)) tasks.push({ reason: 'repair:core', run: repair(core) });
-      if (id.startsWith('tut-hurt-cluster')) {
-        const hurt = now.memory.filter((seg) => seg.type === 'soul' && !seg.sealed && idle(seg));
+      if (id.startsWith('tut-hurt-driver')) {
+        const hurt = now.memory.filter((seg) => seg.type === 'driver' && idle(seg));
         for (const seg of namedIn(text, hurt)) tasks.push({ reason: `repair:${seg.id}`, run: repair(seg) });
       }
       if (id.startsWith('hollow-move-again') && now.run.licences.includes('move')) {
-        const clusters = now.memory.filter((seg) => seg.type === 'soul' && !isInfected(seg) && idle(seg) && !isBusy(seg));
+        const clusters = now.memory.filter((seg) => seg.type === 'driver' && !isInfected(seg) && idle(seg) && !isBusy(seg));
         for (const seg of namedIn(text, clusters)) {
           tasks.push({ reason: `move:${seg.id}`, run: () => {
             const spot = safeSpot(seg);
@@ -493,7 +482,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
   let shipCall = false;   // the follower needs the SHIP (set by the flight follower each tick)
   const mindTick = (): void => {
     const now = state();
-    if (now.clock.paused || !(now.run.phase === 'flight' || now.run.phase === 'printing')) return;
+    if (now.clock.paused || !(now.run.phase === 'flight' || now.run.phase === 'landing')) return;
     let wants = false;
     let urgent = false;
     if (player.competentMind) {
@@ -647,7 +636,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
   const printing = (): void => {
     const end = harness.wall() + PRINT_MAX_WALL_SEC;
     let chose = false;
-    while (state().run.phase === 'printing' && !state().run.coreLost && harness.wall() < end) {
+    while (state().run.phase === 'landing' && !state().run.coreLost && harness.wall() < end) {
       step();
       shipCall = false;
       mindTick();
@@ -663,9 +652,9 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
         if (refusal !== null) throw new Error(`playthrough: the finale refused ${pick} (${refusal})`);
       }
     }
-    if (state().run.phase === 'printing' && !state().run.coreLost) record.cause = `stuck:printing on ${state().level.shipName}`;
+    if (state().run.phase === 'landing' && !state().run.coreLost) record.cause = `stuck:printing on ${state().level.shipName}`;
     if (state().run.shipIndex === LAST_LIGHT) {
-      record.lastLightLost = state().souls.results.filter((result) => result.outcome === 'lost').length;
+      record.lastLightLost = state().landing.pods.filter((pod) => pod.driverLost !== null).length;
     }
   };
 
@@ -714,7 +703,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
       if (plan.kind === 'simulation') record.simulationRetries++;
     } else if (phase === 'flight') {
       flyShip();
-    } else if (phase === 'printing') {
+    } else if (phase === 'landing') {
       printing();
     } else if (phase === 'report') {
       stepFor(player.reportSec);
@@ -733,13 +722,13 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
   if (state().run.phase === 'end') {
     const model = runEndModel(state());
     record.cause = state().run.endCause ?? 'end without a cause';
-    record.woke = model.woke;
-    record.souls = model.fleetSouls;
+    record.woke = model.landed;
+    record.souls = model.fleetColonists;
     record.score = runScore(state().run.ships);
     record.completed = record.cause !== 'overwritten' && record.cause !== 'stayed' && state().run.ships.length === SHIPS.length;
   }
   record.ships = state().run.ships.map((ship, index) => ({
-    ship: ship.shipName, outcome: ship.outcome, woke: ship.woke, half: ship.half, lost: ship.lost, stars: ship.stars,
+    ship: ship.shipName, outcome: ship.outcome, woke: ship.landedInLz, half: ship.lzs.reduce((sum, row) => sum + row.hard, 0), lost: ship.parked.length, stars: ship.stars,
     fuelPct: Math.round(ship.fuelLeftPct * 10) / 10, wallSec: Math.round(shipWall[index] ?? 0),
     ...(diag[index] ?? { chargeIn: -1, coreIn: -1, chargeOut: -1, coreOut: -1, filesEaten: 0, repairLeft: false, repairEaten: [] }),
   }));

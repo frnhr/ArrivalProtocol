@@ -57,8 +57,9 @@ interface GridResult {
 }
 // `stopFirst`: SPACE is pressed once to stop the SKIP (the lead's ruling: that press only stops it), and the RETRO hold
 // is a fresh press after it, so the far-out lift is still flown; otherwise SPACE is held from inside the SKIP.
-// Quick depth (tests/unit/depth.ts): the grid's corners and its middle row; full: the verifier's 5 × 4.
-const INTO_SKIP_SEC = byDepth([2.5, 4.5, 5.5], [2.5, 3.5, 4.5, 5, 5.5]);
+// Quick depth (tests/unit/depth.ts): the grid's four corners, for both grids (held and pressed again); full: the
+// verifier's 5 × 4.
+const INTO_SKIP_SEC = byDepth([2.5, 5.5], [2.5, 3.5, 4.5, 5, 5.5]);
 const HOLD_SEC = byDepth([0.5, 2], [0.5, 1, 1.5, 2]);
 function flyGrid(stopFirst: boolean): GridResult {
   const result: GridResult = { tally: {}, rows: [], lie: '', endless: '', flicker: '', switchedBack: 0, liftRows: 0, inAsked: 0 };

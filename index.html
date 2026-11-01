@@ -65,6 +65,8 @@
         <div class="dock-item open" data-tool="engine"><span class="mark">●</span><span>Engine</span></div>
         <div class="dock-item open" data-tool="telemetry"><span class="mark">●</span><span>Telemetry</span></div>
         <div class="dock-item open" data-tool="comms"><span class="mark">●</span><span>Comms</span></div>
+        <!-- LANDING only (body.landing): the POD BAY window -->
+        <div class="dock-item open landing-only" data-tool="podbay"><span class="mark">●</span><span>Pod Bay</span></div>
         <div class="dock-section">System</div>
         <!-- The cards this unit carries (WP8, SkillsWindow); NEW pulses when one lands and the window is closed -->
         <div class="dock-item" data-tool="skills"><span class="mark">○</span><span>Skills</span><span class="dock-new">NEW</span></div>
@@ -74,8 +76,7 @@
         <div class="dock-section">Filter</div>
         <div class="dock-item open" data-filter="ai"><span class="mark">●</span><span>AI Memory</span></div>
         <div class="dock-item open" data-filter="ship"><span class="mark">●</span><span>Ship Systems</span></div>
-        <!-- Shown once the colonists are found (SidebarFilters): before the reveal it would be a spoiler -->
-        <div class="dock-item open" data-filter="souls" hidden><span class="mark">●</span><span>Colonists</span></div>
+        <div class="dock-item open" data-filter="pods"><span class="mark">●</span><span>Pod Drivers</span></div>
         <div class="dock-item open" data-filter="filesystem"><span class="mark">●</span><span>Filesystem</span></div>
         <div class="dock-item open" data-filter="free"><span class="mark">●</span><span>Free Space</span></div>
 
@@ -217,6 +218,25 @@
           </div>
         </div>
 
+        <!-- POD BAY (01-landing §4, PodBayWindow): LANDING only, under ENGINE, opened at ORBIT LOCK. The launch button
+             rides in the phone bar on a phone (PhoneFlightBar). -->
+        <div class="window podbay-win landing-only" id="podBayWin" data-roles="bay">
+          <div class="window-title">
+            <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
+            <span class="name">Pod Bay</span>
+            <span class="ctl">−</span><span class="ctl">×</span>
+          </div>
+          <div class="window-body podbay-body">
+            <button class="engage pb-launch" id="podLaunchBtn" data-hint-key="L" tabindex="-1"><span class="pb-launch-label" id="pbLaunchLabel"></span><span class="pb-launch-status" id="pbLaunchStatus"></span></button>
+            <div class="pb-bay-row"><div class="pb-bay" id="pbBay"></div><span class="pb-ctrl" id="pbCtrl"></span></div>
+            <div class="pb-next" id="pbNext"></div>
+            <div class="pb-lzs" id="pbLzs"></div>
+            <!-- the class line (slice 1b): `PLAINS · off-site pods score half`, and `NO-GO: LAVA` on ships with no-go arcs -->
+            <div class="pb-class"><span class="pb-class-text" id="pbClass"></span><span class="pb-nogo" id="pbNoGo" hidden></span></div>
+            <div class="pb-foot"><span class="pb-cant" id="pbCant" hidden></span><button class="pb-end" id="pbEnd" tabindex="-1"></button></div>
+          </div>
+        </div>
+
         <div class="window navplot-win" data-roles="navplot sensor">
           <div class="window-title">
             <span class="grip" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
@@ -235,17 +255,31 @@
                 <!-- the plot itself is built and patched by NavPlotWindow -->
               </svg>
               <div class="np-chip" id="npChip"></div>
+              <!-- DECAY (slice 1b, LANDING): orbits until ▼ leaves the band, under the chip (NavPlotWindow, flight-hud decayChip) -->
+              <div class="np-decay" id="npDecay" hidden></div>
               <!-- NO SIGNAL: the Nav Plotter is dead or gone (NavPlotWindow) -->
               <div class="np-veil" id="npVeil" hidden>
                 <div class="np-veil-title">NO SIGNAL</div>
                 <div class="np-veil-why" id="npVeilWhy"></div>
               </div>
             </div>
+            <!-- GROUND TRACK (01-landing §4, GroundTrack): LANDING only; on a phone it takes the readout row's place -->
+            <div class="ground-track" id="groundTrack" hidden>
+              <div class="gt-head"><span class="gt-title">ground track</span><span class="gt-world" id="gtWorld"></span><span class="gt-drop" id="gtDotLabel"></span></div>
+              <div class="gt-planet" id="gtPlanet"></div>
+              <div class="gt-strip" id="gtStrip">
+                <div class="gt-glyphs" id="gtGlyphs" aria-hidden="true"></div>
+                <div class="gt-items" id="gtItems"></div>
+                <div class="gt-dot" id="gtDot"><span class="gt-dot-width"></span><span class="gt-dot-core"></span></div>
+                <div class="gt-ahead" id="gtAhead"></div>
+                <div class="gt-blocked" id="gtBlocked" hidden></div>
+              </div>
+            </div>
             <!-- live readout row, painted by NavPlotWindow from flight-hud's plotReadouts -->
             <div class="np-readout">
               <div class="np-stat"><span class="lbl">▼ lowest<span class="np-drift" id="npLowestDrift" hidden></span></span><span class="v" id="npLowest">—</span></div>
               <div class="np-stat"><span class="lbl">▲ highest</span><span class="v" id="npHighest">—</span></div>
-              <div class="np-stat"><span class="lbl">printer range</span><span class="v" id="npRange">—</span></div>
+              <div class="np-stat"><span class="lbl">in band</span><span class="v" id="npRange">—</span></div>
               <div class="np-stat"><span class="lbl">status</span><span class="v" id="npStatus">—</span></div>
             </div>
           </div>
@@ -263,7 +297,7 @@
         <!-- Computed from memory by MemoryStats (labels too): the colonists, REPAIR CHARGE, free
              blocks, the damage you can see, and the memory's size -->
         <div class="mem-stats">
-          <div class="mem-stat"><span class="lbl">colonists</span><span class="v" id="statSouls"></span></div>
+          <div class="mem-stat"><span class="lbl">colonists</span><span class="v" id="statPods"></span></div>
           <div class="mem-stat"><span class="lbl">repair charge</span><span class="v" id="statRedund"></span><span class="merge-tick" id="statMergeTick" hidden></span></div>
           <div class="mem-stat"><span class="lbl">free</span><span class="v" id="statFree"></span></div>
           <div class="mem-stat"><span class="lbl">damage</span><span class="v" id="statDamage"></span></div>
@@ -307,13 +341,10 @@
               <div class="mh-limit" id="mhLimit" hidden></div>
               <!-- WP9: AUTOBURN armed or flying the ship while the kid works in the MIND (MiniHud) -->
               <div class="mh-auto" id="mhAuto" hidden></div>
-              <!-- While printing: how far, and PRINT FAST (MiniHud; the button does not go back to amber) -->
-              <div class="mh-print" id="mhPrint" hidden>
-                <span class="mh-print-text" id="mhPrintText"></span>
-                <button class="mh-print-fast" id="mhPrintFast" data-hint-target="print-fast" tabindex="-1">PRINT FAST ▸▸</button>
-              </div>
-              <!-- While printing: the INTACT star, live (★ INTACT 11/12 while a hurt cluster could cost it) -->
-              <div class="mh-intact" id="mhIntact" hidden></div>
+              <!-- While landing (01-landing §4): the bay and the pods down (MiniHud) -->
+              <div class="mh-landing" id="mhLanding" hidden><span class="mh-landing-text" id="mhLandingText"></span></div>
+              <!-- While landing: the ON TARGET star, live (★ ON TARGET 5/6, the hurt yellow while it is still at risk) -->
+              <div class="mh-on-target" id="mhOnTarget" hidden></div>
             </div>
           </div>
         </div>
@@ -347,8 +378,8 @@
   </div>
 
   <div class="footer">
-    <!-- SOULS IN STASIS until the reveal, then SOULS: n IN MEMORY · n WOKE · n LOST (Footer) -->
-    <div class="item"><span id="footSouls"></span></div>
+    <!-- PODS: 8 ABOARD · 3 LANDED · 1 CAN'T LAUNCH (Footer, landing-hud footerPods) -->
+    <div class="item"><span id="footPods"></span></div>
     <div class="item"><span id="footBurn">FLIGHT · FLYING</span></div>
     <div class="spacer"></div>
     <!-- WP8: the archive is not keeping this unit (offline, or played without), in the game too (Footer) -->
@@ -365,31 +396,33 @@
       <div class="burn-result-title" id="burnResultTitle"></div>
       <div class="burn-result-sub" id="burnResultSub"></div>
       <!-- The LOST card's colonists line; on ship 1 before the reveal it IS the reveal (BurnResult) -->
-      <div class="burn-result-souls" id="burnResultSouls" hidden></div>
+      <div class="burn-result-pods" id="burnResultPods" hidden></div>
       <!-- The run goes on from here (BurnResult names what its press does: AGAIN, EMERGENCY TRANSMIT …) -->
       <button class="burn-result-retry" id="burnResultRetry" tabindex="-1">▸</button>
     </div>
   </div>
 
-  <!-- The WAKE REPORT (§7.1, WakeReport): once every cluster has left memory, the ship's credits
-       roll (who woke, by name, and what they said), the count rolls up, then the stars land -->
-  <div class="wake-report" id="wakeReport" hidden>
+  <!-- The LANDING REPORT (01-landing §4, LandingReport): the route and the colony, one row per LZ counting up with a pod
+       icon per pod, the OFF-SITE / NO-GO / PARKED / NOT LAUNCHED rows, the credits roll (the lead first), then the
+       headline, the breakdown and the points, the stars, the charge and the near misses, and CONTINUE. It wears the
+       phase-2 WAKE REPORT's night card (.wake-report, game.css) and its roll; its own parts are landing.css's. -->
+  <div class="wake-report landing-report" id="landingReport" hidden>
     <div class="wr-inner">
       <div class="wr-head">
-        <div class="wr-title" id="wrTitle"></div>
-        <div class="wr-route" id="wrRoute"></div>
+        <div class="wr-title" id="lrTitle"></div>
+        <div class="wr-route" id="lrRoute"></div>
+        <div class="lr-colony" id="lrColony" hidden></div>
       </div>
-      <div class="wr-credits" id="wrCredits"><div class="wr-roll" id="wrRoll"></div></div>
-      <div class="wr-epigraph" id="wrEpigraph" hidden></div>
-      <div class="wr-total" id="wrTotal"></div>
-      <!-- WOKE counts heads; the cost of a bad print stands right under it, in the hurt yellow (WP7) -->
-      <div class="wr-missing" id="wrMissing" hidden></div>
-      <div class="wr-breakdown" id="wrBreakdown" hidden></div>
-      <div class="wr-stars" id="wrStars" hidden></div>
-      <div class="wr-charge" id="wrCharge" hidden></div>
+      <div class="lr-rows" id="lrRows"></div>
+      <div class="wr-credits" id="lrCredits"><div class="wr-roll" id="lrRoll"></div></div>
+      <div class="wr-total" id="lrHeadline"></div>
+      <div class="wr-breakdown" id="lrBreakdown" hidden></div>
+      <div class="wr-stars" id="lrStars" hidden></div>
+      <div class="wr-charge" id="lrCharge" hidden></div>
+      <div class="lr-near" id="lrNear" hidden></div>
       <div class="wr-foot">
-        <button class="wr-skip" id="wrSkip" tabindex="-1"></button>
-        <button class="wr-continue" id="wrContinue" tabindex="-1" hidden></button>
+        <button class="wr-skip" id="lrSkip" tabindex="-1"></button>
+        <button class="wr-continue" id="lrContinue" tabindex="-1" hidden></button>
       </div>
     </div>
   </div>
@@ -468,7 +501,7 @@
   <!-- The white-out at the end of a transmission: the new ship comes up from under it (TransmitScreen) -->
   <div class="white-out" id="whiteOut" hidden></div>
 
-  <!-- RUN END (§9 WP7 item 7, RunEnd): the cause, souls woke, every ship, the SCORE and rank, NEW RUN -->
+  <!-- RUN END (§9 WP7 item 7, RunEnd): the cause, the colonists landed, every ship, the SCORE and rank, NEW RUN -->
   <div class="run-end" id="runEnd" hidden>
     <div class="re-inner">
       <div class="re-kicker" id="reKicker"></div>
@@ -520,7 +553,7 @@
       <h1 class="title-name">ARRIVAL PROTOCOL</h1>
       <div class="title-sub">// SOULCACHE</div>
       <div class="title-unit" id="titleUnit"></div>
-      <!-- WP8, run 2+: how the last unit ended (last: UNIT-047 · 6,200 woke · overwritten at HALCYON), and
+      <!-- WP8, run 2+: how the last unit ended (last: UNIT-047 · 6,200 landed · overwritten at HALCYON), and
            the endings found so far -->
       <div class="title-lineage" id="titleLineage" hidden></div>
       <div class="title-endings" id="titleEndings" hidden></div>

@@ -1,7 +1,8 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { chargeLeft, soulCounts, archiveSealed } from '@state/selectors';
-import { formatCount, ARCHIVE_TEXT } from '@data/script';
+import { chargeLeft } from '@state/selectors';
+import { footerPods } from '@systems/landing-hud';
+import { ARCHIVE_TEXT } from '@data/script';
 import { onOpsChange, threadsBusy, threadsTotal } from '@systems/ops-core';
 import { onPostTick } from '@systems/clock';
 import { TERMINAL, thrustLimitModel, type Tone } from '@systems/flight-hud';
@@ -24,23 +25,13 @@ function flightLabel(status: GameState['burn']['status']): string {
   return `${TERMINAL[status].word}${TONE_MARK[TERMINAL[status].tone]}`;
 }
 
-// §7.1: `2,400 SOULS IN STASIS` while the archive is sealed (the briefing's lie), then the real
-// count: `SOULS: 2,400 IN MEMORY · 0 WOKE · 0 LOST`. WOKE counts everyone who woke, gaps or not.
-// On a lost ship (crashed, flown away, stranded) nobody left in memory will wake: they count as
-// lost (WP7 carries the accounting into the transmit).
-export function soulsLabel(state: Readonly<GameState>): string {
-  const counts = soulCounts(state);
-  if (archiveSealed(state)) return `${formatCount(counts.inMemory)} SOULS IN STASIS`;
-  const woke = formatCount(counts.heads);
-  const status = state.burn.status;
-  if (status === 'crashed' || status === 'escaped' || status === 'stranded' || status === 'abandoned' || state.run.coreLost) {
-    return `SOULS: ${woke} WOKE · ${formatCount(counts.lost + counts.inMemory)} LOST`;
-  }
-  return `SOULS: ${formatCount(counts.inMemory)} IN MEMORY · ${woke} WOKE · ${formatCount(counts.lost)} LOST`;
+// 01-landing §4: `PODS: 8 ABOARD · 3 LANDED · 1 CAN'T LAUNCH`, in pods (landing-hud footerPods).
+export function podsLabel(state: Readonly<GameState>): string {
+  return footerPods(state).text;
 }
 
 export function mountFooter(store: Store<GameState>): () => void {
-  const soulsEl = requireById('footSouls');
+  const podsEl = requireById('footPods');
   const chargeEl = requireById('footRedund');
   const coresEl = requireById('footCores');
   const burnEl = requireById('footBurn');
@@ -48,7 +39,7 @@ export function mountFooter(store: Store<GameState>): () => void {
   const archiveEl = requireById('footArchive');
   archiveEl.title = ARCHIVE_TEXT.footerTitle;
 
-  const last = { souls: '', charge: '', threads: '', burn: '', limit: '' };
+  const last = { pods: '', charge: '', threads: '', burn: '', limit: '' };
   const patch = (element: HTMLElement, key: keyof typeof last, text: string): void => {
     if (last[key] === text) return;
     last[key] = text;
@@ -81,22 +72,17 @@ export function mountFooter(store: Store<GameState>): () => void {
     limitEl.hidden = text === '';
   }
 
-  // The reveal's footer beat (§1: SOULS IN STASIS → SOULS IN MEMORY): small text flips silently
-  // unless it is lit, so it flashes once as it changes (a fade under reduced motion, game.css).
-  let wasSealed = archiveSealed(store.getState());
-  function paintSouls(): void {
-    const state = store.getState();
-    patch(soulsEl, 'souls', soulsLabel(state));
-    const sealed = archiveSealed(state);
-    soulsEl.classList.toggle('revealed', !sealed);
-    if (wasSealed && !sealed) replayAnimation(soulsEl, 'souls-flip');
-    wasSealed = sealed;
+  function paintPods(): void {
+    patch(podsEl, 'pods', podsLabel(store.getState()));
+    podsEl.classList.add('revealed');
   }
 
-  const paintAll = (): void => { paintSouls(); paintCharge(); paintThreads(); paintBurn(); paintLimit(); };
+  const paintAll = (): void => { paintPods(); paintCharge(); paintThreads(); paintBurn(); paintLimit(); };
   paintAll();
 
-  const unsubStore = store.subscribe((s) => `${s.ui.memoryRev}|${s.burn.status}|${s.run.phase}`, paintAll);
+  // A pod's fate (launched, down, parked) changes without a memory change at touchdown: it is part of the key.
+  const unsubStore = store.subscribe(
+    (s) => `${s.ui.memoryRev}|${s.burn.status}|${s.run.phase}|${s.landing.pods.map((record) => record.fate.kind).join()}`, paintAll);
 
   function paintArchive(status: GameState['archive']['status'], prev: GameState['archive']['status'] | null): void {
     const text = status === 'ok' || status === 'none' ? '' : ARCHIVE_TEXT.footer[status];

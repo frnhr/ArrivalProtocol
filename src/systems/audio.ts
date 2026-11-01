@@ -26,6 +26,9 @@ import {
 // its line; strip: the objective strip's quieter teletype.
 export type TypeVoice = 'sys' | 'hollow' | 'control' | 'strip';
 export type WhoompShape = 'rise' | 'shimmer' | 'fall' | 'sag' | 'clear';
+// How a pod came down, as the touchdown bell says it (§4): clean, dull (hard), a minor second sour (mislanded, its LZ
+// already full), a low bonk (off-site), or a lower, heavier bonk for a no-go arc (slice 1b: the pod scored nothing).
+export type TouchdownSound = 'soft' | 'hard' | 'mislanded' | 'off-site' | 'no-go';
 
 export interface CueParams {
   transmitIn: undefined;
@@ -46,18 +49,25 @@ export interface CueParams {
   holdTick: { count: number };
   opChirp: undefined;
   opDone: undefined;
-  // WP5: the STASIS reveal and printing.
-  revealPing: { step: number };
-  soulCrack: undefined;
-  revealChoir: undefined;
+  // The truth note (WP5's reveal, kept for HOLLOW naming itself); the choir (the first landing of a run, RUN END's
+  // victory); the pods' stasis heartbeat.
+  truthNote: undefined;
+  arrivalChoir: undefined;
   heartbeat: { strength: number };
-  printBell: { gaps: boolean };
-  // WP6: HOLLOW. The bite landing on a file; a bite held by a WALL; a cluster (or file) eaten; a
-  // repair winning the tug-of-war.
+  // Slice 1a, the landing (01-landing §4): a pod leaving the bay (a low thump and a pneumatic hiss; `first`: run 1's
+  // first pod, which ducks the ambience for its long fall), its entry roar at the atmosphere, and the touchdown bell,
+  // pitched per LZ (`lz`: its index, LZ-A 0) and coloured by how it came down.
+  podLaunch: { first: boolean };
+  podEntry: { first: boolean };
+  touchdownBell: { lz: number; landing: TouchdownSound };
+  // Slice 1b: a drag kick (§4 "a drag kick a soft hiss"): air on the hull at ▼, for the kicks that stamp.
+  dragHiss: undefined;
+  // WP6: HOLLOW. The bite landing on a file; a bite held by a WALL; a driver eaten (the sombre fall, also a sombre RUN
+  // END's); a repair winning the tug-of-war.
   hollowBite: undefined;
   fizzle: undefined;
-  soulLost: undefined;
-  clusterSaved: undefined;
+  sombreFall: undefined;
+  driverSaved: undefined;
   // WP7: the run. TRANSMIT's rising FM sweep into the white-out (and BEAM OUT's moment of leaving); one
   // transit hit landing on a file as the boot names it; HOLLOW's name decoding out of `???`.
   transmitSweep: { seconds: number };
@@ -799,79 +809,34 @@ function cueOpDone(mix: Graph, t0: number): void {
   }
 }
 
-// --- The Soul Archive (WP5) -----------------------------------------------------------------------
+// --- The truth note, the choir and the heartbeat (phase 2's reveal, kept) --------------------------------------------
 
-// The reveal's three lines, one sound each, so the moment builds before anything is read:
-// 0 `0 pods detected`: a sonar ping that comes back empty (a falling pair, a hollow tail);
-// 1 `rescanning…`: two quick pings sweeping up, searching;
-// 2 `They're in here.`: the floor drops away (a sub swell, with a falling low tone an octave and a
-//   half up so laptop and phone speakers, which play almost nothing under ~150 Hz, hear it fall
-//   too) under one high glass note.
-function cueRevealPing(mix: Graph, t0: number, step: number): void {
+// The floor drops away (a sub swell, with a falling low tone an octave and a half up so laptop and phone speakers, which
+// play almost nothing under ~150 Hz, hear it fall too) under one high glass note. Phase 2's reveal ended on it; HOLLOW
+// naming itself (HALCYON, `> i was 046.`) keeps it.
+function cueTruthNote(mix: Graph, t0: number): void {
   const voice = makeVoice(mix.ctx);
   const out = voice.gain(1, mix.buses.ui);
   const tone = voice.filter('lowpass', 4200, 0.7, out);
-  if (step === 0) {
-    [[523.25, 0], [392, 0.22]].forEach(([freq, offset]) => {
-      const at = t0 + offset!;
-      const amp = voice.gain(0, tone);
-      const end = pluck(amp.gain, at, offset === 0 ? 0.16 : 0.11, 0.006, 0.9);
-      voice.osc('sine', freq!, at, end, amp);
-      voice.osc('sine', freq! * 2.01, at, end, voice.gain(0.12, amp));
-    });
-    const hiss = voice.gain(0, out);
-    const band = voice.filter('bandpass', 700, 3, hiss);
-    const hissEnd = swell(hiss.gain, t0, 0.05, 0.3, 1.2);
-    voice.noise(mix.white, t0, hissEnd, band);
-    return;
-  }
-  if (step === 1) {
-    [0, 0.42].forEach((offset) => {
-      const at = t0 + offset;
-      const amp = voice.gain(0, tone);
-      const end = pluck(amp.gain, at, 0.12, 0.01, 0.55);
-      const ping = voice.osc('sine', 620, at, end, amp);
-      sweep(ping.frequency, at, 620, 1480, 0.28);
-    });
-    return;
-  }
-  if (step === 2) {
-    duck(mix, t0);
-    const sub = voice.gain(0, mix.buses.chord);
-    const subEnd = swell(sub.gain, t0, 0.13, 0.6, 2.2);
-    const body = voice.osc('sine', 62, t0, subEnd, sub);
-    sweep(body.frequency, t0, 62, 41, 2.6);
-    const drop = voice.gain(0, mix.buses.chord);
-    const dropTone = voice.filter('lowpass', 700, 0.7, drop);
-    const dropEnd = swell(drop.gain, t0, 0.08, 0.4, 2.0);
-    const fall = voice.osc('triangle', 196, t0, dropEnd, dropTone);
-    sweep(fall.frequency, t0, 196, 123.5, 2.4);
-    const glass = voice.gain(0, tone);
-    const glassEnd = pluck(glass.gain, t0 + 0.35, 0.11, 0.01, 2.4);
-    voice.osc('sine', 1760, t0 + 0.35, glassEnd, glass);
-    voice.osc('sine', 2637, t0 + 0.35, glassEnd, voice.gain(0.25, glass));
-    return;
-  }
-  throw new Error(`revealPing: no step ${step}`);
+  duck(mix, t0);
+  const sub = voice.gain(0, mix.buses.chord);
+  const subEnd = swell(sub.gain, t0, 0.13, 0.6, 2.2);
+  const body = voice.osc('sine', 62, t0, subEnd, sub);
+  sweep(body.frequency, t0, 62, 41, 2.6);
+  const drop = voice.gain(0, mix.buses.chord);
+  const dropTone = voice.filter('lowpass', 700, 0.7, drop);
+  const dropEnd = swell(drop.gain, t0, 0.08, 0.4, 2.0);
+  const fall = voice.osc('triangle', 196, t0, dropEnd, dropTone);
+  sweep(fall.frequency, t0, 196, 123.5, 2.4);
+  const glass = voice.gain(0, tone);
+  const glassEnd = pluck(glass.gain, t0 + 0.35, 0.11, 0.01, 2.4);
+  voice.osc('sine', 1760, t0 + 0.35, glassEnd, glass);
+  voice.osc('sine', 2637, t0 + 0.35, glassEnd, voice.gain(0.25, glass));
 }
 
-// One slab chip cracking open: a dry high crack and a tiny glassy tink, quiet (twelve play 60 ms
-// apart, a ripple across the rack).
-function cueSoulCrack(mix: Graph, t0: number): void {
-  const voice = makeVoice(mix.ctx);
-  const out = voice.gain(1, mix.buses.ui);
-  const crack = voice.gain(0, out);
-  const bright = voice.filter('highpass', 2800, 0.8, crack);
-  const crackEnd = pluck(crack.gain, t0, 0.5, 0.0008, 0.03);
-  voice.noise(mix.white, t0, crackEnd + 0.005, bright);
-  const tink = voice.gain(0, out);
-  const end = pluck(tink.gain, t0, 0.12, 0.002, 0.25);
-  voice.osc('sine', 2200 + Math.random() * 900, t0, end, tink);
-}
-
-// §7.2 revealChoir: four detuned saws through a 900 Hz lowpass, a 2 s swell, then a long fade. A
+// §7.2 arrivalChoir: four detuned saws through a 900 Hz lowpass, a 2 s swell, then a long fade. A
 // major chord over an open fifth (A, E, A, C♯): not triumph, people.
-function cueRevealChoir(mix: Graph, t0: number): void {
+function cueArrivalChoir(mix: Graph, t0: number): void {
   const voice = makeVoice(mix.ctx);
   duck(mix, t0);
   const out = voice.gain(1, mix.buses.chord);
@@ -914,19 +879,117 @@ function cueHeartbeat(mix: Graph, t0: number, strength: number): void {
   });
 }
 
-// §7.2 printBell: 880 Hz with a 1320 Hz partial and a 1.5 s decay, one per cluster that wakes.
-// A cluster that wakes with missing memories rings a step lower and duller: still a bell, but
-// you hear that something is missing.
-function cuePrintBell(mix: Graph, t0: number, gaps: boolean): void {
+// --- The landing (slice 1a, 01-landing §4) --------------------------------------------------------------------------
+
+// A pod leaving the bay: a low thump (a sine falling 72 → 38 Hz, with a short knock in a small speaker's range) and a
+// pneumatic hiss (white noise through a band sweeping down, the rails venting). Run 1's first pod also ducks the
+// ambience for its long fall (§4 "the ambient bus ducked").
+function cuePodLaunch(mix: Graph, t0: number, first: boolean): void {
+  const voice = makeVoice(mix.ctx);
+  if (first) duck(mix, t0);
+  const out = voice.gain(1, mix.buses.chord);
+  const thump = voice.gain(0, out);
+  const thumpEnd = pluck(thump.gain, t0, 0.5, 0.005, 0.32);
+  const body = voice.osc('sine', 72, t0, thumpEnd, thump);
+  sweep(body.frequency, t0, 72, 38, 0.25);
+  const knock = voice.gain(0, out);
+  const knockEnd = pluck(knock.gain, t0, 0.22, 0.003, 0.09);
+  const knockTone = voice.osc('triangle', 180, t0, knockEnd, knock);
+  sweep(knockTone.frequency, t0, 180, 110, 0.08);
+  const hissAt = t0 + 0.04;
+  const hiss = voice.gain(0, out);
+  const band = voice.filter('bandpass', 3800, 1.1, hiss);
+  sweep(band.frequency, hissAt, 3800, 1400, 0.45);
+  hiss.gain.setValueAtTime(0, hissAt);
+  hiss.gain.linearRampToValueAtTime(0.16, hissAt + 0.03);
+  hiss.gain.exponentialRampToValueAtTime(SILENT, hissAt + 0.55);
+  voice.noise(mix.white, hissAt, hissAt + 0.6, band);
+}
+
+// The entry roar at the atmosphere (§4: "a noise roar rising over 1.2 s"): brown and white noise through a lowpass
+// opening 260 → 2,600 Hz as the gain swells for 1.2 s, then a quick fade as the flare burns out. Louder for the first
+// pod of a run.
+function cuePodEntry(mix: Graph, t0: number, first: boolean): void {
+  const voice = makeVoice(mix.ctx);
+  const out = voice.gain(first ? 1.3 : 1, mix.buses.ui);
+  const lowpass = voice.filter('lowpass', 260, 0.9, out);
+  sweep(lowpass.frequency, t0, 260, 2600, 1.2);
+  const amp = voice.gain(0, lowpass);
+  amp.gain.setValueAtTime(0, t0);
+  amp.gain.linearRampToValueAtTime(0.32, t0 + 1.2);
+  amp.gain.exponentialRampToValueAtTime(SILENT, t0 + 1.55);
+  voice.noise(mix.brown, t0, t0 + 1.6, amp);
+  voice.noise(mix.white, t0, t0 + 1.6, voice.gain(0.35, amp));
+}
+
+// A drag kick (slice 1b, §4): a soft hiss, air on the hull for a moment at ▼. White noise through a bandpass that slides
+// down (2,400 → 900 Hz) as it swells and fades over 0.7 s; quiet, on the ambient bus, so a kick every orbit through a
+// long SKIP is felt, never a chore.
+function cueDragHiss(mix: Graph, t0: number): void {
+  const voice = makeVoice(mix.ctx);
+  const out = voice.gain(1, mix.buses.ambient);
+  const band = voice.filter('bandpass', 2400, 0.9, out);
+  sweep(band.frequency, t0, 2400, 900, 0.65);
+  const amp = voice.gain(0, band);
+  amp.gain.setValueAtTime(0, t0);
+  amp.gain.linearRampToValueAtTime(0.14, t0 + 0.18);
+  amp.gain.exponentialRampToValueAtTime(SILENT, t0 + 0.7);
+  voice.noise(mix.white, t0, t0 + 0.75, amp);
+}
+
+// The touchdown bell's pitch per LZ (§4: LZ-B a fifth above LZ-A, so a split is audible), just ratios over G5: A 1,
+// B 3/2 (the fifth), C 5/4, D 15/8; a fifth LZ wraps an octave down.
+const BELL_BASE_HZ = 784;
+const BELL_LZ_RATIO = [1, 3 / 2, 5 / 4, 15 / 8];
+
+function bellHz(lz: number): number {
+  if (!(Number.isInteger(lz) && lz >= 0)) throw new Error(`touchdownBell: LZ index ${lz}`);
+  const ratio = BELL_LZ_RATIO[lz % BELL_LZ_RATIO.length]!;
+  return BELL_BASE_HZ * ratio / 2 ** Math.floor(lz / BELL_LZ_RATIO.length);
+}
+
+// §7.2 touchdownBell, the touchdown (§4): the bell (a 1.5× partial, a 1.5 s decay) at its LZ's pitch. HARD: duller (a low
+// lowpass, a shorter ring, a thud under it). MISLANDED: a second bell a minor second above beating against it, sour.
+// OFF-SITE: no bell, a low bonk (a triangle dropping in pitch).
+function cueTouchdownBell(mix: Graph, t0: number, lz: number, landing: TouchdownSound): void {
   const voice = makeVoice(mix.ctx);
   const out = voice.gain(1, mix.buses.chord);
-  const tone = voice.filter('lowpass', gaps ? 2200 : 6000, 0.7, out);
-  const base = gaps ? 783.99 : 880;
+  // NO-GO (slice 1b): the off-site bonk a fourth lower and longer, with a dull knock of rock under it: the same family of
+  // "not where it should be", heavier, because this pod scored nothing.
+  if (landing === 'no-go') {
+    const amp = voice.gain(0, voice.filter('lowpass', 620, 0.8, out));
+    const end = pluck(amp.gain, t0, 0.36, 0.004, 0.6);
+    const bonk = voice.osc('triangle', 147, t0, end, amp);
+    sweep(bonk.frequency, t0, 147, 62, 0.45);
+    voice.osc('sine', 73, t0, end, voice.gain(0.7, amp));
+    const knock = voice.gain(0, out);
+    const knockEnd = pluck(knock.gain, t0, 0.2, 0.002, 0.08);
+    voice.noise(mix.brown, t0, knockEnd, voice.filter('lowpass', 400, 0.7, knock));
+    return;
+  }
+  if (landing === 'off-site') {
+    const amp = voice.gain(0, voice.filter('lowpass', 900, 0.8, out));
+    const end = pluck(amp.gain, t0, 0.32, 0.004, 0.42);
+    const bonk = voice.osc('triangle', 196, t0, end, amp);
+    sweep(bonk.frequency, t0, 196, 98, 0.3);
+    voice.osc('sine', 98, t0, end, voice.gain(0.6, amp));
+    return;
+  }
+  const base = bellHz(lz);
+  const hard = landing === 'hard';
+  const tone = voice.filter('lowpass', hard ? 1700 : 6000, 0.7, out);
   const amp = voice.gain(0, tone);
-  const end = pluck(amp.gain, t0, 0.14, 0.004, 1.5);
+  const end = pluck(amp.gain, t0, 0.14, 0.004, hard ? 0.7 : 1.5);
   voice.osc('sine', base, t0, end, amp);
-  voice.osc('sine', base * 1.5, t0, end, voice.gain(0.45, amp));
-  voice.osc('sine', base * 2.76, t0, t0 + 0.4, voice.gain(0.12, amp));
+  voice.osc('sine', base * 1.5, t0, end, voice.gain(hard ? 0.25 : 0.45, amp));
+  voice.osc('sine', base * 2.76, t0, t0 + 0.4, voice.gain(hard ? 0.04 : 0.12, amp));
+  if (landing === 'mislanded') voice.osc('sine', base * 2 ** (1 / 12), t0, end, voice.gain(0.8, amp));
+  if (hard) {
+    const thud = voice.gain(0, out);
+    const thudEnd = pluck(thud.gain, t0, 0.28, 0.004, 0.18);
+    const body = voice.osc('sine', 90, t0, thudEnd, thud);
+    sweep(body.frequency, t0, 90, 50, 0.15);
+  }
 }
 
 // The cues played lately, newest last, with the continuous voices switching on (`hollowChew:on`):
@@ -988,9 +1051,9 @@ function cueFizzle(mix: Graph, t0: number): void {
   voice.noise(mix.white, t0, end, band);
 }
 
-// §7.2 soulLost: a sine sweeping 880 → 220 Hz over a long fall, doubled a few cents flat so it
+// §7.2 sombreFall: a sine sweeping 880 → 220 Hz over a long fall, doubled a few cents flat so it
 // wavers, and a soft low tone under it. Not a crash or a scream (PG): something going out.
-function cueSoulLost(mix: Graph, t0: number): void {
+function cueSombreFall(mix: Graph, t0: number): void {
   const voice = makeVoice(mix.ctx);
   duck(mix, t0);
   const out = voice.gain(1, mix.buses.chord);
@@ -1006,9 +1069,9 @@ function cueSoulLost(mix: Graph, t0: number): void {
   voice.osc('triangle', 110, t0 + 0.2, underEnd, under);
 }
 
-// §7.2 clusterSaved: two notes rising a fourth (E5 → A5, triangles with an octave shimmer), then the
+// §7.2 driverSaved: two notes rising a fourth (E5 → A5, triangles with an octave shimmer), then the
 // red "shatters into blue sparkles": a few high glassy pings scattered over half a second.
-function cueClusterSaved(mix: Graph, t0: number): void {
+function cueDriverSaved(mix: Graph, t0: number): void {
   const voice = makeVoice(mix.ctx);
   duck(mix, t0);
   const out = voice.gain(1, mix.buses.chord);
@@ -1496,15 +1559,21 @@ function playOn(mix: Graph, cue: Cue, params: CueParams[Cue] | undefined, t0: nu
     case 'holdTick': cueHoldTick(mix, t0, (params as CueParams['holdTick']).count); return;
     case 'opChirp': cueOpChirp(mix, t0); return;
     case 'opDone': cueOpDone(mix, t0); return;
-    case 'revealPing': cueRevealPing(mix, t0, (params as CueParams['revealPing']).step); return;
-    case 'soulCrack': cueSoulCrack(mix, t0); return;
-    case 'revealChoir': cueRevealChoir(mix, t0); return;
+    case 'truthNote': cueTruthNote(mix, t0); return;
+    case 'arrivalChoir': cueArrivalChoir(mix, t0); return;
     case 'heartbeat': cueHeartbeat(mix, t0, (params as CueParams['heartbeat']).strength); return;
-    case 'printBell': cuePrintBell(mix, t0, (params as CueParams['printBell']).gaps); return;
+    case 'podLaunch': cuePodLaunch(mix, t0, (params as CueParams['podLaunch']).first); return;
+    case 'podEntry': cuePodEntry(mix, t0, (params as CueParams['podEntry']).first); return;
+    case 'touchdownBell': {
+      const bell = params as CueParams['touchdownBell'];
+      cueTouchdownBell(mix, t0, bell.lz, bell.landing);
+      return;
+    }
+    case 'dragHiss': cueDragHiss(mix, t0); return;
     case 'hollowBite': cueHollowBite(mix, t0); return;
     case 'fizzle': cueFizzle(mix, t0); return;
-    case 'soulLost': cueSoulLost(mix, t0); return;
-    case 'clusterSaved': cueClusterSaved(mix, t0); return;
+    case 'sombreFall': cueSombreFall(mix, t0); return;
+    case 'driverSaved': cueDriverSaved(mix, t0); return;
     case 'transmitSweep': cueTransmitSweep(mix, t0, (params as CueParams['transmitSweep']).seconds); return;
     case 'transitHit': cueTransitHit(mix, t0); return;
     case 'nameGlitch': cueNameGlitch(mix, t0); return;

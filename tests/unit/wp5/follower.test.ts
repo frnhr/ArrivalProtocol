@@ -1,71 +1,64 @@
-// WP5 acceptance 5: the WP1 literal follower (it obeys the flight table and nothing else: no TAB, no
-// SCAN, no repair) flies run 1's ship 1 with the archive sealed: SKIP stays held for the colonists,
-// it still locks, the printer finds the colonists by itself, and printing runs through to the WAKE
-// REPORT phase with all 12 clusters printed. A second kid also follows the reveal and the triage
-// (TAB, SCAN STASIS, REPAIR C09) and wakes everyone intact.
+// WP5 acceptance 5, slice 1a: the WP1 literal follower (it obeys the flight table and nothing else: no TAB, no repair)
+// flies run 1's ship 1. There is no sealed archive any more (the drivers are files from the start), so nothing holds
+// SKIP for the colonists: the follower never has a SKIP refused, it locks, and the lock starts the LANDING with all
+// three pods aboard; landed instantly (tests/unit/support/landing-instant.ts), the run reaches the LANDING REPORT with
+// all 600 colonists down. A second kid also follows the hurt-driver lesson (`POD 02 WILL LAND HARD — REPAIR its
+// driver`) and arrives with POD 02 healed.
+// The landing by the strip ([L] on the windows) is tests/unit/landing/ (Track SIM).
 import { check, finish, followStrip } from '../wp1/harness';
 import { createHarness5 } from './harness5';
-import { SKIP_REFUSAL_COLONISTS } from '@systems/pace';
-import { soulCounts, getByRole } from '@state/selectors';
-import { actionScan, actionRepair } from '@state/actions';
-import { setPrintFast } from '@systems/printer';
+import { colonistCounts } from '@state/selectors';
+import { actionRepair } from '@state/actions';
 import { installTool } from '@systems/licences';
+import { setLandingMode } from '../support/landing-instant';
 
 const h = createHarness5(1);
 
 {
   h.resetTo('flight');
-  let skipRefusals = 0;
-  const offRefused = h.events.length;
+  setLandingMode('manual');
+  const before = h.events.length;
   followStrip(h, 0.4, 400, () => undefined);
-  const refusedSkips = h.events.slice(offRefused).filter((event) => event.name === 'refused'
-    && (event.payload as { reason: string }).reason === SKIP_REFUSAL_COLONISTS).length;
-  skipRefusals = refusedSkips;
-  check('the follower locks (archive sealed the whole flight)', h.status() === 'locked', `${h.status()} at ${h.wall().toFixed(1)} s`);
-  // LEAD-1: the strip offers [F] SKIP again, sealed, once the colonists ask has stood SOULS_ASK_HOLD_SEC;
-  // what still holds is that the follower never pressed F into a refusal (CHECK THE COLONISTS FIRST).
-  check('the follower never had a SKIP refused (the strip offers [F] SKIP only once the hold is released)', skipRefusals === 0
-    && !h.events.some((event) => event.name === 'refused'));
-  const lockedAt = h.wall();
-  h.stepUntil(() => h.store.getState().run.phase === 'report', 200);
+  check('the follower locks', h.status() === 'locked', `${h.status()} at ${h.wall().toFixed(1)} s`);
+  check('the follower never had a SKIP refused (no colonists\' hold: the drivers were never sealed)',
+    !h.events.slice(before).some((event) => event.name === 'refused'),
+    h.events.slice(before).filter((event) => event.name === 'refused').map((event) => JSON.stringify(event.payload)).join(' '));
+  h.step();
   const state = h.store.getState();
-  const counts = soulCounts(state);
-  check('printing runs through to the WAKE REPORT phase', state.run.phase === 'report', `${state.run.phase} after ${(h.wall() - lockedAt).toFixed(1)} s`);
-  check('12 clusters printed', state.souls.results.length === 12 && h.souls().length === 0, `${state.souls.results.length}`);
-  check('the printer found them (cause printing) before the first print', state.souls.reveal.cause === 'printing');
-  // WP7 fix round 1: SoulCounts counts heads in `heads`; the intact ones are `intact` (was `woke`), and the
-  // half-credit `score` is RUN END's runScore only.
-  check('C09 never repaired: 2,200 woke intact, 200 with missing memories', counts.intact === 2200 && counts.wokeWithGaps === 200,
-    JSON.stringify(counts));
+  check('the lock starts the LANDING: every pod aboard, the bay loaded, the landing\'s clock started', state.run.phase === 'landing'
+    && colonistCounts(state).aboard === 600 && state.landing.bay.loaded > 0 && state.landing.startedAtTSec !== null,
+    `${state.run.phase} bay ${state.landing.bay.loaded} started ${state.landing.startedAtTSec}`);
+  const lockedAt = h.wall();
+  setLandingMode('instant');
+  h.stepUntil(() => h.store.getState().run.phase === 'report', 60);
+  const counts = colonistCounts(h.store.getState());
+  check('landed instantly, the LANDING REPORT follows with all 600 down in LZ-A', h.store.getState().run.phase === 'report'
+    && counts.landedInLz === 600 && h.souls().length === 0, `${h.store.getState().run.phase} after ${(h.wall() - lockedAt).toFixed(1)} s, ${JSON.stringify(counts)}`);
   console.log(`      locked at ${lockedAt.toFixed(1)} s, report at ${h.wall().toFixed(1)} s`);
 }
 
 {
-  // The kid who also does what the mind asks, from the ship screen (the actions themselves; the
-  // tutorial's TAB, chip and click are covered in reveal.test.ts): on the coast SCAN STASIS, then
-  // REPAIR C09 once it is known to be hurt; PRINT FAST once printing.
+  // The kid who also does what the mind asks, from the ship screen (the action itself; the lesson's TAB, chip and click
+  // are the e2e tier's): REPAIR POD 02 once the strip names it.
   h.resetTo('flight');
-  let scanned = false;
+  setLandingMode('manual');
   let repaired = false;
+  let asked = false;
   followStrip(h, 0.4, 400, () => {
     const state = h.store.getState();
     const line = state.director.shown;
-    if (!scanned && line?.id === 'tut-check-souls') scanned = actionScan(h.store, getByRole(state, 'stasis')!) === null;
-    if (scanned && !repaired && line?.id === 'tut-hurt-cluster-tab') {
+    if (!repaired && line?.id === 'tut-hurt-driver-tab') {
+      asked = true;
       if (!state.run.licences.includes('repair')) installTool(h.store, 'repair');
-      repaired = actionRepair(h.store, h.soul('C09')) === null;
+      repaired = actionRepair(h.store, h.soul('POD 02')) === null;
     }
   });
-  check('the reveal-and-triage kid locks too', h.status() === 'locked', `${h.status()} at ${h.wall().toFixed(1)} s`);
-  check('…having scanned STASIS (the reveal by scan) and repaired C09 on the coast', scanned && repaired
-    && h.store.getState().souls.reveal.cause === 'scan' && h.soul('C09').integrity === 100);
-  h.step();
-  setPrintFast(h.store, true);
-  const lockedAt = h.wall();
-  h.stepUntil(() => h.store.getState().run.phase === 'report', 200);
-  const counts = soulCounts(h.store.getState());
-  check('…and wakes all 2,400 intact, PRINT FAST in about 7.5 s', counts.intact === 2400 && counts.heads === 2400
-    && h.wall() - lockedAt < 7.5 + 2.5, `${JSON.stringify(counts)} in ${(h.wall() - lockedAt).toFixed(1)} s`);
+  check('the strip asks for POD 02 (the hurt-driver lesson) during the flight', asked);
+  check('the lesson-following kid locks too, having repaired POD 02 on the way', h.status() === 'locked' && repaired && h.soul('POD 02').integrity === 100,
+    `${h.status()} repaired=${repaired}`);
+  setLandingMode('instant');
+  h.stepUntil(() => h.store.getState().run.phase === 'report', 60);
+  check('…and lands all 600', colonistCounts(h.store.getState()).landedInLz === 600);
 }
 
 finish();

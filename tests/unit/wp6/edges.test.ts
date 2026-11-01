@@ -1,13 +1,17 @@
 // WP7: HollowDef gained `story` and the timed wake `coastLeadSec` (HALCYON's coast-tied wake); the
 // fixtures below spell them out (no story, no coast lead: the WP6 behaviour they test).
+// Slice 1a: pods for clusters on ARES-VII (rack A's 18 free blocks, the root, POD 01–03, then 160 free): POD 03 stands
+// in for the clusters these cases ate and moved, POD 01 (next to the root) for C12; an eaten driver is recorded on its
+// pod (driverLost). The landing stands ('manual' landing mode) unless a case lands it; "a print and a bite in the same
+// tick" became a launch and a bite (the landing ticks before HOLLOW, so the launch wins).
 // WP6 edge cases (§9 WP6 "Edge cases", items 4, 5, 7, 8 and the WP3 TODO on a consumed clone), on
 // the live systems through the harness:
-// • consume mid-repair: the repair is aborted, the charge it spent stays spent, the cluster did not wake;
+// • consume mid-repair: the repair is aborted, the charge it spent stays spent, the driver is eaten;
 // • a MOVE's clone eaten where it was being written: the jump's source comes back online (the cluster
 //   is NOT lost), the slide's file is gone (lost), the reserved space is handed back, memory stays
 //   valid; a jump's source eaten: the half-written clone goes, the cluster is lost;
 // • a COPY eaten mid-write: the original keeps running; a bite on a moving file travels with it;
-// • a print and a bite in the same tick: the printer ticks first, the print wins;
+// • a launch and a bite in the same tick: the landing ticks first, the launch wins;
 // • refusals: MOVE on an infected file, REPAIR on an infected ship file, DELETE on the root (LOCKED)
 //   and on an eaten block (allowed, 1.0 + 0.5 s per block, the gap comes back);
 // • the eaten alarm's hysteresis (raise ≤ 10 s, clear only past 21 s or when won);
@@ -25,11 +29,12 @@ import { isHollowAlert } from '@systems/alerts';
 import { actionRepair, actionMove, actionCopy, actionDelete, actionRefusal, deleteSec } from '@state/actions';
 import { getOps } from '@systems/ops-core';
 import { installTool } from '@systems/licences';
-import { setPrintNext } from '@systems/printer';
+import { setLandingMode } from '../support/landing-instant';
+import { podRecord } from '@systems/landing-rules';
 import { setPaused, isLivePhase } from '@systems/clock';
 import { lineVars, speakerTag } from '@data/script';
 import { getPrediction } from '@systems/predict';
-import { getRedundancy, getByRole, getAiCore, soulsInMemory } from '@state/selectors';
+import { getRedundancy, getByRole, getAiCore, driversInMemory } from '@state/selectors';
 import { segmentStarts } from '@systems/memory-ops';
 import { TOOL_REFUSAL } from '@data/tool-text';
 import type { HollowDef } from '@data/ships';
@@ -37,12 +42,13 @@ import type { Segment, FreeSegment, HollowSegment } from '@/types/segment';
 import { DELETE_HOLLOW_BASE_SEC, DELETE_HOLLOW_PER_BLOCK_SEC } from '@data/tuning';
 
 const h = createHarness6(1, { soulsFound: true });
+setLandingMode('manual');
 const state = () => h.store.getState();
 const mem = (): Segment[] => state().memory;
 
 // A hungry HOLLOW for the structural cases: no spread, a drain no repair can beat (tests only:
 // validateHollowDef would refuse it on a ship), so an infected file is eaten within a second.
-const HUNGRY: HollowDef = { wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: null, drainPerSec: 200, burnMult: 1, printMult: 1, seed: null, verbs: null, deal: false, story: 'none' };
+const HUNGRY: HollowDef = { wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: null, drainPerSec: 200, burnMult: 1, landMult: 1, seed: null, verbs: null, deal: false, story: 'none' };
 
 function fresh(cfg?: HollowDef): void {
   h.resetTo('flight');
@@ -61,26 +67,32 @@ const freeAfter = (seg: Segment): FreeSegment => {
   if (!next || next.type !== 'free') throw new Error(`no free space after ${seg.name}`);
   return next;
 };
-const lostClusters = (): string[] => state().souls.results.filter((result) => result.outcome === 'lost').map((result) => result.cluster);
-// HOLLOW's echoes since `fromId`, and the soul flag of the hollow-consume events since `fromEvent`.
+const freeBefore = (seg: Segment): FreeSegment => {
+  const index = mem().indexOf(seg);
+  const previous = mem()[index - 1];
+  if (!previous || previous.type !== 'free') throw new Error(`no free space before ${seg.name}`);
+  return previous;
+};
+const lostPods = (): number[] => state().landing.pods.filter((record) => record.driverLost === 'eaten').map((record) => record.pod);
+// HOLLOW's echoes since `fromId`, and the driver flag of the hollow-consume events since `fromEvent`.
 const hollowLines = (fromId: number): string[] => h.log().filter((entry) => entry.id > fromId && entry.speaker === 'hollow').map((entry) => entry.text);
 const consumeSouls = (fromEvent: number): boolean[] => h.events.slice(fromEvent).filter((event) => event.name === 'hollow-consume')
-  .map((event) => (event.payload as { soul: boolean }).soul);
+  .map((event) => (event.payload as { driver: boolean }).driver);
 const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
 
 // --- Consume mid-repair -----------------------------------------------------------------------------
 {
   fresh({ ...HUNGRY, drainPerSec: 40 });
-  const c11 = h.soul('C11');
-  infectNow(h.store, c11);
+  const pod3 = h.soul('POD 03');
+  infectNow(h.store, pod3);
   h.step();
   const chargeBefore = getRedundancy(state())!.used;
-  const started = actionRepair(h.store, c11) === null;
+  const started = actionRepair(h.store, pod3) === null;
   // Net loss 40 − 18.5 = 21.5 points/s: eaten about 4.6 s into the repair.
   h.stepFor(6);
   const spent = chargeBefore - getRedundancy(state())!.used;
-  check('consume mid-repair (a drain the heal can\'t beat): the repair is aborted, the cluster is hollow, C11 did not wake',
-    started && getOps().length === 0 && h.maybeSoul('C11') === null && lostClusters().includes('C11'), `lost: ${lostClusters()}`);
+  check('consume mid-repair (a drain the heal can\'t beat): the repair is aborted, the driver is hollow, POD 03\'s driver eaten',
+    started && getOps().length === 0 && h.maybeSoul('POD 03') === null && lostPods().includes(3), `lost: ${lostPods()}`);
   check('…the charge it spent stays spent', spent > 0, `${spent} spent`);
   h.checkMemory();
 }
@@ -88,37 +100,37 @@ const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
 // --- REPAIR on a file bitten this very tick (still 100%) ------------------------------------------------
 {
   fresh({ ...HUNGRY, drainPerSec: 2 });
-  const c11 = h.soul('C11');
-  infectNow(h.store, c11);
-  const refusal = actionRefusal(state(), 'repair', c11);
-  const started = actionRepair(h.store, c11) === null;
+  const pod3 = h.soul('POD 03');
+  infectNow(h.store, pod3);
+  const refusal = actionRefusal(state(), 'repair', pod3);
+  const started = actionRepair(h.store, pod3) === null;
   h.step();
   check('a file bitten this very tick (still 100%) can be repaired, and the repair wins at once (cured, recoiling)',
-    refusal === null && started && !c11.infected && c11.recoilUntilAi !== undefined && c11.integrity === 100);
+    refusal === null && started && !pod3.infected && pod3.recoilUntilAi !== undefined && pod3.integrity === 100);
 }
 
 // --- MOVE: the clone eaten where it is written (jump) ---------------------------------------------------
 {
   fresh(HUNGRY);
-  const c01 = h.soul('C01');
+  const c01 = h.soul('POD 03');
   const root = mem().find((seg): seg is HollowSegment => seg.type === 'hollow' && seg.root)!;
-  const gap = freeAfter(root);
+  const gap = freeBefore(root);
   const startsBefore = segmentStarts(mem())[mem().indexOf(c01)];
-  const moved = actionMove(h.store, c01, { regionSegIds: [gap.id], col: 0 }) === null;
-  const clone = mem().find((seg) => seg.type === 'soul' && seg.cluster === 'C01' && seg !== c01)!;
+  const moved = actionMove(h.store, c01, { regionSegIds: [gap.id], col: gap.size - c01.size }) === null;
+  const clone = mem().find((seg) => seg.type === 'driver' && seg.pod === 3 && seg !== c01)!;
   const logFrom = lastLogId();
   const eventFrom = h.events.length;
   infectNow(h.store, clone);
   h.stepFor(1);
-  const after = h.maybeSoul('C01');
-  check('jump MOVE, clone eaten mid-write: the move is aborted, C01 is back online where it was, NOT lost',
+  const after = h.maybeSoul('POD 03');
+  check('jump MOVE, clone eaten mid-write: the move is aborted, POD 03 is back online where it was, NOT lost',
     moved && getOps().length === 0 && after === c01 && after.state !== 'transferring' && !after.operating
-      && segmentStarts(mem())[mem().indexOf(c01)] === startsBefore && !lostClusters().includes('C01'), `lost: ${lostClusters()}`);
-  const block = mem()[mem().indexOf(root) + 1]!;
+      && segmentStarts(mem())[mem().indexOf(c01)] === startsBefore && !lostPods().includes(3), `lost: ${lostPods()}`);
+  const block = mem()[mem().indexOf(root) - 1]!;
   check('…the clone\'s blocks are HOLLOW\'s now (next to the root), the reserved space is free again (no reservation left)',
     block.type === 'hollow' && !block.root && mem().every((seg) => seg.type !== 'free' || seg.reservedBy === undefined));
-  check('…HOLLOW echoes `> eat c01 ... COPY GONE` (C01 lives on), and the eaten event is no lost soul (no soulLost sweep)',
-    hollowLines(logFrom).includes('> eat c01 ... COPY GONE   [user: ???]') && consumeSouls(eventFrom).join() === 'false',
+  check('…HOLLOW echoes `> eat pod03 ... COPY GONE` (POD 03 lives on), and the eaten event is no lost driver',
+    hollowLines(logFrom).includes('> eat pod03 ... COPY GONE   [user: ???]') && consumeSouls(eventFrom).join() === 'false',
     `${hollowLines(logFrom).join(' | ')}; soul ${consumeSouls(eventFrom).join()}`);
   h.checkMemory();
 }
@@ -126,18 +138,18 @@ const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
 // --- MOVE: the source eaten mid-move (jump) -----------------------------------------------------------
 {
   fresh(HUNGRY);
-  const c01 = h.soul('C01');
+  const c01 = h.soul('POD 03');
   const biggest = mem().filter((seg): seg is FreeSegment => seg.type === 'free').sort((a, b) => b.size - a.size)[0]!;
   actionMove(h.store, c01, { regionSegIds: [biggest.id], col: biggest.size - c01.size });
   const logFrom = lastLogId();
   const eventFrom = h.events.length;
   infectNow(h.store, c01);
   h.stepFor(1);
-  check('jump MOVE, source eaten mid-move: the half-written clone goes, C01 is lost (no copy left)',
-    getOps().length === 0 && h.maybeSoul('C01') === null && lostClusters().includes('C01')
-      && soulsInMemory(state()).length === 11, `${soulsInMemory(state()).length} clusters`);
-  check('…HOLLOW echoes `> eat c01 ... DID NOT WAKE`, and the eaten event is a lost soul',
-    hollowLines(logFrom).includes('> eat c01 ... DID NOT WAKE   [user: ???]') && consumeSouls(eventFrom).join() === 'true',
+  check('jump MOVE, source eaten mid-move: the half-written clone goes, POD 03\'s driver is eaten (no copy left)',
+    getOps().length === 0 && h.maybeSoul('POD 03') === null && lostPods().includes(3)
+      && driversInMemory(state()).length === 2, `${driversInMemory(state()).length} drivers`);
+  check("…HOLLOW echoes `> eat pod03 ... CAN'T LAUNCH`, and the eaten event is an eaten driver",
+    hollowLines(logFrom).includes("> eat pod03 ... CAN'T LAUNCH   [user: ???]") && consumeSouls(eventFrom).join() === 'true',
     `${hollowLines(logFrom).join(' | ')}; soul ${consumeSouls(eventFrom).join()}`);
   h.checkMemory();
 }
@@ -145,14 +157,14 @@ const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
 // --- MOVE: the only copy eaten mid-slide ---------------------------------------------------------------
 {
   fresh(HUNGRY);
-  const c06 = h.soul('C06');  // rack B's last cluster: 16 free blocks to its right
+  const c06 = h.soul('POD 03');  // rack B's last driver: 160 free blocks to its right
   const gap = freeAfter(c06);
   actionMove(h.store, c06, { regionSegIds: [c06.id, gap.id], col: 4 });
-  const slid = mem().find((seg) => seg.type === 'soul' && seg.cluster === 'C06')!;
+  const slid = mem().find((seg) => seg.type === 'driver' && seg.pod === 3)!;
   infectNow(h.store, slid);
   h.stepFor(1);
-  check('slide MOVE, the file eaten mid-slide: it was the only copy, so C06 is gone (lost), reservations released',
-    getOps().length === 0 && h.maybeSoul('C06') === null && lostClusters().includes('C06')
+  check('slide MOVE, the file eaten mid-slide: it was the only copy, so POD 03\'s driver is gone (eaten), reservations released',
+    getOps().length === 0 && h.maybeSoul('POD 03') === null && lostPods().includes(3)
       && mem().every((seg) => seg.type !== 'free' || seg.reservedBy === undefined));
   h.checkMemory();
 }
@@ -178,43 +190,46 @@ const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
 // --- A bite on a moving file travels with it ---------------------------------------------------------------------
 {
   fresh({ ...HUNGRY, drainPerSec: 2 });
-  const c01 = h.soul('C01');
+  const c01 = h.soul('POD 03');
   const biggest = mem().filter((seg): seg is FreeSegment => seg.type === 'free').sort((a, b) => b.size - a.size)[0]!;
   actionMove(h.store, c01, { regionSegIds: [biggest.id], col: biggest.size - c01.size });
   h.stepFor(0.5);
   infectNow(h.store, c01);
   h.runOps();
-  const landed = h.soul('C01');
+  const landed = h.soul('POD 03');
   check('a jump MOVE whose source is bitten on the way lands infected, with the bite\'s damage (a move never heals)',
     landed !== c01 && landed.infected !== undefined && landed.integrity < 100, `${landed.integrity.toFixed(1)}%`);
   h.checkMemory();
 }
 
-// --- A print and a bite in the same tick ---------------------------------------------------------------------------
+// --- A launch and a bite in the same tick ---------------------------------------------------------------------------
+// The landing's systems tick before HOLLOW (main.ts mounts the landing first, as the harness does): pods launched in a
+// tick are gone before that tick's bite. The launch here is the instant landing's (forceLandAll through the real
+// launch path, from an AI tick mounted with the landing): a kid's [L] lands between ticks, so only an in-tick launcher
+// (a future controller, requestLaunch) can race a bite.
 {
-  fresh({ wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: 25, drainPerSec: 2, burnMult: 2, printMult: 1, seed: null, verbs: null, deal: false, story: 'none' });
-  h.startPrinting(1);
+  fresh({ wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: 25, drainPerSec: 2, burnMult: 2, landMult: 1, seed: null, verbs: null, deal: false, story: 'none' });
+  h.startLanding(1);
   h.step();
-  setPrintNext(h.store, 'C12');
   h.store.update((d) => {
     d.hollow.phase = 'awake';
     d.hollow.biteInSec = 0.01;
-    d.printer.progress = 0.999;
-    d.printer.waitAiSec = 0;
   });
+  setLandingMode('instant');
   h.step();
-  const printed = state().souls.results.find((result) => result.cluster === 'C12');
-  check('a print and a bite in the same tick: the printer ticks first, C12 prints (woke) and is never bitten',
-    printed?.outcome === 'woke' && !h.events.some((event) => event.name === 'hollow-infect'
-      && (event.payload as { segId: string }).segId === 'soul_c12'), printed?.outcome);
+  setLandingMode('manual');
+  const pod1 = podRecord(state(), 1).fate;
+  check('a launch and a bite in the same tick: the landing ticks first, POD 01 launches (down) and is never bitten',
+    pod1.kind === 'down' && !h.events.some((event) => event.name === 'hollow-infect'
+      && (event.payload as { segId: string }).segId === 'driver_pod01'), pod1.kind);
 }
 
 // --- Refusals ---------------------------------------------------------------------------------------------------------------
 {
   fresh(HUNGRY);
-  const c11 = h.soul('C11');
-  infectNow(h.store, c11);
-  check('MOVE on an infected cluster: STILL INFECTED — REPAIR FIRST', actionRefusal(state(), 'move', c11) === TOOL_REFUSAL.infected);
+  const pod3 = h.soul('POD 03');
+  infectNow(h.store, pod3);
+  check('MOVE on an infected driver: STILL INFECTED — REPAIR FIRST', actionRefusal(state(), 'move', pod3) === TOOL_REFUSAL.infected);
   const cargo = getByRole(state(), 'cargo')!;
   infectNow(h.store, cargo);
   check('REPAIR on an infected ship file: SHIP FILES CAN\'T BE HEALED — SWAP OR DELETE IT', actionRefusal(state(), 'repair', cargo) === TOOL_REFUSAL.shipFile);
@@ -222,7 +237,7 @@ const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
   check('DELETE on the root: LOCKED; REPAIR on it: LOCKED', actionRefusal(state(), 'delete', root) === TOOL_REFUSAL.locked
     && actionRefusal(state(), 'repair', root) === TOOL_REFUSAL.locked);
   h.stepFor(1);
-  const eaten = mem().find((seg): seg is HollowSegment => seg.type === 'hollow' && seg.ate === 'C11 · FONTAINE')!;
+  const eaten = mem().find((seg): seg is HollowSegment => seg.type === 'hollow' && seg.atePod === 3)!;
   check('an eaten block: REPAIR / MOVE refused (THIS FILE WAS EATEN — ONLY DELETE WORKS), DELETE allowed',
     actionRefusal(state(), 'repair', eaten) === TOOL_REFUSAL.eaten && actionRefusal(state(), 'move', eaten) === TOOL_REFUSAL.eaten
       && actionRefusal(state(), 'delete', eaten) === null);
@@ -237,11 +252,11 @@ const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
 // --- The eaten alarm's hysteresis -----------------------------------------------------------------------------------------
 {
   fresh({ ...HUNGRY, drainPerSec: 2 });
-  h.startPrinting(1);
+  h.startLanding(1);
   h.step();
-  const c12 = h.soul('C12');
+  const c12 = h.soul('POD 01');
   infectNow(h.store, c12);
-  const up = (): boolean => state().alerts.list.some((alert) => alert.id === 'eaten:C12');
+  const up = (): boolean => state().alerts.list.some((alert) => alert.id === 'eaten:1');
   h.store.update(() => { c12.integrity = 30; });   // 15 s out at 2/s: no alarm yet
   h.step();
   const before = up();
@@ -272,12 +287,12 @@ const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
   check('CORE INFECTED on the opening crash course: an alarm that holds SKIP, but the strip keeps DON\'T HIT THE PLANET',
     coreInfected(state()) && state().alerts.list.some((alert) => alert.id === 'core-infected' && alert.severity === 'alarm' && alert.inhibitsSkip)
       && h.shown()?.source === 'flight' && /^DON'T HIT THE PLANET/.test(h.shown()?.text ?? ''), h.shown()?.text);
-  h.startPrinting(1);
+  h.startLanding(1);
   h.stepFor(0.5);
-  check('…off the crash course (printing), from amber: CORE INFECTED — [TAB], REPAIR THE CORE', h.shown()?.id === 'alarm-core-tab', h.shown()?.text);
+  check('…off the crash course (landing), from amber: CORE INFECTED — [TAB], REPAIR THE CORE', h.shown()?.id === 'alarm-core-tab', h.shown()?.text);
   h.store.update(() => { core.integrity = 0.04; });
   h.stepFor(0.5);
-  check('the Core eaten to 0 (while printing): the ship is lost (CORE LOST), the clock stops, no resume, the Core is still the Core',
+  check('the Core eaten to 0 (while landing): the ship is lost (CORE LOST), the clock stops, no resume, the Core is still the Core',
     state().run.coreLost && state().clock.paused && !isLivePhase(state()) && !setPaused(h.store, false)
       && getAiCore(state()) === core && core.integrity === 0 && h.events.some((event) => event.name === 'core-lost'));
   check('…the strip says CORE LOST', h.shown()?.id === 'over-core-lost' && h.shown()?.text === 'CORE LOST', h.shown()?.text);
@@ -288,22 +303,22 @@ const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
 // --- A ship that crashes with HOLLOW's alarm up ----------------------------------------------------------------------------------
 {
   fresh({ ...HUNGRY, drainPerSec: 2 });
-  const c12 = h.soul('C12');
+  const c12 = h.soul('POD 01');
   infectNow(h.store, c12);
   h.store.update(() => { c12.integrity = 12; });   // 6 s out at the burn's drain: the alarm
   h.step();
   const before = state().alerts.list.filter(isHollowAlert).map((alert) => alert.id).join();
   endFlight(h.store, 'crashed');
   h.stepFor(1);
-  check('a crash with C12\'s alarm up: HOLLOW\'s alerts go with the flight (paused under the LOST card, no vignette)',
-    before === 'hollow-infected,eaten:C12' && state().clock.paused && !state().alerts.list.some(isHollowAlert),
+  check('a crash with POD 01\'s alarm up: HOLLOW\'s alerts go with the flight (paused under the LOST card, no vignette)',
+    before === 'hollow-infected,eaten:1' && state().clock.paused && !state().alerts.list.some(isHollowAlert),
     `before: ${before}; after: ${state().alerts.list.map((alert) => alert.id).join()}`);
 }
 
 // --- The eaten countdown never jumps on SPACE (§2 pillar 5) ----------------------------------------------------------------------
 {
   fresh({ ...HUNGRY, drainPerSec: 2, burnMult: 2 });
-  const c12 = h.soul('C12');
+  const c12 = h.soul('POD 01');
   infectNow(h.store, c12);
   h.store.update(() => { c12.integrity = 30; });
   h.step();
@@ -325,7 +340,7 @@ const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
 // --- A ship file being eaten -----------------------------------------------------------------------------------------------------
 {
   fresh({ ...HUNGRY, drainPerSec: 2 });
-  h.startPrinting(1);
+  h.startLanding(1);
   h.step();
   infectNow(h.store, getByRole(state(), 'cargo')!);
   h.stepFor(0.5);
@@ -350,7 +365,7 @@ const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
 // --- A world reset mid-fight -----------------------------------------------------------------------------------------------------------
 {
   h.resetTo('flight');
-  infectNow(h.store, h.soul('C12'));
+  infectNow(h.store, h.soul('POD 01'));
   h.stepFor(1);
   h.resetTo('flight');
   h.stepFor(1);

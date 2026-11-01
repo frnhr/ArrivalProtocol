@@ -1,23 +1,18 @@
-import type { Segment, FsToolSegment, SoulSegment, HollowSegment } from '@/types/segment';
+import type { Segment, FsToolSegment, DriverSegment, HollowSegment } from '@/types/segment';
 import type { Store } from '@state/store';
-import type { GameState, ClusterOutcome } from '@state/schema';
+import type { GameState } from '@state/schema';
 import {
   getFsTool, getRedundancy, getFreeTotal, getSegmentById, selectCorruption, shownIntegrity, isRepairable,
-  healthKnown, soulOutcome, isInfected, revealUnderway, type HealthSegment,
+  healthKnown, isInfected, type HealthSegment,
 } from '@state/selectors';
-import {
-  INTEGRITY_MAX, REVEAL_TYPE_CPS, REVEAL_TICK_EVERY_CHARS, REVEAL_LINE_AT_SEC, PRINT_RANGE_FLOOR, PRINT_FAST_FACTOR,
-} from '@data/tuning';
-import { printStatus, printerRange, isPrintable, printFastRefusal, printFastActive } from '@systems/printer';
-import { onPostTick } from '@systems/clock';
-import { onWorldReset } from '@systems/reset';
-import { play } from '@systems/audio';
-import { PRINT_FAST_HINT_TARGET } from '@data/script';
+import { INTEGRITY_MAX, BAND_FAILING_MIN } from '@data/tuning';
+import { isLaunchable, driverTouch, dropFactors } from '@systems/landing-rules';
+import { driverLanding } from '@systems/landing-hud';
+import { getDropSolution } from '@systems/drop-cache';
+import { capabilitiesNow } from '@systems/capabilities';
 import { creditName } from '@data/souls';
-import { unitsAt } from '@components/hud/typewriter';
+import { podCode, DRIVER_DETAIL_TEXT, POD_STATE_TEXT } from '@data/landing-text';
 import { guardPresses } from '@components/dom';
-import { setDrawerOpen } from './MobileDrawers';
-import { MOBILE_MEDIA_QUERY } from '@/utils/viewport';
 import { heartbeatSvg, heartbeatKind } from './SegmentBlock';
 import { onOpsChange, threadsBusy, threadsTotal } from '@systems/ops-core';
 import { findBackup } from '@systems/tool-targets';
@@ -38,7 +33,7 @@ import { visibleDamage } from './MemoryStats';
 // rules, a free thread), so a disabled button says the same reason a click would, and main.ts
 // runs them through the same actions, which re-check everything at the click.
 
-export type DetailActionId = 'repair' | 'delete_charge' | 'scan' | 'print-next' | 'print-fast' | 'noop';
+export type DetailActionId = 'repair' | 'delete_charge' | 'scan' | 'load-next' | 'noop';
 
 interface ActionOption {
   id: DetailActionId;
@@ -46,7 +41,7 @@ interface ActionOption {
   cost?: string;
   cls?: string;
   disabled?: boolean;
-  hintTarget?: string;  // a strip line can light this button (PRINT FAST ▸▸)
+  hintTarget?: string;  // a strip line can light this button
 }
 
 interface ComputedActions {
@@ -57,8 +52,6 @@ interface ComputedActions {
 interface RenderDetailDeps {
   state: Readonly<GameState>;
   onAction: (seg: Segment, actionId: DetailActionId) => void;
-  // PRINT FAST ▸▸ is about the whole printer, not the file on show (it is also on the overview).
-  onPrintFast: () => void;
   onCorruptionSliderInput?: (pct: number) => void;
   // current global corruption 0..1, used to initialize the demo slider
   getCorruption?: () => number;
@@ -74,42 +67,16 @@ function scanOption(state: Readonly<GameState>, seg: Segment, label: string): Ac
   return { id: 'scan', label, cost: refusal ?? 'scan', disabled: refusal !== null, cls: refusal ? 'disabled' : '' };
 }
 
-// How many times faster PRINT FAST prints (×4), as its button says it.
-const PRINT_FAST_SPEEDUP = Math.round(1 / PRINT_FAST_FACTOR);
-
-// PRINT FAST ▸▸ (§6.7): a toggle, offered wherever printing is on screen (a cluster, the overview).
-// While anything is infected it can't be switched on (WP6, §6.7), and a fast printer HOLLOW bites
-// mid-run waits at normal speed until the mind is clear: the button says which.
-function printFastOption(state: Readonly<GameState>): ActionOption {
-  const fast = state.printer.fast;
+// LOAD NEXT (PRINT NEXT renamed, 01-landing §3.8): this pod to the front of the launch queue (again: back to its place).
+function loadNextOption(state: Readonly<GameState>, driver: DriverSegment): ActionOption {
+  const pinned = state.landing.loadNext === driver.pod;
   const paused = state.clock.paused;
-  const blocked = !fast && printFastRefusal(state) !== null;
-  const waiting = fast && !printFastActive(state);
-  let cost: string;
-  if (paused) cost = 'PAUSED';
-  else if (blocked) cost = printFastRefusal(state)!;
-  else if (waiting) cost = 'waits · something is infected';
-  else cost = fast ? 'on · click for normal' : `×${PRINT_FAST_SPEEDUP} speed`;
+  const waits = !isLaunchable(driver);
   return {
-    id: 'print-fast',
-    label: fast ? '▸▸ printing fast' : '▸▸ print fast',
-    cost,
-    cls: paused || blocked ? 'disabled' : fast ? 'print on' : 'print',
-    disabled: paused || blocked,
-    hintTarget: PRINT_FAST_HINT_TARGET,
-  };
-}
-
-// PRINT NEXT: this cluster to the front of the line (again: back to its place).
-function printNextOption(state: Readonly<GameState>, soul: SoulSegment): ActionOption {
-  const pinned = state.printer.printNext === soul.cluster;
-  const paused = state.clock.paused;
-  const waits = !isPrintable(soul);
-  return {
-    id: 'print-next',
-    label: pinned ? '✓ next in line' : '▸ print next',
-    cost: paused ? 'PAUSED' : pinned ? (waits ? 'waits for its op' : 'click to undo') : 'first in line',
-    cls: paused ? 'disabled' : pinned ? 'print on' : 'print',
+    id: 'load-next',
+    label: pinned ? '✓ next in line' : `▸ ${DRIVER_DETAIL_TEXT.loadNext.toLowerCase()}`,
+    cost: paused ? 'PAUSED' : pinned ? (waits ? "waits: can't launch yet" : 'click to undo') : 'first in line',
+    cls: paused ? 'disabled' : pinned ? 'load-next on' : 'load-next',
     disabled: paused,
   };
 }
@@ -117,8 +84,6 @@ function printNextOption(state: Readonly<GameState>, soul: SoulSegment): ActionO
 export function computeActions(seg: Segment, state: Readonly<GameState>): ComputedActions {
   const out: ComputedActions = { primary: [], notesHtml: '' };
   const segState = 'state' in seg ? seg.state : undefined;
-  // A sealed cluster: nothing to do to it (every tool is refused until the reveal).
-  if (seg.type === 'soul' && seg.sealed) return out;
   // WP10: the swap button is gone (SWAP is a tool file now, §8): a ship file with a backup says where its job can
   // go, scanned or not (it names no health), so the kid who followed the THRUST CTRL pip here knows what SWAP is for.
   if (seg.type === 'ship') {
@@ -132,9 +97,7 @@ export function computeActions(seg: Segment, state: Readonly<GameState>): Comput
     out.primary.push(scanOption(state, seg, '◎ scan for integrity'));
     return out;
   }
-  if (seg.type === 'soul' && state.run.phase === 'printing') {
-    out.primary.push(printNextOption(state, seg), printFastOption(state));
-  }
+  if (seg.type === 'driver' && state.run.phase === 'landing') out.primary.push(loadNextOption(state, seg));
 
   if (isRepairable(seg) && seg.integrity < INTEGRITY_MAX) {
     const repair = getFsTool(state, 'repair');
@@ -176,14 +139,21 @@ function renderActionButton(option: ActionOption): string {
   return `<button class="${cls}" data-action="${option.id}"${hint} tabindex="-1">${option.label}<span class="cost">${option.cost || ''}</span></button>`;
 }
 
-// --- Souls (§6.7) --------------------------------------------------------------------------------
+// --- Pod drivers (01-landing §3.8) -----------------------------------------------------------------
 
-// HollowPainter patches the words and the heart in place while HOLLOW drains a cluster across a line
+// How a driver's pod would land if it launched now: soft, hard (the failing band), or not at all (dead).
+export type DriverOutlook = 'soft' | 'hard' | 'cant';
+
+export function driverOutlook(integrity: number): DriverOutlook {
+  return integrity < BAND_FAILING_MIN ? 'cant' : driverTouch(integrity);
+}
+
+// HollowPainter patches the words and the heart in place while HOLLOW drains a driver across a line
 // (`data-live-outcome`): the panel rebuilds only on a discrete change.
-export const OUTCOME_WORDS: Readonly<Record<ClusterOutcome, { text: string; cls: string }>> = {
-  woke: { text: 'WILL WAKE', cls: 'good' },
-  gaps: { text: 'WILL WAKE WITH GAPS', cls: 'partial' },
-  lost: { text: 'WILL NOT WAKE', cls: 'warn' },
+export const OUTCOME_WORDS: Readonly<Record<DriverOutlook, { text: string; cls: string }>> = {
+  soft: { text: 'WILL LAND SOFT', cls: 'good' },
+  hard: { text: DRIVER_DETAIL_TEXT.hard, cls: 'partial' },
+  cant: { text: DRIVER_DETAIL_TEXT.cantLaunch, cls: 'warn' },
 };
 
 // A size row's words: WP11's last block is the first file of one block (`1 block`, never `1 blocks`).
@@ -191,21 +161,10 @@ function sizeText(size: number): string {
   return `${size} ${size === 1 ? 'block' : 'blocks'}`;
 }
 
-// The sealed slab: what it is stays hidden (§6.7), and the clue points at STASIS.
-function sealedHtml(seg: SoulSegment): string {
-  return `
-    <div class="detail-title">Sealed block</div>
-    <div class="detail-type">Sealed · contents unknown</div>
-    <div class="detail-row"><span class="k">size</span><span class="v">${sizeText(seg.size)}</span></div>
-    <div class="detail-row"><span class="k">state</span><span class="v unknown">SEALED</span></div>
-    <div class="detail-desc">Locked since launch. It won't say what is inside. The STASIS file might know.</div>`;
-}
-
-// An open cluster: who they are (three people, by name), how the cluster is, and what printing it
-// now would do.
-function soulHtml(seg: SoulSegment, state: Readonly<GameState>): string {
-  const outcome = soulOutcome(seg.integrity);
-  const words = OUTCOME_WORDS[outcome];
+// A driver: whose pod it flies (three people, by name), how the driver is, and how its pod would land now.
+function driverHtml(seg: DriverSegment, state: Readonly<GameState>): string {
+  const outlook = driverOutlook(seg.integrity);
+  const words = OUTCOME_WORDS[outlook];
   let stateRow: string;
   if (seg.state === 'repairing') {
     stateRow = `<span class="v live" data-live-integrity="${seg.id}" data-live-prefix="${LIVE_REPAIR_PREFIX}REPAIRING · ">${LIVE_REPAIR_PREFIX}REPAIRING · ${shownIntegrity(seg.integrity)}%</span>`;
@@ -216,26 +175,31 @@ function soulHtml(seg: SoulSegment, state: Readonly<GameState>): string {
   } else {
     stateRow = `<span class="v ${words.cls}">${shownIntegrity(seg.integrity)}%</span>`;
   }
-  // A person first, named the way the WAKE REPORT names them (`Ada Okafor, 11, wants to name the
-  // first tree.`: data/souls.ts colonistIntro), in the colonists' colour, then who they are.
+  // A person first, named the way the LANDING REPORT names them (`Ada Okafor, 11, wants to name the first tree.`:
+  // data/souls.ts colonistIntro), in the colonists' colour, then who they are.
   const people = seg.featured.map((colonist) => `<li class="colonist"><span class="colonist-name">${escapeHtml(creditName(colonist))}</span>`
     + `<span class="colonist-age">, ${colonist.age},</span> ${escapeHtml(colonist.line)}</li>`).join('');
-  let printing = '';
-  if (state.run.phase === 'printing') {
-    const pinned = state.printer.printNext === seg.cluster;
-    printing = `<div class="detail-row"><span class="k">printer</span><span class="v">${pinned ? 'NEXT IN LINE' : 'IN LINE'}</span></div>`;
-    if (outcome === 'woke' && printerRange() < PRINT_RANGE_FLOOR) {
-      printing += `<div class="detail-note">Low printer range: they may still wake with missing memories.</div>`;
-    }
+  // How this pod would land if it launched now (01-landing §3.8): soft with its drop width from the live drop solution
+  // (from the ship's radius before the landing), hard, or not at all; and where it stands in the bay's line.
+  const sol = state.run.phase === 'landing' ? getDropSolution() : null;
+  const outlookModel = driverLanding(state, seg, sol, dropFactors(capabilitiesNow(state), seg));
+  const outlookText = outlookModel.text;
+  let landing = '';
+  if (state.run.phase === 'landing' && state.landing.ended === null) {
+    const pinned = state.landing.loadNext === seg.pod;
+    const bayWord = outlookModel.tag === 'NEXT' ? 'NEXT · launches on [L]' : outlookModel.tag === 'BAY' ? 'IN THE BAY'
+      : outlook === 'cant' || !isLaunchable(seg) ? POD_STATE_TEXT.cantLaunch : 'IN LINE';
+    const tagCls = outlookModel.tag === 'NEXT' ? 'good' : outlookModel.tag === 'BAY' ? '' : outlook === 'cant' ? 'warn' : '';
+    landing = `<div class="detail-row"><span class="k">bay</span><span class="v ${tagCls}">${bayWord}${pinned ? ' · LOAD NEXT' : ''}</span></div>`;
   }
   return `
-    <div class="detail-title soul-title">${seg.cluster} · ${escapeHtml(seg.family.toUpperCase())}</div>
-    <div class="detail-type">Colonists · ${seg.souls} people</div>
-    <div class="soul-heart hb-${heartbeatKind(outcome)}" data-live-outcome="${seg.id}" data-outcome-part="heart">${heartbeatSvg(heartbeatKind(outcome))}</div>
+    <div class="detail-title driver-title">${podCode(seg.pod)} · ${escapeHtml(seg.family.toUpperCase())}</div>
+    <div class="detail-type">Pod driver · ${seg.colonists} colonists</div>
+    <div class="driver-heart hb-${heartbeatKind(seg.integrity)}" data-live-outcome="${seg.id}" data-outcome-part="heart">${heartbeatSvg(heartbeatKind(seg.integrity))}</div>
     <div class="detail-row"><span class="k">health</span>${stateRow}</div>
     ${infectionRowHtml(seg, state)}
-    <div class="detail-row"><span class="k">if printed now</span><span class="v ${words.cls}" data-live-outcome="${seg.id}" data-outcome-part="words">${words.text}</span></div>
-    ${printing}
+    <div class="detail-row"><span class="k">if launched now</span><span class="v ${words.cls}" data-live-outcome="${seg.id}" data-outcome-part="words">${outlookText}</span></div>
+    ${landing}
     <ul class="colonists">${people}</ul>`;
 }
 
@@ -281,70 +245,6 @@ function hollowHtml(seg: HollowSegment): string {
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-// --- The STASIS reveal's lines (§5.1 0:38) ---------------------------------------------------------
-// INSPECT types each line as it lands (REVEAL_TYPE_CPS, a relay tick every REVEAL_TICK_EVERY_CHARS
-// letters). The panel is rebuilt on every discrete change, so the typing lives here, keyed by when
-// each line first appeared (wall clock: it is presentation), and a rebuild picks up where the
-// typing was. (The radio's typewriter queue can't hold it: its jobs paint into elements a rebuild
-// replaces.) Reset with the world (registered in mountDetailPanel).
-
-const revealTyping: { cause: string | null; landedAtMs: number[]; ticked: Set<number> } = { cause: null, landedAtMs: [], ticked: new Set() };
-
-function resetRevealTyping(): void {
-  revealTyping.cause = null;
-  revealTyping.landedAtMs = [];
-  revealTyping.ticked = new Set();
-}
-
-// The line that says where the colonists are (the last one) is drawn in their colour.
-const TRUTH_LINE_INDEX = REVEAL_LINE_AT_SEC.length - 1;
-
-function syncRevealTyping(state: Readonly<GameState>): void {
-  const reveal = state.souls.reveal;
-  if (reveal.cause !== revealTyping.cause || reveal.lines.length < revealTyping.landedAtMs.length) {
-    revealTyping.cause = reveal.cause;
-    revealTyping.landedAtMs = [];
-    revealTyping.ticked = new Set();
-  }
-  while (revealTyping.landedAtMs.length < reveal.lines.length) revealTyping.landedAtMs.push(performance.now());
-}
-
-function typedText(line: string, index: number): string {
-  const landed = revealTyping.landedAtMs[index];
-  if (landed === undefined) return '';
-  return line.slice(0, unitsAt((performance.now() - landed) / 1000, 0, REVEAL_TYPE_CPS, line.length));
-}
-
-function revealLinesHtml(state: Readonly<GameState>): string {
-  const lines = state.souls.reveal.lines;
-  if (lines.length === 0) return '';
-  const rows = lines.map((line, i) => `<div class="reveal-line${i === TRUTH_LINE_INDEX ? ' truth' : ''}" data-reveal-line="${i}">${escapeHtml(typedText(line, i))}</div>`).join('');
-  return `<div class="reveal-lines" aria-live="polite">${rows}</div>`;
-}
-
-// Patches the typed lines in place (every tick while any is still typing) and schedules the line's
-// relay ticks the first time it types. Only on the blue screen: in amber the panel is hidden, and
-// the radio is the one typing the printer's lines there (reveal.ts), so INSPECT stays silent.
-function paintRevealLines(root: HTMLElement, state: Readonly<GameState>): void {
-  const lines = state.souls.reveal.lines;
-  const heard = state.ui.mode === 'memory';
-  root.querySelectorAll<HTMLElement>('[data-reveal-line]').forEach((element) => {
-    const index = Number(element.dataset.revealLine);
-    const line = lines[index];
-    if (line === undefined) return;
-    const text = typedText(line, index);
-    if (element.textContent !== text) element.textContent = text;
-    element.classList.toggle('typing', text.length < line.length);
-    if (!revealTyping.ticked.has(index)) {
-      revealTyping.ticked.add(index);
-      if (!heard) return;
-      for (let i = 0; i < line.length; i += REVEAL_TICK_EVERY_CHARS) {
-        play('typeTick', { voice: 'sys' }, { delaySec: i / REVEAL_TYPE_CPS });
-      }
-    }
-  });
 }
 
 function renderDemoBlock(currentCorruption: number): string {
@@ -405,14 +305,14 @@ function renderCapacityDemoBlock(currentCapacity: number): string {
 }
 
 function renderDetailPanel(target: HTMLElement, seg: Segment, deps: RenderDetailDeps): void {
-  if (seg.type === 'soul') {
-    let soulBody = seg.sealed ? sealedHtml(seg) : soulHtml(seg, deps.state);
+  if (seg.type === 'driver') {
+    let driverBody = driverHtml(seg, deps.state);
     const actions = computeActions(seg, deps.state);
     if (actions.primary.length) {
-      soulBody += `<div class="action-section"><div class="action-section-label">primary</div>${actions.primary.map(renderActionButton).join('')}</div>`;
+      driverBody += `<div class="action-section"><div class="action-section-label">primary</div>${actions.primary.map(renderActionButton).join('')}</div>`;
     }
-    soulBody += actions.notesHtml;
-    target.innerHTML = soulBody;
+    driverBody += actions.notesHtml;
+    target.innerHTML = driverBody;
     bindActionButtons(target, seg, deps);
     return;
   }
@@ -484,17 +384,9 @@ function renderDetailPanel(target: HTMLElement, seg: Segment, deps: RenderDetail
   // Pre-scan, the `desc` field (which carries lore about damage / cause) is
   // hidden — descs name specific corruption that the player shouldn't know yet.
   // After scan, the full description reveals the cause along with integrity.
-  // The STASIS file's scan result is the reveal (§5.1): its lines type here, above the file's text,
-  // which waits until the reveal is over (it would give the last line away).
-  const revealing = revealUnderway(deps.state);
-  if (seg.role === 'stasis') {
-    syncRevealTyping(deps.state);
-    html += revealLinesHtml(deps.state);
-  }
-  const descWaits = seg.role === 'stasis' && revealing;
-  if (!descWaits && knownScanned) {
+  if (knownScanned) {
     html += `<div class="detail-desc">${seg.desc || '—'}</div>`;
-  } else if (!descWaits) {
+  } else {
     html += `<div class="detail-desc"><em>Integrity unknown. Scan this segment to inspect its contents.</em></div>`;
   }
 
@@ -556,8 +448,7 @@ function bindActionButtons(target: HTMLElement, seg: Segment, deps: RenderDetail
     if (btn.classList.contains('disabled')) return;
     btn.addEventListener('click', () => {
       const id = btn.dataset.action as DetailActionId | undefined;
-      if (id === 'print-fast') deps.onPrintFast();
-      else if (id) deps.onAction(seg, id);
+      if (id) deps.onAction(seg, id);
     });
   });
 }
@@ -567,7 +458,7 @@ function bindActionButtons(target: HTMLElement, seg: Segment, deps: RenderDetail
 // "Known" damage excludes unscanned ship segments — the AI can't know their
 // integrity until Scan reveals it. The damage is the stats bar's own (MemoryStats visibleDamage),
 // so the two DAMAGE readouts on one screen agree.
-function renderOverview(target: HTMLElement, state: Readonly<GameState>, onPrintFast: () => void): void {
+function renderOverview(target: HTMLElement, state: Readonly<GameState>): void {
   const memory = state.memory;
   const total = totalBlocks(memory);
   const free = getFreeTotal(state);
@@ -580,8 +471,7 @@ function renderOverview(target: HTMLElement, state: Readonly<GameState>, onPrint
   let unscannedCount = 0;
   for (const seg of memory) {
     const segState = 'state' in seg ? seg.state : undefined;
-    // A file whose health the kid can't see yet (an unscanned ship file, a sealed cluster) hides its
-    // damage here too.
+    // A file whose health the kid can't see yet (an unscanned ship file) hides its damage here too.
     if (!healthKnown(seg)) { if ('scanned' in seg) unscannedCount++; continue; }
     if (segState === 'corrupt') corruptCount++;
     if (segState === 'partial') partialCount++;
@@ -614,43 +504,22 @@ function renderOverview(target: HTMLElement, state: Readonly<GameState>, onPrint
     ${damageDetail}
     ${unscannedLine}
     <div class="detail-row"><span class="k">repair charge</span>${chargeLine}</div>
-    ${printingOverviewHtml(state)}
     <div class="detail-desc">Click any segment to inspect. Click again or click outside any block to return here.</div>`;
-  // PRINT FAST works from here too: it is about the whole printer, not one cluster (it refuses
-  // with its reason once printing is over, like everywhere else).
-  target.querySelectorAll<HTMLButtonElement>('.action-btn[data-action="print-fast"]').forEach((btn) => {
-    if (btn.classList.contains('disabled')) return;
-    btn.addEventListener('click', onPrintFast);
-  });
-}
-
-// While printing: how far it is, how fast, and PRINT FAST.
-function printingOverviewHtml(state: Readonly<GameState>): string {
-  const status = printStatus(state);
-  if (!status.printing) return '';
-  const pace = status.halted ? '<span class="v warn">NO PRINTER</span>'
-    : `<span class="v">${status.intervalSec.toFixed(1)} s / cluster</span>`;
-  return `
-    <div class="detail-row"><span class="k">printing</span><span class="v good">${status.done} / ${status.total} clusters</span></div>
-    <div class="detail-row"><span class="k">pace</span>${pace}</div>
-    <div class="action-section">${renderActionButton(printFastOption(state))}</div>`;
 }
 
 // Mount the detail panel. It rebuilds its buttons, so it repaints only on a discrete change:
 // memory (memoryRev, which every op start and end bumps), the selection, the tool in hand, an
 // op starting or ending (thread counts), never per tick: a rebuild between mousedown and mouseup
-// swallows the click. Printing changes memory on its own clock, so a rebuild that falls while a
+// swallows the click. A launch changes memory on its own clock, so a rebuild that falls while a
 // press inside the panel is down waits for the click (guardPresses). A repair's climbing integrity
 // is patched live by OpBars instead.
 export function mountDetailPanel(
   store: Store<GameState>,
-  opts: { onAction: (seg: Segment, actionId: DetailActionId) => void; onPrintFast: () => void },
+  opts: { onAction: (seg: Segment, actionId: DetailActionId) => void },
 ): () => void {
   const target = document.getElementById('detailBody');
   if (!target) throw new Error('#detailBody missing from index.html');
   const presses = guardPresses(target, () => paint(store.getState()));
-  const offReset = onWorldReset('detail-reveal-typing', resetRevealTyping,
-    () => ({ cause: revealTyping.cause, landed: revealTyping.landedAtMs.length, ticked: revealTyping.ticked.size }));
 
   // The demo sliders fire `input` per pixel of drag, and their own store updates would rebuild
   // this panel mid-drag (destroying the slider and the browser's drag tracking). This flag makes
@@ -667,7 +536,7 @@ export function mountDetailPanel(
 
   function paint(state: Readonly<GameState>): void {
     if (sliderActive || presses.holds()) return;
-    const deps: RenderDetailDeps = { state, onAction: opts.onAction, onPrintFast: opts.onPrintFast };
+    const deps: RenderDetailDeps = { state, onAction: opts.onAction };
     if (debugSliders) {
       deps.onCorruptionSliderInput = (pct) => fromSlider((draft) => {
         const core = draft.memory.find((m) => m.type === 'core');
@@ -705,32 +574,21 @@ export function mountDetailPanel(
 
     const segId = state.ui.selectedId;
     const seg = segId ? getSegmentById(state, segId) : undefined;
-    if (!seg) { renderOverview(target!, state, opts.onPrintFast); return; }
+    if (!seg) { renderOverview(target!, state); return; }
     renderDetailPanel(target!, seg, deps);
   }
 
   paint(store.getState());
-  // WP5 adds what the souls and the printer show: a reveal line landing, the run phase (PRINT
-  // buttons), PRINT NEXT and PRINT FAST.
+  // The landing adds what a driver shows: the run phase (LOAD NEXT) and the pinned pod.
   const unsub = store.subscribe(
     (s) => [s.ui.memoryRev, s.ui.selectedId, s.ui.activeTool, s.ui.pickedSourceId, s.clock.paused,
-      s.souls.reveal.lines.length, s.souls.reveal.stage, s.run.phase, s.printer.printNext, s.printer.fast] as const,
+      s.run.phase, s.landing.loadNext, s.landing.ended, s.landing.bay.loaded] as const,
     () => paint(store.getState()),
     (a, b) => a.every((value, i) => value === b[i]),
   );
-  // The reveal's lines type in place (no rebuild per letter).
-  const offTyping = onPostTick(() => {
-    const state = store.getState();
-    if (state.souls.reveal.lines.length > 0) paintRevealLines(target, state);
-  });
-  // On a phone INSPECT is a drawer, shut by default: the reveal's lines type in it, so it opens
-  // while they play (the TERMINAL above it has nothing of the reveal).
-  const offDrawer = store.subscribe((s) => s.souls.reveal.stage, (stage) => {
-    if (stage === 'playing' && window.matchMedia(MOBILE_MEDIA_QUERY).matches) setDrawerOpen('inspect', true);
-  });
   const offOps = onOpsChange((change) => { if (change.type !== 'progress') paint(store.getState()); });
   // A delete question opening is the held tool used on a file (fs-tools remembers it before
   // asking): INSPECT shows that file at once, so the kid sees what the question is about.
   const offConfirm = onInlineConfirmChange(() => paint(store.getState()));
-  return () => { unsub(); offOps(); offConfirm(); offTyping(); offDrawer(); offReset(); presses.dispose(); };
+  return () => { unsub(); offOps(); offConfirm(); presses.dispose(); };
 }

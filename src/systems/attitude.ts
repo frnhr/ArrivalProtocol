@@ -71,6 +71,14 @@ export function isPresetAligning(mode: SasMode, heading: number, orbit: OrbitVec
   return Math.abs(wrap(target - heading)) > ALIGN_TOLERANCE_RAD;
 }
 
+// The ship flies along `mode`: its preset is `mode`, or, with no preset held (MANUAL: a failing Autopilot lets go of the
+// presets), the heading the kid turned to by hand is within PRESET_ALIGN_DEG of `mode`'s (the tolerance a preset fires
+// at). GO LOWER's hold reads it (review minor 7: under MANUAL it could never be held).
+export function fliesAlong(mode: PresetMode, sasMode: SasMode, heading: number, orbit: OrbitVec): boolean {
+  if (sasMode === mode) return true;
+  return sasMode === 'off' && Math.abs(wrap(presetHeading(mode, orbit) - heading)) <= ALIGN_TOLERANCE_RAD;
+}
+
 // Manual step: held thrusters add torque (rotInput −1/0/+1), momentum persists (capped),
 // heading integrates.
 function stepManual(att: Attitude, rotInput: number, dt: number, caps: RotCaps): Attitude {

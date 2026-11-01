@@ -1,7 +1,7 @@
 // Final fix pass (the final review's LAST LIGHT and VESPER majors): where a seed lands, judged by the files it would
 // really bite, and the strip's RM THE SEED ahead of a lesson's lead-in when the seed's bite reaches the AI Core.
-// • seedSpot ('walls', LAST LIGHT): a cluster moved into rack A's free tail beside Cargo Ctrl (the strip's old SAFE spot)
-//   no longer pulls the next seed in beside a ship file. The 4-block gap between Cargo Ctrl and the cluster is the
+// • seedSpot ('walls', LAST LIGHT): a pod's driver moved into rack A's free tail beside Cargo Ctrl (the strip's old SAFE spot)
+//   no longer pulls the next seed in beside a ship file. The 4-block gap between Cargo Ctrl and the driver is the
 //   smallest WALL touching a soul at the lowest address, the one the rule picked before; now no gap that touches a ship
 //   file is used.
 // • nearToolsSeedSpot ('near-tools', VESPER): the file on the tool side must BE a filesystem tool, and no spot whose bite
@@ -22,7 +22,7 @@ import { GUIDE_RULES } from '@data/script';
 import { UNIT_RACKS_START } from '@data/memory';
 import { isShipFile, isAiFile } from '@state/selectors';
 import { RACK_BLOCKS, SEED_BLOCKS } from '@data/tuning';
-import type { Segment, SoulSegment, HollowSegment } from '@/types/segment';
+import type { Segment, DriverSegment, HollowSegment } from '@/types/segment';
 import type { GameState } from '@state/schema';
 
 const h = createHarness11(5);
@@ -52,13 +52,13 @@ function bittenBy(memory: readonly Segment[], spot: SeedSpot): Segment[] {
     .map((reach) => find(after, (seg) => seg.id === reach.neighbourId, 'bitten file'));
 }
 
-// --- LAST LIGHT: a cluster moved into rack A's free tail --------------------------------------------------------------
+// --- LAST LIGHT: a driver moved into rack A's free tail --------------------------------------------------------------
 {
   h.lastLight(5, { hollowAsleep: true });
   const memory = clone(state().memory);
-  const c13 = find(memory, (seg) => seg.type === 'soul' && seg.cluster === 'C13', 'C13') as SoulSegment;
+  const c13 = find(memory, (seg) => seg.type === 'driver' && seg.pod === 13, 'POD 13') as DriverSegment;
   const cargo = find(memory, (seg) => seg.type === 'ship' && seg.role === 'cargo', 'Cargo Ctrl');
-  // C13's old place becomes free space; rack A's free tail (after Cargo Ctrl) becomes [4 free, C13, the rest free].
+  // POD 13's old place becomes free space; rack A's free tail (after Cargo Ctrl) becomes [4 free, POD 13, the rest free].
   const tailIndex = memory.indexOf(cargo) + 1;
   const tail = memory[tailIndex]!;
   if (tail.type !== 'free' || tail.size < c13.size + 4) throw new Error(`seed-spots: rack A's tail is ${tail.type} ${tail.size}`);
@@ -66,9 +66,9 @@ function bittenBy(memory: readonly Segment[], spot: SeedSpot): Segment[] {
   memory.splice(tailIndex, 1, freeSegment(4), c13, freeSegment(tail.size - 4 - c13.size));
   mergeAdjacentFree(memory);
   const spot = seedSpot(memory, []);
-  check('LAST LIGHT, C13 moved beside Cargo Ctrl: a seed still has a spot', spot !== null);
+  check('LAST LIGHT, POD 13 moved beside Cargo Ctrl: a seed still has a spot', spot !== null);
   const sides = spot === null ? null : gapAround(memory, spot);
-  check('…in a gap that touches no ship file (not the 4 blocks between Cargo Ctrl and C13)',
+  check('…in a gap that touches no ship file (not the 4 blocks between Cargo Ctrl and POD 13)',
     sides !== null && !(sides.left !== undefined && isShipFile(sides.left)) && !(sides.right !== undefined && isShipFile(sides.right)),
     sides === null ? 'none' : `${sides.left?.name} | ${sides.right?.name}`);
   check('…and it bites no ship file', spot !== null && bittenBy(memory, spot).every((seg) => !isShipFile(seg)),
@@ -161,13 +161,23 @@ function planted(unit: Segment[]): Segment[] {
         ? d.memory.find((seg) => seg.type === 'core')!
         : d.memory.find((seg) => seg.type === 'fs-tool' && seg.fsTool === 'scan')!;
       const starts = segmentStarts(d.memory);
-      // The free space just before the target: one free block, then the seed.
       const index = d.memory.indexOf(target);
-      const before = d.memory[index - 1];
-      if (!before || before.type !== 'free' || before.size < SEED_BLOCKS + 1) throw new Error(`seed-spots: no free space before ${target.name}`);
-      const at = starts[index]! - 1 - SEED_BLOCKS;
       const seed: HollowSegment = { id: newSegId('seed'), name: 'UNIT-046', type: 'hollow', size: SEED_BLOCKS, root: false, locked: false, owner: 'UNIT-046', seed: true };
-      replaceRange(d.memory, at, at + SEED_BLOCKS, [seed], { opId: null, own: [] });
+      if (nextTo === 'core') {
+        // The free space just before the Core (rack D is empty on VESPER): one free block, then the seed.
+        const before = d.memory[index - 1];
+        if (!before || before.type !== 'free' || before.size < SEED_BLOCKS + 1) throw new Error(`seed-spots: no free space before ${target.name}`);
+        const at = starts[index]! - 1 - SEED_BLOCKS;
+        replaceRange(d.memory, at, at + SEED_BLOCKS, [seed], { opId: null, own: [] });
+      } else {
+        // Slice 1a (pooled receiver): Scan sits between AI Comms and REPAIR CHARGE with no free block beside it, so the
+        // seed takes the front of the charge file: Scan, one free block, the seed, the rest of the charge.
+        const after = d.memory[index + 1];
+        if (!after || after.type !== 'redundancy' || after.size < SEED_BLOCKS + 2) throw new Error(`seed-spots: no charge file after ${target.name}`);
+        const at = starts[index]! + target.size;
+        const rest = { ...after, size: after.size - 1 - SEED_BLOCKS };
+        replaceRange(d.memory, at, at + after.size, [freeSegment(1), seed, rest], { opId: null, own: [after] });
+      }
       d.hollow.seedsLanded = 1;
       if (!d.run.licences.includes('delete')) d.run.licences.push('delete');
       d.ui.memoryRev++;
@@ -180,8 +190,7 @@ function planted(unit: Segment[]): Segment[] {
     if (ctx.flight?.urgency === 'now') throw new Error(`seed-spots: the flight line is NOW (${ctx.flight.text}): pick a coast`);
     return composeObjective(ctx, GUIDE_RULES)?.id;
   };
-  // VESPER's opening is a WAIT. Rack D is empty on VESPER, so the blocks before the Core (the start of rack E) are free;
-  // Scan has free space before it once the licences have filled rack F from its end.
+  // VESPER's opening is a WAIT. Rack D is empty on VESPER, so the blocks before the Core (the start of rack E) are free.
   vesperArrived(6);
   setMode(h.store, 'memory');
   plantSeed('tool');

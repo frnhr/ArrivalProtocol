@@ -4,8 +4,8 @@
 // below records what audio would have played from.
 // One harness per test file (systems are module singletons); reset() between scenarios.
 import { createHarness, type Harness, type HarnessOpts } from '../wp1/harness';
-import { createInitialState, openArchive } from '@state/initial';
-import { SOUL_RULES } from '@data/script';
+import { createInitialState } from '@state/initial';
+import { DRIVER_RULES } from '@data/script';
 import type { GameState, ObjectiveLine, RunPhase } from '@state/schema';
 import { resetWorld } from '@systems/reset';
 import { mountSay } from '@systems/say';
@@ -54,8 +54,7 @@ export function createHarness2(seed = 1, opts: HarnessOpts = {}): Harness2 {
         base.store.update((d) => {
           Object.assign(d, createInitialState({ seed: nextSeed, phase }));
           if (soulsFound) {
-            openArchive(d);
-            d.director.done.push(...SOUL_RULES.map((rule) => rule.id));
+            d.director.done.push(...DRIVER_RULES.map((rule) => rule.id));
           }
         });
         resetWorld();

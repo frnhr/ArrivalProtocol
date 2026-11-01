@@ -1,5 +1,6 @@
 // WP9 acceptance 2 (§9 WP9, §6.8): KESTREL's debris cloud, headless, on the real sim.
-// • A pilot who never corrects takes exactly 1 debris hit, and each rack-C cluster loses 25; the files elsewhere
+// Slice 1a: KESTREL's racks are phase 2's with `C` → `P`, so POD 07–12 sit where C07–C12 did.
+// • A pilot who never corrects takes exactly 1 debris hit, and each rack-C pod's driver loses 25; the files elsewhere
 //   and HOLLOW's blocks are untouched; the pace is TACTICAL from 20 tactical s before the contact.
 // • The strip-following kid whose IN correction starts ≤ 80 tactical s after the boot: 0 hits, locked, FUEL ≥ 20%.
 // • A correction started at 170 tactical s (past the dodge's deadline, about 154 since WP9 fix round 1): 1 hit.
@@ -16,12 +17,14 @@ import { getPrediction, getSensedPrediction } from '@systems/predict';
 import { debrisDamagePlan, resolveZones, zoneContains, inboundPoint } from '@systems/zones';
 import { upcomingEvents } from '@systems/flight-hud';
 import { requestSkip } from '@systems/pace';
-import { soulsInMemory } from '@state/selectors';
+import { driversInMemory } from '@state/selectors';
 import { segmentStarts, freeSegment } from '@systems/memory-ops';
 import { createRng, childRng } from '@systems/rng';
 import { getShip } from '@data/ships';
+import { podCode } from '@data/landing-text';
+import { debrisHitLine } from '@data/zone-text';
 import { RACK_BLOCKS, SKIP_END_LEAD_TAC } from '@data/tuning';
-import type { Segment, SoulSegment } from '@/types/segment';
+import type { Segment, DriverSegment } from '@/types/segment';
 
 const h = createHarness9(1);
 const state = () => h.store.getState();
@@ -30,7 +33,7 @@ const rackOf = (seg: Segment): string => {
   const index = state().memory.indexOf(seg);
   return 'ABCDEF'[Math.floor(segmentStarts(state().memory)[index]! / RACK_BLOCKS)]!;
 };
-const RACK_C_CLUSTERS = ['C07', 'C08', 'C09', 'C10', 'C11', 'C12'];
+const RACK_C_PODS = [7, 8, 9, 10, 11, 12];
 
 // --- The pilot who never corrects ------------------------------------------------------------------------------
 {
@@ -57,7 +60,7 @@ const RACK_C_CLUSTERS = ['C07', 'C08', 'C09', 'C10', 'C11', 'C12'];
   check('TOO WIDE says the IN correction also dodges it, and until when', /^TOO WIDE — hold \[SPACE\] · \d+:\d\d to dodge DEBRIS C$/.test(h.objective()?.text ?? '')
     && h.objective()?.urgency === 'now', h.objective()?.text);
 
-  const before = new Map(soulsInMemory(state()).map((soul) => [soul.cluster, soul.integrity]));
+  const before = new Map(driversInMemory(state()).map((soul) => [soul.pod, soul.integrity]));
   const shipFiles = new Map(state().memory.filter((seg) => seg.type === 'ship').map((seg) => [seg.id, 'integrity' in seg ? seg.integrity : 0]));
   let tacticalAtLead = false;
   let paceAtContact = '';
@@ -74,13 +77,15 @@ const RACK_C_CLUSTERS = ['C07', 'C08', 'C09', 'C10', 'C11', 'C12'];
   check('the pilot who never corrects takes exactly one debris hit', hits.length === 1 && hits[0]!.zoneId === zone.id, JSON.stringify(hits));
   check('…at about 212 tac s, at TACTICAL pace (TACTICAL already 18 s before)', Math.abs(contactTac - 212) < 2 && paceAtContact === 'tactical' && tacticalAtLead,
     `contact ${contactTac.toFixed(1)} tac s, pace ${paceAtContact}`);
-  const after = soulsInMemory(state());
-  check('each rack-C cluster lost 25 (C07–C12 at 75), rack B untouched', after.every((soul) => (RACK_C_CLUSTERS.includes(soul.cluster)
-    ? Math.abs(soul.integrity - (before.get(soul.cluster)! - 25)) < 1e-9 : soul.integrity === before.get(soul.cluster)) && rackOf(soul) === (RACK_C_CLUSTERS.includes(soul.cluster) ? 'C' : 'B')),
-  after.map((soul) => `${soul.cluster}:${soul.integrity}`).join(' '));
+  const after = driversInMemory(state());
+  check('each rack-C driver lost 25 (POD 07–12 at 75), rack B untouched', after.every((soul) => (RACK_C_PODS.includes(soul.pod)
+    ? Math.abs(soul.integrity - (before.get(soul.pod)! - 25)) < 1e-9 : soul.integrity === before.get(soul.pod)) && rackOf(soul) === (RACK_C_PODS.includes(soul.pod) ? 'C' : 'B')),
+  after.map((soul) => `${soul.pod}:${soul.integrity}`).join(' '));
   check('…the ship files in rack A untouched, HOLLOW\'s root untouched (no health)', state().memory.filter((seg) => seg.type === 'ship')
     .every((seg) => 'integrity' in seg && seg.integrity === shipFiles.get(seg.id)) && state().memory.some((seg) => seg.type === 'hollow' && seg.root));
-  check('…the TERMINAL names the rack and the clusters', state().log.entries.some((entry) => entry.text === '> DEBRIS HIT RACK C: C07 C08 C09 C10 C11 C12 −25%'),
+  const hitLine = debrisHitLine('C', RACK_C_PODS.map((pod) => ({ label: podCode(pod), lost: 25 })));
+  check(`…the TERMINAL names the rack and the pods (\`${hitLine}\`)`, hitLine.startsWith('> DEBRIS HIT RACK C: POD 07 POD 08')
+    && state().log.entries.some((entry) => entry.text === hitLine),
     state().log.entries.filter((entry) => entry.text.includes('DEBRIS')).map((entry) => entry.text).join(' | '));
   check('…the cloud is spent: no hazard span ahead, no more hits expected, the strip no longer names it',
     state().hazards.hitIds.includes(zone.id) && getPrediction().hazardSpans.length === 0 && getPrediction().zoneHits[0]!.expectedHits === 0
@@ -157,32 +162,32 @@ for (const startTac of [0, 40, 80]) {
   h.kestrel(1, { hollowAsleep: true, sensorHealed: true });
   const memory = state().memory;
   const starts = segmentStarts(memory);
-  // C12's free tail in rack C (5 blocks) runs on into rack D: C01 placed at its start straddles C|D (5 in C, 3 in D).
-  const c12 = memory.find((seg): seg is SoulSegment => seg.type === 'soul' && seg.cluster === 'C12')!;
+  // POD 12's free tail in rack C (5 blocks) runs on into rack D: POD 01 placed at its start straddles C|D (5 in C, 3 in D).
+  const c12 = memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 12)!;
   const tail = memory[memory.indexOf(c12) + 1]!;
   const tailStart = starts[memory.indexOf(tail)]!;
-  check('setup: after C12, free space from inside rack C into rack D', tail.type === 'free' && tailStart < 192 && tailStart + tail.size > 192);
+  check('setup: after POD 12, free space from inside rack C into rack D', tail.type === 'free' && tailStart < 192 && tailStart + tail.size > 192);
   const plan = (() => {
-    // Plant C01 and C10 by hand (the moves are tested in WP7; here only the addresses matter).
+    // Plant POD 01 and POD 10 by hand (the moves are tested in WP7; here only the addresses matter).
     const draft = structuredClone(memory);
-    const c01 = draft.find((seg): seg is SoulSegment => seg.type === 'soul' && seg.cluster === 'C01')!;
-    const c10 = draft.find((seg): seg is SoulSegment => seg.type === 'soul' && seg.cluster === 'C10')!;
+    const c01 = draft.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 1)!;
+    const c10 = draft.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 10)!;
     const tailIndex = draft.findIndex((seg) => seg.id === tail.id);
     const freeTail = draft[tailIndex]!;
-    // C01 → the start of the tail (straddling C|D); C10 → the far end of rack D (out of rack C).
+    // POD 01 → the start of the tail (straddling C|D); POD 10 → the far end of rack D (out of rack C).
     draft.splice(draft.indexOf(c01), 1, freeSegment(8));
     draft.splice(draft.indexOf(c10), 1, freeSegment(8));
     draft.splice(tailIndex, 1, c01, freeSegment(freeTail.size - 16), c10);
     return debrisDamagePlan(draft, 'C');
   })();
-  const lostOf = (cluster: string): number | undefined => {
-    const item = plan.find((entry) => entry.label === cluster);
+  const lostOf = (pod: number): number | undefined => {
+    const item = plan.find((entry) => entry.label === podCode(pod));
     return item ? item.from - item.to : undefined;
   };
-  check('a cluster straddling the rack border loses in proportion (C01: 5 of 8 blocks in rack C → 15.6)',
-    Math.abs((lostOf('C01') ?? 0) - 25 * 5 / 8) < 1e-9, String(lostOf('C01')));
-  check('…a cluster moved out of rack C before contact is spared (C10 in rack D)', lostOf('C10') === undefined);
-  check('…the others in rack C lose 25', ['C07', 'C08', 'C09', 'C11', 'C12'].every((cluster) => lostOf(cluster) === 25));
+  check('a driver straddling the rack border loses in proportion (POD 01: 5 of 8 blocks in rack C → 15.6)',
+    Math.abs((lostOf(1) ?? 0) - 25 * 5 / 8) < 1e-9, String(lostOf(1)));
+  check('…a driver moved out of rack C before contact is spared (POD 10 in rack D)', lostOf(10) === undefined);
+  check('…the others in rack C lose 25', [7, 8, 9, 11, 12].every((pod) => lostOf(pod) === 25));
   const firewallMemory: Segment[] = structuredClone(memory);
   const freeIdx = firewallMemory.findIndex((seg) => seg.id === tail.id);
   firewallMemory.splice(freeIdx, 1, { id: 'fw-test', name: 'Firewall.sys', type: 'firewall', size: 2 }, freeSegment(tail.size - 2));
@@ -192,10 +197,10 @@ for (const startTac of [0, 40, 80]) {
 // --- A file moved into the rack before contact is hit (the live sim) ------------------------------------------------
 {
   h.kestrel(1, { hollowAsleep: true, sensorHealed: true });
-  // Plant a cluster from rack B at the start of rack C's free tail (the MOVE's result) before the contact.
+  // Plant a driver from rack B at the start of rack C's free tail (the MOVE's result) before the contact.
   h.store.update((d) => {
-    const c01 = d.memory.find((seg): seg is SoulSegment => seg.type === 'soul' && seg.cluster === 'C01')!;
-    const c12 = d.memory.find((seg): seg is SoulSegment => seg.type === 'soul' && seg.cluster === 'C12')!;
+    const c01 = d.memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 1)!;
+    const c12 = d.memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 12)!;
     const tailIndex = d.memory.indexOf(c12) + 1;
     const tail = d.memory[tailIndex]!;
     d.memory.splice(d.memory.indexOf(c01), 1, freeSegment(8));
@@ -203,7 +208,7 @@ for (const startTac of [0, 40, 80]) {
     d.memory.splice(tailNow, 1, c01, freeSegment(tail.size - 8));
     d.ui.memoryRev++;
   });
-  // Merge what the plant left touching (rack A's free tail and C01's old place).
+  // Merge what the plant left touching (rack A's free tail and POD 01's old place).
   h.store.update((d) => {
     for (let i = d.memory.length - 1; i > 0; i--) {
       const current = d.memory[i]!;
@@ -213,8 +218,8 @@ for (const startTac of [0, 40, 80]) {
   });
   h.checkMemory();
   while (h.zoneHits().length === 0 && tacNow() < 300) h.step();
-  const c01 = soulsInMemory(state()).find((soul) => soul.cluster === 'C01')!;
-  check('a cluster moved into rack C before contact is hit (C01, 5 of its 8 blocks in rack C: −15.6)', Math.abs(c01.integrity - (100 - 25 * 5 / 8)) < 1e-9,
+  const c01 = driversInMemory(state()).find((soul) => soul.pod === 1)!;
+  check('a driver moved into rack C before contact is hit (POD 01, 5 of its 8 blocks in rack C: −15.6)', Math.abs(c01.integrity - (100 - 25 * 5 / 8)) < 1e-9,
     String(c01.integrity));
 }
 

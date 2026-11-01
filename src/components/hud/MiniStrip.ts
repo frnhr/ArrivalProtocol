@@ -9,7 +9,7 @@ import { IS_DEV } from '@/env';
 
 // The amber mini-strip (§7.1, §9 WP6 item 10): the memory at a glance from the ship, inside the MIND
 // chip above the screen toggle (a click on the chip jacks in). One row per rack, each segment a cell
-// as wide as its blocks: the colonists in their mint (grey while sealed, yellow when hurt), the thing
+// as wide as its blocks: the pods' drivers in the colonists' mint (yellow while a pod would land hard), the thing
 // eating them red and pulsing, an infected file blinking with its eaten share in red from the side
 // HOLLOW bites (a hatch while its health is unknown), and green while a repair pushes back. So a kid
 // burning in amber sees the red creep into C12 without leaving the ship.
@@ -88,7 +88,7 @@ export function mountMiniStrip(store: Store<GameState>): () => void {
 
   build();
   const unsub = store.subscribe(
-    (s) => `${s.ui.memoryRev}|${s.ui.mode}|${s.souls.reveal.stage}|${s.hollow.phase}`,
+    (s) => `${s.ui.memoryRev}|${s.ui.mode}|${s.hollow.phase}`,
     () => { if (inAmber()) build(); },
   );
   let sincePaint = 0;

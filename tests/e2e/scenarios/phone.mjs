@@ -1,3 +1,8 @@
+// Slice 1a: the landing on a phone (01-landing §4): at ORBIT LOCK the GROUND TRACK takes the NAV PLOT's readout row and
+// the POD BAY's LAUNCH (#podLaunchBtn) rides in the phone bar in place of BURN and the presets; a tap on it goes through
+// [L]'s one launch path (its confirm in the pill, on screen); then the pods land at once (__ap.landAll) and the LANDING
+// REPORT's CONTINUE takes the tap. The Stasis ship file is still a file in 1a (no reveal), so its one-chip check stays;
+// a driver chip's pod code (`POD 03`, or `P03` where narrow) shows whole.
 // WP12 fix round 2: fix round 1's phone check, unchanged but for its shots (under tests/unit/wp12/fix2/shots).
 // WP12 fix round 1: part 3's copy of part 2's phone.mjs, shots under tests/unit/wp12/fix1/shots, with the review's checks:
 // • every one-word chip name renders on one line, whole (STASIS read STASI / S; the lead's 08:46 item, ruling of 17:45);
@@ -7,7 +12,7 @@
 // • in blue the opener's ship line names the SHIP first (`… — [SHIP], hold [BURN]`).
 // WP12 part 2, acceptance 4 and the phone items (§9 WP12 item 3, LEAD_NOTES `For WP12`), on a touch phone (390×844,
 // isMobile + hasTouch). Screenshots under tests/.out/e2e/shots/phone-*.png; PASS/FAIL lines; exits non-zero on a FAIL.
-// • title, amber, blue, the tabs, TRANSMIT, the WAKE REPORT, RUN END and a LOST card: no horizontal overflow, the
+// • title, amber, blue, the tabs, the landing, TRANSMIT, the LANDING REPORT, RUN END and a LOST card: no horizontal overflow, the
 //   overlay's card and its button inside the screen;
 // • amber on the default NAV PLOT tab: the BURN button visible, held with a finger (CDP touch events) it burns, let
 //   go it stops; the strip says `hold [BURN]`;
@@ -109,6 +114,12 @@ await shot('03-amber');
 await overflow('amber');
 check('amber opens on the NAV PLOT tab', await st(() => !document.querySelector('.navplot-win').hidden && document.querySelector('.engine-win').hidden));
 check('the BURN button rides in the phone bar', await st(() => document.getElementById('burnBtn').closest('#phoneBar') !== null));
+// Slice 1a: the POD BAY's LAUNCH rides in the bar only while landing (PhoneFlightBar: `shown only while landing`); in
+// the flight it takes no room from the plot.
+const flightLaunch = await st(() => { const btn = document.getElementById('podLaunchBtn'); const box = btn.getBoundingClientRect();
+  return { landing: document.body.classList.contains('landing'), display: getComputedStyle(btn).display, height: Math.round(box.height) }; });
+check('in the flight the phone bar shows no LAUNCH button (it is the landing\'s)', !flightLaunch.landing && (flightLaunch.display === 'none' || flightLaunch.height === 0),
+  JSON.stringify(flightLaunch));
 await onScreen('amber', '#burnBtn');
 await onScreen('amber', '#sasRadOut');
 await onScreen('amber', '.phone-bar .fuel-bar');
@@ -200,6 +211,23 @@ const brokenWords = await st(() => [...document.querySelectorAll('#memWrap .seg 
   })
   .filter((name) => name.lines > 1 || name.cut));
 check('blue: every one-word chip name is on one line and whole (STASIS, SCAN, REPAIR …)', brokenWords.length === 0, JSON.stringify(brokenWords));
+// Slice 1a: a driver chip's pod code (`POD 03`, or `P03` where narrow: SegmentBlock's two spans, one shown by width) is
+// whole: one of the two shows, on one line, inside its chip.
+const podChips = await st(() => [...document.querySelectorAll('#memWrap .seg.driver[data-id^="driver_pod"]')]
+  .filter((chip) => chip.getBoundingClientRect().width > 0 && chip.querySelector('.drv-code'))
+  .map((chip) => {
+    const box = chip.getBoundingClientRect();
+    const shown = [...chip.querySelectorAll('.drv-code-long, .drv-code-short')].filter((span) => getComputedStyle(span).display !== 'none' && span.getBoundingClientRect().width > 0);
+    const code = shown[0];
+    const rects = code ? [...code.getClientRects()] : [];
+    const r = code?.getBoundingClientRect();
+    return {
+      id: chip.dataset.id, code: shown.map((span) => span.textContent).join('|'), lines: new Set(rects.map((rect) => Math.round(rect.top))).size,
+      inside: r ? r.left >= box.left - 1 && r.right <= box.right + 1 : false,
+    };
+  }));
+check(`blue: every driver chip shows its pod code whole, on one line, inside the chip (${podChips.map((chip) => chip.code).join(', ')})`,
+  podChips.length >= 3 && podChips.every((chip) => /^P(OD )?\d\d$/.test(chip.code) && chip.lines === 1 && chip.inside), JSON.stringify(podChips));
 const rackRows = await st(() => Object.fromEntries(['A', 'B', 'C', 'D', 'E', 'F']
   .map((rack) => [rack, document.querySelectorAll(`#memWrap .addr-row[data-rack="${rack}"]`).length])));
 check('blue: every rack in two rows (no row of its own for a free tail)', Object.values(rackRows).every((rows) => rows === 2), JSON.stringify(rackRows));
@@ -240,37 +268,88 @@ await page.waitForTimeout(700);
 check('and on the phone again: one tab, the bar back', await st(() => [...document.querySelectorAll('.desktop > .tools-view > .window')].filter((win) => !win.hidden).length === 1
   && document.getElementById('burnBtn').closest('#phoneBar') !== null));
 
-// --- The run's screens: lock in the ring, the WAKE REPORT, TRANSMIT ---------------------------------------------
+// --- The landing on a phone: lock in the ring; the GROUND TRACK, LAUNCH in the bar --------------------------------
 await st(() => {
   const ap = window.__ap;
-  ap.revealSouls('debug');
   const s = ap.store.getState();
   const r = (s.level.ring.min + s.level.ring.max) / 2;
   ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); d.director.done.push('engine-io-fault'); });
 });
-await waitFor(() => window.__ap.store.getState().run.phase === 'printing', 30000);
+check('locked in the ring, the landing begins', await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 30000));
+if ((await st(() => window.__ap.store.getState().ui.mode)) !== 'tools') await page.tap('.mode-toggle-opt[data-mode="tools"]');
+await page.waitForTimeout(1800);
+const landingView = await st(() => {
+  const shown = (el) => el !== null && getComputedStyle(el).display !== 'none' && el.getBoundingClientRect().height > 0;
+  const launchBtn = document.getElementById('podLaunchBtn');
+  return {
+    navplot: !document.querySelector('.navplot-win').hidden,
+    readouts: [...document.querySelectorAll('.navplot-win .np-readout')].filter(shown).length,
+    track: shown(document.getElementById('groundTrack')), dot: shown(document.getElementById('gtDot')),
+    launchInBar: launchBtn.closest('#phoneBar') !== null, launch: shown(launchBtn), look: launchBtn.dataset.look ?? '',
+    burn: shown(document.getElementById('burnBtn')), presets: shown(document.querySelector('#phoneBar .preset-row')),
+  };
+});
+check('landing: the GROUND TRACK shows on the NAV PLOT tab in the readout row\'s place', landingView.navplot && landingView.track && landingView.dot
+  && landingView.readouts === 0, JSON.stringify(landingView));
+// Slice 1b opens the engine in the landing: BURN and the presets stay in the bar, LAUNCH beside BURN.
+check('landing: LAUNCH rides in the phone bar beside BURN, the presets stay (the engine is open in landing)', landingView.launchInBar
+  && landingView.launch && landingView.burn && landingView.presets, JSON.stringify(landingView));
+await onScreen('landing', '#podLaunchBtn');
+await onScreen('landing', '#groundTrack');
+await overflow('landing');
+const launchText = await visibleText('#podLaunchBtn');
+check('…LAUNCH reads as a word, its [L] cap aside', /LAUNCH/.test(launchText ?? ''), launchText);
+await shot('09-landing');
+// A tap on LAUNCH goes through [L]'s one path: into an open window it launches; off-site (or an LZ full) it asks first,
+// in the pill, on screen; while the bay refuses it is dim.
+const launchedBefore = await st(() => window.__ap.store.getState().landing.pods.filter((pod) => pod.fate.kind !== 'aboard').length);
+const look = await st(() => document.getElementById('podLaunchBtn').dataset.look);
+if (look === 'blocked') {
+  check('a dim LAUNCH says why (blocked)', await st(() => document.getElementById('podLaunchBtn').disabled && document.getElementById('pbLaunchStatus').innerText.length > 0),
+    await visibleText('#podLaunchBtn'));
+} else {
+  await page.tap('#podLaunchBtn');
+  await page.waitForTimeout(400);
+  if (look === 'asks') {
+    await onScreen('LAUNCH\'s question', '#inlineConfirm');
+    const question = await visibleText('#inlineConfirmQuestion');
+    check('a tap on an amber LAUNCH asks first (LAUNCH OFF-SITE? / IS FULL)', /OFF-SITE|FULL/.test(question ?? ''), question);
+    await shot('09b-launch-confirm');
+    await page.tap('#inlineConfirmNo');
+    await page.waitForTimeout(300);
+    check('…✗ WAIT launches nothing', await st((before) => window.__ap.store.getState().landing.pods.filter((pod) => pod.fate.kind !== 'aboard').length === before, launchedBefore));
+  } else {
+    check('a tap on a green LAUNCH launches a pod', await st((before) => window.__ap.store.getState().landing.pods.filter((pod) => pod.fate.kind !== 'aboard').length > before, launchedBefore));
+  }
+}
+
+// --- The run's screens: the LANDING REPORT, TRANSMIT ----------------------------------------------------------------
 await waitFor(() => {
   const ap = window.__ap;
-  const c12 = ap.store.getState().memory.find((seg) => seg.type === 'soul' && seg.cluster === 'C12');
-  if (c12?.infected) ap.cure('C12');
-  if (ap.store.getState().run.phase === 'printing') ap.printAll();
+  // POD 01's driver is the scripted bite's: cured (as the kid's REPAIR would), so all three pods launch.
+  const pod1 = ap.store.getState().memory.find((seg) => seg.type === 'driver' && seg.pod === 1);
+  if (pod1?.infected) ap.cure('POD 01');
+  if (ap.store.getState().run.phase === 'landing' && ap.store.getState().landing.ended === null) ap.landAll();
   return ap.store.getState().run.phase === 'report';
 }, 40000, 400);
-await waitFor(() => !document.getElementById('wrContinue').hidden, 30000, 200);
-await page.waitForTimeout(600);
-await shot('09-wake-report');
-await overflow('WAKE REPORT');
-await onScreen('WAKE REPORT', '#wrContinue');
-const cont = await visibleText('#wrContinue');
+await waitFor(() => !document.getElementById('lrContinue').hidden, 30000, 200);
+await page.waitForTimeout(1200);
+await shot('10-landing-report');
+await overflow('LANDING REPORT');
+await onScreen('LANDING REPORT', '#lrContinue');
+await onScreen('LANDING REPORT', '#lrHeadline');
+const headline = await visibleText('#lrHeadline');
+check('LANDING REPORT: the headline LANDED n / N', /^LANDED \d[\d,]* \/ [\d,]+$/.test(headline ?? ''), headline);
+const cont = await visibleText('#lrContinue');
 check('…its button reads without a key cap', !/SPACE/.test(cont ?? ''), cont);
 // The report can still be settling its last line when CONTINUE shows: tap until TRANSMIT comes up.
 for (let i = 0; i < 4 && (await st(() => document.getElementById('transmitScreen').hidden)); i++) {
-  if (await st(() => !document.getElementById('wrContinue').hidden)) await page.tap('#wrContinue');
+  if (await st(() => !document.getElementById('lrContinue').hidden)) await page.tap('#lrContinue');
   await waitFor(() => !document.getElementById('transmitScreen').hidden, 3000);
 }
 check('CONTINUE (tapped) brings up TRANSMIT', await st(() => !document.getElementById('transmitScreen').hidden));
 await page.waitForTimeout(1500);
-await shot('10-transmit');
+await shot('11-transmit');
 await overflow('TRANSMIT');
 check('TRANSMIT: the draft\'s key hint gives way', await st(() => getComputedStyle(document.getElementById('txDraftKeys')).display === 'none'));
 const cardsFit = await st(() => [...document.querySelectorAll('#txCards .tx-card')].every((card) => { const r = card.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth; }));
@@ -282,14 +361,14 @@ if (firstCard) {
 }
 await page.locator('#txGo').scrollIntoViewIfNeeded({ timeout: 5000 });
 await onScreen('TRANSMIT (scrolled to it)', '#txGo');
-await shot('11-transmit-picked');
+await shot('12-transmit-picked');
 check('…its button reads without a key cap', !/SPACE/.test((await visibleText('#txGo')) ?? ''), await visibleText('#txGo'));
 
 // --- RUN END ---------------------------------------------------------------------------------------------------
 await st(() => window.__ap.store.update((d) => { d.run.ships = []; d.run.phase = 'end'; d.run.endCause = 'flagship-lost'; }));
 await waitFor(() => !document.getElementById('runEnd').hidden, 5000);
 await page.waitForTimeout(3500);
-await shot('12-run-end');
+await shot('13-run-end');
 await overflow('RUN END');
 await page.locator('#reNew').scrollIntoViewIfNeeded();
 await onScreen('RUN END (scrolled to it)', '#reNew');
@@ -360,7 +439,7 @@ await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 10000);
 await st(() => window.__ap.endFlight('crashed'));
 await waitFor(() => !document.getElementById('burnResult').hidden, 8000);
 await page.waitForTimeout(2500);
-await shot('13-lost-card');
+await shot('18-lost-card');
 await overflow('LOST card');
 await onScreen('LOST card', '#burnResultRetry');
 await page.tap('#burnResultRetry');

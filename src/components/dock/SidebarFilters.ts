@@ -2,7 +2,6 @@ import type { Store } from '@state/store';
 import type { GameState, FilterKey, StatusKey } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import { ALL_FILTER_KEYS, categoryOf, countByStatus, matchesStatus } from '@state/sidebar-filters';
-import { archiveSealed } from '@state/selectors';
 import { requireById } from '@components/dom';
 
 // Owns click handlers on Filter / Status dock items, plus their visual state
@@ -161,16 +160,9 @@ export function mountSidebarFilters(store: Store<GameState>): () => void {
     });
   }
 
-  // The Souls filter appears with the colonists (WP5): before the STASIS reveal it would give the
-  // secret away in the dock.
-  const soulsItem = filterItems.find((item) => item.dataset.filter === 'souls');
-  if (!soulsItem) throw new Error('.dock-item[data-filter="souls"] missing from index.html');
-  const paintSoulsItem = (state: Readonly<GameState>): void => { soulsItem.hidden = archiveSealed(state); };
-
   paintFilters(store.getState().ui.filtersOff, store.getState().ui.spotlight);
   paintSpotlight(store.getState().ui.spotlight);
   paintCounts(store.getState());
-  paintSoulsItem(store.getState());
 
   const unsubFilters = store.subscribe(
     (s) => s.ui.filtersOff,
@@ -194,7 +186,6 @@ export function mountSidebarFilters(store: Store<GameState>): () => void {
     (s) => s.ui.memoryRev,
     () => {
       paintCounts(store.getState());
-      paintSoulsItem(store.getState());
       if (hoverPredicate) applyHighlight(hoverPredicate);
     },
   );

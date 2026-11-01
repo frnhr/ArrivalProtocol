@@ -1,5 +1,6 @@
 // WP12 part 3, acceptance 6 (spec item 4, cleanup): no dead telemetry readouts, no dead schema fields, no unused
-// component scaffold, no static corner stamp, and the footer's `SOULS IN STASIS` only while the archive is sealed.
+// component scaffold, no static corner stamp, and (slice 1a) no `SOULS IN STASIS` left anywhere: the sealed archive and
+// the briefing's lie it told are gone; the footer counts pods from the start.
 // Also: the browser tab's title and the header crumb read the run's unit (mission.unitId) and ship.
 // Static greps over src/ and index.html, plus the header crumbs on a fresh state (DOM-free).
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
@@ -8,7 +9,7 @@ import { check, finish } from '../../wp1/harness';
 import { createHarness5 } from '../../wp5/harness5';
 import { headerCrumbs } from '@systems/flight-hud';
 import { getPrediction } from '@systems/predict';
-import { soulsLabel } from '@components/footer/Footer';
+import { podsLabel } from '@components/footer/Footer';
 
 const ROOT = join(import.meta.dirname, '..', '..', '..', '..');
 
@@ -45,14 +46,13 @@ check('src/components/dock/Dock.ts is deleted (every dock item is a ToolsTabs ta
   !existsSync(join(ROOT, 'src/components/dock/Dock.ts')) && hits(/mountDockItems/).length === 0);
 check('MissionMeta has no dead sector field', hits(/\bsector\s*:/).length === 0, hits(/\bsector\s*:/).join(', '));
 
-// `SOULS IN STASIS` is written by code in one place only, behind archiveSealed (the briefing's lie, §7.1).
+// Slice 1a: `SOULS IN STASIS` (phase 2's briefing lie while the archive was sealed, §7.1) and archiveSealed are gone.
 const stasisCode = texts.flatMap((file) => file.text.split('\n')
   .map((line, index) => ({ where: `${file.path}:${index + 1}`, line }))
-  .filter(({ line }) => /SOULS IN STASIS/.test(line) && !/^\s*(\/\/|\/\*|\*|<!--)/.test(line.trim())));
-check('`SOULS IN STASIS` is produced only by the footer, behind archiveSealed',
-  stasisCode.length === 1 && /archiveSealed\(state\)/.test(stasisCode[0]?.line ?? '') && stasisCode[0]?.where.startsWith('src/components/footer/Footer.ts') === true,
+  .filter(({ line }) => /SOULS IN STASIS|archiveSealed/.test(line) && !/^\s*(\/\/|\/\*|\*|<!--)/.test(line.trim())));
+check('no `SOULS IN STASIS` and no archiveSealed in code any more (the sealed archive is gone)', stasisCode.length === 0,
   stasisCode.map((hit) => hit.where).join(', '));
-check('the footer has no static souls text in index.html', !/id="footSouls"[^>]*>[^<]+</.test(texts.find((file) => file.path === 'index.html')?.text ?? ''));
+check('the footer has no static pods text in index.html', !/id="footPods"[^>]*>[^<]+</.test(texts.find((file) => file.path === 'index.html')?.text ?? ''));
 
 // The live title: TimeControls writes document.title from the crumbs; index.html's static title names no unit or ship.
 const timeControls = texts.find((file) => file.path === 'src/components/header/TimeControls.ts')?.text ?? '';
@@ -66,6 +66,8 @@ h.resetTo('flight');
 const crumbs = headerCrumbs(h.store.getState(), getPrediction());
 check('run 1: the crumbs read UNIT-047 and ARES-VII (the title becomes `UNIT-047 · ARES-VII`)',
   crumbs.unit === 'UNIT-047' && crumbs.ship === 'ARES-VII' && `${crumbs.unit} · ${crumbs.ship}` === 'UNIT-047 · ARES-VII', `${crumbs.unit} · ${crumbs.ship}`);
-check('run 1 before the reveal: the footer reads 2,400 SOULS IN STASIS', soulsLabel(h.store.getState()) === '2,400 SOULS IN STASIS', soulsLabel(h.store.getState()));
+// Track UI's footer words (`PODS: 8 ABOARD · 3 LANDED · 1 CAN'T LAUNCH` later in a landing).
+check('run 1 at the start: the footer counts the 3 pods aboard (`PODS: 3 ABOARD · 0 LANDED`, no stasis line)',
+  podsLabel(h.store.getState()) === 'PODS: 3 ABOARD · 0 LANDED', podsLabel(h.store.getState()));
 
 finish();

@@ -22,12 +22,10 @@ import { dealDraft, planPacket, applyPickToPacket, pickCharge } from '@systems/d
 import { archiveShipStarted, archiveRunEnded, archiveTutorialDone, type RunLineage } from '@systems/meta';
 import { finaleRunCause } from '@systems/finale';
 import { newSegId } from '@systems/memory-ops';
-import {
-  createRunState, createShipSlices, createUiState, openArchive, createRunStats,
-} from '@state/initial';
-import { soulCounts } from '@state/selectors';
+import { createRunState, createShipSlices, createUiState, createRunStats } from '@state/initial';
+import { inOrbitOutcome, landingResult } from '@systems/landing-rules';
 import { getShip, isLastShip, SHIPS } from '@data/ships';
-import { BEATS, SOUL_RULES, LINES, perShipBeatIds } from '@data/script';
+import { BEATS, LINES, perShipBeatIds } from '@data/script';
 import { TOOL_REFUSAL } from '@data/tool-text';
 import { elementsFromState, ringFit } from '@/types/orbit';
 import {
@@ -37,10 +35,10 @@ import {
 // The run (§4.1, §4.3, §9 WP7 items 1, 2, 6 and 8), DOM-free: five ships in a row, each one's end
 // deciding how the unit reaches the next. The phase machine:
 //
-//   title → boot → flight → printing → report → transmit → boot (next ship) … → end
+//   title → boot → flight → landing → report → transmit → boot (next ship) … → end
 //                    └→ (lost: its card) → continueAfterLoss → transmit | boot (simulation) | end
 //
-// • A ship that printed ends at its WAKE REPORT's CONTINUE (continueAfterReport): its result and its
+// • A ship that reached orbit ends at its LANDING REPORT's CONTINUE (continueAfterReport): its result and its
 //   stars' REPAIR CHARGE are recorded, then TRANSMIT (goTransmit), or the run ends after the last ship.
 // • A ship that was lost (crashed, escaped, stranded, its Core eaten) waits under its card; the card's
 //   button is continueAfterLoss, which plays the soft fails of §4.3:
@@ -48,9 +46,9 @@ import {
 //   – a crash with AI Comms usable: EMERGENCY TRANSMIT (Core −25, +3 transit hits); without: the unit
 //     stays with them and the run ends (STAYED);
 //   – the Core eaten to 0: EMERGENCY (the Core comes back at 25, +3 hits), or OVERWRITTEN on the flagship;
-//   – flying away or stranding: a normal transmit (its colonists are lost);
+//   – flying away or stranding: a normal transmit (its pods go with the ship, or are parked in its orbit);
 //   – the flagship (LAST LIGHT, the last ship) has no next ship to transmit to: any other loss there ends the run
-//     FLAGSHIP LOST (§4.3, WP11). Its WAKE REPORT ends the run with its finale's cause (PURGE, MERGE, UNRESOLVED).
+//     FLAGSHIP LOST (§4.3, WP11). Its LANDING REPORT ends the run with its finale's cause (PURGE, MERGE, UNRESOLVED).
 // • BEAM OUT (a doomed ship, not run 1's ship 1, AI Comms usable): a TRANSMITTING bar of BEAM_OUT_TAC
 //   tactical seconds races the impact; it cancels itself if the path clears the planet or the comms
 //   fail, and when it fills the ship is ABANDONED (+2 hits) and the unit transmits at once.
@@ -66,8 +64,8 @@ import {
 export function shipOutcomeOf(state: Readonly<GameState>): ShipOutcome {
   if (state.run.coreLost) return 'emergency';
   switch (state.burn.status) {
-    case 'locked': return 'locked';
-    case 'accepted': return 'partial';
+    case 'locked':
+    case 'accepted': return inOrbitOutcome(state.burn.status);
     case 'stranded': return 'stranded';
     case 'escaped': return 'escaped';
     case 'crashed': return 'crashed';
@@ -77,18 +75,17 @@ export function shipOutcomeOf(state: Readonly<GameState>): ShipOutcome {
   }
 }
 
-// The ship's line for RUN END. WOKE counts heads (the lead's rule): everyone who woke, intact or with
-// missing memories; `half` says how many of them came with gaps. Colonists still in memory when the
-// ship was lost did not wake.
+// The ship's result (01-landing §5 "To 02"): who it was, how it ended, and its landing folded from the pods
+// (landing-rules landingResult: pods still aboard are parked when the ship ends in orbit, NOT LAUNCHED when it left).
+// Slot and depth are the map's; in 1a every ship has its fixed slot, so both follow its index.
 export function shipResultOf(state: Readonly<GameState>, outcome: ShipOutcome, stars: number): ShipResult {
-  const counts = soulCounts(state);
   return {
     shipId: state.level.shipId,
     shipName: state.level.shipName,
+    slot: state.run.shipIndex,
+    depth: state.run.shipIndex + 1,
     outcome,
-    woke: counts.heads,
-    half: counts.wokeWithGaps,
-    lost: counts.lost + counts.inMemory,
+    ...landingResult(state, outcome),
     stars,
     fuelLeftPct: state.burn.fuelPct,
     ringMiss: outcome === 'partial' ? ringMissOf(state) : null,
@@ -107,7 +104,7 @@ export function ringMissOf(state: Readonly<GameState>): RingMiss | null {
 }
 
 // The run's totals live in systems/run-score.ts (the archive reads them too); re-exported for RUN END.
-export { runScore, runWoke } from '@systems/run-score';
+export { runScore, runLanded } from '@systems/run-score';
 
 // What the LOST card's button does (continueAfterLoss), so the card can say it before the kid presses.
 export type LossPlan =
@@ -115,9 +112,13 @@ export type LossPlan =
   | { kind: 'transmit'; outcome: ShipOutcome; extraHits: number; coreHit: number; coreReset: boolean }
   | { kind: 'end'; outcome: ShipOutcome; cause: RunEndCause };
 
-// A lost ship is waiting under its card: the flight ended without printing, or HOLLOW ate the Core.
+// A lost ship is waiting under its card: the flight ended without reaching orbit, or HOLLOW ate the Core (in flight or
+// during the landing: the pods still aboard are parked in orbit by its result).
+// Slice 1b: with the engine open during the landing, the ship can leave orbit there too (crashed, escaped: orbit-sim
+// endLandingLost); the landing closed with 'ship-lost' and its LOST card is the flight's.
 export function shipLost(state: Readonly<GameState>): boolean {
-  if (state.run.coreLost) return state.run.phase === 'flight' || state.run.phase === 'printing';
+  if (state.run.coreLost) return state.run.phase === 'flight' || state.run.phase === 'landing';
+  if (state.run.phase === 'landing') return state.burn.status === 'crashed' || state.burn.status === 'escaped';
   return state.run.phase === 'flight' && state.burn.status !== 'approaching';
 }
 
@@ -131,7 +132,8 @@ export function lossPlan(state: Readonly<GameState>): LossPlan {
     return { kind: 'transmit', outcome, extraHits: EMERGENCY_EXTRA_HITS, coreHit: 0, coreReset: true };
   }
   if (outcome === 'crashed') {
-    if (isTutorialShip(state) && !state.run.simulationRetryUsed) return { kind: 'simulation' };
+    // The simulation's retry replays the tutorial FLIGHT: a ship lost during its landing (pods already down) goes on.
+    if (isTutorialShip(state) && !state.run.simulationRetryUsed && state.run.phase === 'flight') return { kind: 'simulation' };
     if (!commsUsable(state)) return { kind: 'end', outcome, cause: 'stayed' };
     if (flagship) return { kind: 'end', outcome, cause: 'flagship-lost' };
     return { kind: 'transmit', outcome, extraHits: EMERGENCY_EXTRA_HITS, coreHit: EMERGENCY_CORE_HIT, coreReset: false };
@@ -151,7 +153,7 @@ export interface WorldReset {
   freshLog: boolean;
   // The one-shot rules and beats already done, as the new world keeps them.
   done: string[];
-  // A last touch to the fresh world inside the same update (the simulation retry opens the archive).
+  // A last touch to the fresh world inside the same update.
   adjust?: (draft: GameState) => void;
 }
 
@@ -321,11 +323,11 @@ export function endRun(store: Store<GameState>, cause: RunEndCause): void {
   });
 }
 
-// The WAKE REPORT's CONTINUE: the ship's result and its stars, then TRANSMIT, or, after the flagship (the last ship),
+// The LANDING REPORT's CONTINUE: the ship's result and its stars, then TRANSMIT, or, after the flagship (the last ship),
 // RUN END with what its finale decided (systems/finale.ts: PURGE, MERGE, or UNRESOLVED; the report waits for it).
 export function continueAfterReport(store: Store<GameState>): void {
   const state = store.getState();
-  if (state.run.phase !== 'report') throw new Error(`continueAfterReport: not on a WAKE REPORT (phase ${state.run.phase})`);
+  if (state.run.phase !== 'report') throw new Error(`continueAfterReport: not on a LANDING REPORT (phase ${state.run.phase})`);
   const stars = shipStars(state);
   const earned = stars.filter((star) => star.earned).length;
   endShip(store, shipOutcomeOf(state), earned);
@@ -334,19 +336,11 @@ export function continueAfterReport(store: Store<GameState>): void {
   else goTransmit(store, { extraHits: 0, coreHit: 0, coreReset: false });
 }
 
-// The ids of run 1's colonist asks and the hurt-cluster triage (SOUL_RULES): a kid who crashed ship 1
-// has already been shown where the colonists are (the LOST card's reveal), so the simulation's ship 1
-// opens its archive and does not ask again.
-function soulRuleIds(): string[] {
-  return SOUL_RULES.map((rule) => rule.id);
-}
-
 // The LOST card's button (see the header and lossPlan).
 export function continueAfterLoss(store: Store<GameState>): LossPlan {
   const state = store.getState();
   const plan = lossPlan(state);
   if (plan.kind === 'simulation') {
-    const revealed = state.souls.reveal.stage === 'revealed';
     const run: RunState = {
       ...state.run,
       shipIndex: 0,
@@ -358,12 +352,7 @@ export function continueAfterLoss(store: Store<GameState>): LossPlan {
       arrival: null,
       transit: null,
     };
-    const done = doneForNextShip(state);
-    if (revealed) done.push(...soulRuleIds().filter((id) => !done.includes(id)));
-    resetWorldForShip(store, {
-      phase: 'boot', run, carried: null, freshLog: false, done,
-      adjust: (draft) => { if (revealed) openArchive(draft); },
-    });
+    resetWorldForShip(store, { phase: 'boot', run, carried: null, freshLog: false, done: doneForNextShip(state) });
     say('control', LINES.simulation(), { critical: true });
     return plan;
   }
@@ -401,14 +390,14 @@ let pendingAny = false;
 let captureOffsetTac: number | null = null;
 let beamOutDone = false;
 // An orbit locked or accepted this tick: the archive notes the tutorial is flown (after the tick, like the stats).
-let orbitPrinted = false;
+let orbitReached = false;
 
 function resetRunModule(): void {
   Object.assign(pendingStats, createRunStats());
   pendingAny = false;
   captureOffsetTac = null;
   beamOutDone = false;
-  orbitPrinted = false;
+  orbitReached = false;
 }
 
 function bump(field: Exclude<keyof GameState['run']['stats'], 'demos' | 'deal'>): void {
@@ -427,8 +416,8 @@ function flushStats(store: Store<GameState>): void {
     stats.repairs += delta.repairs;
     stats.moves += delta.moves;
     stats.deletes += delta.deletes;
-    stats.clustersLost += delta.clustersLost;
-    stats.clustersBitten += delta.clustersBitten;
+    stats.driversLost += delta.driversLost;
+    stats.driversBitten += delta.driversBitten;
     stats.capRefusals += delta.capRefusals;
     stats.demos.push(...delta.demos);
   });
@@ -454,12 +443,12 @@ export function mountRun(store: Store<GameState>): () => void {
       else if (kind === 'move') bump('moves');
       else if (kind === 'delete') bump('deletes');
     }),
-    on('hollow-consume', ({ soul }) => { if (soul) bump('clustersLost'); }),
+    on('hollow-consume', ({ driver }) => { if (driver) bump('driversLost'); }),
     // Ship 1's scripted bite happens to every kid (WP12 p3, WP8 verify): only the bites HOLLOW chose count, so the draft's
-    // mild FIREWALL reason (`??? bit a cluster`) says something about this run.
-    on('hollow-infect', ({ soul, scripted }) => { if (soul && !scripted) bump('clustersBitten'); }),
-    on('locked', () => { orbitPrinted = true; }),
-    on('accepted', () => { orbitPrinted = true; }),
+    // mild FIREWALL reason (`??? bit a driver`) says something about this run.
+    on('hollow-infect', ({ driver, scripted }) => { if (driver && !scripted) bump('driversBitten'); }),
+    on('locked', () => { orbitReached = true; }),
+    on('accepted', () => { orbitReached = true; }),
     // Both wordings of a full Core (WP12 p3, WP11 verify: during a verb's countdown the refusal says how to free a
     // thread, `× AN OP TO BLOCK IT`) count: THREAD+'s draft weight reads them.
     on('refused', ({ reason, tool }) => {
@@ -497,12 +486,12 @@ export function mountRun(store: Store<GameState>): () => void {
     }
   });
 
-  // After the tick: the stats, the tutorial flown (the first orbit that prints), and a finished BEAM OUT goes
+  // After the tick: the stats, the tutorial flown (the first orbit reached), and a finished BEAM OUT goes
   // straight on (the kid chose to leave: no card).
   const offPost = onPostTick(() => {
     flushStats(store);
-    if (orbitPrinted) {
-      orbitPrinted = false;
+    if (orbitReached) {
+      orbitReached = false;
       archiveTutorialDone(store);
     }
     if (beamOutDone) {
@@ -511,7 +500,7 @@ export function mountRun(store: Store<GameState>): () => void {
     }
   });
 
-  const offReset = onWorldReset('run', resetRunModule, () => ({ pendingAny, captureOffsetTac, beamOutDone, orbitPrinted }));
+  const offReset = onWorldReset('run', resetRunModule, () => ({ pendingAny, captureOffsetTac, beamOutDone, orbitReached }));
   return () => {
     offs.forEach((off) => off());
     offGame();

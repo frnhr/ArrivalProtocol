@@ -5,13 +5,14 @@
 // between scenarios (the in-app reset path: fresh slices + resetWorld()).
 import { createStore, type Store } from '@state/store';
 import type { GameState, Pace } from '@state/schema';
-import { createInitialState, openArchive } from '@state/initial';
+import { createInitialState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
 import { getShip } from '@data/ships';
-import { SOUL_RULES } from '@data/script';
+import { DRIVER_RULES } from '@data/script';
 import { advance } from '@systems/clock';
 import { mountOrbitSim } from '@systems/orbit-sim';
 import { mountPredictor, getPrediction, secUntil, type Prediction } from '@systems/predict';
+import { mountDropCache } from '@systems/drop-cache';
 import { mountPace, registerTimeKeys, mainCountdown, type Countdown } from '@systems/pace';
 import { mountGhostThrust } from '@systems/ghost-thrust';
 import { mountInput } from '@systems/input';
@@ -24,6 +25,8 @@ import { elementsFromState, ringFit } from '@/types/orbit';
 import { hasIntegrity, integrityState } from '@state/selectors';
 
 export const TICK = 0.05;
+// Every harness tick stepped in this process (AP_CHECK_TIMES prints it beside each check).
+let ticksStepped = 0;
 
 export interface Harness {
   store: Store<GameState>;
@@ -90,8 +93,7 @@ export function harnessState(seed: number, soulsFound: boolean): GameState {
     controller.state = integrityState(100);
   }
   if (soulsFound) {
-    openArchive(state);
-    state.director.done.push(...SOUL_RULES.map((rule) => rule.id));
+    state.director.done.push(...DRIVER_RULES.map((rule) => rule.id));
   }
   return state;
 }
@@ -101,6 +103,9 @@ export function createHarness(seed = 1, opts: HarnessOpts = {}): Harness {
   const store = createStore<GameState>(harnessState(seed, soulsFound));
   mountOrbitSim(store);
   mountPredictor(store);
+  // Slice 1a: pace reads the landing's drop solution once a flight locks, so every harness has the drop cache (once per
+  // store: a second mount throws), right after the predictor as main.ts mounts it.
+  mountDropCache(store);
   mountPace(store);
   // WP10: the engine firing by itself (the first burst's alarm, the counter, a SKIP re-planned after a later burst):
   // inert on a ship whose Thrust Ctrl is healthy (ships 1–3), live on VESPER (AP_SHIP=3).
@@ -129,6 +134,7 @@ export function createHarness(seed = 1, opts: HarnessOpts = {}): Harness {
       wall = 0;
     },
     step(dtWall = TICK) {
+      ticksStepped++;
       advance(store, dtWall);
       wall += dtWall;
       // The strip the kid reads: the objective through the hysteresis filter, on AI time.
@@ -196,9 +202,15 @@ export function followStrip(h: Harness, reactionSec: number, maxWall: number, on
 // Tiny assertion kit: collect results, print PASS/FAIL lines, exit non-zero on any failure.
 const results: { name: string; ok: boolean; detail: string }[] = [];
 
+// AP_CHECK_TIMES=1 starts each line with the seconds since the suite started and the harness ticks stepped so far, to
+// find where a slow suite spends its time (the unit tier's budget: tests/unit/run.mjs). The ticks do not depend on how
+// busy the machine is.
+const STAMP_CHECKS = process.env.AP_CHECK_TIMES === '1';
+
 export function check(name: string, ok: boolean, detail = ''): void {
   results.push({ name, ok, detail });
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`);
+  const stamp = STAMP_CHECKS ? `[${process.uptime().toFixed(1).padStart(5)} s ${String(ticksStepped).padStart(7)} t] ` : '';
+  console.log(`${stamp}${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`);
 }
 
 // A suite that ran no check at all is a broken suite (a filter that matched nothing, an early return), not a pass

@@ -2,9 +2,10 @@
 // • the flight: an impact opener (IMPACT about 03:04 at ×30) with OUT engaged; ring 5,000–7,000; FUEL 2.5 km/s; ×30 / ×60;
 // • the belt (WP9's belt kind) on racks A–B, drawn on the predicted path with its inside time and expected hits, and hits
 //   that land only on files in racks A–B while the ship is inside;
-// • the layout: 16 clusters, the 16-block root in rack D between C13 and C14 with a 2-block GAP each side, 12 free at
-//   rack D's end; the flagship, the last ship, with link 96 and 6 transit hits;
-// • HOLLOW: spread 12, drain 5, ×2 burning, ×1.5 printing, seeds every 35 s into the walls, verbs every 12 s (3 s
+// • the layout (slice 1a: 01-landing §3.16's final-ship layout): 16 pods, the 16-block root in rack C between POD 11
+//   (a 2-block GAP) and POD 12 (a 1-block GAP), POD 13–16 at rack D's start and 32 free at its end; the flagship, the
+//   last ship, with link 96 and 6 transit hits;
+// • HOLLOW: spread 12, drain 5, ×2 burning, ×1.5 landing, seeds every 35 s into the walls, verbs every 12 s (3 s
 //   countdown, every 4 s in the duel); its boot ends on `> last ship, 047. i'm so tired.`; CONTROL's own hello;
 //   the MERGE 20 tick's data;
 // • the lead's WP9 context: a verb's clock and its countdown, and the first seed, wait while the flight is at TACTICAL
@@ -12,7 +13,7 @@
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { getShip, SHIPS, isLastShip } from '@data/ships';
-import { shipSouls } from '@data/memory';
+import { shipColonists } from '@data/memory';
 import { mergeTickCharge } from '@systems/finale';
 import { skipBlockReason } from '@systems/pace';
 import { segmentStarts } from '@systems/memory-ops';
@@ -26,9 +27,9 @@ import { MERGE_COST_CHARGE } from '@data/tuning';
 import type { GameState } from '@state/schema';
 
 const ship = getShip(LAST_LIGHT);
-check('LAST LIGHT is ship 5: the flagship and the last ship; 3,200 souls in 16 clusters; link 96, 6 hits, no arrival damage',
+check('LAST LIGHT is ship 5: the flagship and the last ship; 3,200 colonists in 16 pods; link 96, 6 hits, no arrival damage',
   ship.name === 'LAST LIGHT' && ship.flagship && isLastShip(LAST_LIGHT) && SHIPS.filter((candidate) => candidate.flagship).length === 1
-  && shipSouls(ship) === 3200 && ship.arrival?.linkBlocks === 96 && ship.arrival.transitHits === 6 && ship.arrival.damage.length === 0);
+  && shipColonists(ship) === 3200 && ship.arrival?.linkBlocks === 96 && ship.arrival.transitHits === 6 && ship.arrival.damage.length === 0);
 const { start, ring, tacticalWarp, cruiseWarp, dvBudgetKmS } = ship.flight;
 check('…§9 WP11 item 1\'s flight: r0 18,000, rp0 3,200, v∞ 1.5, ring 5,000–7,000, FUEL 2.5, ×30 / ×60, OUT engaged',
   start.r0 === 18000 && start.rp0 === 3200 && start.vInf === 1.5 && ring.min === 5000 && ring.max === 7000 && dvBudgetKmS === 2.5
@@ -37,7 +38,7 @@ check('…its belt: 9,000–12,000 km on racks A–B', JSON.stringify(ship.zones
 const hollow = ship.hollow;
 // Unlink pass (Fran, after the handover): the ship's first verb counts 4 s (firstTelegraphSec), every later one 3 s.
 check('…its HOLLOW: spread 12, drain 5, ×2 / ×1.5, seeds every 35 s in the walls, verbs { 12, 3 (first 4), 4 }, no deal, the last-ship story',
-  hollow.spreadEverySec === 12 && hollow.drainPerSec === 5 && hollow.burnMult === 2 && hollow.printMult === 1.5
+  hollow.spreadEverySec === 12 && hollow.drainPerSec === 5 && hollow.burnMult === 2 && hollow.landMult === 1.5
   && hollow.seed?.everySec === 35 && hollow.seed.target === 'walls'
   && JSON.stringify(hollow.verbs) === JSON.stringify({ everySec: 12, telegraphSec: 3, firstTelegraphSec: 4, duelEverySec: 4 })
   && !hollow.deal && hollow.story === 'last-ship');
@@ -50,16 +51,18 @@ h.lastLight(7);
   const memory = state().memory;
   const starts = segmentStarts(memory);
   const at = (id: string): number => starts[memory.findIndex((seg) => seg.id === id)]!;
-  const souls = memory.filter((seg) => seg.type === 'soul');
+  const souls = memory.filter((seg) => seg.type === 'driver');
   const root = memory.find((seg) => isHollow(seg) && seg.root)!;
+  const rackC = 128;
   const rackD = 192;
-  const c13 = souls.find((seg) => seg.type === 'soul' && seg.cluster === 'C13')!;
-  const c14 = souls.find((seg) => seg.type === 'soul' && seg.cluster === 'C14')!;
-  check('the layout: 16 clusters; the 16-block root in rack D, 2 free blocks from C13 and 2 from C14',
-    souls.length === 16 && root.size === 16 && at(root.id) >= rackD && at(root.id) < rackD + 64
-    && at(root.id) - (at(c13.id) + 8) === 2 && at(c14.id) - (at(root.id) + 16) === 2 && at(c13.id) === rackD,
-    `root at ${at(root.id)}, C13 at ${at(c13.id)}, C14 at ${at(c14.id)}`);
-  check('…C14 (right of the root) leads the credits', state().souls.lead === 'C14');
+  const pod11 = souls.find((seg) => seg.type === 'driver' && seg.pod === 11)!;
+  const pod12 = souls.find((seg) => seg.type === 'driver' && seg.pod === 12)!;
+  const pod13 = souls.find((seg) => seg.type === 'driver' && seg.pod === 13)!;
+  check('the layout: 16 pods; the 16-block root in rack C, 2 free blocks from POD 11 and 1 from POD 12; POD 13 opens rack D',
+    souls.length === 16 && root.size === 16 && at(root.id) >= rackC && at(root.id) < rackC + 64
+    && at(root.id) - (at(pod11.id) + 8) === 2 && at(pod12.id) - (at(root.id) + 16) === 1 && at(pod13.id) === rackD,
+    `root at ${at(root.id)}, POD 11 at ${at(pod11.id)}, POD 12 at ${at(pod12.id)}, POD 13 at ${at(pod13.id)}`);
+  check('…POD 12 (right of the root) leads the credits', state().landing.lead === 12);
   check('…its boot plan closes on HOLLOW\'s line, which is `> last ship, 047. i\'m so tired.`',
     bootLinePlan({ ...state(), run: { ...state().run, arrival: { hits: [], chargeCarried: 0, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0, chargeOverflowLost: 0, scripted: [] } } }, false).at(-1) === 'hollow'
     && HOLLOW_STORY.lastShip(47) === "> last ship, 047. i'm so tired.");

@@ -1,14 +1,16 @@
-import type { GameState, RunPhase, RunState, SoulsState, PrinterState, HollowState, RunStats, ArchiveState, HazardsState } from './schema';
+import type { GameState, RunPhase, RunState, HollowState, RunStats, ArchiveState, HazardsState } from './schema';
 import type { Segment } from '@/types/segment';
-import { buildShipMemory, clusterCode, hurtClusterFor, type CarriedRacks, type HurtCluster } from '@data/memory';
+import type { LandingState, PodRecord, ShipLandingDef } from '@/types/landing';
+import { buildShipMemory, hurtDriversFor, type CarriedRacks, type HurtDriver } from '@data/memory';
 import { getShip, type ShipDef } from '@data/ships';
+import { isDriver } from '@state/selectors';
 import { createFlight, createMissionMeta, createClockState } from '@data/mission';
 import { childRng } from '@systems/rng';
 import { hollowLabel } from '@systems/say';
 import { flightModsOf } from '@systems/capabilities';
 import { resolveZones } from '@systems/zones';
 import { FIRST_RUN_LINEAGE, playsTutorial, type RunLineage } from '@systems/meta';
-import { MERGE_BONUS_CORE_CAPACITY } from '@data/tuning';
+import { MERGE_BONUS_CORE_CAPACITY, LZ_WIDTH_KM } from '@data/tuning';
 
 export interface InitialStateOpts {
   seed: number;
@@ -30,7 +32,7 @@ export interface InitialStateOpts {
 }
 
 export function createRunStats(): RunStats {
-  return { manualCaptures: 0, demos: [], repairs: 0, moves: 0, deletes: 0, clustersLost: 0, clustersBitten: 0, capRefusals: 0, deal: null };
+  return { manualCaptures: 0, demos: [], repairs: 0, moves: 0, deletes: 0, driversLost: 0, driversBitten: 0, capRefusals: 0, deal: null };
 }
 
 // A fresh run (§4.1): its unit, wave, last unit and HOLLOW from the archive's lineage (§4.5: UNIT-047 on
@@ -69,19 +71,19 @@ export function createRunState(seed: number, phase: RunPhase, shipIndex: number,
 }
 
 // The slices that belong to one ship (§9 WP7 item 2: systems/run.ts resetWorldForShip assigns them in
-// one update): the mission line, memory, both clocks, the flight, the archive, the printer and HOLLOW.
+// one update): the mission line, memory, both clocks, the flight, the pods and their landing, and HOLLOW.
 // `run` gives the seed, the ship, the unit and what HOLLOW is called by now.
-export type ShipSlices = Pick<GameState, 'mission' | 'memory' | 'clock' | 'burn' | 'orbit' | 'level' | 'souls' | 'printer' | 'hollow' | 'hazards'>;
+export type ShipSlices = Pick<GameState, 'mission' | 'memory' | 'clock' | 'burn' | 'orbit' | 'level' | 'landing' | 'hollow' | 'hazards'>;
 
 export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks | null): ShipSlices {
   const ship = getShip(run.shipIndex);
   const mission = createMissionMeta(ship, run.unitNumber, run.wave);
-  // The tutorial run always meets the same ARES-VII families and its hurt C09 (§6.7); a returning unit meets
-  // ship 1 reseeded, the hurt cluster too (never the lead, §5.2).
+  // The tutorial run always meets the same ARES-VII families and its hurt POD 02 (01-landing §2); a returning unit
+  // meets ship 1 reseeded, the hurt driver too (never the lead, §5.2).
   const firstRun = playsTutorial(run);
-  const hurt = hurtClusterFor(ship, firstRun, childRng(run.seed, run.shipIndex, 'hurt'));
+  const hurt = hurtDriversFor(ship, firstRun, childRng(run.seed, run.shipIndex, 'hurt'));
   const memory = buildShipMemory(
-    ship, carried, childRng(run.seed, run.shipIndex, ship.memory.souls.familiesSeedStream), firstRun,
+    ship, carried, childRng(run.seed, run.shipIndex, ship.memory.drivers.familiesSeedStream), firstRun,
     hollowLabel(run), hurt,
   );
   // The run after a MERGE (§4.5, WP11): the fresh unit's Core comes with the unit it merged with, a thread more. Set on
@@ -95,7 +97,10 @@ export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks 
   const zones = resolveZones(ship.zones, ship.flight, firstRun, childRng(run.seed, run.shipIndex, 'zones'));
   // The carried upgrade files that work on arrival widen this ship's flight (FUEL TRIM, §6.9).
   const flight = createFlight(ship, childRng(run.seed, run.shipIndex, 'flight'), flightModsOf(memory), zones);
-  mission.souls = memory.reduce((sum, seg) => sum + (seg.type === 'soul' ? seg.souls : 0), 0);
+  const landing = createLandingState(ship.landing, memory, {
+    finalShip: ship.flagship, lead: ship.memory.drivers.lead, hurt, planetR: ship.flight.planet.R,
+  });
+  mission.colonists = landing.pods.reduce((sum, record) => sum + record.colonists, 0);
   return {
     mission,
     memory,
@@ -103,8 +108,7 @@ export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks 
     burn: flight.burn,
     orbit: flight.orbit,
     level: flight.level,
-    souls: createSoulsState(ship, memory, hurt),
-    printer: createPrinterState(ship),
+    landing,
     hollow: createHollowState(ship),
     hazards: createHazardsState(),
   };
@@ -115,35 +119,69 @@ export function createHazardsState(): HazardsState {
   return { hitIds: [], debrisHits: [] };
 }
 
-// The archive starts sealed when the ship's data says so (ship 1: the STASIS reveal); an archive
-// that arrives open has nothing left to reveal. `hurt` is the cluster the memory was built hurt with.
-export function createSoulsState(ship: ShipDef, memory: readonly Segment[], hurt: HurtCluster | null): SoulsState {
-  const sealed = memory.some((seg) => seg.type === 'soul' && seg.sealed);
+// The ship's landing slice (01-landing; plan §1.7 "generator-made ships"): built from the ship's landing def, its
+// memory and a few facts copied from the ShipDef, never by looking the ship up again at runtime, so a ship the map's
+// generator rolls needs nothing new here. One PodRecord per driver in memory (address order: POD 01 first), each aboard;
+// the bay is filled by actions.ts beginLanding at the lock. Angles turn from the def's degrees into world radians and
+// widths into half-angles over the planet's radius here, once.
+export interface LandingSliceOpts {
+  finalShip: boolean;               // ShipDef.flagship
+  lead: number;                     // the story pod (ShipDef.memory.drivers.lead)
+  hurt: readonly HurtDriver[];      // the drivers the memory was built hurt with
+  planetR: number;
+}
+
+export function createLandingState(def: ShipLandingDef, memory: readonly Segment[], opts: LandingSliceOpts): LandingState {
+  const toRad = Math.PI / 180;
+  const pods: PodRecord[] = memory.filter(isDriver).map((driver) => ({
+    pod: driver.pod,
+    family: driver.family,
+    colonists: driver.colonists,
+    featured: structuredClone(driver.featured),
+    driverLost: null,
+    restored: false,
+    fate: { kind: 'aboard' },
+  }));
+  pods.forEach((record, index) => {
+    if (record.pod !== index + 1) throw new Error(`createLandingState: pod ${record.pod} is driver ${index + 1} in address order`);
+  });
+  const podTotal = def.lzs.reduce((sum, lz) => sum + lz.pods, 0);
+  if (pods.length !== podTotal) throw new Error(`createLandingState: ${pods.length} drivers in memory for ${podTotal} pods in the LZs`);
   return {
-    lead: clusterCode(ship.memory.souls.lead),
-    hurt: hurt === null ? null : clusterCode(hurt.cluster),
-    reveal: { stage: sealed ? 'sealed' : 'revealed', cause: null, lines: [] },
-    results: [],
+    lzs: def.lzs.map((lz) => {
+      const widthKm = LZ_WIDTH_KM[lz.width];
+      return { label: lz.label, centreRad: lz.centreDeg * toRad, halfWidthRad: widthKm / 2 / opts.planetR, widthKm, pods: lz.pods, ground: 'flat' };
+    }),
+    noGo: def.noGo.map((arc) => ({ centreRad: arc.centreDeg * toRad, halfWidthRad: (arc.widthDeg / 2) * toRad, word: arc.word })),
+    forgiveness: def.forgiveness,
+    terrain: def.terrain,
+    drag: def.drag,
+    finalShip: opts.finalShip,
+    lead: opts.lead,
+    hurt: opts.hurt.map((driver) => driver.pod),
+    colonyFirstRun: def.colonyFirstRun,
+    colony: null,
+    pods,
+    bay: { loaded: 0, reloadTac: 0, cadenceLeftTac: 0 },
+    loadNext: null,
+    startedAtTSec: null,
+    ended: null,
+    lingerAiSec: null,
+    noDriverAiSec: 0,
+    window: null,
+    fuelAtEndPct: null,
+    orbitEpoch: 0,
+    decay: { lastKickTSec: null, kicks: 0, last: null },
+    goLow: null,
+    declined: null,
+    ghostBursts: 0,
   };
-}
-
-// Opens the archive without the reveal: every cluster out of its slab, nothing left to reveal. For the
-// simulation's ship 1 (the LOST card already showed the colonists) and for flight tests that fly past
-// the run-1 STASIS step. (A returning unit's archive cracks open in its boot instead: reveal.ts 'known'.)
-// Mutates `state` (a fresh state or a draft).
-export function openArchive(state: GameState): void {
-  for (const seg of state.memory) if (seg.type === 'soul') seg.sealed = false;
-  state.souls.reveal = { stage: 'revealed', cause: null, lines: [] };
-}
-
-export function createPrinterState(ship: ShipDef): PrinterState {
-  return { baseSec: ship.printBaseSec, progress: 0, waitAiSec: 0, lingerAiSec: null, printNext: null, fast: false };
 }
 
 // HOLLOW sleeps in its root until the ship's wake (systems/hollow.ts).
 export function createHollowState(ship: ShipDef): HollowState {
   return {
-    cfg: structuredClone(ship.hollow), phase: 'asleep', story: 'none', revealOwed: false, biteInSec: null, wakeAtAi: null,
+    cfg: structuredClone(ship.hollow), phase: 'asleep', story: 'none', scriptTargetId: null, biteInSec: null, wakeAtAi: null,
     seedInSec: null, seedTelegraph: null, seedMoments: 0, seedsLanded: 0, wakeHeld: false, wakeHoldEndedAtAi: null,
     deal: createDealState(),
     verbInSec: null, verb: null, verbMoments: 0, verbTelegraphs: 0, verbsLanded: 0, verbsBlocked: 0, untriedTools: [], bitesAt: [],
@@ -153,7 +191,7 @@ export function createHollowState(ship: ShipDef): HollowState {
 
 // THE DEAL before anything was offered (WP10).
 export function createDealState(): HollowState['deal'] {
-  return { phase: 'none', cluster: null, segId: null, startAddr: null, entryId: null, pauseUntilAi: null, hasteUntilAi: null };
+  return { phase: 'none', pod: null, segId: null, startAddr: null, entryId: null, pauseUntilAi: null, hasteUntilAi: null };
 }
 
 // A complete, fresh GameState for one ship of a fresh run. The live store and every headless

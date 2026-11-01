@@ -7,8 +7,8 @@
 // `KEEP HOLDING — until the FUEL runs out` (FLIP), no single SKIP may run longer than SKIP_BUDGET_WALL_SEC,
 // and no WAIT offered with [F] SKIP may be one that SKIP can't cross within it.
 // Same rows as `tests/unit/lead1/fix1/probes/sweep.ts` (IGNORES=60,90,120 FUELS=10,46,0.5 KIDS=obey,f0.3,f0.5). For
-// speed the capture and the ignore are flown once per ignore time and restored for each row (checked below
-// against a row flown from scratch).
+// speed the capture and the ignore are flown once per ignore time per process (flows.ts ignoredAtCapture) and
+// restored for each row (checked below against a row flown from scratch).
 // Review round 3 (the lead's ruling of 13:21) adds the verifier's off-ring captures: ▼ at 4,300 / 4,700 /
 // 4,900 km, the same ignores, 10–46% FUEL in OFFRING_FUEL_STEP steps (1% here, 0.5% by hand:
 // OFFRING_FUEL_STEP=0.5), the same three kids. Before that round the first of the two trims (a PRO at ▲, 0.1%)
@@ -27,23 +27,23 @@ import { createHarness, check, finish, followStrip, TICK } from '../../wp1/harne
 import { getPrediction, computePrediction } from '@systems/predict';
 import { acceptOrbit } from '@systems/flight-controls';
 import { STRANDED_LINE, ACCEPT_ONLY_LINE } from '@systems/guidance';
-import { idle, releaseAtCapture, captureOffRing, obey, text, stepUntil } from '../../wp1-rules/flows';
+import { idle, releaseAtCapture, captureOffRing, obey, text, stepUntil, ignoredAtCapture } from '../../wp1-rules/flows';
 import { SKIP_DIVISOR, SKIP_RAMP_SEC, SKIP_EASE_OUT_SEC } from '@data/tuning';
 import type { GameState } from '@state/schema';
 import { byDepth } from '../../depth';
 
 const harness = createHarness(1);
 const state = () => harness.store.getState();
-// Quick depth (tests/unit/depth.ts) flies a coarse sample of each grid (the shortest and longest ignore, every 9% of
-// the band, the instant and the slowest kid); the full grid is the lead's.
+// Quick depth (tests/unit/depth.ts) flies a coarse sample of each grid (the shortest and longest ignore, every 12% of
+// the band: 10, 22, 34, 46 on ship 1, which still meets STRANDED, ACCEPTED and LOCKED, the instant and the slowest
+// kid); the full grid is the lead's.
 const ignores = byDepth([60, 120], [60, 90, 120]);
 const FEW_SKIP_SEC = SKIP_RAMP_SEC + SKIP_DIVISOR + SKIP_EASE_OUT_SEC + 1;
 // The band's top: ship 1's 46%, or 15 points over the ship's own trim at ▼ (priced on the 60 s capture loop).
-releaseAtCapture(harness);
-idle(harness, 60);
+ignoredAtCapture(harness, 60);
 const trimAtPeriPct = computePrediction({ ...state(), burn: { ...state().burn, fuelPct: 0.5 } }).neededPct;
 const FUEL_TOP = Math.max(46, Math.ceil(trimAtPeriPct + 15));
-const CANONICAL_STEP = Number(process.env.CANONICAL_FUEL_STEP ?? byDepth('9', '0.5'));
+const CANONICAL_STEP = Number(process.env.CANONICAL_FUEL_STEP ?? byDepth('12', '0.5'));
 const fuels: number[] = [];
 for (let fuel = 10; fuel <= FUEL_TOP + 1e-9; fuel += CANONICAL_STEP) fuels.push(Number(fuel.toFixed(1)));
 const KIDS = ['obey', 'f0.3', 'f0.5'] as const;
@@ -61,9 +61,10 @@ interface Row {
   fuelLeft: number;
 }
 
+// Flown once per ignore time per process (flows.ts flyOnce), so the sweep, the restore check and the STRANDED check
+// share one capture each.
 function snapshotAfterIgnore(ignoreSec: number): GameState {
-  releaseAtCapture(harness);
-  idle(harness, ignoreSec);
+  ignoredAtCapture(harness, ignoreSec);
   return structuredClone(state());
 }
 
@@ -116,16 +117,18 @@ const describe = (row: Row): string =>
   + `${row.flicker ? ', FLICKER' : ''}${row.holdLines ? ` (${row.holdLines})` : ''}${row.acceptOnly ? ', ACCEPT only' : ''}, FUEL ${row.fuelLeft.toFixed(1)}%`;
 
 // --- The restore is faithful: a row flown from scratch ends the same way -----------------------------------
+// On the sweep's first ignore time (its capture is the sweep's own, flown once): 90 s at full depth, 60 s in quick.
 {
-  const snapshot = snapshotAfterIgnore(90);
+  const ignoreSec = byDepth(60, 90);
+  const snapshot = snapshotAfterIgnore(ignoreSec);
   restore(snapshot, 33.5);
   const restored = fly('f0.3');
   releaseAtCapture(harness);
-  idle(harness, 90);
+  idle(harness, ignoreSec);
   harness.store.mutate((d) => { d.burn.fuelPct = 33.5; });
   for (let i = 0; i < 4; i++) harness.step();
   const fresh = fly('f0.3');
-  check('setup: a restored row flies like one flown from scratch (ignore 90 s, 33.5%, 0.3 s kid)',
+  check(`setup: a restored row flies like one flown from scratch (ignore ${ignoreSec} s, 33.5%, 0.3 s kid)`,
     restored.status === fresh.status && Math.abs(restored.wallSec - fresh.wallSec) < 0.5
     && Math.abs(restored.fuelLeft - fresh.fuelLeft) < 0.05, `restored: ${describe(restored)} | fresh: ${describe(fresh)}`);
 }
@@ -183,7 +186,8 @@ bad.slice(0, 6).join(' | ') || `${[...outcomes].map(([status, count]) => `${coun
 {
   const lows = byDepth([4300, 4900], [4300, 4700, 4900]);
   const offRingIgnores = byDepth([90], ignores);
-  const offRingStep = Number(process.env.OFFRING_FUEL_STEP ?? byDepth('12', '1'));
+  // Quick depth: every 18% (10, 28, 46: ACCEPT only, ACCEPTED and LOCKED on ship 1); full: every 1%.
+  const offRingStep = Number(process.env.OFFRING_FUEL_STEP ?? byDepth('18', '1'));
   const offRingFuels: number[] = [];
   for (let fuel = 10; fuel <= FUEL_TOP + 1e-9; fuel += offRingStep) offRingFuels.push(Number(fuel.toFixed(1)));
   const offRingSnapshot = (lowestKm: number, ignoreSec: number): GameState => {

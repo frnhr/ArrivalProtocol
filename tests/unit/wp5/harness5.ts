@@ -1,22 +1,24 @@
 // WP5 headless harness: the WP4 harness (store, clock, orbit-sim, predictor, pace, input router, say,
 // boot, flight events, director, mode keys, ops core, held-tool sync, licences, faults) plus the
-// Soul Archive's DOM-free systems: the reveal and the printer. Unlike the earlier suites it starts
-// with the archive SEALED, as run 1 does (pass soulsFound: true for an open one).
+// landing (slice 1a: it replaces the reveal and the printer; the WP1 base mounts the drop cache). Pods are
+// found by the old cluster codes (`C09` is pod 9, tests/unit/support/pod-code.ts). Every pod lands as the landing begins
+// (tests/unit/support/landing-instant.ts), unless the suite sets another landing mode.
 // One harness per test file (systems are module singletons); resetTo() between scenarios.
 import { createHarness4, type Harness4 } from '../wp4/harness4';
-import { mountReveal } from '@systems/reveal';
-import { mountPrinter } from '@systems/printer';
+import { mountLanding } from '@systems/landing';
+import { isPodCode } from '../support/pod-code';
+import { mountInstantLanding } from '../support/landing-instant';
 import { endFlight } from '@systems/orbit-sim';
-import { soulsInMemory } from '@state/selectors';
+import { driversInMemory } from '@state/selectors';
 import { stateFromElements, ringFraction, type Ring } from '@/types/orbit';
-import type { SoulSegment } from '@/types/segment';
+import type { DriverSegment } from '@/types/segment';
 
 export interface Harness5 extends Harness4 {
-  soul: (code: string) => SoulSegment;
-  souls: () => SoulSegment[];
-  // Puts the ship on a closed orbit whose printer range (time-weighted share in the ring) is
-  // `range`, at its ▼, and ends the flight there as `status` (locked or accepted): printing starts.
-  startPrinting: (range: number, status?: 'locked' | 'accepted') => void;
+  soul: (code: string) => DriverSegment;
+  souls: () => DriverSegment[];
+  // Puts the ship on a closed orbit whose share in band (time-weighted share in the ring) is
+  // `range`, at its ▼, and ends the flight there as `status` (locked or accepted): the landing starts.
+  startLanding: (range: number, status?: 'locked' | 'accepted') => void;
   // Steps until `until` holds or maxWall passes; returns the wall seconds it took.
   stepUntil: (until: () => boolean, maxWall?: number) => number;
 }
@@ -42,18 +44,20 @@ export function orbitForRange(ring: Ring, range: number): { rp: number; ra: numb
 
 export function createHarness5(seed = 1, opts: { soulsFound?: boolean } = {}): Harness5 {
   const base = createHarness4(seed, { soulsFound: opts.soulsFound ?? false });
-  mountReveal(base.store);
-  mountPrinter(base.store);
-  const souls = (): SoulSegment[] => soulsInMemory(base.store.getState());
+  mountLanding(base.store);
+  // After the landing, so its tick sees this tick's touchdowns first: the run-flow loops written against printing reach
+  // the report.
+  mountInstantLanding(base.store);
+  const souls = (): DriverSegment[] => driversInMemory(base.store.getState());
   return {
     ...base,
     souls,
     soul(code) {
-      const found = souls().find((soul) => soul.cluster === code);
-      if (!found) throw new Error(`harness5: no cluster ${code} in memory`);
+      const found = souls().find((soul) => isPodCode(soul.pod, code));
+      if (!found) throw new Error(`harness5: no pod ${code} in memory`);
       return found;
     },
-    startPrinting(range, status = 'locked') {
+    startLanding(range, status = 'locked') {
       const state = base.store.getState();
       const { rp, ra } = orbitForRange(state.level.ring, range);
       const ecc = (ra - rp) / (ra + rp);

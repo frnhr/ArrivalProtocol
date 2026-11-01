@@ -8,10 +8,12 @@ import { onAny, type GameEventName } from '@systems/events';
 import { getPrediction, getSensedPrediction, type Prediction } from '@systems/predict';
 import {
   buildFlightContext, flightObjective, createObjectiveFilter, releaseHolds, dodgeCountdownEnds, type FlightObjective,
+  buildLandingContext, landingObjective, landingFlightOf, type LandingObjective,
 } from '@systems/guidance';
+import { getDropSolution } from '@systems/drop-cache';
+import { skipBlockReason } from '@systems/pace';
 import { FLIGHT_OVER_LINE, percentFloor } from '@systems/flight-hud';
 import { getOps } from '@systems/ops-core';
-import { COLONISTS_HOLD_RELEASED } from '@systems/pace';
 import { say } from '@systems/say';
 import { mindAlertActive } from '@systems/alerts';
 import { capabilitiesNow, type Capabilities } from '@systems/capabilities';
@@ -30,11 +32,14 @@ import { getShip } from '@data/ships';
 // the boot and the end of the flight show at once. There is no step counter: every tick the
 // line is recomputed from the situation, first match wins:
 //   1. an active ALARM rule;
-//   2. the flight objective when its urgency is 'now';
+//   2. the live objective when its urgency is 'now';
 //   3. an active MIND-URGENT rule;
 //   4. an active TUTORIAL rule (one-shot, until its doneWhen);
-//   5. the flight objective ('soon' / 'wait');
-//   6. a HINT rule.
+//   5. the live objective when 'soon';
+//   6. a HINT rule;
+//   7. the live objective ('wait').
+// The live objective is the flight table's line in FLIGHT and the landing table's in LANDING (01-landing §3.11:
+// landing-guidance landingObjective in the flight line's places; composeLive is the one composition).
 // A lesson with a lead-in (`leadInSec`) outranks 3 for its first seconds on the strip, so a ship's new rule is read
 // before HOLLOW's eating lines bury it (WP12 p3); a mind-urgent line marked `outranksLeadIn` still comes first.
 // A lesson worded for each screen (its amber `-tab` line and its blue line, GuideRule.lesson) is one lesson: the two
@@ -45,16 +50,13 @@ import { getShip } from '@data/ships';
 // lands mid-correction, with the capture minutes away: TAB now, fix it, come back). A one-shot
 // with `maxShownSec` steps aside for good after that long on the strip, so a kid who does not
 // follow it gets the flight's own line back (what the reminder says stays on the mode toggle).
-// The run-1 colonists ask works the same way across both screens (`colonistsHoldSec`): once its two
-// wordings have stood that long in all, the director releases run 1's SKIP hold (pace.ts).
 // Above all of these sit the director's own overrides: the boot, the end of the flight, a
 // refused input's explanation (a moment), and PAUSED.
 // The shown line passes the same 0.3 s hysteresis as the flight table, and the store is
 // updated only when the shown line changes structurally (objectiveStructure); a countdown's
 // new numbers are mutated in place. Rules and beats live in data/script.ts.
 
-// 'printing': the base line while the colonists print (WP5), in place of the flight objective.
-export type GuidePriority = 'alarm' | 'mind-urgent' | 'tutorial' | 'hint' | 'printing';
+export type GuidePriority = 'alarm' | 'mind-urgent' | 'tutorial' | 'hint';
 
 // What templates may read (script.ts renders them with worst-case values in tests).
 export interface TextCtx {
@@ -68,6 +70,7 @@ export interface DirectorCtx extends TextCtx {
   phase: RunPhase;
   mode: ViewMode;
   flight: FlightObjective | null;  // the flight table's line (null outside a live flight)
+  landing: LandingObjective | null;  // the landing table's line (null outside LANDING, and once the Core is lost)
   skipAvailable: boolean;          // F would start a SKIP right now
   bootSkipWaits: boolean;          // the boot's skip waits for the run-2 ghost (systems/boot.ts)
   events: ReadonlySet<GameEventName>;  // what happened since the previous tick
@@ -112,10 +115,6 @@ export interface GuideRule {
   // Mind-urgent only: a line no lesson's lead-in may stand in front of (a verb's three seconds, the finale's duel), or
   // only while this holds (a seed whose bite reaches the AI Core or an AI file, final review).
   outranksLeadIn?: true | ((ctx: DirectorCtx) => boolean);
-  // Run 1's colonists ask only (LEAD-1; its two wordings carry the same value, checked in script.ts):
-  // every second either is on the strip counts toward one shared clock; at this many AI seconds the
-  // director records COLONISTS_HOLD_RELEASED, and SKIP stops waiting for the colonists (pace.ts).
-  colonistsHoldSec?: number;
 }
 
 export interface BeatLine {
@@ -141,7 +140,6 @@ const RULE_URGENCY: Record<GuidePriority, Urgency> = {
   'mind-urgent': 'now',
   tutorial: 'soon',
   hint: 'wait',
-  printing: 'wait',
 };
 
 // A line's layer is the screen its controls are on: ◆ SHIP in amber, ◇ MIND in blue.
@@ -182,6 +180,21 @@ function flightLine(objective: FlightObjective, ctx: DirectorCtx): ObjectiveLine
     highlight: objective.repairs ? repairStepTarget(ctx.state.ui.activeTool?.kind ?? null, objective.repairs) : null,
     source: 'flight',
     warn: objective.warn === true,
+  };
+}
+
+// The landing table's line on the strip: its own layer; a REPAIR row (L1) lights the chip, then the file, as F1 does.
+function landingLine(objective: LandingObjective, ctx: DirectorCtx): ObjectiveLine {
+  const held = ctx.state.ui.activeTool?.kind ?? null;
+  return {
+    id: objective.id,
+    text: objective.text,
+    keys: objective.keys,
+    urgency: objective.urgency,
+    layer: objective.layer,
+    highlight: objective.repairs ? repairStepTarget(held, objective.repairs) : objective.highlight ?? null,
+    source: 'landing',
+    warn: objective.warn === true,   // L2's flight row in its warning colour (slice 1b)
   };
 }
 
@@ -239,14 +252,16 @@ export function composeObjective(ctx: DirectorCtx, rules: readonly GuideRule[]):
   if (ctx.phase === 'end') {
     return { id: 'run-over', text: LINES.runOver(), keys: [], urgency: 'now', layer: 'mind', highlight: null, source: 'over' };
   }
-  // HOLLOW ate the Core (WP6): the ship is over, in flight or while printing; its card explains.
+  // HOLLOW ate the Core (WP6): the ship is over, in flight or while landing; its card explains.
   if (ctx.state.run.coreLost) {
     return { id: 'over-core-lost', text: CORE_LOST_TEXT.title, keys: [], urgency: 'now', layer: 'mind', highlight: null, source: 'over' };
   }
   if (ctx.phase === 'report') {
-    return { id: 'report', text: LINES.printingDone(), keys: [], urgency: 'now', layer: 'mind', highlight: null, source: 'over' };
+    return { id: 'report', text: LINES.landingDone(), keys: [], urgency: 'now', layer: 'mind', highlight: null, source: 'over' };
   }
-  if (ctx.phase === 'flight' && status !== 'approaching') {
+  // A ship lost in flight, or during its landing (slice 1b: crashed or escaped with the engine open there).
+  const lostLanding = ctx.phase === 'landing' && (status === 'crashed' || status === 'escaped');
+  if ((ctx.phase === 'flight' && status !== 'approaching') || lostLanding) {
     return { id: `over-${status}`, text: FLIGHT_OVER_LINE[status], keys: [], urgency: 'now', layer: 'ship', highlight: null, source: 'over' };
   }
   if (ctx.flash) {
@@ -275,25 +290,31 @@ export function composeObjective(ctx: DirectorCtx, rules: readonly GuideRule[]):
       return { id: 'beam-out-offer', text, keys: inMind ? ['TAB'] : [], urgency: 'now', layer: 'ship', highlight: BEAM_OUT_HINT_TARGET, source: 'flight' };
     }
   }
-  const live = (priority: GuidePriority): GuideRule | undefined =>
-    rules.find((rule) => rule.priority === priority && isRuleLive(rule, ctx));
-
-  // Printing (WP5): the flight is over, the mind's lines lead, and printing's own line is the base.
-  if (ctx.phase === 'printing') {
-    const top = live('alarm') ?? live('mind-urgent') ?? live('tutorial') ?? live('printing');
-    if (!top) throw new Error('composeObjective: no printing line matched (the last PRINTING_RULES entry must)');
-    return ruleLine(top, ctx);
+  // The landing (01-landing §3.11): its table in the flight line's places.
+  if (ctx.phase === 'landing') {
+    if (!ctx.landing) throw new Error('composeObjective: no landing objective during the landing');
+    return composeLive(ctx, rules, ctx.landing.urgency, landingLine(ctx.landing, ctx));
   }
 
   // guidance returns null only once the flight is over; anything else is a table bug.
   if (!ctx.flight) throw new Error('composeObjective: no flight objective during a live flight');
+  return composeLive(ctx, rules, ctx.flight.urgency, flightLine(ctx.flight, ctx));
+}
 
+// The composition of a live ship (plan §1.6), the flight's and the landing's alike: alarm, the objective's `now` line (or
+// a preempting tutorial), a lesson's lead-in, mind-urgent, tutorial, the objective's `soon`, hint, the objective's
+// `wait`. `objective` is the table's line, already on the strip's terms.
+export function composeLive(
+  ctx: DirectorCtx, rules: readonly GuideRule[], urgency: Urgency, objective: ObjectiveLine,
+): ObjectiveLine {
+  const live = (priority: GuidePriority): GuideRule | undefined =>
+    rules.find((rule) => rule.priority === priority && isRuleLive(rule, ctx));
   const alarm = live('alarm');
   if (alarm) return ruleLine(alarm, ctx);
-  if (ctx.flight.urgency === 'now') {
+  if (urgency === 'now') {
     const preempting = rules.find((rule) => rule.priority === 'tutorial' && rule.preempts?.(ctx) === true && isRuleLive(rule, ctx));
     if (preempting) return ruleLine(preempting, ctx);
-    return flightLine(ctx.flight, ctx);
+    return objective;
   }
   const lesson = rules.find((rule) => rule.priority === 'tutorial' && rule.leadInSec !== undefined
     && (ctx.leadShownSec.get(lessonOf(rule)) ?? 0) < rule.leadInSec && isRuleLive(rule, ctx));
@@ -304,10 +325,10 @@ export function composeObjective(ctx: DirectorCtx, rules: readonly GuideRule[]):
   if (urgent) return ruleLine(urgent, ctx);
   const tutorial = live('tutorial');
   if (tutorial) return ruleLine(tutorial, ctx);
-  if (ctx.flight.urgency !== 'wait') return flightLine(ctx.flight, ctx);
+  if (urgency !== 'wait') return objective;
   const hint = live('hint');
   if (hint) return ruleLine(hint, ctx);
-  return flightLine(ctx.flight, ctx);
+  return objective;
 }
 
 // The ids of every wording of the lessons in `done` that are not recorded done yet.
@@ -351,18 +372,6 @@ export function outlivedOneShots(
   return total >= rule.maxShownSec ? wordingsOf(rules, rule).map((wording) => wording.id) : [];
 }
 
-// The run-1 SKIP hold's clock (LEAD-1): `held` (AI seconds the colonists ask has been on the strip,
-// either wording) grows while the shown rule carries colonistsHoldSec, and the hold is released once it
-// reaches that. Returns whether this tick releases it.
-export function releasesColonistsHold(
-  rules: readonly GuideRule[], shownId: string | null, dtAi: number, held: { sec: number },
-): boolean {
-  const rule = shownId === null ? undefined : rules.find((candidate) => candidate.id === shownId);
-  if (rule?.colonistsHoldSec === undefined) return false;
-  held.sec += dtAi;
-  return held.sec >= rule.colonistsHoldSec;
-}
-
 // A countdown's digits are a per-tick value, not a new instruction.
 const DIGITS = /\d+/g;
 
@@ -373,7 +382,7 @@ const DIGITS = /\d+/g;
 // change is an update (the strip retypes, the TAB glow follows), and new numbers are only
 // mutated into director.shown; the strip patches them in place from its per-tick paint.
 // (§6.3 says "update when the id or text changes"; read with §9, the text means its words.
-// A rule whose line should retype for a new number, a different cluster say, needs its own id.)
+// A rule whose line should retype for a new number, a different pod say, needs its own id.)
 export function objectiveStructure(line: ObjectiveLine | null): string {
   if (!line) return '';
   return `${line.id}|${line.text.replace(DIGITS, '#')}|${line.urgency}|${line.layer}|${line.keys.join(',')}|${line.highlight}|${line.source}|${line.warn === true}`;
@@ -398,6 +407,13 @@ export function buildDirectorCtx(
 ): DirectorCtx {
   const flying = state.run.phase === 'flight';
   const flightCtx = flying ? buildFlightContext(state, sensed) : null;
+  // The landing's table reads the drop cache (mounted with the landing); not once the Core is lost (its card owns it).
+  // Its L2 is the flight's row in landing (slice 1b: the engine is open), handed in so landing-guidance stays pure.
+  // Nor once the ship has left orbit during it (crashed, escaped): its LOST card owns it too.
+  const landingLive = state.burn.status === 'locked' || state.burn.status === 'accepted';
+  const landingCtx = state.run.phase === 'landing' && !state.run.coreLost && landingLive
+    ? buildLandingContext(state, getDropSolution(), skipBlockReason(state, sensed) === null, landingFlightOf(state, sensed)) : null;
+  const landing = landingCtx ? landingObjective(landingCtx) : null;
   return {
     state,
     pred,
@@ -405,7 +421,8 @@ export function buildDirectorCtx(
     phase: state.run.phase,
     mode: state.ui.mode,
     flight: flightCtx ? flightObjective(flightCtx) : null,
-    skipAvailable: flightCtx?.skipAvailable ?? false,
+    landing,
+    skipAvailable: flightCtx?.skipAvailable ?? landingCtx?.skipAvailable ?? false,
     bootSkipWaits: bootSkipWaits(state),
     events: inputs.events,
     phaseEntered: inputs.phaseEntered,
@@ -414,7 +431,7 @@ export function buildDirectorCtx(
     mindAlert: mindAlertActive(state),
     flash: inputs.flash,
     done: new Set(state.director.done),
-    vars: lineVars(state, pred),
+    vars: { ...lineVars(state, pred), nextLz: landing?.nextLz ?? '' },
   };
 }
 
@@ -430,7 +447,6 @@ const shownOnceLessons = new Set<string>();
 const shownSecByLesson = new Map<string, number>();
 // AI seconds each lead-in lesson (lessonOf, all its wordings together) has been on the strip on this ship.
 const leadShownSec = new Map<string, number>();
-const colonistsAskHeld = { sec: 0 };
 
 function resetDirector(): void {
   filter.reset();
@@ -441,7 +457,6 @@ function resetDirector(): void {
   shownOnceLessons.clear();
   shownSecByLesson.clear();
   leadShownSec.clear();
-  colonistsAskHeld.sec = 0;
 }
 
 let mounted = false;
@@ -515,9 +530,6 @@ export function mountDirector(store: Store<GameState>): () => void {
     for (const id of outlivedOneShots(GUIDE_RULES, shown?.id ?? null, dtAi, shownSecByLesson)) {
       if (!ctx.done.has(id)) newlyDone.push(id);
     }
-    if (!ctx.done.has(COLONISTS_HOLD_RELEASED) && releasesColonistsHold(GUIDE_RULES, shown?.id ?? null, dtAi, colonistsAskHeld)) {
-      newlyDone.push(COLONISTS_HOLD_RELEASED);
-    }
 
     const current = store.getState().director.shown;
     const structural = !sameObjectiveStructure(shown, current);
@@ -534,7 +546,7 @@ export function mountDirector(store: Store<GameState>): () => void {
 
   const offReset = onWorldReset('director', resetDirector, () => ({
     pending: pendingEvents.size, lastPhase, mindQuietSec, flash, shownOnce: shownOnceLessons.size, shownSec: shownSecByLesson.size,
-    colonistsAskHeld: colonistsAskHeld.sec, leadShown: leadShownSec.size,
+    leadShown: leadShownSec.size,
   }));
   return () => { offEvents(); offTick(); offReset(); mounted = false; };
 }

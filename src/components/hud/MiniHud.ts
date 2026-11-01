@@ -5,8 +5,9 @@ import { getPrediction, getSensedPrediction, type Prediction } from '@systems/pr
 import { capabilitiesNow } from '@systems/capabilities';
 import { onOpsChange } from '@systems/ops-core';
 import { setMode } from '@systems/mode';
-import { printStatus, setPrintFast, printFastRefusal } from '@systems/printer';
-import { intactTally, intactHudLine } from '@systems/stars';
+import { getDropSolution } from '@systems/drop-cache';
+import { landingBurnOffer } from '@systems/landing-orbit';
+import { miniHudLanding } from '@systems/landing-hud';
 import {
   countdownChip, plotChip, fuelModel, thrustLimitModel, paceLabel, plotViewRadius, mindChipModel, overclockBadge, plotZones,
   formatCountdown,
@@ -81,10 +82,9 @@ export function mountMiniHud(store: Store<GameState>): () => void {
   const fuelVal = requireById('mhFuelVal');
   const limitEl = requireById('mhLimit');
   const autoEl = requireById('mhAuto');
-  const printRow = requireById('mhPrint');
-  const printText = requireById('mhPrintText');
-  const printFast = requireById<HTMLButtonElement>('mhPrintFast');
-  const intactEl = requireById('mhIntact');
+  const landingRow = requireById('mhLanding');
+  const landingText = requireById('mhLandingText');
+  const onTargetEl = requireById('mhOnTarget');
   const nodes = buildPlot(requireById<SVGSVGElement>('mhPlot'));
   const chip = requireById<HTMLButtonElement>('mindChip');
   const chipDots = requireById('mindChipDots');
@@ -149,14 +149,16 @@ export function mountMiniHud(store: Store<GameState>): () => void {
     const pred = getSensedPrediction();
     patch(paceEl, paceLabel(state));
 
-    // While printing nothing is burning or counting down: the card trades the countdown row and the
-    // THRUST LIMIT line for the printing rows below, and keeps its height (at 1280×720 a taller card
-    // squeezes the strip and INSPECT).
-    const print = printStatus(state);
+    // While landing nothing is burning: the card trades the THRUST LIMIT line for the landing rows below, and keeps
+    // its height (at 1280×720 a taller card squeezes the strip and INSPECT); the countdown row counts the next window.
+    const landing = state.run.phase === 'landing';
 
     // The header's countdown, with its ▸▸ (fast-forwarding) or ×¼ (OVERCLOCK) badge.
-    const countdown = countdownChip(state, pred);
-    cdEl.hidden = print.printing && !countdown;
+    const sol = landing ? getDropSolution() : null;
+    // Slice 1b: the burn the landing offers counts here too when it comes before the window, as on the header's chip.
+    const offer = landing ? landingBurnOffer(state, pred) : null;
+    const countdown = countdownChip(state, pred, sol, offer);
+
     const badge = countdown?.fastForward ? '▸▸' : countdown?.slow ? overclockBadge() : '';
     patch(cdLabel, countdown ? countdown.label : '—');
     patch(cdTime, countdown ? countdown.time : '');
@@ -171,9 +173,9 @@ export function mountMiniHud(store: Store<GameState>): () => void {
     // FUEL and its NEEDED as the Engine window shows them: from the sensed prediction, as the strip reads it (§6.2:
     // every player-facing number), so its USE IT ALL and the strip's WAIT come from one snapshot even while a failing
     // Sensor Interp holds the plot stale (LEAD-2 review round 2).
-    const fuel = fuelModel(state, pred);
+    const fuel = fuelModel(state, pred, offer);
     const engineLimit = thrustLimitModel(state);
-    const limit = print.printing ? { ...engineLimit, limited: false } : engineLimit;
+    const limit = landing ? { ...engineLimit, limited: false } : engineLimit;
     const barsKey = `${fuel.pct.toFixed(1)}|${fuel.short}|${limit.limited ? limit.capPct : ''}`;
     if (barsKey !== lastBars) {
       lastBars = barsKey;
@@ -198,22 +200,17 @@ export function mountMiniHud(store: Store<GameState>): () => void {
     patch(autoEl, autoText);
     card.classList.toggle('auto-flying', flying);
 
-    // While printing (WP5): the clusters done, the pace, and PRINT FAST ▸▸ one click away; under it
-    // the INTACT star as it stands (★ INTACT 11/12 while C09 still needs a repair).
-    printRow.hidden = !print.printing;
-    intactEl.hidden = !print.printing;
-    if (print.printing) {
-      patch(printText, print.halted ? 'NO PRINTER' : `PRINTING ${print.done}/${print.total}`);
-      printText.classList.toggle('halted', print.halted);
-      patch(printFast, print.fast ? 'FAST ▸▸ ON' : 'PRINT FAST ▸▸');
-      printFast.classList.toggle('on', print.fast);
-      // While HOLLOW eats anything, PRINT FAST waits (WP6): struck out, with the reason on hover.
-      const refusal = state.printer.fast ? null : printFastRefusal(state);
-      printFast.classList.toggle('blocked', refusal !== null);
-      printFast.title = refusal ?? '';
-      const intact = intactHudLine(intactTally(state));
-      patch(intactEl, intact.text);
-      if (intactEl.dataset.tone !== intact.tone) intactEl.dataset.tone = intact.tone;
+    // While landing (01-landing §4): the bay and the pods down, and under it the ON TARGET star as it stands
+    // (`★ ON TARGET 5/6`); the countdown row above already counts the next window.
+    const mini = miniHudLanding(state, sol);
+    landingRow.hidden = mini === null;
+    onTargetEl.hidden = mini === null;
+    if (mini) {
+      patch(landingText, `${mini.bay} · ${mini.down}`);
+      patch(onTargetEl, mini.onTarget.text);
+      if (onTargetEl.dataset.tone !== mini.onTarget.tone) onTargetEl.dataset.tone = mini.onTarget.tone;
+      cdEl.hidden = false;
+      if (!countdown) patch(cdLabel, mini.window?.text ?? '—');
     }
 
     paintPlot(state, pred);
@@ -237,14 +234,8 @@ export function mountMiniHud(store: Store<GameState>): () => void {
 
   const onCardClick = (): void => setMode(store, 'tools');
   const onChipClick = (): void => setMode(store, 'memory');
-  // PRINT FAST lives on the card but is not a way back to the ship.
-  const onPrintFast = (event: MouseEvent): void => {
-    event.stopPropagation();
-    setPrintFast(store, !store.getState().printer.fast);
-  };
   card.addEventListener('click', onCardClick);
   chip.addEventListener('click', onChipClick);
-  printFast.addEventListener('click', onPrintFast);
 
   const paintVisible = (): void => {
     if (store.getState().ui.mode === 'memory') paintCard();
@@ -255,12 +246,11 @@ export function mountMiniHud(store: Store<GameState>): () => void {
   const offTick = onPostTick(paintVisible);
   // Threads and charge change on AI time, also while the world is paused (no game ticks needed).
   const offOps = onOpsChange(() => paintChip());
-  const unsub = store.subscribe((s) => `${s.ui.memoryRev}|${s.ui.mode}|${s.run.phase}|${s.printer.fast}`, paintVisible);
+  const unsub = store.subscribe((s) => `${s.ui.memoryRev}|${s.ui.mode}|${s.run.phase}`, paintVisible);
 
   return () => {
     card.removeEventListener('click', onCardClick);
     chip.removeEventListener('click', onChipClick);
-    printFast.removeEventListener('click', onPrintFast);
     offTick();
     offOps();
     unsub();

@@ -1,9 +1,8 @@
-// LEAD-1 item 6: HOLLOW's story after the ship-1 fight counted only the TERMINAL's typing. Two leftovers
-// from WP6's verify:
-// • after an owed reveal, CONTROL's radio quip (`Oh, you found them! …`) typed right up to `> ...047?`;
-// • on the lose path the owed reveal's first line typed while HOLLOW's slow eat echo was still typing.
-// The story is now a say.ts createStory sequence (reusable: WP7 scripts HALCYON's wake lines with it): each
-// beat waits until BOTH screens have typed everything said before it, plus its own silence.
+// LEAD-1 item 6: HOLLOW's story after the ship-1 fight counted only the TERMINAL's typing. The story is a say.ts
+// createStory sequence (reusable: WP7 scripts HALCYON's wake lines with it): each beat waits until BOTH screens have
+// typed everything said before it, plus its own silence. Slice 1a: the reveal (and the radio's `Oh, you found them!`
+// that came with it) is gone; the ship-1 paths check that `> ...047?` waits for the fight's own echo (the slow eat echo
+// on the lose path) and that `> ...047?` and CONTROL never type at once. HOLLOW's first bite is POD 01.
 import { check, finish, followStrip } from '../wp1/harness';
 import { createHarness6 } from '../wp6/harness6';
 import {
@@ -11,7 +10,7 @@ import {
 } from '@systems/say';
 import { actionRepair } from '@state/actions';
 import { HOLLOW_STORY } from '@data/hollow-text';
-import { HOLLOW_STORY_SILENCE_SEC, HOLLOW_REVEAL_AFTER_FIGHT_SEC } from '@data/tuning';
+import { HOLLOW_STORY_SILENCE_SEC } from '@data/tuning';
 import type { LogEntry } from '@state/schema';
 
 const TICK = 0.05;
@@ -86,32 +85,28 @@ const find = (speaker: string, text: string): LogEntry | undefined =>
     channelTypedByAi(state(), 'mind') === mindTypedByAi(state()) && channelTypedByAi(state(), 'radio') === radioTypedByAi(state()));
 }
 
-// --- Ship 1, the lose path with the reveal owed: the reveal waits for HOLLOW's slow eat echo ---------------
-// The never-scan kid flies; the moment C12 is bitten (sealed: the breach opens C12 alone) the test drops
-// it to 3% so it is eaten in flight: the fight is decided with the archive still sealed.
+// --- Ship 1, the lose path: `> ...047?` waits for HOLLOW's slow eat echo ------------------------------------------
+// The kid only flies; the moment POD 01 is bitten the test drops it to 3% so it is eaten in flight.
 {
   h.resetTo('flight');
   h.noFault();
   let dropped = false;
   let eatenAtAi = NaN;
-  let revealAtAi = NaN;
   let echoTypedBy = NaN;
   followStrip(h, 0.4, 400, () => {
-    const c12 = h.maybeSoul('C12');
-    if (!dropped && c12?.infected) { dropped = true; h.store.mutate(() => { c12.integrity = 3; }); }
-    const echo = state().log.entries.find((entry) => entry.speaker === 'hollow' && entry.text.startsWith('> eat c12'));
+    const pod1 = h.maybeSoul('POD 01');
+    if (!dropped && pod1?.infected) { dropped = true; h.store.mutate(() => { pod1.integrity = 3; }); }
+    const echo = state().log.entries.find((entry) => entry.speaker === 'hollow' && entry.text.startsWith('> eat pod01'));
     if (echo && Number.isNaN(eatenAtAi)) { eatenAtAi = echo.t; echoTypedBy = typedEnd(echo); }
-    if (!Number.isNaN(eatenAtAi) && Number.isNaN(revealAtAi) && state().souls.reveal.stage !== 'sealed') revealAtAi = now();
   });
   h.stepUntil(() => state().hollow.story === 'told' || state().run.phase === 'report', 120);
   const noticed = find('hollow', HOLLOW_STORY.noticed(47));
-  check('lose path: C12 was eaten in flight, the archive still sealed, and the owed reveal (breach) played',
-    dropped && !Number.isNaN(eatenAtAi) && state().souls.reveal.cause === 'breach', `cause ${state().souls.reveal.cause}`);
-  check('lose path: the owed reveal starts only once the slow eat echo has typed out (and ≥ 1.5 s after the fight)',
-    revealAtAi >= echoTypedBy - TICK && revealAtAi >= eatenAtAi + HOLLOW_REVEAL_AFTER_FIGHT_SEC - TICK,
-    `eaten ${eatenAtAi.toFixed(2)}, echo typed by ${echoTypedBy.toFixed(2)}, reveal at ${revealAtAi.toFixed(2)} `
-    + `(before LEAD-1: ${(eatenAtAi + HOLLOW_REVEAL_AFTER_FIGHT_SEC).toFixed(2)}, under the echo)`);
-  check('lose path: `> ...047?` after the reveal, the radio\'s quip and every echo have typed, plus the silence',
+  check('lose path: POD 01 was eaten in flight (the fight decided), and no reveal or breach line was said',
+    dropped && !Number.isNaN(eatenAtAi) && !state().log.entries.some((entry) => /BREACHED|you found them/.test(entry.text)));
+  check('lose path: `> ...047?` starts only once the slow eat echo has typed out, plus the silence',
+    noticed !== undefined && typedStart(noticed) >= echoTypedBy + HOLLOW_STORY_SILENCE_SEC - TICK,
+    noticed ? `echo typed by ${echoTypedBy.toFixed(2)}, 047 from ${typedStart(noticed).toFixed(2)}` : 'never said');
+  check('lose path: `> ...047?` after every line said before it has typed, plus the silence',
     noticed !== undefined && noticed.t >= voiceQuietBefore(noticed) + HOLLOW_STORY_SILENCE_SEC - TICK,
     noticed ? `047 at ${noticed.t.toFixed(2)}, quiet from ${voiceQuietBefore(noticed).toFixed(2)}` : 'never said');
 }
@@ -126,29 +121,26 @@ function voiceQuietBefore(entry: LogEntry): number {
   return quiet;
 }
 
-// --- Ship 1, the cure path with the reveal owed: the radio's quip, then a real pause, then `> ...047?` ------
-// The kid repairs C12 the moment it is bitten (the WP6 follower's second kid): the fight is decided in
-// flight, the owed reveal plays, and CONTROL says `Oh, you found them! …` on the radio at its end.
+// --- Ship 1, the cure path: the fight's echo, a real pause, `> ...047?`, then CONTROL ------------------------------
+// The kid repairs POD 01 the moment it is bitten (the WP6 follower's second kid): the fight is decided in flight.
 {
   h.resetTo('flight');
   h.noFault();
   let repaired = false;
   followStrip(h, 0.4, 400, () => {
-    const c12 = h.maybeSoul('C12');
-    if (!repaired && c12?.infected) repaired = actionRepair(h.store, c12) === null;
+    const pod1 = h.maybeSoul('POD 01');
+    if (!repaired && pod1?.infected) repaired = actionRepair(h.store, pod1) === null;
   });
   h.stepUntil(() => state().hollow.story === 'told' || state().run.phase === 'report', 160);
-  const quip = find('control', 'Oh, you found them! Please handle with care. :)');
+  const fixed = state().log.entries.find((entry) => entry.speaker === 'cmd' && entry.text.startsWith('> repair pod01'));
   const noticed = find('hollow', HOLLOW_STORY.noticed(47));
   const control = find('control', HOLLOW_STORY.control);
-  check('cure path: C12 saved in flight, the owed reveal played, CONTROL found them on the radio',
-    repaired && state().souls.reveal.cause === 'breach' && quip !== undefined, `cause ${state().souls.reveal.cause}`);
-  check('cure path: `> ...047?` comes a full silence after the radio\'s quip has typed (it used to type right up to it)',
-    quip !== undefined && noticed !== undefined && typedStart(noticed) >= typedEnd(quip) + HOLLOW_STORY_SILENCE_SEC - TICK,
-    quip && noticed ? `quip ${quip.t.toFixed(2)}–${typedEnd(quip).toFixed(2)}, 047 from ${typedStart(noticed).toFixed(2)}` : 'missing');
-  // No two story lines type at the same time, across the two screens: the quip, HOLLOW's line and
-  // CONTROL's (a print's echo is the printer's, and the printer does not wait for the story).
-  const storyLine = (entry: LogEntry): boolean => entry === quip || entry === noticed || entry === control;
+  check('cure path: POD 01 saved in flight (its repair echoed)', repaired && fixed !== undefined, fixed?.text ?? 'no echo');
+  check('cure path: `> ...047?` comes a full silence after the repair\'s echo has typed',
+    fixed !== undefined && noticed !== undefined && typedStart(noticed) >= typedEnd(fixed) + HOLLOW_STORY_SILENCE_SEC - TICK,
+    fixed && noticed ? `echo ${fixed.t.toFixed(2)}–${typedEnd(fixed).toFixed(2)}, 047 from ${typedStart(noticed).toFixed(2)}` : 'missing');
+  // No two story lines type at the same time, across the two screens: HOLLOW's line and CONTROL's.
+  const storyLine = (entry: LogEntry): boolean => entry === noticed || entry === control;
   const window = state().log.entries.filter(storyLine);
   let overlap = '';
   for (const first of window) {
@@ -157,7 +149,7 @@ function voiceQuietBefore(entry: LogEntry): number {
       if (typedStart(second) < typedEnd(first) - 1e-6 && typedStart(first) < typedEnd(second) - 1e-6) overlap ||= `'${first.text}' / '${second.text}'`;
     }
   }
-  check('cure path: the quip, `> ...047?` and CONTROL never type at the same time',
+  check('cure path: `> ...047?` and CONTROL never type at the same time',
     overlap === '' && control !== undefined, overlap || `${window.length} lines, CONTROL at ${control?.t.toFixed(2)}`);
 }
 

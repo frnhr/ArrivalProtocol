@@ -1,17 +1,19 @@
 import type { GameState, BurnStatus, SasMode, PresetMode, Urgency, GuideLayer, AutoburnPhase, AutoburnEnd } from '@state/schema';
 import type { Ring } from '@/types/orbit';
-import { isThrustOn } from '@systems/orbit-sim';
+import { isThrustOn, engineAccel } from '@systems/orbit-sim';
+import { fliesAlong } from '@systems/attitude';
 import {
   capabilitiesNow, engineFault, plotFault, presetsAvailable, ROLE_LABEL,
   type CapabilityRole, type EngineFault, type PlotFault, type Capabilities,
 } from '@systems/capabilities';
 import {
   secUntil, sweetZone, isFinishingBurn, burnKey, rpRateUnderThrust,
-  type Prediction, type PredictOutcome, type BurnPoint, type TrimReason,
+  type Prediction, type PredictOutcome, type BurnPoint, type BurnEvent, type TrimReason,
 } from '@systems/predict';
 import { skipBlockReason } from '@systems/pace';
-import { spareFor } from '@systems/tool-targets';
-import { isUsableTool, toolFilesOf } from '@state/selectors';
+import { goLowReleased, landingBurnOffer, launchRadiusRate, offerInTac } from '@systems/landing-orbit';
+import { LANDING_FLIGHT_LINES } from '@data/landing-text';
+import { controllerSwapOf } from '@systems/tool-targets';
 import { autoburnAvailable, autoburnArmedInTac } from '@systems/autoburn';
 import { AUTOBURN_TEXT } from '@data/skill-text';
 import { debrisRack } from '@/types/zone';
@@ -19,7 +21,7 @@ import { IS_DEV } from '@/env';
 import {
   EARLY_BURN_GUARD_TAC, LATE_CAPTURE_TAC, TACTICAL_LEAD_BURN_TAC, COUNTDOWN_RED_TAC,
   ACCEPT_IDLE_AI_SEC, OBJECTIVE_HYSTERESIS_SEC, MAX_LINE_CHARS, STRANDED_RANGE_FRAC, AUTOBURN_DONE_LINE_SEC,
-  DODGE_WARN_TAC, RELEASE_LEAD_TAC,
+  DODGE_WARN_TAC, RELEASE_LEAD_TAC, RP_RATE_PROBE_SEC, LANDING_RELEASE_LEAD_TAC,
 } from '@data/tuning';
 
 // Flight guidance: the objective that is never wrong (§6.3). flightObjective is a PURE
@@ -33,6 +35,13 @@ import {
 // Urgency lives in the schema (the director stores the composed line); re-exported here so
 // the flight table's callers keep importing it from guidance.
 export type { Urgency };
+
+// The landing's table lives in landing-guidance.ts (01-landing §3.11; a file apart so the two tables stay disjoint and the
+// import cycle stays out); re-exported here, where the spec puts it, so the director reads both tables from guidance.
+export {
+  buildLandingContext, landingObjective, type LandingContext, type LandingFlight, type LandingObjective, type LandingRow,
+} from '@systems/landing-guidance';
+import type { LandingFlight } from '@systems/landing-guidance';
 
 export interface FlightObjective {
   id: string;           // stable per row and variant; the strip re-renders when id or text changes
@@ -52,6 +61,10 @@ export interface FlightObjective {
 // Everything the table reads, already reduced to "now" and to tactical seconds.
 export interface FlightContext {
   status: BurnStatus;
+  // LANDING (slice 1b): the engine is open during the landing (selectors engineOpen), and the flight's rows run there as
+  // landingFlightRow (L2). `burnPoint` stays the raw plan everywhere (the rows need it on an open path: F9/F10, and a
+  // declined trim is still named when the next window is out of band); `offer` is the burn the landing offers.
+  landing: boolean;
   outcome: PredictOutcome;
   rp: number;
   // km per tactical second ▼ moves under the thrust delivered now (+ raises it; 0 with no thrust): F6's early RELEASE.
@@ -69,7 +82,7 @@ export interface FlightContext {
   outOfFuel: boolean;         // the tank is dry: no burn can happen any more
   fuelShort: boolean;         // the FUEL left is less than the next burn needs (Prediction.fuelShort)
   acceptOnly: boolean;        // ACCEPT ORBIT is the only way on (predict.ts, the lead's Rule 4; latched)
-  strandedAnyway: boolean;    // ...and that ACCEPT strands the ship: no burn the FUEL left can make reaches the printers
+  strandedAnyway: boolean;    // ...and that ACCEPT strands the ship: no burn the FUEL left can make reaches the launch band
   cannotClose: boolean;       // a flyby the tank can no longer catch, even at ▼ (WP1-rules 3b)
   presetsAvailable: boolean;  // false when the Autopilot file is failing or worse → Q/E hints
   plotFault: PlotFault | null;      // why the NAV PLOT can't show the path, or null (Sensor Interp, Nav Plotter)
@@ -81,6 +94,13 @@ export interface FlightContext {
   skipAvailable: boolean;     // pressing F now would start a SKIP
   // inTac: tactical s to START BURN; burnTac: tactical s of burning the planned burn still takes.
   burnPoint: (BurnPoint & { inTac: number; burnTac: number }) | null;
+  // In LANDING: the burn the landing offers (landing-orbit landingBurnOffer: pace, L2's lead, the beeps), in the same
+  // shape; null outside the landing and with no offer.
+  offer: (BurnPoint & { inTac: number; burnTac: number }) | null;
+  // In LANDING: GO LOWER's aim (state.landing.goLow): its LZ, whether the kid holds it, whether its RELEASE has come
+  // (landing-orbit goLowReleased at the rate the launch point moves now), and whether the ship flies RETRO (its preset,
+  // or by hand under MANUAL: attitude fliesAlong); null outside the landing and with no aim.
+  goLow: { lz: string; held: boolean; released: boolean; retro: boolean } | null;
   periTac: number | null;
   showAccept: boolean;        // suggest ACCEPT ORBIT (offered, and it would not strand the ship)
   // WP9: a debris cloud the (sensed) path will enter while the ▼ correction applies, and the instruments can tell:
@@ -112,19 +132,15 @@ export function canAccept(state: Readonly<GameState>, pred: Prediction): boolean
     && (pred.acceptOnly || state.burn.fuelPct < pred.neededPct || state.burn.closedIdleAiSec >= ACCEPT_IDLE_AI_SEC);
 }
 
-// Accepting this loop would strand the ship: the printers could not reach it (§4.3).
+// Accepting this loop would strand the ship: too little of it is in the launch band to land anyone (§4.3).
 export function acceptStrands(pred: Prediction): boolean {
   return pred.greenFraction < STRANDED_RANGE_FRAC;
 }
 
-// The backup a SWAP could put into service for a lost Thrust Ctrl, and whether the Swap file can do it now (WP12 p3, WP10
-// verify: the strip asked for `SWAP in Thrust.alt` with the Swap file eaten). No Swap file at all: nothing to name.
+// The backup a SWAP could put into service for a lost Thrust Ctrl (tool-targets controllerSwapOf: with no controller in
+// memory it is the orphaned spare), and whether the Swap file can do it now. F2 reads it only with the controller gone.
 function spareControllerOf(state: Readonly<GameState>): FlightContext['spareController'] {
-  if (!state.run.licences.includes('swap')) return null;
-  const spare = spareFor(state, 'thrust-ctrl');
-  const swapFiles = toolFilesOf(state.memory, 'swap');
-  if (spare === null || swapFiles.length === 0) return null;
-  return { name: spare.name, swapReady: swapFiles.some(isUsableTool) };
+  return controllerSwapOf(state);
 }
 
 export function buildFlightContext(state: Readonly<GameState>, pred: Prediction): FlightContext {
@@ -132,9 +148,13 @@ export function buildFlightContext(state: Readonly<GameState>, pred: Prediction)
   const warp = state.level.tacticalWarp;
   const sweet = sweetZone(state.level.ring);
   const burnPoint = pred.burnPoint;
+  const offer = state.run.phase === 'landing' ? landingBurnOffer(state, pred) : null;
+  const timed = (bp: BurnPoint): BurnPoint & { inTac: number; burnTac: number } => (
+    { ...bp, inTac: secUntil(pred, bp.inSec, now) / warp, burnTac: bp.estBurnSec / warp });
   const caps = capabilitiesNow(state);
   return {
     status: state.burn.status,
+    landing: state.run.phase === 'landing',
     outcome: pred.outcome,
     rp: pred.rp,
     rpRateTac: rpRateUnderThrust(state) * warp,
@@ -159,7 +179,9 @@ export function buildFlightContext(state: Readonly<GameState>, pred: Prediction)
     spareController: spareControllerOf(state),
     inMind: state.ui.mode === 'memory',
     skipAvailable: state.clock.skipWarp === null && skipBlockReason(state, pred) === null,
-    burnPoint: burnPoint ? { ...burnPoint, inTac: secUntil(pred, burnPoint.inSec, now) / warp, burnTac: burnPoint.estBurnSec / warp } : null,
+    burnPoint: burnPoint ? timed(burnPoint) : null,
+    offer: offer ? timed(offer) : null,
+    goLow: goLowOf(state),
     periTac: pred.periInSec === null ? null : secUntil(pred, pred.periInSec, now) / warp,
     // Never point the kid at an ACCEPT that strands the ship while a burn can still save it; the button
     // says STRANDED itself. When nothing is left but ACCEPT (acceptOnly), F11 names it anyway (LEAD-1).
@@ -172,6 +194,20 @@ export function buildFlightContext(state: Readonly<GameState>, pred: Prediction)
       end: state.burn.auto.end,
     },
     autoAvailable: autoburnAvailable(state, pred),
+  };
+}
+
+// GO LOWER's aim as the landing's rows read it. The RELEASE is F6's rule on the launch point's radius (landing-orbit
+// goLowReleased), at the rate the thrust delivered now moves it (km per tactical s; 0 with no thrust).
+function goLowOf(state: Readonly<GameState>): FlightContext['goLow'] {
+  const aim = state.run.phase === 'landing' ? state.landing.goLow : null;
+  if (aim === null) return null;
+  const mu = state.level.planet.mu;
+  const accel = isThrustOn(state) ? engineAccel(state) : 0;
+  const rateTac = launchRadiusRate(state.orbit, mu, aim.launchRad, accel, state.burn.heading, RP_RATE_PROBE_SEC) * state.level.tacticalWarp;
+  return {
+    lz: aim.lz, held: aim.held, released: goLowReleased(state.orbit, mu, aim, rateTac),
+    retro: fliesAlong('retrograde', state.burn.sasMode, state.burn.heading, state.orbit),
   };
 }
 
@@ -225,10 +261,11 @@ function fixWithTail(
   return full.text.length <= MAX_LINE_CHARS ? full : fixWith(id, prefix, preset, urgency, ctx, shortTail);
 }
 
-const EVENT_GLYPH = { peri: '▼', apo: '▲', now: '▼' } as const;
+// The burn's place on the orbit as the strip names it; 'point' is GO LOWER's ◇ (an orbit angle, not an apsis: slice 1b).
+const EVENT_GLYPH: Readonly<Record<BurnEvent, string>> = { peri: '▼', apo: '▲', now: '▼', point: '◇' };
 // F11 when ACCEPT ORBIT is the only way on (acceptOnly) and it strands the ship (strandedAnyway)...
-export const STRANDED_LINE = 'NOT ENOUGH FUEL to reach the printers — ACCEPT ORBIT';
-// ...and when that ACCEPT still reaches the printers (the lead's Rule 4 lists it first).
+export const STRANDED_LINE = 'NOT ENOUGH FUEL to reach the launch band — ACCEPT ORBIT';
+// ...and when that ACCEPT still reaches the launch band (the lead's Rule 4 lists it first).
 export const ACCEPT_ONLY_LINE = 'NOT ENOUGH FUEL to lock the orbit — ACCEPT ORBIT';
 // F11 held for a trim the tank can't pay for in full: it runs to the empty tank (then ORBIT ACCEPTED), or, a band
 // of about a FUEL point under the trim's price, into the ring after all, where the strip says RELEASE and the
@@ -373,7 +410,8 @@ const NO_BURN_ROWS: ReadonlySet<string> = new Set([
 // The rows whose instruction is to let go of SPACE (F3 RELEASE, F5 TOO EARLY and RELEASE — next, F6
 // RELEASE): the one thing that ends a burn. Nothing else on the strip may stand in front of them
 // (script.ts: HOLLOW's alarms yield to them), or a kid who chose to burn keeps burning past them.
-const RELEASE_ROWS: ReadonlySet<string> = new Set(['F3', 'F5', 'F5-next', 'F6-release', 'F6-past']);
+// The landing's (slice 1b): GO LOWER's and the 'lift' burn's RELEASE.
+const RELEASE_ROWS: ReadonlySet<string> = new Set(['F3', 'F5', 'F5-next', 'F6-release', 'F6-past', 'GO-LOW-release', 'LIFT-release']);
 
 export function isReleaseRow(id: string): boolean {
   return RELEASE_ROWS.has(id);
@@ -479,7 +517,32 @@ function evaluate(ctx: FlightContext): FlightObjective | null {
   return base;
 }
 
-// F3–F11: the path itself (only during a live approach, which evaluate checks).
+// F5: braking or boosting long before its START BURN tick. A burn the kid is finishing
+// (the right preset, due now) is not early. Nor is a hold that outlived the burn it was pressed
+// for, or one along the other preset than the next burn's: that burn just did its job (the
+// first half of a two-burn fix, a shrink) and the next one is a different burn, so the line
+// names it, urgently, instead of scolding the kid who did exactly what the strip said.
+// A hold pressed for this very burn whose rest takes less than the guard is the kid finishing it, not
+// starting it early (WP7, found on HALCYON: near the end of a trim that makes the loop nearly round, ▼'s
+// place on the loop jumps seconds ahead, and the strip said TOO EARLY 0.3 s of burning short of the ring).
+// The landing's GO LOWER and 'lift' rows ask it too (a stray SPACE in landing, risk 18).
+function earlyBurnRow(ctx: FlightContext, burnPoint: FlightContext['burnPoint']): FlightObjective | null {
+  const pressedForPlan = burnPoint !== null && ctx.firingFor !== null && ctx.firingFor === burnKey(burnPoint);
+  const finishingRest = burnPoint !== null && pressedForPlan && ctx.sasMode === burnPoint.preset && burnPoint.burnTac <= EARLY_BURN_GUARD_TAC;
+  if (burnPoint && ctx.firing && (ctx.sasMode === 'prograde' || ctx.sasMode === 'retrograde')
+    && burnPoint.inTac > EARLY_BURN_GUARD_TAC && !isFinishingBurn(burnPoint, ctx.firing, ctx.sasMode) && !finishingRest) {
+    const next = `${burnVerb(burnPoint)} at ${EVENT_GLYPH[burnPoint.event]} in ${formatTac(burnPoint.inTac)}`;
+    const pressedForThis = ctx.firingFor === null || ctx.firingFor === burnKey(burnPoint);
+    if (ctx.sasMode === burnPoint.preset && pressedForThis) {
+      return make('F5', `TOO EARLY — RELEASE [SPACE], ${next}`, ['SPACE'], 'now', ctx);
+    }
+    return make('F5-next', `RELEASE [SPACE]! — next: ${next}`, ['SPACE'], 'now', ctx);
+  }
+  return null;
+}
+
+// F3–F11: the path itself (only during a live approach, which evaluate checks; the landing's out-of-ring rows, through
+// landingFlightRow).
 function evaluatePath(ctx: FlightContext): FlightObjective {
   const burnPoint = ctx.burnPoint;
 
@@ -525,25 +588,8 @@ function evaluatePath(ctx: FlightContext): FlightObjective {
       : make('F11-accept', ACCEPT_ONLY_LINE, [], 'wait', accept);
   }
 
-  // F5: braking or boosting long before its START BURN tick. A burn the kid is finishing
-  // (the right preset, due now) is not early. Nor is a hold that outlived the burn it was pressed
-  // for, or one along the other preset than the next burn's: that burn just did its job (the
-  // first half of a two-burn fix, a shrink) and the next one is a different burn, so the line
-  // names it, urgently, instead of scolding the kid who did exactly what the strip said.
-  // A hold pressed for this very burn whose rest takes less than the guard is the kid finishing it, not
-  // starting it early (WP7, found on HALCYON: near the end of a trim that makes the loop nearly round, ▼'s
-  // place on the loop jumps seconds ahead, and the strip said TOO EARLY 0.3 s of burning short of the ring).
-  const pressedForPlan = burnPoint !== null && ctx.firingFor !== null && ctx.firingFor === burnKey(burnPoint);
-  const finishingRest = burnPoint !== null && pressedForPlan && ctx.sasMode === burnPoint.preset && burnPoint.burnTac <= EARLY_BURN_GUARD_TAC;
-  if (burnPoint && ctx.firing && (ctx.sasMode === 'prograde' || ctx.sasMode === 'retrograde')
-    && burnPoint.inTac > EARLY_BURN_GUARD_TAC && !isFinishingBurn(burnPoint, ctx.firing, ctx.sasMode) && !finishingRest) {
-    const next = `${burnVerb(burnPoint)} at ${EVENT_GLYPH[burnPoint.event]} in ${formatTac(burnPoint.inTac)}`;
-    const pressedForThis = ctx.firingFor === null || ctx.firingFor === burnKey(burnPoint);
-    if (ctx.sasMode === burnPoint.preset && pressedForThis) {
-      return make('F5', `TOO EARLY — RELEASE [SPACE], ${next}`, ['SPACE'], 'now', ctx);
-    }
-    return make('F5-next', `RELEASE [SPACE]! — next: ${next}`, ['SPACE'], 'now', ctx);
-  }
+  const early = earlyBurnRow(ctx, burnPoint);
+  if (early) return early;
 
   if (ctx.outcome === 'open') {
     if (!burnPoint) throw new Error('flightObjective: open path with fuel but without a burn point');
@@ -634,6 +680,10 @@ function evaluatePath(ctx: FlightContext): FlightObjective {
       return make('SHRINK-keep', 'KEEP HOLDING — shrink the loop', ['SPACE'], 'now', ctx);
     }
     return fixWith('SHRINK', 'SHRINK THE LOOP', 'retrograde', 'now', ctx);
+  }
+  // GO LOWER and the 'lift' burn are planned only in LANDING (predict, slice 1b), where landingFlightRow words them.
+  if (burnPoint.reason === 'go-low' || burnPoint.reason === 'lift') {
+    throw new Error(`flightObjective: a landing-only '${burnPoint.reason}' burn during the flight`);
   }
 
   // F11: a closed loop that is not green yet: trim it. (With nothing left but ACCEPT ORBIT, the
@@ -733,6 +783,109 @@ export function flightObjective(ctx: FlightContext): FlightObjective | null {
     throw new Error(`flightObjective: '${objective.text}' is ${objective.text.length} chars (max ${MAX_LINE_CHARS})`);
   }
   return objective;
+}
+
+// --- The flight table in LANDING (slice 1b, plan §1.4; Track ORBIT) ---------------------------------------------------
+
+// The flight's row during the landing, shown as the landing table's L2 (it keeps the F row's id, so the director's
+// filter, isReleaseRow, followDirector and flight-controls' lineAsks work unchanged): F1/F2 overlays, F4 on an impact
+// course, F9/F10 on an open path, F11 trims, GO LOWER's rows (GO-LOW, its timeline, GO-LOW-keep, GO-LOW-release, the last
+// a RELEASE row), the 'lift' burn's rows (LIFT), and the in-ring F3 as `RELEASE [SPACE]!` only while firing with no
+// offered burn. Skips F3b HOLD STEADY and F11-accept/stranded. null when no row applies (the landing's own rows lead).
+// `ctx.landing` is true here.
+export function landingFlightRow(ctx: FlightContext): FlightObjective | null {
+  if (!ctx.landing) throw new Error('landingFlightRow: not landing (flightObjective is the flight\'s table)');
+  const base = evaluateLanding(ctx);
+  if (base === null) return null;
+  const blind = ctx.plotFault && !beforeBlind(base, ctx.plotFault) ? blindObjective(ctx.plotFault, base, ctx) : null;
+  const overlaid = blind ?? (ctx.engineFault && !NO_BURN_ROWS.has(base.id) ? engineObjective(ctx.engineFault, base, ctx) : base);
+  const objective = fromMind(overlaid, ctx);
+  if (IS_DEV && objective.text.length > MAX_LINE_CHARS) {
+    throw new Error(`landingFlightRow: '${objective.text}' is ${objective.text.length} chars (max ${MAX_LINE_CHARS})`);
+  }
+  return objective;
+}
+
+// The ship's own line for whichever table runs (the flight's, or its rows in landing): flight-controls' lineAsks and
+// ghost-thrust's SKIP plan read it.
+export function shipObjective(ctx: FlightContext): FlightObjective | null {
+  return ctx.landing ? landingFlightRow(ctx) : flightObjective(ctx);
+}
+
+// The landing's path rows. In the ring: GO LOWER's or the 'lift' burn's rows when one is planned, F3's RELEASE when the
+// throttle is held for nothing, else none (no HOLD STEADY: there is no lock to hold for). Out of it: the flight's own
+// rows (evaluatePath: F4, F9/F10, a shrink, F11's trims, TOO EARLY), except a closed loop on an empty tank, which no
+// burn changes (the landing's rows say what that orbit still lands). ACCEPT ORBIT and AUTOBURN are the flight's only:
+// acceptOnly is false in landing (predict) and AUTOBURN refuses there (autoburn.ts).
+function evaluateLanding(ctx: FlightContext): FlightObjective | null {
+  const burnPoint = ctx.burnPoint;
+  if (ctx.inRing) {
+    const aim = ctx.goLow;
+    const goLow = burnPoint?.reason === 'go-low' ? burnPoint : null;
+    // The held GO LOWER keeps its rows to the end, also once its plan is done (the launch point reached the target).
+    if (aim !== null && ctx.firing && aim.retro && (aim.held || (goLow !== null && goLow.inTac <= EARLY_BURN_GUARD_TAC))) {
+      if (aim.released) return make('GO-LOW-release', LANDING_FLIGHT_LINES.goLowRelease, ['SPACE'], 'now', ctx);
+      return make('GO-LOW-keep', LANDING_FLIGHT_LINES.goLowKeep(aim.lz), ['SPACE'], 'now', ctx);
+    }
+    if (goLow !== null) return goLowRows(ctx, goLow);
+    if (burnPoint?.reason === 'lift') return liftRows(ctx, burnPoint);
+    if (ctx.firing || ctx.thrustOn) return make('F3', 'RELEASE [SPACE]!', ['SPACE'], 'now', ctx);
+    return null;
+  }
+  if (ctx.outOfFuel && ctx.outcome === 'closed') return null;
+  return evaluatePath(ctx);
+}
+
+type TimedBurn = NonNullable<FlightContext['burnPoint']>;
+
+// GO LOWER (§3.7) before the kid holds it: TOO EARLY for a hold ahead of its tick; the preset first (`GO LOWER — at ◇
+// press [S] (RETRO)`, or due now `GO LOWER — press [S] (RETRO), hold [SPACE] NOW`); then the START BURN timeline, whose
+// WAIT names the LZ it is for when that fits.
+function goLowRows(ctx: FlightContext, burnPoint: TimedBurn): FlightObjective {
+  const early = earlyBurnRow(ctx, burnPoint);
+  if (early) return early;
+  // Pointed RETRO by hand under MANUAL counts as the preset (review minor 7): the timeline, not `turn to RETRO`.
+  if (ctx.sasMode !== 'retrograde' && ctx.goLow?.retro !== true) {
+    if (burnPoint.inTac <= 0) return fixWith('GO-LOW', LANDING_FLIGHT_LINES.goLowProblem, 'retrograde', 'now', ctx, ' NOW');
+    const press = pressPreset('retrograde', ctx);
+    const urgency: Urgency = burnPoint.inTac <= TACTICAL_LEAD_BURN_TAC ? 'now' : 'soon';
+    return make('GO-LOW', LANDING_FLIGHT_LINES.goLow(press.text), press.keys, urgency, ctx);
+  }
+  const forLz = burnPoint.aimLz === undefined ? '' : LANDING_FLIGHT_LINES.forLz(burnPoint.aimLz);
+  const timeline = burnTimeline('GO-LOW', burnPoint, ctx, forLz);
+  return timeline.text.length <= MAX_LINE_CHARS ? timeline : burnTimeline('GO-LOW', burnPoint, ctx, '');
+}
+
+// The 'lift' burn (risk 3; L10's key): F11's shape, PRO at ▲ lifting ▼ back over the DRAG line (first PRO at ▼ when ▲
+// is under the target too: predict plans it in two). Its RELEASE comes once the burn it still needs, at the thrust it
+// has, is LANDING_RELEASE_LEAD_TAC or less (the plan's own Δv, so it holds for either half; tuning.ts says why not F6's lead).
+function liftRows(ctx: FlightContext, burnPoint: TimedBurn): FlightObjective {
+  if (ctx.firing && ctx.sasMode === 'prograde' && (burnPoint.inTac <= EARLY_BURN_GUARD_TAC || isFinishingBurn(burnPoint, ctx.firing, ctx.sasMode))) {
+    if (burnPoint.burnTac <= LANDING_RELEASE_LEAD_TAC) {
+      return make('LIFT-release', LANDING_FLIGHT_LINES.liftRelease, ['SPACE'], 'now', ctx);
+    }
+    return make('LIFT-keep', LANDING_FLIGHT_LINES.liftKeep, ['SPACE'], 'now', ctx);
+  }
+  const early = earlyBurnRow(ctx, burnPoint);
+  if (early) return early;
+  if (ctx.sasMode !== 'prograde') {
+    if (burnPoint.inTac <= 0) return fixWith('LIFT', LANDING_FLIGHT_LINES.liftProblem, 'prograde', 'now', ctx, ' NOW');
+    const press = pressPreset('prograde', ctx);
+    const urgency: Urgency = burnPoint.inTac <= TACTICAL_LEAD_BURN_TAC ? 'now' : 'soon';
+    return make('LIFT', `${LANDING_FLIGHT_LINES.liftProblem} — at ${EVENT_GLYPH[burnPoint.event]} ${press.text} and burn`, press.keys, urgency, ctx);
+  }
+  return burnTimeline('LIFT', burnPoint, ctx, '');
+}
+
+// What the landing table's L2 reads of the flight, for landing-guidance buildLandingContext: the row above, and how far
+// the OFFERED burn's START BURN is (tactical s; a declined or unpaid burn never pulls L2 forward). Built here so
+// landing-guidance stays pure and imports no guidance values.
+export function landingFlightOf(state: Readonly<GameState>, pred: Prediction): LandingFlight {
+  const ctx = buildFlightContext(state, pred);
+  return {
+    row: landingFlightRow(ctx), burnInTac: offerInTac(state, pred), impact: pred.outcome === 'impact',
+    tankShort: state.burn.fuelPct <= 0 || pred.fuelShort,
+  };
 }
 
 // Hysteresis for the strip: a new objective must persist OBJECTIVE_HYSTERESIS_SEC before it

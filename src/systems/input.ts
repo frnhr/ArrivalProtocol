@@ -33,6 +33,8 @@ export interface KeyBinding {
 // would fight the game. Prevented unless the player is typing into a text field.
 const PREVENTED_CODES: ReadonlySet<string> = new Set([
   'Space', 'Tab', 'KeyF', 'KeyP', 'KeyM', 'KeyB', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE',
+  // Slice 1a: [L] launches a pod; [G] is reserved for the landing (landing-controls.ts).
+  'KeyL', 'KeyG',
 ]);
 
 const TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([

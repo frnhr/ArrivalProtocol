@@ -6,7 +6,6 @@ import { onPostTick } from '@systems/clock';
 import { getSensedPrediction } from '@systems/predict';
 import { toggleAlert } from '@systems/flight-hud';
 import { requireById, replayAnimation } from '@components/dom';
-import { settleCracks } from '@components/memory-view/SegmentBlock';
 import { MODE_WIPE_MS } from '@data/tuning';
 
 // The SHIP ⇄ MIND toggle in the lower-left dock, and the ONE subscriber that owns the screen:
@@ -45,10 +44,6 @@ export function mountModeToggle(store: Store<GameState>): () => void {
   wipe.style.setProperty('--wipe-ms', `${MODE_WIPE_MS}ms`);
 
   const paint = (mode: ViewMode): void => {
-    // The memory view comes back from display:none, which restarts every CSS animation on it: a
-    // colonist chip TABbed away from mid-crack must not crack again (LEAD-1). Settled first, so the
-    // restart (at the next style pass) already sees it.
-    if (mode === 'memory') settleCracks(document);
     document.body.classList.toggle('mode-memory', mode === 'memory');
     options.forEach((option) => option.classList.toggle('active', option.dataset.mode === mode));
   };

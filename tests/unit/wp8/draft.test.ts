@@ -1,7 +1,7 @@
 // WP8 acceptance 2 (§6.9, §9 WP8 items 1–2): PICK ONE TO CARRY.
 // The pure draft:
 // • the same seed deals the same 3 cards, always distinct;
-// • with clustersLost ≥ 1, FIREWALL.sys is in at least 60% of 1,000 seeds (and says why: `you lost a cluster
+// • with driversLost ≥ 1, FIREWALL.sys is in at least 60% of 1,000 seeds (and says why: `you lost a driver
 //   to ???`, the name the strip shows); every boost has its reason, a base card says `ARRIVAL CONTROL had a spare`;
 // • WP8 fix round 1: every boost has a mild step with its own reason (a bite saved, two REPAIRs, one busy
 //   THREADS refusal, REPAIR CHARGE under 30, half the FUEL burned), so a clean tutorial's draft is shaped by
@@ -36,13 +36,13 @@ import { RACK_F_START } from '@systems/carry';
 import {
   MAX_LINE_CHARS, DRAFT_CARDS, FUEL_TRIM_DV_BONUS_FRAC, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, REPAIR_V2_VERSION, CHARGE_ARRIVAL_FLOOR,
 } from '@data/tuning';
-import type { Segment, SoulSegment, FreeSegment, UpgradeSegment } from '@/types/segment';
+import type { Segment, DriverSegment, FreeSegment, UpgradeSegment } from '@/types/segment';
 
 const none: Record<UpgradeId, number> = { firewall: 0, 'repair-v2': 0, 'thread-plus': 0, charge: 0, 'fuel-trim': 0 };
 // The base context has no sign of trouble at all (a fresh unit's 36 charge, most of the FUEL left): every card
 // at its base weight.
 const ctx = (over: Partial<DraftContext> = {}): DraftContext => ({
-  stats: { manualCaptures: 0, demos: [], repairs: 0, moves: 0, deletes: 0, clustersLost: 0, clustersBitten: 0, capRefusals: 0, deal: null },
+  stats: { manualCaptures: 0, demos: [], repairs: 0, moves: 0, deletes: 0, driversLost: 0, driversBitten: 0, capRefusals: 0, deal: null },
   chargeHeld: 36, lastShip: { name: 'ARES-VII', fuelLeftPct: 70 }, owned: none, hasRepair: true, linkRoom: 50, hollowLabel: '???', ...over,
 });
 const ids = (cards: { id: UpgradeId }[]): string => cards.map((card) => card.id).join(',');
@@ -67,47 +67,47 @@ const ever = (context: DraftContext, id: UpgradeId, seeds = 1000): boolean => {
     if (cards.length !== DRAFT_CARDS || new Set(cards.map((card) => card.id)).size !== DRAFT_CARDS) distinct = false;
   }
   check('every deal over 1,000 seeds is 3 distinct cards', distinct);
-  const lost = ctx({ stats: { ...ctx().stats, clustersLost: 1 } });
+  const lost = ctx({ stats: { ...ctx().stats, driversLost: 1 } });
   const firewallShare = share(lost, 'firewall');
-  check('with clustersLost ≥ 1, FIREWALL.sys is in ≥ 60% of 1,000 seeds', firewallShare >= 0.6, `${(firewallShare * 100).toFixed(1)}%`);
+  check('with driversLost ≥ 1, FIREWALL.sys is in ≥ 60% of 1,000 seeds', firewallShare >= 0.6, `${(firewallShare * 100).toFixed(1)}%`);
   check('…against about 60% with nothing lost (base weights)', Math.abs(share(ctx(), 'firewall') - 0.6) < 0.06, `${(share(ctx(), 'firewall') * 100).toFixed(1)}%`);
   const why = draftEntries(lost).find((entry) => entry.def.id === 'firewall');
-  check('…and says why, naming it as the strip does: `you lost a cluster to ???` (`3 clusters to UNIT-047` once named)',
-    why?.why === 'you lost a cluster to ???' && why.boosted
-    && draftEntries(ctx({ stats: { ...ctx().stats, clustersLost: 3 }, hollowLabel: 'UNIT-047' })).find((entry) => entry.def.id === 'firewall')?.why === 'you lost 3 clusters to UNIT-047');
+  check('…and says why, naming it as the strip does: `you lost a driver to ???` (`3 drivers to UNIT-047` once named)',
+    why?.why === 'you lost a driver to ???' && why.boosted
+    && draftEntries(ctx({ stats: { ...ctx().stats, driversLost: 3 }, hollowLabel: 'UNIT-047' })).find((entry) => entry.def.id === 'firewall')?.why === 'you lost 3 drivers to UNIT-047');
   const boosted = draftEntries(ctx({
-    stats: { ...ctx().stats, clustersLost: 2, repairs: 7, capRefusals: 4 }, chargeHeld: 9, lastShip: { name: 'HALCYON', fuelLeftPct: 12.7 },
+    stats: { ...ctx().stats, driversLost: 2, repairs: 7, capRefusals: 4 }, chargeHeld: 9, lastShip: { name: 'HALCYON', fuelLeftPct: 12.7 },
   }));
   check('every boost names the kid\'s own trouble', boosted.every((entry) => entry.boosted)
-    && boosted.map((entry) => entry.why).join(' | ') === 'you lost 2 clusters to ??? | you ran 7 REPAIRs | your THREADS were all busy 4 times | you are down to 9 REPAIR CHARGE | HALCYON ended with FUEL 12%',
+    && boosted.map((entry) => entry.why).join(' | ') === 'you lost 2 drivers to ??? | you ran 7 REPAIRs | your THREADS were all busy 4 times | you are down to 9 REPAIR CHARGE | HALCYON ended with FUEL 12%',
     boosted.map((entry) => entry.why).join(' | '));
   // The mild step: a taste of the same trouble, a smaller push, its own reason.
   const mild = draftEntries(ctx({
-    stats: { ...ctx().stats, clustersBitten: 1, repairs: 3, capRefusals: 1 }, chargeHeld: 22, lastShip: { name: 'ARES-VII', fuelLeftPct: 37.6 },
+    stats: { ...ctx().stats, driversBitten: 1, repairs: 3, capRefusals: 1 }, chargeHeld: 22, lastShip: { name: 'ARES-VII', fuelLeftPct: 37.6 },
   }));
   check('the mild step: every card has a reason from play, at a smaller weight than the strong one', mild.every((entry) => entry.boosted)
-    && mild.map((entry) => entry.why).join(' | ') === '??? bit a cluster | you ran 3 REPAIRs | your THREADS were all busy once | you are down to 22 REPAIR CHARGE | ARES-VII burned 62% of your FUEL'
+    && mild.map((entry) => entry.why).join(' | ') === '??? bit a driver | you ran 3 REPAIRs | your THREADS were all busy once | you are down to 22 REPAIR CHARGE | ARES-VII burned 62% of your FUEL'
     && mild.every((entry) => entry.weight > 1 && entry.weight < Math.min(...boosted.map((strong) => strong.weight))),
     mild.map((entry) => `${entry.why} ×${entry.weight}`).join(' | '));
-  check('…and the strong step still wins over the mild one on the same card', draftEntries(ctx({ stats: { ...ctx().stats, clustersLost: 1, clustersBitten: 4 } }))
-    .find((entry) => entry.def.id === 'firewall')?.why === 'you lost a cluster to ???');
-  check('…several bites say how many', draftEntries(ctx({ stats: { ...ctx().stats, clustersBitten: 3 } })).find((entry) => entry.def.id === 'firewall')?.why === '??? bit your clusters 3 times');
-  // A clean tutorial (the review's strip-following kid: the ENGINE I/O repair and C12's, ship 1's scripted
+  check('…and the strong step still wins over the mild one on the same card', draftEntries(ctx({ stats: { ...ctx().stats, driversLost: 1, driversBitten: 4 } }))
+    .find((entry) => entry.def.id === 'firewall')?.why === 'you lost a driver to ???');
+  check('…several bites say how many', draftEntries(ctx({ stats: { ...ctx().stats, driversBitten: 3 } })).find((entry) => entry.def.id === 'firewall')?.why === '??? bit your drivers 3 times');
+  // A clean tutorial (the review's strip-following kid: the ENGINE I/O repair and POD 01's, ship 1's scripted
   // bite saved, 35 charge, 37.6% FUEL left): two of five cards answer its play.
-  const clean = draftEntries(ctx({ stats: { ...ctx().stats, clustersBitten: 1, repairs: 2 }, chargeHeld: 35, lastShip: { name: 'ARES-VII', fuelLeftPct: 37.6 } }));
+  const clean = draftEntries(ctx({ stats: { ...ctx().stats, driversBitten: 1, repairs: 2 }, chargeHeld: 35, lastShip: { name: 'ARES-VII', fuelLeftPct: 37.6 } }));
   check('a clean tutorial\'s draft still has reasons from play (FIREWALL, REPAIR v2, FUEL TRIM)', clean.filter((entry) => entry.boosted).map((entry) => entry.def.id).join(',') === 'firewall,repair-v2,fuel-trim');
   let personal = 0;
-  for (let seed = 1; seed <= 1000; seed++) personal += draftCards(ctx({ stats: { ...ctx().stats, clustersBitten: 1, repairs: 2 }, chargeHeld: 35, lastShip: { name: 'ARES-VII', fuelLeftPct: 37.6 } }), createRng(seed)).filter((card) => card.boosted).length;
+  for (let seed = 1; seed <= 1000; seed++) personal += draftCards(ctx({ stats: { ...ctx().stats, driversBitten: 1, repairs: 2 }, chargeHeld: 35, lastShip: { name: 'ARES-VII', fuelLeftPct: 37.6 } }), createRng(seed)).filter((card) => card.boosted).length;
   check('…and its 3 cards carry about 2 of them on average over 1,000 seeds', personal / 1000 >= 1.8, `${(personal / 1000).toFixed(2)} of 3`);
   check('no card line says HOLLOW (a kid never reads that name: the strip says ??? or the unit)',
     [...UPGRADES.flatMap((def) => [def.title, def.effect]), ...boosted.map((entry) => entry.why), ...mild.map((entry) => entry.why)].every((line) => !line.includes('HOLLOW')));
   check(`a card at its base weight says so: \`${BASE_WHY}\``, draftEntries(ctx()).every((entry) => !entry.boosted && entry.why === BASE_WHY));
   const worstWhy = [
     ...draftEntries(ctx({
-      stats: { ...ctx().stats, clustersLost: 99, repairs: 999, capRefusals: 999 }, chargeHeld: 14, lastShip: { name: 'W'.repeat(12), fuelLeftPct: 19.9 }, hollowLabel: 'UNIT-998·999',
+      stats: { ...ctx().stats, driversLost: 99, repairs: 999, capRefusals: 999 }, chargeHeld: 14, lastShip: { name: 'W'.repeat(12), fuelLeftPct: 19.9 }, hollowLabel: 'UNIT-998·999',
     })),
     ...draftEntries(ctx({
-      stats: { ...ctx().stats, clustersBitten: 99, repairs: 4, capRefusals: 2 }, chargeHeld: 29, lastShip: { name: 'W'.repeat(12), fuelLeftPct: 20.1 }, hollowLabel: 'UNIT-998·999',
+      stats: { ...ctx().stats, driversBitten: 99, repairs: 4, capRefusals: 2 }, chargeHeld: 29, lastShip: { name: 'W'.repeat(12), fuelLeftPct: 20.1 }, hollowLabel: 'UNIT-998·999',
     })),
   ].map((entry) => entry.why);
   check(`every card line (title, effect, why) is ≤ ${MAX_LINE_CHARS} characters`, [...UPGRADES.flatMap((def) => [def.title, def.effect]), ...worstWhy]
@@ -177,21 +177,24 @@ function pick(id: UpgradeId): void {
   h.transmit();
   const starts = segmentStarts(state().memory);
   const index = state().memory.findIndex(isFirewall);
-  check('HALCYON boots with Firewall.sys in rack F (after the fs-tools), memory valid, the card in run.upgrades',
-    index >= 0 && starts[index]! >= RACK_F_START && memoryValid() && state().run.upgrades.join() === 'firewall'
+  // Slice 1a's pooled receiver: rack F's list follows rack E's with no gap, so the card sits after the fs-tools (in rack E
+  // on a unit this small), then REPAIR CHARGE.
+  const mem = state().memory;
+  check('HALCYON boots with Firewall.sys at the end of rack F\'s list (after the fs-tools, before the charge), memory valid, the card in run.upgrades',
+    index >= 0 && mem[index - 1]?.type === 'fs-tool' && mem[index + 1]?.type === 'redundancy' && memoryValid() && state().run.upgrades.join() === 'firewall'
       && !state().memory[index]!.id.includes(PREVIEW_ID('x').split('~')[1]!), `${index} @ ${starts[index]}`);
   check('the next draft counts it as owned (1 of 2)', ownedUpgrades(state()).firewall === 1);
   const firewall = state().memory[index]!;
   check('a FIREWALL can\'t be copied, healed or scanned', targetRefusal(firewall, { state: state(), activeKind: 'copy', pickedSource: null }) === TOOL_REFUSAL.cardCopy
     && targetRefusal(firewall, { state: state(), activeKind: 'repair', pickedSource: null }) === TOOL_REFUSAL.firewallHealth
     && targetRefusal(firewall, { state: state(), activeKind: 'scan', pickedSource: null }) === TOOL_REFUSAL.firewallHealth);
-  // Into the GAP of 2 between C08 and the root (rack C: `C C _2 R _1 C C _21`).
+  // Into the GAP of 2 between POD 04 and the root (rack C: `P _2 R _1 P _37`).
   h.stepUntil(() => state().run.phase === 'flight', 15);
   installTool(h.store, 'move');
   const memory = state().memory;
   const rootIndex = memory.findIndex((seg) => seg.type === 'hollow' && seg.root);
   const gap = memory[rootIndex - 1] as FreeSegment;
-  check('HALCYON: a 2-block GAP left of the root (C08 behind it)', gap.type === 'free' && gap.size === 2 && memory[rootIndex - 2]?.type === 'soul');
+  check('HALCYON: a 2-block GAP left of the root (POD 04 behind it)', gap.type === 'free' && gap.size === 2 && memory[rootIndex - 2]?.type === 'driver');
   const refusal = actionMove(h.store, firewall, { regionSegIds: [gap.id], col: 0 });
   h.stepUntil(() => state().memory[state().memory.findIndex((seg) => seg.type === 'hollow' && seg.root) - 1]?.type === 'firewall'
     && !state().memory.some((seg) => seg.operating), 10);
@@ -208,11 +211,11 @@ function pick(id: UpgradeId): void {
   h.store.update((d) => { d.hollow.cfg.wake = { afterAiSec: d.clock.aiSec + 1, coastLeadSec: null }; });
   h.stepUntil(() => state().hollow.phase === 'awake', 5);
   h.stepFor(1);
-  const c08 = after[rootAfter - 2] as SoulSegment;
-  const c09 = state().memory.find((seg): seg is SoulSegment => seg.type === 'soul' && seg.cluster === 'C09');
-  check('HOLLOW wakes and bites: the FIREWALL side holds (C08 clean), the open side is bitten (C09 across GAP 1)',
-    state().hollow.phase === 'awake' && !state().memory.find((seg) => seg.id === c08.id && seg.type === 'soul' && seg.infected)
-      && c09?.infected !== undefined, `C08 ${c08.cluster} infected=${String((state().memory.find((seg) => seg.id === c08.id) as SoulSegment | undefined)?.infected)}`);
+  const c08 = after[rootAfter - 2] as DriverSegment;
+  const c09 = state().memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 5);
+  check('HOLLOW wakes and bites: the FIREWALL side holds (POD 04 clean), the open side is bitten (POD 05 across GAP 1)',
+    state().hollow.phase === 'awake' && !state().memory.find((seg) => seg.id === c08.id && seg.type === 'driver' && seg.infected)
+      && c09?.infected !== undefined, `POD ${c08.pod} infected=${String((state().memory.find((seg) => seg.id === c08.id) as DriverSegment | undefined)?.infected)}`);
 }
 
 // REPAIR v2: every Repair copy bumped; the held tool heals twice as fast.

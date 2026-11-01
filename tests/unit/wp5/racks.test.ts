@@ -1,18 +1,27 @@
-// WP5 part 2: the strip as racks and the numbers around it, headless (§9 WP5 items 5 and 9).
+// WP5 part 2, slice 1a: the strip as racks and the numbers around it, headless (§9 WP5 items 5 and 9; 01-landing §3.16).
 // • rack labels `RACK X · 0xNNN` on rack borders only;
 // • how much a chip shows by its width (micro / tiny / narrow / wide) and the names it draws,
 //   checked for every file of ship 1 against the pixel room a chip has at 1280 px;
-// • the computed .mem-stats: souls hidden while sealed, then counted; charge, free, corrupt, total;
-// • the MiniHud's ★ INTACT line and its tones (on track, at risk, lost).
-// The DOM side (six rows, labels, nothing clipped, no console errors) is tests/unit/wp5/p2-flow.mjs.
+// • the computed .mem-stats: the colonists aboard (no sealed archive any more), charge, free, damage, total;
+// • every ship's pod racks (slice-1a-plan §2): the P-token layouts, one driver per pod with the pod count equal to the
+//   LZ sum, the free-block budget (POD_RACK_MIN_FREE, root GAPs not counted) and the unit's tail (UNIT_TAIL_BLOCKS),
+//   and validatePodRacks throwing on each rule;
+// • the live ★ ON TARGET tally (landing-rules onTargetTally) that the MiniHud reads.
+// The DOM side (six rows, labels, nothing clipped, no console errors) is the e2e tier.
 import { check, finish, harnessState } from '../wp1/harness';
-import { rackLabel, hexAddr, RACK_NAMES } from '@data/memory';
+import {
+  rackLabel, hexAddr, RACK_NAMES, podRackLayouts, shipPodCount, lastPodRackTrailingFree, validatePodRacks,
+} from '@data/memory';
+import { SHIPS, type ShipDef } from '@data/ships';
 import { stripTier, stripName } from '@data/type-labels';
 import { memStatsModel, stripRangeLabel } from '@components/memory-view/MemoryStats';
-import { intactTally, intactHudLine, type IntactTally } from '@systems/stars';
-import { openArchive } from '@state/initial';
+import { onTargetTally } from '@systems/landing-rules';
 import { segmentStarts } from '@systems/memory-ops';
-import { RACK_BLOCKS } from '@data/tuning';
+import { createInitialState } from '@state/initial';
+import { freshUnitRacks } from '@systems/carry';
+import type { GameState } from '@state/schema';
+import type { LaunchRecord, Touchdown } from '@/types/landing';
+import { POD_RACK_MIN_FREE, RACK_BLOCKS, UNIT_TAIL_BLOCKS, WALL_MIN_BLOCKS } from '@data/tuning';
 
 // --- Rack labels -------------------------------------------------------------------------------------
 check('rack labels: RACK A · 0x000 … RACK F · 0x140', RACK_NAMES.map((_, i) => rackLabel(i * RACK_BLOCKS)).join()
@@ -70,7 +79,7 @@ function linesNeeded(name: string, blocks: number): number {
 const starts = segmentStarts(state.memory);
 const badNames = state.memory
   .map((seg, i) => ({ seg, start: starts[i]! }))
-  .filter(({ seg }) => seg.type !== 'free' && seg.type !== 'soul')
+  .filter(({ seg }) => seg.type !== 'free' && seg.type !== 'driver')
   .map(({ seg }) => ({ name: seg.name, shown: stripName(seg, seg.size), lines: linesNeeded(stripName(seg, seg.size), seg.size) }))
   .filter(({ lines }) => lines > 2);
 check('every ship-1 file name fits its chip in two lines at 1280 px', badNames.length === 0,
@@ -81,36 +90,96 @@ check('no ship-1 file straddles two racks (every chip is whole in its row)', cro
 
 // --- The stats row -------------------------------------------------------------------------------------
 {
-  const sealed = memStatsModel(state);
-  // Fix round 1: while sealed the stat tells the briefing's story (no SOULS IN MEMORY before the reveal).
-  check('stats, sealed: COLONISTS 2,400 in stasis (the briefing\'s words, not the twist)', sealed.souls.label === 'colonists'
-    && sealed.souls.value === '2,400' && sealed.souls.small === 'in stasis' && sealed.souls.tone === 'plain', JSON.stringify(sealed.souls));
-  check('stats: REPAIR CHARGE 36 blk, MEMORY 384 blk · 6 racks', sealed.charge.value === '36' && sealed.total.value === '384' && sealed.total.small === 'blk · 6 racks');
+  const stats = memStatsModel(state);
+  // Track UI's words: PODS ABOARD 3, `600 colonists` under it.
+  check('stats: 3 pods aboard, 600 colonists (no sealed archive: the drivers are files from the start)', stats.pods.label === 'pods aboard'
+    && stats.pods.value === '3' && stats.pods.small === '600 colonists', JSON.stringify(stats.pods));
+  check('stats: REPAIR CHARGE 36 blk, MEMORY 384 blk · 6 racks', stats.charge.value === '36' && stats.total.value === '384' && stats.total.small === 'blk · 6 racks');
   const free = state.memory.filter((seg) => seg.type === 'free').reduce((sum, seg) => sum + seg.size, 0);
-  check(`stats: FREE ${free} blk (computed)`, sealed.free.value === String(free));
-  check('stats, sealed: DAMAGE, the damage the kid can see (Engine I/O 85%, Sensor Interp 78%), is counted, the hidden is not',
-    sealed.damage.label === 'damage' && sealed.damage.tone === 'warn' && sealed.damage.value === String(Math.round(0.15 * 8 + 0.22 * 8)), JSON.stringify(sealed.damage));
-  const open = harnessState(1, false);
-  openArchive(open);
-  const revealed = memStatsModel(open);
-  check('stats, revealed: SOULS IN MEMORY 2,400 · 12 clusters', revealed.souls.label === 'souls in memory' && revealed.souls.value === '2,400'
-    && revealed.souls.small === '12 clusters' && revealed.souls.tone === 'soul');
-  check('stats, revealed: C09 at 71% now shows in the damage (+2 blk)', revealed.damage.value === String(Math.round(0.15 * 8 + 0.22 * 8 + 0.29 * 8)), revealed.damage.value);
-  check('the strip header range: RACK A → F · 0x000 → 0x17F', stripRangeLabel(open) === 'RACK A → F · 0x000 → 0x17F', stripRangeLabel(open));
+  check(`stats: FREE ${free} blk (computed)`, stats.free.value === String(free));
+  check('stats: DAMAGE counts what the kid can see: Engine I/O 85%, Sensor Interp 78% and POD 02 at 44% (ship files stay hidden)',
+    stats.damage.label === 'damage' && stats.damage.tone === 'warn' && stats.damage.value === String(Math.round(0.15 * 8 + 0.22 * 8 + 0.56 * 8)), JSON.stringify(stats.damage));
+  check('the strip header range: RACK A → F · 0x000 → 0x17F', stripRangeLabel(state) === 'RACK A → F · 0x000 → 0x17F', stripRangeLabel(state));
 }
 
-// --- The MiniHud's INTACT line ---------------------------------------------------------------------------
+// --- Every ship's pod racks ----------------------------------------------------------------------------------
+// A ship's built memory (ship 1 as the harness builds it; a later ship with a fresh unit carried in).
+function builtMemory(ship: ShipDef): GameState['memory'] {
+  const index = SHIPS.indexOf(ship);
+  return index === 0 ? harnessState(1, false).memory : createInitialState({ seed: 1, shipIndex: index, carried: freshUnitRacks(ship) }).memory;
+}
 {
-  const open = harnessState(1, false);
-  openArchive(open);
-  const tally = intactTally(open);
-  // Fix round 1: at risk the line names the repair (the gold and the hurt yellow look the same).
-  check('ship 1 at the reveal: 11/12 intact, at risk, naming the fix (★ INTACT 11/12 · REPAIR C09)', tally.intact === 11 && !tally.onTrack && tally.possible
-    && intactHudLine(tally).text === '★ INTACT 11/12 · REPAIR C09' && intactHudLine(tally).tone === 'risk', JSON.stringify(intactHudLine(tally)));
-  const good: IntactTally = { intact: 12, clusters: 12, intactSouls: 2400, souls: 2400, onTrack: true, possible: true, hurt: [] };
-  const lost: IntactTally = { intact: 11, clusters: 12, intactSouls: 2200, souls: 2400, onTrack: false, possible: false, hurt: ['C10'] };
-  check('on track: ★ INTACT 12/12 (good)', intactHudLine(good).text === '★ INTACT 12/12' && intactHudLine(good).tone === 'good');
-  check('lost for good: a hollow ☆ INTACT 11/12', intactHudLine(lost).text === '☆ INTACT 11/12' && intactHudLine(lost).tone === 'lost');
+  // slice-1a-plan §2: the pod racks, the free blocks in them (root GAPs not counted) and the last rack's tail.
+  const expected: Record<string, { racks: string[]; free: number; tail: number; pods: number }> = {
+    'ARES-VII': { racks: ['R P P P _32', '_64', '_64'], free: 160, tail: 64, pods: 3 },
+    HALCYON: { racks: ['P P P _40', 'P _2 R _1 P _37', '_64'], free: 141, tail: 64, pods: 5 },
+    KESTREL: { racks: ['P P P P P P _16', 'P P P _1 R _2 P P P _5', '_64'], free: 85, tail: 64, pods: 12 },
+    VESPER: { racks: ['P P P P P P _16', 'P P _1 R _3 P P P P _4', '_64'], free: 84, tail: 64, pods: 12 },
+    'LAST LIGHT': { racks: ['P P P P P P P _8', 'P P P P _2 R16 _1 P _5', 'P P P P _32'], free: 45, tail: 32, pods: 16 },
+  };
+  const freeOutsideGaps = (ship: ShipDef): number => podRackLayouts(ship).reduce((sum, { tokens }) => sum + tokens.reduce((rackSum, token, index) => {
+    if (token.kind !== 'free') return rackSum;
+    const nextToRoot = tokens[index - 1]?.kind === 'root' || tokens[index + 1]?.kind === 'root';
+    return rackSum + (nextToRoot && token.size < WALL_MIN_BLOCKS ? 0 : token.size);
+  }, 0), 0);
+  for (const ship of SHIPS) {
+    const want = expected[ship.name];
+    const lzPods = ship.landing.lzs.reduce((sum, lz) => sum + lz.pods, 0);
+    const racks = [ship.memory.podRacks.B, ship.memory.podRacks.C, ship.memory.podRacks.D];
+    check(`${ship.name}: pod racks ${racks.join(' | ')}; ${shipPodCount(ship)} drivers = the LZ sum ${lzPods}; ${freeOutsideGaps(ship)} free, tail ${lastPodRackTrailingFree(ship)}`,
+      want !== undefined && JSON.stringify(racks) === JSON.stringify(want.racks) && shipPodCount(ship) === want.pods && lzPods === want.pods
+      && freeOutsideGaps(ship) === want.free && lastPodRackTrailingFree(ship) === want.tail
+      && want.free >= POD_RACK_MIN_FREE && want.tail >= UNIT_TAIL_BLOCKS,
+      JSON.stringify(want));
+    const drivers = builtMemory(ship).filter((seg) => seg.type === 'driver');
+    check(`${ship.name}: the built memory holds POD 01–${String(want?.pods ?? 0).padStart(2, '0')} in address order, every driver 8 blocks`,
+      drivers.length === want?.pods && drivers.every((seg, i) => seg.type === 'driver' && seg.pod === i + 1 && seg.size === 8));
+  }
+  const throws = (ship: ShipDef, podRacks: Partial<ShipDef['memory']['podRacks']>, pattern: RegExp): { ok: boolean; message: string } => {
+    try {
+      validatePodRacks({ ...ship, memory: { ...ship.memory, podRacks: { ...ship.memory.podRacks, ...podRacks } } });
+      return { ok: false, message: 'did not throw' };
+    } catch (error) {
+      const message = String((error as Error).message);
+      return { ok: pattern.test(message), message };
+    }
+  };
+  const lastLight = SHIPS[4]!;
+  const tooFull = throws(lastLight, { B: 'P P P P P P P P', D: 'P P P P P _24' }, /free blocks \(root gaps not counted\), under 40/);
+  check('validatePodRacks: under 40 free blocks in the pod racks throws', tooFull.ok, tooFull.message);
+  // HALCYON with racks B and D full: only rack C's 37 free blocks count, not the root's GAPs of 2 and 1.
+  const gapsOnly = throws(SHIPS[1]!, { B: 'P P P P P P P P', D: 'P P P P P P P P' }, /37 free blocks \(root gaps not counted\), under 40/);
+  check('…the root\'s GAPs (shorter than a WALL, next to an R) do not count as room', gapsOnly.ok, gapsOnly.message);
+  const shortTail = throws(lastLight, { D: '_16 P P P P _16' }, /ends in 16 free blocks, under the unit's 24-block tail/);
+  check('validatePodRacks: a last pod rack ending in fewer than 24 free blocks throws', shortTail.ok, shortTail.message);
+  const extraPod = throws(SHIPS[0]!, { B: 'R P P P P _24' }, /4 drivers in the pod racks, but the LZ counts sum to 3 pods/);
+  check('validatePodRacks: a driver more than the LZ counts throws', extraPod.ok, extraPod.message);
+}
+
+// --- The live ★ ON TARGET tally --------------------------------------------------------------------------
+{
+  const landed = (state: GameState, pod: number, place: Touchdown['place'], touch: Touchdown['touch']): void => {
+    const record = state.landing.pods.find((candidate) => candidate.pod === pod)!;
+    const launch = { atTSec: 0, atAi: 0 } as LaunchRecord;
+    record.fate = { kind: 'down', launch, touchdown: { place, lz: place === 'lz' ? 'LZ-A' : null, touch, points: 0, missKm: null, atAi: 0 } };
+  };
+  const ship1 = harnessState(1, false);
+  const start = onTargetTally(ship1);
+  check('ship 1 before a launch: 0/3 on target, still possible (every pod aboard)', start.onTargetPods === 0 && start.pods === 3
+    && start.colonists === 600 && !start.earned && start.possible, JSON.stringify(start));
+  landed(ship1, 1, 'lz', 'soft');
+  landed(ship1, 3, 'lz', 'soft');
+  const two = onTargetTally(ship1);
+  check('two soft in the LZ: 2/3, POD 02 still aboard keeps it possible', two.onTargetPods === 2 && two.onTargetColonists === 400 && !two.earned && two.possible);
+  landed(ship1, 2, 'lz', 'hard');
+  const hard = onTargetTally(ship1);
+  check('POD 02 down hard: 2/3 for good (a hard landing is not on target; 95% needs all three)', hard.onTargetPods === 2 && !hard.earned && !hard.possible);
+  const all = harnessState(1, false);
+  for (const pod of [1, 2, 3]) landed(all, pod, 'lz', 'soft');
+  check('all three soft in the LZ: 3/3, earned', onTargetTally(all).onTargetPods === 3 && onTargetTally(all).earned);
+  const off = harnessState(1, false);
+  landed(off, 1, 'off-site', 'soft');
+  check('an off-site pod is not on target: the star is lost', !onTargetTally(off).possible);
 }
 
 finish();

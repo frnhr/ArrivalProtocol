@@ -1,7 +1,7 @@
 // WP8 fix round 1: the review's findings, headless, with the archive on a stubbed storage.
 // • A reload two seconds into run 1 (RECEIVE, then the page goes away) is UNIT-048 on wave 2 with its ghost,
-//   and still the tutorial: the written ARES-VII, the sealed slabs (no archive line in the boot), no REPAIR at
-//   the boot, the simulation retry. The archive learns the tutorial at the first lock (or a second ship);
+//   and still the tutorial: the written ARES-VII (POD 02 hurt), no REPAIR at the boot (slice 1a: no archive line
+//   either way), the simulation retry. The archive learns the tutorial at the first lock (or a second ship);
 //   only then is the next run a returning unit.
 // • A returning unit's boot: the strip does not offer the skip while the ghost types (`someone is typing…`);
 //   CONTROL says hello before the REPAIR licence that came with the boot.
@@ -27,9 +27,9 @@ import { setIntegrity, actionMove } from '@state/actions';
 import {
   openRunArchive, closeArchive, archiveLineage, parseMeta, playsTutorial, type MetaStorage,
 } from '@systems/meta';
-import { soulsInMemory, getAiCore, archiveSealed, isFirewall } from '@state/selectors';
+import { driversInMemory, getAiCore, isFirewall } from '@state/selectors';
 import { ARES_RUN1_FAMILIES } from '@data/souls';
-import { ARCHIVE_TEXT, FIREWALL_RULES, LICENCE_LINES, LINES, bootOpensArchive } from '@data/script';
+import { ARCHIVE_TEXT, FIREWALL_RULES, LICENCE_LINES, LINES, bootLicensesRepair } from '@data/script';
 import { TOOL_HINT_TARGET, firewallHintTarget } from '@data/fs-tools';
 import { META_STORAGE_KEY } from '@data/tuning';
 import type { GameState } from '@state/schema';
@@ -72,15 +72,15 @@ loadPage(12);
 const reloaded = state().run;
 check('the reload: UNIT-048 · WAVE 2, the last unit abandoned at ARES-VII (the wave counts it)',
   reloaded.unitNumber === 48 && reloaded.wave === 2 && reloaded.lastUnit?.cause === 'abandoned' && reloaded.lastUnit.shipName === 'ARES-VII');
-check('…but it is still the tutorial: the written ARES-VII (run 1\'s families, C09 hurt), the simulation retry ahead',
-  playsTutorial(reloaded) && soulsInMemory(state()).every((soul) => ARES_RUN1_FAMILIES.includes(soul.family)) && state().souls.hurt === 'C09'
-    && isTutorialShip(state()) && !bootOpensArchive(state()));
+check('…but it is still the tutorial: the written ARES-VII (run 1\'s families, POD 02 hurt), the simulation retry ahead',
+  playsTutorial(reloaded) && driversInMemory(state()).every((soul) => ARES_RUN1_FAMILIES.includes(soul.family)) && JSON.stringify(state().landing.hurt) === '[2]'
+    && isTutorialShip(state()) && !bootLicensesRepair(state()));
 boot();
 const ghost = log().find((entry) => entry.speaker === 'hollow');
 check('its boot: the ghost greets it (`i blinked and the run was gone.`), and HOLLOW is named UNIT-047',
   ghost?.text === "> hi 048. it's 047. i blinked and the run was gone." && state().run.hollowNamed, ghost?.text);
-check('…the slabs stay sealed (the STASIS step is still to come: no `you know what they are`), REPAIR is not licensed yet',
-  archiveSealed(state()) && !state().run.licences.includes('repair')
+check('…REPAIR is not licensed in the boot yet (the tutorial issues it later), no `you know what they are`',
+  !state().run.licences.includes('repair')
     && !log().some((entry) => entry.text.includes('you know what they are')));
 // The first crash on the tutorial ship is still "a simulation".
 h.store.mutate((d) => { d.orbit.x = d.level.planet.R + 20; d.orbit.y = 0; d.orbit.vx = -3; d.orbit.vy = 0.05; });
@@ -93,11 +93,11 @@ check('the simulation retry is not a second ship: nothing learned yet', !stored(
 // --- The first lock teaches it; the next run is a returning unit ------------------------------------------------
 endFlight(h.store, 'locked');
 h.stepFor(0.2);
-check('ARES-VII locked (its orbit prints): the archive notes the tutorial is flown', stored().tutorialDone && state().run.phase === 'printing');
+check('ARES-VII locked (its landing starts): the archive notes the tutorial is flown', stored().tutorialDone && state().run.phase === 'landing');
 loadPage(13);
 check('the next page: UNIT-049, a returning unit (the archive opens at the boot, ship 1 reseeded)', state().run.unitNumber === 49
-  && !playsTutorial(state().run) && bootOpensArchive(state()) && !isTutorialShip(state())
-  && soulsInMemory(state()).every((soul) => !ARES_RUN1_FAMILIES.includes(soul.family)));
+  && !playsTutorial(state().run) && bootLicensesRepair(state()) && !isTutorialShip(state())
+  && driversInMemory(state()).every((soul) => !ARES_RUN1_FAMILIES.includes(soul.family)));
 
 // The ghost's beat: the strip does not offer a skip while it types.
 receiveTransmission(h.store);

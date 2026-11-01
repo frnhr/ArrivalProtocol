@@ -7,7 +7,7 @@
 // • The director's reset snapshot reports the lead-in clock (quality 1).
 // • One selector for a usable tool (quality 2): an infected copy counts for HOLLOW and the hints, not for the renewal.
 // • The two TODOs part 3 dropped (spec 5): the run-2 hurt-cluster hint shows once; AUTOBURN's READY lesson takes GET
-//   READY's place when the coast was SKIPped.
+//   READY's place when the coast was SKIPped. (Slice 1a: the hurt-cluster hint is the hurt-driver one.)
 // • The phone header's next hazard (experience 2): KESTREL's debris cloud by its rack and countdown.
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../../wp7/harness7';
@@ -45,8 +45,8 @@ h.store.update((d) => {
   if (!freeSeg) throw new Error('fixes.test: the free run went');
   d.hollow.seedTelegraph = { startAddr: requireAddr(d.memory, freeSeg), size: 2, leftSec: 5 };
 });
-const soul = state().memory.find((seg) => seg.type === 'soul' && !seg.sealed);
-if (!soul) throw new Error('fixes.test: no unsealed cluster on VESPER');
+const soul = state().memory.find((seg) => seg.type === 'driver');
+if (!soul) throw new Error('fixes.test: no driver on VESPER');
 infectNow(h.store, soul);
 
 const composedId = (mode: 'tools' | 'memory', lessonSec: number): string => {
@@ -169,8 +169,8 @@ check('…not for the REPAIR renewal (`excluded`, licences.hasWorkingTool)', !ha
   && !hasWorkingTool(state(), 'repair'));
 
 // --- The two TODOs part 3 dropped ---------------------------------------------------------------------------------
-const known = GUIDE_RULES.find((rule) => rule.id === 'tut-hurt-cluster-known');
-check('the run-2 hurt-cluster hint is one showing (done once shown and stepped aside: no doneWhen)', known !== undefined
+const known = GUIDE_RULES.find((rule) => rule.id === 'tut-hurt-driver-known');
+check('the run-2 hurt-driver hint is one showing (done once shown and stepped aside: no doneWhen)', known !== undefined
   && known.once === true && known.doneWhen === undefined);
 const ready = GUIDE_RULES.find((rule) => rule.id === 'tut-autoburn-ready');
 const flightAt = (id: string): DirectorCtx => ({ flight: { id } } as unknown as DirectorCtx);

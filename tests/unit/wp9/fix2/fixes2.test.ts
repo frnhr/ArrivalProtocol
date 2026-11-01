@@ -58,11 +58,11 @@ const correctIn = (): void => {
   h.keyUp('Space');
   h.step();
 };
-// C09 and C10 moved behind WALLs (the kid's MOVEs), so the wake's bites fizzle and no alarm holds the flight.
+// POD 09 and POD 10 moved behind WALLs (the kid's MOVEs), so the wake's bites fizzle and no alarm holds the flight.
 const wallOffRoot = (): void => {
   h.store.update((d) => {
     const starts = segmentStarts(d.memory);
-    d.memory = d.memory.map((seg, i) => (seg.type === 'soul' && (seg.cluster === 'C09' || seg.cluster === 'C10') && starts[i]! < 192 ? freeSegment(seg.size) : seg));
+    d.memory = d.memory.map((seg, i) => (seg.type === 'driver' && (seg.pod === 9 || seg.pod === 10) && starts[i]! < 192 ? freeSegment(seg.size) : seg));
     mergeAdjacentFree(d.memory);
     d.ui.memoryRev++;
   });
@@ -180,7 +180,7 @@ for (const kid of ['still-amber', 'still-blue', 'tapper'] as const) {
   h.stepFor(5);
   const resumed = state().hollow.seedInSec!;
   check('…and runs on once the flight is calm again', state().clock.pace !== 'tactical' && Math.abs(held - resumed - 5) < 0.2,
-    `${held.toFixed(2)} → ${resumed.toFixed(2)}`);
+    `${held.toFixed(2)} → ${resumed.toFixed(2)} (${state().clock.pace}, ${state().run.phase}, ${state().burn.status})`);
   h.stepUntil(() => state().hollow.seedMoments === 1, 40);
   h.stepFor(1);
   const second = state().hollow.seedInSec!;

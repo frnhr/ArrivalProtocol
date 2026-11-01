@@ -7,6 +7,7 @@ import { STAMP_TEXT, FAULT_STAMP } from '@data/script';
 import { ZONE_STAMP_TEXT } from '@data/zone-text';
 import { HOLLOW_DEAL, HOLLOW_VERB } from '@data/hollow-text';
 import { racksText } from '@/types/zone';
+import { podCode, LANDING_STAMP_TEXT } from '@data/landing-text';
 import { STAMP_DEBOUNCE_MS, STAMP_IN_MS, STAMP_SHOW_MS, STAMP_MAX_WIDTH_FRAC } from '@data/tuning';
 
 // Stamps (§7.3): two or three words in VT323 slammed over the middle of the screen on a moment
@@ -89,14 +90,20 @@ export function mountStamps(store: Store<GameState>): () => void {
     // ...and the dodge's countdown running out (WP9 review round 2, the lead's ruling: said once, loudly).
     on('dodge-lapsed', () => { showStamp(ZONE_STAMP_TEXT.tooLate, 'danger'); }),
     // WP10: THE DEAL's answer, with its cost (the lead's note: both answers cost something you can see). An ACCEPT gave
-    // a cluster away; a REFUSE, or no answer, makes it bite faster. A withdrawn offer stamps nothing.
-    on('deal', ({ outcome, cluster }) => {
-      if (outcome === 'accepted') showStamp(HOLLOW_DEAL.stampAccepted(cluster), 'danger');
+    // a pod's driver away; a REFUSE, or no answer, makes it bite faster. A withdrawn offer stamps nothing.
+    on('deal', ({ outcome, pod }) => {
+      if (outcome === 'accepted') showStamp(HOLLOW_DEAL.stampAccepted(podCode(pod)), 'danger');
       else if (outcome === 'refused') showStamp(HOLLOW_DEAL.stampRefused, 'danger');
       else if (outcome === 'timeout') showStamp(HOLLOW_DEAL.stampTimeout, 'danger');
     }),
     // WP11 part 2: a HOLLOW verb stopped by the kid's tool in its last seconds (§3.5's BLOCKED, §5.3 moment 13).
     on('verb-blocked', () => { showStamp(HOLLOW_VERB.stamp, 'good'); }),
+    // Slice 1a (01-landing §2, §4): the run's first pod down, and every pod of a ship down (not on a ship that parked
+    // some: that one ends quietly, its report says what happened).
+    on('pod-landed', ({ firstOfRun }) => { if (firstOfRun) showStamp(LANDING_STAMP_TEXT.firstLanding, 'good'); }),
+    on('all-pods-down', () => {
+      if (store.getState().landing.pods.every((record) => record.fate.kind === 'down')) showStamp(LANDING_STAMP_TEXT.allDown, 'good');
+    }),
   ];
 
   return () => {

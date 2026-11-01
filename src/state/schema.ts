@@ -1,4 +1,5 @@
-import type { Segment, Colonist, SegmentRole } from '@/types/segment';
+import type { Segment, SegmentRole } from '@/types/segment';
+import type { LandingState, LandingTally } from '@/types/landing';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { PlanetParams, Ring } from '@/types/orbit';
 import type { Zone } from '@/types/zone';
@@ -15,7 +16,7 @@ export interface MissionMeta {
   distanceLy: number;      // 581
   transmissionNum: number; // 47
   wave: number;            // the fleet wave this unit flies with (run 1 = wave 1)
-  souls: number;           // colonists aboard at arrival: the soul clusters in memory (2,400 on ARES-VII)
+  colonists: number;       // colonists aboard at arrival: the pods' (600 on ARES-VII)
 }
 
 // CRUISE: a quiet coast, the world runs at ship.cruiseWarp. TACTICAL: something is about to
@@ -52,10 +53,10 @@ export interface ClockState {
 }
 
 // 'locked': ORBIT LOCK (the whole loop in the ring, held steady 3 s). 'accepted': ACCEPT ORBIT
-// or fuel-out on a closed loop with some printer range. 'stranded': the same with range below
+// or fuel-out on a closed loop with some share in the launch band. 'stranded': the same with range below
 // STRANDED_RANGE_FRAC. 'escaped': open, receding past ESCAPE_R_FACTOR × r0, or receding with too
 // little FUEL to close the loop at all. 'crashed': impact. 'abandoned': BEAM OUT finished before
-// the impact (WP7, §4.3): the unit left a doomed ship and the colonists still aboard did not wake.
+// the impact (WP7, §4.3): the unit left a doomed ship and the pods still aboard went with it.
 export type BurnStatus = 'approaching' | 'locked' | 'accepted' | 'stranded' | 'escaped' | 'crashed' | 'abandoned';
 export type TerminalStatus = Exclude<BurnStatus, 'approaching'>;
 
@@ -153,6 +154,8 @@ export interface LevelState {
   planet: PlanetParams;
   ring: Ring;
   r0: number;               // start radius (the escape test scales from it)
+  // The ship's flight warps; at ORBIT LOCK or ACCEPT they become LANDING_TACTICAL_WARP / LANDING_CRUISE_WARP on every ship
+  // (01-landing §3.2). state/actions.ts beginLanding is the only writer after createFlight.
   tacticalWarp: number;
   cruiseWarp: number;
   dvBudgetKmS: number;
@@ -181,32 +184,32 @@ export interface HazardsState {
 }
 
 // The run's phase (§4.1, systems/run.ts). 'title': the title card (nothing moves, audio still
-// locked). 'boot': the unit unpacks in blue for a few seconds. 'flight': the ship. 'printing': the
-// orbit is locked or accepted and the colonists print one by one (the clock runs, the world coasts
-// at TACTICAL, the printer works on AI time). 'report': every cluster has left memory and the WAKE
+// locked). 'boot': the unit unpacks in blue for a few seconds. 'flight': the ship. 'landing': the
+// orbit is locked or accepted and the pods go down (01-landing: the clock runs, the world coasts,
+// [L] launches through the windows; systems/landing.ts). 'report': the landing is over and the LANDING
 // REPORT owns the screen; the world stops. 'transmit': the ship is over and the unit's files are
 // packed for the next one (the TRANSMIT screen, WP7 part 2). 'end': the run is over (RUN END).
 // A crashed, escaped or stranded ship (or one whose Core was eaten) stays in 'flight' with the
 // clock paused under its LOST card until the kid goes on (run.ts continueAfterLoss).
-export type RunPhase = 'title' | 'boot' | 'flight' | 'printing' | 'report' | 'transmit' | 'end';
+export type RunPhase = 'title' | 'boot' | 'flight' | 'landing' | 'report' | 'transmit' | 'end';
 
-// How one ship of the run ended (§4.3, WP7). 'locked' / 'partial': it printed (ORBIT LOCKED, or
-// ACCEPT ORBIT / an empty tank on a loop the printers reach). 'stranded' / 'escaped': its souls were
-// lost, normal transmit. 'crashed': EMERGENCY TRANSMIT (Core −25, +3 transit hits). 'abandoned':
+// How one ship of the run ended (§4.3, WP7). 'locked' / 'partial': it landed (ORBIT LOCKED, or
+// ACCEPT ORBIT / an empty tank on a loop the launch band reaches). 'stranded' / 'escaped': no landing,
+// normal transmit. 'crashed': EMERGENCY TRANSMIT (Core −25, +3 transit hits). 'abandoned':
 // BEAM OUT finished first (+2 hits). 'emergency': HOLLOW ate the Core to 0 (Core reset, +3 hits).
 export type ShipOutcome = 'locked' | 'partial' | 'stranded' | 'escaped' | 'crashed' | 'abandoned' | 'emergency';
 
-// One finished ship, as RUN END lists it. `woke` counts HEADS (everyone who woke, intact or with
-// missing memories: the lead's rule, one meaning of WOKE everywhere); `half` is how many of them woke
-// with missing memories (they count half in the run's SCORE, §4.4); `lost` did not wake.
-export interface ShipResult {
+// One finished ship (01-landing §5 "To 02"): flat and JSON-safe, ready for slice 3's save. The landing half
+// (LandingTally: per-LZ rows, off-site, no-go, parked, the pods' detail, the points and the headline
+// landedInLz) is folded by landing-rules landingResult; slot and depth are the map's (in 1a the ship's
+// index and index + 1).
+export interface ShipResult extends LandingTally {
   shipId: string;
   shipName: string;
+  slot: number;
+  depth: number;
   outcome: ShipOutcome;
-  woke: number;
-  half: number;
-  lost: number;
-  stars: number;            // ★ earned on its WAKE REPORT (0 for a ship that never printed)
+  stars: number;            // ★ earned on its LANDING REPORT (0 for a ship that never landed)
   fuelLeftPct: number;
   // An ACCEPTED loop's distance from a perfect lock (WP7 part 2, RUN END's near-miss line `▼ was 140 km
   // from a perfect lock`): the end of the loop furthest outside the ring and by how many km. null for
@@ -229,22 +232,22 @@ export interface RunStats {
   repairs: number;          // REPAIR ops that finished (healed to 100 or ran out of charge)
   moves: number;            // MOVE ops that finished
   deletes: number;          // DELETE ops that finished
-  clustersLost: number;     // clusters HOLLOW ate (a crash's colonists are counted by the ship result)
-  clustersBitten: number;   // bites HOLLOW landed on a cluster, saved or not (WP8: the draft's FIREWALL reason)
+  driversLost: number;      // drivers HOLLOW ate (their pods are parked, not lost: the ship result counts them)
+  driversBitten: number;    // bites HOLLOW landed on a driver, saved or not (WP8: the draft's FIREWALL reason)
   capRefusals: number;      // tool clicks refused because every Core thread was busy
-  // THE DEAL (WP10, VESPER, §6.6): how HOLLOW's one offer of the run ended, or null while none was made. Its cluster
+  // THE DEAL (WP10, VESPER, §6.6): how HOLLOW's one offer of the run ended, or null while none was made. Its pod
   // and its moment are kept with it for RUN END and WP11's ending lines.
   deal: DealRecord | null;
 }
 
-// accepted: the named cluster was given up (eaten at once), every infection cured, the spread paused. refused / timeout:
-// `> ok.`, and the bites come faster for a while. invalidated: the named cluster printed, moved or was eaten first, or
-// the ship ended while the offer stood.
+// accepted: the named pod's driver was given up (eaten at once), every infection cured, the spread paused. refused /
+// timeout: `> ok.`, and the bites come faster for a while. invalidated: the named driver launched, moved or was eaten
+// first, or the ship ended while the offer stood.
 export type DealOutcome = 'accepted' | 'refused' | 'timeout' | 'invalidated';
 
 export interface DealRecord {
   outcome: DealOutcome;
-  cluster: string;
+  pod: number;
   shipId: string;
 }
 
@@ -277,7 +280,7 @@ export interface TransitHit {
 export interface ArrivalReport {
   hits: TransitHit[];
   chargeCarried: number;    // what crossed the link (min(charge, link − files))
-  starCredit: number;       // +6 per ★ on the last ship's WAKE REPORT
+  starCredit: number;       // +6 per ★ on the last ship's LANDING REPORT
   stars: number;
   // The card picked at the TRANSMIT (WP8), and the REPAIR CHARGE it brings on arrival (+12, else 0).
   card: UpgradeId | null;
@@ -369,8 +372,8 @@ export interface RunState {
 export type HollowPhase = 'asleep' | 'awake' | 'dormant';
 
 // Ship 1's story beat after the first fight (`> ...047?`, then CONTROL): 'pending' from the moment
-// the fight is decided until both lines are said and CONTROL's has had time to be read. The printer
-// holds the WAKE REPORT meanwhile, so a cluster eaten (or saved) last never has its beat land under
+// the fight is decided until both lines are said and CONTROL's has had time to be read. The landing
+// holds the LANDING REPORT meanwhile, so a driver eaten (or saved) last never has its beat land under
 // the report.
 export type HollowStory = 'none' | 'pending' | 'told';
 
@@ -378,10 +381,11 @@ export interface HollowState {
   cfg: HollowDef;            // this ship's HOLLOW, copied from its ShipDef (like `level`)
   phase: HollowPhase;
   story: HollowStory;
-  // Ship 1: the bite broke into the sealed archive, and the full reveal belongs to the fight's story
-  // (systems/hollow.ts plays it after the fight's own moment). Until then the printer's own reveal
-  // waits (reveal.ts) and the strip does not ask the kid to go and find the colonists (script.ts).
-  revealOwed: boolean;
+  // Ship 1's scripted fight ('loop-closed-once'): the file its one bite infected, from the bite until the fight is
+  // decided (cured, or eaten: then `story` turns 'pending'). The LANDING REPORT waits for it (selectors scriptFightOpen),
+  // so END LANDING before the fight is decided still lets `> ...047?` land before the report; in state so a save carries
+  // it. null on every other ship. (update)
+  scriptTargetId: string | null;
   // AI seconds to the next bite (`NEXT BITE m:ss` on every hollow block): one global timer. null
   // while it is not awake or on a ship whose HOLLOW does not spread (ship 1: `NEXT BITE ?:??`). (mutate)
   biteInSec: number | null;
@@ -419,17 +423,17 @@ export interface HollowState {
   // first seed used to land beside Swap, licensed last, on the ship that teaches SWAP). Repair is never in it: it is the
   // COPY lesson's target. Filled by licences.ts, emptied by the kid's first op with each (state/actions.ts). (update)
   untriedTools: FsToolKind[];
-  // Where HOLLOW last bit each cluster on this ship, and how many times in a row it bit it there (WP11 review, the lead's
-  // ruling of 21:30): a cluster bitten again in the same spot is in a trap a REPAIR alone never ends (LAST LIGHT's C13
-  // and C14 sit in the root's 2-block GAPs, bitten every 12 s), so the strip asks to MOVE it behind a WALL before it is
-  // bitten there again (data/script.ts). A cluster that moved starts over. (update, on a bite)
+  // Where HOLLOW last bit each pod's driver on this ship, and how many times in a row it bit it there (WP11 review, the
+  // lead's ruling of 21:30): a driver bitten again in the same spot is in a trap a REPAIR alone never ends (the drivers
+  // in the root's GAPs, bitten every 12 s on LAST LIGHT), so the strip asks to MOVE it behind a WALL before it is
+  // bitten there again (data/script.ts). A driver that moved starts over. (update, on a bite)
   bitesAt: BiteSpot[];
   // LAST LIGHT's finale (WP11, systems/finale.ts). (update)
   finale: FinaleState;
 }
 
 export interface BiteSpot {
-  cluster: string;
+  pod: number;
   addr: number;
   count: number;
 }
@@ -458,22 +462,23 @@ export type VerbTelegraph =
 // LAST LIGHT's finale (§6.6, §9 WP11 items 4–5). none: the root is still LOCKED (or this is not the flagship).
 // duel: the orbit is locked or accepted and the root is open: DELETE THE ROOT (a ROOT_DELETE_SEC op while its verbs come
 // every duelEverySec). choice: the root is gone, one last block is left, and HOLLOW has stopped (no bites, seeds or
-// verbs): PURGE or MERGE. purged / merged: the kid chose. unresolved: printing ended with the root alive and nothing
-// left to delete it with (§4.3 UNRESOLVED). The WAKE REPORT waits while the duel or the choice stands.
+// verbs): PURGE or MERGE. purged / merged: the kid chose. unresolved: the landing ended with the root alive and nothing
+// left to delete it with (§4.3 UNRESOLVED). The LANDING REPORT waits while the duel or the choice stands.
 export type FinalePhase = 'none' | 'duel' | 'choice' | 'purged' | 'merged' | 'unresolved';
 
 export interface FinaleState {
   phase: FinalePhase;
-  // MERGE's restoration (§9 WP11 item 5): the clusters whose blocks turned back into colonists in place, and the ones
-  // whose blocks were gone (moved away by the kid's DELETE, or MV'd and deleted): those print as half credit at once.
-  restoredInPlace: string[];
-  restoredHalf: string[];
+  // MERGE's restoration (plan risk 9; 01-landing §3.17 is slice 7): the pods whose eaten drivers turned back into
+  // drivers in place (their pods launch again), and the pods whose blocks were gone (moved away by the kid's DELETE, or
+  // MV'd and deleted): those stay parked, restorable, for slice 7's last landing.
+  restoredInPlace: number[];
+  restoredHalf: number[];
   // WP11 part 2: the typed ending the choice brought (FinaleChoice types it over the screen), and the AI second until
-  // which it holds the WAKE REPORT back (finalePending): its lines have typed and been read. null before the choice
+  // which it holds the LANDING REPORT back (finalePending): its lines have typed and been read. null before the choice
   // (and after an UNRESOLVED end, which has no typed ending). Written in the same update as the choice's phase, so no
   // listener ever sees a chosen finale without its ending.
   ending: FinaleEnding | null;
-  // UNRESOLVED's last line (`> you can't delete me now. i'll come with you.`) holds the WAKE REPORT back until this AI
+  // UNRESOLVED's last line (`> you can't delete me now. i'll come with you.`) holds the LANDING REPORT back until this AI
   // second: it has typed in the TERMINAL and been read (WP11 review: the report used to cut it off mid-word). null
   // before an UNRESOLVED end.
   unresolvedUntilAi: number | null;
@@ -503,9 +508,10 @@ export type DealPhase = 'none' | 'offered' | 'done';
 
 export interface DealState {
   phase: DealPhase;
-  // The named cluster (the one at that front): its code, its segment and where it was when the offer was made. Moving it
-  // (a MOVE starting on it, or it no longer standing at that address) invalidates the offer, as printing or losing it does.
-  cluster: string | null;
+  // The named pod (its driver is the one at that front): its number, its driver's segment and where it was when the offer
+  // was made. Moving it (a MOVE starting on it, or it no longer standing at that address) invalidates the offer, as
+  // launching or losing it does.
+  pod: number | null;
   segId: string | null;
   startAddr: number | null;
   // The TERMINAL line that carries the choice (say.ts sayChoice), while it stands.
@@ -522,71 +528,6 @@ export interface SeedTelegraph {
   startAddr: number;
   size: number;
   leftSec: number;
-}
-
-// --- The Soul Archive (systems/reveal.ts, systems/printer.ts) -----------------------------------
-
-// What set the reveal off (§6.7): the kid scanning STASIS; HOLLOW breaching a sealed cluster (WP6);
-// printing starting while the archive is still sealed; the ship lost before anyone looked (the
-// LOST card plays it); a returning unit that already knows (run 2+, the ship-1 boot: `SOUL ARCHIVE ·
-// 2,400 · you know what they are`, §5.2); a ?debug hook.
-export type RevealCause = 'scan' | 'breach' | 'printing' | 'lost' | 'known' | 'debug';
-
-// sealed: the slabs are shut and nobody has looked. pending: a reveal is due (printing waits for
-// the lock's stamp to clear first). playing: the lines are landing and the slabs are about to crack.
-// revealed: the colonists are in plain sight (also a ship whose archive arrived unsealed).
-export type RevealStage = 'sealed' | 'pending' | 'playing' | 'revealed';
-
-export interface RevealState {
-  stage: RevealStage;
-  cause: RevealCause | null;
-  // The reveal's lines shown so far (INSPECT types each one as it lands). Changed with update.
-  lines: string[];
-}
-
-// What became of a cluster that left memory: woke intact, woke with missing memories, or did not
-// wake (§4.4).
-export type ClusterOutcome = 'woke' | 'gaps' | 'lost';
-
-export interface ClusterResult {
-  cluster: string;
-  family: string;
-  souls: number;
-  outcome: ClusterOutcome;
-  integrity: number;     // at the moment it left memory
-  // The printer range when it printed (0..1; 0 for a cluster that never reached the printer). The
-  // WAKE REPORT names a low range as the reason an intact cluster woke with gaps.
-  range: number;
-  featured: Colonist[];
-  // WP11: HOLLOW ate it (set only then). MERGE brings back exactly these: a cluster the belt or a dead printer lost was
-  // never HOLLOW's to give back.
-  eaten?: true;
-  // WP11: MERGE gave it back after HOLLOW ate it (it woke with missing memories: half credit).
-  merged?: true;
-}
-
-export interface SoulsState {
-  // This ship's story clusters, copied from its ShipDef (like `level`): the lead (C12 · OKAFOR,
-  // selected at the reveal, first in the credits) and the one that arrives hurt (C09 · REYES; null on
-  // a ship whose clusters all arrive whole, HALCYON: HOLLOW is its whole fight).
-  lead: string;
-  hurt: string | null;
-  reveal: RevealState;
-  // Every cluster that left memory on this ship, in the order it left (the WAKE REPORT reads it).
-  results: ClusterResult[];
-}
-
-// The printer (§6.7). The numbers that move every AI tick are mutated; the kid's two buttons and a
-// finished print are updates.
-export interface PrinterState {
-  baseSec: number;           // AI s per cluster at full range and speed (ShipDef printBaseSec)
-  progress: number;          // 0..1 of the work toward the next print (mutate)
-  // AI seconds the printer still holds back before it may start: the gap after a reveal (mutate).
-  waitAiSec: number;
-  // AI seconds left between the last print and the WAKE REPORT; null until no cluster remains (mutate).
-  lingerAiSec: number | null;
-  printNext: string | null;  // the cluster code the kid pushed to the front (PRINT NEXT)
-  fast: boolean;             // PRINT FAST ▸▸
 }
 
 export type AlertLayer = 'ship' | 'mind';
@@ -669,7 +610,7 @@ export type GuideLayer = 'ship' | 'mind';
 // Which composition step produced the line on the objective strip (§6.3, plus the director's
 // own overrides: a refused input's explanation, PAUSED, the boot, the end of the flight).
 export type ObjectiveSource =
-  'flash' | 'paused' | 'boot' | 'over' | 'alarm' | 'flight' | 'mind-urgent' | 'tutorial' | 'hint' | 'printing';
+  'flash' | 'paused' | 'boot' | 'over' | 'alarm' | 'flight' | 'mind-urgent' | 'tutorial' | 'hint' | 'landing';
 
 // The one line the objective strip shows. Replaced (update) only when it changes.
 export interface ObjectiveLine {
@@ -699,7 +640,7 @@ export interface PendingPlacement {
   col: number;             // column within that region where the new copy will start
 }
 
-export type FilterKey = 'ai' | 'ship' | 'souls' | 'filesystem' | 'free';
+export type FilterKey = 'ai' | 'ship' | 'pods' | 'filesystem' | 'free';
 export type StatusKey = 'corrupt' | 'partial' | 'backup';
 
 export interface UiState {
@@ -747,8 +688,8 @@ export interface GameState {
   alerts: AlertsState;
   log: LogState;
   director: DirectorState;
-  souls: SoulsState;
-  printer: PrinterState;
+  // The ship's pods and their landing (01-landing; systems/landing.ts): replaces phase 2's souls and printer.
+  landing: LandingState;
   hollow: HollowState;
   hazards: HazardsState;
   ui: UiState;

@@ -3,6 +3,7 @@
 // literals of its own, so balancing never means hunting through systems.
 
 import type { Band, GhostSpec } from '@systems/capabilities';
+import type { ForgivenessClass, LzWidth } from '@/types/landing';
 
 // --- Heartbeat -------------------------------------------------------------------------
 
@@ -203,14 +204,14 @@ export const IGNORED_NOW_TAC = 20;
 export const ESCAPE_R_FACTOR = 1.5;
 
 // Halvings of a radius interval in the bisections that find where the tank stops covering the
-// close-the-loop Δv on a coast, and how wide a loop the printers still reach: 40 take a
+// close-the-loop Δv on a coast, and how wide a loop the launch band still reaches: 40 take a
 // 1,000,000 km interval below a micrometre, far past what timing or ringFraction need.
 export const RADIUS_BISECT_STEPS = 40;
 
 // ▼ radii sampled between the surface and the ring's outer edge when looking for the loop with
-// the most printer range at a given ▲. The best one dips exactly to the ring's inner edge, which
+// the most share in the band at a given ▲. The best one dips exactly to the ring's inner edge, which
 // is always a sample; the rest only guard that claim at a negligible one-off cost per ring.
-export const PRINTER_REACH_SAMPLES = 64;
+export const BAND_REACH_SAMPLES = 64;
 
 // Countdowns turn red at or below this, and F7/F8 corrections become urgent. Half a minute
 // is the shortest warning in which a kid can still read the strip, pick a preset and burn;
@@ -581,10 +582,10 @@ export const GHOST_DRIFT_ROUND_KM = 10;
 // GAP (under WALL_MIN_BLOCKS), so it bites the tool at its next bite, with a block between them so the seed reads as a
 // thing of its own next to the tool, not part of it.
 export const SEED_TOOL_GAP_BLOCKS = 1;
-// THE DEAL (§6.6, WP10): offered once, when a hollow front is within DEAL_FRONT_BLOCKS free blocks of a soul cluster and
-// at least DEAL_MIN_CLUSTERS clusters are still in memory.
+// THE DEAL (§6.6, WP10): offered once, when a hollow front is within DEAL_FRONT_BLOCKS free blocks of a pod's driver and
+// at least DEAL_MIN_DRIVERS drivers are still in memory.
 export const DEAL_FRONT_BLOCKS = 3;
-export const DEAL_MIN_CLUSTERS = 3;
+export const DEAL_MIN_DRIVERS = 3;
 // The choice's timer (AI s, from when its line has typed): §6.6's 15 s, long enough to read the line and decide, short
 // enough to be pressure while HOLLOW keeps eating.
 export const DEAL_TIMEOUT_SEC = 15;
@@ -704,8 +705,6 @@ export const PLOT_STALE_TAC = 3;
 // Telemetry (C3): below this integrity its digits start to scramble, all of them at 0 or missing.
 export const TELEMETRY_SCRAMBLE_BELOW = 60;
 
-// The Printer Uplink (C7): print speed by band; dead or missing prints nothing (NO PRINTER).
-export const PRINTER_SPEED_BY_BAND: Readonly<Record<Band, number>> = { ok: 1, degraded: 0.75, failing: 0.5, dead: 0, missing: 0 };
 
 // The glitch overlay follows the Core's damage in steps of this much (§3.3 C5): a repair that
 // heals the Core redraws the static a few times, not on every healed point.
@@ -771,94 +770,14 @@ export const MINI_PLOT_VIEWBOX = 100;
 export const RACK_BLOCKS = 64;
 export const RACK_COUNT = 6;
 
-// A soul cluster is 8 blocks of 200 colonists (§3.5 CLUSTER): big enough to read a family name on
-// the strip, small enough that 12 of them fill racks B–C with room for the root and a gap.
-export const CLUSTER_BLOCKS = 8;
-export const SOULS_PER_CLUSTER = 200;
-// The `R` token in a rack layout: HOLLOW's root, the size of one cluster (R16 spells out others).
+// The `R` token in a rack layout: HOLLOW's root, the size of one pod driver (R16 spells out others).
 export const ROOT_BLOCKS = 8;
 
-// INSPECT names this many colonists per cluster: enough to read as a family, few enough to read.
-export const FEATURED_PER_CLUSTER = 3;
 // A colonist's line ("wants to name the first tree.") stays this short, so `Okafor, Ada (11): …`
-// fits one INSPECT row and one WAKE REPORT credit line (≤ MAX_LINE_CHARS).
+// fits one INSPECT row and one LANDING REPORT credit line (≤ MAX_LINE_CHARS).
 export const COLONIST_LINE_MAX_CHARS = 40;
-// Family names stay this short: `C12 · LINDQVIST` must fit an 8-block chip at 1280 px.
+// Family names stay this short: `POD 12 · LINDQVIST` must fit an 8-block chip at 1280 px.
 export const FAMILY_MAX_CHARS = 10;
-
-// A cluster printed at or above this integrity wakes intact (§4.4: counts 1); below it, it wakes
-// with missing memories (counts 0.5). Set just under 100 so a bite healed back to 96 still counts,
-// and high enough that a hurt cluster (C09 at 71%) is always worth one repair.
-export const SOUL_WAKE_INTACT_MIN = 95;
-// What a soul that woke with missing memories is worth in the run's SCORE (§4.4). WP7 (the lead's rule):
-// only the SCORE on RUN END counts it half; WOKE everywhere else counts heads.
-export const WOKE_WITH_GAPS_SCORE = 0.5;
-
-// Printing (§6.7, AI time). Interval = ship.printBaseSec / max(range, PRINT_RANGE_FLOOR) / the
-// Printer Uplink's speed. The floor keeps a poor orbit from stalling the ship for minutes (at 50%
-// range a cluster takes twice as long, never longer); below it the low-range roll takes over:
-// each cluster may wake with gaps, with chance (floor − range) / floor, i.e. (0.5 − range) × 2.
-export const PRINT_RANGE_FLOOR = 0.5;
-// PRINT FAST ▸▸ (§6.7): a quarter of the interval. A clean ship then prints in seconds, which is
-// the reward for clearing the mind before printing.
-export const PRINT_FAST_FACTOR = 0.25;
-// After the last cluster prints, the ship lingers this many AI seconds before the WAKE REPORT:
-// the last bell and `+200 WOKE` land before the screen changes.
-export const PRINT_DONE_LINGER_SEC = 1.5;
-
-// The STASIS reveal (§1, §5.1 0:38), in AI seconds from the scan's end. It is the emotional turn of
-// the whole game, so it takes its time: the first line lands, a breath, `rescanning…`, a breath,
-// the truth, a beat of silence, then the slabs crack (one chip every REVEAL_CRACK_STAGGER_SEC,
-// §6.7: 60 ms) under the choir, and the panel settles on Ada a moment later.
-export const REVEAL_LINE_AT_SEC: readonly number[] = [0, 1.8, 3.6];
-export const REVEAL_CRACK_AT_SEC = 6.2;
-export const REVEAL_CRACK_STAGGER_SEC = 0.06;
-// One chip's crack on screen (grey slab → flash → the chip), in seconds. The strip sets each chip's
-// animation from this and the stagger, so the picture, the ripple of cracks and the C12 selection
-// stay in step when either is tuned.
-export const REVEAL_CRACK_ANIM_SEC = 0.9;
-// The crack is the picture of the whole reveal, so it waits for the kid to be looking at the mind:
-// a kid who TABbed back to amber to make a burn mid-reveal finds the slabs still shut, and the strip
-// says where to look. It waits at most this many AI seconds (12: a capture burn and its HOLD STEADY),
-// then cracks anyway, so a kid who never looks still gets the colonists, and printing never stalls.
-export const REVEAL_VIEW_WAIT_MAX_SEC = 12;
-// From the last chip cracking to the lead cluster (C12 · OKAFOR) being selected: the strip is the
-// picture for a moment, then INSPECT names a person.
-export const REVEAL_SELECT_AFTER_SEC = 1.4;
-// The reveal lines type into INSPECT at this many characters per second: slower than the radio
-// (COMMS_TYPE_CPS 40), so the words land one at a time.
-export const REVEAL_TYPE_CPS = 30;
-// ...with a quiet relay tick every this many characters (every letter crowded the reveal's own
-// pings).
-export const REVEAL_TICK_EVERY_CHARS = 2;
-// The run-1 ask (CHECK THE 2,400) shows on a coast only while the next burn is at least this many
-// tactical seconds away, so the reveal plays out before GET READY: the kid's TAB and SCAN (≈ 3 s),
-// the scan (1.4 s) and the reveal (≈ 8.3 s) are ≈ 13 wall s, ≈ 37 tactical s at ship 1's CRUISE
-// (×60 over ×20), plus GET READY's own TACTICAL_LEAD_BURN_TAC. A shorter coast waits for the next.
-export const SOULS_ASK_MIN_LEAD_TAC = 45;
-// Run 1 holds SKIP for the colonists (CHECK THE COLONISTS FIRST, §6.1) only until the ask has stood
-// on the strip this many AI seconds in all (LEAD-1, WP5 question 1 option a). A kid who ignored it
-// was measured at 125 s of forced CRUISE coast (pillar 5: something every 20 seconds). Twenty is the
-// ask read twice and acted on; after it the amber ask steps aside for the coast's `WAIT … · [F] SKIP`,
-// and the mode toggle, which named the ask while it stood, goes quiet. Nothing reveals itself
-// mid-flight: the bite's breach or the printer's find after the lock (which waits for the kid to look)
-// still shows the colonists to a kid who never scans STASIS.
-export const SOULS_ASK_HOLD_SEC = 20;
-// When printing starts with the archive still sealed (the kid never scanned STASIS), the reveal
-// plays by itself this long after the lock: after ORBIT LOCKED's stamp is gone (STAMP_SHOW_MS),
-// never in the same second (§6.7).
-export const REVEAL_AUTO_DELAY_SEC = 2.0;
-// ...and the first print waits at least this long after a reveal ends (§6.7: ≥ 3 s), so the kid
-// sees the colonists before the first one leaves.
-export const REVEAL_PRINT_GAP_SEC = 3.0;
-
-// After the reveal, the archive's hearts are heard: three heartbeats about a second apart, fading
-// (audio-cues), so the strip's new heartbeat lines have a sound the first time they appear.
-export const HEARTBEATS_AFTER_REVEAL: readonly number[] = [1, 0.75, 0.5];
-export const HEARTBEAT_GAP_SEC = 0.95;
-// A printed cluster's flash and `+200 WOKE` live this long on screen (wall ms; the CSS animations
-// fit inside it): long enough to read the number as it floats up, gone before the next print.
-export const PRINT_FX_MS = 1400;
 
 // --- WP5 part 2: racks on the strip, the WAKE REPORT, the stars -----------------------------------
 
@@ -872,10 +791,6 @@ export const STRIP_NARROW_MAX_BLOCKS = 6;
 export const STRIP_TINY_MAX_BLOCKS = 4;
 export const STRIP_MICRO_MAX_BLOCKS = 1;
 
-// The stars of a ship (§4.4). INTACT: at least this share of the ship's souls woke intact. With
-// 200-soul clusters and at most 16 of them on a ship, one cluster with gaps already misses it:
-// a hurt cluster is always worth a repair.
-export const STAR_INTACT_FRAC = 0.95;
 // Each star is +6 REPAIR CHARGE on arrival at the next ship (§4.4, §6.9): good flying funds the
 // next fight. The WAKE REPORT promises it; WP7's transmission pays it.
 export const STAR_CHARGE_BONUS = 6;
@@ -956,23 +871,15 @@ export const EATEN_ALARM_CLEAR_SEC = 21;
 // (which doubles the drain: P1). Longer would push "idle loses C12 30 ± 2 s after the lock" (§9 WP6
 // acceptance 3) to its edge: every second here is two seconds of burn drain C12 keeps.
 export const HOLLOW_SCRIPTED_BITE_DELAY_SEC = 1.0;
-// Ship 1's script (§6.6): after the first fight is decided, a sealed archive's full reveal waits this
-// long, so the fight's own moment (SAVED and its chord, or DID NOT WAKE and its falling sweep) is
-// heard alone before the reveal's pings start (§7.2's 1.5 s between story beats). LEAD-1: and only once
-// both screens have been quiet HOLLOW_STORY_SILENCE_SEC after the fight's own echo (HOLLOW's slow
-// `> eat c12 ...` takes ≈ 3.3 s; its last letters typed under the reveal's first line, and since the
-// first LEAD-1 build the reveal still began the moment they ended).
-export const HOLLOW_REVEAL_AFTER_FIGHT_SEC = 1.5;
-// ...then, once no reveal is playing and both screens have typed what they were given (the TERMINAL's
-// echoes; since LEAD-1 also the radio, where CONTROL's `Oh, you found them!` after a reveal used to type
-// right up to `> ...047?`), this many AI seconds of silence, and HOLLOW types `> ...047?`...
+// Ship 1's script (§6.6): once the first fight is decided and both screens have typed what they were given (the
+// TERMINAL's echoes, and since LEAD-1 the radio too), this many AI seconds of silence, and HOLLOW types `> ...047?`...
 export const HOLLOW_STORY_SILENCE_SEC = 1.5;
 // ...and this long after that ARRIVAL CONTROL says it is nothing: the pink line has typed out
 // (9 characters at HOLLOW_TYPE_CPS 12 ≈ 0.8 s) and been read before the radio talks over it. Anything
-// else said in between (a print's echo) is waited out with the same silence (say.ts createStory).
+// else said in between (a launch's echo) is waited out with the same silence (say.ts createStory).
 export const HOLLOW_CONTROL_AFTER_SEC = 2.5;
 // ...and CONTROL's line stays up this long once its chime and its letters are done before the ship may
-// move on (the WAKE REPORT waits for it): a full-screen report must not cover a line nobody has read.
+// move on (the LANDING REPORT waits for it): a full-screen report must not cover a line nobody has read.
 export const HOLLOW_STORY_READ_SEC = 2.0;
 // DELETE on a hollow block (§6.5): 1.0 s + 0.5 s per block, slower than a file (DELETE_SEC): cutting
 // HOLLOW back is a commitment that holds a thread.
@@ -1065,10 +972,6 @@ export const BEAM_OUT_LIFT_MAX_SEC = 4000;
 export const FIRST_UNIT_NUMBER = 47;
 // The whole route the Exodus Fleet flies (§1: 581 light-years), on the title card.
 export const FLEET_ROUTE_LY = 581;
-// A printer halted for good (NO PRINTER: the Printer Uplink is a ship file, nothing heals it) holds the
-// strip's `NO PRINTER — nobody can be printed` this long, read twice, then the colonists still in memory
-// are lost and the ship goes on to its WAKE REPORT (WP5's TODO: before, the ship never ended).
-export const NO_PRINTER_GIVE_UP_SEC = 8;
 // HALCYON's wall rule (`4 FREE BLOCKS STOP IT — REPAIR, then MOVE souls behind a WALL`) holds the strip
 // this long at HOLLOW's wake: read twice, then the plain `SOMETHING IS EATING C08` lines name each
 // cluster the repairs must reach (the rule is back as `MOVE C09 behind a WALL` once they are cured).
@@ -1157,17 +1060,15 @@ export const RUN_END_ROW_GAP_SEC = 0.45;
 export const RUN_END_COUNT_SEC = 1.6;
 // A ship's stars (§4.4: ORBIT LOCKED, INTACT, FUEL): RUN END draws the missed ones as ☆ beside the earned.
 export const STARS_PER_SHIP = 3;
-// The rank (§4.4), by the run's SCORE, out of the whole fleet's 12,400 souls: DRIFTER under 3,000, SHEPHERD,
-// CARETAKER, ARK ANGEL. While the fleet is shorter (ships still being built), each threshold scales with
-// the souls the fleet has, rounded to RANK_ROUND_TO, so the top rank stays reachable and the gap lines stay
-// honest; with all five ships the numbers are §4.4's exactly.
+// The rank (§4.4), by the run's SCORE (landing points), against RANK_FLEET_COLONISTS: DRIFTER under 3,000, SHEPHERD,
+// CARETAKER, ARK ANGEL. Each threshold scales with the colonists the fleet has (9,600 in slice 1a), rounded to
+// RANK_ROUND_TO, so the top rank stays reachable and the gap lines stay honest.
 export const RANKS: readonly { name: string; minScore: number }[] = [
   { name: 'DRIFTER', minScore: 0 },
   { name: 'SHEPHERD', minScore: 3000 },
   { name: 'CARETAKER', minScore: 6800 },
   { name: 'ARK ANGEL', minScore: 10700 },
 ];
-export const RANK_FLEET_SOULS = 12400;
 export const RANK_ROUND_TO = 100;
 // Near misses on RUN END (§4.4): at most this many lines, so they read as a nudge, not a report. A locked
 // ship's FUEL counts as a near miss within this many points under the ★.
@@ -1400,9 +1301,6 @@ export const ROOT_DELETE_SEC = 12;
 // What the root leaves when its DELETE completes (§6.6: "a single last block"): one block, in the middle of where the
 // root was, so a WALL stands on both sides of it (it no longer bites, but the strip must not read `GAP 2` beside it).
 export const LAST_BLOCK_SIZE = 1;
-// MERGE (§9 WP11 item 5): every cluster HOLLOW ate on LAST LIGHT comes back at this integrity (in place, if its
-// block still stands): below SOUL_WAKE_INTACT_MIN, so it wakes with missing memories, the half credit §6.6 asks for.
-export const MERGE_RESTORE_INTEGRITY = 50;
 // ...and the run after a MERGE (§4.5): the Core starts with this many threads, and the screen keeps this much
 // corruption for good (a faint shimmer of the unit that came along). The floor tints the screen only: the page-jerk
 // dice still roll on the Core's own damage, so a healthy merged unit never twitches.
@@ -1459,3 +1357,242 @@ export const FINALE_ENDING_MAX_LINES = 6;
 export const FINALE_ENDING_CPS = 26;
 export const FINALE_ENDING_GAP_SEC = 0.7;
 export const FINALE_ENDING_HOLD_SEC = 4.0;
+
+// --- Phase 3 slice 1a: LANDING (docs/phase3/01-landing.md; Track SIM owns this block) --------------------------------
+
+// A pod driver is 8 blocks (§3.8): v2 §6.6's validated rule (an 8-block file's heal beats 1.5 × the drain) then holds
+// unchanged for whatever HOLLOW does to drivers, and an 8-block chip still reads `POD 03 · OKAFOR`.
+export const DRIVER_BLOCKS = 8;
+// Each pod carries 200 colonists (§1): the old cluster's size, so the fleet's numbers and ranks keep their scale.
+export const COLONISTS_PER_POD = 200;
+// INSPECT and the LANDING REPORT name this many colonists per pod: enough to read as a family, few enough to read.
+export const FEATURED_PER_POD = 3;
+// At most 16 pods on any ship (decision 9): twenty do not fit 384 blocks with the 40-block pod-rack margin (§3.16).
+export const PODS_MAX = 16;
+
+// The bay (§3.4). 4 slots: PHASE3's "3–4", and four launches fill one healthy sure window.
+export const BAY_SLOTS = 4;
+// Tactical seconds between two launches: a rhythm a kid can tap, four pods in 6 s. 1a uses it whatever Bay Ctrl's band
+// (1b reads a per-band table).
+export const BAY_CADENCE_TAC = 2.0;
+// Tactical seconds of WORLD time to reload one slot: any SKIP refills the bay, and two LZs closer than about 40° of arc
+// (four reloads at 6,000 km) share one load, which is PHASE3's split decision.
+export const BAY_RELOAD_TAC = 20;
+
+// The drop (§3.3). Half-width s = DROP_KM_PER_1000 × (launch radius − R) / 1,000 × the factors. 30: a healthy drop fits
+// a STANDARD LZ anywhere in a 5,000–7,000 band (±48 to ±108 km), and only damage forces an orbit choice.
+export const DROP_KM_PER_1000 = 30;
+// The pod's retro kick aims its lowest point at this share of R: the arc then lands 70–88° ahead of the ship on every
+// band (70° from 5,000 km, 88° from 9,000), reads as "down and forward", and never wraps round the planet.
+export const POD_AIM_RP_FRAC = 0.6;
+// The fall is shown on AI time (a real one is 105–270 tactical s): the streak runs its true arc in this many AI seconds,
+// a ritual like the lock hold, its result decided at launch. Run 1's first pod falls slower: the first landing's moment.
+export const POD_DESCENT_SEC = 3.5;
+export const POD_FIRST_DESCENT_SEC = 5.0;
+// The drop solution samples one orbit this finely (1° of a circular orbit, so a STANDARD LZ spans about 7 samples), then
+// refines each window edge on exact evaluations; the solve is cached per orbit and costs a few ms.
+export const DROP_SOLVE_SAMPLES = 360;
+// Points on the drawn pod arc: smooth at the NAV PLOT's size, cheap to rebuild at PREDICT_HZ.
+export const POD_ARC_POINTS = 40;
+
+// LANDING's own warps on every ship (§3.2), set at ORBIT LOCK: the window table (8 sure seconds at ×20) then holds on
+// every planet. ×20 is ship 1's flight warp; ×60 its cruise.
+export const LANDING_TACTICAL_WARP = 20;
+export const LANDING_CRUISE_WARP = 60;
+// TACTICAL this many tactical seconds before a window opens, and a SKIP lands there: the burn lead's value, so GET READY
+// counts down the same 5…1 a burn does, with no CRUISE dead time before it.
+export const WINDOW_TACTICAL_LEAD_TAC = 8;
+
+// Scoring (§3.9, decided by Fran): points per pod = colonists × place × touch.
+// A pod that lands in an LZ already at its count is mislanded: three quarters (each colonist counts once: 400 + 800 → 1,150).
+export const MISLANDED_FACTOR = 0.75;
+// A failing driver lands hard: half points.
+export const HARD_LANDING_FACTOR = 0.5;
+// Off-site, by the planet's forgiveness class (§3.6): what the planet allows. An ocean world forgives nothing.
+export const OFF_SITE_SCORE_BY_CLASS: Readonly<Record<ForgivenessClass, number>> = { gentle: 0.5, rough: 0.25, harsh: 0 };
+
+// LZ widths in km of surface arc (§3.5): WIDE 500 (8.45° at R 3,390), STANDARD 400 (6.76°), NARROW 250 (4.23°). A
+// NARROW LZ gives 3–4 sure seconds (two pods) even healthy and low.
+export const LZ_WIDTH_KM: Readonly<Record<LzWidth, number>> = { wide: 500, standard: 400, narrow: 250 };
+// Brackets sit at least this far apart edge to edge, so two windows never overlap (§3.5).
+export const LZ_MIN_GAP_DEG = 12;
+
+// The memory budget (§3.16). The unit may spill this many blocks into the end of the last pod rack (its "tail"): the
+// room for you is the receiver plus this, one fixed number per memory class.
+export const UNIT_TAIL_BLOCKS = 24;
+// The pod racks keep at least this many free blocks, the root's gaps not counted: the 24-block tail plus 16 for walls
+// and MOVEs (phase 2's calm-rack margin).
+export const POD_RACK_MIN_FREE = 40;
+
+// The GROUND TRACK's main strip shows this much surface, centred on the dot: on the whole plot a 400 km bracket is only
+// 8–10 px, so the panel is the one place a kid can see the dot in the bracket.
+export const GROUND_TRACK_SPAN_KM = 3000;
+
+// With the ship empty, the landing lingers this long before the LANDING REPORT: the last bell and `+200 LANDED` land
+// before the screen changes.
+export const LANDING_DONE_LINGER_SEC = 1.5;
+// A landing in which no pod aboard has a driver left ends itself after this many AI seconds (risk 7, the phase-2 printer
+// gave up after 8 s): headless kids and AFK players never stall, and the strip says L12 meanwhile.
+export const LANDING_NONE_LEFT_SEC = 6;
+// A colony is called after its first family this often (`OKAFOR LANDING`), else it takes a name from the pool (05 §).
+export const COLONY_FAMILY_NAME_CHANCE = 0.5;
+// A launched driver's chip flash lives this long on screen (wall ms): PrintFx's timing, reused as the launch flash.
+export const LAUNCH_FX_MS = 1400;
+
+// ★ ON TARGET (§3.9): at least this share of the colonists aboard landed soft in an LZ with room. The denominator
+// includes pods that never launched; with 200-colonist pods one miss in a small ship already costs it.
+export const STAR_ON_TARGET_FRAC = 0.95;
+
+// MERGE in 1a (risk 9): an eaten driver comes back in place at this integrity, the bottom of the ok band, so the driver
+// never makes its pod land hard (§3.17: the people come back whole).
+export const MERGE_DRIVER_INTEGRITY = 80;
+
+// The ranks' thresholds were authored against the phase-2 fleet's 12,400 colonists; they scale by the fleet's real
+// colonists (9,600 in slice 1a), so perfect landings are now needed for the top ranks (risk 11).
+export const RANK_FLEET_COLONISTS = 12400;
+
+// --- Landing UI (slice 1a, Track UI) ---------------------------------------------------------------------------------
+
+// A falling pod's streak shows this share of its arc behind the head (§4 "a streak with a trail"): long enough to read as
+// motion along the arc, short enough that two pods 2 s apart are two streaks, not one line.
+export const STREAK_TRAIL_FRAC = 0.3;
+// Pods parked in orbit ride the ship's orbit as beacons (§3.10), this share of a period apart behind the ship: a short
+// string of blinking dots that reads as "left up here", clear of the ship's own glyph.
+export const BEACON_LAG_FRAC = 0.03;
+// The GROUND TRACK names at most this many LZs waiting past its right edge (`LZ-B ▸ 2:10`): the next one and the one
+// after are a plan; more is a list nobody reads in a 56 px panel.
+export const GROUND_TRACK_AHEAD_MAX = 2;
+// `+200 LANDED · LZ-A` floats up from the bracket this long (wall ms): the bell's decay, so the words and the sound end
+// together.
+export const TOUCHDOWN_FLOAT_MS = 1600;
+// The screen kicks this much per launch (§4 juice "2 px shake per launch"): felt at the 2-second rhythm, never tiring.
+export const SHAKE_LAUNCH_PX = 2;
+// The LANDING REPORT counts its LZ rows up one after another, this far apart (wall s), each with a heartbeat: the rows
+// are the ship's result, so they get a beat each before the credits roll.
+export const REPORT_LZ_ROW_GAP_SEC = 0.45;
+// Each pod icon in a counting row lands this far after the previous one (wall s): a ship of 4 pods per LZ fills a row in
+// under a second.
+export const REPORT_POD_ICON_GAP_SEC = 0.12;
+// The POD BAY window slides in this long after ORBIT LOCK (wall ms): after the lock's stamp has hit, so the two moments
+// don't land on the same frame.
+export const POD_BAY_OPEN_DELAY_MS = 900;
+
+// =====================================================================================================================
+// --- Phase 3 slice 1b: drop width, no-go arcs, Bay Ctrl, drag and decay, the engine in landing, GO LOWER
+// (docs/phase3/01-landing.md §3.3–§3.12, docs/phase3/impl/slice-1b-plan.md §2.2). Three sub-blocks, each owned by one
+// track: a track edits only its own. Every 1b number is here, so the rebalance (slice 8) has one place to look.
+// =====================================================================================================================
+
+// --- 1b DROP (owned by Track DROP): the drop width's factors, Bay Ctrl, no-go arcs, DROP UNCERTAIN --------------------
+
+// Sensor Interp's factor on the drop width, by band (§3.8): it reads the ship's own state, so a damaged one blurs where
+// the pod is let go. failing / dead / missing all ×2.5 (and the grey dot): the plot is already PATH UNCERTAIN there, and
+// a blind drop must be wide enough that REPAIR SENSOR INTERP is plainly the fix (±195 km at 6,000 km: STANDARD misses).
+export const SENSOR_DROP_FACTOR_BY_BAND: Readonly<Record<Band, number>> = {
+  ok: 1, degraded: 1.5, failing: 2.5, dead: 2.5, missing: 2.5,
+};
+// Nav Plotter's factor (§3.8), gentler than Sensor Interp's: Sensor Interp already greys the whole plot when it fails, so
+// the plotter's hits read as "a bit sloppier", and only its death stops the drop. dead / missing are moot (NO DROP
+// SOLUTION: drop.solution is false), so 1, never a silent widening of a dot nobody sees.
+export const PLOTTER_DROP_FACTOR_BY_BAND: Readonly<Record<Band, number>> = {
+  ok: 1, degraded: 1.25, failing: 1.5, dead: 1, missing: 1,
+};
+// A pod's driver's factor, by its integrity band (§3.8 table): a degraded driver still lands soft but wider, a failing
+// one lands hard AND wide (×2), which is what makes ship 1's POD 02 worth its REPAIR. dead never launches; its 2.0 is
+// for the DetailPanel's display only (it calls dropFactors for every driver, so the table must cover it).
+export const DRIVER_DROP_FACTOR_BY_BAND: Readonly<Record<Exclude<Band, 'missing'>, number>> = {
+  ok: 1, degraded: 1.5, failing: 2.0, dead: 2.0,
+};
+// Bay Ctrl's cadence between launches by band, tactical s (§3.4, C7's shape): ok is BAY_CADENCE_TAC (four pods in 6 s),
+// degraded 2.7 and failing 4.0 cost a pod or two of a sure window, dead 10.0 is one pod per window (`BAY CTRL DEAD · ONE
+// POD AT A TIME`), and missing is null: BAY OFFLINE, no launch at all (a ship file with no backup, risk 8).
+export const BAY_CADENCE_BY_BAND: Readonly<Record<Band, number | null>> = {
+  ok: BAY_CADENCE_TAC, degraded: 2.7, failing: 4.0, dead: 10.0, missing: null,
+};
+// A ship with no-go arcs has at least one within this many km of a bracket edge (§3.6, §3.15): close enough that a wide
+// dot (a degraded Sensor Interp at 6,000 km reaches ±117 km) or a late launch can land in it, far enough that a healthy
+// sure launch never does. validateLandingDef checks it, so slice 3's generator is held to it too.
+export const NO_GO_NEAR_EDGE_KM = 150;
+// L8 (DROP UNCERTAIN) shows when the next awaited window is at most this many tactical s away (§3.11): a minute is enough
+// for a Sensor Interp REPAIR (a few s) and the walk back to the ship, and earlier it would nag through a long WAIT.
+export const DROP_UNCERTAIN_LEAD_TAC = 60;
+// The `THE DOT IS WIDE — REPAIR, or fly lower` lesson (§3.11, risk 14) stands in front of the first L9 for this many AI s:
+// long enough to read twice, short enough that L9's own line (which LZ, which file) and its SKIP come back quickly.
+export const DOT_WIDE_LESSON_SEC = 5;
+
+// --- 1b ORBIT (owned by Track ORBIT): the DRAG line and decay, GO LOWER, the drop solver's domain --------------------
+
+// The DRAG line sits at the sweet zone's lower edge (§3.7): ring.min + this share of the band. It IS SWEET_ZONE_FRAC on
+// purpose, not a second number: phase-2 corrections aim for the sweet zone, so an ordinary lock sits on or above the line
+// and never decays; going low is a choice (6,000 km on ship 1's band, 5,500 km on a 5,000–7,000 band).
+export const DRAG_LINE_FRAC = SWEET_ZONE_FRAC;
+// A drag kick's retrograde Δv at ▼ is this × (line − rp) / (line − ring.min), km/s (§3.7). 0.030: felt over a long
+// landing (a circular 5,250 km orbit on a 5,000–7,000 band leaves the band after three orbits: kicks of 15, 22, 24 m/s),
+// never ruinous (holding that orbit costs about 1% of a 2.1 km/s tank per orbit).
+export const DRAG_DV_MAX_KMS = 0.030;
+// At most one kick per this share of a period (plan §1.4): on a near-circular orbit ▼'s place is noise under CRUISE
+// sub-stepping, and without a gap a ▼ that wobbles back and forth across a tick boundary would kick twice.
+export const DRAG_KICK_MIN_GAP_FRAC = 0.5;
+// A kick still owed after this many periods since the last one (▼ still below the line) is applied at once (plan §1.4):
+// the catch-up for a ▼ the sampling stepped over, so decay never silently stops.
+export const DRAG_KICK_CATCH_UP_FRAC = 1.5;
+// The stamp (`DRAG · ▲ −110 km`), the hiss and the drag lesson show only for kicks that moved the far apsis at least this
+// far (risk 15): a ▼ a few km under the line kicks under 1 m/s every orbit, and stamping that is noise. Physics stays
+// continuous below it.
+export const DRAG_STAMP_MIN_KM = 10;
+// L10 (ORBIT DECAYING) and the 'lift' burn come up when decay takes ▼ out of the band within this many orbits (§3.7):
+// about two SKIPs (≈ 12 real s), time to read the line and act, and late enough not to nag on a slow sink.
+export const DECAY_WARN_ORBITS = 2;
+// The 'lift' burn (risk 3) raises ▼ to the DRAG line plus this margin, km: a little above the line, so the next ▼ is
+// clear of it and the kicks stop instead of starting again an orbit later.
+export const DRAG_LIFT_MARGIN_KM = 50;
+// The lift's HOLD (review fix 2, landing-rules liftHold: the low orbit GO LOWER flew to, kept in the band) burns only once
+// ▼ or ▲ is this far under its mark, km: a release a few tenths of a second early or late leaves it within this, and a
+// lift of a few km is not worth a TACTICAL pass (one kick under the DRAG line takes ▲ down by well over 100 km).
+export const LIFT_HOLD_SLACK_KM = 20;
+// GO LOWER (§3.7) aims for the radius where the awaited LZ's sure window lasts this many tactical s: three pods at the
+// healthy cadence (2.0 s apart), the smallest window worth a burn.
+export const LANDING_SURE_MIN_TAC = 4;
+// ...but never takes ▼ closer than this to the band's floor, km (§3.7's "▼ is 100 km above the band floor"): the hard
+// stop that keeps a late release (risk 1) inside the band.
+export const GO_LOW_FLOOR_MARGIN_KM = 100;
+// The drop solver's domain (risk 9): above this eccentricity the pod's kick can fail (steep paths) or the dot track
+// stop being monotonic. 0.6 is far beyond any orbit the band holds (a 5,000–9,000 band's widest loop is e ≈ 0.29), so
+// only a wild burn in landing leaves it: then there is no dot until the orbit is back (landing-orbit dropSolvable).
+export const DROP_SOLVE_MAX_E = 0.6;
+// The landing's burns run at this share of the flight's thrust (risk 1, the lead's decision; shown on the POWER slider is
+// UI's). Measured (engine-landing.test's scripted kid, ARES-VII from a circular 8,950 km, an LZ 330 km wide, GO LOWER's
+// target 7,096 km): at full thrust the launch point moves about 1,100 km per real second, so the spread between a 0.3 s
+// and a 1.2 s release is about 1,000 km, and no single RELEASE lead lands both near the target. At 0.5 the spread is
+// about 530 km and, with LANDING_RELEASE_LEAD_TAC below, both keep the band and a sure window of at least 4 s (4.01, 4.36).
+// Raise it with Fran: §3.7's "one RETRO burn the strip times and releases" holds only at this power.
+// A ghost burst in the landing runs at it too (review M2): at full push an unswapped VESPER's passive landing had ▼ under
+// the planet 79–110 real s after the lock (seeds 1–3); at 0.5, 95–193 s, with the strip's SWAP row up 3 s after the first.
+export const LANDING_BURN_POWER = 0.5;
+// The `BELOW THE DRAG LINE THE ORBIT SINKS` lesson (§3.11, risk 14) stands this many AI s from the first kick that moved
+// the far side DRAG_STAMP_MIN_KM, while ▼ is still below the line: the stamp's moment, read twice, then the landing's line.
+export const DRAG_LESSON_SEC = 5;
+// GO LOWER's RELEASE (landing-orbit goLowReleased) says RELEASE once the launch point's radius, projected this many
+// tactical s ahead at its current rate, reaches the target (F6's rule with its own lead). Not F6's RELEASE_LEAD_TAC
+// (0.7, centred between a 0.4 s and a 1.2 s kid): GO LOWER's target is a floor for the sure window, not a middle, and a
+// release short of it costs the window it was for. With 0.7 a kid letting go 0.3 s after the word stopped 0.4 s of
+// burning short (3.68 s of sure window at LANDING_BURN_POWER 0.5, 3.17 s at full); with 0.3 the quick kid stops on it
+// (4.01 s) and a slow one (1.2 s) goes deeper, still in the band (4.36 s). The floor (GO_LOW_FLOOR_MARGIN_KM) stays the
+// hard stop for a target that is the floor. The 'lift' burn's RELEASE (guidance liftRows: once the burn it still needs
+// is this short) uses it too, for the same reason: its target (▼ over the DRAG line) is a floor, and with 0.7 a quick kid
+// lifted ▲ only half way on a 1 s burn (decay.test).
+export const LANDING_RELEASE_LEAD_TAC = 0.3;
+
+// --- 1b UI (owned by Track UI): the views' numbers, appended below -----------------------------------------------------
+
+// The GROUND TRACK's terrain rows (01-landing §4, slice 1b terrainStretches): the planet's ground is cut into stretches
+// this many degrees wide (≈ 180 km on a 3,390 km planet), each in the terrain's main glyph or its second one, so a
+// volcanic world reads `^^^ ··· ^^^` instead of one glyph everywhere. Six or so stretches cross the 3,000 km strip:
+// variety the eye follows as it scrolls, never noise.
+export const TERRAIN_STRETCH_DEG = 3;
+// The share of those stretches drawn in the terrain's second glyph (VOLCANIC `·` between its `^`): a minority, so the
+// world keeps its one character.
+export const TERRAIN_ALT_SHARE = 0.35;
+// The drag stamp's life on the NAV PLOT (`DRAG · ▲ −110 km`, §3.7), wall ms: long enough to read the number at a SKIP's
+// speed (a kick lands once an orbit, a few real seconds apart), gone before the next.
+export const DRAG_STAMP_MS = 2600;

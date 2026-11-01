@@ -2,7 +2,7 @@ import type { GameState } from '@state/schema';
 import type { Segment, FreeSegment, ShipSegment, ShipBackupSegment, SegmentRole } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import {
-  getRedundancy, isRepairable, isUsableTool, effectiveToolVersion, filesWithRole, isInfected,
+  getRedundancy, isRepairable, isUsableTool, effectiveToolVersion, filesWithRole, isInfected, toolFilesOf,
 } from '@state/selectors';
 import { getOps } from '@systems/ops-core';
 import {
@@ -103,19 +103,17 @@ export function targetRefusal(seg: Segment, ctx: ValidTargetContext): ToolRefusa
   const { state, activeKind, pickedSource } = ctx;
   if ((activeKind === 'move' || activeKind === 'copy') && pickedSource) return placeRefusal(seg, ctx, pickedSource);
   if (seg.type === 'free') return TOOL_REFUSAL.notAFile;
-  // A sealed slab hides what it is: nothing reaches it until the STASIS reveal (§6.7).
-  if (seg.type === 'soul' && seg.sealed) return TOOL_REFUSAL.sealed;
   if (isBusy(seg)) return TOOL_REFUSAL.busy;
   switch (activeKind) {
     case 'scan':
-      if (seg.type === 'soul') return TOOL_REFUSAL.soulScan;
+      if (seg.type === 'driver') return TOOL_REFUSAL.driverScan;
       if (seg.type === 'firewall') return TOOL_REFUSAL.firewallHealth;
       return 'scanned' in seg ? null : notAFile(seg);
     case 'repair':
       return repairRefusal(seg, state);
     case 'delete':
       if (seg.type === 'core') return TOOL_REFUSAL.coreDelete;
-      if (seg.type === 'soul') return TOOL_REFUSAL.soulDelete;
+      if (seg.type === 'driver') return TOOL_REFUSAL.driverDelete;
       // DELETE cuts HOLLOW back block by block (§6.5); the root stays LOCKED until ship 5's duel.
       if (seg.type === 'hollow' && seg.locked) return TOOL_REFUSAL.locked;
       if (seg.type === 'redundancy' && chargeInUse()) return TOOL_REFUSAL.chargeBusy;
@@ -127,8 +125,8 @@ export function targetRefusal(seg: Segment, ctx: ValidTargetContext): ToolRefusa
       if (seg.type === 'core') return activeKind === 'move' ? TOOL_REFUSAL.coreMove : TOOL_REFUSAL.coreCopy;
       // REPAIR CHARGE stays put (§6.5), and a copy of it would double the repair budget.
       if (seg.type === 'redundancy') return activeKind === 'move' ? TOOL_REFUSAL.moveCharge : TOOL_REFUSAL.copyCharge;
-      // Souls move (a cluster carried behind a gap, §3.2) but are never duplicated.
-      if (seg.type === 'soul' && activeKind === 'copy') return TOOL_REFUSAL.soulCopy;
+      // Drivers move (carried behind a gap, §3.2) but are never duplicated: one pod, one driver.
+      if (seg.type === 'driver' && activeKind === 'copy') return TOOL_REFUSAL.driverCopy;
       // A card's file moves (a FIREWALL is placed with MOVE, §6.9) but is never duplicated: the draft's
       // stacks (FIREWALL ×2, FUEL TRIM ×2) would mean nothing.
       if ((seg.type === 'firewall' || seg.type === 'upgrade') && activeKind === 'copy') return TOOL_REFUSAL.cardCopy;
@@ -239,6 +237,24 @@ export function orphanedBackup(state: Readonly<GameState>, backup: ShipBackupSeg
 export function spareFor(state: Readonly<GameState>, role: SegmentRole): ShipBackupSegment | null {
   return state.memory.find((seg): seg is ShipBackupSegment =>
     seg.type === 'ship-backup' && seg.backs?.role === role && orphanedBackup(state, seg)) ?? null;
+}
+
+// What a SWAP of Thrust Ctrl would put into service, and whether a Swap file can do it now (WP12 p3, WP10 verify: the
+// strip asked for `SWAP in Thrust.alt` with the Swap file eaten), or null: no SWAP licence, no backup, or no Swap file at
+// all. The backup is the orphaned spare when the controller is gone (guidance's F2 NO THRUST CONTROLLER), else the
+// controller's own backup (the landing's ghost-thrust row, review M2: the controller is there and fires by itself).
+export interface ControllerSwap {
+  name: string;
+  swapReady: boolean;
+}
+
+export function controllerSwapOf(state: Readonly<GameState>): ControllerSwap | null {
+  if (!state.run.licences.includes('swap')) return null;
+  const controller = filesWithRole(state, 'thrust-ctrl').find((seg): seg is ShipSegment => seg.type === 'ship');
+  const spare = controller === undefined ? spareFor(state, 'thrust-ctrl') : findBackup(state, controller) ?? null;
+  const swapFiles = toolFilesOf(state.memory, 'swap');
+  if (spare === null || swapFiles.length === 0) return null;
+  return { name: spare.name, swapReady: swapFiles.some(isUsableTool) };
 }
 
 // Why a ship file can't be swapped to its backup right now (the SWAP tool, WP10). Only a ship file that has a backup

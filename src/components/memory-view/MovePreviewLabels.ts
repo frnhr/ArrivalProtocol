@@ -100,7 +100,7 @@ export function mountMovePreviewLabels(store: Store<GameState>): () => void {
   // A placeholder right under the file it moves (the natural drag: straight down a rack) puts its flag on
   // the file's own label. The file's label then becomes a flag on the file's top edge instead, pointing up:
   // the two stack a row apart, each on its own box. (Slid sideways, the placeholder's flag landed beside
-  // the file's label in the same colour on the same row, read as one strip and covered the next cluster;
+  // the file's label in the same colour on the same row, read as one strip and covered the next driver;
   // under the placeholder it sat beneath the held tool's pill.)
   function keepApart(dest: HTMLElement, source: HTMLElement, sourceRect: DOMRect): void {
     const destRect = dest.getBoundingClientRect();

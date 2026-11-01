@@ -1,7 +1,10 @@
-// WP7 part 2, in the page: a whole run from ship 1's WAKE REPORT through TRANSMIT, HALCYON's boot and
+// WP7 part 2, in the page: a whole run from ship 1's LANDING REPORT through TRANSMIT, HALCYON's boot and
 // flight, to RUN END and back to a fresh run via NEW RUN, with no reload and no console error; then BEAM OUT
 // on HALCYON (the button, its confirm, the bar, the black-out) to RUN END and NEW RUN again. Takes the
 // part-2 pictures (acceptance 5: the MOVE preview with a WALL label, TRANSMIT, RUN END).
+// Slice 1a: every ship lands at once (__ap.landAll) once it is in orbit; the landing by the strip is the playthrough's.
+// The phase-2 cluster codes are pods now: ship 1's scripted bite takes POD 01, HALCYON's root sits between POD 04 and
+// POD 05 (src/data/ships.ts).
 // Usage: node tests/e2e/scenarios/run-flow.mjs [outPrefix]   env SHOT_VIEWPORT=1280x720, E2E_BASE_URL (tests/e2e/run.mjs runs it)
 import { launch, BASE_URL } from '../lib.mjs';
 const out = process.argv[2] ?? 'tests/.out/e2e/shots/p2';
@@ -27,35 +30,45 @@ const waitFor = async (pred, maxMs, stepMs = 100, arg) => {
   while (Date.now() < end) { if (await page.evaluate(pred, arg)) return true; await page.waitForTimeout(stepMs); }
   return false;
 };
-const segId = (code) => st((cluster) => window.__ap.store.getState().memory.find((seg) => seg.type === 'soul' && seg.cluster === cluster)?.id ?? null, code);
+// A pod's driver segment (`driver_pod04`, src/data/pod-ids.ts) by its pod number.
+const podSegId = (pod) => st((wanted) => window.__ap.store.getState().memory.find((seg) => seg.type === 'driver' && seg.pod === wanted)?.id ?? null, pod);
 
-// --- 1. Ship 1 to its WAKE REPORT (shortcut: a circular orbit in the ring, every cluster printed) ------------
+// --- 1. Ship 1 to its LANDING REPORT (shortcut: a circular orbit in the ring, every pod landed at once) ----------
 await page.locator('#titleReceive').click();
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 10000);
 await st(() => {
   const ap = window.__ap;
-  ap.revealSouls('debug');
   const s = ap.store.getState();
   const r = (s.level.ring.min + s.level.ring.max) / 2;
   ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); d.director.done.push('engine-io-fault'); });
 });
-await waitFor(() => window.__ap.store.getState().run.phase === 'printing', 25000);
+await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 25000);
+await page.waitForTimeout(1500);
+const podBay = await st(() => ({ body: document.body.classList.contains('landing'), bay: !document.getElementById('podBayWin').hidden,
+  track: !document.getElementById('groundTrack').hidden, lzs: [...document.querySelectorAll('#pbLzs .pb-lz')].map((el) => el.innerText) }));
+check('ship 1 locks: the landing opens the POD BAY window (LZ-A 0/3) and the GROUND TRACK', podBay.body && podBay.bay && podBay.track
+  && podBay.lzs.join(' ') === 'LZ-A 0/3', JSON.stringify(podBay));
 const reportUp = await waitFor(() => {
   const ap = window.__ap;
-  const c12 = ap.store.getState().memory.find((seg) => seg.type === 'soul' && seg.cluster === 'C12');
-  if (c12?.infected) ap.cure('C12');
-  if (ap.store.getState().run.phase === 'printing') ap.printAll();
+  // POD 01's driver is the scripted bite's: cured (as the kid's REPAIR would), so all three pods launch.
+  const pod1 = ap.store.getState().memory.find((seg) => seg.type === 'driver' && seg.pod === 1);
+  if (pod1?.infected) ap.cure('POD 01');
+  if (ap.store.getState().run.phase === 'landing' && ap.store.getState().landing.ended === null) ap.landAll();
   return ap.store.getState().run.phase === 'report';
 }, 40000, 400);
-check('ship 1 reaches its WAKE REPORT', reportUp);
+check('ship 1 reaches its LANDING REPORT', reportUp);
 
-// --- 2. WAKE REPORT → CONTINUE → TRANSMIT --------------------------------------------------------------------
+// --- 2. LANDING REPORT → CONTINUE → TRANSMIT -----------------------------------------------------------------
 await page.waitForTimeout(1200);
+const report1 = await st(() => ({ title: document.getElementById('lrTitle').innerText, route: document.getElementById('lrRoute').innerText,
+  rows: document.querySelectorAll('#lrRows .lr-row').length, model: window.__ap.landingReport().headline }));
+check('the LANDING REPORT: its title, ARES-VII\'s route, the LZ row, every colonist down (LANDED 600 / 600)', report1.title === 'LANDING REPORT'
+  && /^ARES-VII/.test(report1.route) && report1.rows >= 1 && report1.model === 'LANDED 600 / 600', JSON.stringify(report1));
 for (let i = 0; i < 8 && (await phase()) === 'report'; i++) {
   await page.keyboard.press('Space');
   await page.waitForTimeout(1300);
 }
-check('WAKE REPORT CONTINUE leads to TRANSMIT (no auto-send)', (await phase()) === 'transmit');
+check('LANDING REPORT CONTINUE leads to TRANSMIT (no auto-send)', (await phase()) === 'transmit');
 await waitFor(() => !document.getElementById('transmitScreen').hidden, 3000);
 await page.waitForTimeout(900);
 const tx = await st(() => ({
@@ -69,8 +82,8 @@ const tx = await st(() => ({
   drop: document.getElementById('txDropLine').innerText,
   go: document.getElementById('txGo').innerText,
 }));
-check('TRANSMIT shows NEXT: HALCYON · 2,000 SOULS · 22 LY, the packet line, the files as chips (4 locked)', tx.visible
-  && tx.next === 'NEXT: HALCYON · 2,000 SOULS · 22 LY' && /^LINK 120 · FILES \d+ · CHARGE \d+ → FITS$/.test(tx.packet) && tx.chips >= 9 && tx.locked === 4,
+check('TRANSMIT shows NEXT: HALCYON · 1,000 COLONISTS · 22 LY, the packet line, the files as chips (4 locked)', tx.visible
+  && tx.next === 'NEXT: HALCYON · 1,000 COLONISTS · 22 LY' && /^LINK 120 · FILES \d+ · CHARGE \d+ → FITS$/.test(tx.packet) && tx.chips >= 9 && tx.locked === 4,
   JSON.stringify(tx));
 check('…the crossing\'s cost and the charge waiting on arrival', /^ON THE WAY: 3 TRANSIT HITS/.test(tx.hits) && /^ON ARRIVAL: \d+ CARRIED/.test(tx.arrival), `${tx.hits} | ${tx.arrival}`);
 await shot('1-transmit');
@@ -131,12 +144,12 @@ while (Date.now() < end) {
 if (holding) await page.keyboard.up('Space');
 const woke = await waitFor(() => window.__ap.store.getState().hollow.phase === 'awake', 14000);
 check('the coast begins and HOLLOW wakes', woke);
-// Both cures won (the kid's REPAIRs, shortened): clean clusters still within a GAP of it.
+// Both cures won (the kid's REPAIRs, shortened): clean drivers (POD 04 and POD 05) still within a GAP of it.
 await page.waitForTimeout(1500);
-await st(() => { for (const code of ['C08', 'C09']) { const seg = window.__ap.store.getState().memory.find((s) => s.type === 'soul' && s.cluster === code); if (seg?.infected) window.__ap.cure(code); } });
+await st(() => { for (const pod of [4, 5]) { const seg = window.__ap.store.getState().memory.find((s) => s.type === 'driver' && s.pod === pod); if (seg?.infected) window.__ap.cure(`POD 0${pod}`); } });
 await page.waitForTimeout(400);
 const bite = await st(() => ({ hidden: document.getElementById('objectiveBite').hidden, text: document.getElementById('objectiveBite').innerText, mode: window.__ap.store.getState().ui.mode }));
-check('in amber, the strip counts HOLLOW\'s next bite (BITE m:ss) while clusters are in its reach', bite.mode === 'tools' && !bite.hidden && /^BITE \d:\d\d$/.test(bite.text), JSON.stringify(bite));
+check('in amber, the strip counts HOLLOW\'s next bite (BITE m:ss) while drivers are in its reach', bite.mode === 'tools' && !bite.hidden && /^BITE \d:\d\d$/.test(bite.text), JSON.stringify(bite));
 await shot('5-amber-bite');
 await page.keyboard.press('Tab');
 await page.waitForTimeout(700);
@@ -177,12 +190,12 @@ const biggestFree = () => st(() => {
   const s = window.__ap.store.getState();
   return s.memory.filter((seg) => seg.type === 'free' && seg.reservedBy === undefined).sort((a, b) => b.size - a.size)[0]?.id ?? null;
 });
-async function moveCluster(code, shotName) {
+async function movePod(pod, shotName) {
   await waitFor(() => window.__ap.ops().length === 0, 15000);
   // MOVE stays in the hand after a placement: pick it up only if it is not already held.
   if (!(await st(() => window.__ap.store.getState().ui.activeTool?.kind === 'move'))) await page.locator('#chip-move').click();
   await page.waitForTimeout(200);
-  const id = await segId(code);
+  const id = await podSegId(pod);
   await page.locator(`.seg[data-id="${id}"]`).first().click();
   await page.waitForTimeout(200);
   const freeId = await biggestFree();
@@ -202,17 +215,17 @@ async function moveCluster(code, shotName) {
   await waitFor(() => window.__ap.ops().length === 0, 15000);
   return labels;
 }
-const c09Labels = await moveCluster('C09', '8-move-preview');
-const c09Source = c09Labels.find((label) => /source/.test(label.cls));
-const c09Dest = c09Labels.find((label) => /dest/.test(label.cls));
-check('MOVE preview on C09: LEAVES WALL 9 ✓ on the file, SAFE · WALL ✓ on the placeholder', c09Source?.text === 'LEAVES WALL 9 ✓'
-  && /tone-good/.test(c09Source.cls) && c09Dest?.text === 'SAFE WALL ✓' && /tone-good/.test(c09Dest.cls), JSON.stringify(c09Labels));
-const c08Labels = await moveCluster('C08', '9-move-preview-c08');
-check('MOVE preview on C08: LEAVES WALL 10 ✓', c08Labels.some((label) => label.text === 'LEAVES WALL 10 ✓'), JSON.stringify(c08Labels));
+const pod5Labels = await movePod(5, '8-move-preview');
+const pod5Source = pod5Labels.find((label) => /source/.test(label.cls));
+const pod5Dest = pod5Labels.find((label) => /dest/.test(label.cls));
+check('MOVE preview on POD 05: LEAVES WALL n ✓ on the file, SAFE · WALL ✓ on the placeholder', /^LEAVES WALL \d+ ✓$/.test(pod5Source?.text ?? '')
+  && /tone-good/.test(pod5Source.cls) && pod5Dest?.text === 'SAFE WALL ✓' && /tone-good/.test(pod5Dest.cls), JSON.stringify(pod5Labels));
+const pod4Labels = await movePod(4, '9-move-preview-pod04');
+check('MOVE preview on POD 04: LEAVES WALL n ✓', pod4Labels.some((label) => /^LEAVES WALL \d+ ✓$/.test(label.text)), JSON.stringify(pod4Labels));
 const walled = await st(() => window.__ap.hollow().reach.every((reach) => reach.verdict === 'wall'));
-check('…both clusters moved behind WALLs (HOLLOW\'s every side is a WALL)', walled);
+check('…both drivers moved behind WALLs (HOLLOW\'s every side is a WALL)', walled);
 
-// --- 7. Lock, print, the WAKE REPORT, RUN END (the last ship) --------------------------------------------------
+// --- 7. Lock, land, the LANDING REPORT, RUN END (the last ship) -------------------------------------------------
 await page.keyboard.press('Tab');
 await st(() => {
   const ap = window.__ap;
@@ -220,13 +233,13 @@ await st(() => {
   const r = (s.level.ring.min + s.level.ring.max) / 2;
   ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); });
 });
-await waitFor(() => window.__ap.store.getState().run.phase === 'printing', 25000);
+await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 25000);
 const report2 = await waitFor(() => {
   const ap = window.__ap;
-  if (ap.store.getState().run.phase === 'printing') ap.printAll();
+  if (ap.store.getState().run.phase === 'landing' && ap.store.getState().landing.ended === null) ap.landAll();
   return ap.store.getState().run.phase === 'report';
 }, 60000, 500);
-check('HALCYON locks, prints, and reaches its WAKE REPORT', report2);
+check('HALCYON locks, lands, and reaches its LANDING REPORT', report2);
 // WP9: HALCYON is no longer the last ship. CONTINUE → TRANSMIT → KESTREL (locked at once here), whose report ends
 // the run.
 await page.waitForTimeout(1200);
@@ -247,13 +260,13 @@ await st(() => {
   const r = (s.level.ring.min + s.level.ring.max) / 2;
   ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); });
 });
-await waitFor(() => window.__ap.store.getState().run.phase === 'printing', 25000);
+await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 25000);
 const report3 = await waitFor(() => {
   const ap = window.__ap;
-  if (ap.store.getState().run.phase === 'printing') ap.printAll();
+  if (ap.store.getState().run.phase === 'landing' && ap.store.getState().landing.ended === null) ap.landAll();
   return ap.store.getState().run.phase === 'report';
 }, 60000, 500);
-check('KESTREL (locked at once) prints and reaches its WAKE REPORT', report3);
+check('KESTREL (locked at once) lands and reaches its LANDING REPORT', report3);
 await page.waitForTimeout(1200);
 for (let i = 0; i < 8 && (await phase()) === 'report'; i++) {
   await page.keyboard.press('Space');
@@ -274,13 +287,13 @@ await st(() => {
   const r = (s.level.ring.min + s.level.ring.max) / 2;
   ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); });
 });
-await waitFor(() => window.__ap.store.getState().run.phase === 'printing', 25000);
+await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 25000);
 const report4 = await waitFor(() => {
   const ap = window.__ap;
-  if (ap.store.getState().run.phase === 'printing') ap.printAll();
+  if (ap.store.getState().run.phase === 'landing' && ap.store.getState().landing.ended === null) ap.landAll();
   return ap.store.getState().run.phase === 'report';
 }, 60000, 500);
-check('VESPER (locked at once) prints and reaches its WAKE REPORT', report4);
+check('VESPER (locked at once) lands and reaches its LANDING REPORT', report4);
 await page.waitForTimeout(1200);
 for (let i = 0; i < 8 && (await phase()) === 'report'; i++) {
   await page.keyboard.press('Space');
@@ -312,10 +325,11 @@ check('LAST LIGHT: the root\'s DELETE leaves the choice card', choiceUp);
 await page.locator('#fcPurge').click();
 const report5 = await waitFor(() => {
   const ap = window.__ap;
-  if (ap.store.getState().run.phase === 'printing') ap.printAll();
+  if (ap.store.getState().run.phase === 'landing' && ap.store.getState().landing.ended === null) ap.landAll();
   return ap.store.getState().run.phase === 'report';
 }, 60000, 500);
-check('LAST LIGHT prints and reaches its WAKE REPORT', report5);
+check('LAST LIGHT lands and reaches its LANDING REPORT after the finale', report5
+  && await st(() => ['purged', 'merged', 'unresolved'].includes(window.__ap.store.getState().hollow.finale.phase)));
 await page.waitForTimeout(1200);
 for (let i = 0; i < 8 && (await phase()) === 'report'; i++) {
   await page.keyboard.press('Space');
@@ -333,8 +347,8 @@ const runEnd = await st(() => ({
   seed: document.getElementById('reSeed').innerText,
   card: !document.getElementById('burnResult').hidden,
 }));
-check('RUN END: LAST LIGHT · THE FLEET IS HOME, n / 12,400 WOKE, all five ships (WP11), the SCORE, the rank, the seed (and no LOST card)', runEnd.visible
-  && runEnd.title === 'LAST LIGHT · THE FLEET IS HOME' && /\/ 12,400 WOKE$/.test(runEnd.total) && runEnd.ships.length === 5 && /^SCORE [\d,]+$/.test(runEnd.score)
+check('RUN END: LAST LIGHT · THE FLEET IS HOME, n / 9,600 LANDED, all five ships (WP11), the SCORE, the rank, the seed (and no LOST card)', runEnd.visible
+  && runEnd.title === 'LAST LIGHT · THE FLEET IS HOME' && /\/ 9,600 LANDED$/.test(runEnd.total) && runEnd.ships.length === 5 && /^SCORE [\d,]+$/.test(runEnd.score)
   && /^RANK · /.test(runEnd.rank) && /^SEED [0-9A-F]{8}$/.test(runEnd.seed) && !runEnd.card, JSON.stringify(runEnd));
 await shot('10-run-end');
 await page.keyboard.press('Space');

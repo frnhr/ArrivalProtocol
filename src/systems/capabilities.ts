@@ -7,8 +7,9 @@ import {
 import { threadsBusy } from '@systems/ops-core';
 import {
   ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, REACTOR_THREAD_SHARE, GHOST_BY_BAND,
-  SENSOR_FUZZ_KM_PER_POINT, PLOT_STALE_TAC, TELEMETRY_SCRAMBLE_BELOW, PRINTER_SPEED_BY_BAND, INTEGRITY_MAX,
+  SENSOR_FUZZ_KM_PER_POINT, PLOT_STALE_TAC, TELEMETRY_SCRAMBLE_BELOW, INTEGRITY_MAX,
   MAX_LINE_CHARS, COMMS_GARBLE_BY_BAND, FUEL_TRIM_DV_BONUS_FRAC,
+  BAY_CADENCE_BY_BAND, SENSOR_DROP_FACTOR_BY_BAND, PLOTTER_DROP_FACTOR_BY_BAND, DRIVER_DROP_FACTOR_BY_BAND,
 } from '@data/tuning';
 
 // Every capability is a file (§3.3, §6.4, pillar 4). What the ship can do right now is a pure
@@ -25,6 +26,13 @@ import {
 
 export type Band = 'ok' | 'degraded' | 'failing' | 'dead' | 'missing';
 export type PlotMode = 'exact' | 'approx' | 'uncertain' | 'no-signal';
+
+// Bay Ctrl as the landing reads it (§3.4): its band, the cadence between launches, and BAY OFFLINE (the file missing).
+export interface BayCapability {
+  band: Band;
+  cadenceTac: number | null;   // null only with `offline`
+  offline: boolean;
+}
 
 // Uncommanded thrust from a damaged Thrust Ctrl (C2), in tactical seconds and shares of nominal
 // thrust. Rolled by orbit-sim (ghost scheduler).
@@ -53,7 +61,13 @@ export interface Capabilities {
   plot: { band: Band; mode: PlotMode; fuzzKm: number; staleTac: number; offline: OfflineReason | null };
   telemetryScramble: number;                                                                 // 0..1
   comms: Band;                                                                               // AI Comms
-  printer: { band: Band; speed: number };                                                    // Printer Uplink (ship)
+  // Bay Ctrl (ship, 01-landing §3.4): its band, and the tactical seconds between launches (BAY_CADENCE_BY_BAND); with
+  // the file missing, cadenceTac is null and `offline` is true (BAY OFFLINE: no launch, L12-bay, the auto-end).
+  bay: BayCapability;
+  // The drop (01-landing §3.8): whether a drop solution exists (false with Nav Plotter dead or missing: NO DROP
+  // SOLUTION), the instruments' factors on the drop width (SENSOR_ / PLOTTER_DROP_FACTOR_BY_BAND), and `uncertain`
+  // (Sensor Interp failing, dead or missing: the grey dot, DROP UNCERTAIN).
+  drop: { solution: boolean; sensorFactor: number; plotterFactor: number; uncertain: boolean };
   threads: number;                                                                           // Core capacity (1 below 50)
   // Carried upgrade files that work right now, by kind (§6.9, WP8: FUEL TRIM; AUTOBURN.skl in WP9).
   upgrades: Readonly<Record<UpgradeKind, number>>;
@@ -80,10 +94,10 @@ export function flightModsOf(memory: readonly Segment[]): FlightMods {
 // a tooltip or a veil shows. Every role has a line for every band, 'missing' included, so a lost
 // file always reads as a loud state (validated below).
 export type CapabilityRole = Extract<SegmentRole,
-  'engine-io' | 'thrust-ctrl' | 'reactor' | 'autopilot' | 'sensor' | 'navplot' | 'telemetry' | 'comms' | 'printer' | 'core'>;
+  'engine-io' | 'thrust-ctrl' | 'reactor' | 'autopilot' | 'sensor' | 'navplot' | 'telemetry' | 'comms' | 'bay' | 'core'>;
 
 export const CAPABILITY_ROLES: readonly CapabilityRole[] = [
-  'engine-io', 'thrust-ctrl', 'reactor', 'autopilot', 'sensor', 'navplot', 'telemetry', 'comms', 'printer', 'core',
+  'engine-io', 'thrust-ctrl', 'reactor', 'autopilot', 'sensor', 'navplot', 'telemetry', 'comms', 'bay', 'core',
 ];
 
 export const BANDS: readonly Band[] = ['ok', 'degraded', 'failing', 'dead', 'missing'];
@@ -99,7 +113,7 @@ export const ROLE_LABEL: Readonly<Record<CapabilityRole, string>> = {
   navplot: 'NAV PLOTTER',
   telemetry: 'TELEMETRY',
   comms: 'AI COMMS',
-  printer: 'PRINTER UPLINK',
+  bay: 'BAY CTRL',
   core: 'AI CORE',
 };
 
@@ -165,12 +179,14 @@ export const BAND_COPY: Readonly<Record<CapabilityRole, Readonly<Record<Band, st
     dead: 'AI COMMS DEAD · NO WAY OUT',
     missing: 'NO AI COMMS · NO WAY OUT',
   },
-  printer: {
-    ok: 'PRINTER UPLINK OK',
-    degraded: 'PRINTER UPLINK DAMAGED · SLOWER PRINTS',
-    failing: 'PRINTER UPLINK FAILING · HALF SPEED',
-    dead: 'NO PRINTER',
-    missing: 'NO PRINTER',
+  // §3.4: the cadence by band (BAY_CADENCE_BY_BAND) in the kid's words, the POD BAY pip's states. Missing is §3.4's BAY
+  // OFFLINE said as `NO BAY CTRL`: "offline" next to pods would read as theirs (§3.10's word rules).
+  bay: {
+    ok: 'BAY CTRL OK',
+    degraded: 'BAY CTRL DAMAGED · PODS LAUNCH SLOWER',
+    failing: 'BAY CTRL FAILING · PODS LAUNCH SLOWLY',
+    dead: 'BAY CTRL DEAD · ONE POD AT A TIME',
+    missing: 'NO BAY CTRL',
   },
   core: {
     ok: 'AI CORE OK',
@@ -195,12 +211,40 @@ function validateCapabilityTables(): void {
       if (text.length > MAX_LINE_CHARS) throw new Error(`capabilities: BAND_COPY['${role}'].${band} is over ${MAX_LINE_CHARS} chars`);
     }
   }
-  const tables = { ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, PRINTER_SPEED_BY_BAND, COMMS_GARBLE_BY_BAND };
+  const tables = { ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, COMMS_GARBLE_BY_BAND };
   for (const [name, table] of Object.entries(tables)) {
     for (const band of BANDS) {
       const value = table[band];
       if (!(value >= 0 && value <= 1)) throw new Error(`capabilities: ${name}.${band} is ${value}, not in 0..1`);
     }
+  }
+  // The drop width's factors (§3.8): ≥ 1 (damage only ever widens the dot), finite, for every band. The driver table has
+  // no 'missing' (a pod with no driver never launches), but DetailPanel asks it for a dead driver, so dead must be there.
+  const factorTables = { SENSOR_DROP_FACTOR_BY_BAND, PLOTTER_DROP_FACTOR_BY_BAND };
+  for (const [name, table] of Object.entries(factorTables)) {
+    for (const band of BANDS) {
+      const value = table[band];
+      if (!(value >= 1 && Number.isFinite(value))) throw new Error(`capabilities: ${name}.${band} is ${value}, not a factor ≥ 1`);
+    }
+  }
+  for (const band of BANDS) {
+    if (band === 'missing') continue;
+    const value = DRIVER_DROP_FACTOR_BY_BAND[band];
+    if (!(value >= 1 && Number.isFinite(value))) throw new Error(`capabilities: DRIVER_DROP_FACTOR_BY_BAND.${band} is ${value}, not a factor ≥ 1`);
+  }
+  // Bay Ctrl's cadence (§3.4): a positive number of tactical s for every band the file exists in, rising with damage, and
+  // null exactly when it is missing (BAY OFFLINE), so `offline` and a null cadence can never disagree.
+  let previous = 0;
+  for (const band of BANDS) {
+    const cadence = BAY_CADENCE_BY_BAND[band];
+    if (band === 'missing') {
+      if (cadence !== null) throw new Error(`capabilities: BAY_CADENCE_BY_BAND.missing is ${cadence}, not null (BAY OFFLINE)`);
+      continue;
+    }
+    if (cadence === null || !(cadence > 0 && cadence >= previous)) {
+      throw new Error(`capabilities: BAY_CADENCE_BY_BAND.${band} is ${cadence}, not a positive cadence that grows with damage`);
+    }
+    previous = cadence;
   }
   for (const [band, ghost] of Object.entries(GHOST_BY_BAND)) {
     if (!ghost) continue;
@@ -241,14 +285,14 @@ export function deriveCapabilities(state: Readonly<GameState>, threadsBusy: numb
   const sensor = roleHealth(state, 'sensor');
   const navplot = roleHealth(state, 'navplot');
   const telemetry = roleHealth(state, 'telemetry');
-  const printer = roleHealth(state, 'printer');
+  const bay = roleHealth(state, 'bay');
 
   const bandCap = REACTOR_CAP_BY_BAND[reactor.band];
   const reactorCap = Math.max(0, bandCap * (1 - REACTOR_THREAD_SHARE * threadsBusy));
 
   let mode: PlotMode = 'exact';
   if (navplot.band === 'dead' || navplot.band === 'missing') mode = 'no-signal';
-  else if (sensor.band === 'failing' || sensor.band === 'dead' || sensor.band === 'missing') mode = 'uncertain';
+  else if (dropUncertain(sensor.band)) mode = 'uncertain';
   else if (sensor.band === 'degraded') mode = 'approx';
   const plotFile = mode === 'no-signal' ? navplot : sensor;
   const sensorIntegrity = sensor.integrity ?? 0;
@@ -278,10 +322,29 @@ export function deriveCapabilities(state: Readonly<GameState>, threadsBusy: numb
     },
     telemetryScramble,
     comms: roleHealth(state, 'comms').band,
-    printer: { band: printer.band, speed: PRINTER_SPEED_BY_BAND[printer.band] },
+    bay: bayCapability(bay.band),
+    drop: {
+      solution: navplot.band !== 'dead' && navplot.band !== 'missing',
+      sensorFactor: SENSOR_DROP_FACTOR_BY_BAND[sensor.band],
+      plotterFactor: PLOTTER_DROP_FACTOR_BY_BAND[navplot.band],
+      uncertain: dropUncertain(sensor.band),
+    },
     threads: coreThreads(state),
     upgrades: { 'fuel-trim': liveUpgrades(state.memory, 'fuel-trim'), autoburn: liveUpgrades(state.memory, 'autoburn') },
   };
+}
+
+// Bay Ctrl's capability for its band (§3.4): the one rule for the cadence and BAY OFFLINE. landing-rules reads it from
+// roleHealth directly (launchRefusal, landingStuck), so the bay's answer never depends on the ops core's threads.
+export function bayCapability(band: Band): BayCapability {
+  const cadenceTac = BAY_CADENCE_BY_BAND[band];
+  return { band, cadenceTac, offline: cadenceTac === null };
+}
+
+// The drop is uncertain (§3.8: the grey dot, `≈`, DROP UNCERTAIN) while Sensor Interp is failing or worse: the same
+// bands that make the NAV PLOT's path uncertain, so the two never disagree.
+export function dropUncertain(sensorBand: Band): boolean {
+  return sensorBand === 'failing' || sensorBand === 'dead' || sensorBand === 'missing';
 }
 
 // The capabilities right now, with the ops core's busy threads (running ops plus reserved ones).

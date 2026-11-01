@@ -2,7 +2,7 @@
 // • An eaten ship file: `SWAP IT` only for a ship file with a clean backup and SWAP in hand (Thrust Ctrl and Thrust.alt),
 //   lighting SWAP and then the file; any other ship file `DELETE IT` (DELETE, then the file); with neither tool in
 //   hand, `REPAIR can't heal it` and no TAB (final review: `SWAP OR DELETE IT` for every ship file).
-// • MIND CLEAR never while the STASIS reveal plays (the slabs still cracking).
+// • (MIND CLEAR during the STASIS reveal: gone with the reveal, slice 1a.)
 // • The CORE LOST card: on ships 1–4 the run goes on (`ARRIVAL CONTROL is pulling you out.`), on the flagship
 //   OVERWRITTEN (`Nobody is left to think.`); BurnResult picks by lossPlan's kind, checked here on both.
 // • RUN END: `41 points short of CARETAKER`; MERGE's carry line names the shimmer, in one line.
@@ -17,7 +17,8 @@ import { buildDirectorCtx, composeObjective } from '@systems/director';
 import { getPrediction } from '@systems/predict';
 import { setMode } from '@systems/mode';
 import { lossPlan } from '@systems/run';
-import { GUIDE_RULES, RUN_END_TEXT, WORST_CASE_VARS } from '@data/script';
+import { GUIDE_RULES, WORST_CASE_VARS } from '@data/script';
+import { RUN_END_TEXT } from '@data/landing-text';
 import { CORE_LOST_TEXT, HOLLOW_FINALE, hollowUnitName } from '@data/hollow-text';
 import { TOOL_FILES, TOOL_HINT_TARGET, fileHintTarget } from '@data/fs-tools';
 import { UPGRADE_FILE_TEXT } from '@data/upgrades';
@@ -94,16 +95,6 @@ const worst = { vars: WORST_CASE_VARS };
 check(`the eaten-ship lines fit ${MAX_LINE_CHARS} characters with the worst-case names`,
   ['hollow-eating-ship', 'hollow-eating-ship-tab'].every((id) => rule(id).text(worst).length <= MAX_LINE_CHARS)
   && rule('hollow-eating-ship').text({ vars: { ...WORST_CASE_VARS, eatingShipFix: '' } }).length <= MAX_LINE_CHARS);
-
-// --- MIND CLEAR not while the slabs crack --------------------------------------------------------------------------
-{
-  h.store.update((d) => { d.souls.reveal = { stage: 'playing', cause: 'scan', lines: [] }; });
-  setMode(h.store, 'memory');
-  const clear = rule('hint-mind-clear');
-  const playing = clear.activeWhen(ctxNow());
-  h.store.update((d) => { d.souls.reveal = { stage: 'revealed', cause: 'scan', lines: [] }; });
-  check('MIND CLEAR is never offered while the STASIS reveal plays (`C09 IS HURT` comes first once it is over)', !playing);
-}
 
 // --- CORE LOST, RUN END, the COPY lesson, INSPECT -------------------------------------------------------------------
 {

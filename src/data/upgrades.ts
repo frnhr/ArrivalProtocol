@@ -6,7 +6,7 @@ import {
   DRAFT_FUEL_TRIM_BOOST, DRAFT_FUEL_TRIM_BELOW_PCT, DRAFT_MILD_BOOST, DRAFT_FIREWALL_BITTEN_MIN, DRAFT_REPAIR_V2_MILD_MIN,
   DRAFT_THREAD_MILD_MIN, DRAFT_CHARGE_MILD_BELOW, DRAFT_FUEL_TRIM_MILD_BELOW_PCT, FIREWALL_BLOCKS, FUEL_TRIM_BLOCKS,
   FIREWALL_MAX_OWNED, FUEL_TRIM_MAX_OWNED, REPAIR_V2_MAX_OWNED, THREAD_PLUS_MAX_OWNED, CHARGE_CARD_BLOCKS, MAX_LINE_CHARS,
-  FUEL_TRIM_DV_BONUS_FRAC, BAND_DEGRADED_MIN, CLUSTER_BLOCKS, REPAIR_CHARGE_PER_POINT_PER_BLOCK, INTEGRITY_MAX,
+  FUEL_TRIM_DV_BONUS_FRAC, BAND_DEGRADED_MIN, DRIVER_BLOCKS, REPAIR_CHARGE_PER_POINT_PER_BLOCK, INTEGRITY_MAX,
 } from '@data/tuning';
 
 // The cards between ships (§6.9 `PICK ONE TO CARRY`, §9 WP8 items 1–2): what the unit can carry on to the
@@ -79,9 +79,9 @@ function boostOf(strong: false | DraftBoost, mild: false | DraftBoost): DraftBoo
   return strong || mild || null;
 }
 
-// What +12 REPAIR CHARGE buys, in the kid's terms: the integrity points it heals on one cluster (§6.5's cost:
+// What +12 REPAIR CHARGE buys, in the kid's terms: the integrity points it heals on one driver (§6.5's cost:
 // REPAIR_CHARGE_PER_POINT_PER_BLOCK per point per block), as `from 25% to 100%`.
-const CHARGE_CARD_HEAL_FROM_PCT = Math.max(0, INTEGRITY_MAX - Math.floor(CHARGE_CARD_BLOCKS / (CLUSTER_BLOCKS * REPAIR_CHARGE_PER_POINT_PER_BLOCK) + 1e-9));
+const CHARGE_CARD_HEAL_FROM_PCT = Math.max(0, INTEGRITY_MAX - Math.floor(CHARGE_CARD_BLOCKS / (DRIVER_BLOCKS * REPAIR_CHARGE_PER_POINT_PER_BLOCK) + 1e-9));
 
 // The pool, in a fixed order (the draft walks it in this order, so a seed always deals the same cards).
 export const UPGRADES: readonly UpgradeDef[] = [
@@ -93,11 +93,11 @@ export const UPGRADES: readonly UpgradeDef[] = [
     blocks: FIREWALL_BLOCKS,
     maxOwned: FIREWALL_MAX_OWNED,
     boost: (ctx) => {
-      const { clustersLost: lost, clustersBitten: bitten } = ctx.stats;
+      const { driversLost: lost, driversBitten: bitten } = ctx.stats;
       return boostOf(
-        lost >= DRAFT_FIREWALL_LOST_MIN && { mult: DRAFT_FIREWALL_BOOST, why: `you lost ${plural(lost, 'a cluster', 'clusters')} to ${ctx.hollowLabel}` },
+        lost >= DRAFT_FIREWALL_LOST_MIN && { mult: DRAFT_FIREWALL_BOOST, why: `you lost ${plural(lost, 'a driver', 'drivers')} to ${ctx.hollowLabel}` },
         bitten >= DRAFT_FIREWALL_BITTEN_MIN
-          && { mult: DRAFT_MILD_BOOST, why: `${ctx.hollowLabel} bit ${bitten === 1 ? 'a cluster' : `your clusters ${bitten} times`}` },
+          && { mult: DRAFT_MILD_BOOST, why: `${ctx.hollowLabel} bit ${bitten === 1 ? 'a driver' : `your drivers ${bitten} times`}` },
       );
     },
   },
@@ -136,7 +136,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
   {
     id: 'charge',
     title: `+${CHARGE_CARD_BLOCKS} REPAIR CHARGE`,
-    effect: `Arrives with you: enough to heal a cluster from ${CHARGE_CARD_HEAL_FROM_PCT}% to 100%`,
+    effect: `Arrives with you: enough to heal a driver from ${CHARGE_CARD_HEAL_FROM_PCT}% to 100%`,
     form: 'charge',
     blocks: 0,
     maxOwned: Infinity,

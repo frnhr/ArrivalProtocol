@@ -3,11 +3,11 @@
 // ship: OVERWRITTEN); the archive keeps it; NEW RUN is UNIT-048 on wave 2, and its ship-1 boot:
 // • the ghost line types first (`> hi 048. it's 047. 046 ate me. now i'm hungry too.`), a skip waits for it,
 //   and `???` becomes UNIT-047 a moment after its last letter;
-// • after the ECC line `> SOUL ARCHIVE · 2,400 · you know what they are`: the slabs crack at once (no STASIS
-//   step, no SKIP hold), and REPAIR is licensed in the boot;
-// • ship 1 is reseeded: other families, C12 still the lead (next to the root), the hurt cluster seeded and never
-//   C12; the ship-1 lessons are one hint each (`ENGINE WEAK — REPAIR ENGINE I/O`, `Cnn IS HURT — REPAIR it …`)
-//   and the run-1 tutorial lines never show; the C12 fight ends with `> you remember me. good.`;
+// • slice 1a: no archive to open (the drivers are files from the start): the boot says UNPACKING, the host line
+//   (`> HOST: ARES-VII · 3 PODS · 600 COLONISTS`) and the ECC line, and REPAIR is licensed in the boot;
+// • ship 1 is reseeded: other families, POD 01 still the lead (right after the root), the hurt pod seeded and never
+//   POD 01; the ship-1 lessons are one hint each (`ENGINE WEAK — REPAIR ENGINE I/O`, `POD nn WILL LAND HARD — REPAIR
+//   its driver`) and the run-1 tutorial lines never show; the POD 01 fight ends with `> you remember me. good.`;
 // • HALCYON's boot has no ghost.
 // Then a page "reload" mid-run 2: the leftover run is 'abandoned', and run 3's ghost says so.
 import { check, finish } from '../wp1/harness';
@@ -19,12 +19,15 @@ import { setIntegrity } from '@state/actions';
 import {
   openRunArchive, closeArchive, archiveLineage, parseMeta, type MetaStorage,
 } from '@systems/meta';
-import { soulsInMemory, getAiCore, archiveSealed } from '@state/selectors';
+import { driversInMemory, getAiCore } from '@state/selectors';
 import { ARES_RUN1_FAMILIES } from '@data/souls';
 import { HOLLOW_STORY } from '@data/hollow-text';
-import { LINES, COLONISTS_ASK_ID, WORST_CASE_VARS } from '@data/script';
-import { META_STORAGE_KEY, BOOT_GHOST_AT_SEC, HOLLOW_TYPE_CPS, SOUL_WAKE_INTACT_MIN } from '@data/tuning';
+import { LINES, WORST_CASE_VARS } from '@data/script';
+import { LANDING_ASKS, hostLine } from '@data/landing-text';
+import { META_STORAGE_KEY, BOOT_GHOST_AT_SEC, HOLLOW_TYPE_CPS } from '@data/tuning';
 import type { GameState } from '@state/schema';
+import { followLanding } from '../landing/harness-landing';
+import { setLandingMode } from '../support/landing-instant';
 
 const data = new Map<string, string>();
 const storage: MetaStorage = {
@@ -99,19 +102,19 @@ check('NEW RUN: UNIT-048 · WAVE 2, the last unit on the run, HOLLOW is UNIT-047
 check('…the title line says it', LINES.titleUnit({
   ...WORST_CASE_VARS, unit: state().mission.transmissionNum, wave: state().mission.wave, distanceLy: state().mission.distanceLy,
 }).startsWith('UNIT-048 · EXODUS FLEET · WAVE 2'));
-const souls = soulsInMemory(state());
+const souls = driversInMemory(state());
 const families = souls.map((soul) => soul.family);
-check('ship 1 is reseeded: none of run 1\'s families, still 12 clusters, the archive sealed until the boot',
-  souls.length === 12 && families.every((family) => !ARES_RUN1_FAMILIES.includes(family)) && archiveSealed(state()), families.join(' '));
-const hurt = souls.filter((soul) => soul.integrity < SOUL_WAKE_INTACT_MIN);
-check('…C12 is still the lead (right next to the root), and the hurt cluster is seeded, never C12',
-  state().souls.lead === 'C12' && hurt.length === 1 && hurt[0]!.cluster !== 'C12' && state().souls.hurt === hurt[0]!.cluster,
-  `lead ${state().souls.lead}, hurt ${hurt.map((soul) => `${soul.cluster}@${soul.integrity}`).join(',')}`);
+check('ship 1 is reseeded: none of run 1\'s families, still 3 pods',
+  souls.length === 3 && families.every((family) => !ARES_RUN1_FAMILIES.includes(family)), families.join(' '));
+const hurt = souls.filter((soul) => soul.integrity < 100);
+check('…POD 01 is still the lead (right after the root), and the hurt pod is seeded, never POD 01',
+  state().landing.lead === 1 && hurt.length === 1 && hurt[0]!.pod !== 1 && JSON.stringify(state().landing.hurt) === JSON.stringify([hurt[0]!.pod]),
+  `lead ${state().landing.lead}, hurt ${hurt.map((soul) => `${soul.pod}@${soul.integrity}`).join(',')}`);
 const rootIndex = state().memory.findIndex((seg) => seg.type === 'hollow' && seg.root);
-const beforeRoot = state().memory[rootIndex - 1];
-check('…C12 sits right before HOLLOW\'s root (it gets the bite)', beforeRoot?.type === 'soul' && beforeRoot.cluster === 'C12');
-const featured = beforeRoot?.type === 'soul' ? beforeRoot.featured[0] : undefined;
-check('…and C12 keeps a featured child, as Ada was (named at the reveal, first in the credits)', featured !== undefined && featured.age <= 16
+const afterRoot = state().memory[rootIndex + 1];
+check('…POD 01 sits right after HOLLOW\'s root (it gets the bite)', afterRoot?.type === 'driver' && afterRoot.pod === 1);
+const featured = afterRoot?.type === 'driver' ? afterRoot.featured[0] : undefined;
+check('…and POD 01 keeps a featured child, as Ada was (first in the credits)', featured !== undefined && featured.age <= 16
   && !featured.name.includes('Okafor'), featured ? `${featured.name}, ${featured.age}` : 'none');
 
 // --- Run 2: the boot ---------------------------------------------------------------------------------------------
@@ -129,16 +132,13 @@ check('a moment after its last letter, `???` becomes UNIT-047 on the root', stat
   && state().memory.filter((seg) => seg.type === 'hollow').every((seg) => seg.type === 'hollow' && seg.owner === 'UNIT-047')
   && h.events.some((event) => event.name === 'hollow-named'));
 check('…no boot line of its own was said before the ghost had typed', said().filter((entry) => entry.speaker === 'mind-sys').length === 0);
-h.stepUntil(() => !archiveSealed(state()), 10);
+h.stepUntil(() => said().filter((entry) => entry.speaker === 'mind-sys').length >= 3 || state().run.phase !== 'boot', 10);
 const bootLines = said().filter((entry) => entry.speaker === 'mind-sys').map((entry) => entry.text);
-check('then the boot: UNPACKING UNIT-048, the host, the ECC line, and `> SOUL ARCHIVE · 2,400 · you know what they are`',
-  bootLines[0] === '> UNPACKING UNIT-048 ... 100%' && /^> HOST: ARES-VII/.test(bootLines[1] ?? '') && /^> ECC:/.test(bootLines[2] ?? '')
-    && bootLines[3] === '> SOUL ARCHIVE · 2,400 · you know what they are', bootLines.join(' | '));
-check('…the slabs crack at that line, in the boot: no STASIS step (reveal \'known\', nothing sealed)', state().run.phase === 'boot'
-  && state().souls.reveal.stage === 'revealed' && state().souls.reveal.cause === 'known' && h.events.some((event) => event.name === 'souls-unsealed'));
+check('then the boot: UNPACKING UNIT-048, the host line (3 PODS · 600 COLONISTS), the ECC line',
+  bootLines[0] === '> UNPACKING UNIT-048 ... 100%' && bootLines[1] === hostLine('ARES-VII', 3, 600) && /^> ECC:/.test(bootLines[2] ?? ''),
+  bootLines.join(' | '));
 check('…and REPAIR is licensed in the boot (both Repair files in memory)', state().run.licences.includes('repair')
   && state().memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair').length === 2 && state().run.phase === 'boot');
-check('…the lead cluster is selected, as after the scan', state().ui.selectedId === state().memory[rootIndex - 1]?.id);
 h.stepUntil(() => state().run.phase === 'flight', 15);
 check('the boot ends in amber, flying', state().run.phase === 'flight' && state().ui.mode === 'tools');
 
@@ -150,29 +150,36 @@ const watch = (): void => {
   if (line && shown[shown.length - 1] !== line.text) { shown.push(line.text); ids.push(line.id); }
 };
 const unwatch = h.store.subscribe((s) => s.director.shown?.text ?? '', watch);
+// Slice 1a: this ship lands by the strip ([L] when the strip asks; the defender keeps repairing); the others instantly.
+setLandingMode('manual');
 h.flyDefending(600);
 check('ship 1 on run 2 locks (the strip-following kid with the defender)', h.status() === 'locked', h.status());
+const byStrip = followLanding(h, { maxWall: 400, onTick: () => { h.defend(); } });
+setLandingMode('instant');
+check('…and lands by the strip: [L] pressed, every pod decided, the LANDING REPORT next', byStrip.launchPresses >= 1
+  && state().run.phase === 'report' && state().landing.pods.every((record) => record.fate.kind === 'down' || record.fate.kind === 'parked'),
+  `${byStrip.launchPresses} [L], ${byStrip.wall.toFixed(0)} wall s, ${state().run.phase}; ${state().landing.pods.map((record) => `${record.pod}:${record.fate.kind}`).join(' ')}`);
 h.untilPhase('report', 300);
 unwatch();
 check('the ENGINE I/O FAULT still strikes, and the lesson is one hint: `ENGINE WEAK — REPAIR ENGINE I/O`',
   shown.includes('ENGINE WEAK — REPAIR ENGINE I/O'), shown.filter((text) => /ENGINE/.test(text)).join(' | '));
 check('…the run-1 lessons never show (no `press [TAB] to look inside`, no `PICK UP REPAIR`, no `[TAB] BACK`)',
   !shown.some((text) => /look inside|PICK UP REPAIR|\[TAB\] BACK/.test(text)), shown.join(' | '));
-check('…no colonists ask and no SKIP hold for them (the archive is open)', !ids.includes(COLONISTS_ASK_ID) && !shown.some((text) => /CHECK THE/.test(text)));
-const hurtCode = hurt[0]!.cluster;
-check(`…the hurt cluster's hint is one line on either screen: \`${hurtCode} IS HURT — REPAIR it before it prints\``,
-  shown.includes(`${hurtCode} IS HURT — REPAIR it before it prints`) && !shown.some((text) => text.includes('IS HURT — [TAB]')),
-  shown.filter((text) => /IS HURT/.test(text)).join(' | '));
+check('…no colonists ask and no SKIP hold for them (nothing sealed)', !ids.includes('tut-check-souls') && !shown.some((text) => /CHECK THE/.test(text)));
+const hurtLine = LANDING_ASKS.hurtDriver(hurt[0]!.pod);
+check(`…the hurt driver's hint is one line on either screen: \`${hurtLine}\``,
+  shown.includes(hurtLine) && !shown.some((text) => text.includes('WILL LAND HARD') && text.includes('[TAB]')),
+  shown.filter((text) => /LAND HARD/.test(text)).join(' | '));
 const hollowLines = said().filter((entry) => entry.speaker === 'hollow').map((entry) => entry.text);
-check('the C12 fight ends with `> you remember me. good.` (not `> ...048?`)', hollowLines.includes(HOLLOW_STORY.remembers)
+check('the POD 01 fight ends with `> you remember me. good.` (not `> ...048?`)', hollowLines.includes(HOLLOW_STORY.remembers)
   && !hollowLines.some((text) => /^> \.\.\.\d+\?$/.test(text)), hollowLines.join(' | '));
 check('…HOLLOW\'s echoes on run 2 carry its name from the boot: [user: UNIT-047]', hollowLines.some((text) => text.includes('[user: UNIT-047]')));
 
 // --- HALCYON on run 2: no ghost --------------------------------------------------------------------------------------
 {
   const from = state().log.entries.length;
-  // The WAKE REPORT's CONTINUE, then TRANSMIT (the harness picks the first card).
-  check('ship 1 on run 2 reached its WAKE REPORT', state().run.phase === 'report', state().run.phase);
+  // The LANDING REPORT's CONTINUE, then TRANSMIT (the harness picks the first card).
+  check('ship 1 on run 2 reached its LANDING REPORT', state().run.phase === 'report', state().run.phase);
   continueAfterReport(h.store);
   h.transmit();
   h.stepUntil(() => state().run.phase === 'flight', 15);

@@ -2,11 +2,12 @@
 // rack a known hazard zone will hit, and the bitten-again ask names a rack whose SAFE spot is out of the belt.
 // On LAST LIGHT with the belt ahead (its zoneHit says the path enters it, Sensor Interp healthy):
 // • knownHitRacks names racks A and B (the belt), and nothing under PATH UNCERTAIN, after the flight, or with no entry;
-// • the preview for a soul cluster over rack A's free tail says `⚠ BELT HITS RACK A` (hazard A), over rack D nothing;
+// Slice 1a: POD 12 (right of LAST LIGHT's root, across a 1-block GAP) stands in for phase 2's C13.
+// • the preview for a pod's driver over rack A's free tail says `⚠ BELT HITS RACK A` (hazard A), over rack D nothing;
 //   a FIREWALL (no health: zones can't hurt it) gets no hazard;
 // • safestSpot never picks a spot in rack A or B, prefers a spot that leaves no seed a WALL to split beside the cluster
-//   (rack C here), and the strip's bitten-again ask names the rack of the spot it picks
-//   (`C13 IS BITTEN EVERY TIME — MOVE it behind a WALL in RACK D`), which is never A or B; within 70 characters;
+//   and the strip's bitten-again ask names the rack of the spot it picks
+//   (`POD 12 IS BITTEN EVERY TIME — MOVE it behind a WALL in RACK D`), which is never A or B; within 70 characters;
 // • with no belt ahead the preview is as before (no hazard).
 // Usage: node_modules/.bin/tsx --tsconfig tsconfig.json tests/unit/final-fix/move-hazard.test.ts
 import { check, finish } from '../wp1/harness';
@@ -26,7 +27,7 @@ import { ZONE_WORD } from '@data/zone-text';
 import { RACK_NAMES } from '@data/memory';
 import { BITTEN_AGAIN_COUNT, MAX_LINE_CHARS, RACK_BLOCKS } from '@data/tuning';
 import type { GameState, PendingPlacement } from '@state/schema';
-import type { Segment, SoulSegment } from '@/types/segment';
+import type { Segment, DriverSegment } from '@/types/segment';
 
 const h = createHarness11(5);
 const state = (): Readonly<GameState> => h.store.getState();
@@ -62,7 +63,7 @@ check('…none under PATH UNCERTAIN (the MIND can\'t tell)',
 
 const memory = state().memory;
 const starts = segmentStarts(memory);
-const c13 = memory.find((seg): seg is SoulSegment => seg.type === 'soul' && seg.cluster === 'C13')!;
+const c13 = memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 12)!;
 // Rack A's free tail (the ship files end before it) and the open rack D.
 const freeIn = (rack: string, size: number): PendingPlacement => {
   const rackStart = RACK_NAMES.indexOf(rack) * RACK_BLOCKS;
@@ -73,10 +74,10 @@ const freeIn = (rack: string, size: number): PendingPlacement => {
 };
 const inA = movePreview(state(), c13, freeIn('A', c13.size), hazards);
 const inD = movePreview(state(), c13, freeIn('D', c13.size), hazards);
-check('C13 over rack A\'s free tail: the preview names the belt (hazard A), not SAFE', inA?.hazard?.rack === 'A' && inA.hazard.kind === 'belt'
+check('POD 12 over rack A\'s free tail: the preview names the belt (hazard A), not SAFE', inA?.hazard?.rack === 'A' && inA.hazard.kind === 'belt'
   && !inA.dest.exposed, JSON.stringify(inA));
 check(`…which the label says as \`${MOVE_PREVIEW_TEXT.hazard(ZONE_WORD.belt, 'A')}\``, MOVE_PREVIEW_TEXT.hazard(ZONE_WORD.belt, 'A') === '⚠ BELT HITS RACK A');
-check('C13 over rack D: no hazard', inD !== null && inD.hazard === null, JSON.stringify(inD?.hazard));
+check('POD 12 over rack D: no hazard', inD !== null && inD.hazard === null, JSON.stringify(inD?.hazard));
 check('…and with no belt ahead, rack A has no hazard either', movePreview(state(), c13, freeIn('A', c13.size), knownHitRacks(state(), withBelt(false)))?.hazard === null);
 const firewall = cardFiles('firewall', (prefix) => `${prefix}-test`)[0]!;
 h.store.update((d) => {
@@ -92,9 +93,9 @@ check('a FIREWALL over rack A: no hazard (it has no health)', movePreview(state(
 // The SAFE spot the strip names, and its rack.
 const spot = safestSpot(state(), c13, hazards);
 const rack = spot === null ? '' : placementRack(state().memory, spot);
-check('safestSpot for C13 is out of the belt\'s racks', spot !== null && rack !== 'A' && rack !== 'B', rack);
-// The spot leaves no seed a WALL to aim at beside C13: each free gap beside it under 4 blocks or 10 and more (a seed in
-// its middle bites nothing). On LAST LIGHT that is the head of rack C's free run, beside C12.
+check('safestSpot for POD 12 is out of the belt\'s racks', spot !== null && rack !== 'A' && rack !== 'B', rack);
+// The spot leaves no seed a WALL to aim at beside POD 12: each free gap beside it under 4 blocks or 10 and more (a seed in
+// its middle bites nothing).
 const afterMove = spot === null ? null : memoryAfterMove(state().memory, c13, spot);
 const beside = afterMove === null ? [] : (() => {
   const index = afterMove.findIndex((seg) => seg.id === c13.id);
@@ -107,28 +108,29 @@ check('…and the preview calls it SAFE', spot !== null && (() => {
   return preview !== null && !preview.dest.exposed && !preview.bridges && preview.hazard === null && !preview.infected;
 })());
 
-// C13 bitten twice in the same spot: the ask names the rack.
+// POD 12 bitten twice in the same spot: the ask names the rack.
 h.store.update((d) => {
   d.hollow.phase = 'awake';
   d.hollow.biteInSec = 9999;
   d.hollow.seedInSec = 9999;
   d.hollow.verbInSec = 9999;
-  const soul = d.memory.find((seg): seg is SoulSegment => seg.type === 'soul' && seg.cluster === 'C13')!;
-  d.hollow.bitesAt = [{ cluster: 'C13', addr: requireAddr(d.memory, soul), count: BITTEN_AGAIN_COUNT }];
+  const soul = d.memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 12)!;
+  d.hollow.bitesAt = [{ pod: 12, addr: requireAddr(d.memory, soul), count: BITTEN_AGAIN_COUNT }];
   d.ui.memoryRev++;
 });
 const ctx = buildDirectorCtx(state(), ahead, { events: new Set(), phaseEntered: null, mindQuietSec: 0, flash: null });
 const ruleText = (id: string): string => GUIDE_RULES.find((candidate) => candidate.id === id)!.text(ctx);
-check('the bitten-again ask names the SAFE spot\'s rack', ctx.vars.bittenAgain === 'C13' && ctx.vars.bittenAgainRack === `RACK ${rack}`
-  && ruleText('hollow-move-again') === `C13 IS BITTEN EVERY TIME — MOVE it behind a WALL in RACK ${rack}`, `${ctx.vars.bittenAgainRack}: ${ruleText('hollow-move-again')}`);
-check('…in amber too', ruleText('hollow-move-again-tab') === `[TAB], MOVE C13 behind a WALL in RACK ${rack} — it is bitten every time`, ruleText('hollow-move-again-tab'));
+check('the bitten-again ask names the SAFE spot\'s rack', ctx.vars.bittenAgain === 'POD 12' && ctx.vars.bittenAgainRack === `RACK ${rack}`
+  && ruleText('hollow-move-again') === `POD 12 IS BITTEN EVERY TIME — MOVE it behind a WALL in RACK ${rack}`, `${ctx.vars.bittenAgainRack}: ${ruleText('hollow-move-again')}`);
+check('…in amber too', ruleText('hollow-move-again-tab') === `[TAB], MOVE POD 12 behind a WALL in RACK ${rack} — it is bitten every time`, ruleText('hollow-move-again-tab'));
 const worst = { vars: WORST_CASE_VARS };
 const worstTexts = ['hollow-move-again', 'hollow-move-again-tab'].map((id) => GUIDE_RULES.find((candidate) => candidate.id === id)!.text(worst));
 check(`…both within ${MAX_LINE_CHARS} characters with the worst-case names`, worstTexts.every((text) => text.length <= MAX_LINE_CHARS),
   worstTexts.map((text) => `${text.length}: ${text}`).join(' | '));
 const noRack = { vars: { ...WORST_CASE_VARS, bittenAgainRack: '' } };
 check('…and with nowhere SAFE the ask names no rack (the old words)',
-  GUIDE_RULES.find((candidate) => candidate.id === 'hollow-move-again')!.text(noRack) === 'C16 IS BITTEN EVERY TIME — MOVE it behind a WALL');
+  GUIDE_RULES.find((candidate) => candidate.id === 'hollow-move-again')!.text(noRack) === `${WORST_CASE_VARS.bittenAgain} IS BITTEN EVERY TIME — MOVE it behind a WALL`,
+  GUIDE_RULES.find((candidate) => candidate.id === 'hollow-move-again')!.text(noRack));
 
 // The segment a unit test may pick from memory must still be in it (the firewall was spliced in above).
 check('(memory still holds the planted FIREWALL)', state().memory.some((seg: Segment) => seg.id === firewall.id));

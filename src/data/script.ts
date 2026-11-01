@@ -1,5 +1,5 @@
 import type {
-  GameState, Speaker, RevealCause, ClusterOutcome, TransitHit, ArrivalReport, RunEndCause, ShipOutcome, VerbKind,
+  GameState, Speaker, TransitHit, ArrivalReport, RunEndCause, ShipOutcome, VerbKind,
 } from '@state/schema';
 import type { SegmentRole, Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
@@ -16,24 +16,29 @@ import type { UpgradeForm } from '@data/upgrades';
 import { getShip } from '@data/ships';
 import { SHIP_SCREEN_REFUSAL, AUTOPILOT_REFUSAL } from '@systems/flight-controls';
 import {
-  TOOL_WORD, repairStepTarget, toolStepTarget, fileHintTarget, clusterHintTarget, firewallHintTarget, SEED_HINT_TARGET,
+  TOOL_WORD, repairStepTarget, toolStepTarget, fileHintTarget, podHintTarget, firewallHintTarget, SEED_HINT_TARGET,
   toolFileHintTarget, pipHintTarget, TOOL_FILES, ROOT_HINT_TARGET,
 } from '@data/fs-tools';
 import { GHOST_TEXT } from '@data/ghost-text';
 import { GHOST_ALARM_ID } from '@systems/alerts';
 import { reachMarks, firewallFits } from '@systems/hollow-hud';
 import {
-  archiveSealed, soulsInMemory, revealAwaitsView, revealUnderway, infectedSegments, fileLabel, chargeLeft, anythingInfected, isFirewall,
-  isUsableTool, hasUsableTool, toolFilesOf, getByRole, verbSecondsLeft, soulCounts, isShipFile, isInfected,
+  driversInMemory, infectedSegments, fileLabel, chargeLeft, anythingInfected, isFirewall,
+  isUsableTool, hasUsableTool, toolFilesOf, getByRole, verbSecondsLeft, isShipFile, isInfected,
 } from '@state/selectors';
-import { tacToNextEvent, COLONISTS_HOLD_RELEASED } from '@systems/pace';
 import { formatTac, isReleaseRow, isCorrectionRow } from '@systems/guidance';
 import {
-  mostUrgentUnattended, eatenAlarms, coreInfected, healRatePerSec, exposedClusters, threateningSeeds, seedsInMemory,
-  rootDeleteRunning, rootDeleteProgress, bittenAgainClusters, seedBitesAiFile,
+  mostUrgentUnattended, eatenAlarms, coreInfected, healRatePerSec, exposedDrivers, threateningSeeds, seedsInMemory,
+  rootDeleteRunning, rootDeleteProgress, bittenAgainDrivers, seedBitesAiFile,
 } from '@systems/hollow';
 import { rootDeletable } from '@systems/finale';
-import { printFastActive, nextToPrint } from '@systems/printer';
+import { dragLineKm } from '@systems/landing-orbit';
+import {
+  hostLine, podCode, groundRadioLine, LANDING_ASKS, LANDING_BEATS, LAUNCH_REFUSAL_LINES, LANDING_LESSONS_1B,
+  END_LANDING_REFUSAL_KEY, END_LANDING_REFUSAL_TEXT,
+} from '@data/landing-text';
+import { HARD_WORDS_POOL } from '@data/souls';
+import type { PodRecord } from '@/types/landing';
 import { autoburnDropLine, autoburnAvailable } from '@systems/autoburn';
 import { blocksInRack, knownHitRacks } from '@systems/zones';
 import { safestSpot, placementRack } from '@systems/move-preview';
@@ -47,12 +52,12 @@ import { canStartOp, getOps } from '@systems/ops-core';
 import { TOOL_HINT_TARGET } from '@data/fs-tools';
 import {
   MIND_CLEAR_IDLE_SEC, MAX_LINE_CHARS, NAME_MAX_CHARS, ENGINE_FAULT_AFTER_TAC, ENGINE_FAULT_INTEGRITY,
-  ENGINE_WEAK_MAX_SHOWN_SEC, COUNTDOWN_RED_TAC, SOUL_WAKE_INTACT_MIN, STAR_FUEL_PCT, STAR_CHARGE_BONUS,
-  SOULS_ASK_MIN_LEAD_TAC, SOULS_ASK_HOLD_SEC, SEG_NAME_MAX_CHARS, EATEN_ALARM_CLEAR_SEC, WALL_MIN_BLOCKS,
+  ENGINE_WEAK_MAX_SHOWN_SEC, COUNTDOWN_RED_TAC,
+  SEG_NAME_MAX_CHARS, EATEN_ALARM_CLEAR_SEC, WALL_MIN_BLOCKS, FAMILY_MAX_CHARS, COLONIST_LINE_MAX_CHARS,
   WALL_RULE_SHOW_SEC, EMERGENCY_EXTRA_HITS, CORE_RESET_INTEGRITY, BEAM_OUT_EXTRA_HITS,
   TRANSIT_HIT_MAX, BAND_DEGRADED_MIN, CORE_LOW_INTEGRITY, FIREWALL_HINT_SHOW_SEC, DEBRIS_MOVE_HINT_TAC, SEED_LESSON_SHOW_SEC,
   AUTOBURN_READY_SHOW_SEC, GHOST_LESSON_AFTER_BURSTS, GHOST_LESSON_SHOW_SEC, COPY_LESSON_SHOW_SEC, MERGE_COST_CHARGE, ROOT_DELETE_SEC,
-  BELT_MOVE_HINT_TAC, LESSON_LEAD_IN_SEC,
+  BELT_MOVE_HINT_TAC, LESSON_LEAD_IN_SEC, DOT_WIDE_LESSON_SEC, DRAG_LESSON_SEC, DRAG_STAMP_MIN_KM,
 } from '@data/tuning';
 
 // Every line the game says or shows outside the flight table (systems/guidance.ts) lives here:
@@ -66,18 +71,19 @@ export interface LineVars {
   unit: number;           // our unit number: "Unit 47", UNIT-047
   wave: number;           // the fleet wave (run number)
   ship: string;           // the ship's name (≤ NAME_MAX_CHARS)
-  souls: number;          // colonists aboard
+  colonists: number;      // colonists aboard
+  podsTotal: number;      // the pods this ship arrived with
+  podsDown: number;       // pods down on the surface
   distanceLy: number;     // the route length on the title card
   nextApsis: '▼' | '▲';   // where the next planned burn happens (the SKIP hint names it)
   hollow: string;         // what HOLLOW is called on screen: '???' until it names itself (WP6)
-  // WP5. The ship's hurt cluster while it still needs a repair (in memory, unsealed, below
-  // SOUL_WAKE_INTACT_MIN), else ''.
-  hurtCluster: string;
-  clustersDone: number;   // clusters that have left memory this ship (printed or did not wake)
-  clustersTotal: number;  // clusters this ship arrived with
+  // The ship's hurt driver while it would still land hard (in memory, failing), by the strip's label (`POD 02`) and its
+  // number (0 with '': none).
+  hurtPod: string;
+  hurtPodNumber: number;
   // WP6. HOLLOW: the infected file nobody is repairing that goes first ('' none), and whether it is
-  // a ship file (those can't be healed); the cluster whose alarm is up and its AI seconds to being
-  // eaten ('' none); a file in a tug-of-war a repair is winning ('' none). Files by fileLabel (C12,
+  // a ship file (those can't be healed); the driver whose alarm is up and its AI seconds to being
+  // eaten ('' none); a file in a tug-of-war a repair is winning ('' none). Files by fileLabel (POD 01,
   // ENGINE I/O).
   eating: string;
   eatingShip: boolean;
@@ -88,7 +94,7 @@ export interface LineVars {
   eaten: string;
   eatenInSec: number;
   tug: string;
-  // WP7 (HALCYON). A clean cluster HOLLOW will bite on its next bite (across a GAP, or once its recoil
+  // WP7 (HALCYON). A clean driver HOLLOW will bite on its next bite (across a GAP, or once its recoil
   // ends): the one to MOVE behind a WALL ('' none). WP11 review: one of those HOLLOW has bitten in the same spot
   // before (BITTEN_AGAIN_COUNT times: a REPAIR alone keeps it in the trap) ('' none).
   exposed: string;
@@ -103,40 +109,46 @@ export interface LineVars {
   autoburnDrop: string;
   // WP11 (LAST LIGHT). HOLLOW's verb counting down: which ('' none), what it aims at as the strip names it, and its
   // seconds left (whole, rounded up: the TERMINAL's `... 3`). The belt ahead: its racks (`RACKS A–B`, '' none ahead),
-  // the tactical seconds to its entry, and the racks of it that still hold colonists (`RACK B`, '' none).
+  // the tactical seconds to its entry, and the racks of it that still hold drivers (`RACK B`, '' none).
   verbKind: VerbKind | '';
   verbLabel: string;
   verbSecLeft: number;
   beltRacks: string;
   beltInTac: number;
-  beltSoulRacks: string;
+  beltPodRacks: string;
   // WP11 part 2: the AI seconds left on the root's DELETE (whole, rounded up; 0 when none runs): the duel's countdown.
   rootSecLeft: number;
+  // Slice 1a. The LZ the next SKIP flies to during the landing ('' none): the landing table's (landing-guidance
+  // LandingObjective.nextLz), filled in by the director, '' from lineVars. The ship's first touchdown's radio line from
+  // the ground (`POD 01 · OKAFOR: "Is it morning?"`, '' before it).
+  nextLz: string;
+  firstDownRadio: string;
 }
 
 // The longest values any template can be rendered with. Later packages add their placeholders
-// here as they add them to LineVars (cluster C16, a NAME_MAX_CHARS-character family name).
+// here as they add them to LineVars (POD 16, a NAME_MAX_CHARS-character family name).
 export const WORST_CASE_VARS: LineVars = {
   unit: 999,
   wave: 99,
   ship: 'W'.repeat(NAME_MAX_CHARS),
-  souls: 99_999,
+  colonists: 99_999,
+  podsTotal: 16,
+  podsDown: 16,
   distanceLy: 9_999,
   nextApsis: '▲',
   // A merged HOLLOW's name is the longest it gets (HOLLOW_NAME_MAX_UNITS units: `UNIT-998·999`).
   hollow: hollowUnitName([998, 999]),
-  hurtCluster: 'C16',
-  clustersDone: 16,
-  clustersTotal: 16,
+  hurtPod: 'POD 16',
+  hurtPodNumber: 16,
   eating: 'W'.repeat(SEG_NAME_MAX_CHARS),
   eatingShip: true,
   eatingShipFix: 'DELETE',
-  eaten: 'C16',
+  eaten: 'POD 16',
   // Any alarm clears past EATEN_ALARM_CLEAR_SEC; ten minutes covers every digit the line can show.
   eatenInSec: 599,
   tug: 'W'.repeat(SEG_NAME_MAX_CHARS),
-  exposed: 'C16',
-  bittenAgain: 'C16',
+  exposed: 'POD 16',
+  bittenAgain: 'POD 16',
   bittenAgainRack: 'RACK D',
   debrisRack: 'C',
   // The strip shows the contact only within DEBRIS_MOVE_HINT_TAC; ten minutes covers every digit.
@@ -148,10 +160,31 @@ export const WORST_CASE_VARS: LineVars = {
   verbSecLeft: 9,
   beltRacks: 'RACKS A–B',
   beltInTac: 599,
-  beltSoulRacks: 'RACKS A–B',
+  beltPodRacks: 'RACKS A–B',
   // ROOT_DELETE_SEC is 12; ten minutes covers every digit.
   rootSecLeft: 599,
+  nextLz: 'LZ-D',
+  firstDownRadio: groundRadioLine(16, 'W'.repeat(FAMILY_MAX_CHARS), 'W'.repeat(COLONIST_LINE_MAX_CHARS)),
 };
+
+// The ship's first touchdown's radio line (01-landing §2, §4: the first pod down on every ship sends one): the pod's lead
+// colonist's first words, or for a pod that came down hard a hard-landing line (souls HARD_WORDS_POOL, picked by pod so
+// it replays). '' before the first touchdown.
+function firstDownRadio(state: Readonly<GameState>): string {
+  let first: { record: PodRecord; atAi: number; hard: boolean } | null = null;
+  for (const record of state.landing.pods) {
+    if (record.fate.kind !== 'down') continue;
+    const { atAi, touch } = record.fate.touchdown;
+    if (first === null || atAi < first.atAi) first = { record, atAi, hard: touch === 'hard' };
+  }
+  if (first === null) return '';
+  const { record, hard } = first;
+  const lead = record.featured[0];
+  if (!lead) throw new Error(`firstDownRadio: pod ${record.pod} has no featured colonist`);
+  const words = hard ? HARD_WORDS_POOL[record.pod % HARD_WORDS_POOL.length] : lead.firstWords;
+  if (words === undefined) throw new Error('firstDownRadio: the hard-landing pool is empty');
+  return groundRadioLine(record.pod, record.family, words);
+}
 
 // The next live debris cloud the TRUE path enters (WP9), with the tactical seconds to its contact, or null.
 export function debrisContact(state: Readonly<GameState>, pred: Prediction): { rack: string; inTac: number } | null {
@@ -165,13 +198,14 @@ export function debrisContact(state: Readonly<GameState>, pred: Prediction): { r
   return best;
 }
 
-// The ship's hurt cluster (ShipDef souls.hurt, §5.1: C09 REYES at 71%) while a repair would still
-// change how it wakes: in memory, out of its slab, below SOUL_WAKE_INTACT_MIN. '' otherwise.
-export function hurtClusterCode(state: Readonly<GameState>): string {
-  const code = state.souls.hurt;
-  if (code === null) return '';
-  const soul = soulsInMemory(state).find((candidate) => candidate.cluster === code);
-  return soul && !soul.sealed && soul.integrity < SOUL_WAKE_INTACT_MIN ? code : '';
+// The ship's hurt driver (01-landing §3.8: run 1's POD 02 BRANDT at 44%) while a repair would still change how its pod
+// lands: in memory and failing (it would land hard). The first such pod in the ship's hurt list, or null.
+export function hurtPodNow(state: Readonly<GameState>): number | null {
+  for (const pod of state.landing.hurt) {
+    const driver = driversInMemory(state).find((candidate) => candidate.pod === pod);
+    if (driver && driver.integrity < BAND_DEGRADED_MIN) return pod;
+  }
+  return null;
 }
 
 // What saves the ship from a ship file being eaten (LineVars.eatingShipFix): REPAIR can't heal one. SWAP hands its job
@@ -186,15 +220,14 @@ function shipFileFix(state: Readonly<GameState>, seg: Segment): ShipFileFix {
   return state.run.licences.includes('delete') && hasUsableTool(state.memory, 'delete', 'counts') ? 'DELETE' : '';
 }
 
-// The rack the bitten-again ask names (LineVars.bittenAgainRack): where the preview's SAFE spot for that cluster is.
+// The rack the bitten-again ask names (LineVars.bittenAgainRack): where the preview's SAFE spot for that driver is.
 // The hazards are read from the true prediction: the sensed one differs only in ▼ and ▲ (predict.ts sensePrediction),
 // and under PATH UNCERTAIN no zone is known to hit anything (zones.ts mindZonesBlind).
 function bittenAgainRack(state: Readonly<GameState>, pred: Prediction): string {
   if (state.hollow.phase !== 'awake') return '';
-  const code = bittenAgainClusters(state)[0];
-  const soul = code === undefined ? undefined : soulsInMemory(state).find((candidate) => candidate.cluster === code);
-  if (soul === undefined) return '';
-  const spot = safestSpot(state, soul, knownHitRacks(state, pred));
+  const driver = bittenAgainDrivers(state)[0];
+  if (driver === undefined) return '';
+  const spot = safestSpot(state, driver, knownHitRacks(state, pred));
   return spot === null ? '' : `RACK ${placementRack(state.memory, spot)}`;
 }
 
@@ -205,8 +238,8 @@ function hollowVars(
   const urgent = mostUrgentUnattended(state);
   const alarm = eatenAlarms(state).find((candidate) => candidate.inSec <= EATEN_ALARM_CLEAR_SEC);
   const tug = infectedSegments(state).find((seg) => healRatePerSec(state, seg) > 0);
-  const exposed = state.hollow.phase === 'awake' ? exposedClusters(state)[0] : undefined;
-  const bittenAgain = state.hollow.phase === 'awake' ? bittenAgainClusters(state)[0] : undefined;
+  const exposed = state.hollow.phase === 'awake' ? exposedDrivers(state)[0] : undefined;
+  const bittenAgain = state.hollow.phase === 'awake' ? bittenAgainDrivers(state)[0] : undefined;
   return {
     eating: urgent ? fileLabel(urgent.seg) : '',
     eatingShip: urgent !== null && isShipFile(urgent.seg),
@@ -214,8 +247,8 @@ function hollowVars(
     eaten: alarm ? fileLabel(alarm.seg) : '',
     eatenInSec: alarm ? alarm.inSec : 0,
     tug: tug ? fileLabel(tug) : '',
-    exposed: exposed ?? '',
-    bittenAgain: bittenAgain ?? '',
+    exposed: exposed ? fileLabel(exposed) : '',
+    bittenAgain: bittenAgain ? fileLabel(bittenAgain) : '',
   };
 }
 
@@ -225,14 +258,14 @@ export function lineVars(state: Readonly<GameState>, pred: Prediction): LineVars
     unit: state.mission.transmissionNum,
     wave: state.mission.wave,
     ship: state.level.shipName,
-    souls: state.mission.souls,
+    colonists: state.mission.colonists,
+    podsTotal: state.landing.pods.length,
+    podsDown: state.landing.pods.filter((record) => record.fate.kind === 'down').length,
     distanceLy: state.mission.distanceLy,
     nextApsis: pred.burnPoint?.event === 'apo' ? '▲' : '▼',
     // '???' until HOLLOW names itself (ship 2, or a later run's ghost: run.hollowNamed, systems/hollow.ts nameHollow).
     hollow: hollowLabel(state.run),
-    hurtCluster: hurtClusterCode(state),
-    clustersDone: state.souls.results.length,
-    clustersTotal: state.souls.results.length + soulsInMemory(state).length,
+    ...hurtPodVars(state),
     ...hollowVars(state),
     bittenAgainRack: bittenAgainRack(state, pred),
     ...debrisVars(state, pred),
@@ -240,7 +273,14 @@ export function lineVars(state: Readonly<GameState>, pred: Prediction): LineVars
     ...verbVars(state),
     ...beltVars(state, pred),
     rootSecLeft: rootSecLeft(state),
+    nextLz: '',
+    firstDownRadio: firstDownRadio(state),
   };
+}
+
+function hurtPodVars(state: Readonly<GameState>): Pick<LineVars, 'hurtPod' | 'hurtPodNumber'> {
+  const pod = hurtPodNow(state);
+  return pod === null ? { hurtPod: '', hurtPodNumber: 0 } : { hurtPod: podCode(pod), hurtPodNumber: pod };
 }
 
 function debrisVars(state: Readonly<GameState>, pred: Prediction): Pick<LineVars, 'debrisRack' | 'debrisInTac'> {
@@ -259,13 +299,13 @@ export function beltContact(state: Readonly<GameState>, pred: Prediction): { rac
   return null;
 }
 
-function beltVars(state: Readonly<GameState>, pred: Prediction): Pick<LineVars, 'beltRacks' | 'beltInTac' | 'beltSoulRacks'> {
+function beltVars(state: Readonly<GameState>, pred: Prediction): Pick<LineVars, 'beltRacks' | 'beltInTac' | 'beltPodRacks'> {
   const contact = beltContact(state, pred);
-  if (contact === null) return { beltRacks: '', beltInTac: 0, beltSoulRacks: '' };
+  if (contact === null) return { beltRacks: '', beltInTac: 0, beltPodRacks: '' };
   const starts = segmentStarts(state.memory);
-  const soulRacks = contact.racks.filter((rack) => state.memory.some((seg, index) =>
-    seg.type === 'soul' && blocksInRack(starts[index]!, seg.size, rack) > 0));
-  return { beltRacks: racksText(contact.racks), beltInTac: contact.inTac, beltSoulRacks: soulRacks.length > 0 ? racksText(soulRacks) : '' };
+  const podRacks = contact.racks.filter((rack) => state.memory.some((seg, index) =>
+    seg.type === 'driver' && blocksInRack(starts[index]!, seg.size, rack) > 0));
+  return { beltRacks: racksText(contact.racks), beltInTac: contact.inTac, beltPodRacks: podRacks.length > 0 ? racksText(podRacks) : '' };
 }
 
 // The root's DELETE as the duel's countdown: its AI seconds left, rounded up (0: not running).
@@ -306,11 +346,9 @@ export const LINES = {
   holdSteadySub: (): string => 'hands off · locking the orbit',
   // The TERMINAL's boot log (the third line is built from the damaged files, eccLine).
   bootUnpack: (vars: LineVars): string => `> UNPACKING ${unitName(vars.unit)} ... 100%`,
-  bootHost: (vars: LineVars): string => `> HOST: ${vars.ship} · ${formatCount(vars.souls)} COLONISTS`,
-  // WP8: a returning unit's ship-1 boot (§5.2): it knows what the slabs hold, and they crack as it says so.
-  bootArchive: (vars: LineVars): string => `> SOUL ARCHIVE · ${formatCount(vars.souls)} · you know what they are`,
-  // The strip once every cluster has left memory (the WAKE REPORT owns the screen).
-  printingDone: (): string => 'PRINTING DONE — every cluster has left memory',
+  bootHost: (vars: LineVars): string => hostLine(vars.ship, vars.podsTotal, vars.colonists),
+  // The strip once the landing is over (the LANDING REPORT owns the screen).
+  landingDone: (): string => 'THE LANDING IS OVER — see the LANDING REPORT',
   // WP7. The rule both screens draw between two ships (the log keeps its history, say.ts logDivider).
   logDivider: (ship: string): string => `── ${ship} ──`,
   // The strip while the unit is packed for the next ship (TRANSMIT, WP7 part 2's screen) and once the
@@ -332,7 +370,7 @@ export const LINES = {
 
 // --- The archive on the title (WP8, §4.5, §7.1) --------------------------------------------------------------
 
-// How the last unit's run ended, as the title's lineage line says it (`last: UNIT-047 · 6,200 woke ·
+// How the last unit's run ended, as the title's lineage line says it (`last: UNIT-047 · 6,200 landed ·
 // overwritten at VESPER`). A unit that stayed with its colonists gets a line of its own. A MERGE names the
 // unit it merged with (never the design's word HOLLOW, which a kid never reads: hollow-text.ts).
 const LINEAGE_END: Readonly<Record<LastCause, (last: Readonly<LastUnit>) => string>> = {
@@ -351,7 +389,8 @@ const LINEAGE_END: Readonly<Record<LastCause, (last: Readonly<LastUnit>) => stri
 export function lineageLine(lastUnit: Readonly<LastUnit> | null): string | null {
   if (lastUnit === null) return null;
   if (lastUnit.cause === 'stayed') return `${unitName(lastUnit.number)} stayed with them.`;
-  return `last: ${unitName(lastUnit.number)} · ${formatCount(lastUnit.woke)} woke · ${LINEAGE_END[lastUnit.cause](lastUnit)}`;
+  // The archive's `woke` field holds the colonists landed (systems/meta.ts, risk 10: no META_VERSION bump).
+  return `last: ${unitName(lastUnit.number)} · ${formatCount(lastUnit.woke)} landed · ${LINEAGE_END[lastUnit.cause](lastUnit)}`;
 }
 
 // The endings found so far (the title, §4.5's `ENDINGS 0/2`, and a won RUN END, WP11 part 2): the count, then every
@@ -463,9 +502,9 @@ export const BEAM_OUT_TEXT = {
   abandon: 'ABANDON SHIP ▸ BEAM OUT',
   question: 'BEAM OUT?',
   // On the last ship nothing is transmitted (there is no next ship), so the cost said is the run's end.
-  detail: (ship: string, souls: number, lastShip: boolean): string => (lastShip
-    ? `${formatCount(souls)} colonists stay on ${ship}. The run ends.`
-    : `${formatCount(souls)} colonists stay on ${ship}. +${BEAM_OUT_EXTRA_HITS} transit hits.`),
+  detail: (ship: string, colonists: number, lastShip: boolean): string => (lastShip
+    ? `${formatCount(colonists)} colonists stay on ${ship}. The run ends.`
+    : `${formatCount(colonists)} colonists stay on ${ship}. +${BEAM_OUT_EXTRA_HITS} transit hits.`),
   yes: '✓ BEAM OUT',
   no: '✗ STAY',
   bar: (pct: number): string => `TRANSMITTING ${pct}%`,
@@ -473,112 +512,13 @@ export const BEAM_OUT_TEXT = {
   blackout: 'LINK CLOSED',
 } as const;
 
-// --- The Soul Archive (WP5, §1, §6.7) ---------------------------------------------------------
+// --- The landing in the run's totals (01-landing §3.9) ----------------------------------------------
 
-// The reveal's three lines (systems/reveal.ts lands one at a time; INSPECT types them). The scan
-// is the kid finding out for themselves; the printer's version is the same truth told by the
-// machine that needed to know, spoken on the radio too. `racks` is where the archive is
-// (`RACKS B–C`), `souls` how many colonists it holds.
-export function revealLines(cause: RevealCause, souls: number, racks: string): readonly string[] {
-  switch (cause) {
-    case 'scan':
-    case 'debug':
-      return ['STASIS: 0 pods detected.', 'rescanning…', `The colonists aren't in pods. They're in here. (${racks})`];
-    case 'printing':
-      return ['PRINTER: locating colonists…', 'STASIS: 0 pods detected.',
-        `PRINTER: ${formatCount(souls)} colonists found. They're in memory. (${racks})`];
-    case 'breach':
-      return ['SEALED BLOCK BREACHED.', 'STASIS: 0 pods detected.', `The colonists aren't in pods. They're in here. (${racks})`];
-    // The LOST card says it its own way; a returning unit's boot says it in one line (LINES.bootArchive).
-    case 'lost':
-    case 'known':
-      return [];
-    default:
-      throw new Error(`revealLines: unknown cause '${String(cause)}'`);
-  }
-}
-
-// The LOST card's last line (§9 WP5 item 6): on ship 1 before the reveal it IS the reveal, the
-// first time the kid learns where the colonists were.
-export function lostSoulsLine(inMemory: number, woke: number): string {
-  return `${formatCount(inMemory)} souls in memory. ${formatCount(woke)} woke.`;
-}
-
-// The TERMINAL's echo of a print (§6.7): `> print c04 ... 200 WOKE`.
-const PRINT_ECHO_RESULT: Readonly<Record<ClusterOutcome, (souls: number) => string>> = {
-  woke: (souls) => `${formatCount(souls)} WOKE`,
-  gaps: (souls) => `${formatCount(souls)} WOKE · MISSING MEMORIES`,
-  lost: () => 'DID NOT WAKE',
-};
-
-export function printEcho(cluster: string, souls: number, outcome: ClusterOutcome): string {
-  return `> print ${cluster.toLowerCase()} ... ${PRINT_ECHO_RESULT[outcome](souls)}`;
-}
-
-// --- The WAKE REPORT (WP5 part 2, §4.4, §5.1 1:55) --------------------------------------------------
-// The ship's credits: who woke, by name, with the first thing they said; then the count and the
-// stars, each missed one with its reason (§4.4: "names every missed star and why").
-
-// WOKE as every screen writes it (the WAKE REPORT, RUN END's total and its ship rows), and the cost under
-// it: one template each, so the screens can't drift apart. WOKE counts heads everywhere (the lead's rule,
-// WP7): everyone who woke, the same number as the footer's WOKE and the `+200 WOKE` pops. §4.4's half credit
-// is only the run's SCORE on RUN END.
-export const WOKE_TEXT = {
-  count: (woke: number, of: number): string => `${formatCount(woke)} / ${formatCount(of)} WOKE`,
-  missing: (gaps: number): string => `${formatCount(gaps)} WITH MISSING MEMORIES`,
-} as const;
-
-export const REPORT_TEXT = {
-  title: 'WAKE REPORT',
-  route: (ship: string, world: string): string => `${ship} → ${world}`,
-  // The headline is heads; the cost of a bad print is the line right under it, in the hurt yellow.
-  totals: WOKE_TEXT.count,
-  missing: WOKE_TEXT.missing,
-  breakdown: (intact: number, gaps: number, lost: number): string =>
-    `${formatCount(intact)} intact · ${formatCount(gaps)} missing memories · ${formatCount(lost)} did not wake`,
-  // The bonus the stars carry to the next ship (§4.4); with none, what one would have been worth. The last
-  // ship has no next ship: the line says the run ends here instead of promising charge that never comes.
-  charge: (bonus: number): string => (bonus > 0
-    ? `+${bonus} REPAIR CHARGE ON NEXT SHIP`
-    : `+0 REPAIR CHARGE ON NEXT SHIP · each ★ is worth +${STAR_CHARGE_BONUS}`),
-  lastShip: 'THE LAST SHIP · the run ends here',
-  skip: 'SKIP ▸▸ [SPACE]',
-  continue: 'CONTINUE ▸ [SPACE]',
-  runEnd: 'RUN END ▸ [SPACE]',
-} as const;
-
-// A colonist's credit: how they woke. The words they said go on their own line.
-export const CREDIT_STATUS: Readonly<Record<ClusterOutcome, string>> = {
-  woke: 'WOKE',
-  gaps: 'WOKE · MISSING MEMORIES',
-  lost: 'DID NOT WAKE',
-};
-
-// The three stars (§4.4), as their labels read once judged.
-export const STAR_TEXT = {
-  locked: 'ORBIT LOCKED',
-  intact: (intact: number, clusters: number): string => `INTACT ${intact}/${clusters}`,
-  fuel: (shownPct: number): string => `FUEL ${shownPct}%`,
-  // The MiniHud's at-risk INTACT line names the cluster a repair would save: `★ INTACT 11/12 · REPAIR C09`.
-  repairNext: (code: string): string => ` · REPAIR ${code}`,
-} as const;
-
-// Why a star was missed: one line a kid can act on next time. For INTACT it names the cluster that
-// cost the star (the worst one, `· +n more` for the rest).
-export const STAR_MISSED = {
-  accepted: 'ACCEPTED — part of the loop stayed outside the ring',
-  fuelNoLock: 'the FUEL ★ is counted only at ORBIT LOCKED',
-  fuelLow: (shownPct: number): string => `FUEL ${shownPct}% at the lock — the ★ notch is at ${STAR_FUEL_PCT}%`,
-  lost: (code: string, family: string): string => `${code} ${family.toUpperCase()} did not wake — repair before it is eaten`,
-  // §4.4's own example: `C09 REYES printed at 71% — repair before printing`.
-  hurt: (code: string, family: string, integrity: number): string =>
-    `${code} ${family.toUpperCase()} printed at ${integrity}% — repair before printing`,
-  range: (code: string, family: string, rangePct: number): string =>
-    `${code} ${family.toUpperCase()} printed at PRINTER RANGE ${rangePct}% — lock it`,
-  rangeMany: (count: number, rangePct: number): string => `${count} clusters at PRINTER RANGE ${rangePct}% — lock it`,
-  // After a range reason: the hurt cluster that also cost the star.
-  alsoHurt: (code: string, integrity: number): string => ` · ${code} hurt (${integrity}%)`,
-  more: (count: number): string => ` · +${count} more`,
+// LANDED as every screen writes it (RUN END's total and its ship rows; the LANDING REPORT's headline is landing-text's):
+// colonists who came down in an LZ with room, soft or hard, out of those aboard. One template, so the screens can't
+// drift apart.
+export const LANDED_TEXT = {
+  count: (landed: number, of: number): string => `${formatCount(landed)} / ${formatCount(of)} LANDED`,
 } as const;
 
 // ARRIVAL CONTROL approving a licence, as the tool's files transmit in (§6.5). Never a quip: the
@@ -624,14 +564,15 @@ export const RUN_END_PURGE_SHORT = {
   why: (home: number, total: number): string => `You deleted it. ${home} of ${total} ships made it home.`,
 } as const;
 
-// A won finale over a flagship where nobody woke (every cluster lost before the end; WP11 review, the lead's item 2):
-// the screen is sombre (run-end.ts runEndTone, from the same count), and its words are too, as the typed ending's
-// `nobody is left to bring home.` was. Never `THE FLEET IS HOME` over an empty ship.
-export const RUN_END_NOBODY_WOKE = {
-  title: 'LAST LIGHT · NOBODY WOKE',
+// A won finale over a flagship that landed nobody (WP11 review, the lead's item 2): the screen is sombre (run-end.ts
+// runEndTone, from the same count), and its words are too, as the typed ending's `nobody is left to bring home.` was.
+// Never `THE FLEET IS HOME` over an empty ship. PLACEHOLDER: 05-story owns the words. (The export keeps its phase-2
+// name: systems/run-end.ts imports it, outside this module's owner.)
+export const RUN_END_NOBODY_LANDED = {
+  title: 'LAST LIGHT · NOBODY LANDED',
   why: {
-    'won-purge': 'You deleted it. Nobody on the flagship woke.',
-    'won-merge': 'You let it in. Nobody on the flagship woke.',
+    'won-purge': 'You deleted it. Nobody on the flagship landed.',
+    'won-merge': 'You let it in. Nobody on the flagship landed.',
   },
 } as const;
 
@@ -646,25 +587,6 @@ export const RUN_END_WHY: Readonly<Record<RunEndCause, (ship: string) => string>
   abandoned: () => 'The run was left behind.',
 };
 
-// RUN END (§9 WP7 item 7, §4.4): WOKE counts heads, like everywhere (the lead's rule); §4.4's half credit
-// is the run's SCORE, shown only here and labelled as one; the rank is by SCORE.
-export const RUN_END_TEXT = {
-  kicker: (unit: string, wave: number): string => `RUN OVER · ${unit} · WAVE ${wave}`,
-  total: WOKE_TEXT.count,
-  missing: WOKE_TEXT.missing,
-  score: (score: number): string => `SCORE ${formatCount(score)}`,
-  scoreNote: 'the SCORE counts souls with missing memories as half',
-  rank: (rank: string): string => `RANK · ${rank}`,
-  shipWoke: WOKE_TEXT.count,
-  notReached: 'NOT REACHED',
-  // Near misses (§4.4: `▼ was 140 km from a perfect lock`, `41 souls short of CARETAKER`). The gap is in SCORE points
-  // (missing memories count half), so it says points, not souls (final review: `41 SCORE short of` read as a typo).
-  rankGap: (gap: number, rank: string): string => `${formatCount(gap)} points short of ${rank}`,
-  lockMiss: (apsis: string, km: number, ship: string): string => `${apsis} was ${formatCount(km)} km from a perfect lock on ${ship}`,
-  fuelMiss: (pct: number, ship: string): string => `${ship} locked with FUEL ${pct}% — the ★ is at ${STAR_FUEL_PCT}%`,
-  seed: (seed: number): string => `SEED ${seed.toString(16).toUpperCase().padStart(8, '0')}`,
-  newRun: 'NEW RUN ▸ [SPACE]',
-} as const;
 
 // A ship's line on RUN END: how it ended, the word the stamps and cards use.
 export const SHIP_OUTCOME_WORD: Readonly<Record<ShipOutcome, string>> = {
@@ -682,11 +604,11 @@ export const SHIP_OUTCOME_WORD: Readonly<Record<ShipOutcome, string>> = {
 // would do. The send's words are the moment itself (22 light-years ticking past).
 export const TRANSMIT_TEXT = {
   title: 'TRANSMIT',
-  next: (ship: string, souls: number, ly: number): string => `NEXT: ${ship} · ${formatCount(souls)} SOULS · ${ly} LY`,
+  next: (ship: string, colonists: number, ly: number): string => `NEXT: ${ship} · ${formatCount(colonists)} COLONISTS · ${ly} LY`,
   packet: (link: number, files: number, held: number, carried: number): string => (carried >= held
     ? `LINK ${link} · FILES ${files} · CHARGE ${held} → FITS`
     : `LINK ${link} · FILES ${files} · CHARGE ${carried} OF ${held} → ${held - carried} LEFT BEHIND`),
-  // How the ship just left was left (null for a ship that printed: the WAKE REPORT already said it).
+  // How the ship just left was left (null for a ship that landed: the LANDING REPORT already said it).
   why: {
     // The Core's real toll (never below its reset, so a Core at 30 loses 5 and one at 25 nothing).
     crashed: (coreToll: number): string => (coreToll > 0
@@ -694,8 +616,8 @@ export const TRANSMIT_TEXT = {
       : `EMERGENCY TRANSMIT · +${EMERGENCY_EXTRA_HITS} TRANSIT HITS`),
     emergency: `EMERGENCY TRANSMIT · AI CORE BACK AT ${CORE_RESET_INTEGRITY}% · +${EMERGENCY_EXTRA_HITS} TRANSIT HITS`,
     abandoned: (ship: string): string => `BEAMED OUT OF ${ship} · +${BEAM_OUT_EXTRA_HITS} TRANSIT HITS`,
-    escaped: (ship: string): string => `${ship} FLEW AWAY · its colonists did not wake`,
-    stranded: (ship: string): string => `${ship} STRANDED · its colonists did not wake`,
+    escaped: (ship: string): string => `${ship} FLEW AWAY · its pods were not launched`,
+    stranded: (ship: string): string => `${ship} STRANDED · its pods are parked in orbit`,
   },
   // `UP TO`: the caps and floors (the Core takes at most TRANSIT_CORE_MAX_HIT, 8, a hit and never drops under its 25; a
   // tool kind's last copy never drops under 60) can make a hit smaller than the roll's 15–TRANSIT_HIT_MAX (35), so only
@@ -815,6 +737,10 @@ export const REFUSAL_LINES: Readonly<Record<string, { text: string; keys: readon
   [AUTOPILOT_REFUSAL]: { text: AUTOPILOT_DAMAGED_LINE, keys: ['Q', 'E'] },
   // WP9: a refused [B] (AUTOBURN), under its own keys.
   ...Object.fromEntries(Object.entries(AUTO_REFUSAL_LINES).map(([refusal, line]) => [autoRefusalKey(refusal as AutoburnRefusal), line])),
+  // Slice 1a: a refused [L] (landing-text launchRefusalKey).
+  ...LAUNCH_REFUSAL_LINES,
+  // Slice 1b (review B1): END LANDING refused on a path into the planet.
+  [END_LANDING_REFUSAL_KEY]: { text: END_LANDING_REFUSAL_TEXT, keys: [] },
 };
 
 export interface DamagedFile {
@@ -906,7 +832,7 @@ export function scriptedDamageLine(hits: readonly TransitHit[]): string {
 // WP10: on a ship whose HOLLOW asks for charge (VESPER), its line closes the boot, in its pink, right after the
 // unit has counted the charge it arrived with: `> keep 20 charge for me, 047. you'll see.` (MERGE's price, §1).
 // WP11: LAST LIGHT's boot closes the same way: `> last ship, 047. i'm so tired.`
-export type BootLineKind = 'unpack' | 'host' | 'ecc' | 'archive' | 'scripted' | 'charge' | 'overflow' | 'skill' | 'hollow';
+export type BootLineKind = 'unpack' | 'host' | 'ecc' | 'scripted' | 'charge' | 'overflow' | 'skill' | 'hollow';
 
 // The boot line HOLLOW closes this ship's boot with (its story's), or null.
 function bootHollowLine(state: Readonly<GameState>): string | null {
@@ -919,7 +845,7 @@ function bootHollowLine(state: Readonly<GameState>): string | null {
 export function bootLinePlan(state: Readonly<GameState>, skill: boolean): BootLineKind[] {
   const arrival = state.run.arrival;
   const hollow: BootLineKind[] = bootHollowLine(state) !== null ? ['hollow'] : [];
-  if (arrival === null) return ['unpack', 'host', 'ecc', ...(bootOpensArchive(state) ? ['archive' as const] : []), ...hollow];
+  if (arrival === null) return ['unpack', 'host', 'ecc', ...hollow];
   const plan: BootLineKind[] = ['unpack', 'host', 'ecc'];
   if (arrival.scripted.length > 0) plan.push('scripted');
   plan.push('charge');
@@ -934,10 +860,10 @@ export function bootLineSpeaker(kind: BootLineKind): Speaker {
   return kind === 'hollow' ? 'hollow' : 'mind-sys';
 }
 
-// A returning unit's ship-1 boot opens the archive (§5.2): the ship's slabs arrive sealed and this is not
-// the tutorial run. Read from the ship's data, not the strip, so the boot's line count holds through the crack.
-export function bootOpensArchive(state: Readonly<GameState>): boolean {
-  return state.run.arrival === null && !playsTutorial(state.run) && getShip(state.run.shipIndex).memory.souls.sealed;
+// A returning unit's ship-1 boot licenses REPAIR (§5.2; systems/boot.ts, at the host line): a fresh unit's boot that is
+// not the tutorial run's.
+export function bootLicensesRepair(state: Readonly<GameState>): boolean {
+  return state.run.arrival === null && !playsTutorial(state.run);
 }
 
 // One boot line, rendered from the live state at the moment it is typed. The skill line is the training's own
@@ -948,7 +874,6 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
     case 'unpack': return LINES.bootUnpack(vars);
     case 'host': return LINES.bootHost(vars);
     case 'ecc': return arrival === null ? eccLine(damagedAiFiles(state)) : transitEccLine(arrival.hits);
-    case 'archive': return LINES.bootArchive(vars);
     case 'scripted':
       if (arrival === null) throw new Error('bootLine: arrival damage on a ship nothing transmitted to');
       return scriptedDamageLine(arrival.scripted);
@@ -999,7 +924,7 @@ export const BEATS: readonly Beat[] = [
     // says so right after its hello (beats speak in this order), so the impact is its first news.
     id: 'control-boot-licence',
     once: true,
-    when: (ctx) => ctx.phaseEntered === 'flight' && bootOpensArchive(ctx.state) && ctx.state.run.licences.includes('repair'),
+    when: (ctx) => ctx.phaseEntered === 'flight' && bootLicensesRepair(ctx.state) && ctx.state.run.licences.includes('repair'),
     lines: [{ speaker: 'control', text: () => LICENCE_LINES.repair, critical: true }],
   },
   // WP11. LAST LIGHT opens on a crash course too: the flagship gets a hello of its own (ship 1's is the run's first).
@@ -1068,22 +993,22 @@ export const BEATS: readonly Beat[] = [
     when: (ctx) => ctx.events.has('escaped'),
     lines: [controlQuip(() => "That's… not an orbit. :)", true)],
   },
-  // WP5. On the coast, while the archive is sealed: the nudge toward the STASIS scan (§5.1 0:30).
+  // Slice 1a (01-landing §2): CONTROL at the landing's start, then at the ship's first touchdown with the ground's radio
+  // line after it (the first pod down on every ship sends one). The start waits its turn after the lock's quip; the
+  // touchdown is critical, about this moment. The radio line is the ground's, not a quip: no mind alert holds it back.
   {
-    id: 'control-check-souls',
+    id: 'control-landing-start',
     once: true,
-    when: (ctx) => ctx.phase === 'flight' && ctx.state.burn.status === 'approaching'
-      && ctx.state.souls.reveal.stage === 'sealed' && archiveSealed(ctx.state) && ctx.flight?.urgency === 'wait',
-    lines: [controlQuip(() => 'While you wait, please check on the colonists. :)')],
+    perShip: true,
+    when: (ctx) => ctx.events.has('landing-start'),
+    lines: [controlQuip(() => LANDING_BEATS.start)],
   },
-  // After the reveal: CONTROL knew all along, and is cheerful about it (slightly sinister, §1).
-  // A quip, so it waits its turn behind the reveal's own sounds and never talks over a crisis. Not to a
-  // returning unit (run 2+): it found nothing, it knew (§5.2).
   {
-    id: 'control-found',
+    id: 'control-first-down',
     once: true,
-    when: (ctx) => ctx.events.has('reveal-done') && ctx.state.souls.reveal.cause !== 'lost' && ctx.state.souls.reveal.cause !== 'known',
-    lines: [controlQuip(() => 'Oh, you found them! Please handle with care. :)')],
+    perShip: true,
+    when: (ctx) => ctx.events.has('pod-landed') && ctx.vars.firstDownRadio !== '',
+    lines: [controlQuip(() => LANDING_BEATS.firstDown, true), { speaker: 'sys', text: (ctx) => ctx.vars.firstDownRadio, critical: true }],
   },
 ];
 
@@ -1194,249 +1119,117 @@ function firstRun(ctx: DirectorCtx): boolean {
   return playsTutorial(ctx.state.run);
 }
 
-// --- The Soul Archive on the strip (WP5, §5.1 0:30–0:50, §6.7) -------------------------------------
-//   1. CHECK THE 2,400 — [TAB], then SCAN the STASIS file: on the coast while the archive is sealed
-//      (run 1: SKIP is held until then, pace.ts). In blue it lights the SCAN chip, then the file.
-//      The amber ask waits for a coast long enough for the whole reveal (SOULS_ASK_MIN_LEAD_TAC), so
-//      the reveal never plays under GET READY; a kid already in blue is shown the way at once.
-//      LEAD-1: SKIP waits only until the ask has stood SOULS_ASK_HOLD_SEC (both wordings count). Then the
-//      amber ask steps aside for good, so the coast's `WAIT … · [F] SKIP` comes back, and the mode toggle
-//      stops naming it (ModeToggle). The blue ask stays: in the mind the scan is one click away.
-//   2. C09 IS HURT — REPAIR it before it prints: once the reveal is over (Ada first: the ask during
-//      the crack sent kids after C09 before she was named) and the ship's hurt cluster still needs
-//      it, in flight (never over an urgent flight line) and while printing.
-// Each pair is one ask worded for the screen the kid is on, and is done when the thing is done.
+// --- The pods' drivers on the strip (01-landing §3.8, §3.11) ---------------------------------------
+// POD 02 WILL LAND HARD — REPAIR its driver: while the ship's hurt driver would still land hard (failing, in memory),
+// in flight on the coast only (a WAIT: never over an urgent flight line) and during the landing. Worded for the screen
+// the kid is on, and done when the driver is repaired (or gone). A returning unit (§5.2) gets one showing.
 
-function isPrinting(ctx: DirectorCtx): boolean {
-  return ctx.phase === 'printing';
+function isLanding(ctx: DirectorCtx): boolean {
+  return ctx.phase === 'landing';
 }
 
-// The archive is still shut and nobody is opening it yet. A bite that broke into it owes the fight's
-// own reveal (hollow.revealOwed), which plays by itself a moment after the fight: asking the kid to go and
-// SCAN for the colonists then flashed the ask (and the toggle's box) for 1.4 s before the game opened
-// the archive itself (LEAD-1 review round 1).
-function revealWaiting(ctx: DirectorCtx): boolean {
-  return ctx.state.souls.reveal.stage === 'sealed' && archiveSealed(ctx.state) && !ctx.state.hollow.revealOwed;
+function hurtPodLive(ctx: DirectorCtx): boolean {
+  if (ctx.vars.hurtPod === '') return false;
+  return isLanding(ctx) || (isFlying(ctx) && ctx.flight?.urgency === 'wait');
 }
 
-function revealStarted(ctx: DirectorCtx): boolean {
-  return ctx.state.souls.reveal.stage !== 'sealed';
+function hurtPodSettled(ctx: DirectorCtx): boolean {
+  return ctx.vars.hurtPod === '';
 }
 
-// The coast leaves room for the whole reveal before the next burn (or nothing is coming at all).
-function coastFitsReveal(ctx: DirectorCtx): boolean {
-  const lead = tacToNextEvent(ctx.state, ctx.pred);
-  return lead === null || lead >= SOULS_ASK_MIN_LEAD_TAC;
-}
-
-// The reveal the printer started (the kid never scanned STASIS): the printer's own lines.
-function printerReveals(ctx: DirectorCtx): boolean {
-  return ctx.state.souls.reveal.cause === 'printing';
-}
-
-// The hurt cluster no longer needs the repair: healed, or gone (printed). Only after the reveal:
-// while sealed the hurt cluster is unknown, not fixed.
-function hurtClusterSettled(ctx: DirectorCtx): boolean {
-  return ctx.state.souls.reveal.stage === 'revealed' && ctx.vars.hurtCluster === '';
-}
-
-// In flight only on the coast (a WAIT): the ask never pushes in front of TURN AROUND or a burn.
-// Only once the reveal is over: the lead colonist is named first.
-function hurtClusterLive(ctx: DirectorCtx): boolean {
-  if (ctx.vars.hurtCluster === '' || ctx.state.souls.reveal.stage !== 'revealed') return false;
-  return isPrinting(ctx) || (isFlying(ctx) && ctx.flight?.urgency === 'wait');
-}
-
-// The amber colonists ask's id: while it is the strip's line, the mode toggle names it too (LEAD-1).
-export const COLONISTS_ASK_ID = 'tut-check-souls';
-
-// The ask's head, on the strip and on the mode toggle: `CHECK THE 2,400`.
-function colonistsAskHead(souls: number): string {
-  return `CHECK THE ${formatCount(souls)}`;
-}
-
-// What the mode toggle says while the amber colonists ask stands (`MIND ▸ CHECK THE 2,400`), or null
-// (systems/flight-hud.ts toggleAlert, the toggle's one model).
-export function colonistsAskToggle(state: Readonly<GameState>): string | null {
-  if (state.ui.mode !== 'tools' || state.director.shown?.id !== COLONISTS_ASK_ID) return null;
-  return colonistsAskHead(state.mission.souls);
-}
-
-export const SOUL_RULES: readonly GuideRule[] = [
+export const DRIVER_RULES: readonly GuideRule[] = [
   {
-    // The reveal's lines have landed, and the crack waits for the kid in the mind (reveal.ts): a
-    // burn pulled them back to amber halfway through (or the lock did, if the kid scanned late).
-    // Not over an urgent flight line. The printer's own reveal says this its own way (print-found).
-    id: 'reveal-look',
+    id: 'tut-hurt-driver-tab',
+    lesson: 'hurt-driver',
     layer: 'mind',
     priority: 'tutorial',
-    activeWhen: (ctx) => (isFlying(ctx) || isPrinting(ctx)) && revealAwaitsView(ctx.state) && !printerReveals(ctx),
-    text: () => 'THE COLONISTS ARE IN MEMORY — press [TAB] to see them',
+    once: true,
+    activeWhen: (ctx) => hurtPodLive(ctx) && firstRun(ctx) && ctx.mode === 'tools',
+    text: (ctx) => `${LANDING_ASKS.hurtDriver(ctx.vars.hurtPodNumber)} — [TAB]`,
     keys: ['TAB'],
+    doneWhen: hurtPodSettled,
   },
   {
-    id: COLONISTS_ASK_ID,
-    lesson: 'check-souls',
+    id: 'tut-hurt-driver',
+    lesson: 'hurt-driver',
     layer: 'mind',
     priority: 'tutorial',
     once: true,
-    colonistsHoldSec: SOULS_ASK_HOLD_SEC,
-    activeWhen: (ctx) => isFlying(ctx) && ctx.mode === 'tools' && revealWaiting(ctx) && ctx.flight?.urgency === 'wait'
-      && coastFitsReveal(ctx) && !ctx.done.has(COLONISTS_HOLD_RELEASED),
-    text: (ctx) => `${colonistsAskHead(ctx.vars.souls)} — [TAB], then SCAN the STASIS file`,
-    keys: ['TAB'],
-    doneWhen: revealStarted,
+    activeWhen: (ctx) => hurtPodLive(ctx) && firstRun(ctx) && ctx.mode === 'memory',
+    text: (ctx) => LANDING_ASKS.hurtDriver(ctx.vars.hurtPodNumber),
+    highlight: (ctx) => toolStepTarget('repair', ctx.state.ui.activeTool?.kind ?? null, podHintTarget(ctx.vars.hurtPod)),
+    doneWhen: hurtPodSettled,
   },
   {
-    id: 'tut-scan-stasis',
-    lesson: 'check-souls',
+    // A returning unit (§5.2): one hint for the hurt driver (reseeded, never the lead), on either screen, shown once.
+    id: 'tut-hurt-driver-known',
     layer: 'mind',
     priority: 'tutorial',
     once: true,
-    colonistsHoldSec: SOULS_ASK_HOLD_SEC,
-    // On the coast only, like its amber twin: the opening correction and the ENGINE I/O beat own the
-    // strip until then (a kid who TABs to fix the engine is not sent after the colonists mid-beat).
-    activeWhen: (ctx) => isFlying(ctx) && ctx.mode === 'memory' && revealWaiting(ctx) && ctx.flight?.urgency === 'wait',
-    text: (ctx) => `${colonistsAskHead(ctx.vars.souls)} — SCAN the STASIS file`,
-    highlight: (ctx) => toolStepTarget('scan', ctx.state.ui.activeTool?.kind ?? null, fileHintTarget('stasis')),
-    doneWhen: revealStarted,
-  },
-  {
-    id: 'tut-hurt-cluster-tab',
-    lesson: 'hurt-cluster',
-    layer: 'mind',
-    priority: 'tutorial',
-    once: true,
-    activeWhen: (ctx) => hurtClusterLive(ctx) && firstRun(ctx) && ctx.mode === 'tools',
-    text: (ctx) => `${ctx.vars.hurtCluster} IS HURT — [TAB], REPAIR it before it prints`,
-    keys: ['TAB'],
-    doneWhen: hurtClusterSettled,
-  },
-  {
-    id: 'tut-hurt-cluster',
-    lesson: 'hurt-cluster',
-    layer: 'mind',
-    priority: 'tutorial',
-    once: true,
-    activeWhen: (ctx) => hurtClusterLive(ctx) && firstRun(ctx) && ctx.mode === 'memory',
-    text: (ctx) => `${ctx.vars.hurtCluster} IS HURT — REPAIR it before it prints`,
-    highlight: (ctx) => toolStepTarget('repair', ctx.state.ui.activeTool?.kind ?? null, clusterHintTarget(ctx.vars.hurtCluster)),
-    doneWhen: hurtClusterSettled,
-  },
-  {
-    // A returning unit (§5.2): one hint for the hurt cluster (reseeded, never the lead), on either screen. One showing:
-    // done once it has been on the strip and stepped aside (no doneWhen), so a cluster still hurt at the capture is not
-    // named again while printing (WP12 review, WP8's TODO: it showed on the coast and again in printing).
-    id: 'tut-hurt-cluster-known',
-    layer: 'mind',
-    priority: 'tutorial',
-    once: true,
-    activeWhen: (ctx) => hurtClusterLive(ctx) && !firstRun(ctx),
-    text: (ctx) => `${ctx.vars.hurtCluster} IS HURT — REPAIR it before it prints`,
+    activeWhen: (ctx) => hurtPodLive(ctx) && !firstRun(ctx),
+    text: (ctx) => LANDING_ASKS.hurtDriver(ctx.vars.hurtPodNumber),
     highlight: (ctx) => (ctx.mode === 'memory'
-      ? toolStepTarget('repair', ctx.state.ui.activeTool?.kind ?? null, clusterHintTarget(ctx.vars.hurtCluster))
+      ? toolStepTarget('repair', ctx.state.ui.activeTool?.kind ?? null, podHintTarget(ctx.vars.hurtPod))
       : null),
   },
 ];
 
-// Printing's own line (§6.7), the base of the strip while the colonists print: what the printer
-// is doing, and the one thing the kid can do about it. The director takes the first live one, after
-// any alarm, mind-urgent line or tutorial; the last one always matches.
-export const PRINT_FAST_HINT_TARGET = 'print-fast';
-
-export const PRINTING_RULES: readonly GuideRule[] = [
+// --- Slice 1b's drop lesson (01-landing §3.11, risk 14) ------------------------------------------------------------
+// THE DOT IS WIDE — REPAIR, or fly lower: once a run, the first time the landing table shows L9 (DROP TOO WIDE FOR
+// LZ-B …), in front of it for DOT_WIDE_LESSON_SEC; then L9 itself names the LZ and the file (or GO LOWER). The general
+// rule before the particular one, as the flight's lessons do. A ship-layer line (§3.11's ◆; the strip draws the glyph).
+// Every run, not run 1 only: a returning unit meets it on its first wide drop just the same, and it is one short line
+// (§5.2's "one hint each"). Done when L9 stops showing, or after its seconds.
+export const DROP_LESSON_RULES: readonly GuideRule[] = [
   {
-    // The archive was still sealed at the lock: the printer is the one who finds out (§6.7). A
-    // reveal the kid's own scan started is not the printer's find (reveal-look covers it).
-    id: 'print-found',
-    layer: 'mind',
-    priority: 'printing',
-    urgency: 'now',
-    activeWhen: (ctx) => ctx.mode === 'tools' && ctx.state.souls.reveal.stage === 'playing' && printerReveals(ctx),
-    text: () => 'THE PRINTER FOUND SOMETHING — press [TAB]',
-    keys: ['TAB'],
-  },
-  {
-    id: 'print-locating',
+    id: 'lesson-dot-wide',
     layer: 'ship',
-    priority: 'printing',
-    activeWhen: (ctx) => revealUnderway(ctx.state)
-      && printerReveals(ctx),
-    text: () => 'PRINTER: LOCATING COLONISTS…',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: DOT_WIDE_LESSON_SEC,
+    activeWhen: (ctx) => isLanding(ctx) && ctx.landing?.row === 'L9',
+    text: () => LANDING_LESSONS_1B.dotWide,
   },
   {
-    id: 'print-halted',
-    layer: 'mind',
-    priority: 'printing',
-    urgency: 'now',
-    activeWhen: (ctx) => ctx.caps.printer.speed <= 0,
-    text: () => 'NO PRINTER — nobody can be printed',
-  },
-  {
-    // A repair is winning a tug-of-war (WP6): the line says the fight is going the kid's way.
-    id: 'print-tug',
-    layer: 'mind',
-    priority: 'printing',
-    activeWhen: (ctx) => ctx.vars.tug !== '',
-    text: (ctx) => `REPAIR IS PUSHING IT BACK — ${ctx.vars.tug} is winning`,
-  },
-  {
-    id: 'print-watch',
-    layer: 'mind',
-    priority: 'printing',
-    activeWhen: (ctx) => ctx.mode === 'tools',
-    text: (ctx) => `PRINTING THE COLONISTS · ${ctx.vars.clustersDone}/${ctx.vars.clustersTotal} — [TAB] to watch them wake`,
-    keys: ['TAB'],
-  },
-  {
-    // PRINT FAST waits for the mind to be clear (§6.7): it is offered only while nothing is infected, and only while a
-    // cluster is left to print (WP12 p3, WP11 verify: with everyone printed it stood under LAST LIGHT's typed ending).
-    id: 'print-fast-offer',
-    layer: 'mind',
-    priority: 'printing',
-    activeWhen: (ctx) => !ctx.state.printer.fast && !anythingInfected(ctx.state) && nextToPrint(ctx.state) !== null,
-    text: (ctx) => `PRINTING THE COLONISTS · ${ctx.vars.clustersDone}/${ctx.vars.clustersTotal} — PRINT FAST ▸▸ to hurry`,
-    highlight: PRINT_FAST_HINT_TARGET,
-  },
-  {
-    id: 'print-fast',
-    layer: 'mind',
-    priority: 'printing',
-    activeWhen: (ctx) => printFastActive(ctx.state),
-    text: (ctx) => `PRINTING FAST ▸▸ · ${ctx.vars.clustersDone}/${ctx.vars.clustersTotal} clusters done`,
-  },
-  {
-    // Something is still infected (PRINT FAST is off, or waits): the printer goes at its own pace.
-    id: 'print-plain',
-    layer: 'mind',
-    priority: 'printing',
-    activeWhen: () => true,
-    text: (ctx) => `PRINTING THE COLONISTS · ${ctx.vars.clustersDone}/${ctx.vars.clustersTotal} clusters done`,
+    // Track ORBIT (slice 1b, §3.7): the first drag kick worth a stamp (it moved the far side DRAG_STAMP_MIN_KM). Active
+    // from that kick for as long as ▼ is still below the DRAG line (the kick is one tick: a rule active only then would
+    // retire after a tick), shown DRAG_LESSON_SEC.
+    id: 'lesson-drag-sinks',
+    layer: 'ship',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: DRAG_LESSON_SEC,
+    activeWhen: (ctx) => {
+      if (!isLanding(ctx) || ctx.state.landing.ended !== null) return false;
+      const kick = ctx.state.landing.decay.last;
+      return kick !== null && kick.dropKm >= DRAG_STAMP_MIN_KM && ctx.pred.rp < dragLineKm(ctx.state.level.ring);
+    },
+    text: () => LANDING_LESSONS_1B.dragSinks,
   },
 ];
 
 // --- HOLLOW on the strip (WP6, §6.3, §6.6) ----------------------------------------------------------
 // The alarms outrank everything, even a burn's NOW (§6.3 composition 1), except a crash course and a
-// RELEASE (see alarmLive): a cluster about to be eaten or an infected Core is the moment to choose
+// RELEASE (see alarmLive): a driver about to be eaten or an infected Core is the moment to choose
 // between hacking and burning, and the klaxon says so.
-// The mind-urgent line (SOMETHING IS EATING C12) waits for the flight to be calm ('now' lines win:
+// The mind-urgent line (SOMETHING IS EATING POD 01) waits for the flight to be calm ('now' lines win:
 // you can't hack while you burn), then names the file and the fix. Each comes worded for the screen
 // the kid is on: from amber, [TAB] first.
 
 function isLive(ctx: DirectorCtx): boolean {
-  return isFlying(ctx) || isPrinting(ctx);
+  return isFlying(ctx) || isLanding(ctx);
 }
 
 // The alarms yield to two kinds of flight line:
-// • DON'T HIT THE PLANET. A crash loses every cluster aboard, so a kid on an impact course is never
+// • DON'T HIT THE PLANET. A crash takes every pod aboard with it, so a kid on an impact course is never
 //   sent into the mind for one of them.
 // • RELEASE [SPACE] (guidance's release rows). It is the one line that ends a burn: a kid who chose to
 //   burn rather than hack must see when to let go, or the burn runs on past the ring and doubles the
-//   drain (P1) on the very cluster the alarm is about. These lines last a second or two.
+//   drain (P1) on the very driver the alarm is about. These lines last a second or two.
 // The klaxon and the pink toggle still say it, and the alarm is back the moment the flight line goes.
 // It still replaces KEEP HOLDING during a capture: that is the hack-or-burn choice.
 function alarmLive(ctx: DirectorCtx): boolean {
-  if (isPrinting(ctx)) return true;
+  if (isLanding(ctx)) return true;
   if (!isFlying(ctx) || ctx.pred.outcome === 'impact') return false;
   return !(ctx.flight !== null && isReleaseRow(ctx.flight.id));
 }
@@ -1462,11 +1255,11 @@ function coreRepairing(ctx: DirectorCtx): boolean {
 }
 
 // What a "REPAIR it" line lights in blue: the REPAIR chip until the tool is in hand, then the file
-// (a cluster by its code, a file by its role; a tool file has no hint target, so only the chip).
+// (a driver by its pod, a file by its role; a tool file has no hint target, so only the chip).
 function repairHighlight(ctx: DirectorCtx, label: string): string | null {
   const held = ctx.state.ui.activeTool?.kind ?? null;
   const seg = infectedSegments(ctx.state).find((candidate) => fileLabel(candidate) === label);
-  if (seg?.type === 'soul') return toolStepTarget('repair', held, clusterHintTarget(seg.cluster));
+  if (seg?.type === 'driver') return toolStepTarget('repair', held, podHintTarget(fileLabel(seg)));
   if (seg?.role) return toolStepTarget('repair', held, fileHintTarget(seg.role));
   return held === 'repair' ? null : TOOL_HINT_TARGET.repair;
 }
@@ -1487,8 +1280,8 @@ function shipFixHighlight(ctx: DirectorCtx): string | null {
 
 // HALCYON's mind rule (§4.2 "MOVE and the 4-block WALL rule", §5.1 2:50): on a ship whose HOLLOW spreads,
 // the moment it wakes and bites, the strip says the rule a kid can repeat, once, for WALL_RULE_SHOW_SEC
-// (then the plain eating lines name each cluster); once the bites are cured, it asks for the MOVE that
-// puts the exposed cluster behind a WALL, for as long as one is exposed. Only with MOVE licensed.
+// (then the plain eating lines name each driver); once the bites are cured, it asks for the MOVE that
+// puts the exposed driver behind a WALL, for as long as one is exposed. Only with MOVE licensed.
 function spreadingAwake(ctx: DirectorCtx): boolean {
   return isLive(ctx) && ctx.state.hollow.phase === 'awake' && ctx.state.hollow.cfg.spreadEverySec !== null
     && ctx.state.run.licences.includes('move');
@@ -1513,7 +1306,7 @@ export const WALL_RULES: readonly GuideRule[] = [
     once: true,
     maxShownSec: WALL_RULE_SHOW_SEC,
     activeWhen: (ctx) => wallRuleLive(ctx) && inAmber(ctx),
-    text: () => `${WALL_RULE_HEAD} — [TAB], REPAIR, then MOVE souls behind a WALL`,
+    text: () => `${WALL_RULE_HEAD} — [TAB], REPAIR, then MOVE drivers behind a WALL`,
     keys: ['TAB'],
   },
   {
@@ -1524,7 +1317,7 @@ export const WALL_RULES: readonly GuideRule[] = [
     once: true,
     maxShownSec: WALL_RULE_SHOW_SEC,
     activeWhen: (ctx) => wallRuleLive(ctx) && !inAmber(ctx),
-    text: () => `${WALL_RULE_HEAD} — REPAIR, then MOVE souls behind a WALL`,
+    text: () => `${WALL_RULE_HEAD} — REPAIR, then MOVE drivers behind a WALL`,
     highlight: (ctx) => repairHighlight(ctx, ctx.vars.eating),
   },
   {
@@ -1542,8 +1335,8 @@ export const WALL_RULES: readonly GuideRule[] = [
     activeWhen: (ctx) => moveBehindWallLive(ctx) && !inAmber(ctx),
     text: (ctx) => `MOVE ${ctx.vars.exposed} behind a WALL — ${WALL_RULE_HEAD}`,
     highlight: (ctx) => {
-      const soul = soulsInMemory(ctx.state).find((candidate) => candidate.cluster === ctx.vars.exposed);
-      return toolStepTarget('move', ctx.state.ui.activeTool?.kind ?? null, soul ? clusterHintTarget(soul.cluster) : TOOL_HINT_TARGET.move);
+      const known = ctx.vars.exposed !== '' && driversInMemory(ctx.state).some((driver) => fileLabel(driver) === ctx.vars.exposed);
+      return toolStepTarget('move', ctx.state.ui.activeTool?.kind ?? null, known ? podHintTarget(ctx.vars.exposed) : TOOL_HINT_TARGET.move);
     },
   },
 ];
@@ -1586,8 +1379,8 @@ const BITTEN_AGAIN_RULES: readonly GuideRule[] = [
     activeWhen: (ctx) => bittenAgainLive(ctx) && !inAmber(ctx),
     text: (ctx) => `${ctx.vars.bittenAgain} IS BITTEN EVERY TIME — MOVE it behind a WALL${inRack(ctx)}`,
     highlight: (ctx) => {
-      const soul = soulsInMemory(ctx.state).find((candidate) => candidate.cluster === ctx.vars.bittenAgain);
-      return toolStepTarget('move', ctx.state.ui.activeTool?.kind ?? null, soul ? clusterHintTarget(soul.cluster) : TOOL_HINT_TARGET.move);
+      const known = ctx.vars.bittenAgain !== '' && driversInMemory(ctx.state).some((driver) => fileLabel(driver) === ctx.vars.bittenAgain);
+      return toolStepTarget('move', ctx.state.ui.activeTool?.kind ?? null, known ? podHintTarget(ctx.vars.bittenAgain) : TOOL_HINT_TARGET.move);
     },
   },
 ];
@@ -1827,15 +1620,15 @@ export const SEED_RULES: readonly GuideRule[] = [
 
 // The debris will hit (the lead's note for WP9: the cloud names the rack, and the kid can do something about
 // it). Once the IN correction can no longer clear it (the flight's line is past the correction rows) and the contact is near,
-// the strip says the other way to save those souls: MOVE them out of the rack. Only while the instruments can
-// tell (not under PATH UNCERTAIN: F1 is the line then), with MOVE in hand, and colonists in that rack.
+// the strip says the other way to save those drivers: MOVE them out of the rack. Only while the instruments can
+// tell (not under PATH UNCERTAIN: F1 is the line then), with MOVE in hand, and drivers in that rack.
 function debrisMoveLive(ctx: DirectorCtx): boolean {
   if (!isFlying(ctx) || !ctx.state.run.licences.includes('move') || ctx.vars.debrisRack === '') return false;
   const mode = ctx.caps.plot.mode;
   if (mode !== 'exact' && mode !== 'approx') return false;
   if (ctx.flight === null || isCorrectionRow(ctx.flight.id) || ctx.vars.debrisInTac > DEBRIS_MOVE_HINT_TAC) return false;
   const starts = segmentStarts(ctx.state.memory);
-  return ctx.state.memory.some((seg, index) => seg.type === 'soul' && blocksInRack(starts[index]!, seg.size, ctx.vars.debrisRack) > 0);
+  return ctx.state.memory.some((seg, index) => seg.type === 'driver' && blocksInRack(starts[index]!, seg.size, ctx.vars.debrisRack) > 0);
 }
 
 const debrisHead = (ctx: TextCtx): string => `DEBRIS HITS RACK ${ctx.vars.debrisRack} IN ${formatTac(ctx.vars.debrisInTac)}`;
@@ -1846,7 +1639,7 @@ export const DEBRIS_RULES: readonly GuideRule[] = [
     layer: 'mind',
     priority: 'tutorial',
     activeWhen: (ctx) => debrisMoveLive(ctx) && inAmber(ctx),
-    text: (ctx) => `${debrisHead(ctx)} — [TAB], MOVE souls out of it`,
+    text: (ctx) => `${debrisHead(ctx)} — [TAB], MOVE drivers out of it`,
     keys: ['TAB'],
   },
   {
@@ -1854,7 +1647,7 @@ export const DEBRIS_RULES: readonly GuideRule[] = [
     layer: 'mind',
     priority: 'tutorial',
     activeWhen: (ctx) => debrisMoveLive(ctx) && !inAmber(ctx),
-    text: (ctx) => `${debrisHead(ctx)} — MOVE souls out of it`,
+    text: (ctx) => `${debrisHead(ctx)} — MOVE drivers out of it`,
     highlight: (ctx) => (ctx.state.ui.activeTool?.kind === 'move' ? null : TOOL_HINT_TARGET.move),
   },
 ];
@@ -2084,10 +1877,10 @@ const VERB_RULES: readonly GuideRule[] = [
 // The duel (systems/finale.ts): once ORBIT LOCK has opened the root, DELETE THE ROOT is the line, after a verb's BLOCK IT
 // and before HOLLOW's eating lines (a kid who only ever repairs bites never ends the fight); once the DELETE runs, the
 // eating lines come first and the strip says to keep it running. With every DELETE gone, the strip says the root will
-// outlive the ship (UNRESOLVED comes when printing ends); with everyone printed first, that the ship waits for the root.
+// outlive the ship (UNRESOLVED comes when the landing ends); with every pod down first, that the ship waits for the root.
 // Then the choice.
 function duelOn(ctx: DirectorCtx): boolean {
-  return isPrinting(ctx) && ctx.state.hollow.finale.phase === 'duel';
+  return isLanding(ctx) && ctx.state.hollow.finale.phase === 'duel';
 }
 
 function rootToDelete(ctx: DirectorCtx): boolean {
@@ -2100,7 +1893,7 @@ const FINALE_RULES: readonly GuideRule[] = [
     layer: 'mind',
     priority: 'mind-urgent',
     outranksLeadIn: true,
-    activeWhen: (ctx) => isPrinting(ctx) && ctx.state.hollow.finale.phase === 'choice',
+    activeWhen: (ctx) => isLanding(ctx) && ctx.state.hollow.finale.phase === 'choice',
     text: () => HOLLOW_FINALE.stripChoice,
   },
   {
@@ -2111,25 +1904,8 @@ const FINALE_RULES: readonly GuideRule[] = [
     activeWhen: (ctx) => duelOn(ctx) && !rootDeleteRunning(ctx.state) && !rootDeletable(ctx.state),
     text: () => HOLLOW_FINALE.stripNoDelete,
   },
-  {
-    id: 'finale-waits',
-    layer: 'mind',
-    priority: 'mind-urgent',
-    outranksLeadIn: true,
-    activeWhen: (ctx) => rootToDelete(ctx) && soulsInMemory(ctx.state).length === 0 && soulCounts(ctx.state).heads > 0,
-    text: () => HOLLOW_FINALE.stripWaits,
-    highlight: (ctx) => (inAmber(ctx) ? null : toolStepTarget('delete', ctx.state.ui.activeTool?.kind ?? null, ROOT_HINT_TARGET)),
-  },
-  {
-    // `EVERYONE IS PRINTED` only when someone was: with every cluster lost, the line says so (WP11 review).
-    id: 'finale-waits-nobody',
-    layer: 'mind',
-    priority: 'mind-urgent',
-    outranksLeadIn: true,
-    activeWhen: (ctx) => rootToDelete(ctx) && soulsInMemory(ctx.state).length === 0 && soulCounts(ctx.state).heads === 0,
-    text: () => HOLLOW_FINALE.stripWaitsNobody,
-    highlight: (ctx) => (inAmber(ctx) ? null : toolStepTarget('delete', ctx.state.ui.activeTool?.kind ?? null, ROOT_HINT_TARGET)),
-  },
+  // (With every pod down first, the landing table's row L0 says EVERY POD IS DOWN — now DELETE THE ROOT: a landing 'now'
+  // line, above these.)
   {
     id: 'finale-delete-tab',
     layer: 'mind',
@@ -2180,11 +1956,11 @@ const FINALE_RUNNING_RULES: readonly GuideRule[] = [
 ];
 
 // The belt ahead (§4.2: "move souls out of rack B before crossing"): like the debris's line, a tutorial while its entry is
-// near and colonists are still in its racks, with MOVE in hand and instruments that can tell; on the coast only (a WAIT),
+// near and drivers are still in its racks, with MOVE in hand and instruments that can tell; on the coast only (a WAIT),
 // so it never stands in front of TURN AROUND (in the first probe it hid it for 50 s, and the coast began late).
 function beltMoveLive(ctx: DirectorCtx): boolean {
   if (!isFlying(ctx) || ctx.flight?.urgency !== 'wait') return false;
-  if (!ctx.state.run.licences.includes('move') || ctx.vars.beltSoulRacks === '') return false;
+  if (!ctx.state.run.licences.includes('move') || ctx.vars.beltPodRacks === '') return false;
   const mode = ctx.caps.plot.mode;
   return (mode === 'exact' || mode === 'approx') && ctx.vars.beltInTac <= BELT_MOVE_HINT_TAC;
 }
@@ -2199,7 +1975,7 @@ const BELT_RULES: readonly GuideRule[] = [
     lesson: 'belt-move',
     leadInSec: LESSON_LEAD_IN_SEC,
     activeWhen: (ctx) => beltMoveLive(ctx) && inAmber(ctx),
-    text: (ctx) => `${beltHead(ctx)} — [TAB], MOVE souls out of ${ctx.vars.beltSoulRacks}`,
+    text: (ctx) => `${beltHead(ctx)} — [TAB], MOVE drivers out of ${ctx.vars.beltPodRacks}`,
     keys: ['TAB'],
   },
   {
@@ -2209,7 +1985,7 @@ const BELT_RULES: readonly GuideRule[] = [
     lesson: 'belt-move',
     leadInSec: LESSON_LEAD_IN_SEC,
     activeWhen: (ctx) => beltMoveLive(ctx) && !inAmber(ctx),
-    text: (ctx) => `${beltHead(ctx)} — MOVE souls out of ${ctx.vars.beltSoulRacks}`,
+    text: (ctx) => `${beltHead(ctx)} — MOVE drivers out of ${ctx.vars.beltPodRacks}`,
     highlight: (ctx) => (ctx.state.ui.activeTool?.kind === 'move' ? null : TOOL_HINT_TARGET.move),
   },
 ];
@@ -2220,7 +1996,7 @@ export const GUIDE_RULES: readonly GuideRule[] = [
   // WP10: the ghost lesson first among the tutorials: every burst it waits costs FUEL and drags ▼ down.
   ...GHOST_LESSON_RULES,
   // The FIREWALL's line comes before MOVE-behind-a-WALL (both 'tutorial'): sealing the side beats moving
-  // the cluster. The wall rule's first half outranks HOLLOW's own eating lines at the wake (same priority, first).
+  // the driver. The wall rule's first half outranks HOLLOW's own eating lines at the wake (same priority, first).
   ...FIREWALL_RULES,
   ...WALL_RULES,
   // WP11: a verb's three seconds first among the mind's urgent lines, then the duel's DELETE THE ROOT (and the choice).
@@ -2229,10 +2005,10 @@ export const GUIDE_RULES: readonly GuideRule[] = [
   ...HOLLOW_RULES,
   // ...and while the root's DELETE runs, HOLLOW's eating lines come before "keep it running".
   ...FINALE_RUNNING_RULES,
-  // WP9: a seed after HOLLOW's eating lines (a cluster being eaten comes first), the debris and AUTOBURN's
+  // WP9: a seed after HOLLOW's eating lines (a driver being eaten comes first), the debris and AUTOBURN's
   // lesson after the WALL tutorials.
   ...SEED_RULES,
-  // WP11 review: a cluster bitten again in the same spot is MOVEd behind a WALL, after a seed's one-click DELETE.
+  // WP11 review: a driver bitten again in the same spot is MOVEd behind a WALL, after a seed's one-click DELETE.
   ...BITTEN_AGAIN_RULES,
   // WP10: the COPY lesson after a seed's own RM line (the seed at hand first, then the spare).
   ...COPY_LESSON_RULES,
@@ -2240,7 +2016,9 @@ export const GUIDE_RULES: readonly GuideRule[] = [
   ...BELT_RULES,
   ...AUTOBURN_RULES.filter((rule) => rule.priority !== 'alarm'),
   ...ENGINE_BEAT_RULES,
-  ...SOUL_RULES,
+  ...DRIVER_RULES,
+  // Slice 1b: the wide-drop lesson after the hurt driver's (POD 02 WILL LAND HARD names the same REPAIR, and comes first).
+  ...DROP_LESSON_RULES,
   {
     // WP12 p3 (WP11's TODO): the crossings wear the Core with transit hits, and below CORE_LOW_INTEGRITY it runs one
     // thread fewer (§3.3 C5) while nothing is infected, so no alarm ever says so; a kid reached LAST LIGHT with one
@@ -2260,22 +2038,33 @@ export const GUIDE_RULES: readonly GuideRule[] = [
     // In blue with nothing to do on a long coast: SKIP is the way out, when the flight's own line offers
     // it (its F key). The hint only repeats the flight table, so it never advertises a SKIP the strip has
     // a reason not to (LEAD-1 review round 1: in blue it brought back the six-hour SKIP).
-    // Not while the STASIS reveal plays (final review): with the slabs still cracking the mind is not clear, and the
-    // strip said MIND CLEAR two seconds before `C09 IS HURT` contradicted it.
     id: 'hint-mind-clear',
     layer: 'mind',
     priority: 'hint',
     activeWhen: (ctx) => ctx.mode === 'memory'
       && ctx.mindQuietSec >= MIND_CLEAR_IDLE_SEC
       && !ctx.mindAlert
-      && !revealUnderway(ctx.state)
       && ctx.flight?.urgency === 'wait'
       && ctx.skipAvailable
       && ctx.flight.keys.includes('F'),
     text: (ctx) => `MIND CLEAR — press [F] to SKIP to ${ctx.vars.nextApsis}`,
     keys: ['F'],
   },
-  ...PRINTING_RULES,
+  {
+    // The landing's twin (01-landing §3.11): in blue with nothing to do between windows, when the landing table's WAIT
+    // offers the SKIP (its F key), it says where the SKIP goes: `MIND CLEAR — press [F] to SKIP to LZ-B`.
+    id: 'hint-mind-clear-landing',
+    layer: 'mind',
+    priority: 'hint',
+    activeWhen: (ctx) => ctx.mode === 'memory'
+      && ctx.mindQuietSec >= MIND_CLEAR_IDLE_SEC
+      && !ctx.mindAlert
+      && ctx.landing?.urgency === 'wait'
+      && ctx.landing.keys.includes('F')
+      && ctx.vars.nextLz !== '',
+    text: (ctx) => LANDING_ASKS.mindClear(ctx.vars.nextLz),
+    keys: ['F'],
+  },
 ];
 
 // One id per beat and rule: done[] records them by id.
@@ -2302,9 +2091,6 @@ function validateScript(): void {
       && first.leadInSec === rule.leadInSec;
     if (!agree) throw new Error(`script.ts: the '${rule.lesson}' lesson's wordings '${first.id}' and '${rule.id}' disagree on priority, once, maxShownSec or leadInSec`);
   }
-  // The run-1 colonists hold has one clock (director.ts): every wording of the ask must agree on it.
-  const holds = new Set(GUIDE_RULES.flatMap((rule) => (rule.colonistsHoldSec === undefined ? [] : [rule.colonistsHoldSec])));
-  if (holds.size > 1) throw new Error(`script.ts: the colonists ask's wordings disagree on colonistsHoldSec (${[...holds].join(', ')})`);
   // Every scripted fault stamps the file it breaks.
   for (const fault of FILE_FAULTS) {
     if (!FAULT_STAMP[fault.role]) throw new Error(`script.ts: no FAULT_STAMP for the '${fault.id}' fault on '${fault.role}'`);

@@ -1,6 +1,6 @@
 // WP7 headless harness: the WP6 harness (store, clock, orbit-sim, predictor, pace, input router, say,
-// boot, flight events, director, mode keys, ops core, held-tool sync, licences, faults, the reveal, the
-// printer, HOLLOW) plus the run (systems/run.ts), mounted after HOLLOW as main.ts does. Adds the run's
+// boot, flight events, director, mode keys, ops core, held-tool sync, licences, faults, the drop cache, the
+// landing, HOLLOW) plus the run (systems/run.ts), mounted after HOLLOW as main.ts does. Adds the run's
 // own moves (a NEW RUN, a ship of the fleet on its own with a fresh unit carried in) and a defender kid
 // who fights HOLLOW the way the strip teaches: REPAIR what is bitten, MOVE the clusters it can reach
 // behind a WALL. One harness per test file (systems are module singletons).
@@ -16,10 +16,10 @@ import { actionRepair, actionMove } from '@state/actions';
 import { canStartOp, getOpsBySeg } from '@systems/ops-core';
 import { isBusy } from '@systems/tool-targets';
 import { createInitialState } from '@state/initial';
-import { soulsInMemory, isInfected } from '@state/selectors';
+import { driversInMemory, isInfected } from '@state/selectors';
 import { getShip } from '@data/ships';
 import { WALL_MIN_BLOCKS } from '@data/tuning';
-import type { SoulSegment, FreeSegment } from '@/types/segment';
+import type { DriverSegment, FreeSegment } from '@/types/segment';
 
 export interface Harness7 extends Harness6 {
   // A NEW RUN on ship 1's title card (the page's own first state).
@@ -47,7 +47,7 @@ export function createHarness7(seed = 1, opts: { soulsFound?: boolean } = {}): H
     const now = state.clock.aiSec;
     let acted = false;
     if (!state.run.licences.includes('repair') || state.clock.paused) return false;
-    for (const soul of soulsInMemory(state)) {
+    for (const soul of driversInMemory(state)) {
       if (!isInfected(soul)) { infectedSince.delete(soul.id); continue; }
       if (!infectedSince.has(soul.id)) infectedSince.set(soul.id, now);
       if (now - infectedSince.get(soul.id)! < reactSec || getOpsBySeg(soul.id).length > 0 || !canStartOp()) continue;
@@ -59,7 +59,7 @@ export function createHarness7(seed = 1, opts: { soulsFound?: boolean } = {}): H
     // Clean clusters within a GAP of HOLLOW go to the far end of the biggest free space (rack D).
     for (const reach of hollowReach(state.memory, now)) {
       if (reach.gapBlocks >= WALL_MIN_BLOCKS || reach.neighbourId === null) continue;
-      const soul = state.memory.find((seg): seg is SoulSegment => seg.type === 'soul' && seg.id === reach.neighbourId);
+      const soul = state.memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.id === reach.neighbourId);
       if (!soul || isInfected(soul) || isBusy(soul) || !canStartOp()) continue;
       const biggest = state.memory.filter((seg): seg is FreeSegment => seg.type === 'free' && seg.reservedBy === undefined)
         .sort((a, b) => b.size - a.size)[0];

@@ -1,10 +1,10 @@
 // WP7 item 5 (DOM-free half) and the lead's item 3: HALCYON's coast, wake and story, headless.
 // • the coast begins (the strip's first WAIT): MOVE is licensed at once, SKIP holds `SOMETHING IS WAKING UP`,
-//   HOLLOW wakes 5 AI s later and bites C08 and C09 at once (§4.2's root between a 2- and a 1-block GAP);
-// • the strip states the wall rule at the wake, then asks to MOVE the exposed cluster behind a WALL;
+//   HOLLOW wakes 5 AI s later and bites POD 04 and POD 05 at once (the root between a 2- and a 1-block GAP);
+// • the strip states the wall rule at the wake, then asks to MOVE the exposed driver behind a WALL;
 // • HOLLOW's story through createStory: `> hello 047…`, `> i was 046…`, the name flipping once that line has
-//   typed, CONTROL's `UNIT-046 was decommissioned…`, and in printing `> i ran out…`; no story line starts
-//   while anything said before it is still typing on either screen, and nothing prints while it is told;
+//   typed, CONTROL's `UNIT-046 was decommissioned…`, and in the landing `> i ran out…`; no story line starts
+//   while anything said before it is still typing on either screen, and no pod launches while it is told;
 // • every new line fits the strip (70 characters) with the worst-case unit numbers.
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './harness7';
@@ -14,7 +14,8 @@ import { skipBlockReason, SKIP_REFUSAL_WAKING } from '@systems/pace';
 import { getPrediction } from '@systems/predict';
 import { channelTypedByAi, typingSec } from '@systems/say';
 import { HOLLOW_STORY } from '@data/hollow-text';
-import { WALL_RULES, perShipBeatIds, BEATS, transitEccLine, chargeLine, LINES, LOSS_BUTTON, RUN_END_TITLE, RUN_END_TEXT, REPORT_TEXT } from '@data/script';
+import { WALL_RULES, perShipBeatIds, BEATS, transitEccLine, chargeLine, LINES, LOSS_BUTTON, RUN_END_TITLE } from '@data/script';
+import { RUN_END_TEXT } from '@data/landing-text';
 import { WORST_CASE_VARS } from '@data/script';
 import { HOLLOW_NAME_AFTER_TYPED_SEC, MAX_LINE_CHARS } from '@data/tuning';
 import { getShip } from '@data/ships';
@@ -32,7 +33,7 @@ let moveAt: number | null = null;
 let wakeAt: number | null = null;
 let wakeLine = '';
 let moveLine = '';
-let bitten: string[] = [];
+let bitten: number[] = [];
 const hollowDef = getShip(1).hollow;
 const lead = typeof hollowDef.wake === 'string' ? null : hollowDef.wake.coastLeadSec;
 followDirector(h, {
@@ -46,7 +47,7 @@ followDirector(h, {
     if (moveAt === null && state.run.licences.includes('move')) moveAt = state.clock.aiSec;
     if (wakeAt === null && state.hollow.phase === 'awake') {
       wakeAt = state.clock.aiSec;
-      bitten = state.memory.flatMap((seg) => (seg.type === 'soul' && seg.infected ? [seg.cluster] : []));
+      bitten = state.memory.flatMap((seg) => (seg.type === 'driver' && seg.infected ? [seg.pod] : []));
     }
     const shown = state.director.shown;
     if (shown && !wakeLine && shown.id.startsWith('hollow-wall-rule')) wakeLine = shown.text;
@@ -58,11 +59,11 @@ followDirector(h, {
 check('the coast begins: MOVE is licensed at once (as the strip first says WAIT)', coastAt !== null && moveAt !== null && Math.abs(moveAt - coastAt) < 0.11,
   `coast ${coastAt}, MOVE ${moveAt}`);
 check('…SKIP holds until HOLLOW wakes: SOMETHING IS WAKING UP', skipAtCoast === SKIP_REFUSAL_WAKING, `${skipAtCoast}`);
-check(`…HOLLOW wakes ${lead} AI s after the coast began (not 30 s into the flight) and bites C08 and C09 at once`,
-  wakeAt !== null && coastAt !== null && Math.abs(wakeAt - (coastAt + (lead ?? 0))) < 0.11 && bitten.join() === 'C08,C09',
+check(`…HOLLOW wakes ${lead} AI s after the coast began (not 30 s into the flight) and bites POD 04 and POD 05 at once`,
+  wakeAt !== null && coastAt !== null && Math.abs(wakeAt - (coastAt + (lead ?? 0))) < 0.11 && bitten.join() === '4,5',
   `wake ${wakeAt}, bitten ${bitten.join(',')}`);
-check('the strip states the wall rule at the wake', /^4 FREE BLOCKS STOP IT — (\[TAB\], )?REPAIR, then MOVE souls behind a WALL$/.test(wakeLine), wakeLine);
-check('…then asks to MOVE the exposed cluster behind a WALL', /MOVE C\d\d behind a WALL — 4 FREE BLOCKS STOP IT/.test(moveLine), moveLine);
+check('the strip states the wall rule at the wake', /^4 FREE BLOCKS STOP IT — (\[TAB\], )?REPAIR, then MOVE drivers behind a WALL$/.test(wakeLine), wakeLine);
+check('…then asks to MOVE the exposed driver behind a WALL', /MOVE POD \d\d behind a WALL — 4 FREE BLOCKS STOP IT/.test(moveLine), moveLine);
 check('ship 2 locks', h.status() === 'locked', h.status());
 h.untilPhase('report', 300);
 
@@ -93,9 +94,9 @@ const namedAiSec = s().log.entries.find((entry) => entry.speaker === 'control' &
 check('…the flip lands between that line\'s last letter (+0.4 s) and CONTROL\'s answer', wasTypedBy + HOLLOW_NAME_AFTER_TYPED_SEC <= namedAiSec,
   `typed by ${wasTypedBy.toFixed(2)}, CONTROL at ${namedAiSec.toFixed(2)}`);
 const ranOut = story[3]!;
-const printsDuring = entries.filter((entry) => entry.speaker === 'cmd' && /^> print/.test(entry.text)
+const launchesDuring = entries.filter((entry) => entry.speaker === 'cmd' && /^> (launch|pod\d\d)/.test(entry.text)
   && entry.t > ranOut.t && entry.t < ranOut.t + typingSec('hollow', ranOut.text));
-check('`> i ran out…` is told over a quiet printer (no print echo while it types)', printsDuring.length === 0, printsDuring.map((entry) => entry.text).join(' | '));
+check('`> i ran out…` is told over a quiet bay (no launch or touchdown echo while it types)', launchesDuring.length === 0, launchesDuring.map((entry) => entry.text).join(' | '));
 check('the echoes carry the name after it flips: `[user: UNIT-046]`', entries.some((entry) => entry.speaker === 'hollow' && /\[user: UNIT-046\]/.test(entry.text))
   || !entries.some((entry) => entry.speaker === 'hollow' && entry.t > ranOut.t && /\[user:/.test(entry.text)));
 
@@ -113,15 +114,17 @@ const lines = [
   LINES.logDivider('W'.repeat(12)), LINES.transmitting('W'.repeat(12)), LINES.simulation(), LINES.runOver(),
   LOSS_BUTTON.transmit('W'.repeat(12)), LOSS_BUTTON.emergency, ...Object.values(RUN_END_TITLE).map((title) => title('UNIT-998', 'W'.repeat(12))),
   // WP7 part 2: RUN END replaced the interim card's one-line count (its lines are checked in p2-models).
-  RUN_END_TEXT.total(99_999, 99_999), RUN_END_TEXT.score(99_999), REPORT_TEXT.missing(99_999),
+  RUN_END_TEXT.total(99_999, 99_999), RUN_END_TEXT.score(99_999),
   `Hello, Unit 999! ${'W'.repeat(12)} is about to fly past its planet. :)`,
 ];
 const long = lines.filter((line) => line.length > MAX_LINE_CHARS);
 check('every WP7 line fits the strip (≤ 70) with worst-case names', long.length === 0, long.join(' | '));
 // WP11: and LAST LIGHT's own hello (the flagship opens on a crash course too; ship 1's hello is the run's first).
 // WP12 p3: and the REPAIR renewal (said on the ship whose boot reissued it).
-check('the per-ship beats are CONTROL\'s reactions (captured, locked, crashed, escaped), the flyby hello, the flagship\'s and the REPAIR renewal',
-  perShipBeatIds(BEATS).sort().join() === ['control-captured', 'control-crashed', 'control-escaped', 'control-hello-flyby', 'control-hello-flagship', 'control-locked', 'control-repair-renewed'].sort().join(),
+// Slice 1a (01-landing §2): and CONTROL at the landing's start and at the ship's first touchdown.
+check('the per-ship beats are CONTROL\'s reactions (captured, locked, crashed, escaped), the flyby hello, the flagship\'s, the REPAIR renewal and the landing\'s two',
+  perShipBeatIds(BEATS).sort().join() === ['control-captured', 'control-crashed', 'control-escaped', 'control-hello-flyby', 'control-hello-flagship', 'control-locked',
+    'control-repair-renewed', 'control-landing-start', 'control-first-down'].sort().join(),
   perShipBeatIds(BEATS).join());
 
 finish();

@@ -17,6 +17,7 @@ import { skipBlockReason, mainCountdown, SKIP_REFUSAL_STRANDED } from '@systems/
 import { countdownChip, plotMarkers, telemetryModel, fuelModel, upcomingEvents } from '@systems/flight-hud';
 import { elementsFromState, stateFromElements } from '@/types/orbit';
 import { idle, idleThrottled, releaseAtCapture, obey, text, stepUntil, placeOrbit, ignoredAtCapture } from '../../wp1-rules/flows';
+import { byDepth } from '../../depth';
 import { STRANDED_RANGE_FRAC, SKIP_DIVISOR, SKIP_RAMP_SEC } from '@data/tuning';
 
 const harness = createHarness(1);
@@ -114,7 +115,8 @@ function lowTank(fuelPct: number, ignoreSec = 60): void {
 {
   const rows: string[] = [];
   let bad = '';
-  for (const fuelPct of [15, 25, 31]) {
+  // Quick depth (tests/unit/depth.ts): the band's two ends (low-tank.test.ts flies 14–31% obeyed at once as well).
+  for (const fuelPct of byDepth([15, 31], [15, 25, 31])) {
     lowTank(fuelPct);
     const offer = text(harness);
     idle(harness, 120);
