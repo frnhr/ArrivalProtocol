@@ -147,6 +147,7 @@ export const MAP_TEXT = {
     confirmNo: 'KEEP PACKING',
     confirmKeys: '[ENTER] yes · [ESC] no',
     goOverRoom: 'LEAVE FILES BEHIND FIRST',
+    wontFit: (blocks: number): string => `${blocks} WON'T FIT`,
     zeroDetail: (ship: string): string => `${ship} has no room left for REPAIR CHARGE`,
   },
 

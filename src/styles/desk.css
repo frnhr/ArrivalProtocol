@@ -232,3 +232,57 @@ body.reduced-motion .star-chart .cn-box { transition: none; }
   .dc-name { font-size: 28px; }
 }
 body.reduced-motion .desk-card-win { transition: none; }
+
+/* ── The PACKET's slice-3a rows (TransmitScreen): ◀ CHART, the LINK and ROOM bars, the charge line, the inline confirm,
+      the BEAM stamp. The screen stays the mind's blue; the room bar is the link bar's twin under it. ── */
+.tx-head { position: relative; }
+.tx-back {
+  position: absolute; left: 0; top: 4px; padding: 4px 10px; background: transparent; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--transmit-line) 40%, transparent); color: var(--transmit-line);
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.16em;
+}
+.tx-back:hover { border-color: var(--transmit-line); box-shadow: 0 0 10px var(--transmit-glow); }
+.tx-back[hidden] { display: none; }
+.tx-packet { grid-template-columns: 52px minmax(0, 1fr) auto; }
+.tx-bar-label { font-size: 10px; letter-spacing: 0.2em; color: var(--report-dim); }
+.tx-room[data-tone='over'] .tx-room-bar .tx-bar-files { background: color-mix(in srgb, var(--warn) 55%, transparent); }
+.tx-room[data-tone='over'] .tx-bar-over,
+.tx-room[data-tone='zero'] .tx-bar-over { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 60%, transparent); }
+.tx-room-charge { grid-column: 1 / -1; text-align: center; font-size: 12px; letter-spacing: 0.14em; color: var(--accent-bright); }
+.tx-room-charge[hidden] { display: none; }
+.tx-room-charge[data-tone='zero'],
+.tx-room-charge[data-tone='over'] { color: var(--warn); font-weight: 700; }
+.tx-room.nudge { animation: tx-go-refused 0.42s steps(2) 1; }
+.tx-control { text-align: center; font-size: 12px; letter-spacing: 0.06em; color: var(--report-text); }
+.tx-control[hidden] { display: none; }
+.tx-control-tag { margin-right: 8px; font-size: 10px; letter-spacing: 0.2em; color: var(--transmit-line); }
+.tx-send-control { font-size: 12px; letter-spacing: 0.06em; color: var(--report-text); animation: wr-in 0.5s ease-out 0.4s both; }
+
+.tx-confirm { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.tx-confirm[hidden] { display: none; }
+.tx-confirm-q { font-family: 'VT323', monospace; font-size: 24px; letter-spacing: 0.14em; color: var(--warn); }
+.tx-confirm-buttons { display: flex; gap: 10px; }
+.tx-confirm-buttons button {
+  padding: 6px 18px; font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.16em; cursor: pointer;
+  background: transparent; color: var(--report-text); border: 1px solid var(--star-missed);
+}
+.tx-confirm-yes { border-color: var(--warn) !important; color: var(--warn) !important; }
+.tx-confirm-keys { font-size: 10px; letter-spacing: 0.14em; color: var(--report-dim); }
+.tx-go[hidden] { display: none; }
+
+.tx-inner { position: relative; }
+.tx-stamp {
+  position: absolute; left: 50%; top: 42%; z-index: 3; pointer-events: none;
+  padding: 6px 26px 2px; border: 4px double currentColor;
+  background: color-mix(in srgb, var(--report-bg) 72%, transparent);
+  font-family: 'VT323', monospace; font-size: clamp(34px, 4.6vw, 64px); line-height: 1; letter-spacing: 0.14em; white-space: nowrap;
+  color: var(--transmit-line); text-shadow: 0 0 22px currentColor;
+  transform: translate(-50%, -50%) rotate(-3deg); opacity: 0;
+}
+.tx-stamp[hidden] { display: none; }
+.tx-stamp.on { animation: stamp-in 140ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both; }
+.transmit-screen.reduced .tx-stamp.on { animation: wr-in 0.3s ease-out both; transform: translate(-50%, -50%) rotate(-3deg); opacity: 1; }
+@media (max-width: 768px) {
+  .tx-back { position: static; margin-bottom: 8px; }
+  .tx-packet { grid-template-columns: 40px minmax(0, 1fr) auto; }
+}
