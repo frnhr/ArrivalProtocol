@@ -2,6 +2,7 @@ import type { GameState, RunPhase, RunState, HollowState, RunStats, ArchiveState
 import type { Segment } from '@/types/segment';
 import type { LandingState, PodRecord, ShipLandingDef } from '@/types/landing';
 import type { HollowDef, ShipThreat } from '@/types/threat';
+import type { RunMapState } from '@/types/map';
 import { buildShipMemory, type CarriedRacks, type HurtDriver } from '@data/memory';
 import { hurtDriversFor } from '@data/driver-damage';
 import { classicRunMap, shipDefAt, currentSlot, shipRng } from '@systems/map-run';
@@ -36,6 +37,9 @@ export interface InitialStateOpts {
   lineage?: Readonly<RunLineage>;
   // The page's archive status (state/instance.ts openRunArchive); a headless world has none ('none').
   archive?: ArchiveState;
+  // The run's map at ship 1 (slice 3a): the page's first run is on the arm (systems/map-run.ts createRunMap, as NEW RUN's
+  // startRun); left out, the classic world with the unit on classic ship `shipIndex` (the suites' fixture world).
+  map?: RunMapState;
 }
 
 export function createRunStats(): RunStats {
@@ -224,7 +228,11 @@ export function createDealState(): HollowState['deal'] {
 // harness build their state here, so a test flies exactly the flight the page opens on.
 export function createInitialState(opts: InitialStateOpts): GameState {
   const phase = opts.phase ?? 'flight';
-  const run = createRunState(opts.seed, phase, opts.shipIndex ?? 0, opts.lineage ?? FIRST_RUN_LINEAGE, opts.threat);
+  const created = createRunState(opts.seed, phase, opts.shipIndex ?? 0, opts.lineage ?? FIRST_RUN_LINEAGE, opts.threat);
+  if (opts.map !== undefined && (opts.map.route.length !== 1 || (opts.shipIndex ?? 0) !== 0)) {
+    throw new Error('createInitialState: a map is given for ship 1 only (a later arm ship is reached by its hop)');
+  }
+  const run = opts.map === undefined ? created : { ...created, map: structuredClone(opts.map) as RunMapState };
   return {
     ...createShipSlices(run, opts.carried ?? null, opts.threat ?? nominalShipThreat(run.shipIndex)),
     run,
