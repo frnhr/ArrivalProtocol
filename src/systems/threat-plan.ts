@@ -1,4 +1,4 @@
-import type { ThreatInput, ShipThreat, HollowStage, RunThreatState } from '@/types/threat';
+import type { ThreatInput, ShipThreat, HollowStage, RunThreatState, BeamSeedSource } from '@/types/threat';
 import { HOLLOW_STAGES, SEEDS_ONLY_DEF, CALM_DEF, foldArrivalWalls } from '@data/threats';
 import { SHIPS, getShip, type ShipDef } from '@data/ships';
 import { BOARD_MIN_DEPTH, TRACE_BOARD_AT, SEEDS_MIN_DEPTH, PRE_FINAL_ROOT_CAP } from '@data/tuning';
@@ -47,12 +47,17 @@ export function rootBlocksFor(stage: HollowStage, folded: readonly HollowStage[]
 
 // A ship HOLLOW is aboard (not the final one): its stage, and on its first ship one hop from a final ship, WALLS folded
 // into ARRIVAL (04 §3.9: "walls are the one defence the finale cannot do without").
+// The ship's facts the verdict echoes (ShipThreat's first four fields).
+function factsOf(input: Readonly<ThreatInput>): Pick<ShipThreat, 'depth' | 'isFinal' | 'oneHopFromFinal' | 'beamSeeds'> {
+  return { depth: input.depth, isFinal: input.isFinal, oneHopFromFinal: input.oneHopFromFinal, beamSeeds: structuredClone(input.beamSeeds) as BeamSeedSource };
+}
+
 function hollowShip(input: Readonly<ThreatInput>, boards: ShipThreat['boards']): ShipThreat {
   const age = input.aboard ? input.age + 1 : 1;
   const stage = stageForAge(age);
   const folded: HollowStage[] = stage === 'arrival' && input.oneHopFromFinal ? ['walls'] : [];
   const hollow = folded.includes('walls') ? foldArrivalWalls() : structuredClone(HOLLOW_STAGES[stage].hollow);
-  return { act: 'hollow', boards, stage, folded, hollow, rootBlocks: rootBlocksFor(stage, folded, input.fed) };
+  return { ...factsOf(input), act: 'hollow', boards, stage, folded, hollow, rootBlocks: rootBlocksFor(stage, folded, input.fed) };
 }
 
 // The ladder (slice-2-plan §2.4), in order:
@@ -69,13 +74,15 @@ export function planThreat(input: Readonly<ThreatInput>): ShipThreat {
   if (input.isFinal) {
     const folded: HollowStage[] = input.dealDone ? [] : ['hunt'];
     const hollow = { ...structuredClone(HOLLOW_STAGES.finale.hollow), deal: !input.dealDone };
-    return { act: 'finale', boards: null, stage: 'finale', folded, hollow, rootBlocks: rootBlocksFor('finale', folded, input.fed) };
+    return { ...factsOf(input), act: 'finale', boards: null, stage: 'finale', folded, hollow, rootBlocks: rootBlocksFor('finale', folded, input.fed) };
   }
   if (input.aboard) return hollowShip(input, null);
   const boards = boardsOnBeam(input);
   if (boards !== null) return hollowShip(input, boards);
-  if (input.depth >= SEEDS_MIN_DEPTH) return { act: 'seeds', boards: null, stage: null, folded: [], hollow: structuredClone(SEEDS_ONLY_DEF), rootBlocks: null };
-  return { act: 'calm', boards: null, stage: null, folded: [], hollow: structuredClone(CALM_DEF), rootBlocks: null };
+  if (input.depth >= SEEDS_MIN_DEPTH) {
+    return { ...factsOf(input), act: 'seeds', boards: null, stage: null, folded: [], hollow: structuredClone(SEEDS_ONLY_DEF), rootBlocks: null };
+  }
+  return { ...factsOf(input), act: 'calm', boards: null, stage: null, folded: [], hollow: structuredClone(CALM_DEF), rootBlocks: null };
 }
 
 // --- The run's side -----------------------------------------------------------------------------------------------------
@@ -88,32 +95,37 @@ export function createRunThreat(): RunThreatState {
   };
 }
 
-// What the map knows about a ship of the fixed five (slice 3's map replaces this): its depth is its index + 1, the
-// flagship is the final ship, and ShipDef.threat says whether a final ship is one hop away.
+// What the map knows about a ship of the fixed five: its depth is its index + 1, the flagship is the final ship, and
+// ShipDef.threat says whether a final ship is one hop away and what the beam into it carries. Slice 3 replaces only
+// fixedShipFacts (the route's depth, the M3 query, the hop's noise); nothing downstream reads ShipDef.threat.
 export interface ShipThreatFacts {
   depth: number;
   isFinal: boolean;
   oneHopFromFinal: boolean;
+  beamSeeds: BeamSeedSource;
 }
 
 export function fixedShipFacts(index: number): ShipThreatFacts {
   const ship: ShipDef = getShip(index);
-  return { depth: index + 1, isFinal: ship.flagship, oneHopFromFinal: ship.threat.oneHopFromFinal };
+  return {
+    depth: index + 1, isFinal: ship.flagship, oneHopFromFinal: ship.threat.oneHopFromFinal,
+    beamSeeds: structuredClone(ship.threat.beamSeeds) as BeamSeedSource,
+  };
 }
 
 // The ladder's input for the next ship, from the run's threat during the ship before it (its tally done) and whether THE
 // DEAL has happened this run (run.stats.deal !== null).
 export function threatInputFor(prev: Readonly<RunThreatState>, facts: ShipThreatFacts, dealDone: boolean): ThreatInput {
   return {
-    depth: facts.depth, isFinal: facts.isFinal, oneHopFromFinal: facts.oneHopFromFinal,
+    depth: facts.depth, isFinal: facts.isFinal, oneHopFromFinal: facts.oneHopFromFinal, beamSeeds: facts.beamSeeds,
     trace: prev.trace, aboard: prev.aboard, age: prev.age, dealDone, fed: prev.fed,
   };
 }
 
 // The run's threat once a ship's verdict applies (the ship starts): HOLLOW aboard from the ship it boards (or the final
 // ship, which always has it), its age counting this ship, the stages it has played. TRACE, what it was fed and the
-// story flags carry on; the tally that changes them is the ship's end's (Track THREAT).
-export function applyThreat(prev: Readonly<RunThreatState>, plan: Readonly<ShipThreat>, depth: number): RunThreatState {
+// story flags carry on; the tally that changes them is the ship's end's (Track THREAT). The depth is the verdict's own.
+export function applyThreat(prev: Readonly<RunThreatState>, plan: Readonly<ShipThreat>): RunThreatState {
   const next = structuredClone(prev) as RunThreatState;
   if (plan.stage !== null) {
     next.aboard = true;
@@ -121,7 +133,7 @@ export function applyThreat(prev: Readonly<RunThreatState>, plan: Readonly<ShipT
     next.stagesPlayed.push(plan.stage, ...plan.folded);
   }
   if (plan.boards !== null) {
-    next.boardedAtDepth = depth;
+    next.boardedAtDepth = plan.depth;
     next.boardCause = plan.boards;
   }
   return next;
@@ -135,7 +147,7 @@ export function nominalRunThreat(shipIndex: number): RunThreatState {
   let threat = createRunThreat();
   for (let index = 0; index <= shipIndex; index++) {
     const facts = fixedShipFacts(index);
-    threat = applyThreat(threat, planThreat(threatInputFor(threat, facts, false)), facts.depth);
+    threat = applyThreat(threat, planThreat(threatInputFor(threat, facts, false)));
   }
   return threat;
 }

@@ -2,9 +2,10 @@ import type { GameState, RunPhase, RunState, HollowState, RunStats, ArchiveState
 import type { Segment } from '@/types/segment';
 import type { LandingState, PodRecord, ShipLandingDef } from '@/types/landing';
 import type { HollowDef, ShipThreat } from '@/types/threat';
-import { buildShipMemory, hurtDriversFor, type CarriedRacks, type HurtDriver } from '@data/memory';
+import { buildShipMemory, type CarriedRacks, type HurtDriver } from '@data/memory';
+import { hurtDriversFor } from '@data/driver-damage';
 import { getShip } from '@data/ships';
-import { nominalRunThreat, nominalShipThreat } from '@systems/threat-plan';
+import { nominalRunThreat, nominalShipThreat, createRunThreat, applyThreat } from '@systems/threat-plan';
 import { createRunLog } from '@systems/story-log';
 import { isDriver } from '@state/selectors';
 import { createFlight, createMissionMeta, createClockState } from '@data/mission';
@@ -47,8 +48,12 @@ export function createRunStats(): RunStats {
 // unit; every other tool is licensed during the run
 // (systems/licences). HOLLOW starts unnamed on every run: on a later run its ghost names it during the
 // ship-1 boot (systems/boot.ts), on the first HALCYON does. The threat ladder's memory starts as the nominal run's for
-// `shipIndex` (ship 1: nothing reported, HOLLOW not aboard; a later ship built alone: as if flown with TRACE 0).
-export function createRunState(seed: number, phase: RunPhase, shipIndex: number, lineage: Readonly<RunLineage>): RunState {
+// `shipIndex` (ship 1: nothing reported, HOLLOW not aboard; a later ship built alone: as if flown with TRACE 0); with
+// `threat` (a fixture's own verdict for the ship) it is the nominal run before the ship with that verdict applied, so
+// run.threat never disagrees with the HOLLOW the ship is built with.
+export function createRunState(
+  seed: number, phase: RunPhase, shipIndex: number, lineage: Readonly<RunLineage>, threat?: Readonly<ShipThreat>,
+): RunState {
   return {
     rev: 0,
     phase,
@@ -75,7 +80,9 @@ export function createRunState(seed: number, phase: RunPhase, shipIndex: number,
     transit: null,
     arrival: null,
     endCause: null,
-    threat: nominalRunThreat(shipIndex),
+    threat: threat === undefined
+      ? nominalRunThreat(shipIndex)
+      : applyThreat(shipIndex === 0 ? createRunThreat() : nominalRunThreat(shipIndex - 1), threat),
     log: createRunLog(),
   };
 }
@@ -212,7 +219,7 @@ export function createDealState(): HollowState['deal'] {
 // harness build their state here, so a test flies exactly the flight the page opens on.
 export function createInitialState(opts: InitialStateOpts): GameState {
   const phase = opts.phase ?? 'flight';
-  const run = createRunState(opts.seed, phase, opts.shipIndex ?? 0, opts.lineage ?? FIRST_RUN_LINEAGE);
+  const run = createRunState(opts.seed, phase, opts.shipIndex ?? 0, opts.lineage ?? FIRST_RUN_LINEAGE, opts.threat);
   return {
     ...createShipSlices(run, opts.carried ?? null, opts.threat ?? nominalShipThreat(run.shipIndex)),
     run,
@@ -237,5 +244,6 @@ export function createUiState(phase: RunPhase, reducedMotion: boolean): GameStat
     filtersOff: [],
     spotlight: [],
     reducedMotion,
+    logReader: null,
   };
 }

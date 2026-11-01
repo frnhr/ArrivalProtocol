@@ -210,6 +210,7 @@ export function startShip(
 ): void {
   const state = store.getState();
   if (index < 0 || index >= SHIPS.length) throw new Error(`startShip: no ship ${index}`);
+  if (threat.depth !== fixedShipFacts(index).depth) throw new Error(`startShip: a verdict for depth ${threat.depth} on ship ${index}`);
   const run: RunState = {
     ...state.run,
     shipIndex: index,
@@ -217,7 +218,7 @@ export function startShip(
     transit: null,
     pendingStarCredit: 0,
     pendingStars: 0,
-    threat: applyThreat(state.run.threat, threat, fixedShipFacts(index).depth),
+    threat: applyThreat(state.run.threat, threat),
   };
   resetWorldForShip(store, { phase: 'boot', run, carried, threat, freshLog: false, done: doneForNextShip(state) });
   // The archive's run in progress says where the unit is now (a run left on this ship is 'abandoned' here).

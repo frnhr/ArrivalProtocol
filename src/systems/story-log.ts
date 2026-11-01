@@ -1,5 +1,6 @@
 import type { Store } from '@state/store';
 import type { GameState, RunLogState } from '@state/schema';
+import { LOG_ENTRY_COUNT } from '@data/log-text';
 
 // 046.log through the run (docs/phase3/05-story.md §3.2, §3.5; slice-2-plan §1.1 items 14–15), stateful: the keys found
 // at the boots (`> 046.log · KEY FOUND · ENTRY 0n`), the SCAN reaction (the header, CONTROL's ignore line, the file
@@ -21,6 +22,35 @@ export function logEntriesAtBoot(shipIndex: number, isFinal: boolean): number[] 
   if (isFinal) return [10, 11];
   if (shipIndex >= 1 && shipIndex <= 3) return [shipIndex + 1];
   return [];
+}
+
+// --- The LOG READER's actions (05 §4): story-log opens it, the reader view (Track UI) closes it and records what it typed.
+
+function assertEntry(entry: number, who: string): void {
+  if (!(Number.isInteger(entry) && entry >= 1 && entry <= LOG_ENTRY_COUNT)) throw new Error(`${who}: no entry ${entry} in 046.log`);
+}
+
+// Opens the reader on `entry` (ui.logReader). An entry the run has not found yet can't be opened: the reader shows it as
+// `[NOT FOUND YET]` in its rows, but never opens on it.
+export function openLogReader(store: Store<GameState>, entry: number): void {
+  assertEntry(entry, 'openLogReader');
+  if (!store.getState().run.log.found.includes(entry)) throw new Error(`openLogReader: entry ${entry} is not found yet`);
+  store.update((draft) => { draft.ui.logReader = { entry }; });
+}
+
+export function closeLogReader(store: Store<GameState>): void {
+  if (store.getState().ui.logReader === null) return;
+  store.update((draft) => { draft.ui.logReader = null; });
+}
+
+// The reader typed an entry out (it types itself the first time, 05 §4): run.log.read records it, so the chip's glow and
+// the idle line know it is read. Once per entry; a found entry only.
+export function markLogEntryRead(store: Store<GameState>, entry: number): void {
+  assertEntry(entry, 'markLogEntryRead');
+  const log = store.getState().run.log;
+  if (!log.found.includes(entry)) throw new Error(`markLogEntryRead: entry ${entry} is not found yet`);
+  if (log.read.includes(entry)) return;
+  store.update((draft) => { draft.run.log.read.push(entry); });
 }
 
 let mounted = false;

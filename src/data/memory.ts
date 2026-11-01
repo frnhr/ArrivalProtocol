@@ -335,22 +335,9 @@ export function shipPodCount(ship: ShipDef): number {
   return podRackLayouts(ship).reduce((pods, { tokens }) => pods + tokens.filter((token) => token.kind === 'driver').length, 0);
 }
 
-// The drivers a ship arrives with hurt on this run (01-landing §3.8). The ship's written ones, except on a later run of a
-// ship whose first run is written (ARES-VII): its families are reseeded, and so are the hurt drivers, each drawn from
-// `rng` (its own stream) among the pods that are not the lead (POD 01 keeps HOLLOW's bite) and not already hurt.
-export function hurtDriversFor(ship: ShipDef, firstRun: boolean, rng: Rng): HurtDriver[] {
-  const written = ship.memory.drivers.hurt;
-  if (written.length === 0 || firstRun || ship.memory.drivers.firstRun === null) return written.map((hurt) => ({ ...hurt }));
-  const candidates: number[] = [];
-  for (let pod = 1; pod <= shipPodCount(ship); pod++) if (pod !== ship.memory.drivers.lead) candidates.push(pod);
-  return written.map((hurt) => {
-    const index = Math.floor(rng() * candidates.length);
-    const pod = candidates[index];
-    if (pod === undefined) throw new Error(`hurtDriversFor ${ship.id}: no pod besides the lead left to hurt`);
-    candidates.splice(index, 1);
-    return { pod, integrity: hurt.integrity };
-  });
-}
+// The drivers a ship arrives hurt with on this run live in data/driver-damage.ts (Track OPENING's: the layer's rolled
+// damage replaces the reseeding); re-exported here for the callers phase 2 wrote.
+export { hurtDriversFor } from '@data/driver-damage';
 
 // The ship's racks A–D as segments, in address order: the ship's own files, then the pod racks (drivers and HOLLOW's
 // root in its slot) from the layout strings. `rng` is the ship's families stream; `firstRun` keeps the families the first

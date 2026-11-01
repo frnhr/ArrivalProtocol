@@ -126,7 +126,7 @@ Written by the architect agent from HEAD 65b7d5c. The specs it draws on are 04-t
 | `src/data/ships.ts` | data | drops `hollow`, gains `layer`, `threat: ShipThreatDef` and `drivers.damage`; calm layouts; the slot token `S`; licences re-flowed |
 | `src/data/memory.ts` | data | the `S` token (the root slot), `buildShipMemory(..., root: { blocks } \| null)`, `046.log` in `FRESH_UNIT_RACK_F` |
 | `src/systems/hollow.ts` | stateful | the calm-only wake clock, beam flags carried through bites and consumes, the folded story, the deal fold, verbs waiting on the deal |
-| `src/systems/carry.ts` | pure | `Packet.root` and `Packet.seeds`; `layoutCarried` places seeds behind targets; the hunting gap is keyed by stage, not ShipDef |
+| `src/systems/carry.ts` | pure | `Packet.seeds` (no `Packet.root`: the root lands from `ShipThreat.rootBlocks` via `buildShipMemory`; review follow-up M5); `layoutCarried` places seeds behind targets; the hunting gap is keyed by stage, not ShipDef |
 | `src/systems/run.ts` | stateful | `endShip` tallies TRACE; `goTransmit` plans the next ship's threat; `transmitNext` rolls and lays out the seeds and the root |
 
 ### 2.2 Type sketches
@@ -181,7 +181,7 @@ Other type changes:
 - `SegmentType` gains `'log'`: `LogSegment { type: 'log'; id: 'log046'; size: 2; name: '???' | '046.log' }`. It has no integrity, so it is never infectable.
 - The log's state lives in `run.log: { scanned: boolean; found: number[]; read: number[]; autoOpened: boolean }`, not on the segment, because segments are copied through packets.
 - `HollowDef.wake`'s timed variant gains `calmOnly?: true` (the clock counts only non-TACTICAL AI seconds), and `HollowState` gains `calmAiSec`. `HollowStoryKind` gains `'arrives'`: notices you, then names itself, on one ship.
-- `Packet` gains `root: { blocks: number } | null` and `seeds: BeamSeedPlan[]`. `TransitPlan` gains `threat: ShipThreat`. `ArrivalReport` gains `seeds: { segId: string; targetName: string }[]` and `boarded: { blocks: number; cause: 'trace' | 'forced' } | null`.
+- `Packet` gains `seeds: BeamSeedPlan[]` (not `root`: the root lands from `TransitPlan.threat.rootBlocks` via `buildShipMemory`, and the PACKET chip reads that and the tally; review follow-up M5). `TransitPlan` gains `threat: ShipThreat`. `ArrivalReport` gains `seeds: { segId: string; targetName: string }[]` and `boarded: { blocks: number; cause: 'trace' | 'forced' } | null`.
 - `ShipDef` drops `hollow`, gains `layer: number`, `threat: ShipThreatDef` and `memory.drivers.damage: 'scripted' | 'rolled'`, and keeps `flagship` as the final-ship role.
 
 ### 2.3 Pure versus stateful
@@ -413,7 +413,7 @@ Notes on the table:
 - `keepCharge` moved;
 - the deal fold, with verbs paused while it is offered or paused;
 - the TRACE tally and feeding in `endShip` (also on the loss path);
-- the root and seeds in `Packet` and `layoutCarried`;
+- the seeds in `Packet` and `layoutCarried` (the root already lands from `TransitPlan.threat.rootBlocks`; review follow-up M5);
 - the last-rm detection and `last-rm-lost`;
 - the no-rm seed line;
 - dev helpers `__ap.seed(target)` and `__ap.board()`.
@@ -460,7 +460,10 @@ Notes on the table:
 | landing-text.ts | OPENING | none |
 | hollow-text.ts | THREAT | none |
 | run.ts | THREAT | OPENING reacts to `phase` changes in story-log, so it needs no edit |
-| initial.ts, schema.ts, events.ts | FOUNDATION | additions after it go through the lead |
+| state/actions.ts, systems/fs-tools.ts | THREAT | THREAT emits `seed-deleted` and `last-rm-lost` there; others request changes through the lead |
+| data/driver-damage.ts (with `hurtDriversFor`) | OPENING | memory.ts re-exports `hurtDriversFor`; THREAT does not edit it |
+| state/threat-selectors.ts | THREAT | UI reads it (`tallyPreview`, `traceCells`, `noWorkingRm` …); requests through THREAT |
+| initial.ts, schema.ts, events.ts, types/threat.ts | FOUNDATION | additions after it go through the lead |
 
 **Merge order:** THREAT, OPENING, UI.
 
@@ -593,8 +596,8 @@ The foundation (§5.0) as built, where it differs from §2–§5 or fills a gap 
    `ShipDef.hollow`. `freshUnitRacks(ship)` lays out for `nominalShipThreat` of the ship found by id. On the fixed five
    no ship hunts any more (VESPER plays ARRIVAL + WALLS), so the gap only appears where a fixture gives a ship the HUNT
    stage (landing/review-fixes issue 5 does).
-8. **`Packet` is unchanged.** `root` and `seeds` are THREAT's to add along with the code that fills them; adding empty
-   fields now would only move the work.
+8. **`Packet` is unchanged.** `seeds` is THREAT's to add along with the code that fills them; adding an empty field now
+   would only move the work. (Review follow-up M5: `Packet.root` is struck from the plan altogether.)
 9. **`LogSegment.id` and `.size` are typed `string` and `number`**, not the literals `'log046'` and `2`. Why: phase-2
    code and tests copy a `Segment` with a new id or size (`{ ...gap, id, size }`), which fails to type-check over a
    union that holds literal ids. `LOG_FILE` fixes the values, and `name` keeps its `'???' | '046.log'` literal.
@@ -667,9 +670,10 @@ The foundation (§5.0) as built, where it differs from §2–§5 or fills a gap 
 **Text and wiring**
 
 23. **Interim key lines**: `LOG_TEXT.keyFound(entries)` takes a list, so the final ship's two read `ENTRIES 10–11`.
-    `bootLinePlan` emits `'log'` when `run.log.found` holds any of `logEntriesAtBoot(shipIndex, flagship)`. So
-    story-log (OPENING) marks the boot's keys found at the world reset, before the boot's first tick plans its lines. Plan
-    order: `board|unpack, host, ecc, seeds, scripted, charge, overflow, skill, log, hollow`. `bootHollowLine` reads
+    `bootLinePlan` emits `'log'` for `logEntriesAtBoot(shipIndex, flagship)` minus `run.log.found` (corrected by the
+    review follow-up, M1: the first version waited for story-log to mark them found "at the world reset", which depended
+    on tick-listener order). boot.ts emits `log-key { entries }` as the line is said, and story-log marks them found on
+    that event. Plan order: `board|unpack, host, ecc, seeds, scripted, charge, overflow, skill, log, hollow`. `bootHollowLine` reads
     `state.hollow.cfg.story`, not the ShipDef.
 24. **`mountStoryLog` is already mounted** in main.ts after mountRun, so OPENING never edits main.ts for it.
 25. **Text placement**:
@@ -697,3 +701,75 @@ The foundation (§5.0) as built, where it differs from §2–§5 or fills a gap 
     - issue 5 builds VESPER with a HUNT verdict.
 31. **wp11/full-run fails fast**: a pass of its per-seed loop that changes neither the ship, the phase, the flight status
     nor the finale phase ends the seed. It used to repeat its maxWall waits up to the guard.
+
+### Deviations (foundation, review follow-up)
+
+An independent review of 21eb1e6 checked the ladder against 04 §3.16's routes A, B and C and the fixed five, and found
+it correct. These are its fixes to the hand-offs between the tracks.
+
+1. **`hurtDriversFor` lives in `src/data/driver-damage.ts`** (OPENING's), and memory.ts re-exports it. It now counts the pods
+   from the LZ counts (`validatePodRacks` checks they equal the drivers) rather than `shipPodCount`, so driver-damage.ts
+   imports memory.ts and ships.ts for types only and the re-export makes no runtime cycle. initial.ts imports it from
+   driver-damage.ts.
+2. **The LOG READER is opened through UI state: `ui.logReader: { entry: number } | null`**, alongside the other
+   UI-state fields (`pendingPlacement`, `activeTool`). An event was the alternative; the field was picked because the
+   reader's open state must survive across ticks and be readable by headless tests, and a world reset closes it
+   (`createUiState`). The actions are in systems/story-log.ts:
+   - `openLogReader(store, entry)`: a found entry only, so a wrong entry fails loudly;
+   - `closeLogReader(store)`;
+   - `markLogEntryRead(store, entry)`: writes `run.log.read` once per entry, a found entry only.
+
+   story-log calls `openLogReader` for entry 01 after ship 1's report; the reader view calls the other two.
+3. **The boot's 'log' line no longer depends on tick order** (M1): it is planned from keys not yet found, boot emits
+   `log-key` when the line is said, and story-log marks the entries found on that event. Deviation 23 is corrected
+   above.
+4. **`src/state/threat-selectors.ts`** (THREAT's after this), with final signatures:
+   - `beamSeedsInMemory(memory): HollowSegment[]`;
+   - `tallyPreview(state): ThreatTally`: the report shows it before CONTINUE, and THREAT's endShip applies the same
+     result into `lastTally`;
+   - `traceCells(state): { filled; total; over }`;
+   - `hollowAboard(state)`;
+   - `noWorkingRm(state)`;
+   - `hollowFirstFightDecided(state)`: a stub returning false, `TODO(slice2-THREAT)`.
+
+   `tallyBeamBorn` counts `beamSeedsInMemory`. The `ThreatTally` comment says who computes it and when.
+5. **`createRunState(..., threat?)`** (M3): with a fixture's own verdict, `run.threat` is `applyThreat(index ?
+   nominalRunThreat(index − 1) : createRunThreat(), threat)`, so a fixture's run.threat matches the HOLLOW it is built
+   with. `createInitialState` passes `opts.threat` through.
+6. **The verdict carries the ship's facts** (M4):
+   - `ThreatInput` and `ShipThreatFacts` gain `beamSeeds: BeamSeedSource`;
+   - `ShipThreat` echoes `depth`, `isFinal`, `oneHopFromFinal` and `beamSeeds`. `isFinal` is an addition to the
+     review's list, cheap and what hollow.ts's keepCharge trigger needs next to `oneHopFromFinal`;
+   - `applyThreat(prev, plan)` reads the depth from the verdict and has lost its third argument;
+   - `startShip` throws on a verdict whose depth is not the ship's.
+
+   `TransitPlan.threat` now carries everything the beam does: `transmitNext`'s seed roll and the keepCharge trigger read
+   it, never `ShipDef.threat`. Slice 3 replaces only `fixedShipFacts`.
+7. **`Packet.root` is struck** (M5): the root lands from `threat.rootBlocks` via `buildShipMemory`, and the PACKET chip
+   reads `TransitPlan.threat.rootBlocks` and the tally. Only `Packet.seeds` goes through `layoutCarried`. §2.1, §2.2 and
+   §5.1 are edited to match.
+
+**Decisions (the lead's, recorded here)**
+
+- **`fed` stays cumulative across HOLLOW's ships** (documented on `RunThreatState.fed` and `ThreatInput.fed`): each root
+  is its stage's plus everything it was ever fed, capped. The PACKET chip's `+n` is `lastTally.left`.
+- **`eatenDrivers`**: THREAT fills it in slice 2, in hollow.ts where a driver is consumed, so the save schema changes once.
+- **Ownership** (§5.4, updated):
+  - state/actions.ts and systems/fs-tools.ts → THREAT, for `seed-deleted` and `last-rm-lost`;
+  - data/driver-damage.ts, `hurtDriversFor` included → OPENING;
+  - state/threat-selectors.ts → THREAT.
+
+**Notes for the tracks**
+
+- **THREAT:**
+  - Remove the `R` token once `plantRoot` exists. It is used by five suites and by debug.ts's `HOLLOW_DEMO_RACKS`.
+  - Slice 3 rule, noted now (implement if cheap): beam seeds on a plain-ARRIVAL ship run the seeds-only clock until the
+    scripted fight decides.
+- **OPENING:**
+  - The simulation retry must reset `run.log.scanned`, or derive the displayed name from `run.log` rather than renaming
+    the segment. Otherwise a renamed `046.log` survives a ship-1 restart whose log state started over.
+  - Re-measure wp11/full-run's MERGE availability with `RUN_SEEDS=8` after THREAT lands. The levers are the
+    VESPER→LAST LIGHT link at 98 instead of 96 (giving back 046.log's 2 blocks) or the star credit. 046.log stays paid.
+- **Slice 3:** any ship at depth ≥ `BOARD_MIN_DEPTH` needs a root slot, not only `oneHopFromFinal` ones (TRACE can board
+  it there). validateShipDef checks only the latter today, because on the fixed five depth ≥ 4 means VESPER and LAST
+  LIGHT, and both have slots.

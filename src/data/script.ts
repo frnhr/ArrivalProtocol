@@ -838,16 +838,18 @@ export function scriptedDamageLine(hits: readonly TransitHit[]): string {
 // WP11: LAST LIGHT's boot closes the same way: `> last ship, 047. i'm so tired.`
 // Phase 3 slice 2 (slice-2-plan §2.5): 'board' types HOLLOW's 108% unpack in place of 'unpack' when it boarded on this
 // beam (arrival.boarded; systems/boot.ts emits 'hollow-boarded' as it is said); 'seeds' names the beam seeds and their
-// targets right after the ECC line (arrival.seeds); 'log' types `> 046.log · KEY FOUND · ENTRY 0n` when this boot's keys
-// opened entries (run.log.found holds them: systems/story-log.ts). All three are empty until Tracks THREAT and OPENING
-// fill arrival.seeds, arrival.boarded and run.log.
+// targets right after the ECC line (arrival.seeds); 'log' types `> 046.log · KEY FOUND · ENTRY 0n` for the entries this
+// boot's keys open that the run has not found yet (systems/story-log.ts logEntriesAtBoot minus run.log.found). The plan
+// is made once, at the boot's first tick; systems/boot.ts emits 'log-key' as the line is said, and story-log marks the
+// entries found on that event (no tick-order or world-reset dependency). 'seeds' and 'board' stay empty until Track
+// THREAT fills arrival.seeds (arrival.boarded is filled from the verdict already).
 export type BootLineKind = 'unpack' | 'board' | 'host' | 'ecc' | 'seeds' | 'scripted' | 'charge' | 'overflow' | 'skill' | 'log' | 'hollow';
 
-// The entries this boot's keys opened (05 §3.2, the interim keys of systems/story-log.ts logEntriesAtBoot), once the log
-// has them as found; none before.
+// The entries this boot's keys open (05 §3.2, the interim keys of systems/story-log.ts logEntriesAtBoot) that the run has
+// not found yet. Pure in the state: the boot plans its 'log' line from it, before anything marks them found.
 export function bootLogEntries(state: Readonly<GameState>): number[] {
   const keys = logEntriesAtBoot(state.run.shipIndex, getShip(state.run.shipIndex).flagship);
-  return keys.filter((entry) => state.run.log.found.includes(entry));
+  return keys.filter((entry) => !state.run.log.found.includes(entry));
 }
 
 // The boot line HOLLOW closes this ship's boot with (its story's: the threat ladder's config for this ship), or null.

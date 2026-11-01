@@ -98,21 +98,32 @@ export interface ShipThreatDef {
 }
 
 // Everything planThreat reads (systems/threat-plan.ts). Flat and JSON-safe, so a test can run 04 §3.16's routes as
-// plain sequences and slice 3 can feed it from the map without touching the rule.
+// plain sequences and slice 3 can feed it from the map without touching the rule. The ship's own facts (depth, final,
+// M3, the beam's seeds) come from threat-plan.ts fixedShipFacts on the fixed five; slice 3 replaces only that function.
 export interface ThreatInput {
   depth: number;              // the ship's depth on the route (the ship index + 1 on the fixed five)
   isFinal: boolean;           // a final ship (ShipDef.flagship on the fixed five)
   oneHopFromFinal: boolean;   // 02-map M3: a final ship is one hop from this destination
+  beamSeeds: BeamSeedSource;  // what the beam into this ship carries (ShipDef.threat.beamSeeds; slice 3: the hop's noise)
   trace: number;              // TRACE before this ship (RunThreatState.trace)
   aboard: boolean;            // HOLLOW was aboard the ship before this one
   age: number;                // ships HOLLOW has been aboard BEFORE this one
   dealDone: boolean;          // THE DEAL happened this run (run.stats.deal !== null)
-  fed: number;                // beam-born blocks it was fed since boarding (RunThreatState.fed)
+  // Beam-born blocks HOLLOW was fed since it boarded, CUMULATIVE across its ships (RunThreatState.fed): a root is its
+  // stage's plus every block it was ever fed, capped (rootBlocksFor). Not "since the last ship": the PACKET's `+n` reads
+  // the last ship's own share from RunThreatState.lastTally.left.
+  fed: number;
 }
 
 // The ladder's verdict for one ship. Copied into the world when the ship is built: hollow into HollowState.cfg, the root
-// into the bay's root slot.
+// into the bay's root slot. It echoes the ship's facts it was planned from (depth, final, M3, the beam's seeds), so
+// TransitPlan.threat carries everything the beam does: transmitNext's seed roll and hollow.ts's keepCharge trigger read
+// them here, never ShipDef.threat.
 export interface ShipThreat {
+  depth: number;
+  isFinal: boolean;
+  oneHopFromFinal: boolean;
+  beamSeeds: BeamSeedSource;
   act: ThreatAct;
   boards: 'trace' | 'forced' | null;     // HOLLOW boards on the beam into this ship
   stage: HollowStage | null;             // null: HOLLOW is not aboard (calm, seeds-only)
@@ -136,7 +147,9 @@ export interface EatenDriver {
   family: string;
 }
 
-// What the last ship's end did with the beam-born blocks it left (the LANDING REPORT's TRACE line, the PACKET's FED chip).
+// What a ship's end does with the beam-born blocks it leaves. state/threat-selectors.ts tallyPreview computes it from the
+// live state: the LANDING REPORT shows the preview (its TRACE line), because endShip runs on the report's CONTINUE; Track
+// THREAT's endShip applies the same tally and stores it as RunThreatState.lastTally (the next PACKET's FED chip, `+left`).
 export interface ThreatTally {
   left: number;          // beam-born hollow blocks still in memory at the ship's end
   traceBefore: number;
@@ -152,9 +165,12 @@ export interface RunThreatState {
   age: number;                            // ships aboard, this one included
   boardedAtDepth: number | null;
   boardCause: 'trace' | 'forced' | null;
-  fed: number;                            // beam-born blocks left since boarding: added to the next root (cap 14)
+  // Beam-born blocks left at the ends of HOLLOW's ships since it boarded, CUMULATIVE (never reset when a root takes them):
+  // each root is its stage's plus all of them, capped (rootBlocksFor, cap 14). The PACKET's `+n` is lastTally.left.
+  fed: number;
   stagesPlayed: HollowStage[];
   told: { noticed: boolean; keepCharge: boolean };   // the naming stays run.hollowNamed
+  // Filled by Track THREAT in slice 2 (hollow.ts, where a driver is consumed), so the save schema changes once.
   eatenDrivers: EatenDriver[];
   lastTally: ThreatTally | null;
 }

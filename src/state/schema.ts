@@ -692,6 +692,10 @@ export interface UiState {
   // flips it. Removes shake, stamp scale, flashes and pulses; never hides information. A world
   // reset for the next ship must carry it over (createInitialState's reducedMotion option).
   reducedMotion: boolean;
+  // The LOG READER (phase 3 slice 2, 05 §4): open on this entry of 046.log, or closed. Opened by systems/story-log.ts
+  // (entry 01 by itself after ship 1's LANDING REPORT, run 1, once) or by INSPECT on the log; the reader view
+  // (components/memory-view/LogReader.ts, Track UI) draws it and closes it. A world reset closes it (createUiState).
+  logReader: { entry: number } | null;
 }
 
 // The archive behind this page (§4.5, systems/meta.ts). 'ok': loaded (or empty) and written at the run's

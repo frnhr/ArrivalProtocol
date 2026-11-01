@@ -2,7 +2,8 @@ import type { Segment, HollowSegment } from '@/types/segment';
 import type { BeamSeedPlan, BeamSeedSource } from '@/types/threat';
 import type { Packet } from '@systems/carry';
 import type { Rng } from '@systems/rng';
-import { isHollow, isInfectable } from '@state/selectors';
+import { isInfectable } from '@state/selectors';
+import { beamSeedsInMemory } from '@state/threat-selectors';
 import { newSegId } from '@systems/memory-ops';
 import { HOLLOW_DESC } from '@data/hollow-text';
 import { SEED_BLOCKS } from '@data/tuning';
@@ -52,5 +53,5 @@ export function beamSeedSegment(plan: Readonly<BeamSeedPlan>, owner: string): Ho
 // TRACE's tally at a ship's end (04 §3.7): every beam-born hollow block still in memory adds 1 (a seed, or a block a
 // beam-born block made by eating a file: "a seed that ate reports twice").
 export function tallyBeamBorn(memory: readonly Segment[]): number {
-  return memory.filter((seg) => isHollow(seg) && seg.beam === true).length;
+  return beamSeedsInMemory(memory).length;
 }
