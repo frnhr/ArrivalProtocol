@@ -112,7 +112,7 @@ const correctIn = (): void => {
 
 // --- The dodge: countdown, SKIP, the lapse, HOLLOW's wake -----------------------------------------------------
 {
-  h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true, sensorHealed: true });
   h.step();
   const line = h.objective();
   check('TOO WIDE counts the dodge down, urgent: `TOO WIDE — hold [SPACE] · m:ss to dodge DEBRIS C`',
@@ -147,7 +147,7 @@ const correctIn = (): void => {
   // wake waits while the dodge is open: tests/unit/wp9/fix2/fixes2.test.ts checks it at every pace.)
 
   // Blind (as it arrives): SKIP waits too (the dodge is there to save), the strip says PATH UNCERTAIN, and the lapse is silent.
-  h.kestrel(5, { hollowAsleep: true, arrivalDamage: true });
+  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true, arrivalDamage: true });
   h.step();
   const blindSkip = requestSkip(h.store);
   h.stepUntil(() => state().clock.skipWarp === null, 60);
@@ -164,7 +164,7 @@ const correctIn = (): void => {
 
 // --- The first seed: SKIP waits for it ------------------------------------------------------------------------
 {
-  h.kestrel(5, { sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, sensorHealed: true });
   ensureTool('repair');
   ensureTool('move');
   correctIn();
@@ -192,7 +192,7 @@ const correctIn = (): void => {
   check('…the seed landed on the coast and was DELETEd: SKIP works again', state().hollow.seedMoments === 1 && free.ok, JSON.stringify(free));
 
   // A seed moment with nowhere to land (every free block reserved by an op) still counts: SKIP is not held for good.
-  h.kestrel(5, { sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, sensorHealed: true });
   ensureTool('repair');
   ensureTool('move');
   correctIn();
@@ -216,7 +216,7 @@ const correctIn = (): void => {
 
 // --- The debris hit: what the rack tag says, a clone in the rack, a picked MOVE source ---------------------------
 {
-  h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true, sensorHealed: true });
   h.store.update((d) => {
     const starts = segmentStarts(d.memory);
     d.memory = d.memory.map((seg, i) => (seg.type === 'driver' && starts[i]! >= 2 * RACK_BLOCKS && starts[i]! < 3 * RACK_BLOCKS ? freeSegment(seg.size) : seg));
@@ -232,14 +232,14 @@ const correctIn = (): void => {
     terminal[0] === '> DEBRIS HIT RACK C: NOTHING THERE' && JSON.stringify(tag?.lines) === JSON.stringify([RACK_TAG_TEXT.debrisHit, RACK_TAG_TEXT.debrisHitNothing]),
     `${terminal.join(' | ')} | ${JSON.stringify(tag?.lines)}`);
 
-  h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true, sensorHealed: true });
   h.stepUntil(() => state().hazards.hitIds.length > 0, 400);
   h.stepFor(0.3);
   const hitTag = rackZoneTags(state(), getSensedPrediction()).find((candidate) => candidate.rack === 'C');
   check('…a real hit tags `HIT` / `−25%`', JSON.stringify(hitTag?.lines) === JSON.stringify(['HIT', '−25%']), JSON.stringify(hitTag?.lines));
 
   // The review's forced case: POD 01 at 10% being MOVEd from rack B into rack C's tail when the cloud hits.
-  h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true, sensorHealed: true });
   const toEntryTac = (): number => {
     const hit = debrisHit();
     return hit.enterInSec === null ? Infinity : (hit.enterInSec - (state().clock.tSec - getPrediction().asOfTSec)) / warp();
@@ -259,7 +259,7 @@ const correctIn = (): void => {
     && segmentStarts(state().memory)[state().memory.indexOf(c01After)]! < 2 * RACK_BLOCKS, `${refusal} ${threw}`);
 
   // A picked-up MOVE source the hit takes out (the strip's `MOVE drivers out of it`, HOLLOW had chewed it to 20%).
-  h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true, sensorHealed: true });
   ensureTool('move');
   const moveTool = state().memory.find((seg) => seg.type === 'fs-tool' && seg.fsTool === 'move')!;
   const c08 = driversInMemory(state()).find((soul) => soul.pod === 8)!;
@@ -284,7 +284,7 @@ const correctIn = (): void => {
 
 // --- AUTOBURN: it flies the capture through while the kid fights HOLLOW in blue; a refused [B] says why --------------
 {
-  h.kestrel(5, { sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, sensorHealed: true });
   ensureTool('repair');
   h.giveSkill([0, 0]);
   correctIn();
@@ -356,13 +356,13 @@ const correctIn = (): void => {
   check('debrisRack: the one rack of a debris cloud; a two-rack zone or a belt throws', debrisRack(hit) === 'C'
     && throws(() => debrisRack({ ...hit, racks: ['B', 'C'] })) && throws(() => debrisRack({ ...hit, kind: 'belt' })));
 
-  h.kestrel(5, { hollowAsleep: true });
+  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true });
   h.giveSkill([0, 0]);
   const skill = skillFiles(state().memory)[0]!;
   check('AUTOBURN.skl\'s chip name breaks at its dot or as AUTO- / BURN, never mid-word', stripName(skill, 6) === 'AUTO\u00ADBURN\u200B.skl');
 
   // Racks E–F full (the charge filled past the link): the skill goes to the end of rack D's free tail, beside the unit.
-  h.kestrel(5, { hollowAsleep: true });
+  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true });
   h.store.update((d) => {
     const starts = segmentStarts(d.memory);
     const charge = d.memory.find((seg) => seg.type === 'redundancy');

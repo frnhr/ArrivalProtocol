@@ -142,7 +142,8 @@ check('…control: a belt the orbit lies in keeps hitting while landing (§6.8),
   check('a driver the belt takes to 0 leaves memory; its pod stays aboard with its driver lost \'dead\' (never MERGE\'s), and no HOLLOW block appears',
     pod !== undefined && !driversInMemory(state()).some((driver) => driver.pod === pod)
     && record?.driverLost === 'dead' && record.fate.kind === 'aboard'
-    && state().memory.filter((seg) => seg.type === 'hollow').length === 1, `${lost.join(',')}`);
+    // Phase 3 slice 2: KESTREL has no root (a seeds-only ship; this fresh unit brought no seed), so no hollow block at all.
+    && state().memory.filter((seg) => seg.type === 'hollow').length === 0, `${lost.join(',')}`);
   check('…the TERMINAL says so', pod !== undefined && state().log.entries.some((entry) => entry.text === zoneLostLine(podCode(pod))));
   h.checkMemory();
 }

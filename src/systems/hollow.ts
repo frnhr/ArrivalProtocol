@@ -1435,8 +1435,11 @@ function tick(store: Store<GameState>, dtAi: number): void {
 
 // --- Debug and tests ---------------------------------------------------------------------------------
 
-// The side of `seg` that faces the nearest hollow block (a debug bite lands where a real one would).
+// The side of `seg` that faces the nearest hollow block (a debug bite lands where a real one would). With no hollow block
+// in memory (a calm ship, phase 3 slice 2) the infection is one carried in from the last ship (04 §3.5 "infection
+// travels"), which drains on a calm ship too: it crawls in from the left.
 function sideFacingHollow(memory: readonly Segment[], seg: Segment): HollowSide {
+  if (!memory.some(isHollow)) return 'left';
   const starts = segmentStarts(memory);
   const at = starts[memory.indexOf(seg)]!;
   let nearestDistance = Infinity;

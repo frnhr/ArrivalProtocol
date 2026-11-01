@@ -25,14 +25,15 @@ import { installTool } from '@systems/licences';
 import { deleteQuestion, targetRefusal } from '@systems/tool-targets';
 import { mergeAdjacentFree, freeSegment, segmentStarts, assertMemoryInvariants } from '@systems/memory-ops';
 import { freshUnitRacks } from '@systems/carry';
-import { createInitialState } from '@state/initial';
 import { getShip, validateHollowDef, type HollowDef } from '@data/ships';
 import { hollowInspectState, HOLLOW_INSPECT, HOLLOW_STORY } from '@data/hollow-text';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
-import { SEED_BLOCKS, SEED_TELEGRAPH_SEC, WALL_MIN_BLOCKS, WAKE_AFTER_DODGE_SEC } from '@data/tuning';
+import { SEED_BLOCKS, SEED_TELEGRAPH_SEC, WALL_MIN_BLOCKS, WAKE_AFTER_DODGE_SEC, ROOT_BLOCKS } from '@data/tuning';
 import { createToolFiles } from '@data/fs-tools';
 import type { Segment, DriverSegment, HollowSegment } from '@/types/segment';
-import { phase2HollowOf } from '../support/hollow-world';
+import { phase2HollowOf, phase2ShipDef } from '../support/hollow-world';
+import { buildShipMemory } from '@data/memory';
+import { createRng } from '@systems/rng';
 
 const h = createHarness9(3);
 const state = () => h.store.getState();
@@ -45,8 +46,9 @@ const correctIn = (): void => {
   h.step();
 };
 
+// Phase 3 slice 2: KESTREL as phase 2 had it (its root between POD 09 and POD 10), where these seeds were tuned.
 function kestrelMemory(): Segment[] {
-  return createInitialState({ seed: 3, shipIndex: KESTREL, carried: freshUnitRacks(getShip(KESTREL)) }).memory;
+  return buildShipMemory(phase2ShipDef(KESTREL), freshUnitRacks(getShip(KESTREL)), createRng(3), false, '???', { blocks: ROOT_BLOCKS }, []);
 }
 
 // Takes clusters out of a memory (as a MOVE away would), leaving free space, merged.
@@ -115,7 +117,7 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
 
 // --- The live seed: telegraph, DELETE, the line, the WALL --------------------------------------------------------
 {
-  h.kestrel(3, { sensorHealed: true });
+  h.kestrel(3, { phase2Hollow: true, sensorHealed: true });
   // The IN correction first, as every real KESTREL kid makes it before HOLLOW wakes (WP9 fix round 1: the debris
   // dodge's countdown is an urgent line until then; since round 2 a timed wake also waits while the dodge is open).
   correctIn();
@@ -131,7 +133,8 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
   h.stepUntil(() => state().hollow.phase === 'awake', WAKE_AFTER_DODGE_SEC + 2);
   check('KESTREL\'s HOLLOW wakes, and its first seed is due firstAfterSec later', state().hollow.seedInSec !== null
     && Math.abs(state().hollow.seedInSec! - firstAfter) < 0.2, String(state().hollow.seedInSec));
-  check('…DELETE is not licensed yet', !state().run.licences.includes('delete'));
+  // Phase 3 slice 2: DELETE comes at KESTREL's start now (the beam's seeds are in memory from the first tick).
+  check('…DELETE is already licensed (at the ship\'s start)', state().run.licences.includes('delete'));
   const wakeAt = state().clock.aiSec;
   h.stepUntil(() => state().hollow.seedTelegraph !== null, firstAfter + 2);
   const telegraph = state().hollow.seedTelegraph;
@@ -188,7 +191,7 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
 
 // --- A telegraph on a spot a MOVE then takes ---------------------------------------------------------------------
 {
-  h.kestrel(3, { sensorHealed: true });
+  h.kestrel(3, { phase2Hollow: true, sensorHealed: true });
   // WP9 review round 2: HOLLOW never wakes while the debris dodge is open, so the IN correction first (as above).
   correctIn();
   h.store.update((d) => {
@@ -228,7 +231,7 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
 
 // --- A seed next to a FIREWALL ----------------------------------------------------------------------------------
 {
-  h.kestrel(3, { sensorHealed: true });
+  h.kestrel(3, { phase2Hollow: true, sensorHealed: true });
   correctIn();
   // A FIREWALL at the far end of the 9-block wall, against the root (where a kid MOVEs it): [C08][7 free][FW][R].
   h.store.update((d) => {
@@ -270,7 +273,7 @@ const soul = (memory: readonly Segment[], code: string): DriverSegment =>
 
 // --- DELETE on ship files: the inline confirm with its consequence (§9 WP9 item 4) ---------------------------------
 {
-  h.kestrel(3, { sensorHealed: true });
+  h.kestrel(3, { phase2Hollow: true, sensorHealed: true });
   const named = (name: string): Segment => state().memory.find((seg) => seg.name === name)!;
   const cargo = deleteQuestion(state(), named('Cargo Ctrl'));
   const thrust = deleteQuestion(state(), named('Thrust Controller'));

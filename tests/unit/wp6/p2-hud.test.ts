@@ -1,3 +1,5 @@
+// Phase 3 slice 2: ships 1–2 are calm, so the ship-1 cases plant phase 2's root first (support/hollow-world.ts phase2ShipOne),
+// and the HALCYON fixture writes its root through the slot (S) as the ladder brings one.
 // WP7: HollowDef gained `story` and the timed wake `coastLeadSec` (HALCYON's coast-tied wake); the
 // fixtures below spell them out (no story, no coast lead: the WP6 behaviour they test).
 // Slice 1a: pods for clusters. ARES-VII's root comes first in rack B (rack A's 18 free blocks a WALL on its left, POD 01
@@ -30,6 +32,8 @@ import { UNNAMED_HOLLOW } from '@data/hollow-text';
 import { SHIPS, type ShipDef, type HollowDef } from '@data/ships';
 import { childRng } from '@systems/rng';
 import { createHollowState, createLandingState } from '@state/initial';
+import { phase2ShipOne } from '../support/hollow-world';
+import { ROOT_BLOCKS } from '@data/tuning';
 import { stateFromElements } from '@/types/orbit';
 import type { Segment } from '@/types/segment';
 import {
@@ -43,6 +47,7 @@ const near = (a: number, b: number, eps = 1e-6): boolean => Math.abs(a - b) <= e
 
 function fresh(): void {
   h.resetTo('flight');
+  phase2ShipOne(h.store);
   h.noFault();
   installTool(h.store, 'repair');
 }
@@ -154,11 +159,11 @@ function fresh(): void {
     memory: {
       ...ares.memory,
       // HALCYON's pod racks with one pod more on each side of the root: POD 05 | GAP 2 | root | GAP 1 | POD 06, POD 07.
-      podRacks: { B: 'P P P _40', C: 'P P _2 R _1 P P _21', D: '_64' },
+      podRacks: { B: 'P P P _40', C: 'P P _2 S _1 P P _29', D: '_64' },
       drivers: { familiesSeedStream: 'families', damage: 'scripted', hurt: [{ pod: 1, integrity: 90 }], lead: 5, firstRun: null },
     },
   };
-  const memory = buildShipMemory(halcyon, null, childRng(7, 1, 'families'), false, UNNAMED_HOLLOW, null);
+  const memory = buildShipMemory(halcyon, null, childRng(7, 1, 'families'), false, UNNAMED_HOLLOW, { blocks: ROOT_BLOCKS });
   // A quiet closed orbit (never locks, never crashes), as acceptance 4 flies it.
   const rp = 5500;
   const ra = 11000;

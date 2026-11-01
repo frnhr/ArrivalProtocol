@@ -1,3 +1,4 @@
+// Phase 3 slice 2: ships 1–2 are calm, so each case plants phase 2's ship-1 root first (support/hollow-world.ts phase2ShipOne).
 // WP7: HollowDef gained `story` and the timed wake `coastLeadSec` (HALCYON's coast-tied wake); the
 // fixtures below spell them out (no story, no coast lead: the WP6 behaviour they test).
 // Slice 1a: pods for clusters on ARES-VII (rack A's 18 free blocks, the root, POD 01–03, then 160 free): POD 03 stands
@@ -40,6 +41,7 @@ import { TOOL_REFUSAL } from '@data/tool-text';
 import type { HollowDef } from '@data/ships';
 import type { Segment, FreeSegment, HollowSegment } from '@/types/segment';
 import { DELETE_HOLLOW_BASE_SEC, DELETE_HOLLOW_PER_BLOCK_SEC } from '@data/tuning';
+import { phase2ShipOne } from '../support/hollow-world';
 
 const h = createHarness6(1, { soulsFound: true });
 setLandingMode('manual');
@@ -52,6 +54,7 @@ const HUNGRY: HollowDef = { wake: { afterAiSec: 0, coastLeadSec: null }, spreadE
 
 function fresh(cfg?: HollowDef): void {
   h.resetTo('flight');
+  phase2ShipOne(h.store);
   h.noFault();
   for (const kind of ['repair', 'move', 'copy', 'delete'] as const) installTool(h.store, kind);
   // Dormant: no scripted bite at the loop closing; only what a test infects.
@@ -365,6 +368,7 @@ const lastLogId = (): number => h.log().at(-1)?.id ?? 0;
 // --- A world reset mid-fight -----------------------------------------------------------------------------------------------------------
 {
   h.resetTo('flight');
+  phase2ShipOne(h.store);
   infectNow(h.store, h.soul('POD 01'));
   h.stepFor(1);
   h.resetTo('flight');

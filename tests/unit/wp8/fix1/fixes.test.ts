@@ -10,6 +10,7 @@
 // • A FIREWALL to place: the strip's line (`MOVE your FIREWALL (FW) into the GAP next to UNIT-050`, the MOVE chip,
 //   then the FW chip), the MOVE preview's `SEALS THIS SIDE ✓` over the GAP, and the line done once it holds.
 import { SHIPS } from '@data/ships';
+import { phase2Halcyon } from '../../support/hollow-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../../wp7/harness7';
 import { receiveTransmission, skipBoot, bootSkipWaits } from '@systems/boot';
@@ -169,6 +170,8 @@ h.store.update((d) => { d.run.transit!.offer = [{ id: 'firewall', title: 'FIREWA
 pickCard(h.store, 'firewall');
 h.transmit();
 h.stepUntil(() => state().run.phase === 'flight', 20);
+// Phase 3 slice 2: HALCYON is calm now; the lesson is checked on its phase-2 racks and HOLLOW (support/hollow-world.ts).
+phase2Halcyon(h.store);
 const firewallRule = FIREWALL_RULES.find((rule) => rule.id === 'firewall-place')!;
 const tabRule = FIREWALL_RULES.find((rule) => rule.id === 'firewall-place-tab')!;
 const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { events: new Set(), phaseEntered: null, mindQuietSec: 0, flash: null });

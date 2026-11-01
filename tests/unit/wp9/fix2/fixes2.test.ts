@@ -70,7 +70,7 @@ const wallOffRoot = (): void => {
 
 // --- Ruling 1 and 2: the deadline as a pace event; the warning colour; the lapse ------------------------------------
 {
-  h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true, sensorHealed: true });
   h.step();
   const deadline = deadlineTac()!;
   const skip = requestSkip(h.store);
@@ -109,7 +109,7 @@ const wallOffRoot = (): void => {
 // last stood open, when the hold ended, when HOLLOW woke, whether the bite clock showed a time during the hold.
 interface WakeRun { lastOpenAi: number; holdEndedAi: number | null; wakeAi: number | null; openAtWake: boolean; clockWhileHeld: boolean; overclocked: boolean }
 function wakeRun(kid: 'still-amber' | 'still-blue' | 'tapper'): WakeRun {
-  h.kestrel(5, { sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, sensorHealed: true });
   ensureTool('repair');
   if (kid === 'still-blue') setMode(h.store, 'memory');
   const run: WakeRun = { lastOpenAi: 0, holdEndedAi: null, wakeAi: null, openAtWake: false, clockWhileHeld: false, overclocked: false };
@@ -144,7 +144,7 @@ for (const kid of ['still-amber', 'still-blue', 'tapper'] as const) {
 {
   // The early dodger: the hold ends when the correction takes the path off the cloud; the coast's wake (coast + 5 s)
   // or the quiet after the dodge, whichever is later.
-  h.kestrel(5, { sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, sensorHealed: true });
   ensureTool('repair');
   correctIn();
   const ended = state().hollow.wakeHoldEndedAtAi;
@@ -161,7 +161,7 @@ for (const kid of ['still-amber', 'still-blue', 'tapper'] as const) {
 
 // --- Ruling 4: the first seed waits for a calm flight ---------------------------------------------------------------
 {
-  h.kestrel(5, { sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, sensorHealed: true });
   ensureTool('repair');
   ensureTool('move');
   correctIn();
@@ -192,7 +192,7 @@ for (const kid of ['still-amber', 'still-blue', 'tapper'] as const) {
 }
 {
   // ?debug's seedNow sets the clock to zero: the hold freezes the count, not the moment, so it still fires at once.
-  h.kestrel(5, { sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, sensorHealed: true });
   ensureTool('repair');
   ensureTool('move');
   correctIn();
@@ -208,7 +208,7 @@ for (const kid of ['still-amber', 'still-blue', 'tapper'] as const) {
   clearAlert(h.store, 'fix2-test-alarm');
 }
 for (const kid of [{ name: 'late corrector (46 AI s)', delayAi: 46 }, { name: 'never-corrector', delayAi: Infinity }]) {
-  h.kestrel(5, { arrivalDamage: true });
+  h.kestrel(5, { phase2Hollow: true, arrivalDamage: true });
   ensureTool('repair');
   ensureTool('move');
   let telegraphUrgency: string | null = null;
@@ -234,7 +234,7 @@ for (const kid of [{ name: 'late corrector (46 AI s)', delayAi: 46 }, { name: 'n
 
 // --- Minor: letting go during KEEP HOLDING — dodge DEBRIS C ---------------------------------------------------------
 function releaseInDodge(): void {
-  h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true, sensorHealed: true });
   ensureTool('move');
   h.stepUntil(() => state().clock.aiSec >= 40, 60);
   h.keyDown('Space');
@@ -268,7 +268,7 @@ function releaseInDodge(): void {
 
 // --- Minor: busy threads do not move the deadline -------------------------------------------------------------------
 {
-  h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true, sensorHealed: true });
   ensureTool('repair');
   h.store.update((d) => {
     for (const role of ['telemetry', 'comms'] as const) {

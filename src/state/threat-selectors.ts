@@ -63,6 +63,14 @@ export function huntedToolWithoutSpare(state: Readonly<GameState>): FsToolSegmen
   return null;
 }
 
+// The COPY lesson is due (risk 12; data/script.ts toolsHunted reads it, with COPY licensed): a tool HOLLOW can reach has
+// no spare (huntedToolWithoutSpare), or a HUNT stage's seeds, which aim at your tools, are blinking or have landed.
+export function copyLessonDue(state: Readonly<GameState>): boolean {
+  const hollow = state.hollow;
+  const huntSeeds = hollow.cfg.seed?.target === 'near-tools' && (hollow.seedTelegraph !== null || hollow.seedsLanded > 0);
+  return huntSeeds || huntedToolWithoutSpare(state) !== null;
+}
+
 // Slice 5's hook (a corrupted resident wakes after it): HOLLOW is aboard and its first fight on this ship has been decided:
 // the scripted bite cured or eaten, or nobody there to bite (systems/hollow.ts decideScript clears scriptTargetId as it
 // wakes or goes dormant), or a timed wake's first bite has landed. Asleep (before the loop closes, before a timed wake),

@@ -26,6 +26,7 @@ import { createInitialState, createHollowState } from '@state/initial';
 import { buildShipMemory, MEMORY_TOTAL_BLOCKS, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F } from '@data/memory';
 import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
 import { tallyPreview, beamSeedsInMemory } from '@state/threat-selectors';
+import { integrityState } from '@state/selectors';
 import { getShip } from '@data/ships';
 import { nominalShipThreat } from '@systems/threat-plan';
 import { SEEDS_ONLY_DEF } from '@data/threats';
@@ -224,7 +225,7 @@ h.events.length = 0;
 // KESTREL's PATH UNCERTAIN (its Sensor Interp at 45) outranks every mind line: fixed first, as a kid would.
 h.store.update((draft) => {
   const sensor = draft.memory.find((seg) => seg.role === 'sensor');
-  if (sensor && 'integrity' in sensor) { sensor.integrity = 100; sensor.state = 'ok'; }
+  if (sensor && 'integrity' in sensor) { sensor.integrity = 100; sensor.state = integrityState(100); }
   draft.ui.memoryRev++;
 });
 const rmFile = s().memory.find((seg) => seg.type === 'fs-tool' && seg.fsTool === 'delete')!;
