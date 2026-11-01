@@ -39,6 +39,7 @@ import {
 } from '@data/landing-text';
 import { HARD_WORDS_POOL } from '@data/souls';
 import { THREAT_RULES } from '@data/threat-rules';
+import { copyLessonDue, hollowAboard } from '@state/threat-selectors';
 import { THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
 import { LOG_TEXT, LOG_HINT_TARGET } from '@data/log-text';
 import { logEntriesAtBoot, logKnown } from '@systems/story-log';
@@ -870,7 +871,9 @@ export function bootLogEntries(state: Readonly<GameState>): number[] {
 // The boot line HOLLOW closes this ship's boot with (its story's: the threat ladder's config for this ship), or null.
 function bootHollowLine(state: Readonly<GameState>): string | null {
   const story = state.hollow.cfg.story;
-  if (story === 'wants-charge') return HOLLOW_STORY.keepCharge(state.run.unitNumber, MERGE_COST_CHARGE);
+  // MERGE's foreshadowing is said once a run (run.threat.told.keepCharge: boot.ts marks it as the line is said; hollow.ts
+  // marks it when its arrival story says it). Only the HUNT stage asks at its boot; the fixed five never reach it.
+  if (story === 'wants-charge') return state.run.threat.told.keepCharge ? null : HOLLOW_STORY.keepCharge(state.run.unitNumber, MERGE_COST_CHARGE);
   if (story === 'last-ship') return HOLLOW_STORY.lastShip(state.run.unitNumber);
   return null;
 }
@@ -1420,9 +1423,11 @@ function shipFixHighlight(ctx: DirectorCtx): string | null {
 // the moment it wakes and bites, the strip says the rule a kid can repeat, once, for WALL_RULE_SHOW_SEC
 // (then the plain eating lines name each driver); once the bites are cured, it asks for the MOVE that
 // puts the exposed driver behind a WALL, for as long as one is exposed. Only with MOVE licensed.
+// HOLLOW itself is aboard (slice 2): a seeds-only wake (KESTREL's beam seeds) spreads too, but its lesson is RM THE SEED,
+// not MOVE the drivers behind a WALL while a seed eats Telemetry.
 function spreadingAwake(ctx: DirectorCtx): boolean {
   return isLive(ctx) && ctx.state.hollow.phase === 'awake' && ctx.state.hollow.cfg.spreadEverySec !== null
-    && ctx.state.run.licences.includes('move');
+    && ctx.state.run.licences.includes('move') && hollowAboard(ctx.state);
 }
 
 function wallRuleLive(ctx: DirectorCtx): boolean {
@@ -1857,11 +1862,10 @@ function swapRunning(): boolean {
   return getOps().some((operation) => operation.kind === 'swap');
 }
 
-// Seeds that hunt your tools are on their way or in memory (VESPER), with COPY in hand.
+// A tool HOLLOW can reach has no spare, or a HUNT stage's seeds are on their way or in memory, with COPY in hand
+// (slice-2-plan risk 12: re-keyed from VESPER's near-tools seeds, which the fixed five no longer have).
 function toolsHunted(ctx: DirectorCtx): boolean {
-  const hollow = ctx.state.hollow;
-  return isLive(ctx) && hollow.cfg.seed?.target === 'near-tools' && ctx.state.run.licences.includes('copy')
-    && (hollow.seedTelegraph !== null || hollow.seedsLanded > 0);
+  return isLive(ctx) && ctx.state.run.licences.includes('copy') && copyLessonDue(ctx.state);
 }
 
 // A spare Repair exists: more working copies of it than the unit got with its licence (Repair and Repair.bak).

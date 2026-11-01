@@ -840,6 +840,39 @@ Track OPENING (§5.2) as built on branch `opening-2`, where it differs from §1�
     its name-fit check: `???` and `046.log` don't fit a tiny chip, and the chip's own look is Track UI's.
 16. **wp7/, wp9/ and wp10/run-flow** are deleted in the post-THREAT re-fly (§5.2's last task), not before.
 
+**The re-fly, after THREAT's merge**
+
+17. **wp7/, wp9/ and wp10/run-flow are deleted.** What they checked is now wp11/full-run's per-ship checks: 25 rules, each
+    evaluated where its moment comes on every seed and reported once with the count of checks. They cover the hand-over
+    (ops, memory, resets, Engine I/O hits, the charge formula, transit hits, dividers), the boot lines (ECC, charge,
+    046.log keys) and each ship's beats. The beats are slice 2's, not phase 2's: ships 1–2 are calm; KESTREL has the beam
+    seed next to Telemetry, the rm, the sensor and the debris; VESPER has the boarding, the SWAP and HOLLOW's fight and
+    name; LAST LIGHT has THE DEAL refused. Phase 2's HALCYON naming and HOLLOW seeds, and VESPER's deal and near-tools
+    seeds, are gone with their ships' stages. threat/arrival-story covers the story timing.
+18. **The lever: LAST LIGHT's link is 98, not 96.** On the last crossing the link, not the charge, limits what arrives:
+    the files are 82–84 blocks by then. So 046.log's 2 blocks came straight off the charge at the choice. Full-run at
+    `RUN_SEEDS=8`, charge at the choice per seed (MERGE is tried on even seeds):
+
+    | Seed | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | ≥ 20 |
+    |---|---|---|---|---|---|---|---|---|---|
+    | link 96 | 15 | 10 | 23 | 26 | 16 (stuck) | 12 | 28 | 18 | 3/8 |
+    | link 98 | 17 | 12 | 25 | 28 | 5 | 14 | 30 | 20 | 4/8 |
+
+    The target is met at exactly 50%. With 98, all 8 runs are victories (2 MERGE). The star credit is unchanged.
+19. **harness11's defender repairs a driver too hurt to launch**, as the strip's L11 asks. LAST LIGHT's rolled FAILING
+    driver (30–45) can be worn under 25 by the belt. Seed 5 used to stand in the landing for good with `POD 06 CAN'T
+    LAUNCH` (the "stuck" run above). It is a victory now, and the repair is why its charge at the choice is 5.
+20. **full-run's MERGE-charge and both-endings targets are checked from `RUN_SEEDS=8`**. On the quick tier's two seeds
+    they are printed as INFO. Seeds 1 and 2 sit at 17 and 12, below a median of 20, so two seeds measure nothing. The
+    per-ship checks, the victory rate and the reset check hold at any depth.
+21. **THREAT's script.ts patches applied:**
+    - `toolsHunted` reads `copyLessonDue` (risk 12);
+    - the WALL lessons need `hollowAboard` (no `MOVE the drivers` on KESTREL's seeds-only wake);
+    - the HUNT stage's `wants-charge` boot line is said once a run: boot.ts sets `run.threat.told.keepCharge` as it says
+      it, and `bootHollowLine` skips it once told.
+22. **The doubled `── VESPER ──` after `__ap.ship(3)` is by design**: `logDivider` writes one divider per screen (radio and
+    mind, WP7). `__ap.log()` lists both channels, so it shows two. Each screen shows one.
+
 ## Deviations (Track THREAT)
 
 Track THREAT (§5.1) as built on branch `threat-2`, where it differs from §1–§6 or fills a gap the plan left open.

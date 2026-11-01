@@ -14,6 +14,17 @@
 // by the strip ([L] when the strip asks, followLanding) while the duel goes on, as boss-sim's C does. FINAL_LANDING=stand
 // instead keeps phase 2's exposure: LAST LIGHT's landing stands FINAL_LANDING_SEC AI seconds (phase 2's 16 × 3.0 s of
 // printing), then lands at once.
+// Slice 2 (slice-2-plan §6.2): wp7/, wp9/ and wp10/run-flow are folded in here as per-ship checks, evaluated on every
+// seed's run and reported once each with how often they were checked:
+// • every hand-over: nothing running, memory valid, every reset module initial; the carried Engine I/O less the logged
+//   hits; the charge that crossed (min(held, link − files)) plus 6 per ★, the card's, the floor, less any overflow; the
+//   crossing's hits; a divider naming the ship on both screens; the boot's ECC and charge lines; 046.log's keys;
+// • ARES-VII and HALCYON calm (HALCYON opens TOO WIDE with IN engaged; no MOVE yet);
+// • KESTREL: its own sensor damage, the run-1 beam seed next to Telemetry and AUTOBURN.skl at its boot; blind at first;
+//   DELETE at its start and MOVE by its lock; the seed rm'd, the sensor repaired, the debris dodged;
+// • VESPER: the 108% boarding with a 10-block root, Thrust Ctrl at 31% unscanned; COPY, SWAP at the first burst and the
+//   SWAP done; HOLLOW's fight after the capture, and its name;
+// • LAST LIGHT: THE DEAL offered and refused; every ship locked to its LANDING REPORT; RUN END's sums.
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { receiveTransmission } from '@systems/boot';
@@ -32,6 +43,21 @@ import type { GameState } from '@state/schema';
 import { byDepth } from '../depth';
 import { setLandingMode } from '../support/landing-instant';
 import { followLanding } from '../landing/harness-landing';
+import { mountStoryLog, logEntriesAtBoot } from '@systems/story-log';
+import { pickCard } from '@systems/draft';
+import { getOps } from '@systems/ops-core';
+import { assertMemoryInvariants } from '@systems/memory-ops';
+import { capabilitiesNow } from '@systems/capabilities';
+import { theRoot } from '@systems/hollow';
+import { runScore, runLanded } from '@systems/run-score';
+import { beamSeedsInMemory } from '@state/threat-selectors';
+import { getByRole, hasIntegrity } from '@state/selectors';
+import { getShip } from '@data/ships';
+import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
+import { LINES, transitEccLine, scriptedDamageLine } from '@data/script';
+import { LOG_TEXT } from '@data/log-text';
+import { eccSeedsLine } from '@data/threat-text';
+import { STAR_CHARGE_BONUS, BAND_OK_MIN } from '@data/tuning';
 
 const FINAL_LANDING_SEC = Number(process.env.FINAL_LANDING_SEC ?? 48);
 // FINAL_LANDING: 'strip' (default: LAST LIGHT's landing by the strip) or 'stand' (FINAL_LANDING_SEC, then instant).
@@ -41,8 +67,138 @@ const FINAL_STRIP = FINAL_LANDING === 'strip';
 
 // Quick depth (tests/unit/depth.ts): seeds 1 and 2, one PURGE and one MERGE run; full: 50.
 const SEEDS = Number(process.env.RUN_SEEDS ?? byDepth(2, 50));
+// The MERGE-charge and both-endings targets are balance measurements: on fewer than BALANCE_SEEDS seeds they are printed
+// as INFO (slice 2's re-fly: at RUN_SEEDS=8 the charge at the choice runs 5–30, median 20, so two seeds say nothing about
+// the median; `RUN_SEEDS=8` or `npm run balance` checks them). The per-ship checks and the victory rate hold on any count.
+const BALANCE_SEEDS = 8;
 const h = createHarness11(1, { soulsFound: false });
+mountStoryLog(h.store);
 const state = (): Readonly<GameState> => h.store.getState();
+
+// --- The per-ship checks (wp7, wp9 and wp10's run-flow, folded in) ------------------------------------------------------
+// Each is evaluated wherever its moment comes on every seed; the suite reports each once, with how often it was checked
+// and the first seeds that broke it.
+let seedNow = 0;
+const perShip = new Map<string, { runs: number; fails: string[] }>();
+function expect(name: string, ok: boolean, detail = ''): void {
+  const entry = perShip.get(name) ?? { runs: 0, fails: [] };
+  entry.runs++;
+  if (!ok) entry.fails.push(`seed ${seedNow}: ${detail}`);
+  perShip.set(name, entry);
+}
+const said = (from: number): string[] => state().log.entries.slice(from).map((entry) => entry.text);
+const integrityOf = (role: 'engine-io' | 'sensor' | 'thrust-ctrl'): number => {
+  const file = getByRole(state(), role);
+  return file !== null && hasIntegrity(file) ? file.integrity : -1;
+};
+// Where this ship's events and lines start (its boot).
+let eventsAtBoot = 0;
+let logAtBoot = 0;
+
+// TRANSMIT ▸ with the hand-over's checks: the first card picked (as the harness would), the packet read, then the arrival.
+function transmitChecked(): void {
+  const before = state().run.transit;
+  if (before && before.pick === null && before.offer.length > 0) pickCard(h.store, before.offer[0]!.id);
+  const plan = state().run.transit!;
+  const engineBefore = integrityOf('engine-io');
+  const stars = state().run.pendingStars;
+  const credit = state().run.pendingStarCredit;
+  eventsAtBoot = h.events.length;
+  logAtBoot = state().log.entries.length;
+  h.transmit();
+  const arrival = state().run.arrival!;
+  const ship = getShip(state().run.shipIndex);
+  let memoryOk = true;
+  try { assertMemoryInvariants(state().memory, MEMORY_TOTAL_BLOCKS); } catch { memoryOk = false; }
+  expect('every hand-over: no op running, memory 384 and valid, every reset module in its initial state',
+    getOps().length === 0 && memoryOk && resetReport().length === 0, `${ship.name}: ${JSON.stringify(resetReport())}`);
+  const engineHits = arrival.hits.filter((hit) => hit.role === 'engine-io').reduce((sum, hit) => sum + (hit.from - hit.to), 0);
+  expect('every hand-over: the carried Engine I/O = its integrity before the beam minus the hits the log names',
+    Math.abs(integrityOf('engine-io') - (engineBefore - engineHits)) < 1e-9, `${ship.name}: ${engineBefore} − ${engineHits} → ${integrityOf('engine-io')}`);
+  const crossed = Math.min(plan.chargeHeld, plan.linkBlocks - plan.filesBlocks);
+  const total = arrival.chargeCarried + arrival.starCredit + arrival.cardCharge + arrival.chargeFloorAdded - arrival.chargeOverflowLost;
+  expect('every hand-over: min(charge held, link − files) crosses, then +6 per ★, the card\'s, the floor, less any overflow',
+    arrival.chargeCarried === crossed && arrival.starCredit === credit && credit === STAR_CHARGE_BONUS * stars && chargeLeft(state()) === total,
+    `${ship.name}: held ${plan.chargeHeld}, link ${plan.linkBlocks} − files ${plan.filesBlocks} → ${arrival.chargeCarried}; ★ ${stars} → ${arrival.starCredit}; total ${total} vs ${chargeLeft(state())}`);
+  if (plan.extraHits === 0 && plan.coreHit === 0 && !plan.coreReset) {
+    expect('every hand-over (no emergency): the crossing dealt the ship\'s transit hits', arrival.hits.length === ship.arrival!.transitHits,
+      `${ship.name}: ${arrival.hits.length} of ${ship.arrival!.transitHits}`);
+  }
+  const dividers = state().log.entries.filter((entry) => entry.divider && entry.text === LINES.logDivider(ship.name));
+  expect('every hand-over: the log keeps its history, with a divider naming the ship on both screens', dividers.length === 2
+    && new Set(dividers.map((entry) => entry.channel)).size === 2, `${ship.name}: ${dividers.length}`);
+}
+
+// The boot just ended: its lines, then the ship's opening state.
+function bootChecked(): void {
+  const index = state().run.shipIndex;
+  const ship = getShip(index);
+  const arrival = state().run.arrival;
+  const lines = said(logAtBoot);
+  if (arrival !== null) {
+    expect('every boot after a beam: the ECC line from the actual hits, then the charge line',
+      lines.includes(transitEccLine(arrival.hits)) && lines.some((text) => text.startsWith('> +')),
+      `${ship.name}: ${lines.slice(0, 6).join(' | ')}`);
+  }
+  const keys = logEntriesAtBoot(index, ship.flagship);
+  if (keys.length > 0) {
+    expect('every boot past ship 1: `> 046.log · KEY FOUND`, and the run finds its entries (02, 03, 04, 10–11)',
+      lines.includes(LOG_TEXT.keyFound(keys)) && keys.every((entry) => state().run.log.found.includes(entry)),
+      `${ship.name}: ${JSON.stringify(state().run.log.found)}`);
+  }
+  if (ship.id === 'halcyon') {
+    expect('HALCYON opens TOO WIDE with IN engaged', /^TOO WIDE/.test(h.objective()?.text ?? '') && state().burn.sasMode === 'radial-in',
+      h.objective()?.text ?? '');
+  }
+  if (ship.id === 'kestrel' && arrival !== null) {
+    expect('KESTREL\'s boot: its own damage line (SENSOR INTERP 45% — PATH UNCERTAIN), Sensor Interp at 45',
+      lines.includes(scriptedDamageLine(arrival.scripted)) && integrityOf('sensor') <= 45, `${integrityOf('sensor')} | ${lines.join(' | ')}`);
+    expect('KESTREL\'s boot (run 1): one beam seed, next to Telemetry, named on the ECC seeds line',
+      arrival.seeds.length === 1 && arrival.seeds[0]!.targetName === 'Telemetry' && lines.includes(eccSeedsLine(['Telemetry']))
+        && beamSeedsInMemory(state().memory).length === 1, JSON.stringify(arrival.seeds));
+    expect('KESTREL\'s boot: AUTOBURN.skl trained from the two manual captures, in memory',
+      state().memory.some((seg) => seg.type === 'upgrade' && seg.upgrade === 'autoburn') && lines.some((text) => text.startsWith('> SKILL TRAINED')),
+      lines.join(' | '));
+    expect('KESTREL flies blind at first (PATH UNCERTAIN)', capabilitiesNow(state()).plot.mode === 'uncertain', capabilitiesNow(state()).plot.mode);
+  }
+  if (ship.id === 'vesper') {
+    const thrust = getByRole(state(), 'thrust-ctrl');
+    expect('VESPER\'s boot: HOLLOW boards (the 108% unpack, hollow-boarded) with a 10-block root; Thrust Ctrl at 31%, unscanned',
+      h.events.slice(eventsAtBoot).some((event) => event.name === 'hollow-boarded') && theRoot(state().memory)?.size === 10
+        && thrust !== null && hasIntegrity(thrust) && thrust.integrity === 31 && 'scanned' in thrust && !thrust.scanned,
+      `root ${theRoot(state().memory)?.size}, thrust ${integrityOf('thrust-ctrl')}`);
+  }
+}
+
+// The ship's landing is over (its LANDING REPORT is up, or it was lost): what its flight did.
+function shipChecked(): void {
+  const ship = getShip(state().run.shipIndex);
+  const events = h.events.slice(eventsAtBoot);
+  const licences = state().run.licences;
+  expect('every ship locks and reaches its LANDING REPORT', state().run.phase === 'report' && state().burn.status === 'locked',
+    `${ship.name}: ${state().run.phase} ${state().burn.status}`);
+  if (ship.id === 'ares-vii' || ship.id === 'halcyon') {
+    expect('ARES-VII and HALCYON are calm: no HOLLOW block, no bite', !state().memory.some((seg) => seg.type === 'hollow')
+      && !events.some((event) => event.name === 'hollow-infect'), ship.name);
+  }
+  if (ship.id === 'halcyon') expect('HALCYON: no MOVE yet (it comes at KESTREL\'s coast)', !licences.includes('move'), licences.join(','));
+  if (ship.id === 'kestrel') {
+    expect('KESTREL: DELETE at its start and MOVE by its lock', licences.includes('delete') && licences.includes('move'), licences.join(','));
+    expect('KESTREL: the beam seed rm\'d before the ship ends', beamSeedsInMemory(state().memory).length === 0
+      && events.some((event) => event.name === 'seed-deleted'), String(beamSeedsInMemory(state().memory).length));
+    expect('KESTREL: Sensor Interp repaired', integrityOf('sensor') >= BAND_OK_MIN, String(integrityOf('sensor')));
+    expect('KESTREL: the early IN correction cleared the debris (0 hits)', !events.some((event) => event.name === 'zone-hit'));
+  }
+  if (ship.id === 'vesper') {
+    expect('VESPER: COPY, SWAP at the first uncommanded burst, and the kid SWAPped (Thrust.old)', licences.includes('copy')
+      && licences.includes('swap') && state().memory.some((seg) => seg.name === 'Thrust.old'), licences.join(','));
+    expect('VESPER: HOLLOW fought after the capture (it bit) and named itself', events.some((event) => event.name === 'hollow-infect')
+      && state().run.hollowNamed, `named ${state().run.hollowNamed}`);
+  }
+  if (ship.id === 'last-light') {
+    expect('LAST LIGHT: THE DEAL offered and refused', state().run.stats.deal?.outcome === 'refused', JSON.stringify(state().run.stats.deal));
+  }
+}
 
 // A kid playing for MERGE saves REPAIR CHARGE (VESPER's boot: `> keep 20 charge for me`): it heals the Core only back to
 // its two threads.
@@ -109,8 +265,12 @@ const results: SeedResult[] = [];
 const started = Date.now();
 for (let seed = 1; seed <= SEEDS; seed++) {
   h.newRun(seed);
+  seedNow = seed;
+  eventsAtBoot = h.events.length;
+  logAtBoot = state().log.entries.length;
   receiveTransmission(h.store);
   h.stepUntil(() => state().run.phase === 'flight', 15);
+  bootChecked();
   const choice = seed % 2 === 0 ? 'merge' : 'purge';
   defendOpts = choice === 'merge' ? { coreHealBelow: 50, coreHealTo: 60 } : {};
   chargeAtChoice = null;
@@ -129,20 +289,30 @@ for (let seed = 1; seed <= SEEDS; seed++) {
     if (state().run.phase === 'flight' && state().burn.status === 'approaching' && !state().run.coreLost) flyShip();
     if (shipLost(state())) {
       // The LOST card's button.
+      shipChecked();
       continueAfterLoss(h.store);
     } else if (state().run.phase === 'landing') {
       if (!toReport(choice) && !shipLost(state())) break;
+      shipChecked();
       if (state().run.phase === 'report') continueAfterReport(h.store);
     } else if (state().run.phase === 'report') {
+      shipChecked();
       continueAfterReport(h.store);
     }
     if (state().run.phase === 'transmit') {
-      h.transmit();
+      transmitChecked();
       h.stepUntil(() => state().run.phase === 'flight', 25);
+      bootChecked();
     }
   }
   const ended = state().run.phase === 'end';
   const model = ended ? runEndModel(state()) : null;
+  if (ended) {
+    const ships = state().run.ships;
+    expect('RUN END: five ship results; LANDED is the colonists down in an LZ, SCORE the landing points', ships.length === 5
+      && runLanded(ships) === ships.reduce((sum, ship) => sum + ship.landedInLz, 0) && runScore(ships) === ships.reduce((sum, ship) => sum + ship.points, 0)
+      && runScore(ships) > 0, `${ships.length} ships, landed ${runLanded(ships)}, score ${runScore(ships)}`);
+  }
   const line: SeedResult = {
     seed,
     cause: state().run.endCause ?? `(${state().run.phase} on ${state().level.shipName})`,
@@ -171,10 +341,15 @@ console.log(`LAST LIGHT over the ${atChoice.length} runs that reached the choice
   + `(landed ${(sum((verbs) => verbs.landed) / atChoice.length).toFixed(2)}, blocked ${(sum((verbs) => verbs.blocked) / atChoice.length).toFixed(1)}, `
   + `skipped turns ${(sum((verbs) => verbs.moments - verbs.telegraphed) / atChoice.length).toFixed(1)}); drivers lost `
   + `${(lostRuns.reduce((total, result) => total + result.lost!, 0) / Math.max(1, lostRuns.length)).toFixed(2)} on average (worst ${Math.max(...lostRuns.map((result) => result.lost!))})`);
-check(`…at least half of the runs reach the choice with the ${MERGE_COST_CHARGE} MERGE costs (the lead's target, 21:30)`,
+for (const [name, { runs, fails }] of perShip) check(`${name} (checked ${runs}×)`, fails.length === 0, fails.slice(0, 3).join(' | '));
+const balance = (name: string, ok: boolean, detail: string): void => {
+  if (SEEDS >= BALANCE_SEEDS) check(name, ok, detail);
+  else console.log(`INFO  ${name}: ${ok ? 'met' : 'not met'} on ${SEEDS} seeds (checked from RUN_SEEDS=${BALANCE_SEEDS})  — ${detail}`);
+};
+balance(`…at least half of the runs reach the choice with the ${MERGE_COST_CHARGE} MERGE costs (the lead's target, 21:30)`,
   affordable * 2 >= atChoice.length, `${affordable}/${atChoice.length}`);
 check(`ships 1–5 end in the victory RUN END in ≥ 90% of ${SEEDS} seeds`, victories >= Math.ceil(0.9 * SEEDS), `${victories}/${SEEDS}`);
-check('…both endings were reached', merges > 0 && victories - merges > 0, `${merges} MERGE, ${victories - merges} PURGE`);
+balance('…both endings were reached', merges > 0 && victories - merges > 0, `${merges} MERGE, ${victories - merges} PURGE`);
 setLandingMode('instant');
 h.newRun(SEEDS + 1);
 check('NEW RUN: every reset module in its initial state', resetReport().length === 0, JSON.stringify(resetReport()));

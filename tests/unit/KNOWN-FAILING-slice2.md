@@ -28,12 +28,9 @@ rewritten (slice-2-plan Deviations (Track THREAT) 18–20). New suites: threat/p
 
 ## Track OPENING
 
-| Suite | Why it fails | Plan |
-|---|---|---|
-| wp7/run-flow | HALCYON's HOLLOW story and MOVE | delete; folded into wp11/full-run's per-ship checks |
-| wp9/run-flow | KESTREL's HOLLOW seeds | delete; folded into wp11/full-run |
-| wp10/run-flow | VESPER's deal and near-tools seeds | delete; folded into wp11/full-run |
-| wp11/full-run | runs end, but "≥ half reach the choice with 20 MERGE charge" (0/2) and "both endings" fail: the charge at the choice is about 15 | re-fly after THREAT merges (§5.2's last task) |
+All rows are green after Track OPENING's re-fly (branch `opening-2`). wp7/, wp9/ and wp10/run-flow are deleted: their
+checks are wp11/full-run's per-ship checks now (slice-2-plan §6.2, Deviations (Track OPENING) 17–20). New suite:
+opening/calm-ships.
 
 ## Track UI
 

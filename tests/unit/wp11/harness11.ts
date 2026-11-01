@@ -32,7 +32,7 @@ import { autoburnAvailable } from '@systems/autoburn';
 import { getPrediction, getSensedPrediction } from '@systems/predict';
 import { knownHitRacks } from '@systems/zones';
 import { isHollow } from '@state/selectors';
-import { BAND_OK_MIN } from '@data/tuning';
+import { BAND_OK_MIN, BAND_FAILING_MIN } from '@data/tuning';
 import { pickChoice, entryTypedAtAi } from '@systems/say';
 import { DEAL_ACCEPT, DEAL_REFUSE } from '@systems/hollow-deal';
 
@@ -105,8 +105,12 @@ export function createHarness11(seed = 1, opts: { soulsFound?: boolean } = {}): 
     if (core !== undefined && core.type === 'core' && !core.infected && core.integrity >= healTo) {
       for (const operation of getOpsBySeg(core.id)) if (operation.kind === 'repair') cancelOp(operation.id);
     }
+    // A driver too hurt to launch (slice 2: the final ship's rolled FAILING driver, 30–45, worn under 25 by the belt): the
+    // strip's L11 asks `POD 06 CAN'T LAUNCH — TAB, REPAIR its driver`, and the kid does.
+    const deadDrivers = now.memory.filter((seg) => seg.type === 'driver' && !isInfected(seg) && seg.integrity < BAND_FAILING_MIN);
     const wanted = [
       ...now.memory.filter((seg) => seg.type !== 'driver' && isInfected(seg) && isRepairable(seg)),
+      ...deadDrivers,
       ...(wornCore ? [wornCore] : []),
       ...(weakEngine ? [weakEngine] : []),
     ];

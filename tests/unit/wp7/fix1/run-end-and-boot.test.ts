@@ -1,7 +1,7 @@
 // WP7 fix round 1: the run's end and the hand-over, headless.
 // • A lost last ship (a crash, a BEAM OUT, a flyby) ends the run as 'last-ship-lost': a sombre RUN END
 //   (`HALCYON LOST · END OF THE FLEET`, not hopeful), never END OF THE FLEET · FOR NOW's hope, which is
-//   only for a last ship that printed (run-flow.test.ts checks that one).
+//   only for a last ship that printed (wp11/full-run checks the victory RUN END).
 // • EMERGENCY TRANSMIT's why line says the Core's real toll (−25 from 100, −5 from 30, nothing at 25).
 // • A skipped arrival boot lands on the ECC line (the red flashes start), and only cuts to amber once the
 //   last flash has been seen: a kid mashing SPACE still sees what the crossing did.
