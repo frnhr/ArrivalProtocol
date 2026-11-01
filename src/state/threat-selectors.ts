@@ -13,6 +13,13 @@ export function beamSeedsInMemory(memory: readonly Segment[]): HollowSegment[] {
   return memory.filter((seg): seg is HollowSegment => isHollow(seg) && seg.beam === true);
 }
 
+// The beam-born blocks that are a meal, not a seed (04 §3.7: "a seed that ate reports twice"): a file a beam seed ate. In
+// the seeds act it is inert (data/threats.ts SEEDS_ONLY_DEF onlySeedsBite) but still reports home, so the strip asks for
+// a DELETE of it too (data/threat-rules.ts).
+export function beamEatenInMemory(memory: readonly Segment[]): HollowSegment[] {
+  return beamSeedsInMemory(memory).filter((seg) => seg.seed !== true && !seg.root);
+}
+
 // What this ship's end will do with the beam-born blocks still in memory (04 §3.7), computed from the live state: the
 // LANDING REPORT shows it before CONTINUE (endShip runs on CONTINUE, so run.threat.lastTally is still the last ship's),
 // and THREAT's endShip calls this very function to apply it. With HOLLOW aboard they feed its next root (TRACE stands);

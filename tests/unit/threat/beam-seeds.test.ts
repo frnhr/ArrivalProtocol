@@ -15,7 +15,7 @@ import {
   rollBeamSeeds, seedTargetsOf, seedCountFor, beamSeedSegment, tallyBeamBorn, plantBeamSeed, beamSeedTarget,
 } from '@systems/beam-seeds';
 import { packUnit, packedFiles, layoutCarried, freshUnitRacks, BEAM_SEED_LAYOUT_BLOCKS } from '@systems/carry';
-import { stepHollow, hollowReach, type HollowStepCtx } from '@systems/hollow';
+import { stepHollow, hollowReach, bitersOf, type HollowStepCtx } from '@systems/hollow';
 import { continueAfterReport, endShip } from '@systems/run';
 import { actionDelete, deleteSec } from '@state/actions';
 import { getOps } from '@systems/ops-core';
@@ -166,6 +166,26 @@ function freshPacket(): Packet {
   const eaten = memory.find((seg) => seg.type === 'hollow' && seg.ate === 'Telemetry') as HollowSegment | undefined;
   check('…eaten, Telemetry turns into a beam-born block', eaten?.beam === true && eaten.seed === undefined);
   check('the tally: the seed and the block it made, 2 ("a seed that ate reports twice")', tallyBeamBorn(memory) === 2 && beamSeedsInMemory(memory).some((s) => s.id === seed.id));
+  // The review's M1: left alone, the seed's meal used to bite on (Telemetry → Nav Plotter → Sensor Interp → Autopilot →
+  // Engine I/O → the Core infected at 280 s). In the seeds act only seeds bite: the eaten block is inert.
+  const navId = memory.find((seg) => seg.role === 'navplot')!.id;
+  const engineId = memory.find((seg) => seg.role === 'engine-io')!.id;
+  const intact = (id: string): boolean => {
+    const seg = memory.find((candidate) => candidate.id === id);
+    return seg !== undefined && seg.type !== 'hollow' && !('infected' in seg && seg.infected);
+  };
+  const aiFiles = memory.filter((seg) => seg.type === 'core' || seg.type === 'tool').map((seg) => seg.id);
+  for (const end = ai + 400; ai < end; ai += dt) stepHollow(memory, dt, SEEDS_ONLY_DEF, ctx(ai, false));
+  check('M1: 400 more AI s with the seed ignored: Nav Plotter, Engine I/O and the Core are intact (the eaten block never bites)',
+    intact(navId) && intact(engineId) && aiFiles.filter((id) => id !== telemetry.id).every(intact) && tallyBeamBorn(memory) === 2,
+    memory.filter((seg) => seg.type === 'hollow').map((seg) => (seg as HollowSegment).ate ?? 'seed').join(', '));
+  check('…the HUD draws no reach from it (bitersOf: the seeds alone)', hollowReach(memory, ai, bitersOf(memory, SEEDS_ONLY_DEF)).every((r) => r.hollowId === seed.id)
+    && hollowReach(memory, ai).some((r) => r.hollowId === eaten?.id));
+  const seedAt = memory.findIndex((seg) => seg.id === seed.id);
+  memory.splice(seedAt, 1, { id: 'freed', name: 'Free', type: 'free', size: seed.size } as Segment);
+  for (const end = ai + 100; ai < end; ai += dt) stepHollow(memory, dt, SEEDS_ONLY_DEF, ctx(ai, false));
+  check('…and after the seed is rm\'d the eaten block still bites nothing, and still reports home (tally 1)',
+    aiFiles.filter((id) => id !== telemetry.id).every(intact) && tallyBeamBorn(memory) === 1);
   check(`rm takes 2 s on a seed (1.0 + 0.5 per block)`, Math.abs(deleteSec(beamSeedSegment({ targetId: 'x', targetName: 'x', words: 'x' }, '???')) - 2) < 1e-9);
 }
 
@@ -219,6 +239,24 @@ actionDelete(h.store, second);
 for (let i = 0; i < 80; i++) h.step();
 check('…a second seed on the same ship goes with the plain delete echo (at most one voice a ship)',
   !s().log.entries.some((entry) => entry.text === THREAT_TEXT.seedSaid('tell them we tried.')) && beamSeedsInMemory(s().memory).length === 0);
+
+// M1: a file a seed ate, left in memory: the strip asks for a DELETE of it too (it reports home), lighting it.
+{
+  h.store.update((draft) => {
+    const at = draft.memory.findIndex((seg) => seg.role === 'telemetry');
+    const was = draft.memory[at]!;
+    draft.memory[at] = { id: 'eaten-telem', name: '???', type: 'hollow', size: was.size, root: false, locked: false, owner: '???', ate: 'Telemetry', beam: true, desc: '' } as HollowSegment;
+    draft.ui.memoryRev++;
+  });
+  const eatenCtx = buildDirectorCtx(s(), getPrediction(), { events: new Set(), phaseEntered: null, mindQuietSec: 0, flash: null });
+  const eatenRule = THREAT_RULES.find((rule) => rule.id === (s().ui.mode === 'tools' ? 'beam-eaten-tab' : 'beam-eaten'))!;
+  check(`M1: a seed's meal left in memory: \`${THREAT_TEXT.eatenReportsHome}\``, eatenRule.activeWhen(eatenCtx)
+    && [THREAT_TEXT.eatenReportsHome, THREAT_TEXT.eatenReportsHomeTab].includes(eatenRule.text(eatenCtx) as never) && !eatenRule.doneWhen!(eatenCtx));
+  actionDelete(h.store, s().memory.find((seg) => seg.id === 'eaten-telem')!);
+  for (let i = 0; i < 120 && s().memory.some((seg) => seg.id === 'eaten-telem'); i++) h.step();
+  const goneCtx = buildDirectorCtx(s(), getPrediction(), { events: new Set(), phaseEntered: null, mindQuietSec: 0, flash: null });
+  check('…DELETE clears it, and the line is done', !s().memory.some((seg) => seg.id === 'eaten-telem') && eatenRule.doneWhen!(goneCtx) && !eatenRule.activeWhen(goneCtx));
+}
 
 // The last rm deleted: the loud line, as information; then the seed's no-rm line on the strip.
 toKestrel(5);

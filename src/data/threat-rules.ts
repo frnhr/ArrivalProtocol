@@ -1,12 +1,12 @@
 import type { GuideRule, DirectorCtx } from '@systems/director';
-import { beamSeedsInMemory } from '@state/threat-selectors';
+import { beamSeedsInMemory, beamEatenInMemory } from '@state/threat-selectors';
 import { hasUsableTool } from '@state/selectors';
-import { SEED_HINT_TARGET, TOOL_HINT_TARGET, toolStepTarget } from '@data/fs-tools';
+import { SEED_HINT_TARGET, BEAM_EATEN_HINT_TARGET, TOOL_HINT_TARGET, toolStepTarget } from '@data/fs-tools';
 import { THREAT_TEXT } from '@data/threat-text';
 import { SEED_LESSON_SHOW_SEC, BEAM_SEED_NO_RM_AFTER_SEC } from '@data/tuning';
 
 // The strip's rules for the threat ladder (docs/phase3/04-threats.md §3.3, §3.5; slice-2-plan §2.1, §5.1): the beam
-// seeds' `RM THE SEED` lesson and its no-rm line. Track THREAT owns this file; data/script.ts spreads THREAT_RULES into
+// seeds' `RM THE SEED` lesson, its no-rm line, and the line for a file a seed ate (DELETE it too). Track THREAT owns this file; data/script.ts spreads THREAT_RULES into
 // GUIDE_RULES right before SEED_RULES (a beam seed's line sits where phase 2's seed lines do: after HOLLOW's eating
 // lines, before the WALL and COPY lessons), so THREAT never edits script.ts.
 // • The RM lesson for beam seeds is two more wordings of phase 2's 'seed-first' lesson (script.ts SEED_RULES: the same
@@ -48,6 +48,17 @@ function noRmLive(ctx: DirectorCtx): boolean {
     && !hasUsableTool(ctx.state.memory, 'delete', 'counts');
 }
 
+// A block a beam seed ate is in memory, no seed is (the RM lesson comes first), and DELETE is in hand (the review's M1: it
+// is inert, but it reports home at the ship's end).
+function beamEatenLive(ctx: DirectorCtx): boolean {
+  return live(ctx) && !beamSeedAboard(ctx) && ctx.state.run.licences.includes('delete')
+    && hasUsableTool(ctx.state.memory, 'delete', 'counts') && beamEatenInMemory(ctx.state.memory).length > 0;
+}
+
+function beamEatenGone(ctx: DirectorCtx): boolean {
+  return (ctx.state.run.arrival?.seeds.length ?? 0) > 0 && beamEatenInMemory(ctx.state.memory).length === 0 && !beamSeedAboard(ctx);
+}
+
 function seedHighlight(ctx: DirectorCtx): string {
   return toolStepTarget('delete', ctx.state.ui.activeTool?.kind ?? null, SEED_HINT_TARGET);
 }
@@ -76,6 +87,30 @@ export const THREAT_RULES: readonly GuideRule[] = [
     text: () => THREAT_TEXT.rmTheSeed,
     highlight: seedHighlight,
     doneWhen: beamSeedsGone,
+  },
+  {
+    id: 'beam-eaten-tab',
+    lesson: 'beam-eaten',
+    layer: 'mind',
+    priority: 'mind-urgent',
+    once: true,
+    maxShownSec: SEED_LESSON_SHOW_SEC,
+    activeWhen: (ctx) => beamEatenLive(ctx) && inAmber(ctx),
+    text: () => THREAT_TEXT.eatenReportsHomeTab,
+    keys: ['TAB'],
+    doneWhen: beamEatenGone,
+  },
+  {
+    id: 'beam-eaten',
+    lesson: 'beam-eaten',
+    layer: 'mind',
+    priority: 'mind-urgent',
+    once: true,
+    maxShownSec: SEED_LESSON_SHOW_SEC,
+    activeWhen: (ctx) => beamEatenLive(ctx) && !inAmber(ctx),
+    text: () => THREAT_TEXT.eatenReportsHome,
+    highlight: (ctx) => toolStepTarget('delete', ctx.state.ui.activeTool?.kind ?? null, BEAM_EATEN_HINT_TARGET),
+    doneWhen: beamEatenGone,
   },
   {
     id: 'beam-seed-no-rm-tab',

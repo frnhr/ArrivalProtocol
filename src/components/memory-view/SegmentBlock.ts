@@ -3,7 +3,7 @@ import { shownIntegrity, isInfected, integrityBand, fileLabel, type HealthSegmen
 import { INTEGRITY_MAX } from '@data/tuning';
 import { podCode } from '@data/landing-text';
 import {
-  fileHintTarget, podHintTarget, toolFileHintTarget, firewallHintTarget, SEED_HINT_TARGET, ROOT_HINT_TARGET,
+  fileHintTarget, podHintTarget, toolFileHintTarget, firewallHintTarget, SEED_HINT_TARGET, BEAM_EATEN_HINT_TARGET, ROOT_HINT_TARGET,
 } from '@data/fs-tools';
 import { stripTier, stripName, type StripTier } from '@data/type-labels';
 import { HOLLOW_HUD_TEXT, HOLLOW_FINALE, UNNAMED_HOLLOW } from '@data/hollow-text';
@@ -141,6 +141,8 @@ function renderHollowPart(part: HTMLElement, seg: HollowSegment, layout: Segment
   part.title = seg.ate ? `${seg.name} · was ${seg.ate}` : seg.name;
   // WP9: a seed HOLLOW dropped is what `RM THE SEED — pick up DELETE, click the seed` lights (its chip reads SEED).
   if (seg.seed && layout.partIdx === 0) part.dataset.hintTarget = SEED_HINT_TARGET;
+  // Slice 2 (review M1): a block a beam seed ate is what `THE EATEN BLOCK REPORTS HOME TOO — DELETE it` lights.
+  if (seg.beam && !seg.seed && !seg.root && layout.partIdx === 0) part.dataset.hintTarget = BEAM_EATEN_HINT_TARGET;
   // WP11: LAST LIGHT's root, open for the duel, is what `DELETE THE ROOT` lights.
   if (seg.root && !seg.locked && layout.partIdx === 0) part.dataset.hintTarget = ROOT_HINT_TARGET;
   part.innerHTML = hollowPartHtml(seg, layout, tier);

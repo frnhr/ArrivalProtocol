@@ -1,7 +1,7 @@
 import type { GameState } from '@state/schema';
 import type { InfectionSide, Segment } from '@/types/segment';
 import {
-  hollowReach, drainConditions, drainRatePerSec, healRatePerSec, netLossPerSec, oppositeSide, settledWakeAtAi, dealHolds, type ReachVerdict,
+  hollowReach, bitersOf, drainConditions, drainRatePerSec, healRatePerSec, netLossPerSec, oppositeSide, settledWakeAtAi, dealHolds, type ReachVerdict,
 } from '@systems/hollow';
 import { formatTac } from '@systems/guidance';
 import { dealEffectNow } from '@systems/hollow-deal';
@@ -88,7 +88,7 @@ export function amberBite(state: Readonly<GameState>): { text: string; urgent: b
   if (state.hollow.phase !== 'awake') return null;
   const clock = biteClock(state);
   if (clock.secLeft === null) return null;
-  const reach = hollowReach(state.memory, state.clock.aiSec);
+  const reach = hollowReach(state.memory, state.clock.aiSec, bitersOf(state.memory, state.hollow.cfg));
   if (!reach.some((candidate) => candidate.verdict === 'bite' || candidate.verdict === 'recoiling')) return null;
   return { text: HOLLOW_HUD_TEXT.amberBite(clock.time), urgent: clock.urgent };
 }
@@ -221,7 +221,7 @@ const RED_GAP_VERDICTS: ReadonlySet<ReachVerdict> = new Set<ReachVerdict>(['bite
 export function reachMarks(state: Readonly<GameState>): ReachMarks {
   const marks: ReachMarks = { gaps: [], bites: [], shields: [] };
   if (state.hollow.phase === 'dormant') return marks;
-  for (const reach of hollowReach(state.memory, state.clock.aiSec)) {
+  for (const reach of hollowReach(state.memory, state.clock.aiSec, bitersOf(state.memory, state.hollow.cfg))) {
     // Looking right, the gap's left edge touches the hollow block (and the other way round).
     const hollowEdge = oppositeSide(reach.side);
     const blocks = reach.gapBlocks;

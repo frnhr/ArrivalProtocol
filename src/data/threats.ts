@@ -125,7 +125,10 @@ export const HOLLOW_STAGES: Readonly<Record<HollowStage, HollowStageDef>> = {
 // Beam seeds before HOLLOW boards (04 §3.5, §3.17): no root, no story, no seeds of its own; the hollow blocks are the
 // seeds the beam laid out at the boot (systems/beam-seeds.ts). The first bite after BEAM_SEED_FIRST_BITE_CALM_SEC of calm
 // flight, then every BEAM_SEED_BITE_EVERY_SEC at BEAM_SEED_DRAIN_PER_SEC, ×2 while the engine burns or ×1.5 while the
-// landing is active (the larger applies). With no seed aboard nothing wakes (systems/hollow.ts).
+// landing is active (the larger applies). With no seed aboard nothing wakes (systems/hollow.ts). Only the seeds bite
+// (onlySeedsBite): a file a seed ate is an inert block that reports home but eats nothing more, so with nobody aboard to
+// drive it the chain is one file long, the one the ECC line named (the review's M1: left alone, KESTREL's seed ate
+// Telemetry, then Nav Plotter, Engine I/O and the Core).
 export const SEEDS_ONLY_DEF: HollowDef = {
   wake: { afterAiSec: BEAM_SEED_FIRST_BITE_CALM_SEC, coastLeadSec: null, calmOnly: true },
   spreadEverySec: BEAM_SEED_BITE_EVERY_SEC,
@@ -136,6 +139,7 @@ export const SEEDS_ONLY_DEF: HollowDef = {
   verbs: null,
   deal: false,
   story: 'none',
+  onlySeedsBite: true,
 };
 
 // A calm ship (04 §3.2): no adversary. It never wakes; the cfg stays non-null so no module grows a null check. Its drain
@@ -218,6 +222,11 @@ export function validateHollowDef(id: string, hollow: HollowDef): void {
   // THE DEAL trades a pod's driver for a pause in the spread: a HOLLOW that never spreads would offer nothing.
   if (hollow.deal && hollow.spreadEverySec === null) fail('THE DEAL needs a HOLLOW that spreads (spreadEverySec)');
   if (hollow.deal && timed === null) fail('THE DEAL needs a timed wake');
+  // Only seeds bite before HOLLOW is aboard: a HOLLOW with its own seeds, verbs, deal or story is aboard, and its chain
+  // rules are phase 2's.
+  if (hollow.onlySeedsBite && (hollow.seed !== null || hollow.verbs !== null || hollow.deal || hollow.story !== 'none')) {
+    fail('onlySeedsBite is the seeds act\'s (no HOLLOW aboard): no seeds of its own, verbs, deal or story');
+  }
 }
 
 // Every stage at load: its def passes the rule above, its root is a real block, the verbs are the FINALE's alone (a verb

@@ -188,11 +188,12 @@ function lookFrom(memory: readonly Segment[], index: number, side: HollowSide, a
   return { hollowId: hollow.id, side, gapBlocks, gapIds, neighbourId: neighbour?.id ?? null, verdict };
 }
 
-// Every hollow block's reach, left then right, in address order. Pure.
-export function hollowReach(memory: readonly Segment[], aiNow: number): Reach[] {
+// Every hollow block's reach, left then right, in address order. `only`: the blocks that bite at all (bitersOf; null:
+// every one), so the HUD never draws a red GAP beside an inert block. Pure.
+export function hollowReach(memory: readonly Segment[], aiNow: number, only: ReadonlySet<string> | null = null): Reach[] {
   const reach: Reach[] = [];
   memory.forEach((seg, index) => {
-    if (!isHollow(seg)) return;
+    if (!isHollow(seg) || (only !== null && !only.has(seg.id))) return;
     for (const side of SIDES) reach.push(lookFrom(memory, index, side, aiNow));
   });
   return reach;
@@ -210,8 +211,7 @@ function infect(seg: HealthSegment, side: HollowSide, beam = false): void {
 function spreadBite(memory: readonly Segment[], aiNow: number, events: HollowEvent[], only: ReadonlySet<string> | null = null): void {
   const bitten = new Set<string>();
   events.push({ kind: 'bite' });
-  for (const reach of hollowReach(memory, aiNow)) {
-    if (only !== null && !only.has(reach.hollowId)) continue;
+  for (const reach of hollowReach(memory, aiNow, only)) {
     if (reach.verdict === 'wall') {
       events.push({ kind: 'wall-held', hollowId: reach.hollowId, side: reach.side, gapBlocks: reach.gapBlocks });
       continue;
@@ -230,6 +230,13 @@ function spreadBite(memory: readonly Segment[], aiNow: number, events: HollowEve
     infect(target, side, biter !== undefined && isHollow(biter) && biter.beam === true);
     events.push({ kind: 'infect', segId: target.id, side, scripted: false });
   }
+}
+
+// The hollow blocks that bite on this def's timer (spreadBite's `only`): the seeds alone in the seeds act (onlySeedsBite:
+// a file a seed ate is inert, the review's M1), every hollow block once HOLLOW is aboard (null: phase 2's chain). Pure.
+export function bitersOf(memory: readonly Segment[], cfg: Readonly<HollowDef>): ReadonlySet<string> | null {
+  if (!cfg.onlySeedsBite) return null;
+  return new Set(memory.filter((seg) => isHollow(seg) && seg.seed === true).map((seg) => seg.id));
 }
 
 // Ship 1's one bite (§6.6): the driver next to the root, by address (POD 01 · OKAFOR unless it was
@@ -859,7 +866,7 @@ export function stepHollow(memory: Segment[], dtAi: number, cfg: HollowDef, ctx:
   if (hollow.phase === 'asleep' && woken(memory, cfg, ctx)) {
     hollow.phase = 'awake';
     if (cfg.wake === 'loop-closed-once') scriptedBite(memory, aiNow, events);
-    else spreadBite(memory, aiNow, events);
+    else spreadBite(memory, aiNow, events, bitersOf(memory, cfg));
     // The scripted fight is one-on-one: a folded ARRIVAL + WALLS ('arrives') starts its bite timer only once that fight is
     // decided (decideScript), never mid-fight.
     hollow.biteInSec = cfg.wake === 'loop-closed-once' ? null : cfg.spreadEverySec;
@@ -867,7 +874,7 @@ export function stepHollow(memory: Segment[], dtAi: number, cfg: HollowDef, ctx:
   } else if (hollow.phase === 'awake' && hollow.biteInSec !== null && cfg.spreadEverySec !== null && !dealPaused) {
     hollow.biteInSec -= dtAi;
     if (hollow.biteInSec <= 0) {
-      spreadBite(memory, aiNow, events);
+      spreadBite(memory, aiNow, events, bitersOf(memory, cfg));
       hollow.biteInSec += biteIntervalSec(cfg.spreadEverySec, hollow, aiNow);
     }
   } else if (hollow.phase === 'asleep' && cfg.wake === 'loop-closed-once') {
@@ -1022,7 +1029,7 @@ export function nameHollow(store: Store<GameState>): boolean {
 // MOVE behind a WALL (HALCYON's strip line). One per pod. Pure.
 export function exposedDrivers(state: Readonly<GameState>): DriverSegment[] {
   const drivers: DriverSegment[] = [];
-  for (const reach of hollowReach(state.memory, state.clock.aiSec)) {
+  for (const reach of hollowReach(state.memory, state.clock.aiSec, bitersOf(state.memory, state.hollow.cfg))) {
     if (reach.verdict !== 'bite' && reach.verdict !== 'recoiling') continue;
     const seg = state.memory.find((candidate) => candidate.id === reach.neighbourId);
     if (seg?.type === 'driver' && !drivers.some((driver) => driver.pod === seg.pod)) drivers.push(seg);

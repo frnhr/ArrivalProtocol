@@ -69,6 +69,10 @@ export interface HollowDef {
   verbs: VerbDef | null;
   deal: boolean;
   story: HollowStoryKind;
+  // Only seeds bite (the seeds act: beam seeds before HOLLOW boards, SEEDS_ONLY_DEF). A file a seed eats becomes an inert
+  // hollow block: it still counts for TRACE, but it never bites in turn, so a seed eats the one file the ECC line names
+  // and the chain stops there (slice-2-plan risk 4: no seed ever walks on to Nav Plotter, Engine I/O or the Core).
+  onlySeedsBite?: true;
 }
 
 // --- The ladder (04 §3.1, §3.8, §3.9) ---------------------------------------------------------------------------------

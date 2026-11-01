@@ -72,6 +72,8 @@ export function firewallHintTarget(segId: string): string {
 // The data-hint-target of every seed HOLLOW dropped (WP9): the strip's `RM THE SEED` lights them once DELETE
 // is in hand.
 export const SEED_HINT_TARGET = 'hollow-seed';
+// A block a beam seed ate (inert, but it reports home): what the strip's `DELETE it too` line lights (data/threat-rules.ts).
+export const BEAM_EATEN_HINT_TARGET = 'hollow-beam-eaten';
 
 // The data-hint-target of HOLLOW's root once LAST LIGHT's duel has opened it (WP11): `DELETE THE ROOT` lights it once
 // DELETE is in hand.
