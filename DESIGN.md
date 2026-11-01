@@ -6,7 +6,9 @@ and what was cut is listed at the end.
 
 **Phase 3 has begun.** Slice 1a replaced printing with LANDING: colonists sleep in pods flown by 8-block driver files,
 and you land them on the planet's landing zones (`docs/phase3/01-landing.md`). Where this page speaks of printing,
-souls, the reveal and the WAKE REPORT, read pods, drivers, LANDING and the LANDING REPORT; the rest still holds.
+souls, the reveal and the WAKE REPORT, read pods, drivers, LANDING and the LANDING REPORT. Slice 2 moved HOLLOW off
+ships 1–2: it boards on the beam into VESPER, after KESTREL's seeds (`docs/phase3/04-threats.md`), so "The reveals"
+below now play from VESPER on; the rest still holds.
 
 ---
 
