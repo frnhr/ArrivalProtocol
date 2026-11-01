@@ -1662,4 +1662,15 @@ export const DRIVER_FAILING_MIN = 30;
 export const DRIVER_FAILING_MAX = 45;
 export const DRIVER_FAILING_FROM_LAYER = 4;
 
+// The landing lessons (01-landing §3.11), once a run each, on the strip from the landing's start until the first pod
+// launches: `◆ PODS LAND WHERE THE DOT IS` (run 1's first landing) and `◆ 2 SITES · LZ-A 3, LZ-B 2 — don't overfill` (the
+// run's first ship with two or more LZs). Long enough to read a short line twice, as DOT_WIDE_LESSON_SEC's 5; a little
+// more, because each opens a new screen (the dot, the second bracket) the kid is still taking in.
+export const LANDING_DOT_LESSON_SEC = 6;
+export const LANDING_SPLIT_LESSON_SEC = 6;
+// The run-1 SCAN lesson (`◇ A FILE YOU DIDN'T PACK — SCAN it`, slice-2-plan §3.1) steps aside after this many AI seconds
+// on the strip: the beat is missable (05 §3.5), so it never holds the coast's WAIT line back for longer than a glance.
+// Run 2+ gets the same seconds as a hint.
+export const LOG_SCAN_ASK_SEC = 8;
+
 // --- 2 UI (owned by Track UI): the TRACE meter, the chips, the boarding moment, the LOG READER -------------------------

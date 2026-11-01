@@ -34,14 +34,14 @@ import {
 import { rootDeletable } from '@systems/finale';
 import { dragLineKm } from '@systems/landing-orbit';
 import {
-  hostLine, podCode, groundRadioLine, LANDING_ASKS, LANDING_BEATS, LAUNCH_REFUSAL_LINES, LANDING_LESSONS_1B,
+  hostLine, podCode, groundRadioLine, LANDING_ASKS, LANDING_BEATS, LAUNCH_REFUSAL_LINES, LANDING_LESSONS, LANDING_LESSONS_1B,
   END_LANDING_REFUSAL_KEY, END_LANDING_REFUSAL_TEXT,
 } from '@data/landing-text';
 import { HARD_WORDS_POOL } from '@data/souls';
 import { THREAT_RULES } from '@data/threat-rules';
 import { THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
-import { LOG_TEXT } from '@data/log-text';
-import { logEntriesAtBoot } from '@systems/story-log';
+import { LOG_TEXT, LOG_HINT_TARGET } from '@data/log-text';
+import { logEntriesAtBoot, logKnown } from '@systems/story-log';
 import type { PodRecord } from '@/types/landing';
 import { autoburnDropLine, autoburnAvailable } from '@systems/autoburn';
 import { blocksInRack, knownHitRacks } from '@systems/zones';
@@ -62,6 +62,7 @@ import {
   TRANSIT_HIT_MAX, BAND_DEGRADED_MIN, CORE_LOW_INTEGRITY, FIREWALL_HINT_SHOW_SEC, DEBRIS_MOVE_HINT_TAC, SEED_LESSON_SHOW_SEC,
   AUTOBURN_READY_SHOW_SEC, GHOST_LESSON_AFTER_BURSTS, GHOST_LESSON_SHOW_SEC, COPY_LESSON_SHOW_SEC, MERGE_COST_CHARGE, ROOT_DELETE_SEC,
   BELT_MOVE_HINT_TAC, LESSON_LEAD_IN_SEC, DOT_WIDE_LESSON_SEC, DRAG_LESSON_SEC, DRAG_STAMP_MIN_KM,
+  LANDING_DOT_LESSON_SEC, LANDING_SPLIT_LESSON_SEC, LOG_SCAN_ASK_SEC,
 } from '@data/tuning';
 
 // Every line the game says or shows outside the flight table (systems/guidance.ts) lives here:
@@ -127,6 +128,9 @@ export interface LineVars {
   // the ground (`POD 01 · OKAFOR: "Is it morning?"`, '' before it).
   nextLz: string;
   firstDownRadio: string;
+  // Slice 2. The split lesson for this ship's LZs (`2 SITES · LZ-A 3, LZ-B 2 — don't overfill`; a returning unit's
+  // short form; '' with fewer than two LZs).
+  splitLesson: string;
 }
 
 // The longest values any template can be rendered with. Later packages add their placeholders
@@ -169,7 +173,16 @@ export const WORST_CASE_VARS: LineVars = {
   rootSecLeft: 599,
   nextLz: 'LZ-D',
   firstDownRadio: groundRadioLine(16, 'W'.repeat(FAMILY_MAX_CHARS), 'W'.repeat(COLONIST_LINE_MAX_CHARS)),
+  // The most LZs a ship has (01-landing §3.15: 4) with two-digit counts.
+  splitLesson: LANDING_LESSONS.split(['LZ-A', 'LZ-B', 'LZ-C', 'LZ-D'].map((lz) => ({ lz, pods: 16 }))),
 };
+
+// The split lesson's words for this ship (01-landing §3.11), '' with fewer than two LZs.
+function splitLesson(state: Readonly<GameState>): string {
+  if (state.landing.lzs.length < 2) return '';
+  const counts = state.landing.lzs.map((lz) => ({ lz: lz.label, pods: lz.pods }));
+  return playsTutorial(state.run) ? LANDING_LESSONS.split(counts) : LANDING_LESSONS.splitShort(counts);
+}
 
 // The ship's first touchdown's radio line (01-landing §2, §4: the first pod down on every ship sends one): the pod's lead
 // colonist's first words, or for a pod that came down hard a hard-landing line (souls HARD_WORDS_POOL, picked by pod so
@@ -267,7 +280,8 @@ export function lineVars(state: Readonly<GameState>, pred: Prediction): LineVars
     podsDown: state.landing.pods.filter((record) => record.fate.kind === 'down').length,
     distanceLy: state.mission.distanceLy,
     nextApsis: pred.burnPoint?.event === 'apo' ? '▲' : '▼',
-    // '???' until HOLLOW names itself (ship 2, or a later run's ghost: run.hollowNamed, systems/hollow.ts nameHollow).
+    // '???' until HOLLOW names itself (run.hollowNamed, systems/hollow.ts nameHollow: on the ship it arrives on since
+    // phase 3 slice 2; a later run's ghost at ship 1 no longer names it, slice-2-plan risk 11).
     hollow: hollowLabel(state.run),
     ...hurtPodVars(state),
     ...hollowVars(state),
@@ -279,6 +293,7 @@ export function lineVars(state: Readonly<GameState>, pred: Prediction): LineVars
     rootSecLeft: rootSecLeft(state),
     nextLz: '',
     firstDownRadio: firstDownRadio(state),
+    splitLesson: splitLesson(state),
   };
 }
 
@@ -1204,6 +1219,98 @@ export const DRIVER_RULES: readonly GuideRule[] = [
   },
 ];
 
+// --- 046.log's SCAN lesson (slice-2-plan §3.1; 05 §3.5) -------------------------------------------------------------
+// The `???` file is ship 1's SCAN lesson now that HOLLOW is gone from it: on run 1, once POD 02 no longer lands hard (the
+// coast's REPAIR is done) and the flight is in a WAIT, `◇ A FILE YOU DIDN'T PACK — SCAN it`, worded for the screen the
+// kid is on. The beat is missable (05 §3.5): a one-shot that steps aside after LOG_SCAN_ASK_SEC and never blocks the
+// flight. Done when the run knows the file (story-log logKnown: scanned, or a key found). A returning unit gets one
+// hint and no lesson.
+
+function logAskLive(ctx: DirectorCtx): boolean {
+  return isFlying(ctx) && ctx.flight?.urgency === 'wait' && hurtPodSettled(ctx) && !logKnown(ctx.state.run.log)
+    && ctx.state.memory.some((seg) => seg.type === 'log') && ctx.state.run.licences.includes('scan');
+}
+
+function logKnownNow(ctx: DirectorCtx): boolean {
+  return logKnown(ctx.state.run.log);
+}
+
+function logScanTarget(ctx: DirectorCtx): string {
+  return toolStepTarget('scan', ctx.state.ui.activeTool?.kind ?? null, LOG_HINT_TARGET);
+}
+
+export const LOG_RULES: readonly GuideRule[] = [
+  {
+    id: 'tut-scan-log-tab',
+    lesson: 'scan-log',
+    layer: 'mind',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: LOG_SCAN_ASK_SEC,
+    activeWhen: (ctx) => logAskLive(ctx) && firstRun(ctx) && ctx.mode === 'tools',
+    text: () => LOG_TEXT.scanAskTab,
+    keys: ['TAB'],
+    doneWhen: logKnownNow,
+  },
+  {
+    id: 'tut-scan-log',
+    lesson: 'scan-log',
+    layer: 'mind',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: LOG_SCAN_ASK_SEC,
+    activeWhen: (ctx) => logAskLive(ctx) && firstRun(ctx) && ctx.mode === 'memory',
+    text: () => LOG_TEXT.scanAsk,
+    highlight: logScanTarget,
+    doneWhen: logKnownNow,
+  },
+  {
+    // A returning unit (§5.2): one hint, on either screen, shown once.
+    id: 'hint-scan-log',
+    layer: 'mind',
+    priority: 'hint',
+    once: true,
+    maxShownSec: LOG_SCAN_ASK_SEC,
+    activeWhen: (ctx) => logAskLive(ctx) && !firstRun(ctx),
+    text: () => LOG_TEXT.scanAsk,
+    highlight: (ctx) => (ctx.mode === 'memory' ? logScanTarget(ctx) : null),
+    doneWhen: logKnownNow,
+  },
+];
+
+// --- The landing lessons (01-landing §3.11; slice-2-plan §1.1 item 10) ------------------------------------------------
+// Ship-layer lines (the strip draws ◆), once a run each, from the landing's start until the first pod of the ship
+// launches, so they read in the WAIT before the first window (a window's own lines are 'now' and come first):
+// • PODS LAND WHERE THE DOT IS: the tutorial run's first landing (run 1 only: a returning unit has landed pods);
+// • 2 SITES · LZ-A 3, LZ-B 2 — don't overfill: the run's first ship with two or more LZs (HALCYON on the fixed five).
+//   A returning unit reads the short form, the counts alone (v2 §5.2: one hint each).
+
+function noPodLaunchedYet(ctx: DirectorCtx): boolean {
+  const landing = ctx.state.landing;
+  return isLanding(ctx) && landing.ended === null && landing.pods.every((record) => record.fate.kind === 'aboard');
+}
+
+export const LANDING_LESSON_RULES: readonly GuideRule[] = [
+  {
+    id: 'lesson-pods-dot',
+    layer: 'ship',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: LANDING_DOT_LESSON_SEC,
+    activeWhen: (ctx) => noPodLaunchedYet(ctx) && firstRun(ctx),
+    text: () => LANDING_LESSONS.dot,
+  },
+  {
+    id: 'lesson-split',
+    layer: 'ship',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: LANDING_SPLIT_LESSON_SEC,
+    activeWhen: (ctx) => noPodLaunchedYet(ctx) && ctx.state.landing.lzs.length >= 2,
+    text: (ctx) => ctx.vars.splitLesson,
+  },
+];
+
 // --- Slice 1b's drop lesson (01-landing §3.11, risk 14) ------------------------------------------------------------
 // THE DOT IS WIDE — REPAIR, or fly lower: once a run, the first time the landing table shows L9 (DROP TOO WIDE FOR
 // LZ-B …), in front of it for DOT_WIDE_LESSON_SEC; then L9 itself names the LZ and the file (or GO LOWER). The general
@@ -1308,7 +1415,8 @@ function shipFixHighlight(ctx: DirectorCtx): string | null {
   return held === kind ? null : TOOL_HINT_TARGET[kind];
 }
 
-// HALCYON's mind rule (§4.2 "MOVE and the 4-block WALL rule", §5.1 2:50): on a ship whose HOLLOW spreads,
+// The WALLS mind rule (§4.2 "MOVE and the 4-block WALL rule"; phase 2's HALCYON, VESPER's arrival since phase 3 slice
+// 2, 04 §3.9): on a ship whose HOLLOW spreads,
 // the moment it wakes and bites, the strip says the rule a kid can repeat, once, for WALL_RULE_SHOW_SEC
 // (then the plain eating lines name each driver); once the bites are cured, it asks for the MOVE that
 // puts the exposed driver behind a WALL, for as long as one is exposed. Only with MOVE licensed.
@@ -1545,7 +1653,7 @@ export const HOLLOW_RULES: readonly GuideRule[] = [
     layer: 'mind',
     priority: 'mind-urgent',
     activeWhen: (ctx) => isLive(ctx) && ctx.vars.eating !== '' && ctx.vars.eatingShip,
-    // With neither SWAP nor DELETE in hand (HALCYON, or KESTREL before its first seed) there is nothing to do it with:
+    // With neither SWAP nor DELETE in hand (a HOLLOW met before either licence) there is nothing to do it with:
     // the line says why REPAIR is no use, on either screen, and sends the kid nowhere.
     text: (ctx) => (ctx.vars.eatingShipFix === ''
       ? `SOMETHING IS EATING ${ctx.vars.eating} — REPAIR can't heal it`
@@ -2048,7 +2156,11 @@ export const GUIDE_RULES: readonly GuideRule[] = [
   ...BELT_RULES,
   ...AUTOBURN_RULES.filter((rule) => rule.priority !== 'alarm'),
   ...ENGINE_BEAT_RULES,
+  // Slice 2: the landing's general lessons before the hurt driver's particular one; the SCAN lesson after it (it waits
+  // for POD 02 to be settled).
+  ...LANDING_LESSON_RULES,
   ...DRIVER_RULES,
+  ...LOG_RULES,
   // Slice 1b: the wide-drop lesson after the hurt driver's (POD 02 WILL LAND HARD names the same REPAIR, and comes first).
   ...DROP_LESSON_RULES,
   {

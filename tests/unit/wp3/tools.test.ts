@@ -64,8 +64,8 @@ function timeOf(start: () => unknown): number {
   const charge = h.charge();
   const core = memory().find((seg) => seg.type === 'core')!;
   const ship = h.seg('Cargo Ctrl');
-  // WP6: the old encrypted block is HOLLOW's root now (type 'hollow', locked): still LOCKED to every tool.
-  const enc = memory().find((seg) => seg.type === 'hollow' && seg.locked)!;
+  // Slice 2: ship 1 is calm (no HOLLOW root); its locked file is 046.log, which SCAN reads and every other tool refuses.
+  const log = memory().find((seg) => seg.type === 'log')!;
   check('repair on a ship file: SHIP FILES CAN\'T BE HEALED — SWAP OR DELETE IT', refusal('repair', ship) === TOOL_REFUSAL.shipFile);
   // WP4: the AI's own files are always visible (§3.2), so there is no SCAN IT FIRST any more.
   check('repair on an AI file needs no scan (WP4: always visible)', h.seg('Engine I/O').type === 'tool'
@@ -74,7 +74,9 @@ function timeOf(start: () => unknown): number {
   check('move REPAIR CHARGE: refused', refusal('move', charge) === TOOL_REFUSAL.moveCharge);
   check('copy REPAIR CHARGE: refused (it would double the repair budget)', refusal('copy', charge) === TOOL_REFUSAL.copyCharge);
   check('delete / move / copy the Core: refused, naming the verb', refusal('delete', core) === TOOL_REFUSAL.coreDelete && refusal('move', core) === TOOL_REFUSAL.coreMove && refusal('copy', core) === TOOL_REFUSAL.coreCopy);
-  check('the encrypted block is LOCKED to every tool', ['scan', 'repair', 'delete', 'move', 'copy'].every((kind) => refusal(kind as 'scan', enc) === TOOL_REFUSAL.locked));
+  check('046.log: SCAN reads it; REPAIR, DELETE, MOVE and COPY refuse it (IT ISN\'T YOURS …)', refusal('scan', log) === null
+    && refusal('repair', log) === TOOL_REFUSAL.logRepair && refusal('delete', log) === TOOL_REFUSAL.logDelete
+    && refusal('move', log) === TOOL_REFUSAL.logMove && refusal('copy', log) === TOOL_REFUSAL.logCopy);
   check('free space is not a file to any tool', refusal('scan', free()) === TOOL_REFUSAL.notAFile && refusal('delete', free()) === TOOL_REFUSAL.notAFile);
   const engine = h.seg('Engine I/O');
   if (engine.type === 'tool') engine.scanned = true;

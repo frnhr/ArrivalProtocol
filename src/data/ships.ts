@@ -21,6 +21,7 @@ import { createRng } from '@systems/rng';
 import { UNNAMED_HOLLOW } from '@data/hollow-text';
 import { HOLLOW_STAGES } from '@data/threats';
 import { ARES_RUN1_FAMILIES, ADA, HARD_WORDS_POOL } from '@data/souls';
+import { hurtDriversFor, rootSlotNeighbours } from '@data/driver-damage';
 
 // Per-ship flight data. Units: km, km/s, km/s², μ in km³/s²; radii from the planet centre.
 // Everything that differs between ships lives here; global rules live in tuning.ts.
@@ -575,6 +576,20 @@ export function validateShipDef(ship: ShipDef): void {
   // A ship one hop from a final ship is where HOLLOW is forced aboard (04 §3.8): its root needs a slot.
   if (ship.threat.oneHopFromFinal && rootSlotRack(ship) === null) fail('HOLLOW boards here (one hop from the final ship), but the layout has no root slot');
   if (!(Number.isInteger(ship.layer) && ship.layer >= 1)) fail(`layer must be a whole number ≥ 1 (got ${ship.layer})`);
+  // Driver arrival damage (01-landing §3.8): a scripted ship writes its hurt drivers, a rolled one leaves the layer's roll
+  // to data/driver-damage.ts, so a written list there would be silently ignored. The roll must have room: it never hurts
+  // the lead or the root slot's neighbours (slice-2-plan risk 9). Rolled on a few seeds, so a ship too small fails here.
+  const { damage, hurt } = ship.memory.drivers;
+  if ((damage === 'scripted') !== (hurt.length > 0)) fail(`drivers.damage '${damage}' with ${hurt.length} written hurt driver(s)`);
+  const avoid = rootSlotNeighbours(ship);
+  for (const seed of [0, 1, 2]) {
+    for (const firstRun of [true, false]) {
+      const rolled = hurtDriversFor(ship, firstRun, createRng(seed));
+      if (rolled.some((driver) => driver.pod === ship.memory.drivers.lead || avoid.includes(driver.pod))) {
+        fail('driver arrival damage hurt the lead or a driver beside the root slot');
+      }
+    }
+  }
   const seeds = ship.threat.beamSeeds;
   if (seeds.kind === 'scripted' && seeds.firstRun.length === 0) fail('a scripted beam seed source with no first-run seed (use { kind: \'none\' })');
 }

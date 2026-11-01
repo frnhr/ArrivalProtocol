@@ -37,6 +37,7 @@ import {
   MAX_LINE_CHARS, DRAFT_CARDS, FUEL_TRIM_DV_BONUS_FRAC, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, REPAIR_V2_VERSION, CHARGE_ARRIVAL_FLOOR,
 } from '@data/tuning';
 import type { Segment, DriverSegment, FreeSegment, UpgradeSegment } from '@/types/segment';
+import { plantHalcyonRoot } from '../opening/plant-root';
 
 const none: Record<UpgradeId, number> = { firewall: 0, 'repair-v2': 0, 'thread-plus': 0, charge: 0, 'fuel-trim': 0 };
 // The base context has no sign of trouble at all (a fresh unit's 36 charge, most of the FUEL left): every card
@@ -180,16 +181,20 @@ function pick(id: UpgradeId): void {
   // Slice 1a's pooled receiver: rack F's list follows rack E's with no gap, so the card sits after the fs-tools (in rack E
   // on a unit this small), then REPAIR CHARGE.
   const mem = state().memory;
-  check('HALCYON boots with Firewall.sys at the end of rack F\'s list (after the fs-tools, before the charge), memory valid, the card in run.upgrades',
-    index >= 0 && mem[index - 1]?.type === 'fs-tool' && mem[index + 1]?.type === 'redundancy' && memoryValid() && state().run.upgrades.join() === 'firewall'
+  // Slice 2: 046.log packs after the FIREWALLs and before the charge (slice-2-plan Deviations (foundation) 10).
+  check('HALCYON boots with Firewall.sys at the end of rack F\'s list (after the fs-tools, then 046.log and the charge), memory valid, the card in run.upgrades',
+    index >= 0 && mem[index - 1]?.type === 'fs-tool' && mem[index + 1]?.type === 'log' && mem[index + 2]?.type === 'redundancy' && memoryValid()
+      && state().run.upgrades.join() === 'firewall'
       && !state().memory[index]!.id.includes(PREVIEW_ID('x').split('~')[1]!), `${index} @ ${starts[index]}`);
   check('the next draft counts it as owned (1 of 2)', ownedUpgrades(state()).firewall === 1);
   const firewall = state().memory[index]!;
   check('a FIREWALL can\'t be copied, healed or scanned', targetRefusal(firewall, { state: state(), activeKind: 'copy', pickedSource: null }) === TOOL_REFUSAL.cardCopy
     && targetRefusal(firewall, { state: state(), activeKind: 'repair', pickedSource: null }) === TOOL_REFUSAL.firewallHealth
     && targetRefusal(firewall, { state: state(), activeKind: 'scan', pickedSource: null }) === TOOL_REFUSAL.firewallHealth);
-  // Into the GAP of 2 between POD 04 and the root (rack C: `P _2 R _1 P _37`).
+  // Into the GAP of 2 between POD 04 and the root. Slice 2: HALCYON is calm (no root slot), so phase 2's geometry is planted
+  // in rack B, `P P P P _2 R _1 P _13` (POD 05 moves behind the root), with phase 2's HALCYON HOLLOW (the WALLS stage).
   h.stepUntil(() => state().run.phase === 'flight', 15);
+  h.store.update(plantHalcyonRoot);
   installTool(h.store, 'move');
   const memory = state().memory;
   const rootIndex = memory.findIndex((seg) => seg.type === 'hollow' && seg.root);

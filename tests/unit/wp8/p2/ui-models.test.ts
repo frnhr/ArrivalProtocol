@@ -31,6 +31,7 @@ import { BASE_WHY, type UpgradeId } from '@data/upgrades';
 import { DRAFT_TEXT, SKILLS_TEXT, ARCHIVE_TEXT } from '@data/script';
 import { FIREWALL_BLOCKS, MAX_LINE_CHARS, FUEL_TRIM_BLOCKS, INTEGRITY_MAX } from '@data/tuning';
 import type { FreeSegment, UpgradeSegment } from '@/types/segment';
+import { plantHalcyonRoot } from '../../opening/plant-root';
 
 const h = createHarness7(31, { soulsFound: true });
 const state = () => h.store.getState();
@@ -115,6 +116,8 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
   let row = rowOf('firewall');
   check('FIREWALL.sys arrives IDLE: one ■ pip, `MOVE IT INTO A GAP NEXT TO ???`', row !== undefined && row.pips.length === 1
     && row.pips[0]!.look === 'idle' && row.status === SKILLS_TEXT.status.idle('???') && row.tone === 'hint' && row.title === 'FIREWALL.sys', JSON.stringify(row));
+  // Slice 2: HALCYON is calm; phase 2's root geometry is planted for the FIREWALL to hold against.
+  h.store.update(plantHalcyonRoot);
   installTool(h.store, 'move');
   const memory = state().memory;
   const rootIndex = memory.findIndex((seg) => seg.type === 'hollow' && seg.root);
