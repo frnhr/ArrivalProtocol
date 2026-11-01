@@ -1,8 +1,8 @@
 // WP5 acceptance 2, slice 1a: the ship's memory is built from ship data (§4.2, 01-landing §3.16, slice-1a-plan §2) and
 // validated.
 // • buildShipMemory(SHIPS[0]) totals 384, each rack holds exactly 64 blocks with no file straddling a rack, roles are
-//   unique (Bay Ctrl's `bay` in Printer Uplink's place), and ARES-VII's pod rack is `R P P P _32`: the root first, then
-//   POD 01 OKAFOR (HOLLOW's scripted bite), POD 02 BRANDT at 44 and POD 03 AL-SAYED;
+//   unique (Bay Ctrl's `bay` in Printer Uplink's place), and ARES-VII's pod rack is `P P P _40` (slice 2: a calm ship,
+//   no root slot): POD 01 OKAFOR, POD 02 BRANDT at 44 and POD 03 AL-SAYED;
 // • a rack sum of 63, an unknown token, a duplicate role and a hurt pod the ship does not have each throw;
 // plus the run-1 names, the seeded rosters (a later run reseeds the hurt pod among the non-lead pods), and what
 // createInitialState makes of it (600 colonists in 3 pods, aboard, one LZ).
@@ -46,8 +46,8 @@ const drivers = (memory: readonly Segment[]): DriverSegment[] => memory.filter((
 
   const firstOf = (rack: string): Segment | undefined => memory.find((_seg, i) => rackOf(starts[i]!) === rack && starts[i]! % RACK_BLOCKS === 0);
   const rackBFirst = firstOf('B');
-  check('rack A starts with Life Support, B with HOLLOW\'s root, E with the AI Core, F with Scan',
-    firstOf('A')?.name === 'Life Support' && rackBFirst?.type === 'hollow' && rackBFirst.root
+  check('rack A starts with Life Support, B with POD 01 (no root on a calm ship), E with the AI Core, F with Scan',
+    firstOf('A')?.name === 'Life Support' && rackBFirst?.type === 'driver' && rackBFirst.pod === 1
     && firstOf('E')?.type === 'core' && firstOf('F')?.name === 'Scan',
     ['A', 'B', 'E', 'F'].map((rack) => firstOf(rack)?.name).join(' / '));
 
@@ -60,12 +60,10 @@ const drivers = (memory: readonly Segment[]): DriverSegment[] => memory.filter((
     && rackOf(starts[memory.indexOf(bay)]!) === 'A' && 'desc' in bay && bay.desc === 'Runs the pod bay\'s launch rails. Damaged, pods launch further apart; gone, no pod can launch.', bay?.name);
 
   const pods = drivers(memory);
-  const rootIndex = memory.findIndex((seg) => seg.type === 'hollow' && seg.root);
-  const root = memory[rootIndex];
-  check('the root (8 blocks, locked) sits right after rack A\'s 18 free blocks, POD 01 = OKAFOR right after it', root?.type === 'hollow'
-    && root.locked && root.size === 8 && memory[rootIndex - 1]?.type === 'free' && memory[rootIndex - 1]!.size === 18
-    && memory[rootIndex + 1]?.type === 'driver' && (memory[rootIndex + 1] as DriverSegment).pod === 1
-    && (memory[rootIndex + 1] as DriverSegment).family === 'Okafor', `${memory[rootIndex - 1]?.name} → ${root?.name} → ${memory[rootIndex + 1]?.name}`);
+  const podIndex = memory.findIndex((seg) => seg.type === 'driver' && seg.pod === 1);
+  check('no HOLLOW anywhere; POD 01 = OKAFOR sits right after rack A\'s 18 free blocks', !memory.some((seg) => seg.type === 'hollow')
+    && memory[podIndex - 1]?.type === 'free' && memory[podIndex - 1]!.size === 18
+    && (memory[podIndex] as DriverSegment).family === 'Okafor', `${memory[podIndex - 1]?.name} → ${memory[podIndex]?.name}`);
   check('3 drivers of 8 blocks and 200 colonists, POD 01–03 in address order (id driver_pod01, name `POD 01 · OKAFOR`)',
     pods.length === 3 && pods.every((driver, i) => driver.pod === i + 1 && driver.id === `driver_pod0${i + 1}`
       && driver.name === `POD 0${i + 1} · ${driver.family.toUpperCase()}` && driver.size === DRIVER_BLOCKS && driver.colonists === COLONISTS_PER_POD),
@@ -73,7 +71,7 @@ const drivers = (memory: readonly Segment[]): DriverSegment[] => memory.filter((
   check('the pod count is the LZ sum (3) and 600 colonists', shipPodCount(ship) === 3 && ship.landing.lzs.reduce((sum, lz) => sum + lz.pods, 0) === 3
     && shipColonists(ship) === 600);
   const after = memory[memory.indexOf(pods[2]!) + 1];
-  check('after POD 03: rack B\'s 32 free blocks run on through the empty racks C–D (160)', after?.type === 'free' && after.size === 32 + 64 + 64, `${after?.size}`);
+  check('after POD 03: rack B\'s 40 free blocks run on through the empty racks C–D (168)', after?.type === 'free' && after.size === 40 + 64 + 64, `${after?.size}`);
   check('racks label: RACK B', racksLabel(memory, pods) === 'RACK B', racksLabel(memory, pods));
 
   check('run 1: the written families in order (Okafor, Brandt, Al-Sayed)', pods.map((driver) => driver.family).join() === ARES_RUN1_FAMILIES.join(),
