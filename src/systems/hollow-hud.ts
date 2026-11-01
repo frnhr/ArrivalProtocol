@@ -100,7 +100,8 @@ export function amberBite(state: Readonly<GameState>): { text: string; urgent: b
 export const TRACE_UI_TEXT = {
   key: 'TRACE',
   clean: (cells: string): string => `NO SEEDS LEFT BEHIND · NOTHING REPORTS HOME · TRACE ${cells}`,
-  title: 'TRACE: every seed left in memory at a ship\'s end reports home. Three, and it finds you.',
+  // Softened until slice 3 gives TRACE its effect (risk 3: the fixed five board forced, whatever it counts).
+  title: 'TRACE: every seed left in memory at a ship\'s end reports home. Something out there is listening.',
   ridesTitle: 'It rides the beam with you now, from ship to ship.',
   // The amber MIND chip's narrow row (about 70 px for the value): the meter's cells, or this once HOLLOW is aboard (its size
   // is in the blue header and the title).

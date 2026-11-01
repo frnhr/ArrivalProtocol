@@ -163,7 +163,7 @@ export interface GameEvents {
   // Phase 3 slice 2 (04 §3.4–§3.8, 05 §3.2). A beam seed landed behind its target at the boot (the ECC seeds line, the
   // `seedLand` thunk); a seed was deleted (`beam`: a beam seed, whose `words` it may say, at most once a ship); TRACE went
   // up at a ship's end.
-  'seed-landed-beam': { segId: string; targetId: string };
+  'seed-landed-beam': { segId: string; targetId: string | null };   // targetId null: a stray, loose (no-room rule)
   'seed-deleted': { segId: string; beam: boolean; words: string | null };
   'trace-changed': { from: number; to: number };
   // HOLLOW rides the beam into the next ship (the PACKET's uninvited chip, the transmitSweep stutter), then landed in the

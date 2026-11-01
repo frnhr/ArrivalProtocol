@@ -36,8 +36,10 @@ export const THREAT_TEXT = {
     `${owner} ${blocks} BLOCKS · +${fed}: ${fed} ${fed === 1 ? 'SEED' : 'SEEDS'} FED IT`,
   // The boot's unpack when HOLLOW boarded on this beam (04 §4: the 108% unpack), in place of the plain unpack.
   boardUnpack: (unit: string): string => `> UNPACKING ${unit} ... 100% ... 108%`,
-  // The map card's line (slice 3 draws it; planThreat(...).boards decides it).
+  // The map card's line (slice 3 draws it; planThreat(...).boards decides it): TRACE full.
   willFindYou: 'HOLLOW WILL FIND YOU ON THIS BEAM',
+  // ...and the PACKET's when HOLLOW boards forced, one hop from a final ship, whatever TRACE says (04 §3.8).
+  foundYouAnyway: 'IT FOUND YOU ANYWAY',
   // The strip's RM lesson (slice-2-plan §3.4), and its line when no rm is aboard (04 §3.5).
   rmTheSeed: 'RM THE SEED — pick up DELETE, click the seed',
   seedNoRm: 'A SEED — no rm aboard: REPAIR what it bites, or MOVE the file away',
@@ -48,6 +50,8 @@ export const THREAT_TEXT = {
   eatenReportsHomeTab: '[TAB], THE EATEN BLOCK REPORTS HOME TOO — DELETE it',
   // The seeds-only alert (slice-2-plan §5.1): which file the seed sits beside.
   seedNextTo: (fileName: string): string => `SEED NEXT TO ${fileName.toUpperCase()}`,
+  // ...and a stray's (the no-room rule): next to nothing.
+  seedLoose: 'SEED · LOOSE',
   // The echo when a beam seed is deleted with its words (slice-2-plan §3.4).
   seedSaid: (words: string): string => `> rm seed ... OK · it said: "${words}"`,
   // The loud last-rm line (04 §3.3), as information: the stamp, the echo, and the PACKET's warning before the final ship.
@@ -57,17 +61,25 @@ export const THREAT_TEXT = {
 } as const;
 
 // The boot's ECC seeds line (04 §4, slice-2-plan §3.4): `> ECC: 1 FOREIGN BLOCK IN PACKET · NEXT TO TELEMETRY`, or for
-// more `> ECC: 2 FOREIGN BLOCKS · NEXT TO AUTOBURN.SKL, MV`; the names are cut from the end (`+1`) to fit one row.
-export function eccSeedsLine(targetNames: readonly string[]): string {
-  if (targetNames.length === 0) throw new Error('eccSeedsLine: no seeds to name');
-  const head = targetNames.length === 1 ? `${ECC_PREFIX}1 FOREIGN BLOCK IN PACKET · NEXT TO ` : `${ECC_PREFIX}${targetNames.length} FOREIGN BLOCKS · NEXT TO `;
+// more `> ECC: 2 FOREIGN BLOCKS · NEXT TO AUTOBURN.SKL, MV`; the names are cut from the end (`+1`) to fit one row. A
+// stray (the no-room rule, 04 §3.4) is next to nothing: it is reported apart, by the rack it landed in (`looseRacks`, null
+// for one already gone): `> ECC: 1 FOREIGN BLOCK · LOOSE IN RACK D`, or `… · NEXT TO TELEMETRY · 1 LOOSE IN RACK D`.
+export function eccSeedsLine(targetNames: readonly string[], looseRacks: readonly (string | null)[] = []): string {
+  const total = targetNames.length + looseRacks.length;
+  if (total === 0) throw new Error('eccSeedsLine: no seeds to name');
+  const blocks = `${total} FOREIGN ${total === 1 ? 'BLOCK' : 'BLOCKS'}`;
+  const racks = [...new Set(looseRacks.filter((rack): rack is string => rack !== null))].sort();
+  const where = racks.length === 0 ? 'LOOSE' : `LOOSE IN ${racks.length === 1 ? 'RACK' : 'RACKS'} ${racks.join(', ')}`;
+  if (targetNames.length === 0) return `${ECC_PREFIX}${blocks} · ${where}`;
+  const loose = looseRacks.length === 0 ? '' : ` · ${looseRacks.length} ${where}`;
+  const head = total === 1 ? `${ECC_PREFIX}1 FOREIGN BLOCK IN PACKET · NEXT TO ` : `${ECC_PREFIX}${blocks} · NEXT TO `;
   const names = targetNames.map((name) => name.toUpperCase());
   for (let shown = names.length; shown >= 1; shown--) {
     const rest = names.length - shown;
-    const line = head + names.slice(0, shown).join(', ') + (rest > 0 ? `, +${rest}` : '');
+    const line = head + names.slice(0, shown).join(', ') + (rest > 0 ? `, +${rest}` : '') + loose;
     if (line.length <= MAX_LINE_CHARS) return line;
   }
-  return `${ECC_PREFIX}${targetNames.length} FOREIGN BLOCKS IN PACKET`;
+  return `${ECC_PREFIX}${blocks} IN PACKET`;
 }
 
 // A beam seed's words (05 §3.5's pool, at most SEED_WORDS_MAX_CHARS each): the first four are 05's; the rest are

@@ -53,6 +53,7 @@ import {
   AUTOBURN_TEXT, AUTOBURN_DROP_TEXT, AUTOBURN_DROP_TAB, AUTO_REFUSAL_LINES, autoRefusalKey, type AutoburnRefusal,
 } from '@data/skill-text';
 import { segmentStarts } from '@systems/memory-ops';
+import { rackOf } from '@data/memory';
 import { canStartOp, getOps } from '@systems/ops-core';
 import { TOOL_HINT_TARGET } from '@data/fs-tools';
 import {
@@ -893,6 +894,12 @@ export function bootLinePlan(state: Readonly<GameState>, skill: boolean): BootLi
   return plan;
 }
 
+// The rack a stray beam seed landed in (the ECC seeds line's `LOOSE IN RACK D`), or null once it is gone.
+function looseSeedRack(state: Readonly<GameState>, segId: string): string | null {
+  const index = state.memory.findIndex((seg) => seg.id === segId);
+  return index < 0 ? null : rackOf(segmentStarts(state.memory)[index]!);
+}
+
 // Who says a boot line: HOLLOW its own (slow, pink), the unit every other.
 export function bootLineSpeaker(kind: BootLineKind): Speaker {
   return kind === 'hollow' ? 'hollow' : 'mind-sys';
@@ -915,7 +922,10 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
     case 'ecc': return arrival === null ? eccLine(damagedAiFiles(state)) : transitEccLine(arrival.hits);
     case 'seeds':
       if (arrival === null || arrival.seeds.length === 0) throw new Error('bootLine: a seeds line with no beam seeds');
-      return eccSeedsLine(arrival.seeds.map((seed) => seed.targetName));
+      return eccSeedsLine(
+        arrival.seeds.filter((seed) => !seed.loose).map((seed) => seed.targetName),
+        arrival.seeds.filter((seed) => seed.loose).map((seed) => looseSeedRack(state, seed.segId)),
+      );
     case 'log': {
       const entries = bootLogEntries(state);
       if (entries.length === 0) throw new Error('bootLine: a log line with no key found');

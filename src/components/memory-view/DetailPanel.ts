@@ -239,6 +239,7 @@ export const BEAM_SEED_INSPECT = {
   from: 'came in',
   fromValue: 'with the packet · named by ECC',
   nextTo: 'next to',
+  loose: 'NOTHING · LOOSE (NO ROOM BEHIND ITS FILE)',
   ifLeft: 'if left',
   reports: 'REPORTS HOME · TRACE +1',
   feeds: (owner: string): string => `FEEDS ${owner} · +1 BLOCK`,
@@ -271,17 +272,31 @@ function logActions(state: Readonly<GameState>, seg: LogSegment): ActionOption[]
   return out;
 }
 
-// A beam seed's extra rows: the file the ECC line named (run.arrival.seeds), and what it does if left (TRACE, or HOLLOW's
-// next root once it is aboard).
+// What a beam-born block left at the ship's end does (04 §3.7): TRACE, or HOLLOW's next root once it is aboard; on the final
+// ship nothing (no next root to feed: the review's minor 3), so the row is left out.
+export function beamIfLeftText(state: Readonly<GameState>): string | null {
+  if (state.run.threat.current?.isFinal === true) return null;
+  return state.run.threat.aboard ? BEAM_SEED_INSPECT.feeds(hollowLabel(state.run)) : BEAM_SEED_INSPECT.reports;
+}
+
+function beamIfLeftRowHtml(state: Readonly<GameState>): string {
+  const ifLeft = beamIfLeftText(state);
+  if (ifLeft === null) return '';
+  return `<div class="detail-row"><span class="k">${BEAM_SEED_INSPECT.ifLeft}</span><span class="v warn">${escapeHtml(ifLeft)}</span></div>`;
+}
+
+// A beam seed's extra rows: the file the ECC line named (run.arrival.seeds), and what it does if left. A block a beam seed
+// ate (inert before HOLLOW boards, the review's M1) shows what it does if left too: it reports home like the seed.
 function beamSeedRowsHtml(seg: HollowSegment, state: Readonly<GameState>): string {
-  if (!seg.beam || !seg.seed) return '';
-  const target = state.run.arrival?.seeds.find((seed) => seed.segId === seg.id)?.targetName;
-  const next = target === undefined ? '' : `<div class="detail-row"><span class="k">${BEAM_SEED_INSPECT.nextTo}</span><span class="v">${escapeHtml(target.toUpperCase())}</span></div>`;
-  const ifLeft = state.run.threat.aboard ? BEAM_SEED_INSPECT.feeds(hollowLabel(state.run)) : BEAM_SEED_INSPECT.reports;
+  if (!seg.beam || seg.root) return '';
+  if (!seg.seed) return beamIfLeftRowHtml(state);
+  const arrived = state.run.arrival?.seeds.find((seed) => seed.segId === seg.id);
+  const target = arrived === undefined ? undefined : arrived.loose ? BEAM_SEED_INSPECT.loose : arrived.targetName.toUpperCase();
+  const next = target === undefined ? '' : `<div class="detail-row"><span class="k">${BEAM_SEED_INSPECT.nextTo}</span><span class="v">${escapeHtml(target)}</span></div>`;
   return `
     <div class="detail-row"><span class="k">${BEAM_SEED_INSPECT.from}</span><span class="v">${BEAM_SEED_INSPECT.fromValue}</span></div>
     ${next}
-    <div class="detail-row"><span class="k">${BEAM_SEED_INSPECT.ifLeft}</span><span class="v warn">${escapeHtml(ifLeft)}</span></div>`;
+    ${beamIfLeftRowHtml(state)}`;
 }
 
 // A hollow block: who it is, and what kind of block (data/hollow-text.ts hollowInspectState: the root, LOCKED or open

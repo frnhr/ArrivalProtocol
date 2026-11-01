@@ -40,7 +40,9 @@ import {
 } from '@data/tuning';
 import type { Packet } from '@systems/carry';
 import type { Segment, HollowSegment } from '@/types/segment';
-import type { GameState } from '@state/schema';
+import type { GameState, ArrivalReport } from '@state/schema';
+import { bootLine, type LineVars } from '@data/script';
+import { rackOf } from '@data/memory';
 import type { LinkNoise } from '@/types/threat';
 
 const KESTREL = 2;
@@ -133,6 +135,14 @@ function freshPacket(): Packet {
   const right = tightMemory[tightMemory.indexOf(stray) + 1]!;
   check('…which lands in the centre of the largest free region of the whole memory (the pod racks)',
     strayAt < 256 && left.type === 'free' && right.type === 'free' && Math.abs(left.size - right.size) <= 1, `at ${strayAt}, ${left.size} | ${right.size}`);
+  // The review's minor 4: a stray is next to nothing, so it is reported loose, by the rack it landed in.
+  check('…and the arrival reports it loose, not next to the file it was rolled for', tight.seeds[1]!.loose === true && tight.seeds[0]!.loose === undefined);
+  const strayState = createInitialState({ seed: 5, shipIndex: KESTREL, carried: tight.racks });
+  const withArrival = { ...strayState, run: { ...strayState.run, arrival: { seeds: tight.seeds } as unknown as ArrivalReport } } as GameState;
+  const strayLine = bootLine('seeds', withArrival, {} as LineVars);
+  check(`…the ECC line: \`${strayLine}\``, strayLine === `> ECC: 2 FOREIGN BLOCKS · NEXT TO TELEMETRY · 1 LOOSE IN RACK ${rackOf(strayAt)}`, strayLine);
+  check('…a stray alone: `> ECC: 1 FOREIGN BLOCK · LOOSE IN RACK D`', eccSeedsLine([], ['D']) === '> ECC: 1 FOREIGN BLOCK · LOOSE IN RACK D'
+    && eccSeedsLine(['Telemetry']) === '> ECC: 1 FOREIGN BLOCK IN PACKET · NEXT TO TELEMETRY');
 }
 
 // --- The calm-only clock, the bite, consume, pack, the tally ----------------------------------------------------------

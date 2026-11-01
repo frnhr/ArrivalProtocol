@@ -291,8 +291,16 @@ export interface ArrivalReport {
   scripted: TransitHit[];   // the ship's own arrival damage (§6.9: KESTREL's sensor, VESPER's Thrust Ctrl)
   // Phase 3 slice 2 (04 §3.4, §3.8): the beam seeds laid out behind their targets (the boot's ECC seeds line names each),
   // and HOLLOW's root when it boarded on this beam (the 108% unpack line, the boarding moment). Empty / null otherwise.
-  seeds: { segId: string; targetName: string }[];
+  seeds: ArrivalSeed[];
   boarded: { blocks: number; cause: 'trace' | 'forced' } | null;
+}
+
+// One beam seed as it arrived (04 §3.4): the file it was rolled to ride behind, and `loose` when the no-room rule made it a
+// stray (carry.ts layoutCarried), landed in the largest free region instead: it is next to nothing the ECC line can name.
+export interface ArrivalSeed {
+  segId: string;
+  targetName: string;
+  loose?: true;
 }
 
 // The transmission being prepared ('transmit'): the next ship, the link and how the unit's files pack

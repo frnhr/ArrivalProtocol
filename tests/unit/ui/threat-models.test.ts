@@ -25,6 +25,8 @@ import { endShip, goTransmit } from '@systems/run';
 import { logChip, logReaderModel, logEntryToOpen, adjacentFoundEntry, LOG_UI_TEXT } from '@systems/log-view';
 import { openLogReader, closeLogReader, markLogEntryRead } from '@systems/story-log';
 import { noWorkingRm } from '@state/threat-selectors';
+import { beamIfLeftText, BEAM_SEED_INSPECT } from '@components/memory-view/DetailPanel';
+import { hollowLabel } from '@systems/say';
 import { SEEDS_ONLY_DEF } from '@data/threats';
 import { THREAT_TEXT } from '@data/threat-text';
 import { LOG_TEXT, LOG_ENTRY_COUNT } from '@data/log-text';
@@ -171,7 +173,11 @@ function toTransmit(store: Store<GameState>): void {
     model.uninvited?.text === '??? · 10 BLOCKS · NOT YOURS · RIDES FREE' && model.uninvited.boards && model.uninvited.blocks === 10
     && model.uninvited.note === 'NOT YOURS · RIDES FREE' && model.uninvited.fedText === null, model.uninvited?.text);
   check('…it costs no link room (the packet\'s files are the unit\'s own)', model.files === store.getState().run.transit?.filesBlocks);
-  check('…the TRACE line says it finds you on this beam', model.trace?.tone === 'boards' && model.trace.text.endsWith(THREAT_TEXT.willFindYou), model.trace?.text);
+  check('…the TRACE line says it found you anyway (forced one hop from the final ship, not by TRACE: minor 2)',
+    model.trace?.tone === 'boards' && model.trace.text.endsWith(THREAT_TEXT.foundYouAnyway) && !model.trace.text.includes(THREAT_TEXT.willFindYou), model.trace?.text);
+  store.update((draft) => { draft.run.transit!.threat.boards = 'trace'; });
+  check('…and, boarding by TRACE (slice 3\'s routes), that it finds you on this beam', transmitModel(store.getState()).trace?.text.endsWith(THREAT_TEXT.willFindYou) === true);
+  store.update((draft) => { draft.run.transit!.threat.boards = 'forced'; });
   check('…no NO RM warning (not the beam to the final ship)', model.noRm === null);
   const logOf = (): ReturnType<typeof transmitModel>['chips'][number] | undefined => transmitModel(store.getState()).chips.find((chip) => chip.log);
   check('046.log rides locked (`LOCKED · 046 ASKED YOU TO CARRY IT`), `???` while it is unknown, no glow', logOf()?.lock === 'log'
@@ -193,7 +199,13 @@ function toTransmit(store: Store<GameState>): void {
   const owner = model.uninvited?.owner ?? '';
   check('VESPER → LAST LIGHT: HOLLOW rides at the FINALE\'s 16, named, not boarding (already aboard)', model.uninvited?.blocks === 16
     && owner !== UNNAMED_HOLLOW && !model.uninvited.boards && model.uninvited.text === THREAT_TEXT.uninvitedChip(owner, 16), model.uninvited?.text);
-  check('…it says why it grew (`+2: 2 SEEDS FED IT`)', model.uninvited?.fedText === THREAT_TEXT.uninvitedFed(owner, 16, 2), model.uninvited?.fedText ?? 'none');
+  check('…on the final beam feeding changes nothing (its root is the FINALE\'s 16): no `SEEDS FED IT` (minor 3)',
+    model.uninvited?.fedText === null && model.uninvited.fed === 0, model.uninvited?.fedText ?? 'none');
+  store.update((draft) => { draft.run.transit!.threat.isFinal = false; });
+  const notFinal = transmitModel(store.getState());
+  check('…a beam HOLLOW rides into a ship before the final one says why it grew (`+2: 2 SEEDS FED IT`)',
+    notFinal.uninvited?.fedText === THREAT_TEXT.uninvitedFed(owner, 16, 2), notFinal.uninvited?.fedText ?? 'none');
+  store.update((draft) => { draft.run.transit!.threat.isFinal = true; });
   check('…no TRACE line while it already rides with you', model.trace === null, model.trace?.text);
   const hasRm = !noWorkingRm(store.getState());
   check('…NO RM only when no working rm is aboard', model.noRm === (hasRm ? null : THREAT_TEXT.noRmPacket), `rm aboard: ${hasRm}`);
@@ -202,8 +214,16 @@ function toTransmit(store: Store<GameState>): void {
   });
   check('…with the last rm gone: `NO RM · YOU CAN\'T DELETE THE ROOT` before the beam to the final ship',
     transmitModel(store.getState()).noRm === THREAT_TEXT.noRmPacket);
-  check('the packet\'s new words fit a line', [THREAT_TEXT.noRmPacket, model.uninvited?.text ?? '', model.uninvited?.fedText ?? '',
-    `${THREAT_TEXT.trace(2)} · ${THREAT_TEXT.willFindYou}`].every((line) => line.length <= MAX_LINE_CHARS));
+  check('the packet\'s new words fit a line', [THREAT_TEXT.noRmPacket, model.uninvited?.text ?? '', notFinal.uninvited?.fedText ?? '',
+    `${THREAT_TEXT.trace(2)} · ${THREAT_TEXT.willFindYou}`, `${THREAT_TEXT.trace(2)} · ${THREAT_TEXT.foundYouAnyway}`].every((line) => line.length <= MAX_LINE_CHARS));
+}
+
+// INSPECT's `if left` row (minor 3): TRACE before HOLLOW boards, its next root once aboard, nothing on the final ship.
+{
+  const owner = hollowLabel(world(VESPER).getState().run);
+  check('INSPECT on a beam-born block: `if left` reports home (KESTREL), feeds HOLLOW (VESPER), and says nothing on the final ship',
+    beamIfLeftText(world(KESTREL).getState()) === BEAM_SEED_INSPECT.reports && beamIfLeftText(world(VESPER).getState()) === BEAM_SEED_INSPECT.feeds(owner)
+    && beamIfLeftText(world(VESPER + 1).getState()) === null);
 }
 
 // --- The LOG READER --------------------------------------------------------------------------------------------------

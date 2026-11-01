@@ -1,5 +1,5 @@
 import type { Segment, RedundancySegment, SegmentRole } from '@/types/segment';
-import type { TransitHit } from '@state/schema';
+import type { TransitHit, ArrivalSeed } from '@state/schema';
 import type { ShipDef, ArrivalDamage } from '@data/ships';
 import type { ShipThreat, BeamSeedPlan } from '@/types/threat';
 import type { Rng } from '@systems/rng';
@@ -240,8 +240,9 @@ export interface CarriedLayout {
   racks: CarriedRacks;
   chargeBlocks: number;     // what was laid out (after any overflow)
   overflowLost: number;     // charge that did not fit memory
-  // The beam seeds as laid out, in the packet's order (ArrivalReport.seeds: the boot's ECC seeds line names each target).
-  seeds: { segId: string; targetName: string }[];
+  // The beam seeds as laid out, in the packet's order (ArrivalReport.seeds: the boot's ECC seeds line names each target,
+  // and reports a stray as loose, not next to the file it was rolled for).
+  seeds: ArrivalSeed[];
 }
 
 // The hunting ground (review issue 5): on a ship whose seeds hunt your tools ('near-tools': the HUNT stage, phase 2's
@@ -313,7 +314,9 @@ export function layoutCarried(
   const free = MEMORY_TOTAL_BLOCKS - (startAddr + block);
   if (free > 0) segs.push(freeSegment(free));
   const strays = seedSegs.slice(placed);
-  const seeds = packet.seeds.map((plan, index) => ({ segId: seedSegs[index]!.id, targetName: plan.targetName }));
+  const seeds = packet.seeds.map((plan, index): ArrivalSeed => ({
+    segId: seedSegs[index]!.id, targetName: plan.targetName, ...(index >= placed ? { loose: true as const } : {}),
+  }));
   return { racks: { startAddr, segs, ...(strays.length > 0 ? { strays } : {}) }, chargeBlocks: charge, overflowLost, seeds };
 }
 

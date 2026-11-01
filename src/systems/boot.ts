@@ -213,11 +213,13 @@ function sayNextLine(store: Store<GameState>): void {
   // the hollowBoard cue hang on the event; Track UI).
   if (kind === 'board' && arrival !== null && arrival.boarded !== null) emit('hollow-boarded', { ...arrival.boarded });
   // The beam's seeds (phase 3 slice 2, 04 §4): the ECC seeds line names each, and each lands as it is said (the drop, the
-  // flash and the seedLand thunk hang on the event; Track UI). A seed already gone (rm'd in a skipped boot) says nothing.
+  // flash and the seedLand thunk hang on the event; Track UI). A seed already gone (rm'd in a skipped boot) says nothing;
+  // a stray (the no-room rule) lands next to no file it was named for (targetId null: the review's minor 4).
   if (kind === 'seeds' && arrival !== null) {
     for (const seed of arrival.seeds) {
-      const target = beamSeedTarget(state.memory, seed.segId);
-      if (target !== null) emit('seed-landed-beam', { segId: seed.segId, targetId: target.id });
+      if (!state.memory.some((seg) => seg.id === seed.segId)) continue;
+      const target = seed.loose ? null : beamSeedTarget(state.memory, seed.segId);
+      if (seed.loose || target !== null) emit('seed-landed-beam', { segId: seed.segId, targetId: target?.id ?? null });
     }
   }
   // 046.log's keys (05 §3.2): the entries this line names, as planned (systems/story-log.ts marks them found on it).

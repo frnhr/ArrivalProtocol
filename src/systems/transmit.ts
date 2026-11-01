@@ -123,7 +123,9 @@ function uninvitedChip(state: Readonly<GameState>, plan: TransitPlan): Uninvited
   if (blocks === null) return null;
   const owner = hollowLabel(state.run);
   const tally = state.run.threat.lastTally;
-  const fed = tally !== null && tally.fed ? tally.left : 0;
+  // Into a final ship feeding changes nothing (its root is the FINALE's 16 whatever it ate: threat-plan.ts rootBlocksFor),
+  // so the chip never says SEEDS FED IT there (the review's minor 3).
+  const fed = tally !== null && tally.fed && !plan.threat.isFinal ? tally.left : 0;
   const text = THREAT_TEXT.uninvitedChip(owner, blocks);
   const cut = text.indexOf(UNINVITED_NOTE_FROM);
   if (cut < 0) throw new Error(`uninvitedChip: the chip's words changed shape: ${text}`);
@@ -134,11 +136,16 @@ function uninvitedChip(state: Readonly<GameState>, plan: TransitPlan): Uninvited
 }
 
 // HOLLOW boarding on this beam is said outright (the map card's line, 04 §3.8: the surprise is what it does, not that it
-// comes); a beam it already rides needs no line (its chip is there). Otherwise the meter, once TRACE has counted or the
-// last ship's end tallied a seed; nothing on a run that has met no seed.
+// comes), worded by its cause: TRACE full (`HOLLOW WILL FIND YOU ON THIS BEAM`), or forced one hop from a final ship,
+// where TRACE did not do it (`IT FOUND YOU ANYWAY`: the review's minor 2; the fixed five always board forced). A beam it
+// already rides needs no line (its chip is there). Otherwise the meter, once TRACE has counted or the last ship's end
+// tallied a seed; nothing on a run that has met no seed.
 function packetTraceLine(state: Readonly<GameState>, plan: TransitPlan): PacketTraceLine | null {
   const trace = state.run.threat.trace;
-  if (plan.threat.boards !== null) return { text: `${THREAT_TEXT.trace(trace)} · ${THREAT_TEXT.willFindYou}`, tone: 'boards' };
+  if (plan.threat.boards !== null) {
+    const why = plan.threat.boards === 'forced' ? THREAT_TEXT.foundYouAnyway : THREAT_TEXT.willFindYou;
+    return { text: `${THREAT_TEXT.trace(trace)} · ${why}`, tone: 'boards' };
+  }
   if (plan.threat.rootBlocks !== null) return null;
   const tallied = (state.run.threat.lastTally?.left ?? 0) > 0;
   if (trace === 0 && !tallied) return null;
