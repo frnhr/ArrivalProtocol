@@ -418,9 +418,12 @@ await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 16000);
 await st(() => window.__ap.ship(4));
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'LAST LIGHT', 20000);
 await page.waitForTimeout(500);
+// Falling at the planet with an empty tank. BEAM OUT is a real race (6 tactical s against the impact) and the world runs
+// on while the kid reads the offer and its confirm: from 1,000 km the impact was 5 s off by the time the bar ran, and
+// with a second scenario beside it the bar lost (the full e2e run after slice 2). 3,000 km leaves the race winnable.
 await st(() => {
   const s = window.__ap.store.getState();
-  const r = s.level.planet.R + 1000;
+  const r = s.level.planet.R + 3000;
   window.__ap.store.mutate((d) => { d.burn.fuelPct = 0; d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = -2.5; d.orbit.vy = 0.05; });
 });
 await waitFor(() => !document.getElementById('beamBtn').hidden, 3000);
