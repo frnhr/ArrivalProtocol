@@ -1,4 +1,7 @@
-// WP10 part 2: what VESPER shows and says, as data (the DOM-free models the views paint), headless on harness10:
+// WP10 part 2: what VESPER shows and says, as data (the DOM-free models the views paint), headless on harness10.
+// Phase 3 slice 2 (slice-2-plan §5.3, Track UI): THE DEAL left VESPER and folds into LAST LIGHT when the run reaches it
+// without one, and VESPER's boot line (keepCharge) moved to its landing (risk 6): the deal's views and the boot's closing
+// HOLLOW line are checked on LAST LIGHT (its `> last ship, 047. i'm so tired.`). The ghost and SWAP stay on VESPER.
 // • the engine firing by itself: the NAV PLOT's STATUS reads UNCOMMANDED during a burst (COASTING after it); the
 //   THRUST CTRL pip carries the count (`FIRED ×n`, from the first burst, gone once the controller is swapped); in blue
 //   the mode toggle names the counter (`◀ SHIP · UNCOMMANDED THRUST ×n`) while nothing more urgent stands;
@@ -9,8 +12,8 @@
 //   its clock is whole seconds of the timer; sayChoice refuses a look that does not fit its options;
 // • NEXT BITE after the answer: FED while an ACCEPT keeps it still (counting the pause in: monotonic, no jump when
 //   the pause ends), FASTER while a REFUSE hastes it; the answer's stamps fit and never say HOLLOW;
-// • VESPER's boot ends with HOLLOW's own line in its pink (`> keep 20 charge for me, 047. you'll see.`); the klaxon
-//   and the cut to amber wait until it has typed; a skip jumps to it (it is said at once) and the cut still waits.
+// • the final ship's boot ends with HOLLOW's own line in its pink (`> last ship, 047. i'm so tired.`); the cut to amber
+//   waits until it has typed; a skip jumps to it (it is said at once) and the cut still waits.
 import { check, finish } from '../../wp1/harness';
 import { createHarness10, VESPER } from '../harness10';
 import { windowPip, plotReadouts, toggleAlert, choiceTicker } from '@systems/flight-hud';
@@ -31,11 +34,17 @@ import { HOLLOW_DEAL, HOLLOW_HUD_TEXT, HOLLOW_STORY } from '@data/hollow-text';
 import { SWAP_DESC } from '@data/tool-text';
 import { segTypeLabel } from '@data/type-labels';
 import {
-  CHOICE_URGENT_SEC, DEAL_TIMEOUT_SEC, DEAL_PAUSE_SEC, MERGE_COST_CHARGE, MAX_LINE_CHARS, BOOT_AFTER_HOLLOW_LINE_SEC,
+  CHOICE_URGENT_SEC, DEAL_TIMEOUT_SEC, DEAL_PAUSE_SEC, MAX_LINE_CHARS, BOOT_AFTER_HOLLOW_LINE_SEC,
 } from '@data/tuning';
 
 const h = createHarness10(3);
 const state = () => h.store.getState();
+const LAST_LIGHT = 4;
+// LAST LIGHT alone, in flight, a fresh unit carried in: the run reaches it without a deal, so THE DEAL folds in (slice 2).
+const lastLight = (seed: number): void => {
+  h.shipAlone(LAST_LIGHT, seed);
+  h.events.length = 0;
+};
 
 
 // --- The engine firing by itself, on screen ------------------------------------------------------------------------
@@ -94,7 +103,8 @@ const state = () => h.store.getState();
 
 // --- THE DEAL: the choice, the ticker, the clock --------------------------------------------------------------------
 {
-  h.vesper(5);
+  lastLight(5);
+  check('LAST LIGHT (reached with no deal this run) folds THE DEAL in', state().hollow.cfg.deal && state().run.stats.deal === null);
   h.stepUntil(() => state().hollow.phase === 'awake', 60);
   h.stepUntil(() => state().hollow.deal.phase === 'offered', 30);
   const entry = openChoiceEntry(state());
@@ -137,8 +147,8 @@ const state = () => h.store.getState();
 
 // --- ACCEPT: FED, counting the pause in ------------------------------------------------------------------------------
 {
-  // A fresh run's VESPER (the deal comes once a run).
-  h.vesper(6);
+  // A fresh run's LAST LIGHT (the deal comes once a run).
+  lastLight(6);
   h.stepUntil(() => state().hollow.phase === 'awake', 60);
   h.stepUntil(() => state().hollow.deal.phase === 'offered', 30);
   const entry = openChoiceEntry(state())!;
@@ -175,23 +185,23 @@ const state = () => h.store.getState();
   withdrawChoice(id);
 }
 
-// --- VESPER's boot: HOLLOW's line closes it ------------------------------------------------------------------------
-function bootVesper(seed: number): void {
-  h.vesper(seed);
-  // VESPER as it boots: the same world, the boot's clock from 0 (shipAlone left it in flight).
+// --- The final ship's boot: HOLLOW's line closes it ----------------------------------------------------------------
+function bootLastLight(seed: number): void {
+  lastLight(seed);
+  // LAST LIGHT as it boots: the same world, the boot's clock from 0 (shipAlone left it in flight).
   h.store.update((d) => { d.run.phase = 'boot'; d.ui.mode = 'memory'; });
   resetWorld();
 }
 
 {
-  bootVesper(8);
+  bootLastLight(8);
   const plan = bootLinePlan(state(), false);
   const vars = lineVars(state(), getPrediction());
   const text = bootLine('hollow', state(), vars);
-  check('VESPER\'s boot plan ends with HOLLOW\'s line, said by HOLLOW', plan[plan.length - 1] === 'hollow' && bootLineSpeaker('hollow') === 'hollow'
+  check('LAST LIGHT\'s boot plan ends with HOLLOW\'s line, said by HOLLOW', plan[plan.length - 1] === 'hollow' && bootLineSpeaker('hollow') === 'hollow'
     && plan.slice(0, -1).every((kind) => bootLineSpeaker(kind) === 'mind-sys'), plan.join(','));
-  check('…`> keep 20 charge for me, 047. you\'ll see.` (MERGE\'s price, our unit number)',
-    text === HOLLOW_STORY.keepCharge(state().run.unitNumber, MERGE_COST_CHARGE) && text === '> keep 20 charge for me, 047. you\'ll see.', text);
+  check('…`> last ship, 047. i\'m so tired.` (our unit number)',
+    text === HOLLOW_STORY.lastShip(state().run.unitNumber) && text === '> last ship, 047. i\'m so tired.', text);
   let saidAt: number | null = null;
   let endedAt: number | null = null;
   const start = h.wall();
@@ -203,13 +213,15 @@ function bootVesper(seed: number): void {
   const typing = typingSec('hollow', text);
   check('…and the cut to amber waits until it has typed (plus a beat to read it)', saidAt !== null && endedAt !== null
     && endedAt >= saidAt + typing + BOOT_AFTER_HOLLOW_LINE_SEC - 0.05, `said ${saidAt}, typed ${(saidAt ?? 0) + typing}, flight ${endedAt}`);
-  // Other ships' boots have no such line.
+  // Other ships' boots have no such line (VESPER's keepCharge moved to its landing, slice 2 risk 6).
   h.shipAlone(2, 9);
   check('KESTREL\'s boot has no HOLLOW line', !bootLinePlan(state(), false).includes('hollow'));
+  h.vesper(9);
+  check('VESPER\'s boot has no HOLLOW line (HOLLOW boards silent)', !bootLinePlan(state(), false).includes('hollow'));
 }
 
 {
-  bootVesper(10);
+  bootLastLight(10);
   const text = bootLine('hollow', state(), lineVars(state(), getPrediction()));
   // Past the skip grace: a skip jumps to HOLLOW's line (the lines before it are said at once)...
   h.stepFor(1.2);

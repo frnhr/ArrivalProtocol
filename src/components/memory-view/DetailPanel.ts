@@ -1,4 +1,4 @@
-import type { Segment, FsToolSegment, DriverSegment, HollowSegment } from '@/types/segment';
+import type { Segment, FsToolSegment, DriverSegment, HollowSegment, LogSegment } from '@/types/segment';
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import {
@@ -27,13 +27,17 @@ import { TOOL_MAX_VERSION } from '@data/fs-tools';
 import { isDebugMode } from '@/debug';
 import { LIVE_REPAIR_PREFIX, shownThreadsTotal } from './SegmentBlock';
 import { visibleDamage } from './MemoryStats';
+import { logChip, LOG_UI_TEXT } from '@systems/log-view';
+import { hollowLabel } from '@systems/say';
+import { LOG_DESC } from '@data/log-text';
 
 // The INSPECT panel: what the selected file is, and buttons for what can be done to it. The
 // buttons ask the actions' own rules (actionRefusal: pause, a usable tool, the target
 // rules, a free thread), so a disabled button says the same reason a click would, and main.ts
 // runs them through the same actions, which re-check everything at the click.
 
-export type DetailActionId = 'repair' | 'delete_charge' | 'scan' | 'load-next' | 'noop';
+// 'read-log' (phase 3 slice 2): INSPECT on 046.log opens the LOG READER (05 §4).
+export type DetailActionId = 'repair' | 'delete_charge' | 'scan' | 'load-next' | 'read-log' | 'noop';
 
 interface ActionOption {
   id: DetailActionId;
@@ -227,19 +231,75 @@ function infectionRowHtml(seg: Segment, state: Readonly<GameState>): string {
   return `<div class="detail-row"><span class="k">infected</span><span class="v ${cls}">from the ${seg.infected.side} · ${fix}</span></div>`;
 }
 
+// --- 046.log and beam seeds (phase 3 slice 2) ----------------------------------------------------------------------
+
+// INSPECT's words for a beam seed (04 §3.4, §3.7): where it came from, what it sits beside, and what leaving it does.
+export const BEAM_SEED_INSPECT = {
+  type: 'seed · came with the beam',
+  from: 'came in',
+  fromValue: 'with the packet · named by ECC',
+  nextTo: 'next to',
+  ifLeft: 'if left',
+  reports: 'REPORTS HOME · TRACE +1',
+  feeds: (owner: string): string => `FEEDS ${owner} · +1 BLOCK`,
+  desc: 'It rode in behind the file the boot named, and bites that file first. rm it (DELETE) before the ship ends, or it reports home.',
+} as const;
+
+// 046.log: what it is, LOCKED (05 §3.2: it isn't yours), the keys found once the kid knows it, and READ while there is an
+// entry to read (glowing while one is new). SCAN is offered until it has been scanned (the run-1 lesson's answer).
+function logHtml(seg: LogSegment, state: Readonly<GameState>): string {
+  const chip = logChip(state);
+  const found = chip.known
+    ? `<div class="detail-row"><span class="k">entries</span><span class="v${chip.glow ? ' good' : ''}">${LOG_UI_TEXT.found(chip.found)}${chip.unread > 0 ? ` · ${chip.unread} ${LOG_UI_TEXT.unread}` : ''}</span></div>`
+    : '';
+  return `
+    <div class="detail-title log-title">${escapeHtml(chip.name)}</div>
+    <div class="detail-type">${escapeHtml(segTypeLabel(seg))}</div>
+    <div class="detail-row"><span class="k">size</span><span class="v">${sizeText(seg.size)}</span></div>
+    <div class="detail-row"><span class="k">state</span><span class="v partial">${LOG_UI_TEXT.lockedState}</span></div>
+    ${found}
+    <div class="detail-desc">${escapeHtml(chip.known ? LOG_DESC.known : LOG_DESC.unknown)}</div>`;
+}
+
+function logActions(state: Readonly<GameState>, seg: LogSegment): ActionOption[] {
+  const chip = logChip(state);
+  const out: ActionOption[] = [];
+  if (chip.found > 0) {
+    out.push({ id: 'read-log', label: LOG_UI_TEXT.read, cost: LOG_UI_TEXT.readCost(chip.unread), cls: chip.glow ? 'read-log glow' : 'read-log' });
+  }
+  if (!state.run.log.scanned) out.push(scanOption(state, seg, '◎ scan'));
+  return out;
+}
+
+// A beam seed's extra rows: the file the ECC line named (run.arrival.seeds), and what it does if left (TRACE, or HOLLOW's
+// next root once it is aboard).
+function beamSeedRowsHtml(seg: HollowSegment, state: Readonly<GameState>): string {
+  if (!seg.beam || !seg.seed) return '';
+  const target = state.run.arrival?.seeds.find((seed) => seed.segId === seg.id)?.targetName;
+  const next = target === undefined ? '' : `<div class="detail-row"><span class="k">${BEAM_SEED_INSPECT.nextTo}</span><span class="v">${escapeHtml(target.toUpperCase())}</span></div>`;
+  const ifLeft = state.run.threat.aboard ? BEAM_SEED_INSPECT.feeds(hollowLabel(state.run)) : BEAM_SEED_INSPECT.reports;
+  return `
+    <div class="detail-row"><span class="k">${BEAM_SEED_INSPECT.from}</span><span class="v">${BEAM_SEED_INSPECT.fromValue}</span></div>
+    ${next}
+    <div class="detail-row"><span class="k">${BEAM_SEED_INSPECT.ifLeft}</span><span class="v warn">${escapeHtml(ifLeft)}</span></div>`;
+}
+
 // A hollow block: who it is, and what kind of block (data/hollow-text.ts hollowInspectState: the root, LOCKED or open
 // for LAST LIGHT's duel, the last block its DELETE leaves, a block that ate a file, or a seed it dropped; anything else
 // throws), and the rule a kid can repeat (the open root's own words: hollowInspectDesc).
-function hollowHtml(seg: HollowSegment): string {
+function hollowHtml(seg: HollowSegment, state: Readonly<GameState>): string {
   const stateText = hollowInspectState(seg);
-  const desc = hollowInspectDesc(seg);
+  const beamSeed = seg.beam === true && seg.seed === true;
+  const desc = beamSeed ? BEAM_SEED_INSPECT.desc : hollowInspectDesc(seg);
   const stateRow = `<span class="v warn">${escapeHtml(stateText)}</span>`;
-  const kind = seg.root ? ` · ${HOLLOW_INSPECT.rootType}` : seg.last ? ` · ${HOLLOW_INSPECT.lastType}` : seg.seed ? ` · ${HOLLOW_INSPECT.seedType}` : '';
+  const seedKind = beamSeed ? BEAM_SEED_INSPECT.type : HOLLOW_INSPECT.seedType;
+  const kind = seg.root ? ` · ${HOLLOW_INSPECT.rootType}` : seg.last ? ` · ${HOLLOW_INSPECT.lastType}` : seg.seed ? ` · ${seedKind}` : '';
   return `
     <div class="detail-title hollow-title">${escapeHtml(seg.name)}</div>
     <div class="detail-type">${TYPE_LABELS.hollow}${kind}</div>
     <div class="detail-row"><span class="k">size</span><span class="v">${sizeText(seg.size)}</span></div>
     <div class="detail-row"><span class="k">state</span>${stateRow}</div>
+    ${beamSeedRowsHtml(seg, state)}
     <div class="detail-desc">${escapeHtml(desc)}</div>`;
 }
 
@@ -316,8 +376,18 @@ function renderDetailPanel(target: HTMLElement, seg: Segment, deps: RenderDetail
     bindActionButtons(target, seg, deps);
     return;
   }
+  if (seg.type === 'log') {
+    let logBody = logHtml(seg, deps.state);
+    const actions = logActions(deps.state, seg);
+    if (actions.length) {
+      logBody += `<div class="action-section"><div class="action-section-label">primary</div>${actions.map(renderActionButton).join('')}</div>`;
+    }
+    target.innerHTML = logBody;
+    bindActionButtons(target, seg, deps);
+    return;
+  }
   if (seg.type === 'hollow') {
-    let hollowBody = hollowHtml(seg);
+    let hollowBody = hollowHtml(seg, deps.state);
     const actions = computeActions(seg, deps.state);
     if (actions.primary.length) {
       hollowBody += `<div class="action-section"><div class="action-section-label">primary</div>${actions.primary.map(renderActionButton).join('')}</div>`;
@@ -582,7 +652,9 @@ export function mountDetailPanel(
   // The landing adds what a driver shows: the run phase (LOAD NEXT) and the pinned pod.
   const unsub = store.subscribe(
     (s) => [s.ui.memoryRev, s.ui.selectedId, s.ui.activeTool, s.ui.pickedSourceId, s.clock.paused,
-      s.run.phase, s.landing.loadNext, s.landing.ended, s.landing.bay.loaded] as const,
+      s.run.phase, s.landing.loadNext, s.landing.ended, s.landing.bay.loaded,
+      // Slice 2: 046.log's panel follows the log (a scan, a key found, an entry read: no memory change).
+      s.run.log.scanned, s.run.log.found.length, s.run.log.read.length] as const,
     () => paint(store.getState()),
     (a, b) => a.every((value, i) => value === b[i]),
   );

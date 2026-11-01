@@ -9,6 +9,7 @@ import { creditName } from '@data/souls';
 import { LANDING_REPORT_TEXT, LANDING_REPORT_UI_TEXT, podCode } from '@data/landing-text';
 import { requireById, replayAnimation, make } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
+import { reportTraceLine } from '@systems/hollow-hud';
 import {
   CREDITS_LINES_PER_SEC, CREDITS_END_AT_FRAC, REPORT_LEAD_HOLD_SEC, WALL_FRAME_MAX_SEC, REPORT_STAR_GAP_SEC,
   REPORT_CHARGE_AFTER_SEC, REPORT_CHOIR_EVERY_SEC, REPORT_STAR_CHIME_AFTER_SEC, REPORT_FANFARE_AFTER_SEC,
@@ -25,7 +26,9 @@ import {
 //    pod's bell), then one colonist per pod that scored, each with site and first words (`OKAFOR, ADA (11) · LZ-A ·
 //    "Is it morning?"`), under the choir;
 // 3. stars: the breakdown and the points, then the three stars land one by one (a thud, a chime for an earned one);
-// 4. done: the charge they carry (`+18 REPAIR CHARGE ON NEXT SHIP`), up to two near misses, CONTINUE ▸.
+// 4. done: the charge they carry (`+18 REPAIR CHARGE ON NEXT SHIP`), the TRACE line (phase 3 slice 2, 04 §4: what the
+//    beam seeds left behind will do at CONTINUE, `2 SEEDS LEFT BEHIND · THEY REPORT HOME · TRACE □□□ → ■■□`, from the
+//    same tally the ship's end applies), up to two near misses, CONTINUE ▸.
 // SPACE / ENTER, a click or SKIP jumps a stage; every stage ignores input for REPORT_ADVANCE_LOCK_SEC after it starts and
 // CONTINUE arms REPORT_CONTINUE_ARM_SEC after it shows, so mashing [L] or SPACE through the last touchdown can't throw the
 // report away unseen. On the final ship it opens after the finale (landing.ts holds the phase until then). Reduced
@@ -106,6 +109,7 @@ export function mountLandingReport(store: Store<GameState>): () => void {
   const starsEl = requireById('lrStars');
   const chargeEl = requireById('lrCharge');
   const nearEl = requireById('lrNear');
+  const traceEl = requireById('lrTrace');
   const skipEl = requireById<HTMLButtonElement>('lrSkip');
   const continueEl = requireById<HTMLButtonElement>('lrContinue');
 
@@ -293,6 +297,11 @@ export function mountLandingReport(store: Store<GameState>): () => void {
     chargeEl.textContent = report.chargeLine;
     chargeEl.classList.toggle('none', report.charge === 0 && !report.lastShip);
     chargeEl.hidden = false;
+    // The world is stopped on the report, so the tally read now is the one CONTINUE applies.
+    const trace = reportTraceLine(store.getState());
+    traceEl.hidden = trace === null;
+    traceEl.textContent = trace?.text ?? '';
+    traceEl.dataset.tone = trace?.tone ?? '';
     const near = report.nearMisses.slice(0, NEAR_MISSES_SHOWN);
     nearEl.replaceChildren(...near.map((line) => make('div', 'lr-near-line', line)));
     nearEl.hidden = near.length === 0;
@@ -325,6 +334,7 @@ export function mountLandingReport(store: Store<GameState>): () => void {
     breakdownEl.hidden = true;
     starsEl.hidden = true;
     chargeEl.hidden = true;
+    traceEl.hidden = true;
     nearEl.hidden = true;
     root.hidden = false;
     root.classList.toggle('reduced', reducedMotion());

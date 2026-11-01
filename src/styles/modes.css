@@ -81,4 +81,19 @@ body.mode-memory {
   --merge-glow-blue: rgba(0, 212, 255, 0.28);
   --finale-backdrop: rgba(2, 4, 9, 0.8);
   --report-glow-sombre: rgba(111, 140, 158, 0.06);
+  /* The threat ladder and 046.log (phase 3 slice 2) look the same on both screens (see tokens.css). */
+  --trace: #ff6ec7;
+  --trace-dim: rgba(255, 110, 199, 0.18);
+  --trace-glow: rgba(255, 110, 199, 0.45);
+  --beam-seed: #d79bff;
+  --beam-seed-static: rgba(215, 155, 255, 0.38);
+  --reader-backdrop: rgba(2, 5, 10, 0.78);
+  --reader-bg: #04080d;
+  --reader-edge: #1d4566;
+  --reader-accent: #00d4ff;
+  --reader-bright: #b3e5fc;
+  --reader-text: #d6f0ff;
+  --reader-dim: #4a7a90;
+  --reader-glow: rgba(0, 212, 255, 0.18);
+  --reader-new: #ffd36e;
 }

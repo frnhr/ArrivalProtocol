@@ -37,9 +37,7 @@ rewritten (slice-2-plan Deviations (Track THREAT) 18–20). New suites: threat/p
 
 ## Track UI
 
-| Suite | Why it fails | Plan |
-|---|---|---|
-| wp10/p2/views | the deal's views were built on VESPER's deal | re-key to LAST LIGHT's folded deal |
+None. wp10/p2/views was re-keyed to LAST LIGHT's folded deal and its closing boot line (Track UI), and passes.
 
 ## Information-only checks
 

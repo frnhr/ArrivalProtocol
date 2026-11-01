@@ -70,7 +70,8 @@ export interface CueParams {
   driverSaved: undefined;
   // WP7: the run. TRANSMIT's rising FM sweep into the white-out (and BEAM OUT's moment of leaving); one
   // transit hit landing on a file as the boot names it; HOLLOW's name decoding out of `???`.
-  transmitSweep: { seconds: number };
+  // Phase 3 slice 2: `stutter` when HOLLOW rides the beam it boards on (04 §4: a stutter in the transmit sound).
+  transmitSweep: { seconds: number; stutter?: boolean };
   transitHit: undefined;
   nameGlitch: undefined;
   // WP9: KESTREL. A debris cloud hitting a rack; one Geiger tick inside a radiation belt (audio-cues schedules
@@ -82,6 +83,10 @@ export interface CueParams {
   beltStatic: { depth: number };
   seedWarn: undefined;
   seedDrop: undefined;
+  // Phase 3 slice 2 (04 §4): a beam seed landing behind its target as the boot's ECC line names it (a small thunk); HOLLOW's
+  // root dropping into the bay's slot as it boards (a thud under a falling drone).
+  seedLand: undefined;
+  hollowBoard: undefined;
   // WP10: VESPER. The engine lighting by itself (a ghost burst: the ship's first one louder); one second of THE DEAL's
   // timer running out (urgent: its last seconds).
   ghostIgnite: { first: boolean };
@@ -1097,10 +1102,26 @@ function cueDriverSaved(mix: Graph, t0: number): void {
 // whistle over `seconds` while its modulator climbs with it and the index opens, so it starts as a clean
 // tone and ends as a bright, tearing signal (the unit stretched across light-years); a band of noise
 // rises under it. At the top: a burst of wide white noise and a low thump, the white-out heard.
-function cueTransmitSweep(mix: Graph, t0: number, seconds: number): void {
+// With `stutter` (slice 2, the boarding beam): past the middle the signal drops out in a few short gaps, as if something
+// heavier were riding the beam, and a low detuned square (HOLLOW's voice) growls under the gaps.
+const STUTTER_AT_FRACS: readonly number[] = [0.5, 0.57, 0.61, 0.7];
+const STUTTER_GAP_SEC = 0.07;
+
+function cueTransmitSweep(mix: Graph, t0: number, seconds: number, stutter: boolean): void {
   const voice = makeVoice(mix.ctx);
   duck(mix, t0);
-  const out = voice.gain(1, mix.buses.chord);
+  const gate = voice.gain(1, mix.buses.chord);
+  const out = voice.gain(1, gate);
+  if (stutter) {
+    for (const frac of STUTTER_AT_FRACS) {
+      const at = t0 + seconds * frac;
+      gate.gain.setTargetAtTime(0, at, 0.004);
+      gate.gain.setTargetAtTime(1, at + STUTTER_GAP_SEC, 0.006);
+      const growl = voice.gain(0, voice.filter('lowpass', 520, 1.2, mix.buses.chord));
+      const growlEnd = pluck(growl.gain, at, 0.09, 0.004, STUTTER_GAP_SEC + 0.05);
+      for (const detune of [-18, 18]) voice.osc('square', HOLLOW_SCALE[0]! / 2, at, growlEnd + 0.01, growl, detune);
+    }
+  }
   const tone = voice.filter('lowpass', 6000, 0.7, out);
   const sweepEnd = t0 + seconds;
   const amp = voice.gain(0, tone);
@@ -1274,6 +1295,46 @@ function cueSeedDrop(mix: Graph, t0: number): void {
   sweep(band.frequency, t0, 2200, 700, 0.12);
   const crunchEnd = pluck(crunch.gain, t0, 0.3, 0.002, 0.1);
   voice.noise(mix.white, t0, crunchEnd + 0.01, band);
+}
+
+// Slice 2, seedLand (04 §4): a beam seed set down behind its target as the ECC line names it. Smaller than seedDrop (a
+// seed HOLLOW drops mid-fight): a muffled knock with a short click on top, and one quiet square blip a fifth down in
+// HOLLOW's scale, so it reads as "something foreign" without sounding like a bite.
+function cueSeedLand(mix: Graph, t0: number): void {
+  const voice = makeVoice(mix.ctx);
+  const out = voice.gain(1, mix.buses.ui);
+  const knock = voice.gain(0, out);
+  const knockEnd = pluck(knock.gain, t0, 0.75, 0.002, 0.16);
+  const body = voice.osc('sine', 140, t0, knockEnd, knock);
+  sweep(body.frequency, t0, 140, 52, 0.12);
+  const click = voice.gain(0, voice.filter('bandpass', 1800, 1.4, out));
+  const clickEnd = pluck(click.gain, t0, 0.32, 0.0005, 0.03);
+  voice.noise(mix.white, t0, clickEnd + 0.01, click);
+  const blip = voice.gain(0, voice.filter('lowpass', 800, 1.2, out));
+  const blipEnd = pluck(blip.gain, t0 + 0.05, 0.1, 0.003, 0.14);
+  voice.osc('square', HOLLOW_SCALE[0]! * 0.75, t0 + 0.05, blipEnd + 0.01, blip);
+}
+
+// Slice 2, hollowBoard (04 §4, the boarding moment): the root lands in the bay. A heavy sub thud (as low as the duel's)
+// with a crunch of dark noise, under a detuned drone that falls an octave and a half over two seconds and fades: low,
+// slow and unhurried, then silence until the first bite.
+function cueHollowBoard(mix: Graph, t0: number): void {
+  const voice = makeVoice(mix.ctx);
+  duck(mix, t0);
+  const out = voice.gain(1, mix.buses.chord);
+  const thud = voice.gain(0, out);
+  const thudEnd = pluck(thud.gain, t0, 0.6, 0.003, 0.7);
+  const body = voice.osc('sine', 78, t0, thudEnd, thud);
+  sweep(body.frequency, t0, 78, 26, 0.6);
+  const crunch = voice.gain(0, voice.filter('lowpass', 700, 0.8, out));
+  const crunchEnd = pluck(crunch.gain, t0, 0.4, 0.004, 0.5);
+  voice.noise(mix.white, t0, crunchEnd, crunch);
+  const drone = voice.gain(0, voice.filter('lowpass', 900, 1.1, out));
+  const droneEnd = swell(drone.gain, t0 + 0.05, 0.16, 0.25, 2.3);
+  for (const detune of [-22, 0, 19]) {
+    const fall = voice.osc('sawtooth', HOLLOW_SCALE[0]!, t0 + 0.05, droneEnd, drone, detune);
+    sweep(fall.frequency, t0 + 0.05, HOLLOW_SCALE[0]!, HOLLOW_SCALE[0]! / 2.8, 2.2);
+  }
 }
 
 // The engine lights with nobody on the throttle (C2, §5.3 moment 11): a relay clacking twice (the controller
@@ -1574,7 +1635,11 @@ function playOn(mix: Graph, cue: Cue, params: CueParams[Cue] | undefined, t0: nu
     case 'fizzle': cueFizzle(mix, t0); return;
     case 'sombreFall': cueSombreFall(mix, t0); return;
     case 'driverSaved': cueDriverSaved(mix, t0); return;
-    case 'transmitSweep': cueTransmitSweep(mix, t0, (params as CueParams['transmitSweep']).seconds); return;
+    case 'transmitSweep': {
+      const sweepParams = params as CueParams['transmitSweep'];
+      cueTransmitSweep(mix, t0, sweepParams.seconds, sweepParams.stutter === true);
+      return;
+    }
     case 'transitHit': cueTransitHit(mix, t0); return;
     case 'nameGlitch': cueNameGlitch(mix, t0); return;
     case 'debrisImpact': cueDebrisImpact(mix, t0); return;
@@ -1582,6 +1647,8 @@ function playOn(mix: Graph, cue: Cue, params: CueParams[Cue] | undefined, t0: nu
     case 'beltStatic': cueBeltStatic(mix, t0, (params as CueParams['beltStatic']).depth); return;
     case 'seedWarn': cueSeedWarn(mix, t0); return;
     case 'seedDrop': cueSeedDrop(mix, t0); return;
+    case 'seedLand': cueSeedLand(mix, t0); return;
+    case 'hollowBoard': cueHollowBoard(mix, t0); return;
     case 'ghostIgnite': cueGhostIgnite(mix, t0, (params as CueParams['ghostIgnite']).first); return;
     case 'dealTick': cueDealTick(mix, t0, (params as CueParams['dealTick']).urgent); return;
     case 'verbTick': cueVerbTick(mix, t0, (params as CueParams['verbTick']).count); return;

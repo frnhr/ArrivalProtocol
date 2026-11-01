@@ -8,6 +8,7 @@ import { ZONE_STAMP_TEXT } from '@data/zone-text';
 import { HOLLOW_DEAL, HOLLOW_VERB } from '@data/hollow-text';
 import { racksText } from '@/types/zone';
 import { podCode, LANDING_STAMP_TEXT } from '@data/landing-text';
+import { THREAT_TEXT } from '@data/threat-text';
 import { STAMP_DEBOUNCE_MS, STAMP_IN_MS, STAMP_SHOW_MS, STAMP_MAX_WIDTH_FRAC } from '@data/tuning';
 
 // Stamps (§7.3): two or three words in VT323 slammed over the middle of the screen on a moment
@@ -101,6 +102,8 @@ export function mountStamps(store: Store<GameState>): () => void {
     // Slice 1a (01-landing §2, §4): the run's first pod down, and every pod of a ship down (not on a ship that parked
     // some: that one ends quietly, its report says what happened).
     on('pod-landed', ({ firstOfRun }) => { if (firstOfRun) showStamp(LANDING_STAMP_TEXT.firstLanding, 'good'); }),
+    // Phase 3 slice 2 (04 §3.3): the unit's last working rm is gone. Information, loudly: the TERMINAL echoes the rule.
+    on('last-rm-lost', () => { showStamp(THREAT_TEXT.lastRmStamp, 'danger'); }),
     on('all-pods-down', () => {
       if (store.getState().landing.pods.every((record) => record.fate.kind === 'down')) showStamp(LANDING_STAMP_TEXT.allDown, 'good');
     }),

@@ -83,6 +83,10 @@ import {
 //   verb-landed → verbLanded; root-unlocked → rootOpen; duel-spike → duelSpike (brighter as the DELETE nears its end),
 //   and while the root's DELETE runs, the duel's drone climbs with it; root-deleted → rootDeleted; finale-chosen →
 //   purgeTone or mergeChord (the choice card plays its own hold, FinaleChoice)
+// • Phase 3 slice 2 (04 §4): seed-landed-beam → seedLand (each beam seed's small thunk as the ECC line names it);
+//   hollow-boarded → hollowBoard (the root drops into the bay as the 108% unpack is said; the shake and the tear are
+//   Juice's and the glitch driver's); last-rm-lost → the LAST rm DELETED stamp's heavy thud. The boarding beam's stutter
+//   is the TRANSMIT screen's own transmitSweep (TransmitScreen).
 // • a new alarm alert → klaxon
 // • every tick: the engine rumble follows delivered thrust, the engine firing by itself (ghost
 //   thrust, C2) included; the lock tone follows the green share of a captured loop while burning
@@ -242,6 +246,9 @@ export function mountAudioCues(store: Store<GameState>): () => void {
       for (let i = 0; i < blinks; i++) play('seedWarn', undefined, { delaySec: i * SEED_BLINK_SEC });
     }),
     on('seed-landed', () => play('seedDrop')),
+    on('seed-landed-beam', () => play('seedLand')),
+    on('hollow-boarded', () => play('hollowBoard')),
+    on('last-rm-lost', () => play('stampHit', { heavy: true })),
     // A burst a SKIP flies through takes no wall time, so the rumble that follows delivered thrust never sounds for
     // it: its ignite (the relay and the whump) is what says the engine fired (WP10 review, the lead's ruling).
     on('ghost-start', ({ first }) => play('ghostIgnite', { first })),

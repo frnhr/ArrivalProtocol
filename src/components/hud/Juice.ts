@@ -8,14 +8,14 @@ import { screenFocus } from './focus';
 import { LINES, BEAM_OUT_TEXT } from '@data/script';
 import {
   LOCK_HOLD_AI_SEC, SHAKE_BURN_PX, SHAKE_FAULT_PX, SHAKE_CRASH_PX, SHAKE_DEBRIS_PX, SHAKE_MS_PER_PX, SHAKE_MIN_MS, SHAKE_MAX_MS, SHAKE_STEPS,
-  LINE_TWEEN_MS, SCREEN_FLASH_MS, SHAKE_GHOST_FIRST_PX, SHAKE_GHOST_PX, SHAKE_LAUNCH_PX,
+  LINE_TWEEN_MS, SCREEN_FLASH_MS, SHAKE_GHOST_FIRST_PX, SHAKE_GHOST_PX, SHAKE_LAUNCH_PX, SHAKE_BOARD_PX,
 } from '@data/tuning';
 
 // Juice (§7.3): the feel, never the information.
 // • Screen shake on .desktop-wrap (never <html>: the glitch jerk owns that): a nudge when the
 //   engine lights, a jolt when a scripted fault breaks a file (the ENGINE I/O FAULT) or debris hits
 //   a rack (WP9), a slam on a crash, and the engine firing by itself (WP10: the ship's first burst slams like
-//   debris, every later one kicks).
+//   debris, every later one kicks); HOLLOW's root landing as it boards (phase 3 slice 2).
 // • The red alarm vignette while any alarm is active (an impact under 30 tactical s).
 // • HOLD STEADY 3-2-1, the big count over the screen while the lock hold runs, with a bar.
 // • The predicted line's colour tween on a state change (red → flyby → green); the ring's
@@ -128,6 +128,9 @@ export function mountJuice(store: Store<GameState>): () => void {
     // Slice 1a (01-landing §4): a kick per launch, felt at the 2-second rhythm. The streak, the entry flare, the ring's
     // pulse and the touchdown float are the NAV PLOT's (plot-landing.ts), the chip flash LaunchFx's.
     on('pod-launched', () => shake(SHAKE_LAUNCH_PX)),
+    // Phase 3 slice 2 (04 §4): HOLLOW's root drops into the bay as the 108% unpack is said (the tear is the glitch
+    // driver's, the thud the hollowBoard cue's).
+    on('hollow-boarded', () => shake(SHAKE_BOARD_PX)),
     on('locked', () => flash('good')),
     on('line-state', ({ from }) => {
       plot.dataset.tweenFrom = from;

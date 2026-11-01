@@ -1678,3 +1678,18 @@ export const LANDING_SPLIT_LESSON_SEC = 6;
 export const LOG_SCAN_ASK_SEC = 8;
 
 // --- 2 UI (owned by Track UI): the TRACE meter, the chips, the boarding moment, the LOG READER -------------------------
+
+// The boarding moment (04 §4, a signature moment): as the boot's 108% unpack is said, the root drops into the bay's slot
+// with a shake as big as debris slamming a rack or the ship's first ghost burst (SHAKE_DEBRIS_PX, SHAKE_GHOST_FIRST_PX),
+// and the screen tears as hard as the root's death did in phase 2: glitchBurst(0.6, 900).
+export const SHAKE_BOARD_PX = 6;
+export const BOARD_TEAR_LEVEL = 0.6;
+export const BOARD_TEAR_MS = 900;
+// The root's slab falling into its slot on the strip (HollowPainter): long enough to see it land after the white-out
+// lifts, short enough to be over before the boot's next line.
+export const BOARD_DROP_MS = 1100;
+// A beam seed's thunk on the strip (HollowPainter, with the seedLand cue): a short drop and flash.
+export const SEED_LAND_FX_MS = 700;
+// The LOG READER types an entry the first time at this many characters a second (05 §4: "an entry types itself"): a
+// little slower than the TERMINAL's lines, so a 3-line entry (≤ 210 characters) reads in about 5 s.
+export const LOG_READER_CPS = 42;

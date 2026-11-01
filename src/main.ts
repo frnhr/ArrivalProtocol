@@ -7,6 +7,7 @@ import './styles/glitch.css';
 import './styles/legacy-components.css';
 import './styles/game.css';
 import './styles/landing.css';
+import './styles/threat.css';
 import './styles/responsive.css';
 
 import { store } from '@state/instance';
@@ -80,7 +81,9 @@ import { mountZones } from '@systems/zones';
 import { mountAutoburn, registerAutoburnKeys } from '@systems/autoburn';
 import { mountHollowPainter } from '@components/memory-view/HollowPainter';
 import { mountRun } from '@systems/run';
-import { mountStoryLog } from '@systems/story-log';
+import { mountStoryLog, openLogReader } from '@systems/story-log';
+import { logEntryToOpen } from '@systems/log-view';
+import { mountLogReader, mountLogChips } from '@components/memory-view/LogReader';
 import { mountTransmitScreen } from '@components/run/TransmitScreen';
 import { mountRunEnd } from '@components/run/RunEnd';
 import { mountMergeTick } from '@components/memory-view/MergeTick';
@@ -119,6 +122,11 @@ function runAction(shown: Segment, action: DetailActionId): void {
   else if (action === 'delete_charge') requestDelete(store, seg, toolDeps);
   else if (action === 'scan') actionScan(store, seg);
   else if (action === 'load-next' && seg.type === 'driver') setLoadNext(store, seg.pod);
+  else if (action === 'read-log') {
+    // INSPECT's READ on 046.log (slice 2): the reader opens on the entry left unread, else the last found.
+    const entry = logEntryToOpen(store.getState());
+    if (entry !== null) openLogReader(store, entry);
+  }
 }
 
 // World systems first, in tick order: orbit-sim integrates, the predictor reads the fresh
@@ -264,12 +272,16 @@ mountLandingReport(store);
 // Between ships and after the run (WP7): the packet for the link, and the run's end.
 mountTransmitScreen(store);
 mountRunEnd(store);
+// Slice 2: the LOG READER, over TRANSMIT or the game (05 §4).
+mountLogReader(store);
 // WP11: LAST LIGHT's choice, once the root's DELETE has left its last block.
 mountFinaleChoice(store);
 mountPlacement(store, memWrap);
 // After the strip: HOLLOW's reach (NEXT BITE, arrows, GAP/WALL), the infection's crawl and readouts,
 // the tug's green boundary and HOLLOW's moments are painted onto its rebuilt chips.
 mountHollowPainter(store);
+// After the strip (slice 2): 046.log's chip, its `3/12` and its glow, from run.log.
+mountLogChips(store);
 // After the strip (WP11 part 2): the MERGE 20 tick on the REPAIR CHARGE pool and the charge readouts (LAST LIGHT).
 mountMergeTick(store, memWrap);
 // A launched driver's chip flash (01-landing §4), read from the strip before it rebuilds without the driver.

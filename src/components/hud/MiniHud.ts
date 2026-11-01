@@ -14,6 +14,8 @@ import {
 } from '@systems/flight-hud';
 import { autoburnArmedInTac, autoburnAvailable } from '@systems/autoburn';
 import { AUTO_MINI_TEXT } from '@data/skill-text';
+import { traceMeter } from '@systems/hollow-hud';
+import { paintTraceMeter } from './TraceMeter';
 import { makeProjector } from '@/types/orbit';
 import { requireById } from '@components/dom';
 import { svgEl, fmt, setCircle, annulus, circlePath, pathsByColour, bandWidth } from './plot-draw';
@@ -32,6 +34,8 @@ import { MINI_PLOT_VIEWBOX, PLOT_FUZZ_MIN_UNITS, PLOT_PLANET_MIN_UNITS } from '@
 // border pulsing violet. Its plot carries the hazard zones in their verdict colours (WP9): a kid fighting in
 // blue sees the debris cloud turn from red to green as AUTOBURN or their own correction flies the ship.
 // Painted per tick only while its screen is up, patching what changed.
+// Phase 3 slice 2 (04 §4): the TRACE meter on both glances (the card's head; a row of the amber chip, compact) and in the
+// MIND header, all from hollow-hud's traceMeter; hidden on a run that has met no seed.
 
 const MARGIN = 4;          // viewBox units kept clear around the plot radius
 const SHIP_DOT = 2.4;      // viewBox units
@@ -90,6 +94,10 @@ export function mountMiniHud(store: Store<GameState>): () => void {
   const chipDots = requireById('mindChipDots');
   const chipThreads = requireById('mindChipThreads');
   const chipCharge = requireById('mindChipCharge');
+  const memTrace = requireById('memTrace');
+  const mhTrace = requireById('mhTrace');
+  const chipTraceRow = requireById('mindChipTraceRow');
+  const chipTrace = requireById('mindChipTrace');
 
   const patch = (element: HTMLElement, text: string): void => {
     if (element.textContent !== text) element.textContent = text;
@@ -237,12 +245,27 @@ export function mountMiniHud(store: Store<GameState>): () => void {
   card.addEventListener('click', onCardClick);
   chip.addEventListener('click', onChipClick);
 
+  // TRACE: the blue header and card, or the amber chip's row (paintTraceMeter skips an unchanged meter).
+  function paintTrace(): void {
+    const state = store.getState();
+    const meter = traceMeter(state);
+    if (state.ui.mode === 'memory') {
+      paintTraceMeter(memTrace, meter);
+      paintTraceMeter(mhTrace, meter);
+    } else {
+      paintTraceMeter(chipTrace, meter, { compact: true });
+      chipTraceRow.hidden = !meter.visible;
+    }
+  }
+
   const paintVisible = (): void => {
     if (store.getState().ui.mode === 'memory') paintCard();
     else paintChip();
+    paintTrace();
   };
   paintCard();
   paintChip();
+  paintTrace();
   const offTick = onPostTick(paintVisible);
   // Threads and charge change on AI time, also while the world is paused (no game ticks needed).
   const offOps = onOpsChange(() => paintChip());
