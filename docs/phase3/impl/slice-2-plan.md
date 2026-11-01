@@ -1049,3 +1049,97 @@ Track UI (§5.3) as built, where it differs from §2–§5 or fills a gap the pl
     and modes.css (`--trace`, `--beam-seed`, `--reader-*`), so game.css is untouched.
 21. **Not done (optional, OPENING's suggestion)**: FinaleChoice showing entry 12's lines under `> 047. wait.`; story-log
     types them in the TERMINAL already.
+
+## Deviations (review fixes)
+
+The fixes for the independent review of the merged slice (HEAD de81e30), where they differ from §1–§6 and the earlier
+Deviations sections, or fill a gap. Each bug has a fast regression check built from direct state.
+
+**M1. A seed's chain (risk 4).** In the seeds act every hollow block bit on the timer, so the block KESTREL's seed made
+by eating Telemetry bit on: Nav Plotter at 120 s, Engine I/O at 264 s, the Core infected at 280 s (the reviewer's
+`.tmp/review2/chain.ts`).
+- `HollowDef.onlySeedsBite` (on `SEEDS_ONLY_DEF`, validated: no seeds of its own, verbs, deal or story). `bitersOf(memory,
+  cfg)` gives spreadBite's `only` set (the seeds), and `hollowReach(memory, aiNow, only)` uses it, so the HUD's reach marks,
+  `amberBite` and `exposedDrivers` never draw a red GAP beside an inert block. Once HOLLOW is aboard `bitersOf` is null:
+  phase 2's chain, unchanged. `stepBeamSeedsBeforeFight` (HOLLOW aboard, plain ARRIVAL) is unchanged for the same reason.
+- The eaten block stays beam-born, so it reports home (a seed that ate reports twice). A new strip lesson
+  (`beam-eaten`, two wordings, mind-urgent, once, `SEED_LESSON_SHOW_SEC`): `THE EATEN BLOCK REPORTS HOME TOO — DELETE it`,
+  once no seed is left and DELETE is in hand; it lights the block (`BEAM_EATEN_HINT_TARGET`). INSPECT on such a block
+  shows the `if left` row too.
+- Checks: threat/beam-seeds (400 AI s more with the seed ignored: Nav Plotter, Engine I/O and the Core intact; no reach
+  from the eaten block; after the rm it still bites nothing and still counts; the strip line and its DELETE). The probe
+  now ends with Telemetry eaten and nothing else.
+
+**M2. LAST LIGHT's deal and the duel.** An ACCEPT near ORBIT LOCK held the verbs (and bites and seeds) for its 60 s into
+the duel, and an offer standing at the lock kept its buttons beside FinaleChoice.
+- On a ship with verbs `dealLive` is false off the flight: the lock withdraws a standing offer silently ('invalidated').
+  The deal's AI tick ends an ACCEPT's pause at the lock (`pauseUntilAi` = now). `verbsHeld` holds for the deal only on the
+  flight.
+- **The first verb's lesson (chosen: play it at the first verb after the lock).** `verbTelegraphs` counts telegraphs, so
+  the ship's first verb counts from `firstTelegraphSec` wherever it comes, and in the duel its extra second pushes the next
+  verb back (the existing rule). Its clock stood still from the offer (at the wake), so it comes a full `everySec` after
+  the lock, or `duelEverySec` after the root's DELETE starts, never on the lock's tick under CONTROL's DELETE line. Moving
+  it earlier would mean a verb under the deal's pause, which risk 13 forbids.
+- Checks: threat/arrival-story (ACCEPT 10 s before the lock: the pause ends at the lock, the first verb comes in the duel
+  with the 4 s count after about 12 s; an offer standing at the lock is withdrawn; the duel runs to the choice with no
+  deal UI). The browser check below repeats it by the TERMINAL's ACCEPT button.
+
+**Minor fixes**
+1. **wp11/full-run quick seeds are 3 and 4** (charges 25 and 28 at the choice; seed 4 MERGEs). "Both endings were reached"
+   is a check at any depth; only the median-charge target stays gated to `RUN_SEEDS=8`. `RUN_SEEDS=n` flies seeds 1–n.
+2. **The PACKET's boarding line names its cause**: `TRACE ■□□ · IT FOUND YOU ANYWAY` when `boards === 'forced'`
+   (`THREAT_TEXT.foundYouAnyway`), `HOLLOW WILL FIND YOU ON THIS BEAM` when TRACE did it. The meter's title says
+   "Something out there is listening." until slice 3 gives TRACE its effect.
+3. **Into the final ship feeding changes nothing**: the uninvited chip's `fed` is 0 there (no `SEEDS FED IT`), and INSPECT's
+   `if left` row is left out on the final ship (`beamIfLeftText`, reading `run.threat.current.isFinal`).
+4. **Stray seeds are loose.** `ArrivalSeed.loose` (schema) marks a seed the no-room rule made a stray. The ECC line reports
+   it apart by the rack it landed in (`> ECC: 1 FOREIGN BLOCK · LOOSE IN RACK D`, or `… · NEXT TO TELEMETRY · 1 LOOSE IN
+   RACK D`); `seed-landed-beam` carries `targetId: null` for it, and the painter labels it `SEED · LOOSE`, INSPECT `NOTHING ·
+   LOOSE`.
+5. **COPY's lesson on the fixed five**: a verb that telegraphs `unlink` on Repair's last spare latches
+   `HollowState.unlinkedLastSpare` for the ship, and `copyLessonDue` reads it, so the lesson follows the verb's BLOCK IT line
+   (on LAST LIGHT the first verb is `unlink repair.bak`). Only Repair has a spare, and the lesson says `COPY your Repair`, so
+   the trigger is Repair's alone. Check in threat/arrival-story.
+6. **`run.threat.current`** (`ShipThreatNow`: oneHopFromFinal, isFinal, stage, boards) is set by `applyThreat` as the ship
+   starts. That covers `startShip`, `createRunState` (every fixture), the run reset and the simulation retry (both rebuild
+   it from `nominalRunThreat(0)`), so it is never stale. `keepChargeDue(state)` = aboard && oneHopFromFinal && not told;
+   both the 'arrives' and the 'names-itself' stories append `keepCharge` when it is due (slice 3's seam).
+7. **046.log's pure rules live in `src/state/log-selectors.ts`** (`createRunLog`, `logKnown`, `logDisplayName`,
+   `logEntriesAtBoot`). There is one `logKnown(log)`; the view's extra "segment renamed" branch is gone (story-log renames
+   the segment from the log). script.ts and initial.ts no longer import the mount.
+8. **`startShip` checks the verdict against the TransitPlan** (`toShipIndex` and the depth) when a beam planned one; the
+   fixed five's depth is no longer hard-coded there.
+9. **Stale phase-2 comments** corrected in initial.ts, hollow.ts (header, scripted bite, wakes, naming, the story beats),
+   finale.ts (`openRoot`'s fallback), hollow-deal.ts's header, and the HOLLOW-facing comments of types, say, events,
+   audio, pace, director, landing, run, skills, hollow-hud, hollow-text, memory, script and tuning. Ship-specific flight
+   comments are left alone.
+10. **The SCAN lesson** is live after POD 02 is settled or once the coast has lasted `LOG_SCAN_AFTER_COAST_SEC` (20 s,
+    tuning.ts WHY) with no op running, on a WAIT that does not offer ACCEPT ORBIT (lead1/fix1/stranded-blue caught the
+    F11 line). `LOG_RULES` now come before `DRIVER_RULES`, so after the wait it takes the strip for its 8 s and hands it
+    back to POD 02's lesson. Still missable. Check in opening/calm-ships.
+11. **Nits**: threat-plan's comment moved to `hollowShip`; THE DEAL's folded HUNT is pushed onto `stagesPlayed` when the
+    deal is offered (hollow-deal.ts), not when the ladder folds it in (threat/plan expects `arrival,walls,seeds,finale`
+    for route C); `__ap.seed` plants inside `store.update`; the selector `traceCells` is `traceFill` (the text keeps
+    `traceCells`).
+
+**The unit tier**
+- Quick-depth trims (full depth keeps the old resolution): rule4-sweep flies one kid per grid row, the kids taking turns;
+  coast-skip `[44, 46]` and `[5]`; rule2-shrink ignores `[one-burn, 120, 240]`, over-trims `[-10, -1, 1, 19]`, ▼
+  `[3450, 3800, 4300]`, over-holds `[0.5, 3]`; low-tank two kids at the band's foot and top, the 0.3 s kid in the band
+  sweep, one short tank after 120 s; deal-test brings HOLLOW's wake to now except in its first scenario, one seed for
+  ACCEPT-and-seeds and two for the unanswered offer; vesper-sim 10 and 5 seeds (its burst check now measures the bursts no
+  coast end cut: with fewer seeds one cut burst moved the mean past 0.5%); boss-sim C 2 seeds.
+- Measured serially, the seven trimmed suites took 177 s before and 130 s after. The whole tier, 4 workers: 255 s before
+  (one failure, fixed above) and 251 s after (142 passed). The machine is noisy: untouched suites moved by ±10 s between the
+  two runs (wp10/skip-through 23 → 35 s, lead2/rule4-fuel 28 → 20 s), and the summed suite time fell only 16 s. The
+  reviewer's note stands: the same commits measure the same today, and the old 159 s came from a quieter machine, so the
+  trims buy about 12 s of wall at 4 workers on any machine.
+- `tests/unit/run.mjs` drops timings of suites that no longer exist. `tests/unit/KNOWN-FAILING-slice2.md` is deleted:
+  every suite passes.
+
+**Browser checks (ad hoc, `?debug`, Chromium)**
+- KESTREL, run 1, the seed ignored for 3 minutes after a lock: Telemetry eaten at about 80 AI s, Nav Plotter at 100%,
+  Engine I/O at 85% (its arrival), the Core at 100%, the hollow blocks `ate:Telemetry, seed`. No page errors.
+- LAST LIGHT: ACCEPT by the TERMINAL's button, ORBIT LOCK 10 s later: the pause ended at the lock, the first verb
+  (`unlink repair.bak`) telegraphed in the duel, the root's DELETE (by the strip's chips) reached the choice, and no
+  ACCEPT/REFUSE button was on the page at any point after the lock.
