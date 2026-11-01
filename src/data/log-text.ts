@@ -30,6 +30,10 @@ export const LOG_FILE: LogSegment = {
 
 export const LOG_ENTRY_COUNT = 12;
 
+// The data-hint-target of the log's chip (its first part): the strip's SCAN lesson lights it once SCAN is in hand
+// (components/memory-view/SegmentBlock sets it, as podHintTarget for a driver).
+export const LOG_HINT_TARGET = 'file-log046';
+
 // INSPECT's type line (data/type-labels.ts).
 export const LOG_TYPE_LABEL = 'Locked file · not yours';
 
@@ -138,8 +142,11 @@ export const LOG_TEXT = {
   refuseCopy: "IT ISN'T YOURS TO COPY",
   refuseRepair: 'NOTHING TO REPAIR · IT ISN\'T YOURS',
   // TODO(05): the run-1 SCAN lesson on ship 1's coast (slice-2-plan §3.1; wording to be signed off by 05's owner). The
-  // strip draws the ◇ from the rule's layer.
+  // strip draws the ◇ from the rule's layer; from amber the lesson asks for the TAB first.
   scanAsk: "A FILE YOU DIDN'T PACK — SCAN it",
+  scanAskTab: "A FILE YOU DIDN'T PACK — SCAN it — [TAB]",
+  // Entry 12 types from the root at its last block (05 §3.12's step 1), each line as HOLLOW's own TERMINAL line.
+  rootLine: (line: string): string => `> ${line}`,
   // The LOG READER (05 §4).
   readerTitle: '046.log',
   readerKey: 'KEY',
@@ -162,7 +169,7 @@ export function logEntryLines(n: number, vars: LogVars): readonly string[] | nul
     if (entry.n !== index + 1) throw new Error(`log-text: entry ${entry.n} is at place ${index + 1}`);
     const lines = entry.lines?.({ charge: 999 }) ?? [];
     if (lines.length > 3) throw new Error(`log-text: entry ${entry.n} has ${lines.length} lines (at most 3)`);
-    const long = lines.find((line) => line.length > MAX_LINE_CHARS);
+    const long = [...lines, ...lines.map((line) => LOG_TEXT.rootLine(line))].find((line) => line.length > MAX_LINE_CHARS);
     if (long !== undefined) throw new Error(`log-text: entry ${entry.n} has a line over ${MAX_LINE_CHARS} chars: ${long}`);
   });
 })();
