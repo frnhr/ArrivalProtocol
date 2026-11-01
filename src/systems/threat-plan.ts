@@ -91,7 +91,7 @@ export function planThreat(input: Readonly<ThreatInput>): ShipThreat {
 export function createRunThreat(): RunThreatState {
   return {
     trace: 0, aboard: false, age: 0, boardedAtDepth: null, boardCause: null, fed: 0, stagesPlayed: [],
-    told: { noticed: false, keepCharge: false }, eatenDrivers: [], lastTally: null,
+    told: { noticed: false, keepCharge: false }, eatenDrivers: [], lastTally: null, current: null,
   };
 }
 
@@ -122,16 +122,20 @@ export function threatInputFor(prev: Readonly<RunThreatState>, facts: ShipThreat
   };
 }
 
-// The run's threat once a ship's verdict applies (the ship starts): HOLLOW aboard from the ship it boards (or the final
-// ship, which always has it), its age counting this ship, the stages it has played. TRACE, what it was fed and the
-// story flags carry on; the tally that changes them is the ship's end's (Track THREAT). The depth is the verdict's own.
+// The run's threat once a ship's verdict applies (the ship starts: run.ts startShip, and every fixture and the simulation
+// retry that builds a ship through createRunState or nominalRunThreat): HOLLOW aboard from the ship it boards (or the
+// final ship, which always has it), its age counting this ship, the stages it plays, and the verdict's facts the world
+// reads during the ship (`current`). TRACE, what it was fed and the story flags carry on; the tally that changes them is
+// the ship's end's (Track THREAT). The depth is the verdict's own. THE DEAL's HUNT folded into a final ship is recorded
+// as played only when the deal is offered (hollow-deal.ts): the ladder folds it in, the ship may never offer it.
 export function applyThreat(prev: Readonly<RunThreatState>, plan: Readonly<ShipThreat>): RunThreatState {
   const next = structuredClone(prev) as RunThreatState;
   if (plan.stage !== null) {
     next.aboard = true;
     next.age = prev.age + 1;
-    next.stagesPlayed.push(plan.stage, ...plan.folded);
+    next.stagesPlayed.push(plan.stage, ...plan.folded.filter((fold) => !(plan.stage === 'finale' && fold === 'hunt')));
   }
+  next.current = { oneHopFromFinal: plan.oneHopFromFinal, isFinal: plan.isFinal, stage: plan.stage, boards: plan.boards };
   if (plan.boards !== null) {
     next.boardedAtDepth = plan.depth;
     next.boardCause = plan.boards;

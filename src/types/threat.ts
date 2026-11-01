@@ -172,9 +172,18 @@ export interface RunThreatState {
   // Beam-born blocks left at the ends of HOLLOW's ships since it boarded, CUMULATIVE (never reset when a root takes them):
   // each root is its stage's plus all of them, capped (rootBlocksFor, cap 14). The PACKET's `+n` is lastTally.left.
   fed: number;
+  // The stages HOLLOW has played this run, in order. A stage folded in counts once it is played: WALLS with its ARRIVAL,
+  // THE DEAL's HUNT on a final ship only once the deal is offered (hollow-deal.ts), not when the ladder folds it in.
   stagesPlayed: HollowStage[];
   told: { noticed: boolean; keepCharge: boolean };   // the naming stays run.hollowNamed
   // Filled by Track THREAT in slice 2 (hollow.ts, where a driver is consumed), so the save schema changes once.
   eatenDrivers: EatenDriver[];
   lastTally: ThreatTally | null;
+  // The current ship's verdict, the facts the world reads during it (applyThreat sets it as the ship starts; null before
+  // the first ship): hollow.ts keys `keepCharge` on aboard && oneHopFromFinal, the PACKET and INSPECT read isFinal.
+  // Slice 3's map sets the same fields from the route; slice 5's resident hook can read them too.
+  current: ShipThreatNow | null;
 }
+
+// The facts of the current ship's verdict that the world reads during it (RunThreatState.current).
+export type ShipThreatNow = Pick<ShipThreat, 'oneHopFromFinal' | 'isFinal' | 'stage' | 'boards'>;

@@ -127,6 +127,8 @@ function offer(store: Store<GameState>, driver: DriverSegment): void {
   }, { keys: [HOLLOW_DEAL.acceptKey, HOLLOW_DEAL.refuseKey], tickerWords: HOLLOW_DEAL.tickerWords });
   store.update((draft) => {
     draft.hollow.deal = { ...draft.hollow.deal, phase: 'offered', pod: driver.pod, segId: driver.id, startAddr: addr, entryId };
+    // THE DEAL folded into a final ship counts as HUNT played once it is offered (threat-plan.ts applyThreat).
+    if (!draft.run.threat.stagesPlayed.includes('hunt')) draft.run.threat.stagesPlayed.push('hunt');
   });
   emit('deal-offered', { pod: driver.pod });
 }

@@ -46,8 +46,9 @@ export function createRunStats(): RunStats {
 // A fresh run (§4.1): its unit, wave, last unit and HOLLOW from the archive's lineage (§4.5: UNIT-047 on
 // wave 1 the first time), and the tutorial until a unit has flown ARES-VII through. SCAN comes with the
 // unit; every other tool is licensed during the run
-// (systems/licences). HOLLOW starts unnamed on every run: on a later run its ghost names it during the
-// ship-1 boot (systems/boot.ts), on the first HALCYON does. The threat ladder's memory starts as the nominal run's for
+// (systems/licences). HOLLOW starts unnamed on every run and names itself on the ship it boards (VESPER on the fixed
+// five; a run that lost VESPER first hears it at the final ship's wake). A later run's ghost still types at ship 1's boot,
+// but no longer names it (slice 2, risk 11). The threat ladder's memory starts as the nominal run's for
 // `shipIndex` (ship 1: nothing reported, HOLLOW not aboard; a later ship built alone: as if flown with TRACE 0); with
 // `threat` (a fixture's own verdict for the ship) it is the nominal run before the ship with that verdict applied, so
 // run.threat never disagrees with the HOLLOW the ship is built with.
@@ -90,8 +91,8 @@ export function createRunState(
 // The slices that belong to one ship (§9 WP7 item 2: systems/run.ts resetWorldForShip assigns them in
 // one update): the mission line, memory, both clocks, the flight, the pods and their landing, and HOLLOW.
 // `run` gives the seed, the ship, the unit and what HOLLOW is called by now. `threat` is the ladder's verdict for this
-// ship (systems/threat-plan.ts planThreat): HOLLOW's config, and its root in the layout's slot (slice 2's THREAT track
-// carries the root in the Packet; the verdict's rootBlocks is the same number).
+// ship (systems/threat-plan.ts planThreat): HOLLOW's config, and its root in the layout's slot (buildShipMemory lays it
+// out from the verdict's rootBlocks; the Packet carries no root, slice 2 review follow-up M5).
 export type ShipSlices = Pick<GameState, 'mission' | 'memory' | 'clock' | 'burn' | 'orbit' | 'level' | 'landing' | 'hollow' | 'hazards'>;
 
 export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks | null, threat: Readonly<ShipThreat>): ShipSlices {

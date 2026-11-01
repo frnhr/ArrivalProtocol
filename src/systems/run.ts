@@ -212,7 +212,11 @@ export function startShip(
 ): void {
   const state = store.getState();
   if (index < 0 || index >= SHIPS.length) throw new Error(`startShip: no ship ${index}`);
-  if (threat.depth !== fixedShipFacts(index).depth) throw new Error(`startShip: a verdict for depth ${threat.depth} on ship ${index}`);
+  // The verdict the beam planned for this ship (TransitPlan.threat), when a beam planned one: not a stand-in's.
+  const transit = state.run.transit;
+  if (transit !== null && (transit.toShipIndex !== index || transit.threat.depth !== threat.depth)) {
+    throw new Error(`startShip: a verdict for depth ${threat.depth} on ship ${index}, but the beam planned depth ${transit.threat.depth} on ship ${transit.toShipIndex}`);
+  }
   const run: RunState = {
     ...state.run,
     shipIndex: index,

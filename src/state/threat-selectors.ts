@@ -43,6 +43,14 @@ export function hollowAboard(state: Readonly<GameState>): boolean {
   return state.run.threat.aboard;
 }
 
+// `> keep 20 charge for me…` is due on this ship (05 §3.5 'wants-charge', slice-2-plan risk 6): HOLLOW is aboard and the
+// ship is one hop from a final ship (run.threat.current, the verdict's facts), so MERGE's price is said one ship before
+// MERGE. Not yet told this run. The slice 3 seam: the map's M3 query sets oneHopFromFinal.
+export function keepChargeDue(state: Readonly<GameState>): boolean {
+  const threat = state.run.threat;
+  return threat.aboard && threat.current?.oneHopFromFinal === true && !threat.told.keepCharge;
+}
+
 // No working rm in memory (04 §3.3): no usable DELETE file that is not being eaten. Information only: the last-rm stamp
 // and echo, `NO RM · YOU CAN'T DELETE THE ROOT` on the PACKET, and the no-rm seed line.
 export function noWorkingRm(state: Readonly<GameState>): boolean {

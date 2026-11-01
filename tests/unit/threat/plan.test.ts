@@ -79,9 +79,12 @@ const shape = (plan: ShipThreat): string => `${plan.act}${plan.stage ? `:${plan.
     got === 'calm calm seeds seeds hollow:arrival!trace/8 hollow:walls/11 hollow:seeds/14 finale:finale+hunt/16', got);
   check('…TRACE stops counting once HOLLOW is aboard; what is left feeds it, cumulatively',
     threats[3]!.trace === 3 && threats[7]!.trace === 3 && threats[5]!.fed === 3, `trace ${threats.map((t) => t.trace).join(',')} fed ${threats.map((t) => t.fed).join(',')}`);
-  check('…the run remembers where and why it boarded, and the stages it played',
-    threats[4]!.boardedAtDepth === 5 && threats[4]!.boardCause === 'trace' && threats[7]!.stagesPlayed.join() === 'arrival,walls,seeds,finale,hunt',
+  check('…the run remembers where and why it boarded, and the stages it played (the folded DEAL\'s HUNT only once offered)',
+    threats[4]!.boardedAtDepth === 5 && threats[4]!.boardCause === 'trace' && threats[7]!.stagesPlayed.join() === 'arrival,walls,seeds,finale',
     `${threats[7]!.stagesPlayed.join()}`);
+  check('…and the current ship\'s verdict facts (run.threat.current: the final ship here)',
+    JSON.stringify(threats[7]!.current) === JSON.stringify({ oneHopFromFinal: false, isFinal: true, stage: 'finale', boards: null })
+    && threats[6]!.current?.oneHopFromFinal === true && threats[4]!.current?.boards === 'trace', JSON.stringify(threats[7]!.current));
 }
 
 // --- The boarding conditions ---------------------------------------------------------------------------------------

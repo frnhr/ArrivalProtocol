@@ -35,6 +35,7 @@ import { MEMORY_TOTAL_BLOCKS, FRESH_UNIT_CHARGE, UNIT_RACKS_START, hexAddr } fro
 import { HOLLOW_ALERT_TEXT, HOLLOW_DESC, HOLLOW_STORY, HOLLOW_ECHO, hollowUnitName } from '@data/hollow-text';
 import { SEEDS_ONLY_DEF } from '@data/threats';
 import { THREAT_TEXT } from '@data/threat-text';
+import { keepChargeDue } from '@state/threat-selectors';
 import { driverName } from '@data/landing-text';
 import { echoName } from '@data/tool-text';
 import { IS_DEV } from '@/env';
@@ -1211,9 +1212,9 @@ const ranOutBeat: StoryBeat = {
   tell: () => { say('hollow', HOLLOW_STORY.ranOut, { critical: true }); },
 };
 
-// MERGE's price, foreshadowed (`> keep 20 charge for me, 047. you'll see.`, 05 §3.5 'wants-charge'): on the ship HOLLOW
-// boarded one hop from the final ship, the last beat of its naming story, in the landing (slice-2-plan risk 6: 05's
-// trigger, that ship's boot, is the boarding boot, which 04 keeps silent).
+// MERGE's price, foreshadowed (`> keep 20 charge for me, 047. you'll see.`, 05 §3.5 'wants-charge'): on a ship HOLLOW is
+// aboard one hop from the final ship (threat-selectors.ts keepChargeDue: run.threat.current), the last beat of its story,
+// in the landing (slice-2-plan risk 6: 05's trigger, that ship's boot, is the boarding boot, which 04 keeps silent).
 const keepChargeBeat: StoryBeat = {
   silenceSec: HOLLOW_STORY_SILENCE_SEC,
   ready: (state) => state.run.phase === 'landing',
@@ -1223,9 +1224,13 @@ const keepChargeBeat: StoryBeat = {
   },
 };
 
-// The WALLS stage's story ('names-itself', phase 2's HALCYON): the naming at the wake, then `> i ran out…` in the landing.
+// The WALLS stage's story ('names-itself', phase 2's HALCYON): the naming at the wake, then `> i ran out…` in the landing,
+// and `keepCharge` when it is due (slice 3: a WALLS ship one hop from a final ship).
 function namesItselfStory(state: Readonly<GameState>): StoryBeat[] {
-  return [...(state.run.hollowNamed ? [] : [...namingBeats(), ranOutBeat]), toldBeat(HOLLOW_STORY_SILENCE_SEC)];
+  return [
+    ...(state.run.hollowNamed ? [] : [...namingBeats(), ranOutBeat]), ...(keepChargeDue(state) ? [keepChargeBeat] : []),
+    toldBeat(HOLLOW_STORY_SILENCE_SEC),
+  ];
 }
 
 // A folded ARRIVAL + WALLS ('arrives', 04 §3.9), from the moment its scripted fight is decided: it notices you
@@ -1235,9 +1240,8 @@ function namesItselfStory(state: Readonly<GameState>): StoryBeat[] {
 function arrivesStory(state: Readonly<GameState>): StoryBeat[] {
   const beats: StoryBeat[] = state.run.threat.told.noticed ? [] : noticedBeats();
   if (!state.run.hollowNamed) beats.push(...namingBeats(() => bitesSinceFight > 0), ranOutBeat);
-  // 'arrives' is itself the "one hop from a final ship" fact: planThreat folds WALLS into ARRIVAL only on HOLLOW's first
-  // ship when that ship is one hop from a final one (the verdict's oneHopFromFinal), so no ShipDef is read here.
-  if (!state.run.threat.told.keepCharge) beats.push(keepChargeBeat);
+  // Keyed on the verdict's facts (run.threat.current), not on 'arrives' itself (the review's minor 6).
+  if (keepChargeDue(state)) beats.push(keepChargeBeat);
   beats.push(toldBeat(HOLLOW_STORY_SILENCE_SEC));
   return beats;
 }

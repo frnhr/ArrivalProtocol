@@ -20,7 +20,10 @@ import { hollowReach, theRoot, rootDeleteRunning } from '@systems/hollow';
 import { verbsHeld } from '@systems/hollow-verbs';
 import { DEAL_ACCEPT, DEAL_REFUSE } from '@systems/hollow-deal';
 import { pickChoice, openChoiceEntry } from '@systems/say';
-import { hollowFirstFightDecided } from '@state/threat-selectors';
+import { hollowFirstFightDecided, keepChargeDue } from '@state/threat-selectors';
+import { createInitialState } from '@state/initial';
+import { freshUnitRacks } from '@systems/carry';
+import { getShip } from '@data/ships';
 import { installTool } from '@systems/licences';
 import { HOLLOW_STORY, HOLLOW_DEAL } from '@data/hollow-text';
 import { foldArrivalWalls } from '@data/threats';
@@ -131,6 +134,18 @@ check('…bites every 25 s at 3.5 %/s after the fight', s().hollow.cfg.spreadEve
   check('a driver HOLLOW eats goes on run.threat.eatenDrivers (slice 7\'s MERGE record)',
     s().run.threat.eatenDrivers.some((record) => record.pod === driver.pod && record.family === driver.family && record.shipId === s().level.shipId),
     JSON.stringify(s().run.threat.eatenDrivers));
+}
+
+// The review's minor 6: keepCharge is keyed on the current verdict's facts (run.threat.current), not on the story kind.
+{
+  const vesper = createInitialState({ seed: 3, shipIndex: VESPER, carried: freshUnitRacks(getShip(VESPER)) });
+  const lastLight = createInitialState({ seed: 3, shipIndex: LAST_LIGHT, carried: freshUnitRacks(getShip(LAST_LIGHT)) });
+  const first = createInitialState({ seed: 3, shipIndex: 0 });
+  const notOneHop = { ...vesper, run: { ...vesper.run, threat: { ...vesper.run.threat, current: { ...vesper.run.threat.current!, oneHopFromFinal: false } } } };
+  const told = { ...vesper, run: { ...vesper.run, threat: { ...vesper.run.threat, told: { noticed: true, keepCharge: true } } } };
+  check('minor 6: keepCharge is due where HOLLOW is aboard one hop from the final ship (VESPER), nowhere else, and once',
+    keepChargeDue(vesper) && !keepChargeDue(notOneHop) && !keepChargeDue(lastLight) && !keepChargeDue(first) && !keepChargeDue(told)
+    && first.run.threat.current?.stage === null && vesper.run.threat.current?.boards === 'forced', JSON.stringify(vesper.run.threat.current));
 }
 
 // --- LAST LIGHT on a run that never heard VESPER's beats ---------------------------------------------------------------
