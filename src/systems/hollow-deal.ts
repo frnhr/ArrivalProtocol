@@ -69,9 +69,11 @@ function dealLive(state: Readonly<GameState>): boolean {
 }
 
 // The deal may be offered now: a dealing HOLLOW awake on a live ship, nothing offered yet on this ship or in this run,
-// and enough drivers left to bargain over.
+// and enough drivers left to bargain over. Folded into the final ship (phase 3 slice 2, 04 §3.9: "before ORBIT LOCK"),
+// only while the flight is on: at the lock the root opens for the duel, and a bargain over a pod then would talk over it.
 function dealOpen(state: Readonly<GameState>): boolean {
   const hollow = state.hollow;
+  if (hollow.cfg.verbs !== null && state.run.phase !== 'flight') return false;
   return hollow.cfg.deal && hollow.phase === 'awake' && hollow.deal.phase !== 'offered' && hollow.deal.phase !== 'done'
     && state.run.stats.deal === null && dealLive(state) && driversInMemory(state).length >= DEAL_MIN_DRIVERS;
 }
