@@ -55,16 +55,6 @@ Most failures have one of four causes:
 
 | Suite | Why it fails | Plan |
 |---|---|---|
-| wp5/layout | ARES-VII's pod racks (no root) | the calm layouts |
-| wp5/racks | every ship's expected layout string | §4's table and the `S` slot |
-| wp9/zones-sim | KESTREL's rack C layout (no root) | update the geometry |
-| wp6/hollow-sim | ship 1's scripted bite | rewrite: the calm ship-1 follower |
-| wp6/follower | ship 1's scripted bite | rewrite with hollow-sim |
-| wp8/run-flow | `infectNow` on ship 1; the ghost names HOLLOW at ship 1 | no naming at ship 1 (risk 11) |
-| wp7/fix1/run-end-and-boot | HALCYON's NEXT BITE clock (no HOLLOW there) | the boot and the calm ships |
-| wp3/tools | the fresh unit's rack F order (046.log after Scan) | triage |
-| wp8/draft | the FIREWALL's place in rack F (after 046.log now) | triage |
-| wp8/p2/ui-models | the fresh rack F order, and HOLLOW on a calm ship | triage (UI may share it) |
 | wp7/run-flow | HALCYON's HOLLOW story and MOVE | delete; folded into wp11/full-run's per-ship checks |
 | wp9/run-flow | KESTREL's HOLLOW seeds | delete; folded into wp11/full-run |
 | wp10/run-flow | VESPER's deal and near-tools seeds | delete; folded into wp11/full-run |

@@ -18,6 +18,7 @@ import { isBusy } from '@systems/tool-targets';
 import { createInitialState } from '@state/initial';
 import { driversInMemory, isInfected } from '@state/selectors';
 import { getShip } from '@data/ships';
+import { DRIVER_RULES } from '@data/script';
 import { WALL_MIN_BLOCKS } from '@data/tuning';
 import type { DriverSegment, FreeSegment } from '@/types/segment';
 
@@ -80,6 +81,10 @@ export function createHarness7(seed = 1, opts: { soulsFound?: boolean } = {}): H
     shipAlone(index, nextSeed) {
       base.resetTo('flight', nextSeed);
       const state = createInitialState({ seed: nextSeed, shipIndex: index, carried: freshUnitRacks(getShip(index)) });
+      // A later ship is reached through ship 1, where the driver lessons were met (as harnessState marks them for found
+      // colonists): slice 2's rolled arrival damage gives later ships failing drivers too, and a ship alone must not
+      // replay run 1's POD 02 lesson there.
+      if (opts.soulsFound !== false) state.director.done.push(...DRIVER_RULES.map((rule) => rule.id));
       base.store.update((d) => { Object.assign(d, state); });
       resetWorld();
       infectedSince.clear();

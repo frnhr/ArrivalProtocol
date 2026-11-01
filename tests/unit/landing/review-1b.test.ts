@@ -16,7 +16,7 @@ import { dropTooWide, landingMoment, landingResult, landingStuck, liftHold } fro
 import { decayForecast, decayLiftAhead, dragLineKm, landingBurnOffer, offerInTac } from '@systems/landing-orbit';
 import { lossPlan, shipLost } from '@systems/run';
 import { elementsFromState, stateFromElements } from '@/types/orbit';
-import { DRIVER_RULES } from '@data/script';
+import { DRIVER_RULES, LANDING_LESSON_RULES } from '@data/script';
 import { END_LANDING_REFUSAL_TEXT, LANDING_GHOST_LINES, LANDING_NODROP_LINES } from '@data/landing-text';
 import { DECAY_WARN_ORBITS, GO_LOW_FLOOR_MARGIN_KM, LANDING_BURN_POWER, LANDING_NONE_LEFT_SEC } from '@data/tuning';
 import { on } from '@systems/events';
@@ -40,7 +40,8 @@ function board(index: number, healthy = true): void {
   else h.shipAlone(index, 1);
   h.store.update((draft) => {
     draft.hollow.phase = 'dormant';
-    draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id), 'engine-io-fault', 'lesson-dot-wide', 'lesson-drag-sinks');
+    draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id), ...LANDING_LESSON_RULES.map((rule) => rule.id), 'engine-io-fault',
+      'lesson-dot-wide', 'lesson-drag-sinks');
     if (healthy) for (const seg of draft.memory) if ('integrity' in seg) (seg as { integrity: number }).integrity = 100;
   });
   ensureLandingKeys(h);

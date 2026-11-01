@@ -82,8 +82,8 @@ function grantLicence(store: Store<GameState>, kind: FsToolKind): Segment[] {
 // jacks in during a flight, or the first moment something needs it from amber: a line on the strip
 // pointing at the REPAIR chip, or a mind alert (an infection, WP6; the only cure is a repair). That is
 // ship 1 in a normal run, but any ship if it never happened there (a crash before the kid looked inside).
-// Then each ship's own timed licences (ShipDef.licences, §6.5: MOVE at HALCYON boot + 25 s, DELETE at KESTREL's
-// first seed, COPY at VESPER's boot, SWAP at its first uncommanded burst): on their ship once that many AI seconds of
+// Then each ship's own timed licences (ShipDef.licences, re-flowed by slice-2-plan §3.2: DELETE at KESTREL's start, MOVE
+// at its coast, COPY at VESPER's boot, SWAP at its first uncommanded burst): on their ship once that many AI seconds of
 // the flight have passed, as the coast begins, as the first seed is telegraphed, or as the engine first fires by
 // itself, and at the start of any later ship if that ship was lost before (so a later ship never lacks a tool it
 // expects).
