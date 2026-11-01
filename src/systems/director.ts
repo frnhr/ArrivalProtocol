@@ -244,8 +244,9 @@ export function composeObjective(ctx: DirectorCtx, rules: readonly GuideRule[]):
     return { id: 'boot', text: LINES.booting(), keys: ['SPACE'], urgency: 'wait', layer: 'mind', highlight: null, source: 'boot' };
   }
   const status = ctx.state.burn.status;
-  // Phase 3 slice 3a: the DESK's two steps (systems/desk.ts deskSteps: a ship, then SET COURSE ▸ it [ENTER]).
-  // TODO(3a-DESK): the desk's guidance strip proper (the opening beat, CONTROL's line, the first-time notes).
+  // Phase 3 slice 3a: the DESK's two steps (systems/desk.ts deskSteps: a ship, then SET COURSE ▸ it [ENTER]). The desk
+  // screen (components/desk/DeskScreen.ts) shows the same steps in its own guidance strip, with the opening beat and
+  // CONTROL's line, over this one; the strip keeps the step so every reader of the objective agrees.
   if (ctx.phase === 'desk') {
     const step = deskSteps(ctx.state).find((candidate) => !candidate.done);
     if (!step) throw new Error('composeObjective: a desk step is always left (SET COURSE)');

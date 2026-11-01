@@ -112,6 +112,8 @@ const LABEL_CHAR_PX = 7.3;
 const LABEL_ASCENT_PX = 9;
 const LABEL_LINE_PX = 11;
 const LABEL_HEIGHT_PX = 23;
+// The beacon's tag is set larger and wider-spaced (styles/desk.css .beacon-label: 12 px, 0.22 em).
+const BEACON_CHAR_PX = 10;
 
 interface LabelSpot { x: number; y: number; anchor: 'start' | 'middle' | 'end' }
 interface Box { x0: number; y0: number; x1: number; y1: number }
@@ -225,7 +227,7 @@ export function drawChart(svg: SVGSVGElement, model: Readonly<ChartModel>, opts:
     for (const ring of model.rings) {
       const r = scaleOf(ring.ly);
       rings.append(el('circle', { cx: sol.px.toFixed(1), cy: sol.py.toFixed(1), r: r.toFixed(1) }, ring.next ? 'ring next' : 'ring'));
-      if (ring.next && opts.labels !== 'none') {
+      if (ring.next && opts.labels === 'all') {
         // On the ring just off the arm's axis, toward the outer lane, so it never sits on a node.
         const a = AXIS_RAD + 0.42;
         const p = at(Math.cos(a) * ring.ly, Math.sin(a) * ring.ly);
@@ -296,7 +298,7 @@ export function drawChart(svg: SVGSVGElement, model: Readonly<ChartModel>, opts:
   // SOL, tagged ARRIVAL CONTROL.
   const solG = el('g', {}, 'chart-sol');
   solG.append(el('circle', { cx: sol.px.toFixed(1), cy: sol.py.toFixed(1), r: 3.5 }, 'sol-dot'));
-  if (opts.labels !== 'none') {
+  if (opts.labels === 'all' || opts.labels === 'beacon') {
     const box = solLabelBox(sol);
     solG.append(text(box.x0, box.y0 + LABEL_ASCENT_PX, MAP_TEXT.chart.solName, 'sol-name'));
     solG.append(text(box.x0, box.y0 + LABEL_ASCENT_PX + LABEL_LINE_PX + 1, MAP_TEXT.chart.solTag, 'sol-label'));
@@ -331,14 +333,21 @@ export function drawChart(svg: SVGSVGElement, model: Readonly<ChartModel>, opts:
     g.append(nodeShape(node, px, py));
     const showLabel = opts.labels === 'all'
       || (opts.labels === 'beacon' && node.isFinal)
-      || (opts.labels === 'route' && (routeSlots.has(node.slot) || node.isFinal));
+      || (opts.labels === 'route' && routeSlots.has(node.slot));
     if (showLabel) {
       const lx = px + (node.kind === 'ark' || node.isFinal ? CHART_ARK_PX : CHART_NODE_PX) / 2 + 5;
       if (opts.labels === 'beacon') {
-        g.append(text(px, py - 16, MAP_TEXT.title.beacon(node.name, node.year), 'cn-label beacon-label', 'middle'));
+        // Centred over the beacon, or ending (starting) at it when the centre would run off the chart's right (left) edge.
+        const words = MAP_TEXT.title.beacon(node.name, node.year);
+        const half = (words.length * BEACON_CHAR_PX) / 2;
+        const margin = CHART_PAD_PX / 2;
+        if (px + half > width - margin) g.append(text(px + 10, py - 18, words, 'cn-label beacon-label', 'end'));
+        else if (px - half < margin) g.append(text(px - 10, py - 18, words, 'cn-label beacon-label', 'start'));
+        else g.append(text(px, py - 18, words, 'cn-label beacon-label', 'middle'));
       } else if (opts.labels === 'route') {
+        // The mini route numbers its ships as the tally's rows do.
         const depth = model.route.indexOf(node.slot) + 1;
-        g.append(text(lx, py + 4, depth > 0 ? `${depth} · ${node.name}` : node.name, 'cn-label'));
+        if (depth > 0) g.append(text(lx, py + 4, String(depth), 'cn-label'));
       } else {
         const spot = placed.get(node.slot);
         if (spot) {

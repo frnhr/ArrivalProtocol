@@ -286,3 +286,53 @@ body.reduced-motion .desk-card-win { transition: none; }
   .tx-back { position: static; margin-bottom: 8px; }
   .tx-packet { grid-template-columns: 40px minmax(0, 1fr) auto; }
 }
+
+/* ── The MIND strip's header: the memory class (01-landing §4: `MEMORY 256 · TIGHT`) beside the address range ── */
+.mem-strip-header .mem-class { margin-left: auto; margin-right: 14px; font-size: 10px; letter-spacing: 0.15em; color: var(--accent-bright); }
+.mem-strip-header .mem-class[data-cls='TIGHT'] { color: var(--warn); }
+@media (max-width: 768px) {
+  .mem-strip-header .mem-class { margin: 0; font-size: 9px; }
+}
+
+/* ── The title card's faint chart (TitleCard): behind the logo, the beacon's label the only words; RECEIVE draws the beam
+      from SOL to the first ship while the card clears ── */
+.title-chart { position: absolute; inset: 0; z-index: 0; opacity: 0.42; pointer-events: none; transition: opacity 0.6s ease-out; }
+.title-chart .star-chart { width: 100%; height: 100%; }
+.title-card .title-inner { position: relative; z-index: 1; }
+.title-chart .cn-box { fill: var(--desk-accent-dim); stroke: none; }
+.title-chart .cn.final .cn-box { fill: var(--desk-accent); stroke: var(--desk-bright); }
+.title-chart .cn-label { fill: var(--desk-accent); }
+.title-chart .sol-beam { stroke: var(--desk-bright); stroke-width: 2; opacity: 0; filter: drop-shadow(0 0 4px var(--desk-accent)); }
+.title-card.booting .title-chart { opacity: 0; }
+.title-card.booting.receiving .title-chart { opacity: 0.7; animation: title-chart-out 2.2s ease-in forwards; }
+.title-card.receiving .sol-beam {
+  opacity: 1; stroke-dasharray: var(--beam-len) var(--beam-len); stroke-dashoffset: var(--beam-len);
+  animation: sol-beam-draw 0.9s ease-out 0.15s forwards;
+}
+@keyframes sol-beam-draw { to { stroke-dashoffset: 0; } }
+@keyframes title-chart-out { 0%, 55% { opacity: 0.7; } 100% { opacity: 0; } }
+body.reduced-motion .title-card.receiving .sol-beam { animation: none; opacity: 0; }
+body.reduced-motion .title-card.booting.receiving .title-chart { animation: none; opacity: 0; }
+
+/* ── The RUN TALLY (RunEnd, 02-map §4): the visited ships beside the route's mini chart ── */
+.run-end .re-inner { width: min(980px, calc(100% - 32px)); }
+.re-tally { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 16px; width: 100%; align-items: start; margin: 6px 0; }
+.re-tally-list { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; }
+.re-tally-title, .re-tally-route { font-size: 10px; letter-spacing: 0.3em; color: var(--report-dim); text-align: left; }
+.re-tally .re-ships { width: 100%; margin: 0; }
+.re-ship-year { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: var(--report-dim); }
+.re-ship.colony .re-ship-n { color: var(--soul); }
+.re-tally-side { display: flex; flex-direction: column; gap: 6px; }
+.re-tally-chart { height: 200px; border: 1px solid var(--star-missed); background: var(--desk-sky); overflow: hidden; }
+.re-tally-chart .star-chart { width: 100%; height: 100%; }
+.star-chart.mini .cn-box { fill: var(--desk-far); stroke: none; }
+.star-chart.mini .cn.state-visited .cn-box,
+.star-chart.mini .cn.state-current .cn-box { fill: var(--desk-accent); stroke: var(--desk-bright); stroke-width: 1; }
+.star-chart.mini .cn-label { font-size: 10px; fill: var(--desk-text); }
+.star-chart.mini .cn-beacon { animation: none; opacity: 0.5; }
+.re-tally-colonies { font-family: 'VT323', monospace; font-size: 24px; letter-spacing: 0.12em; color: var(--soul); text-shadow: 0 0 12px var(--soul-dim); text-align: left; }
+.run-end.tone-sombre .re-tally-colonies { color: var(--report-text); text-shadow: none; }
+@media (max-width: 900px) {
+  .re-tally { grid-template-columns: minmax(0, 1fr); }
+  .re-tally-chart { height: 160px; }
+}

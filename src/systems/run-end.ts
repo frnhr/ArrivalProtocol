@@ -3,9 +3,9 @@ import { runScore, runLanded } from '@systems/run';
 import { fleetHome } from '@systems/run-score';
 import { unitName } from '@systems/say';
 import { shownFuelPct } from '@systems/flight-hud';
-import { fleetOf, classicRunMap } from '@systems/map-run';
+import { classicRunMap, shipSummaryAt } from '@systems/map-run';
 import type { RunMapState } from '@/types/map';
-import { shipColonists } from '@data/memory';
+import { MAP_TEXT } from '@data/map-text';
 import { RUN_END_TITLE, RUN_END_WHY, RUN_END_PURGE_SHORT, RUN_END_NOBODY_LANDED, SHIP_OUTCOME_WORD } from '@data/script';
 import { RUN_END_TEXT } from '@data/landing-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
@@ -14,18 +14,28 @@ import {
 } from '@data/tuning';
 
 // RUN END's model (§4.4, §9 WP7 item 7, 01-landing §3.9), pure and DOM-free: how the run ended, the colonists LANDED
-// (in an LZ with room), every ship in the fleet with its outcome and stars (a ship the run never reached says so), the
-// landing points as the run's SCORE (labelled), the rank by that score, up to NEAR_MISS_LINES_MAX near misses, and the
-// seed.
+// (in an LZ with room), the landing points as the run's SCORE (labelled), the rank by that score, up to
+// NEAR_MISS_LINES_MAX near misses, and the seed.
+// Phase 3 slice 3a (02-map §4): the RUN TALLY. One row per ship the run VISITED, in route order (`3 · KESTREL · 2467 ·
+// LANDED 1,000 / 1,200`, with its outcome, stars and points); a ship the route never took has no row (phase 2's NOT
+// REACHED rows are gone, on both worlds). The route for the mini chart, `n COLONIES FOUNDED` (the ships where colonists
+// came down alive). Ranks are absolute on the arm (rankBasis: RANK_FLEET_COLONISTS, so SHEPHERD 3,000, CARETAKER 6,800,
+// ARK ANGEL 10,700 whatever the route's length); the classic world keeps phase 2's scaling by its five ships, so its
+// suites keep their numbers.
 
 export interface RunEndShipRow {
-  index: number;
+  index: number;                // depth − 1: the N-th ship of the run, from 0
+  depth: number;
+  slot: number;
   shipName: string;
+  year: number;                 // the ship's approach year (the classic world's fixture year)
   colonists: number;
-  result: ShipResult | null;    // null: the run never reached this ship
-  outcomeWord: string;          // ORBIT LOCKED / CRASHED … or NOT REACHED
-  outcome: ShipOutcome | null;
-  landedLine: string;           // 2,400 / 2,400 LANDED, or '' when not reached
+  result: ShipResult;
+  outcomeWord: string;          // ORBIT LOCKED / CRASHED …
+  outcome: ShipOutcome;
+  landedLine: string;           // 2,400 / 2,400 LANDED
+  tallyLine: string;            // 3 · KESTREL · 2467 · LANDED 1,000 / 1,200
+  colony: boolean;              // colonists came down alive here (a colony founded)
 }
 
 export interface RankStep {
@@ -54,6 +64,11 @@ export interface RunEndModel {
   // MERGE pink into blue), and what a MERGE carries into the next run (null otherwise).
   ending: 'purge' | 'merge' | null;
   carryLine: string | null;
+  // Slice 3a: the RUN TALLY's title, the route (slots, for the mini chart) and the colonies founded.
+  tallyTitle: string;
+  route: number[];
+  colonies: number;
+  coloniesLine: string;
 }
 
 // RUN END's mood (the lead's item 2 for WP11): a function of how the run ended. Only a won finale (PURGE or MERGE) is
@@ -69,10 +84,26 @@ export function runEndTone(cause: RunEndCause, flagshipDown: number | null): Run
 
 const CLASSIC_MAP: RunMapState = classicRunMap(0, 0, 1);
 
-// Every ship's colonists together: what the run could have landed (systems/map-run.ts fleetOf: the classic five, or on
-// the arm the ships visited). Left out, the classic world's.
+// The ships the run counts as its fleet: the classic world's five (phase 2's fleet), or on the arm the ships visited
+// (02 §4). Read through shipSummaryAt, so the tally never builds a ship.
+export function fleetSlots(map: Readonly<RunMapState>): number[] {
+  return map.world === 'classic' ? [0, 1, 2, 3, 4] : map.route.map((stop) => stop.slot);
+}
+
+// Every ship's colonists together: what the run could have landed. Left out, the classic world's.
 export function fleetColonists(map: Readonly<RunMapState> = CLASSIC_MAP): number {
-  return fleetOf(map).reduce((sum, ship) => sum + shipColonists(ship), 0);
+  return fleetSlots(map).reduce((sum, slot) => sum + shipSummaryAt(map, slot).colonists, 0);
+}
+
+// What the rank thresholds are scaled by (02 §4): on the arm the reference fleet itself (ranks absolute: a run's best
+// route is worth 13,400–13,800 whatever its length), on the classic world its five ships' colonists (phase 2's scaling).
+export function rankBasis(map: Readonly<RunMapState> = CLASSIC_MAP): number {
+  return map.world === 'arm' ? RANK_FLEET_COLONISTS : fleetColonists(map);
+}
+
+// Did colonists come down alive on this ship (a colony founded)? Any pod down with points, in an LZ or not.
+function colonyFounded(result: Readonly<ShipResult>): boolean {
+  return result.landedInLz > 0 || result.pods.some((pod) => pod.fate === 'down' && pod.points > 0);
 }
 
 // §4.4's rank thresholds for a fleet of `colonists` (scaled from the reference fleet's RANK_FLEET_COLONISTS; see RANKS).
@@ -115,31 +146,37 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
   if (run.phase !== 'end' || run.endCause === null) throw new Error(`runEndModel: the run is not over (phase ${run.phase})`);
   const cause = run.endCause;
   const colonists = fleetColonists(run.map);
+  const basis = rankBasis(run.map);
   const landed = runLanded(run.ships);
   const score = runScore(run.ships);
-  const { rank } = rankOf(score, colonists);
+  const { rank } = rankOf(score, basis);
   const lastShip = run.ships[run.ships.length - 1]?.shipName ?? state.level.shipName;
-  const ships = fleetOf(run.map).map((ship, index): RunEndShipRow => {
-    // By id, not by position: a ship can be flown twice (the run-1 simulation keeps no record of its first
-    // go) or, with ?debug, skipped.
-    const result = run.ships.find((candidate) => candidate.shipId === ship.id) ?? null;
-    const shipTotal = shipColonists(ship);
+  // One row per ship the run finished, in order (the run-1 simulation keeps no record of its first go; a ?debug jump
+  // skips ships, and they have no row).
+  const ships = run.ships.map((result, index): RunEndShipRow => {
+    const ship = shipSummaryAt(run.map, result.slot);
     return {
       index,
-      shipName: ship.name,
-      colonists: shipTotal,
+      depth: index + 1,
+      slot: result.slot,
+      shipName: result.shipName,
+      year: ship.approachYear,
+      colonists: ship.colonists,
       result,
-      outcome: result?.outcome ?? null,
-      outcomeWord: result ? SHIP_OUTCOME_WORD[result.outcome] : RUN_END_TEXT.notReached,
-      landedLine: result ? RUN_END_TEXT.shipLanded(result.landedInLz, shipTotal) : '',
+      outcome: result.outcome,
+      outcomeWord: SHIP_OUTCOME_WORD[result.outcome],
+      landedLine: RUN_END_TEXT.shipLanded(result.landedInLz, ship.colonists),
+      tallyLine: MAP_TEXT.tally.row(index + 1, result.shipName, ship.approachYear, result.landedInLz, ship.colonists),
+      colony: colonyFounded(result),
     };
   });
+  const colonies = ships.filter((row) => row.colony).length;
   const unit = unitName(run.unitNumber);
   // The words and the mood follow one count: a won finale over a flagship that landed nobody is sombre (runEndTone) and
   // says so (the lead's item 2, WP11 review). Otherwise a PURGE claims the whole fleet only when every ship reached
   // orbit, and else says how many did (the lead's note).
   const landedOnFlagship = flagshipDown(state);
-  const fleet = fleetHome(run.ships, fleetOf(run.map).length);
+  const fleet = fleetHome(run.ships, fleetSlots(run.map).length);
   let title = RUN_END_TITLE[cause](unit, lastShip);
   let why = RUN_END_WHY[cause](lastShip);
   if ((cause === 'won-purge' || cause === 'won-merge') && landedOnFlagship === 0) {
@@ -162,11 +199,15 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
     rank: rank.name,
     rankLine: RUN_END_TEXT.rank(rank.name),
     ships,
-    nearMisses: nearMisses(run.ships, score, colonists),
+    nearMisses: nearMisses(run.ships, score, basis),
     seedLine: RUN_END_TEXT.seed(run.seed),
     tone: runEndTone(cause, landedOnFlagship),
     ending: cause === 'won-purge' ? 'purge' : cause === 'won-merge' ? 'merge' : null,
     carryLine: cause === 'won-merge' ? HOLLOW_FINALE.mergeCarries(MERGE_BONUS_CORE_CAPACITY) : null,
+    tallyTitle: MAP_TEXT.tally.title,
+    route: run.map.route.map((stop) => stop.slot),
+    colonies,
+    coloniesLine: MAP_TEXT.tally.colonies(colonies),
   };
 }
 

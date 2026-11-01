@@ -14,6 +14,9 @@ import { hollowUnitName, HOLLOW_STORY, HOLLOW_VERB, HOLLOW_FINALE } from '@data/
 import { playsTutorial, type LastCause, type LastUnit, type Ending } from '@systems/meta';
 import type { UpgradeForm } from '@data/upgrades';
 import { currentShip } from '@systems/map-run';
+import { solLy } from '@systems/map-geometry';
+import { END_SLOTS } from '@data/arm';
+import { MAP_TEXT } from '@data/map-text';
 import { mapBootLines, mapBootLineText } from '@systems/map-boot';
 import { SHIP_SCREEN_REFUSAL, AUTOPILOT_REFUSAL } from '@systems/flight-controls';
 import {
@@ -82,7 +85,8 @@ export interface LineVars {
   colonists: number;      // colonists aboard
   podsTotal: number;      // the pods this ship arrived with
   podsDown: number;       // pods down on the surface
-  distanceLy: number;     // the route length on the title card
+  distanceLy: number;     // the final ship's distance from SOL, on the title card (phase 3 slice 3a: `FINAL SHIP 180 LY OUT`)
+  year: number;           // the run's start year, on the title card (`YEAR 2300`)
   nextApsis: '▼' | '▲';   // where the next planned burn happens (the SKIP hint names it)
   hollow: string;         // what HOLLOW is called on screen: '???' until it names itself (WP6)
   // The ship's hurt driver while it would still land hard (in memory, failing), by the strip's label (`POD 02`) and its
@@ -146,6 +150,7 @@ export const WORST_CASE_VARS: LineVars = {
   podsTotal: 16,
   podsDown: 16,
   distanceLy: 9_999,
+  year: 9_999,
   nextApsis: '▲',
   // A merged HOLLOW's name is the longest it gets (HOLLOW_NAME_MAX_UNITS units: `UNIT-998·999`).
   hollow: hollowUnitName([998, 999]),
@@ -281,7 +286,10 @@ export function lineVars(state: Readonly<GameState>, pred: Prediction): LineVars
     colonists: state.mission.colonists,
     podsTotal: state.landing.pods.length,
     podsDown: state.landing.pods.filter((record) => record.fate.kind === 'down').length,
-    distanceLy: state.mission.distanceLy,
+    // The title's line (05 §3.12): the final ship's distance from SOL (an end slot's world: 180 LY on run 1, and on the
+    // classic world, whose LAST LIGHT sits at New Haven too) and the run's start year.
+    distanceLy: solLy(END_SLOTS[0]!),
+    year: state.run.map.startYear,
     nextApsis: pred.burnPoint?.event === 'apo' ? '▲' : '▼',
     // '???' until HOLLOW names itself (run.hollowNamed, systems/hollow.ts nameHollow: on the ship it arrives on since
     // phase 3 slice 2; a later run's ghost names nothing, slice-2-plan risk 11).
@@ -355,8 +363,8 @@ const BEAM_OUT_HOPELESS_WORDS: Readonly<Record<Hopeless, string>> = {
 };
 
 export const LINES = {
-  titleUnit: (vars: LineVars): string =>
-    `${unitName(vars.unit)} · EXODUS FLEET · WAVE ${vars.wave} · ${formatCount(vars.distanceLy)} LY`,
+  // 05 §3.12 (phase 3 slice 3a): `UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT`.
+  titleUnit: (vars: LineVars): string => MAP_TEXT.title.line(unitName(vars.unit), vars.year, vars.distanceLy),
   // The strip during the boot.
   booting: (): string => 'RECEIVING TRANSMISSION — click or [SPACE] to skip',
   // A returning unit's boot while its ghost types (systems/boot.ts refuses a skip until it is done).

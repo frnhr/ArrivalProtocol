@@ -130,12 +130,13 @@ export function mountTimeControls(store: Store<GameState>): () => void {
     const truth = getPrediction();
 
     const crumbs = headerCrumbs(state, pred);
-    const crumbsKey = `${crumbs.unit}|${crumbs.wave}|${crumbs.ship}|${crumbs.phase.text}|${crumbs.phase.tone}`;
+    const crumbsKey = `${crumbs.unit}|${crumbs.wave}|${crumbs.ship}|${crumbs.year}|${crumbs.phase.text}|${crumbs.phase.tone}`;
     if (crumbsKey !== last.crumbs) {
       last.crumbs = crumbsKey;
       crumbUnit.textContent = crumbs.unit;
       crumbWave.textContent = crumbs.wave;
-      crumbShip.textContent = crumbs.ship;
+      // 02-map §4: `UNIT-047 / KESTREL · 2467 / FLYBY` on the arm.
+      crumbShip.textContent = crumbs.year === null ? crumbs.ship : `${crumbs.ship} · ${crumbs.year}`;
       crumbPhase.textContent = crumbs.phase.text;
       crumbPhase.className = `crumb phase tone-${crumbs.phase.tone}`;
       document.title = `${crumbs.unit} · ${crumbs.ship}`;
