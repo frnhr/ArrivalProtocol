@@ -1022,5 +1022,14 @@ page plays the classic world until GEN flips it.
     unchanged. The strip's 4–6 rows were already the layout's (F1); no ship of another class can be built until GEN.
 16. **BurnResult** already read `TO THE CHART ▸` on the arm (F2); unchanged.
 17. **Suites changed by these screens** (TESTS): `wp8/run-flow` and `wp8/ghost` (the title line is now `UNIT-048 · YEAR
-    2300 · FINAL SHIP 180 LY OUT`), `wp7/p2-models` (no NOT REACHED rows). New: `map/desk-models`, `map/packet-room`,
-    `map/run-tally`, `map/desk-chrome`.
+    2300 · FINAL SHIP 180 LY OUT`), `wp7/p2-models` (no NOT REACHED rows), `wp7/fix1/run-end-and-boot` (`FINAL SHIP
+    LOST` / `The final ship never made it.`). New: `map/desk-models`, `map/packet-room`, `map/run-tally`,
+    `map/desk-chrome`.
+18. **GEN's requested patches, applied after merging Track GEN** (`ec757ca`): the boot's overflow line on the arm is
+    map-boot's `mapOverflowLineText`; a TIGHT 0-charge arrival types `> REPAIR CHARGE 0 · NO ROOM ON <SHIP>`;
+    `BOOT_LINE_MAX` is 13, and **`BOOT_LINE_AT_SEC` (tuning, outside DESK's block) gains 13.5, 14.8, 16.1**: boot.ts's
+    load check still demands a time per line, and these are the times it already extrapolated; the PACKET's arrival line
+    is `arrivalCharge(…, plan.hop.chargeFloor)`, asserted equal to `roomFit`'s `wanted` (item 11's own computation is
+    gone); `flagship-lost` reads FINAL SHIP LOST; the LOST card says `TO THE CHART ▸` on both worlds (both have the desk).
+19. **Noise on the real arm** is heavy (GEN: about one hop in six SEVERE): the cloud hatching is fainter (opacity 0.45,
+    8 px spacing) so labels over clouds stay readable; beams keep their solid / dashed / dotted steps by noise.
