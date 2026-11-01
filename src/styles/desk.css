@@ -153,6 +153,8 @@ body.reduced-motion .star-chart .cn-box { transition: none; }
 .chart-tip-label { font-size: 11px; letter-spacing: 0.1em; color: var(--desk-bright); }
 .chart-tip-reason { margin-top: 2px; font-size: 10px; letter-spacing: 0.12em; color: var(--desk-dim); }
 .chart-tip-reason[hidden] { display: none; }
+.chart-tip-taken { margin-top: 2px; font-size: 10px; letter-spacing: 0.12em; color: var(--desk-trail-046); }
+.chart-tip-taken[hidden] { display: none; }
 .chart-tip[data-state='too-late'] .chart-tip-reason,
 .chart-tip[data-state='urgent'] .chart-tip-reason { color: var(--desk-warn); }
 .chart-tip[data-state='reachable'] .chart-tip-reason { color: var(--desk-good); }
@@ -186,8 +188,8 @@ body.reduced-motion .star-chart .cn-box { transition: none; }
 .dc-tl-mark.approach { width: auto; height: auto; margin-left: -5px; bottom: 0; background: none; color: var(--desk-bright); font-size: 11px; line-height: 1; }
 .dc-tl-text { margin-top: 6px; font-size: 10px; letter-spacing: 0.06em; color: var(--desk-dim); text-align: center; }
 
-/* ── 1280 × 720: a narrower card, the chart keeps the room ── */
-@media (max-width: 1360px) {
+/* ── Narrower than 1440: a narrower card, the chart keeps the room ── */
+@media (max-width: 1439px) {
   .desk-body { grid-template-columns: minmax(0, 1fr) 340px; }
   .dc-row { grid-template-columns: 84px minmax(0, 1fr); }
 }
@@ -334,7 +336,7 @@ body.reduced-motion .title-card.booting.receiving .title-chart { animation: none
 .star-chart.mini .cn-beacon { animation: none; opacity: 0.5; }
 .re-tally-colonies { font-family: 'VT323', monospace; font-size: 24px; letter-spacing: 0.12em; color: var(--soul); text-shadow: 0 0 12px var(--soul-dim); text-align: left; }
 .run-end.tone-sombre .re-tally-colonies { color: var(--report-text); text-shadow: none; }
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .re-tally { grid-template-columns: minmax(0, 1fr); }
   .re-tally-chart { height: 160px; }
 }

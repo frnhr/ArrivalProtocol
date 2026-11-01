@@ -901,3 +901,61 @@ The independent review of `31c8a35` and `1a64f42` confirmed the hop math against
   two arm seeds once shipDefOf lands. In 3c, assert that a `world: 'classic'` map is never saved.
 - **3c:** the save needs a version field on the map (beside ARM_CONTENT_VERSION and MAP_GENERATOR_VERSION).
 - **Slice 7:** widen `Reservations.tracePlace` (today `null` only).
+
+## Deviations (Track DESK)
+
+Recorded by Track DESK (branch `desk-3a`, from `1390b93`). Each is a change from §2–§5 above, or a reading of them, with
+its reason. Screens were checked against run 1's arm built directly (assembleRun1Arm and a crafted route), since the
+page plays the classic world until GEN flips it.
+
+1. **The DESK is its own full screen** (under the header on a desktop, the whole screen on a phone): the head (`STAR
+   CHART`, unit, galaxy year, ship, TRACE meter), its own two-step guidance strip, CONTROL's line and the greying line,
+   the chart window, the docked card, SET COURSE pinned at the bottom. The objective strip under it still carries the
+   step (director.ts reads deskSteps), so every reader agrees. All desk words are in `map-text.ts`, not `script.ts`.
+2. **Inspect versus select.** A click on a ship out of reach shows its card (TOO LATE in red, the range instead of the
+   BEAM row) and buzzes, but the selection, which SET COURSE uses, stays. ← → reset the card to the selection.
+3. **`ONLY FROM HERE`** is "a ship in reach with ships in reach in lower layers on the way to it, none of which can reach
+   it in time" (`onlyFromHere`). On run 1 it flags ALBATROSS at ARES-VII and also VESPER at KESTREL (the layer-4 ships
+   are too late for the ark), which is the same decision. A ship one layer out is never flagged.
+4. **Node states:** `out-of-range` also covers a ship in the same or an inner layer (`BEHIND YOU · THE BEAM ONLY GOES
+   OUTWARD`) and, on the classic world, a ship past the next one (`NOT ON THIS BEAM · ONE SHIP AT A TIME`). A reachable
+   ship's hover reason is its slack (`31 YRS EARLY`); a ship 046's trail reaches first adds `UNIT-046 GETS THERE FIRST`.
+5. **Card rows:** MEMORY and its fit line are two rows, as are BEAM and NOISE (F2's 70-character split); an out-of-range
+   ship gets a `range` row instead of BEAM; `ONLY FROM HERE` is its own red row; `SHIP n OF YOUR RUN` is shown for ships
+   in reach only. **§3's `4–6 MORE` for HALCYON is `3–6`** by `shipsLeft` (ARES-VII → HALCYON → a layer-4 ship → a
+   layer-6 ship → LAST LIGHT is a 5-ship route). DEBRIS names its rack when the arm stored it (`DEBRIS · RACK C`).
+6. **The card's HOLLOW line** says `HOLLOW WILL FIND YOU ON THIS BEAM` for both causes (TRACE or M3's forced boarding),
+   as §3 step 6 has it for CORMORANT; the PACKET keeps slice 2's `IT FOUND YOU ANYWAY` for the forced one.
+7. **The opening beat** greys the ships never flown whose approach year is after the galaxy year at the previous desk
+   and at or before now (none on a run's first desk). At HALCYON's desk OSPREY (2352, the same year) greys: `1 SHIP NOW
+   OUT OF YOUR REACH`. The tone is the existing `chime` falling (no new cue: `audio.ts` is not DESK's); the desk's and the
+   PACKET's cues are played by their views, as phase 2's screens do, not from `audio-cues.ts`.
+8. **CONTROL's desk line** types on a run's first desk only (later desks have the greying line).
+9. **The chart's projection:** a desktop turns the arm 15° clockwise (`CHART_LANDSCAPE_DEG`: the best scale at 1280 ×
+   720 and 1440 × 900, SOL still lower left); a phone turns it 50° so it stands upright and scrolls at 5.2 px/LY,
+   opening on the ship being left. Labels are placed greedily (right, left, above, below; the ships that matter first)
+   so they do not cover each other. 046's written trail is drawn on any run-1 map (the classic world's too); its passed
+   marks are green dots, the cross sits 6 LY past Calder (`TRAIL_046_CROSS_PAST_LY`).
+10. **The PACKET's new parts are built in JS** (index.html keeps phase 2's skeleton): ◀ CHART, LINK/ROOM labels, the
+    room bar, CONTROL's line, the inline confirm and the stamp. The confirm is the screen's own (the global InlineConfirm
+    sits under the PACKET and its `confirm` input layer is below `transmit`); so is the `OUTWARD BOUND` stamp and
+    CONTROL's "Outward bound! :)" under the light-years (the global stamp layer is under the screen). Both play on the
+    classic world too.
+11. **PACKET charge on the arm:** the arrival line uses the destination's own floor through `roomFit` (`wanted`), so a
+    TIGHT ship shows no FLOOR (carry.ts `arrivalCharge` still adds 12: a request for GEN). A chip shows the larger of
+    the charge it lets cross and the charge it lets arrive, and a drop is offered when it buys either, or while files
+    plus the floor are over the room (`arriveGain`, beside phase 2's `chargeGain`). The classic world's rooms never bind,
+    so its numbers are phase 2's.
+12. **The header crumb's year is the arm's only** (`HeaderCrumbs.year`, null on the classic world, whose years are
+    fixtures); the desk and the PACKET name themselves (`STAR CHART`, `TRANSMIT`).
+13. **The title line** keeps `LineVars.distanceLy` (now the final ship's distance from SOL, 180 on both worlds) and adds
+    `year`. `FLEET_ROUTE_LY` and `MissionMeta.distanceLy` are no longer read by the title but stay: removing them touches
+    `schema.ts` and `mission.ts` (a request for the lead).
+14. **The RUN TALLY replaces the ship rows on both worlds** (the classic world loses its NOT REACHED rows too; its
+    fleet totals and rank scaling stay its five ships'). It is still the RUN END screen (slice 7 makes it its own).
+15. **The MIND header** gains `MEMORY 384 · FULL` beside the address range (`memoryClassLabel`); `stripRangeLabel` is
+    unchanged. The strip's 4–6 rows were already the layout's (F1); no ship of another class can be built until GEN.
+16. **BurnResult** already read `TO THE CHART ▸` on the arm (F2); unchanged.
+17. **Suites changed by these screens** (TESTS): `wp8/run-flow` and `wp8/ghost` (the title line is now `UNIT-048 · YEAR
+    2300 · FINAL SHIP 180 LY OUT`), `wp7/p2-models` (no NOT REACHED rows). New: `map/desk-models`, `map/packet-room`,
+    `map/run-tally`, `map/desk-chrome`.

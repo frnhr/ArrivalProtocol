@@ -1,6 +1,7 @@
 import type { ChartModel, ChartNode } from '@systems/desk';
 import { drawChart, PORTRAIT_ROTATE_DEG, LANDSCAPE_ROTATE_DEG, type ChartDrawOpts, type ChartGeometry } from '@components/desk/chart-draw';
 import { make } from '@components/dom';
+import { MAP_TEXT } from '@data/map-text';
 
 // The DESK's STAR CHART window body (02-map §4): the SVG (components/desk/chart-draw.ts), redrawn when the model or the
 // host's size changes, a hover tag with the node's label and reason (`TOO LATE BY 18 YRS`), and the node clicks handed
@@ -27,7 +28,8 @@ export function mountStarChart(host: HTMLElement, opts: StarChartOpts): StarChar
   tip.hidden = true;
   const tipLabel = make('div', 'chart-tip-label');
   const tipReason = make('div', 'chart-tip-reason');
-  tip.append(tipLabel, tipReason);
+  const tipTaken = make('div', 'chart-tip-taken', MAP_TEXT.chart.trail046);
+  tip.append(tipLabel, tipReason, tipTaken);
   host.append(svg, tip);
 
   let model: ChartModel | null = null;
@@ -92,6 +94,7 @@ export function mountStarChart(host: HTMLElement, opts: StarChartOpts): StarChar
     tipLabel.textContent = node.label;
     tipReason.textContent = node.reason ?? '';
     tipReason.hidden = node.reason === null;
+    tipTaken.hidden = !node.taken046;
     tip.dataset.state = node.state;
     const p = geo.at(node.x, node.y);
     tip.hidden = false;
