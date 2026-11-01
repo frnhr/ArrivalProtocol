@@ -1808,3 +1808,25 @@ export const SLEEP_YEAR_ROLL_MS = 1500;
 // 046's written trail ends in a grey cross "past Calder" (05 §3.11): this many LY beyond the world along the trail's last
 // leg, so the cross reads as lost on the way, not as a colony at Calder.
 export const TRAIL_046_CROSS_PAST_LY = 6;
+// The STAR CHART's drawing (components/desk/chart-draw.ts), in screen pixels so the chart reads the same at any zoom: a
+// ship's square and an ark's (and the final ship's) bigger one (02 §4: "arks are bigger"); the margin round the arm, and
+// the room kept right of the outermost nodes for their `NAME · colonists` labels.
+export const CHART_NODE_PX = 9;
+export const CHART_ARK_PX = 14;
+export const CHART_PAD_PX = 22;
+export const CHART_LABEL_ROOM_PX = 118;
+// Faint stars along the arm's band (02 §4: "near-black space with faint arm stars"): enough to read as a sky, few enough
+// that a node is never lost among them.
+export const CHART_STARS = 240;
+// The phone's chart scrolls along the arm at this scale (02 §4: the arm runs from SOL at the bottom to the final ship at
+// the top): about the desktop's at 1280 wide, so labels stay apart; turned this far so the arm's 40° axis stands upright.
+export const CHART_PHONE_PX_PER_LY = 5.2;
+export const CHART_PORTRAIT_DEG = 50;
+// A desktop's chart turns the arm 15° clockwise (its axis at 25° instead of 40°): the scale that fits a 1280 × 720 and a
+// 1440 × 900 desk best while SOL stays at the lower left.
+export const CHART_LANDSCAPE_DEG = -15;
+// The ship card's bottom sheet on a phone peeks this much of its top block above SET COURSE until it is pulled up.
+export const DESK_SHEET_PEEK_PX = 132;
+// CONTROL's line on the first desk types at this speed (characters per second): CONTROL's radio pace, so the kid reads
+// it as the same voice.
+export const DESK_TYPE_CPS = 38;

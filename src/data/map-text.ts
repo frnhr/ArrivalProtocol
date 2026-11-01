@@ -48,6 +48,7 @@ export const MAP_TEXT = {
     stepCourse: 'SET COURSE',
     back: '◀ CHART',
     closeSheet: '✕',
+    cardTitle: 'SHIP CARD',
     trace: 'TRACE',
     yearLine: (year: number): string => `YEAR ${year}`,
     tooLateBuzz: (reason: string): string => reason,
@@ -72,7 +73,8 @@ export const MAP_TEXT = {
     notNext: 'NOT ON THIS BEAM · ONE SHIP AT A TIME',
     colony: (name: string, age: number, unit: string): string => `${name} · ${age} ${age === 1 ? 'YEAR' : 'YEARS'} OLD · ${unit}`,
     lost046: 'UNIT-046 WAS LOST HERE',
-    sol: 'SOL · ARRIVAL CONTROL',
+    solName: 'SOL',
+    solTag: 'ARRIVAL CONTROL',
   },
 
   // --- The SHIP CARD (02 §4; 01 §3.16's MEMORY row) --------------------------------------------------------------------
