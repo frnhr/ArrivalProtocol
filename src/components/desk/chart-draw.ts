@@ -201,8 +201,8 @@ export function drawChart(svg: SVGSVGElement, model: Readonly<ChartModel>, opts:
 
   const defs = el('defs', {});
   // Hatched static for the noise clouds: diagonal hatching over a speckle.
-  const hatch = el('pattern', { id: id('hatch'), width: 7, height: 7, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(35)' });
-  hatch.append(el('line', { x1: 0, y1: 0, x2: 0, y2: 7 }, 'cloud-hatch'));
+  const hatch = el('pattern', { id: id('hatch'), width: 8, height: 8, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(35)' });
+  hatch.append(el('line', { x1: 0, y1: 0, x2: 0, y2: 8 }, 'cloud-hatch'));
   hatch.append(el('rect', { x: 3, y: 2, width: 1, height: 1 }, 'cloud-speck'));
   hatch.append(el('rect', { x: 5, y: 5, width: 1, height: 1 }, 'cloud-speck'));
   defs.append(hatch);
