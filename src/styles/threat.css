@@ -225,4 +225,6 @@ body.reduced-motion .lg-text.typing::after { animation: none; }
   .lg-close { padding: 9px 14px; }
   .mem-strip-header .mem-trace { margin-right: 8px; }
   .mem-strip-header .mem-trace .tr-note { display: none; }
+  /* The mini-HUD is a one-row top bar on a phone: TRACE stays in the MIND header right under it. */
+  .mini-hud .mh-trace { display: none; }
 }

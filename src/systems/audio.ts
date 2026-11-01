@@ -1304,14 +1304,14 @@ function cueSeedLand(mix: Graph, t0: number): void {
   const voice = makeVoice(mix.ctx);
   const out = voice.gain(1, mix.buses.ui);
   const knock = voice.gain(0, out);
-  const knockEnd = pluck(knock.gain, t0, 0.42, 0.002, 0.16);
+  const knockEnd = pluck(knock.gain, t0, 0.75, 0.002, 0.16);
   const body = voice.osc('sine', 140, t0, knockEnd, knock);
   sweep(body.frequency, t0, 140, 52, 0.12);
   const click = voice.gain(0, voice.filter('bandpass', 1800, 1.4, out));
-  const clickEnd = pluck(click.gain, t0, 0.18, 0.0005, 0.03);
+  const clickEnd = pluck(click.gain, t0, 0.32, 0.0005, 0.03);
   voice.noise(mix.white, t0, clickEnd + 0.01, click);
   const blip = voice.gain(0, voice.filter('lowpass', 800, 1.2, out));
-  const blipEnd = pluck(blip.gain, t0 + 0.05, 0.05, 0.003, 0.14);
+  const blipEnd = pluck(blip.gain, t0 + 0.05, 0.1, 0.003, 0.14);
   voice.osc('square', HOLLOW_SCALE[0]! * 0.75, t0 + 0.05, blipEnd + 0.01, blip);
 }
 
@@ -1323,7 +1323,7 @@ function cueHollowBoard(mix: Graph, t0: number): void {
   duck(mix, t0);
   const out = voice.gain(1, mix.buses.chord);
   const thud = voice.gain(0, out);
-  const thudEnd = pluck(thud.gain, t0, 0.75, 0.003, 0.7);
+  const thudEnd = pluck(thud.gain, t0, 0.6, 0.003, 0.7);
   const body = voice.osc('sine', 78, t0, thudEnd, thud);
   sweep(body.frequency, t0, 78, 26, 0.6);
   const crunch = voice.gain(0, voice.filter('lowpass', 700, 0.8, out));

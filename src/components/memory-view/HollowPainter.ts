@@ -596,6 +596,13 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
       if (!inBlue()) return;
       const root = store.getState().memory.find((seg) => seg.type === 'hollow' && seg.root);
       if (!root) return;
+      // A phone shows two racks at a time: the slot is scrolled into view first, so the drop is seen (as a verb's aim is).
+      const first = partsOf(memWrap, root.id)[0];
+      const view = memWrap.getBoundingClientRect();
+      const at = first?.getBoundingClientRect();
+      if (at && (at.top < view.top || at.bottom > view.bottom)) {
+        memWrap.scrollTo({ top: memWrap.scrollTop + at.top - view.top - AIM_SCROLL_ROOM_PX, behavior: 'auto' });
+      }
       partsOf(memWrap, root.id).forEach((part) => {
         part.style.setProperty('--board-drop-ms', `${BOARD_DROP_MS}ms`);
         replayAnimation(part, 'board-drop');
