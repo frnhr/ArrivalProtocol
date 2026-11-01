@@ -81,7 +81,8 @@ function untilReport(maxWall: number): string | null {
     h.store.update((draft) => { setIntegrity(draft.memory.find((seg) => seg.id === driver.id) as DriverSegment, 3); });
     endLanding(h.store);
     const parkedAtEnd = podRecord(state(), driver.pod).fate;
-    const threw = untilReport(30);
+    // Slice 2: this infect is VESPER's scripted bite, and the folded story after it holds the report a while.
+    const threw = untilReport(150);
     const record = podRecord(state(), driver.pod);
     check(`${state().level.shipName}: END LANDING, then HOLLOW eats a parked pod's driver: no throw, the report opens`,
       threw === null && state().run.phase === 'report', threw ?? state().run.phase);
@@ -148,7 +149,9 @@ const huntOnVesper = (): void => { h.store.update((draft) => { draft.hollow.cfg 
     String(targetId));
   if (target?.type === 'driver') h.store.update((draft) => { setIntegrity(draft.memory.find((seg) => seg.id === targetId) as DriverSegment, 6); });
   endLanding(h.store);
-  untilReport(60);
+  // Slice 2 (Track THREAT): VESPER's folded story goes on after `> ...047?` (the naming at the first timed bite, then
+  // `> i ran out…` and `keepCharge`), so the report waits longer.
+  untilReport(150);
   const said = h.log().some((entry) => entry.text === HOLLOW_STORY.noticed(state().mission.transmissionNum));
   check('…END LANDING before the fight is decided: the report waits for the fight and its story (`> ...047?` is said first)',
     state().run.phase === 'report' && state().hollow.story === 'told' && said && state().hollow.scriptTargetId === null,

@@ -243,7 +243,7 @@ const ctx = buildDirectorCtx(s(), getPrediction(), { events: new Set(), phaseEnt
 const noRm = THREAT_RULES.find((rule) => rule.id === (s().ui.mode === 'tools' ? 'beam-seed-no-rm-tab' : 'beam-seed-no-rm'))!;
 const rmLesson = THREAT_RULES.filter((rule) => rule.lesson === 'seed-first');
 check(`…with the seed still aboard the strip's line is \`${THREAT_TEXT.seedNoRm}\`, and the RM lesson stands down`,
-  noRm.activeWhen(ctx) && noRm.text(ctx).endsWith(THREAT_TEXT.seedNoRm) && rmLesson.every((rule) => !rule.activeWhen(ctx)), [...texts].slice(-1).join(''));
+  noRm.activeWhen(ctx) && [THREAT_TEXT.seedNoRm, THREAT_TEXT.seedNoRmTab].some((line) => line === noRm.text(ctx)) && rmLesson.every((rule) => !rule.activeWhen(ctx)), [...texts].slice(-1).join(''));
 
 // A seed left behind reports home.
 toKestrel(4);

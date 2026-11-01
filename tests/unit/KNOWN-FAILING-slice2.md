@@ -22,34 +22,9 @@ Most failures have one of four causes:
 
 ## Track THREAT
 
-| Suite | Why it fails | Plan |
-|---|---|---|
-| wp6/edges | bites on ship 1's root (`no hollow block`) | re-key with `support/hollow-world.ts` (`plantRoot`) |
-| wp6/p2-echo | ship 1's root geometry | re-key |
-| wp6/p2-hud | ship 1's root and walls | re-key |
-| wp6/hollow-ship2 | HALCYON's root (now: no slot) | re-key |
-| wp7/bridge-test | the MOVE preview against HALCYON's root | re-key (`plantRoot`) |
-| wp7/halcyon-story | HALCYON no longer has HOLLOW (no wake, no MOVE) | delete; its content moves to `threat/arrival-story` |
-| lead1/story | ship 1's scripted fight | rewrite: story timing on VESPER's ARRIVAL |
-| lead1/fix1/story-landing | the same, during the landing (caught by the `landing` filter) | rewrite with lead1/story |
-| wp10/deal-test | THE DEAL left VESPER (folded into LAST LIGHT) | rewrite: LAST LIGHT's folded deal, verbs waiting |
-| wp10/copy-test | VESPER's near-tools seed and hunting gap (HUNT stage) | near-tools → a HUNT-stage pure test; the COPY licence part stays |
-| wp10/fix1/fixes | `SEED NEXT TO …` on VESPER's near-tools seeds | HUNT stage |
-| wp12/p3/minors | VESPER's first seed holding SKIP | HUNT stage |
-| final-fix/seed-spots | VESPER's seed spots; the fresh rack F order (046.log after Scan) | VESPER part → HUNT stage |
-| wp9/seed-test | KESTREL's own HOLLOW seeds | the walls part stays for FINALE; KESTREL is beam seeds now |
-| wp9/fix1/fixes | KESTREL's HOLLOW wake and first seed vs SKIP | SEEDS stage, or the seeds-only calm clock |
-| wp9/fix2/fixes2 | KESTREL's wake held by the debris dodge | as above |
-| lead2/dodge-rules | a seeding HOLLOW awake on KESTREL | as above |
-| wp9/autoburn-sim | `infectNow` on KESTREL with no hollow block | plant a seed or root in the fixture |
-| wp9/belt-unit | expects KESTREL's root (one hollow block) | count with no root |
-| wp7/carry | 046.log in the packet (+2 link blocks, rack F order) | update the numbers (risk 7) |
-| wp7/soft-fails | `infectNow` on a calm ship | plant a root (`hollow-world.ts`) |
-| wp7/p2-models | `infectNow` on a calm ship | plant a root |
-| wp12/p3/repair-renewed | `infectNow` on a calm ship | plant a root |
-| wp12/fix1/fixes | the WALL lessons and an infect on a calm ship | triage: plant a root |
-| wp8/fix1/fixes | the FIREWALL-next-to-HOLLOW lesson with no HOLLOW aboard | triage: plant a root |
-| final-fix/two-screens | KESTREL's FIREWALL lesson needs HOLLOW aboard | move it to VESPER, or plant a root |
+All 26 rows are green after Track THREAT (branch `threat-2`). wp7/halcyon-story is deleted (its content is
+threat/arrival-story); the rest were re-keyed (support/hollow-world.ts, harness9 `phase2Hollow`, harness10 `hunt`) or
+rewritten (slice-2-plan Deviations (Track THREAT) 18–20). New suites: threat/plan, threat/beam-seeds, threat/arrival-story.
 
 ## Track OPENING
 

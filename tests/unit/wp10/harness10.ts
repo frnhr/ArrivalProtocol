@@ -88,6 +88,8 @@ export function createHarness10(seed = 1, opts: { soulsFound?: boolean } = {}): 
         const packet = packUnit(files, ship.arrival!.linkBlocks, []);
         const carried = layoutCarried(packet, packet.chargeCarried, ship, threat).racks;
         const fresh = createInitialState({ seed: nextSeed, shipIndex: VESPER, carried, threat });
+        // What shipAlone marked done (run 1's driver lessons) stays done.
+        fresh.director.done = [...base.store.getState().director.done];
         base.store.update((d) => { Object.assign(d, fresh); });
         resetWorld();
       }

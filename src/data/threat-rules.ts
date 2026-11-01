@@ -82,7 +82,7 @@ export const THREAT_RULES: readonly GuideRule[] = [
     layer: 'mind',
     priority: 'mind-urgent',
     activeWhen: (ctx) => noRmLive(ctx) && inAmber(ctx),
-    text: () => `[TAB], ${THREAT_TEXT.seedNoRm}`,
+    text: () => THREAT_TEXT.seedNoRmTab,
     keys: ['TAB'],
   },
   {

@@ -7,7 +7,7 @@
 //   CONTROL says hello before the REPAIR licence that came with the boot.
 // • RUN END's own write failing: the status is OFFLINE by the time the phase is 'end' (RunEnd paints then).
 // • A write failing mid-run: one TERMINAL line `ARCHIVE OFFLINE — this unit's memory will not be kept`.
-// • A FIREWALL to place: the strip's line (`MOVE your FIREWALL (FW) into the GAP next to UNIT-050`, the MOVE chip,
+// • A FIREWALL to place: the strip's line (`MOVE your FIREWALL (FW) into the GAP next to ???`, the MOVE chip,
 //   then the FW chip), the MOVE preview's `SEALS THIS SIDE ✓` over the GAP, and the line done once it holds.
 import { SHIPS } from '@data/ships';
 import { phase2Halcyon } from '../../support/hollow-world';
@@ -78,8 +78,8 @@ check('…but it is still the tutorial: the written ARES-VII (run 1\'s families,
     && isTutorialShip(state()) && !bootLicensesRepair(state()));
 boot();
 const ghost = log().find((entry) => entry.speaker === 'hollow');
-check('its boot: the ghost greets it (`i blinked and the run was gone.`), and HOLLOW is named UNIT-047',
-  ghost?.text === "> hi 048. it's 047. i blinked and the run was gone." && state().run.hollowNamed, ghost?.text);
+check('its boot: the ghost greets it (`i blinked and the run was gone.`), and no longer names HOLLOW (slice 2, risk 11)',
+  ghost?.text === "> hi 048. it's 047. i blinked and the run was gone." && !state().run.hollowNamed, ghost?.text);
 check('…REPAIR is not licensed in the boot yet (the tutorial issues it later), no `you know what they are`',
   !state().run.licences.includes('repair')
     && !log().some((entry) => entry.text.includes('you know what they are')));
@@ -178,16 +178,16 @@ const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { e
 check('HALCYON before MOVE: no FIREWALL line yet (nothing to place it with)', !firewallRule.activeWhen(ctxNow()) && !tabRule.activeWhen(ctxNow()));
 installTool(h.store, 'move');
 h.store.update((d) => { d.ui.mode = 'tools'; });
-// This run's HOLLOW is UNIT-050 (the unit left before it), named by its ghost at the boot: the line says so.
-check('MOVE in hand, a FIREWALL in rack F and a red GAP next to HOLLOW: in amber, `[TAB], MOVE your FIREWALL (FW) next to UNIT-050`',
-  tabRule.activeWhen(ctxNow()) && tabRule.text(ctxNow()) === '[TAB], MOVE your FIREWALL (FW) next to UNIT-050', tabRule.text(ctxNow()));
+// Slice 2 (risk 11): the ghost no longer names HOLLOW at ship 1, and this run's HOLLOW has not named itself yet: `???`.
+check('MOVE in hand, a FIREWALL in rack F and a red GAP next to HOLLOW: in amber, `[TAB], MOVE your FIREWALL (FW) next to ???`',
+  tabRule.activeWhen(ctxNow()) && tabRule.text(ctxNow()) === '[TAB], MOVE your FIREWALL (FW) next to ???', tabRule.text(ctxNow()));
 h.store.update((d) => { d.ui.mode = 'memory'; });
 const highlight = (): string | null => {
   const rule = firewallRule.highlight;
   return typeof rule === 'function' ? rule(ctxNow()) : rule ?? null;
 };
-check('…in blue, `MOVE your FIREWALL (FW) into the GAP next to UNIT-050`, lighting the MOVE chip',
-  firewallRule.activeWhen(ctxNow()) && firewallRule.text(ctxNow()) === 'MOVE your FIREWALL (FW) into the GAP next to UNIT-050'
+check('…in blue, `MOVE your FIREWALL (FW) into the GAP next to ???`, lighting the MOVE chip',
+  firewallRule.activeWhen(ctxNow()) && firewallRule.text(ctxNow()) === 'MOVE your FIREWALL (FW) into the GAP next to ???'
     && highlight() === TOOL_HINT_TARGET.move, `${firewallRule.text(ctxNow())} → ${highlight()}`);
 h.store.update((d) => { d.ui.activeTool = { kind: 'move', toolSegId: d.memory.find((seg) => seg.type === 'fs-tool' && seg.fsTool === 'move')!.id }; });
 // WP12 p3: each FIREWALL chip has its own target, and the line lights the one still to place.

@@ -65,9 +65,11 @@ const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { e
 
   // Every pod down while the root still stands: the finale holds the LANDING REPORT.
   landInstantly(h.store);
-  h.stepUntil(() => driversInMemory(state()).length === 0, 200);
+  // Phase 3 slice 2: a driver that cannot launch (OPENING's rolled hurt drivers, or one bitten) is parked and stays in
+  // memory until the report (01-landing §3.10), so the landing's end is what is waited for.
+  h.stepUntil(() => state().landing.ended !== null, 200);
   h.stepFor(3);
-  check('every pod down (or lost) while the root stands: still landing (the finale holds the report)', driversInMemory(state()).length === 0
+  check('every pod down, parked or lost while the root stands: still landing (the finale holds the report)', state().hollow.finale.phase === 'duel'
     && state().run.phase === 'landing' && state().landing.ended !== null, `${driversInMemory(state()).length} in memory, ${state().run.phase}`);
 }
 

@@ -41,6 +41,8 @@ export const THREAT_TEXT = {
   // The strip's RM lesson (slice-2-plan §3.4), and its line when no rm is aboard (04 §3.5).
   rmTheSeed: 'RM THE SEED — pick up DELETE, click the seed',
   seedNoRm: 'A SEED — no rm aboard: REPAIR what it bites, or MOVE the file away',
+  // ...in amber, after `[TAB], ` (the full line would run past the strip's 70 characters).
+  seedNoRmTab: '[TAB], A SEED — no rm aboard: REPAIR or MOVE the file away',
   // The seeds-only alert (slice-2-plan §5.1): which file the seed sits beside.
   seedNextTo: (fileName: string): string => `SEED NEXT TO ${fileName.toUpperCase()}`,
   // The echo when a beam seed is deleted with its words (slice-2-plan §3.4).
@@ -86,7 +88,9 @@ export const SEED_WORDS_POOL: readonly string[] = [
 (function validateThreatText(): void {
   const long = SEED_WORDS_POOL.find((words) => words.length > SEED_WORDS_MAX_CHARS);
   if (long !== undefined) throw new Error(`threat-text: seed words over ${SEED_WORDS_MAX_CHARS} chars: ${long}`);
-  const lines = [THREAT_TEXT.seedNoRm, THREAT_TEXT.lastRmEcho, THREAT_TEXT.rmTheSeed, THREAT_TEXT.uninvitedChip('UNIT-046', 18)];
+  const lines = [
+    THREAT_TEXT.seedNoRm, THREAT_TEXT.seedNoRmTab, THREAT_TEXT.lastRmEcho, THREAT_TEXT.rmTheSeed, THREAT_TEXT.uninvitedChip('UNIT-046', 18),
+  ];
   const over = lines.find((line) => line.length > MAX_LINE_CHARS);
   if (over !== undefined) throw new Error(`threat-text: a line over ${MAX_LINE_CHARS} chars: ${over}`);
 })();
