@@ -333,12 +333,10 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
   const { outcome, ship: fromShip } = lastOutcome(state);
   const core = getAiCore(state);
   if (!core) throw new Error('transmitModel: the unit has no AI Core');
-  // What arrives before the room has its say: phase 2's arrivalCharge on the classic world; on the arm the destination's
-  // own floor (01 §3.16: none on a TIGHT ship), which roomFit already applied (its `wanted`).
-  const classicCharge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, pickCharge(plan.pick));
-  const charge = state.run.map.world === 'arm'
-    ? { blocks: fit.wanted, floorAdded: fit.wanted - (fit.carried + state.run.pendingStarCredit + pickCharge(plan.pick)) }
-    : classicCharge;
+  // What arrives before the room has its say, on the destination's own floor (01 §3.16: none on a TIGHT ship), as the
+  // arrival counts it; roomFit's `wanted` is the same number (asserted: the room bar and this line must agree).
+  const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, pickCharge(plan.pick), plan.hop.chargeFloor);
+  if (charge.blocks !== fit.wanted) throw new Error(`transmitModel: arrival charge ${charge.blocks} but the room bar wants ${fit.wanted}`);
   const infectedCount = chips.filter((chip) => chip.infected && !chip.dropped).length;
   const arm = state.run.map.world === 'arm';
   const room = packetRoom(fit);

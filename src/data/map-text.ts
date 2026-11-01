@@ -159,6 +159,7 @@ export const MAP_TEXT = {
     ecc: (fixed: number): string => `> ECC: ${fixed} TRANSIT ${fixed === 1 ? 'HIT' : 'HITS'} CORRECTED WHILE ASLEEP`,
     receiver: (racks: number, room: number): string => `> RECEIVER: ${racks} ${racks === 1 ? 'RACK' : 'RACKS'} · ROOM ${room}`,
     overflow: (lost: number, ship: string): string => `> CHARGE OVERFLOW · ${lost} LOST · NO ROOM ON ${ship}`,
+    zeroCharge: (ship: string): string => `> REPAIR CHARGE 0 · NO ROOM ON ${ship}`,
   },
 
   // --- The MIND strip's header (01-landing §4): the memory class --------------------------------------------------------

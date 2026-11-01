@@ -17,7 +17,7 @@ import { currentShip } from '@systems/map-run';
 import { solLy } from '@systems/map-geometry';
 import { END_SLOTS } from '@data/arm';
 import { MAP_TEXT } from '@data/map-text';
-import { mapBootLines, mapBootLineText } from '@systems/map-boot';
+import { mapBootLines, mapBootLineText, mapOverflowLineText } from '@systems/map-boot';
 import { SHIP_SCREEN_REFUSAL, AUTOPILOT_REFUSAL } from '@systems/flight-controls';
 import {
   TOOL_WORD, repairStepTarget, toolStepTarget, fileHintTarget, podHintTarget, firewallHintTarget, SEED_HINT_TARGET,
@@ -580,7 +580,7 @@ export const RUN_END_TITLE: Readonly<Record<RunEndCause, (unit: string, ship: st
   'won-purge': () => 'LAST LIGHT · THE FLEET IS HOME',
   'won-merge': () => 'WE ARRIVE TOGETHER',
   unresolved: () => 'IT FOLLOWED YOU',
-  'flagship-lost': () => 'FLAGSHIP LOST',
+  'flagship-lost': () => 'FINAL SHIP LOST',
   overwritten: (unit) => `${unit} OVERWRITTEN`,
   stayed: () => 'YOU STAYED WITH THEM',
   abandoned: () => 'RUN ABANDONED',
@@ -611,7 +611,7 @@ export const RUN_END_WHY: Readonly<Record<RunEndCause, (ship: string) => string>
   'won-purge': () => 'You deleted it. Every ship is home.',
   'won-merge': () => 'You let it in. Nobody is alone now.',
   unresolved: () => 'Nothing was left to delete it with.',
-  'flagship-lost': () => 'The flagship never made it.',
+  'flagship-lost': () => 'The final ship never made it.',
   overwritten: (ship) => `Your AI Core was eaten on ${ship}. Nobody was left to think.`,
   stayed: (ship) => `Your AI Comms were gone. Nobody could beam you off ${ship}.`,
   abandoned: () => 'The run was left behind.',
@@ -958,10 +958,15 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
       return scriptedDamageLine(arrival.scripted);
     case 'charge':
       if (arrival === null) throw new Error('bootLine: a charge line on a ship nothing transmitted to');
+      // A TIGHT ship's room left no charge at all (01 §3.16): said plainly, never a surprise.
+      if (state.run.map.world === 'arm' && chargeLeft(state) === 0 && layoutOf(state).chargeFloor === 0) {
+        return MAP_TEXT.boot.zeroCharge(state.level.shipName);
+      }
       return chargeLine(arrival, chargeLeft(state));
     case 'overflow':
       if (arrival === null) throw new Error('bootLine: an overflow line on a ship nothing transmitted to');
-      return chargeOverflowLine(arrival.chargeOverflowLost);
+      // On the arm the line names the ship whose room had none left (01 §3.16, map-boot.ts).
+      return state.run.map.world === 'arm' ? mapOverflowLineText(state) : chargeOverflowLine(arrival.chargeOverflowLost);
     case 'skill': throw new Error('bootLine: the skill line is trainSkillAtBoot\'s');
     case 'hollow': {
       const line = bootHollowLine(state);
@@ -971,8 +976,8 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
   }
 }
 // The most a boot ever says (a later ship with the beam's seeds, arrival damage, an overflow, a skill trained, a log key
-// and HOLLOW's line).
-export const BOOT_LINE_MAX = 10;
+// and HOLLOW's line; on the arm also the sleep, receiver and ECC-while-asleep lines).
+export const BOOT_LINE_MAX = 13;
 
 // --- Beats: lines spoken on a moment (§6.3) ---------------------------------------------------
 

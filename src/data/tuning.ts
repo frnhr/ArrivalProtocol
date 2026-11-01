@@ -396,9 +396,10 @@ export const BEEP_JUMP_TAC = 1.5;
 // (`> ECC: SENSOR INTERP 45% — PATH UNCERTAIN`) and AUTOBURN.skl trained from the kid's captures. VESPER (WP10) closes
 // its boot with HOLLOW's own line, which types slowly: the klaxon waits for it (BOOT_AFTER_HOLLOW_LINE_SEC). Phase 3
 // slice 2 adds up to two more at the same rhythm: the beam seeds' ECC line or HOLLOW's 108% unpack, and `046.log · KEY
-// FOUND` (data/script.ts BOOT_LINE_MAX 10).
+// FOUND`; slice 3a three more on the arm (the sleep, receiver and ECC-while-asleep lines: data/script.ts BOOT_LINE_MAX 13),
+// on the same 1.3 s step boot.ts extrapolates with.
 export const BOOT_ASSEMBLE_SEC = 1.5;
-export const BOOT_LINE_AT_SEC: readonly number[] = [0.5, 1.8, 3.1, 4.4, 5.7, 7.0, 8.3, 9.6, 10.9, 12.2];
+export const BOOT_LINE_AT_SEC: readonly number[] = [0.5, 1.8, 3.1, 4.4, 5.7, 7.0, 8.3, 9.6, 10.9, 12.2, 13.5, 14.8, 16.1];
 export const BOOT_KLAXON_AFTER_LAST_LINE_SEC = 1.4;
 export const BOOT_END_AFTER_KLAXON_SEC = 0.4;
 
