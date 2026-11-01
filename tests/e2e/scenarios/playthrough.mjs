@@ -16,6 +16,18 @@
 // Each ship is checked at its boot, its flight's first seconds, every strip line it showed, its end, its landing (the
 // POD BAY and the GROUND TRACK at ORBIT LOCK, a launch by [L], the LZ counters), its LANDING REPORT (LANDED n / N, the
 // credits, the stars, CONTINUE) and its TRANSMIT; on LAST LIGHT the report after the finale; then RUN END and NEW RUN.
+// Phase 3 slice 2 (the calm opening), per ship:
+// • ARES-VII and HALCYON are calm: no hollow block, no HOLLOW line, nothing bitten, no TRACE meter. On ship 1 the kid
+//   answers the SCAN lesson (`A FILE YOU DIDN'T PACK — SCAN it`: the `???` becomes 046.log) when it is shown (it is
+//   missable), and after ship 1's LANDING REPORT the LOG READER opens by itself on entry 01; the kid closes it with SPACE.
+// • KESTREL: the boot's ECC line names the beam seed next to Telemetry; the kid rm's it on `RM THE SEED` (DELETE, then the
+//   seed); the TRACE meter shows; the report's TRACE line says what was left behind.
+// • The PACKET to VESPER carries the uninvited chip (`??? · 10 BLOCKS · NOT YOURS · RIDES FREE`, boarding); VESPER's boot
+//   unpacks to 108%; HOLLOW is silent until it bites POD 09, the kid fights it by REPAIR, it says `> ...047?` and names
+//   itself (`> i was 046.`). The PACKET to LAST LIGHT carries it under its name (NO RM only with no rm aboard).
+// • LAST LIGHT: THE DEAL stands in the TERMINAL with ACCEPT / REFUSE; the kid looks inside and REFUSEs it (or the lock
+//   withdraws it), no deal button stands after ORBIT LOCK; then the duel and an ending.
+// • Every TRANSMIT: 046.log's chip `046.log · n/12`, glowing while an entry is unread.
 // About 15 minutes; shots under tests/.out/e2e/shots/play-*.
 // Usage: node tests/e2e/scenarios/playthrough.mjs   (env E2E_BASE_URL, SEED, SHOT_VIEWPORT; tests/e2e/run.mjs runs it)
 // Debugging a ship: PLAY_FROM=5 jumps to LAST LIGHT after the title (__ap.ship, a fresh unit carried in; the earlier
@@ -62,6 +74,15 @@ const look = () => st(() => {
     fits: strip.scrollWidth <= strip.clientWidth + 1, firing: s.burn.firing, ops: ap.ops().length,
     choice: !document.getElementById('finaleChoice').hidden && document.getElementById('finaleChoice').classList.contains('armed'),
     lostCard: !document.getElementById('burnResult').hidden, auto: !document.getElementById('autoBtn').hidden,
+    // Slice 2: the LOG READER over the screen, THE DEAL's buttons standing in the TERMINAL, HOLLOW in memory and in the
+    // TERMINAL (its lines since this ship's boot, window.__e2eLogFrom), the TRACE meter (the amber chip's row, the blue
+    // header's).
+    reader: !document.getElementById('logReader').hidden,
+    deal: [...document.querySelectorAll('#mindTermLines .choice-open .term-choice-btn')].map((btn) => btn.textContent.replace(/^[A-Z] /, '').trim()),
+    hollowSegs: s.memory.filter((seg) => seg.type === 'hollow').length, infected: ap.hollow().infected.map((hit) => hit.file),
+    hollowLines: ap.log().filter((entry) => entry.speaker === 'hollow' && entry.id > (window.__e2eLogFrom ?? -1)).map((entry) => entry.text),
+    trace: ['mindChipTraceRow', 'memTrace'].filter((id) => !document.getElementById(id).hidden)
+      .map((id) => `${id}:${document.querySelectorAll(`#${id} .tr-cell`).length}`),
   };
 });
 
@@ -85,6 +106,16 @@ const resolveTarget = (line) => st(({ text, verbs }) => {
   for (const [, own] of upper.matchAll(/\bYOUR ([A-Z]+)/g)) {
     const tool = s.memory.find((seg) => (seg.type === 'fs-tool' || seg.type === 'firewall') && seg.name.toUpperCase().split('.')[0] === own);
     if (tool) return { id: tool.id, name: tool.name.toUpperCase(), len: own.length };
+  }
+  // Slice 2: `A FILE YOU DIDN'T PACK — SCAN it` names the `???` file (046.log) by what it is, not by a name.
+  if (/DIDN'T PACK/.test(upper)) {
+    const log = s.memory.find((seg) => seg.type === 'log');
+    if (log) return { id: log.id, name: '???', len: 3 };
+  }
+  // `THE EATEN BLOCK REPORTS HOME TOO — DELETE it`: the block a beam seed made by eating.
+  if (/EATEN BLOCK/.test(upper)) {
+    const eaten = s.memory.find((seg) => seg.type === 'hollow' && seg.beam && !seg.seed && !seg.root);
+    if (eaten) return { id: eaten.id, name: 'THE EATEN BLOCK', len: 15 };
   }
   let best = null;
   for (const seg of s.memory) {
@@ -171,8 +202,30 @@ async function mindAct(view) {
   return true;
 }
 
+// Slice 2: THE DEAL (LAST LIGHT) stands in the TERMINAL with ACCEPT and REFUSE; the ticker says WANTS A DEAL. The kid
+// looks inside and REFUSEs it by its button. The LOG READER, if something opened it, is closed with SPACE.
+const deal = { seen: [], clicked: 0, standingAfterLock: 0 };
+let lastDealTry = 0;
+async function answerDeal(view) {
+  if (!view.deal.includes('REFUSE') || Date.now() - lastDealTry < 1500) return false;
+  lastDealTry = Date.now();
+  if (deal.seen.length === 0) deal.seen = [...view.deal];
+  await toMode('memory', view.mode);
+  await page.waitForTimeout(250);
+  const button = page.locator('#mindTermLines .choice-open .term-choice-btn', { hasText: 'REFUSE' }).first();
+  if (await tap(button)) { deal.clicked++; log(`MIND: REFUSE on THE DEAL (${view.deal.join(' / ')})`); }
+  return true;
+}
+async function closeReader(view) {
+  if (!view.reader) return false;
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(300);
+  return true;
+}
+
 // One poll of the kid in a flight: the SHIP's keys, or the MIND's clicks when the line asks for a tool.
 async function flyStep(view) {
+  if (await closeReader(view) || await answerDeal(view)) return;
   const text = view.line;
   // The strip names [TAB] only while the kid is on the wrong screen for what it asks; the strip lags a switch by a
   // tick or two, so a second TAB waits.
@@ -194,6 +247,7 @@ let lastEnd = 0;
 // One poll of the kid in a landing: [TAB] when asked, [L] when the line names it, END LANDING on L12, the MIND's line,
 // [F] when it offers SKIP. Never SPACE: LAUNCH NOW reads `NOW`, which the flight's rule takes for "hold SPACE".
 async function landStep(view, tally) {
+  if (await closeReader(view) || await answerDeal(view)) return;
   const text = view.line;
   if (/\[TAB\]/.test(text) && Date.now() - lastTab > 900) { lastTab = Date.now(); await page.keyboard.press('Tab'); return; }
   if (/\[L\]/.test(text)) {
@@ -276,6 +330,18 @@ for (const [index, name] of SHIPS.entries()) {
   if (index + 1 < FROM) continue;
   const tag = `${index + 1} ${name}`;
   const errorsBefore = errors.length;
+  // Slice 2: what the kid met of HOLLOW and TRACE on this ship (from its boot on: its TERMINAL lines, its blocks in memory,
+  // what it bit, the TRACE meter), noted on every poll of the flight and the landing.
+  await st(() => { window.__e2eLogFrom = Math.max(-1, ...window.__ap.log().map((entry) => entry.id)); });
+  const met = { maxSegs: 0, lines: [], trace: new Set(), bitten: new Set(), firstBiteMs: null, firstLineMs: null };
+  const note = (seen) => {
+    met.maxSegs = Math.max(met.maxSegs, seen.hollowSegs);
+    for (const text of seen.hollowLines) if (!met.lines.includes(text)) met.lines.push(text);
+    if (seen.hollowLines.length > 0) met.firstLineMs ??= Date.now();
+    for (const file of seen.infected) met.bitten.add(file);
+    if (seen.infected.length > 0) met.firstBiteMs ??= Date.now();
+    for (const where of seen.trace) met.trace.add(where);
+  };
   // Boot: the MIND's terminal types the ship's boot, the strip says how to skip it.
   const booted = await waitFor(() => window.__ap.store.getState().run.phase === 'boot', 30000)
     && await waitFor(() => (window.__ap.director().shown?.text ?? '') !== '', 5000);
@@ -289,6 +355,19 @@ for (const [index, name] of SHIPS.entries()) {
   const flying = await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
   check(`${tag}: SPACE skips the boot into the flight`, flying);
   await page.waitForTimeout(1200);
+  // Slice 2: the boot's unpack and ECC lines (the log keeps a skipped boot's lines too). HOLLOW boards on the beam into
+  // VESPER only: its unpack runs on to 108%; KESTREL's ECC line names the beam seed next to Telemetry.
+  const bootLines = await st(() => window.__ap.log().filter((entry) => entry.id > window.__e2eLogFrom && /UNPACKING|ECC:/.test(entry.text)).map((entry) => entry.text));
+  if (name === 'VESPER') {
+    check(`${tag}: …the boot's unpack runs on to 108% (HOLLOW boarded on the beam)`, bootLines.some((text) => /100% \.\.\. 108%/.test(text)), bootLines.join(' | '));
+  } else if (index > 0) {
+    check(`${tag}: …the boot's unpack stops at 100% (nothing boarded)`, !bootLines.some((text) => /108%/.test(text)), bootLines.join(' | '));
+  }
+  if (name === 'KESTREL') {
+    check(`${tag}: …its ECC line names the beam seed: 1 FOREIGN BLOCK IN PACKET · NEXT TO TELEMETRY`,
+      bootLines.some((text) => text === '> ECC: 1 FOREIGN BLOCK IN PACKET · NEXT TO TELEMETRY'), bootLines.join(' | '));
+  }
+  const repairsBefore = mindByVerb.REPAIR ?? 0;
 
   // The flight's first seconds: the desk shows the ship.
   const desk = await st(() => {
@@ -342,6 +421,7 @@ for (const [index, name] of SHIPS.entries()) {
     await flyStep(view);
     await page.waitForTimeout(POLL_MS);
     view = await look();
+    note(view);
     if (/\[TAB\]/.test(lastLine) && modeBefore !== view.mode) { tabbed++; modeFollowed++; }
     if (paceBefore !== 'skip' && view.pace === 'skip') skips++;
   }
@@ -370,6 +450,30 @@ for (const [index, name] of SHIPS.entries()) {
   const ended = await st(() => ({ status: window.__ap.store.getState().burn.status, phase: window.__ap.store.getState().run.phase }));
   check(`${tag}: …it ends locked or accepted`, ['locked', 'accepted'].includes(ended.status), JSON.stringify(ended));
   await shot(`${index + 1}b-flight-end`);
+  if (name === 'ARES-VII') {
+    // The SCAN lesson (run 1, on the coast, missable): shown, the kid SCANs the `???`, and it is 046.log on the strip.
+    const scan = await st(() => {
+      const chip = document.querySelector('#memWrap [data-log-chip]');
+      return { scanned: window.__ap.store.getState().run.log.scanned, name: chip?.querySelector('[data-log-name]')?.textContent ?? null,
+        count: chip?.querySelector('[data-log-count]')?.textContent ?? null };
+    });
+    const asked = [...lines].some((text) => /A FILE YOU DIDN'T PACK — SCAN it/.test(text));
+    if (asked) {
+      check(`${tag}: …the SCAN lesson was answered: the \`???\` became 046.log (the strip's chip: 046 over n/12)`, scan.scanned && scan.name === '046' && /^\d+\/12$/.test(scan.count ?? ''),
+        JSON.stringify(scan));
+    } else log(`${tag}: the SCAN lesson was not shown (missable): ${JSON.stringify(scan)}`);
+  }
+  if (name === 'KESTREL') {
+    // The strip's RM lesson, the kid's DELETE on the seed, its words echoed; the TRACE meter showed.
+    const rm = await st(() => ({
+      seeds: window.__ap.store.getState().memory.filter((seg) => seg.type === 'hollow' && seg.seed).length,
+      said: window.__ap.log().filter((entry) => /^> rm seed \.\.\. OK · it said: "/.test(entry.text)).map((entry) => entry.text),
+    }));
+    const lesson = [...lines].find((text) => /RM THE SEED/.test(text)) ?? null;
+    check(`${tag}: …the strip said RM THE SEED and the kid rm'd it by DELETE (its words echoed, no seed left)`, lesson === 'RM THE SEED — pick up DELETE, click the seed'
+      && rm.seeds === 0 && rm.said.length === 1, JSON.stringify({ lesson, ...rm }));
+    check(`${tag}: …the TRACE meter showed (three cells)`, [...met.trace].some((where) => /:3$/.test(where)), [...met.trace].join(', ') || 'never');
+  }
 
   // The landing (slice 1a): at ORBIT LOCK the POD BAY window and the GROUND TRACK open on the SHIP screen; then the
   // pods go down by the strip ([L], [F], END LANDING on L12), or at once (__ap.landAll) on the ships not in LAND_BY_STRIP.
@@ -404,6 +508,8 @@ for (const [index, name] of SHIPS.entries()) {
     if (!byStrip) log(`${tag}: lands at once (__ap.landAll: ${await st(() => window.__ap.landAll())} pods)`);
     while (Date.now() - landStart < LANDING_MAX_MS) {
       landView = await look();
+      note(landView);
+      if (landView.phase === 'landing' && landView.deal.length > 0) deal.standingAfterLock++;
       if (['report', 'transmit', 'end'].includes(landView.phase)) break;
       if (landView.lostCard) await tap(page.locator('#burnResultRetry'));
       else if (landView.choice) { if (await tap(page.locator('#fcPurge'))) choiceAt ??= Date.now(); }
@@ -511,6 +617,7 @@ for (const [index, name] of SHIPS.entries()) {
     starsShown: !document.getElementById('lrStars').hidden, charge: document.getElementById('lrCharge').innerText,
     chargeShown: !document.getElementById('lrCharge').hidden, skip: !document.getElementById('lrSkip').hidden,
     cont: document.getElementById('lrContinue').hidden ? null : document.getElementById('lrContinue').innerText,
+    trace: document.getElementById('lrTrace').hidden ? null : document.getElementById('lrTrace').innerText,
   }));
   check(`${tag}: …the headline LANDED n / N (${done.headline})`, /^LANDED \d[\d,]* \/ [\d,]+$/.test(done.headline) && done.headline === model.headline,
     `model ${model.headline}`);
@@ -520,6 +627,36 @@ for (const [index, name] of SHIPS.entries()) {
   check(`${tag}: …then the charge line and CONTINUE (${done.cont})`, done.chargeShown && done.charge === model.chargeLine && !done.skip
     && done.cont !== null && /CONTINUE|RUN END/.test(done.cont), JSON.stringify(done));
   await shot(`${index + 1}e-report-done`);
+  // Slice 2, per ship, over its flight and landing.
+  if (index <= 1) {
+    check(`${tag}: …calm all the way: no hollow block, no HOLLOW line, nothing bitten, no TRACE meter, no TRACE line on the report`,
+      met.maxSegs === 0 && met.lines.length === 0 && met.bitten.size === 0 && met.trace.size === 0 && done.trace === null,
+      JSON.stringify({ maxSegs: met.maxSegs, lines: met.lines, bitten: [...met.bitten], trace: [...met.trace], report: done.trace }));
+  }
+  if (name === 'KESTREL') {
+    const seedsLeft = await st(() => window.__ap.store.getState().memory.filter((seg) => seg.type === 'hollow' && seg.beam).length);
+    check(`${tag}: …the report's TRACE line says what the beam's seed left behind (${seedsLeft} beam-born blocks left)`, seedsLeft === 0
+      ? /^NO SEEDS LEFT BEHIND · NOTHING REPORTS HOME · TRACE □□□$/.test(done.trace ?? '') : /SEEDS? LEFT BEHIND · (IT REPORTS|THEY REPORT) HOME · TRACE /.test(done.trace ?? ''),
+      done.trace ?? 'no TRACE line');
+  }
+  if (name === 'VESPER') {
+    // Silent until the capture closed the loop, then the bite, the kid's fight (REPAIR), `> ...047?`, and the naming.
+    const story = await st(() => ({ named: window.__ap.store.getState().run.hollowNamed, owner: window.__ap.store.getState().memory.find((seg) => seg.type === 'hollow' && seg.root)?.owner ?? null }));
+    const repairs = (mindByVerb.REPAIR ?? 0) - repairsBefore;
+    check(`${tag}: …HOLLOW was silent until it bit (${[...met.bitten].join(', ') || 'nothing'}), then the kid fought it with REPAIR (${repairs}×)`,
+      met.firstBiteMs !== null && (met.firstLineMs === null || met.firstLineMs >= met.firstBiteMs) && [...met.bitten].some((file) => /POD 09/.test(file)) && repairs >= 1,
+      JSON.stringify({ bitten: [...met.bitten], firstLine: met.lines[0] ?? null, lineAfterBiteMs: met.firstLineMs && met.firstBiteMs ? met.firstLineMs - met.firstBiteMs : null }));
+    check(`${tag}: …it said \`> ...047?\`, then named itself (\`> i was 046.\`, the root's owner UNIT-046)`, met.lines.includes('> ...047?')
+      && met.lines.some((text) => /^> i was 046\./.test(text)) && story.named && story.owner === 'UNIT-046'
+      && met.lines.indexOf('> ...047?') < met.lines.findIndex((text) => /^> i was 046\./.test(text)), JSON.stringify({ ...story, lines: met.lines }));
+  }
+  if (name === 'LAST LIGHT') {
+    const outcome = await st(() => window.__ap.store.getState().run.stats.deal);
+    check(`${tag}: …THE DEAL stood in the TERMINAL with ACCEPT / REFUSE before ORBIT LOCK; the kid REFUSEd it, or the lock withdrew it (${outcome?.outcome ?? 'never offered'})`,
+      outcome !== null && (outcome.outcome === 'refused' ? deal.seen.includes('ACCEPT') && deal.seen.includes('REFUSE') && deal.clicked >= 1 : outcome.outcome === 'invalidated'),
+      JSON.stringify({ outcome, deal }));
+    check(`${tag}: …no deal button stood after ORBIT LOCK`, deal.standingAfterLock === 0, `${deal.standingAfterLock} polls`);
+  }
   for (let i = 0; i < 6 && (await st(() => window.__ap.store.getState().run.phase)) === 'report'; i++) {
     await page.keyboard.press(i % 2 === 0 ? 'Space' : 'Enter');
     await page.waitForTimeout(1300);
@@ -528,6 +665,28 @@ for (const [index, name] of SHIPS.entries()) {
   if (index < SHIPS.length - 1) {
     check(`${tag}: CONTINUE leads to TRANSMIT`, afterReport === 'transmit', afterReport);
     await waitFor(() => !document.getElementById('transmitScreen').hidden, 4000);
+    // Slice 2: on run 1, ship 1's report closing opens the LOG READER on entry 01 over TRANSMIT; the kid reads it and
+    // closes it with SPACE (the first SPACE finishes the typing, the next closes), and TRANSMIT under it sends nothing.
+    const readerUp = await waitFor(() => !document.getElementById('logReader').hidden, index === 0 ? 4000 : 800, 50);
+    if (index === 0) {
+      const reader = await st(() => ({ title: document.getElementById('lgTitle').innerText, open: document.querySelector('#lgRows .lg-row.open')?.dataset.entry ?? null,
+        count: document.getElementById('lgCount').innerText, transmit: !document.getElementById('transmitScreen').hidden }));
+      check(`${tag}: the LOG READER opens by itself on entry 01 over TRANSMIT (${reader.title}, ${reader.count})`, readerUp && reader.title === '046.log'
+        && reader.open === '1' && /^1 \/ 12 found$/.test(reader.count) && reader.transmit, JSON.stringify(reader));
+      await page.waitForTimeout(1500);
+      await shot(`${index + 1}e2-log-reader`);
+      let presses = 0;
+      for (; presses < 4 && (await st(() => !document.getElementById('logReader').hidden)); presses++) {
+        await page.keyboard.press('Space');
+        await page.waitForTimeout(500);
+      }
+      const after = await st(() => ({ hidden: document.getElementById('logReader').hidden, read: window.__ap.store.getState().run.log.read,
+        phase: window.__ap.store.getState().run.phase, sent: document.querySelectorAll('#txChips .tx-chip.sent').length, paused: window.__ap.store.getState().clock.paused }));
+      check(`${tag}: …SPACE closes it (${presses}×), entry 01 read, and the run goes on at TRANSMIT (nothing sent)`, after.hidden && after.read.includes(1)
+        && after.phase === 'transmit' && after.sent === 0, JSON.stringify(after));
+    } else {
+      check(`${tag}: the LOG READER stays shut at TRANSMIT (it opened by itself once, after ship 1)`, !readerUp);
+    }
     await page.waitForTimeout(1000);
     const tx = await st(() => ({
       next: document.getElementById('txNext').innerText, packet: document.getElementById('txPacketLine').innerText,
@@ -537,11 +696,45 @@ for (const [index, name] of SHIPS.entries()) {
     check(`${tag}: TRANSMIT names the next ship (${SHIPS[index + 1]}), the packet and the files as chips`,
       tx.next.startsWith(`NEXT: ${SHIPS[index + 1]}`) && /^LINK \d+ · FILES \d+/.test(tx.packet) && tx.chips >= 5, JSON.stringify(tx));
     check(`${tag}: …and deals cards to carry`, tx.cards >= 1, `${tx.cards} cards`);
+    // Slice 2: 046.log's chip (`046.log · n/12`, glowing while an entry is unread), and HOLLOW riding the beam to VESPER
+    // (boarding) and on to LAST LIGHT: the uninvited chip after the unit's own; NO RM only with no working rm aboard.
+    const packet = await st(() => {
+      const s = window.__ap.store.getState();
+      const logChip = document.querySelector('#txChips .tx-chip.log-chip');
+      const uninvited = document.querySelector('#txChips .tx-chip.uninvited');
+      const rms = s.memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'delete');
+      const rm = rms.length === 0 ? 'none' : rms.some((seg) => seg.integrity >= 100 && !seg.infected) ? 'whole' : 'hurt';
+      return {
+        log: logChip ? { name: logChip.querySelector('.tx-chip-name')?.innerText ?? '', glow: logChip.classList.contains('glow'), locked: logChip.classList.contains('locked') } : null,
+        found: s.run.log.found.length, unread: s.run.log.found.filter((n) => !s.run.log.read.includes(n)).length,
+        uninvited: uninvited ? { label: uninvited.getAttribute('aria-label'), boards: uninvited.classList.contains('boards'),
+          last: uninvited === [...document.querySelectorAll('#txChips .tx-chip')].pop() } : null,
+        trace: document.getElementById('txTrace').hidden ? null : document.getElementById('txTrace').innerText,
+        noRm: document.getElementById('txNoRm').hidden ? null : document.getElementById('txNoRm').innerText, rm,
+      };
+    });
+    check(`${tag}: …046.log rides as \`046.log · ${packet.found}/12\`, locked, glowing while an entry is unread (${packet.unread})`, packet.log !== null
+      && packet.log.name === `046.log · ${packet.found}/12` && packet.log.locked && packet.log.glow === (packet.unread > 0) && packet.found >= index + 1, JSON.stringify(packet.log));
+    if (SHIPS[index + 1] === 'VESPER') {
+      check(`${tag}: …the uninvited chip rides after the unit's own: \`??? · 10 BLOCKS · NOT YOURS · RIDES FREE\`, boarding`, packet.uninvited !== null
+        && packet.uninvited.label === '??? · 10 BLOCKS · NOT YOURS · RIDES FREE' && packet.uninvited.boards && packet.uninvited.last && /^TRACE [■□]{3}/.test(packet.trace ?? ''),
+        JSON.stringify(packet));
+    } else if (SHIPS[index + 1] === 'LAST LIGHT') {
+      check(`${tag}: …HOLLOW rides on to LAST LIGHT under its name (\`UNIT-046 · n BLOCKS · NOT YOURS · RIDES FREE\`)`, packet.uninvited !== null
+        && /^UNIT-046 · \d+ BLOCKS · NOT YOURS · RIDES FREE$/.test(packet.uninvited.label ?? '') && !packet.uninvited.boards, JSON.stringify(packet));
+      // A hurt DELETE may or may not still work (isUsableTool decides): judged only for a whole one or none.
+      if (packet.rm !== 'hurt') {
+        check(`${tag}: …NO RM on the final packet only with no rm aboard (DELETE: ${packet.rm})`,
+          packet.rm === 'whole' ? packet.noRm === null : packet.noRm === 'NO RM · YOU CAN\'T DELETE THE ROOT', JSON.stringify({ noRm: packet.noRm, rm: packet.rm }));
+      } else log(`${tag}: DELETE is hurt at the final packet; NO RM ${packet.noRm === null ? 'not shown' : 'shown'}`);
+    } else {
+      check(`${tag}: …nothing uninvited rides the beam to ${SHIPS[index + 1]}`, packet.uninvited === null && packet.noRm === null, JSON.stringify(packet));
+    }
     await shot(`${index + 1}f-transmit`);
     await page.keyboard.press('Digit1');
     await page.waitForTimeout(300);
     check(`${tag}: …[1] picks the first card`, await st(() => window.__ap.draft()?.pick !== null));
-    await page.locator('#txGo').click();
+    await page.locator('#txGo').click({ timeout: 10000 });
     const white = await waitFor(() => { const el = document.getElementById('whiteOut'); return !el.hidden && Number(getComputedStyle(el).opacity) > 0.5; }, 15000, 50);
     check(`${tag}: TRANSMIT ▸ sends, the screen floods white`, white);
   } else {
