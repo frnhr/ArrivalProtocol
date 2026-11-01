@@ -5,9 +5,12 @@
 // • EMERGENCY TRANSMIT's why line says the Core's real toll (−25 from 100, −5 from 30, nothing at 25).
 // • A skipped arrival boot lands on the ECC line (the red flashes start), and only cuts to amber once the
 //   last flash has been seen: a kid mashing SPACE still sees what the crossing did.
-// • NEXT BITE on HALCYON's sleeping root shows no time until the coast fixes the wake (no 0:22 → 0:05 jump).
+// • NEXT BITE on a sleeping root whose wake the coast can bring forward shows no time until the coast fixes the wake (no
+//   0:22 → 0:05 jump). Slice 2: HALCYON is calm, so phase 2's HALCYON root and HOLLOW (the WALLS stage's coast-tied wake)
+//   are planted there (opening/plant-root.ts).
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../harness7';
+import { plantHalcyonRoot } from '../../opening/plant-root';
 import { continueAfterLoss, lossPlan } from '@systems/run';
 import { runEndModel } from '@systems/run-end';
 import { transmitModel } from '@systems/transmit';
@@ -100,6 +103,7 @@ check('the crash\'s why line keeps the extra hits either way', TRANSMIT_TEXT.why
 // --- NEXT BITE before HALCYON's coast --------------------------------------------------------------------
 {
   h.shipAlone(1, 9);
+  h.store.update(plantHalcyonRoot);
   check('HALCYON\'s HOLLOW sleeps, the coast not begun', state().hollow.phase === 'asleep' && state().burn.coastAtAi === null);
   const early = biteClock(state());
   check('…NEXT BITE shows no time yet (the coast could still bring the wake sooner)', early.secLeft === null

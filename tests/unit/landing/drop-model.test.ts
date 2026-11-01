@@ -24,7 +24,7 @@ import { getDropSolution } from '@systems/drop-cache';
 import { stateFromElements, type OrbitState } from '@/types/orbit';
 import { getShip, SHIPS } from '@data/ships';
 import { validateLandingDef } from '@data/landing-def';
-import { DRIVER_RULES } from '@data/script';
+import { DRIVER_RULES, LANDING_LESSON_RULES } from '@data/script';
 import {
   LANDING_DROP_LINES, LANDING_END_TEXT, LANDING_LESSONS_1B, LAUNCH_REFUSAL_TEXT, LAUNCH_CONFIRM_TEXT,
 } from '@data/landing-text';
@@ -317,7 +317,8 @@ function freshLanding(seedNo: number, extra: (draft: GameState) => void = () => 
   h.noFault();
   h.store.update((draft) => {
     draft.hollow.phase = 'dormant';
-    draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id));
+    // Slice 2's landing lessons (the dot, the split) come before the wide-drop one on the strip; met already here.
+    draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id), ...LANDING_LESSON_RULES.map((rule) => rule.id));
     // A Repair in the first free gap that holds it (run 1 arrives with SCAN only): L9 names a REPAIR only when one can run.
     const at = draft.memory.findIndex((seg) => seg.type === 'free' && seg.size >= 4);
     const gap = draft.memory[at]!;

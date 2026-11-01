@@ -56,7 +56,10 @@ const CRUISE_TICK_TAC = (0.05 * getShip(2).flight.cruiseWarp) / warp;
 {
   const now = fly('lead2', 'hit');
   const before = fly('base', 'hit');
-  const sameHits = now.hits.length > 0 && JSON.stringify(now.hits) === JSON.stringify(before.hits)
+  // Slice 2: KESTREL's drivers arrive hurt by the layer's roll (data/driver-damage.ts), so a hit driver may start below
+  // 100; the debris still takes the same files in the same rack for the same loss.
+  const losses = (outcome: Outcome): string => JSON.stringify(outcome.hits.map((hit) => ({ segId: hit.segId, rack: hit.rack, loss: hit.from - hit.to })));
+  const sameHits = now.hits.length > 0 && losses(now) === losses(before)
     && JSON.stringify(now.spentIds) === JSON.stringify(before.spentIds);
   check('KESTREL, no correction: the debris hits the same files in the same rack for the same loss as before LEAD-2',
     sameHits, `${now.hits.map((item) => `${item.segId} ${item.from}→${item.to}`).join(', ')} | before: ${before.hits.length} files`);

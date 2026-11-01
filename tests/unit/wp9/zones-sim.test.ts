@@ -1,7 +1,7 @@
 // WP9 acceptance 2 (§9 WP9, §6.8): KESTREL's debris cloud, headless, on the real sim.
 // Slice 1a: KESTREL's racks are phase 2's with `C` → `P`, so POD 07–12 sit where C07–C12 did.
 // • A pilot who never corrects takes exactly 1 debris hit, and each rack-C pod's driver loses 25; the files elsewhere
-//   and HOLLOW's blocks are untouched; the pace is TACTICAL from 20 tactical s before the contact.
+//   are untouched (slice 2: no HOLLOW aboard KESTREL); the pace is TACTICAL from 20 tactical s before the contact.
 // • The strip-following kid whose IN correction starts ≤ 80 tactical s after the boot: 0 hits, locked, FUEL ≥ 20%.
 // • A correction started at 170 tactical s (past the dodge's deadline, about 154 since WP9 fix round 1): 1 hit.
 // Edge cases (§9 WP9): contact during SKIP (the SKIP ends before the cloud, TACTICAL at contact); a file straddling
@@ -81,8 +81,9 @@ const RACK_C_PODS = [7, 8, 9, 10, 11, 12];
   check('each rack-C driver lost 25 (POD 07–12 at 75), rack B untouched', after.every((soul) => (RACK_C_PODS.includes(soul.pod)
     ? Math.abs(soul.integrity - (before.get(soul.pod)! - 25)) < 1e-9 : soul.integrity === before.get(soul.pod)) && rackOf(soul) === (RACK_C_PODS.includes(soul.pod) ? 'C' : 'B')),
   after.map((soul) => `${soul.pod}:${soul.integrity}`).join(' '));
-  check('…the ship files in rack A untouched, HOLLOW\'s root untouched (no health)', state().memory.filter((seg) => seg.type === 'ship')
-    .every((seg) => 'integrity' in seg && seg.integrity === shipFiles.get(seg.id)) && state().memory.some((seg) => seg.type === 'hollow' && seg.root));
+  // Slice 2: KESTREL carries no HOLLOW of its own (the SEEDS act), so there is no root to spare.
+  check('…the ship files in rack A untouched', state().memory.filter((seg) => seg.type === 'ship')
+    .every((seg) => 'integrity' in seg && seg.integrity === shipFiles.get(seg.id)));
   const hitLine = debrisHitLine('C', RACK_C_PODS.map((pod) => ({ label: podCode(pod), lost: 25 })));
   check(`…the TERMINAL names the rack and the pods (\`${hitLine}\`)`, hitLine.startsWith('> DEBRIS HIT RACK C: POD 07 POD 08')
     && state().log.entries.some((entry) => entry.text === hitLine),
@@ -158,11 +159,14 @@ for (const startTac of [0, 40, 80]) {
 }
 
 // --- A file straddling the rack border, a file moved in, a file moved out, a FIREWALL --------------------------
+// Rack C's free tail after POD 12 is 16 blocks: a driver 11 blocks into it has 5 of its 8 blocks in rack C.
+const STRADDLE_AT = 11;
 {
   h.kestrel(1, { hollowAsleep: true, sensorHealed: true });
   const memory = state().memory;
   const starts = segmentStarts(memory);
-  // POD 12's free tail in rack C (5 blocks) runs on into rack D: POD 01 placed at its start straddles C|D (5 in C, 3 in D).
+  // POD 12's free tail in rack C (16 blocks since slice 2's calm layouts) runs on into rack D: POD 01 placed 11 blocks into
+  // it straddles C|D (5 in C, 3 in D).
   const c12 = memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 12)!;
   const tail = memory[memory.indexOf(c12) + 1]!;
   const tailStart = starts[memory.indexOf(tail)]!;
@@ -174,10 +178,10 @@ for (const startTac of [0, 40, 80]) {
     const c10 = draft.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 10)!;
     const tailIndex = draft.findIndex((seg) => seg.id === tail.id);
     const freeTail = draft[tailIndex]!;
-    // POD 01 → the start of the tail (straddling C|D); POD 10 → the far end of rack D (out of rack C).
+    // POD 01 → 11 blocks into the tail (straddling C|D); POD 10 → the far end of rack D (out of rack C).
     draft.splice(draft.indexOf(c01), 1, freeSegment(8));
     draft.splice(draft.indexOf(c10), 1, freeSegment(8));
-    draft.splice(tailIndex, 1, c01, freeSegment(freeTail.size - 16), c10);
+    draft.splice(tailIndex, 1, freeSegment(STRADDLE_AT), c01, freeSegment(freeTail.size - STRADDLE_AT - 16), c10);
     return debrisDamagePlan(draft, 'C');
   })();
   const lostOf = (pod: number): number | undefined => {
@@ -197,7 +201,7 @@ for (const startTac of [0, 40, 80]) {
 // --- A file moved into the rack before contact is hit (the live sim) ------------------------------------------------
 {
   h.kestrel(1, { hollowAsleep: true, sensorHealed: true });
-  // Plant a driver from rack B at the start of rack C's free tail (the MOVE's result) before the contact.
+  // Plant a driver from rack B 11 blocks into rack C's free tail, across the C|D border (the MOVE's result) before the contact.
   h.store.update((d) => {
     const c01 = d.memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 1)!;
     const c12 = d.memory.find((seg): seg is DriverSegment => seg.type === 'driver' && seg.pod === 12)!;
@@ -205,7 +209,7 @@ for (const startTac of [0, 40, 80]) {
     const tail = d.memory[tailIndex]!;
     d.memory.splice(d.memory.indexOf(c01), 1, freeSegment(8));
     const tailNow = d.memory.indexOf(tail);
-    d.memory.splice(tailNow, 1, c01, freeSegment(tail.size - 8));
+    d.memory.splice(tailNow, 1, freeSegment(STRADDLE_AT), c01, freeSegment(tail.size - STRADDLE_AT - 8));
     d.ui.memoryRev++;
   });
   // Merge what the plant left touching (rack A's free tail and POD 01's old place).

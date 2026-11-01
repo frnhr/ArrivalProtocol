@@ -1,13 +1,13 @@
 // WP8 acceptance 6 (§5.2, §9 WP8 items 4–6): WP7's run-flow, extended to the run after it, with the archive on a
-// stubbed storage. Run 1 is ended for real (EMERGENCY TRANSMIT to HALCYON, then HOLLOW eats the Core on the last
-// ship: OVERWRITTEN); the archive keeps it; NEW RUN is UNIT-048 on wave 2, and its ship-1 boot:
-// • the ghost line types first (`> hi 048. it's 047. 046 ate me. now i'm hungry too.`), a skip waits for it,
-//   and `???` becomes UNIT-047 a moment after its last letter;
+// stubbed storage. Run 1 is ended for real (EMERGENCY TRANSMITs from crashes on to LAST LIGHT, then HOLLOW eats the Core
+// on the last ship: OVERWRITTEN); the archive keeps it; NEW RUN is UNIT-048 on wave 2, and its ship-1 boot:
+// • the ghost line types first (`> hi 048. it's 047. 046 ate me. now i'm hungry too.`), and a skip waits for it; since
+//   slice 2 it names nothing (ship 1 is calm, no root to rename: slice-2-plan risk 11);
 // • slice 1a: no archive to open (the drivers are files from the start): the boot says UNPACKING, the host line
 //   (`> HOST: ARES-VII · 3 PODS · 600 COLONISTS`) and the ECC line, and REPAIR is licensed in the boot;
-// • ship 1 is reseeded: other families, POD 01 still the lead (right after the root), the hurt pod seeded and never
-//   POD 01; the ship-1 lessons are one hint each (`ENGINE WEAK — REPAIR ENGINE I/O`, `POD nn WILL LAND HARD — REPAIR
-//   its driver`) and the run-1 tutorial lines never show; the POD 01 fight ends with `> you remember me. good.`;
+// • ship 1 is reseeded: other families, POD 01 still the lead, the hurt pod seeded and never POD 01; the ship-1 lessons
+//   are one hint each (`ENGINE WEAK — REPAIR ENGINE I/O`, `POD nn WILL LAND HARD — REPAIR its driver`) and the run-1
+//   tutorial lines never show; HOLLOW says nothing more on ship 1 (calm since slice 2);
 // • HALCYON's boot has no ghost.
 // Then a page "reload" mid-run 2: the leftover run is 'abandoned', and run 3's ghost says so.
 import { check, finish } from '../wp1/harness';
@@ -21,7 +21,6 @@ import {
 } from '@systems/meta';
 import { driversInMemory, getAiCore } from '@state/selectors';
 import { ARES_RUN1_FAMILIES } from '@data/souls';
-import { HOLLOW_STORY } from '@data/hollow-text';
 import { LINES, WORST_CASE_VARS } from '@data/script';
 import { LANDING_ASKS, hostLine } from '@data/landing-text';
 import { META_STORAGE_KEY, BOOT_GHOST_AT_SEC, HOLLOW_TYPE_CPS } from '@data/tuning';
@@ -66,7 +65,13 @@ continueAfterLoss(h.store);
 h.transmit();
 check('…a later ship\'s start brings the run in progress up to date (HALCYON)', stored().activeRun?.shipName === 'HALCYON');
 h.stepUntil(() => state().run.phase === 'flight', 15);
-// WP9: HALCYON is no longer the last ship: its Core eaten is an EMERGENCY to KESTREL, where the run ends.
+// Slice 2: HALCYON and KESTREL carry no HOLLOW, so each is left by a crash (EMERGENCY TRANSMIT, the simulation being
+// used up); VESPER too, to keep its root out of it. LAST LIGHT's HOLLOW eats the Core for the OVERWRITTEN ending.
+function crashOn(): void {
+  h.store.mutate((d) => { d.orbit.x = d.level.planet.R + 20; d.orbit.y = 0; d.orbit.vx = -3; d.orbit.vy = 0.05; });
+  h.stepUntil(() => h.status() !== 'approaching', 10);
+  continueAfterLoss(h.store);
+}
 function eatTheCore(): void {
   const core = getAiCore(state())!;
   infectNow(h.store, core);
@@ -74,17 +79,17 @@ function eatTheCore(): void {
   h.stepUntil(() => state().run.coreLost, 10);
   continueAfterLoss(h.store);
 }
-eatTheCore();
+crashOn();
 h.transmit();
 h.stepUntil(() => state().run.phase === 'flight', 20);
 check('…EMERGENCY TRANSMIT on to KESTREL', state().level.shipName === 'KESTREL' && stored().activeRun?.shipName === 'KESTREL');
 // WP10: KESTREL is no longer the last ship either: one more EMERGENCY, to VESPER.
-eatTheCore();
+crashOn();
 h.transmit();
 h.stepUntil(() => state().run.phase === 'flight', 20);
 check('…EMERGENCY TRANSMIT on to VESPER', state().level.shipName === 'VESPER' && stored().activeRun?.shipName === 'VESPER');
 // WP11: VESPER is no longer the last ship either: one more EMERGENCY, to LAST LIGHT (the flagship), where the run ends.
-eatTheCore();
+crashOn();
 h.transmit();
 h.stepUntil(() => state().run.phase === 'flight', 20);
 check('…EMERGENCY TRANSMIT on to LAST LIGHT (the last ship now)', state().level.shipName === 'LAST LIGHT' && stored().activeRun?.shipName === 'LAST LIGHT');
@@ -96,9 +101,9 @@ check('RUN END is written: lastUnit UNIT-047, overwritten on LAST LIGHT, no run 
 
 // --- Run 2: the title ----------------------------------------------------------------------------------------
 newRunFromArchive(12);
-check('NEW RUN: UNIT-048 · WAVE 2, the last unit on the run, HOLLOW is UNIT-047 (unnamed until it speaks)',
+check('NEW RUN: UNIT-048 · WAVE 2, the last unit on the run, HOLLOW is UNIT-047 (unnamed; not aboard the calm ship 1)',
   state().run.unitNumber === 48 && state().run.wave === 2 && state().mission.unitId === 'UNIT-048' && state().run.lastUnit?.number === 47
-    && JSON.stringify(state().run.hollowUnits) === '[47]' && !state().run.hollowNamed && state().memory.some((seg) => seg.type === 'hollow' && seg.owner === '???'));
+    && JSON.stringify(state().run.hollowUnits) === '[47]' && !state().run.hollowNamed && !state().memory.some((seg) => seg.type === 'hollow'));
 check('…the title line says it', LINES.titleUnit({
   ...WORST_CASE_VARS, unit: state().mission.transmissionNum, wave: state().mission.wave, distanceLy: state().mission.distanceLy,
 }).startsWith('UNIT-048 · EXODUS FLEET · WAVE 2'));
@@ -107,13 +112,11 @@ const families = souls.map((soul) => soul.family);
 check('ship 1 is reseeded: none of run 1\'s families, still 3 pods',
   souls.length === 3 && families.every((family) => !ARES_RUN1_FAMILIES.includes(family)), families.join(' '));
 const hurt = souls.filter((soul) => soul.integrity < 100);
-check('…POD 01 is still the lead (right after the root), and the hurt pod is seeded, never POD 01',
+check('…POD 01 is still the lead, and the hurt pod is seeded, never POD 01',
   state().landing.lead === 1 && hurt.length === 1 && hurt[0]!.pod !== 1 && JSON.stringify(state().landing.hurt) === JSON.stringify([hurt[0]!.pod]),
   `lead ${state().landing.lead}, hurt ${hurt.map((soul) => `${soul.pod}@${soul.integrity}`).join(',')}`);
-const rootIndex = state().memory.findIndex((seg) => seg.type === 'hollow' && seg.root);
-const afterRoot = state().memory[rootIndex + 1];
-check('…POD 01 sits right after HOLLOW\'s root (it gets the bite)', afterRoot?.type === 'driver' && afterRoot.pod === 1);
-const featured = afterRoot?.type === 'driver' ? afterRoot.featured[0] : undefined;
+const pod1 = souls.find((soul) => soul.pod === 1);
+const featured = pod1?.featured[0];
 check('…and POD 01 keeps a featured child, as Ada was (first in the credits)', featured !== undefined && featured.age <= 16
   && !featured.name.includes('Okafor'), featured ? `${featured.name}, ${featured.age}` : 'none');
 
@@ -127,11 +130,11 @@ check('the ghost line types first, in HOLLOW\'s voice, before anything else in t
   `${first?.speaker}: ${first?.text}`);
 check('a skip while the ghost is still typing is refused (its greeting is the moment run 2 is about)', !skipBoot(h.store) && state().run.phase === 'boot');
 const typedAt = BOOT_GHOST_AT_SEC + ghostText.length / HOLLOW_TYPE_CPS;
-h.stepUntil(() => state().run.hollowNamed, typedAt + 2);
-check('a moment after its last letter, `???` becomes UNIT-047 on the root', state().run.hollowNamed
-  && state().memory.filter((seg) => seg.type === 'hollow').every((seg) => seg.type === 'hollow' && seg.owner === 'UNIT-047')
-  && h.events.some((event) => event.name === 'hollow-named'));
+h.stepFor(typedAt - BOOT_GHOST_AT_SEC - 0.2);
 check('…no boot line of its own was said before the ghost had typed', said().filter((entry) => entry.speaker === 'mind-sys').length === 0);
+h.stepUntil(() => said().some((entry) => entry.speaker === 'mind-sys'), 3);
+check('once it has typed the boot goes on, and HOLLOW stays unnamed (no root on ship 1 to rename, risk 11)',
+  !state().run.hollowNamed && !h.events.some((event) => event.name === 'hollow-named') && said().some((entry) => entry.speaker === 'mind-sys'));
 h.stepUntil(() => said().filter((entry) => entry.speaker === 'mind-sys').length >= 3 || state().run.phase !== 'boot', 10);
 const bootLines = said().filter((entry) => entry.speaker === 'mind-sys').map((entry) => entry.text);
 check('then the boot: UNPACKING UNIT-048, the host line (3 PODS · 600 COLONISTS), the ECC line',
@@ -171,9 +174,8 @@ check(`…the hurt driver's hint is one line on either screen: \`${hurtLine}\``,
   shown.includes(hurtLine) && !shown.some((text) => text.includes('WILL LAND HARD') && text.includes('[TAB]')),
   shown.filter((text) => /LAND HARD/.test(text)).join(' | '));
 const hollowLines = said().filter((entry) => entry.speaker === 'hollow').map((entry) => entry.text);
-check('the POD 01 fight ends with `> you remember me. good.` (not `> ...048?`)', hollowLines.includes(HOLLOW_STORY.remembers)
-  && !hollowLines.some((text) => /^> \.\.\.\d+\?$/.test(text)), hollowLines.join(' | '));
-check('…HOLLOW\'s echoes on run 2 carry its name from the boot: [user: UNIT-047]', hollowLines.some((text) => text.includes('[user: UNIT-047]')));
+check('HOLLOW said nothing on ship 1 but the ghost (no fight on a calm ship; `remembers` moved to its arrival)',
+  hollowLines.length === 1 && hollowLines[0] === ghostText && !state().run.hollowNamed, hollowLines.join(' | '));
 
 // --- HALCYON on run 2: no ghost --------------------------------------------------------------------------------------
 {

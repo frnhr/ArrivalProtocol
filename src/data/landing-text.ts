@@ -167,10 +167,14 @@ export const LANDING_ASKS = {
 
 // Lessons, once each (§3.11).
 // No layer glyph (slice 2, the 1b rule): the strip draws ◆ from the rule's layer (ObjectiveStrip LAYER_GLYPH).
+// A returning unit's split lesson is the short form (v2 §5.2: "one hint each"): the counts, without the advice it already
+// took on its first run.
+const splitCounts = (counts: readonly { lz: string; pods: number }[]): string =>
+  `${counts.length} SITES · ${counts.map((count) => `${count.lz} ${count.pods}`).join(', ')}`;
 export const LANDING_LESSONS = {
   dot: 'PODS LAND WHERE THE DOT IS',
-  split: (counts: readonly { lz: string; pods: number }[]): string =>
-    `${counts.length} SITES · ${counts.map((count) => `${count.lz} ${count.pods}`).join(', ')} — don't overfill`,
+  split: (counts: readonly { lz: string; pods: number }[]): string => `${splitCounts(counts)} — don't overfill`,
+  splitShort: splitCounts,
 } as const;
 
 // ARRIVAL CONTROL's beats (§2): at the landing's start and at the first touchdown.
