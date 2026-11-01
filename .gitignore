@@ -6,3 +6,4 @@ dist/
 .tmp/
 tests/.out/
 __pycache__/
+pnpm-lock.yaml
