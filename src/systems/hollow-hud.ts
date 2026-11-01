@@ -10,8 +10,8 @@ import { segmentStarts } from '@systems/memory-ops';
 import { infectedSegments, healthKnown, isInfected, isFirewall, type InfectedSegment } from '@state/selectors';
 import { driverTouch } from '@systems/landing-rules';
 import { HOLLOW_HUD_TEXT } from '@data/hollow-text';
-import { THREAT_TEXT, traceCells as traceCellsText } from '@data/threat-text';
-import { traceCells, tallyPreview, beamSeedsInMemory } from '@state/threat-selectors';
+import { THREAT_TEXT, traceCells } from '@data/threat-text';
+import { traceFill, tallyPreview, beamSeedsInMemory } from '@state/threat-selectors';
 import { hollowLabel } from '@systems/say';
 import {
   RACK_BLOCKS, RACK_COUNT, INTEGRITY_MAX, HOLLOW_BITE_URGENT_SEC, CHEW_FULL_DRAIN, TUG_BEAT_PER_PCT, TUG_BEAT_MIN_HZ,
@@ -28,12 +28,12 @@ import {
 // • miniStripRows: the amber mini-strip, one row of cells per rack.
 // • chewLevel / tugTone: the chew's loudness and the tug-of-war's beating tones.
 // • traceMeter / reportTraceLine (phase 3 slice 2, 04 §4): TRACE as the MIND header, the mini-HUD and the LANDING
-//   REPORT draw it, from state/threat-selectors.ts (traceCells, tallyPreview), so the three never disagree.
+//   REPORT draw it, from state/threat-selectors.ts (traceFill, tallyPreview), so the three never disagree.
 
 // --- NEXT BITE ----------------------------------------------------------------------------------------
 
 export interface BiteClock {
-  secLeft: number | null;  // AI seconds to the next bite; null: no timer (ship 1 bites once, on its cue; a
+  secLeft: number | null;  // AI seconds to the next bite; null: no timer (the ARRIVAL stage bites once, on its cue; a
                            // coast-tied wake before the coast has fixed its time)
   time: string;            // `0:25`, or `?:??`
   key: string;             // `NEXT BITE`, or what THE DEAL made of it: `FED · BITE`, `FASTER BITE` (WP10)
@@ -136,9 +136,9 @@ function rootInMemory(memory: readonly Segment[]): number | null {
 }
 
 export function traceMeter(state: Readonly<GameState>): TraceMeter {
-  const { filled, total, over } = traceCells(state);
+  const { filled, total, over } = traceFill(state);
   const trace = state.run.threat.trace;
-  const cells = traceCellsText(trace);
+  const cells = traceCells(trace);
   const rootBlocks = state.run.threat.aboard ? rootInMemory(state.memory) : null;
   const metSeeds = (state.run.arrival?.seeds.length ?? 0) > 0 || beamSeedsInMemory(state.memory).length > 0;
   const visible = rootBlocks !== null || trace > 0 || metSeeds;
@@ -169,7 +169,7 @@ export function reportTraceLine(state: Readonly<GameState>): ReportTraceLine | n
   const tally = tallyPreview(state);
   if (tally.left === 0) {
     const met = (state.run.arrival?.seeds.length ?? 0) > 0;
-    return met ? { text: TRACE_UI_TEXT.clean(traceCellsText(tally.traceAfter)), tone: 'good' } : null;
+    return met ? { text: TRACE_UI_TEXT.clean(traceCells(tally.traceAfter)), tone: 'good' } : null;
   }
   if (tally.fed) return { text: THREAT_TEXT.reportFed(tally.left, hollowLabel(state.run)), tone: 'fed' };
   return { text: THREAT_TEXT.reportTrace(tally.left, tally.traceBefore, tally.traceAfter), tone: 'warn' };

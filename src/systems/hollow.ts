@@ -69,22 +69,25 @@ import {
 //   state/actions.ts cureInfection): the infection clears and the file recoils HOLLOW_RECOIL_SEC
 //   (bites skip it). The design rule (validateHollowDef) makes a started repair always win while
 //   charge lasts; at 0 the repair is aborted and its charge is lost.
-// • WAKE. Ship 1 ('loop-closed-once'): a moment after the loop first closes, one scripted bite on
-//   the driver next to the root (POD 01 · OKAFOR: "it waits until you brake"). Once that fight is decided
-//   it goes dormant: 1.5 s of silence, `> ...047?`, and ARRIVAL CONTROL says to ignore it (advanceStory). Later ships wake afterAiSec
-//   into the flight (or soon after the coast begins), bite at once and then on the timer; never while a
-//   debris dodge is open, nor in the WAKE_AFTER_DODGE_SEC after it closes (KESTREL, the lead's ruling).
-// • SEEDS (ship 3+, §6.6). Every seed.everySec (the first seed.firstAfterSec after the wake, counted only
+// • WAKE. The ARRIVAL stage ('loop-closed-once'; VESPER on the fixed five, folded with WALLS): a moment after the loop
+//   first closes, one scripted bite on the driver next to the root ("it waits until you brake"). Once that fight is
+//   decided a plain ARRIVAL goes dormant: 1.5 s of silence, `> ...047?`, and ARRIVAL CONTROL says to ignore it
+//   (advanceStory); a folded one ('arrives') keeps biting on WALLS's timer. A timed wake (the WALLS, SEEDS, HUNT and
+//   FINALE stages, and the seeds act's calm-only one) wakes afterAiSec into the flight (or soon after the coast begins),
+//   bites at once and then on the timer; never while a debris dodge is open, nor in the WAKE_AFTER_DODGE_SEC after it
+//   closes (the lead's ruling, from phase 2's KESTREL). A calm ship ('never') never wakes. In the seeds act only the
+//   seeds bite (onlySeedsBite: a file a seed ate is inert, bitersOf).
+// • SEEDS (the SEEDS stage on, §6.6). Every seed.everySec (the first seed.firstAfterSec after the wake, counted only
 //   while the flight is calm: HollowStepCtx.firstSeedHeld) a 2-block seed
 //   is telegraphed for SEED_TELEGRAPH_SEC (a blinking outline, the moment DELETE is licensed), then lands
 //   in free space as one more hollow block, which bites by the same rule. It aims at the walls that guard
-//   the colonists (seedSpot), or on VESPER at your filesystem tools (nearToolsSeedSpot), never at space a running
+//   the colonists (seedSpot), or in the HUNT stage at your filesystem tools (nearToolsSeedSpot), never at space a running
 //   op reserved; DELETE clears it, and the wall is back.
 //
 // stepHollow is the whole rule, pure: it reshapes the memory array and returns what happened. The
 // mount (mountHollow) runs it on the AI tick (flight and landing; pause stops it, warp never speeds
 // it), after the ops and the landing (a launch and a bite in the same tick: the launch wins), and turns
-// its events into one store update, aborted ops, alerts, sounds and the ship-1 script.
+// its events into one store update, aborted ops, alerts, sounds and the ARRIVAL stage's script.
 
 export type HollowSide = InfectionSide;
 
@@ -124,11 +127,11 @@ export interface HollowStepCtx {
   // This ship's HOLLOW (the state.hollow slice): its phase and its one bite timer are advanced in
   // place, like every per-tick number (§9 tick discipline).
   hollow: HollowState;
-  loopClosed: boolean;        // the TRUE path is a closed loop right now (ship 1's wake)
+  loopClosed: boolean;        // the TRUE path is a closed loop right now (the ARRIVAL stage's wake)
   coastAtAi: number | null;   // when the coast began (burn.coastAtAi): a later ship's wake may key on it
   owner: string;              // what a newly eaten block is called (`???`, later UNIT-046)
   // WP9 review round 2 (the lead's ruling for round 1): a debris dodge is open on the TRUE path, so a timed wake waits
-  // (KESTREL: its bites, alarms and tutorials would bury the dodge's countdown, the ship's one decision that runs out).
+  // (phase 2's KESTREL: its bites, alarms and tutorials would bury the dodge's countdown, the ship's one decision that runs out).
   wakeHeld: boolean;
   // The flight is at TACTICAL pace (a burn, its last seconds, the ring, an alarm): the FIRST seed waits for a calm
   // flight, so DELETE's licence and the RM THE SEED lesson never land under a NOW / KEEP HOLDING / RELEASE line.
@@ -240,9 +243,9 @@ export function bitersOf(memory: readonly Segment[], cfg: Readonly<HollowDef>): 
   return new Set(memory.filter((seg) => isHollow(seg) && seg.seed === true).map((seg) => seg.id));
 }
 
-// Ship 1's one bite (§6.6): the driver next to the root, by address (POD 01 · OKAFOR unless it was
-// moved). Only a driver: the scripted bite is about the people. A WALL or another neighbour means
-// nothing is bitten, silently (the fizzle is for the timer's bites).
+// The ARRIVAL stage's one bite (§6.6, phase 2's ship 1): the driver next to the root, by address. Only a driver: the
+// scripted bite is about the people. A WALL or another neighbour means nothing is bitten, silently (the fizzle is for
+// the timer's bites).
 // Phase 3 slice 2: the root sits in its slot between two drivers (GAPs of 2 and 1, 04 §3.8), so the nearer one is
 // bitten (the smaller GAP; of equal ones the first in reach order): VESPER's POD 09, the ship's lead.
 function scriptedBite(memory: readonly Segment[], aiNow: number, events: HollowEvent[]): void {
@@ -355,7 +358,7 @@ function sparedFromToolHunt(memory: readonly Segment[], starts: readonly number[
   return start < UNIT_RACKS_START + RACK_BLOCKS && start + seg.size > UNIT_RACKS_START;
 }
 
-// Where the next seed lands on a ship whose seeds hunt your tools ('near-tools', VESPER, §6.6, WP10): a free gap with a
+// Where the next seed lands on a ship whose seeds hunt your tools ('near-tools', the HUNT stage, §6.6, WP10): a free gap with a
 // filesystem tool's file right beside it, and in it the end that faces the tool, SEED_TOOL_GAP_BLOCKS free blocks from it
 // (fewer if the gap is that small, or right against the tool when that keeps the far side a WALL off a spared file): a
 // GAP the seed bites across at its next bite, so it really comes for that tool, while the rest of the gap stays a WALL
@@ -728,7 +731,7 @@ export function bittenAgainDrivers(state: Readonly<GameState>): DriverSegment[] 
   });
 }
 
-// HOLLOW's root (the ship's `R` token; LAST LIGHT's is the one the duel deletes), or null once it is gone.
+// HOLLOW's root (laid out in the ship's `S` slot; the final ship's is the one the duel deletes), or null once it is gone.
 export function theRoot(memory: readonly Segment[]): HollowSegment | null {
   return rootBlock(memory);
 }
@@ -768,10 +771,10 @@ export function drainRatePerSec(cfg: HollowDef, thrustDelivered: boolean, landin
   return cfg.drainPerSec * Math.max(thrustDelivered ? cfg.burnMult : 1, landingActive ? cfg.landMult : 1);
 }
 
-// When a timed wake comes (a later ship): afterAiSec into the flight, or coastLeadSec after the coast
-// began if that is sooner (HALCYON: the fight belongs to the coast, WP7); and never before WAKE_AFTER_DODGE_SEC
+// When a timed wake comes (the WALLS stage on): afterAiSec into the flight, or coastLeadSec after the coast
+// began if that is sooner (phase 2's HALCYON: the fight belongs to the coast, WP7); and never before WAKE_AFTER_DODGE_SEC
 // after a debris dodge's hold ended (`holdEndedAtAi`, HollowState.wakeHoldEndedAtAi; while the hold lasts there is
-// no wake at all). null for ship 1's scripted wake and a calm ship's 'never'.
+// no wake at all). null for the ARRIVAL stage's scripted wake and a calm ship's 'never'.
 export function timedWakeAtAi(cfg: HollowDef, coastAtAi: number | null, holdEndedAtAi: number | null): number | null {
   if (typeof cfg.wake === 'string') return null;
   const lead = cfg.wake.coastLeadSec;
@@ -782,14 +785,14 @@ export function timedWakeAtAi(cfg: HollowDef, coastAtAi: number | null, holdEnde
 // The timed wake once it can no longer move, at AI time `aiNow`; null while a coast that has not begun
 // yet could still bring a coast-tied wake sooner, or while a debris dodge holds it (NEXT BITE then shows no
 // time: a countdown that jumped from 0:22 to 0:05 as the coast began, or stood still through the dodge, would
-// lie, pillar 5). Throws for ship 1's scripted wake.
+// lie, pillar 5). Throws for the ARRIVAL stage's scripted wake.
 // A calm-only wake (the seeds-only config, 04 §3.5) has no fixed moment: it comes once afterAiSec of calm flight have
 // passed (HollowState.calmAiSec), so this is the moment it would come if the flight stays calm from now; at TACTICAL it
 // moves with the clock, and a countdown read from it stands still instead of jumping (pillar 5).
 export function settledWakeAtAi(
   cfg: HollowDef, coastAtAi: number | null, aiNow: number, hollow: Pick<HollowState, 'wakeHeld' | 'wakeHoldEndedAtAi' | 'calmAiSec'>,
 ): number | null {
-  if (cfg.wake === 'loop-closed-once') throw new Error('settledWakeAtAi: ship 1\'s wake is scripted, not timed');
+  if (cfg.wake === 'loop-closed-once') throw new Error('settledWakeAtAi: the ARRIVAL stage\'s wake is scripted, not timed');
   if (cfg.wake === 'never') return null;
   if (hollow.wakeHeld) return null;
   if (cfg.wake.calmOnly) return aiNow + Math.max(0, cfg.wake.afterAiSec - hollow.calmAiSec);
@@ -798,9 +801,9 @@ export function settledWakeAtAi(
   return couldComeSooner ? null : timedWakeAtAi(cfg, coastAtAi, hollow.wakeHoldEndedAtAi);
 }
 
-// Ship 1 bites HOLLOW_SCRIPTED_BITE_DELAY_SEC after the true path first closes (the CAPTURED moment
-// first, then the bite as a beat of its own); later ships at their timed wake, unless a debris dodge holds
-// it. Marks ship 1's bite time in ctx.hollow the first time the loop is closed. A calm ship ('never') never wakes, and
+// The ARRIVAL stage bites HOLLOW_SCRIPTED_BITE_DELAY_SEC after the true path first closes (the CAPTURED moment
+// first, then the bite as a beat of its own); every other stage at its timed wake, unless a debris dodge holds
+// it. Marks its bite time in ctx.hollow the first time the loop is closed. A calm ship ('never') never wakes, and
 // nothing wakes with no hollow block in memory (phase 3 slice 2: a seeds-only ship whose beam brought no seed): there is
 // nobody to bite, and a wake would start a NEXT BITE clock and lines for nothing.
 // A calm-only wake (the seeds-only config: beam seeds before HOLLOW boards, 04 §3.5) counts only AI seconds of calm
@@ -882,7 +885,7 @@ export function stepHollow(memory: Segment[], dtAi: number, cfg: HollowDef, ctx:
     stepBeamSeedsBeforeFight(memory, dtAi, ctx, events);
   }
 
-  // 2b. Seeds (ship 3+): their telegraph, then the landing. Not while THE DEAL's pause lasts ("i leave the others alone").
+  // 2b. HOLLOW's own seeds (the SEEDS stage on): their telegraph, then the landing. Not while THE DEAL's pause lasts ("i leave the others alone").
   if (cfg.seed !== null && hollow.phase === 'awake' && !dealPaused) stepSeeds(memory, dtAi, cfg.seed, ctx, events);
 
   // 3. The drain, and what it eats. The Core clamps at 0 and the ship is lost; anything else turns. The driver THE
@@ -948,7 +951,7 @@ export function netLossPerSec(state: Readonly<GameState>, seg: HealthSegment): n
 // landing projects it (drainRatePerSec with thrust: the larger of burnMult and landMult) only while thrust is delivered
 // or the burn the landing offers is due within TACTICAL_LEAD_BURN_TAC (the strip is asking for it: GET READY, HOLD
 // [SPACE] NOW), and the landing's coast rate (landMult, as 1a) otherwise. WHY: projecting the burn all landing long would
-// run every landing countdown at half speed while coasting (ship 1's scripted bite came 20 s early, not 10), and never
+// run every landing countdown at half speed while coasting (phase 2's ship-1 scripted bite came 20 s early, not 10), and never
 // projecting it would make a countdown jump at every burn the strip asks for. So a countdown jumps only when the kid
 // fires uninvited.
 export function projectedDrainPerSec(state: Readonly<GameState>): number {
@@ -1006,10 +1009,10 @@ export function coreInfected(state: Readonly<GameState>): boolean {
   return state.memory.some((seg) => seg.type === 'core' && seg.infected !== undefined);
 }
 
-// HOLLOW names itself (ship 2, `> i was 046.`, the story below; on a later run its ghost at the ship-1
-// boot, systems/boot.ts): every hollow block and every TERMINAL tag from now on carry its unit name.
-// 'hollow-named' is the moment (the name decodes on the strip, WP7 part 2). Once named it stays named, so a
-// second naming (HALCYON's lines on a run whose ghost already spoke) changes nothing and plays nothing.
+// HOLLOW names itself (`> i was 046.`, the story below: on the ship it boards, VESPER on the fixed five; or the final
+// ship's wake, or finale.ts at ORBIT LOCK, on a run that never got that far): every hollow block and every TERMINAL tag
+// from now on carry its unit name. 'hollow-named' is the moment (the name decodes on the strip, WP7 part 2). Once named
+// it stays named, so a second naming changes nothing and plays nothing.
 export function nameHollow(store: Store<GameState>): boolean {
   if (store.getState().run.hollowNamed) return false;
   const owner = hollowUnitName(store.getState().run.hollowUnits);
@@ -1027,7 +1030,7 @@ export function nameHollow(store: Store<GameState>): boolean {
 }
 
 // The clean drivers HOLLOW bites next (across a GAP, or as soon as their recoil ends), in reach order: the ones to
-// MOVE behind a WALL (HALCYON's strip line). One per pod. Pure.
+// MOVE behind a WALL (the walls lesson's strip line). One per pod. Pure.
 export function exposedDrivers(state: Readonly<GameState>): DriverSegment[] {
   const drivers: DriverSegment[] = [];
   for (const reach of hollowReach(state.memory, state.clock.aiSec, bitersOf(state.memory, state.hollow.cfg))) {
@@ -1080,8 +1083,8 @@ function syncAlerts(store: Store<GameState>): void {
 let hollowRng: Rng | null = null;
 // The run's first seed (its telegraph) has been met: `> sorry. i'm so hungry.` is said once a run (director.done).
 export const SEED_SORRY_ID = 'hollow-seed-sorry';
-// Ship 1's script (the fight's target is HollowState.scriptTargetId): whether the repair that won it was just heard on
-// the bus; and the story after the fight (null until it is decided, and again once it is told).
+// The ARRIVAL stage's script (the fight's target is HollowState.scriptTargetId): whether the repair that won it was just
+// heard on the bus; and the ship's story (null until it starts, and again once it is told).
 let curedTargetPending = false;
 let story: Story | null = null;
 // Bites of the timer since a folded ARRIVAL + WALLS decided its scripted fight: its naming waits for the first one
@@ -1123,10 +1126,10 @@ function endCoreLost(store: Store<GameState>): void {
   emit('core-lost', NO_PAYLOAD);
 }
 
-// Ship 1's story after the fight (§6.6, §7.2), in order, each beat with room of its own (say.ts
-// createStory: a beat waits until both screens have typed everything said before it):
+// The story after the ARRIVAL stage's fight (§6.6, §7.2; phase 2's ship 1), in order, each beat with room of its own
+// (say.ts createStory: a beat waits until both screens have typed everything said before it):
 // 1. the fight's own moment comes first: SAVED or EATEN, its sound and its echo;
-// 2. once both screens have been quiet HOLLOW_STORY_SILENCE_SEC (HOLLOW's slow `> eat pod01 ...` takes a few
+// 2. once both screens have been quiet HOLLOW_STORY_SILENCE_SEC (HOLLOW's slow `> eat pod09 ...` takes a few
 //    seconds), HOLLOW types `> ...047?` (on a later run, whose ghost greeted the unit at the boot,
 //    `> you remember me. good.`);
 // 3. HOLLOW_CONTROL_AFTER_SEC after it CONTROL says to ignore it, and if anything else spoke in between,
@@ -1164,8 +1167,9 @@ function shipOneStory(state: Readonly<GameState>): StoryBeat[] {
   return [...(state.run.threat.told.noticed ? [] : noticedBeats()), toldBeat(HOLLOW_STORY_READ_SEC)];
 }
 
-// HALCYON's story (§1 reveal 2, §5.1 2:50, §9 WP7 item 5): HOLLOW names itself. It starts at the wake,
-// once the bite's own slow echoes (`> infect pod04   [user: ???]`, one per bitten driver) have typed, and
+// The naming (§1 reveal 2, §5.1 2:50, §9 WP7 item 5; phase 2's HALCYON, VESPER's on the fixed five): HOLLOW names
+// itself. It starts at a timed wake, or at a folded ARRIVAL's first timed bite after its fight, once the bite's own slow
+// echoes (`> infect pod04   [user: ???]`, one per bitten driver) have typed, and
 // every beat waits for both screens to be quiet (say.ts createStory), so no two story lines ever type at
 // once, whatever the kid's own repairs echo meanwhile:
 // 1. `> hello 047. they sent me with 36 blocks of charge too.` (in pink, at HOLLOW's slow speed);
@@ -1175,7 +1179,7 @@ function shipOneStory(state: Readonly<GameState>): StoryBeat[] {
 // 4. HOLLOW_CONTROL_AFTER_SEC later ARRIVAL CONTROL: `UNIT-046 was decommissioned. Please ignore it. :)`;
 // 5. once the landing starts (the walls held, its food is leaving): `> i ran out. then i got so hungry.`, and
 //    when that has been read the story is told. The LANDING REPORT waits while the story is pending (LEAD-1's
-//    rule, as on ship 1).
+//    rule, as for the ARRIVAL stage's story).
 // The naming (steps 1–4); `ready`, a condition the first line waits for (a folded ship's first timed bite).
 function namingBeats(ready?: StoryBeat['ready']): StoryBeat[] {
   return [
@@ -1311,7 +1315,7 @@ function writesCopy(operation: Op, segId: string): boolean {
 // Turns one tick's events into the game's reactions: ops on eaten files aborted (their own onAbort
 // settles them: a repair's spent charge is lost, a move hands its reserved space back), ONE store
 // update for the batch (memoryRev, the pods whose drivers were eaten, the selection following an eaten
-// file), then HOLLOW's echoes, the moments on the event bus, and the ship-1 script.
+// file), then HOLLOW's echoes, the moments on the event bus, and the ARRIVAL stage's script.
 function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], phaseChanged: boolean): void {
   const memory = store.getState().memory;
   if (IS_DEV) assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
@@ -1404,19 +1408,19 @@ function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], ph
         break;
     }
   }
-  // Ship 1's wake found nobody to bite (the driver next to the root was moved behind a WALL): the
+  // The ARRIVAL stage's wake found nobody to bite (the driver next to the root was moved behind a WALL): the
   // fight is over before it began, and HOLLOW still notices you.
   if (phaseChanged && store.getState().hollow.cfg.wake === 'loop-closed-once' && !scriptedHit && store.getState().hollow.scriptTargetId === null) {
     decideScript(store);
   }
-  // A timed wake (HALCYON): its story begins now, after this tick's bite echoes.
+  // A timed wake (WALLS's naming, the FINALE's missed beats): its story begins now, after this tick's bite echoes.
   if (phaseChanged && store.getState().hollow.cfg.wake !== 'loop-closed-once' && store.getState().hollow.phase === 'awake') {
     startWakeStory(store);
   }
 }
 
 function tick(store: Store<GameState>, dtAi: number): void {
-  // The repair that won the ship-1 fight (heard on the bus, acted on here: never inside an emit).
+  // The repair that won the ARRIVAL stage's fight (heard on the bus, acted on here: never inside an emit).
   if (curedTargetPending) {
     curedTargetPending = false;
     decideScript(store);
@@ -1468,7 +1472,7 @@ function sideFacingHollow(memory: readonly Segment[], seg: Segment): HollowSide 
 
 // Infects a file now, from the side facing HOLLOW (?debug `__ap.infect('POD 01')`, tests). On a ship
 // whose HOLLOW still waits for its scripted bite, this IS that bite: it wakes, and the fight that
-// follows is the ship-1 script's.
+// follows is the ARRIVAL stage's script's.
 export function infectNow(store: Store<GameState>, seg: Segment): void {
   if (!isInfectable(seg)) throw new Error(`infectNow: ${seg.name} can't be infected`);
   if (seg.infected) return;
@@ -1513,7 +1517,7 @@ export function acceptDeal(store: Store<GameState>, driver: DriverSegment): void
 }
 
 // Heals an infected file to 100 at once and cures it, exactly as a winning repair would (recoil,
-// sparkles, the ship-1 script): ?debug `__ap.cure('POD 01')`.
+// sparkles, the ARRIVAL stage's script): ?debug `__ap.cure('POD 01')`.
 export function cureNow(store: Store<GameState>, seg: Segment): void {
   if (!isInfected(seg)) throw new Error(`cureNow: ${seg.name} is not infected`);
   store.update((draft) => {

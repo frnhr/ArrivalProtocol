@@ -94,7 +94,7 @@ export interface GameEvents {
   // and the AI Core was eaten to 0, which loses the ship (the CORE LOST card).
   'hollow-bite': Record<string, never>;
   // `driver`: the bitten file is a pod's driver (the run's stats count those bites for the draft, WP8).
-  // `scripted`: ship 1's one scripted bite (the story's), not one HOLLOW chose.
+  // `scripted`: the ARRIVAL stage's one scripted bite (the story's), not one HOLLOW chose.
   'hollow-infect': { segId: string; side: InfectionSide; driver: boolean; scripted: boolean };
   'hollow-wall': { hollowId: string; side: InfectionSide; gapBlocks: number };
   // WP8: a FIREWALL.sys held a bite (`side`: the way HOLLOW looked, so the FIREWALL's edge that faces it is
@@ -105,7 +105,7 @@ export interface GameEvents {
   // `driver`: a pod lost its driver (its last copy was eaten), not merely one copy of it gone.
   'hollow-consume': { segId: string; ate: string; driver: boolean };
   'core-lost': Record<string, never>;
-  // WP7: HOLLOW said who it is (HALCYON, `> i was 046.`): every hollow block now carries `name`.
+  // WP7: HOLLOW said who it is (on the ship it boards, `> i was 046.`): every hollow block now carries `name`.
   'hollow-named': { name: string };
   // WP7 part 2: the name flip was seen (in blue: at once, or on the kid's first look), so its sound
   // plays with the picture (like 'crack-shown').

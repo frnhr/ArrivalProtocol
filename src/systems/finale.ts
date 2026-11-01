@@ -217,7 +217,8 @@ function stepSpikes(state: Readonly<GameState>, dtAi: number): void {
 // --- The moments ---------------------------------------------------------------------------------------------------
 
 // ORBIT LOCK (or ACCEPT) on the flagship: the root opens for the duel. ARRIVAL CONTROL names it in its order, so a HOLLOW
-// that never said who it is (only a unit that skipped HALCYON: ?debug, a suite) is named here first.
+// that never said who it is (a run that lost VESPER before its naming and whose final-ship wake story was cut short, or
+// ?debug and a suite that start at LAST LIGHT) is named here first: the last fallback (slice 2, THREAT deviation 11).
 function openRoot(store: Store<GameState>): void {
   const root = theRoot(store.getState().memory);
   if (root === null) throw new Error('finale: the flagship has no root to open');

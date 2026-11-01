@@ -147,7 +147,7 @@ export interface FreeSegment extends SegmentBase {
 // names itself); `ate` is the file an eaten block used to be, so INSPECT can say what was lost, and
 // `atePod` the pod number when it was a pod's driver, so the strip can say whose it was (ATE POD 01) and MERGE can
 // give it back in place.
-// `seed` marks a 2-block seed it dropped into free space (ship 3+, §6.6): it bites like any hollow block,
+// `seed` marks a 2-block seed it dropped into free space (the SEEDS stage on, §6.6; or rode the beam in, `beam`): it bites like any hollow block,
 // and DELETE clears it. `beam` marks a beam-born block (phase 3 slice 2, 04 §3.4–§3.7): a seed that rode the beam in
 // behind its target, or a block such a seed (or another beam-born block) made by eating a file; each one left in memory
 // at a ship's end adds to TRACE (or feeds HOLLOW's next root once it is aboard). `words` is a beam seed's line from

@@ -45,13 +45,13 @@ export function rootBlocksFor(stage: HollowStage, folded: readonly HollowStage[]
   return Math.min(PRE_FINAL_ROOT_CAP, base + fed);
 }
 
-// A ship HOLLOW is aboard (not the final one): its stage, and on its first ship one hop from a final ship, WALLS folded
-// into ARRIVAL (04 §3.9: "walls are the one defence the finale cannot do without").
 // The ship's facts the verdict echoes (ShipThreat's first four fields).
 function factsOf(input: Readonly<ThreatInput>): Pick<ShipThreat, 'depth' | 'isFinal' | 'oneHopFromFinal' | 'beamSeeds'> {
   return { depth: input.depth, isFinal: input.isFinal, oneHopFromFinal: input.oneHopFromFinal, beamSeeds: structuredClone(input.beamSeeds) as BeamSeedSource };
 }
 
+// A ship HOLLOW is aboard (not the final one): its stage, and on its first ship one hop from a final ship, WALLS folded
+// into ARRIVAL (04 §3.9: "walls are the one defence the finale cannot do without").
 function hollowShip(input: Readonly<ThreatInput>, boards: ShipThreat['boards']): ShipThreat {
   const age = input.aboard ? input.age + 1 : 1;
   const stage = stageForAge(age);

@@ -495,7 +495,7 @@ export function mountRun(store: Store<GameState>): () => void {
       else if (kind === 'delete') bump('deletes');
     }),
     on('hollow-consume', ({ driver }) => { if (driver) bump('driversLost'); }),
-    // Ship 1's scripted bite happens to every kid (WP12 p3, WP8 verify): only the bites HOLLOW chose count, so the draft's
+    // The ARRIVAL stage's scripted bite happens to every kid (WP12 p3, WP8 verify): only the bites HOLLOW chose count, so the draft's
     // mild FIREWALL reason (`??? bit a driver`) says something about this run.
     on('hollow-infect', ({ driver, scripted }) => { if (driver && !scripted) bump('driversBitten'); }),
     on('locked', () => { orbitReached = true; }),

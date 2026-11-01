@@ -869,7 +869,7 @@ export const EATEN_ALARM_SEC = 10;
 // printer's (printMult 1), up to twice as far out: the alarm raised in flight must not clear there
 // and sound a second klaxon at the next rise. Just over twice EATEN_ALARM_SEC covers the ×2.
 export const EATEN_ALARM_CLEAR_SEC = 21;
-// Ship 1's scripted bite lands this many AI seconds after the true path first closes (§5.1: CAPTURED
+// The ARRIVAL stage's scripted bite lands this many AI seconds after the true path first closes (§5.1: CAPTURED
 // at 1:10, the bite at 1:11). The CAPTURED chord and its duck (AUDIO_DUCK_HOLD_SEC + _RELEASE_SEC) are
 // over, so the chomp and the pink toggle land as a beat of their own, still inside the capture burn
 // (which doubles the drain: P1). Longer would push "idle loses C12 30 ± 2 s after the lock" (§9 WP6
@@ -983,7 +983,7 @@ export const WALL_RULE_SHOW_SEC = 8;
 // The strip's `MOVE your FIREWALL (FW) into the GAP next to ???` (WP8 fix round 1) stands this long at most:
 // long enough to TAB in and pick up MOVE, then it gives the strip back (the Skills window keeps the hint).
 export const FIREWALL_HINT_SHOW_SEC = 12;
-// HALCYON's naming (systems/hollow.ts): `???` flips to UNIT-046 this long after `> i was 046. they sent
+// The naming (systems/hollow.ts; phase 2's HALCYON, VESPER's now): `???` flips to UNIT-046 this long after `> i was 046. they sent
 // me first.` has typed out: the last letter lands, a breath, then the name changes on the strip.
 export const HOLLOW_NAME_AFTER_TYPED_SEC = 0.4;
 
@@ -1051,7 +1051,7 @@ export const BEAM_OUT_BLACKOUT_SEC = 1.6;
 // the send's own, on the next screen).
 export const BEAM_OUT_SWEEP_SEC = 0.7;
 
-// HOLLOW names itself (HALCYON): `???` decodes into UNIT-046 on every hollow block over this long, a letter
+// HOLLOW names itself (on the ship it boards): `???` decodes into UNIT-046 on every hollow block over this long, a letter
 // at a time through static, as the truth note falls. Seen later (the kid was flying), it plays this long
 // after the jack-in, once the scanline wipe has cleared.
 export const HOLLOW_NAME_DECODE_MS = 1100;
@@ -1103,7 +1103,7 @@ export const DRAFT_FUEL_TRIM_BELOW_PCT = 20;
 // The mild step of each boost (WP8 fix round 1, the lead's note: the draft must answer how the kid played).
 // §6.9's thresholds are trouble a clean tutorial never reaches (5 REPAIRs, a lost cluster, FUEL under the ★),
 // so its draft said `ARRIVAL CONTROL had a spare` on two or three cards. A taste of the same trouble gives the
-// card a smaller push and its reason: a bite on a cluster (ship 1's scripted bite counts, saved or not), a
+// card a smaller push and its reason: a bite on a cluster (the ARRIVAL stage's scripted bite counts, saved or not), a
 // second REPAIR (the ENGINE I/O lesson is the first), one refused click on busy THREADS, a sixth of a fresh
 // unit's 36 REPAIR CHARGE spent, half the FUEL burned. Small against the strong boosts, so FIREWALL after a
 // loss still leads (about 80% of drafts against four mild cards).
@@ -1610,9 +1610,9 @@ export const DRAG_STAMP_MS = 2600;
 
 // Beam seeds before HOLLOW boards (04 §3.5, §3.17) run on SEEDS_ONLY_DEF (data/threats.ts): the first bite after this many
 // AI s of calm flight (the clock stands still at TACTICAL, as phase 2's first seed waited for a calm flight), so a seed
-// never bites under a burn's lines and the kid has the RM lesson's time to answer it. HALCYON's HOLLOW woke at 30.
+// never bites under a burn's lines and the kid has the RM lesson's time to answer it. Phase 2's HALCYON woke at 30.
 export const BEAM_SEED_FIRST_BITE_CALM_SEC = 30;
-// Then a bite every 25 AI s: HALCYON's WALLS rhythm, the one a kid already met as "HOLLOW's" pace.
+// Then a bite every 25 AI s: the WALLS stage's rhythm (phase 2's HALCYON), the pace HOLLOW keeps once it boards.
 export const BEAM_SEED_BITE_EVERY_SEC = 25;
 // 2.5 %/s: weaker than HOLLOW's own 3.5, so a seed is a tax, not a fight; the worst 2.5 × 2 = 5 (the multipliers never
 // stack), and heal(8) 18.5 still beats 1.5 × 5 (validateHollowDef).

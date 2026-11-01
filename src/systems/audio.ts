@@ -1172,7 +1172,7 @@ function cueTransitHit(mix: Graph, t0: number): void {
   sweep(body.frequency, t0, 180, 70, 0.14);
 }
 
-// HOLLOW's name decoding out of `???` (HALCYON): its own detuned square blips, the wrong little scale it
+// HOLLOW's name decoding out of `???` (on the ship it boards): its own detuned square blips, the wrong little scale it
 // types in, stepping DOWN to its lowest note while a band of static settles, the letters locking in. It
 // plays over the reveal's truth note (the floor dropping away), the first turn's sound under the second's.
 function cueNameGlitch(mix: Graph, t0: number): void {

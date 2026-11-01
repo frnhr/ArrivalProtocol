@@ -13,7 +13,7 @@ import { POD_STATE_TEXT } from '@data/landing-text';
 // FinaleChoice's MERGE line names at most this many pods, then `+n`: five pod codes ran it past one line (70 characters).
 const MERGE_GAIN_MAX_PODS = 3;
 
-// What HOLLOW is called on screen until it names itself (ship 2, `> i was 046.`): its root is built
+// What HOLLOW is called on screen until it names itself (`> i was 046.`, on the ship it boards): its root is built
 // with this owner, and the TERMINAL tags its lines with it.
 export const UNNAMED_HOLLOW = '???';
 
@@ -100,7 +100,7 @@ export function hollowUnitWords(units: readonly number[]): string {
   return digits.length === 1 ? digits[0]! : `${digits.slice(0, -1).join(', ')} and ${digits[digits.length - 1]!}`;
 }
 
-// Ship 1's script (§6.6, §5.1 1:11–1:23). After the first fight HOLLOW notices you (`> ...047?`), and ARRIVAL
+// The ARRIVAL stage's script (§6.6, §5.1 1:11–1:23; phase 2's ship 1). After the first fight HOLLOW notices you (`> ...047?`), and ARRIVAL
 // CONTROL is cheerful about it.
 export const HOLLOW_STORY = {
   // `> ...047?`: our own unit number, as HOLLOW would say it (lowercase, three digits).

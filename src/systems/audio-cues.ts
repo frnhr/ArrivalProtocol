@@ -200,7 +200,7 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     on('hollow-firewall', () => onceThisTick('fizzle')),
     on('hollow-consume', ({ driver }) => onceThisTick(driver ? 'sombreFall' : 'hollowBite')),
     on('hollow-cure', () => onceThisTick('driverSaved')),
-    // WP7: HOLLOW names itself (HALCYON, `> i was 046.`): the second turn of the story gets the first one's
+    // WP7: HOLLOW names itself (on the ship it boards, `> i was 046.`): the second turn of the story gets the first one's
     // truth note, the floor dropping away under one high glass note, with HOLLOW's own blips stepping down
     // through static as `???` decodes into UNIT-046. Heard with the picture: at once in blue, else on the
     // kid's first look (components/memory-view/HollowNameFx, 'hollow-name-shown').

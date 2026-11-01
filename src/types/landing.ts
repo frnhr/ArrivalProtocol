@@ -186,7 +186,7 @@ export interface LandingState {
   terrain: TerrainWord;
   drag: boolean;
   finalShip: boolean;           // ShipDef.flagship, copied: L0 and the finale's wait
-  lead: number;                 // the story pod: credits first, the scripted bite's target on ARES-VII
+  lead: number;                 // the story pod: credits first, the scripted bite's target beside the root (VESPER's POD 09)
   hurt: number[];               // pods built hurt (run 1's POD 02)
   colonyFirstRun: string | null; // the def's written colony name, copied (null: colonyName rolls one)
   colony: string | null;        // named at the ship's first touchdown

@@ -55,8 +55,8 @@ export function unitName(unitNumber: number): string {
   return `UNIT-${unitDigits(unitNumber)}`;
 }
 
-// What the kid calls HOLLOW right now: '???' until it has said who it is (ship 2's `> i was 046.`, or on a
-// later run the ghost at the ship-1 boot: run.hollowNamed), then its units' name (run.hollowUnits:
+// What the kid calls HOLLOW right now: '???' until it has said who it is (`> i was 046.` on the ship it boards, or
+// finale.ts at the final ship's ORBIT LOCK: run.hollowNamed), then its units' name (run.hollowUnits:
 // `UNIT-046`, on a later run the last unit, systems/meta.ts hollowName). Its blocks, the TERMINAL's
 // `[user: …]` tags and the line vars all read it here.
 export function hollowLabel(run: Readonly<Pick<RunState, 'hollowUnits' | 'hollowNamed'>>): string {
@@ -114,8 +114,8 @@ export function voicesQuietFromAi(state: Readonly<GameState>): number {
   return Math.max(mindTypedByAi(state), radioTypedByAi(state));
 }
 
-// A story told one beat at a time (LEAD-1): HOLLOW after the ship-1 fight (systems/hollow.ts), and
-// WP7's HALCYON wake lines (`> hello 047…`, `> i was 046…`, CONTROL). Each beat waits for
+// A story told one beat at a time (LEAD-1): HOLLOW after the ARRIVAL stage's fight (systems/hollow.ts), and
+// its naming lines (`> hello 047…`, `> i was 046…`, CONTROL). Each beat waits for
 // • afterSec since the beat before it was told (the first: since the story began);
 // • ready, when it has a condition of its own (a reveal still playing must end first);
 // • silenceSec of quiet on BOTH screens once everything said so far has typed (voicesQuietFromAi):

@@ -330,7 +330,7 @@ export function isOverclocked(state: Readonly<GameState>, pace: Pace, _pred: Pre
 // SKIP's refusal when ACCEPT ORBIT is the only way on (Prediction.acceptOnly, LEAD-1 and the lead's Rule 4):
 // no burn the FUEL left can make saves the ship. The strip names ACCEPT ORBIT in the same words.
 export const SKIP_REFUSAL_STRANDED = 'NOT ENOUGH FUEL';
-// SKIP's refusal in the few seconds between the coast's start and a coast-tied wake (HALCYON).
+// SKIP's refusal in the few seconds between the coast's start and a coast-tied wake (the WALLS stage on).
 export const SKIP_REFUSAL_WAKING = 'SOMETHING IS WAKING UP';
 // SKIP's refusal in the last SKIP_END_LEAD_TAC before a debris dodge's deadline (WP9 review round 2; round 1 refused
 // it for the whole window), as the kid sees it: the countdown on the strip (`· 0:12 to dodge DEBRIS C`), or, while
@@ -392,7 +392,7 @@ function skipInhibitor(state: Readonly<GameState>, pred: Prediction): string | n
   if (close) return skipRefusalZoneAhead(close.kind);
   // (A debris dodge still open is not an inhibitor: its deadline is the SKIP's next event, and the SKIP ends ahead of
   // it, so the world never skips through the choice; see nextEvent and skipBlockReason.)
-  // HALCYON (WP7): the coast has begun and HOLLOW wakes within moments of it (its wake's coastLeadSec):
+  // A coast-tied wake (WP7, phase 2's HALCYON): the coast has begun and HOLLOW wakes within moments of it (its wake's coastLeadSec):
   // a SKIP now would carry the kid past the fight the coast is for.
   if (hollowWaking(state)) return SKIP_REFUSAL_WAKING;
   // KESTREL (seeds): HOLLOW is awake and its first seed is still to come. A kid who walls the first bites and SKIPs

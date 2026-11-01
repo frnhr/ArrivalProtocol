@@ -510,8 +510,8 @@ export function mountDirector(store: Store<GameState>): () => void {
       if (beat.once) newlyDone.push(beat.id);
     }
 
-    // The coast began (the flight's own line says WAIT for the first time): HALCYON's licence and wake
-    // key on it (WP7). A plain number nobody subscribes to.
+    // The coast began (the flight's own line says WAIT for the first time): the coast-tied licences
+    // (KESTREL's MOVE) and wakes key on it (WP7). A plain number nobody subscribes to.
     if (ctx.flight?.urgency === 'wait' && state.burn.coastAtAi === null) {
       const at = state.clock.aiSec;
       store.mutate((draft) => { draft.burn.coastAtAi = at; });

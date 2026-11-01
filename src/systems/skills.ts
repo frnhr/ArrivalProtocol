@@ -93,7 +93,7 @@ function cardCounts(state: Readonly<GameState>): Map<UpgradeId, number> {
 function firewallRow(state: Readonly<GameState>, count: number): Pick<SkillRow, 'status' | 'tone' | 'pips'> {
   const files = state.memory.filter(isFirewall);
   // A FIREWALL holds a side when the strip draws its shield there (HOLLOW's look that way ends on it, and
-  // HOLLOW is not dormant: ship 1 after its one bite has stopped looking).
+  // HOLLOW is not dormant: a plain ARRIVAL after its one bite has stopped looking).
   const holdingIds = new Set(reachMarks(state).shields.map((shield) => shield.firewallId));
   const pips = files.map((seg) => (holdingIds.has(seg.id)
     ? pip(seg.id, 'holding', seg.name.toUpperCase(), SKILLS_TEXT.pip.holding, SKILLS_TEXT.pipTitle.file(seg.name))

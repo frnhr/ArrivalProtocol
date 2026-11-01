@@ -569,7 +569,7 @@ function tick(store: Store<GameState>, dtAi: number): void {
   if (store.getState().landing.ended === null && podCounts(store.getState()).aboard === 0 && !landingEndHeld()) endNow(store, 'all-launched');
   noneLeftTick(store, dtAi);
   // 5. The end: the landing has ended and nothing is still falling. The last bell rings out (LANDING_DONE_LINGER_SEC),
-  // and ship 1's scripted fight (still undecided after an early END LANDING), HOLLOW's story beat and LAST LIGHT's
+  // and the ARRIVAL stage's scripted fight (still undecided after an early END LANDING), HOLLOW's story beat and LAST LIGHT's
   // finale are part of this ship: the report waits for them.
   state = store.getState();
   const over = podCounts(state).falling === 0 && state.landing.ended !== null;

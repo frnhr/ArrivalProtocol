@@ -101,7 +101,7 @@ export interface LineVars {
   eaten: string;
   eatenInSec: number;
   tug: string;
-  // WP7 (HALCYON). A clean driver HOLLOW will bite on its next bite (across a GAP, or once its recoil
+  // WP7 (the walls lesson). A clean driver HOLLOW will bite on its next bite (across a GAP, or once its recoil
   // ends): the one to MOVE behind a WALL ('' none). WP11 review: one of those HOLLOW has bitten in the same spot
   // before (BITTEN_AGAIN_COUNT times: a REPAIR alone keeps it in the trap) ('' none).
   exposed: string;

@@ -124,7 +124,7 @@ const ONE_UNIT_NAME_CHARS = 8;
 
 function renderHollowPart(part: HTMLElement, seg: HollowSegment, layout: SegmentPartLayout, behavior: SegmentBehavior): HTMLElement {
   const tier = stripTier(layout.partSize);
-  // `named`: HOLLOW has said who it is (HALCYON's `> i was 046.`): its name is longer than `???` (WP7).
+  // `named`: HOLLOW has said who it is (`> i was 046.`, on the ship it boards): its name is longer than `???` (WP7).
   const named = seg.owner !== UNNAMED_HOLLOW;
   let cls = `seg hollow tier-${tier}${seg.root ? ' hollow-root' : ''}${seg.locked ? ' locked' : ''}${named ? ' named' : ''}${seg.seed ? ' hollow-seed' : ''}`;
   // Beam-born (slice 2, 04 §3.7): a beam seed, or a block one made by eating a file; it counts for TRACE.

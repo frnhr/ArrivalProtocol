@@ -156,9 +156,9 @@ interface DebugHooks {
   landingTable: () => LandingObjective | null;
   lockOn: (opts?: { r?: number; e?: number; status?: 'locked' | 'accepted' }) => void;
   // WP6: HOLLOW. infect / cure take a cluster code (C12) or a file name (Engine I/O): infect bites it
-  // now from the side facing HOLLOW (on ship 1 before the loop closed, that IS the scripted bite);
+  // now from the side facing HOLLOW (on an ARRIVAL ship before the loop closed, that IS the scripted bite);
   // cure heals it to 100 and cures it at once, exactly as a winning repair does (recoil, sparkles, the
-  // ship-1 story). hollow is its phase, bite timer and reach (the painter's arrows and GAP/WALL
+  // ARRIVAL stage's story). hollow is its phase, bite timer and reach (the painter's arrows and GAP/WALL
   // labels) plus what is infected.
   infect: (target: string) => void;
   cure: (target: string) => void;
@@ -282,7 +282,7 @@ declare global {
 }
 
 // __ap.hollowDemo(): HOLLOW as ship 2 meets it, on the ship being flown: rack C becomes `P P _2 S _1 P P _29` with an 8-block root in its slot (the
-// root between POD 08 behind a 2-block GAP and POD 09 behind a 1-block GAP; one LZ takes all ten pods), MOVE is licensed, and HOLLOW wakes HOLLOW_DEMO_WAKE_SEC from now with HALCYON's numbers
+// root between POD 08 behind a 2-block GAP and POD 09 behind a 1-block GAP; one LZ takes all ten pods), MOVE is licensed, and HOLLOW wakes HOLLOW_DEMO_WAKE_SEC from now with the WALLS stage's numbers (phase 2's HALCYON)
 // and no story. WP6's browser checks were built on it; the real HALCYON is
 // __ap.ship(1) (WP7).
 const HOLLOW_DEMO_RACKS = { B: 'P P P P P P _16', C: 'P P _2 S _1 P P _29', D: '_64' } as const;
@@ -399,15 +399,16 @@ function debugSeed(store: Store<GameState>, target: string): string {
   const seg = debugTarget(store, target);
   if (!seedTargetsOf([seg]).includes(seg)) throw new Error(`__ap.seed: ${seg.name} is never a beam seed's target`);
   abortAll();
-  const state = store.getState();
   const words = SEED_WORDS_POOL[Math.floor(Math.random() * SEED_WORDS_POOL.length)]!;
-  const seed = plantBeamSeed(state.memory, seg.id, words, hollowLabel(state.run));
-  assertMemoryInvariants(state.memory, MEMORY_TOTAL_BLOCKS);
+  let seedId = '';
+  // In the update (the review's nit: the memory was mutated outside it, so subscribers never heard the change).
   store.update((draft) => {
+    seedId = plantBeamSeed(draft.memory, seg.id, words, hollowLabel(draft.run)).id;
+    assertMemoryInvariants(draft.memory, MEMORY_TOTAL_BLOCKS);
     if (draft.hollow.cfg.wake === 'never') draft.hollow.cfg = structuredClone(SEEDS_ONLY_DEF);
     draft.ui.memoryRev++;
   });
-  return seed.id;
+  return seedId;
 }
 
 // A driver by its pod's code (P03, or POD 03) or a file by its on-screen name, for the HOLLOW hooks.

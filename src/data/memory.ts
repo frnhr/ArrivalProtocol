@@ -56,7 +56,7 @@ export interface ShipDriversDef {
   // The drivers that arrive hurt (a list, so slice 2's rolled arrival damage needs no type change). On a later run of
   // a ship whose first run is written (firstRun below), they are reseeded among the other pods (hurtDriversFor).
   hurt: readonly HurtDriver[];
-  lead: number;                        // the story's pod: first in the credits, HOLLOW's first bite on ARES-VII
+  lead: number;                        // the story's pod: first in the credits, the scripted bite's target beside the root
   firstRun: ScriptedRoster | null;     // the families and lead colonist the first run always meets
 }
 
@@ -143,7 +143,7 @@ const FRESH_CHARGE_FILE: RedundancySegment = (() => {
   return charge;
 })();
 
-// The REPAIR CHARGE a fresh unit is sent with (§6.5: 36 on ship 1): what HALCYON's HOLLOW says it was
+// The REPAIR CHARGE a fresh unit is sent with (§6.5: 36 on ship 1): what HOLLOW says it was
 // sent with too (`> hello 047. they sent me with 36 blocks of charge too.`).
 export const FRESH_UNIT_CHARGE: number = FRESH_CHARGE_FILE.used;
 

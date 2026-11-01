@@ -32,8 +32,8 @@ export function tallyPreview(state: Readonly<GameState>): ThreatTally {
 }
 
 // The TRACE meter as cells (04 §4: `TRACE ■■□`, then `■■■ +1`): how many of TRACE_CELLS are filled, and the reports past a
-// full meter. data/threat-text.ts traceCells(trace) draws the same numbers as text.
-export function traceCells(state: Readonly<GameState>): { filled: number; total: number; over: number } {
+// full meter. data/threat-text.ts traceCells(trace) draws the same numbers as text (this one is the fill, by count).
+export function traceFill(state: Readonly<GameState>): { filled: number; total: number; over: number } {
   const trace = state.run.threat.trace;
   return { filled: Math.min(trace, TRACE_CELLS), total: TRACE_CELLS, over: Math.max(0, trace - TRACE_CELLS) };
 }
