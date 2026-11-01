@@ -13,7 +13,10 @@ import { requireById, partNumber, replayAnimation } from '@components/dom';
 import { heartbeatKind, heartbeatSvg, type Heartbeat } from './SegmentBlock';
 import { OUTCOME_WORDS, driverOutlook } from './DetailPanel';
 import { segmentStarts } from '@systems/memory-ops';
-import { HOLLOW_PAINT_HZ, INTEGRITY_MAX, HOLLOW_FX_MS, CURE_SPARKS, SEED_BLINK_SEC } from '@data/tuning';
+import { THREAT_TEXT } from '@data/threat-text';
+import {
+  HOLLOW_PAINT_HZ, INTEGRITY_MAX, HOLLOW_FX_MS, CURE_SPARKS, SEED_BLINK_SEC, BOARD_DROP_MS, SEED_LAND_FX_MS,
+} from '@data/tuning';
 
 // HOLLOW on the strip (§6.6, §7.1, §9 WP6 item 6), drawn so a kid can see it coming and beat it:
 // • NEXT BITE m:ss on every hollow block (`?:??` without a timer), pulsing in its last seconds, gone
@@ -38,6 +41,11 @@ import { HOLLOW_PAINT_HZ, INTEGRITY_MAX, HOLLOW_FX_MS, CURE_SPARKS, SEED_BLINK_S
 //   in a solid pink edge that beats each second, a reticle closing in around it and a badge over it (`UNLINK 3`), the
 //   rest of the strip dimmed, and an MV's landing spot outlined too (`MV →`); BLOCKED flashes the target green with
 //   `BLOCKED`; a landed verb flashes where its file was (`UNLINKED`) or where the block went (`MOVED`).
+// • phase 3 slice 2 (04 §3.4, §4): a beam seed reads apart from HOLLOW's own (SegmentBlock: `ECC` for its size, a
+//   colder static, game.css/threat.css `.hollow-beam`); as the boot's ECC line names it, it drops in with a thunk
+//   (`seed-landed-beam`: the chip falls and flashes, and `SEED NEXT TO TELEMETRY` floats up off it); HOLLOW boarding
+//   (`hollow-boarded`, the 108% unpack) drops its root slab into the bay's slot with a pink flash under the shake and
+//   the tear.
 // The marks are rebuilt after every strip rebuild (memoryRev: an infection, a cure, an op, an eaten
 // file all bump it; this subscribes after MemoryStrip); the numbers are patched at most
 // HOLLOW_PAINT_HZ in between. Sparkle scatter uses Math.random: cosmetic, like the glitch jerk.
@@ -171,10 +179,19 @@ function addLine(mark: HTMLElement, cls: string, text: string): void {
   mark.appendChild(line);
 }
 
+// The beam seed's tooltip (slice 2): its chip is 2 blocks, too small for more than SEED and its countdown.
+function beamSeedTitle(targetName: string): string {
+  return `${HOLLOW_HUD_TEXT.seedChip} · ECC · ${THREAT_TEXT.seedNextTo(targetName)} · came with the beam`;
+}
+
 function paintMarks(root: HTMLElement, state: Readonly<GameState>): void {
   clearMarks(root);
   const clock = biteClock(state);
   if (clock.quiet) root.querySelectorAll<HTMLElement>('.seg.hollow').forEach((chip) => chip.classList.add('hollow-quiet'));
+  // A beam seed's tooltip names where it came from and the file the ECC line put it beside (slice 2).
+  for (const seed of state.run.arrival?.seeds ?? []) {
+    partsOf(root, seed.segId).forEach((part) => setTitle(part, beamSeedTitle(seed.targetName)));
+  }
   const marks = reachMarks(state);
   marks.bites.forEach((bite) => paintBite(root, bite));
   marks.gaps.forEach((gap) => paintGap(root, gap));
@@ -558,6 +575,33 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
     }),
     on('hollow-cure', ({ segId }) => {
       if (inBlue()) sparkle(layer, partsOf(memWrap, segId));
+    }),
+    // Slice 2: a beam seed lands behind the file the ECC line names (the seedLand thunk plays with it).
+    on('seed-landed-beam', ({ segId, targetId }) => {
+      if (!inBlue()) return;
+      const state = store.getState();
+      const named = state.run.arrival?.seeds.find((seed) => seed.segId === segId)?.targetName
+        ?? state.memory.find((seg) => seg.id === targetId)?.name;
+      partsOf(memWrap, segId).forEach((part, i) => {
+        part.style.setProperty('--seed-land-ms', `${SEED_LAND_FX_MS}ms`);
+        replayAnimation(part, 'seed-landing');
+        const rect = rectOf(part);
+        if (!rect) return;
+        fxBox(layer, 'hollow-fx seed-land-flash', rect);
+        if (i === 0 && named !== undefined) fxLabel(layer, 'hollow-fx-label seed-named', THREAT_TEXT.seedNextTo(named), rect);
+      });
+    }),
+    // Slice 2, the boarding moment: the root's slab drops into its slot (the shake, the tear and the thud are the others').
+    on('hollow-boarded', () => {
+      if (!inBlue()) return;
+      const root = store.getState().memory.find((seg) => seg.type === 'hollow' && seg.root);
+      if (!root) return;
+      partsOf(memWrap, root.id).forEach((part) => {
+        part.style.setProperty('--board-drop-ms', `${BOARD_DROP_MS}ms`);
+        replayAnimation(part, 'board-drop');
+        const rect = rectOf(part);
+        if (rect) fxBox(layer, 'hollow-fx board-flash', rect);
+      });
     }),
     // An eaten file: the block it became flashes red, with what it means.
     on('hollow-consume', ({ segId, driver }) => {

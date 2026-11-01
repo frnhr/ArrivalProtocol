@@ -102,6 +102,9 @@ export const TRACE_UI_TEXT = {
   clean: (cells: string): string => `NO SEEDS LEFT BEHIND · NOTHING REPORTS HOME · TRACE ${cells}`,
   title: 'TRACE: every seed left in memory at a ship\'s end reports home. Three, and it finds you.',
   ridesTitle: 'It rides the beam with you now, from ship to ship.',
+  // The amber MIND chip's narrow row (about 70 px for the value): the meter's cells, or this once HOLLOW is aboard (its size
+  // is in the blue header and the title).
+  ridesShort: 'ABOARD',
 } as const;
 
 // What the TRACE meter shows (the MIND header and the mini-HUD): `TRACE ■■□`, `■■■ +1` past a full meter, with
@@ -120,6 +123,7 @@ export interface TraceMeter {
   text: string;             // TRACE ■■□, or IT RIDES WITH YOU · 10 BLOCKS
   note: string | null;      // 1 MORE AND IT FINDS YOU
   aboard: boolean;          // the meter's place says HOLLOW rides along
+  short: string;            // the narrow form (the amber MIND chip): the cells, or ABOARD
   tone: TraceTone;
   title: string;
 }
@@ -140,13 +144,13 @@ export function traceMeter(state: Readonly<GameState>): TraceMeter {
   if (rootBlocks !== null) {
     return {
       visible, key: TRACE_UI_TEXT.key, cells, filled, total, over, text: THREAT_TEXT.ridesWithYou(rootBlocks), note: null,
-      aboard: true, tone: 'aboard', title: TRACE_UI_TEXT.ridesTitle,
+      aboard: true, short: TRACE_UI_TEXT.ridesShort, tone: 'aboard', title: TRACE_UI_TEXT.ridesTitle,
     };
   }
   const oneShort = trace === TRACE_BOARD_AT - 1;
   return {
     visible, key: TRACE_UI_TEXT.key, cells, filled, total, over, text: THREAT_TEXT.trace(trace),
-    note: oneShort ? THREAT_TEXT.traceOneMore : null, aboard: false,
+    note: oneShort ? THREAT_TEXT.traceOneMore : null, aboard: false, short: cells,
     tone: filled >= total ? 'full' : oneShort ? 'warn' : 'quiet', title: TRACE_UI_TEXT.title,
   };
 }

@@ -96,6 +96,8 @@
           <span class="mini-strip" id="miniStrip" aria-hidden="true"></span>
           <span class="mind-chip-row"><span>threads</span><span class="mind-chip-threads"><span class="mind-chip-dots" id="mindChipDots"></span><span id="mindChipThreads"></span></span></span>
           <span class="mind-chip-row"><span>charge</span><span><span id="mindChipCharge"></span><span class="merge-tick" id="mindChipMergeTick" hidden></span></span></span>
+          <!-- Phase 3 slice 2: TRACE in its pink cells, or IT RIDES WITH YOU once HOLLOW is aboard (MiniHud) -->
+          <span class="mind-chip-row trace-row" id="mindChipTraceRow" hidden><span>trace</span><span class="trace-meter" id="mindChipTrace"></span></span>
         </button>
         <div class="mode-toggle-label">screen <kbd class="keycap">TAB</kbd></div>
         <!-- The other screen's top problem: MIND ▸ ENGINE I/O 38% / ◀ SHIP · IMPACT 00:20 (ModeToggle) -->
@@ -307,6 +309,8 @@
         <div class="mem-strip-panel">
           <div class="mem-strip-header">
             <span>▌ memory · <span id="memShip"></span></span>
+            <!-- Phase 3 slice 2 (04 §4): TRACE ■■□ in the MIND header (MiniHud paints it with the mini-HUD's) -->
+            <span class="trace-meter mem-trace" id="memTrace" hidden></span>
             <span class="meta" id="memRange"></span>
           </div>
           <div class="mem-strip-wrap" id="memWrap"></div>
@@ -328,6 +332,8 @@
         <!-- The mini-HUD: the ship at a glance while you work in the mind (MiniHud); a click goes back -->
         <div class="mini-hud" id="miniHud" role="button" title="The SHIP: click or [TAB] to go back">
           <div class="mh-head"><span class="mh-title">◆ ship</span><span class="mh-pace" id="mhPace"></span></div>
+          <!-- Phase 3 slice 2: TRACE on the mini-HUD (MiniHud) -->
+          <div class="trace-meter mh-trace" id="mhTrace" hidden></div>
           <div class="mh-body">
             <svg class="mh-plot" id="mhPlot" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
             <div class="mh-stats">
@@ -419,6 +425,8 @@
       <div class="wr-breakdown" id="lrBreakdown" hidden></div>
       <div class="wr-stars" id="lrStars" hidden></div>
       <div class="wr-charge" id="lrCharge" hidden></div>
+      <!-- Phase 3 slice 2 (04 §4): what the seeds left behind do, `2 SEEDS LEFT BEHIND · THEY REPORT HOME · TRACE ■■□` -->
+      <div class="lr-trace" id="lrTrace" hidden></div>
       <div class="lr-near" id="lrNear" hidden></div>
       <div class="wr-foot">
         <button class="wr-skip" id="lrSkip" tabindex="-1"></button>
@@ -450,6 +458,9 @@
       <div class="tx-drop-line" id="txDropLine"></div>
       <div class="tx-chips" id="txChips"></div>
       <div class="tx-notes">
+        <!-- Phase 3 slice 2: TRACE (or the boarding beam's warning) and NO RM before the final beam (TransmitScreen) -->
+        <div class="tx-note tx-trace" id="txTrace" hidden></div>
+        <div class="tx-note tx-norm" id="txNoRm" hidden></div>
         <div class="tx-note tx-infected" id="txInfected" hidden></div>
         <div class="tx-note" id="txHits"></div>
         <div class="tx-note tx-arrival" id="txArrival"></div>
@@ -495,6 +506,19 @@
       <!-- the typed ending (≤ 6 lines) the choice brings, then the hint that a click goes on -->
       <div class="fc-ending" id="fcEnding" hidden></div>
       <div class="fc-hint" id="fcHint" hidden></div>
+    </div>
+  </div>
+
+  <!-- The LOG READER (phase 3 slice 2, 05 §4, LogReader): 046.log in the mind's blue over whatever is up, one row per
+       entry (number, KEY, the text or [NOT FOUND YET]) and the next key -->
+  <div class="log-reader" id="logReader" role="dialog" aria-modal="true" aria-labelledby="lgTitle" hidden>
+    <div class="lg-card" id="lgCard">
+      <div class="lg-head">
+        <div class="lg-kicker" id="lgKicker"></div>
+        <div class="lg-title-row"><span class="lg-title" id="lgTitle"></span><span class="lg-count" id="lgCount"></span></div>
+      </div>
+      <div class="lg-rows" id="lgRows"></div>
+      <div class="lg-foot"><span class="lg-next" id="lgNext"></span><button class="lg-close" id="lgClose" tabindex="-1"></button></div>
     </div>
   </div>
 

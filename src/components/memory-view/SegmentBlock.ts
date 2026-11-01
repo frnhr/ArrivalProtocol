@@ -1,4 +1,4 @@
-import type { Segment, RedundancySegment, DriverSegment, FreeSegment, HollowSegment } from '@/types/segment';
+import type { Segment, RedundancySegment, DriverSegment, FreeSegment, HollowSegment, LogSegment } from '@/types/segment';
 import { shownIntegrity, isInfected, integrityBand, fileLabel, type HealthSegment } from '@state/selectors';
 import { INTEGRITY_MAX } from '@data/tuning';
 import { podCode } from '@data/landing-text';
@@ -8,6 +8,7 @@ import {
 import { stripTier, stripName, type StripTier } from '@data/type-labels';
 import { HOLLOW_HUD_TEXT, HOLLOW_FINALE, UNNAMED_HOLLOW } from '@data/hollow-text';
 import { UPGRADE_FILE_TEXT } from '@data/upgrades';
+import { LOG_SEG_ID } from '@data/log-text';
 
 interface SegmentPartLayout {
   partSize: number;
@@ -103,6 +104,9 @@ function hollowPartHtml(seg: HollowSegment, layout: SegmentPartLayout, tier: Str
   if (seg.locked) tag = '<span class="hollow-tag locked">LOCKED</span>';
   else if (seg.root) tag = `<span class="hollow-tag root">${HOLLOW_FINALE.rootTag(seg.size)}</span>`;
   else if (seg.atePod !== undefined) tag = `<span class="hollow-tag ate">${HOLLOW_HUD_TEXT.ateTag(podCode(seg.atePod))}</span>`;
+  // Phase 3 slice 2 (04 §3.4): a beam seed came with the packet, behind the file the boot's ECC line named: its tag says
+  // ECC (where it was named) instead of its size, so it reads apart from HOLLOW's own seeds.
+  if (seg.seed && seg.beam) tag = `<span class="hollow-tag ecc">${BEAM_SEED_TAG}</span>`;
   // A seed is a SEED on the strip (WP9): the word the kid is told to DELETE.
   const name = seg.seed ? HOLLOW_HUD_TEXT.seedChip : stripName(seg, layout.partSize);
   return `
@@ -110,6 +114,9 @@ function hollowPartHtml(seg: HollowSegment, layout: SegmentPartLayout, tier: Str
     <div class="hollow-head"><div class="seg-name" title="${seg.name}">${name}</div>${tag}</div>
     <div class="hollow-bite" data-hollow-bite><span class="bite-k"></span><span class="bite-t"></span></div>`;
 }
+
+// The beam seed's tag (slice 2): the boot's ECC line named it.
+const BEAM_SEED_TAG = 'ECC';
 
 // WP11 part 2 (WP8's note): a merged HOLLOW's name (`UNIT-046·047`) was cut to `UNIT-046·…` on an 8-block chip at
 // 1280×720. A name longer than one unit's (`UNIT-046`) is set tighter (game.css .long-name) so it fits whole.
@@ -120,6 +127,8 @@ function renderHollowPart(part: HTMLElement, seg: HollowSegment, layout: Segment
   // `named`: HOLLOW has said who it is (HALCYON's `> i was 046.`): its name is longer than `???` (WP7).
   const named = seg.owner !== UNNAMED_HOLLOW;
   let cls = `seg hollow tier-${tier}${seg.root ? ' hollow-root' : ''}${seg.locked ? ' locked' : ''}${named ? ' named' : ''}${seg.seed ? ' hollow-seed' : ''}`;
+  // Beam-born (slice 2, 04 §3.7): a beam seed, or a block one made by eating a file; it counts for TRACE.
+  if (seg.beam) cls += ' hollow-beam';
   if (seg.owner.length > ONE_UNIT_NAME_CHARS) cls += ' long-name';
   if (layout.totalParts > 1) {
     cls += ' is-part';
@@ -135,6 +144,41 @@ function renderHollowPart(part: HTMLElement, seg: HollowSegment, layout: Segment
   // WP11: LAST LIGHT's root, open for the duel, is what `DELETE THE ROOT` lights.
   if (seg.root && !seg.locked && layout.partIdx === 0) part.dataset.hintTarget = ROOT_HINT_TARGET;
   part.innerHTML = hollowPartHtml(seg, layout, tier);
+  wire(part, seg, behavior);
+  return part;
+}
+
+// The log chip's short names on the strip (LogReader's chip painter writes the known one).
+export const LOG_STRIP_UNKNOWN = '???';
+export const LOG_STRIP_KNOWN = '046';
+
+// --- 046.log (phase 3 slice 2, 05 §3.2, §4) ---------------------------------------------------------------------------
+// The log UNIT-046 left: a locked 2-block file in rack F, never infectable, never anyone's to move. Its chip carries the
+// name and `3/12` (the keys found) and glows while an entry is unread; LogReader's chip painter writes those from
+// run.log after every strip rebuild (`data-log-chip`), because what the run has found is not the segment's (it is copied
+// through packets). A strip line can light it (`data-hint-target` = its id: the run-1 SCAN lesson).
+function renderLogPart(part: HTMLElement, seg: LogSegment, layout: SegmentPartLayout, behavior: SegmentBehavior): HTMLElement {
+  const tier = stripTier(layout.partSize);
+  let cls = `seg log locked-log tier-${tier}`;
+  if (layout.totalParts > 1) {
+    cls += ' is-part';
+    if (layout.partIdx < layout.totalParts - 1) cls += ' part-continues-right';
+    if (layout.partIdx > 0) cls += ' part-continues-left';
+  }
+  part.className = cls;
+  stampPart(part, seg, layout);
+  part.title = seg.name;
+  if (layout.partIdx === 0) {
+    part.dataset.logChip = '1';
+    part.dataset.hintTarget = LOG_SEG_ID;
+    // A 2-block chip is about 26 px wide at 1440: the name is cut to its unit's number (`046`, `???` before it is known)
+    // over `3/12`; INSPECT and the title carry `046.log` whole.
+    part.innerHTML = tier === 'micro'
+      ? `<div class="seg-name log-name" data-log-name>${LOG_STRIP_UNKNOWN}</div>`
+      : `<div class="seg-name log-name" data-log-name>${LOG_STRIP_UNKNOWN}</div><div class="seg-meta"><span class="log-count" data-log-count></span></div>`;
+  } else {
+    part.innerHTML = `<div class="seg-cont-marker">↪</div>`;
+  }
   wire(part, seg, behavior);
   return part;
 }
@@ -216,6 +260,7 @@ export function renderSegmentPart(
   const part = document.createElement('div');
   if (seg.type === 'driver') return renderDriverPart(part, seg, layout, behavior);
   if (seg.type === 'hollow') return renderHollowPart(part, seg, layout, behavior);
+  if (seg.type === 'log') return renderLogPart(part, seg, layout, behavior);
   let cls = `seg ${seg.type} tier-${tier}`;
   const state = 'state' in seg ? seg.state : undefined;
   // `scanned` is what gates visible damage indicators on the memory strip.

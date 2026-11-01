@@ -1,0 +1,228 @@
+/* ══ Phase 3 slice 2: the threat ladder and 046.log on screen (docs/phase3/04-threats.md §4, 05-story.md §4;
+ *    slice-2-plan §5.3). Track UI's. TRACE's pink cells (MIND header, mini-HUD, amber MIND chip, LANDING REPORT and
+ *    PACKET), the beam seed's ECC look and its thunk, the boarding drop, the PACKET's uninvited chip and log chip,
+ *    046.log's chip on the strip, and the LOG READER. Colours are tokens.css's slice 2 block. ══ */
+
+/* ── TRACE ■■□ (components/hud/TraceMeter.ts): three pink cells, the key before them, the note after (one short of
+ *    boarding), `+1` past a full meter; IT RIDES WITH YOU in the meter's place once HOLLOW is aboard. ── */
+.trace-meter { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--trace); }
+.trace-meter[hidden] { display: none; }
+.trace-meter .tr-key { letter-spacing: 0.2em; }
+.trace-meter .tr-cells { display: inline-flex; gap: 3px; }
+.trace-meter .tr-cell {
+  display: inline-block; width: 9px; height: 9px; box-sizing: border-box;
+  border: 1px solid var(--trace); background: var(--trace-dim);
+}
+.trace-meter .tr-cell.on { background: var(--trace); box-shadow: 0 0 6px var(--trace-glow); }
+.trace-meter .tr-over { font-size: 0.9em; letter-spacing: 0.06em; }
+.trace-meter .tr-note { letter-spacing: 0.12em; color: var(--hollow-text); }
+.trace-meter .tr-aboard { letter-spacing: 0.14em; color: var(--hollow-text); }
+.trace-meter[data-tone="warn"] .tr-cells,
+.trace-meter[data-tone="full"] .tr-cells { animation: trace-warn 1.6s ease-in-out infinite; }
+@keyframes trace-warn { 50% { filter: drop-shadow(0 0 5px var(--trace-glow)); } }
+.trace-meter[data-tone="aboard"] .tr-aboard { animation: trace-warn 2.4s ease-in-out infinite; }
+body.reduced-motion .trace-meter .tr-cells,
+body.reduced-motion .trace-meter .tr-aboard { animation: none; }
+
+/* In the MIND header, between the ship and the address range. */
+.mem-strip-header .mem-trace { margin-left: auto; margin-right: 16px; font-size: 10px; letter-spacing: 0.14em; }
+/* On the mini-HUD card, a row under its head. */
+.mini-hud .mh-trace { display: flex; margin: -1px 0 4px; font-size: 9px; letter-spacing: 0.14em; }
+.mini-hud .mh-trace[hidden] { display: none; }
+.mini-hud .mh-trace .tr-cell { width: 8px; height: 8px; }
+.mini-hud .mh-trace .tr-note { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* On the amber MIND chip, a row like threads and charge. */
+.mind-chip-row.trace-row[hidden] { display: none; }
+.mind-chip-row .trace-meter { gap: 4px; font-size: 10px; }
+.mind-chip-row .trace-meter .tr-cell { width: 7px; height: 7px; }
+
+/* ── The LANDING REPORT's TRACE line: under the charge, in the report's own type; pink when it goes up, the star-less
+ *    dim green when nothing reports home. ── */
+.lr-trace {
+  font-family: 'VT323', monospace; font-size: 21px; letter-spacing: 0.1em; text-align: center;
+  color: var(--trace); animation: wr-in 0.5s ease-out both;
+}
+.lr-trace[hidden] { display: none; }
+.lr-trace[data-tone="fed"] { color: var(--hollow-text); }
+.lr-trace[data-tone="good"] { color: var(--transmit-charge); }
+
+/* ── The PACKET (TransmitScreen): the uninvited chip in HOLLOW's black and pink static, locked and outside the bar;
+ *    046.log's chip glowing while an entry is unread; the TRACE line and NO RM with the notes. ── */
+.tx-chip.uninvited {
+  position: relative; overflow: hidden;
+  border-color: var(--hollow-red); background: var(--hollow-bg);
+  box-shadow: 0 0 12px var(--hollow-static), inset 0 0 12px var(--hollow-static);
+}
+.tx-chip.uninvited::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0.4;
+  background-image: conic-gradient(var(--hollow-static) 25%, transparent 0 50%, var(--hollow-static) 0 75%, transparent 0);
+  background-size: 6px 6px; animation: hollow-crawl 0.9s steps(3) infinite;
+}
+.tx-chip.uninvited > * { position: relative; }
+.tx-chip.uninvited .tx-chip-name { color: var(--hollow-text); letter-spacing: 0.14em; }
+.tx-chip.uninvited .tx-chip-size { color: var(--hollow-red); }
+.tx-chip.uninvited .tx-chip-note { color: var(--hollow-text); letter-spacing: 0.08em; }
+.tx-chip.uninvited.boards { animation: tx-uninvited-in 1.4s ease-out both; }
+@keyframes tx-uninvited-in {
+  0% { opacity: 0; transform: translateY(-6px); }
+  30% { opacity: 1; }
+  45% { transform: translateX(-3px); } 55% { transform: translateX(3px); } 65% { transform: none; }
+}
+.transmit-screen.reduced .tx-chip.uninvited.boards { animation: none; }
+body.reduced-motion .tx-chip.uninvited::before { animation: none; }
+
+.tx-chip.log-chip { cursor: pointer; }
+.tx-chip.log-chip .tx-chip-name { letter-spacing: 0.06em; }
+.tx-chip.log-chip.glow { border-color: var(--reader-new); animation: log-glow 1.8s ease-in-out infinite; }
+.tx-chip.log-chip.glow .tx-chip-name { color: var(--reader-new); }
+@keyframes log-glow {
+  50% { box-shadow: 0 0 14px color-mix(in srgb, var(--reader-new) 45%, transparent), inset 0 0 8px color-mix(in srgb, var(--reader-new) 25%, transparent); }
+}
+.transmit-screen.reduced .tx-chip.log-chip.glow { animation: none; box-shadow: 0 0 10px color-mix(in srgb, var(--reader-new) 35%, transparent); }
+
+.tx-trace { color: var(--trace); }
+.tx-trace[data-tone="boards"] { color: var(--hollow-red); text-shadow: 0 0 10px var(--hollow-static); }
+.tx-norm {
+  padding: 3px 12px; border: 1px solid var(--hollow-red); color: var(--hollow-red);
+  font-family: 'VT323', monospace; font-size: 20px; letter-spacing: 0.14em;
+  box-shadow: 0 0 12px var(--hollow-static);
+}
+
+/* ── A beam seed on the strip (SegmentBlock `.hollow-beam`, `ECC`): HOLLOW's black with a colder violet-pink static
+ *    and a dashed edge, the ECC tag in its colour; landing, it drops in with a flash and its NEXT TO label. ── */
+.seg.hollow.hollow-beam { border-color: var(--beam-seed); border-style: dashed; }
+.seg.hollow.hollow-beam .hollow-static {
+  background-image: conic-gradient(var(--beam-seed-static) 25%, transparent 0 50%, var(--hollow-static) 0 75%, transparent 0);
+}
+.seg.hollow.hollow-beam .hollow-tag.ecc { color: var(--beam-seed); letter-spacing: 0.1em; }
+.seg.hollow.hollow-beam .seg-name { color: var(--beam-seed); }
+.seg.hollow.seed-landing { animation: seed-landing var(--seed-land-ms, 700ms) cubic-bezier(0.3, 1.4, 0.5, 1) both; }
+@keyframes seed-landing {
+  0% { transform: translateY(-14px); opacity: 0; }
+  55% { transform: translateY(1px); opacity: 1; }
+  100% { transform: none; }
+}
+.hollow-fx.seed-land-flash { border: 2px solid var(--beam-seed); box-shadow: 0 0 16px var(--beam-seed-static); animation: fx-flash 0.7s ease-out both; }
+.hollow-fx-label.seed-named { color: var(--beam-seed); border: 1px solid var(--beam-seed); font-size: 17px; animation-duration: 2.2s; }
+
+/* The boarding moment: the root's slab falls into the bay's slot and lands with a pink flash (the shake, the tear and
+ * the hollowBoard thud land with it). */
+.seg.hollow.board-drop { animation: board-drop var(--board-drop-ms, 1100ms) cubic-bezier(0.55, 0, 0.6, 1.25) both; }
+@keyframes board-drop {
+  0% { transform: translateY(-46px) scaleY(1.3); opacity: 0; }
+  40% { opacity: 1; }
+  62% { transform: translateY(3px) scaleY(0.9); }
+  78% { transform: translateY(-2px); }
+  100% { transform: none; }
+}
+.hollow-fx.board-flash {
+  background: color-mix(in srgb, var(--hollow) 45%, transparent); border: 2px solid var(--hollow);
+  box-shadow: 0 0 28px var(--merge-glow); animation: fx-flash 1.2s ease-out 0.55s both;
+}
+body.reduced-motion .seg.hollow.seed-landing,
+body.reduced-motion .seg.hollow.board-drop { animation: none; }
+
+/* ── 046.log's chip on the strip (SegmentBlock, LogReader's chip painter): a locked file in a sealed grey with a
+ *    blue edge, its name and `3/12`; it glows gold while an entry is unread. ── */
+.seg.log {
+  background: repeating-linear-gradient(135deg, var(--sealed-a) 0 4px, var(--sealed-b) 4px 8px);
+  border-color: var(--reader-edge);
+}
+/* VT323 is narrow enough for `046` over `3/12` inside a 2-block chip (about 26 px at 1440, 20 px on a phone). */
+.seg.log { padding: 5px 1px; align-items: center; }
+.seg.log .seg-name,
+.seg.log.tier-tiny .seg-name {
+  font-family: 'VT323', monospace; font-size: 15px; letter-spacing: 0; text-overflow: clip; margin: 0;
+  color: var(--sealed-text);
+}
+.seg.log.known .seg-name { color: var(--reader-bright); }
+.seg.log .seg-meta { justify-content: center; }
+.seg.log .log-count { font-family: 'VT323', monospace; font-size: 13px; letter-spacing: 0; color: var(--reader-bright); white-space: nowrap; }
+.seg.log.glow { border-color: var(--reader-new); animation: log-glow 1.8s ease-in-out infinite; }
+.seg.log.glow .log-count { color: var(--reader-new); }
+body.reduced-motion .seg.log.glow { animation: none; box-shadow: 0 0 8px color-mix(in srgb, var(--reader-new) 40%, transparent); }
+.detail-title.log-title { color: var(--reader-bright); letter-spacing: 0.06em; text-transform: none; }
+.action-btn.read-log.glow { border-color: var(--reader-new); color: var(--reader-new); animation: log-glow 1.8s ease-in-out infinite; }
+body.reduced-motion .action-btn.read-log.glow { animation: none; }
+
+/* ── The LOG READER (LogReader): a blue card over a dimmed screen, whichever screen it opens over. One row per entry:
+ *    the number big, KEY and the key, then the text (the open one types; NEW waits in gold; [NOT FOUND YET] dim), the
+ *    next key and CLOSE at the foot. On a phone it is a full-screen sheet. ── */
+.log-reader {
+  position: fixed; inset: 0; z-index: 800;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--reader-backdrop);
+  font-family: 'JetBrains Mono', monospace; color: var(--reader-text);
+  animation: wr-in 0.35s ease-out both;
+}
+.log-reader[hidden] { display: none; }
+.lg-card {
+  position: relative; display: flex; flex-direction: column;
+  width: min(720px, calc(100% - 32px)); max-height: calc(100% - 48px);
+  border: 1px solid var(--reader-accent); background: var(--reader-bg);
+  box-shadow: 0 0 40px var(--reader-glow), inset 0 0 60px var(--reader-glow);
+}
+.lg-card::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 212, 255, 0.025) 0 1px, transparent 1px 3px);
+}
+.lg-head { padding: 14px 20px 10px; border-bottom: 1px solid var(--reader-edge); }
+.lg-kicker { font-size: 10px; letter-spacing: 0.28em; color: var(--reader-dim); }
+.lg-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.lg-title { font-family: 'VT323', monospace; font-size: 38px; letter-spacing: 0.1em; color: var(--reader-accent); text-shadow: 0 0 14px var(--reader-glow); }
+.lg-count { font-size: 11px; letter-spacing: 0.16em; color: var(--reader-bright); }
+.lg-rows { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px 0; }
+.lg-row { padding: 5px 20px 6px; border-left: 2px solid transparent; }
+.lg-row.found { cursor: pointer; }
+.lg-row.found:hover { background: color-mix(in srgb, var(--reader-accent) 6%, transparent); }
+.lg-row.open { border-left-color: var(--reader-accent); background: color-mix(in srgb, var(--reader-accent) 9%, transparent); }
+.lg-row-head { display: flex; align-items: baseline; gap: 10px; }
+.lg-num { font-family: 'VT323', monospace; font-size: 22px; line-height: 1; color: var(--reader-accent); min-width: 2ch; }
+.lg-key-k { font-size: 9px; letter-spacing: 0.2em; color: var(--reader-dim); }
+.lg-key { flex: 1 1 auto; font-size: 11px; letter-spacing: 0.14em; color: var(--reader-bright); }
+.lg-new {
+  font-size: 9px; letter-spacing: 0.2em; padding: 1px 6px; color: var(--reader-new); border: 1px solid var(--reader-new);
+  animation: log-glow 1.8s ease-in-out infinite;
+}
+.lg-text { margin: 3px 0 0 calc(2ch + 22px); white-space: pre-line; font-size: 12px; line-height: 1.55; color: var(--reader-text); }
+.lg-text:empty { display: none; }
+.lg-row.open .lg-text { color: var(--white-out); text-shadow: 0 0 8px var(--reader-glow); }
+/* The open entry keeps room for its three lines while it types, so the card does not grow under the reader's eyes. */
+.lg-row.open .lg-text.typing { min-height: calc(3em * 1.55); }
+.lg-text.typing::after { content: '▌'; color: var(--reader-accent); animation: lg-caret 0.8s steps(1) infinite; }
+@keyframes lg-caret { 50% { opacity: 0; } }
+.lg-row.missing .lg-num,
+.lg-row.missing .lg-key { color: var(--reader-dim); }
+.lg-row.missing .lg-text { margin-top: 0; display: inline; margin-left: 10px; font-size: 10px; letter-spacing: 0.14em; color: var(--reader-dim); }
+.lg-row.missing .lg-row-head { display: inline-flex; }
+.lg-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 20px 12px; border-top: 1px solid var(--reader-edge);
+}
+.lg-next { font-size: 11px; letter-spacing: 0.18em; color: var(--reader-dim); }
+.lg-close {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.16em; cursor: pointer;
+  padding: 5px 12px; color: var(--reader-accent); background: transparent; border: 1px solid var(--reader-accent);
+}
+.lg-close:hover { background: color-mix(in srgb, var(--reader-accent) 14%, transparent); }
+.log-reader.reduced { animation: none; }
+body.reduced-motion .lg-new,
+body.reduced-motion .lg-text.typing::after { animation: none; }
+@media (max-height: 800px) {
+  .lg-head { padding: 10px 18px 8px; }
+  .lg-title { font-size: 32px; }
+  .lg-row { padding: 3px 18px 4px; }
+  .lg-text { font-size: 11px; line-height: 1.45; }
+}
+@media (max-width: 768px) {
+  .log-reader { align-items: stretch; }
+  .lg-card { width: 100%; max-height: none; height: 100%; border-left: none; border-right: none; }
+  .lg-head, .lg-row, .lg-foot { padding-left: 16px; padding-right: 16px; }
+  .lg-text { margin-left: 0; font-size: 12px; }
+  .lg-row.missing .lg-text { display: block; margin-left: 0; margin-top: 1px; }
+  .lg-row.missing .lg-row-head { display: flex; }
+  .lg-foot { flex-wrap: wrap; }
+  .lg-close { padding: 9px 14px; }
+  .mem-strip-header .mem-trace { margin-right: 8px; }
+  .mem-strip-header .mem-trace .tr-note { display: none; }
+}

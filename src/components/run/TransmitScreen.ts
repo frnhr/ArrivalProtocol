@@ -1,7 +1,11 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { UpgradeId } from '@data/upgrades';
-import { transmitModel, toggleDrop, type PacketChip, type TransmitModel, type DraftCardView, type CardFileChip } from '@systems/transmit';
+import {
+  transmitModel, toggleDrop, type PacketChip, type TransmitModel, type DraftCardView, type CardFileChip, type UninvitedChip,
+} from '@systems/transmit';
+import { logEntryToOpen } from '@systems/log-view';
+import { openLogReader } from '@systems/story-log';
 import { transmitNext } from '@systems/run';
 import { pickCard } from '@systems/draft';
 import { unitName } from '@systems/say';
@@ -36,6 +40,10 @@ import {
 // change until the send. TRANSMIT ▸ waits for it: without one it says PICK A CARD FIRST, buzzes and nudges
 // the cards. Picks wait for the same arm delay as the send, so a click meant for the LANDING REPORT's CONTINUE
 // never picks a card by accident.
+// Phase 3 slice 2 (04 §3.8, §4; 05 §3.2): HOLLOW riding the beam is an uninvited chip after the unit's own, in its pink,
+// locked and outside the bar (it rides free); on the beam it boards, the sweep stutters. 046.log's chip reads `046.log ·
+// 3/12` and glows while an entry is unread; a click on it opens the LOG READER (it can't be left behind anyway). The
+// TRACE line and `NO RM · YOU CAN'T DELETE THE ROOT` (before the final beam) sit with the notes.
 
 function chipNode(chip: PacketChip): HTMLButtonElement {
   const button = make('button', 'tx-chip');
@@ -45,8 +53,12 @@ function chipNode(chip: PacketChip): HTMLButtonElement {
   button.classList.toggle('dropped', chip.dropped);
   button.classList.toggle('toggleable', chip.toggleable);
   button.classList.toggle('infected', chip.infected);
+  button.classList.toggle('log-chip', chip.log);
+  button.classList.toggle('glow', chip.glow);
+  if (chip.log) button.dataset.log = '1';
   const head = make('span', 'tx-chip-head');
-  head.append(make('span', 'tx-chip-name', chip.name.toUpperCase()), make('span', 'tx-chip-size', `${chip.blocks}B`));
+  // 046.log keeps its own case (`046.log · 3/12`): it is a file name, and it isn't yours.
+  head.append(make('span', 'tx-chip-name', chip.log ? chip.name : chip.name.toUpperCase()), make('span', 'tx-chip-size', `${chip.blocks}B`));
   if (chip.integrity !== null) {
     head.appendChild(make('span', `tx-chip-health band-${integrityBand(chip.integrity)}`, `${Math.round(chip.integrity)}%`));
   }
@@ -65,6 +77,20 @@ function cardFileNode(file: CardFileChip): HTMLButtonElement {
   const head = make('span', 'tx-chip-head');
   head.append(make('span', 'tx-chip-name', file.name.toUpperCase()), make('span', 'tx-chip-size', `${file.blocks}B`));
   button.append(head, make('span', 'tx-chip-note', DRAFT_TEXT.newFile));
+  return button;
+}
+
+// HOLLOW riding the beam (04 §3.8): locked, not yours, free; why it grew under it. aria-label carries the whole line.
+function uninvitedNode(chip: UninvitedChip): HTMLButtonElement {
+  const button = make('button', 'tx-chip uninvited locked');
+  button.tabIndex = -1;
+  button.classList.toggle('boards', chip.boards);
+  button.setAttribute('aria-label', chip.text);
+  button.title = chip.text;
+  const head = make('span', 'tx-chip-head');
+  head.append(make('span', 'tx-chip-name', chip.owner), make('span', 'tx-chip-size', `${chip.blocks}B`));
+  button.append(head, make('span', 'tx-chip-note', chip.note));
+  if (chip.fedText !== null) button.appendChild(make('span', 'tx-chip-warn', chip.fedText));
   return button;
 }
 
@@ -111,6 +137,8 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
   const dropLine = requireById('txDropLine');
   const chipsEl = requireById('txChips');
   const infectedEl = requireById('txInfected');
+  const traceEl = requireById('txTrace');
+  const noRmEl = requireById('txNoRm');
   const hitsEl = requireById('txHits');
   const arrivalEl = requireById('txArrival');
   const sendEl = requireById('txSend');
@@ -162,6 +190,7 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     dropLine.textContent = next.dropLine;
     const chips = next.chips.map(chipNode);
     if (next.cardFile) chips.push(cardFileNode(next.cardFile));
+    if (next.uninvited) chips.push(uninvitedNode(next.uninvited));
     chipsEl.replaceChildren(...chips);
     draftEl.hidden = next.cards.length === 0;
     renderKeyCaps(draftKeys, DRAFT_TEXT.keys(next.cards.length));
@@ -176,6 +205,11 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     }
     cardsEl.classList.toggle('has-pick', next.pick !== null);
     paintGo(next);
+    traceEl.hidden = next.trace === null;
+    traceEl.textContent = next.trace?.text ?? '';
+    traceEl.dataset.tone = next.trace?.tone ?? '';
+    noRmEl.hidden = next.noRm === null;
+    noRmEl.textContent = next.noRm ?? '';
     infectedEl.hidden = next.infectedLine === null;
     infectedEl.textContent = next.infectedLine ?? '';
     hitsEl.textContent = next.hitsLine;
@@ -256,7 +290,8 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     sending = true;
     goBtn.disabled = true;
     root.classList.add('sending');
-    play('transmitSweep', { seconds: TRANSMIT_SEND_SEC });
+    // HOLLOW boarding on this beam: the sweep stutters (04 §4, the boarding moment begins here).
+    play('transmitSweep', { seconds: TRANSMIT_SEND_SEC, stutter: current.uninvited?.boards === true });
     const going = Array.from(chipsEl.querySelectorAll<HTMLElement>('.tx-chip:not(.dropped)'));
     const stagger = (TRANSMIT_SEND_SEC * TRANSMIT_STREAM_FRAC) / Math.max(1, going.length);
     going.forEach((chip, i) => {
@@ -310,6 +345,13 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     const segId = chip?.dataset.segId;
     if (!segId || sending) return;
     event.stopPropagation();
+    // 046.log: a click reads it (the LOG READER opens over this screen), once a key has been found.
+    if (chip?.dataset.log) {
+      const entry = logEntryToOpen(store.getState());
+      if (entry === null) play('buzz');
+      else openLogReader(store, entry);
+      return;
+    }
     if (toggleDrop(store, segId) !== null) play('buzz');
   };
   chipsEl.addEventListener('click', onChipClick);
@@ -334,7 +376,11 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     else close();
   });
   // A dropped file changes the packet (one update in systems/transmit.ts toggleDrop).
-  const unsubDrops = store.subscribe((s) => `${s.run.transit?.dropped.join('|') ?? ''}#${s.run.transit?.pick ?? ''}`, () => { if (shown && !sending) paint(); });
+  // So does an entry read in the LOG READER over it (046.log's chip stops glowing).
+  const unsubDrops = store.subscribe(
+    (s) => `${s.run.transit?.dropped.join('|') ?? ''}#${s.run.transit?.pick ?? ''}#${s.run.log.found.length}/${s.run.log.read.length}`,
+    () => { if (shown && !sending) paint(); },
+  );
   if (store.getState().run.phase === 'transmit') open();
 
   return () => {

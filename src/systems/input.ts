@@ -15,12 +15,13 @@ import { emit, NO_PAYLOAD } from '@systems/events';
 // 'report', 'transmit' and 'end' are full-screen cards that own the keys while they are up (the WAKE
 // REPORT, TRANSMIT, RUN END; WP7): like the title, nothing under them may hear SPACE, TAB or P. They are
 // never up together (one per run phase); each has its own layer so a card's keys are never heard by
-// another card's handler.
-export type InputLayer = 'title' | 'report' | 'transmit' | 'end' | 'confirm' | 'choice' | 'game';
+// another card's handler. 'reader' (phase 3 slice 2) is the LOG READER, which opens over TRANSMIT (entry 01 after ship
+// 1's report) or over the game (INSPECT's READ): it owns the keys above both while it is up.
+export type InputLayer = 'title' | 'reader' | 'report' | 'transmit' | 'end' | 'confirm' | 'choice' | 'game';
 export type ModalLayer = Exclude<InputLayer, 'game'>;
 
 // Highest priority first.
-const LAYER_PRIORITY: readonly InputLayer[] = ['title', 'report', 'transmit', 'end', 'confirm', 'choice', 'game'];
+const LAYER_PRIORITY: readonly InputLayer[] = ['title', 'reader', 'report', 'transmit', 'end', 'confirm', 'choice', 'game'];
 
 export interface KeyBinding {
   layer: InputLayer;
