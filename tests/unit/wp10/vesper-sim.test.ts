@@ -43,11 +43,11 @@ const DRIFT_SCALE = (FAILING.amp / FAILING.meanIntervalTac) / (0.15 / 25);
 
 const VESPER = 3;
 const TICK = 0.05;
-// Quick depth (tests/unit/depth.ts): 20 seeds for the drift's mean (30 seeds measured 2,974 km against the 1,500–4,500
-// band, so 20 keep it well inside), 10 for the SWAP; full: the WP's 200 and 50. A multiple of 10: the 10th–90th detail
-// indexes by it.
-const SEEDS = byDepth(20, 200);
-const SWAP_SEEDS = byDepth(10, 50);
+// Quick depth (tests/unit/depth.ts): 10 seeds for the drift's mean (30 seeds measured 2,974 km against the 1,500–4,500
+// band, so 10 keep it inside), 5 for the SWAP (the slice 2 review's tier trim; it was 20 and 10); full: the WP's 200 and
+// 50. A multiple of 10: the 10th–90th detail indexes by it.
+const SEEDS = byDepth(10, 200);
+const SWAP_SEEDS = byDepth(5, 50);
 const ship = getShip(VESPER);
 const CRUISE = ship.flight.cruiseWarp;
 
@@ -118,6 +118,9 @@ function runUntil(tSec: number): void {
   let drop = 0;
   let bursts = 0;
   let dv = 0;
+  // The seeds whose last burst ended inside the coast (none cut by its end): their bursts are all whole.
+  let wholeBursts = 0;
+  let wholeDv = 0;
   const drops: number[] = [];
   for (let seed = 1; seed <= SEEDS; seed++) {
     fresh(seed);
@@ -128,6 +131,10 @@ function runUntil(tSec: number): void {
     drop += rp0 - rp;
     bursts += starts;
     dv += state().burn.dvDeliveredKmS;
+    if (state().burn.ghost === null) {
+      wholeBursts += starts;
+      wholeDv += state().burn.dvDeliveredKmS;
+    }
   }
   const mean = drop / SEEDS;
   const meanBursts = bursts / SEEDS;
@@ -136,9 +143,11 @@ function runUntil(tSec: number): void {
     mean >= 300 * DRIFT_SCALE && mean <= 900 * DRIFT_SCALE,
     `mean ${mean.toFixed(0)} km (median ${drops[SEEDS / 2]!.toFixed(0)}, 10th–90th ${drops[SEEDS / 10]!.toFixed(0)}–${drops[SEEDS * 0.9]!.toFixed(0)}), `
     + `${meanBursts.toFixed(1)} bursts, ${((dv / bursts) * 1000).toFixed(1)} m/s each`);
-  // A burst still running when the coast's span ends is cut there, so the mean sits a hair under the full burst's.
-  check(`…each burst delivers ${FAILING.amp * 100}% × 5 m/s² × ${FAILING.durTac} tac s (×30) = ${(FAILING.amp * 5 * FAILING.durTac * 30).toFixed(1)} m/s (within 0.5%: the last can be cut by the span)`,
-    Math.abs(dv / bursts / (FAILING.amp * 0.005 * FAILING.durTac * 30) - 1) < 0.005, `${((dv / bursts) * 1000).toFixed(4)} m/s`);
+  // A burst still running when the coast's span ends is cut there, so it is measured on the seeds whose bursts all
+  // ended inside the coast (with fewer seeds in quick depth one cut burst moved the all-seed mean past 0.5%).
+  check(`…each burst delivers ${FAILING.amp * 100}% × 5 m/s² × ${FAILING.durTac} tac s (×30) = ${(FAILING.amp * 5 * FAILING.durTac * 30).toFixed(1)} m/s (within 0.5%, the bursts no coast end cut)`,
+    wholeBursts > 0 && Math.abs(wholeDv / wholeBursts / (FAILING.amp * 0.005 * FAILING.durTac * 30) - 1) < 0.005,
+    `${((wholeDv / wholeBursts) * 1000).toFixed(4)} m/s over ${wholeBursts} bursts (all: ${((dv / bursts) * 1000).toFixed(4)})`);
 }
 
 // --- A SWAP at boot + 20 AI s, SWAP_SEEDS seeds --------------------------------------------------------------------------

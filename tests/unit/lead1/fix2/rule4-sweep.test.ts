@@ -48,6 +48,10 @@ const fuels: number[] = [];
 for (let fuel = 10; fuel <= FUEL_TOP + 1e-9; fuel += CANONICAL_STEP) fuels.push(Number(fuel.toFixed(1)));
 const KIDS = ['obey', 'f0.3', 'f0.5'] as const;
 const kids = byDepth<readonly typeof KIDS[number][]>(['obey', 'f0.5'], KIDS);
+// Quick depth flies half of that sample (the slice 2 review's tier trim: rule4.test.ts flies the same capture's rows):
+// each grid row (an ignore and a FUEL) one kid, the kids taking turns, offset by the ignore, so every FUEL row still
+// meets both kids across the ignores and every kid every band. Full depth flies every kid on every row.
+const kidsAt = (row: number): readonly typeof KIDS[number][] => byDepth([kids[row % kids.length]!], kids);
 
 interface Row {
   status: string;
@@ -139,13 +143,16 @@ const bad: string[] = [];
 let flights = 0;
 let longestSkip = 0;
 const bands: string[] = [];
-for (const ignoreSec of ignores) {
+let expectedFlights = 0;
+for (const [ignoreIndex, ignoreSec] of ignores.entries()) {
   const snapshot = snapshotAfterIgnore(ignoreSec);
   let band = '';
   let bandFrom = 0;
   const closeBand = (upTo: number): void => { if (band) bands.push(`${ignoreSec} s ${bandFrom}–${upTo}% ${band}`); };
-  for (const fuelPct of fuels) {
-    const rows = kids.map((kid) => {
+  for (const [fuelIndex, fuelPct] of fuels.entries()) {
+    const rowKids = kidsAt(ignoreIndex + fuelIndex);
+    expectedFlights += rowKids.length;
+    const rows = rowKids.map((kid) => {
       restore(snapshot, fuelPct);
       return fly(kid);
     });
@@ -154,7 +161,7 @@ for (const ignoreSec of ignores) {
       outcomes.set(row.status, (outcomes.get(row.status) ?? 0) + 1);
       longestSkip = Math.max(longestSkip, row.longestSkipSec);
       if (row.status === 'approaching' || row.flip || row.flicker || row.longestSkipSec > FEW_SKIP_SEC) {
-        bad.push(`ignore ${ignoreSec} s, ${fuelPct}%, ${kids[i]}: "${row.offer}" → ${describe(row)}`);
+        bad.push(`ignore ${ignoreSec} s, ${fuelPct}%, ${rowKids[i]}: "${row.offer}" → ${describe(row)}`);
       }
     }
     const kind = rows[0]!.acceptOnly ? 'ACCEPT only' : rows[0]!.status;
@@ -164,7 +171,7 @@ for (const ignoreSec of ignores) {
 }
 check(`Rule 4 sweep: ${flights} flights (ignore ${ignores.join('/')} s × 10–${FUEL_TOP}% FUEL in ${CANONICAL_STEP}% steps × ${kids.join('/')}) all end; no FLIP or FLICKER; `
   + `no SKIP over ${FEW_SKIP_SEC} s`,
-bad.length === 0 && flights === ignores.length * fuels.length * kids.length,
+bad.length === 0 && flights === expectedFlights && expectedFlights >= ignores.length * fuels.length,
 bad.slice(0, 6).join(' | ') || `${[...outcomes].map(([status, count]) => `${count} ${status}`).join(', ')}; `
   + `longest SKIP ${longestSkip.toFixed(1)} s; bands (obey): ${bands.join(' / ')}`);
 
@@ -206,15 +213,18 @@ bad.slice(0, 6).join(' | ') || `${[...outcomes].map(([status, count]) => `${coun
   const offRingBad: string[] = [];
   const offRingBands: string[] = [];
   let offRingFlights = 0;
+  let offRingExpected = 0;
   let offRingLongestSkip = 0;
-  for (const lowestKm of lows) {
+  for (const [lowIndex, lowestKm] of lows.entries()) {
     for (const ignoreSec of offRingIgnores) {
       const snapshot = offRingSnapshot(lowestKm, ignoreSec);
       let band = '';
       let bandFrom = 0;
       const closeBand = (upTo: number): void => { if (band) offRingBands.push(`▼ ${lowestKm} ${ignoreSec} s ${bandFrom}–${upTo}% ${band}`); };
-      for (const fuelPct of offRingFuels) {
-        const rows = kids.map((kid) => {
+      for (const [fuelIndex, fuelPct] of offRingFuels.entries()) {
+        const rowKids = kidsAt(lowIndex + fuelIndex);
+        offRingExpected += rowKids.length;
+        const rows = rowKids.map((kid) => {
           restore(snapshot, fuelPct);
           return fly(kid);
         });
@@ -222,7 +232,7 @@ bad.slice(0, 6).join(' | ') || `${[...outcomes].map(([status, count]) => `${coun
           offRingFlights++;
           offRingOutcomes.set(row.status, (offRingOutcomes.get(row.status) ?? 0) + 1);
           offRingLongestSkip = Math.max(offRingLongestSkip, row.longestSkipSec);
-          const where = `▼ ${lowestKm}, ignore ${ignoreSec} s, ${fuelPct}%, ${kids[i]}`;
+          const where = `▼ ${lowestKm}, ignore ${ignoreSec} s, ${fuelPct}%, ${rowKids[i]}`;
           if (row.status === 'approaching' || row.flip || row.flicker || row.longestSkipSec > FEW_SKIP_SEC) {
             offRingBad.push(`${where}: "${row.offer}" → ${describe(row)}`);
           }
@@ -235,7 +245,7 @@ bad.slice(0, 6).join(' | ') || `${[...outcomes].map(([status, count]) => `${coun
   }
   check(`Rule 4 off-ring sweep: ${offRingFlights} flights (▼ ${lows.join('/')} km × ignore ${offRingIgnores.join('/')} s × 10–${FUEL_TOP}% FUEL in `
     + `${offRingStep}% steps × ${kids.join('/')}) all end; no FLIP or FLICKER; no SKIP over ${FEW_SKIP_SEC} s`,
-  offRingBad.length === 0 && offRingFlights === lows.length * offRingIgnores.length * offRingFuels.length * kids.length,
+  offRingBad.length === 0 && offRingFlights === offRingExpected && offRingExpected >= lows.length * offRingIgnores.length * offRingFuels.length,
   offRingBad.slice(0, 6).join(' | ') || `${[...offRingOutcomes].map(([status, count]) => `${count} ${status}`).join(', ')}; `
     + `longest SKIP ${offRingLongestSkip.toFixed(1)} s; bands (obey): ${offRingBands.join(' / ')}`);
 }

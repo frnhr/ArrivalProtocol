@@ -9,7 +9,7 @@
 // • UNIT_WORKERS: parallel suites (default: the machine's cores). A filter keeps only the suites whose path contains
 //   one of the given substrings, a `-substring` filter drops the ones that contain it (the tsc pass always runs).
 // Per-suite wall times are kept in tests/.out/unit-timings.json and order the next run (longest first), so one slow
-// suite does not start last and hold the whole run.
+// suite does not start last and hold the whole run; entries for suites that no longer exist are dropped.
 import { spawn } from 'node:child_process';
 import { availableParallelism } from 'node:os';
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
@@ -45,7 +45,9 @@ function suites(dir) {
 
 let timings = {};
 try { timings = JSON.parse(readFileSync(TIMINGS, 'utf8')); } catch { /* first run: no order yet */ }
-const known = timings[DEPTH] ?? {};
+// Only suites that still exist keep a time: a deleted or renamed suite's entry is dropped at the next write.
+const ALL_LABELS = new Set(['tsc-tests', ...suites(join(ROOT, 'tests', 'unit'))]);
+const known = Object.fromEntries(Object.entries(timings[DEPTH] ?? {}).filter(([label]) => ALL_LABELS.has(label)));
 
 const jobs = [
   { label: 'tsc-tests', cmd: 'node_modules/.bin/tsc', args: ['-p', 'tests/tsconfig.json'] },

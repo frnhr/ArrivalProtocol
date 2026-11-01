@@ -21,6 +21,7 @@
 // calls off comes back DEAL_SEED_CALLED_OFF_SEC after the pause, also held by a burn; an offer the ship's end cuts
 // short is recorded (invalidated).
 import { check, finish } from '../wp1/harness';
+import { byDepth } from '../depth';
 import { createHarness10 } from './harness10';
 import { pickChoice, entryTypedAtAi } from '@systems/say';
 import { offerDealNow, dealFront, DEAL_ACCEPT, DEAL_REFUSE } from '@systems/hollow-deal';
@@ -55,10 +56,18 @@ function soul(code: string): DriverSegment | undefined {
   return driversInMemory(state()).find((candidate) => isPodCode(candidate.pod, code));
 }
 
-// VESPER until the deal is offered (HOLLOW wakes 30 AI s into the coast, which begins at once).
+// HOLLOW's wake brought to now (the slice 2 review's tier trim): the HUNT stage wakes 30 AI s into the coast, and only
+// the first scenario below flies that coast; the rest build the awake state directly (as threat/arrival-story's lockOn
+// builds the lock), so the deal's own rules are what they spend their ticks on.
+function wakeNow(): void {
+  h.store.update((d) => { d.hollow.cfg.wake = { afterAiSec: d.clock.aiSec, coastLeadSec: null }; });
+}
+
+// VESPER until the deal is offered: its wake brought to now, the bites and the offer on the next ticks.
 function toOffer(seed: number): void {
   h.vesper(seed, { hunt: true });
-  h.stepUntil(() => state().hollow.phase === 'awake', 60);
+  wakeNow();
+  h.stepUntil(() => state().hollow.phase === 'awake', 5);
   h.stepUntil(() => state().hollow.deal.phase === 'offered', 30);
 }
 
@@ -175,7 +184,7 @@ function toOffer(seed: number): void {
   let held = 0;
   let noAlarm = 0;
   let othersDrain = 0;
-  const seeds = [7, 13, 14, 15];
+  const seeds = byDepth([7, 13], [7, 13, 14, 15]);
   for (const seed of seeds) {
     toOffer(seed);
     const entry = dealEntry()!;
@@ -252,7 +261,8 @@ function toOffer(seed: number): void {
 {
   h.vesper(10, { hunt: true });
   h.store.update((d) => { d.run.stats.deal = { outcome: 'refused', pod: 8, shipId: 'vesper' }; });
-  h.stepUntil(() => state().hollow.phase === 'awake', 60);
+  wakeNow();
+  h.stepUntil(() => state().hollow.phase === 'awake', 5);
   h.stepFor(15);
   check('a run that already had its deal is never offered another', state().hollow.deal.phase === 'none'
     && dealFront(state().memory, state().clock.aiSec) !== null);
@@ -292,7 +302,7 @@ function telegraphWhileBurning(fromAi: number, forSec: number): boolean {
 {
   let clockKept = 0;
   let waited = 0;
-  const seeds = [1, 2, 3];
+  const seeds = byDepth([1], [1, 2, 3]);
   for (const seed of seeds) {
     const before = (toOffer(seed), state().hollow.seedInSec);
     const id = state().hollow.deal.entryId!;

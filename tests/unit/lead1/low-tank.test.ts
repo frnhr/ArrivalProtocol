@@ -135,8 +135,9 @@ for (const fuelPct of [31.5, 32]) {
 // now is that its SKIP takes a few seconds.
 // Quick depth (tests/unit/depth.ts): the band's foot and its top; inside it, 34–35% fly below (held late), 31.5–35.5% in
 // the band sweep.
+// Quick depth flies the instant and the slowest kid (the tier trim; full: all three).
 for (const fuelPct of byDepth([32.5, 40], [32.5, 34, 36, 40])) {
-  const runs = (['obey', 0.3, 0.5] as const).map((kid) => fly(fuelPct, 60, kid));
+  const runs = byDepth(['obey', 0.5] as const, ['obey', 0.3, 0.5] as const).map((kid) => fly(fuelPct, 60, kid));
   check(`${fuelPct}%: SHRINK THE LOOP; obeyed instantly or at a 0.3 / 0.5 s reaction it locks, every SKIP a few seconds`,
     runs.every((flown) => /^SHRINK THE LOOP/.test(flown.offer) && flown.status === 'locked' && !flown.flipToLast
       && flown.longestSkipSec <= FEW_SKIP_SEC),
@@ -155,7 +156,8 @@ for (const fuelPct of byDepth([32.5, 40], [32.5, 34, 36, 40])) {
   // above: 32.5–36% after 60 s, three kids each, and 34–35% held late below).
   for (const ignoreSec of byDepth([60, 120], [60, 90, 120])) {
     for (const fuelPct of byDepth([31.5, 35.5], [31.5, 32.5, 33.5, 34.5, 35.5])) {
-      for (const reaction of ignoreSec === 60 ? [0.3, 0.5] : [0.3]) {
+      // Quick depth: the 0.3 s kid (the 0.5 s one flies the band's foot and top above); full: both after 60 s.
+      for (const reaction of ignoreSec === 60 ? byDepth([0.3], [0.3, 0.5]) : [0.3]) {
         const flown = fly(fuelPct, ignoreSec, reaction);
         flights++;
         if ((flown.status !== 'locked' && flown.status !== 'accepted') || flown.flipToLast || flown.releaseInLast !== null
@@ -197,8 +199,9 @@ for (const fuelPct of [34, 35]) {
 
 // --- 90–120 s of ignoring: a short tank still gets its brake at ▼ ------------------------------------------------
 // LEAD-2: it was the last FUEL run to the empty tank (it used to stop at the over-hold margin, review round 1).
-// Quick depth: the longest ignore only (90 s is the full depth's, and the only row that needs a 90 s capture).
-const shortAfterIgnoring: readonly (readonly [number, number])[] = byDepth([[120, 24], [120, 31]], [[90, 28], [120, 24], [120, 31]]);
+// Quick depth: the longest ignore, the shorter tank only (90 s is the full depth's, and the only row that needs a 90 s
+// capture; 31% after 60 s is flown in the first section).
+const shortAfterIgnoring: readonly (readonly [number, number])[] = byDepth([[120, 24]], [[90, 28], [120, 24], [120, 31]]);
 for (const [ignoreSec, fuelPct] of shortAfterIgnoring) {
   const instant = fly(fuelPct, ignoreSec, 'obey');
   const human = fly(fuelPct, ignoreSec, 0.3);

@@ -28,7 +28,8 @@
 // Slice 2 (Track THREAT): LAST LIGHT folds THE DEAL in (offered at the wake, before ORBIT LOCK; the verbs wait for it, and
 // this kid refuses it once its line has typed: harness11 DefendOpts.deal) and arrives with Track OPENING's rolled hurt
 // drivers (4 degraded and 1 failing, never the lead or the slot's neighbours). Re-measured on 12 seeds by the strip:
-// 12/12 locked and root deleted, 0.00 drivers lost (worst 0), 60 verb moments (0 landed, 51 blocked); 3 seeds in quick.
+// 12/12 locked and root deleted, 0.00 drivers lost (worst 0), 60 verb moments (0 landed, 51 blocked); 2 seeds in quick
+// (3 before the slice 2 review's tier trim).
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { createInitialState } from '@state/initial';
@@ -493,10 +494,10 @@ h.step();
   check('B: …and no verb starts there even when its clock is out', state().hollow.verb === null && state().hollow.verbMoments === 0);
 }
 
-// --- C. The competent defender, 200 seeds (3 at quick depth) ----------------------------------------------------------------------------
+// --- C. The competent defender, 200 seeds (2 at quick depth) ----------------------------------------------------------------------------
 
 {
-  const SEEDS = Number(process.env.BOSS_SEEDS ?? byDepth(3, 200));
+  const SEEDS = Number(process.env.BOSS_SEEDS ?? byDepth(2, 200));
   const LANDING_SEC = Number(process.env.BOSS_LANDING_SEC ?? 48);
   // BOSS_LANDING: 'strip' (default: [L] at the windows, followLanding) or 'stand' (BOSS_LANDING_SEC, then instant).
   const MODE = process.env.BOSS_LANDING ?? 'strip';
