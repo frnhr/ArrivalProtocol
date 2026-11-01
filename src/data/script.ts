@@ -62,7 +62,7 @@ import {
   SEG_NAME_MAX_CHARS, EATEN_ALARM_CLEAR_SEC, WALL_MIN_BLOCKS, FAMILY_MAX_CHARS, COLONIST_LINE_MAX_CHARS,
   WALL_RULE_SHOW_SEC, EMERGENCY_EXTRA_HITS, CORE_RESET_INTEGRITY, BEAM_OUT_EXTRA_HITS,
   TRANSIT_HIT_MAX, BAND_DEGRADED_MIN, CORE_LOW_INTEGRITY, FIREWALL_HINT_SHOW_SEC, DEBRIS_MOVE_HINT_TAC, SEED_LESSON_SHOW_SEC,
-  AUTOBURN_READY_SHOW_SEC, GHOST_LESSON_AFTER_BURSTS, GHOST_LESSON_SHOW_SEC, COPY_LESSON_SHOW_SEC, MERGE_COST_CHARGE, ROOT_DELETE_SEC,
+  AUTOBURN_READY_SHOW_SEC, GHOST_LESSON_AFTER_BURSTS, GHOST_LESSON_SHOW_SEC, COPY_LESSON_SHOW_SEC, MERGE_COST_CHARGE, ROOT_DELETE_SEC, LOG_SCAN_AFTER_COAST_SEC,
   BELT_MOVE_HINT_TAC, LESSON_LEAD_IN_SEC, DOT_WIDE_LESSON_SEC, DRAG_LESSON_SEC, DRAG_STAMP_MIN_KM,
   LANDING_DOT_LESSON_SEC, LANDING_SPLIT_LESSON_SEC, LOG_SCAN_ASK_SEC,
 } from '@data/tuning';
@@ -1233,14 +1233,19 @@ export const DRIVER_RULES: readonly GuideRule[] = [
 ];
 
 // --- 046.log's SCAN lesson (slice-2-plan §3.1; 05 §3.5) -------------------------------------------------------------
-// The `???` file is ship 1's SCAN lesson now that HOLLOW is gone from it: on run 1, once POD 02 no longer lands hard (the
-// coast's REPAIR is done) and the flight is in a WAIT, `◇ A FILE YOU DIDN'T PACK — SCAN it`, worded for the screen the
-// kid is on. The beat is missable (05 §3.5): a one-shot that steps aside after LOG_SCAN_ASK_SEC and never blocks the
-// flight. Done when the run knows the file (state/log-selectors.ts logKnown: scanned, or a key found). A returning unit gets one
-// hint and no lesson.
+// The `???` file is ship 1's SCAN lesson now that HOLLOW is gone from it: on run 1, while the flight is in a WAIT, once
+// POD 02 no longer lands hard (the coast's REPAIR is done) or, for a kid who never repairs it, once the coast has lasted
+// LOG_SCAN_AFTER_COAST_SEC with no op running (the review's minor 10: entry 01 would make the log known by itself, and
+// that kid never met the beat): `◇ A FILE YOU DIDN'T PACK — SCAN it`, worded for the screen the kid is on. Its rules come
+// before the hurt-driver lesson's (GUIDE_RULES), so after that wait it takes the strip for its LOG_SCAN_ASK_SEC and then
+// hands it back. The beat is missable (05 §3.5): a one-shot that steps aside after LOG_SCAN_ASK_SEC and never blocks the
+// flight. Done when the run knows the file (state/log-selectors.ts logKnown: scanned, or a key found). A returning unit
+// gets one hint and no lesson.
 
 function logAskLive(ctx: DirectorCtx): boolean {
-  return isFlying(ctx) && ctx.flight?.urgency === 'wait' && hurtPodSettled(ctx) && !logKnown(ctx.state.run.log)
+  const coastAt = ctx.state.burn.coastAtAi;
+  const coastLong = coastAt !== null && ctx.state.clock.aiSec - coastAt >= LOG_SCAN_AFTER_COAST_SEC && getOps().length === 0;
+  return isFlying(ctx) && ctx.flight?.urgency === 'wait' && (hurtPodSettled(ctx) || coastLong) && !logKnown(ctx.state.run.log)
     && ctx.state.memory.some((seg) => seg.type === 'log') && ctx.state.run.licences.includes('scan');
 }
 
@@ -2174,8 +2179,10 @@ export const GUIDE_RULES: readonly GuideRule[] = [
   // Slice 2: the landing's general lessons before the hurt driver's particular one; the SCAN lesson after it (it waits
   // for POD 02 to be settled).
   ...LANDING_LESSON_RULES,
-  ...DRIVER_RULES,
+  // The SCAN lesson before the hurt-driver lesson: it is live only once POD 02 is settled or the coast has waited
+  // LOG_SCAN_AFTER_COAST_SEC for it, and then has the strip for its few seconds (minor 10).
   ...LOG_RULES,
+  ...DRIVER_RULES,
   // Slice 1b: the wide-drop lesson after the hurt driver's (POD 02 WILL LAND HARD names the same REPAIR, and comes first).
   ...DROP_LESSON_RULES,
   {

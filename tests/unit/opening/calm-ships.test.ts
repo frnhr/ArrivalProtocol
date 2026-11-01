@@ -38,6 +38,7 @@ import { TOOL_HINT_TARGET } from '@data/fs-tools';
 import { stateFromElements } from '@/types/orbit';
 import {
   DRIVER_ROLLED_MIN, DRIVER_ROLLED_MAX, DRIVER_FAILING_MIN, DRIVER_FAILING_MAX, POD_FIRST_DESCENT_SEC, BAND_DEGRADED_MIN,
+  LOG_SCAN_AFTER_COAST_SEC, LOG_SCAN_ASK_SEC,
 } from '@data/tuning';
 import type { GameState } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
@@ -118,6 +119,33 @@ function stepUntil(done: () => boolean, maxWall: number): boolean {
   let threw = false;
   try { driverArrivalDamage({ layer: 4, pods: 3, lead: 1, avoid: [2, 3], firstRun: true, scripted: null }, createRng(1)); } catch { threw = true; }
   check('a ship with no pod left to hurt fails loudly', threw);
+}
+
+// --- Ship 1, run 1: a kid who never repairs POD 02 still meets the SCAN lesson (the review's minor 10) ------------------------
+h.newRun(12);
+receiveTransmission(h.store);
+stepUntil(() => state().run.phase === 'flight', 30);
+{
+  const { ring, planet } = state().level;
+  const elems = stateFromElements((ring.min + ring.max) / 2, 0.6, 0, Math.PI, planet.mu);
+  h.store.update((draft) => {
+    draft.orbit = { x: elems.x, y: elems.y, vx: elems.vx, vy: elems.vy };
+    draft.burn.sasMode = 'retrograde';
+  });
+  const seen: { id: string; at: number }[] = [];
+  for (let t = 0; t < LOG_SCAN_AFTER_COAST_SEC + LOG_SCAN_ASK_SEC + 12; t += 0.5) {
+    h.stepFor(0.5);
+    const id = shownId();
+    if (seen[seen.length - 1]?.id !== id) seen.push({ id, at: state().clock.aiSec - (state().burn.coastAtAi ?? Infinity) });
+  }
+  const scan = seen.find((entry) => entry.id.startsWith('tut-scan-log'));
+  const scanIndex = seen.findIndex((entry) => entry === scan);
+  check(`POD 02 left hurt: its lesson has the coast first, then after ${LOG_SCAN_AFTER_COAST_SEC} s the SCAN lesson, then POD 02's again`,
+    seen[0]?.id.startsWith('tut-hurt-driver') === true && scan !== undefined && scan.at >= LOG_SCAN_AFTER_COAST_SEC - 0.6
+    && seen.slice(scanIndex + 1).some((entry) => entry.id.startsWith('tut-hurt-driver')) && drivers().find((d) => d.pod === 2)?.integrity === 44,
+    seen.map((entry) => `${entry.id}@${entry.at.toFixed(1)}`).join(' → '));
+  check('…missable: it stepped aside without the file known (no SCAN), and the lesson is done', !logKnown(state().run.log)
+    && state().director.done.includes('tut-scan-log'));
 }
 
 // --- Ship 1, run 1: the boot and the coast ----------------------------------------------------------------------------------

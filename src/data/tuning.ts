@@ -1676,6 +1676,11 @@ export const LANDING_SPLIT_LESSON_SEC = 6;
 // on the strip: the beat is missable (05 §3.5), so it never holds the coast's WAIT line back for longer than a glance.
 // Run 2+ gets the same seconds as a hint.
 export const LOG_SCAN_ASK_SEC = 8;
+// ...and it waits for POD 02 to be settled, or for this many AI seconds of the coast with no op running (the review's
+// minor 10: a kid who never repairs POD 02 never met it). The hurt-driver lesson has the coast to itself first: 20 s
+// reads its line twice and starts a REPAIR (the op running holds the SCAN line back), while ARES-VII's coast still has
+// a long WAIT left for the glance.
+export const LOG_SCAN_AFTER_COAST_SEC = 20;
 
 // --- 2 UI (owned by Track UI): the TRACE meter, the chips, the boarding moment, the LOG READER -------------------------
 
