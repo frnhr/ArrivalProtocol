@@ -773,7 +773,8 @@ export const MINI_PLOT_VIEWBOX = 100;
 export const RACK_BLOCKS = 64;
 export const RACK_COUNT = 6;
 
-// The `R` token in a rack layout: HOLLOW's root, the size of one pod driver (R16 spells out others).
+// Phase 2's root size (its written `R` token, gone since slice 2): what debug.ts's hollowDemo and the test fixtures plant (the
+// ARRIVAL stage's root is HOLLOW_STAGES.arrival.rootBlocks, the same 8).
 export const ROOT_BLOCKS = 8;
 
 // A colonist's line ("wants to name the first tree.") stays this short, so `Okafor, Ada (11): …`
@@ -1646,6 +1647,9 @@ export const PRE_FINAL_ROOT_CAP = 14;
 export const FINAL_ROOT_MAX_BLOCKS = 18;
 // A deleted seed says one line from 05 §3.5's pool at most this often per ship (04 §3.6): a voice, not a chorus.
 export const SEED_WORDS_PER_SHIP = 1;
+// The strip's `A SEED — no rm aboard` line (04 §3.5) waits this many AI s into a ship: a licence the ship gives at its
+// start (KESTREL's DELETE, afterAiSec 0) is written on the flight's first ticks, and the line must never flash before it.
+export const BEAM_SEED_NO_RM_AFTER_SEC = 1;
 
 // --- 2 OPENING (owned by Track OPENING): driver arrival damage, the calm ships, the log -------------------------------
 

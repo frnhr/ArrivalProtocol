@@ -16,9 +16,10 @@ import {
 } from '@data/tuning';
 
 // THE DEAL (§1, §5.3 moment 12, §6.6, §9 WP10 item 5): HOLLOW's most personal moment so far. On a ship whose HOLLOW
-// deals (VESPER), once, when one of its fronts stands within DEAL_FRONT_BLOCKS free blocks of a pod's driver and at
-// least DEAL_MIN_DRIVERS drivers are still in memory, it offers, in the TERMINAL, with ACCEPT and REFUSE buttons and a
-// DEAL_TIMEOUT_SEC timer on AI time (say.ts sayChoice; it starts once the line has typed):
+// deals (the HUNT stage; folded into the final ship when the run had none, and offered there before ORBIT LOCK), once,
+// when one of its fronts stands within DEAL_FRONT_BLOCKS free blocks of a pod's driver and at least DEAL_MIN_DRIVERS
+// drivers are still in memory, it offers, in the TERMINAL, with ACCEPT and REFUSE buttons and a DEAL_TIMEOUT_SEC timer
+// on AI time (say.ts sayChoice; it starts once the line has typed):
 //   `> give me pod08. then i leave the others alone. for a while.`
 // • ACCEPT: the named driver is eaten at once (its pod can't launch: parked in orbit), every infection is cured, and
 //   the spread stands still for DEAL_PAUSE_SEC (no bites, no seeds). CONTROL: "Negotiating with unauthorized processes
@@ -69,9 +70,11 @@ function dealLive(state: Readonly<GameState>): boolean {
 }
 
 // The deal may be offered now: a dealing HOLLOW awake on a live ship, nothing offered yet on this ship or in this run,
-// and enough drivers left to bargain over.
+// and enough drivers left to bargain over. Folded into the final ship (phase 3 slice 2, 04 §3.9: "before ORBIT LOCK"),
+// only while the flight is on: at the lock the root opens for the duel, and a bargain over a pod then would talk over it.
 function dealOpen(state: Readonly<GameState>): boolean {
   const hollow = state.hollow;
+  if (hollow.cfg.verbs !== null && state.run.phase !== 'flight') return false;
   return hollow.cfg.deal && hollow.phase === 'awake' && hollow.deal.phase !== 'offered' && hollow.deal.phase !== 'done'
     && state.run.stats.deal === null && dealLive(state) && driversInMemory(state).length >= DEAL_MIN_DRIVERS;
 }

@@ -65,9 +65,11 @@ const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { e
 
   // Every pod down while the root still stands: the finale holds the LANDING REPORT.
   landInstantly(h.store);
-  h.stepUntil(() => driversInMemory(state()).length === 0, 200);
+  // Phase 3 slice 2: a driver that cannot launch (OPENING's rolled hurt drivers, or one bitten) is parked and stays in
+  // memory until the report (01-landing §3.10), so the landing's end is what is waited for.
+  h.stepUntil(() => state().landing.ended !== null, 200);
   h.stepFor(3);
-  check('every pod down (or lost) while the root stands: still landing (the finale holds the report)', driversInMemory(state()).length === 0
+  check('every pod down, parked or lost while the root stands: still landing (the finale holds the report)', state().hollow.finale.phase === 'duel'
     && state().run.phase === 'landing' && state().landing.ended !== null, `${driversInMemory(state()).length} in memory, ${state().run.phase}`);
 }
 
@@ -83,7 +85,7 @@ const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { e
 
 // --- THE DEAL's pause does not hold SKIP --------------------------------------------------------------------------------
 {
-  h.vesper(11, { hollowAsleep: false });
+  h.vesper(11, { hunt: true, hollowAsleep: false });
   h.store.update((d) => {
     d.hollow.phase = 'awake';
     d.hollow.seedMoments = 0;
@@ -116,7 +118,7 @@ const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { e
 
 // --- Two FIREWALLs --------------------------------------------------------------------------------------------------
 {
-  h.vesper(12, { hollowAsleep: true });
+  h.vesper(12, { hunt: true, hollowAsleep: true });
   // Two FIREWALL.sys files, installed as __ap.giveCard does (debug.ts is DOM code, so the same calls here).
   for (let i = 0; i < 2; i++) {
     const memory = state().memory;
@@ -143,7 +145,7 @@ const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { e
 
 // --- A worn Core on a quiet coast --------------------------------------------------------------------------------------
 {
-  h.vesper(13, { hollowAsleep: true });
+  h.vesper(13, { hunt: true, hollowAsleep: true });
   h.store.update((d) => {
     for (const seg of d.memory) {
       // No bursts (a healthy controller) and a Core worn under the line, nothing infected.

@@ -1,3 +1,5 @@
+// Phase 3 slice 2: KESTREL has no root any more, so the FIREWALL case plays on VESPER (HOLLOW boarded there), and the COPY
+// case gives VESPER the HUNT stage, whose seeds hunt tools.
 // Final fix pass (the final review's third major): a lesson worded for each screen (its amber `-tab` line and its blue
 // line) retires as one, so the two screens' strips stop sending the kid back and forth. The kid run looped for 22 s
 // and 33 s (.tmp/final-review/journey/kj-full-1440.log):
@@ -23,6 +25,7 @@ import { outlivedOneShots, lessonOf } from '@systems/director';
 import { GUIDE_RULES } from '@data/script';
 import { COPY_LESSON_SHOW_SEC, FIREWALL_HINT_SHOW_SEC } from '@data/tuning';
 import type { GameState, ObjectiveLine, ViewMode } from '@state/schema';
+import { phase2HollowOf } from '../support/hollow-world';
 
 const h = createHarness11(7);
 const state = (): Readonly<GameState> => h.store.getState();
@@ -35,9 +38,10 @@ const shown = (): ObjectiveLine | null => state().director.shown;
   const late = outlivedOneShots(GUIDE_RULES, 'firewall-place', 1, clock);
   check('maxShownSec counts the lesson: 14 s on the amber wording and 1 s on the blue one retire both',
     early.length === 0 && late.includes('firewall-place') && late.includes('firewall-place-tab'), `${early} / ${late}`);
-  const lessons = ['firewall-place', 'copy-repair', 'wall-rule', 'seed-first'];
-  check('the twins of the FIREWALL, COPY, WALL-rule and first-seed lessons each name one lesson',
-    lessons.every((lesson) => GUIDE_RULES.filter((rule) => lessonOf(rule) === lesson).length === 2));
+  // Phase 3 slice 2: the first-seed lesson has a second pair of twins, the beam seeds' (data/threat-rules.ts).
+  const lessons: [string, number][] = [['firewall-place', 2], ['copy-repair', 2], ['wall-rule', 2], ['seed-first', 4]];
+  check('the twins of the FIREWALL, COPY and WALL-rule lessons each name one lesson, and the first-seed lesson\'s two pairs too',
+    lessons.every(([lesson, wordings]) => GUIDE_RULES.filter((rule) => lessonOf(rule) === lesson).length === wordings));
 }
 
 // Flies the strip (the guidance follower) until the flight's own line is a WAIT: the coast.
@@ -108,10 +112,17 @@ function playLesson(name: string, amberId: string, blueId: string, retireBy: num
     `amber ${amber?.text} · blue ${blue?.text}`);
 }
 
-// --- KESTREL: the FIREWALL to place ----------------------------------------------------------------------------------
+// --- The FIREWALL to place (phase 3 slice 2: on VESPER, the first ship with HOLLOW's root aboard; KESTREL has none) ----
 {
-  h.kestrel(7, { hollowAsleep: true });
+  h.vesper(7, { hollowAsleep: true });
   for (const kind of ['repair', 'move'] as const) if (!state().run.licences.includes(kind)) installTool(h.store, kind);
+  // A healthy Thrust Ctrl: no uncommanded bursts and their alarms on this coast.
+  h.store.update((d) => {
+    const thrust = d.memory.find((seg) => seg.type === 'ship' && seg.role === 'thrust-ctrl');
+    if (!thrust || !('integrity' in thrust)) throw new Error('two-screens: no Thrust Ctrl');
+    setIntegrity(thrust, 100);
+    d.ui.memoryRev++;
+  });
   flyToCoast(400);
   // A FIREWALL carried in, as a card's file arrives (debug.ts giveCard), and HOLLOW awake with its timers held still.
   h.store.update((d) => {
@@ -125,7 +136,7 @@ function playLesson(name: string, amberId: string, blueId: string, retireBy: num
     d.hollow.seedInSec = 9999;
     d.ui.memoryRev++;
   });
-  playLesson('KESTREL', 'firewall-place-tab', 'firewall-place', FIREWALL_HINT_SHOW_SEC + 5);
+  playLesson('VESPER (FIREWALL)', 'firewall-place-tab', 'firewall-place', FIREWALL_HINT_SHOW_SEC + 5);
 }
 
 // --- VESPER: the COPY lesson ---------------------------------------------------------------------------------------
@@ -137,6 +148,8 @@ function playLesson(name: string, amberId: string, blueId: string, retireBy: num
     const thrust = d.memory.find((seg) => seg.type === 'ship' && seg.role === 'thrust-ctrl');
     if (!thrust || !('integrity' in thrust)) throw new Error('two-screens: no Thrust Ctrl');
     setIntegrity(thrust, 100);
+    // Phase 3 slice 2: tool-hunting seeds are the HUNT stage's (phase 2's VESPER), which the fixed five no longer reach.
+    d.hollow.cfg = phase2HollowOf(3);
     d.hollow.seedsLanded = 1;
     d.ui.memoryRev++;
   });

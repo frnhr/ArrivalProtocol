@@ -1,3 +1,4 @@
+// Phase 3 slice 2: ships 1–2 are calm, so each case plants phase 2's ship-1 root first (support/hollow-world.ts phase2ShipOne).
 // WP7: HollowDef gained `story` and the timed wake `coastLeadSec` (HALCYON's coast-tied wake); the
 // fixtures below spell them out (no story, no coast lead: the WP6 behaviour they test).
 // Slice 1a: pods for clusters (ARES-VII's POD 01 is next to the root, POD 02 arrives hurt, POD 03 is the third), and no
@@ -29,6 +30,7 @@ import { HOLLOW_ECHO, HOLLOW_HUD_TEXT } from '@data/hollow-text';
 import type { HollowDef } from '@data/ships';
 import type { Segment, FreeSegment, HollowSegment, ShipSegment, FsToolSegment } from '@/types/segment';
 import { MAX_LINE_CHARS, SEG_NAME_MAX_CHARS } from '@data/tuning';
+import { phase2ShipOne } from '../support/hollow-world';
 
 const h = createHarness6(1, { soulsFound: true });
 const state = () => h.store.getState();
@@ -43,6 +45,7 @@ const HUNGRY: HollowDef = { wake: { afterAiSec: 0, coastLeadSec: null }, spreadE
 
 function fresh(cfg?: HollowDef): void {
   h.resetTo('flight');
+  phase2ShipOne(h.store);
   h.noFault();
   for (const kind of ['repair', 'move', 'copy', 'delete'] as const) installTool(h.store, kind);
   h.store.update((d) => {

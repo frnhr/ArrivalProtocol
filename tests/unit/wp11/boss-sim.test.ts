@@ -25,6 +25,10 @@
 // while HOLLOW bites, then the pods land at once (tests/unit/support/landing-instant.ts); BOSS_LANDING_SEC=0 is the
 // instant landing (the lower bound). Measured on 30 seeds, slice 1a: by the strip 30/30 root deleted, 0.00 lost, 150
 // verbs (0 landed, 120 blocked); standing 48 s the same numbers.
+// Slice 2 (Track THREAT): LAST LIGHT folds THE DEAL in (offered at the wake, before ORBIT LOCK; the verbs wait for it, and
+// this kid refuses it once its line has typed: harness11 DefendOpts.deal) and arrives with Track OPENING's rolled hurt
+// drivers (4 degraded and 1 failing, never the lead or the slot's neighbours). Re-measured on 12 seeds by the strip:
+// 12/12 locked and root deleted, 0.00 drivers lost (worst 0), 60 verb moments (0 landed, 51 blocked); 3 seeds in quick.
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { createInitialState } from '@state/initial';
@@ -345,6 +349,8 @@ function coast(seed: number): void {
   // REPAIR comes with the first look inside or the first need (licences.ts); this kid has looked: Repair and Repair.bak.
   if (!isLicensed(state(), 'repair')) installTool(h.store, 'repair');
   h.store.update((d) => {
+    // Phase 3 slice 2: no folded DEAL here (its offer would hold the verbs: section C answers it).
+    d.hollow.cfg.deal = false;
     d.hollow.phase = 'awake';
     d.hollow.biteInSec = 9999;
     d.hollow.seedInSec = 9999;

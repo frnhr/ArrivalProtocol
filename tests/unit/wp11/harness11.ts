@@ -33,6 +33,8 @@ import { getPrediction, getSensedPrediction } from '@systems/predict';
 import { knownHitRacks } from '@systems/zones';
 import { isHollow } from '@state/selectors';
 import { BAND_OK_MIN } from '@data/tuning';
+import { pickChoice, entryTypedAtAi } from '@systems/say';
+import { DEAL_ACCEPT, DEAL_REFUSE } from '@systems/hollow-deal';
 
 export const LAST_LIGHT = 4;
 
@@ -50,6 +52,9 @@ export interface DefendOpts {
   // to 100). A kid saving charge for MERGE heals it only back to its two threads (below 50, to 60).
   coreHealBelow?: number;
   coreHealTo?: number;
+  // Phase 3 slice 2: THE DEAL folds into LAST LIGHT on a run that had none. The kid answers it once its line has typed
+  // (default 'refuse', the playthrough kids' answer, slice-2-plan §6.2); 'ignore' lets its timer run out.
+  deal?: 'refuse' | 'accept' | 'ignore';
 }
 
 export interface Harness11 extends Harness10 {
@@ -149,6 +154,14 @@ export function createHarness11(seed = 1, opts: { soulsFound?: boolean } = {}): 
     return false;
   };
 
+  // THE DEAL standing, its line typed: the kid's answer.
+  const answerDeal = (answer: 'refuse' | 'accept' | 'ignore'): boolean => {
+    const deal = state().hollow.deal;
+    if (answer === 'ignore' || deal.phase !== 'offered' || deal.entryId === null) return false;
+    if (state().clock.aiSec < entryTypedAtAi(state(), deal.entryId)) return false;
+    return pickChoice(deal.entryId, answer === 'refuse' ? DEAL_REFUSE : DEAL_ACCEPT);
+  };
+
   const defend11 = (defendOpts: DefendOpts = {}): boolean => {
     let acted = cutFromCore();
     if (moveBehindWall()) acted = true;
@@ -156,6 +169,7 @@ export function createHarness11(seed = 1, opts: { soulsFound?: boolean } = {}): 
     if (repairOwnFiles(defendOpts)) acted = true;
     if (blockVerb(defendOpts.blockAfterSec ?? 0.8)) acted = true;
     if ((defendOpts.deleteRoot ?? true) && startRootDelete()) acted = true;
+    if (answerDeal(defendOpts.deal ?? 'refuse')) acted = true;
     return acted;
   };
 

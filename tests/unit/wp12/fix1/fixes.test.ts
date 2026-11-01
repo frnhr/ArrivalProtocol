@@ -23,6 +23,7 @@ import { GHOST_TEXT } from '@data/ghost-text';
 import { LESSON_LEAD_IN_SEC, MAX_LINE_CHARS, OBJECTIVE_HYSTERESIS_SEC } from '@data/tuning';
 import { installTool, isLicensed, hasWorkingTool } from '@systems/licences';
 import { infectNow } from '@systems/hollow';
+import { phase2HollowOf } from '../../support/hollow-world';
 import { setMode } from '@systems/mode';
 import { requireAddr } from '@systems/memory-ops';
 import { resetReport, resetWorld } from '@systems/reset';
@@ -40,6 +41,8 @@ if (!isLicensed(state(), 'copy')) installTool(h.store, 'copy');
 const free = state().memory.find((seg) => seg.type === 'free' && seg.size >= 2);
 if (!free) throw new Error('fixes.test: no free run on VESPER');
 h.store.update((d) => {
+  // Phase 3 slice 2: VESPER plays ARRIVAL + WALLS now; tool-hunting seeds are the HUNT stage's (phase 2's VESPER).
+  d.hollow.cfg = phase2HollowOf(3);
   d.hollow.phase = 'awake';
   const freeSeg = d.memory.find((seg) => seg.id === free.id);
   if (!freeSeg) throw new Error('fixes.test: the free run went');

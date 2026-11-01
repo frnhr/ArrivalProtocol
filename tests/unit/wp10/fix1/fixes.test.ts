@@ -46,7 +46,7 @@ function line(): string {
 
 // --- The orphaned backup ------------------------------------------------------------------------------------------
 {
-  h.vesper(21, { hollowAsleep: true });
+  h.vesper(21, { hunt: true, hollowAsleep: true });
   h.stepUntil(() => state().run.licences.includes('swap'), 120);
   const primary = getByRole(state(), 'thrust-ctrl')!;
   const question = deleteQuestion(state(), primary);
@@ -73,7 +73,7 @@ function line(): string {
 
 {
   // A COPY of Thrust.alt is no backup the ship knows of: with the primary gone, only the original is a spare.
-  h.vesper(22, { hollowAsleep: true });
+  h.vesper(22, { hunt: true, hollowAsleep: true });
   h.stepUntil(() => state().run.licences.includes('swap'), 120);
   const free = state().memory.filter((seg): seg is FreeSegment => seg.type === 'free' && seg.reservedBy === undefined).sort((a, b) => b.size - a.size)[0]!;
   check('a COPY of Thrust.alt starts', actionCopy(h.store, named('Thrust.alt'), { regionSegIds: [free.id], col: 0 }) === null);
@@ -87,7 +87,7 @@ function line(): string {
 
 // --- The ghost lesson survives a TAB for something else (found in the browser run from TRANSMIT) --------------------
 {
-  h.vesper(27, { hollowAsleep: true });
+  h.vesper(27, { hunt: true, hollowAsleep: true });
   h.stepUntil(() => state().burn.ghostBursts >= 2 && state().director.shown?.id === 'tut-ghost-pip', 200);
   check('after the second burst the pip lesson stands in amber', state().director.shown?.id === 'tut-ghost-pip', state().director.shown?.id);
   // A TAB to the MIND for something else (no file selected), and back.
@@ -120,7 +120,7 @@ function line(): string {
   let shown = '';
   let found = false;
   for (let seed = 30; seed < 90 && !found; seed++) {
-    h.vesper(seed, { hollowAsleep: true });
+    h.vesper(seed, { hunt: true, hollowAsleep: true });
     h.store.update((d) => {
       const file = d.memory.find((seg) => seg.role === 'thrust-ctrl');
       if (!file || !('integrity' in file)) throw new Error('no Thrust Ctrl');
@@ -140,7 +140,7 @@ function line(): string {
 
 // --- Seeds that hunt tools ------------------------------------------------------------------------------------------
 {
-  h.vesper(23, { hollowAsleep: true });
+  h.vesper(23, { hunt: true, hollowAsleep: true });
   h.step();
   // Slice 1a (pooled receiver): racks E–F hold the carried files back to back (Scan near the end of rack E, then REPAIR
   // CHARGE, then the free tail), so a fresh unit has no gap beside a tool. Everything after Scan is laid out again: a
@@ -180,7 +180,7 @@ function line(): string {
 }
 
 {
-  h.vesper(24);
+  h.vesper(24, { hunt: true });
   h.stepUntil(() => state().hollow.seedsLanded > 0, 200);
   h.stepFor(0.2);
   const alert = state().alerts.list.find((candidate) => candidate.id === SEED_ALERT_ID);
@@ -191,7 +191,7 @@ function line(): string {
 
 // --- ▼'s drift ----------------------------------------------------------------------------------------------------------
 {
-  h.vesper(25, { hollowAsleep: true });
+  h.vesper(25, { hunt: true, hollowAsleep: true });
   const rpBefore = getPrediction().rp;
   h.stepUntil(() => state().burn.ghostBursts >= 1 && state().burn.ghost === null, 120);
   const drift = ghostDriftKm(state());
@@ -225,7 +225,7 @@ function line(): string {
 
 {
   // A held burn (TOO EARLY) during a burst: no drift is shown (the kid's own burn moves ▼ too).
-  h.vesper(26, { hollowAsleep: true });
+  h.vesper(26, { hunt: true, hollowAsleep: true });
   h.stepUntil(() => state().burn.ghostBursts >= 1 && state().burn.ghost === null, 120);
   h.stepFor(GHOST_DRIFT_SHOW_SEC + 0.5);
   h.keyDown('Space');

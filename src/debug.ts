@@ -47,13 +47,19 @@ import { beamOutView, type BeamOutView } from '@systems/beam-out';
 import { buildShipMemory } from '@data/memory';
 import { podCode } from '@data/landing-text';
 import { getShip, type ShipDef, type HollowDef } from '@data/ships';
-import { nominalShipThreat, nominalRunThreat } from '@systems/threat-plan';
+import { nominalShipThreat, nominalRunThreat, planThreat, threatInputFor, fixedShipFacts } from '@systems/threat-plan';
+import { rollBeamSeeds, plantBeamSeed, seedTargetsOf } from '@systems/beam-seeds';
+import { beamSourceOf } from '@systems/run';
+import { playsTutorial } from '@systems/meta';
+import { SEED_WORDS_POOL } from '@data/threat-text';
+import { SEEDS_ONLY_DEF } from '@data/threats';
+import type { ShipThreat } from '@/types/threat';
 import { childRng } from '@systems/rng';
 import { createHollowState } from '@state/initial';
 import { getOps, threadsBusy, threadsTotal, cancelOp, abortAll } from '@systems/ops-core';
 import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
-import { META_STORAGE_KEY } from '@data/tuning';
+import { META_STORAGE_KEY, ROOT_BLOCKS } from '@data/tuning';
 import type { Segment } from '@/types/segment';
 import { showStamp, type StampTone } from '@components/hud/Stamp';
 import { shake, recentShakes } from '@components/hud/Juice';
@@ -168,6 +174,10 @@ interface DebugHooks {
   // beamOut / cancelBeamOut drive BEAM OUT (refusal or null); newRun starts a NEW RUN;
   // movePreview judges MOVE of the named file into the free region holding `addr`.
   ship: (index: number) => void;
+  // Phase 3 slice 2 (THREAT): a beam seed behind this file now (returns its id); HOLLOW boards on the beam into this ship
+  // (its boot replayed with the 108% unpack; VESPER on the fixed five).
+  seed: (target: string) => string;
+  board: () => ShipThreat;
   run: () => GameState['run'];
   resetReport: () => ResetDrift[];
   continueLoss: () => LossPlan;
@@ -271,11 +281,11 @@ declare global {
   }
 }
 
-// __ap.hollowDemo(): HOLLOW as ship 2 meets it, on the ship being flown: rack C becomes `P P _2 R _1 P P _21` (the
+// __ap.hollowDemo(): HOLLOW as ship 2 meets it, on the ship being flown: rack C becomes `P P _2 S _1 P P _29` with an 8-block root in its slot (the
 // root between POD 08 behind a 2-block GAP and POD 09 behind a 1-block GAP; one LZ takes all ten pods), MOVE is licensed, and HOLLOW wakes HOLLOW_DEMO_WAKE_SEC from now with HALCYON's numbers
 // and no story. WP6's browser checks were built on it; the real HALCYON is
 // __ap.ship(1) (WP7).
-const HOLLOW_DEMO_RACKS = { B: 'P P P P P P _16', C: 'P P _2 R _1 P P _21', D: '_64' } as const;
+const HOLLOW_DEMO_RACKS = { B: 'P P P P P P _16', C: 'P P _2 S _1 P P _29', D: '_64' } as const;
 // POD 09 leads (the pod right of the root, behind the 1-block GAP).
 const HOLLOW_DEMO_LEAD = 9;
 const HOLLOW_DEMO_WAKE_SEC = 12;
@@ -302,7 +312,7 @@ function hollowDemo(store: Store<GameState>): void {
   const landingDef = { ...ship.landing, lzs: [lz] };
   const state = store.getState();
   const owner = hollowLabel(state.run);
-  const memory = buildShipMemory(demo, null, childRng(state.run.seed, 1, 'families'), false, owner, null, []);
+  const memory = buildShipMemory(demo, null, childRng(state.run.seed, 1, 'families'), false, owner, { blocks: ROOT_BLOCKS }, []);
   const landing = createLandingState(landingDef, memory, { finalShip: false, lead: HOLLOW_DEMO_LEAD, hurt: [], planetR: state.level.planet.R });
   store.update((draft) => {
     draft.memory = memory;
@@ -349,21 +359,55 @@ function giveCard(store: Store<GameState>, id: UpgradeId): Segment[] {
 // hits and no stars: a quick way to reach HALCYON or KESTREL for a look (WP7 replaces WP6's hollowDemo). The
 // run's licences stay. The threat is the nominal run's (systems/threat-plan.ts, slice-2-plan risk 14): the ships before
 // it flown with TRACE 0, so VESPER gets HOLLOW's forced boarding and its 10-block root, LAST LIGHT the FINALE.
-function debugJump(store: Store<GameState>, index: number): void {
+// The beam's seeds are rolled as transmitNext rolls them (KESTREL's next to Telemetry on the tutorial run), so the RM
+// lesson can be reached in one call. `threat` replaces the nominal verdict (__ap.board).
+function debugJump(store: Store<GameState>, index: number, threat: ShipThreat = nominalShipThreat(index)): void {
   const ship = getShip(index);
   if (!ship.arrival) throw new Error(`__ap.ship(${index}): ${ship.name} meets a fresh unit; use __ap.newRun()`);
   abortAll();
-  const threat = nominalShipThreat(index);
-  const packet = packUnit(store.getState().memory, ship.arrival.linkBlocks, []);
-  const layout = layoutCarried(packet, packet.chargeCarried, ship, threat);
+  const state = store.getState();
+  const packet = packUnit(state.memory, ship.arrival.linkBlocks, []);
+  packet.seeds = rollBeamSeeds(packet, beamSourceOf(threat), playsTutorial(state.run), childRng(state.run.seed, index, 'beam-seeds'));
+  const layout = layoutCarried(packet, packet.chargeCarried, ship, threat, hollowLabel(state.run));
   // The ship's own arrival damage still applies (WP9: KESTREL's Sensor Interp at 45%, PATH UNCERTAIN).
   const scripted = arrivalDamage(layout.racks.segs, ship.arrival.damage);
   // The run's threat memory as the nominal run had it before this ship (startShip applies the ship's verdict on top).
   store.update((draft) => { draft.run.threat = nominalRunThreat(index - 1); });
   startShip(store, index, layout.racks, {
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0,
-    chargeOverflowLost: 0, scripted, seeds: [], boarded: boardedBy(threat),
+    chargeOverflowLost: 0, scripted, seeds: layout.seeds, boarded: boardedBy(threat),
   }, threat);
+}
+
+// __ap.board(): HOLLOW boards on the beam into the ship being flown, now: the ship is entered again through its boot (the
+// 108% unpack, 'hollow-boarded': the shake, the tear, the cue), with the verdict of a forced boarding (04 §3.8) on the
+// nominal run's history. Only where the ladder lets it board (depth ≥ 4, not a final ship: VESPER on the fixed five).
+function debugBoard(store: Store<GameState>): ShipThreat {
+  const index = store.getState().run.shipIndex;
+  const facts = { ...fixedShipFacts(index), oneHopFromFinal: true };
+  const before = { ...nominalRunThreat(index - 1), aboard: false, age: 0 };
+  const threat = planThreat(threatInputFor(before, facts, store.getState().run.stats.deal !== null));
+  if (threat.boards === null) throw new Error(`__ap.board: HOLLOW never boards on the beam into ${getShip(index).name} (depth ${facts.depth})`);
+  debugJump(store, index, threat);
+  return threat;
+}
+
+// __ap.seed(target): a beam seed laid out behind this file now, as the unpack lays one (GAP 1, the seed, WALL 4), with
+// words from 05's pool. On a calm ship (nothing there would ever wake) HOLLOW takes the seeds-only config, so the seed
+// bites after its calm seconds as on KESTREL. Returns the seed's id.
+function debugSeed(store: Store<GameState>, target: string): string {
+  const seg = debugTarget(store, target);
+  if (!seedTargetsOf([seg]).includes(seg)) throw new Error(`__ap.seed: ${seg.name} is never a beam seed's target`);
+  abortAll();
+  const state = store.getState();
+  const words = SEED_WORDS_POOL[Math.floor(Math.random() * SEED_WORDS_POOL.length)]!;
+  const seed = plantBeamSeed(state.memory, seg.id, words, hollowLabel(state.run));
+  assertMemoryInvariants(state.memory, MEMORY_TOTAL_BLOCKS);
+  store.update((draft) => {
+    if (draft.hollow.cfg.wake === 'never') draft.hollow.cfg = structuredClone(SEEDS_ONLY_DEF);
+    draft.ui.memoryRev++;
+  });
+  return seed.id;
 }
 
 // A driver by its pod's code (P03, or POD 03) or a file by its on-screen name, for the HOLLOW hooks.
@@ -508,6 +552,8 @@ export function mountDebug(store: Store<GameState>): void {
     },
     hollowDemo: () => hollowDemo(store),
     ship: (index) => debugJump(store, index),
+    seed: (target) => debugSeed(store, target),
+    board: () => debugBoard(store),
     run: () => store.getState().run,
     resetReport,
     continueLoss: () => continueAfterLoss(store),

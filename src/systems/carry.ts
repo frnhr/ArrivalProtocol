@@ -1,9 +1,10 @@
 import type { Segment, RedundancySegment, SegmentRole } from '@/types/segment';
 import type { TransitHit } from '@state/schema';
 import type { ShipDef, ArrivalDamage } from '@data/ships';
-import type { ShipThreat } from '@/types/threat';
+import type { ShipThreat, BeamSeedPlan } from '@/types/threat';
 import type { Rng } from '@systems/rng';
 import { freeSegment, newSegId } from '@systems/memory-ops';
+import { beamSeedSegment } from '@systems/beam-seeds';
 import { hasIntegrity, type HealthSegment } from '@state/selectors';
 import { setIntegrity } from '@state/actions';
 import { FS_TOOL_KINDS } from '@data/fs-tools';
@@ -15,7 +16,7 @@ import {
 } from '@data/memory';
 import {
   RACK_BLOCKS, TRANSIT_HIT_MIN, TRANSIT_HIT_MAX, TRANSIT_LAST_COPY_FLOOR, TRANSIT_CORE_MAX_HIT, CORE_RESET_INTEGRITY,
-  CHARGE_ARRIVAL_FLOOR, UNIT_TAIL_BLOCKS, SEED_BLOCKS, SEED_TOOL_GAP_BLOCKS, WALL_MIN_BLOCKS,
+  CHARGE_ARRIVAL_FLOOR, UNIT_TAIL_BLOCKS, SEED_BLOCKS, SEED_TOOL_GAP_BLOCKS, WALL_MIN_BLOCKS, SEED_GAP_TO_TARGET_BLOCKS,
 } from '@data/tuning';
 
 // Transmission and carry (§6.9), pure and DOM-free: what of the unit crosses the link to the next
@@ -38,7 +39,8 @@ import {
 //    the charge; a block longer than the receiver spills backward
 //    into the last pod rack's tail (at most UNIT_TAIL_BLOCKS), and REPAIR CHARGE that still does not fit is lost,
 //    loudly (any other overflow throws). A unit that spent its last point of charge before TRANSMIT has no pool
-//    file left: its arrival charge is written into a fresh one (the floor is a guarantee).
+//    file left: its arrival charge is written into a fresh one (the floor is a guarantee). The beam seeds (phase 3
+//    slice 2, 04 §3.4) go right behind their targets, each as GAP, seed, WALL.
 // 5. arrivalDamage: the ship's own scripted damage (KESTREL, VESPER), named like a hit.
 
 // The order rack E is packed in (§6.9): the Core, then the AI tools by their job.
@@ -114,6 +116,9 @@ export interface Packet {
   filesBlocks: number;      // the files' blocks, charge excluded
   chargeHeld: number;       // the charge the unit had at TRANSMIT
   chargeCarried: number;    // what crosses: min(charge, link − files)
+  // The beam seeds riding along (phase 3 slice 2, 04 §3.4; systems/beam-seeds.ts rollBeamSeeds, at the beam): hitchhikers
+  // ride free, so they are in neither filesBlocks nor the link; they take room only at the boot (layoutCarried).
+  seeds: BeamSeedPlan[];
 }
 
 // Packs the unit for a link of `linkBlocks` (step 1 of the header). Copies only: memory is not touched.
@@ -144,7 +149,7 @@ export function packUnit(memory: readonly Segment[], linkBlocks: number, dropped
   const chargeHeld = held ? held.used : 0;
   const chargeCarried = Math.max(0, Math.min(chargeHeld, linkBlocks - filesBlocks));
   const charge = held ? packedCopy(held) as RedundancySegment : null;
-  return { linkBlocks, rackE, rackF, charge, filesBlocks, chargeHeld, chargeCarried };
+  return { linkBlocks, rackE, rackF, charge, filesBlocks, chargeHeld, chargeCarried, seeds: [] };
 }
 
 // Every packed file a hit can land on (charge is not a file: §6.9 hits "packed non-charge files").
@@ -235,6 +240,8 @@ export interface CarriedLayout {
   racks: CarriedRacks;
   chargeBlocks: number;     // what was laid out (after any overflow)
   overflowLost: number;     // charge that did not fit memory
+  // The beam seeds as laid out, in the packet's order (ArrivalReport.seeds: the boot's ECC seeds line names each target).
+  seeds: { segId: string; targetName: string }[];
 }
 
 // The hunting ground (review issue 5): on a ship whose seeds hunt your tools ('near-tools': the HUNT stage, phase 2's
@@ -260,9 +267,18 @@ function huntingGapBlocks(threat: Readonly<ShipThreat>, packet: Packet, filesBlo
 // into the last pod rack (and never into more of it than the ship's layout leaves free at its end), so the Core stays at
 // rack E's start on almost every ship. Charge that still does not fit is lost, loudly (the caller's CHARGE OVERFLOW);
 // files that do not fit throw (the PACKET screen checks the room before the beam). `threat` is the ladder's verdict for
-// `ship` (TransitPlan.threat): it says whether HOLLOW's seeds hunt tools there. Track THREAT adds the beam seeds behind
-// their targets here.
-export function layoutCarried(packet: Packet, chargeBlocks: number, ship: ShipDef, threat: Readonly<ShipThreat>): CarriedLayout {
+// `ship` (TransitPlan.threat): it says whether HOLLOW's seeds hunt tools there.
+// The beam seeds (04 §3.4; packet.seeds, named `owner`: what the kid calls HOLLOW now, say.ts hollowLabel) each go right
+// behind their target: the file, a GAP of SEED_GAP_TO_TARGET_BLOCKS, the seed, a WALL of WALL_MIN_BLOCKS, then the next
+// file, so a seed bites only the file the ECC line names. 01's unpack order is files, the seeds, then the charge, but on
+// a FULL ship CHARGE_ARRIVAL_FLOOR comes before the seeds and holds (04 §3.4): a seed takes its BEAM_SEED_LAYOUT_BLOCKS
+// from the room the files and that floor leave, and the charge above the floor gets what the seeds leave. The no-room
+// rule: in the pooled receiver every target has the same room (the block only grows), so re-picking a target never finds
+// more; a seed with no room is a stray (CarriedRacks.strays), which buildShipMemory lands in the centre of the largest free
+// region of the whole memory (on a full receiver that is in the pod racks: 04 §3.4, round-2 decision 9).
+export function layoutCarried(
+  packet: Packet, chargeBlocks: number, ship: ShipDef, threat: Readonly<ShipThreat>, owner?: string,
+): CarriedLayout {
   const files = [...packet.rackE, ...packet.rackF];
   const filesBlocks = files.reduce((sum, seg) => sum + seg.size, 0);
   const receiver = MEMORY_TOTAL_BLOCKS - RACK_E_START;
@@ -271,18 +287,38 @@ export function layoutCarried(packet: Packet, chargeBlocks: number, ship: ShipDe
   if (filesBlocks > room) {
     throw new Error(`layoutCarried: ${filesBlocks} blocks of files do not fit ${ship.name}'s room (${receiver} + a tail of ${tail})`);
   }
-  const charge = Math.max(0, Math.min(chargeBlocks, room - filesBlocks));
+  if (packet.seeds.length > 0 && owner === undefined) throw new Error('layoutCarried: beam seeds need an owner name (say.ts hollowLabel)');
+  for (const plan of packet.seeds) {
+    if (!files.some((seg) => seg.id === plan.targetId)) throw new Error(`layoutCarried: beam seed target ${plan.targetId} is not in the packet`);
+  }
+  if (new Set(packet.seeds.map((plan) => plan.targetId)).size !== packet.seeds.length) throw new Error('layoutCarried: two beam seeds behind one file');
+  const seedRoom = Math.max(0, room - filesBlocks - Math.min(chargeBlocks, CHARGE_ARRIVAL_FLOOR));
+  const placed = Math.min(packet.seeds.length, Math.floor(seedRoom / BEAM_SEED_LAYOUT_BLOCKS));
+  const seedsBlocks = placed * BEAM_SEED_LAYOUT_BLOCKS;
+  const charge = Math.max(0, Math.min(chargeBlocks, room - filesBlocks - seedsBlocks));
   const overflowLost = chargeBlocks - charge;
-  const hunting = huntingGapBlocks(threat, packet, filesBlocks, charge, receiver);
-  const block = filesBlocks + hunting + charge;
+  const hunting = huntingGapBlocks(threat, packet, filesBlocks + seedsBlocks, charge, receiver);
+  const block = filesBlocks + seedsBlocks + hunting + charge;
   const startAddr = Math.min(RACK_E_START, MEMORY_TOTAL_BLOCKS - block);
-  const segs: Segment[] = [...files];
-  if (hunting > 0) segs.splice(packet.rackE.length, 0, freeSegment(hunting));
+  const seedSegs = packet.seeds.map((plan) => beamSeedSegment(plan, owner!));
+  const segs: Segment[] = [];
+  files.forEach((seg, index) => {
+    if (hunting > 0 && index === packet.rackE.length) segs.push(freeSegment(hunting));
+    segs.push(seg);
+    const seedIndex = packet.seeds.findIndex((plan) => plan.targetId === seg.id);
+    if (seedIndex < 0 || seedIndex >= placed) return;
+    segs.push(freeSegment(SEED_GAP_TO_TARGET_BLOCKS), seedSegs[seedIndex]!, freeSegment(WALL_MIN_BLOCKS));
+  });
   if (charge > 0) segs.push(chargeSegment(packet.charge, charge));
   const free = MEMORY_TOTAL_BLOCKS - (startAddr + block);
   if (free > 0) segs.push(freeSegment(free));
-  return { racks: { startAddr, segs }, chargeBlocks: charge, overflowLost };
+  const strays = seedSegs.slice(placed);
+  const seeds = packet.seeds.map((plan, index) => ({ segId: seedSegs[index]!.id, targetName: plan.targetName }));
+  return { racks: { startAddr, segs, ...(strays.length > 0 ? { strays } : {}) }, chargeBlocks: charge, overflowLost, seeds };
 }
+
+// The blocks one beam seed takes at the boot (04 §3.4): its GAP to the target, itself, and the WALL behind it.
+export const BEAM_SEED_LAYOUT_BLOCKS = SEED_GAP_TO_TARGET_BLOCKS + SEED_BLOCKS + WALL_MIN_BLOCKS;
 
 // REPAIR CHARGE as it arrives: `points` of charge in as many blocks (the blocks a repair had spent
 // do not cross the link), a full pool again. A unit that spent its last point carried no pool file

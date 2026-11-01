@@ -13,6 +13,7 @@ import { installBootLicences, renewRepairAtBoot } from '@systems/licences';
 import { skillBootDue, trainSkillAtBoot } from '@systems/autoburn';
 import { bootLine, bootLinePlan, bootLineSpeaker, bootLogEntries, lineVars, BOOT_LINE_MAX, type BootLineKind } from '@data/script';
 import type { Speaker } from '@state/schema';
+import { beamSeedTarget } from '@systems/beam-seeds';
 import {
   BOOT_LINE_AT_SEC, BOOT_KLAXON_AFTER_LAST_LINE_SEC, BOOT_END_AFTER_KLAXON_SEC, BOOT_SKIP_GRACE_SEC,
   ARRIVAL_HIT_STAGGER_SEC, ARRIVAL_HIT_SEEN_SEC, BOOT_GHOST_AT_SEC, BOOT_AFTER_GHOST_SEC, BOOT_AFTER_HOLLOW_LINE_SEC,
@@ -211,6 +212,14 @@ function sayNextLine(store: Store<GameState>): void {
   // HOLLOW boarded on this beam (phase 3 slice 2, 04 §4): its 108% unpack is the boarding moment (the shake, the tear,
   // the hollowBoard cue hang on the event; Track UI).
   if (kind === 'board' && arrival !== null && arrival.boarded !== null) emit('hollow-boarded', { ...arrival.boarded });
+  // The beam's seeds (phase 3 slice 2, 04 §4): the ECC seeds line names each, and each lands as it is said (the drop, the
+  // flash and the seedLand thunk hang on the event; Track UI). A seed already gone (rm'd in a skipped boot) says nothing.
+  if (kind === 'seeds' && arrival !== null) {
+    for (const seed of arrival.seeds) {
+      const target = beamSeedTarget(state.memory, seed.segId);
+      if (target !== null) emit('seed-landed-beam', { segId: seed.segId, targetId: target.id });
+    }
+  }
   // 046.log's keys (05 §3.2): the entries this line names, as planned (systems/story-log.ts marks them found on it).
   if (kind === 'log') emit('log-key', { entries: bootLogEntries(state) });
   // A returning unit's ship-1 boot licenses REPAIR as it names the host (§5.2; phase 2 did it as the archive opened):

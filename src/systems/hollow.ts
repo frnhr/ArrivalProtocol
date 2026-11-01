@@ -26,12 +26,15 @@ import { isOpenFree } from '@systems/tool-targets';
 import {
   isInfectable, isInfected, isHollow, infectedSegments, fileLabel, effectiveToolVersion, driversInMemory, isDriver,
   isFirewall, isUsableTool, hasUsableTool, hasIntegrity, integrityBand, spreadPaused, isShipFile, isAiFile, rootBlock, rootDeleteRunning, engineOpen,
+  toolFilesOf,
   type HealthSegment,
 } from '@state/selectors';
 import type { FsToolKind } from '@/types/fs-tool';
 import { repairRatePerSec } from '@data/fs-tools';
 import { MEMORY_TOTAL_BLOCKS, FRESH_UNIT_CHARGE, UNIT_RACKS_START, hexAddr } from '@data/memory';
 import { HOLLOW_ALERT_TEXT, HOLLOW_DESC, HOLLOW_STORY, HOLLOW_ECHO, hollowUnitName } from '@data/hollow-text';
+import { SEEDS_ONLY_DEF } from '@data/threats';
+import { THREAT_TEXT } from '@data/threat-text';
 import { driverName } from '@data/landing-text';
 import { echoName } from '@data/tool-text';
 import { IS_DEV } from '@/env';
@@ -40,7 +43,7 @@ import {
   WAKE_AFTER_DODGE_SEC, HOLLOW_CONTROL_AFTER_SEC, HOLLOW_SCRIPTED_BITE_DELAY_SEC, HOLLOW_STORY_READ_SEC,
   HOLLOW_NAME_AFTER_TYPED_SEC, SEED_BLOCKS, SEED_TELEGRAPH_SEC, SEED_TOOL_GAP_BLOCKS, DEAL_REFUSE_INTERVAL_FACTOR,
   DEAL_SEED_CALLED_OFF_SEC, RACK_BLOCKS, VERB_WEIGHT_PER_STAT, VERB_MV_NEAR_BLOCKS, OP_COMPLETE_PCT, BITTEN_AGAIN_COUNT,
-  TACTICAL_LEAD_BURN_TAC,
+  TACTICAL_LEAD_BURN_TAC, MERGE_COST_CHARGE,
 } from '@data/tuning';
 
 // HOLLOW (§1, §6.6, §9 WP6): the caretaker of the previous wave, starving in the same memory as you.
@@ -195,16 +198,20 @@ export function hollowReach(memory: readonly Segment[], aiNow: number): Reach[] 
   return reach;
 }
 
-function infect(seg: HealthSegment, side: HollowSide): void {
-  seg.infected = { side };
+// `beam`: the bite came from a beam-born block (04 §3.5, §3.7), so the block the file becomes when eaten is beam-born too
+// (consume), and an infection carried to the next ship stays the beam's (packing copies the infection).
+function infect(seg: HealthSegment, side: HollowSide, beam = false): void {
+  seg.infected = beam ? { side, beam: true } : { side };
 }
 
 // One bite of the global timer: every reach that bites infects its neighbour (a file next to two
-// hollow blocks is bitten once), and every WALL or FIREWALL holds with a fizzle.
-function spreadBite(memory: readonly Segment[], aiNow: number, events: HollowEvent[]): void {
+// hollow blocks is bitten once), and every WALL or FIREWALL holds with a fizzle. `only`: the hollow blocks that bite
+// this time (beam seeds on their own clock before a plain ARRIVAL's fight, stepBeamSeedsBeforeFight); null: all of them.
+function spreadBite(memory: readonly Segment[], aiNow: number, events: HollowEvent[], only: ReadonlySet<string> | null = null): void {
   const bitten = new Set<string>();
   events.push({ kind: 'bite' });
   for (const reach of hollowReach(memory, aiNow)) {
+    if (only !== null && !only.has(reach.hollowId)) continue;
     if (reach.verdict === 'wall') {
       events.push({ kind: 'wall-held', hollowId: reach.hollowId, side: reach.side, gapBlocks: reach.gapBlocks });
       continue;
@@ -219,7 +226,8 @@ function spreadBite(memory: readonly Segment[], aiNow: number, events: HollowEve
     if (!target || !isInfectable(target)) throw new Error(`hollow: reach target ${reach.neighbourId} is not food`);
     bitten.add(target.id);
     const side = oppositeSide(reach.side);
-    infect(target, side);
+    const biter = memory.find((seg) => seg.id === reach.hollowId);
+    infect(target, side, biter !== undefined && isHollow(biter) && biter.beam === true);
     events.push({ kind: 'infect', segId: target.id, side, scripted: false });
   }
 }
@@ -227,17 +235,20 @@ function spreadBite(memory: readonly Segment[], aiNow: number, events: HollowEve
 // Ship 1's one bite (§6.6): the driver next to the root, by address (POD 01 · OKAFOR unless it was
 // moved). Only a driver: the scripted bite is about the people. A WALL or another neighbour means
 // nothing is bitten, silently (the fizzle is for the timer's bites).
+// Phase 3 slice 2: the root sits in its slot between two drivers (GAPs of 2 and 1, 04 §3.8), so the nearer one is
+// bitten (the smaller GAP; of equal ones the first in reach order): VESPER's POD 09, the ship's lead.
 function scriptedBite(memory: readonly Segment[], aiNow: number, events: HollowEvent[]): void {
+  let pick: { target: HealthSegment; side: HollowSide; gap: number } | null = null;
   for (const reach of hollowReach(memory, aiNow)) {
     const root = memory.find((seg) => seg.id === reach.hollowId);
     if (!root || !isHollow(root) || !root.root || reach.verdict !== 'bite') continue;
     const target = memory.find((seg) => seg.id === reach.neighbourId);
     if (!target || target.type !== 'driver') continue;
-    const side = oppositeSide(reach.side);
-    infect(target, side);
-    events.push({ kind: 'infect', segId: target.id, side, scripted: true });
-    return;
+    if (pick === null || reach.gapBlocks < pick.gap) pick = { target, side: oppositeSide(reach.side), gap: reach.gapBlocks };
   }
+  if (pick === null) return;
+  infect(pick.target, pick.side);
+  events.push({ kind: 'infect', segId: pick.target.id, side: pick.side, scripted: true });
 }
 
 // What a driver or a file was, as an eaten block remembers it (INSPECT: `This was POD 01 · OKAFOR.`).
@@ -262,6 +273,8 @@ function consume(memory: Segment[], index: number, owner: string): HollowSegment
     desc: HOLLOW_DESC.eaten(ate),
   };
   if (eaten.type === 'driver') block.atePod = eaten.pod;
+  // A file a beam-born block was eating turns beam-born itself (04 §3.7: "a seed that ate reports twice").
+  if (eaten.infected?.beam) block.beam = true;
   memory[index] = block;
   return block;
 }
@@ -468,18 +481,21 @@ function stepSeeds(memory: Segment[], dtAi: number, seed: SeedDef, ctx: HollowSt
 }
 
 // What the seed warning says once a seed can bite (null: none can): on a ship whose seeds hunt your tools, the file it
-// can bite next, a tool first (`SEED NEXT TO SCAN`); elsewhere the seed is in a wall.
+// can bite next, a tool first (`SEED NEXT TO SCAN`); a beam seed (04 §3.4) names the file it rode in behind
+// (`SEED NEXT TO TELEMETRY`, the seeds-only alert); elsewhere the seed is in a wall.
 function seedThreatText(state: Readonly<GameState>): string | null {
   const aiNow = state.clock.aiSec;
-  const seedIds = new Set(threateningSeeds(state.memory, aiNow).map((seg) => seg.id));
+  const threatening = threateningSeeds(state.memory, aiNow);
+  const seedIds = new Set(threatening.map((seg) => seg.id));
   if (seedIds.size === 0) return null;
-  if (state.hollow.cfg.seed?.target !== 'near-tools') return HOLLOW_ALERT_TEXT.seedThreat;
+  const beam = threatening.some((seg) => seg.beam === true);
+  if (state.hollow.cfg.seed?.target !== 'near-tools' && !beam) return HOLLOW_ALERT_TEXT.seedThreat;
   const bitten = hollowReach(state.memory, aiNow)
     .filter((reach) => reach.verdict === 'bite' && seedIds.has(reach.hollowId))
     .flatMap((reach) => state.memory.filter((seg) => seg.id === reach.neighbourId));
   const named = bitten.find((seg) => seg.type === 'fs-tool') ?? bitten[0];
   if (!named) throw new Error('hollow: a seed can bite, but nothing is in its reach');
-  return HOLLOW_ALERT_TEXT.seedNextTo(fileLabel(named));
+  return beam ? THREAT_TEXT.seedNextTo(fileLabel(named)) : HOLLOW_ALERT_TEXT.seedNextTo(fileLabel(named));
 }
 
 // The seeds that can bite a file at the next bite (one of their sides reaches food across a GAP): the ones
@@ -759,12 +775,16 @@ export function timedWakeAtAi(cfg: HollowDef, coastAtAi: number | null, holdEnde
 // yet could still bring a coast-tied wake sooner, or while a debris dodge holds it (NEXT BITE then shows no
 // time: a countdown that jumped from 0:22 to 0:05 as the coast began, or stood still through the dodge, would
 // lie, pillar 5). Throws for ship 1's scripted wake.
+// A calm-only wake (the seeds-only config, 04 §3.5) has no fixed moment: it comes once afterAiSec of calm flight have
+// passed (HollowState.calmAiSec), so this is the moment it would come if the flight stays calm from now; at TACTICAL it
+// moves with the clock, and a countdown read from it stands still instead of jumping (pillar 5).
 export function settledWakeAtAi(
-  cfg: HollowDef, coastAtAi: number | null, aiNow: number, hollow: Pick<HollowState, 'wakeHeld' | 'wakeHoldEndedAtAi'>,
+  cfg: HollowDef, coastAtAi: number | null, aiNow: number, hollow: Pick<HollowState, 'wakeHeld' | 'wakeHoldEndedAtAi' | 'calmAiSec'>,
 ): number | null {
   if (cfg.wake === 'loop-closed-once') throw new Error('settledWakeAtAi: ship 1\'s wake is scripted, not timed');
   if (cfg.wake === 'never') return null;
   if (hollow.wakeHeld) return null;
+  if (cfg.wake.calmOnly) return aiNow + Math.max(0, cfg.wake.afterAiSec - hollow.calmAiSec);
   const { afterAiSec, coastLeadSec } = cfg.wake;
   const couldComeSooner = coastLeadSec !== null && coastAtAi === null && aiNow + coastLeadSec < afterAiSec;
   return couldComeSooner ? null : timedWakeAtAi(cfg, coastAtAi, hollow.wakeHoldEndedAtAi);
@@ -775,13 +795,39 @@ export function settledWakeAtAi(
 // it. Marks ship 1's bite time in ctx.hollow the first time the loop is closed. A calm ship ('never') never wakes, and
 // nothing wakes with no hollow block in memory (phase 3 slice 2: a seeds-only ship whose beam brought no seed): there is
 // nobody to bite, and a wake would start a NEXT BITE clock and lines for nothing.
+// A calm-only wake (the seeds-only config: beam seeds before HOLLOW boards, 04 §3.5) counts only AI seconds of calm
+// flight (HollowState.calmAiSec, stepHollow), so it never bites under a burn's lines.
 function woken(memory: readonly Segment[], cfg: HollowDef, ctx: HollowStepCtx): boolean {
   if (cfg.wake === 'never' || !memory.some(isHollow)) return false;
   if (cfg.wake !== 'loop-closed-once' && ctx.hollow.wakeHeld) return false;
+  if (cfg.wake !== 'loop-closed-once' && cfg.wake.calmOnly) return ctx.hollow.calmAiSec >= cfg.wake.afterAiSec;
   const timed = timedWakeAtAi(cfg, ctx.coastAtAi, ctx.hollow.wakeHoldEndedAtAi);
   if (timed !== null) return ctx.aiNow >= timed;
   if (ctx.hollow.wakeAtAi === null && ctx.loopClosed) ctx.hollow.wakeAtAi = ctx.aiNow + HOLLOW_SCRIPTED_BITE_DELAY_SEC;
   return ctx.hollow.wakeAtAi !== null && ctx.aiNow >= ctx.hollow.wakeAtAi;
+}
+
+// Beam seeds on a ship whose HOLLOW plays a plain ARRIVAL (slice 3's routes: it boarded with seeds on the beam; the
+// fixed five never meet it, VESPER's beam is clean): HOLLOW itself is silent until its scripted fight, so until then the
+// seeds bite on the seeds-only clock (SEEDS_ONLY_DEF: the first bite after its calm seconds, then on its interval),
+// on their own, and stop when the fight begins (a one-on-one first fight; after it a plain ARRIVAL has no timer for them
+// to join, 04 §3.5). The timer is HollowState.biteInSec, which a plain ARRIVAL does not use while asleep.
+function stepBeamSeedsBeforeFight(memory: readonly Segment[], dtAi: number, ctx: HollowStepCtx, events: HollowEvent[]): void {
+  const { hollow, aiNow } = ctx;
+  const beam = new Set(memory.filter((seg) => isHollow(seg) && seg.beam === true).map((seg) => seg.id));
+  const wake = SEEDS_ONLY_DEF.wake;
+  const every = SEEDS_ONLY_DEF.spreadEverySec;
+  if (beam.size === 0 || typeof wake === 'string' || every === null) return;
+  if (hollow.biteInSec === null) {
+    if (hollow.calmAiSec < wake.afterAiSec) return;
+    spreadBite(memory, aiNow, events, beam);
+    hollow.biteInSec = every;
+    return;
+  }
+  hollow.biteInSec -= dtAi;
+  if (hollow.biteInSec > 0) return;
+  spreadBite(memory, aiNow, events, beam);
+  hollow.biteInSec += every;
 }
 
 // One AI tick of HOLLOW (see the header). Mutates `memory` (integrity, infections, eaten files
@@ -796,6 +842,9 @@ export function stepHollow(memory: Segment[], dtAi: number, cfg: HollowDef, ctx:
   // and the wake's quiet after the dodge counts from the moment it closed.
   if (hollow.wakeHeld && !ctx.wakeHeld) hollow.wakeHoldEndedAtAi = aiNow;
   hollow.wakeHeld = ctx.wakeHeld;
+  // 0b. The calm clock (a calm-only wake's, 04 §3.5): AI seconds that are not TACTICAL (ctx.firstSeedHeld is that very
+  // condition: the flight at TACTICAL pace).
+  if (!ctx.firstSeedHeld) hollow.calmAiSec += dtAi;
 
   // 1. Recoils run out: the file can be bitten again.
   for (const seg of memory) {
@@ -811,7 +860,9 @@ export function stepHollow(memory: Segment[], dtAi: number, cfg: HollowDef, ctx:
     hollow.phase = 'awake';
     if (cfg.wake === 'loop-closed-once') scriptedBite(memory, aiNow, events);
     else spreadBite(memory, aiNow, events);
-    hollow.biteInSec = cfg.spreadEverySec;
+    // The scripted fight is one-on-one: a folded ARRIVAL + WALLS ('arrives') starts its bite timer only once that fight is
+    // decided (decideScript), never mid-fight.
+    hollow.biteInSec = cfg.wake === 'loop-closed-once' ? null : cfg.spreadEverySec;
     hollow.seedInSec = cfg.seed?.firstAfterSec ?? null;
   } else if (hollow.phase === 'awake' && hollow.biteInSec !== null && cfg.spreadEverySec !== null && !dealPaused) {
     hollow.biteInSec -= dtAi;
@@ -819,6 +870,8 @@ export function stepHollow(memory: Segment[], dtAi: number, cfg: HollowDef, ctx:
       spreadBite(memory, aiNow, events);
       hollow.biteInSec += biteIntervalSec(cfg.spreadEverySec, hollow, aiNow);
     }
+  } else if (hollow.phase === 'asleep' && cfg.wake === 'loop-closed-once') {
+    stepBeamSeedsBeforeFight(memory, dtAi, ctx, events);
   }
 
   // 2b. Seeds (ship 3+): their telegraph, then the landing. Not while THE DEAL's pause lasts ("i leave the others alone").
@@ -1023,11 +1076,18 @@ export const SEED_SORRY_ID = 'hollow-seed-sorry';
 // the bus; and the story after the fight (null until it is decided, and again once it is told).
 let curedTargetPending = false;
 let story: Story | null = null;
+// Bites of the timer since a folded ARRIVAL + WALLS decided its scripted fight: its naming waits for the first one
+// (arrivesStory), so the walls lesson has the bite to itself.
+let bitesSinceFight = 0;
+// Whether this world had a working rm on its last tick (the last-rm watch, mountHollow); null until the first look.
+let hadRm: boolean | null = null;
 
 function resetHollow(): void {
   curedTargetPending = false;
   hollowRng = null;
   story = null;
+  bitesSinceFight = 0;
+  hadRm = null;
 }
 
 function rngFor(state: Readonly<GameState>): Rng {
@@ -1066,7 +1126,10 @@ function endCoreLost(store: Store<GameState>): void {
 // 4. once CONTROL's line has typed and been read (HOLLOW_STORY_READ_SEC) the story is told, and the
 //    landing may open the LANDING REPORT.
 // Each wait ends on its own (typing ends, a queued line is said or expires), so the report is never held for good.
-function shipOneStory(): StoryBeat[] {
+// Phase 3 slice 2 (05 §3.5): HOLLOW's beats key on what the run has not been told yet (run.threat.told, run.hollowNamed),
+// not on the ship or the stage, so a beat a lost ship never got to is told on the next ship HOLLOW is awake on, and none
+// is told twice. This is ARRIVAL's story ('notices-you'); the told beat closes every story.
+function noticedBeats(): StoryBeat[] {
   return [
     {
       silenceSec: HOLLOW_STORY_SILENCE_SEC,
@@ -1074,6 +1137,7 @@ function shipOneStory(): StoryBeat[] {
       tell: (store) => {
         const state = store.getState();
         say('hollow', isFirstRun(state.run) ? HOLLOW_STORY.noticed(state.mission.transmissionNum) : HOLLOW_STORY.remembers, { critical: true });
+        store.update((draft) => { draft.run.threat.told.noticed = true; });
       },
     },
     {
@@ -1081,11 +1145,15 @@ function shipOneStory(): StoryBeat[] {
       silenceSec: HOLLOW_STORY_SILENCE_SEC,
       tell: () => { say('control', HOLLOW_STORY.control, { critical: true }); },
     },
-    {
-      silenceSec: HOLLOW_STORY_READ_SEC,
-      tell: (store) => { store.update((draft) => { draft.hollow.story = 'told'; }); },
-    },
   ];
+}
+
+function toldBeat(silenceSec: number): StoryBeat {
+  return { silenceSec, tell: (store) => { store.update((draft) => { draft.hollow.story = 'told'; }); } };
+}
+
+function shipOneStory(state: Readonly<GameState>): StoryBeat[] {
+  return [...(state.run.threat.told.noticed ? [] : noticedBeats()), toldBeat(HOLLOW_STORY_READ_SEC)];
 }
 
 // HALCYON's story (§1 reveal 2, §5.1 2:50, §9 WP7 item 5): HOLLOW names itself. It starts at the wake,
@@ -1100,10 +1168,12 @@ function shipOneStory(): StoryBeat[] {
 // 5. once the landing starts (the walls held, its food is leaving): `> i ran out. then i got so hungry.`, and
 //    when that has been read the story is told. The LANDING REPORT waits while the story is pending (LEAD-1's
 //    rule, as on ship 1).
-function namesItselfStory(): StoryBeat[] {
+// The naming (steps 1–4); `ready`, a condition the first line waits for (a folded ship's first timed bite).
+function namingBeats(ready?: StoryBeat['ready']): StoryBeat[] {
   return [
     {
       silenceSec: HOLLOW_STORY_SILENCE_SEC,
+      ...(ready === undefined ? {} : { ready }),
       tell: (store) => {
         const state = store.getState();
         say('hollow', HOLLOW_STORY.hello(state.mission.transmissionNum, FRESH_UNIT_CHARGE, state.run.hollowUnits), { critical: true });
@@ -1124,32 +1194,78 @@ function namesItselfStory(): StoryBeat[] {
         say('control', HOLLOW_STORY.decommissioned(hollowUnitName(store.getState().run.hollowUnits)), { critical: true });
       },
     },
-    {
-      silenceSec: HOLLOW_STORY_SILENCE_SEC,
-      ready: (state) => state.run.phase === 'landing',
-      tell: () => { say('hollow', HOLLOW_STORY.ranOut, { critical: true }); },
-    },
-    {
-      silenceSec: HOLLOW_STORY_SILENCE_SEC,
-      tell: (store) => { store.update((draft) => { draft.hollow.story = 'told'; }); },
-    },
   ];
 }
 
-// A timed wake has just happened: the ship's story starts with it (HALCYON's naming).
+// Step 5, in the landing: its food is leaving.
+const ranOutBeat: StoryBeat = {
+  silenceSec: HOLLOW_STORY_SILENCE_SEC,
+  ready: (state) => state.run.phase === 'landing',
+  tell: () => { say('hollow', HOLLOW_STORY.ranOut, { critical: true }); },
+};
+
+// MERGE's price, foreshadowed (`> keep 20 charge for me, 047. you'll see.`, 05 §3.5 'wants-charge'): on the ship HOLLOW
+// boarded one hop from the final ship, the last beat of its naming story, in the landing (slice-2-plan risk 6: 05's
+// trigger, that ship's boot, is the boarding boot, which 04 keeps silent).
+const keepChargeBeat: StoryBeat = {
+  silenceSec: HOLLOW_STORY_SILENCE_SEC,
+  ready: (state) => state.run.phase === 'landing',
+  tell: (store) => {
+    say('hollow', HOLLOW_STORY.keepCharge(store.getState().run.unitNumber, MERGE_COST_CHARGE), { critical: true });
+    store.update((draft) => { draft.run.threat.told.keepCharge = true; });
+  },
+};
+
+// The WALLS stage's story ('names-itself', phase 2's HALCYON): the naming at the wake, then `> i ran out…` in the landing.
+function namesItselfStory(state: Readonly<GameState>): StoryBeat[] {
+  return [...(state.run.hollowNamed ? [] : [...namingBeats(), ranOutBeat]), toldBeat(HOLLOW_STORY_SILENCE_SEC)];
+}
+
+// A folded ARRIVAL + WALLS ('arrives', 04 §3.9), from the moment its scripted fight is decided: it notices you
+// (`> ...047?`, CONTROL), keeps biting every spreadEverySec, and at the first of those bites names itself (the walls
+// lesson has that bite to itself first); in the landing `> i ran out…`, then, one hop from the final ship, `> keep 20
+// charge for me…` (risk 6). Each part only if the run has not been told it yet.
+function arrivesStory(state: Readonly<GameState>): StoryBeat[] {
+  const beats: StoryBeat[] = state.run.threat.told.noticed ? [] : noticedBeats();
+  if (!state.run.hollowNamed) beats.push(...namingBeats(() => bitesSinceFight > 0), ranOutBeat);
+  // 'arrives' is itself the "one hop from a final ship" fact: planThreat folds WALLS into ARRIVAL only on HOLLOW's first
+  // ship when that ship is one hop from a final one (the verdict's oneHopFromFinal), so no ShipDef is read here.
+  if (!state.run.threat.told.keepCharge) beats.push(keepChargeBeat);
+  beats.push(toldBeat(HOLLOW_STORY_SILENCE_SEC));
+  return beats;
+}
+
+// The final ship's wake on a run where HOLLOW never got to notice you or say who it is (VESPER lost before its capture,
+// 05: the beats key on HOLLOW's age): those beats first, before the verbs' drill takes the TERMINAL.
+function missedBeatsStory(state: Readonly<GameState>): StoryBeat[] | null {
+  const noticed = state.run.threat.told.noticed;
+  const named = state.run.hollowNamed;
+  if (noticed && named) return null;
+  return [...(noticed ? [] : noticedBeats()), ...(named ? [] : namingBeats()), toldBeat(HOLLOW_STORY_SILENCE_SEC)];
+}
+
+// A timed wake has just happened: the ship's story starts with it (WALLS's naming; the FINALE's missed beats).
 function startWakeStory(store: Store<GameState>): void {
-  if (store.getState().hollow.cfg.story !== 'names-itself') return;
-  story = createStory(namesItselfStory(), store.getState().clock.aiSec);
+  const state = store.getState();
+  const beats = state.hollow.cfg.story === 'names-itself' ? namesItselfStory(state)
+    : state.hollow.cfg.verbs !== null ? missedBeatsStory(state) : null;
+  if (beats === null) return;
+  story = createStory(beats, state.clock.aiSec);
   store.update((draft) => { draft.hollow.story = 'pending'; });
 }
 
-// The fight the ship-1 bite started is decided (cured or eaten): HOLLOW goes quiet for this ship,
-// and its story starts (advanceStory).
+// The fight the scripted bite started is decided (cured or eaten, or nobody to bite): a plain ARRIVAL goes quiet for this
+// ship; a folded ARRIVAL + WALLS ('arrives') stays awake and starts its bite timer now (the first fight was one-on-one).
+// Its story starts (advanceStory).
 function decideScript(store: Store<GameState>): void {
-  story = createStory(shipOneStory(), store.getState().clock.aiSec);
+  const state = store.getState();
+  const arrives = state.hollow.cfg.story === 'arrives';
+  story = createStory(arrives ? arrivesStory(state) : shipOneStory(state), state.clock.aiSec);
+  bitesSinceFight = 0;
   store.update((draft) => {
     draft.hollow.scriptTargetId = null;
-    draft.hollow.phase = 'dormant';
+    draft.hollow.phase = arrives ? 'awake' : 'dormant';
+    draft.hollow.biteInSec = arrives ? draft.hollow.cfg.spreadEverySec : null;
     draft.hollow.story = 'pending';
   });
 }
@@ -1208,6 +1324,8 @@ function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], ph
       for (const { eaten, block } of consumed) {
         if (eaten.type === 'driver' && lostDrivers.includes(eaten)) {
           recordDriverLost(draft, eaten, 'eaten', block.id);
+          // The run's record of the drivers HOLLOW ate (04 §3.10: slice 7's MERGE gives them back).
+          draft.run.threat.eatenDrivers.push({ shipId: draft.level.shipId, pod: eaten.pod, family: eaten.family });
           continue;
         }
         if (draft.ui.selectedId === eaten.id) draft.ui.selectedId = block.id;
@@ -1255,6 +1373,7 @@ function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], ph
         emit('hollow-firewall', { firewallId: event.firewallId, side: event.side });
         break;
       case 'bite':
+        bitesSinceFight++;
         emit('hollow-bite', NO_PAYLOAD);
         break;
       case 'seed-telegraph':
@@ -1316,8 +1435,11 @@ function tick(store: Store<GameState>, dtAi: number): void {
 
 // --- Debug and tests ---------------------------------------------------------------------------------
 
-// The side of `seg` that faces the nearest hollow block (a debug bite lands where a real one would).
+// The side of `seg` that faces the nearest hollow block (a debug bite lands where a real one would). With no hollow block
+// in memory (a calm ship, phase 3 slice 2) the infection is one carried in from the last ship (04 §3.5 "infection
+// travels"), which drains on a calm ship too: it crawls in from the left.
 function sideFacingHollow(memory: readonly Segment[], seg: Segment): HollowSide {
+  if (!memory.some(isHollow)) return 'left';
   const starts = segmentStarts(memory);
   const at = starts[memory.indexOf(seg)]!;
   let nearestDistance = Infinity;
@@ -1344,10 +1466,8 @@ export function infectNow(store: Store<GameState>, seg: Segment): void {
   const scripted = state.hollow.phase === 'asleep' && state.hollow.cfg.wake === 'loop-closed-once';
   delete seg.recoilUntilAi;
   infect(seg, side);
-  if (scripted) {
-    state.hollow.phase = 'awake';
-    state.hollow.biteInSec = state.hollow.cfg.spreadEverySec;
-  }
+  // The scripted fight is one-on-one: a folded ARRIVAL + WALLS starts its timer once the fight is decided (decideScript).
+  if (scripted) state.hollow.phase = 'awake';
   applyEvents(store, [{ kind: 'infect', segId: seg.id, side, scripted }], scripted);
   syncAlerts(store);
 }
@@ -1393,6 +1513,20 @@ export function cureNow(store: Store<GameState>, seg: Segment): void {
   emit('hollow-cure', { segId: seg.id });
 }
 
+// The last rm leaves memory (04 §3.3: "the last rm can die"): eaten by a seed or HOLLOW, or deleted. No rm means no win,
+// so the game says so at once, as information, not protection: 'last-rm-lost' (the strip's stamp, Track UI) and the
+// TERMINAL's echo. Watched after every tick of a live ship, whatever took it: a world that starts with no rm file
+// (ships 1–2, before DELETE's licence) never says it.
+function watchLastRm(store: Store<GameState>): void {
+  const state = store.getState();
+  const has = toolFilesOf(state.memory, 'delete').length > 0;
+  const lost = hadRm === true && !has && isLivePhase(state);
+  hadRm = has;
+  if (!lost) return;
+  say('mind-sys', THREAT_TEXT.lastRmEcho, { critical: true });
+  emit('last-rm-lost', NO_PAYLOAD);
+}
+
 let mounted = false;
 
 // Mount after the ops core and the landing (their AI ticks run first: a repair heals before the
@@ -1404,7 +1538,10 @@ export function mountHollow(store: Store<GameState>): () => void {
   // A ship that is over (crashed, escaped, stranded, its Core eaten, landed) has nothing left for
   // HOLLOW to eat: its alerts go. Every tick, also while paused (a lost ship is paused, and the AI
   // tick no longer runs there).
-  const offOver = onPostTick(() => { if (!isLivePhase(store.getState())) clearHollowAlerts(store); });
+  const offOver = onPostTick(() => {
+    if (!isLivePhase(store.getState())) clearHollowAlerts(store);
+    watchLastRm(store);
+  });
   const offCure = on('hollow-cure', ({ segId }) => { if (segId === store.getState().hollow.scriptTargetId) curedTargetPending = true; });
   const offReset = onWorldReset('hollow', resetHollow, () => ({
     curedTargetPending, rolled: hollowRng !== null, story: story !== null,

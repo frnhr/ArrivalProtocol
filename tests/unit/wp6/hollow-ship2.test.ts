@@ -1,3 +1,5 @@
+// Phase 3 slice 2: HALCYON is calm now (no slot); its phase-2 pod racks come from support/hollow-world.ts, the root written
+// through the slot as the ladder brings one.
 // WP7: HollowDef gained `story` and the timed wake `coastLeadSec` (HALCYON's coast-tied wake); the
 // fixtures below spell them out (no story, no coast lead: the WP6 behaviour they test).
 // WP6 acceptance 4: the HOLLOW rules on a ship-2 config (§4.2 HALCYON: spreads every 25 s, drain
@@ -25,7 +27,8 @@ import { createHollowState, createLandingState } from '@state/initial';
 import { driversInMemory, getRedundancy, isInfected } from '@state/selectors';
 import { stateFromElements } from '@/types/orbit';
 import type { DriverSegment, FreeSegment } from '@/types/segment';
-import { WALL_MIN_BLOCKS } from '@data/tuning';
+import { WALL_MIN_BLOCKS, ROOT_BLOCKS } from '@data/tuning';
+import { phase2HalcyonDef } from '../support/hollow-world';
 
 const HALCYON_HOLLOW: HollowDef = {
   wake: { afterAiSec: 30, coastLeadSec: null }, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, landMult: 1.5, seed: null, verbs: null, deal: false, story: 'none',
@@ -37,7 +40,7 @@ const HALCYON: ShipDef = {
   name: 'HALCYON',
   memory: {
     ...ares.memory,
-    podRacks: SHIPS[1]!.memory.podRacks,
+    podRacks: phase2HalcyonDef().memory.podRacks,
     drivers: SHIPS[1]!.memory.drivers,
   },
   landing: SHIPS[1]!.landing,
@@ -52,7 +55,7 @@ const h = createHarness6(7, { soulsFound: true });
 function setUp(): void {
   h.resetTo('flight');
   h.noFault();
-  const memory = buildShipMemory(HALCYON, null, childRng(7, 1, 'families'), false, UNNAMED_HOLLOW, null);
+  const memory = buildShipMemory(HALCYON, null, childRng(7, 1, 'families'), false, UNNAMED_HOLLOW, { blocks: ROOT_BLOCKS }, []);
   const state = h.store.getState();
   // A closed loop that pokes out of the ring (▼ 5,500 km inside, ▲ 11,000 km outside): it never
   // locks and never crashes, and nobody burns, so 180 AI s pass on a quiet flight.

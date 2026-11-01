@@ -21,6 +21,8 @@ import { runEndModel, rankSteps, rankOf, nearMisses, fleetColonists } from '@sys
 import { beamOutView, hopelessWhy } from '@systems/beam-out';
 import { amberBite } from '@systems/hollow-hud';
 import { exposedDrivers, cureNow, infectNow } from '@systems/hollow';
+import { phase2Halcyon } from '../support/hollow-world';
+import { LOG_TEXT } from '@data/log-text';
 import { getPrediction } from '@systems/predict';
 import { installTool } from '@systems/licences';
 import { setPaused } from '@systems/clock';
@@ -71,12 +73,13 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
   check('…no why line after a ship that landed', model.why === null);
   check('…the packet line: LINK 120 · FILES n · CHARGE n → FITS', /^LINK 120 · FILES \d+ · CHARGE \d+ → FITS$/.test(model.packetLine), model.packetLine);
   const names = model.chips.map((chip) => chip.name);
+  // Phase 3 slice 2: 046.log (still `???` until scanned) rides in every packet, locked.
   check('…the chips, safest to drop first: the spare REPAIRs, Telemetry, Autopilot, Sensor Interp, AI Comms, then the locked',
-    names.join(',') === 'Repair,Repair.bak,Telemetry,Autopilot,Sensor Interp,AI Comms,AI Core,Engine I/O,Nav Plotter,Scan', names.join(','));
+    names.join(',') === 'Repair,Repair.bak,Telemetry,Autopilot,Sensor Interp,AI Comms,AI Core,Engine I/O,Nav Plotter,Scan,???', names.join(','));
   const locked = model.chips.filter((chip) => chip.lock !== null);
-  check('…locked: the Core (THIS IS YOU), Engine I/O, Nav Plotter and the only SCAN, each saying why',
+  check('…locked: the Core (THIS IS YOU), Engine I/O, Nav Plotter, the only SCAN and 046.log, each saying why',
     locked.map((chip) => chip.note).join(' | ') === [TRANSMIT_TEXT.locked.core, TRANSMIT_TEXT.locked.engine, TRANSMIT_TEXT.locked.navplot,
-      TRANSMIT_TEXT.locked.lastCopy('SCAN')].join(' | '), locked.map((chip) => chip.note).join(' | '));
+      TRANSMIT_TEXT.locked.lastCopy('SCAN'), LOG_TEXT.packetLock].join(' | '), locked.map((chip) => chip.note).join(' | '));
   check('…an AI tool says what leaving it does (Autopilot: no W/A/S/D presets)',
     model.chips.find((chip) => chip.name === 'Autopilot')?.note === TRANSMIT_TEXT.without.autopilot, model.chips.find((chip) => chip.name === 'Autopilot')?.note);
   check('…everything fits: nothing can be dropped, and the screen says so', model.chips.every((chip) => !chip.toggleable) && model.dropLine === TRANSMIT_TEXT.fits);
@@ -138,10 +141,12 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
   h.stepUntil(() => state().run.phase === 'flight', 15);
   off();
   const arrival = state().run.arrival!;
-  check('the boot\'s ECC line emits the crossing\'s hits once, in order', flashed.length === 1
-    && JSON.stringify(flashed[0]) === JSON.stringify([...arrival.hits, ...arrival.scripted]), `${flashed.length} × ${flashed[0]?.length}`);
+  // Phase 3 slice 2 (risk 10): HALCYON's Sensor Interp arrives at 62 by its own scripted line, which flashes with it.
+  check('the boot\'s ECC line emits the crossing\'s hits once, in order, and the ship\'s own damage with its own line', flashed.length === 2
+    && JSON.stringify(flashed[0]) === JSON.stringify(arrival.hits) && JSON.stringify(flashed[1]) === JSON.stringify(arrival.scripted),
+    `${flashed.length} × ${flashed[0]?.length}`);
   const lastTo = new Map<string, number>();
-  for (const hit of flashed[0] ?? []) lastTo.set(hit.segId, hit.to);
+  for (const hit of flashed.flat()) lastTo.set(hit.segId, hit.to);
   const consistent = [...lastTo].every(([segId, to]) => {
     const seg = state().memory.find((candidate) => candidate.id === segId);
     return seg !== undefined && hasIntegrity(seg) && seg.integrity === to;
@@ -195,6 +200,9 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
 // --- The amber BITE slot ----------------------------------------------------------------------------------
 {
   h.shipAlone(1, 33);
+  // Phase 3 slice 2: HALCYON is calm now; the BITE slot is checked on its phase-2 racks and HOLLOW (support/hollow-world.ts).
+  phase2Halcyon(h.store);
+  installTool(h.store, 'move');
   h.store.update((d) => { d.ui.mode = 'tools'; });
   check('BITE: nothing while HOLLOW sleeps', amberBite(state()) === null);
   h.stepUntil(() => state().hollow.phase === 'awake', 60);

@@ -13,7 +13,7 @@ import { childRng } from '@systems/rng';
 import { glitchBurst } from '@systems/glitch';
 import { chooseVerb, landVerb, verbWeights, rootDeleteRunning, type Verb } from '@systems/hollow';
 import { assertMemoryInvariants } from '@systems/memory-ops';
-import { fileLabel, isHollow, verbSecondsLeft } from '@state/selectors';
+import { fileLabel, isHollow, verbSecondsLeft, spreadPaused } from '@state/selectors';
 import { echoName, echoWord } from '@data/tool-text';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { HOLLOW_VERB } from '@data/hollow-text';
@@ -156,7 +156,11 @@ function land(store: Store<GameState>, telegraph: Readonly<VerbTelegraph>): void
 }
 
 // The flight is busy (TACTICAL): the verbs wait (see the header). The landing is never "busy" here: the duel is fought there.
-function verbsHeld(state: Readonly<GameState>): boolean {
+// THE DEAL folded into the final ship (phase 3 slice 2, risk 13): the verbs' clock and a standing countdown also stand
+// still while the offer stands and through the pause an ACCEPT buys (DEAL_PAUSE_SEC), as the seeds already do, so
+// HOLLOW's one personal moment is never talked over by `> unlink …`, and "i leave the others alone" holds for the verbs.
+export function verbsHeld(state: Readonly<GameState>): boolean {
+  if (state.hollow.deal.phase === 'offered' || spreadPaused(state.hollow, state.clock.aiSec)) return true;
   return state.run.phase === 'flight' && state.clock.pace === 'tactical';
 }
 

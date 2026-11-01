@@ -32,7 +32,7 @@ function dodgeLeftTac(): number | null {
 
 // --- The SKIP stops ahead of the choice, and the last seconds are real seconds --------------------------------------
 {
-  h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true, sensorHealed: true });
   for (let i = 0; i < 4; i++) h.step();
   h.press('KeyF');
   let landedLeft: number | null = null;
@@ -61,7 +61,7 @@ function dodgeLeftTac(): number | null {
 // --- The first seed still holds SKIP ------------------------------------------------------------------------------
 // KESTREL with HOLLOW awake: the kid dodges early and walls nothing; after the wake, SKIP waits for the first seed.
 {
-  h.kestrel(5, { sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, sensorHealed: true });
   let held = false;
   let seeded = false;
   let skipUnderHold = false;
@@ -87,7 +87,7 @@ function dodgeLeftTac(): number | null {
   const rows: string[] = [];
   let broken = 0;
   for (const startLeftTac of [1.0, 0.9, 0.8, 0.7, 0.6, 0.5]) {
-    h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
+    h.kestrel(5, { phase2Hollow: true, hollowAsleep: true, sensorHealed: true });
     installTool(h.store, 'repair');
     h.store.update((d) => {
       for (const role of BUSY_ROLES) {
@@ -132,7 +132,7 @@ function dodgeLeftTac(): number | null {
 
 // --- The deadline holds still while ops start and end ------------------------------------------------------------
 {
-  h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
+  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true, sensorHealed: true });
   installTool(h.store, 'repair');
   h.store.update((d) => {
     for (const role of BUSY_ROLES) {

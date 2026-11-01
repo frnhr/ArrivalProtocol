@@ -17,6 +17,7 @@ import { capabilitiesNow } from '@systems/capabilities';
 import { followDirector } from '../wp2/harness2';
 import { getShip } from '@data/ships';
 import type { Segment } from '@/types/segment';
+import { phase2Ship } from '../support/hollow-world';
 
 export const KESTREL = 2;
 
@@ -27,6 +28,9 @@ export interface KestrelOpts {
   hollowAsleep?: boolean;
   // Sensor Interp healed to 100 (exact path) before the flight starts.
   sensorHealed?: boolean;
+  // Phase 3 slice 2: KESTREL as phase 2 had it (its root between POD 09 and POD 10, HOLLOW's own seeds: the SEEDS stage,
+  // support/hollow-world.ts phase2Ship). Off: the ship as it is now (beam seeds only, none from a fresh unit, no root).
+  phase2Hollow?: boolean;
 }
 
 export interface Harness9 extends Harness7 {
@@ -73,7 +77,6 @@ export function createHarness9(seed = 1, opts: { soulsFound?: boolean } = {}): H
       const carried = freshUnitRacks(ship);
       if (kestrelOpts.arrivalDamage) arrivalDamage(carried.segs, ship.arrival!.damage);
       const fresh = createInitialState({ seed: nextSeed, shipIndex: KESTREL, carried });
-      if (kestrelOpts.hollowAsleep) fresh.hollow.phase = 'dormant';
       if (kestrelOpts.sensorHealed) {
         const sensor = fresh.memory.find((seg) => seg.role === 'sensor');
         if (!sensor || !hasIntegrity(sensor)) throw new Error('harness9: no sensor');
@@ -82,6 +85,8 @@ export function createHarness9(seed = 1, opts: { soulsFound?: boolean } = {}): H
       }
       base.store.update((d) => { Object.assign(d, fresh); });
       resetWorld();
+      if (kestrelOpts.phase2Hollow) phase2Ship(base.store, KESTREL);
+      if (kestrelOpts.hollowAsleep) base.store.update((d) => { d.hollow.phase = 'dormant'; });
       base.events.length = 0;
     },
     defend9,

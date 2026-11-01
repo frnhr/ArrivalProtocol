@@ -17,12 +17,15 @@ import type { Segment, DriverSegment, HollowSegment, FreeSegment } from '@/types
 import type { GameState } from '@state/schema';
 import type { RackHazard } from '@/types/zone';
 import { isPodCode, podNumber } from '../support/pod-code';
+import { phase2Halcyon } from '../support/hollow-world';
 
 // Final fix pass: the preview also takes the racks a hazard zone is known to hit (the MIND's red rack tags); HALCYON has
 // no hazard zones, so none. The hazard warning has its own suite (tests/unit/final-fix/move-hazard.test.ts).
 const NO_HAZARDS: readonly RackHazard[] = [];
 const h = createHarness7(3, { soulsFound: true });
 h.shipAlone(1, 3);
+// Phase 3 slice 2: HALCYON is calm now; the preview is checked on its phase-2 racks (support/hollow-world.ts).
+phase2Halcyon(h.store);
 installTool(h.store, 'move');
 const state = () => h.store.getState();
 const soul = (code: string): DriverSegment => {

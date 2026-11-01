@@ -82,7 +82,7 @@ function bittenBy(memory: readonly Segment[], spot: SeedSpot): Segment[] {
 // --- VESPER: the tool-hunting seed --------------------------------------------------------------------------------
 // A unit alone on VESPER has only what a fresh unit carries: the licences a run would have issued by now come first.
 function vesperArrived(seed: number): void {
-  h.vesper(seed, { hollowAsleep: true });
+  h.vesper(seed, { hunt: true, hollowAsleep: true });
   for (const kind of ['repair', 'move', 'delete', 'swap'] as const) if (!state().run.licences.includes(kind)) installTool(h.store, kind);
   for (let i = 0; i < 10; i++) h.step();
 }
@@ -172,11 +172,15 @@ function planted(unit: Segment[]): Segment[] {
       } else {
         // Slice 1a (pooled receiver): Scan sits between AI Comms and REPAIR CHARGE with no free block beside it, so the
         // seed takes the front of the charge file: Scan, one free block, the seed, the rest of the charge.
-        const after = d.memory[index + 1];
+        // Phase 3 slice 2: 046.log sits between Scan and the charge now; it is taken out of the way (2 blocks) with one
+        // block of the charge: Scan, one free block, the seed, the rest of the charge.
+        const log = d.memory[index + 1];
+        const after = d.memory[index + 2];
+        if (!log || log.type !== 'log') throw new Error(`seed-spots: no 046.log after ${target.name}`);
         if (!after || after.type !== 'redundancy' || after.size < SEED_BLOCKS + 2) throw new Error(`seed-spots: no charge file after ${target.name}`);
         const at = starts[index]! + target.size;
-        const rest = { ...after, size: after.size - 1 - SEED_BLOCKS };
-        replaceRange(d.memory, at, at + after.size, [freeSegment(1), seed, rest], { opId: null, own: [after] });
+        const rest = { ...after, size: after.size + log.size - 1 - SEED_BLOCKS };
+        replaceRange(d.memory, at, at + log.size + after.size, [freeSegment(1), seed, rest], { opId: null, own: [log, after] });
       }
       d.hollow.seedsLanded = 1;
       if (!d.run.licences.includes('delete')) d.run.licences.push('delete');

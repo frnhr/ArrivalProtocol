@@ -1,8 +1,8 @@
 import type { GameState } from '@state/schema';
-import type { Segment, HollowSegment } from '@/types/segment';
+import type { Segment, HollowSegment, FsToolSegment } from '@/types/segment';
 import type { ThreatTally } from '@/types/threat';
-import { isHollow, hasUsableTool } from '@state/selectors';
-import { TRACE_CELLS } from '@data/tuning';
+import { isHollow, hasUsableTool, toolFilesOf, isUsableTool } from '@state/selectors';
+import { TRACE_CELLS, WALL_MIN_BLOCKS } from '@data/tuning';
 
 // Pure reads of the threat ladder's state (docs/phase3/04-threats.md §3.3–§3.8; slice-2-plan §2.1). Track THREAT owns this
 // file after the slice 2 foundation; UI reads it for the TRACE meter, the LANDING REPORT's TRACE line and the PACKET's
@@ -42,10 +42,40 @@ export function noWorkingRm(state: Readonly<GameState>): boolean {
   return !hasUsableTool(state.memory, 'delete', 'excluded');
 }
 
-// Slice 5's hook (a corrupted resident wakes after it): on the ship HOLLOW boarded, its first fight has been decided (the
-// scripted bite cured or eaten, or a timed wake's first bite landed).
-// TODO(slice2-THREAT): implement with the 'arrives' story (decideScript's moment on a folded ship); false until then.
+// The COPY lesson's moment (slice-2-plan risk 12, data/script.ts COPY_LESSON_RULES): a hollow block's reach (a seed's
+// included) stands beside one of your filesystem tools across less than a WALL, and that tool has no spare (no other
+// working copy of its kind), so one bite would take the tool for good. The first such tool in reach order, or null.
+// Never keyed on a `NEEDED FOR THE FINALE` tag (round 3, 9). Pure.
+export function huntedToolWithoutSpare(state: Readonly<GameState>): FsToolSegment | null {
+  const { memory } = state;
+  for (let index = 0; index < memory.length; index++) {
+    if (!isHollow(memory[index]!)) continue;
+    for (const step of [-1, 1] as const) {
+      let cursor = index + step;
+      let gap = 0;
+      for (; cursor >= 0 && cursor < memory.length && memory[cursor]!.type === 'free'; cursor += step) gap += memory[cursor]!.size;
+      const neighbour = memory[cursor];
+      if (gap >= WALL_MIN_BLOCKS || neighbour === undefined || neighbour.type !== 'fs-tool') continue;
+      const spares = toolFilesOf(memory, neighbour.fsTool).filter((copy) => copy !== neighbour && isUsableTool(copy));
+      if (spares.length === 0) return neighbour;
+    }
+  }
+  return null;
+}
+
+// The COPY lesson is due (risk 12; data/script.ts toolsHunted reads it, with COPY licensed): a tool HOLLOW can reach has
+// no spare (huntedToolWithoutSpare), or a HUNT stage's seeds, which aim at your tools, are blinking or have landed.
+export function copyLessonDue(state: Readonly<GameState>): boolean {
+  const hollow = state.hollow;
+  const huntSeeds = hollow.cfg.seed?.target === 'near-tools' && (hollow.seedTelegraph !== null || hollow.seedsLanded > 0);
+  return huntSeeds || huntedToolWithoutSpare(state) !== null;
+}
+
+// Slice 5's hook (a corrupted resident wakes after it): HOLLOW is aboard and its first fight on this ship has been decided:
+// the scripted bite cured or eaten, or nobody there to bite (systems/hollow.ts decideScript clears scriptTargetId as it
+// wakes or goes dormant), or a timed wake's first bite has landed. Asleep (before the loop closes, before a timed wake),
+// or with the scripted target still being fought over, it is not.
 export function hollowFirstFightDecided(state: Readonly<GameState>): boolean {
-  void state;
-  return false;
+  const hollow = state.hollow;
+  return state.run.threat.aboard && hollow.phase !== 'asleep' && hollow.scriptTargetId === null;
 }

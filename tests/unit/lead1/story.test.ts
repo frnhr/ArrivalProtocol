@@ -1,3 +1,5 @@
+// Phase 3 slice 2: ships 1–2 are calm; the ship-1 paths plant phase 2's root and its ARRIVAL stage (support/hollow-world.ts
+// phase2ShipOne): the story's timing rules are the same code on every ARRIVAL (VESPER's folded one: tests/unit/threat/arrival-story).
 // LEAD-1 item 6: HOLLOW's story after the ship-1 fight counted only the TERMINAL's typing. The story is a say.ts
 // createStory sequence (reusable: WP7 scripts HALCYON's wake lines with it): each beat waits until BOTH screens have
 // typed everything said before it, plus its own silence. Slice 1a: the reveal (and the radio's `Oh, you found them!`
@@ -12,6 +14,7 @@ import { actionRepair } from '@state/actions';
 import { HOLLOW_STORY } from '@data/hollow-text';
 import { HOLLOW_STORY_SILENCE_SEC } from '@data/tuning';
 import type { LogEntry } from '@state/schema';
+import { phase2ShipOne } from '../support/hollow-world';
 
 const TICK = 0.05;
 const h = createHarness6(1, { soulsFound: false });
@@ -89,6 +92,7 @@ const find = (speaker: string, text: string): LogEntry | undefined =>
 // The kid only flies; the moment POD 01 is bitten the test drops it to 3% so it is eaten in flight.
 {
   h.resetTo('flight');
+  phase2ShipOne(h.store);
   h.noFault();
   let dropped = false;
   let eatenAtAi = NaN;
@@ -125,6 +129,7 @@ function voiceQuietBefore(entry: LogEntry): number {
 // The kid repairs POD 01 the moment it is bitten (the WP6 follower's second kid): the fight is decided in flight.
 {
   h.resetTo('flight');
+  phase2ShipOne(h.store);
   h.noFault();
   let repaired = false;
   followStrip(h, 0.4, 400, () => {

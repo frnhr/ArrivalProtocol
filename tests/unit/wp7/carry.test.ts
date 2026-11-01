@@ -40,11 +40,13 @@ const memory = h.store.getState().memory;
   const packet = packUnit(memory, link, []);
   check('packing: rack E is the Core, then the AI tools by job', packet.rackE.map((seg) => seg.name).join(',')
     === 'AI Core,Engine I/O,Autopilot,Sensor Interp,Nav Plotter,Telemetry,AI Comms', packet.rackE.map((seg) => seg.name).join(','));
-  check('…rack F the fs-tools by kind (Scan, then Repair and its .bak)', packet.rackF.map((seg) => seg.name).join(',') === 'Scan,Repair,Repair.bak');
-  check('…files 63 blocks (§5.1: LINK 120 · FILES 63), the charge fits whole', packet.filesBlocks === 63 && packet.chargeCarried === 36);
+  // Phase 3 slice 2 (risk 7): 046.log packs after the fs-tools and FIREWALLs, and costs its 2 blocks of the link.
+  check('…rack F the fs-tools by kind (Scan, then Repair and its .bak), then 046.log', packet.rackF.map((seg) => seg.name).join(',') === 'Scan,Repair,Repair.bak,???',
+    packet.rackF.map((seg) => seg.name).join(','));
+  check('…files 65 blocks (§5.1\'s 63, plus 046.log\'s 2), the charge fits whole', packet.filesBlocks === 65 && packet.chargeCarried === 36, `${packet.filesBlocks} ${packet.chargeCarried}`);
   check('…copies: memory itself is untouched', packedFiles(packet).every((seg) => !memory.includes(seg)));
   const tight = packUnit(memory, 80, []);
-  check('…a narrow link carries charge only up to link − files', tight.chargeCarried === 80 - 63, `${tight.chargeCarried}`);
+  check('…a narrow link carries charge only up to link − files', tight.chargeCarried === 80 - 65, `${tight.chargeCarried}`);
   const files = packedFiles(packet);
   const lock = (name: string): string | null => dropLock(files, files.find((seg) => seg.name === name)!);
   // WP7 part 2 (deliberate): "the last copy of each tool kind" is the filesystem tools' kinds. The other AI
@@ -61,7 +63,7 @@ const memory = h.store.getState().memory;
   check('…dropping both copies of REPAIR throws (the second is the last copy)', /last-copy/.test(bothThrew), bothThrew);
   const bak = memory.find((seg) => seg.name === 'Repair.bak')!;
   const lighter = packUnit(memory, link, [bak.id]);
-  check('…a dropped .bak stays behind and its blocks go to charge', lighter.filesBlocks === 59 && lighter.rackF.every((seg) => seg.name !== 'Repair.bak'));
+  check('…a dropped .bak stays behind and its blocks go to charge', lighter.filesBlocks === 61 && lighter.rackF.every((seg) => seg.name !== 'Repair.bak'));
   let threw = '';
   try { packUnit(memory, link, [memory.find((seg) => seg.type === 'core')!.id]); } catch (error) { threw = (error as Error).message; }
   check('…dropping the Core throws loudly', /can't be left behind/.test(threw), threw);
