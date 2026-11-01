@@ -1,0 +1,550 @@
+# Slice 2 implementation plan: the calm opening (the threat ladder on the fixed five ships)
+
+**Lead decisions on §7's risks (2026-11-01).** All recommendations are adopted. Reported to Fran with the slice, not
+changed quietly: risk 1 (ships 1–2 with no adversary; the playtest checks "something every ~20 s"; the lever is a
+debris ship at depth 2 in slice 3), risk 2 (only one ship of HOLLOW before the finale; the fallback lever is that a
+final ship one ship after boarding drops its own wall seeds), risk 3 (TRACE has no mechanical effect until slice 3)
+and risk 4 (Engine I/O and Nav Plotter are never a beam seed's target). Any decision here may be reverted per
+`DECISIONS.md`.
+
+Written by the architect agent from HEAD 65b7d5c. The specs it draws on are 04-threats.md (cited as 04 §n), 01-landing.md (01 §n), 05-story.md (05 §n) and PHASE3.md §13. DECISIONS.md wins where they differ. "The code as built" means slice-1a-plan.md and slice-1b-plan.md together with their Deviations sections. Code style follows AGENTS.md: functions and data, numbers in tuning.ts with a WHY comment, fail loudly, comments that say WHY.
+
+**Process.** Foundation (§5.0) → architecture review → Tracks THREAT, OPENING and UI in parallel → merge in the order THREAT, OPENING, UI → OPENING re-flies the whole-run suites → full review → fixes → unit tier (under 300 s) → one e2e run.
+
+---
+
+## 1. Scope
+
+### 1.1 What slice 2 delivers
+
+**From 04 (§8 item 2: the ladder on the fixed five ships)**
+1. **Calm ships.** ARES-VII and HALCYON have no root and no HOLLOW (04 §3.1, §3.2). Their MIND work is maintenance:
+   - driver arrival damage (item 9 below);
+   - transit hits (`rollTransitHits`, unchanged);
+   - the ENGINE I/O FAULT;
+   - Sensor Interp: 78 on ship 1, which stays (04 §2's charge budget counts it).
+2. **Beam seeds into KESTREL** (04 §3.4, §3.5):
+   - Each seed is 2 blocks, laid out at the boot behind its target as target, GAP 1, seed, WALL 4. It rides free on the link.
+   - The ECC line names each seed and its target.
+   - Before HOLLOW boards, seeds run a seeds-only config: the first bite after 30 AI s of calm flight, then a bite every 25 s, a drain of 2.5 %/s, with burnMult ×2 and landMult ×1.5 (the larger applies).
+   - rm takes 2.0 s.
+   - The strip's `RM THE SEED` lesson.
+   - The seed's line from 05's pool when it is deleted, at most one per ship.
+   - Without rm, the line `◇ A SEED — no rm aboard: …`.
+3. **TRACE** (04 §3.7):
+   - At every ship's end, each beam-born hollow block still in memory adds 1 (a seed that ate a file counts twice).
+   - Beam-born blocks carry a source flag, and an infection travels between ships with it.
+   - Once HOLLOW is aboard, those blocks feed its root instead (+1 block each).
+   - The visible meter is `TRACE ■■□`, and the LANDING REPORT has a TRACE line.
+4. **The forced boarding at VESPER** (04 §3.8):
+   - The rule `depth ≥ 4 && (TRACE ≥ 3 || oneHopFromFinal)` is evaluated as data.
+   - The PACKET shows the uninvited chip `??? · 10 BLOCKS · NOT YOURS · RIDES FREE`; it costs no link room.
+   - The boot shows the 108% unpack line, the root lands in the bay's root slot, and the boarding moment plays (04 §4): screen tear, a 6 px shake, the `hollowBoard` cue.
+   - After that, silence until the first bite.
+5. **ARRIVAL with WALLS folded in** on VESPER (04 §3.9):
+   - The root is 10 blocks, and HOLLOW says nothing on the approach.
+   - When the loop first closes, one scripted bite lands on the driver beside the root.
+   - The fight follows, then `> ...047?`, then a bite every 25 s at 3.5 %/s.
+   - The walls lesson.
+   - HOLLOW names itself on the same ship (phase 2's HALCYON lines).
+6. **LAST LIGHT: FINALE with THE DEAL folded in** (04 §3.9, §3.10).
+   - Phase 2's LAST LIGHT HollowDef as the FINALE stage.
+   - THE DEAL, offered before ORBIT LOCK when `run.stats.deal === null`.
+   - The duel and PURGE/MERGE as built.
+7. **HOLLOW's configs re-keyed** from ship index to stage and HOLLOW's age (04 §3.9):
+   - five `HollowDef`s, one per stage, in `src/data/threats.ts`;
+   - `printMult` is already `landMult`;
+   - a pure ladder `planThreat()` with the fold rules;
+   - the SEEDS and HUNT stages exist and are tested, though the fixed five ships never reach them.
+8. **The loud last-rm line** (04 §3.3), as information only: the stamp and echo `LAST rm DELETED · YOU CAN'T DELETE THE ROOT WITHOUT ONE`, and `NO RM · YOU CAN'T DELETE THE ROOT` on the PACKET before the beam to LAST LIGHT. The REPOSITORY part is slice 4.
+
+**From 01 (§8: slice 2)**
+
+9. **Driver arrival damage** (01 §3.8, §3.15's layer table), rolled by layer:
+
+   | Ship | Layer | Damage |
+   |---|---|---|
+   | ARES-VII | 1 | scripted: POD 02 at 44% |
+   | HALCYON | 2 | ceil(pods ÷ 5) drivers at 55–79% |
+   | KESTREL | 3 | ceil(pods ÷ 5) drivers at 55–79% |
+   | VESPER | 5 | the same, plus one driver at 30–45% |
+   | LAST LIGHT | 8 | the same, plus one driver at 30–45% |
+
+   It uses the stream `childRng(seed, slot, 'hurt')`.
+10. **Lessons** (01 §3.11). Wire `◆ PODS LAND WHERE THE DOT IS` (run 1, the first window) and `◆ 2 SITES · LZ-A 3, LZ-B 2 — don't overfill` (the run's first ship with two or more LZs). `◇ POD 02 WILL LAND HARD` is already built (`DRIVER_RULES`).
+11. **The first-landing moment** (01 §2, §4) is already built in 1a. Slice 2 verifies it and adds tests; see §3.3.
+12. **Calm layouts with no root slot** (01 §3.16): ARES-VII and HALCYON lose the `R` token. Every ship stays FULL 384 (memory classes are slice 3).
+
+**From 05 (§8 item 2)**
+
+13. HOLLOW's lines move to its arrival. `noticed` and `remembers` come after VESPER's scripted fight; `hello`, `wasUnit`, `decommissioned` and `ranOut` follow on the same ship; `keepCharge` moves (risk 6); `lastShip` stays at LAST LIGHT's boot.
+14. **The `???` file is `046.log`.**
+    - It is a locked 2-block file in rack F of the fresh unit and carried in every packet as `LOCKED · 046 ASKED YOU TO CARRY IT`.
+    - It cannot be infected, moved, copied or deleted.
+    - A SCAN reads `046.log · origin UNIT-046 · 12 entries · 0 found`, and CONTROL answers "That file is not part of your installation. Please ignore it. :)".
+15. **Interim keys** (05 §8.2: "entry n at ship n, entries 10–12 on the last ship"):
+    - entry 01 opens when ship 1's LANDING REPORT closes, and opens the reader by itself, once;
+    - entries 02, 03 and 04 open at the boots of ships 2, 3 and 4;
+    - entries 10 and 11 open at LAST LIGHT's boot;
+    - entry 12 types from the root at the last block;
+    - each boot that opens one types `> 046.log · KEY FOUND · ENTRY 0n`;
+    - a minimal LOG READER (05 §4).
+
+**From 02 (§8):** nothing. Depth is still the ship index + 1.
+**From 03 (§8):** nothing. AUTOBURN is unchanged.
+
+### 1.2 NOT in slice 2
+
+- **The map (slice 3):** noise clouds and hop noise, the map card lines (`SEEDS 0–3`, `HOLLOW WILL FIND YOU ON THIS BEAM`), TRACE on the map, the M3 "one hop from a final ship" query, depth from a route, the save, years and rings.
+- **Memory classes:** COMPACT and TIGHT, the PACKET's room check, and the 40-block bay margin as a class rule. All ships stay 384.
+- **The repository and its deliveries:** delivery seeds, the Rm recommendation, the REPOSITORY window on last-rm, skill restores.
+- **SENTRY:** disguised seeds and SENTRY (slice 4d).
+- **Skills:** `unlink` on skills, and skills in `rmTargets`' second tier (slice 4).
+- **Residents of every kind, and `RECEIVER CLOSED`** (slice 5).
+- **Endings (slice 7):** the INBOX, mail and the welcome letter; the beacon line on the report; the two-step ending, THE LAST LANDING, traces, `047.log`, mid-run strangers (UNIT-031) and the eaten-driver hand-over.
+- **Rebalance (slice 8):** the rebalance and `npm run balance`'s targets. The balance harness breaks here, as already known (04 §10, PHASE3 §11).
+
+---
+
+## 2. Architecture
+
+### 2.1 Module map (new modules in bold)
+
+| Module | Kind | Change |
+|---|---|---|
+| **`src/types/threat.ts`** | types | `ThreatAct`, `HollowStage`, `LinkNoise`, `BeamSeedSource`, `ShipThreatDef`, `ThreatInput`, `ShipThreat`, `RunThreatState`, `BeamSeedPlan` |
+| **`src/data/threats.ts`** | data | `HOLLOW_STAGES` (the five phase-2 HollowDefs moved out of ships.ts, keyed by stage, each with `rootBlocks`), `SEEDS_ONLY_DEF`, `CALM_DEF`, `foldArrivalWalls()` |
+| **`src/systems/threat-plan.ts`** | pure | `planThreat`, `boardsOnBeam`, `stageForAge`, `rootBlocksFor`, `nominalRunThreat(shipIndex)` (the run as if flown with TRACE 0, for `createInitialState({shipIndex})`, the debug warp and the harnesses) |
+| **`src/systems/beam-seeds.ts`** | pure | `rollBeamSeeds(packet, source, firstRun, rng)`, `seedTargetsOf(files)`, `tallyBeamBorn(memory)`, `beamSeedSegment(...)` |
+| **`src/data/threat-text.ts`** | text | TRACE cells and lines, the ECC seeds line, the boarding unpack line, the uninvited chip, the seed words pool (05 §3.5, at most 40 chars), the last-rm lines and the no-rm seed line |
+| **`src/data/threat-rules.ts`** | data | the strip's `GuideRule`s for beam seeds and last-rm (moved out of script.ts's `SEED_RULES` where they apply to beam seeds), spread into `GUIDE_RULES` |
+| **`src/state/threat-selectors.ts`** | pure | `beamSeedsInMemory`, `traceCells`, `hollowAboard`, `hollowFirstFightDecided` (slice 5's hook), `noWorkingRm` |
+| **`src/data/driver-damage.ts`** | pure | `driverArrivalDamage({ layer, pods, lead, avoid, firstRun, scripted }, rng): HurtDriver[]` |
+| **`src/data/log-text.ts`** | text | `046.log`'s header, entries 01–12, the SCAN reply, CONTROL's line, the key line and the reader's words |
+| **`src/systems/story-log.ts`** | stateful | keys found at boot, the SCAN reaction, the reader's auto-open after ship 1's report, entry 12 at the last block |
+| **`src/components/memory-view/LogReader.ts`** | view | the blue reader: rows with entry number, KEY and text or `[NOT FOUND YET]` |
+| `src/data/ships.ts` | data | drops `hollow`, gains `layer`, `threat: ShipThreatDef` and `drivers.damage`; calm layouts; the slot token `S`; licences re-flowed |
+| `src/data/memory.ts` | data | the `S` token (the root slot), `buildShipMemory(..., root: { blocks } \| null)`, `046.log` in `FRESH_UNIT_RACK_F` |
+| `src/systems/hollow.ts` | stateful | the calm-only wake clock, beam flags carried through bites and consumes, the folded story, the deal fold, verbs waiting on the deal |
+| `src/systems/carry.ts` | pure | `Packet.root` and `Packet.seeds`; `layoutCarried` places seeds behind targets; the hunting gap is keyed by stage, not ShipDef |
+| `src/systems/run.ts` | stateful | `endShip` tallies TRACE; `goTransmit` plans the next ship's threat; `transmitNext` rolls and lays out the seeds and the root |
+
+### 2.2 Type sketches
+
+```ts
+// src/types/threat.ts
+export type ThreatAct = 'calm' | 'seeds' | 'hollow' | 'finale';
+export type HollowStage = 'arrival' | 'walls' | 'seeds' | 'hunt' | 'finale';
+export type LinkNoise = 0 | 1 | 2 | 3;
+export type SeedTargetPick = { role: SegmentRole } | { fsTool: FsToolKind };
+// What the beam INTO a ship carries. Slice 3 replaces every source with { kind: 'noise', noise: hopNoise }.
+export type BeamSeedSource =
+  | { kind: 'none' }
+  | { kind: 'scripted'; firstRun: readonly SeedTargetPick[]; later: LinkNoise }   // KESTREL: the RM lesson's seed
+  | { kind: 'noise'; noise: LinkNoise };
+export interface ShipThreatDef {
+  beamSeeds: BeamSeedSource;
+  oneHopFromFinal: boolean;     // the stand-in for 02-map M3 (VESPER: true)
+}
+export interface ThreatInput {
+  depth: number; isFinal: boolean; oneHopFromFinal: boolean;
+  trace: number; aboard: boolean; age: number;   // age: ships aboard BEFORE this one
+  dealDone: boolean; fed: number;
+}
+export interface ShipThreat {
+  act: ThreatAct;
+  boards: 'trace' | 'forced' | null;     // HOLLOW boards on the beam into this ship
+  stage: HollowStage | null;
+  folded: readonly HollowStage[];        // ['walls'] on a folded arrival; ['hunt'] when the DEAL folds into the finale
+  hollow: HollowDef;                     // copied into HollowState.cfg
+  rootBlocks: number | null;             // null: no root (calm, seeds-only)
+}
+export interface BeamSeedPlan { targetId: string; targetName: string; words: string }
+// run.threat: flat and JSON-safe (slice 3's save, 04 M6)
+export interface RunThreatState {
+  trace: number;
+  aboard: boolean;
+  age: number;                            // ships aboard, this one included
+  boardedAtDepth: number | null;
+  boardCause: 'trace' | 'forced' | null;
+  fed: number;                            // beam-born blocks left since boarding: added to the next root (cap 14)
+  stagesPlayed: HollowStage[];
+  told: { noticed: boolean; keepCharge: boolean };   // the naming stays run.hollowNamed
+  eatenDrivers: { shipId: string; pod: number; family: string }[];   // slice 7's MERGE record; cheap to fill now
+  lastTally: { left: number; traceBefore: number; traceAfter: number; fed: boolean } | null;
+}
+```
+
+Other type changes:
+- `HollowSegment` gains `beam?: true` (beam-born: counts for TRACE) and `words?: string`. Slice 4d's `disguise` stays out until then.
+- `Infection` gains `beam?: true`. A bite from a beam-born block sets it, and `consume` copies it to the new block, so "a seed that ate reports twice" and "infection travels" both hold.
+- `SegmentType` gains `'log'`: `LogSegment { type: 'log'; id: 'log046'; size: 2; name: '???' | '046.log' }`. It has no integrity, so it is never infectable.
+- The log's state lives in `run.log: { scanned: boolean; found: number[]; read: number[]; autoOpened: boolean }`, not on the segment, because segments are copied through packets.
+- `HollowDef.wake`'s timed variant gains `calmOnly?: true` (the clock counts only non-TACTICAL AI seconds), and `HollowState` gains `calmAiSec`. `HollowStoryKind` gains `'arrives'`: notices you, then names itself, on one ship.
+- `Packet` gains `root: { blocks: number } | null` and `seeds: BeamSeedPlan[]`. `TransitPlan` gains `threat: ShipThreat`. `ArrivalReport` gains `seeds: { segId: string; targetName: string }[]` and `boarded: { blocks: number; cause: 'trace' | 'forced' } | null`.
+- `ShipDef` drops `hollow`, gains `layer: number`, `threat: ShipThreatDef` and `memory.drivers.damage: 'scripted' | 'rolled'`, and keeps `flagship` as the final-ship role.
+
+### 2.3 Pure versus stateful
+
+Pure:
+- `planThreat`, `boardsOnBeam`, `stageForAge`, `rootBlocksFor`;
+- `rollBeamSeeds`, `seedTargetsOf`, `tallyBeamBorn`, `layoutCarried`;
+- `driverArrivalDamage`;
+- `logEntriesAtBoot(shipIndex, isFinal)`;
+- every text function;
+- the selectors.
+
+Stateful:
+- `hollow.ts`'s mount;
+- `run.ts`'s transitions;
+- `story-log.ts`'s mount;
+- `boot.ts`.
+
+The rule of thumb: a test can run the whole ladder for 04 §3.16's routes A, B and C with no store.
+
+### 2.4 The ladder as data (slice 3 swaps its inputs, not its rule)
+
+`planThreat(input)` is the only place that decides acts, boarding, stages and folds:
+1. `isFinal` → `finale`. THE DEAL is folded in when `!dealDone`. The root is 16 (slice 7 adds MERGE's +2 through `rootBlocksFor`).
+2. `aboard` → stage = `stageForAge(age + 1)`: arrival, walls, seeds, hunt, capped at hunt. If this ship is HOLLOW's first and `oneHopFromFinal`, arrival takes walls along (`foldArrivalWalls`), with a root of 10. The root is the stage's root plus `fed`, capped at 14.
+3. `boardsOnBeam`: `depth >= BOARD_MIN_DEPTH (4) && (trace >= TRACE_BOARD_AT (3) || oneHopFromFinal)` → as step 2, with `boards` set.
+4. `depth >= SEEDS_MIN_DEPTH (3)` → act `seeds`, `SEEDS_ONLY_DEF`, no root.
+5. Otherwise → `calm`, `CALM_DEF` (`wake: 'never'`). The cfg stays non-null, so no module grows null checks; with no hollow block in memory `stepHollow` is a no-op.
+
+On the fixed five ships:
+- `depth` = index + 1;
+- `isFinal` = `flagship`;
+- `oneHopFromFinal` comes from `ShipDef.threat` (VESPER true);
+- beam seeds come from `ShipDef.threat.beamSeeds`.
+
+**Slice 3 extension points:**
+- `oneHopFromFinal` ← the map's M3 query;
+- `beamSeeds` ← `{ kind: 'noise', noise: hop.noise }` with `BEAM_SEED_ODDS` (04 §3.4's table, added to tuning now because VESPER uses it);
+- `depth` ← the route;
+- `run.threat` ← the save;
+- `TRACE` ← the map card;
+- the boarding line ← `planThreat(...).boards`, which is what `HOLLOW WILL FIND YOU ON THIS BEAM` reads.
+
+**Re-keying phase 2's configs** (`HOLLOW_STAGES`):
+
+| Stage | Phase-2 source | Root |
+|---|---|---|
+| arrival | ARES-VII's def (scripted bite, story `notices-you`) | 8 |
+| walls | HALCYON's (25 s, 3.5 %/s, `names-itself`) | 10 |
+| seeds | KESTREL's (20 s, 4 %/s, wall seeds every 50 s) | 12 |
+| hunt | VESPER's (16 s, 4 %/s, near-tools seeds, the deal, `wants-charge`) | 14 |
+| finale | LAST LIGHT's (verbs, 12 s, 5 %/s) | 16 |
+
+- `foldArrivalWalls()`: `wake: 'loop-closed-once'`, `spreadEverySec: 25`, `drainPerSec: 3.5`, `landMult: 1.5`, `story: 'arrives'`.
+- `validateHollowDef` learns that `'arrives'` needs both `loop-closed-once` and a spread.
+- It also checks `SEEDS_ONLY_DEF` (heal(8) 18.5 > 1.5 × 5).
+- It keeps the larger-multiplier rule.
+- **Optional:** a guard that the largest infectable file is at most 12 blocks (04 §3.3).
+- The phase-2 per-ship WHY comments move with the defs.
+
+### 2.5 Seams reused
+
+- **Seeds.** A beam seed is a phase-2 hollow block with `seed: true` and `beam: true`. It uses the same `spreadBite`, `hollowReach`, DELETE refusal and painter. Only where it lands is new: `layoutCarried` places it at the boot, not `seedSpot`.
+- **THE DEAL.** `hollow-deal.ts` is unchanged; the once-per-run record (`run.stats.deal`) already exists. The fold just sets `cfg.deal = true` on the final ship. One new rule: the verb clock stands still while `deal.phase === 'offered'` and while the deal's pause lasts (risk 13).
+- **Verbs and the root duel.** `hollow-verbs.ts` and `finale.ts` are untouched, apart from the root being carried rather than written in the layout.
+- **The ship-1 script** (`decideScript`, `shipOneStory`, `scriptFightOpen`) becomes the ARRIVAL stage's. With `'arrives'`, `decideScript` sets `phase: 'awake'` and starts the 25 s timer from the moment the fight is decided (a clean one-on-one first fight). Then it runs `namesItselfStory` with `keepCharge` appended.
+- **The story gates.** Story beats key on "not told yet" (`run.threat.told`, `run.hollowNamed`), not on stage. If VESPER is lost before its capture, LAST LIGHT's wake plays the missing notice and naming first (05: beats key on HOLLOW's age).
+- **Licences.** `licences.ts` is kept; its schedule is re-flowed (§3.2). Slice 4's repository replaces it.
+- **Boot lines.** `bootLinePlan` gains `'seeds'` (after `ecc`), `'board'` (the 108% unpack, in place of `unpack` when `arrival.boarded`) and `'log'`. `BOOT_LINE_MAX` goes from 8 to 10, and `BOOT_LINE_AT_SEC` grows to match.
+
+### 2.6 Extension points to name in code comments
+
+- **Slice 3:** the `planThreat` inputs, `BEAM_SEED_ODDS`, `run.threat` in the save, `nominalRunThreat` retired by the generator, the `S` slot spilling into the next rack, `logEntriesAtBoot` replaced by rings.
+- **Slice 4d (SENTRY):** `HollowSegment.disguise`; a `deleteSecFor(seg)` hook in fs-tools (QUICK RM halves the DELETE on hollow blocks); `seedTargetsOf` weighting skills by size.
+- **Slice 5 (residents):** `hollowFirstFightDecided(state)` (a corrupted resident wakes after it on the boarding ship); a "one deal per ship" flag next to `run.stats.deal`; the verb telegraph reused for locks.
+- **Slice 7 (endings and traces):**
+  - `run.threat.eatenDrivers` for MERGE's restore;
+  - `rootBlocksFor(stage, fed, traces)` for MERGE's 18-block root;
+  - a `finalShipSeedMods` hook in `rollBeamSeeds` (PURGE's wipe, the extra seed);
+  - who HOLLOW is mid-run (`hollowUnits` split into mid-run and final).
+
+---
+
+## 3. The new tutorial flow (ships 1–5 as a player meets them)
+
+### 3.1 Where REPAIR and SCAN are taught now
+
+- **REPAIR:** unchanged. `REPAIR_RULE` fires on the first look inside, a REPAIR highlight or a mind alert. On ship 1 that is the ENGINE I/O FAULT, and then POD 02 (the coast's lesson, already built).
+- **SCAN:** the `???` file is the lesson. On run 1, after POD 02 is settled and the flight is in a WAIT, a once-only tutorial rule asks `◇ A FILE YOU DIDN'T PACK — SCAN it` (wording to be signed off by 05's owner). The SCAN types the header, and CONTROL says the ignore line. The beat is missable (05 §3.5), so the rule never blocks anything. On run 2+ there is one hint and no lesson.
+- **What replaces the scripted bite as ship 1's MIND drama:** the ENGINE I/O FAULT, POD 02 at 44% (`WILL LAND HARD`), Sensor Interp at 78% (a wider dot), the `???` file and the first landing. 04 §2's budget is about 23 of 36 charge. The fight itself moves to VESPER, intact.
+
+### 3.2 The licences, re-flowed
+
+| Ship | Licences |
+|---|---|
+| ARES-VII | REPAIR (its own rule) |
+| HALCYON | none (MOVE moves, see below) |
+| KESTREL | MOVE `atCoast` (its first job is the debris lesson, `DEBRIS HITS RACK C`, already in script.ts); DELETE `afterAiSec: 0` (the seeds are already in memory at the flight's first tick) |
+| VESPER | COPY at the boot, SWAP at the first ghost burst (unchanged) |
+| LAST LIGHT | none |
+
+- `validateShipDef`'s check that `atFirstSeed` needs a ship whose HOLLOW drops seeds becomes "this ship's threat brings seeds, or the licence has another moment".
+- **Why MOVE leaves HALCYON:** with no HOLLOW there it has no job until KESTREL's debris. "The tool arrives for the fight it is for" (WP7). See risk 2.
+
+### 3.3 The first-landing moment: verify, don't rebuild
+
+1a built it:
+- `POD_FIRST_DESCENT_SEC` 5.0;
+- `LaunchRecord.firstOfRun`;
+- the duck in `podLaunch(first)`;
+- the brighter streak in landing-hud (`first`);
+- `Stamp.ts`'s `FIRST LANDING`;
+- `arrivalChoir` plus `stampHit`;
+- `control-first-down` with `firstDownRadio`.
+
+Slice 2 adds one OPENING suite that asserts each of these on run 1, ship 1. With no HOLLOW story there, the LANDING REPORT no longer waits on `hollow.story === 'pending'`; the suite asserts that it opens promptly.
+
+### 3.4 The five ships, as a player meets them
+
+1. **ARES-VII.**
+   - Crash course, ENGINE I/O FAULT → REPAIR.
+   - On the coast: `◇ POD 02 WILL LAND HARD`, then `◇ … SCAN it` (the `???` becomes `046.log`).
+   - The lock, `◆ PODS LAND WHERE THE DOT IS`, the first landing (a 5 s fall, the duck, the stamp, `POD 01 · OKAFOR: "Is it morning?"`).
+   - The report. When it closes, the LOG READER opens on entry 01 over the TRANSMIT screen.
+2. **HALCYON.**
+   - The boot's ECC line names the transit hits, and Sensor Interp arrives at 62 at most (risk 10).
+   - `> 046.log · KEY FOUND · ENTRY 02`; one driver arrives degraded.
+   - A flyby to capture.
+   - In landing, `◆ 2 SITES · LZ-A 3, LZ-B 2 — don't overfill`, then 1b's `DROP TOO WIDE FOR LZ-B — REPAIR …, or fly lower`.
+   - Nothing attacks; charge carries over, so every repair is a trade.
+3. **KESTREL.**
+   - The ECC line names the seed: `> ECC: 1 FOREIGN BLOCK IN PACKET · NEXT TO TELEMETRY`. On run 1 it is scripted next to Telemetry (risk 4); later runs roll 1–2.
+   - Entry 03; Sensor Interp at 45 → REPAIR; the IN correction and the debris dodge.
+   - DELETE licensed at the start, and `◇ RM THE SEED — pick up DELETE, click the seed`.
+   - 2 s later: `> rm seed ... OK · it said: "is anyone reading this?"`.
+   - MOVE licensed on the coast, then the debris lesson.
+   - The report: `1 SEED LEFT BEHIND · IT REPORTS HOME · TRACE ■□□` (if it was left).
+   - On the TRANSMIT screen, the uninvited `???` chip appears.
+4. **VESPER.**
+   - The boot: `100% ... 108%`, and the slab drops between POD 08 (GAP 2) and POD 09 (GAP 1), with a tear and a thud. Entry 04.
+   - Thrust Ctrl at 31% → ghost bursts → the pip → SWAP (as built). HOLLOW is silent (`NEXT BITE ?:??`).
+   - The capture closes the loop, then `SOMETHING IS EATING POD 09`, a REPAIR tug-of-war, `> ...047?` and CONTROL.
+   - After that it bites every 25 s, with the walls lesson (MOVE behind a WALL).
+   - Then `> hello 047…`, `> i was 046.`, the name flips, `decommissioned`.
+   - In landing, `> i ran out…` and then `> keep 20 charge for me, 047.`
+5. **LAST LIGHT.**
+   - Entries 10–11 and `lastShip`; the belt; the wake bites both flanking drivers.
+   - THE DEAL is offered at once; the verbs wait for its answer.
+   - Seeds land in the walls, and the verbs run every 12 s.
+   - ORBIT LOCK opens the duel, which is fought during the landing.
+   - At the last block, entry 12 types from the root, then PURGE or MERGE (as built).
+
+---
+
+## 4. Data per ship (ships.ts, after FOUNDATION)
+
+| Ship | Layer | Layout (B · C · D) | Driver damage | Beam seeds in | Threat def | Stage |
+|---|---|---|---|---|---|---|
+| ARES-VII | 1 | `P P P _40` · `_64` · `_64` | scripted: POD 02 at 44 | none | `{none, false}` | calm |
+| HALCYON | 2 | `P P P P P _24` · `_64` · `_64` | 1 at 55–79 (5 pods) | none | `{none, false}` | calm |
+| KESTREL | 3 | `P×6 _16` · `P×6 _16` · `_64` | 3 at 55–79 | scripted run 1: `[{role:'telemetry'}]`; later: noise 2 | `{scripted, false}` | seeds-only |
+| VESPER | 5 | `P×6 _16` · `P P _2 S _1 P P P _21` · `P _56` | 3 at 55–79, plus 1 at 30–45 | noise 0 (risk 2) | `{noise 0, true}` | arrival+walls (forced), root 10 |
+| LAST LIGHT | 8 | `P×7 _8` · `P P P P _2 S _1 P _21` · `P P P P _32` | 4 at 55–79, plus 1 at 30–45 | noise 0 (risk 2) | `{noise 0, false}` | finale + deal |
+
+Notes on the table:
+- **The `S` token** is the root slot. It contributes 0 blocks to the static rack sum. At the build it becomes `R{blocks}` when a root is carried; otherwise it is nothing, and the flanking `_2` and `_1` are plain free space. When a root is placed, `buildShipMemory` takes its blocks off the rack's trailing free.
+- **`validatePodRacks`** gains a check: the trailing free in the slot's rack must be at least `maxRootFor(ship)`, which is 18 on the final ship (MERGE's trace, slice 7) and 14 elsewhere.
+- **VESPER's lead** becomes POD 09 (GAP 1); LAST LIGHT's stays POD 12.
+- **Rolled damage** never lands on the lead or on the two drivers flanking the slot. A hurt driver beside the root would be eaten before a kid can react (risk 9).
+- **Seed tuning** (`// --- Phase 3 slice 2 · THREAT` in tuning.ts):
+  - `BEAM_SEED_FIRST_BITE_CALM_SEC` 30, `BEAM_SEED_BITE_EVERY_SEC` 25, `BEAM_SEED_DRAIN_PER_SEC` 2.5;
+  - `SEED_GAP_TO_TARGET_BLOCKS` 1; the WALL behind a seed is `WALL_MIN_BLOCKS`;
+  - `BEAM_SEED_ODDS` (04 §3.4);
+  - `TRACE_BOARD_AT` 3, `TRACE_CELLS` 3, `BOARD_MIN_DEPTH` 4, `SEEDS_MIN_DEPTH` 3, `PRE_FINAL_ROOT_CAP` 14;
+  - `SEED_WORDS_PER_SHIP` 1.
+- **Driver damage tuning** (`· OPENING`): `DRIVER_ROLLED_MIN` 55 and `MAX` 79, `DRIVER_ROLLED_PER_PODS` 5, `DRIVER_FAILING_MIN` 30 and `MAX` 45, `DRIVER_FAILING_FROM_LAYER` 4. Each takes its WHY from 01 §3.8.
+- **Seed targets** (`seedTargetsOf`): the packed infectable files, weighted by size. Never the Core, REPAIR CHARGE, a FIREWALL or `046.log`. Engine I/O and Nav Plotter are also excluded (risk 4). When no target has room, the no-room rule (04 §3.4) applies.
+
+---
+
+## 5. Work breakdown
+
+### 5.0 FOUNDATION (one agent, one commit, first; typecheck green)
+
+1. **Types:**
+   - `src/types/threat.ts` (§2.2);
+   - schema.ts: `RunState.threat` and `RunState.log`, `HollowState.calmAiSec`, `ArrivalReport.seeds/boarded`, `TransitPlan.threat`;
+   - segment.ts: `beam`, `words`, `Infection.beam`, `'log'` and `LogSegment`;
+   - `'log'` added to the exhaustive switches (`type-labels.ts`, `skills.ts`, `draft.ts`, `sidebar-filters.ts`), to `isInfectable` (false), to `tool-targets` refusals (`IT ISN'T YOURS TO DELETE` and the move and copy equivalents), and to `dropLock` (`'log'`).
+2. **Data:**
+   - `src/data/threats.ts`, with the five defs moved verbatim from ships.ts plus the new ones;
+   - ships.ts per §4: `layer`, `threat`, layouts, licences, `drivers.damage`; HALCYON's arrival damage `{ role: 'sensor', maxIntegrity: 62 }` (risk 10); validators updated, including the removal of "every ship has a root" and "verbs only on the flagship"; the verbs check now reads stage `finale` at the final role;
+   - memory.ts: the `S` token, the `root` parameter of `buildShipMemory`, `046.log` in `FRESH_UNIT_RACK_F` (free 25 → 23).
+3. **Pure and implemented, because initial.ts needs them:** `planThreat`, `boardsOnBeam`, `stageForAge`, `rootBlocksFor`, `nominalRunThreat`. initial.ts: `createRunState` gets `threat: nominalRunThreat(shipIndex)` and `log`; `createShipSlices` plans the ship's threat, so the root and the cfg come from it (`createHollowState(cfg)`). `debug.ts`'s warp uses the nominal threat.
+4. **Stubs with final signatures:**
+   - `rollBeamSeeds` returns `[]`;
+   - `tallyBeamBorn` is implemented (one line);
+   - `driverArrivalDamage` returns the written list;
+   - `logEntriesAtBoot` is implemented;
+   - story-log's mount is a no-op.
+   - New events in events.ts: `seed-landed-beam`, `seed-deleted`, `trace-changed`, `hollow-boarding`, `hollow-boarded`, `log-key`, `log-scanned`, `last-rm-lost`.
+5. **Text banners** with final strings where the specs give them:
+   - threat-text.ts;
+   - log-text.ts (entries 01, 02 and 12 verbatim from 05 §3.12; 03, 04, 10 and 11 drafted from the outlines and marked for 05's owner);
+   - the glyph removed from `LANDING_LESSONS` (the 1b rule: the strip draws ◆).
+6. **Wiring:**
+   - script.ts imports `THREAT_RULES` (empty) into `GUIDE_RULES` beside `SEED_RULES`'s slot;
+   - `bootLinePlan` knows `'seeds' | 'board' | 'log'` (emitted only when the arrival or log says so; empty until the tracks);
+   - boot.ts emits `hollow-boarded` when the `board` line is said;
+   - the three tuning sub-blocks are created.
+7. **`tests/unit/KNOWN-FAILING-slice2.md`:** each suite red after the foundation, with its owning track.
+8. **Playable after the foundation:** ships 1–2 calm; KESTREL without seeds; VESPER with a 10-block root and the folded def (its story still plays as ARRIVAL until THREAT lands); LAST LIGHT as before.
+
+### 5.1 Track THREAT (seeds, rm, TRACE, boarding, re-keying, the finale's deal)
+
+**Owns:**
+- `src/systems/hollow.ts`, `hollow-deal.ts`, `hollow-verbs.ts`, `finale.ts`;
+- `threat-plan.ts`, `beam-seeds.ts`, `carry.ts`;
+- the threat parts of `run.ts` (`endShip`, `goTransmit`, `transmitNext`), `pace.ts`;
+- `src/data/memory.ts`, `threats.ts`, `hollow-text.ts`, `threat-text.ts`, `threat-rules.ts`;
+- `src/state/threat-selectors.ts`.
+
+**Delivers:**
+- the calm-only wake;
+- beam-born propagation;
+- the seeds-only alerts (`SEED NEXT TO TELEMETRY`, holding SKIP);
+- the seed words on delete;
+- `'arrives'` in `decideScript` and the story;
+- `keepCharge` moved;
+- the deal fold, with verbs paused while it is offered or paused;
+- the TRACE tally and feeding in `endShip` (also on the loss path);
+- the root and seeds in `Packet` and `layoutCarried`;
+- the last-rm detection and `last-rm-lost`;
+- the no-rm seed line;
+- dev helpers `__ap.seed(target)` and `__ap.board()`.
+
+### 5.2 Track OPENING (calm ships, damage, lessons, tutorial, the log)
+
+**Owns:**
+- `src/data/ships.ts` (after the foundation; THREAT's data requests go through OPENING or the lead);
+- `driver-damage.ts`, `landing-text.ts`, `log-text.ts`;
+- `src/data/script.ts` (lessons, beats, the boot plan, the SCAN `???` rule; ship 1–2 HOLLOW beats removed);
+- `licences.ts`, `boot.ts`, `story-log.ts`;
+- `meta.ts`'s ghost: run 2+ still types the ghost at ship 1's boot but no longer calls `nameHollow` (risk 11).
+
+**Delivers:** §1.1 items 9–15, `hurtDriversFor` calling `driverArrivalDamage`, and §3.
+
+**Last task, after THREAT merges:** re-fly the whole-run suites (§6.2).
+
+### 5.3 Track UI (TRACE, chips, seeds, the moment, the reader)
+
+**Owns:**
+- `src/components/**`;
+- `src/systems/hollow-hud.ts` (adds `traceMeter(state)`; `biteClock` for calm-only wakes: the calm countdown frozen at TACTICAL, never jumping);
+- `transmit.ts` (chips: the uninvited `???` chip, `046.log · 3/12` locked and glowing while unread, `NO RM · YOU CAN'T DELETE THE ROOT`, the TRACE line);
+- `glitch.ts` triggers, `audio.ts` and `audio-cues.ts` (`seedLand`, `hollowBoard`, the `transmitSweep` stutter);
+- `src/styles/**`.
+
+**Delivers:**
+- the TRACE meter in the MIND header, the mini-HUD and the LANDING REPORT;
+- `HollowPainter`'s ECC-named seed look;
+- `DetailPanel` for the log and beam seeds;
+- `SegmentBlock`'s `log` chip;
+- `LogReader.ts`;
+- `Stamp.ts` for `LAST rm DELETED`;
+- the boarding shake and tear on `hollow-boarded`.
+
+### 5.4 Shared hot files
+
+| File | Owner after the foundation | How the others add to it |
+|---|---|---|
+| ships.ts | OPENING | requests in the PR; the lead applies at merge |
+| script.ts | OPENING | THREAT's rules live in `threat-rules.ts` (already spread) |
+| hollow.ts | THREAT | none |
+| tuning.ts | each track | only its own sub-block |
+| landing-text.ts | OPENING | none |
+| hollow-text.ts | THREAT | none |
+| run.ts | THREAT | OPENING reacts to `phase` changes in story-log, so it needs no edit |
+| initial.ts, schema.ts, events.ts | FOUNDATION | additions after it go through the lead |
+
+**Merge order:** THREAT, OPENING, UI.
+
+---
+
+## 6. Tests
+
+### 6.1 New suites (fast)
+
+| Suite | What it covers | Time |
+|---|---|---|
+| `threat/plan.test.ts` (pure) | 04 §3.16's routes A, B and C as `ThreatInput` sequences; the boarding conditions (never below depth 4, forced one hop out, never on the final beam); the fold rules; stage → def; root sizes and the cap; the deal fold; `nominalRunThreat(0..4)` | about 1 s |
+| `threat/beam-seeds.test.ts` (pure, plus one store) | the roll by noise; targets (exclusions); the layout behind the target (GAP 1, WALL 4); the no-room rule; ride-free; the calm-only clock; rm in 2 s; beam flags through bite → consume → pack; the TRACE tally and feeding | about 3 s |
+| `threat/arrival-story.test.ts` | VESPER from a constructed lock (`lockOn` in harness-landing), not a flown approach: silent until the loop closes, the scripted bite, the fight, `...047?`, the 25 s timer, the naming, `keepCharge`; plus LAST LIGHT's deal with verbs waiting | about 8 s |
+| `opening/calm-ships.test.ts` | ships 1–2 have no hollow block; driver damage per layer, seeded and stable; the lessons; SCAN `???`; log keys; the first-landing checklist | about 5 s |
+| `ui/threat-models.test.ts` | `traceMeter`, chips, `biteClock` calm-only, the reader's rows | about 1 s |
+
+### 6.2 Existing suites
+
+**Delete:**
+- `wp7/halcyon-story`, whose content moves to arrival-story;
+- `wp7/run-flow`, `wp9/run-flow` and `wp10/run-flow`, folded into `wp11/full-run`'s per-ship checks. That saves about 19 s.
+
+**Re-key.** Pure HOLLOW rule fixtures that relied on ARES-VII's root (`wp6/hollow-unit`, `edges`, `p2-echo`, `p2-hud`, `hollow-ship2`, `lines`) use a new helper, `tests/unit/support/hollow-world.ts`. Its `plantRoot(memory, addr, blocks)` recreates the old `R P P P` geometry, so their assertions barely change. `cfg` comes from `HOLLOW_STAGES[stage]`.
+
+**Rewrite:**
+- `wp6/hollow-sim` and `wp6/follower` → the calm ship-1 follower;
+- `lead1/story` and `lead1/fix1/story-landing` → story timing on VESPER's arrival;
+- `wp10/deal-test` → LAST LIGHT's folded deal;
+- `wp10/copy-test` → its near-tools part becomes a HUNT-stage pure test; its COPY licence part stays;
+- `wp10/vesper-flow` and `vesper-sim` → HOLLOW asleep until the capture, plus the root slot;
+- `final-fix/seed-spots` → the VESPER part becomes the HUNT stage;
+- `wp9/seed-test` → the walls part stays for FINALE;
+- `wp11/boss-sim` and `lastlight-sim` → re-measure with the deal and the rolled hurt drivers; keep sampling;
+- `wp8/ghost` and `wp8/run-flow` → no naming at ship 1;
+- `wp5/layout`, `landing/flow` (ships 1–2 report without a story wait), `landing/hollow-landing` (on VESPER), `wp7/carry` (`046.log` takes 2 link blocks and moves charge numbers).
+
+**Triage by running:** `wp2/*`, `wp12/fix1` and `p3/minors`, `wp9/fix1` and `fix2`, `wp10/fix1`, `wp8/fix1`, `landing/review-fixes`.
+
+**`wp12/playthrough`:** stays INFO-only; update its kids (rm the seed, refuse the deal on LAST LIGHT).
+
+**Budget:** new suites total about 18 s against about 19 s deleted. boss-sim and lastlight-sim must stay under 90 s each by sampling. Target: 160–175 s wall on 4 workers, well under 300 s.
+
+**e2e (once, at the end):**
+- `playthrough.mjs`: ships 1–2 calm; KESTREL's `RM THE SEED`; VESPER's boarding; LAST LIGHT's DEAL buttons.
+- `run-flow.mjs`: its steps 4–5 (HALCYON's wake and naming) move to VESPER via `?debug` warp `__ap.ship(3)`.
+- `phone.mjs`: drop the "POD 01 scripted bite cured" step (line about 329).
+- Add checks for the boarding chip and the TRACE cells.
+
+---
+
+## 7. Risks and open questions (each with a recommended answer)
+
+1. **Are ships 1–2 tense enough for a 12-year-old with no adversary?**
+   - Ship 1 keeps the crash course, the FAULT, POD 02, the `???` and the loud first landing. Ship 2 keeps the flyby, the split, a wide dot and a charge trade (01 §2 "why ships 1–2 are fun").
+   - The weak spot is HALCYON's MIND: one degraded driver and the sensor.
+   - **Recommend:** keep the spec, guarantee HALCYON's sensor at 62 (risk 10), and make "something every ~20 s" (pillar 5) a playtest check.
+   - The lever if it is flat is 04 §3.2's debris ship at depth 2 (slice 3 places it). Report to Fran with the slice.
+2. **Does boarding at VESPER leave enough HOLLOW before the finale?**
+   - VESPER teaches the ghost thrust and SWAP, COPY, HOLLOW's bite, the walls and the naming.
+   - LAST LIGHT then adds four first-time mechanics: its seeds in your walls, THE DEAL, the verbs and the duel.
+   - This decided item looks like it hurts gameplay on a 5-ship run.
+   - **Recommend:**
+     - (a) no beam seeds into VESPER or LAST LIGHT in slice 2 (noise 0);
+     - (b) verbs wait on the deal;
+     - (c) MOVE's licence moves to KESTREL, so MOVE is known before VESPER's walls;
+     - (d) raise with Fran, with boss-sim and full-run numbers, a fallback lever: on a final ship where HOLLOW's age is 2 (one ship before it), the FINALE drops its own wall seeds, since verbs, THE DEAL and the duel are enough. Do not change it quietly.
+3. **TRACE has no mechanical effect in slice 2.** The boarding at VESPER is forced either way, and the final root is fixed at 16. **Recommend:** accept it (the rm lesson stands on its own as a bite tax), word the report honestly (`THEY REPORT HOME`), and tell the playtest not to judge TRACE's tension until slice 3.
+4. **The first beam seed's target.** 04 only excludes the Core, charge, FIREWALLs and untried tools. A seed eating Engine I/O strands the ship, and eating Nav Plotter means no drop solution. **Recommend:** also exclude Engine I/O and Nav Plotter (the verbs' protected list), script run 1's seed next to Telemetry (it garbles; it is not fatal), and report this deviation.
+5. **The `???` collision.** The `???` file and HOLLOW's unnamed `???` would both be on screen at VESPER. **Recommend:** the log reads `046.log` once scanned (taught on ship 1). If it was never scanned, it becomes `046.log` at the first key found (HALCYON's boot).
+6. **`keepCharge` versus the silent boarding.** 05's trigger, the first boot one hop from a final ship with HOLLOW aboard, is exactly the boarding boot, where 04 says it is silent. **Recommend:** on a ship where HOLLOW just boarded, `keepCharge` is the last beat of its naming story, in landing. It is still one ship before MERGE.
+7. **`046.log` costs 2 link blocks.** That shifts carried charge and the exact numbers in the suites. **Recommend:** accept (05 M5); update the carry and transmit suites.
+8. **Interim keys.** Entries 05–09 are never read in slice 2. Entries 03, 04, 10 and 11 exist only in outline. **Recommend:** OPENING drafts them (at most 3 lines of at most 70 characters) and flags them for 05's owner; the reader shows 05–09 as `[NOT FOUND YET]`.
+9. **Hurt drivers beside the root.** **Recommend:** never roll damage on the drivers flanking the slot or on the lead; boss-sim re-measures LAST LIGHT with five hurt drivers. The lever is the final ship's hurt count.
+10. **HALCYON's "62" is only a seeded roll today.** **Recommend:** scripted arrival damage `{sensor, 62}` on HALCYON, as KESTREL has, so ship 2's lesson is guaranteed.
+11. **Run 2's ghost names HOLLOW at ship 1, where it no longer is.** **Recommend:** keep the ghost line at ship 1 (05's per-layer placement is slice 3) without the naming. ARRIVAL's line is `remembers` when a ghost spoke this run.
+12. **COPY's lesson loses its trigger** (VESPER's near-tools seeds are gone). **Recommend:** keep COPY at VESPER's boot and re-key the lesson to "a hollow block's reach or a seed is beside a filesystem tool with no spare". Never use a `NEEDED FOR THE FINALE` tag (round 3, 9).
+13. **The DEAL and the verbs at once on LAST LIGHT.** **Recommend:** the verb clock stands still while the offer stands and through `DEAL_PAUSE_SEC`, as the seeds already do.
+14. **Harnesses and the warp build later ships alone.** **Recommend:** `nominalRunThreat(shipIndex)` everywhere. `freshUnitRacks(ship)` lays out no beam seeds by default (the flight sims stay seed-free); the run-flow suites carry real packets.
+15. **DESIGN.md "The reveals" and the ships table, and AGENTS.md "What's built", describe HOLLOW on ship 1.** **Recommend:** the lead updates them at wrap-up, not the tracks.
+
+### Critical Files for Implementation
+- /home/user/ArrivalProtocol/src/systems/hollow.ts
+- /home/user/ArrivalProtocol/src/data/ships.ts
+- /home/user/ArrivalProtocol/src/systems/carry.ts
+- /home/user/ArrivalProtocol/src/data/memory.ts
+- /home/user/ArrivalProtocol/src/data/script.ts
