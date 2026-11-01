@@ -2,7 +2,9 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
-import type { RunMapState } from '@/types/map';
+import type { RunMapState, ModifierId } from '@/types/map';
+import { armShipAt, currentStop } from '@systems/map-streams';
+import { SEEDS_MIN_DEPTH } from '@data/tuning';
 import { onPostTick, isLivePhase } from '@systems/clock';
 import { replaceRange, mergeAdjacentFree, segmentStarts, assertMemoryInvariants, newSegId } from '@systems/memory-ops';
 import { isOpenFree } from '@systems/tool-targets';
@@ -10,7 +12,7 @@ import { say } from '@systems/say';
 import { emit } from '@systems/events';
 import { mindAlertActive } from '@systems/alerts';
 import { createToolFiles, TOOL_HINT_TARGET } from '@data/fs-tools';
-import { layoutOf } from '@data/memory';
+import { layoutOf, isUnitFileType } from '@data/memory';
 import { LICENCE_LINES } from '@data/script';
 import { CLASSIC_LICENCES } from '@data/classic-five';
 import { IS_DEV } from '@/env';
@@ -39,8 +41,10 @@ export interface TimedLicence {
 // and CONTROL says so. DOM-free; the chip row reads the files (components/memory-view/FsStatusBar).
 //
 // Placement: each file goes at the start of the LAST open free region that fits it, scanning
-// back from the end of memory (the tail of rack F in both layouts), so new tools land next to
-// the old ones and REPAIR CHARGE. Space a running move or copy reserved is never used. No room at
+// back from the end of memory: the receiver's free run right after REPAIR CHARGE (the unit's block is files, seeds, then
+// the charge, from rack E's start), on every memory class (slice 3a: a TIGHT ship's receiver is rack E alone, it has no
+// rack F), so new tools land next to the old ones and REPAIR CHARGE. A full receiver sends the file to the last free
+// run among the pods. Space a running move or copy reserved is never used. No room at
 // all is a design error (a layout that can't take its own licences), so it throws.
 
 export function isLicensed(state: Readonly<GameState>, kind: FsToolKind): boolean {
@@ -50,9 +54,17 @@ export function isLicensed(state: Readonly<GameState>, kind: FsToolKind): boolea
 // The address a new file of `size` blocks goes to (see the header).
 export function installAddress(memory: readonly Segment[], size: number): number {
   const starts = segmentStarts(memory);
+  const charge = memory.findIndex((seg) => seg.type === 'redundancy');
   for (let i = memory.length - 1; i >= 0; i--) {
     const seg = memory[i]!;
-    if (isOpenFree(seg) && seg.size >= size) return starts[i]!;
+    if (!isOpenFree(seg) || seg.size < size) continue;
+    // A receiver with no room after REPAIR CHARGE (a TIGHT ship's unit spilled back into the tail, slice 3a): the file
+    // goes flush against the unit's block from below, not at the far end of the pod rack's free run.
+    // That region ends at the AI Core (the block's start); a free run inside the receiver keeps the rule above.
+    if (charge >= 0 && i < charge && memory[i + 1]?.type === 'core' && memory.slice(i + 1, charge).every(isUnitFileType)) {
+      return starts[i]! + seg.size - size;
+    }
+    return starts[i]!;
   }
   throw new Error(`licences: no free space for a ${size}-block tool file`);
 }
@@ -121,12 +133,42 @@ const REPAIR_RULE: LicenceRule = {
     || mindAlertActive(state),
 };
 
+// The arm's interim schedule, by act (slice-3a-plan §2.8, risk 3; not in any spec: 3a has no repository yet). TODO(3b):
+// the repository's requests replace it, and this block goes.
+// • DELETE at the start of the first ship at depth ≥ 3 (the SEEDS act: the tool arrives with the thing it removes);
+// • MOVE at that ship's coast, or at a DEBRIS ship's coast, whichever comes first (its first job is the debris lesson);
+// • COPY at the boot of HOLLOW's first ship (the tool is there before the fight for your tools);
+// • SWAP at the first uncommanded burst on any ENGINE FAULT ship (the fix arrives with the problem);
+// • a licence whose moment passed on an earlier ship of the route (the ship was lost first) comes at this ship's start.
+// REPAIR keeps its own first-look rule (REPAIR_RULE).
+function armLicenceRules(): LicenceRule[] {
+  const depth = (state: Readonly<GameState>): number => state.run.shipIndex + 1;
+  // The modifiers of the route's ships before the current one, and of the current one.
+  const earlier = (state: Readonly<GameState>): ModifierId[][] =>
+    state.run.map.route.slice(0, -1).map((stop) => armShipAt(state.run.map, stop.slot).modifiers);
+  const here = (state: Readonly<GameState>): readonly ModifierId[] => armShipAt(state.run.map, currentStop(state.run).slot).modifiers;
+  return [
+    { kind: 'delete', due: (state) => depth(state) >= SEEDS_MIN_DEPTH },
+    {
+      kind: 'move',
+      due: (state) => depth(state) > SEEDS_MIN_DEPTH || earlier(state).some((mods) => mods.includes('debris'))
+        || ((depth(state) >= SEEDS_MIN_DEPTH || here(state).includes('debris')) && state.burn.coastAtAi !== null),
+    },
+    { kind: 'copy', due: (state) => state.run.threat.aboard },
+    {
+      kind: 'swap',
+      due: (state) => earlier(state).some((mods) => mods.includes('engine-fault'))
+        || (here(state).includes('engine-fault') && state.burn.ghostBursts > 0),
+    },
+  ];
+}
+
 // Every licence due on the ship being flown, in order: REPAIR's own rule, then every ship's timed ones. `world` is the
 // run's map (run.map.world): the classic five's schedule is CLASSIC_LICENCES by ship index; the arm issues its licences
-// by act (slice-3a-plan §2.8, Track GEN: TODO(3a-GEN), REPAIR only until then).
+// by act (armLicenceRules).
 export function licenceSchedule(shipIndex: number, world: RunMapState['world'] = 'classic'): LicenceRule[] {
   const rules: LicenceRule[] = [REPAIR_RULE];
-  if (world !== 'classic') return rules;
+  if (world !== 'classic') return [...rules, ...armLicenceRules()];
   CLASSIC_LICENCES.forEach((licences, index) => {
     if (index > shipIndex) return;
     for (const licence of licences) {

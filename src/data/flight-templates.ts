@@ -1,5 +1,5 @@
 import type { ShipFlightDef, ShrinkTuning } from '@data/ships';
-import type { TemplateId } from '@/types/map';
+import type { TemplateId, ModifierId } from '@/types/map';
 import {
   SHRINK_MARGIN_TAC, SHRINK_MARGIN_MIN_TAC, SHRINK_SMALL_LOOP_FACTOR, SHRINK_REACTION_TAC, HALCYON_SMALL_LOOP_FACTOR,
   HALCYON_EDGE_BACK_OFF_TAC, KESTREL_SMALL_LOOP_FACTOR, KESTREL_EDGE_BACK_OFF_TAC, VESPER_SMALL_LOOP_FACTOR,
@@ -126,3 +126,54 @@ export const FLIGHT_TEMPLATES: Readonly<Record<TemplateId, FlightTemplate>> = {
   'capture': CAPTURE,
   'impact-b': IMPACT_B,
 };
+
+// --- What a generated ship may roll on each template (02-map §3.5; slice-3a-plan §2.3, §4.2, risk 12) -------------------
+
+// One template's rules for the generator: the layer a generated ship may take it from, its inherent problem (the
+// template's own arrival, always on, so a template flies unchanged: IMPACT COURSE, FLYBY / TOO WIDE), and the extra
+// modifiers it may roll, each from its own layer ("Uncertain path" from 3, DEBRIS from 3, ENGINE FAULT from 4, RADIATION
+// BELT from 5).
+export interface TemplateRule {
+  fromLayer: number;
+  inherent: readonly ModifierId[];
+  extras: readonly { modifier: ModifierId; fromLayer: number }[];
+}
+
+export const TEMPLATE_RULES: Readonly<Record<TemplateId, TemplateRule>> = {
+  // IMPACT-A is the first ship's (layer 1); a generated ship may take it from layer 2 (02 §3.5: "layer 2: IMPACT-A or WIDE").
+  'impact-a': { fromLayer: 2, inherent: ['impact-course'], extras: [{ modifier: 'sensor-damage', fromLayer: 3 }] },
+  'wide': { fromLayer: 2, inherent: ['too-wide'], extras: [{ modifier: 'sensor-damage', fromLayer: 3 }] },
+  'wide-b': {
+    fromLayer: 3, inherent: ['too-wide'],
+    extras: [{ modifier: 'sensor-damage', fromLayer: 3 }, { modifier: 'debris', fromLayer: 3 }],
+  },
+  'capture': {
+    fromLayer: 4, inherent: [],
+    extras: [{ modifier: 'sensor-damage', fromLayer: 3 }, { modifier: 'engine-fault', fromLayer: 4 }],
+  },
+  'impact-b': {
+    fromLayer: 5, inherent: ['impact-course'],
+    extras: [{ modifier: 'sensor-damage', fromLayer: 3 }, { modifier: 'radiation-belt', fromLayer: 5 }],
+  },
+};
+
+// The templates in the order the generator draws from (a stream reads an index into this list, so the order is part of
+// what an arm rolls: map-generator MAP_GENERATOR_VERSION).
+export const TEMPLATE_IDS: readonly TemplateId[] = ['impact-a', 'wide', 'wide-b', 'capture', 'impact-b'];
+
+// The templates a generated ship in `layer` may fly.
+export function templatesForLayer(layer: number): TemplateId[] {
+  return TEMPLATE_IDS.filter((id) => TEMPLATE_RULES[id].fromLayer <= layer);
+}
+
+// The extra modifiers a ship on `template` in `layer` may roll.
+export function extrasFor(template: TemplateId, layer: number): ModifierId[] {
+  return TEMPLATE_RULES[template].extras.filter((extra) => extra.fromLayer <= layer).map((extra) => extra.modifier);
+}
+
+// The hazard zones a modifier brings, where the template it was tuned on had them (02 §3.5: "KESTREL's cloud", "LAST
+// LIGHT's belt"): the cloud on WIDE-B's arrival path at 14,000 km, 900 km across (the dodge the strip counts down was
+// swept on it); the belt across IMPACT-B's coast, 9,000–12,000 km, peppering racks A–B (every memory class has both).
+// Only those templates may roll them (TEMPLATE_RULES), so the geometry always fits the flight.
+export const DEBRIS_CLOUD = { onInboundAtR: 14000, r: 900 } as const;
+export const RADIATION_BELT: { rIn: number; rOut: number; racks: readonly string[] } = { rIn: 9000, rOut: 12000, racks: ['A', 'B'] };

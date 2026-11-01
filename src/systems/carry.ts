@@ -31,8 +31,8 @@ import {
 //    by size, 15–35 each. The best copy of every tool kind (an fs-tool kind or an AI tool's role) never
 //    drops below 60, and the Core takes at most 15 per hit and never drops below its emergency reset
 //    (25). A crash adds 3 hits and Core −25, BEAM OUT 2 hits (run.ts passes them in).
-// 3. arrivalCharge: +6 per ★ of the last ship, +12 for the charge card, and never fewer than 12 blocks
-//    (§6.5's floor).
+// 3. arrivalCharge: +6 per ★ of the last ship, +12 for the charge card, and never fewer than the destination's floor
+//    (§6.5's 12 blocks on FULL and COMPACT ships; none on a TIGHT one, 01 §3.16).
 // 4. layoutCarried: the files back into memory, 01-landing §3.16's pooled receiver: rack E's list and rack F's
 //    list as one block from rack E's start (with a hunting ground between them on a ship whose seeds hunt tools), then
 //    the charge; a block longer than the receiver spills backward
@@ -225,10 +225,13 @@ export interface ArrivalCharge {
   floorAdded: number;
 }
 
-// `cardCharge`: what the picked card brings (+12 REPAIR CHARGE; none for every other card).
-export function arrivalCharge(chargeCarried: number, starCredit: number, cardCharge = 0): ArrivalCharge {
+// `cardCharge`: what the picked card brings (+12 REPAIR CHARGE; none for every other card). `floor` is the destination's
+// (its memory layout's chargeFloor, slice 3a step 2: 12 on FULL and COMPACT ships, none on a TIGHT one, 01 §3.16 round 2
+// Q8: there the charge may arrive at 0); left out, the 12 every classic ship has.
+export function arrivalCharge(chargeCarried: number, starCredit: number, cardCharge = 0, floor: number = CHARGE_ARRIVAL_FLOOR): ArrivalCharge {
+  if (!(Number.isInteger(floor) && floor >= 0)) throw new Error(`arrivalCharge: floor ${floor}`);
   const earned = chargeCarried + starCredit + cardCharge;
-  const blocks = Math.max(CHARGE_ARRIVAL_FLOOR, earned);
+  const blocks = Math.max(floor, earned);
   return { blocks, floorAdded: blocks - earned };
 }
 
@@ -290,7 +293,8 @@ export function layoutCarried(
     if (!files.some((seg) => seg.id === plan.targetId)) throw new Error(`layoutCarried: beam seed target ${plan.targetId} is not in the packet`);
   }
   if (new Set(packet.seeds.map((plan) => plan.targetId)).size !== packet.seeds.length) throw new Error('layoutCarried: two beam seeds behind one file');
-  const seedRoom = Math.max(0, room - filesBlocks - Math.min(chargeBlocks, CHARGE_ARRIVAL_FLOOR));
+  // 01 §3.16's fill order: files, the floor (none on a TIGHT ship), the seeds, the rest of the charge.
+  const seedRoom = Math.max(0, room - filesBlocks - Math.min(chargeBlocks, layout.chargeFloor));
   const placed = Math.min(packet.seeds.length, Math.floor(seedRoom / BEAM_SEED_LAYOUT_BLOCKS));
   const seedsBlocks = placed * BEAM_SEED_LAYOUT_BLOCKS;
   const charge = Math.max(0, Math.min(chargeBlocks, room - filesBlocks - seedsBlocks));
@@ -357,7 +361,9 @@ export function arrivalDamage(segs: readonly Segment[], damage: readonly Arrival
 // seed-free). Throws for a first ship (nothing transmits to it) and, without both, for a ship that is not classic.
 export function freshUnitRacks(ship: ShipDef, linkBlocks?: number, threat?: Readonly<ShipThreat>): CarriedRacks {
   if (ship.kind === 'first') throw new Error(`freshUnitRacks: ${ship.name} meets a fresh unit by itself (no link)`);
-  const classic = CLASSIC_FIVE[ship.slot]?.id === ship.id;
+  // By id and world (an arm ship may share an id, the arm's KESTREL is 'kestrel' too, but never a classic slot's world).
+  const twin = CLASSIC_FIVE[ship.slot];
+  const classic = twin?.id === ship.id && twin.world === ship.world;
   if (!classic && (linkBlocks === undefined || threat === undefined)) {
     throw new Error(`freshUnitRacks: ${ship.name} is not a classic ship: pass its link and verdict`);
   }

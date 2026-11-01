@@ -3,6 +3,7 @@ import type { GameState } from './schema';
 import { createInitialState } from './initial';
 import { newRunSeed } from '@systems/rng';
 import { openRunArchive, archiveLineage, browserStorage } from '@systems/meta';
+import { createRunMap } from '@systems/map-run';
 
 // The run seed is the one entropy source of a run (every game roll is a child stream of
 // it). `?seed=N` pins it so a screenshot or a bug report replays the same run.
@@ -22,10 +23,15 @@ const archiveStatus = openRunArchive(browserStorage);
 
 // The single global store. Components and systems import this singleton. The page opens on
 // the title card; RECEIVE TRANSMISSION boots the unit and starts the flight (systems/boot).
+// The page plays the galaxy map (slice 3a): the run's arm from its seed and its run number (systems/map-run.ts createRunMap,
+// as NEW RUN's startRun does); the classic five stay the suites' fixture and __ap.ship's.
+const seed = pickRunSeed();
+const lineage = archiveLineage();
 export const store = createStore<GameState>(createInitialState({
-  seed: pickRunSeed(),
+  seed,
   phase: 'title',
   reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  lineage: archiveLineage(),
+  lineage,
   archive: { status: archiveStatus },
+  map: createRunMap(lineage, seed),
 }));

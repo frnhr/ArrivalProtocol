@@ -9,7 +9,7 @@
 //   reader opening by itself on the TRANSMIT screen.
 // • HALCYON after a real TRANSMIT: the boot's ECC line and `> 046.log · KEY FOUND · ENTRY 02`, one degraded driver, the
 //   sensor at 62, no MOVE; its landing's split lesson.
-// • The other boots' keys (03, 04, 10–11), entry 12 from the root, the name derived from run.log (the simulation retry),
+// • The other boots' keys (the rings: 02–03, 02–06, 02–11 for a ship flown alone), entry 12 from the root, the name derived from run.log (the simulation retry),
 //   and run 2's ship 1 with no ghost and no naming (risk 11 and its follow-up: the ghost speaks where the last unit was
 //   lost, opening/ghost-placement).
 import { check, finish } from '../wp1/harness';
@@ -286,9 +286,13 @@ stepUntil(() => state().run.phase === 'flight', 30);
 
 // --- The other boots' keys, entry 12 from the root ---------------------------------------------------------------------------
 {
-  check('the interim keys (05 §8.2): 02, 03, 04 at ships 2–4, 10–11 at the final ship',
-    JSON.stringify([0, 1, 2, 3, 4].map((index) => logEntriesAtBoot(index, classicShip(index).final))) === '[[],[2],[3],[4],[10,11]]');
-  for (const [index, entries] of [[2, [3]], [3, [4]], [4, [10, 11]]] as const) {
+  // Slice 3a: the rings replace the interim keys (05 §3.2): a boot finds every ring at or inside its world's distance from
+  // SOL (the classic five sit on w0, w2, w5, w11, w19: 8, 29, 55, 107, 180 LY), and the final ship 10–11. A ship flown
+  // alone (nothing found before it) finds them all at once.
+  check('the rings (05 §3.2): 02 at 29 LY, 03 at 55, 04–06 at 107, 07–11 at the final ship\'s 180',
+    JSON.stringify([8, 29, 55, 107].map((sol) => logEntriesAtBoot(sol, false))) === '[[],[2],[2,3],[2,3,4,5,6]]'
+      && logEntriesAtBoot(180, true).join() === '2,3,4,5,6,7,8,9,10,11');
+  for (const [index, entries] of [[2, [2, 3]], [3, [2, 3, 4, 5, 6]], [4, [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]]] as const) {
     h.shipAlone(index, 5);
     h.store.update((draft) => { draft.run.phase = 'boot'; draft.clock.paused = false; });
     stepUntil(() => state().run.phase === 'flight', 30);

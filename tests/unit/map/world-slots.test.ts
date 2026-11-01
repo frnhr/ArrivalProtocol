@@ -31,9 +31,13 @@ const kestrel = shipSummaryAt(classic, 2);
 check('…a classic ship reads from its ShipDef: KESTREL at Brine, 12 pods, debris in rack C, its fixture year',
   kestrel.world === 'Brine' && kestrel.worldSlot === 5 && kestrel.pods === 12 && kestrel.colonists === 2400 && kestrel.debrisRack === 'C'
   && kestrel.approachYear === hopBetween(classic, 1, 2).approachYear && kestrel.reserved === null, JSON.stringify(kestrel));
-let threw = false;
-try { shipDefAt(map, 11); } catch { threw = true; }
-check('…while building an arm ship still waits for GEN\'s shipDefOf (shipDefAt throws)', threw && shipDefAt(classic, 2) === classicShip(2));
+// Track GEN: an arm ship is built from its ArmShip (data/ships.ts shipDefOf), memoized on its id; two arm seeds roll two
+// different generated ships in one slot (the same structure, other details).
+const other = run1Map(9);
+const rolled = (m: typeof map): string => JSON.stringify([7, 8, 9, 10, 12, 13, 14, 15].map((slot) => shipDefAt(m, slot).landing));
+check('…an arm ship is built (shipDefAt → shipDefOf, cached on its id) and differs across two arm seeds',
+  shipDefAt(map, 11).name === 'VESPER' && shipDefAt(map, 11) === shipDefAt(structuredClone(map), 11) && shipDefAt(classic, 2) === classicShip(2)
+  && shipDefAt(other, 11).pods === shipDefAt(map, 11).pods && rolled(other) !== rolled(map));
 
 // Ids (M5): an arm ship's id is its ShipKey, so two seeds' VESPERs differ and a cache keyed on it is run-safe.
 check('arm ship ids are armSeed:reportedRun:slot:attempt, unique per seed',

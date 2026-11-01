@@ -114,10 +114,14 @@ export const RUN1_AUTHORED: Readonly<Record<NonNullable<Run1Row['authored']>, Au
     terrain: 'OCEAN', lzPods: [3, 3], allWide: true, noGo: 'none', debrisRack: 'B',
   },
   // VESPER: ENGINE FAULT (Thrust Ctrl at 31%), never a resident; Cinder is ROUGH volcanic with its two lava arcs, three
-  // sites of 6 · 5 · 5 at the written centres (the arcs sit by LZ-B and the NARROW LZ-C).
+  // sites of 6 · 5 · 5 at the written centres (the arcs are placed against LZ-B's and the NARROW LZ-C's written edges, so
+  // the whole landing is written: rolled centres would leave the arcs beside nothing).
   'vesper': {
-    ...NONE, modifiers: ['engine-fault'], arrivalDamage: classic('vesper').arrivalDamage, forgiveness: 'rough', terrain: 'VOLCANIC',
-    lzPods: [6, 5, 5], noGo: classic('vesper').landing.noGo,
+    ...NONE, modifiers: ['engine-fault'], arrivalDamage: classic('vesper').arrivalDamage,
+    landing: {
+      ...classic('vesper').landing,
+      lzs: classic('vesper').landing.lzs.map((lz, index) => ({ ...lz, pods: [6, 5, 5][index]! })),
+    },
   },
   // LAST LIGHT: the New Haven row as today (16 pods, FULL, the belt, the cliffs, FIRST LIGHT) and its written layout.
   'last-light': {

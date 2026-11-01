@@ -1,13 +1,16 @@
 import type { GameState } from '@state/schema';
 import type { RunLineage } from '@systems/meta';
-import type { ShipDef } from '@data/ships';
+import { shipDefOf, type ShipDef } from '@data/ships';
+import { assembleRun1Arm, freshArm } from '@systems/map-generator';
+import { rollNoiseClouds } from '@systems/map-noise';
+import { FIRST_SLOT } from '@data/arm';
 import type { Hop, RouteStop, RunMapState, ShipSummary } from '@/types/map';
 import type { LinkNoise } from '@/types/threat';
 import { CLASSIC_FIVE, CLASSIC_HOPS, CLASSIC_FACTS, classicShip } from '@data/classic-five';
 import { layoutFor, shipColonists, POD_RACK_KEYS } from '@data/memory';
 import { WORLDS } from '@data/arm';
 import { RUN_START_YEAR, COLONISTS_PER_POD } from '@data/tuning';
-import { currentSlot, armShipAt, worldSlotOf } from '@systems/map-streams';
+import { currentSlot, armShipAt, worldSlotOf, noiseRng } from '@systems/map-streams';
 
 export {
   currentStop, currentSlot, armShipAt, armShipId, shipKeyOf, keyRng, shipRng, visitRng, hopRng, worldSlotOf, isEndSlot,
@@ -66,13 +69,22 @@ export function classicRunMap(seed: number, shipIndex: number, run: number): Run
   };
 }
 
-// The map a NEW RUN starts on (systems/run.ts startRun): the one place 3c swaps "run ≥ 2 = a fresh roll" for "the
-// archive's updated arm" (slice-3a-plan §2.10). The run number is the lineage's wave (1 on run 1).
-// TODO(3a-GEN): run 1 → the run-1 arm (map-generator assembleRun1Arm(seed), its noise clouds from
-// noiseRng(seed)); run ≥ 2 → freshArm(seed, run, RUN_START_YEAR) with ARES-(VI+run) at w0 and
-// finalShipName(run) at w19 (risk 4). Until then every run is the classic world, so the page plays the five.
+// The map a NEW RUN starts on (systems/run.ts startRun, state/instance.ts's first page): the one place 3c swaps "run ≥ 2 =
+// a fresh roll" for "the archive's updated arm" (slice-3a-plan §2.10). The run number is the lineage's wave (1 on run 1):
+// run 1 is run 1's arm (§3.14's structure, details rolled from the seed: map-generator assembleRun1Arm); a later run is a
+// fresh roll with ARES-(VI + run) at w0 and finalShipName(run) at w19 (interim, risk 4). Both start in RUN_START_YEAR
+// (3a has no launch gap: 3c's world update brings it), and the noise clouds roll fresh every run (noiseRng). The arm seed
+// is the run seed in 3a (3c: the archive's).
 export function createRunMap(lineage: Readonly<Pick<RunLineage, 'wave'>>, seed: number): RunMapState {
-  return classicRunMap(seed, 0, lineage.wave);
+  const run = lineage.wave;
+  if (!(Number.isInteger(run) && run >= 1)) throw new Error(`createRunMap: run ${run}`);
+  const armSeed = seed >>> 0;
+  return {
+    world: 'arm', run, armSeed, startYear: RUN_START_YEAR,
+    arm: run === 1 ? assembleRun1Arm(armSeed) : freshArm(armSeed, run, RUN_START_YEAR),
+    noise: rollNoiseClouds(noiseRng(armSeed)),
+    route: [{ slot: FIRST_SLOT, depth: 1, hop: null }], galaxyYear: RUN_START_YEAR, pendingExtra: null,
+  };
 }
 
 // --- Where the unit is -------------------------------------------------------------------------------------------------
@@ -107,8 +119,7 @@ export function mapAtFirstShip(map: Readonly<RunMapState>): RunMapState {
 // pure and memoized: Track GEN).
 export function shipDefAt(map: Readonly<RunMapState>, slot: number): ShipDef {
   if (map.world === 'classic') return classicShip(slot);
-  armShipAt(map, slot);
-  throw new Error('TODO(3a-GEN): shipDefAt on the arm (data/ships.ts shipDefOf)');
+  return shipDefOf(armShipAt(map, slot));
 }
 
 // What the desk, the PACKET, the strip and the RUN TALLY may read of the ship in `slot` (review follow-up B1): on the
