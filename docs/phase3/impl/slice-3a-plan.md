@@ -902,6 +902,71 @@ The independent review of `31c8a35` and `1a64f42` confirmed the hop math against
 - **3c:** the save needs a version field on the map (beside ARM_CONTENT_VERSION and MAP_GENERATOR_VERSION).
 - **Slice 7:** widen `Reservations.tracePlace` (today `null` only).
 
+## Deviations (Track GEN)
+
+Recorded by Track GEN (branch `gen-3a`). Each is a change from §2–§5 or the foundation notes, with its reason.
+
+1. **`ArmShip.arrivalDamage`** joins the stored rolls (types/map.ts): what SENSOR DAMAGE (Sensor ≤ 45) and ENGINE FAULT
+   (Thrust Ctrl 31, `ENGINE_FAULT_THRUST_INTEGRITY`) do, or an authored ship's written rule (HALCYON's Sensor 62 without the
+   label). shipDefOf then needs no authored table: importing run1-arm from data/ships.ts would close the cycle ships →
+   run1-arm → classic-five → ships.
+2. **Written rows on every run.** VESPER's arm landing is written whole (the classic centres 60/180/300 with 6 · 5 · 5):
+   its two lava arcs are placed against written bracket edges, so rolled centres would leave them beside nothing. ARES-n
+   (run ≥ 2) takes ARES-VII's written row (landing, `P P P _40` / `_64`, the scripted POD 02); the final ship of every run
+   takes New Haven's (LAST LIGHT's landing, layout and belt on IMPACT-B), with `FIRST LIGHT` only on LAST LIGHT itself
+   (01 §3.15: "each future end slot needs its own authored row"). omega0 is re-rolled only on generated ships.
+3. **The roller's vocabulary.** Terrain words stay within the four the GROUND TRACK draws (landing-hud.ts
+   TERRAIN_PATTERN): GENTLE → PLAINS or GRASSLAND, ROUGH → VOLCANIC, HARSH → OCEAN; no-go words CLIFFS / LAKE, LAVA,
+   REEF. A new word needs its pattern there first. No double windows (01's optional pair from layer 3) are rolled:
+   brackets are spread evenly round the rim with ±20° (`LZ_CENTRE_JITTER_DEG`). Arcs sit 30–140 km from a bracket edge.
+4. **A generated DEBRIS cloud's later racks are its own rack** (`laterRacks: [debrisRack]`), so the card's rack never
+   changes between runs of a waiting ship. The arm's KESTREL names rack B (its pods are all there).
+5. **Reservations** draw from arm-level streams `armRng(armSeed, run, attempt, name)` (`res-corrupted`, `res-left`,
+   `res-sleeper`, `unknown-events`, `fragments`, `res-names`, `debris-guarantee`); POOR site data is the ship key's `site`.
+   Never on the first, a final or an authored ship. The four ordinary departed residents are placed one in layer 2, two in
+   layers 3–7 (the two fragments' notes), one in 2–7. A fresh arm places one corrupted resident per band when a candidate
+   exists (02 §3.5's "at most 2"); run 1 keeps the table's.
+6. **layoutPods without a slot**: up to 7 pods per rack, B then C then D, the lead the last pod. With a slot, the 10-pod
+   FULL row differs from 01 §3.16's illustration (B 7, C `P P _2 S _1 P _37`, D `_64`); every count 3–max on every class
+   passes the 40-free and 24-tail budget (map/memory-classes).
+7. **`freshArm` refuses run 1** (run 1's arm is assembleRun1Arm's: an id collision would fool shipDefOf's cache, which
+   also guards with a fingerprint in dev). `freshArmAttempts` is exported for the statistics.
+8. **`startRun(store, seed, lineage, world = the store's)`**: a NEW RUN plays the world the last one played, so the
+   page's runs stay on the arm and the suites' (classic) NEW RUN stays classic with no edit. `__ap.newRun` forces the arm.
+9. **The page's first state** is built on the arm through a new `createInitialState({ map })` option (state/initial.ts,
+   state/instance.ts: small edits outside §5.4's list, the mechanical half of "switch the page's world").
+10. **The licence spot.** `installAddress` already finds the receiver's free run after REPAIR CHARGE on every class (the
+    unit's block is laid from rack E). When a TIGHT receiver is full (the block spilled into the tail), the file now goes
+    flush against the unit's block from below instead of at the far end of rack C.
+11. **Boot rhythm.** An arm boot can say 13 lines (sleep, receiver and ECC added); boot.ts extends `BOOT_LINE_AT_SEC`'s
+    rhythm past its last entry instead of reading `undefined`.
+12. **The ghost** (`ghostPlaceReached`, meta.ts): `ghostLineDue` takes an optional `map` (the archive suites ask with a
+    bare run: the classic rule). LAST LIGHT and `FINAL_SHIP_NAMES` read as `the flagship` in the ghost's line.
+13. **Interim licences, the "issued at the next ship's start" rule on the arm**: MOVE is due at the start of any ship past
+    depth 3 or after an earlier DEBRIS ship of the route; COPY whenever HOLLOW is aboard (its first ship, or the final ship
+    if it never boarded before); SWAP at the start of a ship after an ENGINE FAULT ship.
+14. **Noise clouds** are placed along the centre lane's polyline (SOL, w0, w2, w5, … w19) by SOL distance, with whole-LY
+    centres and radii. Measured (200 arms): reachable hops CLEAN 24%, LOW 36%, NOISY 24%, SEVERE 16%; a route sums 6 noise
+    (median, no clean route); the hops into the final ship CLEAN 34%, LOW 44%, NOISY 17%, SEVERE 5%; no arm with every final
+    beam SEVERE. That is noisier than slice 2's two-in-five; a lever if the playtest finds seeds too common: radius 12–18 →
+    8–12.
+15. **Not renamed**: `fixedShipFacts` stays (the suites import it); `classicFacts` would be cosmetic.
+16. **ShipDef ids on the arm**: an authored ship keeps its id (`kestrel`), every other its name's slug (`good-hope`);
+    `freshUnitRacks`' classic test compares id and world (the arm's KESTREL is `kestrel` too).
+17. **Suites outside the new ones**: map/world-slots (the "shipDefAt throws" stub check became "built and different across
+    two seeds"), opening/calm-ships and wp11/full-run (the ring keys: VESPER finds 04–06, LAST LIGHT 07–11; a ship flown
+    alone finds every ring inside its distance).
+
+**Patches requested from DESK** (kept out of this diff):
+- script.ts `bootLine` 'overflow': on the arm, `state.run.map.world === 'arm' ? mapOverflowLineText(state) :
+  chargeOverflowLine(arrival.chargeOverflowLost)` (map-boot.ts; `> CHARGE OVERFLOW · 26 LOST · NO ROOM ON WAYFARER`).
+- script.ts `BOOT_LINE_MAX` 10 → 13 (sleep, receiver and ECC lines; boot.ts already copes).
+- transmit.ts `transmitModel`: `arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, pickCharge(plan.pick),
+  plan.hop.chargeFloor)`, so the PACKET's charge preview drops the floor on a TIGHT ship as the arrival does.
+- Optional: the charge line on a TIGHT 0-charge arrival, `> REPAIR CHARGE 0 · NO ROOM ON <SHIP>` (01 §3.16).
+- The `flagship-lost` words (script.ts) as FINAL SHIP LOST (02 §3.6), and BurnResult's classic wording now that the page is
+  on the arm (the foundation's note).
+
 ## Deviations (Track DESK)
 
 Recorded by Track DESK (branch `desk-3a`, from `1390b93`). Each is a change from §2–§5 above, or a reading of them, with

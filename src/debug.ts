@@ -92,8 +92,14 @@ import { nextZoneEntry, zoneInside } from '@systems/pace';
 import type { Zone, ZoneHit } from '@/types/zone';
 import { offerDealNow, dealEffectNow } from '@systems/hollow-deal';
 import { lastSkipPlanChange } from '@systems/ghost-thrust';
-import { visitRng, currentShip, classicRunMap } from '@systems/map-run';
-import { hopBetween } from '@systems/map-hop';
+import { visitRng, currentShip, classicRunMap, shipDefAt, currentSlot, hopRng, createRunMap } from '@systems/map-run';
+import { hopBetween, reachable, roomFit } from '@systems/map-hop';
+import { mapFacts, nominalRouteThreat } from '@systems/map-facts';
+import { layerOf } from '@systems/map-geometry';
+import { FIRST_SLOT } from '@data/arm';
+import { packedFiles, arrivalCharge } from '@systems/carry';
+import { resetWorldForShip } from '@systems/run';
+import { createRunState } from '@state/initial';
 import type { RunMapState, Hop } from '@/types/map';
 
 // Debug hooks on window.__ap, installed ONLY with ?debug in the URL. Screenshot scripts and
@@ -314,11 +320,13 @@ const HOLLOW_DEMO: HollowDef = {
 function hollowDemo(store: Store<GameState>): void {
   const ship = currentShip(store.getState());
   if (!ship.memory.aiFiles) throw new Error('__ap.hollowDemo: only on a ship that meets a fresh unit (ship 1); HALCYON is __ap.ship(1)');
+  // The arm's ARES-n is COMPACT (no rack D): the demo's racks are the ship's class's.
+  const podRacks = ship.memoryClass === 'FULL' ? HOLLOW_DEMO_RACKS : { B: HOLLOW_DEMO_RACKS.B, C: HOLLOW_DEMO_RACKS.C };
   const demo: ShipDef = {
     ...ship,
     memory: {
       ...ship.memory,
-      podRacks: HOLLOW_DEMO_RACKS,
+      podRacks,
       drivers: { ...ship.memory.drivers, lead: HOLLOW_DEMO_LEAD, hurt: [], firstRun: null },
     },
   };
@@ -402,6 +410,95 @@ function debugJump(store: Store<GameState>, index: number, threat: ShipThreat = 
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0,
     chargeOverflowLost: 0, scripted, eccCorrected: 0, seeds: layout.seeds, boarded: boardedBy(threat),
   }, threat);
+}
+
+// --- The galaxy map's helpers (slice 3a, Track GEN) ----------------------------------------------------------------------
+
+// The unit packed for `hop` and laid out on the ship it reaches, as debugJump does for a classic ship: the current unit's
+// files with the charge the link lets cross (no transit hits, no stars, no card), the beam's seeds as transmitNext rolls
+// them, and the ship's own arrival damage. Files over the destination's room throw (the PACKET would hold the send).
+function debugArrive(store: Store<GameState>, hop: Hop, threat: ShipThreat): void {
+  abortAll();
+  const state = store.getState();
+  const map = state.run.map;
+  const ship = shipDefAt(map, hop.to);
+  const packet = packUnit(state.memory, hop.linkBlocks, []);
+  const fit = roomFit({ files: packedFiles(packet), charge: packet.chargeHeld }, hop);
+  if (fit.over > 0) throw new Error(`__ap: the unit's ${fit.files} blocks of files and a floor of ${fit.floor} are ${fit.over} over ${ship.name}'s room (${fit.room})`);
+  packet.seeds = rollBeamSeeds(packet, beamSourceOf(threat), playsTutorial(state.run), hopRng(state.run, hop.from, hop.to, 'beam-seeds'));
+  const charge = arrivalCharge(packet.chargeCarried, 0, 0, hop.chargeFloor);
+  const layout = layoutCarried(packet, charge.blocks, ship, threat, hollowLabel(state.run));
+  const scripted = arrivalDamage(layout.racks.segs, ship.arrivalDamage);
+  store.update((draft) => { draft.run.transit = null; });
+  startShip(store, hop.to, layout.racks, {
+    hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: charge.floorAdded,
+    chargeOverflowLost: layout.overflowLost, scripted, eccCorrected: 0, seeds: layout.seeds, boarded: boardedBy(threat),
+  }, threat, hop);
+}
+
+function armMapOf(store: Store<GameState>, what: string): RunMapState {
+  const map = store.getState().run.map;
+  if (map.world !== 'arm') throw new Error(`__ap.${what}: the run is on the classic world (__ap.ship's); start an arm run with __ap.newRun()`);
+  return map;
+}
+
+// __ap.slot(s): the ship in slot `s`, as a beam from the current ship would bring the unit there (the hop's link and
+// room, the ladder's verdict from the map's facts and the run's threat, no transit hits), reachable or not (a quick look
+// at any ship further out). The route gains the stop.
+function debugSlot(store: Store<GameState>, slot: number): Hop {
+  const map = armMapOf(store, 'slot');
+  const state = store.getState();
+  const from = currentSlot(state.run);
+  if (layerOf(slot) <= layerOf(from)) throw new Error(`__ap.slot(${slot}): not further out than slot ${from}`);
+  const hop = hopBetween(map, from, slot);
+  const facts = mapFacts(map, from, slot, state.run.shipIndex + 2);
+  const threat = planThreat(threatInputFor(state.run.threat, facts, state.run.stats.deal !== null));
+  debugArrive(store, hop, threat);
+  return hop;
+}
+
+// __ap.route([s0, …, sn]): the run on the route's last ship, flown headless: the route's stops and years, the threat as the
+// nominal route left it (TRACE 0, no DEAL: map-facts nominalRouteThreat), then the unit beamed into the last ship by its
+// hop. The route starts at the first ship and every hop must be reachable; the unit is the current one (from ship 1: the
+// fresh unit). `__ap.route([0, 2, 5, 11, 15])` is CORMORANT with HOLLOW's forced boarding on run 1.
+function debugRoute(store: Store<GameState>, slots: readonly number[]): Hop {
+  const map = armMapOf(store, 'route');
+  if (slots.length < 2 || slots[0] !== FIRST_SLOT) throw new Error(`__ap.route: a route from slot ${FIRST_SLOT} with at least two ships (got [${slots.join(', ')}])`);
+  slots.forEach((slot, index) => {
+    if (index > 0 && !reachable(map, slots[index - 1]!, slot)) throw new Error(`__ap.route: slot ${slot} is not reachable from slot ${slots[index - 1]}`);
+  });
+  const before = slots.slice(0, -1);
+  let route = map.route.slice(0, 1);
+  if (route[0]?.slot !== FIRST_SLOT) throw new Error('__ap.route: the run\'s route does not start at the first ship');
+  for (let i = 1; i < before.length; i++) {
+    const hop = hopBetween(map, before[i - 1]!, before[i]!);
+    route = [...route, { slot: before[i]!, depth: i + 1, hop }];
+  }
+  const prior = nominalRouteThreat(map, before);
+  const last = slots[slots.length - 1]!;
+  const prev = before[before.length - 1]!;
+  store.update((draft) => {
+    draft.run.map.route = structuredClone(route);
+    draft.run.map.galaxyYear = route.at(-1)!.hop?.approachYear ?? draft.run.map.startYear;
+    draft.run.shipIndex = route.length - 1;
+    draft.run.threat = prior;
+  });
+  const hop = hopBetween(store.getState().run.map, prev, last);
+  const facts = mapFacts(map, prev, last, slots.length);
+  debugArrive(store, hop, planThreat(threatInputFor(prior, facts, false)));
+  return hop;
+}
+
+// __ap.runNumber(n): a NEW RUN now, as run `n` of the arm (run 1: run 1's arm; later: a fresh roll with ARES-(VI + n) and
+// that run's final ship), on its title card. The archive's lineage is kept (the unit number); only the map's run differs.
+function debugRunNumber(store: Store<GameState>, run: number): void {
+  if (!(Number.isInteger(run) && run >= 1)) throw new Error(`__ap.runNumber(${run}): a run number is a whole number ≥ 1`);
+  const lineage = archiveLineage();
+  const seed = newRunSeed();
+  resetWorldForShip(store, {
+    phase: 'title', run: { ...createRunState(seed, 'title', 0, lineage), map: createRunMap({ wave: run }, seed) }, carried: null,
+    threat: nominalShipThreat(0), freshLog: true, done: [],
+  });
 }
 
 // __ap.board(): HOLLOW boards on the beam into the ship being flown, now: the ship is entered again through its boot (the
@@ -578,9 +675,9 @@ export function mountDebug(store: Store<GameState>): void {
     },
     hollowDemo: () => hollowDemo(store),
     ship: (index) => debugJump(store, index),
-    slot: (slot) => { throw new Error(`TODO(3a-GEN): __ap.slot(${slot})`); },
-    route: (slots) => { throw new Error(`TODO(3a-GEN): __ap.route([${slots.join(', ')}])`); },
-    runNumber: (run) => { throw new Error(`TODO(3a-GEN): __ap.runNumber(${run})`); },
+    slot: (slot) => { debugSlot(store, slot); },
+    route: (slots) => { debugRoute(store, slots); },
+    runNumber: (run) => debugRunNumber(store, run),
     arm: () => structuredClone(store.getState().run.map) as RunMapState,
     hop: (from, to) => hopBetween(store.getState().run.map, from, to),
     course: (slot) => setCourse(store, slot),
@@ -593,7 +690,7 @@ export function mountDebug(store: Store<GameState>): void {
     transmit: () => transmitNext(store),
     beamOut: () => startBeamOut(store),
     cancelBeamOut: () => cancelBeamOut(store),
-    newRun: (seed) => startRun(store, seed ?? newRunSeed(), archiveLineage()),
+    newRun: (seed) => startRun(store, seed ?? newRunSeed(), archiveLineage(), 'arm'),
     movePreview: (name, addr) => {
       const state = store.getState();
       const source = state.memory.find((seg) => seg.name.toLowerCase() === name.toLowerCase() || isPodName(seg, name.toLowerCase()));

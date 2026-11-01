@@ -1792,6 +1792,28 @@ export const POOR_SITE_ODDS_LAYER5 = 1 / 3;
 export const POOR_SITE_ODDS_LATE = 1 / 2;
 export const SLEEPER_CHANCE = 0.45;
 export const HIDDEN_RESIDENT_ODDS = 1 / 2;
+// --- 3a GEN, Track GEN's additions ---
+// ENGINE FAULT (02 §3.5): Thrust Ctrl arrives at 31% (VESPER's, WP10/WP12: the ghost thrust's rate and strength in
+// GHOST_BY_BAND were tuned against a failing controller at this number).
+export const ENGINE_FAULT_THRUST_INTEGRITY = 31;
+// The pod-rack rule (01 §3.16): a rack takes at most 7 drivers (56 of 64 blocks), so rack B keeps a WALL's worth of free
+// blocks and two drivers are left to flank the root slot in rack C. The slot reads `P _2 S _1 P`: the root sits between a
+// driver at GAP 2 and the lead family's driver at GAP 1, which is bitten first (04's L2 geometry, LAST LIGHT's POD 11/12).
+export const POD_RACK_MAX_DRIVERS = 7;
+export const ROOT_GAP_BEFORE_BLOCKS = 2;
+export const ROOT_GAP_AFTER_BLOCKS = 1;
+// The landing roller (01 §3.15): brackets are spread evenly round the rim from a rolled start, each nudged at most this
+// many degrees (4 LZs are 90° apart, so ±20° keeps them far beyond LZ_MIN_GAP_DEG and their windows well apart).
+export const LZ_CENTRE_JITTER_DEG = 20;
+// A no-go arc (01 §3.6): 3–8° wide, its near edge 30–140 km from a bracket's edge (within NO_GO_NEAR_EDGE_KM, never
+// touching it), so a wide or late dot is a real risk and a healthy sure launch is not.
+export const NO_GO_WIDTH_MIN_DEG = 3;
+export const NO_GO_WIDTH_MAX_DEG = 8;
+export const NO_GO_EDGE_GAP_MIN_KM = 30;
+export const NO_GO_EDGE_GAP_MAX_KM = 140;
+// A noise cloud's centre is drawn again at most this many times before the roll throws (its spacing rule is loose: four
+// centres along 120 LY of arm, 20 LY apart, almost always place in a few draws).
+export const NOISE_CLOUD_MAX_DRAWS = 200;
 
 // --- Phase 3 slice 3a DESK (owned by Track DESK): the DESK, the chart, the card, the PACKET's new rows -----------------
 // (docs/phase3/02-map.md §3.10, §4; 01-landing §3.16's room bar). Foundation F2 opens the block.

@@ -159,8 +159,15 @@ function lineShiftSec(): number {
   return ghost === null ? 0 : ghost.typedAtSec + BOOT_AFTER_GHOST_SEC - BOOT_LINE_AT_SEC[0]!;
 }
 
+// A boot longer than BOOT_LINE_AT_SEC (slice 3a's sleep, receiver and ECC lines can take an arm boot to 13) keeps the same
+// rhythm: each further line one step after the last listed one.
 function lineAtSec(index: number): number {
-  return BOOT_LINE_AT_SEC[index]! + lineShiftSec();
+  if (!(Number.isInteger(index) && index >= 0)) throw new Error(`boot: line ${index}`);
+  const listed = BOOT_LINE_AT_SEC[index];
+  if (listed !== undefined) return listed + lineShiftSec();
+  const last = BOOT_LINE_AT_SEC.length - 1;
+  const step = BOOT_LINE_AT_SEC[last]! - BOOT_LINE_AT_SEC[last - 1]!;
+  return BOOT_LINE_AT_SEC[last]! + (index - last) * step + lineShiftSec();
 }
 
 // The ghost's line at BOOT_GHOST_AT_SEC (at once, when the boot is finished early). The run notes it has spoken, so no

@@ -81,6 +81,9 @@ export interface ArmShip {
   modifiers: ModifierId[];
   omega0: number;
   debrisRack: PodRackName | null;   // the rack a DEBRIS modifier's cloud names (02 §3.5: a rack the ship has), else null
+  // The ship's own arrival damage (§6.9): what its modifiers do (SENSOR DAMAGE, ENGINE FAULT), or an authored ship's
+  // written rule (HALCYON's Sensor 62 has the rule without the label). Stored so shipDefOf needs no authored table.
+  arrivalDamage: { role: 'sensor' | 'thrust-ctrl'; maxIntegrity: number }[];
   landing: ShipLandingDef;
   podRacks: Partial<Record<PodRackName, string>>;
   lead: number;

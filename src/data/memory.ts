@@ -507,6 +507,11 @@ export function shipColonists(ship: ShipDef): number {
 // It walks the racks the ship has, so slice 3's smaller classes need no change here.
 export function validatePodRacks(ship: ShipDef): void {
   const fail = failFor(ship);
+  // The class's own pod racks, all of them and no other (slice 3a step 2: rack D only on a FULL ship, so a COMPACT or
+  // TIGHT layout naming D, or leaving C out, is a layout this memory can't build).
+  const layout = layoutFor(ship.memoryClass);
+  const written = POD_RACK_KEYS.filter((rack) => ship.memory.podRacks[rack] !== undefined);
+  if (written.join() !== layout.podRacks.join()) fail(`pod racks ${written.join('') || 'none'} on a ${layout.cls} ship (its pod racks are ${layout.podRacks.join('')})`);
   let free = 0;
   for (const { tokens } of podRackLayouts(ship)) {
     tokens.forEach((token, index) => {

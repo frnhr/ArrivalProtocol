@@ -58,7 +58,8 @@ import { LINES, transitEccLine, scriptedDamageLine } from '@data/script';
 import { LOG_TEXT } from '@data/log-text';
 import { eccSeedsLine } from '@data/threat-text';
 import { STAR_CHARGE_BONUS, BAND_OK_MIN } from '@data/tuning';
-import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
+import { classicShip, CLASSIC_HOPS, CLASSIC_WORLD_SLOTS } from '@data/classic-five';
+import { solLy } from '@systems/map-geometry';
 import { MEMORY_LAYOUTS } from '@data/memory';
 
 const FINAL_LANDING_SEC = Number(process.env.FINAL_LANDING_SEC ?? 48);
@@ -148,9 +149,13 @@ function bootChecked(): void {
       lines.includes(transitEccLine(arrival.hits)) && lines.some((text) => text.startsWith('> +')),
       `${ship.name}: ${lines.slice(0, 6).join(' | ')}`);
   }
-  const keys = logEntriesAtBoot(index, ship.final);
+  // Slice 3a: the rings (05 §3.2): this boot finds the rings between the last ship's world and this one's (the classic five
+  // sit at 8, 29, 55, 107 and 180 LY from SOL), and on the final ship 10–11.
+  const solOf = (i: number): number => solLy(CLASSIC_WORLD_SLOTS[i]!);
+  const before = index === 0 ? [] : logEntriesAtBoot(solOf(index - 1), false);
+  const keys = logEntriesAtBoot(solOf(index), ship.final).filter((entry) => !before.includes(entry));
   if (keys.length > 0) {
-    expect('every boot past ship 1: `> 046.log · KEY FOUND`, and the run finds its entries (02, 03, 04, 10–11)',
+    expect('every boot past ship 1: `> 046.log · KEY FOUND`, and the run finds its entries (02, 03, 04–06, 07–11)',
       lines.includes(LOG_TEXT.keyFound(keys)) && keys.every((entry) => state().run.log.found.includes(entry)),
       `${ship.name}: ${JSON.stringify(state().run.log.found)}`);
   }

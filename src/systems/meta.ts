@@ -4,6 +4,9 @@ import { runScore, runLanded } from '@systems/run-score';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { hollowUnitName, GHOST_LINE } from '@data/hollow-text';
 import { CLASSIC_FIVE } from '@data/classic-five';
+import { AUTHORED_SHIP_NAMES, FINAL_SHIP_NAMES } from '@data/ship-names';
+import { currentStop, isEndSlot } from '@systems/map-streams';
+import { layerOf } from '@systems/map-geometry';
 import {
   META_STORAGE_KEY, META_VERSION, FIRST_UNIT_NUMBER, HOLLOW_NAME_MAX_UNITS,
 } from '@data/tuning';
@@ -375,10 +378,11 @@ export function playsTutorial(run: Readonly<Pick<RunState, 'tutorial'>>): boolea
 // How HOLLOW names a ship it lost (the flagship-lost ghost line): LAST LIGHT is `the flagship`. Only a flagship's loss
 // ends a run that way now (systems/run.ts lossPlan); a record from before LAST LIGHT existed named its last ship, and
 // is read as HOLLOW would say any other ship's name, lowercase.
-// TODO(3a-GEN): the arm's final ships have their own names (FINAL_NAMES); the lookup reads the classic five until then.
+// The arm's final ships have their own names (LAST LIGHT on run 1, then data/ship-names.ts FINAL_SHIP_NAMES by run).
 function lostShipWords(shipName: string): string {
   const ship = CLASSIC_FIVE.find((candidate) => candidate.name === shipName);
-  return ship?.final === true ? 'the flagship' : shipName.toLowerCase();
+  const finalName = shipName === AUTHORED_SHIP_NAMES[AUTHORED_SHIP_NAMES.length - 1] || FINAL_SHIP_NAMES.includes(shipName);
+  return ship?.final === true || finalName ? 'the flagship' : shipName.toLowerCase();
 }
 
 // The ghost's line for a unit `us` whose last unit was `lastUnit` (§4.5's table), or null: the first run has
@@ -402,10 +406,30 @@ export function ghostShipIndex(lastUnit: Readonly<Pick<LastUnit, 'shipName'>>, s
   return Math.max(1, at < 0 ? shipNames.length - 1 : at);
 }
 
+// Is this ship at or past where the ghost speaks? On the classic world (or a run with no map: the archive suites), the
+// fixed five's index (ghostShipIndex). On the arm, by layer (slice-3a-plan §2.9, interim until 3c's trail and grey cross):
+// the last unit's ship (its shipName) is looked up on the current arm, and the ghost speaks at the first boot whose ship's
+// layer is at or past that ship's layer, never at ship 1; a name the arm does not hold (a fresh roll, an older fleet)
+// speaks at the final ship.
+export function ghostPlaceReached(
+  run: Readonly<Pick<RunState, 'lastUnit' | 'shipIndex'> & Partial<Pick<RunState, 'map'>>>, lastUnit: Readonly<Pick<LastUnit, 'shipName'>>,
+): boolean {
+  const map = run.map;
+  if (map === undefined || map.world === 'classic') return run.shipIndex >= ghostShipIndex(lastUnit);
+  if (run.shipIndex === 0) return false;
+  const slot = currentStop({ map, shipIndex: run.shipIndex }).slot;
+  const lostOn = map.arm.find((ship) => ship.name === lastUnit.shipName);
+  if (lostOn === undefined) return isEndSlot(map, slot);
+  return layerOf(slot) >= layerOf(lostOn.slot);
+}
+
 // The ghost's line on this run's current boot, or null: the run has a ghost (ghostLine), it has not spoken yet this run,
-// and this ship is at or past where it speaks (ghostShipIndex).
-export function ghostLineDue(run: Readonly<Pick<RunState, 'unitNumber' | 'lastUnit' | 'shipIndex' | 'ghostSpoken'>>): string | null {
-  if (run.ghostSpoken || run.lastUnit === null || run.shipIndex < ghostShipIndex(run.lastUnit)) return null;
+// and this ship is at or past where it speaks (ghostPlaceReached). `map` is optional so the archive's own suites can ask
+// with a bare run (the classic rule).
+export function ghostLineDue(
+  run: Readonly<Pick<RunState, 'unitNumber' | 'lastUnit' | 'shipIndex' | 'ghostSpoken'> & Partial<Pick<RunState, 'map'>>>,
+): string | null {
+  if (run.ghostSpoken || run.lastUnit === null || !ghostPlaceReached(run, run.lastUnit)) return null;
   return ghostLine(run.unitNumber, run.lastUnit);
 }
 

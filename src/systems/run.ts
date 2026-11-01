@@ -4,7 +4,7 @@ import type {
 } from '@state/schema';
 import type { CarriedRacks } from '@data/memory';
 import type { ShipThreat, BeamSeedSource } from '@/types/threat';
-import type { Hop, PendingExtra } from '@/types/map';
+import type { Hop, PendingExtra, RunMapState } from '@/types/map';
 import { onGameTick, onPostTick } from '@systems/clock';
 import { onWorldReset, resetWorld } from '@systems/reset';
 import { on, emit, NO_PAYLOAD } from '@systems/events';
@@ -29,9 +29,9 @@ import { createRunState, createShipSlices, createUiState, createRunStats } from 
 import { planThreat, threatInputFor, applyThreat, nominalShipThreat, nominalRunThreat } from '@systems/threat-plan';
 import { inOrbitOutcome, landingResult } from '@systems/landing-rules';
 import {
-  currentShip, currentSlot, shipDefAt, mapAtShip, mapAtFirstShip, hopRng, createRunMap,
+  currentShip, currentSlot, shipDefAt, mapAtShip, mapAtFirstShip, hopRng, createRunMap, classicRunMap,
 } from '@systems/map-run';
-import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
+import { hopBetween, reachable, reachableFrom, hitsLanding, roomFit } from '@systems/map-hop';
 import { mapFacts } from '@systems/map-facts';
 import { BEATS, LINES, perShipBeatIds } from '@data/script';
 import { TOOL_REFUSAL } from '@data/tool-text';
@@ -204,9 +204,13 @@ function doneForNextShip(state: Readonly<GameState>): string[] {
 // unit is (systems/meta.ts: the page's archive after the run that just ended, archiveLineage; a headless
 // suite passes FIRST_RUN_LINEAGE or a built one). Always explicit: a NEW RUN that quietly forgot the archive
 // would be run 1 again with nobody noticing.
-export function startRun(store: Store<GameState>, seed: number, lineage: Readonly<RunLineage>): void {
+// The NEW RUN plays the world the last run played (`world`, default: the store's): the page's runs are on the arm (its
+// first state is, state/instance.ts), so every NEW RUN rolls the next run's arm (systems/map-run.ts createRunMap); the
+// suites' worlds start classic (createInitialState), so their NEW RUN flies the classic five again, as it always did.
+export function startRun(store: Store<GameState>, seed: number, lineage: Readonly<RunLineage>, world: RunMapState['world'] = store.getState().run.map.world): void {
+  const map = world === 'arm' ? createRunMap(lineage, seed) : classicRunMap(seed, 0, lineage.wave);
   resetWorldForShip(store, {
-    phase: 'title', run: { ...createRunState(seed, 'title', 0, lineage), map: createRunMap(lineage, seed) }, carried: null,
+    phase: 'title', run: { ...createRunState(seed, 'title', 0, lineage), map }, carried: null,
     threat: nominalShipThreat(0), freshLog: true, done: [],
   });
 }
@@ -385,6 +389,11 @@ export function transmitNext(store: Store<GameState>): void {
   // transit hits): they ride free, and land behind their targets at the boot. From the verdict, never the map's facts again.
   packet.seeds = rollBeamSeeds(packet, beamSourceOf(plan.threat), playsTutorial(state.run), hopRng(state.run, fromSlot, plan.toSlot, 'beam-seeds'));
   const files = packedFiles(packet);
+  // The PACKET's TRANSMIT ▸ waits while the files and the floor are over the destination's room (01 §3.16; the review
+  // follow-up M2): a send that gets here over it is a bug, not a squeeze (layoutCarried would throw on the files anyway,
+  // later and less clearly).
+  const fit = roomFit({ files, charge: packet.chargeHeld }, plan.hop);
+  if (fit.over > 0) throw new Error(`transmitNext: ${fit.files} blocks of files and a floor of ${fit.floor} are ${fit.over} over ${ship.name}'s room of ${fit.room}`);
   const hits: TransitHit[] = [];
   if (plan.coreHit > 0 || plan.coreReset) {
     const toll = emergencyCoreToll(files, plan.coreHit, plan.coreReset);
@@ -395,7 +404,7 @@ export function transmitNext(store: Store<GameState>): void {
   const landing = hitsLanding(plan.hop, plan.extraHits);
   hits.push(...rollTransitHits(files, landing, hopRng(state.run, fromSlot, plan.toSlot, 'transit')));
   const cardCharge = pickCharge(plan.pick);
-  const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, cardCharge);
+  const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, cardCharge, plan.hop.chargeFloor);
   const layout = layoutCarried(packet, charge.blocks, ship, plan.threat, hollowLabel(state.run));
   const scripted = arrivalDamage(layout.racks.segs, ship.arrivalDamage);
   const arrival: ArrivalReport = {
