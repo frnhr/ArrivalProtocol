@@ -185,8 +185,10 @@ function toTransmit(store: Store<GameState>): void {
 
 {
   const store = world(VESPER);
-  store.update((draft) => { draft.run.hollowNamed = true; draft.run.threat.lastTally = { left: 2, traceBefore: 1, traceAfter: 1, fed: true }; });
+  store.update((draft) => { draft.run.hollowNamed = true; });
   toTransmit(store);
+  // Track THREAT's endShip writes the ship's own tally (none left here), so the fed blocks are set after it.
+  store.update((draft) => { draft.run.threat.lastTally = { left: 2, traceBefore: 1, traceAfter: 1, fed: true }; });
   const model = transmitModel(store.getState());
   const owner = model.uninvited?.owner ?? '';
   check('VESPER → LAST LIGHT: HOLLOW rides at the FINALE\'s 16, named, not boarding (already aboard)', model.uninvited?.blocks === 16
