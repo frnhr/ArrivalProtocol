@@ -24,7 +24,7 @@ import { driversInMemory } from '@state/selectors';
 import { getShip, SHIPS } from '@data/ships';
 import { DRIVER_RULES } from '@data/script';
 import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, MEMORY_TOTAL_BLOCKS, lastPodRackTrailingFree } from '@data/memory';
-import { UNIT_TAIL_BLOCKS } from '@data/tuning';
+import { UNIT_TAIL_BLOCKS, BAND_DEGRADED_MIN } from '@data/tuning';
 import type { GameState, ShipOutcome } from '@state/schema';
 import type { HollowSegment, Segment } from '@/types/segment';
 import { nominalShipThreat } from '@systems/threat-plan';
@@ -61,6 +61,9 @@ function fates(): string {
 // --- Every ship, by the strip --------------------------------------------------------------------------------------------
 for (let index = 0; index < SHIPS.length; index++) {
   boardShip(index);
+  // The drivers that arrive failing (ARES-VII's POD 02 at 44 on run 1; from layer 4 one rolled at 30–45) land hard if
+  // left unrepaired; the degraded ones (55–79) land soft.
+  const failing = new Set(driversInMemory(state()).filter((driver) => driver.integrity < BAND_DEGRADED_MIN).map((driver) => driver.pod));
   lockOn(h);
   const name = state().level.shipName;
   const result = followLanding(h, { maxWall: 600 });
@@ -72,14 +75,13 @@ for (let index = 0; index < SHIPS.length; index++) {
   const missed = pods.filter((record) => record.fate.kind === 'down' && record.fate.touchdown.lz === null);
   const allDown = pods.every((record) => record.fate.kind === 'down');
   const wideSaid = result.texts.some((text) => text.includes('WIDE DROP'));
-  // The hurt drivers (ARES-VII's POD 02 at 44 on run 1) were left unrepaired: they land hard, every other pod soft.
-  const hurt = new Set(state().landing.hurt);
+  // The failing drivers were left unrepaired: they land hard, every other pod soft.
   const touchOk = pods.every((record) => record.fate.kind === 'down'
-    && record.fate.touchdown.touch === (hurt.has(record.pod) ? 'hard' : 'soft'));
+    && record.fate.touchdown.touch === (failing.has(record.pod) ? 'hard' : 'soft'));
   const tally = onTargetTally(state());
   check(`${name}: landed by the strip to the LANDING REPORT, every pod down, a miss only after WIDE DROP (${missed.length} missed)`,
     state().run.phase === 'report' && allDown && touchOk && (missed.length === 0 || wideSaid) && missed.length <= pods.length / 4
-    && !(tally.earned && hurt.size > 0), `${state().run.phase} · ${fates()}`);
+    && !(tally.earned && failing.size > 0), `${state().run.phase} · ${fates()}`);
   check(`${name}: the strip never said IMPACT, scatter or deorbit`, !result.texts.some((text) => /impact|scatter|deorbit/i.test(text)));
   const lzCount = state().landing.lzs.length;
   check(`${name}: about one window per LZ (${result.windows} for ${lzCount})`, result.windows >= lzCount && result.windows <= lzCount + 2,
