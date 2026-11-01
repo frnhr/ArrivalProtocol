@@ -1,3 +1,6 @@
+// Phase 3 slice 2: ARES-VII is calm (no scripted bite to cure before the landing); ship 1's report opens the LOG READER
+// over TRANSMIT as a full-screen sheet, closed by a tap on CLOSE; KESTREL's beam seed shows the TRACE meter, which must
+// fit the MIND header.
 // Slice 1a: the landing on a phone (01-landing §4): at ORBIT LOCK the GROUND TRACK takes the NAV PLOT's readout row and
 // the POD BAY's LAUNCH (#podLaunchBtn) rides in the phone bar in place of BURN and the presets; a tap on it goes through
 // [L]'s one launch path (its confirm in the pill, on screen); then the pods land at once (__ap.landAll) and the LANDING
@@ -324,11 +327,9 @@ if (look === 'blocked') {
 }
 
 // --- The run's screens: the LANDING REPORT, TRANSMIT ----------------------------------------------------------------
+// Slice 2: ARES-VII is calm (no scripted bite to cure first): every pod lands at once.
 await waitFor(() => {
   const ap = window.__ap;
-  // POD 01's driver is the scripted bite's: cured (as the kid's REPAIR would), so all three pods launch.
-  const pod1 = ap.store.getState().memory.find((seg) => seg.type === 'driver' && seg.pod === 1);
-  if (pod1?.infected) ap.cure('POD 01');
   if (ap.store.getState().run.phase === 'landing' && ap.store.getState().landing.ended === null) ap.landAll();
   return ap.store.getState().run.phase === 'report';
 }, 40000, 400);
@@ -348,6 +349,32 @@ for (let i = 0; i < 4 && (await st(() => document.getElementById('transmitScreen
   await waitFor(() => !document.getElementById('transmitScreen').hidden, 3000);
 }
 check('CONTINUE (tapped) brings up TRANSMIT', await st(() => !document.getElementById('transmitScreen').hidden));
+
+// --- Slice 2: the LOG READER (run 1, entry 01 after ship 1's report) as a full-screen sheet; CLOSE takes the tap ---------
+const readerUp = await waitFor(() => !document.getElementById('logReader').hidden, 4000, 50);
+await page.waitForTimeout(1200);
+const sheet = await st(() => {
+  const box = (el) => { const r = el.getBoundingClientRect(); return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom) }; };
+  const card = document.getElementById('lgCard');
+  const rows = [...document.querySelectorAll('#lgRows .lg-row')];
+  return {
+    card: box(card), cardOverflow: card.scrollWidth > card.clientWidth + 1,
+    rowsOut: rows.filter((row) => { const r = row.getBoundingClientRect(); return r.width > 0 && (r.left < -1 || r.right > innerWidth + 1 || row.scrollWidth > row.clientWidth + 1); }).length,
+    rows: rows.length, open: document.querySelector('#lgRows .lg-row.open')?.dataset.entry ?? null, title: document.getElementById('lgTitle').innerText,
+  };
+});
+check('the LOG READER opens over TRANSMIT as a full-screen sheet (the card fills the screen, nothing spills sideways)', readerUp && sheet.title === '046.log'
+  && sheet.open === '1' && sheet.rows === 12 && sheet.card.left <= 0 && sheet.card.top <= 0 && Math.abs(sheet.card.right - vw) <= 1 && Math.abs(sheet.card.bottom - vh) <= 1
+  && !sheet.cardOverflow && sheet.rowsOut === 0, JSON.stringify(sheet));
+await overflow('LOG READER');
+await page.locator('#lgClose').scrollIntoViewIfNeeded({ timeout: 5000 });
+await onScreen('LOG READER', '#lgClose');
+const closeText = await visibleText('#lgClose');
+check('…its CLOSE button reads as a word', /^CLOSE/.test(closeText ?? ''), closeText);
+await shot('10b-log-reader');
+await page.tap('#lgClose');
+check('…a tap on CLOSE shuts it, TRANSMIT under it', await waitFor(() => document.getElementById('logReader').hidden, 3000)
+  && await st(() => !document.getElementById('transmitScreen').hidden && window.__ap.store.getState().run.phase === 'transmit'));
 await page.waitForTimeout(1500);
 await shot('11-transmit');
 await overflow('TRANSMIT');
@@ -429,6 +456,31 @@ check('KESTREL: the debris label and the rest render at ≥ 10 px', kestrelLabel
   && kestrelLabels.every((label) => label.px >= 9.95), kestrelLabels.map((label) => `${label.text} ${label.px.toFixed(1)}px`).join(' | '));
 await overflow('KESTREL');
 await shot('17-kestrel');
+// Slice 2: KESTREL's beam seed shows the TRACE meter. In blue it sits in the MIND header (its note dropped on a phone);
+// it fits the header's row and the screen.
+await page.tap('.mode-toggle-opt[data-mode="memory"]');
+await waitFor(() => window.__ap.store.getState().ui.mode === 'memory', 3000);
+await page.waitForTimeout(800);
+const traceFit = await st(() => {
+  const meter = document.getElementById('memTrace');
+  const header = meter.closest('.mem-strip-header');
+  const r = meter.getBoundingClientRect();
+  const h = header.getBoundingClientRect();
+  const siblings = [...header.children].filter((el) => el !== meter && el.getBoundingClientRect().width > 0).map((el) => el.getBoundingClientRect());
+  const overlaps = siblings.filter((b) => Math.min(b.right, r.right) - Math.max(b.left, r.left) > 1 && Math.min(b.bottom, r.bottom) - Math.max(b.top, r.top) > 1).length;
+  const note = meter.querySelector('.tr-note');
+  return {
+    shown: !meter.hidden && r.width > 0, cells: meter.querySelectorAll('.tr-cell').length, label: meter.getAttribute('aria-label'),
+    box: { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom) },
+    inHeader: r.top >= h.top - 1 && r.bottom <= h.bottom + 1 && r.right <= h.right + 1, overlaps,
+    noteHidden: note === null || getComputedStyle(note).display === 'none', headerOverflow: header.scrollWidth > header.clientWidth + 1,
+  };
+});
+check('KESTREL in blue: the TRACE meter (three cells) fits the MIND header on the phone: on screen, inside the header, overlapping nothing',
+  traceFit.shown && traceFit.cells === 3 && /^TRACE [■□]{3}/.test(traceFit.label ?? '') && traceFit.box.left >= 0 && traceFit.box.right <= vw
+  && traceFit.inHeader && traceFit.overlaps === 0 && traceFit.noteHidden && !traceFit.headerOverflow, JSON.stringify(traceFit));
+await overflow('KESTREL blue');
+await shot('17b-kestrel-trace');
 
 // --- A LOST card on a fresh page -----------------------------------------------------------------------------------
 await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
