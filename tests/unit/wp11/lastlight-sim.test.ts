@@ -4,7 +4,7 @@
 //   that land only on files in racks A–B while the ship is inside;
 // • the layout (slice 1a: 01-landing §3.16's final-ship layout): 16 pods, the 16-block root in rack C between POD 11
 //   (a 2-block GAP) and POD 12 (a 1-block GAP), POD 13–16 at rack D's start and 32 free at its end; the flagship, the
-//   last ship, with link 96 and 6 transit hits;
+//   last ship, with link 98 (slice 2: 046.log's 2 blocks given back) and 6 transit hits;
 // • HOLLOW: spread 12, drain 5, ×2 burning, ×1.5 landing, seeds every 35 s into the walls, verbs every 12 s (3 s
 //   countdown, every 4 s in the duel); its boot ends on `> last ship, 047. i'm so tired.`; CONTROL's own hello;
 //   the MERGE 20 tick's data;
@@ -28,9 +28,9 @@ import type { GameState } from '@state/schema';
 import { phase2HollowOf } from '../support/hollow-world';
 
 const ship = getShip(LAST_LIGHT);
-check('LAST LIGHT is ship 5: the flagship and the last ship; 3,200 colonists in 16 pods; link 96, 6 hits, no arrival damage',
+check('LAST LIGHT is ship 5: the flagship and the last ship; 3,200 colonists in 16 pods; link 98, 6 hits, no arrival damage',
   ship.name === 'LAST LIGHT' && ship.flagship && isLastShip(LAST_LIGHT) && SHIPS.filter((candidate) => candidate.flagship).length === 1
-  && shipColonists(ship) === 3200 && ship.arrival?.linkBlocks === 96 && ship.arrival.transitHits === 6 && ship.arrival.damage.length === 0);
+  && shipColonists(ship) === 3200 && ship.arrival?.linkBlocks === 98 && ship.arrival.transitHits === 6 && ship.arrival.damage.length === 0);
 const { start, ring, tacticalWarp, cruiseWarp, dvBudgetKmS } = ship.flight;
 check('…§9 WP11 item 1\'s flight: r0 18,000, rp0 3,200, v∞ 1.5, ring 5,000–7,000, FUEL 2.5, ×30 / ×60, OUT engaged',
   start.r0 === 18000 && start.rp0 === 3200 && start.vInf === 1.5 && ring.min === 5000 && ring.max === 7000 && dvBudgetKmS === 2.5

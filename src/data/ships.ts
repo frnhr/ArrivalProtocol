@@ -446,8 +446,12 @@ const LAST_LIGHT: ShipDef = {
     marginTac: SHRINK_MARGIN_TAC, marginMinTac: SHRINK_MARGIN_MIN_TAC, smallLoopFactor: LAST_LIGHT_SMALL_LOOP_FACTOR,
     reactionTac: SHRINK_REACTION_TAC, edgeBackOffTac: LAST_LIGHT_EDGE_BACK_OFF_TAC,
   },
-  // §6.9: link 96 blocks, 6 transit hits (the longest crossing), the last 36 LY of the route.
-  arrival: { linkBlocks: 96, transitHits: 6, distanceLy: 36, damage: [] },
+  // §6.9: 6 transit hits (the longest crossing), the last 36 LY of the route. Link 98 blocks, not phase 2's 96 (slice 2,
+  // Track OPENING's re-fly): 046.log rides in every packet (2 locked blocks, 05 §3.2), and on the last crossing the link,
+  // not the charge, is what limits the charge that arrives (its files are 82–84 blocks by then), so the log cost MERGE's 20 at the choice
+  // in most runs (wp11/full-run, RUN_SEEDS=8: 3 of 8 before). The 2 blocks are given back here; the log stays paid
+  // everywhere else.
+  arrival: { linkBlocks: 98, transitHits: 6, distanceLy: 36, damage: [] },
   // §9 WP11 item 1: the belt (WP9's belt kind) hits racks A–B.
   zones: [{ kind: 'belt', id: 'last-light-belt', rIn: 9000, rOut: 12000, racks: ['A', 'B'] }],
   // Every tool is licensed by now (a licence a lost ship never issued comes at this ship's start: licences.ts).

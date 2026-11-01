@@ -222,6 +222,8 @@ function sayNextLine(store: Store<GameState>): void {
   }
   // 046.log's keys (05 §3.2): the entries this line names, as planned (systems/story-log.ts marks them found on it).
   if (kind === 'log') emit('log-key', { entries: bootLogEntries(state) });
+  // HOLLOW's `keep 20 charge for me` (the HUNT stage's boot line) is told once a run (04 §3.9, slice 3's routes).
+  if (kind === 'hollow' && state.hollow.cfg.story === 'wants-charge') store.update((draft) => { draft.run.threat.told.keepCharge = true; });
   // A returning unit's ship-1 boot licenses REPAIR as it names the host (§5.2; phase 2 did it as the archive opened):
   // the chip is there before the flight, as on every later ship.
   if (kind === 'host' && state.run.arrival === null) installBootLicences(store);
