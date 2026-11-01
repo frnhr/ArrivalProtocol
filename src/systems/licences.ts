@@ -60,7 +60,10 @@ export function installAddress(memory: readonly Segment[], size: number): number
     if (!isOpenFree(seg) || seg.size < size) continue;
     // A receiver with no room after REPAIR CHARGE (a TIGHT ship's unit spilled back into the tail, slice 3a): the file
     // goes flush against the unit's block from below, not at the far end of the pod rack's free run.
-    if (charge >= 0 && i < charge && memory.slice(i + 1, charge).every(isUnitFileType)) return starts[i]! + seg.size - size;
+    // That region ends at the AI Core (the block's start); a free run inside the receiver keeps the rule above.
+    if (charge >= 0 && i < charge && memory[i + 1]?.type === 'core' && memory.slice(i + 1, charge).every(isUnitFileType)) {
+      return starts[i]! + seg.size - size;
+    }
     return starts[i]!;
   }
   throw new Error(`licences: no free space for a ${size}-block tool file`);

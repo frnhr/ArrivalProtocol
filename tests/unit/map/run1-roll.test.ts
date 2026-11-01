@@ -3,7 +3,9 @@
 // classes, the reservations the table places and those its streams roll, the authored ships' written details, the
 // generated ships' rolled ones (deterministic per seed, different across seeds), and every ShipDef valid.
 import { check, finish } from '../landing/checks';
-import { assembleRun1Arm, armChecks, bases, timingYear, finalYear } from '@systems/map-generator';
+import { assembleRun1Arm, armChecks, bases, timingYear, finalYear, freshArm } from '@systems/map-generator';
+import { ghostPlaceReached } from '@systems/meta';
+import { WORLDS } from '@data/arm';
 import { hopBetween, reachable } from '@systems/map-hop';
 import { routes, bestRoute, routePods } from '@systems/map-route';
 import { shipDefAt } from '@systems/map-run';
@@ -114,4 +116,19 @@ check('the same seed rolls the same arm; another seed other details on the same 
   && JSON.stringify(assembleRun1Arm(8).map((ship) => ship.landing)) !== JSON.stringify(arm.map((ship) => ship.landing)));
 check('the Debris guarantee: KESTREL is a DEBRIS ship among the layer-3 ships reachable from ARES-VII',
   [4, 5, 6].some((slot) => reachable(map, 0, slot) && arm[slot]!.modifiers.includes('debris')));
+
+// A fresh roll (run ≥ 2, risk 4): ARES-(VI + run) at w0, the final name by run, names never a world's, never twice.
+const run3 = freshArm(5, 3, 2300);
+check('a fresh roll for run 3: ARES-IX at Kepler-186f, EVENSONG at New Haven (written row, no FIRST LIGHT), names unique',
+  run3[0]!.name === 'ARES-IX' && run3[19]!.name === 'EVENSONG' && run3[19]!.landing.colonyFirstRun === null
+  && new Set(run3.map((ship) => ship.name)).size === 20 && run3.every((ship) => !WORLDS.some((world) => world.name.toUpperCase() === ship.name)));
+check('…freshArm refuses run 1 (run 1\'s arm is assembleRun1Arm\'s)', (() => { try { freshArm(5, 1, 2300); return false; } catch { return true; } })());
+
+// The ghost by layer (slice-3a-plan §2.9): the last unit's ship looked up on the arm, the first boot at or past its layer.
+const at = (slots: number[]) => ({ ...map, route: slots.map((slot, i) => ({ slot, depth: i + 1, hop: i === 0 ? null : hopBetween(map, slots[i - 1]!, slot) })) });
+const reached = (slots: number[], shipName: string): boolean => ghostPlaceReached({ map: at(slots), shipIndex: slots.length - 1, lastUnit: null }, { shipName });
+check('the ghost by layer: lost on CORMORANT (layer 6) → not at VESPER (layer 5), at KITTIWAKE (layer 6, another ship of that layer)',
+  !reached([0, 2, 5, 11], 'CORMORANT') && reached([0, 2, 5, 11, 14], 'CORMORANT'));
+check('…never at ship 1; a name the arm does not hold speaks at the final ship', !reached([0], 'ARES-VII') && reached([0, 2], 'ARES-VII')
+  && !reached([0, 2, 5, 11, 15], 'NOSTROMO') && reached([0, 2, 5, 11, 15, 19], 'NOSTROMO'));
 finish();
