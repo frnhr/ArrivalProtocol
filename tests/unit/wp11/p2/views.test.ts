@@ -23,7 +23,7 @@ import {
   chooseFinale, finaleEndingSec, finaleEndingLineStartsSec, skipFinaleEnding, finaleEndingShowing, mergeTickCharge,
 } from '@systems/finale';
 import { runEndModel, type RunEndModel } from '@systems/run-end';
-import { continueAfterReport } from '@systems/run';
+import { continueAfterReport } from '../../support/classic-flow';
 import { say } from '@systems/say';
 import { actionDelete } from '@state/actions';
 import { driversInMemory, finalePending, quantizeCorruption } from '@state/selectors';

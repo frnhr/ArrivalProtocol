@@ -8,6 +8,7 @@ import './styles/legacy-components.css';
 import './styles/game.css';
 import './styles/landing.css';
 import './styles/threat.css';
+import './styles/desk.css';
 import './styles/responsive.css';
 
 import { store } from '@state/instance';
@@ -85,6 +86,7 @@ import { mountStoryLog, openLogReader } from '@systems/story-log';
 import { logEntryToOpen } from '@systems/log-view';
 import { mountLogReader, mountLogChips } from '@components/memory-view/LogReader';
 import { mountTransmitScreen } from '@components/run/TransmitScreen';
+import { mountDeskScreen } from '@components/desk/DeskScreen';
 import { mountRunEnd } from '@components/run/RunEnd';
 import { mountMergeTick } from '@components/memory-view/MergeTick';
 import { mountLaunchFx } from '@components/memory-view/LaunchFx';
@@ -270,6 +272,7 @@ mountBurnResult(store);
 // The end of a landed ship: the count and the stars (placeholder until the real LANDING REPORT).
 mountLandingReport(store);
 // Between ships and after the run (WP7): the packet for the link, and the run's end.
+mountDeskScreen(store);
 mountTransmitScreen(store);
 mountRunEnd(store);
 // Slice 2: the LOG READER, over TRANSMIT or the game (05 §4).

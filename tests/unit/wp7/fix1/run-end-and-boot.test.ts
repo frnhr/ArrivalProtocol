@@ -11,7 +11,8 @@
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../harness7';
 import { plantHalcyonRoot } from '../../support/hollow-world';
-import { continueAfterLoss, lossPlan } from '@systems/run';
+import { lossPlan } from '@systems/run';
+import { continueAfterLoss } from '../../support/classic-flow';
 import { runEndModel } from '@systems/run-end';
 import { transmitModel } from '@systems/transmit';
 import { skipBoot } from '@systems/boot';

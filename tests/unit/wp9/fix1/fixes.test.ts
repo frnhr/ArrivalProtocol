@@ -15,7 +15,7 @@
 //   every new line fits the strip.
 import { check, finish } from '../../wp1/harness';
 import { createHarness9, KESTREL } from '../harness9';
-import { continueAfterReport } from '@systems/run';
+import { continueAfterReport } from '../../support/classic-flow';
 import { toggleDrop, transmitModel } from '@systems/transmit';
 import { arrivalDamage } from '@systems/carry';
 import { getPrediction, getSensedPrediction } from '@systems/predict';

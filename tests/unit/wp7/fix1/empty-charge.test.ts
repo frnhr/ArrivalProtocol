@@ -7,7 +7,7 @@
 // • the CONTINUE path: ship 1 flown to its WAKE REPORT with the pool spent → HALCYON with max(12, 6·★).
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../harness7';
-import { continueAfterLoss, continueAfterReport } from '@systems/run';
+import { continueAfterLoss, continueAfterReport } from '../../support/classic-flow';
 import { packUnit, layoutCarried, arrivalCharge } from '@systems/carry';
 import { receiveTransmission } from '@systems/boot';
 import { installTool } from '@systems/licences';

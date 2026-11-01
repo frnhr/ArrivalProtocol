@@ -9,7 +9,8 @@
 //   the path clearing the planet; when it fills before the impact the ship is ABANDONED (+2 hits).
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './harness7';
-import { continueAfterLoss, lossPlan, startBeamOut, cancelBeamOut } from '@systems/run';
+import { lossPlan, startBeamOut, cancelBeamOut } from '@systems/run';
+import { continueAfterLoss, throughDesk } from '../support/classic-flow';
 // WP7 fix round 1: run.ts no longer re-exports BEAM OUT's readers.
 import { beamOutRefusal, beamOutProgress, shipDoomed } from '@systems/beam-out';
 import { infectNow } from '@systems/hollow';
@@ -196,6 +197,8 @@ function bootToFlight(): void {
   check('BEAM OUT fills in 6 tactical s, before the impact: ABANDONED', h.status() === 'abandoned' || state().run.shipIndex === 1,
     `${h.status()} after ${tookTac.toFixed(2)} tac s (impact was ${(impactPred.impactInSec ?? 0) / state().level.tacticalWarp} tac s out)`);
   check('…the bar took BEAM_OUT_TAC', Math.abs(tookTac - BEAM_OUT_TAC) < 0.2, tookTac.toFixed(2));
+  // Slice 3a: the unit goes on to the DESK by itself; the classic desk's one ship is set course to.
+  throughDesk(h.store);
   check('…the unit goes straight on (no card): TRANSMIT, ship 1 recorded as abandoned, +2 hits planned',
     state().run.phase === 'transmit' && state().run.ships[0]?.outcome === 'abandoned' && state().run.transit?.extraHits === BEAM_OUT_EXTRA_HITS,
     `${state().run.phase} ${JSON.stringify(state().run.transit)}`);

@@ -16,7 +16,8 @@ import type { SegmentRole } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import { resetWorld, listResets, resetReport, type ResetDrift } from '@systems/reset';
 import {
-  startShip, boardedBy, startRun, continueAfterLoss, continueAfterReport, transmitNext, startBeamOut, cancelBeamOut, type LossPlan,
+  startShip, boardedBy, startRun, continueAfterLoss, continueAfterReport, transmitNext, startBeamOut, cancelBeamOut, setCourse,
+  type LossPlan,
 } from '@systems/run';
 import { packUnit, layoutCarried } from '@systems/carry';
 import { movePreview, type MovePreview } from '@systems/move-preview';
@@ -92,6 +93,8 @@ import type { Zone, ZoneHit } from '@/types/zone';
 import { offerDealNow, dealEffectNow } from '@systems/hollow-deal';
 import { lastSkipPlanChange } from '@systems/ghost-thrust';
 import { visitRng, currentShip, classicRunMap } from '@systems/map-run';
+import { hopBetween } from '@systems/map-hop';
+import type { RunMapState, Hop } from '@/types/map';
 
 // Debug hooks on window.__ap, installed ONLY with ?debug in the URL. Screenshot scripts and
 // manual poking use them; the shipped game never depends on them. Each package adds its own.
@@ -180,6 +183,16 @@ interface DebugHooks {
   // (its boot replayed with the 108% unpack; VESPER on the fixed five).
   seed: (target: string) => string;
   board: () => ShipThreat;
+  // Phase 3 slice 3a (the galaxy map; Track GEN owns them, DESK and TESTS request more): slot(s) jumps to the ship in
+  // slot s as a beam from the current ship would bring it; route([...]) flies the route's ships headless to its last one;
+  // runNumber(n) makes the next NEW RUN run n (its arm, its ARES and final-ship names); arm() is the run's map; hop(a, b)
+  // the beam between two slots; course(s) is the desk's SET COURSE to slot s (the e2e fallback when a click misses).
+  slot: (slot: number) => void;
+  route: (slots: readonly number[]) => void;
+  runNumber: (run: number) => void;
+  arm: () => RunMapState;
+  hop: (from: number, to: number) => Hop;
+  course: (slot: number) => void;
   run: () => GameState['run'];
   resetReport: () => ResetDrift[];
   continueLoss: () => LossPlan;
@@ -565,6 +578,12 @@ export function mountDebug(store: Store<GameState>): void {
     },
     hollowDemo: () => hollowDemo(store),
     ship: (index) => debugJump(store, index),
+    slot: (slot) => { throw new Error(`TODO(3a-GEN): __ap.slot(${slot})`); },
+    route: (slots) => { throw new Error(`TODO(3a-GEN): __ap.route([${slots.join(', ')}])`); },
+    runNumber: (run) => { throw new Error(`TODO(3a-GEN): __ap.runNumber(${run})`); },
+    arm: () => structuredClone(store.getState().run.map) as RunMapState,
+    hop: (from, to) => hopBetween(store.getState().run.map, from, to),
+    course: (slot) => setCourse(store, slot),
     seed: (target) => debugSeed(store, target),
     board: () => debugBoard(store),
     run: () => store.getState().run,

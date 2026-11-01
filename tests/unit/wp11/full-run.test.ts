@@ -28,7 +28,8 @@
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { receiveTransmission } from '@systems/boot';
-import { continueAfterReport, continueAfterLoss, shipLost } from '@systems/run';
+import { shipLost } from '@systems/run';
+import { continueAfterReport, continueAfterLoss } from '../support/classic-flow';
 import { runEndModel } from '@systems/run-end';
 import { autoburnAvailable } from '@systems/autoburn';
 import { getPrediction } from '@systems/predict';

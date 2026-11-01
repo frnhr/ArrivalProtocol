@@ -27,7 +27,10 @@ for (const seed of [1, 7]) {
       threat: state.run.threat, hollow: state.hollow,
     });
     // Generated ids (`free~12`) count from module load, so they are left out: the order of imports must not move a digest.
-    now.push(createHash('sha256').update(dump.replace(/~\d+/g, '~#')).digest('hex').slice(0, 16));
+    // F2's one intended change to a built world: the colonist first name Sol is Suvi (05-story §3.11's name rule), read
+    // back here so the rest of the world is still checked byte for byte.
+    const before = dump.replace(/~\d+/g, '~#').replace(/, Suvi"/g, ', Sol"');
+    now.push(createHash('sha256').update(before).digest('hex').slice(0, 16));
   }
 }
 now.forEach((digest, i) => {

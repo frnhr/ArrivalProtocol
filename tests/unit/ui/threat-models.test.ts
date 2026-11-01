@@ -161,7 +161,7 @@ function removeBeamSeeds(store: Store<GameState>): void {
 function toTransmit(store: Store<GameState>): void {
   store.update((draft) => { draft.run.phase = 'report'; });
   endShip(store, 'locked');
-  goTransmit(store, { extraHits: 0, coreHit: 0, coreReset: false });
+  goTransmit(store, store.getState().run.shipIndex + 1);
   if (store.getState().run.phase !== 'transmit') throw new Error(`toTransmit: phase ${store.getState().run.phase}`);
 }
 

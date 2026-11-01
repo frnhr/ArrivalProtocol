@@ -18,7 +18,7 @@ import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { theRoot, bittenAgainDrivers, infectNow } from '@systems/hollow';
 import { chooseFinale, finaleEndingSec, finaleEndingShowing, finaleRunCause } from '@systems/finale';
-import { continueAfterReport } from '@systems/run';
+import { continueAfterReport } from '../../support/classic-flow';
 import { runEndModel } from '@systems/run-end';
 import { actionDelete, actionRepair, actionRefusal } from '@state/actions';
 import { reserveThread, releaseThread, threadsTotal, canStartOp, getOps, cancelOp } from '@systems/ops-core';

@@ -1704,8 +1704,104 @@ export const SEED_LAND_FX_MS = 700;
 export const LOG_READER_CPS = 42;
 
 // --- Phase 3 slice 3a GEN (owned by Track GEN): the arm, years, the beam's numbers, the generator --------------------
-// (docs/phase3/02-map.md §3.1–§3.6; slice-3a-plan §4.2). Foundation F1 opens the block with what the classic world needs.
+// (docs/phase3/02-map.md §3.1–§3.6; slice-3a-plan §4.2). Every rule is integer arithmetic with half-up rounding
+// (Math.round on a positive number: slice-3a-plan §2.3's finding, so LAST LIGHT lands on 3020).
 
 // The galaxy year a run starts in (02 §3.1: `UNIT-047 · YEAR 2300`): ARES-n's approach, the first ship's year. The
 // classic world counts its fixture years from it too (systems/map-run.ts classicRoute), so the two read alike.
 export const RUN_START_YEAR = 2300;
+// The beam's reach (02 §3.3): every one-layer hop (the longest is 45 LY) and most two-layer hops (31 of 42), never three
+// layers (the shortest is 70 LY), so every route has 5–8 ships.
+export const BEAM_RANGE_LY = 58;
+// The link in blocks is round(146 − 1.1·d) (02 §3.3), in tenths so it stays integer: round((1460 − 11·d) / 10). 22 LY
+// gives 122 (phase 2: 120); a 55-LY hop carries 27 blocks fewer than a 30-LY hop, about half a mid-run unit's charge; the
+// arm's links run 82–123, never below the locked floor (46) nor above 01-landing's 131.
+export const LINK_BASE_TENTHS = 1460;
+export const LINK_PER_LY_TENTHS = 11;
+// Transit hits are round(d / 7) (02 §3.3): phase 2's 3–6 hits on 22–36 LY, and a route's total hardly depends on how it
+// is split.
+export const TRANSIT_LY_PER_HIT = 7;
+// ECC repairs one hit per 25 years of slack while the unit sleeps (02 §3.3): a ship reached 50 years early cancels 2 of
+// about 4 hits; an ark reached just in time cancels few or none. It counts against the extras too.
+export const ECC_YEARS_PER_HIT = 25;
+// A world closer than this to one of 046.log's rings fails the arm check (02 §3.2, 05 §3.2): a ring is crossed exactly
+// when a route enters a new layer. The arm passes with at least 9 LY to spare.
+export const RING_CLEARANCE_LY = 5;
+// The layer base years (02 §3.4): B1 = the start year, B(k+1) = B(k) + the axis gap (22 LY out of layer 1, then 25) +
+// LAYER_SLACK(k). Big slack on the hops out of layers 2 and 3 makes a request from layers 1–3 reach the next ship almost
+// always; the smaller slack beyond starts the planning at layer 4. Run 1: 2300, 2352, 2467, 2612, 2712, 2817, 2927.
+export const LAYER_AXIS_GAP_FIRST_LY = 22;
+export const LAYER_AXIS_GAP_LY = 25;
+export const LAYER_SLACK: readonly number[] = [30, 90, 120, 75, 80, 85, 90];   // index k − 1: the hop out of layer k
+// A ship's timing (02 §3.4): A = base + offset × LAYER_SLACK(layer − 1) + jitter. LATE 50/50; +0.5 of the slack (0.3 in
+// layer 2, so a request from a late ship 2 still makes ship 3); jitter a whole number in ±4 so no two ships tie by rule.
+export const LATE_CHANCE = 0.5;
+export const LATE_OFFSET = 0.5;
+export const LATE_OFFSET_LAYER2 = 0.3;
+export const TIMING_JITTER_YEARS = 4;
+// An ark approaches 12 years, plus 0–4, before the earliest moment any ship of the layer before could reach it (02 §3.4):
+// unreachable by a one-layer hop, reachable by a long hop from two layers back. Measured from the real neighbours.
+export const ARK_MARGIN_YEARS = 12;
+export const ARK_MARGIN_EXTRA_YEARS = 4;
+// One ark in every second layer, never two in adjacent layers (an ark one layer after another would be reachable from it).
+export const ARK_PATTERNS: readonly (readonly number[])[] = [[3, 5, 7], [4, 6]];
+// The final ship's year (02 §3.4): the latest A(S) + d over every ship that has it in range, plus 20, rounded up to a
+// multiple of 5 (3020 on run 1): every in-range ship can reach it, with room for the years new ships add.
+export const FINAL_MARGIN_YEARS = 20;
+export const FINAL_YEAR_ROUND_TO = 5;
+// Ship size (02 §3.4, 01 §3.16's 16-pod cap): light 3 + ⌊layer / 3⌋ (3–5), standard 3 + layer (5–10), ark
+// round(2.2 × (4 + layer)) capped at 16 (15 in layer 3), the first ship 3, the final ship 16.
+export const FIRST_SHIP_PODS = 3;
+export const FINAL_SHIP_PODS = 16;
+export const LIGHT_PODS_BASE = 3;
+export const STANDARD_PODS_BASE = 3;
+export const ARK_PODS_PER_LAYER = 2.2;
+export const ARK_PODS_LAYER_OFFSET = 4;
+export const MAX_SHIP_PODS = 16;
+// A standard ship of this many pods or more is FULL (02 §3.4, 01 §3.16): smaller ships carry smaller computers.
+export const FULL_FROM_PODS = 9;
+// 40% light ships among the non-ark ships (the old mix; Bernoulli per slot, as the sim's fresh roll), and from layer 5
+// on at most two light (TIGHT) ships per layer, so check 5 keeps a non-TIGHT way through every late layer.
+export const LIGHT_SHARE = 0.4;
+export const LATE_TIGHT_FROM_LAYER = 5;
+export const MAX_LATE_TIGHT_PER_LAYER = 2;
+// A fresh roll that fails the validity checks is rolled again, at most this many times, then it throws (fail loudly:
+// the sim's first roll is valid 84.7% of the time, and none needed more than 5).
+export const GEN_MAX_ATTEMPTS = 50;
+// Extra modifiers per generated ship by layer (02 §3.5): none in layer 2, up to 1 in layers 3–5, up to 2 in layers 6–7.
+// Index = layer; layers 0–1 are unused (the first ship is authored).
+export const EXTRA_MODIFIERS_MAX_BY_LAYER: readonly number[] = [0, 0, 0, 1, 1, 1, 2, 2, 0];
+// SENSOR DAMAGE (02 §3.5): Sensor Interp arrives at most this (KESTREL's 45: PATH UNCERTAIN on arrival).
+export const SENSOR_DAMAGE_MAX_INTEGRITY = 45;
+// Noise clouds (02 §3.3; slice-3a-plan risk 14): four per run (three of strength 1, one of 2), radius 12–18 LY, centres
+// 45–167 LY from SOL along the arm's bend and at most 16 LY to either side of it, no two centres closer than 20 LY.
+// Space weather a kid can see and avoid; the one thing rolled fresh each run.
+export const NOISE_CLOUD_STRENGTHS: readonly (1 | 2)[] = [1, 1, 1, 2];
+export const NOISE_CLOUD_R_MIN_LY = 12;
+export const NOISE_CLOUD_R_MAX_LY = 18;
+export const NOISE_CLOUD_SOL_MIN_LY = 45;
+export const NOISE_CLOUD_SOL_MAX_LY = 167;
+export const NOISE_CLOUD_LATERAL_LY = 16;
+export const NOISE_CLOUD_MIN_GAP_LY = 20;
+// A hop's noise is the clouds' strengths summed, capped here (CLEAN, LOW, NOISY, SEVERE: 04 §3.4's seed table).
+export const LINK_NOISE_MAX = 3;
+// The salvage-rack reservations' odds (02 §3.5): POOR site data 1 in 3 in layer 5, 1 in 2 in layers 6–7; a sleeping
+// resident placed with chance 45% when none waits (a sleeper on the arm in about 60% of runs); a late corrupted resident
+// reads `unknown` 1 time in 2.
+export const POOR_SITE_ODDS_LAYER5 = 1 / 3;
+export const POOR_SITE_ODDS_LATE = 1 / 2;
+export const SLEEPER_CHANCE = 0.45;
+export const HIDDEN_RESIDENT_ODDS = 1 / 2;
+
+// --- Phase 3 slice 3a DESK (owned by Track DESK): the DESK, the chart, the card, the PACKET's new rows -----------------
+// (docs/phase3/02-map.md §3.10, §4; 01-landing §3.16's room bar). Foundation F2 opens the block.
+
+// A reachable ship with less slack than this is URGENT on the chart (02 §4: a pulsing ring): a few years of drift or a
+// detour and it is gone.
+export const URGENT_SLACK_YEARS = 10;
+// The opening beat (02 §4): each ship whose approach passed since the last desk fades to grey this long after the one
+// before, with a soft falling tone, so the kid can count them (`2 SHIPS NOW OUT OF YOUR REACH`).
+export const DESK_GREY_STEP_MS = 450;
+// The boot's sleep line (`> ASLEEP IN KESTREL'S RECEIVER · 2378 → 2467 · 89 YEARS`) rolls its year for this long as it
+// types (02 §4 step 2: about 1.5 s), with a soft tick ratchet: the years are felt, not just read.
+export const SLEEP_YEAR_ROLL_MS = 1500;

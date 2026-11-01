@@ -14,6 +14,7 @@ import { hollowUnitName, HOLLOW_STORY, HOLLOW_VERB, HOLLOW_FINALE } from '@data/
 import { playsTutorial, type LastCause, type LastUnit, type Ending } from '@systems/meta';
 import type { UpgradeForm } from '@data/upgrades';
 import { currentShip } from '@systems/map-run';
+import { mapBootLines, mapBootLineText } from '@systems/map-boot';
 import { SHIP_SCREEN_REFUSAL, AUTOPILOT_REFUSAL } from '@systems/flight-controls';
 import {
   TOOL_WORD, repairStepTarget, toolStepTarget, fileHintTarget, podHintTarget, firewallHintTarget, SEED_HINT_TARGET,
@@ -860,7 +861,10 @@ export function scriptedDamageLine(hits: readonly TransitHit[]): string {
 // is made once, at the boot's first tick; systems/boot.ts emits 'log-key' as the line is said, and story-log marks the
 // entries found on that event (no tick-order or world-reset dependency). 'seeds' and 'board' stay empty until Track
 // THREAT fills arrival.seeds (arrival.boarded is filled from the verdict already).
-export type BootLineKind = 'unpack' | 'board' | 'host' | 'ecc' | 'seeds' | 'scripted' | 'charge' | 'overflow' | 'skill' | 'log' | 'hollow';
+// Phase 3 slice 3a: 'sleep' (`> ASLEEP IN KESTREL'S RECEIVER · …`, first) and 'receiver' (`> RECEIVER: 1 RACK · ROOM 88`,
+// after the host line) are the galaxy map's, planned and worded by systems/map-boot.ts (Track GEN); 3b adds 'delivery'.
+export type BootLineKind =
+  | 'sleep' | 'unpack' | 'board' | 'host' | 'receiver' | 'ecc' | 'seeds' | 'scripted' | 'charge' | 'overflow' | 'skill' | 'log' | 'hollow';
 
 // The entries this boot's keys open (05 §3.2, the interim keys of state/log-selectors.ts logEntriesAtBoot) that the run has
 // not found yet. Pure in the state: the boot plans its 'log' line from it, before anything marks them found.
@@ -883,8 +887,11 @@ export function bootLinePlan(state: Readonly<GameState>, skill: boolean): BootLi
   const arrival = state.run.arrival;
   const hollow: BootLineKind[] = bootHollowLine(state) !== null ? ['hollow'] : [];
   const log: BootLineKind[] = bootLogEntries(state).length > 0 ? ['log'] : [];
-  if (arrival === null) return ['unpack', 'host', 'ecc', ...log, ...hollow];
-  const plan: BootLineKind[] = [arrival.boarded !== null ? 'board' : 'unpack', 'host', 'ecc'];
+  const map = mapBootLines(state);
+  const sleep: BootLineKind[] = map.includes('sleep') ? ['sleep'] : [];
+  const receiver: BootLineKind[] = map.includes('receiver') ? ['receiver'] : [];
+  if (arrival === null) return [...sleep, 'unpack', 'host', ...receiver, 'ecc', ...log, ...hollow];
+  const plan: BootLineKind[] = [...sleep, arrival.boarded !== null ? 'board' : 'unpack', 'host', ...receiver, 'ecc'];
   if (arrival.seeds.length > 0) plan.push('seeds');
   if (arrival.scripted.length > 0) plan.push('scripted');
   plan.push('charge');
@@ -916,6 +923,8 @@ export function bootLicensesRepair(state: Readonly<GameState>): boolean {
 export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: LineVars): string {
   const arrival = state.run.arrival;
   switch (kind) {
+    case 'sleep':
+    case 'receiver': return mapBootLineText(kind, state);
     case 'unpack': return LINES.bootUnpack(vars);
     case 'board': return THREAT_TEXT.boardUnpack(unitName(vars.unit));
     case 'host': return LINES.bootHost(vars);

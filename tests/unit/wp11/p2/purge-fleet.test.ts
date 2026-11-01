@@ -9,7 +9,8 @@
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { receiveTransmission } from '@systems/boot';
-import { continueAfterReport, continueAfterLoss, lossPlan } from '@systems/run';
+import { lossPlan } from '@systems/run';
+import { continueAfterReport, continueAfterLoss } from '../../support/classic-flow';
 import { fleetHome } from '@systems/run-score';
 import { endFlight } from '@systems/orbit-sim';
 import { runEndModel } from '@systems/run-end';

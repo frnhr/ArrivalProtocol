@@ -4,7 +4,7 @@ import type {
 } from '@state/schema';
 import type { CarriedRacks } from '@data/memory';
 import type { ShipThreat, BeamSeedSource } from '@/types/threat';
-import type { Hop } from '@/types/map';
+import type { Hop, PendingExtra } from '@/types/map';
 import { onGameTick, onPostTick } from '@systems/clock';
 import { onWorldReset, resetWorld } from '@systems/reset';
 import { on, emit, NO_PAYLOAD } from '@systems/events';
@@ -26,11 +26,13 @@ import { archiveShipStarted, archiveRunEnded, archiveTutorialDone, playsTutorial
 import { finaleRunCause } from '@systems/finale';
 import { newSegId } from '@systems/memory-ops';
 import { createRunState, createShipSlices, createUiState, createRunStats } from '@state/initial';
-import { planThreat, threatInputFor, applyThreat, fixedShipFacts, nominalShipThreat, nominalRunThreat } from '@systems/threat-plan';
+import { planThreat, threatInputFor, applyThreat, nominalShipThreat, nominalRunThreat } from '@systems/threat-plan';
 import { inOrbitOutcome, landingResult } from '@systems/landing-rules';
 import {
-  currentShip, currentSlot, shipDefAt, mapAtShip, mapAtFirstShip, classicHop, hopRng,
+  currentShip, currentSlot, shipDefAt, mapAtShip, mapAtFirstShip, hopRng, createRunMap,
 } from '@systems/map-run';
+import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
+import { mapFacts } from '@systems/map-facts';
 import { BEATS, LINES, perShipBeatIds } from '@data/script';
 import { TOOL_REFUSAL } from '@data/tool-text';
 import { elementsFromState, ringFit } from '@/types/orbit';
@@ -38,14 +40,15 @@ import {
   BEAM_OUT_TAC, BEAM_OUT_EXTRA_HITS, EMERGENCY_EXTRA_HITS, EMERGENCY_CORE_HIT,
 } from '@data/tuning';
 
-// The run (§4.1, §4.3, §9 WP7 items 1, 2, 6 and 8), DOM-free: five ships in a row, each one's end
-// deciding how the unit reaches the next. The phase machine:
+// The run (§4.1, §4.3, §9 WP7 items 1, 2, 6 and 8), DOM-free: a route of ships on the run's map (systems/map-run.ts),
+// each one's end deciding how the unit reaches the next. The phase machine:
 //
-//   title → boot → flight → landing → report → transmit → boot (next ship) … → end
-//                    └→ (lost: its card) → continueAfterLoss → transmit | boot (simulation) | end
+//   title → boot → flight → landing → report → desk → transmit → boot (next ship) … → end
+//                    └→ (lost: its card) → continueAfterLoss → desk | boot (simulation) | end
 //
 // • A ship that reached orbit ends at its LANDING REPORT's CONTINUE (continueAfterReport): its result and its
-//   stars' REPAIR CHARGE are recorded, then TRANSMIT (goTransmit), or the run ends after the last ship.
+//   stars' REPAIR CHARGE are recorded, then the DESK (openDesk: the kid picks the next ship, SET COURSE goes to
+//   TRANSMIT), or the run ends after the final ship.
 // • A ship that was lost (crashed, escaped, stranded, its Core eaten) waits under its card; the card's
 //   button is continueAfterLoss, which plays the soft fails of §4.3:
 //   – run 1, ship 1, the first crash: "That was a simulation. :) Again." and ship 1 starts over, once;
@@ -203,7 +206,8 @@ function doneForNextShip(state: Readonly<GameState>): string[] {
 // would be run 1 again with nobody noticing.
 export function startRun(store: Store<GameState>, seed: number, lineage: Readonly<RunLineage>): void {
   resetWorldForShip(store, {
-    phase: 'title', run: createRunState(seed, 'title', 0, lineage), carried: null, threat: nominalShipThreat(0), freshLog: true, done: [],
+    phase: 'title', run: { ...createRunState(seed, 'title', 0, lineage), map: createRunMap(lineage, seed) }, carried: null,
+    threat: nominalShipThreat(0), freshLog: true, done: [],
   });
 }
 
@@ -259,21 +263,82 @@ export function endShip(store: Store<GameState>, outcome: ShipOutcome, stars = 0
   return result;
 }
 
-// TRANSMIT (§4.1 step 5): every op is stopped first (an op in flight at the ship's end must not write
-// into the packet), the tool is put down, the packet is worked out for the TRANSMIT screen, and the draft
-// is dealt (§6.9: PICK ONE TO CARRY; seeded by the ship being left, weighted by the run's stats).
-export function goTransmit(store: Store<GameState>, extra: { extraHits: number; coreHit: number; coreReset: boolean }): void {
+// --- The DESK (phase 3 slice 3a, 02-map §3.10, slice-3a-plan §2.5) --------------------------------------------------------
+//   report ─CONTINUE→ endShip → [final? endRun : openDesk]        lost card → endShip → [end | openDesk with its extras]
+//   desk ─SET COURSE(slot)→ goTransmit(slot) → transmit (PACKET) ─◀ CHART→ desk
+//                                               └ TRANSMIT ▸ → transmitNext → startShip(slot) → boot
+// On the classic world the desk offers the single next ship (reachableFrom: index + 1), so the five play end to end.
+
+// The ship is over and not the final one: every op stops, the tool is put down, both clocks stop, and the STAR CHART
+// opens. `extra` is the way the ship ended's toll on the next hop (BEAM OUT +2, EMERGENCY +3 and Core −25; null after a
+// LANDING REPORT), held on the map until the kid picks the hop (RunMapState.pendingExtra). No reachable ship from a
+// non-final ship throws: the arm's checks 1 and 4 guarantee one.
+export function openDesk(store: Store<GameState>, extra: PendingExtra | null): void {
+  const state = store.getState();
+  if (currentShip(state).final) throw new Error('openDesk: the final ship ends the run (endRun)');
+  if (!shipEnded(state)) throw new Error('openDesk: the ship has not ended (endShip first)');
+  const offered = reachableFrom(state.run.map, currentSlot(state.run));
+  if (offered.length === 0) throw new Error(`openDesk: no ship is reachable from slot ${currentSlot(state.run)}`);
+  abortAll();
+  store.update((draft) => {
+    draft.run.phase = 'desk';
+    draft.run.map.pendingExtra = extra === null ? null : { ...extra };
+    draft.run.transit = null;
+    draft.run.beamOut = null;
+    draft.clock.paused = true;
+    draft.ui.activeTool = null;
+    draft.ui.pickedSourceId = null;
+    draft.ui.pendingPlacement = null;
+    // One ship in reach (the classic world) is already the selection: SET COURSE is the desk's only step.
+    draft.ui.deskSelected = offered.length === 1 ? offered[0]! : null;
+    draft.ui.memoryRev++;
+  });
+}
+
+// The ship being flown has its result in the run (endShip): its own is the last one recorded.
+function shipEnded(state: Readonly<GameState>): boolean {
+  return state.run.ships.at(-1)?.shipId === state.level.shipId;
+}
+
+// SET COURSE ▸ (the desk's ENTER): the PACKET for the ship in `slot`.
+export function setCourse(store: Store<GameState>, slot: number): void {
+  const phase = store.getState().run.phase;
+  if (phase !== 'desk') throw new Error(`setCourse: not on the DESK (phase ${phase})`);
+  goTransmit(store, slot);
+}
+
+// ◀ CHART (the PACKET's ESC): back to the desk. The drops and the pick are forgotten (a new destination deals against its
+// own link); the lost ship's extras stay on the map for whichever hop is picked.
+export function backToChart(store: Store<GameState>): void {
+  const phase = store.getState().run.phase;
+  if (phase !== 'transmit') throw new Error(`backToChart: not on the PACKET (phase ${phase})`);
+  store.update((draft) => {
+    draft.run.phase = 'desk';
+    draft.ui.deskSelected = draft.run.transit?.toSlot ?? draft.ui.deskSelected;
+    draft.run.transit = null;
+    draft.ui.memoryRev++;
+  });
+}
+
+// TRANSMIT (§4.1 step 5) to the ship in `toSlot`: every op is stopped first (an op in flight at the ship's end must not
+// write into the packet), the tool is put down, the hop is worked out (systems/map-hop.ts hopBetween: link, hits, ECC,
+// years, the destination's room), the ladder plans the destination from the map's facts, the packet is packed against the
+// hop's link with the lost ship's extras (RunMapState.pendingExtra), and the draft is dealt (§6.9: PICK ONE TO CARRY;
+// seeded by the slot being left, weighted by the run's stats). Throws on a slot the unit cannot reach.
+export function goTransmit(store: Store<GameState>, toSlot: number): void {
   const state = store.getState();
   if (currentShip(state).final) throw new Error('goTransmit: the final ship has no next ship (endRun)');
-  if (state.run.map.world !== 'classic') throw new Error('TODO(3a-F2): goTransmit on the arm (the desk picks the slot)');
-  abortAll();
+  if (!shipEnded(state)) throw new Error('goTransmit: the ship has not ended (endShip first)');
   const fromSlot = currentSlot(state.run);
+  if (!reachable(state.run.map, fromSlot, toSlot)) throw new Error(`goTransmit: slot ${toSlot} is not reachable from slot ${fromSlot}`);
+  abortAll();
   const toShipIndex = state.run.shipIndex + 1;
-  const toSlot = fromSlot + 1;
-  const hop = classicHop(fromSlot, toSlot, state.run.map.galaxyYear);
+  const hop = hopBetween(state.run.map, fromSlot, toSlot);
+  const extra = state.run.map.pendingExtra ?? { extraHits: 0, coreHit: 0, coreReset: false };
   const packet = packUnit(store.getState().memory, hop.linkBlocks, []);
   // The ladder's verdict for the next ship, from the run's threat once this ship's tally is done (Track THREAT's endShip).
-  const threat = planThreat(threatInputFor(state.run.threat, fixedShipFacts(toSlot), state.run.stats.deal !== null));
+  const facts = mapFacts(state.run.map, fromSlot, toSlot, toShipIndex + 1);
+  const threat = planThreat(threatInputFor(state.run.threat, facts, state.run.stats.deal !== null));
   const plan: TransitPlan = {
     toShipIndex,
     toSlot,
@@ -298,6 +363,7 @@ export function goTransmit(store: Store<GameState>, extra: { extraHits: number; 
     draft.ui.activeTool = null;
     draft.ui.pickedSourceId = null;
     draft.ui.pendingPlacement = null;
+    draft.ui.deskSelected = toSlot;
     draft.ui.memoryRev++;
   });
 }
@@ -326,7 +392,7 @@ export function transmitNext(store: Store<GameState>): void {
   }
   // ECC repairs hits while the unit sleeps (02 §3.3), counted after the extra ones (BEAM OUT, EMERGENCY): none on the classic
   // world (no slack).
-  const landing = Math.max(0, plan.hop.transitHits + plan.extraHits - plan.hop.eccFixes);
+  const landing = hitsLanding(plan.hop, plan.extraHits);
   hits.push(...rollTransitHits(files, landing, hopRng(state.run, fromSlot, plan.toSlot, 'transit')));
   const cardCharge = pickCharge(plan.pick);
   const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, cardCharge);
@@ -394,7 +460,7 @@ export function continueAfterReport(store: Store<GameState>): void {
   endShip(store, shipOutcomeOf(state), earned);
   store.update((draft) => { draft.run.pendingStarCredit = starCharge(stars); });
   if (currentShip(state).final) endRun(store, finaleRunCause(store.getState()));
-  else goTransmit(store, { extraHits: 0, coreHit: 0, coreReset: false });
+  else openDesk(store, null);
 }
 
 // The LOST card's button (see the header and lossPlan).
@@ -424,7 +490,7 @@ export function continueAfterLoss(store: Store<GameState>): LossPlan {
   }
   endShip(store, plan.outcome);
   if (plan.kind === 'end') endRun(store, plan.cause);
-  else goTransmit(store, plan);
+  else openDesk(store, { extraHits: plan.extraHits, coreHit: plan.coreHit, coreReset: plan.coreReset });
   return plan;
 }
 

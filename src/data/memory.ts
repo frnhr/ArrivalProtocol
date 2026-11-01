@@ -33,8 +33,7 @@ import { LOG_FILE } from '@data/log-text';
 // --- Memory classes (01 §3.16, 02 §3.4; slice-3a-plan §2.7) ---------------------------------------------------------
 // One layout per class. Every reader of a ship's size, rack names, unit start or receiver asks the ship's layout
 // (layoutOf(state) with a store; layoutFor(ship.memoryClass) with a ShipDef; layoutForTotal(total) for a pure helper
-// that only holds segments), so a smaller class is data, not a code change. Foundation step 1 (F1): FULL only, every
-// ship FULL, nothing on screen moves. Track GEN adds COMPACT and TIGHT here (step 2), with their validators.
+// that only holds segments), so a smaller class is data, not a code change.
 
 function makeLayout(
   cls: MemoryClass, racks: readonly RackName[], podRacks: readonly PodRackName[], chargeFloor: number, maxPods: number,
@@ -55,15 +54,21 @@ function makeLayout(
 }
 
 // FULL holds 16 pods: the most any ship carries (02 §3.4: an ark or the final ship), 7 + 5 + 4 with the root slot's
-// GAPs and the 40-free rule (LAST LIGHT's `P×7 _8 / P P P P _2 S _1 P _21 / P P P P _32`).
-export const MEMORY_LAYOUTS: { readonly FULL: MemoryLayout } & Readonly<Partial<Record<MemoryClass, MemoryLayout>>> = {
+// GAPs and the 40-free rule (LAST LIGHT's `P×7 _8 / P P P P _2 S _1 P _21 / P P P P _32`). COMPACT drops rack D (a ship
+// of 8 pods or fewer leaves it empty: pods fill from B); TIGHT drops rack F too (a small ship has a small receiver: room
+// 88, and no charge floor, 01 §3.16 round 2 Q8). Racks keep their names on every ship, so rack E is always the unit.
+// F2 holds the classes' numbers (the card and the PACKET read them from the hop); Track GEN's step 2 makes ships of the
+// smaller classes (their pod layouts, validators, the boot's fill order).
+export const MEMORY_LAYOUTS: Readonly<Record<MemoryClass, MemoryLayout>> = {
   FULL: makeLayout('FULL', ['A', 'B', 'C', 'D', 'E', 'F'], ['B', 'C', 'D'], CHARGE_ARRIVAL_FLOOR, 16),
+  COMPACT: makeLayout('COMPACT', ['A', 'B', 'C', 'E', 'F'], ['B', 'C'], CHARGE_ARRIVAL_FLOOR, 8),
+  TIGHT: makeLayout('TIGHT', ['A', 'B', 'C', 'E'], ['B', 'C'], 0, 8),
 };
 
-// The layout of a memory class; a class with no layout yet throws (fail loudly: never a quiet FULL).
+// The layout of a memory class; an unknown class throws (fail loudly: never a quiet FULL).
 export function layoutFor(cls: MemoryClass): MemoryLayout {
-  const layout = MEMORY_LAYOUTS[cls];
-  if (layout === undefined) throw new Error(`layoutFor: no memory layout for class ${cls}`);
+  const layout = MEMORY_LAYOUTS[cls] as MemoryLayout | undefined;
+  if (layout === undefined) throw new Error(`layoutFor: no memory layout for class ${String(cls)}`);
   return layout;
 }
 

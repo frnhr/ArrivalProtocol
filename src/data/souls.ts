@@ -50,13 +50,14 @@ export const FAMILY_POOL: readonly string[] = [
   "O'Brien", 'Park', 'Rahman', 'Silva', 'Walsh', 'Yamada',
 ];
 
+// Suvi replaced Sol (05-story.md §3.11's name rule: SOL is Earth on the chart; data/ship-names.ts validateNames).
 export const FIRST_NAME_POOL: readonly string[] = [
   'Amara', 'Ben', 'Chiara', 'Dev', 'Elif', 'Finn', 'Grace', 'Hiro', 'Isla', 'Jonah',
   'Kiri', 'Leo', 'Maya', 'Nico', 'Omar', 'Priya', 'Quentin', 'Rosa', 'Sami', 'Tova',
   'Uma', 'Vik', 'Wren', 'Xander', 'Yara', 'Zane', 'Kofi', 'Lena', 'Mateo', 'Noor',
   'Oskar', 'Pita', 'Ravi', 'Sofia', 'Tomas', 'Ulla', 'Vera', 'Wei', 'Yusuf', 'Zara',
   'Arjun', 'Bea', 'Cyrus', 'Dara', 'Emil', 'Fatima', 'Gus', 'Hana', 'Ivo', 'Jada',
-  'Kai', 'Lucia', 'Malik', 'Nell', 'Otto', 'Pia', 'Rumi', 'Sol', 'Teo', 'Viola',
+  'Kai', 'Lucia', 'Malik', 'Nell', 'Otto', 'Pia', 'Rumi', 'Suvi', 'Teo', 'Viola',
 ];
 
 // Who they are, in one line (≤ COLONIST_LINE_MAX_CHARS). Things a kid would say about a person:

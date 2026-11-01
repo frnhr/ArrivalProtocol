@@ -192,11 +192,13 @@ export interface HazardsState {
 // locked). 'boot': the unit unpacks in blue for a few seconds. 'flight': the ship. 'landing': the
 // orbit is locked or accepted and the pods go down (01-landing: the clock runs, the world coasts,
 // [L] launches through the windows; systems/landing.ts). 'report': the landing is over and the LANDING
-// REPORT owns the screen; the world stops. 'transmit': the ship is over and the unit's files are
-// packed for the next one (the TRANSMIT screen, WP7 part 2). 'end': the run is over (RUN END).
+// REPORT owns the screen; the world stops. 'desk': the ship is over and the kid picks the next one on the STAR CHART
+// (phase 3 slice 3a, 02-map §3.10: both clocks stopped; systems/run.ts openDesk, setCourse). 'transmit': the next ship
+// is chosen and the unit's files are packed for it (the PACKET, WP7 part 2; `◀ CHART` goes back to 'desk'). 'end': the
+// run is over (RUN END).
 // A crashed, escaped or stranded ship (or one whose Core was eaten) stays in 'flight' with the
 // clock paused under its LOST card until the kid goes on (run.ts continueAfterLoss).
-export type RunPhase = 'title' | 'boot' | 'flight' | 'landing' | 'report' | 'transmit' | 'end';
+export type RunPhase = 'title' | 'boot' | 'flight' | 'landing' | 'report' | 'desk' | 'transmit' | 'end';
 
 // How one ship of the run ended (§4.3, WP7). 'locked' / 'partial': it landed (ORBIT LOCKED, or
 // ACCEPT ORBIT / an empty tank on a loop the launch band reaches). 'stranded' / 'escaped': no landing,
@@ -723,6 +725,9 @@ export interface UiState {
   // (entry 01 by itself after ship 1's LANDING REPORT, run 1, once) or by INSPECT on the log; the reader view
   // (components/memory-view/LogReader.ts, Track UI) draws it and closes it. A world reset closes it (createUiState).
   logReader: { entry: number } | null;
+  // The ship the kid is looking at on the DESK (its slot; the SHIP CARD shows it, SET COURSE goes there), or null before
+  // the first pick (phase 3 slice 3a, systems/desk.ts selectShip). A world reset clears it (createUiState).
+  deskSelected: number | null;
 }
 
 // The archive behind this page (§4.5, systems/meta.ts). 'ok': loaded (or empty) and written at the run's

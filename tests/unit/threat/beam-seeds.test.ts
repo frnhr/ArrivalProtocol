@@ -16,7 +16,8 @@ import {
 } from '@systems/beam-seeds';
 import { packUnit, packedFiles, layoutCarried, freshUnitRacks, BEAM_SEED_LAYOUT_BLOCKS } from '@systems/carry';
 import { stepHollow, hollowReach, bitersOf, type HollowStepCtx } from '@systems/hollow';
-import { continueAfterReport, endShip } from '@systems/run';
+import { endShip } from '@systems/run';
+import { continueAfterReport } from '../support/classic-flow';
 import { actionDelete, deleteSec } from '@state/actions';
 import { getOps } from '@systems/ops-core';
 import { skipBlockReason } from '@systems/pace';

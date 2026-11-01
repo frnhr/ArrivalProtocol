@@ -36,7 +36,8 @@
 // prints one `RECORD {json}` line per seed (playthrough.test.ts runs shards of it in parallel and judges them).
 import { createHarness11, LAST_LIGHT, type Harness11, type DefendOpts } from '../wp11/harness11';
 import { receiveTransmission } from '@systems/boot';
-import { continueAfterReport, continueAfterLoss, shipLost, startBeamOut } from '@systems/run';
+import { shipLost, startBeamOut } from '@systems/run';
+import { continueAfterReport, continueAfterLoss } from '../support/classic-flow';
 import { runEndModel } from '@systems/run-end';
 import { runScore } from '@systems/run-score';
 import { autoburnAvailable } from '@systems/autoburn';

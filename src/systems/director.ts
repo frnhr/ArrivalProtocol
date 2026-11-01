@@ -26,6 +26,7 @@ import { repairStepTarget } from '@data/fs-tools';
 import { REFUSAL_FLASH_SEC } from '@data/tuning';
 import { CORE_LOST_TEXT } from '@data/hollow-text';
 import { shipDefAt } from '@systems/map-run';
+import { deskSteps } from '@systems/desk';
 
 // The director (§6.3) composes the one line the objective strip shows and speaks the story
 // beats. It runs at the end of every clock tick, in every phase and while paused, so PAUSED,
@@ -243,6 +244,13 @@ export function composeObjective(ctx: DirectorCtx, rules: readonly GuideRule[]):
     return { id: 'boot', text: LINES.booting(), keys: ['SPACE'], urgency: 'wait', layer: 'mind', highlight: null, source: 'boot' };
   }
   const status = ctx.state.burn.status;
+  // Phase 3 slice 3a: the DESK's two steps (systems/desk.ts deskSteps: a ship, then SET COURSE ▸ it [ENTER]).
+  // TODO(3a-DESK): the desk's guidance strip proper (the opening beat, CONTROL's line, the first-time notes).
+  if (ctx.phase === 'desk') {
+    const step = deskSteps(ctx.state).find((candidate) => !candidate.done);
+    if (!step) throw new Error('composeObjective: a desk step is always left (SET COURSE)');
+    return { id: `desk-${step.id}`, text: step.text, keys: step.id === 'set-course' ? ['ENTER'] : [], urgency: 'now', layer: 'mind', highlight: null, source: 'over' };
+  }
   // WP7: between ships (TRANSMIT) and after the run (RUN END) their screens explain.
   if (ctx.phase === 'transmit') {
     const plan = ctx.state.run.transit;

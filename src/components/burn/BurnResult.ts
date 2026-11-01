@@ -5,6 +5,7 @@ import { shipLost, lossPlan, continueAfterLoss, shipOutcomeOf, type LossPlan } f
 import { landingResult } from '@systems/landing-rules';
 import { requireById } from '@components/dom';
 import { shipDefAt, currentSlot } from '@systems/map-run';
+import { MAP_TEXT } from '@data/map-text';
 import { LOSS_BUTTON } from '@data/script';
 import { RESULT_BANNER_DELAY_MS } from '@data/tuning';
 import { LOST_CARD_TEXT, POD_STATE_TEXT } from '@data/landing-text';
@@ -29,7 +30,9 @@ function lossButtonText(state: Readonly<GameState>, plan: LossPlan): string {
   if (plan.kind === 'simulation') return LOSS_BUTTON.simulation;
   if (plan.kind === 'end') return LOSS_BUTTON.end;
   const emergency = plan.outcome === 'crashed' || plan.outcome === 'emergency';
-  return emergency ? LOSS_BUTTON.emergency : LOSS_BUTTON.transmit(shipDefAt(state.run.map, currentSlot(state.run) + 1).name);
+  if (emergency) return LOSS_BUTTON.emergency;
+  // The classic world has one next ship; on the arm the kid picks it at the desk.
+  return state.run.map.world === 'classic' ? LOSS_BUTTON.transmit(shipDefAt(state.run.map, currentSlot(state.run) + 1).name) : MAP_TEXT.lossToChart;
 }
 
 // The LOST card (§9 WP5 item 6) over a crashed, escaped, stranded or abandoned ship, or one whose Core
@@ -86,8 +89,8 @@ export function mountBurnResult(store: Store<GameState>): () => void {
     const state = store.getState();
     stopTimers();
     document.body.dataset.burnStatus = coreLost ? CORE_LOST_OUTCOME : status;
-    // TRANSMIT and RUN END have their own screens; the card is only ever over a lost ship.
-    if (phase === 'transmit' || phase === 'end') {
+    // The DESK, TRANSMIT and RUN END have their own screens; the card is only ever over a lost ship.
+    if (phase === 'desk' || phase === 'transmit' || phase === 'end') {
       root.hidden = true;
       return;
     }

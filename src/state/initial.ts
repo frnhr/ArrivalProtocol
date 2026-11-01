@@ -250,5 +250,6 @@ export function createUiState(phase: RunPhase, reducedMotion: boolean): GameStat
     spotlight: [],
     reducedMotion,
     logReader: null,
+    deskSelected: null,
   };
 }

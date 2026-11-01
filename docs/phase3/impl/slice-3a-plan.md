@@ -755,3 +755,90 @@ Total new: about 35 s serial, spread over workers. If the tier goes over 280 s, 
 - /home/user/ArrivalProtocol/src/systems/threat-plan.ts
 - /home/user/ArrivalProtocol/src/systems/carry.ts
 - /home/user/ArrivalProtocol/docs/phase3/map-sim/arm_sim.py
+---
+
+## Deviations (foundation)
+
+Recorded by the foundation agent (F1 `Slice 3a F1`, F2 `Slice 3a F2`). Each is a change from §2–§5 above, with its reason.
+
+### F1: the refactor with no visible change
+
+1. **`visitRng(run, stream)` beside `shipRng` and `hopRng`.** The per-visit rolls (the landing's drop, the colony name,
+   HOLLOW's bites and verbs, the ghost thrust and its noise, the belt, the draft) draw `childRng(run.seed, slot, stream)`,
+   as risk 9 says; `shipRng` is for rolls OF the ship (families, hurt drivers, zones, the flight's start), keyed by the
+   ShipKey on the arm. On the classic world all three are `(seed, index, stream)`, so nothing moved.
+2. **`systems/map-streams.ts`, a leaf module.** `currentStop`, `currentSlot`, `armShipAt`, `shipKeyOf`, `keyRng`,
+   `shipRng`, `visitRng` and `hopRng` live there and `systems/map-run.ts` re-exports them. Why: zones.ts (imported by
+   data/ships.ts) needs `visitRng`, and importing map-run there closed the cycle ships → zones → map-run → classic-five →
+   ships, which `wp12/fix1/entries` caught (a module must load as a process's first import).
+3. **`currentSlot` on the classic world is `run.shipIndex`**, not the route's last stop, so the suites that set
+   `run.shipIndex` by hand (wp4, wp8 meta) move the ship as before. On the arm it is the route's last stop, and
+   `currentStop` checks `route.length === shipIndex + 1`.
+4. **`startShip(store, slot, carried, arrival, threat, hop = null)`** takes the slot and the hop that reached it; the
+   route moves through `mapAtShip(map, slot, hop)` (classic: the fixed route to that ship, so `__ap.ship` jumps work; arm:
+   the stop is pushed and the galaxy year set). `mapAtFirstShip` serves the simulation retry.
+5. **`TransitPlan.toSlot` and `TransitPlan.hop` arrive in F1** (not F2): transmitNext and the director already read them.
+6. **`ShipDef` keeps `layer`** (driver damage reads it) beside §2.2's new fields. `validateShipDef` gains
+   `checkModifiers` (a modifier ⇔ its zone or arrival damage, so the card's KNOWN PROBLEMS never disagrees with the
+   flight) and, in place of `threat.oneHopFromFinal → slot`, **a root slot on every ship from `ROOT_SLOT_FROM_LAYER` (4)**
+   (§1.1 item 18). The facts-based checks (M3 → slot, scripted seeds, licences) moved to classic-five's own validation.
+   The classic modifiers: KESTREL `sensor-damage, debris`, VESPER `engine-fault`, LAST LIGHT `radiation-belt`; HALCYON's
+   authored Sensor 62 is a rule without the label.
+7. **`CLASSIC_HOPS` holds `ClassicHop` (link, hits, LY)**, not `Hop`; `classicHop(from, to, leaveYear)` builds the full
+   `Hop` with fixture years counted from `RUN_START_YEAR` (arrive = leave + LY = approach: slack 0, so ECC 0 and the
+   suites' hits are phase 2's).
+8. **Helpers the plan did not name:** `layoutOfMemory(memory)` and `rackStartOf(rack, layout)` (data/memory.ts);
+   `fleetOf(map)` (map-run: the classic five, or the visited ships on the arm; RUN END's rows, colonists and
+   `fleetHome` size read it until DESK's tally); `freshUnitRacks(ship, linkBlocks?, threat?)` (classic by default);
+   `licenceSchedule(shipIndex, world = 'classic')` (the arm: REPAIR only until GEN's interim schedule);
+   `validateZoneDefs(…, layout)` and `blocksInRack(…, layout)` (a zone may only name a rack the class has).
+9. **`__ap.ship(n)` always lands on the classic world**: on an arm run it first turns the map into the classic route.
+10. **`ROOT_SLOT_FROM_LAYER` and `RUN_START_YEAR`** are F1 tuning (the latter opens the `3a GEN` block); `RACK_COUNT` is
+    deleted from tuning.ts with the memory constants.
+11. **Suites:** only mechanical edits (listed in the F1 report); the new `map/memory-refactor` checks every classic
+    ship's built world (memory, flight, landing slice, mission, burn, orbit, threat, HOLLOW) against its pre-refactor
+    digest on two seeds.
+
+### F2: the map's skeleton
+
+12. **COMPACT and TIGHT layouts' numbers are in `MEMORY_LAYOUTS` from F2** (racks ABCEF / ABCE, unit at 192, room 152 /
+    88, floor 12 / 0, 8 pods), so `hopBetween` names a real room and floor and `roomFit` is real for DESK. Making ships
+    of those classes (validators per class, `layoutPods`, the floor in `arrivalCharge`, the fill order, the RECEIVER and
+    OVERFLOW lines) stays GEN's step 2.
+13. **`openDesk` / `setCourse` / `backToChart` live in run.ts**, not desk.ts: setCourse calls goTransmit and openDesk is
+    called by the flow, so desk.ts ↔ run.ts would be an import cycle. desk.ts keeps the models, `deskCandidates`,
+    `selectShip` and `cycleShip`.
+14. **`goTransmit(store, toSlot)` works from any ended ship** (a fixture or `__ap` may call it off the report); the
+    desk's gate is `setCourse`. It throws on an unreachable slot and reads `map.pendingExtra`.
+15. **The classic world has the desk** (its one next ship preselected), so the page plays the five with a desk between
+    ships. The suites written before the desk import `continueAfterReport` / `continueAfterLoss` from
+    `tests/unit/support/classic-flow.ts`, which sets course to that ship (an import-path edit in 18 suites); soft-fails
+    adds one `throughDesk` after BEAM OUT's own continue; threat-models' `goTransmit` call takes the slot. 046.log's
+    entry 01 still opens at the PACKET, now after the desk.
+16. **`roomFit`'s `over` counts the room only** (files + floor > room; files alone on TIGHT). The link limits the
+    charge that crosses (packUnit's rule) and the floor tops it up on arrival; files over the link stay the PACKET's link
+    bar's (phase 2). 02 §3.3 says "files plus the floor must fit both": that would make today's packer refuse units it
+    sends. Raise with Fran before DESK's TRANSMIT gate.
+17. **Map text vs the 70-character rule:** the card's BEAM row is two strings, `card.beam` (`55 LY · LINK 86 · 8 HITS
+    (ECC fixes 4)`) and `card.noise` (`NOISE LOW · 1 · SEEDS 0–2`): 02 §4's one line reaches 72. `packet.onTheWay` drops
+    TRANSIT (02 §4's sample is 75): `ON THE WAY: 4 HITS · ECC FIXES 3 WHILE YOU SLEEP (89 YRS) → 1 LANDS`.
+18. **Names (05 §3.11):** the ARES series ends at ARES-LXXXVII (run 81): 05's "up to ARES-LXXXVIII" is 13 characters.
+    `FAR SHORE III` (13) is left out of the final names. `Sol` became `Suvi` in FIRST_NAME_POOL (the only change a
+    built classic world shows; map/memory-refactor reads it back). Raise both counts with 05's owner.
+19. **run1-arm's residents:** only WARDEN (GANNET) is authored; CURLEW's sleeper and PROVIDENCE's hidden corrupted
+    resident have `name: null` (rolled from 05's pools by GEN's streams; the foundation placeholder takes the pools'
+    first names).
+20. **More is real than "stub" in §5.0 F2 item 3**, because the formulas are short and the run-1 table is their check:
+    `map-route` (routes, bestRoute, shipsLeft: 907 routes, best 66/69/68/64 by length), `map-facts` (mapFacts,
+    oneHopFromFinal, nominalRouteThreat), `hopNoise`, `seedRange`, and in `map-generator` `bases`, `timingYear`,
+    `finalYear`, `podsFor`, `memoryClassOf`. `tests/unit/map/hop-math` cross-checks §3.14 with them (every number in
+    the worked route, ALBATROSS 35/18/11 too late, GOOD HOPE 15, M3 at CORMORANT not VESPER, the classes 7/7/6, every
+    non-ark ship's year on its layer base). Still stubs (TODO(3a-GEN)): `rollNoiseClouds` (no clouds), `rollTiming`,
+    `arkYear`, `armChecks`, `freshArm`, `rollShipDetails`, `rollLanding`, `layoutPods`, `mapBootLines` (returns `[]`),
+    `mapBootLineText`, `createRunMap` (the classic world), `shipDefAt` on the arm, `__ap.slot` / `route` /
+    `runNumber`; and `assembleRun1Arm` returns the table with placeholder details. DESK's models return typed empty rows
+    except what the minimal desk shows (the ships in reach, the card's top line, the two steps).
+21. **A minimal `components/desk/DeskScreen.ts`** (the TRANSMIT screen's chrome, built in JS, no index.html change)
+    lists the ships in reach with SET COURSE ▸ [ENTER], ← → and click to pick, and ESC on the PACKET for ◀ CHART. DESK
+    replaces it; `styles/desk.css` is empty and imported.
+22. **`RING_CLEARANCE_LY` reads "within 5 LY" as < 5** (the arm clears every ring by 9 LY or more either way).

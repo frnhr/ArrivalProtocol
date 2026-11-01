@@ -1,4 +1,5 @@
 import type { GameState } from '@state/schema';
+import type { RunLineage } from '@systems/meta';
 import type { ShipDef } from '@data/ships';
 import type { Hop, RouteStop, RunMapState } from '@/types/map';
 import type { LinkNoise } from '@/types/threat';
@@ -61,6 +62,15 @@ export function classicRunMap(seed: number, shipIndex: number, run: number): Run
     world: 'classic', run, armSeed: seed >>> 0, startYear: RUN_START_YEAR, arm: [], noise: [], route,
     galaxyYear: route.at(-1)!.hop?.approachYear ?? RUN_START_YEAR, pendingExtra: null,
   };
+}
+
+// The map a NEW RUN starts on (systems/run.ts startRun): the one place 3c swaps "run ≥ 2 = a fresh roll" for "the
+// archive's updated arm" (slice-3a-plan §2.10). The run number is the lineage's wave (1 on run 1).
+// TODO(3a-GEN): run 1 → the run-1 arm (map-generator assembleRun1Arm(seed), its noise clouds from
+// childRng(seed, 0, 'noise')); run ≥ 2 → freshArm(seed, run, RUN_START_YEAR) with ARES-(VI+run) at w0 and
+// finalShipName(run) at w19 (risk 4). Until then every run is the classic world, so the page plays the five.
+export function createRunMap(lineage: Readonly<Pick<RunLineage, 'wave'>>, seed: number): RunMapState {
+  return classicRunMap(seed, 0, lineage.wave);
 }
 
 // --- Where the unit is -------------------------------------------------------------------------------------------------

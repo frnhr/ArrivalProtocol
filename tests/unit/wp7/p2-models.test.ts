@@ -14,7 +14,8 @@
 // • every new line fits the strip (≤ 70) with worst-case values.
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './harness7';
-import { continueAfterReport, continueAfterLoss, startBeamOut, cancelBeamOut, shipResultOf, ringMissOf } from '@systems/run';
+import { startBeamOut, cancelBeamOut, shipResultOf, ringMissOf } from '@systems/run';
+import { continueAfterReport, continueAfterLoss } from '../support/classic-flow';
 import { pushModal, activeLayer } from '@systems/input';
 import { transmitModel, toggleDrop } from '@systems/transmit';
 import { runEndModel, rankSteps, rankOf, nearMisses, fleetColonists } from '@systems/run-end';
