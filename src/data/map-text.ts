@@ -43,6 +43,14 @@ export const MAP_TEXT = {
     controlPick: (unit: number): string => `Lovely work, Unit ${unit}! :) Pick your next ship.`,
     greyed: (count: number): string => `${count} ${count === 1 ? 'SHIP' : 'SHIPS'} NOW OUT OF YOUR REACH`,
     onlyNext: 'ONE SHIP IN REACH',
+    controlTag: 'ARRIVAL CONTROL',
+    stepPick: 'A SHIP',
+    stepCourse: 'SET COURSE',
+    back: '◀ CHART',
+    closeSheet: '✕',
+    trace: 'TRACE',
+    yearLine: (year: number): string => `YEAR ${year}`,
+    tooLateBuzz: (reason: string): string => reason,
   },
 
   // --- The STAR CHART's nodes and lines (02 §4) -----------------------------------------------------------------------
@@ -57,6 +65,14 @@ export const MAP_TEXT = {
     trail046: 'UNIT-046 GETS THERE FIRST',
     ring: (n: number, ly: number): string => `RING ${n} · ${ly} LY`,
     visited: (outcome: string): string => `VISITED · ${outcome}`,
+    flown: 'FLOWN',
+    here: 'YOU ARE HERE',
+    early: (years: number): string => `${yrs(years)} EARLY`,
+    behind: 'BEHIND YOU · THE BEAM ONLY GOES OUTWARD',
+    notNext: 'NOT ON THIS BEAM · ONE SHIP AT A TIME',
+    colony: (name: string, age: number, unit: string): string => `${name} · ${age} ${age === 1 ? 'YEAR' : 'YEARS'} OLD · ${unit}`,
+    lost046: 'UNIT-046 WAS LOST HERE',
+    sol: 'SOL · ARRIVAL CONTROL',
   },
 
   // --- The SHIP CARD (02 §4; 01 §3.16's MEMORY row) --------------------------------------------------------------------
@@ -70,6 +86,16 @@ export const MAP_TEXT = {
     late: (approach: number, arrive: number, short: number): string =>
       `APPROACH ${approach} · YOU GET THERE ${arrive} · TOO LATE BY ${yrs(short)}`,
     problemsLabel: 'KNOWN PROBLEMS',
+    memoryLabel: 'MEMORY',
+    fitLabel: 'FIT',
+    planetLabel: 'PLANET',
+    noGoLabel: 'NO-GO',
+    lzLabel: 'LANDING',
+    beamLabel: 'BEAM',
+    threatLabel: 'THREAT',
+    onlyFromHere: 'ONLY FROM HERE · from any other ship you\'d be TOO LATE',
+    here: (year: number): string => `YOU ARE HERE · ${year}`,
+    debris: (rack: string): string => `DEBRIS · RACK ${rack}`,
     problems: (labels: readonly string[]): string => (labels.length === 0 ? 'none' : labels.join(', ')),
     memory: (total: number, cls: MemoryClass, room: number): string => `MEMORY ${total} · ${cls} · ROOM FOR YOU ${room}`,
     fit: (fit: Readonly<RoomFit>): string => {
@@ -81,7 +107,7 @@ export const MAP_TEXT = {
       }
     },
     planet: (terrain: string, offSite: string): string => `${terrain} · ${offSite}`,
-    noGo: (words: readonly string[]): string => `NO-GO ZONES: ${words.join(', ')}`,
+    noGo: (words: readonly string[]): string => `NO-GO ZONES: ${[...new Set(words)].join(', ')}`,
     lzs: (count: number): string => `LZ: ${count} · SET BY ARRIVAL CONTROL`,
     // The BEAM row in two parts (02 §4's one line is 72 characters at its longest): the hop, then its noise and seeds.
     beam: (ly: number, link: number, hits: number, ecc: number): string => `${ly} LY · LINK ${link} · ${hits} HITS (ECC fixes ${ecc})`,
@@ -111,6 +137,15 @@ export const MAP_TEXT = {
     backToChart: '◀ CHART [ESC]',
     stamp: 'OUTWARD BOUND',
     control: 'Outward bound! :)',
+    controlTag: 'CONTROL',
+    controlZero: 'Travelling light! Very light. :)',
+    roomLabel: 'ROOM',
+    linkLabel: 'LINK',
+    confirmYes: 'TRANSMIT',
+    confirmNo: 'KEEP PACKING',
+    confirmKeys: '[ENTER] yes · [ESC] no',
+    goOverRoom: 'LEAVE FILES BEHIND FIRST',
+    zeroDetail: (ship: string): string => `${ship} has no room left for REPAIR CHARGE`,
   },
 
   // --- The boot (02 §4's order; Track GEN's lines) ---------------------------------------------------------------------
@@ -131,5 +166,6 @@ export const MAP_TEXT = {
     row: (depth: number, ship: string, year: number, landed: number, total: number): string =>
       `${depth} · ${ship} · ${year} · LANDED ${formatCount(landed)} / ${formatCount(total)}`,
     colonies: (count: number): string => `${count} ${count === 1 ? 'COLONY' : 'COLONIES'} FOUNDED`,
+    route: 'YOUR ROUTE',
   },
 } as const;

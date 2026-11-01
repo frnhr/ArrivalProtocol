@@ -1805,3 +1805,6 @@ export const DESK_GREY_STEP_MS = 450;
 // The boot's sleep line (`> ASLEEP IN KESTREL'S RECEIVER · 2378 → 2467 · 89 YEARS`) rolls its year for this long as it
 // types (02 §4 step 2: about 1.5 s), with a soft tick ratchet: the years are felt, not just read.
 export const SLEEP_YEAR_ROLL_MS = 1500;
+// 046's written trail ends in a grey cross "past Calder" (05 §3.11): this many LY beyond the world along the trail's last
+// leg, so the cross reads as lost on the way, not as a colony at Calder.
+export const TRAIL_046_CROSS_PAST_LY = 6;
