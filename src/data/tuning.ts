@@ -1646,6 +1646,9 @@ export const PRE_FINAL_ROOT_CAP = 14;
 export const FINAL_ROOT_MAX_BLOCKS = 18;
 // A deleted seed says one line from 05 §3.5's pool at most this often per ship (04 §3.6): a voice, not a chorus.
 export const SEED_WORDS_PER_SHIP = 1;
+// The strip's `A SEED — no rm aboard` line (04 §3.5) waits this many AI s into a ship: a licence the ship gives at its
+// start (KESTREL's DELETE, afterAiSec 0) is written on the flight's first ticks, and the line must never flash before it.
+export const BEAM_SEED_NO_RM_AFTER_SEC = 1;
 
 // --- 2 OPENING (owned by Track OPENING): driver arrival damage, the calm ships, the log -------------------------------
 

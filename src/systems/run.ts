@@ -3,7 +3,7 @@ import type {
   GameState, RunPhase, RunState, ShipOutcome, ShipResult, RunEndCause, ArrivalReport, TransitPlan, TransitHit, RingMiss,
 } from '@state/schema';
 import type { CarriedRacks } from '@data/memory';
-import type { ShipThreat } from '@/types/threat';
+import type { ShipThreat, BeamSeedSource } from '@/types/threat';
 import { onGameTick, onPostTick } from '@systems/clock';
 import { onWorldReset, resetWorld } from '@systems/reset';
 import { on, emit, NO_PAYLOAD } from '@systems/events';
@@ -13,14 +13,16 @@ import { endFlight } from '@systems/orbit-sim';
 import {
   isTutorialShip, commsUsable, beamOutRefusal, type BeamOutRefusal,
 } from '@systems/beam-out';
-import { logDivider, say } from '@systems/say';
+import { logDivider, say, hollowLabel } from '@systems/say';
+import { rollBeamSeeds } from '@systems/beam-seeds';
+import { tallyPreview } from '@state/threat-selectors';
 import { childRng } from '@systems/rng';
 import { shipStars, starCharge } from '@systems/stars';
 import {
   packUnit, packedFiles, rollTransitHits, emergencyCoreToll, arrivalCharge, layoutCarried, arrivalDamage,
 } from '@systems/carry';
 import { dealDraft, planPacket, applyPickToPacket, pickCharge } from '@systems/draft';
-import { archiveShipStarted, archiveRunEnded, archiveTutorialDone, type RunLineage } from '@systems/meta';
+import { archiveShipStarted, archiveRunEnded, archiveTutorialDone, playsTutorial, type RunLineage } from '@systems/meta';
 import { finaleRunCause } from '@systems/finale';
 import { newSegId } from '@systems/memory-ops';
 import { createRunState, createShipSlices, createUiState, createRunStats } from '@state/initial';
@@ -227,14 +229,23 @@ export function startShip(
 
 // The ship is over: its line goes into the run (§9 WP7 item 1), with the REPAIR CHARGE its stars pay on
 // arrival at the next ship.
+// TRACE's tally comes here too (04 §3.7), on every way a ship ends (its report's CONTINUE and a lost ship's card alike):
+// the beam-born blocks still in memory report home (TRACE) or, with HOLLOW aboard, feed its next root (run.threat.fed,
+// cumulative), exactly as the LANDING REPORT previewed it (state/threat-selectors.ts tallyPreview). The next ship's plan
+// (goTransmit) reads the result.
 export function endShip(store: Store<GameState>, outcome: ShipOutcome, stars = 0): ShipResult {
   const state = store.getState();
   if (state.run.ships.length > state.run.shipIndex) throw new Error(`endShip: ship ${state.run.shipIndex} already ended`);
   const result = shipResultOf(state, outcome, stars);
+  const tally = tallyPreview(state);
   store.update((draft) => {
     draft.run.ships.push(result);
     draft.run.pendingStars = stars;
+    draft.run.threat.trace = tally.traceAfter;
+    if (tally.fed) draft.run.threat.fed += tally.left;
+    draft.run.threat.lastTally = tally;
   });
+  if (tally.traceAfter !== tally.traceBefore) emit('trace-changed', { from: tally.traceBefore, to: tally.traceAfter });
   return result;
 }
 
@@ -291,6 +302,9 @@ export function transmitNext(store: Store<GameState>): void {
   if (!link) throw new Error(`transmitNext: ${ship.name} has no link`);
   const packet = planPacket(state.memory, plan, newSegId);
   applyPickToPacket(packet, plan.pick);
+  // The beam's hitchhikers (04 §3.4), rolled on the packet as it crosses (after the card's file is in it, before the
+  // transit hits): they ride free, and land behind their targets at the boot. From the verdict, never ShipDef.threat.
+  packet.seeds = rollBeamSeeds(packet, beamSourceOf(plan.threat), playsTutorial(state.run), childRng(state.run.seed, plan.toShipIndex, 'beam-seeds'));
   const files = packedFiles(packet);
   const hits: TransitHit[] = [];
   if (plan.coreHit > 0 || plan.coreReset) {
@@ -300,7 +314,7 @@ export function transmitNext(store: Store<GameState>): void {
   hits.push(...rollTransitHits(files, link.transitHits + plan.extraHits, childRng(state.run.seed, plan.toShipIndex, 'transit')));
   const cardCharge = pickCharge(plan.pick);
   const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, cardCharge);
-  const layout = layoutCarried(packet, charge.blocks, ship, plan.threat);
+  const layout = layoutCarried(packet, charge.blocks, ship, plan.threat, hollowLabel(state.run));
   const scripted = arrivalDamage(layout.racks.segs, link.damage);
   const arrival: ArrivalReport = {
     hits,
@@ -312,8 +326,8 @@ export function transmitNext(store: Store<GameState>): void {
     chargeFloorAdded: charge.floorAdded,
     chargeOverflowLost: layout.overflowLost,
     scripted,
-    // Beam seeds are Track THREAT's (systems/beam-seeds.ts rollBeamSeeds); the root lands in the slot as the ship is built.
-    seeds: [],
+    // The root lands in the slot as the ship is built (createShipSlices, from the verdict's rootBlocks).
+    seeds: layout.seeds,
     boarded: boardedBy(plan.threat),
   };
   // The card goes with the unit: the run remembers it (the Skills window lists it, THREAD+ is owned by it).
@@ -322,6 +336,12 @@ export function transmitNext(store: Store<GameState>): void {
     store.update((draft) => { draft.run.upgrades.push(picked); });
   }
   startShip(store, plan.toShipIndex, layout.racks, arrival, plan.threat);
+}
+
+// What the beam into a ship carries, from the ladder's verdict (04 §3.4): nothing into a calm ship ("no seeds before
+// depth 3", decided; slice 3's noisy hops into depths 1–2 then still carry none), else the verdict's own source.
+export function beamSourceOf(threat: Readonly<ShipThreat>): BeamSeedSource {
+  return threat.act === 'calm' ? { kind: 'none' } : threat.beamSeeds;
 }
 
 // HOLLOW's boarding as the arrival reports it (the boot's 108% unpack), from the ladder's verdict.

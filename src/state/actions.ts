@@ -28,8 +28,9 @@ import {
   SCAN_BASE_SEC, SCAN_PER_BLOCK_SEC, MOVE_BASE_SEC, MOVE_PER_BLOCK_SEC, COPY_BASE_SEC,
   COPY_PER_BLOCK_SEC, DELETE_SEC, COMPACT_SEC, REPAIR_CHARGE_PER_POINT_PER_BLOCK, INTEGRITY_MAX,
   OP_COMPLETE_PCT, FLOAT_SLACK, DELETE_HOLLOW_BASE_SEC, DELETE_HOLLOW_PER_BLOCK_SEC, HOLLOW_RECOIL_SEC, SWAP_SEC,
-  SEG_NAME_MAX_CHARS, ROOT_DELETE_SEC, BAY_SLOTS, LANDING_TACTICAL_WARP, LANDING_CRUISE_WARP,
+  SEG_NAME_MAX_CHARS, ROOT_DELETE_SEC, BAY_SLOTS, LANDING_TACTICAL_WARP, LANDING_CRUISE_WARP, SEED_WORDS_PER_SHIP,
 } from '@data/tuning';
+import { THREAT_TEXT } from '@data/threat-text';
 
 // A ship file's backup copy is called `<name>.alt` (Thrust.alt); a swapped-out primary `<name>.old` (§6.5).
 const BACKUP_SUFFIX = '.alt';
@@ -447,7 +448,14 @@ export function actionDelete(store: Store<GameState>, seg: Segment): ToolRefusal
   // one last block in its middle (data/memory.ts rootRemains); systems/finale.ts sees the root gone and stops HOLLOW.
   const isRoot = seg.type === 'hollow' && seg.root;
   let lastBlockId: string | null = null;
+  // A beam seed's words (phase 3 slice 2, 04 §3.6, 05 §3.5): at most SEED_WORDS_PER_SHIP seeds a ship say theirs as they
+  // go, in the delete's own echo (`> rm seed ... OK · it said: "…"`); the others go quietly.
+  let saidWords: string | null = null;
   runQuickOp(store, seg, 'delete', 'delete', deleteSec(seg), () => {
+    if (seg.type === 'hollow' && seg.seed) {
+      saidWords = claimSeedWords(store, seg);
+      emit('seed-deleted', { segId: seg.id, beam: seg.beam === true, words: seg.words ?? null });
+    }
     const memory = store.getState().memory;
     const start = requireAddr(memory, seg);
     for (const primary of memory) {
@@ -464,8 +472,28 @@ export function actionDelete(store: Store<GameState>, seg: Segment): ToolRefusal
       if (draft.ui.pickedSourceId === seg.id) draft.ui.pickedSourceId = null;
     });
     if (isRoot) emit('root-deleted', NO_PAYLOAD);
-  }, () => (seg.type === 'hollow' && seg.root ? OP_ECHO.deleteRoot(echoWord(seg.owner)) : OP_ECHO.delete(echoName(seg), seg.size)));
+  }, () => {
+    if (saidWords !== null) return THREAT_TEXT.seedSaid(saidWords);
+    return seg.type === 'hollow' && seg.root ? OP_ECHO.deleteRoot(echoWord(seg.owner)) : OP_ECHO.delete(echoName(seg), seg.size);
+  });
   return null;
+}
+
+// The director's one-shot ids that count a ship's seed words (director.done keeps every id that is not a per-ship beat
+// across ships, so the ship's index in the id makes the count per ship; a simulation retry replays ship 1, which has no
+// seeds).
+const SEED_WORDS_ID_PREFIX = 'seed-words-';
+
+// A deleted seed's words, if it has any and this ship has not heard SEED_WORDS_PER_SHIP seeds speak yet (recorded as it
+// is claimed); null otherwise.
+function claimSeedWords(store: Store<GameState>, seg: Readonly<Segment>): string | null {
+  if (seg.type !== 'hollow' || seg.words === undefined) return null;
+  const state = store.getState();
+  const prefix = `${SEED_WORDS_ID_PREFIX}${state.run.shipIndex}-`;
+  const said = state.director.done.filter((id) => id.startsWith(prefix)).length;
+  if (said >= SEED_WORDS_PER_SHIP) return null;
+  store.update((draft) => { draft.director.done.push(`${prefix}${said}`); });
+  return seg.words;
 }
 
 // Spends REPAIR CHARGE outside a repair (WP11: MERGE's price), all at once. The caller checked there is enough (a

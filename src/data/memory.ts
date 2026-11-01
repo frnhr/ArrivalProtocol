@@ -325,6 +325,9 @@ export function isUnitFileType(seg: Segment): boolean {
 export interface CarriedRacks {
   startAddr: number;
   segs: Segment[];
+  // Beam seeds that found no room in the receiver (04 §3.4's no-room rule, systems/carry.ts layoutCarried): buildShipMemory
+  // lands each in the centre of the largest free region of the whole memory once the ship is built.
+  strays?: HollowSegment[];
 }
 
 // Rack E's first address: where a unit's own files start (§4.2).
@@ -518,8 +521,23 @@ export function buildShipMemory(
   // Free space written at the end of one rack and the start of the next is one gap in memory
   // (rack B's tail and the empty racks C–D on ship 1).
   mergeAdjacentFree(memory);
+  for (const stray of carried?.strays ?? []) landStray(memory, structuredClone(stray), fail);
   assertMemoryInvariants(memory, MEMORY_TOTAL_BLOCKS);
   return memory;
+}
+
+// A beam seed with no room in the receiver (04 §3.4's no-room rule, a designed rule): it lands in the centre of the
+// largest free region (the lowest address of equal ones). Throws when no free region takes it.
+function landStray(memory: Segment[], seed: HollowSegment, fail: (why: string) => never): void {
+  let best = -1;
+  memory.forEach((seg, index) => {
+    if (seg.type === 'free' && seg.size >= seed.size && (best < 0 || seg.size > memory[best]!.size)) best = index;
+  });
+  if (best < 0) fail(`no free region takes a ${seed.size}-block beam seed`);
+  const region = memory[best]!;
+  const left = Math.floor((region.size - seed.size) / 2);
+  const right = region.size - seed.size - left;
+  memory.splice(best, 1, ...(left > 0 ? [freeSegment(left)] : []), seed, ...(right > 0 ? [freeSegment(right)] : []));
 }
 
 // --- Racks on screen ---------------------------------------------------------------------------------
