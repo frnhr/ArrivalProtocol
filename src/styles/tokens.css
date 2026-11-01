@@ -147,6 +147,24 @@
   --nogo: #ff3b2f;
   --nogo-hatch: rgba(255, 59, 47, 0.35);
 
+  /* ── the threat ladder and 046.log (phase 3 slice 2): the same on both screens. TRACE's cells are HOLLOW's pink
+        (04 §4); a beam seed's ECC mark a colder violet-pink, so it reads apart from HOLLOW's own seeds; the LOG READER is
+        the mind's blue whichever screen it opens over (05 §4), its new entries in the star's gold. ── */
+  --trace: #ff6ec7;
+  --trace-dim: rgba(255, 110, 199, 0.18);
+  --trace-glow: rgba(255, 110, 199, 0.45);
+  --beam-seed: #d79bff;
+  --beam-seed-static: rgba(215, 155, 255, 0.38);
+  --reader-backdrop: rgba(2, 5, 10, 0.78);
+  --reader-bg: #04080d;
+  --reader-edge: #1d4566;
+  --reader-accent: #00d4ff;
+  --reader-bright: #b3e5fc;
+  --reader-text: #d6f0ff;
+  --reader-dim: #4a7a90;
+  --reader-glow: rgba(0, 212, 255, 0.18);
+  --reader-new: #ffd36e;
+
   /* ── live state knob (set by systems/glitch.ts) ── */
   --corruption: 0;
   /* WP11: a glitchBurst under reduced motion dims the screen this much (0..1) for its moment (systems/glitch.ts). */

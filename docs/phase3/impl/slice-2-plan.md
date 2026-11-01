@@ -839,3 +839,91 @@ Track OPENING (§5.2) as built on branch `opening-2`, where it differs from §1�
     wp8/run-flow crashes run 1 on to LAST LIGHT, where HOLLOW eats the Core. wp5/racks leaves the log's 2-block chip out of
     its name-fit check: `???` and `046.log` don't fit a tiny chip, and the chip's own look is Track UI's.
 16. **wp7/, wp9/ and wp10/run-flow** are deleted in the post-THREAT re-fly (§5.2's last task), not before.
+
+## Deviations (Track UI)
+
+Track UI (§5.3) as built, where it differs from §2–§5 or fills a gap the plan left open. Each item has its reason.
+
+**Modules and seams**
+
+1. **`src/systems/log-view.ts` is new (Track UI's, the way hollow-hud.ts is)**: the pure models for 046.log's chip
+   (`logChip`: `046.log · 3/12`, the glow while an entry is unread), the LOG READER's rows (`logReaderModel`), the entry a
+   click opens (`logEntryToOpen`: the first found and unread, else the last found) and ↑ ↓ (`adjacentFoundEntry`), and
+   the reader's own words (`LOG_UI_TEXT`). Why: §2.1 puts the rows in LogReader.ts, but transmit.ts needs the chip too,
+   and a system must not import a component. The display name derives from `run.log` (scanned, or a key found, or the
+   segment renamed), so it never depends on story-log renaming the segment.
+2. **`src/systems/input.ts` gains the input layer `'reader'`**, above `'report'` and `'transmit'` (no track owned it; the
+   change is two lines). Why: the reader opens over TRANSMIT (entry 01 after ship 1's report), and TRANSMIT's SPACE would
+   otherwise send the packet behind it. SPACE, ENTER and ESC finish the typing, then close; ↑ ↓ move; M mutes.
+3. **The reader pauses a live ship while it is open** (`setPaused`) and lifts only the pause it made. Why: INSPECT's READ
+   can open it mid-flight, and reading must never cost a pod (the PAUSED veil stays under the card).
+4. **An unread entry shows `NEW` and no text until it is opened**, then types itself once (`LOG_READER_CPS` 42); a key, a
+   click or closing finishes it, and only then is `markLogEntryRead` called. The open entry keeps room for three lines while
+   it types, so the card does not grow. Reduced motion shows it whole at once.
+5. **`DetailActionId` gains `'read-log'`** (INSPECT's `▸ read 046.log`, glowing while an entry is new; SCAN is offered
+   until the log is scanned), and main.ts runs it with `logEntryToOpen` + `openLogReader`. The PACKET's log chip opens the
+   reader the same way instead of trying a drop (it is locked anyway).
+6. **The strip's log chip reads `046` (or `???`) over `3/12`** in VT323, in a sealed grey with a blue edge, glowing gold
+   while an entry is unread; `046.log · 3/12` whole is the PACKET chip, INSPECT and the tooltip. Why: a 2-block chip is
+   about 26 px wide at 1440 and 20 px on a phone. LogReader.ts's `mountLogChips` patches it after every strip rebuild and on
+   every `run.log` change (which bumps no memoryRev). Its hint target is OPENING's `LOG_HINT_TARGET`.
+
+**TRACE**
+
+7. **The meter is hidden until it means something this run**: TRACE above 0, a beam seed met (`run.arrival.seeds`) or in
+   memory, or HOLLOW aboard with its root in memory (then `IT RIDES WITH YOU · 10 BLOCKS` from the root's size in memory,
+   so the duel shrinks it). The calm ships show nothing.
+8. **TRACE is on both glances of MiniHud.ts**: the blue mini-HUD card (§5.3's mini-HUD) and the amber MIND chip (a compact
+   row: cells only, `ABOARD` once HOLLOW rides along). Why: the amber chip is where a kid flying the ship sees the mind.
+   On a phone the mini-HUD is a one-row top bar, so its TRACE row is dropped; the MIND header right under it shows the
+   meter (its note hidden). The cells are boxes in `--trace` pink, the whole line is the aria-label and title.
+9. **The LANDING REPORT's TRACE line** (`reportTraceLine`, from `tallyPreview`) comes with the charge line at the report's
+   last stage. A ship whose beam brought seeds and that kept none gets a line of UI text, `NO SEEDS LEFT BEHIND · NOTHING
+   REPORTS HOME · TRACE ■□□`; a ship that met none has no line. With HOLLOW aboard it is THREAT_TEXT.reportFed.
+
+**The PACKET**
+
+10. **The uninvited chip shows whenever `TransitPlan.threat.rootBlocks !== null`** (the boarding beam and every later
+    one, the final beam included), after the unit's own chips, in HOLLOW's black and pink static, outside the bar. Its owner
+    is `hollowLabel(run)` (`???` until it named itself); its `+n` line is `lastTally.left` when `lastTally.fed`. The
+    `transmitSweep` stutter plays only when `threat.boards !== null`. TransmitScreen reads the model, so UI does not need
+    the `hollow-boarding` event.
+11. **The PACKET's TRACE line**: on a boarding beam `TRACE ■□□ · HOLLOW WILL FIND YOU ON THIS BEAM` (THREAT_TEXT.willFindYou,
+    the map card's line, early); none on a beam HOLLOW already rides (its chip says it); otherwise the meter, with `1 MORE
+    AND IT FINDS YOU` at 2; none on a run with TRACE 0 and nothing tallied.
+12. **`NO RM · YOU CAN'T DELETE THE ROOT`** shows when `threat.isFinal && noWorkingRm(state)`, read from the memory being
+    packed.
+
+**Beam seeds and the boarding moment**
+
+13. **A beam seed's look** (`.hollow-beam`): HOLLOW's black with a dashed violet edge and a violet-pink static; on a chip
+    wider than two blocks its tag is `ECC` instead of its size (a 2-block chip hides its tag, as every tiny hollow chip
+    does). Its tooltip names its target (`SEED · ECC · SEED NEXT TO TELEMETRY · came with the beam`). On
+    `seed-landed-beam` it drops in with a flash and `SEED NEXT TO TELEMETRY` floats off it (THREAT_TEXT.seedNextTo), with
+    the `seedLand` cue. Any beam-born block (one a seed made by eating) keeps the class.
+14. **INSPECT on a beam seed** adds `came in · with the packet · named by ECC`, `next to` (from `run.arrival.seeds`) and
+    `if left · REPORTS HOME · TRACE +1` (or `FEEDS ??? · +1 BLOCK` with HOLLOW aboard), and its own description (UI text in
+    DetailPanel's `BEAM_SEED_INSPECT`).
+15. **The boarding moment** hangs on `hollow-boarded`: the tear is `glitchBurst(BOARD_TEAR_LEVEL 0.6, BOARD_TEAR_MS 900)` in
+    glitch.ts's driver (the phase-2 glitch overlay; no separate tear effect), the 6 px shake is Juice's, the `hollowBoard` cue
+    audio-cues', and HollowPainter drops the root's slab into its slot with a pink flash, first scrolling the slot into view
+    (a phone shows two racks). The cues were measured with `__ap.audio.measure`: seedLand about 5 dB under seedDrop,
+    hollowBoard about level with a heavy stampHit.
+16. **`biteClock` on a calm-only wake** counts `afterAiSec − hollow.calmAiSec` (no time while a dodge holds the wake). It
+    depends on THREAT advancing `calmAiSec` only outside TACTICAL; until THREAT lands, calmAiSec stays 0 and the countdown
+    stands at 0:30 while the foundation's wake counts plain AI seconds. VESPER's silent boarding shows `NEXT BITE ?:??` with
+    no change (its scripted wake has no time).
+17. **`LAST rm DELETED`** is Stamp.ts's on `last-rm-lost`, its heavy thud audio-cues'; the TERMINAL echo is THREAT's.
+
+**Tests and styles**
+
+18. **wp10/p2/views** checks THE DEAL's views on LAST LIGHT (`shipAlone(4)`: reached with no deal, it folds in), and the
+    boot's closing HOLLOW line there (`> last ship, 047. i'm so tired.`); VESPER's boot has no HOLLOW line now (risk 6).
+    The ghost and SWAP checks stay on VESPER. It passes; its KNOWN-FAILING row is gone.
+19. **`tests/unit/ui/threat-models.test.ts`** (43 checks, about 1 s) builds every state directly (run.threat, run.log,
+    beam-flagged hollow segments, ui.logReader, a crafted arrival report) and goes to TRANSMIT through `endShip` +
+    `goTransmit`.
+20. **Styles live in a new `src/styles/threat.css`** (imported after landing.css), with a slice 2 token block in tokens.css
+    and modes.css (`--trace`, `--beam-seed`, `--reader-*`), so game.css is untouched.
+21. **Not done (optional, OPENING's suggestion)**: FinaleChoice showing entry 12's lines under `> 047. wait.`; story-log
+    types them in the TERMINAL already.
