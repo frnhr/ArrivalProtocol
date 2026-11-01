@@ -839,3 +839,89 @@ Track OPENING (§5.2) as built on branch `opening-2`, where it differs from §1�
     wp8/run-flow crashes run 1 on to LAST LIGHT, where HOLLOW eats the Core. wp5/racks leaves the log's 2-block chip out of
     its name-fit check: `???` and `046.log` don't fit a tiny chip, and the chip's own look is Track UI's.
 16. **wp7/, wp9/ and wp10/run-flow** are deleted in the post-THREAT re-fly (§5.2's last task), not before.
+
+## Deviations (Track THREAT)
+
+Track THREAT (§5.1) as built on branch `threat-2`, where it differs from §1–§6 or fills a gap the plan left open.
+
+**Beam seeds**
+
+1. **One seed per file.** `rollBeamSeeds` rolls the count by noise (`BEAM_SEED_ODDS`), then each seed's target by size
+   among the packet's targets, never the same file twice: a beam that rolls more seeds than there are targets carries one
+   per target. The scripted tutorial seed (`playsTutorial(run)`) rides behind Telemetry; if the kid left Telemetry behind
+   on the TRANSMIT screen it rides behind a rolled target instead. Every seed draws its words as it is rolled.
+2. **`layoutCarried(packet, charge, ship, threat, owner?)`** gained the owner name for the seed segments (it throws when
+   the packet carries seeds and no owner is given). `CHARGE_ARRIVAL_FLOOR` is laid out before the seeds, the charge above
+   it after them (04 §3.4's FULL rule). **The no-room rule:** in the pooled receiver every target has the same room, so
+   re-picking a target can never help; a seed with no room is a stray (`CarriedRacks.strays`), which `buildShipMemory`
+   lands in the centre of the largest free region of the whole memory. `CarriedLayout.seeds` is what
+   `ArrivalReport.seeds` reports.
+3. **No seeds into a calm ship** whatever the source says (`beamSourceOf(threat)` in run.ts): 04 §3.4's "no seeds before
+   depth 3" is enforced from the verdict's act, so slice 3's noisy hops into depths 1–2 need no extra rule.
+4. **The calm-only clock** counts the AI seconds when the flight is not at TACTICAL (the same condition as
+   `firstSeedHeld`, so `HollowStepCtx` did not grow). `settledWakeAtAi` projects a calm-only wake as `aiNow` plus the calm
+   seconds left, so a countdown read from it stands still at TACTICAL and never jumps (its `hollow` argument now also
+   picks `calmAiSec`).
+5. **The seeds-only alert** is the existing seed alert worded `SEED NEXT TO <FILE>` for a beam seed. It holds SKIP from
+   the flight's first tick until the seed is rm'd, as a phase-2 seed in reach does.
+6. **The seed's words** replace the delete's own echo (`> rm seed ... OK · it said: "…"`), for at most
+   `SEED_WORDS_PER_SHIP` seeds a ship, counted through `director.done` ids `seed-words-<ship>-<n>` (no schema field).
+   `seed-deleted` is emitted for every seed (HOLLOW's own ones too, `beam: false`, `words: null`).
+7. **The strip's RM lesson for beam seeds** is two more wordings of phase 2's `seed-first` lesson (threat-rules.ts), done
+   when the beam's seeds are gone from memory; phase 2's two wordings call it done only for HOLLOW's own seeds. So the
+   lesson has four wordings (final-fix/two-screens checks it). The no-rm line waits `BEAM_SEED_NO_RM_AFTER_SEC` (1 s)
+   into a ship so it never flashes before KESTREL's DELETE licence is written.
+8. **Slice 3's rule is built**: beam seeds on a plain-ARRIVAL ship bite on the seeds-only clock before its scripted fight
+   (`stepBeamSeedsBeforeFight`, using `biteInSec`, which a plain ARRIVAL leaves unused while asleep), and stop when the
+   fight begins. Their infections drain at the ship's def's rate (ARRIVAL's 2 %/s), not the seeds-only 2.5.
+
+**HOLLOW's arrival and the stories**
+
+9. **The scripted bite takes the nearer driver** (the smaller GAP) when both of the root's neighbours are drivers: on
+   VESPER that is POD 09, the lead (deviation (foundation) 18's "POD 09" now holds; it used to take POD 08, left first).
+10. **'arrives'**: no bite timer runs during the scripted fight; `decideScript` keeps HOLLOW awake and starts the 25 s timer
+    there. The naming begins at the first timed bite after the fight (so the walls lesson has that bite first);
+    `> i ran out…` and then `keepCharge` wait for the landing. `keepCharge` is keyed on `'arrives'` itself: the ladder folds
+    WALLS into ARRIVAL only on a first HOLLOW ship one hop from a final ship, so no verdict or ShipDef is read in the
+    world (the verdict is not kept in the state after the boot).
+11. **The final ship's missed beats** are the notice (`> ...047?`, CONTROL) and the naming, told at its wake before
+    anything else; `> i ran out…` and `keepCharge` are not (they belong to the ship before MERGE). finale.ts's
+    `nameHollow` at ORBIT LOCK stays as the last fallback.
+12. **`hollowFirstFightDecided`** = HOLLOW aboard, not asleep, and no scripted target still fought over.
+
+**THE DEAL and the verbs**
+
+13. **The folded deal is offered only while the flight is on** (a final ship's HOLLOW, `cfg.verbs !== null`): at ORBIT
+    LOCK the duel opens, and a bargain then would talk over it. It is still offered by the front rule (at the wake on LAST
+    LIGHT, which bites both drivers beside the root).
+14. **`verbsHeld(state)`** is exported (hollow-verbs.ts): the verbs' clock and a standing countdown stand still while the
+    offer stands and through an ACCEPT's pause, at any pace.
+
+**The last rm, infections, records**
+
+15. **The last rm** is watched after every tick of a live ship by file presence (no DELETE file left in memory, whatever
+    took it), not by "working": an infected or failing rm is not deleted yet. Its echo is a `mind-sys` line; the stamp is
+    UI's on `last-rm-lost`. `noWorkingRm` (no usable rm that is not infected) stays the PACKET chip's reading.
+16. **A debug infect on a calm ship** (no hollow block in memory) crawls in from the left, as an infection carried in from
+    the last ship does (`infectNow`, which threw before). wp7/soft-fails and wp12/p3/repair-renewed rely on it.
+17. **`run.threat.eatenDrivers`** is filled in hollow.ts's consume, which also covers an ACCEPTed deal's driver.
+
+**Tests and helpers**
+
+18. **The `R` token is gone.** `ROOT_BLOCKS` stays (debug.ts's hollowDemo, which now writes its root through a slot, and
+    the fixtures). `tests/unit/support/hollow-world.ts` has `plantRoot`, `phase2ShipOne` (ship 1's root at rack B's start),
+    `phase2Ship` (HALCYON's and KESTREL's phase-2 pod racks with an 8-block root through a slot), and OPENING's
+    `plantHalcyonRoot` (moved there from tests/unit/opening/plant-root.ts, now deleted). harness9's `phase2Hollow` and
+    harness10's `hunt` build KESTREL's SEEDS stage and VESPER's HUNT stage for the phase-2 suites.
+19. **lead1/story and lead1/fix1/story-landing** were re-keyed onto a planted ship-1 ARRIVAL rather than rewritten on
+    VESPER: the timing rules are the same code on every ARRIVAL, and threat/arrival-story covers VESPER's folded story.
+    **wp10/deal-test** runs the deal's mechanics on VESPER's HUNT stage (its nearer pod is POD 09 now); LAST LIGHT's fold
+    and the verbs waiting are threat/arrival-story's. wp7/halcyon-story is deleted.
+20. **harness11's `defend11` answers a standing deal** once its line has typed (`DefendOpts.deal`, default `'refuse'`, the
+    playthrough kids' answer). wp11/full-run (OPENING's re-fly) uses it.
+21. **Dev helpers**: `__ap.ship(i)` rolls the beam's seeds as a transmission does (KESTREL's Telemetry seed on run 1);
+    `__ap.seed(target)` lays a beam seed behind a file (and gives a calm ship the seeds-only config); `__ap.board()` enters
+    the ship again with a forced boarding's verdict (only where the ladder lets HOLLOW board: VESPER on the fixed five).
+22. **The COPY lesson's re-keyed trigger** is `copyLessonDue(state)` in threat-selectors.ts (a hollow block's reach beside
+    a filesystem tool with no spare, `huntedToolWithoutSpare`, or a HUNT stage's seeds); wiring it is a one-line patch to
+    script.ts, which is OPENING's (requested with this track's report).
