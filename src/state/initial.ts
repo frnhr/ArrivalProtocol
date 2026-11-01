@@ -207,7 +207,7 @@ export function createHollowState(cfg: Readonly<HollowDef>): HollowState {
     deal: createDealState(),
     verbInSec: null, verb: null, verbMoments: 0, verbTelegraphs: 0, verbsLanded: 0, verbsBlocked: 0, untriedTools: [], bitesAt: [],
     finale: { phase: 'none', restoredInPlace: [], restoredHalf: [], ending: null, unresolvedUntilAi: null },
-    calmAiSec: 0,
+    calmAiSec: 0, unlinkedLastSpare: false,
   };
 }
 

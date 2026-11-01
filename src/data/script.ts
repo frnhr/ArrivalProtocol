@@ -1872,7 +1872,8 @@ function swapRunning(): boolean {
   return getOps().some((operation) => operation.kind === 'swap');
 }
 
-// A tool HOLLOW can reach has no spare, or a HUNT stage's seeds are on their way or in memory, with COPY in hand
+// A tool HOLLOW can reach has no spare, a HUNT stage's seeds are on their way or in memory, or a verb unlinked Repair's
+// last spare on this ship (LAST LIGHT, the review's minor 5), with COPY in hand
 // (slice-2-plan risk 12: re-keyed from VESPER's near-tools seeds, which the fixed five no longer have).
 function toolsHunted(ctx: DirectorCtx): boolean {
   return isLive(ctx) && ctx.state.run.licences.includes('copy') && copyLessonDue(ctx.state);

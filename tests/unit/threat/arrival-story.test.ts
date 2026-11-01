@@ -17,10 +17,13 @@ import { actionRepair, actionDelete } from '@state/actions';
 import { spreadPaused } from '@state/selectors';
 import { getOps } from '@systems/ops-core';
 import { hollowReach, theRoot, rootDeleteRunning } from '@systems/hollow';
-import { verbsHeld } from '@systems/hollow-verbs';
+import { verbsHeld, verbNow } from '@systems/hollow-verbs';
 import { DEAL_ACCEPT, DEAL_REFUSE } from '@systems/hollow-deal';
 import { pickChoice, openChoiceEntry } from '@systems/say';
-import { hollowFirstFightDecided, keepChargeDue } from '@state/threat-selectors';
+import { hollowFirstFightDecided, keepChargeDue, copyLessonDue } from '@state/threat-selectors';
+import { buildDirectorCtx } from '@systems/director';
+import { getPrediction } from '@systems/predict';
+import { GUIDE_RULES } from '@data/script';
 import { createInitialState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
 import { getShip } from '@data/ships';
@@ -253,6 +256,34 @@ check('REFUSE: `> ok.`, and nothing of the deal holds the verbs any more', s().r
   }
   check('…and the duel runs to FinaleChoice with no deal UI beside it', s().hollow.finale.phase === 'choice' && !coexisted
     && openChoiceEntry(s()) === null && s().hollow.deal.phase === 'done', `${s().hollow.finale.phase}`);
+}
+
+// The review's minor 5: the COPY lesson on the fixed five fires on LAST LIGHT's first `unlink` of Repair's last spare.
+{
+  setLandingMode('manual');
+  h.shipAlone(LAST_LIGHT, 16);
+  installTool(h.store, 'repair');
+  installTool(h.store, 'copy');
+  for (let i = 0; i < 1600 && s().hollow.deal.phase !== 'offered'; i++) h.step();
+  pickChoice(s().hollow.deal.entryId!, DEAL_REFUSE);
+  // The harness's flight stands at TACTICAL (the verbs wait for a calm flight): the duel's landing runs them at once.
+  lockOn(h);
+  const lessonLive = (): boolean => {
+    const ctx = buildDirectorCtx(s(), getPrediction(), { events: new Set(), phaseEntered: null, mindQuietSec: 0, flash: null });
+    return GUIDE_RULES.some((rule) => rule.lesson === 'copy-repair' && rule.activeWhen(ctx));
+  };
+  const before = copyLessonDue(s()) || lessonLive();
+  let unlinked: string | null = null;
+  for (let i = 0; i < 3000 && unlinked === null; i++) {
+    if (s().hollow.verb === null && s().hollow.phase === 'awake') verbNow(h.store);
+    h.step();
+    const verb = s().hollow.verb;
+    if (verb?.kind === 'rm' && /repair/i.test(verb.targetWord)) unlinked = verb.targetWord;
+  }
+  check('minor 5: no COPY lesson on LAST LIGHT before a verb aims at Repair\'s spare; `unlink repair.bak` makes it due',
+    !before && unlinked !== null && s().hollow.unlinkedLastSpare && copyLessonDue(s()), `${unlinked}`);
+  for (let i = 0; i < 200 && s().hollow.verb !== null; i++) h.step();
+  check('…and it stays due once the verb is over, so the lesson follows BLOCK IT on the strip', s().hollow.verb === null && copyLessonDue(s()) && lessonLive());
 }
 
 finish();

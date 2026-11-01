@@ -79,11 +79,13 @@ export function huntedToolWithoutSpare(state: Readonly<GameState>): FsToolSegmen
 }
 
 // The COPY lesson is due (risk 12; data/script.ts toolsHunted reads it, with COPY licensed): a tool HOLLOW can reach has
-// no spare (huntedToolWithoutSpare), or a HUNT stage's seeds, which aim at your tools, are blinking or have landed.
+// no spare (huntedToolWithoutSpare), or a HUNT stage's seeds, which aim at your tools, are blinking or have landed, or
+// (the review's minor 5: the one moment the fixed five reliably give it) a verb has telegraphed `unlink` on Repair's last
+// spare on this ship (HollowState.unlinkedLastSpare, LAST LIGHT; latched, so the lesson follows the verb's BLOCK IT line).
 export function copyLessonDue(state: Readonly<GameState>): boolean {
   const hollow = state.hollow;
   const huntSeeds = hollow.cfg.seed?.target === 'near-tools' && (hollow.seedTelegraph !== null || hollow.seedsLanded > 0);
-  return huntSeeds || huntedToolWithoutSpare(state) !== null;
+  return huntSeeds || hollow.unlinkedLastSpare || huntedToolWithoutSpare(state) !== null;
 }
 
 // Slice 5's hook (a corrupted resident wakes after it): HOLLOW is aboard and its first fight on this ship has been decided:

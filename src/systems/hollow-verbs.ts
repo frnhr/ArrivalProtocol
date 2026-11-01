@@ -13,7 +13,7 @@ import { childRng } from '@systems/rng';
 import { glitchBurst } from '@systems/glitch';
 import { chooseVerb, landVerb, verbWeights, rootDeleteRunning, type Verb } from '@systems/hollow';
 import { assertMemoryInvariants } from '@systems/memory-ops';
-import { fileLabel, isHollow, verbSecondsLeft, spreadPaused } from '@state/selectors';
+import { fileLabel, isHollow, verbSecondsLeft, spreadPaused, toolFilesOf, isUsableTool } from '@state/selectors';
 import { echoName, echoWord } from '@data/tool-text';
 import { MEMORY_TOTAL_BLOCKS } from '@data/memory';
 import { HOLLOW_VERB } from '@data/hollow-text';
@@ -84,6 +84,14 @@ function telegraphOf(verb: Readonly<Verb>, target: Readonly<Segment>, telegraphS
   return { kind: 'mv', targetId: target.id, targetWord: word, targetLabel: label, toAddr: verb.toAddr, ...clock };
 }
 
+// An `unlink` aimed at a Repair file whose kind keeps no other spare once it lands (the review's minor 5: on the fixed five
+// this is LAST LIGHT's `unlink repair.bak`, the moment the COPY lesson is for: HollowState.unlinkedLastSpare). Only Repair
+// comes with a spare, and the lesson's words are `COPY your Repair`.
+function unlinksLastRepairSpare(memory: readonly Segment[], telegraph: Readonly<VerbTelegraph>, target: Readonly<Segment>): boolean {
+  if (telegraph.kind !== 'rm' || target.type !== 'fs-tool' || target.fsTool !== 'repair') return false;
+  return toolFilesOf(memory, 'repair').filter((copy) => copy !== target && isUsableTool(copy)).length <= 1;
+}
+
 // Its moment has come: a verb (or none, when nothing is a fair target, or no thread is free to block it with: HOLLOW skips
 // its turn, §6.6 and the lead's ruling). A skipped turn still counts as a moment (SKIP waits only for the first:
 // pace.ts), but not as a telegraph: the ship's first verb the kid sees is the one that counts from firstTelegraphSec.
@@ -96,10 +104,12 @@ function startVerb(store: Store<GameState>, cfg: Readonly<VerbDef>): VerbTelegra
   if (verb !== null && target === undefined) throw new Error(`hollow-verbs: chose ${verb.targetId}, which is not in memory`);
   const telegraphSec = state.hollow.verbTelegraphs === 0 ? cfg.firstTelegraphSec : cfg.telegraphSec;
   const telegraph = verb === null || target === undefined ? null : telegraphOf(verb, target, telegraphSec);
+  const lastSpare = telegraph !== null && target !== undefined && unlinksLastRepairSpare(state.memory, telegraph, target);
   store.update((draft) => {
     draft.hollow.verbMoments++;
     draft.hollow.verb = telegraph;
     if (telegraph !== null) draft.hollow.verbTelegraphs++;
+    if (lastSpare) draft.hollow.unlinkedLastSpare = true;
   });
   if (telegraph === null) return null;
   touched = false;

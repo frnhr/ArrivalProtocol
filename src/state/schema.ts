@@ -465,6 +465,10 @@ export interface HollowState {
   // AI seconds of calm flight on this ship (phase 3 slice 2): the clock a calm-only wake counts (HollowWake calmOnly, the
   // seeds-only config's first bite, 04 §3.5). It stands still at TACTICAL, as the first seed's clock does. (mutate)
   calmAiSec: number;
+  // A verb telegraphed `unlink` on Repair's last spare on this ship (the review's minor 5, systems/hollow-verbs.ts): the
+  // COPY lesson's moment on the fixed five (state/threat-selectors.ts copyLessonDue), latched for the ship so the lesson
+  // can follow the verb's BLOCK IT line. (update, at the telegraph)
+  unlinkedLastSpare: boolean;
 }
 
 export interface BiteSpot {
