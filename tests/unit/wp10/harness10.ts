@@ -14,12 +14,29 @@ import { pickUpTool, applyTool, cancelTool } from '@systems/fs-tools';
 import { getByRole } from '@state/selectors';
 import { capabilitiesNow } from '@systems/capabilities';
 import { getOps, canStartOp } from '@systems/ops-core';
+import { packUnit, layoutCarried } from '@systems/carry';
+import { resetWorld } from '@systems/reset';
+import { createInitialState } from '@state/initial';
+import { nominalShipThreat } from '@systems/threat-plan';
+import { getShip } from '@data/ships';
+import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F } from '@data/memory';
+import type { ShipThreat } from '@/types/threat';
+import type { Segment } from '@/types/segment';
+import { phase2HollowOf } from '../support/hollow-world';
 
 export const VESPER = 3;
 
 export interface VesperOpts {
   // HOLLOW put to sleep for good (a flight suite measures the flight, not the fight).
   hollowAsleep?: boolean;
+  // Phase 3 slice 2: VESPER as phase 2 had it, HOLLOW's HUNT stage (seeds next to your tools, THE DEAL, a 14-block
+  // root), with the receiver's hunting ground; the fixed five no longer reach that stage (VESPER plays ARRIVAL + WALLS).
+  hunt?: boolean;
+}
+
+// VESPER's verdict as the HUNT stage (phase 2's VESPER def, its 14-block root): what \`hunt\` builds the ship with.
+export function huntVerdict(): ShipThreat {
+  return { ...nominalShipThreat(VESPER), act: 'hollow', stage: 'hunt', folded: [], hollow: phase2HollowOf(VESPER), rootBlocks: 14 };
 }
 
 export interface Harness10 extends Harness9 {
@@ -62,6 +79,18 @@ export function createHarness10(seed = 1, opts: { soulsFound?: boolean } = {}): 
     ...base,
     vesper(nextSeed, vesperOpts = {}) {
       base.shipAlone(VESPER, nextSeed);
+      if (vesperOpts.hunt) {
+        const threat = huntVerdict();
+        const ship = getShip(VESPER);
+        const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
+          .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item))
+          .map((item) => structuredClone(item) as Segment);
+        const packet = packUnit(files, ship.arrival!.linkBlocks, []);
+        const carried = layoutCarried(packet, packet.chargeCarried, ship, threat).racks;
+        const fresh = createInitialState({ seed: nextSeed, shipIndex: VESPER, carried, threat });
+        base.store.update((d) => { Object.assign(d, fresh); });
+        resetWorld();
+      }
       if (vesperOpts.hollowAsleep) base.store.update((d) => { d.hollow.phase = 'dormant'; });
       base.events.length = 0;
     },

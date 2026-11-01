@@ -1,3 +1,5 @@
+// Phase 3 slice 2: ships 1–2 are calm; cases A and B plant phase 2's root and its ARRIVAL stage (support/hollow-world.ts
+// phase2ShipOne), whose story timing is the same code on every ARRIVAL.
 // LEAD-1 review round 1, slice 1a (story-printer became story-landing): HOLLOW's story after the ship-1 fight and the
 // landing. Phase 2's printer went quiet for the story; the landing's launches and touchdowns are the kid's (and the
 // instant landing's) and may come at any moment, so what holds is the story's own rule: each beat waits until BOTH
@@ -21,6 +23,7 @@ import { podRecord } from '@systems/landing-rules';
 import { HOLLOW_STORY } from '@data/hollow-text';
 import { HOLLOW_STORY_SILENCE_SEC } from '@data/tuning';
 import type { LogEntry } from '@state/schema';
+import { phase2ShipOne } from '../../support/hollow-world';
 import { setLandingMode, landInstantly } from '../../support/landing-instant';
 
 const TICK = 0.05;
@@ -68,6 +71,7 @@ function toReport(each?: () => void): { pendingAt: number; toldAt: number } {
 // --- A: the pods launch while the story is told ---------------------------------------------------------------------
 {
   h.resetTo('flight');
+  phase2ShipOne(h.store);
   followStrip(h, 0.4, 400, () => {
     const line = state().director.shown;
     if (line?.id === 'tut-repair-engine' || line?.id === 'tut-engine-weak') {
@@ -107,6 +111,7 @@ function toReport(each?: () => void): { pendingAt: number; toldAt: number } {
 // --- B: the kid who never TABs: POD 01 is eaten after the lock ------------------------------------------------------
 {
   h.resetTo('flight');
+  phase2ShipOne(h.store);
   let lockedAt = NaN;
   followStrip(h, 0.4, 400);
   if (h.status() === 'locked') lockedAt = now();

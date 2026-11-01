@@ -45,7 +45,7 @@ const biggestFree = (): FreeSegment => state().memory.filter((seg): seg is FreeS
   .sort((a, b) => b.size - a.size)[0]!;
 
 // --- The licence --------------------------------------------------------------------------------------------------
-h.vesper(13, { hollowAsleep: true });
+h.vesper(13, { hunt: true, hollowAsleep: true });
 h.step();
 h.step();
 {
@@ -113,7 +113,7 @@ check('WP11: Repair is never spared (the COPY lesson\'s target): REPAIR\'s licen
 
 // --- near-tools targeting, pure ---------------------------------------------------------------------------------
 {
-  h.vesper(14, { hollowAsleep: true });
+  h.vesper(14, { hunt: true, hollowAsleep: true });
   // Slice 1a's pooled receiver (01-landing §3.16) packs the unit's files back to back from rack E's start; on VESPER it
   // leaves a hunting ground before the first tool (carry.ts huntingGapBlocks, review issue 5: a WALL off the AI files,
   // then room for the seed), so as it arrives the seed already borders a tool (Scan) and bites no AI file.
@@ -172,7 +172,7 @@ check('WP11: Repair is never spared (the COPY lesson\'s target): REPAIR\'s licen
 
 // --- Live on VESPER: the first seed hunts a tool -------------------------------------------------------------------
 {
-  h.vesper(15);
+  h.vesper(15, { hunt: true });
   h.stepUntil(() => state().hollow.phase === 'awake', 60);
   const wokeAt = state().clock.aiSec;
   // The kid answers THE DEAL at once (REFUSE) and heals the two bites, so the seed is the next thing that happens.
@@ -223,7 +223,7 @@ function bittenBy(memory: readonly Segment[], startAddr: number): Segment[] {
 }
 const toolsIn = (segs: readonly Segment[]): FsToolSegment['fsTool'][] => segs.flatMap((seg) => (seg.type === 'fs-tool' ? [seg.fsTool] : []));
 {
-  h.vesper(14, { hollowAsleep: true });
+  h.vesper(14, { hunt: true, hollowAsleep: true });
   h.step();
   h.step();
   // VESPER after its first moment (its licences in memory): the tool the seed hunts with every tool tried, then spared.
@@ -253,7 +253,7 @@ const toolsIn = (segs: readonly Segment[]): FsToolSegment['fsTool'][] => segs.fl
   let bad = '';
   let sawSwapSpared = 0;
   for (const seed of [21, 22, 23, 24, 25, 26]) {
-    h.vesper(seed);
+    h.vesper(seed, { hunt: true });
     let landed = state().hollow.seedsLanded;
     let swapSpared = false;
     h.stepUntil(() => {

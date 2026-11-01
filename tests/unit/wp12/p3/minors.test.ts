@@ -83,7 +83,7 @@ const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { e
 
 // --- THE DEAL's pause does not hold SKIP --------------------------------------------------------------------------------
 {
-  h.vesper(11, { hollowAsleep: false });
+  h.vesper(11, { hunt: true, hollowAsleep: false });
   h.store.update((d) => {
     d.hollow.phase = 'awake';
     d.hollow.seedMoments = 0;
@@ -116,7 +116,7 @@ const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { e
 
 // --- Two FIREWALLs --------------------------------------------------------------------------------------------------
 {
-  h.vesper(12, { hollowAsleep: true });
+  h.vesper(12, { hunt: true, hollowAsleep: true });
   // Two FIREWALL.sys files, installed as __ap.giveCard does (debug.ts is DOM code, so the same calls here).
   for (let i = 0; i < 2; i++) {
     const memory = state().memory;
@@ -143,7 +143,7 @@ const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { e
 
 // --- A worn Core on a quiet coast --------------------------------------------------------------------------------------
 {
-  h.vesper(13, { hollowAsleep: true });
+  h.vesper(13, { hunt: true, hollowAsleep: true });
   h.store.update((d) => {
     for (const seg of d.memory) {
       // No bursts (a healthy controller) and a Core worn under the line, nothing infected.
