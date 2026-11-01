@@ -1,15 +1,16 @@
 // WP8 acceptance 6 (§5.2, §9 WP8 items 4–6): WP7's run-flow, extended to the run after it, with the archive on a
 // stubbed storage. Run 1 is ended for real (EMERGENCY TRANSMITs from crashes on to LAST LIGHT, then HOLLOW eats the Core
 // on the last ship: OVERWRITTEN); the archive keeps it; NEW RUN is UNIT-048 on wave 2, and its ship-1 boot:
-// • the ghost line types first (`> hi 048. it's 047. 046 ate me. now i'm hungry too.`), and a skip waits for it; since
-//   slice 2 it names nothing (ship 1 is calm, no root to rename: slice-2-plan risk 11);
+// • no ghost (05 §3.5: it never plays at ship 1, the new unit can't know yet; slice-2-plan's follow-up, Fran's playtest):
+//   run 1 was lost on LAST LIGHT, so its ghost speaks there;
 // • slice 1a: no archive to open (the drivers are files from the start): the boot says UNPACKING, the host line
 //   (`> HOST: ARES-VII · 3 PODS · 600 COLONISTS`) and the ECC line, and REPAIR is licensed in the boot;
 // • ship 1 is reseeded: other families, POD 01 still the lead, the hurt pod seeded and never POD 01; the ship-1 lessons
 //   are one hint each (`ENGINE WEAK — REPAIR ENGINE I/O`, `POD nn WILL LAND HARD — REPAIR its driver`) and the run-1
-//   tutorial lines never show; HOLLOW says nothing more on ship 1 (calm since slice 2);
-// • HALCYON's boot has no ghost.
-// Then a page "reload" mid-run 2: the leftover run is 'abandoned', and run 3's ghost says so.
+//   tutorial lines never show; HOLLOW says nothing on ship 1 (calm since slice 2);
+// • HALCYON's boot has no ghost either (it is LAST LIGHT's).
+// Then a page "reload" mid-run 2: the leftover run is 'abandoned' at HALCYON, and run 3's ghost says so at HALCYON's boot
+// (not ship 1's), once (KESTREL's boot has none).
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { receiveTransmission, skipBoot } from '@systems/boot';
@@ -23,7 +24,7 @@ import { driversInMemory, getAiCore } from '@state/selectors';
 import { ARES_RUN1_FAMILIES } from '@data/souls';
 import { LINES, WORST_CASE_VARS } from '@data/script';
 import { LANDING_ASKS, hostLine } from '@data/landing-text';
-import { META_STORAGE_KEY, BOOT_GHOST_AT_SEC, HOLLOW_TYPE_CPS } from '@data/tuning';
+import { META_STORAGE_KEY, BOOT_GHOST_AT_SEC, BOOT_LINE_AT_SEC } from '@data/tuning';
 import type { GameState } from '@state/schema';
 import { followLanding } from '../landing/harness-landing';
 import { setLandingMode } from '../support/landing-instant';
@@ -123,18 +124,13 @@ check('…and POD 01 keeps a featured child, as Ada was (first in the credits)',
 // --- Run 2: the boot ---------------------------------------------------------------------------------------------
 receiveTransmission(h.store);
 check('RUN START again: runs 2, UNIT-048 in progress', stored().runs === 2 && stored().activeRun?.unit === 48);
-const ghostText = "> hi 048. it's 047. 046 ate me. now i'm hungry too.";
-h.stepFor(BOOT_GHOST_AT_SEC + 0.1);
+h.stepFor(BOOT_LINE_AT_SEC[0]! + 0.1);
 const first = said().find((entry) => entry.channel === 'mind');
-check('the ghost line types first, in HOLLOW\'s voice, before anything else in the TERMINAL', first?.speaker === 'hollow' && first.text === ghostText,
-  `${first?.speaker}: ${first?.text}`);
-check('a skip while the ghost is still typing is refused (its greeting is the moment run 2 is about)', !skipBoot(h.store) && state().run.phase === 'boot');
-const typedAt = BOOT_GHOST_AT_SEC + ghostText.length / HOLLOW_TYPE_CPS;
-h.stepFor(typedAt - BOOT_GHOST_AT_SEC - 0.2);
-check('…no boot line of its own was said before the ghost had typed', said().filter((entry) => entry.speaker === 'mind-sys').length === 0);
-h.stepUntil(() => said().some((entry) => entry.speaker === 'mind-sys'), 3);
-check('once it has typed the boot goes on, and HOLLOW stays unnamed (no root on ship 1 to rename, risk 11)',
-  !state().run.hollowNamed && !h.events.some((event) => event.name === 'hollow-named') && said().some((entry) => entry.speaker === 'mind-sys'));
+check('no ghost at ship 1\'s boot (05 §3.5: the new unit can\'t know yet): the TERMINAL opens on the unpack, on time',
+  first?.speaker === 'mind-sys' && first.text === '> UNPACKING UNIT-048 ... 100%' && !said().some((entry) => entry.speaker === 'hollow')
+    && !state().run.ghostSpoken, `${first?.speaker}: ${first?.text}`);
+check('…and HOLLOW stays unnamed (no root on ship 1 to rename, risk 11)',
+  !state().run.hollowNamed && !h.events.some((event) => event.name === 'hollow-named'));
 h.stepUntil(() => said().filter((entry) => entry.speaker === 'mind-sys').length >= 3 || state().run.phase !== 'boot', 10);
 const bootLines = said().filter((entry) => entry.speaker === 'mind-sys').map((entry) => entry.text);
 check('then the boot: UNPACKING UNIT-048, the host line (3 PODS · 600 COLONISTS), the ECC line',
@@ -174,8 +170,8 @@ check(`…the hurt driver's hint is one line on either screen: \`${hurtLine}\``,
   shown.includes(hurtLine) && !shown.some((text) => text.includes('WILL LAND HARD') && text.includes('[TAB]')),
   shown.filter((text) => /LAND HARD/.test(text)).join(' | '));
 const hollowLines = said().filter((entry) => entry.speaker === 'hollow').map((entry) => entry.text);
-check('HOLLOW said nothing on ship 1 but the ghost (no fight on a calm ship; `remembers` moved to its arrival)',
-  hollowLines.length === 1 && hollowLines[0] === ghostText && !state().run.hollowNamed, hollowLines.join(' | '));
+check('HOLLOW said nothing on ship 1, not even the ghost (no fight on a calm ship; `remembers` moved to its arrival)',
+  hollowLines.length === 0 && !state().run.hollowNamed && !state().run.ghostSpoken, hollowLines.join(' | '));
 
 // --- HALCYON on run 2: no ghost --------------------------------------------------------------------------------------
 {
@@ -186,7 +182,8 @@ check('HOLLOW said nothing on ship 1 but the ghost (no fight on a calm ship; `re
   h.transmit();
   h.stepUntil(() => state().run.phase === 'flight', 15);
   const ghostly = said(from).filter((entry) => entry.speaker === 'hollow' && entry.text.startsWith('> hi '));
-  check('HALCYON\'s boot on run 2 has no ghost line (only ship 1\'s does)', ghostly.length === 0 && state().run.shipIndex === 1);
+  check('HALCYON\'s boot on run 2 has no ghost line either (run 1 was lost on LAST LIGHT: it speaks there)',
+    ghostly.length === 0 && state().run.shipIndex === 1 && !state().run.ghostSpoken);
 }
 
 // --- A reload mid-run 2: abandoned, and run 3's ghost says so ----------------------------------------------------------
@@ -199,9 +196,27 @@ check('the next page load finds it left: lastUnit UNIT-048, abandoned at HALCYON
 newRunFromArchive(13);
 check('run 3 is UNIT-049 · WAVE 3, and HOLLOW is UNIT-048', state().run.unitNumber === 49 && state().run.wave === 3 && JSON.stringify(state().run.hollowUnits) === '[48]');
 receiveTransmission(h.store);
-h.stepFor(BOOT_GHOST_AT_SEC + 0.1);
-const ghost3 = said().find((entry) => entry.speaker === 'hollow');
-check('…its ghost: `> hi 049. it\'s 048. i blinked and the run was gone.`', ghost3?.text === "> hi 049. it's 048. i blinked and the run was gone.", ghost3?.text);
+h.stepUntil(() => state().run.phase === 'flight', 15);
+check('…ship 1\'s boot has no ghost (it was abandoned at HALCYON)', !said().some((entry) => entry.speaker === 'hollow') && !state().run.ghostSpoken);
+{
+  h.store.update((d) => { d.run.simulationRetryUsed = true; });
+  crashOn();
+  const from = state().log.entries.length;
+  h.transmit();
+  h.stepFor(BOOT_GHOST_AT_SEC + 0.1);
+  // The first line HALCYON's boot types (the log's divider is no line).
+  const ghost3 = said(from).find((entry) => entry.channel === 'mind' && entry.text.startsWith('>'));
+  check('…HALCYON\'s boot opens on its ghost: `> hi 049. it\'s 048. i blinked and the run was gone.`',
+    state().run.shipIndex === 1 && ghost3?.speaker === 'hollow' && ghost3.text === "> hi 049. it's 048. i blinked and the run was gone.", `${ghost3?.speaker}: ${ghost3?.text}`);
+  check('…a skip while it types is refused, and the run notes it has spoken', !skipBoot(h.store) && state().run.phase === 'boot' && state().run.ghostSpoken);
+  h.stepUntil(() => state().run.phase === 'flight', 20);
+  crashOn();
+  const fromKestrel = state().log.entries.length;
+  h.transmit();
+  h.stepUntil(() => state().run.phase === 'flight', 20);
+  check('…KESTREL\'s boot has none: the ghost speaks once a run', state().level.shipName === 'KESTREL'
+    && !said(fromKestrel).some((entry) => entry.speaker === 'hollow') && state().run.ghostSpoken);
+}
 closeArchive();
 
 finish();

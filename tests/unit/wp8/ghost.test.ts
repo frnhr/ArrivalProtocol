@@ -1,10 +1,13 @@
 // WP8 acceptance 5 (§4.5's table, §9 WP8 item 5): every way a run can end gives the next run's ghost a line of
 // at most 70 characters (with the worst-case unit numbers and ship names), or none (STAYED), and the right
 // hollowName. Plus the HOLLOW lines that take units (`> i was 047.`), the run-2 line after the POD 01 fight, the
-// title's lineage line, and unit / wave numbering through createRunState and the mission line.
+// title's lineage line, and unit / wave numbering through createRunState and the mission line. And where the ghost
+// speaks (ghostShipIndex, ghostLineDue: the ship where the last unit's run ended, never ship 1, once a run; slice-2-plan's
+// follow-up, Fran's playtest).
 import { check, finish } from '../wp1/harness';
 import {
-  ghostLine, hollowName, hollowUnitsAfter, lineageOf, freshMeta, recordRunStart, recordRunEnd, LAST_CAUSES, FIRST_RUN_LINEAGE,
+  ghostLine, ghostShipIndex, ghostLineDue, hollowName, hollowUnitsAfter, lineageOf, freshMeta, recordRunStart, recordRunEnd, LAST_CAUSES,
+  FIRST_RUN_LINEAGE,
   type LastUnit, type LastCause,
 } from '@systems/meta';
 import { hollowLabel } from '@systems/say';
@@ -13,6 +16,7 @@ import { HOLLOW_STORY, GHOST_LINE, hollowUnitName } from '@data/hollow-text';
 import { lineageLine, LINES, WORST_CASE_VARS, type LineVars } from '@data/script';
 import type { GameState } from '@state/schema';
 import { MAX_LINE_CHARS, NAME_MAX_CHARS } from '@data/tuning';
+import { SHIPS } from '@data/ships';
 
 // The line vars a title line reads (lineVars needs a mounted predictor; these lines only use the mission's).
 const titleVars = (state: GameState): LineVars => ({
@@ -47,6 +51,42 @@ check('the first run: HOLLOW is UNIT-046 and there is no ghost (`> ...047?` afte
 check('a flagship lost on LAST LIGHT is "the flagship"; a record from before it existed names its ship',
   ghostLine(48, last('flagship-lost')) === "> hi 048. it's 047. i lost the flagship. then i got hungry."
   && ghostLine(48, last('flagship-lost', { shipName: 'HALCYON' })) === "> hi 048. it's 047. i lost halcyon. then i got hungry.");
+
+// --- Where the ghost speaks (05 §3.5: at the first boot in or past where it was lost, never at ship 1) ---------------
+{
+  const names = SHIPS.map((ship) => ship.name);
+  const finalShip = names.length - 1;
+  const wrong: string[] = [];
+  for (const cause of LAST_CAUSES) {
+    names.forEach((shipName, index) => {
+      const at = ghostShipIndex(last(cause, { shipName }));
+      if (at !== Math.max(1, index)) wrong.push(`${cause} on ${shipName} → ${at}`);
+    });
+    const unknown = ghostShipIndex(last(cause, { shipName: 'NOSTROMO' }));
+    if (unknown !== finalShip) wrong.push(`${cause} on an unknown ship → ${unknown}`);
+  }
+  check('every cause on every ship: the ghost speaks at that ship\'s index, ship 1 (ARES-VII) moved to HALCYON, an unknown ship at the final one',
+    wrong.length === 0 && names[0] === 'ARES-VII' && names[1] === 'HALCYON', wrong.join(' | '));
+  check('…never at ship 1 (index 0), for any ship name', LAST_CAUSES.every((cause) => [...names, 'NOSTROMO'].every((shipName) => ghostShipIndex(last(cause, { shipName })) >= 1)));
+  check('…VESPER → VESPER, LAST LIGHT (won or lost there) → LAST LIGHT, abandoned on ARES-VII or HALCYON → HALCYON',
+    ghostShipIndex(last('abandoned', { shipName: 'VESPER' })) === names.indexOf('VESPER')
+    && ghostShipIndex(last('won-purge')) === names.indexOf('LAST LIGHT') && ghostShipIndex(last('flagship-lost')) === names.indexOf('LAST LIGHT')
+    && ghostShipIndex(last('abandoned', { shipName: 'ARES-VII' })) === 1 && ghostShipIndex(last('abandoned', { shipName: 'HALCYON' })) === 1);
+  let threw = false;
+  try { ghostShipIndex(last('overwritten'), ['ARES-VII']); } catch { threw = true; }
+  check('…a one-ship fleet has nowhere past ship 1 for it: loud', threw);
+
+  // ghostLineDue: at or past its ship, once a run, and only when there is a ghost.
+  const vesper = names.indexOf('VESPER');
+  const run = (shipIndex: number, lastUnit: LastUnit | null, ghostSpoken = false) => ({ unitNumber: 48, lastUnit, shipIndex, ghostSpoken });
+  const lostOnVesper = last('overwritten', { shipName: 'VESPER' });
+  const line = ghostLine(48, lostOnVesper);
+  check('ghostLineDue: lost on VESPER → nothing before VESPER, the line at VESPER and past it (a skipped VESPER still hears it)',
+    names.every((_, index) => (ghostLineDue(run(index, lostOnVesper)) === (index >= vesper ? line : null))));
+  check('…nothing once it has spoken this run, on any ship', names.every((_, index) => ghostLineDue(run(index, lostOnVesper, true)) === null));
+  check('…nothing on a first run, nor after a unit that STAYED (it left no ghost)',
+    names.every((_, index) => ghostLineDue(run(index, null)) === null && ghostLineDue(run(index, last('stayed'))) === null));
+}
 
 // --- Every line fits, at the worst case --------------------------------------------------------------------
 {

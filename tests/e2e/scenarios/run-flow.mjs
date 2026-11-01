@@ -411,12 +411,20 @@ check('NEW RUN: the title card, ship 1, a fresh run, in the page', fresh.phase =
 await shot('11-new-run');
 
 // --- 8. BEAM OUT on the last ship (WP9: KESTREL; WP10: VESPER; WP11: LAST LIGHT): the offer, the confirm, the bar, the black-out, RUN END
-// WP8: after NEW RUN this is run 2 (UNIT-048): its ship-1 boot types the ghost's greeting first and runs ~11 s.
+// WP8: after NEW RUN this is run 2 (UNIT-048). Its ghost never speaks at ship 1 (05 §3.5; slice-2-plan's follow-up, Fran's
+// playtest): run 1 won on LAST LIGHT, so the ghost's greeting opens LAST LIGHT's boot.
 await page.locator('#titleReceive').click();
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 16000);
+check('run 2: ship 1\'s boot has no ghost (no HOLLOW line in the TERMINAL)', await st(() => window.__ap.store.getState().run.unitNumber === 48
+  && !window.__ap.log().some((entry) => entry.speaker === 'hollow') && !window.__ap.store.getState().run.ghostSpoken));
 // WP11: the last ship is LAST LIGHT, the flagship (__ap.ship(4)).
+const logFromLast = await st(() => Math.max(-1, ...window.__ap.log().map((entry) => entry.id)));
 await st(() => window.__ap.ship(4));
-await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'LAST LIGHT', 20000);
+await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'LAST LIGHT', 24000);
+const lastBoot = await st((from) => window.__ap.log().filter((entry) => entry.id > from && entry.channel === 'mind' && entry.text.startsWith('>'))
+  .map((entry) => ({ speaker: entry.speaker, text: entry.text })), logFromLast);
+check('…LAST LIGHT\'s boot opens on it, in HOLLOW\'s voice (`> hi 048. …`)', lastBoot[0]?.speaker === 'hollow'
+  && /^> hi 048\. /.test(lastBoot[0].text) && await st(() => window.__ap.store.getState().run.ghostSpoken), JSON.stringify(lastBoot.slice(0, 3)));
 await page.waitForTimeout(500);
 // Falling at the planet with an empty tank. BEAM OUT is a real race (6 tactical s against the impact) and the world runs
 // on while the kid reads the offer and its confirm: from 1,000 km the impact was 5 s off by the time the bar ran, and

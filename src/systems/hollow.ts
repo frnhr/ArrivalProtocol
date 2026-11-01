@@ -15,7 +15,7 @@ import {
 } from '@systems/alerts';
 import { nextToLaunch } from '@systems/landing-rules';
 import { say, hollowLabel, createStory, type Story, type StoryBeat } from '@systems/say';
-import { isFirstRun, type LastUnit } from '@systems/meta';
+import type { LastUnit } from '@systems/meta';
 import {
   newSegId, segmentStarts, assertMemoryInvariants, replaceRange, freeSegment, mergeAdjacentFree, requireAddr,
 } from '@systems/memory-ops';
@@ -1130,7 +1130,7 @@ function endCoreLost(store: Store<GameState>): void {
 // (say.ts createStory: a beat waits until both screens have typed everything said before it):
 // 1. the fight's own moment comes first: SAVED or EATEN, its sound and its echo;
 // 2. once both screens have been quiet HOLLOW_STORY_SILENCE_SEC (HOLLOW's slow `> eat pod09 ...` takes a few
-//    seconds), HOLLOW types `> ...047?` (on a later run, whose ghost greeted the unit at the boot,
+//    seconds), HOLLOW types `> ...047?` (once the last unit's ghost has greeted the unit at a boot this run,
 //    `> you remember me. good.`);
 // 3. HOLLOW_CONTROL_AFTER_SEC after it CONTROL says to ignore it, and if anything else spoke in between,
 //    only after the same silence;
@@ -1144,10 +1144,12 @@ function noticedBeats(): StoryBeat[] {
   return [
     {
       silenceSec: HOLLOW_STORY_SILENCE_SEC,
-      // A returning unit was greeted by its ghost at the boot: HOLLOW knows it is known (§5.2).
+      // A unit its ghost has already greeted this run (at this ship's boot or an earlier one, run.ghostSpoken): HOLLOW
+      // knows it is known (§5.2). Otherwise, run 2+ too (the ghost speaks further on, or a unit that stayed left none), it
+      // notices you as on run 1.
       tell: (store) => {
         const state = store.getState();
-        say('hollow', isFirstRun(state.run) ? HOLLOW_STORY.noticed(state.mission.transmissionNum) : HOLLOW_STORY.remembers, { critical: true });
+        say('hollow', state.run.ghostSpoken ? HOLLOW_STORY.remembers : HOLLOW_STORY.noticed(state.mission.transmissionNum), { critical: true });
         store.update((draft) => { draft.run.threat.told.noticed = true; });
       },
     },

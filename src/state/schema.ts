@@ -346,8 +346,13 @@ export interface RunState {
   unitNumber: number;       // 47 on run 1 (UNIT-047), 47 + runs after (WP8: the archive counts them)
   wave: number;             // the fleet wave: 1 on run 1, runs + 1 after
   // How the last unit's run ended, from the archive (§4.5; null on the first run): its ghost greets this
-  // unit at the ship-1 boot, and HOLLOW is it (hollowUnits).
+  // unit at the boot of the ship where that run ended, never ship 1 (systems/meta.ts ghostShipIndex), and HOLLOW is it
+  // (hollowUnits).
   lastUnit: LastUnit | null;
+  // The last unit's ghost has typed its line at a boot this run (systems/boot.ts, systems/meta.ts ghostLineDue): it speaks
+  // once a run, at the first boot at or past its ship, and HOLLOW's notice after it is `> you remember me. good.`. Kept
+  // across ships; false again on a NEW RUN and on the simulation retry.
+  ghostSpoken: boolean;
   // Who HOLLOW is on this run (§4.5's table, systems/meta.ts hollowUnitsAfter): [46] on run 1, the last unit
   // after most endings, both after a MERGE. Its blocks read `UNIT-046` once it has said who it is.
   hollowUnits: number[];
@@ -364,8 +369,8 @@ export interface RunState {
   // The fs-tools ARRIVAL CONTROL has licensed this run (§3.2, §6.5). A licence installs the tool's
   // files once; they carry with the unit, so a licence is never issued twice.
   licences: FsToolKind[];
-  // HOLLOW has said who it is (ship 2: `> i was 046.`; on a later run the ghost at the ship-1 boot): its
-  // blocks and its TERMINAL lines carry its unit name instead of `???` from then on (say.ts hollowLabel).
+  // HOLLOW has said who it is (`> i was 046.`, on the ship it arrives on since phase 3 slice 2; the ghost names nothing):
+  // its blocks and its TERMINAL lines carry its unit name instead of `???` from then on (say.ts hollowLabel).
   // Carried to every later ship.
   hollowNamed: boolean;
   // HOLLOW ate the AI Core to 0 (§3.3 C5): this ship is over (the clock stops under its card, then

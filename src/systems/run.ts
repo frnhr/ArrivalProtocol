@@ -397,6 +397,8 @@ export function continueAfterLoss(store: Store<GameState>): LossPlan {
       // unnamed again (the simulation is run 1's: no ghost has named it; it names itself on the ship it boards, VESPER).
       licences: ['scan'],
       hollowNamed: false,
+      // The simulation is run 1's ship 1 again: a ghost (never at ship 1) has nothing to have said yet.
+      ghostSpoken: false,
       simulationRetryUsed: true,
       arrival: null,
       transit: null,

@@ -1143,3 +1143,28 @@ the duel, and an offer standing at the lock kept its buttons beside FinaleChoice
 - LAST LIGHT: ACCEPT by the TERMINAL's button, ORBIT LOCK 10 s later: the pause ended at the lock, the first verb
   (`unlink repair.bak`) telegraphed in the duel, the root's DELETE (by the strip's chips) reached the choice, and no
   ACCEPT/REFUSE button was on the page at any point after the lock.
+
+## Deviations (follow-up: the ghost line leaves ship 1)
+
+From Fran's playtest: on run 2+ ship 1's boot still typed the last unit's ghost line in HOLLOW's pink, so HOLLOW seemed to
+talk on a ship where it no longer is. Risk 11 had kept it there until slice 3; it moves now, for the fixed five, toward
+05 §3.5 ("at the first boot in or past the layer where it was lost … never at ship 1").
+
+- **The rule** (`src/systems/meta.ts` `ghostShipIndex`, `ghostLineDue`): the ghost speaks at the boot of the first ship this
+  run whose index is at or past max(1, the index of the ship where the last unit's run ended, `lastUnit.shipName`; the
+  final ship when the name is not in SHIPS), once a run. Lost on VESPER: VESPER's boot. Won or lost on LAST LIGHT: LAST
+  LIGHT's. Abandoned on ARES-VII or HALCYON: HALCYON's. Slice 3's seam is named there: the map replaces "ship index" with
+  the layer where the last unit was lost and "at or past" with passing the grey cross on the chart.
+- **Run state**: `run.ghostSpoken` (false on a NEW RUN and on the simulation retry, kept across ships), set as the boot
+  types the line, so a ship lost or skipped before the ghost's ship never makes it vanish or repeat.
+- **The boot** (`src/systems/boot.ts`): `planGhost` reads `ghostLineDue`; the pacing is unchanged (the boot's lines wait for
+  the ghost, a skip waits until it has typed, `bootSkipWaits`). On VESPER it types before the boarding's 108% unpack, and
+  `hollow-boarded` still fires on that line.
+- **ARRIVAL's notice**: `> you remember me. good.` only once the ghost has spoken this run (`run.ghostSpoken`), not on any
+  run 2+: a VESPER notice before a ghost still to come (lost on LAST LIGHT), or after a unit that STAYED, is `> ...048?`.
+- No other HOLLOW-voiced line reaches a calm ship (ARES-VII, HALCYON, KESTREL): the story beats, the boot's `hollow` line,
+  `sorry`, the echoes and entry 12 all need HOLLOW aboard or a root.
+- Tests: `wp8/ghost` (every cause on every ship, never index 0; `ghostLineDue`), `opening/ghost-placement` (new: run 2 after
+  a loss on VESPER, every ship left by a crash; the notice both ways), `wp8/run-flow`, `wp8/fix1`, `opening/calm-ships`,
+  and the e2e `run-flow` (run 2: no ghost at ship 1, the ghost at LAST LIGHT's boot). The playtest checklist's items 38
+  and 46 say where it now speaks.

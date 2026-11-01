@@ -197,9 +197,9 @@ interface DebugHooks {
   beamOutView: () => BeamOutView;
   amberBite: () => { text: string; urgent: boolean } | null;
   // WP8: the archive and the draft. archive is the page's status and its session record; archiveAs writes
-  // an archive as if UNIT-047's run had just ended with `cause` (reload to meet its ghost), archiveCorrupt
-  // writes JSON that does not read (reload: ARCHIVE CORRUPT), archiveClear forgets everything (a first run);
-  // ghost is this run's ghost line; draft is the TRANSMIT's offer, pick and what weighted it; pick takes a
+  // an archive as if UNIT-047's run had just ended with `cause` on HALCYON (reload, then meet its ghost at HALCYON's boot:
+  // __ap.ship(1)), archiveCorrupt writes JSON that does not read (reload: ARCHIVE CORRUPT), archiveClear forgets everything
+  // (a first run); ghost is this run's ghost line, wherever it speaks (systems/meta.ts ghostShipIndex); draft is the TRANSMIT's offer, pick and what weighted it; pick takes a
   // card (refusal or null).
   archive: () => { status: string; meta: Readonly<Meta> };
   archiveAs: (cause: LastCause, woke?: number) => Meta;

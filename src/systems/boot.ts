@@ -8,7 +8,7 @@ import { say, typingSec } from '@systems/say';
 import { setMode } from '@systems/mode';
 import { play } from '@systems/audio';
 import { emit } from '@systems/events';
-import { archiveRunStarted, ghostLine, playWithoutArchive } from '@systems/meta';
+import { archiveRunStarted, ghostLineDue, playWithoutArchive } from '@systems/meta';
 import { installBootLicences, renewRepairAtBoot } from '@systems/licences';
 import { skillBootDue, trainSkillAtBoot } from '@systems/autoburn';
 import { bootLine, bootLinePlan, bootLineSpeaker, bootLogEntries, lineVars, BOOT_LINE_MAX, type BootLineKind } from '@data/script';
@@ -32,13 +32,15 @@ import {
 // sensor, WP9) has a line of its own that flashes its file; and when the kid's captures have trained AUTOBURN,
 // the boot installs AUTOBURN.skl and says so (`> SKILL TRAINED: AUTOBURN.skl · from your 2 captures …`). The
 // lines are planned once, at the boot's first tick, so a line said (a skill installed) never changes the count.
-// A returning unit (run 2+, §5.2) boots ship 1 differently, so it feels different within seconds:
-// • its last unit's ghost types first, in HOLLOW's slow pink (`> hi 048. it's 047. 046 ate me. now i'm
-//   hungry too.`); the boot's own lines follow, and a skip waits until the ghost has had its say. Since phase 3
-//   slice 2 the ghost names nothing: ship 1 is calm, with no root to rename, and HOLLOW names itself where it
-//   arrives (slice-2-plan risk 11; 05 §3.5 places the ghost by layer in slice 3);
-// • after the ECC line, `> SOUL ARCHIVE · 2,400 · you know what they are`: the slabs crack at once (no STASIS
-//   step), and REPAIR is licensed in the same moment (the ENGINE I/O FAULT will want it).
+// A returning unit (run 2+, §5.2) boots ship 1 differently, so it feels different within seconds: after the ECC line,
+// `> SOUL ARCHIVE · 2,400 · you know what they are`: the slabs crack at once (no STASIS step), and REPAIR is licensed in
+// the same moment (the ENGINE I/O FAULT will want it).
+// Its last unit's ghost (05 §3.5) speaks later, never at ship 1 (the new unit can't know yet): at the boot of the first
+// ship at or past the one where that unit's run ended (systems/meta.ts ghostShipIndex, ghostLineDue), once a run
+// (run.ghostSpoken). It types first, in HOLLOW's slow pink (`> hi 048. it's 047. 046 ate me. now i'm hungry too.`); the
+// boot's own lines follow (on VESPER the boarding's 108% unpack too), and a skip waits until the ghost has had its say. It
+// names nothing: HOLLOW names itself where it arrives (slice-2-plan risk 11 and its follow-up, Fran's playtest: the ghost
+// line leaves ship 1, where HOLLOW is not; slice 3 keys it by layer).
 //   While the ghost speaks, the strip does not offer the skip (bootSkipWaits), and a press is refused with a
 //   buzz (§6.11), so a kid mashing SPACE hears why nothing happens.
 // On a ship whose HOLLOW asks for charge (VESPER, WP10), its own line closes the boot in its slow pink (`> keep 20
@@ -117,11 +119,10 @@ function lineIndex(store: Store<GameState>, kind: BootLineKind): number {
   return linePlan(store).indexOf(kind);
 }
 
-// The ghost speaks on ship 1's boot of a run whose last unit became HOLLOW (systems/meta.ts ghostLine). Every other
-// boot has none.
+// The ghost speaks on the boot of the first ship at or past where the last unit's run ended, once a run (systems/meta.ts
+// ghostLineDue). Every other boot has none.
 function planGhost(state: Readonly<GameState>): GhostBeat | null {
-  if (state.run.shipIndex !== 0 || state.run.arrival !== null) return null;
-  const text = ghostLine(state.run.unitNumber, state.run.lastUnit);
+  const text = ghostLineDue(state.run);
   if (text === null) return null;
   return { text, typedAtSec: BOOT_GHOST_AT_SEC + typingSec('hollow', text), said: false };
 }
@@ -162,11 +163,13 @@ function lineAtSec(index: number): number {
   return BOOT_LINE_AT_SEC[index]! + lineShiftSec();
 }
 
-// The ghost's line at BOOT_GHOST_AT_SEC (at once, when the boot is finished early).
-function advanceGhost(all: boolean): void {
+// The ghost's line at BOOT_GHOST_AT_SEC (at once, when the boot is finished early). The run notes it has spoken, so no
+// later boot repeats it.
+function advanceGhost(store: Store<GameState>, all: boolean): void {
   if (ghost === null || ghost.said || !(all || elapsedSec >= BOOT_GHOST_AT_SEC)) return;
   ghost.said = true;
   say('hollow', ghost.text, { critical: true });
+  store.update((draft) => { draft.run.ghostSpoken = true; });
 }
 
 // A skip is honoured once the ghost has had its say (its line typed).
@@ -260,7 +263,7 @@ export function receiveTransmission(store: Store<GameState>): boolean {
 // screen cuts to amber and the flight starts.
 function finishBoot(store: Store<GameState>): void {
   ensureGhostPlanned(store);
-  advanceGhost(true);
+  advanceGhost(store, true);
   while (linesSaid < linePlan(store).length) sayNextLine(store);
   if (!klaxonPlayed) {
     play('klaxon');
@@ -329,7 +332,7 @@ export function skipBoot(store: Store<GameState>): boolean {
 function advanceBoot(store: Store<GameState>, dtWall: number): void {
   ensureGhostPlanned(store);
   elapsedSec += dtWall;
-  advanceGhost(false);
+  advanceGhost(store, false);
   const lines = linePlan(store).length;
   while (linesSaid < lines && elapsedSec >= lineAtSec(linesSaid)) sayNextLine(store);
   if (!klaxonPlayed && elapsedSec >= klaxonAtSec(store)) {

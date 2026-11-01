@@ -11,7 +11,8 @@ import {
 // The archive (§4.5, §9 WP8 item 4): the one thing that outlives a run. A local record of how many units
 // ARRIVAL CONTROL has sent, the best SCORE, the endings seen, the run in progress and how the last unit
 // ended. The next run reads it: you are UNIT-047 + runs on wave runs + 1, and HOLLOW is your last unit
-// (hollowName, by how it ended), whose ghost greets you during the ship-1 boot (data/hollow-text.ts).
+// (hollowName, by how it ended), whose ghost greets you at a later boot: the ship where that unit's run ended, never
+// ship 1 (ghostShipIndex; data/hollow-text.ts).
 //
 // • Run accounting: RECEIVE TRANSMISSION on a run's title is RUN START (archiveRunStarted): runs + 1, and
 //   activeRun is set. Each later ship's start brings activeRun up to date (where the unit is, who woke, its
@@ -385,6 +386,26 @@ export function ghostLine(us: number, lastUnit: LastUnit | null): string | null 
   if (lastUnit === null) return null;
   const line = GHOST_LINE[lastUnit.cause];
   return line === null ? null : line({ us, last: lastUnit, hollow: hollowUnitsAfter(lastUnit), lostShip: lostShipWords(lastUnit.shipName) });
+}
+
+// Where this run's ghost speaks (05 §3.5: "at the first boot in or past the layer where it was lost … never at ship 1: the
+// new unit can't know yet"), on the fixed five: the index of the ship where the last unit's run ended (its shipName), or
+// the final ship when the name is not one of `shipNames` (a record from an older fleet), and never ship 1 (index 0: a run
+// abandoned on ARES-VII speaks at HALCYON). The boot plays it at the first ship this run whose index is at or past this
+// one, once (run.ghostSpoken; systems/boot.ts), so a ship skipped or lost before it never makes it vanish or repeat.
+// Slice 3's seam: the galaxy map replaces "ship index" with the layer where the last unit was lost, and the boot's "at or
+// past" with the moment the new unit passes the grey cross on the chart.
+export function ghostShipIndex(lastUnit: Readonly<Pick<LastUnit, 'shipName'>>, shipNames: readonly string[] = SHIPS.map((ship) => ship.name)): number {
+  if (shipNames.length < 2) throw new Error(`ghostShipIndex: a fleet of ${shipNames.length} ship(s) has no ship past ship 1 for the ghost`);
+  const at = shipNames.indexOf(lastUnit.shipName);
+  return Math.max(1, at < 0 ? shipNames.length - 1 : at);
+}
+
+// The ghost's line on this run's current boot, or null: the run has a ghost (ghostLine), it has not spoken yet this run,
+// and this ship is at or past where it speaks (ghostShipIndex).
+export function ghostLineDue(run: Readonly<Pick<RunState, 'unitNumber' | 'lastUnit' | 'shipIndex' | 'ghostSpoken'>>): string | null {
+  if (run.ghostSpoken || run.lastUnit === null || run.shipIndex < ghostShipIndex(run.lastUnit)) return null;
+  return ghostLine(run.unitNumber, run.lastUnit);
 }
 
 // --- The page's archive (the live half) ----------------------------------------------------------------

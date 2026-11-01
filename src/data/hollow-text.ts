@@ -105,7 +105,7 @@ export function hollowUnitWords(units: readonly number[]): string {
 export const HOLLOW_STORY = {
   // `> ...047?`: our own unit number, as HOLLOW would say it (lowercase, three digits).
   noticed: (unitNumber: number): string => `> ...${unitDigits(unitNumber)}?`,
-  // ...and on a later run, where its ghost already greeted you at the boot (§5.2).
+  // ...and once the last unit's ghost has greeted you at a boot this run (§5.2, run.ghostSpoken).
   remembers: '> you remember me. good.',
   control: 'Unauthorized process detected. Please ignore it. :)',
   // Ship 2, at its wake (§1, §5.1 2:50, §9 WP7 item 5): HOLLOW names itself. Every unit number is

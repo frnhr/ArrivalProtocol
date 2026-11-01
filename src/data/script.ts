@@ -283,7 +283,7 @@ export function lineVars(state: Readonly<GameState>, pred: Prediction): LineVars
     distanceLy: state.mission.distanceLy,
     nextApsis: pred.burnPoint?.event === 'apo' ? '▲' : '▼',
     // '???' until HOLLOW names itself (run.hollowNamed, systems/hollow.ts nameHollow: on the ship it arrives on since
-    // phase 3 slice 2; a later run's ghost at ship 1 no longer names it, slice-2-plan risk 11).
+    // phase 3 slice 2; a later run's ghost names nothing, slice-2-plan risk 11).
     hollow: hollowLabel(state.run),
     ...hurtPodVars(state),
     ...hollowVars(state),
@@ -849,7 +849,7 @@ export function scriptedDamageLine(hits: readonly TransitHit[]): string {
 // (systems/boot.ts cracks the slabs as it is said). Later ships: the unpack, the host, what the crossing hit,
 // the ship's own arrival damage when it has some (WP9: KESTREL's sensor), the REPAIR CHARGE that arrived, an
 // overflow when there was one, and AUTOBURN.skl trained from the kid's captures when that is due (WP9; the
-// boot decides it once, at its start: `skill`). (A returning unit's ghost line comes before all of them.)
+// boot decides it once, at its start: `skill`). (The last unit's ghost line, at its ship's boot, comes before all of them.)
 // WP10: on a ship whose HOLLOW asks for charge (VESPER), its line closes the boot, in its pink, right after the
 // unit has counted the charge it arrived with: `> keep 20 charge for me, 047. you'll see.` (MERGE's price, §1).
 // WP11: LAST LIGHT's boot closes the same way: `> last ship, 047. i'm so tired.`

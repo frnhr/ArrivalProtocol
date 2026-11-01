@@ -72,7 +72,7 @@ export interface DirectorCtx extends TextCtx {
   flight: FlightObjective | null;  // the flight table's line (null outside a live flight)
   landing: LandingObjective | null;  // the landing table's line (null outside LANDING, and once the Core is lost)
   skipAvailable: boolean;          // F would start a SKIP right now
-  bootSkipWaits: boolean;          // the boot's skip waits for the run-2 ghost (systems/boot.ts)
+  bootSkipWaits: boolean;          // the boot's skip waits for the last unit's ghost (systems/boot.ts)
   events: ReadonlySet<GameEventName>;  // what happened since the previous tick
   phaseEntered: RunPhase | null;   // the phase this tick started, if it just changed
   mindQuietSec: number;            // AI s in blue with no op running and nothing infected

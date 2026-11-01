@@ -77,6 +77,7 @@ export function createRunState(
     pendingStarCredit: 0,
     pendingStars: 0,
     simulationRetryUsed: false,
+    ghostSpoken: false,
     beamOut: null,
     transit: null,
     arrival: null,

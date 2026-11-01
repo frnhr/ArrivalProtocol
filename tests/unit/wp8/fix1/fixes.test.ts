@@ -1,10 +1,11 @@
 // WP8 fix round 1: the review's findings, headless, with the archive on a stubbed storage.
-// • A reload two seconds into run 1 (RECEIVE, then the page goes away) is UNIT-048 on wave 2 with its ghost,
-//   and still the tutorial: the written ARES-VII (POD 02 hurt), no REPAIR at the boot (slice 1a: no archive line
+// • A reload two seconds into run 1 (RECEIVE, then the page goes away) is UNIT-048 on wave 2 with its ghost (at
+//   HALCYON's boot, never ship 1's: slice-2-plan's follow-up), and still the tutorial: the written ARES-VII (POD 02 hurt), no REPAIR at the boot (slice 1a: no archive line
 //   either way), the simulation retry. The archive learns the tutorial at the first lock (or a second ship);
 //   only then is the next run a returning unit.
-// • A returning unit's boot: the strip does not offer the skip while the ghost types (`someone is typing…`);
-//   CONTROL says hello before the REPAIR licence that came with the boot.
+// • A returning unit's boot: CONTROL says hello before the REPAIR licence that came with the boot; at the boot its ghost
+//   speaks on (HALCYON's, the last unit having been left on ARES-VII), the strip does not offer the skip while the ghost
+//   types (`someone is typing…`).
 // • RUN END's own write failing: the status is OFFLINE by the time the phase is 'end' (RunEnd paints then).
 // • A write failing mid-run: one TERMINAL line `ARCHIVE OFFLINE — this unit's memory will not be kept`.
 // • A FIREWALL to place: the strip's line (`MOVE your FIREWALL (FW) into the GAP next to ???`, the MOVE chip,
@@ -78,8 +79,8 @@ check('…but it is still the tutorial: the written ARES-VII (run 1\'s families,
     && isTutorialShip(state()) && !bootLicensesRepair(state()));
 boot();
 const ghost = log().find((entry) => entry.speaker === 'hollow');
-check('its boot: the ghost greets it (`i blinked and the run was gone.`), and no longer names HOLLOW (slice 2, risk 11)',
-  ghost?.text === "> hi 048. it's 047. i blinked and the run was gone." && !state().run.hollowNamed, ghost?.text);
+check('its ship-1 boot: no ghost (left on ARES-VII, it speaks at HALCYON: never ship 1), and HOLLOW unnamed (slice 2, risk 11)',
+  ghost === undefined && !state().run.ghostSpoken && !state().run.hollowNamed, ghost?.text);
 check('…REPAIR is not licensed in the boot yet (the tutorial issues it later), no `you know what they are`',
   !state().run.licences.includes('repair')
     && !log().some((entry) => entry.text.includes('you know what they are')));
@@ -100,11 +101,28 @@ check('the next page: UNIT-049, a returning unit (the archive opens at the boot,
   && !playsTutorial(state().run) && bootLicensesRepair(state()) && !isTutorialShip(state())
   && driversInMemory(state()).every((soul) => !ARES_RUN1_FAMILIES.includes(soul.family)));
 
-// The ghost's beat: the strip does not offer a skip while it types.
+// Ship 1's boot has no ghost beat: the strip offers the skip as on any boot.
 receiveTransmission(h.store);
 h.stepFor(0.3);
-check('while the ghost types, a skip waits, and the strip says so (no [SPACE] skip offered)', bootSkipWaits(state())
-  && state().director.shown?.text === LINES.bootingGhost() && state().director.shown?.keys.length === 0,
+check('ship 1\'s boot: no ghost beat, the strip offers the skip ([SPACE])', !bootSkipWaits(state())
+  && state().director.shown?.text === LINES.booting() && (state().director.shown?.keys.includes('SPACE') ?? false), JSON.stringify(state().director.shown));
+h.stepUntil(() => state().run.phase === 'flight', 20);
+h.stepFor(0.3);
+const control = log().filter((entry) => entry.speaker === 'control').map((entry) => entry.text);
+const hello = control.findIndex((text) => text.startsWith('Hello, Unit 49!'));
+const licence = control.indexOf(LICENCE_LINES.repair);
+check('REPAIR came with the boot, and CONTROL says hello first, then the licence', state().run.licences.includes('repair')
+  && hello >= 0 && licence > hello, control.join(' | '));
+
+// The ghost's beat, at HALCYON's boot (the last unit was left on ARES-VII): the strip does not offer a skip while it types.
+h.store.update((d) => { d.run.simulationRetryUsed = true; });
+h.store.mutate((d) => { d.orbit.x = d.level.planet.R + 20; d.orbit.y = 0; d.orbit.vx = -3; d.orbit.vy = 0.05; });
+h.stepUntil(() => h.status() !== 'approaching', 10);
+continueAfterLoss(h.store);
+h.transmit();
+h.stepFor(0.3);
+check('HALCYON: while the ghost types, a skip waits, and the strip says so (no [SPACE] skip offered)', state().run.shipIndex === 1
+  && bootSkipWaits(state()) && state().director.shown?.text === LINES.bootingGhost() && state().director.shown?.keys.length === 0,
   JSON.stringify(state().director.shown));
 h.stepFor(1);
 check('…a press then is refused (the buzz, in the browser)', !skipBoot(h.store) && state().run.phase === 'boot');
@@ -113,12 +131,6 @@ h.stepFor(0.1);
 check('…once it has had its say, the strip offers the skip again (at once)', state().director.shown?.text === LINES.booting() && (state().director.shown?.keys.includes('SPACE') ?? false),
   JSON.stringify(state().director.shown));
 h.stepUntil(() => state().run.phase === 'flight', 20);
-h.stepFor(0.3);
-const control = log().filter((entry) => entry.speaker === 'control').map((entry) => entry.text);
-const hello = control.findIndex((text) => text.startsWith('Hello, Unit 49!'));
-const licence = control.indexOf(LICENCE_LINES.repair);
-check('REPAIR came with the boot, and CONTROL says hello first, then the licence', state().run.licences.includes('repair')
-  && hello >= 0 && licence > hello, control.join(' | '));
 
 // --- RUN END's own write fails: OFFLINE before RUN END paints ---------------------------------------------------
 // To HALCYON by EMERGENCY, then on by another each ship, to the last one (WP9: KESTREL; WP10: VESPER, read off the

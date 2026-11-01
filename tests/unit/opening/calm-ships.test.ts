@@ -10,7 +10,8 @@
 // • HALCYON after a real TRANSMIT: the boot's ECC line and `> 046.log · KEY FOUND · ENTRY 02`, one degraded driver, the
 //   sensor at 62, no MOVE; its landing's split lesson.
 // • The other boots' keys (03, 04, 10–11), entry 12 from the root, the name derived from run.log (the simulation retry),
-//   and run 2's ghost with no naming (risk 11).
+//   and run 2's ship 1 with no ghost and no naming (risk 11 and its follow-up: the ghost speaks where the last unit was
+//   lost, opening/ghost-placement).
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { followLanding, lockOn } from '../landing/harness-landing';
@@ -328,7 +329,7 @@ stepUntil(() => state().run.phase === 'flight', 30);
   check('…and `???` again for a log that starts over', logSeg()?.name === LOG_NAME.unknown);
 }
 
-// --- Run 2: the ghost speaks at ship 1's boot, but names nothing (risk 11) ----------------------------------------------------
+// --- Run 2: ship 1 stays calm: no ghost at its boot (it speaks at VESPER's, where the last unit was lost), no naming -----------
 {
   const meta = recordRunEnd(recordRunStart(freshMeta(), { unit: 47, shipName: 'ARES-VII', woke: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46] }, 0),
     { unit: 47, shipName: 'VESPER', woke: 3100, stats: { moves: 4, deletes: 0 }, hollowUnits: [46], cause: 'overwritten', score: 3000 });
@@ -339,7 +340,8 @@ stepUntil(() => state().run.phase === 'flight', 30);
   receiveTransmission(h.store);
   stepUntil(() => state().run.phase === 'flight', 40);
   const ghost = ghostLine(48, lineage.lastUnit);
-  check('run 2: the ghost types at ship 1\'s boot', ghost !== null && logTexts().includes(ghost), ghost ?? 'no ghost');
+  check('run 2: the ghost does not type at ship 1\'s boot (05 §3.5: never at ship 1)', ghost !== null && !logTexts().includes(ghost)
+    && !state().log.entries.some((entry) => entry.speaker === 'hollow') && !state().run.ghostSpoken, ghost ?? 'no ghost');
   check('…and HOLLOW stays unnamed (no root on a calm ship to rename; it names itself where it arrives)',
     !state().run.hollowNamed && state().run.phase === 'flight');
 }
