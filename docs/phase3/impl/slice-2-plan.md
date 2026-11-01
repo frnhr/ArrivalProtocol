@@ -773,3 +773,69 @@ it correct. These are its fixes to the hand-offs between the tracks.
 - **Slice 3:** any ship at depth ≥ `BOARD_MIN_DEPTH` needs a root slot, not only `oneHopFromFinal` ones (TRACE can board
   it there). validateShipDef checks only the latter today, because on the fixed five depth ≥ 4 means VESPER and LAST
   LIGHT, and both have slots.
+
+## Deviations (Track OPENING)
+
+Track OPENING (§5.2) as built on branch `opening-2`, where it differs from §1–§6 or fills a gap the plan left open.
+
+**Driver arrival damage**
+
+1. **The root slot's neighbours come from the layout words** (`rootSlotNeighbours` in driver-damage.ts: the nearest `P`
+   before and after `S`, pods numbered through racks B, C, D), so driver-damage.ts still imports memory.ts for types only.
+   They are avoided whenever the ship has a slot, root or not: on the fixed five a slot always holds a root.
+2. **A scripted ship on a later run keeps phase 2's reseeding**: ARES-VII's written integrity (44) moves to a random pod
+   that is not the lead (v2 §5.2). Draw order is fixed (pod, then integrity, per driver), so a seed replays.
+3. **validateShipDef** also checks that `drivers.damage` agrees with the written list ('scripted' has one, 'rolled' none)
+   and rolls three seeds both ways to prove the roll never hurts the lead or the slot's neighbours.
+4. **Later ships now arrive with a failing driver** (VESPER, LAST LIGHT: 30–45), so the run-1 `POD nn WILL LAND HARD`
+   lesson can show there. On a real run it is a once-a-run lesson already done on ship 1; `harness7.shipAlone` now marks
+   the driver lessons done (as `harnessState` does for ship 1). Three suites outside the known-failing list moved with the
+   rolled drivers and are fixed: landing/flow (only failing drivers land hard), lead2/kestrel-debris (the debris's losses,
+   not absolute integrities), wp10/vesper-flow (through harness7).
+
+**Lessons and the tutorial**
+
+5. **When the landing lessons show**: from the landing's start until the ship's first launch, i.e. the WAIT before the
+   first window. A window's own rows are `now` and outrank a tutorial, so a lesson keyed to the open window would never
+   be read. `◆ PODS LAND WHERE THE DOT IS` is run 1 only (§1.1 item 10). The split lesson shows on every run; "run 2+
+   shortens" is read as its short form, the counts alone (`2 SITES · LZ-A 3, LZ-B 2`), worded by the new
+   `LineVars.splitLesson`. Both are once a run, `LANDING_DOT_LESSON_SEC` and `LANDING_SPLIT_LESSON_SEC` (6 s) each. They
+   come before the hurt-driver and wide-drop lessons on the strip, so landing/drop-model and landing/review-1b mark them
+   done in their setups, as those suites already did with the other lessons.
+6. **The SCAN `???` lesson** (`LOG_RULES`) has an amber `— [TAB]` wording and a blue one that lights the SCAN chip and
+   then the file (`LOG_HINT_TARGET`, which Track UI puts on the log chip). It is a tutorial on run 1 and one hint on run
+   2+, gated on POD 02 settled (`hurtPod` empty), a flight WAIT, SCAN licensed and the file not known yet. It steps aside
+   after `LOG_SCAN_ASK_SEC` (8 s) and is done once the file is known. Only a SCAN draws CONTROL's line; 05 §3.5's "or a
+   click on `???`" is not wired (a click is UI's; an event would do it in a later slice).
+7. **"Remove the ship 1–2 HOLLOW beats from script.ts"**: after the foundation none keyed to ships 1–2 remained. The HOLLOW
+   rules key on HOLLOW's state, which a calm ship never sets. Stale comments that put HOLLOW on ships 1–2 are corrected.
+8. **Licences** are as the foundation re-flowed them (§3.2, Deviations (foundation) 20–21), verified by
+   opening/calm-ships. Only licences.ts's header changed.
+9. **The ghost's naming lived in boot.ts, not meta.ts.** It is removed there: run 2+ still types the ghost first, and a
+   skip is honoured once it has typed (the 0.4 s name pause went with the naming). meta.ts is unchanged.
+
+**046.log**
+
+10. **The chip's name derives from `run.log`** (`logKnown`: scanned, or any key found). story-log brings the segment's
+    `name` and `desc` in line every post tick. run.ts needed no edit, and the simulation retry keeps `run.log`, because
+    the kid did scan it. Every carried copy follows too.
+11. **Entry 01's key is "the first LANDING REPORT with a pod down closes"**: the TRANSMIT screen is up and a pod of this
+    ship is down. That is ship 1's report on the fixed run, and the key still works if ship 1 landed nobody (05 keys it to
+    "your first landing"). The reader opens by itself only on the tutorial run (05 §3.2 "On run 1"). On a returning
+    unit's run, entry 01 is found and the chip glows (Track UI).
+12. **Entry 12** needs no new event: story-log follows `hollow.finale.phase === 'choice'`. finale.ts's rootGone sets it in
+    the AI tick, after `> 047. wait.`. Entry 12's three lines then type as HOLLOW's own TERMINAL lines (`> …`, 05 §3.12
+    step 1), and the entry is found. Showing them on the FinaleChoice card is Track UI's.
+13. **Entries 03, 04, 10 and 11** were already drafted by the foundation within the limits. They are reviewed and left
+    marked `TODO(05)`. The validator also checks entry lines with the root's `> ` prefix against the 70 characters.
+
+**Tests**
+
+14. **`tests/unit/opening/plant-root.ts`** plants phase 2's HALCYON geometry (`P P P P _2 R _1 P _13`, the WALLS stage) for
+    the three suites that test a FIREWALL or the coast-tied wake against a root there: wp8/draft, wp8/p2/ui-models and
+    wp7/fix1/run-end-and-boot. It is kept out of THREAT's `support/hollow-world.ts`.
+15. **wp6/hollow-sim and wp6/follower are the calm ship-1 follower now.** The follower locks with a full engine, a 40%
+    engine and a thread-limited engine; nothing bites, no alarm shows, and the report comes promptly with no story.
+    wp8/run-flow crashes run 1 on to LAST LIGHT, where HOLLOW eats the Core. wp5/racks leaves the log's 2-block chip out of
+    its name-fit check: `???` and `046.log` don't fit a tiny chip, and the chip's own look is Track UI's.
+16. **wp7/, wp9/ and wp10/run-flow** are deleted in the post-THREAT re-fly (§5.2's last task), not before.
