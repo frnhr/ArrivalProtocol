@@ -65,11 +65,17 @@ const FINAL_LANDING = process.env.FINAL_LANDING ?? 'strip';
 if (FINAL_LANDING !== 'strip' && FINAL_LANDING !== 'stand') throw new Error(`FINAL_LANDING=${FINAL_LANDING} is neither strip nor stand`);
 const FINAL_STRIP = FINAL_LANDING === 'strip';
 
-// Quick depth (tests/unit/depth.ts): seeds 1 and 2, one PURGE and one MERGE run; full: 50.
-const SEEDS = Number(process.env.RUN_SEEDS ?? byDepth(2, 50));
-// The MERGE-charge and both-endings targets are balance measurements: on fewer than BALANCE_SEEDS seeds they are printed
-// as INFO (slice 2's re-fly: at RUN_SEEDS=8 the charge at the choice runs 5–30, median 20, so two seeds say nothing about
-// the median; `RUN_SEEDS=8` or `npm run balance` checks them). The per-ship checks and the victory rate hold on any count.
+// Quick depth (tests/unit/depth.ts): seeds 3 and 4, a PURGE run (odd) and a MERGE run (even) whose charge at the choice
+// pays for it (25 and 28 at the slice 2 re-fly; seeds 1 and 2 sit at 17 and 12, so both of them PURGE); full: 1–50.
+// RUN_SEEDS=n flies seeds 1–n.
+const SEED_LIST: readonly number[] = process.env.RUN_SEEDS !== undefined
+  ? Array.from({ length: Number(process.env.RUN_SEEDS) }, (_, i) => i + 1)
+  : byDepth([3, 4], Array.from({ length: 50 }, (_, i) => i + 1));
+const SEEDS = SEED_LIST.length;
+// The MERGE-charge target is a balance measurement: on fewer than BALANCE_SEEDS seeds it is printed as INFO (slice 2's
+// re-fly: at RUN_SEEDS=8 the charge at the choice runs 5–30, median 20, so two seeds say nothing about the median;
+// `RUN_SEEDS=8` or `npm run balance` checks it). The per-ship checks, the victory rate and both endings hold on any count
+// that flies an even seed with the charge for MERGE and an odd one (the quick pair does).
 const BALANCE_SEEDS = 8;
 const h = createHarness11(1, { soulsFound: false });
 mountStoryLog(h.store);
@@ -263,7 +269,7 @@ let verbsAtChoice: VerbCounts | null = null;
 let lostOnLastLight: number | null = null;
 const results: SeedResult[] = [];
 const started = Date.now();
-for (let seed = 1; seed <= SEEDS; seed++) {
+for (const seed of SEED_LIST) {
   h.newRun(seed);
   seedNow = seed;
   eventsAtBoot = h.events.length;
@@ -349,8 +355,8 @@ const balance = (name: string, ok: boolean, detail: string): void => {
 balance(`…at least half of the runs reach the choice with the ${MERGE_COST_CHARGE} MERGE costs (the lead's target, 21:30)`,
   affordable * 2 >= atChoice.length, `${affordable}/${atChoice.length}`);
 check(`ships 1–5 end in the victory RUN END in ≥ 90% of ${SEEDS} seeds`, victories >= Math.ceil(0.9 * SEEDS), `${victories}/${SEEDS}`);
-balance('…both endings were reached', merges > 0 && victories - merges > 0, `${merges} MERGE, ${victories - merges} PURGE`);
+check('…both endings were reached', merges > 0 && victories - merges > 0, `${merges} MERGE, ${victories - merges} PURGE`);
 setLandingMode('instant');
-h.newRun(SEEDS + 1);
+h.newRun(Math.max(...SEED_LIST) + 1);
 check('NEW RUN: every reset module in its initial state', resetReport().length === 0, JSON.stringify(resetReport()));
 finish();
