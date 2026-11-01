@@ -8,7 +8,7 @@ import { assertMemoryInvariants, freeSegment, mergeAdjacentFree, segmentStarts, 
 import { createToolFiles } from '@data/fs-tools';
 import { rollRoster, rollChildAge, type ScriptedRoster } from '@data/souls';
 import {
-  SEG_NAME_MAX_CHARS, RACK_BLOCKS, RACK_COUNT, DRIVER_BLOCKS, ROOT_BLOCKS, COLONISTS_PER_POD, INTEGRITY_MAX, LAST_BLOCK_SIZE,
+  SEG_NAME_MAX_CHARS, RACK_BLOCKS, RACK_COUNT, DRIVER_BLOCKS, COLONISTS_PER_POD, INTEGRITY_MAX, LAST_BLOCK_SIZE,
   POD_RACK_MIN_FREE, UNIT_TAIL_BLOCKS, WALL_MIN_BLOCKS, PRE_FINAL_ROOT_CAP, FINAL_ROOT_MAX_BLOCKS,
 } from '@data/tuning';
 import { integrityState } from '@state/selectors';
@@ -70,8 +70,8 @@ export interface ShipMemoryDef {
   // The pod racks as layout strings (§4.2, 01-landing §3.16): `P` an 8-block pod driver, `S` the root slot (0 blocks in
   // the layout: when the threat ladder brings a root, buildShipMemory writes it there and takes its blocks off the slot
   // rack's trailing free; without one the slot is nothing, and the free tokens around it are plain free space), `_n` n
-  // free blocks; space-separated, each rack summing to RACK_BLOCKS. `R` (an 8-block root, `R16`: 16 blocks) is phase 2's
-  // written root, kept for the test fixtures' layouts only: a ShipDef may not write one (validateShipDef).
+  // free blocks; space-separated, each rack summing to RACK_BLOCKS. Phase 2's written root `R` is gone (slice 2): a root
+  // only ever comes from the ladder, through `S`; test fixtures plant theirs (tests/unit/support/hollow-world.ts).
   podRacks: Record<PodRackKey, string>;
   // Racks E and F as written for a unit that arrives fresh (ship 1). Later ships hold whatever the
   // unit carried (systems/carry.ts), so theirs is null.
@@ -156,7 +156,7 @@ export function freshChargeFile(): RedundancySegment {
 
 // --- The root: HOLLOW's first block (§6.6) ----------------------------------------------------------
 
-// The `R` token. `owner` is what the kid calls HOLLOW at this point of the run (say.ts hollowLabel:
+// The root, as the ladder brings it into the `S` slot (placeRoot). `owner` is what the kid calls HOLLOW at this point of the run (say.ts hollowLabel:
 // `???` until it names itself on ship 2, its unit name on every ship after); naming it mid-ship flips
 // every hollow block (systems/hollow.ts nameHollow). LOCKED to every tool until ship 5's duel.
 function rootSegment(size: number, index: number, owner: string): HollowSegment {
@@ -223,8 +223,6 @@ export function parseRackLayout(rack: string, layout: string, fail: (why: string
     let match: RegExpExecArray | null;
     if (word === 'P') tokens.push({ kind: 'driver' });
     else if (word === 'S') tokens.push({ kind: 'slot' });
-    else if (word === 'R') tokens.push({ kind: 'root', size: ROOT_BLOCKS });
-    else if ((match = /^R(\d+)$/.exec(word))) tokens.push({ kind: 'root', size: Number(match[1]) });
     else if ((match = /^_(\d+)$/.exec(word))) tokens.push({ kind: 'free', size: Number(match[1]) });
     else fail(`unknown token '${word}' in rack ${rack}`);
   }
@@ -435,7 +433,7 @@ export function shipColonists(ship: ShipDef): number {
 
 // Throws on pod racks that break 01-landing §3.16's budget, run for every ship at load (data/ships.ts):
 // • at least POD_RACK_MIN_FREE free blocks across the pod racks, not counting the root's GAPs (free tokens shorter than
-//   WALL_MIN_BLOCKS right next to an `R` or the `S` slot) nor the largest root the slot may hold (maxRootFor), so walls
+//   WALL_MIN_BLOCKS right next to the `S` slot) nor the largest root the slot may hold (maxRootFor), so walls
 //   and MOVEs always have room;
 // • a slot's rack ends in at least maxRootFor free blocks: the root takes its blocks from there (slice-2-plan §4);
 // • at least UNIT_TAIL_BLOCKS trailing free in the last pod rack: the tail the unit may spill into;

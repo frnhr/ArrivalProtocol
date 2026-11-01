@@ -773,7 +773,8 @@ export const MINI_PLOT_VIEWBOX = 100;
 export const RACK_BLOCKS = 64;
 export const RACK_COUNT = 6;
 
-// The `R` token in a rack layout: HOLLOW's root, the size of one pod driver (R16 spells out others).
+// Phase 2's root size (its written `R` token, gone since slice 2): what debug.ts's hollowDemo and the test fixtures plant (the
+// ARRIVAL stage's root is HOLLOW_STAGES.arrival.rootBlocks, the same 8).
 export const ROOT_BLOCKS = 8;
 
 // A colonist's line ("wants to name the first tree.") stays this short, so `Okafor, Ada (11): …`

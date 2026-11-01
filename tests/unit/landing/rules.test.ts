@@ -303,14 +303,14 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
     ...ares.landing, lzs: [{ label: 'LZ-A', centreDeg: 10, width: 'wide', pods: 1 }, { label: 'LZ-A', centreDeg: 120, width: 'wide', pods: 2 }],
   }, 3, R)) && bad(() => validateLandingDef('t', { ...ares.landing, lzs: [{ label: 'LZ-A', centreDeg: 10, width: 'wide', pods: 17 }] }, 17, R)));
   check('validatePodRacks throws on pod racks with under 40 free blocks', bad(() => validatePodRacks({
-    ...ares, memory: { ...ares.memory, podRacks: { B: 'R P P P P P P P', C: 'P P P P P P P P', D: 'P P P P P _24' } },
-    landing: { ...ares.landing, lzs: [{ label: 'LZ-A', centreDeg: 160, width: 'wide', pods: 20 }] },
+    ...ares, memory: { ...ares.memory, podRacks: { B: 'P P P P P P P P', C: 'P P P P P P P P', D: 'P P P P P _24' } },
+    landing: { ...ares.landing, lzs: [{ label: 'LZ-A', centreDeg: 160, width: 'wide', pods: 21 }] },
   })));
   check('validatePodRacks throws when the drivers miss the LZ counts', bad(() => validatePodRacks({
     ...ares, landing: { ...ares.landing, lzs: [{ label: 'LZ-A', centreDeg: 160, width: 'wide', pods: 4 }] },
   })));
   check('validatePodRacks throws on a last pod rack with under 24 trailing free', bad(() => validatePodRacks({
-    ...ares, memory: { ...ares.memory, podRacks: { B: 'R _32 P P P', C: '_64', D: '_48 P P' } },
+    ...ares, memory: { ...ares.memory, podRacks: { B: '_40 P P P', C: '_64', D: '_48 P P' } },
     landing: { ...ares.landing, lzs: [{ label: 'LZ-A', centreDeg: 160, width: 'wide', pods: 5 }] },
   })));
 }

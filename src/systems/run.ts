@@ -390,7 +390,7 @@ export function continueAfterLoss(store: Store<GameState>): LossPlan {
       ...state.run,
       shipIndex: 0,
       // A fresh unit meets ship 1 (its written racks E–F): the licences go with the old memory. HOLLOW is
-      // unnamed again (the simulation is run 1's: no ghost has named it; HALCYON does).
+      // unnamed again (the simulation is run 1's: no ghost has named it; it names itself on the ship it boards, VESPER).
       licences: ['scan'],
       hollowNamed: false,
       simulationRetryUsed: true,

@@ -119,3 +119,22 @@ export function phase2ShipOne(store: Store<GameState>, cfg: HollowDef = phase2Ho
   if (root === null) throw new Error('phase2ShipOne: no root planted');
   return root;
 }
+
+// Phase 2's HALCYON geometry on the live HALCYON, in place (Track OPENING's helper, folded in here so there is one): its
+// rack B `P P P P P _24` becomes `P P P P _2 R _1 P _13`, POD 05 moving behind an 8-block root (POD 04 a GAP of 2 to its
+// left, POD 05 a GAP of 1 to its right), and HOLLOW is phase 2's HALCYON (the WALLS stage). For the suites that test a
+// FIREWALL or a card against a root there (wp8/draft, wp8/p2/ui-models, wp7/fix1/run-end-and-boot); a store.update
+// recipe. phase2Ship rebuilds the racks with phase 2's own layout instead.
+export function plantHalcyonRoot(draft: GameState): void {
+  if (draft.level.shipName !== 'HALCYON') throw new Error(`plantHalcyonRoot: on ${draft.level.shipName}`);
+  const pod5 = draft.memory.findIndex((seg) => seg.type === 'driver' && seg.pod === 5);
+  const driver = draft.memory[pod5];
+  const tail = draft.memory[pod5 + 1];
+  if (driver === undefined || tail?.type !== 'free' || tail.size < 24) throw new Error('plantHalcyonRoot: rack B no longer ends POD 05, _24');
+  const root: HollowSegment = {
+    id: 'root', name: UNNAMED_HOLLOW, type: 'hollow', size: ROOT_BLOCKS, root: true, locked: true, owner: UNNAMED_HOLLOW, desc: HOLLOW_DESC.root,
+  };
+  draft.memory.splice(pod5, 2, freeSegment(2), root, freeSegment(1), driver, freeSegment(tail.size - 11));
+  draft.hollow.cfg = phase2HollowOf(1);
+  draft.ui.memoryRev++;
+}

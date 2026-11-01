@@ -7,10 +7,10 @@
 //   last flash has been seen: a kid mashing SPACE still sees what the crossing did.
 // • NEXT BITE on a sleeping root whose wake the coast can bring forward shows no time until the coast fixes the wake (no
 //   0:22 → 0:05 jump). Slice 2: HALCYON is calm, so phase 2's HALCYON root and HOLLOW (the WALLS stage's coast-tied wake)
-//   are planted there (opening/plant-root.ts).
+//   are planted there (support/hollow-world.ts plantHalcyonRoot).
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../harness7';
-import { plantHalcyonRoot } from '../../opening/plant-root';
+import { plantHalcyonRoot } from '../../support/hollow-world';
 import { continueAfterLoss, lossPlan } from '@systems/run';
 import { runEndModel } from '@systems/run-end';
 import { transmitModel } from '@systems/transmit';

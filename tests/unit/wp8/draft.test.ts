@@ -37,7 +37,7 @@ import {
   MAX_LINE_CHARS, DRAFT_CARDS, FUEL_TRIM_DV_BONUS_FRAC, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, REPAIR_V2_VERSION, CHARGE_ARRIVAL_FLOOR,
 } from '@data/tuning';
 import type { Segment, DriverSegment, FreeSegment, UpgradeSegment } from '@/types/segment';
-import { plantHalcyonRoot } from '../opening/plant-root';
+import { plantHalcyonRoot } from '../support/hollow-world';
 
 const none: Record<UpgradeId, number> = { firewall: 0, 'repair-v2': 0, 'thread-plus': 0, charge: 0, 'fuel-trim': 0 };
 // The base context has no sign of trouble at all (a fresh unit's 36 charge, most of the FUEL left): every card

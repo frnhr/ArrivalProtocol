@@ -120,7 +120,7 @@ function throwsWith(memory: Partial<ShipMemoryDef>, pattern: RegExp): { ok: bool
   }
 }
 {
-  const short = throwsWith({ podRacks: { ...ship.memory.podRacks, B: 'R P P P _31' } }, /rack B sums to 63, not 64/);
+  const short = throwsWith({ podRacks: { ...ship.memory.podRacks, B: 'P P P _39' } }, /rack B sums to 63, not 64/);
   check('a rack sum of 63 throws (layout string)', short.ok, short.message);
   const shortA = throwsWith({ rackA: [...RACK_A.slice(0, -1), { free: 17 }] }, /rack A sums to 63, not 64/);
   check('a rack sum of 63 throws (written rack A)', shortA.ok, shortA.message);

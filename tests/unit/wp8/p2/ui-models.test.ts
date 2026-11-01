@@ -31,7 +31,7 @@ import { BASE_WHY, type UpgradeId } from '@data/upgrades';
 import { DRAFT_TEXT, SKILLS_TEXT, ARCHIVE_TEXT } from '@data/script';
 import { FIREWALL_BLOCKS, MAX_LINE_CHARS, FUEL_TRIM_BLOCKS, INTEGRITY_MAX } from '@data/tuning';
 import type { FreeSegment, UpgradeSegment } from '@/types/segment';
-import { plantHalcyonRoot } from '../../opening/plant-root';
+import { plantHalcyonRoot } from '../../support/hollow-world';
 
 const h = createHarness7(31, { soulsFound: true });
 const state = () => h.store.getState();
