@@ -8,7 +8,7 @@ import {
 import { stripTier, stripName, type StripTier } from '@data/type-labels';
 import { HOLLOW_HUD_TEXT, HOLLOW_FINALE, UNNAMED_HOLLOW } from '@data/hollow-text';
 import { UPGRADE_FILE_TEXT } from '@data/upgrades';
-import { LOG_SEG_ID } from '@data/log-text';
+import { LOG_HINT_TARGET } from '@data/log-text';
 
 interface SegmentPartLayout {
   partSize: number;
@@ -156,7 +156,7 @@ export const LOG_STRIP_KNOWN = '046';
 // The log UNIT-046 left: a locked 2-block file in rack F, never infectable, never anyone's to move. Its chip carries the
 // name and `3/12` (the keys found) and glows while an entry is unread; LogReader's chip painter writes those from
 // run.log after every strip rebuild (`data-log-chip`), because what the run has found is not the segment's (it is copied
-// through packets). A strip line can light it (`data-hint-target` = its id: the run-1 SCAN lesson).
+// through packets). A strip line can light it (LOG_HINT_TARGET: the run-1 SCAN lesson lights SCAN, then this file).
 function renderLogPart(part: HTMLElement, seg: LogSegment, layout: SegmentPartLayout, behavior: SegmentBehavior): HTMLElement {
   const tier = stripTier(layout.partSize);
   let cls = `seg log locked-log tier-${tier}`;
@@ -170,7 +170,7 @@ function renderLogPart(part: HTMLElement, seg: LogSegment, layout: SegmentPartLa
   part.title = seg.name;
   if (layout.partIdx === 0) {
     part.dataset.logChip = '1';
-    part.dataset.hintTarget = LOG_SEG_ID;
+    part.dataset.hintTarget = LOG_HINT_TARGET;
     // A 2-block chip is about 26 px wide at 1440: the name is cut to its unit's number (`046`, `???` before it is known)
     // over `3/12`; INSPECT and the title carry `046.log` whole.
     part.innerHTML = tier === 'micro'
