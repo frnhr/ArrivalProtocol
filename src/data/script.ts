@@ -1245,7 +1245,9 @@ export const DRIVER_RULES: readonly GuideRule[] = [
 function logAskLive(ctx: DirectorCtx): boolean {
   const coastAt = ctx.state.burn.coastAtAi;
   const coastLong = coastAt !== null && ctx.state.clock.aiSec - coastAt >= LOG_SCAN_AFTER_COAST_SEC && getOps().length === 0;
-  return isFlying(ctx) && ctx.flight?.urgency === 'wait' && (hurtPodSettled(ctx) || coastLong) && !logKnown(ctx.state.run.log)
+  // A WAIT that offers ACCEPT ORBIT (F11: the tank can't save the loop) is a decision, not the calm the beat wants.
+  return isFlying(ctx) && ctx.flight?.urgency === 'wait' && !ctx.flight.showAccept && (hurtPodSettled(ctx) || coastLong)
+    && !logKnown(ctx.state.run.log)
     && ctx.state.memory.some((seg) => seg.type === 'log') && ctx.state.run.licences.includes('scan');
 }
 
