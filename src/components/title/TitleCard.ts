@@ -7,6 +7,9 @@ import { play, unlockAudio } from '@systems/audio';
 import { requireById, make } from '@components/dom';
 import { LINES, ARCHIVE_TEXT, lineVars, lineageLine } from '@data/script';
 import { BOOT_ASSEMBLE_SEC, BOOT_ASSEMBLE_SETTLE_SEC } from '@data/tuning';
+import { chartModel } from '@systems/desk';
+import { drawChart, LANDSCAPE_ROTATE_DEG, PORTRAIT_ROTATE_DEG } from '@components/desk/chart-draw';
+import { MAP_TEXT } from '@data/map-text';
 
 // The title card and the boot overlay (§5.1, §7.1). The title is a black card over everything
 // with one button, RECEIVE TRANSMISSION; the click unlocks audio (systems/boot calls the hook)
@@ -19,6 +22,10 @@ import { BOOT_ASSEMBLE_SEC, BOOT_ASSEMBLE_SETTLE_SEC } from '@data/tuning';
 // anything), PLAYING WITHOUT ARCHIVE, or CORRUPT, which offers WIPE ARCHIVE or PLAY WITHOUT ARCHIVE; RECEIVE
 // TRANSMISSION stays (it plays without the archive, systems/boot.ts), so a kid is never held at the title by
 // a question about saving. Never a quiet reset: the red box stays up until the run starts.
+// Phase 3 slice 3a (02-map §2, §4; 05 §3.12): the STAR CHART sits faint behind the logo (SOL at the lower left, the band
+// of stars, the final ship's amber beacon `FINAL SHIP · LAST LIGHT · 3020`) under `ARRIVAL PROTOCOL // OUTWARD BOUND`
+// and `UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT`; RECEIVE TRANSMISSION draws the beam from SOL to the first ship as
+// the card clears (reduced motion: no draw, the chart just fades).
 export function mountTitleCard(store: Store<GameState>): () => void {
   const root = requireById('titleCard');
   const receiveBtn = requireById<HTMLButtonElement>('titleReceive');
@@ -33,6 +40,31 @@ export function mountTitleCard(store: Store<GameState>): () => void {
   const lineageEl = requireById('titleLineage');
   const endingsEl = requireById('titleEndings');
   const memWrap = requireById('memWrap');
+  const subEl = root.querySelector<HTMLElement>('.title-sub');
+  if (!subEl) throw new Error('TitleCard: index.html lost .title-sub');
+  // `ARRIVAL PROTOCOL // OUTWARD BOUND`: the h1 keeps the name, the sub line takes the rest.
+  subEl.textContent = MAP_TEXT.title.logo.replace(/^ARRIVAL PROTOCOL\s*/, '');
+  const chartHost = document.createElement('div');
+  chartHost.className = 'title-chart';
+  chartHost.setAttribute('aria-hidden', 'true');
+  const chartSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  chartSvg.setAttribute('class', 'star-chart');
+  chartHost.appendChild(chartSvg);
+  root.prepend(chartHost);
+  const paintChart = (): void => {
+    const state = store.getState();
+    if (state.run.phase !== 'title' && state.run.phase !== 'boot') return;
+    const width = chartHost.clientWidth;
+    const height = chartHost.clientHeight;
+    if (width < 40 || height < 40) return;
+    const portrait = width < height;
+    drawChart(chartSvg, chartModel(state), {
+      width, height, rotateDeg: portrait ? PORTRAIT_ROTATE_DEG : LANDSCAPE_ROTATE_DEG, labels: 'beacon', beams: false, clouds: true,
+      rings: true, trail046: false, route: false, stars: true, beamFromSol: true, idPrefix: 'title',
+    });
+  };
+  const chartResize = new ResizeObserver(paintChart);
+  chartResize.observe(chartHost);
 
   wipeBtn.textContent = ARCHIVE_TEXT.wipe;
   withoutBtn.textContent = ARCHIVE_TEXT.playWithout;
@@ -150,12 +182,16 @@ export function mountTitleCard(store: Store<GameState>): () => void {
       paintArchive();
     }
     root.classList.toggle('booting', phase === 'boot');
+    // RECEIVE TRANSMISSION (the run's first boot, from the title): the beam draws from SOL to the first ship.
+    root.classList.toggle('receiving', phase === 'boot' && prev === 'title');
+    if (phase === 'title') paintChart();
     if (phase === 'boot' && prev !== null && prev !== 'boot') assembleStrip();
   }
 
   paint(store.getState().run.phase, null);
   const unsub = store.subscribe((s) => s.run.phase, (phase, prev) => paint(phase, prev));
-  const unsubRun = store.subscribe((s) => s.run.rev, paintUnit);
+  const unsubRun = store.subscribe((s) => s.run.rev, () => { paintUnit(); paintChart(); });
+  const unsubMap = store.subscribe((s) => s.run.map, paintChart);
 
   return () => {
     receiveBtn.removeEventListener('click', onReceive);
@@ -163,6 +199,9 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     withoutBtn.removeEventListener('click', onWithout);
     root.removeEventListener('click', onCardClick);
     if (assembleTimer !== null) clearTimeout(assembleTimer);
+    chartResize.disconnect();
+    unsubMap();
+    chartHost.remove();
     unsub();
     unsubRun();
     unsubArchive();

@@ -14,7 +14,10 @@ import { hollowUnitName, HOLLOW_STORY, HOLLOW_VERB, HOLLOW_FINALE } from '@data/
 import { playsTutorial, type LastCause, type LastUnit, type Ending } from '@systems/meta';
 import type { UpgradeForm } from '@data/upgrades';
 import { currentShip } from '@systems/map-run';
-import { mapBootLines, mapBootLineText } from '@systems/map-boot';
+import { solLy } from '@systems/map-geometry';
+import { END_SLOTS } from '@data/arm';
+import { MAP_TEXT } from '@data/map-text';
+import { mapBootLines, mapBootLineText, mapOverflowLineText } from '@systems/map-boot';
 import { SHIP_SCREEN_REFUSAL, AUTOPILOT_REFUSAL } from '@systems/flight-controls';
 import {
   TOOL_WORD, repairStepTarget, toolStepTarget, fileHintTarget, podHintTarget, firewallHintTarget, SEED_HINT_TARGET,
@@ -82,7 +85,8 @@ export interface LineVars {
   colonists: number;      // colonists aboard
   podsTotal: number;      // the pods this ship arrived with
   podsDown: number;       // pods down on the surface
-  distanceLy: number;     // the route length on the title card
+  distanceLy: number;     // the final ship's distance from SOL, on the title card (phase 3 slice 3a: `FINAL SHIP 180 LY OUT`)
+  year: number;           // the run's start year, on the title card (`YEAR 2300`)
   nextApsis: '▼' | '▲';   // where the next planned burn happens (the SKIP hint names it)
   hollow: string;         // what HOLLOW is called on screen: '???' until it names itself (WP6)
   // The ship's hurt driver while it would still land hard (in memory, failing), by the strip's label (`POD 02`) and its
@@ -146,6 +150,7 @@ export const WORST_CASE_VARS: LineVars = {
   podsTotal: 16,
   podsDown: 16,
   distanceLy: 9_999,
+  year: 9_999,
   nextApsis: '▲',
   // A merged HOLLOW's name is the longest it gets (HOLLOW_NAME_MAX_UNITS units: `UNIT-998·999`).
   hollow: hollowUnitName([998, 999]),
@@ -281,7 +286,10 @@ export function lineVars(state: Readonly<GameState>, pred: Prediction): LineVars
     colonists: state.mission.colonists,
     podsTotal: state.landing.pods.length,
     podsDown: state.landing.pods.filter((record) => record.fate.kind === 'down').length,
-    distanceLy: state.mission.distanceLy,
+    // The title's line (05 §3.12): the final ship's distance from SOL (an end slot's world: 180 LY on run 1, and on the
+    // classic world, whose LAST LIGHT sits at New Haven too) and the run's start year.
+    distanceLy: solLy(END_SLOTS[0]!),
+    year: state.run.map.startYear,
     nextApsis: pred.burnPoint?.event === 'apo' ? '▲' : '▼',
     // '???' until HOLLOW names itself (run.hollowNamed, systems/hollow.ts nameHollow: on the ship it arrives on since
     // phase 3 slice 2; a later run's ghost names nothing, slice-2-plan risk 11).
@@ -355,8 +363,8 @@ const BEAM_OUT_HOPELESS_WORDS: Readonly<Record<Hopeless, string>> = {
 };
 
 export const LINES = {
-  titleUnit: (vars: LineVars): string =>
-    `${unitName(vars.unit)} · EXODUS FLEET · WAVE ${vars.wave} · ${formatCount(vars.distanceLy)} LY`,
+  // 05 §3.12 (phase 3 slice 3a): `UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT`.
+  titleUnit: (vars: LineVars): string => MAP_TEXT.title.line(unitName(vars.unit), vars.year, vars.distanceLy),
   // The strip during the boot.
   booting: (): string => 'RECEIVING TRANSMISSION — click or [SPACE] to skip',
   // A returning unit's boot while its ghost types (systems/boot.ts refuses a skip until it is done).
@@ -572,7 +580,7 @@ export const RUN_END_TITLE: Readonly<Record<RunEndCause, (unit: string, ship: st
   'won-purge': () => 'LAST LIGHT · THE FLEET IS HOME',
   'won-merge': () => 'WE ARRIVE TOGETHER',
   unresolved: () => 'IT FOLLOWED YOU',
-  'flagship-lost': () => 'FLAGSHIP LOST',
+  'flagship-lost': () => 'FINAL SHIP LOST',
   overwritten: (unit) => `${unit} OVERWRITTEN`,
   stayed: () => 'YOU STAYED WITH THEM',
   abandoned: () => 'RUN ABANDONED',
@@ -603,7 +611,7 @@ export const RUN_END_WHY: Readonly<Record<RunEndCause, (ship: string) => string>
   'won-purge': () => 'You deleted it. Every ship is home.',
   'won-merge': () => 'You let it in. Nobody is alone now.',
   unresolved: () => 'Nothing was left to delete it with.',
-  'flagship-lost': () => 'The flagship never made it.',
+  'flagship-lost': () => 'The final ship never made it.',
   overwritten: (ship) => `Your AI Core was eaten on ${ship}. Nobody was left to think.`,
   stayed: (ship) => `Your AI Comms were gone. Nobody could beam you off ${ship}.`,
   abandoned: () => 'The run was left behind.',
@@ -950,10 +958,15 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
       return scriptedDamageLine(arrival.scripted);
     case 'charge':
       if (arrival === null) throw new Error('bootLine: a charge line on a ship nothing transmitted to');
+      // A TIGHT ship's room left no charge at all (01 §3.16): said plainly, never a surprise.
+      if (state.run.map.world === 'arm' && chargeLeft(state) === 0 && layoutOf(state).chargeFloor === 0) {
+        return MAP_TEXT.boot.zeroCharge(state.level.shipName);
+      }
       return chargeLine(arrival, chargeLeft(state));
     case 'overflow':
       if (arrival === null) throw new Error('bootLine: an overflow line on a ship nothing transmitted to');
-      return chargeOverflowLine(arrival.chargeOverflowLost);
+      // On the arm the line names the ship whose room had none left (01 §3.16, map-boot.ts).
+      return state.run.map.world === 'arm' ? mapOverflowLineText(state) : chargeOverflowLine(arrival.chargeOverflowLost);
     case 'skill': throw new Error('bootLine: the skill line is trainSkillAtBoot\'s');
     case 'hollow': {
       const line = bootHollowLine(state);
@@ -963,8 +976,8 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
   }
 }
 // The most a boot ever says (a later ship with the beam's seeds, arrival damage, an overflow, a skill trained, a log key
-// and HOLLOW's line).
-export const BOOT_LINE_MAX = 10;
+// and HOLLOW's line; on the arm also the sleep, receiver and ECC-while-asleep lines).
+export const BOOT_LINE_MAX = 13;
 
 // --- Beats: lines spoken on a moment (§6.3) ---------------------------------------------------
 

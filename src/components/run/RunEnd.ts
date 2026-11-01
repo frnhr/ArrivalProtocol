@@ -10,6 +10,9 @@ import { requireById, replayAnimation, make } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
 import { ARCHIVE_TEXT, endingsLine } from '@data/script';
 import { RUN_END_TEXT } from '@data/landing-text';
+import { chartModel } from '@systems/desk';
+import { drawChart, LANDSCAPE_ROTATE_DEG } from '@components/desk/chart-draw';
+import { MAP_TEXT } from '@data/map-text';
 import {
   RUN_END_ARM_SEC, RUN_END_ROW_GAP_SEC, RUN_END_COUNT_SEC, BEAM_OUT_BLACKOUT_SEC, STARS_PER_SHIP, REPORT_COUNT_HEARTBEAT,
 } from '@data/tuning';
@@ -29,6 +32,9 @@ import {
 // behind it, the endings found so far stand under it (`ENDINGS 1/2 · PURGE · ???`: there is another way), and a MERGE
 // says what it carries into the next run. Every other ending is sombre: a grey night, the title in the warning colour,
 // the count plain (no green glow), a falling tone instead of the choir.
+// Phase 3 slice 3a (02-map §4): the ships become the RUN TALLY: one row per ship the run visited (`3 · KESTREL · 2467`,
+// its outcome, stars, LANDED and points; a ship the route never took has no row), beside the route on a small chart
+// (the STAR CHART's drawing, the visited ships numbered), and `n COLONIES FOUNDED` under it.
 
 function starsText(earned: number): string {
   return '★'.repeat(earned) + '☆'.repeat(Math.max(0, STARS_PER_SHIP - earned));
@@ -38,17 +44,46 @@ function starsText(earned: number): string {
 const COUNT_STEP_COLONISTS = 100;
 
 function shipRowNode(row: RunEndShipRow): HTMLElement {
-  const node = make('div', `re-ship outcome-${row.outcome ?? 'none'}`);
+  const node = make('div', `re-ship outcome-${row.outcome}${row.colony ? ' colony' : ''}`);
+  node.setAttribute('aria-label', row.tallyLine);
+  const name = make('span', 're-ship-name', row.shipName);
+  name.appendChild(make('span', 're-ship-year', ` · ${row.year}`));
   node.append(
-    make('span', 're-ship-n', String(row.index + 1)),
-    make('span', 're-ship-name', row.shipName),
+    make('span', 're-ship-n', String(row.depth)),
+    name,
     make('span', 're-ship-outcome', row.outcomeWord),
-    make('span', 're-ship-stars', row.result ? starsText(row.result.stars) : ''),
+    make('span', 're-ship-stars', starsText(row.result.stars)),
     make('span', 're-ship-landed', row.landedLine),
     // Slice 1a: the ship's landing points beside its LANDED (the run's SCORE is their sum).
-    make('span', 're-ship-points', row.result ? RUN_END_TEXT.shipPoints(row.result.points) : ''),
+    make('span', 're-ship-points', RUN_END_TEXT.shipPoints(row.result.points)),
   );
   return node;
+}
+
+// The RUN TALLY's frame (slice 3a), built round index.html's ship list: its title, the list, and the route's mini chart
+// with the colonies line.
+interface TallyParts {
+  title: HTMLElement;
+  chart: HTMLElement;
+  svg: SVGSVGElement;
+  colonies: HTMLElement;
+}
+
+function buildTally(shipsEl: HTMLElement): TallyParts {
+  const tally = make('div', 're-tally');
+  const title = make('div', 're-tally-title');
+  shipsEl.before(tally);
+  const side = make('div', 're-tally-side');
+  const chart = make('div', 're-tally-chart');
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'star-chart mini');
+  chart.appendChild(svg);
+  const colonies = make('div', 're-tally-colonies');
+  side.append(make('div', 're-tally-route', MAP_TEXT.tally.route), chart, colonies);
+  const list = make('div', 're-tally-list');
+  list.append(title, shipsEl);
+  tally.append(list, side);
+  return { title, chart, svg, colonies };
 }
 
 export function mountRunEnd(store: Store<GameState>): () => void {
@@ -68,6 +103,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
   const seedEl = requireById('reSeed');
   const archiveEl = requireById('reArchive');
   const newBtn = requireById<HTMLButtonElement>('reNew');
+  const tally = buildTally(shipsEl);
 
   let model: RunEndModel | null = null;
   let closeModal: (() => void) | null = null;
@@ -148,6 +184,18 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     missingEl.textContent = '';
     missingEl.hidden = true;
     shipsEl.replaceChildren(...report.ships.map(shipRowNode));
+    tally.title.textContent = report.tallyTitle;
+    tally.colonies.textContent = report.coloniesLine;
+    // The route on a small chart, once the screen is laid out (its size is the CSS box's).
+    requestAnimationFrame(() => {
+      const width = tally.chart.clientWidth;
+      const height = tally.chart.clientHeight;
+      if (width < 40 || height < 40 || model !== report) return;
+      drawChart(tally.svg, chartModel(store.getState()), {
+        width, height, rotateDeg: LANDSCAPE_ROTATE_DEG, labels: 'route', beams: false, clouds: false, rings: false,
+        trail046: false, route: true, stars: true, idPrefix: 'tally',
+      });
+    });
     scoreEl.textContent = report.scoreLine;
     scoreNoteEl.textContent = RUN_END_TEXT.scoreNote;
     rankEl.textContent = report.rankLine;

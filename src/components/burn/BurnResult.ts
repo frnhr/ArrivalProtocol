@@ -4,7 +4,6 @@ import { TERMINAL } from '@systems/flight-hud';
 import { shipLost, lossPlan, continueAfterLoss, shipOutcomeOf, type LossPlan } from '@systems/run';
 import { landingResult } from '@systems/landing-rules';
 import { requireById } from '@components/dom';
-import { shipSummaryAt, currentSlot } from '@systems/map-run';
 import { MAP_TEXT } from '@data/map-text';
 import { LOSS_BUTTON } from '@data/script';
 import { RESULT_BANNER_DELAY_MS } from '@data/tuning';
@@ -26,14 +25,13 @@ export const RESULT_SUB: Record<TerminalStatus, string> = {
 };
 
 // What the LOST card's button does, in its own words (systems/run.ts lossPlan).
-function lossButtonText(state: Readonly<GameState>, plan: LossPlan): string {
+function lossButtonText(plan: LossPlan): string {
   if (plan.kind === 'simulation') return LOSS_BUTTON.simulation;
   if (plan.kind === 'end') return LOSS_BUTTON.end;
   const emergency = plan.outcome === 'crashed' || plan.outcome === 'emergency';
   if (emergency) return LOSS_BUTTON.emergency;
-  // The classic world has one next ship; on the arm the kid picks it at the desk.
-  if (state.run.map.world !== 'classic') return MAP_TEXT.lossToChart;
-  return LOSS_BUTTON.transmit(shipSummaryAt(state.run.map, currentSlot(state.run) + 1).name);
+  // Every world goes through the desk now (the classic one offers its one next ship there): the kid picks it on the chart.
+  return MAP_TEXT.lossToChart;
 }
 
 // The LOST card (§9 WP5 item 6) over a crashed, escaped, stranded or abandoned ship, or one whose Core
@@ -100,7 +98,7 @@ export function mountBurnResult(store: Store<GameState>): () => void {
       return;
     }
     const plan = lossPlan(state);
-    retryEl.textContent = lossButtonText(state, plan);
+    retryEl.textContent = lossButtonText(plan);
     // The CORE LOST card is the one card shown while the static rages (the Core is at 0): it sits above the
     // glitch overlay, so its line and its EMERGENCY TRANSMIT / RUN OVER button can be read (WP6's TODO).
     root.classList.toggle('over-static', coreLost);

@@ -396,9 +396,10 @@ export const BEEP_JUMP_TAC = 1.5;
 // (`> ECC: SENSOR INTERP 45% — PATH UNCERTAIN`) and AUTOBURN.skl trained from the kid's captures. VESPER (WP10) closes
 // its boot with HOLLOW's own line, which types slowly: the klaxon waits for it (BOOT_AFTER_HOLLOW_LINE_SEC). Phase 3
 // slice 2 adds up to two more at the same rhythm: the beam seeds' ECC line or HOLLOW's 108% unpack, and `046.log · KEY
-// FOUND` (data/script.ts BOOT_LINE_MAX 10).
+// FOUND`; slice 3a three more on the arm (the sleep, receiver and ECC-while-asleep lines: data/script.ts BOOT_LINE_MAX 13),
+// on the same 1.3 s step boot.ts extrapolates with.
 export const BOOT_ASSEMBLE_SEC = 1.5;
-export const BOOT_LINE_AT_SEC: readonly number[] = [0.5, 1.8, 3.1, 4.4, 5.7, 7.0, 8.3, 9.6, 10.9, 12.2];
+export const BOOT_LINE_AT_SEC: readonly number[] = [0.5, 1.8, 3.1, 4.4, 5.7, 7.0, 8.3, 9.6, 10.9, 12.2, 13.5, 14.8, 16.1];
 export const BOOT_KLAXON_AFTER_LAST_LINE_SEC = 1.4;
 export const BOOT_END_AFTER_KLAXON_SEC = 0.4;
 
@@ -1827,3 +1828,28 @@ export const DESK_GREY_STEP_MS = 450;
 // The boot's sleep line (`> ASLEEP IN KESTREL'S RECEIVER · 2378 → 2467 · 89 YEARS`) rolls its year for this long as it
 // types (02 §4 step 2: about 1.5 s), with a soft tick ratchet: the years are felt, not just read.
 export const SLEEP_YEAR_ROLL_MS = 1500;
+// 046's written trail ends in a grey cross "past Calder" (05 §3.11): this many LY beyond the world along the trail's last
+// leg, so the cross reads as lost on the way, not as a colony at Calder.
+export const TRAIL_046_CROSS_PAST_LY = 6;
+// The STAR CHART's drawing (components/desk/chart-draw.ts), in screen pixels so the chart reads the same at any zoom: a
+// ship's square and an ark's (and the final ship's) bigger one (02 §4: "arks are bigger"); the margin round the arm, and
+// the room kept right of the outermost nodes for their `NAME · colonists` labels.
+export const CHART_NODE_PX = 9;
+export const CHART_ARK_PX = 14;
+export const CHART_PAD_PX = 22;
+export const CHART_LABEL_ROOM_PX = 118;
+// Faint stars along the arm's band (02 §4: "near-black space with faint arm stars"): enough to read as a sky, few enough
+// that a node is never lost among them.
+export const CHART_STARS = 240;
+// The phone's chart scrolls along the arm at this scale (02 §4: the arm runs from SOL at the bottom to the final ship at
+// the top): about the desktop's at 1280 wide, so labels stay apart; turned this far so the arm's 40° axis stands upright.
+export const CHART_PHONE_PX_PER_LY = 5.2;
+export const CHART_PORTRAIT_DEG = 50;
+// A desktop's chart turns the arm 15° clockwise (its axis at 25° instead of 40°): the scale that fits a 1280 × 720 and a
+// 1440 × 900 desk best while SOL stays at the lower left.
+export const CHART_LANDSCAPE_DEG = -15;
+// The ship card's bottom sheet on a phone peeks this much of its top block above SET COURSE until it is pulled up.
+export const DESK_SHEET_PEEK_PX = 132;
+// CONTROL's line on the first desk types at this speed (characters per second): CONTROL's radio pace, so the kid reads
+// it as the same voice.
+export const DESK_TYPE_CPS = 38;

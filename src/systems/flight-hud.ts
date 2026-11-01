@@ -1,3 +1,4 @@
+import { MAP_TEXT } from '@data/map-text';
 import type { GameState, Pace, PresetMode, TerminalStatus, LogEntry } from '@state/schema';
 import type { Ring, Vec2 } from '@/types/orbit';
 import { secUntil, samplePath, loopProblem, type BurnPoint, type Prediction } from '@systems/predict';
@@ -257,11 +258,14 @@ export function decayChip(
 
 // The header crumbs (§7.1): UNIT-047 · WAVE 1 / ARES-VII / what is happening right now, in the words the
 // rest of the HUD uses: IMPACT COURSE, FLYBY, GET READY, CAPTURED, IN RING, then the outcome. The wave is
-// the run (§4.5, WP8: UNIT-048 · WAVE 2 on the next one).
+// the run (§4.5, WP8: UNIT-048 · WAVE 2 on the next one). Phase 3 slice 3a (02-map §4): on the arm the ship crumb gains
+// the galaxy year (`UNIT-047 / KESTREL · 2467 / FLYBY`: `year`, null on the classic world, whose years are fixtures),
+// and the desk and the PACKET name themselves.
 export interface HeaderCrumbs {
   unit: string;
   wave: string;
   ship: string;
+  year: number | null;
   phase: Label;
 }
 
@@ -284,8 +288,11 @@ export function headerCrumbs(state: Readonly<GameState>, pred: Prediction): Head
   const unit = state.mission.unitId;
   const wave = `WAVE ${state.mission.wave}`;
   const ship = state.level.shipName;
-  const crumbs = (phase: Label): HeaderCrumbs => ({ unit, wave, ship, phase });
+  const year = state.run.map.world === 'arm' ? state.run.map.galaxyYear : null;
+  const crumbs = (phase: Label): HeaderCrumbs => ({ unit, wave, ship, year, phase });
   if (state.run.phase === 'title') return crumbs({ text: 'STANDBY', tone: 'plain' });
+  if (state.run.phase === 'desk') return crumbs({ text: MAP_TEXT.desk.title, tone: 'plain' });
+  if (state.run.phase === 'transmit') return crumbs({ text: MAP_TEXT.desk.packetCrumb, tone: 'plain' });
   if (state.run.phase === 'boot') return crumbs({ text: 'RECEIVING', tone: 'plain' });
   // 01-landing §4: … ORBIT LOCKED | LANDING · 2/6 DOWN | ALL DOWN. The outcome stays on the crumb until the first pod
   // is down (the moment belongs to the lock), then the crumb says what is happening now, and ALL DOWN once every pod is.

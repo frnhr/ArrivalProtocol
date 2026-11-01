@@ -7,6 +7,7 @@ import { totalBlocks } from '@systems/memory-ops';
 import { formatCount } from '@data/script';
 import { hexAddr, layoutOf } from '@data/memory';
 import { requireById } from '@components/dom';
+import { MAP_TEXT } from '@data/map-text';
 
 // The stats row over the strip (§7.1: a computed `.mem-stats`) and the strip's header. Every number
 // is read from memory, nothing is written in the page: the colonists whose drivers are still in memory (pods aboard),
@@ -66,6 +67,13 @@ export function memStatsModel(state: Readonly<GameState>): Record<MemStatKey, Me
   };
 }
 
+// The strip header's memory class (01-landing §4, phase 3 slice 3a): `MEMORY 256 · TIGHT`, so a kid on a small ship
+// knows why the strip has four rows.
+export function memoryClassLabel(state: Readonly<GameState>): string {
+  const layout = layoutOf(state);
+  return MAP_TEXT.strip.memory(layout.totalBlocks, layout.cls);
+}
+
 // The strip header's address range, rack by rack: `RACK A → F · 0x000 → 0x17F`.
 export function stripRangeLabel(state: Readonly<GameState>): string {
   const total = totalBlocks(state.memory);
@@ -93,6 +101,9 @@ export function mountMemoryStats(store: Store<GameState>): () => void {
   })) as Record<MemStatKey, HTMLElement>;
   const shipEl = requireById('memShip');
   const rangeEl = requireById('memRange');
+  const classEl = document.createElement('span');
+  classEl.className = 'mem-class';
+  rangeEl.before(classEl);
 
   const lastHtml = new Map<MemStatKey, string>();
   function paint(state: Readonly<GameState>): void {
@@ -110,6 +121,11 @@ export function mountMemoryStats(store: Store<GameState>): () => void {
     if (shipEl.textContent !== state.level.shipName) shipEl.textContent = state.level.shipName;
     const range = stripRangeLabel(state);
     if (rangeEl.textContent !== range) rangeEl.textContent = range;
+    const cls = memoryClassLabel(state);
+    if (classEl.textContent !== cls) {
+      classEl.textContent = cls;
+      classEl.dataset.cls = layoutOf(state).cls;
+    }
   }
 
   paint(store.getState());
@@ -118,5 +134,5 @@ export function mountMemoryStats(store: Store<GameState>): () => void {
     if (change.type === 'progress' && change.operation.kind === 'repair') paint(store.getState());
   });
 
-  return () => { unsub(); offOps(); };
+  return () => { unsub(); offOps(); classEl.remove(); };
 }

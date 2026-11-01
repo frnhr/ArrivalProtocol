@@ -1,3 +1,344 @@
-/* The DESK (phase 3 slice 3a, docs/phase3/02-map.md §4): the STAR CHART, the SHIP CARD, the phone bottom sheet.
-   Track DESK owns this file (with a 3a token block in tokens.css and modes.css). Empty in the foundation: the minimal
-   desk (components/desk/DeskScreen.ts) wears the TRANSMIT screen's chrome. */
+/* The DESK (phase 3 slice 3a, docs/phase3/02-map.md §4; components/desk/*): the STAR CHART, the SHIP CARD, the guidance
+   strip, SET COURSE, the phone bottom sheet; the chart's look where it is shared (the title card's faint chart, the RUN
+   TALLY's mini route). Amber whichever screen the kid was on: every colour is a --desk-* token (tokens.css). */
+
+/* ── The screen: under the header (the crumb keeps the year), over everything else ── */
+.desk-screen {
+  position: fixed; left: 0; right: 0; top: var(--header-h); bottom: 0; z-index: 690;
+  display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 8px;
+  padding: 10px 16px 12px;
+  background: radial-gradient(ellipse at 30% 70%, var(--desk-glow) 0%, transparent 55%), var(--desk-bg);
+  color: var(--desk-text); font-family: 'JetBrains Mono', monospace;
+  animation: wr-in 0.5s ease-out both;
+}
+.desk-screen[hidden] { display: none; }
+.desk-screen::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, var(--desk-scan) 0 1px, transparent 1px 3px);
+}
+.desk-screen.reduced { animation: none; }
+
+.desk-head { display: flex; align-items: baseline; gap: 18px; min-width: 0; }
+.desk-title {
+  font-family: 'VT323', monospace; font-size: 30px; line-height: 1; letter-spacing: 0.32em;
+  color: var(--desk-accent); text-shadow: 0 0 14px color-mix(in srgb, var(--desk-accent) 40%, transparent);
+}
+.desk-where { flex: 1 1 auto; min-width: 0; font-size: 12px; letter-spacing: 0.18em; color: var(--desk-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.desk-trace { margin-left: auto; }
+
+/* The guidance strip: two numbered steps, the one to do now lit, and what it says. */
+.desk-guide {
+  display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 10px;
+  border: 1px solid var(--desk-edge); background: linear-gradient(90deg, var(--desk-glow), transparent 70%);
+  font-size: 12px; letter-spacing: 0.12em;
+}
+.desk-step {
+  padding: 2px 8px; border: 1px solid var(--desk-edge-bright); color: var(--desk-dim);
+  font-size: 10px; letter-spacing: 0.18em; white-space: nowrap;
+}
+.desk-step.now { color: var(--desk-bg); background: var(--desk-accent); border-color: var(--desk-accent); }
+.desk-step.done { color: var(--desk-accent-dim); text-decoration: line-through; }
+.desk-step-text { margin-left: 8px; color: var(--desk-bright); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.desk-notes { display: flex; align-items: baseline; gap: 22px; min-height: 18px; font-size: 12px; letter-spacing: 0.08em; }
+.desk-control[hidden], .desk-beat[hidden] { display: none; }
+.desk-control-tag { margin-right: 8px; font-size: 10px; letter-spacing: 0.2em; color: var(--layer-mind); }
+.desk-control-text { color: var(--desk-text); }
+.desk-beat { color: var(--desk-dim); letter-spacing: 0.16em; animation: wr-in 0.5s ease-out both; }
+
+/* ── The windows: the phase-2 chrome, in the desk's amber ── */
+.desk-body { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 12px; min-height: 0; }
+.desk-win {
+  position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0;
+  background: var(--desk-window); border: 1px solid var(--desk-edge-bright);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), inset 0 0 20px var(--desk-glow);
+}
+.desk-win-title {
+  flex: 0 0 26px; display: flex; align-items: center; gap: 10px; padding: 0 10px;
+  border-bottom: 1px solid var(--desk-edge); background: linear-gradient(180deg, var(--desk-glow), transparent);
+}
+.desk-win-grip { width: 11px; height: 11px; background: repeating-linear-gradient(90deg, var(--desk-accent) 0 3px, transparent 3px 4px); opacity: 0.9; }
+.desk-win-name { flex: 1; font-size: 11px; letter-spacing: 0.2em; color: var(--desk-accent); }
+.desk-sheet-close { display: none; }
+
+.desk-chart { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: var(--desk-sky); }
+.desk-card { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 16px 16px; }
+
+/* ── SET COURSE ── */
+.desk-foot { display: flex; justify-content: center; }
+.desk-go {
+  min-width: 340px; padding: 9px 26px; font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.2em;
+  color: var(--desk-bg); background: var(--desk-accent); border: 1px solid var(--desk-bright); cursor: pointer;
+  box-shadow: 0 0 22px color-mix(in srgb, var(--desk-accent) 45%, transparent);
+}
+.desk-go:hover { background: var(--desk-bright); }
+.desk-go.waiting { color: var(--desk-dim); background: transparent; border-color: var(--desk-edge-bright); box-shadow: none; cursor: default; }
+.desk-go .keycap { color: inherit; border-color: currentColor; }
+
+/* ── The STAR CHART (chart-draw.ts) ── */
+.star-chart { display: block; user-select: none; }
+.star-chart .star { fill: var(--desk-star); }
+.star-chart .star.bright { fill: var(--desk-star-bright); }
+.star-chart .ring { fill: none; stroke: var(--desk-ring); stroke-width: 1; stroke-dasharray: 2 5; }
+.star-chart .ring.next { stroke: var(--desk-ring-next); stroke-dasharray: 4 4; }
+.star-chart .ring-label { fill: var(--desk-accent-dim); font-size: 10px; letter-spacing: 0.14em; }
+.star-chart .cloud { fill-opacity: 1; stroke: var(--desk-cloud); stroke-width: 1; stroke-dasharray: 1 3; }
+.star-chart .cloud.strength-2 { stroke-width: 1.6; }
+/* Faint enough that a label over a cloud still reads (GEN: about one hop in six is SEVERE, so clouds are everywhere). */
+.star-chart .cloud-hatch { stroke: var(--desk-cloud); stroke-width: 1; opacity: 0.45; }
+.star-chart .cloud.strength-2 { fill-opacity: 1; }
+.star-chart .cloud-speck { fill: var(--desk-bright); opacity: 0.22; }
+.star-chart .sol-dot { fill: var(--desk-bright); filter: drop-shadow(0 0 4px var(--desk-accent)); }
+.star-chart .sol-label { fill: var(--desk-accent-dim); font-size: 10px; letter-spacing: 0.16em; }
+.star-chart .sol-name { fill: var(--desk-bright); font-size: 11px; letter-spacing: 0.2em; }
+.star-chart .trail-046 { fill: none; stroke: var(--desk-trail-046); stroke-width: 1.2; stroke-dasharray: 3 4; }
+.star-chart .cross-046 { stroke: var(--desk-past-text); stroke-width: 2; }
+.star-chart .colony-046 { fill: var(--desk-colony); opacity: 0.7; }
+.star-chart .route-trail {
+  fill: none; stroke: var(--desk-bright); stroke-width: 2.4; stroke-linejoin: round;
+  filter: drop-shadow(0 0 4px var(--desk-accent));
+}
+/* The beams from the ship being left: solid when CLEAN, more broken at LOW, NOISY, SEVERE (02 §4). */
+.star-chart .beam { stroke: var(--desk-accent); stroke-width: 1.4; opacity: 0.55; }
+.star-chart .beam.noise-1 { stroke-dasharray: 7 2; }
+.star-chart .beam.noise-2 { stroke-dasharray: 3 3; }
+.star-chart .beam.noise-3 { stroke-dasharray: 1.5 3.5; }
+.star-chart .beam.urgent { stroke: var(--desk-warn); }
+.star-chart .beam.selected { opacity: 1; stroke-width: 2.4; stroke: var(--desk-bright); filter: drop-shadow(0 0 3px var(--desk-accent)); }
+
+.star-chart .cn { cursor: pointer; }
+.star-chart .cn-hit { fill: transparent; }
+.star-chart .cn-box { fill: var(--desk-accent); stroke: var(--desk-bright); stroke-width: 1; transition: fill 0.6s, stroke 0.6s; }
+.star-chart .cn-label { fill: var(--desk-text); font-size: 11px; letter-spacing: 0.06em; }
+.star-chart .cn-year { fill: var(--desk-accent-dim); font-size: 10px; letter-spacing: 0.1em; }
+.star-chart .cn:hover .cn-box { fill: var(--desk-bright); }
+.star-chart .cn.state-current .cn-box { fill: var(--desk-bg); stroke: var(--desk-bright); stroke-width: 2; }
+.star-chart .cn.state-current .cn-label { fill: var(--desk-bright); }
+.star-chart .cn.state-visited .cn-box { fill: transparent; stroke: var(--desk-accent); }
+.star-chart .cn.state-visited .cn-label { fill: var(--desk-accent-dim); }
+.star-chart .cn.state-too-late .cn-box,
+.star-chart .cn.state-out-of-range .cn-box { fill: var(--desk-far); stroke: var(--desk-far); }
+.star-chart .cn.state-too-late .cn-label,
+.star-chart .cn.state-out-of-range .cn-label { fill: var(--desk-dim); }
+.star-chart .cn.state-too-late .cn-year,
+.star-chart .cn.state-out-of-range .cn-year { fill: var(--desk-far); }
+.star-chart .cn.state-past .cn-box { fill: var(--desk-past); stroke: var(--desk-past); }
+.star-chart .cn.state-past .cn-label,
+.star-chart .cn.state-past .cn-year { fill: var(--desk-past-text); }
+/* The opening beat: a ship that is about to grey still shows as it was at the last desk (dim amber). */
+.star-chart .cn.beat-pending .cn-box { fill: var(--desk-far); stroke: var(--desk-accent-dim); }
+.star-chart .cn.beat-pending .cn-label { fill: var(--desk-dim); }
+.star-chart .cn.state-urgent .cn-box { fill: var(--desk-warn); }
+.star-chart .cn-urgent { fill: none; stroke: var(--desk-warn); stroke-width: 1.4; animation: cn-pulse 1.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.star-chart .cn.only .cn-label { fill: var(--desk-warn); }
+.star-chart .cn.selected .cn-box { fill: var(--desk-bright); }
+.star-chart .cn-bracket { fill: none; stroke: var(--desk-bright); stroke-width: 1.6; }
+.star-chart .cn.taken .cn-year { fill: var(--desk-trail-046); }
+/* The final ship: a pulsing beacon (02 §4), whatever its state. */
+.star-chart .cn.final .cn-box { stroke: var(--desk-bright); stroke-width: 1.5; }
+.star-chart .cn-beacon { fill: none; stroke: var(--desk-accent); stroke-width: 1.4; animation: cn-pulse 2.6s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+.star-chart .cn-beacon.late { animation-delay: 1.3s; }
+.star-chart .beacon-label { fill: var(--desk-accent); font-size: 12px; letter-spacing: 0.22em; }
+@keyframes cn-pulse {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+body.reduced-motion .star-chart .cn-beacon,
+body.reduced-motion .star-chart .cn-urgent { animation: none; opacity: 0.6; }
+body.reduced-motion .star-chart .cn-box { transition: none; }
+
+.chart-tip {
+  position: absolute; z-index: 2; pointer-events: none; max-width: 300px; padding: 5px 9px;
+  background: var(--desk-window); border: 1px solid var(--desk-edge-bright); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+}
+.chart-tip[hidden] { display: none; }
+.chart-tip-label { font-size: 11px; letter-spacing: 0.1em; color: var(--desk-bright); }
+.chart-tip-reason { margin-top: 2px; font-size: 10px; letter-spacing: 0.12em; color: var(--desk-dim); }
+.chart-tip-reason[hidden] { display: none; }
+.chart-tip-taken { margin-top: 2px; font-size: 10px; letter-spacing: 0.12em; color: var(--desk-trail-046); }
+.chart-tip-taken[hidden] { display: none; }
+.chart-tip[data-state='too-late'] .chart-tip-reason,
+.chart-tip[data-state='urgent'] .chart-tip-reason { color: var(--desk-warn); }
+.chart-tip[data-state='reachable'] .chart-tip-reason { color: var(--desk-good); }
+
+/* ── The SHIP CARD (ShipCard.ts) ── */
+.dc-empty { margin-top: 30px; text-align: center; font-size: 11px; letter-spacing: 0.16em; color: var(--desk-dim); }
+.dc-top { padding-bottom: 12px; border-bottom: 1px solid var(--desk-edge); }
+.dc-tags { display: flex; gap: 6px; margin-bottom: 6px; }
+.dc-tag { padding: 1px 7px; border: 1px solid var(--desk-accent); color: var(--desk-accent); font-size: 10px; letter-spacing: 0.2em; }
+.dc-tag.final { color: var(--desk-bg); background: var(--desk-accent); }
+.dc-tag.dim { border-color: var(--desk-far); color: var(--desk-dim); }
+.dc-name { font-family: 'VT323', monospace; font-size: 34px; line-height: 1; letter-spacing: 0.14em; color: var(--desk-bright); }
+.dc-sub { margin-top: 3px; font-size: 11px; letter-spacing: 0.1em; color: var(--desk-text); }
+.dc-sched { margin-top: 8px; font-size: 11px; letter-spacing: 0.08em; line-height: 1.4; }
+.dc-sched.tone-good { color: var(--desk-good); }
+.dc-sched.tone-warn { color: var(--desk-warn); }
+.dc-rows { display: flex; flex-direction: column; padding: 8px 0; }
+.dc-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; padding: 4px 0; border-top: 1px dotted var(--desk-edge); font-size: 11px; line-height: 1.35; }
+.dc-row.cont { border-top: none; padding-top: 0; }
+.dc-k { font-size: 9px; letter-spacing: 0.18em; color: var(--desk-dim); padding-top: 1px; }
+.dc-v { color: var(--desk-text); letter-spacing: 0.04em; overflow-wrap: anywhere; }
+.dc-row.tone-good .dc-v { color: var(--desk-good); }
+.dc-row.tone-warn .dc-v { color: var(--desk-warn); }
+.dc-row.key-only .dc-v, .dc-row.key-norm .dc-v, .dc-row.key-threat .dc-v { font-weight: 700; }
+.dc-timeline { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--desk-edge); }
+.dc-tl-bar { position: relative; height: 18px; margin: 0 8px; border-bottom: 1px solid var(--desk-accent-dim); }
+.dc-tl-span { position: absolute; bottom: -2px; height: 3px; background: var(--desk-good); }
+.dc-timeline.late .dc-tl-span { background: var(--desk-warn); }
+.dc-tl-mark { position: absolute; bottom: -4px; width: 7px; height: 7px; margin-left: -3.5px; background: var(--desk-accent); }
+.dc-tl-mark.leave { background: var(--desk-dim); }
+.dc-tl-mark.approach { width: auto; height: auto; margin-left: -5px; bottom: 0; background: none; color: var(--desk-bright); font-size: 11px; line-height: 1; }
+.dc-tl-text { margin-top: 6px; font-size: 10px; letter-spacing: 0.06em; color: var(--desk-dim); text-align: center; }
+
+/* ── Narrower than 1440: a narrower card, the chart keeps the room ── */
+@media (max-width: 1439px) {
+  .desk-body { grid-template-columns: minmax(0, 1fr) 340px; }
+  .dc-row { grid-template-columns: 84px minmax(0, 1fr); }
+}
+@media (max-height: 760px) {
+  .desk-screen { gap: 6px; padding-top: 6px; padding-bottom: 8px; }
+  .desk-title { font-size: 26px; }
+  .dc-name { font-size: 28px; }
+  .desk-card { padding: 10px 14px 12px; }
+}
+
+/* ── The phone (≤ 768 px): the whole screen, the arm upright and scrolling, the card a bottom sheet, SET COURSE pinned ── */
+@media (max-width: 768px) {
+  .desk-screen { top: 0; padding: 8px 10px 0; gap: 6px; grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
+  .desk-head { gap: 10px; }
+  .desk-title { font-size: 22px; letter-spacing: 0.18em; white-space: nowrap; }
+  .desk-where { font-size: 10px; letter-spacing: 0.1em; }
+  .desk-guide { padding: 2px 6px; gap: 5px; }
+  .desk-step { display: none; }
+  .desk-step-text { margin-left: 0; font-size: 11px; white-space: normal; }
+  .desk-notes { flex-direction: column; gap: 2px; font-size: 11px; }
+  .desk-body { display: block; position: relative; min-height: 0; }
+  .desk-chart-win { position: absolute; inset: 0; }
+  .desk-chart-win .desk-win-title { display: none; }
+  .desk-chart { overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+  /* The bottom sheet: a peek of the top block until the kid taps a ship or the handle. */
+  .desk-card-win {
+    position: fixed; left: 0; right: 0; bottom: 58px; z-index: 3; max-height: 70vh;
+    transform: translateY(calc(100% - 0px)); transition: transform 0.28s ease-out;
+    border-left: none; border-right: none; box-shadow: 0 -10px 30px var(--desk-sheet-shadow);
+    background: var(--desk-bg);
+  }
+  .desk-screen.has-card .desk-card-win { transform: translateY(calc(100% - var(--sheet-peek, 132px))); }
+  .desk-screen.sheet-open .desk-card-win { transform: none; }
+  .desk-sheet-handle { cursor: pointer; flex-basis: 30px; }
+  .desk-sheet-handle::before { content: ''; position: absolute; left: 50%; top: 4px; width: 40px; height: 3px; margin-left: -20px; background: var(--desk-edge-bright); }
+  .desk-sheet-close { display: block; padding: 0 6px; background: none; border: none; color: var(--desk-accent-dim); font-size: 14px; cursor: pointer; }
+  .desk-screen:not(.sheet-open) .desk-sheet-close { visibility: hidden; }
+  .desk-foot {
+    position: relative; z-index: 4; margin: 0 -10px; padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    background: var(--desk-bg); border-top: 1px solid var(--desk-edge-bright);
+  }
+  .desk-go { width: 100%; min-width: 0; padding: 10px 12px; font-size: 13px; letter-spacing: 0.14em; }
+  .chart-tip { display: none; }
+  .dc-name { font-size: 28px; }
+}
+body.reduced-motion .desk-card-win { transition: none; }
+
+/* ── The PACKET's slice-3a rows (TransmitScreen): ◀ CHART, the LINK and ROOM bars, the charge line, the inline confirm,
+      the BEAM stamp. The screen stays the mind's blue; the room bar is the link bar's twin under it. ── */
+.tx-head { position: relative; }
+.tx-back {
+  position: absolute; left: 0; top: 4px; padding: 4px 10px; background: transparent; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--transmit-line) 40%, transparent); color: var(--transmit-line);
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.16em;
+}
+.tx-back:hover { border-color: var(--transmit-line); box-shadow: 0 0 10px var(--transmit-glow); }
+.tx-back[hidden] { display: none; }
+.tx-packet { grid-template-columns: 52px minmax(0, 1fr) auto; }
+.tx-bar-label { font-size: 10px; letter-spacing: 0.2em; color: var(--report-dim); }
+.tx-room[data-tone='over'] .tx-room-bar .tx-bar-files { background: color-mix(in srgb, var(--warn) 55%, transparent); }
+.tx-room[data-tone='over'] .tx-bar-over,
+.tx-room[data-tone='zero'] .tx-bar-over { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 60%, transparent); }
+.tx-room-charge { grid-column: 1 / -1; text-align: center; font-size: 12px; letter-spacing: 0.14em; color: var(--accent-bright); }
+.tx-room-charge[hidden] { display: none; }
+.tx-room-charge[data-tone='zero'],
+.tx-room-charge[data-tone='over'] { color: var(--warn); font-weight: 700; }
+.tx-room.nudge { animation: tx-go-refused 0.42s steps(2) 1; }
+.tx-control { text-align: center; font-size: 12px; letter-spacing: 0.06em; color: var(--report-text); }
+.tx-control[hidden] { display: none; }
+.tx-control-tag { margin-right: 8px; font-size: 10px; letter-spacing: 0.2em; color: var(--transmit-line); }
+.tx-send-control { font-size: 12px; letter-spacing: 0.06em; color: var(--report-text); animation: wr-in 0.5s ease-out 0.4s both; }
+
+.tx-confirm { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.tx-confirm[hidden] { display: none; }
+.tx-confirm-q { font-family: 'VT323', monospace; font-size: 24px; letter-spacing: 0.14em; color: var(--warn); }
+.tx-confirm-buttons { display: flex; gap: 10px; }
+.tx-confirm-buttons button {
+  padding: 6px 18px; font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.16em; cursor: pointer;
+  background: transparent; color: var(--report-text); border: 1px solid var(--star-missed);
+}
+.tx-confirm-yes { border-color: var(--warn) !important; color: var(--warn) !important; }
+.tx-confirm-keys { font-size: 10px; letter-spacing: 0.14em; color: var(--report-dim); }
+.tx-go[hidden] { display: none; }
+
+.tx-inner { position: relative; }
+.tx-stamp {
+  position: absolute; left: 50%; top: 42%; z-index: 3; pointer-events: none;
+  padding: 6px 26px 2px; border: 4px double currentColor;
+  background: color-mix(in srgb, var(--report-bg) 72%, transparent);
+  font-family: 'VT323', monospace; font-size: clamp(34px, 4.6vw, 64px); line-height: 1; letter-spacing: 0.14em; white-space: nowrap;
+  color: var(--transmit-line); text-shadow: 0 0 22px currentColor;
+  transform: translate(-50%, -50%) rotate(-3deg); opacity: 0;
+}
+.tx-stamp[hidden] { display: none; }
+.tx-stamp.on { animation: stamp-in 140ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both; }
+.transmit-screen.reduced .tx-stamp.on { animation: wr-in 0.3s ease-out both; transform: translate(-50%, -50%) rotate(-3deg); opacity: 1; }
+@media (max-width: 768px) {
+  .tx-back { position: static; margin-bottom: 8px; }
+  .tx-packet { grid-template-columns: 40px minmax(0, 1fr) auto; }
+}
+
+/* ── The MIND strip's header: the memory class (01-landing §4: `MEMORY 256 · TIGHT`) beside the address range ── */
+.mem-strip-header .mem-class { margin-left: auto; margin-right: 14px; font-size: 10px; letter-spacing: 0.15em; color: var(--accent-bright); }
+.mem-strip-header .mem-class[data-cls='TIGHT'] { color: var(--warn); }
+@media (max-width: 768px) {
+  .mem-strip-header .mem-class { margin: 0; font-size: 9px; }
+}
+
+/* ── The title card's faint chart (TitleCard): behind the logo, the beacon's label the only words; RECEIVE draws the beam
+      from SOL to the first ship while the card clears ── */
+.title-chart { position: absolute; inset: 0; z-index: 0; opacity: 0.42; pointer-events: none; transition: opacity 0.6s ease-out; }
+.title-chart .star-chart { width: 100%; height: 100%; }
+.title-card .title-inner { position: relative; z-index: 1; }
+.title-chart .cn-box { fill: var(--desk-accent-dim); stroke: none; }
+.title-chart .cn.final .cn-box { fill: var(--desk-accent); stroke: var(--desk-bright); }
+.title-chart .cn-label { fill: var(--desk-accent); }
+.title-chart .sol-beam { stroke: var(--desk-bright); stroke-width: 2; opacity: 0; filter: drop-shadow(0 0 4px var(--desk-accent)); }
+.title-card.booting .title-chart { opacity: 0; }
+.title-card.booting.receiving .title-chart { opacity: 0.7; animation: title-chart-out 2.2s ease-in forwards; }
+.title-card.receiving .sol-beam {
+  opacity: 1; stroke-dasharray: var(--beam-len) var(--beam-len); stroke-dashoffset: var(--beam-len);
+  animation: sol-beam-draw 0.9s ease-out 0.15s forwards;
+}
+@keyframes sol-beam-draw { to { stroke-dashoffset: 0; } }
+@keyframes title-chart-out { 0%, 55% { opacity: 0.7; } 100% { opacity: 0; } }
+body.reduced-motion .title-card.receiving .sol-beam { animation: none; opacity: 0; }
+body.reduced-motion .title-card.booting.receiving .title-chart { animation: none; opacity: 0; }
+
+/* ── The RUN TALLY (RunEnd, 02-map §4): the visited ships beside the route's mini chart ── */
+.run-end .re-inner { width: min(980px, calc(100% - 32px)); }
+.re-tally { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 16px; width: 100%; align-items: start; margin: 6px 0; }
+.re-tally-list { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; }
+.re-tally-title, .re-tally-route { font-size: 10px; letter-spacing: 0.3em; color: var(--report-dim); text-align: left; }
+.re-tally .re-ships { width: 100%; margin: 0; }
+.re-ship-year { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: var(--report-dim); }
+.re-ship.colony .re-ship-n { color: var(--soul); }
+.re-tally-side { display: flex; flex-direction: column; gap: 6px; }
+.re-tally-chart { height: 200px; border: 1px solid var(--star-missed); background: var(--desk-sky); overflow: hidden; }
+.re-tally-chart .star-chart { width: 100%; height: 100%; }
+.star-chart.mini .cn-box { fill: var(--desk-far); stroke: none; }
+.star-chart.mini .cn.state-visited .cn-box,
+.star-chart.mini .cn.state-current .cn-box { fill: var(--desk-accent); stroke: var(--desk-bright); stroke-width: 1; }
+.star-chart.mini .cn-label { font-size: 10px; fill: var(--desk-text); }
+.star-chart.mini .cn-beacon { animation: none; opacity: 0.5; }
+.re-tally-colonies { font-family: 'VT323', monospace; font-size: 24px; letter-spacing: 0.12em; color: var(--soul); text-shadow: 0 0 12px var(--soul-dim); text-align: left; }
+.run-end.tone-sombre .re-tally-colonies { color: var(--report-text); text-shadow: none; }
+@media (max-width: 768px) {
+  .re-tally { grid-template-columns: minmax(0, 1fr); }
+  .re-tally-chart { height: 160px; }
+}

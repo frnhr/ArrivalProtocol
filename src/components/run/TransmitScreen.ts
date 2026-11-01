@@ -6,7 +6,7 @@ import {
 } from '@systems/transmit';
 import { logEntryToOpen } from '@systems/log-view';
 import { openLogReader } from '@systems/story-log';
-import { transmitNext } from '@systems/run';
+import { transmitNext, backToChart } from '@systems/run';
 import { pickCard } from '@systems/draft';
 import { unitName } from '@systems/say';
 import { pushModal, registerKeys } from '@systems/input';
@@ -15,6 +15,7 @@ import { integrityBand } from '@state/selectors';
 import { requireById, make, replayAnimation } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
+import { MAP_TEXT } from '@data/map-text';
 import {
   TRANSMIT_ARM_SEC, TRANSMIT_SEND_SEC, TRANSMIT_STREAM_FRAC, WHITE_OUT_IN_SEC, WHITE_OUT_HOLD_SEC, WHITE_OUT_FADE_SEC,
   BEAM_OUT_BLACKOUT_SEC, DRAFT_CARDS,
@@ -44,6 +45,14 @@ import {
 // locked and outside the bar (it rides free); on the beam it boards, the sweep stutters. 046.log's chip reads `046.log ·
 // 3/12` and glows while an entry is unread; a click on it opens the LOG READER (it can't be left behind anyway). The
 // TRACE line and `NO RM · YOU CAN'T DELETE THE ROOT` (before the final beam) sit with the notes.
+// Phase 3 slice 3a (02-map §4, 01-landing §3.16): the PACKET between the DESK and the beam. `◀ CHART [ESC]` goes back to
+// the desk until TRANSMIT ▸ (the drops and the pick are forgotten). The room bar sits under the link bar: the files and
+// the charge that will arrive against the destination's room, and what does not fit hangs off its end (`26 WON'T FIT`),
+// with the charge line naming the loss before it happens; on a TIGHT ship whose room leaves no charge the line turns red
+// (`→ 0 ON ARRIVAL`, with buzz and CONTROL's "Travelling light! Very light. :)"), and TRANSMIT ▸ asks inline first
+// (`ARRIVE WITH NO REPAIR CHARGE?`, ENTER yes, ESC no). While files plus the floor are over the room, TRANSMIT ▸ waits
+// (LEAVE FILES BEHIND FIRST). On the arm the ECC line takes the hits line's place. The send stamps OUTWARD BOUND over the
+// screen, and CONTROL says "Outward bound! :)" under the light-years.
 
 function chipNode(chip: PacketChip): HTMLButtonElement {
   const button = make('button', 'tx-chip');
@@ -65,7 +74,9 @@ function chipNode(chip: PacketChip): HTMLButtonElement {
   button.appendChild(head);
   const foot = make('span', 'tx-chip-note', chip.dropped ? TRANSMIT_TEXT.dropped : chip.note);
   button.appendChild(foot);
-  if (chip.toggleable && chip.chargeGain > 0) button.appendChild(make('span', 'tx-chip-gain', TRANSMIT_TEXT.gain(chip.chargeGain)));
+  // What leaving it behind buys: the charge that then arrives (slice 3a: a squeezing room), at least what then crosses.
+  const gain = Math.max(chip.chargeGain, chip.arriveGain);
+  if (chip.toggleable && gain > 0) button.appendChild(make('span', 'tx-chip-gain', TRANSMIT_TEXT.gain(gain)));
   if (chip.infected && !chip.dropped) button.appendChild(make('span', 'tx-chip-warn', TRANSMIT_TEXT.chipInfected));
   return button;
 }
@@ -120,6 +131,75 @@ if (CARD_KEY_CODES.length < DRAFT_CARDS) {
   throw new Error(`TransmitScreen: ${CARD_KEY_CODES.length} card keys for a draft of ${DRAFT_CARDS} cards`);
 }
 
+// The slice-3a parts of the PACKET, built here (index.html keeps phase 2's skeleton): ◀ CHART in the head, the room bar
+// under the link bar, CONTROL's line, the inline confirm in the foot and the BEAM stamp.
+interface PacketParts {
+  back: HTMLButtonElement;
+  room: HTMLElement;
+  roomBar: HTMLElement;
+  roomFiles: HTMLElement;
+  roomCharge: HTMLElement;
+  roomOver: HTMLElement;
+  roomLine: HTMLElement;
+  roomCharges: HTMLElement;
+  linkLabel: HTMLElement;
+  control: HTMLElement;
+  confirm: HTMLElement;
+  confirmYes: HTMLButtonElement;
+  confirmNo: HTMLButtonElement;
+  stamp: HTMLElement;
+  sendControl: HTMLElement;
+}
+
+function buildPacketParts(root: HTMLElement): PacketParts {
+  const inner = root.querySelector<HTMLElement>('.tx-inner');
+  const head = root.querySelector<HTMLElement>('.tx-head');
+  const packet = root.querySelector<HTMLElement>('.tx-packet');
+  const foot = root.querySelector<HTMLElement>('.tx-foot');
+  const send = root.querySelector<HTMLElement>('.tx-send');
+  if (!inner || !head || !packet || !foot || !send) throw new Error('TransmitScreen: index.html lost the PACKET\'s skeleton');
+  const back = make('button', 'tx-back', MAP_TEXT.packet.backToChart);
+  back.tabIndex = -1;
+  head.prepend(back);
+  const linkLabel = make('div', 'tx-bar-label', MAP_TEXT.packet.linkLabel);
+  packet.prepend(linkLabel);
+  const room = make('div', 'tx-packet tx-room');
+  const roomLabel = make('div', 'tx-bar-label', MAP_TEXT.packet.roomLabel);
+  const roomBar = make('div', 'tx-bar tx-room-bar');
+  const roomFiles = make('span', 'tx-bar-files');
+  const roomCharge = make('span', 'tx-bar-charge');
+  roomBar.append(roomFiles, roomCharge);
+  const roomOver = make('div', 'tx-bar-over');
+  roomOver.hidden = true;
+  const roomLine = make('div', 'tx-packet-line tx-room-line');
+  const roomCharges = make('div', 'tx-room-charge');
+  room.append(roomLabel, roomBar, roomOver, roomLine, roomCharges);
+  packet.after(room);
+  const control = make('div', 'tx-control');
+  control.hidden = true;
+  room.after(control);
+  const confirm = make('div', 'tx-confirm');
+  confirm.hidden = true;
+  const confirmYes = make('button', 'tx-confirm-yes', MAP_TEXT.packet.confirmYes);
+  const confirmNo = make('button', 'tx-confirm-no', MAP_TEXT.packet.confirmNo);
+  confirmYes.tabIndex = -1;
+  confirmNo.tabIndex = -1;
+  const buttons = make('div', 'tx-confirm-buttons');
+  buttons.append(confirmYes, confirmNo);
+  confirm.append(make('div', 'tx-confirm-q', MAP_TEXT.packet.zeroConfirm), buttons, make('div', 'tx-confirm-keys', MAP_TEXT.packet.confirmKeys));
+  foot.append(confirm);
+  const stamp = make('div', 'tx-stamp', MAP_TEXT.packet.stamp);
+  stamp.hidden = true;
+  inner.append(stamp);
+  const sendControl = make('div', 'tx-send-control');
+  sendControl.append(make('span', 'tx-control-tag', MAP_TEXT.packet.controlTag), make('span', 'tx-control-text', MAP_TEXT.packet.control));
+  send.append(sendControl);
+  return {
+    back, room, roomBar, roomFiles, roomCharge, roomOver, roomLine, roomCharges, linkLabel, control, confirm, confirmYes,
+    confirmNo, stamp, sendControl,
+  };
+}
+
 export function mountTransmitScreen(store: Store<GameState>): () => void {
   const root = requireById('transmitScreen');
   const titleEl = requireById('txTitle');
@@ -147,6 +227,7 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
   const sendLy = requireById('txSendLy');
   const goBtn = requireById<HTMLButtonElement>('txGo');
   const whiteOut = requireById('whiteOut');
+  const parts = buildPacketParts(root);
 
   titleEl.textContent = TRANSMIT_TEXT.title;
   draftTitle.textContent = DRAFT_TEXT.title;
@@ -157,6 +238,10 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
   let sending = false;
   let model: TransmitModel | null = null;
   let shownDeal = '';
+  // The TIGHT ship's inline confirm is up (TRANSMIT ▸ on a packet that arrives with no charge), and whether this PACKET
+  // has already buzzed its `→ 0 ON ARRIVAL` (once per screen, not per repaint).
+  let confirming = false;
+  let zeroAnnounced = false;
   let closeModal: (() => void) | null = null;
   let inputFromMs = 0;
   let timers: ReturnType<typeof setTimeout>[] = [];
@@ -212,17 +297,44 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     noRmEl.textContent = next.noRm ?? '';
     infectedEl.hidden = next.infectedLine === null;
     infectedEl.textContent = next.infectedLine ?? '';
-    hitsEl.textContent = next.hitsLine;
+    hitsEl.textContent = next.onTheWay ?? next.hitsLine;
     arrivalEl.textContent = next.arrivalLine;
+    paintRoom(next);
+  }
+
+  // The room bar (01 §3.16): the files and the charge that arrives against the destination's room.
+  function paintRoom(current: TransmitModel): void {
+    const room = current.room;
+    const fit = room.fit;
+    const pct = (blocks: number): string => `${Math.min(100, (100 * blocks) / fit.room)}%`;
+    parts.room.dataset.tone = room.tone;
+    parts.roomBar.style.setProperty('--link-blocks', String(fit.room));
+    parts.roomFiles.style.width = pct(Math.min(fit.files, fit.room));
+    parts.roomCharge.style.width = pct(Math.max(0, Math.min(fit.chargeArrives, fit.room - fit.files)));
+    const hang = room.tone === 'over' ? fit.over : fit.roomLost;
+    parts.roomOver.hidden = hang <= 0;
+    parts.roomOver.textContent = room.tone === 'over' ? `+${fit.over}` : hang > 0 ? MAP_TEXT.packet.wontFit(hang) : '';
+    parts.roomLine.textContent = room.line;
+    parts.roomCharges.hidden = room.charge === null && room.overRoom === null;
+    parts.roomCharges.textContent = room.overRoom ?? room.charge ?? '';
+    parts.roomCharges.dataset.tone = room.tone;
+    parts.control.hidden = !room.zeroCharge;
+    parts.control.replaceChildren(make('span', 'tx-control-tag', MAP_TEXT.packet.controlTag), make('span', 'tx-control-text', MAP_TEXT.packet.controlZero));
+    if (room.zeroCharge && !zeroAnnounced && !root.hidden) {
+      zeroAnnounced = true;
+      play('buzz');
+    }
+    if (!room.zeroCharge && confirming) closeConfirm();
   }
 
   // TRANSMIT ▸ once a card is picked (or when none was dealt); before that it says what is missing.
   const awaitingPick = (current: TransmitModel): boolean => current.cards.length > 0 && current.pick === null;
   function paintGo(current: TransmitModel): void {
     if (sending) return;
-    const waiting = awaitingPick(current);
+    const waiting = awaitingPick(current) || current.room.overRoom !== null;
     goBtn.classList.toggle('waiting', waiting);
-    renderKeyCaps(goBtn, waiting ? DRAFT_TEXT.goWaiting : TRANSMIT_TEXT.go, { own: 'SPACE' });
+    const words = awaitingPick(current) ? DRAFT_TEXT.goWaiting : current.room.overRoom !== null ? MAP_TEXT.packet.goOverRoom : TRANSMIT_TEXT.go;
+    renderKeyCaps(goBtn, words, { own: 'SPACE' });
   }
 
   // A card is picked (a click, or its key), once the screen has armed. Changing the pick is allowed until
@@ -249,6 +361,13 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     cardsEl.classList.remove('sending', 'nudge');
     goBtn.classList.remove('nudge');
     shownDeal = '';
+    confirming = false;
+    zeroAnnounced = false;
+    parts.confirm.hidden = true;
+    goBtn.hidden = false;
+    parts.stamp.hidden = true;
+    parts.stamp.classList.remove('on');
+    parts.back.hidden = false;
     root.classList.toggle('reduced', reducedMotion());
     sendEl.hidden = true;
     goBtn.disabled = false;
@@ -260,6 +379,8 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     later(delay, () => {
       root.hidden = false;
       play('transmitIn');
+      // A TIGHT ship that takes no charge says so as the screen comes up (01 §3.16: never a surprise).
+      if (model?.room.zeroCharge && !zeroAnnounced) { zeroAnnounced = true; play('buzz'); }
       inputFromMs = performance.now() + TRANSMIT_ARM_SEC * 1000;
       later(TRANSMIT_ARM_SEC, () => goBtn.classList.remove('arming'));
     });
@@ -287,7 +408,21 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
       replayAnimation(goBtn, 'nudge');
       return;
     }
+    // Files plus the floor over the destination's room: TRANSMIT ▸ waits until files are left behind (01 §3.16).
+    if (current.room.overRoom !== null) {
+      play('buzz');
+      replayAnimation(parts.room, 'nudge');
+      replayAnimation(goBtn, 'nudge');
+      return;
+    }
+    // No charge will arrive (a TIGHT ship): asked first, inline; ENTER says yes.
+    if (current.room.zeroCharge && !confirming) {
+      openConfirm();
+      return;
+    }
+    closeConfirm();
     sending = true;
+    parts.back.hidden = true;
     goBtn.disabled = true;
     root.classList.add('sending');
     // HOLLOW boarding on this beam: the sweep stutters (04 §4, the boarding moment begins here).
@@ -302,6 +437,10 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     cardsEl.classList.add('sending');
     sendLine.textContent = TRANSMIT_TEXT.sending(unitName(store.getState().run.unitNumber), current.shipName);
     sendEl.hidden = false;
+    // The BEAM stamp (05 §3.12): OUTWARD BOUND over the screen as the packet goes.
+    parts.stamp.hidden = false;
+    replayAnimation(parts.stamp, 'on');
+    play('stampHit', { heavy: false });
     const startMs = performance.now();
     const tick = (now: number): void => {
       // Wall time, in step with the send's own timer (the white-out comes when it ends).
@@ -312,6 +451,26 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     };
     frame = requestAnimationFrame(tick);
     later(TRANSMIT_SEND_SEC, startWhiteOut);
+  }
+
+  function openConfirm(): void {
+    confirming = true;
+    parts.confirm.hidden = false;
+    goBtn.hidden = true;
+    play('buzz');
+  }
+  function closeConfirm(): void {
+    confirming = false;
+    parts.confirm.hidden = true;
+    goBtn.hidden = false;
+  }
+  // ◀ CHART [ESC]: back to the desk until the send (the confirm's ESC answers no first).
+  function toChart(): void {
+    if (!shown || sending || root.hidden) return;
+    if (confirming) { closeConfirm(); return; }
+    if (store.getState().run.phase !== 'transmit') return;
+    play('uiClick');
+    backToChart(store);
   }
 
   function startWhiteOut(): void {
@@ -368,7 +527,14 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
   const offCardKeys = CARD_KEY_CODES.map((codes, index) => registerKeys({ layer: 'transmit', codes, onDown: () => pickByIndex(index) }));
   const onGo = (event: MouseEvent): void => { event.stopPropagation(); send(); };
   goBtn.addEventListener('click', onGo);
-  const offKeys = registerKeys({ layer: 'transmit', codes: ['Space', 'Enter'], onDown: send });
+  const offKeys = registerKeys({ layer: 'transmit', codes: ['Space', 'Enter', 'NumpadEnter'], onDown: send });
+  const offEsc = registerKeys({ layer: 'transmit', codes: ['Escape'], onDown: toChart });
+  const onBack = (event: MouseEvent): void => { event.stopPropagation(); toChart(); };
+  const onYes = (event: MouseEvent): void => { event.stopPropagation(); if (confirming) send(); };
+  const onNo = (event: MouseEvent): void => { event.stopPropagation(); closeConfirm(); };
+  parts.back.addEventListener('click', onBack);
+  parts.confirmYes.addEventListener('click', onYes);
+  parts.confirmNo.addEventListener('click', onNo);
   const offMute = registerKeys({ layer: 'transmit', codes: ['KeyM'], onDown: () => toggleMuted() });
 
   const unsubPhase = store.subscribe((s) => s.run.phase, (phase) => {
@@ -389,6 +555,10 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     offCardKeys.forEach((off) => off());
     goBtn.removeEventListener('click', onGo);
     offKeys();
+    offEsc();
+    parts.back.removeEventListener('click', onBack);
+    parts.confirmYes.removeEventListener('click', onYes);
+    parts.confirmNo.removeEventListener('click', onNo);
     offMute();
     unsubPhase();
     unsubDrops();

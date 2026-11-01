@@ -96,4 +96,35 @@ body.mode-memory {
   --reader-dim: #4a7a90;
   --reader-glow: rgba(0, 212, 255, 0.18);
   --reader-new: #ffd36e;
+
+  /* ── the DESK (phase 3 slice 3a, 02-map §4): the same on both screens (see tokens.css). The desk is the ship's amber whichever screen the
+        kid was on (its STAR CHART is a ship's instrument), on a near-black sky; a dim ship is a warm brown, a past one a
+        cold grey; the route is the bright amber, 046's written trail and its colonies a faint green, noise clouds an
+        amber hatch, the final ship's beacon the accent. ── */
+  --desk-bg: #070503;
+  --desk-sky: #0b0804;
+  --desk-window: rgba(18, 13, 6, 0.94);
+  --desk-edge: #2a1d0a;
+  --desk-edge-bright: #4a3318;
+  --desk-accent: #ffa726;
+  --desk-accent-dim: #8d6e3d;
+  --desk-bright: #ffd180;
+  --desk-text: #f5e6c8;
+  --desk-dim: #7a6845;
+  --desk-warn: #ff6b3d;
+  --desk-good: #b2ff59;
+  --desk-glow: rgba(255, 167, 38, 0.10);
+  --desk-scan: rgba(255, 167, 38, 0.018);
+  --desk-star: rgba(245, 230, 200, 0.22);
+  --desk-star-bright: rgba(255, 209, 128, 0.45);
+  --desk-ring: rgba(255, 167, 38, 0.10);
+  --desk-ring-next: rgba(255, 167, 38, 0.32);
+  --desk-cloud: rgba(255, 167, 38, 0.30);
+  --desk-cloud-fill: rgba(255, 167, 38, 0.035);
+  --desk-far: #5a4526;
+  --desk-past: #3e3a33;
+  --desk-past-text: #5d574c;
+  --desk-trail-046: rgba(141, 255, 196, 0.32);
+  --desk-colony: #8dffc4;
+  --desk-sheet-shadow: rgba(0, 0, 0, 0.7);
 }
