@@ -201,7 +201,8 @@ body.reduced-motion .star-chart .cn-box { transition: none; }
 /* ── The phone (≤ 768 px): the whole screen, the arm upright and scrolling, the card a bottom sheet, SET COURSE pinned ── */
 @media (max-width: 768px) {
   .desk-screen { top: 0; padding: 8px 10px 0; gap: 6px; grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
-  .desk-title { font-size: 22px; letter-spacing: 0.24em; }
+  .desk-head { gap: 10px; }
+  .desk-title { font-size: 22px; letter-spacing: 0.18em; white-space: nowrap; }
   .desk-where { font-size: 10px; letter-spacing: 0.1em; }
   .desk-guide { padding: 2px 6px; gap: 5px; }
   .desk-step { display: none; }
@@ -216,8 +217,9 @@ body.reduced-motion .star-chart .cn-box { transition: none; }
     position: fixed; left: 0; right: 0; bottom: 58px; z-index: 3; max-height: 70vh;
     transform: translateY(calc(100% - 0px)); transition: transform 0.28s ease-out;
     border-left: none; border-right: none; box-shadow: 0 -10px 30px var(--desk-sheet-shadow);
+    background: var(--desk-bg);
   }
-  .desk-screen.has-card .desk-card-win { transform: translateY(calc(100% - 132px)); }
+  .desk-screen.has-card .desk-card-win { transform: translateY(calc(100% - var(--sheet-peek, 132px))); }
   .desk-screen.sheet-open .desk-card-win { transform: none; }
   .desk-sheet-handle { cursor: pointer; flex-basis: 30px; }
   .desk-sheet-handle::before { content: ''; position: absolute; left: 50%; top: 4px; width: 40px; height: 3px; margin-left: -20px; background: var(--desk-edge-bright); }

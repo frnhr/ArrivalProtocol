@@ -16,7 +16,7 @@ import { paintTraceMeter } from '@components/hud/TraceMeter';
 import { mountStarChart } from '@components/desk/StarChart';
 import { renderShipCard } from '@components/desk/ShipCard';
 import { MAP_TEXT } from '@data/map-text';
-import { DESK_GREY_STEP_MS, DESK_TYPE_CPS } from '@data/tuning';
+import { DESK_GREY_STEP_MS, DESK_TYPE_CPS, DESK_SHEET_PEEK_PX } from '@data/tuning';
 
 // The DESK (phase 3 slice 3a; 02-map §3.10, §4; slice-3a-plan §3): between a ship's end and its PACKET, in amber
 // whatever screen the kid was on (both clocks are stopped). Top to bottom:
@@ -78,6 +78,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   goBtn.tabIndex = -1;
   foot.append(goBtn);
   root.append(head, guide, notes, body, foot);
+  root.style.setProperty('--sheet-peek', `${DESK_SHEET_PEEK_PX}px`);
   document.body.appendChild(root);
 
   const phone = window.matchMedia(PHONE_QUERY);
