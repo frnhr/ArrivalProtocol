@@ -7,6 +7,7 @@ import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-
 import { layerOf, solLy } from '@systems/map-geometry';
 import { seedAllowance } from '@systems/map-noise';
 import { unitArrival } from '@systems/arrival-preview';
+import { deliveriesForHop } from '@systems/repository';
 import { playsTutorial } from '@systems/meta';
 import { shipsLeft } from '@systems/map-route';
 import { mapFacts } from '@systems/map-facts';
@@ -94,11 +95,12 @@ export interface ChartModel {
   selected: number | null;
 }
 
-// One row of the SHIP CARD (02 §4: KNOWN PROBLEMS, MEMORY and its fit line, PLANET, LZ, BEAM, SHIP n OF YOUR RUN …).
-// 'resident' (slice 5), 'site' (slice 6) and 'history' (3c) are reserved: 3a never makes them.
+// One row of the SHIP CARD (02 §4: KNOWN PROBLEMS, MEMORY and its fit line, PLANET, LZ, BEAM, DELIVERIES, SHIP n OF YOUR
+// RUN …). 'resident' (slice 5), 'site' (slice 6) and 'history' (3c) are reserved: 3a never makes them. 'deliveries' is
+// 3b's (`Swap ✗ 4 YRS LATE`, `✓ CATCHES UP HERE`; Track UI makes it).
 export interface CardRow {
   key: 'problems' | 'resident' | 'memory' | 'fit' | 'planet' | 'site' | 'lzs' | 'nogo' | 'beam' | 'noise' | 'range'
-    | 'threat' | 'norm' | 'only' | 'run' | 'history';
+    | 'deliveries' | 'threat' | 'norm' | 'only' | 'run' | 'history';
   label: string;
   value: string;
   tone: 'plain' | 'good' | 'warn';
@@ -132,10 +134,11 @@ export interface CardModel {
   fit: RoomFit | null;      // the unit as it is now against the ship's room (null on the ship being left)
 }
 
-// The guidance strip's steps on a desk (02 §4): a ship, then SET COURSE. 3b inserts the recommended file, slice 4 the
-// required TRAINING pick first (slice-3a-plan §2.10).
+// The guidance strip's steps on a desk (02 §4): a ship, then SET COURSE. 3b inserts the recommended file ('request', the
+// first desk only; it guides, SET COURSE never waits for it: decision 19), slice 4 the required TRAINING pick first
+// (slice-3a-plan §2.10).
 export interface DeskStep {
-  id: 'pick-ship' | 'set-course';
+  id: 'pick-ship' | 'request' | 'set-course';
   text: string;
   done: boolean;
 }
@@ -307,7 +310,8 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   // The fit line only for a ship SET COURSE can go to (an out-of-range or TOO LATE hop has no packet to fit).
   let fit: RoomFit | null = null;
   if (hop !== null && verdict !== null && isReachable) {
-    const preview = unitArrival(state, { hop, threat: verdict, dropped: [], pick: null });
+    // The fit line counts the deliveries that would ride that hop (phase 3 slice 3b, plan §1.1 item 13).
+    const preview = unitArrival(state, { hop, threat: verdict, dropped: [], pick: null, deliveries: deliveriesForHop(state, from, slot) });
     fit = preview.fit;
     row('fit', MAP_TEXT.card.fitLabel, preview.card, fitTone(fit));
   }

@@ -39,7 +39,7 @@ function packetTo(route: readonly number[], to: number, opts: { charge?: number;
   const plan: TransitPlan = {
     toShipIndex: route.length, toSlot: to, hop, linkBlocks: hop.linkBlocks, filesBlocks: packet.filesBlocks,
     chargeHeld: packet.chargeHeld, chargeCarried: packet.chargeCarried, extraHits: 0, coreHit: 0, coreReset: false,
-    dropped: [], offer: [], pick: null, threat,
+    dropped: [], offer: [], pick: null, threat, deliveries: [],
   };
   store.update((draft) => {
     draft.run.ships.push({

@@ -14,6 +14,7 @@ import { skillBootDue, trainSkillAtBoot } from '@systems/autoburn';
 import { bootLine, bootLinePlan, bootLineSpeaker, bootLogEntries, lineVars, BOOT_LINE_MAX, type BootLineKind } from '@data/script';
 import type { Speaker } from '@state/schema';
 import { beamSeedTarget } from '@systems/beam-seeds';
+import { receiveDeliveryAtBoot } from '@systems/delivery-boot';
 import {
   BOOT_LINE_AT_SEC, BOOT_KLAXON_AFTER_LAST_LINE_SEC, BOOT_END_AFTER_KLAXON_SEC, BOOT_SKIP_GRACE_SEC,
   ARRIVAL_HIT_STAGGER_SEC, ARRIVAL_HIT_SEEN_SEC, BOOT_GHOST_AT_SEC, BOOT_AFTER_GHOST_SEC, BOOT_AFTER_HOLLOW_LINE_SEC,
@@ -140,7 +141,7 @@ function lineTypedAtSec(store: Store<GameState>, index: number): number {
   for (let i = 0; i <= index; i++) {
     const said = saidLines[i];
     const kind = linePlan(store)[i]!;
-    const text = said?.text ?? plannedText(store, kind);
+    const text = said?.text ?? plannedText(store, kind, lineOrdinal(store, i));
     typedBy = Math.max(said?.atSec ?? lineAtSec(i), typedBy) + typingSec(said?.speaker ?? bootLineSpeaker(kind), text);
   }
   return typedBy;
@@ -148,10 +149,19 @@ function lineTypedAtSec(store: Store<GameState>, index: number): number {
 
 // A line's words before it is said: rendered as it would be now (a skill line's are the training's own; its length
 // only shifts a later line's typing by a fraction of a second, so an estimate of the same shape is enough).
-function plannedText(store: Store<GameState>, kind: BootLineKind): string {
+function plannedText(store: Store<GameState>, kind: BootLineKind, ordinal: number): string {
   if (kind === 'skill') return '';
   const state = store.getState();
-  return bootLine(kind, state, lineVars(state, getPrediction()));
+  return bootLine(kind, state, lineVars(state, getPrediction()), ordinal);
+}
+
+// Line `index`'s place among the plan's lines of its kind (phase 3 slice 3b: 'delivery' repeats, one line per group of
+// deliveries; every other kind is 0).
+function lineOrdinal(store: Store<GameState>, index: number): number {
+  const plan = linePlan(store);
+  const kind = plan[index];
+  if (kind === undefined) throw new Error(`boot: no line ${index} in this boot's plan`);
+  return plan.slice(0, index).filter((other) => other === kind).length;
 }
 
 // The boot's own lines wait for the ghost to finish: line i at its time, shifted past the ghost's last letter.
@@ -212,7 +222,8 @@ function sayNextLine(store: Store<GameState>): void {
   const state = store.getState();
   const kind = linePlan(store)[linesSaid];
   if (kind === undefined) throw new Error(`boot: no line ${linesSaid} in this boot's plan`);
-  const text = kind === 'skill' ? trainSkillAtBoot(store) : bootLine(kind, state, lineVars(state, getPrediction()));
+  const ordinal = lineOrdinal(store, linesSaid);
+  const text = kind === 'skill' ? trainSkillAtBoot(store) : bootLine(kind, state, lineVars(state, getPrediction()), ordinal);
   const speaker = bootLineSpeaker(kind);
   say(speaker, text, { critical: true });
   saidLines.push({ speaker, text, atSec: elapsedSec });
@@ -234,11 +245,16 @@ function sayNextLine(store: Store<GameState>): void {
   }
   // 046.log's keys (05 §3.2): the entries this line names, as planned (systems/story-log.ts marks them found on it).
   if (kind === 'log') emit('log-key', { entries: bootLogEntries(state) });
+  // HOLLOW's reading line (phase 3 slice 3b, 05 §3.5) is said once a run: marked as it is said, as keepCharge is below.
+  if (kind === 'reading') store.update((draft) => { draft.run.log.toldReading = true; });
   // HOLLOW's `keep 20 charge for me` (the HUNT stage's boot line) is told once a run (04 §3.9, slice 3's routes).
   if (kind === 'hollow' && state.hollow.cfg.story === 'wants-charge') store.update((draft) => { draft.run.threat.told.keepCharge = true; });
   // A returning unit's ship-1 boot licenses REPAIR as it names the host (§5.2; phase 2 did it as the archive opened):
   // the chip is there before the flight, as on every later ship.
   if (kind === 'host' && state.run.arrival === null) installBootLicences(store);
+  // The deliveries this line names unpack as it is said (phase 3 slice 3b: the chime and the chip on the 'delivery' event,
+  // the patch's install; systems/delivery-boot.ts). finishBoot says every line, so a skip still unpacks them.
+  if (kind === 'delivery') receiveDeliveryAtBoot(store, ordinal);
   // A unit that crossed with no working REPAIR gets it back with its charge (WP12: licences.ts renewRepairAtBoot).
   if (kind === 'charge') renewRepairAtBoot(store);
   linesSaid++;

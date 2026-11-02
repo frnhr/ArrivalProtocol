@@ -238,7 +238,7 @@ function effectNote(kept: readonly Segment[], seg: Segment): string {
 // files as they would cross (the card's file in them), the charge held, the star credit and the card's charge, and the
 // room the beam's seeds could take by the verdict.
 export function packetArrival(state: Readonly<GameState>, plan: Readonly<TransitPlan>, dropped: readonly string[] = plan.dropped): ArrivalPreview {
-  return unitArrival(state, { hop: plan.hop, threat: plan.threat, dropped, pick: plan.pick });
+  return unitArrival(state, { hop: plan.hop, threat: plan.threat, dropped, pick: plan.pick, deliveries: plan.deliveries });
 }
 
 export function packetFit(state: Readonly<GameState>, plan: Readonly<TransitPlan>, dropped: readonly string[] = plan.dropped): RoomFit {
@@ -373,6 +373,19 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
 function cardFileChip(pick: UpgradeId | null): CardFileChip | null {
   const [file] = cardFiles(pick, PREVIEW_ID);
   return file === undefined ? null : { name: file.name, blocks: file.size };
+}
+
+// Why a delivery chip's SEND ON did not toggle (Track REPO may add reasons).
+export type SendOnRefusal = 'no-chip';
+
+// The PACKET's SEND ON on delivery chip `key` (02 §3.9; slice-3b-plan §1.1 item 8): the file stays in the destination's
+// receiver to ride the unit's next hop (on a hop into a final ship there is none: it is lost, and the tally lists it), or
+// comes back into the packet. One update: the chip and the plan's filesBlocks / chargeCarried worked out again by
+// planPacket. Track REPO fills it (`TODO(3b-REPO)`).
+export function toggleSendOn(store: Store<GameState>, key: string): SendOnRefusal | null {
+  const plan = requirePlan(store.getState());
+  if (!plan.deliveries.some((chip) => chip.key === key)) return 'no-chip';
+  throw new Error('TODO(3b-REPO): toggleSendOn');
 }
 
 // Why a chip did not toggle.

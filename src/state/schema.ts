@@ -8,6 +8,7 @@ import type { MemoryClass, RunMapState, Hop, DeskWindowId } from '@/types/map';
 import type { HollowDef, RunThreatState, ShipThreat } from '@/types/threat';
 import type { UpgradeId, DraftCard } from '@data/upgrades';
 import type { LastUnit } from '@systems/meta';
+import type { DeliveryChip, ArrivalDelivery, RunRepoState, RunInboxState } from '@/types/repo';
 
 export type ViewMode = 'tools' | 'memory';
 
@@ -301,6 +302,10 @@ export interface ArrivalReport {
   // and HOLLOW's root when it boarded on this beam (the 108% unpack line, the boarding moment). Empty / null otherwise.
   seeds: ArrivalSeed[];
   boarded: { blocks: number; cause: 'trace' | 'forced' } | null;
+  // Phase 3 slice 3b (02 §3.9): the deliveries that crossed on this hop, oldest first, as laid out (their files' ids). The
+  // boot's `> DELIVERY:` lines, the patch's install (systems/delivery-boot.ts receiveDeliveryAtBoot) and the untried kinds
+  // read it. Empty on the classic world and on ship 1.
+  deliveries: ArrivalDelivery[];
 }
 
 // One beam seed as it arrived (04 §3.4): the file it was rolled to ride behind, and `loose` when the no-room rule made it a
@@ -334,6 +339,10 @@ export interface TransitPlan {
   // The ladder's verdict for the ship being beamed to (systems/threat-plan.ts planThreat, from run.threat after this
   // ship's tally): the PACKET's uninvited chip reads `boards` and `rootBlocks`; transmitNext builds the ship with it.
   threat: ShipThreat;
+  // Phase 3 slice 3b (02 §3.9, plan §2.3): the deliveries that ride this hop (systems/repository.ts deliveriesForHop at
+  // goTransmit; the PACKET's SEND ON toggles them). The ones not sent on are files of the packet (systems/draft.ts
+  // planPacket is the one adder), so the link, the room, the draft and the gate count them once. Empty on the classic world.
+  deliveries: DeliveryChip[];
 }
 
 // 046.log's progress through the run (05 §3.2; systems/story-log.ts): kept on the run, not the segment, because the
@@ -345,6 +354,9 @@ export interface RunLogState {
   found: number[];
   read: number[];
   autoOpened: boolean;
+  // Phase 3 slice 3b (05 §3.5): HOLLOW's `> you're reading my log. good. read it slowly.` has been said this run (the boot's
+  // 'reading' line, at the first boot after entry 05 is read; systems/story-log.ts marks it as it is said).
+  toldReading: boolean;
 }
 
 export interface RunState {
@@ -380,8 +392,11 @@ export interface RunState {
   shipIndex: number;
   // The run's map (phase 3 slice 3a, types/map.ts): the world, the arm, the route so far, the galaxy year.
   map: RunMapState;
-  // The fs-tools ARRIVAL CONTROL has licensed this run (§3.2, §6.5). A licence installs the tool's
-  // files once; they carry with the unit, so a licence is never issued twice.
+  // The fs-tool kinds that have reached the unit this run (§3.2, §6.5). On the classic world each is a licence ARRIVAL
+  // CONTROL issued (it installs the tool's files once; they carry with the unit, so a licence is never issued twice:
+  // systems/licences.ts installTool throws on a second). Phase 3 slice 3b changes the meaning on the arm (plan §2.2):
+  // SCAN at the start, REPAIR by its first-look rule, every other kind by its first delivery from the repository (a later
+  // delivery of a kind already here is a spare copy and changes nothing here; deliveries never call installTool).
   licences: FsToolKind[];
   // HOLLOW has said who it is (`> i was 046.`, on the ship it arrives on since phase 3 slice 2; the ghost names nothing):
   // its blocks and its TERMINAL lines carry its unit name instead of `???` from then on (say.ts hollowLabel).
@@ -413,6 +428,10 @@ export interface RunState {
   threat: RunThreatState;
   // 046.log's progress (05 §3.2).
   log: RunLogState;
+  // Phase 3 slice 3b: the repository's requests (02 §3.8–§3.9; types/repo.ts) and the INBOX's read marks (05 §4). Both are
+  // JSON-safe and all 3c's save keeps of them: deliveries' chips, forecasts and every message re-derive.
+  repo: RunRepoState;
+  inbox: RunInboxState;
 }
 
 // --- HOLLOW (systems/hollow.ts, §6.6) -----------------------------------------------------------

@@ -100,6 +100,8 @@ export const DELETE_CARD_EFFECT = {
   firewall: 'Bites can pass there again.',
   'fuel-trim': 'No extra FUEL on arrival.',
   autoburn: 'No AUTOBURN.',
+  // Phase 3 slice 3b: the REPAIR v2 patch installs and is used up at its boot, before DELETE can reach it; exhaustive.
+  'repair-patch': 'Repair stays as it is.',
 } as const;
 export const DELETE_EFFECT: Readonly<Record<SegmentRole, string>> = {
   'engine-io': 'The engine stops.',

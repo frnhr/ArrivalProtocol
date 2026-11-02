@@ -92,6 +92,9 @@ export function createRunState(
       ? nominalRunThreat(shipIndex)
       : applyThreat(shipIndex === 0 ? createRunThreat() : nominalRunThreat(shipIndex - 1), threat),
     log: createRunLog(),
+    // Phase 3 slice 3b: no request yet (the first desk's pick is the first), no mail opened.
+    repo: { pick: null, requests: [], nextId: 1 },
+    inbox: { read: [] },
   };
 }
 

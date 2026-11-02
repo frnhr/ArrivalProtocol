@@ -1,5 +1,8 @@
 import type { GameState } from '@state/schema';
+import type { ArrivalDelivery } from '@/types/repo';
 import { MAP_TEXT } from '@data/map-text';
+import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
+import { DELIVERY_BOOT_LINES_MAX } from '@data/tuning';
 import { layoutFor } from '@data/memory';
 import { currentStop } from '@systems/map-streams';
 
@@ -60,4 +63,32 @@ export function mapOverflowLineText(state: Readonly<GameState>): string {
   const lost = state.run.arrival?.chargeOverflowLost ?? 0;
   if (lost <= 0) throw new Error('mapOverflowLineText: no charge overflowed');
   return MAP_TEXT.boot.overflow(lost, state.level.shipName);
+}
+
+// --- Phase 3 slice 3b: the deliveries' boot lines (02 §4 step 6; slice-3b-plan §1.1 item 12, §2.3 step 5) ----------------
+// One `> DELIVERY: mv (arrived 2337)` line per delivery, oldest first (the arrival report's order); a patch says what it
+// upgraded; beyond DELIVERY_BOOT_LINES_MAX files the last line folds the rest (`> DELIVERY: 3 MORE · cp, swap, rm …`).
+// data/script.ts bootLinePlan places one 'delivery' line per group, after the ship's own arrival damage and before the
+// charge; bootLine renders group `ordinal`; systems/delivery-boot.ts receiveDeliveryAtBoot unpacks the same group as it is
+// said. Track REPO owns these after the foundation (the words are repo-text's, Track UI's).
+
+// The arrival's deliveries grouped by the boot line that says them (empty off the arm and on a fresh unit's boot).
+export function deliveryBootLines(state: Readonly<GameState>): ArrivalDelivery[][] {
+  const deliveries = state.run.map.world === 'arm' ? state.run.arrival?.deliveries ?? [] : [];
+  if (deliveries.length <= DELIVERY_BOOT_LINES_MAX) return deliveries.map((delivery) => [delivery]);
+  const single = deliveries.slice(0, DELIVERY_BOOT_LINES_MAX - 1).map((delivery) => [delivery]);
+  return [...single, deliveries.slice(DELIVERY_BOOT_LINES_MAX - 1)];
+}
+
+// The words of delivery line `ordinal`.
+export function deliveryBootLineText(state: Readonly<GameState>, ordinal: number): string {
+  const group = deliveryBootLines(state)[ordinal];
+  if (group === undefined || group.length === 0) throw new Error(`deliveryBootLineText: no delivery line ${ordinal} at this boot`);
+  if (group.length === 1) {
+    const delivery = group[0]!;
+    const word = REPO_FILE_TEXT[delivery.file].boot;
+    return delivery.file === 'repair-v2' ? REPO_TEXT.boot.patch(word, delivery.arrivedYear) : REPO_TEXT.boot.delivery(word, delivery.arrivedYear);
+  }
+  const years = group.map((delivery) => delivery.arrivedYear);
+  return REPO_TEXT.boot.folded(group.map((delivery) => REPO_FILE_TEXT[delivery.file].boot), Math.min(...years), Math.max(...years));
 }

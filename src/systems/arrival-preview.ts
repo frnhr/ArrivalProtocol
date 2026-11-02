@@ -2,6 +2,7 @@ import type { GameState } from '@state/schema';
 import type { Hop, RoomFit } from '@/types/map';
 import type { ShipThreat } from '@/types/threat';
 import type { UpgradeId } from '@data/upgrades';
+import type { DeliveryChip } from '@/types/repo';
 import { packedFiles, BEAM_SEED_LAYOUT_BLOCKS } from '@systems/carry';
 import { planPacket, pickCharge } from '@systems/draft';
 import { roomFit, linkBlocksFor } from '@systems/map-hop';
@@ -71,19 +72,21 @@ export function arrivalPreview(fit: Readonly<RoomFit>, credit: Readonly<ArrivalC
   return { fit: { ...fit }, sum, card, charge, tooMany: null, tone, confirm };
 }
 
-// What a crossing to `hop` is planned with: the ladder's verdict for the destination (its seeds), the files left behind
-// and the card picked (the card: none of either yet).
+// What a crossing to `hop` is planned with: the ladder's verdict for the destination (its seeds), the files left behind,
+// the card picked and the deliveries riding the hop (phase 3 slice 3b: TransitPlan.deliveries; the card: the hop's
+// deliveriesForHop, none dropped or picked yet).
 export interface ArrivalPlan {
   hop: Readonly<Pick<Hop, 'linkBlocks' | 'room' | 'chargeFloor'>>;
   threat: Readonly<Pick<ShipThreat, 'act' | 'beamSeeds'>>;
   dropped: readonly string[];
   pick: UpgradeId | null;
+  deliveries: readonly DeliveryChip[];
 }
 
 // The unit's arrival over `plan`. `seedsExact`: the seeds the beam really rolled (transmitNext's check), in place of the
 // verdict's allowance.
 export function unitArrival(state: Readonly<GameState>, plan: Readonly<ArrivalPlan>, seedsExact?: number): ArrivalPreview {
-  const packet = planPacket(state.memory, { linkBlocks: plan.hop.linkBlocks, dropped: plan.dropped, pick: plan.pick });
+  const packet = planPacket(state.memory, { linkBlocks: plan.hop.linkBlocks, dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries });
   const seeds = seedsExact !== undefined
     ? { min: seedsExact, max: seedsExact }
     : seedAllowance(plan.threat, playsTutorial(state.run)) ?? { min: 0, max: 0 };

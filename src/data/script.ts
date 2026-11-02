@@ -17,7 +17,10 @@ import { currentShip } from '@systems/map-run';
 import { solLy } from '@systems/map-geometry';
 import { END_SLOTS } from '@data/arm';
 import { MAP_TEXT } from '@data/map-text';
-import { mapBootLines, mapBootLineText, mapOverflowLineText } from '@systems/map-boot';
+import { mapBootLines, mapBootLineText, mapOverflowLineText, deliveryBootLines, deliveryBootLineText } from '@systems/map-boot';
+import { newMessagesAtBoot } from '@systems/inbox';
+import { readingLineDue } from '@state/log-selectors';
+import { INBOX_TEXT } from '@data/inbox-text';
 import { SHIP_SCREEN_REFUSAL, AUTOPILOT_REFUSAL } from '@systems/flight-controls';
 import {
   TOOL_WORD, repairStepTarget, toolStepTarget, fileHintTarget, podHintTarget, firewallHintTarget, SEED_HINT_TARGET,
@@ -696,6 +699,9 @@ export const TRANSMIT_TEXT = {
     firewall: 'Without it, one wall less.',
     'fuel-trim': 'Without it, no extra FUEL on arrival.',
     autoburn: 'Without it, no AUTOBURN.',
+    // The REPAIR v2 patch (phase 3 slice 3b) is used up at its boot, so no packed copy is ever offered as a drop; the
+    // record is exhaustive over the upgrade kinds.
+    'repair-patch': 'Without it, Repair stays as it is.',
   },
   gain: (blocks: number): string => `+${blocks} CHARGE`,
   dropped: 'LEFT BEHIND',
@@ -880,10 +886,18 @@ export function scriptedDamageLine(hits: readonly TransitHit[]): string {
 // THREAT fills arrival.seeds (arrival.boarded is filled from the verdict already).
 // Phase 3 slice 3a: 'sleep' (`> ASLEEP IN KESTREL'S RECEIVER · …`, first), 'receiver' (`> RECEIVER: 1 RACK · ROOM 88`,
 // after the host line) and 'ecc-sleep' (`> ECC: 3 TRANSIT HITS CORRECTED WHILE ASLEEP`, before the hits line) are the
-// galaxy map's, planned and worded by systems/map-boot.ts (Track GEN); 3b adds 'delivery'.
+// galaxy map's, planned and worded by systems/map-boot.ts (Track GEN).
+// Phase 3 slice 3b (02 §4 steps 6 and 10, 05 §3.5; slice-3b-plan §1.1 items 12 and 19), on the arm only:
+// • 'delivery': one line per group of systems/map-boot.ts deliveryBootLines (one file each, the last folded past
+//   DELIVERY_BOOT_LINES_MAX), after the ship's own arrival damage and before the charge; a kind that repeats, so bootLine
+//   takes the line's ordinal among them, and systems/boot.ts unpacks that group as it is said (receiveDeliveryAtBoot);
+// • 'reading': HOLLOW's `> you're reading my log. good. read it slowly.` once a run (state/log-selectors.ts readingLineDue),
+//   just before the log key line;
+// • 'inbox': `> n NEW MESSAGES · INBOX` (systems/inbox.ts newMessagesAtBoot), right after the log key line and before
+//   HOLLOW's own line, which still closes the boot.
 export type BootLineKind =
-  | 'sleep' | 'unpack' | 'board' | 'host' | 'receiver' | 'ecc-sleep' | 'ecc' | 'seeds' | 'scripted' | 'charge' | 'overflow'
-  | 'skill' | 'log' | 'hollow';
+  | 'sleep' | 'unpack' | 'board' | 'host' | 'receiver' | 'ecc-sleep' | 'ecc' | 'seeds' | 'scripted' | 'delivery' | 'charge'
+  | 'overflow' | 'skill' | 'reading' | 'log' | 'inbox' | 'hollow';
 
 // The entries this boot's keys open (05 §3.2, the interim keys of state/log-selectors.ts logEntriesAtBoot) that the run has
 // not found yet. Pure in the state: the boot plans its 'log' line from it, before anything marks them found.
@@ -910,17 +924,23 @@ export function bootLinePlan(state: Readonly<GameState>, skill: boolean): BootLi
   const sleep: BootLineKind[] = map.includes('sleep') ? ['sleep'] : [];
   const receiver: BootLineKind[] = map.includes('receiver') ? ['receiver'] : [];
   const eccSleep: BootLineKind[] = map.includes('ecc-sleep') ? ['ecc-sleep'] : [];
-  if (arrival === null) return [...sleep, 'unpack', 'host', ...receiver, 'ecc', ...log, ...hollow];
+  // 3b: the mail and HOLLOW's reading line (arm only: the classic world has neither), around the log key line.
+  const arm = state.run.map.world === 'arm';
+  const reading: BootLineKind[] = arm && readingLineDue(state) ? ['reading'] : [];
+  const inbox: BootLineKind[] = arm && newMessagesAtBoot(state).length > 0 ? ['inbox'] : [];
+  const story: BootLineKind[] = [...reading, ...log, ...inbox, ...hollow];
+  if (arrival === null) return [...sleep, 'unpack', 'host', ...receiver, 'ecc', ...story];
   const unpack: BootLineKind = arrival.boarded !== null ? 'board' : 'unpack';
   const plan: BootLineKind[] = [...sleep, unpack, 'host', ...receiver, ...eccSleep, 'ecc'];
   if (arrival.seeds.length > 0) plan.push('seeds');
   if (arrival.scripted.length > 0) plan.push('scripted');
+  for (let line = 0; line < deliveryBootLines(state).length; line++) plan.push('delivery');
   plan.push('charge');
   // A TIGHT arrival with no charge laid out says its loss on the charge line itself (M1: one honest line, not `REPAIR
   // CHARGE 0 · NO ROOM` and then `CHARGE OVERFLOW · 54 LOST`).
   if (arrival.chargeOverflowLost > 0 && !zeroChargeArrival(state)) plan.push('overflow');
   if (skill) plan.push('skill');
-  plan.push(...log, ...hollow);
+  plan.push(...story);
   return plan;
 }
 
@@ -939,9 +959,9 @@ function looseSeedRack(state: Readonly<GameState>, segId: string): string | null
   return index < 0 ? null : rackOf(segmentStarts(state.memory)[index]!, layoutOf(state));
 }
 
-// Who says a boot line: HOLLOW its own (slow, pink), the unit every other.
+// Who says a boot line: HOLLOW its own and its reading line (slow, pink), the unit every other.
 export function bootLineSpeaker(kind: BootLineKind): Speaker {
-  return kind === 'hollow' ? 'hollow' : 'mind-sys';
+  return kind === 'hollow' || kind === 'reading' ? 'hollow' : 'mind-sys';
 }
 
 // A returning unit's ship-1 boot licenses REPAIR (§5.2; systems/boot.ts, at the host line): a fresh unit's boot that is
@@ -951,9 +971,11 @@ export function bootLicensesRepair(state: Readonly<GameState>): boolean {
 }
 
 // One boot line, rendered from the live state at the moment it is typed. The skill line is the training's own
-// (systems/autoburn.ts trainSkillAtBoot says what it did), so it is not rendered here.
-export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: LineVars): string {
+// (systems/autoburn.ts trainSkillAtBoot says what it did), so it is not rendered here. `ordinal` is the line's place among
+// the plan's lines of its kind (0 for the first): only 'delivery' repeats, and it renders its own group by it.
+export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: LineVars, ordinal = 0): string {
   const arrival = state.run.arrival;
+  if (kind !== 'delivery' && ordinal !== 0) throw new Error(`bootLine: a '${kind}' line never repeats (ordinal ${ordinal})`);
   switch (kind) {
     case 'sleep':
     case 'receiver':
@@ -976,6 +998,15 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
     case 'scripted':
       if (arrival === null) throw new Error('bootLine: arrival damage on a ship nothing transmitted to');
       return scriptedDamageLine(arrival.scripted);
+    case 'delivery': return deliveryBootLineText(state, ordinal);
+    case 'reading':
+      if (!readingLineDue(state)) throw new Error('bootLine: a reading line that is not due');
+      return INBOX_TEXT.boot.reading;
+    case 'inbox': {
+      const count = newMessagesAtBoot(state).length;
+      if (count === 0) throw new Error('bootLine: an INBOX line with no new message');
+      return INBOX_TEXT.boot.newMessages(count);
+    }
     case 'charge':
       if (arrival === null) throw new Error('bootLine: a charge line on a ship nothing transmitted to');
       // A TIGHT ship's room left no charge at all (01 §3.16): said plainly, with what it cost, never a surprise.
@@ -994,8 +1025,9 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
   }
 }
 // The most a boot ever says (a later ship with the beam's seeds, arrival damage, an overflow, a skill trained, a log key
-// and HOLLOW's line; on the arm also the sleep, receiver and ECC-while-asleep lines).
-export const BOOT_LINE_MAX = 13;
+// and HOLLOW's line; on the arm also the sleep, receiver and ECC-while-asleep lines, and since slice 3b up to
+// DELIVERY_BOOT_LINES_MAX delivery lines, the INBOX line and HOLLOW's reading line).
+export const BOOT_LINE_MAX = 18;
 
 // --- Beats: lines spoken on a moment (§6.3) ---------------------------------------------------
 

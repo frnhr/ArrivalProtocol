@@ -200,7 +200,7 @@ export interface DriverSegment extends SegmentBase, Infectable {
 // FUEL TRIM widens the Δv budget on each arrival; AUTOBURN.skl (WP9) is the skill trained from your own
 // captures. Food for HOLLOW, healed by REPAIR, like the AI's own files: a consumed file, or one below 50,
 // gives no effect (systems/capabilities.ts liveUpgrades).
-export type UpgradeKind = 'fuel-trim' | 'autoburn';
+export type UpgradeKind = 'fuel-trim' | 'autoburn' | 'repair-patch';
 
 export interface UpgradeSegment extends SegmentBase, Infectable {
   type: 'upgrade';

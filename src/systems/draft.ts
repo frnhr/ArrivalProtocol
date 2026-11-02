@@ -2,6 +2,7 @@ import type { Store } from '@state/store';
 import type { GameState, TransitPlan } from '@state/schema';
 import type { Segment, FirewallSegment, UpgradeSegment } from '@/types/segment';
 import type { Hop } from '@/types/map';
+import type { DeliveryChip } from '@/types/repo';
 import { packUnit, type Packet } from '@systems/carry';
 import { chargeLeft, upgradeFiles, isFirewall } from '@state/selectors';
 import { hollowLabel } from '@systems/say';
@@ -10,6 +11,7 @@ import {
   REPAIR_V2_VERSION, THREAD_PLUS_THREADS, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, FUEL_TRIM_BLOCKS, INTEGRITY_MAX,
 } from '@data/tuning';
 import { visitRng } from '@systems/map-streams';
+import { deliveryFiles } from '@systems/repository';
 
 // PICK ONE TO CARRY (§6.9, §9 WP8 items 1–2), the systems half: the draft dealt at TRANSMIT from the run's
 // seed and stats, the pick, and what the picked card does to the packet. DOM-free; the TRANSMIT screen shows
@@ -93,19 +95,23 @@ export function cardFiles(id: UpgradeId | null, makeId: (prefix: string) => stri
 // The id the screen's previews give a card's file: it never reaches memory.
 export const PREVIEW_ID = (prefix: string): string => `${prefix}~preview`;
 
-// The packet a plan sends: the unit's files less the dropped ones, plus the picked card's file. The screen's
-// numbers use preview ids; the send passes newSegId (`makeId`), so the file that lands has a real id.
+// The packet a plan sends: the unit's files less the dropped ones, plus the picked card's file and the deliveries riding
+// this hop (phase 3 slice 3b: every chip not sent on, systems/repository.ts deliveryFiles). planPacket is the ONE place
+// files are added to a packet (slice-3b-plan §2.7 item 2): the PACKET's numbers, the preview, the draft's room and the send
+// all go through it, so no number counts a delivery twice or forgets it. The screen's numbers use preview ids; the send
+// passes newSegId (`makeId`), so the files that land have real ids.
 export interface PacketPlan {
   linkBlocks: number;
   dropped: readonly string[];
   pick: TransitPlan['pick'];
+  deliveries: readonly DeliveryChip[];
 }
 
 export function planPacket(
   memory: readonly Segment[], plan: Readonly<PacketPlan>,
   makeId: (prefix: string) => string = PREVIEW_ID,
 ): Packet {
-  return packUnit(memory, plan.linkBlocks, plan.dropped, cardFiles(plan.pick, makeId));
+  return packUnit(memory, plan.linkBlocks, plan.dropped, [...cardFiles(plan.pick, makeId), ...deliveryFiles(plan.deliveries, memory, makeId)]);
 }
 
 // The REPAIR CHARGE the pick brings on arrival.

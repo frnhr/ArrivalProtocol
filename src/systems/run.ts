@@ -19,7 +19,7 @@ import { rollBeamSeeds } from '@systems/beam-seeds';
 import { tallyPreview } from '@state/threat-selectors';
 import { shipStars, starCharge } from '@systems/stars';
 import {
-  packUnit, packedFiles, rollTransitHits, emergencyCoreToll, arrivalCharge, layoutCarried, arrivalDamage,
+  packedFiles, rollTransitHits, emergencyCoreToll, arrivalCharge, layoutCarried, arrivalDamage,
 } from '@systems/carry';
 import { dealDraft, planPacket, applyPickToPacket, pickCharge } from '@systems/draft';
 import { archiveShipStarted, archiveRunEnded, archiveTutorialDone, playsTutorial, type RunLineage } from '@systems/meta';
@@ -33,6 +33,7 @@ import {
 } from '@systems/map-run';
 import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
 import { unitArrival } from '@systems/arrival-preview';
+import { deliveriesForHop } from '@systems/repository';
 import { mapFacts } from '@systems/map-facts';
 import { BEATS, LINES, perShipBeatIds } from '@data/script';
 import { TOOL_REFUSAL } from '@data/tool-text';
@@ -340,7 +341,10 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
   const toShipIndex = state.run.shipIndex + 1;
   const hop = hopBetween(state.run.map, fromSlot, toSlot);
   const extra = state.run.map.pendingExtra ?? { extraHits: 0, coreHit: 0, coreReset: false };
-  const packet = packUnit(store.getState().memory, hop.linkBlocks, []);
+  // Phase 3 slice 3b: the deliveries that catch up at the destination ride this hop (02 §3.9), packed by planPacket with
+  // the unit's files, so the plan's numbers count them from the start.
+  const deliveries = deliveriesForHop(state, fromSlot, toSlot);
+  const packet = planPacket(store.getState().memory, { linkBlocks: hop.linkBlocks, dropped: [], pick: null, deliveries });
   // The ladder's verdict for the next ship, from the run's threat once this ship's tally is done (Track THREAT's endShip).
   const facts = mapFacts(state.run.map, fromSlot, toSlot, toShipIndex + 1);
   const threat = planThreat(threatInputFor(state.run.threat, facts, state.run.stats.deal !== null));
@@ -359,6 +363,7 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
     offer: dealDraft(store.getState(), hop),
     pick: null,
     threat,
+    deliveries,
   };
   store.update((draft) => {
     draft.run.phase = 'transmit';
@@ -393,7 +398,7 @@ export function transmitNext(store: Store<GameState>): void {
   // The arrival as the PACKET previewed it (systems/arrival-preview.ts), for the seeds the beam really rolled. TRANSMIT ▸
   // waits while files are over the link or files and the floor over the room (01 §3.16; the review's B1 and the follow-up
   // M2): a send that gets here over either is a bug, not a squeeze.
-  const preview = unitArrival(state, { hop: plan.hop, threat: plan.threat, dropped: plan.dropped, pick: plan.pick }, packet.seeds.length);
+  const preview = unitArrival(state, { hop: plan.hop, threat: plan.threat, dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries }, packet.seeds.length);
   const fit = preview.fit;
   if (fit.overLink > 0) throw new Error(`transmitNext: ${fit.files} blocks of files are ${fit.overLink} over the link of ${fit.link}`);
   if (fit.over > 0) throw new Error(`transmitNext: ${fit.files} blocks of files and a floor of ${fit.floor} are ${fit.over} over ${ship.name}'s room of ${fit.room}`);
@@ -428,6 +433,8 @@ export function transmitNext(store: Store<GameState>): void {
     // The root lands in the slot as the ship is built (createShipSlices, from the verdict's rootBlocks).
     seeds: layout.seeds,
     boarded: boardedBy(plan.threat),
+    // TODO(3b-REPO): the chips not sent on, as laid out (their segment ids), oldest first.
+    deliveries: [],
   };
   // The card goes with the unit: the run remembers it (the Skills window lists it, THREAD+ is owned by it).
   if (plan.pick !== null) {

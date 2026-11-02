@@ -330,7 +330,13 @@ export function deriveCapabilities(state: Readonly<GameState>, threadsBusy: numb
       uncertain: dropUncertain(sensor.band),
     },
     threads: coreThreads(state),
-    upgrades: { 'fuel-trim': liveUpgrades(state.memory, 'fuel-trim'), autoburn: liveUpgrades(state.memory, 'autoburn') },
+    upgrades: {
+      'fuel-trim': liveUpgrades(state.memory, 'fuel-trim'),
+      autoburn: liveUpgrades(state.memory, 'autoburn'),
+      // Phase 3 slice 3b: the REPAIR v2 patch is a file only between its crossing and its boot line (it is used up there);
+      // its effect is the Repair copies' version, not a live capability. Counted like the others for an honest record.
+      'repair-patch': liveUpgrades(state.memory, 'repair-patch'),
+    },
   };
 }
 

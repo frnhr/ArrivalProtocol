@@ -396,10 +396,13 @@ export const BEEP_JUMP_TAC = 1.5;
 // (`> ECC: SENSOR INTERP 45% — PATH UNCERTAIN`) and AUTOBURN.skl trained from the kid's captures. VESPER (WP10) closes
 // its boot with HOLLOW's own line, which types slowly: the klaxon waits for it (BOOT_AFTER_HOLLOW_LINE_SEC). Phase 3
 // slice 2 adds up to two more at the same rhythm: the beam seeds' ECC line or HOLLOW's 108% unpack, and `046.log · KEY
-// FOUND`; slice 3a three more on the arm (the sleep, receiver and ECC-while-asleep lines: data/script.ts BOOT_LINE_MAX 13),
-// on the same 1.3 s step boot.ts extrapolates with.
+// FOUND`; slice 3a three more on the arm (the sleep, receiver and ECC-while-asleep lines); slice 3b five more (up to three
+// `> DELIVERY:` lines, DELIVERY_BOOT_LINES_MAX, the INBOX line and HOLLOW's reading line: data/script.ts BOOT_LINE_MAX 18),
+// all on the same 1.3 s step (boot.ts checks at load that every possible line has its time).
 export const BOOT_ASSEMBLE_SEC = 1.5;
-export const BOOT_LINE_AT_SEC: readonly number[] = [0.5, 1.8, 3.1, 4.4, 5.7, 7.0, 8.3, 9.6, 10.9, 12.2, 13.5, 14.8, 16.1];
+export const BOOT_LINE_AT_SEC: readonly number[] = [
+  0.5, 1.8, 3.1, 4.4, 5.7, 7.0, 8.3, 9.6, 10.9, 12.2, 13.5, 14.8, 16.1, 17.4, 18.7, 20.0, 21.3, 22.6,
+];
 export const BOOT_KLAXON_AFTER_LAST_LINE_SEC = 1.4;
 export const BOOT_END_AFTER_KLAXON_SEC = 0.4;
 
@@ -1857,3 +1860,40 @@ export const DESK_SHEET_PEEK_PX = 132;
 // CONTROL's line on the first desk types at this speed (characters per second): CONTROL's radio pace, so the kid reads
 // it as the same voice.
 export const DESK_TYPE_CPS = 38;
+
+// =====================================================================================================================
+// --- Phase 3 slice 3b: the repository, deliveries and the INBOX (docs/phase3/02-map.md §3.8–§3.9, §4; 05-story.md
+// §3.3–§3.5; 04-threats.md §3.3–§3.4; docs/phase3/impl/slice-3b-plan.md §4). Two sub-blocks, each owned by one track: a
+// track edits only its own (BOOT_LINE_AT_SEC above stays the foundation's).
+// =====================================================================================================================
+
+// --- 3b REPO (owned by Track REPO): the delivery rule's numbers, delivery seeds, the recommendation, the patch ----------
+
+// The chance a delivery carries a seed, by its hop's noise (04 §3.4: 0 / 10 / 25 / 40%), at most one seed per file, behind
+// the file it rode with. The beam's own seed odds rise with noise the same way: a delivery is one more file on that beam.
+// Never on a tool kind's first delivery (the lesson is never eaten), never into a calm ship, never on the patch.
+export const DELIVERY_SEED_CHANCE: Readonly<Record<LinkNoise, number>> = { 0: 0, 1: 0.1, 2: 0.25, 3: 0.4 };
+// The boot says at most this many `> DELIVERY:` lines (02 §4 step 6: one per file, oldest first); beyond it the rest fold
+// into the last line, so a boot that unpacks a backlog stays under 20 s (BOOT_LINE_AT_SEC's 18 lines).
+export const DELIVERY_BOOT_LINES_MAX = 3;
+// ARRIVAL CONTROL recommends REPAIR v2 once the unit has repaired this many times this run (02 §3.8's rule 5): by then
+// REPAIR is the tool it leans on, and v2's double heal pays for its 2 blocks.
+export const REPO_RECOMMEND_REPAIRS_MIN = 5;
+// The Swap rule looks this many layers ahead for an ENGINE FAULT ship the unit can reach (02 §3.8's rule 3: "within two
+// layers"). The lever if VESPER without SWAP hurts (plan risk 1): 3 asks for Swap a hop earlier, in time more often.
+export const REPO_SWAP_LOOKAHEAD_LAYERS = 2;
+// The REPAIR v2 patch's size (02 §3.8's catalogue): it presses on the link and the room like a small tool, so asking for
+// v2 still costs something on a tight hop, but less than the 4-block Repair.bak it competes with.
+export const REPAIR_PATCH_BLOCKS = 2;
+
+// --- 3b UI (owned by Track UI): the INBOX's numbers, the desk tabs, the boot words ------------------------------------
+
+// ARRIVAL CONTROL's broadcasts (the welcome, the policy reminders, the arm-complete letter) leave Earth this many years
+// before the run's start year: 05 §3.12's welcome is SENT 2280 for a run that starts in 2300 (sent with the beam).
+export const WELCOME_SENT_BEFORE_START_YEARS = 20;
+// A colony writes at these colony years (05 §3.3): the first-week letter, the same colonist grown old, and the colony
+// itself two centuries on. Each arrives by light at the first of the unit's ships far enough out in time.
+export const POSTCARD_COLONY_YEARS: readonly number[] = [1, 50, 200];
+// A message's body has at most this many lines (05 §3.3's rule): the reader shows a whole message without scrolling at
+// 1280 × 720 and on a phone.
+export const INBOX_BODY_MAX_LINES = 6;

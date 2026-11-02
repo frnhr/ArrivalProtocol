@@ -4,6 +4,7 @@ import type {
 import type { DragKick, LandingEnd, LaunchSource, Place, Touch } from '@/types/landing';
 import type { SegmentRole, InfectionSide } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
+import type { RepoFileId } from '@/types/repo';
 import type { LineState } from '@systems/flight-events';
 import type { OpKind } from '@systems/ops-core';
 import type { PlotMode } from '@systems/capabilities';
@@ -52,6 +53,9 @@ export interface GameEvents {
   'ui-click': Record<string, never>;
   // WP4. ARRIVAL CONTROL installed a licensed tool's files (transmitIn, chime, the chip slides in).
   'licence': { kind: FsToolKind };
+  // Phase 3 slice 3b (02 §4 step 6): a delivery from the repository unpacked at the boot, as its `> DELIVERY:` line is said
+  // (systems/delivery-boot.ts receiveDeliveryAtBoot; a chime and the chip sliding in, Track UI). One per file.
+  'delivery': { file: RepoFileId };
   // A scripted fault hit a file (ship 1's ENGINE I/O FAULT): its integrity fell from → to.
   'file-fault': { role: SegmentRole; from: number; to: number };
   // SPACE was pressed but the engine can't fire at all (dead or missing driver, no controller).

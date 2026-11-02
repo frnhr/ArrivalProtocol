@@ -1,6 +1,7 @@
 import type { Segment, HollowSegment } from '@/types/segment';
 import type { BeamSeedPlan, BeamSeedSource, LinkNoise, SeedTargetPick } from '@/types/threat';
 import type { Packet } from '@systems/carry';
+import type { DeliveryChip } from '@/types/repo';
 import type { Rng } from '@systems/rng';
 import { isInfectable } from '@state/selectors';
 import { beamSeedsInMemory } from '@state/threat-selectors';
@@ -74,6 +75,18 @@ export function rollBeamSeeds(packet: Readonly<Packet>, source: BeamSeedSource, 
     plans.push({ targetId: target.id, targetName: target.name, words });
   }
   return plans;
+}
+
+// The seeds riding the deliveries on a hop (04 §3.4; slice-3b-plan §1.1 item 9, §2.3 step 4.3): per chip not sent on, in
+// chip order, one chance draw against its seedChance (0 on a tool kind's first delivery, into a calm ship and on the patch;
+// else DELIVERY_SEED_CHANCE by the hop's noise) and one words draw, each seed behind the delivered file it rode with (at
+// most one per file). `packet` is the packet planPacket built (the delivered files' real ids); `rng` is the hop's own
+// 'delivery-seeds' stream, so the beam's own seeds never shift. Track REPO fills it (`TODO(3b-REPO)`): empty until then.
+export function rollDeliverySeeds(chips: readonly DeliveryChip[], packet: Readonly<Packet>, rng: Rng): BeamSeedPlan[] {
+  void chips;
+  void packet;
+  void rng;
+  return []; // TODO(3b-REPO): one chance draw and one words draw per chip.
 }
 
 // One beam seed as a segment (a phase-2 seed, beam-born): what layoutCarried places behind its target at the boot.

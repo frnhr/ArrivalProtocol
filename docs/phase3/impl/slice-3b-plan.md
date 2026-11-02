@@ -636,3 +636,79 @@ The tier is about 232 s on 4 workers against a 300 s cap. New suites are pure or
 - /home/user/ArrivalProtocol/src/systems/desk.ts
 - /home/user/ArrivalProtocol/src/data/script.ts
 - /home/user/ArrivalProtocol/src/state/schema.ts
+
+---
+
+## Deviations (foundation)
+
+The foundation (§5.0 items 1–8) as built. Nothing changes behaviour yet: every stub throws `TODO(3b-REPO)` /
+`TODO(3b-UI)` or returns empty, so no boot gains a line and no packet gains a file until REPO and UI fill them.
+
+1. **`receiveDeliveryAtBoot` lives in a new `src/systems/delivery-boot.ts`, not `repository.ts`** (REPO owns it). The patch
+   needs `licences.ts renewRepairAtBoot`, and licences.ts imports `data/script.ts`; repository.ts must stay importable from
+   script.ts's side of the graph (`draft.ts → repository.ts` already, and later `desk.ts` / the INBOX). boot.ts imports
+   delivery-boot.ts. The cycle guard was checked transitively: repository.ts, inbox.ts, delivery-rule.ts and
+   data/repository.ts reach none of script.ts, arrival-preview.ts or licences.ts.
+2. **Delivery boot lines are groups.** `map-boot.ts deliveryBootLines(state): ArrivalDelivery[][]` (real: at most
+   `DELIVERY_BOOT_LINES_MAX` groups, one delivery each, the last folding the rest) and `deliveryBootLineText(state,
+   ordinal)`. `bootLinePlan` pushes one `'delivery'` per group; `bootLine(kind, state, vars, ordinal = 0)` throws on an
+   ordinal ≠ 0 for any other kind; boot.ts derives the ordinal from the plan (`lineOrdinal`) for the said line and for
+   `plannedText`; `receiveDeliveryAtBoot(store, ordinal)` unpacks the whole group (a folded line unpacks every file it
+   names). The patch line says `· EVERY REPAIR → v2` without a count: it types before the install, and REPAIR's renewal
+   at the same moment may add copies.
+3. **§4.2's Cp row.** "2861 at LAST LIGHT" is the year Cp reaches CORMORANT's receiver (44 late). Forwarded by the rule it
+   reaches LAST LIGHT's in 3020 − 105 = **2915** (lateness 44 − 149). `map/delivery-rule` pins 2861 at CORMORANT and 2915 at
+   LAST LIGHT. §3 step 9's `> DELIVERY: cp (arrived 2861)` should therefore read 2915 if `RepoRequest.arrivedYear` keeps
+   its meaning ("the receiver where it caught up"); REPO decides and keeps the boot line and the TIMELINE on one year.
+   The receiver year is `receiverYear(approach, lateness) = approach + lateness` at every ship (it equals A(S0) + |S0−SOL| +
+   |SOL−S1| at the first one).
+4. **`delivery-rule.ts` is complete**, including `deliveryForecast` (§5.1 put its BFS under REPO): both tracks need its
+   numbers now. Signatures: `deliveryForecast(map, from, to, toDepth = map.route.length + 1)` (the depth is explicit so a
+   forecast from any stop works); `lightArrival(map, source: LightSource, sentYear, route, afterDepth)` with `LightSource =
+   { kind: 'sol' } | { kind: 'world'; worldSlot }`, returning `{ depth, receivedYear } | null` (null: no stop of `route`
+   takes it yet). `forwardLateness(lateness, hop)` takes the hop's slack, not a map.
+5. **A few "stubs" are real** because they are a line or two and the debug helpers need them: `setRequest` (desk phase,
+   arm only, unknown ids throw; the pick is not yet cleared by TRANSMIT ▸, which is `advanceRequests`'s job),
+   `deliveryFiles(chips, memory, makeId)` (it gains `memory` for Repair.bak's version: `bestRepairVersion`),
+   `receiverClosed(map, slot)` (false until slice 5), `newMessagesAtBoot`, `inboxUnread` (a list, not a count) and
+   `markMessageRead` over the still-empty derivation. `inbox.ts` also carries 3c's seam `letterSources(run):
+   LetterSource[]` (returns `[]`).
+6. **Other final signatures that differ from the sketch:** `advanceRequests(repo, plan, map)` (the map for the first
+   lateness and the final-ship check; the hop is in the plan); `toggleSendOn(store, key): SendOnRefusal | null` (`'no-chip'`
+   for an unknown key); `rollDeliverySeeds(chips, packet, rng): BeamSeedPlan[]` (the beam seeds' own type, so both lists go
+   into `packet.seeds` unchanged); `undeliveredFiles(run): RepoRequest[]` (the tally names them). `repoModel` returns
+   `RepoModel { world, selected, pick, recommended, recommendLine, available: RepoRow[], inTransit: RepoTransitRow[],
+   restricted: RepoRestrictedRow[] }`, defined in systems/repository.ts.
+7. **The catalogue derives its sizes** from `TOOL_FILES` (Scan.bak is Scan's size); the only new number is
+   `REPAIR_PATCH_BLOCKS = 2` (tuning `3b REPO`). data/repository.ts adds `REPO_FILE_IDS` (the row order for keys 1–7),
+   `RESTRICTED_IDS` / `RESTRICTED_ROWS` (`RestrictedId` in types/repo.ts, which slice 4 extends with the tree's skills),
+   `repoToolKind(id)` and one `repoFileSegments(id, makeId, repairVersion)` instead of a builder per row.
+   `validateCatalogue()` returns its problems (the load-time check throws on any). It checks "no row bigger than its
+   kind's biggest tool file" in place of re-running arrival-preview's locked-floor check (which it may not import).
+8. **The reading line** is marked by boot.ts as it is said (`run.log.toldReading = true`, as `keepCharge` is), not by
+   story-log: no event and no mount-order dependency. `readingLineDue` (state/log-selectors.ts, UI) returns false until
+   UI fills it. Its speaker is HOLLOW (pink, slow).
+9. **Boot order:** `'delivery'` after `'scripted'`, before `'charge'`; `'reading'` just before `'log'`; `'inbox'` just
+   after `'log'`; HOLLOW's `'hollow'` still closes the boot. Fresh-unit boots (ship 1) place `'reading'`, `'log'`,
+   `'inbox'` the same way, so the welcome's `> 1 NEW MESSAGE · INBOX` needs no plan change. `'reading'` and `'inbox'` are
+   arm only.
+10. **`UpgradeKind 'repair-patch'`** had three exhaustive sites (capabilities' live count, `DELETE_CARD_EFFECT`,
+    `TRANSMIT_TEXT.withoutCard`), not about seven.
+11. **Wiring:** `goTransmit` packs with `planPacket(memory, { …, deliveries })` from the start (the plan's `filesBlocks` /
+    `chargeCarried` count deliveries once REPO returns chips); the card's fit line already passes `deliveriesForHop(state,
+    from, slot)` to `unitArrival`; `transmitNext` writes `ArrivalReport.deliveries: []` (`TODO(3b-REPO)`). `dealDraft`'s
+    room does not count deliveries yet (§5.1 item 3, REPO).
+12. **`__ap.give(file)`** emits `'delivery'` for every file. `give('repair-v2')` installs the patch at once, as at its
+    boot line: every Repair copy to v2, `run.upgrades` gains `'repair-v2'`, no file is left. A first-of-kind tool goes into
+    `run.licences` and `hollow.untriedTools` (REPAIR excepted, as `grantLicence`); a spare is just a file. `__ap.repo()`
+    returns `{ state, recommendation, model, deliveries, undelivered }`; `__ap.inbox()` `{ messages, unread, read }`.
+13. **Text.** `repo-text.ts` exports `REPO_FILE_TEXT` (name, effect, boot word, desc), `RESTRICTED_TEXT` and `REPO_TEXT`
+    (window, row, eta, transit, card, desk, packet, noSwap, boot, tally); `inbox-text.ts` exports `INBOX_TEXT` (window,
+    from, welcome, policy ×2, armComplete, reply, postcard y1/y50/y200, letter, noAddress ×2, boot) and `firstNameOf`.
+    Every line renders ≤ 70 characters at its worst case (checked by hand; `map/text` is TESTS'); the two new segment
+    descs are INSPECT paragraphs, like the tool files' own.
+
+**Measured:** typecheck and the tests tsc pass; `node tests/unit/run.mjs map entries words` 21/21; the new
+`map/delivery-rule` 17/17 in 0.6 s; the full unit tier 161/161 in 241 s on 4 workers (fly-once cache cold); a Playwright
+pass of run 1 to HALCYON's desk with `__ap.request('mv')`, `__ap.repo()`, `__ap.inbox()`, `__ap.give('rm')` and
+`__ap.give('repair-v2')` had no console errors.

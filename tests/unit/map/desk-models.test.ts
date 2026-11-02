@@ -130,7 +130,7 @@ check('LAPWING (TIGHT): MEMORY 256 · TIGHT · ROOM FOR YOU 88, the fit line is 
 // ladder's verdict for the beam: the PACKET's own function.
 const lapVerdict = planThreat(threatInputFor(state.run.threat, mapFacts(state.run.map, 5, 8, 4), false));
 check('…the fit is the PACKET\'s rule: unitArrival of the unit as it is against the hop, with the verdict\'s seeds',
-  JSON.stringify(lapFit) === JSON.stringify(unitArrival(state, { hop: hopBetween(state.run.map, 5, 8), threat: lapVerdict, dropped: [], pick: null }).fit));
+  JSON.stringify(lapFit) === JSON.stringify(unitArrival(state, { hop: hopBetween(state.run.map, 5, 8), threat: lapVerdict, dropped: [], pick: null, deliveries: [] }).fit));
 
 // A heavy unit squeezed on TIGHT: the card says so before the PACKET does.
 kestrel.update((draft) => {

@@ -1,0 +1,146 @@
+import type { RepoFileId, RestrictedId } from '@/types/repo';
+
+// PLACEHOLDER(05): every word slice 3b puts on screen for the repository and its deliveries (docs/phase3/02-map.md §3.8,
+// §3.9, §4; 01-landing §3.16's PACKET; 04-threats §3.3's last rm; slice-3b-plan §1.1 items 1–16, §3), drafted from the
+// specs' sample lines for 05-story's owner to sign off. Each line renders to at most MAX_LINE_CHARS (70) with the longest
+// names and numbers (tests/unit/map/text.test.ts) and says no never-say word (tests/unit/support/words.test.ts).
+// Track UI owns this file after the foundation; Track REPO asks UI for words by message (plan §5.4). The conditions that
+// pick a line live in systems/repository.ts, systems/map-boot.ts and systems/desk.ts, never here.
+
+const yrs = (years: number): string => `${years} ${Math.abs(years) === 1 ? 'YR' : 'YRS'}`;
+const blocks = (count: number): string => `${count} ${count === 1 ? 'BLOCK' : 'BLOCKS'}`;
+
+// One catalogue row's words (data/repository.ts REPO_FILES reads them): its name in memory and on every row, its effect on
+// the AVAILABLE row, its word on the boot's `> DELIVERY:` line, and the desc a new segment of it carries (the tool files
+// keep data/fs-tools.ts's own desc; the two new defs, Scan.bak and the patch, have theirs here).
+export interface RepoFileText {
+  name: string;
+  effect: string;
+  boot: string;
+  desc: string | null;
+}
+
+export const REPO_FILE_TEXT: Readonly<Record<RepoFileId, RepoFileText>> = {
+  mv: { name: 'Mv', effect: 'MOVE', boot: 'mv', desc: null },
+  rm: { name: 'Rm', effect: 'DELETE', boot: 'rm', desc: null },
+  cp: { name: 'Cp', effect: 'COPY', boot: 'cp', desc: null },
+  swap: { name: 'Swap', effect: 'SWAP', boot: 'swap', desc: null },
+  'repair-bak': { name: 'Repair.bak', effect: 'A SPARE REPAIR', boot: 'repair.bak', desc: null },
+  'scan-bak': {
+    name: 'Scan.bak', effect: 'A SPARE SCAN', boot: 'scan.bak',
+    desc: 'Backup copy of Scan. If Scan gets damaged, this one keeps working.',
+  },
+  'repair-v2': {
+    name: 'REPAIR v2 patch', effect: 'EVERY REPAIR COPY → v2', boot: 'repair_v2.patch',
+    desc: 'A patch from the repository. It installs at the boot: every Repair copy becomes v2, and the patch is used up.',
+  },
+};
+
+// The locked rows (02 §3.8: shown locked, never sent). Slice 4 adds the tree's skills (permanent).
+export const RESTRICTED_TEXT: Readonly<Record<RestrictedId, { name: string; why: string }>> = {
+  'autoburn-skl': { name: 'AUTOBURN.skl', why: 'Train it yourself :)' },
+  'thread-plus': { name: 'THREAD+', why: 'Not available to caretakers :)' },
+  'firewall-sys': { name: 'FIREWALL.sys', why: 'Not available to caretakers :)' },
+};
+
+export const REPO_TEXT = {
+  // --- The REPOSITORY window (02 §4; plan §1.1 items 1–5) --------------------------------------------------------------
+  window: {
+    title: 'REPOSITORY',
+    tab: 'REPOSITORY [R]',
+    available: 'AVAILABLE',
+    inTransit: 'IN TRANSIT',
+    restricted: 'RESTRICTED',
+    classic: 'NO REPOSITORY ON THE CLASSIC ROUTE',
+    noShip: 'PICK A SHIP TO SEE WHEN A FILE GETS THERE',
+    nothingInTransit: 'NOTHING ON THE WAY',
+    request: 'REQUEST',
+    requested: 'REQUESTED',
+    clear: 'CLEAR',
+    locked: 'LOCKED',
+    // One request per transmit (02 §3.8): what the window says under the list.
+    oneRequest: 'ONE REQUEST PER TRANSMIT · CHANGE IT UNTIL TRANSMIT ▸',
+    // The tag (02 §3.8; decision 19: the tag is the advice, no confirm).
+    recommended: ':) RECOMMENDED FOR YOU',
+    nothingToRecommend: 'You have everything you need :)',
+    // The last-rm prompt (04 §3.3, round 3): the desk opens here with Rm lit.
+    lastRm: 'YOUR LAST RM IS GONE · NO RM, NO WAY TO DELETE THE ROOT',
+    restrictedRefusal: 'RESTRICTED · ARRIVAL CONTROL WILL NOT SEND IT',
+  },
+  // An AVAILABLE row: `Mv · 2 BLOCKS · MOVE`, then its ETA for the selected destination.
+  row: (name: string, size: number, effect: string): string => `${name} · ${blocks(size)} · ${effect}`,
+  // The ETA (systems/delivery-rule.ts deliveryForecast): `ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME`.
+  eta: {
+    inTime: (arrived: number, ship: string, approach: number): string => `ARRIVES ${arrived} · ${ship} APPROACH ${approach} · IN TIME`,
+    late: (yearsLate: number, depth: number): string => `${yrs(yearsLate)} LATE → FOLLOWS YOUR ROUTE · SHIP ${depth} AT THE EARLIEST`,
+    never: 'NOTHING WILL REACH YOU IN TIME',
+  },
+  // The IN TRANSIT rows (02 §3.9: "the file is n years behind you").
+  transit: {
+    behind: (name: string, years: number): string => `${name} · ${yrs(years)} BEHIND YOU`,
+    waiting: (name: string, ship: string): string => `${name} · WAITING IN ${ship}'S RECEIVER`,
+    catchesUp: (name: string, ship: string): string => `${name} · CATCHES UP AT ${ship}`,
+  },
+
+  // --- The SHIP CARD (02 §4; plan §1.1 item 13) --------------------------------------------------------------------------
+  card: {
+    deliveriesLabel: 'DELIVERIES',
+    late: (name: string, years: number): string => `${name} ✗ ${yrs(years)} LATE`,
+    catchesUp: (name: string): string => `${name} ✓ CATCHES UP HERE`,
+    inTime: (name: string): string => `${name} ✓ WAITING HERE`,
+    // The TIMELINE's mark: `2629 Swap` (green before ▲, red after).
+    mark: (year: number, name: string): string => `${year} ${name}`,
+  },
+
+  // --- The DESK's guidance and tabs (02 §4; plan §1.1 item 15, §5.2 item 1) -----------------------------------------------
+  desk: {
+    // The first desk's file step (02 §4: ship → file → SET COURSE); it guides only, SET COURSE never waits for it.
+    request: (file: string): string => `REQUEST ${file} · RECOMMENDED [R]`,
+    requestAny: 'REQUEST A FILE [R] · OPTIONAL',
+    requested: (file: string): string => `${file} REQUESTED`,
+    tabCard: 'CARD',
+    tabRepository: 'REPOSITORY [R]',
+    tabInbox: 'INBOX [I]',
+    back: 'CARD [ESC]',
+  },
+
+  // --- The PACKET (02 §4; 01 §3.16; plan §1.1 item 14) -------------------------------------------------------------------
+  packet: {
+    deliveriesLabel: 'DELIVERIES',
+    chip: (name: string, size: number, arrived: number): string => `${name} · ${blocks(size)} · ARRIVED ${arrived}`,
+    sendOn: '[SEND ON]',
+    sentOn: 'SENT ON · RIDES YOUR NEXT HOP',
+    // On a hop into a final ship (02 §3.9: "on the final ship the chip says there is none").
+    lostAfter: (ship: string): string => `NO SHIP AFTER ${ship} · IT IS LOST`,
+    inTransit: (name: string, years: number): string => `IN TRANSIT: ${name} · ${yrs(years)} BEHIND YOU`,
+    inTransitMore: (count: number): string => `IN TRANSIT: ${count} FILES BEHIND YOU`,
+    // The draft's heading on the arm (3a's deferred wording; 02 §3.10: SALVAGE at the PACKET's top).
+    salvage: 'SALVAGE · PICK ONE TO CARRY',
+    // The gate (plan §1.1 item 8): files, deliveries and the floor over the room or the link.
+    overWithDeliveries: (blocksOver: number): string => `${blocks(blocksOver)} TOO MANY · LEAVE FILES OR SEND ON`,
+  },
+  // The strip's ghost-thrust line when no Swap is aboard (plan risk 1: VESPER flown without SWAP on the worked route).
+  noSwap: 'NO SWAP ABOARD — SPACE ends each burst',
+
+  // --- The boot (02 §4 step 6; plan §1.1 item 12) ------------------------------------------------------------------------
+  boot: {
+    delivery: (file: string, arrived: number): string => `> DELIVERY: ${file} (arrived ${arrived})`,
+    // A patch says what it upgraded (02 §4). No count of copies: the line types before the patch installs, and REPAIR's
+    // renewal at the same moment may add copies.
+    patch: (file: string, arrived: number): string => `> DELIVERY: ${file} (arrived ${arrived}) · EVERY REPAIR → v2`,
+    // Beyond the third file the lines fold into one (DELIVERY_BOOT_LINES_MAX): the files by name, the years they span.
+    folded: (files: readonly string[], first: number, last: number): string =>
+      `> DELIVERY: ${foldNames(files, 2)} (arrived ${first === last ? first : `${first}–${last}`})`,
+  },
+
+  // --- RUN END (02 §3.9, §4; plan §1.1 item 16) --------------------------------------------------------------------------
+  tally: {
+    neverArrived: (names: readonly string[]): string => `NEVER ARRIVED: ${names.length === 0 ? '—' : foldNames(names)}`,
+  },
+} as const;
+
+// A list of file words that never runs past a strip row: the first `shown`, then `+n`.
+function foldNames(names: readonly string[], shown = 3): string {
+  const listed = names.slice(0, shown).join(', ');
+  return names.length > shown ? `${listed} +${names.length - shown}` : listed;
+}

@@ -328,7 +328,7 @@ stepUntil(() => state().run.phase === 'flight', 30);
   });
   h.step();
   check('a rebuilt `???` chip reads `046.log` again on the next tick while the run knows the file', logSeg()?.name === LOG_NAME.known);
-  h.store.update((draft) => { draft.run.log = { scanned: false, found: [], read: [], autoOpened: false }; });
+  h.store.update((draft) => { draft.run.log = { scanned: false, found: [], read: [], autoOpened: false, toldReading: false }; });
   h.step();
   check('…and `???` again for a log that starts over', logSeg()?.name === LOG_NAME.unknown);
 }
