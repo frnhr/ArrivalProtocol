@@ -160,6 +160,14 @@ The questions are numbered as the README listed them after round 2.
 - **7.** MERGE's 20 charge stays "kept through the duel" until a playtest decides.
 - **8.** 0 charge on TIGHT ships is TIGHT's price; the first seed ship never is a TIGHT ship you'd reach with 0 charge.
 
+## During implementation (slice 3b, 2026-11-03)
+
+- **An ENGINE FAULT ship without Swap limps, and REPAIR helps.** Requests travel by light, so ENGINE FAULT ships are
+  often reached before a requested Swap can arrive, and phase 2's ghost bursts emptied the tank whatever the kid did
+  (VESPER without Swap: 0% fuel, 0–2,200 of 3,200 landed). Fran: a limping engine combined with regular repair. Without
+  Swap aboard the bursts are gentler, and repairing Thrust Ctrl calms them (maybe only partly); Swap stays the full fix.
+- **The INBOX keeps its volume** (about 20 messages on run 1's worked route, 10 of them postcards). Fran: leave as built.
+
 ## The list as it was asked
 
 Collected from the five specs and merged where they overlapped. Each has the specs' recommendation; the spec and
