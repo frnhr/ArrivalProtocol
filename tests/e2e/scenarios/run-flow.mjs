@@ -13,6 +13,11 @@
 // The RUN TALLY ends the run (six rows). BEAM OUT on run 2's LAST LIGHT goes there by __ap.runNumber(1) and
 // __ap.route([0, 2, 5, 11, 15, 19]); HOLLOW's wake, bite, naming and MOVE-behind-a-WALL steps run on CORMORANT on a fresh
 // run 1 flown there headless (__ap.route([0, 2, 5, 11, 15])), whose PACKET to LAST LIGHT also shows NO RM.
+// Slice 3b (the repository; the interim licences are gone, tools come only by request): at HALCYON's DESK the kid opens the
+// REPOSITORY [R] and REQUESTs Rm (the tag's file), which arrives on KESTREL's boot (`> DELIVERY: rm (arrived 2436)`): that
+// is KESTREL's DELETE, and LAST LIGHT's duel is fought with it. The headless CORMORANT run gets its MOVE and DELETE by
+// __ap.give('mv') / __ap.give('rm') on ship 1 (__ap.route resets the requests), and after the kid DELETEs its only rm there
+// the DESK to LAST LIGHT opens on the REPOSITORY with Rm lit (the last-rm prompt).
 // Usage: node tests/e2e/scenarios/run-flow.mjs [outPrefix]   env SHOT_VIEWPORT=1280x720, E2E_BASE_URL (tests/e2e/run.mjs runs it)
 import { launch, BASE_URL, runKit } from '../lib.mjs';
 const out = process.argv[2] ?? 'tests/.out/e2e/shots/p2';
@@ -43,14 +48,30 @@ const kit = runKit(page, { st, waitFor });
 const ROUTE = [[0, 'ARES-VII'], [2, 'HALCYON'], [5, 'KESTREL'], [11, 'VESPER'], [15, 'CORMORANT'], [19, 'LAST LIGHT']];
 // The DESK after a report: the kid clicks the next ship's node and presses ENTER (the PACKET opens). A click that misses
 // is a FAIL, and the run goes on by __ap.course so the rest is still checked.
-async function throughDesk(slot, name) {
+// Slice 3b: `request` (a catalogue id) is REQUESTed on the way: [R] opens the REPOSITORY, a click on the file's row.
+async function throughDesk(slot, name, request = null) {
   const up = await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 8000);
   await page.waitForTimeout(400);
+  // The tab the desk opened on (the REPOSITORY for the last-rm prompt), before the kid touches anything.
+  const openedOn = await st(() => document.getElementById('deskScreen').dataset.tab ?? null);
   const clicked = await kit.clickNode(slot);
   await page.waitForTimeout(300);
   const picked = await st(() => window.__ap.store.getState().ui.deskSelected);
   const go = await kit.capsText('#deskGo');
-  const seen = await kit.desk();
+  const seen = { ...(await kit.desk()), openedOn };
+  if (request !== null) {
+    if ((await st(() => document.getElementById('deskScreen').dataset.tab)) !== 'repository') await page.keyboard.press('KeyR');
+    await page.waitForTimeout(300);
+    await page.locator(`#deskScreen .rp-row[data-file="${request}"]`).click({ timeout: 4000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    const asked = await st((file) => ({
+      tab: document.getElementById('deskScreen').dataset.tab, pick: window.__ap.store.getState().run.repo.pick,
+      row: document.querySelector(`#deskScreen .rp-row[data-file="${file}"]`)?.innerText.replace(/\s+/g, ' ') ?? null,
+      requested: document.querySelector(`#deskScreen .rp-row[data-file="${file}"]`)?.classList.contains('requested') ?? false,
+    }), request);
+    check(`…[R] opens the REPOSITORY and a click REQUESTs ${request} for ${name} (${asked.row})`, asked.tab === 'repository' && asked.pick === request && asked.requested,
+      JSON.stringify(asked));
+  }
   if (clicked === true && picked === slot) await page.keyboard.press('Enter');
   else await st((to) => window.__ap.course(to), slot);
   const packet = await waitFor(() => window.__ap.store.getState().run.phase === 'transmit' && !document.getElementById('transmitScreen').hidden, 6000);
@@ -246,13 +267,14 @@ check('HALCYON locks, lands, and reaches its LANDING REPORT', await kit.landToRe
 await kit.finishReport();
 // WP9: HALCYON is no longer the last ship. CONTINUE → the DESK → KESTREL (locked at once here).
 check('CONTINUE on HALCYON goes on to the DESK (KESTREL picked there)', (await phase()) === 'desk');
-await throughDesk(5, 'KESTREL');
+await throughDesk(5, 'KESTREL', 'rm');
 await page.waitForTimeout(1200);
 await kit.pickCard(0);
 await page.locator('#txGo').click();
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'KESTREL', 30000);
 // Slice 2: KESTREL's beam brought one seed, scripted next to Telemetry on run 1 (the scripted first seed at depth 3 on the
-// arm); DELETE is licensed at the start, and the TRACE meter shows (the amber MIND chip's row: three empty cells).
+// arm); DELETE came with it (slice 3b: the Rm requested at HALCYON's desk, its boot line `> DELIVERY: rm (arrived 2436)`),
+// and the TRACE meter shows (the amber MIND chip's row: three empty cells).
 await page.waitForTimeout(1500);
 const kestrel = await st(() => {
   const s = window.__ap.store.getState();
@@ -266,11 +288,15 @@ const kestrel = await st(() => {
     traceRow: !document.getElementById('mindChipTraceRow').hidden, cells: document.querySelectorAll('#mindChipTrace .tr-cell').length,
     on: document.querySelectorAll('#mindChipTrace .tr-cell.on').length, label: document.getElementById('mindChipTrace').getAttribute('aria-label'),
     ecc: window.__ap.log().filter((entry) => /FOREIGN BLOCK/.test(entry.text)).map((entry) => entry.text),
+    delivery: window.__ap.log().filter((entry) => /^> DELIVERY:/.test(entry.text)).map((entry) => entry.text),
+    rms: memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'delete').length,
   };
 });
-check('KESTREL: one beam seed, next to Telemetry, named by the boot\'s ECC line; DELETE licensed at the start', kestrel.seeds === 1
-  && kestrel.next.some((name) => /telemetry/i.test(name ?? '')) && kestrel.ecc.some((text) => /1 FOREIGN BLOCK IN PACKET · NEXT TO TELEMETRY/.test(text)) && kestrel.delete,
+check('KESTREL: one beam seed, next to Telemetry, named by the boot\'s ECC line', kestrel.seeds === 1
+  && kestrel.next.some((name) => /telemetry/i.test(name ?? '')) && kestrel.ecc.some((text) => /1 FOREIGN BLOCK IN PACKET · NEXT TO TELEMETRY/.test(text)),
   JSON.stringify(kestrel));
+check('…DELETE came by request: the boot said `> DELIVERY: rm (arrived 2436)`, an rm is aboard and DELETE reached the unit', kestrel.delete && kestrel.rms >= 1
+  && kestrel.delivery.includes('> DELIVERY: rm (arrived 2436)'), JSON.stringify({ delete: kestrel.delete, rms: kestrel.rms, delivery: kestrel.delivery }));
 check('…the TRACE meter shows on the amber MIND chip: three cells, none lit (TRACE □□□)', kestrel.mode === 'tools' && kestrel.traceRow && kestrel.cells === 3 && kestrel.on === 0
   && /^TRACE □□□/.test(kestrel.label ?? ''), JSON.stringify(kestrel));
 await shot('5b-kestrel-seed');
@@ -484,6 +510,9 @@ await st(() => window.__ap.archiveClear());
 await page.reload({ waitUntil: 'networkidle' });
 await page.locator('#titleReceive').click();
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 16000);
+// Slice 3b: no licence brings MOVE or DELETE any more, and __ap.route resets the requests: the unit is given Mv and Rm on
+// ship 1 (each a first copy: its licence) and carries them to CORMORANT.
+const given = await st(() => [...window.__ap.give('mv'), ...window.__ap.give('rm')].map((seg) => seg.name));
 await st(() => window.__ap.route([0, 2, 5, 11, 15]));
 const warpBoot = await waitFor(() => window.__ap.store.getState().run.phase === 'boot' && window.__ap.store.getState().level.shipName === 'CORMORANT', 20000, 50);
 await page.waitForTimeout(2500);
@@ -639,7 +668,7 @@ await waitFor(() => !document.getElementById('inlineConfirm').hidden, 3000);
 const rmAsk = await st(() => document.getElementById('inlineConfirmQuestion').innerText);
 await page.locator('#inlineConfirmYes').click();
 const rmGone = await waitFor(() => !window.__ap.store.getState().memory.some((seg) => seg.type === 'fs-tool' && seg.fsTool === 'delete'), 10000);
-check('…the kid DELETEs its only rm (DELETE RM? ✓ DELETE)', rmGone && /DELETE RM\?/.test(rmAsk), rmAsk);
+check(`…the kid DELETEs its only rm (DELETE RM? ✓ DELETE; MOVE and DELETE given on ship 1: ${given.join(', ')})`, rmGone && /DELETE RM\?/.test(rmAsk), rmAsk);
 await page.keyboard.press('Tab');
 await st(() => {
   const ap = window.__ap;
@@ -655,7 +684,8 @@ const warpReport = await waitFor(() => {
 }, 60000, 500);
 check('CORMORANT (by __ap.route) locks, lands, and reaches its LANDING REPORT', warpReport);
 await kit.finishReport();
-await throughDesk(19, 'LAST LIGHT');
+const lastRmDesk = await throughDesk(19, 'LAST LIGHT');
+check('…the DESK after the last rm went opens on the REPOSITORY (the last-rm prompt)', lastRmDesk.openedOn === 'repository', JSON.stringify({ openedOn: lastRmDesk.openedOn }));
 await page.waitForTimeout(1200);
 const finalPacket = await packetThreat();
 check('the PACKET to LAST LIGHT: `UNIT-046 · n BLOCKS · NOT YOURS · RIDES FREE`, and `NO RM · YOU CAN\'T DELETE THE ROOT` with no rm aboard',
