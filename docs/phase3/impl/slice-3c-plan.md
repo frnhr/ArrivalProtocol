@@ -1274,3 +1274,16 @@ All are far under `SAVE_SIZE_INFO_BYTES` (400 KB).
   - `notableEvents` is still the stub, so archives record `[]` until it lands;
   - note that a run started with `__ap.runNumber(n)` stores an arm for run `n + 1` at its end, which a strict
     `createRunMap` run-equals-wave assertion will refuse on the next page (debug only).
+
+### After merging Track WORLD (8a3b77a)
+
+WORLD's requested patches, applied:
+1. `archiveRunEnded` calls `updateAfterRun(state.run)`, stores `update.next` and `notableEvents(state.run)`, and sets
+   `run.next` to the result's `next`. `__ap.archiveAs` goes through it too.
+2. `abandonVisits` follows `visitsOf`'s rule: a colony where `landed > 0`. The abandon's `from` arm is still the one
+   `createRunMap` builds for the abandoned run's wave, which is `meta.arm` when stored and run 1's assembled arm
+   otherwise.
+3. `ArmShip.attempt`: `checkArmShip` already accepts any whole number, the valve's 50–99 included.
+
+Re-checked in Chromium after the merge: the resume walk passes, and `__ap.archiveAs('won-purge')` then a reload gives
+`UNIT-048 · YEAR 2303` (a gap of 3, as §3's walk says).

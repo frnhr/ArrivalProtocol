@@ -4,7 +4,7 @@ import type { GameState, RunEndCause, RunStats, ArchiveStatus, RunState, ShipOut
 import type {
   LastCause, LastUnit, UnitStats, UnitTrail, TrailStop, TrailLost, ArmState, ColonyRecord, RouteRecord, NotableEvent, MapHistory,
 } from '@/types/lineage';
-import type { NextLaunch, Visit } from '@/types/lineage';
+import type { Visit } from '@/types/lineage';
 import type { StorageProvider } from '@systems/storage';
 import { runScore, runLanded } from '@systems/run-score';
 import { emit, NO_PAYLOAD } from '@systems/events';
@@ -12,8 +12,8 @@ import { hollowUnitName, GHOST_LINE } from '@data/hollow-text';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import { AUTHORED_SHIP_NAMES, FINAL_SHIP_NAMES } from '@data/ship-names';
 import { shipDefOf, validateShipDef } from '@data/ships';
-import { trailOf, ghostPlaceReached, mapHistoryOf, visitsOf, coloniesOf, notableEvents } from '@systems/lineage';
-import { updateArm, armStateOfMap, armContent, freshArmState, type ArmUpdate } from '@systems/map-update';
+import { trailOf, ghostPlaceReached, mapHistoryOf, coloniesOf, notableEvents } from '@systems/lineage';
+import { updateArm, updateAfterRun, armStateOfMap, armContent, freshArmState, type ArmUpdate } from '@systems/map-update';
 import { createRunMap } from '@systems/map-run';
 import {
   ShapeError, rec, whole, name as nameCheck, nullable, checkArmShip, checkDepartures,
@@ -622,10 +622,10 @@ export function abandonUpdate(meta: Readonly<Meta>): ArmUpdate | null {
   return updateArm({ from: armStateOfMap(map), visited: abandonVisits(trail) });
 }
 
-// An abandoned run's visits, from its trail (the archive has no RunState for it, so not lineage.ts visitsOf): every stop,
-// with a colony where someone landed in an LZ.
+// An abandoned run's visits, from its trail (the archive has no RunState for it, so not lineage.ts visitsOf, whose rule this
+// is: every stop, with a colony where someone landed in an LZ; trailOf writes a stop's `landed` from ShipResult.landedInLz).
 export function abandonVisits(trail: Readonly<UnitTrail>): Visit[] {
-  return trail.stops.map((stop) => ({ slot: stop.slot, colony: stop.colony !== null && stop.landed > 0 }));
+  return trail.stops.map((stop) => ({ slot: stop.slot, colony: stop.landed > 0 }));
 }
 
 // RUN END's cause as the archive keeps it (§4.5 item 6): one for one, now that the fleet ends with the flagship.
@@ -896,22 +896,17 @@ export function archiveTutorialDone(store: Store<GameState>): void {
 // caller (systems/run.ts endRun, right after: save-write.ts sits below this file).
 export function archiveRunEnded(store: Store<GameState>, cause: RunEndCause): void {
   const state = store.getState();
-  const update = state.run.map.world === 'arm' ? updateArm({ from: armStateOfMap(state.run.map), visited: visitsOf(state.run) }) : null;
+  const after = state.run.map.world === 'arm' ? updateAfterRun(state.run) : null;
   if (hasArchive(state)) {
     const current = requireSession();
     current.meta = recordRunEnd(current.meta, {
-      ...progressOf(state, lastCauseOf(cause)), cause: lastCauseOf(cause), score: runScore(state.run.ships), nextArm: update?.next ?? null,
-      events: state.run.map.world === 'arm' ? notableEvents(state.run) : [],
+      ...progressOf(state, lastCauseOf(cause)), cause: lastCauseOf(cause), score: runScore(state.run.ships), nextArm: after?.update.next ?? null,
+      events: after === null ? [] : notableEvents(state.run),
     });
     write();
     syncStatus(store);
   }
-  if (update !== null) {
-    const next: NextLaunch = {
-      unit: state.run.unitNumber + 1, run: update.next.run, startYear: update.next.startYear, gap: update.next.gap, valveYears: update.next.valveYears,
-    };
-    store.update((draft) => { draft.run.next = next; });
-  }
+  if (after !== null) store.update((draft) => { draft.run.next = after.next; });
 }
 
 // ARCHIVE CORRUPT's two ways on (§4.5): WIPE ARCHIVE throws the bad record away for a fresh one (a remove

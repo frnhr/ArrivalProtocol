@@ -64,7 +64,7 @@ import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
 import { layoutOf } from '@data/memory';
 import { META_STORAGE_KEY, RUN_SAVE_KEY, ROOT_BLOCKS, COLONISTS_PER_POD } from '@data/tuning';
 import type { SaveState } from '@/types/save';
-import { updateArm, armStateOfMap, type ArmUpdate } from '@systems/map-update';
+import { updateArm, updateAfterRun, armStateOfMap, type ArmUpdate } from '@systems/map-update';
 import { visitsOf, trailOf, notableEvents } from '@systems/lineage';
 import { abandonRun, resumeRun } from '@systems/run-save';
 import { runScore, runLanded } from '@systems/run-score';
@@ -392,7 +392,7 @@ function debugArchiveAs(store: Store<GameState>, cause: LastCause, landed: numbe
     hollowUnits: first.hollowUnits, trail,
   };
   const started = recordTutorialDone(recordRunStart(freshMeta(armSeed), progress, Date.now()));
-  const update = updateArm({ from: armStateOfMap(map), visited: visitsOf(run) });
+  const { update } = updateAfterRun(run);
   const meta = recordRunEnd(started, { ...progress, cause, score: runScore(ships), nextArm: update.next, events: notableEvents(run) });
   if (saveMeta(browserStorage, meta) !== 'ok') throw new Error('__ap.archiveAs: the archive could not be written');
   browserStorage().removeItem(RUN_SAVE_KEY);
