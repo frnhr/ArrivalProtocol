@@ -46,9 +46,11 @@ for (const viewport of [{ name: '1440x900', width: 1440, height: 900, phone: fal
 
   for (const world of ['classic', 'arm']) {
     const tag = `${viewport.name} ${world} HALCYON`;
-    // A fresh run 1 each time (no archive: a reload mid-run would start run 2 on a fresh roll).
+    // A fresh run 1 each time (no archive: a reload mid-run would start run 2 on a fresh roll; slice 3c: and no run save,
+    // or the reload offers RESUME). Cleared before leaving the last page too, so it never opens on the last run's save.
+    await evaluate(() => { window.__ap?.archiveClear(); window.__ap?.saveClear(); });
     await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
-    await evaluate(() => window.__ap.archiveClear());
+    await evaluate(() => { window.__ap.archiveClear(); window.__ap.saveClear(); });
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('#titleReceive').click({ force: true });
     await waitFor(() => ['boot', 'flight'].includes(window.__ap.store.getState().run.phase), 8000);

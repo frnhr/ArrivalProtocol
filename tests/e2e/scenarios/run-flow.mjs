@@ -505,8 +505,11 @@ check('NEW RUN again: the title card, the windows back from black', await st(() 
 // __ap.route([0, 2, 5, 11, 15]): HOLLOW boards on the beam (M3: the final ship is in range; the 108% unpack, the root
 // between two pods), is silent until the capture closes the loop, then bites a pod beside the root, is fought off,
 // notices you, and names itself.
+// Slice 3c: the archive and the run save are cleared before leaving this page too: the run 2 above ended after
+// __ap.runNumber(1), so the archive holds an arm for another run than its lineage's, which the next page's open refuses.
+await st(() => { window.__ap.archiveClear(); window.__ap.saveClear(); });
 await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
-await st(() => window.__ap.archiveClear());
+await st(() => { window.__ap.archiveClear(); window.__ap.saveClear(); });
 await page.reload({ waitUntil: 'networkidle' });
 await page.locator('#titleReceive').click();
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 16000);

@@ -48,8 +48,11 @@ for (const viewport of viewports) {
 
   // `index` 1–4: a classic ship by __ap.ship; `armSlot`: a ship of run 1's arm by __ap.slot from ARES-VII.
   async function startShip(index, armSlot = null) {
+    // A fresh run 1 (slice 3c: no archive and no run save, cleared before leaving the last page too, so it never opens on
+    // the last run's save).
+    await evaluate(() => { window.__ap?.archiveClear(); window.__ap?.saveClear(); });
     await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
-    await evaluate(() => window.__ap.archiveClear?.());
+    await evaluate(() => { window.__ap.archiveClear(); window.__ap.saveClear(); });
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('#titleReceive').click({ force: true });
     await waitFor(() => ['boot', 'flight'].includes(window.__ap.store.getState().run.phase), 8000);

@@ -96,7 +96,7 @@ const touchHold = async (selector, holdMs) => {
 };
 
 await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
-await st(() => window.__ap.archiveClear?.());
+await st(() => { window.__ap.archiveClear?.(); window.__ap.saveClear?.(); });
 await page.reload({ waitUntil: 'networkidle' });
 
 // --- The title -----------------------------------------------------------------------------------------------------
@@ -426,6 +426,9 @@ await page.tap('#reNew');
 check('a tap on NEW RUN brings up the title', await waitFor(() => !document.getElementById('titleCard').hidden && document.getElementById('runEnd').hidden, 8000));
 
 // --- BEAM OUT on a phone (WP7 verify: its line was cut and both buttons sat in hidden tabs) --------------------------
+// Slice 3c: the run save goes first, so the reload abandons the run in progress (as every reload did before the save)
+// instead of offering RESUME.
+await st(() => window.__ap.saveClear());
 await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
 await page.tap('#titleReceive');
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
@@ -456,6 +459,11 @@ await onScreen('BEAM OUT transmitting', '#beamBar');
 await shot('16-beaming');
 
 // --- KESTREL: the debris countdown in the header, the plot's labels (WP12 fix round 1) -------------------------------
+// Slice 3c: a fresh archive and no run save. The run in progress here is run 2 on the classic HALCYON (__ap.ship), which a
+// reload can't place on the arm when it abandons it, and the page then fails to open (a src bug at the time of writing:
+// `createRunMap: the stored arm is for run 2, the lineage's wave is 3`; the e2e run2 scenario checks the player's path to
+// it, a corrupt save on run 2). This section is about KESTREL on a phone, so it starts from run 1.
+await st(() => { window.__ap.archiveClear(); window.__ap.saveClear(); });
 await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
 await page.tap('#titleReceive');
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
@@ -505,9 +513,11 @@ await overflow('KESTREL blue');
 await shot('17b-kestrel-trace');
 
 // --- Slice 3a: an arm ship of the TIGHT class (PETREL, run 1's slot 1) in blue: four racks, each in two rows ---------------
-// A fresh run 1 (no archive: a reload mid-run starts run 2 on a fresh roll), then __ap.slot(1).
+// A fresh run 1 (no archive: a reload mid-run starts run 2 on a fresh roll; slice 3c: no run save either, cleared before
+// leaving the last page too), then __ap.slot(1).
+await st(() => { window.__ap.archiveClear(); window.__ap.saveClear(); });
 await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
-await st(() => window.__ap.archiveClear());
+await st(() => { window.__ap.archiveClear(); window.__ap.saveClear(); });
 await page.reload({ waitUntil: 'networkidle' });
 await page.tap('#titleReceive');
 await waitFor(() => window.__ap.store.getState().run.phase === 'boot', 5000);
@@ -557,6 +567,7 @@ await overflow('PETREL blue');
 await shot('17c-petrel-tight');
 
 // --- A LOST card on a fresh page -----------------------------------------------------------------------------------
+await st(() => window.__ap.saveClear());   // slice 3c: the reload abandons the run, no RESUME
 await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
 await page.tap('#titleReceive');
 await waitFor(() => window.__ap.store.getState().run.phase === 'boot', 5000);

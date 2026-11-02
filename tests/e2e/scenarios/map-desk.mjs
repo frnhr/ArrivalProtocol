@@ -41,12 +41,12 @@ const LAPWING = 8;
 const browser = await launch();
 const { check, finish } = checker();
 
-// Opens the page on a fresh run 1 (no archive), on the title.
+// Opens the page on a fresh run 1 (no archive, no run save), on the title.
 async function openPage(context) {
   const page = await context.newPage();
   const kit = pageKit(page);
   await page.goto(`${BASE_URL}?debug&seed=4`, { waitUntil: 'networkidle' });
-  await kit.st(() => window.__ap.archiveClear());
+  await kit.st(() => { window.__ap.archiveClear(); window.__ap.saveClear(); });
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForTimeout(800);
   return { page, kit, run: runKit(page, kit) };
