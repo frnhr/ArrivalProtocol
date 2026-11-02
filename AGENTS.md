@@ -82,13 +82,19 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 
 ## What's built
 
-- A full run: five ships (ARES-VII, HALCYON, KESTREL, VESPER, LAST LIGHT), each with its own rule, TRANSMIT between
+- The galaxy map (phase 3 slice 3a, `docs/phase3/02-map.md`): one arm of 20 worlds in 8 layers; run 1 is an authored
+  arm, later runs a fresh roll (`src/systems/map-generator.ts`) with ships generated from five flight templates. Years,
+  hops (link, hits, ECC, noise), memory classes FULL / COMPACT / TIGHT, the DESK (STAR CHART, SHIP CARD, SET COURSE)
+  between ships, the PACKET's room bar and the RUN TALLY. The old five ships survive as a frozen test fixture
+  (`src/data/classic-five.ts`, `__ap.ship(n)`); `__ap.route`, `__ap.slot` and `__ap.course` drive the arm.
+- A full run (phase 2's, now the classic fixture): five ships (ARES-VII, HALCYON, KESTREL, VESPER, LAST LIGHT), each
+  with its own rule, TRANSMIT between
   them (a link budget, transit damage, one card of three to carry), soft fails instead of reloads, RUN END with score,
   rank and ending (PURGE or MERGE), and a small local archive (unit number, wave, the last unit as next run's ghost).
 - The threat ladder (phase 3 slice 2, `docs/phase3/04-threats.md`): ARES-VII and HALCYON are calm (driver arrival
   damage, transit hits, the `???` file that is `046.log`); KESTREL brings a seed on the beam (rm it, or it reports home
-  on the TRACE meter); HOLLOW boards on the beam into VESPER and fights there; LAST LIGHT is the FINALE with THE DEAL.
-  The ladder is data (`src/systems/threat-plan.ts`), so the galaxy map can drive it.
+  on the TRACE meter); HOLLOW boards one hop from the final ship (or at TRACE 3) and fights
+  there; the final ship is the FINALE with THE DEAL. The ladder is data (`src/systems/threat-plan.ts`), fed by the map.
 - SHIP: a two-body orbital capture with a predicted path coloured by outcome, presets, hold-to-burn, a guidance line
   that always names the next step, director-paced time (CRUISE / TACTICAL / SKIP), hazard zones (debris, a belt).
 - MIND: 384 blocks in six racks, tools that are files (SCAN, REPAIR, MOVE, DELETE, COPY, SWAP, licensed through the
@@ -112,9 +118,9 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 ## Next logical steps
 
 1. **Fran's playtest**: one full run by `docs/playtest-checklist.md`.
-2. **Phase 3** (`docs/PHASE3.md`, specs in `docs/phase3/`): landing instead of printing and the calm opening (slices 1a,
-   1b and 2 built; plans and deviations in `docs/phase3/impl/`), then slice 3 (the galaxy map, years, the save), the skill tree and repository,
-   new endings.
+2. **Phase 3** (`docs/PHASE3.md`, specs in `docs/phase3/`): landing, the calm opening and the galaxy map (slices 1a, 1b, 2
+   and 3a built; plans and deviations in `docs/phase3/impl/`), then 3b (the repository, deliveries, the INBOX), 3c (the
+   save, archive v2, the arm carried between runs), the skill tree, residents, SURVEY, new endings.
 3. **The refactors parked until after the playtest** (discuss the split before writing code): `src/data/script.ts`
    into its text and its director rules, `src/styles/game.css` by surface, `tuning.ts` and `script.ts` grouped by
    domain.
