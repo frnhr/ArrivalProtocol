@@ -50,7 +50,9 @@ const ALL_LABELS = new Set(['tsc-tests', ...suites(join(ROOT, 'tests', 'unit'))]
 const known = Object.fromEntries(Object.entries(timings[DEPTH] ?? {}).filter(([label]) => ALL_LABELS.has(label)));
 
 const jobs = [
-  { label: 'tsc-tests', cmd: 'node_modules/.bin/tsc', args: ['-p', 'tests/tsconfig.json'] },
+  // Incremental (its build info in the ignored tests/.out): a re-run re-checks only what changed (slice 3a's review fixes, the
+  // tier's budget: about 20 s of one core on a tree that did not change).
+  { label: 'tsc-tests', cmd: 'node_modules/.bin/tsc', args: ['-p', 'tests/tsconfig.json', '--incremental', '--tsBuildInfoFile', 'tests/.out/tsc-tests.tsbuildinfo'] },
   ...suites(join(ROOT, 'tests', 'unit'))
     .filter((file) => includes.length === 0 || includes.some((filter) => file.includes(filter)))
     .filter((file) => !excludes.some((filter) => file.includes(filter)))

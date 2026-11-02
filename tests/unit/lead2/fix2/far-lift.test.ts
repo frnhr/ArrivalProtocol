@@ -23,7 +23,7 @@ import { buildFlightContext, flightObjective } from '@systems/guidance';
 import { integrateStep } from '@systems/orbit-sim';
 import { presetHeading } from '@systems/attitude';
 import { releaseAtCapture, stepUntil, idle, text, flyOnce } from '../../wp1-rules/flows';
-import { byDepth } from '../../depth';
+import { byDepth, FULL } from '../../depth';
 import { stateFromElements, elementsFromState, type OrbitState } from '@/types/orbit';
 import type { PresetMode } from '@state/schema';
 import { SIM_SUBSTEP_MAX_SEC, MAX_LINE_CHARS } from '@data/tuning';
@@ -57,14 +57,17 @@ interface GridResult {
 }
 // `stopFirst`: SPACE is pressed once to stop the SKIP (the lead's ruling: that press only stops it), and the RETRO hold
 // is a fresh press after it, so the far-out lift is still flown; otherwise SPACE is held from inside the SKIP.
-// Quick depth (tests/unit/depth.ts): the grid's four corners, for both grids (held and pressed again); full: the
-// verifier's 5 × 4.
+// Quick depth (tests/unit/depth.ts): the grid's four corners, split between the two grids (held: one diagonal; pressed
+// again: the other), so every corner is flown once (slice 3a's review fixes, the unit tier's budget); full: the
+// verifier's 5 × 4, on both grids.
 const INTO_SKIP_SEC = byDepth([2.5, 5.5], [2.5, 3.5, 4.5, 5, 5.5]);
 const HOLD_SEC = byDepth([0.5, 2], [0.5, 1, 1.5, 2]);
+const quickCell = (stopFirst: boolean, intoSkipSec: number, holdSec: number): boolean =>
+  FULL || (INTO_SKIP_SEC.indexOf(intoSkipSec) === HOLD_SEC.indexOf(holdSec)) !== stopFirst;
 function flyGrid(stopFirst: boolean): GridResult {
   const result: GridResult = { tally: {}, rows: [], lie: '', endless: '', flicker: '', switchedBack: 0, liftRows: 0, inAsked: 0 };
   for (const intoSkipSec of INTO_SKIP_SEC) {
-    for (const holdSec of HOLD_SEC) {
+    for (const holdSec of HOLD_SEC.filter((hold) => quickCell(stopFirst, intoSkipSec, hold))) {
       // Flown once, restored for every cell (flows.ts flyOnce).
       flyOnce(harness, 'far-lift WAIT', () => {
         releaseAtCapture(harness);

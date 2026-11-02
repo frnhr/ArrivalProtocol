@@ -49,8 +49,9 @@ const SHIP_RUNS: { ship: number; env?: Record<string, string> }[] = [
 for (const { ship, env: shipEnv } of SHIP_RUNS) {
   for (const suite of SUITES.filter((candidate) => FULL || candidate.quick)) {
     const started = Date.now();
-    const run = spawnSync('node_modules/.bin/tsx', ['--tsconfig', 'tsconfig.json', suite.file], {
-      env: { ...process.env, ...suite.env, ...shipEnv, AP_SHIP: String(ship) }, encoding: 'utf8', maxBuffer: 1 << 26,
+    // tsx's loader in the child itself (as tests/unit/run.mjs runs the suites), not the tsx CLI's second node process.
+    const run = spawnSync(process.execPath, ['--import', 'tsx', suite.file], {
+      env: { ...process.env, ...suite.env, ...shipEnv, AP_SHIP: String(ship), TSX_TSCONFIG_PATH: 'tsconfig.json' }, encoding: 'utf8', maxBuffer: 1 << 26,
     });
     const lines = `${run.stdout}\n${run.stderr}`.split('\n');
     const summary = lines.filter((line) => line.startsWith('----')).pop() ?? '(no summary)';

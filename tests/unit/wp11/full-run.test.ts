@@ -68,12 +68,14 @@ const FINAL_LANDING = process.env.FINAL_LANDING ?? 'strip';
 if (FINAL_LANDING !== 'strip' && FINAL_LANDING !== 'stand') throw new Error(`FINAL_LANDING=${FINAL_LANDING} is neither strip nor stand`);
 const FINAL_STRIP = FINAL_LANDING === 'strip';
 
-// Quick depth (tests/unit/depth.ts): seeds 3 and 4, a PURGE run (odd) and a MERGE run (even) whose charge at the choice
-// pays for it (25 and 28 at the slice 2 re-fly; seeds 1 and 2 sit at 17 and 12, so both of them PURGE); full: 1–50.
-// RUN_SEEDS=n flies seeds 1–n.
+// Quick depth (tests/unit/depth.ts): seed 4, a MERGE run whose charge at the choice pays for it (28 at the slice 2
+// re-fly), the longer of the two endings (THE DEAL's choice, MERGE's typed ending, the drivers given back). Slice 3a's
+// review fixes (the unit tier's budget): seed 3's PURGE run left the quick depth; PURGE is flown to its RUN END by
+// wp11/merge-test's PURGE scenario and wp11/fix1's, and both endings in one sweep by RUN_SEEDS=4 or `npm run balance`.
+// Full: 1–50. RUN_SEEDS=n flies seeds 1–n.
 const SEED_LIST: readonly number[] = process.env.RUN_SEEDS !== undefined
   ? Array.from({ length: Number(process.env.RUN_SEEDS) }, (_, i) => i + 1)
-  : byDepth([3, 4], Array.from({ length: 50 }, (_, i) => i + 1));
+  : byDepth([4], Array.from({ length: 50 }, (_, i) => i + 1));
 const SEEDS = SEED_LIST.length;
 // The MERGE-charge target is a balance measurement: on fewer than BALANCE_SEEDS seeds it is printed as INFO (slice 2's
 // re-fly: at RUN_SEEDS=8 the charge at the choice runs 5–30, median 20, so two seeds say nothing about the median;
@@ -362,7 +364,8 @@ const balance = (name: string, ok: boolean, detail: string): void => {
 balance(`…at least half of the runs reach the choice with the ${MERGE_COST_CHARGE} MERGE costs (the lead's target, 21:30)`,
   affordable * 2 >= atChoice.length, `${affordable}/${atChoice.length}`);
 check(`ships 1–5 end in the victory RUN END in ≥ 90% of ${SEEDS} seeds`, victories >= Math.ceil(0.9 * SEEDS), `${victories}/${SEEDS}`);
-check('…both endings were reached', merges > 0 && victories - merges > 0, `${merges} MERGE, ${victories - merges} PURGE`);
+if (SEEDS >= 2) check('…both endings were reached', merges > 0 && victories - merges > 0, `${merges} MERGE, ${victories - merges} PURGE`);
+else check('…the quick seed reached its MERGE (PURGE: merge-test and fix1)', merges === SEEDS, `${merges} MERGE, ${victories - merges} PURGE`);
 setLandingMode('instant');
 h.newRun(Math.max(...SEED_LIST) + 1);
 check('NEW RUN: every reset module in its initial state', resetReport().length === 0, JSON.stringify(resetReport()));

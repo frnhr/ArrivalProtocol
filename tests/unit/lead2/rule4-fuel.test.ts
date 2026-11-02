@@ -94,10 +94,12 @@ function fly(kid: typeof KIDS[number]): Flown {
   let bad = '';
   let saves = 0;
   let strandedLines = 0;
-  // Quick depth (tests/unit/depth.ts): the line ±2% in 1% steps; full: in 0.5% steps.
+  // Quick depth (tests/unit/depth.ts): the line ±2% in 1% steps, the kids taking the steps in turn (the unit tier's budget,
+  // slice 3a's review fixes); full: in 0.5% steps, every kid on every step.
   const step = byDepth(1, 0.5);
+  let row = 0;
   for (let fuelPct = lineFuel - 2; fuelPct <= lineFuel + 2 + 1e-9; fuelPct += step) {
-    for (const kid of kids) {
+    for (const kid of byDepth([kids[row++ % kids.length]!], kids)) {
       restore(snapshot, fuelPct);
       const offer = text(harness);
       const estimate = rangeAtPeri(fuelPct);

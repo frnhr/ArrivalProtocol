@@ -115,8 +115,9 @@ function lowTank(fuelPct: number, ignoreSec = 60): void {
 {
   const rows: string[] = [];
   let bad = '';
-  // Quick depth (tests/unit/depth.ts): the band's two ends (low-tank.test.ts flies 14–31% obeyed at once as well).
-  for (const fuelPct of byDepth([15, 31], [15, 25, 31])) {
+  // Quick depth (tests/unit/depth.ts): the band's top end, next to the trim (slice 3a's review fixes, the unit tier's budget:
+  // the low end is low-tank.test.ts's 14% row, the same short tank's WAIT and SKIP, held to the empty tank); full: 15/25/31.
+  for (const fuelPct of byDepth([31], [15, 25, 31])) {
     lowTank(fuelPct);
     const offer = text(harness);
     idle(harness, 120);

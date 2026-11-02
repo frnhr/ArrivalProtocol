@@ -20,8 +20,11 @@ const harness = createHarness(1);
 const state = () => harness.store.getState();
 const KIDS = ['obey', 'f0.3', 'f0.5'] as const;
 // Quick depth (tests/unit/depth.ts): every 4% of each band (18–30% and 30–34%: both ends of the second), the instant and
-// the slowest kid; full: the check's own rows.
+// the slowest kid taking the rows in turn (the unit tier's budget, slice 3a's review fixes: both kids still fly each band);
+// full: the check's own rows, every kid on every row.
 const kids = byDepth<readonly typeof KIDS[number][]>(['obey', 'f0.5'], KIDS);
+const kidsAt = (row: number): readonly typeof KIDS[number][] => byDepth([kids[row % kids.length]!], kids);
+let row = 0;
 const FUEL_STEP = byDepth(4, 0.25);
 
 function snapshotOffRing(periKm: number, ignoreSec: number): GameState {
@@ -91,7 +94,7 @@ for (const rowset of rowsets) {
   const snapshot = snapshotOffRing(rowset.periKm, rowset.ignoreSec);
   for (let fuel = rowset.from; fuel <= rowset.to + 1e-9; fuel += FUEL_STEP) {
     const fuelPct = Number(fuel.toFixed(2));
-    for (const kid of kids) {
+    for (const kid of kidsAt(row++)) {
       restore(snapshot, fuelPct);
       const flight = fly(kid);
       flights++;

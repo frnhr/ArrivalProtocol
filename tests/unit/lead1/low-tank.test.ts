@@ -135,14 +135,16 @@ for (const fuelPct of [31.5, 32]) {
 // now is that its SKIP takes a few seconds.
 // Quick depth (tests/unit/depth.ts): the band's foot and its top; inside it, 34–35% fly below (held late), 31.5–35.5% in
 // the band sweep.
-// Quick depth flies the instant and the slowest kid (the tier trim; full: all three).
-for (const fuelPct of byDepth([32.5, 40], [32.5, 34, 36, 40])) {
-  const runs = byDepth(['obey', 0.5] as const, ['obey', 0.3, 0.5] as const).map((kid) => fly(fuelPct, 60, kid));
+// Quick depth flies the instant and the slowest kid, one at each end (slice 3a's review fixes, the unit tier's budget: the
+// instant kid at the foot, the slow one at the top; full: all three at every point).
+const LOW_TANK_KIDS: readonly ('obey' | 0.3 | 0.5)[] = byDepth<readonly ('obey' | 0.3 | 0.5)[]>(['obey', 0.5], ['obey', 0.3, 0.5]);
+byDepth([32.5, 40], [32.5, 34, 36, 40]).forEach((fuelPct, index) => {
+  const runs = byDepth([LOW_TANK_KIDS[index % LOW_TANK_KIDS.length]!], LOW_TANK_KIDS).map((kid) => fly(fuelPct, 60, kid));
   check(`${fuelPct}%: SHRINK THE LOOP; obeyed instantly or at a 0.3 / 0.5 s reaction it locks, every SKIP a few seconds`,
     runs.every((flown) => /^SHRINK THE LOOP/.test(flown.offer) && flown.status === 'locked' && !flown.flipToLast
       && flown.longestSkipSec <= FEW_SKIP_SEC),
     runs.map(describe).join(' | '));
-}
+});
 
 // --- Review round 1, the band sweep: no flip, no early RELEASE, no long SKIP, whatever the ignore time -------
 // The reviewers' band (31.5–35% FUEL; ignore 60–120 s) with the WP1 followStrip kid at human reactions:

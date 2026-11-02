@@ -7,6 +7,10 @@ import { buildFlightContext, flightObjective } from '@systems/guidance';
 import type { ZoneHit } from '@/types/zone';
 import type { GameState } from '@state/schema';
 import { DT_WALL_MAX } from '@data/tuning';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { serialize, deserialize } from 'node:v8';
 
 export const text = (harness: Harness): string => harness.objective()?.text ?? '';
 
@@ -31,13 +35,54 @@ export function restoreState(harness: Harness, snapshot: GameState, settleTicks 
 // A long setup (an hour of ignoring, a WAIT that takes half an hour to come up) flown once per process under `key`
 // and restored from its snapshot after that: the unit tier's time goes to the rows, not to re-flying their setup. The
 // first call settles the same few ticks as a restore, so every call leaves the same state.
+// Slice 3a's review fixes (the unit tier's budget): the snapshot is also kept on disk (tests/.out/fly-once), keyed by the
+// suite, the key, the depth and the AP_* env, under a hash of every source and test file: a tier re-run on a tree that did
+// not change restores it instead of flying it again (coast-skip's long WAIT alone is 20 s), and any edit anywhere under
+// src/ or tests/unit/ flies every setup afresh. The suites are deterministic (seeded, on the harness's own clock), so a
+// restored setup is the one the suite would fly. AP_FLY_ONCE=fresh ignores and rewrites the disk copies.
 const setups = new Map<string, GameState>();
+const FLY_ONCE_DIR = join('tests', '.out', 'fly-once');
+let treeHash: string | null = null;
+
+function filesUnder(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (name === '.out' || name === 'node_modules') return [];
+    return statSync(path).isDirectory() ? filesUnder(path) : [path];
+  });
+}
+
+function diskKey(key: string): string {
+  treeHash ??= (() => {
+    const hash = createHash('sha1');
+    for (const file of [...filesUnder('src'), ...filesUnder(join('tests', 'unit')), 'tsconfig.json', 'package-lock.json'].sort()) {
+      hash.update(file).update(readFileSync(file));
+    }
+    return hash.digest('hex').slice(0, 16);
+  })();
+  const env = Object.entries(process.env).filter(([name]) => name.startsWith('AP_')).sort().map(([name, value]) => `${name}=${value}`).join(',');
+  const id = createHash('sha1').update(`${process.argv[1] ?? ''}|${key}|${env}`).digest('hex').slice(0, 16);
+  return join(FLY_ONCE_DIR, `${treeHash}-${id}.bin`);
+}
+
 export function flyOnce(harness: Harness, key: string, fly: () => void): void {
   const saved = setups.get(key);
   if (saved) { restoreState(harness, saved); return; }
+  const file = diskKey(key);
+  if (process.env.AP_FLY_ONCE !== 'fresh' && existsSync(file)) {
+    const snapshot = deserialize(readFileSync(file)) as GameState;
+    setups.set(key, snapshot);
+    restoreState(harness, snapshot);
+    return;
+  }
   fly();
   const snapshot = structuredClone(harness.store.getState());
   setups.set(key, snapshot);
+  mkdirSync(FLY_ONCE_DIR, { recursive: true });
+  // Written whole, then renamed: a suite reading it at the same moment never sees half of it.
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, serialize(snapshot));
+  renameSync(tmp, file);
   restoreState(harness, snapshot);
 }
 

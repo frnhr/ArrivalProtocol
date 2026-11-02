@@ -181,8 +181,9 @@ fullOnly(`${ship}: SHRINK ignored for an hour (LEAD-1 deviation 1)`, () => {
 {
   const rows: string[] = [];
   let bad = '';
-  // Quick depth: the rows' two ends (the tier trim); full: all three.
-  for (const fuelPct of byDepth([44, 46], [44, 45, 46])) {
+  // Quick depth: the rows' low end (slice 3a's review fixes, the unit tier's budget; the capture and the ignore are the
+  // rows' cost, flown once either way); full: all three.
+  for (const fuelPct of byDepth([44], [44, 45, 46])) {
     // The rows differ only in the FUEL set after the ignore: the capture and the ignore are flown once (flows.ts flyOnce).
     flyOnce(harness, 'off the ring 4,300 km, ignored 120 s', () => {
       captureOffRing(harness, 4300);

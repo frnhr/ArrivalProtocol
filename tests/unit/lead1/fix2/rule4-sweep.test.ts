@@ -43,7 +43,9 @@ const FEW_SKIP_SEC = SKIP_RAMP_SEC + SKIP_DIVISOR + SKIP_EASE_OUT_SEC + 1;
 ignoredAtCapture(harness, 60);
 const trimAtPeriPct = computePrediction({ ...state(), burn: { ...state().burn, fuelPct: 0.5 } }).neededPct;
 const FUEL_TOP = Math.max(46, Math.ceil(trimAtPeriPct + 15));
-const CANONICAL_STEP = Number(process.env.CANONICAL_FUEL_STEP ?? byDepth('12', '0.5'));
+// Quick depth: every 18% (10, 28, 46: ACCEPT only, ACCEPTED and LOCKED on ship 1, as the off-ring rows below; slice 3a's
+// review fixes, the unit tier's budget, from 12%); full: every 0.5%.
+const CANONICAL_STEP = Number(process.env.CANONICAL_FUEL_STEP ?? byDepth('18', '0.5'));
 const fuels: number[] = [];
 for (let fuel = 10; fuel <= FUEL_TOP + 1e-9; fuel += CANONICAL_STEP) fuels.push(Number(fuel.toFixed(1)));
 const KIDS = ['obey', 'f0.3', 'f0.5'] as const;

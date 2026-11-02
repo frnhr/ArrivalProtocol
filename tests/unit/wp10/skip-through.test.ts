@@ -194,9 +194,11 @@ for (const { name, where } of PLANTS) {
   let counted = 0;
   let longest = 0;
   let mostBursts = 0;
-  // Quick depth (tests/unit/depth.ts): 2 seeds a loop (each flies the SKIP and its ×25 reference); full: 8.
-  const seeds = byDepth(2, 8);
-  for (let seed = 1; seed <= seeds; seed++) {
+  // Quick depth (tests/unit/depth.ts): seed 2 alone on each loop (it flies the SKIP and its ×25 reference; the unit tier's
+  // budget, slice 3a's review fixes), whose two loops stop for ▼ leaving the ring and for Rule 4's verdict; full: 1–8.
+  const seedList = byDepth([2], [1, 2, 3, 4, 5, 6, 7, 8]);
+  const seeds = seedList.length;
+  for (const seed of seedList) {
     plant(seed, where);
     pastFirstBurst();
     const t0 = state().clock.tSec;

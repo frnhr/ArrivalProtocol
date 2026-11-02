@@ -47,7 +47,7 @@ const TICK = 0.05;
 // band, so 10 keep it inside), 5 for the SWAP (the slice 2 review's tier trim; it was 20 and 10); full: the WP's 200 and
 // 50. A multiple of 10: the 10th–90th detail indexes by it.
 const SEEDS = byDepth(10, 200);
-const SWAP_SEEDS = byDepth(5, 50);
+const SWAP_SEEDS = byDepth(3, 50);   // 3 in quick depth: the unit tier's budget (slice 3a's review fixes)
 const ship = classicShip(VESPER);
 const CRUISE = ship.flight.cruiseWarp;
 

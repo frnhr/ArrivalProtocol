@@ -484,8 +484,9 @@ const sweetLo = sweetZone(ring).lo;
   let violation = '';
   let longest = '';
   const stepTac = SIM_SUBSTEP_MAX_SEC / tacticalWarp;
-  // Quick depth: 1,500 random loops (about 250 of them shrink), full depth 3,000.
-  const samples = byDepth(1500, 3000);
+  // Quick depth: 1,000 random loops (about 170 of them shrink; 1,500 before slice 3a's review fixes, the unit tier's
+  // budget), full depth 3,000.
+  const samples = byDepth(1000, 3000);
   for (let i = 0; i < samples && !violation; i++) {
     harness.reset();
     // LEAD-2: from the ship's own ring (ship 1: ▼ up to 9,500 km, ▲ from 9,100 km).

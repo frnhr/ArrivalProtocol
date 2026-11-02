@@ -494,10 +494,10 @@ h.step();
   check('B: …and no verb starts there even when its clock is out', state().hollow.verb === null && state().hollow.verbMoments === 0);
 }
 
-// --- C. The competent defender, 200 seeds (2 at quick depth) ----------------------------------------------------------------------------
+// --- C. The competent defender, 200 seeds (1 at quick depth: the unit tier's budget; its balance target is npm run balance's) ----------------------------------------------------------------------------
 
 {
-  const SEEDS = Number(process.env.BOSS_SEEDS ?? byDepth(2, 200));
+  const SEEDS = Number(process.env.BOSS_SEEDS ?? byDepth(1, 200));
   const LANDING_SEC = Number(process.env.BOSS_LANDING_SEC ?? 48);
   // BOSS_LANDING: 'strip' (default: [L] at the windows, followLanding) or 'stand' (BOSS_LANDING_SEC, then instant).
   const MODE = process.env.BOSS_LANDING ?? 'strip';
