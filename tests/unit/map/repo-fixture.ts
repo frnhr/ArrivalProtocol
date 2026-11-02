@@ -22,7 +22,7 @@ import { FIRST_RUN_LINEAGE } from '@systems/meta';
 // A fresh run on the arm of run `wave` (1: run 1's authored arm; later: a fresh roll from `seed`), on ship 1's LANDING
 // REPORT.
 export function armRun(seed = 3, wave = 1): Store<GameState> {
-  const store = createStore<GameState>(createInitialState({ seed, map: createRunMap({ wave } as never, seed), lineage: FIRST_RUN_LINEAGE }));
+  const store = createStore<GameState>(createInitialState({ seed, map: createRunMap({ wave }, seed), lineage: FIRST_RUN_LINEAGE }));
   store.update((draft) => { draft.run.phase = 'report'; });
   return store;
 }

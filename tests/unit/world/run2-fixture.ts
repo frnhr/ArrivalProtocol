@@ -38,17 +38,19 @@ export interface Run1Result {
   outcome: ShipResult['outcome'];
   landed: number;
   colony: string;
+  writer: { name: string; age: number };   // the first featured colonist of the first pod down in an LZ (the fixture's pick)
 }
 
 // RIVERSIDE and FIRST LIGHT are run 1's written colonies (05 §3.11); the four between are this fixture's picks from
-// COLONY_NAMES (§3.14 says only "RIVERSIDE and five more colonies").
+// COLONY_NAMES (§3.14 says only "RIVERSIDE and five more colonies"), and so are the writers (names in the colonists'
+// `Family, First` form, from data/souls.ts's pools; slice 3b's postcards sign them `First Family`).
 export const RUN1_RESULTS: readonly Run1Result[] = [
-  { slot: 0, ship: 'ARES-VII', year: 2300, outcome: 'locked', landed: 3 * COLONISTS_PER_POD, colony: 'RIVERSIDE' },
-  { slot: 2, ship: 'HALCYON', year: 2352, outcome: 'locked', landed: 5 * COLONISTS_PER_POD, colony: 'LANTERN' },
-  { slot: 5, ship: 'KESTREL', year: 2467, outcome: 'locked', landed: 6 * COLONISTS_PER_POD, colony: 'GREENSTEP' },
-  { slot: 11, ship: 'VESPER', year: 2625, outcome: 'locked', landed: 16 * COLONISTS_PER_POD, colony: 'STARFORD' },
-  { slot: 15, ship: 'CORMORANT', year: 2817, outcome: 'locked', landed: 9 * COLONISTS_PER_POD, colony: 'HARBOUR' },
-  { slot: 19, ship: 'LAST LIGHT', year: 3020, outcome: 'locked', landed: 16 * COLONISTS_PER_POD, colony: 'FIRST LIGHT' },
+  { slot: 0, ship: 'ARES-VII', year: 2300, outcome: 'locked', landed: 3 * COLONISTS_PER_POD, colony: 'RIVERSIDE', writer: { name: 'Okafor, Amara', age: 11 } },
+  { slot: 2, ship: 'HALCYON', year: 2352, outcome: 'locked', landed: 5 * COLONISTS_PER_POD, colony: 'LANTERN', writer: { name: 'Castillo, Mateo', age: 34 } },
+  { slot: 5, ship: 'KESTREL', year: 2467, outcome: 'locked', landed: 6 * COLONISTS_PER_POD, colony: 'GREENSTEP', writer: { name: 'Eriksen, Elif', age: 8 } },
+  { slot: 11, ship: 'VESPER', year: 2625, outcome: 'locked', landed: 16 * COLONISTS_PER_POD, colony: 'STARFORD', writer: { name: 'Haddad, Sami', age: 52 } },
+  { slot: 15, ship: 'CORMORANT', year: 2817, outcome: 'locked', landed: 9 * COLONISTS_PER_POD, colony: 'HARBOUR', writer: { name: 'Tanaka, Yara', age: 19 } },
+  { slot: 19, ship: 'LAST LIGHT', year: 3020, outcome: 'locked', landed: 16 * COLONISTS_PER_POD, colony: 'FIRST LIGHT', writer: { name: 'Adeyemi, Kofi', age: 27 } },
 ];
 if (RUN1_RESULTS.map((result) => result.slot).join() !== WORKED_ROUTE.join()) throw new Error('run2-fixture: RUN1_RESULTS is not the worked route');
 
@@ -56,7 +58,8 @@ if (RUN1_RESULTS.map((result) => result.slot).join() !== WORKED_ROUTE.join()) th
 export const RUN1_TRAIL: UnitTrail = {
   unit: 47, run: 1, startYear: RUN_START_YEAR, lost: null,
   stops: RUN1_RESULTS.map((result) => ({
-    slot: result.slot, shipName: result.ship, year: result.year, outcome: result.outcome, landed: result.landed, colony: result.colony, writer: null,
+    slot: result.slot, shipName: result.ship, year: result.year, outcome: result.outcome, landed: result.landed, colony: result.colony,
+    writer: { ...result.writer },
   })),
 };
 

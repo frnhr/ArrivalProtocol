@@ -10,8 +10,7 @@ import { emit, NO_PAYLOAD } from '@systems/events';
 import { hollowUnitName, GHOST_LINE } from '@data/hollow-text';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import { AUTHORED_SHIP_NAMES, FINAL_SHIP_NAMES } from '@data/ship-names';
-import { EMPTY_HISTORY } from '@data/map-state';
-import { trailOf, ghostPlaceReached } from '@systems/lineage';
+import { trailOf, ghostPlaceReached, mapHistoryOf } from '@systems/lineage';
 import {
   META_STORAGE_KEY, META_VERSION, FIRST_UNIT_NUMBER, HOLLOW_NAME_MAX_UNITS,
 } from '@data/tuning';
@@ -106,10 +105,11 @@ export interface Meta {
   activeRun: ActiveRun | null;
   lastUnit: LastUnit | null;
   // Archive v2 (02 §3.12, 3c plan §2.4): the arm seed every run's arm is rolled from (a fresh archive takes the page's run
-  // seed, so `?seed=N` on a cleared archive replays run 1 exactly), the next run's arm (null: run 1's assembled arm, rebuilt
+  // seed, so `?seed=N` on a cleared archive replays run 1 exactly; null, a headless archive's, means "the run seed": the
+  // suites' worlds roll run 1's arm from their own seed, as before 3c), the next run's arm (null: run 1's assembled arm, rebuilt
   // from armSeed on demand), the colonies (at most COLONY_HISTORY_MAX_PER_WORLD per world), the last ROUTE_HISTORY_RUNS
   // routes, the last run's notable events (at most NOTABLE_EVENTS_MAX), slice 7's traces, and the title's one-off notes.
-  armSeed: number;
+  armSeed: number | null;
   arm: ArmState | null;
   colonies: ColonyRecord[];
   routes: RouteRecord[];
@@ -118,11 +118,12 @@ export interface Meta {
   notes: ArchiveNotes;
 }
 
-// An empty archive. `armSeed`: the page's run seed (state/instance.ts); suites that don't care take 0.
-export function freshMeta(armSeed = 0): Meta {
+// An empty archive. `armSeed`: the page's run seed (state/instance.ts threads it through openRunArchive); null (the
+// suites') means each run rolls from its own run seed (systems/map-run.ts createRunMap: `lineage.armSeed ?? seed`).
+export function freshMeta(armSeed: number | null = null): Meta {
   return {
     version: META_VERSION, runs: 0, bestScore: 0, endingsSeen: [], mergeBonus: false, tutorialDone: false, activeRun: null, lastUnit: null,
-    armSeed: armSeed >>> 0, arm: null, colonies: [], routes: [], events: [], traces: [], notes: { olderArchive: false, armReset: false },
+    armSeed: armSeed === null ? null : armSeed >>> 0, arm: null, colonies: [], routes: [], events: [], traces: [], notes: { olderArchive: false, armReset: false },
   };
 }
 
@@ -282,17 +283,42 @@ function parseActiveRun(value: unknown): ActiveRun | null {
   };
 }
 
+// Archive migrations (slice 3c review follow-up): the key stays META_STORAGE_KEY for good, and a stored record of an older
+// version is brought up to META_VERSION here, one version at a time, before the strict parse. Each step takes a record of
+// version n and returns one of version n + 1 (a later slice's field gets its default here, never a quiet default in the
+// parse). Version 2 is the first under this key, so there is none yet. A version this build does not know (newer, or
+// below the key's first) is corrupt. A new key is only for a deliberate reset (META_V1_KEY is the one there was).
+export const META_MIGRATIONS: Readonly<Record<number, (record: Record<string, unknown>) => Record<string, unknown>>> = {};
+export const META_FIRST_VERSION = 2;
+
+export function migrateMeta(record: Record<string, unknown>): Record<string, unknown> {
+  let current = record;
+  for (;;) {
+    const version = current.version;
+    if (version === META_VERSION) return current;
+    if (typeof version !== 'number' || !Number.isInteger(version) || version < META_FIRST_VERSION || version > META_VERSION) {
+      return corrupt(`version ${String(version)}, this build reads ${META_FIRST_VERSION}–${META_VERSION}`);
+    }
+    const step = META_MIGRATIONS[version];
+    if (step === undefined) return corrupt(`no migration from version ${version}`);
+    const next = step(current);
+    if (next.version !== version + 1) throw new Error(`migrateMeta: the step from ${version} made version ${String(next.version)}`);
+    current = next;
+  }
+}
+
 // The archive's JSON as a Meta, or MetaCorrupt with what was wrong. Strict: a field missing, of the wrong
-// type or out of range is corrupt, never a default (a half-read archive would be a quiet reset of that half).
+// type or out of range is corrupt, never a default (a half-read archive would be a quiet reset of that half). An older
+// version is migrated first (migrateMeta).
 export function parseMeta(raw: string): Meta {
-  let data: unknown;
+  let parsed: unknown;
   try {
-    data = JSON.parse(raw);
+    parsed = JSON.parse(raw);
   } catch (error) {
     return corrupt(`not JSON (${(error as Error).message})`);
   }
-  if (!isRecord(data)) return corrupt('not a record');
-  if (data.version !== META_VERSION) return corrupt(`version ${String(data.version)}, not ${META_VERSION}`);
+  if (!isRecord(parsed)) return corrupt('not a record');
+  const data = migrateMeta(parsed);
   exactRecord(data, 'the archive', [
     'version', 'runs', 'bestScore', 'endingsSeen', 'mergeBonus', 'tutorialDone', 'activeRun', 'lastUnit', 'armSeed', 'arm', 'colonies',
     'routes', 'events', 'traces', 'notes',
@@ -310,7 +336,7 @@ export function parseMeta(raw: string): Meta {
     tutorialDone: flag(data.tutorialDone, 'tutorialDone'),
     activeRun: parseActiveRun(data.activeRun),
     lastUnit: parseLastUnit(data.lastUnit),
-    armSeed: wholeNumber(data.armSeed, 'armSeed'),
+    armSeed: data.armSeed === null ? null : wholeNumber(data.armSeed, 'armSeed'),
     arm: parseArm(data.arm),
     colonies: list(data.colonies, 'colonies').map((colony, i) => parseColony(colony, `colonies[${i}]`)),
     routes: list(data.routes, 'routes').map((route, i) => parseRoute(route, `routes[${i}]`)),
@@ -337,14 +363,15 @@ function abandon(run: ActiveRun): LastUnit {
 
 // Reads the archive. Nothing stored yet is a fresh archive (a first run is not a failure). A leftover
 // activeRun is recorded as lastUnit 'abandoned' and cleared (`recovered`: the caller writes it back).
-export function loadMeta(storage: StorageProvider): LoadResult {
+// `armSeed`: a fresh archive's (the page's run seed; null in the suites).
+export function loadMeta(storage: StorageProvider, armSeed: number | null = null): LoadResult {
   let raw: string | null;
   try {
     raw = storage().getItem(META_STORAGE_KEY);
   } catch (error) {
     return { ok: false, reason: 'unavailable', detail: (error as Error).message };
   }
-  if (raw === null) return { ok: true, meta: freshMeta(), recovered: false };
+  if (raw === null) return { ok: true, meta: freshMeta(armSeed), recovered: false };
   let meta: Meta;
   try {
     meta = parseMeta(raw);
@@ -450,7 +477,7 @@ export interface RunLineage {
   hollowUnits: number[];
   tutorialDone: boolean;
   mergeBonus: boolean;
-  armSeed: number;
+  armSeed: number | null;      // null: the run seed (createRunMap's `lineage.armSeed ?? seed`)
   arm: ArmState | null;
   history: MapHistory;
 }
@@ -480,8 +507,7 @@ export function lineageOf(meta: Readonly<Meta>): RunLineage {
     mergeBonus: meta.mergeBonus,
     armSeed: meta.armSeed,
     arm: meta.arm === null ? null : structuredClone(meta.arm),
-    // TODO(3c-SAVE): the history from the archive (gap, departures, colonies, routes, the last unit's number), plan §2.4.
-    history: structuredClone(EMPTY_HISTORY),
+    history: mapHistoryOf(meta.arm, meta.lastUnit, meta.colonies, meta.routes),
   };
 }
 
@@ -538,6 +564,7 @@ interface Session {
   provider: StorageProvider;
   meta: Meta;
   status: Exclude<ArchiveStatus, 'none'>;
+  freshArmSeed: number | null;    // a fresh archive's arm seed (the page's run seed): WIPE ARCHIVE starts from it too
 }
 
 let session: Session | null = null;
@@ -547,14 +574,15 @@ let session: Session | null = null;
 // activeRun is written back at once, so a page that is closed again before RUN START does not lose it.
 // Returns the status the store starts with. A load that failed starts a fresh session copy (the run still
 // has a unit number), and the status says the archive is not behind it; the console says why.
-export function openRunArchive(provider: StorageProvider): ArchiveStatus {
-  const loaded = loadMeta(provider);
+// `armSeed`: the page's run seed, a fresh archive's arm seed (state/instance.ts picks the seed first).
+export function openRunArchive(provider: StorageProvider, armSeed: number | null = null): ArchiveStatus {
+  const loaded = loadMeta(provider, armSeed);
   if (!loaded.ok) {
-    session = { provider, meta: freshMeta(), status: loaded.reason === 'corrupt' ? 'corrupt' : 'offline' };
+    session = { provider, meta: freshMeta(armSeed), status: loaded.reason === 'corrupt' ? 'corrupt' : 'offline', freshArmSeed: armSeed };
     console.error(`[archive] ${loaded.reason}: ${loaded.detail}`);
     return session.status;
   }
-  session = { provider, meta: loaded.meta, status: 'ok' };
+  session = { provider, meta: loaded.meta, status: 'ok', freshArmSeed: armSeed };
   if (loaded.recovered) write();
   return session.status;
 }
@@ -639,6 +667,28 @@ export function archiveShipStarted(store: Store<GameState>): void {
   syncStatus(store);
 }
 
+// SHIP DONE (systems/run.ts openDesk, beside the run save's point): the run in progress takes the ship's result, so a run
+// abandoned at the desk keeps that ship's colony (activeRun was otherwise last written at the ship's start, its outcome null).
+export function archiveShipDone(store: Store<GameState>): void {
+  const state = store.getState();
+  if (!hasArchive(state)) return;
+  const current = requireSession();
+  current.meta = recordShipStart(current.meta, progressOf(state, 'abandoned'));
+  write();
+  syncStatus(store);
+}
+
+// The title said its one-off notes (an older archive not carried over, the arm redrawn): cleared, so they are said once
+// (Track UI calls it once the title has shown them). Nothing to clear writes nothing.
+export function archiveNotesSaid(store: Store<GameState>): void {
+  if (!hasArchive(store.getState())) return;
+  const current = requireSession();
+  if (!current.meta.notes.olderArchive && !current.meta.notes.armReset) return;
+  current.meta = { ...current.meta, notes: { olderArchive: false, armReset: false } };
+  write();
+  syncStatus(store);
+}
+
 // An orbit locked or accepted (systems/run.ts, after the tick): the unit has flown its ship through. Written
 // once per archive; every later lock finds it done.
 export function archiveTutorialDone(store: Store<GameState>): void {
@@ -665,7 +715,7 @@ export function archiveRunEnded(store: Store<GameState>, cause: RunEndCause): vo
 export function wipeArchive(store: Store<GameState>): void {
   const current = requireSession();
   if (current.status !== 'corrupt') throw new Error(`wipeArchive: the archive is ${current.status}, not corrupt`);
-  current.meta = freshMeta();
+  current.meta = freshMeta(current.freshArmSeed);
   try {
     current.provider().removeItem(META_STORAGE_KEY);
     current.status = 'ok';

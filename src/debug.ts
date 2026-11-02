@@ -65,6 +65,7 @@ import { layoutOf } from '@data/memory';
 import { META_STORAGE_KEY, RUN_SAVE_KEY, ROOT_BLOCKS } from '@data/tuning';
 import type { SaveState } from '@/types/save';
 import { updateArm, armStateOfMap, type ArmUpdate } from '@systems/map-update';
+import { visitsOf } from '@systems/lineage';
 import type { Segment } from '@/types/segment';
 import { showStamp, type StampTone } from '@components/hud/Stamp';
 import { shake, recentShakes } from '@components/hud/Juice';
@@ -823,8 +824,9 @@ export function mountDebug(store: Store<GameState>): void {
     saveClear: () => { browserStorage().removeItem(RUN_SAVE_KEY); },
     updateArm: (route) => {
       const run = store.getState().run;
-      const slots = route ?? run.map.route.map((stop) => stop.slot);
-      const visited = slots.map((slot) => ({ slot, colony: (run.ships.find((ship) => ship.slot === slot)?.landedInLz ?? 0) > 0 }));
+      const visits = visitsOf(run);
+      const visited = route === undefined ? visits
+        : route.map((slot) => visits.find((visit) => visit.slot === slot) ?? { slot, colony: false });
       return updateArm({ from: armStateOfMap(run.map), visited });
     },
     ghost: () => ghostLine(store.getState().run.unitNumber, store.getState().run.lastUnit),

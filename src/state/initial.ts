@@ -260,7 +260,7 @@ export function createInitialState(opts: InitialStateOpts): GameState {
     director: { shown: null, done: [] },
     ui: createUiState(phase, opts.reducedMotion ?? false),
     archive: opts.archive ?? { status: 'none' },
-    save: opts.save ?? { status: 'none', resume: null, reason: null },
+    save: opts.save ?? { status: 'none', resume: null, refusal: null },
   };
 }
 

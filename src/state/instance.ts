@@ -18,15 +18,17 @@ function pickRunSeed(): number {
   return newRunSeed();
 }
 
+// The run seed first (slice 3c): a fresh archive takes it as its arm seed, so `?seed=N` on a cleared archive replays run 1.
+const seed = pickRunSeed();
+
 // The archive is read before the store exists: the very first title already names this run's unit
 // (UNIT-048 · WAVE 2 after one run) and the last one's lineage.
-const archiveStatus = openRunArchive(browserStorage);
+const archiveStatus = openRunArchive(browserStorage, seed);
 
 // The single global store. Components and systems import this singleton. The page opens on
 // the title card; RECEIVE TRANSMISSION boots the unit and starts the flight (systems/boot).
 // The page plays the galaxy map (slice 3a): the run's arm from its seed and its run number (systems/map-run.ts createRunMap,
 // as NEW RUN's startRun does); the classic five stay the suites' fixture and __ap.ship's.
-const seed = pickRunSeed();
 const lineage = archiveLineage();
 export const store = createStore<GameState>(createInitialState({
   seed,

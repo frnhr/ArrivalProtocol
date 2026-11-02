@@ -3,6 +3,7 @@ import type { Store } from '@state/store';
 import type { GameState, RunState, ShipResult } from '@state/schema';
 import type { RouteStop, RunMapState } from '@/types/map';
 import type { InboxMessage } from '@/types/inbox';
+import type { LetterSource } from '@/types/lineage';
 import type { FeaturedColonist } from '@/types/landing';
 import { lightArrival, type LightSource } from '@systems/delivery-rule';
 import { armShipAt, isEndSlot, worldSlotOf } from '@systems/map-streams';
@@ -334,15 +335,8 @@ export function markMessageRead(store: Store<GameState>, id: string): void {
   store.update((draft) => { draft.run.inbox.read.push(id); });
 }
 
-// A letter to the unit ahead (05 §3.3): a colony of the last unit's route writing to it at colony year 1. 3c's archive v2
-// fills these (`FOR UNIT-047`); on run 1 the seam gives 046's MERIDIAN (Marrow, landed 2350).
-export interface LetterSource {
-  id: string;                 // the message id: 'letter:meridian', 'letter:<worldSlot>'
-  colony: string;
-  worldSlot: number;
-  landedYear: number;
-  toUnit: number;
-}
+// A letter to the unit ahead (05 §3.3): types/lineage.ts LetterSource (moved there in slice 3c; its id is saved in
+// run.inbox.read). From run 2 systems/lineage.ts letterSourcesFromTrail makes them (Track UI wires it here).
 
 // The seam 3c fills from archive v2 (plan §2.6). Run 1: 046's written trail's MERIDIAN writes to 046 (05 §3.3: "the first
 // instance of letters to the unit ahead"), read by 047, who is not 46.
@@ -350,5 +344,5 @@ export function letterSources(run: Readonly<RunState>): LetterSource[] {
   if (run.map.world !== 'arm' || run.map.run !== 1) return [];
   const meridian = UNIT_046_TRAIL.find((mark) => mark.colony === 'MERIDIAN');
   if (meridian === undefined || meridian.colony === null) throw new Error('letterSources: 046\'s written trail lost MERIDIAN');
-  return [{ id: 'letter:meridian', colony: meridian.colony, worldSlot: meridian.slot, landedYear: meridian.year, toUnit: UNIT_046 }];
+  return [{ id: 'letter:meridian', colony: meridian.colony, worldSlot: meridian.slot, landedYear: meridian.year, toUnit: UNIT_046, writer: null }];
 }

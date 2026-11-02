@@ -123,6 +123,26 @@ export interface NextLaunch {
   valveYears: number;
 }
 
+// One ship the unit visited, as the world update reads it (02 §3.12 step 1: it leaves as a colony marker, or `NO COLONY`
+// when nobody landed in an LZ). systems/lineage.ts visitsOf(run) makes them from the route's ShipResults (an abandoned
+// run's ship not yet ended: colony false).
+export interface Visit {
+  slot: number;
+  colony: boolean;
+}
+
+// A letter to the unit ahead (05 §3.3): a colony of the last unit's route writing to it at colony year 1. systems/lineage.ts
+// letterSourcesFromTrail makes them from the trail; systems/inbox.ts turns them into messages. The id is saved in
+// run.inbox.read, so it is pinned: `letter:<trail run>:<slot>` (run 1's 046 MERIDIAN keeps `letter:meridian`).
+export interface LetterSource {
+  id: string;
+  colony: string;
+  worldSlot: number;            // the arm world the colony is on
+  landedYear: number;
+  toUnit: number;
+  writer: { name: string; age: number } | null;   // who signs it (046's written trail names nobody)
+}
+
 // --- History records (archive v2) -----------------------------------------------------------------------------------------
 
 export interface ColonyRecord {

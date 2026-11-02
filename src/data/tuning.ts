@@ -1983,12 +1983,16 @@ export const NOTABLE_EVENTS_MAX = 4;
 
 // --- 3c SAVE (owned by Track SAVE): the run save's and the archive's keys and versions ----------------------------------
 
-// The run save (02 §3.11): its own key beside the archive's, so a bad save never takes the archive with it. Versioned in
-// the key and the envelope: a later shape is a new version, refused loudly (RUN SAVE CAN'T RESUME), never reinterpreted.
+// The run save (02 §3.11): its own key beside the archive's, so a bad save never takes the archive with it. The key stays
+// for good; the envelope's version moves, and an older save is migrated in place (systems/save-codec.ts migrateRunSave),
+// so a new field never strands a save in flight. A version this build can't migrate is refused loudly (RUN SAVE CAN'T
+// RESUME), never reinterpreted.
 export const RUN_SAVE_KEY = 'arrival-protocol/run/v1';
 export const RUN_SAVE_VERSION = 1;
-// The archive (§4.5; 02 §3.12: v2 holds the arm, the trail, colonies, routes, events and traces). One key per shape: v1's
-// key is never written or read past detecting it (the title says once that an older archive was not carried over).
+// The archive (§4.5; 02 §3.12: v2 holds the arm, the trail, colonies, routes, events and traces). From slice 3c the key
+// stays `meta/v2` and versions migrate in place (systems/meta.ts migrateMeta, META_VERSION the record's); a new key is
+// only ever a deliberate reset. v1's key (phase 2's archive) was the one such reset: never written, read only to detect it
+// (the title says once that an older archive was not carried over).
 export const META_STORAGE_KEY = 'arrival-protocol/meta/v2';
 export const META_V1_KEY = 'arrival-protocol/meta/v1';
 export const META_VERSION = 2;

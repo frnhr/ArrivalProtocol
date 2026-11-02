@@ -1,11 +1,13 @@
 import type { GameState, RunState } from '@state/schema';
 import type { RunMapState } from '@/types/map';
-import type { LastCause, LastUnit, UnitTrail, TrailStop, ColonyRecord, NotableEvent } from '@/types/lineage';
-import type { LetterSource } from '@systems/inbox';
+import type {
+  LastCause, LastUnit, UnitTrail, TrailStop, ColonyRecord, RouteRecord, NotableEvent, ArmState, MapHistory, Visit, LetterSource,
+} from '@/types/lineage';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import { UNIT_046_TRAIL } from '@data/ship-names';
 import { currentStop, armShipAt, isEndSlot, worldSlotOf } from '@systems/map-streams';
 import { layerOf } from '@systems/map-geometry';
+import { FIRST_SLOT } from '@data/arm';
 import { FIRST_UNIT_NUMBER, TRAIL_046_CROSS_PAST_LY, COLONISTS_PER_POD } from '@data/tuning';
 
 // The lineage (phase 3 slice 3c, docs/phase3/impl/slice-3c-plan.md §2.4; 02-map §3.12, 05-story §3.3, §3.5): what a unit
@@ -13,7 +15,8 @@ import { FIRST_UNIT_NUMBER, TRAIL_046_CROSS_PAST_LY, COLONISTS_PER_POD } from '@
 // cross), the colonies it founded, where its ghost speaks, the beacon on ship 1 and the letters to the unit ahead. Pure: no
 // store, no storage. unitTrailOf is the one reader the chart, the ghost, the letters and the beacon share.
 // Cycle guard (plan §5.4): this file never imports data/script.ts, systems/meta.ts or systems/run.ts (meta.ts imports it).
-// The foundation laid it down (trail046, unitTrailOf and the ghost real; the rest stubs marked TODO(3c-WORLD)); Track
+// The foundation laid it down (trail046, unitTrailOf, visitsOf, mapHistoryOf, coloniesOf, the beacon, the letters and the
+// older colonies real; trailOf's cross and writers, notableEvents and the ghost by the cross marked TODO(3c-WORLD)); Track
 // WORLD owns it after.
 
 // --- 046's written trail: run 1's last trail (05 §3.11) ----------------------------------------------------------------
@@ -65,6 +68,33 @@ export function trailOf(run: Readonly<Pick<RunState, 'unitNumber' | 'map' | 'shi
     };
   });
   return { unit: run.unitNumber, run: map.run, startYear: map.startYear, stops, lost: null };
+}
+
+// The route's visits as the world update reads them (RUN END, abandoning, __ap.updateArm): each stop, with a colony when its
+// ship landed someone in an LZ (a ship not yet ended has none).
+export function visitsOf(run: Readonly<Pick<RunState, 'map' | 'ships'>>): Visit[] {
+  return run.map.route.map((stop, index) => {
+    const result = run.ships[index];
+    if (result !== undefined && result.slot !== stop.slot) throw new Error(`visitsOf: ship result ${index} is slot ${result.slot}, the route's stop is ${stop.slot}`);
+    return { slot: stop.slot, colony: (result?.landedInLz ?? 0) > 0 };
+  });
+}
+
+// What a run's map remembers of the runs before it (RunMapState.history), from the archive's parts (systems/meta.ts
+// lineageOf; the arm's own gap, valve years, serial and departures, so systems/map-run.ts createRunMap can check they agree).
+// No arm (run 1, or a fresh roll) is no gap and no departures.
+export function mapHistoryOf(
+  arm: Readonly<ArmState> | null, lastUnit: Readonly<LastUnit> | null, colonies: readonly ColonyRecord[], routes: readonly RouteRecord[],
+): MapHistory {
+  return {
+    gap: arm?.gap ?? 0,
+    valveYears: arm?.valveYears ?? 0,
+    finalSerial: arm?.finalSerial ?? 0,
+    lastUnitNumber: lastUnit?.number ?? null,
+    departures: structuredClone(arm?.departures ?? []),
+    colonies: structuredClone([...colonies]),
+    routes: structuredClone([...routes]),
+  };
 }
 
 // The colonies a trail founded (archive v2's colonies): one per stop with a colony and someone landed.
@@ -120,23 +150,33 @@ export interface Beacon {
   yearsAgo: number;
 }
 
-// TODO(3c-WORLD): plan §2.4 (the foundation's stub: no beacon).
-export function beaconOnFirstShip(state: Readonly<GameState>): Beacon | null {
-  void state;
-  return null;
+// Run 1 reads 046's (`SET BY UNIT-046 · 1 YEAR AGO`). None on the classic world, past ship 1, or when the last unit's first
+// ship never reached orbit. A stop dated after the run's start is a bug (the unit ahead set out first) and throws.
+export function beaconOnFirstShip(state: Readonly<Pick<GameState, 'run'>>): Beacon | null {
+  const run = state.run;
+  if (run.map.world !== 'arm' || run.shipIndex !== 0) return null;
+  const trail = unitTrailOf(run);
+  const stop = trail?.stops.find((candidate) => candidate.slot === FIRST_SLOT);
+  if (trail === null || stop === undefined || (stop.outcome !== 'locked' && stop.outcome !== 'partial')) return null;
+  const yearsAgo = run.map.startYear - stop.year;
+  if (yearsAgo < 0) throw new Error(`beaconOnFirstShip: unit ${trail.unit}'s beacon is dated ${stop.year}, after this run's start ${run.map.startYear}`);
+  return { unit: trail.unit, yearsAgo };
 }
 
-// Letters to the unit ahead (05 §3.3): one per trail stop with a colony and someone landed, id `letter:<run>:<slot>`,
-// landed in the stop's year, to the trail's unit. Run 1 keeps 046's MERIDIAN (systems/inbox.ts letterSources).
-// TODO(3c-WORLD): plan §2.4; Track UI wires systems/inbox.ts letterSources to it (the foundation's stub: none).
-export function letterSourcesFromTrail(run: Readonly<RunState>): LetterSource[] {
-  void run;
-  return [];
+// Letters to the unit ahead (05 §3.3): one per stop of the archive's last trail with a colony and someone landed, id
+// `letter:<trail run>:<slot>`, landed in the stop's year, to the trail's unit, signed by the stop's writer. Only the
+// archive's trail: run 1 keeps 046's MERIDIAN (systems/inbox.ts letterSources, `letter:meridian`). Track UI wires
+// letterSources to it; the light rule (when each is read) is inbox.ts's.
+export function letterSourcesFromTrail(run: Readonly<Pick<RunState, 'lastUnit' | 'map'>>): LetterSource[] {
+  const trail = run.lastUnit?.trail ?? null;
+  if (run.map.world !== 'arm' || trail === null) return [];
+  return trail.stops.flatMap((stop): LetterSource[] => (stop.colony === null || stop.landed <= 0 ? [] : [{
+    id: `letter:${trail.run}:${stop.slot}`, colony: stop.colony, worldSlot: stop.slot, landedYear: stop.year, toUnit: trail.unit,
+    writer: stop.writer === null ? null : { ...stop.writer },
+  }]));
 }
 
 // Older colonies the chart draws as faint dots: the history's colonies whose year the galaxy year has reached.
-// TODO(3c-WORLD): plan §2.4 (the foundation's stub: none).
 export function olderColonies(map: Readonly<RunMapState>): ColonyRecord[] {
-  void map;
-  return [];
+  return map.history.colonies.filter((colony) => colony.year <= map.galaxyYear);
 }

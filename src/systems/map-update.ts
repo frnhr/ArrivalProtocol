@@ -1,5 +1,5 @@
 import type { ArmShip, RunMapState, ShipKey } from '@/types/map';
-import type { ArmState, LeaveReason } from '@/types/lineage';
+import type { ArmState, LeaveReason, Visit } from '@/types/lineage';
 import type { Rng } from '@systems/rng';
 import { createRng, hashSeed } from '@systems/rng';
 import { assembleRun1Arm, freshArm, MAP_GENERATOR_VERSION } from '@systems/map-generator';
@@ -19,16 +19,11 @@ import { LAUNCH_GAP_TABLE, RUN_START_YEAR } from '@data/tuning';
 // reset (02 §10), and the run save refuses it.
 export const MAP_UPDATE_VERSION = 1;
 
-// One ship the unit visited (02 §3.12 step 1: it leaves as a colony marker, or `NO COLONY` when nobody landed in an LZ).
-// The caller reads `colony` from the route's ShipResults (an abandoned run's ship not yet ended: false).
-export interface Visit {
-  slot: number;
-  colony: boolean;
-}
+export type { Visit } from '@/types/lineage';
 
 export interface UpdateInput {
   from: Readonly<Pick<ArmState, 'armSeed' | 'run' | 'startYear' | 'finalSerial' | 'lastFinal' | 'ships'>>;
-  visited: readonly Visit[];        // the route's ships in order (an abandoned run's so far)
+  visited: readonly Visit[];        // the route's ships in order (an abandoned run's so far; lineage.ts visitsOf)
 }
 
 export interface ArmUpdate {
@@ -113,11 +108,14 @@ function noReasons(): Record<LeaveReason, number> {
 
 // The update (02 §3.12): the gap, then steps 1–5 (Done, Older, the ark pattern, Reported home, the checks with repairs from
 // UPDATE_REPAIR_FROM_ATTEMPT and a throw after GEN_MAX_ATTEMPTS), then the valve (step 6: below VALVE_FLOOR_PODS, again
-// from the same input with VALVE_YEARS more and seededDice(…, 'valve')). `opts.valveFloor` forces the valve in a suite.
+// from the same input with VALVE_YEARS more and seededDice(…, 'valve')). `dice(pass)` gives each pass its rolls (seeded in
+// play; a suite scripts the valve's pass too); `opts.valveFloor` forces the valve in a suite.
 // TODO(3c-WORLD): plan §2.3. The foundation's stub is a fresh roll one year later with nobody leaving (the page keeps
 // playing while Track SAVE wires it into RUN END and abandonment); it reads no dice.
 export function updateArm(
-  input: Readonly<UpdateInput>, dice: UpdateDice = seededDice(input.from.armSeed, input.from.run + 1, 'first'), opts: { valveFloor?: number } = {},
+  input: Readonly<UpdateInput>,
+  dice: (pass: UpdatePass) => UpdateDice = (pass) => seededDice(input.from.armSeed, input.from.run + 1, pass),
+  opts: { valveFloor?: number } = {},
 ): ArmUpdate {
   void dice;
   void opts;

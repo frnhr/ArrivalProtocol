@@ -34,9 +34,9 @@ const WAYFARER = 18;
 // Run 1's arm with the unit's route at `route`'s last ship, its ship ended on the LANDING REPORT, and `extra` files laid
 // into the largest free run of its memory.
 function unitAt(route: readonly number[], extra: readonly Segment[]): Store<GameState> {
-  let map = createRunMap({ wave: 1 } as never, 3);
+  let map = createRunMap({ wave: 1 }, 3);
   for (let i = 1; i < route.length; i++) map = mapAtShip(map, route[i]!, hopBetween(map, route[i - 1]!, route[i]!));
-  const store = createStore<GameState>(createInitialState({ seed: 3, map: createRunMap({ wave: 1 } as never, 3), lineage: FIRST_RUN_LINEAGE }));
+  const store = createStore<GameState>(createInitialState({ seed: 3, map: createRunMap({ wave: 1 }, 3), lineage: FIRST_RUN_LINEAGE }));
   store.update((draft) => {
     draft.run.map = structuredClone(map);
     draft.run.shipIndex = map.route.length - 1;
@@ -55,7 +55,7 @@ const filesOf = (state: Readonly<GameState>): number =>
 
 // --- B1: 90 blocks of files to an 82-block link -------------------------------------------------------------------------
 {
-  const base = createInitialState({ seed: 3, map: createRunMap({ wave: 1 } as never, 3), lineage: FIRST_RUN_LINEAGE });
+  const base = createInitialState({ seed: 3, map: createRunMap({ wave: 1 }, 3), lineage: FIRST_RUN_LINEAGE });
   const telemetry = base.memory.find((seg) => seg.role === 'telemetry')!;
   const sensor = base.memory.find((seg) => seg.role === 'sensor')!;
   // Every filesystem tool but SCAN (already aboard), spare Telemetry and Sensor copies, two FIREWALLs.
@@ -112,8 +112,8 @@ const filesOf = (state: Readonly<GameState>): number =>
 // --- M1: the preview is the layout (one room, one fill rule) -------------------------------------------------------------
 {
   const full = classicShip(4);
-  const tight = shipDefAt(createRunMap({ wave: 1 } as never, 3), WAYFARER);
-  const fresh = createInitialState({ seed: 3, map: createRunMap({ wave: 1 } as never, 3), lineage: FIRST_RUN_LINEAGE }).memory;
+  const tight = shipDefAt(createRunMap({ wave: 1 }, 3), WAYFARER);
+  const fresh = createInitialState({ seed: 3, map: createRunMap({ wave: 1 }, 3), lineage: FIRST_RUN_LINEAGE }).memory;
   const rng = createRng(11);
   let compared = 0;
   const misses: string[] = [];

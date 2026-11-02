@@ -115,7 +115,7 @@ DECISIONS round 1 #5: "Reload mid-ship replays the ship from its boot, for now. 
 - `RunSave.mode: 'standard'` (`'ironman'` later);
 - one entry point, `writeRunSave(store, point)`, so ironman can add a `'tab-hidden'` point;
 - `SavePayload` is a tagged union, so a later `'mid-ship'` payload kind (slices plus module snapshots) slots in;
-- the save codec refuses to load a save older than the archive's knowledge (the stale rule, §2.1), which is ironman's no-rewind core.
+- the save codec refuses a save from a run the archive no longer has in progress (the stale rule, §2.1). That is not yet a rewind guard: ironman's later check is `resume.depth >= activeRun.trail.stops.length` (review follow-up).
 
 ### 1.4 Open calls 3c resolves
 
@@ -986,3 +986,85 @@ behaviour: the page plays run 1 to the desks as before (checked in Chromium), an
 - **UI:** the strings are in `map-text.ts`. Build the chart, card, title and tally against `run2Map()` and
   `RUN1_LAST_UNIT`. `desk.ts trail046` becomes `unitTrailOf`; `inbox.ts letterSources` reads
   `letterSourcesFromTrail` from run 2 on.
+
+## Deviations (foundation, review follow-up)
+
+The independent review of `23ad7c7` confirmed these are sound: the codec, the stale rule, the versions, the counters, the
+cycle guard and the §3.14 fixture. On the worked route the save round-trips deep-equal at every SHIP DONE and at ENDING
+CHOSEN (31–118 KB). Its items were applied in `Slice 3c F: review follow-up`. None was rejected.
+
+### Blockers
+
+1. **`SaveState { status; resume; refusal: SaveRefusal | null }`** replaces the free `reason` string. The title's words
+   are `MAP_TEXT.save.reason[refusal.kind]`. `refusal.detail` goes to the console only and is never shown on screen.
+   `'offline'` has no refusal (the status says it).
+2. **`LetterSource` moved to `types/lineage.ts`** with `writer: { name, age } | null`. Its id is pinned as
+   `letter:<trail run>:<slot>`, and 046's MERIDIAN keeps `letter:meridian`, because ids are saved in `run.inbox.read`.
+   inbox.ts and lineage.ts import it from there. `Visit` moved there too (map-update.ts re-exports it).
+3. **`Meta.armSeed` and `RunLineage.armSeed` are `number | null`**, where null means "the run seed".
+   - `freshMeta(armSeed = null)`, so `FIRST_RUN_LINEAGE.armSeed` is null.
+   - `loadMeta(storage, armSeed)` and `openRunArchive(provider, armSeed)` give a fresh archive the page seed (WIPE
+     ARCHIVE too). instance.ts now picks the run seed before it opens the archive.
+   - `createRunMap` rolls the arm from `lineage.armSeed ?? seed` and the noise from the run seed (02: noise per run; §2.8
+     item 9 brought forward). Both are the same on run 1 in the page and in every suite.
+   - `world/foundation-seams` pins run 1's arm and noise unchanged on the suites' seeds (3, 7, 19).
+   - One visible change: in the page a NEW RUN's fresh roll for run ≥ 2 now rolls from the archive's arm seed, not the
+     new run seed. That is the plan's persistent seed; WORLD replaces the roll with `lineage.arm`.
+
+### Majors
+
+4. **`mapHistoryOf(arm, lastUnit, colonies, routes)`** (lineage.ts, real) fills `lineageOf`'s history.
+   `createRunMap(lineage, seed)` widens to `Pick<RunLineage,'wave'> & Partial<Pick<…,'armSeed'|'arm'|'history'>>`. It
+   keeps the lineage's history (`EMPTY_HISTORY` when there is none) and throws when a stored arm's gap, valve years,
+   serial or departures disagree with it. The suites' `as never` casts are gone.
+5. **`archiveShipDone(store)`** (meta.ts) refreshes `activeRun` with the ship's result. `openDesk` calls it beside
+   `writeRunSave(store, 'ship-done')`, so a run abandoned at a desk keeps that ship's colony.
+6. **Migrations in place.**
+   - The archive key stays `meta/v2`. `parseMeta` runs `migrateMeta` first: `META_MIGRATIONS` (none yet) steps one version
+     at a time, from `META_FIRST_VERSION` 2 up to `META_VERSION`. Any other version is corrupt.
+   - A new key is only for a deliberate reset. The tuning.ts comment says so, and so does the run save's.
+   - `decodeRunSave` runs `migrateRunSave` (`RUN_SAVE_MIGRATIONS`, none yet) before the version check, so slice 4's
+     `run.skills` is a migration step rather than a CAN'T RESUME.
+7. **`olderColonies`, `beaconOnFirstShip` and `letterSourcesFromTrail` are real**, and `RUN1_TRAIL`'s stops have writers.
+   - `letterSourcesFromTrail` reads only the archive's trail; run 1's MERIDIAN stays inbox.ts's.
+   - `beaconOnFirstShip` throws on a beacon dated after the run's start.
+   - inbox.ts still uses `letterSources`. Wiring the letters in is Track UI's.
+
+### Minors
+
+- **`updateArm(input, dice: (pass: UpdatePass) => UpdateDice = seeded, opts)`**, so a suite can script the valve's pass.
+- **`visitsOf(run)`** (lineage.ts) is used by `__ap.updateArm`, and will be by run end and abandon (Track SAVE).
+- **`archiveNotesSaid(store)`** (meta.ts) clears the title's one-off notes in a single write. Track UI calls it.
+- **New suite `world/foundation-seams`** (<1 s) covers the arm-seed pins, migrations, `mapHistoryOf`, the agreement check,
+  `visitsOf`, the beacon, the letters, the older colonies, SHIP DONE's refresh and the notes.
+
+### Ownership (§5)
+
+- `types/lineage.ts` (WORLD) now holds `LetterSource` and `Visit`.
+- `archiveShipDone`, `archiveNotesSaid`, `migrateMeta` and `migrateRunSave` are Track SAVE's, in files it already owns.
+
+### Notes for the tracks (not built)
+
+- **SAVE:**
+  - **Audio:** unlock it in `startBootFromTitle`, and on a desk or report resume.
+  - **ENDING CHOSEN:**
+    - call `abortAll()` before the write;
+    - assert that no free segment carries `reservedBy`;
+    - restore `clock.paused` as saved;
+    - handle `finale.ts`'s `verdictOwed` module state on resume.
+  - **Content reset:**
+    - pass the old arm to `freshArmState` rather than null, so `finalSerial` and the final ship's floor survive;
+    - in `parseArm`, check `content` before `validateShipDef`.
+  - **Foundation-built archives:** they carry `mergeBonus` and `armSeed: 0` (a real number). Either accept and migrate
+    them, or reset them, and document which.
+  - **Write failures:** `writeRunSave` catches an encode throw, goes `offline` with a loud console error, and emits
+    `'save-lost'`.
+  - **Desk UI:** `deskUiOnOpen` reads the state after `abortAll`.
+  - **Ironman (§1.3 overstated it):** the plain stale rule is not a rewind guard. Ironman's later check is
+    `resume.depth >= activeRun.trail.stops.length`.
+  - **Shared checks:**
+    - share one `checkArmShip` between `parseArm` and `checkSavedRun`;
+    - `checkShape` cross-checks `save.unit` / `run` / `resume` against `payload.run`;
+    - `checkShape` rejects non-finite numbers outside `endTSec`.
+  - **Phase listeners:** audit them for the `title→desk` and `title→report` jumps a resume makes.
+- **UI:** the inbox's memo key must add the trail's unit, cause and stop count, since letters now depend on the last unit.

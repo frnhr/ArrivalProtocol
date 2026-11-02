@@ -199,7 +199,7 @@ check('…Swap arrived here (delivered at CORMORANT, 2659); Cp is still behind a
   let swapSeed: number | null = null;
   let mvSeed: number | null = null;
   for (let seed = 1000; seed < 1200 && (swapSeed === null || mvSeed === null); seed++) {
-    const kind = firstDeskRecommendation(createRunMap({ wave: 2 } as never, seed));
+    const kind = firstDeskRecommendation(createRunMap({ wave: 2 }, seed));
     if (kind === 'swap') swapSeed ??= seed;
     else mvSeed ??= seed;
   }

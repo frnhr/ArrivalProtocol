@@ -178,17 +178,37 @@ function checkShape(data: Record<string, unknown>): string | null {
   return null;
 }
 
+// Run save migrations (slice 3c review follow-up), as the archive's (systems/meta.ts migrateMeta): the key stays
+// RUN_SAVE_KEY, and a save of an older version is brought up to RUN_SAVE_VERSION here, one version at a time, before the
+// checks: slice 4's `run.skills` is a step that adds it, not a RUN SAVE CAN'T RESUME for every save in flight. Version 1 is
+// the first, so there is none yet. A version this build does not know is left as it is (check 2 refuses it).
+export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {};
+
+export function migrateRunSave(save: Record<string, unknown>): Record<string, unknown> {
+  let current = save;
+  for (;;) {
+    const version = current.saveVersion;
+    if (version === RUN_SAVE_VERSION || typeof version !== 'number') return current;
+    const step = RUN_SAVE_MIGRATIONS[version];
+    if (step === undefined) return current;
+    const next = step(current);
+    if (next.saveVersion !== version + 1) throw new Error(`migrateRunSave: the step from ${version} made version ${String(next.saveVersion)}`);
+    current = next;
+  }
+}
+
 // A stored save, checked in order (3c plan §2.1; the first failure is the refusal): 1 JSON, 2 the save version, 3 the
 // content versions, 4 the shape, 5 an arm map, 6 the route against the point, 7 every ArmShip a valid ShipDef. The archive's
 // view (check 8, stale) is saveRefusal's.
 export function decodeRunSave(raw: string): DecodeResult {
-  let data: unknown;
+  let parsed: unknown;
   try {
-    data = JSON.parse(raw, (_key, value: unknown) => (isInfinityTag(value) ? Infinity : value));
+    parsed = JSON.parse(raw, (_key, value: unknown) => (isInfinityTag(value) ? Infinity : value));
   } catch (error) {
     return refuse('not-json', `not JSON (${(error as Error).message})`);
   }
-  if (!isRecord(data)) return refuse('not-json', 'not a record');
+  if (!isRecord(parsed)) return refuse('not-json', 'not a record');
+  const data = migrateRunSave(parsed);
   if (data.saveVersion !== RUN_SAVE_VERSION) return refuse('version', `save version ${String(data.saveVersion)}, not ${RUN_SAVE_VERSION}`);
   const want = contentVersions();
   const content = data.content;

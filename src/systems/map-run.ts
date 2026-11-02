@@ -75,19 +75,29 @@ export function classicRunMap(seed: number, shipIndex: number, run: number): Run
 // a fresh roll" for "the archive's updated arm" (slice-3a-plan §2.10). The run number is the lineage's wave (1 on run 1):
 // run 1 is run 1's arm (§3.14's structure, details rolled from the seed: map-generator assembleRun1Arm); a later run is a
 // fresh roll with ARES-(VI + run) at w0 and finalShipName(run) at w19 (interim, risk 4). Both start in RUN_START_YEAR
-// (3a has no launch gap: 3c's world update brings it), and the noise clouds roll fresh every run (noiseRng). The arm seed
-// is the run seed in 3a (3c: the archive's).
-export function createRunMap(lineage: Readonly<Pick<RunLineage, 'wave'>>, seed: number): RunMapState {
+// (3a has no launch gap: 3c's world update brings it), and the noise clouds roll fresh every run, from the run seed (02:
+// noise per run). Slice 3c: the arm seed is the archive's (`lineage.armSeed`; null or left out, the run seed: the suites'
+// worlds and a headless archive, so their run-1 arm is the one they always had), and the map's history is the lineage's
+// (left out: none). A stored arm's gap, valve years, serial and departures must agree with that history.
+// TODO(3c-WORLD): a stored lineage.arm's ships, start year and run (asserted equal to the wave) in place of the roll.
+export function createRunMap(
+  lineage: Readonly<Pick<RunLineage, 'wave'> & Partial<Pick<RunLineage, 'armSeed' | 'arm' | 'history'>>>, seed: number,
+): RunMapState {
   const run = lineage.wave;
   if (!(Number.isInteger(run) && run >= 1)) throw new Error(`createRunMap: run ${run}`);
-  const armSeed = seed >>> 0;
+  const armSeed = (lineage.armSeed ?? seed) >>> 0;
+  const history = structuredClone(lineage.history ?? EMPTY_HISTORY);
+  const arm = lineage.arm ?? null;
+  if (arm !== null && (arm.gap !== history.gap || arm.valveYears !== history.valveYears || arm.finalSerial !== history.finalSerial
+    || JSON.stringify(arm.departures) !== JSON.stringify(history.departures))) {
+    throw new Error(`createRunMap: the stored arm (gap ${arm.gap}, serial ${arm.finalSerial}) and the lineage's history (gap ${history.gap}, serial ${history.finalSerial}) disagree`);
+  }
   return {
     version: MAP_STATE_VERSION, world: 'arm', run, armSeed, startYear: RUN_START_YEAR,
     arm: run === 1 ? assembleRun1Arm(armSeed) : freshArm(armSeed, run, RUN_START_YEAR),
-    noise: rollNoiseClouds(noiseRng(armSeed)),
+    noise: rollNoiseClouds(noiseRng(seed >>> 0)),
     route: [{ slot: FIRST_SLOT, depth: 1, hop: null }], galaxyYear: RUN_START_YEAR, pendingExtra: null,
-    // TODO(3c-WORLD): lineage.history (and lineage.arm's ships, start year and arm seed; noise by the run seed), plan §2.3.
-    history: structuredClone(EMPTY_HISTORY),
+    history,
   };
 }
 

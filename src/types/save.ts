@@ -71,13 +71,15 @@ export interface RunSave {
 
 // The page's save (GameState.save). 'none': a headless world (nothing is ever written); 'ok': written at the points;
 // 'offline': a read or write threw (play goes on, nothing more is written this page); 'cant-resume': a save is there but
-// cannot be resumed (`reason` says why; the title offers ABANDON RUN only).
+// cannot be resumed (`refusal` says why; the title offers ABANDON RUN only).
 export type SaveStatus = 'none' | 'ok' | 'offline' | 'cant-resume';
 
 export interface SaveState {
   status: SaveStatus;
   resume: ResumeLine | null;    // a resumable save's line (the title's RESUME block), else null
-  reason: string | null;        // 'cant-resume' and 'offline': what went wrong, for the title
+  // 'cant-resume' only: why (the title's words are MAP_TEXT.save.reason[refusal.kind]; refusal.detail goes to the console
+  // only, never on screen). null otherwise ('offline' says itself).
+  refusal: SaveRefusal | null;
 }
 
 // Why a stored save can't be resumed, in the order the decoder checks (3c plan §2.1 "content check on load"): the first

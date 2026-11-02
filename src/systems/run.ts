@@ -25,7 +25,7 @@ import {
   packedFiles, rollTransitHits, emergencyCoreToll, arrivalCharge, layoutCarried, arrivalDamage,
 } from '@systems/carry';
 import { dealDraft, planPacket, applyPickToPacket, pickCharge } from '@systems/draft';
-import { archiveShipStarted, archiveRunEnded, archiveTutorialDone, playsTutorial, type RunLineage } from '@systems/meta';
+import { archiveShipStarted, archiveShipDone, archiveRunEnded, archiveTutorialDone, playsTutorial, type RunLineage } from '@systems/meta';
 import { writeRunSave } from '@systems/save-write';
 import { finaleRunCause } from '@systems/finale';
 import { newSegId } from '@systems/memory-ops';
@@ -304,7 +304,9 @@ export function openDesk(store: Store<GameState>, extra: PendingExtra | null): v
     Object.assign(draft.ui, ui);
     draft.ui.memoryRev++;
   });
-  // SHIP DONE (02 §3.11): a reload resumes at this desk.
+  // SHIP DONE (02 §3.11): the archive's run in progress takes the ship's result (a run abandoned here keeps its colony), and
+  // a reload resumes at this desk.
+  archiveShipDone(store);
   writeRunSave(store, 'ship-done');
 }
 
