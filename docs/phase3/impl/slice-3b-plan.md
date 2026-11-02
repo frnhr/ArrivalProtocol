@@ -927,16 +927,24 @@ types and was checked with crafted models and, for the screenshots only, a throw
     motion shows the true year. The TERMINAL finds the line by reading it back (`map-text.ts sleepLineYears`, pinned
     against `MAP_TEXT.boot.sleep` in `map/text`), not by a new `LogEntry` field.
 14. **The no-Swap line** reads `NO SWAP ABOARD — fly through each burst, then fix ▼` (the draft's `SPACE ends each
-    burst` is true only of a sticky burst, which has its own line). It is a once-only ghost lesson step on a local
-    `!run.licences.includes('swap')` (no REPO selector yet); the THRUST CTRL pip lesson now waits for SWAP to have
-    reached the unit. The classic world licenses SWAP with the first burst, so its lessons are unchanged.
+    burst` is true only of a sticky burst, which has its own line). After the REPO merge it shows on REPO's
+    `noSwapForGhost` (a burst running on an ENGINE FAULT arm ship with no working Swap), once, for up to
+    GHOST_LESSON_SHOW_SEC across the bursts; the THRUST CTRL pip step waits for SWAP to have reached the unit
+    (`run.licences`). The classic world licenses SWAP with the first burst, so its lessons are unchanged.
 15. **NEVER ARRIVED** is a `RunEndModel.undeliveredLine` (null on the classic world), under the colonies line.
 16. **Audio:** `chime` on each `'delivery'` and on `'inbox-new'`.
 
 **Tuning `3b UI` additions:** `POSTCARD_PEOPLE_PER_COLONIST_Y200 = 20`, `REPLY_STALE_AFTER_SHIPS = 2`,
 `SLEEP_YEAR_TICK_YEARS = 5`.
 
-**Requests.** REPO: `repoModel`'s AVAILABLE rows in `REPO_FILE_IDS` order (the number keys index them), `focus` on Rm for
+**After the REPO merge (0fd0dc6).** `REPO_TEXT.boot.patchBroken` reads `> DELIVERY: repair_v2.patch (arrived 2337) ·
+DAMAGED · NOT INSTALLED` (REPO's draft `NOTHING INSTALLED` ran to 72 characters at its worst case); map-boot's
+`deliveryBootLineText` uses it when `patchInstalls` says no (the one approved edit in REPO's file), and
+`map/delivery-packet`'s broken-patch check pins it. The views were re-checked against the real models (screenshots in
+`tests/.out/ui-3b/`): REPOSITORY rows, the tag, KESTREL's Rm recommendation and `4 YRS LATE → … SHIP 5`, the card's red
+`2629 Swap`, SEND ON (`SENT ON · RIDES YOUR NEXT HOP`, FILES 59 → 57).
+
+**Requests (before the merge; the REPO ones are now met by its models).** REPO: `repoModel`'s AVAILABLE rows in `REPO_FILE_IDS` order (the number keys index them), `focus` on Rm for
 the last-rm prompt, ETAs from `REPO_TEXT.eta`; a "Swap aboard" selector if the licence reading is not the one wanted;
 `__ap.route` leaves no `ShipResult` for the ships it flies through (only ship 1's mail shows at KESTREL after it). Lead /
 landing owner: the featured colonists' ages in `PodSummary` for the postcards' `I'm 12 now`.
