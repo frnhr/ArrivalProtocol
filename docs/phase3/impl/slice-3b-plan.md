@@ -948,3 +948,168 @@ DAMAGED · NOT INSTALLED` (REPO's draft `NOTHING INSTALLED` ran to 72 characters
 the last-rm prompt, ETAs from `REPO_TEXT.eta`; a "Swap aboard" selector if the licence reading is not the one wanted;
 `__ap.route` leaves no `ShipResult` for the ships it flies through (only ship 1's mail shows at KESTREL after it). Lead /
 landing owner: the featured colonists' ages in `PodSummary` for the postcards' `I'm 12 now`.
+
+## Deviations (review fixes)
+
+The fix agent's pass over the full review of slice 3b (HEAD d36dbeb), in four commits after it plus this note.
+
+**Item 1: VESPER / ENGINE FAULT without Swap (the lead's decision).**
+1. **(a) SKIP is refused, not stopped at each burst.** On the arm, from the ship's first uncommanded burst (which a SKIP
+   still lands on: the alarm moment) and while no Swap is aboard and fuel is left, a flight's SKIP is refused with
+   `ENGINE FAULT — NO SKIP` (`pace.ts SKIP_REFUSAL_ENGINE_FAULT`, read from `capabilities.ts ghostWithoutSwap`). Stopping
+   the SKIP at each burst instead would mean a press of F every few seconds: a burst comes every 10 tac s on average, about
+   4 wall s at CRUISE ×80. At CRUISE every burst is seen (the whump, `▼ DRIFT`, the counter) and the strip's fix follows it.
+   The landing keeps 1b's rules (only its first burst stops a SKIP). The cost is pacing: VESPER's flight takes 150–200
+   wall s at CRUISE instead of about 42 s with the SKIPs.
+2. **(b) The no-Swap line** is live from the first burst while bursts can come (`repository.ts noSwapForGhost`), not only
+   while one runs, which was a third of a second at CRUISE. For its first `GHOST_NOSWAP_LEAD_SEC` (6 AI s) on the strip
+   it outranks the flight's NOW lines (`preempts`, a lead-in), except a path into the planet and a held burn. After that
+   it is a tutorial, retired after `GHOST_LESSON_SHOW_SEC`. The words are `NO SWAP ABOARD — nothing stops the bursts. Fix ▼
+   after each one` (63 characters). The condition is any ghost source with no Swap (no longer the ENGINE FAULT modifier
+   only), so a Thrust Ctrl hit down to failing behaves the same.
+3. **One selector for "has Swap":** `selectors.ts swapAboard(state)`, a usable Swap file with a copy being eaten counted.
+   The pip and SWAP steps, the no-Swap line, the SKIP refusal and the card read it. The recommendation keeps its generic
+   "working copy or on its way" reading for every kind.
+4. **(c), (e) The recommendation is a rule table**, `RECOMMEND_RULES: { file, due(state) }[]`:
+   1. Swap at a run 2+ first desk with an ENGINE FAULT ship in reach;
+   2. Mv at the first desk;
+   3. Rm;
+   4. Swap;
+   5. Mv while missing;
+   6. Repair.bak;
+   7. Cp;
+   8. REPAIR v2.
+
+   `REPO_SWAP_LOOKAHEAD_LAYERS = 3`. Run 1's first desk keeps Mv. The welcome's file is `firstDeskRecommendation(map)`,
+   which replaces the constant `WELCOME_RECOMMENDS`.
+5. **(d) The card** of a reachable ENGINE FAULT ship reads `ENGINE FAULT · NO SWAP IN TIME` (row `noswap`, under KNOWN
+   PROBLEMS) while no Swap is aboard and none rides the hop (the pick included).
+6. **The gate:** `map/run1-route` fails if VESPER flown without Swap ends other than locked or accepted. The new
+   `map/ghost-noswap` (3 s) builds run 1's VESPER from the repository fixture and checks:
+   - the first burst still stops a SKIP;
+   - the no-Swap line wins the strip right after the alarm and stands between bursts;
+   - `ENGINE FAULT — NO SKIP` follows, and no burst fires inside a SKIP over 40 wall s of pressing F;
+   - a Swap aboard lifts both.
+
+   On the way it checks KESTREL's no-rm line.
+
+**Measured (item 1 (f)).**
+- **The reviewer's `.tmp/rv3b/swap.ts`, 200 fresh arms**, the game's own rule (`base`) before → after:
+
+  | | Before | After |
+  |---|---|---|
+  | ENGINE FAULT ships reached without Swap | 30 / 37 | 7 / 37 |
+  | Ships at depth 3+ without rm | 16 / 841 | 16 / 841 |
+  | Finals without rm | 0 / 200 | 0 / 200 |
+  | Debris ships without Mv | 0 / 91 | 7 / 91 |
+
+  The after row is the reviewer's `L3 s>mv d1+mv` variant, exactly.
+- **VESPER on run 1 without Swap**, the headless strip-following kid (wp2 `followDirector` with wp11's defenders, the
+  worked route with Mv and Rm, landed by the strip with `followLanding`), seeds 3, 5, 7 and 11 × reaction 0.4 and 0.8 s
+  (`.tmp/fix3b/vesper.ts`):
+
+  | | Flight | Fuel | Bursts | In an LZ (of 3,200) | Flight wall s |
+  |---|---|---|---|---|---|
+  | Before | 8 accepted | 0% | 26–41 | 0, 0, 1000 ×4, 2200 (one landing still going at 900 s) | 32–45 |
+  | After (a)+(b) | 7 accepted, 1 crashed | 0% | 27–40 | 0, 0, 1000 ×2, 2200; 2 landings still going at 900 s (ORBIT DECAYED) | 148–204 |
+  | Reference: Swap aboard | 4 locked | 35–43% | 2–5 | 2600–3200 | 39–44 |
+
+  **(a)+(b) do not fix the trap**, so this pass stopped there on item 1, as the brief asked. **Root cause: fuel.** A
+  burst is 30% thrust for 1 tac s, so Δv 0.005 × 0.3 × 30 = 0.045 km/s, 2.5% of the CAPTURE template's 1.8 km/s.
+  VESPER's coast to ▼ fires 27–40 of them by game time, so 68–100% of the tank goes to the bursts whatever the kid sees or
+  does. The landing's bursts then decay the orbit. `GHOST_BY_BAND` was tuned in WP12 for a world where SWAP came with the
+  first burst.
+- **Levers measured, not committed** (the same kid, seeds 3, 5, 7, 11):
+  - half the push (`amp` 0.15): locked with 11–29% fuel, but 0–1,800 of 3,200 in an LZ;
+  - half the rate (mean 20 tac s): the same, plus one accepted run at 0% that landed all 3,200.
+
+  Both leave the landing short, because bursts keep firing there. A lever for the lead and Fran:
+  - a gentler ghost on the arm when no Swap is aboard;
+  - bursts that cost no fuel;
+  - no bursts in the landing;
+  - a larger Δv budget on ENGINE FAULT ships.
+- **CURLEW on the three full-depth routes** (`AP_DEPTH=full map/run1-route`, the tag followed) is still **stranded on
+  all three**. Run 1 keeps its first-desk Mv, and Rm comes before Swap, so Swap is tagged at HERON and arrives after
+  CURLEW. Its card now says `ENGINE FAULT · NO SWAP IN TIME`. Charge at the choice: 38 (MERGE), 34 (MERGE), 8 (PURGE).
+  VESPER on the worked route ends partial: 3,200 in an LZ with the instant landing, 1 star, fuel 0%.
+
+**Review findings.**
+7. **M2:**
+   - Mv is re-tagged while missing (rule 5);
+   - Cp when HOLLOW is aboard, or a ship within the look-ahead is one hop from a final ship or is one (rule 7);
+   - `NO RM ABOARD — ask the REPOSITORY [R] at the next desk` (a seed in memory with no DELETE) and `NO MV ABOARD — …` (the
+     debris lesson's moment with no MOVE) are once-a-run tutorials on the arm.
+8. **M3:** `nothingArrives(state)`: when every reachable destination's forecast is NEVER (the forecast is the same for
+   every file), there is no tag and the window says `Nothing can reach you in time now :)`. On the worked route that is
+   CORMORANT, which used to tag Repair.bak.
+9. **m1:** the card's DELIVERIES row, TIMELINE marks and the new `noswap` row exist only for a ship SET COURSE can go to.
+   **m2:** `Cp ✗ NEVER ARRIVES`. **m5:** `RepoModel.eta` / `forecast` are drawn once above AVAILABLE, and the rows keep
+   their tag and request. The e2e lib reads every row's ETA from it.
+10. **m3:** while a chip that is not sent on rides a packet over the link or room, the gate line is `n BLOCKS TOO MANY ·
+    LEAVE FILES OR SEND ON` and the arrival line `ON ARRIVAL: LEAVE FILES OR SEND ON FIRST` (new
+    `REPO_TEXT.packet.arrivalOverWithDeliveries`). `REPO_TEXT.window.restrictedRefusal` and `desk.back` are deleted.
+11. **m4:** `ToolsTabs closeToolWindow(id)`. The flight INBOX closes on every world reset (`run.rev`).
+12. **m6:** `PodSummary.featured: FeaturedColonist[]` (`{ name, age }`), with the age at landing. Year 1 says `It's Ada.
+    I'm 12 now.`. Year 50 says `I'm 61 now` up to `POSTCARD_AGE_SHOWN_MAX` (99); past it, the old wording without an
+    age. The year-1 card is still three lines.
+13. **m8:** CONTROL sends at most one reply a boot. The replies reaching one boot are one memo, and a policy reminder due
+    there rides in it as a two-line postscript (id `reply:<slots>+policy:<ring>`). The worked route goes from **21 to 20
+    messages** (per boot 1, 2, 5, 4, 5, 4 → 1, 2, 4, 4, 5, 4). Only KESTREL had a reply and a policy at the same boot.
+    **The target of about 12 is not reached**: 10 of the 20 are colony postcards (05 §3.3's three cards per colony,
+    joined only within a colony). Getting near 12 needs a story call, for example a year-50 card only when it joins a
+    year-1 card (−1) and year-200 cards from the first colony only (−3), which gives 16. The tally hides `NEVER ARRIVED`
+    on a run that requested nothing.
+14. **Nits:**
+    - a second REPAIR v2 patch folds, so the delivery lines stay within `DELIVERY_BOOT_LINES_MAX` (three patches and a
+      file: `repair-v2 | mv | repair-v2+repair-v2`);
+    - the INBOX dock item and the R and I tabs are hidden on the classic world (the CARD tab stays as its title), and R
+      and I do nothing there;
+    - a tab click and a mail row click tick once (their pointerdown already did); a key still ticks;
+    - `__ap.ship` clears the run's requests;
+    - `classic-five.ts`'s stale licence comment is fixed.
+
+**e2e: the KESTREL → VESPER white-out.** It was real, if rare. The crossing ran on a timer started when `on` was added.
+On a busy page, the timer could fire before any frame drew the flood, and the crossing then swapped `on` for `fading`
+with no white shown. The hold now counts from the flood's `transitionend`, with `WHITE_OUT_FLOOD_GRACE_SEC` (1 s past
+the flood) as the fallback. Under normal load the timings are unchanged. Measured only by reasoning and a Playwright pass;
+the e2e tier is the lead's.
+
+**Unit tier.**
+- `tests/unit/run.mjs` skips suites whose header carries `// BALANCE_ONLY: <why>` in quick depth: wp11/full-run,
+  wp12/playthrough, lead1/fix2/rule4, lead1/low-tank, lead1/shrink-reaction. It lists them as SKIP and prints the 10
+  slowest. AGENTS.md describes the marker.
+- Quick cuts:
+  - per-ship on VESPER only;
+  - landing/flow on ARES-VII and VESPER;
+  - autoburn-sim at offset 0;
+  - coast-skip joins the long WAIT's loop at 0.95 π true anomaly (the climb took 22 s of its 35);
+  - rule4-sweep: the 60 s ignore and the 4,300 km capture only;
+  - rule2-shrink: the one-burn and 240 s ignores, the 3 s over-hold, three over-trims, two ▼ heights;
+  - rule4-fuel: 30 and 44%, 2% steps;
+  - dry-end: 7% steps in its first band.
+- dodge-rules' SKIP-stop block is folded into kestrel-debris: the scenario reports `lastSecondsTactical`.
+- wp11/merge-test and wp11/fix1 restore one LAST LIGHT duel (`wp11/duel.ts`, seed 41, `flyOnce(…, { shared: true })`)
+  instead of flying it 13 times.
+- **A real test bug found on the way:** a snapshot restored from disk into a fresh process minted runtime segment ids
+  again (`memory: duplicate id free~217`). `restoreState` now moves `memory-ops`' counter past the snapshot's ids.
+  3c's save will meet the same counter; flagged for it.
+- `tsc-tests` was left as it is. It is incremental (about 7 s on a warm tree, 22–25 s cold), and checking the tests
+  against declarations would need src as a composite project; the budget was met without it.
+
+**Exit checks.**
+- **The unit tier**, once at the end on a quiet machine (fly-once cache cold after the last edits): 160 passed, 0 failed,
+  5 balance-only skipped, **206 s** on 4 workers. It was 287 s at the review and 279 s on this branch before the cuts.
+  - The 10 slowest before: coast-skip 42, wp11/fix1 37, rule2-shrink 29, rule4-sweep 27, run1-route 26, low-tank 26,
+    tsc-tests 25, per-ship 25, merge-test 25, review-1b 23.
+  - After: run1-route 25, review-1b 23, rule2-shrink 21, wp9/fix2 19, kestrel-fixes 18, far-reach 18, dodge-rules 17,
+    wp11/fix1 17, wp9/fix1 16, autoburn-sim 16.
+- `npm run typecheck` and the tests tsc pass.
+- Playwright (dev server, `?debug`):
+  - VESPER without Swap shows `NO SWAP ABOARD — …` right after the first burst;
+  - 40 presses of F over 10 s started no SKIP, and the header shows `ENGINE FAULT — NO SKIP`;
+  - KESTREL → VESPER with ten files catching up says `13 BLOCKS TOO MANY · LEAVE FILES OR SEND ON` and `ON ARRIVAL:
+    LEAVE FILES OR SEND ON FIRST`;
+  - the INBOX window opened in flight is closed on the next ship;
+  - no page errors.
+
+  The e2e playthrough's no-Swap words are updated to match.
