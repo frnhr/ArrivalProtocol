@@ -300,6 +300,25 @@ body.reduced-motion .desk-card-win { transition: none; }
 .tx-stamp[hidden] { display: none; }
 .tx-stamp.on { animation: stamp-in 140ms cubic-bezier(0.2, 0.9, 0.3, 1.25) both; }
 .transmit-screen.reduced .tx-stamp.on { animation: wr-in 0.3s ease-out both; transform: translate(-50%, -50%) rotate(-3deg); opacity: 1; }
+/* Slice 3b: the DELIVERIES chip row (a delivery's chip in the soul green of a file that came for you, SEND ON under it;
+   sent on, it stays behind dashed; lost into the final ship, in red) and the IN TRANSIT line. */
+.tx-deliveries { display: flex; flex-direction: column; gap: 4px; }
+.tx-deliveries[hidden] { display: none; }
+.tx-deliveries-label { text-align: left; }
+.tx-chip.tx-delivery { border-color: color-mix(in srgb, var(--good) 60%, transparent); background: color-mix(in srgb, var(--good) 7%, transparent); }
+.tx-chip.tx-delivery .tx-chip-name { color: var(--good); }
+.tx-chip-sendon {
+  align-self: flex-start; margin-top: 2px; padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--transmit-line) 50%, transparent);
+  font-size: 9px; letter-spacing: 0.14em; color: var(--transmit-line);
+}
+.tx-chip.tx-delivery.sent-on { border-style: dashed; opacity: 0.75; background: transparent; }
+.tx-chip.tx-delivery.sent-on .tx-chip-sendon { color: var(--report-bg); background: var(--transmit-line); }
+.tx-chip.tx-delivery.lost { border-color: var(--warn); }
+.tx-chip.tx-delivery.lost .tx-chip-name { color: var(--warn); text-decoration: line-through; }
+.tx-chip.tx-delivery.lost .tx-chip-sendon { color: var(--report-bg); background: var(--warn); border-color: var(--warn); }
+.tx-intransit { font-size: 11px; letter-spacing: 0.12em; color: var(--report-dim); text-align: left; }
+.tx-intransit[hidden] { display: none; }
+
 @media (max-width: 768px) {
   .tx-back { position: static; margin-bottom: 8px; }
   .tx-packet { grid-template-columns: 40px minmax(0, 1fr) auto; }
