@@ -374,7 +374,7 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
   }] });
   const result = landingResult(hardDown, 'locked');
   check('landingResult counts the touchdown\'s touch (hard), not the launch\'s guess', result.lzs[0]?.hard === COLONISTS_PER_POD && result.pods[0]?.touch === 'hard');
-  check('the pods\' detail keeps the featured names', result.pods[0]?.featured.join('|') === 'Okafor, Ada');
+  check('the pods\' detail keeps the featured names and ages', result.pods[0]?.featured.map((colonist) => `${colonist.name} ${colonist.age}`).join('|') === 'Okafor, Ada 11');
   check('ON TARGET reads the touchdown\'s touch too', onTargetTally(hardDown).onTargetPods === 0);
 }
 

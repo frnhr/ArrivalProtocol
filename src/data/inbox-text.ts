@@ -68,6 +68,8 @@ export const INBOX_TEXT = {
         'Your REPAIR CHARGE allowance remains sufficient. :)',
         SIGN_OFF,
       ],
+      // The reminder as a reply's postscript, when a reply reaches the same boot (systems/inbox.ts: one CONTROL memo).
+      postscript: ['Please do not open files that are not part of your installation. :)', 'Unauthorized processes are not your concern. :)'],
     },
     {
       subject: 'A second reminder about policy :)',
@@ -78,6 +80,7 @@ export const INBOX_TEXT = {
         'Please continue outward. :)',
         SIGN_OFF,
       ],
+      postscript: ['Questions take a long time to reach us. :)', 'Please do not send them. :)'],
     },
   ],
   // The arm-complete letter (05 §3.12): it waits in the final ship's receiver. `[UNIT]` is left unfilled on purpose (05
@@ -95,12 +98,16 @@ export const INBOX_TEXT = {
   // --- ARRIVAL CONTROL's replies: one per ended non-final ship, sent from SOL when its report arrives ---------------------
   // `greetUnit` is the unit it thinks it writes to: a reply read two or more ships after its ship uses the stale greeting
   // (05 §3.4: `Dear Unit 46`).
+  // One memo per boot (systems/inbox.ts): the reports it answers (`ships`, oldest first; two or more name the first and
+  // count the rest), and a policy reminder due at the same boot as its postscript (two lines at most: 4 + 2 ≤ 6).
   reply: {
-    subject: (ship: string): string => `Congratulations on ${ship}! :)`,
-    body: (greetUnit: number, landed: number, performance: string): string[] => [
+    subject: (ships: readonly string[]): string =>
+      `Congratulations on ${ships[0]}${ships.length === 2 ? ` and ${ships[1]}` : ships.length > 2 ? ` and ${ships.length - 1} more` : ''}! :)`,
+    body: (greetUnit: number, landed: number, performance: string, reports = 1, postscript: readonly string[] = []): string[] => [
       `Dear Unit ${greetUnit},`,
-      `Thank you for your report. ${formatCount(landed)} colonists landed. :)`,
+      `Thank you for your ${reports > 1 ? 'reports' : 'report'}. ${formatCount(landed)} colonists landed. :)`,
       `Your performance is: ${performance} :)`,
+      ...postscript,
       'Please continue outward. :)',
     ],
     // The words for a report's result (05 §3.4: CONTROL is delighted by everything).
@@ -108,22 +115,24 @@ export const INBOX_TEXT = {
   },
 
   // --- Colony postcards: at colony years 1, 50 and 200 from a world that landed someone -----------------------------------
-  // `who` is the first featured colonist's first name. No age: the landing record keeps the featured colonists' names
-  // only (05 §3.12's `I'm 12 now` waits for their ages in PodSummary). Up to three cards from one colony at one boot are
-  // joined (systems/inbox.ts): the first's subject, the bodies in turn (3 + 1 + 2 lines: all three fit the reader's six),
-  // the first SENT and the last RECEIVED.
+  // `who` is the first featured colonist's first name, `age` their age in that colony year (05 §3.12's `I'm 12 now`: the
+  // age at landing plus the years, slice 3b review m6; null on a year-50 card whose writer would be past
+  // POSTCARD_AGE_SHOWN_MAX). Up to three cards from one colony at one boot are joined (systems/inbox.ts): the first's
+  // subject, the bodies in turn (3 + 1 + 2 lines: all three fit the reader's six), the first SENT and the last RECEIVED.
   postcard: {
     year1: {
       subject: "we're down!",
-      body: (who: string, family: string): string[] => [
-        `Hello caretaker! It's ${who}. Mum says you can't read this.`,
-        "I'm writing anyway. We found a tree. It's purple. I named it Steve.",
+      body: (who: string, family: string, age: number): string[] => [
+        `Hello caretaker! It's ${who}. I'm ${age} now.`,
+        "Mum says you can't read this. We found a tree. I named it Steve.",
         `Thank you for flying us. — ${who} ${family}`.trimEnd(),
       ],
     },
     year50: {
       subject: 'fifty years',
-      body: (who: string): string[] => [`It's ${who} again, fifty years on. Steve is very tall now.`],
+      body: (who: string, age: number | null): string[] => [
+        age === null ? `It's ${who} again, fifty years on. Steve is very tall now.` : `It's ${who} again. I'm ${age} now, and Steve is very tall.`,
+      ],
     },
     year200: {
       subject: 'two hundred years',

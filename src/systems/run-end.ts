@@ -214,7 +214,10 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
     route: run.map.route.map((stop) => stop.slot),
     colonies,
     coloniesLine: MAP_TEXT.tally.colonies(colonies),
-    undeliveredLine: run.map.world === 'arm' ? REPO_TEXT.tally.neverArrived(undeliveredFiles(run).map((request) => REPO_FILES[request.file].name)) : null,
+    // The arm's NEVER ARRIVED line, only for a run that asked the repository for something (review m8: `NEVER ARRIVED: —`
+    // on a run with no request said nothing).
+    undeliveredLine: run.map.world === 'arm' && run.repo.requests.length > 0
+      ? REPO_TEXT.tally.neverArrived(undeliveredFiles(run).map((request) => REPO_FILES[request.file].name)) : null,
   };
 }
 

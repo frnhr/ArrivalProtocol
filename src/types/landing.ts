@@ -362,7 +362,15 @@ export interface PodSummary {
   points: number;
   parkedWhy: ParkReason | null;
   restored: boolean;
-  featured: string[];   // the featured colonists' names ('Okafor, Ada'): rolled from the run's rng, so kept here
+  // The featured colonists (name 'Okafor, Ada', age at landing): rolled from the run's rng, so kept here. The age is the
+  // postcards' (slice 3b review m6: `I'm 12 now` in colony year 1 is the age plus the colony's years).
+  featured: FeaturedColonist[];
+}
+
+// A featured colonist as a pod's summary keeps them (PodSummary.featured).
+export interface FeaturedColonist {
+  name: string;
+  age: number;
 }
 
 // The landing half of a ShipResult (state/schema.ts), folded from the pods by landing-rules landingResult.

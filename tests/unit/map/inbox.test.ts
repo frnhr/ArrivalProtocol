@@ -1,6 +1,7 @@
 // Slice 3b Track UI: the INBOX's derivation (systems/inbox.ts; 05-story §3.3–§3.5, §3.12; slice-3b-plan §2.4, §4.3), pure
 // on a crafted run: run 1's arm along the worked route (ARES-VII → HALCYON → KESTREL → VESPER → CORMORANT → LAST LIGHT)
-// with a fixture of ShipResults in which every ship lands someone. Pins §4.3's table boot by boot, the stamps, the joined
+// with a fixture of ShipResults in which every ship lands someone. Pins §4.3's table boot by boot (one CONTROL memo a boot
+// since the review, m8: a policy reminder rides in a reply at the same boot), the stamps, the joined
 // postcards, no postcard without landed colonists, the stale greeting, the ring crossings of a two-layer hop, arm only,
 // stable ids, the read marks, and HOLLOW's reading line once a run.
 import { check, finish } from '../landing/checks';
@@ -28,7 +29,7 @@ function result(depth: number, landed: number, stars = 2): ShipResult {
     points: landed, colony: landed > 0 ? COLONIES[depth - 1]! : null,
     pods: [{
       pod: 1, family: 'Okafor', colonists: landed, fate: 'down', place: null, lz: landed > 0 ? 'LZ-A' : null, touch: null,
-      points: landed, parkedWhy: null, restored: false, featured: ['Okafor, Ada', 'Okafor, Ben'],
+      points: landed, parkedWhy: null, restored: false, featured: [{ name: 'Okafor, Ada', age: 11 }, { name: 'Okafor, Ben', age: 40 }],
     }],
   };
 }
@@ -71,9 +72,13 @@ check('HALCYON: the reply to ARES-VII (2308 / 2337) and RIVERSIDE year 1 (2301 /
 check("…RIVERSIDE's card: FROM `RIVERSIDE · <world>`, `we're down!`, signed by its first featured colonist",
   byId(all, `postcard:${ARES}:1`)!.from.startsWith('RIVERSIDE · ') && byId(all, `postcard:${ARES}:1`)!.subject === "we're down!"
   && byId(all, `postcard:${ARES}:1`)!.body.some((line) => line.includes('— Ada Okafor')));
-check('KESTREL: the reply to HALCYON (2381 / 2436), RIVERSIDE y50 (2350 / 2397), HALCYON\'s colony y1 + y50 joined, MERIDIAN → 046 (2351 / 2380), policy (ring 2)',
-  ids(at(all, 3)) === want(`letter:meridian policy:2 postcard:${ARES}:50 postcard:${HALCYON}:1+50 reply:${HALCYON}`)
-  && stamp(byId(all, `reply:${HALCYON}`)) === 'SENT 2381 · RECEIVED 2436' && stamp(byId(all, `postcard:${ARES}:50`)) === 'SENT 2350 · RECEIVED 2397'
+check("…its writer's age in that colony year (review m6): Ada landed at 11, so `I'm 12 now` at year 1 and `I'm 61 now` at year 50",
+  byId(all, `postcard:${ARES}:1`)!.body.some((line) => line.includes("It's Ada. I'm 12 now."))
+  && byId(all, `postcard:${ARES}:50`)!.body.some((line) => line.includes("I'm 61 now")));
+check('KESTREL: the reply to HALCYON (2381 / 2436) with ring 2\'s policy reminder as its postscript (one CONTROL memo a boot), RIVERSIDE y50 (2350 / 2397), HALCYON\'s colony y1 + y50 joined, MERIDIAN → 046 (2351 / 2380)',
+  ids(at(all, 3)) === want(`letter:meridian postcard:${ARES}:50 postcard:${HALCYON}:1+50 reply:${HALCYON}+policy:2`)
+  && stamp(byId(all, `reply:${HALCYON}+policy:2`)) === 'SENT 2381 · RECEIVED 2436'
+  && INBOX_TEXT.policy[0]!.postscript.every((line) => byId(all, `reply:${HALCYON}+policy:2`)!.body.includes(line)) && stamp(byId(all, `postcard:${ARES}:50`)) === 'SENT 2350 · RECEIVED 2397'
   && stamp(byId(all, 'letter:meridian')) === 'SENT 2351 · RECEIVED 2380', ids(at(all, 3)));
 check('VESPER: RIVERSIDE y200 (2500 / 2600), KESTREL\'s colony y1 + y50, no-address (ring 3), policy (ring 4)',
   ids(at(all, 4)) === want(`noaddr:3 policy:4 postcard:${ARES}:200 postcard:${KESTREL}:1+50`) && stamp(byId(all, `postcard:${ARES}:200`)) === 'SENT 2500 · RECEIVED 2600',
@@ -87,7 +92,8 @@ check('LAST LIGHT: the reply to VESPER (2732 / 2912), VESPER\'s y200, CORMORANT\
   && stamp(byId(all, `reply:${VESPER}`)) === 'SENT 2732 · RECEIVED 2912' && stamp(byId(all, 'arm-complete')) === 'SENT 2280 · RECEIVED 2460',
   ids(at(all, 6)));
 check('…no reply to CORMORANT reaches LAST LIGHT (2946 + 180 > 3020)', byId(all, `reply:${CORMORANT}`) === undefined);
-check('21 messages in all (plan risk 7)', all.length === 21, String(all.length));
+check('20 messages in all (plan risk 7; review m8: one CONTROL memo a boot, from 21)', all.length === 20, String(all.length));
+check('…at most one CONTROL reply at any boot', [1, 2, 3, 4, 5, 6].every((depth) => at(all, depth).filter((m) => m.kind === 'reply').length <= 1));
 
 // Stamps and joins.
 const joined = byId(all, `postcard:${HALCYON}:1+50`)!;
@@ -102,26 +108,26 @@ check('a reply read one ship later greets this unit (Dear Unit 47)', byId(all, `
 check('every message fits the reader: at most 6 body lines of at most 70 characters',
   all.every((m) => m.body.length <= INBOX_BODY_MAX_LINES && [m.subject, m.from, ...m.body].every((line) => line.length <= MAX_LINE_CHARS)));
 check('three cards at one boot still fit (separators dropped)',
-  joinBodies([INBOX_TEXT.postcard.year1.body('Ada', 'Okafor'), INBOX_TEXT.postcard.year50.body('Ada'), INBOX_TEXT.postcard.year200.body('X', 'Ada', 1)]).length <= INBOX_BODY_MAX_LINES);
+  joinBodies([INBOX_TEXT.postcard.year1.body('Ada', 'Okafor', 12), INBOX_TEXT.postcard.year50.body('Ada', 61), INBOX_TEXT.postcard.year200.body('X', 'Ada', 1)]).length <= INBOX_BODY_MAX_LINES);
 
 // No postcard without landed colonists; the reply still comes.
 const noLand = inboxMessages(runAt(6, false, (d) => (d === 2 ? 0 : 200 * d)));
 check('HALCYON landed nobody: no card from it ever, CONTROL still replies',
-  !noLand.some((m) => m.id.startsWith(`postcard:${HALCYON}:`)) && byId(noLand, `reply:${HALCYON}`) !== undefined);
+  !noLand.some((m) => m.id.startsWith(`postcard:${HALCYON}:`)) && noLand.some((m) => m.id.startsWith(`reply:${HALCYON}`)));
 
 // Up to the current stop only; stable ids as the route grows.
 const atKestrel = inboxMessages(runAt(3, false));
 check('at KESTREL\'s boot the INBOX holds boots 1–3 only, with the same ids as at the end',
   Math.max(...atKestrel.map((m) => m.readAtDepth)) === 3 && atKestrel.every((m) => byId(all, m.id)?.readAtDepth === m.readAtDepth)
   && ids(atKestrel) === ids(all.filter((m) => m.readAtDepth <= 3)));
-check('newMessagesAtBoot at KESTREL: its five', newMessagesAtBoot(runAt(3, false)).length === 5);
+check('newMessagesAtBoot at KESTREL: its four', newMessagesAtBoot(runAt(3, false)).length === 4);
 
 // A two-layer hop crosses two rings: ARES-VII (8 LY) → KESTREL (55 LY) crosses rings 1 and 2: one policy reminder.
 const skip = runAt(1, true);
 skip.run.map.route.push({ slot: KESTREL, depth: 2, hop: hopBetween(skip.run.map, ARES, KESTREL) });
 skip.run.shipIndex = 1;
-check('a two-layer hop (ARES-VII → KESTREL) brings ring 2\'s policy reminder at its boot',
-  byId(inboxMessages(skip), 'policy:2')?.readAtDepth === 2);
+check('a two-layer hop (ARES-VII → KESTREL) brings ring 2\'s policy reminder at its boot (in the reply to ARES-VII there)',
+  byId(inboxMessages(skip), `reply:${ARES}+policy:2`)?.readAtDepth === 2, ids(inboxMessages(skip)));
 
 // The read marks and the unread list.
 check('unread: everything at first', inboxUnread(final.getState()).length === all.length);

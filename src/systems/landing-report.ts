@@ -161,7 +161,7 @@ function credits(state: Readonly<GameState>, tally: LandingTally): LandingReport
     said.add(words);
     const where = LANDING_REPORT_UI_TEXT.creditWhere(pod.place!, pod.lz, touch);
     return {
-      pod: pod.pod, family: pod.family, names: pod.featured, place: pod.place!, touch, points: pod.points, lead: pod.pod === landing.lead,
+      pod: pod.pod, family: pod.family, names: pod.featured.map((colonist) => colonist.name), place: pod.place!, touch, points: pod.points, lead: pod.pod === landing.lead,
       lz: pod.lz, colonist: { name: colonist.name, age: colonist.age, about: colonist.line, words }, where,
       line: LANDING_REPORT_UI_TEXT.credit(colonist.name, colonist.age, where, words),
     };

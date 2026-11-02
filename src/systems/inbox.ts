@@ -2,6 +2,7 @@ import type { Store } from '@state/store';
 import type { GameState, RunState, ShipResult } from '@state/schema';
 import type { RouteStop, RunMapState } from '@/types/map';
 import type { InboxMessage } from '@/types/inbox';
+import type { FeaturedColonist } from '@/types/landing';
 import { lightArrival, type LightSource } from '@systems/delivery-rule';
 import { armShipAt, isEndSlot, worldSlotOf } from '@systems/map-streams';
 import { solLy, ringsCrossed } from '@systems/map-geometry';
@@ -9,8 +10,9 @@ import { WORLDS, RING_LY } from '@data/arm';
 import { UNIT_046_TRAIL } from '@data/ship-names';
 import { INBOX_TEXT, firstNameOf, familyOf } from '@data/inbox-text';
 import { REPO_FILE_TEXT } from '@data/repo-text';
+import { firstDeskRecommendation } from '@systems/repository';
 import {
-  WELCOME_SENT_BEFORE_START_YEARS, POSTCARD_COLONY_YEARS, INBOX_BODY_MAX_LINES, POSTCARD_PEOPLE_PER_COLONIST_Y200,
+  WELCOME_SENT_BEFORE_START_YEARS, POSTCARD_COLONY_YEARS, INBOX_BODY_MAX_LINES, POSTCARD_PEOPLE_PER_COLONIST_Y200, POSTCARD_AGE_SHOWN_MAX,
   REPLY_STALE_AFTER_SHIPS, MAX_LINE_CHARS,
 } from '@data/tuning';
 
@@ -32,9 +34,11 @@ import {
 // ARRIVAL CONTROL's words for a report, by its stars (05 §3.4: it is delighted by everything; ★★★ is the best it knows).
 const PERFORMANCE_BY_STARS: readonly (keyof typeof INBOX_TEXT.reply.performance)[] = ['poor', 'fair', 'fair', 'good'];
 
-// The file the welcome recommends: 02 §3.8's first rule (the run's first desk → Mv), so the welcome and the first desk's
-// tag always agree.
-const WELCOME_RECOMMENDS = REPO_FILE_TEXT.mv.boot;
+// The file the welcome recommends: the first desk's tag (repository.ts firstDeskRecommendation: Mv on run 1, Swap on a later
+// run with an ENGINE FAULT ship in reach of ship 1), so the welcome and the first desk always agree.
+function welcomeRecommends(map: Readonly<RunMapState>): string {
+  return REPO_FILE_TEXT[firstDeskRecommendation(map)].boot;
+}
 
 // --- The derivation, memoised ------------------------------------------------------------------------------------------
 
@@ -64,9 +68,10 @@ export function inboxMessages(state: Readonly<GameState>): InboxMessage[] {
 function deriveMessages(run: Readonly<RunState>): InboxMessage[] {
   const map = run.map;
   const route = map.route;
+  const policies = policiesInReplies(run);
   const messages: InboxMessage[] = [
-    ...broadcasts(run),
-    ...replies(run),
+    ...broadcasts(run, policies),
+    ...replies(run, policies),
     ...postcards(run),
     ...letters(run),
   ];
@@ -98,7 +103,7 @@ function stopSol(map: Readonly<RunMapState>, stop: Readonly<RouteStop>): number 
 
 // --- ARRIVAL CONTROL's broadcasts and 046's no-address mail (by the boots) ---------------------------------------------
 
-function broadcasts(run: Readonly<RunState>): InboxMessage[] {
+function broadcasts(run: Readonly<RunState>, policiesInReplies: ReadonlyMap<number, number>): InboxMessage[] {
   const map = run.map;
   const sent = map.startYear - WELCOME_SENT_BEFORE_START_YEARS;
   const out: InboxMessage[] = [];
@@ -110,7 +115,7 @@ function broadcasts(run: Readonly<RunState>): InboxMessage[] {
       tag: null, tone: 'control',
     });
     if (stop.depth === 1) {
-      out.push(control('welcome', 'welcome', INBOX_TEXT.welcome.subject(run.unitNumber), INBOX_TEXT.welcome.body(map.arm.length, WELCOME_RECOMMENDS)));
+      out.push(control('welcome', 'welcome', INBOX_TEXT.welcome.subject(run.unitNumber), INBOX_TEXT.welcome.body(map.arm.length, welcomeRecommends(map))));
     }
     // The rings this boot's beam crossed (the first ship: from SOL).
     const prev = index === 0 ? null : map.route[index - 1]!;
@@ -118,7 +123,7 @@ function broadcasts(run: Readonly<RunState>): InboxMessage[] {
     for (const ring of ringsCrossed(prevSol, sol)) {
       const n = ring + 1;
       const policy = POLICY_RINGS.indexOf(n);
-      if (policy >= 0) {
+      if (policy >= 0 && policiesInReplies.get(stop.depth) !== n) {
         const text = INBOX_TEXT.policy[policy]!;
         out.push(control(`policy:${n}`, 'policy', text.subject, text.body(run.unitNumber)));
       }
@@ -163,31 +168,71 @@ function relayAfter(unit: number): number {
 
 // --- ARRIVAL CONTROL's replies (one per ended non-final ship, from SOL when its report arrives) ------------------------
 
-function replies(run: Readonly<RunState>): InboxMessage[] {
+// One reply's facts: the ship it answers, when it was sent, where it is read, and its words.
+interface ReplyDue {
+  ship: Readonly<ShipResult>;
+  sent: number;
+  read: { depth: number; receivedYear: number };
+}
+
+function repliesDue(run: Readonly<RunState>): ReplyDue[] {
   const map = run.map;
-  return run.ships.flatMap((ship): InboxMessage[] => {
+  return run.ships.flatMap((ship): ReplyDue[] => {
     if (isEndSlot(map, ship.slot)) return [];
     const stop = map.route[ship.depth - 1];
     if (stop === undefined || stop.slot !== ship.slot) throw new Error(`inbox: ${ship.shipName} (depth ${ship.depth}) is not on the route`);
     const sent = stopYear(map, stop) + stopSol(map, stop);
     const read = lightArrival(map, { kind: 'sol' }, sent, map.route, ship.depth);
-    if (read === null) return [];
-    // Read two or more ships after its ship, CONTROL still writes to the unit before you (05 §3.4's stale greeting).
-    const greet = read.depth - ship.depth >= REPLY_STALE_AFTER_SHIPS ? run.unitNumber - 1 : run.unitNumber;
-    const performance = INBOX_TEXT.reply.performance[PERFORMANCE_BY_STARS[Math.min(3, Math.max(0, ship.stars))]!];
-    return [{
-      id: `reply:${ship.slot}`, kind: 'reply', from: INBOX_TEXT.from.control, sentYear: sent, receivedYear: read.receivedYear,
-      readAtDepth: read.depth, subject: INBOX_TEXT.reply.subject(ship.shipName), body: INBOX_TEXT.reply.body(greet, ship.landedInLz, performance),
-      tag: null, tone: 'control',
-    }];
+    return read === null ? [] : [{ ship, sent, read }];
   });
+}
+
+// CONTROL's replies, at most ONE per boot (slice 3b review m8: the INBOX ran to 21 messages, 5 at a boot): the reports
+// whose replies reach the same boot are answered in one memo (the first's greeting, the colonists of all of them, the
+// best performance), and a policy reminder due at that boot rides in it as a postscript instead of a memo of its own
+// (`policies`: the boots' reminders, which broadcasts() then leaves out). The memo keeps the latest reply's stamps.
+function replies(run: Readonly<RunState>, policies: ReadonlyMap<number, number>): InboxMessage[] {
+  const byBoot = new Map<number, ReplyDue[]>();
+  for (const due of repliesDue(run)) byBoot.set(due.read.depth, [...(byBoot.get(due.read.depth) ?? []), due]);
+  return [...byBoot.entries()].map(([depth, group]): InboxMessage => {
+    const first = group[0]!;
+    const last = group[group.length - 1]!;
+    // Read two or more ships after its ship, CONTROL still writes to the unit before you (05 §3.4's stale greeting).
+    const greet = depth - first.ship.depth >= REPLY_STALE_AFTER_SHIPS ? run.unitNumber - 1 : run.unitNumber;
+    const stars = Math.max(...group.map((due) => due.ship.stars));
+    const performance = INBOX_TEXT.reply.performance[PERFORMANCE_BY_STARS[Math.min(3, Math.max(0, stars))]!];
+    const landed = group.reduce((sum, due) => sum + due.ship.landedInLz, 0);
+    const policy = policies.get(depth);
+    const postscript = policy === undefined ? [] : INBOX_TEXT.policy[POLICY_RINGS.indexOf(policy)]!.postscript;
+    const names = group.map((due) => due.ship.shipName);
+    return {
+      id: `reply:${group.map((due) => due.ship.slot).join('+')}${policy === undefined ? '' : `+policy:${policy}`}`,
+      kind: 'reply', from: INBOX_TEXT.from.control, sentYear: last.sent, receivedYear: last.read.receivedYear, readAtDepth: depth,
+      subject: INBOX_TEXT.reply.subject(names), body: INBOX_TEXT.reply.body(greet, landed, performance, names.length, postscript),
+      tag: null, tone: 'control',
+    };
+  });
+}
+
+// The boots (depth → ring) whose policy reminder rides in a reply: a reply reaches that boot too.
+function policiesInReplies(run: Readonly<RunState>): Map<number, number> {
+  const replyBoots = new Set(repliesDue(run).map((due) => due.read.depth));
+  const out = new Map<number, number>();
+  run.map.route.forEach((stop, index) => {
+    const prev = index === 0 ? null : run.map.route[index - 1]!;
+    const prevSol = prev === null ? 0 : stopSol(run.map, prev);
+    for (const ring of ringsCrossed(prevSol, stopSol(run.map, stop))) {
+      if (POLICY_RINGS.includes(ring + 1) && replyBoots.has(stop.depth)) out.set(stop.depth, ring + 1);
+    }
+  });
+  return out;
 }
 
 // --- Colony postcards (colony years 1, 50, 200; two or more at one boot joined) -----------------------------------------
 
 // The colonist who writes a colony's cards (05 §3.3: "a featured colonist"): the first featured one of the first pod down
 // in an LZ. A colony with landed colonists always has one (every pod carries featured colonists).
-function writerOf(ship: Readonly<ShipResult>): string {
+function writerOf(ship: Readonly<ShipResult>): FeaturedColonist {
   const pod = ship.pods.find((candidate) => candidate.lz !== null && candidate.featured.length > 0);
   if (pod === undefined) throw new Error(`inbox: ${ship.shipName} landed ${ship.landedInLz} in an LZ but no pod there has a featured colonist`);
   return pod.featured[0]!;
@@ -202,9 +247,9 @@ function postcards(run: Readonly<RunState>): InboxMessage[] {
     const landed = stopYear(map, stop);
     const worldSlot = worldSlotOf(map, ship.slot);
     const source: LightSource = { kind: 'world', worldSlot };
-    const record = writerOf(ship);
-    const who = firstNameOf(record);
-    const family = familyOf(record);
+    const writer = writerOf(ship);
+    const who = firstNameOf(writer.name);
+    const family = familyOf(writer.name);
     const colony = ship.colony;
     // Each card and the boot it is read at; those at one boot join (05 §3.3: the year-1 card is never skipped).
     const cards = POSTCARD_COLONY_YEARS.flatMap((year) => {
@@ -215,7 +260,7 @@ function postcards(run: Readonly<RunState>): InboxMessage[] {
     const byBoot = new Map<number, typeof cards>();
     for (const card of cards) byBoot.set(card.read.depth, [...(byBoot.get(card.read.depth) ?? []), card]);
     return [...byBoot.values()].map((group): InboxMessage => {
-      const bodies = group.map((card) => postcardBody(card.year, colony, who, family, ship.landedInLz));
+      const bodies = group.map((card) => postcardBody(card.year, colony, who, family, writer.age + card.year, ship.landedInLz));
       const first = group[0]!;
       const last = group[group.length - 1]!;
       return {
@@ -232,10 +277,11 @@ function postcardSubject(year: number): string {
   return year === 1 ? text.year1.subject : year === 50 ? text.year50.subject : text.year200.subject;
 }
 
-function postcardBody(year: number, colony: string, who: string, family: string, landed: number): string[] {
+// `age`: the writer's age in that colony year (their age at landing plus the years: review m6).
+function postcardBody(year: number, colony: string, who: string, family: string, age: number, landed: number): string[] {
   const text = INBOX_TEXT.postcard;
-  if (year === 1) return text.year1.body(who, family);
-  if (year === 50) return text.year50.body(who);
+  if (year === 1) return text.year1.body(who, family, age);
+  if (year === 50) return text.year50.body(who, age <= POSTCARD_AGE_SHOWN_MAX ? age : null);
   if (year === 200) return text.year200.body(colony, who, landed * POSTCARD_PEOPLE_PER_COLONIST_Y200);
   throw new Error(`inbox: no postcard for colony year ${year}`);
 }

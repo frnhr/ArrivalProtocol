@@ -54,5 +54,14 @@ check('…ranks absolute on the arm: SHEPHERD 3,000, CARETAKER 6,800, ARK ANGEL 
 check('…PURGE counts the visited ships: 5 OF 6 HOME', /5 OF 6/.test(model.title), model.title);
 check('the classic world keeps phase 2\'s scaling by its five ships (9,600 colonists)', rankBasis(classicRunMap(0, 0, 1)) === 9600 && fleetColonists() === 9600);
 // Slice 3b: the tally's one line for the repository's files that never arrived (02 §3.9): none requested here.
-check('3b: `NEVER ARRIVED: —` with nothing on the way', model.undeliveredLine === 'NEVER ARRIVED: —', model.undeliveredLine ?? 'null');
+check('3b: no NEVER ARRIVED line on a run that requested nothing (review m8: `NEVER ARRIVED: —` said nothing)', model.undeliveredLine === null, model.undeliveredLine ?? 'null');
+store.update((draft) => {
+  draft.run.repo.requests = [{ id: 'rq1', file: 'mv', fromSlot: 0, toSlot: 2, requestedYear: 2300, lateness: 0, status: 'delivered', at: 2, arrivedYear: 2337 }];
+});
+check('…`NEVER ARRIVED: —` once it asked and everything came', runEndModel(store.getState()).undeliveredLine === 'NEVER ARRIVED: —');
+store.update((draft) => {
+  draft.run.repo.requests.push({ id: 'rq2', file: 'swap', fromSlot: 5, toSlot: 11, requestedYear: 2467, lateness: 4, status: 'in-transit', at: null, arrivedYear: null });
+});
+check('…`NEVER ARRIVED: Swap` for one still on its way at the end', runEndModel(store.getState()).undeliveredLine === 'NEVER ARRIVED: Swap',
+  runEndModel(store.getState()).undeliveredLine ?? 'null');
 finish();
