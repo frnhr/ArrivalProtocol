@@ -23,6 +23,8 @@ import { resumeRun } from '@systems/run-save';
 import { pendingRunSave } from '@systems/save-write';
 import { setCourse, backToChart, continueAfterReport } from '@systems/run';
 import { resetReport } from '@systems/reset';
+import { reachableFrom } from '@systems/map-hop';
+import { currentSlot, isEndSlot } from '@systems/map-streams';
 import { newSegId, freeSegment, highestSegId } from '@systems/memory-ops';
 import { logDivider } from '@systems/say';
 import { META_STORAGE_KEY, RUN_SAVE_KEY } from '@data/tuning';
@@ -74,12 +76,12 @@ function playBoot(store: Store<GameState>): string[] {
   return store.getState().log.entries.slice(from).filter((entry) => !entry.divider).map((entry) => `${entry.speaker}:${entry.text}`);
 }
 
-// A reload, then RESUME.
-function reloadAndResume(label: string): void {
+// A reload, then RESUME (`unit`: the saved run's).
+function reloadAndResume(label: string, unit = 47): void {
   pageOpen(h.store, storage, SEED + 100);
   const offered = state().save;
-  check(`${label}: the reload's title offers RESUME (UNIT-047, its point) and starts on the saved run's unit`,
-    state().run.phase === 'title' && offered.status === 'ok' && offered.resume !== null && offered.resume.unit === 47 && state().run.unitNumber === 47,
+  check(`${label}: the reload's title offers RESUME (UNIT-0${unit}, its point) and starts on the saved run's unit`,
+    state().run.phase === 'title' && offered.status === 'ok' && offered.resume !== null && offered.resume.unit === unit && state().run.unitNumber === unit,
     JSON.stringify(offered));
   resumeRun(h.store);
   const drift = resetReport();
@@ -156,6 +158,42 @@ check('…its CONTINUE ends the run: the archive written once, lastUnit UNIT-047
 check('…the save is cleared, and run.next names UNIT-048 on run 2', !storage.data.has(RUN_SAVE_KEY)
   && state().run.next?.unit === 48 && state().run.next?.run === 2, JSON.stringify(state().run.next));
 check('…the archive stores the next arm (run 2) from the world update', (meta.arm as { run: number } | null)?.run === 2);
+
+// --- Run 2 (slice 3c review fix M4): UNIT-048 on the updated arm, resumed at each point ----------------------------------
+pageOpen(h.store, storage, SEED);
+check('run 2: the next page is UNIT-048\'s title on run 2\'s arm, with nothing to resume', state().run.unitNumber === 48
+  && state().run.map.run === 2 && state().save.status === 'ok' && state().save.resume === null);
+receiveToReport(h.store);
+h.store.update((draft) => { draft.run.phase = 'boot'; });
+const run2Start = comparable(state());
+reloadAndResume('run 2 RUN START', 48);
+check('run 2 RUN START: the same ship-1 boot of ARES-VIII (no run counted twice)', isDeepStrictEqual(comparable(state()), run2Start)
+  && state().run.unitNumber === 48 && state().run.map.run === 2, differs(comparable(state()), run2Start));
+h.store.update((draft) => { draft.run.phase = 'report'; });
+toDesk(h.store);
+const run2Desk = comparable(state());
+reloadAndResume('run 2 SHIP DONE', 48);
+check('run 2 SHIP DONE: the same first desk on run 2\'s arm', state().run.phase === 'desk' && isDeepStrictEqual(comparable(state()), run2Desk),
+  differs(comparable(state()), run2Desk));
+const run2Next = reachableFrom(state().run.map, currentSlot(state().run))[0]!;
+beamTo(h.store, run2Next);
+const run2Beam = comparable(state());
+reloadAndResume('run 2 BEAM', 48);
+check('run 2 BEAM: the state right after the original startShip into ship 2', state().run.phase === 'boot' && state().run.shipIndex === 1
+  && isDeepStrictEqual(comparable(state()), run2Beam), differs(comparable(state()), run2Beam));
+for (let guard = 0; guard < 20 && !isEndSlot(state().run.map, currentSlot(state().run)); guard++) {
+  toDesk(h.store);
+  beamTo(h.store, reachableFrom(state().run.map, currentSlot(state().run))[0]!);
+}
+finalReport(h.store, 'purged');
+const run2End = comparable(state());
+reloadAndResume('run 2 ENDING CHOSEN', 48);
+check('run 2 ENDING CHOSEN: its final ship\'s LANDING REPORT as it stood', state().run.phase === 'report' && isDeepStrictEqual(comparable(state()), run2End),
+  differs(comparable(state()), run2End));
+continueAfterReport(h.store);
+check('…its CONTINUE ends run 2 once: UNIT-048 is the last unit, the arm is run 3\'s, the save is cleared', state().run.phase === 'end'
+  && (storedMeta(storage).lastUnit as { number: number }).number === 48 && (storedMeta(storage).arm as { run: number }).run === 3
+  && (storedMeta(storage).runs as number) === 2 && !storage.data.has(RUN_SAVE_KEY));
 
 // --- The id counters -------------------------------------------------------------------------------------------------------
 {

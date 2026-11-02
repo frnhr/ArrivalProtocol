@@ -17,10 +17,13 @@ import { createStore } from '@state/store';
 import { createInitialState } from '@state/initial';
 import { on } from '@systems/events';
 import { visitsOfTrail } from '@systems/lineage';
-import { archiveMeta, freshMeta, saveMeta, recordRunStart, recordRunEnd } from '@systems/meta';
+import { archiveMeta, archiveLineage, freshMeta, saveMeta, recordRunStart, recordRunEnd } from '@systems/meta';
 import { resumeRun, abandonRun } from '@systems/run-save';
-import { receiveTransmission } from '@systems/boot';
-import { continueAfterReport } from '@systems/run';
+import { receiveTransmission, mountBoot } from '@systems/boot';
+import { continueAfterReport, startRun } from '@systems/run';
+import { reachableFrom } from '@systems/map-hop';
+import { currentSlot, isEndSlot } from '@systems/map-streams';
+import { mountInput } from '@systems/input';
 import { META_STORAGE_KEY, RUN_SAVE_KEY, RUN_SAVE_VERSION } from '@data/tuning';
 import {
   stubStorage, pageOpen, storedSave, storedMeta, receiveToReport, toDesk, beamTo, finalReport, WORKED_ROUTE, type StubStorage,
@@ -217,6 +220,128 @@ for (const [what, corrupt, kind] of corruptions) {
   check('…NEW RUN over it (after its confirm) abandons UNIT-047\'s run, clears the save and opens UNIT-048\'s title',
     meta.lastUnit.cause === 'abandoned' && meta.lastUnit.number === 47 && meta.activeRun === null && !storage.data.has(RUN_SAVE_KEY)
     && state().run.unitNumber === 48 && state().save.resume === null);
+}
+
+// --- Run 2 (slice 3c review fix M4): every failure again on UNIT-048's run, where the page used to throw ----------------------
+// From the run's first report, desk to desk by the first ship in reach, to RUN END.
+function playToEnd(): void {
+  for (let guard = 0; guard < 20; guard++) {
+    if (isEndSlot(state().run.map, currentSlot(state().run))) {
+      finalReport(store);
+      continueAfterReport(store);
+      return;
+    }
+    toDesk(store);
+    beamTo(store, reachableFrom(state().run.map, currentSlot(state().run))[0]!);
+  }
+  throw new Error('playToEnd: no final ship');
+}
+
+// UNIT-047's run 1 ended, a reload, UNIT-048's run 2 saved at its second desk.
+function run2Saved(): StubStorage {
+  const storage = stubStorage();
+  pageOpen(store, storage, SEED);
+  receiveToReport(store);
+  playToEnd();
+  pageOpen(store, storage, SEED);
+  receiveToReport(store);
+  toDesk(store);
+  beamTo(store, reachableFrom(state().run.map, currentSlot(state().run))[0]!);
+  toDesk(store);
+  return storage;
+}
+
+// Opens a page and says whether it threw (it never may).
+const opens = (storage: StubStorage): string => {
+  try { quiet(() => pageOpen(store, storage, SEED)); return ''; } catch (error) { return (error as Error).message; }
+};
+const onRun2Title = (): boolean => state().run.phase === 'title' && state().run.unitNumber === 48 && state().run.map.run === 2;
+
+const run2Refusals: [string, (storage: StubStorage) => void, string][] = [
+  ...corruptions.map(([what, corrupt, kind]): [string, (storage: StubStorage) => void, string] =>
+    [what, (storage) => { storage.data.set(RUN_SAVE_KEY, corrupt(storage.data.get(RUN_SAVE_KEY)!)); }, kind]),
+  ['a ship that does not build', (storage) => {
+    const data = JSON.parse(storage.data.get(RUN_SAVE_KEY)!) as { payload: { run: { map: { arm: { pods: number }[] } } } };
+    data.payload.run.map.arm[3]!.pods = 99;
+    storage.data.set(RUN_SAVE_KEY, JSON.stringify(data));
+  }, 'ship'],
+];
+for (const [what, spoil, kind] of run2Refusals) {
+  const storage = run2Saved();
+  spoil(storage);
+  const threw = opens(storage);
+  check(`run 2, ${what}: the page opens on CAN'T RESUME · ${kind}, on UNIT-048's own title (run 2's arm)`, threw === '' && saveIs('cant-resume', kind)
+    && onRun2Title(), threw || JSON.stringify(state().save));
+  quiet(() => abandonRun(store, 81));
+  const meta = storedMeta(storage) as { lastUnit: { number: number; cause: string }; arm: { run: number } };
+  check(`…ABANDON RUN: UNIT-048 signal-lost, run 3's arm, UNIT-049's title`, meta.lastUnit.number === 48 && meta.lastUnit.cause === 'signal-lost'
+    && meta.arm.run === 3 && state().run.unitNumber === 49 && state().run.map.run === 3 && !storage.data.has(RUN_SAVE_KEY));
+}
+{
+  const storage = run2Saved();
+  const data = JSON.parse(storage.data.get(RUN_SAVE_KEY)!) as { payload: { slices: { memory: { size: number }[] } } };
+  data.payload.slices.memory[0]!.size += 1;
+  storage.data.set(RUN_SAVE_KEY, JSON.stringify(data));
+  opens(storage);
+  quiet(() => resumeRun(store));
+  check('run 2, a resume that throws: CAN\'T RESUME · resume-threw on UNIT-048\'s title', saveIs('cant-resume', 'resume-threw') && onRun2Title());
+}
+{
+  const storage = run2Saved();
+  storage.data.set(META_STORAGE_KEY, '{ not an archive');
+  const threw = opens(storage);
+  check('run 2, an archive that can\'t be read: CAN\'T RESUME · archive, the page opens', threw === '' && saveIs('cant-resume', 'archive'), threw);
+}
+{
+  const storage = run2Saved();
+  const saved = storage.data.get(RUN_SAVE_KEY)!;
+  // Run 2 ends in this tab; a stale copy of its save comes back (another tab's slot, a restore).
+  pageOpen(store, storage, SEED);
+  resumeRun(store);
+  quiet(() => playToEnd());
+  storage.data.set(RUN_SAVE_KEY, saved);
+  const threw = opens(storage);
+  check('run 2, stale (that run already ended): CAN\'T RESUME · stale on UNIT-049\'s title', threw === '' && saveIs('cant-resume', 'stale')
+    && state().run.unitNumber === 49 && state().run.map.run === 3, threw);
+}
+{
+  const storage = run2Saved();
+  quiet(() => abandonRun(store, 91));
+  receiveToReport(store);
+  storage.fail.setKey = RUN_SAVE_KEY;
+  quiet(() => playToEnd());
+  storage.fail.setKey = null;
+  startRun(store, 92, archiveLineage(), 'arm');
+  quiet(() => receiveToReport(store));
+  const threw = opens(storage);
+  check('run 3, a full quota, a NEW RUN in the same page, a reload: the page opens on the next unit\'s title (the unsaved run abandoned)',
+    threw === '' && saveIs('ok') && state().run.phase === 'title' && archiveMeta().activeRun === null
+    && state().run.unitNumber === 47 + archiveMeta().runs, threw);
+}
+{
+  // ENTER and SPACE on run 2's titles, through the input layer (boot.ts's RECEIVE TRANSMISSION binding).
+  const storage = run2Saved();
+  const target = new EventTarget();
+  const offInput = mountInput(target);
+  const offBoot = mountBoot(store);
+  const press = (code: string): void => {
+    target.dispatchEvent(Object.assign(new Event('keydown'), { code, repeat: false }));
+    target.dispatchEvent(Object.assign(new Event('keyup'), { code }));
+  };
+  opens(storage);
+  const raw = storage.data.get(RUN_SAVE_KEY);
+  press('Enter');
+  press('Space');
+  check('run 2, ENTER and SPACE on the RESUME title: no RECEIVE TRANSMISSION (runs 2, the save untouched)', archiveMeta().runs === 2
+    && storage.data.get(RUN_SAVE_KEY) === raw && onRun2Title() && state().save.resume?.unit === 48);
+  storage.data.set(RUN_SAVE_KEY, '{ broken');
+  opens(storage);
+  press('Enter');
+  press('Space');
+  check('run 2, ENTER and SPACE on the CAN\'T RESUME title: no RECEIVE TRANSMISSION either (UNIT-048 still the run in progress)',
+    archiveMeta().runs === 2 && archiveMeta().activeRun?.unit === 48 && storage.data.get(RUN_SAVE_KEY) === '{ broken' && onRun2Title());
+  offBoot();
+  offInput();
 }
 
 finish();

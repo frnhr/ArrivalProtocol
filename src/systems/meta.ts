@@ -583,7 +583,7 @@ export function activeLineageOf(meta: Readonly<Meta>): RunLineage | null {
 }
 
 // The lineage of unit `unitNumber` on wave `wave`. The stored arm goes with it only when it is that wave's (the archive keeps
-// it so: the load and the record steps reset an arm of another run; review fix B1). One of another run is replaced here
+// it so: the load and the record steps reset an arm of another run or content; review fix B1). One of another run is replaced here
 // too, by a fresh roll for the wave from its start year with its final-ship lineage (map-update freshArmState), so a bug
 // that slipped past them can never stop a title from opening (systems/map-run.ts createRunMap would throw on it).
 function lineageAt(meta: Readonly<Meta>, unitNumber: number, wave: number): RunLineage {
@@ -601,7 +601,7 @@ function lineageAt(meta: Readonly<Meta>, unitNumber: number, wave: number): RunL
 
 function armForWave(arm: Readonly<ArmState> | null, wave: number): ArmState | null {
   if (arm === null) return null;
-  if (arm.run === wave) return structuredClone(arm) as ArmState;
+  if (arm.run === wave && JSON.stringify(arm.content) === JSON.stringify(armContent())) return structuredClone(arm) as ArmState;
   try {
     return freshArmState(arm.armSeed, wave, arm.startYear, arm);
   } catch {
