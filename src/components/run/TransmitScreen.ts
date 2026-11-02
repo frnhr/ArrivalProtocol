@@ -2,7 +2,8 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { UpgradeId } from '@data/upgrades';
 import {
-  transmitModel, toggleDrop, type PacketChip, type TransmitModel, type DraftCardView, type CardFileChip, type UninvitedChip,
+  transmitModel, toggleDrop, toggleSendOn, type PacketChip, type TransmitModel, type DraftCardView, type CardFileChip,
+  type UninvitedChip, type DeliveryChipView,
 } from '@systems/transmit';
 import { logEntryToOpen } from '@systems/log-view';
 import { openLogReader } from '@systems/story-log';
@@ -16,6 +17,7 @@ import { requireById, make, replayAnimation } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
 import { MAP_TEXT } from '@data/map-text';
+import { REPO_TEXT } from '@data/repo-text';
 import {
   TRANSMIT_ARM_SEC, TRANSMIT_SEND_SEC, TRANSMIT_STREAM_FRAC, WHITE_OUT_IN_SEC, WHITE_OUT_HOLD_SEC, WHITE_OUT_FADE_SEC,
   DRAFT_CARDS,
@@ -53,6 +55,12 @@ import {
 // (`ARRIVE WITH NO REPAIR CHARGE?`, ENTER yes, ESC no). While files plus the floor are over the room, TRANSMIT ▸ waits
 // (LEAVE FILES BEHIND FIRST). On the arm the ECC line takes the hits line's place. The send stamps OUTWARD BOUND over the
 // screen, and CONTROL says "Outward bound! :)" under the light-years.
+// Phase 3 slice 3b (02-map §3.9, §4; 01-landing §3.16; slice-3b-plan §1.1 item 14, §3 step 3): the deliveries that ride
+// this hop are a DELIVERIES chip row under the unit's own files (`Mv · 2 BLOCKS · ARRIVED 2337 · [SEND ON]`): a click
+// toggles SEND ON (the file stays in the destination's receiver to ride the next hop; on a hop into a final ship the chip
+// says `NO SHIP AFTER LAST LIGHT · IT IS LOST`), and the bars and the gate count only the ones that go (systems/transmit.ts
+// toggleSendOn, Track REPO). An IN TRANSIT line names what is still behind the unit; the draft is headed SALVAGE on the arm.
+// The chips that go stream out with the rest at the send.
 
 function chipNode(chip: PacketChip): HTMLButtonElement {
   const button = make('button', 'tx-chip');
@@ -88,6 +96,20 @@ function cardFileNode(file: CardFileChip): HTMLButtonElement {
   const head = make('span', 'tx-chip-head');
   head.append(make('span', 'tx-chip-name', file.name.toUpperCase()), make('span', 'tx-chip-size', `${file.blocks}B`));
   button.append(head, make('span', 'tx-chip-note', DRAFT_TEXT.newFile));
+  return button;
+}
+
+// A delivery riding this hop (02 §3.9): its file, size and the year it reached the receiver; its SEND ON toggle under it.
+function deliveryNode(chip: DeliveryChipView): HTMLButtonElement {
+  const button = make('button', 'tx-chip tx-delivery toggleable');
+  button.tabIndex = -1;
+  button.dataset.key = chip.key;
+  button.classList.toggle('sent-on', chip.sendOn);
+  button.classList.toggle('lost', chip.lost);
+  button.setAttribute('aria-label', `${chip.text} · ${chip.sendOnLabel}`);
+  const head = make('span', 'tx-chip-head');
+  head.append(make('span', 'tx-chip-name', chip.name.toUpperCase()), make('span', 'tx-chip-size', `${chip.blocks}B`));
+  button.append(head, make('span', 'tx-chip-note', chip.text), make('span', 'tx-chip-sendon', chip.sendOnLabel));
   return button;
 }
 
@@ -150,6 +172,9 @@ interface PacketParts {
   confirmNo: HTMLButtonElement;
   stamp: HTMLElement;
   sendControl: HTMLElement;
+  deliveries: HTMLElement;
+  deliveryChips: HTMLElement;
+  inTransit: HTMLElement;
 }
 
 function buildPacketParts(root: HTMLElement): PacketParts {
@@ -196,9 +221,19 @@ function buildPacketParts(root: HTMLElement): PacketParts {
   const sendControl = make('div', 'tx-send-control');
   sendControl.append(make('span', 'tx-control-tag', MAP_TEXT.packet.controlTag), make('span', 'tx-control-text', MAP_TEXT.packet.control));
   send.append(sendControl);
+  // 3b: the DELIVERIES row and the IN TRANSIT line, under the unit's own files.
+  const chips = root.querySelector<HTMLElement>('.tx-chips');
+  if (!chips) throw new Error('TransmitScreen: index.html lost the PACKET\'s chips');
+  const deliveries = make('div', 'tx-deliveries');
+  deliveries.hidden = true;
+  const deliveryChips = make('div', 'tx-chips tx-delivery-chips');
+  deliveries.append(make('div', 'tx-bar-label tx-deliveries-label', REPO_TEXT.packet.deliveriesLabel), deliveryChips);
+  const inTransit = make('div', 'tx-intransit');
+  inTransit.hidden = true;
+  chips.after(deliveries, inTransit);
   return {
     back, room, roomBar, roomFiles, roomCharge, roomOver, roomLine, roomCharges, linkLabel, control, confirm, confirmQ, confirmYes,
-    confirmNo, stamp, sendControl,
+    confirmNo, stamp, sendControl, deliveries, deliveryChips, inTransit,
   };
 }
 
@@ -259,7 +294,8 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
 
   function paint(): void {
     const state = store.getState();
-    if (state.run.phase !== 'transmit') return;
+    // (A plan cleared before the phase moves on, as a debug jump from the PACKET does, has nothing left to paint.)
+    if (state.run.phase !== 'transmit' || state.run.transit === null) return;
     const next = transmitModel(state);
     model = next;
     nextEl.textContent = next.headline;
@@ -282,6 +318,11 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     if (next.cardFile) chips.push(cardFileNode(next.cardFile));
     if (next.uninvited) chips.push(uninvitedNode(next.uninvited));
     chipsEl.replaceChildren(...chips);
+    parts.deliveries.hidden = next.deliveries.length === 0;
+    parts.deliveryChips.replaceChildren(...next.deliveries.map(deliveryNode));
+    parts.inTransit.hidden = next.inTransit === null;
+    parts.inTransit.textContent = next.inTransit ?? '';
+    draftTitle.textContent = next.salvageTitle ?? DRAFT_TEXT.title;
     draftEl.hidden = next.cards.length === 0;
     renderKeyCaps(draftKeys, DRAFT_TEXT.keys(next.cards.length));
     // The same deal as on screen (a pick, a drop): the cards are patched in place, so the picked one's lift
@@ -432,7 +473,10 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     root.classList.add('sending');
     // HOLLOW boarding on this beam: the sweep stutters (04 §4, the boarding moment begins here).
     play('transmitSweep', { seconds: TRANSMIT_SEND_SEC, stutter: current.uninvited?.boards === true });
-    const going = Array.from(chipsEl.querySelectorAll<HTMLElement>('.tx-chip:not(.dropped)'));
+    const going = [
+      ...Array.from(chipsEl.querySelectorAll<HTMLElement>('.tx-chip:not(.dropped)')),
+      ...Array.from(parts.deliveryChips.querySelectorAll<HTMLElement>('.tx-chip:not(.sent-on)')),
+    ];
     const stagger = (TRANSMIT_SEND_SEC * TRANSMIT_STREAM_FRAC) / Math.max(1, going.length);
     going.forEach((chip, i) => {
       chip.style.animationDelay = `${(i * stagger).toFixed(3)}s`;
@@ -519,6 +563,17 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     if (toggleDrop(store, segId) !== null) play('buzz');
   };
   chipsEl.addEventListener('click', onChipClick);
+  // A delivery chip: SEND ON, or back into the packet (systems/transmit.ts toggleSendOn works the numbers out again).
+  const onDeliveryClick = (event: MouseEvent): void => {
+    const key = (event.target as HTMLElement | null)?.closest<HTMLElement>('.tx-delivery')?.dataset.key;
+    if (key === undefined || sending || !armed()) return;
+    event.stopPropagation();
+    // A chip on screen that the plan does not hold is a bug; any other refusal (Track REPO's) is the kid's: a buzz.
+    const refusal = toggleSendOn(store, key);
+    if (refusal === 'no-chip') throw new Error(`TransmitScreen: the delivery chip '${key}' on screen is not in the plan`);
+    play(refusal === null ? 'uiClick' : 'buzz');
+  };
+  parts.deliveryChips.addEventListener('click', onDeliveryClick);
   const onCardClick = (event: MouseEvent): void => {
     const card = (event.target as HTMLElement | null)?.closest<HTMLElement>('.tx-card');
     const id = card?.dataset.card;
@@ -549,13 +604,15 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
   // A dropped file changes the packet (one update in systems/transmit.ts toggleDrop).
   // So does an entry read in the LOG READER over it (046.log's chip stops glowing).
   const unsubDrops = store.subscribe(
-    (s) => `${s.run.transit?.dropped.join('|') ?? ''}#${s.run.transit?.pick ?? ''}#${s.run.log.found.length}/${s.run.log.read.length}`,
+    (s) => `${s.run.transit?.dropped.join('|') ?? ''}#${s.run.transit?.pick ?? ''}#${s.run.log.found.length}/${s.run.log.read.length}`
+      + `#${s.run.transit?.deliveries.map((chip) => `${chip.key}:${chip.sendOn ? 1 : 0}`).join('|') ?? ''}`,
     () => { if (shown && !sending) paint(); },
   );
   if (store.getState().run.phase === 'transmit') open();
 
   return () => {
     chipsEl.removeEventListener('click', onChipClick);
+    parts.deliveryChips.removeEventListener('click', onDeliveryClick);
     cardsEl.removeEventListener('click', onCardClick);
     offCardKeys.forEach((off) => off());
     goBtn.removeEventListener('click', onGo);

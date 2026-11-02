@@ -17,6 +17,12 @@ export function firstNameOf(record: string): string {
   return comma < 0 ? record.trim() : record.slice(comma + 1).trim();
 }
 
+// ...and the family name (`Okafor`), which the year-1 card signs with.
+export function familyOf(record: string): string {
+  const comma = record.indexOf(',');
+  return comma < 0 ? '' : record.slice(0, comma).trim();
+}
+
 export const INBOX_TEXT = {
   // --- The window (05 §4) and its two hosts: the desk tab and the flight dock window ----------------------------------
   window: {
@@ -102,24 +108,22 @@ export const INBOX_TEXT = {
   },
 
   // --- Colony postcards: at colony years 1, 50 and 200 from a world that landed someone -----------------------------------
-  // `who` is the first featured colonist's first name; `age` their age when the pod came down (year 50 adds 50). Two from one
-  // colony at one boot are joined (systems/inbox.ts): the first's subject, both bodies, the first SENT and the last RECEIVED.
+  // `who` is the first featured colonist's first name. No age: the landing record keeps the featured colonists' names
+  // only (05 §3.12's `I'm 12 now` waits for their ages in PodSummary). Up to three cards from one colony at one boot are
+  // joined (systems/inbox.ts): the first's subject, the bodies in turn (3 + 1 + 2 lines: all three fit the reader's six),
+  // the first SENT and the last RECEIVED.
   postcard: {
     year1: {
       subject: "we're down!",
-      body: (who: string, age: number, family: string): string[] => [
-        `Hello caretaker! It's ${who}. I'm ${age} now.`,
-        "Mum says you can't read this. I'm writing anyway.",
-        'We found a tree. It is purple. I named it Steve.',
-        `Thank you for flying us. — ${who} ${family}`,
+      body: (who: string, family: string): string[] => [
+        `Hello caretaker! It's ${who}. Mum says you can't read this.`,
+        "I'm writing anyway. We found a tree. It's purple. I named it Steve.",
+        `Thank you for flying us. — ${who} ${family}`.trimEnd(),
       ],
     },
     year50: {
       subject: 'fifty years',
-      body: (who: string, age: number): string[] => [
-        `It's ${who} again. I'm ${age} now.`,
-        'My grandson flies kites off the hill. Steve is very tall.',
-      ],
+      body: (who: string): string[] => [`It's ${who} again, fifty years on. Steve is very tall now.`],
     },
     year200: {
       subject: 'two hundred years',
@@ -128,7 +132,7 @@ export const INBOX_TEXT = {
         `The school still reads ${who}'s first letter to you.`,
       ],
     },
-    // A joined card's separator line between two bodies.
+    // A joined card's separator line between two bodies (dropped when the whole would not fit the reader).
     joined: '· · ·',
   },
 

@@ -70,6 +70,8 @@
         <div class="dock-section">System</div>
         <!-- The cards this unit carries (WP8, SkillsWindow); NEW pulses when one lands and the window is closed -->
         <div class="dock-item" data-tool="skills"><span class="mark">○</span><span>Skills</span><span class="dock-new">NEW</span></div>
+        <!-- Phase 3 slice 3b: the INBOX (InboxWindow); its label reads `INBOX n` and pulses while mail is unread -->
+        <div class="dock-item" data-tool="inbox"><span class="mark">○</span><span class="dock-label" id="inboxDockLabel">Inbox</span></div>
       </div>
 
       <div class="dock-content memory-view">
@@ -156,6 +158,17 @@
             <span class="ctl">−</span><span class="ctl">×</span>
           </div>
           <div class="window-body skills-body" id="skillsBody"></div>
+        </div>
+
+        <!-- INBOX (phase 3 slice 3b, InboxWindow): the mail read in flight (05-story §4), the desk's INBOX tab's twin: a
+             list above a reader. Opened from the dock (closed at first), over the NAV PLOT's column. -->
+        <div class="window inbox-win" id="inboxWin" hidden>
+          <div class="window-title">
+            <span class="grip intact" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
+            <span class="name">Inbox</span>
+            <span class="ctl">−</span><span class="ctl">×</span>
+          </div>
+          <div class="window-body inbox-body" id="inboxBody"></div>
         </div>
 
         <div class="window engine-win" data-roles="engine-io thrust-ctrl reactor autopilot">

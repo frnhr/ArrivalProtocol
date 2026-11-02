@@ -1899,3 +1899,12 @@ export const POSTCARD_COLONY_YEARS: readonly number[] = [1, 50, 200];
 // A message's body has at most this many lines (05 §3.3's rule): the reader shows a whole message without scrolling at
 // 1280 × 720 and on a phone.
 export const INBOX_BODY_MAX_LINES = 6;
+// A colony's year-200 card counts this many people per colonist who landed (a placeholder growth for 05's words: a few
+// doublings in two centuries; 05 §3.12's epilogue has RIVERSIDE at 120,000 after 760 years from 600).
+export const POSTCARD_PEOPLE_PER_COLONIST_Y200 = 20;
+// A reply read this many ships or more after the ship it answers greets the unit before you (05 §3.4's running joke,
+// made deterministic: `Dear Unit 46` on run 1). One ship later is the norm near Earth; two is CONTROL falling behind.
+export const REPLY_STALE_AFTER_SHIPS = 2;
+// The sleep line's year roll (SLEEP_YEAR_ROLL_MS, 02 §4 step 2) ticks a soft ratchet once per this many years: a hop's
+// 20–160 years read as 4–30 ticks over the 1.5 s, a ratchet and never a buzz.
+export const SLEEP_YEAR_TICK_YEARS = 5;

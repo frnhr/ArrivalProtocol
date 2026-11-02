@@ -53,4 +53,6 @@ check('…ranks absolute on the arm: SHEPHERD 3,000, CARETAKER 6,800, ARK ANGEL 
   && model.score === 13910 && model.rank === 'ARK ANGEL', `${model.score} ${model.rank}`);
 check('…PURGE counts the visited ships: 5 OF 6 HOME', /5 OF 6/.test(model.title), model.title);
 check('the classic world keeps phase 2\'s scaling by its five ships (9,600 colonists)', rankBasis(classicRunMap(0, 0, 1)) === 9600 && fleetColonists() === 9600);
+// Slice 3b: the tally's one line for the repository's files that never arrived (02 §3.9): none requested here.
+check('3b: `NEVER ARRIVED: —` with nothing on the way', model.undeliveredLine === 'NEVER ARRIVED: —', model.undeliveredLine ?? 'null');
 finish();

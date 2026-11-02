@@ -48,6 +48,7 @@ import {
 // • mode-change     → jackIn / jackOut; refused → buzz; ui-click → uiClick
 // • op-done         → opDone, or buzz when a repair ran out of REPAIR CHARGE
 // • licence         → transmitIn, then a chime as the files land (WP4)
+// • delivery        → a chime per file unpacked at its boot line; inbox-new → one chime for the boot's new mail (3b)
 // • engine-cough    → engineCough (SPACE on an engine that can't fire)
 // • file-fault      → faultCrunch, then engineCough as the engine chokes (the ENGINE I/O FAULT)
 // • plot-mode       → lineWhoomp 'clear' when the instruments see exactly again (Sensor Interp
@@ -161,6 +162,10 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     on('refused', () => play('buzz')),
     on('op-done', ({ result }) => play(result === 'done' ? 'opDone' : 'buzz')),
     on('ui-click', () => play('uiClick')),
+    // Phase 3 slice 3b: a delivery unpacked at its boot line (02 §4: a chime per delivery), and the boot's new mail (05 §4:
+    // one chime per boot with new mail).
+    on('delivery', () => play('chime', { falling: false })),
+    on('inbox-new', () => play('chime', { falling: false })),
     on('licence', () => {
       play('transmitIn');
       play('chime', { falling: false }, { delaySec: CHIME_AFTER_TRANSMIT_SEC });

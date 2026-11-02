@@ -87,6 +87,8 @@ export const REPO_TEXT = {
     late: (name: string, years: number): string => `${name} ✗ ${yrs(years)} LATE`,
     catchesUp: (name: string): string => `${name} ✓ CATCHES UP HERE`,
     inTime: (name: string): string => `${name} ✓ WAITING HERE`,
+    // A file sent on from the ship being left: it rides in the packet, in time by definition.
+    ridesWithYou: (name: string): string => `${name} ✓ RIDES WITH YOU`,
     // The TIMELINE's mark: `2629 Swap` (green before ▲, red after).
     mark: (year: number, name: string): string => `${year} ${name}`,
   },
@@ -101,6 +103,8 @@ export const REPO_TEXT = {
     tabRepository: 'REPOSITORY [R]',
     tabInbox: 'INBOX [I]',
     back: 'CARD [ESC]',
+    // The REPOSITORY tab's badge while CONTROL recommends a file and none is asked for.
+    badgeRecommended: ':)',
   },
 
   // --- The PACKET (02 §4; 01 §3.16; plan §1.1 item 14) -------------------------------------------------------------------
@@ -118,8 +122,10 @@ export const REPO_TEXT = {
     // The gate (plan §1.1 item 8): files, deliveries and the floor over the room or the link.
     overWithDeliveries: (blocksOver: number): string => `${blocks(blocksOver)} TOO MANY · LEAVE FILES OR SEND ON`,
   },
-  // The strip's ghost-thrust line when no Swap is aboard (plan risk 1: VESPER flown without SWAP on the worked route).
-  noSwap: 'NO SWAP ABOARD — SPACE ends each burst',
+  // The strip's ghost-thrust line when no Swap is aboard (plan risk 1: VESPER flown without SWAP on the worked route). The
+  // plan's draft said `SPACE ends each burst`, true only of a sticky one (which has its own line); a burst ends by itself, so
+  // the advice is to fly through it and fix ▼ after.
+  noSwap: 'NO SWAP ABOARD — fly through each burst, then fix ▼',
 
   // --- The boot (02 §4 step 6; plan §1.1 item 12) ------------------------------------------------------------------------
   boot: {
@@ -127,6 +133,9 @@ export const REPO_TEXT = {
     // A patch says what it upgraded (02 §4). No count of copies: the line types before the patch installs, and REPAIR's
     // renewal at the same moment may add copies.
     patch: (file: string, arrived: number): string => `> DELIVERY: ${file} (arrived ${arrived}) · EVERY REPAIR → v2`,
+    // A patch a transit hit broke installs nothing (systems/repository.ts patchInstalls): the line says so. (REPO's draft,
+    // `· DAMAGED · NOTHING INSTALLED`, ran to 72 characters with the patch's word.)
+    patchBroken: (file: string, arrived: number): string => `> DELIVERY: ${file} (arrived ${arrived}) · DAMAGED · NOT INSTALLED`,
     // Beyond the third file the lines fold into one (DELIVERY_BOOT_LINES_MAX): the files by name, the years they span.
     folded: (files: readonly string[], first: number, last: number): string =>
       `> DELIVERY: ${foldNames(files, 2)} (arrived ${first === last ? first : `${first}–${last}`})`,

@@ -27,6 +27,8 @@ import {
   toolFileHintTarget, pipHintTarget, TOOL_FILES, ROOT_HINT_TARGET,
 } from '@data/fs-tools';
 import { GHOST_TEXT } from '@data/ghost-text';
+import { REPO_TEXT } from '@data/repo-text';
+import { noSwapForGhost } from '@systems/repository';
 import { GHOST_ALARM_ID } from '@systems/alerts';
 import { reachMarks, firewallFits } from '@systems/hollow-hud';
 import {
@@ -1947,6 +1949,15 @@ function atThrustCtrlFile(ctx: DirectorCtx): boolean {
   return ctx.mode === 'memory' && file !== null && ctx.state.ui.selectedId === file.id;
 }
 
+// Slice 3b (plan risk 1): the THRUST CTRL pip's way leads to SWAP, which on the arm comes only from the repository (on the
+// worked route it is 4 years late for VESPER). The pip step waits until SWAP has reached the unit this run (run.licences:
+// "the kinds that reached the unit"); the classic world licenses it with the first burst (licences.ts), so it is unchanged.
+// The no-Swap line itself is Track REPO's moment (systems/repository.ts noSwapForGhost: a burst running on an ENGINE FAULT
+// ship of the arm with no working Swap).
+function swapReachedUnit(ctx: DirectorCtx): boolean {
+  return ctx.state.run.licences.includes('swap');
+}
+
 // A SWAP the kid can pick up: a live Swap file (a seed hunting tools can eat it, WP10 fix round 1).
 function swapInHand(ctx: DirectorCtx): boolean {
   return hasUsableTool(ctx.state.memory, 'swap', 'counts');
@@ -2011,15 +2022,25 @@ const GHOST_ALARM_RULES: readonly GuideRule[] = [
   },
 ];
 
-// ...its lesson after the second burst: the THRUST CTRL pip, then SWAP.
+// ...its lesson after the second burst: the THRUST CTRL pip, then SWAP; with no Swap aboard, how to fly through it.
 const GHOST_LESSON_RULES: readonly GuideRule[] = [
+  {
+    id: 'tut-ghost-noswap',
+    layer: 'ship',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: GHOST_LESSON_SHOW_SEC,
+    activeWhen: (ctx) => noSwapForGhost(ctx.state),
+    text: () => REPO_TEXT.noSwap,
+    doneWhen: (ctx) => ghostLessonStarted(ctx) && !ghostFiring(ctx),
+  },
   {
     id: 'tut-ghost-pip',
     layer: 'ship',
     priority: 'tutorial',
     once: true,
     maxShownSec: GHOST_LESSON_SHOW_SEC,
-    activeWhen: (ctx) => ghostLessonDue(ctx) && inAmber(ctx),
+    activeWhen: (ctx) => ghostLessonDue(ctx) && inAmber(ctx) && swapReachedUnit(ctx),
     text: () => GHOST_TEXT.pipLesson,
     highlight: pipHintTarget('thrust-ctrl'),
     // Done once the kid is at the file (the pip's jump) or the engine is fixed; the second step's line takes over in

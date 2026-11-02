@@ -45,6 +45,8 @@ export const MAP_TEXT = {
     onlyNext: 'ONE SHIP IN REACH',
     controlTag: 'ARRIVAL CONTROL',
     stepPick: 'A SHIP',
+    // Slice 3b: the first desk's file step (02 §4: ship → file → SET COURSE).
+    stepFile: 'A FILE',
     stepCourse: 'SET COURSE',
     back: '◀ CHART',
     closeSheet: '✕',
@@ -202,3 +204,15 @@ export const MAP_TEXT = {
     route: 'YOUR ROUTE',
   },
 } as const;
+
+// The boot's sleep line rolls its approach year as it types (02 §4 step 2; components/memory-view/MindTerminal.ts, slice 3b):
+// where that year sits in the line, and the years it rolls between. null for any other line. Read back from the words
+// MAP_TEXT.boot.sleep types (tests/unit/map/text.test.ts pins the two together), so the TERMINAL needs no line kind.
+export function sleepLineYears(text: string): { at: number; arrive: number; approach: number } | null {
+  const match = /^> ASLEEP IN .+'S RECEIVER · (\d+) → (\d+) · \d+ YEARS$/.exec(text);
+  if (match === null) return null;
+  const arrive = Number(match[1]);
+  const approach = Number(match[2]);
+  const at = text.lastIndexOf(` → ${match[2]} · `) + ' → '.length;
+  return { at, arrive, approach };
+}

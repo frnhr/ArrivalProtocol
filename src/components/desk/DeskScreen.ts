@@ -4,7 +4,10 @@ import type { ChartNode } from '@systems/desk';
 import { pushModal, registerKeys } from '@systems/input';
 import {
   deskCandidates, selectShip, cycleShip, cardModel, chartModel, deskSteps, deskOpeningBeat, deskControlLine, deskOpening,
+  openDeskWindow, toggleRequest, deskTabBadges,
 } from '@systems/desk';
+import { repoModel } from '@systems/repository';
+import type { RepoFileId } from '@/types/repo';
 import { setCourse } from '@systems/run';
 import { currentSlot, shipSummaryAt } from '@systems/map-run';
 import { traceMeter } from '@systems/hollow-hud';
@@ -15,7 +18,11 @@ import { renderKeyCaps } from '@components/hud/keycaps';
 import { paintTraceMeter } from '@components/hud/TraceMeter';
 import { mountStarChart } from '@components/desk/StarChart';
 import { renderShipCard } from '@components/desk/ShipCard';
+import { buildDeskTabs, type DeskTab } from '@components/desk/DeskTabs';
+import { renderRepository } from '@components/desk/RepositoryWindow';
+import { mountInboxView } from '@components/desk/InboxView';
 import { MAP_TEXT } from '@data/map-text';
+import { REPO_FILE_IDS } from '@data/repository';
 import { DESK_GREY_STEP_MS, DESK_TYPE_CPS, DESK_SHEET_PEEK_PX } from '@data/tuning';
 
 // The DESK (phase 3 slice 3a; 02-map §3.10, §4; slice-3a-plan §3): between a ship's end and its PACKET, in amber
@@ -31,8 +38,18 @@ import { DESK_GREY_STEP_MS, DESK_TYPE_CPS, DESK_SHEET_PEEK_PX } from '@data/tuni
 // with a quiet falling tone (reduced motion: no fade, the same tones and words). On a phone (≤ 768 px) the arm stands
 // upright and scrolls, a tap opens the card as a bottom sheet over the chart (a handle or ✕ closes it), and SET COURSE
 // stays pinned at the bottom.
+// Slice 3b (02 §4; slice-3b-plan §3, §5.2 items 1–3): the right window holds three tabs, CARD / REPOSITORY [R] /
+// INBOX [I] (components/desk/DeskTabs.ts) with their badges; R and I open theirs (again: back to the card), Escape goes
+// back to the card, and while the REPOSITORY is open the number keys [1]–[7] request (or clear) a row. The guidance strip's
+// steps are a list (the first desk has three: a ship, a file, SET COURSE). On a phone the tabs are the sheet's handle: the
+// sheet always peeks its tab bar on the arm, and a tab opens it.
 
 const PHONE_QUERY = '(max-width: 768px)';
+// The REPOSITORY's number keys, one per catalogue row (data/repository.ts REPO_FILE_IDS has seven).
+const REQUEST_KEY_CODES: readonly (readonly string[])[] = [1, 2, 3, 4, 5, 6, 7].map((n) => [`Digit${n}`, `Numpad${n}`]);
+if (REPO_FILE_IDS.length > REQUEST_KEY_CODES.length) {
+  throw new Error(`DeskScreen: ${REQUEST_KEY_CODES.length} request keys for ${REPO_FILE_IDS.length} repository rows`);
+}
 
 export function mountDeskScreen(store: Store<GameState>): () => void {
   const root = make('div', 'desk-screen');
@@ -46,9 +63,9 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   head.append(title, where, trace);
 
   const guide = make('div', 'desk-guide');
-  const stepEls = [make('span', 'desk-step'), make('span', 'desk-step')];
+  const stepList = make('span', 'desk-steps');
   const stepText = make('span', 'desk-step-text');
-  guide.append(...stepEls, stepText);
+  guide.append(stepList, stepText);
   const control = make('div', 'desk-control');
   const controlTag = make('span', 'desk-control-tag', MAP_TEXT.desk.controlTag);
   const controlText = make('span', 'desk-control-text');
@@ -67,9 +84,14 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   const cardTitle = make('div', 'desk-win-title desk-sheet-handle');
   const cardClose = make('button', 'desk-sheet-close', MAP_TEXT.desk.closeSheet);
   cardClose.tabIndex = -1;
-  cardTitle.append(make('span', 'desk-win-grip'), make('span', 'desk-win-name', MAP_TEXT.desk.cardTitle), cardClose);
+  const tabs = buildDeskTabs();
+  cardTitle.append(make('span', 'desk-win-grip'), tabs.root, cardClose);
   const cardHost = make('div', 'desk-card');
-  cardWin.append(cardTitle, cardHost);
+  const repoHost = make('div', 'desk-card desk-repo');
+  const inbox = mountInboxView(store, 'desk');
+  const inboxHost = make('div', 'desk-card desk-inbox');
+  inboxHost.appendChild(inbox.root);
+  cardWin.append(cardTitle, cardHost, repoHost, inboxHost);
   body.append(chartWin, cardWin);
 
   const foot = make('div', 'desk-foot');
@@ -118,9 +140,14 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     paintTraceMeter(trace, traceMeter(state));
     const steps = deskSteps(state);
     const at = steps.findIndex((step) => !step.done);
-    stepEls.forEach((el, i) => {
-      el.textContent = `${i + 1} ${i === 0 ? MAP_TEXT.desk.stepPick : MAP_TEXT.desk.stepCourse}`;
-      el.classList.toggle('done', steps[i]!.done);
+    // The steps as a list (3a had two hard-coded; 3b's first desk has three, slice 4 prepends TRAINING).
+    while (stepList.childElementCount < steps.length) stepList.appendChild(make('span', 'desk-step'));
+    while (stepList.childElementCount > steps.length) stepList.lastElementChild?.remove();
+    steps.forEach((step, i) => {
+      const el = stepList.children[i] as HTMLElement;
+      el.textContent = `${i + 1} ${step.label}`;
+      el.dataset.step = step.id;
+      el.classList.toggle('done', step.done);
       el.classList.toggle('now', i === at);
     });
     stepText.textContent = steps[at]?.text ?? '';
@@ -130,9 +157,52 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     goBtn.classList.toggle('waiting', selected === null);
     chart.paint(chartModel(state), beatPending);
     const showing = inspected ?? selected;
-    renderShipCard(cardHost, showing === null ? null : cardModel(state, showing), MAP_TEXT.desk.pickShip);
-    root.classList.toggle('sheet-open', sheetOpen && showing !== null);
-    root.classList.toggle('has-card', showing !== null);
+    const tab = state.ui.deskWindow;
+    tabs.paint(tab, deskTabBadges(state));
+    cardHost.hidden = tab !== null;
+    repoHost.hidden = tab !== 'repository';
+    inboxHost.hidden = tab !== 'inbox';
+    root.dataset.tab = tab ?? 'card';
+    if (tab === null) renderShipCard(cardHost, showing === null ? null : cardModel(state, showing), MAP_TEXT.desk.pickShip);
+    // The REPOSITORY's ETAs are for the ship SET COURSE goes to (the selection, not a ship only inspected).
+    if (tab === 'repository') renderRepository(repoHost, repoModel(state, selected));
+    if (tab === 'inbox') inbox.paint();
+    const arm = state.run.map.world === 'arm';
+    root.classList.toggle('sheet-open', sheetOpen && (showing !== null || tab !== null));
+    root.classList.toggle('has-card', showing !== null || tab !== null);
+    root.classList.toggle('has-tabs', arm);
+  }
+
+  // A tab (a click, R, I, Escape): the card is null. On a phone a tab opens the sheet it lives in.
+  function showTab(next: DeskTab): void {
+    const state = store.getState();
+    if (state.run.phase !== 'desk') return;
+    const id = next === 'card' ? null : next;
+    if (state.ui.deskWindow === id && id === null && !phone.matches) return;
+    play('uiClick');
+    openDeskWindow(store, id);
+    if (phone.matches) sheetOpen = true;
+    paint();
+  }
+  // R and I open their tab, or go back to the card when it is already open.
+  function toggleTab(id: Exclude<DeskTab, 'card'>): void {
+    showTab(store.getState().ui.deskWindow === id ? 'card' : id);
+  }
+
+  // A REQUEST toggle (a click on a row, or its number key while the REPOSITORY is open).
+  function request(file: RepoFileId): void {
+    const state = store.getState();
+    if (state.run.phase !== 'desk' || state.run.map.world !== 'arm') return;
+    const next = toggleRequest(store, file);
+    play('chime', { falling: next === null });
+    paint();
+  }
+  function requestRow(index: number): void {
+    const state = store.getState();
+    if (state.run.phase !== 'desk' || state.ui.deskWindow !== 'repository') return;
+    const row = repoModel(state, state.ui.deskSelected).available[index];
+    if (row === undefined) { play('buzz'); return; }
+    request(row.id);
   }
 
   function pick(slot: number): void {
@@ -212,9 +282,10 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     shown = true;
     if (!closeModal) closeModal = pushModal('desk');
     inspected = null;
-    sheetOpen = false;
     stopTimers();
     const state = store.getState();
+    // A desk that opens on a tab (the REPOSITORY after the last rm: openDesk) shows it at once, on a phone too.
+    sheetOpen = phone.matches && state.ui.deskWindow !== null;
     // systems/desk.ts deskOpening: the opening once per desk visit; after a BEAM OUT the old ship's windows go black first
     // (Telemetry's blackout), and the desk comes up out of the dark, once (the review's m3, m4).
     const opening = deskOpening(state, openedVisit);
@@ -246,10 +317,19 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   const onGo = (event: MouseEvent): void => { event.stopPropagation(); go(); };
   const onClose = (event: MouseEvent): void => { event.stopPropagation(); sheetOpen = false; paint(); };
   const onHandle = (event: MouseEvent): void => {
+    const tab = (event.target as HTMLElement | null)?.closest<HTMLElement>('.desk-tab')?.dataset.tab as DeskTab | undefined;
+    if (tab !== undefined) { event.stopPropagation(); showTab(tab); return; }
     if (!phone.matches || event.target === cardClose) return;
     sheetOpen = !sheetOpen;
     paint();
   };
+  const onRepoClick = (event: MouseEvent): void => {
+    const file = (event.target as HTMLElement | null)?.closest<HTMLElement>('.rp-row')?.dataset.file as RepoFileId | undefined;
+    if (file === undefined) return;
+    event.stopPropagation();
+    request(file);
+  };
+  repoHost.addEventListener('click', onRepoClick);
   goBtn.addEventListener('click', onGo);
   cardClose.addEventListener('click', onClose);
   cardTitle.addEventListener('click', onHandle);
@@ -257,11 +337,29 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     registerKeys({ layer: 'desk', codes: ['Enter', 'NumpadEnter', 'Space'], onDown: go }),
     registerKeys({ layer: 'desk', codes: ['ArrowRight', 'ArrowDown'], onDown: () => cycle(1) }),
     registerKeys({ layer: 'desk', codes: ['ArrowLeft', 'ArrowUp'], onDown: () => cycle(-1) }),
-    registerKeys({ layer: 'desk', codes: ['Escape'], onDown: () => { if (sheetOpen) { sheetOpen = false; paint(); } } }),
+    registerKeys({
+      layer: 'desk', codes: ['Escape'],
+      onDown: () => {
+        if (store.getState().ui.deskWindow !== null && !(phone.matches && sheetOpen)) { showTab('card'); return; }
+        if (sheetOpen) { sheetOpen = false; paint(); }
+      },
+    }),
+    registerKeys({ layer: 'desk', codes: ['KeyR'], onDown: () => toggleTab('repository') }),
+    registerKeys({ layer: 'desk', codes: ['KeyI'], onDown: () => toggleTab('inbox') }),
+    ...REQUEST_KEY_CODES.map((codes, index) => registerKeys({ layer: 'desk', codes, onDown: () => requestRow(index) })),
   ];
   const unsubPhase = store.subscribe((s) => s.run.phase, (phase) => { if (phase === 'desk') open(); else close(); });
   const unsubPick = store.subscribe((s) => s.ui.deskSelected, () => { if (shown) paint(); });
   const unsubTrace = store.subscribe((s) => s.run.threat.trace, () => { if (shown) paint(); });
+  // 3b: the tab (openDesk opens the REPOSITORY after the last rm), the request and the read marks.
+  const unsubTabs = store.subscribe(
+    (s) => `${s.ui.deskWindow ?? ''}|${s.run.repo.pick ?? ''}|${s.run.inbox.read.length}`,
+    () => {
+      if (!shown) return;
+      if (phone.matches && store.getState().ui.deskWindow === 'repository' && !sheetOpen) sheetOpen = true;
+      paint();
+    },
+  );
   if (store.getState().run.phase === 'desk') open();
 
   return () => {
@@ -272,6 +370,9 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     unsubPhase();
     unsubPick();
     unsubTrace();
+    unsubTabs();
+    repoHost.removeEventListener('click', onRepoClick);
+    inbox.destroy();
     close();
     chart.destroy();
     root.remove();

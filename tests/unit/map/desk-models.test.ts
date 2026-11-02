@@ -3,6 +3,8 @@
 // states and reasons (6 in reach from ARES-VII, ALBATROSS ONLY FROM HERE, TOO LATE, OUT OF RANGE, past, visited, urgent),
 // the card rows for HALCYON, ALBATROSS, VESPER from KESTREL, LAPWING (TIGHT), a final ship with no rm and CORMORANT's
 // boarding beam (M3), the TIMELINE, the greying beat (`2 SHIPS NOW OUT OF YOUR REACH` at KESTREL), the steps and ← →.
+// Slice 3b (Track UI): the first desk's file step, the DELIVERIES row and TIMELINE marks (in time, late, catching up), the
+// request toggle, the tab and its badge.
 import { check, finish } from '../landing/checks';
 import { createStore, type Store } from '@state/store';
 import type { GameState } from '@state/schema';
@@ -10,7 +12,7 @@ import type { RouteStop } from '@/types/map';
 import { createInitialState } from '@state/initial';
 import {
   chartModel, cardModel, deskSteps, deskOpeningBeat, deskCandidates, selectShip, cycleShip, onlyFromHere, deskControlLine,
-  trail046, chartRings, type CardModel,
+  trail046, chartRings, toggleRequest, openDeskWindow, deskTabBadges, type CardModel,
 } from '@systems/desk';
 import { hopBetween } from '@systems/map-hop';
 import { unitArrival } from '@systems/arrival-preview';
@@ -21,6 +23,8 @@ import { shipsLeft } from '@systems/map-route';
 import { freshUnitRacks } from '@systems/carry';
 import { classicShip } from '@data/classic-five';
 import { MAP_TEXT } from '@data/map-text';
+import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
+import { recommendation } from '@systems/repository';
 import { THREAT_TEXT } from '@data/threat-text';
 import { run1Map } from './run1-fixture';
 
@@ -93,13 +97,37 @@ check('an OUT OF RANGE ship\'s card has no BEAM row, only the range (Hop.inRange
   && row(far, 'fit') === undefined && far.fit === null && far.cost === null);
 
 // Picking and cycling.
-check('steps: pick a ship first, SET COURSE ▸ … not yet', !deskSteps(state)[0]!.done && deskSteps(state)[1]!.text === MAP_TEXT.desk.setCourse('…'));
+// 3b: the run's first desk has three steps (02 §4: ship → file → SET COURSE); the file step only guides.
+const firstSteps = deskSteps(state);
+check('steps: a ship, a file, SET COURSE (the first desk); pick a ship first, SET COURSE ▸ … not yet',
+  firstSteps.map((step) => step.id).join() === 'pick-ship,request,set-course' && !firstSteps[0]!.done && !firstSteps[1]!.done
+  && firstSteps[2]!.text === MAP_TEXT.desk.setCourse('…') && firstSteps.map((step) => step.label).join() === 'A SHIP,A FILE,SET COURSE');
+const recommendedNow = recommendation(state);
+check('…the file step names CONTROL\'s recommendation (`REQUEST mv · RECOMMENDED [R]`), or any file while it has none',
+  firstSteps[1]!.text === (recommendedNow === null ? REPO_TEXT.desk.requestAny : REPO_TEXT.desk.request(REPO_FILE_TEXT[recommendedNow].boot)), firstSteps[1]!.text);
 check('a TOO LATE or OUT OF RANGE click is refused', !selectShip(ares, 8) && ares.getState().ui.deskSelected === null);
 check('← → cycle the six in slot order, wrapping', cycleShip(ares, 1) === 1 && cycleShip(ares, 1) === 2 && cycleShip(ares, -1) === 1 && cycleShip(ares, -1) === 6);
 selectShip(ares, 2);
 state = ares.getState();
-check('…a pick moves the strip on to `SET COURSE ▸ HALCYON [ENTER]`', deskSteps(state)[0]!.done && deskSteps(state)[1]!.text === 'SET COURSE ▸ HALCYON [ENTER]'
+check('…a pick moves the strip on (the file step, then `SET COURSE ▸ HALCYON [ENTER]`)', deskSteps(state)[0]!.done && deskSteps(state)[2]!.text === 'SET COURSE ▸ HALCYON [ENTER]'
   && chartModel(state).selected === 2);
+
+// 3b: a request on the first desk (Mv to HALCYON: in time, 2337 before the 2352 approach), from the one outlook rule.
+check('no request yet: HALCYON\'s card has no DELIVERIES row and no TIMELINE marks',
+  row(cardModel(state, 2), 'deliveries') === undefined && cardModel(state, 2).timeline?.marks.length === 0);
+check('toggleRequest(mv) requests it; the file step is done and says `mv REQUESTED`',
+  toggleRequest(ares, 'mv') === 'mv' && deskSteps(ares.getState())[1]!.done && deskSteps(ares.getState())[1]!.text === 'mv REQUESTED');
+state = ares.getState();
+const mvCard = cardModel(state, 2);
+check('HALCYON: `DELIVERIES · Mv ✓ WAITING HERE` in green, TIMELINE mark `2337 Mv` before ▲ (green)',
+  row(mvCard, 'deliveries') === 'Mv ✓ WAITING HERE' && mvCard.rows.find((r) => r.key === 'deliveries')?.tone === 'good'
+  && mvCard.timeline?.marks.length === 1 && mvCard.timeline.marks[0]!.text === '2337 Mv' && !mvCard.timeline.marks[0]!.late,
+  JSON.stringify(mvCard.timeline?.marks));
+check('…the REPOSITORY badge names the request', deskTabBadges(state).repository === 'Mv');
+check('…a second toggle clears it (one request, changeable until TRANSMIT ▸)', toggleRequest(ares, 'mv') === null && ares.getState().run.repo.pick === null);
+openDeskWindow(ares, 'repository');
+check('openDeskWindow: the REPOSITORY tab, then back to the card (null)', ares.getState().ui.deskWindow === 'repository'
+  && (openDeskWindow(ares, null), ares.getState().ui.deskWindow === null));
 
 // --- KESTREL's desk, 2467 (route ARES-VII → HALCYON → KESTREL) ------------------------------------------------------------
 const kestrel = deskAt([0, 2, 5]);
@@ -121,6 +149,15 @@ check('VESPER from KESTREL: ARK, ENGINE FAULT, MEMORY 384 · FULL, 55 LY · LINK
   && /^NOISE CLEAN · SEEDS 0$/.test(row(vesper, 'noise') ?? '')
   && vesper.schedule === '103 YRS EARLY' && vesper.timeline?.text === '2467 you leave · 2522 you get there · 2625 ▲ approach', JSON.stringify(vesper.rows));
 check('VESPER is ONLY FROM HERE at KESTREL (the layer-4 ships would be too late for the ark)', row(vesper, 'only') !== undefined);
+check('3b: later desks have no file step', deskSteps(state).map((step) => step.id).join() === 'pick-ship,set-course');
+// 3b: Swap asked for at KESTREL is 4 years late at VESPER (2629 > 2625): the card says so in red, the mark after ▲.
+toggleRequest(kestrel, 'swap');
+const lateSwap = cardModel(kestrel.getState(), 11);
+check('VESPER with Swap requested: `DELIVERIES · Swap ✗ 4 YRS LATE` in red, TIMELINE `2629 Swap` after ▲ (red)',
+  row(lateSwap, 'deliveries') === 'Swap ✗ 4 YRS LATE' && lateSwap.rows.find((r) => r.key === 'deliveries')?.tone === 'warn'
+  && lateSwap.timeline?.marks[0]?.text === '2629 Swap' && lateSwap.timeline.marks[0].late === true, JSON.stringify(lateSwap.timeline?.marks));
+toggleRequest(kestrel, 'swap');
+state = kestrel.getState();
 const lapwing = cardModel(state, 8);
 const lapFit = lapwing.fit!;
 check('LAPWING (TIGHT): MEMORY 256 · TIGHT · ROOM FOR YOU 88, the fit line is roomFit\'s words for this unit',
@@ -148,6 +185,16 @@ const cormorant = cardModel(state, 15);
 check('VESPER\'s desk: CORMORANT says HOLLOW WILL FIND YOU ON THIS BEAM (M3)', row(cormorant, 'threat') === THREAT_TEXT.willFindYou, JSON.stringify(cormorant.rows));
 check('…KITTIWAKE (Kettle is 59 LY from New Haven: no M3) has no HOLLOW line; CORMORANT is not ONLY FROM HERE',
   row(cardModel(state, 14), 'threat') === undefined && row(cormorant, 'only') === undefined);
+// 3b: Swap in transit, 4 years behind the unit at VESPER: it catches up at CORMORANT (4 − 162), its receiver in 2659.
+atVesper.update((draft) => {
+  draft.run.repo.requests = [{
+    id: 'rq3', file: 'swap', fromSlot: 5, toSlot: 11, requestedYear: 2467, lateness: 4, status: 'in-transit', at: null, arrivedYear: null,
+  }];
+});
+const catchUp = cardModel(atVesper.getState(), 15);
+check('Swap in transit: CORMORANT says `Swap ✓ CATCHES UP HERE`, TIMELINE `2659 Swap` before ▲',
+  row(catchUp, 'deliveries') === 'Swap ✓ CATCHES UP HERE' && catchUp.timeline?.marks[0]?.text === '2659 Swap' && !catchUp.timeline.marks[0].late,
+  `${row(catchUp, 'deliveries')} ${JSON.stringify(catchUp.timeline?.marks)}`);
 
 // --- CORMORANT's desk: LAST LIGHT with no rm aboard -------------------------------------------------------------------------
 const atCormorant = deskAt([0, 2, 5, 11, 15]);
