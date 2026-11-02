@@ -1127,5 +1127,33 @@ the check that guards it.
     `UNIT-047 / ARES-VII · 2300` and ❚❚ ♪ ◐ share the first row: two rows without `?debug` (the ladder is a third).
 16. **NAV PLOT labels over the path (PETREL's opener).** ▼ and START BURN share a spot on a wide approx band, so every
     side at `LABEL_GAP` crossed it and the least bad sat on the path. The collision pass tries the same eight sides again
-    `LABEL_GAP_FAR` (24 units × the label scale) further out before settling (NavPlotWindow.ts). Checked in the page at
-    1440×900 and 390×844 (no marker label crosses the drawn path or its band).
+    one and two `LABEL_GAP_FAR` (24 units × the label scale) further out before settling, and those far sides keep off
+    the ring's disc whatever its size, so a label never trades the path for the ring (NavPlotWindow.ts). On a phone the
+    two-line ▼ label then sits below the ring, a step from its marker. Checked in the page at 1440×900 and 390×844, and by
+    the `label-hops` e2e scenario (40/40, its PETREL path checks failed before).
+
+**The unit tier's budget**
+
+17. Before: 266 s by the reviewer; 288 s on this machine at the start of the fixes (sum of suite times 1,153 s, and
+    `wp12/fix1/entries` held four cores for 34 s). After: 232–236 s cold on a quiet machine (sum about 930 s; 249 s once
+    while the VM was slow), 225 s on a re-run of an unchanged tree. Every suite passes. Levers:
+    - `wp12/fix1/entries` transpiles the modules once with esbuild (tsx's own per-file ESM, the tsconfig's
+      verbatimModuleSyntax, aliases respelled to relative `.mjs` paths) and loads each with plain node, two at a time: 9 s
+      on two cores. A planted import cycle still fails it (checked, then removed).
+    - `flows.ts flyOnce` also keeps its snapshots on disk (tests/.out/fly-once), keyed by the suite, the key, the depth
+      and the AP_* env under a hash of every file in src/ and tests/unit/: a re-run on an unchanged tree restores them
+      (coast-skip 33 → 9 s, shrink-reaction 15 → 5 s), any edit flies them afresh, `AP_FLY_ONCE=fresh` forces it; a
+      warm run's output is identical to a cold one's.
+    - `tsc-tests` is incremental (tests/.out/tsc-tests.tsbuildinfo): 11 s → 3 s on an unchanged tree.
+    - Quick depth, coarser where a sample still reaches every row family: boss-sim 1 seed; skip-through seed 2 alone
+      (its two loops still stop for the ring and for Rule 4's verdict); wp11/full-run seed 4 alone (the MERGE run: PURGE
+      to its RUN END is merge-test's and fix1's; both endings in one sweep at RUN_SEEDS=4 or `npm run balance`);
+      dry-end, rule4-fuel and low-tank's SHRINK rows fly their two kids in turn; far-lift's four corners are split
+      between its held and its pressed grid; rule4-sweep's canonical rows at 18% (10/28/46: ACCEPT only, ACCEPTED,
+      LOCKED, like its off-ring rows); rule4's short tank at 31% only (14% is low-tank's row); coast-skip's off-ring rows
+      at 44%; vesper-sim 3 SWAP seeds; rule2-shrink 1,000 random loops. per-ship's children run under `node --import tsx`.
+    - The ten slowest after (cold): coast-skip 33 s, wp11/fix1 28, rule2-shrink 26, low-tank 23, rule4-sweep 23,
+      per-ship 22, merge-test 21, landing/flow 20, landing/review-1b 20, autoburn-sim 19. Warm: wp11/fix1 32, merge-test
+      24, per-ship 24, review-1b 22, autoburn-sim 22, landing/flow 22, full-run 20, wp9/fix2 20, run1-route 19,
+      rule4-sweep 18. Next levers if it grows: wp11/fix1 and merge-test each fly LAST LIGHT to its duel per scenario on
+      a seed of its own (module state outside the store keeps that from flyOnce today).
