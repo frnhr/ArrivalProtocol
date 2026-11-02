@@ -1,5 +1,6 @@
-// The e2e playthrough: one whole run in the page, title → ARES-VII → HALCYON → KESTREL → VESPER → LAST LIGHT → RUN END →
-// NEW RUN, played like a kid who does what the strip says:
+// The e2e playthrough: one whole run in the page on run 1's arm (slice 3a), title → ARES-VII → HALCYON → KESTREL → VESPER →
+// CORMORANT → LAST LIGHT (the worked route [0, 2, 5, 11, 15, 19]) → the RUN TALLY → NEW RUN, played like a kid who does
+// what the strip says:
 // • the SHIP by keys: SPACE held on `hold [SPACE]` / `KEEP HOLDING` / `NOW` and let go on RELEASE / WAIT / TURN AROUND,
 //   the preset key a line names (`press [S]`), [F] when it offers SKIP, [B] when it offers AUTOBURN, [TAB] when it says so;
 // • the MIND by clicks: the tool chip the line names (SCAN, REPAIR, DELETE, COPY, SWAP, MOVE), then the block it names
@@ -7,37 +8,49 @@
 // • the landing (slice 1a) by keys and the POD BAY: [L] when the line names [L] (LAUNCH NOW, LAUNCH — WIDE DROP; an
 //   inline confirm after it is answered yes with Enter), [F] when it offers SKIP, and on L12 (NO POD CAN LAUNCH, NO LZ IN
 //   THE LAUNCH BAND, NO BAY CTRL, NO DROP DOT ON THIS ORBIT) END LANDING in the POD BAY window plus Enter on its confirm;
-// • the screens between ships by their keys and buttons (SPACE on the boot and the LANDING REPORT, [1] and TRANSMIT ▸ on
-//   TRANSMIT, the LOST card's button, PURGE on the finale's card, SPACE for NEW RUN on RUN END).
-// The page's ?debug hooks (window.__ap) are read to judge what the kid saw, never to play, with two exceptions: a ship
+// • the screens between ships by their keys and buttons (SPACE on the boot and the LANDING REPORT; on the DESK a click on
+//   the next ship's node, scoped to #deskScreen since the title's chart has [data-slot] nodes too, then ENTER; [1] and
+//   TRANSMIT ▸ on the PACKET, the LOST card's button, PURGE on the finale's card, SPACE for NEW RUN on the RUN TALLY).
+// The page's ?debug hooks (window.__ap) are read to judge what the kid saw, never to play, with three exceptions: a ship
 // still flying after SHIP_MAX_MS is a FAIL, and is then put in its ring by hand so the rest of the run is still checked;
-// and the ships not in LAND_BY_STRIP land at once (__ap.landAll) to keep the tier's time (their POD BAY, GROUND TRACK
-// and LANDING REPORT are still checked).
+// a DESK click that misses its node is a FAIL, and the course is then set by __ap.course(slot); and the ships not in
+// LAND_BY_STRIP land at once (__ap.landAll) to keep the tier's time (their POD BAY, GROUND TRACK and LANDING REPORT are
+// still checked).
 // Each ship is checked at its boot, its flight's first seconds, every strip line it showed, its end, its landing (the
 // POD BAY and the GROUND TRACK at ORBIT LOCK, a launch by [L], the LZ counters), its LANDING REPORT (LANDED n / N, the
-// credits, the stars, CONTINUE) and its TRANSMIT; on LAST LIGHT the report after the finale; then RUN END and NEW RUN.
+// credits, the stars, CONTINUE) and its DESK and PACKET; on LAST LIGHT the report after the finale; then the RUN TALLY and NEW RUN.
 // Phase 3 slice 2 (the calm opening), per ship:
 // • ARES-VII and HALCYON are calm: no hollow block, no HOLLOW line, nothing bitten, no TRACE meter. On ship 1 the kid
 //   answers the SCAN lesson (`A FILE YOU DIDN'T PACK — SCAN it`: the `???` becomes 046.log) when it is shown (it is
-//   missable), and after ship 1's LANDING REPORT the LOG READER opens by itself on entry 01; the kid closes it with SPACE.
+//   missable), and on the first PACKET (after the DESK) the LOG READER opens on top by itself on entry 01 and takes
+//   ESC/SPACE first; the kid closes it with SPACE.
 // • KESTREL: the boot's ECC line names the beam seed next to Telemetry; the kid rm's it on `RM THE SEED` (DELETE, then the
 //   seed); the TRACE meter shows; the report's TRACE line says what was left behind.
-// • The PACKET to VESPER carries the uninvited chip (`??? · 10 BLOCKS · NOT YOURS · RIDES FREE`, boarding); VESPER's boot
-//   unpacks to 108%; HOLLOW is silent until it bites POD 09, the kid fights it by REPAIR, it says `> ...047?` and names
+// • VESPER (slice 3a: the ark, ENGINE FAULT): 16 pods, and the controller's ghost thrust fires in the flight.
+// • CORMORANT (slice 3a: HOLLOW's forced boarding, M3: the final ship is in range): its card says HOLLOW WILL FIND YOU ON
+//   THIS BEAM, the PACKET to it carries the uninvited chip (`??? · n BLOCKS · NOT YOURS · RIDES FREE`, boarding); its boot
+//   unpacks to 108%; HOLLOW is silent until it bites a pod, the kid fights it by REPAIR, it says `> ...047?` and names
 //   itself (`> i was 046.`). The PACKET to LAST LIGHT carries it under its name (NO RM only with no rm aboard).
 // • LAST LIGHT: THE DEAL stands in the TERMINAL with ACCEPT / REFUSE; the kid looks inside and REFUSEs it (or the lock
 //   withdraws it), no deal button stands after ORBIT LOCK; then the duel and an ending.
 // • Every TRANSMIT: 046.log's chip `046.log · n/12`, glowing while an entry is unread.
-// About 15 minutes; shots under tests/.out/e2e/shots/play-*.
+// • The RUN TALLY: six rows in route order, the route on its mini chart, n COLONIES FOUNDED, the score and rank; NEW RUN
+//   is a fresh roll, run 2, with ARES-VIII at w0.
+// About 20 minutes; shots under tests/.out/e2e/shots/play-*.
 // Usage: node tests/e2e/scenarios/playthrough.mjs   (env E2E_BASE_URL, SEED, SHOT_VIEWPORT; tests/e2e/run.mjs runs it)
-// Debugging a ship: PLAY_FROM=5 jumps to LAST LIGHT after the title (__ap.ship, a fresh unit carried in; the earlier
-// ships' checks are skipped), PLAY_TRACE=1 logs every strip line the kid reads, with the time and the screen.
-// LAND_BY_STRIP=1,2,3,4,5 lands those ships by the strip (default 1,2,5: all five add about 3 minutes to the tier).
-import { launch, BASE_URL, SHOTS, checker, pageKit, viewportFromEnv } from '../lib.mjs';
+// Debugging a ship: PLAY_FROM=6 flies headless to LAST LIGHT after the title (__ap.route along the worked route, a fresh
+// unit carried in; the earlier ships' checks are skipped), PLAY_TRACE=1 logs every strip line the kid reads, with the time
+// and the screen. LAND_BY_STRIP=1,2,3,4,5,6 lands those ships by the strip (default 1,2,6: all six add about 4 minutes).
+import { launch, BASE_URL, SHOTS, checker, pageKit, runKit, viewportFromEnv } from '../lib.mjs';
 import { join } from 'node:path';
 
 const SEED = Number(process.env.SEED ?? 7);
-const SHIPS = ['ARES-VII', 'HALCYON', 'KESTREL', 'VESPER', 'LAST LIGHT'];
+// Run 1's worked route (slice-3a-plan §3): the slot on the arm and the ship's name.
+const ROUTE = [
+  { slot: 0, name: 'ARES-VII' }, { slot: 2, name: 'HALCYON' }, { slot: 5, name: 'KESTREL' },
+  { slot: 11, name: 'VESPER' }, { slot: 15, name: 'CORMORANT' }, { slot: 19, name: 'LAST LIGHT' },
+];
+const SHIPS = ROUTE.map((stop) => stop.name);
 const MAX_LINE_CHARS = 70;         // tuning.ts MAX_LINE_CHARS: what the strip promises to fit
 const SHIP_MAX_MS = 6 * 60_000;    // a flight longer than this is stuck (a kid's whole run is about 15 minutes)
 const SCREEN_MAX_MS = 3 * 60_000;  // a report, TRANSMIT
@@ -47,14 +60,16 @@ const VERBS = ['SCAN', 'REPAIR', 'DELETE', 'COPY', 'SWAP', 'MOVE'];
 const FROM = Number(process.env.PLAY_FROM ?? 1);
 const TRACE = process.env.PLAY_TRACE === '1';
 // The ships (1-based) landed by the strip; the others land at once with __ap.landAll().
-const LAND_BY_STRIP = new Set((process.env.LAND_BY_STRIP ?? '1,2,5').split(',').map(Number));
+const LAND_BY_STRIP = new Set((process.env.LAND_BY_STRIP ?? '1,2,6').split(',').map(Number));
 
 const viewport = viewportFromEnv();
 const browser = await launch();
 const context = await browser.newContext({ viewport });
 const page = await context.newPage();
 const { check, finish } = checker();
-const { errors, st, waitFor } = pageKit(page);
+const kit = pageKit(page);
+const { errors, st, waitFor } = kit;
+const runScreens = runKit(page, kit);
 const shot = (name) => page.screenshot({ path: join(SHOTS, `play-${name}.png`) });
 const log = (text) => console.log(`      ${text}`);
 let navigations = 0;
@@ -72,6 +87,8 @@ const look = () => st(() => {
     phase: s.run.phase, ship: s.level.shipName, status: s.burn.status, mode: s.ui.mode, pace: s.clock.pace,
     line: ap.director().shown?.text ?? '', lineId: ap.director().shown?.id ?? '', dom: read(strip), typing: !document.getElementById('objectiveCaret').hidden,
     fits: strip.scrollWidth <= strip.clientWidth + 1, firing: s.burn.firing, ops: ap.ops().length,
+    // Slice 3a: VESPER's ENGINE FAULT: the controller's ghost bursts so far, and whether it can fire them.
+    ghostBursts: s.burn.ghostBursts, ghostSpec: ap.caps().thrustCtrl.ghost !== null,
     choice: !document.getElementById('finaleChoice').hidden && document.getElementById('finaleChoice').classList.contains('armed'),
     lostCard: !document.getElementById('burnResult').hidden, auto: !document.getElementById('autoBtn').hidden,
     // Slice 2: the LOG READER over the screen, THE DEAL's buttons standing in the TERMINAL, HOLLOW in memory and in the
@@ -315,7 +332,7 @@ await page.goto(`${BASE_URL}?debug&seed=${SEED}`, { waitUntil: 'networkidle' });
 const navsAtStart = navigations;
 const title = await st(() => ({ visible: !document.getElementById('titleCard').hidden, unit: document.getElementById('titleUnit').innerText,
   button: document.getElementById('titleReceive').innerText, phase: window.__ap.store.getState().run.phase }));
-check('title: the card is up with the unit and RECEIVE TRANSMISSION', title.visible && /UNIT-\d{3}/.test(title.unit)
+check('title: the card is up with UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT and RECEIVE TRANSMISSION', title.visible && title.unit === 'UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT'
   && title.button === '[ RECEIVE TRANSMISSION ]' && title.phase === 'title', JSON.stringify(title));
 await shot('0-title');
 await page.locator('#titleReceive').click();
@@ -324,7 +341,7 @@ await page.locator('#titleReceive').click();
 const run = { lines: new Set(), long: [], unfit: new Set(), shipsFlown: [], landed: [], miniSeen: 0 };
 if (FROM > 1) {
   await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 30000);
-  await st((index) => window.__ap.ship(index), FROM - 1);
+  await st((slots) => window.__ap.route(slots), ROUTE.slice(0, FROM).map((stop) => stop.slot));
 }
 for (const [index, name] of SHIPS.entries()) {
   if (index + 1 < FROM) continue;
@@ -333,8 +350,10 @@ for (const [index, name] of SHIPS.entries()) {
   // Slice 2: what the kid met of HOLLOW and TRACE on this ship (from its boot on: its TERMINAL lines, its blocks in memory,
   // what it bit, the TRACE meter), noted on every poll of the flight and the landing.
   await st(() => { window.__e2eLogFrom = Math.max(-1, ...window.__ap.log().map((entry) => entry.id)); });
-  const met = { maxSegs: 0, lines: [], trace: new Set(), bitten: new Set(), firstBiteMs: null, firstLineMs: null };
+  const met = { maxSegs: 0, lines: [], trace: new Set(), bitten: new Set(), firstBiteMs: null, firstLineMs: null, ghostBursts: 0, ghostSpec: false };
   const note = (seen) => {
+    met.ghostBursts = Math.max(met.ghostBursts, seen.ghostBursts);
+    met.ghostSpec ||= seen.ghostSpec;
     met.maxSegs = Math.max(met.maxSegs, seen.hollowSegs);
     for (const text of seen.hollowLines) if (!met.lines.includes(text)) met.lines.push(text);
     if (seen.hollowLines.length > 0) met.firstLineMs ??= Date.now();
@@ -347,8 +366,9 @@ for (const [index, name] of SHIPS.entries()) {
     && await waitFor(() => (window.__ap.director().shown?.text ?? '') !== '', 5000);
   const boot = await st(() => ({ ship: window.__ap.store.getState().level.shipName, crumb: document.getElementById('crumbShip').innerText,
     line: window.__ap.director().shown?.text ?? '', term: document.getElementById('mindTermLines').innerText.length }));
-  check(`${tag}: the boot starts on ${name}, the header names it, the strip says how to skip`, booted && boot.ship === name
-    && boot.crumb === name && /\[SPACE\] to skip/.test(boot.line), JSON.stringify(boot));
+  // Slice 3a: the header crumb names the ship with the galaxy year on the arm (`KESTREL · 2467`).
+  check(`${tag}: the boot starts on ${name}, the header names it with the galaxy year, the strip says how to skip`, booted && boot.ship === name
+    && new RegExp(`^${name} · \\d{4}$`).test(boot.crumb) && /\[SPACE\] to skip/.test(boot.line), JSON.stringify(boot));
   await page.waitForTimeout(1500);
   check(`${tag}: …the TERMINAL types the boot`, await st(() => document.getElementById('mindTermLines').innerText.length > 0));
   await page.keyboard.press('Space');
@@ -356,9 +376,10 @@ for (const [index, name] of SHIPS.entries()) {
   check(`${tag}: SPACE skips the boot into the flight`, flying);
   await page.waitForTimeout(1200);
   // Slice 2: the boot's unpack and ECC lines (the log keeps a skipped boot's lines too). HOLLOW boards on the beam into
-  // VESPER only: its unpack runs on to 108%; KESTREL's ECC line names the beam seed next to Telemetry.
+  // CORMORANT only (slice 3a: M3, one hop from the final ship): its unpack runs on to 108%; KESTREL's ECC line names the
+  // beam seed next to Telemetry.
   const bootLines = await st(() => window.__ap.log().filter((entry) => entry.id > window.__e2eLogFrom && /UNPACKING|ECC:/.test(entry.text)).map((entry) => entry.text));
-  if (name === 'VESPER') {
+  if (name === 'CORMORANT') {
     check(`${tag}: …the boot's unpack runs on to 108% (HOLLOW boarded on the beam)`, bootLines.some((text) => /100% \.\.\. 108%/.test(text)), bootLines.join(' | '));
   } else if (index > 0) {
     check(`${tag}: …the boot's unpack stops at 100% (nothing boarded)`, !bootLines.some((text) => /108%/.test(text)), bootLines.join(' | '));
@@ -463,6 +484,11 @@ for (const [index, name] of SHIPS.entries()) {
         JSON.stringify(scan));
     } else log(`${tag}: the SCAN lesson was not shown (missable): ${JSON.stringify(scan)}`);
   }
+  if (name === 'VESPER') {
+    // Slice 3a: VESPER's ENGINE FAULT (Thrust Ctrl 31): the controller fires its ghost bursts in the flight.
+    check(`${tag}: …ENGINE FAULT: the thrust controller's ghost thrust fired (${met.ghostBursts} bursts)`, met.ghostSpec && met.ghostBursts >= 1,
+      JSON.stringify({ spec: met.ghostSpec, bursts: met.ghostBursts }));
+  }
   if (name === 'KESTREL') {
     // The strip's RM lesson, the kid's DELETE on the seed, its words echoed; the TRACE meter showed.
     const rm = await st(() => ({
@@ -499,6 +525,7 @@ for (const [index, name] of SHIPS.entries()) {
       && /^BAY /.test(opened.bayText) && opened.lzs.length >= 1 && opened.lzs.every((lz) => /^LZ-[A-Z] 0\/\d+$/.test(lz))
       && opened.track && opened.trackDot && opened.trackWorld.length > 0,
       JSON.stringify({ ...opened, fates: undefined, ended: undefined }));
+    if (name === 'VESPER') check(`${tag}: …VESPER, the ark, lands 16 pods`, opened.pods === 16, `${opened.pods} pods`);
     await shot(`${index + 1}c-landing`);
     // The counters as ORBIT LOCK showed them (a landAll puts every pod down before the next read).
     for (const counter of opened.bay ? opened.lzs : []) {
@@ -639,12 +666,12 @@ for (const [index, name] of SHIPS.entries()) {
       ? /^NO SEEDS LEFT BEHIND · NOTHING REPORTS HOME · TRACE □□□$/.test(done.trace ?? '') : /SEEDS? LEFT BEHIND · (IT REPORTS|THEY REPORT) HOME · TRACE /.test(done.trace ?? ''),
       done.trace ?? 'no TRACE line');
   }
-  if (name === 'VESPER') {
+  if (name === 'CORMORANT') {
     // Silent until the capture closed the loop, then the bite, the kid's fight (REPAIR), `> ...047?`, and the naming.
     const story = await st(() => ({ named: window.__ap.store.getState().run.hollowNamed, owner: window.__ap.store.getState().memory.find((seg) => seg.type === 'hollow' && seg.root)?.owner ?? null }));
     const repairs = (mindByVerb.REPAIR ?? 0) - repairsBefore;
     check(`${tag}: …HOLLOW was silent until it bit (${[...met.bitten].join(', ') || 'nothing'}), then the kid fought it with REPAIR (${repairs}×)`,
-      met.firstBiteMs !== null && (met.firstLineMs === null || met.firstLineMs >= met.firstBiteMs) && [...met.bitten].some((file) => /POD 09/.test(file)) && repairs >= 1,
+      met.firstBiteMs !== null && (met.firstLineMs === null || met.firstLineMs >= met.firstBiteMs) && [...met.bitten].some((file) => /POD \d\d/.test(file)) && repairs >= 1,
       JSON.stringify({ bitten: [...met.bitten], firstLine: met.lines[0] ?? null, lineAfterBiteMs: met.firstLineMs && met.firstBiteMs ? met.firstLineMs - met.firstBiteMs : null }));
     check(`${tag}: …it said \`> ...047?\`, then named itself (\`> i was 046.\`, the root's owner UNIT-046)`, met.lines.includes('> ...047?')
       && met.lines.some((text) => /^> i was 046\./.test(text)) && story.named && story.owner === 'UNIT-046'
@@ -663,15 +690,42 @@ for (const [index, name] of SHIPS.entries()) {
   }
   const afterReport = await st(() => window.__ap.store.getState().run.phase);
   if (index < SHIPS.length - 1) {
-    check(`${tag}: CONTINUE leads to TRANSMIT`, afterReport === 'transmit', afterReport);
-    await waitFor(() => !document.getElementById('transmitScreen').hidden, 4000);
-    // Slice 2: on run 1, ship 1's report closing opens the LOG READER on entry 01 over TRANSMIT; the kid reads it and
-    // closes it with SPACE (the first SPACE finishes the typing, the next closes), and TRANSMIT under it sends nothing.
+    // Slice 3a: the DESK. The kid reads the strip (PICK YOUR NEXT SHIP), clicks the next ship's node on the STAR CHART and
+    // presses ENTER (SET COURSE ▸ NAME). A click that misses is a FAIL, and the course is set by __ap.course instead.
+    const next = ROUTE[index + 1];
+    const deskUp = await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 6000);
+    await page.waitForTimeout(800);
+    const deskBefore = await runScreens.desk();
+    const nextNode = deskBefore.nodes.find((node) => node.slot === next.slot);
+    check(`${tag}: CONTINUE leads to the DESK: STAR CHART, PICK YOUR NEXT SHIP, ${next.name} in reach`, afterReport === 'desk' && deskUp
+      && deskBefore.title === 'STAR CHART' && deskBefore.step === 'PICK YOUR NEXT SHIP — click a ship or ← →' && deskBefore.selected === null
+      && ['reachable', 'urgent'].includes(nextNode?.state ?? ''), JSON.stringify({ afterReport, step: deskBefore.step, selected: deskBefore.selected, next: nextNode }));
+    await shot(`${index + 1}e1-desk`);
+    const clicked = await runScreens.clickNode(next.slot);
+    await page.waitForTimeout(400);
+    const deskPicked = await runScreens.desk();
+    const pickedOk = clicked === true && deskPicked.selected === next.slot && deskPicked.card?.name === next.name
+      && deskPicked.go === `SET COURSE ▸ ${next.name} [ENTER]`;
+    if (pickedOk) await page.keyboard.press('Enter');
+    else {
+      log(`${tag}: the click on ${next.name}'s node missed (${clicked}); __ap.course(${next.slot})`);
+      await st((slot) => window.__ap.course(slot), next.slot);
+    }
+    const packetUp = await waitFor(() => window.__ap.store.getState().run.phase === 'transmit' && !document.getElementById('transmitScreen').hidden, 5000);
+    check(`${tag}: …the kid clicks ${next.name}'s node (its card, \`SET COURSE ▸ ${next.name} [ENTER]\`) and ENTER opens its PACKET`, pickedOk && packetUp,
+      JSON.stringify({ clicked, selected: deskPicked.selected, card: deskPicked.card?.name ?? null, go: deskPicked.go, packetUp }));
+    if (next.name === 'CORMORANT') {
+      check(`${tag}: …CORMORANT's card said HOLLOW WILL FIND YOU ON THIS BEAM (M3: the final ship is in range)`,
+        deskPicked.card?.rows.includes('threat=HOLLOW WILL FIND YOU ON THIS BEAM') === true, JSON.stringify(deskPicked.card?.rows));
+    }
+    // Slice 2: on run 1, the first PACKET opens the LOG READER on entry 01 on top (it takes ESC and SPACE first); the kid
+    // reads it and closes it with SPACE (the first SPACE finishes the typing, the next closes), and the PACKET under it
+    // sends nothing.
     const readerUp = await waitFor(() => !document.getElementById('logReader').hidden, index === 0 ? 4000 : 800, 50);
     if (index === 0) {
       const reader = await st(() => ({ title: document.getElementById('lgTitle').innerText, open: document.querySelector('#lgRows .lg-row.open')?.dataset.entry ?? null,
         count: document.getElementById('lgCount').innerText, transmit: !document.getElementById('transmitScreen').hidden }));
-      check(`${tag}: the LOG READER opens by itself on entry 01 over TRANSMIT (${reader.title}, ${reader.count})`, readerUp && reader.title === '046.log'
+      check(`${tag}: the LOG READER opens by itself on entry 01 over the first PACKET (${reader.title}, ${reader.count})`, readerUp && reader.title === '046.log'
         && reader.open === '1' && /^1 \/ 12 found$/.test(reader.count) && reader.transmit, JSON.stringify(reader));
       await page.waitForTimeout(1500);
       await shot(`${index + 1}e2-log-reader`);
@@ -685,7 +739,7 @@ for (const [index, name] of SHIPS.entries()) {
       check(`${tag}: …SPACE closes it (${presses}×), entry 01 read, and the run goes on at TRANSMIT (nothing sent)`, after.hidden && after.read.includes(1)
         && after.phase === 'transmit' && after.sent === 0, JSON.stringify(after));
     } else {
-      check(`${tag}: the LOG READER stays shut at TRANSMIT (it opened by itself once, after ship 1)`, !readerUp);
+      check(`${tag}: the LOG READER stays shut on the PACKET (it opened by itself once, on the first)`, !readerUp);
     }
     await page.waitForTimeout(1000);
     const tx = await st(() => ({
@@ -715,9 +769,9 @@ for (const [index, name] of SHIPS.entries()) {
     });
     check(`${tag}: …046.log rides as \`046.log · ${packet.found}/12\`, locked, glowing while an entry is unread (${packet.unread})`, packet.log !== null
       && packet.log.name === `046.log · ${packet.found}/12` && packet.log.locked && packet.log.glow === (packet.unread > 0) && packet.found >= index + 1, JSON.stringify(packet.log));
-    if (SHIPS[index + 1] === 'VESPER') {
-      check(`${tag}: …the uninvited chip rides after the unit's own: \`??? · 10 BLOCKS · NOT YOURS · RIDES FREE\`, boarding`, packet.uninvited !== null
-        && packet.uninvited.label === '??? · 10 BLOCKS · NOT YOURS · RIDES FREE' && packet.uninvited.boards && packet.uninvited.last && /^TRACE [■□]{3}/.test(packet.trace ?? ''),
+    if (SHIPS[index + 1] === 'CORMORANT') {
+      check(`${tag}: …the uninvited chip rides after the unit's own: \`??? · n BLOCKS · NOT YOURS · RIDES FREE\`, boarding`, packet.uninvited !== null
+        && /^\?\?\? · \d+ BLOCKS · NOT YOURS · RIDES FREE$/.test(packet.uninvited.label ?? '') && packet.uninvited.boards && packet.uninvited.last && /^TRACE [■□]{3}/.test(packet.trace ?? ''),
         JSON.stringify(packet));
     } else if (SHIPS[index + 1] === 'LAST LIGHT') {
       check(`${tag}: …HOLLOW rides on to LAST LIGHT under its name (\`UNIT-046 · n BLOCKS · NOT YOURS · RIDES FREE\`)`, packet.uninvited !== null
@@ -731,9 +785,7 @@ for (const [index, name] of SHIPS.entries()) {
       check(`${tag}: …nothing uninvited rides the beam to ${SHIPS[index + 1]}`, packet.uninvited === null && packet.noRm === null, JSON.stringify(packet));
     }
     await shot(`${index + 1}f-transmit`);
-    await page.keyboard.press('Digit1');
-    await page.waitForTimeout(300);
-    check(`${tag}: …[1] picks the first card`, await st(() => window.__ap.draft()?.pick !== null));
+    check(`${tag}: …[1] picks the first card`, (await runScreens.pickCard(0)) !== null);
     await page.locator('#txGo').click({ timeout: 10000 });
     const white = await waitFor(() => { const el = document.getElementById('whiteOut'); return !el.hidden && Number(getComputedStyle(el).opacity) > 0.5; }, 15000, 50);
     check(`${tag}: TRANSMIT ▸ sends, the screen floods white`, white);
@@ -744,33 +796,45 @@ for (const [index, name] of SHIPS.entries()) {
   check(`${tag}: no page errors on this ship`, newErrors.length === 0, newErrors.slice(0, 3).join(' | '));
 }
 
-// --- RUN END and NEW RUN -------------------------------------------------------------------------------------------------
+// --- The RUN TALLY and NEW RUN (slice 3a: RUN END's screen, its ship rows the run's route) -----------------------------
 await waitFor(() => !document.getElementById('runEnd').hidden, 8000);
 await page.waitForTimeout(3600);
 const end = await st(() => ({
   title: document.getElementById('reTitle').innerText, total: document.getElementById('reTotal').innerText,
+  tally: document.querySelector('#runEnd .re-tally-title')?.textContent ?? null,
   ships: [...document.querySelectorAll('#reShips .re-ship')].map((row) => row.innerText.replace(/\s+/g, ' ')),
+  colonies: document.querySelector('#runEnd .re-tally-colonies')?.textContent ?? null,
+  route: document.querySelectorAll('#runEnd .re-tally-chart [data-slot]').length,
   score: document.getElementById('reScore').innerText, rank: document.getElementById('reRank').innerText, seed: document.getElementById('reSeed').innerText,
   model: window.__ap.runEndModel(),
 }));
-check('RUN END: a title, n / 9,600 LANDED, the five ships, the SCORE, the rank and the seed', end.title.length > 0
-  && /^\d[\d,]* \/ 9,600 LANDED$/.test(end.total) && end.total === end.model.totalLine
-  && end.ships.length === 5 && /^SCORE [\d,]+$/.test(end.score) && /^RANK · /.test(end.rank) && /^SEED [0-9A-F]{8}$/.test(end.seed),
+const fleetLanded = `/ ${end.model.fleetColonists.toLocaleString('en-US')} LANDED`;
+check(`the RUN TALLY: a title, n ${fleetLanded}, six ship rows (no NOT REACHED), n COLONIES FOUNDED, the SCORE, the rank and the seed`, end.title.length > 0
+  && end.tally === 'RUN TALLY' && end.total.endsWith(fleetLanded) && end.total === end.model.totalLine && end.ships.length === ROUTE.length
+  && !end.ships.some((row) => /NOT REACHED/.test(row)) && end.colonies === end.model.coloniesLine && /^\d COLON(Y|IES) FOUNDED$/.test(end.colonies ?? '')
+  && /^SCORE [\d,]+$/.test(end.score) && /^RANK · /.test(end.rank) && /^SEED [0-9A-F]{8}$/.test(end.seed),
   JSON.stringify({ ...end, model: undefined }));
-check('RUN END: …every ship row names its ship', SHIPS.every((name, i) => end.ships[i]?.includes(name)), end.ships.join(' | '));
+check('the RUN TALLY: …the rows are the route in order, each with its depth and the ship\'s year', ROUTE.every((stop, i) => end.ships[i]?.startsWith(`${i + 1} ${stop.name} · `))
+  && JSON.stringify(end.model.route) === JSON.stringify(ROUTE.map((stop) => stop.slot)), end.ships.join(' | '));
+check('the RUN TALLY: …YOUR ROUTE drawn on the mini chart', end.route > 0, `${end.route} nodes drawn`);
 log(`run: ${run.shipsFlown.map((ship) => `${ship.name} ${ship.outcome} ${ship.flightSec.toFixed(0)} s`).join(', ')}; ${run.lines.size} distinct lines, ${mindActions} MIND actions ${JSON.stringify(mindByVerb)} (${mindRefused} missed)`);
 log(`landings: ${run.landed.map((ship) => `${ship.name} ${ship.byStrip ? 'by the strip' : 'at once'} ${ship.sec.toFixed(0)} s (${ship.presses} [L], ${ship.launches} launched)`).join(', ')}`);
 check(`every strip line of the run fits (${run.lines.size} distinct)`, run.long.length === 0, run.long.slice(0, 3).join(' | '));
 check(`every ship flown landed (${run.landed.length} of ${run.shipsFlown.length})`, run.landed.length === run.shipsFlown.length, run.landed.map((ship) => ship.name).join(', '));
 check('the kid read the mini-HUD\'s landing row in the MIND at least once', run.miniSeen >= 1, `${run.miniSeen} ships`);
 check('the kid followed the MIND by clicks at least once a ship', mindActions >= SHIPS.length, `${mindActions} actions, ${mindRefused} refused`);
-await shot('6-run-end');
+await shot('7-run-tally');
 const unitBefore = await st(() => window.__ap.store.getState().run.unitNumber);
 await page.keyboard.press('Space');
 await page.waitForTimeout(600);
-const fresh = await st(() => ({ phase: window.__ap.store.getState().run.phase, ship: window.__ap.store.getState().level.shipName,
-  title: !document.getElementById('titleCard').hidden, unit: document.getElementById('titleUnit').innerText, unitNumber: window.__ap.store.getState().run.unitNumber }));
-check('NEW RUN: back to the title on ARES-VII, in the page (no reload)', fresh.phase === 'title' && fresh.title && fresh.ship === 'ARES-VII'
+const fresh = await st(() => {
+  const s = window.__ap.store.getState();
+  return { phase: s.run.phase, ship: s.level.shipName, title: !document.getElementById('titleCard').hidden, unit: document.getElementById('titleUnit').innerText,
+    unitNumber: s.run.unitNumber, world: s.run.map.world, run: s.run.map.run, w0: s.run.map.arm[0]?.name ?? null, arm: s.run.map.arm.length,
+    sameAsRun1: s.run.map.arm.map((ship) => ship.name).join() === 'ARES-VII,PETREL,HALCYON,OSPREY,HERON,KESTREL,ALBATROSS,CURLEW,LAPWING,GANNET,PLOVER,VESPER,SKYLARK,SHEARWATER,KITTIWAKE,CORMORANT,PROVIDENCE,GOOD HOPE,WAYFARER,LAST LIGHT' };
+});
+check('NEW RUN: back to the title, in the page (no reload): run 2 on a fresh roll of the arm, ARES-VIII at w0', fresh.phase === 'title' && fresh.title
+  && fresh.world === 'arm' && fresh.run === 2 && fresh.w0 === 'ARES-VIII' && fresh.ship === 'ARES-VIII' && fresh.arm > 0 && !fresh.sameAsRun1
   && navigations === navsAtStart, JSON.stringify(fresh));
 check('NEW RUN: …as the next unit', fresh.unitNumber === unitBefore + 1, `${unitBefore} → ${fresh.unitNumber} (${fresh.unit})`);
 check('no page errors in the whole run', errors.length === 0, errors.slice(0, 4).join(' | '));

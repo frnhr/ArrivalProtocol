@@ -1,3 +1,8 @@
+// Phase 3 slice 3a (the galaxy map): the page plays run 1's arm, so ship 1 is the arm's ARES-VII (COMPACT: five racks,
+// A B C E F, each in two rows); its report's CONTINUE opens the DESK (a tap on HALCYON's node, a tap on SET COURSE), then
+// the PACKET with the LOG READER on top. HALCYON's BEAM OUT and KESTREL stay the classic ships (__ap.ship); one arm ship
+// more, PETREL (TIGHT: four racks, A B C E) by __ap.slot(1), is checked in blue: its four racks with no free-tail row, files whole, the
+// header and the strip, nothing spilling sideways.
 // Phase 3 slice 2: ARES-VII is calm (no scripted bite to cure before the landing); ship 1's report opens the LOG READER
 // over TRANSMIT as a full-screen sheet, closed by a tap on CLOSE; KESTREL's beam seed shows the TRACE meter, which must
 // fit the MIND header.
@@ -231,9 +236,15 @@ const podChips = await st(() => [...document.querySelectorAll('#memWrap .seg.dri
   }));
 check(`blue: every driver chip shows its pod code whole, on one line, inside the chip (${podChips.map((chip) => chip.code).join(', ')})`,
   podChips.length >= 3 && podChips.every((chip) => /^P(OD )?\d\d$/.test(chip.code) && chip.lines === 1 && chip.inside), JSON.stringify(podChips));
-const rackRows = await st(() => Object.fromEntries(['A', 'B', 'C', 'D', 'E', 'F']
-  .map((rack) => [rack, document.querySelectorAll(`#memWrap .addr-row[data-rack="${rack}"]`).length])));
-check('blue: every rack in two rows (no row of its own for a free tail)', Object.values(rackRows).every((rows) => rows === 2), JSON.stringify(rackRows));
+// Slice 3a: the racks the ship's class has (ARES-VII is COMPACT: A B C E F; rack D is FULL's only).
+const rackRowsNow = () => st(() => {
+  const rows = {};
+  for (const row of document.querySelectorAll('#memWrap .addr-row[data-rack]')) rows[row.dataset.rack] = (rows[row.dataset.rack] ?? 0) + 1;
+  return { cls: window.__ap.store.getState().level.memoryClass, rows };
+});
+const rackRows = await rackRowsNow();
+check('blue: ARES-VII (COMPACT) shows its five racks A B C E F, each in two rows (no row of its own for a free tail)', rackRows.cls === 'COMPACT'
+  && Object.keys(rackRows.rows).join('') === 'ABCEF' && Object.values(rackRows.rows).every((rows) => rows === 2), JSON.stringify(rackRows));
 const blueOpener = await visibleText('#objectiveText');
 check('blue: the opener\'s ship line names the SHIP first (`— [SHIP], … [BURN]`)', /\[SHIP\],.*\[BURN\]/.test(blueOpener ?? ''), blueOpener);
 
@@ -343,12 +354,23 @@ const headline = await visibleText('#lrHeadline');
 check('LANDING REPORT: the headline LANDED n / N', /^LANDED \d[\d,]* \/ [\d,]+$/.test(headline ?? ''), headline);
 const cont = await visibleText('#lrContinue');
 check('…its button reads without a key cap', !/SPACE/.test(cont ?? ''), cont);
-// The report can still be settling its last line when CONTINUE shows: tap until TRANSMIT comes up.
-for (let i = 0; i < 4 && (await st(() => document.getElementById('transmitScreen').hidden)); i++) {
+// The report can still be settling its last line when CONTINUE shows: tap until the DESK comes up.
+for (let i = 0; i < 4 && (await st(() => window.__ap.store.getState().run.phase === 'report')); i++) {
   if (await st(() => !document.getElementById('lrContinue').hidden)) await page.tap('#lrContinue');
-  await waitFor(() => !document.getElementById('transmitScreen').hidden, 3000);
+  await waitFor(() => window.__ap.store.getState().run.phase !== 'report', 3000);
 }
-check('CONTINUE (tapped) brings up TRANSMIT', await st(() => !document.getElementById('transmitScreen').hidden));
+check('CONTINUE (tapped) brings up the DESK', await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 4000));
+// Slice 3a: the DESK on a phone (map-desk.mjs checks its sheet in full): a tap on HALCYON's node, a tap on SET COURSE.
+await page.waitForTimeout(800);
+await overflow('DESK');
+await shot('10a-desk');
+let deskTap = 'no tap';
+try { await page.locator('#deskScreen [data-slot="2"] .cn-box').first().tap({ timeout: 4000 }); deskTap = 'ok'; } catch (err) { deskTap = String(err).split('\n')[0]; }
+await page.waitForTimeout(500);
+check('…a tap on HALCYON\'s node picks it', deskTap === 'ok' && await st(() => window.__ap.store.getState().ui.deskSelected === 2), deskTap);
+await onScreen('DESK', '#deskGo');
+await page.tap('#deskGo');
+check('…a tap on SET COURSE brings up the PACKET', await waitFor(() => !document.getElementById('transmitScreen').hidden && window.__ap.store.getState().run.phase === 'transmit', 4000));
 
 // --- Slice 2: the LOG READER (run 1, entry 01 after ship 1's report) as a full-screen sheet; CLOSE takes the tap ---------
 const readerUp = await waitFor(() => !document.getElementById('logReader').hidden, 4000, 50);
@@ -363,7 +385,7 @@ const sheet = await st(() => {
     rows: rows.length, open: document.querySelector('#lgRows .lg-row.open')?.dataset.entry ?? null, title: document.getElementById('lgTitle').innerText,
   };
 });
-check('the LOG READER opens over TRANSMIT as a full-screen sheet (the card fills the screen, nothing spills sideways)', readerUp && sheet.title === '046.log'
+check('the LOG READER opens over the PACKET as a full-screen sheet (the card fills the screen, nothing spills sideways)', readerUp && sheet.title === '046.log'
   && sheet.open === '1' && sheet.rows === 12 && sheet.card.left <= 0 && sheet.card.top <= 0 && Math.abs(sheet.card.right - vw) <= 1 && Math.abs(sheet.card.bottom - vh) <= 1
   && !sheet.cardOverflow && sheet.rowsOut === 0, JSON.stringify(sheet));
 await overflow('LOG READER');
@@ -481,6 +503,58 @@ check('KESTREL in blue: the TRACE meter (three cells) fits the MIND header on th
   && traceFit.inHeader && traceFit.overlaps === 0 && traceFit.noteHidden && !traceFit.headerOverflow, JSON.stringify(traceFit));
 await overflow('KESTREL blue');
 await shot('17b-kestrel-trace');
+
+// --- Slice 3a: an arm ship of the TIGHT class (PETREL, run 1's slot 1) in blue: four racks, each in two rows ---------------
+// A fresh run 1 (no archive: a reload mid-run starts run 2 on a fresh roll), then __ap.slot(1).
+await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
+await st(() => window.__ap.archiveClear());
+await page.reload({ waitUntil: 'networkidle' });
+await page.tap('#titleReceive');
+await waitFor(() => window.__ap.store.getState().run.phase === 'boot', 5000);
+await st(() => window.__ap.skipBoot());
+await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 10000);
+await st(() => window.__ap.slot(1));
+await waitFor(() => {
+  const s = window.__ap.store.getState();
+  if (s.run.phase === 'boot') window.__ap.skipBoot();
+  return s.run.phase === 'flight' && s.level.shipName === 'PETREL';
+}, 30000);
+if ((await st(() => window.__ap.store.getState().ui.mode)) !== 'memory') await page.tap('.mode-toggle-opt[data-mode="memory"]');
+await page.waitForTimeout(1200);
+const petrelRows = await st((() => {
+  const rows = {};
+  const freeTails = [];
+  // A rack's usual rows: a phone lays 64 blocks out in two rows of 32, a desktop in one.
+  const usual = innerWidth <= 768 ? 2 : 1;
+  for (const row of document.querySelectorAll('#memWrap .addr-row[data-rack]')) {
+    const rack = row.dataset.rack;
+    rows[rack] = (rows[rack] ?? 0) + 1;
+    const segs = [...row.querySelectorAll('.seg')];
+    // A row of its own for a few free blocks (WP12 fix round 1's rule): a row past the usual ones holding only free space
+        // (a whole file may take a row past them: no file of ≤ 32 blocks is cut).
+    if (rows[rack] > usual && segs.length > 0 && segs.every((seg) => seg.classList.contains('free'))) freeTails.push(`${rack}${rows[rack]}`);
+  }
+  const wrap = document.getElementById('memWrap').getBoundingClientRect();
+  return { rows, freeTails, left: Math.round(wrap.left), right: Math.round(wrap.right), width: innerWidth, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth };
+}));
+const petrelCls = await st(() => window.__ap.store.getState().level.memoryClass);
+// The unit's files arrive whole (no file of ≤ 32 blocks cut), so its rack may take a third row; a free tail may not.
+check('PETREL (TIGHT) in blue: its four racks A B C E, no rack with a row of its own for a free tail', petrelCls === 'TIGHT'
+  && Object.keys(petrelRows.rows).join('') === 'ABCE' && petrelRows.freeTails.length === 0, JSON.stringify(petrelRows));
+const petrelCut = await st(() => {
+  const sizes = new Map();
+  document.querySelectorAll('#memWrap .seg[data-id]').forEach((part) => sizes.set(part.dataset.id, (sizes.get(part.dataset.id) ?? 0) + Number(part.dataset.partSize)));
+  return [...document.querySelectorAll('#memWrap .seg.is-part:not(.free)')]
+    .filter((part) => sizes.get(part.dataset.id) <= 32)
+    .map((part) => `${part.dataset.id}:${part.dataset.partSize}/${sizes.get(part.dataset.id)}`);
+});
+check('…no named file of ≤ 32 blocks cut across two rows', petrelCut.length === 0, petrelCut.join(', '));
+const petrelHud = await rect('#miniHud');
+const petrelStats = await rect('.mem-stats');
+check('…the mini-HUD still a top bar above the memory', petrelHud !== null && petrelHud.height > 0 && petrelHud.height <= 70 && petrelHud.bottom <= petrelStats.top + 1,
+  `${JSON.stringify(petrelHud)} stats top ${petrelStats?.top}`);
+await overflow('PETREL blue');
+await shot('17c-petrel-tight');
 
 // --- A LOST card on a fresh page -----------------------------------------------------------------------------------
 await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });

@@ -4,12 +4,17 @@
 // part-2 pictures (acceptance 5: the MOVE preview with a WALL label, TRANSMIT, RUN END).
 // Slice 1a: every ship lands at once (__ap.landAll) once it is in orbit; the landing by the strip is the playthrough's.
 // Phase 3 slice 2 (the calm opening): ARES-VII and HALCYON are calm (no HOLLOW: HALCYON's coast is checked quiet);
-// ship 1's report opens the LOG READER on entry 01 over TRANSMIT (SPACE closes it); KESTREL brings a beam seed and the
-// TRACE meter; the PACKET to VESPER carries HOLLOW's uninvited chip and VESPER boots with the 108% unpack. HALCYON's old
-// wake, bite, naming and MOVE-behind-a-WALL steps run on VESPER at the end, on a fresh run warped there (__ap.ship(3)),
-// whose PACKET to LAST LIGHT also shows NO RM.
+// ship 1's report opens the LOG READER on entry 01 over the first PACKET (SPACE closes it); KESTREL brings a beam seed and
+// the TRACE meter.
+// Slice 3a (the galaxy map): the page plays run 1's arm, with the DESK between ships: the run flies the worked route
+// ARES-VII → HALCYON → KESTREL → VESPER → CORMORANT → LAST LIGHT ([0, 2, 5, 11, 15, 19]), each hop picked by a click on
+// the node and ENTER (__ap.course only as a logged FAIL when a click misses). HOLLOW's forced boarding (M3) is on the beam
+// into CORMORANT now: its PACKET carries the uninvited chip and CORMORANT boots with the 108% unpack; VESPER boots clean.
+// The RUN TALLY ends the run (six rows). BEAM OUT on run 2's LAST LIGHT goes there by __ap.runNumber(1) and
+// __ap.route([0, 2, 5, 11, 15, 19]); HOLLOW's wake, bite, naming and MOVE-behind-a-WALL steps run on CORMORANT on a fresh
+// run 1 flown there headless (__ap.route([0, 2, 5, 11, 15])), whose PACKET to LAST LIGHT also shows NO RM.
 // Usage: node tests/e2e/scenarios/run-flow.mjs [outPrefix]   env SHOT_VIEWPORT=1280x720, E2E_BASE_URL (tests/e2e/run.mjs runs it)
-import { launch, BASE_URL } from '../lib.mjs';
+import { launch, BASE_URL, runKit } from '../lib.mjs';
 const out = process.argv[2] ?? 'tests/.out/e2e/shots/p2';
 const [vw, vh] = (process.env.SHOT_VIEWPORT ?? '1440x900').split('x').map(Number);
 const tag = `${vw}x${vh}`;
@@ -33,25 +38,29 @@ const waitFor = async (pred, maxMs, stepMs = 100, arg) => {
   while (Date.now() < end) { if (await page.evaluate(pred, arg)) return true; await page.waitForTimeout(stepMs); }
   return false;
 };
+const kit = runKit(page, { st, waitFor });
+// The worked route on run 1's arm (slice-3a-plan §3): slot → name.
+const ROUTE = [[0, 'ARES-VII'], [2, 'HALCYON'], [5, 'KESTREL'], [11, 'VESPER'], [15, 'CORMORANT'], [19, 'LAST LIGHT']];
+// The DESK after a report: the kid clicks the next ship's node and presses ENTER (the PACKET opens). A click that misses
+// is a FAIL, and the run goes on by __ap.course so the rest is still checked.
+async function throughDesk(slot, name) {
+  const up = await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 8000);
+  await page.waitForTimeout(400);
+  const clicked = await kit.clickNode(slot);
+  await page.waitForTimeout(300);
+  const picked = await st(() => window.__ap.store.getState().ui.deskSelected);
+  const go = await kit.capsText('#deskGo');
+  const seen = await kit.desk();
+  if (clicked === true && picked === slot) await page.keyboard.press('Enter');
+  else await st((to) => window.__ap.course(to), slot);
+  const packet = await waitFor(() => window.__ap.store.getState().run.phase === 'transmit' && !document.getElementById('transmitScreen').hidden, 6000);
+  check(`the DESK: a click on ${name}'s node picks it (\`SET COURSE ▸ ${name} [ENTER]\`), ENTER opens its PACKET`, up && clicked === true && picked === slot
+    && go === `SET COURSE ▸ ${name} [ENTER]` && packet, JSON.stringify({ up, clicked, picked, go, packet }));
+  return seen;
+}
 // A pod's driver segment (`driver_pod04`, src/data/pod-ids.ts) by its pod number.
 const podSegId = (pod) => st((wanted) => window.__ap.store.getState().memory.find((seg) => seg.type === 'driver' && seg.pod === wanted)?.id ?? null, pod);
 
-// The LANDING REPORT by SPACE up to CONTINUE (its last stage: the charge line, and slice 2's TRACE line), read there,
-// then on until the report closes.
-async function finishReport() {
-  await page.waitForTimeout(1200);
-  for (let i = 0; i < 8 && (await st(() => document.getElementById('lrContinue').hidden)); i++) {
-    await page.keyboard.press('Space');
-    await page.waitForTimeout(900);
-  }
-  await page.waitForTimeout(600);
-  const seen = await st(() => ({ trace: document.getElementById('lrTrace').hidden ? null : document.getElementById('lrTrace').innerText, cont: !document.getElementById('lrContinue').hidden }));
-  for (let i = 0; i < 8 && (await phase()) === 'report'; i++) {
-    await page.keyboard.press('Space');
-    await page.waitForTimeout(1300);
-  }
-  return seen;
-}
 // What the PACKET shows of HOLLOW riding the beam (slice 2): the uninvited chip, the TRACE line, NO RM.
 const packetThreat = () => st(() => {
   const chip = document.querySelector('#txChips .tx-chip.uninvited');
@@ -88,7 +97,7 @@ const reportUp = await waitFor(() => {
 }, 40000, 400);
 check('ship 1 reaches its LANDING REPORT', reportUp);
 
-// --- 2. LANDING REPORT → CONTINUE → TRANSMIT -----------------------------------------------------------------
+// --- 2. LANDING REPORT → CONTINUE → the DESK → HALCYON's PACKET--------------------------------------------------------------
 await page.waitForTimeout(1200);
 const report1 = await st(() => ({ title: document.getElementById('lrTitle').innerText, route: document.getElementById('lrRoute').innerText,
   rows: document.querySelectorAll('#lrRows .lr-row').length, model: window.__ap.landingReport().headline }));
@@ -98,10 +107,10 @@ for (let i = 0; i < 8 && (await phase()) === 'report'; i++) {
   await page.keyboard.press('Space');
   await page.waitForTimeout(1300);
 }
-check('LANDING REPORT CONTINUE leads to TRANSMIT (no auto-send)', (await phase()) === 'transmit');
-await waitFor(() => !document.getElementById('transmitScreen').hidden, 3000);
+check('LANDING REPORT CONTINUE leads to the DESK (no auto-send)', (await phase()) === 'desk');
+await throughDesk(2, 'HALCYON');
 
-// --- 2b. Slice 2: on run 1 the LOG READER opens by itself on entry 01 over TRANSMIT; SPACE finishes it, then closes it -----
+// --- 2b. Slice 2: on run 1 the LOG READER opens by itself on entry 01 over the PACKET; SPACE finishes it, then closes it ---
 const readerUp = await waitFor(() => !document.getElementById('logReader').hidden, 4000, 50);
 await page.waitForTimeout(400);
 const reader = await st(() => {
@@ -145,8 +154,8 @@ const tx = await st(() => ({
   go: document.getElementById('txGo').innerText,
 }));
 // Slice 2: 046.log rides along as a fifth locked chip (it isn't yours to leave behind), and nothing uninvited rides yet.
-check('TRANSMIT shows NEXT: HALCYON · 1,000 COLONISTS · 22 LY, the packet line, the files as chips (5 locked, 046.log among them)', tx.visible
-  && tx.next === 'NEXT: HALCYON · 1,000 COLONISTS · 22 LY' && /^LINK 120 · FILES \d+ · CHARGE \d+ → FITS$/.test(tx.packet) && tx.chips >= 9 && tx.locked === 5,
+check('TRANSMIT shows NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY, the packet line, the files as chips (5 locked, 046.log among them)', tx.visible
+  && tx.next === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY' && /^LINK 123 · FILES \d+ · CHARGE \d+ → FITS$/.test(tx.packet) && tx.chips >= 9 && tx.locked === 5,
   JSON.stringify(tx));
 const logChipTx = await st(() => {
   const chip = document.querySelector('#txChips .tx-chip.log-chip');
@@ -156,7 +165,8 @@ check('…the PACKET\'s 046.log chip reads `046.log · 1/12`, locked, no glow (e
   && logChipTx.locked && !logChipTx.glow, JSON.stringify(logChipTx));
 check('…no uninvited chip and no TRACE line on the beam to HALCYON', await st(() => document.querySelectorAll('#txChips .tx-chip.uninvited').length === 0
   && document.getElementById('txTrace').hidden && document.getElementById('txNoRm').hidden));
-check('…the crossing\'s cost and the charge waiting on arrival', /^ON THE WAY: 3 TRANSIT HITS/.test(tx.hits) && /^ON ARRIVAL: \d+ CARRIED/.test(tx.arrival), `${tx.hits} | ${tx.arrival}`);
+check('…the crossing\'s cost (ECC while asleep) and the charge waiting on arrival', tx.hits === 'ON THE WAY: 3 HITS · ECC FIXES 1 WHILE YOU SLEEP (31 YRS) → 2 LAND'
+  && /^ON ARRIVAL: \d+ CARRIED/.test(tx.arrival), `${tx.hits} | ${tx.arrival}`);
 await shot('1-transmit');
 // Everything fits: a click on a file does nothing (and says so with a buzz).
 await page.locator('#txChips .tx-chip', { hasText: 'TELEMETRY' }).first().click();
@@ -165,8 +175,7 @@ check('…everything fits: clicking a file leaves nothing behind', await st(() =
 
 // --- 3. TRANSMIT ▸: the send, the white-out, HALCYON's boot ---------------------------------------------------
 // WP8 part 2: PICK ONE TO CARRY is mandatory on the screen (TRANSMIT ▸ waits for it): [1] picks the first card.
-await page.keyboard.press('Digit1');
-await page.waitForTimeout(300);
+await kit.pickCard(0);
 await page.keyboard.press('Space');
 await page.waitForTimeout(1100);
 const sending = await st(() => ({
@@ -174,7 +183,7 @@ const sending = await st(() => ({
   sent: document.querySelectorAll('#txChips .tx-chip.sent').length,
   line: document.getElementById('txSendLine').innerText,
 }));
-check('the send: the files stream out while the light-years tick past', /^\d+\.\d \/ 22 LY$/.test(sending.ly) && sending.sent >= 9
+check('the send: the files stream out while the light-years tick past', /^\d+\.\d \/ 21 LY$/.test(sending.ly) && sending.sent >= 9
   && sending.line === 'TRANSMITTING UNIT-047 → HALCYON', JSON.stringify(sending));
 await shot('2-sending');
 const whiteUp = await waitFor(() => {
@@ -231,35 +240,19 @@ check('HALCYON coasts calm: HOLLOW never wakes, no hollow block or root, no HOLL
   && calm.hollowSegs === 0 && calm.root === 0 && calm.hollowLines.length === 0 && !calm.bite && !calm.trace, JSON.stringify({ coasting, calmAwake, ...calm }));
 await shot('5-halcyon-calm');
 
-// --- 7. Lock, land, the LANDING REPORT, RUN END (the last ship) -------------------------------------------------
-await st(() => {
-  const ap = window.__ap;
-  const s = ap.store.getState();
-  const r = (s.level.ring.min + s.level.ring.max) / 2;
-  ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); });
-});
-await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 25000);
-const report2 = await waitFor(() => {
-  const ap = window.__ap;
-  if (ap.store.getState().run.phase === 'landing' && ap.store.getState().landing.ended === null) ap.landAll();
-  return ap.store.getState().run.phase === 'report';
-}, 60000, 500);
-check('HALCYON locks, lands, and reaches its LANDING REPORT', report2);
-// WP9: HALCYON is no longer the last ship. CONTINUE → TRANSMIT → KESTREL (locked at once here), whose report ends
-// the run.
+// --- 7. Lock, land, the LANDING REPORT; the DESK to each next ship of the worked route, to the RUN TALLY ----------------
+await kit.lockInRing();
+check('HALCYON locks, lands, and reaches its LANDING REPORT', await kit.landToReport());
+await kit.finishReport();
+// WP9: HALCYON is no longer the last ship. CONTINUE → the DESK → KESTREL (locked at once here).
+check('CONTINUE on HALCYON goes on to the DESK (KESTREL picked there)', (await phase()) === 'desk');
+await throughDesk(5, 'KESTREL');
 await page.waitForTimeout(1200);
-for (let i = 0; i < 8 && (await phase()) === 'report'; i++) {
-  await page.keyboard.press('Space');
-  await page.waitForTimeout(1300);
-}
-check('CONTINUE on HALCYON goes on to TRANSMIT (KESTREL is next)', (await phase()) === 'transmit');
-await page.waitForTimeout(1200);
-await page.keyboard.press('Digit1');
-await page.waitForTimeout(300);
+await kit.pickCard(0);
 await page.locator('#txGo').click();
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'KESTREL', 30000);
-// Slice 2: KESTREL's beam brought one seed, scripted next to Telemetry on run 1; DELETE is licensed at the start, and the
-// TRACE meter shows (the amber MIND chip's row: three empty cells).
+// Slice 2: KESTREL's beam brought one seed, scripted next to Telemetry on run 1 (the scripted first seed at depth 3 on the
+// arm); DELETE is licensed at the start, and the TRACE meter shows (the amber MIND chip's row: three empty cells).
 await page.waitForTimeout(1500);
 const kestrel = await st(() => {
   const s = window.__ap.store.getState();
@@ -281,40 +274,50 @@ check('KESTREL: one beam seed, next to Telemetry, named by the boot\'s ECC line;
 check('…the TRACE meter shows on the amber MIND chip: three cells, none lit (TRACE □□□)', kestrel.mode === 'tools' && kestrel.traceRow && kestrel.cells === 3 && kestrel.on === 0
   && /^TRACE □□□/.test(kestrel.label ?? ''), JSON.stringify(kestrel));
 await shot('5b-kestrel-seed');
-await st(() => {
-  const ap = window.__ap;
-  ap.store.update((d) => { d.hollow.phase = 'dormant'; });
-  const s = ap.store.getState();
-  const r = (s.level.ring.min + s.level.ring.max) / 2;
-  ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); });
-});
-await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 25000);
-const report3 = await waitFor(() => {
-  const ap = window.__ap;
-  if (ap.store.getState().run.phase === 'landing' && ap.store.getState().landing.ended === null) ap.landAll();
-  return ap.store.getState().run.phase === 'report';
-}, 60000, 500);
-check('KESTREL (locked at once) lands and reaches its LANDING REPORT', report3);
-const kestrelReport = await finishReport();
+await kit.lockInRing({ sleep: true });
+check('KESTREL (locked at once) lands and reaches its LANDING REPORT', await kit.landToReport());
+const kestrelReport = await kit.finishReport();
 check('…its report\'s TRACE line: the seed left behind reports home (TRACE □□□ → ■□□)', /^1 SEED LEFT BEHIND · IT REPORTS HOME · TRACE □□□ → ■□□$/.test(kestrelReport.trace ?? ''),
   JSON.stringify(kestrelReport));
-// WP10: KESTREL is no longer the last ship either. CONTINUE → TRANSMIT → VESPER (locked at once here, its HOLLOW put to
-// sleep so THE DEAL stays out of it), whose report ends the run.
-check('CONTINUE on KESTREL goes on to TRANSMIT (VESPER is next)', (await phase()) === 'transmit');
+// WP10: KESTREL is no longer the last ship either. The DESK → VESPER (locked at once here, its HOLLOW put to sleep).
+check('CONTINUE on KESTREL goes on to the DESK (VESPER picked there)', (await phase()) === 'desk');
+await throughDesk(11, 'VESPER');
 await page.waitForTimeout(1200);
-// Slice 2: the beam into VESPER is the one HOLLOW boards: its uninvited chip rides after the unit's own, locked, free.
+// Slice 3a: on the arm HOLLOW does not board on the beam into VESPER (M3 forces it one hop from the final ship: CORMORANT).
 const toVesper = await packetThreat();
-check('the PACKET to VESPER: the uninvited chip `??? · 10 BLOCKS · NOT YOURS · RIDES FREE`, boarding, locked, after the unit\'s own',
-  toVesper.chip !== null && toVesper.chip.label === '??? · 10 BLOCKS · NOT YOURS · RIDES FREE' && toVesper.chip.name === '???' && toVesper.chip.note === 'NOT YOURS · RIDES FREE'
-  && toVesper.chip.boards && toVesper.chip.locked && toVesper.chip.last, JSON.stringify(toVesper));
-check('…its TRACE line says HOLLOW finds the unit on this beam (TRACE ■□□), and no NO RM (DELETE aboard)',
-  /^TRACE ■□□ · (IT FOUND YOU ANYWAY|HOLLOW WILL FIND YOU ON THIS BEAM)$/.test(toVesper.trace ?? '') && toVesper.noRm === null, JSON.stringify(toVesper));
-await shot('5c-packet-uninvited');
-await page.keyboard.press('Digit1');
-await page.waitForTimeout(300);
+check('the PACKET to VESPER: nothing uninvited rides (HOLLOW boards one hop from the final ship, at CORMORANT), no NO RM',
+  toVesper.chip === null && toVesper.noRm === null, JSON.stringify(toVesper));
+await kit.pickCard(0);
 await page.locator('#txGo').click();
 const vesperBoot = await waitFor(() => window.__ap.store.getState().run.phase === 'boot' && window.__ap.store.getState().level.shipName === 'VESPER', 30000, 50);
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'VESPER', 30000);
+await page.waitForTimeout(600);
+const vesper = await st(() => ({
+  unpack: window.__ap.log().filter((entry) => /UNPACKING/.test(entry.text)).map((entry) => entry.text).slice(-1)[0] ?? null,
+  root: window.__ap.store.getState().memory.some((seg) => seg.type === 'hollow' && seg.root), pods: window.__ap.store.getState().landing.pods.length,
+}));
+check('VESPER boots clean: the unpack stops at 100%, no root aboard; 16 pods', vesperBoot && /100%/.test(vesper.unpack ?? '') && !/108%/.test(vesper.unpack ?? '')
+  && !vesper.root && vesper.pods === 16, JSON.stringify(vesper));
+await kit.lockInRing({ sleep: true });
+check('VESPER (locked at once) lands and reaches its LANDING REPORT', await kit.landToReport());
+await kit.finishReport();
+check('CONTINUE on VESPER goes on to the DESK (CORMORANT picked there)', (await phase()) === 'desk');
+const cormorantDesk = await throughDesk(15, 'CORMORANT');
+check('…CORMORANT\'s card said HOLLOW WILL FIND YOU ON THIS BEAM before SET COURSE (M3: the final ship is in range)',
+  cormorantDesk.card?.name === 'CORMORANT' && cormorantDesk.card.rows.includes('threat=HOLLOW WILL FIND YOU ON THIS BEAM'), JSON.stringify(cormorantDesk.card?.rows));
+await page.waitForTimeout(1200);
+// Slice 2's boarding, on the arm's beam into CORMORANT: the uninvited chip rides after the unit's own, locked, free.
+const toCormorant = await packetThreat();
+check('the PACKET to CORMORANT: the uninvited chip `??? · n BLOCKS · NOT YOURS · RIDES FREE`, boarding, locked, after the unit\'s own',
+  toCormorant.chip !== null && /^\?\?\? · \d+ BLOCKS · NOT YOURS · RIDES FREE$/.test(toCormorant.chip.label ?? '') && toCormorant.chip.name === '???'
+  && toCormorant.chip.note === 'NOT YOURS · RIDES FREE' && toCormorant.chip.boards && toCormorant.chip.locked && toCormorant.chip.last, JSON.stringify(toCormorant));
+check('…its TRACE line says HOLLOW finds the unit on this beam, and no NO RM (DELETE aboard)',
+  /^TRACE [■□]{3} · (IT FOUND YOU ANYWAY|HOLLOW WILL FIND YOU ON THIS BEAM)$/.test(toCormorant.trace ?? '') && toCormorant.noRm === null, JSON.stringify(toCormorant));
+await shot('5c-packet-uninvited');
+await kit.pickCard(0);
+await page.locator('#txGo').click();
+const cormorantBoot = await waitFor(() => window.__ap.store.getState().run.phase === 'boot' && window.__ap.store.getState().level.shipName === 'CORMORANT', 30000, 50);
+await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'CORMORANT', 30000);
 await page.waitForTimeout(600);
 const boarded = await st(() => {
   const s = window.__ap.store.getState();
@@ -325,46 +328,25 @@ const boarded = await st(() => {
     hollowLines: window.__ap.log().filter((entry) => entry.speaker === 'hollow').length, events: window.__ap.events('hollow-boarded').length,
   };
 });
-check('VESPER boots boarded: the unpack types `100% ... 108%`, the 10-block root sits in memory, HOLLOW silent', vesperBoot
-  && /100% \.\.\. 108%/.test(boarded.unpack ?? '') && boarded.root === 10 && boarded.rootChip >= 1 && boarded.hollowLines === 0 && boarded.events >= 1, JSON.stringify(boarded));
-await st(() => {
-  const ap = window.__ap;
-  ap.store.update((d) => { d.hollow.phase = 'dormant'; });
-  const s = ap.store.getState();
-  const r = (s.level.ring.min + s.level.ring.max) / 2;
-  ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); });
-});
-await waitFor(() => window.__ap.store.getState().run.phase === 'landing', 25000);
-const report4 = await waitFor(() => {
-  const ap = window.__ap;
-  if (ap.store.getState().run.phase === 'landing' && ap.store.getState().landing.ended === null) ap.landAll();
-  return ap.store.getState().run.phase === 'report';
-}, 60000, 500);
-check('VESPER (locked at once) lands and reaches its LANDING REPORT', report4);
-await page.waitForTimeout(1200);
-for (let i = 0; i < 8 && (await phase()) === 'report'; i++) {
-  await page.keyboard.press('Space');
-  await page.waitForTimeout(1300);
-}
-// WP11: VESPER is no longer the last ship. CONTINUE → TRANSMIT → LAST LIGHT (locked at once, HOLLOW asleep), whose duel
-// is fought by clicks (DELETE on the root), then PURGE on the choice card, and its report ends the run.
-check('CONTINUE on VESPER goes on to TRANSMIT (LAST LIGHT is next)', (await phase()) === 'transmit');
+check('CORMORANT boots boarded: the unpack types `100% ... 108%`, the root sits in memory, HOLLOW silent', cormorantBoot
+  && /100% \.\.\. 108%/.test(boarded.unpack ?? '') && boarded.root !== null && boarded.root >= 8 && boarded.rootChip >= 1 && boarded.hollowLines === 0 && boarded.events >= 1,
+  JSON.stringify(boarded));
+await kit.lockInRing({ sleep: true });
+check('CORMORANT (locked at once) lands and reaches its LANDING REPORT', await kit.landToReport());
+await kit.finishReport();
+// WP11: the final ship. The DESK → LAST LIGHT (locked at once, HOLLOW asleep), whose duel is fought by clicks (DELETE on the
+// root), then PURGE on the choice card, and its report ends the run.
+check('CONTINUE on CORMORANT goes on to the DESK (LAST LIGHT picked there)', (await phase()) === 'desk');
+await throughDesk(19, 'LAST LIGHT');
 await page.waitForTimeout(1200);
 const toLastLight = await packetThreat();
 check('the PACKET to LAST LIGHT: HOLLOW rides along (the uninvited chip, not boarding now), no NO RM with DELETE aboard',
   toLastLight.chip !== null && /^\?\?\? · \d+ BLOCKS · NOT YOURS · RIDES FREE$/.test(toLastLight.chip.label ?? '') && !toLastLight.chip.boards && toLastLight.noRm === null,
   JSON.stringify(toLastLight));
-await page.keyboard.press('Digit1');
-await page.waitForTimeout(300);
+await kit.pickCard(0);
 await page.locator('#txGo').click();
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'LAST LIGHT', 30000);
-await st(() => {
-  const ap = window.__ap;
-  ap.store.update((d) => { d.hollow.phase = 'dormant'; });
-  const s = ap.store.getState();
-  const r = (s.level.ring.min + s.level.ring.max) / 2;
-  ap.store.mutate((d) => { d.orbit.x = r; d.orbit.y = 0; d.orbit.vx = 0; d.orbit.vy = Math.sqrt(s.level.planet.mu / r); });
-});
+await kit.lockInRing({ sleep: true });
 await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'duel', 25000);
 if ((await st(() => window.__ap.store.getState().ui.mode)) !== 'memory') await page.keyboard.press('Tab');
 await page.waitForTimeout(800);
@@ -374,11 +356,7 @@ await page.locator('.seg.hollow-root').first().click({ force: true });
 const choiceUp = await waitFor(() => !document.getElementById('finaleChoice').hidden && document.getElementById('finaleChoice').classList.contains('armed'), 25000);
 check('LAST LIGHT: the root\'s DELETE leaves the choice card', choiceUp);
 await page.locator('#fcPurge').click();
-const report5 = await waitFor(() => {
-  const ap = window.__ap;
-  if (ap.store.getState().run.phase === 'landing' && ap.store.getState().landing.ended === null) ap.landAll();
-  return ap.store.getState().run.phase === 'report';
-}, 60000, 500);
+const report5 = await kit.landToReport();
 check('LAST LIGHT lands and reaches its LANDING REPORT after the finale', report5
   && await st(() => ['purged', 'merged', 'unresolved'].includes(window.__ap.store.getState().hollow.finale.phase)));
 await page.waitForTimeout(1200);
@@ -392,22 +370,30 @@ const runEnd = await st(() => ({
   visible: !document.getElementById('runEnd').hidden,
   title: document.getElementById('reTitle').innerText,
   total: document.getElementById('reTotal').innerText,
+  tally: document.querySelector('#runEnd .re-tally-title')?.textContent ?? null,
   ships: [...document.querySelectorAll('#reShips .re-ship')].map((row) => row.innerText.replace(/\s+/g, ' ')),
+  colonies: document.querySelector('#runEnd .re-tally-colonies')?.textContent ?? null,
+  route: document.querySelectorAll('#runEnd .re-tally-chart [data-slot]').length,
   score: document.getElementById('reScore').innerText,
   rank: document.getElementById('reRank').innerText,
   seed: document.getElementById('reSeed').innerText,
   card: !document.getElementById('burnResult').hidden,
+  model: window.__ap.runEndModel().totalLine,
 }));
-check('RUN END: LAST LIGHT · THE FLEET IS HOME, n / 9,600 LANDED, all five ships (WP11), the SCORE, the rank, the seed (and no LOST card)', runEnd.visible
-  && runEnd.title === 'LAST LIGHT · THE FLEET IS HOME' && /\/ 9,600 LANDED$/.test(runEnd.total) && runEnd.ships.length === 5 && /^SCORE [\d,]+$/.test(runEnd.score)
-  && /^RANK · /.test(runEnd.rank) && /^SEED [0-9A-F]{8}$/.test(runEnd.seed) && !runEnd.card, JSON.stringify(runEnd));
+check('the RUN TALLY: LAST LIGHT · THE FLEET IS HOME, n / N LANDED, six rows in route order, n COLONIES FOUNDED, the SCORE, the rank, the seed (and no LOST card)',
+  runEnd.visible && runEnd.title === 'LAST LIGHT · THE FLEET IS HOME' && runEnd.total === runEnd.model && runEnd.tally === 'RUN TALLY' && runEnd.ships.length === 6
+  && ROUTE.every(([, name], i) => runEnd.ships[i]?.includes(name)) && /^\d COLON(Y|IES) FOUNDED$/.test(runEnd.colonies ?? '')
+  && /^SCORE [\d,]+$/.test(runEnd.score) && /^RANK · /.test(runEnd.rank) && /^SEED [0-9A-F]{8}$/.test(runEnd.seed) && !runEnd.card && !runEnd.ships.some((row) => /NOT REACHED/.test(row)),
+  JSON.stringify(runEnd));
+check('…YOUR ROUTE: the route drawn on the mini chart', runEnd.route > 0, `${runEnd.route} nodes drawn`);
 await shot('10-run-end');
 await page.keyboard.press('Space');
 await page.waitForTimeout(400);
 const fresh = await st(() => ({ phase: window.__ap.store.getState().run.phase, ship: window.__ap.store.getState().level.shipName,
-  title: !document.getElementById('titleCard').hidden, ships: window.__ap.store.getState().run.ships.length, end: !document.getElementById('runEnd').hidden }));
-check('NEW RUN: the title card, ship 1, a fresh run, in the page', fresh.phase === 'title' && fresh.title && fresh.ship === 'ARES-VII'
-  && fresh.ships === 0 && !fresh.end && navigations === navsAtStart, JSON.stringify(fresh));
+  title: !document.getElementById('titleCard').hidden, ships: window.__ap.store.getState().run.ships.length, end: !document.getElementById('runEnd').hidden,
+  run: window.__ap.store.getState().run.map.run, w0: window.__ap.store.getState().run.map.arm[0]?.name ?? null }));
+check('NEW RUN: the title card, a fresh run 2 (ARES-VIII at w0), in the page', fresh.phase === 'title' && fresh.title && fresh.ship === 'ARES-VIII'
+  && fresh.w0 === 'ARES-VIII' && fresh.run === 2 && fresh.ships === 0 && !fresh.end && navigations === navsAtStart, JSON.stringify(fresh));
 await shot('11-new-run');
 
 // --- 8. BEAM OUT on the last ship (WP9: KESTREL; WP10: VESPER; WP11: LAST LIGHT): the offer, the confirm, the bar, the black-out, RUN END
@@ -417,14 +403,22 @@ await page.locator('#titleReceive').click();
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 16000);
 check('run 2: ship 1\'s boot has no ghost (no HOLLOW line in the TERMINAL)', await st(() => window.__ap.store.getState().run.unitNumber === 48
   && !window.__ap.log().some((entry) => entry.speaker === 'hollow') && !window.__ap.store.getState().run.ghostSpoken));
-// WP11: the last ship is LAST LIGHT, the flagship (__ap.ship(4)).
+// Slice 3a: run 2 is a fresh roll (its slots are not run 1's), so its LAST LIGHT is reached on run 1's arm again:
+// __ap.runNumber(1) (a NEW RUN as run 1, the lineage kept: UNIT-048), then __ap.route to the final ship.
+await st(() => window.__ap.runNumber(1));
+await waitFor(() => window.__ap.store.getState().run.phase === 'title' && window.__ap.store.getState().run.map.run === 1, 8000);
+await page.locator('#titleReceive').click();
+await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 16000);
 const logFromLast = await st(() => Math.max(-1, ...window.__ap.log().map((entry) => entry.id)));
-await st(() => window.__ap.ship(4));
+await st(() => window.__ap.route([0, 2, 5, 11, 15, 19]));
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'LAST LIGHT', 24000);
 const lastBoot = await st((from) => window.__ap.log().filter((entry) => entry.id > from && entry.channel === 'mind' && entry.text.startsWith('>'))
   .map((entry) => ({ speaker: entry.speaker, text: entry.text })), logFromLast);
-check('…LAST LIGHT\'s boot opens on it, in HOLLOW\'s voice (`> hi 048. …`)', lastBoot[0]?.speaker === 'hollow'
-  && /^> hi 048\. /.test(lastBoot[0].text) && await st(() => window.__ap.store.getState().run.ghostSpoken), JSON.stringify(lastBoot.slice(0, 3)));
+// The unit is the archive's next (__ap.runNumber re-reads the lineage: UNIT-049 after run 2's start), greeted by the last
+// unit that ended (047).
+const lastUnit = await st(() => window.__ap.store.getState().run.unitNumber);
+check(`…LAST LIGHT's boot opens on it, in HOLLOW's voice (\`> hi 0${lastUnit}. it's 047. …\`)`, lastBoot[0]?.speaker === 'hollow'
+  && lastBoot[0].text.startsWith(`> hi 0${lastUnit}. it's 047. `) && await st(() => window.__ap.store.getState().run.ghostSpoken), JSON.stringify(lastBoot.slice(0, 3)));
 await page.waitForTimeout(500);
 // Falling at the planet with an empty tank. BEAM OUT is a real race (6 tactical s against the impact) and the world runs
 // on while the kid reads the offer and its confirm: from 1,000 km the impact was 5 s off by the time the bar ran, and
@@ -467,39 +461,53 @@ await shot('15-blackout');
 await waitFor(() => !document.getElementById('runEnd').hidden, 4000);
 await page.waitForTimeout(3200);
 const endAbandoned = await st(() => ({ title: document.getElementById('reTitle').innerText,
-  ships: [...document.querySelectorAll('#reShips .re-ship')].map((row) => row.innerText.replace(/\s+/g, ' ')) }));
-// WP7 fix round 1: a BEAM OUT of the last ship is a lost ship: the sombre RUN END (WP11: the flagship's, 'flagship-lost').
+  ships: [...document.querySelectorAll('#reShips .re-ship')].map((row) => row.innerText.replace(/\s+/g, ' ')),
+  route: document.querySelectorAll('#runEnd .re-tally-chart [data-slot]').length }));
+// WP7 fix round 1: a BEAM OUT of the last ship is a lost ship: the sombre RUN END (WP11: the flagship's, 'flagship-lost',
+// worded FINAL SHIP LOST since slice 3a).
 check('…and the run ends (LAST LIGHT is the last ship): RUN END lists it as BEAMED OUT', /BEAMED OUT/.test(endAbandoned.ships.join(' | '))
-  && endAbandoned.title === 'FLAGSHIP LOST', JSON.stringify(endAbandoned));
+  && endAbandoned.title === 'FINAL SHIP LOST', JSON.stringify(endAbandoned));
+check('…YOUR ROUTE is drawn on the RUN TALLY after a BEAM OUT too (the black-out delays the screen)', endAbandoned.route > 0, `${endAbandoned.route} nodes drawn`);
 await shot('16-run-end-beamed');
 await page.keyboard.press('Space');
 await page.waitForTimeout(400);
 check('NEW RUN again: the title card, the windows back from black', await st(() => window.__ap.store.getState().run.phase === 'title'
   && !document.body.classList.contains('beamed-out')) && navigations === navsAtStart);
 
-// --- 9. VESPER, boarded (slice 2: HOLLOW's wake, fight and naming moved here from HALCYON), by the ?debug warp ------
-// A fresh run 1 (no archive: `> ...047?`, not a returning unit's line), warped to VESPER with __ap.ship(3): HOLLOW boards
-// on the beam (the 108% unpack, the 10-block root between POD 08 behind a GAP 2 and POD 09 behind a GAP 1), is silent
-// until the capture closes the loop, then bites POD 09, is fought off, notices you, and names itself.
+// --- 9. CORMORANT, boarded (slice 2: HOLLOW's wake, fight and naming; slice 3a: on the arm's forced boarding) -------
+// A fresh run 1 (no archive: `> ...047?`, not a returning unit's line), flown headless to CORMORANT with
+// __ap.route([0, 2, 5, 11, 15]): HOLLOW boards on the beam (M3: the final ship is in range; the 108% unpack, the root
+// between two pods), is silent until the capture closes the loop, then bites a pod beside the root, is fought off,
+// notices you, and names itself.
 await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
 await st(() => window.__ap.archiveClear());
 await page.reload({ waitUntil: 'networkidle' });
 await page.locator('#titleReceive').click();
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 16000);
-await st(() => window.__ap.ship(3));
-const warpBoot = await waitFor(() => window.__ap.store.getState().run.phase === 'boot' && window.__ap.store.getState().level.shipName === 'VESPER', 20000, 50);
+await st(() => window.__ap.route([0, 2, 5, 11, 15]));
+const warpBoot = await waitFor(() => window.__ap.store.getState().run.phase === 'boot' && window.__ap.store.getState().level.shipName === 'CORMORANT', 20000, 50);
 await page.waitForTimeout(2500);
 const warpUnpack = await st(() => window.__ap.log().filter((entry) => /UNPACKING/.test(entry.text)).map((entry) => entry.text).slice(-1)[0] ?? '');
 await page.keyboard.press('Space');
-await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'VESPER', 20000);
+await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'CORMORANT', 20000);
 await page.waitForTimeout(2500);
-const silent = await st(() => ({
-  phase: window.__ap.store.getState().hollow.phase, lines: window.__ap.log().filter((entry) => entry.speaker === 'hollow').length,
-  root: window.__ap.store.getState().memory.find((seg) => seg.type === 'hollow' && seg.root)?.size ?? null, unit: window.__ap.store.getState().run.unitNumber,
-  infected: window.__ap.hollow().infected.length,
-}));
-check('VESPER by the warp: the boot types the 108% unpack, the 10-block root is aboard, HOLLOW silent in the flight (asleep, no line, no bite)', warpBoot
-  && /100% \.\.\. 108%/.test(warpUnpack) && silent.root === 10 && silent.phase !== 'awake' && silent.lines === 0 && silent.infected === 0, JSON.stringify({ warpUnpack, ...silent }));
+const silent = await st(() => {
+  const s = window.__ap.store.getState();
+  const memory = s.memory;
+  const at = memory.findIndex((seg) => seg.type === 'hollow' && seg.root);
+  // The pods beside the root: the nearest driver on either side (past the GAPs).
+  const beside = (step) => { for (let j = at + step; j >= 0 && j < memory.length; j += step) if (memory[j].type === 'driver') return memory[j].pod; else if (memory[j].type !== 'free') return null; return null; };
+  return {
+    phase: s.hollow.phase, lines: window.__ap.log().filter((entry) => entry.speaker === 'hollow').length,
+    root: at >= 0 ? memory[at].size : null, beside: at >= 0 ? [beside(-1), beside(1)].filter((pod) => pod !== null) : [], unit: s.run.unitNumber,
+    infected: window.__ap.hollow().infected.length, boarded: s.run.threat.aboard,
+  };
+});
+const besidePods = silent.beside;
+const podName = (pod) => `POD ${String(pod).padStart(2, '0')}`;
+check('CORMORANT by __ap.route: the boot types the 108% unpack, the root is aboard between pods, HOLLOW silent in the flight (asleep, no line, no bite)', warpBoot
+  && /100% \.\.\. 108%/.test(warpUnpack) && silent.root !== null && besidePods.length >= 1 && silent.phase !== 'awake' && silent.lines === 0 && silent.infected === 0,
+  JSON.stringify({ warpUnpack, ...silent }));
 // The capture closes the loop (a captured loop whose far end is three ring radii out: closed, not yet in the ring).
 await st(() => {
   const ap = window.__ap;
@@ -514,13 +522,14 @@ await st(() => {
 });
 const bitten = await waitFor(() => window.__ap.hollow().infected.length > 0, 15000);
 const firstBite = await st(() => ({ infected: window.__ap.hollow().infected, status: window.__ap.store.getState().burn.status }));
-// The strip names the bitten pod: the mind-urgent `SOMETHING IS EATING POD 09`, or the alarm that outranks it while the
-// pod is projected to be eaten (`POD 09 WILL BE EATEN IN 0:09`); either waits for a calm strip (VESPER's ghost bursts
-// say UNCOMMANDED THRUST first).
-await waitFor(() => /SOMETHING IS EATING POD 09|POD 09 WILL BE EATEN/.test(window.__ap.director().shown?.text ?? ''), 10000, 100);
+const bittenPod = firstBite.infected.map((hit) => /POD \d\d/.exec(hit.file)?.[0]).find(Boolean) ?? null;
+// The strip names the bitten pod: the mind-urgent `SOMETHING IS EATING POD nn`, or the alarm that outranks it while the
+// pod is projected to be eaten (`POD nn WILL BE EATEN IN 0:09`).
+await waitFor((pod) => new RegExp(`SOMETHING IS EATING ${pod}|${pod} WILL BE EATEN`).test(window.__ap.director().shown?.text ?? ''), 10000, 100, bittenPod);
 const eatingLine = await line();
-check('…the capture closes the loop and HOLLOW bites POD 09; the strip names it (SOMETHING IS EATING POD 09 / POD 09 WILL BE EATEN)', bitten && firstBite.status === 'approaching'
-  && firstBite.infected.some((hit) => /POD 09/.test(hit.file)) && /SOMETHING IS EATING POD 09|POD 09 WILL BE EATEN IN \d:\d\d/.test(eatingLine), JSON.stringify({ ...firstBite, line: eatingLine }));
+check('…the capture closes the loop and HOLLOW bites a pod beside the root; the strip names it (SOMETHING IS EATING POD nn / POD nn WILL BE EATEN)', bitten
+  && firstBite.status === 'approaching' && bittenPod !== null && besidePods.map(podName).includes(bittenPod)
+  && new RegExp(`SOMETHING IS EATING ${bittenPod}|${bittenPod} WILL BE EATEN IN \\d:\\d\\d`).test(eatingLine), JSON.stringify({ ...firstBite, besidePods, line: eatingLine }));
 // The fight won (the kid's REPAIRs, shortened): every bitten driver cured, now and at every bite after it while this
 // section waits on the story.
 const cureAll = () => { for (const hit of window.__ap.hollow().infected) window.__ap.cure(hit.file); };
@@ -533,7 +542,7 @@ check('…fought off, it notices the unit: `> ...047?` in the TERMINAL', noticed
 await page.waitForTimeout(400);
 const bite = await st(() => ({ hidden: document.getElementById('objectiveBite').hidden, text: document.getElementById('objectiveBite').innerText, mode: window.__ap.store.getState().ui.mode }));
 check('in amber, the strip counts HOLLOW\'s next bite (BITE m:ss) while drivers are in its reach', bite.mode === 'tools' && !bite.hidden && /^BITE \d:\d\d$/.test(bite.text), JSON.stringify(bite));
-await shot('17-vesper-amber-bite');
+await shot('17-cormorant-amber-bite');
 await page.keyboard.press('Tab');
 await page.waitForTimeout(700);
 
@@ -549,8 +558,8 @@ const decoding = await st(() => ({
   pulse: document.querySelectorAll('.seg.hollow.naming').length,
   rootName: document.querySelector('.seg.hollow-root .seg-name')?.innerText ?? '',
 }));
-check('the naming on VESPER: the hollow blocks decode `???` into the name, pulsing', named && decoding.decoding > 0 && decoding.pulse > 0, JSON.stringify(decoding));
-await shot('18-vesper-name-decoding');
+check('the naming on CORMORANT: the hollow blocks decode `???` into the name, pulsing', named && decoding.decoding > 0 && decoding.pulse > 0, JSON.stringify(decoding));
+await shot('18-cormorant-name-decoding');
 await page.waitForTimeout(1600);
 const namedView = await st(() => {
   const root = document.querySelector('.seg.hollow-root');
@@ -565,10 +574,10 @@ const namedView = await st(() => {
 check('…settles on UNIT-046, whole; the TERMINAL\'s old [user: ???] tags now read [user: UNIT-046]; it said `hello 047` and `i was 046`', namedView.root === 'UNIT-046' && namedView.whole
   && namedView.oldTags === 0 && namedView.newTags >= 1 && namedView.said.some((text) => /^> hello 047\./.test(text)) && namedView.said.some((text) => /^> i was 046\./.test(text)),
   JSON.stringify(namedView));
-await shot('19-vesper-named');
+await shot('19-cormorant-named');
 
-// The MOVE preview (acceptance 5: the WALL label), then two moves behind WALLs (the warp brings the licences of the ships
-// before VESPER: MOVE is KESTREL's).
+// The MOVE preview (acceptance 5: the WALL label), then two moves behind WALLs (MOVE is due at the start of any ship past
+// depth 3 on the arm: CORMORANT is depth 5).
 // WP12 p3 (test hygiene): this section checks the preview and the placements, not a race with HOLLOW. Under load the
 // two moves can take longer than its 25 s bite, and a bite between them changes the reach the last check reads
 // (WP7 verify). Hold the bite timer for the section (biteInSec is a per-tick number: mutate).
@@ -605,14 +614,18 @@ async function movePod(pod, shotName) {
   await waitFor(() => window.__ap.ops().length === 0, 15000);
   return labels;
 }
-check('…POD 08 and POD 09 still aboard, whole (every bite cured)', await st(() => [8, 9].every((pod) => window.__ap.store.getState().memory.some((seg) => seg.type === 'driver' && seg.pod === pod && !seg.infected))));
-const pod9Labels = await movePod(9, '20-move-preview');
-const pod9Source = pod9Labels.find((label) => /source/.test(label.cls));
-const pod9Dest = pod9Labels.find((label) => /dest/.test(label.cls));
-check('MOVE preview on POD 09: LEAVES WALL n ✓ on the file, SAFE · WALL ✓ on the placeholder', /^LEAVES WALL \d+ ✓$/.test(pod9Source?.text ?? '')
-  && /tone-good/.test(pod9Source.cls) && pod9Dest?.text === 'SAFE WALL ✓' && /tone-good/.test(pod9Dest.cls), JSON.stringify(pod9Labels));
-const pod8Labels = await movePod(8, '21-move-preview-pod08');
-check('MOVE preview on POD 08: LEAVES WALL n ✓', pod8Labels.some((label) => /^LEAVES WALL \d+ ✓$/.test(label.text)), JSON.stringify(pod8Labels));
+check(`…the pods beside the root (${besidePods.map(podName).join(', ')}) still aboard, whole (every bite cured)`, besidePods.length >= 1
+  && await st((pods) => pods.every((pod) => window.__ap.store.getState().memory.some((seg) => seg.type === 'driver' && seg.pod === pod && !seg.infected)), besidePods));
+const [firstPod, secondPod] = besidePods;
+const firstLabels = await movePod(firstPod, '20-move-preview');
+const firstSource = firstLabels.find((label) => /source/.test(label.cls));
+const firstDest = firstLabels.find((label) => /dest/.test(label.cls));
+check(`MOVE preview on ${podName(firstPod)}: LEAVES WALL n ✓ on the file, SAFE · WALL ✓ on the placeholder`, /^LEAVES WALL \d+ ✓$/.test(firstSource?.text ?? '')
+  && /tone-good/.test(firstSource.cls) && firstDest?.text === 'SAFE WALL ✓' && /tone-good/.test(firstDest.cls), JSON.stringify(firstLabels));
+if (secondPod !== undefined) {
+  const secondLabels = await movePod(secondPod, '21-move-preview-second');
+  check(`MOVE preview on ${podName(secondPod)}: LEAVES WALL n ✓`, secondLabels.some((label) => /^LEAVES WALL \d+ ✓$/.test(label.text)), JSON.stringify(secondLabels));
+}
 const walled = await st(() => window.__ap.hollow().reach.every((reach) => reach.verdict === 'wall'));
 check('…both drivers moved behind WALLs (HOLLOW\'s every side is a WALL)', walled, JSON.stringify(await st(() => window.__ap.hollow().reach)));
 
@@ -640,9 +653,9 @@ const warpReport = await waitFor(() => {
   if (ap.store.getState().run.phase === 'landing' && ap.store.getState().landing.ended === null) ap.landAll();
   return ap.store.getState().run.phase === 'report';
 }, 60000, 500);
-check('VESPER (warped) locks, lands, and reaches its LANDING REPORT', warpReport);
-await finishReport();
-await waitFor(() => !document.getElementById('transmitScreen').hidden, 4000);
+check('CORMORANT (by __ap.route) locks, lands, and reaches its LANDING REPORT', warpReport);
+await kit.finishReport();
+await throughDesk(19, 'LAST LIGHT');
 await page.waitForTimeout(1200);
 const finalPacket = await packetThreat();
 check('the PACKET to LAST LIGHT: `UNIT-046 · n BLOCKS · NOT YOURS · RIDES FREE`, and `NO RM · YOU CAN\'T DELETE THE ROOT` with no rm aboard',

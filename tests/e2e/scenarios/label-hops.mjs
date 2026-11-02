@@ -5,6 +5,10 @@
 //   (COAST_SEC);
 // • HALCYON's opener burn (the older START BURN jitter, minor 4): no hop; and at its far zoom, before the burn and after
 //   it, no marker label on the small ring (and the planet inside it) or on the drawn path (round 1's fix 12).
+// • Slice 3a (the galaxy map): the page plays run 1's arm, so ship 1 is the arm's ARES-VII (COMPACT, five racks); HALCYON
+//   stays the classic one (__ap.ship(1)); and one arm ship more, PETREL (TIGHT: four racks, A B C E), by __ap.slot(1): its
+//   opener at the far zoom and under a burn (no label on the ring, the planet or the path, no hop), and the MIND strip
+//   laid out in its class's four racks, inside the screen.
 // A side change: the label's centre jumps over 10 px between two 50 ms samples, or its text-anchor changes.
 // Usage: node tests/e2e/scenarios/label-hops.mjs [desk|phone|both]   (exits non-zero on a failed check; tests/e2e/run.mjs runs it)
 import { launch, BASE_URL } from '../lib.mjs';
@@ -42,7 +46,8 @@ for (const viewport of viewports) {
     return false;
   };
 
-  async function startShip(index) {
+  // `index` 1–4: a classic ship by __ap.ship; `armSlot`: a ship of run 1's arm by __ap.slot from ARES-VII.
+  async function startShip(index, armSlot = null) {
     await page.goto(BASE_URL + '?debug&seed=4', { waitUntil: 'networkidle' });
     await evaluate(() => window.__ap.archiveClear?.());
     await page.reload({ waitUntil: 'networkidle' });
@@ -50,7 +55,12 @@ for (const viewport of viewports) {
     await waitFor(() => ['boot', 'flight'].includes(window.__ap.store.getState().run.phase), 8000);
     await evaluate(() => window.__ap.skipBoot());
     await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
-    if (index > 0) {
+    if (armSlot !== null) {
+      await evaluate((slot) => window.__ap.slot(slot), armSlot);
+      await waitFor(() => ['boot', 'flight'].includes(window.__ap.store.getState().run.phase), 20000);
+      await evaluate(() => window.__ap.skipBoot());
+      await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 30000);
+    } else if (index > 0) {
       await evaluate((shipIndex) => window.__ap.ship(shipIndex), index);
       await waitFor(() => ['boot', 'flight'].includes(window.__ap.store.getState().run.phase), 20000);
       await evaluate(() => window.__ap.skipBoot());
@@ -182,6 +192,54 @@ for (const viewport of viewports) {
     `${halcyon['np-peri-label'].hops} hops, ${halcyon['np-peri-label'].changes} changes`);
   await clearanceCheck('after the burn');
   await page.screenshot({ path: `tests/.out/e2e/shots/check-${viewport.name}-halcyon.png` });
+
+  // Slice 3a: an arm ship of the TIGHT class (PETREL, run 1's slot 1): the opener's labels and the MIND's four racks.
+  await startShip(0, 1);
+  const petrel = await evaluate(() => ({ ship: window.__ap.store.getState().level.shipName, cls: window.__ap.store.getState().level.memoryClass }));
+  check(`${viewport.name} PETREL: an arm ship of the TIGHT class by __ap.slot(1)`, petrel.ship === 'PETREL' && petrel.cls === 'TIGHT', JSON.stringify(petrel));
+  const petrelClearance = async (when) => {
+    const clearance = await labelClearance();
+    console.log(`PETREL ${when} @ ${viewport.name}: ring ${clearance.ringRadius} units, ${JSON.stringify(clearance.labels)}`);
+    check(`${viewport.name} PETREL ${when}: no marker label on the ring or the planet`, clearance.labels.every((label) => !label.onRing),
+      clearance.labels.filter((label) => label.onRing).map((label) => label.text).join(' | '));
+    check(`${viewport.name} PETREL ${when}: no marker label on the drawn path`, clearance.labels.every((label) => label.onPath === 0),
+      clearance.labels.filter((label) => label.onPath > 0).map((label) => `${label.text} (${label.onPath})`).join(' | '));
+  };
+  await petrelClearance('opener');
+  await page.screenshot({ path: `tests/.out/e2e/shots/check-${viewport.name}-petrel-opener.png` });
+  await startSampling();
+  await page.keyboard.down('Space');
+  await page.waitForTimeout(4000);
+  await page.keyboard.up('Space');
+  await page.waitForTimeout(3000);
+  const petrelBurn = await stopSampling();
+  console.log(`PETREL opener burn @ ${viewport.name}: ${JSON.stringify(petrelBurn)}`);
+  check(`${viewport.name} PETREL: no label hops under the opener's burn (▼ and START BURN)`, petrelBurn['np-burn-label'].hops === 0 && petrelBurn['np-peri-label'].hops === 0,
+    `START BURN ${petrelBurn['np-burn-label'].hops} hops ${petrelBurn['np-burn-label'].timeline} · ▼ ${petrelBurn['np-peri-label'].hops} hops`);
+  await petrelClearance('after the burn');
+  await page.screenshot({ path: `tests/.out/e2e/shots/check-${viewport.name}-petrel.png` });
+  // The MIND strip in the class's layout: A B C E, no row of its own for a free tail, nothing past the screen's edge.
+  await evaluate(() => window.__ap.setMode('memory'));
+  await page.waitForTimeout(900);
+  const racks = await evaluate((() => {
+    const rows = {};
+    const freeTails = [];
+    // A rack's usual rows: a phone lays 64 blocks out in two rows of 32, a desktop in one.
+    const usual = innerWidth <= 768 ? 2 : 1;
+    for (const row of document.querySelectorAll('#memWrap .addr-row[data-rack]')) {
+      const rack = row.dataset.rack;
+      rows[rack] = (rows[rack] ?? 0) + 1;
+      const segs = [...row.querySelectorAll('.seg')];
+      // A row of its own for a few free blocks (WP12 fix round 1's rule): a row past the usual ones holding only free space
+        // (a whole file may take a row past them: no file of ≤ 32 blocks is cut).
+      if (rows[rack] > usual && segs.length > 0 && segs.every((seg) => seg.classList.contains('free'))) freeTails.push(`${rack}${rows[rack]}`);
+    }
+    const wrap = document.getElementById('memWrap').getBoundingClientRect();
+    return { rows, freeTails, left: Math.round(wrap.left), right: Math.round(wrap.right), width: innerWidth, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth };
+  }));
+  check(`${viewport.name} PETREL in blue: the MIND strip has TIGHT's four racks (A B C E), no rack with a row of its own for a free tail, inside the screen`,
+    Object.keys(racks.rows).join('') === 'ABCE' && racks.freeTails.length === 0 && racks.left >= 0 && racks.right <= racks.width && !racks.overflow, JSON.stringify(racks));
+  await page.screenshot({ path: `tests/.out/e2e/shots/check-${viewport.name}-petrel-mind.png` });
 
   check(`${viewport.name}: no console errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
   await context.close();
