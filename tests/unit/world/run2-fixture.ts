@@ -1,26 +1,26 @@
 // 02 §3.14 as data (slice-3c-plan §4.3): run 1's results on the worked route, UNIT-047's trail, and the update to run 2 with
-// its rolls fixed by hand, so Track UI builds the chart, card, title and tally against real shapes before Track WORLD's
-// update merges, and WORLD's `world/update-fixture` checks updateArm cell by cell against the same numbers.
-// • RUN2_DICE scripts every roll of §3.14's update (gap 1; PETREL `core-coming`, SHEARWATER `own-way`, every other ship
+// its rolls fixed by hand, so Track UI builds the chart, card, title and tally against real shapes, and Track WORLD's
+// `world/update-fixture` checks updateArm cell by cell against the same numbers.
+// • run2Dice scripts every roll of §3.14's update (gap 1; PETREL `core-coming`, SHEARWATER `own-way`, every other ship
 //   stays; the pattern kept 3, 5, 7 with Cinder taking the ark; the refill puts Marrow and Greywater first, as the light
-//   ships; jitter 0 with BELLWETHER and MORNING STAR late; TIDINGS' ark extra 3; §3.14's names).
+//   ships; jitter 0 with BELLWETHER and MORNING STAR late; TIDINGS' ark extra 3; §3.14's names). It throws on a roll §3.14
+//   never makes (a victim, a repair, a feeder, a refill).
 // • run2Arm builds run 2's ArmState the way the update must: the 12 waiting ships byte-identical to run 1's except
-//   runsOnChart 2, the 8 new ships timed with the generator's own helpers (bases, timingYear, arkYear, finalYear) and their
-//   details rolled from ShipKey(armSeed, 2, slot, 0) as the generator does (rollShipDetails; ARES and the final ship take the
-//   written rows). Their reservations are empty: Track WORLD's topUpReservations fills them (update this fixture then).
+//   runsOnChart 2, the 8 new ships timed with the generator's own helpers (bases, timingYear, arkYear, finalYear) and then
+//   finished by the generator (shipsFromFrames: 02 §3.5's quotas topped up on the new ships, their details from
+//   ShipKey(armSeed, 2, slot, 0), the Debris guarantee among the new layer-3 ships; ARES and the final ship take the written
+//   rows).
 // • RUN2_EXPECTED is §3.14's table, recomputed by hand: tests/unit/world/run2-fixture.test.ts checks run2Arm against it.
-// Track WORLD owns this file after the foundation.
-import type { ArmShip, RunMapState, ShipKey, ShipKind, MemoryClass, Reservations } from '@/types/map';
+// Track WORLD owns this file.
+import type { ArmShip, RunMapState, ShipKey, ShipKind, MemoryClass } from '@/types/map';
 import type { ShipResult } from '@state/schema';
 import type { ArmState, Departure, LastUnit, UnitTrail, MapHistory } from '@/types/lineage';
 import type { UpdateDice } from '@systems/map-update';
 import { armContent } from '@systems/map-update';
 import { coloniesOf } from '@systems/lineage';
 import {
-  assembleRun1Arm, bases, timingYear, arkYear, finalYear, podsFor, memoryClassOf, rollShipDetails,
+  assembleRun1Arm, bases, timingYear, arkYear, finalYear, podsFor, memoryClassOf, shipsFromFrames, type ShipFrame,
 } from '@systems/map-generator';
-import { armShipId } from '@systems/map-streams';
-import { RUN1_AUTHORED, type AuthoredOverride } from '@data/run1-arm';
 import { MAP_STATE_VERSION } from '@data/map-state';
 import { layerOf } from '@systems/map-geometry';
 import { COLONISTS_PER_POD, RUN_START_YEAR } from '@data/tuning';
@@ -105,6 +105,7 @@ export function run2Dice(): UpdateDice {
       return { approachYear: timingYear(base, layer, late, 0), late };
     },
     arkExtra: () => TIDINGS_ARK_EXTRA,
+    refillKind: (slot) => { throw new Error(`run2Dice.refillKind: §3.14 never repairs (slot ${slot})`); },
     name: (pool) => {
       const next = names.shift();
       if (next === undefined || !pool.includes(next)) throw new Error(`run2Dice.name: ${String(next)} is not in the pool (${pool.join(', ')})`);
@@ -161,56 +162,36 @@ export const RUN2_DEPARTURES: readonly Departure[] = [
 // Run 2's best routes by length (§3.14: the same values as run 1's, through different ships).
 export const RUN2_BEST_BY_LENGTH: Readonly<Record<number, number>> = { 5: 13_200, 6: 13_800, 7: 13_600, 8: 12_800 };
 
-const NO_RESERVATIONS = (): Reservations => ({ resident: null, unknownEvent: null, fragments: 0, site: 'good', tracePlace: null });
-
-// The written row an ARES-n or a final ship flies (map-generator's writtenRow: ARES-VII's, LAST LIGHT's without FIRST LIGHT).
-function writtenRow(kind: ShipKind): AuthoredOverride | null {
-  if (kind !== 'first' && kind !== 'final') return null;
-  const row = structuredClone(RUN1_AUTHORED[kind === 'first' ? 'ares-vii' : 'last-light']) as AuthoredOverride;
-  if (kind === 'final' && row.landing) row.landing = { ...row.landing, colonyFirstRun: null };
-  return row;
-}
-
-// Run 2's ArmState from run 1's arm on `armSeed` (the page's run 1 uses its seed; the suites take 1).
+// Run 2's ArmState from run 1's arm on `armSeed` (the page's run 1 uses its seed; the suites take 1): §3.14's frames by hand
+// (the waiting ships one run older, the new ones timed with the generator's helpers and named as §3.14 names them), then
+// the generator's own finish (shipsFromFrames: the reservations topped up on the new ships, their details from
+// ShipKey(armSeed, 2, slot, 0), the Debris guarantee among the new layer-3 ships, the self-check), as the update does.
 export function run2Arm(armSeed = 1): ArmState {
   const run1 = assembleRun1Arm(armSeed);
   const leaving = new Set([...WORKED_ROUTE, ...run1.filter((ship) => LEAVING[ship.name] !== undefined).map((ship) => ship.slot)]);
-  const frames: (Pick<ArmShip, 'slot' | 'approachYear'> | null)[] = run1.map((ship) => (leaving.has(ship.slot) ? null : ship));
+  const waiting: (ArmShip | null)[] = run1.map((ship) => (leaving.has(ship.slot) ? null : { ...structuredClone(ship), runsOnChart: ship.runsOnChart + 1 }));
+  const frames: (ShipFrame | null)[] = waiting.map((ship) => ship);
   const base = bases(RUN2_START);
-  const timed = new Map<number, { approachYear: number; late: boolean }>();
+  const frameOf = (slot: number, approachYear: number, late: boolean): ShipFrame => {
+    const fresh = NEW_SHIPS.find((candidate) => candidate.slot === slot);
+    if (fresh === undefined) throw new Error(`run2Arm: slot ${slot} left and §3.14 refills it with nothing`);
+    const pods = podsFor(fresh.kind, layerOf(slot));
+    return { slot, kind: fresh.kind, name: fresh.name, pods, memoryClass: memoryClassOf(fresh.kind, pods), approachYear, late, authored: null };
+  };
   // Light and standard ships first (the ark and the final ship are timed from their real neighbours).
   for (const ship of NEW_SHIPS) {
-    if (ship.kind === 'first') timed.set(ship.slot, { approachYear: RUN2_START, late: false });
-    else if (ship.kind === 'light' || ship.kind === 'standard') timed.set(ship.slot, { approachYear: timingYear(base, layerOf(ship.slot), ship.late, 0), late: ship.late });
-    const at = timed.get(ship.slot);
-    if (at) frames[ship.slot] = { slot: ship.slot, approachYear: at.approachYear };
+    if (ship.kind === 'first') frames[ship.slot] = frameOf(ship.slot, RUN2_START, false);
+    else if (ship.kind === 'light' || ship.kind === 'standard') frames[ship.slot] = frameOf(ship.slot, timingYear(base, layerOf(ship.slot), ship.late, 0), ship.late);
   }
-  const tidings = arkYear(frames, 11, TIDINGS_ARK_EXTRA);
-  timed.set(11, { approachYear: tidings, late: false });
-  frames[11] = { slot: 11, approachYear: tidings };
+  frames[11] = frameOf(11, arkYear(frames, 11, TIDINGS_ARK_EXTRA), false);
   const lastFinal = run1[19]!;
-  const finalAt = finalYear(frames, 19, lastFinal.approachYear + Math.max(RUN2_GAP, 1));
-  timed.set(19, { approachYear: finalAt, late: false });
-  const ships = run1.map((ship): ArmShip => {
-    if (!leaving.has(ship.slot)) return { ...structuredClone(ship), runsOnChart: ship.runsOnChart + 1 };
-    const fresh = NEW_SHIPS.find((candidate) => candidate.slot === ship.slot);
-    const at = timed.get(ship.slot);
-    if (fresh === undefined || at === undefined) throw new Error(`run2Arm: slot ${ship.slot} left and §3.14 refills it with nothing`);
-    const key: ShipKey = { armSeed: armSeed >>> 0, reportedRun: 2, slot: ship.slot, attempt: 0 };
-    const pods = podsFor(fresh.kind, layerOf(ship.slot));
-    const memoryClass = memoryClassOf(fresh.kind, pods);
-    const template = fresh.kind === 'first' ? 'impact-a' : fresh.kind === 'final' ? 'impact-b' : undefined;
-    const { site, ...details } = rollShipDetails(key, fresh.kind, layerOf(ship.slot), {
-      slot: ship.slot, pods, memoryClass, ...(template ? { template } : {}),
-    }, writtenRow(fresh.kind));
-    return {
-      slot: ship.slot, id: armShipId(key), name: fresh.name, kind: fresh.kind, template: details.template, pods, memoryClass,
-      approachYear: at.approachYear, late: at.late, timedAgainstStart: RUN2_START, reportedRun: 2, runsOnChart: 1, attempt: 0,
-      modifiers: [...details.modifiers], omega0: details.omega0, debrisRack: details.debrisRack,
-      arrivalDamage: details.arrivalDamage.map((rule) => ({ ...rule })), landing: structuredClone(details.landing),
-      podRacks: { ...details.podRacks }, lead: details.lead, authored: null, reserved: { ...NO_RESERVATIONS(), site },
-    };
+  frames[19] = frameOf(19, finalYear(frames, 19, lastFinal.approachYear + Math.max(RUN2_GAP, 1)), false);
+  const timed = frames.map((frame, slot) => {
+    if (frame === null) throw new Error(`run2Arm: slot ${slot} left empty`);
+    return frame;
   });
+  const keyOf = (slot: number): ShipKey => ({ armSeed: armSeed >>> 0, reportedRun: 2, slot, attempt: 0 });
+  const ships = shipsFromFrames(timed, waiting, keyOf, RUN2_START, armSeed, 2, 0);
   return {
     armSeed: armSeed >>> 0, run: 2, startYear: RUN2_START, gap: RUN2_GAP, valveYears: 0, finalSerial: 1,
     lastFinal: { name: ships[19]!.name, year: ships[19]!.approachYear }, ships, departures: structuredClone(RUN2_DEPARTURES) as Departure[],

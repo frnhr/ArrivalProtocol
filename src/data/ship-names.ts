@@ -18,19 +18,26 @@ export const GENERATED_SHIP_NAMES: readonly string[] = [
   'WAYFARER',
 ];
 
-// The final ships after LAST LIGHT (05 §3.11): LODESTAR on run 2 (interim, slice-3a-plan risk 4: by run number until 3c's
-// world update), then the same names with II and III. `FAR SHORE III` is 13 characters, over NAME_MAX_CHARS: left out
-// (raised with 05's owner; the list wraps before a run that far).
+// The final ships after LAST LIGHT (05 §3.11), by serial (slice 3c: the world update names each new final ship by the
+// arm's serial, not by run, since a final ship nobody reached waits into the next run): LODESTAR first, then the same
+// names with II and III. `FAR SHORE III` is 13 characters, over NAME_MAX_CHARS: left out (raised with 05's owner; the
+// list wraps after HOMEWARD III, so no serial is ever without a name).
 export const FINAL_SHIP_NAMES: readonly string[] = [
   'LODESTAR', 'EVENSONG', 'FAR SHORE', 'HOMEWARD',
   'LODESTAR II', 'EVENSONG II', 'FAR SHORE II', 'HOMEWARD II',
   'LODESTAR III', 'EVENSONG III', 'HOMEWARD III',
 ];
 
-// The final ship of run `run`: LAST LIGHT on run 1, then the list in order (wrapping, so no run is ever without one).
+// The final ship of serial `serial`: LAST LIGHT is 0 (run 1's authored one), then the list in order, wrapping.
+export function finalShipNameOfSerial(serial: number): string {
+  if (!(Number.isInteger(serial) && serial >= 0)) throw new Error(`finalShipNameOfSerial: serial ${serial}`);
+  return serial === 0 ? 'LAST LIGHT' : FINAL_SHIP_NAMES[(serial - 1) % FINAL_SHIP_NAMES.length]!;
+}
+
+// 3a's interim (a fresh roll for run `run` names its final ship as if one new final ship came every run): serial run − 1.
 export function finalShipName(run: number): string {
   if (!(Number.isInteger(run) && run >= 1)) throw new Error(`finalShipName: run ${run}`);
-  return run === 1 ? 'LAST LIGHT' : FINAL_SHIP_NAMES[(run - 2) % FINAL_SHIP_NAMES.length]!;
+  return finalShipNameOfSerial(run - 1);
 }
 
 // Roman numerals for the ARES series.
@@ -45,12 +52,14 @@ function roman(n: number): string {
 }
 
 // The first ship of run `run` (05 §3.11): ARES-VII on run 1, ARES-VIII on run 2, … one for each core, to Kepler-186f.
-// At most NAME_MAX_CHARS (12): up to ARES-LXXXVII (run 81). 05 says "up to ARES-LXXXVIII", which is 13 characters
-// (raised with 05's owner); a run past the last name that fits throws.
+// Roman numerals fit NAME_MAX_CHARS (12) up to ARES-LXXXVII (run 81); 05 says "up to ARES-LXXXVIII", which is 13
+// characters. Past run 81 the series goes on in Arabic numerals, ARES-88 onward (slice 3c plan risk 6: a kid on run 82
+// must not crash in the world update; raised with 05's owner), which stays within NAME_MAX_CHARS for any run a save can
+// reach.
 export const ARES_SERIES_RUNS = 81;
 export function aresName(run: number): string {
-  if (!(Number.isInteger(run) && run >= 1 && run <= ARES_SERIES_RUNS)) throw new Error(`aresName: run ${run} (the series names runs 1–${ARES_SERIES_RUNS})`);
-  return `ARES-${roman(run + 6)}`;
+  if (!(Number.isInteger(run) && run >= 1)) throw new Error(`aresName: run ${run}`);
+  return run <= ARES_SERIES_RUNS ? `ARES-${roman(run + 6)}` : `ARES-${run + 6}`;
 }
 
 // The colonies (05 §3.11): the first pod down names the settlement, `{FAMILY} LANDING` half the time, else one of these.
