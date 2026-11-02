@@ -18,6 +18,21 @@ export const GENERATED_SHIP_NAMES: readonly string[] = [
   'WAYFARER',
 ];
 
+// PLACEHOLDER(05): 15 more names in the same style (birds, then hopes), each at most NAME_MAX_CHARS, for the world update's
+// new ships only (slice 3c review fix M5). The update never names a new ship after one that left the chart in that same
+// update (a departed PETREL in the first desk's box beside a new PETREL on the chart read as one ship come back): with 21
+// names a new generated ship took a departed name about 68% of the time. 36 is the bound that makes the rule hard: at most
+// 18 generated ships on the old chart (waiting or departed) plus at most 17 new ones named before the last pick. The fresh
+// roll and run 1's arm keep drawing from the 21 (their output, and every fixture built on it, unchanged). 05's owner to
+// replace or confirm.
+export const UPDATE_EXTRA_SHIP_NAMES: readonly string[] = [
+  'FULMAR', 'DUNLIN', 'GODWIT', 'WHIMBREL', 'SANDPIPER', 'NIGHTJAR', 'AVOCET', 'PUFFIN', 'GREBE', 'EIDER',
+  'FORTITUDE', 'RESOLUTE', 'FAIR PROMISE', 'SAFE PASSAGE', 'GOOD COMPANY',
+];
+
+// The world update's pool (02 §3.12 step 6): the generated names and the extras.
+export const UPDATE_SHIP_NAMES: readonly string[] = [...GENERATED_SHIP_NAMES, ...UPDATE_EXTRA_SHIP_NAMES];
+
 // The final ships after LAST LIGHT (05 §3.11), by serial (slice 3c: the world update names each new final ship by the
 // arm's serial, not by run, since a final ship nobody reached waits into the next run): LODESTAR first, then the same
 // names with II and III. `FAR SHORE III` is 13 characters, over NAME_MAX_CHARS: left out (raised with 05's owner; the
@@ -131,7 +146,7 @@ export function shipNameLists(): Record<string, readonly string[]> {
   return {
     worlds: WORLDS.map((def) => def.name),
     ships: [
-      ...AUTHORED_SHIP_NAMES, ...GENERATED_SHIP_NAMES, ...FINAL_SHIP_NAMES,
+      ...AUTHORED_SHIP_NAMES, ...UPDATE_SHIP_NAMES, ...FINAL_SHIP_NAMES,
       ...Array.from({ length: ARES_SERIES_RUNS - 1 }, (_, i) => aresName(i + 2)),
     ],
     colonies: [...COLONY_NAMES, ...WRITTEN_COLONY_NAMES, ...OLD_COLONY_NAMES],
@@ -149,8 +164,8 @@ export function validateNames(): void {
   if (clashes.length > 0) throw new Error(`names: ${clashes.map((c) => `${c.a} (${c.lists[0]}) / ${c.b} (${c.lists[1]})`).join('; ')}`);
   const long = lists.ships!.filter((name) => name.length > NAME_MAX_CHARS);
   if (long.length > 0) throw new Error(`names: ${long.join(', ')} longer than ${NAME_MAX_CHARS} characters`);
-  const generated = new Set(GENERATED_SHIP_NAMES);
-  if (generated.size !== GENERATED_SHIP_NAMES.length) throw new Error('names: a generated ship name is listed twice');
+  const generated = new Set(UPDATE_SHIP_NAMES);
+  if (generated.size !== UPDATE_SHIP_NAMES.length) throw new Error('names: a generated ship name is listed twice');
   for (const def of WORLDS) {
     if (generated.has(def.name.toUpperCase())) throw new Error(`names: ${def.name} is a world and a ship`);
   }

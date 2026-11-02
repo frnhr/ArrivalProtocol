@@ -13,7 +13,7 @@ import { updateArm, seededDice, freshArmState, rollLaunchGap, type UpdateDice, t
 import { armChecks, armReach } from '@systems/map-generator';
 import { layerOf } from '@systems/map-geometry';
 import { shipDefOf, validateShipDef } from '@data/ships';
-import { aresName, finalShipNameOfSerial, GENERATED_SHIP_NAMES } from '@data/ship-names';
+import { aresName, finalShipNameOfSerial, UPDATE_SHIP_NAMES } from '@data/ship-names';
 import { slotsInLayer, END_SLOTS } from '@data/arm';
 import { createRng, hashSeed } from '@systems/rng';
 import { LAUNCH_GAP_TABLE, LATE_TIGHT_FROM_LAYER, MAX_LATE_TIGHT_PER_LAYER, NAME_MAX_CHARS, VALVE_YEARS, GEN_MAX_ATTEMPTS } from '@data/tuning';
@@ -190,8 +190,12 @@ const at = (arm: Readonly<ArmState>, name: string): ArmShip | undefined => arm.s
   console.log(`INFO  every quota exact (5 departed residents, 3 ? ships, 5 fragments) on ${exact} of ${arms.length} arms (a top-up skips a quota the waiting ships leave no slot for)`);
   const dupes = arms.filter((arm) => new Set(arm.ships.map((ship) => ship.name)).size !== arm.ships.length);
   const taken = rows.flatMap((row) => (row.update === null ? [] : row.update.next.ships.filter((ship) => ship.runsOnChart === 1 && ship.kind !== 'first' && ship.kind !== 'final'
-    && !GENERATED_SHIP_NAMES.includes(ship.name))));
-  check('names are unique on every chart, and every new generated ship is named from the pool', dupes.length === 0 && taken.length === 0);
+    && !UPDATE_SHIP_NAMES.includes(ship.name))));
+  const backAtOnce = rows.flatMap((row) => (row.update === null ? [] : row.update.next.ships.filter((ship) => ship.runsOnChart === 1
+    && row.update!.next.departures.some((departure) => departure.name === ship.name)).map((ship) => ship.name)));
+  check('names are unique on every chart, and every new generated ship is named from the update\'s pool (36 names: review M5)', dupes.length === 0 && taken.length === 0);
+  check('…and never after a ship that left the chart in the same update (review M5: no PETREL in the first desk\'s box beside a new PETREL)',
+    backAtOnce.length === 0, backAtOnce.slice(0, 5).join(', '));
   let serial = 0;
   const serialsOk = arms.slice(1).every((arm, i) => {
     const fresh = arm.ships[19]!.reportedRun === arm.run;

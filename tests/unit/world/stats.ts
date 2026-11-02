@@ -90,9 +90,28 @@ export function checkBands(label: string, chains: readonly (readonly RunRow[])[]
   const reasons = Object.fromEntries(LEAVE_REASONS.map((reason) => [reason, mean(updates.map((update) => update.reasons[reason]))]));
   console.log(`INFO  ${label}: leaving the chart per update: ${LEAVE_REASONS.map((reason) => `${reason} ${reasons[reason]!.toFixed(2)}`).join(', ')}`
     + ' (sim mix: done 6.04, resolved 2.16, aged 2.13, drifted 0.91, unreachable 0.05, made-room 0.03)');
-  const reused = updates.reduce((sum, update) => sum + update.namesReused, 0);
-  const named = updates.reduce((sum, update) => sum + update.next.ships.filter((ship) => ship.runsOnChart === 1 && ship.kind !== 'first' && ship.kind !== 'final').length, 0);
-  console.log(`INFO  ${label}: names: ${reused} of ${named} new generated ships took a departed ship's name (the soft rule, risk 5; the hard rule never fails: 21 names, 18 slots)`);
+  // Names (risk 5; slice 3c review fix M5): a new generated ship is never named after a ship that left in the same update
+  // (hard); how often one takes the name of a ship that left one update before is reported.
+  let named = 0;
+  let sameUpdate = 0;
+  let updateBefore = 0;
+  for (const rowsOf of chains) {
+    let leftBefore = new Set<string>();
+    for (const row of rowsOf) {
+      if (row.update === null) continue;
+      const left = new Set(row.update.next.departures.map((departure) => departure.name));
+      for (const ship of row.update.next.ships) {
+        if (ship.runsOnChart !== 1 || ship.kind === 'first' || ship.kind === 'final') continue;
+        named++;
+        if (left.has(ship.name)) sameUpdate++;
+        else if (leftBefore.has(ship.name)) updateBefore++;
+      }
+      leftBefore = left;
+    }
+  }
+  check(`${label}: no new ship takes the name of a ship that left in the same update (review M5): ${sameUpdate} of ${named}`, sameUpdate === 0);
+  console.log(`INFO  ${label}: names: ${sameUpdate} of ${named} new generated ships took the name of a ship that left in the same update, `
+    + `${updateBefore} (${fmt(share(updateBefore, named))}) one that left the update before (36 names, 18 slots)`);
   const noDebris = rows.filter((row) => !row.debrisAtDepth2).length;
   console.log(`INFO  ${label}: no DEBRIS ship among the reachable layer-3 ships in ${noDebris} of ${rows.length} runs (${fmt(share(noDebris, rows.length))}; risk 4's lever at 10%)`);
   const quotas = later.filter((row) => {

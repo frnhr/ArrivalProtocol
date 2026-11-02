@@ -12,7 +12,7 @@ import { visitsOf } from '@systems/lineage';
 import { layerOf, distTable } from '@systems/map-geometry';
 import { ARM_CONTENT_VERSION, END_SLOTS, FIRST_SLOT, WORLDS, LAYER_COUNT, slotsInLayer } from '@data/arm';
 import { MAP_STATE_VERSION } from '@data/map-state';
-import { GENERATED_SHIP_NAMES, aresName, finalShipNameOfSerial } from '@data/ship-names';
+import { UPDATE_SHIP_NAMES, aresName, finalShipNameOfSerial } from '@data/ship-names';
 import {
   LAUNCH_GAP_TABLE, RUN_START_YEAR, DRIFT_LIMIT_YEARS, VALVE_FLOOR_PODS, VALVE_YEARS, MAX_RUNS_ON_CHART, RESOLVE_CHANCE,
   RESOLVE_CORE_SHARE, FINAL_FLOOR_MIN_GAP_YEARS, UPDATE_REPAIR_FROM_ATTEMPT, UPDATE_FEEDER_FROM_ATTEMPT, GEN_MAX_ATTEMPTS,
@@ -44,8 +44,6 @@ export interface ArmUpdate {
   valveOpened: boolean;
   bestPods: number;                 // the next arm's best route, pods (the valve's score)
   reasons: Record<LeaveReason, number>;
-  // New ships that had to take a name the soft rule avoids (a departed ship's: 3c plan risk 5), for the statistics.
-  namesReused: number;
 }
 
 // Every roll of the update (plan §2.3): seeded in play (seededDice), scripted by §3.14's fixture
@@ -163,7 +161,6 @@ interface PassResult {
   reasons: Record<LeaveReason, number>;
   attempts: number;
   finalSerial: number;
-  namesReused: number;
 }
 
 // Steps 1–5 and the details (02 §3.12; the sim's update_arm) for a next run starting in `start`, `gapTotal` years after the
@@ -327,24 +324,21 @@ function runPass(input: Readonly<UpdateInput>, dice: UpdateDice, pass: UpdatePas
   throw new Error(`updateArm: no valid arm in ${GEN_MAX_ATTEMPTS} attempts (seed ${from.armSeed >>> 0}, run ${nextRun}, pass ${pass}, start ${start}; `
     + `problems ${problems.map((problem) => `${problem.check} ${problem.slot}`).join(', ')}; plan ${[...plan].map(([slot, kind]) => `${slot}:${kind}`).join(' ')})`);
 
-  // 6. The details, new ships only: names (the pool minus the chart's names, hard; minus the departed ships' names while the
-  // pool allows, soft: 3c plan risk 5), ARES by run, the final ship by serial; then the reservations' top-up, the Debris
-  // guarantee and the self-check (map-generator shipsFromFrames). Waiting ships stay byte-identical but runsOnChart.
+  // 6. The details, new ships only: names (UPDATE_SHIP_NAMES minus the chart's names and minus this update's departed ships'
+  // names, both hard: slice 3c review fix M5; the pool is big enough that the rule never gives way, data/ship-names.ts),
+  // ARES by run, the final ship by serial; then the reservations' top-up, the Debris guarantee and the self-check
+  // (map-generator shipsFromFrames). Waiting ships stay byte-identical but runsOnChart.
   function detail(timed: ShipFrame[], planned: readonly number[], keyAttempt: number, attempts: number): PassResult {
     const onChart = new Set(arm.flatMap((ship) => (ship === null ? [] : [ship.name])));
     const departed = new Set(departures.map((departure) => departure.name));
     let finalSerial = from.finalSerial;
-    let namesReused = 0;
     for (const slot of planned) {
       const frame = timed[slot]!;
       if (frame.kind === 'first') frame.name = aresName(nextRun);
       else if (frame.kind === 'final') frame.name = finalShipNameOfSerial(++finalSerial);
       else {
-        const pool = GENERATED_SHIP_NAMES.filter((name) => !onChart.has(name));
-        if (pool.length === 0) throw new Error(`updateArm: no generated ship name left for slot ${slot}`);
-        const fresh = pool.filter((name) => !departed.has(name));
-        if (fresh.length === 0) namesReused++;
-        const offer = fresh.length > 0 ? fresh : pool;
+        const offer = UPDATE_SHIP_NAMES.filter((name) => !onChart.has(name) && !departed.has(name));
+        if (offer.length === 0) throw new Error(`updateArm: no ship name left for slot ${slot} (the pool's bound is broken)`);
         const name = dice.name(offer);
         if (!offer.includes(name)) throw new Error(`updateArm: the dice named slot ${slot} ${name}, not one of ${offer.join(', ')}`);
         frame.name = name;
@@ -360,7 +354,7 @@ function runPass(input: Readonly<UpdateInput>, dice: UpdateDice, pass: UpdatePas
       }
     }
     // Done first in route order, then the others as they left (the opening desk's departures block reads them so).
-    return { ships, departures, reasons, attempts, finalSerial, namesReused };
+    return { ships, departures, reasons, attempts, finalSerial };
   }
 }
 
@@ -399,7 +393,7 @@ export function updateArm(
     finalSerial: result.finalSerial, lastFinal: { name: final.name, year: final.approachYear }, ships: result.ships,
     departures: result.departures, content: armContent(),
   };
-  return { next, attempts: result.attempts, valveOpened, bestPods, reasons: result.reasons, namesReused: result.namesReused };
+  return { next, attempts: result.attempts, valveOpened, bestPods, reasons: result.reasons };
 }
 
 // RUN END's one step, the pure half (plan §2.4 "Run end"): the arm the run played (its own map, risk 13) and its route →
