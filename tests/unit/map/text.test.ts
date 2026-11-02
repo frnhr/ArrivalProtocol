@@ -165,6 +165,9 @@ const bodies: [string, string[]][] = [
   ['postcard y50 old', INBOX_TEXT.postcard.year50.body(FIRST, null)],
   ['postcard y200', INBOX_TEXT.postcard.year200.body(COLONY, FIRST, BIG)],
   ['meridian', [...INBOX_TEXT.letter.meridian]],
+  // Slice 3c: letters to the unit ahead, signed by a writer (at the oldest a featured colonist can be, plus the year) or the school.
+  ['letter', INBOX_TEXT.letter.body(999, COLONY, FIRST, FAMILY, 99)],
+  ['letter school', INBOX_TEXT.letter.bodySchool(999, COLONY)],
   ...INBOX_TEXT.noAddress.map((mail, i): [string, string[]] => [`noAddress ${i}`, [...mail.body]]),
 ];
 for (const [key, body] of bodies) body.forEach((line, i) => lines.push([`inbox.body.${key}.${i}`, line]));
