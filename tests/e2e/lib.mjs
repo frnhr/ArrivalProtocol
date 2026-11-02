@@ -171,7 +171,8 @@ export function runKit(page, kit) {
         on: tab.classList.contains('on'), badge: tab.querySelector('.desk-tab-badge')?.hidden === false ? tab.querySelector('.desk-tab-badge').textContent : null })),
       repoShown: shown(repo), inboxShown: shown(inbox), cardShown: shown(root.querySelector('.desk-card:not(.desk-repo):not(.desk-inbox)')),
       rows: [...(repo?.querySelectorAll('.rp-row') ?? [])].map((row) => ({ file: row.dataset.file, text: row.querySelector('.rp-text')?.textContent ?? '',
-        eta: row.querySelector('.rp-eta')?.textContent ?? null, tone: [...(row.querySelector('.rp-eta')?.classList ?? [])].find((c) => c.startsWith('eta-')) ?? null,
+        // The ETA is the window's, once above the list (3b review m5): every row reads it.
+        eta: repo.querySelector('.rp-eta')?.textContent ?? null, tone: [...(repo.querySelector('.rp-eta')?.classList ?? [])].find((c) => c.startsWith('eta-')) ?? null,
         tag: row.querySelector('.rp-tag')?.textContent ?? null, req: row.querySelector('.rp-req')?.textContent ?? '',
         requested: row.classList.contains('requested'), focus: row.classList.contains('focus') })),
       transit: [...(repo?.querySelectorAll('.rp-transit-row') ?? [])].map((row) => row.textContent),

@@ -567,6 +567,11 @@ export const SKIP_REPLAN_TICKS = 8;
 // steps aside after GHOST_LESSON_SHOW_SEC on the strip (the counter and the flashing pip stay).
 export const GHOST_LESSON_AFTER_BURSTS = 2;
 export const GHOST_LESSON_SHOW_SEC = 20;
+// Slice 3b review (item 1): the no-Swap line (`NO SWAP ABOARD — …`, data/script.ts tut-ghost-noswap) outranks the flight's
+// NOW lines for its first this-many AI seconds on the strip, so the kid reads it right after the first burst's alarm
+// (GHOST_ALARM_MIN_SEC) even under the ▼ correction the burst brought: long enough to read a 60-character line twice, as
+// LESSON_LEAD_IN_SEC is for a ship's new rule.
+export const GHOST_NOSWAP_LEAD_SEC = 6;
 // The COPY lesson (`UNIT-046 IS HUNTING YOUR TOOLS — COPY your Repair`) stands at most this long.
 export const COPY_LESSON_SHOW_SEC = 15;
 // WP12 p3 (the lead's ruling 4 of 2026-10-21 06:20, and the WP11 verifier's belt item): a lesson that teaches a ship's
@@ -1035,6 +1040,9 @@ export const TRANSMIT_STREAM_FRAC = 0.7;
 export const WHITE_OUT_IN_SEC = 0.35;
 export const WHITE_OUT_HOLD_SEC = 0.25;
 export const WHITE_OUT_FADE_SEC = 1.1;
+// The hold starts when the flood reports its end (transitionend; slice 3b review: on a busy page the old timer could cross
+// before a frame drew any white). This long past WHITE_OUT_IN_SEC the hold starts anyway (a flood that never reports).
+export const WHITE_OUT_FLOOD_GRACE_SEC = 1;
 
 // The arrival's red flashes (§4.1 step 1, §9 WP7 item 3): as the boot's ECC line types, each file a transit
 // hit landed on flashes red with what it lost, one after another, so the kid sees WHERE the crossing hurt.
@@ -1882,8 +1890,11 @@ export const DELIVERY_BOOT_LINES_MAX = 3;
 // REPAIR is the tool it leans on, and v2's double heal pays for its 2 blocks.
 export const REPO_RECOMMEND_REPAIRS_MIN = 5;
 // The Swap rule looks this many layers ahead for an ENGINE FAULT ship the unit can reach (02 §3.8's rule 3: "within two
-// layers"). The lever if VESPER without SWAP hurts (plan risk 1): 3 asks for Swap a hop earlier, in time more often.
-export const REPO_SWAP_LOOKAHEAD_LAYERS = 2;
+// layers"), and the Cp rule as far for HOLLOW. Slice 3b review (item 1, the lead's decision): 3, the lever plan risk 1
+// named. Over 200 fresh arms following the tag (.tmp/rv3b/swap.ts), ENGINE FAULT ships were reached without Swap 30 times
+// of 37 at 2; at 3 with the first desk's Swap form (runs 2+) and Mv re-tagged later, 7 of 37, with no more ships at
+// depth 3+ without rm (16 of 841 either way) and 7 of 91 debris ships without Mv (from 0).
+export const REPO_SWAP_LOOKAHEAD_LAYERS = 3;
 // The REPAIR v2 patch's size (02 §3.8's catalogue): it presses on the link and the room like a small tool, so asking for
 // v2 still costs something on a tight hop, but less than the 4-block Repair.bak it competes with.
 export const REPAIR_PATCH_BLOCKS = 2;
@@ -1902,6 +1913,9 @@ export const INBOX_BODY_MAX_LINES = 6;
 // A colony's year-200 card counts this many people per colonist who landed (a placeholder growth for 05's words: a few
 // doublings in two centuries; 05 §3.12's epilogue has RIVERSIDE at 120,000 after 760 years from 600).
 export const POSTCARD_PEOPLE_PER_COLONIST_Y200 = 20;
+// A postcard names its writer's age (`I'm 12 now`: the age at landing plus the colony's years, slice 3b review m6) up to
+// this age; the year-50 card of a writer who landed old leaves the age out (a 61-year-old at landing would be 111).
+export const POSTCARD_AGE_SHOWN_MAX = 99;
 // A reply read this many ships or more after the ship it answers greets the unit before you (05 §3.4's running joke,
 // made deterministic: `Dear Unit 46` on run 1). One ship later is the norm near Earth; two is CONTROL falling behind.
 export const REPLY_STALE_AFTER_SHIPS = 2;

@@ -80,6 +80,14 @@ export function hasUsableTool(memory: readonly Segment[], kind: FsToolKind, infe
   return toolFilesOf(memory, kind).some((seg) => isUsableTool(seg) && (infected === 'counts' || seg.infected === undefined));
 }
 
+// A SWAP the unit has aboard right now (slice 3b review: the ONE reading of "has Swap" that the ghost lessons, the no-Swap
+// line, the ENGINE FAULT SKIP refusal and the repository's recommendation share): a usable Swap file in memory, a copy
+// being eaten included (it works until it is gone, as the strip's tool hints count it). A licence alone is not a Swap
+// (a seed may have eaten the file since), and a request on its way is not aboard yet.
+export function swapAboard(state: Readonly<Pick<GameState, 'memory'>>): boolean {
+  return hasUsableTool(state.memory, 'swap', 'counts');
+}
+
 // --- Roles (§6.4) ------------------------------------------------------------------------------
 
 // A segment that carries a health number (everything but free space, HOLLOW, REPAIR CHARGE and a

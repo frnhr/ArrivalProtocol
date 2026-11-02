@@ -33,7 +33,7 @@ import { GHOST_ALARM_ID } from '@systems/alerts';
 import { reachMarks, firewallFits } from '@systems/hollow-hud';
 import {
   driversInMemory, infectedSegments, fileLabel, chargeLeft, anythingInfected, isFirewall,
-  isUsableTool, hasUsableTool, toolFilesOf, getByRole, verbSecondsLeft, isShipFile, isInfected,
+  isUsableTool, hasUsableTool, swapAboard, toolFilesOf, getByRole, verbSecondsLeft, isShipFile, isInfected,
 } from '@state/selectors';
 import { formatTac, isReleaseRow, isCorrectionRow } from '@systems/guidance';
 import {
@@ -72,7 +72,7 @@ import {
   WALL_RULE_SHOW_SEC, EMERGENCY_EXTRA_HITS, CORE_RESET_INTEGRITY, BEAM_OUT_EXTRA_HITS,
   TRANSIT_HIT_MAX, BAND_DEGRADED_MIN, CORE_LOW_INTEGRITY, FIREWALL_HINT_SHOW_SEC, DEBRIS_MOVE_HINT_TAC, SEED_LESSON_SHOW_SEC,
   AUTOBURN_READY_SHOW_SEC, GHOST_LESSON_AFTER_BURSTS, GHOST_LESSON_SHOW_SEC, COPY_LESSON_SHOW_SEC, MERGE_COST_CHARGE, ROOT_DELETE_SEC, LOG_SCAN_AFTER_COAST_SEC,
-  BELT_MOVE_HINT_TAC, LESSON_LEAD_IN_SEC, DOT_WIDE_LESSON_SEC, DRAG_LESSON_SEC, DRAG_STAMP_MIN_KM,
+  BELT_MOVE_HINT_TAC, LESSON_LEAD_IN_SEC, GHOST_NOSWAP_LEAD_SEC, DOT_WIDE_LESSON_SEC, DRAG_LESSON_SEC, DRAG_STAMP_MIN_KM,
   LANDING_DOT_LESSON_SEC, LANDING_SPLIT_LESSON_SEC, LOG_SCAN_ASK_SEC,
 } from '@data/tuning';
 
@@ -1862,7 +1862,12 @@ export const SEED_RULES: readonly GuideRule[] = [
 // the strip says the other way to save those drivers: MOVE them out of the rack. Only while the instruments can
 // tell (not under PATH UNCERTAIN: F1 is the line then), with MOVE in hand, and drivers in that rack.
 function debrisMoveLive(ctx: DirectorCtx): boolean {
-  if (!isFlying(ctx) || !ctx.state.run.licences.includes('move') || ctx.vars.debrisRack === '') return false;
+  return ctx.state.run.licences.includes('move') && debrisWillHitDrivers(ctx);
+}
+
+// ...the debris lesson's moment, whether or not MOVE is aboard (the no-Mv line's too).
+function debrisWillHitDrivers(ctx: DirectorCtx): boolean {
+  if (!isFlying(ctx) || ctx.vars.debrisRack === '') return false;
   const mode = ctx.caps.plot.mode;
   if (mode !== 'exact' && mode !== 'approx') return false;
   if (ctx.flight === null || isCorrectionRow(ctx.flight.id) || ctx.vars.debrisInTac > DEBRIS_MOVE_HINT_TAC) return false;
@@ -1871,6 +1876,31 @@ function debrisMoveLive(ctx: DirectorCtx): boolean {
 }
 
 const debrisHead = (ctx: TextCtx): string => `DEBRIS HITS RACK ${ctx.vars.debrisRack} IN ${formatTac(ctx.vars.debrisInTac)}`;
+
+// Slice 3b review (M2): a lesson whose tool is not aboard used to go silent (the seed lines need DELETE in hand, the
+// debris line MOVE). On the arm a tool comes only by request, so the strip says where it comes from instead, in the
+// no-Swap line's style: once a run, informational (nothing to do on this ship), never in front of the flight's NOW lines.
+const MISSING_TOOL_RULES: readonly GuideRule[] = [
+  {
+    id: 'tut-no-rm',
+    layer: 'ship',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: SEED_LESSON_SHOW_SEC,
+    activeWhen: (ctx) => ctx.state.run.map.world === 'arm' && isLive(ctx) && seedsInMemory(ctx.state.memory).length > 0
+      && !hasUsableTool(ctx.state.memory, 'delete', 'counts'),
+    text: () => REPO_TEXT.noRm,
+  },
+  {
+    id: 'tut-no-mv',
+    layer: 'ship',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: SEED_LESSON_SHOW_SEC,
+    activeWhen: (ctx) => ctx.state.run.map.world === 'arm' && debrisWillHitDrivers(ctx) && !hasUsableTool(ctx.state.memory, 'move', 'counts'),
+    text: () => REPO_TEXT.noMv,
+  },
+];
 
 export const DEBRIS_RULES: readonly GuideRule[] = [
   {
@@ -1949,18 +1979,12 @@ function atThrustCtrlFile(ctx: DirectorCtx): boolean {
   return ctx.mode === 'memory' && file !== null && ctx.state.ui.selectedId === file.id;
 }
 
-// Slice 3b (plan risk 1): the THRUST CTRL pip's way leads to SWAP, which on the arm comes only from the repository (on the
-// worked route it is 4 years late for VESPER). The pip step waits until SWAP has reached the unit this run (run.licences:
-// "the kinds that reached the unit"); the classic world licenses it with the first burst (licences.ts), so it is unchanged.
-// The no-Swap line itself is Track REPO's moment (systems/repository.ts noSwapForGhost: a burst running on an ENGINE FAULT
-// ship of the arm with no working Swap).
-function swapReachedUnit(ctx: DirectorCtx): boolean {
-  return ctx.state.run.licences.includes('swap');
-}
-
-// A SWAP the kid can pick up: a live Swap file (a seed hunting tools can eat it, WP10 fix round 1).
+// Slice 3b (plan risk 1; review: one reading of "has Swap"): the THRUST CTRL pip's way leads to SWAP, which on the arm comes
+// only from the repository (on the worked route it is 4 years late for VESPER). Both steps wait for a Swap aboard
+// (selectors swapAboard: a usable file, a copy being eaten included, WP10 fix round 1); with none, the no-Swap line speaks
+// instead (repository.ts noSwapForGhost). The classic world licenses SWAP with the first burst, so its lessons are unchanged.
 function swapInHand(ctx: DirectorCtx): boolean {
-  return hasUsableTool(ctx.state.memory, 'swap', 'counts');
+  return swapAboard(ctx.state);
 }
 
 function swapRunning(): boolean {
@@ -2025,14 +2049,21 @@ const GHOST_ALARM_RULES: readonly GuideRule[] = [
 // ...its lesson after the second burst: the THRUST CTRL pip, then SWAP; with no Swap aboard, how to fly through it.
 const GHOST_LESSON_RULES: readonly GuideRule[] = [
   {
+    // Slice 3b review (item 1): from the ship's first burst, once its alarm line is down, while nothing aboard can stop the
+    // bursts. For its first GHOST_NOSWAP_LEAD_SEC on the strip it outranks the flight's NOW lines too (the corrections a
+    // burst brings, ▼ TOO LOW first: before, the line was live only while a burst ran, a third of a second at CRUISE, and
+    // never won the strip), except a path into the planet and a burn being held (the line must not stand between the kid
+    // and RELEASE). Then a tutorial like the others, retired after GHOST_LESSON_SHOW_SEC.
     id: 'tut-ghost-noswap',
     layer: 'ship',
     priority: 'tutorial',
     once: true,
+    leadInSec: GHOST_NOSWAP_LEAD_SEC,
     maxShownSec: GHOST_LESSON_SHOW_SEC,
     activeWhen: (ctx) => noSwapForGhost(ctx.state),
+    preempts: (ctx) => (ctx.leadShownSec.get('tut-ghost-noswap') ?? 0) < GHOST_NOSWAP_LEAD_SEC
+      && ctx.pred.outcome !== 'impact' && !ctx.state.burn.firing,
     text: () => REPO_TEXT.noSwap,
-    doneWhen: (ctx) => ghostLessonStarted(ctx) && !ghostFiring(ctx),
   },
   {
     id: 'tut-ghost-pip',
@@ -2040,7 +2071,7 @@ const GHOST_LESSON_RULES: readonly GuideRule[] = [
     priority: 'tutorial',
     once: true,
     maxShownSec: GHOST_LESSON_SHOW_SEC,
-    activeWhen: (ctx) => ghostLessonDue(ctx) && inAmber(ctx) && swapReachedUnit(ctx),
+    activeWhen: (ctx) => ghostLessonDue(ctx) && inAmber(ctx) && swapInHand(ctx),
     text: () => GHOST_TEXT.pipLesson,
     highlight: pipHintTarget('thrust-ctrl'),
     // Done once the kid is at the file (the pip's jump) or the engine is fixed; the second step's line takes over in
@@ -2055,7 +2086,7 @@ const GHOST_LESSON_RULES: readonly GuideRule[] = [
     priority: 'tutorial',
     once: true,
     maxShownSec: GHOST_LESSON_SHOW_SEC,
-    activeWhen: (ctx) => ghostLessonDue(ctx) && !inAmber(ctx) && ctx.state.run.licences.includes('swap') && swapInHand(ctx),
+    activeWhen: (ctx) => ghostLessonDue(ctx) && !inAmber(ctx) && swapInHand(ctx),
     text: () => GHOST_TEXT.swapLesson,
     highlight: (ctx) => toolStepTarget('swap', ctx.state.ui.activeTool?.kind ?? null, fileHintTarget('thrust-ctrl')),
     doneWhen: (ctx) => ghostLessonStarted(ctx) && (!ghostFiring(ctx) || swapRunning()),
@@ -2273,6 +2304,7 @@ export const GUIDE_RULES: readonly GuideRule[] = [
   // WP10: the COPY lesson after a seed's own RM line (the seed at hand first, then the spare).
   ...COPY_LESSON_RULES,
   ...DEBRIS_RULES,
+  ...MISSING_TOOL_RULES,
   ...BELT_RULES,
   ...AUTOBURN_RULES.filter((rule) => rule.priority !== 'alarm'),
   ...ENGINE_BEAT_RULES,

@@ -16,8 +16,12 @@ import type { GameState } from '@state/schema';
 import { createStore } from '@state/store';
 import { createInitialState } from '@state/initial';
 import {
-  recommendation, repoModel, setRequest, deskWindowOnOpen, noSwapForGhost,
+  recommendation, repoModel, setRequest, deskWindowOnOpen, noSwapForGhost, nothingArrives, firstDeskRecommendation, RECOMMEND_RULES,
 } from '@systems/repository';
+import { cardModel } from '@systems/desk';
+import { inboxMessages } from '@systems/inbox';
+import { createRunMap } from '@systems/map-run';
+import { REPO_SWAP_LOOKAHEAD_LAYERS } from '@data/tuning';
 import { REPO_FILES, REPO_FILE_IDS, RESTRICTED_ROWS, validateCatalogue, REPO_CATALOGUE_VERSION } from '@data/repository';
 import { REPO_TEXT } from '@data/repo-text';
 import { setCourse, backToChart, openDesk } from '@systems/run';
@@ -35,6 +39,9 @@ import { armRun, toDesk, send, giveTools, dropTools, addRequest, throws } from '
 
 const state = (store: Store<GameState>): Readonly<GameState> => store.getState();
 const row = (store: Store<GameState>, selected: number | null, id: string) => repoModel(state(store), selected).available.find((entry) => entry.id === id)!;
+// The window's one ETA toward `selected` (review m5: once above the list, the same for every file).
+const eta = (store: Store<GameState>, selected: number | null) => repoModel(state(store), selected).eta;
+const forecast = (store: Store<GameState>, selected: number | null) => repoModel(state(store), selected).forecast;
 
 // --- The catalogue ---------------------------------------------------------------------------------------------------------
 check('catalogue v1: Mv 2, Rm 1, Cp 3, Swap 1, Repair.bak 4, Scan.bak 3, REPAIR v2 patch 2, in that order, sound',
@@ -48,14 +55,13 @@ const run = armRun();
 giveTools(run, ['repair']);
 toDesk(run);
 check('ARES-VII\'s desk (the run\'s first): the tag is Mv', recommendation(state(run)) === 'mv');
-check('…Mv toward HALCYON: `ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME`, tagged',
-  row(run, 2, 'mv').eta === REPO_TEXT.eta.inTime(2337, 'HALCYON', 2352) && row(run, 2, 'mv').recommended && !row(run, 2, 'rm').recommended,
-  row(run, 2, 'mv').eta ?? 'null');
+check('…Mv toward HALCYON: `ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME` (the window\'s one ETA), Mv tagged',
+  eta(run, 2) === REPO_TEXT.eta.inTime(2337, 'HALCYON', 2352) && row(run, 2, 'mv').recommended && !row(run, 2, 'rm').recommended,
+  eta(run, 2) ?? 'null');
 const outOfReach = state(run).run.map.arm.map((ship) => ship.slot).find((slot) => slot !== 0 && !reachableFrom(state(run).run.map, 0).includes(slot))!;
-check(`…a ship out of reach (slot ${outOfReach}) gets no ETA (forecast null on every row)`,
-  repoModel(state(run), outOfReach).available.every((entry) => entry.forecast === null && entry.eta === null));
+check(`…a ship out of reach (slot ${outOfReach}) gets no ETA (forecast null)`, forecast(run, outOfReach) === null && eta(run, outOfReach) === null);
 check('…no ship selected: no ETA; RESTRICTED lists the three locked rows',
-  repoModel(state(run), null).available.every((entry) => entry.eta === null) && repoModel(state(run), null).restricted.length === 3);
+  eta(run, null) === null && repoModel(state(run), null).restricted.length === 3);
 check('…a restricted or unknown file is refused (throws), the pick unchanged', throws(() => setRequest(run, 'thread-plus' as never))
   && throws(() => setRequest(run, 'skl:autoburn' as never)) && state(run).run.repo.pick === null);
 setRequest(run, 'mv');
@@ -72,12 +78,12 @@ check('…TRANSMIT ▸ clears the pick and records rq1, delivered at HALCYON in 
   && state(run).run.repo.nextId === 2, JSON.stringify(state(run).run.repo));
 toDesk(run);
 check('HALCYON\'s desk: the tag is Rm; `ARRIVES 2436 · KESTREL APPROACH 2467 · IN TIME`',
-  recommendation(state(run)) === 'rm' && row(run, 5, 'rm').eta === REPO_TEXT.eta.inTime(2436, 'KESTREL', 2467), row(run, 5, 'rm').eta ?? '');
+  recommendation(state(run)) === 'rm' && eta(run, 5) === REPO_TEXT.eta.inTime(2436, 'KESTREL', 2467), eta(run, 5) ?? '');
 send(run, 5, 'rm');
 toDesk(run);
-check('KESTREL\'s desk: the tag is Swap (VESPER and CURLEW report ENGINE FAULT within two layers)', recommendation(state(run)) === 'swap', String(recommendation(state(run))));
+check('KESTREL\'s desk: the tag is Swap (VESPER and CURLEW report ENGINE FAULT within three layers)', recommendation(state(run)) === 'swap', String(recommendation(state(run))));
 check('…Swap toward VESPER: `4 YRS LATE → FOLLOWS YOUR ROUTE · SHIP 5 AT THE EARLIEST`',
-  row(run, 11, 'swap').eta === REPO_TEXT.eta.late(4, 5) && row(run, 11, 'swap').forecast?.kind === 'late', row(run, 11, 'swap').eta ?? '');
+  eta(run, 11) === REPO_TEXT.eta.late(4, 5) && forecast(run, 11)?.kind === 'late', eta(run, 11) ?? '');
 send(run, 11, 'swap');
 toDesk(run);
 const vesperModel = repoModel(state(run), null);
@@ -86,16 +92,18 @@ check('VESPER\'s desk: IN TRANSIT `Swap · 4 YRS BEHIND YOU`; toward CORMORANT `
   && repoModel(state(run), 15).inTransit.map((entry) => `${entry.text}:${entry.catchesUp}`).join() === `${REPO_TEXT.transit.catchesUp('Swap', 'CORMORANT')}:true`,
   JSON.stringify(repoModel(state(run), 15).inTransit));
 check('…the Swap in flight counts as owned: the tag is neither Swap nor Rm (risk 4)', !['swap', 'rm'].includes(recommendation(state(run)) ?? ''), String(recommendation(state(run))));
-check('…Cp toward CORMORANT: `44 YRS LATE → FOLLOWS YOUR ROUTE · SHIP 6 AT THE EARLIEST`', row(run, 15, 'cp').eta === REPO_TEXT.eta.late(44, 6), row(run, 15, 'cp').eta ?? '');
+check('…Cp toward CORMORANT: `44 YRS LATE → FOLLOWS YOUR ROUTE · SHIP 6 AT THE EARLIEST`', eta(run, 15) === REPO_TEXT.eta.late(44, 6), eta(run, 15) ?? '');
 send(run, 15, 'cp');
 toDesk(run);
 const cormorant = repoModel(state(run), 19);
-check('CORMORANT\'s desk: every row toward LAST LIGHT says `NOTHING WILL REACH YOU IN TIME`',
-  cormorant.available.every((entry) => entry.eta === REPO_TEXT.eta.never && entry.forecast?.kind === 'never'));
+check('CORMORANT\'s desk: the ETA toward LAST LIGHT says `NOTHING WILL REACH YOU IN TIME`',
+  cormorant.eta === REPO_TEXT.eta.never && cormorant.forecast?.kind === 'never');
+check('…and so no tag at all, `Nothing can reach you in time now :)` (review M3: it tagged Repair.bak, which could never arrive)',
+  recommendation(state(run)) === null && nothingArrives(state(run)) && cormorant.recommended === null
+  && cormorant.recommendLine === REPO_TEXT.window.nothingCanReach, `${recommendation(state(run))} ${cormorant.recommendLine}`);
 check('…Swap arrived here (delivered at CORMORANT, 2659); Cp is still behind and catches up at LAST LIGHT',
   JSON.stringify(state(run).run.repo.requests.map((r) => [r.file, r.status, r.at, r.arrivedYear])).includes('["swap","delivered",15,2659]')
   && cormorant.inTransit.map((entry) => `${entry.file}:${entry.catchesUp}`).join() === 'cp:true', JSON.stringify(cormorant.inTransit));
-console.log(`INFO  CORMORANT's tag: ${recommendation(state(run)) ?? 'none'} · Repair copies working: ${state(run).memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair' && seg.integrity >= 50).length}`);
 
 // --- Rules 4 and 5, and none --------------------------------------------------------------------------------------------
 {
@@ -171,10 +179,81 @@ console.log(`INFO  CORMORANT's tag: ${recommendation(state(run)) ?? 'none'} · R
   for (const slot of [2, 5, 11]) send(store, slot);
   const ghost = { startTSec: 0, endTSec: 5, amp: 0.3, sticky: false, releaseArmed: false };
   check('VESPER (ENGINE FAULT) with no burst: no line', armShipAt(store.getState().run.map, 11).modifiers.includes('engine-fault') && !noSwapForGhost(store.getState()));
-  store.update((draft) => { draft.burn.ghost = { ...ghost }; });
+  store.update((draft) => { draft.burn.ghost = { ...ghost }; draft.burn.ghostBursts = 1; });
   check('…a ghost burst with no Swap aboard: the no-Swap line is due', noSwapForGhost(store.getState()));
+  store.update((draft) => { draft.burn.ghost = null; });
+  check('…and stays due between bursts (review item 1: a burst is a third of a second at CRUISE, too short for the strip)',
+    noSwapForGhost(store.getState()));
+  store.update((draft) => { draft.burn.fuelPct = 0; });
+  check('…not with an empty tank (no burst can fire)', !noSwapForGhost(store.getState()));
+  store.update((draft) => { draft.burn.fuelPct = 100; });
   giveTools(store, ['swap']);
   check('…with a working Swap: not due', !noSwapForGhost(store.getState()));
+}
+
+// --- The review's rules (slice 3b review: item 1 (c)–(e), M2, M3; the card's m1, m2 and item 1 (d)) ------------------------
+{
+  check('the recommendation is a rule table: Swap (runs 2+, first desk), Mv (first desk), Rm, Swap, Mv, Repair.bak, Cp, REPAIR v2',
+    RECOMMEND_RULES.map((rule) => rule.file).join() === 'swap,mv,rm,swap,mv,repair-bak,cp,repair-v2' && REPO_SWAP_LOOKAHEAD_LAYERS === 3);
+  // Runs 2+: the first desk tags Swap when an ENGINE FAULT ship lies within reach of ship 1; the welcome agrees.
+  let swapSeed: number | null = null;
+  let mvSeed: number | null = null;
+  for (let seed = 1000; seed < 1200 && (swapSeed === null || mvSeed === null); seed++) {
+    const kind = firstDeskRecommendation(createRunMap({ wave: 2 } as never, seed));
+    if (kind === 'swap') swapSeed ??= seed;
+    else mvSeed ??= seed;
+  }
+  check('runs 2+ roll both first desks over 200 arms (Swap with ENGINE FAULT in reach, else Mv)', swapSeed !== null && mvSeed !== null);
+  const second = armRun(swapSeed ?? 1000, 2);
+  toDesk(second);
+  check('…a run 2 arm with ENGINE FAULT in reach of ship 1: the first desk tags Swap, and the welcome recommends swap',
+    recommendation(state(second)) === 'swap'
+    && inboxMessages(state(second)).find((m) => m.id === 'welcome')!.body.some((line) => line.includes('Recommended for you: swap :)')),
+    String(recommendation(state(second))));
+  const plain = armRun(mvSeed ?? 1001, 2);
+  toDesk(plain);
+  check('…one without: Mv, as run 1 (whose first desk keeps its authored Mv whatever lies ahead)',
+    recommendation(state(plain)) === 'mv' && firstDeskRecommendation(state(armRun()).run.map) === 'mv');
+
+  // M2: Mv re-tagged later while it is missing; Cp when HOLLOW is aboard or boards within the look-ahead.
+  const later = armRun();
+  giveTools(later, ['repair', 'delete', 'swap']);
+  send(later, 2);
+  toDesk(later);
+  check('HALCYON with Rm, Swap and both Repair copies but no Mv: Mv (no longer only at the first desk)', recommendation(state(later)) === 'mv',
+    String(recommendation(state(later))));
+  giveTools(later, ['move']);
+  later.update((draft) => { draft.run.threat.aboard = true; });
+  check('…with Mv too and HOLLOW aboard: Cp (COPY\'s lesson was never tagged)', recommendation(state(later)) === 'cp', String(recommendation(state(later))));
+  giveTools(later, ['copy']);
+  check('…with Cp aboard: none', recommendation(state(later)) === null);
+
+  // The card (item 1 (d), m1, m2), from KESTREL's desk on run 1.
+  const card = armRun();
+  giveTools(card, ['repair']);
+  send(card, 2, 'mv');
+  send(card, 5, 'rm');
+  toDesk(card);
+  const rowOf = (slot: number, key: string) => cardModel(state(card), slot).rows.find((entry) => entry.key === key);
+  check('VESPER\'s card from KESTREL with no Swap aboard and none riding: `ENGINE FAULT · NO SWAP IN TIME`',
+    rowOf(11, 'noswap')?.value === REPO_TEXT.card.noSwapInTime && rowOf(11, 'noswap')?.tone === 'warn');
+  setRequest(card, 'swap');
+  check('…Swap requested now is 4 years late: still warned', rowOf(11, 'noswap') !== undefined && rowOf(11, 'deliveries')?.value === REPO_TEXT.card.late('Swap', 4));
+  setRequest(card, null);
+  giveTools(card, ['swap']);
+  check('…with a Swap aboard: no warning; a ship without ENGINE FAULT never has one', rowOf(11, 'noswap') === undefined && rowOf(10, 'noswap') === undefined);
+  addRequest(card, { file: 'cp', status: 'in-transit', lateness: 3 });
+  const behind = cardModel(state(card), 2);
+  check('a ship behind the unit (HALCYON from KESTREL) shows no DELIVERIES row and no TIMELINE marks (review m1)',
+    !behind.rows.some((entry) => entry.key === 'deliveries') && (behind.timeline?.marks.length ?? 0) === 0);
+  const toCormorant = armRun();
+  giveTools(toCormorant, ['repair']);
+  for (const slot of [2, 5, 11, 15]) send(toCormorant, slot);
+  toDesk(toCormorant);
+  setRequest(toCormorant, 'cp');
+  check('a file no route can bring reads `Cp ✗ NEVER ARRIVES`, not `✗ n YRS LATE` (review m2)',
+    cardModel(state(toCormorant), 19).rows.find((entry) => entry.key === 'deliveries')?.value === REPO_TEXT.card.never('Cp'),
+    cardModel(state(toCormorant), 19).rows.find((entry) => entry.key === 'deliveries')?.value ?? 'none');
 }
 
 // --- INFO over fresh arms, following the tag on random routes -------------------------------------------------------------

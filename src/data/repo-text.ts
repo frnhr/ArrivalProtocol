@@ -62,9 +62,11 @@ export const REPO_TEXT = {
     // The tag (02 §3.8; decision 19: the tag is the advice, no confirm).
     recommended: ':) RECOMMENDED FOR YOU',
     nothingToRecommend: 'You have everything you need :)',
+    // Review M3: nothing sent from this desk reaches the unit before its run ends (every route's forecast is NEVER), so
+    // there is no tag at all.
+    nothingCanReach: 'Nothing can reach you in time now :)',
     // The last-rm prompt (04 §3.3, round 3): the desk opens here with Rm lit.
     lastRm: 'YOUR LAST RM IS GONE · NO RM, NO WAY TO DELETE THE ROOT',
-    restrictedRefusal: 'RESTRICTED · ARRIVAL CONTROL WILL NOT SEND IT',
   },
   // An AVAILABLE row: `Mv · 2 BLOCKS · MOVE`, then its ETA for the selected destination.
   row: (name: string, size: number, effect: string): string => `${name} · ${blocks(size)} · ${effect}`,
@@ -85,6 +87,10 @@ export const REPO_TEXT = {
   card: {
     deliveriesLabel: 'DELIVERIES',
     late: (name: string, years: number): string => `${name} ✗ ${yrs(years)} LATE`,
+    // No route catches it up before the run ends (review m2).
+    never: (name: string): string => `${name} ✗ NEVER ARRIVES`,
+    // Review item 1 (d): an ENGINE FAULT ship reached with no Swap aboard and none riding the hop.
+    noSwapInTime: 'ENGINE FAULT · NO SWAP IN TIME',
     catchesUp: (name: string): string => `${name} ✓ CATCHES UP HERE`,
     inTime: (name: string): string => `${name} ✓ WAITING HERE`,
     // A file sent on from the ship being left: it rides in the packet, in time by definition.
@@ -102,7 +108,6 @@ export const REPO_TEXT = {
     tabCard: 'CARD',
     tabRepository: 'REPOSITORY [R]',
     tabInbox: 'INBOX [I]',
-    back: 'CARD [ESC]',
     // The REPOSITORY tab's badge while CONTROL recommends a file and none is asked for.
     badgeRecommended: ':)',
   },
@@ -121,11 +126,17 @@ export const REPO_TEXT = {
     salvage: 'SALVAGE · PICK ONE TO CARRY',
     // The gate (plan §1.1 item 8): files, deliveries and the floor over the room or the link.
     overWithDeliveries: (blocksOver: number): string => `${blocks(blocksOver)} TOO MANY · LEAVE FILES OR SEND ON`,
+    // ...and the arrival line then (MAP_TEXT.packet.arrivalLeave's twin).
+    arrivalOverWithDeliveries: 'ON ARRIVAL: LEAVE FILES OR SEND ON FIRST',
   },
-  // The strip's ghost-thrust line when no Swap is aboard (plan risk 1: VESPER flown without SWAP on the worked route). The
-  // plan's draft said `SPACE ends each burst`, true only of a sticky one (which has its own line); a burst ends by itself, so
-  // the advice is to fly through it and fix ▼ after.
-  noSwap: 'NO SWAP ABOARD — fly through each burst, then fix ▼',
+  // The strip's ghost-thrust line when no Swap is aboard (plan risk 1; slice 3b review item 1): it shows right after the
+  // first burst's alarm and says what is left to do. Nothing aboard stops the bursts (SKIP is refused meanwhile:
+  // pace.ts SKIP_REFUSAL_ENGINE_FAULT), so the kid watches each one and fixes ▼ when the strip asks.
+  noSwap: 'NO SWAP ABOARD — nothing stops the bursts. Fix ▼ after each one',
+  // The same for a seed with no rm aboard and debris coming for the drivers with no Mv (review M2: those lessons went
+  // silent without their tool). The REPOSITORY is a desk tab, so the line points at the next desk.
+  noRm: 'NO RM ABOARD — ask the REPOSITORY [R] at the next desk',
+  noMv: 'NO MV ABOARD — ask the REPOSITORY [R] at the next desk',
 
   // --- The boot (02 §4 step 6; plan §1.1 item 12) ------------------------------------------------------------------------
   boot: {

@@ -193,6 +193,10 @@ check('…NEVER ARRIVED is empty: every request reached the unit', undeliveredFi
   JSON.stringify(state().run.repo.requests));
 const vesper = state().run.ships.find((ship) => ship.shipName === 'VESPER');
 console.log(`INFO  risk 1, VESPER flown without SWAP (ENGINE FAULT, 16 pods): ${vesper?.outcome ?? 'not reached'} · ${vesper?.landedInLz ?? '-'} of ${vesper?.colonistsAboard ?? '-'} colonists in an LZ · stars ${vesper?.stars ?? '-'} · fuel left ${vesper ? Math.round(vesper.fuelLeftPct) : '-'}%`);
+// Slice 3b review (item 1): VESPER flown without Swap is a trade, never a dead end: it must not regress to stranded,
+// crashed or escaped (it ends with the orbit locked or accepted; the instant landing then lands its pods).
+check('…VESPER flown without SWAP ends with its orbit locked or accepted, never stranded, crashed or escaped (review item 1)',
+  vesper !== undefined && (vesper.outcome === 'locked' || vesper.outcome === 'partial'), vesper?.outcome ?? 'not reached');
 console.log(`INFO  charge at the choice on the worked route (ends at CORMORANT → LAST LIGHT): ${worked.charge ?? 'not reached'}`);
 
 // --- Risk 6 at full depth: the other last ships before the final one -------------------------------------------------------

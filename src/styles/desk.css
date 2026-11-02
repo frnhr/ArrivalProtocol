@@ -380,6 +380,7 @@ body.reduced-motion .title-card.booting.receiving .title-chart { animation: none
 /* ── Slice 3b: the desk's tabs (DeskTabs: CARD / REPOSITORY [R] / INBOX [I]) in the right window's title, with badges ── */
 .desk-steps { display: inline-flex; gap: 8px; }
 .desk-tabs { flex: 1; display: flex; gap: 2px; min-width: 0; align-self: stretch; align-items: stretch; }
+.desk-tab[hidden] { display: none; }
 .desk-tab {
   display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; cursor: pointer;
   background: transparent; border: 1px solid transparent; border-bottom: none;
@@ -418,7 +419,7 @@ body.reduced-motion .title-card.booting.receiving .title-chart { animation: none
 .rp-req { grid-column: 3; }
 .rp-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .rp-text { font-size: 12px; letter-spacing: 0.06em; color: var(--desk-bright); }
-.rp-eta { font-size: 10px; letter-spacing: 0.06em; line-height: 1.35; color: var(--desk-dim); }
+.rp-eta { margin-top: 4px; font-size: 10px; letter-spacing: 0.06em; line-height: 1.35; color: var(--desk-dim); }
 .rp-eta.eta-in-time { color: var(--desk-good); }
 .rp-eta.eta-late { color: var(--desk-accent); }
 .rp-eta.eta-never { color: var(--desk-warn); }

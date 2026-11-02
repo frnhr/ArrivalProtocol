@@ -93,6 +93,10 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   check(`the deliveries push the packet over KESTREL → VESPER's link (${model.link}): TRANSMIT ▸ waits, the send throws`,
     model.room.tooMany !== null && model.room.fit.overLink > 0 && throws(() => transmitNext(at(store).run.transit!.offer.length > 0
       ? (pickCard(store, at(store).run.transit!.offer[0]!.id), store) : store)), `${model.files} files, link ${model.link}`);
+  check('…the gate and arrival lines say SEND ON helps too: `n BLOCKS TOO MANY · LEAVE FILES OR SEND ON` (review m3)',
+    model.room.tooMany === REPO_TEXT.packet.overWithDeliveries(Math.max(model.room.fit.overLink, model.room.fit.over))
+    && model.dropLine === model.room.tooMany && model.arrivalLine === REPO_TEXT.packet.arrivalOverWithDeliveries,
+    `${model.room.tooMany} | ${model.arrivalLine}`);
   const before = transmitModel(at(store));
   for (const chip of [...chipsOf(store)].reverse()) {
     if (transmitModel(at(store)).room.fit.overLink === 0 && transmitModel(at(store)).chargeCarried > before.chargeCarried) break;
@@ -224,6 +228,13 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
     && deliveryBootLineText(at(store), 2) === REPO_TEXT.boot.folded(['rm', 'cp', 'swap'], 2331, 2333)
     && bootLinePlan(at(store), false).filter((kind) => kind === 'delivery').length === 3,
     groups.map((group) => group.map((entry) => entry.file).join('+')).join(' | '));
+  // Review nit: three patches and a file made four lines (every patch had one of its own).
+  const many = [chip('rq6', 'repair-v2', 2330), chip('rq7', 'repair-v2', 2331), chip('rq8', 'repair-v2', 2332), chip('rq9', 'mv', 2333)];
+  store.update((draft) => { draft.run.arrival!.deliveries = arrivalDeliveries(many, many.map((entry) => ({ key: entry.key, segIds: [`seg-${entry.key}`] })), []); });
+  const manyGroups = deliveryBootLines(at(store)).map((group) => group.map((entry) => entry.file).join('+')).join(' | ');
+  check('three patches and a file: still three lines (the first patch alone, then mv, the other two patches folded)',
+    manyGroups === 'repair-v2 | mv | repair-v2+repair-v2' && bootLinePlan(at(store), false).filter((kind) => kind === 'delivery').length === 3, manyGroups);
+  store.update((draft) => { draft.run.arrival!.deliveries = deliveries; });
   const plan = bootLinePlan(at(store), false);
   check('…the delivery lines come after the ship\'s own damage and before the charge (02 §4 steps 5–7)',
     plan.indexOf('delivery') > plan.indexOf('ecc') && plan.lastIndexOf('delivery') < plan.indexOf('charge'), plan.join(' '));

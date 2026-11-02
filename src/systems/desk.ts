@@ -15,6 +15,7 @@ import { shipsLeft } from '@systems/map-route';
 import { mapFacts } from '@systems/map-facts';
 import { planThreat, threatInputFor } from '@systems/threat-plan';
 import { noWorkingRm } from '@state/threat-selectors';
+import { swapAboard } from '@state/selectors';
 import { layoutFor } from '@data/memory';
 import { WORLDS, RING_LY } from '@data/arm';
 import { UNIT_046_TRAIL } from '@data/ship-names';
@@ -104,7 +105,7 @@ export interface ChartModel {
 // 3b's (`Swap ✗ 4 YRS LATE`, `✓ CATCHES UP HERE`; Track UI makes it).
 export interface CardRow {
   key: 'problems' | 'resident' | 'memory' | 'fit' | 'planet' | 'site' | 'lzs' | 'nogo' | 'beam' | 'noise' | 'range'
-    | 'deliveries' | 'threat' | 'norm' | 'only' | 'run' | 'history';
+    | 'noswap' | 'deliveries' | 'threat' | 'norm' | 'only' | 'run' | 'history';
   label: string;
   value: string;
   tone: 'plain' | 'good' | 'warn';
@@ -330,6 +331,16 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
     row('fit', MAP_TEXT.card.fitLabel, preview.card, fitTone(fit));
   }
   row('problems', MAP_TEXT.card.problemsLabel, MAP_TEXT.card.problems(problemLabels(ship)), ship.modifiers.length > 0 ? 'warn' : 'plain');
+  // 3b: what the requests (and this desk's pick) do on this hop (02 §4's DELIVERIES row, the TIMELINE's marks), from the one
+  // outlook rule, for a ship SET COURSE can go to (review m1: as repoModel; a ship behind the unit or out of range is
+  // never sent toward, so its card promised nothing).
+  const outlook = arm && hop !== null && isReachable ? hopOutlook(state, from, slot) : [];
+  // Review item 1 (d): an ENGINE FAULT ship with no Swap aboard and none riding this hop (the pick included) says so under
+  // its KNOWN PROBLEMS, so the kid can route around it or ask for Swap first.
+  if (arm && isReachable && ship.modifiers.includes('engine-fault') && !swapAboard(state)
+    && !outlook.some((entry) => entry.file === 'swap' && entry.rides)) {
+    row('noswap', '', REPO_TEXT.card.noSwapInTime, 'warn');
+  }
   row('memory', MAP_TEXT.card.memoryLabel, MAP_TEXT.card.memory(layout.totalBlocks, ship.memoryClass, layout.roomForUnit));
 
   row('planet', MAP_TEXT.card.planetLabel, MAP_TEXT.card.planet(ship.terrain, FORGIVENESS_TEXT[ship.forgiveness].offSite));
@@ -352,8 +363,6 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   if (ship.final && noWorkingRm(state)) row('norm', MAP_TEXT.card.threatLabel, THREAT_TEXT.noRmPacket, 'warn');
   if (isReachable && onlyFromHere(map, from).includes(slot)) row('only', '', MAP_TEXT.card.onlyFromHere, 'warn');
 
-  // 3b: what the requests (and this desk's pick) do on this hop (02 §4's DELIVERIES row), from the one outlook rule.
-  const outlook = arm && hop !== null ? hopOutlook(state, from, slot) : [];
   const deliveries = deliveriesRow(outlook);
   if (deliveries !== null) row('deliveries', REPO_TEXT.card.deliveriesLabel, deliveries.value, deliveries.tone);
 
@@ -407,8 +416,9 @@ export function deliveriesRow(outlook: readonly OutlookEntry[]): { value: string
       case 'in-time': return REPO_TEXT.card.inTime(name);
       case 'catches-up': return REPO_TEXT.card.catchesUp(name);
       case 'waiting': return REPO_TEXT.card.ridesWithYou(name);
-      case 'late':
-      case 'never': return REPO_TEXT.card.late(name, entry.yearsLate);
+      case 'late': return REPO_TEXT.card.late(name, entry.yearsLate);
+      // Review m2: no route catches it up, so no count of years (it read `✗ 4 YRS LATE`, as if it still might).
+      case 'never': return REPO_TEXT.card.never(name);
     }
   });
   return { value: words.join(' · '), tone: outlook.every((entry) => entry.rides) ? 'good' : 'warn' };

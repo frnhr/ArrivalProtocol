@@ -268,10 +268,18 @@ export function packetFit(state: Readonly<GameState>, plan: Readonly<TransitPlan
   return packetArrival(state, plan, dropped).fit;
 }
 
-function packetRoom(preview: Readonly<ArrivalPreview>): PacketRoom {
+// The packet is over the link or the room while a delivery rides in it (a chip not sent on): SEND ON is a way back under
+// as well as leaving files behind, so the gate line and the arrival line say both (review m3: they said LEAVE FILES BEHIND
+// only, and the chip that pushed the packet over sat right above them).
+function sendOnHelps(plan: Readonly<TransitPlan>, preview: Readonly<ArrivalPreview>): boolean {
+  return preview.tooMany !== null && plan.deliveries.some((chip) => !chip.sendOn);
+}
+
+function packetRoom(preview: Readonly<ArrivalPreview>, plan: Readonly<TransitPlan>): PacketRoom {
   const fit = preview.fit;
   const line = fit.floor > 0 ? MAP_TEXT.packet.room(fit.room, fit.files, fit.floor) : MAP_TEXT.packet.roomNoFloor(fit.room, fit.files);
-  return { fit, line, charge: preview.charge, tone: preview.tone, tooMany: preview.tooMany, confirm: preview.confirm };
+  const tooMany = sendOnHelps(plan, preview) ? REPO_TEXT.packet.overWithDeliveries(Math.max(fit.overLink, fit.over)) : preview.tooMany;
+  return { fit, line, charge: preview.charge, tone: preview.tone, tooMany, confirm: preview.confirm };
 }
 
 function requirePlan(state: Readonly<GameState>): TransitPlan {
@@ -355,7 +363,7 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
   if (charge.blocks !== fit.wanted) throw new Error(`transmitModel: arrival charge ${charge.blocks} but the room bar wants ${fit.wanted}`);
   const infectedCount = chips.filter((chip) => chip.infected && !chip.dropped).length;
   const arm = state.run.map.world === 'arm';
-  const room = packetRoom(preview);
+  const room = packetRoom(preview, plan);
   const hits = plan.hop.transitHits + plan.extraHits;
   return {
     toShipIndex: plan.toShipIndex,
@@ -372,7 +380,7 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
     chargeCarried: packet.chargeCarried,
     packetLine: TRANSMIT_TEXT.packet(plan.linkBlocks, packet.filesBlocks, packet.chargeHeld, packet.chargeCarried, fit.roomLost > 0),
     hitsLine: TRANSMIT_TEXT.hits(hits),
-    arrivalLine: preview.sum,
+    arrivalLine: sendOnHelps(plan, preview) ? REPO_TEXT.packet.arrivalOverWithDeliveries : preview.sum,
     arrivalCharge: fit.chargeArrives,
     infectedLine: infectedCount > 0 ? TRANSMIT_TEXT.infected(infectedCount) : null,
     dropLine: room.tooMany !== null ? room.tooMany

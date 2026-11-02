@@ -108,6 +108,9 @@ lines.push(
   ['repo.transit.waiting', REPO_TEXT.transit.waiting(FILE, SHIP)],
   ['repo.transit.catchesUp', REPO_TEXT.transit.catchesUp(FILE, SHIP)],
   ['repo.card.late', REPO_TEXT.card.late(FILE, SLACK)],
+  ['repo.card.never', REPO_TEXT.card.never(FILE)],
+  ['repo.card.noSwapInTime', REPO_TEXT.card.noSwapInTime],
+  ['repo.packet.arrivalOverWithDeliveries', REPO_TEXT.packet.arrivalOverWithDeliveries],
   ['repo.card.catchesUp', REPO_TEXT.card.catchesUp(FILE)],
   ['repo.card.inTime', REPO_TEXT.card.inTime(FILE)],
   ['repo.card.ridesWithYou', REPO_TEXT.card.ridesWithYou(FILE)],
@@ -123,6 +126,8 @@ lines.push(
   ['repo.packet.salvage', REPO_TEXT.packet.salvage],
   ['repo.packet.overWithDeliveries', REPO_TEXT.packet.overWithDeliveries(199)],
   ['repo.noSwap', REPO_TEXT.noSwap],
+  ['repo.noRm', REPO_TEXT.noRm],
+  ['repo.noMv', REPO_TEXT.noMv],
   ['repo.boot.delivery', REPO_TEXT.boot.delivery(BOOT, YEAR)],
   ['repo.boot.patch', REPO_TEXT.boot.patch(BOOT, YEAR)],
   ['repo.boot.patchBroken', REPO_TEXT.boot.patchBroken(BOOT, YEAR)],
@@ -140,18 +145,22 @@ lines.push(
   ['inbox.boot.newMessages', INBOX_TEXT.boot.newMessages(99)],
   ['inbox.boot.reading', INBOX_TEXT.boot.reading],
   ['inbox.welcome.subject', INBOX_TEXT.welcome.subject(999)],
-  ['inbox.reply.subject', INBOX_TEXT.reply.subject(SHIP)],
+  ['inbox.reply.subject', INBOX_TEXT.reply.subject([SHIP])],
+  ['inbox.reply.subject 2', INBOX_TEXT.reply.subject([SHIP, SHIP])],
+  ['inbox.reply.subject 3', INBOX_TEXT.reply.subject([SHIP, SHIP, SHIP])],
   ['inbox.letter.subject', INBOX_TEXT.letter.subject(999)],
 );
 // A message body: at most INBOX_BODY_MAX_LINES lines, each one strip row.
 const bodies: [string, string[]][] = [
-  // The welcome always recommends mv (02 §3.8's first rule: systems/inbox.ts WELCOME_RECOMMENDS).
+  // The welcome recommends the first desk's tag (systems/repository.ts firstDeskRecommendation): mv on run 1.
   ['welcome', INBOX_TEXT.welcome.body(20, REPO_FILE_TEXT.mv.boot)],
   ...INBOX_TEXT.policy.map((policy, i): [string, string[]] => [`policy ${i}`, policy.body(999)]),
   ['armComplete', INBOX_TEXT.armComplete.body(999)],
   ['reply', INBOX_TEXT.reply.body(999, BIG, INBOX_TEXT.reply.performance.good)],
-  ['postcard y1', INBOX_TEXT.postcard.year1.body(FIRST, FAMILY)],
-  ['postcard y50', INBOX_TEXT.postcard.year50.body(FIRST)],
+  ...INBOX_TEXT.policy.map((policy, i): [string, string[]] => [`reply + policy ${i}`, INBOX_TEXT.reply.body(999, BIG, INBOX_TEXT.reply.performance.good, 9, policy.postscript)]),
+  ['postcard y1', INBOX_TEXT.postcard.year1.body(FIRST, FAMILY, 89)],
+  ['postcard y50', INBOX_TEXT.postcard.year50.body(FIRST, 99)],
+  ['postcard y50 old', INBOX_TEXT.postcard.year50.body(FIRST, null)],
   ['postcard y200', INBOX_TEXT.postcard.year200.body(COLONY, FIRST, BIG)],
   ['meridian', [...INBOX_TEXT.letter.meridian]],
   ...INBOX_TEXT.noAddress.map((mail, i): [string, string[]] => [`noAddress ${i}`, [...mail.body]]),
@@ -162,7 +171,7 @@ lines.push(...INBOX_TEXT.noAddress.map((mail, i): [string, string] => [`inbox.no
 const tall = bodies.filter(([, body]) => body.length > INBOX_BODY_MAX_LINES);
 check(`every message body has at most ${INBOX_BODY_MAX_LINES} lines`, tall.length === 0, tall.map(([key, body]) => `${key} ${body.length}`).join(' | '));
 check('the three postcards joined still fit the reader (3 + 1 + 2 lines)',
-  INBOX_TEXT.postcard.year1.body(FIRST, FAMILY).length + INBOX_TEXT.postcard.year50.body(FIRST).length
+  INBOX_TEXT.postcard.year1.body(FIRST, FAMILY, 89).length + INBOX_TEXT.postcard.year50.body(FIRST, 99).length
   + INBOX_TEXT.postcard.year200.body(COLONY, FIRST, BIG).length <= INBOX_BODY_MAX_LINES);
 check('a record `Okafor, Ada` signs as Ada Okafor', firstNameOf('Okafor, Ada') === 'Ada' && familyOf('Okafor, Ada') === 'Okafor');
 check("05 §3.12's stamps and samples: `SENT 2522 · RECEIVED 2651`, `SENT ???? · RECEIVED 2481`, `> 3 NEW MESSAGES · INBOX`",

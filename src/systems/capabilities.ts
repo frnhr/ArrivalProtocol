@@ -2,7 +2,7 @@ import type { GameState } from '@state/schema';
 import type { Segment, SegmentRole, SegmentState, UpgradeKind } from '@/types/segment';
 import type { FlightMods } from '@data/mission';
 import {
-  filesWithRole, hasIntegrity, integrityBand, coreThreads, upgradeFiles, type HealthSegment,
+  filesWithRole, hasIntegrity, integrityBand, coreThreads, upgradeFiles, swapAboard, type HealthSegment,
 } from '@state/selectors';
 import { threadsBusy } from '@systems/ops-core';
 import {
@@ -418,4 +418,13 @@ export function planningThrustCap(state: Readonly<GameState>, caps: Capabilities
   const integrity = roleHealth(state, 'engine-io').integrity;
   if (integrity === null) throw new Error('planningThrustCap: Engine I/O is offline but has no integrity');
   return Math.min(ENGINE_POWER_BY_BAND[integrityBand(integrity)], caps.reactor.reactorCap);
+}
+
+// The engine fires by itself and nothing aboard can stop it (slice 3b review, item 1): on the arm, Thrust Ctrl is failing or
+// dead (a ghost source, whatever put it there: ENGINE FAULT, a transit hit, a bite) and no Swap is aboard (selectors
+// swapAboard), with fuel left for a burst. On the arm SWAP comes only by request, so a kid can meet this with no cure; the
+// classic world licenses SWAP with the first burst and never meets it. The strip's no-Swap line (repository.ts
+// noSwapForGhost) and the flight's ENGINE FAULT SKIP refusal (pace.ts) both read it.
+export function ghostWithoutSwap(state: Readonly<GameState>): boolean {
+  return state.run.map.world === 'arm' && state.burn.fuelPct > 0 && capabilitiesNow(state).thrustCtrl.ghost !== null && !swapAboard(state);
 }

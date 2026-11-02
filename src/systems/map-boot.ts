@@ -74,17 +74,22 @@ export function mapOverflowLineText(state: Readonly<GameState>): string {
 // said. Track REPO owns these after the foundation (the words are repo-text's, Track UI's).
 
 // The arrival's deliveries grouped by the boot line that says them (empty off the arm and on a fresh unit's boot), in the
-// arrival's order (systems/run.ts: the REPAIR v2 patch first, then oldest first). A patch always has a line of its own,
-// never the folded one (it says what it upgraded, and it installs right after REPAIR's renewal at the first line): the
-// singles are every patch, then the oldest other files while lines are left, and the rest fold into the last line.
+// arrival's order (systems/run.ts: the REPAIR v2 patch first, then oldest first), never more than DELIVERY_BOOT_LINES_MAX
+// lines. The first patch has a line of its own, never the folded one (it says what it upgraded; it installs right after
+// REPAIR's renewal at the first line); then the oldest other files while lines are left; the rest fold into the last line,
+// a second patch among them (review nit: each patch had a line of its own, so three patches and a file made four lines; a
+// second patch upgrades nothing the first did not, and its folded line still installs it).
 export function deliveryBootLines(state: Readonly<GameState>): ArrivalDelivery[][] {
   const deliveries = state.run.map.world === 'arm' ? state.run.arrival?.deliveries ?? [] : [];
   if (deliveries.length <= DELIVERY_BOOT_LINES_MAX) return deliveries.map((delivery) => [delivery]);
-  const patches = deliveries.filter((delivery) => delivery.file === 'repair-v2');
-  const others = deliveries.filter((delivery) => delivery.file !== 'repair-v2');
-  const singles = Math.max(0, DELIVERY_BOOT_LINES_MAX - 1 - patches.length);
-  const folded = others.slice(singles);
-  return [...patches.map((delivery) => [delivery]), ...others.slice(0, singles).map((delivery) => [delivery]), ...(folded.length > 0 ? [folded] : [])];
+  const firstPatch = deliveries.find((delivery) => delivery.file === 'repair-v2');
+  const head = firstPatch === undefined ? [] : [firstPatch];
+  const rest = [
+    ...deliveries.filter((delivery) => delivery.file !== 'repair-v2'),
+    ...deliveries.filter((delivery) => delivery.file === 'repair-v2' && delivery !== firstPatch),
+  ];
+  const singles = DELIVERY_BOOT_LINES_MAX - 1 - head.length;
+  return [...head.map((delivery) => [delivery]), ...rest.slice(0, singles).map((delivery) => [delivery]), rest.slice(singles)];
 }
 
 // The words of delivery line `ordinal`.

@@ -4,19 +4,20 @@ import { REPO_TEXT } from '@data/repo-text';
 
 // The REPOSITORY (02-map §3.8, §4; slice-3b-plan §1.1 items 1–5, §3 steps 2, 5–8): the desk's [R] tab, drawn from
 // systems/repository.ts repoModel only (Track REPO owns the rule; this view never works out an ETA). Three lists:
-// • AVAILABLE: each file with its number key ([1]–[7]), size and effect, its ETA for the selected ship (`ARRIVES 2337 ·
-//   HALCYON APPROACH 2352 · IN TIME` in green, `4 YRS LATE → …` in amber, NEVER in red), ARRIVAL CONTROL's one
-//   `:) RECOMMENDED FOR YOU` tag, and its REQUEST toggle (one request per transmit; a second click clears it);
+// • AVAILABLE: the ETA for the selected ship once above the list (`ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME` in green,
+//   `4 YRS LATE → …` in amber, NEVER in red: the years are every file's), then each file with its number key ([1]–[7]),
+//   size and effect, ARRIVAL CONTROL's one `:) RECOMMENDED FOR YOU` tag, and its REQUEST toggle (one request per transmit;
+//   a second click clears it);
 // • IN TRANSIT: the requests behind the unit (`Swap · 4 YRS BEHIND YOU`), green when they catch up at the selected ship;
 // • RESTRICTED: the locked rows and why (`Train it yourself :)`).
 // After the last rm was lost the desk opens here with Rm lit and the warning on top (04 §3.3, round 3). The classic world
 // has no repository: one line says so. DeskScreen owns the clicks (data-file) and the keys.
 
-function etaTone(row: Readonly<RepoRow>): string {
-  return row.forecast === null ? 'none' : row.forecast.kind;
+function etaTone(model: Readonly<RepoModel>): string {
+  return model.forecast === null ? 'none' : model.forecast.kind;
 }
 
-function availableNode(row: Readonly<RepoRow>, index: number, noShip: boolean): HTMLButtonElement {
+function availableNode(row: Readonly<RepoRow>, index: number): HTMLButtonElement {
   const node = make('button', 'rp-row');
   node.tabIndex = -1;
   node.dataset.file = row.id;
@@ -26,8 +27,6 @@ function availableNode(row: Readonly<RepoRow>, index: number, noShip: boolean): 
   const key = make('kbd', 'keycap rp-key', String(index + 1));
   const main = make('span', 'rp-main');
   main.appendChild(make('span', 'rp-text', row.text));
-  const eta = make('span', `rp-eta eta-${etaTone(row)}`, row.eta ?? (noShip ? REPO_TEXT.window.noShip : ''));
-  if (eta.textContent !== '') main.appendChild(eta);
   if (row.recommended) main.appendChild(make('span', 'rp-tag', REPO_TEXT.window.recommended));
   const toggle = make('span', 'rp-req', row.requested ? REPO_TEXT.window.requested : REPO_TEXT.window.request);
   node.append(key, main, toggle);
@@ -45,8 +44,10 @@ export function renderRepository(host: HTMLElement, model: Readonly<RepoModel>):
   if (model.recommended === null && model.recommendLine !== null) parts.push(make('div', 'rp-control', model.recommendLine));
 
   parts.push(make('div', 'rp-section', REPO_TEXT.window.available));
+  const eta = model.eta ?? (model.selected === null ? REPO_TEXT.window.noShip : null);
+  if (eta !== null) parts.push(make('div', `rp-eta eta-${etaTone(model)}`, eta));
   const available = make('div', 'rp-list');
-  model.available.forEach((row, index) => available.appendChild(availableNode(row, index, model.selected === null)));
+  model.available.forEach((row, index) => available.appendChild(availableNode(row, index)));
   parts.push(available);
 
   parts.push(make('div', 'rp-section', REPO_TEXT.window.inTransit));

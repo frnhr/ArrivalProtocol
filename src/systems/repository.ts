@@ -16,7 +16,9 @@ import {
 import { hopBetween, reachable, reachableFrom } from '@systems/map-hop';
 import { currentSlot, isEndSlot, armShipAt, worldSlotOf } from '@systems/map-streams';
 import { layerOf } from '@systems/map-geometry';
-import { hasUsableTool, toolFilesOf, isUsableTool, integrityBand } from '@state/selectors';
+import { oneHopFromFinal } from '@systems/map-facts';
+import { hasUsableTool, toolFilesOf, isUsableTool, integrityBand, ghostBurstsThisPhase } from '@state/selectors';
+import { ghostWithoutSwap } from '@systems/capabilities';
 import { noWorkingRm } from '@state/threat-selectors';
 import {
   firstLateness, arrivedYear, forwardLateness, receiverYear, earliestCatchUp, receiverClosed, deliveryForecast,
@@ -61,23 +63,68 @@ export function deliveryFiles(chips: readonly DeliveryChip[], memory: readonly S
   return deliveryFileGroups(chips, memory, makeId).flatMap((group) => group.segs);
 }
 
-// ARRIVAL CONTROL's recommendation for this desk (02 §3.8, first rule that matches): the run's first desk → Mv; no Rm →
-// Rm; a reachable ship within REPO_SWAP_LOOKAHEAD_LAYERS reports ENGINE FAULT and no Swap → Swap; one Repair copy or fewer
-// → Repair.bak; REPO_RECOMMEND_REPAIRS_MIN repairs this run and no v2 → REPAIR v2; else none. A request in transit or
-// waiting counts as owned (plan risk 4). null: none (`You have everything you need :)`), and on the classic world.
-// "Has" is a working copy (usable and not being eaten: what will still be there at the next ship), as noWorkingRm judges.
-// Rule 1 asks for Mv only while the unit has no MOVE (only ?debug's give can bring one before the first desk).
+// ARRIVAL CONTROL's recommendation for this desk (02 §3.8, first rule that matches; need only, never the ETA). The order is
+// data (RECOMMEND_RULES, as licences.ts's LicenceRule). "Has" is a working copy (usable and not being eaten: what will
+// still be there at the next ship, as noWorkingRm judges) or a request in transit or waiting (plan risk 4). null: none
+// (`You have everything you need :)`), on the classic world, and when nothing sent now can reach the unit before its run
+// ends (review M3: a tag on a file that will never arrive; the window says `Nothing can reach you in time now`).
+interface RecommendRule {
+  file: RepoFileId;
+  due(state: Readonly<GameState>): boolean;
+}
+
+// Slice 3b review (item 1): the Swap rule's first-desk form is for runs 2+ (a fresh roll); run 1's first desk keeps its
+// authored Mv (the welcome says mv, 02 §3.14). Ship 1 has never yet been left, so the first desk is shipIndex 0.
+const firstDesk = (state: Readonly<GameState>): boolean => state.run.shipIndex === 0;
+const swapDue = (state: Readonly<GameState>): boolean => !hasOrComing(state, 'swap', 'swap') && engineFaultAhead(state);
+
+export const RECOMMEND_RULES: readonly RecommendRule[] = [
+  // 1. Runs 2+: the first desk asks for Swap when an ENGINE FAULT ship lies within reach (the review: following the tag,
+  //    81% of ENGINE FAULT ships were reached without Swap, Mv having taken the first desk's request).
+  { file: 'swap', due: (state) => firstDesk(state) && state.run.map.run > 1 && swapDue(state) },
+  // 2. The first desk: Mv (only ?debug's give can bring MOVE before it).
+  { file: 'mv', due: (state) => firstDesk(state) && !hasOrComing(state, 'move', 'mv') },
+  // 3. No Rm.
+  { file: 'rm', due: (state) => !hasOrComing(state, 'delete', 'rm') },
+  // 4. An ENGINE FAULT ship the unit can reach lies within REPO_SWAP_LOOKAHEAD_LAYERS and no Swap.
+  { file: 'swap', due: swapDue },
+  // 5. No Mv and none coming (review M2: Mv was tagged only at the first desk, so a run whose first request went to Swap,
+  //    or whose Mv was eaten, never heard of it again; debris ships need it).
+  { file: 'mv', due: (state) => !hasOrComing(state, 'move', 'mv') },
+  // 6. One Repair copy or fewer.
+  { file: 'repair-bak', due: (state) => workingCopies(state, 'repair') + (inFlight(state, 'repair-bak') ? 1 : 0) <= 1 },
+  // 7. HOLLOW is aboard, or boards on a ship within the look-ahead, and no Cp (review M2: COPY's lesson, `… IS HUNTING
+  //    YOUR TOOLS — COPY your Repair`, was silent on the arm: Cp was never tagged).
+  { file: 'cp', due: (state) => !hasOrComing(state, 'copy', 'cp') && hollowAhead(state) },
+  // 8. REPO_RECOMMEND_REPAIRS_MIN repairs this run and no v2.
+  {
+    file: 'repair-v2',
+    due: (state) => state.run.stats.repairs >= REPO_RECOMMEND_REPAIRS_MIN && !inFlight(state, 'repair-v2')
+      && !state.memory.some((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair' && seg.version >= REPAIR_V2_VERSION),
+  },
+];
+
 export function recommendation(state: Readonly<GameState>): RepoFileId | null {
-  const run = state.run;
-  if (run.map.world !== 'arm') return null;
-  if (run.shipIndex === 0 && !hasOrComing(state, 'move', 'mv')) return 'mv';
-  if (!hasOrComing(state, 'delete', 'rm')) return 'rm';
-  if (!hasOrComing(state, 'swap', 'swap') && engineFaultAhead(state)) return 'swap';
-  const repairs = toolFilesOf(state.memory, 'repair').filter((seg) => isUsableTool(seg) && seg.infected === undefined).length;
-  if (repairs + (inFlight(state, 'repair-bak') ? 1 : 0) <= 1) return 'repair-bak';
-  const v2 = state.memory.some((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair' && seg.version >= REPAIR_V2_VERSION);
-  if (run.stats.repairs >= REPO_RECOMMEND_REPAIRS_MIN && !v2 && !inFlight(state, 'repair-v2')) return 'repair-v2';
-  return null;
+  if (state.run.map.world !== 'arm' || nothingArrives(state)) return null;
+  return RECOMMEND_RULES.find((rule) => rule.due(state))?.file ?? null;
+}
+
+// What the first desk of a run on `map` recommends while the unit has none of the files (the welcome names it, so the two
+// never disagree: inbox.ts): Swap on runs 2+ with an ENGINE FAULT ship in reach of ship 1, else Mv.
+export function firstDeskRecommendation(map: Readonly<RunMapState>): RepoFileId {
+  if (map.world !== 'arm') throw new Error('firstDeskRecommendation: there is no repository on the classic route');
+  return map.run > 1 && shipAhead(map, map.route[0]!.slot, REPO_SWAP_LOOKAHEAD_LAYERS, engineFaultAt) ? 'swap' : 'mv';
+}
+
+// Review M3: nothing sent from this desk reaches the unit in time on any route (every reachable destination's forecast is
+// NEVER: the run's last hops, where no slack is left). The forecast is the same for every file (it is the years), so the
+// tag would point at a file that will never arrive.
+export function nothingArrives(state: Readonly<GameState>): boolean {
+  const map = state.run.map;
+  if (map.world !== 'arm') return false;
+  const from = currentSlot(state.run);
+  const destinations = isEndSlot(map, from) ? [] : reachableFrom(map, from);
+  return destinations.length > 0 && destinations.every((to) => deliveryForecast(map, from, to).kind === 'never');
 }
 
 // A request for `file` still on its way (in transit, or waiting in a receiver): plan risk 4 counts it as owned. The pick
@@ -90,13 +137,14 @@ function hasOrComing(state: Readonly<GameState>, kind: FsToolKind, file: RepoFil
   return hasUsableTool(state.memory, kind, 'excluded') || inFlight(state, file);
 }
 
-// 02 §3.8's rule 3: some ship the unit can still reach, by any route, at most REPO_SWAP_LOOKAHEAD_LAYERS layers out from
-// the current one, reports ENGINE FAULT (its KNOWN PROBLEMS: the ship's modifiers). Reach is the map's (in range and in
-// time), hop by hop outward; a final ship ends a route.
-function engineFaultAhead(state: Readonly<GameState>): boolean {
-  const map = state.run.map;
-  const from = currentSlot(state.run);
-  const limit = layerOf(worldSlotOf(map, from)) + REPO_SWAP_LOOKAHEAD_LAYERS;
+function workingCopies(state: Readonly<GameState>, kind: FsToolKind): number {
+  return toolFilesOf(state.memory, kind).filter((seg) => isUsableTool(seg) && seg.infected === undefined).length;
+}
+
+// Some ship the unit can still reach from `from`, by any route, at most `layers` layers further out, passes `test`. Reach
+// is the map's (in range and in time), hop by hop outward; a final ship ends a route.
+function shipAhead(map: Readonly<RunMapState>, from: number, layers: number, test: (map: Readonly<RunMapState>, slot: number) => boolean): boolean {
+  const limit = layerOf(worldSlotOf(map, from)) + layers;
   const seen = new Set<number>();
   let frontier = [from];
   while (frontier.length > 0) {
@@ -106,7 +154,7 @@ function engineFaultAhead(state: Readonly<GameState>): boolean {
       for (const to of reachableFrom(map, at)) {
         if (seen.has(to) || layerOf(worldSlotOf(map, to)) > limit) continue;
         seen.add(to);
-        if (armShipAt(map, to).modifiers.includes('engine-fault')) return true;
+        if (test(map, to)) return true;
         next.push(to);
       }
     }
@@ -115,18 +163,33 @@ function engineFaultAhead(state: Readonly<GameState>): boolean {
   return false;
 }
 
+// The ship reports ENGINE FAULT (its KNOWN PROBLEMS: the ship's modifiers).
+function engineFaultAt(map: Readonly<RunMapState>, slot: number): boolean {
+  return armShipAt(map, slot).modifiers.includes('engine-fault');
+}
+
+// 02 §3.8's Swap rule: an ENGINE FAULT ship within REPO_SWAP_LOOKAHEAD_LAYERS of the current one.
+function engineFaultAhead(state: Readonly<GameState>): boolean {
+  return shipAhead(state.run.map, currentSlot(state.run), REPO_SWAP_LOOKAHEAD_LAYERS, engineFaultAt);
+}
+
+// HOLLOW is aboard now, or a ship within the look-ahead is where it boards (one hop from a final ship: M3's forced
+// boarding, map-facts.ts oneHopFromFinal) or fights (a final ship).
+function hollowAhead(state: Readonly<GameState>): boolean {
+  return state.run.threat.aboard
+    || shipAhead(state.run.map, currentSlot(state.run), REPO_SWAP_LOOKAHEAD_LAYERS, (map, slot) => isEndSlot(map, slot) || oneHopFromFinal(map, slot));
+}
+
 // --- The REPOSITORY window's model (02 §4; plan §1.1 item 4) ----------------------------------------------------------
 
-// An AVAILABLE row: the file, its ETA toward the selected destination (null with no destination selected), its tag, and
-// whether it is this desk's pick.
+// An AVAILABLE row: the file, its tag, and whether it is this desk's pick. The ETA is the window's, once above the list
+// (review m5: the years are the same for every file, so every row repeated it).
 export interface RepoRow {
   id: RepoFileId;
   name: string;
   blocks: number;
   effect: string;
   text: string;                       // `Mv · 2 BLOCKS · MOVE`
-  forecast: DeliveryForecast | null;
-  eta: string | null;                 // `ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME` / `4 YRS LATE → …` / NEVER
   recommended: boolean;
   requested: boolean;
   focus: boolean;                     // the last-rm prompt lights this row (04 §3.3)
@@ -156,7 +219,9 @@ export interface RepoModel {
   selected: number | null;            // the destination the ETAs are for (ui.deskSelected)
   pick: RepoFileId | null;
   recommended: RepoFileId | null;
-  recommendLine: string | null;       // `You have everything you need :)` when nothing is recommended
+  recommendLine: string | null;       // `You have everything you need :)` when nothing is recommended (`Nothing can reach you in time now`)
+  forecast: DeliveryForecast | null;  // toward the selected destination (null: none selected, or TOO LATE / OUT OF RANGE)
+  eta: string | null;                 // `ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME` / `4 YRS LATE → …` / NEVER
   available: RepoRow[];
   inTransit: RepoTransitRow[];
   restricted: RepoRestrictedRow[];
@@ -169,7 +234,7 @@ export function repoModel(state: Readonly<GameState>, selected: number | null): 
   const map = state.run.map;
   const pick = state.run.repo.pick;
   if (map.world !== 'arm') {
-    return { world: map.world, selected, pick, recommended: null, recommendLine: null, available: [], inTransit: [], restricted: [] };
+    return { world: map.world, selected, pick, recommended: null, recommendLine: null, forecast: null, eta: null, available: [], inTransit: [], restricted: [] };
   }
   const from = currentSlot(state.run);
   const recommended = recommendation(state);
@@ -181,7 +246,6 @@ export function repoModel(state: Readonly<GameState>, selected: number | null): 
     const def = REPO_FILES[id];
     return {
       id, name: def.name, blocks: def.blocks, effect: def.effect, text: REPO_TEXT.row(def.name, def.blocks, def.effect),
-      forecast, eta: forecast === null || targetName === null ? null : etaText(forecast, targetName),
       recommended: recommended === id, requested: pick === id, focus: focus && id === 'rm',
     };
   });
@@ -202,8 +266,9 @@ export function repoModel(state: Readonly<GameState>, selected: number | null): 
   });
   const restricted = RESTRICTED_ROWS.map((row): RepoRestrictedRow => ({ id: row.id, name: row.name, why: row.why }));
   return {
-    world: map.world, selected, pick, recommended, recommendLine: recommended === null ? REPO_TEXT.window.nothingToRecommend : null,
-    available, inTransit, restricted,
+    world: map.world, selected, pick, recommended,
+    recommendLine: recommended !== null ? null : nothingArrives(state) ? REPO_TEXT.window.nothingCanReach : REPO_TEXT.window.nothingToRecommend,
+    forecast, eta: forecast === null || targetName === null ? null : etaText(forecast, targetName), available, inTransit, restricted,
   };
 }
 
@@ -414,11 +479,10 @@ export function patchInstalls(arrival: Readonly<Pick<ArrivalReport, 'hits'>>, de
   });
 }
 
-// The strip's no-Swap line's moment (plan risk 1; UI's words, REPO_TEXT.noSwap): an uncommanded burst is running on an ENGINE
-// FAULT ship of the arm and the unit has no working Swap (the cure is a repository request; on the classic world SWAP
-// still arrives with the first burst, so never there).
+// The strip's no-Swap line's moment (plan risk 1; slice 3b review item 1): the engine has fired by itself on this ship (in
+// this phase) and keeps firing with no Swap aboard to stop it (capabilities ghostWithoutSwap: the arm only, so never on the
+// classic world, where SWAP arrives with the first burst). Not only while a burst runs: a burst lasts a third of a second
+// at CRUISE, too short for the strip ever to show the line (the review: it never won the strip).
 export function noSwapForGhost(state: Readonly<GameState>): boolean {
-  const map = state.run.map;
-  if (map.world !== 'arm' || state.burn.ghost === null) return false;
-  return armShipAt(map, currentSlot(state.run)).modifiers.includes('engine-fault') && !hasUsableTool(state.memory, 'swap', 'excluded');
+  return ghostBurstsThisPhase(state) > 0 && ghostWithoutSwap(state);
 }
