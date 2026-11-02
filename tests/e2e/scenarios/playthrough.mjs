@@ -349,7 +349,11 @@ for (const [index, name] of SHIPS.entries()) {
   const errorsBefore = errors.length;
   // Slice 2: what the kid met of HOLLOW and TRACE on this ship (from its boot on: its TERMINAL lines, its blocks in memory,
   // what it bit, the TRACE meter), noted on every poll of the flight and the landing.
-  await st(() => { window.__e2eLogFrom = Math.max(-1, ...window.__ap.log().map((entry) => entry.id)); });
+  // From the TRANSMIT ▸ that brought the unit here (set at the send: the boot may be well along when this loop comes round).
+  await st(() => {
+    window.__e2eLogFrom = window.__e2eNextLogFrom ?? Math.max(-1, ...window.__ap.log().map((entry) => entry.id));
+    window.__e2eNextLogFrom = undefined;
+  });
   const met = { maxSegs: 0, lines: [], trace: new Set(), bitten: new Set(), firstBiteMs: null, firstLineMs: null, ghostBursts: 0, ghostSpec: false };
   const note = (seen) => {
     met.ghostBursts = Math.max(met.ghostBursts, seen.ghostBursts);
@@ -786,8 +790,19 @@ for (const [index, name] of SHIPS.entries()) {
     }
     await shot(`${index + 1}f-transmit`);
     check(`${tag}: …[1] picks the first card`, (await runScreens.pickCard(0)) !== null);
+    // The white-out is about a second long: watched in the page (every 30 ms), not by polls that load can space out.
+    await st(() => {
+      window.__e2eNextLogFrom = Math.max(-1, ...window.__ap.log().map((entry) => entry.id));
+      window.__e2eWhite = 0;
+      clearInterval(window.__e2eWhiteTimer);
+      window.__e2eWhiteTimer = setInterval(() => {
+        const el = document.getElementById('whiteOut');
+        if (!el.hidden) window.__e2eWhite = Math.max(window.__e2eWhite, Number(getComputedStyle(el).opacity));
+      }, 30);
+    });
     await page.locator('#txGo').click({ timeout: 10000 });
-    const white = await waitFor(() => { const el = document.getElementById('whiteOut'); return !el.hidden && Number(getComputedStyle(el).opacity) > 0.5; }, 15000, 50);
+    const white = await waitFor(() => window.__e2eWhite > 0.5, 15000, 100);
+    await st(() => clearInterval(window.__e2eWhiteTimer));
     check(`${tag}: TRANSMIT ▸ sends, the screen floods white`, white);
   } else {
     check(`${tag}: CONTINUE on the last ship ends the run`, afterReport === 'end', afterReport);
