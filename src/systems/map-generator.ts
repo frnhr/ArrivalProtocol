@@ -151,7 +151,7 @@ export interface ArmProblem {
 
 // What the checks and the reservations read of a ship: its slot, kind, class and year. The generator's trial arms are
 // these (the details roll only once the arm passes).
-type Timed = Pick<ArmShip, 'slot' | 'kind' | 'memoryClass' | 'approachYear'>;
+export type Timed = Pick<ArmShip, 'slot' | 'kind' | 'memoryClass' | 'approachYear'>;
 
 // Can a ship beam from `a` to `b` (02 §3.1)? systems/map-geometry.ts beamReaches, the map's one rule (systems/map-hop.ts
 // reachable reads it too), on a bare arm, so the generator needs no RunMapState.
@@ -276,54 +276,76 @@ export function rollShipDetails(
 
 const NO_RESERVATIONS = (): Reservations => ({ resident: null, unknownEvent: null, fragments: 0, site: 'good', tracePlace: null });
 
-interface Placement {
+export interface Placement {
   reserved: Reservations[];   // by slot
   corrupted: number[];        // their slots (CAPTURE, no extras)
 }
 
 // What a caller already placed (run 1's table: the corrupted residents on GANNET and PROVIDENCE, the sleeper on CURLEW).
-interface PlacedResident {
+export interface PlacedResident {
   slot: number;
   resident: Omit<NonNullable<Reservations['resident']>, 'name'> & { name: string | null };
 }
 
-// 02 §3.5's quotas on a timed arm, each from its own stream (armRng):
+// 02 §3.5's quotas on a timed arm, each from its own stream (armRng), counting what the ships already on the chart hold
+// (`held`: a waiting ship's reservations, null for a new slot; 02 §3.5 "each run's quotas count the ships still waiting,
+// and only new ships are given what is missing"). A fresh roll and run 1 have no held ship, so they place everything:
 // • corrupted residents ('res-corrupted'): at most two, one in layers 4–5 (`reported faulty`) and one in layers 6–7, never
 //   adjacent layers, never linked by a reachable hop, never an ark; the late one reads `unknown` 1 time in 2, and a hidden
-//   one is never TIGHT;
+//   one is never TIGHT; the late one only beside an early one (waiting or new);
 // • the three `?` ships ('unknown-events'): old colony (layers 3–5), gone resident (3–6), signal (5–7), in three different
 //   layers;
-// • a sleeper ('res-sleeper'): at most one, layers 3–7, with chance SLEEPER_CHANCE when the caller placed none;
+// • a sleeper ('res-sleeper'): at most one, layers 3–7, with chance SLEEPER_CHANCE when none is placed or waiting (a kept
+//   sleeper means no new roll);
 // • residents that left ('res-left'): five, the gone-resident `?` ship and four ordinary ships (one in layer 2, two in
 //   layers 3–7 for the fragments' notes, one anywhere in 2–7);
 // • fragments ('fragments'): 2 on the signal ship, 1 on the gone-resident ship, 1 in each of two departed residents' notes
 //   in layers 3–7.
-// Never on the first ship, a final ship or an authored ship (VESPER never carries a resident); one resident per ship.
-// Names: corrupted and departed residents from the ship-AI pool, the sleeper from the sleepers', all different.
-function placeReservations(
-  arm: readonly Timed[], armSeed: number, run: number, attempt: number, authored: ReadonlySet<number>, placed: readonly PlacedResident[],
+// Only on a new slot, never on the first ship, a final ship or a closed slot (an authored ship: VESPER never carries a
+// resident); one resident per ship. Names: corrupted and departed residents from the ship-AI pool, the sleeper from the
+// sleepers', all different from each other and from the waiting ships' residents. A fresh roll that finds no slot for a
+// quota throws (its geometry always has one); a top-up skips it (the waiting ships may fill a layer: tests/unit/world's
+// update-stats counts the arms that miss a quota, INFO).
+export function topUpReservations(
+  arm: readonly Timed[], held: readonly (Reservations | null)[], armSeed: number, run: number, attempt: number,
+  closed: ReadonlySet<number> = new Set(), placed: readonly PlacedResident[] = [],
 ): Placement {
-  const reserved = arm.map(NO_RESERVATIONS);
+  if (held.length !== arm.length) throw new Error(`topUpReservations: ${held.length} holdings for an arm of ${arm.length}`);
+  const topUp = held.some((entry) => entry !== null);
+  const reserved = arm.map((ship) => (held[ship.slot] ? structuredClone(held[ship.slot]!) : NO_RESERVATIONS()));
   const rng = (stream: string): Rng => armRng(armSeed, run, attempt, stream);
-  const open = (slot: number): boolean => !END_SLOTS.includes(slot) && slot !== FIRST_SLOT && !authored.has(slot)
+  const open = (slot: number): boolean => held[slot] === null && !END_SLOTS.includes(slot) && slot !== FIRST_SLOT && !closed.has(slot)
     && reserved[slot]!.resident === null && reserved[slot]!.unknownEvent === null;
   const inLayers = (from: number, to: number): number[] => arm.map((ship) => ship.slot).filter((slot) => layerOf(slot) >= from && layerOf(slot) <= to);
+  // A fresh roll throws on an empty choice (pickFrom); a top-up leaves that quota open this run.
+  const choose = (r: Rng, slots: readonly number[], what: string): number | null => (topUp && slots.length === 0 ? null : pickFrom(r, slots, what));
+  const heldSlots = (test: (entry: Reservations) => boolean): number[] => arm.map((ship) => ship.slot).filter((slot) => held[slot] !== null && test(held[slot]!));
   const corrupted: number[] = [];
   for (const entry of placed) {
     reserved[entry.slot]!.resident = { ...entry.resident, name: entry.resident.name ?? '' };
     if (entry.resident.kind === 'corrupted') corrupted.push(entry.slot);
   }
-  // Corrupted residents (when the caller placed none).
+  // Corrupted residents (when the caller placed none; run 1 places both).
   if (!placed.some((entry) => entry.resident.kind === 'corrupted')) {
     const r = rng('res-corrupted');
-    const early = inLayers(4, 5).filter((slot) => open(slot) && arm[slot]!.kind !== 'ark');
-    if (early.length > 0) {
-      const first = pickFrom(r, early, 'early corrupted slot');
-      reserved[first]!.resident = { kind: 'corrupted', shown: 'faulty', name: '' };
-      corrupted.push(first);
+    const waiting = heldSlots((entry) => entry.resident?.kind === 'corrupted');
+    const earlyHeld = waiting.find((slot) => layerOf(slot) <= 5);
+    const lateHeld = waiting.find((slot) => layerOf(slot) >= 6);
+    const apart = (a: number, b: number): boolean => Math.abs(layerOf(a) - layerOf(b)) >= 2 && !armReach(arm, a, b) && !armReach(arm, b, a);
+    let anchor = earlyHeld ?? null;
+    if (earlyHeld === undefined) {
+      const early = inLayers(4, 5).filter((slot) => open(slot) && arm[slot]!.kind !== 'ark' && (lateHeld === undefined || apart(slot, lateHeld)));
+      if (early.length > 0) {
+        const first = pickFrom(r, early, 'early corrupted slot');
+        reserved[first]!.resident = { kind: 'corrupted', shown: 'faulty', name: '' };
+        corrupted.push(first);
+        anchor = first;
+      }
+    }
+    if (lateHeld === undefined && anchor !== null) {
       const hidden = r() < HIDDEN_RESIDENT_ODDS;
-      const late = inLayers(6, 7).filter((slot) => open(slot) && arm[slot]!.kind !== 'ark'
-        && Math.abs(layerOf(slot) - layerOf(first)) >= 2 && !armReach(arm, first, slot)
+      const from = anchor;
+      const late = inLayers(6, 7).filter((slot) => open(slot) && arm[slot]!.kind !== 'ark' && apart(from, slot)
         && !(hidden && arm[slot]!.memoryClass === 'TIGHT'));
       if (late.length > 0) {
         const second = pickFrom(r, late, 'late corrupted slot');
@@ -332,12 +354,14 @@ function placeReservations(
       }
     }
   }
-  // The `?` ships.
+  // The `?` ships: the kinds no waiting ship holds, in layers no waiting `?` ship is in.
   const u = rng('unknown-events');
-  const usedLayers: number[] = [];
-  const unknown = (kind: NonNullable<Reservations['unknownEvent']>, from: number, to: number): number => {
-    const slots = inLayers(from, to).filter((slot) => open(slot) && !usedLayers.includes(layerOf(slot)));
-    const slot = pickFrom(u, slots, `slot for the ${kind} event`);
+  const usedLayers: number[] = heldSlots((entry) => entry.unknownEvent !== null).map(layerOf);
+  const heldKinds = new Set(heldSlots((entry) => entry.unknownEvent !== null).map((slot) => held[slot]!.unknownEvent));
+  const unknown = (kind: NonNullable<Reservations['unknownEvent']>, from: number, to: number): number | null => {
+    if (heldKinds.has(kind)) return null;
+    const slot = choose(u, inLayers(from, to).filter((candidate) => open(candidate) && !usedLayers.includes(layerOf(candidate))), `slot for the ${kind} event`);
+    if (slot === null) return null;
     reserved[slot]!.unknownEvent = kind;
     usedLayers.push(layerOf(slot));
     return slot;
@@ -345,30 +369,36 @@ function placeReservations(
   const signal = unknown('signal', 5, 7);
   unknown('old-colony', 3, 5);
   const gone = unknown('gone-resident', 3, 6);
-  reserved[gone]!.resident = { kind: 'left', shown: 'unknown', name: '' };
+  if (gone !== null) reserved[gone]!.resident = { kind: 'left', shown: 'unknown', name: '' };
   // The sleeper.
   const s = rng('res-sleeper');
   const chance = s();
-  if (!placed.some((entry) => entry.resident.kind === 'sleeping') && chance < SLEEPER_CHANCE) {
-    const slot = pickFrom(s, inLayers(3, 7).filter(open), 'sleeper slot');
-    reserved[slot]!.resident = { kind: 'sleeping', shown: 'unknown', name: '' };
+  const sleeping = placed.some((entry) => entry.resident.kind === 'sleeping') || heldSlots((entry) => entry.resident?.kind === 'sleeping').length > 0;
+  if (!sleeping && chance < SLEEPER_CHANCE) {
+    const slot = choose(s, inLayers(3, 7).filter(open), 'sleeper slot');
+    if (slot !== null) reserved[slot]!.resident = { kind: 'sleeping', shown: 'unknown', name: '' };
   }
-  // The residents that left.
+  // The residents that left: the ordinary ones the waiting ships hold count toward the four (one in layer 2, two notes).
   const l = rng('res-left');
+  const ordinary = heldSlots((entry) => entry.resident?.kind === 'left' && entry.unknownEvent !== 'gone-resident');
   const leftNotes: number[] = [];
-  const leave = (from: number, to: number): number => {
-    const slot = pickFrom(l, inLayers(from, to).filter(open), `slot for a departed resident (layers ${from}–${to})`);
-    reserved[slot]!.resident = { kind: 'left', shown: 'unknown', name: '' };
+  const leave = (from: number, to: number): number | null => {
+    const slot = choose(l, inLayers(from, to).filter(open), `slot for a departed resident (layers ${from}–${to})`);
+    if (slot !== null) reserved[slot]!.resident = { kind: 'left', shown: 'unknown', name: '' };
     return slot;
   };
-  leave(2, 2);
-  leftNotes.push(leave(3, 7), leave(3, 7));
-  leave(2, 7);
+  let placedLeft = 0;
+  if (!ordinary.some((slot) => layerOf(slot) === 2) && leave(2, 2) !== null) placedLeft++;
+  for (let notes = ordinary.filter((slot) => layerOf(slot) >= 3 && held[slot]!.fragments === 1).length; notes < 2; notes++) {
+    const slot = leave(3, 7);
+    if (slot !== null) { leftNotes.push(slot); placedLeft++; }
+  }
+  for (let total = ordinary.length + placedLeft; total < 4; total++) leave(2, 7);
   // Fragments.
   const f = rng('fragments');
   void f();
-  reserved[signal]!.fragments = 2;
-  reserved[gone]!.fragments = 1;
+  if (signal !== null) reserved[signal]!.fragments = 2;
+  if (gone !== null) reserved[gone]!.fragments = 1;
   for (const slot of leftNotes) reserved[slot]!.fragments = 1;
   // Names, all different: the ship-AI pool for corrupted and departed residents, the sleepers' pool for the sleeper.
   const n = rng('res-names');
@@ -385,7 +415,7 @@ function placeReservations(
 
 // --- Building the arm ----------------------------------------------------------------------------------------------------
 
-interface ShipFrame extends Timed {
+export interface ShipFrame extends Timed {
   name: string;
   late: boolean;
   pods: number;
@@ -416,55 +446,108 @@ function writtenRow(kind: ShipKind, authoredId: ArmShip['authored']): AuthoredOv
   return row;
 }
 
-// The details, the Debris guarantee and the loud self-check, on a timed arm whose reservations are placed. The Debris
-// guarantee (04 §3.2's recommendation, slice-3a-plan §1.3): at least one DEBRIS ship among the layer-3 ships reachable from
-// the first ship (KESTREL on run 1), so the depth-2 hop always offers MOVE's first job; when none rolled one, one of them
-// (a light or standard ship first, an ark only when none other qualifies; never authored) re-rolls as WIDE-B with DEBRIS.
+// The details, the Debris guarantee and the loud self-check, on a timed arm whose reservations are placed. `waiting[slot]`:
+// a ship already on the chart (3c's world update), kept exactly as it is (its key is null); only the other slots roll. The
+// Debris guarantee (04 §3.2's recommendation, slice-3a-plan §1.3): at least one DEBRIS ship among the layer-3 ships
+// reachable from the first ship (KESTREL on run 1), so the depth-2 hop always offers MOVE's first job; when none has one,
+// one of them (a new light or standard ship first, a new ark only when none other qualifies; never authored, never a
+// waiting ship: 3c plan risk 4) re-rolls as WIDE-B with DEBRIS. A fresh roll always has such a ship (it throws otherwise);
+// an update whose reachable layer-3 ships all wait may have none (tests/unit/world's update-stats measures it, INFO).
 function detailArm(
-  frames: readonly ShipFrame[], keys: readonly ShipKey[], start: number, placement: Placement, run1Rows: readonly Run1Row[] | null,
-  guarantee: Rng,
+  frames: readonly ShipFrame[], keys: readonly (ShipKey | null)[], start: number, placement: Placement, run1Rows: readonly Run1Row[] | null,
+  guarantee: Rng, waiting: readonly (ArmShip | null)[] = [],
 ): ArmShip[] {
+  const isNew = (slot: number): boolean => (waiting[slot] ?? null) === null;
+  const keyAt = (slot: number): ShipKey => {
+    const key = keys[slot];
+    if (!key) throw new Error(`detailArm: new slot ${slot} has no ShipKey`);
+    return key;
+  };
   const detailsFor = (slot: number, extra: FixedDetails = {}): ShipDetails => {
     const frame = frames[slot]!;
     const row = run1Rows?.[slot] ?? null;
     const authored = frame.authored !== null ? structuredClone(RUN1_AUTHORED[frame.authored]) as AuthoredOverride : writtenRow(frame.kind, null);
     const corrupted = placement.corrupted.includes(slot);
     const template = extra.template ?? row?.template ?? (corrupted ? 'capture' : frame.kind === 'first' ? 'impact-a' : frame.kind === 'final' ? 'impact-b' : undefined);
-    return rollShipDetails(keys[slot]!, frame.kind, layerOf(slot), {
+    return rollShipDetails(keyAt(slot), frame.kind, layerOf(slot), {
       slot, pods: frame.pods, memoryClass: frame.memoryClass, noExtras: corrupted, ...extra, ...(template ? { template } : {}),
     }, authored);
   };
-  const details = frames.map((frame) => detailsFor(frame.slot));
+  const details = frames.map((frame) => (isNew(frame.slot) ? detailsFor(frame.slot) : null));
+  const modifiersAt = (slot: number): readonly ModifierId[] => details[slot]?.modifiers ?? waiting[slot]!.modifiers;
   const reachableL3 = slotsInLayer(3).filter((slot) => armReach(frames, FIRST_SLOT, slot));
-  if (!reachableL3.some((slot) => details[slot]!.modifiers.includes('debris'))) {
-    const open = reachableL3.filter((slot) => frames[slot]!.authored === null);
+  if (!reachableL3.some((slot) => modifiersAt(slot).includes('debris'))) {
+    const open = reachableL3.filter((slot) => isNew(slot) && frames[slot]!.authored === null);
     const small = open.filter((slot) => frames[slot]!.kind !== 'ark');
-    const slot = pickFrom(guarantee, small.length > 0 ? small : open, 'ship for the Debris guarantee');
-    details[slot] = detailsFor(slot, { template: 'wide-b', extras: ['debris'] });
+    if (open.length > 0 || waiting.every((ship) => ship === null)) {
+      const slot = pickFrom(guarantee, small.length > 0 ? small : open, 'ship for the Debris guarantee');
+      details[slot] = detailsFor(slot, { template: 'wide-b', extras: ['debris'] });
+    }
   }
-  const arm = frames.map((frame) => buildShip(frame, keys[frame.slot]!, start, details[frame.slot]!, placement.reserved[frame.slot]!));
-  for (const ship of arm) validateShipDef(shipDefOf(ship));
-  return arm;
+  return frames.map((frame) => {
+    const kept = waiting[frame.slot] ?? null;
+    if (kept !== null) return kept;
+    const ship = buildShip(frame, keyAt(frame.slot), start, details[frame.slot]!, placement.reserved[frame.slot]!);
+    validateShipDef(shipDefOf(ship));
+    return ship;
+  });
 }
 
-// A fresh roll (run ≥ 2 in 3a, risk 4; 3c's fresh arm): layer bases from `start`, the ark pattern, kinds by LIGHT_SHARE (at
-// most MAX_LATE_TIGHT_PER_LAYER light ships per layer from LATE_TIGHT_FROM_LAYER), timing from each ship's key, arks from
-// their real neighbours, the final year, the checks; at most GEN_MAX_ATTEMPTS attempts (the attempt is part of every key, so
-// a retry re-rolls), then a throw. Then the reservations, the details, the Debris guarantee and the self-check. The first
-// ship is ARES-(VI + run) and the final ship finalShipName(run) (interim, risk 4: 3c's world update names them).
-export function freshArm(armSeed: number, run: number, start: number): ArmShip[] {
+// A timed arm made into ships (3c's world update, and §3.14's fixture that checks it): the waiting ships kept as they are
+// (`waiting[slot]`, its runsOnChart already advanced by the caller), and the new ones (`keyOf(slot)`) given what the
+// waiting ships leave of 02 §3.5's quotas (topUpReservations), their details, the Debris guarantee and the self-check. The
+// reservation and guarantee streams are the arm's own (armRng) for (armSeed, run, attempt).
+export function shipsFromFrames(
+  frames: readonly ShipFrame[], waiting: readonly (ArmShip | null)[], keyOf: (slot: number) => ShipKey, start: number,
+  armSeed: number, run: number, attempt: number,
+): ArmShip[] {
+  if (frames.length !== WORLDS.length || waiting.length !== WORLDS.length) throw new Error(`shipsFromFrames: ${frames.length} frames, ${waiting.length} waiting`);
+  const held = frames.map((frame) => waiting[frame.slot]?.reserved ?? null);
+  const closed = new Set(frames.filter((frame) => frame.authored !== null).map((frame) => frame.slot));
+  const placement = topUpReservations(frames, held, armSeed, run, attempt, closed);
+  const keys = frames.map((frame) => (waiting[frame.slot] ? null : keyOf(frame.slot)));
+  return detailArm(frames, keys, start, placement, null, armRng(armSeed, run, attempt, 'debris-guarantee'), waiting);
+}
+
+// The best route's pods on a timed arm (02 §3.12 step 6's score, the sim's `max(p for _, p in routes(arm))`): the heaviest
+// chain of reachable hops from the first ship to a final ship, by a walk from the end (no route enumeration: 3c's
+// statistics score 12,000 arms). Throws when no route exists (checks 1 and 4 guarantee one on a valid arm).
+export function bestRoutePods(arm: readonly (Timed & Pick<ArmShip, 'pods'>)[]): number {
+  const best = new Map<number, number>();
+  for (const ship of [...arm].sort((a, b) => layerOf(b.slot) - layerOf(a.slot))) {
+    if (END_SLOTS.includes(ship.slot)) { best.set(ship.slot, ship.pods); continue; }
+    let on = -Infinity;
+    for (const [to, pods] of best) if (armReach(arm, ship.slot, to)) on = Math.max(on, pods);
+    best.set(ship.slot, on + ship.pods);
+  }
+  const pods = best.get(FIRST_SLOT) ?? -Infinity;
+  if (!Number.isFinite(pods)) throw new Error('bestRoutePods: no route from the first ship to a final ship');
+  return pods;
+}
+
+// A fresh roll (run ≥ 2 in 3a, risk 4; 3c's content reset and the suites' runs ≥ 2 without an archive): layer bases from
+// `start`, the ark pattern, kinds by LIGHT_SHARE (at most MAX_LATE_TIGHT_PER_LAYER light ships per layer from
+// LATE_TIGHT_FROM_LAYER), timing from each ship's key, arks from their real neighbours, the final year (at least
+// `finalFloor`: 02 §3.4's floor, the last final year plus the gap), the checks; at most GEN_MAX_ATTEMPTS attempts (the
+// attempt is part of every key, so a retry re-rolls), then a throw. Then the reservations, the details, the Debris guarantee
+// and the self-check. The first ship is ARES-(VI + run); the final ship `names.final` (3c: by serial, map-update.ts
+// freshArmState), else finalShipName(run) (3a's interim).
+export function freshArm(armSeed: number, run: number, start: number, names: { final?: string } = {}, finalFloor: number | null = null): ArmShip[] {
   if (!(Number.isInteger(run) && run >= 2)) throw new Error(`freshArm: run ${run} (run 1's arm is assembleRun1Arm's)`);
-  return freshArmAttempts(armSeed, run, start).arm;
+  return freshArmAttempts(armSeed, run, start, names, finalFloor).arm;
 }
 
 // freshArm with the attempt that passed (tests/unit/map/generator-stats: 02 §4.5's "valid first try").
-export function freshArmAttempts(armSeed: number, run: number, start: number): { arm: ArmShip[]; attempt: number } {
+export function freshArmAttempts(
+  armSeed: number, run: number, start: number, names: { final?: string } = {}, finalFloor: number | null = null,
+): { arm: ArmShip[]; attempt: number } {
   const base = bases(start);
+  const finalName = names.final ?? finalShipName(run);
   for (let attempt = 0; attempt < GEN_MAX_ATTEMPTS; attempt++) {
     const keyOf = (slot: number): ShipKey => ({ armSeed: armSeed >>> 0, reportedRun: run, slot, attempt });
     const pattern = pickFrom(armRng(armSeed, run, attempt, 'pattern'), ARK_PATTERNS, 'ark pattern');
     const kinds = armRng(armSeed, run, attempt, 'kinds');
-    const names = armRng(armSeed, run, attempt, 'names');
+    const nameRng = armRng(armSeed, run, attempt, 'names');
     const pool = [...GENERATED_SHIP_NAMES];
     const frames: (ShipFrame | null)[] = WORLDS.map(() => null);
     frames[FIRST_SLOT] = {
@@ -484,7 +567,7 @@ export function freshArmAttempts(armSeed: number, run: number, start: number): {
         }
         if (kind === 'light') lights++;
         const pods = podsFor(kind, layer);
-        const name = pool.splice(Math.floor(names() * pool.length), 1)[0];
+        const name = pool.splice(Math.floor(nameRng() * pool.length), 1)[0];
         if (name === undefined) throw new Error('freshArm: the generated name pool ran out');
         const timing = kind === 'ark' ? { approachYear: 0, late: false } : rollTiming(keyOf(slot), base, layer);
         frames[slot] = { slot, kind, memoryClass: memoryClassOf(kind, pods), name, pods, authored: null, ...timing };
@@ -493,18 +576,18 @@ export function freshArmAttempts(armSeed: number, run: number, start: number): {
     }
     for (const end of END_SLOTS) {
       frames[end] = {
-        slot: end, kind: 'final', memoryClass: memoryClassOf('final', FINAL_SHIP_PODS), approachYear: 0, name: finalShipName(run),
+        slot: end, kind: 'final', memoryClass: memoryClassOf('final', FINAL_SHIP_PODS), approachYear: 0, name: finalName,
         late: false, pods: FINAL_SHIP_PODS, authored: null,
       };
     }
-    for (const end of END_SLOTS) frames[end]!.approachYear = finalYear(frames, end);
+    for (const end of END_SLOTS) frames[end]!.approachYear = finalYear(frames, end, finalFloor);
     const timed = frames.map((frame, slot) => {
       if (frame === null) throw new Error(`freshArm: slot ${slot} left empty`);
       return frame;
     });
     if (armChecks(timed).length > 0) continue;
     const keys = timed.map((frame) => keyOf(frame.slot));
-    const placement = placeReservations(timed, armSeed, run, attempt, new Set(), []);
+    const placement = topUpReservations(timed, timed.map(() => null), armSeed, run, attempt);
     return { arm: detailArm(timed, keys, start, placement, null, armRng(armSeed, run, attempt, 'debris-guarantee')), attempt };
   }
   throw new Error(`freshArm: no valid arm in ${GEN_MAX_ATTEMPTS} attempts (seed ${armSeed >>> 0}, run ${run}, start ${start})`);
@@ -527,6 +610,6 @@ export function assembleRun1Arm(armSeed: number): ArmShip[] {
   const keys = frames.map((frame): ShipKey => ({ armSeed: armSeed >>> 0, reportedRun: 1, slot: frame.slot, attempt: 0 }));
   const placed: PlacedResident[] = RUN1_ROWS.flatMap((row) => (row.reserved.resident ? [{ slot: row.slot, resident: row.reserved.resident }] : []));
   const authoredSlots = new Set([...RUN1_ROWS.filter((row) => row.authored !== null || row.reserved.resident === null).map((row) => row.slot)]);
-  const placement = placeReservations(frames, armSeed, 1, 0, authoredSlots, placed);
+  const placement = topUpReservations(frames, frames.map(() => null), armSeed, 1, 0, authoredSlots, placed);
   return detailArm(frames, keys, RUN_START_YEAR, placement, RUN1_ROWS, armRng(armSeed, 1, 0, 'debris-guarantee'));
 }
