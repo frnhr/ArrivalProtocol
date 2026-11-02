@@ -1995,7 +1995,8 @@ export const RUN_SAVE_VERSION = 1;
 // (the title says once that an older archive was not carried over).
 export const META_STORAGE_KEY = 'arrival-protocol/meta/v2';
 export const META_V1_KEY = 'arrival-protocol/meta/v1';
-export const META_VERSION = 2;
+// 3 (Track SAVE): `mergeBonus` retired (plan risk 3); a version-2 record (the foundation's) migrates in place.
+export const META_VERSION = 3;
 // The save suites print a world point's size, INFO only, against this (3c plan risk 8: an estimated 150–250 KB, the log
 // the largest part; past it the lever is keeping only the last TERMINAL entries).
 export const SAVE_SIZE_INFO_BYTES = 400_000;

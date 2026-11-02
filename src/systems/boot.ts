@@ -268,8 +268,6 @@ function sayNextLine(store: Store<GameState>): void {
 
 export function receiveTransmission(store: Store<GameState>): boolean {
   if (store.getState().run.phase !== 'title') return false;
-  // The press is the gesture that unlocks audio.
-  hooks.onReceive?.();
   // ARCHIVE CORRUPT: the run plays without the archive (nothing is written over the bad record), and the
   // status says so from here on (the title's box, the footer's NO ARCHIVE, RUN END's line).
   if (store.getState().archive.status === 'corrupt') playWithoutArchive(store);
@@ -279,10 +277,19 @@ export function receiveTransmission(store: Store<GameState>): boolean {
   return true;
 }
 
-// The boot starts from the title (slice 3c, factored out of receiveTransmission): the boot's timers, blue, the unpause and
-// the beam's sound. `countRun`: RUN START for the archive (RECEIVE TRANSMISSION); false for a resumed run, which the archive
-// already counted (systems/run-save.ts resumeRun).
+// The press on the title that starts a run or resumes one is the gesture that unlocks audio (the browser lets a page start
+// sound only inside one): RECEIVE TRANSMISSION and a resumed boot through startBootFromTitle, a resumed desk or LANDING
+// REPORT directly (slice 3c review follow-up; systems/run-save.ts resumeRun). The hook is the page's (main.ts: unlockAudio);
+// a headless world has none.
+export function unlockAudioFromGesture(): void {
+  hooks.onReceive?.();
+}
+
+// The boot starts from the title (slice 3c, factored out of receiveTransmission): the audio unlocked, the boot's timers,
+// blue, the unpause and the beam's sound. `countRun`: RUN START for the archive (RECEIVE TRANSMISSION); false for a resumed
+// run, which the archive already counted (systems/run-save.ts resumeRun).
 export function startBootFromTitle(store: Store<GameState>, opts: { countRun: boolean }): void {
+  unlockAudioFromGesture();
   resetBootTimers();
   // The boot happens in blue. The title already is (createInitialState), so this is a no-op
   // unless something switched the screen behind the title card.

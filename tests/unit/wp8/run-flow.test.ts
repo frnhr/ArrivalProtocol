@@ -19,7 +19,7 @@ import { continueAfterLoss, continueAfterReport } from '../support/classic-flow'
 import { infectNow } from '@systems/hollow';
 import { setIntegrity } from '@state/actions';
 import {
-  openRunArchive, closeArchive, archiveLineage, parseMeta, type MetaStorage,
+  openRunArchive, closeArchive, archiveLineage, parseMeta, abandonActiveRun, type MetaStorage,
 } from '@systems/meta';
 import { driversInMemory, getAiCore } from '@state/selectors';
 import { ARES_RUN1_FAMILIES } from '@data/souls';
@@ -195,6 +195,8 @@ check('HOLLOW said nothing on ship 1, not even the ghost (no fight on a calm shi
 check('mid-run 2 the archive holds the run in progress (HALCYON)', stored().activeRun?.unit === 48 && stored().activeRun?.shipName === 'HALCYON');
 closeArchive();
 const reopened = openRunArchive(() => storage);
+// Slice 3c: the page's open sequence abandons the run in progress when no run save resumes it (the classic world never saves).
+abandonActiveRun();
 check('the next page load finds it left: lastUnit UNIT-048, abandoned at HALCYON, written back',
   reopened === 'ok' && stored().lastUnit?.number === 48 && stored().lastUnit?.cause === 'abandoned' && stored().lastUnit?.shipName === 'HALCYON'
     && stored().activeRun === null);

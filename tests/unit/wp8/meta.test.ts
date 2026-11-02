@@ -2,7 +2,7 @@
 // • a localStorage that throws (on reach, on read, on write) → unavailable / a failed save;
 // • corrupt JSON, and JSON without the archive's shape → corrupt (never a quiet default);
 // • a round trip preserves every field;
-// • a leftover activeRun → lastUnit 'abandoned' on the next load, written back by the page's open;
+// • a leftover activeRun is kept by the load (slice 3c), and abandoned by abandonActiveRun when no save resumes it;
 // plus the run accounting (RUN START runs + 1, a ship start keeps the run in progress up to date, RUN END the
 // last unit and the best SCORE), the lineage (UNIT-047 + runs on wave runs + 1), the causes RUN END maps to,
 // and the live half: an archive that goes OFFLINE mid-run keeps the game going, says so, and stops writing;
@@ -13,13 +13,14 @@ import { check, finish } from '../wp1/harness';
 import {
   loadMeta, saveMeta, parseMeta, freshMeta, recordRunStart, recordShipStart, recordRunEnd, lineageOf, lastCauseOf,
   openRunArchive, closeArchive, archiveLineage, archiveMeta, archiveRunStarted, archiveShipStarted, archiveRunEnded,
-  wipeArchive, playWithoutArchive, MetaCorrupt, recordTutorialDone, archiveTutorialDone, type Meta, type MetaStorage, type RunProgress,
+  wipeArchive, playWithoutArchive, MetaCorrupt, recordTutorialDone, archiveTutorialDone, abandonActiveRun, type Meta, type MetaStorage,
+  type RunProgress,
 } from '@systems/meta';
 import { on } from '@systems/events';
 import { createStore } from '@state/store';
 import { createInitialState } from '@state/initial';
 import type { GameState, RunEndCause } from '@state/schema';
-import { META_STORAGE_KEY, FIRST_UNIT_NUMBER } from '@data/tuning';
+import { META_STORAGE_KEY, META_VERSION, FIRST_UNIT_NUMBER } from '@data/tuning';
 
 // A Map-backed storage; `failOn` makes one operation throw (as a blocked or full localStorage does).
 function stub(initial: Record<string, string> = {}, failOn: Set<'get' | 'set' | 'remove' | 'reach'> = new Set()) {
@@ -60,7 +61,8 @@ const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
     ['a negative bestScore', { ...freshMeta(), bestScore: -5 }],
     ['an unknown cause', { ...freshMeta(), lastUnit: { number: 47, landed: 0, shipName: 'ARES-VII', cause: 'exploded', stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, skills: null } }],
     ['a lastUnit without stats', { ...freshMeta(), lastUnit: { number: 47, landed: 0, shipName: 'ARES-VII', cause: 'stayed', hollowUnits: [46], trail: null, skills: null } }],
-    ['mergeBonus missing', (() => { const meta: Record<string, unknown> = { ...freshMeta() }; delete meta.mergeBonus; return meta; })()],
+    // Slice 3c SAVE: mergeBonus retired (version 3); a version-3 record that still has it is a shape this build does not know.
+    ['mergeBonus at version 3', { ...freshMeta(), mergeBonus: false }],
     // WP8 fix round 1: an archive written before tutorialDone existed is corrupt, never read as "not done".
     ['tutorialDone missing', (() => { const meta: Record<string, unknown> = { ...freshMeta() }; delete meta.tutorialDone; return meta; })()],
     ['tutorialDone as text', { ...freshMeta(), tutorialDone: 'yes' }],
@@ -74,18 +76,18 @@ const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
   try { parseMeta('nope'); } catch (error) { thrown = error; }
   check('parseMeta throws MetaCorrupt (the load turns it into the status)', thrown instanceof MetaCorrupt);
   const empty = loadMeta(stub().provider);
-  check('nothing stored yet is a fresh archive, not a failure (a first run)', empty.ok && empty.meta.runs === 0 && empty.meta.lastUnit === null && !empty.recovered);
+  check('nothing stored yet is a fresh archive, not a failure (a first run)', empty.ok && empty.meta.runs === 0 && empty.meta.lastUnit === null && !empty.changed);
 }
 
 // --- A round trip preserves every field ----------------------------------------------------------------
 {
   const meta: Meta = {
-    version: 2, runs: 7, bestScore: 9123, endingsSeen: ['purge', 'merge'], mergeBonus: true, tutorialDone: true,
+    version: META_VERSION, runs: 7, bestScore: 9123, endingsSeen: ['purge', 'merge'], tutorialDone: true,
     activeRun: null,
     lastUnit: {
       number: 53, landed: 6200, shipName: 'VESPER', cause: 'overwritten', stats: { moves: 14, deletes: 3 }, hollowUnits: [51, 52], trail: null, skills: null,
     },
-    armSeed: 0, arm: null, colonies: [], routes: [], events: [], traces: [], notes: { olderArchive: false, armReset: false },
+    armSeed: 5, arm: null, colonies: [], routes: [], events: [], traces: [], notes: { olderArchive: false, armReset: false },
   };
   const store = stub();
   check('the round trip saves', saveMeta(store.provider, meta) === 'ok');
@@ -96,22 +98,23 @@ const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
   check('a saved run in progress parses (parseMeta keeps activeRun)', JSON.stringify(parseMeta(store.data.get(META_STORAGE_KEY)!)) === JSON.stringify(withRun));
 }
 
-// --- A leftover activeRun → abandoned on the next load ---------------------------------------------------
+// --- A leftover activeRun: abandoned only when no run save can resume it (slice 3c plan §2.2) -----------------------------
 {
   const started = recordRunStart(freshMeta(), progress(), 1_700_000_000_000);
   const onHalcyon = recordShipStart(started, progress({ shipName: 'HALCYON', landed: 2200, stats: { moves: 1, deletes: 0 } }));
   const store = stub();
   saveMeta(store.provider, onHalcyon);
   const loaded = loadMeta(store.provider);
-  check('a leftover activeRun is recorded as lastUnit "abandoned", where the unit was', loaded.ok && loaded.recovered
-    && loaded.meta.activeRun === null && loaded.meta.lastUnit?.cause === 'abandoned' && loaded.meta.lastUnit.number === 47
-    && loaded.meta.lastUnit.shipName === 'HALCYON' && loaded.meta.lastUnit.landed === 2200 && loaded.meta.runs === 1,
+  check('loading leaves a leftover activeRun as it is (slice 3c: the page\'s open sequence decides)', loaded.ok && !loaded.changed
+    && loaded.meta.activeRun?.shipName === 'HALCYON' && loaded.meta.lastUnit === null && loaded.meta.runs === 1,
     loaded.ok ? JSON.stringify(loaded.meta) : JSON.stringify(loaded));
-  // The page's open writes the recovery back, so a page closed again on the title does not lose it.
+  // The page's open finds no run save: the run is abandoned (abandonActiveRun), written at once.
   const opened = openRunArchive(store.provider);
+  abandonActiveRun();
   const stored = parseMeta(store.data.get(META_STORAGE_KEY)!);
-  check('…and the page\'s open writes it back at once (a reload on the title keeps it)', opened === 'ok'
-    && stored.activeRun === null && stored.lastUnit?.cause === 'abandoned');
+  check('…with no save to resume it, abandonActiveRun records it as lastUnit "abandoned", where the unit was, and writes it', opened === 'ok'
+    && stored.activeRun === null && stored.lastUnit?.cause === 'abandoned' && stored.lastUnit.number === 47 && stored.lastUnit.shipName === 'HALCYON'
+    && stored.lastUnit.landed === 2200 && stored.runs === 1, JSON.stringify(stored));
   check('…the next run is UNIT-048 on wave 2, and its HOLLOW is UNIT-047', archiveLineage().unitNumber === 48 && archiveLineage().wave === 2
     && JSON.stringify(archiveLineage().hollowUnits) === '[47]');
   closeArchive();
@@ -124,6 +127,7 @@ const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
   const store = stub();
   saveMeta(store.provider, recordRunStart(freshMeta(), progress(), 0));
   openRunArchive(store.provider);
+  abandonActiveRun();
   check('a run left before it locked an orbit or reached a second ship counts as a wave, but taught nothing',
     archiveLineage().unitNumber === 48 && archiveLineage().wave === 2 && archiveLineage().lastUnit?.cause === 'abandoned' && !archiveLineage().tutorialDone);
   closeArchive();
@@ -169,8 +173,8 @@ const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
   const worse = recordRunEnd(recordRunStart(ended, progress({ unit: 48 }), 0), { ...progress({ unit: 48 }), cause: 'stayed', score: 100 });
   check('a worse run keeps the best SCORE', worse.bestScore === 4101 && worse.runs === 2 && worse.lastUnit?.number === 48);
   const merged = recordRunEnd(worse, { ...progress({ unit: 49 }), cause: 'won-merge', score: 0 });
-  check('a MERGE is an ending seen and gives the bonus; a later run without it uses the bonus up', merged.endingsSeen.includes('merge') && merged.mergeBonus
-    && !recordRunEnd(merged, { ...progress({ unit: 50 }), cause: 'won-purge', score: 0 }).mergeBonus);
+  check('a MERGE is an ending seen; its next-run bonus is retired (slice 3c, risk 3: the lineage never carries it)', merged.endingsSeen.includes('merge')
+    && !lineageOf(merged).mergeBonus && !('mergeBonus' in merged));
   const lineage = lineageOf(ended);
   check('the lineage: UNIT-047 + runs on wave runs + 1', lineage.unitNumber === FIRST_UNIT_NUMBER + 1 && lineage.wave === 2 && lineage.lastUnit?.number === 47);
   // WP11: the fleet ends with the flagship, so RUN END's causes are §4.5's, kept one for one (WP7/WP8's interim

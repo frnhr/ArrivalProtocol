@@ -373,6 +373,15 @@ function merge(store: Store<GameState>): void {
   emit('finale-chosen', { choice: 'merge', restoredInPlace: inPlace.length, restoredHalf: half.length });
 }
 
+// ENDING CHOSEN's save (slice 3c, systems/save-write.ts writeEndingChosen): CONTROL's verdict, if still owed, is said now,
+// so the save's log has it (a resumed LANDING REPORT has no module state to say it from). The report has opened, so the
+// typed ending it waited for is over.
+export function sayOwedVerdict(): void {
+  if (verdictOwed === null) return;
+  say('control', verdictOwed, { critical: true });
+  verdictOwed = null;
+}
+
 // PURGE or MERGE (FinaleChoice's buttons). Returns the refusal when it can't be made (nothing changes then).
 export function chooseFinale(store: Store<GameState>, choice: FinaleChoice): string | null {
   const refusal = finaleChoiceRefusal(store.getState(), choice);

@@ -191,18 +191,20 @@ archiveRunStarted(h.store);
 continueAfterReport(h.store);
 check('RUN END: won-merge, the victory tone', state().run.phase === 'end' && state().run.endCause === 'won-merge' && runEndModel(state()).tone === 'victory',
   `${state().run.endCause} ${state().run.phase}`);
-check('…the archive keeps mergeBonus and endingsSeen [merge]', archiveMeta().mergeBonus && JSON.stringify(archiveMeta().endingsSeen) === '["merge"]'
+// Slice 3c SAVE (plan risk 3, decided): MERGE's next-run thread retires; archive v2 keeps no mergeBonus.
+check('…the archive keeps endingsSeen [merge] (and no mergeBonus: retired in 3c)', !('mergeBonus' in archiveMeta()) && JSON.stringify(archiveMeta().endingsSeen) === '["merge"]'
   && archiveMeta().lastUnit?.cause === 'won-merge', JSON.stringify(archiveMeta()));
 
-// The next run: the bonus.
+// The next run: no bonus any more (slice 3c, risk 3: the lineage gives false); the bonus itself is still built (a run
+// with run.mergeBonus set, as below, plays it) until slice 7 deletes it.
 startRun(h.store, 77, archiveLineage());
 h.step();
 {
   const core = state().memory.find((seg) => seg.type === 'core');
-  check(`the next run: its unit's Core has ${MERGE_BONUS_CORE_CAPACITY} threads, the screen keeps ${MERGE_CORRUPTION_FLOOR} for good`,
-    state().run.mergeBonus && core?.type === 'core' && core.capacity === MERGE_BONUS_CORE_CAPACITY && corruptionFloor(state()) === MERGE_CORRUPTION_FLOOR
-    && threadsTotal() === MERGE_BONUS_CORE_CAPACITY, `${core?.type === 'core' ? core.capacity : '?'} ${corruptionFloor(state())} ${threadsTotal()}`);
-  check('…while the Core itself reads healthy (the jerk dice roll on it, not on the floor)', selectCorruption(state()) === 0);
+  check(`the next run: no MERGE bonus (retired in 3c): its unit's Core has fewer than ${MERGE_BONUS_CORE_CAPACITY} threads, no shimmer floor ${MERGE_CORRUPTION_FLOOR}`,
+    !state().run.mergeBonus && core?.type === 'core' && core.capacity < MERGE_BONUS_CORE_CAPACITY && corruptionFloor(state()) !== MERGE_CORRUPTION_FLOOR,
+    `${core?.type === 'core' ? core.capacity : '?'} ${corruptionFloor(state())} ${threadsTotal()}`);
+  check('…and the Core reads healthy', selectCorruption(state()) === 0);
   check('…and HOLLOW is both of them now (UNIT-046·047)', JSON.stringify(state().run.hollowUnits) === '[46,47]', JSON.stringify(state().run.hollowUnits));
 }
 
@@ -229,8 +231,8 @@ while (state().run.phase === 'landing' && h.wall() < purgeEnd) h.step();
 check('…CONTROL said `… stand by for reassignment. :)` once the typed ending was over',
   state().log.entries.some((entry) => /stand by for reassignment\. :\)$/.test(entry.text)));
 continueAfterReport(h.store);
-check('…RUN END won-purge, victory; the archive adds purge and uses the bonus up', state().run.endCause === 'won-purge' && runEndModel(state()).tone === 'victory'
-  && JSON.stringify(archiveMeta().endingsSeen) === '["purge"]' && !archiveMeta().mergeBonus, JSON.stringify(archiveMeta()));
+check('…RUN END won-purge, victory; the archive adds purge (no mergeBonus kept: retired in 3c)', state().run.endCause === 'won-purge' && runEndModel(state()).tone === 'victory'
+  && JSON.stringify(archiveMeta().endingsSeen) === '["purge"]' && !('mergeBonus' in archiveMeta()), JSON.stringify(archiveMeta()));
 
 // --- UNRESOLVED ---------------------------------------------------------------------------------------------------------
 closeArchive();

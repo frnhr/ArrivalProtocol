@@ -4,15 +4,23 @@ import type { GameState, RunEndCause, RunStats, ArchiveStatus, RunState, ShipOut
 import type {
   LastCause, LastUnit, UnitStats, UnitTrail, TrailStop, TrailLost, ArmState, ColonyRecord, RouteRecord, NotableEvent, MapHistory,
 } from '@/types/lineage';
+import type { Visit } from '@/types/lineage';
 import type { StorageProvider } from '@systems/storage';
 import { runScore, runLanded } from '@systems/run-score';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { hollowUnitName, GHOST_LINE } from '@data/hollow-text';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import { AUTHORED_SHIP_NAMES, FINAL_SHIP_NAMES } from '@data/ship-names';
-import { trailOf, ghostPlaceReached, mapHistoryOf } from '@systems/lineage';
+import { shipDefOf, validateShipDef } from '@data/ships';
+import { trailOf, ghostPlaceReached, mapHistoryOf, coloniesOf, notableEvents } from '@systems/lineage';
+import { updateArm, updateAfterRun, armStateOfMap, armContent, freshArmState, type ArmUpdate } from '@systems/map-update';
+import { createRunMap } from '@systems/map-run';
 import {
-  META_STORAGE_KEY, META_VERSION, FIRST_UNIT_NUMBER, HOLLOW_NAME_MAX_UNITS,
+  ShapeError, rec, whole, name as nameCheck, nullable, checkArmShip, checkDepartures,
+} from '@systems/save-shape';
+import {
+  META_STORAGE_KEY, META_V1_KEY, META_VERSION, FIRST_UNIT_NUMBER, HOLLOW_NAME_MAX_UNITS, COLONY_HISTORY_MAX_PER_WORLD,
+  ROUTE_HISTORY_RUNS, NOTABLE_EVENTS_MAX,
 } from '@data/tuning';
 
 export type { LastCause, LastUnit, UnitStats } from '@/types/lineage';
@@ -29,9 +37,12 @@ export { ghostShipIndex, ghostPlaceReached } from '@systems/lineage';
 //
 // • Run accounting: RECEIVE TRANSMISSION on a run's title is RUN START (archiveRunStarted): runs + 1, and
 //   activeRun is set. Each later ship's start brings activeRun up to date (where the unit is, who woke, its
-//   MOVEs and DELETEs), so a run left mid-ship still has a lineage: the next page load finds the leftover
-//   activeRun and records it as lastUnit with cause 'abandoned' (loadMeta). RUN END (archiveRunEnded) writes
-//   lastUnit and bestScore and clears activeRun. The run itself is never saved mid-ship (the title says so).
+//   MOVEs and DELETEs; slice 3c: and at each SHIP DONE), so a run left mid-ship still has a lineage. Slice 3c made the
+//   abandon explicit: the page's open sequence (state/instance.ts) records a leftover activeRun as lastUnit 'abandoned'
+//   only when no run save can resume it (abandonActiveRun, with the world update: its ships count as done), and the
+//   title's NEW RUN / ABANDON RUN over a save go the same way (systems/run-save.ts abandonRun). RUN END (archiveRunEnded)
+//   writes lastUnit and bestScore, runs the world update, stores the next arm and clears activeRun. The run itself is
+//   saved between ships (systems/save-write.ts), never mid-ship.
 // • The tutorial is learned once (tutorialDone): the first time a unit locks (or accepts) an orbit, or reaches
 //   a second ship, the archive notes that ARES-VII has been flown. Only then does a later run skip the run-1
 //   lessons (§5.2). The unit and wave still count every run, an abandoned one too, so a kid who reloads two
@@ -51,8 +62,11 @@ export { ghostShipIndex, ghostPlaceReached } from '@systems/lineage';
 //
 // • Archive v2 (phase 3 slice 3c, slice-3c-plan §2.4): a new key (META_STORAGE_KEY, `…/meta/v2`; v1's is never read), the
 //   last unit's `landed` and trail (systems/lineage.ts trailOf) in place of `woke` and 3a's layer, the arm seed and the next
-//   arm, colonies, routes, events, traces and the title's notes. The foundation laid the shape and its strict parse down;
-//   Track SAVE fills the record steps (run end with the world update, the explicit abandon, v1 detection, the content reset).
+//   arm, colonies, routes, events, traces and the title's notes. Run end runs the world update (systems/map-update.ts) and
+//   stores its arm; an abandoned run does too, with the ships it visited counted as done; a v1 archive is detected and not
+//   carried over (notes.olderArchive); an arm made by other content is replaced by a fresh roll (notes.armReset, 02 §10).
+//   `mergeBonus` is gone (plan risk 3, decided: MERGE's next-run thread retires): version 3 dropped it, and a version-2
+//   record (the foundation's) is migrated in place (META_MIGRATIONS).
 //
 // The pure half (loadMeta, saveMeta, the record* steps, lineageOf, hollowName) takes its storage as an
 // argument, so the headless suites run it on stubs. The live half (openRunArchive and the archive* calls) holds
@@ -96,9 +110,6 @@ export interface Meta {
   runs: number;
   bestScore: number;
   endingsSeen: Ending[];
-  // RETIRES in 3c SAVE (plan risk 3, decided: MERGE's next-run thread is gone). Kept through the foundation so nothing
-  // changes behaviour before Track SAVE's archive v2 lands; lineageOf then gives false and slice 7 deletes the code.
-  mergeBonus: boolean;
   // A unit has flown ARES-VII through (see the header): later runs skip the run-1 lessons (WP8 fix round 1;
   // §4.5's shape has no field for it).
   tutorialDone: boolean;
@@ -122,7 +133,7 @@ export interface Meta {
 // suites') means each run rolls from its own run seed (systems/map-run.ts createRunMap: `lineage.armSeed ?? seed`).
 export function freshMeta(armSeed: number | null = null): Meta {
   return {
-    version: META_VERSION, runs: 0, bestScore: 0, endingsSeen: [], mergeBonus: false, tutorialDone: false, activeRun: null, lastUnit: null,
+    version: META_VERSION, runs: 0, bestScore: 0, endingsSeen: [], tutorialDone: false, activeRun: null, lastUnit: null,
     armSeed: armSeed === null ? null : armSeed >>> 0, arm: null, colonies: [], routes: [], events: [], traces: [], notes: { olderArchive: false, armReset: false },
   };
 }
@@ -154,7 +165,7 @@ function flag(value: unknown, field: string): boolean {
   return value;
 }
 
-function list(value: unknown, field: string): unknown[] {
+function list_(value: unknown, field: string): unknown[] {
   if (!Array.isArray(value)) corrupt(`${field} is not a list`);
   return value;
 }
@@ -203,7 +214,7 @@ function parseTrail(value: unknown, field: string): UnitTrail | null {
     if (typeof l.pastLy !== 'number' || !Number.isFinite(l.pastLy) || l.pastLy < 0) corrupt(`${field}.lost.pastLy is not a distance`);
     lost = { slot: wholeNumber(l.slot, `${field}.lost.slot`), year: wholeNumber(l.year, `${field}.lost.year`), pastLy: l.pastLy, cause: lastCause(l.cause, `${field}.lost.cause`) };
   }
-  const stops = list(trail.stops, `${field}.stops`).map((stop, i) => parseTrailStop(stop, `${field}.stops[${i}]`));
+  const stops = list_(trail.stops, `${field}.stops`).map((stop, i) => parseTrailStop(stop, `${field}.stops[${i}]`));
   if (stops.length === 0) corrupt(`${field}.stops is empty`);
   return {
     unit: wholeNumber(trail.unit, `${field}.unit`), run: wholeNumber(trail.run, `${field}.run`),
@@ -223,7 +234,7 @@ function parseRoute(value: unknown, field: string): RouteRecord {
   const r = exactRecord(value, field, ['run', 'unit', 'slots']);
   return {
     run: wholeNumber(r.run, `${field}.run`), unit: wholeNumber(r.unit, `${field}.unit`),
-    slots: list(r.slots, `${field}.slots`).map((slot, i) => wholeNumber(slot, `${field}.slots[${i}]`)),
+    slots: list_(r.slots, `${field}.slots`).map((slot, i) => wholeNumber(slot, `${field}.slots[${i}]`)),
   };
 }
 
@@ -235,12 +246,57 @@ function parseEvent(value: unknown, field: string): NotableEvent {
   return { kind: e.kind as NotableEvent['kind'], slot: wholeNumber(e.slot, `${field}.slot`), shipName: text(e.shipName, `${field}.shipName`), value: wholeNumber(e.value, `${field}.value`) };
 }
 
-// The stored next arm. TODO(3c-SAVE): its strict parse (the ArmShip fields, then validateShipDef(shipDefOf(ship)) on every
-// ship and the content versions, a mismatch being a content reset, plan §2.4). Nothing writes one before Track SAVE, so
-// until then any arm is a shape this build can't read.
-function parseArm(value: unknown): ArmState | null {
+// The stored next arm (3c plan §2.4), strict. Its content versions are read first: an arm made by other content (another
+// arm table, generator, update or map shape) is not corrupt, it is a content reset (02 §10: the next run gets a fresh roll;
+// readMeta applies it), and its ships are not read at all (they may not build under this code). Only the fields the reset
+// carries over are checked then (the arm seed, its run and start year, the final ships' serial and the last final).
+// Otherwise every ArmShip is checked field by field (save-shape checkArmShip, the run save's own check) and must build
+// (validateShipDef(shipDefOf(ship))): a ship of this build's content that does not build is a corrupt archive.
+type ArmRead = { kind: 'arm'; arm: ArmState } | { kind: 'reset'; prev: ArmState };
+
+const ARM_KEYS = ['armSeed', 'run', 'startYear', 'gap', 'valveYears', 'finalSerial', 'lastFinal', 'ships', 'departures', 'content'];
+const checkArmHead = rec({
+  armSeed: whole, run: whole, startYear: whole, gap: whole, valveYears: whole, finalSerial: whole,
+  lastFinal: nullable(rec({ name: nameCheck, year: whole })),
+  content: rec({ arm: whole, generator: whole, update: whole, mapState: whole }),
+});
+
+function shaped<T>(read: () => T): T {
+  try {
+    return read();
+  } catch (error) {
+    if (error instanceof ShapeError) return corrupt(error.message);
+    throw error;
+  }
+}
+
+function parseArm(value: unknown): ArmRead | null {
   if (value === null) return null;
-  return corrupt('arm is not readable yet (TODO(3c-SAVE))');
+  const arm = exactRecord(value, 'arm', ARM_KEYS);
+  const { ships, departures, ...head } = arm;
+  shaped(() => checkArmHead(head, 'arm'));
+  const scalars = head as Omit<ArmState, 'ships' | 'departures'>;
+  if (!Array.isArray(ships)) return corrupt('arm.ships is not a list');
+  if (JSON.stringify(scalars.content) !== JSON.stringify(armContent())) {
+    return { kind: 'reset', prev: { ...structuredClone(scalars), ships: [], departures: [] } };
+  }
+  shaped(() => {
+    ships.forEach((ship, slot) => checkArmShip(ship, `arm.ships[${slot}]`, slot));
+    checkDepartures(departures, 'arm.departures');
+  });
+  for (const ship of ships as ArmState['ships']) {
+    try {
+      validateShipDef(shipDefOf(ship));
+    } catch (error) {
+      corrupt(`arm.ships[${ship.slot}] (${ship.name}) does not build: ${(error as Error).message}`);
+    }
+  }
+  // In ArmState's own key order (a stored arm reads back byte for byte).
+  const { content, ...rest } = structuredClone(scalars);
+  return {
+    kind: 'arm',
+    arm: { ...rest, ships: structuredClone(ships) as ArmState['ships'], departures: structuredClone(departures) as ArmState['departures'], content },
+  };
 }
 
 function unitList(value: unknown, field: string): number[] {
@@ -253,7 +309,9 @@ function unitStats(value: unknown, field: string): UnitStats {
   return { moves: wholeNumber(value.moves, `${field}.moves`), deletes: wholeNumber(value.deletes, `${field}.deletes`) };
 }
 
-function parseLastUnit(value: unknown): LastUnit | null {
+// The last unit as the archive reads it (field by field; MetaCorrupt names what is wrong): the run save reads the copy its
+// RunState holds (run.lastUnit) through it too.
+export function parseLastUnit(value: unknown): LastUnit | null {
   if (value === null) return null;
   const unit = exactRecord(value, 'lastUnit', ['number', 'landed', 'shipName', 'cause', 'stats', 'hollowUnits', 'trail', 'skills']);
   if (unit.skills !== null) corrupt('lastUnit.skills is not null (slice 4 fills it)');
@@ -286,9 +344,29 @@ function parseActiveRun(value: unknown): ActiveRun | null {
 // Archive migrations (slice 3c review follow-up): the key stays META_STORAGE_KEY for good, and a stored record of an older
 // version is brought up to META_VERSION here, one version at a time, before the strict parse. Each step takes a record of
 // version n and returns one of version n + 1 (a later slice's field gets its default here, never a quiet default in the
-// parse). Version 2 is the first under this key, so there is none yet. A version this build does not know (newer, or
-// below the key's first) is corrupt. A new key is only for a deliberate reset (META_V1_KEY is the one there was).
-export const META_MIGRATIONS: Readonly<Record<number, (record: Record<string, unknown>) => Record<string, unknown>>> = {};
+// parse). A version this build does not know (newer, or below the key's first) is corrupt. A new key is only for a
+// deliberate reset (META_V1_KEY is the one there was).
+// 2 → 3 (Track SAVE): the foundation's archives (version 2) are migrated, not reset (a playtest archive keeps its units):
+// • `mergeBonus` is dropped (plan risk 3, decided: the run after a MERGE no longer gets its extra thread);
+// • an arm seed of 0 with no stored arm is the foundation's placeholder (its page never passed the run seed in), not a
+//   seed any arm was rolled from: it becomes null ("the run seed"), so the next run rolls from its own seed and the archive
+//   takes that run's arm seed at its end. A run in progress then cannot be placed on an arm (its trail's slots belong to an
+//   arm the archive can't rebuild): its trail goes, so abandoning it records where it was without a world update.
+// A version-2 record never holds an arm (the foundation read any as corrupt), so nothing else changes.
+export const META_MIGRATIONS: Readonly<Record<number, (record: Record<string, unknown>) => Record<string, unknown>>> = {
+  2: (record) => {
+    const { mergeBonus: _retired, ...rest } = record;
+    void _retired;
+    const placeholderSeed = rest.armSeed === 0 && rest.arm === null;
+    const active = rest.activeRun;
+    return {
+      ...rest,
+      version: 3,
+      armSeed: placeholderSeed ? null : rest.armSeed,
+      activeRun: placeholderSeed && isRecord(active) ? { ...active, trail: null } : active,
+    };
+  },
+};
 export const META_FIRST_VERSION = 2;
 
 export function migrateMeta(record: Record<string, unknown>): Record<string, unknown> {
@@ -309,8 +387,13 @@ export function migrateMeta(record: Record<string, unknown>): Record<string, unk
 
 // The archive's JSON as a Meta, or MetaCorrupt with what was wrong. Strict: a field missing, of the wrong
 // type or out of range is corrupt, never a default (a half-read archive would be a quiet reset of that half). An older
-// version is migrated first (migrateMeta).
+// version is migrated first (migrateMeta), and a stored arm made by other content is replaced (readMeta's content reset).
 export function parseMeta(raw: string): Meta {
+  return readMeta(raw).meta;
+}
+
+// parseMeta, and whether reading changed the record (a migration step or a content reset): the page writes it back.
+export function readMeta(raw: string): { meta: Meta; changed: boolean } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -320,67 +403,89 @@ export function parseMeta(raw: string): Meta {
   if (!isRecord(parsed)) return corrupt('not a record');
   const data = migrateMeta(parsed);
   exactRecord(data, 'the archive', [
-    'version', 'runs', 'bestScore', 'endingsSeen', 'mergeBonus', 'tutorialDone', 'activeRun', 'lastUnit', 'armSeed', 'arm', 'colonies',
+    'version', 'runs', 'bestScore', 'endingsSeen', 'tutorialDone', 'activeRun', 'lastUnit', 'armSeed', 'arm', 'colonies',
     'routes', 'events', 'traces', 'notes',
   ]);
   const endings = data.endingsSeen;
   if (!Array.isArray(endings) || endings.some((ending) => !(ENDINGS as readonly unknown[]).includes(ending))) corrupt('endingsSeen is not a list of endings');
-  if (list(data.traces, 'traces').length > 0) corrupt('traces is not empty (slice 7 places them)');
+  if (list_(data.traces, 'traces').length > 0) corrupt('traces is not empty (slice 7 places them)');
   const notes = exactRecord(data.notes, 'notes', ['olderArchive', 'armReset']);
-  return {
+  const meta: Meta = {
     version: META_VERSION,
     runs: wholeNumber(data.runs, 'runs'),
     bestScore: wholeNumber(data.bestScore, 'bestScore'),
     endingsSeen: [...(endings as Ending[])],
-    mergeBonus: flag(data.mergeBonus, 'mergeBonus'),
     tutorialDone: flag(data.tutorialDone, 'tutorialDone'),
     activeRun: parseActiveRun(data.activeRun),
     lastUnit: parseLastUnit(data.lastUnit),
     armSeed: data.armSeed === null ? null : wholeNumber(data.armSeed, 'armSeed'),
-    arm: parseArm(data.arm),
-    colonies: list(data.colonies, 'colonies').map((colony, i) => parseColony(colony, `colonies[${i}]`)),
-    routes: list(data.routes, 'routes').map((route, i) => parseRoute(route, `routes[${i}]`)),
-    events: list(data.events, 'events').map((event, i) => parseEvent(event, `events[${i}]`)),
+    arm: null,
+    colonies: list_(data.colonies, 'colonies').map((colony, i) => parseColony(colony, `colonies[${i}]`)),
+    routes: list_(data.routes, 'routes').map((route, i) => parseRoute(route, `routes[${i}]`)),
+    events: list_(data.events, 'events').map((event, i) => parseEvent(event, `events[${i}]`)),
     traces: [],
     notes: { olderArchive: flag(notes.olderArchive, 'notes.olderArchive'), armReset: flag(notes.armReset, 'notes.armReset') },
+  };
+  const arm = parseArm(data.arm);
+  const changed = parsed.version !== META_VERSION;
+  if (arm === null || arm.kind === 'arm') return { meta: { ...meta, arm: arm?.arm ?? null }, changed };
+  return { meta: contentReset(meta, arm.prev), changed: true };
+}
+
+// The content reset (02 §10; 3c plan §2.4): the stored arm was made by other content, so the next run gets a fresh roll at
+// the next run number from the old arm's start year, the old arm's final-ship lineage carried over (`prev`: its serial and
+// last final, freshArmState's floor). The lineage, colonies and history are kept, and the title says so once
+// (notes.armReset). A run in progress was played on the old arm: its trail's slots mean nothing on the new one, so it keeps
+// no trail (abandoning it records where it was, with no world update: the fresh arm is already the next run's).
+function contentReset(meta: Readonly<Meta>, prev: Readonly<ArmState>): Meta {
+  let arm: ArmState;
+  try {
+    arm = freshArmState(prev.armSeed, meta.runs + 1, prev.startYear, prev);
+  } catch (error) {
+    return corrupt(`the content reset could not roll a fresh arm (${(error as Error).message})`);
+  }
+  return {
+    ...meta,
+    arm,
+    armSeed: arm.armSeed,
+    activeRun: meta.activeRun === null ? null : { ...meta.activeRun, trail: null },
+    notes: { ...meta.notes, armReset: true },
   };
 }
 
 // --- Storage (systems/storage.ts holds the provider since slice 3c; re-exported above) ------------------------
 
+// `changed`: reading changed the record (an older version migrated, a v1 archive found, a content reset), so the caller
+// writes it back at once (openRunArchive): the title's one-off notes are then said from the stored record, and a page
+// closed before RUN START does not lose the change. Slice 3c: a leftover activeRun is no longer abandoned here; the page's
+// open sequence decides (state/instance.ts: only when no run save can resume it, abandonActiveRun).
 export type LoadResult =
-  | { ok: true; meta: Meta; recovered: boolean }
+  | { ok: true; meta: Meta; changed: boolean }
   | { ok: false; reason: 'unavailable' | 'corrupt'; detail: string };
 
-// A run left without a RUN END (the page closed or reloaded mid-run) is the last unit, 'abandoned' where it
-// was when its last ship started. TODO(3c-SAVE): explicit (abandonActiveRun, with the world update), plan §2.2.
-function abandon(run: ActiveRun): LastUnit {
-  return {
-    number: run.unit, landed: run.landed, shipName: run.shipName, cause: 'abandoned', stats: { ...run.stats },
-    hollowUnits: [...run.hollowUnits], trail: run.trail === null ? null : structuredClone(run.trail), skills: null,
-  };
-}
-
-// Reads the archive. Nothing stored yet is a fresh archive (a first run is not a failure). A leftover
-// activeRun is recorded as lastUnit 'abandoned' and cleared (`recovered`: the caller writes it back).
-// `armSeed`: a fresh archive's (the page's run seed; null in the suites).
+// Reads the archive. Nothing stored yet is a fresh archive (a first run is not a failure); when the v1 key holds phase 2's
+// archive, the fresh one says once that it was not carried over (notes.olderArchive; the v1 key is read for that only,
+// never parsed, written or removed). `armSeed`: a fresh archive's (the page's run seed; null in the suites).
 export function loadMeta(storage: StorageProvider, armSeed: number | null = null): LoadResult {
   let raw: string | null;
+  let older: string | null = null;
   try {
     raw = storage().getItem(META_STORAGE_KEY);
+    if (raw === null) older = storage().getItem(META_V1_KEY);
   } catch (error) {
     return { ok: false, reason: 'unavailable', detail: (error as Error).message };
   }
-  if (raw === null) return { ok: true, meta: freshMeta(armSeed), recovered: false };
-  let meta: Meta;
+  if (raw === null) {
+    if (older === null) return { ok: true, meta: freshMeta(armSeed), changed: false };
+    return { ok: true, meta: { ...freshMeta(armSeed), notes: { olderArchive: true, armReset: false } }, changed: true };
+  }
   try {
-    meta = parseMeta(raw);
+    const read = readMeta(raw);
+    return { ok: true, meta: read.meta, changed: read.changed };
   } catch (error) {
     if (error instanceof MetaCorrupt) return { ok: false, reason: 'corrupt', detail: error.message };
     throw error;
   }
-  if (meta.activeRun === null) return { ok: true, meta, recovered: false };
-  return { ok: true, meta: { ...meta, lastUnit: abandon(meta.activeRun), activeRun: null }, recovered: true };
 }
 
 export type MetaWriteStatus = 'ok' | 'unavailable';
@@ -437,25 +542,90 @@ export function recordTutorialDone(meta: Readonly<Meta>): Meta {
 export interface RunEnd extends RunProgress {
   cause: LastCause;
   score: number;
+  // The world update's next arm (02 §3.12), or null (or left out: a record a suite writes for its lineage alone) to keep the
+  // stored one (the classic world is never updated).
+  nextArm?: ArmState | null;
+  // The run's notable events (systems/lineage.ts notableEvents; at most NOTABLE_EVENTS_MAX are kept); left out, none.
+  events?: readonly NotableEvent[];
+}
+
+// The colonies kept: the newest COLONY_HISTORY_MAX_PER_WORLD per world (slot), in the order they were founded.
+function capColonies(colonies: readonly ColonyRecord[]): ColonyRecord[] {
+  const kept: ColonyRecord[] = [];
+  const perWorld = new Map<number, number>();
+  for (let i = colonies.length - 1; i >= 0; i--) {
+    const colony = colonies[i]!;
+    const count = perWorld.get(colony.slot) ?? 0;
+    if (count >= COLONY_HISTORY_MAX_PER_WORLD) continue;
+    perWorld.set(colony.slot, count + 1);
+    kept.unshift(structuredClone(colony));
+  }
+  return kept;
+}
+
+// A unit's run is over, however it ended (RUN END, or abandoned): it becomes the last unit, its trail's colonies and route
+// join the history (capped), its notable events replace the last run's, and the world update's arm (when given) is the
+// next run's, with its arm seed (a migrated archive's null takes the seed its first updated arm was rolled from).
+function recordUnitEnd(meta: Readonly<Meta>, lastUnit: LastUnit, nextArm: ArmState | null, events: readonly NotableEvent[]): Meta {
+  const trail = lastUnit.trail;
+  const routes: RouteRecord[] = trail === null ? structuredClone(meta.routes)
+    : [...structuredClone(meta.routes), { run: trail.run, unit: trail.unit, slots: trail.stops.map((stop) => stop.slot) }].slice(-ROUTE_HISTORY_RUNS);
+  return {
+    ...meta,
+    activeRun: null,
+    lastUnit,
+    colonies: capColonies([...meta.colonies, ...(trail === null ? [] : coloniesOf(trail))]),
+    routes,
+    events: structuredClone(events.slice(0, NOTABLE_EVENTS_MAX)) as NotableEvent[],
+    arm: nextArm === null ? meta.arm : structuredClone(nextArm),
+    armSeed: nextArm === null ? meta.armSeed : nextArm.armSeed,
+  };
 }
 
 export function recordRunEnd(meta: Readonly<Meta>, end: RunEnd): Meta {
   const endingsSeen = [...meta.endingsSeen];
   const ending: Ending | null = end.cause === 'won-purge' ? 'purge' : end.cause === 'won-merge' ? 'merge' : null;
   if (ending !== null && !endingsSeen.includes(ending)) endingsSeen.push(ending);
-  return {
-    ...meta,
-    bestScore: Math.max(meta.bestScore, Math.round(end.score)),
-    endingsSeen,
-    // §4.5: a MERGE gives the next run its bonus (WP11 applies it); any other ending uses it up.
-    mergeBonus: end.cause === 'won-merge',
-    activeRun: null,
-    // TODO(3c-SAVE): the colonies, routes, events and the updated arm (plan §2.4 "Run end").
-    lastUnit: {
-      number: end.unit, landed: end.landed, shipName: end.shipName, cause: end.cause, stats: { ...end.stats },
-      hollowUnits: [...end.hollowUnits], trail: end.trail === null ? null : structuredClone(end.trail), skills: null,
-    },
+  const lastUnit: LastUnit = {
+    number: end.unit, landed: end.landed, shipName: end.shipName, cause: end.cause, stats: { ...end.stats },
+    hollowUnits: [...end.hollowUnits], trail: end.trail === null ? null : structuredClone(end.trail), skills: null,
   };
+  return { ...recordUnitEnd(meta, lastUnit, end.nextArm ?? null, end.events ?? []), bestScore: Math.max(meta.bestScore, Math.round(end.score)), endingsSeen };
+}
+
+// The run in progress is abandoned (02 §3.11 "abandoned"): it becomes the last unit, cause 'abandoned', where it was at its
+// last ship start or SHIP DONE, and the ships it visited count as done (`nextArm`: the world update with them;
+// abandonUpdate). No events (the archive has only the trail of a run it no longer has; slice 7 reads events). Throws when
+// no run is in progress (a bug: the callers check).
+export function recordAbandon(meta: Readonly<Meta>, nextArm: ArmState | null): Meta {
+  const run = meta.activeRun;
+  if (run === null) throw new Error('recordAbandon: no run in progress');
+  const lastUnit: LastUnit = {
+    number: run.unit, landed: run.landed, shipName: run.shipName, cause: 'abandoned', stats: { ...run.stats },
+    hollowUnits: [...run.hollowUnits], trail: run.trail === null ? null : structuredClone(run.trail), skills: null,
+  };
+  return recordUnitEnd(meta, lastUnit, nextArm, []);
+}
+
+// The world update for an abandoned run (3c plan risk 13: from the archive's arm, the one the run started on): its trail's
+// stops are the visits (a colony where someone landed in an LZ; the ship it was on, never ended, none). null when the run
+// can't be placed on an arm: it kept no trail (the classic world, a content reset, a migrated foundation archive), the
+// archive has no arm seed to rebuild run 1's arm from, or the trail is another run's than the arm's.
+export function abandonUpdate(meta: Readonly<Meta>): ArmUpdate | null {
+  const trail = meta.activeRun?.trail ?? null;
+  if (trail === null || meta.armSeed === null) return null;
+  const lineage = lineageOf(meta);
+  // The arm the run played (systems/map-run.ts createRunMap: the stored arm, run 1's assembled one, or a fresh roll), as the
+  // lineage before its end describes it: the wave the run was counted as.
+  const map = createRunMap({ ...lineage, wave: meta.runs }, meta.armSeed);
+  if (map.run !== trail.run || trail.stops.some((stop) => map.arm[stop.slot] === undefined)) return null;
+  return updateArm({ from: armStateOfMap(map), visited: abandonVisits(trail) });
+}
+
+// An abandoned run's visits, from its trail (the archive has no RunState for it, so not lineage.ts visitsOf, whose rule this
+// is: every stop, with a colony where someone landed in an LZ; trailOf writes a stop's `landed` from ShipResult.landedInLz).
+export function abandonVisits(trail: Readonly<UnitTrail>): Visit[] {
+  return trail.stops.map((stop) => ({ slot: stop.slot, colony: stop.landed > 0 }));
 }
 
 // RUN END's cause as the archive keeps it (§4.5 item 6): one for one, now that the fleet ends with the flagship.
@@ -504,7 +674,8 @@ export function lineageOf(meta: Readonly<Meta>): RunLineage {
     lastUnit: meta.lastUnit === null ? null : structuredClone(meta.lastUnit),
     hollowUnits: hollowUnitsAfter(meta.lastUnit),
     tutorialDone: meta.tutorialDone,
-    mergeBonus: meta.mergeBonus,
+    // Retired (3c plan risk 3, decided): the archive no longer keeps it, so no run after a MERGE starts with the bonus.
+    mergeBonus: false,
     armSeed: meta.armSeed,
     arm: meta.arm === null ? null : structuredClone(meta.arm),
     history: mapHistoryOf(meta.arm, meta.lastUnit, meta.colonies, meta.routes),
@@ -570,8 +741,9 @@ interface Session {
 let session: Session | null = null;
 
 // Opens the page's archive of runs (state/instance.ts, before the store exists: the first title already names
-// UNIT-048). Not the SOUL ARCHIVE of colonists (state/initial.ts openArchive unseals that one). A recovered
-// activeRun is written back at once, so a page that is closed again before RUN START does not lose it.
+// UNIT-048). Not the SOUL ARCHIVE of colonists (state/initial.ts openArchive unseals that one). A record changed on load
+// (migrated, a v1 archive found, a content reset) is written back at once. A leftover activeRun is left as it is: the
+// page's open sequence abandons it only when no run save can resume it (abandonActiveRun).
 // Returns the status the store starts with. A load that failed starts a fresh session copy (the run still
 // has a unit number), and the status says the archive is not behind it; the console says why.
 // `armSeed`: the page's run seed, a fresh archive's arm seed (state/instance.ts picks the seed first).
@@ -583,8 +755,20 @@ export function openRunArchive(provider: StorageProvider, armSeed: number | null
     return session.status;
   }
   session = { provider, meta: loaded.meta, status: 'ok', freshArmSeed: armSeed };
-  if (loaded.recovered) write();
+  if (loaded.changed) write();
   return session.status;
+}
+
+// The run in progress is abandoned (3c plan §2.2): the page opened with no run save to resume it (risk 7: a save that was
+// never written, or offline), or the kid chose NEW RUN / ABANDON RUN over a save (systems/run-save.ts abandonRun). It is
+// recorded as the last unit 'abandoned' with the world update (its ships count as done), and written. Nothing in progress:
+// nothing to do. `store`: the page's store once it exists (its archive status follows); null at the page's open, before it.
+export function abandonActiveRun(store: Store<GameState> | null = null): void {
+  const current = requireSession();
+  if (current.meta.activeRun === null) return;
+  current.meta = recordAbandon(current.meta, abandonUpdate(current.meta)?.next ?? null);
+  write();
+  if (store !== null) syncStatus(store);
 }
 
 // Forgets the page's archive (headless suites between scenarios).
@@ -600,6 +784,11 @@ function requireSession(): Session {
 // The next run's lineage, from the session (NEW RUN: RUN END's button).
 export function archiveLineage(): RunLineage {
   return lineageOf(requireSession().meta);
+}
+
+// The session's status now (state/instance.ts reads it after the page's open sequence, which may have written).
+export function archiveStatusNow(): Exclude<ArchiveStatus, 'none'> {
+  return requireSession().status;
 }
 
 // The session's record, for ?debug and the title (best score, endings seen).
@@ -700,14 +889,24 @@ export function archiveTutorialDone(store: Store<GameState>): void {
   syncStatus(store);
 }
 
-// RUN END (systems/run.ts endRun): the last unit and the best score.
+// RUN END (systems/run.ts endRun), one step (02 §3.11): the world update runs on the arm the run played (3c plan risk 13:
+// its own map) with its route's ships done, the archive keeps the last unit, its trail, colonies, route and events and the
+// next arm, and the run learns who comes next (run.next, RUN END's bridging line). The update runs with or without an
+// archive (a headless arm run gets its run.next too); the classic world is never updated. The run save is cleared by the
+// caller (systems/run.ts endRun, right after: save-write.ts sits below this file).
 export function archiveRunEnded(store: Store<GameState>, cause: RunEndCause): void {
   const state = store.getState();
-  if (!hasArchive(state)) return;
-  const current = requireSession();
-  current.meta = recordRunEnd(current.meta, { ...progressOf(state, lastCauseOf(cause)), cause: lastCauseOf(cause), score: runScore(state.run.ships) });
-  write();
-  syncStatus(store);
+  const after = state.run.map.world === 'arm' ? updateAfterRun(state.run) : null;
+  if (hasArchive(state)) {
+    const current = requireSession();
+    current.meta = recordRunEnd(current.meta, {
+      ...progressOf(state, lastCauseOf(cause)), cause: lastCauseOf(cause), score: runScore(state.run.ships), nextArm: after?.update.next ?? null,
+      events: after === null ? [] : notableEvents(state.run),
+    });
+    write();
+    syncStatus(store);
+  }
+  if (after !== null) store.update((draft) => { draft.run.next = after.next; });
 }
 
 // ARCHIVE CORRUPT's two ways on (§4.5): WIPE ARCHIVE throws the bad record away for a fresh one (a remove
