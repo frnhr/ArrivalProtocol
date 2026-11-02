@@ -86,6 +86,12 @@ const LABEL_CLASH_UNITS = 40;
 // clearly less (LABEL_HOP_MIN_AREA) or it moved less than LABEL_HOLD_MS ago, so labels never hop; but never over another
 // label's text, which it leaves at once (final review, placeClear).
 const LABEL_TRY_TURNS_DEG = [0, 45, -45, 90, -90, 135, -135, 180];
+// Slice 3a (the e2e run: PETREL's opener, START BURN at 1440×900 and `▼ LOWEST` at 390×844 lay across the drawn path):
+// where ▼ and START BURN share a spot on a wide approx band, every side at LABEL_GAP still crossed the band, and the least
+// bad one sat on the path. The pass then tries the same sides once more, this much further out (viewBox units, times the
+// label scale): a label steps off the path rather than lie on it. Tried only after the near sides, so it never moves a
+// label that has a clear near side.
+const LABEL_GAP_FAR = 24;
 // Room kept around a glyph, the ship and the chip (viewBox units).
 const OBSTACLE_PAD = 2;
 // Room kept between two labels: flush against each other, START BURN over `▼ 08:23 / LOWEST …` read as one block.
@@ -375,8 +381,8 @@ function turned(direction: Vec2, degrees: number): Vec2 {
 
 // Where a multi-line label next to a marker goes, pushed away from the marker along `away` (a screen-space unit
 // vector) and kept inside the plot frame. `scale`: the label font's scale (1 on a desktop; see LABEL_FONT_UNITS).
-function layoutLabel(lines: readonly string[], spot: Vec2, away: Vec2, scale: number, charW: number = CHAR_W): LabelLayout {
-  const origin = { x: spot.x + away.x * LABEL_GAP, y: spot.y + away.y * LABEL_GAP };
+function layoutLabel(lines: readonly string[], spot: Vec2, away: Vec2, scale: number, charW: number = CHAR_W, gap = LABEL_GAP): LabelLayout {
+  const origin = { x: spot.x + away.x * gap, y: spot.y + away.y * gap };
   const anchor = away.x > LABEL_SIDE_COS ? 'start' : away.x < -LABEL_SIDE_COS ? 'end' : 'middle';
   const width = Math.max(...lines.map((line) => line.length)) * charW * scale;
   const height = lines.length * LINE_H * scale;
@@ -755,8 +761,10 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
   function placeClear(label: SVGTextElement, lines: readonly string[], spot: Vec2, preferred: Vec2, obstacles: Obstacles,
     charW: number = CHAR_W, path: PathObstacle | null = null): void {
     interface Option { layout: LabelLayout; onText: number; cost: number }
+    const turns = LABEL_TRY_TURNS_DEG.length;
     const tryTurn = (index: number): Option => {
-      const layout = layoutLabel(lines, spot, turned(preferred, LABEL_TRY_TURNS_DEG[index]!), labelScale, charW);
+      const gap = index < turns ? LABEL_GAP : LABEL_GAP + LABEL_GAP_FAR * labelScale;
+      const layout = layoutLabel(lines, spot, turned(preferred, LABEL_TRY_TURNS_DEG[index % turns]!), labelScale, charW, gap);
       let cost = pathArea(layout.box, path);
       for (const box of obstacles.boxes) cost += overlapArea(layout.box, box);
       let onText = 0;
@@ -777,7 +785,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     let best = kept;
     let bestIndex = turn.index;
     if (kept.onText > 0 || kept.cost > 0) {
-      for (let index = 0; index < LABEL_TRY_TURNS_DEG.length; index++) {
+      for (let index = 0; index < 2 * turns; index++) {
         const option = tryTurn(index);
         if (better(option, best)) { best = option; bestIndex = index; }
         if (best.onText === 0 && best.cost === 0) break;

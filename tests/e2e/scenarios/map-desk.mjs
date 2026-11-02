@@ -234,7 +234,7 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
     model: window.__ap.transmitModel().room, text: document.getElementById('transmitScreen').innerText,
     offer: window.__ap.draft()?.offer.map((card) => card.id) ?? [],
   }));
-  check('…the PACKET: ROOM 88 · FILES n · NO FLOOR and `→ 0 ON ARRIVAL`', zero.model.zeroCharge && /ROOM 88 · FILES \d+ · NO FLOOR/.test(zero.text) && /→ 0 ON ARRIVAL/.test(zero.text),
+  check('…the PACKET: ROOM 88 · FILES n · NO FLOOR and `→ 0 ON ARRIVAL`', zero.model.confirm !== null && /ROOM 88 · FILES \d+ · NO FLOOR/.test(zero.text) && /→ 0 ON ARRIVAL/.test(zero.text),
     JSON.stringify({ room: zero.model.line, charge: zero.model.charge }));
   // A card that is not the +12 charge (it would bring charge across).
   const pickIndex = zero.offer.findIndex((id) => id !== 'charge');
