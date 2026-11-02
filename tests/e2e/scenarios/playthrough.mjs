@@ -270,6 +270,8 @@ async function closeReader(view) {
   return true;
 }
 
+let lastBeam = 0;
+const beams = [];
 // One poll of the kid in a flight: the SHIP's keys, or the MIND's clicks when the line asks for a tool.
 async function flyStep(view) {
   if (await closeReader(view) || await answerDeal(view)) return;
@@ -278,6 +280,22 @@ async function flyStep(view) {
   // tick or two, so a second TAB waits.
   if (/\[TAB\]/.test(text) && Date.now() - lastTab > 900) { lastTab = Date.now(); await page.keyboard.press('Tab'); return; }
   if (await mindAct(view)) return;
+  // `NOT ENOUGH FUEL to miss the planet — press BEAM OUT`: the kid presses it (the Engine window's button) and says yes on
+  // its inline confirm (slice 3b: VESPER flown without Swap can drain its tank on the ghost bursts and come to this).
+  if (/press BEAM OUT/.test(text)) {
+    if (Date.now() - lastBeam < 3000) return;
+    lastBeam = Date.now();
+    await hold(false);
+    await toMode('tools', view.mode);
+    if (await tap(page.locator('#beamBtn'))) {
+      await page.waitForTimeout(200);
+      const question = await st(() => document.getElementById('inlineConfirm').hidden ? null : document.getElementById('inlineConfirmQuestion').innerText);
+      if (question !== null) await page.keyboard.press('Enter');
+      beams.push(`${view.ship}: ${question ?? 'no confirm'}`);
+      log(`SHIP: BEAM OUT on ${view.ship} (${question ?? 'no confirm'})`);
+    }
+    return;
+  }
   if (/RELEASE|TOO EARLY|WAIT|TURN AROUND|HOLD STEADY/.test(text)) await hold(false);
   const preset = text.match(/press \[([WASD])\]/);
   if (preset) { await toMode('tools', view.mode); await page.keyboard.press(`Key${preset[1]}`); }
@@ -1017,7 +1035,7 @@ if (run.vesper) {
   const vesperResult = await st(() => { const r = window.__ap.store.getState().run.ships.find((ship) => ship.shipName === 'VESPER');
     return r ? { outcome: r.outcome, landedInLz: r.landedInLz, stars: r.stars, fuelLeftPct: r.fuelLeftPct } : null; });
   log(`VESPER without Swap: flight ${run.vesper.outcome} in ${run.vesper.flightSec.toFixed(0)} s${run.vesper.stuck ? ' (STUCK: put in its ring by hand)' : ''}, ${run.vesper.bursts} ghost bursts, `
-    + `fuel ${run.vesper.fuelPct.toFixed(0)}%; ${vesperReport ? `${vesperReport.headline}, stars ${vesperReport.stars}` : 'no LANDING REPORT'}; result ${JSON.stringify(vesperResult)}`);
+    + `fuel ${run.vesper.fuelPct.toFixed(0)}%; ${vesperReport ? `${vesperReport.headline}, stars ${vesperReport.stars}` : 'no LANDING REPORT'}; result ${JSON.stringify(vesperResult)}${beams.length ? `; BEAM OUT: ${beams.join(', ')}` : ''}`);
 }
 log(`run: ${run.shipsFlown.map((ship) => `${ship.name} ${ship.outcome} ${ship.flightSec.toFixed(0)} s`).join(', ')}; ${run.lines.size} distinct lines, ${mindActions} MIND actions ${JSON.stringify(mindByVerb)} (${mindRefused} missed)`);
 log(`landings: ${run.landed.map((ship) => `${ship.name} ${ship.byStrip ? 'by the strip' : 'at once'} ${ship.sec.toFixed(0)} s (${ship.presses} [L], ${ship.launches} launched)`).join(', ')}`);
