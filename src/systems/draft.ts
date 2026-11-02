@@ -11,7 +11,7 @@ import {
   REPAIR_V2_VERSION, THREAD_PLUS_THREADS, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, FUEL_TRIM_BLOCKS, INTEGRITY_MAX,
 } from '@data/tuning';
 import { visitRng } from '@systems/map-streams';
-import { deliveryFiles } from '@systems/repository';
+import { deliveryFileGroups } from '@systems/repository';
 
 // PICK ONE TO CARRY (§6.9, §9 WP8 items 1–2), the systems half: the draft dealt at TRANSMIT from the run's
 // seed and stats, the pick, and what the picked card does to the packet. DOM-free; the TRANSMIT screen shows
@@ -42,11 +42,15 @@ export function ownedUpgrades(state: Readonly<GameState>): Record<UpgradeId, num
 // way the kid saw it). A unit whose files are over the link is dealt no file card (the review's B1: a FIREWALL picked
 // there would only add to what must be left behind); on the classic world the link always binds first, so its deals
 // are phase 2's.
+// Phase 3 slice 3b: the files count the hop's deliveries as first packed (`deliveries`: the plan's chips, none sent on yet;
+// slice-3b-plan risk 17's reading: the deal stays keyed by the slot left, and a SEND ON later does not re-deal), and the arm
+// deals salvage only (UpgradeDef.salvage: REPAIR v2 moved to the repository, 02 §3.10).
 export function draftContext(
   state: Readonly<GameState>, linkBlocks: number, room?: Readonly<Pick<Hop, 'room' | 'chargeFloor'>>,
+  deliveries: readonly DeliveryChip[] = [],
 ): DraftContext {
   const last = state.run.ships[state.run.ships.length - 1] ?? null;
-  const files = packUnit(state.memory, linkBlocks, []).filesBlocks;
+  const files = planPacket(state.memory, { linkBlocks, dropped: [], pick: null, deliveries }).filesBlocks;
   const roomLeft = room === undefined ? Infinity : room.room - room.chargeFloor - files;
   return {
     stats: state.run.stats,
@@ -56,13 +60,16 @@ export function draftContext(
     hasRepair: state.memory.some((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair'),
     linkRoom: Math.max(0, Math.min(linkBlocks - files, roomLeft)),
     hollowLabel: hollowLabel(state.run),
+    salvageOnly: state.run.map.world === 'arm',
   };
 }
 
 // The cards for the TRANSMIT now being prepared (goTransmit), seeded by the ship being left: a hop (its link and room),
-// or a bare link (the classic suites).
-export function dealDraft(state: Readonly<GameState>, hop: number | Readonly<Pick<Hop, 'linkBlocks' | 'room' | 'chargeFloor'>>): DraftCard[] {
-  const context = typeof hop === 'number' ? draftContext(state, hop) : draftContext(state, hop.linkBlocks, hop);
+// or a bare link (the classic suites), with the hop's delivery chips as first packed.
+export function dealDraft(
+  state: Readonly<GameState>, hop: number | Readonly<Pick<Hop, 'linkBlocks' | 'room' | 'chargeFloor'>>, deliveries: readonly DeliveryChip[] = [],
+): DraftCard[] {
+  const context = typeof hop === 'number' ? draftContext(state, hop, undefined, deliveries) : draftContext(state, hop.linkBlocks, hop, deliveries);
   return draftCards(context, visitRng(state.run, 'draft'));
 }
 
@@ -111,7 +118,10 @@ export function planPacket(
   memory: readonly Segment[], plan: Readonly<PacketPlan>,
   makeId: (prefix: string) => string = PREVIEW_ID,
 ): Packet {
-  return packUnit(memory, plan.linkBlocks, plan.dropped, [...cardFiles(plan.pick, makeId), ...deliveryFiles(plan.deliveries, memory, makeId)]);
+  const groups = deliveryFileGroups(plan.deliveries, memory, makeId);
+  const packet = packUnit(memory, plan.linkBlocks, plan.dropped, [...cardFiles(plan.pick, makeId), ...groups.flatMap((group) => group.segs)]);
+  packet.deliveries = groups.map((group) => ({ key: group.key, segIds: group.segs.map((seg) => seg.id) }));
+  return packet;
 }
 
 // The REPAIR CHARGE the pick brings on arrival.

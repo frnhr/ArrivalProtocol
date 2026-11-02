@@ -3,6 +3,8 @@ import type {
   GameState, RunPhase, RunState, ShipOutcome, ShipResult, RunEndCause, ArrivalReport, TransitPlan, TransitHit, RingMiss,
 } from '@state/schema';
 import type { CarriedRacks } from '@data/memory';
+import type { ArrivalDelivery, DeliveryChip } from '@/types/repo';
+import type { Packet } from '@systems/carry';
 import type { ShipThreat, BeamSeedSource } from '@/types/threat';
 import type { Hop, PendingExtra, RunMapState } from '@/types/map';
 import { onGameTick, onPostTick } from '@systems/clock';
@@ -15,7 +17,7 @@ import {
   isTutorialShip, commsUsable, beamOutRefusal, type BeamOutRefusal,
 } from '@systems/beam-out';
 import { logDivider, say, hollowLabel } from '@systems/say';
-import { rollBeamSeeds } from '@systems/beam-seeds';
+import { rollBeamSeeds, rollDeliverySeeds } from '@systems/beam-seeds';
 import { tallyPreview } from '@state/threat-selectors';
 import { shipStars, starCharge } from '@systems/stars';
 import {
@@ -33,7 +35,8 @@ import {
 } from '@systems/map-run';
 import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
 import { unitArrival } from '@systems/arrival-preview';
-import { deliveriesForHop, deskWindowOnOpen } from '@systems/repository';
+import { deliveriesForHop, deskWindowOnOpen, advanceRequests } from '@systems/repository';
+import { repoToolKind } from '@data/repository';
 import { mapFacts } from '@systems/map-facts';
 import { BEATS, LINES, perShipBeatIds } from '@data/script';
 import { TOOL_REFUSAL } from '@data/tool-text';
@@ -362,7 +365,7 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
     coreHit: extra.coreHit,
     coreReset: extra.coreReset,
     dropped: [],
-    offer: dealDraft(store.getState(), hop),
+    offer: dealDraft(store.getState(), hop, deliveries),
     pick: null,
     threat,
     deliveries,
@@ -395,11 +398,15 @@ export function transmitNext(store: Store<GameState>): void {
   applyPickToPacket(packet, plan.pick);
   // The beam's hitchhikers (04 §3.4), rolled on the packet as it crosses (after the card's file is in it, before the
   // transit hits): they ride free, and land behind their targets at the boot. From the verdict, never the map's facts again.
-  packet.seeds = rollBeamSeeds(packet, beamSourceOf(plan.threat), playsTutorial(state.run), hopRng(state.run, fromSlot, plan.toSlot, 'beam-seeds'));
+  // Never behind a delivered file (phase 3 slice 3b): each delivery rolls its own, on its own stream (the beam's stays put).
+  const delivered = packet.deliveries.flatMap((group) => group.segIds);
+  const beamSeeds = rollBeamSeeds(packet, beamSourceOf(plan.threat), playsTutorial(state.run), hopRng(state.run, fromSlot, plan.toSlot, 'beam-seeds'), delivered);
+  const deliverySeeds = rollDeliverySeeds(plan.deliveries, packet, hopRng(state.run, fromSlot, plan.toSlot, 'delivery-seeds'));
+  packet.seeds = [...beamSeeds, ...deliverySeeds];
   const files = packedFiles(packet);
-  // The arrival as the PACKET previewed it (systems/arrival-preview.ts), for the seeds the beam really rolled. TRANSMIT ▸
-  // waits while files are over the link or files and the floor over the room (01 §3.16; the review's B1 and the follow-up
-  // M2): a send that gets here over either is a bug, not a squeeze.
+  // The arrival as the PACKET previewed it (systems/arrival-preview.ts), for the seeds the beam really rolled (the
+  // deliveries' included). TRANSMIT ▸ waits while files (deliveries included) are over the link or files and the floor over
+  // the room (01 §3.16; the review's B1 and the follow-up M2): a send that gets here over either is a bug, not a squeeze.
   const preview = unitArrival(state, { hop: plan.hop, threat: plan.threat, dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries }, packet.seeds.length);
   const fit = preview.fit;
   if (fit.overLink > 0) throw new Error(`transmitNext: ${fit.files} blocks of files are ${fit.overLink} over the link of ${fit.link}`);
@@ -435,15 +442,37 @@ export function transmitNext(store: Store<GameState>): void {
     // The root lands in the slot as the ship is built (createShipSlices, from the verdict's rootBlocks).
     seeds: layout.seeds,
     boarded: boardedBy(plan.threat),
-    // TODO(3b-REPO): the chips not sent on, as laid out (their segment ids), oldest first.
-    deliveries: [],
+    deliveries: arrivalDeliveries(plan.deliveries, packet.deliveries, deliverySeeds.map((seed) => seed.targetId)),
   };
-  // The card goes with the unit: the run remembers it (the Skills window lists it, THREAD+ is owned by it).
-  if (plan.pick !== null) {
-    const picked = plan.pick;
-    store.update((draft) => { draft.run.upgrades.push(picked); });
-  }
+  // The tool kinds this send brought for the first time (run.licences: "the kinds that have reached the unit", plan §2.2).
+  const firstKinds = plan.deliveries.filter((chip) => chip.firstOfKind).map((chip) => repoToolKind(chip.file))
+    .filter((kind): kind is NonNullable<typeof kind> => kind !== null);
+  store.update((draft) => {
+    // The card goes with the unit: the run remembers it (the Skills window lists it, THREAD+ is owned by it).
+    if (plan.pick !== null) draft.run.upgrades.push(plan.pick);
+    // Phase 3 slice 3b: the requests move on (delivered, waiting, lost, forwarded; the pick becomes a request).
+    draft.run.repo = advanceRequests(draft.run.repo, plan, draft.run.map);
+    for (const kind of firstKinds) if (!draft.run.licences.includes(kind)) draft.run.licences.push(kind);
+  });
   startShip(store, plan.toSlot, layout.racks, arrival, plan.threat, plan.hop);
+}
+
+// The deliveries as they crossed (ArrivalReport.deliveries; plan §2.3 step 4.6): each chip not sent on with the ids of the
+// files it laid out and whether a seed rode behind it. The REPAIR v2 patch comes first (the slice-3b foundation review: it
+// installs at the first delivery line, right after REPAIR's renewal, and is never folded into the boot's last line), then
+// the rest oldest first, as the chips are.
+export function arrivalDeliveries(
+  chips: readonly DeliveryChip[], packed: Readonly<Packet>['deliveries'], seededIds: readonly string[],
+): ArrivalDelivery[] {
+  const deliveries = chips.filter((chip) => !chip.sendOn).map((chip): ArrivalDelivery => {
+    const group = packed.find((entry) => entry.key === chip.key);
+    if (group === undefined) throw new Error(`transmitNext: delivery ${chip.key} is not in the packet`);
+    return {
+      key: chip.key, file: chip.file, segIds: [...group.segIds], arrivedYear: chip.arrivedYear, firstOfKind: chip.firstOfKind,
+      seeded: group.segIds.some((id) => seededIds.includes(id)),
+    };
+  });
+  return [...deliveries.filter((delivery) => delivery.file === 'repair-v2'), ...deliveries.filter((delivery) => delivery.file !== 'repair-v2')];
 }
 
 // What the beam into a ship carries, from the ladder's verdict (04 §3.4): nothing into a calm ship ("no seeds before
