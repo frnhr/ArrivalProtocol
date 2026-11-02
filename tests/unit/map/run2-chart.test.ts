@@ -11,7 +11,7 @@ import type { RouteStop, RunMapState } from '@/types/map';
 import type { Departure, LastUnit } from '@/types/lineage';
 import { createInitialState } from '@state/initial';
 import {
-  chartModel, chartTrail, cardModel, deskDepartures, departuresBlock, deskControlLine, deskOpeningBeat, olderColonyDots, trail046,
+  chartModel, chartTrail, chartLegend, cardModel, deskDepartures, departuresBlock, deskControlLine, deskOpeningBeat, olderColonyDots, trail046,
 } from '@systems/desk';
 import { hopBetween } from '@systems/map-hop';
 import { WORLDS } from '@data/arm';
@@ -122,7 +122,13 @@ check('older colonies only once the galaxy year reaches them, never the trail\'s
   olderColonyDots(olderMap, trailKey).length === 0
   && olderColonyDots({ ...olderMap, galaxyYear: 2470 }, trailKey).map((d) => d.label).join() === 'TALLGRASS · 6 YEARS OLD · UNIT-046'
   && olderColonyDots({ ...olderMap, galaxyYear: 2470 }, null).length === 4);
-check('run 1 keeps 046\'s written trail (WAYPOINT a colony, MERIDIAN and TALLGRASS TAKEN, the cross past Calder), no beacon ring change',
+check('run 1 keeps 046\'s written trail (WAYPOINT a colony, MERIDIAN and TALLGRASS TAKEN, the cross past Calder), and 046\'s beacon',
   trail046(run1Map()).map((m) => `${m.kind}:${m.colony}`).join() === 'colony:WAYPOINT,taken:MERIDIAN,taken:TALLGRASS,lost:null'
   && chartTrail({ lastUnit: null, map: run1Map() })?.beacon?.label === 'BEACON · SET BY UNIT-046 · 1 YEAR AGO');
+
+// --- The chart's key (the desk's corner) ------------------------------------------------------------------------------------
+const kinds = (state: GameState): string => chartLegend(chartModel(state)).map((item) => item.kind).join();
+check('the key names only the marks the chart has: TAKEN, colony, REPORTED HOME on the first desk; the cross when lost',
+  kinds(first) === 'taken,colony,new' && kinds(deskAt([0], lost)) === 'taken,colony,lost,new' && kinds(patienceDesk) === 'taken,colony'
+  && chartLegend(chartModel(first))[0]?.words === 'UNIT-047 GETS THERE FIRST', `${kinds(first)} / ${kinds(deskAt([0], lost))} / ${kinds(patienceDesk)}`);
 finish();

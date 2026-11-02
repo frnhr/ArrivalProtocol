@@ -231,6 +231,10 @@ lines.push(
   ['tally.next', MAP_TEXT.tally.next(UNIT, YEAR)],
   ['tally.update', MAP_TEXT.tally.update(19, 19, 19)],
   ['tally.valve', MAP_TEXT.tally.valve(99)],
+  ['chart.legendTaken', MAP_TEXT.chart.legendTaken(UNIT)],
+  ['chart.legendColony', MAP_TEXT.chart.legendColony(UNIT)],
+  ['chart.legendLost', MAP_TEXT.chart.legendLost(UNIT)],
+  ['chart.legendOlder', MAP_TEXT.chart.legendOlder],
 );
 check('3c\'s sample lines: the launch line, the beacon, the bridge, the history row, the RESUME line',
   MAP_TEXT.title.launched('UNIT-048', 2303, 3, 'UNIT-047') === 'UNIT-048 · YEAR 2303 · LAUNCHED 3 YEARS AFTER UNIT-047'
