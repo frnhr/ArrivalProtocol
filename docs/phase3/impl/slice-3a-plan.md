@@ -1033,3 +1033,99 @@ page plays the classic world until GEN flips it.
     gone); `flagship-lost` reads FINAL SHIP LOST; the LOST card says `TO THE CHART ▸` on both worlds (both have the desk).
 19. **Noise on the real arm** is heavy (GEN: about one hop in six SEVERE): the cloud hatching is fainter (opacity 0.45,
     8 px spacing) so labels over clouds stay readable; beams keep their solid / dashed / dotted steps by noise.
+
+## Deviations (review fixes)
+
+Recorded by the fix agent after the independent review of slice 3a and the e2e runs. Each item names its root cause and
+the check that guards it.
+
+**From the review**
+
+1. **B1, files over the link.** `packUnit` threw when the files outgrew a hop's link (82 at 58 LY; CORMORANT → LAST
+   LIGHT is 87), so SET COURSE crashed. It now reports `Packet.overLink`; `roomFit` gains `link` and `overLink` and says
+   `leave` for the link as for the room; the card's fit line reads `LEAVE n BLOCKS BEHIND · TOO BIG FOR THE LINK`; the
+   PACKET says `n TOO MANY FOR THE LINK · LEAVE FILES BEHIND`, offers every unlocked file as a drop, holds TRANSMIT ▸,
+   and its link line reads `LINK 82 · FILES 90 · 8 TOO MANY FOR THE LINK`; `transmitNext` and `layoutCarried` throw on a
+   packet still over the link. `draftContext` takes the hop's room too: `linkRoom = max(0, min(link − files, room −
+   floor − files))`, so no file card is dealt with no link (or room) left (the classic world's link always binds first:
+   its deals are unchanged). A load-time check (systems/arrival-preview.ts) asserts the locked files (46 blocks) fit
+   the shortest link (82) and TIGHT's room (88). Guard: `map/link-over` (a 90-block unit at VESPER → WAYFARER, 58 LY,
+   link 82: card, SET COURSE, PACKET, no file card, the held send throws, a drop, the crossing to WAYFARER), and
+   `map/room-fit`'s link case.
+2. **M1, one arrival number.** Three places built their own preview (`deskUnitLoad`, `packetFit`, the PACKET's arrival
+   line from `arrivalCharge`), and two copies of the fill rule disagreed (roomFit let a seed take part of its blocks,
+   layoutCarried laid seeds whole or as strays). Now:
+   - `data/memory.ts fillRoom(room, files, floor, charge, seeds)` is the one fill rule (files, floor, whole seeds, the
+     rest) and `roomForUnitOn(ship)` the one room (the class's `roomForUnit`, which `validatePodRacks`' 24-block tail
+     makes true on every ship; it throws otherwise rather than take a smaller room). `layoutCarried` and `roomFit` read
+     both.
+   - `systems/arrival-preview.ts`: `unitArrival(state, { hop, threat, dropped, pick }, seedsExact?)` and
+     `arrivalPreview(fit, credit)` drive the card's fit line, the PACKET's arrival line, its room line and the inline
+     confirm. Where the room binds, the arrival line is `ON ARRIVAL: 36 CARRIED + 18 (★★★) = 54 · ROOM FOR 20` and the
+     link line says `→ CROSSES` instead of `→ FITS`; `TransmitModel.arrivalCharge` is the charge that arrives.
+   - `transmitNext` asserts the laid-out charge and its overflow equal the preview for the seeds the beam rolled.
+   - A TIGHT 0-charge boot types one line, `> REPAIR CHARGE 0 · 54 LOST · NO ROOM ON X`, and no OVERFLOW line.
+   Guards: `map/packet-room` (the test that locked the bug in now demands the room's number on the arrival line),
+   `map/link-over` (240 random files/charge/seed mixes on a FULL and a TIGHT ship: the preview equals the layout; the
+   reviewer's fit probe on every line), `map/room-fit` (whole seeds), `wp7/carry` (a ship with no tail is refused).
+3. **M2, the seeds' share on TIGHT.** The fit line and the room line show the worst case when seeds could take charge
+   room (`CHARGE SQUEEZED: 20 ARRIVES (6 IF SEEDS RIDE)`, `CHARGE 54 → 20 ON ARRIVAL (6 IF SEEDS RIDE) · 34 WON'T
+   FIT`), on any class (the floor holds on FULL and COMPACT, so it shows on TIGHT in practice). The confirm opens when
+   `chargeArrivesMin === 0` (`0 CHARGE IF SEEDS RIDE · TRANSMIT ANYWAY?` when some arrives without seeds). Guard:
+   `map/link-over`.
+4. **M3, the ghost by layer.** `LastUnit` and `ActiveRun` gain optional `layer` and `worldSlot` (archive v1, no
+   version bump: an older record parses without them; a non-number is corrupt), written at each ship's start and the
+   run's end; `ghostPlaceReached` matches the layer, and a record with none speaks at the final ship. **For 3c:** archive
+   v2 formalises the fields with the trail. Guard: `map/run1-roll` (by layer not name, never ship 1, no layer → final
+   ship; the record written, recovered from an abandoned run, round-tripped, corrupt when bad).
+5. **m1, the tutorial's seed.** `map-noise.ts seedAllowance(verdict, firstRun)` replaces `seedRange`: none into a calm
+   ship, exactly the scripted count on the tutorial run (`SEEDS 1`, its room reserved: `RoomFit.seedsMin`), else the
+   noise's odds. Guard: `map/link-over` (HALCYON → KESTREL on run 1), `map/hop-math`.
+6. **m2, the link's loss.** The fit line adds `· LINK LEAVES n` (tone plain, not the good green). Guard: `map/text`.
+7. **m3 / m4, the desk's opening and BEAM OUT's blackout.** `desk.ts deskOpening(state, lastVisit)`: the greying chimes
+   and CONTROL's typed line play on a desk visit's first open (keyed by the run and `run.ships.length`); a return from
+   the PACKET shows the greyed ships and the line at once, in silence. BEAM OUT's blackout delays that first desk open,
+   not every PACKET open. Guard: `map/desk-chrome`.
+8. **m5, the ShipDef cache.** `shipDefOf` is memoized on `JSON.stringify(armShip)` (bounded at 512 entries), not the
+   id with a dev-only partial fingerprint; about 5 µs a call (+4% on `map/run1-route`). **For 3c:** a world update that
+   re-times or re-rolls a ship under the same id gets a fresh ShipDef by construction. Guard: `map/world-slots`.
+9. **m6, one rule each.** `map-geometry.ts beamReaches` is the reachability rule (`reachable` and the generator's
+   `armReach` read it); `ships.ts armShipDefId` is the only id rule (the unused `shipIdFor` is gone); the seed allowance
+   and the arrival preview are item 5's and item 2's, used by the card, the PACKET and the beam alike.
+10. **Nits.** Out-of-range and TOO LATE cards have no fit line and no cost; the card's schedule line is the difference
+    only (`31 YRS EARLY`, `TOO LATE BY 15 YRS`), the TIMELINE keeps the years; `ECC fixes 3` reads `3 FIXED WHILE YOU
+    SLEEP` on the card and the PACKET (`ON THE WAY: 4 HITS · 3 FIXED WHILE YOU SLEEP (89 YRS) → 1 LANDS`); a past ship's
+    reason is `OUT OF YOUR REACH · IT ARRIVED IN 2352`; `desk-chrome`'s two tautologies became a real crumb check and
+    the desk-opening checks; `__ap.runNumber(n)` sets the lineage's wave to `n`, so `run.wave === map.run`.
+11. **The card's lead (the lead's call).** Under the name and `Tessaly · 5 PODS`: `1,000 COLONISTS`, `31 YRS EARLY`
+    (green, red when late) and the cost `3 HITS · 1 FIXED WHILE YOU SLEEP → 2 LAND` (a lost ship's extra hits
+    included), then the fit line, then the other rows smaller and dimmer, then the TIMELINE. The BEAM row is the hop
+    alone (`21 LY · LINK 123`). `CardModel` gains `sub`, `colonists`, `cost`; the fit row is `rows[0]`.
+12. **Noise (the lead's call).** Cloud radius 12–18 → 8–12 LY (tuning.ts, with the measurement as its WHY). Measured
+    over 150 arms (runs 1 and 2 alternating; every reachable hop; 40 random routes an arm flown on the ladder):
+
+    | | CLEAN | LOW | NOISY | SEVERE | depth-3 hops clean | into the final ship CLEAN / SEVERE | TRACE boards, every seed left | every seed deleted |
+    |---|---|---|---|---|---|---|---|---|
+    | 12–18 LY | 21.8% | 35.2% | 25.1% | 18.0% | 18.3% | 41.2% / 3.0% | 38.5% | 0% |
+    | 8–12 LY | 39.8% | 35.7% | 17.8% | 6.7% | 36.1% | 62.0% / 1.3% | 20.4% | 0% |
+
+    Routes with ≥ 2 HOLLOW ships: 36.2% → 28.9% leaving every seed, 21.6% (M3's forced boardings) deleting every seed.
+    CLEAN stays under half, so no in-between radius was needed. GEN's deviation 14 numbers are superseded.
+
+**From the e2e runs**
+
+13. **The RUN TALLY's mini chart** was drawn in a `requestAnimationFrame` from `open()`, while `#runEnd` could still be
+    hidden (BEAM OUT's delayed `show()`): a zero-size box, no redraw. It is drawn after `show()` and on every resize of
+    its box (a ResizeObserver). Checked in the page (20 nodes after FINAL SHIP LOST).
+14. **The LOG READER on the arm.** Entries 05–09 are drafted from 05 §3.12's outlines, `TODO(05)`, in the entries'
+    voice (05–06 in capitals, 07 on lowercase; 08's charge templated, its "a year" launch gap not yet: 3c has it). The
+    reader still throws on a found entry with no text; `state/log-selectors.ts` checks at load that every entry a ring or
+    the final ship can open has words. **Not built:** 05 §3.5's `> you're reading my log. good. read it slowly.` after
+    entry 05 is read: it needs a once-a-run flag on the run state (a schema field) and a moment to say it; left for the
+    INBOX/delivery work in 3b.
+15. **The phone header** drops `WAVE n` at ≤ 768 px (responsive.css; the title and RUN END still say it), so
+    `UNIT-047 / ARES-VII · 2300` and ❚❚ ♪ ◐ share the first row: two rows without `?debug` (the ladder is a third).
+16. **NAV PLOT labels over the path (PETREL's opener).** ▼ and START BURN share a spot on a wide approx band, so every
+    side at `LABEL_GAP` crossed it and the least bad sat on the path. The collision pass tries the same eight sides again
+    `LABEL_GAP_FAR` (24 units × the label scale) further out before settling (NavPlotWindow.ts). Checked in the page at
+    1440×900 and 390×844 (no marker label crosses the drawn path or its band).

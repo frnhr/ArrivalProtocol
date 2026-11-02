@@ -88,10 +88,12 @@ const LABEL_CLASH_UNITS = 40;
 const LABEL_TRY_TURNS_DEG = [0, 45, -45, 90, -90, 135, -135, 180];
 // Slice 3a (the e2e run: PETREL's opener, START BURN at 1440×900 and `▼ LOWEST` at 390×844 lay across the drawn path):
 // where ▼ and START BURN share a spot on a wide approx band, every side at LABEL_GAP still crossed the band, and the least
-// bad one sat on the path. The pass then tries the same sides once more, this much further out (viewBox units, times the
-// label scale): a label steps off the path rather than lie on it. Tried only after the near sides, so it never moves a
-// label that has a clear near side.
+// bad one sat on the path. The pass then tries the same sides again, this much further out and twice that (viewBox units,
+// times the label scale; on a phone the two-line ▼ label is a third of the plot wide, and the first step still left it
+// on the small ring): a label steps off the path rather than lie on it. Tried only after the near sides, so it never
+// moves a label that has a clear near side.
 const LABEL_GAP_FAR = 24;
+const LABEL_FAR_STEPS = 2;
 // Room kept around a glyph, the ship and the chip (viewBox units).
 const OBSTACLE_PAD = 2;
 // Room kept between two labels: flush against each other, START BURN over `▼ 08:23 / LOWEST …` read as one block.
@@ -329,6 +331,9 @@ interface Obstacles {
   boxes: Box[];
   labels: Box[];
   ring: { cx: number; cy: number; radius: number } | null;
+  // The ring with the planet inside it, whatever its size: the far sides (LABEL_GAP_FAR) keep off it, so a label never
+  // trades the path for the ring (the near sides read on the ring band as before).
+  disc: { cx: number; cy: number; radius: number };
 }
 
 // The drawn path, an obstacle for the labels that sit on it (pathArea).
@@ -763,7 +768,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     interface Option { layout: LabelLayout; onText: number; cost: number }
     const turns = LABEL_TRY_TURNS_DEG.length;
     const tryTurn = (index: number): Option => {
-      const gap = index < turns ? LABEL_GAP : LABEL_GAP + LABEL_GAP_FAR * labelScale;
+      const gap = LABEL_GAP + Math.floor(index / turns) * LABEL_GAP_FAR * labelScale;
       const layout = layoutLabel(lines, spot, turned(preferred, LABEL_TRY_TURNS_DEG[index % turns]!), labelScale, charW, gap);
       let cost = pathArea(layout.box, path);
       for (const box of obstacles.boxes) cost += overlapArea(layout.box, box);
@@ -774,6 +779,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
         cost += overlapArea(layout.box, padded(box, LABEL_SPACING));
       }
       if (obstacles.ring) cost += areaOverDisc(layout.box, obstacles.ring);
+      else if (index >= turns) cost += areaOverDisc(layout.box, obstacles.disc);
       return { layout, onText, cost };
     };
     const better = (option: Option, than: Option): boolean =>
@@ -785,7 +791,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     let best = kept;
     let bestIndex = turn.index;
     if (kept.onText > 0 || kept.cost > 0) {
-      for (let index = 0; index < 2 * turns; index++) {
+      for (let index = 0; index < (1 + LABEL_FAR_STEPS) * turns; index++) {
         const option = tryTurn(index);
         if (better(option, best)) { best = option; bestIndex = index; }
         if (best.onText === 0 && best.cost === 0) break;
@@ -1040,7 +1046,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     const bracketBoxes = landingLayer.paint(landingModel, proj, half, half, planetUnits);
     const obstacles: Obstacles = {
       boxes: [boxAround(shipAt, SHIP_TIP + OBSTACLE_PAD), ...bracketBoxes.map((box) => padded(box, OBSTACLE_PAD))],
-      labels: [...zoneLabelBoxes], ring: smallRing,
+      labels: [...zoneLabelBoxes], ring: smallRing, disc: { cx: half, cy: half, radius: ringOuterUnits + OBSTACLE_PAD },
     };
     for (const marker of [markers.impact, markers.peri, apo]) {
       if (marker) obstacles.boxes.push(boxAround(proj.project(marker.pos), MARK_SIZE + OBSTACLE_PAD));
