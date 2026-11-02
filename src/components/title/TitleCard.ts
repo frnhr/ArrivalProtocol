@@ -353,7 +353,9 @@ export function mountTitleCard(store: Store<GameState>): () => void {
   paint(store.getState().run.phase, null);
   const unsub = store.subscribe((s) => s.run.phase, (phase, prev) => paint(phase, prev));
   const unsubRun = store.subscribe((s) => s.run.rev, () => { paintUnit(); paintChart(); });
-  const unsubMap = store.subscribe((s) => s.run.map, paintChart);
+  // The map, the unit and the last unit (a NEW RUN, a resumed run's title) repaint the line; the map repaints the chart.
+  const unsubMap = store.subscribe((s) => `${s.run.seed}|${s.run.unitNumber}|${s.run.lastUnit?.number ?? '-'}|${s.run.map.run}|${s.run.map.startYear}`, paintUnit);
+  const unsubChart = store.subscribe((s) => s.run.map, paintChart);
   const unsubSave = store.subscribe((s) => s.save, paintUnit);
 
   return () => {
@@ -371,6 +373,7 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     if (assembleTimer !== null) clearTimeout(assembleTimer);
     chartResize.disconnect();
     unsubMap();
+    unsubChart();
     chartHost.remove();
     unsub();
     unsubRun();

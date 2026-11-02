@@ -125,8 +125,7 @@ interface LabelSpot { x: number; y: number; anchor: 'start' | 'middle' | 'end' }
 interface Box { x0: number; y0: number; x1: number; y1: number }
 
 function yearLine(node: Readonly<ChartNode>): string {
-  const year = node.isFinal ? `${MAP_TEXT.chart.finalTag} · ${node.year}` : String(node.year);
-  return node.tag === null ? year : `${year} · ${node.tag}`;
+  return node.isFinal ? `${MAP_TEXT.chart.finalTag} · ${node.year}` : String(node.year);
 }
 
 // --- The last unit's trail (slice 3c) --------------------------------------------------------------------------------------
@@ -366,6 +365,14 @@ export function drawChart(svg: SVGSVGElement, model: Readonly<ChartModel>, opts:
       }, 'cn-bracket'));
     }
     g.append(nodeShape(node, px, py));
+    // A ship REPORTED HOME on this run's first desk (slice 3c): a small green diamond at a corner (the desk's legend and
+    // the hover say the words; written into every label they crowded layer 2 at 1280 × 720).
+    if (node.tag !== null) {
+      const c = (node.kind === 'ark' || node.isFinal ? CHART_ARK_PX : CHART_NODE_PX) / 2 + 3;
+      const d = 2.6;
+      // Top-left: labels start right of the node more often than anywhere else.
+      g.append(el('path', { d: `M${px - c},${py - c - d} L${px - c + d},${py - c} L${px - c},${py - c + d} L${px - c - d},${py - c} Z` }, 'cn-new'));
+    }
     const showLabel = opts.labels === 'all'
       || (opts.labels === 'beacon' && node.isFinal)
       || (opts.labels === 'route' && routeSlots.has(node.slot));

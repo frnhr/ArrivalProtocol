@@ -5,7 +5,7 @@ import type { ChartNode } from '@systems/desk';
 import { pushModal, registerKeys } from '@systems/input';
 import {
   deskCandidates, selectShip, cycleShip, cardModel, chartModel, deskSteps, deskOpeningBeat, deskControlLine, deskOpening,
-  openDeskWindow, toggleRequest, deskTabBadges, deskDepartures,
+  openDeskWindow, toggleRequest, deskTabBadges, deskDepartures, chartLegend,
 } from '@systems/desk';
 import { repoModel } from '@systems/repository';
 import type { RepoFileId } from '@/types/repo';
@@ -44,6 +44,10 @@ import { DESK_GREY_STEP_MS, DESK_TYPE_CPS, DESK_SHEET_PEEK_PX } from '@data/tuni
 // back to the card, and while the REPOSITORY is open the number keys [1]–[7] request (or clear) a row. The guidance strip's
 // steps are a list (the first desk has three: a ship, a file, SET COURSE). On a phone the tabs are the sheet's handle: the
 // sheet always peeks its tab bar on the arm, and a tab opens it.
+// Slice 3c (02 §4; 3c plan §3 steps 4–5): the opening desk of a run ≥ 2 lists the ships that moved on in a box over the
+// chart's empty sky (a click puts it away), CONTROL says `UNIT-047 got here first. :)`, the opening beat turns the last
+// unit's newly passed colonies green after the greying (a rising chime each), and a key in the chart's corner says what
+// the trail's marks are (a phone drops it: the card's LAST UNIT row says it there).
 
 const PHONE_QUERY = '(max-width: 768px)';
 // The REPOSITORY's number keys, one per catalogue row (data/repository.ts REPO_FILE_IDS has seven).
@@ -83,7 +87,12 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   // Slice 3c: the opening desk's departures block (`PETREL · ANOTHER CORE IS ON ITS WAY`), over the chart's empty sky.
   const leaveBox = make('div', 'desk-leave');
   leaveBox.hidden = true;
-  chartWin.append(chartTitle, chartHost, leaveBox);
+  // Slice 3c: the key for the trail's marks (systems/desk.ts chartLegend), in the chart's lower-right corner.
+  const legend = make('div', 'desk-legend');
+  legend.hidden = true;
+  legend.setAttribute('aria-hidden', 'true');
+  chartWin.append(chartTitle, chartHost, leaveBox, legend);
+  let legendKey = '';
   const cardWin = make('aside', 'desk-win desk-card-win');
   const cardTitle = make('div', 'desk-win-title desk-sheet-handle');
   const cardClose = make('button', 'desk-sheet-close', MAP_TEXT.desk.closeSheet);
@@ -160,7 +169,19 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     const course = steps.find((step) => step.id === 'set-course')!;
     renderKeyCaps(goBtn, course.text);
     goBtn.classList.toggle('waiting', selected === null);
-    chart.paint(chartModel(state), beatPending, greenPending);
+    const chartNow = chartModel(state);
+    chart.paint(chartNow, beatPending, greenPending);
+    const items = chartLegend(chartNow);
+    const key = items.map((item) => `${item.kind}:${item.words}`).join('|');
+    if (key !== legendKey) {
+      legendKey = key;
+      legend.hidden = items.length === 0;
+      legend.replaceChildren(...items.map((item) => {
+        const line = make('div', `desk-legend-item kind-${item.kind}`);
+        line.append(make('span', 'desk-legend-glyph'), make('span', 'desk-legend-words', item.words));
+        return line;
+      }));
+    }
     const showing = inspected ?? selected;
     const tab = state.ui.deskWindow;
     tabs.paint(tab, deskTabBadges(state), state.run.map.world === 'arm');
@@ -362,6 +383,9 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     request(file);
   };
   repoHost.addEventListener('click', onRepoClick);
+  // The departures block goes away on a click (it is the opening desk's news, not a control).
+  const onLeaveClick = (event: MouseEvent): void => { event.stopPropagation(); leaveBox.hidden = true; };
+  leaveBox.addEventListener('click', onLeaveClick);
   goBtn.addEventListener('click', onGo);
   cardClose.addEventListener('click', onClose);
   cardTitle.addEventListener('click', onHandle);
@@ -404,6 +428,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     unsubTrace();
     unsubTabs();
     repoHost.removeEventListener('click', onRepoClick);
+    leaveBox.removeEventListener('click', onLeaveClick);
     inbox.destroy();
     close();
     chart.destroy();

@@ -395,6 +395,28 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
   };
 }
 
+// The chart's key for the slice-3c marks (the desk shows it in a corner): one entry per kind of mark the chart has now, in a
+// fixed order. The hover and the card carry each mark's own words; the key says what the glyphs are.
+export type ChartLegendKind = 'taken' | 'colony' | 'lost' | 'new' | 'older';
+
+export interface ChartLegendItem {
+  kind: ChartLegendKind;
+  words: string;
+}
+
+export function chartLegend(model: Readonly<ChartModel>): ChartLegendItem[] {
+  const trail = model.trail;
+  const has = (kind: TrailMarkKind): boolean => trail?.marks.some((mark) => mark.kind === kind) === true;
+  const unit = trail === null ? '' : unitName(trail.unit);
+  const items: ChartLegendItem[] = [];
+  if (has('taken')) items.push({ kind: 'taken', words: MAP_TEXT.chart.legendTaken(unit) });
+  if (has('colony')) items.push({ kind: 'colony', words: MAP_TEXT.chart.legendColony(unit) });
+  if (has('lost')) items.push({ kind: 'lost', words: MAP_TEXT.chart.legendLost(unit) });
+  if (model.older.length > 0) items.push({ kind: 'older', words: MAP_TEXT.chart.legendOlder });
+  if (model.nodes.some((node) => node.tag !== null)) items.push({ kind: 'new', words: MAP_TEXT.chart.reportedHome });
+  return items;
+}
+
 // --- The SHIP CARD ------------------------------------------------------------------------------------------------------
 
 // KNOWN PROBLEMS' labels: the template's own arrival and the extra modifiers (02 §3.5); DEBRIS names its rack when the

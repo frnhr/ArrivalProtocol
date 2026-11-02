@@ -122,6 +122,11 @@ export const MAP_TEXT = {
       `BEACON · SET BY ${unit} · ${yearsAgo === 0 ? 'THIS YEAR' : `${years(yearsAgo)} AGO`}`,
     // Track UI: an older colony's dot when its world holds more than one (`LANTERN · 49 YEARS OLD · UNIT-047 · +1`).
     olderMore: (label: string, more: number): string => `${label} · +${more}`,
+    // Track UI: the chart's key for the trail's marks (the desk's corner).
+    legendTaken: (unit: string): string => `${unit} GETS THERE FIRST`,
+    legendColony: (unit: string): string => `${unit}'S COLONY`,
+    legendLost: (unit: string): string => `WHERE ${unit} WAS LOST`,
+    legendOlder: 'OLDER COLONIES',
     // A ship new on this run's chart (its first desk only), and one waiting from earlier runs.
     reportedHome: 'REPORTED HOME',
     runOnChart: (runs: number): string => `${ordinal(runs)} RUN ON THE CHART`,

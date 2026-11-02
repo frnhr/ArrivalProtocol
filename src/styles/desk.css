@@ -115,7 +115,7 @@
 .star-chart .tm.older:hover .colony-old { opacity: 0.9; }
 body.reduced-motion .star-chart .tm-beacon { animation: none; opacity: 0.5; }
 body.reduced-motion .star-chart .tm-colony { transition: none; }
-.star-chart .cn.tagged .cn-year { fill: var(--desk-colony); }
+.star-chart .cn-new { fill: var(--desk-colony); stroke: var(--desk-sky); stroke-width: 0.8; }
 .star-chart .route-trail {
   fill: none; stroke: var(--desk-bright); stroke-width: 2.4; stroke-linejoin: round;
   filter: drop-shadow(0 0 4px var(--desk-accent));
@@ -195,6 +195,31 @@ body.reduced-motion .star-chart .cn-box { transition: none; }
 .desk-leave-line { color: var(--desk-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .desk-leave-more { color: var(--desk-dim); }
 .desk-screen.reduced .desk-leave { animation: none; }
+/* The key for the trail's marks (slice 3c): the chart's lower-right corner, faint, never in the way of a click. */
+.desk-legend {
+  position: absolute; right: 10px; bottom: 8px; z-index: 2; display: flex; flex-direction: column; gap: 2px; align-items: flex-start;
+  padding: 4px 8px; background: color-mix(in srgb, var(--desk-bg) 80%, transparent); pointer-events: none;
+  font-size: 9px; letter-spacing: 0.14em; color: var(--desk-dim);
+}
+.desk-legend[hidden] { display: none; }
+/* A phone: the chart is narrow and the card's sheet peeks at the bottom, so the key gives way (a tap on a ship opens its
+   card, whose LAST UNIT row says the mark's words) and the departures block is smaller (a tap puts it away). */
+@media (max-width: 768px) {
+  .desk-legend { display: none; }
+  .desk-leave { top: 32px; left: 6px; padding: 4px 8px 5px; font-size: 10px; letter-spacing: 0.06em; }
+}
+.desk-leave { cursor: pointer; }
+.desk-legend-item { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.desk-legend-glyph { position: relative; width: 8px; height: 8px; flex: 0 0 8px; box-sizing: border-box; }
+.desk-legend-item.kind-taken .desk-legend-glyph { border: 1.3px solid var(--desk-trail-mark); }
+.desk-legend-item.kind-colony .desk-legend-glyph { border-radius: 50%; background: var(--desk-colony); transform: scale(0.8); }
+.desk-legend-item.kind-older .desk-legend-glyph { border-radius: 50%; background: var(--desk-colony); opacity: 0.45; transform: scale(0.55); }
+.desk-legend-item.kind-new .desk-legend-glyph { background: var(--desk-colony); transform: rotate(45deg) scale(0.65); }
+.desk-legend-item.kind-lost .desk-legend-glyph::before, .desk-legend-item.kind-lost .desk-legend-glyph::after {
+  content: ''; position: absolute; left: -1px; top: 3px; width: 10px; height: 2px; background: var(--desk-cross);
+}
+.desk-legend-item.kind-lost .desk-legend-glyph::before { transform: rotate(45deg); }
+.desk-legend-item.kind-lost .desk-legend-glyph::after { transform: rotate(-45deg); }
 .chart-tip[data-state='too-late'] .chart-tip-reason,
 .chart-tip[data-state='urgent'] .chart-tip-reason { color: var(--desk-warn); }
 .chart-tip[data-state='reachable'] .chart-tip-reason { color: var(--desk-good); }
@@ -389,7 +414,7 @@ body.reduced-motion .desk-card-win { transition: none; }
 body.reduced-motion .title-card.receiving .sol-beam { animation: none; opacity: 0; }
 body.reduced-motion .title-card.booting.receiving .title-chart { animation: none; opacity: 0; }
 /* The last unit's trail on the title's faint chart (slice 3c, run 2+): its marks, no hover. */
-.title-chart .tm-hit { display: none; }
+.title-chart .tm-hit, .title-chart .cn-new { display: none; }
 .title-chart .trail-last { stroke: var(--desk-trail-mark); opacity: 0.7; }
 
 /* ── Slice 3c on the title (TitleCard; systems/title.ts): the launch gap's stamp, the run save's block, the one-off notes.
@@ -457,9 +482,9 @@ body.reduced-motion .title-save-btn.primary { animation: none; }
 .re-tally-undelivered { font-size: 11px; letter-spacing: 0.14em; color: var(--report-dim); text-align: left; }
 .re-tally-undelivered[hidden] { display: none; }
 /* Slice 3c: the world update's summary under the route, and the bridging line under NEW RUN (05 §3.12). */
-.re-tally-next { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--star-missed); text-align: left; font-size: 11px; letter-spacing: 0.1em; color: var(--report-text); }
+.re-tally-next { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--star-missed); text-align: left; font-size: 10px; letter-spacing: 0.04em; color: var(--report-text); }
 .re-tally-next[hidden] { display: none; }
-.re-next-line { font-size: 12px; letter-spacing: 0.16em; color: var(--report-text); }
+.re-next-line { font-size: 11px; letter-spacing: 0.08em; color: var(--report-text); white-space: nowrap; }
 .re-next-valve { color: var(--warn); }
 .re-next-summary { color: var(--report-dim); }
 .re-next-leave { color: var(--report-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
