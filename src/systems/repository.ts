@@ -1,18 +1,25 @@
 import type { Store } from '@state/store';
-import type { GameState, RunState, TransitPlan } from '@state/schema';
+import type { GameState, RunState, TransitPlan, ArrivalReport } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { DeskWindowId, RunMapState } from '@/types/map';
 import type { ShipThreat } from '@/types/threat';
 import type {
-  DeliveryChip, DeliveryForecast, RepoFileId, RepoRequest, RequestStatus, RestrictedId, RunRepoState,
+  ArrivalDelivery, DeliveryChip, DeliveryForecast, RepoFileId, RepoRequest, RequestStatus, RestrictedId, RunRepoState,
 } from '@/types/repo';
-import { REPO_FILES, repoFileSegments, repoToolKind } from '@data/repository';
-import { DELIVERY_SEED_CHANCE } from '@data/tuning';
-import { hopBetween } from '@systems/map-hop';
-import { currentSlot, isEndSlot } from '@systems/map-streams';
+import type { LinkNoise } from '@/types/threat';
+import { REPO_FILES, REPO_FILE_IDS, RESTRICTED_ROWS, repoFileSegments, repoToolKind } from '@data/repository';
+import { REPO_TEXT } from '@data/repo-text';
 import {
-  firstLateness, arrivedYear, forwardLateness, receiverYear, earliestCatchUp, receiverClosed,
+  DELIVERY_SEED_CHANCE, REPO_RECOMMEND_REPAIRS_MIN, REPO_SWAP_LOOKAHEAD_LAYERS, REPAIR_V2_VERSION, INTEGRITY_MAX,
+} from '@data/tuning';
+import { hopBetween, reachable, reachableFrom } from '@systems/map-hop';
+import { currentSlot, isEndSlot, armShipAt, worldSlotOf } from '@systems/map-streams';
+import { layerOf } from '@systems/map-geometry';
+import { hasUsableTool, toolFilesOf, isUsableTool, integrityBand } from '@state/selectors';
+import { noWorkingRm } from '@state/threat-selectors';
+import {
+  firstLateness, arrivedYear, forwardLateness, receiverYear, earliestCatchUp, receiverClosed, deliveryForecast,
 } from '@systems/delivery-rule';
 
 // The repository's rules (02-map §3.8–§3.9; slice-3b-plan §2.3, §2.5), pure models and two small actions, DOM-free:
@@ -31,28 +38,81 @@ import {
 // renewal, which this module must not import: see the cycle guard below).
 // CYCLE GUARD (plan §5.4): this module never imports data/script.ts or systems/arrival-preview.ts, directly or through
 // another module (script.ts → map-boot → … → repository would close a cycle; wp12/fix1/entries loads every module first).
-// Track REPO owns this file after the foundation; its stubs throw `TODO(3b-REPO)` or return empty until then.
+// Track REPO owns this file. lastRmPrompt and noSwapForGhost are the conditions UI's words hang on (the REPOSITORY's Rm focus,
+// the strip's no-Swap ghost line); patchInstalls is the patch's verdict at its boot line.
 
 // The version of the unit's best Repair copy in `memory` (1 with none): a Repair.bak delivery arrives at it.
 export function bestRepairVersion(memory: readonly Segment[]): number {
   return memory.reduce((best, seg) => (seg.type === 'fs-tool' && seg.fsTool === 'repair' ? Math.max(best, seg.version) : best), 1);
 }
 
-// The files the chips not sent on lay out, in chip order (oldest first), with ids from `makeId`: planPacket adds them to
-// the packet beside the card's file, so the link, the room, the draft's room and the gate count them once (plan §2.7 item
-// 2: no third adder anywhere else).
-export function deliveryFiles(chips: readonly DeliveryChip[], memory: readonly Segment[], makeId: (prefix: string) => string): Segment[] {
+// The files the chips not sent on lay out, in chip order (oldest first), with ids from `makeId`, grouped by the chip that
+// carries them: planPacket adds them to the packet beside the card's file, so the link, the room, the draft's room and the
+// gate count them once (plan §2.7 item 2: no third adder anywhere else), and keeps the groups (Packet.deliveries) for the
+// send's seeds and its arrival report.
+export function deliveryFileGroups(
+  chips: readonly DeliveryChip[], memory: readonly Segment[], makeId: (prefix: string) => string,
+): { key: string; segs: Segment[] }[] {
   const repairVersion = bestRepairVersion(memory);
-  return chips.filter((chip) => !chip.sendOn).flatMap((chip) => repoFileSegments(chip.file, makeId, repairVersion));
+  return chips.filter((chip) => !chip.sendOn).map((chip) => ({ key: chip.key, segs: repoFileSegments(chip.file, makeId, repairVersion) }));
+}
+
+export function deliveryFiles(chips: readonly DeliveryChip[], memory: readonly Segment[], makeId: (prefix: string) => string): Segment[] {
+  return deliveryFileGroups(chips, memory, makeId).flatMap((group) => group.segs);
 }
 
 // ARRIVAL CONTROL's recommendation for this desk (02 §3.8, first rule that matches): the run's first desk → Mv; no Rm →
 // Rm; a reachable ship within REPO_SWAP_LOOKAHEAD_LAYERS reports ENGINE FAULT and no Swap → Swap; one Repair copy or fewer
 // → Repair.bak; REPO_RECOMMEND_REPAIRS_MIN repairs this run and no v2 → REPAIR v2; else none. A request in transit or
 // waiting counts as owned (plan risk 4). null: none (`You have everything you need :)`), and on the classic world.
+// "Has" is a working copy (usable and not being eaten: what will still be there at the next ship), as noWorkingRm judges.
+// Rule 1 asks for Mv only while the unit has no MOVE (only ?debug's give can bring one before the first desk).
 export function recommendation(state: Readonly<GameState>): RepoFileId | null {
-  void state;
-  return null; // TODO(3b-REPO): 02 §3.8's rule order.
+  const run = state.run;
+  if (run.map.world !== 'arm') return null;
+  if (run.shipIndex === 0 && !hasOrComing(state, 'move', 'mv')) return 'mv';
+  if (!hasOrComing(state, 'delete', 'rm')) return 'rm';
+  if (!hasOrComing(state, 'swap', 'swap') && engineFaultAhead(state)) return 'swap';
+  const repairs = toolFilesOf(state.memory, 'repair').filter((seg) => isUsableTool(seg) && seg.infected === undefined).length;
+  if (repairs + (inFlight(state, 'repair-bak') ? 1 : 0) <= 1) return 'repair-bak';
+  const v2 = state.memory.some((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair' && seg.version >= REPAIR_V2_VERSION);
+  if (run.stats.repairs >= REPO_RECOMMEND_REPAIRS_MIN && !v2 && !inFlight(state, 'repair-v2')) return 'repair-v2';
+  return null;
+}
+
+// A request for `file` still on its way (in transit, or waiting in a receiver): plan risk 4 counts it as owned. The pick
+// is not on its way yet, so the tag stays on the row the kid picked.
+function inFlight(state: Readonly<GameState>, file: RepoFileId): boolean {
+  return state.run.repo.requests.some((request) => request.file === file && (request.status === 'in-transit' || request.status === 'waiting'));
+}
+
+function hasOrComing(state: Readonly<GameState>, kind: FsToolKind, file: RepoFileId): boolean {
+  return hasUsableTool(state.memory, kind, 'excluded') || inFlight(state, file);
+}
+
+// 02 §3.8's rule 3: some ship the unit can still reach, by any route, at most REPO_SWAP_LOOKAHEAD_LAYERS layers out from
+// the current one, reports ENGINE FAULT (its KNOWN PROBLEMS: the ship's modifiers). Reach is the map's (in range and in
+// time), hop by hop outward; a final ship ends a route.
+function engineFaultAhead(state: Readonly<GameState>): boolean {
+  const map = state.run.map;
+  const from = currentSlot(state.run);
+  const limit = layerOf(worldSlotOf(map, from)) + REPO_SWAP_LOOKAHEAD_LAYERS;
+  const seen = new Set<number>();
+  let frontier = [from];
+  while (frontier.length > 0) {
+    const next: number[] = [];
+    for (const at of frontier) {
+      if (isEndSlot(map, at)) continue;
+      for (const to of reachableFrom(map, at)) {
+        if (seen.has(to) || layerOf(worldSlotOf(map, to)) > limit) continue;
+        seen.add(to);
+        if (armShipAt(map, to).modifiers.includes('engine-fault')) return true;
+        next.push(to);
+      }
+    }
+    frontier = next;
+  }
+  return false;
 }
 
 // --- The REPOSITORY window's model (02 §4; plan §1.1 item 4) ----------------------------------------------------------
@@ -103,12 +163,57 @@ export interface RepoModel {
 }
 
 // The window's model for the destination `selected` (the desk's selection; null: no ETAs yet).
+// A TOO LATE or OUT OF RANGE destination (the desk can select one to look at) gets no ETA and no IN TRANSIT verdict
+// (`forecast: null`): nothing is sent toward a ship the unit will not reach. IN TRANSIT reads the one outlook rule.
 export function repoModel(state: Readonly<GameState>, selected: number | null): RepoModel {
-  // TODO(3b-REPO): the rows (AVAILABLE with deliveryForecast's ETA and the tag, IN TRANSIT, RESTRICTED).
+  const map = state.run.map;
+  const pick = state.run.repo.pick;
+  if (map.world !== 'arm') {
+    return { world: map.world, selected, pick, recommended: null, recommendLine: null, available: [], inTransit: [], restricted: [] };
+  }
+  const from = currentSlot(state.run);
+  const recommended = recommendation(state);
+  const target = selected !== null && reachable(map, from, selected) ? selected : null;
+  const forecast = target === null ? null : deliveryForecast(map, from, target);
+  const targetName = target === null ? null : armShipAt(map, target).name;
+  const focus = lastRmPrompt(state);
+  const available = REPO_FILE_IDS.map((id): RepoRow => {
+    const def = REPO_FILES[id];
+    return {
+      id, name: def.name, blocks: def.blocks, effect: def.effect, text: REPO_TEXT.row(def.name, def.blocks, def.effect),
+      forecast, eta: forecast === null || targetName === null ? null : etaText(forecast, targetName),
+      recommended: recommended === id, requested: pick === id, focus: focus && id === 'rm',
+    };
+  });
+  const outlook = target === null ? [] : hopOutlook(state, from, target);
+  const inTransit = state.run.repo.requests.flatMap((request): RepoTransitRow[] => {
+    if (request.status !== 'in-transit' && request.status !== 'waiting') return [];
+    const name = REPO_FILES[request.file].name;
+    const catchesUp = outlook.some((entry) => entry.key === request.id && entry.rides);
+    if (request.status === 'waiting') {
+      if (request.at === null) throw new Error(`repoModel: ${request.id} waits in no receiver`);
+      return [{
+        requestId: request.id, file: request.file, name, status: 'waiting', behind: null, at: request.at,
+        text: REPO_TEXT.transit.waiting(name, armShipAt(map, request.at).name), catchesUp,
+      }];
+    }
+    const text = catchesUp && targetName !== null ? REPO_TEXT.transit.catchesUp(name, targetName) : REPO_TEXT.transit.behind(name, request.lateness);
+    return [{ requestId: request.id, file: request.file, name, status: 'in-transit', behind: request.lateness, at: null, text, catchesUp }];
+  });
+  const restricted = RESTRICTED_ROWS.map((row): RepoRestrictedRow => ({ id: row.id, name: row.name, why: row.why }));
   return {
-    world: state.run.map.world, selected, pick: state.run.repo.pick, recommended: null, recommendLine: null,
-    available: [], inTransit: [], restricted: [],
+    world: map.world, selected, pick, recommended, recommendLine: recommended === null ? REPO_TEXT.window.nothingToRecommend : null,
+    available, inTransit, restricted,
   };
+}
+
+// An AVAILABLE row's ETA toward the ship named `ship`.
+function etaText(forecast: DeliveryForecast, ship: string): string {
+  switch (forecast.kind) {
+    case 'in-time': return REPO_TEXT.eta.inTime(forecast.arrivedYear, ship, forecast.approachYear);
+    case 'late': return REPO_TEXT.eta.late(forecast.yearsLate, forecast.earliestDepth);
+    case 'never': return REPO_TEXT.eta.never;
+  }
 }
 
 // --- Requests (02 §3.8: one per transmit, optional, changeable until TRANSMIT ▸) ---------------------------------------
@@ -223,32 +328,97 @@ export function deliveriesForHop(state: Readonly<GameState>, from: number, toSlo
     key: entry.key, file: entry.file, blocks: REPO_FILES[entry.file].blocks, source: source[entry.source],
     arrivedYear: entry.arrivedYear, sendOn: false, firstOfKind: false, seedChance: 0,
   }));
-  return markFirstOfKind(state.run, chips, (chip) => (threat.act === 'calm' || chip.firstOfKind || chip.file === 'repair-v2' ? 0 : DELIVERY_SEED_CHANCE[noise]));
+  return markFirstOfKind(state.run, chips, deliverySeedChance(threat, noise));
 }
 
-// The desk tab a desk visit opens on (null: the SHIP CARD): the REPOSITORY with Rm lit when the unit's last rm is gone and
-// it has had DELETE (04 §3.3, round 3: the last-rm prompt). openDesk sets ui.deskWindow from it; REPO owns the rule, UI only
-// draws the tab. Until REPO fills it, always the card.
+// A chip's seed chance on a hop into a ship with this verdict and noise (04 §3.4): none into a calm ship ("no seeds before
+// depth 3"), none on a tool kind's first delivery (its lesson) or on the patch (used up at the boot), else
+// DELIVERY_SEED_CHANCE by the noise. deliveriesForHop and the PACKET's SEND ON (transmit.ts toggleSendOn, which re-marks the
+// first of each kind) both read it.
+export function deliverySeedChance(threat: Readonly<Pick<ShipThreat, 'act'>>, noise: LinkNoise): (chip: Readonly<DeliveryChip>) => number {
+  return (chip) => (threat.act === 'calm' || chip.firstOfKind || chip.file === 'repair-v2' ? 0 : DELIVERY_SEED_CHANCE[noise]);
+}
+
+// The last-rm prompt (04 §3.3, round 3): on the arm, the unit has had DELETE, has no working rm now, and none is on its way
+// (an Rm in transit already answers it: plan risk 4's reading, so the prompt does not nag a kid who asked). The desk then
+// opens on the REPOSITORY with Rm lit.
+export function lastRmPrompt(state: Readonly<GameState>): boolean {
+  return state.run.map.world === 'arm' && state.run.licences.includes('delete') && noWorkingRm(state) && !inFlight(state, 'rm');
+}
+
+// The desk tab a desk visit opens on (null: the SHIP CARD): the REPOSITORY for the last-rm prompt. openDesk sets
+// ui.deskWindow from it; REPO owns the rule, UI only draws the tab.
 export function deskWindowOnOpen(state: Readonly<GameState>): DeskWindowId | null {
-  void state;
-  return null; // TODO(3b-REPO): 'repository' when noWorkingRm && licences.includes('delete'), on the arm.
+  return lastRmPrompt(state) ? 'repository' : null;
 }
 
-// The run's requests after the send over `plan` (plan §2.3 step 4.7): chips not sent on become delivered at the
-// destination; sent on become waiting there (lost on a hop into a final ship); every other request in transit has its
-// lateness reduced by the hop's slack; the pick joins as `rq${nextId}` with its first lateness, and is cleared. Pure.
+// The run's requests after the send over `plan` (plan §2.3 step 4.7), oldest first, pure:
+// • a chip not sent on: delivered at the destination (its arrivedYear: the receiver year it rode from);
+// • a chip sent on: waiting in the destination's receiver to ride the next hop, or lost on a hop into a final ship (no hop
+//   follows; the tally lists it);
+// • a request in transit with no chip: forwarded, its lateness reduced by the hop's slack (it stays in transit, and the
+//   tally lists it if the run ends first);
+// • the pick: as its chip says when it rode (in time), else in transit with its first lateness; it becomes `rq${nextId}`
+//   and the pick is cleared.
+// A waiting request always rides the next hop (deliveriesForHop): one with no chip is a bug, and throws.
 export function advanceRequests(
   repo: Readonly<RunRepoState>, plan: Readonly<Pick<TransitPlan, 'toSlot' | 'hop' | 'deliveries'>>, map: Readonly<RunMapState>,
 ): RunRepoState {
-  void repo;
-  void plan;
-  void map;
-  throw new Error('TODO(3b-REPO): advanceRequests');
+  const to = plan.toSlot;
+  const intoFinal = isEndSlot(map, to);
+  const chipOf = (key: string): DeliveryChip | undefined => plan.deliveries.find((chip) => chip.key === key);
+  const rode = (request: RepoRequest, chip: Readonly<DeliveryChip>): RepoRequest => ({
+    ...request, lateness: 0, arrivedYear: chip.arrivedYear, at: to,
+    status: !chip.sendOn ? 'delivered' : intoFinal ? 'lost' : 'waiting',
+  });
+  const requests = repo.requests.map((request): RepoRequest => {
+    if (request.status === 'delivered' || request.status === 'lost') return { ...request };
+    const chip = chipOf(request.id);
+    if (chip !== undefined) return rode(request, chip);
+    if (request.status === 'waiting') throw new Error(`advanceRequests: ${request.id} waits at slot ${request.at} but did not ride the hop to ${to}`);
+    return { ...request, lateness: forwardLateness(request.lateness, plan.hop) };
+  });
+  let nextId = repo.nextId;
+  if (repo.pick !== null) {
+    const id = `rq${nextId++}`;
+    const request: RepoRequest = {
+      id, file: repo.pick, fromSlot: plan.hop.from, toSlot: to, requestedYear: plan.hop.leaveYear,
+      lateness: firstLateness(map, plan.hop.from, to), status: 'in-transit', at: null, arrivedYear: null,
+    };
+    const chip = chipOf(id);
+    requests.push(chip === undefined ? request : rode(request, chip));
+  }
+  const known = new Set(requests.map((request) => request.id));
+  const stray = plan.deliveries.find((chip) => !known.has(chip.key));
+  if (stray !== undefined) throw new Error(`advanceRequests: chip ${stray.key} (${stray.file}) is no request of the run`);
+  return { pick: null, requests, nextId };
 }
 
 // The files that never reached the unit (02 §3.9: the RUN TALLY's one line): requests still in transit or waiting when
-// the run ended, and those lost on a hop into a final ship. Oldest first.
+// the run ended, and those lost on a hop into a final ship. Oldest first. (Read at RUN END; mid-run it lists what has not
+// arrived yet.)
 export function undeliveredFiles(run: Readonly<RunState>): RepoRequest[] {
-  void run;
-  return []; // TODO(3b-REPO): in transit, waiting, or lost.
+  return run.repo.requests.filter((request) => request.status !== 'delivered').map((request) => ({ ...request }));
+}
+
+// Does the REPAIR v2 patch of `delivery` install at its boot line? It installs while it crossed usable (the band every file
+// works in: not below BAND_DEGRADED_MIN), judged from the transit hits that landed on it (ArrivalReport.hits: the last one
+// on its file is its integrity on arrival; nothing else touches it before its line). A patch hit lower is broken: it is
+// used up and installs nothing (systems/delivery-boot.ts), and its boot line makes no `EVERY REPAIR → v2` claim
+// (map-boot.ts).
+export function patchInstalls(arrival: Readonly<Pick<ArrivalReport, 'hits'>>, delivery: Readonly<ArrivalDelivery>): boolean {
+  if (delivery.file !== 'repair-v2') throw new Error(`patchInstalls: ${delivery.file} is not the patch`);
+  return delivery.segIds.every((id) => {
+    const band = integrityBand(arrival.hits.filter((hit) => hit.segId === id).at(-1)?.to ?? INTEGRITY_MAX);
+    return band === 'ok' || band === 'degraded';
+  });
+}
+
+// The strip's no-Swap line's moment (plan risk 1; UI's words, REPO_TEXT.noSwap): an uncommanded burst is running on an ENGINE
+// FAULT ship of the arm and the unit has no working Swap (the cure is a repository request; on the classic world SWAP
+// still arrives with the first burst, so never there).
+export function noSwapForGhost(state: Readonly<GameState>): boolean {
+  const map = state.run.map;
+  if (map.world !== 'arm' || state.burn.ghost === null) return false;
+  return armShipAt(map, currentSlot(state.run)).modifiers.includes('engine-fault') && !hasUsableTool(state.memory, 'swap', 'excluded');
 }
