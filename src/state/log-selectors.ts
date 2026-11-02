@@ -1,6 +1,6 @@
 import type { GameState, RunLogState } from '@state/schema';
 import type { LogSegment } from '@/types/segment';
-import { LOG_NAME } from '@data/log-text';
+import { LOG_NAME, logEntryLines } from '@data/log-text';
 import { currentSlot, isEndSlot, worldSlotOf } from '@systems/map-streams';
 import { solLy, ringsWithin } from '@systems/map-geometry';
 import { RING_LY } from '@data/arm';
@@ -33,8 +33,15 @@ export function logDisplayName(log: Readonly<RunLogState>): LogSegment['name'] {
 export const RING_ENTRIES: readonly (readonly number[])[] = [[2], [3], [4], [5, 6], [7, 8], [9]];
 // The final ship's boot opens the truth's first two entries (05 §3.2: 10–11; 12 is in the root).
 export const FINAL_ENTRIES: readonly number[] = [10, 11];
+// Any charge renders an entry's words; the check only asks whether they exist.
+const FRESH_UNIT_CHARGE_FOR_CHECK = 36;
 
 if (RING_ENTRIES.length !== RING_LY.length) throw new Error(`log-selectors: ${RING_ENTRIES.length} ring entry lists for ${RING_LY.length} rings`);
+// At load: every entry a ring or the final ship's boot can open has its words (log-view.ts throws on a found entry with
+// none, loudly, at the reader; this says it before any run: the e2e run found 05–09 on the arm with no text).
+for (const n of [...RING_ENTRIES.flat(), ...FINAL_ENTRIES]) {
+  if (logEntryLines(n, { charge: FRESH_UNIT_CHARGE_FOR_CHECK }) === null) throw new Error(`log-selectors: entry ${n} opens at a boot but has no text`);
+}
 
 // The entries whose keys a boot `solLy` LY from SOL finds (05 §3.2; slice 3a: the rings replace 05 §8.2's interim keys):
 // every ring at or inside that distance (an entry opens at the boot of the first ship at or beyond its ring, so a

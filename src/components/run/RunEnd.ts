@@ -135,8 +135,23 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     frame = requestAnimationFrame(tick);
   }
 
+  // The route on the tally's mini chart, at the box's size now (nothing while it has none: the resize observer draws it
+  // as soon as it is laid out).
+  function drawTallyChart(): void {
+    const width = tally.chart.clientWidth;
+    const height = tally.chart.clientHeight;
+    if (width < 40 || height < 40 || model === null || root.hidden) return;
+    drawChart(tally.svg, chartModel(store.getState()), {
+      width, height, rotateDeg: LANDSCAPE_ROTATE_DEG, labels: 'route', beams: false, clouds: false, rings: false,
+      trail046: false, route: true, stars: true, idPrefix: 'tally',
+    });
+  }
+  const chartResize = new ResizeObserver(() => drawTallyChart());
+  chartResize.observe(tally.chart);
+
   function show(report: RunEndModel): void {
     root.hidden = false;
+    requestAnimationFrame(() => { if (model === report) drawTallyChart(); });
     root.classList.toggle('reduced', reducedMotion());
     const victory = report.tone === 'victory';
     root.classList.toggle('tone-victory', victory);
@@ -186,16 +201,9 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     shipsEl.replaceChildren(...report.ships.map(shipRowNode));
     tally.title.textContent = report.tallyTitle;
     tally.colonies.textContent = report.coloniesLine;
-    // The route on a small chart, once the screen is laid out (its size is the CSS box's).
-    requestAnimationFrame(() => {
-      const width = tally.chart.clientWidth;
-      const height = tally.chart.clientHeight;
-      if (width < 40 || height < 40 || model !== report) return;
-      drawChart(tally.svg, chartModel(store.getState()), {
-        width, height, rotateDeg: LANDSCAPE_ROTATE_DEG, labels: 'route', beams: false, clouds: false, rings: false,
-        trail046: false, route: true, stars: true, idPrefix: 'tally',
-      });
-    });
+    // The route's mini chart is drawn once the screen shows (show(): its size is the CSS box's, and a hidden box has none:
+    // drawn here, under a BEAM OUT's delayed show, it was often empty; the e2e run), and again on a resize.
+    tally.svg.replaceChildren();
     scoreEl.textContent = report.scoreLine;
     scoreNoteEl.textContent = RUN_END_TEXT.scoreNote;
     rankEl.textContent = report.rankLine;
@@ -245,6 +253,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     offKeys();
     offMute();
     unsub();
+    chartResize.disconnect();
     close();
   };
 }

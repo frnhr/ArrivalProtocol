@@ -21,7 +21,6 @@ import { FLIGHT_TEMPLATES, DEBRIS_CLOUD, RADIATION_BELT } from '@data/flight-tem
 import { RACK_A, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, POD_RACK_KEYS } from '@data/memory';
 import { ARES_RUN1_FAMILIES, ADA } from '@data/souls';
 import { WORLDS } from '@data/arm';
-import { IS_DEV } from '@/env';
 
 // The runtime ship (phase 3 slice 3a, slice-3a-plan §2.2): everything one ship's world is built from (state/initial.ts
 // createShipSlices, data/memory.ts buildShipMemory, systems/carry.ts layoutCarried, the landing slice). It is never
@@ -239,13 +238,13 @@ export function validateShipDef(ship: ShipDef): void {
 // the class and the pod layout it rolled, rack A as every ship has it, and racks E–F written only on a first ship (ARES-n
 // meets a fresh unit). The first ship's drivers are ARES-VII's written ones (POD 02 at 44%, Ada's family first in the
 // credits on the tutorial run; data/driver-damage.ts reseeds them on a returning unit); every other ship's are rolled by
-// its layer. Pure and memoized ON `armShip.id` (never on the object: systems/map-run.ts mapAtShip clones the map, and a
-// JSON round trip of the save would too); in dev a cheap fingerprint guards against two different ships sharing an id.
-const SHIP_DEF_CACHE = new Map<string, { fingerprint: string; ship: ShipDef }>();
-
-function fingerprintOf(arm: Readonly<ArmShip>): string {
-  return `${arm.slot}|${arm.name}|${arm.kind}|${arm.template}|${arm.pods}|${arm.memoryClass}|${arm.modifiers.join(',')}|${arm.omega0}`;
-}
+// its layer. Pure and memoized on the ArmShip's whole content (its JSON: every field shipDefOf reads and the rest), never on
+// its id or on the object (systems/map-run.ts mapAtShip clones the map, and a JSON round trip of the save would too). The
+// review's m5: the cache was keyed on the id with a dev-only check of a few fields (no approach year, landing or pod racks),
+// so 3c's world update, which re-times a waiting ship under the same id, could have been served a stale ShipDef. The key
+// costs a JSON.stringify per call (about 5 µs); the cache is bounded (a run's arms are a few dozen ships).
+const SHIP_DEF_CACHE = new Map<string, ShipDef>();
+const SHIP_DEF_CACHE_MAX = 512;
 
 // The ShipDef id of an arm ship: an authored ship keeps its own ('kestrel'), every other its name's ('good-hope'). The
 // only copy of the rule (the review's m6: map-generator had a second).
@@ -254,13 +253,9 @@ export function armShipDefId(arm: Readonly<ArmShip>): string {
 }
 
 export function shipDefOf(arm: Readonly<ArmShip>): ShipDef {
-  const cached = SHIP_DEF_CACHE.get(arm.id);
-  if (cached !== undefined) {
-    if (IS_DEV && cached.fingerprint !== fingerprintOf(arm)) {
-      throw new Error(`shipDefOf: two arm ships share the id ${arm.id} (${cached.ship.name} and ${arm.name})`);
-    }
-    return cached.ship;
-  }
+  const key = JSON.stringify(arm);
+  const cached = SHIP_DEF_CACHE.get(key);
+  if (cached !== undefined) return cached;
   const world = WORLDS[arm.slot];
   if (!world) throw new Error(`shipDefOf: ${arm.name} in slot ${arm.slot}, which the arm does not have`);
   const template = FLIGHT_TEMPLATES[arm.template];
@@ -312,6 +307,7 @@ export function shipDefOf(arm: Readonly<ArmShip>): ShipDef {
     },
     landing: structuredClone(arm.landing) as ShipLandingDef,
   };
-  SHIP_DEF_CACHE.set(arm.id, { fingerprint: fingerprintOf(arm), ship });
+  if (SHIP_DEF_CACHE.size >= SHIP_DEF_CACHE_MAX) SHIP_DEF_CACHE.clear();
+  SHIP_DEF_CACHE.set(key, ship);
   return ship;
 }

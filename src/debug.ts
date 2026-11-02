@@ -490,10 +490,11 @@ function debugRoute(store: Store<GameState>, slots: readonly number[]): Hop {
 }
 
 // __ap.runNumber(n): a NEW RUN now, as run `n` of the arm (run 1: run 1's arm; later: a fresh roll with ARES-(VI + n) and
-// that run's final ship), on its title card. The archive's lineage is kept (the unit number); only the map's run differs.
+// that run's final ship), on its title card. The archive's lineage is kept (the unit number, the last unit), with its wave
+// set to `n`, so run.wave and map.run agree (the review's nit: the map came from `n`, the run state from the archive).
 function debugRunNumber(store: Store<GameState>, run: number): void {
   if (!(Number.isInteger(run) && run >= 1)) throw new Error(`__ap.runNumber(${run}): a run number is a whole number ≥ 1`);
-  const lineage = archiveLineage();
+  const lineage = { ...archiveLineage(), wave: run };
   const seed = newRunSeed();
   resetWorldForShip(store, {
     phase: 'title', run: { ...createRunState(seed, 'title', 0, lineage), map: createRunMap({ wave: run }, seed) }, carried: null,

@@ -3,7 +3,7 @@ import type { GameState } from '@state/schema';
 import type { ChartNode } from '@systems/desk';
 import { pushModal, registerKeys } from '@systems/input';
 import {
-  deskCandidates, selectShip, cycleShip, cardModel, chartModel, deskSteps, deskOpeningBeat, deskControlLine,
+  deskCandidates, selectShip, cycleShip, cardModel, chartModel, deskSteps, deskOpeningBeat, deskControlLine, deskOpening,
 } from '@systems/desk';
 import { setCourse } from '@systems/run';
 import { currentSlot, shipSummaryAt } from '@systems/map-run';
@@ -88,6 +88,9 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   let inspected: number | null = null;
   let sheetOpen = false;
   let beatPending: number[] = [];
+  // The desk visit whose opening (the greying chimes, CONTROL's typed line, BEAM OUT's blackout) has played: one per ship
+  // left, keyed by the run and run.ships.length (the review's m3: every ◀ CHART return replayed it).
+  let openedVisit: string | null = null;
   let timers: ReturnType<typeof setTimeout>[] = [];
   let typing: ReturnType<typeof setInterval> | null = null;
   const stopTimers = (): void => {
@@ -166,12 +169,12 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     paint();
   }
 
-  // CONTROL's line, typed (wall time; reduced motion shows it whole).
-  function typeControl(line: string | null): void {
+  // CONTROL's line, typed (wall time; reduced motion, or back from the PACKET, shows it whole).
+  function typeControl(line: string | null, typed: boolean): void {
     control.hidden = line === null;
     controlText.textContent = '';
     if (line === null) return;
-    if (store.getState().ui.reducedMotion) { controlText.textContent = line; return; }
+    if (store.getState().ui.reducedMotion || !typed) { controlText.textContent = line; return; }
     let shownChars = 0;
     typing = setInterval(() => {
       shownChars += 1;
@@ -181,12 +184,18 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     }, 1000 / DESK_TYPE_CPS);
   }
 
-  // The opening beat: the ships whose approach passed since the last desk turn grey one by one.
-  function openingBeat(): void {
+  // The opening beat: the ships whose approach passed since the last desk turn grey one by one. `replay` false (back from
+  // the PACKET): they are grey already and the line is up, in silence.
+  function openingBeat(replay: boolean, delayMs: number): void {
     const beat = deskOpeningBeat(store.getState());
+    beatLine.textContent = beat.line ?? '';
+    if (!replay) {
+      beatPending = [];
+      beatLine.hidden = beat.line === null;
+      return;
+    }
     beatPending = [...beat.greyed];
     beatLine.hidden = true;
-    beatLine.textContent = beat.line ?? '';
     if (beat.greyed.length === 0) return;
     beat.greyed.forEach((slot, i) => {
       timers.push(setTimeout(() => {
@@ -194,7 +203,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
         chart.ungrey(slot);
         play('chime', { falling: true });
         if (i === beat.greyed.length - 1) beatLine.hidden = false;
-      }, (i + 1) * DESK_GREY_STEP_MS));
+      }, delayMs + (i + 1) * DESK_GREY_STEP_MS));
     });
   }
 
@@ -205,10 +214,23 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     inspected = null;
     sheetOpen = false;
     stopTimers();
-    root.hidden = false;
-    root.classList.toggle('reduced', store.getState().ui.reducedMotion);
-    openingBeat();
-    typeControl(deskControlLine(store.getState()));
+    const state = store.getState();
+    // systems/desk.ts deskOpening: the opening once per desk visit; after a BEAM OUT the old ship's windows go black first
+    // (Telemetry's blackout), and the desk comes up out of the dark, once (the review's m3, m4).
+    const opening = deskOpening(state, openedVisit);
+    openedVisit = opening.visit;
+    const first = opening.replay;
+    root.classList.toggle('reduced', state.ui.reducedMotion);
+    const blackoutMs = opening.blackoutSec * 1000;
+    root.hidden = blackoutMs > 0;
+    if (blackoutMs > 0) timers.push(setTimeout(() => { root.hidden = false; }, blackoutMs));
+    openingBeat(first, blackoutMs);
+    if (first && blackoutMs > 0) {
+      control.hidden = true;
+      timers.push(setTimeout(() => typeControl(deskControlLine(store.getState()), true), blackoutMs));
+    } else {
+      typeControl(deskControlLine(state), first);
+    }
     paint();
   }
   function close(): void {

@@ -19,7 +19,7 @@ import { FORGIVENESS_TEXT } from '@data/landing-text';
 import { THREAT_TEXT } from '@data/threat-text';
 import { SHIP_OUTCOME_WORD } from '@data/script';
 import { MAP_TEXT, MODIFIER_LABEL } from '@data/map-text';
-import { URGENT_SLACK_YEARS, TRAIL_046_CROSS_PAST_LY } from '@data/tuning';
+import { URGENT_SLACK_YEARS, TRAIL_046_CROSS_PAST_LY, BEAM_OUT_BLACKOUT_SEC } from '@data/tuning';
 
 export type { DeskWindowId };
 
@@ -396,6 +396,21 @@ export function deskOpeningBeat(state: Readonly<GameState>): DeskOpeningBeat {
     .sort((a, b) => a.year - b.year || a.slot - b.slot)
     .map(({ slot }) => slot);
   return { greyed, line: greyed.length > 0 ? MAP_TEXT.desk.greyed(greyed.length) : null };
+}
+
+// How a desk opens (the review's m3, m4): the first open of a desk visit (one per ship left: the run and how many ships it
+// has ended) plays the opening, the greying chimes and CONTROL's typed line, and after a BEAM OUT waits for the old ship's
+// blackout first; an open back from the PACKET (◀ CHART) shows the same desk at once and in silence.
+export interface DeskOpening {
+  visit: string;            // the visit's key: the view keeps the last one it opened
+  replay: boolean;          // the opening plays (the first open of this visit)
+  blackoutSec: number;      // the desk waits this long before it shows (BEAM OUT's blackout, first open only)
+}
+
+export function deskOpening(state: Readonly<GameState>, lastVisit: string | null): DeskOpening {
+  const visit = `${state.run.seed}|${state.run.unitNumber}|${state.run.ships.length}`;
+  const replay = visit !== lastVisit;
+  return { visit, replay, blackoutSec: replay && state.burn.status === 'abandoned' ? BEAM_OUT_BLACKOUT_SEC : 0 };
 }
 
 // CONTROL's line as the desk opens (02 §2): the first desk of a run only.

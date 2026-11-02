@@ -55,4 +55,18 @@ arm[0]!.podRacks.B = 'changed';
 check('assembleRun1Arm copies RUN1_AUTHORED (mutating an arm leaves LAST LIGHT and the table alone)',
   classicShip(4).landing.lzs[0]!.pods === 4 && RUN1_AUTHORED['last-light'].landing!.lzs[0]!.pods === 4 && RUN1_AUTHORED['ares-vii'].podRacks!.B === 'P P P _40');
 check('the run map round-trips through JSON', JSON.stringify(JSON.parse(JSON.stringify(map))) === JSON.stringify(map));
+// The review's m5: shipDefOf is memoized on the ArmShip's whole content, so a ship re-timed or re-rolled under the same
+// id (3c's world update) is built again, never served stale; the same content is the same ShipDef.
+{
+  const before = run1Map(6);
+  const after = structuredClone(before);
+  const ship = after.arm[13]!;
+  ship.approachYear += 5;
+  ship.podRacks = { ...ship.podRacks };
+  ship.landing = { ...ship.landing, lzs: ship.landing.lzs.map((lz) => ({ ...lz })) };
+  const same = structuredClone(before);
+  check('shipDefOf: the same id with another approach year is a new ShipDef; the same content is the cached one',
+    shipDefAt(after, 13).approachYear === shipDefAt(before, 13).approachYear + 5 && after.arm[13]!.id === before.arm[13]!.id
+    && shipDefAt(same, 13) === shipDefAt(before, 13));
+}
 finish();

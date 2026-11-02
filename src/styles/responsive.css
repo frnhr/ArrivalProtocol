@@ -56,6 +56,9 @@
   .id-block .crumb.dim,
   .id-block .crumb.phase,
   .id-block .sep.sep-phase { display: none; }
+  /* Slice 3a (the e2e run): the arm's ship crumb carries the year (`ARES-VII · 2300`), which pushed ◐ onto a third
+     header row at 390 px. The wave gives way on a phone (the title and RUN END still say it); the year stays. */
+  .id-block .crumb-wave { display: none; }
 
   .speed-btn {
     min-width: 36px;

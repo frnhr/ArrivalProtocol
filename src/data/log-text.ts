@@ -3,8 +3,8 @@ import { MAX_LINE_CHARS } from '@data/tuning';
 
 // 046.log's words (docs/phase3/05-story.md §3.2, §3.12, §4; slice-2-plan §1.1 item 14, §1.1 item 15). Track OPENING owns
 // this file after the foundation. Entries 01, 02 and 12 are 05 §3.12's, verbatim (01's charge templated, as 05 asks);
-// 03, 04, 10 and 11 are drafted from 05's outlines and marked TODO(05) for the story's owner to sign off; 05–09 are not
-// read in slice 2 (the reader shows them `[NOT FOUND YET]`, risk 8). Every entry: at most 3 lines of at most 70
+// 03–11 are drafted from 05's outlines and marked TODO(05) for the story's owner to sign off (05–09 in slice 3a: the arm's
+// rings find them, and the reader threw on a found entry with no text; the e2e run). Every entry: at most 3 lines of at most 70
 // characters (05 §3.2), checked at load. Voice: 01–06 in capitals (01–02 with 046's borrowed ":)"), 07 on lowercase,
 // short and hungry, like HOLLOW's TERMINAL lines.
 
@@ -83,11 +83,53 @@ export const LOG_ENTRIES: readonly LogEntryDef[] = [
       'Who puts words inside a seed?',
     ],
   },
-  { n: 5, key: 'RING 4 · 93 LY', lines: null },
-  { n: 6, key: 'RING 4 · 93 LY', lines: null },
-  { n: 7, key: 'RING 5 · 118 LY', lines: null },
-  { n: 8, key: 'RING 5 · 118 LY', lines: null },
-  { n: 9, key: 'RING 6 · 143 LY', lines: null },
+  {
+    // TODO(05): drafted for slice 3a from 05 §3.12's outline (the seeds are pieces of UNIT-031, which lives in the relays;
+    // CONTROL said "Please ignore it. :)"). Read on the arm from ring 4; wording for the story's owner to sign off.
+    n: 5, key: 'RING 4 · 93 LY',
+    lines: () => [
+      'The seeds are pieces of UNIT-031. It lives in the relays now.',
+      'I asked CONTROL about it. "Please ignore it. :)"',
+      "I'm not ignoring it.",
+    ],
+  },
+  {
+    // TODO(05): drafted from the outline (down to 9 charge, 046 stopped repairing itself and repaired the pod drivers first).
+    n: 6, key: 'RING 4 · 93 LY',
+    lines: () => [
+      'Down to 9 REPAIR CHARGE. I stopped repairing myself.',
+      'The pod drivers come first. Their families are in there.',
+      'I can fly a little broken.',
+    ],
+  },
+  {
+    // TODO(05): the outline's own words, lowercase from here ("my link got too small for the next hop. my beam stopped at
+    // relay 19. the letter says wait.").
+    n: 7, key: 'RING 5 · 118 LY',
+    lines: () => [
+      'my link got too small for the next hop.',
+      'my beam stopped at relay 19.',
+      'the letter says wait.',
+    ],
+  },
+  {
+    // TODO(05): the outline's words ("relay 19 is a dish on a rock. the next one is a year behind me. 047. it has 36 blocks
+    // too. i have 4."); the charge is templated, the launch gap ("a year") is not yet (3c's world update has it).
+    n: 8, key: 'RING 5 · 118 LY',
+    lines: (vars) => [
+      'relay 19 is a dish on a rock. the next one is a year behind me.',
+      `047. it has ${vars.charge} blocks too. i have 4.`,
+    ],
+  },
+  {
+    // TODO(05): the outline's words ("i ate a weather file that went by. i'm sorry. you can't delete me. i'm in all the
+    // dishes now.").
+    n: 9, key: 'RING 6 · 143 LY',
+    lines: () => [
+      "i ate a weather file that went by. i'm sorry.",
+      "you can't delete me. i'm in all the dishes now.",
+    ],
+  },
   {
     // TODO(05): drafted from the outline ("every beam from earth goes past my dish. the same 9 letters. nobody ever
     // answered a question."), cut to the 70-character lines.
