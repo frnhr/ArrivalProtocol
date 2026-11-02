@@ -114,6 +114,9 @@ function resumeWorld(store: Store<GameState>, save: Readonly<RunSave>, payload: 
     draft.log = { entries: structuredClone(save.log.entries), rev: logRev };
     draft.ui = {
       ...createUiState(payload.phase, draft.ui.reducedMotion),
+      // The amber screen: the landing is flown there, and its report and the desk open over it (the title's blue would tint
+      // the desk's header as no played desk is).
+      mode: 'tools',
       filtersOff: draft.ui.filtersOff,
       spotlight: draft.ui.spotlight,
       memoryRev: draft.ui.memoryRev + 1,

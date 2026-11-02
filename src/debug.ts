@@ -66,7 +66,7 @@ import { META_STORAGE_KEY, RUN_SAVE_KEY, ROOT_BLOCKS, COLONISTS_PER_POD } from '
 import type { SaveState } from '@/types/save';
 import { updateArm, armStateOfMap, type ArmUpdate } from '@systems/map-update';
 import { visitsOf, trailOf, notableEvents } from '@systems/lineage';
-import { abandonRun } from '@systems/run-save';
+import { abandonRun, resumeRun } from '@systems/run-save';
 import { runScore, runLanded } from '@systems/run-score';
 import type { ShipResult } from '@state/schema';
 import type { Segment } from '@/types/segment';
@@ -254,6 +254,10 @@ interface DebugHooks {
   save: () => { state: SaveState; stored: string | null };
   saveCorrupt: () => void;
   saveClear: () => void;
+  // Track SAVE: the title's [RESUME ▸] and [ABANDON RUN] / NEW RUN over a save (systems/run-save.ts resumeRun, abandonRun), for
+  // the e2e scripts and a page without the title's RESUME block.
+  resume: () => void;
+  abandon: () => void;
   updateArm: (route?: readonly number[]) => ArmUpdate;
   ghost: () => string | null;
   draft: () => { offer: DraftCard[]; pick: UpgradeId | null; context: DraftContext } | null;
@@ -856,6 +860,8 @@ export function mountDebug(store: Store<GameState>): void {
     save: () => ({ state: structuredClone(store.getState().save), stored: browserStorage().getItem(RUN_SAVE_KEY) }),
     saveCorrupt: () => { browserStorage().setItem(RUN_SAVE_KEY, '{ this is not a run save'); },
     saveClear: () => { browserStorage().removeItem(RUN_SAVE_KEY); },
+    resume: () => resumeRun(store),
+    abandon: () => abandonRun(store),
     updateArm: (route) => {
       const run = store.getState().run;
       const visits = visitsOf(run);
