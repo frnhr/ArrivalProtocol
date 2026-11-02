@@ -36,6 +36,16 @@
 // • Every TRANSMIT: 046.log's chip `046.log · n/12`, glowing while an entry is unread.
 // • The RUN TALLY: six rows in route order, the route on its mini chart, n COLONIES FOUNDED, the score and rank; NEW RUN
 //   is a fresh roll, run 2, with ARES-VIII at w0.
+// Phase 3 slice 3b (the repository, deliveries, the INBOX; slice-3b-plan §3, §6.3): the interim licences are gone, so the
+// kid's tools come by request. At each DESK, after clicking the next ship, the kid opens the REPOSITORY [R] and clicks
+// REQUEST on the worked route's file (Mv, Rm, Swap, Cp), checking its ETA (IN TIME / `4 YRS LATE → …` / NEVER on every row
+// at CORMORANT) and ARRIVAL CONTROL's `:) RECOMMENDED FOR YOU` tag; KESTREL's desk shows VESPER's `Swap ✗ 4 YRS LATE` and
+// its red TIMELINE mark, VESPER's shows CORMORANT's `Swap ✓ CATCHES UP HERE`. The PACKETs carry the delivery chips (Mv into
+// HALCYON, Rm into KESTREL, none into VESPER, Swap into CORMORANT, Cp into LAST LIGHT) and the SALVAGE draft without
+// REPAIR v2; the boots say `> DELIVERY: …`. The INBOX: ARES-VII's dock reads `INBOX 1` and the kid opens the welcome there;
+// CONTROL's reply to ARES-VII comes at HALCYON (read in the desk's INBOX tab); 046's no-address mail in pink at VESPER.
+// VESPER is flown with no Swap aboard: the ghost thrust, the strip's `NO SWAP ABOARD — fly through each burst, then fix ▼`,
+// and how the ship ended is logged. The RUN TALLY says `NEVER ARRIVED: —`.
 // About 20 minutes; shots under tests/.out/e2e/shots/play-*.
 // Usage: node tests/e2e/scenarios/playthrough.mjs   (env E2E_BASE_URL, SEED, SHOT_VIEWPORT; tests/e2e/run.mjs runs it)
 // Debugging a ship: PLAY_FROM=6 flies headless to LAST LIGHT after the title (__ap.route along the worked route, a fresh
@@ -51,6 +61,26 @@ const ROUTE = [
   { slot: 11, name: 'VESPER' }, { slot: 15, name: 'CORMORANT' }, { slot: 19, name: 'LAST LIGHT' },
 ];
 const SHIPS = ROUTE.map((stop) => stop.name);
+// Slice 3b: what the kid requests at each DESK of the worked route (slice-3b-plan §3, §4.2 and its Deviations: Cp reaches
+// LAST LIGHT's receiver in 2915), the REPOSITORY's ETA for it toward the next ship, and whether CONTROL tags it. At
+// CORMORANT nothing can arrive in time (every row NEVER): no request.
+const NEVER_ETA = 'NOTHING WILL REACH YOU IN TIME';
+const DESK_REQUESTS = [
+  { file: 'mv', eta: 'ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME', tone: 'eta-in-time', tagged: true },
+  { file: 'rm', eta: 'ARRIVES 2436 · KESTREL APPROACH 2467 · IN TIME', tone: 'eta-in-time', tagged: true },
+  { file: 'swap', eta: '4 YRS LATE → FOLLOWS YOUR ROUTE · SHIP 5 AT THE EARLIEST', tone: 'eta-late', tagged: true },
+  { file: 'cp', eta: '44 YRS LATE → FOLLOWS YOUR ROUTE · SHIP 6 AT THE EARLIEST', tone: 'eta-late', tagged: false },
+  null,
+];
+// The delivery chips on the PACKET into each ship, and the boot line each delivery says there.
+const CHIPS_INTO = {
+  HALCYON: ['Mv · 2 BLOCKS · ARRIVED 2337'], KESTREL: ['Rm · 1 BLOCK · ARRIVED 2436'], VESPER: [],
+  CORMORANT: ['Swap · 1 BLOCK · ARRIVED 2659'], 'LAST LIGHT': ['Cp · 3 BLOCKS · ARRIVED 2915'],
+};
+const BOOT_DELIVERIES = {
+  'ARES-VII': [], HALCYON: ['> DELIVERY: mv (arrived 2337)'], KESTREL: ['> DELIVERY: rm (arrived 2436)'], VESPER: [],
+  CORMORANT: ['> DELIVERY: swap (arrived 2659)'], 'LAST LIGHT': ['> DELIVERY: cp (arrived 2915)'],
+};
 const MAX_LINE_CHARS = 70;         // tuning.ts MAX_LINE_CHARS: what the strip promises to fit
 const SHIP_MAX_MS = 6 * 60_000;    // a flight longer than this is stuck (a kid's whole run is about 15 minutes)
 const SCREEN_MAX_MS = 3 * 60_000;  // a report, TRANSMIT
@@ -320,6 +350,9 @@ const landingLook = () => st(() => {
     launchLabel: document.getElementById('pbLaunchLabel').innerText, bayText: document.getElementById('pbBay').innerText,
     lzs: [...document.querySelectorAll('#pbLzs .pb-lz')].map((el) => el.textContent),
     track: shown('groundTrack'), trackWorld: document.getElementById('gtWorld').innerText, trackDot: shown('gtDot'),
+    // Slice 3b: an orbit only accepted (VESPER flown without Swap, its tank drained by the ghost bursts) may have no drop
+    // dot at all: the drop solution says so (the strip's NO DROP DOT ON THIS ORBIT).
+    solutionDot: ap.landing().solution?.dot != null,
     mini: shown('mhLanding') ? document.getElementById('mhLandingText').innerText : null,
     onTarget: shown('mhOnTarget') ? document.getElementById('mhOnTarget').innerText : null,
     pods: s.landing.pods.length, fates, ended: s.landing.ended,
@@ -338,7 +371,7 @@ await shot('0-title');
 await page.locator('#titleReceive').click();
 
 // --- The ships ----------------------------------------------------------------------------------------------------------
-const run = { lines: new Set(), long: [], unfit: new Set(), shipsFlown: [], landed: [], miniSeen: 0 };
+const run = { lines: new Set(), long: [], unfit: new Set(), shipsFlown: [], landed: [], miniSeen: 0, readingLines: 0, reports: [], noSalvageV2: [] };
 if (FROM > 1) {
   await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 30000);
   await st((slots) => window.__ap.route(slots), ROUTE.slice(0, FROM).map((stop) => stop.slot));
@@ -391,6 +424,41 @@ for (const [index, name] of SHIPS.entries()) {
   if (name === 'KESTREL') {
     check(`${tag}: …its ECC line names the beam seed: 1 FOREIGN BLOCK IN PACKET · NEXT TO TELEMETRY`,
       bootLines.some((text) => text === '> ECC: 1 FOREIGN BLOCK IN PACKET · NEXT TO TELEMETRY'), bootLines.join(' | '));
+  }
+  // Slice 3b: the boot's `> DELIVERY:` lines (the files requested at the desks, arrived in this ship's receiver) and the mail
+  // line `> n NEW MESSAGES · INBOX`; HOLLOW's reading line is said at most once a run.
+  const bootSaid = await st(() => window.__ap.log().filter((entry) => entry.id > window.__e2eLogFrom && entry.text.startsWith('>')).map((entry) => entry.text));
+  const said = { deliveries: bootSaid.filter((text) => /^> DELIVERY:/.test(text)), mail: bootSaid.filter((text) => /^> \d+ NEW MESSAGES? · INBOX$/.test(text)) };
+  run.readingLines += bootSaid.filter((text) => text === "> you're reading my log. good. read it slowly.").length;
+  check(`${tag}: …the boot's deliveries: ${BOOT_DELIVERIES[name].length === 0 ? 'none' : BOOT_DELIVERIES[name].join(', ')}`,
+    JSON.stringify(said.deliveries) === JSON.stringify(BOOT_DELIVERIES[name]), JSON.stringify(said.deliveries));
+  const inboxNow = await st(() => ({ ...window.__ap.inbox(), dock: document.getElementById('inboxDockLabel').innerText }));
+  log(`${tag}: boot mail ${said.mail.join(' ') || 'none'}; INBOX ${inboxNow.messages.length} messages, ${inboxNow.unread.length} unread (dock \`${inboxNow.dock}\`): ${inboxNow.messages.map((message) => message.id).join(', ')}`);
+  if (name === 'ARES-VII') {
+    // The welcome, in flight: the dock reads `INBOX 1`; the kid opens the INBOX window from it and clicks the welcome.
+    check(`${tag}: …the boot said \`> 1 NEW MESSAGE · INBOX\` and the dock reads \`INBOX 1\``, said.mail.join() === '> 1 NEW MESSAGE · INBOX' && inboxNow.dock === 'INBOX 1'
+      && inboxNow.unread.join() === 'welcome', JSON.stringify({ mail: said.mail, dock: inboxNow.dock, unread: inboxNow.unread }));
+    await tap(page.locator('.dock-item[data-tool="inbox"]'));
+    await page.waitForTimeout(400);
+    await tap(page.locator('#inboxWin .ib-row[data-id="welcome"]'));
+    await page.waitForTimeout(400);
+    const welcome = await st(() => ({
+      shown: !document.getElementById('inboxWin').hidden, stamps: document.querySelector('#inboxWin .ib-stamps')?.textContent ?? null,
+      lines: [...document.querySelectorAll('#inboxWin .ib-line')].map((line) => line.textContent), dock: document.getElementById('inboxDockLabel').innerText,
+      read: window.__ap.inbox().read,
+    }));
+    check(`${tag}: …the kid opens the INBOX from the dock and the welcome: SENT 2280 · RECEIVED 2288, \`Recommended for you: mv :)\`; read`, welcome.shown
+      && welcome.stamps === 'SENT 2280 · RECEIVED 2288' && welcome.lines.includes('Need software? Ask our repository. Recommended for you: mv :)') && welcome.read.includes('welcome')
+      && welcome.dock !== 'INBOX 1', JSON.stringify(welcome));
+    await shot('1a2-inbox-welcome');
+    await tap(page.locator('.dock-item[data-tool="inbox"]'));
+    await page.waitForTimeout(300);
+  }
+  if (name === 'HALCYON') {
+    // CONTROL's reply to ARES-VII arrives here (with RIVERSIDE's first postcard): `> 2 NEW MESSAGES · INBOX`.
+    const reply = inboxNow.messages.find((message) => message.id === 'reply:0');
+    check(`${tag}: …CONTROL's reply to ARES-VII arrives here (SENT 2308 · RECEIVED 2337): \`> 2 NEW MESSAGES · INBOX\`, the dock \`INBOX 2\``, said.mail.join() === '> 2 NEW MESSAGES · INBOX'
+      && reply?.sentYear === 2308 && reply.receivedYear === 2337 && reply.readAtDepth === 2 && inboxNow.dock === 'INBOX 2', JSON.stringify({ mail: said.mail, reply, dock: inboxNow.dock }));
   }
   const repairsBefore = mindByVerb.REPAIR ?? 0;
 
@@ -489,9 +557,15 @@ for (const [index, name] of SHIPS.entries()) {
     } else log(`${tag}: the SCAN lesson was not shown (missable): ${JSON.stringify(scan)}`);
   }
   if (name === 'VESPER') {
-    // Slice 3a: VESPER's ENGINE FAULT (Thrust Ctrl 31): the controller fires its ghost bursts in the flight.
-    check(`${tag}: …ENGINE FAULT: the thrust controller's ghost thrust fired (${met.ghostBursts} bursts)`, met.ghostSpec && met.ghostBursts >= 1,
-      JSON.stringify({ spec: met.ghostSpec, bursts: met.ghostBursts }));
+    // Slice 3a: VESPER's ENGINE FAULT (Thrust Ctrl 31): the controller fires its ghost bursts in the flight. Slice 3b: with no
+    // Swap aboard (the Swap requested at KESTREL is 4 years late), the strip says how to fly through it.
+    const swap = await st(() => ({ licensed: window.__ap.store.getState().run.licences.includes('swap'),
+      files: window.__ap.store.getState().memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'swap').length, chip: !document.getElementById('chip-swap').hidden }));
+    const noSwapLine = [...lines].find((text) => /^NO SWAP ABOARD/.test(text)) ?? null;
+    check(`${tag}: …ENGINE FAULT with no Swap aboard: the ghost thrust fired (${met.ghostBursts} bursts), SWAP never reached the unit`, met.ghostSpec && met.ghostBursts >= 1
+      && !swap.licensed && swap.files === 0 && !swap.chip, JSON.stringify({ spec: met.ghostSpec, bursts: met.ghostBursts, ...swap }));
+    check(`${tag}: …the strip said \`NO SWAP ABOARD — fly through each burst, then fix ▼\``, noSwapLine === 'NO SWAP ABOARD — fly through each burst, then fix ▼', noSwapLine ?? 'never shown');
+    run.vesper = { outcome, flightSec, stuck, bursts: met.ghostBursts, fuelPct: await st(() => window.__ap.store.getState().burn.fuelPct) };
   }
   if (name === 'KESTREL') {
     // The strip's RM lesson, the kid's DELETE on the seed, its words echoed; the TRACE meter showed.
@@ -524,11 +598,13 @@ for (const [index, name] of SHIPS.entries()) {
     await waitFor(() => !document.getElementById('podBayWin').classList.contains('pb-waiting') || window.__ap.store.getState().run.phase !== 'landing', 4000);
     await page.waitForTimeout(300);
     opened = await landingLook();
-    check(`${tag}: ORBIT LOCK opens the POD BAY window (the launch button, the bay, a counter per LZ) and the GROUND TRACK`,
+    // The GROUND TRACK's drop dot: always on a locked orbit; on an orbit only accepted, exactly when the drop solution has one.
+    const dotOk = ended.status === 'locked' ? opened.trackDot : opened.trackDot === opened.solutionDot;
+    check(`${tag}: ORBIT LOCK opens the POD BAY window (the launch button, the bay, a counter per LZ) and the GROUND TRACK${ended.status === 'locked' ? '' : ` (${ended.status}: drop dot ${opened.solutionDot ? 'shown' : 'none on this orbit'})`}`,
       opened.phase === 'landing' && opened.body && opened.bay && /POD BAY/i.test(opened.bayTitle) && /LAUNCH/.test(opened.launchLabel)
       && /^BAY /.test(opened.bayText) && opened.lzs.length >= 1 && opened.lzs.every((lz) => /^LZ-[A-Z] 0\/\d+$/.test(lz))
-      && opened.track && opened.trackDot && opened.trackWorld.length > 0,
-      JSON.stringify({ ...opened, fates: undefined, ended: undefined }));
+      && opened.track && dotOk && opened.trackWorld.length > 0,
+      JSON.stringify({ ...opened, fates: undefined, ended: undefined, status: ended.status }));
     if (name === 'VESPER') check(`${tag}: …VESPER, the ark, lands 16 pods`, opened.pods === 16, `${opened.pods} pods`);
     await shot(`${index + 1}c-landing`);
     // The counters as ORBIT LOCK showed them (a landAll puts every pod down before the next read).
@@ -594,7 +670,8 @@ for (const [index, name] of SHIPS.entries()) {
     run.landed.push({ name, byStrip, sec: landSec, launches: landed.launches, presses: tally.lPresses });
   } else {
     // A ship that did not end in orbit (a LOST card) never lands: on to whatever comes next.
-    while (Date.now() - landStart < SCREEN_MAX_MS && !['report', 'transmit', 'end'].includes(landView.phase)) {
+    // Since slice 3a a lost ship's card leads to the DESK (an EMERGENCY TRANSMIT or a normal one), with no LANDING REPORT.
+    while (Date.now() - landStart < SCREEN_MAX_MS && !['report', 'transmit', 'end', 'desk'].includes(landView.phase)) {
       if (landView.lostCard) await tap(page.locator('#burnResultRetry'));
       await page.waitForTimeout(250);
       landView = await look();
@@ -606,87 +683,93 @@ for (const [index, name] of SHIPS.entries()) {
     break;
   }
 
-  // The LANDING REPORT: the rows count up, SPACE moves it on (the rows → the credits → the stars → CONTINUE).
-  const reportOpen = await waitFor(() => !document.getElementById('landingReport').hidden, 5000);
-  const reportAt = Date.now();
-  const finaleAtReport = await st(() => ({ phase: window.__ap.store.getState().hollow.finale.phase, showing: window.__ap.finale().endingShowing }));
-  if (index === SHIPS.length - 1) {
-    check(`${tag}: the LANDING REPORT follows the finale (${finaleAtReport.phase}, its typed ending over)`,
-      ['purged', 'merged', 'unresolved'].includes(finaleAtReport.phase) && !finaleAtReport.showing && (choiceAt === null || choiceAt < reportAt),
-      JSON.stringify({ ...finaleAtReport, choiceAt, reportAt }));
-  }
-  await page.waitForTimeout(1500);
-  const model = await st(() => window.__ap.landingReport());
-  const rows = await st(() => ({
-    title: document.getElementById('lrTitle').innerText, route: document.getElementById('lrRoute').innerText,
-    rows: [...document.querySelectorAll('#lrRows .lr-row')].map((row) => row.innerText.replace(/\s+/g, ' ')),
-  }));
-  check(`${tag}: LANDING REPORT: its title, ${name}'s route and a row per LZ`, reportOpen && rows.title === 'LANDING REPORT' && rows.route.includes(name)
-    && rows.rows.length === model.rows.length && model.lzRows.every((lzRow) => rows.rows.some((row) => row.includes(lzRow.split(' ')[0]))),
-    JSON.stringify({ ...rows, lzRows: model.lzRows }));
-  await shot(`${index + 1}d-report`);
-  // The roll may already be showing (ship 1's short report) or wait for one Space; read it whenever it shows, so a
-  // Space never skips past it before it is read.
-  const readCredits = () => st(() => ({ shown: !document.getElementById('lrCredits').hidden, names: [...document.querySelectorAll('#lrRoll > *')].map((el) => el.innerText.split('\n')[0]) }));
-  let credits = await readCredits();
-  if (!credits.shown) {
-    await page.keyboard.press('Space');
+  // A ship lost before orbit (its LOST card answered) has no LANDING REPORT: the run goes on to the DESK.
+  const lostToDesk = landView.phase === 'desk';
+  if (lostToDesk) log(`${tag}: lost (${await st(() => window.__ap.store.getState().run.ships.at(-1)?.outcome ?? '?')}): no LANDING REPORT, on to the DESK`);
+  if (!lostToDesk) {
+    // The LANDING REPORT: the rows count up, SPACE moves it on (the rows → the credits → the stars → CONTINUE).
+    const reportOpen = await waitFor(() => !document.getElementById('landingReport').hidden, 5000);
+    const reportAt = Date.now();
+    const finaleAtReport = await st(() => ({ phase: window.__ap.store.getState().hollow.finale.phase, showing: window.__ap.finale().endingShowing }));
+    if (index === SHIPS.length - 1) {
+      check(`${tag}: the LANDING REPORT follows the finale (${finaleAtReport.phase}, its typed ending over)`,
+        ['purged', 'merged', 'unresolved'].includes(finaleAtReport.phase) && !finaleAtReport.showing && (choiceAt === null || choiceAt < reportAt),
+        JSON.stringify({ ...finaleAtReport, choiceAt, reportAt }));
+    }
+    await page.waitForTimeout(1500);
+    const model = await st(() => window.__ap.landingReport());
+    const rows = await st(() => ({
+      title: document.getElementById('lrTitle').innerText, route: document.getElementById('lrRoute').innerText,
+      rows: [...document.querySelectorAll('#lrRows .lr-row')].map((row) => row.innerText.replace(/\s+/g, ' ')),
+    }));
+    check(`${tag}: LANDING REPORT: its title, ${name}'s route and a row per LZ`, reportOpen && rows.title === 'LANDING REPORT' && rows.route.includes(name)
+      && rows.rows.length === model.rows.length && model.lzRows.every((lzRow) => rows.rows.some((row) => row.includes(lzRow.split(' ')[0]))),
+      JSON.stringify({ ...rows, lzRows: model.lzRows }));
+    await shot(`${index + 1}d-report`);
+    // The roll may already be showing (ship 1's short report) or wait for one Space; read it whenever it shows, so a
+    // Space never skips past it before it is read.
+    const readCredits = () => st(() => ({ shown: !document.getElementById('lrCredits').hidden, names: [...document.querySelectorAll('#lrRoll > *')].map((el) => el.innerText.split('\n')[0]) }));
+    let credits = await readCredits();
+    if (!credits.shown) {
+      await page.keyboard.press('Space');
+      await page.waitForTimeout(1100);
+      credits = await readCredits();
+    }
+    check(`${tag}: …the credits roll names a colonist per pod that scored (${model.credits.length})`, model.credits.length === 0
+      ? credits.names.length === 0 : credits.shown && credits.names.length === model.credits.length, credits.names.slice(0, 3).join(' | '));
+    if (byStrip) check(`${tag}: …the kid's landing put colonists down in an LZ`, model.landed > 0, model.headline);
+    for (let i = 0; i < 8 && (await st(() => document.getElementById('lrContinue').hidden)); i++) {
+      await page.keyboard.press('Space');
+      await page.waitForTimeout(900);
+    }
     await page.waitForTimeout(1100);
-    credits = await readCredits();
-  }
-  check(`${tag}: …the credits roll names a colonist per pod that scored (${model.credits.length})`, model.credits.length === 0
-    ? credits.names.length === 0 : credits.shown && credits.names.length === model.credits.length, credits.names.slice(0, 3).join(' | '));
-  if (byStrip) check(`${tag}: …the kid's landing put colonists down in an LZ`, model.landed > 0, model.headline);
-  for (let i = 0; i < 8 && (await st(() => document.getElementById('lrContinue').hidden)); i++) {
-    await page.keyboard.press('Space');
-    await page.waitForTimeout(900);
-  }
-  await page.waitForTimeout(1100);
-  const done = await st(() => ({
-    headline: document.getElementById('lrHeadline').innerText,
-    stars: [...document.querySelectorAll('#lrStars .wr-star')].map((star) => `${star.classList.contains('earned') ? '★' : '☆'}${star.dataset.star}`),
-    starsShown: !document.getElementById('lrStars').hidden, charge: document.getElementById('lrCharge').innerText,
-    chargeShown: !document.getElementById('lrCharge').hidden, skip: !document.getElementById('lrSkip').hidden,
-    cont: document.getElementById('lrContinue').hidden ? null : document.getElementById('lrContinue').innerText,
-    trace: document.getElementById('lrTrace').hidden ? null : document.getElementById('lrTrace').innerText,
-  }));
-  check(`${tag}: …the headline LANDED n / N (${done.headline})`, /^LANDED \d[\d,]* \/ [\d,]+$/.test(done.headline) && done.headline === model.headline,
-    `model ${model.headline}`);
-  check(`${tag}: …the stars land, earned as the model says (${done.stars.join(' ')})`, done.starsShown && done.stars.length === model.stars.length
-    && done.stars.length >= 1 && model.stars.every((star, i) => done.stars[i] === `${star.earned ? '★' : '☆'}${star.id}`),
-    JSON.stringify(model.stars.map((star) => `${star.earned ? '★' : '☆'}${star.id}`)));
-  check(`${tag}: …then the charge line and CONTINUE (${done.cont})`, done.chargeShown && done.charge === model.chargeLine && !done.skip
-    && done.cont !== null && /CONTINUE|RUN END/.test(done.cont), JSON.stringify(done));
-  await shot(`${index + 1}e-report-done`);
-  // Slice 2, per ship, over its flight and landing.
-  if (index <= 1) {
-    check(`${tag}: …calm all the way: no hollow block, no HOLLOW line, nothing bitten, no TRACE meter, no TRACE line on the report`,
-      met.maxSegs === 0 && met.lines.length === 0 && met.bitten.size === 0 && met.trace.size === 0 && done.trace === null,
-      JSON.stringify({ maxSegs: met.maxSegs, lines: met.lines, bitten: [...met.bitten], trace: [...met.trace], report: done.trace }));
-  }
-  if (name === 'KESTREL') {
-    const seedsLeft = await st(() => window.__ap.store.getState().memory.filter((seg) => seg.type === 'hollow' && seg.beam).length);
-    check(`${tag}: …the report's TRACE line says what the beam's seed left behind (${seedsLeft} beam-born blocks left)`, seedsLeft === 0
-      ? /^NO SEEDS LEFT BEHIND · NOTHING REPORTS HOME · TRACE □□□$/.test(done.trace ?? '') : /SEEDS? LEFT BEHIND · (IT REPORTS|THEY REPORT) HOME · TRACE /.test(done.trace ?? ''),
-      done.trace ?? 'no TRACE line');
-  }
-  if (name === 'CORMORANT') {
-    // Silent until the capture closed the loop, then the bite, the kid's fight (REPAIR), `> ...047?`, and the naming.
-    const story = await st(() => ({ named: window.__ap.store.getState().run.hollowNamed, owner: window.__ap.store.getState().memory.find((seg) => seg.type === 'hollow' && seg.root)?.owner ?? null }));
-    const repairs = (mindByVerb.REPAIR ?? 0) - repairsBefore;
-    check(`${tag}: …HOLLOW was silent until it bit (${[...met.bitten].join(', ') || 'nothing'}), then the kid fought it with REPAIR (${repairs}×)`,
-      met.firstBiteMs !== null && (met.firstLineMs === null || met.firstLineMs >= met.firstBiteMs) && [...met.bitten].some((file) => /POD \d\d/.test(file)) && repairs >= 1,
-      JSON.stringify({ bitten: [...met.bitten], firstLine: met.lines[0] ?? null, lineAfterBiteMs: met.firstLineMs && met.firstBiteMs ? met.firstLineMs - met.firstBiteMs : null }));
-    check(`${tag}: …it said \`> ...047?\`, then named itself (\`> i was 046.\`, the root's owner UNIT-046)`, met.lines.includes('> ...047?')
-      && met.lines.some((text) => /^> i was 046\./.test(text)) && story.named && story.owner === 'UNIT-046'
-      && met.lines.indexOf('> ...047?') < met.lines.findIndex((text) => /^> i was 046\./.test(text)), JSON.stringify({ ...story, lines: met.lines }));
-  }
-  if (name === 'LAST LIGHT') {
-    const outcome = await st(() => window.__ap.store.getState().run.stats.deal);
-    check(`${tag}: …THE DEAL stood in the TERMINAL with ACCEPT / REFUSE before ORBIT LOCK; the kid REFUSEd it, or the lock withdrew it (${outcome?.outcome ?? 'never offered'})`,
-      outcome !== null && (outcome.outcome === 'refused' ? deal.seen.includes('ACCEPT') && deal.seen.includes('REFUSE') && deal.clicked >= 1 : outcome.outcome === 'invalidated'),
-      JSON.stringify({ outcome, deal }));
-    check(`${tag}: …no deal button stood after ORBIT LOCK`, deal.standingAfterLock === 0, `${deal.standingAfterLock} polls`);
+    const done = await st(() => ({
+      headline: document.getElementById('lrHeadline').innerText,
+      stars: [...document.querySelectorAll('#lrStars .wr-star')].map((star) => `${star.classList.contains('earned') ? '★' : '☆'}${star.dataset.star}`),
+      starsShown: !document.getElementById('lrStars').hidden, charge: document.getElementById('lrCharge').innerText,
+      chargeShown: !document.getElementById('lrCharge').hidden, skip: !document.getElementById('lrSkip').hidden,
+      cont: document.getElementById('lrContinue').hidden ? null : document.getElementById('lrContinue').innerText,
+      trace: document.getElementById('lrTrace').hidden ? null : document.getElementById('lrTrace').innerText,
+    }));
+    check(`${tag}: …the headline LANDED n / N (${done.headline})`, /^LANDED \d[\d,]* \/ [\d,]+$/.test(done.headline) && done.headline === model.headline,
+      `model ${model.headline}`);
+    check(`${tag}: …the stars land, earned as the model says (${done.stars.join(' ')})`, done.starsShown && done.stars.length === model.stars.length
+      && done.stars.length >= 1 && model.stars.every((star, i) => done.stars[i] === `${star.earned ? '★' : '☆'}${star.id}`),
+      JSON.stringify(model.stars.map((star) => `${star.earned ? '★' : '☆'}${star.id}`)));
+    check(`${tag}: …then the charge line and CONTINUE (${done.cont})`, done.chargeShown && done.charge === model.chargeLine && !done.skip
+      && done.cont !== null && /CONTINUE|RUN END/.test(done.cont), JSON.stringify(done));
+    await shot(`${index + 1}e-report-done`);
+    run.reports.push({ name, headline: done.headline, stars: done.stars.join(' ') });
+    // Slice 2, per ship, over its flight and landing.
+    if (index <= 1) {
+      check(`${tag}: …calm all the way: no hollow block, no HOLLOW line, nothing bitten, no TRACE meter, no TRACE line on the report`,
+        met.maxSegs === 0 && met.lines.length === 0 && met.bitten.size === 0 && met.trace.size === 0 && done.trace === null,
+        JSON.stringify({ maxSegs: met.maxSegs, lines: met.lines, bitten: [...met.bitten], trace: [...met.trace], report: done.trace }));
+    }
+    if (name === 'KESTREL') {
+      const seedsLeft = await st(() => window.__ap.store.getState().memory.filter((seg) => seg.type === 'hollow' && seg.beam).length);
+      check(`${tag}: …the report's TRACE line says what the beam's seed left behind (${seedsLeft} beam-born blocks left)`, seedsLeft === 0
+        ? /^NO SEEDS LEFT BEHIND · NOTHING REPORTS HOME · TRACE □□□$/.test(done.trace ?? '') : /SEEDS? LEFT BEHIND · (IT REPORTS|THEY REPORT) HOME · TRACE /.test(done.trace ?? ''),
+        done.trace ?? 'no TRACE line');
+    }
+    if (name === 'CORMORANT') {
+      // Silent until the capture closed the loop, then the bite, the kid's fight (REPAIR), `> ...047?`, and the naming.
+      const story = await st(() => ({ named: window.__ap.store.getState().run.hollowNamed, owner: window.__ap.store.getState().memory.find((seg) => seg.type === 'hollow' && seg.root)?.owner ?? null }));
+      const repairs = (mindByVerb.REPAIR ?? 0) - repairsBefore;
+      check(`${tag}: …HOLLOW was silent until it bit (${[...met.bitten].join(', ') || 'nothing'}), then the kid fought it with REPAIR (${repairs}×)`,
+        met.firstBiteMs !== null && (met.firstLineMs === null || met.firstLineMs >= met.firstBiteMs) && [...met.bitten].some((file) => /POD \d\d/.test(file)) && repairs >= 1,
+        JSON.stringify({ bitten: [...met.bitten], firstLine: met.lines[0] ?? null, lineAfterBiteMs: met.firstLineMs && met.firstBiteMs ? met.firstLineMs - met.firstBiteMs : null }));
+      check(`${tag}: …it said \`> ...047?\`, then named itself (\`> i was 046.\`, the root's owner UNIT-046)`, met.lines.includes('> ...047?')
+        && met.lines.some((text) => /^> i was 046\./.test(text)) && story.named && story.owner === 'UNIT-046'
+        && met.lines.indexOf('> ...047?') < met.lines.findIndex((text) => /^> i was 046\./.test(text)), JSON.stringify({ ...story, lines: met.lines }));
+    }
+    if (name === 'LAST LIGHT') {
+      const outcome = await st(() => window.__ap.store.getState().run.stats.deal);
+      check(`${tag}: …THE DEAL stood in the TERMINAL with ACCEPT / REFUSE before ORBIT LOCK; the kid REFUSEd it, or the lock withdrew it (${outcome?.outcome ?? 'never offered'})`,
+        outcome !== null && (outcome.outcome === 'refused' ? deal.seen.includes('ACCEPT') && deal.seen.includes('REFUSE') && deal.clicked >= 1 : outcome.outcome === 'invalidated'),
+        JSON.stringify({ outcome, deal }));
+      check(`${tag}: …no deal button stood after ORBIT LOCK`, deal.standingAfterLock === 0, `${deal.standingAfterLock} polls`);
+    }
   }
   for (let i = 0; i < 6 && (await st(() => window.__ap.store.getState().run.phase)) === 'report'; i++) {
     await page.keyboard.press(i % 2 === 0 ? 'Space' : 'Enter');
@@ -699,6 +782,36 @@ for (const [index, name] of SHIPS.entries()) {
     const next = ROUTE[index + 1];
     const deskUp = await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 6000);
     await page.waitForTimeout(800);
+    // Slice 3b: a desk opens on the REPOSITORY (Rm lit) when the last rm was lost (a seed ate it): noted, then back to the card.
+    const openedOn = await runScreens.deskTabs();
+    if (openedOn.tab !== 'card') {
+      const rmRow = openedOn.rows.find((row) => row.file === 'rm');
+      log(`${tag}: the DESK opened on the ${openedOn.tab} (${openedOn.warn ?? 'no warning'})`);
+      check(`${tag}: …a DESK that opens on the REPOSITORY does so for the last rm: Rm lit, the warning on top`, openedOn.tab === 'repository' && rmRow?.focus === true
+        && openedOn.warn === 'YOUR LAST RM IS GONE · NO RM, NO WAY TO DELETE THE ROOT', JSON.stringify({ tab: openedOn.tab, warn: openedOn.warn, rm: rmRow }));
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(300);
+    }
+    if (name === 'HALCYON' || name === 'VESPER') {
+      // The desk's INBOX tab [I]: CONTROL's reply to ARES-VII at HALCYON; 046's mail with no address, in pink, at VESPER.
+      await page.keyboard.press('KeyI');
+      await page.waitForTimeout(400);
+      const wanted = name === 'HALCYON' ? 'reply:0' : (await runScreens.deskTabs()).mail.find((row) => row.tone === 'tone-hollow')?.id ?? null;
+      if (wanted !== null) await tap(page.locator(`#deskScreen .desk-inbox .ib-row[data-id="${wanted}"]`));
+      await page.waitForTimeout(400);
+      const mail = await runScreens.deskTabs();
+      const row = mail.mail.find((entry) => entry.id === wanted);
+      if (name === 'HALCYON') {
+        check(`${tag}: [I] the desk's INBOX: the kid opens CONTROL's reply to ARES-VII (SENT 2308 · RECEIVED 2337)`, mail.tab === 'inbox' && row !== undefined
+          && row.from === 'ARRIVAL CONTROL · EARTH' && mail.reader?.stamps === 'SENT 2308 · RECEIVED 2337', JSON.stringify({ tab: mail.tab, row, reader: mail.reader }));
+      } else {
+        check(`${tag}: [I] the desk's INBOX: 046's mail with no address came at VESPER's boot, in pink (SENT ???? · RECEIVED 2481)`, mail.tab === 'inbox' && row !== undefined
+          && row.from === '(no address)' && mail.reader?.stamps === 'SENT ???? · RECEIVED 2481', JSON.stringify({ tab: mail.tab, rows: mail.mail.slice(0, 6), reader: mail.reader }));
+      }
+      await shot(`${index + 1}e1b-desk-inbox`);
+      await page.keyboard.press('KeyI');
+      await page.waitForTimeout(300);
+    }
     const deskBefore = await runScreens.desk();
     const nextNode = deskBefore.nodes.find((node) => node.slot === next.slot);
     check(`${tag}: CONTINUE leads to the DESK: STAR CHART, PICK YOUR NEXT SHIP, ${next.name} in reach`, afterReport === 'desk' && deskUp
@@ -710,6 +823,56 @@ for (const [index, name] of SHIPS.entries()) {
     const deskPicked = await runScreens.desk();
     const pickedOk = clicked === true && deskPicked.selected === next.slot && deskPicked.card?.name === next.name
       && deskPicked.go === `SET COURSE ▸ ${next.name} [ENTER]`;
+    // Slice 3b: the REPOSITORY [R] toward the ship picked, the worked route's request, then back to the card ([ESC]).
+    if (index === 0) {
+      check(`${tag}: …the first desk's guidance then says \`REQUEST mv · RECOMMENDED [R]\``, deskPicked.step === 'REQUEST mv · RECOMMENDED [R]', deskPicked.step);
+    }
+    await page.keyboard.press('KeyR');
+    await page.waitForTimeout(400);
+    let repo = await runScreens.deskTabs();
+    const want = DESK_REQUESTS[index];
+    const tagged = repo.rows.filter((row) => row.tag !== null).map((row) => row.file);
+    log(`${tag}: REPOSITORY toward ${next.name}: tag ${tagged.join(',') || 'none'}; IN TRANSIT ${repo.transit.join(' | ') || repo.transitNone || '-'}`);
+    if (want === null) {
+      check(`${tag}: [R] the REPOSITORY toward ${next.name}: every file \`${NEVER_ETA}\` (red); the kid requests nothing`, repo.tab === 'repository' && repo.rows.length === 7
+        && repo.rows.every((row) => row.eta === NEVER_ETA && row.tone === 'eta-never') && repo.pick === null && tagged.length <= 1,
+        JSON.stringify(repo.rows.map((row) => `${row.file}:${row.eta}:${row.tone}`)));
+    } else {
+      const row = repo.rows.find((entry) => entry.file === want.file);
+      const fileName = row?.text.split(' · ')[0] ?? want.file;
+      check(`${tag}: [R] the REPOSITORY toward ${next.name}: ${fileName} \`${want.eta}\`${want.tagged ? ', tagged `:) RECOMMENDED FOR YOU`' : ''}`, repo.tab === 'repository'
+        && row?.eta === want.eta && row.tone === want.tone && tagged.length <= 1 && (!want.tagged || (tagged[0] === want.file && row.tag === ':) RECOMMENDED FOR YOU')),
+        JSON.stringify({ tab: repo.tab, row, tagged }));
+      await tap(page.locator(`#deskScreen .rp-row[data-file="${want.file}"]`));
+      await page.waitForTimeout(400);
+      repo = await runScreens.deskTabs();
+      check(`${tag}: …a click REQUESTs ${fileName} (REQUESTED; the REPOSITORY badge names it)`, repo.pick === want.file && repo.rows.find((entry) => entry.file === want.file)?.requested
+        && repo.tabs.find((entry) => entry.id === 'repository')?.badge === fileName, JSON.stringify({ pick: repo.pick, tabs: repo.tabs }));
+    }
+    if (next.name === 'CORMORANT') {
+      check(`${tag}: …IN TRANSIT: \`Swap · CATCHES UP AT CORMORANT\``, repo.transit.includes('Swap · CATCHES UP AT CORMORANT'), JSON.stringify(repo.transit));
+    }
+    await shot(`${index + 1}e1c-repository`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(400);
+    const cardAfter = await runScreens.desk();
+    const marks = await runScreens.deskMarks();
+    const outlookRow = cardAfter.card?.rows.find((row) => row.startsWith('deliveries=')) ?? null;
+    if (next.name === 'VESPER') {
+      check(`${tag}: …ESC: VESPER's card says \`DELIVERIES · Swap ✗ 4 YRS LATE\`, its TIMELINE \`… 2625 ▲ approach\` and \`2629 Swap\` in red`,
+        outlookRow === 'deliveries=Swap ✗ 4 YRS LATE' && /2625 ▲ approach$/.test(cardAfter.card?.timeline ?? '') && marks.length === 1 && marks[0].text === '2629 Swap' && marks[0].late,
+        JSON.stringify({ outlookRow, timeline: cardAfter.card?.timeline, marks }));
+    } else if (next.name === 'CORMORANT') {
+      // The Cp just requested is on it too (late here: it catches up at LAST LIGHT).
+      check(`${tag}: …ESC: CORMORANT's card says \`Swap ✓ CATCHES UP HERE · Cp ✗ 44 YRS LATE\`, \`2659 Swap\` green and \`2861 Cp\` red on its TIMELINE`,
+        outlookRow === 'deliveries=Swap ✓ CATCHES UP HERE · Cp ✗ 44 YRS LATE' && marks.map((mark) => `${mark.text}${mark.late ? ' late' : ''}`).join() === '2659 Swap,2861 Cp late',
+        JSON.stringify({ outlookRow, marks }));
+    } else if (next.name === 'LAST LIGHT') {
+      check(`${tag}: …ESC: LAST LIGHT's card says \`Cp ✓ CATCHES UP HERE\``, outlookRow === 'deliveries=Cp ✓ CATCHES UP HERE', JSON.stringify({ outlookRow, marks }));
+    } else {
+      check(`${tag}: …ESC: ${next.name}'s card shows the request in time (a green TIMELINE mark)`, cardAfter.card?.name === next.name && outlookRow !== null
+        && marks.length === 1 && !marks[0].late, JSON.stringify({ outlookRow, marks }));
+    }
     if (pickedOk) await page.keyboard.press('Enter');
     else {
       log(`${tag}: the click on ${next.name}'s node missed (${clicked}); __ap.course(${next.slot})`);
@@ -754,6 +917,19 @@ for (const [index, name] of SHIPS.entries()) {
     check(`${tag}: TRANSMIT names the next ship (${SHIPS[index + 1]}), the packet and the files as chips`,
       tx.next.startsWith(`NEXT: ${SHIPS[index + 1]}`) && /^LINK \d+ · FILES \d+/.test(tx.packet) && tx.chips >= 5, JSON.stringify(tx));
     check(`${tag}: …and deals cards to carry`, tx.cards >= 1, `${tx.cards} cards`);
+    // Slice 3b: the DELIVERIES chips riding this hop, the IN TRANSIT line, the draft headed SALVAGE (REPAIR v2 is the
+    // repository's now, never salvage on the arm).
+    const deliveries = await st(() => ({
+      chips: [...document.querySelectorAll('#transmitScreen .tx-delivery')].map((chip) => chip.getAttribute('aria-label')),
+      inTransit: document.querySelector('#transmitScreen .tx-intransit')?.hidden === false ? document.querySelector('#transmitScreen .tx-intransit').textContent : null,
+      salvage: document.querySelector('#transmitScreen .tx-draft-title')?.textContent ?? null, offer: window.__ap.draft()?.offer.map((card) => card.id) ?? [],
+    }));
+    const wantChips = CHIPS_INTO[next.name].map((text) => `${text} · [SEND ON]`);
+    check(`${tag}: …DELIVERIES on the PACKET into ${next.name}: ${wantChips.length === 0 ? 'none' : wantChips.join(', ')}`, JSON.stringify(deliveries.chips) === JSON.stringify(wantChips),
+      JSON.stringify(deliveries));
+    check(`${tag}: …the draft is headed SALVAGE · PICK ONE TO CARRY, no REPAIR v2 card (${deliveries.offer.join(', ')})`, deliveries.salvage === 'SALVAGE · PICK ONE TO CARRY'
+      && !deliveries.offer.includes('repair-v2'), JSON.stringify(deliveries));
+    if (deliveries.inTransit !== null) log(`${tag}: PACKET ${deliveries.inTransit}`);
     // Slice 2: 046.log's chip (`046.log · n/12`, glowing while an entry is unread), and HOLLOW riding the beam to VESPER
     // (boarding) and on to LAST LIGHT: the uninvited chip after the unit's own; NO RM only with no working rm aboard.
     const packet = await st(() => {
@@ -820,6 +996,7 @@ const end = await st(() => ({
   ships: [...document.querySelectorAll('#reShips .re-ship')].map((row) => row.innerText.replace(/\s+/g, ' ')),
   colonies: document.querySelector('#runEnd .re-tally-colonies')?.textContent ?? null,
   route: document.querySelectorAll('#runEnd .re-tally-chart [data-slot]').length,
+  undelivered: document.querySelector('#runEnd .re-tally-undelivered')?.hidden === false ? document.querySelector('#runEnd .re-tally-undelivered').textContent : null,
   score: document.getElementById('reScore').innerText, rank: document.getElementById('reRank').innerText, seed: document.getElementById('reSeed').innerText,
   model: window.__ap.runEndModel(),
 }));
@@ -832,6 +1009,16 @@ check(`the RUN TALLY: a title, n ${fleetLanded}, six ship rows (no NOT REACHED),
 check('the RUN TALLY: …the rows are the route in order, each with its depth and the ship\'s year', ROUTE.every((stop, i) => end.ships[i]?.startsWith(`${i + 1} ${stop.name} · `))
   && JSON.stringify(end.model.route) === JSON.stringify(ROUTE.map((stop) => stop.slot)), end.ships.join(' | '));
 check('the RUN TALLY: …YOUR ROUTE drawn on the mini chart', end.route > 0, `${end.route} nodes drawn`);
+check('the RUN TALLY: …`NEVER ARRIVED: —` (every file requested reached the unit)', end.undelivered === 'NEVER ARRIVED: —' && end.model.undeliveredLine === end.undelivered,
+  JSON.stringify({ shown: end.undelivered, model: end.model.undeliveredLine }));
+check(`HOLLOW's reading line was said at most once in the run (${run.readingLines}×)`, run.readingLines <= 1, `${run.readingLines}`);
+if (run.vesper) {
+  const vesperReport = run.reports.find((report) => report.name === 'VESPER');
+  const vesperResult = await st(() => { const r = window.__ap.store.getState().run.ships.find((ship) => ship.shipName === 'VESPER');
+    return r ? { outcome: r.outcome, landedInLz: r.landedInLz, stars: r.stars, fuelLeftPct: r.fuelLeftPct } : null; });
+  log(`VESPER without Swap: flight ${run.vesper.outcome} in ${run.vesper.flightSec.toFixed(0)} s${run.vesper.stuck ? ' (STUCK: put in its ring by hand)' : ''}, ${run.vesper.bursts} ghost bursts, `
+    + `fuel ${run.vesper.fuelPct.toFixed(0)}%; ${vesperReport ? `${vesperReport.headline}, stars ${vesperReport.stars}` : 'no LANDING REPORT'}; result ${JSON.stringify(vesperResult)}`);
+}
 log(`run: ${run.shipsFlown.map((ship) => `${ship.name} ${ship.outcome} ${ship.flightSec.toFixed(0)} s`).join(', ')}; ${run.lines.size} distinct lines, ${mindActions} MIND actions ${JSON.stringify(mindByVerb)} (${mindRefused} missed)`);
 log(`landings: ${run.landed.map((ship) => `${ship.name} ${ship.byStrip ? 'by the strip' : 'at once'} ${ship.sec.toFixed(0)} s (${ship.presses} [L], ${ship.launches} launched)`).join(', ')}`);
 check(`every strip line of the run fits (${run.lines.size} distinct)`, run.long.length === 0, run.long.slice(0, 3).join(' | '));
