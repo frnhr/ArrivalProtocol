@@ -1364,16 +1364,30 @@ reason. Built against the foundation's real pieces (`unitTrailOf`, `olderColonie
     gap 5, LODESTAR 3025, seven ships moved on, PETREL's name back on a new ship), not only on §3.14's scripted fixture.
 23. **No e2e changes** (the lead: no e2e this round). §6.3's `resume.mjs` and the playthrough's run-2 check are still to do.
 
+### After the WORLD and SAVE merges (re-checked in Chromium on the real save and update)
+
+24. Played through the page: `__ap.archiveAs('won-purge')` (seed 1) then a reload gives `UNIT-048 · YEAR 2305 · LAUNCHED 5
+    YEARS AFTER UNIT-047` with its `+5 YEARS` stamp and `runs save between ships`; RECEIVE, landing ARES-VIII and its report
+    (`LZ-A · A BEACON WAS ALREADY THERE · SET BY UNIT-047 · 5 YEARS AGO`), the first desk (seven ships moved on, the trail's
+    marks, CONTROL's line), a letter in the INBOX, a reload (`RESUME · UNIT-048 · SHIP 1 DONE · AT THE DESK · 2305`), RESUME ▸
+    (the same desk, amber), and a corrupt save (`RUN SAVE CAN'T RESUME · THE SAVE IS DAMAGED`, ABANDON RUN only). Shots
+    `tests/.out/ui-3c/real-*.png`.
+25. SAVE's optional note taken: a resumed BEAM boot past ship 1 no longer draws TitleCard's beam from SOL.
+
 ### Requests
 
-- **SAVE:**
-  - `boot.ts`: RECEIVE TRANSMISSION's ENTER/SPACE must stand down on the title while a save is there
-    (`save.status === 'cant-resume'` or `save.resume !== null`); TitleCard's own title-layer ENTER is RESUME (or ABANDON
-    RUN), ESC takes NEW RUN's confirm back. Both bindings fire today.
-  - `audio-cues.ts` (no owner in §5.4): `on('save-lost', () => play('buzz'))`, as `'archive-lost'` has.
-  - `openRunSave` gives the page `status: 'ok'` when it can save (the title's `runs save between ships` keys on it).
-  - `archiveRunEnded` leaves `meta.arm` as the update's next arm before RUN END opens (the tally's turnover reads it).
-- **WORLD:** `trailOf`'s `lost.slot` is the last stop's slot (the cross's leg is drawn from the stop before it); writers
-  keep the colonists' `Family, First` form (the letters sign `First Family`).
-- **Lead:** if the tally should not read the archive, add `departures` and `reportedHome` to `NextLaunch` (types/lineage.ts
-  and the update's result) and `runEndNext` reads `run.next` only.
+- **SAVE (blocker, confirmed in Chromium):** ENTER on a RESUME title runs `receiveTransmission` (boot.ts's title-layer
+  binding is registered first): the archive counts the run again (runs 1 → 2) and RUN START is written over the save,
+  before TitleCard's RESUME sees the key. Patch, in `receiveTransmission` (or the binding):
+  `const save = store.getState().save; if (save.status === 'cant-resume' || save.resume !== null) return false;`
+  (SPACE too). TitleCard already takes ENTER as RESUME / ABANDON RUN and ESC as KEEP IT.
+- **SAVE (bug, confirmed):** a run 2 in progress at its desk, then `__ap.saveCorrupt()` and a reload: the page throws at
+  open, `createRunMap: the stored arm is for run 2, the lineage's wave is 3` (`pageTitleState` builds the next unit's
+  title from a lineage whose wave counts the run in progress, over the arm stored for it). Run 1's corrupt save opens fine.
+- **SAVE:** `audio-cues.ts` (no owner in §5.4) `on('save-lost', () => play('buzz'))`, beside `'archive-lost'`; the
+  TERMINAL rule (`script.ts 'save-lost'`) and the footer's NO SAVE are in.
+- **Lead:** `RunEnd.carryLine` is the classic world's only now, but with `mergeBonus` gone it is untrue there too;
+  dropping it needs `wp11/p2/views`'s MERGE check changed (not UI's file). If the tally should not read the archive, add
+  `departures` and `reportedHome` to `NextLaunch` and `runEndNext` reads `run.next` only.
+- **e2e (§6.3, not run this round):** `resume.mjs` and the playthrough's run-2 check; the playthrough reads `#titleUnit`,
+  whose run-2 text is now the launch line.

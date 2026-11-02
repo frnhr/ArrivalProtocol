@@ -344,8 +344,9 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     }
     if (phase !== 'title') { asking = false; stopRoll(); settleLaunch(); }
     root.classList.toggle('booting', phase === 'boot');
-    // RECEIVE TRANSMISSION (the run's first boot, from the title): the beam draws from SOL to the first ship.
-    root.classList.toggle('receiving', phase === 'boot' && prev === 'title');
+    // RECEIVE TRANSMISSION (the run's first boot, from the title): the beam draws from SOL to the first ship. A resumed BEAM
+    // boot past ship 1 (systems/run-save.ts) is no beam from SOL: the card just clears (Track SAVE's note).
+    root.classList.toggle('receiving', phase === 'boot' && prev === 'title' && store.getState().run.shipIndex === 0);
     if (phase === 'title') { paintUnit(); paintChart(); }
     if (phase === 'boot' && prev !== null && prev !== 'boot') assembleStrip();
   }
