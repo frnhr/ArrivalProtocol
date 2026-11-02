@@ -26,7 +26,7 @@ import {
 } from '@systems/carry';
 import { dealDraft, planPacket, applyPickToPacket, pickCharge } from '@systems/draft';
 import { archiveShipStarted, archiveShipDone, archiveRunEnded, archiveTutorialDone, playsTutorial, type RunLineage } from '@systems/meta';
-import { writeRunSave } from '@systems/save-write';
+import { writeRunSave, clearRunSave } from '@systems/save-write';
 import { finaleRunCause } from '@systems/finale';
 import { newSegId } from '@systems/memory-ops';
 import { createRunState, createShipSlices, createUiState, createRunStats } from '@state/initial';
@@ -294,7 +294,8 @@ export function openDesk(store: Store<GameState>, extra: PendingExtra | null): v
   const offered = reachableFrom(state.run.map, currentSlot(state.run));
   if (offered.length === 0) throw new Error(`openDesk: no ship is reachable from slot ${currentSlot(state.run)}`);
   abortAll();
-  const ui = deskUiOnOpen(state);
+  // Read after abortAll (the review follow-up): an op aborted here may have changed what the desk opens on.
+  const ui = deskUiOnOpen(store.getState());
   store.update((draft) => {
     draft.run.phase = 'desk';
     draft.run.map.pendingExtra = extra === null ? null : { ...extra };
@@ -511,9 +512,11 @@ export function boardedBy(threat: Readonly<ShipThreat>): ArrivalReport['boarded'
 // (§4.5: the last unit, the best SCORE; the next run's ghost and HOLLOW come from it). The archive is written
 // before the phase changes: RUN END paints its archive line as it opens, so a write that fails here must
 // already have turned the status OFFLINE (`ARCHIVE OFFLINE — the next unit will not remember this run`).
+// Slice 3c (02 §3.11, one step): the archive's record, the world update (run.next) and the run save's deletion together.
 export function endRun(store: Store<GameState>, cause: RunEndCause): void {
   abortAll();
   archiveRunEnded(store, cause);
+  clearRunSave(store);
   store.update((draft) => {
     draft.run.phase = 'end';
     draft.run.endCause = cause;

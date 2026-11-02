@@ -4,7 +4,7 @@
 // generated ships' rolled ones (deterministic per seed, different across seeds), and every ShipDef valid.
 import { check, finish } from '../landing/checks';
 import { assembleRun1Arm, armChecks, bases, timingYear, finalYear, freshArm } from '@systems/map-generator';
-import { ghostPlaceReached, freshMeta, recordRunStart, recordShipStart, recordRunEnd, parseMeta, loadMeta } from '@systems/meta';
+import { ghostPlaceReached, freshMeta, recordRunStart, recordShipStart, recordRunEnd, parseMeta, loadMeta, recordAbandon } from '@systems/meta';
 import { WORLDS } from '@data/arm';
 import { hopBetween, reachable } from '@systems/map-hop';
 import { routes, bestRoute, routePods } from '@systems/map-route';
@@ -156,13 +156,15 @@ check('…never at ship 1; a record with no trail speaks at the final ship',
   const store: Record<string, string> = {};
   const storage = () => ({ getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; }, removeItem: () => {} });
   store[META_STORAGE_KEY] = JSON.stringify(started);
-  const recovered = loadMeta(storage as never);
+  const loaded = loadMeta(storage as never);
+  // Slice 3c: the load keeps the run in progress; abandoning it (no save to resume it) records its trail.
+  const recovered = loaded.ok ? recordAbandon(loaded.meta, null) : null;
   const none = JSON.parse(JSON.stringify(ended)) as { lastUnit: Record<string, unknown> };
   none.lastUnit.trail = null;
   const bad = JSON.parse(JSON.stringify(ended)) as { lastUnit: { trail: Record<string, unknown> } };
   bad.lastUnit.trail.stops = 'six';
   check('…an abandoned run keeps it; a record with none parses (the final ship then); a bad one is corrupt',
-    recovered.ok && recovered.recovered && recovered.meta.lastUnit?.trail?.stops.at(-1)?.slot === 15
+    recovered !== null && recovered.lastUnit?.cause === 'abandoned' && recovered.lastUnit.trail?.stops.at(-1)?.slot === 15
     && parseMeta(JSON.stringify(none)).lastUnit?.trail === null
     && (() => { try { parseMeta(JSON.stringify(bad)); return false; } catch { return true; } })());
 }
