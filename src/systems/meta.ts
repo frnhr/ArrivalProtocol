@@ -4,7 +4,7 @@ import type { GameState, RunEndCause, RunStats, ArchiveStatus, RunState, ShipOut
 import type {
   LastCause, LastUnit, UnitStats, UnitTrail, TrailStop, TrailLost, ArmState, ColonyRecord, RouteRecord, NotableEvent, MapHistory,
 } from '@/types/lineage';
-import type { NextLaunch } from '@/types/lineage';
+import type { NextLaunch, Visit } from '@/types/lineage';
 import type { StorageProvider } from '@systems/storage';
 import { runScore, runLanded } from '@systems/run-score';
 import { emit, NO_PAYLOAD } from '@systems/events';
@@ -291,9 +291,11 @@ function parseArm(value: unknown): ArmRead | null {
       corrupt(`arm.ships[${ship.slot}] (${ship.name}) does not build: ${(error as Error).message}`);
     }
   }
+  // In ArmState's own key order (a stored arm reads back byte for byte).
+  const { content, ...rest } = structuredClone(scalars);
   return {
     kind: 'arm',
-    arm: { ...structuredClone(scalars), ships: structuredClone(ships) as ArmState['ships'], departures: structuredClone(departures) as ArmState['departures'] },
+    arm: { ...rest, ships: structuredClone(ships) as ArmState['ships'], departures: structuredClone(departures) as ArmState['departures'], content },
   };
 }
 
@@ -617,8 +619,13 @@ export function abandonUpdate(meta: Readonly<Meta>): ArmUpdate | null {
   // lineage before its end describes it: the wave the run was counted as.
   const map = createRunMap({ ...lineage, wave: meta.runs }, meta.armSeed);
   if (map.run !== trail.run || trail.stops.some((stop) => map.arm[stop.slot] === undefined)) return null;
-  const visited = trail.stops.map((stop) => ({ slot: stop.slot, colony: stop.colony !== null && stop.landed > 0 }));
-  return updateArm({ from: armStateOfMap(map), visited });
+  return updateArm({ from: armStateOfMap(map), visited: abandonVisits(trail) });
+}
+
+// An abandoned run's visits, from its trail (the archive has no RunState for it, so not lineage.ts visitsOf): every stop,
+// with a colony where someone landed in an LZ.
+export function abandonVisits(trail: Readonly<UnitTrail>): Visit[] {
+  return trail.stops.map((stop) => ({ slot: stop.slot, colony: stop.colony !== null && stop.landed > 0 }));
 }
 
 // RUN END's cause as the archive keeps it (§4.5 item 6): one for one, now that the fleet ends with the flagship.

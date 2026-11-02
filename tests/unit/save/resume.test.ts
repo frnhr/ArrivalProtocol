@@ -154,7 +154,7 @@ check('…its CONTINUE ends the run: the archive written once, lastUnit UNIT-047
   && (meta.lastUnit as { cause: string; trail: { stops: unknown[] } }).cause === 'won-purge'
   && (meta.lastUnit as { trail: { stops: unknown[] } }).trail.stops.length === 6 && meta.activeRun === null);
 check('…the save is cleared, and run.next names UNIT-048 on run 2', !storage.data.has(RUN_SAVE_KEY)
-  && state().run.next?.unit === 48 && state().run.next.run === 2, JSON.stringify(state().run.next));
+  && state().run.next?.unit === 48 && state().run.next?.run === 2, JSON.stringify(state().run.next));
 check('…the archive stores the next arm (run 2) from the world update', (meta.arm as { run: number } | null)?.run === 2);
 
 // --- The id counters -------------------------------------------------------------------------------------------------------

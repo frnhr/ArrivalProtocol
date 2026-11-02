@@ -23,22 +23,23 @@ export interface StubStorage {
   data: Map<string, string>;
   // Every setItem / removeItem, in order (key and kind).
   log: { key: string; kind: 'set' | 'remove' }[];
-  // Throw on reaching the storage, on a read, a write or a remove (each a switch a suite flips).
-  fail: { reach: boolean; get: boolean; set: boolean; remove: boolean };
+  // Throw on reaching the storage, on a read, a write or a remove (each a switch a suite flips); `setKey`: a write to that
+  // key only (a full quota hits the bigger run save before the archive).
+  fail: { reach: boolean; get: boolean; set: boolean; remove: boolean; setKey: string | null };
   provider: StorageProvider;
 }
 
 export function stubStorage(initial: Record<string, string> = {}): StubStorage {
   const data = new Map(Object.entries(initial));
   const log: StubStorage['log'] = [];
-  const fail = { reach: false, get: false, set: false, remove: false };
+  const fail: StubStorage['fail'] = { reach: false, get: false, set: false, remove: false, setKey: null };
   const storage: MetaStorage = {
     getItem(key) {
       if (fail.get) throw new Error('stub: getItem refused');
       return data.get(key) ?? null;
     },
     setItem(key, value) {
-      if (fail.set) throw Object.assign(new Error('stub: QuotaExceededError'), { name: 'QuotaExceededError' });
+      if (fail.set || fail.setKey === key) throw Object.assign(new Error('stub: QuotaExceededError'), { name: 'QuotaExceededError' });
       data.set(key, value);
       log.push({ key, kind: 'set' });
     },

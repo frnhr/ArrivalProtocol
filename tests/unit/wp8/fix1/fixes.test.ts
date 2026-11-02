@@ -27,7 +27,7 @@ import { buildDirectorCtx, type DirectorCtx } from '@systems/director';
 import { getPrediction } from '@systems/predict';
 import { setIntegrity, actionMove } from '@state/actions';
 import {
-  openRunArchive, closeArchive, archiveLineage, parseMeta, playsTutorial, type MetaStorage,
+  openRunArchive, closeArchive, archiveLineage, parseMeta, playsTutorial, abandonActiveRun, type MetaStorage,
 } from '@systems/meta';
 import { driversInMemory, getAiCore, isFirewall } from '@state/selectors';
 import { ARES_RUN1_FAMILIES } from '@data/souls';
@@ -51,10 +51,12 @@ const h = createHarness7(41, { soulsFound: false });
 const state = () => h.store.getState();
 const log = (): GameState['log']['entries'] => state().log.entries;
 
-// A page load: the archive opened again (a leftover run becomes 'abandoned'), and the title's run from it.
+// A page load: the archive opened again (a leftover run becomes 'abandoned': slice 3c's open sequence, with no run save on
+// the classic world), and the title's run from it.
 function loadPage(seed: number): void {
   closeArchive();
   openRunArchive(() => storage);
+  abandonActiveRun();
   h.newRun(seed);
   startRun(h.store, seed, archiveLineage());
   h.store.update((d) => { d.archive = { status: 'ok' }; });
