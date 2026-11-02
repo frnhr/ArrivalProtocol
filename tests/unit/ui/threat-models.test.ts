@@ -257,10 +257,12 @@ function toTransmit(store: Store<GameState>): void {
   closeLogReader(store);
   check('closed: ui.logReader is null, the model has nothing open', state().ui.logReader === null && logReaderModel(state()).open === null);
   store.update((draft) => { draft.run.log.found = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]; });
-  // Entries 05–09 are not written in slice 2 (risk 8): a found entry with no text is a data bug, and the model says so.
-  let unwritten = false;
-  try { logReaderModel(state()); } catch { unwritten = true; }
-  check('a found entry with no text fails loudly (slice 2 never finds 05–09)', unwritten);
+  // Slice 3a (the e2e run): the arm's rings find 05–09 (VESPER 04–06, LAST LIGHT 07–11), and the reader threw on them
+  // (`entry 5 is found but has no text`). Every entry has its words now (state/log-selectors.ts checks it at load; the
+  // reader still throws on a found entry without).
+  const all = logReaderModel(state());
+  check('every entry found (the arm finds 05–09): the reader builds, each row with its words', all.rows.length === 12
+    && all.rows.every((row) => row.found && row.lines !== null && row.lines.length > 0), JSON.stringify(all.rows.map((row) => row.lines?.length ?? 0)));
 }
 
 finish();
