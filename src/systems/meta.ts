@@ -1,15 +1,26 @@
+// Slice 3c: Track SAVE owns this file (docs/phase3/impl/slice-3c-plan.md §5.2); WORLD and UI request helpers by message.
 import type { Store } from '@state/store';
-import type { GameState, RunEndCause, RunStats, ArchiveStatus, RunState } from '@state/schema';
+import type { GameState, RunEndCause, RunStats, ArchiveStatus, RunState, ShipOutcome } from '@state/schema';
+import type {
+  LastCause, LastUnit, UnitStats, UnitTrail, TrailStop, TrailLost, ArmState, ColonyRecord, RouteRecord, NotableEvent, MapHistory,
+} from '@/types/lineage';
+import type { StorageProvider } from '@systems/storage';
 import { runScore, runLanded } from '@systems/run-score';
 import { emit, NO_PAYLOAD } from '@systems/events';
 import { hollowUnitName, GHOST_LINE } from '@data/hollow-text';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import { AUTHORED_SHIP_NAMES, FINAL_SHIP_NAMES } from '@data/ship-names';
-import { currentStop, currentSlot, isEndSlot, worldSlotOf } from '@systems/map-streams';
-import { layerOf } from '@systems/map-geometry';
+import { EMPTY_HISTORY } from '@data/map-state';
+import { trailOf, ghostPlaceReached } from '@systems/lineage';
 import {
   META_STORAGE_KEY, META_VERSION, FIRST_UNIT_NUMBER, HOLLOW_NAME_MAX_UNITS,
 } from '@data/tuning';
+
+export type { LastCause, LastUnit, UnitStats } from '@/types/lineage';
+export type { MetaStorage, StorageProvider } from '@systems/storage';
+export { browserStorage } from '@systems/storage';
+// The ghost's place moved to systems/lineage.ts (slice 3c plan §2.8 item 6: pure, and read by the chart too).
+export { ghostShipIndex, ghostPlaceReached } from '@systems/lineage';
 
 // The archive (§4.5, §9 WP8 item 4): the one thing that outlives a run. A local record of how many units
 // ARRIVAL CONTROL has sent, the best SCORE, the endings seen, the run in progress and how the last unit
@@ -39,17 +50,19 @@ import {
 // • The session copy still counts runs while nothing can be written (offline, corrupt, played without):
 //   a NEW RUN in the same page is still UNIT-048, only it is not kept.
 //
+// • Archive v2 (phase 3 slice 3c, slice-3c-plan §2.4): a new key (META_STORAGE_KEY, `…/meta/v2`; v1's is never read), the
+//   last unit's `landed` and trail (systems/lineage.ts trailOf) in place of `woke` and 3a's layer, the arm seed and the next
+//   arm, colonies, routes, events, traces and the title's notes. The foundation laid the shape and its strict parse down;
+//   Track SAVE fills the record steps (run end with the world update, the explicit abandon, v1 detection, the content reset).
+//
 // The pure half (loadMeta, saveMeta, the record* steps, lineageOf, hollowName) takes its storage as an
 // argument, so the headless suites run it on stubs. The live half (openRunArchive and the archive* calls) holds
 // the page's session; run.ts and boot.ts call it at the run's moments, never from a store listener.
 
-// --- The record (§4.5's shape) -----------------------------------------------------------------------
+// --- The record (§4.5's shape; archive v2, slice 3c plan §2.4) ---------------------------------------------
 
-// How a unit's run ended, as the next run remembers it (§4.5's causes). (WP8's interim 'reassigned', a run that ran out
-// of ships before LAST LIGHT existed, is gone with that fleet: an archive that still holds it reads ARCHIVE CORRUPT, and
-// WIPE ARCHIVE clears it, loudly, like any record this build can't read.)
-export type LastCause =
-  | 'won-purge' | 'won-merge' | 'unresolved' | 'flagship-lost' | 'overwritten' | 'stayed' | 'abandoned';
+// How a unit's run ended, as the next run remembers it (§4.5's causes; the type is types/lineage.ts LastCause). (WP8's
+// interim 'reassigned' is gone with that fleet: a record that holds it reads ARCHIVE CORRUPT.)
 export const LAST_CAUSES: readonly LastCause[] = [
   'won-purge', 'won-merge', 'unresolved', 'flagship-lost', 'overwritten', 'stayed', 'abandoned',
 ];
@@ -57,39 +70,26 @@ export type Ending = 'purge' | 'merge';
 // Every ending there is (the title's ENDINGS n/2 counts against it).
 export const ENDINGS: readonly Ending[] = ['purge', 'merge'];
 
-// What HOLLOW's verbs on ship 5 are weighted by (§4.5: "it fights like you did", WP11).
-export interface UnitStats {
-  moves: number;
-  deletes: number;
-}
-
-// The last unit (§4.5), plus the HOLLOW it faced (hollowUnits): a unit that STAYED with its colonists never
-// becomes HOLLOW, so the next run meets the one this unit met (WP8 deviation: §4.5's shape has no field for it).
-export interface LastUnit {
-  number: number;
-  woke: number;
-  shipName: string;
-  // Where its run ended on its arm (slice 3a, the review's M3): the layer (and the world's slot) of the ship it was on.
-  // Optional: archives written before it have none (the ghost then speaks at the final ship). 3c's archive v2 formalises
-  // it with the trail and the grey cross.
-  layer?: number;
-  worldSlot?: number;
-  cause: LastCause;
-  stats: UnitStats;
-  hollowUnits: number[];
-}
-
 // The run in progress (§4.5's { unit, startedAt }), brought up to date at each ship's start so a run left
-// mid-ship can still be named on the next title (WP8 deviation: the fields after startedAt).
+// mid-ship can still be named on the next title (WP8 deviation: the fields after startedAt). Archive v2: `landed` (was
+// `woke`), and the trail so far in place of 3a's layer / worldSlot (slice 3c foundation deviation: the trail, not a bare
+// route, so an abandoned run's stops keep their outcomes and colonies, and its route is the stops' slots). The stop of the
+// ship being flown has outcome null. null on the classic world (it keeps no trail).
 export interface ActiveRun {
   unit: number;
   startedAt: number;
   shipName: string;
-  layer?: number;          // as LastUnit's (M3)
-  worldSlot?: number;
-  woke: number;
+  landed: number;
   stats: UnitStats;
   hollowUnits: number[];
+  trail: UnitTrail | null;
+}
+
+// Said once on the title, then cleared (3c plan §2.4): an older (v1) archive was found and not carried over; the stored
+// arm was made by other content and the next run got a fresh roll (02 §10).
+export interface ArchiveNotes {
+  olderArchive: boolean;
+  armReset: boolean;
 }
 
 export interface Meta {
@@ -97,17 +97,32 @@ export interface Meta {
   runs: number;
   bestScore: number;
   endingsSeen: Ending[];
+  // RETIRES in 3c SAVE (plan risk 3, decided: MERGE's next-run thread is gone). Kept through the foundation so nothing
+  // changes behaviour before Track SAVE's archive v2 lands; lineageOf then gives false and slice 7 deletes the code.
   mergeBonus: boolean;
   // A unit has flown ARES-VII through (see the header): later runs skip the run-1 lessons (WP8 fix round 1;
   // §4.5's shape has no field for it).
   tutorialDone: boolean;
   activeRun: ActiveRun | null;
   lastUnit: LastUnit | null;
+  // Archive v2 (02 §3.12, 3c plan §2.4): the arm seed every run's arm is rolled from (a fresh archive takes the page's run
+  // seed, so `?seed=N` on a cleared archive replays run 1 exactly), the next run's arm (null: run 1's assembled arm, rebuilt
+  // from armSeed on demand), the colonies (at most COLONY_HISTORY_MAX_PER_WORLD per world), the last ROUTE_HISTORY_RUNS
+  // routes, the last run's notable events (at most NOTABLE_EVENTS_MAX), slice 7's traces, and the title's one-off notes.
+  armSeed: number;
+  arm: ArmState | null;
+  colonies: ColonyRecord[];
+  routes: RouteRecord[];
+  events: NotableEvent[];
+  traces: [];
+  notes: ArchiveNotes;
 }
 
-export function freshMeta(): Meta {
+// An empty archive. `armSeed`: the page's run seed (state/instance.ts); suites that don't care take 0.
+export function freshMeta(armSeed = 0): Meta {
   return {
     version: META_VERSION, runs: 0, bestScore: 0, endingsSeen: [], mergeBonus: false, tutorialDone: false, activeRun: null, lastUnit: null,
+    armSeed: armSeed >>> 0, arm: null, colonies: [], routes: [], events: [], traces: [], notes: { olderArchive: false, armReset: false },
   };
 }
 
@@ -133,6 +148,100 @@ function text(value: unknown, field: string): string {
   return value;
 }
 
+function flag(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') corrupt(`${field} is not true or false`);
+  return value;
+}
+
+function list(value: unknown, field: string): unknown[] {
+  if (!Array.isArray(value)) corrupt(`${field} is not a list`);
+  return value;
+}
+
+// A record with exactly these keys (archive v2 is strict: an extra key is a shape this build does not know).
+function exactRecord(value: unknown, field: string, keys: readonly string[]): Record<string, unknown> {
+  if (!isRecord(value)) corrupt(`${field} is not a record`);
+  const extra = Object.keys(value).filter((key) => !keys.includes(key));
+  if (extra.length > 0) corrupt(`${field} has unknown fields (${extra.join(', ')})`);
+  return value;
+}
+
+const SHIP_OUTCOMES: readonly ShipOutcome[] = ['locked', 'partial', 'stranded', 'escaped', 'crashed', 'abandoned', 'emergency'];
+
+function lastCause(value: unknown, field: string): LastCause {
+  if (typeof value !== 'string' || !(LAST_CAUSES as readonly string[]).includes(value)) corrupt(`${field} '${String(value)}' is unknown`);
+  return value as LastCause;
+}
+
+function parseTrailStop(value: unknown, field: string): TrailStop {
+  const stop = exactRecord(value, field, ['slot', 'shipName', 'year', 'outcome', 'landed', 'colony', 'writer']);
+  const outcome = stop.outcome;
+  if (outcome !== null && !(SHIP_OUTCOMES as readonly unknown[]).includes(outcome)) corrupt(`${field}.outcome '${String(outcome)}' is unknown`);
+  let writer: TrailStop['writer'] = null;
+  if (stop.writer !== null) {
+    const w = exactRecord(stop.writer, `${field}.writer`, ['name', 'age']);
+    writer = { name: text(w.name, `${field}.writer.name`), age: wholeNumber(w.age, `${field}.writer.age`) };
+  }
+  return {
+    slot: wholeNumber(stop.slot, `${field}.slot`),
+    shipName: stop.shipName === null ? null : text(stop.shipName, `${field}.shipName`),
+    year: wholeNumber(stop.year, `${field}.year`),
+    outcome: outcome as ShipOutcome | null,
+    landed: wholeNumber(stop.landed, `${field}.landed`),
+    colony: stop.colony === null ? null : text(stop.colony, `${field}.colony`),
+    writer,
+  };
+}
+
+function parseTrail(value: unknown, field: string): UnitTrail | null {
+  if (value === null) return null;
+  const trail = exactRecord(value, field, ['unit', 'run', 'startYear', 'stops', 'lost']);
+  let lost: TrailLost | null = null;
+  if (trail.lost !== null) {
+    const l = exactRecord(trail.lost, `${field}.lost`, ['slot', 'year', 'pastLy', 'cause']);
+    if (typeof l.pastLy !== 'number' || !Number.isFinite(l.pastLy) || l.pastLy < 0) corrupt(`${field}.lost.pastLy is not a distance`);
+    lost = { slot: wholeNumber(l.slot, `${field}.lost.slot`), year: wholeNumber(l.year, `${field}.lost.year`), pastLy: l.pastLy, cause: lastCause(l.cause, `${field}.lost.cause`) };
+  }
+  const stops = list(trail.stops, `${field}.stops`).map((stop, i) => parseTrailStop(stop, `${field}.stops[${i}]`));
+  if (stops.length === 0) corrupt(`${field}.stops is empty`);
+  return {
+    unit: wholeNumber(trail.unit, `${field}.unit`), run: wholeNumber(trail.run, `${field}.run`),
+    startYear: wholeNumber(trail.startYear, `${field}.startYear`), stops, lost,
+  };
+}
+
+function parseColony(value: unknown, field: string): ColonyRecord {
+  const c = exactRecord(value, field, ['run', 'unit', 'slot', 'year', 'landed', 'name']);
+  return {
+    run: wholeNumber(c.run, `${field}.run`), unit: wholeNumber(c.unit, `${field}.unit`), slot: wholeNumber(c.slot, `${field}.slot`),
+    year: wholeNumber(c.year, `${field}.year`), landed: wholeNumber(c.landed, `${field}.landed`), name: text(c.name, `${field}.name`),
+  };
+}
+
+function parseRoute(value: unknown, field: string): RouteRecord {
+  const r = exactRecord(value, field, ['run', 'unit', 'slots']);
+  return {
+    run: wholeNumber(r.run, `${field}.run`), unit: wholeNumber(r.unit, `${field}.unit`),
+    slots: list(r.slots, `${field}.slots`).map((slot, i) => wholeNumber(slot, `${field}.slots[${i}]`)),
+  };
+}
+
+const EVENT_KINDS: readonly NotableEvent['kind'][] = ['deal-accepted', 'best-colony', 'ship-lost'];
+
+function parseEvent(value: unknown, field: string): NotableEvent {
+  const e = exactRecord(value, field, ['kind', 'slot', 'shipName', 'value']);
+  if (!(EVENT_KINDS as readonly unknown[]).includes(e.kind)) corrupt(`${field}.kind '${String(e.kind)}' is unknown`);
+  return { kind: e.kind as NotableEvent['kind'], slot: wholeNumber(e.slot, `${field}.slot`), shipName: text(e.shipName, `${field}.shipName`), value: wholeNumber(e.value, `${field}.value`) };
+}
+
+// The stored next arm. TODO(3c-SAVE): its strict parse (the ArmShip fields, then validateShipDef(shipDefOf(ship)) on every
+// ship and the content versions, a mismatch being a content reset, plan §2.4). Nothing writes one before Track SAVE, so
+// until then any arm is a shape this build can't read.
+function parseArm(value: unknown): ArmState | null {
+  if (value === null) return null;
+  return corrupt('arm is not readable yet (TODO(3c-SAVE))');
+}
+
 function unitList(value: unknown, field: string): number[] {
   if (!Array.isArray(value) || value.length === 0) corrupt(`${field} is not a list of units`);
   return value.map((unit, i) => wholeNumber(unit, `${field}[${i}]`));
@@ -143,41 +252,33 @@ function unitStats(value: unknown, field: string): UnitStats {
   return { moves: wholeNumber(value.moves, `${field}.moves`), deletes: wholeNumber(value.deletes, `${field}.deletes`) };
 }
 
-// The optional place fields (M3): absent in an older record, a whole number when present (anything else is corrupt).
-function placeOf(value: Record<string, unknown>, field: string): { layer?: number; worldSlot?: number } {
-  const place: { layer?: number; worldSlot?: number } = {};
-  if (value.layer !== undefined) place.layer = wholeNumber(value.layer, `${field}.layer`);
-  if (value.worldSlot !== undefined) place.worldSlot = wholeNumber(value.worldSlot, `${field}.worldSlot`);
-  return place;
-}
-
 function parseLastUnit(value: unknown): LastUnit | null {
   if (value === null) return null;
-  if (!isRecord(value)) corrupt('lastUnit is not a record');
-  const cause = value.cause;
-  if (typeof cause !== 'string' || !(LAST_CAUSES as readonly string[]).includes(cause)) corrupt(`lastUnit.cause '${String(cause)}' is unknown`);
+  const unit = exactRecord(value, 'lastUnit', ['number', 'landed', 'shipName', 'cause', 'stats', 'hollowUnits', 'trail', 'skills']);
+  if (unit.skills !== null) corrupt('lastUnit.skills is not null (slice 4 fills it)');
   return {
-    number: wholeNumber(value.number, 'lastUnit.number'),
-    woke: wholeNumber(value.woke, 'lastUnit.woke'),
-    shipName: text(value.shipName, 'lastUnit.shipName'),
-    ...placeOf(value, 'lastUnit'),
-    cause: cause as LastCause,
-    stats: unitStats(value.stats, 'lastUnit.stats'),
-    hollowUnits: unitList(value.hollowUnits, 'lastUnit.hollowUnits'),
+    number: wholeNumber(unit.number, 'lastUnit.number'),
+    landed: wholeNumber(unit.landed, 'lastUnit.landed'),
+    shipName: text(unit.shipName, 'lastUnit.shipName'),
+    cause: lastCause(unit.cause, 'lastUnit.cause'),
+    stats: unitStats(unit.stats, 'lastUnit.stats'),
+    hollowUnits: unitList(unit.hollowUnits, 'lastUnit.hollowUnits'),
+    trail: parseTrail(unit.trail, 'lastUnit.trail'),
+    skills: null,
   };
 }
 
 function parseActiveRun(value: unknown): ActiveRun | null {
   if (value === null) return null;
-  if (!isRecord(value)) corrupt('activeRun is not a record');
+  const run = exactRecord(value, 'activeRun', ['unit', 'startedAt', 'shipName', 'landed', 'stats', 'hollowUnits', 'trail']);
   return {
-    unit: wholeNumber(value.unit, 'activeRun.unit'),
-    startedAt: wholeNumber(value.startedAt, 'activeRun.startedAt'),
-    shipName: text(value.shipName, 'activeRun.shipName'),
-    ...placeOf(value, 'activeRun'),
-    woke: wholeNumber(value.woke, 'activeRun.woke'),
-    stats: unitStats(value.stats, 'activeRun.stats'),
-    hollowUnits: unitList(value.hollowUnits, 'activeRun.hollowUnits'),
+    unit: wholeNumber(run.unit, 'activeRun.unit'),
+    startedAt: wholeNumber(run.startedAt, 'activeRun.startedAt'),
+    shipName: text(run.shipName, 'activeRun.shipName'),
+    landed: wholeNumber(run.landed, 'activeRun.landed'),
+    stats: unitStats(run.stats, 'activeRun.stats'),
+    hollowUnits: unitList(run.hollowUnits, 'activeRun.hollowUnits'),
+    trail: parseTrail(run.trail, 'activeRun.trail'),
   };
 }
 
@@ -192,58 +293,45 @@ export function parseMeta(raw: string): Meta {
   }
   if (!isRecord(data)) return corrupt('not a record');
   if (data.version !== META_VERSION) return corrupt(`version ${String(data.version)}, not ${META_VERSION}`);
+  exactRecord(data, 'the archive', [
+    'version', 'runs', 'bestScore', 'endingsSeen', 'mergeBonus', 'tutorialDone', 'activeRun', 'lastUnit', 'armSeed', 'arm', 'colonies',
+    'routes', 'events', 'traces', 'notes',
+  ]);
   const endings = data.endingsSeen;
   if (!Array.isArray(endings) || endings.some((ending) => !(ENDINGS as readonly unknown[]).includes(ending))) corrupt('endingsSeen is not a list of endings');
-  if (typeof data.mergeBonus !== 'boolean') corrupt('mergeBonus is not true or false');
-  if (typeof data.tutorialDone !== 'boolean') corrupt('tutorialDone is not true or false');
+  if (list(data.traces, 'traces').length > 0) corrupt('traces is not empty (slice 7 places them)');
+  const notes = exactRecord(data.notes, 'notes', ['olderArchive', 'armReset']);
   return {
     version: META_VERSION,
     runs: wholeNumber(data.runs, 'runs'),
     bestScore: wholeNumber(data.bestScore, 'bestScore'),
     endingsSeen: [...(endings as Ending[])],
-    mergeBonus: data.mergeBonus,
-    tutorialDone: data.tutorialDone,
+    mergeBonus: flag(data.mergeBonus, 'mergeBonus'),
+    tutorialDone: flag(data.tutorialDone, 'tutorialDone'),
     activeRun: parseActiveRun(data.activeRun),
     lastUnit: parseLastUnit(data.lastUnit),
+    armSeed: wholeNumber(data.armSeed, 'armSeed'),
+    arm: parseArm(data.arm),
+    colonies: list(data.colonies, 'colonies').map((colony, i) => parseColony(colony, `colonies[${i}]`)),
+    routes: list(data.routes, 'routes').map((route, i) => parseRoute(route, `routes[${i}]`)),
+    events: list(data.events, 'events').map((event, i) => parseEvent(event, `events[${i}]`)),
+    traces: [],
+    notes: { olderArchive: flag(notes.olderArchive, 'notes.olderArchive'), armReset: flag(notes.armReset, 'notes.armReset') },
   };
 }
 
-// --- Storage -------------------------------------------------------------------------------------------
-
-// What the archive needs of localStorage (headless suites pass stubs). The provider is a function because
-// reaching window.localStorage can itself throw (storage blocked by the browser): that is ARCHIVE OFFLINE.
-export interface MetaStorage {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-  removeItem(key: string): void;
-}
-export type StorageProvider = () => MetaStorage;
-
-// The page's archive storage (§4.5): localStorage. Reaching it can itself throw (storage blocked by the
-// browser, a sandboxed frame), so it is reached through this function every time, inside the archive's own
-// try: a throw there is ARCHIVE OFFLINE, said on screen, never a crash. Headless suites pass stubs instead.
-export function browserStorage(): MetaStorage {
-  return window.localStorage;
-}
+// --- Storage (systems/storage.ts holds the provider since slice 3c; re-exported above) ------------------------
 
 export type LoadResult =
   | { ok: true; meta: Meta; recovered: boolean }
   | { ok: false; reason: 'unavailable' | 'corrupt'; detail: string };
 
 // A run left without a RUN END (the page closed or reloaded mid-run) is the last unit, 'abandoned' where it
-// was when its last ship started.
+// was when its last ship started. TODO(3c-SAVE): explicit (abandonActiveRun, with the world update), plan §2.2.
 function abandon(run: ActiveRun): LastUnit {
   return {
-    number: run.unit, woke: run.woke, shipName: run.shipName, ...placeFields(run), cause: 'abandoned', stats: { ...run.stats },
-    hollowUnits: [...run.hollowUnits],
-  };
-}
-
-// The place fields of a record, only those it has (an older record has none: never written as undefined).
-function placeFields(from: { layer?: number; worldSlot?: number }): { layer?: number; worldSlot?: number } {
-  return {
-    ...(from.layer !== undefined ? { layer: from.layer } : {}),
-    ...(from.worldSlot !== undefined ? { worldSlot: from.worldSlot } : {}),
+    number: run.unit, landed: run.landed, shipName: run.shipName, cause: 'abandoned', stats: { ...run.stats },
+    hollowUnits: [...run.hollowUnits], trail: run.trail === null ? null : structuredClone(run.trail), skills: null,
   };
 }
 
@@ -268,9 +356,9 @@ export function loadMeta(storage: StorageProvider): LoadResult {
   return { ok: true, meta: { ...meta, lastUnit: abandon(meta.activeRun), activeRun: null }, recovered: true };
 }
 
-export type SaveStatus = 'ok' | 'unavailable';
+export type MetaWriteStatus = 'ok' | 'unavailable';
 
-export function saveMeta(storage: StorageProvider, meta: Readonly<Meta>): SaveStatus {
+export function saveMeta(storage: StorageProvider, meta: Readonly<Meta>): MetaWriteStatus {
   try {
     storage().setItem(META_STORAGE_KEY, JSON.stringify(meta));
     return 'ok';
@@ -289,11 +377,10 @@ export function unitStatsOf(stats: Readonly<RunStats>): UnitStats {
 export interface RunProgress {
   unit: number;
   shipName: string;
-  layer?: number;            // the ship's layer and world on its arm (M3)
-  worldSlot?: number;
-  woke: number;
+  landed: number;
   stats: UnitStats;
   hollowUnits: readonly number[];
+  trail: UnitTrail | null;   // the run so far (systems/lineage.ts trailOf); null on the classic world
 }
 
 export function recordRunStart(meta: Readonly<Meta>, progress: RunProgress, now: number): Meta {
@@ -302,8 +389,8 @@ export function recordRunStart(meta: Readonly<Meta>, progress: RunProgress, now:
 
 function activeOf(progress: RunProgress): Omit<ActiveRun, 'startedAt'> {
   return {
-    unit: progress.unit, shipName: progress.shipName, ...placeFields(progress), woke: progress.woke, stats: { ...progress.stats },
-    hollowUnits: [...progress.hollowUnits],
+    unit: progress.unit, shipName: progress.shipName, landed: progress.landed, stats: { ...progress.stats },
+    hollowUnits: [...progress.hollowUnits], trail: progress.trail === null ? null : structuredClone(progress.trail),
   };
 }
 
@@ -336,9 +423,10 @@ export function recordRunEnd(meta: Readonly<Meta>, end: RunEnd): Meta {
     // §4.5: a MERGE gives the next run its bonus (WP11 applies it); any other ending uses it up.
     mergeBonus: end.cause === 'won-merge',
     activeRun: null,
+    // TODO(3c-SAVE): the colonies, routes, events and the updated arm (plan §2.4 "Run end").
     lastUnit: {
-      number: end.unit, woke: end.woke, shipName: end.shipName, ...placeFields(end), cause: end.cause, stats: { ...end.stats },
-      hollowUnits: [...end.hollowUnits],
+      number: end.unit, landed: end.landed, shipName: end.shipName, cause: end.cause, stats: { ...end.stats },
+      hollowUnits: [...end.hollowUnits], trail: end.trail === null ? null : structuredClone(end.trail), skills: null,
     },
   };
 }
@@ -352,7 +440,9 @@ export function lastCauseOf(cause: RunEndCause): LastCause {
 
 // What a run starts with from the archive (§4.5): its unit and wave, the last unit, HOLLOW's units, whether a unit
 // before it has flown the tutorial (tutorialDone), and whether the last run ended in a MERGE (WP11: this run's Core
-// starts with MERGE_BONUS_CORE_CAPACITY threads and a faint permanent shimmer).
+// starts with MERGE_BONUS_CORE_CAPACITY threads and a faint permanent shimmer; retires with 3c SAVE's archive v2, risk 3:
+// the field stays, always false, until slice 7 deletes it). Slice 3c: the arm seed, the arm the run starts on (null: run
+// 1's assembled arm, or a fresh roll where no arm is stored) and what the runs before left on the map (RunMapState.history).
 export interface RunLineage {
   unitNumber: number;
   wave: number;
@@ -360,6 +450,9 @@ export interface RunLineage {
   hollowUnits: number[];
   tutorialDone: boolean;
   mergeBonus: boolean;
+  armSeed: number;
+  arm: ArmState | null;
+  history: MapHistory;
 }
 
 // HOLLOW's units after `lastUnit` (§4.5's table): on the first run the unit before 047 (UNIT-046); after a
@@ -381,10 +474,14 @@ export function lineageOf(meta: Readonly<Meta>): RunLineage {
   return {
     unitNumber: FIRST_UNIT_NUMBER + meta.runs,
     wave: meta.runs + 1,
-    lastUnit: meta.lastUnit === null ? null : { ...meta.lastUnit, stats: { ...meta.lastUnit.stats }, hollowUnits: [...meta.lastUnit.hollowUnits] },
+    lastUnit: meta.lastUnit === null ? null : structuredClone(meta.lastUnit),
     hollowUnits: hollowUnitsAfter(meta.lastUnit),
     tutorialDone: meta.tutorialDone,
     mergeBonus: meta.mergeBonus,
+    armSeed: meta.armSeed,
+    arm: meta.arm === null ? null : structuredClone(meta.arm),
+    // TODO(3c-SAVE): the history from the archive (gap, departures, colonies, routes, the last unit's number), plan §2.4.
+    history: structuredClone(EMPTY_HISTORY),
   };
 }
 
@@ -423,37 +520,6 @@ export function ghostLine(us: number, lastUnit: LastUnit | null): string | null 
   if (lastUnit === null) return null;
   const line = GHOST_LINE[lastUnit.cause];
   return line === null ? null : line({ us, last: lastUnit, hollow: hollowUnitsAfter(lastUnit), lostShip: lostShipWords(lastUnit.shipName) });
-}
-
-// Where this run's ghost speaks (05 §3.5: "at the first boot in or past the layer where it was lost … never at ship 1: the
-// new unit can't know yet"), on the fixed five: the index of the ship where the last unit's run ended (its shipName), or
-// the final ship when the name is not one of `shipNames` (a record from an older fleet), and never ship 1 (index 0: a run
-// abandoned on ARES-VII speaks at HALCYON). The boot plays it at the first ship this run whose index is at or past this
-// one, once (run.ghostSpoken; systems/boot.ts), so a ship skipped or lost before it never makes it vanish or repeat.
-// Slice 3's seam: the galaxy map replaces "ship index" with the layer where the last unit was lost, and the boot's "at or
-// past" with the moment the new unit passes the grey cross on the chart.
-export function ghostShipIndex(lastUnit: Readonly<Pick<LastUnit, 'shipName'>>, shipNames: readonly string[] = CLASSIC_FIVE.map((ship) => ship.name)): number {
-  if (shipNames.length < 2) throw new Error(`ghostShipIndex: a fleet of ${shipNames.length} ship(s) has no ship past ship 1 for the ghost`);
-  const at = shipNames.indexOf(lastUnit.shipName);
-  return Math.max(1, at < 0 ? shipNames.length - 1 : at);
-}
-
-// Is this ship at or past where the ghost speaks? On the classic world (or a run with no map: the archive suites), the
-// fixed five's index (ghostShipIndex). On the arm, by layer (slice-3a-plan §2.9, interim until 3c's trail and grey cross;
-// the review's M3): the layer the last unit's run ended in, as the archive recorded it (LastUnit.layer), and the ghost
-// speaks at the first boot whose ship's layer is at or past it, never at ship 1. Not by its ship's name: from run 2 the
-// arm is a fresh roll whose names sit on other worlds, which made the place effectively random. A record with no layer
-// (an older archive) speaks at the final ship.
-export function ghostPlaceReached(
-  run: Readonly<Pick<RunState, 'lastUnit' | 'shipIndex'> & Partial<Pick<RunState, 'map'>>>,
-  lastUnit: Readonly<Pick<LastUnit, 'shipName' | 'layer'>>,
-): boolean {
-  const map = run.map;
-  if (map === undefined || map.world === 'classic') return run.shipIndex >= ghostShipIndex(lastUnit);
-  if (run.shipIndex === 0) return false;
-  const slot = currentStop({ map, shipIndex: run.shipIndex }).slot;
-  if (lastUnit.layer === undefined) return isEndSlot(map, slot);
-  return layerOf(worldSlotOf(map, slot)) >= lastUnit.layer;
 }
 
 // The ghost's line on this run's current boot, or null: the run has a ghost (ghostLine), it has not spoken yet this run,
@@ -538,22 +604,17 @@ function hasArchive(state: Readonly<GameState>): boolean {
   return state.archive.status !== 'none';
 }
 
-function shipPlace(state: Readonly<GameState>): { layer: number; worldSlot: number } {
-  const worldSlot = worldSlotOf(state.run.map, currentSlot(state.run));
-  return { layer: layerOf(worldSlot), worldSlot };
-}
-
-function progressOf(state: Readonly<GameState>): RunProgress {
+// Where the unit is now. `cause`: how the run ends (RUN END), or 'abandoned' for the run in progress (what a run left here
+// would be recorded as).
+function progressOf(state: Readonly<GameState>, cause: LastCause): RunProgress {
   return {
     unit: state.run.unitNumber,
     shipName: state.level.shipName,
-    // Where the unit is on its arm (M3): the next run's ghost speaks by this layer, not by a name a fresh arm reuses.
-    ...shipPlace(state),
-    // Risk 10 (no META_VERSION bump): the archive's `woke` field now holds the colonists LANDED (on target). Slice 3's
-    // save replaces the record.
-    woke: runLanded(state.run.ships),
+    landed: runLanded(state.run.ships),
     stats: unitStatsOf(state.run.stats),
     hollowUnits: state.run.hollowUnits,
+    // The trail (slice 3c): the next run's chart, ghost, letters and beacon read it (systems/lineage.ts unitTrailOf).
+    trail: trailOf(state.run, cause),
   };
 }
 
@@ -561,7 +622,7 @@ function progressOf(state: Readonly<GameState>): RunProgress {
 export function archiveRunStarted(store: Store<GameState>, now: number = Date.now()): void {
   if (!hasArchive(store.getState())) return;
   const current = requireSession();
-  current.meta = recordRunStart(current.meta, progressOf(store.getState()), now);
+  current.meta = recordRunStart(current.meta, progressOf(store.getState(), 'abandoned'), now);
   write();
   syncStatus(store);
 }
@@ -572,7 +633,7 @@ export function archiveShipStarted(store: Store<GameState>): void {
   const state = store.getState();
   if (!hasArchive(state)) return;
   const current = requireSession();
-  current.meta = recordShipStart(current.meta, progressOf(state));
+  current.meta = recordShipStart(current.meta, progressOf(state, 'abandoned'));
   if (state.run.shipIndex > 0) current.meta = recordTutorialDone(current.meta);
   write();
   syncStatus(store);
@@ -594,7 +655,7 @@ export function archiveRunEnded(store: Store<GameState>, cause: RunEndCause): vo
   const state = store.getState();
   if (!hasArchive(state)) return;
   const current = requireSession();
-  current.meta = recordRunEnd(current.meta, { ...progressOf(state), cause: lastCauseOf(cause), score: runScore(state.run.ships) });
+  current.meta = recordRunEnd(current.meta, { ...progressOf(state, lastCauseOf(cause)), cause: lastCauseOf(cause), score: runScore(state.run.ships) });
   write();
   syncStatus(store);
 }

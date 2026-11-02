@@ -335,8 +335,8 @@ stepUntil(() => state().run.phase === 'flight', 30);
 
 // --- Run 2: ship 1 stays calm: no ghost at its boot (it speaks at VESPER's, where the last unit was lost), no naming -----------
 {
-  const meta = recordRunEnd(recordRunStart(freshMeta(), { unit: 47, shipName: 'ARES-VII', woke: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46] }, 0),
-    { unit: 47, shipName: 'VESPER', woke: 3100, stats: { moves: 4, deletes: 0 }, hollowUnits: [46], cause: 'overwritten', score: 3000 });
+  const meta = recordRunEnd(recordRunStart(freshMeta(), { unit: 47, shipName: 'ARES-VII', landed: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null }, 0),
+    { unit: 47, shipName: 'VESPER', landed: 3100, stats: { moves: 4, deletes: 0 }, hollowUnits: [46], trail: null, cause: 'overwritten', score: 3000 });
   const lineage = lineageOf(meta);
   h.resetTo('flight', 13);
   h.store.update((draft) => { Object.assign(draft, createInitialState({ seed: 13, phase: 'title', lineage })); });

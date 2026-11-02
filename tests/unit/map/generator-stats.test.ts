@@ -16,6 +16,7 @@ import { rootSlotRack } from '@data/memory';
 import { END_SLOTS, FIRST_SLOT } from '@data/arm';
 import { RUN_START_YEAR, LATE_TIGHT_FROM_LAYER, ROOT_SLOT_FROM_LAYER } from '@data/tuning';
 import { byDepth } from '../depth';
+import { MAP_STATE_VERSION, EMPTY_HISTORY } from '@data/map-state';
 
 const ARMS = byDepth(50, 200);
 const pct = (xs: readonly number[], q: number): number => [...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor(q * xs.length))]!;
@@ -30,8 +31,9 @@ interface ArmStats {
 function statsOf(seed: number): ArmStats {
   const { arm, attempt } = freshArmAttempts(seed, 2, RUN_START_YEAR);
   const map: RunMapState = {
-    world: 'arm', run: 2, armSeed: seed, startYear: RUN_START_YEAR, arm, noise: rollNoiseClouds(noiseRng(seed)),
+    version: MAP_STATE_VERSION, world: 'arm', run: 2, armSeed: seed, startYear: RUN_START_YEAR, arm, noise: rollNoiseClouds(noiseRng(seed)),
     route: [{ slot: FIRST_SLOT, depth: 1, hop: null }], galaxyYear: RUN_START_YEAR, pendingExtra: null,
+    history: EMPTY_HISTORY,
   };
   const problems: string[] = [];
   if (armChecks(arm).length > 0) problems.push(`checks: ${JSON.stringify(armChecks(arm))}`);

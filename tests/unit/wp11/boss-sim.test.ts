@@ -315,7 +315,7 @@ function mvProblem(memory: Segment[], verb: Extract<Verb, { kind: 'mv' }>): stri
 
 // Weights: the last unit's habits.
 {
-  const mover = verbWeights({ number: 47, woke: 0, shipName: 'X', cause: 'overwritten', stats: { moves: 30, deletes: 0 }, hollowUnits: [46] });
+  const mover = verbWeights({ number: 47, landed: 0, shipName: 'X', cause: 'overwritten', stats: { moves: 30, deletes: 0 }, hollowUnits: [46], trail: null, skills: null });
   const fresh = verbWeights(null);
   check('A: weights: MV = 1 + moves/10, RM = 1 + deletes/10 (a first run: 1 and 1)', mover.mv === 4 && mover.rm === 1 && fresh.mv === 1 && fresh.rm === 1,
     JSON.stringify({ mover, fresh }));
@@ -467,7 +467,7 @@ coast(15);
   mergeAdjacentFree(memory);
   h.store.update((d) => {
     d.ui.memoryRev++;
-    d.run.lastUnit = { number: 47, woke: 0, shipName: 'X', cause: 'overwritten', stats: { moves: 999, deletes: 0 }, hollowUnits: [46] };
+    d.run.lastUnit = { number: 47, landed: 0, shipName: 'X', cause: 'overwritten', stats: { moves: 999, deletes: 0 }, hollowUnits: [46], trail: null, skills: null };
   });
   const verb = telegraphNow();
   // The ship's first verb, an MV this time: it counts from 4 too (the first of either kind).

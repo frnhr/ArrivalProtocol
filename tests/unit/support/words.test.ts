@@ -148,7 +148,7 @@ check('the typed endings count colonists, never souls', endings.some((text) => t
   JSON.stringify(endings));
 check('RUN END over an empty flagship: nobody LANDED', /LANDED/.test(RUN_END_NOBODY_LANDED.title)
   && Object.values(RUN_END_NOBODY_LANDED.why).every((text) => /landed/.test(text) && !/woke/i.test(text)));
-const lineage = lineageLine({ number: 47, woke: 6200, shipName: 'VESPER', cause: 'overwritten', stats: { moves: 0, deletes: 0 }, hollowUnits: [46] });
+const lineage = lineageLine({ number: 47, landed: 6200, shipName: 'VESPER', cause: 'overwritten', stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, skills: null });
 check("the title's lineage counts the colonists landed", lineage === 'last: UNIT-047 · 6,200 landed · overwritten at VESPER', String(lineage));
 check('SCAN STASIS finds the sleepers, not `0 pods`', scanFinding('stasis', 100) !== '0 pods' && /sleeper/.test(scanFinding('stasis', 100)));
 

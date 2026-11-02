@@ -1,8 +1,10 @@
+// Slice 3c: Track SAVE owns this file (docs/phase3/impl/slice-3c-plan.md §5.2); WORLD and UI request helpers by message.
 import type { GameState, RunPhase, RunState, HollowState, RunStats, ArchiveState, HazardsState } from './schema';
 import type { Segment } from '@/types/segment';
 import type { LandingState, PodRecord, ShipLandingDef } from '@/types/landing';
 import type { HollowDef, ShipThreat } from '@/types/threat';
 import type { RunMapState } from '@/types/map';
+import type { SaveState } from '@/types/save';
 import type { FsToolKind } from '@/types/fs-tool';
 import { repoToolKind } from '@data/repository';
 import { buildShipMemory, type CarriedRacks, type HurtDriver } from '@data/memory';
@@ -39,6 +41,8 @@ export interface InitialStateOpts {
   lineage?: Readonly<RunLineage>;
   // The page's archive status (state/instance.ts openRunArchive); a headless world has none ('none').
   archive?: ArchiveState;
+  // The page's run save (slice 3c, systems/save-write.ts openRunSave); a headless world has none ('none': never written).
+  save?: SaveState;
   // The run's map at ship 1 (slice 3a): the page's first run is on the arm (systems/map-run.ts createRunMap, as NEW RUN's
   // startRun); left out, the classic world with the unit on classic ship `shipIndex` (the suites' fixture world).
   map?: RunMapState;
@@ -97,6 +101,8 @@ export function createRunState(
     // Phase 3 slice 3b: no request yet (the first desk's pick is the first), no mail opened.
     repo: { pick: null, requests: [], nextId: 1 },
     inbox: { read: [] },
+    // Phase 3 slice 3c: the world update fills it at RUN END.
+    next: null,
   };
 }
 
@@ -254,6 +260,7 @@ export function createInitialState(opts: InitialStateOpts): GameState {
     director: { shown: null, done: [] },
     ui: createUiState(phase, opts.reducedMotion ?? false),
     archive: opts.archive ?? { status: 'none' },
+    save: opts.save ?? { status: 'none', resume: null, reason: null },
   };
 }
 

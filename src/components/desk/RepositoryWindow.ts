@@ -1,3 +1,4 @@
+// Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
 import type { RepoModel, RepoRow } from '@systems/repository';
 import { make } from '@components/dom';
 import { REPO_TEXT } from '@data/repo-text';

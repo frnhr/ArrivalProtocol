@@ -1,3 +1,4 @@
+// Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
 import type { GameState, RunEndCause, ShipOutcome, ShipResult } from '@state/schema';
 import { runScore, runLanded } from '@systems/run';
 import { fleetHome } from '@systems/run-score';

@@ -1,3 +1,4 @@
+// Slice 3c: Track SAVE owns this file (docs/phase3/impl/slice-3c-plan.md §5.2); WORLD and UI request helpers by message.
 import type { Store } from '@state/store';
 import type { GameState, Speaker, ObjectiveLine, LogEntry, ViewMode, TerminalStatus, EndingLine } from '@state/schema';
 import { getPrediction, getSensedPrediction, type Prediction } from '@systems/predict';
@@ -61,7 +62,9 @@ import { createHollowState } from '@state/initial';
 import { getOps, threadsBusy, threadsTotal, cancelOp, abortAll } from '@systems/ops-core';
 import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
 import { layoutOf } from '@data/memory';
-import { META_STORAGE_KEY, ROOT_BLOCKS } from '@data/tuning';
+import { META_STORAGE_KEY, RUN_SAVE_KEY, ROOT_BLOCKS } from '@data/tuning';
+import type { SaveState } from '@/types/save';
+import { updateArm, armStateOfMap, type ArmUpdate } from '@systems/map-update';
 import type { Segment } from '@/types/segment';
 import { showStamp, type StampTone } from '@components/hud/Stamp';
 import { shake, recentShakes } from '@components/hud/Juice';
@@ -233,9 +236,18 @@ interface DebugHooks {
   // (a first run); ghost is this run's ghost line, wherever it speaks (systems/meta.ts ghostShipIndex); draft is the TRANSMIT's offer, pick and what weighted it; pick takes a
   // card (refusal or null).
   archive: () => { status: string; meta: Readonly<Meta> };
-  archiveAs: (cause: LastCause, woke?: number) => Meta;
+  // Slice 3c (archive v2): `landed` (was `woke`). TODO(3c-SAVE): run 1 on the worked route through the real update (plan
+  // §5.0 item 9), so a reload meets UNIT-048 on the updated arm; until then the WP8 record above with an empty trail.
+  archiveAs: (cause: LastCause, landed?: number) => Meta;
   archiveCorrupt: () => void;
   archiveClear: () => void;
+  // Phase 3 slice 3c: the run save. save is the page's save state and what is stored under RUN_SAVE_KEY; saveCorrupt
+  // writes JSON that does not read (reload: RUN SAVE CAN'T RESUME); saveClear forgets the save; updateArm runs the world
+  // update on this run's arm as if the run ended after `route` (default: the route so far; colony where a pod landed).
+  save: () => { state: SaveState; stored: string | null };
+  saveCorrupt: () => void;
+  saveClear: () => void;
+  updateArm: (route?: readonly number[]) => ArmUpdate;
   ghost: () => string | null;
   draft: () => { offer: DraftCard[]; pick: UpgradeId | null; context: DraftContext } | null;
   pick: (id: UpgradeId) => PickRefusal | null;
@@ -336,8 +348,8 @@ const HOLLOW_DEMO_RACKS = { B: 'P P P P P P _16', C: 'P P _2 S _1 P P _29', D: '
 // POD 09 leads (the pod right of the root, behind the 1-block GAP).
 const HOLLOW_DEMO_LEAD = 9;
 const HOLLOW_DEMO_WAKE_SEC = 12;
-// __ap.archiveAs: the souls a written-in last run woke (HALCYON reached: ship 1's 2,400 and some).
-const DEBUG_ARCHIVE_WOKE = 3400;
+// __ap.archiveAs: the colonists a written-in last run landed (HALCYON reached).
+const DEBUG_ARCHIVE_LANDED = 3400;
 const HOLLOW_DEMO: HollowDef = {
   wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, landMult: 1.5, seed: null, verbs: null, deal: false,
   story: 'none',
@@ -792,18 +804,29 @@ export function mountDebug(store: Store<GameState>): void {
     beamOutView: () => beamOutView(store.getState(), getPrediction()),
     amberBite: () => amberBite(store.getState()),
     archive: () => ({ status: store.getState().archive.status, meta: archiveMeta() }),
-    archiveAs: (cause, woke = DEBUG_ARCHIVE_WOKE) => {
+    archiveAs: (cause, landed = DEBUG_ARCHIVE_LANDED) => {
       // UNIT-047's run as the archive keeps it: started, ARES-VII flown through (the next run is a returning
       // unit), then ended with `cause` on HALCYON.
       const first = lineageOf(freshMeta());
-      const progress = { unit: first.unitNumber, shipName: classicShip(1).name, woke, stats: { moves: 0, deletes: 0 }, hollowUnits: first.hollowUnits };
+      const progress = {
+        unit: first.unitNumber, shipName: classicShip(1).name, landed, stats: { moves: 0, deletes: 0 }, hollowUnits: first.hollowUnits, trail: null,
+      };
       const started = recordTutorialDone(recordRunStart(freshMeta(), progress, Date.now()));
-      const meta = recordRunEnd(started, { ...progress, cause, score: woke });
+      const meta = recordRunEnd(started, { ...progress, cause, score: landed });
       if (saveMeta(browserStorage, meta) !== 'ok') throw new Error('__ap.archiveAs: the archive could not be written');
       return meta;
     },
     archiveCorrupt: () => { browserStorage().setItem(META_STORAGE_KEY, '{ this is not an archive'); },
     archiveClear: () => { browserStorage().removeItem(META_STORAGE_KEY); },
+    save: () => ({ state: structuredClone(store.getState().save), stored: browserStorage().getItem(RUN_SAVE_KEY) }),
+    saveCorrupt: () => { browserStorage().setItem(RUN_SAVE_KEY, '{ this is not a run save'); },
+    saveClear: () => { browserStorage().removeItem(RUN_SAVE_KEY); },
+    updateArm: (route) => {
+      const run = store.getState().run;
+      const slots = route ?? run.map.route.map((stop) => stop.slot);
+      const visited = slots.map((slot) => ({ slot, colony: (run.ships.find((ship) => ship.slot === slot)?.landedInLz ?? 0) > 0 }));
+      return updateArm({ from: armStateOfMap(run.map), visited });
+    },
     ghost: () => ghostLine(store.getState().run.unitNumber, store.getState().run.lastUnit),
     draft: () => {
       const plan = store.getState().run.transit;

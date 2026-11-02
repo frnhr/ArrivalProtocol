@@ -1,3 +1,4 @@
+// Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
 import { formatCount } from '@data/format';
 
 // PLACEHOLDER(05): every word slice 3b puts in the INBOX and its boot lines (docs/phase3/05-story.md §3.3–§3.5, §3.12, §4;

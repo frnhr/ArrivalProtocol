@@ -1,3 +1,4 @@
+// Slice 3c: Track SAVE owns this file (docs/phase3/impl/slice-3c-plan.md §5.2); WORLD and UI request helpers by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { onPostTick } from '@systems/clock';
@@ -16,6 +17,8 @@ import type { Speaker } from '@state/schema';
 import { beamSeedTarget } from '@systems/beam-seeds';
 import { receiveDeliveryAtBoot } from '@systems/delivery-boot';
 import { newMessagesAtBoot } from '@systems/inbox';
+import { writeRunSave } from '@systems/save-write';
+import { nominalShipThreat } from '@systems/threat-plan';
 import {
   BOOT_LINE_AT_SEC, BOOT_KLAXON_AFTER_LAST_LINE_SEC, BOOT_END_AFTER_KLAXON_SEC, BOOT_SKIP_GRACE_SEC,
   ARRIVAL_HIT_STAGGER_SEC, ARRIVAL_HIT_SEEN_SEC, BOOT_GHOST_AT_SEC, BOOT_AFTER_GHOST_SEC, BOOT_AFTER_HOLLOW_LINE_SEC,
@@ -270,6 +273,16 @@ export function receiveTransmission(store: Store<GameState>): boolean {
   // ARCHIVE CORRUPT: the run plays without the archive (nothing is written over the bad record), and the
   // status says so from here on (the title's box, the footer's NO ARCHIVE, RUN END's line).
   if (store.getState().archive.status === 'corrupt') playWithoutArchive(store);
+  startBootFromTitle(store, { countRun: true });
+  // RUN START (02 §3.11): the run save's first point, once the archive has counted the run (its runs are the save's).
+  writeRunSave(store, 'run-start', { carried: null, threat: nominalShipThreat(0) });
+  return true;
+}
+
+// The boot starts from the title (slice 3c, factored out of receiveTransmission): the boot's timers, blue, the unpause and
+// the beam's sound. `countRun`: RUN START for the archive (RECEIVE TRANSMISSION); false for a resumed run, which the archive
+// already counted (systems/run-save.ts resumeRun).
+export function startBootFromTitle(store: Store<GameState>, opts: { countRun: boolean }): void {
   resetBootTimers();
   // The boot happens in blue. The title already is (createInitialState), so this is a no-op
   // unless something switched the screen behind the title card.
@@ -280,9 +293,8 @@ export function receiveTransmission(store: Store<GameState>): boolean {
     draft.clock.paused = false;
   });
   // RUN START (§4.5): the archive counts the run and remembers it is in progress.
-  archiveRunStarted(store);
+  if (opts.countRun) archiveRunStarted(store);
   play('transmitIn');
-  return true;
 }
 
 // The end of the boot, on time or skipped: every line is in the log, the klaxon sounds, the

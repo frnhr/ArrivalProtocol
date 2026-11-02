@@ -1,3 +1,4 @@
+// Slice 3c: Track WORLD owns this file (docs/phase3/impl/slice-3c-plan.md §5.1); SAVE and UI request changes by message.
 import type { ArmShip, MemoryClass, ShipKind, TemplateId, ModifierId, Reservations, ShipKey, PodRackName } from '@/types/map';
 import type { Rng } from '@systems/rng';
 import { createRng, hashSeed } from '@systems/rng';
@@ -36,8 +37,9 @@ import {
 //   'landing' and 'site' (systems/landing-roller.ts).
 
 // The generator's own version (beside data/arm.ts ARM_CONTENT_VERSION): bump when a rule or a stream changes what an arm
-// rolls, so 3c's save refuses an arm state another generator made.
-export const MAP_GENERATOR_VERSION = 1;
+// rolls, so 3c's save refuses an arm state another generator made. 2: slice 3c names a fresh roll's final ship by serial,
+// not by run (the foundation bumped it with §4.4; no arm state was ever stored with 1).
+export const MAP_GENERATOR_VERSION = 2;
 
 // An arm-level stream: one per (arm seed, run, attempt, name), in a namespace of its own (`arm:`), apart from the ships'
 // keys (`ship:`) and the per-visit `childRng(seed, slot, stream)` keys.

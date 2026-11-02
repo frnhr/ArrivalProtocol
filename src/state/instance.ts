@@ -1,3 +1,4 @@
+// Slice 3c: Track SAVE owns this file (docs/phase3/impl/slice-3c-plan.md §5.2); WORLD and UI request helpers by message.
 import { createStore } from './store';
 import type { GameState } from './schema';
 import { createInitialState } from './initial';

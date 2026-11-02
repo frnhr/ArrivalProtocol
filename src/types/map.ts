@@ -1,5 +1,6 @@
 import type { ShipLandingDef, ForgivenessClass, TerrainWord } from '@/types/landing';
 import type { LinkNoise } from '@/types/threat';
+import type { MapHistory } from '@/types/lineage';
 
 // The galaxy map's types (phase 3 slice 3a, docs/phase3/02-map.md; slice-3a-plan §2.2). Everything a run stores here is
 // flat and JSON-safe (3c's save writes RunMapState as it is). Track GEN owns this file after the foundation.
@@ -138,6 +139,8 @@ export interface PendingExtra {
 // The run's map (run.map). 'classic' is the frozen five (data/classic-five.ts: the suites' and __ap.ship's fixture world,
 // slot = index, one route); 'arm' is a real arm. Every function that reads the map switches on `world` once.
 export interface RunMapState {
+  // The shape's version (data/map-state.ts MAP_STATE_VERSION, slice 3c): the run save refuses a map of another shape.
+  version: number;
   world: 'arm' | 'classic';
   run: number;                  // the run number: 1 is run 1's arm (the classic world keeps the wave)
   armSeed: number;              // 3a: the run seed (interim); 3c: the archive's
@@ -147,6 +150,9 @@ export interface RunMapState {
   route: RouteStop[];           // last = the current ship; route.length === run.shipIndex + 1
   galaxyYear: number;           // the current ship's approach year
   pendingExtra: PendingExtra | null;
+  // What the runs before this one left (slice 3c: the launch gap, the departures, the colonies and routes; types/lineage.ts).
+  // Empty (data/map-state.ts EMPTY_HISTORY) on run 1 and the classic world.
+  history: MapHistory;
 }
 
 // The card's fit line and the PACKET's room bar (01 §3.16; systems/map-hop.ts roomFit): how the unit's files and

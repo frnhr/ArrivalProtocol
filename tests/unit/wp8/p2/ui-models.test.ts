@@ -30,7 +30,7 @@ import { isFirewall, upgradeFiles, getAiCore } from '@state/selectors';
 import { newSegId } from '@systems/memory-ops';
 import { BASE_WHY, type UpgradeId } from '@data/upgrades';
 import { DRAFT_TEXT, SKILLS_TEXT, ARCHIVE_TEXT } from '@data/script';
-import { FIREWALL_BLOCKS, MAX_LINE_CHARS, FUEL_TRIM_BLOCKS, INTEGRITY_MAX } from '@data/tuning';
+import { FIREWALL_BLOCKS, MAX_LINE_CHARS, FUEL_TRIM_BLOCKS, INTEGRITY_MAX, META_STORAGE_KEY } from '@data/tuning';
 import type { FreeSegment, UpgradeSegment } from '@/types/segment';
 import { plantHalcyonRoot } from '../../support/hollow-world';
 
@@ -236,7 +236,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
   h.newRun(11);
   check('a NEW RUN is on its title', state().run.phase === 'title');
   // A page whose archive holds JSON that does not read (a stub localStorage).
-  const stored = new Map<string, string>([['arrival-protocol/meta/v1', '{ not an archive']]);
+  const stored = new Map<string, string>([[META_STORAGE_KEY, '{ not an archive']]);
   const storage: MetaStorage = {
     getItem: (key) => stored.get(key) ?? null,
     setItem: (key, value) => { stored.set(key, value); },
@@ -247,7 +247,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
   const received = receiveTransmission(h.store);
   check('ARCHIVE CORRUPT: RECEIVE TRANSMISSION starts the run without the archive (status "without", the bad record left as it was)',
     opened === 'corrupt' && received && state().run.phase === 'boot' && state().archive.status === 'without'
-    && stored.get('arrival-protocol/meta/v1') === '{ not an archive');
+    && stored.get(META_STORAGE_KEY) === '{ not an archive');
   closeArchive();
   // PLAY WITHOUT ARCHIVE, the box's own answer, is the same thing before RECEIVE.
   h.newRun(11);
@@ -255,7 +255,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
   h.store.update((d) => { d.archive = { status: 'corrupt' }; });
   playWithoutArchive(h.store);
   check('…PLAY WITHOUT ARCHIVE answered first: the run starts the same way', state().archive.status === 'without'
-    && receiveTransmission(h.store) && state().run.phase === 'boot' && stored.get('arrival-protocol/meta/v1') === '{ not an archive');
+    && receiveTransmission(h.store) && state().run.phase === 'boot' && stored.get(META_STORAGE_KEY) === '{ not an archive');
   closeArchive();
   const crumbs = headerCrumbs(state(), getPrediction());
   check('the header crumb: UNIT-047 · WAVE 1 (the unit unchanged, the wave beside it)', crumbs.unit === 'UNIT-047' && crumbs.wave === 'WAVE 1', JSON.stringify(crumbs));

@@ -846,3 +846,143 @@ No decided item looks likely to hurt gameplay once built, apart from those repor
 - /home/user/ArrivalProtocol/src/systems/map-generator.ts
 - /home/user/ArrivalProtocol/src/systems/map-run.ts
 - /home/user/ArrivalProtocol/docs/phase3/map-sim/arm_sim.py
+
+---
+
+## Deviations (foundation)
+
+Recorded by the foundation agent (`Slice 3c F`). Each is a change from §2–§5 above, with its reason. Nothing changes
+behaviour: the page plays run 1 to the desks as before (checked in Chromium), and every suite stays green.
+
+### Architecture
+
+1. **The save is three modules, not one `run-save.ts`** (the §5.4 cycle guard, applied up front instead of waiting for
+   `wp12/fix1/entries`):
+   - `systems/save-codec.ts`, pure: `SAVE_POINTS`, `contentVersions`, `savePayloadAt`, `resumeLineOf`, `buildRunSave`,
+     `encodeRunSave`, `decodeRunSave`, `saveRefusal`;
+   - `systems/save-write.ts`, the live session (a leaf below run.ts and boot.ts): `openRunSave`, `writeRunSave`,
+     `clearRunSave`, `closeRunSave`;
+   - `systems/run-save.ts`: `resumeRun`, `abandonRun` (may import run.ts and boot.ts) and a re-export of both others, so a
+     caller still has one import.
+   run.ts and boot.ts import only `save-write.ts`; nothing imports `run-save.ts` yet.
+2. **`writeRunSave(store, point, boot: BootParts | null = null)`.** The BEAM point's racks and verdict are not in the store
+   once startShip has built the ship, so the caller passes them (`types/save.ts BootParts`). RUN START passes
+   `{ carried: null, threat: nominalShipThreat(0) }`; the world points pass nothing. Still one entry point.
+3. **The three easy points are wired now, as no-ops.** `receiveTransmission` (after the archive counts the run), the
+   simulation retry, `openDesk` (after its update) and `startShip` (when `hop !== null`) call `writeRunSave`, which returns
+   at once unless `GameState.save.status === 'ok'`, and nothing sets `'ok'` before Track SAVE's `openRunSave`. This puts the
+   final import graph under the entries suite today. ENDING CHOSEN is a `TODO(3c-SAVE)` above `landing.ts finishLanding`.
+4. **`UpdateInput.visited` is `readonly Visit[]`** (`{ slot, colony: boolean }`), not `number[]`. Step 1's words (colony
+   or `NO COLONY`) need each visited ship's landing, which a bare slot list cannot carry.
+5. **`MapHistory.finalSerial`.** The update needs the arm's final-ship serial, and RUN END's update reads the run's own map
+   (risk 13), which held no serial. It lives in the history (0 on run 1: LAST LIGHT). `armStateOfMap(map)` (map-update.ts)
+   builds `UpdateInput.from` from a map, taking `lastFinal` from the end slot's ship.
+6. **`ActiveRun.trail: UnitTrail | null`, not `route: number[]`.** Abandoning needs each visited ship's outcome, landing
+   and colony (the trail, and step 1's words), not only its slot. The current ship's stop has `outcome: null`, which is
+   what `TrailStop.outcome`'s null was for. The route is the stops' slots. It is null on the classic world.
+7. **`TrailStop.shipName: string | null`.** 05 §3.11 writes 046's trail without ships; null is used only there.
+8. **`LastCause`, `UnitStats` and `LastUnit` moved to `types/lineage.ts`** (meta.ts re-exports them), so lineage.ts never
+   imports meta.ts. `ghostShipIndex` moved with `ghostPlaceReached`. Both are re-exported from meta.ts, so the existing
+   suites' imports still work.
+9. **`MAP_STATE_VERSION` and `EMPTY_HISTORY` live in a leaf `data/map-state.ts`.** lineage.ts imports map-streams, so
+   putting them in map-run.ts or lineage.ts would make a cycle; the suites' literals import them too. `EMPTY_HISTORY` is
+   frozen. Makers take `structuredClone(EMPTY_HISTORY)`, so a write through a shared literal throws.
+10. **`MapHistory`, `ArmState` and the history records are in `types/lineage.ts`**, as §2.5 sketched. The update's
+    interfaces (`UpdateInput`, `ArmUpdate`, `UpdateDice`, `Visit`) are in map-update.ts, beside `updRng(seed, run, pass,
+    stream)` and `armContent()`.
+11. **meta.ts's `SaveStatus` (the archive write's result) is renamed `MetaWriteStatus`.** `SaveStatus` is now the run
+    save's (`types/save.ts`).
+
+### Archive v2 in the foundation (to keep behaviour)
+
+12. **The key flips to `arrival-protocol/meta/v2` (`META_VERSION` 2) now.** `LastUnit` v2 (`landed`, `trail`,
+    `skills: null`) changes the stored shape, so keeping the v1 key would read old archives as CORRUPT. A fresh archive
+    behaves exactly as before. Playtest archives restart (risk 2, decided); the v1 note on the title is Track SAVE's.
+    `META_V1_KEY` is defined for detection.
+13. **`Meta` v2 has its final fields** (`armSeed`, `arm`, `colonies`, `routes`, `events`, `traces: []`, `notes`) with a
+    strict parse: exact keys, the trail, colonies, routes and events field by field. Two exceptions:
+    - `mergeBonus` stays, marked RETIRES. Dropping it now would change the run after a MERGE (wp11/merge-test). Track
+      SAVE drops it, and `lineageOf` then gives false (risk 3).
+    - A non-null `arm` reads as corrupt (`TODO(3c-SAVE)`), because nothing writes one before SAVE.
+    `freshMeta(armSeed = 0)` takes the seed; the page passes nothing yet.
+14. **The archive already writes the trail.** `progressOf` stores `trailOf(run, cause)` in `activeRun` (at each ship
+    start, cause 'abandoned') and in `lastUnit` (RUN END). The trail has real stops (name, approach year, outcome,
+    landed, colony) and no `lost` or writer yet (`TODO(3c-WORLD)`). `ghostPlaceReached` keeps 3a's rule, reading the
+    layer from the trail's last stop instead of `LastUnit.layer`, so the ghost speaks where it did. Track WORLD moves it
+    to the grey cross.
+15. **`RunLineage` gains `armSeed`, `arm` and `history`.** `lineageOf` fills `history` with `EMPTY_HISTORY` until Track
+    SAVE. `createRunMap` still rolls by the run seed and run number (`TODO(3c-WORLD)` marks the switch to `lineage.arm`).
+
+### Smaller
+
+16. **`MAP_GENERATOR_VERSION` is bumped to 2 by F**, as §4.4 lists it, even though the change it versions (final names by
+    serial) is Track WORLD's. No stored arm carries a generator version yet, so the timing doesn't matter.
+17. **`FLEET_ROUTE_LY` / `MissionMeta.distanceLy` were already gone** (3a removed them). Nothing to do.
+18. **`updateArm`'s stub** is `freshArmState(seed, run + 1, start + 1, null)` with gap 1 and no departures. It reads no
+    dice. `freshArmState` uses `assembleRun1Arm` for run 1, else `freshArm`, with `finalSerial = run − 1` (3a's interim
+    naming). `seededDice` rolls a real `gap()`; its other rolls throw `TODO(3c-WORLD)`.
+19. **Text** (`map-text.ts`, PLACEHOLDER(05), each ≤ 70 at its worst case, pinned in `map/text`):
+    - `title.launched`, `title.savesBetweenShips`;
+    - `chart.taken`, `takenNoShip`, `noColony`, `lostCross`, `leave` (by `LeaveWords`), `leaveLine`, `leaveMore`,
+      `reportedHome`, `runOnChart`, `controlFirst`;
+    - `card.historyLabel` / `history`, `report.beacon`, `runEnd.bridge` and `bridgeTail`;
+    - `save.*`: the three RESUME lines by point, the buttons, the confirm, `cantResume` with `reason` keyed by
+      `SaveRefusalKind`, `offline`, `footer`, `olderArchive`, `armReset`.
+
+    The colony-age line is the existing `chart.colony`. 02's one-sentence bridge (> 70 characters) is split into `bridge`
+    and `bridgeTail`.
+20. **Debug:**
+    - `__ap.save()` returns `{ state, stored }`;
+    - `saveCorrupt()` and `saveClear()` are real;
+    - `updateArm(route?)` runs the (stub) update on this run's arm, marking a colony wherever a pod landed;
+    - `archiveAs(cause, landed?)` writes the WP8 record in v2's shape with `trail: null`. The worked-route version through
+      the real update is `TODO(3c-SAVE)`.
+21. **Counters:** `memory-ops highestSegId(json)` and `reserveSegIds(highest)`, and `say.ts highestLogEntryId(log)` and
+    `reserveLogEntryIds(highest)`. They never move a counter back. `flows.ts restoreState` reserves both counters (it
+    reserved only segment ids before).
+22. **`deskUiOnOpen(state)` is exported from run.ts** and returns the five UI fields `openDesk` sets (`memoryRev` stays
+    with the caller). **`startBootFromTitle(store, { countRun })`** is exported from boot.ts.
+23. **Fixture** `tests/unit/world/run2-fixture.ts` (Track WORLD):
+    - `RUN1_RESULTS`, `RUN1_TRAIL`, `RUN1_LAST_UNIT`;
+    - `run2Dice()`, stateful: names are handed out in slot order;
+    - `run2Arm(seed)`, `run2History()`, `run2Map(seed)`;
+    - `RUN2_EXPECTED`, `RUN2_DEPARTURES`, `RUN2_BEST_BY_LENGTH`.
+
+    New ships are timed with the generator's helpers and their details rolled from `ShipKey(seed, 2, slot, 0)`. Their
+    reservations are empty until `topUpReservations`. The four middle colony names (LANTERN, GREENSTEP, STARFORD,
+    HARBOUR) are the fixture's picks. `world/run2-fixture.test` checks it against §3.14 cell by cell; every number
+    matched on the first run, and so did the 13,200 / 13,800 / 13,600 / 12,800 best routes and ALBATROSS's 13 years.
+24. **`save/codec.test`** (the skeleton; Track SAVE grows it):
+    - a RUN START and an ENDING CHOSEN save round-trip `isDeepStrictEqual`, the sticky Infinity included;
+    - encode throws on NaN, on an untagged Infinity and on a classic map;
+    - decode refuses, in order: not-json, version, each content field, shape, classic, route, ship;
+    - `saveRefusal` catches stale saves.
+
+    A world save at ARES-VII's report is 27.6 KB (INFO). `checkShape` checks only the envelope; the run's field-by-field
+    check is `TODO(3c-SAVE)`.
+25. **Ownership banners** head every file named in §5.1–§5.3 (the CSS and index.html are left out). `schema.ts` and
+    `events.ts` carry the foundation's "one-liners only" banner.
+
+### For the tracks
+
+- **WORLD:** fill the `TODO(3c-WORLD)` items:
+  - in map-update.ts: `seededDice`, `updateArm`, and `freshArmState`'s serial and floor;
+  - in lineage.ts: `trailOf`'s `lost` and writers, `notableEvents`, the ghost by `trail.lost`, `beaconOnFirstShip`,
+    `letterSourcesFromTrail` and `olderColonies`;
+  - in map-run.ts: `createRunMap` from `lineage.arm` / `history`, with noise by the run seed.
+
+  `run2Dice().name` is asked in slot order; widen it to `(pool, slot)` if your update asks in another order, and update
+  the fixture's reservations once `topUpReservations` exists.
+- **SAVE:** every `TODO(3c-SAVE)`:
+  - meta.ts: the record steps, the explicit abandon with `abandonActiveRun`, v1 detection, the content reset, the `arm`
+    parse, `mergeBonus`'s retirement and the lineage's history;
+  - save-write.ts and run-save.ts;
+  - ENDING CHOSEN in landing.ts;
+  - `checkShape`'s deep checks;
+  - the page's open sequence in instance.ts, with `freshMeta(pageSeed)`;
+  - `__ap.archiveAs` on the worked route.
+
+  `wp8/meta`'s round-trip literal is v2-shaped now.
+- **UI:** the strings are in `map-text.ts`. Build the chart, card, title and tally against `run2Map()` and
+  `RUN1_LAST_UNIT`. `desk.ts trail046` becomes `unitTrailOf`; `inbox.ts letterSources` reads
+  `letterSourcesFromTrail` from run 2 on.

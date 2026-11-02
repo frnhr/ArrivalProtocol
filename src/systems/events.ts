@@ -1,3 +1,4 @@
+// Slice 3c: the foundation owns this file; the tracks add lead-approved one-liners only (slice-3c-plan §5.4).
 import type {
   FiringSource, ViewMode, TransitHit, AutoburnPhase, AutoburnEnd, DealOutcome, VerbKind,
 } from '@state/schema';
@@ -126,6 +127,10 @@ export interface GameEvents {
   // WP8: a write to the archive failed mid-run: from now on this unit is not kept (systems/meta.ts). The game
   // says so once (a TERMINAL line and a buzz); the footer's tag stays.
   'archive-lost': Record<string, never>;
+  // Phase 3 slice 3c: a read or write of the run save failed (systems/save-write.ts): a reload will lose this run. The
+  // game says so once (`RUN SAVE OFFLINE — a reload will lose this run`: a TERMINAL line and a buzz); the footer's NO SAVE
+  // stays. Play goes on.
+  'save-lost': Record<string, never>;
   // WP9: a hazard zone hit memory (systems/zones.ts): a debris contact (every file in its rack at once) or one
   // belt hit. `hits` are the files, the rack each was in, and their integrity before and after; `lostDrivers`
   // are the pods whose drivers it took to 0. The thud, shake, rack flash and `HIT · RACK C` stamp hang on it.

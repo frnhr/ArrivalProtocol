@@ -109,7 +109,8 @@ continueAfterReport(h.store);
   check('…still the victory tone (the flagship landed), the PURGE ending', model.tone === 'victory' && model.ending === 'purge', model.tone);
   // WP11 fix round 1 (the experience review): the next title's lineage line said `brought the fleet home` after this run.
   const lineage = lineageLine({
-    number: state().run.unitNumber, woke: model.landed, shipName: 'LAST LIGHT', cause: 'won-purge', stats: { moves: 0, deletes: 0 }, hollowUnits: [46],
+    number: state().run.unitNumber, landed: model.landed, shipName: 'LAST LIGHT', cause: 'won-purge', stats: { moves: 0, deletes: 0 }, hollowUnits: [46],
+    trail: null, skills: null,
   });
   check('…and the next title\'s lineage names what the unit did, never the fleet (`deleted it at LAST LIGHT`)',
     lineage !== null && lineage.endsWith('· deleted it at LAST LIGHT') && !/fleet/.test(lineage), String(lineage));

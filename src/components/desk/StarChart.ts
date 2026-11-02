@@ -1,3 +1,4 @@
+// Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
 import type { ChartModel, ChartNode } from '@systems/desk';
 import { drawChart, PORTRAIT_ROTATE_DEG, LANDSCAPE_ROTATE_DEG, type ChartDrawOpts, type ChartGeometry } from '@components/desk/chart-draw';
 import { make } from '@components/dom';

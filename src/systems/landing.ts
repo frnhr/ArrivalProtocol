@@ -246,6 +246,8 @@ function endNow(store: Store<GameState>, reason: LandingEnd): void {
 }
 
 // The landing is over and the bells have rung out: the LANDING REPORT opens.
+// TODO(3c-SAVE): ENDING CHOSEN (3c plan §2.1, risk 1): on the final ship with a decided finale, writeRunSave(store,
+// 'ending-chosen') right after this update (systems/save-write.ts; slice 7 moves it to step 2's confirm).
 function finishLanding(store: Store<GameState>): void {
   store.update((draft) => {
     draft.landing.lingerAiSec = null;

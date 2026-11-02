@@ -1,3 +1,4 @@
+// Slice 3c: the foundation owns this file; the tracks add lead-approved one-liners only (slice-3c-plan §5.4).
 import type { Segment, SegmentRole } from '@/types/segment';
 import type { LandingState, LandingTally } from '@/types/landing';
 import type { FsToolKind } from '@/types/fs-tool';
@@ -7,7 +8,8 @@ import type { ShrinkTuning } from '@data/ships';
 import type { MemoryClass, RunMapState, Hop, DeskWindowId } from '@/types/map';
 import type { HollowDef, RunThreatState, ShipThreat } from '@/types/threat';
 import type { UpgradeId, DraftCard } from '@data/upgrades';
-import type { LastUnit } from '@systems/meta';
+import type { LastUnit, NextLaunch } from '@/types/lineage';
+import type { SaveState } from '@/types/save';
 import type { DeliveryChip, ArrivalDelivery, RunRepoState } from '@/types/repo';
 import type { RunInboxState } from '@/types/inbox';
 
@@ -433,6 +435,9 @@ export interface RunState {
   // JSON-safe and all 3c's save keeps of them: deliveries' chips, forecasts and every message re-derive.
   repo: RunRepoState;
   inbox: RunInboxState;
+  // Phase 3 slice 3c: the next unit, as the world update at RUN END worked it out (RUN END's bridging line `UNIT-048 LEFT
+  // SOL 3 YEARS AFTER YOU, IN 2303`). null until the run ends, and on the classic world (never updated).
+  next: NextLaunch | null;
 }
 
 // --- HOLLOW (systems/hollow.ts, §6.6) -----------------------------------------------------------
@@ -784,6 +789,8 @@ export interface GameState {
   ui: UiState;
   // Lives across every world reset (it is the page's, not the ship's or the run's).
   archive: ArchiveState;
+  // The run save behind this page (phase 3 slice 3c, types/save.ts; systems/save-write.ts): the page's too, like the archive.
+  save: SaveState;
   // Running fs-tool ops live in systems/ops-core.ts (module state, reset with the world): their
   // closures hold live segment references that a store snapshot could not.
 }

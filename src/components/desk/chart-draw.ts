@@ -1,3 +1,4 @@
+// Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
 import type { ChartModel, ChartNode } from '@systems/desk';
 import { MAP_TEXT } from '@data/map-text';
 import {

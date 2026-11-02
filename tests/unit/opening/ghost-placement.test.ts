@@ -31,7 +31,7 @@ const lines = (from: number): LogEntry[] => said(from).filter((entry) => entry.c
 
 // UNIT-047's run as the archive keeps it: ARES-VII flown through, then ended with `cause` on `shipName`.
 function lineageAfter(cause: LastCause, shipName: string) {
-  const progress = { unit: 47, shipName, woke: 3100, stats: { moves: 4, deletes: 0 }, hollowUnits: [46] };
+  const progress = { unit: 47, shipName, landed: 3100, stats: { moves: 4, deletes: 0 }, hollowUnits: [46], trail: null };
   return lineageOf(recordRunEnd(recordTutorialDone(recordRunStart(freshMeta(), progress, 0)), { ...progress, cause, score: 3000 }));
 }
 

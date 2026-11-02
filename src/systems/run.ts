@@ -1,6 +1,7 @@
+// Slice 3c: Track SAVE owns this file (docs/phase3/impl/slice-3c-plan.md §5.2); WORLD and UI request helpers by message.
 import type { Store } from '@state/store';
 import type {
-  GameState, RunPhase, RunState, ShipOutcome, ShipResult, RunEndCause, ArrivalReport, TransitPlan, TransitHit, RingMiss,
+  GameState, RunPhase, RunState, ShipOutcome, ShipResult, RunEndCause, ArrivalReport, TransitPlan, TransitHit, RingMiss, UiState,
 } from '@state/schema';
 import type { CarriedRacks } from '@data/memory';
 import type { ArrivalDelivery, DeliveryChip } from '@/types/repo';
@@ -25,6 +26,7 @@ import {
 } from '@systems/carry';
 import { dealDraft, planPacket, applyPickToPacket, pickCharge } from '@systems/draft';
 import { archiveShipStarted, archiveRunEnded, archiveTutorialDone, playsTutorial, type RunLineage } from '@systems/meta';
+import { writeRunSave } from '@systems/save-write';
 import { finaleRunCause } from '@systems/finale';
 import { newSegId } from '@systems/memory-ops';
 import { createRunState, createShipSlices, createUiState, createRunStats } from '@state/initial';
@@ -248,6 +250,9 @@ export function startShip(
   resetWorldForShip(store, { phase: 'boot', run, carried, threat, freshLog: false, done: doneForNextShip(state) });
   // The archive's run in progress says where the unit is now (a run left on this ship is 'abandoned' here).
   archiveShipStarted(store);
+  // BEAM (02 §3.11): the packet has crossed (hits rolled, ECC applied, the layout done); a reload replays this boot. Not on
+  // a first ship or a classic jump (no hop): RUN START covers ship 1.
+  if (hop !== null) writeRunSave(store, 'beam', { carried, threat });
 }
 
 // The ship is over: its line goes into the run (§9 WP7 item 1), with the REPAIR CHARGE its stars pay on
@@ -289,21 +294,33 @@ export function openDesk(store: Store<GameState>, extra: PendingExtra | null): v
   const offered = reachableFrom(state.run.map, currentSlot(state.run));
   if (offered.length === 0) throw new Error(`openDesk: no ship is reachable from slot ${currentSlot(state.run)}`);
   abortAll();
+  const ui = deskUiOnOpen(state);
   store.update((draft) => {
     draft.run.phase = 'desk';
     draft.run.map.pendingExtra = extra === null ? null : { ...extra };
     draft.run.transit = null;
     draft.run.beamOut = null;
     draft.clock.paused = true;
-    draft.ui.activeTool = null;
-    draft.ui.pickedSourceId = null;
-    draft.ui.pendingPlacement = null;
-    // One ship in reach (the classic world) is already the selection: SET COURSE is the desk's only step.
-    draft.ui.deskSelected = offered.length === 1 ? offered[0]! : null;
-    // The tab it opens on (phase 3 slice 3b: the SHIP CARD, or the REPOSITORY for the last-rm prompt; repository.ts).
-    draft.ui.deskWindow = deskWindowOnOpen(state);
+    Object.assign(draft.ui, ui);
     draft.ui.memoryRev++;
   });
+  // SHIP DONE (02 §3.11): a reload resumes at this desk.
+  writeRunSave(store, 'ship-done');
+}
+
+// The UI fields the desk opens with (slice 3c, out of openDesk so a resumed desk opens the same way: systems/run-save.ts):
+// the tool put down, and the selection and tab. Read from the ended ship's state (the desk's or the save's).
+export function deskUiOnOpen(state: Readonly<GameState>): Pick<UiState, 'activeTool' | 'pickedSourceId' | 'pendingPlacement' | 'deskSelected' | 'deskWindow'> {
+  const offered = reachableFrom(state.run.map, currentSlot(state.run));
+  return {
+    activeTool: null,
+    pickedSourceId: null,
+    pendingPlacement: null,
+    // One ship in reach (the classic world) is already the selection: SET COURSE is the desk's only step.
+    deskSelected: offered.length === 1 ? offered[0]! : null,
+    // The tab it opens on (phase 3 slice 3b: the SHIP CARD, or the REPOSITORY for the last-rm prompt; repository.ts).
+    deskWindow: deskWindowOnOpen(state),
+  };
 }
 
 // The ship being flown has its result in the run (endShip): its own is the last one recorded.
@@ -541,6 +558,8 @@ export function continueAfterLoss(store: Store<GameState>): LossPlan {
     };
     resetWorldForShip(store, { phase: 'boot', run, carried: null, threat: nominalShipThreat(0), freshLog: false, done: doneForNextShip(state) });
     say('control', LINES.simulation(), { critical: true });
+    // RUN START again (02 §3.11): ship 1 again, as the run began it.
+    writeRunSave(store, 'run-start', { carried: null, threat: nominalShipThreat(0) });
     return plan;
   }
   endShip(store, plan.outcome);

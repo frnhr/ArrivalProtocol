@@ -1166,10 +1166,7 @@ export const THREAD_PLUS_THREADS = 1;
 // +12 REPAIR CHARGE (§6.9): added on arrival with the star credit, before the floor.
 export const CHARGE_CARD_BLOCKS = 12;
 
-// The archive (§4.5): one localStorage key, versioned, so a later shape is a new key, never a silent
-// reinterpretation of an old one.
-export const META_STORAGE_KEY = 'arrival-protocol/meta/v1';
-export const META_VERSION = 1;
+// The archive's key and version moved to the `3c SAVE` block (archive v2).
 // A MERGE makes HOLLOW the two units together (`UNIT-046·047`, §4.5). The name keeps at most this many
 // units, the newest: a chip on the strip and a ≤ 70-character ghost line still fit after many merges.
 export const HOLLOW_NAME_MAX_UNITS = 2;
@@ -1943,3 +1940,67 @@ export const REPLY_STALE_AFTER_SHIPS = 2;
 // The sleep line's year roll (SLEEP_YEAR_ROLL_MS, 02 §4 step 2) ticks a soft ratchet once per this many years: a hop's
 // 20–160 years read as 4–30 ticks over the 1.5 s, a ratchet and never a buzz.
 export const SLEEP_YEAR_TICK_YEARS = 5;
+
+// --- Phase 3 slice 3c: the save, archive v2 and the world update between runs (docs/phase3/impl/slice-3c-plan.md §4.1;
+// 02-map.md §3.1, §3.11–§3.13). The foundation laid these blocks down; each track adds only inside its own. ---------------
+
+// --- 3c WORLD (owned by Track WORLD): the world update's numbers, cross-checked against docs/phase3/map-sim/arm_sim.py ---
+
+// The launch gap (02 §3.1 = the sim's GAP_TABLE): [years, chance], the chances summing to 1. The next unit sets out this
+// many years after the last: mostly a year or two (it was following you all along), now and then long enough that the arm
+// moved on. Mean 2.785, median 2 (the sim's runs: 2.69–2.81).
+export const LAUNCH_GAP_TABLE: readonly (readonly [number, number])[] = [
+  [0, 0.10], [1, 0.35], [2, 0.25], [3, 0.12], [5, 0.10], [10, 0.06], [20, 0.015], [35, 0.005],
+];
+// A waiting ship more than this many years off the next run's schedule (next start − the start it was timed against,
+// strictly greater) leaves, final ships included (02 §3.12 step 2): it keeps every waiting ship inside the margins the
+// timing rules were built with (jitter ±4, ark margin 12), so a gap over 10 years clears the arm.
+export const DRIFT_LIMIT_YEARS = 10;
+// The time valve (02 §3.12 step 6): an updated arm whose best route is below the fresh roll's 1st percentile (63 pods,
+// the TIGHT cost not counted, as the sim scores it) gets this many more years, so every waiting ship drifts off and the next
+// arm is a fresh roll around the final ship. Never opened in the sim's 12,000 runs.
+export const VALVE_FLOOR_PODS = 63;
+export const VALVE_YEARS = 11;
+// A ship leaves after its 3rd run on the chart (runsOnChart > 3 after the update's increment; the sim's age >= MAX_AGE with
+// age from 0): some turnover makes the same arm feel new, and nobody's skipped ship sits there forever.
+export const MAX_RUNS_ON_CHART = 3;
+// Each other generated ship leaves with this chance (02 §3.12 step 2; authored ships are exempt, as in the sim), and of
+// those, this share says `ANOTHER CORE IS ON ITS WAY` (else `IT WILL COME IN ON ITS OWN`).
+export const RESOLVE_CHANCE = 0.2;
+export const RESOLVE_CORE_SHARE = 0.5;
+// A new final ship comes no earlier than the last final ship's year plus max(gap, this) (02 §3.4's floor): the ending never
+// moves earlier for a later unit.
+export const FINAL_FLOOR_MIN_GAP_YEARS = 1;
+// The update's repairs (the sim's): from this attempt a waiting ship that is part of a check failure leaves; from the
+// second, a planned slot with no predecessor retires a feeder too. Until then only the new ships re-roll.
+export const UPDATE_REPAIR_FROM_ATTEMPT = 5;
+export const UPDATE_FEEDER_FROM_ATTEMPT = 10;
+// Archive v2's history caps: colonies kept per world (about 1,000 over 200 runs otherwise: the archive stays small), the
+// last runs' routes (02 §3.12: three, for faint trails) and the notable events of the last run (05 §3.8: four).
+export const COLONY_HISTORY_MAX_PER_WORLD = 8;
+export const ROUTE_HISTORY_RUNS = 3;
+export const NOTABLE_EVENTS_MAX = 4;
+
+// --- 3c SAVE (owned by Track SAVE): the run save's and the archive's keys and versions ----------------------------------
+
+// The run save (02 §3.11): its own key beside the archive's, so a bad save never takes the archive with it. Versioned in
+// the key and the envelope: a later shape is a new version, refused loudly (RUN SAVE CAN'T RESUME), never reinterpreted.
+export const RUN_SAVE_KEY = 'arrival-protocol/run/v1';
+export const RUN_SAVE_VERSION = 1;
+// The archive (§4.5; 02 §3.12: v2 holds the arm, the trail, colonies, routes, events and traces). One key per shape: v1's
+// key is never written or read past detecting it (the title says once that an older archive was not carried over).
+export const META_STORAGE_KEY = 'arrival-protocol/meta/v2';
+export const META_V1_KEY = 'arrival-protocol/meta/v1';
+export const META_VERSION = 2;
+// The save suites print a world point's size, INFO only, against this (3c plan risk 8: an estimated 150–250 KB, the log
+// the largest part; past it the lever is keeping only the last TERMINAL entries).
+export const SAVE_SIZE_INFO_BYTES = 400_000;
+
+// --- 3c UI (owned by Track UI): the chart's trail markers and the departures block ---------------------------------------
+
+// A trail marker at a world that also holds a REPORTED HOME ship is drawn this far along the trail from the node (3c plan
+// risk 10), so the marker and the live node never sit on each other.
+export const TAKEN_MARK_OFFSET_PX = 10;
+// The opening desk's departures block lists at most this many ships (the rest fold into `+n MORE`): it must not push the
+// chart off a 1280 × 720 screen.
+export const LEAVE_BLOCK_MAX_LINES = 6;

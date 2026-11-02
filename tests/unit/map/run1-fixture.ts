@@ -3,11 +3,13 @@
 import type { RunMapState } from '@/types/map';
 import { assembleRun1Arm } from '@systems/map-generator';
 import { RUN_START_YEAR } from '@data/tuning';
+import { MAP_STATE_VERSION, EMPTY_HISTORY } from '@data/map-state';
 
 export function run1Map(seed = 1): RunMapState {
   return {
-    world: 'arm', run: 1, armSeed: seed, startYear: RUN_START_YEAR, arm: assembleRun1Arm(seed), noise: [],
+    version: MAP_STATE_VERSION, world: 'arm', run: 1, armSeed: seed, startYear: RUN_START_YEAR, arm: assembleRun1Arm(seed), noise: [],
     route: [{ slot: 0, depth: 1, hop: null }], galaxyYear: RUN_START_YEAR, pendingExtra: null,
+    history: EMPTY_HISTORY,
   };
 }
 

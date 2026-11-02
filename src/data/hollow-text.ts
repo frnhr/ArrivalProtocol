@@ -332,9 +332,8 @@ const hiFrom = (words: GhostWords): string => `> hi ${unitDigits(words.us)}. it'
 
 export const GHOST_LINE: Readonly<Record<LastCause, ((words: GhostWords) => string) | null>> = {
   overwritten: (words) => `${hiFrom(words)} ${hollowUnitWords(words.last.hollowUnits)} ate me. now i'm hungry too.`,
-  // §1's line, when someone landed (the archive's `woke` field holds the colonists landed); a run that landed nobody is
-  // not called home (WP11 review).
-  'won-purge': (words) => (words.last.woke > 0
+  // §1's line, when someone landed (the archive's `landed`); a run that landed nobody is not called home (WP11 review).
+  'won-purge': (words) => (words.last.landed > 0
     ? `${hiFrom(words)} we brought them home. they sent me out again.`
     : `${hiFrom(words)} i deleted it. nobody landed. they sent me out again.`),
   'won-merge': (words) => `> hi ${unitDigits(words.us)}. it's us. ${hollowUnitWords(words.hollow)}. we saved you a seat.`,

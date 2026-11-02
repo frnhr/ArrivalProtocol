@@ -7,7 +7,8 @@ import { buildFlightContext, flightObjective } from '@systems/guidance';
 import type { ZoneHit } from '@/types/zone';
 import type { GameState } from '@state/schema';
 import { DT_WALL_MAX } from '@data/tuning';
-import { newSegId } from '@systems/memory-ops';
+import { highestSegId, reserveSegIds } from '@systems/memory-ops';
+import { highestLogEntryId, reserveLogEntryIds } from '@systems/say';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -34,14 +35,13 @@ export function restoreState(harness: Harness, snapshot: GameState, settleTicks 
   for (let i = 0; i < settleTicks; i++) harness.step();
 }
 
-// The runtime segment-id counter (memory-ops newSegId, module state) moved past every runtime id in `snapshot`: a setup
-// restored from disk into a fresh process (flyOnce) otherwise mints `free~217` again beside the snapshot's own
-// (slice 3b review: the shared LAST LIGHT duel threw `memory: duplicate id` in wp11/merge-test).
+// The runtime id counters (memory-ops' segment ids, say.ts's log entry ids; module state) moved past every id in `snapshot`:
+// a setup restored from disk into a fresh process (flyOnce) otherwise mints `free~217` again beside the snapshot's own
+// (slice 3b review: the shared LAST LIGHT duel threw `memory: duplicate id` in wp11/merge-test). The same src helpers the
+// run save's resume uses (slice 3c).
 function passSegIds(snapshot: GameState): void {
-  let highest = 0;
-  for (const match of JSON.stringify(snapshot).matchAll(/~(\d+)"/g)) highest = Math.max(highest, Number(match[1]));
-  const current = Number(newSegId('restore').split('~')[1]);
-  for (let i = current; i < highest; i++) newSegId('restore');
+  reserveSegIds(highestSegId(JSON.stringify(snapshot)));
+  reserveLogEntryIds(highestLogEntryId(snapshot.log));
 }
 
 // A long setup (an hour of ignoring, a WAIT that takes half an hour to come up) flown once per process under `key`

@@ -295,7 +295,9 @@ check('the nobody-landed words fit one line', [RUN_END_NOBODY_LANDED.title, ...O
 
 // --- The lineage and the ghost -----------------------------------------------------------------------------------------
 {
-  const unit = (woke: number): LastUnit => ({ number: 47, woke, shipName: 'LAST LIGHT', cause: 'won-purge', stats: { moves: 0, deletes: 0 }, hollowUnits: [46] });
+  const unit = (landed: number): LastUnit => ({
+    number: 47, landed, shipName: 'LAST LIGHT', cause: 'won-purge', stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, skills: null,
+  });
   const lineage = lineageLine(unit(3200));
   check('the title\'s lineage after a PURGE names what the unit did, never the fleet', lineage === 'last: UNIT-047 · 3,200 landed · deleted it at LAST LIGHT'
     && !/fleet/.test(lineage ?? ''), String(lineage));

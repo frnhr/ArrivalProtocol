@@ -35,7 +35,7 @@ function stub(initial: Record<string, string> = {}, failOn: Set<'get' | 'set' | 
 }
 
 const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
-  unit: 47, shipName: 'ARES-VII', woke: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], ...over,
+  unit: 47, shipName: 'ARES-VII', landed: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, ...over,
 });
 
 // --- Storage that throws: unavailable ---------------------------------------------------------------
@@ -54,11 +54,12 @@ const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
   check('corrupt JSON → corrupt', !notJson.ok && notJson.reason === 'corrupt', JSON.stringify(notJson));
   const shapes: [string, unknown][] = [
     ['an array', []],
-    ['another version', { ...freshMeta(), version: 2 }],
+    // Slice 3c: archive v2; a v1 record (another version) is corrupt under the v2 key.
+    ['another version', { ...freshMeta(), version: 1 }],
     ['runs as text', { ...freshMeta(), runs: '3' }],
     ['a negative bestScore', { ...freshMeta(), bestScore: -5 }],
-    ['an unknown cause', { ...freshMeta(), lastUnit: { number: 47, woke: 0, shipName: 'ARES-VII', cause: 'exploded', stats: { moves: 0, deletes: 0 }, hollowUnits: [46] } }],
-    ['a lastUnit without stats', { ...freshMeta(), lastUnit: { number: 47, woke: 0, shipName: 'ARES-VII', cause: 'stayed', hollowUnits: [46] } }],
+    ['an unknown cause', { ...freshMeta(), lastUnit: { number: 47, landed: 0, shipName: 'ARES-VII', cause: 'exploded', stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, skills: null } }],
+    ['a lastUnit without stats', { ...freshMeta(), lastUnit: { number: 47, landed: 0, shipName: 'ARES-VII', cause: 'stayed', hollowUnits: [46], trail: null, skills: null } }],
     ['mergeBonus missing', (() => { const meta: Record<string, unknown> = { ...freshMeta() }; delete meta.mergeBonus; return meta; })()],
     // WP8 fix round 1: an archive written before tutorialDone existed is corrupt, never read as "not done".
     ['tutorialDone missing', (() => { const meta: Record<string, unknown> = { ...freshMeta() }; delete meta.tutorialDone; return meta; })()],
@@ -79,15 +80,18 @@ const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
 // --- A round trip preserves every field ----------------------------------------------------------------
 {
   const meta: Meta = {
-    version: 1, runs: 7, bestScore: 9123, endingsSeen: ['purge', 'merge'], mergeBonus: true, tutorialDone: true,
+    version: 2, runs: 7, bestScore: 9123, endingsSeen: ['purge', 'merge'], mergeBonus: true, tutorialDone: true,
     activeRun: null,
-    lastUnit: { number: 53, woke: 6200, shipName: 'VESPER', cause: 'overwritten', stats: { moves: 14, deletes: 3 }, hollowUnits: [51, 52] },
+    lastUnit: {
+      number: 53, landed: 6200, shipName: 'VESPER', cause: 'overwritten', stats: { moves: 14, deletes: 3 }, hollowUnits: [51, 52], trail: null, skills: null,
+    },
+    armSeed: 0, arm: null, colonies: [], routes: [], events: [], traces: [], notes: { olderArchive: false, armReset: false },
   };
   const store = stub();
   check('the round trip saves', saveMeta(store.provider, meta) === 'ok');
   const back = loadMeta(store.provider);
   check('…and loads every field back exactly', back.ok && JSON.stringify(back.meta) === JSON.stringify(meta), back.ok ? JSON.stringify(back.meta) : JSON.stringify(back));
-  const withRun: Meta = { ...meta, activeRun: { unit: 54, startedAt: 1_700_000_000_000, shipName: 'HALCYON', woke: 2400, stats: { moves: 2, deletes: 0 }, hollowUnits: [53] } };
+  const withRun: Meta = { ...meta, activeRun: { unit: 54, startedAt: 1_700_000_000_000, shipName: 'HALCYON', landed: 2400, stats: { moves: 2, deletes: 0 }, hollowUnits: [53], trail: null } };
   saveMeta(store.provider, withRun);
   check('a saved run in progress parses (parseMeta keeps activeRun)', JSON.stringify(parseMeta(store.data.get(META_STORAGE_KEY)!)) === JSON.stringify(withRun));
 }
@@ -95,13 +99,13 @@ const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
 // --- A leftover activeRun → abandoned on the next load ---------------------------------------------------
 {
   const started = recordRunStart(freshMeta(), progress(), 1_700_000_000_000);
-  const onHalcyon = recordShipStart(started, progress({ shipName: 'HALCYON', woke: 2200, stats: { moves: 1, deletes: 0 } }));
+  const onHalcyon = recordShipStart(started, progress({ shipName: 'HALCYON', landed: 2200, stats: { moves: 1, deletes: 0 } }));
   const store = stub();
   saveMeta(store.provider, onHalcyon);
   const loaded = loadMeta(store.provider);
   check('a leftover activeRun is recorded as lastUnit "abandoned", where the unit was', loaded.ok && loaded.recovered
     && loaded.meta.activeRun === null && loaded.meta.lastUnit?.cause === 'abandoned' && loaded.meta.lastUnit.number === 47
-    && loaded.meta.lastUnit.shipName === 'HALCYON' && loaded.meta.lastUnit.woke === 2200 && loaded.meta.runs === 1,
+    && loaded.meta.lastUnit.shipName === 'HALCYON' && loaded.meta.lastUnit.landed === 2200 && loaded.meta.runs === 1,
     loaded.ok ? JSON.stringify(loaded.meta) : JSON.stringify(loaded));
   // The page's open writes the recovery back, so a page closed again on the title does not lose it.
   const opened = openRunArchive(store.provider);
@@ -158,9 +162,9 @@ const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
   let threw = false;
   try { recordShipStart(freshMeta(), progress()); } catch { threw = true; }
   check('a ship start with no run started throws (RUN START always comes first)', threw);
-  const ended = recordRunEnd(started, { ...progress({ shipName: 'HALCYON', woke: 4200, stats: { moves: 5, deletes: 1 } }), cause: 'overwritten', score: 4100.5 });
+  const ended = recordRunEnd(started, { ...progress({ shipName: 'HALCYON', landed: 4200, stats: { moves: 5, deletes: 1 } }), cause: 'overwritten', score: 4100.5 });
   check('RUN END: lastUnit with its stats, the best SCORE, no run in progress', ended.activeRun === null && ended.lastUnit?.cause === 'overwritten'
-    && ended.lastUnit.woke === 4200 && ended.lastUnit.stats.moves === 5 && ended.lastUnit.stats.deletes === 1 && ended.bestScore === 4101
+    && ended.lastUnit.landed === 4200 && ended.lastUnit.stats.moves === 5 && ended.lastUnit.stats.deletes === 1 && ended.bestScore === 4101
     && ended.runs === 1, JSON.stringify(ended));
   const worse = recordRunEnd(recordRunStart(ended, progress({ unit: 48 }), 0), { ...progress({ unit: 48 }), cause: 'stayed', score: 100 });
   check('a worse run keeps the best SCORE', worse.bestScore === 4101 && worse.runs === 2 && worse.lastUnit?.number === 48);

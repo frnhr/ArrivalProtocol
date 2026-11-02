@@ -189,6 +189,42 @@ check('the sleep line\'s years read back for the roll (the approach year where i
   && years.approach === 2467 && sleep.slice(years.at, years.at + 4) === '2467' && sleepLineYears('> ECC: 3 TRANSIT HITS') === null,
   JSON.stringify(years));
 
+// --- Slice 3c (foundation): the save, the trail, the beacon and the bridge at their worst case (Track UI extends) -----------
+lines.push(
+  ['title.launched', MAP_TEXT.title.launched(UNIT, YEAR, 46, UNIT)],
+  ['title.launched same year', MAP_TEXT.title.launched(UNIT, YEAR, 0, UNIT)],
+  ['title.savesBetweenShips', MAP_TEXT.title.savesBetweenShips],
+  ['chart.taken', MAP_TEXT.chart.taken(SHIP, UNIT)],
+  ['chart.noColony', MAP_TEXT.chart.noColony(UNIT)],
+  ['chart.colony 3c', MAP_TEXT.chart.colony(COLONY, 999, UNIT)],
+  ['chart.lostCross', MAP_TEXT.chart.lostCross(UNIT)],
+  ...Object.values(MAP_TEXT.chart.leave).map((words): [string, string] => ['chart.leaveLine', MAP_TEXT.chart.leaveLine(SHIP, words)]),
+  ['chart.leaveMore', MAP_TEXT.chart.leaveMore(14)],
+  ['chart.runOnChart', MAP_TEXT.chart.runOnChart(3)],
+  ['chart.controlFirst', MAP_TEXT.chart.controlFirst(UNIT)],
+  ['card.history', MAP_TEXT.card.history(3)],
+  ['report.beacon', MAP_TEXT.report.beacon('LZ-D', UNIT, 46)],
+  ['runEnd.bridge', MAP_TEXT.runEnd.bridge(UNIT, 46, YEAR)],
+  ['runEnd.bridge same year', MAP_TEXT.runEnd.bridge(UNIT, 0, YEAR)],
+  ['runEnd.bridgeTail', MAP_TEXT.runEnd.bridgeTail],
+  ['save.resumeBoot', MAP_TEXT.save.resumeBoot(UNIT, 8, SHIP, YEAR)],
+  ['save.resumeDesk', MAP_TEXT.save.resumeDesk(UNIT, 8, YEAR)],
+  ['save.resumeReport', MAP_TEXT.save.resumeReport(UNIT, SHIP, YEAR)],
+  ['save.abandonConfirm', MAP_TEXT.save.abandonConfirm(UNIT)],
+  ...Object.values(MAP_TEXT.save.reason).map((reason): [string, string] => ['save.cantResume', MAP_TEXT.save.cantResume(reason)]),
+  ['save.offline', MAP_TEXT.save.offline],
+  ['save.olderArchive', MAP_TEXT.save.olderArchive],
+  ['save.armReset', MAP_TEXT.save.armReset],
+);
+check('3c\'s sample lines: the launch line, the beacon, the bridge, the history row, the RESUME line',
+  MAP_TEXT.title.launched('UNIT-048', 2303, 3, 'UNIT-047') === 'UNIT-048 · YEAR 2303 · LAUNCHED 3 YEARS AFTER UNIT-047'
+  && MAP_TEXT.report.beacon('LZ-A', 'UNIT-046', 1) === 'LZ-A · A BEACON WAS ALREADY THERE · SET BY UNIT-046 · 1 YEAR AGO'
+  && MAP_TEXT.report.beacon('LZ-A', 'UNIT-047', 0) === 'LZ-A · A BEACON WAS ALREADY THERE · SET BY UNIT-047 · THIS YEAR'
+  && MAP_TEXT.runEnd.bridge('UNIT-048', 3, 2303) === 'UNIT-048 LEFT SOL 3 YEARS AFTER YOU, IN 2303.'
+  && MAP_TEXT.card.history(1) === 'REPORTED HOME' && MAP_TEXT.card.history(2) === '2ND RUN ON THE CHART'
+  && MAP_TEXT.chart.taken('HALCYON', 'UNIT-047') === 'HALCYON · TAKEN · UNIT-047 GETS THERE FIRST'
+  && MAP_TEXT.save.resumeBoot('UNIT-047', 4, 'VESPER', 2625) === 'RESUME · UNIT-047 · SHIP 4 · bound for VESPER · 2625');
+
 const long = lines.filter(([, text]) => text.length > MAX_LINE_CHARS);
 check(`every map line fits ${MAX_LINE_CHARS} characters with the longest names (${SHIP}, ${WORLD})`, long.length === 0,
   long.map(([key, text]) => `${key} (${text.length}): ${text}`).join(' | '));

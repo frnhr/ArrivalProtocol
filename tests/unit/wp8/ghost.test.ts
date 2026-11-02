@@ -28,7 +28,7 @@ const titleVars = (state: GameState): LineVars => ({
 
 // WP11: the last ship a unit was on is LAST LIGHT (the flagship) for every cause the finale or its loss ends a run with.
 const last = (cause: LastCause, over: Partial<LastUnit> = {}): LastUnit => ({
-  number: 47, woke: 6200, shipName: 'LAST LIGHT', cause, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], ...over,
+  number: 47, landed: 6200, shipName: 'LAST LIGHT', cause, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null, skills: null, ...over,
 });
 
 // --- §4.5's table, run 2 after run 1 -----------------------------------------------------------------------
@@ -134,8 +134,8 @@ check('the POD 01 fight on a later run ends with `> you remember me. good.`', HO
   check('run 1: UNIT-047 · WAVE 1, `UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT` on the title line; HOLLOW unnamed (???), UNIT-046 once named',
     run1.mission.unitId === 'UNIT-047' && run1.mission.wave === 1 && LINES.titleUnit(titleVars(run1)) === 'UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT'
       && hollowLabel(run1.run) === '???' && hollowLabel({ ...run1.run, hollowNamed: true }) === 'UNIT-046');
-  const meta = recordRunEnd(recordRunStart(freshMeta(), { unit: 47, shipName: 'ARES-VII', woke: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46] }, 0),
-    { unit: 47, shipName: 'HALCYON', woke: 3100, stats: { moves: 4, deletes: 0 }, hollowUnits: [46], cause: 'overwritten', score: 3000 });
+  const meta = recordRunEnd(recordRunStart(freshMeta(), { unit: 47, shipName: 'ARES-VII', landed: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null }, 0),
+    { unit: 47, shipName: 'HALCYON', landed: 3100, stats: { moves: 4, deletes: 0 }, hollowUnits: [46], trail: null, cause: 'overwritten', score: 3000 });
   const run2 = createInitialState({ seed: 1, phase: 'title', lineage: lineageOf(meta) });
   check('run 2: UNIT-048 · WAVE 2, the crumb\'s unit id, the last unit kept on the run, HOLLOW is UNIT-047',
     run2.mission.unitId === 'UNIT-048' && run2.run.unitNumber === 48 && run2.run.wave === 2 && run2.mission.transmissionNum === 48
@@ -152,7 +152,7 @@ check('the POD 01 fight on a later run ends with `> you remember me. good.`', HO
     lineageLine(last('overwritten')) ?? '');
   check('stayed: `UNIT-047 stayed with them.`', lineageLine(last('stayed')) === 'UNIT-047 stayed with them.');
   check('the first run has no lineage line', lineageLine(null) === null);
-  const lines = LAST_CAUSES.map((cause) => lineageLine(last(cause, { number: 998, woke: 99_999, shipName: 'W'.repeat(NAME_MAX_CHARS) })) ?? '');
+  const lines = LAST_CAUSES.map((cause) => lineageLine(last(cause, { number: 998, landed: 99_999, shipName: 'W'.repeat(NAME_MAX_CHARS) })) ?? '');
   check(`every lineage line is ≤ ${MAX_LINE_CHARS} characters at the worst case`, lines.every((line) => line.length > 0 && line.length <= MAX_LINE_CHARS),
     lines.reduce((a, b) => (b.length > a.length ? b : a), ''));
 }

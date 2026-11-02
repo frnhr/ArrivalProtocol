@@ -1,14 +1,24 @@
+// Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
 import type { ModifierId, MemoryClass, RoomFit } from '@/types/map';
 import type { LinkNoise } from '@/types/threat';
+import type { SaveRefusalKind } from '@/types/save';
+import type { LeaveWords } from '@/types/lineage';
 import { formatCount } from '@data/format';
 
-// PLACEHOLDER(05): every word slice 3a puts on screen for the galaxy map (docs/phase3/02-map.md §4, 01-landing §3.16's
+// PLACEHOLDER(05): every word slice 3a puts on screen (slice 3c's foundation added the save, the trail and the bridge) for the galaxy map (docs/phase3/02-map.md §4, 01-landing §3.16's
 // MEMORY row and room bar, 05-story.md §3.11–§3.12's title and trail; slice-3a-plan §3), drafted from the specs' sample
 // lines for 05-story's owner to sign off. Each line renders to at most MAX_LINE_CHARS (70) with the longest names and
 // numbers (tests/unit/map/text.test.ts) and says no never-say word (tests/unit/support/words.test.ts).
 // Track DESK owns this file after the foundation; Track GEN adds its boot lines here too (MAP_TEXT.boot).
 
 const yrs = (years: number): string => `${years} ${Math.abs(years) === 1 ? 'YR' : 'YRS'}`;
+const years = (n: number): string => `${n} ${Math.abs(n) === 1 ? 'YEAR' : 'YEARS'}`;
+// 2ND, 3RD, 4TH … (a ship's runs on the chart; MAX_RUNS_ON_CHART keeps it at 3RD in play).
+const ordinal = (n: number): string => {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? 'TH' : (['TH', 'ST', 'ND', 'RD'][n % 10] ?? 'TH');
+  return `${n}${suffix}`;
+};
 
 // The words for a link's noise (02 §3.3): `NOISE LOW · 1`.
 export const NOISE_WORD: Readonly<Record<LinkNoise, string>> = { 0: 'CLEAN', 1: 'LOW', 2: 'NOISY', 3: 'SEVERE' };
@@ -31,6 +41,11 @@ export const MAP_TEXT = {
     line: (unit: string, year: number, finalLy: number): string => `${unit} · YEAR ${year} · FINAL SHIP ${finalLy} LY OUT`,
     beacon: (ship: string, year: number): string => `FINAL SHIP · ${ship} · ${year}`,
     sol: 'ARRIVAL CONTROL',
+    // Slice 3c (05 §3.12, 02 §4): from run 2 the title line says when this unit left after the last (the valve's years
+    // included): `UNIT-048 · YEAR 2303 · LAUNCHED 3 YEARS AFTER UNIT-047`.
+    launched: (unit: string, year: number, gap: number, last: string): string =>
+      (gap === 0 ? `${unit} · YEAR ${year} · LAUNCHED IN THE SAME YEAR AS ${last}` : `${unit} · YEAR ${year} · LAUNCHED ${years(gap)} AFTER ${last}`),
+    savesBetweenShips: 'runs save between ships',
   },
   // The header crumb gains the year (02 §4): `UNIT-047 / KESTREL · 2467 / FLYBY`.
   crumb: (unit: string, ship: string, year: number, state: string): string => `${unit} / ${ship} · ${year} / ${state}`,
@@ -78,6 +93,29 @@ export const MAP_TEXT = {
     lost046: 'UNIT-046 WAS LOST HERE',
     solName: 'SOL',
     solTag: 'ARRIVAL CONTROL',
+    // --- Slice 3c: the last unit's trail on the chart, and what left it (02 §2, §4; 3c plan §3) ---
+    // A trail stop whose year the galaxy year has not passed: the unit ahead gets there first (`HALCYON · TAKEN · …`).
+    taken: (ship: string, unit: string): string => `${ship} · TAKEN · ${unit} GETS THERE FIRST`,
+    // 046's written trail has no ship names: its worlds keep `UNIT-046 GETS THERE FIRST` (trail046 above).
+    takenNoShip: (unit: string): string => `${unit} GETS THERE FIRST`,
+    // A passed stop that founded nothing; a passed one with a colony is `colony` above (`RIVERSIDE · 3 YEARS OLD · UNIT-047`).
+    noColony: (unit: string): string => `NO COLONY · ${unit}`,
+    // The grey cross (05 §3.5).
+    lostCross: (unit: string): string => `${unit} WAS LOST HERE`,
+    // Why a ship of the last arm left (the opening desk's departures block, 3c plan §4.2): `PETREL · ANOTHER CORE IS ON ITS
+    // WAY`. Said in the future tense: the ship's approach is still ahead of the new unit, just not this unit's (02 §3.12).
+    leave: {
+      'core-coming': 'ANOTHER CORE IS ON ITS WAY',
+      'own-way': 'IT WILL COME IN ON ITS OWN',
+      'no-colony': 'NO COLONY',
+    } satisfies Readonly<Record<Exclude<LeaveWords, 'colony' | null>, string>>,
+    leaveLine: (ship: string, words: string): string => `${ship} · ${words}`,
+    leaveMore: (count: number): string => `+${count} MORE`,
+    // A ship new on this run's chart (its first desk only), and one waiting from earlier runs.
+    reportedHome: 'REPORTED HOME',
+    runOnChart: (runs: number): string => `${ordinal(runs)} RUN ON THE CHART`,
+    // CONTROL's one-liner at the first desk when the unit ahead took a ship there (PLACEHOLDER(05)).
+    controlFirst: (unit: string): string => `${unit} got here first. :)`,
   },
 
   // --- The SHIP CARD (02 §4; 01 §3.16's MEMORY row) --------------------------------------------------------------------
@@ -136,6 +174,9 @@ export const MAP_TEXT = {
     lastOfRun: (depth: number): string => `SHIP ${depth} OF YOUR RUN · THE LAST`,
     timeline: (leave: number, arrive: number, approach: number): string =>
       `${leave} you leave · ${arrive} you get there · ${approach} ▲ approach`,
+    // Slice 3c: the card's history row (`REPORTED HOME` / `2ND RUN ON THE CHART` / `3RD RUN ON THE CHART`).
+    historyLabel: 'HISTORY',
+    history: (runsOnChart: number): string => (runsOnChart <= 1 ? 'REPORTED HOME' : `${ordinal(runsOnChart)} RUN ON THE CHART`),
   },
 
   // --- The PACKET (02 §4; 01 §3.16's room bar) -------------------------------------------------------------------------
@@ -194,6 +235,51 @@ export const MAP_TEXT = {
 
   // --- The LOST card on the arm (BurnResult): the kid picks the next ship at the desk -----------------------------------
   lossToChart: 'TO THE CHART ▸',
+
+  // --- Slice 3c: the last unit's beacon on ship 1's LANDING REPORT (05 §3.5) ---------------------------------------------
+  report: {
+    beacon: (lz: string, unit: string, yearsAgo: number): string =>
+      `${lz} · A BEACON WAS ALREADY THERE · SET BY ${unit} · ${yearsAgo === 0 ? 'THIS YEAR' : `${years(yearsAgo)} AGO`}`,
+  },
+
+  // --- Slice 3c: RUN END's bridging line, under NEW RUN (05 §3.12; slice 7 moves it to the final card) -----------------
+  runEnd: {
+    bridge: (next: string, gap: number, year: number): string =>
+      (gap === 0 ? `${next} LEFT SOL IN THE SAME YEAR AS YOU, ${year}.` : `${next} LEFT SOL ${years(gap)} AFTER YOU, IN ${year}.`),
+    bridgeTail: 'IT HAS BEEN FOLLOWING YOU ALL ALONG. YOUR TURN.',
+  },
+
+  // --- Slice 3c: the run save on the title, the TERMINAL and the footer (02 §3.11, 3c plan §2.1) ------------------------
+  save: {
+    // The RESUME block's line, by the point it was written at.
+    resumeBoot: (unit: string, depth: number, ship: string, year: number): string => `RESUME · ${unit} · SHIP ${depth} · bound for ${ship} · ${year}`,
+    resumeDesk: (unit: string, depth: number, year: number): string => `RESUME · ${unit} · SHIP ${depth} DONE · AT THE DESK · ${year}`,
+    resumeReport: (unit: string, ship: string, year: number): string => `RESUME · ${unit} · ${ship} · LANDING REPORT · ${year}`,
+    resume: 'RESUME ▸',
+    newRun: 'NEW RUN',
+    abandonConfirm: (unit: string): string => `ABANDON ${unit}'S RUN? · ITS SHIPS COUNT AS DONE`,
+    abandon: 'ABANDON RUN',
+    cantResume: (reason: string): string => `RUN SAVE CAN'T RESUME · ${reason}`,
+    // The reasons, by save-codec's refusal kind (types/save.ts SaveRefusalKind).
+    reason: {
+      'not-json': 'THE SAVE IS DAMAGED',
+      'version': 'SAVED BY ANOTHER VERSION',
+      'content': 'SAVED BY ANOTHER VERSION',
+      'shape': 'THE SAVE IS DAMAGED',
+      'classic': 'THE SAVE IS DAMAGED',
+      'route': 'THE SAVE IS DAMAGED',
+      'ship': 'A SAVED SHIP DOES NOT BUILD',
+      'stale': 'THAT RUN ALREADY ENDED',
+      'archive': 'THE ARCHIVE CAN\'T BE READ',
+      'resume-threw': 'THE SAVE DOES NOT REBUILD',
+    } satisfies Readonly<Record<SaveRefusalKind, string>>,
+    offline: 'RUN SAVE OFFLINE — a reload will lose this run',
+    offlineTitle: 'RUN SAVE OFFLINE',
+    footer: 'NO SAVE',
+    // The title's one-off notes (archive v2), said once then cleared.
+    olderArchive: 'AN OLDER ARCHIVE WAS FOUND · IT WAS NOT CARRIED OVER',
+    armReset: 'THE ARM WAS REDRAWN · YOUR LINEAGE AND COLONIES ARE KEPT',
+  },
 
   // --- The RUN TALLY (02 §4) -------------------------------------------------------------------------------------------
   tally: {

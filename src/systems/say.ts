@@ -1,3 +1,4 @@
+// Slice 3c: Track SAVE owns reserveLogEntryIds / highestLogEntryId here (the entry-id counter only; slice-3c-plan §5.2).
 import type { Store } from '@state/store';
 import type {
   GameState, Speaker, Channel, LogEntry, LogChoice, LogState, ViewMode, RunState, LineTone,
@@ -199,6 +200,19 @@ const queue: QueuedLine[] = [];
 let lastSpokenAt = -Infinity;
 let lastFlushAt = -Infinity;
 const choiceHandlers = new Map<number, (picked: string | null) => void>();
+
+// Moves the log's entry ids past `highest` (never back): a log restored into a fresh page or process (slice 3c's resume, the
+// suites' flyOnce) holds ids this page has not reached, and a repeat would answer the wrong choice (entryTypedAtAi, pickChoice
+// find entries by id).
+export function reserveLogEntryIds(highest: number): void {
+  if (!(Number.isInteger(highest) && highest >= 0)) throw new Error(`reserveLogEntryIds: ${highest} is not an entry id`);
+  nextEntryId = Math.max(nextEntryId, highest + 1);
+}
+
+// The highest entry id in a log (0 for an empty one).
+export function highestLogEntryId(log: Readonly<LogState>): number {
+  return log.entries.reduce((highest, entry) => Math.max(highest, entry.id), 0);
+}
 
 function requireStore(): Store<GameState> {
   if (!storeRef) throw new Error('say: mountSay has not run');

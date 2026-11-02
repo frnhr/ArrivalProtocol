@@ -1,3 +1,4 @@
+// Slice 3c: Track WORLD owns this file (docs/phase3/impl/slice-3c-plan.md §5.1); SAVE and UI request changes by message.
 import { NAME_MAX_CHARS } from '@data/tuning';
 import { WORLDS } from '@data/arm';
 import { FAMILY_POOL, FIRST_NAME_POOL, ARES_RUN1_FAMILIES } from '@data/souls';

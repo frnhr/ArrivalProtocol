@@ -1,3 +1,4 @@
+// Slice 3c: Track SAVE owns this file (docs/phase3/impl/slice-3c-plan.md §5.2); WORLD and UI request helpers by message.
 import type { Segment, FreeSegment } from '@/types/segment';
 
 // Structural memory helpers (§6.12). The strip is one ordered array; a segment's address is the
@@ -14,6 +15,21 @@ let segIdCounter = 0;
 export function newSegId(base: string): string {
   segIdCounter++;
   return `${base.replace(/~\d+$/, '')}~${segIdCounter}`;
+}
+
+// The highest runtime id number in a stored state's JSON (`free~217"` → 217; 0 when there is none). A state restored into a
+// fresh page or process (slice 3c's resume, the suites' flyOnce) carries ids this page's counter has not reached yet.
+export function highestSegId(json: string): number {
+  let highest = 0;
+  for (const match of json.matchAll(/~(\d+)"/g)) highest = Math.max(highest, Number(match[1]));
+  return highest;
+}
+
+// Moves the counter past `highest` (never back), so the next runtime id can't repeat one a restored state already holds
+// (slice 3b review: a setup restored from disk minted `free~217` again beside its own and threw `memory: duplicate id`).
+export function reserveSegIds(highest: number): void {
+  if (!(Number.isInteger(highest) && highest >= 0)) throw new Error(`reserveSegIds: ${highest} is not an id number`);
+  segIdCounter = Math.max(segIdCounter, highest);
 }
 
 export function freeSegment(size: number, reservedBy?: number): FreeSegment {

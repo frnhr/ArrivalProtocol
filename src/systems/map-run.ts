@@ -1,3 +1,4 @@
+// Slice 3c: Track WORLD owns this file (docs/phase3/impl/slice-3c-plan.md §5.1); SAVE and UI request changes by message.
 import type { GameState } from '@state/schema';
 import type { RunLineage } from '@systems/meta';
 import { shipDefOf, type ShipDef } from '@data/ships';
@@ -11,6 +12,7 @@ import { layoutFor, shipColonists, POD_RACK_KEYS } from '@data/memory';
 import { WORLDS } from '@data/arm';
 import { RUN_START_YEAR, COLONISTS_PER_POD } from '@data/tuning';
 import { currentSlot, armShipAt, worldSlotOf, noiseRng } from '@systems/map-streams';
+import { MAP_STATE_VERSION, EMPTY_HISTORY } from '@data/map-state';
 
 export {
   currentStop, currentSlot, armShipAt, armShipId, shipKeyOf, keyRng, shipRng, visitRng, hopRng, worldSlotOf, isEndSlot,
@@ -64,8 +66,8 @@ export function classicRoute(index: number, startYear: number = RUN_START_YEAR):
 export function classicRunMap(seed: number, shipIndex: number, run: number): RunMapState {
   const route = classicRoute(shipIndex);
   return {
-    world: 'classic', run, armSeed: seed >>> 0, startYear: RUN_START_YEAR, arm: [], noise: [], route,
-    galaxyYear: route.at(-1)!.hop?.approachYear ?? RUN_START_YEAR, pendingExtra: null,
+    version: MAP_STATE_VERSION, world: 'classic', run, armSeed: seed >>> 0, startYear: RUN_START_YEAR, arm: [], noise: [], route,
+    galaxyYear: route.at(-1)!.hop?.approachYear ?? RUN_START_YEAR, pendingExtra: null, history: structuredClone(EMPTY_HISTORY),
   };
 }
 
@@ -80,10 +82,12 @@ export function createRunMap(lineage: Readonly<Pick<RunLineage, 'wave'>>, seed: 
   if (!(Number.isInteger(run) && run >= 1)) throw new Error(`createRunMap: run ${run}`);
   const armSeed = seed >>> 0;
   return {
-    world: 'arm', run, armSeed, startYear: RUN_START_YEAR,
+    version: MAP_STATE_VERSION, world: 'arm', run, armSeed, startYear: RUN_START_YEAR,
     arm: run === 1 ? assembleRun1Arm(armSeed) : freshArm(armSeed, run, RUN_START_YEAR),
     noise: rollNoiseClouds(noiseRng(armSeed)),
     route: [{ slot: FIRST_SLOT, depth: 1, hop: null }], galaxyYear: RUN_START_YEAR, pendingExtra: null,
+    // TODO(3c-WORLD): lineage.history (and lineage.arm's ships, start year and arm seed; noise by the run seed), plan §2.3.
+    history: structuredClone(EMPTY_HISTORY),
   };
 }
 

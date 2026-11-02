@@ -16,6 +16,7 @@ import { classicShip } from '@data/classic-five';
 import { TEMPLATE_RULES } from '@data/flight-templates';
 import { EXTRA_MODIFIERS_MAX_BY_LAYER, META_STORAGE_KEY } from '@data/tuning';
 import { run1Map, WORKED_ROUTE } from './run1-fixture';
+import type { UnitTrail } from '@/types/lineage';
 
 const map = run1Map(7);
 const arm = map.arm;
@@ -124,39 +125,44 @@ check('a fresh roll for run 3: ARES-IX at Kepler-186f, EVENSONG at New Haven (wr
   && new Set(run3.map((ship) => ship.name)).size === 20 && run3.every((ship) => !WORLDS.some((world) => world.name.toUpperCase() === ship.name)));
 check('…freshArm refuses run 1 (run 1\'s arm is assembleRun1Arm\'s)', (() => { try { freshArm(5, 1, 2300); return false; } catch { return true; } })());
 
-// The ghost by layer (slice-3a-plan §2.9; the review's M3): the layer the archive recorded where the last unit's run
-// ended, the first boot at or past it; never by the ship's name (a fresh arm puts names on other worlds).
+// The ghost by layer (slice-3a-plan §2.9; the review's M3): the layer of the ship where the last unit's run ended, the first
+// boot at or past it; never by the ship's name (a fresh arm puts names on other worlds). Slice 3c's archive v2 reads that
+// ship from the trail's last stop (systems/lineage.ts ghostPlaceReached; Track WORLD moves it to the grey cross).
 const at = (slots: number[]) => ({ ...map, route: slots.map((slot, i) => ({ slot, depth: i + 1, hop: i === 0 ? null : hopBetween(map, slots[i - 1]!, slot) })) });
-const reached = (slots: number[], lastUnit: { shipName: string; layer?: number }): boolean =>
+const trailTo = (slot: number): UnitTrail => ({
+  unit: 47, run: 1, startYear: 2300,
+  stops: [{ slot, shipName: 'CORMORANT', year: 2817, outcome: null, landed: 0, colony: null, writer: null }],
+  lost: null,
+});
+const reached = (slots: number[], lastUnit: { shipName: string; trail: UnitTrail | null }): boolean =>
   ghostPlaceReached({ map: at(slots), shipIndex: slots.length - 1, lastUnit: null }, lastUnit);
 check('the ghost by layer: lost in layer 6 → not at VESPER (layer 5), at KITTIWAKE (layer 6, another ship of that layer)',
-  !reached([0, 2, 5, 11], { shipName: 'CORMORANT', layer: 6 }) && reached([0, 2, 5, 11, 14], { shipName: 'CORMORANT', layer: 6 }));
-check('…by the recorded layer, not the name: a layer-3 record named CORMORANT speaks at KESTREL',
-  reached([0, 2, 5], { shipName: 'CORMORANT', layer: 3 }) && !reached([0, 2], { shipName: 'CORMORANT', layer: 3 }));
-check('…never at ship 1; a record with no layer (an older archive) speaks at the final ship',
-  !reached([0], { shipName: 'ARES-VII', layer: 1 }) && reached([0, 2], { shipName: 'ARES-VII', layer: 1 })
-  && !reached([0, 2, 5, 11, 15], { shipName: 'CORMORANT' }) && reached([0, 2, 5, 11, 15, 19], { shipName: 'CORMORANT' }));
-// …and the archive keeps that layer (M3): at each ship's start (activeRun, so an abandoned run has it) and at the run's
-// end (lastUnit); an older record without it still parses; a bad one is corrupt.
+  !reached([0, 2, 5, 11], { shipName: 'CORMORANT', trail: trailTo(15) }) && reached([0, 2, 5, 11, 14], { shipName: 'CORMORANT', trail: trailTo(15) }));
+check('…by the trail\'s layer, not the name: a layer-3 trail named CORMORANT speaks at KESTREL',
+  reached([0, 2, 5], { shipName: 'CORMORANT', trail: trailTo(5) }) && !reached([0, 2], { shipName: 'CORMORANT', trail: trailTo(5) }));
+check('…never at ship 1; a record with no trail speaks at the final ship',
+  !reached([0], { shipName: 'ARES-VII', trail: trailTo(0) }) && reached([0, 2], { shipName: 'ARES-VII', trail: trailTo(0) })
+  && !reached([0, 2, 5, 11, 15], { shipName: 'CORMORANT', trail: null }) && reached([0, 2, 5, 11, 15, 19], { shipName: 'CORMORANT', trail: null }));
+// …and the archive keeps the trail: at each ship's start (activeRun, so an abandoned run has it) and at the run's end
+// (lastUnit); a record with none parses; a bad one is corrupt.
 {
-  const progress = { unit: 47, shipName: 'CORMORANT', layer: 6, worldSlot: 15, woke: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46] };
-  const started = recordShipStart(recordRunStart(freshMeta(), { ...progress, shipName: 'ARES-VII', layer: 1, worldSlot: 0 }, 0), progress);
+  const progress = { unit: 47, shipName: 'CORMORANT', landed: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: trailTo(15) };
+  const started = recordShipStart(recordRunStart(freshMeta(), { ...progress, shipName: 'ARES-VII', trail: trailTo(0) }, 0), progress);
   const ended = recordRunEnd(started, { ...progress, cause: 'flagship-lost', score: 0 });
-  check('the archive records the layer: activeRun at a ship\'s start, lastUnit at the run\'s end, and it round-trips',
-    started.activeRun?.layer === 6 && ended.lastUnit?.layer === 6 && ended.lastUnit.worldSlot === 15
-    && parseMeta(JSON.stringify(ended)).lastUnit?.layer === 6);
+  check('the archive records the trail: activeRun at a ship\'s start, lastUnit at the run\'s end, and it round-trips',
+    started.activeRun?.trail?.stops.at(-1)?.slot === 15 && ended.lastUnit?.trail?.stops.at(-1)?.slot === 15
+    && JSON.stringify(parseMeta(JSON.stringify(ended)).lastUnit?.trail) === JSON.stringify(trailTo(15)));
   const store: Record<string, string> = {};
   const storage = () => ({ getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; }, removeItem: () => {} });
   store[META_STORAGE_KEY] = JSON.stringify(started);
   const recovered = loadMeta(storage as never);
-  const old = JSON.parse(JSON.stringify(ended)) as { lastUnit: Record<string, unknown> };
-  delete old.lastUnit.layer;
-  delete old.lastUnit.worldSlot;
-  const bad = JSON.parse(JSON.stringify(ended)) as { lastUnit: Record<string, unknown> };
-  bad.lastUnit.layer = 'six';
-  check('…an abandoned run keeps it; an older record has none (the final ship then); a bad one is corrupt',
-    recovered.ok && recovered.recovered && recovered.meta.lastUnit?.layer === 6
-    && parseMeta(JSON.stringify(old)).lastUnit?.layer === undefined
+  const none = JSON.parse(JSON.stringify(ended)) as { lastUnit: Record<string, unknown> };
+  none.lastUnit.trail = null;
+  const bad = JSON.parse(JSON.stringify(ended)) as { lastUnit: { trail: Record<string, unknown> } };
+  bad.lastUnit.trail.stops = 'six';
+  check('…an abandoned run keeps it; a record with none parses (the final ship then); a bad one is corrupt',
+    recovered.ok && recovered.recovered && recovered.meta.lastUnit?.trail?.stops.at(-1)?.slot === 15
+    && parseMeta(JSON.stringify(none)).lastUnit?.trail === null
     && (() => { try { parseMeta(JSON.stringify(bad)); return false; } catch { return true; } })());
 }
 finish();

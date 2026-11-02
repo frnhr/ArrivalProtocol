@@ -1,3 +1,4 @@
+// Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
 import type {
   GameState, Speaker, TransitHit, ArrivalReport, RunEndCause, ShipOutcome, VerbKind,
 } from '@state/schema';
@@ -424,8 +425,7 @@ const LINEAGE_END: Readonly<Record<LastCause, (last: Readonly<LastUnit>) => stri
 export function lineageLine(lastUnit: Readonly<LastUnit> | null): string | null {
   if (lastUnit === null) return null;
   if (lastUnit.cause === 'stayed') return `${unitName(lastUnit.number)} stayed with them.`;
-  // The archive's `woke` field holds the colonists landed (systems/meta.ts, risk 10: no META_VERSION bump).
-  return `last: ${unitName(lastUnit.number)} · ${formatCount(lastUnit.woke)} landed · ${LINEAGE_END[lastUnit.cause](lastUnit)}`;
+  return `last: ${unitName(lastUnit.number)} · ${formatCount(lastUnit.landed)} landed · ${LINEAGE_END[lastUnit.cause](lastUnit)}`;
 }
 
 // The endings found so far (the title, §4.5's `ENDINGS 0/2`, and a won RUN END, WP11 part 2): the count, then every
