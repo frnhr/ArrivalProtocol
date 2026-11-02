@@ -18,6 +18,16 @@ const TAB_WINDOWS: Record<string, string> = {
 // The tab a phone opens on: the NAV PLOT, where the line goes green (the touch flight bar sits under it).
 const DEFAULT_TAB = 'navplot';
 
+// Closes one window as if its dock item were clicked shut (desktop), or goes back to the default tab if it is the phone's
+// tab (slice 3b review m4: the INBOX opened in flight stayed open over the NAV PLOT on every later ship, because nothing
+// but a click ever took it out of `desktopOpen`). Set while mounted.
+let closeWindow: ((id: string) => void) | null = null;
+
+export function closeToolWindow(id: string): void {
+  if (!closeWindow) throw new Error('closeToolWindow: the tools tabs are not mounted');
+  closeWindow(id);
+}
+
 // On mobile, the bottom dock's tool items double as a tab bar: at most one window is visible at a time, and clicking
 // an item switches to it. On desktop, dock items are independent open/close toggles that hide/show their panel.
 // The two meanings of a dock item's `open` mark live apart: which windows are open on the desk is kept in
@@ -127,9 +137,16 @@ export function mountToolsTabs(): () => void {
   dock.addEventListener('click', onClick, true);
   mq.addEventListener('change', sync);
   sync();
+  closeWindow = (id) => {
+    windowOf(id);
+    desktopOpen.delete(id);
+    if (activeTab === id) activeTab = DEFAULT_TAB;
+    sync();
+  };
 
   return () => {
     dock.removeEventListener('click', onClick, true);
     mq.removeEventListener('change', sync);
+    closeWindow = null;
   };
 }

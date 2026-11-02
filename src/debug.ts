@@ -460,6 +460,9 @@ function debugJump(store: Store<GameState>, index: number, threat: ShipThreat = 
   // the classic world.
   store.update((draft) => {
     draft.run.threat = nominalRunThreat(index - 1);
+    // The classic world has no repository: requests made on the arm name its receivers (the review's nit: a waiting one
+    // threw at the next send).
+    draft.run.repo = { pick: null, requests: [], nextId: draft.run.repo.nextId };
     if (draft.run.map.world !== 'classic') {
       draft.run.map = classicRunMap(draft.run.seed, index - 1, draft.run.wave);
       draft.run.shipIndex = index - 1;

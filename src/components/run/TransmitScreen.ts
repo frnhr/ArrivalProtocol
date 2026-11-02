@@ -19,7 +19,7 @@ import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
 import { MAP_TEXT } from '@data/map-text';
 import { REPO_TEXT } from '@data/repo-text';
 import {
-  TRANSMIT_ARM_SEC, TRANSMIT_SEND_SEC, TRANSMIT_STREAM_FRAC, WHITE_OUT_IN_SEC, WHITE_OUT_HOLD_SEC, WHITE_OUT_FADE_SEC,
+  TRANSMIT_ARM_SEC, TRANSMIT_SEND_SEC, TRANSMIT_STREAM_FRAC, WHITE_OUT_IN_SEC, WHITE_OUT_HOLD_SEC, WHITE_OUT_FADE_SEC, WHITE_OUT_FLOOD_GRACE_SEC,
   DRAFT_CARDS,
 } from '@data/tuning';
 
@@ -529,23 +529,35 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     // Laid out first, so the opacity transition runs from 0.
     void whiteOut.offsetWidth;
     whiteOut.classList.add('on');
-    later(WHITE_OUT_IN_SEC + WHITE_OUT_HOLD_SEC, () => {
-      // At full white: the packet crosses (the hits, the charge, the next ship's world; the phase moves on
-      // to its boot, which closes this screen), and the new ship shows through as the white fades. The white
-      // lifts even when the crossing throws: the error still reaches the console, and the screen under it
-      // shows where the run stopped instead of a white page.
-      try {
-        transmitNext(store);
-      } finally {
-        sending = false;
-        whiteOut.classList.add('fading');
-        whiteOut.classList.remove('on');
-        later(WHITE_OUT_FADE_SEC, () => {
-          whiteOut.hidden = true;
-          whiteOut.classList.remove('fading');
-        });
-      }
-    });
+    // The hold is counted from the flood's END (its transitionend), not from now (slice 3b review, the e2e's KESTREL →
+    // VESPER): on a busy page the timer could fire before a frame had drawn the flood, and the crossing swapped `on` for
+    // `fading` with the white never shown. The timer stays as the fallback for a flood that never reports its end.
+    let held = false;
+    const hold = (): void => {
+      if (held) return;
+      held = true;
+      whiteOut.removeEventListener('transitionend', hold);
+      later(WHITE_OUT_HOLD_SEC, cross);
+    };
+    whiteOut.addEventListener('transitionend', hold);
+    later(WHITE_OUT_IN_SEC + WHITE_OUT_FLOOD_GRACE_SEC, hold);
+  }
+
+  // At full white: the packet crosses (the hits, the charge, the next ship's world; the phase moves on to its boot, which
+  // closes this screen), and the new ship shows through as the white fades. The white lifts even when the crossing throws:
+  // the error still reaches the console, and the screen under it shows where the run stopped instead of a white page.
+  function cross(): void {
+    try {
+      transmitNext(store);
+    } finally {
+      sending = false;
+      whiteOut.classList.add('fading');
+      whiteOut.classList.remove('on');
+      later(WHITE_OUT_FADE_SEC, () => {
+        whiteOut.hidden = true;
+        whiteOut.classList.remove('fading');
+      });
+    }
   }
 
   const onChipClick = (event: MouseEvent): void => {

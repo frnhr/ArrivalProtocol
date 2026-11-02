@@ -4,6 +4,7 @@ import { on } from '@systems/events';
 import { inboxUnread } from '@systems/inbox';
 import { requireById, requireIn } from '@components/dom';
 import { mountInboxView } from '@components/desk/InboxView';
+import { closeToolWindow } from '@components/tools-view/ToolsTabs';
 import { INBOX_TEXT } from '@data/inbox-text';
 
 // The INBOX in flight (05-story §3.3, §4; slice-3b-plan §1.1 item 17): an amber window from the dock's SYSTEM section
@@ -24,6 +25,8 @@ export function mountInboxWindow(store: Store<GameState>): () => void {
 
   function paint(): void {
     const state = store.getState();
+    // The classic world has no mail: no dock item (the review's nit).
+    dockItem.hidden = state.run.map.world !== 'arm';
     const unread = inboxUnread(state).length;
     label.textContent = unread > 0 ? INBOX_TEXT.window.badge(unread) : DOCK_WORD;
     dockItem.classList.toggle('has-mail', unread > 0);
@@ -43,6 +46,9 @@ export function mountInboxWindow(store: Store<GameState>): () => void {
     (s) => `${s.run.rev}|${s.run.map.route.length}|${s.run.ships.length}|${s.run.inbox.read.length}`,
     paint,
   );
+  // A new world (the next ship, a NEW RUN, a debug jump) starts with the window closed (review m4: it stayed open over the
+  // NAV PLOT across ships). Mounted after the tools tabs (main.ts).
+  const offWorld = store.subscribe((s) => s.run.rev, () => { if (!win.hidden) closeToolWindow('inbox'); });
   // Opened (the dock, or a tab on a phone): painted at once, between ships too.
   const shown = new MutationObserver(paint);
   shown.observe(win, { attributes: true, attributeFilter: ['hidden'] });
@@ -53,6 +59,7 @@ export function mountInboxWindow(store: Store<GameState>): () => void {
   return () => {
     offNew();
     unsub();
+    offWorld();
     shown.disconnect();
     dockOpen.disconnect();
     view.destroy();

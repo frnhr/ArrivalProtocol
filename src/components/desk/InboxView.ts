@@ -2,7 +2,6 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { InboxMessage } from '@/types/inbox';
 import { inboxMessages, markMessageRead } from '@systems/inbox';
-import { play } from '@systems/audio';
 import { make } from '@components/dom';
 import { INBOX_TEXT } from '@data/inbox-text';
 
@@ -100,8 +99,8 @@ export function mountInboxView(store: Store<GameState>, variant: 'desk' | 'fligh
     const row = (event.target as HTMLElement | null)?.closest<HTMLElement>('.ib-row');
     const id = row?.dataset.id;
     if (id === undefined) return;
+    // (The row is a button: its pointerdown already ticked, systems/input.ts emitUiClicks.)
     event.stopPropagation();
-    play('uiClick');
     open(id);
   };
   list.addEventListener('click', onClick);

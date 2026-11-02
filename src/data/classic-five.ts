@@ -352,7 +352,8 @@ export const CLASSIC_FACTS: readonly ShipThreatDef[] = [
 ];
 
 // Each classic ship's own timed licences (§6.5, slice-2-plan §3.2; phase 2's ShipDef.licences): see systems/licences.ts
-// TimedLicence. The arm issues them by act instead (slice-3a-plan §2.8, Track GEN).
+// TimedLicence. The arm has none of these: there every tool but REPAIR comes from the repository, by request (slice 3b,
+// 02 §3.8; 3a's interim licences by act are gone).
 export const CLASSIC_LICENCES: readonly (readonly TimedLicence[])[] = [
   // REPAIR is licensed by its own rule (systems/licences.ts: the first look inside, or the first line
   // that needs it), on whichever ship that happens.

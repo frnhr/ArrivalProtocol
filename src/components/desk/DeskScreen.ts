@@ -158,7 +158,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     chart.paint(chartModel(state), beatPending);
     const showing = inspected ?? selected;
     const tab = state.ui.deskWindow;
-    tabs.paint(tab, deskTabBadges(state));
+    tabs.paint(tab, deskTabBadges(state), state.run.map.world === 'arm');
     cardHost.hidden = tab !== null;
     repoHost.hidden = tab !== 'repository';
     inboxHost.hidden = tab !== 'inbox';
@@ -173,19 +173,21 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     root.classList.toggle('has-tabs', arm);
   }
 
-  // A tab (a click, R, I, Escape): the card is null. On a phone a tab opens the sheet it lives in.
-  function showTab(next: DeskTab): void {
+  // A tab (a click, R, I, Escape): the card is null. On a phone a tab opens the sheet it lives in. A key ticks here; a click
+  // already ticked on its pointerdown (systems/input.ts emitUiClicks: the review's double click sound).
+  function showTab(next: DeskTab, byKey = true): void {
     const state = store.getState();
     if (state.run.phase !== 'desk') return;
     const id = next === 'card' ? null : next;
     if (state.ui.deskWindow === id && id === null && !phone.matches) return;
-    play('uiClick');
+    if (byKey) play('uiClick');
     openDeskWindow(store, id);
     if (phone.matches) sheetOpen = true;
     paint();
   }
   // R and I open their tab, or go back to the card when it is already open.
   function toggleTab(id: Exclude<DeskTab, 'card'>): void {
+    if (store.getState().run.map.world !== 'arm') return;
     showTab(store.getState().ui.deskWindow === id ? 'card' : id);
   }
 
@@ -318,7 +320,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   const onClose = (event: MouseEvent): void => { event.stopPropagation(); sheetOpen = false; paint(); };
   const onHandle = (event: MouseEvent): void => {
     const tab = (event.target as HTMLElement | null)?.closest<HTMLElement>('.desk-tab')?.dataset.tab as DeskTab | undefined;
-    if (tab !== undefined) { event.stopPropagation(); showTab(tab); return; }
+    if (tab !== undefined) { event.stopPropagation(); showTab(tab, false); return; }
     if (!phone.matches || event.target === cardClose) return;
     sheetOpen = !sheetOpen;
     paint();

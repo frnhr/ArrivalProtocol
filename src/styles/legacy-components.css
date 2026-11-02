@@ -93,6 +93,7 @@
 }
 .dock-section:first-child { margin-top: 0; }
 
+.dock-item[hidden] { display: none; }
 .dock-item {
   padding: 7px 16px;
   font-size: 11px;
