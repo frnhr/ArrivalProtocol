@@ -1,7 +1,7 @@
 import type { GameState, RunState, ShipResult } from '@state/schema';
 import type { RunMapState } from '@/types/map';
 import type {
-  LastCause, LastUnit, UnitTrail, TrailStop, ColonyRecord, RouteRecord, NotableEvent, ArmState, MapHistory, Visit, LetterSource,
+  LastCause, LastUnit, UnitTrail, TrailStop, ColonyRecord, RouteRecord, NotableEvent, ArmState, MapHistory, Visit, LetterSource, NextLaunch,
 } from '@/types/lineage';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import { UNIT_046_TRAIL } from '@data/ship-names';
@@ -202,6 +202,16 @@ export function letterSourcesFromTrail(run: Readonly<Pick<RunState, 'lastUnit' |
     id: `letter:${trail.run}:${stop.slot}`, colony: stop.colony, worldSlot: stop.slot, landedYear: stop.year, toUnit: trail.unit,
     writer: stop.writer === null ? null : { ...stop.writer },
   }]));
+}
+
+// The title's launch line from run 2 on (02 §4, 05 §3.12: `UNIT-048 · YEAR 2303 · LAUNCHED 3 YEARS AFTER UNIT-047`), as
+// RUN END's run.next said it: this unit, its run and start year, and the years since the last unit set out (gap plus the
+// valve's years), from the map's history (the arm the update made). null on run 1, the classic world, and a run with no
+// last unit on record (a fresh roll); the last unit's number is history.lastUnitNumber.
+export function launchOf(run: Readonly<Pick<RunState, 'unitNumber' | 'map'>>): NextLaunch | null {
+  const map = run.map;
+  if (map.world !== 'arm' || map.run === 1 || map.history.lastUnitNumber === null) return null;
+  return { unit: run.unitNumber, run: map.run, startYear: map.startYear, gap: map.history.gap, valveYears: map.history.valveYears };
 }
 
 // Older colonies the chart draws as faint dots: the history's colonies whose year the galaxy year has reached.

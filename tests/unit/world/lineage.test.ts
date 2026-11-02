@@ -3,14 +3,14 @@
 // and none for a won run; the ghost by the trail's cross (never ship 1; a won run speaks at the final ship); the beacon
 // (`1 YEAR AGO`, `THIS YEAR`, `3 YEARS AGO`, none without a landing on ship 1); the letters to the unit ahead (one per colony,
 // signed, `letter:<run>:<slot>`; none from 046's written trail, whose MERIDIAN stays inbox.ts's); the notable events and their
-// cap; and the update's input from a run (visitsOf, updateAfterRun). Pure (<1 s).
+// cap; the update's input from a run (visitsOf, updateAfterRun); the title's launch line (launchOf). Pure (<1 s).
 import { isDeepStrictEqual } from 'node:util';
 import { check, finish } from '../landing/checks';
 import type { RunState, ShipResult } from '@state/schema';
 import type { RunMapState } from '@/types/map';
 import type { LastCause, LastUnit } from '@/types/lineage';
 import {
-  trailOf, trail046, unitTrailOf, ghostPlaceReached, beaconOnFirstShip, letterSourcesFromTrail, notableEvents, coloniesOf, visitsOf,
+  trailOf, trail046, unitTrailOf, ghostPlaceReached, beaconOnFirstShip, letterSourcesFromTrail, notableEvents, coloniesOf, visitsOf, launchOf,
 } from '@systems/lineage';
 import { updateAfterRun } from '@systems/map-update';
 import { hopBetween } from '@systems/map-hop';
@@ -121,5 +121,9 @@ const after = updateAfterRun(run1);
 check('updateAfterRun: the run\'s own arm and route → run 2\'s arm (the six done) and run.next for UNIT-048',
   after.update.next.run === 2 && after.update.reasons.done === 6 && after.next.unit === 48 && after.next.run === 2
   && after.next.startYear === after.update.next.startYear && after.next.gap === after.update.next.gap);
+check('launchOf (the title\'s line): UNIT-048 in 2301, 1 year after the last; the valve\'s years ride with it; none on run 1',
+  isDeepStrictEqual(launchOf({ unitNumber: 48, map: run2Map(1) }), { unit: 48, run: 2, startYear: 2301, gap: 1, valveYears: 0 })
+  && launchOf({ unitNumber: 48, map: { ...run2Map(1), history: { ...run2Map(1).history, valveYears: 11 } } })?.valveYears === 11
+  && launchOf({ unitNumber: 47, map: run1Map(1) }) === null);
 
 finish();
