@@ -6,6 +6,8 @@ import { unitName } from '@systems/say';
 import { shownFuelPct } from '@systems/flight-hud';
 import { classicRunMap, shipSummaryAt } from '@systems/map-run';
 import type { RunMapState } from '@/types/map';
+import type { ArmState, NextLaunch } from '@/types/lineage';
+import { departuresBlock, type DeskDepartures } from '@systems/desk';
 import { MAP_TEXT } from '@data/map-text';
 import { undeliveredFiles } from '@systems/repository';
 import { REPO_FILES } from '@data/repository';
@@ -76,6 +78,38 @@ export interface RunEndModel {
   // Slice 3b (02 §3.9, §4): the files the repository sent that never reached the unit (`NEVER ARRIVED: Swap, Cp` or `—`);
   // null on the classic world, which has no repository.
   undeliveredLine: string | null;
+  // Slice 3c (02 §3.12, §4; 05 §3.12): what the world update made of the run's end (run.next), null on the classic world.
+  next: RunEndNext | null;
+}
+
+// The RUN TALLY's update summary and RUN END's bridging line (slice 3c): run.next is the next unit (the update ran as the
+// tally opened); the arm it made (the archive's, `nextArm`) gives the turnover and the ships that moved on, when the page has
+// it (a headless world or a page without an archive shows the launch and the bridge only).
+export interface RunEndNext {
+  line: string;                 // `NEXT UNIT LAUNCHES 2303 · UNIT-048`
+  summary: string | null;       // `THE ARM: 6 DONE · 2 MOVED ON · 8 REPORTED HOME`
+  valve: string | null;         // `ARRIVAL CONTROL WAITED 11 MORE YEARS` (the time valve opened)
+  departures: DeskDepartures | null;   // `PETREL · ANOTHER CORE IS ON ITS WAY` …
+  bridge: string;               // `UNIT-048 LEFT SOL 3 YEARS AFTER YOU, IN 2303.`
+  bridgeTail: string;           // `IT HAS BEEN FOLLOWING YOU ALL ALONG. YOUR TURN.`
+}
+
+export function runEndNext(next: Readonly<NextLaunch> | null, nextArm: Readonly<ArmState> | null): RunEndNext | null {
+  if (next === null) return null;
+  const unit = unitName(next.unit);
+  // The arm is the next run's only when it was made for it (a stale archive arm says nothing rather than something wrong).
+  const arm = nextArm !== null && nextArm.run === next.run ? nextArm : null;
+  const done = arm?.departures.filter((departure) => departure.reason === 'done').length ?? 0;
+  const departures = arm === null ? null : departuresBlock(arm.departures);
+  const reported = arm?.ships.filter((ship) => ship.reportedRun === arm.run).length ?? 0;
+  return {
+    line: MAP_TEXT.tally.next(unit, next.startYear),
+    summary: arm === null ? null : MAP_TEXT.tally.update(done, departures?.all.length ?? 0, reported),
+    valve: next.valveYears > 0 ? MAP_TEXT.tally.valve(next.valveYears) : null,
+    departures,
+    bridge: MAP_TEXT.runEnd.bridge(unit, next.gap + next.valveYears, next.startYear),
+    bridgeTail: MAP_TEXT.runEnd.bridgeTail,
+  };
 }
 
 // RUN END's mood (the lead's item 2 for WP11): a function of how the run ended. Only a won finale (PURGE or MERGE) is
@@ -148,7 +182,9 @@ export function nearMisses(ships: readonly ShipResult[], score: number, colonist
   return lines.slice(0, NEAR_MISS_LINES_MAX);
 }
 
-export function runEndModel(state: Readonly<GameState>): RunEndModel {
+// `nextArm`: the arm the world update made for the next run (the archive's, systems/meta.ts archiveMeta().arm), for the
+// tally's turnover and departures; null without one.
+export function runEndModel(state: Readonly<GameState>, nextArm: Readonly<ArmState> | null = null): RunEndModel {
   const run = state.run;
   if (run.phase !== 'end' || run.endCause === null) throw new Error(`runEndModel: the run is not over (phase ${run.phase})`);
   const cause = run.endCause;
@@ -210,7 +246,8 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
     seedLine: RUN_END_TEXT.seed(run.seed),
     tone: runEndTone(cause, landedOnFlagship),
     ending: cause === 'won-purge' ? 'purge' : cause === 'won-merge' ? 'merge' : null,
-    carryLine: cause === 'won-merge' ? HOLLOW_FINALE.mergeCarries(MERGE_BONUS_CORE_CAPACITY) : null,
+    // Slice 3c (3c plan risk 3, decided): MERGE's next-run thread retires on the arm, so only the classic world says it.
+    carryLine: cause === 'won-merge' && run.map.world === 'classic' ? HOLLOW_FINALE.mergeCarries(MERGE_BONUS_CORE_CAPACITY) : null,
     tallyTitle: MAP_TEXT.tally.title,
     route: run.map.route.map((stop) => stop.slot),
     colonies,
@@ -219,6 +256,7 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
     // on a run with no request said nothing).
     undeliveredLine: run.map.world === 'arm' && run.repo.requests.length > 0
       ? REPO_TEXT.tally.neverArrived(undeliveredFiles(run).map((request) => REPO_FILES[request.file].name)) : null,
+    next: run.map.world === 'arm' ? runEndNext(run.next, nextArm) : null,
   };
 }
 

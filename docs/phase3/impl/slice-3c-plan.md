@@ -1287,3 +1287,107 @@ WORLD's requested patches, applied:
 
 Re-checked in Chromium after the merge: the resume walk passes, and `__ap.archiveAs('won-purge')` then a reload gives
 `UNIT-048 · YEAR 2303` (a gap of 3, as §3's walk says).
+
+## Deviations (Track UI)
+
+Recorded by Track UI (branch `ui-3c`, from `4d38889`). Each is a change from §2–§5 or the foundation's notes, with its
+reason. Built against the foundation's real pieces (`unitTrailOf`, `olderColonies`, `beaconOnFirstShip`,
+`letterSourcesFromTrail`, `mapHistoryOf`'s `MapHistory`, `SaveState`) and checked on `run2-fixture` and crafted states;
+`resumeRun` / `abandonRun` are still SAVE's stubs, so the RESUME block's buttons are wired but not exercised.
+
+### The title
+
+1. **The title's model is a new pure module, `systems/title.ts`** (`titleModel`, `titleLaunch`, `resumeLineText`), not
+   `script.ts LINES`. `LINES.titleUnit` stays for the wp8 suites; the view no longer reads it.
+2. **The launch line reads the map's history** (`gap + valveYears`, `lastUnitNumber`), not `run.next`: NEW RUN's `startRun`
+   builds a fresh `RunState`, whose `next` is null. `run.next` drives RUN END only.
+3. **The launch roll and its stamp** (the lead's "launch-gap roll and its stamp"): the line's year and gap count up from the
+   last unit's start over `TITLE_LAUNCH_ROLL_SEC`, then a stamp lands: `+3 YEARS`, `SAME YEAR`, or with the valve
+   `+14 YEARS · THE ARM MOVED ON` (new words, PLACEHOLDER(05); tuning `3c UI`). Reduced motion shows it settled.
+4. **NEW RUN's confirm is built inside the RESUME block** (`ABANDON UNIT-047'S RUN? · ITS SHIPS COUNT AS DONE`, then
+   ABANDON RUN [ENTER] / KEEP IT [ESC]), not the shared InlineConfirm, so the title keeps its own input layer. New words
+   `save.keep`, `resumeKey`, `abandonKey`, `keepKey`.
+5. **`runs save between ships` shows only while `save.status === 'ok'` with nothing to resume.** The static `runs are not
+   saved mid-ship` note is gone from index.html; a headless page (`'none'`, the page before SAVE merges) says nothing.
+6. **The one-off notes are cleared when the kid leaves the title** (RECEIVE, RESUME, NEW RUN), not when it shows, so a
+   reload before playing still says them once.
+7. **The faint title chart draws the last unit's trail from run 2** (02 §4); run 1's title is unchanged.
+
+### The chart, the card and the opening desk
+
+8. **`ChartModel.trail046` became `trail: ChartTrail | null`** (every stop of `unitTrailOf`, the cross, the beacon) plus
+   `older: OlderColonyDot[]`; `ChartNode.taken046` became `taken: string | null`, plus `history` and `tag`.
+   `trail046(map)` stays as a wrapper (run 1's marks). The trail is drawn on the arm only (the classic world drew 046's
+   trail on its five fixed ships before).
+9. **Every stop is a mark offset along the trail** (risk 10), not only TAKEN ones: a hollow square while TAKEN, a green dot
+   once a colony, a grey ring for NO COLONY, each `TAKEN_MARK_OFFSET_PX` back toward the stop before (SOL for the first).
+   The offset went from 10 to 13 so a mark clears an ark's or the final ship's 14 px square. Labels are placed around the
+   marks too.
+10. **REPORTED HOME on the chart is a small green diamond at the node's corner plus a key in the chart's corner**, not text
+    under the year: written into eight first-desk labels it piled layer 2's labels on each other at 1280 × 720. The hover
+    and the card keep the words. The key (`chartLegend`: TAKEN, colony, the cross, older colonies, REPORTED HOME) is new;
+    a phone drops it.
+11. **The card gains a LAST UNIT row** (the trail's mark at the ship's world: `HALCYON · TAKEN · UNIT-047 GETS THERE
+    FIRST`, or the colony and its age): the phone's chart has no hover. The HISTORY row is from run 2 only (on run 1
+    every ship would read REPORTED HOME).
+12. **The departures block is a box over the chart's empty upper-left sky** (`2 SHIPS MOVED ON`, then the lines; a click
+    puts it away), so it never pushes the chart down at 1280 × 720. It lists only `core-coming` / `own-way` departures:
+    the ships the last unit flew are its trail's marks, and the first ship's leaving is said nowhere. "Reasons on hover":
+    the words are the reason, and the box's hover lists every line past the `+n MORE` fold.
+13. **The beacon on the chart** is a slow ring round the first stop's mark with `BEACON · SET BY UNIT-047 · 1 YEAR AGO`
+    on hover (new words, `chart.beacon`).
+14. **The green turn:** the colonies passed since the last desk (on the first desk: since the run's start, which the title
+    already showed) are drawn as TAKEN, then turn green one by one after the greying, each with a rising chime.
+15. **Older colonies leave out the trail's own** (same unit and run): those are the trail's marks. One dot per world,
+    named by its newest colony (`… · +1` when there are more).
+16. **CONTROL's first-desk line** from run 2 is `UNIT-047 got here first. :)` when a TAKEN stop names a ship, instead of
+    `Lovely work, Unit 48! :) Pick your next ship.` (the strip's step still says PICK YOUR NEXT SHIP).
+
+### Letters, the beacon row, the tally, the footer
+
+17. **Letters' bodies are new words** (`INBOX_TEXT.letter.body` / `bodySchool`, PLACEHOLDER(05)): signed by the trail stop's
+    writer at their age plus one (colony year 1), or by the colony's school when the stop has no writer. The memo key adds
+    the last unit's number and cause, the trail's run and stop count, and each stop's slot, year, landing, colony and writer.
+18. **Ship 1's beacon row** sits under the colony line at the ship's first LZ in label order. Run 1 now shows 046's row
+    (`LZ-A · … · SET BY UNIT-046 · 1 YEAR AGO`), which it did not before.
+19. **`runEndModel(state, nextArm = null)`**: the tally's turnover (`THE ARM: 6 DONE · 2 MOVED ON · 8 REPORTED HOME`) and the
+    ships that moved on come from the archive's next arm (`archiveMeta().arm` while the archive is `ok`, ignored unless
+    `arm.run === next.run`); `NEXT UNIT LAUNCHES 2301 · UNIT-048`, the valve's line and the bridge come from `run.next`.
+20. **MERGE's carry line is the classic world's only** (risk 3: the next-run thread retires on the arm).
+21. **NO SAVE** is its own footer item (`#footSave`), flashing in on `ok → offline`; the `'save-lost'` beat types
+    `RUN SAVE OFFLINE — a reload will lose this run` once. The buzz is a request (below).
+22. **The ghost needed no UI words:** `GHOST_LINE` covers every `LastCause`, and the chart's cross sits at `trail.lost.slot`,
+    the world WORLD's rule reads. After WORLD's merge (its deviation 16: a lost unit's cross is on its last stop's world,
+    0 LY past it) the cross *is* that stop's mark, offset along the trail like every stop (`TrailMark.offset`), and the
+    live ship there reads it on its card; only a cross past a world (046's) is a mark of its own. The title's launch line
+    reads `launchOf(run)`. The screens were re-shot on WORLD's real seeded update of run 1's worked route (`*-real.png`:
+    gap 5, LODESTAR 3025, seven ships moved on, PETREL's name back on a new ship), not only on §3.14's scripted fixture.
+23. **No e2e changes** (the lead: no e2e this round). §6.3's `resume.mjs` and the playthrough's run-2 check are still to do.
+
+### After the WORLD and SAVE merges (re-checked in Chromium on the real save and update)
+
+24. Played through the page: `__ap.archiveAs('won-purge')` (seed 1) then a reload gives `UNIT-048 · YEAR 2305 · LAUNCHED 5
+    YEARS AFTER UNIT-047` with its `+5 YEARS` stamp and `runs save between ships`; RECEIVE, landing ARES-VIII and its report
+    (`LZ-A · A BEACON WAS ALREADY THERE · SET BY UNIT-047 · 5 YEARS AGO`), the first desk (seven ships moved on, the trail's
+    marks, CONTROL's line), a letter in the INBOX, a reload (`RESUME · UNIT-048 · SHIP 1 DONE · AT THE DESK · 2305`), RESUME ▸
+    (the same desk, amber), and a corrupt save (`RUN SAVE CAN'T RESUME · THE SAVE IS DAMAGED`, ABANDON RUN only). Shots
+    `tests/.out/ui-3c/real-*.png`.
+25. SAVE's optional note taken: a resumed BEAM boot past ship 1 no longer draws TitleCard's beam from SOL.
+
+### Requests
+
+- **SAVE (blocker, confirmed in Chromium):** ENTER on a RESUME title runs `receiveTransmission` (boot.ts's title-layer
+  binding is registered first): the archive counts the run again (runs 1 → 2) and RUN START is written over the save,
+  before TitleCard's RESUME sees the key. Patch, in `receiveTransmission` (or the binding):
+  `const save = store.getState().save; if (save.status === 'cant-resume' || save.resume !== null) return false;`
+  (SPACE too). TitleCard already takes ENTER as RESUME / ABANDON RUN and ESC as KEEP IT.
+- **SAVE (bug, confirmed):** a run 2 in progress at its desk, then `__ap.saveCorrupt()` and a reload: the page throws at
+  open, `createRunMap: the stored arm is for run 2, the lineage's wave is 3` (`pageTitleState` builds the next unit's
+  title from a lineage whose wave counts the run in progress, over the arm stored for it). Run 1's corrupt save opens fine.
+- **SAVE:** `audio-cues.ts` (no owner in §5.4) `on('save-lost', () => play('buzz'))`, beside `'archive-lost'`; the
+  TERMINAL rule (`script.ts 'save-lost'`) and the footer's NO SAVE are in.
+- **Lead:** `RunEnd.carryLine` is the classic world's only now, but with `mergeBonus` gone it is untrue there too;
+  dropping it needs `wp11/p2/views`'s MERGE check changed (not UI's file). If the tally should not read the archive, add
+  `departures` and `reportedHome` to `NextLaunch` and `runEndNext` reads `run.next` only.
+- **e2e (§6.3, not run this round):** `resume.mjs` and the playthrough's run-2 check; the playthrough reads `#titleUnit`,
+  whose run-2 text is now the launch line.

@@ -155,6 +155,21 @@ export const INBOX_TEXT = {
       'Teacher says you went on to help other ships. Come back and visit?',
     ],
     subject: (unit: number): string => `for unit ${unit}`,
+    // Slice 3c (Track UI): a colony of the last unit's route writing to it at colony year 1 (05 §3.3: "the same Ada, writing
+    // to the unit the kid played last run, read by the new one"). `who` / `family` from the trail stop's writer (the first
+    // featured colonist of the first pod down in an LZ), `age` theirs in that year; a stop with no writer is signed by the
+    // colony's school, as MERIDIAN is.
+    body: (unit: number, colony: string, who: string, family: string, age: number): string[] => [
+      `Dear ${unit}, it's ${who} from ${colony}. I'm ${age} now.`,
+      "We're down, and the river is warm. You flew us here. :)",
+      'Mum says you went on to help other ships. Say hi to them.',
+      `— ${who} ${family}`.trimEnd(),
+    ],
+    bodySchool: (unit: number, colony: string): string[] => [
+      `Dear ${unit}, it is the ${colony} school. We all wrote this.`,
+      "We're down, and the fields are green. You flew us here. :)",
+      'Teacher says you went on to help other ships. Come back and visit?',
+    ],
   },
 
   // --- 046's mail with no address (05 §3.12): at the boots crossing rings 3 and 5 (index 0: ring 3, 1: ring 5) -----------

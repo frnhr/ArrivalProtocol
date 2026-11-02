@@ -400,6 +400,9 @@ body.reduced-motion .pb-ctrl[data-band="missing"] { animation: none; }
  *    with the colony line, the rows counting up with their pod icons, the credits' outcome colours and the near misses ── */
 .lr-colony { margin-top: 8px; font-family: 'VT323', monospace; font-size: 22px; letter-spacing: 0.08em; color: var(--soul); }
 .lr-colony[hidden] { display: none; }
+/* Slice 3c: ship 1's beacon row (05 §3.5), quieter than the colony's name: the last unit was here first. */
+.lr-beacon { margin-top: 4px; font-size: 11px; letter-spacing: 0.16em; color: var(--soul); opacity: 0.8; }
+.lr-beacon[hidden] { display: none; }
 .lr-rows { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; width: min(100%, 560px); }
 .lr-row {
   display: grid;

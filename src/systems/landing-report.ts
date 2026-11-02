@@ -5,6 +5,9 @@ import type { LandingTally, Place, PodSummary, Touch } from '@/types/landing';
 import { landingOutcome, landingResult } from '@systems/landing-rules';
 import { angleDelta } from '@systems/landing-solve';
 import { shipStars, starCharge, type ShipStar } from '@systems/stars';
+import { beaconOnFirstShip } from '@systems/lineage';
+import { unitName } from '@systems/say';
+import { MAP_TEXT } from '@data/map-text';
 import { LANDING_REPORT_TEXT, LANDING_REPORT_UI_TEXT, PARK_REASON_TEXT, podCode } from '@data/landing-text';
 import { HARD_WORDS_POOL } from '@data/souls';
 import { COLONISTS_PER_POD, STAR_CHARGE_BONUS } from '@data/tuning';
@@ -55,6 +58,10 @@ export interface LandingReportModel {
   lzRows: string[];           // `LZ-A 600 / 600 ✓`, `LZ-B 400 / 600 · 200 SHORT`, one per LZ in label order
   otherRows: string[];        // OFF-SITE, NO-GO, each parked / not-launched pod, RESTORED BY MERGE
   colonyLine: string | null;  // `they are calling it RIVERSIDE`
+  // Slice 3c (05 §3.5, §3.8): ship 1's beacon row, `LZ-A · A BEACON WAS ALREADY THERE · SET BY UNIT-046 · 1 YEAR AGO` (the
+  // last unit's from run 2, by the launch gap; `THIS YEAR` for 0), null past ship 1, on the classic world, and when the last
+  // unit's first ship never reached orbit (systems/lineage.ts beaconOnFirstShip).
+  beaconLine: string | null;
   nearMisses: string[];       // `POD 04 landed 23 km outside LZ-B`, closest first (the screen shows two)
   credits: LandingReportCredit[];  // pods that came down and scored (none for 0 points or never launched), lead first
   points: number;
@@ -169,6 +176,16 @@ function credits(state: Readonly<GameState>, tally: LandingTally): LandingReport
   });
 }
 
+// Ship 1's beacon row (05 §3.5): at the ship's first LZ in label order (the beacon marks where the last unit's pods came
+// down first; 05's sample is LZ-A).
+function beaconLine(state: Readonly<GameState>): string | null {
+  const beacon = beaconOnFirstShip(state);
+  if (beacon === null) return null;
+  const lz = [...state.landing.lzs].map((zone) => zone.label).sort()[0];
+  if (lz === undefined) throw new Error('landing-report: ship 1 has a beacon but no LZ to put it in');
+  return MAP_TEXT.report.beacon(lz, unitName(beacon.unit), beacon.yearsAgo);
+}
+
 // Read from the state alone (the ship's name and world, the final ship), never from a ShipDef: a generator-made ship (§1.7)
 // needs nothing new here. The report opens for a ship whose landing ran in orbit (locked or accepted); a ship lost during
 // the landing (1b's 'ship-lost') gets the LOST card, but its outcome still reads (landingOutcome) rather than throws.
@@ -214,6 +231,7 @@ export function landingReportModel(state: Readonly<GameState>): LandingReportMod
     lzRows: rows.filter((row) => row.kind === 'lz').map((row) => row.line),
     otherRows: rows.filter((row) => row.kind !== 'lz').map((row) => row.line),
     colonyLine: tally.colony === null ? null : LANDING_REPORT_TEXT.colony(tally.colony),
+    beaconLine: beaconLine(state),
     nearMisses: misses.map((miss) => miss.text),
     credits: credits(state, tally),
     points: tally.points,

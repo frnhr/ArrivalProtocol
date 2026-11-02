@@ -6,6 +6,7 @@ import type { InboxMessage } from '@/types/inbox';
 import type { LetterSource } from '@/types/lineage';
 import type { FeaturedColonist } from '@/types/landing';
 import { lightArrival, type LightSource } from '@systems/delivery-rule';
+import { letterSourcesFromTrail } from '@systems/lineage';
 import { armShipAt, isEndSlot, worldSlotOf } from '@systems/map-streams';
 import { solLy, ringsCrossed } from '@systems/map-geometry';
 import { WORLDS, RING_LY } from '@data/arm';
@@ -49,11 +50,17 @@ function welcomeRecommends(map: Readonly<RunMapState>): string {
 let memoKey = '';
 let memo: InboxMessage[] = [];
 
+// Slice 3c: letters to the unit ahead depend on the last unit too (the foundation review's note): its number, how it ended
+// and its trail's stops (a stop's slot, landing and colony; the writer rides with them).
 function derivationKey(run: Readonly<RunState>): string {
   const map = run.map;
   const route = map.route.map((stop) => stop.slot).join(',');
   const ships = run.ships.map((ship) => `${ship.slot}:${ship.depth}:${ship.landedInLz}:${ship.stars}:${ship.colony ?? ''}`).join(',');
-  return `${map.run}|${map.armSeed}|${map.startYear}|${run.unitNumber}|${route}|${ships}`;
+  const last = run.lastUnit;
+  const trail = last?.trail ?? null;
+  const stops = trail === null ? '' : trail.stops.map((stop) => `${stop.slot}:${stop.year}:${stop.landed}:${stop.colony ?? ''}:${stop.writer?.name ?? ''}`).join(',');
+  const lineage = last === null ? '-' : `${last.number}:${last.cause}:${trail?.run ?? ''}:${trail?.stops.length ?? 0}:${stops}`;
+  return `${map.run}|${map.armSeed}|${map.startYear}|${run.unitNumber}|${route}|${ships}|${lineage}`;
 }
 
 // Every message the unit has received so far this run, oldest boot first (within a boot, by year received).
@@ -297,10 +304,13 @@ export function joinBodies(bodies: readonly (readonly string[])[]): string[] {
 
 // --- Letters to the unit ahead (05 §3.3) ---------------------------------------------------------------------------------
 
+// The colony year a letter to the unit ahead is written in (05 §3.3: "each one's year-1 letter").
+const LETTER_COLONY_YEAR = 1;
+
 function letters(run: Readonly<RunState>): InboxMessage[] {
   const map = run.map;
   return letterSources(run).flatMap((letter): InboxMessage[] => {
-    const sent = letter.landedYear + 1;
+    const sent = letter.landedYear + LETTER_COLONY_YEAR;
     const read = lightArrival(map, { kind: 'world', worldSlot: letter.worldSlot }, sent, map.route, 0);
     if (read === null) return [];
     const meridian = letter.id === 'letter:meridian';
@@ -308,9 +318,17 @@ function letters(run: Readonly<RunState>): InboxMessage[] {
       id: letter.id, kind: 'letter', from: INBOX_TEXT.from.colony(letter.colony, WORLDS[letter.worldSlot]!.name),
       sentYear: sent, receivedYear: read.receivedYear, readAtDepth: read.depth,
       subject: meridian ? INBOX_TEXT.letter.meridianSubject : INBOX_TEXT.letter.subject(letter.toUnit),
-      body: meridian ? [...INBOX_TEXT.letter.meridian] : [], tag: INBOX_TEXT.window.forUnit(letter.toUnit), tone: 'colony',
+      body: meridian ? [...INBOX_TEXT.letter.meridian] : letterBody(letter), tag: INBOX_TEXT.window.forUnit(letter.toUnit), tone: 'colony',
     }];
   });
+}
+
+// A letter's words (slice 3c): signed by the trail stop's writer, at their age in the colony year it is written; with no
+// writer, by the colony's school.
+function letterBody(letter: Readonly<LetterSource>): string[] {
+  if (letter.writer === null) return INBOX_TEXT.letter.bodySchool(letter.toUnit, letter.colony);
+  const { name, age } = letter.writer;
+  return INBOX_TEXT.letter.body(letter.toUnit, letter.colony, firstNameOf(name), familyOf(name), age + LETTER_COLONY_YEAR);
 }
 
 // --- The views' and the boot's reads -----------------------------------------------------------------------------------
@@ -336,12 +354,14 @@ export function markMessageRead(store: Store<GameState>, id: string): void {
 }
 
 // A letter to the unit ahead (05 §3.3): types/lineage.ts LetterSource (moved there in slice 3c; its id is saved in
-// run.inbox.read). From run 2 systems/lineage.ts letterSourcesFromTrail makes them (Track UI wires it here).
+// run.inbox.read).
 
-// The seam 3c fills from archive v2 (plan §2.6). Run 1: 046's written trail's MERIDIAN writes to 046 (05 §3.3: "the first
-// instance of letters to the unit ahead"), read by 047, who is not 46.
+// The seam 3c filled from archive v2 (3b plan §2.6). Run 1: 046's written trail's MERIDIAN writes to 046 (05 §3.3: "the
+// first instance of letters to the unit ahead"), read by 047, who is not 46. From run 2: one letter per colony of the last
+// unit's route (systems/lineage.ts letterSourcesFromTrail, from the archive's trail), at most one per colony per run.
 export function letterSources(run: Readonly<RunState>): LetterSource[] {
-  if (run.map.world !== 'arm' || run.map.run !== 1) return [];
+  if (run.map.world !== 'arm') return [];
+  if (run.map.run !== 1) return letterSourcesFromTrail(run);
   const meridian = UNIT_046_TRAIL.find((mark) => mark.colony === 'MERIDIAN');
   if (meridian === undefined || meridian.colony === null) throw new Error('letterSources: 046\'s written trail lost MERIDIAN');
   return [{ id: 'letter:meridian', colony: meridian.colony, worldSlot: meridian.slot, landedYear: meridian.year, toUnit: UNIT_046, writer: null }];

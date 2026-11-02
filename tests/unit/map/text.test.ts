@@ -165,6 +165,9 @@ const bodies: [string, string[]][] = [
   ['postcard y50 old', INBOX_TEXT.postcard.year50.body(FIRST, null)],
   ['postcard y200', INBOX_TEXT.postcard.year200.body(COLONY, FIRST, BIG)],
   ['meridian', [...INBOX_TEXT.letter.meridian]],
+  // Slice 3c: letters to the unit ahead, signed by a writer (at the oldest a featured colonist can be, plus the year) or the school.
+  ['letter', INBOX_TEXT.letter.body(999, COLONY, FIRST, FAMILY, 99)],
+  ['letter school', INBOX_TEXT.letter.bodySchool(999, COLONY)],
   ...INBOX_TEXT.noAddress.map((mail, i): [string, string[]] => [`noAddress ${i}`, [...mail.body]]),
 ];
 for (const [key, body] of bodies) body.forEach((line, i) => lines.push([`inbox.body.${key}.${i}`, line]));
@@ -215,6 +218,23 @@ lines.push(
   ['save.offline', MAP_TEXT.save.offline],
   ['save.olderArchive', MAP_TEXT.save.olderArchive],
   ['save.armReset', MAP_TEXT.save.armReset],
+  // Track UI's 3c lines.
+  ['chart.leaveTitle', MAP_TEXT.chart.leaveTitle(18)],
+  ['chart.beacon', MAP_TEXT.chart.beacon(UNIT, 46)],
+  ['chart.olderMore', MAP_TEXT.chart.olderMore(MAP_TEXT.chart.colony(COLONY, 999, UNIT), 9)],
+  ['card.trailLabel + taken', `${MAP_TEXT.card.trailLabel} ${MAP_TEXT.chart.taken(SHIP, UNIT)}`],
+  ['title.stamp', MAP_TEXT.title.stamp(46)],
+  ['title.stampValve', MAP_TEXT.title.stampValve(46)],
+  ['save.resumeKey', MAP_TEXT.save.resumeKey],
+  ['save.abandonKey', MAP_TEXT.save.abandonKey],
+  ['save.keepKey', MAP_TEXT.save.keepKey],
+  ['tally.next', MAP_TEXT.tally.next(UNIT, YEAR)],
+  ['tally.update', MAP_TEXT.tally.update(19, 19, 19)],
+  ['tally.valve', MAP_TEXT.tally.valve(99)],
+  ['chart.legendTaken', MAP_TEXT.chart.legendTaken(UNIT)],
+  ['chart.legendColony', MAP_TEXT.chart.legendColony(UNIT)],
+  ['chart.legendLost', MAP_TEXT.chart.legendLost(UNIT)],
+  ['chart.legendOlder', MAP_TEXT.chart.legendOlder],
 );
 check('3c\'s sample lines: the launch line, the beacon, the bridge, the history row, the RESUME line',
   MAP_TEXT.title.launched('UNIT-048', 2303, 3, 'UNIT-047') === 'UNIT-048 · YEAR 2303 · LAUNCHED 3 YEARS AFTER UNIT-047'

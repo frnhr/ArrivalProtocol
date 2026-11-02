@@ -61,7 +61,7 @@ check('…layer-4 ships are OUT OF RANGE with the distance', node(8).state === '
 check('…HALCYON reads 31 YRS EARLY on hover; its label is `HALCYON · 1,000`', node(2).reason === MAP_TEXT.chart.early(31) && node(2).label === 'HALCYON · 1,000');
 check('…046\'s written trail: WAYPOINT already a colony (2299 < 2300), MERIDIAN and TALLGRASS still ahead, a grey cross',
   trail046(state.run.map).map((m) => `${m.colony}:${m.passed}`).join() === 'WAYPOINT:true,MERIDIAN:false,TALLGRASS:false,null:false'
-  && node(1).taken046 && !node(2).taken046);
+  && node(1).taken === MAP_TEXT.chart.trail046 && node(2).taken === null);
 check('…rings: six, the next one out from ARES-VII (8 LY) is ring 1 at 20 LY', chartRings(state.run.map, 0).filter((r) => r.next).map((r) => r.n).join() === '1'
   && chart.rings.length === 6);
 check('…no ship greyed on the first desk; CONTROL types its line', deskOpeningBeat(state).greyed.length === 0 && deskOpeningBeat(state).line === null

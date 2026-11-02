@@ -102,6 +102,7 @@ export function mountLandingReport(store: Store<GameState>): () => void {
   const titleEl = requireById('lrTitle');
   const routeEl = requireById('lrRoute');
   const colonyEl = requireById('lrColony');
+  const beaconEl = requireById('lrBeacon');
   const rowsEl = requireById('lrRows');
   const creditsEl = requireById('lrCredits');
   const rollEl = requireById('lrRoll');
@@ -330,6 +331,9 @@ export function mountLandingReport(store: Store<GameState>): () => void {
     routeEl.textContent = report.route;
     colonyEl.hidden = report.colonyLine === null;
     colonyEl.textContent = report.colonyLine ?? '';
+    // Slice 3c: ship 1's beacon (05 §3.5), under the colony: the last unit was here first.
+    beaconEl.hidden = report.beaconLine === null;
+    beaconEl.textContent = report.beaconLine ?? '';
     creditsEl.hidden = true;
     rollEl.replaceChildren();
     breakdownEl.hidden = true;
