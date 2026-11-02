@@ -66,7 +66,7 @@ check('the run map round-trips through JSON', JSON.stringify(JSON.parse(JSON.str
   ship.landing = { ...ship.landing, lzs: ship.landing.lzs.map((lz) => ({ ...lz })) };
   const same = structuredClone(before);
   check('shipDefOf: the same id with another approach year is a new ShipDef; the same content is the cached one',
-    shipDefAt(after, 13).approachYear === shipDefAt(before, 13).approachYear + 5 && after.arm[13]!.id === before.arm[13]!.id
+    shipDefAt(after, 13).approachYear === (shipDefAt(before, 13).approachYear ?? 0) + 5 && after.arm[13]!.id === before.arm[13]!.id
     && shipDefAt(same, 13) === shipDefAt(before, 13));
 }
 finish();
