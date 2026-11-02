@@ -306,6 +306,12 @@ export const MAP_TEXT = {
       `${depth} · ${ship} · ${year} · LANDED ${formatCount(landed)} / ${formatCount(total)}`,
     colonies: (count: number): string => `${count} ${count === 1 ? 'COLONY' : 'COLONIES'} FOUNDED`,
     route: 'YOUR ROUTE',
+    // Slice 3c (Track UI): what the world update made of the arm after this run (02 §3.12), under the route: who launches
+    // next and when, the arm's turnover, the valve when it opened, and the ships that moved on (chart.leaveLine's words).
+    next: (unit: string, year: number): string => `NEXT UNIT LAUNCHES ${year} · ${unit}`,
+    update: (done: number, movedOn: number, reported: number): string =>
+      `THE ARM: ${done} DONE · ${movedOn} MOVED ON · ${reported} REPORTED HOME`,
+    valve: (years: number): string => `ARRIVAL CONTROL WAITED ${years} MORE YEARS`,
   },
 } as const;
 

@@ -456,6 +456,18 @@ body.reduced-motion .title-save-btn.primary { animation: none; }
 /* Slice 3b: the files the repository sent that never reached the unit (`NEVER ARRIVED: Swap` or `—`). */
 .re-tally-undelivered { font-size: 11px; letter-spacing: 0.14em; color: var(--report-dim); text-align: left; }
 .re-tally-undelivered[hidden] { display: none; }
+/* Slice 3c: the world update's summary under the route, and the bridging line under NEW RUN (05 §3.12). */
+.re-tally-next { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--star-missed); text-align: left; font-size: 11px; letter-spacing: 0.1em; color: var(--report-text); }
+.re-tally-next[hidden] { display: none; }
+.re-next-line { font-size: 12px; letter-spacing: 0.16em; color: var(--report-text); }
+.re-next-valve { color: var(--warn); }
+.re-next-summary { color: var(--report-dim); }
+.re-next-leave { color: var(--report-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.re-next-leave.more { opacity: 0.7; }
+.re-foot:has(.re-bridge:not([hidden])) { flex-direction: column; align-items: center; gap: 8px; }
+.re-bridge { max-width: 640px; text-align: center; font-size: 11px; letter-spacing: 0.14em; line-height: 1.6; color: var(--report-dim); }
+.re-bridge[hidden] { display: none; }
+.re-bridge-line { color: var(--report-text); }
 @media (max-width: 768px) {
   .re-tally { grid-template-columns: minmax(0, 1fr); }
   .re-tally-chart { height: 160px; }

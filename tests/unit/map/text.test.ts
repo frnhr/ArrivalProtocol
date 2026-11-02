@@ -228,6 +228,9 @@ lines.push(
   ['save.resumeKey', MAP_TEXT.save.resumeKey],
   ['save.abandonKey', MAP_TEXT.save.abandonKey],
   ['save.keepKey', MAP_TEXT.save.keepKey],
+  ['tally.next', MAP_TEXT.tally.next(UNIT, YEAR)],
+  ['tally.update', MAP_TEXT.tally.update(19, 19, 19)],
+  ['tally.valve', MAP_TEXT.tally.valve(99)],
 );
 check('3c\'s sample lines: the launch line, the beacon, the bridge, the history row, the RESUME line',
   MAP_TEXT.title.launched('UNIT-048', 2303, 3, 'UNIT-047') === 'UNIT-048 · YEAR 2303 · LAUNCHED 3 YEARS AFTER UNIT-047'

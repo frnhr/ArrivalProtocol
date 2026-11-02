@@ -1,7 +1,7 @@
 // Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import { runEndModel, type RunEndModel, type RunEndShipRow } from '@systems/run-end';
+import { runEndModel, type RunEndModel, type RunEndShipRow, type RunEndNext } from '@systems/run-end';
 import { startRun } from '@systems/run';
 import { archiveLineage, archiveMeta, ENDINGS } from '@systems/meta';
 import { newRunSeed } from '@systems/rng';
@@ -69,6 +69,25 @@ interface TallyParts {
   svg: SVGSVGElement;
   colonies: HTMLElement;
   undelivered: HTMLElement;
+  next: HTMLElement;
+}
+
+// Slice 3c: the world update's summary under the route (who launches next and when, the arm's turnover, the valve, the
+// ships that moved on), or nothing on the classic world.
+function paintNext(host: HTMLElement, next: Readonly<RunEndNext> | null): void {
+  host.hidden = next === null;
+  if (next === null) { host.replaceChildren(); return; }
+  const leave = next.departures;
+  host.replaceChildren(
+    make('div', 're-next-line', next.line),
+    ...(next.valve === null ? [] : [make('div', 're-next-valve', next.valve)]),
+    ...(next.summary === null ? [] : [make('div', 're-next-summary', next.summary)]),
+    ...(leave === null ? [] : [
+      ...leave.lines.map((line) => make('div', 're-next-leave', line)),
+      ...(leave.more === null ? [] : [make('div', 're-next-leave more', leave.more)]),
+    ]),
+  );
+  if (leave !== null) host.title = leave.all.join('\n');
 }
 
 function buildTally(shipsEl: HTMLElement): TallyParts {
@@ -83,11 +102,13 @@ function buildTally(shipsEl: HTMLElement): TallyParts {
   const colonies = make('div', 're-tally-colonies');
   // Slice 3b: the files that never arrived (02 §3.9), under the colonies.
   const undelivered = make('div', 're-tally-undelivered');
-  side.append(make('div', 're-tally-route', MAP_TEXT.tally.route), chart, colonies, undelivered);
+  // Slice 3c: the world update's summary (paintNext).
+  const next = make('div', 're-tally-next');
+  side.append(make('div', 're-tally-route', MAP_TEXT.tally.route), chart, colonies, undelivered, next);
   const list = make('div', 're-tally-list');
   list.append(title, shipsEl);
   tally.append(list, side);
-  return { title, chart, svg, colonies, undelivered };
+  return { title, chart, svg, colonies, undelivered, next };
 }
 
 export function mountRunEnd(store: Store<GameState>): () => void {
@@ -108,6 +129,10 @@ export function mountRunEnd(store: Store<GameState>): () => void {
   const archiveEl = requireById('reArchive');
   const newBtn = requireById<HTMLButtonElement>('reNew');
   const tally = buildTally(shipsEl);
+  // Slice 3c (05 §3.12; slice 7 moves it to the final card): the bridging line under NEW RUN.
+  const bridgeEl = make('div', 're-bridge');
+  bridgeEl.hidden = true;
+  newBtn.after(bridgeEl);
 
   let model: RunEndModel | null = null;
   let closeModal: (() => void) | null = null;
@@ -186,7 +211,8 @@ export function mountRunEnd(store: Store<GameState>): () => void {
   function open(): void {
     if (model) return;
     const state = store.getState();
-    const report = runEndModel(state);
+    // The arm the world update made (the archive's; only an archive the page keeps has it): the tally's turnover.
+    const report = runEndModel(state, state.archive.status === 'ok' ? archiveMeta().arm : null);
     model = report;
     stopTimers();
     if (!closeModal) closeModal = pushModal('end');
@@ -207,6 +233,11 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     tally.colonies.textContent = report.coloniesLine;
     tally.undelivered.hidden = report.undeliveredLine === null;
     tally.undelivered.textContent = report.undeliveredLine ?? '';
+    paintNext(tally.next, report.next);
+    bridgeEl.hidden = report.next === null;
+    bridgeEl.replaceChildren(...(report.next === null ? [] : [
+      make('div', 're-bridge-line', report.next.bridge), make('div', 're-bridge-tail', report.next.bridgeTail),
+    ]));
     // The route's mini chart is drawn once the screen shows (show(): its size is the CSS box's, and a hidden box has none:
     // drawn here, under a BEAM OUT's delayed show, it was often empty; the e2e run), and again on a resize.
     tally.svg.replaceChildren();
