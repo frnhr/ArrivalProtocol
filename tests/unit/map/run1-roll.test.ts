@@ -4,7 +4,7 @@
 // generated ships' rolled ones (deterministic per seed, different across seeds), and every ShipDef valid.
 import { check, finish } from '../landing/checks';
 import { assembleRun1Arm, armChecks, bases, timingYear, finalYear, freshArm } from '@systems/map-generator';
-import { ghostPlaceReached } from '@systems/meta';
+import { ghostPlaceReached, freshMeta, recordRunStart, recordShipStart, recordRunEnd, parseMeta, loadMeta } from '@systems/meta';
 import { WORLDS } from '@data/arm';
 import { hopBetween, reachable } from '@systems/map-hop';
 import { routes, bestRoute, routePods } from '@systems/map-route';
@@ -14,7 +14,7 @@ import { validateShipDef } from '@data/ships';
 import { rootSlotRack, maxRootFor } from '@data/memory';
 import { classicShip } from '@data/classic-five';
 import { TEMPLATE_RULES } from '@data/flight-templates';
-import { EXTRA_MODIFIERS_MAX_BY_LAYER } from '@data/tuning';
+import { EXTRA_MODIFIERS_MAX_BY_LAYER, META_STORAGE_KEY } from '@data/tuning';
 import { run1Map, WORKED_ROUTE } from './run1-fixture';
 
 const map = run1Map(7);
@@ -124,11 +124,39 @@ check('a fresh roll for run 3: ARES-IX at Kepler-186f, EVENSONG at New Haven (wr
   && new Set(run3.map((ship) => ship.name)).size === 20 && run3.every((ship) => !WORLDS.some((world) => world.name.toUpperCase() === ship.name)));
 check('…freshArm refuses run 1 (run 1\'s arm is assembleRun1Arm\'s)', (() => { try { freshArm(5, 1, 2300); return false; } catch { return true; } })());
 
-// The ghost by layer (slice-3a-plan §2.9): the last unit's ship looked up on the arm, the first boot at or past its layer.
+// The ghost by layer (slice-3a-plan §2.9; the review's M3): the layer the archive recorded where the last unit's run
+// ended, the first boot at or past it; never by the ship's name (a fresh arm puts names on other worlds).
 const at = (slots: number[]) => ({ ...map, route: slots.map((slot, i) => ({ slot, depth: i + 1, hop: i === 0 ? null : hopBetween(map, slots[i - 1]!, slot) })) });
-const reached = (slots: number[], shipName: string): boolean => ghostPlaceReached({ map: at(slots), shipIndex: slots.length - 1, lastUnit: null }, { shipName });
-check('the ghost by layer: lost on CORMORANT (layer 6) → not at VESPER (layer 5), at KITTIWAKE (layer 6, another ship of that layer)',
-  !reached([0, 2, 5, 11], 'CORMORANT') && reached([0, 2, 5, 11, 14], 'CORMORANT'));
-check('…never at ship 1; a name the arm does not hold speaks at the final ship', !reached([0], 'ARES-VII') && reached([0, 2], 'ARES-VII')
-  && !reached([0, 2, 5, 11, 15], 'NOSTROMO') && reached([0, 2, 5, 11, 15, 19], 'NOSTROMO'));
+const reached = (slots: number[], lastUnit: { shipName: string; layer?: number }): boolean =>
+  ghostPlaceReached({ map: at(slots), shipIndex: slots.length - 1, lastUnit: null }, lastUnit);
+check('the ghost by layer: lost in layer 6 → not at VESPER (layer 5), at KITTIWAKE (layer 6, another ship of that layer)',
+  !reached([0, 2, 5, 11], { shipName: 'CORMORANT', layer: 6 }) && reached([0, 2, 5, 11, 14], { shipName: 'CORMORANT', layer: 6 }));
+check('…by the recorded layer, not the name: a layer-3 record named CORMORANT speaks at KESTREL',
+  reached([0, 2, 5], { shipName: 'CORMORANT', layer: 3 }) && !reached([0, 2], { shipName: 'CORMORANT', layer: 3 }));
+check('…never at ship 1; a record with no layer (an older archive) speaks at the final ship',
+  !reached([0], { shipName: 'ARES-VII', layer: 1 }) && reached([0, 2], { shipName: 'ARES-VII', layer: 1 })
+  && !reached([0, 2, 5, 11, 15], { shipName: 'CORMORANT' }) && reached([0, 2, 5, 11, 15, 19], { shipName: 'CORMORANT' }));
+// …and the archive keeps that layer (M3): at each ship's start (activeRun, so an abandoned run has it) and at the run's
+// end (lastUnit); an older record without it still parses; a bad one is corrupt.
+{
+  const progress = { unit: 47, shipName: 'CORMORANT', layer: 6, worldSlot: 15, woke: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46] };
+  const started = recordShipStart(recordRunStart(freshMeta(), { ...progress, shipName: 'ARES-VII', layer: 1, worldSlot: 0 }, 0), progress);
+  const ended = recordRunEnd(started, { ...progress, cause: 'flagship-lost', score: 0 });
+  check('the archive records the layer: activeRun at a ship\'s start, lastUnit at the run\'s end, and it round-trips',
+    started.activeRun?.layer === 6 && ended.lastUnit?.layer === 6 && ended.lastUnit.worldSlot === 15
+    && parseMeta(JSON.stringify(ended)).lastUnit?.layer === 6);
+  const store: Record<string, string> = {};
+  const storage = () => ({ getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; }, removeItem: () => {} });
+  store[META_STORAGE_KEY] = JSON.stringify(started);
+  const recovered = loadMeta(storage as never);
+  const old = JSON.parse(JSON.stringify(ended)) as { lastUnit: Record<string, unknown> };
+  delete old.lastUnit.layer;
+  delete old.lastUnit.worldSlot;
+  const bad = JSON.parse(JSON.stringify(ended)) as { lastUnit: Record<string, unknown> };
+  bad.lastUnit.layer = 'six';
+  check('…an abandoned run keeps it; an older record has none (the final ship then); a bad one is corrupt',
+    recovered.ok && recovered.recovered && recovered.meta.lastUnit?.layer === 6
+    && parseMeta(JSON.stringify(old)).lastUnit?.layer === undefined
+    && (() => { try { parseMeta(JSON.stringify(bad)); return false; } catch { return true; } })());
+}
 finish();

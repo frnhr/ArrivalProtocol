@@ -5,7 +5,7 @@ import { emit, NO_PAYLOAD } from '@systems/events';
 import { hollowUnitName, GHOST_LINE } from '@data/hollow-text';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import { AUTHORED_SHIP_NAMES, FINAL_SHIP_NAMES } from '@data/ship-names';
-import { currentStop, isEndSlot } from '@systems/map-streams';
+import { currentStop, currentSlot, isEndSlot, worldSlotOf } from '@systems/map-streams';
 import { layerOf } from '@systems/map-geometry';
 import {
   META_STORAGE_KEY, META_VERSION, FIRST_UNIT_NUMBER, HOLLOW_NAME_MAX_UNITS,
@@ -69,6 +69,11 @@ export interface LastUnit {
   number: number;
   woke: number;
   shipName: string;
+  // Where its run ended on its arm (slice 3a, the review's M3): the layer (and the world's slot) of the ship it was on.
+  // Optional: archives written before it have none (the ghost then speaks at the final ship). 3c's archive v2 formalises
+  // it with the trail and the grey cross.
+  layer?: number;
+  worldSlot?: number;
   cause: LastCause;
   stats: UnitStats;
   hollowUnits: number[];
@@ -80,6 +85,8 @@ export interface ActiveRun {
   unit: number;
   startedAt: number;
   shipName: string;
+  layer?: number;          // as LastUnit's (M3)
+  worldSlot?: number;
   woke: number;
   stats: UnitStats;
   hollowUnits: number[];
@@ -136,6 +143,14 @@ function unitStats(value: unknown, field: string): UnitStats {
   return { moves: wholeNumber(value.moves, `${field}.moves`), deletes: wholeNumber(value.deletes, `${field}.deletes`) };
 }
 
+// The optional place fields (M3): absent in an older record, a whole number when present (anything else is corrupt).
+function placeOf(value: Record<string, unknown>, field: string): { layer?: number; worldSlot?: number } {
+  const place: { layer?: number; worldSlot?: number } = {};
+  if (value.layer !== undefined) place.layer = wholeNumber(value.layer, `${field}.layer`);
+  if (value.worldSlot !== undefined) place.worldSlot = wholeNumber(value.worldSlot, `${field}.worldSlot`);
+  return place;
+}
+
 function parseLastUnit(value: unknown): LastUnit | null {
   if (value === null) return null;
   if (!isRecord(value)) corrupt('lastUnit is not a record');
@@ -145,6 +160,7 @@ function parseLastUnit(value: unknown): LastUnit | null {
     number: wholeNumber(value.number, 'lastUnit.number'),
     woke: wholeNumber(value.woke, 'lastUnit.woke'),
     shipName: text(value.shipName, 'lastUnit.shipName'),
+    ...placeOf(value, 'lastUnit'),
     cause: cause as LastCause,
     stats: unitStats(value.stats, 'lastUnit.stats'),
     hollowUnits: unitList(value.hollowUnits, 'lastUnit.hollowUnits'),
@@ -158,6 +174,7 @@ function parseActiveRun(value: unknown): ActiveRun | null {
     unit: wholeNumber(value.unit, 'activeRun.unit'),
     startedAt: wholeNumber(value.startedAt, 'activeRun.startedAt'),
     shipName: text(value.shipName, 'activeRun.shipName'),
+    ...placeOf(value, 'activeRun'),
     woke: wholeNumber(value.woke, 'activeRun.woke'),
     stats: unitStats(value.stats, 'activeRun.stats'),
     hollowUnits: unitList(value.hollowUnits, 'activeRun.hollowUnits'),
@@ -217,7 +234,16 @@ export type LoadResult =
 // was when its last ship started.
 function abandon(run: ActiveRun): LastUnit {
   return {
-    number: run.unit, woke: run.woke, shipName: run.shipName, cause: 'abandoned', stats: { ...run.stats }, hollowUnits: [...run.hollowUnits],
+    number: run.unit, woke: run.woke, shipName: run.shipName, ...placeFields(run), cause: 'abandoned', stats: { ...run.stats },
+    hollowUnits: [...run.hollowUnits],
+  };
+}
+
+// The place fields of a record, only those it has (an older record has none: never written as undefined).
+function placeFields(from: { layer?: number; worldSlot?: number }): { layer?: number; worldSlot?: number } {
+  return {
+    ...(from.layer !== undefined ? { layer: from.layer } : {}),
+    ...(from.worldSlot !== undefined ? { worldSlot: from.worldSlot } : {}),
   };
 }
 
@@ -263,6 +289,8 @@ export function unitStatsOf(stats: Readonly<RunStats>): UnitStats {
 export interface RunProgress {
   unit: number;
   shipName: string;
+  layer?: number;            // the ship's layer and world on its arm (M3)
+  worldSlot?: number;
   woke: number;
   stats: UnitStats;
   hollowUnits: readonly number[];
@@ -273,7 +301,10 @@ export function recordRunStart(meta: Readonly<Meta>, progress: RunProgress, now:
 }
 
 function activeOf(progress: RunProgress): Omit<ActiveRun, 'startedAt'> {
-  return { unit: progress.unit, shipName: progress.shipName, woke: progress.woke, stats: { ...progress.stats }, hollowUnits: [...progress.hollowUnits] };
+  return {
+    unit: progress.unit, shipName: progress.shipName, ...placeFields(progress), woke: progress.woke, stats: { ...progress.stats },
+    hollowUnits: [...progress.hollowUnits],
+  };
 }
 
 // A later ship starts: activeRun says where the unit is. Throws when no run was started (a bug: RUN START
@@ -306,7 +337,8 @@ export function recordRunEnd(meta: Readonly<Meta>, end: RunEnd): Meta {
     mergeBonus: end.cause === 'won-merge',
     activeRun: null,
     lastUnit: {
-      number: end.unit, woke: end.woke, shipName: end.shipName, cause: end.cause, stats: { ...end.stats }, hollowUnits: [...end.hollowUnits],
+      number: end.unit, woke: end.woke, shipName: end.shipName, ...placeFields(end), cause: end.cause, stats: { ...end.stats },
+      hollowUnits: [...end.hollowUnits],
     },
   };
 }
@@ -407,20 +439,21 @@ export function ghostShipIndex(lastUnit: Readonly<Pick<LastUnit, 'shipName'>>, s
 }
 
 // Is this ship at or past where the ghost speaks? On the classic world (or a run with no map: the archive suites), the
-// fixed five's index (ghostShipIndex). On the arm, by layer (slice-3a-plan §2.9, interim until 3c's trail and grey cross):
-// the last unit's ship (its shipName) is looked up on the current arm, and the ghost speaks at the first boot whose ship's
-// layer is at or past that ship's layer, never at ship 1; a name the arm does not hold (a fresh roll, an older fleet)
-// speaks at the final ship.
+// fixed five's index (ghostShipIndex). On the arm, by layer (slice-3a-plan §2.9, interim until 3c's trail and grey cross;
+// the review's M3): the layer the last unit's run ended in, as the archive recorded it (LastUnit.layer), and the ghost
+// speaks at the first boot whose ship's layer is at or past it, never at ship 1. Not by its ship's name: from run 2 the
+// arm is a fresh roll whose names sit on other worlds, which made the place effectively random. A record with no layer
+// (an older archive) speaks at the final ship.
 export function ghostPlaceReached(
-  run: Readonly<Pick<RunState, 'lastUnit' | 'shipIndex'> & Partial<Pick<RunState, 'map'>>>, lastUnit: Readonly<Pick<LastUnit, 'shipName'>>,
+  run: Readonly<Pick<RunState, 'lastUnit' | 'shipIndex'> & Partial<Pick<RunState, 'map'>>>,
+  lastUnit: Readonly<Pick<LastUnit, 'shipName' | 'layer'>>,
 ): boolean {
   const map = run.map;
   if (map === undefined || map.world === 'classic') return run.shipIndex >= ghostShipIndex(lastUnit);
   if (run.shipIndex === 0) return false;
   const slot = currentStop({ map, shipIndex: run.shipIndex }).slot;
-  const lostOn = map.arm.find((ship) => ship.name === lastUnit.shipName);
-  if (lostOn === undefined) return isEndSlot(map, slot);
-  return layerOf(slot) >= layerOf(lostOn.slot);
+  if (lastUnit.layer === undefined) return isEndSlot(map, slot);
+  return layerOf(worldSlotOf(map, slot)) >= lastUnit.layer;
 }
 
 // The ghost's line on this run's current boot, or null: the run has a ghost (ghostLine), it has not spoken yet this run,
@@ -505,10 +538,17 @@ function hasArchive(state: Readonly<GameState>): boolean {
   return state.archive.status !== 'none';
 }
 
+function shipPlace(state: Readonly<GameState>): { layer: number; worldSlot: number } {
+  const worldSlot = worldSlotOf(state.run.map, currentSlot(state.run));
+  return { layer: layerOf(worldSlot), worldSlot };
+}
+
 function progressOf(state: Readonly<GameState>): RunProgress {
   return {
     unit: state.run.unitNumber,
     shipName: state.level.shipName,
+    // Where the unit is on its arm (M3): the next run's ghost speaks by this layer, not by a name a fresh arm reuses.
+    ...shipPlace(state),
     // Risk 10 (no META_VERSION bump): the archive's `woke` field now holds the colonists LANDED (on target). Slice 3's
     // save replaces the record.
     woke: runLanded(state.run.ships),
