@@ -94,6 +94,12 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
   delivery-rule.ts`); deliveries ride the packet as chips (SEND ON), can carry seeds, and are the only source of tools
   besides REPAIR's first look. The INBOX (desk tab and flight window) holds CONTROL's replies, colony postcards and
   046's mail, all derived from the route. An ENGINE FAULT ship without Swap limps, and REPAIR calms Thrust Ctrl.
+- Runs that follow each other (slice 3c): one run save at RUN START, every desk, every beam and the ending, with
+  RESUME on the title (a reload mid-ship replays the ship from its boot; `src/systems/save-*.ts`, `run-save.ts`).
+  Archive v2 (`meta.ts`, key `meta/v2`, migrated in place) keeps the lineage; at each run's end a pure, seeded world
+  update (`src/systems/map-update.ts`, matched to `docs/phase3/map-sim/`) moves the same arm on: the next unit launches
+  0–35 years later, visited ships are colonies, skipped ships age or leave, new ships report home, and the last unit's
+  trail, grey cross, beacon and letters are found where it went.
 - A full run (phase 2's, now the classic fixture): five ships (ARES-VII, HALCYON, KESTREL, VESPER, LAST LIGHT), each
   with its own rule, TRANSMIT between
   them (a link budget, transit damage, one card of three to carry), soft fails instead of reloads, RUN END with score,
@@ -126,8 +132,8 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 
 1. **Fran's playtest**: one full run by `docs/playtest-checklist.md`.
 2. **Phase 3** (`docs/PHASE3.md`, specs in `docs/phase3/`): landing, the calm opening and the galaxy map (slices 1a, 1b, 2
-   and 3a built; plans and deviations in `docs/phase3/impl/`), 3b (the repository, deliveries, the INBOX) also built; then
-   3c (the save, archive v2, the arm carried between runs), the skill tree, residents, SURVEY, new endings.
+   and 3a built; plans and deviations in `docs/phase3/impl/`), 3b (the repository, deliveries, the INBOX) and 3c (the save,
+   archive v2, the arm carried between runs) also built; then the skill tree, residents, SURVEY, new endings.
 3. **The refactors parked until after the playtest** (discuss the split before writing code): `src/data/script.ts`
    into its text and its director rules, `src/styles/game.css` by surface, `tuning.ts` and `script.ts` grouped by
    domain.
