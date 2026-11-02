@@ -121,6 +121,15 @@ export interface Packet {
   // The beam seeds riding along (phase 3 slice 2, 04 §3.4; systems/beam-seeds.ts rollBeamSeeds, at the beam): hitchhikers
   // ride free, so they are in neither filesBlocks nor the link; they take room only at the boot (layoutCarried).
   seeds: BeamSeedPlan[];
+  // Phase 3 slice 3b: the delivery chips' files as packed (systems/draft.ts planPacket, the one adder, fills it; packUnit
+  // knows no chips): each chip not sent on and the ids of the files it laid out, in chip order. The send reads it for
+  // the delivery seeds (behind their own file), the beam seeds' exclusion and ArrivalReport.deliveries.
+  deliveries: PacketDelivery[];
+}
+
+export interface PacketDelivery {
+  key: string;
+  segIds: string[];
 }
 
 // Packs the unit for a link of `linkBlocks` (step 1 of the header). Copies only: memory is not touched.
@@ -152,7 +161,7 @@ export function packUnit(memory: readonly Segment[], linkBlocks: number, dropped
   const chargeHeld = held ? held.used : 0;
   const chargeCarried = Math.max(0, Math.min(chargeHeld, linkBlocks - filesBlocks));
   const charge = held ? packedCopy(held) as RedundancySegment : null;
-  return { linkBlocks, rackE, rackF, charge, filesBlocks, overLink, chargeHeld, chargeCarried, seeds: [] };
+  return { linkBlocks, rackE, rackF, charge, filesBlocks, overLink, chargeHeld, chargeCarried, seeds: [], deliveries: [] };
 }
 
 // Every packed file a hit can land on (charge is not a file: §6.9 hits "packed non-charge files").

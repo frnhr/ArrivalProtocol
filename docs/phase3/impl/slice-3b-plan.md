@@ -776,6 +776,106 @@ or recorded, so it rides every later hop too and arrives with no licence. Withou
   - pin two chips of one new kind in one packet (one first of kind, one spare);
   - add a classic boot-plan byte-equality check (the classic world's plans unchanged by 3b).
 
+## Deviations (Track REPO)
+
+Track REPO's slice (§5.1 with the foundation's notes) as built on branch `repo-3b` from 1d450af. Every rule of §2.3 is in
+play: requests, chips, SEND ON, delivery seeds, the patch, licences by request, the boot's delivery lines.
+
+1. **The patch comes first.** `transmitNext` writes `ArrivalReport.deliveries` with every REPAIR v2 patch first, then the
+   rest oldest first (chip order). `deliveryBootLines` gives each patch a line of its own and folds only the other files
+   (with 3+ patches in one arrival the singles are the patches and the rest still fold).
+2. **REPAIR's renewal ignores this boot's deliveries.** The delivered files are already in memory when the boot types, so
+   the order of calls alone could not stop a delivered Repair.bak from counting as a working copy. `renewRepairAtBoot`
+   judges "no working Repair" without the arrival's delivered segment ids, and `receiveDeliveryAtBoot` calls it at the
+   first `'delivery'` line, whatever that line carries. The `'charge'` call is then a no-op.
+3. **A damaged or broken patch.** A patch that crossed usable (integrity ≥ `BAND_DEGRADED_MIN`, read from the last
+   `ArrivalReport.hits` entry on its file: `repository.ts patchInstalls`) installs. Below that it is broken: used up, its
+   blocks freed, nothing upgraded, and its boot line is the plain `> DELIVERY: repair_v2.patch (arrived y)` with no
+   `· EVERY REPAIR → v2` (UI's own words for it are requested). A patch reaching a unit with no Repair copy (REPAIR not
+   licensed yet) is spent for nothing, and `run.upgrades` does not gain `'repair-v2'`.
+4. **The recommendation:**
+   - "has" means a working copy (usable and not being eaten, as `noWorkingRm` judges), or a request in transit or waiting
+     (risk 4);
+   - rule 1 (Mv at the first desk) falls through when the unit already has MOVE (only `__ap.give` can do that);
+   - rule 3's "reachable ship within two layers" is reach by any route (in range and in time, hop by hop), at most
+     `REPO_SWAP_LOOKAHEAD_LAYERS` layers out, ENGINE FAULT read from the ship's modifiers. On run 1 this tags Swap at
+     KESTREL (VESPER, and CURLEW one layer out). From HALCYON CURLEW is also in reach, but rule 2 (Rm) comes first.
+5. **The last-rm prompt** is `lastRmPrompt(state)`: arm, DELETE licensed, no working rm, **and no Rm already on its way**
+   (risk 4's reading, so it does not nag a kid who asked). `deskWindowOnOpen` and the REPOSITORY's Rm `focus` read it.
+6. **`repoModel`:** a TOO LATE or OUT OF RANGE selection gives `forecast: null` and `eta: null` on every row and no
+   `catchesUp` in IN TRANSIT. IN TRANSIT reads `hopOutlook` for a reachable selection, `behind` is the request's lateness at
+   the current ship, and a waiting row names the receiver's ship.
+7. **Plumbing:**
+   - `Packet.deliveries` (`{ key, segIds }[]`, carry.ts) is filled by `planPacket` through `repository.ts
+     deliveryFileGroups`, so the send knows each chip's files without a second adder;
+   - `rollBeamSeeds(…, excludeIds = [])` takes every delivered segment id;
+   - `rollDeliverySeeds` takes two draws per packed chip whatever its chance, and throws on a target that is not an
+     infectable packed file;
+   - `arrivalDeliveries` is exported from run.ts (debug.ts and the suites use it);
+   - `deliverySeedChance(threat, noise)` is shared by `deliveriesForHop` and `toggleSendOn`.
+8. **The draft:**
+   - `DraftContext.salvageOnly` is optional (the classic world and phase 2's suites build contexts without it);
+   - `draftContext` and `dealDraft` gain an optional `deliveries` argument;
+   - the load check requires a salvage card that stacks without limit.
+9. **The preview's seed allowance** is the beam's `{min, max}` plus one per packed chip with a chance above 0 on `max`
+   (the minimum is unchanged). `seedsExact` covers both kinds.
+10. **`advanceRequests`:**
+    - a chip that rode sets `lateness: 0` and `at: toSlot`;
+    - a waiting request with no chip on the hop throws, and so does a chip that is no request;
+    - the pick's request gets `requestedYear = hop.leaveYear`.
+
+    **`undeliveredFiles`** returns every request not delivered. At RUN END that is "in transit, waiting or lost"; mid-run it
+    also lists what has not arrived yet.
+11. **Debug:**
+    - `__ap.slot` carries the hop's deliveries as the send does (seeds, licences, requests moved on);
+    - `__ap.route` resets the run's requests, because its stops are rewritten;
+    - `__ap.give('repair-v2')` uses `delivery-boot.ts upgradeRepairsToV2`;
+    - new `__ap.sendOn(key)`;
+    - `__ap.draft().context` is the deal's own (hop room and deliveries).
+12. **The no-Swap condition** is `repository.ts noSwapForGhost(state)`: arm only, an uncommanded burst now, the current
+    ship's modifiers include ENGINE FAULT, no working Swap. The classic world still licenses SWAP at its first burst.
+13. **Cp's year** follows the foundation's correction: the chip, the request and the boot line all say 2915 at LAST
+    LIGHT. Swap reaches CORMORANT in 2659.
+14. **Tests** (Track REPO's):
+    - `map/repository` (4 s) and `map/delivery-packet` (7 s), with the store-level fixture `map/repo-fixture.ts`;
+    - `map/classic-boot-plans.txt`, the classic five's boot plans and lines generated from 28ddee8 (pre-3b), byte-compared;
+    - `map/run1-route` requests §3.14's files, and its full-depth routes now follow the tag.
+
+**Measured:**
+- **Run 1's worked route** (`map/run1-route`, the defenders' kid, 14/14):
+  - the tag is Mv, Rm and Swap at the first three desks, then Repair.bak at VESPER and CORMORANT (one working Repair
+    left);
+  - the files arrive Mv at HALCYON 2337, Rm at KESTREL 2436, Swap at CORMORANT 2659, Cp at LAST LIGHT 2915;
+  - NEVER ARRIVED is empty.
+- **Risk 1:**
+  - VESPER flown without SWAP ends `partial`: 3,200 of 3,200 colonists in an LZ, 1 star, fuel 0%. With phase 2's
+    licence it was `locked`;
+  - the kid can fly it.
+- **Charge at the choice** (MERGE saver), before 3b (28ddee8, interim licences) → now:
+
+  | Route | Before | Now | Now ends |
+  |---|---|---|---|
+  | worked | 13 | 9 | PURGE |
+  | [0,1,4,7,10,13,16,19] | 40 | 38 | MERGE |
+  | [0,1,4,7,12,17,19] | 50 | 34 | MERGE |
+  | [0,1,4,7,10,13,18,19] | 10 | 0 | PURGE |
+
+  On the three full-depth routes, which follow the tag, CURLEW (ENGINE FAULT, layer 4) is **stranded** every time: its
+  Swap was requested at HERON and arrived later. On the last route WAYFARER escaped.
+- **INFO over 50 fresh arms, following the tag on random routes** (`map/repository`):
+  - ENGINE FAULT ships were reached without Swap 8 times out of 9 (89%);
+  - with the lever `REPO_SWAP_LOOKAHEAD_LAYERS = 3` (measured, not committed) it was 5 of 9 (56%);
+  - 128 tagged requests were made, and 115 were delivered before the run ended;
+  - risk 11: 0 of 254 salvage deals had fewer than 3 cards.
+- **`map/delivery-packet`**, over 200 random sends on fresh arms:
+  - 390 files were delivered and 12 carried a seed;
+  - 25 sends had a transit hit on a delivery;
+  - the preview equalled the layout every time.
+- Unit tier: 163/163 suites pass. The timings are not clean: a run alongside my own jobs took 282 s (161 suites, before
+  the new two), and two full runs at 445 s and 457 s overlapped another track's tier on the same 4 cores (load 11–13), so
+  the 300 s budget check failed on wall time only. The new suites take, unloaded: `map/repository` 4 s,
+  `map/delivery-packet` 7 s, `map/run1-route` 14–18 s (about 19 s before).
+
 ## Deviations (Track UI)
 
 Track UI's part (§5.2) as built on branch `ui-3b`, against the foundation's stubs (REPO's `repoModel`, `recommendation`,

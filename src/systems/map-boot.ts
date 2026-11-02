@@ -5,6 +5,7 @@ import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
 import { DELIVERY_BOOT_LINES_MAX } from '@data/tuning';
 import { layoutFor } from '@data/memory';
 import { currentStop } from '@systems/map-streams';
+import { patchInstalls } from '@systems/repository';
 
 // The galaxy map's boot lines (02-map §4's order, steps 2 and 5; slice-3a-plan §1.1 items 7, 12, risk 13): the sleep line
 // `> ASLEEP IN KESTREL'S RECEIVER · 2378 → 2467 · 89 YEARS` (from ship 2), the receiver line `> RECEIVER: 1 RACK · ROOM 88`
@@ -72,12 +73,18 @@ export function mapOverflowLineText(state: Readonly<GameState>): string {
 // charge; bootLine renders group `ordinal`; systems/delivery-boot.ts receiveDeliveryAtBoot unpacks the same group as it is
 // said. Track REPO owns these after the foundation (the words are repo-text's, Track UI's).
 
-// The arrival's deliveries grouped by the boot line that says them (empty off the arm and on a fresh unit's boot).
+// The arrival's deliveries grouped by the boot line that says them (empty off the arm and on a fresh unit's boot), in the
+// arrival's order (systems/run.ts: the REPAIR v2 patch first, then oldest first). A patch always has a line of its own,
+// never the folded one (it says what it upgraded, and it installs right after REPAIR's renewal at the first line): the
+// singles are every patch, then the oldest other files while lines are left, and the rest fold into the last line.
 export function deliveryBootLines(state: Readonly<GameState>): ArrivalDelivery[][] {
   const deliveries = state.run.map.world === 'arm' ? state.run.arrival?.deliveries ?? [] : [];
   if (deliveries.length <= DELIVERY_BOOT_LINES_MAX) return deliveries.map((delivery) => [delivery]);
-  const single = deliveries.slice(0, DELIVERY_BOOT_LINES_MAX - 1).map((delivery) => [delivery]);
-  return [...single, deliveries.slice(DELIVERY_BOOT_LINES_MAX - 1)];
+  const patches = deliveries.filter((delivery) => delivery.file === 'repair-v2');
+  const others = deliveries.filter((delivery) => delivery.file !== 'repair-v2');
+  const singles = Math.max(0, DELIVERY_BOOT_LINES_MAX - 1 - patches.length);
+  const folded = others.slice(singles);
+  return [...patches.map((delivery) => [delivery]), ...others.slice(0, singles).map((delivery) => [delivery]), ...(folded.length > 0 ? [folded] : [])];
 }
 
 // The words of delivery line `ordinal`.
@@ -87,7 +94,10 @@ export function deliveryBootLineText(state: Readonly<GameState>, ordinal: number
   if (group.length === 1) {
     const delivery = group[0]!;
     const word = REPO_FILE_TEXT[delivery.file].boot;
-    return delivery.file === 'repair-v2' ? REPO_TEXT.boot.patch(word, delivery.arrivedYear) : REPO_TEXT.boot.delivery(word, delivery.arrivedYear);
+    // A broken patch installs nothing, so its line makes no claim (UI's words for it are requested: REPO_TEXT.boot.patch's
+    // `· EVERY REPAIR → v2` is only for a patch that installs).
+    const installs = delivery.file === 'repair-v2' && state.run.arrival !== null && patchInstalls(state.run.arrival, delivery);
+    return installs ? REPO_TEXT.boot.patch(word, delivery.arrivedYear) : REPO_TEXT.boot.delivery(word, delivery.arrivedYear);
   }
   const years = group.map((delivery) => delivery.arrivedYear);
   return REPO_TEXT.boot.folded(group.map((delivery) => REPO_FILE_TEXT[delivery.file].boot), Math.min(...years), Math.max(...years));

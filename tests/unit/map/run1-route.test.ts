@@ -3,10 +3,15 @@
 // with its defenders, every landing instant but the final ship's (flown by the strip through the duel to the choice, as
 // wp11/full-run does). At each desk the kid sets course to the route's next ship. Checks: the desk between ships, the
 // hop and its years (the galaxy year is the approach), the hits that land (round(d / 7) − ECC), the boot's sleep and ECC
-// lines, the rings at each boot (02, 03, 04–06, 07–08, 09–11), HOLLOW's forced boarding at CORMORANT (M3), the interim
-// licences by act, the run ending at the first final ship, and the route in run.ships. Prints the REPAIR CHARGE at the
-// choice of a kid saving it for MERGE (risk 6: the MERGE margin moves to the route). Full depth (npm run balance) also flies the routes ending at
-// PROVIDENCE, GOOD HOPE and WAYFARER.
+// lines, the rings at each boot (02, 03, 04–06, 07–08, 09–11), HOLLOW's forced boarding at CORMORANT (M3), the run ending
+// at the first final ship, and the route in run.ships. Prints the REPAIR CHARGE at the choice of a kid saving it for MERGE
+// (risk 6: the MERGE margin moves to the route). Full depth (npm run balance) also flies the routes ending at PROVIDENCE,
+// GOOD HOPE and WAYFARER, the kid following the tag at every desk.
+// Slice 3b (Track REPO; slice-3b-plan §6.2): the tools come by request now (02 §3.14's table): Mv at ARES-VII, Rm at
+// HALCYON, Swap at KESTREL, Cp at VESPER, nothing at CORMORANT (NEVER there). Checks: the tag at the first three desks
+// (Mv, Rm, Swap), MOVE on HALCYON's boot, DELETE on KESTREL's, SWAP absent on VESPER and arriving on CORMORANT's (4 years
+// late at VESPER, forwarded), COPY on LAST LIGHT's, each with its `> DELIVERY:` line, and `NEVER ARRIVED` empty. Prints
+// VESPER's outcome flown without SWAP (plan risk 1: reported, not worked around).
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
 import { receiveTransmission } from '@systems/boot';
@@ -29,9 +34,14 @@ import { MAP_TEXT } from '@data/map-text';
 import { LOG_TEXT } from '@data/log-text';
 import { MERGE_COST_CHARGE } from '@data/tuning';
 import { byDepth } from '../depth';
+import { setRequest, recommendation, undeliveredFiles } from '@systems/repository';
+import { REPO_TEXT } from '@data/repo-text';
+import type { RepoFileId } from '@/types/repo';
 import type { GameState } from '@state/schema';
 
 const WORKED: readonly number[] = [0, 2, 5, 11, 15, 19];
+// 02 §3.14's requests, desk by desk along the worked route (CORMORANT's would never arrive: none).
+const WORKED_REQUESTS: readonly (RepoFileId | null)[] = ['mv', 'rm', 'swap', 'cp', null];
 const SEED = 3;
 const h = createHarness11(1, { soulsFound: false });
 mountStoryLog(h.store);
@@ -56,7 +66,8 @@ function flyShip(): void {
 }
 
 // One run along `route`; `record` collects per-ship observations for the worked route's checks.
-function flyRoute(route: readonly number[], record: (event: string, at: Readonly<GameState>) => void): Flown {
+// `requests[i]`: what the kid requests at desk i (null: nothing; 'tag': whatever ARRIVAL CONTROL recommends there).
+function flyRoute(route: readonly number[], record: (event: string, at: Readonly<GameState>) => void, requests: readonly (RepoFileId | null | 'tag')[] = []): Flown {
   h.newRun(SEED);
   startRun(h.store, SEED, FIRST_RUN_LINEAGE, 'arm');
   const failures: string[] = [];
@@ -99,6 +110,9 @@ function flyRoute(route: readonly number[], record: (event: string, at: Readonly
       record('desk', state());
       const next = route[state().run.shipIndex + 1];
       if (next === undefined) { failures.push('the route ran out before the final ship'); break; }
+      const wanted = requests[state().run.shipIndex] ?? null;
+      const ask = wanted === 'tag' ? recommendation(state()) : wanted;
+      if (ask !== null) setRequest(h.store, ask);
       setCourse(h.store, next);
       record('packet', state());
       h.transmit();
@@ -116,6 +130,8 @@ function flyRoute(route: readonly number[], record: (event: string, at: Readonly
 const boots: { slot: number; year: number; found: number[]; lines: string[]; boarded: string | null; landed: number | null; hits: number }[] = [];
 const desks: { slot: number; paused: boolean; offered: boolean }[] = [];
 const licencesAt: Record<string, string[]> = {};
+const toolsAt: Record<string, string[]> = {};
+const tags: (RepoFileId | null)[] = [];
 let logFrom = 0;
 const worked = flyRoute(WORKED, (event, at) => {
   if (event === 'boot' && at.run.phase === 'flight') {
@@ -127,9 +143,15 @@ const worked = flyRoute(WORKED, (event, at) => {
     });
     logFrom = at.log.entries.length;
   }
-  if (event === 'flown') licencesAt[at.level.shipName] = [...at.run.licences];
-  if (event === 'desk') desks.push({ slot: currentSlot(at.run), paused: at.clock.paused, offered: at.ui.deskSelected === null || typeof at.ui.deskSelected === 'number' });
-});
+  if (event === 'flown') {
+    licencesAt[at.level.shipName] = [...at.run.licences];
+    toolsAt[at.level.shipName] = at.memory.filter((seg) => seg.type === 'fs-tool').map((seg) => seg.type === 'fs-tool' ? seg.fsTool : '');
+  }
+  if (event === 'desk') {
+    desks.push({ slot: currentSlot(at.run), paused: at.clock.paused, offered: at.ui.deskSelected === null || typeof at.ui.deskSelected === 'number' });
+    tags.push(recommendation(at));
+  }
+}, WORKED_REQUESTS);
 console.log(`worked route [${WORKED.join(', ')}]: ${worked.ended} | ${worked.ships} | charge at the choice ${worked.charge ?? '-'}`);
 check('run 1 flies the worked route to its end: six ships, the run ending at LAST LIGHT (the first final ship landed on)',
   worked.failures.length === 0 && state().run.ships.map((ship) => ship.slot).join() === WORKED.join() && state().run.phase === 'end'
@@ -150,10 +172,27 @@ check('…the rings at each boot: HALCYON 02, KESTREL 03, VESPER 04–06, CORMOR
   ringsAt(2, [2]) && ringsAt(5, [3]) && ringsAt(11, [4, 5, 6]) && ringsAt(15, [7, 8]) && ringsAt(19, [9, 10, 11]), JSON.stringify(boots.map((b) => b.found)));
 check('…HOLLOW boards on the beam into CORMORANT, forced (M3: New Haven is one hop away), and not into VESPER',
   bootAt(15)!.boarded === 'forced' && bootAt(11)!.boarded === null, `${bootAt(11)!.boarded} / ${bootAt(15)!.boarded}`);
-check('…the interim licences by act: DELETE and MOVE on KESTREL (depth 3, DEBRIS), SWAP on VESPER (ENGINE FAULT), COPY on CORMORANT (HOLLOW\'s first ship)',
-  ['delete', 'move'].every((kind) => licencesAt.KESTREL?.includes(kind)) && !licencesAt.HALCYON?.includes('delete')
-  && licencesAt.VESPER?.includes('swap') === true && licencesAt.CORMORANT?.includes('copy') === true && !licencesAt.VESPER?.includes('copy'),
-  JSON.stringify(licencesAt));
+check('…ARRIVAL CONTROL tags Mv at the first desk, Rm at HALCYON\'s, Swap at KESTREL\'s (VESPER: ENGINE FAULT two layers out)',
+  tags.slice(0, 3).join() === 'mv,rm,swap', tags.join());
+console.log(`INFO  the tag at each desk of the worked route: ${tags.map((tag) => tag ?? 'none').join(', ')}`);
+const delivered = (slot: number, line: string): boolean => bootAt(slot)!.lines.includes(line);
+check('…MOVE arrives on HALCYON\'s boot (`> DELIVERY: mv (arrived 2337)`), not before',
+  delivered(2, REPO_TEXT.boot.delivery('mv', 2337)) && licencesAt.HALCYON?.includes('move') === true && licencesAt['ARES-VII']?.includes('move') === false,
+  bootAt(2)!.lines.filter((line) => line.includes('DELIVERY')).join(' | '));
+check('…DELETE on KESTREL\'s (`> DELIVERY: rm (arrived 2436)`), not on HALCYON',
+  delivered(5, REPO_TEXT.boot.delivery('rm', 2436)) && licencesAt.KESTREL?.includes('delete') === true && !licencesAt.HALCYON?.includes('delete'),
+  bootAt(5)!.lines.filter((line) => line.includes('DELIVERY')).join(' | '));
+check('…SWAP absent on VESPER (4 years late), arriving on CORMORANT\'s (`> DELIVERY: swap (arrived 2659)`)',
+  !licencesAt.VESPER?.includes('swap') && !toolsAt.VESPER?.includes('swap') && delivered(15, REPO_TEXT.boot.delivery('swap', 2659))
+  && licencesAt.CORMORANT?.includes('swap') === true && !bootAt(11)!.lines.some((line) => line.includes('DELIVERY')),
+  `${JSON.stringify(licencesAt)} | ${bootAt(15)!.lines.filter((line) => line.includes('DELIVERY')).join(' | ')}`);
+check('…COPY on LAST LIGHT\'s (`> DELIVERY: cp (arrived 2915)`: 44 late at CORMORANT, forwarded), not on CORMORANT',
+  delivered(19, REPO_TEXT.boot.delivery('cp', 2915)) && !licencesAt.CORMORANT?.includes('copy'),
+  bootAt(19)!.lines.filter((line) => line.includes('DELIVERY')).join(' | '));
+check('…NEVER ARRIVED is empty: every request reached the unit', undeliveredFiles(state().run).length === 0 && state().run.repo.requests.length === 4,
+  JSON.stringify(state().run.repo.requests));
+const vesper = state().run.ships.find((ship) => ship.shipName === 'VESPER');
+console.log(`INFO  risk 1, VESPER flown without SWAP (ENGINE FAULT, 16 pods): ${vesper?.outcome ?? 'not reached'} · ${vesper?.landedInLz ?? '-'} of ${vesper?.colonistsAboard ?? '-'} colonists in an LZ · stars ${vesper?.stars ?? '-'} · fuel left ${vesper ? Math.round(vesper.fuelLeftPct) : '-'}%`);
 console.log(`INFO  charge at the choice on the worked route (ends at CORMORANT → LAST LIGHT): ${worked.charge ?? 'not reached'}`);
 
 // --- Risk 6 at full depth: the other last ships before the final one -------------------------------------------------------
@@ -163,7 +202,8 @@ const all = routes(state().run.map);
 for (const last of others) {
   const route = all.filter((candidate) => candidate[candidate.length - 2] === last).sort((a, b) => b.length - a.length)[0];
   if (!route) { console.log(`INFO  no route ends through slot ${last}`); continue; }
-  const flown = flyRoute(route, () => {});
-  console.log(`INFO  charge at the choice, route [${route.join(', ')}]: ${flown.charge ?? 'not reached'} | ${flown.ended} | ${flown.ships}`);
+  const flown = flyRoute(route, () => {}, route.slice(1).map(() => 'tag' as const));
+  console.log(`INFO  charge at the choice, route [${route.join(', ')}], following the tag: ${flown.charge ?? 'not reached'} | ${flown.ended} | ${flown.ships}`
+    + ` | requested ${state().run.repo.requests.map((request) => `${request.file}:${request.status}`).join(' ') || 'nothing'}`);
 }
 finish();

@@ -2,9 +2,7 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
-import type { RunMapState, ModifierId } from '@/types/map';
-import { armShipAt, currentStop } from '@systems/map-streams';
-import { SEEDS_MIN_DEPTH } from '@data/tuning';
+import type { RunMapState } from '@/types/map';
 import { onPostTick, isLivePhase } from '@systems/clock';
 import { replaceRange, mergeAdjacentFree, segmentStarts, assertMemoryInvariants, newSegId } from '@systems/memory-ops';
 import { isOpenFree } from '@systems/tool-targets';
@@ -133,42 +131,13 @@ const REPAIR_RULE: LicenceRule = {
     || mindAlertActive(state),
 };
 
-// The arm's interim schedule, by act (slice-3a-plan §2.8, risk 3; not in any spec: 3a has no repository yet). TODO(3b):
-// the repository's requests replace it, and this block goes.
-// • DELETE at the start of the first ship at depth ≥ 3 (the SEEDS act: the tool arrives with the thing it removes);
-// • MOVE at that ship's coast, or at a DEBRIS ship's coast, whichever comes first (its first job is the debris lesson);
-// • COPY at the boot of HOLLOW's first ship (the tool is there before the fight for your tools);
-// • SWAP at the first uncommanded burst on any ENGINE FAULT ship (the fix arrives with the problem);
-// • a licence whose moment passed on an earlier ship of the route (the ship was lost first) comes at this ship's start.
-// REPAIR keeps its own first-look rule (REPAIR_RULE).
-function armLicenceRules(): LicenceRule[] {
-  const depth = (state: Readonly<GameState>): number => state.run.shipIndex + 1;
-  // The modifiers of the route's ships before the current one, and of the current one.
-  const earlier = (state: Readonly<GameState>): ModifierId[][] =>
-    state.run.map.route.slice(0, -1).map((stop) => armShipAt(state.run.map, stop.slot).modifiers);
-  const here = (state: Readonly<GameState>): readonly ModifierId[] => armShipAt(state.run.map, currentStop(state.run).slot).modifiers;
-  return [
-    { kind: 'delete', due: (state) => depth(state) >= SEEDS_MIN_DEPTH },
-    {
-      kind: 'move',
-      due: (state) => depth(state) > SEEDS_MIN_DEPTH || earlier(state).some((mods) => mods.includes('debris'))
-        || ((depth(state) >= SEEDS_MIN_DEPTH || here(state).includes('debris')) && state.burn.coastAtAi !== null),
-    },
-    { kind: 'copy', due: (state) => state.run.threat.aboard },
-    {
-      kind: 'swap',
-      due: (state) => earlier(state).some((mods) => mods.includes('engine-fault'))
-        || (here(state).includes('engine-fault') && state.burn.ghostBursts > 0),
-    },
-  ];
-}
-
 // Every licence due on the ship being flown, in order: REPAIR's own rule, then every ship's timed ones. `world` is the
-// run's map (run.map.world): the classic five's schedule is CLASSIC_LICENCES by ship index; the arm issues its licences
-// by act (armLicenceRules).
+// run's map (run.map.world): the classic five's schedule is CLASSIC_LICENCES by ship index; on the arm REPAIR's rule is the
+// only one (phase 3 slice 3b, 02 §3.8: every other tool comes from the repository, by request; 3a's interim schedule by
+// act is gone).
 export function licenceSchedule(shipIndex: number, world: RunMapState['world'] = 'classic'): LicenceRule[] {
   const rules: LicenceRule[] = [REPAIR_RULE];
-  if (world !== 'classic') return [...rules, ...armLicenceRules()];
+  if (world !== 'classic') return rules;
   CLASSIC_LICENCES.forEach((licences, index) => {
     if (index > shipIndex) return;
     for (const licence of licences) {
@@ -209,9 +178,14 @@ export function hasWorkingTool(state: Readonly<GameState>, kind: FsToolKind): bo
 // transmission, ARRIVAL CONTROL reissues the licence's files (fresh ids, the licence's sound and the chip sliding in)
 // and says so once the flight starts (data/script.ts 'control-repair-renewed'). A designed rule, like the arrival
 // charge floor: losing Repair still costs the ship where it happened. Returns whether it reissued.
+// Phase 3 slice 3b: the copies this boot's deliveries brought do not count (a Repair.bak the kid asked for is a spare on
+// top, never a reason to cancel the free renewal); the boot calls this at its first 'delivery' line, before the REPAIR v2
+// patch installs (systems/delivery-boot.ts), and again at 'charge', where it is then a no-op.
 export function renewRepairAtBoot(store: Store<GameState>): boolean {
   const state = store.getState();
-  if (state.run.arrival === null || !isLicensed(state, 'repair') || hasWorkingTool(state, 'repair')) return false;
+  if (state.run.arrival === null || !isLicensed(state, 'repair')) return false;
+  const delivered = new Set(state.run.arrival.deliveries.flatMap((delivery) => delivery.segIds));
+  if (hasUsableTool(state.memory.filter((seg) => !delivered.has(seg.id)), 'repair', 'excluded')) return false;
   writeToolFiles(store, 'repair', true);
   store.update((draft) => {
     draft.run.repairRenewedOn = draft.run.shipIndex;

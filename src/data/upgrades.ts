@@ -39,6 +39,9 @@ export interface DraftContext {
   hasRepair: boolean;                                  // a Repair copy is packed (what REPAIR v2 upgrades)
   linkRoom: number;                                    // link blocks the unit's files leave free
   hollowLabel: string;                                 // what the strip calls HOLLOW now (say.ts hollowLabel)
+  // Phase 3 slice 3b: deal only the salvage pool's cards (UpgradeDef.salvage), on the arm. Left out (the classic world,
+  // phase 2's suites): every card, as before.
+  salvageOnly?: boolean;
 }
 
 // A boost: the weight multiplier and the reason, in the kid's own terms.
@@ -54,6 +57,9 @@ export interface UpgradeDef {
   form: UpgradeForm;
   blocks: number;     // the file a 'file' card adds to the packet (link room), else 0
   maxOwned: number;   // Infinity: stackable without limit
+  // In the arm's salvage pool (02 §3.10): REPAIR v2 moved to the repository (its patch, data/repository.ts), so the arm
+  // never deals it; the classic world deals every card. Slice 4 adds `+2 CYCLES` here.
+  salvage: boolean;
   // Whether the card can do anything for this unit now (REPAIR v2 needs a Repair to upgrade); a card that
   // could not is never offered. Every card also needs link room for its file (draftEntries).
   usable?(ctx: DraftContext): boolean;
@@ -92,6 +98,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     form: 'file',
     blocks: FIREWALL_BLOCKS,
     maxOwned: FIREWALL_MAX_OWNED,
+    salvage: true,
     boost: (ctx) => {
       const { driversLost: lost, driversBitten: bitten } = ctx.stats;
       return boostOf(
@@ -108,6 +115,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     form: 'version',
     blocks: 0,
     maxOwned: REPAIR_V2_MAX_OWNED,
+    salvage: false,
     // A unit that crashed before REPAIR was licensed has no Repair file to bump (its licence comes later).
     usable: (ctx) => ctx.hasRepair,
     boost: (ctx) => {
@@ -125,6 +133,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     form: 'core',
     blocks: 0,
     maxOwned: THREAD_PLUS_MAX_OWNED,
+    salvage: true,
     boost: (ctx) => {
       const why = `your THREADS were all busy ${times(ctx.stats.capRefusals)}`;
       return boostOf(
@@ -140,6 +149,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     form: 'charge',
     blocks: 0,
     maxOwned: Infinity,
+    salvage: true,
     boost: (ctx) => {
       const why = `you are down to ${ctx.chargeHeld} REPAIR CHARGE`;
       return boostOf(
@@ -155,6 +165,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     form: 'file',
     blocks: FUEL_TRIM_BLOCKS,
     maxOwned: FUEL_TRIM_MAX_OWNED,
+    salvage: true,
     boost: (ctx) => {
       const last = ctx.lastShip;
       if (last === null) return null;
@@ -209,7 +220,7 @@ export interface DraftEntry {
 
 export function draftEntries(ctx: DraftContext): DraftEntry[] {
   const offerable = (def: UpgradeDef): boolean => ctx.owned[def.id] < def.maxOwned && def.blocks <= ctx.linkRoom
-    && (def.usable?.(ctx) ?? true);
+    && (def.usable?.(ctx) ?? true) && (def.salvage || ctx.salvageOnly !== true);
   return UPGRADES.filter(offerable).map((def) => {
     const boost = def.boost(ctx);
     return { def, weight: DRAFT_BASE_WEIGHT * (boost?.mult ?? 1), why: boost?.why ?? BASE_WHY, boosted: boost !== null };
@@ -250,5 +261,6 @@ function validateUpgrades(): void {
   }
   if (!UPGRADES.some((def) => def.maxOwned === Infinity)) fail('one card must stack without limit, or a late draft could run dry');
   if (UPGRADES.length < DRAFT_CARDS) fail(`the pool has ${UPGRADES.length} cards for a draft of ${DRAFT_CARDS}`);
+  if (!UPGRADES.some((def) => def.salvage && def.maxOwned === Infinity)) fail('the salvage pool needs a card that stacks without limit');
 }
 validateUpgrades();
