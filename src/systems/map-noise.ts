@@ -13,7 +13,7 @@ import {
 
 // The run's noise clouds, rolled at RUN START from systems/map-streams.ts noiseRng(run.seed): a namespace of its own
 // (not childRng(seed, 0, 'noise'), which shares visitRng's key space). Four, three of strength 1 and one of 2, radius
-// 12–18 LY, centres 45–167 LY from SOL along the arm's bend, at most 16 LY to either side, no two centres closer than
+// 8–12 LY, centres 45–167 LY from SOL along the arm's bend, at most 16 LY to either side, no two centres closer than
 // 20 LY (tuning.ts 3a GEN). "Along the arm's bend" is the centre lane (w0, w2, w5, … w19): a centre is the point of that
 // polyline at its SOL distance, pushed sideways along the lane's normal. A draw closer than NOISE_CLOUD_MIN_GAP_LY to a
 // cloud already placed is drawn again (at most NOISE_CLOUD_MAX_DRAWS times, then it throws: fail loudly). Clouds over a

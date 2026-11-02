@@ -1772,12 +1772,18 @@ export const GEN_MAX_ATTEMPTS = 50;
 export const EXTRA_MODIFIERS_MAX_BY_LAYER: readonly number[] = [0, 0, 0, 1, 1, 1, 2, 2, 0];
 // SENSOR DAMAGE (02 §3.5): Sensor Interp arrives at most this (KESTREL's 45: PATH UNCERTAIN on arrival).
 export const SENSOR_DAMAGE_MAX_INTEGRITY = 45;
-// Noise clouds (02 §3.3; slice-3a-plan risk 14): four per run (three of strength 1, one of 2), radius 12–18 LY, centres
+// Noise clouds (02 §3.3; slice-3a-plan risk 14): four per run (three of strength 1, one of 2), radius 8–12 LY, centres
 // 45–167 LY from SOL along the arm's bend and at most 16 LY to either side of it, no two centres closer than 20 LY.
 // Space weather a kid can see and avoid; the one thing rolled fresh each run.
+// WHY 8–12 (the slice-3a review, the lead's call; GEN's lever): at 12–18 LY, measured over 150 arms (every reachable
+// hop, 40 routes an arm; tests/unit/map/generator-stats prints the hop distribution as INFO), only 22% of reachable hops
+// were CLEAN, 18% SEVERE, and 18% of depth-3 hops clean, so seeds rode almost every beam and a kid who left them had TRACE
+// board HOLLOW on 39% of routes: noise was the norm, not a choice. At 8–12:
+// CLEAN 40%, SEVERE 7%, depth-3 hops 36% clean, TRACE boarding 20% under "leave every seed" (still under the ~50% CLEAN
+// past which a cloud would stop being something to route round).
 export const NOISE_CLOUD_STRENGTHS: readonly (1 | 2)[] = [1, 1, 1, 2];
-export const NOISE_CLOUD_R_MIN_LY = 12;
-export const NOISE_CLOUD_R_MAX_LY = 18;
+export const NOISE_CLOUD_R_MIN_LY = 8;
+export const NOISE_CLOUD_R_MAX_LY = 12;
 export const NOISE_CLOUD_SOL_MIN_LY = 45;
 export const NOISE_CLOUD_SOL_MAX_LY = 167;
 export const NOISE_CLOUD_LATERAL_LY = 16;
