@@ -2,6 +2,7 @@
 import type { GameState } from '@state/schema';
 import type { ResumeLine } from '@/types/save';
 import { unitName } from '@systems/say';
+import { launchOf } from '@systems/lineage';
 import { solLy } from '@systems/map-geometry';
 import { END_SLOTS } from '@data/arm';
 import { MAP_TEXT } from '@data/map-text';
@@ -63,14 +64,14 @@ export function resumeLineText(resume: Readonly<ResumeLine>): string {
 // The launch line's parts from run 2 (the map's history: the gap and the valve's years the update rolled, the last unit's
 // number), or null (run 1, the classic world, a run whose last unit the archive no longer names).
 export function titleLaunch(state: Readonly<Pick<GameState, 'run'>>): TitleLaunch | null {
-  const map = state.run.map;
-  const history = map.history;
-  if (map.world !== 'arm' || map.run <= 1 || history.lastUnitNumber === null) return null;
-  const years = history.gap + history.valveYears;
+  const launch = launchOf(state.run);
+  const last = state.run.map.history.lastUnitNumber;
+  if (launch === null || last === null) return null;
+  const years = launch.gap + launch.valveYears;
   let stamp: string;
-  if (history.valveYears > 0) stamp = MAP_TEXT.title.stampValve(years);
+  if (launch.valveYears > 0) stamp = MAP_TEXT.title.stampValve(years);
   else stamp = years === 0 ? MAP_TEXT.title.stampSameYear : MAP_TEXT.title.stamp(years);
-  return { fromYear: map.startYear - years, toYear: map.startYear, years, valveYears: history.valveYears, last: unitName(history.lastUnitNumber), stamp };
+  return { fromYear: launch.startYear - years, toYear: launch.startYear, years, valveYears: launch.valveYears, last: unitName(last), stamp };
 }
 
 export function titleModel(state: Readonly<Pick<GameState, 'run' | 'save'>>, notes: Readonly<TitleNotes> | null): TitleModel {

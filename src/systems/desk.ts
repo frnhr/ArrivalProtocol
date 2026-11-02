@@ -97,6 +97,9 @@ export interface TrailMark {
   colony: string | null;
   passed: boolean;          // the galaxy year has passed its year (the cross: always false)
   label: string;
+  // Drawn offset along the trail (every stop, and a cross on a world: the live ship there keeps its node); a cross past a
+  // world (046's, past Calder) sits where it is.
+  offset: boolean;
 }
 
 // The beacon the last unit set on its first ship's world (05 §3.5; the LANDING REPORT says it on ship 1): a ring round that
@@ -298,21 +301,29 @@ export function chartTrail(run: Readonly<Pick<GameState['run'], 'lastUnit' | 'ma
       kind = 'no-colony';
       label = MAP_TEXT.chart.noColony(unit);
     }
-    return { slot: stop.slot, x: world.x, y: world.y, year: stop.year, kind, ship: stop.shipName, colony, passed, label };
+    return { slot: stop.slot, x: world.x, y: world.y, year: stop.year, kind, ship: stop.shipName, colony, passed, label, offset: true };
   });
   if (trail.lost !== null) {
     const lost = trail.lost;
     const world = WORLDS[lost.slot];
     if (world === undefined) throw new Error(`chartTrail: unit ${trail.unit} was lost at slot ${lost.slot}, which is no world`);
-    // The leg that led there: from the stop before the world it was lost at (046's last colony; the run's own stop before
-    // its last), or from SOL when the trail has none.
-    const before = [...trail.stops].reverse().find((stop) => stop.slot !== lost.slot);
-    const prev = before === undefined ? { x: 0, y: 0 } : WORLDS[before.slot]!;
-    const len = Math.hypot(world.x - prev.x, world.y - prev.y) || 1;
-    marks.push({
-      slot: lost.slot, x: world.x + ((world.x - prev.x) / len) * lost.pastLy, y: world.y + ((world.y - prev.y) / len) * lost.pastLy,
-      year: lost.year, kind: 'lost', ship: null, colony: null, passed: false, label: MAP_TEXT.chart.lostCross(unit),
-    });
+    const cross = { year: lost.year, kind: 'lost' as const, ship: null, colony: null, passed: false, label: MAP_TEXT.chart.lostCross(unit) };
+    const last = marks.at(-1);
+    if (lost.pastLy === 0 && last !== undefined && last.slot === lost.slot) {
+      // A unit lost aboard its last ship (Track WORLD: the cross on that stop's world, 0 LY past it): the cross is that
+      // stop's mark, offset along the trail as every stop's is.
+      marks[marks.length - 1] = { ...last, ...cross };
+    } else {
+      // A cross past a world (046's, past Calder): along the leg that led there, from the stop before the world it was lost
+      // at, or from SOL when the trail has none.
+      const before = [...trail.stops].reverse().find((stop) => stop.slot !== lost.slot);
+      const prev = before === undefined ? { x: 0, y: 0 } : WORLDS[before.slot]!;
+      const len = Math.hypot(world.x - prev.x, world.y - prev.y) || 1;
+      marks.push({
+        slot: lost.slot, x: world.x + ((world.x - prev.x) / len) * lost.pastLy, y: world.y + ((world.y - prev.y) / len) * lost.pastLy,
+        ...cross, offset: lost.pastLy === 0,
+      });
+    }
   }
   // The beacon on the first ship's world (05 §3.5): the trail's stop there reached orbit.
   const first = trail.stops.find((stop) => stop.slot === FIRST_SLOT);
@@ -501,7 +512,7 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   // Slice 3c (02 §4): its history (from run 2), and the last unit's mark at its world (TAKEN, or its colony with its age).
   const history = shipHistory(map, slot, true);
   if (history !== null) row('history', MAP_TEXT.card.historyLabel, history);
-  const mark = chartTrail(state.run)?.marks.find((candidate) => candidate.kind !== 'lost' && candidate.slot === worldSlotOf(map, slot));
+  const mark = chartTrail(state.run)?.marks.find((candidate) => candidate.offset && candidate.slot === worldSlotOf(map, slot));
   if (mark !== undefined) row('trail', MAP_TEXT.card.trailLabel, mark.label, mark.kind === 'colony' ? 'good' : 'plain');
 
   if (isReachable || slot === from) {

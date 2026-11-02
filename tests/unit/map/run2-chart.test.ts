@@ -99,20 +99,24 @@ lost.cause = 'flagship-lost';
 lost.trail!.stops = lost.trail!.stops.slice(0, 5);
 const cormorant = lost.trail!.stops[4]!;
 Object.assign(cormorant, { outcome: 'crashed', landed: 0, colony: null, writer: null });
-lost.trail!.lost = { slot: cormorant.slot, year: cormorant.year, pastLy: 5, cause: 'flagship-lost' };
+// Track WORLD's trailOf: a unit lost aboard a ship has its cross on that ship's world, 0 LY past it.
+lost.trail!.lost = { slot: cormorant.slot, year: cormorant.year, pastLy: 0, cause: 'flagship-lost' };
 const lostTrail = chartTrail(deskAt([0], lost).run);
-const cross = lostTrail?.marks.find((m) => m.kind === 'lost');
+const crosses = lostTrail?.marks.filter((m) => m.kind === 'lost') ?? [];
 const avalon = WORLDS[cormorant.slot]!;
-const vesperWorld = WORLDS[11]!;
-const along = cross === undefined ? NaN : ((cross.x - avalon.x) * (avalon.x - vesperWorld.x) + (cross.y - avalon.y) * (avalon.y - vesperWorld.y))
-  / Math.hypot(avalon.x - vesperWorld.x, avalon.y - vesperWorld.y);
-check('lost at CORMORANT: the grey cross `UNIT-047 WAS LOST HERE` 5 LY past its world, along the leg from VESPER\'s',
-  cross !== undefined && cross.slot === cormorant.slot && cross.label === 'UNIT-047 WAS LOST HERE' && Math.abs(along - 5) < 1e-9,
-  `${cross?.label} ${along}`);
-check('…CORMORANT\'s own stop is TAKEN until 2817, then NO COLONY (it landed nobody)',
-  lostTrail?.marks.find((m) => m.slot === cormorant.slot && m.kind !== 'lost')?.kind === 'taken'
-  && chartTrail({ ...deskAt([0], lost).run, map: { ...deskAt([0], lost).run.map, galaxyYear: 2900 } })?.marks
-    .find((m) => m.slot === cormorant.slot && m.kind !== 'lost')?.label === 'NO COLONY · UNIT-047');
+check('lost at CORMORANT: the grey cross `UNIT-047 WAS LOST HERE` on its world is that stop\'s mark, drawn offset as the stops are',
+  crosses.length === 1 && crosses[0]!.slot === cormorant.slot && crosses[0]!.label === 'UNIT-047 WAS LOST HERE' && crosses[0]!.offset
+  && crosses[0]!.x === avalon.x && crosses[0]!.y === avalon.y && lostTrail?.marks.length === 5
+  && !lostTrail.marks.some((m) => m.slot === cormorant.slot && m.kind !== 'lost'), JSON.stringify(crosses));
+check('…the live ship at that world reads the cross on its card (LAST UNIT), and the cross stays whatever the year',
+  cardModel(deskAt([0], lost), cormorant.slot).rows.find((r) => r.key === 'trail')?.value === 'UNIT-047 WAS LOST HERE'
+  && chartTrail({ ...deskAt([0], lost).run, map: { ...deskAt([0], lost).run.map, galaxyYear: 2900 } })?.marks.at(-1)?.kind === 'lost');
+const past = structuredClone(lost);
+past.trail!.lost = { ...past.trail!.lost!, pastLy: 6 };
+const pastCross = chartTrail(deskAt([0], past).run)?.marks.find((m) => m.kind === 'lost');
+check('…a cross past a world (046\'s kind) is its own mark, not offset, beyond the stop',
+  pastCross !== undefined && !pastCross.offset && (pastCross.x !== avalon.x || pastCross.y !== avalon.y)
+  && chartTrail(deskAt([0], past).run)?.marks.length === 6);
 
 // --- Older colonies (02 §4: faint green dots), and run 1 unchanged ---------------------------------------------------------
 const olderMap = structuredClone(first.run.map);

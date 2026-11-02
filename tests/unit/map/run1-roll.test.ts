@@ -132,7 +132,8 @@ const at = (slots: number[]) => ({ ...map, route: slots.map((slot, i) => ({ slot
 const trailTo = (slot: number): UnitTrail => ({
   unit: 47, run: 1, startYear: 2300,
   stops: [{ slot, shipName: 'CORMORANT', year: 2817, outcome: null, landed: 0, colony: null, writer: null }],
-  lost: null,
+  // Slice 3c: the ghost places itself by the trail's grey cross (lineage.ts ghostPlaceReached).
+  lost: { slot, year: 2817, pastLy: 0, cause: 'flagship-lost' },
 });
 const reached = (slots: number[], lastUnit: { shipName: string; trail: UnitTrail | null }): boolean =>
   ghostPlaceReached({ map: at(slots), shipIndex: slots.length - 1, lastUnit: null }, lastUnit);

@@ -140,7 +140,7 @@ function trailPoints(model: Readonly<ChartModel>, at: ChartGeometry['at']): Trai
   let prev = at(0, 0);
   return marks.map((mark) => {
     const p = at(mark.x, mark.y);
-    if (mark.kind === 'lost') return { px: p.px, py: p.py, ox: p.px, oy: p.py };
+    if (!mark.offset) return { px: p.px, py: p.py, ox: p.px, oy: p.py };
     const dx = prev.px - p.px;
     const dy = prev.py - p.py;
     const len = Math.hypot(dx, dy) || 1;
