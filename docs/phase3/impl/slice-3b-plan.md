@@ -775,3 +775,68 @@ or recorded, so it rides every later hop too and arrives with no licence. Withou
   - pin Repair.bak arriving before REPAIR's first look (REPAIR still comes, `run.licences` gains 'repair' only by the rule);
   - pin two chips of one new kind in one packet (one first of kind, one spare);
   - add a classic boot-plan byte-equality check (the classic world's plans unchanged by 3b).
+
+## Deviations (Track UI)
+
+Track UI's part (§5.2) as built on branch `ui-3b`, against the foundation's stubs (REPO's `repoModel`, `recommendation`,
+`toggleSendOn`, `advanceRequests`, `undeliveredFiles` and `deskWindowOnOpen` were still stubs; every view reads their final
+types and was checked with crafted models and, for the screenshots only, a throwaway `repoModel`).
+
+**The INBOX (`systems/inbox.ts`).**
+1. **§4.3's table holds exactly** on the worked route (21 messages; `map/inbox` pins every boot and stamp), with the
+   follow-up's broadcast rule (sent + solLy at the boot they belong to).
+2. **Postcards carry no age.** The landing record keeps the featured colonists' names only (`PodSummary.featured`), so
+   05 §3.12's `I'm 12 now` is dropped: year 1 is 3 lines, year 50 one line, year 200 two, so all three joined fit the
+   reader's six lines. Joined cards keep a `· · ·` separator while it fits, else drop it. The writer is the first featured
+   colonist of the first pod down in an LZ; year 200's head count is `landedInLz × POSTCARD_PEOPLE_PER_COLONIST_Y200` (20).
+   Ids: `postcard:<slot>:1+50` (the years joined).
+3. **Replies:** one per ended non-final `ShipResult`, whatever its outcome (CONTROL is delighted by everything); the
+   performance word is by stars (★★★ EXCELLENT, ★–★★ ACCEPTABLE, none SUFFICIENT); the stale greeting from
+   `REPLY_STALE_AFTER_SHIPS = 2` ships late (`Dear Unit 46` on run 1).
+4. **No-address mail's RECEIVED** is the hop's leave year plus its distance times the share of the SOL-distance gap up to
+   the ring (`2481` for ring 3 on KESTREL → VESPER, the plan's §4.4 sample). A first ship counts rings from SOL.
+5. **The arm-complete letter's relay** is `19 + (unit − 46)` (046 went to RELAY 19; 047 gets RELAY 20). The welcome always
+   recommends `mv` (02 §3.8's first rule), so it never disagrees with the first desk's tag.
+6. **The memo key** is the route's slots, each ship's slot / depth / landed / stars / colony, the run and the unit, not
+   only the two lengths: crafted test states of equal lengths must not share a result, and it is still a string of a few
+   dozen characters.
+7. `readingLineDue` exports `READING_LINE_AFTER_ENTRY = 5`; the arm only.
+
+**The desk.**
+8. **DELIVERIES row:** a sent-on (waiting) request reads `Swap ✓ RIDES WITH YOU` (new words), and its TIMELINE mark sits at
+   the unit's own arrival (it rides in the packet). The row follows 02 §4's order (after BEAM, before `SHIP n OF YOUR
+   RUN`). Marks are listed under the TIMELINE's text too (`2629 Swap` in red), not appended to it (two marks would pass
+   70 characters).
+9. **Tabs:** desk.ts gains `openDeskWindow`, `toggleRequest` (a second REQUEST, or number key, clears the pick) and
+   `deskTabBadges` (the REPOSITORY's badge names the pick, or `:)` while a file is recommended; the INBOX's is the unread
+   count). R and I toggle their tab back to the card. The tabs show on the classic world too (its REPOSITORY says `NO
+   REPOSITORY ON THE CLASSIC ROUTE`, its INBOX `NO MAIL ON THE CLASSIC ROUTE`). `DeskStep` gains `label` (the strip's short
+   name).
+10. **Phone:** the tab bar is the sheet's handle and always peeks on the arm (32 px) so the REPOSITORY and INBOX are one tap
+    away before a ship is picked; a tab opens the sheet; a desk that opens on a tab (the last-rm prompt) opens the sheet.
+
+**The PACKET, the flight window, the boot, the tally.**
+11. The delivery chips use `TransmitModel.deliveries` as REPO built them (the chip's note repeats the name its head
+    shows: REPO may want `text` without the name). A `toggleSendOn` refusal other than `'no-chip'` buzzes; `'no-chip'`
+    throws. The PACKET paints nothing once its plan is cleared (a debug jump from the PACKET used to throw there).
+12. **The flight INBOX** is `.inbox-win` over the NAV PLOT's column (z-index 3 while open). Its dock item's label reads
+    `INBOX n` while mail is unread (the walk's `INBOX 1`) and pulses from `'inbox-new'` until opened. `src/main.ts` gained
+    one line, `mountInboxWindow(store)` (main.ts is in neither track's list).
+13. **The year roll** rolls only the approach year (the line keeps its length, so the typing is unchanged), on wall time
+    from the moment the line starts typing, with a soft `typeTick` ratchet every `SLEEP_YEAR_TICK_YEARS = 5`; reduced
+    motion shows the true year. The TERMINAL finds the line by reading it back (`map-text.ts sleepLineYears`, pinned
+    against `MAP_TEXT.boot.sleep` in `map/text`), not by a new `LogEntry` field.
+14. **The no-Swap line** reads `NO SWAP ABOARD — fly through each burst, then fix ▼` (the draft's `SPACE ends each
+    burst` is true only of a sticky burst, which has its own line). It is a once-only ghost lesson step on a local
+    `!run.licences.includes('swap')` (no REPO selector yet); the THRUST CTRL pip lesson now waits for SWAP to have
+    reached the unit. The classic world licenses SWAP with the first burst, so its lessons are unchanged.
+15. **NEVER ARRIVED** is a `RunEndModel.undeliveredLine` (null on the classic world), under the colonies line.
+16. **Audio:** `chime` on each `'delivery'` and on `'inbox-new'`.
+
+**Tuning `3b UI` additions:** `POSTCARD_PEOPLE_PER_COLONIST_Y200 = 20`, `REPLY_STALE_AFTER_SHIPS = 2`,
+`SLEEP_YEAR_TICK_YEARS = 5`.
+
+**Requests.** REPO: `repoModel`'s AVAILABLE rows in `REPO_FILE_IDS` order (the number keys index them), `focus` on Rm for
+the last-rm prompt, ETAs from `REPO_TEXT.eta`; a "Swap aboard" selector if the licence reading is not the one wanted;
+`__ap.route` leaves no `ShipResult` for the ships it flies through (only ship 1's mail shows at KESTREL after it). Lead /
+landing owner: the featured colonists' ages in `PodSummary` for the postcards' `I'm 12 now`.

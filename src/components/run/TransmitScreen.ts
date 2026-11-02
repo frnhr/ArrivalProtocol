@@ -568,8 +568,10 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     const key = (event.target as HTMLElement | null)?.closest<HTMLElement>('.tx-delivery')?.dataset.key;
     if (key === undefined || sending || !armed()) return;
     event.stopPropagation();
-    if (toggleSendOn(store, key) !== null) throw new Error(`TransmitScreen: the delivery chip '${key}' on screen is not in the plan`);
-    play('uiClick');
+    // A chip on screen that the plan does not hold is a bug; any other refusal (Track REPO's) is the kid's: a buzz.
+    const refusal = toggleSendOn(store, key);
+    if (refusal === 'no-chip') throw new Error(`TransmitScreen: the delivery chip '${key}' on screen is not in the plan`);
+    play(refusal === null ? 'uiClick' : 'buzz');
   };
   parts.deliveryChips.addEventListener('click', onDeliveryClick);
   const onCardClick = (event: MouseEvent): void => {
