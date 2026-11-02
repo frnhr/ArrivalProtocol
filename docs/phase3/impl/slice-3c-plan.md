@@ -1068,3 +1068,126 @@ CHOSEN (31–118 KB). Its items were applied in `Slice 3c F: review follow-up`. 
     - `checkShape` rejects non-finite numbers outside `endTSec`.
   - **Phase listeners:** audit them for the `title→desk` and `title→report` jumps a resume makes.
 - **UI:** the inbox's memo key must add the trail's unit, cause and stop count, since letters now depend on the last unit.
+
+## Deviations (Track SAVE)
+
+Recorded by the Track SAVE agent (branch `save-3c`). Each is a change from §2–§5 or from the foundation's notes, with its
+reason. Every SAVE note of "Deviations (foundation, review follow-up)" is built; where it is built differently, it is here.
+
+### Archive v2
+
+1. **`META_VERSION` 3; the foundation's archives are migrated, not reset.** `mergeBonus` is gone from `Meta` (risk 3), so
+   the record's shape changed. The key stays `meta/v2`, and `META_MIGRATIONS[2]` steps a version-2 record in place: it
+   drops `mergeBonus`, and an `armSeed` of 0 with no stored arm (the foundation's placeholder, from before the page passed
+   its seed in) becomes null ("the run seed"). Its run in progress then loses its trail, because the trail's slots belong
+   to an arm the archive can't rebuild. The run after that stores its own arm seed with its updated arm. A follow-up-built
+   record keeps its real seed and its trail. `lineageOf().mergeBonus` is always false. `RunLineage.mergeBonus` and
+   `RunState.mergeBonus` stay until slice 7 deletes them.
+2. **`LoadResult.recovered` is now `changed`.** `loadMeta` no longer abandons anything. `changed` means reading changed
+   the record (a migration, a v1 archive found, a content reset), and `openRunArchive` writes it back at once.
+3. **The abandon is explicit and runs the world update.** The pure half is `recordAbandon(meta, nextArm)`,
+   `abandonUpdate(meta)` and `abandonVisits(trail)`. The live half is `abandonActiveRun(store | null)` (null at the page's
+   open, before the store exists). `abandonUpdate` rebuilds the arm the run played through `createRunMap` from the lineage
+   before its end (`meta.arm`, else run 1's assembled arm or a fresh roll from `armSeed`, so it follows WORLD's rule
+   whatever that becomes). It takes the visits from `activeRun.trail`, and returns null when the run can't be placed: no
+   trail (the classic world, a content reset, a migrated foundation record), no arm seed, or a trail of another run.
+4. **An abandoned run records no notable events.** The archive has only its trail, not its RunState. Its colonies and
+   route are recorded.
+5. **`RunEnd` gains `nextArm?` and `events?`** (left out: keep the stored arm, no events), so the suites' lineage-only
+   records still build. Run end and abandon share `recordUnitEnd`: colonies capped at the newest
+   `COLONY_HISTORY_MAX_PER_WORLD` per world, the last `ROUTE_HISTORY_RUNS` routes, at most `NOTABLE_EVENTS_MAX` events. The
+   stored arm's seed becomes `meta.armSeed`.
+6. **The content reset happens in the parse** (`readMeta`). The arm's head and its `content` are read first. On a
+   mismatch the ships and departures are never read or validated, and the arm becomes
+   `freshArmState(prev.armSeed, runs + 1, prev.startYear, prev)`, where `prev` is the old head with empty ships and
+   departures: the serial and the last final carry over. A failure to roll is CORRUPT. With matching content, every ship
+   goes through `checkArmShip` (shared with the save, in the new `systems/save-shape.ts`) and then
+   `validateShipDef(shipDefOf(…))`. A stored arm reads back byte for byte, in `ArmState`'s key order.
+7. **`archiveRunEnded` runs the update even headless and sets `run.next`**, with `unit = run.unitNumber + 1`. The save is
+   cleared by `endRun`, right after it: `save-write.ts` imports `meta.ts`, so `meta.ts` can't call it.
+
+### The run save
+
+8. **`writeRunSave` also needs the archive to be `ok`.** A save is resumed only when the archive's run in progress is its
+   run, so one written while the archive is corrupt, played without or offline could never be resumed.
+9. **Session additions.** These are `pendingRunSave()`, `takePendingRunSave()`, `runSaveSessionStatus()` and
+   `clearRunSave(store?)`. The store parameter lets a remove that throws go OFFLINE in the store too. Each refusal's detail
+   goes to `console.error` only.
+10. **ENDING CHOSEN is `writeEndingChosen(store, flushOwed)` in `save-write.ts`.** `landing.ts finishLanding` calls it when
+    `landing.finalShip` is set, and it does nothing on the classic world or with an undecided finale. In order: `abortAll()`,
+    a throw if any free block is still `reservedBy`, then `finale.ts sayOwedVerdict()` (CONTROL's owed verdict is said now,
+    so the saved log has it), then the save. The clock is not touched. The decoder also refuses ENDING CHOSEN off the final
+    ship or with an undecided finale.
+11. **The page's open sequence lives in `run-save.ts`** (`openPageStorage`, `pageTitleState`) so the suites run it, and
+    `state/instance.ts` calls it. It also abandons the run in progress when the save storage is **offline**, not only when
+    no save exists, because such a run can't be resumed either.
+12. **`abandonRun(store, seed?)` abandons the archive's run in progress whenever there is one.** A stale save whose run
+    already ended only clears. When the stale save is another tab's run, the archive's run in progress belongs to the tab
+    that wrote last, and that run is the one abandoned (the last write wins, documented in `save-write.ts`). The store's
+    save status goes back to the session's (`ok`), so the next run saves.
+13. **Resume.**
+    - A boot payload restores the saved log as it is, with no extra divider: BEAM's log already ends with the ship's own
+      divider, and RUN START's is the title's.
+    - A world payload resumes in **`ui.mode = 'tools'`**. In Chromium the resumed desk had the title's blue header until
+      then; a played desk is amber.
+    - The clock stays as saved.
+    - A throw puts the title state back, sets CAN'T RESUME `resume-threw` and drops the pending save.
+14. **The audio unlock** moved from `receiveTransmission` into `startBootFromTitle`. `boot.ts unlockAudioFromGesture()`
+    calls the page's hook, and `resumeWorld` calls it too.
+15. **`checkShape`.**
+    - The saved RunState is checked field by field (`save-shape.ts` checkers). So are the map, every ArmShip, the route, the
+      history, the ships, the stats, the repo, the inbox and `next`.
+    - `beamOut`, `transit` and `endCause` must be null at a save point.
+    - The slices, the threat memory, the run log and the beam's verdict use `likeReference`: exactly the keys of a freshly
+      built one, and each primitive field of the same type or null. So a field a slice adds never makes the check go
+      stale; it is a version bump plus a migration step. Memory segments are checked for id, name, type and size only;
+      `assertMemoryInvariants` on resume does the rest.
+    - Non-finite numbers are refused anywhere but `endTSec`.
+    - Cross-checks: `unit`, `run` and the resume line's unit, depth and year against the run.
+    - After the ship check: the resume line's ship and the slices' ship against the current ship, the ships ended per
+      point, and each result on its route stop.
+
+### Debug and suites
+
+16. **Debug.** `__ap.resume()` and `__ap.abandon()` are added (the title's RESUME block is Track UI's). `__ap.newRun` goes
+    through `abandonRun`. In `__ap.archiveAs(cause, landed?)`, `landed` caps each ship's landing (default: all its pods);
+    a colony is named from its landing def, else its world. A lost cause ends on LAST LIGHT; `abandoned` ends while still
+    on it.
+17. **Suites changed for risk 3 and the explicit abandon.**
+    - `wp11/merge-test`: the run after a MERGE has no bonus, and the archive keeps no `mergeBonus`.
+    - `wp8/meta`, `wp8/run-flow`, `wp8/fix1/fixes`, `map/run1-roll`: the page's load calls `abandonActiveRun`, or
+      `recordAbandon`.
+18. **Phase listeners audited** for `title → desk`, `title → report` and `title → boot`.
+    - DeskScreen, LandingReport, FinaleChoice, RunEnd and TransmitScreen are driven by state.
+    - The director's `phaseEntered` beats all key on `flight`.
+    - Boot's modal follows the phase.
+    - Only TitleCard reads the previous phase: a resumed BEAM boot gets its `receiving` class (the beam drawn from SOL).
+      This is cosmetic, and left to UI (below).
+
+    Nothing needed a change.
+19. **The failure table** follows §2.1. A corrupt save, another version or another content version is CAN'T RESUME; only
+    storage that can't be reached or read, and a write, clear or build that throws, are OFFLINE.
+
+### Save sizes
+
+These are JSON bytes.
+- Store-level, on the worked route with no flights (`save/codec`, small logs): RUN START 18 KB, SHIP DONE 29–53 KB, BEAM
+  23–38 KB, ENDING CHOSEN 58 KB.
+- Played in Chromium, ARES-VII and HALCYON flown: first desk 31 KB, second desk 39 KB, BEAM into KESTREL 32 KB.
+
+All are far under `SAVE_SIZE_INFO_BYTES` (400 KB).
+
+### Requests to the other tracks
+
+- **UI:**
+  - the title's RESUME block calls `resumeRun(store)`; [NEW RUN] (after its confirm) and [ABANDON RUN] call
+    `abandonRun(store)`;
+  - CAN'T RESUME reads `save.refusal.kind`;
+  - the TERMINAL line and buzz for `'save-lost'` need a `script.ts` rule beside `archive-lost` with
+    `MAP_TEXT.save.offline` (nothing listens to it yet), and the footer's NO SAVE goes on `save.status === 'offline'`;
+  - optional: skip TitleCard's `receiving` class when a resumed boot is past ship 1.
+- **WORLD:**
+  - none required;
+  - `notableEvents` is still the stub, so archives record `[]` until it lands;
+  - note that a run started with `__ap.runNumber(n)` stores an arm for run `n + 1` at its end, which a strict
+    `createRunMap` run-equals-wave assertion will refuse on the next page (debug only).
