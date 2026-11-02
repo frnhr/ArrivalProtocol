@@ -122,8 +122,10 @@ export const REPO_TEXT = {
     // The gate (plan §1.1 item 8): files, deliveries and the floor over the room or the link.
     overWithDeliveries: (blocksOver: number): string => `${blocks(blocksOver)} TOO MANY · LEAVE FILES OR SEND ON`,
   },
-  // The strip's ghost-thrust line when no Swap is aboard (plan risk 1: VESPER flown without SWAP on the worked route).
-  noSwap: 'NO SWAP ABOARD — SPACE ends each burst',
+  // The strip's ghost-thrust line when no Swap is aboard (plan risk 1: VESPER flown without SWAP on the worked route). The
+  // plan's draft said `SPACE ends each burst`, true only of a sticky one (which has its own line); a burst ends by itself, so
+  // the advice is to fly through it and fix ▼ after.
+  noSwap: 'NO SWAP ABOARD — fly through each burst, then fix ▼',
 
   // --- The boot (02 §4 step 6; plan §1.1 item 12) ------------------------------------------------------------------------
   boot: {

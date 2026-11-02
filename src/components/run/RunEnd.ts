@@ -67,6 +67,7 @@ interface TallyParts {
   chart: HTMLElement;
   svg: SVGSVGElement;
   colonies: HTMLElement;
+  undelivered: HTMLElement;
 }
 
 function buildTally(shipsEl: HTMLElement): TallyParts {
@@ -79,11 +80,13 @@ function buildTally(shipsEl: HTMLElement): TallyParts {
   svg.setAttribute('class', 'star-chart mini');
   chart.appendChild(svg);
   const colonies = make('div', 're-tally-colonies');
-  side.append(make('div', 're-tally-route', MAP_TEXT.tally.route), chart, colonies);
+  // Slice 3b: the files that never arrived (02 §3.9), under the colonies.
+  const undelivered = make('div', 're-tally-undelivered');
+  side.append(make('div', 're-tally-route', MAP_TEXT.tally.route), chart, colonies, undelivered);
   const list = make('div', 're-tally-list');
   list.append(title, shipsEl);
   tally.append(list, side);
-  return { title, chart, svg, colonies };
+  return { title, chart, svg, colonies, undelivered };
 }
 
 export function mountRunEnd(store: Store<GameState>): () => void {
@@ -201,6 +204,8 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     shipsEl.replaceChildren(...report.ships.map(shipRowNode));
     tally.title.textContent = report.tallyTitle;
     tally.colonies.textContent = report.coloniesLine;
+    tally.undelivered.hidden = report.undeliveredLine === null;
+    tally.undelivered.textContent = report.undeliveredLine ?? '';
     // The route's mini chart is drawn once the screen shows (show(): its size is the CSS box's, and a hidden box has none:
     // drawn here, under a BEAM OUT's delayed show, it was often empty; the e2e run), and again on a resize.
     tally.svg.replaceChildren();

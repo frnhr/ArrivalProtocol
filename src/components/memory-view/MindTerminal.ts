@@ -9,7 +9,10 @@ import { formatTac } from '@systems/guidance';
 import { liveVerbText } from '@systems/flight-hud';
 import { verbSecondsLeft } from '@state/selectors';
 import { createTypeQueue } from '@components/hud/typewriter';
-import { TERMINAL_VISIBLE_LINES, LOG_VIEW_KEEP_ROWS, CHOICE_URGENT_SEC, VERB_TELEGRAPH_TYPE_CPS } from '@data/tuning';
+import { sleepLineYears } from '@data/map-text';
+import {
+  TERMINAL_VISIBLE_LINES, LOG_VIEW_KEEP_ROWS, CHOICE_URGENT_SEC, VERB_TELEGRAPH_TYPE_CPS, SLEEP_YEAR_ROLL_MS, SLEEP_YEAR_TICK_YEARS,
+} from '@data/tuning';
 
 // The TERMINAL (§6.3, §7.1): the mind's own voice, a 4-line pane inside the blue screen, just
 // above the filesystem chips. Boot and ECC lines, command echoes (accent) and HOLLOW (pink, its
@@ -33,6 +36,10 @@ import { TERMINAL_VISIBLE_LINES, LOG_VIEW_KEEP_ROWS, CHOICE_URGENT_SEC, VERB_TEL
 // bar draining under it and the line pulsing each second; once the verb has ended (BLOCKED, landed, failed, called off)
 // the line greys out where it stands and the outcome types under it: BLOCKED in the good green, a landed verb in the
 // warning red (the line's tone).
+// Phase 3 slice 3b (02-map §4 step 2): the boot's sleep line (`> ASLEEP IN KESTREL'S RECEIVER · 2378 → 2467 · 89 YEARS`)
+// rolls its approach year up from the arrival year as it types, over SLEEP_YEAR_ROLL_MS of wall time, with a soft tick
+// ratchet every SLEEP_YEAR_TICK_YEARS: the years are felt, not just read. The line keeps its length (the year keeps its
+// digits), so the typing is the same; a line shown at once (a catch-up, reduced motion) shows its true year.
 
 interface ChoiceButton {
   option: string;
@@ -238,6 +245,24 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
     while (linesEl.childElementCount > LOG_VIEW_KEEP_ROWS) linesEl.firstElementChild?.remove();
 
     const hollow = entry.speaker === 'hollow' || entry.speaker === 'hollow-cmd';
+    // 3b: the sleep line's year roll (wall time from the moment it starts typing).
+    const roll = entry.speaker === 'mind-sys' && !store.getState().ui.reducedMotion ? sleepLineYears(entry.text) : null;
+    let rollFromMs: number | null = null;
+    let rollTick = -1;
+    const rolledText = (): string => {
+      if (roll === null || rollFromMs === null) return entry.text;
+      const share = Math.min(1, (performance.now() - rollFromMs) / SLEEP_YEAR_ROLL_MS);
+      const year = Math.round(roll.arrive + (roll.approach - roll.arrive) * share);
+      const tick = Math.floor((year - roll.arrive) / SLEEP_YEAR_TICK_YEARS);
+      if (share < 1 && tick !== rollTick) { rollTick = tick; play('typeTick', { voice: 'strip' }); }
+      const digits = String(roll.approach).length;
+      return entry.text.slice(0, roll.at) + String(year).padStart(digits, '0') + entry.text.slice(roll.at + digits);
+    };
+    const rollOn = (): void => {
+      if (roll === null || rollFromMs === null || !row.isConnected) return;
+      text.textContent = rolledText();
+      if (performance.now() - rollFromMs < SLEEP_YEAR_ROLL_MS) requestAnimationFrame(rollOn);
+    };
     const reveal = (): void => {
       row.hidden = false;
       scrollToEnd();
@@ -245,7 +270,10 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
     queue.push({
       length: entry.text.length,
       cps: verb !== null ? VERB_TELEGRAPH_TYPE_CPS : lineTypeCps(entry.speaker),
-      onStart: reveal,
+      onStart: () => {
+        if (roll !== null) rollFromMs = performance.now();
+        reveal();
+      },
       onUnit: (index) => {
         if (entry.text[index] === ' ') return;
         play('typeTick', { voice: hollow ? 'hollow' : 'sys' });
@@ -254,7 +282,9 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
         if (row.hidden) reveal();
         // A live verb types its number as it is now (the same length: one digit), then counts on per tick.
         const live = verb !== null && verbRow === verb ? liveVerbText(store.getState()) : null;
-        text.textContent = (live ?? entry.text).slice(0, count);
+        text.textContent = (live ?? rolledText()).slice(0, count);
+        // Typed before its roll is over: the year rolls on in place to its end.
+        if (done && rollFromMs !== null) requestAnimationFrame(rollOn);
         row.classList.toggle('typing', !done);
         if (done && view) showChoice(view);
         if (done && verb !== null) verb.typed = true;

@@ -6,6 +6,9 @@ import { shownFuelPct } from '@systems/flight-hud';
 import { classicRunMap, shipSummaryAt } from '@systems/map-run';
 import type { RunMapState } from '@/types/map';
 import { MAP_TEXT } from '@data/map-text';
+import { undeliveredFiles } from '@systems/repository';
+import { REPO_FILES } from '@data/repository';
+import { REPO_TEXT } from '@data/repo-text';
 import { RUN_END_TITLE, RUN_END_WHY, RUN_END_PURGE_SHORT, RUN_END_NOBODY_LANDED, SHIP_OUTCOME_WORD } from '@data/script';
 import { RUN_END_TEXT } from '@data/landing-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
@@ -69,6 +72,9 @@ export interface RunEndModel {
   route: number[];
   colonies: number;
   coloniesLine: string;
+  // Slice 3b (02 §3.9, §4): the files the repository sent that never reached the unit (`NEVER ARRIVED: Swap, Cp` or `—`);
+  // null on the classic world, which has no repository.
+  undeliveredLine: string | null;
 }
 
 // RUN END's mood (the lead's item 2 for WP11): a function of how the run ended. Only a won finale (PURGE or MERGE) is
@@ -208,6 +214,7 @@ export function runEndModel(state: Readonly<GameState>): RunEndModel {
     route: run.map.route.map((stop) => stop.slot),
     colonies,
     coloniesLine: MAP_TEXT.tally.colonies(colonies),
+    undeliveredLine: run.map.world === 'arm' ? REPO_TEXT.tally.neverArrived(undeliveredFiles(run).map((request) => REPO_FILES[request.file].name)) : null,
   };
 }
 

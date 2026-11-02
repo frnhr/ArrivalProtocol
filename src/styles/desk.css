@@ -369,6 +369,9 @@ body.reduced-motion .title-card.booting.receiving .title-chart { animation: none
 .star-chart.mini .cn-beacon { animation: none; opacity: 0.5; }
 .re-tally-colonies { font-family: 'VT323', monospace; font-size: 24px; letter-spacing: 0.12em; color: var(--soul); text-shadow: 0 0 12px var(--soul-dim); text-align: left; }
 .run-end.tone-sombre .re-tally-colonies { color: var(--report-text); text-shadow: none; }
+/* Slice 3b: the files the repository sent that never reached the unit (`NEVER ARRIVED: Swap` or `—`). */
+.re-tally-undelivered { font-size: 11px; letter-spacing: 0.14em; color: var(--report-dim); text-align: left; }
+.re-tally-undelivered[hidden] { display: none; }
 @media (max-width: 768px) {
   .re-tally { grid-template-columns: minmax(0, 1fr); }
   .re-tally-chart { height: 160px; }

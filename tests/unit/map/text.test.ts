@@ -1,7 +1,15 @@
 // Slice 3a F2: every galaxy-map line (data/map-text.ts, PLACEHOLDER(05)) rendered with the longest names and numbers the
 // arm can give fits one row of the strip (MAX_LINE_CHARS, 70). The never-say words are tests/unit/support/words.test.ts's.
+// Slice 3b (Track UI): every repo-text and inbox-text line too, message bodies at most INBOX_BODY_MAX_LINES lines, and the
+// sleep line's years read back for the TERMINAL's year roll.
 import { check, finish } from '../landing/checks';
-import { MAP_TEXT, MODIFIER_LABEL, NOISE_WORD } from '@data/map-text';
+import { MAP_TEXT, MODIFIER_LABEL, NOISE_WORD, sleepLineYears } from '@data/map-text';
+import { REPO_TEXT, REPO_FILE_TEXT, RESTRICTED_WHY } from '@data/repo-text';
+import { INBOX_TEXT, firstNameOf, familyOf } from '@data/inbox-text';
+import { REPO_FILES, RESTRICTED_ROWS } from '@data/repository';
+import { FAMILY_POOL, FIRST_NAME_POOL } from '@data/souls';
+import { COLONY_NAMES, WRITTEN_COLONY_NAMES } from '@data/ship-names';
+import { INBOX_BODY_MAX_LINES } from '@data/tuning';
 import { GENERATED_SHIP_NAMES, AUTHORED_SHIP_NAMES, FINAL_SHIP_NAMES } from '@data/ship-names';
 import { WORLDS } from '@data/arm';
 import { MAX_LINE_CHARS } from '@data/tuning';
@@ -83,6 +91,92 @@ const lines: [string, string][] = [
   ['tally.row', MAP_TEXT.tally.row(8, SHIP, YEAR, C, C)],
   ['tally.colonies', MAP_TEXT.tally.colonies(8)],
 ];
+// --- Slice 3b (Track UI): every repo-text and inbox-text line at its worst case -----------------------------------------
+const FILE = longest(Object.values(REPO_FILES).map((file) => file.name));
+const BOOT = longest(Object.values(REPO_FILE_TEXT).map((text) => text.boot));
+const EFFECT = longest(Object.values(REPO_FILE_TEXT).map((text) => text.effect));
+const FIRST = longest(FIRST_NAME_POOL);
+const FAMILY = longest(FAMILY_POOL);
+const COLONY = longest([...COLONY_NAMES, ...WRITTEN_COLONY_NAMES, `${FAMILY.toUpperCase()} LANDING`]);
+const BIG = 999999;    // people in a colony at year 200 (3,200 landed × the growth, with room)
+lines.push(
+  ['repo.row', REPO_TEXT.row(FILE, 99, EFFECT)],
+  ['repo.eta.inTime', REPO_TEXT.eta.inTime(YEAR, SHIP, YEAR)],
+  ['repo.eta.late', REPO_TEXT.eta.late(SLACK, 8)],
+  ['repo.eta.never', REPO_TEXT.eta.never],
+  ['repo.transit.behind', REPO_TEXT.transit.behind(FILE, SLACK)],
+  ['repo.transit.waiting', REPO_TEXT.transit.waiting(FILE, SHIP)],
+  ['repo.transit.catchesUp', REPO_TEXT.transit.catchesUp(FILE, SHIP)],
+  ['repo.card.late', REPO_TEXT.card.late(FILE, SLACK)],
+  ['repo.card.catchesUp', REPO_TEXT.card.catchesUp(FILE)],
+  ['repo.card.inTime', REPO_TEXT.card.inTime(FILE)],
+  ['repo.card.ridesWithYou', REPO_TEXT.card.ridesWithYou(FILE)],
+  ['repo.card.mark', REPO_TEXT.card.mark(YEAR, FILE)],
+  ['repo.desk.request', REPO_TEXT.desk.request(BOOT)],
+  ['repo.desk.requestAny', REPO_TEXT.desk.requestAny],
+  ['repo.desk.requested', REPO_TEXT.desk.requested(BOOT)],
+  ['repo.packet.chip', REPO_TEXT.packet.chip(FILE, 99, YEAR)],
+  ['repo.packet.lostAfter', REPO_TEXT.packet.lostAfter(SHIP)],
+  ['repo.packet.sentOn', REPO_TEXT.packet.sentOn],
+  ['repo.packet.inTransit', REPO_TEXT.packet.inTransit(FILE, SLACK)],
+  ['repo.packet.inTransitMore', REPO_TEXT.packet.inTransitMore(99)],
+  ['repo.packet.salvage', REPO_TEXT.packet.salvage],
+  ['repo.packet.overWithDeliveries', REPO_TEXT.packet.overWithDeliveries(199)],
+  ['repo.noSwap', REPO_TEXT.noSwap],
+  ['repo.boot.delivery', REPO_TEXT.boot.delivery(BOOT, YEAR)],
+  ['repo.boot.patch', REPO_TEXT.boot.patch(BOOT, YEAR)],
+  ['repo.boot.folded', REPO_TEXT.boot.folded([BOOT, BOOT, BOOT, BOOT, BOOT], YEAR, YEAR + 1)],
+  ['repo.tally.neverArrived', REPO_TEXT.tally.neverArrived([FILE, FILE, FILE, FILE, FILE])],
+  ...Object.entries(REPO_TEXT.window).map(([key, text]): [string, string] => [`repo.window.${key}`, text]),
+  ...Object.entries(REPO_FILE_TEXT).flatMap(([id, text]): [string, string][] => [[`repo.file.${id}.effect`, text.effect]]),
+  ...Object.values(RESTRICTED_WHY).map((why): [string, string] => ['repo.restricted.why', why]),
+  ...RESTRICTED_ROWS.map((row): [string, string] => [`repo.restricted.${row.id}`, `${REPO_TEXT.window.locked} ${row.name} ${row.why}`]),
+  ['inbox.badge', INBOX_TEXT.window.badge(99)],
+  ['inbox.stamps', INBOX_TEXT.window.stamps(YEAR, YEAR)],
+  ['inbox.stamps ????', INBOX_TEXT.window.stamps(null, YEAR)],
+  ['inbox.forUnit', INBOX_TEXT.window.forUnit(999)],
+  ['inbox.from.colony', INBOX_TEXT.from.colony(COLONY, WORLD)],
+  ['inbox.boot.newMessages', INBOX_TEXT.boot.newMessages(99)],
+  ['inbox.boot.reading', INBOX_TEXT.boot.reading],
+  ['inbox.welcome.subject', INBOX_TEXT.welcome.subject(999)],
+  ['inbox.reply.subject', INBOX_TEXT.reply.subject(SHIP)],
+  ['inbox.letter.subject', INBOX_TEXT.letter.subject(999)],
+);
+// A message body: at most INBOX_BODY_MAX_LINES lines, each one strip row.
+const bodies: [string, string[]][] = [
+  // The welcome always recommends mv (02 §3.8's first rule: systems/inbox.ts WELCOME_RECOMMENDS).
+  ['welcome', INBOX_TEXT.welcome.body(20, REPO_FILE_TEXT.mv.boot)],
+  ...INBOX_TEXT.policy.map((policy, i): [string, string[]] => [`policy ${i}`, policy.body(999)]),
+  ['armComplete', INBOX_TEXT.armComplete.body(999)],
+  ['reply', INBOX_TEXT.reply.body(999, BIG, INBOX_TEXT.reply.performance.good)],
+  ['postcard y1', INBOX_TEXT.postcard.year1.body(FIRST, FAMILY)],
+  ['postcard y50', INBOX_TEXT.postcard.year50.body(FIRST)],
+  ['postcard y200', INBOX_TEXT.postcard.year200.body(COLONY, FIRST, BIG)],
+  ['meridian', [...INBOX_TEXT.letter.meridian]],
+  ...INBOX_TEXT.noAddress.map((mail, i): [string, string[]] => [`noAddress ${i}`, [...mail.body]]),
+];
+for (const [key, body] of bodies) body.forEach((line, i) => lines.push([`inbox.body.${key}.${i}`, line]));
+lines.push(...INBOX_TEXT.policy.map((policy, i): [string, string] => [`inbox.policy.${i}.subject`, policy.subject]));
+lines.push(...INBOX_TEXT.noAddress.map((mail, i): [string, string] => [`inbox.noAddress.${i}.subject`, mail.subject]));
+const tall = bodies.filter(([, body]) => body.length > INBOX_BODY_MAX_LINES);
+check(`every message body has at most ${INBOX_BODY_MAX_LINES} lines`, tall.length === 0, tall.map(([key, body]) => `${key} ${body.length}`).join(' | '));
+check('the three postcards joined still fit the reader (3 + 1 + 2 lines)',
+  INBOX_TEXT.postcard.year1.body(FIRST, FAMILY).length + INBOX_TEXT.postcard.year50.body(FIRST).length
+  + INBOX_TEXT.postcard.year200.body(COLONY, FIRST, BIG).length <= INBOX_BODY_MAX_LINES);
+check('a record `Okafor, Ada` signs as Ada Okafor', firstNameOf('Okafor, Ada') === 'Ada' && familyOf('Okafor, Ada') === 'Okafor');
+check("05 §3.12's stamps and samples: `SENT 2522 · RECEIVED 2651`, `SENT ???? · RECEIVED 2481`, `> 3 NEW MESSAGES · INBOX`",
+  INBOX_TEXT.window.stamps(2522, 2651) === 'SENT 2522 · RECEIVED 2651' && INBOX_TEXT.window.stamps(null, 2481) === 'SENT ???? · RECEIVED 2481'
+  && INBOX_TEXT.boot.newMessages(3) === '> 3 NEW MESSAGES · INBOX' && INBOX_TEXT.boot.newMessages(1) === '> 1 NEW MESSAGE · INBOX');
+check('02 §4\'s samples: `Swap ✗ 4 YRS LATE`, `> DELIVERY: mv (arrived 2337)`, `Mv · 2 BLOCKS · MOVE`',
+  REPO_TEXT.card.late('Swap', 4) === 'Swap ✗ 4 YRS LATE' && REPO_TEXT.boot.delivery('mv', 2337) === '> DELIVERY: mv (arrived 2337)'
+  && REPO_TEXT.row('Mv', 2, 'MOVE') === 'Mv · 2 BLOCKS · MOVE' && REPO_TEXT.packet.chip('Rm', 1, 2436) === 'Rm · 1 BLOCK · ARRIVED 2436');
+// The TERMINAL reads the sleep line's years back from MAP_TEXT.boot.sleep's words (the year roll): the two agree.
+const sleep = MAP_TEXT.boot.sleep(SHIP, 2378, 2467);
+const years = sleepLineYears(sleep);
+check('the sleep line\'s years read back for the roll (the approach year where it sits)', years !== null && years.arrive === 2378
+  && years.approach === 2467 && sleep.slice(years.at, years.at + 4) === '2467' && sleepLineYears('> ECC: 3 TRANSIT HITS') === null,
+  JSON.stringify(years));
+
 const long = lines.filter(([, text]) => text.length > MAX_LINE_CHARS);
 check(`every map line fits ${MAX_LINE_CHARS} characters with the longest names (${SHIP}, ${WORLD})`, long.length === 0,
   long.map(([key, text]) => `${key} (${text.length}): ${text}`).join(' | '));

@@ -1905,3 +1905,6 @@ export const POSTCARD_PEOPLE_PER_COLONIST_Y200 = 20;
 // A reply read this many ships or more after the ship it answers greets the unit before you (05 §3.4's running joke,
 // made deterministic: `Dear Unit 46` on run 1). One ship later is the norm near Earth; two is CONTROL falling behind.
 export const REPLY_STALE_AFTER_SHIPS = 2;
+// The sleep line's year roll (SLEEP_YEAR_ROLL_MS, 02 §4 step 2) ticks a soft ratchet once per this many years: a hop's
+// 20–160 years read as 4–30 ticks over the 1.5 s, a ratchet and never a buzz.
+export const SLEEP_YEAR_TICK_YEARS = 5;
