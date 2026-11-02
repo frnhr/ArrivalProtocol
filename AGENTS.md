@@ -89,6 +89,11 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
   hops (link, hits, ECC, noise), memory classes FULL / COMPACT / TIGHT, the DESK (STAR CHART, SHIP CARD, SET COURSE)
   between ships, the PACKET's room bar and the RUN TALLY. The old five ships survive as a frozen test fixture
   (`src/data/classic-five.ts`, `__ap.ship(n)`); `__ap.route`, `__ap.slot` and `__ap.course` drive the arm.
+- The repository and the INBOX (slice 3b): one request per beam from ARRIVAL CONTROL's repository (tools, spares, the
+  REPAIR v2 patch); requests travel by light, so far out they trail the unit or never arrive (`src/systems/
+  delivery-rule.ts`); deliveries ride the packet as chips (SEND ON), can carry seeds, and are the only source of tools
+  besides REPAIR's first look. The INBOX (desk tab and flight window) holds CONTROL's replies, colony postcards and
+  046's mail, all derived from the route. An ENGINE FAULT ship without Swap limps, and REPAIR calms Thrust Ctrl.
 - A full run (phase 2's, now the classic fixture): five ships (ARES-VII, HALCYON, KESTREL, VESPER, LAST LIGHT), each
   with its own rule, TRANSMIT between
   them (a link budget, transit damage, one card of three to carry), soft fails instead of reloads, RUN END with score,
@@ -121,8 +126,8 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 
 1. **Fran's playtest**: one full run by `docs/playtest-checklist.md`.
 2. **Phase 3** (`docs/PHASE3.md`, specs in `docs/phase3/`): landing, the calm opening and the galaxy map (slices 1a, 1b, 2
-   and 3a built; plans and deviations in `docs/phase3/impl/`), then 3b (the repository, deliveries, the INBOX), 3c (the
-   save, archive v2, the arm carried between runs), the skill tree, residents, SURVEY, new endings.
+   and 3a built; plans and deviations in `docs/phase3/impl/`), 3b (the repository, deliveries, the INBOX) also built; then
+   3c (the save, archive v2, the arm carried between runs), the skill tree, residents, SURVEY, new endings.
 3. **The refactors parked until after the playtest** (discuss the split before writing code): `src/data/script.ts`
    into its text and its director rules, `src/styles/game.css` by surface, `tuning.ts` and `script.ts` grouped by
    domain.
