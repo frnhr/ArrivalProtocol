@@ -8,6 +8,8 @@
 //   two hours on four cores).
 // • UNIT_WORKERS: parallel suites (default: the machine's cores). A filter keeps only the suites whose path contains
 //   one of the given substrings, a `-substring` filter drops the ones that contain it (the tsc pass always runs).
+// • A suite whose first lines carry the marker `// BALANCE_ONLY: <why>` runs only at full depth (`npm run balance`): the
+//   quick run lists it as SKIP (slice 3b review: long sentinels whose coverage other quick suites keep).
 // Per-suite wall times are kept in tests/.out/unit-timings.json and order the next run (longest first), so one slow
 // suite does not start last and hold the whole run; entries for suites that no longer exist are dropped.
 import { spawn } from 'node:child_process';
@@ -49,6 +51,10 @@ try { timings = JSON.parse(readFileSync(TIMINGS, 'utf8')); } catch { /* first ru
 const ALL_LABELS = new Set(['tsc-tests', ...suites(join(ROOT, 'tests', 'unit'))]);
 const known = Object.fromEntries(Object.entries(timings[DEPTH] ?? {}).filter(([label]) => ALL_LABELS.has(label)));
 
+// The BALANCE_ONLY marker, looked for in a suite's first 40 lines (its header comment).
+const balanceOnly = (file) => readFileSync(join(ROOT, file), 'utf8').split('\n').slice(0, 40).some((line) => /^\/\/ BALANCE_ONLY:/.test(line));
+const skipped = [];
+
 const jobs = [
   // Incremental (its build info in the ignored tests/.out): a re-run re-checks only what changed (slice 3a's review fixes, the
   // tier's budget: about 20 s of one core on a tree that did not change).
@@ -56,6 +62,11 @@ const jobs = [
   ...suites(join(ROOT, 'tests', 'unit'))
     .filter((file) => includes.length === 0 || includes.some((filter) => file.includes(filter)))
     .filter((file) => !excludes.some((filter) => file.includes(filter)))
+    .filter((file) => {
+      if (!QUICK || !balanceOnly(file)) return true;
+      skipped.push(file);
+      return false;
+    })
     // tsx's loader in the suite's own process (`node --import tsx`, the tsconfig from TSX_TSCONFIG_PATH below), not the
     // tsx CLI, which starts a second node process to run the file: about 0.1 s of CPU a suite.
     .map((file) => ({ label: file, cmd: process.execPath, args: ['--import', 'tsx', file] })),
@@ -64,6 +75,7 @@ const jobs = [
 jobs.sort((a, b) => (known[b.label] ?? Infinity) - (known[a.label] ?? Infinity));
 if (jobs.length < 2) { console.error(`no suite matches ${filterArgs.join(' ')}`); process.exit(2); }
 
+for (const file of skipped) console.log(`SKIP          ${file}  — BALANCE_ONLY (npm run balance)`);
 const started = Date.now();
 const results = [];
 const env = { ...process.env, AP_DEPTH: DEPTH, TSX_TSCONFIG_PATH: 'tsconfig.json' };
@@ -98,10 +110,10 @@ mkdirSync(join(ROOT, 'tests', '.out'), { recursive: true });
 writeFileSync(TIMINGS, JSON.stringify({ ...timings, [DEPTH]: { ...known, ...Object.fromEntries(results.map((r) => [r.label, r.sec])) } }, null, 1));
 
 const failed = results.filter((r) => !r.ok);
-const slowest = [...results].sort((a, b) => b.sec - a.sec).slice(0, 5);
+const slowest = [...results].sort((a, b) => b.sec - a.sec).slice(0, 10);
 console.log(`---- slowest: ${slowest.map((r) => `${r.label.replace(/^tests\/unit\//, '')} ${r.sec.toFixed(0)}s`).join(', ')}`);
 const overBudget = wallSec > BUDGET_SEC;
 if (overBudget) console.log(`FAIL  the run took ${wallSec.toFixed(0)} s, over the unit tier's ${BUDGET_SEC} s budget (UNIT_BUDGET_SEC)`);
-console.log(`---- ${results.length - failed.length} passed, ${failed.length} failed in ${wallSec.toFixed(0)} s (${DEPTH}, ${WORKERS} workers)`);
+console.log(`---- ${results.length - failed.length} passed, ${failed.length} failed${skipped.length > 0 ? `, ${skipped.length} balance-only skipped` : ''} in ${wallSec.toFixed(0)} s (${DEPTH}, ${WORKERS} workers)`);
 for (const r of failed) console.log(`      failed: ${r.label}`);
 process.exit(failed.length === 0 && !overBudget ? 0 : 1);

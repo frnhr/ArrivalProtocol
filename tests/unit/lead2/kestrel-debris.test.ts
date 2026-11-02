@@ -6,7 +6,8 @@
 // Same seed, same kid, same harness.
 // • MODE=hit (the kid never steers IN): the same files in the same rack lose the same 25, within one TACTICAL tick of
 //   the reference's game time; the SKIPs stop where the dodge rules say (15 tac s before the deadline, the zone's
-//   TACTICAL lead before its entry), exactly on this tree, up to a tick early on the reference.
+//   TACTICAL lead before its entry), exactly on this tree, up to a tick early on the reference; then F says DODGE THE
+//   DEBRIS FIRST and the deadline's last DODGE_TACTICAL_LEAD_TAC run at TACTICAL (slice 3b review: from lead2/dodge-rules).
 // • MODE=dodge (the kid steers IN where the first SKIP stopped): no hit on either, and the same zone-forecast verdict
 //   change (hit → clear: CLEAR OF THE DEBRIS); the jump never carries the ship past the choice or past the verdict.
 // LEAD-2 item 5 moved the dodge's deadline 2.2 tac s earlier (judged with every Core thread busy), so the first SKIP's
@@ -14,7 +15,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { check, finish } from '../wp1/harness';
-import { SKIP_END_LEAD_TAC, ZONE_TACTICAL_LEAD_TAC, DODGE_DEADLINE_RESOLUTION_TAC } from '@data/tuning';
+import { SKIP_END_LEAD_TAC, ZONE_TACTICAL_LEAD_TAC, DODGE_DEADLINE_RESOLUTION_TAC, DODGE_TACTICAL_LEAD_TAC } from '@data/tuning';
 import { classicShip } from '@data/classic-five';
 
 interface Outcome {
@@ -25,6 +26,7 @@ interface Outcome {
   spentIds: string[];
   forecasts: string[];
   skipEnds: { tac: number; pace: string; refusal: string | null }[];
+  lastSecondsTactical?: boolean;   // this tree's scenario only (the reference predates it)
   wall: number;
   status: string;
 }
@@ -79,6 +81,7 @@ const CRUISE_TICK_TAC = (0.05 * classicShip(2).flight.cruiseWarp) / warp;
     firstOk && secondOk,
     `deadline ${now.deadlineTac?.toFixed(2)}: SKIPs stopped at ${now.skipEnds.map((end) => `${end.tac.toFixed(2)} (${end.refusal})`).join(', ')} `
     + `| before LEAD-2: deadline ${before.deadlineTac?.toFixed(2)}, stops ${before.skipEnds.map((end) => end.tac.toFixed(2)).join(', ')}`);
+  check(`…and the deadline's last ${DODGE_TACTICAL_LEAD_TAC} tac s run at TACTICAL (folded in from lead2/dodge-rules)`, now.lastSecondsTactical === true);
   check('…and the dodge is judged at the worst case now: its deadline is no later than before',
     now.deadlineTac !== null && before.deadlineTac !== null && now.deadlineTac <= before.deadlineTac,
     `${now.deadlineTac?.toFixed(2)} vs ${before.deadlineTac?.toFixed(2)} tac s`);

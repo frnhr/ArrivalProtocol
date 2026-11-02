@@ -7,6 +7,7 @@ import { buildFlightContext, flightObjective } from '@systems/guidance';
 import type { ZoneHit } from '@/types/zone';
 import type { GameState } from '@state/schema';
 import { DT_WALL_MAX } from '@data/tuning';
+import { newSegId } from '@systems/memory-ops';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -28,8 +29,19 @@ export function stepUntil(harness: Harness, done: () => boolean, maxWall: number
 // Module state outside the store (held keys, a SKIP in flight) is not in it: snapshot only while coasting, hands off.
 export function restoreState(harness: Harness, snapshot: GameState, settleTicks = 4): void {
   harness.reset();
+  passSegIds(snapshot);
   harness.store.update((d) => { Object.assign(d, structuredClone(snapshot)); });
   for (let i = 0; i < settleTicks; i++) harness.step();
+}
+
+// The runtime segment-id counter (memory-ops newSegId, module state) moved past every runtime id in `snapshot`: a setup
+// restored from disk into a fresh process (flyOnce) otherwise mints `free~217` again beside the snapshot's own
+// (slice 3b review: the shared LAST LIGHT duel threw `memory: duplicate id` in wp11/merge-test).
+function passSegIds(snapshot: GameState): void {
+  let highest = 0;
+  for (const match of JSON.stringify(snapshot).matchAll(/~(\d+)"/g)) highest = Math.max(highest, Number(match[1]));
+  const current = Number(newSegId('restore').split('~')[1]);
+  for (let i = current; i < highest; i++) newSegId('restore');
 }
 
 // A long setup (an hour of ignoring, a WAIT that takes half an hour to come up) flown once per process under `key`
@@ -52,7 +64,7 @@ function filesUnder(dir: string): string[] {
   });
 }
 
-function diskKey(key: string): string {
+function diskKey(key: string, shared: boolean): string {
   treeHash ??= (() => {
     const hash = createHash('sha1');
     for (const file of [...filesUnder('src'), ...filesUnder(join('tests', 'unit')), 'tsconfig.json', 'package-lock.json'].sort()) {
@@ -61,14 +73,18 @@ function diskKey(key: string): string {
     return hash.digest('hex').slice(0, 16);
   })();
   const env = Object.entries(process.env).filter(([name]) => name.startsWith('AP_')).sort().map(([name, value]) => `${name}=${value}`).join(',');
-  const id = createHash('sha1').update(`${process.argv[1] ?? ''}|${key}|${env}`).digest('hex').slice(0, 16);
+  // A shared setup (flyOnce's `shared`) is one snapshot for every suite that names its key: no suite in its id.
+  const id = createHash('sha1').update(`${shared ? 'shared' : process.argv[1] ?? ''}|${key}|${env}`).digest('hex').slice(0, 16);
   return join(FLY_ONCE_DIR, `${treeHash}-${id}.bin`);
 }
 
-export function flyOnce(harness: Harness, key: string, fly: () => void): void {
+// `shared`: suites that fly the very same setup (the same harness, ship and seed) share one disk copy (slice 3b review, the
+// unit tier's budget: wp11/merge-test and wp11/fix1 both fly LAST LIGHT to the duel); the setup must not depend on the
+// suite.
+export function flyOnce(harness: Harness, key: string, fly: () => void, opts: { shared?: boolean } = {}): void {
   const saved = setups.get(key);
   if (saved) { restoreState(harness, saved); return; }
-  const file = diskKey(key);
+  const file = diskKey(key, opts.shared === true);
   if (process.env.AP_FLY_ONCE !== 'fresh' && existsSync(file)) {
     const snapshot = deserialize(readFileSync(file)) as GameState;
     setups.set(key, snapshot);

@@ -1,3 +1,5 @@
+// BALANCE_ONLY: slice 3b review (the unit tier's budget): a regression sentinel for LEAD-1's premise, which LEAD-2 rewrote;
+// lead1/fix2/rule4-sweep and lead2/rule4-fuel keep Rule 4 in the quick tier.
 // LEAD-1 review round 2: the lead's Rule 4, "a WAIT longer than the SKIP budget is not an option" (PROGRESS.md
 // 09:40, binding; follow-up 10:50). A WAIT the FUEL is to blame for (the brake at ▼ the tank can't pay for in
 // full, or the WAIT a FUEL-limited shrink leaves) is an option only while SKIP crosses it within

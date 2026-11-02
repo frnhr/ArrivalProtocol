@@ -7,6 +7,7 @@
 // pods (NOT LAUNCHED); a Core lost while landing parks every pod; HOLLOW's story beat and LAST LIGHT's duel hold the
 // report (the duel's L0 on the strip). Last, the pooled receiver (§3.16) that lays out the unit at the next ship.
 import { check, finish } from './checks';
+import { byDepth } from '../depth';
 import { followLanding, landInstantly, lockOn } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';
 import { endLanding, forceLandAll } from '@systems/landing';
@@ -59,7 +60,9 @@ function fates(): string {
 }
 
 // --- Every ship, by the strip --------------------------------------------------------------------------------------------
-for (let index = 0; index < CLASSIC_FIVE.length; index++) {
+// Quick depth lands two of them (slice 3b review, the unit tier's budget): ARES-VII (its failing POD 02 lands hard) and
+// VESPER (the ark, 16 pods); all five at full depth (npm run balance).
+for (const index of byDepth([0, 3], CLASSIC_FIVE.map((_, i) => i))) {
   boardShip(index);
   // The drivers that arrive failing (ARES-VII's POD 02 at 44 on run 1; from layer 4 one rolled at 30–45) land hard if
   // left unrepaired; the degraded ones (55–79) land soft.

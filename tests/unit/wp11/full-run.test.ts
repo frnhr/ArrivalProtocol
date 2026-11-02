@@ -1,3 +1,5 @@
+// BALANCE_ONLY: slice 3b review (the unit tier's budget): the classic five's whole run; map/run1-route flies the arm end to
+// end, and wp11/merge-test and wp11/fix1 keep both endings in the quick tier.
 // WP11 acceptance 4 (§9 WP11): the whole run, headless, on 50 seeds. Title → ARES-VII → HALCYON → KESTREL → VESPER →
 // LAST LIGHT → RUN END, flown by the strip-following kid with the defenders (WP7's REPAIR and MOVE, WP9's sensor and
 // seeds, WP10's pip → SWAP, WP11's verb blocks and the root's DELETE), [B] when AUTOBURN is offered, THE DEAL refused, the

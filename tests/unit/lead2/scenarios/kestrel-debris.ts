@@ -4,10 +4,11 @@
 // correction, so the cloud hits rack C. MODE=dodge: the kid makes it where the first SKIP stopped (15 tac s before the
 // dodge's deadline), holding SPACE (IN) until the strip says RELEASE, then turns RETRO. Prints one JSON line: the hit
 // (game time, files, their loss), the zone-forecast verdict changes in order, where each SKIP stopped and why, the
-// dodge's deadline, and the wall time it all took.
+// dodge's deadline, whether its last DODGE_TACTICAL_LEAD_TAC ran at TACTICAL, and the wall time it all took.
 import { createHarness9 } from '../../wp9/harness9';
 import { getPrediction } from '@systems/predict';
 import { skipBlockReason } from '@systems/pace';
+import { DODGE_TACTICAL_LEAD_TAC } from '@data/tuning';
 
 const mode = process.env.MODE ?? 'hit';
 if (mode !== 'hit' && mode !== 'dodge') throw new Error(`kestrel-debris: MODE ${mode} is neither hit nor dodge`);
@@ -25,6 +26,10 @@ let skipping = false;
 let wall = 0;
 let hitTac: number | null = null;
 let hitAt: { x: number; y: number } | null = null;
+// The deadline's last DODGE_TACTICAL_LEAD_TAC run at TACTICAL (slice 3b review: folded in from lead2/dodge-rules, which
+// flew the same stop again): seen at all, and TACTICAL on every tick of it.
+let lastSecondsSeen = false;
+let lastSecondsTactical = true;
 // MODE=dodge: 'wait' for the first SKIP to stop, 'hold' the IN correction until RELEASE, then 'done'.
 let dodge: 'wait' | 'hold' | 'done' = mode === 'dodge' ? 'wait' : 'done';
 while (wall < 600 && h.status() === 'approaching') {
@@ -46,6 +51,11 @@ while (wall < 600 && h.status() === 'approaching') {
     dodge = 'done';
   }
   skipping = nowSkipping;
+  const nowTac = state().clock.tSec / warp;
+  if (deadlineTac !== null && nowTac > deadlineTac - DODGE_TACTICAL_LEAD_TAC + 0.1 && nowTac < deadlineTac - 0.05) {
+    lastSecondsSeen = true;
+    if (state().clock.pace !== 'tactical') lastSecondsTactical = false;
+  }
   if (hitTac === null && state().hazards.hitIds.length > 0) {
     hitTac = state().clock.tSec / warp;
     hitAt = { x: state().orbit.x, y: state().orbit.y };
@@ -71,6 +81,7 @@ console.log(JSON.stringify({
     return `${payload.from}→${payload.to}`;
   }),
   skipEnds,
+  lastSecondsTactical: lastSecondsSeen && lastSecondsTactical,
   wall,
   status: h.status(),
 }));

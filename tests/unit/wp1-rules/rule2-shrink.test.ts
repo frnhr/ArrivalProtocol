@@ -150,7 +150,8 @@ const oneBurnIgnoreSec = Math.min(45, Math.floor(0.75 * oneBurnWindowSec));
 // Quick depth (tests/unit/depth.ts): the one-burn window, the ring-edge span's far end (120 s) and the throttled 240 s
 // (the tier trim: 60 and 90 s sit inside the 60–120 s span; 60 s is still flown by every scenario below). Each capture
 // is flown once per process and restored (flows.ts ignoredAtCapture).
-for (const ignoreSec of byDepth([oneBurnIgnoreSec, 120, 240], [oneBurnIgnoreSec, 60, 90, 120, 240])) {
+// Slice 3b review (the unit tier's budget): quick keeps the one-burn window and the throttled 240 s, the span's ends.
+for (const ignoreSec of byDepth([oneBurnIgnoreSec, 240], [oneBurnIgnoreSec, 60, 90, 120, 240])) {
   // Four minutes of ignoring are flown at a throttled tab's ticks (flows.ts idleThrottled: long hands-off stretches,
   // where the predictor re-planning the loop every 50 ms is most of the time); the shorter ignores at 50 ms ticks.
   if (ignoreSec > RING_EDGE_IGNORE_MAX_SEC) {
@@ -222,8 +223,8 @@ for (const ignoreSec of byDepth([oneBurnIgnoreSec, 120, 240], [oneBurnIgnoreSec,
 }
 
 // --- Over-holding the hand-over: never IMPACT, never a second shrink -----------------------------
-// Quick depth: the shortest and the longest over-hold (the tier trim); full: every one.
-for (const overHoldSec of byDepth([0.5, 3], [0.5, 1, 2, 3])) {
+// Quick depth: the longest over-hold (the tier trim; slice 3b review: the shortest went to the full depth); full: every one.
+for (const overHoldSec of byDepth([3], [0.5, 1, 2, 3])) {
   ignored60();
   harness.keyDown('Space');
   stepUntil(harness, () => /RELEASE/.test(text(harness)), 60);
@@ -257,7 +258,7 @@ for (const overHoldSec of byDepth([0.5, 3], [0.5, 1, 2, 3])) {
   const results: string[] = [];
   let bad = '';
   // Quick depth: both sides of the trim close in and far out (the full grid steps 2–5 points).
-  for (const overTrim of byDepth([-10, -1, 1, 19], [-10, -4, -1, 1, 3, 5, 7, 10, 14, 19])) {
+  for (const overTrim of byDepth([-1, 1, 19], [-10, -4, -1, 1, 3, 5, 7, 10, 14, 19])) {
     const fuelPct = Number((waitTrimPct + overTrim).toFixed(1));
     if (fuelPct > 100) continue;
     ignored60();
@@ -311,8 +312,9 @@ for (const overHoldSec of byDepth([0.5, 3], [0.5, 1, 2, 3])) {
 {
   const results: string[] = [];
   let bad = '';
-  // Quick depth: the band's foot (3,450, where no RETRO may keep the margin), a point inside and its top.
-  for (const lowestKm of byDepth([3450, 3800, 4300], [3450, 3600, 3800, 3950, 4050, 4100, 4300])) {
+  // Quick depth: the band's foot (3,450, where no RETRO may keep the margin) and its top (slice 3b review: the point
+  // inside went to the full depth for the unit tier's budget).
+  for (const lowestKm of byDepth([3450, 4300], [3450, 3600, 3800, 3950, 4050, 4100, 4300])) {
     captureOffRing(harness, lowestKm);
     stepUntil(harness, () => /HOLD \[SPACE\] NOW/.test(text(harness)), 120);
     harness.keyDown('Space');

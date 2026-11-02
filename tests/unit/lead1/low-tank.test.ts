@@ -1,3 +1,5 @@
+// BALANCE_ONLY: slice 3b review (the unit tier's budget): a regression sentinel for LEAD-1's premise, which LEAD-2 rewrote;
+// lead2/dry-end and lead2/rule4-fuel keep the short tank in the quick tier.
 // LEAD-1 items 2 and 3, as reworked in review round 1: the shrink and a tank that is short.
 // (2) After a let-go-at-CAPTURED capture left to ride 60 s, a tank of 10–32% used to get
 //     `WAIT — brake at ▼ in 35364:28 · [F] SKIP` (about six wall hours of SKIP;

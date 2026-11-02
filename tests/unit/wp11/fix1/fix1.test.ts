@@ -36,6 +36,7 @@ import {
 } from '@data/tuning';
 import type { GameState, FinaleEnding } from '@state/schema';
 import type { LastUnit } from '@systems/meta';
+import { toTheDuel } from '../duel';
 
 const h = createHarness11(83);
 setLandingMode('manual');
@@ -43,19 +44,6 @@ const state = (): Readonly<GameState> => h.store.getState();
 const events: string[] = [];
 onAny((name) => { events.push(name); });
 
-// LAST LIGHT flown to ORBIT LOCK (the root open, the duel on), HOLLOW held still unless a scenario lets it go.
-function toTheDuel(seed: number): void {
-  h.lastLight(seed);
-  h.flyLastLight(900, { deleteRoot: false });
-  if (h.status() !== 'locked') throw new Error(`fix1: seed ${seed} did not lock (${h.status()})`);
-  h.step();
-  h.store.update((d) => {
-    d.hollow.biteInSec = 9999;
-    d.hollow.seedInSec = 9999;
-    d.hollow.verbInSec = 9999;
-    d.hollow.verb = null;
-  });
-}
 
 function deleteRoot(): void {
   // The defender's last ops are called off first: each scenario says who holds which thread.
@@ -123,7 +111,7 @@ function untilReport(maxWall: number): number | null {
 }
 
 // --- The ending in one update: every pod down before the root's end, then PURGE ----------------------------------------
-toTheDuel(83);
+toTheDuel(h);
 landInstantly(h.store);
 {
   const end = h.wall() + 200;
@@ -147,7 +135,7 @@ h.stepFor(ROOT_DELETE_SEC + 0.3);
 }
 
 // --- The ending in one update: MERGE with drivers given back ------------------------------------------------------------
-toTheDuel(89);
+toTheDuel(h);
 {
   const c13 = driversInMemory(state()).find((soul) => soul.pod === 12);
   if (!c13) throw new Error('fix1: POD 12 launched already');
@@ -166,7 +154,7 @@ setCharge(MERGE_COST_CHARGE + 4);
 }
 
 // --- UNRESOLVED's last line holds the LANDING REPORT -------------------------------------------------------------------
-toTheDuel(97);
+toTheDuel(h);
 h.store.update((d) => {
   for (let i = 0; i < d.memory.length; i++) {
     const seg = d.memory[i]!;
@@ -198,7 +186,7 @@ landInstantly(h.store);
 
 // --- HOLLOW's verbs and the kid's threads ------------------------------------------------------------------------------
 // A 1-thread Core, the root's DELETE holding that thread: the duel's verbs (every 4 s) are all skipped.
-toTheDuel(101);
+toTheDuel(h);
 setCore(CORE_LOW_INTEGRITY - 10);
 h.step();
 deleteRoot();
@@ -224,7 +212,7 @@ deleteRoot();
 }
 // Two threads: the root's DELETE on one, the other free: a verb comes. The kid fills the free one after the telegraph: a
 // click on the target says how to block it, a click elsewhere the plain words.
-toTheDuel(103);
+toTheDuel(h);
 setCore(100);
 h.step();
 deleteRoot();
@@ -264,7 +252,7 @@ deleteRoot();
 }
 // Outside the duel: both threads busy at the verb's moment: no telegraph either.
 {
-  toTheDuel(107);
+  toTheDuel(h);
   setCore(100);
   h.step();
   for (const operation of getOps()) if (operation.owner === 'player') cancelOp(operation.id);
@@ -280,7 +268,7 @@ deleteRoot();
 
 // --- A won finale over a flagship where nobody landed ------------------------------------------------------------------
 for (const choice of ['purge', 'merge'] as const) {
-  toTheDuel(choice === 'purge' ? 109 : 113);
+  toTheDuel(h);
   loseEveryone();
   // No driver left: the landing ends by itself after LANDING_NONE_LEFT_SEC (risk 7).
   h.stepFor(LANDING_NONE_LEFT_SEC + 0.6);

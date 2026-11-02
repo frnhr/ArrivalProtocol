@@ -1,7 +1,6 @@
 // LEAD-2 item 5: WP9's dodge rules stay intact under the coast SKIP, and the dodge promise never lies.
-// • A SKIP with the dodge open stops exactly SKIP_END_LEAD_TAC before the dodge's deadline (pace.ts
-//   dodgeDeadlineInSec), F is then refused (DODGE THE DEBRIS FIRST), and the last DODGE_TACTICAL_LEAD_TAC run at
-//   TACTICAL (tests/unit/lead2/kestrel-debris.test.ts checks the same stop against the tree before LEAD-2).
+// • (A SKIP with the dodge open stops exactly SKIP_END_LEAD_TAC before the dodge's deadline, F is then refused and the
+//   last DODGE_TACTICAL_LEAD_TAC run at TACTICAL: tests/unit/lead2/kestrel-debris.test.ts, since the slice 3b review.)
 // • The first seed still holds SKIP (`SOMETHING IS COMING`) on a seeding ship until it has come.
 // • The promise: WP9 round 2 judged the dodge with no Core thread busy, and a kid who started the correction in the
 //   last ~0.7 tac s of the countdown while two REPAIRs ran was hit (the WP9 verify-3 probe, 3 broken promises). It is
@@ -12,11 +11,10 @@ import { followDirector } from '../wp2/harness2';
 import { check, finish } from '../wp1/harness';
 import { installTool } from '@systems/licences';
 import { getPrediction } from '@systems/predict';
-import { skipBlockReason, SKIP_REFUSAL_DODGE, SKIP_REFUSAL_SEED_COMING } from '@systems/pace';
+import { skipBlockReason, SKIP_REFUSAL_SEED_COMING } from '@systems/pace';
 import { actionRepair, setIntegrity } from '@state/actions';
 import { getByRole, hasIntegrity } from '@state/selectors';
 import { getOpsBySeg } from '@systems/ops-core';
-import { SKIP_END_LEAD_TAC, DODGE_TACTICAL_LEAD_TAC } from '@data/tuning';
 
 const h = createHarness9(5);
 const state = () => h.store.getState();
@@ -28,34 +26,6 @@ function dodgeLeftTac(): number | null {
   const hit = pred.zoneHits.find((zone) => zone.kind === 'debris');
   if (!hit || hit.correctionClears !== true || hit.dodgeInSec === null) return null;
   return (pred.asOfTSec + hit.dodgeInSec - state().clock.tSec) / state().level.tacticalWarp;
-}
-
-// --- The SKIP stops ahead of the choice, and the last seconds are real seconds --------------------------------------
-{
-  h.kestrel(5, { phase2Hollow: true, hollowAsleep: true, sensorHealed: true });
-  for (let i = 0; i < 4; i++) h.step();
-  h.press('KeyF');
-  let landedLeft: number | null = null;
-  for (let i = 0; i < 2000 && state().clock.skipWarp !== null; i++) {
-    h.step();
-    const clock = state().clock;
-    if (clock.skipEndTSec !== null && clock.tSec >= clock.skipEndTSec) landedLeft = dodgeLeftTac();
-  }
-  const refusal = skipBlockReason(state(), getPrediction());
-  let tacticalAll = true;
-  let sawLastSeconds = false;
-  while ((dodgeLeftTac() ?? 0) > 0.05) {
-    h.step();
-    const left = dodgeLeftTac();
-    if (left !== null && left < DODGE_TACTICAL_LEAD_TAC - 0.1) {
-      sawLastSeconds = true;
-      if (state().clock.pace !== 'tactical') tacticalAll = false;
-    }
-  }
-  check(`the dodge open: a SKIP lands exactly ${SKIP_END_LEAD_TAC} tac s before the deadline, then F says ${SKIP_REFUSAL_DODGE}`,
-    landedLeft !== null && Math.abs(landedLeft - SKIP_END_LEAD_TAC) < 0.01 && refusal === SKIP_REFUSAL_DODGE,
-    `${landedLeft?.toFixed(3)} tac s left at the landing; SKIP "${refusal}"`);
-  check(`…and the deadline's last ${DODGE_TACTICAL_LEAD_TAC} tac s run at TACTICAL`, sawLastSeconds && tacticalAll, `TACTICAL throughout: ${tacticalAll}`);
 }
 
 // --- The first seed still holds SKIP ------------------------------------------------------------------------------

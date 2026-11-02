@@ -16,14 +16,14 @@ import { getPrediction } from '@systems/predict';
 import { integrateStep } from '@systems/orbit-sim';
 import { paceLabel, countdownChip } from '@systems/flight-hud';
 import { propagateConic, stateFromElements, elementsFromState } from '@/types/orbit';
-import { releaseAtCapture, captureOffRing, idle, obey, text, stepUntil, flyOnce, longWait as sharedLongWait } from '../wp1-rules/flows';
-import { fullOnly, byDepth } from '../depth';
+import { releaseAtCapture, captureOffRing, idle, obey, text, stepUntil, flyOnce, placeOrbit, longWait as sharedLongWait } from '../wp1-rules/flows';
+import { fullOnly, byDepth, FULL } from '../depth';
 import { resumeHeldThrottle } from '@systems/flight-controls';
 import { pressAutoburn, autoburnRefusal } from '@systems/autoburn';
 import { asksToHoldSpace } from '@systems/guidance';
 import { AUTOBURN_REFUSAL } from '@data/skill-text';
 import { on } from '@systems/events';
-import { SKIP_DIVISOR, SKIP_RAMP_SEC, SKIP_EASE_OUT_SEC, SKIP_END_LEAD_TAC } from '@data/tuning';
+import { SKIP_DIVISOR, SKIP_RAMP_SEC, SKIP_EASE_OUT_SEC, SKIP_END_LEAD_TAC, DT_WALL_MAX } from '@data/tuning';
 
 const harness = createHarness(1);
 const state = () => harness.store.getState();
@@ -79,7 +79,22 @@ function flyObeying(maxWall: number): { longestSkipSec: number; skipSec: number;
 // Let go at CAPTURED and left alone until SHRINK THE LOOP has lapsed (late in the climb: about half an hour on
 // HALCYON and KESTREL, an hour on ship 1): the strip offers the brake at the next ▼, 10,000–35,000 tactical minutes away.
 // Flown once, restored for the later scenarios (flows.ts longWait).
-const longWait = (): void => sharedLongWait(harness);
+// Quick depth (slice 3b review, the unit tier's budget: the hands-off climb was 22 s of this suite's 35): the same loop
+// joined further along its arc. Let go at CAPTURED as the full flight is, then the ship is put on that very conic at
+// LONG_WAIT_ARC of the way from ▼ to ▲ (placeOrbit), past where SHRINK THE LOOP lapses, and the strip's WAIT is waited
+// for from there. The WAIT is still tens of thousands of tactical minutes (section 2 checks over an hour).
+const LONG_WAIT_ARC = 0.95;
+const longWait = (): void => {
+  if (FULL) { sharedLongWait(harness); return; }
+  flyOnce(harness, 'longWait-arc', () => {
+    releaseAtCapture(harness);
+    const el = elementsFromState(state().orbit, mu);
+    placeOrbit(harness, stateFromElements(el.rp, el.e, el.omega, Math.PI * LONG_WAIT_ARC, mu));
+    const end = harness.wall() + 4000;
+    while (harness.wall() < end && harness.status() === 'approaching' && !/^WAIT — brake at ▼/.test(text(harness))) harness.step(DT_WALL_MAX);
+    if (!/^WAIT — brake at ▼/.test(text(harness))) throw new Error(`longWait (arc): no WAIT offered: "${text(harness)}"`);
+  });
+};
 
 // --- 2. The SKIP's look on a long WAIT ---------------------------------------------------------------------------
 {

@@ -1,3 +1,5 @@
+// BALANCE_ONLY: slice 3b review (the unit tier's budget): the balance harness is `npm run balance`'s by name; the quick
+// tier's single COMPETENT seed duplicated map/run1-route and wp11/merge-test.
 // WP12 acceptance 3 (§9 WP12 spec item 1): the 200-seed playthrough. Runs tests/unit/wp12/playthrough.ts for the COMPETENT
 // and the SLOPPY kid on seeds 1–PT_SEEDS (200 at full depth; the unit tier flies COMPETENT on 1: see SEEDS), in PT_WORKERS
 // parallel shards (default 4: one harness per process, since the systems are module singletons), prints the results

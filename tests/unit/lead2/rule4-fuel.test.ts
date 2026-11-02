@@ -59,8 +59,8 @@ function fly(kid: typeof KIDS[number]): Flown {
   const snapshot = structuredClone(state());
   const rows: string[] = [];
   let bad = '';
-  // Quick depth: the band's ends and its middle; full: two more points.
-  for (const fuelPct of byDepth([30, 34, 44], [30, 32, 34, 38, 44])) {
+  // Quick depth: the band's ends (slice 3b review, the unit tier's budget); full: three more points.
+  for (const fuelPct of byDepth([30, 44], [30, 32, 34, 38, 44])) {
     restore(snapshot, fuelPct);
     const pred = getPrediction();
     const offer = text(harness);
@@ -96,7 +96,8 @@ function fly(kid: typeof KIDS[number]): Flown {
   let strandedLines = 0;
   // Quick depth (tests/unit/depth.ts): the line ±2% in 1% steps, the kids taking the steps in turn (the unit tier's budget,
   // slice 3a's review fixes); full: in 0.5% steps, every kid on every step.
-  const step = byDepth(1, 0.5);
+  // (Slice 3b review: 2% steps in quick, the line and ±2%.)
+  const step = byDepth(2, 0.5);
   let row = 0;
   for (let fuelPct = lineFuel - 2; fuelPct <= lineFuel + 2 + 1e-9; fuelPct += step) {
     for (const kid of byDepth([kids[row++ % kids.length]!], kids)) {

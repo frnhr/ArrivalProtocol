@@ -32,7 +32,9 @@ by HOLLOW, the previous wave's caretaker. Everything is UI: windows, terminals, 
   once and restored (`flyOnce` in `tests/unit/wp1-rules/flows.ts`; kept on disk in `tests/.out/fly-once` under a hash of every
   source and test file, so a re-run of an unchanged tree skips them; `AP_FLY_ONCE=fresh` flies them). The runner fails the run over 300 s or
   any suite over 90 s: a suite that outgrows that samples more coarsely in quick depth, it does not raise the budget.
-  `node tests/unit/run.mjs wp9 -sim` runs the suites whose path contains `wp9`, minus those containing `sim`.
+  `node tests/unit/run.mjs wp9 -sim` runs the suites whose path contains `wp9`, minus those containing `sim`. A suite
+  whose header carries `// BALANCE_ONLY: <why>` (the classic full run, the 200-seed playthrough, LEAD-1's sentinels) runs
+  only at full depth: the quick run lists it as SKIP.
 - `npm run test:e2e` — the e2e tier (`tests/e2e/`): Playwright scripts that drive the game in Chromium, against a Vite
   server the runner starts itself (`E2E_BASE_URL` to use a running one). The playthrough plays a whole run by the
   strip (keys for the SHIP, clicks for the MIND) and checks every ship's boot, flight, lines, landing (ships 1, 2 and 5 by the strip), LANDING
@@ -40,7 +42,7 @@ by HOLLOW, the previous wave's caretaker. Everything is UI: windows, terminals, 
   15 minutes, a few hundred checks; logs and shots in `tests/.out/e2e/`. `node tests/e2e/run.mjs phone desk` runs
   some. Chromium: `E2E_CHROMIUM`, else `$PLAYWRIGHT_BROWSERS_PATH/chromium`, else the installed Google Chrome.
 - `npm run balance` — not a test suite: the unit tier at full depth (`--full`), every sweep at the resolution its review
-  round asked for, every guidance suite on all five ships and the 200-seed balance harness
+  round asked for, every guidance suite on all five ships, the BALANCE_ONLY suites and the 200-seed balance harness
   (`tests/unit/wp12/playthrough.test.ts`, whose hard checks are the game's balance targets). About two hours on four cores (the per-ship sweeps take most of it); run it
   when `tuning.ts` or `ships.ts` change.
 

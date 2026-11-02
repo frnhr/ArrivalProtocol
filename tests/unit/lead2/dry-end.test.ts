@@ -19,13 +19,13 @@ import { byDepth } from '../depth';
 const harness = createHarness(1);
 const state = () => harness.store.getState();
 const KIDS = ['obey', 'f0.3', 'f0.5'] as const;
-// Quick depth (tests/unit/depth.ts): every 4% of each band (18–30% and 30–34%: both ends of the second), the instant and
+// Quick depth (tests/unit/depth.ts): 18, 25, 32% of the first band and both ends of the second (30, 34%), the instant and
 // the slowest kid taking the rows in turn (the unit tier's budget, slice 3a's review fixes: both kids still fly each band);
 // full: the check's own rows, every kid on every row.
 const kids = byDepth<readonly typeof KIDS[number][]>(['obey', 'f0.5'], KIDS);
 const kidsAt = (row: number): readonly typeof KIDS[number][] => byDepth([kids[row % kids.length]!], kids);
 let row = 0;
-const FUEL_STEP = byDepth(4, 0.25);
+const FUEL_STEP = 0.25;  // full depth; quick steps by each rowset's quickStep
 
 function snapshotOffRing(periKm: number, ignoreSec: number): GameState {
   captureOffRing(harness, periKm);
@@ -81,9 +81,10 @@ function fly(kid: typeof KIDS[number]): Flight {
   return flight;
 }
 
+// Slice 3b review (the unit tier's budget): quick steps the first band by 7% (18, 25, 32), the second by its own 4%.
 const rowsets = [
-  { periKm: 4700, ignoreSec: 90, from: 18, to: 32 },
-  { periKm: 4900, ignoreSec: 90, from: 30, to: 34 },
+  { periKm: 4700, ignoreSec: 90, from: 18, to: 32, quickStep: 7 },
+  { periKm: 4900, ignoreSec: 90, from: 30, to: 34, quickStep: 4 },
 ];
 const bad: string[] = [];
 const outcomes = new Map<string, number>();
@@ -92,7 +93,7 @@ let lowestAltKm = Infinity;
 let lowestAt = '';
 for (const rowset of rowsets) {
   const snapshot = snapshotOffRing(rowset.periKm, rowset.ignoreSec);
-  for (let fuel = rowset.from; fuel <= rowset.to + 1e-9; fuel += FUEL_STEP) {
+  for (let fuel = rowset.from; fuel <= rowset.to + 1e-9; fuel += byDepth(rowset.quickStep, FUEL_STEP)) {
     const fuelPct = Number(fuel.toFixed(2));
     for (const kid of kidsAt(row++)) {
       restore(snapshot, fuelPct);
@@ -110,7 +111,7 @@ for (const rowset of rowsets) {
 }
 const tally = [...outcomes].map(([status, count]) => `${count} ${status}`).join(', ');
 check(`the deferred dry-end check's rows: ${flights} flights (▼ 4,700 km 18–32% and ▼ 4,900 km 30–34%, ignored 90 s, `
-  + `${FUEL_STEP}% steps × ${kids.join('/')}): no FLICKER, no FLIP, no LAST FUEL line, none crashed or still flying`,
+  + `${byDepth('7/4', String(FUEL_STEP))}% steps × ${kids.join('/')}): no FLICKER, no FLIP, no LAST FUEL line, none crashed or still flying`,
 bad.length === 0, bad.slice(0, 5).join(' | ') || tally);
 // The patch asked a dry end to leave ▼ at least 20 km up (it was 17 km on the round-2 tree); the brake at ▼ only
 // brings ▲ down, so ▼ stays where the capture and the trims left it.

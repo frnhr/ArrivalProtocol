@@ -37,7 +37,9 @@ const state = () => harness.store.getState();
 // Quick depth (tests/unit/depth.ts) flies a coarse sample of each grid (the shortest and longest ignore, every 12% of
 // the band: 10, 22, 34, 46 on ship 1, which still meets STRANDED, ACCEPTED and LOCKED, the instant and the slowest
 // kid); the full grid is the lead's.
-const ignores = byDepth([60, 120], [60, 90, 120]);
+// Slice 3b review (the unit tier's budget): quick flies the 60 s ignore alone (its capture is flown for the band's top and
+// the STRANDED row anyway); the kids still take turns along the FUEL rows, so both meet the sweep.
+const ignores = byDepth([60], [60, 90, 120]);
 const FEW_SKIP_SEC = SKIP_RAMP_SEC + SKIP_DIVISOR + SKIP_EASE_OUT_SEC + 1;
 // The band's top: ship 1's 46%, or 15 points over the ship's own trim at ▼ (priced on the 60 s capture loop).
 ignoredAtCapture(harness, 60);
@@ -193,7 +195,8 @@ bad.slice(0, 6).join(' | ') || `${[...outcomes].map(([status, count]) => `${coun
 // LEAD-2: FLIPs and FLICKERs fail here too (round 3 only counted them: the held last FUEL's dry-end flicker, a burn
 // that is gone with the last FUEL).
 {
-  const lows = byDepth([4300, 4900], [4300, 4700, 4900]);
+  // Quick: the deepest capture under the ring alone (slice 3b review, the unit tier's budget).
+  const lows = byDepth([4300], [4300, 4700, 4900]);
   const offRingIgnores = byDepth([90], ignores);
   // Quick depth: every 18% (10, 28, 46: ACCEPT only, ACCEPTED and LOCKED on ship 1); full: every 1%.
   const offRingStep = Number(process.env.OFFRING_FUEL_STEP ?? byDepth('18', '1'));

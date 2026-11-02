@@ -1,3 +1,5 @@
+// BALANCE_ONLY: slice 3b review (the unit tier's budget): a regression sentinel for LEAD-1's premise, which LEAD-2 rewrote;
+// wp1-rules/rule2-shrink keeps the shrink's reaction allowance in the quick tier.
 // LEAD-1 item 1: the reaction allowance at the shrink's stop. The verifier's kid lets go the moment
 // the chip says CAPTURED, ignores SHRINK THE LOOP for a while, then holds it and lets go of the
 // hand-over (`RELEASE [SPACE]! — next: brake at ▼ …`) a human reaction late. Before LEAD-1 the shrink

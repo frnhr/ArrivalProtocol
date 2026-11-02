@@ -42,6 +42,7 @@ import { classicShip } from '@data/classic-five';
 import type { GameState } from '@state/schema';
 import type { HollowSegment, DriverSegment } from '@/types/segment';
 import { MEMORY_LAYOUTS } from '@data/memory';
+import { toTheDuel } from './duel';
 
 const h = createHarness11(31);
 setLandingMode('manual');
@@ -56,21 +57,6 @@ function stubStorage(): () => MetaStorage {
   return () => storage;
 }
 
-// LAST LIGHT flown to ORBIT LOCK by the strip-following kid with the defender, then HOLLOW held still (no bite, seed or
-// verb on its own) so the scenario's eating is the scenario's.
-function toTheDuel(seed: number): void {
-  h.lastLight(seed);
-  // The scenario deletes the root itself: the defender only flies and fights until the lock.
-  h.flyLastLight(900, { deleteRoot: false });
-  if (h.status() !== 'locked') throw new Error(`merge-test: seed ${seed} did not lock (${h.status()})`);
-  h.step();
-  h.store.update((d) => {
-    d.hollow.biteInSec = 9999;
-    d.hollow.seedInSec = 9999;
-    d.hollow.verbInSec = 9999;
-    d.hollow.verb = null;
-  });
-}
 
 // Lets HOLLOW eat these drivers (no defender), whatever else it eats meanwhile is held off.
 function eat(codes: string[]): void {
@@ -101,7 +87,7 @@ function setCharge(points: number): void {
 }
 
 // --- The duel and MERGE -----------------------------------------------------------------------------------------------
-toTheDuel(41);
+toTheDuel(h);
 {
   const root = theRoot(state().memory)!;
   check('ORBIT LOCK opened the root: unlocked, the duel on, CONTROL said to delete it', !root.locked && state().hollow.finale.phase === 'duel'
@@ -223,7 +209,7 @@ h.step();
 // --- PURGE ---------------------------------------------------------------------------------------------------------------
 closeArchive();
 openRunArchive(stubStorage());
-toTheDuel(43);
+toTheDuel(h);
 h.store.update((d) => { d.archive = { status: 'ok' }; d.run.mergeBonus = true; });
 archiveRunStarted(h.store);
 eat(['POD 11']);
@@ -248,7 +234,7 @@ check('…RUN END won-purge, victory; the archive adds purge and uses the bonus 
 
 // --- UNRESOLVED ---------------------------------------------------------------------------------------------------------
 closeArchive();
-toTheDuel(47);
+toTheDuel(h);
 // Every Rm gone (none a REPAIR could bring back).
 h.store.update((d) => {
   for (let i = 0; i < d.memory.length; i++) {
@@ -271,7 +257,7 @@ continueAfterReport(h.store);
 check('…RUN END unresolved, sombre', state().run.endCause === 'unresolved' && runEndModel(state()).tone === 'sombre');
 
 // --- The tone: a flagship that landed nobody ----------------------------------------------------------------------------------
-toTheDuel(53);
+toTheDuel(h);
 // Every driver lost (as if HOLLOW and the belt had them all), the root deleted, PURGE: no victory screen.
 h.store.update((d) => {
   for (let i = 0; i < d.memory.length; i++) {
@@ -305,7 +291,7 @@ check('LAST LIGHT is the flagship and the last ship', classicShip(4).final);
 // --- §9 WP11's edge cases -----------------------------------------------------------------------------------------------
 // The Core worn below its low mark mid-duel: fewer threads, but the running DELETE keeps its own (ops-core never takes a
 // thread back), and the root is gone on time.
-toTheDuel(59);
+toTheDuel(h);
 deleteRoot();
 h.stepFor(2);
 const threadsBefore = threadsTotal();

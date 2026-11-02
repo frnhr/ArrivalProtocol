@@ -13,6 +13,7 @@
 // • Edge cases: pause (it takes the throttle again after), a dead engine (dropped, ENGINE NOT RESPONDING), SPACE
 //   (a takeover: the player has the throttle, no gap), B again (cancel), the refusals, and (LEAD-2 review round 2) a
 //   SKIP inside the window: [B] only stops it; armed, [B] during a SKIP cancels it as its line says (review round 3).
+import { byDepth } from '../depth';
 import { check, finish } from '../wp1/harness';
 import { createHarness9 } from './harness9';
 import {
@@ -92,7 +93,8 @@ function untilOffered(maxWall = 200): boolean {
   return h.stepUntil(() => autoburnRefusal(state(), getPrediction()) === null, maxWall) < maxWall;
 }
 
-for (const learned of [-8, 0, 8]) {
+// Quick depth flies offset 0 (slice 3b review, the unit tier's budget); −8 and +8 at full depth (npm run balance).
+for (const learned of byDepth([0], [-8, 0, 8])) {
   correctedKestrel([2 * learned, 2 * learned]);
   const demosBefore = state().run.stats.demos.length;
   check(`learned ${learned}: before the window, B is refused (TOO FAR FROM ▼)`, autoburnRefusal(state(), getPrediction()) === AUTOBURN_REFUSAL.tooFar,

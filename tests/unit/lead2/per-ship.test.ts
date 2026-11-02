@@ -6,7 +6,7 @@
 // SKIP). The Rule 4 sweep runs here at 1% FUEL steps on the canonical capture and 2% on the off-ring ones (half its
 // own resolution: about 4 minutes a ship instead of 12); the full-resolution runs are logged in tests/unit/lead2/
 // (rule4-sweep-ship1.log, rule4-sweep-ship2.log).
-// Quick depth (tests/unit/depth.ts, npm test): every ship flies the suites marked `quick` (a few seconds a ship); the
+// Quick depth (tests/unit/depth.ts, npm test): VESPER flies the suites marked `quick` (a few seconds); the
 // rest are ship 1's in the unit tier and every ship's in `npm run balance` (about two hours: 32 child runs, one at a
 // time).
 import { spawnSync } from 'node:child_process';
@@ -46,7 +46,9 @@ const SHIP_RUNS: { ship: number; env?: Record<string, string> }[] = [
   { ship: 1 }, { ship: 2 }, { ship: 3, env: { AP_GHOST: 'quiet' } }, { ship: 4, env: { AP_ZONES: 'none' } },
 ];
 
-for (const { ship, env: shipEnv } of SHIP_RUNS) {
+// Quick depth flies the `quick` suites on VESPER alone (slice 3b review, the unit tier's budget: the other ships are
+// ship 1's own runs in the tier and every ship's in `npm run balance`).
+for (const { ship, env: shipEnv } of SHIP_RUNS.filter((run) => FULL || run.ship === 3)) {
   for (const suite of SUITES.filter((candidate) => FULL || candidate.quick)) {
     const started = Date.now();
     // tsx's loader in the child itself (as tests/unit/run.mjs runs the suites), not the tsx CLI's second node process.
