@@ -1068,3 +1068,86 @@ CHOSEN (31–118 KB). Its items were applied in `Slice 3c F: review follow-up`. 
     - `checkShape` rejects non-finite numbers outside `endTSec`.
   - **Phase listeners:** audit them for the `title→desk` and `title→report` jumps a resume makes.
 - **UI:** the inbox's memo key must add the trail's unit, cause and stop count, since letters now depend on the last unit.
+
+## Deviations (Track WORLD)
+
+Recorded by Track WORLD (branch `world-3c`). Each is a change from §2–§6 or from the reference sim, with its reason. The
+update reproduces `arm_sim.py`'s rules and its statistics: 12,000 consecutive runs (20 chains × 200 × best, random, mix)
+pass every §4.5 band (`world/update-stats-full`, BALANCE_ONLY), and §3.14's update is reproduced cell by cell and whole
+(`world/update-fixture`).
+
+### The update (map-update.ts)
+
+1. **`UpdateDice.refillKind(slot)`** is added: the sim's `light if rng < LIGHT_SHARE else std` for a slot a repair empties
+   (a retired waiting ship, a feeder). §3.14's dice throw on it (it never repairs).
+2. **Repairs keep the late-layer light cap.** The sim's repair refill can make a third light ship in a layer from 5; this
+   port turns that one into a standard ship (02 §3.12 step 4: "never a third light ship in a layer from 5 on"). It is rare
+   (repairs start only after four failed attempts; about 0.06 ships a run leave by them) and moves no statistic.
+3. **The sim's `ark-one-hop-from`.** `armChecks` reports only the ark; the update's repair adds the sim's second name (each
+   ship of the layer before that reaches the ark by one hop), so a waiting one leaves as in the sim.
+4. **The valve's pass keys its new ships from attempt `GEN_MAX_ATTEMPTS` (50–99)**, so no ShipKey, and no ship id, is
+   shared with a ship the first pass timed (3a m5). **SAVE:** `ArmShip.attempt` can be up to 99 in a stored arm.
+5. **Departures** are listed done first (in route order), then `first-past`, then the others as they left (slot order); the
+   sim counts them in slot order. The opening desk's block reads them so; §3.14's fixture agrees.
+6. **Seeded streams** (`upd:<armSeed>:<run>:<pass>:<stream>`): the gap, the pattern tie, each pick kind, the refill order,
+   the refill kind and the names one stream each; a ship's resolve roll keyed by its slot (`resolve:<slot>`), so one more
+   ship on the chart never moves another's. Timing and ark extras stay on the new ship's own ShipKey (`rollTiming`,
+   `rollArkExtra`), as the plan says.
+7. **`ArmUpdate.namesReused`**: new generated ships that had to take a departed ship's name (risk 5's soft rule), for the
+   statistics.
+8. **Names (risk 5) measured:** the hard rule (no name on the chart twice) never fails, but the soft rule (avoid the
+   departed ships' names) gives way for about 68% of new generated ships: with about 9 waiting ships and 11 departures a
+   run, the 21-name pool leaves about 3 names unused. Recommendation for 05's owner: grow `GENERATED_SHIP_NAMES` to about 32
+   if a name coming straight back reads badly in the playtest.
+9. **New helpers for the other tracks:** `updateAfterRun(run, dice?)` (the run's own map and route → `{ update, next }`)
+   and `nextLaunchOf(unit, arm)` for RUN END's step; `launchOf(run)` in lineage.ts for the title's launch line (from the
+   map's history; null on run 1).
+
+### The generator (map-generator.ts) and names
+
+10. **`topUpReservations(arm, held, armSeed, run, attempt, closed?, placed?)`**: `held[slot]` is a waiting ship's
+    reservations (null: a new slot) instead of a `newSlots` list, because the quotas count what the waiting ships hold.
+    A top-up skips a quota no new slot can take (the fresh roll still throws there): 99.8% of updated arms hold every quota
+    exactly (INFO). A late corrupted resident is placed only beside an early one, waiting or new, as the generator does.
+    The fresh roll and run 1 call it with nothing held, and their output is byte-identical to before (160 arms compared).
+11. **`shipsFromFrames(frames, waiting, keyOf, start, armSeed, run, attempt)`** is the finish the update and §3.14's fixture
+    share: waiting ships kept as they are, new ones topped up, detailed, the Debris guarantee among the new reachable
+    layer-3 ships, the self-check. When every reachable layer-3 ship waits and none has DEBRIS, the guarantee is not met
+    (risk 4): it happened in 0 of 12,000 runs (INFO), far from the 10% lever.
+12. **`bestRoutePods(arm)`** takes no start year: a walk from the end over reachable hops (no route enumeration).
+13. **`freshArm(armSeed, run, start, names?, finalFloor?)`** as planned. **`freshArmState(…, prev)`** names the next serial
+    (`prev.finalSerial + 1`), floors the final ship at `prev`'s final year + max(start − prev.start, 1), and, replacing an
+    arm for the same run, keeps its gap and valve years (the title's launch line stays true). Without `prev` the serial
+    follows the run (3a's interim).
+14. **Names:** `finalShipNameOfSerial(serial)` (0: LAST LIGHT); `finalShipName(run)` stays as the interim (serial run − 1).
+    `aresName` never throws past run 81: `ARES-88` onward (risk 6, as recommended; to be raised with 05's owner).
+
+### The map and the lineage (map-run.ts, lineage.ts)
+
+15. **`createRunMap`** asserts a stored arm's run (= the wave) and content (= this build's) and throws otherwise: the archive
+    resets a stale arm first, so a mismatch is a bug. Without a stored arm a run ≥ 2 is `freshArmState(…, null)` (unchanged
+    output) and its history's `finalSerial` is set to run − 1, so the next update names on from the right serial.
+16. **The grey cross** of a lost unit is on the world of its last stop (`pastLy` 0, the stop's approach year): the unit ended
+    aboard that ship. Only 046's written cross lies past a world (6 LY past Calder). The archive's activeRun writes cause
+    `abandoned`, so a run in progress already carries its cross.
+17. **The writer** is null when no pod in an LZ carries a featured colonist (a hand-built result), where inbox.ts's postcard
+    writer throws.
+18. **`notableEvents`** takes `Pick<RunState, 'map' | 'ships' | 'stats'>`: the DEAL accepted (value: the pod), the best colony
+    (colonists), then each lost ship (outcome neither locked nor partial; value: its depth), at most 4.
+19. **The ghost** by the cross: a lost unit's speaks from the cross's layer on; a unit with no cross (won, unresolved) or no
+    trail at the final ship; never ship 1. `map/run1-roll`'s M3 block (SAVE's migration) needs its trail to carry a cross
+    (patch in the WORLD report).
+
+### Suites
+
+20. `world/update-stats` (the tier) is 3 chains × 40 runs by the mixed player at widened bands (`stats.ts QUICK_BANDS`, ~1.5 s);
+    `world/update-stats-full` (BALANCE_ONLY) is the plan's 20 × 200 × three players at §4.5's bands plus 800 fresh rolls as
+    the baseline (~95 s). `world/chain.ts` plays the chains as `arm_sim.py chain` does, starting from run 1's authored arm
+    (risk 14).
+
+**The 12,000-run result against the sim (mix; best and random in the suite):** best route p1 65 / p10 67 / median 68 / p90 69
+(sim 65 / 67 / 68 / 69); runs 1–40 → 161–200: 68.01 → 67.91; corr +0.006; waiting median 9, new 11; ages 53 / 30 / 17%; gap
+mean 2.86, max 35; valve 0 of 3,980; first attempt 77.9%, worst 14 (sim 12); FULL 34 / COMPACT 37 / TIGHT 29%; late TIGHT
+2.69 per arm, on the best route 0.2%; all 20 on some route; new final ship 85%; authored ships gone by run 4; span median 733;
+ship-2 request 93.5%. Leaving per update: done 6.03, aged 2.13, resolved 2.10, drifted 1.04, unreachable 0.06, made-room
+0.03 (sim 6.04, 2.13, 2.16, 0.91, 0.05, 0.03). The best player's p1 is 64 (sim 65), inside the band.
