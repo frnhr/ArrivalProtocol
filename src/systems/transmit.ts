@@ -20,7 +20,7 @@ import { logChip } from '@systems/log-view';
 import { TRACE_BOARD_AT } from '@data/tuning';
 import { REPO_FILES } from '@data/repository';
 import { REPO_TEXT } from '@data/repo-text';
-import { hopOutlook } from '@systems/repository';
+import { hopOutlook, markFirstOfKind, deliverySeedChance } from '@systems/repository';
 import type { DeliveryChip } from '@/types/repo';
 
 // The TRANSMIT screen's model (§4.1 step 5, §6.9, §9 WP7 item 4), pure and DOM-free. Mostly information:
@@ -425,12 +425,25 @@ export type SendOnRefusal = 'no-chip';
 
 // The PACKET's SEND ON on delivery chip `key` (02 §3.9; slice-3b-plan §1.1 item 8): the file stays in the destination's
 // receiver to ride the unit's next hop (on a hop into a final ship there is none: it is lost, and the tally lists it), or
-// comes back into the packet. One update: the chip and the plan's filesBlocks / chargeCarried worked out again by
-// planPacket. Track REPO fills it (`TODO(3b-REPO)`).
+// comes back into the packet. One update: the chips re-marked (a first of kind sent on hands "first" to the next chip of
+// its kind on this hop, or to none: systems/repository.ts markFirstOfKind, with the seed chances that follow) and the plan's
+// filesBlocks / chargeCarried worked out again by planPacket. The card dealt stays (the deal counted the deliveries as first
+// packed). The chip's view says `IT IS LOST` on a hop into a final ship (deliveryChipView); the send writes it lost
+// (advanceRequests).
 export function toggleSendOn(store: Store<GameState>, key: string): SendOnRefusal | null {
-  const plan = requirePlan(store.getState());
+  const state = store.getState();
+  const plan = requirePlan(state);
   if (!plan.deliveries.some((chip) => chip.key === key)) return 'no-chip';
-  throw new Error('TODO(3b-REPO): toggleSendOn');
+  const toggled = plan.deliveries.map((chip) => (chip.key === key ? { ...chip, sendOn: !chip.sendOn } : chip));
+  const deliveries = markFirstOfKind(state.run, toggled, deliverySeedChance(plan.threat, plan.hop.noise));
+  const packet = planPacket(state.memory, { ...plan, deliveries });
+  store.update((draft) => {
+    if (!draft.run.transit) throw new Error('toggleSendOn: the transit plan vanished');
+    draft.run.transit.deliveries = deliveries;
+    draft.run.transit.filesBlocks = packet.filesBlocks;
+    draft.run.transit.chargeCarried = packet.chargeCarried;
+  });
+  return null;
 }
 
 // Why a chip did not toggle.

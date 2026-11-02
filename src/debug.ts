@@ -50,8 +50,8 @@ import { podCode } from '@data/landing-text';
 import type { ShipDef, HollowDef } from '@data/ships';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat, nominalRunThreat, planThreat, threatInputFor, fixedShipFacts } from '@systems/threat-plan';
-import { rollBeamSeeds, plantBeamSeed, seedTargetsOf } from '@systems/beam-seeds';
-import { beamSourceOf } from '@systems/run';
+import { rollBeamSeeds, rollDeliverySeeds, plantBeamSeed, seedTargetsOf } from '@systems/beam-seeds';
+import { beamSourceOf, arrivalDeliveries } from '@systems/run';
 import { playsTutorial } from '@systems/meta';
 import { SEED_WORDS_POOL } from '@data/threat-text';
 import { SEEDS_ONLY_DEF } from '@data/threats';
@@ -78,7 +78,8 @@ import {
   archiveLineage, archiveMeta, freshMeta, saveMeta, lineageOf, recordRunStart, recordRunEnd, recordTutorialDone, ghostLine, browserStorage,
   type LastCause, type Meta,
 } from '@systems/meta';
-import { pickCard, draftContext, cardFiles, type PickRefusal } from '@systems/draft';
+import { pickCard, draftContext, cardFiles, planPacket, type PickRefusal } from '@systems/draft';
+import { upgradeRepairsToV2 } from '@systems/delivery-boot';
 import { installAddress } from '@systems/licences';
 import { replaceRange, mergeAdjacentFree, newSegId } from '@systems/memory-ops';
 import { REPAIR_V2_VERSION, THREAD_PLUS_THREADS } from '@data/tuning';
@@ -106,8 +107,9 @@ import type { InboxMessage } from '@/types/inbox';
 import { REPO_FILES, repoFileSegments, repoToolKind } from '@data/repository';
 import {
   setRequest, recommendation, repoModel, undeliveredFiles, bestRepairVersion, deliveryFirstOfKind, hopOutlook,
-  type RepoModel, type OutlookEntry,
+  deliveriesForHop, advanceRequests, type RepoModel, type OutlookEntry,
 } from '@systems/repository';
+import { toggleSendOn, type SendOnRefusal } from '@systems/transmit';
 import { inboxMessages, inboxUnread } from '@systems/inbox';
 
 // Debug hooks on window.__ap, installed ONLY with ?debug in the URL. Screenshot scripts and
@@ -255,6 +257,8 @@ interface DebugHooks {
   };
   inbox: () => { messages: InboxMessage[]; unread: string[]; read: string[] };
   give: (file: RepoFileId) => Segment[];
+  // The PACKET's SEND ON on delivery chip `key` (a request id, as __ap.repo().deliveries lists them): refusal or null.
+  sendOn: (key: string) => SendOnRefusal | null;
   // WP8 part 2: the Skills window's rows (the cards carried, their files, what each is doing now).
   skills: () => SkillRow[];
   // WP9 (KESTREL). zones: this flight's hazard zones, what was hit, and what the true and sensed paths do with
@@ -407,13 +411,7 @@ function giveCard(store: Store<GameState>, id: UpgradeId): Segment[] {
 function giveRepoFile(store: Store<GameState>, file: RepoFileId): Segment[] {
   if (!Object.hasOwn(REPO_FILES, file)) throw new Error(`__ap.give: '${String(file)}' is not in the catalogue (${Object.keys(REPO_FILES).join(', ')})`);
   if (file === 'repair-v2') {
-    store.update((draft) => {
-      for (const seg of draft.memory) {
-        if (seg.type === 'fs-tool' && seg.fsTool === 'repair') seg.version = Math.max(seg.version, REPAIR_V2_VERSION);
-      }
-      if (!draft.run.upgrades.includes('repair-v2')) draft.run.upgrades.push('repair-v2');
-      draft.ui.memoryRev++;
-    });
+    upgradeRepairsToV2(store);
     emit('delivery', { file });
     return [];
   }
@@ -476,25 +474,41 @@ function debugJump(store: Store<GameState>, index: number, threat: ShipThreat = 
 // --- The galaxy map's helpers (slice 3a, Track GEN) ----------------------------------------------------------------------
 
 // The unit packed for `hop` and laid out on the ship it reaches, as debugJump does for a classic ship: the current unit's
-// files with the charge the link lets cross (no transit hits, no stars, no card), the beam's seeds as transmitNext rolls
-// them, and the ship's own arrival damage. Files over the destination's room throw (the PACKET would hold the send).
+// files with the charge the link lets cross (no transit hits, no stars, no card), the deliveries that ride the hop (phase 3
+// slice 3b: every chip, none sent on; the requests move on and first-of-kind tools are licensed, as transmitNext does), the
+// beam's and the deliveries' seeds as transmitNext rolls them, and the ship's own arrival damage. Files over the link or
+// the destination's room throw (the PACKET would hold the send).
 function debugArrive(store: Store<GameState>, hop: Hop, threat: ShipThreat): void {
   abortAll();
   const state = store.getState();
   const map = state.run.map;
   const ship = shipDefAt(map, hop.to);
-  const packet = packUnit(state.memory, hop.linkBlocks, []);
+  const deliveries = deliveriesForHop(state, hop.from, hop.to, threat);
+  const packet = planPacket(state.memory, { linkBlocks: hop.linkBlocks, dropped: [], pick: null, deliveries }, newSegId);
   const fit = roomFit({ files: packedFiles(packet), charge: packet.chargeHeld }, hop);
-  if (fit.over > 0) throw new Error(`__ap: the unit's ${fit.files} blocks of files and a floor of ${fit.floor} are ${fit.over} over ${ship.name}'s room (${fit.room})`);
-  packet.seeds = rollBeamSeeds(packet, beamSourceOf(threat), playsTutorial(state.run), hopRng(state.run, hop.from, hop.to, 'beam-seeds'));
+  if (fit.over > 0 || fit.overLink > 0) throw new Error(`__ap: the unit's ${fit.files} blocks of files (and a floor of ${fit.floor}) are over ${ship.name}'s link (${fit.link}) or room (${fit.room})`);
+  const delivered = packet.deliveries.flatMap((group) => group.segIds);
+  const deliverySeeds = rollDeliverySeeds(deliveries, packet, hopRng(state.run, hop.from, hop.to, 'delivery-seeds'));
+  packet.seeds = [
+    ...rollBeamSeeds(packet, beamSourceOf(threat), playsTutorial(state.run), hopRng(state.run, hop.from, hop.to, 'beam-seeds'), delivered),
+    ...deliverySeeds,
+  ];
   const charge = arrivalCharge(packet.chargeCarried, 0, 0, hop.chargeFloor);
   const layout = layoutCarried(packet, charge.blocks, ship, threat, hollowLabel(state.run));
   const scripted = arrivalDamage(layout.racks.segs, ship.arrivalDamage);
-  store.update((draft) => { draft.run.transit = null; });
+  const plan = { toSlot: hop.to, hop, deliveries };
+  store.update((draft) => {
+    draft.run.transit = null;
+    draft.run.repo = advanceRequests(draft.run.repo, plan, draft.run.map);
+    for (const chip of deliveries) {
+      const kind = repoToolKind(chip.file);
+      if (chip.firstOfKind && kind !== null && !draft.run.licences.includes(kind)) draft.run.licences.push(kind);
+    }
+  });
   startShip(store, hop.to, layout.racks, {
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: charge.floorAdded,
     chargeOverflowLost: layout.overflowLost, scripted, eccCorrected: 0, seeds: layout.seeds, boarded: boardedBy(threat),
-    deliveries: [],
+    deliveries: arrivalDeliveries(deliveries, packet.deliveries, deliverySeeds.map((seed) => seed.targetId)),
   }, threat, hop);
 }
 
@@ -544,6 +558,8 @@ function debugRoute(store: Store<GameState>, slots: readonly number[]): Hop {
     draft.run.map.galaxyYear = route.at(-1)!.hop?.approachYear ?? draft.run.map.startYear;
     draft.run.shipIndex = route.length - 1;
     draft.run.threat = prior;
+    // The route is rewritten: requests made on the old one name receivers and years it no longer has (3b).
+    draft.run.repo = { pick: null, requests: [], nextId: draft.run.repo.nextId };
   });
   const hop = hopBetween(store.getState().run.map, prev, last);
   const facts = mapFacts(map, prev, last, slots.length);
@@ -788,7 +804,7 @@ export function mountDebug(store: Store<GameState>): void {
     ghost: () => ghostLine(store.getState().run.unitNumber, store.getState().run.lastUnit),
     draft: () => {
       const plan = store.getState().run.transit;
-      return plan === null ? null : { offer: plan.offer, pick: plan.pick, context: draftContext(store.getState(), plan.linkBlocks) };
+      return plan === null ? null : { offer: plan.offer, pick: plan.pick, context: draftContext(store.getState(), plan.linkBlocks, plan.hop, plan.deliveries) };
     },
     pick: (id) => pickCard(store, id),
     giveCard: (id) => giveCard(store, id),
@@ -808,6 +824,7 @@ export function mountDebug(store: Store<GameState>): void {
       return { messages: inboxMessages(state), unread: inboxUnread(state).map((message) => message.id), read: [...state.run.inbox.read] };
     },
     give: (file) => giveRepoFile(store, file),
+    sendOn: (key) => toggleSendOn(store, key),
     skills: () => skillsModel(store.getState()),
     zones: () => {
       const state = store.getState();

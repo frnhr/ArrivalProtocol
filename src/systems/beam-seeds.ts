@@ -59,9 +59,14 @@ function matchesPick(seg: Readonly<Segment>, pick: Readonly<SeedTargetPick>): bo
 // whose file is not in the packet (the kid left Telemetry behind on the TRANSMIT screen) rides behind a file rolled the
 // usual way instead. Each seed's words come from 05 §3.5's pool. Uses `rng` only (childRng(seed, toShip, 'beam-seeds')
 // at the caller), so a hop rolls the same seeds whatever route led to it.
-export function rollBeamSeeds(packet: Readonly<Packet>, source: BeamSeedSource, firstRun: boolean, rng: Rng): BeamSeedPlan[] {
+// `excludeIds` (phase 3 slice 3b): the delivered files (Packet.deliveries) are never a beam seed's target. A delivery rolls
+// its own seed (rollDeliverySeeds, behind the delivered file), and a first of kind none at all (its lesson), so a beam
+// seed behind one would break both rules, and two seeds behind one file throw in layoutCarried.
+export function rollBeamSeeds(
+  packet: Readonly<Packet>, source: BeamSeedSource, firstRun: boolean, rng: Rng, excludeIds: readonly string[] = [],
+): BeamSeedPlan[] {
   if (source.kind === 'none') return [];
-  const pool = seedTargetsOf([...packet.rackE, ...packet.rackF]);
+  const pool = seedTargetsOf([...packet.rackE, ...packet.rackF]).filter((seg) => !excludeIds.includes(seg.id));
   const scripted = source.kind === 'scripted' && firstRun ? source.firstRun : null;
   const count = scripted !== null ? scripted.length : seedCountFor(source.kind === 'scripted' ? source.later : source.noise, rng);
   const plans: BeamSeedPlan[] = [];
@@ -81,12 +86,23 @@ export function rollBeamSeeds(packet: Readonly<Packet>, source: BeamSeedSource, 
 // chip order, one chance draw against its seedChance (0 on a tool kind's first delivery, into a calm ship and on the patch;
 // else DELIVERY_SEED_CHANCE by the hop's noise) and one words draw, each seed behind the delivered file it rode with (at
 // most one per file). `packet` is the packet planPacket built (the delivered files' real ids); `rng` is the hop's own
-// 'delivery-seeds' stream, so the beam's own seeds never shift. Track REPO fills it (`TODO(3b-REPO)`): empty until then.
+// 'delivery-seeds' stream, so the beam's own seeds never shift. Both draws are taken for every chip packed, whatever its
+// chance, so one chip's verdict never shifts the next one's numbers.
 export function rollDeliverySeeds(chips: readonly DeliveryChip[], packet: Readonly<Packet>, rng: Rng): BeamSeedPlan[] {
-  void chips;
-  void packet;
-  void rng;
-  return []; // TODO(3b-REPO): one chance draw and one words draw per chip.
+  const files = [...packet.rackE, ...packet.rackF];
+  const plans: BeamSeedPlan[] = [];
+  for (const chip of chips) {
+    if (chip.sendOn) continue;
+    const packed = packet.deliveries.find((group) => group.key === chip.key);
+    if (packed === undefined) throw new Error(`rollDeliverySeeds: chip ${chip.key} (${chip.file}) is not in the packet`);
+    const roll = rng();
+    const words = SEED_WORDS_POOL[Math.floor(rng() * SEED_WORDS_POOL.length)]!;
+    if (!(roll < chip.seedChance)) continue;
+    const target = files.find((seg) => seg.id === packed.segIds[0]);
+    if (target === undefined || !isInfectable(target)) throw new Error(`rollDeliverySeeds: ${chip.file}'s file is not an infectable packed file`);
+    plans.push({ targetId: target.id, targetName: target.name, words });
+  }
+  return plans;
 }
 
 // One beam seed as a segment (a phase-2 seed, beam-born): what layoutCarried places behind its target at the boot.

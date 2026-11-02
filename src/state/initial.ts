@@ -211,8 +211,6 @@ export function createLandingState(def: ShipLandingDef, memory: readonly Segment
   };
 }
 
-// HOLLOW sleeps in its root until the ship's wake (systems/hollow.ts). `cfg` is the ladder's config for the ship
-// (ShipThreat.hollow), copied.
 // The tool kinds that arrive untried with this ship's deliveries (phase 3 slice 3b, 04 §3.3: the lesson is never eaten):
 // the first of each kind, as the send marked it (systems/repository.ts deliveryFirstOfKind, read when the chips were made,
 // before the send added the kind to run.licences). Spares are not untried. Empty on ship 1 and on the classic world.
@@ -221,6 +219,8 @@ function untriedOnArrival(run: Readonly<RunState>): FsToolKind[] {
   return kinds.filter((kind): kind is FsToolKind => kind !== null);
 }
 
+// HOLLOW sleeps in its root until the ship's wake (systems/hollow.ts). `cfg` is the ladder's config for the ship
+// (ShipThreat.hollow), copied.
 export function createHollowState(cfg: Readonly<HollowDef>): HollowState {
   return {
     cfg: structuredClone(cfg) as HollowDef, phase: 'asleep', story: 'none', scriptTargetId: null, biteInSec: null, wakeAtAi: null,

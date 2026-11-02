@@ -83,13 +83,16 @@ export interface ArrivalPlan {
   deliveries: readonly DeliveryChip[];
 }
 
-// The unit's arrival over `plan`. `seedsExact`: the seeds the beam really rolled (transmitNext's check), in place of the
-// verdict's allowance.
+// The unit's arrival over `plan`. `seedsExact`: the seeds the beam really rolled, the deliveries' own included
+// (transmitNext's check), in place of the allowance. The allowance is the verdict's beam seeds plus, at most, one seed per
+// delivery packed with a chance of one (phase 3 slice 3b, 04 §3.4: none on a first of kind, the patch, into a calm ship).
 export function unitArrival(state: Readonly<GameState>, plan: Readonly<ArrivalPlan>, seedsExact?: number): ArrivalPreview {
   const packet = planPacket(state.memory, { linkBlocks: plan.hop.linkBlocks, dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries });
+  const deliverySeedsMax = plan.deliveries.filter((chip) => !chip.sendOn && chip.seedChance > 0).length;
+  const beam = seedAllowance(plan.threat, playsTutorial(state.run)) ?? { min: 0, max: 0 };
   const seeds = seedsExact !== undefined
     ? { min: seedsExact, max: seedsExact }
-    : seedAllowance(plan.threat, playsTutorial(state.run)) ?? { min: 0, max: 0 };
+    : { min: beam.min, max: beam.max + deliverySeedsMax };
   const card = pickCharge(plan.pick);
   const fit = roomFit({
     files: packedFiles(packet).map((seg) => ({ size: seg.size })),
