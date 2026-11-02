@@ -2,13 +2,13 @@ import type { Store } from '@state/store';
 import type { GameState, ShipOutcome, TransitPlan } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import type { RoomFit } from '@/types/map';
-import { unitFilesIn, dropLock, toolKindOf, arrivalCharge, crashCoreToll, packedFiles, BEAM_SEED_LAYOUT_BLOCKS, type DropLock } from '@systems/carry';
+import { unitFilesIn, dropLock, toolKindOf, arrivalCharge, crashCoreToll, type DropLock } from '@systems/carry';
 import { planPacket, pickCharge, cardFiles, PREVIEW_ID } from '@systems/draft';
 import { getUpgrade, type DraftCard, type UpgradeId } from '@data/upgrades';
 import { hasIntegrity, isInfected, getAiCore } from '@state/selectors';
 import { shipSummaryAt } from '@systems/map-run';
-import { roomFit, hitsLanding } from '@systems/map-hop';
-import { seedRange } from '@systems/map-noise';
+import { hitsLanding } from '@systems/map-hop';
+import { unitArrival, type ArrivalPreview } from '@systems/arrival-preview';
 import { MAP_TEXT } from '@data/map-text';
 import { TOOL_WORD } from '@data/fs-tools';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
@@ -45,8 +45,11 @@ import { TRACE_BOARD_AT } from '@data/tuning';
 //   FLOOR 12`), with the charge it costs named before it happens (`CHARGE 38 → 12 ON ARRIVAL · 26 WON'T FIT`); on a
 //   TIGHT ship whose room leaves no charge, `→ 0 ON ARRIVAL` in red, and TRANSMIT ▸ asks first (the screen's inline
 //   confirm, `ARRIVE WITH NO REPAIR CHARGE?`);
-// • TRANSMIT ▸ waits while files plus the floor are over the room (`20 TOO MANY FOR THE ROOM · LEAVE FILES BEHIND`), and
-//   a file can then be left behind even when that buys no charge (toggleDrop);
+// • TRANSMIT ▸ waits while files plus the floor are over the room (`20 TOO MANY FOR THE ROOM · LEAVE FILES BEHIND`), or
+//   files are over the link (`8 TOO MANY FOR THE LINK · …`: a unit grown past a short hop's link, the review's B1), and a
+//   file can then be left behind even when that buys no charge (toggleDrop);
+// • every arrival number (the arrival line, the room line, the confirm) is systems/arrival-preview.ts's, from one roomFit
+//   (the review's M1: the room line and the arrival line said 20 and 54);
 // • a file left behind on a squeezing room shows the charge it lets arrive (`+6 CHARGE`), not only what it lets cross.
 
 export interface PacketChip {
@@ -136,14 +139,15 @@ export interface TransmitModel {
   onTheWay: string | null;     // the ECC line on the arm (null on the classic world: hitsLine says it)
 }
 
-// The PACKET's room bar (01 §3.16): the packet against the destination's room, and what it costs the charge.
+// The PACKET's room bar (01 §3.16): the packet against the destination's room, and what it costs the charge; the words
+// are the arrival preview's (systems/arrival-preview.ts).
 export interface PacketRoom {
   fit: RoomFit;
   line: string;                // ROOM 152 · FILES 65 + FLOOR 12 / ROOM 88 · FILES 73 · NO FLOOR
   charge: string | null;       // CHARGE 38 → 12 ON ARRIVAL · 26 WON'T FIT, or → 0 ON ARRIVAL; null when all of it fits
   tone: 'quiet' | 'squeezed' | 'zero' | 'over';
-  overRoom: string | null;     // 20 TOO MANY FOR THE ROOM · LEAVE FILES BEHIND: TRANSMIT ▸ waits
-  zeroCharge: boolean;         // no charge arrives: TRANSMIT ▸ asks ARRIVE WITH NO REPAIR CHARGE? first
+  tooMany: string | null;      // 20 TOO MANY FOR THE ROOM (or LINK) · LEAVE FILES BEHIND: TRANSMIT ▸ waits
+  confirm: string | null;      // the charge may arrive at 0: TRANSMIT ▸ asks this first (ARRIVE WITH NO REPAIR CHARGE?)
 }
 
 // The chip's words after the owner (THREAT_TEXT.uninvitedChip reads `owner · n BLOCKS · NOT YOURS · RIDES FREE`).
@@ -230,33 +234,21 @@ function effectNote(kept: readonly Segment[], seg: Segment): string {
   return TRANSMIT_TEXT.without[seg.role];
 }
 
-// The packet's fit to the destination's room (systems/map-hop.ts roomFit): its files as they would cross (the card's
-// file in them), the charge held, the star credit and the card's charge, and the room the beam's seeds could take
-// (SEEDS FIRST: none into a calm ship, else the hop's noise at the destination's depth).
-export function packetFit(state: Readonly<GameState>, plan: Readonly<TransitPlan>, dropped: readonly string[] = plan.dropped): RoomFit {
-  const packet = planPacket(state.memory, { ...plan, dropped });
-  const seeds = plan.threat.act === 'calm' ? 0 : (seedRange(plan.hop.noise, plan.threat.depth)?.max ?? 0);
-  return roomFit({
-    files: packedFiles(packet).map((seg) => ({ size: seg.size })),
-    charge: packet.chargeHeld,
-    bonus: { starCredit: state.run.pendingStarCredit, card: pickCharge(plan.pick) },
-    seedBlocksMax: seeds * BEAM_SEED_LAYOUT_BLOCKS,
-  }, plan.hop);
+// The packet's fit to the destination's link and room (systems/arrival-preview.ts unitArrival, the one preview): its
+// files as they would cross (the card's file in them), the charge held, the star credit and the card's charge, and the
+// room the beam's seeds could take by the verdict.
+export function packetArrival(state: Readonly<GameState>, plan: Readonly<TransitPlan>, dropped: readonly string[] = plan.dropped): ArrivalPreview {
+  return unitArrival(state, { hop: plan.hop, threat: plan.threat, dropped, pick: plan.pick });
 }
 
-function packetRoom(fit: Readonly<RoomFit>): PacketRoom {
+export function packetFit(state: Readonly<GameState>, plan: Readonly<TransitPlan>, dropped: readonly string[] = plan.dropped): RoomFit {
+  return packetArrival(state, plan, dropped).fit;
+}
+
+function packetRoom(preview: Readonly<ArrivalPreview>): PacketRoom {
+  const fit = preview.fit;
   const line = fit.floor > 0 ? MAP_TEXT.packet.room(fit.room, fit.files, fit.floor) : MAP_TEXT.packet.roomNoFloor(fit.room, fit.files);
-  if (fit.word === 'leave') {
-    return { fit, line, charge: null, tone: 'over', overRoom: MAP_TEXT.packet.overRoom(fit.over), zeroCharge: false };
-  }
-  if (fit.word === 'no-charge') {
-    const charge = fit.wanted > 0 ? MAP_TEXT.packet.squeeze(fit.wanted, 0, fit.roomLost) : MAP_TEXT.packet.zeroCharge;
-    return { fit, line, charge, tone: 'zero', overRoom: null, zeroCharge: true };
-  }
-  if (fit.word === 'squeezed') {
-    return { fit, line, charge: MAP_TEXT.packet.squeeze(fit.wanted, fit.chargeArrives, fit.roomLost), tone: 'squeezed', overRoom: null, zeroCharge: false };
-  }
-  return { fit, line, charge: null, tone: 'quiet', overRoom: null, zeroCharge: false };
+  return { fit, line, charge: preview.charge, tone: preview.tone, tooMany: preview.tooMany, confirm: preview.confirm };
 }
 
 function requirePlan(state: Readonly<GameState>): TransitPlan {
@@ -294,7 +286,8 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
   const packet = planPacket(state.memory, plan);
   const carriedWith = (dropped: readonly string[]): number => planPacket(state.memory, { ...plan, dropped }).chargeCarried;
   const chargeShort = packet.chargeHeld > packet.chargeCarried;
-  const fit = packetFit(state, plan);
+  const preview = packetArrival(state, plan);
+  const fit = preview.fit;
   const arrivesWith = (dropped: readonly string[]): number => packetFit(state, plan, dropped).chargeArrives;
 
   const log = logChip(state);
@@ -316,9 +309,9 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
       infected: isInfected(seg),
       dropped,
       lock,
-      // A drop is offered while it buys charge across the link or on arrival, or while files are over the room (then it
-      // is needed whatever it buys: 01 §3.16, TRANSMIT ▸ waits).
-      toggleable: dropped || (lock === null && (chargeGain > 0 || arriveGain > 0 || fit.over > 0)),
+      // A drop is offered while it buys charge across the link or on arrival, or while files are over the room or the
+      // link (then it is needed whatever it buys: 01 §3.16, the review's B1; TRANSMIT ▸ waits).
+      toggleable: dropped || (lock === null && (chargeGain > 0 || arriveGain > 0 || fit.over > 0 || fit.overLink > 0)),
       note: lock !== null ? lockNote(lock, seg) : effectNote(kept, seg),
       chargeGain,
       arriveGain,
@@ -339,7 +332,7 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
   if (charge.blocks !== fit.wanted) throw new Error(`transmitModel: arrival charge ${charge.blocks} but the room bar wants ${fit.wanted}`);
   const infectedCount = chips.filter((chip) => chip.infected && !chip.dropped).length;
   const arm = state.run.map.world === 'arm';
-  const room = packetRoom(fit);
+  const room = packetRoom(preview);
   const hits = plan.hop.transitHits + plan.extraHits;
   return {
     toShipIndex: plan.toShipIndex,
@@ -354,14 +347,12 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
     files: packet.filesBlocks,
     chargeHeld: packet.chargeHeld,
     chargeCarried: packet.chargeCarried,
-    packetLine: TRANSMIT_TEXT.packet(plan.linkBlocks, packet.filesBlocks, packet.chargeHeld, packet.chargeCarried),
+    packetLine: TRANSMIT_TEXT.packet(plan.linkBlocks, packet.filesBlocks, packet.chargeHeld, packet.chargeCarried, fit.roomLost > 0),
     hitsLine: TRANSMIT_TEXT.hits(hits),
-    arrivalLine: TRANSMIT_TEXT.arrival(
-      packet.chargeCarried, state.run.pendingStarCredit, state.run.pendingStars, charge.floorAdded, charge.blocks, pickCharge(plan.pick),
-    ),
-    arrivalCharge: charge.blocks,
+    arrivalLine: preview.sum,
+    arrivalCharge: fit.chargeArrives,
     infectedLine: infectedCount > 0 ? TRANSMIT_TEXT.infected(infectedCount) : null,
-    dropLine: room.overRoom !== null ? room.overRoom
+    dropLine: room.tooMany !== null ? room.tooMany
       : chargeShort || plan.dropped.length > 0 || fit.roomLost > 0 ? TRANSMIT_TEXT.tight : TRANSMIT_TEXT.fits,
     chips: chips.map(({ order: _order, ...chip }) => chip),
     cards: plan.offer.map((card, i) => {

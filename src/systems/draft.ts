@@ -1,6 +1,7 @@
 import type { Store } from '@state/store';
 import type { GameState, TransitPlan } from '@state/schema';
 import type { Segment, FirewallSegment, UpgradeSegment } from '@/types/segment';
+import type { Hop } from '@/types/map';
 import { packUnit, type Packet } from '@systems/carry';
 import { chargeLeft, upgradeFiles, isFirewall } from '@state/selectors';
 import { hollowLabel } from '@systems/say';
@@ -34,24 +35,33 @@ export function ownedUpgrades(state: Readonly<GameState>): Record<UpgradeId, num
 }
 
 // What the draft reads at this TRANSMIT: the run's stats, the charge held, the ship just left, what the unit
-// owns, whether it has a Repair, the link room its files leave (`linkBlocks`: the next ship's link), and what
-// the strip calls HOLLOW (the reasons name it the way the kid saw it).
-export function draftContext(state: Readonly<GameState>, linkBlocks: number): DraftContext {
+// owns, whether it has a Repair, the room its files leave (`linkRoom`: the next ship's link, and on a hop with a room
+// that room less the floor, whichever is less, never below 0), and what the strip calls HOLLOW (the reasons name it the
+// way the kid saw it). A unit whose files are over the link is dealt no file card (the review's B1: a FIREWALL picked
+// there would only add to what must be left behind); on the classic world the link always binds first, so its deals
+// are phase 2's.
+export function draftContext(
+  state: Readonly<GameState>, linkBlocks: number, room?: Readonly<Pick<Hop, 'room' | 'chargeFloor'>>,
+): DraftContext {
   const last = state.run.ships[state.run.ships.length - 1] ?? null;
+  const files = packUnit(state.memory, linkBlocks, []).filesBlocks;
+  const roomLeft = room === undefined ? Infinity : room.room - room.chargeFloor - files;
   return {
     stats: state.run.stats,
     chargeHeld: chargeLeft(state),
     lastShip: last === null ? null : { name: last.shipName, fuelLeftPct: last.fuelLeftPct },
     owned: ownedUpgrades(state),
     hasRepair: state.memory.some((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair'),
-    linkRoom: linkBlocks - packUnit(state.memory, linkBlocks, []).filesBlocks,
+    linkRoom: Math.max(0, Math.min(linkBlocks - files, roomLeft)),
     hollowLabel: hollowLabel(state.run),
   };
 }
 
-// The cards for the TRANSMIT now being prepared (goTransmit), seeded by the ship being left.
-export function dealDraft(state: Readonly<GameState>, linkBlocks: number): DraftCard[] {
-  return draftCards(draftContext(state, linkBlocks), visitRng(state.run, 'draft'));
+// The cards for the TRANSMIT now being prepared (goTransmit), seeded by the ship being left: a hop (its link and room),
+// or a bare link (the classic suites).
+export function dealDraft(state: Readonly<GameState>, hop: number | Readonly<Pick<Hop, 'linkBlocks' | 'room' | 'chargeFloor'>>): DraftCard[] {
+  const context = typeof hop === 'number' ? draftContext(state, hop) : draftContext(state, hop.linkBlocks, hop);
+  return draftCards(context, visitRng(state.run, 'draft'));
 }
 
 // The new file a file card adds to the packet, with an id from `makeId` (the real send mints one; the

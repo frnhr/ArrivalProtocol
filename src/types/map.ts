@@ -150,19 +150,26 @@ export interface RunMapState {
 }
 
 // The card's fit line and the PACKET's room bar (01 §3.16; systems/map-hop.ts roomFit): how the unit's files and
-// charge meet a destination's room. Charge in blocks: what the link lets cross, plus the star credit and the +12 card
-// (arrivalCharge), never below the floor; then the room: files, the floor, the beam seeds, the rest (SEEDS FIRST).
+// charge meet a destination's link and room. Charge in blocks: what the link lets cross, plus the star credit and the +12
+// card (arrivalCharge), never below the floor; then the room by data/memory.ts fillRoom: files, the floor, the beam seeds,
+// the rest (SEEDS FIRST). systems/arrival-preview.ts turns it into every arrival number the kid reads.
 export interface RoomFit {
   files: number;
+  link: number;
   room: number;
   floor: number;
-  carried: number;              // the charge the link lets cross (min(charge, link − files))
-  wanted: number;               // what would arrive with room to spare: max(floor, carried + star credit + card)
-  chargeArrives: number;        // with no beam seeds
-  chargeArrivesMin: number;     // with seedBlocksMax of beam seeds laid out first
-  linkLost: number;             // charge the link leaves behind (the PACKET's link bar)
-  roomLost: number;             // charge the room has no space for (no seeds): `CHARGE 38 → 12 · 26 WON'T FIT`
+  carried: number;              // the charge the link lets cross (min(charge, link − files); none while files are over it)
+  bonus: number;                // what arrives on top of it: the star credit and the card's charge
+  wanted: number;               // what would arrive with room to spare: max(floor, carried + bonus)
+  floorAdded: number;           // ARRIVAL CONTROL's top-up to the floor inside `wanted`
+  seedsMin: number;             // the fewest beam seeds the beam brings (the tutorial's scripted seed: 1)
+  seedsMax: number;             // the most
+  chargeArrives: number;        // laid out with seedsMin seeds
+  chargeArrivesMin: number;     // laid out with seedsMax seeds (the room's worst case)
+  linkLost: number;             // charge the link leaves behind (the PACKET's link bar; the card's `LINK LEAVES n`)
+  roomLost: number;             // charge the room has no space for (with seedsMin): `CHARGE 38 → 12 · 26 WON'T FIT`
   over: number;                 // files + floor − room, when positive: the unit does not fit until files are left
+  overLink: number;             // files − link, when positive: nor does it cross (the review's B1)
   word: 'fits' | 'squeezed' | 'leave' | 'no-charge';
 }
 

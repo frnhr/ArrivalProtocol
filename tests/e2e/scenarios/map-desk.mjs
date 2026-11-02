@@ -120,12 +120,12 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
     && view.nodes.find((node) => node.slot === HALCYON)?.selected && view.go === 'SET COURSE ▸ HALCYON [ENTER]' && (await cuesSince(from)).includes('chime'),
     `${clicked} ${view.selected} ${view.go}`);
   const card = view.card;
-  check('…HALCYON\'s card: HALCYON · Tessaly · 1,000 COLONISTS · 5 PODS, APPROACH 2352 · YOU GET THERE 2321 · 31 YRS EARLY',
-    card?.slot === HALCYON && card.name === 'HALCYON' && card.sub === 'Tessaly · 1,000 COLONISTS · 5 PODS'
-    && card.sched === 'APPROACH 2352 · YOU GET THERE 2321 · 31 YRS EARLY', JSON.stringify(card));
-  check('…its rows: FLYBY, TOO WIDE · MEMORY 320 · COMPACT · ROOM FOR YOU 152 · YOU FIT · LZ: 2 · 21 LY · LINK 123 · 3 HITS (ECC fixes 1) · NOISE CLEAN',
-    ['problems=FLYBY, TOO WIDE', 'memory=MEMORY 320 · COMPACT · ROOM FOR YOU 152', 'fit=YOU FIT', 'lzs=LZ: 2 · SET BY ARRIVAL CONTROL',
-      'beam=21 LY · LINK 123 · 3 HITS (ECC fixes 1)', 'noise=NOISE CLEAN · SEEDS: none'].every((row) => card?.rows.includes(row))
+  check('…HALCYON\'s card leads: Tessaly · 5 PODS, 1,000 COLONISTS, 31 YRS EARLY, 3 HITS · 1 FIXED WHILE YOU SLEEP → 2 LAND',
+    card?.slot === HALCYON && card.name === 'HALCYON' && card.sub === 'Tessaly · 5 PODS' && card.colonists === '1,000 COLONISTS'
+    && card.sched === '31 YRS EARLY' && card.cost === '3 HITS · 1 FIXED WHILE YOU SLEEP → 2 LAND', JSON.stringify(card));
+  check('…its rows: YOU FIT first, then FLYBY, TOO WIDE · MEMORY 320 · COMPACT · ROOM FOR YOU 152 · LZ: 2 · 21 LY · LINK 123 · NOISE CLEAN',
+    card?.rows[0] === 'fit=YOU FIT' && ['problems=FLYBY, TOO WIDE', 'memory=MEMORY 320 · COMPACT · ROOM FOR YOU 152', 'lzs=LZ: 2 · SET BY ARRIVAL CONTROL',
+      'beam=21 LY · LINK 123', 'noise=NOISE CLEAN · SEEDS: none'].every((row) => card?.rows.includes(row))
     && card?.rows.some((row) => /^run=SHIP 2 OF YOUR RUN · \d(–\d)? MORE TO THE FINAL SHIP$/.test(row)), JSON.stringify(card?.rows));
   check('…and the TIMELINE `2300 you leave · 2321 you get there · 2352 ▲ approach`', card?.timeline === '2300 you leave · 2321 you get there · 2352 ▲ approach', card?.timeline);
   // ALBATROSS, the ark at the end of a long line: ONLY FROM HERE (read by hovering is the tag; its card by a click).
@@ -133,7 +133,7 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await page.waitForTimeout(300);
   const albatross = (await run.desk()).card;
   check('…ALBATROSS\'s card: ARK, 51 LY · LINK 90 · 7 HITS, 14 YRS EARLY and ONLY FROM HERE in red', albatross?.name === 'ALBATROSS' && albatross.tags.includes('ARK')
-    && albatross.rows.some((row) => /^beam=51 LY · LINK 90 · 7 HITS/.test(row)) && /14 YRS EARLY$/.test(albatross.sched ?? '')
+    && albatross.rows.some((row) => /^beam=51 LY · LINK 90$/.test(row)) && /^7 HITS/.test(albatross.cost ?? '') && albatross.sched === '14 YRS EARLY'
     && albatross.rows.some((row) => /^only=ONLY FROM HERE/.test(row)), JSON.stringify(albatross));
   await run.clickNode(HALCYON);
   await page.waitForTimeout(300);

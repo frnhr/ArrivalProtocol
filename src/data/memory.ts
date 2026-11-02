@@ -12,6 +12,7 @@ import { rollRoster, rollChildAge, type ScriptedRoster } from '@data/souls';
 import {
   SEG_NAME_MAX_CHARS, RACK_BLOCKS, DRIVER_BLOCKS, COLONISTS_PER_POD, INTEGRITY_MAX, LAST_BLOCK_SIZE,
   POD_RACK_MIN_FREE, UNIT_TAIL_BLOCKS, WALL_MIN_BLOCKS, PRE_FINAL_ROOT_CAP, FINAL_ROOT_MAX_BLOCKS, CHARGE_ARRIVAL_FLOOR,
+  SEED_BLOCKS, SEED_GAP_TO_TARGET_BLOCKS,
 } from '@data/tuning';
 import { integrityState } from '@state/selectors';
 import { HOLLOW_DESC } from '@data/hollow-text';
@@ -64,6 +65,31 @@ export const MEMORY_LAYOUTS: Readonly<Record<MemoryClass, MemoryLayout>> = {
   COMPACT: makeLayout('COMPACT', ['A', 'B', 'C', 'E', 'F'], ['B', 'C'], CHARGE_ARRIVAL_FLOOR, 8),
   TIGHT: makeLayout('TIGHT', ['A', 'B', 'C', 'E'], ['B', 'C'], 0, 8),
 };
+
+// The blocks one beam seed takes at the boot (04 §3.4): its GAP to the target, itself, and the WALL behind it.
+export const BEAM_SEED_LAYOUT_BLOCKS = SEED_GAP_TO_TARGET_BLOCKS + SEED_BLOCKS + WALL_MIN_BLOCKS;
+
+// What a unit's arrival does in the room for it (01 §3.16's fill order): the files, then the floor (none on a TIGHT
+// ship), then the beam seeds, each whole (a seed with no room left is a stray, laid out elsewhere: it takes none of the
+// room), then the rest of the charge. The ONE rule: systems/carry.ts layoutCarried lays a unit out by it, and
+// systems/map-hop.ts roomFit previews it for the card and the PACKET (the slice-3a review's M1: two copies of it had
+// drifted, a seed with half its blocks of room counted as taking them in one and as a stray in the other).
+export interface RoomFill {
+  seedsPlaced: number;      // seeds laid out in the room (the rest are strays)
+  charge: number;           // REPAIR CHARGE laid out
+  lost: number;             // charge with no room (CHARGE OVERFLOW)
+}
+
+export function fillRoom(room: number, files: number, floor: number, charge: number, seeds: number): RoomFill {
+  for (const [what, n] of [['room', room], ['files', files], ['floor', floor], ['charge', charge], ['seeds', seeds]] as const) {
+    if (!(Number.isInteger(n) && n >= 0)) throw new Error(`fillRoom: ${what} ${n}`);
+  }
+  if (files > room) throw new Error(`fillRoom: ${files} blocks of files over a room of ${room}`);
+  const seedRoom = Math.max(0, room - files - Math.min(charge, floor));
+  const seedsPlaced = Math.min(seeds, Math.floor(seedRoom / BEAM_SEED_LAYOUT_BLOCKS));
+  const laid = Math.max(0, Math.min(charge, room - files - seedsPlaced * BEAM_SEED_LAYOUT_BLOCKS));
+  return { seedsPlaced, charge: laid, lost: charge - laid };
+}
 
 // The layout of a memory class; an unknown class throws (fail loudly: never a quiet FULL).
 export function layoutFor(cls: MemoryClass): MemoryLayout {
@@ -489,6 +515,16 @@ export function lastPodRackTrailingFree(ship: ShipDef): number {
   if (!last) throw new Error(`lastPodRackTrailingFree ${ship.id}: the ship has no pod rack`);
   const slotHere = last.tokens.some((token) => token.kind === 'slot');
   return Math.max(0, trailingFree(last.tokens) - (slotHere ? maxRootFor(ship) : 0));
+}
+
+// The room for the unit on a built ship: the receiver plus the tail of its last pod rack (01 §3.16). The ONE definition
+// (the review's M1): the hop and the card read the class's roomForUnit before the ship is built, and the layout reads it
+// here; they agree because validatePodRacks demands the whole UNIT_TAIL_BLOCKS tail on every ship, which this checks
+// again rather than quietly taking a smaller room.
+export function roomForUnitOn(ship: ShipDef): number {
+  const tail = lastPodRackTrailingFree(ship);
+  if (tail < UNIT_TAIL_BLOCKS) throw new Error(`roomForUnitOn ${ship.id}: the last pod rack ends in ${tail} free blocks, under the unit's ${UNIT_TAIL_BLOCKS}`);
+  return layoutFor(ship.memoryClass).roomForUnit;
 }
 
 // The colonists a ship carries (01-landing §3.5: the LZ counts sum to everyone aboard), from its landing data alone: the

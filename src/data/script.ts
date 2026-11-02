@@ -632,12 +632,26 @@ export const SHIP_OUTCOME_WORD: Readonly<Record<ShipOutcome, string>> = {
 // The TRANSMIT screen (§4.1 step 5, §6.9, §9 WP7 item 4): mostly information. Where the unit goes, how the
 // packet fits the link, what the crossing costs, and the files: each a chip with what leaving it behind
 // would do. The send's words are the moment itself (22 light-years ticking past).
+// The sum the arrival line adds up (`36 CARRIED + 18 (★★★) + 12 (CARD)`): TRANSMIT_TEXT.arrival's, and the arm's room
+// line's (systems/arrival-preview.ts: `… = 54 · ROOM FOR 20`), so both say the same parts.
+export function arrivalParts(carried: number, starCredit: number, stars: number, floorAdded: number, cardCharge = 0): string {
+  const parts = [`${carried} CARRIED`];
+  if (starCredit > 0) parts.push(`+ ${starCredit} (${'★'.repeat(stars)})`);
+  if (cardCharge > 0) parts.push(`+ ${cardCharge} (CARD)`);
+  if (floorAdded > 0) parts.push(`+ ${floorAdded} FLOOR`);
+  return parts.join(' ');
+}
+
 export const TRANSMIT_TEXT = {
   title: 'TRANSMIT',
   next: (ship: string, colonists: number, ly: number): string => `NEXT: ${ship} · ${formatCount(colonists)} COLONISTS · ${ly} LY`,
-  packet: (link: number, files: number, held: number, carried: number): string => (carried >= held
-    ? `LINK ${link} · FILES ${files} · CHARGE ${held} → FITS`
-    : `LINK ${link} · FILES ${files} · CHARGE ${carried} OF ${held} → ${held - carried} LEFT BEHIND`),
+  // The link's own line. `roomBinds`: the next ship's room will squeeze the charge (slice 3a): it all crosses, but it does
+  // not all fit there, so the line says CROSSES, not FITS (the review's M1). Files over the link (B1) say so.
+  packet: (link: number, files: number, held: number, carried: number, roomBinds = false): string => {
+    if (files > link) return `LINK ${link} · FILES ${files} · ${files - link} TOO MANY FOR THE LINK`;
+    if (carried >= held) return `LINK ${link} · FILES ${files} · CHARGE ${held} → ${roomBinds ? 'CROSSES' : 'FITS'}`;
+    return `LINK ${link} · FILES ${files} · CHARGE ${carried} OF ${held} → ${held - carried} LEFT BEHIND`;
+  },
   // How the ship just left was left (null for a ship that landed: the LANDING REPORT already said it).
   why: {
     // The Core's real toll (never below its reset, so a Core at 30 loses 5 and one at 25 nothing).
@@ -654,13 +668,8 @@ export const TRANSMIT_TEXT = {
   // the roll's upper end is always true; the ECC line says what each took.
   hits: (count: number): string => `ON THE WAY: ${count} TRANSIT HITS · UP TO −${TRANSIT_HIT_MAX}% EACH`,
   // `cardCharge`: the +12 REPAIR CHARGE card, once picked (WP8; none for any other card).
-  arrival: (carried: number, starCredit: number, stars: number, floorAdded: number, total: number, cardCharge = 0): string => {
-    const parts = [`${carried} CARRIED`];
-    if (starCredit > 0) parts.push(`+ ${starCredit} (${'★'.repeat(stars)})`);
-    if (cardCharge > 0) parts.push(`+ ${cardCharge} (CARD)`);
-    if (floorAdded > 0) parts.push(`+ ${floorAdded} FLOOR`);
-    return `ON ARRIVAL: ${parts.join(' ')} = ${total} REPAIR CHARGE`;
-  },
+  arrival: (carried: number, starCredit: number, stars: number, floorAdded: number, total: number, cardCharge = 0): string =>
+    `ON ARRIVAL: ${arrivalParts(carried, starCredit, stars, floorAdded, cardCharge)} = ${total} REPAIR CHARGE`,
   infected: (count: number): string => `⚠ ${count === 1 ? '1 FILE' : `${count} FILES`} WILL ARRIVE INFECTED`,
   chipInfected: '⚠ WILL ARRIVE INFECTED',
   // The files: when every block of REPAIR CHARGE already fits there is nothing to leave behind for.
@@ -907,10 +916,21 @@ export function bootLinePlan(state: Readonly<GameState>, skill: boolean): BootLi
   if (arrival.seeds.length > 0) plan.push('seeds');
   if (arrival.scripted.length > 0) plan.push('scripted');
   plan.push('charge');
-  if (arrival.chargeOverflowLost > 0) plan.push('overflow');
+  // A TIGHT arrival with no charge laid out says its loss on the charge line itself (M1: one honest line, not `REPAIR
+  // CHARGE 0 · NO ROOM` and then `CHARGE OVERFLOW · 54 LOST`).
+  if (arrival.chargeOverflowLost > 0 && !zeroChargeArrival(state)) plan.push('overflow');
   if (skill) plan.push('skill');
   plan.push(...log, ...hollow);
   return plan;
+}
+
+// The arrival laid out no REPAIR CHARGE on a ship with no floor (a TIGHT ship on the arm): what the boot's charge line
+// says by itself. From the arrival report (what the layout put down: the sum less the overflow), not the live pool.
+function zeroChargeArrival(state: Readonly<GameState>): boolean {
+  const arrival = state.run.arrival;
+  if (arrival === null || state.run.map.world !== 'arm' || layoutOf(state).chargeFloor !== 0) return false;
+  const laid = arrival.chargeCarried + arrival.starCredit + arrival.cardCharge + arrival.chargeFloorAdded - arrival.chargeOverflowLost;
+  return laid === 0;
 }
 
 // The rack a stray beam seed landed in (the ECC seeds line's `LOOSE IN RACK D`), or null once it is gone.
@@ -958,10 +978,8 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
       return scriptedDamageLine(arrival.scripted);
     case 'charge':
       if (arrival === null) throw new Error('bootLine: a charge line on a ship nothing transmitted to');
-      // A TIGHT ship's room left no charge at all (01 §3.16): said plainly, never a surprise.
-      if (state.run.map.world === 'arm' && chargeLeft(state) === 0 && layoutOf(state).chargeFloor === 0) {
-        return MAP_TEXT.boot.zeroCharge(state.level.shipName);
-      }
+      // A TIGHT ship's room left no charge at all (01 §3.16): said plainly, with what it cost, never a surprise.
+      if (zeroChargeArrival(state)) return MAP_TEXT.boot.zeroCharge(state.level.shipName, arrival.chargeOverflowLost);
       return chargeLine(arrival, chargeLeft(state));
     case 'overflow':
       if (arrival === null) throw new Error('bootLine: an overflow line on a ship nothing transmitted to');

@@ -170,10 +170,22 @@ body.reduced-motion .star-chart .cn-box { transition: none; }
 .dc-tag.dim { border-color: var(--desk-far); color: var(--desk-dim); }
 .dc-name { font-family: 'VT323', monospace; font-size: 34px; line-height: 1; letter-spacing: 0.14em; color: var(--desk-bright); }
 .dc-sub { margin-top: 3px; font-size: 11px; letter-spacing: 0.1em; color: var(--desk-text); }
-.dc-sched { margin-top: 8px; font-size: 11px; letter-spacing: 0.08em; line-height: 1.4; }
+/* The lead: the colonists, the years early or late, what the trip costs (the review's card call). */
+.dc-lead { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+.dc-colonists { font-family: 'VT323', monospace; font-size: 24px; line-height: 1; letter-spacing: 0.1em; color: var(--desk-text); }
+.dc-sched { font-family: 'VT323', monospace; font-size: 22px; line-height: 1; letter-spacing: 0.1em; }
 .dc-sched.tone-good { color: var(--desk-good); }
 .dc-sched.tone-warn { color: var(--desk-warn); }
+.dc-sched.tone-plain { color: var(--desk-text); }
+.dc-cost { margin-top: 2px; font-size: 12px; letter-spacing: 0.06em; line-height: 1.35; color: var(--desk-bright); }
 .dc-rows { display: flex; flex-direction: column; padding: 8px 0; }
+.dc-fit { padding-bottom: 2px; }
+.dc-fit .dc-row { border-top: none; font-size: 12px; }
+.dc-fit .dc-v { font-weight: 700; }
+/* The rest of the rows, lighter: they are there to read, not to lead. */
+.dc-rest .dc-row { font-size: 10.5px; }
+.dc-rest .dc-v { color: var(--desk-dim); }
+.dc-rest .dc-row.tone-warn .dc-v { color: var(--desk-warn); opacity: 0.85; }
 .dc-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; padding: 4px 0; border-top: 1px dotted var(--desk-edge); font-size: 11px; line-height: 1.35; }
 .dc-row.cont { border-top: none; padding-top: 0; }
 .dc-k { font-size: 9px; letter-spacing: 0.18em; color: var(--desk-dim); padding-top: 1px; }

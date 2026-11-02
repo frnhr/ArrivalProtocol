@@ -127,6 +127,7 @@ export function runKit(page, kit) {
       card: card && card.dataset.slot !== '' ? {
         slot: Number(card.dataset.slot), state: card.dataset.state ?? '', name: card.querySelector('.dc-name')?.textContent ?? '',
         sub: card.querySelector('.dc-sub')?.textContent ?? '', sched: card.querySelector('.dc-sched')?.textContent ?? null,
+        colonists: card.querySelector('.dc-colonists')?.textContent ?? '', cost: card.querySelector('.dc-cost')?.textContent ?? null,
         tags: [...card.querySelectorAll('.dc-tag')].map((tag) => tag.textContent),
         rows: [...card.querySelectorAll('.dc-row')].map((row) => [...row.classList].find((c) => c.startsWith('key-'))?.slice(4) + '=' + row.querySelector('.dc-v')?.textContent),
         timeline: card.querySelector('.dc-tl-text')?.textContent ?? null,

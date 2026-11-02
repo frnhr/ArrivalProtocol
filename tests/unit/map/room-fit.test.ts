@@ -58,15 +58,28 @@ const seeded = roomFit({ files: files(110), charge: 40, seedBlocksMax: 3 * BEAM_
 check('three seeds (21 blocks) come before the charge above the floor: 40 without them, 21 with them, never below the floor',
   seeded.chargeArrives === 40 && seeded.chargeArrivesMin === 21 && seeded.word === 'fits', json(seeded));
 const seededTight = roomFit({ files: files(80), charge: 30, seedBlocksMax: 2 * BEAM_SEED_LAYOUT_BLOCKS }, hop('TIGHT'));
-check('…on a TIGHT ship (no floor) seeds can leave the charge at 0', seededTight.chargeArrives === 8 && seededTight.chargeArrivesMin === 0, json(seededTight));
-const floorHolds = roomFit({ files: files(135), charge: 30, seedBlocksMax: 21 }, hop('FULL', 200));
-check('…the floor holds against them: 17 without seeds, 12 with', floorHolds.chargeArrives === 17 && floorHolds.chargeArrivesMin === 12, json(floorHolds));
+// Seeds are laid out whole (data/memory.ts fillRoom, layoutCarried's own rule; the review's M1): 8 blocks of room hold one
+// 7-block seed, and the second is a stray that takes none of it.
+check('…on a TIGHT ship (no floor) seeds take the charge\'s room first: 8 without, 1 with (one seed fits, one strays)',
+  seededTight.chargeArrives === 8 && seededTight.chargeArrivesMin === 1 && seededTight.seedsMax === 2, json(seededTight));
+const seededZero = roomFit({ files: files(74), charge: 30, seedBlocksMax: 2 * BEAM_SEED_LAYOUT_BLOCKS }, hop('TIGHT'));
+check('…two whole seeds in 14 blocks leave the charge at 0', seededZero.chargeArrives === 14 && seededZero.chargeArrivesMin === 0, json(seededZero));
+const floorHolds = roomFit({ files: files(130), charge: 30, seedBlocksMax: 21 }, hop('FULL', 200));
+check('…the floor holds against them: 22 without seeds, 15 with one seed in the 10 blocks above the floor',
+  floorHolds.chargeArrives === 22 && floorHolds.chargeArrivesMin === 15, json(floorHolds));
+const scripted = roomFit({ files: files(80), charge: 30, seedBlocksMin: 7, seedBlocksMax: 7 }, hop('TIGHT'));
+check('…a seed that always rides (the tutorial\'s scripted one) is reserved in chargeArrives too (m1)',
+  scripted.chargeArrives === 1 && scripted.chargeArrivesMin === 1 && scripted.seedsMin === 1, json(scripted));
 
 // The room's own limit.
 const leave = roomFit({ files: files(150), charge: 20 }, hop('FULL', 200));
 check('files + the floor over the room: leave 10 behind', leave.word === 'leave' && leave.over === 10 && leave.chargeArrives === 0, json(leave));
 const tightLeave = roomFit({ files: files(90), charge: 0 }, hop('TIGHT'));
 check('…on a TIGHT ship the files alone must fit (90 of 88: leave 2)', tightLeave.word === 'leave' && tightLeave.over === 2, json(tightLeave));
+// The link's own limit (the review's B1): files over it leave too, and nothing crosses.
+const overLink = roomFit({ files: files(90), charge: 20, bonus: { starCredit: 12, card: 0 } }, hop('FULL', 82));
+check('files over the link: leave (8 over 82), no charge crosses or arrives', overLink.word === 'leave' && overLink.overLink === 8 && overLink.over === 0
+  && overLink.carried === 0 && overLink.chargeArrives === 0 && overLink.linkLost === 20, json(overLink));
 
 // On run 1's hops (their room comes with the hop).
 const toLapwing = hopBetween(run1Map(), 5, 8);

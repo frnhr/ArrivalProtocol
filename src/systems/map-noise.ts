@@ -1,10 +1,10 @@
 import type { NoiseCloud } from '@/types/map';
-import type { LinkNoise } from '@/types/threat';
+import type { LinkNoise, ShipThreat } from '@/types/threat';
 import type { Rng } from '@systems/rng';
 import { segmentDistanceLy } from '@systems/map-geometry';
 import { WORLDS } from '@data/arm';
 import {
-  BEAM_SEED_ODDS, LINK_NOISE_MAX, SEEDS_MIN_DEPTH, NOISE_CLOUD_STRENGTHS, NOISE_CLOUD_R_MIN_LY, NOISE_CLOUD_R_MAX_LY,
+  BEAM_SEED_ODDS, LINK_NOISE_MAX, NOISE_CLOUD_STRENGTHS, NOISE_CLOUD_R_MIN_LY, NOISE_CLOUD_R_MAX_LY,
   NOISE_CLOUD_SOL_MIN_LY, NOISE_CLOUD_SOL_MAX_LY, NOISE_CLOUD_LATERAL_LY, NOISE_CLOUD_MIN_GAP_LY, NOISE_CLOUD_MAX_DRAWS,
 } from '@data/tuning';
 
@@ -70,12 +70,29 @@ export function hopNoise(clouds: readonly NoiseCloud[], from: number, to: number
   return Math.min(LINK_NOISE_MAX, sum) as LinkNoise;
 }
 
-// The seeds a beam into a ship at `depth` may carry, for the card's BEAM row (`SEEDS 0–2`): null before SEEDS_MIN_DEPTH
-// (`SEEDS: none`, 04 §3.4: "no seeds before depth 3"), else 0 up to the most seeds the noise's odds allow.
-export function seedRange(noise: LinkNoise, depth: number): { min: number; max: number } | null {
-  if (depth < SEEDS_MIN_DEPTH) return null;
+// The fewest and most seeds a beam with `noise` may carry by BEAM_SEED_ODDS (CLEAN 0, LOW 0–2, NOISY 0–3, SEVERE 0–3).
+function seedOddsRange(noise: LinkNoise): { min: number; max: number } {
   const odds = BEAM_SEED_ODDS[noise];
-  let max = 0;
-  odds.forEach((chance, seeds) => { if (chance > 0) max = seeds; });
-  return { min: 0, max };
+  const possible = odds.flatMap((chance, seeds) => (chance > 0 ? [seeds] : []));
+  if (possible.length === 0) throw new Error(`seedOddsRange: noise ${noise} has no seed count with a chance`);
+  return { min: possible[0]!, max: possible[possible.length - 1]! };
+}
+
+// The seeds the beam into a ship may carry, from the ladder's verdict for it (the card's `SEEDS 0–2`, and the room every
+// arrival preview keeps for them: systems/arrival-preview.ts). The ONE rule the card, the PACKET and the beam share (the
+// review's m6: the card ignored a calm verdict the PACKET honoured, and m1: the tutorial's seed was read as noise):
+// • null: none rides (a calm ship, 04 §3.4's "no seeds before depth 3"; the card says `SEEDS: none`);
+// • the scripted seeds on the tutorial run (systems/beam-seeds.ts rollBeamSeeds plays them whatever the noise): exactly
+//   their count, so `SEEDS 1` and the room for it;
+// • otherwise the noise's odds (a later run's scripted source rolls its `later` noise).
+export function seedAllowance(
+  threat: Readonly<Pick<ShipThreat, 'act' | 'beamSeeds'>>, firstRun: boolean,
+): { min: number; max: number } | null {
+  if (threat.act === 'calm') return null;
+  const source = threat.beamSeeds;
+  switch (source.kind) {
+    case 'none': return null;
+    case 'scripted': return firstRun ? { min: source.firstRun.length, max: source.firstRun.length } : seedOddsRange(source.later);
+    case 'noise': return seedOddsRange(source.noise);
+  }
 }

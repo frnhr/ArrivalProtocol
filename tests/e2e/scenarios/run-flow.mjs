@@ -165,7 +165,7 @@ check('…the PACKET\'s 046.log chip reads `046.log · 1/12`, locked, no glow (e
   && logChipTx.locked && !logChipTx.glow, JSON.stringify(logChipTx));
 check('…no uninvited chip and no TRACE line on the beam to HALCYON', await st(() => document.querySelectorAll('#txChips .tx-chip.uninvited').length === 0
   && document.getElementById('txTrace').hidden && document.getElementById('txNoRm').hidden));
-check('…the crossing\'s cost (ECC while asleep) and the charge waiting on arrival', tx.hits === 'ON THE WAY: 3 HITS · ECC FIXES 1 WHILE YOU SLEEP (31 YRS) → 2 LAND'
+check('…the crossing\'s cost (ECC while asleep) and the charge waiting on arrival', tx.hits === 'ON THE WAY: 3 HITS · 1 FIXED WHILE YOU SLEEP (31 YRS) → 2 LAND'
   && /^ON ARRIVAL: \d+ CARRIED/.test(tx.arrival), `${tx.hits} | ${tx.arrival}`);
 await shot('1-transmit');
 // Everything fits: a click on a file does nothing (and says so with a buzz).

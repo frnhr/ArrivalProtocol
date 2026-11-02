@@ -7,7 +7,7 @@ import { hopBetween, hitsLanding, reachable, reachableFrom, linkBlocksFor, trans
 import { bases, timingYear, finalYear, podsFor, memoryClassOf } from '@systems/map-generator';
 import { routes, bestRoute, routePods, shipsLeft } from '@systems/map-route';
 import { mapFacts, oneHopFromFinal } from '@systems/map-facts';
-import { seedRange, hopNoise } from '@systems/map-noise';
+import { seedAllowance, hopNoise } from '@systems/map-noise';
 import { RUN1_ROWS } from '@data/run1-arm';
 import { WORLDS } from '@data/arm';
 import { run1Map, WORKED_ROUTE } from './run1-fixture';
@@ -76,6 +76,11 @@ check('ships left after ARES-VII: 4–7 (routes of 5–8 ships); after CORMORANT
 
 // Noise and seeds (04 §3.4's table).
 check('no clouds: every hop CLEAN', hopNoise([], 0, 2) === 0 && hopNoise([{ x: 18, y: 2, r: 12, strength: 2 }, { x: 20, y: 0, r: 15, strength: 2 }], 0, 2) === 3);
-check('seed ranges: none before depth 3, then 0 / 0–2 / 0–3 / 0–3', seedRange(2, 2) === null
-  && [0, 1, 2, 3].map((noise) => seedRange(noise as 0 | 1 | 2 | 3, 3)!.max).join() === '0,2,3,3');
+const noisy = (noise: 0 | 1 | 2 | 3) => ({ act: 'seeds' as const, beamSeeds: { kind: 'noise' as const, noise } });
+check('seed allowances: none into a calm ship, then 0 / 0–2 / 0–3 / 0–3 by the noise',
+  seedAllowance({ act: 'calm', beamSeeds: { kind: 'noise', noise: 3 } }, false) === null
+  && [0, 1, 2, 3].map((noise) => { const r = seedAllowance(noisy(noise as 0 | 1 | 2 | 3), false)!; return `${r.min}-${r.max}`; }).join() === '0-0,0-2,0-3,0-3');
+const scriptedSource = { act: 'seeds' as const, beamSeeds: { kind: 'scripted' as const, firstRun: [{ role: 'telemetry' as const }], later: 2 as const } };
+check('…the tutorial run\'s scripted seed is exactly 1 (m1), a later run rolls the hop\'s noise',
+  JSON.stringify(seedAllowance(scriptedSource, true)) === '{"min":1,"max":1}' && JSON.stringify(seedAllowance(scriptedSource, false)) === '{"min":0,"max":3}');
 finish();

@@ -3,15 +3,15 @@ import type { GameState } from '@state/schema';
 import type { NoiseCloud, ShipKind, DeskWindowId, Hop, RoomFit, ShipSummary, RunMapState } from '@/types/map';
 import type { LinkNoise } from '@/types/threat';
 import { currentSlot, shipSummaryAt, worldSlotOf, isEndSlot } from '@systems/map-run';
-import { hopBetween, reachable, reachableFrom, roomFit, type UnitLoad } from '@systems/map-hop';
+import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
 import { layerOf, solLy } from '@systems/map-geometry';
-import { seedRange } from '@systems/map-noise';
+import { seedAllowance } from '@systems/map-noise';
+import { unitArrival } from '@systems/arrival-preview';
+import { playsTutorial } from '@systems/meta';
 import { shipsLeft } from '@systems/map-route';
 import { mapFacts } from '@systems/map-facts';
 import { planThreat, threatInputFor } from '@systems/threat-plan';
-import { unitFilesIn, BEAM_SEED_LAYOUT_BLOCKS } from '@systems/carry';
 import { noWorkingRm } from '@state/threat-selectors';
-import { chargeLeft } from '@state/selectors';
 import { layoutFor } from '@data/memory';
 import { WORLDS, RING_LY } from '@data/arm';
 import { UNIT_046_TRAIL } from '@data/ship-names';
@@ -113,15 +113,20 @@ export interface CardTimeline {
   text: string;
 }
 
+// The card leads with three things (the lead's call after the review): the colonists, the years early or late, and what
+// the trip costs; then the fit line (rows[0], key 'fit'); the other rows follow, lighter.
 export interface CardModel {
   slot: number;
   reachable: boolean;
   state: ChartNodeState;
-  top: string;              // `HALCYON · Tessaly · 1,000 COLONISTS · 5 PODS`
+  top: string;              // `HALCYON · Tessaly · 1,000 COLONISTS · 5 PODS` (the card's text in one line)
   name: string;
+  sub: string;              // `Tessaly · 5 PODS`
+  colonists: string;        // `1,000 COLONISTS`
   tags: string[];           // `ARK`, `FINAL SHIP`
-  schedule: string | null;  // `APPROACH 2352 · YOU GET THERE 2321 · 31 YRS EARLY` (null on the classic world: no years)
+  schedule: string | null;  // `31 YRS EARLY` / `TOO LATE BY 18 YRS` (null on the classic world: no years); the TIMELINE has the years
   scheduleTone: 'plain' | 'good' | 'warn';
+  cost: string | null;      // `4 HITS · 3 FIXED WHILE YOU SLEEP → 1 LANDS` (ships in reach)
   rows: CardRow[];
   timeline: CardTimeline | null;
   fit: RoomFit | null;      // the unit as it is now against the ship's room (null on the ship being left)
@@ -186,7 +191,7 @@ function nodeState(
     return { state: 'visited', reason: MAP_TEXT.chart.visited(result ? SHIP_OUTCOME_WORD[result.outcome] : MAP_TEXT.chart.flown), hop: null };
   }
   const summary = shipSummaryAt(map, slot);
-  if (summary.approachYear <= map.galaxyYear) return { state: 'past', reason: MAP_TEXT.chart.past, hop: null };
+  if (summary.approachYear <= map.galaxyYear) return { state: 'past', reason: MAP_TEXT.chart.past(summary.approachYear), hop: null };
   const outward = layerOf(worldSlotOf(map, slot)) > layerOf(worldSlotOf(map, from));
   // The classic world's ships ahead of the next one are not on any beam from here (one route): out of range.
   if (map.world === 'classic' && !offered.includes(slot)) {
@@ -264,19 +269,6 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
 
 // --- The SHIP CARD ------------------------------------------------------------------------------------------------------
 
-// The unit as it would cross now (no file left behind, no card picked yet): its files, the REPAIR CHARGE it holds, the
-// star credit the last ship's stars pay, and the most room the beam's seeds could take (SEEDS FIRST). The card's fit
-// line reads it; the PACKET builds its own from the packet (systems/transmit.ts).
-export function deskUnitLoad(state: Readonly<GameState>, seedsMax: number): UnitLoad {
-  const files = unitFilesIn(state.memory).filter((seg) => seg.type !== 'redundancy').map((seg) => ({ size: seg.size }));
-  return {
-    files,
-    charge: chargeLeft(state),
-    bonus: { starCredit: state.run.pendingStarCredit, card: 0 },
-    seedBlocksMax: seedsMax * BEAM_SEED_LAYOUT_BLOCKS,
-  };
-}
-
 // KNOWN PROBLEMS' labels: the template's own arrival and the extra modifiers (02 §3.5); DEBRIS names its rack when the
 // arm stored it.
 export function problemLabels(ship: Readonly<ShipSummary>): string[] {
@@ -284,7 +276,8 @@ export function problemLabels(ship: Readonly<ShipSummary>): string[] {
 }
 
 function fitTone(fit: Readonly<RoomFit>): CardRow['tone'] {
-  return fit.word === 'fits' ? 'good' : 'warn';
+  if (fit.word !== 'fits' || fit.chargeArrivesMin < fit.chargeArrives) return 'warn';
+  return fit.linkLost > 0 ? 'plain' : 'good';
 }
 
 export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
@@ -303,26 +296,31 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   const layout = layoutFor(ship.memoryClass);
   const depth = map.route.length + 1;
 
-  row('problems', MAP_TEXT.card.problemsLabel, MAP_TEXT.card.problems(problemLabels(ship)), ship.modifiers.length > 0 ? 'warn' : 'plain');
-  row('memory', MAP_TEXT.card.memoryLabel, MAP_TEXT.card.memory(layout.totalBlocks, ship.memoryClass, layout.roomForUnit));
-
   // The hop (the beam from the ship being left), for every ship but that one: the card shows TOO LATE and OUT OF RANGE
   // ships too, and prints the beam only when it is in range (Hop.inRange).
   const hop = slot === from ? null : (seen.hop ?? (map.world === 'classic' && !isReachable ? null : hopBetween(map, from, slot)));
+  // The ladder's verdict for this beam, from the run's threat with this ship's tally done: HOLLOW's line and the seeds the
+  // beam may bring (the PACKET's own rule: systems/map-noise.ts seedAllowance), for any beam in range.
+  const verdict = hop !== null && (isReachable || (arm && hop.inRange))
+    ? planThreat(threatInputFor(state.run.threat, mapFacts(map, from, slot, depth), state.run.stats.deal !== null))
+    : null;
+  // The fit line only for a ship SET COURSE can go to (an out-of-range or TOO LATE hop has no packet to fit).
   let fit: RoomFit | null = null;
-  let seeds: { min: number; max: number } | null = null;
-  if (hop !== null) {
-    seeds = seedRange(hop.noise, depth);
-    fit = roomFit(deskUnitLoad(state, seeds?.max ?? 0), hop);
-    row('fit', MAP_TEXT.card.fitLabel, MAP_TEXT.card.fit(fit), fitTone(fit));
+  if (hop !== null && verdict !== null && isReachable) {
+    const preview = unitArrival(state, { hop, threat: verdict, dropped: [], pick: null });
+    fit = preview.fit;
+    row('fit', MAP_TEXT.card.fitLabel, preview.card, fitTone(fit));
   }
+  row('problems', MAP_TEXT.card.problemsLabel, MAP_TEXT.card.problems(problemLabels(ship)), ship.modifiers.length > 0 ? 'warn' : 'plain');
+  row('memory', MAP_TEXT.card.memoryLabel, MAP_TEXT.card.memory(layout.totalBlocks, ship.memoryClass, layout.roomForUnit));
 
   row('planet', MAP_TEXT.card.planetLabel, MAP_TEXT.card.planet(ship.terrain, FORGIVENESS_TEXT[ship.forgiveness].offSite));
   if (ship.noGoWords.length > 0) row('nogo', MAP_TEXT.card.noGoLabel, MAP_TEXT.card.noGo(ship.noGoWords), 'warn');
   row('lzs', MAP_TEXT.card.lzLabel, MAP_TEXT.card.lzs(ship.lzCount));
 
   if (hop !== null && hop.inRange) {
-    row('beam', MAP_TEXT.card.beamLabel, MAP_TEXT.card.beam(hop.distanceLy, hop.linkBlocks, hop.transitHits, hop.eccFixes));
+    const seeds = verdict === null ? null : seedAllowance(verdict, playsTutorial(state.run));
+    row('beam', MAP_TEXT.card.beamLabel, MAP_TEXT.card.beam(hop.distanceLy, hop.linkBlocks));
     row('noise', '', MAP_TEXT.card.noise(hop.noise, MAP_TEXT.card.seeds(seeds)), hop.noise > 0 ? 'warn' : 'plain');
   } else if (hop !== null) {
     row('range', MAP_TEXT.card.beamLabel, MAP_TEXT.chart.outOfRange(hop.distanceLy), 'warn');
@@ -330,12 +328,8 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
 
   // HOLLOW boarding on this beam is said before SET COURSE (04 §3.8; slice-3a-plan §1.1 item 14): the ladder's verdict
   // for this candidate, from the run's threat with this ship's tally done.
-  if (isReachable) {
-    const facts = mapFacts(map, from, slot, depth);
-    const verdict = planThreat(threatInputFor(state.run.threat, facts, state.run.stats.deal !== null));
-    if (verdict.boards !== null) {
-      row('threat', MAP_TEXT.card.threatLabel, THREAT_TEXT.willFindYou, 'warn');
-    }
+  if (isReachable && verdict !== null && verdict.boards !== null) {
+    row('threat', MAP_TEXT.card.threatLabel, THREAT_TEXT.willFindYou, 'warn');
   }
   if (ship.final && noWorkingRm(state)) row('norm', MAP_TEXT.card.threatLabel, THREAT_TEXT.noRmPacket, 'warn');
   if (isReachable && onlyFromHere(map, from).includes(slot)) row('only', '', MAP_TEXT.card.onlyFromHere, 'warn');
@@ -351,9 +345,7 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   let timeline: CardTimeline | null = null;
   if (arm && hop !== null) {
     const late = hop.slackYears < 0;
-    schedule = late
-      ? MAP_TEXT.card.late(hop.approachYear, hop.arriveYear, -hop.slackYears)
-      : MAP_TEXT.card.early(hop.approachYear, hop.arriveYear, hop.slackYears);
+    schedule = late ? MAP_TEXT.card.late(-hop.slackYears) : MAP_TEXT.card.early(hop.slackYears);
     scheduleTone = late ? 'warn' : hop.slackYears < URGENT_SLACK_YEARS ? 'warn' : 'good';
     timeline = {
       leave: hop.leaveYear, arrive: hop.arriveYear, approach: hop.approachYear, late,
@@ -363,10 +355,19 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
     schedule = MAP_TEXT.card.here(ship.approachYear);
   }
 
+  // What the trip costs (the lead's call): the hits on the way (a lost ship's extras too), what ECC fixes while the unit
+  // sleeps, and what lands.
+  let cost: string | null = null;
+  if (hop !== null && isReachable) {
+    const extra = map.pendingExtra?.extraHits ?? 0;
+    cost = MAP_TEXT.card.cost(hop.transitHits + extra, hop.eccFixes, hitsLanding(hop, extra));
+  }
+
   return {
     slot, reachable: isReachable, state: seen.state,
     top: MAP_TEXT.card.top(ship.name, ship.world, ship.colonists, ship.pods), name: ship.name,
-    tags, schedule, scheduleTone, rows, timeline, fit,
+    sub: MAP_TEXT.card.sub(ship.world, ship.pods), colonists: MAP_TEXT.card.colonists(ship.colonists),
+    tags, schedule, scheduleTone, cost, rows, timeline, fit,
   };
 }
 

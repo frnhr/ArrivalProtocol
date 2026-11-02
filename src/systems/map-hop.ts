@@ -1,7 +1,7 @@
 import type { Hop, RunMapState, RoomFit } from '@/types/map';
-import { layoutFor } from '@data/memory';
+import { layoutFor, fillRoom, BEAM_SEED_LAYOUT_BLOCKS } from '@data/memory';
 import { CLASSIC_FIVE } from '@data/classic-five';
-import { distTable, layerOf } from '@systems/map-geometry';
+import { distTable, beamReaches } from '@systems/map-geometry';
 import { hopNoise } from '@systems/map-noise';
 import { armShipAt, classicHop, classicRoute, worldSlotOf } from '@systems/map-run';
 import {
@@ -70,9 +70,8 @@ export function hopBetween(map: Readonly<RunMapState>, from: number, to: number)
 // The classic world has one route: each ship to the next.
 export function reachable(map: Readonly<RunMapState>, from: number, to: number): boolean {
   if (map.world === 'classic') return to === from + 1 && to < CLASSIC_FIVE.length;
-  if (from === to || layerOf(worldSlotOf(map, to)) <= layerOf(worldSlotOf(map, from))) return false;
-  const hop = hopBetween(map, from, to);
-  return hop.inRange && hop.slackYears >= 0;
+  if (from === to) return false;
+  return beamReaches(worldSlotOf(map, from), worldSlotOf(map, to), approachOf(map, from), armShipAt(map, to).approachYear);
 }
 
 // Every slot reachable from `from`, in slot order.
@@ -83,54 +82,62 @@ export function reachableFrom(map: Readonly<RunMapState>, from: number): number[
 
 // What the unit would carry across: its files (a list, so a delivery's file adds its room with no new type, 3b), the
 // REPAIR CHARGE it holds, what arrives with it (the last ship's star credit and the +12 card: systems/carry.ts
-// arrivalCharge), and the most blocks the beam's seeds could take (seedBlocksMax: seeds × BEAM_SEED_LAYOUT_BLOCKS).
+// arrivalCharge), and the blocks the beam's seeds could take, fewest and most (seeds × BEAM_SEED_LAYOUT_BLOCKS: the
+// tutorial's scripted seed is always 1, a noisy hop's 0 up to its odds' most; systems/map-noise.ts seedAllowance).
 export interface UnitLoad {
   files: readonly { size: number }[];
   charge: number;
   bonus?: { starCredit: number; card: number };
+  seedBlocksMin?: number;
   seedBlocksMax?: number;
 }
 
-// How a unit meets a destination's room (01 §3.16, the spec amendment of 02 §3.3 in slice-3a-plan's review follow-up):
-// files plus the charge floor must fit the room (on a TIGHT ship there is no floor: files alone); the link limits files
-// plus charge, as phase 2's packUnit does (files over the link itself are the PACKET's link bar's, not counted here).
-// The charge that arrives is arrivalCharge's (what crossed, plus the star credit and the card, never below the floor),
-// laid out in 01's order: files, the floor, the beam seeds (SEEDS FIRST), the rest. The card's fit line and the
-// PACKET's room bar read it:
-// • fits: every block that crossed or was earned arrives (seeds aside);
+// How a unit meets a destination's link and room (01 §3.16, the spec amendment of 02 §3.3 in slice-3a-plan's review
+// follow-up): files must cross the link (the review's B1: files over it are `leave`, not a throw at SET COURSE); files
+// plus the charge floor must fit the room (on a TIGHT ship there is no floor: files alone); the link limits files plus
+// charge, as phase 2's packUnit does. The charge that arrives is arrivalCharge's (what crossed, plus the star credit and
+// the card, never below the floor), laid out by data/memory.ts fillRoom, the rule layoutCarried lays the unit out by:
+// • fits: every block that crossed or was earned arrives (with the fewest seeds);
 // • squeezed: the room leaves some of it behind (roomLost > 0: `CHARGE SQUEEZED: 15 ARRIVES`, `26 WON'T FIT`);
-// • leave: files plus the floor are over the room (`LEAVE 20 BEHIND`): the PACKET waits until files are left;
+// • leave: files are over the link, or files plus the floor over the room: the PACKET waits until files are left;
 // • no-charge: no charge arrives at all (only where the floor is 0, a TIGHT ship: `NO CHARGE ARRIVES`), whatever the unit
 //   held, an empty unit included.
+// The words are systems/arrival-preview.ts's, from this one result, everywhere.
 export function roomFit(unit: Readonly<UnitLoad>, hop: Readonly<Pick<Hop, 'linkBlocks' | 'room' | 'chargeFloor'>>): RoomFit {
   const whole = (n: number, what: string): number => {
     if (!(Number.isInteger(n) && n >= 0)) throw new Error(`roomFit: ${what} ${n}`);
     return n;
   };
+  const seeds = (blocks: number, what: string): number => {
+    if (whole(blocks, what) % BEAM_SEED_LAYOUT_BLOCKS !== 0) throw new Error(`roomFit: ${what} ${blocks} is not whole seeds`);
+    return blocks / BEAM_SEED_LAYOUT_BLOCKS;
+  };
   const charge = whole(unit.charge, 'charge');
   const bonus = whole(unit.bonus?.starCredit ?? 0, 'star credit') + whole(unit.bonus?.card ?? 0, 'card charge');
-  const seedsMax = whole(unit.seedBlocksMax ?? 0, 'seed blocks');
+  const seedsMin = seeds(unit.seedBlocksMin ?? 0, 'seed blocks (fewest)');
+  const seedsMax = seeds(unit.seedBlocksMax ?? 0, 'seed blocks (most)');
+  if (seedsMin > seedsMax) throw new Error(`roomFit: ${seedsMin} seeds at the fewest, ${seedsMax} at the most`);
   const files = unit.files.reduce((sum, file) => sum + file.size, 0);
+  const link = hop.linkBlocks;
   const floor = hop.chargeFloor;
   const room = hop.room;
   const over = Math.max(0, files + floor - room);
-  const carried = Math.max(0, Math.min(charge, hop.linkBlocks - files));
+  const overLink = Math.max(0, files - link);
+  const leave = over > 0 || overLink > 0;
+  const carried = Math.max(0, Math.min(charge, link - files));
   const wanted = Math.max(floor, carried + bonus);
-  const avail = room - files;
-  const arrive = (seedBlocks: number): number => {
-    if (over > 0) return 0;
-    const floorHeld = Math.min(wanted, floor);
-    const seeds = Math.min(seedBlocks, avail - floorHeld);
-    return Math.min(wanted, avail - seeds);
-  };
-  const chargeArrives = arrive(0);
+  const arrive = (count: number): number => (leave ? 0 : fillRoom(room, files, floor, wanted, count).charge);
+  const chargeArrives = arrive(seedsMin);
   const chargeArrivesMin = arrive(seedsMax);
   const linkLost = charge - carried;
-  const roomLost = over > 0 ? 0 : wanted - chargeArrives;
+  const roomLost = leave ? 0 : wanted - chargeArrives;
   let word: RoomFit['word'];
-  if (over > 0) word = 'leave';
+  if (leave) word = 'leave';
   else if (chargeArrives === 0) word = 'no-charge';
   else if (roomLost > 0) word = 'squeezed';
   else word = 'fits';
-  return { files, room, floor, carried, wanted, chargeArrives, chargeArrivesMin, linkLost, roomLost, over, word };
+  return {
+    files, link, room, floor, carried, bonus, wanted, floorAdded: wanted - (carried + bonus), seedsMin, seedsMax,
+    chargeArrives, chargeArrivesMin, linkLost, roomLost, over, overLink, word,
+  };
 }

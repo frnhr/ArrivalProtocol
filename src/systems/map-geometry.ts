@@ -1,4 +1,5 @@
 import { WORLDS, RING_LY, worldAt } from '@data/arm';
+import { BEAM_RANGE_LY } from '@data/tuning';
 
 // The arm's geometry (02-map §3.1, §3.2; slice-3a-plan §2.1), pure: whole-LY distances between worlds and from SOL, the
 // layer of a slot, and the 046.log rings a distance from SOL has passed. Every distance a rule uses is the rounded one
@@ -51,4 +52,13 @@ export function distTable(a: number, b: number): number {
   const d = TABLE[a]?.[b];
   if (d === undefined) throw new Error(`distTable: no world pair ${a}–${b}`);
   return d;
+}
+
+// Can the unit beam from world `from` (left in `leaveYear`) to world `to` (approaching in `approachYear`)? 02 §3.1:
+// outward (a higher layer), within BEAM_RANGE_LY, and in time (it gets there no later than the approach). The ONE rule:
+// systems/map-hop.ts reachable reads it on a map, systems/map-generator.ts armReach on a bare arm (the review's m6).
+export function beamReaches(from: number, to: number, leaveYear: number, approachYear: number): boolean {
+  if (layerOf(to) <= layerOf(from)) return false;
+  const d = distTable(from, to);
+  return d <= BEAM_RANGE_LY && leaveYear + d <= approachYear;
 }

@@ -6,7 +6,7 @@ import { armShipId, keyRng } from '@systems/map-streams';
 import { RESIDENT_NAMES, SLEEPER_NAMES, GENERATED_SHIP_NAMES, aresName, finalShipName } from '@data/ship-names';
 import { FLIGHT_TEMPLATES, TEMPLATE_RULES, templatesForLayer, extrasFor } from '@data/flight-templates';
 import { END_SLOTS, FIRST_SLOT, WORLDS, LAYER_COUNT, slotsInLayer } from '@data/arm';
-import { distTable, layerOf } from '@systems/map-geometry';
+import { distTable, layerOf, beamReaches } from '@systems/map-geometry';
 import { rollLanding } from '@systems/landing-roller';
 import { layoutPods } from '@systems/pod-layout';
 import { shipDefOf, validateShipDef } from '@data/ships';
@@ -151,14 +151,12 @@ export interface ArmProblem {
 // these (the details roll only once the arm passes).
 type Timed = Pick<ArmShip, 'slot' | 'kind' | 'memoryClass' | 'approachYear'>;
 
-// Can a ship beam from `a` to `b` (02 §3.1)? Outward, in range, in time. The map's own rule (systems/map-hop.ts reachable)
-// on a bare arm, so the generator needs no RunMapState.
+// Can a ship beam from `a` to `b` (02 §3.1)? systems/map-geometry.ts beamReaches, the map's one rule (systems/map-hop.ts
+// reachable reads it too), on a bare arm, so the generator needs no RunMapState.
 export function armReach(arm: readonly (Timed | null)[], a: number, b: number): boolean {
   const from = arm[a];
   const to = arm[b];
-  if (!from || !to || layerOf(b) <= layerOf(a)) return false;
-  const d = distTable(a, b);
-  return d <= BEAM_RANGE_LY && from.approachYear + d <= to.approachYear;
+  return !!from && !!to && beamReaches(a, b, from.approachYear, to.approachYear);
 }
 
 // A TIGHT ship from LATE_TIGHT_FROM_LAYER on (check 5's ships).
@@ -384,11 +382,6 @@ function placeReservations(
 }
 
 // --- Building the arm ----------------------------------------------------------------------------------------------------
-
-// The ShipDef id of an arm ship: an authored ship keeps its own ('kestrel'), every other its name's ('good-hope').
-export function shipIdFor(name: string, authored: ArmShip['authored']): string {
-  return authored ?? name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-}
 
 interface ShipFrame extends Timed {
   name: string;

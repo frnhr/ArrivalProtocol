@@ -61,7 +61,7 @@ export const MAP_TEXT = {
     finalTag: 'FINAL SHIP',
     tooLate: (years: number): string => `TOO LATE BY ${yrs(years)}`,
     outOfRange: (ly: number): string => `OUT OF RANGE · ${ly} LY`,
-    past: 'OUT OF YOUR REACH · THE NEXT CORE MAY GET THERE',
+    past: (year: number): string => `OUT OF YOUR REACH · IT ARRIVED IN ${year}`,
     urgent: (years: number): string => `ONLY ${yrs(years)} TO SPARE`,
     onlyFromHere: 'ONLY FROM HERE',
     trail046: 'UNIT-046 GETS THERE FIRST',
@@ -84,10 +84,14 @@ export const MAP_TEXT = {
       `${ship} · ${world} · ${formatCount(colonists)} COLONISTS · ${pods} PODS`,
     ark: 'ARK',
     finalShip: 'FINAL SHIP',
-    early: (approach: number, arrive: number, slack: number): string =>
-      `APPROACH ${approach} · YOU GET THERE ${arrive} · ${yrs(slack)} EARLY`,
-    late: (approach: number, arrive: number, short: number): string =>
-      `APPROACH ${approach} · YOU GET THERE ${arrive} · TOO LATE BY ${yrs(short)}`,
+    // The card's lead (the lead's call: colonists, years early or late, and what the trip costs, then the fit line); the
+    // TIMELINE strip under the rows carries the years themselves, so the schedule line is only the difference.
+    sub: (world: string, pods: number): string => `${world} · ${pods} PODS`,
+    colonists: (colonists: number): string => `${formatCount(colonists)} COLONISTS`,
+    early: (slack: number): string => `${yrs(slack)} EARLY`,
+    late: (short: number): string => `TOO LATE BY ${yrs(short)}`,
+    cost: (hits: number, fixed: number, land: number): string =>
+      `${hits} ${hits === 1 ? 'HIT' : 'HITS'} · ${fixed} FIXED WHILE YOU SLEEP → ${land} ${land === 1 ? 'LANDS' : 'LAND'}`,
     problemsLabel: 'KNOWN PROBLEMS',
     memoryLabel: 'MEMORY',
     fitLabel: 'FIT',
@@ -101,19 +105,27 @@ export const MAP_TEXT = {
     debris: (rack: string): string => `DEBRIS · RACK ${rack}`,
     problems: (labels: readonly string[]): string => (labels.length === 0 ? 'none' : labels.join(', ')),
     memory: (total: number, cls: MemoryClass, room: number): string => `MEMORY ${total} · ${cls} · ROOM FOR YOU ${room}`,
+    // The fit line (systems/arrival-preview.ts, from roomFit): the charge that arrives with the fewest seeds, the room's
+    // worst case when seeds could take some (M2: on a TIGHT ship seeds come before the charge), and what the link leaves
+    // behind (m2: `YOU FIT` alone hid it).
     fit: (fit: Readonly<RoomFit>): string => {
+      const seeds = fit.word !== 'leave' && fit.chargeArrivesMin < fit.chargeArrives ? ` (${fit.chargeArrivesMin} IF SEEDS RIDE)` : '';
+      const link = fit.word !== 'leave' && fit.linkLost > 0 ? ` · LINK LEAVES ${fit.linkLost}` : '';
       switch (fit.word) {
-        case 'fits': return 'YOU FIT';
-        case 'squeezed': return `CHARGE SQUEEZED: ${fit.chargeArrives} ARRIVES`;
-        case 'leave': return `LEAVE ${fit.over} BEHIND`;
-        case 'no-charge': return 'NO CHARGE ARRIVES';
+        case 'fits': return `${seeds === '' ? 'YOU FIT' : `YOU FIT · ${fit.chargeArrives} ARRIVES${seeds}`}${link}`;
+        case 'squeezed': return `CHARGE SQUEEZED: ${fit.chargeArrives} ARRIVES${seeds}${link}`;
+        case 'leave': return fit.overLink >= fit.over
+          ? `LEAVE ${fit.overLink} BLOCKS BEHIND · TOO BIG FOR THE LINK`
+          : `LEAVE ${fit.over} BLOCKS BEHIND · TOO BIG FOR THE ROOM`;
+        case 'no-charge': return `NO CHARGE ARRIVES${link}`;
       }
     },
     planet: (terrain: string, offSite: string): string => `${terrain} · ${offSite}`,
     noGo: (words: readonly string[]): string => `NO-GO ZONES: ${[...new Set(words)].join(', ')}`,
     lzs: (count: number): string => `LZ: ${count} · SET BY ARRIVAL CONTROL`,
     // The BEAM row in two parts (02 §4's one line is 72 characters at its longest): the hop, then its noise and seeds.
-    beam: (ly: number, link: number, hits: number, ecc: number): string => `${ly} LY · LINK ${link} · ${hits} HITS (ECC fixes ${ecc})`,
+    // The hits and what ECC fixes are the lead's cost line (card.cost), so the BEAM row is the hop itself.
+    beam: (ly: number, link: number): string => `${ly} LY · LINK ${link}`,
     noise: (noise: LinkNoise, seeds: string): string => `NOISE ${NOISE_WORD[noise]}${noise > 0 ? ` · ${noise}` : ''} · ${seeds}`,
     seeds: (range: { min: number; max: number } | null): string =>
       (range === null ? 'SEEDS: none' : range.max === range.min ? `SEEDS ${range.min}` : `SEEDS ${range.min}–${range.max}`),
@@ -131,12 +143,21 @@ export const MAP_TEXT = {
     room: (room: number, files: number, floor: number): string => `ROOM ${room} · FILES ${files} + FLOOR ${floor}`,
     roomNoFloor: (room: number, files: number): string => `ROOM ${room} · FILES ${files} · NO FLOOR`,
     squeeze: (held: number, arrives: number, lost: number): string => `CHARGE ${held} → ${arrives} ON ARRIVAL · ${lost} WON'T FIT`,
+    // The room's worst case when the beam's seeds could take some of it first (M2).
+    squeezeSeeds: (held: number, arrives: number, min: number, lost: number): string =>
+      `CHARGE ${held} → ${arrives} ON ARRIVAL (${min} IF SEEDS RIDE) · ${lost} WON'T FIT`,
+    seedsMay: (arrives: number, min: number): string => `CHARGE ${arrives} ON ARRIVAL (${min} IF SEEDS RIDE)`,
     zeroCharge: '→ 0 ON ARRIVAL',
     zeroConfirm: 'ARRIVE WITH NO REPAIR CHARGE?',
+    zeroIfSeedsConfirm: '0 CHARGE IF SEEDS RIDE · TRANSMIT ANYWAY?',
     overRoom: (over: number): string => `${over} TOO MANY FOR THE ROOM · LEAVE FILES BEHIND`,
+    overLink: (over: number): string => `${over} TOO MANY FOR THE LINK · LEAVE FILES BEHIND`,
+    // The arrival line where the room binds: the same sum as phase 2's, and the room it meets (M1: one number).
+    roomFor: (parts: string, total: number, arrives: number): string => `ON ARRIVAL: ${parts} = ${total} · ROOM FOR ${arrives}`,
+    arrivalLeave: 'ON ARRIVAL: LEAVE FILES BEHIND FIRST',
     // 02 §4's `ON THE WAY: 4 TRANSIT HITS · …` is 75 characters; without TRANSIT it fits at its longest.
     onTheWay: (hits: number, ecc: number, years: number, land: number): string =>
-      `ON THE WAY: ${hits} HITS · ECC FIXES ${ecc} WHILE YOU SLEEP (${yrs(years)}) → ${land} ${land === 1 ? 'LANDS' : 'LAND'}`,
+      `ON THE WAY: ${hits} HITS · ${ecc} FIXED WHILE YOU SLEEP (${yrs(years)}) → ${land} ${land === 1 ? 'LANDS' : 'LAND'}`,
     backToChart: '◀ CHART [ESC]',
     stamp: 'OUTWARD BOUND',
     control: 'Outward bound! :)',
@@ -159,7 +180,9 @@ export const MAP_TEXT = {
     ecc: (fixed: number): string => `> ECC: ${fixed} TRANSIT ${fixed === 1 ? 'HIT' : 'HITS'} CORRECTED WHILE ASLEEP`,
     receiver: (racks: number, room: number): string => `> RECEIVER: ${racks} ${racks === 1 ? 'RACK' : 'RACKS'} · ROOM ${room}`,
     overflow: (lost: number, ship: string): string => `> CHARGE OVERFLOW · ${lost} LOST · NO ROOM ON ${ship}`,
-    zeroCharge: (ship: string): string => `> REPAIR CHARGE 0 · NO ROOM ON ${ship}`,
+    // A TIGHT arrival with no charge laid out: the one charge line (M1: it no longer types an OVERFLOW line too).
+    zeroCharge: (ship: string, lost: number): string =>
+      (lost > 0 ? `> REPAIR CHARGE 0 · ${lost} LOST · NO ROOM ON ${ship}` : `> REPAIR CHARGE 0 · NO ROOM ON ${ship}`),
   },
 
   // --- The MIND strip's header (01-landing §4): the memory class --------------------------------------------------------

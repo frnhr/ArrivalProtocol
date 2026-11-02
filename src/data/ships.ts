@@ -247,9 +247,9 @@ function fingerprintOf(arm: Readonly<ArmShip>): string {
   return `${arm.slot}|${arm.name}|${arm.kind}|${arm.template}|${arm.pods}|${arm.memoryClass}|${arm.modifiers.join(',')}|${arm.omega0}`;
 }
 
-// The ShipDef id of an arm ship (map-generator shipIdFor says the same): an authored ship keeps its own ('kestrel'), every
-// other its name's ('good-hope').
-function armShipDefId(arm: Readonly<ArmShip>): string {
+// The ShipDef id of an arm ship: an authored ship keeps its own ('kestrel'), every other its name's ('good-hope'). The
+// only copy of the rule (the review's m6: map-generator had a second).
+export function armShipDefId(arm: Readonly<ArmShip>): string {
   return arm.authored ?? arm.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 }
 

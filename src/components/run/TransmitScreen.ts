@@ -18,7 +18,7 @@ import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
 import { MAP_TEXT } from '@data/map-text';
 import {
   TRANSMIT_ARM_SEC, TRANSMIT_SEND_SEC, TRANSMIT_STREAM_FRAC, WHITE_OUT_IN_SEC, WHITE_OUT_HOLD_SEC, WHITE_OUT_FADE_SEC,
-  BEAM_OUT_BLACKOUT_SEC, DRAFT_CARDS,
+  DRAFT_CARDS,
 } from '@data/tuning';
 
 // The TRANSMIT screen (§4.1 step 5, §6.9, §9 WP7 item 4): between two ships, the unit packed for the link.
@@ -145,6 +145,7 @@ interface PacketParts {
   linkLabel: HTMLElement;
   control: HTMLElement;
   confirm: HTMLElement;
+  confirmQ: HTMLElement;
   confirmYes: HTMLButtonElement;
   confirmNo: HTMLButtonElement;
   stamp: HTMLElement;
@@ -186,7 +187,8 @@ function buildPacketParts(root: HTMLElement): PacketParts {
   confirmNo.tabIndex = -1;
   const buttons = make('div', 'tx-confirm-buttons');
   buttons.append(confirmYes, confirmNo);
-  confirm.append(make('div', 'tx-confirm-q', MAP_TEXT.packet.zeroConfirm), buttons, make('div', 'tx-confirm-keys', MAP_TEXT.packet.confirmKeys));
+  const confirmQ = make('div', 'tx-confirm-q', MAP_TEXT.packet.zeroConfirm);
+  confirm.append(confirmQ, buttons, make('div', 'tx-confirm-keys', MAP_TEXT.packet.confirmKeys));
   foot.append(confirm);
   const stamp = make('div', 'tx-stamp', MAP_TEXT.packet.stamp);
   stamp.hidden = true;
@@ -195,7 +197,7 @@ function buildPacketParts(root: HTMLElement): PacketParts {
   sendControl.append(make('span', 'tx-control-tag', MAP_TEXT.packet.controlTag), make('span', 'tx-control-text', MAP_TEXT.packet.control));
   send.append(sendControl);
   return {
-    back, room, roomBar, roomFiles, roomCharge, roomOver, roomLine, roomCharges, linkLabel, control, confirm, confirmYes,
+    back, room, roomBar, roomFiles, roomCharge, roomOver, roomLine, roomCharges, linkLabel, control, confirm, confirmQ, confirmYes,
     confirmNo, stamp, sendControl,
   };
 }
@@ -265,12 +267,15 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     whyEl.textContent = next.why ?? '';
     whyEl.classList.toggle('emergency', next.emergency);
     barEl.style.setProperty('--link-blocks', String(next.link));
-    barFiles.style.width = `${(100 * next.files) / next.link}%`;
+    barFiles.style.width = `${Math.min(100, (100 * next.files) / next.link)}%`;
     barCharge.style.width = `${(100 * next.chargeCarried) / next.link}%`;
+    // Files over the link (the review's B1) hang off the bar's end in red, like the room's; else the charge left behind.
+    const overLink = next.room.fit.overLink;
     const left = next.chargeHeld - next.chargeCarried;
-    barOver.hidden = left <= 0;
-    barOver.textContent = left > 0 ? TRANSMIT_TEXT.over(left) : '';
-    barOver.title = left > 0 ? TRANSMIT_TEXT.overTitle(left) : '';
+    barEl.classList.toggle('over-link', overLink > 0);
+    barOver.hidden = overLink <= 0 && left <= 0;
+    barOver.textContent = overLink > 0 ? `+${overLink}` : left > 0 ? TRANSMIT_TEXT.over(left) : '';
+    barOver.title = overLink > 0 ? '' : left > 0 ? TRANSMIT_TEXT.overTitle(left) : '';
     packetLine.textContent = next.packetLine;
     dropLine.textContent = next.dropLine;
     const chips = next.chips.map(chipNode);
@@ -315,25 +320,27 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     parts.roomOver.hidden = hang <= 0;
     parts.roomOver.textContent = room.tone === 'over' ? `+${fit.over}` : hang > 0 ? MAP_TEXT.packet.wontFit(hang) : '';
     parts.roomLine.textContent = room.line;
-    parts.roomCharges.hidden = room.charge === null && room.overRoom === null;
-    parts.roomCharges.textContent = room.overRoom ?? room.charge ?? '';
+    parts.roomCharges.hidden = room.charge === null && room.tooMany === null;
+    parts.roomCharges.textContent = room.tooMany ?? room.charge ?? '';
     parts.roomCharges.dataset.tone = room.tone;
-    parts.control.hidden = !room.zeroCharge;
+    const zero = room.confirm !== null;
+    parts.control.hidden = !zero;
     parts.control.replaceChildren(make('span', 'tx-control-tag', MAP_TEXT.packet.controlTag), make('span', 'tx-control-text', MAP_TEXT.packet.controlZero));
-    if (room.zeroCharge && !zeroAnnounced && !root.hidden) {
+    parts.confirmQ.textContent = room.confirm ?? MAP_TEXT.packet.zeroConfirm;
+    if (zero && !zeroAnnounced && !root.hidden) {
       zeroAnnounced = true;
       play('buzz');
     }
-    if (!room.zeroCharge && confirming) closeConfirm();
+    if (!zero && confirming) closeConfirm();
   }
 
   // TRANSMIT ▸ once a card is picked (or when none was dealt); before that it says what is missing.
   const awaitingPick = (current: TransmitModel): boolean => current.cards.length > 0 && current.pick === null;
   function paintGo(current: TransmitModel): void {
     if (sending) return;
-    const waiting = awaitingPick(current) || current.room.overRoom !== null;
+    const waiting = awaitingPick(current) || current.room.tooMany !== null;
     goBtn.classList.toggle('waiting', waiting);
-    const words = awaitingPick(current) ? DRAFT_TEXT.goWaiting : current.room.overRoom !== null ? MAP_TEXT.packet.goOverRoom : TRANSMIT_TEXT.go;
+    const words = awaitingPick(current) ? DRAFT_TEXT.goWaiting : current.room.tooMany !== null ? MAP_TEXT.packet.goOverRoom : TRANSMIT_TEXT.go;
     renderKeyCaps(goBtn, words, { own: 'SPACE' });
   }
 
@@ -373,17 +380,14 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     goBtn.disabled = false;
     goBtn.classList.add('arming');
     paint();
-    // After a BEAM OUT the old ship's windows go black first (Telemetry's blackout): this is the moment
-    // the unit left, and the packet screen comes up out of the dark.
-    const delay = store.getState().burn.status === 'abandoned' ? BEAM_OUT_BLACKOUT_SEC : 0;
-    later(delay, () => {
-      root.hidden = false;
-      play('transmitIn');
-      // A TIGHT ship that takes no charge says so as the screen comes up (01 §3.16: never a surprise).
-      if (model?.room.zeroCharge && !zeroAnnounced) { zeroAnnounced = true; play('buzz'); }
-      inputFromMs = performance.now() + TRANSMIT_ARM_SEC * 1000;
-      later(TRANSMIT_ARM_SEC, () => goBtn.classList.remove('arming'));
-    });
+    // After a BEAM OUT the old ship's windows go black before the DESK comes up (components/desk/DeskScreen.ts, once per
+    // desk visit: the review's m4); the PACKET, opened from the desk, never waits for it again.
+    root.hidden = false;
+    play('transmitIn');
+    // A TIGHT ship that takes no charge says so as the screen comes up (01 §3.16: never a surprise).
+    if (model !== null && model.room.confirm !== null && !zeroAnnounced) { zeroAnnounced = true; play('buzz'); }
+    inputFromMs = performance.now() + TRANSMIT_ARM_SEC * 1000;
+    later(TRANSMIT_ARM_SEC, () => goBtn.classList.remove('arming'));
   }
 
   function close(): void {
@@ -408,15 +412,16 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
       replayAnimation(goBtn, 'nudge');
       return;
     }
-    // Files plus the floor over the destination's room: TRANSMIT ▸ waits until files are left behind (01 §3.16).
-    if (current.room.overRoom !== null) {
+    // Files plus the floor over the destination's room, or files over the link: TRANSMIT ▸ waits until files are left
+    // behind (01 §3.16; the review's B1).
+    if (current.room.tooMany !== null) {
       play('buzz');
       replayAnimation(parts.room, 'nudge');
       replayAnimation(goBtn, 'nudge');
       return;
     }
     // No charge will arrive (a TIGHT ship): asked first, inline; ENTER says yes.
-    if (current.room.zeroCharge && !confirming) {
+    if (current.room.confirm !== null && !confirming) {
       openConfirm();
       return;
     }

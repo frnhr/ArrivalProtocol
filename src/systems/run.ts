@@ -31,7 +31,8 @@ import { inOrbitOutcome, landingResult } from '@systems/landing-rules';
 import {
   currentShip, currentSlot, shipDefAt, mapAtShip, mapAtFirstShip, hopRng, createRunMap, classicRunMap,
 } from '@systems/map-run';
-import { hopBetween, reachable, reachableFrom, hitsLanding, roomFit } from '@systems/map-hop';
+import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
+import { unitArrival } from '@systems/arrival-preview';
 import { mapFacts } from '@systems/map-facts';
 import { BEATS, LINES, perShipBeatIds } from '@data/script';
 import { TOOL_REFUSAL } from '@data/tool-text';
@@ -355,7 +356,7 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
     coreHit: extra.coreHit,
     coreReset: extra.coreReset,
     dropped: [],
-    offer: dealDraft(store.getState(), hop.linkBlocks),
+    offer: dealDraft(store.getState(), hop),
     pick: null,
     threat,
   };
@@ -389,10 +390,12 @@ export function transmitNext(store: Store<GameState>): void {
   // transit hits): they ride free, and land behind their targets at the boot. From the verdict, never the map's facts again.
   packet.seeds = rollBeamSeeds(packet, beamSourceOf(plan.threat), playsTutorial(state.run), hopRng(state.run, fromSlot, plan.toSlot, 'beam-seeds'));
   const files = packedFiles(packet);
-  // The PACKET's TRANSMIT ▸ waits while the files and the floor are over the destination's room (01 §3.16; the review
-  // follow-up M2): a send that gets here over it is a bug, not a squeeze (layoutCarried would throw on the files anyway,
-  // later and less clearly).
-  const fit = roomFit({ files, charge: packet.chargeHeld }, plan.hop);
+  // The arrival as the PACKET previewed it (systems/arrival-preview.ts), for the seeds the beam really rolled. TRANSMIT ▸
+  // waits while files are over the link or files and the floor over the room (01 §3.16; the review's B1 and the follow-up
+  // M2): a send that gets here over either is a bug, not a squeeze.
+  const preview = unitArrival(state, { hop: plan.hop, threat: plan.threat, dropped: plan.dropped, pick: plan.pick }, packet.seeds.length);
+  const fit = preview.fit;
+  if (fit.overLink > 0) throw new Error(`transmitNext: ${fit.files} blocks of files are ${fit.overLink} over the link of ${fit.link}`);
   if (fit.over > 0) throw new Error(`transmitNext: ${fit.files} blocks of files and a floor of ${fit.floor} are ${fit.over} over ${ship.name}'s room of ${fit.room}`);
   const hits: TransitHit[] = [];
   if (plan.coreHit > 0 || plan.coreReset) {
@@ -406,6 +409,10 @@ export function transmitNext(store: Store<GameState>): void {
   const cardCharge = pickCharge(plan.pick);
   const charge = arrivalCharge(packet.chargeCarried, state.run.pendingStarCredit, cardCharge, plan.hop.chargeFloor);
   const layout = layoutCarried(packet, charge.blocks, ship, plan.threat, hollowLabel(state.run));
+  // Every arrival number the kid read must be the one that happens (the review's M1): the charge laid out and lost.
+  if (charge.blocks !== fit.wanted || layout.chargeBlocks !== fit.chargeArrives || layout.overflowLost !== fit.wanted - fit.chargeArrives) {
+    throw new Error(`transmitNext: the PACKET previewed ${fit.chargeArrives} of ${fit.wanted} charge arriving, the layout put ${layout.chargeBlocks} of ${charge.blocks}`);
+  }
   const scripted = arrivalDamage(layout.racks.segs, ship.arrivalDamage);
   const arrival: ArrivalReport = {
     hits,

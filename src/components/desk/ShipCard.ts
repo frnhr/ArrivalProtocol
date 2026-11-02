@@ -2,7 +2,8 @@ import type { CardModel, CardTimeline } from '@systems/desk';
 import { make } from '@components/dom';
 
 // The SHIP CARD (02-map §4), docked right of the chart on a desktop and a bottom sheet on a phone: a large top block (the
-// tags, the name, the world and its people, the schedule in green when early and red when late), then Uplink rows
+// tags, the name, the world and its pods, then the lead: the colonists, the years early in green or late in red, and what
+// the trip costs), the fit line, then the other Uplink rows, lighter
 // (label left, value right; a continuation row has no label, so the fit line sits under MEMORY and the noise under BEAM;
 // a warning row in red), then the TIMELINE strip: you leave, you get there, ▲ approach, green between the last two when
 // early, red when the approach comes first. Built from systems/desk.ts cardModel only.
@@ -41,16 +42,29 @@ export function renderShipCard(host: HTMLElement, card: Readonly<CardModel> | nu
   if (!card.reachable && card.state !== 'current') tags.appendChild(make('span', 'dc-tag dim', card.state.replace(/-/g, ' ').toUpperCase()));
   if (tags.childElementCount > 0) top.appendChild(tags);
   top.appendChild(make('div', 'dc-name', card.name));
-  const sub = card.top.startsWith(`${card.name} · `) ? card.top.slice(card.name.length + 3) : card.top;
-  top.appendChild(make('div', 'dc-sub', sub));
-  if (card.schedule !== null) top.appendChild(make('div', `dc-sched tone-${card.scheduleTone}`, card.schedule));
-  const rows = make('div', 'dc-rows');
-  for (const row of card.rows) {
+  top.appendChild(make('div', 'dc-sub', card.sub));
+  // The lead (the lead's call after the review): the colonists, the years early or late, what the trip costs.
+  const lead = make('div', 'dc-lead');
+  lead.appendChild(make('div', 'dc-colonists', card.colonists));
+  if (card.schedule !== null) lead.appendChild(make('div', `dc-sched tone-${card.scheduleTone}`, card.schedule));
+  if (card.cost !== null) lead.appendChild(make('div', 'dc-cost', card.cost));
+  top.appendChild(lead);
+  const rowNode = (row: CardModel['rows'][number]): HTMLElement => {
     const node = make('div', `dc-row key-${row.key} tone-${row.tone}${row.label === '' ? ' cont' : ''}`);
     node.append(make('span', 'dc-k', row.label), make('span', 'dc-v', row.value));
-    rows.appendChild(node);
+    return node;
+  };
+  const parts: HTMLElement[] = [top];
+  // Then the fit line, then the rest, lighter.
+  const fit = card.rows.find((row) => row.key === 'fit');
+  if (fit !== undefined) {
+    const fitNode = make('div', 'dc-rows dc-fit');
+    fitNode.appendChild(rowNode(fit));
+    parts.push(fitNode);
   }
-  const parts: HTMLElement[] = [top, rows];
+  const rows = make('div', 'dc-rows dc-rest');
+  for (const row of card.rows) if (row.key !== 'fit') rows.appendChild(rowNode(row));
+  parts.push(rows);
   if (card.timeline !== null) parts.push(timelineNode(card.timeline));
   host.replaceChildren(...parts);
 }

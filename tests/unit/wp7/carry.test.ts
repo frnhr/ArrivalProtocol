@@ -163,14 +163,15 @@ const memory = h.store.getState().memory;
   check('…a packet bigger than the receiver takes at most UNIT_TAIL_BLOCKS of rack D, and the charge past that is lost',
     big.racks.startAddr === MEMORY_LAYOUTS.FULL.unitStart - UNIT_TAIL_BLOCKS && big.chargeBlocks === room - filesBlocks
     && big.overflowLost === 120 - (room - filesBlocks), `start ${big.racks.startAddr}, ${big.overflowLost} lost`);
-  // A ship whose rack D is full to its end: no tail at all; the charge that does not fit is lost, loudly.
+  // A ship whose rack D is full to its end has no tail: no valid ship can be like that (validatePodRacks demands the whole
+  // UNIT_TAIL_BLOCKS), and the layout refuses it rather than quietly taking a smaller room than the card and the PACKET
+  // promised (the slice-3a review's M1: one room, data/memory.ts roomForUnitOn).
   const fullD: ShipDef = { ...halcyon, id: 'full-d-test', memory: { ...halcyon.memory, podRacks: { ...halcyon.memory.podRacks, D: '_56 P' } } };
-  const lost = layoutCarried(packet, 80, fullD, nominalShipThreat(1));
-  check('…with rack D full at its end, charge that does not fit the receiver is lost (CHARGE OVERFLOW)',
-    lost.racks.startAddr === MEMORY_LAYOUTS.FULL.unitStart && lost.overflowLost === 80 - (receiver - filesBlocks)
-    && lost.chargeBlocks === receiver - filesBlocks, `${lost.overflowLost} lost`);
+  let refused = '';
+  try { layoutCarried(packet, 80, fullD, nominalShipThreat(1)); } catch (error) { refused = (error as Error).message; }
+  check('…a ship with no tail at the end of its last pod rack is refused, loudly (one room for the unit)', /roomForUnitOn full-d-test/.test(refused), refused);
   let threw = '';
-  try { layoutCarried({ ...packet, rackE: [...packet.rackE, ...packet.rackE.map((seg) => ({ ...seg, size: 30 }))] }, 0, fullD, nominalShipThreat(1)); } catch (error) { threw = (error as Error).message; }
+  try { layoutCarried({ ...packet, rackE: [...packet.rackE, ...packet.rackE.map((seg) => ({ ...seg, size: 30 }))] }, 0, halcyon, nominalShipThreat(1)); } catch (error) { threw = (error as Error).message; }
   check('…files that do not fit throw', /do not fit/.test(threw), threw);
 }
 

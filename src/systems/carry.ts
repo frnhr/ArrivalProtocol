@@ -11,12 +11,15 @@ import { FS_TOOL_KINDS } from '@data/fs-tools';
 import { CLASSIC_FIVE, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat } from '@systems/threat-plan';
 import {
-  FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, lastPodRackTrailingFree, isUnitFileType, freshChargeFile, layoutFor, type CarriedRacks,
+  FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, isUnitFileType, freshChargeFile, layoutFor, fillRoom, roomForUnitOn,
+  BEAM_SEED_LAYOUT_BLOCKS, type CarriedRacks,
 } from '@data/memory';
 import {
   TRANSIT_HIT_MIN, TRANSIT_HIT_MAX, TRANSIT_LAST_COPY_FLOOR, TRANSIT_CORE_MAX_HIT, CORE_RESET_INTEGRITY,
-  CHARGE_ARRIVAL_FLOOR, UNIT_TAIL_BLOCKS, SEED_BLOCKS, SEED_TOOL_GAP_BLOCKS, WALL_MIN_BLOCKS, SEED_GAP_TO_TARGET_BLOCKS,
+  CHARGE_ARRIVAL_FLOOR, SEED_BLOCKS, SEED_TOOL_GAP_BLOCKS, WALL_MIN_BLOCKS, SEED_GAP_TO_TARGET_BLOCKS,
 } from '@data/tuning';
+
+export { BEAM_SEED_LAYOUT_BLOCKS };
 
 // Transmission and carry (§6.9), pure and DOM-free: what of the unit crosses the link to the next
 // ship, and what the crossing does to it. systems/run.ts calls these in order at TRANSMIT:
@@ -110,8 +113,11 @@ export interface Packet {
   rackF: Segment[];         // packed fs-tools, in rack-F order (REPAIR CHARGE apart, below)
   charge: RedundancySegment | null;  // the charge's packed copy (null: the unit has none left)
   filesBlocks: number;      // the files' blocks, charge excluded
+  // Blocks of files over the link (files − link, when positive; the slice-3a review's B1): such a packet can't cross
+  // until files are left behind (the PACKET says `n TOO MANY FOR THE LINK` and TRANSMIT ▸ waits; transmitNext throws).
+  overLink: number;
   chargeHeld: number;       // the charge the unit had at TRANSMIT
-  chargeCarried: number;    // what crosses: min(charge, link − files)
+  chargeCarried: number;    // what crosses: min(charge, link − files), none while the files are over the link
   // The beam seeds riding along (phase 3 slice 2, 04 §3.4; systems/beam-seeds.ts rollBeamSeeds, at the beam): hitchhikers
   // ride free, so they are in neither filesBlocks nor the link; they take room only at the boot (layoutCarried).
   seeds: BeamSeedPlan[];
@@ -119,8 +125,9 @@ export interface Packet {
 
 // Packs the unit for a link of `linkBlocks` (step 1 of the header). Copies only: memory is not touched.
 // `added` is the picked card's new file (systems/draft.ts cardFiles), packed with the rest; none when the
-// card brings no file. Throws on a drop that is locked, an unknown id, and on files that do not fit the
-// link at all (the TRANSMIT screen asks the kid to drop some first; WP7 part 2).
+// card brings no file. Throws on a drop that is locked and on an unknown id. Files over the link are reported (overLink),
+// not thrown on: a unit grown past a short arm hop's link (82 at 58 LY) must still reach its PACKET, which asks for files
+// to be left behind (the slice-3a review's B1: SET COURSE threw there).
 export function packUnit(memory: readonly Segment[], linkBlocks: number, dropped: readonly string[], added: readonly Segment[] = []): Packet {
   const live = unitFilesIn(memory);
   const kept = live.filter((seg) => !dropped.includes(seg.id));
@@ -140,12 +147,12 @@ export function packUnit(memory: readonly Segment[], linkBlocks: number, dropped
   const rackE = files.filter((seg) => !packsInRackF(seg)).sort((a, b) => rackESortKey(a) - rackESortKey(b)).map(packedCopy);
   const rackF = files.filter(packsInRackF).sort((a, b) => rackFSortKey(a) - rackFSortKey(b)).map(packedCopy);
   const filesBlocks = [...rackE, ...rackF].reduce((sum, seg) => sum + seg.size, 0);
-  if (filesBlocks > linkBlocks) throw new Error(`packUnit: the files take ${filesBlocks} blocks, the link carries ${linkBlocks}`);
+  const overLink = Math.max(0, filesBlocks - linkBlocks);
   const held = charges[0] ?? null;
   const chargeHeld = held ? held.used : 0;
   const chargeCarried = Math.max(0, Math.min(chargeHeld, linkBlocks - filesBlocks));
   const charge = held ? packedCopy(held) as RedundancySegment : null;
-  return { linkBlocks, rackE, rackF, charge, filesBlocks, chargeHeld, chargeCarried, seeds: [] };
+  return { linkBlocks, rackE, rackF, charge, filesBlocks, overLink, chargeHeld, chargeCarried, seeds: [] };
 }
 
 // Every packed file a hit can land on (charge is not a file: §6.9 hits "packed non-charge files").
@@ -283,22 +290,23 @@ export function layoutCarried(
   const filesBlocks = files.reduce((sum, seg) => sum + seg.size, 0);
   const layout = layoutFor(ship.memoryClass);
   const receiver = layout.receiverBlocks;
-  const tail = Math.min(UNIT_TAIL_BLOCKS, lastPodRackTrailingFree(ship));
-  const room = receiver + tail;
+  const room = roomForUnitOn(ship);
+  if (packet.overLink > 0) throw new Error(`layoutCarried: ${packet.overLink} blocks of files over the link were sent`);
   if (filesBlocks > room) {
-    throw new Error(`layoutCarried: ${filesBlocks} blocks of files do not fit ${ship.name}'s room (${receiver} + a tail of ${tail})`);
+    throw new Error(`layoutCarried: ${filesBlocks} blocks of files do not fit ${ship.name}'s room (${room})`);
   }
   if (packet.seeds.length > 0 && owner === undefined) throw new Error('layoutCarried: beam seeds need an owner name (say.ts hollowLabel)');
   for (const plan of packet.seeds) {
     if (!files.some((seg) => seg.id === plan.targetId)) throw new Error(`layoutCarried: beam seed target ${plan.targetId} is not in the packet`);
   }
   if (new Set(packet.seeds.map((plan) => plan.targetId)).size !== packet.seeds.length) throw new Error('layoutCarried: two beam seeds behind one file');
-  // 01 §3.16's fill order: files, the floor (none on a TIGHT ship), the seeds, the rest of the charge.
-  const seedRoom = Math.max(0, room - filesBlocks - Math.min(chargeBlocks, layout.chargeFloor));
-  const placed = Math.min(packet.seeds.length, Math.floor(seedRoom / BEAM_SEED_LAYOUT_BLOCKS));
+  // 01 §3.16's fill order: files, the floor (none on a TIGHT ship), the seeds, the rest of the charge (data/memory.ts
+  // fillRoom, the rule the card and the PACKET preview).
+  const fill = fillRoom(room, filesBlocks, layout.chargeFloor, chargeBlocks, packet.seeds.length);
+  const placed = fill.seedsPlaced;
   const seedsBlocks = placed * BEAM_SEED_LAYOUT_BLOCKS;
-  const charge = Math.max(0, Math.min(chargeBlocks, room - filesBlocks - seedsBlocks));
-  const overflowLost = chargeBlocks - charge;
+  const charge = fill.charge;
+  const overflowLost = fill.lost;
   const hunting = huntingGapBlocks(threat, packet, filesBlocks + seedsBlocks, charge, receiver);
   const block = filesBlocks + seedsBlocks + hunting + charge;
   const startAddr = Math.min(layout.unitStart, layout.totalBlocks - block);
@@ -320,9 +328,6 @@ export function layoutCarried(
   }));
   return { racks: { startAddr, segs, ...(strays.length > 0 ? { strays } : {}) }, chargeBlocks: charge, overflowLost, seeds };
 }
-
-// The blocks one beam seed takes at the boot (04 §3.4): its GAP to the target, itself, and the WALL behind it.
-export const BEAM_SEED_LAYOUT_BLOCKS = SEED_GAP_TO_TARGET_BLOCKS + SEED_BLOCKS + WALL_MIN_BLOCKS;
 
 // REPAIR CHARGE as it arrives: `points` of charge in as many blocks (the blocks a repair had spent
 // do not cross the link), a full pool again. A unit that spent its last point carried no pool file
