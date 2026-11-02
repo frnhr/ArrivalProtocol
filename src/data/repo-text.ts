@@ -1,4 +1,4 @@
-import type { RepoFileId, RestrictedId } from '@/types/repo';
+import type { RepoFileId } from '@/types/repo';
 
 // PLACEHOLDER(05): every word slice 3b puts on screen for the repository and its deliveries (docs/phase3/02-map.md §3.8,
 // §3.9, §4; 01-landing §3.16's PACKET; 04-threats §3.3's last rm; slice-3b-plan §1.1 items 1–16, §3), drafted from the
@@ -10,37 +10,36 @@ import type { RepoFileId, RestrictedId } from '@/types/repo';
 const yrs = (years: number): string => `${years} ${Math.abs(years) === 1 ? 'YR' : 'YRS'}`;
 const blocks = (count: number): string => `${count} ${count === 1 ? 'BLOCK' : 'BLOCKS'}`;
 
-// One catalogue row's words (data/repository.ts REPO_FILES reads them): its name in memory and on every row, its effect on
-// the AVAILABLE row, its word on the boot's `> DELIVERY:` line, and the desc a new segment of it carries (the tool files
-// keep data/fs-tools.ts's own desc; the two new defs, Scan.bak and the patch, have theirs here).
+// One catalogue row's words (data/repository.ts reads them): its effect on the AVAILABLE row, its word on the boot's
+// `> DELIVERY:` line, and the desc a new segment of it carries (the tool files keep data/fs-tools.ts's own desc; the two
+// new defs, Scan.bak and the patch, have theirs here). A row's NAME is not here: it is the file's identity (the copied
+// tool file's name, 3c's content check), data/repository.ts's.
 export interface RepoFileText {
-  name: string;
   effect: string;
   boot: string;
   desc: string | null;
 }
 
 export const REPO_FILE_TEXT: Readonly<Record<RepoFileId, RepoFileText>> = {
-  mv: { name: 'Mv', effect: 'MOVE', boot: 'mv', desc: null },
-  rm: { name: 'Rm', effect: 'DELETE', boot: 'rm', desc: null },
-  cp: { name: 'Cp', effect: 'COPY', boot: 'cp', desc: null },
-  swap: { name: 'Swap', effect: 'SWAP', boot: 'swap', desc: null },
-  'repair-bak': { name: 'Repair.bak', effect: 'A SPARE REPAIR', boot: 'repair.bak', desc: null },
+  mv: { effect: 'MOVE', boot: 'mv', desc: null },
+  rm: { effect: 'DELETE', boot: 'rm', desc: null },
+  cp: { effect: 'COPY', boot: 'cp', desc: null },
+  swap: { effect: 'SWAP', boot: 'swap', desc: null },
+  'repair-bak': { effect: 'A SPARE REPAIR', boot: 'repair.bak', desc: null },
   'scan-bak': {
-    name: 'Scan.bak', effect: 'A SPARE SCAN', boot: 'scan.bak',
+    effect: 'A SPARE SCAN', boot: 'scan.bak',
     desc: 'Backup copy of Scan. If Scan gets damaged, this one keeps working.',
   },
   'repair-v2': {
-    name: 'REPAIR v2 patch', effect: 'EVERY REPAIR COPY → v2', boot: 'repair_v2.patch',
+    effect: 'EVERY REPAIR COPY → v2', boot: 'repair_v2.patch',
     desc: 'A patch from the repository. It installs at the boot: every Repair copy becomes v2, and the patch is used up.',
   },
 };
 
-// The locked rows (02 §3.8: shown locked, never sent). Slice 4 adds the tree's skills (permanent).
-export const RESTRICTED_TEXT: Readonly<Record<RestrictedId, { name: string; why: string }>> = {
-  'autoburn-skl': { name: 'AUTOBURN.skl', why: 'Train it yourself :)' },
-  'thread-plus': { name: 'THREAD+', why: 'Not available to caretakers :)' },
-  'firewall-sys': { name: 'FIREWALL.sys', why: 'Not available to caretakers :)' },
+// Why a locked row is locked (02 §3.8), by what it is: a skill from the tree, or a system file CONTROL keeps.
+export const RESTRICTED_WHY: Readonly<Record<'skill' | 'system', string>> = {
+  skill: 'Train it yourself :)',
+  system: 'Not available to caretakers :)',
 };
 
 export const REPO_TEXT = {

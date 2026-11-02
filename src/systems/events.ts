@@ -56,6 +56,9 @@ export interface GameEvents {
   // Phase 3 slice 3b (02 §4 step 6): a delivery from the repository unpacked at the boot, as its `> DELIVERY:` line is said
   // (systems/delivery-boot.ts receiveDeliveryAtBoot; a chime and the chip sliding in, Track UI). One per file.
   'delivery': { file: RepoFileId };
+  // Phase 3 slice 3b (05 §4): the boot's `> n NEW MESSAGES · INBOX` line was said (systems/boot.ts, beside 'log-key'): the
+  // one chime per boot with new mail and the dock badge's pulse hang on it (Track UI).
+  'inbox-new': { count: number };
   // A scripted fault hit a file (ship 1's ENGINE I/O FAULT): its integrity fell from → to.
   'file-fault': { role: SegmentRole; from: number; to: number };
   // SPACE was pressed but the engine can't fire at all (dead or missing driver, no controller).

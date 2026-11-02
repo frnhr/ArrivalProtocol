@@ -15,6 +15,7 @@ import { bootLine, bootLinePlan, bootLineSpeaker, bootLogEntries, lineVars, BOOT
 import type { Speaker } from '@state/schema';
 import { beamSeedTarget } from '@systems/beam-seeds';
 import { receiveDeliveryAtBoot } from '@systems/delivery-boot';
+import { newMessagesAtBoot } from '@systems/inbox';
 import {
   BOOT_LINE_AT_SEC, BOOT_KLAXON_AFTER_LAST_LINE_SEC, BOOT_END_AFTER_KLAXON_SEC, BOOT_SKIP_GRACE_SEC,
   ARRIVAL_HIT_STAGGER_SEC, ARRIVAL_HIT_SEEN_SEC, BOOT_GHOST_AT_SEC, BOOT_AFTER_GHOST_SEC, BOOT_AFTER_HOLLOW_LINE_SEC,
@@ -245,6 +246,8 @@ function sayNextLine(store: Store<GameState>): void {
   }
   // 046.log's keys (05 §3.2): the entries this line names, as planned (systems/story-log.ts marks them found on it).
   if (kind === 'log') emit('log-key', { entries: bootLogEntries(state) });
+  // The INBOX's new mail (phase 3 slice 3b, 05 §4): the count this line names (the chime and the badge hang on the event).
+  if (kind === 'inbox') emit('inbox-new', { count: newMessagesAtBoot(state).length });
   // HOLLOW's reading line (phase 3 slice 3b, 05 §3.5) is said once a run: marked as it is said, as keepCharge is below.
   if (kind === 'reading') store.update((draft) => { draft.run.log.toldReading = true; });
   // HOLLOW's `keep 20 charge for me` (the HUNT stage's boot line) is told once a run (04 §3.9, slice 3's routes).

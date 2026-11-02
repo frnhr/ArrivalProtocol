@@ -101,10 +101,12 @@ import { packedFiles, arrivalCharge } from '@systems/carry';
 import { resetWorldForShip } from '@systems/run';
 import { createRunState } from '@state/initial';
 import type { RunMapState, Hop } from '@/types/map';
-import type { RepoFileId, RunRepoState, DeliveryChip, RepoRequest, InboxMessage } from '@/types/repo';
+import type { RepoFileId, RunRepoState, DeliveryChip, RepoRequest } from '@/types/repo';
+import type { InboxMessage } from '@/types/inbox';
 import { REPO_FILES, repoFileSegments, repoToolKind } from '@data/repository';
 import {
-  setRequest, recommendation, repoModel, undeliveredFiles, bestRepairVersion, type RepoModel,
+  setRequest, recommendation, repoModel, undeliveredFiles, bestRepairVersion, deliveryFirstOfKind, hopOutlook,
+  type RepoModel, type OutlookEntry,
 } from '@systems/repository';
 import { inboxMessages, inboxUnread } from '@systems/inbox';
 
@@ -241,13 +243,15 @@ interface DebugHooks {
   giveCard: (id: UpgradeId) => Segment[];
   // Phase 3 slice 3b (the repository, deliveries, the INBOX; Track REPO owns them, UI and TESTS request more): request(f)
   // is the desk's REQUEST toggle (null clears it); repo is the run's requests, this desk's pick, the recommendation, the
-  // REPOSITORY window's model for the selected ship and the PACKET's delivery chips; inbox is every message received, the
+  // REPOSITORY window's model and the outlook (systems/repository.ts hopOutlook) for the selected ship, and the PACKET's
+  // delivery chips; inbox is every message received, the
   // unread ones and the read marks; give(f) writes a repository file into memory now, as a delivery's boot would unpack it
   // (a tool kind's first copy is its licence and arrives untried; a spare is just a file; the REPAIR v2 patch installs at
   // once: every Repair copy becomes v2 and the patch is used up).
   request: (file: RepoFileId | null) => void;
   repo: () => {
-    state: RunRepoState; recommendation: RepoFileId | null; model: RepoModel; deliveries: DeliveryChip[] | null; undelivered: RepoRequest[];
+    state: RunRepoState; recommendation: RepoFileId | null; model: RepoModel; outlook: OutlookEntry[] | null;
+    deliveries: DeliveryChip[] | null; undelivered: RepoRequest[];
   };
   inbox: () => { messages: InboxMessage[]; unread: string[]; read: string[] };
   give: (file: RepoFileId) => Segment[];
@@ -396,9 +400,9 @@ function giveCard(store: Store<GameState>, id: UpgradeId): Segment[] {
 }
 
 // __ap.give(file): a repository file written into memory now (phase 3 slice 3b), where a licence's files go (the receiver's
-// free run after REPAIR CHARGE: licences.ts installAddress). A tool kind the run has not had yet is recorded as it would be
-// by its first delivery (run.licences, and HOLLOW leaves it alone until the kid has tried it: untriedTools, REPAIR excepted
-// as in grantLicence); a kind already here arrives as a spare copy. The REPAIR v2 patch installs at once, as at its boot
+// free run after REPAIR CHARGE: licences.ts installAddress). A tool kind's first delivery (systems/repository.ts
+// deliveryFirstOfKind: never REPAIR or SCAN, whose .bak is a spare) is recorded as the send would record it: run.licences,
+// and HOLLOW leaves it alone until the kid has tried it (untriedTools); anything else arrives as a spare copy. The REPAIR v2 patch installs at once, as at its boot
 // line: every Repair copy becomes v2, run.upgrades gains 'repair-v2', and the patch leaves no file. Emits 'delivery'.
 function giveRepoFile(store: Store<GameState>, file: RepoFileId): Segment[] {
   if (!Object.hasOwn(REPO_FILES, file)) throw new Error(`__ap.give: '${String(file)}' is not in the catalogue (${Object.keys(REPO_FILES).join(', ')})`);
@@ -422,10 +426,11 @@ function giveRepoFile(store: Store<GameState>, file: RepoFileId): Segment[] {
   mergeAdjacentFree(memory);
   assertMemoryInvariants(memory, layoutOf(store.getState()).totalBlocks);
   const kind = repoToolKind(file);
+  const first = deliveryFirstOfKind(store.getState().run, file);
   store.update((draft) => {
-    if (kind !== null && !draft.run.licences.includes(kind)) {
+    if (first && kind !== null) {
       draft.run.licences.push(kind);
-      if (kind !== 'repair' && !draft.hollow.untriedTools.includes(kind)) draft.hollow.untriedTools.push(kind);
+      draft.hollow.untriedTools.push(kind);
     }
     draft.ui.memoryRev++;
   });
@@ -792,6 +797,9 @@ export function mountDebug(store: Store<GameState>): void {
       const state = store.getState();
       return {
         state: structuredClone(state.run.repo), recommendation: recommendation(state), model: repoModel(state, state.ui.deskSelected),
+        // The outlook toward the selected ship on the DESK (or the PACKET's destination).
+        outlook: state.run.map.world !== 'arm' || state.ui.deskSelected === null || !['desk', 'transmit'].includes(state.run.phase) ? null
+          : hopOutlook(state, currentSlot(state.run), state.ui.deskSelected),
         deliveries: state.run.transit === null ? null : structuredClone(state.run.transit.deliveries), undelivered: undeliveredFiles(state.run),
       };
     },

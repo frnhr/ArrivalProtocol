@@ -551,6 +551,10 @@ Owns `tests/unit/**`, `tests/e2e/**`, and the timings in `tests/unit/run.mjs`. I
 | `tuning.ts` | F creates blocks | each track only inside its block (`BOOT_LINE_AT_SEC`: F) |
 | `debug.ts` | REPO | UI and TESTS request helpers |
 | `classic-five.ts` | frozen | lead only |
+| `src/systems/events.ts` | F / lead | one-liners on request (3b added `'delivery'` and `'inbox-new'`) |
+| `src/types/repo.ts`, `systems/delivery-rule.ts`, `systems/delivery-boot.ts` | REPO | UI asks by message |
+| `src/types/inbox.ts` | UI | REPO asks by message |
+| `systems/repository.ts` `hopOutlook` | REPO | the ONE outlook rule: desk.ts's DELIVERIES row and TIMELINE, `repoModel`'s IN TRANSIT, the PACKET read it, never a copy |
 
 **Order:**
 1. F, then review.
@@ -712,3 +716,62 @@ The foundation (§5.0 items 1–8) as built. Nothing changes behaviour yet: ever
 `map/delivery-rule` 17/17 in 0.6 s; the full unit tier 161/161 in 241 s on 4 workers (fly-once cache cold); a Playwright
 pass of run 1 to HALCYON's desk with `__ap.request('mv')`, `__ap.repo()`, `__ap.inbox()`, `__ap.give('rm')` and
 `__ap.give('repair-v2')` had no console errors.
+
+## Deviations (foundation, review follow-up)
+
+An independent review of 6989176 confirmed the delivery rule, the Cp correction (CORMORANT 2861, LAST LIGHT 2915), the
+light stamps, the BFS, the catalogue sizes, the boot order and the cycle guard. The follow-up commit applies:
+
+1. **`TransmitModel` gains its final 3b fields**: `deliveries: DeliveryChipView[]` (`{ key, file, name, blocks, text,
+   sendOn, lost, sendOnLabel }`, from `plan.deliveries`; `lost` = sent on into a final ship), `inTransit: string | null`
+   (the hop's outlook entries still in transit that do not ride: one by name, several as a count) and `salvageTitle: string
+   | null` (`SALVAGE · PICK ONE TO CARRY` on the arm, null on the classic world).
+2. **One outlook rule**: `repository.ts hopOutlook(state, from, to): OutlookEntry[]`, real, on the real delivery rule.
+   `OutlookEntry = { key, file, source: 'pick' | 'in-transit' | 'waiting', kind: 'in-time' | 'catches-up' | 'waiting' |
+   'late' | 'never', rides, arrivedYear, yearsLate, earliestDepth }`, oldest request first and the pick last; `from`
+   must be the current ship (in-transit requests carry their lateness at it); a destination out of reach still has an
+   outlook. `deliveriesForHop(state, from, to, threat)` is now real: the riding entries as chips. It gained `threat` (the
+   ladder's verdict: no seed into a calm ship), so goTransmit computes the verdict first. `repoModel` stays a stub; its IN
+   TRANSIT rows and UI's card must read `hopOutlook`. `delivery-rule.ts` exports `earliestCatchUp` for it.
+3. **First of kind**: `deliveryFirstOfKind(run, file)` (false for the patch, for REPAIR and for SCAN: Repair.bak and
+   Scan.bak are spares, 02 §3.8, so a delivered Repair.bak no longer pre-empts REPAIR's first-look licence) and
+   `markFirstOfKind(run, chips, seedChance)` (only the first chip of a new kind that is not sent on; toggleSendOn must
+   re-mark). `__ap.give` uses `deliveryFirstOfKind`; `createShipSlices` seeds `hollow.untriedTools` from
+   `arrival.deliveries`' `firstOfKind` flags (decided at the send, before the send adds the kind to `run.licences`, which
+   is why it reads the flag rather than calling the helper again).
+4. **The catalogue's identity is data**: each row's name and gives live in data/repository.ts (`REPO_FILE_DATA`);
+   repo-text keeps the effect, the boot word and the desc (`REPO_FILE_TEXT`), and the locked rows' reasons
+   (`RESTRICTED_WHY.skill / .system`). `validateCatalogue` pins v1's blocks `{mv 2, rm 1, cp 3, swap 1, repair-bak 4,
+   scan-bak 3, repair-v2 2}` and fails with "bump REPO_CATALOGUE_VERSION" on a drift.
+5. **`MessageKind`, `InboxMessage`, `RunInboxState` moved to `src/types/inbox.ts`** (UI).
+6. **`'inbox-new': { count }`** is emitted by boot.ts as the `'inbox'` line is said, beside `'log-key'`.
+7. **Minors**: the pick's chip key is `rq${nextId}` minted at goTransmit (documented on `DeliveryChip.key`);
+   ``RestrictedId = 'thread-plus' | 'firewall-sys' | `skl:${string}` `` (AUTOBURN is `'skl:autoburn'`; `RESTRICTED_ROWS`
+   is a list); `deskWindowOnOpen(state)` in repository.ts (REPO; a stub returning null) is what `openDesk` sets
+   `ui.deskWindow` from; `DeskWindowId = 'repository' | 'training' | 'inbox'` and `null` is the SHIP CARD (the unused
+   `'chart'` / `'card'` ids are gone); `receiverClosed` moved into delivery-rule.ts and is read by `earliestCatchUp`, the
+   forecast and `hopOutlook` (one seam); the stale `toldReading` comments and the boot-length WHY are corrected.
+
+**Behaviour now:** a pick set with `__ap.request` rides as a real chip (the card's fit line, the PACKET's numbers and the
+crossing include its file), but until REPO's `advanceRequests` and `ArrivalReport.deliveries` land it is never cleared
+or recorded, so it rides every later hop too and arrives with no licence. Without `__ap.request` nothing changes.
+
+**Notes for the tracks:**
+- REPO:
+  - call `renewRepairAtBoot` at the first `'delivery'` line, whatever the file, so a delivered Repair.bak does not cancel
+    the free renewal (it would otherwise count as a working copy);
+  - define what a damaged or broken patch does at its boot line (transit hits can land on it);
+  - never fold the patch into a folded line: put it first in the arrival's order;
+  - `repoModel` gives `forecast: null` for an unreachable, TOO LATE or out-of-range destination;
+  - `toggleSendOn` re-runs `markFirstOfKind` (a sent-on first of kind hands "first" to the next chip of its kind).
+- UI:
+  - broadcasts (welcome, policy, arm-complete) are RECEIVED at sent + solLy(ship) of the ship they are read at, not by
+    `lightArrival` over the whole route (which would read the arm-complete letter at ship 1): §2.4's "one light rule"
+    holds for replies, postcards and letters only;
+  - memoise `inboxMessages` per (route length, ships length): boot.ts's `plannedText('inbox')` re-derives it on every
+    timing call;
+  - message ids are stable keys from the source (`reply:<slot>`, `postcard:<slot>:<year>`), never text or list indices.
+- TESTS:
+  - pin Repair.bak arriving before REPAIR's first look (REPAIR still comes, `run.licences` gains 'repair' only by the rule);
+  - pin two chips of one new kind in one packet (one first of kind, one spare);
+  - add a classic boot-plan byte-equality check (the classic world's plans unchanged by 3b).

@@ -1,8 +1,8 @@
 import type { FsToolKind } from '@/types/fs-tool';
-import type { RepoFileDef, RepoFileId, RestrictedRowDef, RestrictedId } from '@/types/repo';
+import type { RepoFileDef, RepoFileId, RestrictedRowDef } from '@/types/repo';
 import type { FsToolSegment, Segment, UpgradeSegment } from '@/types/segment';
 import { TOOL_FILES, createToolFiles } from '@data/fs-tools';
-import { REPO_FILE_TEXT, RESTRICTED_TEXT, REPO_TEXT } from '@data/repo-text';
+import { REPO_FILE_TEXT, RESTRICTED_WHY, REPO_TEXT } from '@data/repo-text';
 import { REPAIR_PATCH_BLOCKS, INTEGRITY_MAX, MAX_LINE_CHARS } from '@data/tuning';
 
 // The repository's catalogue v1 (02-map §3.8; slice-3b-plan §1.1 item 1, §4.1): what ARRIVAL CONTROL sends on request, as
@@ -19,31 +19,45 @@ export const REPO_CATALOGUE_VERSION = 1;
 // The AVAILABLE list's order (02 §3.8's table): the 1–7 keys request rows in this order.
 export const REPO_FILE_IDS: readonly RepoFileId[] = ['mv', 'rm', 'cp', 'swap', 'repair-bak', 'scan-bak', 'repair-v2'];
 
-// The tool file a catalogue row copies (its def by name, so a renamed tool file fails loudly here, not on a desk).
-function toolDef(kind: FsToolKind, name: string): (typeof TOOL_FILES)[FsToolKind][number] {
-  const def = TOOL_FILES[kind].find((file) => file.name === name);
-  if (def === undefined) throw new Error(`repository: no ${kind} tool file named ${name}`);
+// Each row's identity, as data (never words a text module may reword): the file's name in memory (a tool row's is the
+// name of the tool file it copies) and what it gives. 3c's content check and every segment read these.
+const REPO_FILE_DATA: Readonly<Record<RepoFileId, { name: string; gives: RepoFileDef['gives'] }>> = {
+  mv: { name: 'Mv', gives: 'move' },
+  rm: { name: 'Rm', gives: 'delete' },
+  cp: { name: 'Cp', gives: 'copy' },
+  swap: { name: 'Swap', gives: 'swap' },
+  'repair-bak': { name: 'Repair.bak', gives: 'repair' },
+  'scan-bak': { name: 'Scan.bak', gives: 'scan' },
+  'repair-v2': { name: 'REPAIR v2 patch', gives: 'repair-v2' },
+};
+
+// Catalogue v1's sizes, pinned (validateCatalogue): a size is part of what 3c's save trusts, so a drift (a tool file
+// resized in data/fs-tools.ts, the patch retuned) must come with a REPO_CATALOGUE_VERSION bump and a new pin, never quietly.
+const V1_BLOCKS: Readonly<Record<RepoFileId, number>> = { mv: 2, rm: 1, cp: 3, swap: 1, 'repair-bak': 4, 'scan-bak': 3, 'repair-v2': 2 };
+
+// The tool file a catalogue row copies (its def by name, so a renamed tool file fails loudly here, not on a desk). Scan.bak
+// copies Scan (a backup is the same file under another name: the same size).
+function copiedToolDef(id: RepoFileId): (typeof TOOL_FILES)[FsToolKind][number] | null {
+  const gives = REPO_FILE_DATA[id].gives;
+  if (gives === 'repair-v2') return null;
+  const name = id === 'scan-bak' ? 'Scan' : REPO_FILE_DATA[id].name;
+  const def = TOOL_FILES[gives].find((file) => file.name === name);
+  if (def === undefined) throw new Error(`repository: no ${gives} tool file named ${name}`);
   return def;
 }
 
-function fileDef(id: RepoFileId, gives: RepoFileDef['gives'], blocks: number): RepoFileDef {
-  return { id, name: REPO_FILE_TEXT[id].name, blocks, gives, effect: REPO_FILE_TEXT[id].effect };
-}
+export const REPO_FILES: Readonly<Record<RepoFileId, RepoFileDef>> = Object.fromEntries(REPO_FILE_IDS.map((id) => [id, {
+  id, name: REPO_FILE_DATA[id].name, gives: REPO_FILE_DATA[id].gives, effect: REPO_FILE_TEXT[id].effect,
+  blocks: copiedToolDef(id)?.size ?? REPAIR_PATCH_BLOCKS,
+}])) as Record<RepoFileId, RepoFileDef>;
 
-export const REPO_FILES: Readonly<Record<RepoFileId, RepoFileDef>> = {
-  mv: fileDef('mv', 'move', toolDef('move', 'Mv').size),
-  rm: fileDef('rm', 'delete', toolDef('delete', 'Rm').size),
-  cp: fileDef('cp', 'copy', toolDef('copy', 'Cp').size),
-  swap: fileDef('swap', 'swap', toolDef('swap', 'Swap').size),
-  'repair-bak': fileDef('repair-bak', 'repair', toolDef('repair', 'Repair.bak').size),
-  // A backup copy of Scan is Scan's own file under another name: the same size.
-  'scan-bak': fileDef('scan-bak', 'scan', toolDef('scan', 'Scan').size),
-  'repair-v2': fileDef('repair-v2', 'repair-v2', REPAIR_PATCH_BLOCKS),
-};
-
-// The locked rows (02 §3.8: shown locked, never sent; no trace changes this list).
-export const RESTRICTED_IDS: readonly RestrictedId[] = ['autoburn-skl', 'thread-plus', 'firewall-sys'];
-export const RESTRICTED_ROWS: readonly RestrictedRowDef[] = RESTRICTED_IDS.map((id) => ({ id, ...RESTRICTED_TEXT[id] }));
+// The locked rows (02 §3.8: shown locked, never sent; no trace changes this list). Slice 4 appends the tree's skills as
+// `skl:<id>` rows.
+export const RESTRICTED_ROWS: readonly RestrictedRowDef[] = [
+  { id: 'skl:autoburn', name: 'AUTOBURN.skl', why: RESTRICTED_WHY.skill },
+  { id: 'thread-plus', name: 'THREAD+', why: RESTRICTED_WHY.system },
+  { id: 'firewall-sys', name: 'FIREWALL.sys', why: RESTRICTED_WHY.system },
+];
 
 // The tool kind a delivery of `id` is a copy of, or null for the patch (it gives no tool: it upgrades Repair).
 export function repoToolKind(id: RepoFileId): FsToolKind | null {
@@ -60,26 +74,25 @@ export function repoFileSegments(id: RepoFileId, makeId: (prefix: string) => str
     case 'rm':
     case 'cp':
     case 'swap': {
-      const kind = repoToolKind(id)!;
-      const def = toolDef(kind, REPO_FILE_TEXT[id].name);
-      return createToolFiles(kind).filter((seg) => seg.name === def.name).map((seg) => ({ ...seg, id: makeId(seg.id) }));
+      const def = copiedToolDef(id)!;
+      return createToolFiles(repoToolKind(id)!).filter((seg) => seg.name === def.name).map((seg) => ({ ...seg, id: makeId(seg.id) }));
     }
     case 'repair-bak': {
-      const seg = createToolFiles('repair').find((file) => file.name === REPO_FILE_TEXT[id].name)!;
+      const seg = createToolFiles('repair').find((file) => file.name === REPO_FILE_DATA[id].name)!;
       return [{ ...seg, id: makeId(seg.id), version: Math.max(1, repairVersion) }];
     }
     case 'scan-bak': {
       const scan = createToolFiles('scan')[0]!;
       const desc = REPO_FILE_TEXT[id].desc;
       if (desc === null) throw new Error('repository: Scan.bak has no desc');
-      const seg: FsToolSegment = { ...scan, id: makeId('t_scan_bak'), name: REPO_FILE_TEXT[id].name, desc };
+      const seg: FsToolSegment = { ...scan, id: makeId('t_scan_bak'), name: REPO_FILE_DATA[id].name, desc };
       return [seg];
     }
     case 'repair-v2': {
       const desc = REPO_FILE_TEXT[id].desc;
       if (desc === null) throw new Error('repository: the REPAIR v2 patch has no desc');
       const patch: UpgradeSegment = {
-        id: makeId('repair_patch'), name: REPO_FILE_TEXT[id].name, type: 'upgrade', upgrade: 'repair-patch',
+        id: makeId('repair_patch'), name: REPO_FILE_DATA[id].name, type: 'upgrade', upgrade: 'repair-patch',
         size: REPAIR_PATCH_BLOCKS, integrity: INTEGRITY_MAX, state: 'intact', scanned: true, desc,
       };
       return [patch];
@@ -88,8 +101,8 @@ export function repoFileSegments(id: RepoFileId, makeId: (prefix: string) => str
 }
 
 // The catalogue's checks (plan §4.1), as a list of problems (empty: sound). At load they throw.
-// • every row's segments total its blocks, and a tool row's size is its tool file's (TOOL_FILES): the PACKET, the card and
-//   the layout all count one number;
+// • every row's size is catalogue v1's pin (V1_BLOCKS; a drift needs a REPO_CATALOGUE_VERSION bump), its segments total
+//   it, and a tool row's size is its tool file's (TOOL_FILES): the PACKET, the card and the layout all count one number;
 // • every tool row gives a tool kind, and no row is bigger than the biggest file of its kind: arrival-preview's locked-floor
 //   check (46 blocks fit the shortest link and TIGHT's room) counts one copy of each kind at its biggest, so a delivery can
 //   never make that floor untrue;
@@ -99,6 +112,7 @@ export function validateCatalogue(): string[] {
   for (const id of REPO_FILE_IDS) {
     const def = REPO_FILES[id];
     if (def.id !== id) problems.push(`${id}: its def says ${def.id}`);
+    if (def.blocks !== V1_BLOCKS[id]) problems.push(`${id}: ${def.blocks} blocks, catalogue v1 pins ${V1_BLOCKS[id]}: bump REPO_CATALOGUE_VERSION and re-pin`);
     const segs = repoFileSegments(id, (prefix) => `${prefix}~check`, 2);
     const total = segs.reduce((sum, seg) => sum + seg.size, 0);
     if (total !== def.blocks) problems.push(`${id}: ${def.blocks} blocks on the row, ${total} laid out`);

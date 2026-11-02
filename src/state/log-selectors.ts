@@ -19,8 +19,7 @@ export function createRunLog(): RunLogState {
 
 // HOLLOW's `> you're reading my log. good. read it slowly.` is due at this boot (05 §3.5; slice-3b-plan §1.1 item 19): once
 // a run, at the first boot after entry 05 is read (run.log.read has 5, run.log.toldReading is still false). data/script.ts
-// bootLinePlan places the 'reading' line from it, before the log key line; systems/story-log.ts sets toldReading as it is
-// said. Track UI owns it after the foundation: until then it is never due (`TODO(3b-UI)`), so no boot changes.
+// bootLinePlan places the 'reading' line from it, before the log key line; systems/boot.ts sets toldReading as it is said. Track UI owns it after the foundation: until then it is never due (`TODO(3b-UI)`), so no boot changes.
 export function readingLineDue(state: Readonly<GameState>): boolean {
   void state;
   return false; // TODO(3b-UI): state.run.log.read.includes(5) && !state.run.log.toldReading, on the arm.

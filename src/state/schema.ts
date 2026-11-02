@@ -8,7 +8,8 @@ import type { MemoryClass, RunMapState, Hop, DeskWindowId } from '@/types/map';
 import type { HollowDef, RunThreatState, ShipThreat } from '@/types/threat';
 import type { UpgradeId, DraftCard } from '@data/upgrades';
 import type { LastUnit } from '@systems/meta';
-import type { DeliveryChip, ArrivalDelivery, RunRepoState, RunInboxState } from '@/types/repo';
+import type { DeliveryChip, ArrivalDelivery, RunRepoState } from '@/types/repo';
+import type { RunInboxState } from '@/types/inbox';
 
 export type ViewMode = 'tools' | 'memory';
 
@@ -355,7 +356,7 @@ export interface RunLogState {
   read: number[];
   autoOpened: boolean;
   // Phase 3 slice 3b (05 §3.5): HOLLOW's `> you're reading my log. good. read it slowly.` has been said this run (the boot's
-  // 'reading' line, at the first boot after entry 05 is read; systems/story-log.ts marks it as it is said).
+  // 'reading' line, at the first boot after entry 05 is read; systems/boot.ts marks it as it is said).
   toldReading: boolean;
 }
 
@@ -749,8 +750,9 @@ export interface UiState {
   // The ship the kid is looking at on the DESK (its slot; the SHIP CARD shows it, SET COURSE goes there), or null before
   // the first pick (phase 3 slice 3a, systems/desk.ts selectShip). A world reset clears it (createUiState).
   deskSelected: number | null;
-  // The desk window open beside the chart and card (02 §3.10: R / T / I; 3b's repository and INBOX, slice 4's TRAINING),
-  // or null. The PACKET's TIGHT confirm (`ARRIVE WITH NO REPAIR CHARGE?`) is the inline confirm's, not state here.
+  // The desk tab open beside the chart (02 §3.10: R / T / I; 3b's repository and INBOX, slice 4's TRAINING), or null for
+  // the SHIP CARD (the default tab; it has no id). openDesk sets it from systems/repository.ts deskWindowOnOpen.
+  // The PACKET's TIGHT confirm (`ARRIVE WITH NO REPAIR CHARGE?`) is the inline confirm's, not state here.
   deskWindow: DeskWindowId | null;
 }
 

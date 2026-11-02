@@ -311,7 +311,7 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   let fit: RoomFit | null = null;
   if (hop !== null && verdict !== null && isReachable) {
     // The fit line counts the deliveries that would ride that hop (phase 3 slice 3b, plan §1.1 item 13).
-    const preview = unitArrival(state, { hop, threat: verdict, dropped: [], pick: null, deliveries: deliveriesForHop(state, from, slot) });
+    const preview = unitArrival(state, { hop, threat: verdict, dropped: [], pick: null, deliveries: deliveriesForHop(state, from, slot, verdict) });
     fit = preview.fit;
     row('fit', MAP_TEXT.card.fitLabel, preview.card, fitTone(fit));
   }

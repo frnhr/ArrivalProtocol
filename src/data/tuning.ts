@@ -1874,7 +1874,9 @@ export const DESK_TYPE_CPS = 38;
 // Never on a tool kind's first delivery (the lesson is never eaten), never into a calm ship, never on the patch.
 export const DELIVERY_SEED_CHANCE: Readonly<Record<LinkNoise, number>> = { 0: 0, 1: 0.1, 2: 0.25, 3: 0.4 };
 // The boot says at most this many `> DELIVERY:` lines (02 §4 step 6: one per file, oldest first); beyond it the rest fold
-// into the last line, so a boot that unpacks a backlog stays under 20 s (BOOT_LINE_AT_SEC's 18 lines).
+// into the last line, so a backlog adds at most 3 lines (3.9 s at the 1.3 s step) whatever its size. The longest possible
+// boot (BOOT_LINE_MAX 18) then says its last line at 22.6 s; a typical arm boot with one delivery and new mail is 8–11
+// lines (its last line at about 10–14 s), and the skip rules hold throughout.
 export const DELIVERY_BOOT_LINES_MAX = 3;
 // ARRIVAL CONTROL recommends REPAIR v2 once the unit has repaired this many times this run (02 §3.8's rule 5): by then
 // REPAIR is the tool it leans on, and v2's double heal pays for its 2 blocks.

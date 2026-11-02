@@ -3,6 +3,8 @@ import type { Segment } from '@/types/segment';
 import type { LandingState, PodRecord, ShipLandingDef } from '@/types/landing';
 import type { HollowDef, ShipThreat } from '@/types/threat';
 import type { RunMapState } from '@/types/map';
+import type { FsToolKind } from '@/types/fs-tool';
+import { repoToolKind } from '@data/repository';
 import { buildShipMemory, type CarriedRacks, type HurtDriver } from '@data/memory';
 import { hurtDriversFor } from '@data/driver-damage';
 import { classicRunMap, shipDefAt, currentSlot, shipRng } from '@systems/map-run';
@@ -140,7 +142,7 @@ export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks 
     orbit: flight.orbit,
     level: flight.level,
     landing,
-    hollow: createHollowState(threat.hollow),
+    hollow: { ...createHollowState(threat.hollow), untriedTools: untriedOnArrival(run) },
     hazards: createHazardsState(),
   };
 }
@@ -211,6 +213,14 @@ export function createLandingState(def: ShipLandingDef, memory: readonly Segment
 
 // HOLLOW sleeps in its root until the ship's wake (systems/hollow.ts). `cfg` is the ladder's config for the ship
 // (ShipThreat.hollow), copied.
+// The tool kinds that arrive untried with this ship's deliveries (phase 3 slice 3b, 04 §3.3: the lesson is never eaten):
+// the first of each kind, as the send marked it (systems/repository.ts deliveryFirstOfKind, read when the chips were made,
+// before the send added the kind to run.licences). Spares are not untried. Empty on ship 1 and on the classic world.
+function untriedOnArrival(run: Readonly<RunState>): FsToolKind[] {
+  const kinds = (run.arrival?.deliveries ?? []).filter((delivery) => delivery.firstOfKind).map((delivery) => repoToolKind(delivery.file));
+  return kinds.filter((kind): kind is FsToolKind => kind !== null);
+}
+
 export function createHollowState(cfg: Readonly<HollowDef>): HollowState {
   return {
     cfg: structuredClone(cfg) as HollowDef, phase: 'asleep', story: 'none', scriptTargetId: null, biteInSec: null, wakeAtAi: null,

@@ -56,16 +56,26 @@ export function deliveryForecast(map: Readonly<RunMapState>, from: number, to: n
   const lateness = firstLateness(map, from, to);
   const arrived = arrivedYear(map, from, to);
   const approachYear = hopBetween(map, from, to).approachYear;
-  if (lateness <= 0) return { kind: 'in-time', arrivedYear: arrived, approachYear };
+  if (lateness <= 0 && !receiverClosed(map, to)) return { kind: 'in-time', arrivedYear: arrived, approachYear };
   const earliest = earliestCatchUp(map, to, lateness, toDepth);
   if (earliest === null) return { kind: 'never', arrivedYear: arrived, approachYear, yearsLate: lateness };
   return { kind: 'late', arrivedYear: arrived, approachYear, yearsLate: lateness, earliestDepth: earliest };
 }
 
-// The first depth past `depth` at which some route from `slot` brings a file `lateness` years behind to zero or less, or
-// null. Each layer keeps the least lateness per slot (a later route to the same ship with more lateness can never do
-// better from there). A final ship ends a route: nothing forwards from it.
-function earliestCatchUp(map: Readonly<RunMapState>, slot: number, lateness: number, depth: number): number | null {
+// A receiver that will not hold a delivery (slice 5's RECEIVER CLOSED on a resident's ship, plan risk 14): nothing catches
+// up there (it is not a stop a file can wait at), though a file may still be forwarded past it. Slice 5 decides; until then
+// every receiver is open. The one seam: the forecast's walk and systems/repository.ts hopOutlook both read it.
+export function receiverClosed(map: Readonly<RunMapState>, slot: number): boolean {
+  void map;
+  void slot;
+  return false;
+}
+
+// The first depth past `depth` at which some route from `slot` (reached at `depth`) brings a file `lateness` years behind
+// to zero or less, or null: the forecast's `SHIP d AT THE EARLIEST`, and systems/repository.ts's late-or-never verdict for a
+// request still in transit. Each layer keeps the least lateness per slot (a later route to the same ship with more
+// lateness can never do better from there). A final ship ends a route: nothing forwards from it.
+export function earliestCatchUp(map: Readonly<RunMapState>, slot: number, lateness: number, depth: number): number | null {
   let frontier = new Map<number, number>([[slot, lateness]]);
   for (let d = depth; frontier.size > 0; d++) {
     const next = new Map<number, number>();
@@ -73,7 +83,7 @@ function earliestCatchUp(map: Readonly<RunMapState>, slot: number, lateness: num
       if (isEndSlot(map, at)) continue;
       for (const to of reachableFrom(map, at)) {
         const left = forwardLateness(behind, hopBetween(map, at, to));
-        if (left <= 0) return d + 1;
+        if (left <= 0 && !receiverClosed(map, to)) return d + 1;
         const best = next.get(to);
         if (best === undefined || left < best) next.set(to, left);
       }

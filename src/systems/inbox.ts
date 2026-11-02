@@ -1,6 +1,6 @@
 import type { Store } from '@state/store';
 import type { GameState, RunState } from '@state/schema';
-import type { InboxMessage } from '@/types/repo';
+import type { InboxMessage } from '@/types/inbox';
 
 // The INBOX (05-story §3.3–§3.5, §4; slice-3b-plan §2.4): messages are DERIVED, never queued. inboxMessages builds them
 // from the route, run.ships (colony, landed, featured), the map, 046's written trail and the lineage, up to the current

@@ -18,6 +18,10 @@ import { noWorkingRm } from '@state/threat-selectors';
 import { hollowLabel } from '@systems/say';
 import { logChip } from '@systems/log-view';
 import { TRACE_BOARD_AT } from '@data/tuning';
+import { REPO_FILES } from '@data/repository';
+import { REPO_TEXT } from '@data/repo-text';
+import { hopOutlook } from '@systems/repository';
+import type { DeliveryChip } from '@/types/repo';
 
 // The TRANSMIT screen's model (§4.1 step 5, §6.9, §9 WP7 item 4), pure and DOM-free. Mostly information:
 // where the unit goes next (`NEXT: HALCYON · 2,000 SOULS · 22 LY`), how the packet fits the link
@@ -137,6 +141,25 @@ export interface TransmitModel {
   arm: boolean;
   room: PacketRoom;
   onTheWay: string | null;     // the ECC line on the arm (null on the classic world: hitsLine says it)
+  // Slice 3b (02 §3.9, §4; plan §1.1 item 14): the DELIVERIES chip row (the plan's chips, oldest first; empty on the
+  // classic world), the IN TRANSIT line (requests still behind the unit after this hop: null when none) and the draft's
+  // heading (SALVAGE on the arm, null on the classic world: PICK ONE TO CARRY as before).
+  deliveries: DeliveryChipView[];
+  inTransit: string | null;
+  salvageTitle: string | null;
+}
+
+// One delivery chip on the PACKET: `Mv · 2 BLOCKS · ARRIVED 2337` and its SEND ON toggle. `lost`: sent on from a hop into a
+// final ship, where no hop follows (the label says `NO SHIP AFTER LAST LIGHT · IT IS LOST`).
+export interface DeliveryChipView {
+  key: string;
+  file: DeliveryChip['file'];
+  name: string;
+  blocks: number;
+  text: string;
+  sendOn: boolean;
+  lost: boolean;
+  sendOnLabel: string;         // [SEND ON] / SENT ON · RIDES YOUR NEXT HOP / NO SHIP AFTER … · IT IS LOST
 }
 
 // The PACKET's room bar (01 §3.16): the packet against the destination's room, and what it costs the charge; the words
@@ -367,7 +390,29 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
     arm,
     room,
     onTheWay: arm ? MAP_TEXT.packet.onTheWay(hits, plan.hop.eccFixes, plan.hop.slackYears, hitsLanding(plan.hop, plan.extraHits)) : null,
+    deliveries: plan.deliveries.map((chip) => deliveryChipView(chip, ship.name, ship.final)),
+    inTransit: arm ? inTransitLine(state, plan) : null,
+    salvageTitle: arm ? REPO_TEXT.packet.salvage : null,
   };
+}
+
+function deliveryChipView(chip: Readonly<DeliveryChip>, shipName: string, intoFinal: boolean): DeliveryChipView {
+  const name = REPO_FILES[chip.file].name;
+  const lost = chip.sendOn && intoFinal;
+  return {
+    key: chip.key, file: chip.file, name, blocks: chip.blocks, text: REPO_TEXT.packet.chip(name, chip.blocks, chip.arrivedYear),
+    sendOn: chip.sendOn, lost,
+    sendOnLabel: lost ? REPO_TEXT.packet.lostAfter(shipName) : chip.sendOn ? REPO_TEXT.packet.sentOn : REPO_TEXT.packet.sendOn,
+  };
+}
+
+// The PACKET's IN TRANSIT line: the requests the hop's outlook leaves behind the unit (late or never; the pick is not one
+// yet: its ETA is the REPOSITORY's), from the one rule (systems/repository.ts hopOutlook).
+function inTransitLine(state: Readonly<GameState>, plan: Readonly<TransitPlan>): string | null {
+  const behind = hopOutlook(state, plan.hop.from, plan.toSlot).filter((entry) => !entry.rides && entry.source === 'in-transit');
+  if (behind.length === 0) return null;
+  if (behind.length > 1) return REPO_TEXT.packet.inTransitMore(behind.length);
+  return REPO_TEXT.packet.inTransit(REPO_FILES[behind[0]!.file].name, behind[0]!.yearsLate);
 }
 
 function cardFileChip(pick: UpgradeId | null): CardFileChip | null {

@@ -33,7 +33,7 @@ import {
 } from '@systems/map-run';
 import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
 import { unitArrival } from '@systems/arrival-preview';
-import { deliveriesForHop } from '@systems/repository';
+import { deliveriesForHop, deskWindowOnOpen } from '@systems/repository';
 import { mapFacts } from '@systems/map-facts';
 import { BEATS, LINES, perShipBeatIds } from '@data/script';
 import { TOOL_REFUSAL } from '@data/tool-text';
@@ -297,6 +297,8 @@ export function openDesk(store: Store<GameState>, extra: PendingExtra | null): v
     draft.ui.pendingPlacement = null;
     // One ship in reach (the classic world) is already the selection: SET COURSE is the desk's only step.
     draft.ui.deskSelected = offered.length === 1 ? offered[0]! : null;
+    // The tab it opens on (phase 3 slice 3b: the SHIP CARD, or the REPOSITORY for the last-rm prompt; repository.ts).
+    draft.ui.deskWindow = deskWindowOnOpen(state);
     draft.ui.memoryRev++;
   });
 }
@@ -341,13 +343,13 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
   const toShipIndex = state.run.shipIndex + 1;
   const hop = hopBetween(state.run.map, fromSlot, toSlot);
   const extra = state.run.map.pendingExtra ?? { extraHits: 0, coreHit: 0, coreReset: false };
-  // Phase 3 slice 3b: the deliveries that catch up at the destination ride this hop (02 §3.9), packed by planPacket with
-  // the unit's files, so the plan's numbers count them from the start.
-  const deliveries = deliveriesForHop(state, fromSlot, toSlot);
-  const packet = planPacket(store.getState().memory, { linkBlocks: hop.linkBlocks, dropped: [], pick: null, deliveries });
   // The ladder's verdict for the next ship, from the run's threat once this ship's tally is done (Track THREAT's endShip).
   const facts = mapFacts(state.run.map, fromSlot, toSlot, toShipIndex + 1);
   const threat = planThreat(threatInputFor(state.run.threat, facts, state.run.stats.deal !== null));
+  // Phase 3 slice 3b: the deliveries that catch up at the destination ride this hop (02 §3.9; their seed chance reads the
+  // verdict), packed by planPacket with the unit's files, so the plan's numbers count them from the start.
+  const deliveries = deliveriesForHop(state, fromSlot, toSlot, threat);
+  const packet = planPacket(store.getState().memory, { linkBlocks: hop.linkBlocks, dropped: [], pick: null, deliveries });
   const plan: TransitPlan = {
     toShipIndex,
     toSlot,

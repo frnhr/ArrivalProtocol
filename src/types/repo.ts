@@ -1,10 +1,9 @@
 import type { FsToolKind } from '@/types/fs-tool';
 
 // Phase 3 slice 3b: the repository, deliveries and the INBOX (docs/phase3/impl/slice-3b-plan.md §2.2; 02-map §3.8–§3.9,
-// 05-story §3.3–§3.5). Track REPO owns this file after the foundation; the INBOX's types at the end (MessageKind,
-// InboxMessage, RunInboxState) are Track UI's to shape, and UI asks REPO by message to change them here.
-// Everything stored on the run (RunRepoState, RunInboxState) is JSON-safe: 3c's save writes `run.repo` whole and
-// `run.inbox.read`; every message and every forecast re-derives from the route, the map and the ships (plan §2.6).
+// 05-story §3.3–§3.5). Track REPO owns this file after the foundation; the INBOX's types are types/inbox.ts (Track UI).
+// Everything stored on the run (RunRepoState) is JSON-safe: 3c's save writes `run.repo` whole; every chip, outlook and
+// forecast re-derives from the route, the map and the requests (plan §2.6).
 
 // --- The repository (02 §3.8) --------------------------------------------------------------------------------------
 
@@ -22,8 +21,9 @@ export interface RepoFileDef {
   effect: string;                     // the AVAILABLE row's effect words (data/repo-text.ts)
 }
 
-// The restricted rows (02 §3.8: shown locked, never sent). Slice 4 adds the tree's `.skl` (permanent, 03 §3.11).
-export type RestrictedId = 'autoburn-skl' | 'thread-plus' | 'firewall-sys';
+// The restricted rows (02 §3.8: shown locked, never sent). Every skill is `skl:<id>` (AUTOBURN today as 'skl:autoburn';
+// slice 4 adds the tree's, permanent, 03 §3.11) without a Record over a closed union.
+export type RestrictedId = 'thread-plus' | 'firewall-sys' | `skl:${string}`;
 
 export interface RestrictedRowDef {
   id: RestrictedId;
@@ -69,7 +69,9 @@ export interface RunRepoState {
 // `sendOn` is the PACKET's toggle: the chip stays in the destination's receiver to ride the unit's next hop instead (on a
 // hop into a final ship there is none: the file is lost, and the tally lists it).
 export interface DeliveryChip {
-  key: string;                        // a request id, or 'new' (the pick)
+  // The request's id. The pick's is minted at goTransmit as `rq${RunRepoState.nextId}` (never a placeholder like 'new'),
+  // so the PACKET's SEND ON, the arrival's ArrivalDelivery.key and advanceRequests' new request all name it alike.
+  key: string;
   file: RepoFileId;
   blocks: number;
   source: 'new' | 'caught-up' | 'sent-on';
@@ -98,27 +100,3 @@ export type DeliveryForecast =
   | { kind: 'in-time'; arrivedYear: number; approachYear: number }
   | { kind: 'late'; arrivedYear: number; approachYear: number; yearsLate: number; earliestDepth: number }
   | { kind: 'never'; arrivedYear: number; approachYear: number; yearsLate: number };
-
-// --- The INBOX (05 §3.3–§3.5, §4) ------------------------------------------------------------------------------------
-
-// Slice 5 adds 'note' | 'signal' | 'old-colony'; slice 7 the epilogue's letters.
-export type MessageKind = 'welcome' | 'policy' | 'arm-complete' | 'reply' | 'postcard' | 'letter' | 'no-address';
-
-// One message, derived (systems/inbox.ts inboxMessages), never stored: only its id is (run.inbox.read).
-export interface InboxMessage {
-  id: string;                         // stable: 'welcome', 'reply:<slot>', 'postcard:<slot>:<depth>', 'noaddr:3', 'letter:meridian'
-  kind: MessageKind;
-  from: string;                       // FROM ARRIVAL CONTROL · EARTH / RIVERSIDE · Kepler-186f / (no address)
-  sentYear: number | null;            // null: SENT ????
-  receivedYear: number;
-  readAtDepth: number;                // the boot it arrives at (route index + 1)
-  subject: string;
-  body: string[];                     // ≤ INBOX_BODY_MAX_LINES lines of ≤ 70 chars
-  tag: string | null;                 // FOR UNIT-046
-  tone: 'control' | 'colony' | 'hollow';
-}
-
-// The run's INBOX state (run.inbox): the message ids the kid has opened. 3c saves it.
-export interface RunInboxState {
-  read: string[];
-}

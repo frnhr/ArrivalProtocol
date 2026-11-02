@@ -173,8 +173,10 @@ export interface RoomFit {
   word: 'fits' | 'squeezed' | 'leave' | 'no-charge';
 }
 
-// The desk's windows (02 §3.10). 3b adds the repository and the INBOX, slice 4 TRAINING (slice-3a-plan §2.10).
-export type DeskWindowId = 'chart' | 'card' | 'repository' | 'training' | 'inbox';
+// The desk's tabs beside the STAR CHART (02 §3.10): 3b's REPOSITORY and INBOX, slice 4's TRAINING (slice-3a-plan §2.10).
+// The SHIP CARD is the default and has no id: `ui.deskWindow === null` means the card (the chart is always shown). One
+// encoding, so a view never has to ask "null or 'card'?" (the 3b foundation's review follow-up).
+export type DeskWindowId = 'repository' | 'training' | 'inbox';
 
 // What the desk, the PACKET and the strip may read of a ship before it is built (review follow-up B1;
 // systems/map-run.ts shipSummaryAt): the classic ShipDef's, or an ArmShip's plus its world. JSON-safe.
