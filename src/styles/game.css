@@ -2918,6 +2918,8 @@ body.reduced-motion .dock-item.fresh .dock-new { animation: none; }
    first, its list scrolling inside; the dock item reads `INBOX n` in the bright amber while mail is unread, and pulses from
    the boot's mail line until the window is opened. */
 .inbox-win {
+  /* Over the NAV PLOT (later in the page) while open: the kid opened it to read. */
+  z-index: 3;
   top: var(--gutter);
   left: calc(2 * var(--gutter) + var(--col-left-w) + max(0px, (var(--plot-avail-w) - min(var(--plot-avail-w), 560px)) / 2));
   width: min(var(--plot-avail-w), 560px);

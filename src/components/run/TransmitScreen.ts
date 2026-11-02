@@ -294,7 +294,8 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
 
   function paint(): void {
     const state = store.getState();
-    if (state.run.phase !== 'transmit') return;
+    // (A plan cleared before the phase moves on, as a debug jump from the PACKET does, has nothing left to paint.)
+    if (state.run.phase !== 'transmit' || state.run.transit === null) return;
     const next = transmitModel(state);
     model = next;
     nextEl.textContent = next.headline;
