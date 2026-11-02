@@ -133,6 +133,9 @@ export const REPO_TEXT = {
     // A patch says what it upgraded (02 §4). No count of copies: the line types before the patch installs, and REPAIR's
     // renewal at the same moment may add copies.
     patch: (file: string, arrived: number): string => `> DELIVERY: ${file} (arrived ${arrived}) · EVERY REPAIR → v2`,
+    // A patch a transit hit broke installs nothing (systems/repository.ts patchInstalls): the line says so. (REPO's draft,
+    // `· DAMAGED · NOTHING INSTALLED`, ran to 72 characters with the patch's word.)
+    patchBroken: (file: string, arrived: number): string => `> DELIVERY: ${file} (arrived ${arrived}) · DAMAGED · NOT INSTALLED`,
     // Beyond the third file the lines fold into one (DELIVERY_BOOT_LINES_MAX): the files by name, the years they span.
     folded: (files: readonly string[], first: number, last: number): string =>
       `> DELIVERY: ${foldNames(files, 2)} (arrived ${first === last ? first : `${first}–${last}`})`,

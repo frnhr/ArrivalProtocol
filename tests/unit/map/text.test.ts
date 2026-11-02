@@ -125,6 +125,7 @@ lines.push(
   ['repo.noSwap', REPO_TEXT.noSwap],
   ['repo.boot.delivery', REPO_TEXT.boot.delivery(BOOT, YEAR)],
   ['repo.boot.patch', REPO_TEXT.boot.patch(BOOT, YEAR)],
+  ['repo.boot.patchBroken', REPO_TEXT.boot.patchBroken(BOOT, YEAR)],
   ['repo.boot.folded', REPO_TEXT.boot.folded([BOOT, BOOT, BOOT, BOOT, BOOT], YEAR, YEAR + 1)],
   ['repo.tally.neverArrived', REPO_TEXT.tally.neverArrived([FILE, FILE, FILE, FILE, FILE])],
   ...Object.entries(REPO_TEXT.window).map(([key, text]): [string, string] => [`repo.window.${key}`, text]),

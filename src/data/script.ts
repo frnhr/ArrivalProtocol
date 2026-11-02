@@ -28,6 +28,7 @@ import {
 } from '@data/fs-tools';
 import { GHOST_TEXT } from '@data/ghost-text';
 import { REPO_TEXT } from '@data/repo-text';
+import { noSwapForGhost } from '@systems/repository';
 import { GHOST_ALARM_ID } from '@systems/alerts';
 import { reachMarks, firewallFits } from '@systems/hollow-hud';
 import {
@@ -1948,12 +1949,13 @@ function atThrustCtrlFile(ctx: DirectorCtx): boolean {
   return ctx.mode === 'memory' && file !== null && ctx.state.ui.selectedId === file.id;
 }
 
-// Slice 3b (plan risk 1): no Swap has reached the unit this run (on the arm SWAP comes only from the repository, and on the
-// worked route it is 4 years late for VESPER), so the pip's way to SWAP leads nowhere: the strip says how to fly through the
-// bursts instead. A local reading of run.licences ("the kinds that reached the unit"), pending Track REPO's selector; the
-// classic world licenses SWAP with the first burst (licences.ts), so it never says this.
-function noSwapAboard(ctx: DirectorCtx): boolean {
-  return !ctx.state.run.licences.includes('swap');
+// Slice 3b (plan risk 1): the THRUST CTRL pip's way leads to SWAP, which on the arm comes only from the repository (on the
+// worked route it is 4 years late for VESPER). The pip step waits until SWAP has reached the unit this run (run.licences:
+// "the kinds that reached the unit"); the classic world licenses it with the first burst (licences.ts), so it is unchanged.
+// The no-Swap line itself is Track REPO's moment (systems/repository.ts noSwapForGhost: a burst running on an ENGINE FAULT
+// ship of the arm with no working Swap).
+function swapReachedUnit(ctx: DirectorCtx): boolean {
+  return ctx.state.run.licences.includes('swap');
 }
 
 // A SWAP the kid can pick up: a live Swap file (a seed hunting tools can eat it, WP10 fix round 1).
@@ -2028,7 +2030,7 @@ const GHOST_LESSON_RULES: readonly GuideRule[] = [
     priority: 'tutorial',
     once: true,
     maxShownSec: GHOST_LESSON_SHOW_SEC,
-    activeWhen: (ctx) => ghostLessonDue(ctx) && noSwapAboard(ctx),
+    activeWhen: (ctx) => noSwapForGhost(ctx.state),
     text: () => REPO_TEXT.noSwap,
     doneWhen: (ctx) => ghostLessonStarted(ctx) && !ghostFiring(ctx),
   },
@@ -2038,7 +2040,7 @@ const GHOST_LESSON_RULES: readonly GuideRule[] = [
     priority: 'tutorial',
     once: true,
     maxShownSec: GHOST_LESSON_SHOW_SEC,
-    activeWhen: (ctx) => ghostLessonDue(ctx) && inAmber(ctx) && !noSwapAboard(ctx),
+    activeWhen: (ctx) => ghostLessonDue(ctx) && inAmber(ctx) && swapReachedUnit(ctx),
     text: () => GHOST_TEXT.pipLesson,
     highlight: pipHintTarget('thrust-ctrl'),
     // Done once the kid is at the file (the pip's jump) or the engine is fixed; the second step's line takes over in

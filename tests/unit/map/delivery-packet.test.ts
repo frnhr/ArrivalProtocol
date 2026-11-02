@@ -186,7 +186,8 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   broken.update((draft) => {
     draft.run.arrival!.hits.push({ segId: brokenPatch.segIds[0]!, fileName: 'REPAIR v2 patch', role: null, from: 50, to: 20 });
   });
-  check('a patch hit below the usable band: its line makes no v2 claim', deliveryBootLineText(at(broken), 0) === REPO_TEXT.boot.delivery(REPO_FILE_TEXT['repair-v2'].boot, brokenPatch.arrivedYear));
+  check('a patch hit below the usable band: its line makes no v2 claim (`· DAMAGED · NOT INSTALLED`)',
+    deliveryBootLineText(at(broken), 0) === REPO_TEXT.boot.patchBroken(REPO_FILE_TEXT['repair-v2'].boot, brokenPatch.arrivedYear));
   receiveDeliveryAtBoot(broken, 0);
   check('…used up all the same, and nothing upgrades', !at(broken).memory.some((seg) => seg.type === 'upgrade') && repairs(broken).every((seg) => seg.type === 'fs-tool' && seg.version === 1)
     && !at(broken).run.upgrades.includes('repair-v2'));

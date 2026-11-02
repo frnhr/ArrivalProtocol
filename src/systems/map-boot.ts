@@ -94,10 +94,10 @@ export function deliveryBootLineText(state: Readonly<GameState>, ordinal: number
   if (group.length === 1) {
     const delivery = group[0]!;
     const word = REPO_FILE_TEXT[delivery.file].boot;
-    // A broken patch installs nothing, so its line makes no claim (UI's words for it are requested: REPO_TEXT.boot.patch's
-    // `· EVERY REPAIR → v2` is only for a patch that installs).
-    const installs = delivery.file === 'repair-v2' && state.run.arrival !== null && patchInstalls(state.run.arrival, delivery);
-    return installs ? REPO_TEXT.boot.patch(word, delivery.arrivedYear) : REPO_TEXT.boot.delivery(word, delivery.arrivedYear);
+    if (delivery.file !== 'repair-v2') return REPO_TEXT.boot.delivery(word, delivery.arrivedYear);
+    // A patch says what it upgraded; a broken one says it installed nothing (patchInstalls decides; Track UI's edit, approved).
+    const installs = state.run.arrival !== null && patchInstalls(state.run.arrival, delivery);
+    return installs ? REPO_TEXT.boot.patch(word, delivery.arrivedYear) : REPO_TEXT.boot.patchBroken(word, delivery.arrivedYear);
   }
   const years = group.map((delivery) => delivery.arrivedYear);
   return REPO_TEXT.boot.folded(group.map((delivery) => REPO_FILE_TEXT[delivery.file].boot), Math.min(...years), Math.max(...years));
