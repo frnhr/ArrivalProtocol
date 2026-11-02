@@ -93,6 +93,7 @@ import { mountLaunchFx } from '@components/memory-view/LaunchFx';
 import { mountPodTags } from '@components/memory-view/PodTags';
 import { mountFinaleChoice } from '@components/run/FinaleChoice';
 import { mountSkillsWindow } from '@components/run/SkillsWindow';
+import { mountInboxWindow } from '@components/run/InboxWindow';
 import { mountArrivalFlash } from '@components/run/ArrivalFlash';
 import { mountHollowNameFx } from '@components/memory-view/HollowNameFx';
 import { mountMovePreviewLabels } from '@components/memory-view/MovePreviewLabels';
@@ -198,6 +199,8 @@ mountTelemetryWindow(store);
 mountCommsWindow(store);
 // WP8: the cards this unit carries (the dock's SYSTEM item).
 mountSkillsWindow(store);
+// Slice 3b: the INBOX (the dock's SYSTEM item), read in flight and between ships.
+mountInboxWindow(store);
 mountMindTerminal(store);
 mountWindowGrips(store);
 // After the windows: the strip lights the controls its line names ([data-hint-key]).

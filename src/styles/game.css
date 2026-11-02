@@ -2914,6 +2914,23 @@ body.reduced-motion .term-line.renamed { animation: none; }
 .dock-item.fresh { color: var(--violet-bright); border-left-color: var(--violet); background: rgba(var(--violet-rgb), 0.1); }
 @keyframes dock-new-pulse { 50% { opacity: 0.6; box-shadow: none; } }
 body.reduced-motion .dock-item.fresh .dock-new { animation: none; }
+/* Slice 3b: the INBOX window (InboxWindow, components/desk/InboxView.ts's look): over the NAV PLOT's column, closed at
+   first, its list scrolling inside; the dock item reads `INBOX n` in the bright amber while mail is unread, and pulses from
+   the boot's mail line until the window is opened. */
+.inbox-win {
+  top: var(--gutter);
+  left: calc(2 * var(--gutter) + var(--col-left-w) + max(0px, (var(--plot-avail-w) - min(var(--plot-avail-w), 560px)) / 2));
+  width: min(var(--plot-avail-w), 560px);
+  max-height: calc(100% - 2 * var(--gutter));
+  display: flex;
+  flex-direction: column;
+}
+.inbox-body { padding: 10px 12px; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.inbox-flight .ib-list { max-height: 210px; }
+.dock-item.has-mail { color: var(--accent-bright); font-weight: 700; }
+.dock-item.fresh-mail { border-left-color: var(--accent); background: rgba(255, 167, 38, 0.1); animation: dock-mail-pulse 1.1s ease-in-out infinite; }
+@keyframes dock-mail-pulse { 50% { background: transparent; } }
+body.reduced-motion .dock-item.fresh-mail { animation: none; }
 /* FUEL TRIM's share of this ship's tank, beside FUEL (WP8): a card the kid picked, in its violet. */
 .fuel-trim { margin-left: 8px; padding: 0 4px; font-size: 9px; letter-spacing: 0.1em; color: var(--violet-bright); border: 1px dashed var(--violet); }
 .fuel-trim[hidden] { display: none; }

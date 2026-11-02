@@ -11,6 +11,8 @@ const TAB_WINDOWS: Record<string, string> = {
   skills: '.skills-win',
   // Slice 1a: the POD BAY, while landing (PodBayWindow; its dock item shows only then, body.landing).
   podbay: '.podbay-win',
+  // Slice 3b: the INBOX (InboxWindow), read in flight and between ships.
+  inbox: '.inbox-win',
 };
 
 // The tab a phone opens on: the NAV PLOT, where the line goes green (the touch flight bar sits under it).
