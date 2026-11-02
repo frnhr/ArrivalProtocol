@@ -1221,7 +1221,11 @@ reason. Built against the foundation's real pieces (`unitTrailOf`, `olderColonie
 21. **NO SAVE** is its own footer item (`#footSave`), flashing in on `ok → offline`; the `'save-lost'` beat types
     `RUN SAVE OFFLINE — a reload will lose this run` once. The buzz is a request (below).
 22. **The ghost needed no UI words:** `GHOST_LINE` covers every `LastCause`, and the chart's cross sits at `trail.lost.slot`,
-    the world WORLD's rule reads.
+    the world WORLD's rule reads. After WORLD's merge (its deviation 16: a lost unit's cross is on its last stop's world,
+    0 LY past it) the cross *is* that stop's mark, offset along the trail like every stop (`TrailMark.offset`), and the
+    live ship there reads it on its card; only a cross past a world (046's) is a mark of its own. The title's launch line
+    reads `launchOf(run)`. The screens were re-shot on WORLD's real seeded update of run 1's worked route (`*-real.png`:
+    gap 5, LODESTAR 3025, seven ships moved on, PETREL's name back on a new ship), not only on §3.14's scripted fixture.
 23. **No e2e changes** (the lead: no e2e this round). §6.3's `resume.mjs` and the playthrough's run-2 check are still to do.
 
 ### Requests
