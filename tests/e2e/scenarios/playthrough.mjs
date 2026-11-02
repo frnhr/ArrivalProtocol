@@ -35,7 +35,10 @@
 //   withdraws it), no deal button stands after ORBIT LOCK; then the duel and an ending.
 // • Every TRANSMIT: 046.log's chip `046.log · n/12`, glowing while an entry is unread.
 // • The RUN TALLY: six rows in route order, the route on its mini chart, n COLONIES FOUNDED, the score and rank; NEW RUN
-//   is a fresh roll, run 2, with ARES-VIII at w0.
+//   is run 2, with ARES-VIII at w0.
+// Phase 3 slice 3c: the RUN TALLY says `NEXT UNIT LAUNCHES <year> · UNIT-048` and the arm's update; NEW RUN is run 2 on the
+// arm the world update made (the route's six ships done), its title `UNIT-048 · YEAR <y> · LAUNCHED <gap> YEARS AFTER
+// UNIT-047` with its stamp, and 047's trail on the faint chart.
 // Phase 3 slice 3b (the repository, deliveries, the INBOX; slice-3b-plan §3, §6.3): the interim licences are gone, so the
 // kid's tools come by request. At each DESK, after clicking the next ship, the kid opens the REPOSITORY [R] and clicks
 // REQUEST on the worked route's file (Mv, Rm, Swap, Cp), checking its ETA (IN TIME / `4 YRS LATE → …` / NEVER on every row
@@ -1021,6 +1024,9 @@ const end = await st(() => ({
   undelivered: document.querySelector('#runEnd .re-tally-undelivered')?.hidden === false ? document.querySelector('#runEnd .re-tally-undelivered').textContent : null,
   score: document.getElementById('reScore').innerText, rank: document.getElementById('reRank').innerText, seed: document.getElementById('reSeed').innerText,
   model: window.__ap.runEndModel(),
+  // Slice 3c: the world update under the route (who launches next and when, the arm's turnover).
+  next: document.querySelector('#runEnd .re-next-line')?.textContent ?? null, update: document.querySelector('#runEnd .re-next-summary')?.textContent ?? null,
+  nextRun: window.__ap.store.getState().run.next,
 }));
 const fleetLanded = `/ ${end.model.fleetColonists.toLocaleString('en-US')} LANDED`;
 check(`the RUN TALLY: a title, n ${fleetLanded}, six ship rows (no NOT REACHED), n COLONIES FOUNDED, the SCORE, the rank and the seed`, end.title.length > 0
@@ -1031,6 +1037,11 @@ check(`the RUN TALLY: a title, n ${fleetLanded}, six ship rows (no NOT REACHED),
 check('the RUN TALLY: …the rows are the route in order, each with its depth and the ship\'s year', ROUTE.every((stop, i) => end.ships[i]?.startsWith(`${i + 1} ${stop.name} · `))
   && JSON.stringify(end.model.route) === JSON.stringify(ROUTE.map((stop) => stop.slot)), end.ships.join(' | '));
 check('the RUN TALLY: …YOUR ROUTE drawn on the mini chart', end.route > 0, `${end.route} nodes drawn`);
+// Slice 3c: the next unit is launched 0–35 years after this one, onto the same arm.
+check('the RUN TALLY: …`NEXT UNIT LAUNCHES <year> · UNIT-048` and the arm\'s update `THE ARM: n DONE · n MOVED ON · n REPORTED HOME`',
+  end.nextRun !== null && end.next === `NEXT UNIT LAUNCHES ${end.nextRun.startYear} · UNIT-048` && end.nextRun.unit === 48 && end.nextRun.startYear >= 2300
+  && end.nextRun.startYear <= 2335 + end.nextRun.valveYears && /^THE ARM: \d+ DONE · \d+ MOVED ON · \d+ REPORTED HOME$/.test(end.update ?? ''),
+  JSON.stringify({ next: end.next, update: end.update, nextRun: end.nextRun }));
 check('the RUN TALLY: …`NEVER ARRIVED: —` (every file requested reached the unit)', end.undelivered === 'NEVER ARRIVED: —' && end.model.undeliveredLine === end.undelivered,
   JSON.stringify({ shown: end.undelivered, model: end.model.undeliveredLine }));
 check(`HOLLOW's reading line was said at most once in the run (${run.readingLines}×)`, run.readingLines <= 1, `${run.readingLines}`);
@@ -1050,16 +1061,30 @@ check('the kid followed the MIND by clicks at least once a ship', mindActions >=
 await shot('7-run-tally');
 const unitBefore = await st(() => window.__ap.store.getState().run.unitNumber);
 await page.keyboard.press('Space');
-await page.waitForTimeout(600);
+await waitFor(() => window.__ap.store.getState().run.phase === 'title' && !document.getElementById('titleCard').hidden, 6000);
+// Slice 3c: from run 2 the title's line rolls its year up before the gap's stamp lands (about 2.4 s).
+await waitFor(() => !document.getElementById('titleStamp').hidden, 6000);
 const fresh = await st(() => {
   const s = window.__ap.store.getState();
-  return { phase: s.run.phase, ship: s.level.shipName, title: !document.getElementById('titleCard').hidden, unit: document.getElementById('titleUnit').innerText,
+  const chart = document.querySelector('#titleCard .title-chart');
+  return { phase: s.run.phase, ship: s.level.shipName, title: !document.getElementById('titleCard').hidden, unit: document.getElementById('titleUnit').textContent,
+    stamp: document.getElementById('titleStamp').hidden ? null : document.getElementById('titleStamp').textContent,
     unitNumber: s.run.unitNumber, world: s.run.map.world, run: s.run.map.run, w0: s.run.map.arm[0]?.name ?? null, arm: s.run.map.arm.length,
+    startYear: s.run.map.startYear, lastUnit: s.run.map.history.lastUnitNumber, done: s.run.map.history.departures.filter((d) => d.reason === 'done').map((d) => d.name),
+    trail: chart?.querySelector('.trail-last') !== null, marks: [...(chart?.querySelectorAll('.chart-trail .tm:not(.older)') ?? [])].map((g) => g.dataset.tip ?? ''),
     sameAsRun1: s.run.map.arm.map((ship) => ship.name).join() === 'ARES-VII,PETREL,HALCYON,OSPREY,HERON,KESTREL,ALBATROSS,CURLEW,LAPWING,GANNET,PLOVER,VESPER,SKYLARK,SHEARWATER,KITTIWAKE,CORMORANT,PROVIDENCE,GOOD HOPE,WAYFARER,LAST LIGHT' };
 });
-check('NEW RUN: back to the title, in the page (no reload): run 2 on a fresh roll of the arm, ARES-VIII at w0', fresh.phase === 'title' && fresh.title
+check('NEW RUN: back to the title, in the page (no reload): run 2 on the arm the world update made, ARES-VIII at w0', fresh.phase === 'title' && fresh.title
   && fresh.world === 'arm' && fresh.run === 2 && fresh.w0 === 'ARES-VIII' && fresh.ship === 'ARES-VIII' && fresh.arm > 0 && !fresh.sameAsRun1
-  && navigations === navsAtStart, JSON.stringify(fresh));
+  && fresh.lastUnit === 47 && JSON.stringify(fresh.done) === JSON.stringify(SHIPS) && navigations === navsAtStart, JSON.stringify(fresh));
+const gap = fresh.startYear - 2300;
+const launched = gap === 0 ? `UNIT-048 · YEAR ${fresh.startYear} · LAUNCHED IN THE SAME YEAR AS UNIT-047`
+  : `UNIT-048 · YEAR ${fresh.startYear} · LAUNCHED ${gap} ${gap === 1 ? 'YEAR' : 'YEARS'} AFTER UNIT-047`;
+check(`NEW RUN: …the title's launch line \`${launched}\` (the tally's year) with its stamp`, fresh.unit === launched && fresh.startYear === end.nextRun?.startYear
+  && /^\+\d+ YEARS?( · THE ARM MOVED ON)?$|^SAME YEAR$/.test(fresh.stamp ?? ''), JSON.stringify({ unit: fresh.unit, stamp: fresh.stamp, tally: end.next }));
+check('NEW RUN: …047\'s trail on the title\'s faint chart, a mark per ship of the route', fresh.trail && fresh.marks.length === ROUTE.length
+  && fresh.marks.every((tip) => /UNIT-047/.test(tip)), JSON.stringify(fresh.marks));
+await shot('8-run-2-title');
 check('NEW RUN: …as the next unit', fresh.unitNumber === unitBefore + 1, `${unitBefore} → ${fresh.unitNumber} (${fresh.unit})`);
 check('no page errors in the whole run', errors.length === 0, errors.slice(0, 4).join(' | '));
 await finish(browser);
