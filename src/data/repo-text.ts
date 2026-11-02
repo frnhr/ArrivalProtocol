@@ -87,6 +87,8 @@ export const REPO_TEXT = {
     late: (name: string, years: number): string => `${name} ✗ ${yrs(years)} LATE`,
     catchesUp: (name: string): string => `${name} ✓ CATCHES UP HERE`,
     inTime: (name: string): string => `${name} ✓ WAITING HERE`,
+    // A file sent on from the ship being left: it rides in the packet, in time by definition.
+    ridesWithYou: (name: string): string => `${name} ✓ RIDES WITH YOU`,
     // The TIMELINE's mark: `2629 Swap` (green before ▲, red after).
     mark: (year: number, name: string): string => `${year} ${name}`,
   },
@@ -101,6 +103,8 @@ export const REPO_TEXT = {
     tabRepository: 'REPOSITORY [R]',
     tabInbox: 'INBOX [I]',
     back: 'CARD [ESC]',
+    // The REPOSITORY tab's badge while CONTROL recommends a file and none is asked for.
+    badgeRecommended: ':)',
   },
 
   // --- The PACKET (02 §4; 01 §3.16; plan §1.1 item 14) -------------------------------------------------------------------

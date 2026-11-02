@@ -354,3 +354,128 @@ body.reduced-motion .title-card.booting.receiving .title-chart { animation: none
   .re-tally { grid-template-columns: minmax(0, 1fr); }
   .re-tally-chart { height: 160px; }
 }
+
+/* ── Slice 3b: the desk's tabs (DeskTabs: CARD / REPOSITORY [R] / INBOX [I]) in the right window's title, with badges ── */
+.desk-steps { display: inline-flex; gap: 8px; }
+.desk-tabs { flex: 1; display: flex; gap: 2px; min-width: 0; align-self: stretch; align-items: stretch; }
+.desk-tab {
+  display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; cursor: pointer;
+  background: transparent; border: 1px solid transparent; border-bottom: none;
+  color: var(--desk-dim); font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.16em; white-space: nowrap;
+}
+.desk-tab:hover { color: var(--desk-bright); }
+.desk-tab.on { color: var(--desk-bg); background: var(--desk-accent); border-color: var(--desk-accent); }
+.desk-tab-badge {
+  min-width: 14px; padding: 0 4px; text-align: center; font-size: 9px; letter-spacing: 0.06em; line-height: 14px;
+  color: var(--desk-bg); background: var(--desk-bright); box-shadow: 0 0 6px var(--desk-accent);
+}
+.desk-tab-badge[hidden] { display: none; }
+.desk-tab.on .desk-tab-badge { background: var(--desk-bg); color: var(--desk-bright); box-shadow: none; }
+.desk-card[hidden] { display: none; }
+
+/* ── The REPOSITORY (RepositoryWindow): AVAILABLE rows with their ETA and tag, IN TRANSIT, RESTRICTED (locked) ── */
+.desk-repo { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
+.rp-classic { margin-top: 30px; text-align: center; font-size: 11px; letter-spacing: 0.16em; color: var(--desk-dim); }
+.rp-warn {
+  padding: 6px 8px; border: 1px solid var(--desk-warn); color: var(--desk-warn);
+  font-size: 11px; letter-spacing: 0.1em; font-weight: 700;
+}
+.rp-control { font-size: 11px; letter-spacing: 0.06em; color: var(--desk-text); }
+.rp-control::before { content: 'ARRIVAL CONTROL  '; font-size: 9px; letter-spacing: 0.2em; color: var(--layer-mind); }
+.rp-section { margin-top: 8px; padding-bottom: 3px; border-bottom: 1px solid var(--desk-edge); font-size: 9px; letter-spacing: 0.28em; color: var(--desk-dim); }
+.rp-list { display: flex; flex-direction: column; }
+.rp-row {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 6px 4px; cursor: pointer;
+  background: transparent; border: none; border-bottom: 1px dotted var(--desk-edge); text-align: left;
+  color: var(--desk-text); font-family: 'JetBrains Mono', monospace;
+}
+.rp-row:hover { background: var(--desk-glow); }
+.rp-key { margin-top: 1px; font-size: 10px; }
+.rp-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rp-text { font-size: 12px; letter-spacing: 0.06em; color: var(--desk-bright); }
+.rp-eta { font-size: 10px; letter-spacing: 0.06em; line-height: 1.35; color: var(--desk-dim); }
+.rp-eta.eta-in-time { color: var(--desk-good); }
+.rp-eta.eta-late { color: var(--desk-accent); }
+.rp-eta.eta-never { color: var(--desk-warn); }
+.rp-tag { align-self: flex-start; margin-top: 2px; padding: 0 6px; font-size: 9px; letter-spacing: 0.16em; color: var(--desk-bg); background: var(--layer-mind); }
+.rp-req {
+  align-self: center; padding: 3px 8px; border: 1px solid var(--desk-edge-bright);
+  font-size: 9px; letter-spacing: 0.18em; color: var(--desk-dim);
+}
+.rp-row:hover .rp-req { border-color: var(--desk-accent); color: var(--desk-accent); }
+.rp-row.recommended { background: linear-gradient(90deg, rgba(0, 212, 255, 0.06), transparent 70%); }
+.rp-row.requested { background: var(--desk-glow); box-shadow: inset 3px 0 0 var(--desk-accent); }
+.rp-row.requested .rp-req { color: var(--desk-bg); background: var(--desk-accent); border-color: var(--desk-accent); }
+.rp-row.focus { box-shadow: inset 0 0 0 1px var(--desk-warn); animation: rp-focus 1.2s ease-in-out infinite; }
+@keyframes rp-focus { 50% { box-shadow: inset 0 0 0 1px transparent; } }
+body.reduced-motion .rp-row.focus { animation: none; }
+.rp-none { padding: 5px 4px; font-size: 10px; letter-spacing: 0.14em; color: var(--desk-dim); }
+.rp-transit-row { padding: 5px 4px; border-bottom: 1px dotted var(--desk-edge); font-size: 11px; letter-spacing: 0.06em; color: var(--desk-accent); }
+.rp-transit-row.catches-up { color: var(--desk-good); }
+.rp-locked { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 8px; align-items: baseline; padding: 4px; opacity: 0.6; }
+.rp-lock { padding: 0 5px; border: 1px solid var(--desk-far); font-size: 8px; letter-spacing: 0.2em; color: var(--desk-dim); }
+.rp-locked .rp-text { font-size: 11px; color: var(--desk-dim); text-decoration: line-through; }
+.rp-why { font-size: 10px; color: var(--desk-dim); text-align: right; }
+.rp-foot { margin-top: 10px; font-size: 9px; letter-spacing: 0.16em; color: var(--desk-dim); text-align: center; }
+
+/* ── The SHIP CARD's 3b marks: the deliveries on the TIMELINE, green before ▲ and red after ── */
+.dc-tl-file {
+  position: absolute; bottom: -5px; width: 9px; height: 9px; margin-left: -4.5px; transform: rotate(45deg);
+  background: var(--desk-good); box-shadow: 0 0 6px var(--desk-good);
+}
+.dc-tl-file.late { background: var(--desk-warn); box-shadow: 0 0 6px var(--desk-warn); }
+.dc-tl-files { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; margin-top: 4px; font-size: 10px; letter-spacing: 0.06em; }
+.dc-tl-filetext { color: var(--desk-good); }
+.dc-tl-filetext.late { color: var(--desk-warn); }
+
+/* ── The INBOX (InboxView), in the desk's tab and the flight window: a list above a reader ── */
+.desk-inbox { padding: 8px 10px 12px; }
+.inbox-view { display: flex; flex-direction: column; gap: 6px; min-height: 0; font-family: 'JetBrains Mono', monospace; color: var(--desk-text); }
+.ib-head, .ib-row { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.2fr) 42px; gap: 8px; align-items: baseline; }
+.ib-head { padding: 0 4px 3px; border-bottom: 1px solid var(--desk-edge); font-size: 9px; letter-spacing: 0.24em; color: var(--desk-dim); }
+.ib-head[hidden] { display: none; }
+.ib-list { display: flex; flex-direction: column; max-height: 40%; min-height: 54px; overflow-y: auto; scrollbar-width: thin; }
+.inbox-view:not(.reading) .ib-list { max-height: none; }
+.ib-row {
+  padding: 4px; cursor: pointer; background: transparent; border: none; border-bottom: 1px dotted var(--desk-edge); text-align: left;
+  font-family: inherit; font-size: 10.5px; letter-spacing: 0.03em; color: var(--desk-dim);
+}
+.ib-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ib-row:hover { background: var(--desk-glow); color: var(--desk-text); }
+.ib-row.unread { font-weight: 700; color: var(--desk-bright); }
+.ib-row.unread .ib-subject::before { content: '● '; color: var(--desk-accent); }
+.ib-row.open { background: var(--desk-glow); box-shadow: inset 3px 0 0 var(--desk-accent); color: var(--desk-text); }
+.ib-received { text-align: right; }
+.ib-row.tone-hollow, .ib-reader.tone-hollow { color: var(--hollow); }
+.ib-row.tone-hollow { animation: ib-glitch 4.2s steps(1) infinite; }
+.ib-reader.tone-hollow .ib-body { animation: ib-glitch 3.6s steps(1) infinite; }
+@keyframes ib-glitch {
+  0%, 91%, 100% { transform: none; text-shadow: none; opacity: 1; }
+  92% { transform: translateX(2px) skewX(-6deg); text-shadow: -2px 0 rgba(255, 42, 85, 0.6); opacity: 0.85; }
+  94% { transform: translateX(-1px); text-shadow: 2px 0 rgba(0, 212, 255, 0.35); }
+  96% { transform: none; opacity: 0.6; }
+}
+body.reduced-motion .ib-row.tone-hollow, body.reduced-motion .ib-reader.tone-hollow .ib-body { animation: none; opacity: 0.72; }
+.ib-empty { margin-top: 24px; text-align: center; font-size: 11px; letter-spacing: 0.16em; color: var(--desk-dim); }
+.ib-empty[hidden] { display: none; }
+.ib-reader-host { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.ib-reader { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 10px; border: 1px solid var(--desk-edge-bright); background: rgba(0, 0, 0, 0.25); }
+.ib-reader-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; }
+.ib-reader-from, .ib-reader-subject { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 11px; }
+.ib-k { font-size: 9px; letter-spacing: 0.22em; color: var(--desk-dim); }
+.ib-v { color: var(--desk-bright); letter-spacing: 0.04em; }
+.ib-reader-subject .ib-v { font-weight: 700; }
+.ib-stamps { font-size: 10px; letter-spacing: 0.12em; color: var(--desk-accent); }
+.ib-tag { padding: 0 6px; font-size: 9px; letter-spacing: 0.16em; color: var(--desk-bg); background: var(--desk-colony); }
+.ib-body { display: flex; flex-direction: column; gap: 3px; padding-top: 6px; border-top: 1px dotted var(--desk-edge); font-size: 11.5px; line-height: 1.45; }
+.ib-reader.tone-hollow .ib-v, .ib-reader.tone-hollow .ib-stamps { color: var(--hollow); }
+.ib-reader.tone-colony .ib-body { color: var(--desk-text); }
+
+@media (max-width: 768px) {
+  .desk-tabs { gap: 0; }
+  .desk-tab { padding: 0 6px; font-size: 9px; letter-spacing: 0.08em; }
+  /* The sheet always shows its tab bar on the arm, so the REPOSITORY and the INBOX are one tap away before a ship is picked. */
+  .desk-screen.has-tabs:not(.has-card) .desk-card-win { transform: translateY(calc(100% - 32px)); }
+  .desk-screen[data-tab='repository'] .desk-card-win, .desk-screen[data-tab='inbox'] .desk-card-win { height: 70vh; }
+  .ib-head, .ib-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 38px; }
+}

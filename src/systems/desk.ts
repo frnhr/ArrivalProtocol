@@ -2,12 +2,14 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { NoiseCloud, ShipKind, DeskWindowId, Hop, RoomFit, ShipSummary, RunMapState } from '@/types/map';
 import type { LinkNoise } from '@/types/threat';
+import type { RepoFileId } from '@/types/repo';
 import { currentSlot, shipSummaryAt, worldSlotOf, isEndSlot } from '@systems/map-run';
 import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
 import { layerOf, solLy } from '@systems/map-geometry';
 import { seedAllowance } from '@systems/map-noise';
 import { unitArrival } from '@systems/arrival-preview';
-import { deliveriesForHop } from '@systems/repository';
+import { deliveriesForHop, hopOutlook, recommendation, setRequest, type OutlookEntry } from '@systems/repository';
+import { inboxUnread } from '@systems/inbox';
 import { playsTutorial } from '@systems/meta';
 import { shipsLeft } from '@systems/map-route';
 import { mapFacts } from '@systems/map-facts';
@@ -20,6 +22,8 @@ import { FORGIVENESS_TEXT } from '@data/landing-text';
 import { THREAT_TEXT } from '@data/threat-text';
 import { SHIP_OUTCOME_WORD } from '@data/script';
 import { MAP_TEXT, MODIFIER_LABEL } from '@data/map-text';
+import { REPO_FILES } from '@data/repository';
+import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
 import { URGENT_SLACK_YEARS, TRAIL_046_CROSS_PAST_LY, BEAM_OUT_BLACKOUT_SEC } from '@data/tuning';
 
 export type { DeskWindowId };
@@ -106,13 +110,22 @@ export interface CardRow {
   tone: 'plain' | 'good' | 'warn';
 }
 
-// The TIMELINE strip (02 §4, 3a without deliveries): the three years on one line, and the text the strip reads.
+// The TIMELINE strip (02 §4): the three years on one line, the text the strip reads, and 3b's delivery marks
+// (`2629 Swap`: green before ▲ approach, red after), from the one outlook rule (systems/repository.ts hopOutlook).
 export interface CardTimeline {
   leave: number;
   arrive: number;
   approach: number;
   late: boolean;
   text: string;
+  marks: TimelineMark[];
+}
+
+export interface TimelineMark {
+  key: string;              // the request's id (the pick's `rq${nextId}`)
+  year: number;             // when the file is in this ship's receiver (a sent-on file rides with the unit: its arrival)
+  late: boolean;            // after ▲ approach: red
+  text: string;             // `2629 Swap`
 }
 
 // The card leads with three things (the lead's call after the review): the colonists, the years early or late, and what
@@ -136,9 +149,10 @@ export interface CardModel {
 
 // The guidance strip's steps on a desk (02 §4): a ship, then SET COURSE. 3b inserts the recommended file ('request', the
 // first desk only; it guides, SET COURSE never waits for it: decision 19), slice 4 the required TRAINING pick first
-// (slice-3a-plan §2.10).
+// (slice-3a-plan §2.10). `label` is the step's short name on the strip (`1 A SHIP · 2 A FILE · 3 SET COURSE`).
 export interface DeskStep {
   id: 'pick-ship' | 'request' | 'set-course';
+  label: string;
   text: string;
   done: boolean;
 }
@@ -338,6 +352,11 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   if (ship.final && noWorkingRm(state)) row('norm', MAP_TEXT.card.threatLabel, THREAT_TEXT.noRmPacket, 'warn');
   if (isReachable && onlyFromHere(map, from).includes(slot)) row('only', '', MAP_TEXT.card.onlyFromHere, 'warn');
 
+  // 3b: what the requests (and this desk's pick) do on this hop (02 §4's DELIVERIES row), from the one outlook rule.
+  const outlook = arm && hop !== null ? hopOutlook(state, from, slot) : [];
+  const deliveries = deliveriesRow(outlook);
+  if (deliveries !== null) row('deliveries', REPO_TEXT.card.deliveriesLabel, deliveries.value, deliveries.tone);
+
   if (isReachable || slot === from) {
     const [min, max] = shipsLeft(map, slot);
     const at = slot === from ? map.route.length : depth;
@@ -354,6 +373,7 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
     timeline = {
       leave: hop.leaveYear, arrive: hop.arriveYear, approach: hop.approachYear, late,
       text: MAP_TEXT.card.timeline(hop.leaveYear, hop.arriveYear, hop.approachYear),
+      marks: timelineMarks(outlook, hop),
     };
   } else if (arm && slot === from) {
     schedule = MAP_TEXT.card.here(ship.approachYear);
@@ -375,15 +395,57 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
   };
 }
 
+// --- The card's deliveries (phase 3 slice 3b; 02 §4) -----------------------------------------------------------------------
+
+// The DELIVERIES row from a hop's outlook (`Swap ✗ 4 YRS LATE · Mv ✓ CATCHES UP HERE`), or null with nothing on the way:
+// red while any file misses the approach, green when every one is there for it.
+export function deliveriesRow(outlook: readonly OutlookEntry[]): { value: string; tone: CardRow['tone'] } | null {
+  if (outlook.length === 0) return null;
+  const words = outlook.map((entry) => {
+    const name = REPO_FILES[entry.file].name;
+    switch (entry.kind) {
+      case 'in-time': return REPO_TEXT.card.inTime(name);
+      case 'catches-up': return REPO_TEXT.card.catchesUp(name);
+      case 'waiting': return REPO_TEXT.card.ridesWithYou(name);
+      case 'late':
+      case 'never': return REPO_TEXT.card.late(name, entry.yearsLate);
+    }
+  });
+  return { value: words.join(' · '), tone: outlook.every((entry) => entry.rides) ? 'good' : 'warn' };
+}
+
+// The TIMELINE's marks: each file at the year it is in this ship's receiver (a file sent on rides in the packet: the
+// unit's own arrival), in year order. Late (red) when after ▲ approach.
+export function timelineMarks(outlook: readonly OutlookEntry[], hop: Readonly<Pick<Hop, 'arriveYear' | 'approachYear'>>): TimelineMark[] {
+  return outlook
+    .map((entry): TimelineMark => {
+      const year = entry.kind === 'waiting' ? hop.arriveYear : entry.arrivedYear;
+      return { key: entry.key, year, late: year > hop.approachYear, text: REPO_TEXT.card.mark(year, REPO_FILES[entry.file].name) };
+    })
+    .sort((a, b) => a.year - b.year || (a.key < b.key ? -1 : 1));
+}
+
 // --- The guidance strip and the opening beat ------------------------------------------------------------------------------
 
-// The desk's guidance steps: pick a ship (done once one is selected), then SET COURSE to it.
+// The desk's guidance steps: pick a ship (done once one is selected), then SET COURSE to it. On a run's first desk on the
+// arm the recommended file comes between (02 §4: ship → file → SET COURSE): done once any request is set; it only
+// guides, SET COURSE never waits for it (decision 19; plan risk 2).
 export function deskSteps(state: Readonly<GameState>): DeskStep[] {
   const selected = state.ui.deskSelected;
-  return [
-    { id: 'pick-ship', text: MAP_TEXT.desk.pickShip, done: selected !== null },
-    { id: 'set-course', text: MAP_TEXT.desk.setCourse(selected === null ? '…' : shipSummaryAt(state.run.map, selected).name), done: false },
-  ];
+  const steps: DeskStep[] = [{ id: 'pick-ship', label: MAP_TEXT.desk.stepPick, text: MAP_TEXT.desk.pickShip, done: selected !== null }];
+  if (state.run.map.world === 'arm' && state.run.map.route.length === 1) {
+    const pick = state.run.repo.pick;
+    const recommended = recommendation(state);
+    const text = pick !== null
+      ? REPO_TEXT.desk.requested(REPO_FILE_TEXT[pick].boot)
+      : recommended !== null ? REPO_TEXT.desk.request(REPO_FILE_TEXT[recommended].boot) : REPO_TEXT.desk.requestAny;
+    steps.push({ id: 'request', label: MAP_TEXT.desk.stepFile, text, done: pick !== null });
+  }
+  steps.push({
+    id: 'set-course', label: MAP_TEXT.desk.stepCourse,
+    text: MAP_TEXT.desk.setCourse(selected === null ? '…' : shipSummaryAt(state.run.map, selected).name), done: false,
+  });
+  return steps;
 }
 
 // The ships whose approach passed since the last desk (02 §4's opening beat), earliest first: their approach year is
@@ -443,4 +505,40 @@ export function cycleShip(store: Store<GameState>, step: 1 | -1): number {
   const next = at < 0 ? offered[step === 1 ? 0 : offered.length - 1]! : offered[(at + step + offered.length) % offered.length]!;
   selectShip(store, next);
   return next;
+}
+
+// --- The desk's tabs (phase 3 slice 3b; 02 §4: R / I; slice-3b-plan §5.2 item 1) --------------------------------------
+
+// The tab beside the chart: the SHIP CARD (null), the REPOSITORY or the INBOX. Escape goes back to the card. Slice 4's
+// TRAINING has no window yet, so asking for it is a bug in the caller.
+export function openDeskWindow(store: Store<GameState>, id: DeskWindowId | null): void {
+  const state = store.getState();
+  if (state.run.phase !== 'desk') throw new Error(`openDeskWindow: not on the DESK (phase ${state.run.phase})`);
+  if (id === 'training') throw new Error("openDeskWindow: TRAINING is slice 4's");
+  if (state.ui.deskWindow !== id) store.update((draft) => { draft.ui.deskWindow = id; });
+}
+
+// A REQUEST toggle on a REPOSITORY row (or its number key): request `file`, or clear it when it is already this desk's
+// request (02 §3.8: one request per transmit, changeable until TRANSMIT ▸). Returns the pick after the toggle.
+export function toggleRequest(store: Store<GameState>, file: RepoFileId): RepoFileId | null {
+  const next = store.getState().run.repo.pick === file ? null : file;
+  setRequest(store, next);
+  return next;
+}
+
+// The tab badges (02 §4: badges for unread mail): the INBOX's unread count; the REPOSITORY's names this desk's request,
+// or `:)` while CONTROL recommends a file and none is asked for. null shows none (and on the classic world, always).
+export interface DeskTabBadges {
+  repository: string | null;
+  inbox: string | null;
+}
+
+export function deskTabBadges(state: Readonly<GameState>): DeskTabBadges {
+  if (state.run.map.world !== 'arm') return { repository: null, inbox: null };
+  const pick = state.run.repo.pick;
+  const unread = inboxUnread(state).length;
+  return {
+    repository: pick !== null ? REPO_FILES[pick].name : recommendation(state) !== null ? REPO_TEXT.desk.badgeRecommended : null,
+    inbox: unread > 0 ? String(unread) : null,
+  };
 }

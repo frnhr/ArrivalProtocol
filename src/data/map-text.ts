@@ -45,6 +45,8 @@ export const MAP_TEXT = {
     onlyNext: 'ONE SHIP IN REACH',
     controlTag: 'ARRIVAL CONTROL',
     stepPick: 'A SHIP',
+    // Slice 3b: the first desk's file step (02 §4: ship → file → SET COURSE).
+    stepFile: 'A FILE',
     stepCourse: 'SET COURSE',
     back: '◀ CHART',
     closeSheet: '✕',
