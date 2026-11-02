@@ -5,6 +5,15 @@ import type {
   RunSave, SavePoint, SavePayload, ResumeLine, BootParts, DecodeResult, SaveRefusal, SaveRefusalKind,
 } from '@/types/save';
 import type { Meta } from '@systems/meta';
+import { parseLastUnit, MetaCorrupt, FIRST_RUN_LINEAGE } from '@systems/meta';
+import { createRunState, createInitialState } from '@state/initial';
+import { createRunLog } from '@state/log-selectors';
+import { createRunThreat, nominalShipThreat } from '@systems/threat-plan';
+import { createRunMap } from '@systems/map-run';
+import {
+  ShapeError, shapeFail, rec, list, whole, int, num, str, name, bool, isNull, anyRecord, nullable, oneOf, likeReference,
+  finiteNumbers, checkArmShip, checkHistory, type Check,
+} from '@systems/save-shape';
 import { ARM_CONTENT_VERSION } from '@data/arm';
 import { MAP_GENERATOR_VERSION } from '@systems/map-generator';
 import { MAP_UPDATE_VERSION } from '@systems/map-update';
@@ -21,7 +30,8 @@ import { RUN_SAVE_VERSION } from '@data/tuning';
 // systems/save-write.ts, resume and abandon systems/run-save.ts.
 // Cycle guard (plan §5.4; slice 3c foundation deviation): a leaf below run.ts, so run.ts's save points can call
 // save-write.ts (which encodes through this file) while run-save.ts imports run.ts.
-// The foundation made it real except the deep field checks of a saved run (TODO(3c-SAVE) in checkShape); Track SAVE owns it.
+// Track SAVE owns it (the foundation laid the envelope down; the saved run's field checks, the cross-checks and the
+// non-finite rule are SAVE's).
 
 export const SAVE_POINTS: readonly SavePoint[] = ['run-start', 'ship-done', 'beam', 'ending-chosen'];
 
@@ -133,9 +143,129 @@ const BOOT_KEYS = ['kind', 'run', 'carried', 'threat'];
 const WORLD_KEYS = ['kind', 'phase', 'run', 'slices'];
 const SLICE_KEYS = ['mission', 'memory', 'clock', 'burn', 'orbit', 'level', 'landing', 'hollow', 'hazards'];
 
-// Check 4 (the envelope's keys and types, strict, like parseMeta). Returns what is wrong, or null.
-// TODO(3c-SAVE): the saved run field by field (checkSavedRun: RunState, the map, the repo, the inbox, the log; a slice
-// 4 field bumps RUN_SAVE_VERSION and joins it), and the world payload's slices. The foundation checks the envelope only.
+// --- Check 4: the shape, field by field ------------------------------------------------------------------------------
+
+const RUN_PHASES: readonly RunState['phase'][] = ['title', 'boot', 'flight', 'landing', 'report', 'desk', 'transmit', 'end'];
+
+const checkHop = rec({
+  from: whole, to: whole, distanceLy: int, linkBlocks: whole, transitHits: whole, eccFixes: whole, leaveYear: int, arriveYear: int,
+  approachYear: int, slackYears: int, noise: oneOf(0, 1, 2, 3), inRange: bool, memoryClass: oneOf('FULL', 'COMPACT', 'TIGHT'),
+  room: whole, chargeFloor: whole,
+});
+
+const checkArmShips: Check = (value, at) => {
+  if (!Array.isArray(value)) shapeFail(at, 'is not a list');
+  value.forEach((ship, slot) => checkArmShip(ship, `${at}[${slot}]`, slot));
+};
+
+const checkMap = rec({
+  version: oneOf(MAP_STATE_VERSION),
+  world: oneOf('arm', 'classic'),
+  run: whole,
+  armSeed: whole,
+  startYear: whole,
+  arm: checkArmShips,
+  noise: list(rec({ x: num, y: num, r: num, strength: oneOf(1, 2) })),
+  route: list(rec({ slot: whole, depth: whole, hop: nullable(checkHop) })),
+  galaxyYear: whole,
+  pendingExtra: nullable(rec({ extraHits: whole, coreHit: num, coreReset: bool })),
+  history: checkHistory,
+});
+
+const checkShipResult = rec({
+  shipId: name, shipName: name, slot: whole, depth: whole,
+  outcome: oneOf('locked', 'partial', 'stranded', 'escaped', 'crashed', 'abandoned', 'emergency'),
+  stars: whole, fuelLeftPct: num, ringMiss: nullable(rec({ apsis: oneOf('▼', '▲'), km: num })),
+  colonistsAboard: whole, lzs: list(anyRecord), offSite: whole, noGo: whole, restored: whole,
+  parked: list(rec({ pod: whole, why: str })), notLaunched: whole, landedInLz: whole, points: num, colony: nullable(name), pods: list(anyRecord),
+});
+
+const checkLastUnit: Check = (value, at) => {
+  try {
+    parseLastUnit(value);
+  } catch (error) {
+    if (error instanceof MetaCorrupt) shapeFail(at, `is not a last unit (${error.message})`);
+    throw error;
+  }
+};
+
+// The references likeReference reads (built once, lazily: a fresh run, its threat memory and log, and a fresh arm world's
+// slices, from the code's own constructors, so a field a slice adds is in the reference the day it is added).
+let references: { run: RunState; slices: ShipSlices; shipThreat: Readonly<Record<string, unknown>> } | null = null;
+
+function refs(): NonNullable<typeof references> {
+  if (references === null) {
+    const world = createInitialState({ seed: 1, phase: 'title', map: createRunMap({ wave: 1 }, 1) });
+    references = {
+      run: createRunState(1, 'title', 0, FIRST_RUN_LINEAGE),
+      slices: shipSlicesOf(world),
+      shipThreat: nominalShipThreat(0) as unknown as Record<string, unknown>,
+    };
+  }
+  return references;
+}
+
+// The saved RunState, field by field (every key, exactly: a field a later slice adds bumps RUN_SAVE_VERSION, joins this
+// spec, and gets a migration step; slice 4's run.skills is the first). The fields a save point always has empty are
+// checked empty: no beam out, no transit, no end cause.
+function checkSavedRun(value: unknown, at: string): void {
+  rec({
+    rev: whole, phase: oneOf(...RUN_PHASES), seed: whole, unitNumber: whole, wave: whole, lastUnit: nullable(checkLastUnit),
+    ghostSpoken: bool, hollowUnits: list(whole), mergeBonus: bool, upgrades: list(str), tutorial: bool, shipIndex: whole, map: checkMap,
+    licences: list(str), hollowNamed: bool, coreLost: bool, skillTrainedOn: nullable(whole), repairRenewedOn: nullable(whole),
+    ships: list(checkShipResult),
+    stats: rec({
+      manualCaptures: whole, demos: list(rec({ offsetTac: num })), repairs: whole, moves: whole, deletes: whole, driversLost: whole,
+      driversBitten: whole, capRefusals: whole, deal: nullable(anyRecord),
+    }),
+    pendingStarCredit: num, pendingStars: whole, simulationRetryUsed: bool, beamOut: isNull, transit: isNull, arrival: nullable(anyRecord),
+    endCause: isNull,
+    threat: likeReference(createRunThreat() as unknown as Record<string, unknown>),
+    log: likeReference(createRunLog() as unknown as Record<string, unknown>),
+    repo: rec({
+      pick: nullable(str),
+      requests: list(rec({
+        id: name, file: name, fromSlot: whole, toSlot: whole, requestedYear: int, lateness: int, status: name, at: nullable(whole),
+        arrivedYear: nullable(int),
+      })),
+      nextId: whole,
+    }),
+    inbox: rec({ read: list(str) }),
+    next: nullable(rec({ unit: whole, run: whole, startYear: whole, gap: whole, valveYears: whole })),
+  })(value, at);
+  // Every key of a fresh run is in the spec above (a field a slice adds fails here first, in the round-trip suite).
+  const known = Object.keys(refs().run);
+  const have = Object.keys(value as Record<string, unknown>);
+  if (known.length !== have.length || known.some((key) => !have.includes(key))) shapeFail(at, 'does not have a fresh run\'s fields');
+}
+
+// Memory (the world payload's): a list of segments, each with its id, name, type and size (the layout and every rule
+// past that are assertMemoryInvariants', which the resume runs).
+const checkMemory: Check = (value, at) => {
+  if (!Array.isArray(value)) shapeFail(at, 'is not a list');
+  value.forEach((seg, i) => {
+    const where = `${at}[${i}]`;
+    anyRecord(seg, where);
+    const entry = seg as Record<string, unknown>;
+    name(entry.id, `${where}.id`);
+    str(entry.name, `${where}.name`);
+    name(entry.type, `${where}.type`);
+    whole(entry.size, `${where}.size`);
+  });
+};
+
+function checkSlices(value: unknown, at: string): void {
+  const reference = refs().slices as unknown as Record<string, Record<string, unknown>>;
+  rec({
+    mission: likeReference(reference.mission!), memory: checkMemory, clock: likeReference(reference.clock!),
+    burn: likeReference(reference.burn!), orbit: likeReference(reference.orbit!), level: likeReference(reference.level!),
+    landing: likeReference(reference.landing!), hollow: likeReference(reference.hollow!), hazards: likeReference(reference.hazards!),
+  })(value, at);
+}
+
+// Check 4 (the envelope's keys and types, strict, like parseMeta; then the saved run and the payload field by field, every
+// number finite but a sticky burst's end, and the envelope's copies of the unit, the run and the resume line against the
+// run they describe). Returns what is wrong, or null.
 function checkShape(data: Record<string, unknown>): string | null {
   const envelope = sameKeys(data, ENVELOPE_KEYS);
   if (envelope !== null) return `the save: ${envelope}`;
@@ -175,6 +305,30 @@ function checkShape(data: Record<string, unknown>): string | null {
     return 'payload.run is not a run with a map';
   }
   if (run.map.version !== MAP_STATE_VERSION) return `payload.run.map is version ${String(run.map.version)}, not ${MAP_STATE_VERSION}`;
+  try {
+    finiteNumbers(data, 'save', INFINITY_KEY);
+    checkSavedRun(run, 'payload.run');
+    if (payload.kind === 'world') checkSlices(payload.slices, 'payload.slices');
+    else {
+      likeReference(refs().shipThreat)(payload.threat, 'payload.threat');
+      if (payload.carried !== null) {
+        const carried = payload.carried as Record<string, unknown>;
+        whole(carried.startAddr, 'payload.carried.startAddr');
+        checkMemory(carried.segs, 'payload.carried.segs');
+      }
+    }
+    list(anyRecord)(log.entries, 'log.entries');
+  } catch (error) {
+    if (error instanceof ShapeError) return error.message;
+    throw error;
+  }
+  // The envelope's copies against the run they describe (the review follow-up's cross-checks).
+  const saved = run as unknown as RunState;
+  if (data.unit !== saved.unitNumber) return `the save is unit ${String(data.unit)}'s, its run unit ${saved.unitNumber}'s`;
+  if (data.run !== saved.map.run) return `the save is run ${String(data.run)}, its map run ${saved.map.run}`;
+  if (resume.unit !== data.unit || resume.depth !== saved.shipIndex + 1 || resume.year !== saved.map.galaxyYear) {
+    return `the resume line (unit ${String(resume.unit)}, depth ${String(resume.depth)}, ${String(resume.year)}) is not the run's`;
+  }
   return null;
 }
 
@@ -230,11 +384,27 @@ export function decodeRunSave(raw: string): DecodeResult {
   if (save.point === 'run-start' ? run.map.route.length !== 1 : save.point === 'beam' && run.map.route.length < 2) {
     return refuse('route', `point ${save.point} at depth ${run.map.route.length}`);
   }
+  // The ships ended so far: a boot point and ENDING CHOSEN are on a ship not yet ended (its result comes at CONTINUE), SHIP
+  // DONE on one just ended.
+  const ended = save.point === 'ship-done' ? run.shipIndex + 1 : run.shipIndex;
+  if (run.ships.length !== ended) return refuse('route', `point ${save.point} at depth ${run.map.route.length} with ${run.ships.length} ship(s) ended`);
+  if (run.ships.some((result, i) => result.slot !== run.map.route[i]!.slot)) return refuse('route', 'a ship result is not its route stop\'s');
   for (const ship of run.map.arm) {
     try {
       validateShipDef(shipDefOf(ship));
     } catch (error) {
       return refuse('ship', `${String(ship?.name)} (slot ${String(ship?.slot)}): ${(error as Error).message}`);
+    }
+  }
+  if (run.map.route.some((stop) => run.map.arm[stop.slot] === undefined)) return refuse('route', 'a route stop is off the arm');
+  // The ships the envelope and the slices name are the route's current one.
+  const current = shipSummaryAt(run.map, currentSlot(run)).name;
+  if (save.resume.ship !== current) return refuse('shape', `the resume line names ${save.resume.ship}, the run is on ${current}`);
+  if (save.payload.kind === 'world') {
+    const slices = save.payload.slices;
+    if (slices.level.shipName !== current) return refuse('shape', `the slices are ${slices.level.shipName}'s, the run is on ${current}`);
+    if (save.point === 'ending-chosen' && (!slices.landing.finalShip || !['purged', 'merged', 'unresolved'].includes(slices.hollow.finale.phase))) {
+      return refuse('route', `ENDING CHOSEN on ${current} with the finale '${slices.hollow.finale.phase}'`);
     }
   }
   return { ok: true, save };

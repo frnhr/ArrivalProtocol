@@ -17,7 +17,7 @@ import type { SegmentRole } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import { resetWorld, listResets, resetReport, type ResetDrift } from '@systems/reset';
 import {
-  startShip, boardedBy, startRun, continueAfterLoss, continueAfterReport, transmitNext, startBeamOut, cancelBeamOut, setCourse,
+  startShip, boardedBy, continueAfterLoss, continueAfterReport, transmitNext, startBeamOut, cancelBeamOut, setCourse,
   type LossPlan,
 } from '@systems/run';
 import { packUnit, layoutCarried } from '@systems/carry';
@@ -62,10 +62,13 @@ import { createHollowState } from '@state/initial';
 import { getOps, threadsBusy, threadsTotal, cancelOp, abortAll } from '@systems/ops-core';
 import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
 import { layoutOf } from '@data/memory';
-import { META_STORAGE_KEY, RUN_SAVE_KEY, ROOT_BLOCKS } from '@data/tuning';
+import { META_STORAGE_KEY, RUN_SAVE_KEY, ROOT_BLOCKS, COLONISTS_PER_POD } from '@data/tuning';
 import type { SaveState } from '@/types/save';
 import { updateArm, armStateOfMap, type ArmUpdate } from '@systems/map-update';
-import { visitsOf } from '@systems/lineage';
+import { visitsOf, trailOf, notableEvents } from '@systems/lineage';
+import { abandonRun } from '@systems/run-save';
+import { runScore, runLanded } from '@systems/run-score';
+import type { ShipResult } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import { showStamp, type StampTone } from '@components/hud/Stamp';
 import { shake, recentShakes } from '@components/hud/Juice';
@@ -237,8 +240,11 @@ interface DebugHooks {
   // (a first run); ghost is this run's ghost line, wherever it speaks (systems/meta.ts ghostShipIndex); draft is the TRANSMIT's offer, pick and what weighted it; pick takes a
   // card (refusal or null).
   archive: () => { status: string; meta: Readonly<Meta> };
-  // Slice 3c (archive v2): `landed` (was `woke`). TODO(3c-SAVE): run 1 on the worked route through the real update (plan
-  // §5.0 item 9), so a reload meets UNIT-048 on the updated arm; until then the WP8 record above with an empty trail.
+  // Slice 3c (archive v2, plan §5.0 item 9): UNIT-047's run 1 on the worked route (ARES-VII, HALCYON, KESTREL, VESPER,
+  // CORMORANT, LAST LIGHT) on this page's arm seed, ended with `cause`, written through the real record and the real world
+  // update (its trail, colonies, route, events and the next arm), with the run save cleared: a reload meets UNIT-048 on
+  // the updated arm. `landed`: the colonists each ship that reached orbit landed (default: all its pods); a lost cause
+  // ends on LAST LIGHT (crashed, or eaten for 'overwritten'), 'abandoned' while still on it.
   archiveAs: (cause: LastCause, landed?: number) => Meta;
   archiveCorrupt: () => void;
   archiveClear: () => void;
@@ -349,8 +355,45 @@ const HOLLOW_DEMO_RACKS = { B: 'P P P P P P _16', C: 'P P _2 S _1 P P _29', D: '
 // POD 09 leads (the pod right of the root, behind the 1-block GAP).
 const HOLLOW_DEMO_LEAD = 9;
 const HOLLOW_DEMO_WAKE_SEC = 12;
-// __ap.archiveAs: the colonists a written-in last run landed (HALCYON reached).
-const DEBUG_ARCHIVE_LANDED = 3400;
+// __ap.archiveAs: run 1's worked route (02 §3.14; tests/unit/map/run1-fixture.ts WORKED_ROUTE).
+const DEBUG_WORKED_ROUTE: readonly number[] = [0, 2, 5, 11, 15, 19];
+
+// __ap.archiveAs: the archive as if UNIT-047 had played run 1 on the worked route and ended with `cause`, through the real
+// record steps and the real world update (see DebugHooks.archiveAs).
+function debugArchiveAs(store: Store<GameState>, cause: LastCause, landed: number | undefined): Meta {
+  const page = store.getState().run.map;
+  const armSeed = page.world === 'arm' ? page.armSeed : newRunSeed();
+  const first = lineageOf(freshMeta(armSeed));
+  const map = createRunMap(first, armSeed);
+  map.route = DEBUG_WORKED_ROUTE.map((slot, i) => ({ slot, depth: i + 1, hop: i === 0 ? null : hopBetween(map, DEBUG_WORKED_ROUTE[i - 1]!, slot) }));
+  map.galaxyYear = map.route.at(-1)!.hop!.approachYear;
+  const lost = cause === 'flagship-lost' || cause === 'stayed' || cause === 'overwritten';
+  const ended = cause === 'abandoned' ? DEBUG_WORKED_ROUTE.length - 1 : DEBUG_WORKED_ROUTE.length;
+  const ships: ShipResult[] = DEBUG_WORKED_ROUTE.slice(0, ended).map((slot, i): ShipResult => {
+    const def = shipDefAt(map, slot);
+    const last = i === DEBUG_WORKED_ROUTE.length - 1;
+    const outcome = last && lost ? (cause === 'overwritten' ? 'emergency' : 'crashed') : 'locked';
+    const aboard = map.arm[slot]!.pods * COLONISTS_PER_POD;
+    const down = outcome === 'locked' ? Math.min(aboard, landed ?? aboard) : 0;
+    return {
+      shipId: def.id, shipName: def.name, slot, depth: i + 1, outcome, stars: down > 0 ? 2 : 0, fuelLeftPct: 30, ringMiss: null,
+      colonistsAboard: aboard, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: aboard - down, landedInLz: down,
+      points: down, colony: down > 0 ? (def.landing.colonyFirstRun ?? def.world.toUpperCase()) : null, pods: [],
+    };
+  });
+  const run = { ...createRunState(armSeed, 'end', 0, first), map, shipIndex: DEBUG_WORKED_ROUTE.length - 1, ships, tutorial: false };
+  const trail = trailOf(run, cause);
+  const progress = {
+    unit: first.unitNumber, shipName: map.arm[DEBUG_WORKED_ROUTE.at(-1)!]!.name, landed: runLanded(ships), stats: { moves: 0, deletes: 0 },
+    hollowUnits: first.hollowUnits, trail,
+  };
+  const started = recordTutorialDone(recordRunStart(freshMeta(armSeed), progress, Date.now()));
+  const update = updateArm({ from: armStateOfMap(map), visited: visitsOf(run) });
+  const meta = recordRunEnd(started, { ...progress, cause, score: runScore(ships), nextArm: update.next, events: notableEvents(run) });
+  if (saveMeta(browserStorage, meta) !== 'ok') throw new Error('__ap.archiveAs: the archive could not be written');
+  browserStorage().removeItem(RUN_SAVE_KEY);
+  return meta;
+}
 const HOLLOW_DEMO: HollowDef = {
   wake: { afterAiSec: 0, coastLeadSec: null }, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, landMult: 1.5, seed: null, verbs: null, deal: false,
   story: 'none',
@@ -785,7 +828,9 @@ export function mountDebug(store: Store<GameState>): void {
     transmit: () => transmitNext(store),
     beamOut: () => startBeamOut(store),
     cancelBeamOut: () => cancelBeamOut(store),
-    newRun: (seed) => startRun(store, seed ?? newRunSeed(), archiveLineage(), 'arm'),
+    // Slice 3c: through abandonRun (plan §2.2), so a run in progress is recorded 'abandoned' with the world update and the save
+    // is cleared, as the title's NEW RUN over a save does.
+    newRun: (seed) => abandonRun(store, seed ?? newRunSeed()),
     movePreview: (name, addr) => {
       const state = store.getState();
       const source = state.memory.find((seg) => seg.name.toLowerCase() === name.toLowerCase() || isPodName(seg, name.toLowerCase()));
@@ -805,18 +850,7 @@ export function mountDebug(store: Store<GameState>): void {
     beamOutView: () => beamOutView(store.getState(), getPrediction()),
     amberBite: () => amberBite(store.getState()),
     archive: () => ({ status: store.getState().archive.status, meta: archiveMeta() }),
-    archiveAs: (cause, landed = DEBUG_ARCHIVE_LANDED) => {
-      // UNIT-047's run as the archive keeps it: started, ARES-VII flown through (the next run is a returning
-      // unit), then ended with `cause` on HALCYON.
-      const first = lineageOf(freshMeta());
-      const progress = {
-        unit: first.unitNumber, shipName: classicShip(1).name, landed, stats: { moves: 0, deletes: 0 }, hollowUnits: first.hollowUnits, trail: null,
-      };
-      const started = recordTutorialDone(recordRunStart(freshMeta(), progress, Date.now()));
-      const meta = recordRunEnd(started, { ...progress, cause, score: landed });
-      if (saveMeta(browserStorage, meta) !== 'ok') throw new Error('__ap.archiveAs: the archive could not be written');
-      return meta;
-    },
+    archiveAs: (cause, landed) => debugArchiveAs(store, cause, landed),
     archiveCorrupt: () => { browserStorage().setItem(META_STORAGE_KEY, '{ this is not an archive'); },
     archiveClear: () => { browserStorage().removeItem(META_STORAGE_KEY); },
     save: () => ({ state: structuredClone(store.getState().save), stored: browserStorage().getItem(RUN_SAVE_KEY) }),

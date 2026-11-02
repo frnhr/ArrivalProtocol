@@ -36,6 +36,8 @@ import {
   LANDING_NONE_LEFT_SEC, POD_DESCENT_SEC, POD_FIRST_DESCENT_SEC, EARLY_BURN_GUARD_TAC, LATE_TRIM_TAC,
 } from '@data/tuning';
 import { visitRng } from '@systems/map-streams';
+import { writeEndingChosen } from '@systems/save-write';
+import { sayOwedVerdict } from '@systems/finale';
 
 // The landing (01-landing; plan §1.4): replaces phase 2's printer. DOM-free; the only module besides
 // landing-controls.ts that changes landing state. The pure rules are landing-rules.ts, the math landing-solve.ts, the
@@ -245,14 +247,15 @@ function endNow(store: Store<GameState>, reason: LandingEnd): void {
   emit('landing-ended', { reason });
 }
 
-// The landing is over and the bells have rung out: the LANDING REPORT opens.
-// TODO(3c-SAVE): ENDING CHOSEN (3c plan §2.1, risk 1): on the final ship with a decided finale, writeRunSave(store,
-// 'ending-chosen') right after this update (systems/save-write.ts; slice 7 moves it to step 2's confirm).
+// The landing is over and the bells have rung out: the LANDING REPORT opens. On the final ship its finale is decided by now
+// (the report waits for it: finalePending), and this is ENDING CHOSEN (slice 3c plan §2.1, risk 1; systems/save-write.ts:
+// the ops stopped, the finale's owed line said, then the save; slice 7 moves it to step 2's confirm).
 function finishLanding(store: Store<GameState>): void {
   store.update((draft) => {
     draft.landing.lingerAiSec = null;
     draft.run.phase = 'report';
   });
+  if (store.getState().landing.finalShip) writeEndingChosen(store, sayOwedVerdict);
 }
 
 // LandingState.window from the drop solution, with its edge events (window-open, window-sure, window-closed).
