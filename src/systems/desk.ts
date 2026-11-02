@@ -4,7 +4,11 @@ import type { GameState } from '@state/schema';
 import type { NoiseCloud, ShipKind, DeskWindowId, Hop, RoomFit, ShipSummary, RunMapState } from '@/types/map';
 import type { LinkNoise } from '@/types/threat';
 import type { RepoFileId } from '@/types/repo';
+import type { ColonyRecord, Departure, UnitTrail } from '@/types/lineage';
 import { currentSlot, shipSummaryAt, worldSlotOf, isEndSlot } from '@systems/map-run';
+import { armShipAt } from '@systems/map-streams';
+import { unitTrailOf, olderColonies } from '@systems/lineage';
+import { unitName } from '@systems/say';
 import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
 import { layerOf, solLy } from '@systems/map-geometry';
 import { seedAllowance } from '@systems/map-noise';
@@ -18,15 +22,14 @@ import { planThreat, threatInputFor } from '@systems/threat-plan';
 import { noWorkingRm } from '@state/threat-selectors';
 import { swapAboard } from '@state/selectors';
 import { layoutFor } from '@data/memory';
-import { WORLDS, RING_LY } from '@data/arm';
-import { UNIT_046_TRAIL } from '@data/ship-names';
+import { WORLDS, RING_LY, FIRST_SLOT } from '@data/arm';
 import { FORGIVENESS_TEXT } from '@data/landing-text';
 import { THREAT_TEXT } from '@data/threat-text';
 import { SHIP_OUTCOME_WORD } from '@data/script';
 import { MAP_TEXT, MODIFIER_LABEL } from '@data/map-text';
 import { REPO_FILES } from '@data/repository';
 import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
-import { URGENT_SLACK_YEARS, TRAIL_046_CROSS_PAST_LY, BEAM_OUT_BLACKOUT_SEC } from '@data/tuning';
+import { URGENT_SLACK_YEARS, BEAM_OUT_BLACKOUT_SEC, LEAVE_BLOCK_MAX_LINES } from '@data/tuning';
 
 export type { DeskWindowId };
 
@@ -35,8 +38,9 @@ export type { DeskWindowId };
 // and how it reads. It reads ships only through systems/map-run.ts shipSummaryAt and the hop (never a built ShipDef: an
 // arm ship is built only when the unit arrives), so every row can be computed for a ship no unit has reached.
 // • chartModel: the STAR CHART's nodes (with their state, label, year and hover reason), the beams from the ship being
-//   left to every ship in reach, the noise clouds, the route trail, 046's written trail and grey cross, and the key
-//   rings with the next one labelled. Shared by the desk, the title card's faint chart and the RUN TALLY's mini chart.
+//   left to every ship in reach, the noise clouds, the route trail, the last unit's trail (046's written one on run 1)
+//   with its TAKEN marks, colonies, grey cross and beacon, older units' colonies, and the key rings with the next one
+//   labelled. Shared by the desk, the title card's faint chart and the RUN TALLY's mini chart.
 // • cardModel: the SHIP CARD for a ship, seen from the ship being left (the schedule, the Uplink rows, the TIMELINE).
 // • deskSteps: the guidance strip's two steps; deskOpeningBeat: the ships greyed since the last desk.
 // The RUN TALLY's model lives in run-end.ts.
@@ -59,7 +63,14 @@ export interface ChartNode {
   year: number;             // the approach year, under the label
   reason: string | null;    // the hover reason (`TOO LATE BY 18 YRS`, `31 YRS EARLY`, `VISITED · ORBIT LOCKED`)
   onlyFromHere: boolean;    // in reach now and from no ship in reach after it (02 §2: ALBATROSS on the first desk)
-  taken046: boolean;        // 046's written trail gets there first (run 1; until the galaxy year passes its year)
+  // The last unit gets to this world first (`UNIT-047 GETS THERE FIRST`, 046's on run 1) until the galaxy year passes its
+  // stop there; null otherwise (and on the classic world).
+  taken: string | null;
+  // Slice 3c (02 §4): a waiting ship's `2ND RUN ON THE CHART` / `3RD`, a new one's `REPORTED HOME` on the run's first desk
+  // (from run 2; null on run 1 and the classic world). The hover tip says it.
+  history: string | null;
+  // `REPORTED HOME` beside the year on the run's first desk (the walk's "new nodes tagged REPORTED HOME"), else null.
+  tag: string | null;
 }
 
 export interface ChartLine {
@@ -69,16 +80,44 @@ export interface ChartLine {
   urgent: boolean;
 }
 
-// 046's written trail on run 1 (05 §3.11): its colonies, where they are, and whether the galaxy year has passed them
-// (then they read as colonies with their age); the grey cross where it was lost.
-export interface Trail046Mark {
+// The last unit's trail on the chart (02 §4; slice 3c, 3c plan §3, risk 10): 046's written one on run 1, the archive's from
+// run 2 (systems/lineage.ts unitTrailOf). One mark per stop, in trail order, then the grey cross where it was lost. A stop
+// the galaxy year has not passed is TAKEN (`HALCYON · TAKEN · UNIT-047 GETS THERE FIRST`; 046's, with no ship, `UNIT-046
+// GETS THERE FIRST`); a passed one is its colony with its age (`RIVERSIDE · 52 YEARS OLD · UNIT-047`), or `NO COLONY`. The
+// drawing offsets every stop's mark along the trail (TAKEN_MARK_OFFSET_PX), so the live node at that world stays readable.
+export type TrailMarkKind = 'taken' | 'colony' | 'no-colony' | 'lost';
+
+export interface TrailMark {
+  slot: number;             // the world (an arm slot is its world); the cross: the world it was lost past
+  x: number;                // LY from SOL (the cross: TrailLost.pastLy along the last leg)
+  y: number;
+  year: number;
+  kind: TrailMarkKind;
+  ship: string | null;      // the trail's ship there (null on 046's written trail, and on the cross)
+  colony: string | null;
+  passed: boolean;          // the galaxy year has passed its year (the cross: always false)
+  label: string;
+}
+
+// The beacon the last unit set on its first ship's world (05 §3.5; the LANDING REPORT says it on ship 1): a ring round that
+// stop's mark, with its words on hover.
+export interface TrailBeacon {
+  slot: number;
+  label: string;            // `BEACON · SET BY UNIT-047 · 1 YEAR AGO`
+}
+
+export interface ChartTrail {
+  unit: number;
+  marks: TrailMark[];
+  beacon: TrailBeacon | null;
+}
+
+// An older unit's colony (02 §4: faint green dots): one per world, the newest named, once the galaxy year has reached it.
+export interface OlderColonyDot {
   slot: number;
   x: number;
   y: number;
-  year: number;
-  colony: string | null;    // null: the grey cross
-  passed: boolean;
-  label: string;
+  label: string;            // `LANTERN · 49 YEARS OLD · UNIT-047` (`+1` when the world has more)
 }
 
 export interface ChartRing {
@@ -96,17 +135,19 @@ export interface ChartModel {
   lines: ChartLine[];
   clouds: NoiseCloud[];
   route: number[];          // the slots visited, in order (the bright trail)
-  trail046: Trail046Mark[];
+  trail: ChartTrail | null; // the last unit's trail (046's on run 1); null when this run has none
+  older: OlderColonyDot[];  // older units' colonies (never the trail's own: those are its marks)
   rings: ChartRing[];
   selected: number | null;
 }
 
 // One row of the SHIP CARD (02 §4: KNOWN PROBLEMS, MEMORY and its fit line, PLANET, LZ, BEAM, DELIVERIES, SHIP n OF YOUR
-// RUN …). 'resident' (slice 5), 'site' (slice 6) and 'history' (3c) are reserved: 3a never makes them. 'deliveries' is
-// 3b's (`Swap ✗ 4 YRS LATE`, `✓ CATCHES UP HERE`; Track UI makes it).
+// RUN …). 'resident' (slice 5) and 'site' (slice 6) are reserved. 'deliveries' is 3b's (`Swap ✗ 4 YRS LATE`, `✓ CATCHES
+// UP HERE`). 3c adds 'history' (`REPORTED HOME` / `2ND RUN ON THE CHART`, from run 2) and 'trail' (the last unit's mark at
+// this ship's world: what the hover says on a desktop, readable on a phone, whose chart has no hover).
 export interface CardRow {
   key: 'problems' | 'resident' | 'memory' | 'fit' | 'planet' | 'site' | 'lzs' | 'nogo' | 'beam' | 'noise' | 'range'
-    | 'noswap' | 'deliveries' | 'threat' | 'norm' | 'only' | 'run' | 'history';
+    | 'noswap' | 'deliveries' | 'threat' | 'norm' | 'only' | 'run' | 'history' | 'trail';
   label: string;
   value: string;
   tone: 'plain' | 'good' | 'warn';
@@ -159,10 +200,12 @@ export interface DeskStep {
   done: boolean;
 }
 
-// The opening beat (02 §4): the ships whose approach passed since the last desk, greying one by one.
+// The opening beat (02 §4): the ships whose approach passed since the last desk, greying one by one; then the last unit's
+// stops the year has passed since then, turning green one by one with a soft rising note (slice 3c).
 export interface DeskOpeningBeat {
   greyed: number[];
   line: string | null;      // `2 SHIPS NOW OUT OF YOUR REACH`
+  greened: number[];        // the trail marks' worlds (TrailMark.slot), earliest first
 }
 
 // The ships the unit can beam to from here, in slot order (the arrows cycle them).
@@ -229,26 +272,85 @@ function worldXY(map: Readonly<RunMapState>, slot: number): { x: number; y: numb
   return { x: world.x, y: world.y };
 }
 
-// 046's written trail (run 1 only; 3c's archive replaces it with the last unit's real one). The grey cross sits a few
-// LY past its world, along the trail's last leg (05: `a grey cross past Calder`).
-export function trail046(map: Readonly<RunMapState>): Trail046Mark[] {
-  if (map.run !== 1) return [];
-  return UNIT_046_TRAIL.map((mark, index): Trail046Mark => {
-    const world = WORLDS[mark.slot]!;
-    let { x, y } = world;
-    if (mark.colony === null) {
-      const prev = WORLDS[UNIT_046_TRAIL[index - 1]?.slot ?? mark.slot]!;
-      const len = Math.hypot(world.x - prev.x, world.y - prev.y) || 1;
-      x += ((world.x - prev.x) / len) * TRAIL_046_CROSS_PAST_LY;
-      y += ((world.y - prev.y) / len) * TRAIL_046_CROSS_PAST_LY;
-    }
-    const passed = map.galaxyYear > mark.year;
+// The last unit's trail as the chart draws it (systems/lineage.ts unitTrailOf: 046's written one on run 1, the archive's
+// from run 2), at the map's galaxy year; null on the classic world and when the run has no trail. A stop is passed once
+// the galaxy year is past its year (so a colony is never `0 YEARS OLD`). The grey cross sits TrailLost.pastLy past the
+// world it was lost at, along the leg that led there (05: `a grey cross past Calder`).
+export function chartTrail(run: Readonly<Pick<GameState['run'], 'lastUnit' | 'map'>>): ChartTrail | null {
+  const map = run.map;
+  const trail = map.world === 'arm' ? unitTrailOf(run) : null;
+  if (trail === null) return null;
+  const unit = unitName(trail.unit);
+  const marks = trail.stops.map((stop): TrailMark => {
+    const world = WORLDS[stop.slot];
+    if (world === undefined) throw new Error(`chartTrail: unit ${trail.unit}'s trail stops at slot ${stop.slot}, which is no world`);
+    const passed = map.galaxyYear > stop.year;
+    const colony = stop.landed > 0 ? stop.colony : null;
+    let kind: TrailMarkKind;
     let label: string;
-    if (mark.colony === null) label = MAP_TEXT.chart.lost046;
-    else if (passed) label = MAP_TEXT.chart.colony(mark.colony, map.galaxyYear - mark.year, 'UNIT-046');
-    else label = MAP_TEXT.chart.trail046;
-    return { slot: mark.slot, x, y, year: mark.year, colony: mark.colony, passed, label };
+    if (!passed) {
+      kind = 'taken';
+      label = stop.shipName === null ? MAP_TEXT.chart.takenNoShip(unit) : MAP_TEXT.chart.taken(stop.shipName, unit);
+    } else if (colony !== null) {
+      kind = 'colony';
+      label = MAP_TEXT.chart.colony(colony, map.galaxyYear - stop.year, unit);
+    } else {
+      kind = 'no-colony';
+      label = MAP_TEXT.chart.noColony(unit);
+    }
+    return { slot: stop.slot, x: world.x, y: world.y, year: stop.year, kind, ship: stop.shipName, colony, passed, label };
   });
+  if (trail.lost !== null) {
+    const lost = trail.lost;
+    const world = WORLDS[lost.slot];
+    if (world === undefined) throw new Error(`chartTrail: unit ${trail.unit} was lost at slot ${lost.slot}, which is no world`);
+    // The leg that led there: from the stop before the world it was lost at (046's last colony; the run's own stop before
+    // its last), or from SOL when the trail has none.
+    const before = [...trail.stops].reverse().find((stop) => stop.slot !== lost.slot);
+    const prev = before === undefined ? { x: 0, y: 0 } : WORLDS[before.slot]!;
+    const len = Math.hypot(world.x - prev.x, world.y - prev.y) || 1;
+    marks.push({
+      slot: lost.slot, x: world.x + ((world.x - prev.x) / len) * lost.pastLy, y: world.y + ((world.y - prev.y) / len) * lost.pastLy,
+      year: lost.year, kind: 'lost', ship: null, colony: null, passed: false, label: MAP_TEXT.chart.lostCross(unit),
+    });
+  }
+  // The beacon on the first ship's world (05 §3.5): the trail's stop there reached orbit.
+  const first = trail.stops.find((stop) => stop.slot === FIRST_SLOT);
+  const beacon = first !== undefined && (first.outcome === 'locked' || first.outcome === 'partial') && first.year <= map.startYear
+    ? { slot: FIRST_SLOT, label: MAP_TEXT.chart.beacon(unit, map.startYear - first.year) }
+    : null;
+  return { unit: trail.unit, marks, beacon };
+}
+
+// 046's written trail's marks on run 1 (the chart's trail before 3c; tests read it): chartTrail on a run with no archive.
+export function trail046(map: Readonly<RunMapState>): TrailMark[] {
+  if (map.run !== 1) return [];
+  return chartTrail({ lastUnit: null, map })?.marks ?? [];
+}
+
+// Older units' colonies (02 §4: faint green dots), never the trail's own (its marks say them): one dot per world, named by
+// its newest colony, once the galaxy year has reached it (systems/lineage.ts olderColonies).
+export function olderColonyDots(map: Readonly<RunMapState>, trail: Readonly<Pick<UnitTrail, 'unit' | 'run'>> | null): OlderColonyDot[] {
+  if (map.world !== 'arm') return [];
+  const older = olderColonies(map).filter((colony) => trail === null || colony.unit !== trail.unit || colony.run !== trail.run);
+  const bySlot = new Map<number, ColonyRecord[]>();
+  for (const colony of older) bySlot.set(colony.slot, [...(bySlot.get(colony.slot) ?? []), colony]);
+  return [...bySlot.entries()].sort((a, b) => a[0] - b[0]).map(([slot, colonies]) => {
+    const newest = [...colonies].sort((a, b) => b.year - a.year || b.run - a.run)[0]!;
+    const world = WORLDS[slot];
+    if (world === undefined) throw new Error(`olderColonyDots: colony ${newest.name} is on slot ${slot}, which is no world`);
+    const label = MAP_TEXT.chart.colony(newest.name, map.galaxyYear - newest.year, unitName(newest.unit));
+    return { slot, x: world.x, y: world.y, label: colonies.length > 1 ? MAP_TEXT.chart.olderMore(label, colonies.length - 1) : label };
+  });
+}
+
+// A ship's history on the chart and its card (02 §4), from run 2: a waiting ship's runs on the chart, a new one's REPORTED
+// HOME (`firstDesk`: the run's first desk only, on the chart; the card always says it). null on run 1 and the classic world.
+function shipHistory(map: Readonly<RunMapState>, slot: number, firstDesk: boolean): string | null {
+  if (map.world !== 'arm' || map.run <= 1) return null;
+  const ship = armShipAt(map, slot);
+  if (ship.runsOnChart > 1) return MAP_TEXT.chart.runOnChart(ship.runsOnChart);
+  return firstDesk && ship.reportedRun === map.run ? MAP_TEXT.chart.reportedHome : null;
 }
 
 // The six key rings (05 §3.2), the next one out from the ship being left labelled.
@@ -263,17 +365,23 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
   const from = currentSlot(state.run);
   const offered = reachableFrom(map, from);
   const only = new Set(onlyFromHere(map, from));
-  const trail = trail046(map);
+  const trail = chartTrail(state.run);
+  const firstDesk = map.route.length === 1;
   const nodes = mapSlots(map).map((slot): ChartNode => {
     const ship = shipSummaryAt(map, slot);
     const { x, y } = worldXY(map, slot);
     const seen = nodeState(state, slot, from, offered);
+    const world = worldSlotOf(map, slot);
+    const taken = trail?.marks.some((mark) => mark.kind === 'taken' && mark.slot === world) === true;
+    const history = shipHistory(map, slot, firstDesk);
     return {
       slot, name: ship.name, world: ship.world, x, y, kind: ship.kind, colonists: ship.colonists,
       tight: ship.memoryClass === 'TIGHT', isFinal: ship.final, state: seen.state,
       label: MAP_TEXT.chart.node(ship.name, ship.colonists), year: ship.approachYear, reason: seen.reason,
       onlyFromHere: only.has(slot),
-      taken046: map.world === 'arm' && trail.some((mark) => mark.colony !== null && mark.slot === worldSlotOf(map, slot) && !mark.passed),
+      taken: taken && trail !== null ? MAP_TEXT.chart.takenNoShip(unitName(trail.unit)) : null,
+      history,
+      tag: history === MAP_TEXT.chart.reportedHome && seen.state !== 'current' ? history : null,
     };
   });
   const lines = offered.map((to): ChartLine => {
@@ -282,7 +390,8 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
   });
   return {
     world: map.world, galaxyYear: map.galaxyYear, current: from, nodes, lines, clouds: map.noise.map((cloud) => ({ ...cloud })),
-    route: map.route.map((stop) => stop.slot), trail046: trail, rings: chartRings(map, from), selected: state.ui.deskSelected,
+    route: map.route.map((stop) => stop.slot), trail, older: olderColonyDots(map, trail === null ? null : unitTrailOf(state.run)),
+    rings: chartRings(map, from), selected: state.ui.deskSelected,
   };
 }
 
@@ -366,6 +475,12 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
 
   const deliveries = deliveriesRow(outlook);
   if (deliveries !== null) row('deliveries', REPO_TEXT.card.deliveriesLabel, deliveries.value, deliveries.tone);
+
+  // Slice 3c (02 §4): its history (from run 2), and the last unit's mark at its world (TAKEN, or its colony with its age).
+  const history = shipHistory(map, slot, true);
+  if (history !== null) row('history', MAP_TEXT.card.historyLabel, history);
+  const mark = chartTrail(state.run)?.marks.find((candidate) => candidate.kind !== 'lost' && candidate.slot === worldSlotOf(map, slot));
+  if (mark !== undefined) row('trail', MAP_TEXT.card.trailLabel, mark.label, mark.kind === 'colony' ? 'good' : 'plain');
 
   if (isReachable || slot === from) {
     const [min, max] = shipsLeft(map, slot);
@@ -472,7 +587,46 @@ export function deskOpeningBeat(state: Readonly<GameState>): DeskOpeningBeat {
     .filter(({ year }) => year > before && year <= map.galaxyYear)
     .sort((a, b) => a.year - b.year || a.slot - b.slot)
     .map(({ slot }) => slot);
-  return { greyed, line: greyed.length > 0 ? MAP_TEXT.desk.greyed(greyed.length) : null };
+  // The last unit's colonies the year passed since the last desk (on the first desk: since the run's start, which the title
+  // already showed): passed now (galaxy year > its year), not at the last desk's year.
+  const since = route.length >= 2 ? before : map.startYear;
+  const greened = (chartTrail(state.run)?.marks ?? [])
+    .filter((mark) => mark.kind === 'colony' && mark.year >= since)
+    .sort((a, b) => a.year - b.year || a.slot - b.slot)
+    .map((mark) => mark.slot);
+  return { greyed, line: greyed.length > 0 ? MAP_TEXT.desk.greyed(greyed.length) : null, greened };
+}
+
+// The opening desk's departures block (02 §4; 3c plan §3 step 4): the ships of the last arm that are no longer this unit's
+// to take, said in the future tense (`PETREL · ANOTHER CORE IS ON ITS WAY`), at most LEAVE_BLOCK_MAX_LINES then `+n MORE`.
+// The ships the last unit flew are its trail's marks, and the first ship's leaving is said nowhere (02 §3.12), so only
+// the ships that moved on are listed. `all` is every line (the block's hover). null past the run's first desk, on run 1
+// and on the classic world.
+export interface DeskDepartures {
+  title: string;
+  lines: string[];
+  more: string | null;
+  all: string[];
+}
+
+export function deskDepartures(state: Readonly<GameState>): DeskDepartures | null {
+  const map = state.run.map;
+  if (map.world !== 'arm' || map.run <= 1 || map.route.length !== 1) return null;
+  return departuresBlock(map.history.departures);
+}
+
+// The block's lines from a list of departures (the desk's from the map's history; the RUN TALLY's from the next arm).
+export function departuresBlock(departures: readonly Departure[]): DeskDepartures | null {
+  const all = departures.flatMap((departure) => {
+    const words = departure.words;
+    return words === 'core-coming' || words === 'own-way' ? [MAP_TEXT.chart.leaveLine(departure.name, MAP_TEXT.chart.leave[words])] : [];
+  });
+  if (all.length === 0) return null;
+  const fits = all.length <= LEAVE_BLOCK_MAX_LINES;
+  const lines = fits ? all : all.slice(0, LEAVE_BLOCK_MAX_LINES - 1);
+  return {
+    title: MAP_TEXT.chart.leaveTitle(all.length), lines, more: fits ? null : MAP_TEXT.chart.leaveMore(all.length - lines.length), all,
+  };
 }
 
 // How a desk opens (the review's m3, m4): the first open of a desk visit (one per ship left: the run and how many ships it
@@ -490,9 +644,16 @@ export function deskOpening(state: Readonly<GameState>, lastVisit: string | null
   return { visit, replay, blackoutSec: replay && state.burn.status === 'abandoned' ? BEAM_OUT_BLACKOUT_SEC : 0 };
 }
 
-// CONTROL's line as the desk opens (02 §2): the first desk of a run only.
+// CONTROL's line as the desk opens (02 §2): the first desk of a run only. From run 2, when the unit ahead has taken a ship
+// on this chart, CONTROL is delighted about that instead (02 §4: `UNIT-047 got here first. :)`).
 export function deskControlLine(state: Readonly<GameState>): string | null {
-  return state.run.map.route.length === 1 ? MAP_TEXT.desk.controlPick(state.run.unitNumber) : null;
+  const map = state.run.map;
+  if (map.route.length !== 1) return null;
+  const trail = map.run > 1 ? chartTrail(state.run) : null;
+  if (trail !== null && trail.marks.some((mark) => mark.kind === 'taken' && mark.ship !== null)) {
+    return MAP_TEXT.chart.controlFirst(unitName(trail.unit));
+  }
+  return MAP_TEXT.desk.controlPick(state.run.unitNumber);
 }
 
 // --- Actions ---------------------------------------------------------------------------------------------------------------

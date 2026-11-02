@@ -590,6 +590,8 @@
       <h1 class="title-name">ARRIVAL PROTOCOL</h1>
       <div class="title-sub">// SOULCACHE</div>
       <div class="title-unit" id="titleUnit"></div>
+      <!-- Slice 3c, run 2+: the launch gap's stamp once the launch line's year has rolled up (+3 YEARS) -->
+      <div class="title-stamp" id="titleStamp" hidden></div>
       <!-- WP8, run 2+: how the last unit ended (last: UNIT-047 · 6,200 landed · overwritten at HALCYON), and
            the endings found so far -->
       <div class="title-lineage" id="titleLineage" hidden></div>
@@ -605,8 +607,23 @@
         </div>
         <div class="title-archive-hints" id="titleArchiveHints" hidden></div>
       </div>
+      <!-- Slice 3c: the run save (02 §3.11). RESUME · UNIT-047 · SHIP 4 · bound for VESPER · 2625 with RESUME ▸ and NEW RUN
+           (an inline confirm first), or RUN SAVE CAN'T RESUME · <reason> with ABANDON RUN only, or RUN SAVE OFFLINE.
+           RECEIVE TRANSMISSION is hidden while a save is there. -->
+      <div class="title-save" id="titleSave" hidden>
+        <div class="title-save-line" id="titleSaveLine"></div>
+        <div class="title-save-ask" id="titleSaveAsk" hidden></div>
+        <div class="title-save-choices">
+          <button class="title-save-btn primary" id="titleResume" tabindex="-1"></button>
+          <button class="title-save-btn" id="titleNewRun" tabindex="-1"></button>
+          <button class="title-save-btn warn" id="titleAbandon" tabindex="-1"></button>
+          <button class="title-save-btn" id="titleKeep" tabindex="-1"></button>
+        </div>
+      </div>
+      <!-- Slice 3c: the archive's one-off notes (an older archive not carried over, the arm redrawn), said once -->
+      <div class="title-notes" id="titleNotes" hidden></div>
       <button class="title-receive" id="titleReceive" tabindex="-1">[ RECEIVE TRANSMISSION ]</button>
-      <div class="title-note">runs are not saved mid-ship</div>
+      <div class="title-note" id="titleNote"></div>
     </div>
   </div>
 

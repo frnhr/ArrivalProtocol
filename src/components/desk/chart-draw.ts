@@ -1,8 +1,9 @@
 // Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
-import type { ChartModel, ChartNode } from '@systems/desk';
+import type { ChartModel, ChartNode, OlderColonyDot } from '@systems/desk';
 import { MAP_TEXT } from '@data/map-text';
 import {
   CHART_NODE_PX, CHART_ARK_PX, CHART_PAD_PX, CHART_LABEL_ROOM_PX, CHART_STARS, CHART_PHONE_PX_PER_LY, CHART_PORTRAIT_DEG, CHART_LANDSCAPE_DEG,
+  TAKEN_MARK_OFFSET_PX,
 } from '@data/tuning';
 
 // The STAR CHART's drawing (02-map §4; slice-3a-plan §5.2), one SVG shared by the DESK, the title card's faint chart and
@@ -11,9 +12,13 @@ import {
 // `rotateDeg` (the phone turns the arm to run from SOL at the bottom to the final ship at the top) and fitted with a
 // margin, or (`pxPerLy`) drawn at a fixed scale for a scrolling phone chart. Uplink's vocabulary: square nodes (arks
 // bigger, a TIGHT ship's corner notched), the final ship a pulsing beacon, beams solid when CLEAN and more broken with
-// noise, noise clouds as hatched static, the route a bright trail, 046's written trail faint and dashed, the six key
-// rings round SOL with the next one labelled. States are classes (styles/desk.css colours them); a node carries
-// data-slot for the views' clicks and hovers. Pure DOM building: no store, no listeners.
+// noise, noise clouds as hatched static, the route a bright trail, the last unit's trail faint and dashed (046's written
+// one on run 1), the six key rings round SOL with the next one labelled. States are classes (styles/desk.css colours
+// them); a node carries data-slot for the views' clicks and hovers, a trail mark or an older colony data-tip (its words).
+// Slice 3c (3c plan risk 10): each of the trail's stops is a small mark offset along the trail toward the stop before it
+// (TAKEN_MARK_OFFSET_PX), so a live ship at the same world keeps its node: a hollow square while TAKEN, a green dot once
+// it is a colony, a grey ring for NO COLONY; the grey cross where it was lost; a ring round the first stop for its beacon;
+// older units' colonies as faint green dots on the other side of the world. Pure DOM building: no store, no listeners.
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -26,7 +31,7 @@ export interface ChartDrawOpts {
   beams: boolean;              // the beams from the current ship (the desk)
   clouds: boolean;
   rings: boolean;
-  trail046: boolean;
+  trail: boolean;              // the last unit's trail (its marks, the grey cross, the beacon) and older units' colonies
   route: boolean;
   stars: boolean;
   beamFromSol?: boolean;       // the title's RECEIVE beam, SOL → the first ship
@@ -120,8 +125,39 @@ interface LabelSpot { x: number; y: number; anchor: 'start' | 'middle' | 'end' }
 interface Box { x0: number; y0: number; x1: number; y1: number }
 
 function yearLine(node: Readonly<ChartNode>): string {
-  return node.isFinal ? `${MAP_TEXT.chart.finalTag} · ${node.year}` : String(node.year);
+  const year = node.isFinal ? `${MAP_TEXT.chart.finalTag} · ${node.year}` : String(node.year);
+  return node.tag === null ? year : `${year} · ${node.tag}`;
 }
+
+// --- The last unit's trail (slice 3c) --------------------------------------------------------------------------------------
+
+// Where each trail mark is drawn, in px: a stop's mark sits TAKEN_MARK_OFFSET_PX back along the leg that reached it (from
+// the stop before, or from SOL for the first), so it lies on the dashed trail and off the live node at that world (3c plan
+// risk 10); the grey cross sits where the model put it. Older colonies' dots go the same distance the other way, below.
+export interface TrailPoint { px: number; py: number; ox: number; oy: number }
+
+function trailPoints(model: Readonly<ChartModel>, at: ChartGeometry['at']): TrailPoint[] {
+  const marks = model.trail?.marks ?? [];
+  let prev = at(0, 0);
+  return marks.map((mark) => {
+    const p = at(mark.x, mark.y);
+    if (mark.kind === 'lost') return { px: p.px, py: p.py, ox: p.px, oy: p.py };
+    const dx = prev.px - p.px;
+    const dy = prev.py - p.py;
+    const len = Math.hypot(dx, dy) || 1;
+    const step = Math.min(TAKEN_MARK_OFFSET_PX, len / 2);
+    prev = p;
+    return { px: p.px, py: p.py, ox: p.px + (dx / len) * step, oy: p.py + (dy / len) * step };
+  });
+}
+
+function olderPoint(dot: Readonly<OlderColonyDot>, at: ChartGeometry['at']): { px: number; py: number } {
+  const p = at(dot.x, dot.y);
+  const d = TAKEN_MARK_OFFSET_PX * Math.SQRT1_2;
+  return { px: p.px + d, py: p.py + d };
+}
+
+const MARK_HALF_PX = 3;
 
 const LABEL_ORDER: Readonly<Record<ChartNode['state'], number>> = {
   current: 0, urgent: 1, reachable: 1, visited: 2, 'too-late': 3, 'out-of-range': 4, past: 5,
@@ -151,6 +187,13 @@ function placeLabels(
     const { px, py } = at(node.x, node.y);
     const h = (node.kind === 'ark' || node.isFinal ? CHART_ARK_PX : CHART_NODE_PX) / 2 + 2;
     taken.push({ x0: px - h, y0: py - h, x1: px + h, y1: py + h });
+  }
+  // The trail's marks and the older colonies' dots are small, but a label over them hides them (3c plan risk 10).
+  const h = MARK_HALF_PX + 2;
+  for (const p of trailPoints(model, at)) taken.push({ x0: p.ox - h, y0: p.oy - h, x1: p.ox + h, y1: p.oy + h });
+  for (const dot of model.older) {
+    const p = olderPoint(dot, at);
+    taken.push({ x0: p.px - h, y0: p.py - h, x1: p.px + h, y1: p.py + h });
   }
   const out = new Map<number, LabelSpot>();
   const order = [...model.nodes].sort((a, b) => (a.isFinal ? -1 : LABEL_ORDER[a.state]) - (b.isFinal ? -1 : LABEL_ORDER[b.state]));
@@ -255,20 +298,11 @@ export function drawChart(svg: SVGSVGElement, model: Readonly<ChartModel>, opts:
     return at(node.x, node.y);
   };
 
-  if (opts.trail046 && model.trail046.length > 0) {
-    const trail = el('g', {}, 'chart-046');
-    const pts = model.trail046.map((mark) => at(mark.x, mark.y));
-    trail.append(el('polyline', { points: pts.map((p) => `${p.px.toFixed(1)},${p.py.toFixed(1)}`).join(' ') }, 'trail-046'));
-    model.trail046.forEach((mark, i) => {
-      const p = pts[i]!;
-      if (mark.colony === null) {
-        const s = 4;
-        trail.append(el('path', { d: `M${p.px - s},${p.py - s} L${p.px + s},${p.py + s} M${p.px + s},${p.py - s} L${p.px - s},${p.py + s}` }, 'cross-046'));
-      } else if (mark.passed) {
-        trail.append(el('circle', { cx: p.px.toFixed(1), cy: p.py.toFixed(1), r: 2.5 }, 'colony-046'));
-      }
-    });
-    parts.push(trail);
+  // The last unit's dashed trail under everything else of the arm (its marks go on top of the nodes, below).
+  const trailPts = opts.trail ? trailPoints(model, at) : [];
+  if (opts.trail && model.trail !== null && model.trail.marks.length > 0) {
+    const pts = trailPts.map((p) => `${p.px.toFixed(1)},${p.py.toFixed(1)}`).join(' ');
+    parts.push(el('polyline', { points: pts }, 'trail-last'));
   }
 
   if (opts.beamFromSol) {
@@ -313,7 +347,7 @@ export function drawChart(svg: SVGSVGElement, model: Readonly<ChartModel>, opts:
     const { px, py } = at(node.x, node.y);
     const g = el('g', { 'data-slot': node.slot },
       `cn state-${node.state} kind-${node.kind}${node.tight ? ' tight' : ''}${node.isFinal ? ' final' : ''}${node.onlyFromHere ? ' only' : ''}`
-      + `${model.selected === node.slot ? ' selected' : ''}${node.taken046 ? ' taken' : ''}`);
+      + `${model.selected === node.slot ? ' selected' : ''}${node.taken !== null ? ' taken' : ''}${node.tag !== null ? ' tagged' : ''}`);
     // A generous hit area: the squares are small, a kid's click is not.
     g.append(el('circle', { cx: px.toFixed(1), cy: py.toFixed(1), r: 13 }, 'cn-hit'));
     if (node.isFinal) {
@@ -360,8 +394,53 @@ export function drawChart(svg: SVGSVGElement, model: Readonly<ChartModel>, opts:
     nodes.append(g);
   }
   parts.push(nodes);
+  if (opts.trail) parts.push(trailMarks(model, trailPts, at));
   svg.replaceChildren(...parts);
   return geo;
+}
+
+// The trail's marks, the beacon and the older colonies (slice 3c), each in a group carrying its words (data-tip; the
+// beacon's as data-tip2 on its stop) and data-trail-slot, so the desk's opening beat can turn a TAKEN mark green.
+function trailMarks(model: Readonly<ChartModel>, pts: readonly TrailPoint[], at: ChartGeometry['at']): SVGGElement {
+  const group = el('g', {}, 'chart-trail');
+  const s = MARK_HALF_PX;
+  for (const dot of model.older) {
+    const p = olderPoint(dot, at);
+    const g = el('g', { 'data-tip': dot.label }, 'tm older');
+    g.append(el('circle', { cx: p.px.toFixed(1), cy: p.py.toFixed(1), r: 6 }, 'tm-hit'));
+    g.append(el('circle', { cx: p.px.toFixed(1), cy: p.py.toFixed(1), r: 2 }, 'colony-old'));
+    group.append(g);
+  }
+  const trail = model.trail;
+  if (trail === null) return group;
+  trail.marks.forEach((mark, i) => {
+    const p = pts[i]!;
+    const x = p.ox;
+    const y = p.oy;
+    const beacon = trail.beacon !== null && mark.kind !== 'lost' && mark.slot === trail.beacon.slot ? trail.beacon : null;
+    const attrs: Record<string, string | number> = { 'data-tip': mark.label, 'data-trail-slot': mark.slot };
+    if (beacon !== null) attrs['data-tip2'] = beacon.label;
+    // A stop the year passed with a colony keeps its TAKEN square underneath (styled away), so the opening beat can show
+    // the square first and turn it green on its note (StarChart.green).
+    const g = el('g', attrs, `tm kind-${mark.kind}`);
+    g.append(el('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: 7 }, 'tm-hit'));
+    if (beacon !== null) {
+      g.append(el('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: 6.5 }, 'tm-beacon'));
+      g.append(el('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: 6.5 }, 'tm-beacon late'));
+    }
+    if (mark.kind === 'lost') {
+      const c = s + 1;
+      g.append(el('path', { d: `M${x - c},${y - c} L${x + c},${y + c} M${x + c},${y - c} L${x - c},${y + c}` }, 'tm-cross'));
+    } else {
+      if (mark.kind === 'taken' || mark.kind === 'colony') {
+        g.append(el('rect', { x: (x - s).toFixed(1), y: (y - s).toFixed(1), width: s * 2, height: s * 2 }, 'tm-taken'));
+      }
+      if (mark.kind === 'colony') g.append(el('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: s }, 'tm-colony'));
+      if (mark.kind === 'no-colony') g.append(el('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: s - 0.5 }, 'tm-none'));
+    }
+    group.append(g);
+  });
+  return group;
 }
 
 // The phone turns the arm so it runs from SOL at the bottom to the final ship at the top (02 §4).

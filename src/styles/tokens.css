@@ -194,6 +194,9 @@
   --desk-past-text: #5d574c;
   --desk-trail-046: rgba(141, 255, 196, 0.32);
   --desk-colony: #8dffc4;
+  /* Slice 3c: the last unit's TAKEN marks (brighter than its dashed trail) and its grey cross. */
+  --desk-trail-mark: rgba(141, 255, 196, 0.85);
+  --desk-cross: #a39b8c;
   --desk-sheet-shadow: rgba(0, 0, 0, 0.7);
 
   /* ── live state knob (set by systems/glitch.ts) ── */

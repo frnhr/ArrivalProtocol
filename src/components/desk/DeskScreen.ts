@@ -5,7 +5,7 @@ import type { ChartNode } from '@systems/desk';
 import { pushModal, registerKeys } from '@systems/input';
 import {
   deskCandidates, selectShip, cycleShip, cardModel, chartModel, deskSteps, deskOpeningBeat, deskControlLine, deskOpening,
-  openDeskWindow, toggleRequest, deskTabBadges,
+  openDeskWindow, toggleRequest, deskTabBadges, deskDepartures,
 } from '@systems/desk';
 import { repoModel } from '@systems/repository';
 import type { RepoFileId } from '@/types/repo';
@@ -80,7 +80,10 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   const chartTitle = make('div', 'desk-win-title');
   chartTitle.append(make('span', 'desk-win-grip'), make('span', 'desk-win-name', MAP_TEXT.desk.title));
   const chartHost = make('div', 'desk-chart');
-  chartWin.append(chartTitle, chartHost);
+  // Slice 3c: the opening desk's departures block (`PETREL · ANOTHER CORE IS ON ITS WAY`), over the chart's empty sky.
+  const leaveBox = make('div', 'desk-leave');
+  leaveBox.hidden = true;
+  chartWin.append(chartTitle, chartHost, leaveBox);
   const cardWin = make('aside', 'desk-win desk-card-win');
   const cardTitle = make('div', 'desk-win-title desk-sheet-handle');
   const cardClose = make('button', 'desk-sheet-close', MAP_TEXT.desk.closeSheet);
@@ -111,6 +114,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   let inspected: number | null = null;
   let sheetOpen = false;
   let beatPending: number[] = [];
+  let greenPending: number[] = [];
   // The desk visit whose opening (the greying chimes, CONTROL's typed line, BEAM OUT's blackout) has played: one per ship
   // left, keyed by the run and run.ships.length (the review's m3: every ◀ CHART return replayed it).
   let openedVisit: string | null = null;
@@ -156,7 +160,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     const course = steps.find((step) => step.id === 'set-course')!;
     renderKeyCaps(goBtn, course.text);
     goBtn.classList.toggle('waiting', selected === null);
-    chart.paint(chartModel(state), beatPending);
+    chart.paint(chartModel(state), beatPending, greenPending);
     const showing = inspected ?? selected;
     const tab = state.ui.deskWindow;
     tabs.paint(tab, deskTabBadges(state), state.run.map.world === 'arm');
@@ -259,17 +263,19 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
 
   // The opening beat: the ships whose approach passed since the last desk turn grey one by one. `replay` false (back from
   // the PACKET): they are grey already and the line is up, in silence.
+  // Slice 3c: then the last unit's colonies the year has passed turn green one by one, each with a soft rising note.
   function openingBeat(replay: boolean, delayMs: number): void {
     const beat = deskOpeningBeat(store.getState());
     beatLine.textContent = beat.line ?? '';
     if (!replay) {
       beatPending = [];
+      greenPending = [];
       beatLine.hidden = beat.line === null;
       return;
     }
     beatPending = [...beat.greyed];
+    greenPending = [...beat.greened];
     beatLine.hidden = true;
-    if (beat.greyed.length === 0) return;
     beat.greyed.forEach((slot, i) => {
       timers.push(setTimeout(() => {
         beatPending = beatPending.filter((s) => s !== slot);
@@ -278,6 +284,27 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
         if (i === beat.greyed.length - 1) beatLine.hidden = false;
       }, delayMs + (i + 1) * DESK_GREY_STEP_MS));
     });
+    const greenFrom = delayMs + (beat.greyed.length + 1) * DESK_GREY_STEP_MS;
+    beat.greened.forEach((slot, i) => {
+      timers.push(setTimeout(() => {
+        greenPending = greenPending.filter((s) => s !== slot);
+        chart.green(slot);
+        play('chime', { falling: false });
+      }, greenFrom + i * DESK_GREY_STEP_MS));
+    });
+  }
+
+  // The opening desk's departures block (systems/desk.ts deskDepartures): the ships that moved on since the last run.
+  function paintDepartures(): void {
+    const block = deskDepartures(store.getState());
+    leaveBox.hidden = block === null;
+    if (block === null) { leaveBox.replaceChildren(); return; }
+    leaveBox.title = block.all.join('\n');
+    leaveBox.replaceChildren(
+      make('div', 'desk-leave-title', block.title),
+      ...block.lines.map((line) => make('div', 'desk-leave-line', line)),
+      ...(block.more === null ? [] : [make('div', 'desk-leave-more', block.more)]),
+    );
   }
 
   function open(): void {
@@ -299,6 +326,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     root.hidden = blackoutMs > 0;
     if (blackoutMs > 0) timers.push(setTimeout(() => { root.hidden = false; }, blackoutMs));
     openingBeat(first, blackoutMs);
+    paintDepartures();
     if (first && blackoutMs > 0) {
       control.hidden = true;
       timers.push(setTimeout(() => typeControl(deskControlLine(store.getState()), true), blackoutMs));
@@ -312,6 +340,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     shown = false;
     stopTimers();
     beatPending = [];
+    greenPending = [];
     root.hidden = true;
     closeModal?.();
     closeModal = null;

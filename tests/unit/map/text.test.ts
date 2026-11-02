@@ -215,6 +215,16 @@ lines.push(
   ['save.offline', MAP_TEXT.save.offline],
   ['save.olderArchive', MAP_TEXT.save.olderArchive],
   ['save.armReset', MAP_TEXT.save.armReset],
+  // Track UI's 3c lines.
+  ['chart.leaveTitle', MAP_TEXT.chart.leaveTitle(18)],
+  ['chart.beacon', MAP_TEXT.chart.beacon(UNIT, 46)],
+  ['chart.olderMore', MAP_TEXT.chart.olderMore(MAP_TEXT.chart.colony(COLONY, 999, UNIT), 9)],
+  ['card.trailLabel + taken', `${MAP_TEXT.card.trailLabel} ${MAP_TEXT.chart.taken(SHIP, UNIT)}`],
+  ['title.stamp', MAP_TEXT.title.stamp(46)],
+  ['title.stampValve', MAP_TEXT.title.stampValve(46)],
+  ['save.resumeKey', MAP_TEXT.save.resumeKey],
+  ['save.abandonKey', MAP_TEXT.save.abandonKey],
+  ['save.keepKey', MAP_TEXT.save.keepKey],
 );
 check('3c\'s sample lines: the launch line, the beacon, the bridge, the history row, the RESUME line',
   MAP_TEXT.title.launched('UNIT-048', 2303, 3, 'UNIT-047') === 'UNIT-048 · YEAR 2303 · LAUNCHED 3 YEARS AFTER UNIT-047'

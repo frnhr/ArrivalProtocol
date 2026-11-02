@@ -1,13 +1,18 @@
 // Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
 import type { Store } from '@state/store';
 import type { GameState, RunPhase, ArchiveStatus } from '@state/schema';
-import { getPrediction } from '@systems/predict';
 import { receiveTransmission, skipBoot } from '@systems/boot';
-import { archiveMeta, wipeArchive, playWithoutArchive, isFirstRun, ENDINGS } from '@systems/meta';
+import { archiveMeta, wipeArchive, playWithoutArchive, isFirstRun, archiveNotesSaid, ENDINGS } from '@systems/meta';
+import { resumeRun, abandonRun } from '@systems/run-save';
+import { registerKeys } from '@systems/input';
+import { titleModel, type TitleModel, type TitleNotes } from '@systems/title';
 import { play, unlockAudio } from '@systems/audio';
-import { requireById, make } from '@components/dom';
-import { LINES, ARCHIVE_TEXT, lineVars, lineageLine } from '@data/script';
-import { BOOT_ASSEMBLE_SEC, BOOT_ASSEMBLE_SETTLE_SEC } from '@data/tuning';
+import { requireById, make, replayAnimation } from '@components/dom';
+import { renderKeyCaps } from '@components/hud/keycaps';
+import { ARCHIVE_TEXT, lineageLine } from '@data/script';
+import {
+  BOOT_ASSEMBLE_SEC, BOOT_ASSEMBLE_SETTLE_SEC, TITLE_LAUNCH_ROLL_DELAY_SEC, TITLE_LAUNCH_ROLL_SEC, TITLE_LAUNCH_STAMP_AFTER_SEC,
+} from '@data/tuning';
 import { chartModel } from '@systems/desk';
 import { drawChart, LANDSCAPE_ROTATE_DEG, PORTRAIT_ROTATE_DEG } from '@components/desk/chart-draw';
 import { MAP_TEXT } from '@data/map-text';
@@ -27,6 +32,12 @@ import { MAP_TEXT } from '@data/map-text';
 // of stars, the final ship's amber beacon `FINAL SHIP · LAST LIGHT · 3020`) under `ARRIVAL PROTOCOL // OUTWARD BOUND`
 // and `UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT`; RECEIVE TRANSMISSION draws the beam from SOL to the first ship as
 // the card clears (reduced motion: no draw, the chart just fades).
+// Slice 3c (02 §3.11, §4; 05 §3.12; systems/title.ts titleModel): from run 2 the line says when this unit launched after the
+// last (`UNIT-048 · YEAR 2303 · LAUNCHED 3 YEARS AFTER UNIT-047`), its year and gap rolling up from the last unit's start
+// before the gap's stamp lands, and the faint chart carries the last unit's trail. The run save's block: RESUME ▸ [ENTER]
+// and NEW RUN (which asks first: ABANDON RUN [ENTER] / KEEP IT [ESC]), or CAN'T RESUME with ABANDON RUN only, or RUN SAVE
+// OFFLINE; RECEIVE TRANSMISSION is hidden while a save is there. `runs save between ships` under it, and the archive's
+// one-off notes, cleared (archiveNotesSaid) once the kid leaves the title.
 export function mountTitleCard(store: Store<GameState>): () => void {
   const root = requireById('titleCard');
   const receiveBtn = requireById<HTMLButtonElement>('titleReceive');
@@ -40,6 +51,16 @@ export function mountTitleCard(store: Store<GameState>): () => void {
   const withoutBtn = requireById<HTMLButtonElement>('titlePlayWithout');
   const lineageEl = requireById('titleLineage');
   const endingsEl = requireById('titleEndings');
+  const stampEl = requireById('titleStamp');
+  const saveEl = requireById('titleSave');
+  const saveLine = requireById('titleSaveLine');
+  const saveAsk = requireById('titleSaveAsk');
+  const resumeBtn = requireById<HTMLButtonElement>('titleResume');
+  const newRunBtn = requireById<HTMLButtonElement>('titleNewRun');
+  const abandonBtn = requireById<HTMLButtonElement>('titleAbandon');
+  const keepBtn = requireById<HTMLButtonElement>('titleKeep');
+  const notesEl = requireById('titleNotes');
+  const noteEl = requireById('titleNote');
   const memWrap = requireById('memWrap');
   const subEl = root.querySelector<HTMLElement>('.title-sub');
   if (!subEl) throw new Error('TitleCard: index.html lost .title-sub');
@@ -61,7 +82,7 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     const portrait = width < height;
     drawChart(chartSvg, chartModel(state), {
       width, height, rotateDeg: portrait ? PORTRAIT_ROTATE_DEG : LANDSCAPE_ROTATE_DEG, labels: 'beacon', beams: false, clouds: true,
-      rings: true, trail046: false, route: false, stars: true, beamFromSol: true, idPrefix: 'title',
+      rings: true, trail: state.run.map.run > 1, route: false, stars: true, beamFromSol: true, idPrefix: 'title',
     });
   };
   const chartResize = new ResizeObserver(paintChart);
@@ -71,11 +92,95 @@ export function mountTitleCard(store: Store<GameState>): () => void {
   withoutBtn.textContent = ARCHIVE_TEXT.playWithout;
   archiveHints.replaceChildren(make('div', 'title-archive-hint', ARCHIVE_TEXT.wipeHint), make('div', 'title-archive-hint', ARCHIVE_TEXT.withoutHint));
 
+  // The archive's one-off notes, while an archive is behind the page (a headless world has none).
+  const notesNow = (): TitleNotes | null => (store.getState().archive.status === 'none' ? null : archiveMeta().notes);
+  let model: TitleModel = titleModel(store.getState(), notesNow());
+  // The launch line's roll (run 2+): once per run's title (its seed and unit), then the line stays settled.
+  let rolledFor = '';
+  let rollTimers: ReturnType<typeof setTimeout>[] = [];
+  let rollFrame: number | null = null;
+  let rolling = false;
+  const stopRoll = (): void => {
+    rollTimers.forEach(clearTimeout);
+    rollTimers = [];
+    if (rollFrame !== null) cancelAnimationFrame(rollFrame);
+    rollFrame = null;
+    rolling = false;
+  };
+  const settleLaunch = (): void => {
+    rolling = false;
+    unitEl.textContent = model.unitLine;
+    stampEl.hidden = model.launch === null;
+    stampEl.textContent = model.launch?.stamp ?? '';
+  };
+  function rollLaunch(): void {
+    const launch = model.launch;
+    const state = store.getState();
+    const key = `${state.run.seed}|${state.run.unitNumber}`;
+    if (launch === null || key === rolledFor) { if (!rolling) settleLaunch(); return; }
+    rolledFor = key;
+    stopRoll();
+    if (state.ui.reducedMotion || launch.years === 0) { settleLaunch(); return; }
+    rolling = true;
+    stampEl.hidden = true;
+    const lineAt = (fraction: number): string => {
+      const gap = Math.round(launch.years * fraction);
+      return MAP_TEXT.title.launched(model.unit, launch.fromYear + gap, gap, launch.last);
+    };
+    unitEl.textContent = lineAt(0);
+    rollTimers.push(setTimeout(() => {
+      const startMs = performance.now();
+      let shown = 0;
+      const tick = (now: number): void => {
+        const fraction = Math.min(1, (now - startMs) / 1000 / TITLE_LAUNCH_ROLL_SEC);
+        const gap = Math.round(launch.years * fraction);
+        unitEl.textContent = lineAt(fraction);
+        if (gap !== shown) { shown = gap; play('typeTick', { voice: 'sys' }); }
+        if (fraction < 1) { rollFrame = requestAnimationFrame(tick); return; }
+        rollFrame = null;
+        rollTimers.push(setTimeout(() => {
+          settleLaunch();
+          replayAnimation(stampEl, 'land');
+          play('stampHit', { heavy: false });
+        }, TITLE_LAUNCH_STAMP_AFTER_SEC * 1000));
+      };
+      rollFrame = requestAnimationFrame(tick);
+    }, TITLE_LAUNCH_ROLL_DELAY_SEC * 1000));
+  }
+
+  // The run save's block (systems/title.ts): `asking` while NEW RUN's inline confirm is up.
+  let asking = false;
+  renderKeyCaps(resumeBtn, MAP_TEXT.save.resumeKey);
+  newRunBtn.textContent = MAP_TEXT.save.newRun;
+  renderKeyCaps(keepBtn, MAP_TEXT.save.keepKey);
+  const paintSave = (): void => {
+    const block = model.save;
+    saveEl.hidden = block === null;
+    saveEl.dataset.kind = block?.kind ?? '';
+    saveLine.textContent = block?.line ?? '';
+    if (block?.kind !== 'resume') asking = false;
+    saveAsk.hidden = !asking;
+    saveAsk.textContent = block?.kind === 'resume' ? block.confirm : '';
+    resumeBtn.hidden = block?.kind !== 'resume' || asking;
+    newRunBtn.hidden = block?.kind !== 'resume' || asking;
+    abandonBtn.hidden = !(block?.kind === 'cant-resume' || asking);
+    keepBtn.hidden = !asking;
+    renderKeyCaps(abandonBtn, MAP_TEXT.save.abandonKey);
+    receiveBtn.hidden = !model.receive;
+    noteEl.hidden = model.saveNote === null;
+    noteEl.textContent = model.saveNote ?? '';
+    notesEl.hidden = model.notes.length === 0;
+    notesEl.replaceChildren(...model.notes.map((note) => make('div', 'title-notes-line', note)));
+  };
+
   // The unit and wave of the run (a NEW RUN starts over with its own), and for a returning unit the one
   // before it and the endings found.
   const paintUnit = (): void => {
     const state = store.getState();
-    unitEl.textContent = LINES.titleUnit(lineVars(state, getPrediction()));
+    model = titleModel(state, notesNow());
+    if (state.run.phase === 'title') rollLaunch();
+    else settleLaunch();
+    paintSave();
     const lineage = lineageLine(state.run.lastUnit);
     lineageEl.hidden = lineage === null;
     lineageEl.textContent = lineage ?? '';
@@ -154,6 +259,55 @@ export function mountTitleCard(store: Store<GameState>): () => void {
   receiveBtn.addEventListener('click', onReceive);
   root.addEventListener('click', onCardClick);
 
+  // The run save's answers (systems/run-save.ts): each a click or a key, the gesture that lets the page make sound.
+  const onTitle = (): boolean => store.getState().run.phase === 'title';
+  const resume = (): void => {
+    if (!onTitle() || model.save?.kind !== 'resume' || asking) return;
+    unlockAudio();
+    resumeRun(store);
+  };
+  const ask = (): void => {
+    if (!onTitle() || model.save?.kind !== 'resume') return;
+    unlockAudio();
+    asking = true;
+    paintSave();
+    play('buzz');
+  };
+  const keep = (): void => {
+    if (!asking) return;
+    asking = false;
+    paintSave();
+    play('chime', { falling: false });
+  };
+  const abandon = (): void => {
+    if (!onTitle() || !(asking || model.save?.kind === 'cant-resume')) return;
+    unlockAudio();
+    asking = false;
+    abandonRun(store);
+  };
+  const clicked = (action: () => void) => (event: MouseEvent): void => { event.stopPropagation(); action(); };
+  const onResume = clicked(resume);
+  const onNewRun = clicked(ask);
+  const onKeep = clicked(keep);
+  const onAbandon = clicked(abandon);
+  resumeBtn.addEventListener('click', onResume);
+  newRunBtn.addEventListener('click', onNewRun);
+  keepBtn.addEventListener('click', onKeep);
+  abandonBtn.addEventListener('click', onAbandon);
+  // ENTER: RESUME, or ABANDON RUN where that is the way on (CAN'T RESUME, or NEW RUN's confirm); ESC takes the confirm back.
+  // RECEIVE TRANSMISSION's own ENTER (systems/boot.ts) stands down while a save is there (Track SAVE's guard).
+  const offKeys = [
+    registerKeys({
+      layer: 'title', codes: ['Enter', 'NumpadEnter'],
+      onDown: () => {
+        if (!onTitle() || model.save === null || model.save.kind === 'offline') return;
+        if (asking || model.save.kind === 'cant-resume') abandon();
+        else resume();
+      },
+    }),
+    registerKeys({ layer: 'title', codes: ['Escape'], onDown: keep }),
+  ];
+
   // The strip's rows slide in one after another over BOOT_ASSEMBLE_SEC.
   let assembleTimer: ReturnType<typeof setTimeout> | null = null;
   function assembleStrip(): void {
@@ -182,10 +336,17 @@ export function mountTitleCard(store: Store<GameState>): () => void {
       wiped = false;
       paintArchive();
     }
+    // The one-off notes were said: the kid has left the title (RECEIVE, RESUME, NEW RUN), so they are cleared for good.
+    if (prev === 'title' && phase !== 'title' && model.notes.length > 0) {
+      archiveNotesSaid(store);
+      model = { ...model, notes: [] };
+      notesEl.hidden = true;
+    }
+    if (phase !== 'title') { asking = false; stopRoll(); settleLaunch(); }
     root.classList.toggle('booting', phase === 'boot');
     // RECEIVE TRANSMISSION (the run's first boot, from the title): the beam draws from SOL to the first ship.
     root.classList.toggle('receiving', phase === 'boot' && prev === 'title');
-    if (phase === 'title') paintChart();
+    if (phase === 'title') { paintUnit(); paintChart(); }
     if (phase === 'boot' && prev !== null && prev !== 'boot') assembleStrip();
   }
 
@@ -193,8 +354,16 @@ export function mountTitleCard(store: Store<GameState>): () => void {
   const unsub = store.subscribe((s) => s.run.phase, (phase, prev) => paint(phase, prev));
   const unsubRun = store.subscribe((s) => s.run.rev, () => { paintUnit(); paintChart(); });
   const unsubMap = store.subscribe((s) => s.run.map, paintChart);
+  const unsubSave = store.subscribe((s) => s.save, paintUnit);
 
   return () => {
+    resumeBtn.removeEventListener('click', onResume);
+    newRunBtn.removeEventListener('click', onNewRun);
+    keepBtn.removeEventListener('click', onKeep);
+    abandonBtn.removeEventListener('click', onAbandon);
+    offKeys.forEach((off) => off());
+    stopRoll();
+    unsubSave();
     receiveBtn.removeEventListener('click', onReceive);
     wipeBtn.removeEventListener('click', onWipe);
     withoutBtn.removeEventListener('click', onWithout);

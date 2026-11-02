@@ -2003,8 +2003,15 @@ export const SAVE_SIZE_INFO_BYTES = 400_000;
 // --- 3c UI (owned by Track UI): the chart's trail markers and the departures block ---------------------------------------
 
 // A trail marker at a world that also holds a REPORTED HOME ship is drawn this far along the trail from the node (3c plan
-// risk 10), so the marker and the live node never sit on each other.
-export const TAKEN_MARK_OFFSET_PX = 10;
+// risk 10), so the marker and the live node never sit on each other. Track UI: 13, so the 6 px mark clears an ark's or the
+// final ship's 14 px square (half 7 + half 3) with a 3 px gap; the old 10 put the mark on an ark's edge.
+export const TAKEN_MARK_OFFSET_PX = 13;
 // The opening desk's departures block lists at most this many ships (the rest fold into `+n MORE`): it must not push the
 // chart off a 1280 × 720 screen.
 export const LEAVE_BLOCK_MAX_LINES = 6;
+// The title's launch line from run 2 rolls its year (and the gap) up from the last unit's start, then lands its stamp: it
+// waits this long after the title shows (the chart fading in first), and rolls over this long (a 35-year gap still reads as
+// years ticking, not a blur), then the stamp lands this long after the last year.
+export const TITLE_LAUNCH_ROLL_DELAY_SEC = 0.7;
+export const TITLE_LAUNCH_ROLL_SEC = 1.4;
+export const TITLE_LAUNCH_STAMP_AFTER_SEC = 0.25;

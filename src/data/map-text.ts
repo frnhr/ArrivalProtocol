@@ -46,6 +46,10 @@ export const MAP_TEXT = {
     launched: (unit: string, year: number, gap: number, last: string): string =>
       (gap === 0 ? `${unit} · YEAR ${year} · LAUNCHED IN THE SAME YEAR AS ${last}` : `${unit} · YEAR ${year} · LAUNCHED ${years(gap)} AFTER ${last}`),
     savesBetweenShips: 'runs save between ships',
+    // Track UI: the stamp the launch line lands with once its year has rolled up (02 §3.12 step 6: the valve says so).
+    stamp: (gap: number): string => `+${years(gap)}`,
+    stampSameYear: 'SAME YEAR',
+    stampValve: (gap: number): string => `+${years(gap)} · THE ARM MOVED ON`,
   },
   // The header crumb gains the year (02 §4): `UNIT-047 / KESTREL · 2467 / FLYBY`.
   crumb: (unit: string, ship: string, year: number, state: string): string => `${unit} / ${ship} · ${year} / ${state}`,
@@ -111,6 +115,13 @@ export const MAP_TEXT = {
     } satisfies Readonly<Record<Exclude<LeaveWords, 'colony' | null>, string>>,
     leaveLine: (ship: string, words: string): string => `${ship} · ${words}`,
     leaveMore: (count: number): string => `+${count} MORE`,
+    // Track UI: the departures block's head (the opening desk; the RUN TALLY's update summary uses it too).
+    leaveTitle: (count: number): string => `${count} ${count === 1 ? 'SHIP' : 'SHIPS'} MOVED ON`,
+    // Track UI: the last unit's beacon on its first ship's world (05 §3.5), the hover's words on the chart.
+    beacon: (unit: string, yearsAgo: number): string =>
+      `BEACON · SET BY ${unit} · ${yearsAgo === 0 ? 'THIS YEAR' : `${years(yearsAgo)} AGO`}`,
+    // Track UI: an older colony's dot when its world holds more than one (`LANTERN · 49 YEARS OLD · UNIT-047 · +1`).
+    olderMore: (label: string, more: number): string => `${label} · +${more}`,
     // A ship new on this run's chart (its first desk only), and one waiting from earlier runs.
     reportedHome: 'REPORTED HOME',
     runOnChart: (runs: number): string => `${ordinal(runs)} RUN ON THE CHART`,
@@ -177,6 +188,8 @@ export const MAP_TEXT = {
     // Slice 3c: the card's history row (`REPORTED HOME` / `2ND RUN ON THE CHART` / `3RD RUN ON THE CHART`).
     historyLabel: 'HISTORY',
     history: (runsOnChart: number): string => (runsOnChart <= 1 ? 'REPORTED HOME' : `${ordinal(runsOnChart)} RUN ON THE CHART`),
+    // Track UI: the last unit's mark at the ship's world (the chart's hover words, for the phone, which has no hover).
+    trailLabel: 'LAST UNIT',
   },
 
   // --- The PACKET (02 §4; 01 §3.16's room bar) -------------------------------------------------------------------------
@@ -259,6 +272,11 @@ export const MAP_TEXT = {
     newRun: 'NEW RUN',
     abandonConfirm: (unit: string): string => `ABANDON ${unit}'S RUN? · ITS SHIPS COUNT AS DONE`,
     abandon: 'ABANDON RUN',
+    // Track UI: the confirm's way back, and the keys the RESUME block takes.
+    keep: 'KEEP IT',
+    resumeKey: 'RESUME ▸ [ENTER]',
+    abandonKey: 'ABANDON RUN [ENTER]',
+    keepKey: 'KEEP IT [ESC]',
     cantResume: (reason: string): string => `RUN SAVE CAN'T RESUME · ${reason}`,
     // The reasons, by save-codec's refusal kind (types/save.ts SaveRefusalKind).
     reason: {

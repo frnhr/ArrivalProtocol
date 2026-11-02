@@ -147,7 +147,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     if (width < 40 || height < 40 || model === null || root.hidden) return;
     drawChart(tally.svg, chartModel(store.getState()), {
       width, height, rotateDeg: LANDSCAPE_ROTATE_DEG, labels: 'route', beams: false, clouds: false, rings: false,
-      trail046: false, route: true, stars: true, idPrefix: 'tally',
+      trail: false, route: true, stars: true, idPrefix: 'tally',
     });
   }
   const chartResize = new ResizeObserver(() => drawTallyChart());
