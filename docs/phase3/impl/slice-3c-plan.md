@@ -1391,3 +1391,114 @@ reason. Built against the foundation's real pieces (`unitTrailOf`, `olderColonie
   `departures` and `reportedHome` to `NextLaunch` and `runEndNext` reads `run.next` only.
 - **e2e (§6.3, not run this round):** `resume.mjs` and the playthrough's run-2 check; the playthrough reads `#titleUnit`,
   whose run-2 text is now the launch line.
+
+## Deviations (review fixes)
+
+Recorded by the fix agent after the full review of slice 3c (probes `.tmp/rv3c/p1–p3`, the e2e repros `repro-route.mjs` and
+`repro-phone2.mjs`, the scenarios `resume.mjs` and `run2.mjs`). Each item names its root cause and the guard that keeps it
+fixed. Every bug has a fast store-level check in `save/review-fixes` (and run-2 rows in `save/failures` and `save/resume`).
+
+### Blockers
+
+1. **B1, a CAN'T RESUME on run 2 or later bricked the page.** Root cause: `pageTitleState` built the title from
+   `archiveLineage()`, whose wave already counted the run in progress, over the arm stored for that run, and `createRunMap`
+   threw while `state/instance.ts` loaded. Fix:
+   - a CAN'T RESUME title with a run in progress is that run's own (`meta.ts activeLineageOf`: its unit, wave `meta.runs`,
+     its arm), so run 1's CAN'T RESUME title is UNIT-047's again too;
+   - `pageTitleState` never throws: a title that can't be built is logged and a plain title opens with CAN'T RESUME
+     (`plainTitleState`, `resume-threw` unless the save already had a refusal; OFFLINE stays OFFLINE);
+   - the archive never hands a wave another run's (or content's) arm (`lineageAt` / `armForWave`: a fresh roll for the wave
+     from the arm's start year and final-ship lineage instead), `readMeta` resets an arm of another run like a content reset
+     (expected: `runs + 1`, or `runs` with a run in progress), and an abandon that can't run the update redraws the arm for
+     the next run (`abandonedMeta`, `notes.armReset`). The debug path of repro-phone2 (the classic jump, no save, a reload)
+     opens UNIT-049's title.
+   - The quota path is closed at the source too (M2: going offline empties the slot).
+2. **B2, ENTER and SPACE ran RECEIVE TRANSMISSION over a save.** Root cause: boot.ts's title binding ran first and
+   `receiveTransmission` had no guard. Fix: the guard is in `receiveTransmission` (`save.resume !== null ||
+   save.status === 'cant-resume'` refuses), so keys, clicks and `__ap` are all covered. TitleCard's ENTER is
+   `title.ts titleEnterAction` (pure): RESUME on RESUME, ABANDON RUN on CAN'T RESUME, nothing over a focused button.
+   `resume.mjs`'s ENTER checks pass.
+
+### Majors
+
+3. **M1, saves stopped silently while the archive wasn't ok.** The one place the save mirrors the archive is
+   `save-write.ts writable`, the gate every save point goes through: an archive that isn't ok sends the save OFFLINE there
+   (NO SAVE, the TERMINAL line), which happens at RUN START. The title shows `runs save between ships` only beside an ok
+   archive (`titleModel` reads `state.archive`). WIPE ARCHIVE on the title brings saving back; PLAY WITHOUT ARCHIVE goes
+   OFFLINE at RUN START.
+4. **M2, OFFLINE left the previous save in the slot.** `clearRunSave` removes the slot whatever the status; `goOffline`
+   tries to remove it too. When that throws as well, the beat is `save-stale` (`RUN SAVE OFFLINE — a reload may go back to
+   an older save`, new event, beat and buzz) instead of `save-lost`. Either is said once (only on the ok → offline step).
+5. **M3, `save/shape-pin`.** Every key path of a SHIP DONE save (RunState and the ship slices, three levels deep; memory and
+   other heterogeneous lists opaque) and `contentVersions()`, pinned under `RUN_SAVE_VERSION`. It fails until the version
+   is bumped, `RUN_SAVE_MIGRATIONS` has the step and the new shape is pinned (`AP_PIN_PRINT=1` prints it). **Catalogue and
+   content changes should go through `RUN_SAVE_MIGRATIONS` where possible:** a content refusal ends every save in flight
+   (as `signal-lost`, item 13), a migration step keeps the run.
+6. **M4, run-2 rows.** `save/resume`: run 2 resumed at RUN START, SHIP DONE, BEAM and ENDING CHOSEN, ended once.
+   `save/failures`: run 2's CAN'T RESUME for every refusal kind (the page opens on UNIT-048's own title; ABANDON RUN records
+   `signal-lost`), `resume-threw`, `archive`, `stale`, the full quota then a NEW RUN then a reload, and ENTER / SPACE on
+   run 2's RESUME and CAN'T RESUME titles through the input layer (`mountInput` on an EventTarget, `mountBoot`).
+7. **M5, departed names came straight back.** Root cause: the soft rule gave way for most new ships (21 names). The update
+   now hard-excludes the chart's names and this update's departures, drawing from `UPDATE_SHIP_NAMES` (the 21 plus 15
+   `PLACEHOLDER(05)` extras, `UPDATE_EXTRA_SHIP_NAMES`, each ≤ `NAME_MAX_CHARS`, validated by `validateNames`). 36 is the
+   bound that makes the rule never give way (at most 18 generated ships on the old chart, waiting or departed, plus at
+   most 17 new ones named before the last pick); it throws if the bound is ever broken. The fresh roll and run 1's arm keep
+   the 21, so their output and every fixture on them are unchanged; no content version moves (stored arms still rebuild
+   byte for byte). `ArmUpdate.namesReused` is gone. Measured (`world/update-stats`, mix, 3 × 40): before, 723 of 1,092 new
+   generated ships (66%) took a name that left in the same update; after, 0. 540 (49.5%) take a name that left one update
+   before (not in the first desk's box, nor on the last unit's trail); `world/update-rules` and `world/stats` check the rule.
+
+### Minors
+
+8. **NEW RUN's confirm:** ENTER and ESC keep the run (`KEEP IT [ENTER]`); ABANDON RUN takes a click or its own key, [DEL]
+   (Delete or Backspace: `TITLE_ABANDON_CODES`, `ABANDON RUN [DEL]`); A was not used (it is the IN preset's cap on a
+   phone). A focused save button acts by itself (the browser clicks it), so with NEW RUN focused ENTER asks, never resumes.
+   `resume.mjs` C and E check ENTER keeping and DEL abandoning.
+9. **The world update can throw:** RUN END's update falls back to `map-update resetArmAfter` (a fresh roll for the next run
+   from the played arm's start year, its final-ship lineage carried; `notes.armReset`), then to no arm; the abandon's to
+   the same reset (`abandonedMeta`). `endRun` reaches RUN END in a `finally` (the save cleared, the phase set) even if the
+   record itself throws, and the error still goes up loudly.
+10. **`writeEndingChosen`** runs its abort, verdict flush and check only when a save will be written (`writable`); a block
+    still reserved after the abort sends the save OFFLINE with a console line instead of throwing out of the final report.
+11. **`mergeBonus` is deleted** (RunState, RunLineage, `checkSavedRun`, `glitch.ts corruptionFloor`, `initial.ts`'s Core
+    bonus, the tuning constants) with RUN END's carry line (`RunEndModel.carryLine`, `#reCarry`, `HOLLOW_FINALE.mergeCarries`),
+    while `RUN_SAVE_VERSION` 1 is unreleased; `wp11/p2/views`, `wp11/merge-test`, `map/run2-tally` and `final-fix/strip-words`
+    follow.
+12. **One `visitsOfTrail(trail)`** (lineage.ts): `visitsOf(run)` is `visitsOfTrail(trailOf(run, …))`, the abandon reads its
+    archived trail through it, and `meta.ts abandonVisits` is gone. `createRunMap` reads the gap, valve years, serial and
+    departures off the arm (`RunLineage.history` is now `LineageHistory`: the last unit's number, colonies and routes;
+    `mapHistoryOf(lastUnit, colonies, routes)`), so nothing is copied beside the arm and nothing can disagree at the page's
+    open; a stored arm of another run still throws there (the archive never hands one over).
+13. **Pure modules.** `systems/meta-parse.ts` holds `LAST_CAUSES`, `MetaCorrupt`, `parseLastUnit` and the record's field
+    parsers (meta.ts re-exports them); `save-codec.ts` no longer imports meta.ts at runtime, and builds its references on
+    a scratch segment counter (`memory-ops withScratchSegIds`) with a literal first-run lineage, so reading a save mints no
+    id. `unitName` lives in `data/hollow-text.ts` beside `unitDigits` (say.ts re-exports it); title.ts and desk.ts import it
+    from there.
+14. **CAN'T RESUME's words.** A new refusal kind `superseded` (`ANOTHER RUN HAS STARTED SINCE`): the archive has another
+    run in progress (another tab's, or one started in this page after the save went OFFLINE); `stale` keeps `THAT RUN
+    ALREADY ENDED` for an archive with none. **The neutral cause:** a new `LastCause` `'signal-lost'`, which ABANDON RUN on
+    any CAN'T RESUME title records (the game could not give the run back: another version or content, a damaged save, a
+    ship that no longer builds, a resume that threw, another run in progress). Its ghost line is null (no `i blinked and the
+    run was gone`), its lineage line `signal lost at <ship>` (PLACEHOLDER(05)), HOLLOW is that unit as after any other
+    cause, and the trail's grey cross takes the cause. NEW RUN over a resumable save, the kid's choice, and a run left with
+    no save at the page's open still record `abandoned`. The cleanest of the options: no new field in `LastUnit`, one value
+    in the cause's union (archive v3 reads it without a migration; every `Record<LastCause, …>` table names it).
+15. **The ghost and its cross** (05 §3.5, decided): the grey cross marks where the unit was lost, at or past its last
+    stop's world, and the ghost speaks from that layer on (unchanged). A last stop that founded a colony keeps its colony
+    mark (the colony is real: the unit landed them and was lost after, at the desk or on the way on), and the cross stands
+    `TRAIL_CROSS_PAST_COLONY_LY` (6, as 046's) past that world along the trail; a last stop that founded nothing (lost
+    aboard: crashed, overwritten, abandoned mid-ship) is the cross itself, as before. The card's LAST UNIT row reads the
+    colony mark.
+16. **`__ap.archiveAs`** throws on a cause that is not a `LastCause` and on a `landed` that is not a whole number.
+
+### e2e: `__ap.route` runs can't end
+
+17. Root cause: `__ap.route` rewrote the route without results for the stops it skipped, so `trailOf` / `visitsOf` threw at
+    RUN END and a BEAM save's per-stop check read DAMAGED. Fix: every stop before the last gets a result (the run's own when
+    it already ended that ship there, else `debugSkippedResult`: in orbit, nobody landed, 0 % fuel, no LZ or pod records,
+    logged on the console as skipped); `__ap.slot` from a flight ends the ship being left the same way (`debugArrive`).
+    run-flow's section 8 and the playthrough's `PLAY_FROM` route through it.
+
+### Unit tier
+
+Recorded with the final run below.

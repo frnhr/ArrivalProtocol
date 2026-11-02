@@ -7,19 +7,21 @@
 // B. SET COURSE to KESTREL, TRANSMIT: its boot typed in full, then a reload mid-flight: `RESUME · UNIT-047 · SHIP 3 · bound
 //    for KESTREL · …`, and a click on RESUME ▸ replays KESTREL from its boot with the same lines, hits and seeds.
 // C. KESTREL landed, a reload at its LANDING REPORT (no save point before the final ship: the line still names KESTREL's
-//    boot). NEW RUN asks `ABANDON UNIT-047'S RUN? · ITS SHIPS COUNT AS DONE` (ABANDON RUN [ENTER] / KEEP IT [ESC]); ESC keeps
-//    the run, nothing written.
+//    boot). NEW RUN asks `ABANDON UNIT-047'S RUN? · ITS SHIPS COUNT AS DONE` (ABANDON RUN [DEL] / KEEP IT [ENTER]; slice 3c
+//    review fix minor 1: ENTER keeps, abandoning takes a click or DEL); ENTER keeps the run, so does ESC, nothing written.
 // D. On to LAST LIGHT by the DESK (each ship flown at once), its duel by DELETE, PURGE, the LANDING REPORT: ENDING CHOSEN. A reload there,
 //    ENTER restores the report; CONTINUE ends the run once (the archive counts it once, the save is gone), and the RUN TALLY
 //    says `NEXT UNIT LAUNCHES … · UNIT-048` and the arm's update. NEW RUN: UNIT-048's title, launched after UNIT-047.
-// E. UNIT-048's RECEIVE (RUN START), a reload in its boot, NEW RUN, and ENTER on the confirm abandons it: UNIT-049's title.
+// E. UNIT-048's RECEIVE (RUN START), a reload in its boot, NEW RUN; ENTER on the confirm keeps the run, DEL abandons it:
+//    UNIT-049's title.
 // F. A fresh page: a corrupt save (__ap.saveCorrupt) and a reload give `RUN SAVE CAN'T RESUME · THE SAVE IS DAMAGED` with
-//    ABANDON RUN only; ENTER abandons, to UNIT-048's title. Then the save's storage throws (setItem stubbed for the run save's
-//    key only): RECEIVE's RUN START can't be written, the footer says NO SAVE and the TERMINAL `RUN SAVE OFFLINE — …`.
+//    ABANDON RUN only; ENTER abandons (recorded signal-lost: the game lost the run, review fix minor 7), to UNIT-048's title.
+//    Then the save's storage throws (setItem stubbed for the run save's key only): RECEIVE's RUN START can't be written, the
+//    footer says NO SAVE and the TERMINAL `RUN SAVE OFFLINE — …`.
 // No page errors anywhere, except the console lines the save itself writes for a corrupt save and a write that throws.
-// ENTER is the kid's key on the RESUME block; where it does not do its job (a src bug at the time of writing: boot.ts's
-// title binding runs RECEIVE TRANSMISSION first), the check FAILs and the scenario goes on by the logged fallback: the
-// storage as it was before the key, a reload, then __ap.resume() (or the ABANDON RUN button).
+// ENTER is the kid's key on the RESUME block; where it does not do its job (it ran RECEIVE TRANSMISSION over the block before
+// the slice 3c review fix B2), the check FAILs and the scenario goes on by the logged fallback: the storage as it was before
+// the key, a reload, then __ap.resume() (or the ABANDON RUN button).
 // About 5 minutes; shots under tests/.out/e2e/shots/resume-*.
 // Usage: node tests/e2e/scenarios/resume.mjs   (env E2E_BASE_URL, SHOT_VIEWPORT; tests/e2e/run.mjs runs it)
 import { launch, BASE_URL, SHOTS, checker, pageKit, runKit, viewportFromEnv } from '../lib.mjs';
@@ -157,18 +159,18 @@ const arrival = (kit) => kit.st(() => {
 
 // ENTER on the RESUME block, as the kid presses it. `ok(state)` judges the page afterwards (in the page). On a FAIL the
 // storage goes back to before the key, the page reloads and `fallback` gets past it (logged), so the rest is still checked.
-async function enterOnTitle(tab, label, ok, fallback, fallbackWhat) {
+async function enterOnTitle(tab, label, ok, fallback, fallbackWhat, key = 'Enter') {
   const { page, kit } = tab;
   const snap = await snapshot(kit);
   const before = await stored(kit);
-  await page.keyboard.press('Enter');
+  await page.keyboard.press(key);
   await page.waitForTimeout(1500);
   const after = await kit.st(() => { const s = window.__ap.store.getState(); return { phase: s.run.phase, ship: s.level.shipName, shipIndex: s.run.shipIndex, unit: s.run.unitNumber }; });
   const afterStore = await stored(kit);
   const good = ok(after, before, afterStore);
   check(label, good, JSON.stringify({ after, runs: `${before.runs} → ${afterStore.runs}`, save: `${before.point} → ${afterStore.point}` }));
   if (!good) {
-    log(`FALLBACK (src bug, boot.ts's title binding: ENTER runs RECEIVE TRANSMISSION over the RESUME block): the storage put back, a reload, then ${fallbackWhat}`);
+    log(`FALLBACK (src bug: ${key} did not do the RESUME block's job): the storage put back, a reload, then ${fallbackWhat}`);
     await tab.shot(`enter-bug-${label.slice(0, 24).replace(/[^A-Za-z0-9]+/g, '-')}`);
     await restore(kit, snap);
     await page.reload({ waitUntil: 'networkidle' });
@@ -306,23 +308,29 @@ check('reload at KESTREL\'s report: no save point before the final ship, the lin
 await page.locator('#titleNewRun').click();
 await page.waitForTimeout(400);
 const asking = await titleLook(kit);
-check('NEW RUN asks first: `ABANDON UNIT-047\'S RUN? · ITS SHIPS COUNT AS DONE`, ABANDON RUN [ENTER] / KEEP IT [ESC], RESUME and NEW RUN put away',
-  asking.save?.ask === 'ABANDON UNIT-047\'S RUN? · ITS SHIPS COUNT AS DONE' && asking.abandon === 'ABANDON RUN [ENTER]' && asking.keep === 'KEEP IT [ESC]'
+check('NEW RUN asks first: `ABANDON UNIT-047\'S RUN? · ITS SHIPS COUNT AS DONE`, ABANDON RUN [DEL] / KEEP IT [ENTER], RESUME and NEW RUN put away',
+  asking.save?.ask === 'ABANDON UNIT-047\'S RUN? · ITS SHIPS COUNT AS DONE' && asking.abandon === 'ABANDON RUN [DEL]' && asking.keep === 'KEEP IT [ENTER]'
   && asking.resume === null && asking.newRun === null && asking.phase === 'title', JSON.stringify(asking));
 await shot('6-new-run-confirm');
-await page.keyboard.press('Escape');
+const keptBy = async (key) => {
+  await page.keyboard.press(key);
+  await page.waitForTimeout(400);
+  const kept = await titleLook(kit);
+  const keptStore = await stored(kit);
+  check(`…${key === 'Enter' ? 'ENTER' : 'ESC'} keeps it: the RESUME block back as it was, nothing abandoned or written`, kept.save?.ask === null && kept.resume === 'RESUME ▸ [ENTER]' && kept.newRun === 'NEW RUN'
+    && kept.abandon === null && kept.keep === null && kept.phase === 'title' && keptStore.raw === beam3.raw && keptStore.runs === 1 && keptStore.activeRun === 47
+    && keptStore.routes === 0, JSON.stringify({ kept, runs: keptStore.runs, routes: keptStore.routes }));
+};
+await keptBy('Enter');
+await page.locator('#titleNewRun').click();
 await page.waitForTimeout(400);
-const kept = await titleLook(kit);
-const keptStore = await stored(kit);
-check('…ESC keeps it: the RESUME block back as it was, nothing abandoned or written', kept.save?.ask === null && kept.resume === 'RESUME ▸ [ENTER]' && kept.newRun === 'NEW RUN'
-  && kept.abandon === null && kept.keep === null && kept.phase === 'title' && keptStore.raw === beam3.raw && keptStore.runs === 1 && keptStore.activeRun === 47
-  && keptStore.routes === 0, JSON.stringify({ kept, runs: keptStore.runs, routes: keptStore.routes }));
+await keptBy('Escape');
 
 // ======================================================================================================================
 // D. LAST LIGHT's ENDING CHOSEN, a reload at its report, ENTER restores it, CONTINUE ends the run once.
 // ======================================================================================================================
-// On by the DESK (no headless __ap.route: its route has no results for the ships it skips, so the saves it writes can't be
-// resumed, 'route'): KESTREL again, VESPER and CORMORANT flown at once, then LAST LIGHT.
+// On by the DESK (as a kid plays it; __ap.route also works since the slice 3c review fixes, its skipped ships given debug
+// results): KESTREL again, VESPER and CORMORANT flown at once, then LAST LIGHT.
 await page.locator('#titleResume').click();
 await waitFor(() => window.__ap.store.getState().run.phase === 'boot', 6000, 50);
 check('KESTREL (resumed again) flown at once to its DESK', await flyToDesk(tab));
@@ -406,7 +414,7 @@ check(`NEW RUN: UNIT-048's title, \`${launched}\` with its stamp, RECEIVE TRANSM
 await shot('10-unit-048-title');
 
 // ======================================================================================================================
-// E. UNIT-048's RUN START, a reload in its boot, NEW RUN, ENTER on the confirm abandons it.
+// E. UNIT-048's RUN START, a reload in its boot, NEW RUN; ENTER on the confirm keeps it, DEL abandons it.
 // ======================================================================================================================
 await page.locator('#titleReceive').click();
 await waitFor(() => window.__ap.store.getState().run.phase === 'boot', 6000);
@@ -422,14 +430,21 @@ await page.locator('#titleNewRun').click();
 await page.waitForTimeout(400);
 const asking48 = await titleLook(kit);
 check('…NEW RUN asks `ABANDON UNIT-048\'S RUN? · ITS SHIPS COUNT AS DONE`', asking48.save?.ask === 'ABANDON UNIT-048\'S RUN? · ITS SHIPS COUNT AS DONE'
-  && asking48.abandon === 'ABANDON RUN [ENTER]' && asking48.keep === 'KEEP IT [ESC]', JSON.stringify(asking48));
+  && asking48.abandon === 'ABANDON RUN [DEL]' && asking48.keep === 'KEEP IT [ENTER]', JSON.stringify(asking48));
+const keptOk = (after, before, now) => after.phase === 'title' && after.unit === 48 && now.runs === before.runs && now.activeRun === 48 && now.raw === before.raw;
+await enterOnTitle(tab, 'ENTER on the confirm keeps UNIT-048\'s run (nothing abandoned, the save as it was)', keptOk, async () => {}, 'nothing');
+const kept48 = await titleLook(kit);
+check('…the RESUME block back (RESUME ▸ [ENTER], NEW RUN)', kept48.resume === 'RESUME ▸ [ENTER]' && kept48.newRun === 'NEW RUN' && kept48.save?.ask === null,
+  JSON.stringify(kept48));
+await page.locator('#titleNewRun').click();
+await page.waitForTimeout(400);
 const abandonedOk = (after, before, now) => after.phase === 'title' && after.unit === 49 && now.runs === before.runs && now.activeRun === null
   && now.lastUnit?.number === 48 && now.lastUnit?.cause === 'abandoned' && now.raw === null;
-await enterOnTitle(tab, 'ENTER on the confirm abandons UNIT-048\'s run (recorded abandoned, the save cleared): UNIT-049\'s title', abandonedOk, async () => {
+await enterOnTitle(tab, 'DEL on the confirm abandons UNIT-048\'s run (recorded abandoned, the save cleared): UNIT-049\'s title', abandonedOk, async () => {
   await page.locator('#titleNewRun').click();
   await page.waitForTimeout(400);
   await page.locator('#titleAbandon').click();
-}, 'NEW RUN, then a click on ABANDON RUN');
+}, 'NEW RUN, then a click on ABANDON RUN', 'Delete');
 const t49 = await settledTitle(kit);
 const s49 = await stored(kit);
 check('…UNIT-049\'s title: launched after UNIT-048, RECEIVE TRANSMISSION, no RESUME block; the archive has UNIT-048 abandoned', abandonedOk({ phase: t49.phase, unit: 49 }, s49, s49)
@@ -458,8 +473,8 @@ check('a corrupt save, a reload: `RUN SAVE CAN\'T RESUME · THE SAVE IS DAMAGED`
 log(`console on the corrupt save: ${tabF.kit.errors.join(' | ') || '(nothing)'}`);
 await tabF.shot('1-cant-resume');
 const abandonedCorrupt = (after, before, now) => after.phase === 'title' && after.unit === 48 && now.runs === 1 && now.activeRun === null
-  && now.lastUnit?.number === 47 && now.lastUnit?.cause === 'abandoned' && now.raw === null && now.status === 'ok';
-await enterOnTitle(tabF, 'ENTER on CAN\'T RESUME abandons the run (UNIT-047 recorded abandoned, the save cleared): UNIT-048\'s title', abandonedCorrupt,
+  && now.lastUnit?.number === 47 && now.lastUnit?.cause === 'signal-lost' && now.raw === null && now.status === 'ok';
+await enterOnTitle(tabF, 'ENTER on CAN\'T RESUME abandons the run (UNIT-047 recorded signal-lost, the save cleared): UNIT-048\'s title', abandonedCorrupt,
   () => tabF.page.locator('#titleAbandon').click(), 'a click on ABANDON RUN');
 const t48 = await settledTitle(tabF.kit);
 const s48 = await stored(tabF.kit);
