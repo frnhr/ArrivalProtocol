@@ -29,7 +29,8 @@ by HOLLOW, the previous wave's caretaker. Everything is UI: windows, terminals, 
 - `npm test` — the unit tier (`tests/unit/`, under 5 minutes, enforced): every headless suite plus a strict tsc over
   them, in parallel on all cores, slowest first. The suites run the real DOM-free systems on a private store (no
   browser); the sweeps among them fly a coarse sample of their grids (`tests/unit/depth.ts`), and long setups are flown
-  once per process and restored (`flyOnce` in `tests/unit/wp1-rules/flows.ts`). The runner fails the run over 300 s or
+  once and restored (`flyOnce` in `tests/unit/wp1-rules/flows.ts`; kept on disk in `tests/.out/fly-once` under a hash of every
+  source and test file, so a re-run of an unchanged tree skips them; `AP_FLY_ONCE=fresh` flies them). The runner fails the run over 300 s or
   any suite over 90 s: a suite that outgrows that samples more coarsely in quick depth, it does not raise the budget.
   `node tests/unit/run.mjs wp9 -sim` runs the suites whose path contains `wp9`, minus those containing `sim`.
 - `npm run test:e2e` — the e2e tier (`tests/e2e/`): Playwright scripts that drive the game in Chromium, against a Vite
