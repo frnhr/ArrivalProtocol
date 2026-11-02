@@ -1499,6 +1499,12 @@ fixed. Every bug has a fast store-level check in `save/review-fixes` (and run-2 
     logged on the console as skipped); `__ap.slot` from a flight ends the ship being left the same way (`debugArrive`).
     run-flow's section 8 and the playthrough's `PLAY_FROM` route through it.
 
-### Unit tier
+### Unit tier and e2e
 
-Recorded with the final run below.
+- The unit tier passes: 177 suites, 6 balance-only skipped, 250 s (266 s on the first run after the source changes, the
+  fly-once cache cold; ~227 s before), under the 300 s cap. New suites: `save/review-fixes`, `save/shape-pin` (2–4 s each);
+  `save/failures` and `save/resume` grew by their run-2 rows. Slowest ten: landing/review-1b 25 s, wp9/fix2/fixes2 23 s,
+  map/run1-route 23 s, wp9/fix1/fixes 22 s, wp10/skip-through 20 s, lead2/dodge-rules 20 s, wp9/autoburn-sim 20 s,
+  wp12/fix1/entries 20 s, wp11/boss-sim 20 s, lead2/fix1/kestrel-fixes 19 s.
+- e2e, single scenarios only (`node tests/e2e/run.mjs resume run2 run-flow`): resume 56/56, run2 22/22, run-flow 74/74, no
+  fallback taken. The full e2e tier is the lead's.
