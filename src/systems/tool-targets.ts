@@ -2,7 +2,7 @@ import type { GameState } from '@state/schema';
 import type { Segment, FreeSegment, ShipSegment, ShipBackupSegment, SegmentRole } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import {
-  getRedundancy, isRepairable, isUsableTool, effectiveToolVersion, filesWithRole, isInfected, toolFilesOf,
+  getRedundancy, isRepairable, isUsableTool, effectiveToolVersion, filesWithRole, isInfected, toolFilesOf, repairableShipFile, repairCeiling,
 } from '@state/selectors';
 import { getOps } from '@systems/ops-core';
 import {
@@ -74,12 +74,16 @@ function repairRefusal(seg: Segment, state: Readonly<GameState>): ToolRefusal | 
     if (effectiveToolVersion(state, 'repair') < REPAIR_V2_VERSION) return TOOL_REFUSAL.needsV2;
     return chargeInUse() ? TOOL_REFUSAL.chargeBusy : null;
   }
-  if (seg.type === 'ship' || seg.type === 'ship-backup') return TOOL_REFUSAL.shipFile;
+  const shipRepair = repairableShipFile(state, seg);
+  if ((seg.type === 'ship' && !shipRepair) || seg.type === 'ship-backup') return TOOL_REFUSAL.shipFile;
   if (seg.type === 'firewall') return TOOL_REFUSAL.firewallHealth;
   if (seg.type === 'log') return TOOL_REFUSAL.logRepair;
-  if (!isRepairable(seg)) return notAFile(seg);
+  // The arm's Thrust Ctrl heals only so far (selectors repairCeiling): past it, SWAP's.
+  if (shipRepair) {
+    if (seg.integrity >= repairCeiling(state, seg) && !isInfected(seg)) return TOOL_REFUSAL.fieldRepairMax;
+  } else if (!isRepairable(seg)) return notAFile(seg);
   // No scan gate: the AI's own files are always visible (§3.2), so a hurt Engine I/O is one
-  // click from a repair. Only ship files hide their health, and those can't be healed anyway.
+  // click from a repair. Only ship files hide their health, and those can't be healed (but the arm's Thrust Ctrl).
   // A file HOLLOW bit this very tick is still at 100%, but it is being eaten: a repair started now
   // wins at once (§6.6), so it is never "ALREADY 100%".
   if (seg.integrity >= INTEGRITY_MAX && !isInfected(seg)) return TOOL_REFUSAL.healthy;

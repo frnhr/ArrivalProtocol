@@ -1113,3 +1113,66 @@ the e2e tier is the lead's.
   - no page errors.
 
   The e2e playthrough's no-Swap words are updated to match.
+
+## Deviations (review fixes 2: the limping engine)
+
+Fran's decision on item 1 (DECISIONS.md "During implementation"): an ENGINE FAULT ship without Swap limps, and REPAIR
+helps; Swap stays the full fix. As built:
+
+1. **The limp** is `tuning.ts ARM_GHOST_BY_BAND`, read on the arm instead of phase 2's `GHOST_BY_BAND`
+   (`capabilities.ts ghostSpecOf`):
+
+   | Band | Mean interval (tac s) | Push (amp) | Sticks |
+   |---|---|---|---|
+   | dead | 10 | 0.15 | 30% |
+   | failing (ENGINE FAULT's 31%) | 10 | 0.15 | never |
+   | degraded (after REPAIR) | 20 | 0.15 | never |
+
+   That is half of phase 2's push while failing or dead, and half of that again once repaired. Nothing fires in the
+   landing on the arm: the limp ends with the orbit locked or accepted, so the pods' orbit is not decayed by bursts.
+   `validateCapabilityTables` pins the order: ARM failing < phase 2 failing, and ARM degraded < ARM failing (push per
+   tac s).
+
+   With the first try, degraded at a third of the push (mean 40, amp 0.05, then mean 20, amp 0.1), the repair matched
+   Swap (34–42% FUEL against 31–43%). The final table keeps Swap the better answer.
+2. **REPAIR on Thrust Ctrl.**
+   - On the arm, Thrust Ctrl is the one ship file REPAIR may heal (`selectors.ts repairableShipFile`). The repair is the
+     usual one: charge by size, a thread, 18.5%/s at v1. VESPER's 31 → 70 costs 7 charge.
+   - It heals only to `THRUST_CTRL_REPAIR_MAX = 70`, the middle of the degraded band (`repairCeiling`). Beyond that the
+     refusal is `HEALED AS FAR AS IT GOES — SWAP FOR THE REST`.
+   - A Thrust Ctrl that HOLLOW is eating heals to 100, as any file does, so the repair can win the tug-of-war.
+   - Every other ship file, and Thrust Ctrl on the classic world, still refuses with `SHIP FILES CAN'T BE HEALED — SWAP
+     OR DELETE IT`. Bay Ctrl and the rest have no burst to calm, so the logic does not clearly apply to them.
+   - The MIND's detail panel offers `▸ repair` on the arm's Thrust Ctrl.
+3. **The strip.** The no-Swap lesson (`ghost-noswap`) has three wordings with one lead-in, one `maxShownSec` and one
+   completion:
+   - in the MIND: `NO SWAP ABOARD — REPAIR THRUST CTRL to calm the bursts`, lighting REPAIR, then Thrust Ctrl;
+   - in amber: `NO SWAP ABOARD — [TAB], REPAIR THRUST CTRL to calm the bursts`;
+   - with no REPAIR in hand or no charge: `NO SWAP ABOARD — nothing stops the bursts. Fix ▼ after each one`.
+
+   All three are live only while Thrust Ctrl is failing or dead, so a repair retires them. The SKIP refusal also relaxes
+   at the repair (`capabilities.ts ghostRefusesSkip`: failing or dead only). The degraded twitch, a burst every 20 tac s,
+   is flown through as WP10 ruled, and the SKIP re-plans after each burst.
+4. **The classic world** keeps phase 2: its VESPER fires `GHOST_BY_BAND`, SWAP comes with the first burst, and REPAIR
+   refuses Thrust Ctrl. `map/ghost-noswap` checks both.
+5. **Measured** with `.tmp/fix3b/vesper.ts`: run 1's worked route (Mv and Rm requested), the strip-following kid with
+   wp11's defenders, landed by the strip, seeds 3/5/7/11 × reaction 0.4/0.8 s.
+
+   | Case | Before (the review-fix pass) | Now |
+   |---|---|---|
+   | (i) no Swap, no repair | 7 accepted, 1 crashed; FUEL 0%; 0–2,200 in an LZ | **8 locked; FUEL 12–29%; 2,800–3,200 in an LZ** (★1–2); flight 135–205 wall s (SKIP refused) |
+   | (ii) no Swap, REPAIR when the strip asks | (no repair possible) | **8 locked; FUEL 26–41%; 2,400–3,200** (★2); flight 39–49 wall s; Thrust Ctrl 31 → 70 |
+   | (iii) Swap aboard | 4 locked; FUEL 35–43%; 2,600–3,200 | **8 locked; FUEL 31–43%; 2,600–3,200** (★2) |
+   | (iv) CURLEW, the 3 full-depth routes (`AP_DEPTH=full map/run1-route`; its kid repairs when the strip asks) | stranded ×3 | **accepted ×3; FUEL 0%; 1,400 / 1,400** (instant landing) |
+
+   CURLEW is repaired on all three routes but still ends with an empty tank. It is a generated CAPTURE ship deeper in
+   the arm. The worked route's VESPER in `map/run1-route` now ends locked: 3,200 / 3,200, ★★★, FUEL 33%.
+6. **Gates:**
+   - `map/run1-route`: VESPER without Swap, the kid repairing when the strip asks, must lock or be accepted with at least
+     half its colonists in an LZ, and the repair must have happened.
+   - `map/ghost-noswap` gains checks:
+     - the limp's spec (half phase 2's push), and none in the landing;
+     - REPAIR taking Thrust Ctrl to 70 for charge, and no further;
+     - the degraded twitch, not silence;
+     - the lines retiring and SKIP offered again after the repair;
+     - the classic world unchanged.

@@ -20,6 +20,18 @@ import { seedsInMemory } from '@systems/hollow';
 import { REPO_TEXT } from '@data/repo-text';
 import { MAX_LINE_CHARS } from '@data/tuning';
 import { send, giveTools } from './repo-fixture';
+import { capabilitiesNow } from '@systems/capabilities';
+import { actionRepair } from '@state/actions';
+import { getByRole, chargeLeft } from '@state/selectors';
+import { getOpsBySeg } from '@systems/ops-core';
+import { targetRefusal } from '@systems/tool-targets';
+import { createInitialState } from '@state/initial';
+import { freshUnitRacks } from '@systems/carry';
+import { classicShip } from '@data/classic-five';
+import { TOOL_REFUSAL } from '@data/tool-text';
+import { ARM_GHOST_BY_BAND, GHOST_BY_BAND, THRUST_CTRL_REPAIR_MAX } from '@data/tuning';
+import type { Segment } from '@/types/segment';
+const noSwapLines = ['tut-ghost-noswap', 'tut-ghost-noswap-tab', 'tut-ghost-noswap-fly'];
 import type { GameState } from '@state/schema';
 
 const h = createHarness11(1, { soulsFound: false });
@@ -58,9 +70,14 @@ check('a SKIP still lands on the ship\'s first burst (its alarm moment)', skippe
 h.stepUntil(() => !st().alerts.list.some((alert) => alert.severity === 'alarm'), 20);
 let shownNoSwap = false;
 const until = h.wall() + 3;
-while (h.wall() < until) { h.step(); if (st().director.shown?.id === 'tut-ghost-noswap') shownNoSwap = true; }
-check('right after the alarm the strip shows the no-Swap line (review: it never won the strip)', shownNoSwap, st().director.shown?.text ?? 'none');
-check('…its words say what to do, in one strip row', REPO_TEXT.noSwap.length <= MAX_LINE_CHARS && /Fix ▼/.test(REPO_TEXT.noSwap));
+while (h.wall() < until) { h.step(); if (['tut-ghost-noswap', 'tut-ghost-noswap-tab'].includes(st().director.shown?.id ?? '')) shownNoSwap = true; }
+check('right after the alarm the strip shows the no-Swap line, naming the repair (review: it never won the strip)', shownNoSwap, st().director.shown?.text ?? 'none');
+check('…its words say what to do, in one strip row', [REPO_TEXT.noSwap, REPO_TEXT.noSwapTab, REPO_TEXT.noSwapFly].every((line) => line.length <= MAX_LINE_CHARS)
+  && /REPAIR THRUST CTRL/.test(REPO_TEXT.noSwap) && /\[TAB\]/.test(REPO_TEXT.noSwapTab));
+check('the limp (Fran\'s decision): the arm\'s failing controller fires ARM_GHOST_BY_BAND\'s gentler bursts, half phase 2\'s push',
+  capabilitiesNow(st()).thrustCtrl.band === 'failing' && capabilitiesNow(st()).thrustCtrl.ghost === ARM_GHOST_BY_BAND.failing
+  && ARM_GHOST_BY_BAND.failing!.amp === GHOST_BY_BAND.failing!.amp / 2);
+check('…and none once the orbit is locked or accepted (the landing)', capabilitiesNow({ ...st(), run: { ...st().run, phase: 'landing' } }).thrustCtrl.ghost === null);
 h.stepUntil(() => st().burn.ghost === null, 5);
 check('…and the moment stands between bursts', st().burn.ghost === null && noSwapForGhost(st()));
 
@@ -83,6 +100,27 @@ while (h.wall() < end && st().burn.status === 'approaching') {
 check('…40 wall seconds pressing F under every WAIT: bursts fired, none inside a SKIP', st().burn.ghostBursts > before && burstsInSkip === 0,
   `${st().burn.ghostBursts - before} bursts, ${burstsInSkip} in a SKIP`);
 check('…the WAIT line offers no [F] SKIP meanwhile', !(st().director.shown?.text ?? '').includes('[F] SKIP'), st().director.shown?.text ?? '');
+
+// REPAIR on Thrust Ctrl (the arm's one repairable ship file): a field repair into the degraded band, which leaves a twitch.
+const thrust = (): Segment => getByRole(st(), 'thrust-ctrl')!;
+const chargeBefore = chargeLeft(st());
+check('REPAIR takes Thrust Ctrl on the arm (no SWAP OR DELETE refusal)', actionRepair(h.store, thrust()) === null);
+h.stepUntil(() => getOpsBySeg(thrust().id).length === 0, 30);
+const healed = 'integrity' in thrust() ? (thrust() as { integrity: number }).integrity : -1;
+check(`…it heals to THRUST_CTRL_REPAIR_MAX (${THRUST_CTRL_REPAIR_MAX}%, degraded) for some charge, and no further`, healed === THRUST_CTRL_REPAIR_MAX
+  && chargeLeft(st()) < chargeBefore && actionRepair(h.store, thrust()) === TOOL_REFUSAL.fieldRepairMax, `${healed}% · charge ${chargeBefore} → ${chargeLeft(st())}`);
+check('…the bursts calm by band: the degraded twitch (rarer and weaker), not silence', capabilitiesNow(st()).thrustCtrl.band === 'degraded'
+  && capabilitiesNow(st()).thrustCtrl.ghost === ARM_GHOST_BY_BAND.degraded);
+for (let i = 0; i < 4; i++) h.step();
+check('…the no-Swap lines step aside, and SKIP is offered again (the twitch is flown through)', !noSwapLines.includes(st().director.shown?.id ?? '')
+  && skipBlockReason(st(), currentPrediction()) !== SKIP_REFUSAL_ENGINE_FAULT, `${st().director.shown?.text} | ${skipBlockReason(st(), currentPrediction())}`);
+{
+  const classic = createInitialState({ seed: 4, shipIndex: 3, carried: freshUnitRacks(classicShip(3)) });
+  const file = classic.memory.find((seg) => seg.type === 'ship' && seg.role === 'thrust-ctrl')!;
+  check('the classic world keeps phase 2: its VESPER fires GHOST_BY_BAND, and REPAIR refuses Thrust Ctrl (SWAP OR DELETE IT)',
+    capabilitiesNow(classic).thrustCtrl.ghost === GHOST_BY_BAND.failing
+    && targetRefusal(file, { state: classic, activeKind: 'repair', pickedSource: null }) === TOOL_REFUSAL.shipFile);
+}
 
 installTool(h.store, 'swap');
 check('a Swap aboard: no no-Swap moment, and the SKIP is no longer refused for the engine',

@@ -49,8 +49,8 @@ check('with nothing urgent the lesson shows as any tutorial does', shownWith(LES
 
 // The real rules.
 const withLeadIn = GUIDE_RULES.filter((candidate) => candidate.leadInSec !== undefined).map((candidate) => candidate.id).sort();
-check('the lead-in lessons: VESPER\'s COPY and LAST LIGHT\'s belt, both wordings, and the arm\'s no-Swap line (slice 3b review)',
-  JSON.stringify(withLeadIn) === JSON.stringify(['belt-move', 'belt-move-tab', 'tut-copy-repair', 'tut-copy-repair-tab', 'tut-ghost-noswap']), withLeadIn.join(', '));
+check('the lead-in lessons: VESPER\'s COPY and LAST LIGHT\'s belt, both wordings, and the arm\'s no-Swap lesson\'s three wordings (slice 3b review)',
+  JSON.stringify(withLeadIn) === JSON.stringify(['belt-move', 'belt-move-tab', 'tut-copy-repair', 'tut-copy-repair-tab', 'tut-ghost-noswap', 'tut-ghost-noswap-fly', 'tut-ghost-noswap-tab']), withLeadIn.join(', '));
 check('every lead-in is a tutorial', GUIDE_RULES.every((candidate) => candidate.leadInSec === undefined || candidate.priority === 'tutorial'));
 const outranking = GUIDE_RULES.filter((candidate) => candidate.outranksLeadIn === true);
 check('every verb and finale line outranks a lead-in, and each is mind-urgent',

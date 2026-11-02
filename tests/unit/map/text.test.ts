@@ -126,6 +126,8 @@ lines.push(
   ['repo.packet.salvage', REPO_TEXT.packet.salvage],
   ['repo.packet.overWithDeliveries', REPO_TEXT.packet.overWithDeliveries(199)],
   ['repo.noSwap', REPO_TEXT.noSwap],
+  ['repo.noSwapTab', REPO_TEXT.noSwapTab],
+  ['repo.noSwapFly', REPO_TEXT.noSwapFly],
   ['repo.noRm', REPO_TEXT.noRm],
   ['repo.noMv', REPO_TEXT.noMv],
   ['repo.boot.delivery', REPO_TEXT.boot.delivery(BOOT, YEAR)],

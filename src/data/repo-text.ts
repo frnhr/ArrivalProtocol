@@ -129,10 +129,12 @@ export const REPO_TEXT = {
     // ...and the arrival line then (MAP_TEXT.packet.arrivalLeave's twin).
     arrivalOverWithDeliveries: 'ON ARRIVAL: LEAVE FILES OR SEND ON FIRST',
   },
-  // The strip's ghost-thrust line when no Swap is aboard (plan risk 1; slice 3b review item 1): it shows right after the
-  // first burst's alarm and says what is left to do. Nothing aboard stops the bursts (SKIP is refused meanwhile:
-  // pace.ts SKIP_REFUSAL_ENGINE_FAULT), so the kid watches each one and fixes ▼ when the strip asks.
-  noSwap: 'NO SWAP ABOARD — nothing stops the bursts. Fix ▼ after each one',
+  // The strip's ghost-thrust lines when no Swap is aboard (plan risk 1; slice 3b review item 1; Fran's limping engine):
+  // REPAIR on Thrust Ctrl calms the bursts (in amber, the TAB first), and with no REPAIR or charge to do it, how to fly
+  // through them (SKIP is refused meanwhile: pace.ts SKIP_REFUSAL_ENGINE_FAULT).
+  noSwap: 'NO SWAP ABOARD — REPAIR THRUST CTRL to calm the bursts',
+  noSwapTab: 'NO SWAP ABOARD — [TAB], REPAIR THRUST CTRL to calm the bursts',
+  noSwapFly: 'NO SWAP ABOARD — nothing stops the bursts. Fix ▼ after each one',
   // The same for a seed with no rm aboard and debris coming for the drivers with no Mv (review M2: those lessons went
   // silent without their tool). The REPOSITORY is a desk tab, so the line points at the next desk.
   noRm: 'NO RM ABOARD — ask the REPOSITORY [R] at the next desk',

@@ -44,8 +44,8 @@
 // HALCYON, Rm into KESTREL, none into VESPER, Swap into CORMORANT, Cp into LAST LIGHT) and the SALVAGE draft without
 // REPAIR v2; the boots say `> DELIVERY: …`. The INBOX: ARES-VII's dock reads `INBOX 1` and the kid opens the welcome there;
 // CONTROL's reply to ARES-VII comes at HALCYON (read in the desk's INBOX tab); 046's no-address mail in pink at VESPER.
-// VESPER is flown with no Swap aboard: the ghost thrust, the strip's `NO SWAP ABOARD — nothing stops the bursts. Fix ▼ …`
-// (SKIP refused meanwhile: ENGINE FAULT — NO SKIP, the 3b review),
+// VESPER is flown with no Swap aboard: the limping engine's bursts, the strip's `NO SWAP ABOARD — [TAB], REPAIR THRUST
+// CTRL …` (SKIP refused meanwhile: ENGINE FAULT — NO SKIP, the 3b review),
 // and how the ship ended is logged. The RUN TALLY says `NEVER ARRIVED: —`.
 // About 20 minutes; shots under tests/.out/e2e/shots/play-*.
 // Usage: node tests/e2e/scenarios/playthrough.mjs   (env E2E_BASE_URL, SEED, SHOT_VIEWPORT; tests/e2e/run.mjs runs it)
@@ -583,7 +583,10 @@ for (const [index, name] of SHIPS.entries()) {
     const noSwapLine = [...lines].find((text) => /^NO SWAP ABOARD/.test(text)) ?? null;
     check(`${tag}: …ENGINE FAULT with no Swap aboard: the ghost thrust fired (${met.ghostBursts} bursts), SWAP never reached the unit`, met.ghostSpec && met.ghostBursts >= 1
       && !swap.licensed && swap.files === 0 && !swap.chip, JSON.stringify({ spec: met.ghostSpec, bursts: met.ghostBursts, ...swap }));
-    check(`${tag}: …the strip said \`NO SWAP ABOARD — nothing stops the bursts. Fix ▼ after each one\``, noSwapLine === 'NO SWAP ABOARD — nothing stops the bursts. Fix ▼ after each one', noSwapLine ?? 'never shown');
+    // The limping engine (Fran's decision): the line names the repair (in amber, the TAB first), or how to fly through.
+    const NO_SWAP_WORDINGS = ['NO SWAP ABOARD — [TAB], REPAIR THRUST CTRL to calm the bursts', 'NO SWAP ABOARD — REPAIR THRUST CTRL to calm the bursts',
+      'NO SWAP ABOARD — nothing stops the bursts. Fix ▼ after each one'];
+    check(`${tag}: …the strip said \`NO SWAP ABOARD — …\` (REPAIR THRUST CTRL, or how to fly through)`, NO_SWAP_WORDINGS.includes(noSwapLine ?? ''), noSwapLine ?? 'never shown');
     run.vesper = { outcome, flightSec, stuck, bursts: met.ghostBursts, fuelPct: await st(() => window.__ap.store.getState().burn.fuelPct) };
   }
   if (name === 'KESTREL') {

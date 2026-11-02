@@ -3,7 +3,7 @@ import type {
 } from '@state/schema';
 import type { SegmentRole, Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
-import { AUTOPILOT_DAMAGED_LINE, BAND_COPY, CAPABILITY_ROLES, type Band, type CapabilityRole } from '@systems/capabilities';
+import { AUTOPILOT_DAMAGED_LINE, BAND_COPY, CAPABILITY_ROLES, ghostRefusesSkip, type Band, type CapabilityRole } from '@systems/capabilities';
 import { integrityBand } from '@state/selectors';
 import { formatCount } from '@data/format';
 import type { Hopeless } from '@systems/beam-out';
@@ -33,7 +33,7 @@ import { GHOST_ALARM_ID } from '@systems/alerts';
 import { reachMarks, firewallFits } from '@systems/hollow-hud';
 import {
   driversInMemory, infectedSegments, fileLabel, chargeLeft, anythingInfected, isFirewall,
-  isUsableTool, hasUsableTool, swapAboard, toolFilesOf, getByRole, verbSecondsLeft, isShipFile, isInfected,
+  isUsableTool, hasUsableTool, swapAboard, repairableShipFile, repairCeiling, toolFilesOf, getByRole, verbSecondsLeft, isShipFile, isInfected,
 } from '@state/selectors';
 import { formatTac, isReleaseRow, isCorrectionRow } from '@systems/guidance';
 import {
@@ -2046,24 +2046,73 @@ const GHOST_ALARM_RULES: readonly GuideRule[] = [
   },
 ];
 
+// The no-Swap lesson (all three wordings: lessonOf).
+const GHOST_NOSWAP_LESSON = 'ghost-noswap';
+
+// REPAIR can calm the controller now: the arm lets it heal Thrust Ctrl (selectors repairableShipFile) up to its ceiling,
+// REPAIR is in hand's reach and some charge is left.
+function thrustRepairPossible(ctx: DirectorCtx): boolean {
+  const file = getByRole(ctx.state, 'thrust-ctrl');
+  return file !== null && repairableShipFile(ctx.state, file) && file.integrity < repairCeiling(ctx.state, file)
+    && hasUsableTool(ctx.state.memory, 'repair', 'counts') && chargeLeft(ctx.state) >= 1;
+}
+
+// The frequent bursts with no Swap aboard (capabilities ghostRefusesSkip: Thrust Ctrl failing or dead), and REPAIR can calm
+// them.
+function noSwapRepairDue(ctx: DirectorCtx): boolean {
+  return noSwapForGhost(ctx.state) && ghostRefusesSkip(ctx.state) && thrustRepairPossible(ctx);
+}
+
+function noSwapPreempts(ctx: DirectorCtx): boolean {
+  return (ctx.leadShownSec.get(GHOST_NOSWAP_LESSON) ?? 0) < GHOST_NOSWAP_LEAD_SEC && ctx.pred.outcome !== 'impact' && !ctx.state.burn.firing;
+}
+
 // ...its lesson after the second burst: the THRUST CTRL pip, then SWAP; with no Swap aboard, how to fly through it.
 const GHOST_LESSON_RULES: readonly GuideRule[] = [
+  // Slice 3b review (item 1) and Fran's decision (the limping engine): from the ship's first burst, once its alarm line is
+  // down, while nothing aboard can stop the bursts. One lesson in three wordings: REPAIR THRUST CTRL (in the MIND, the
+  // file lit; in amber, the way there first) while REPAIR can still calm them, else how to fly through them. For its first
+  // GHOST_NOSWAP_LEAD_SEC on the strip it outranks the flight's NOW lines too (the corrections a burst brings: before, the
+  // line was live only while a burst ran, a third of a second at CRUISE, and never won the strip), except a path into the
+  // planet and a held burn (the line must not stand between the kid and RELEASE). Then a tutorial like the others,
+  // retired after GHOST_LESSON_SHOW_SEC, or once REPAIR has calmed the controller (it is no longer live).
   {
-    // Slice 3b review (item 1): from the ship's first burst, once its alarm line is down, while nothing aboard can stop the
-    // bursts. For its first GHOST_NOSWAP_LEAD_SEC on the strip it outranks the flight's NOW lines too (the corrections a
-    // burst brings, ▼ TOO LOW first: before, the line was live only while a burst ran, a third of a second at CRUISE, and
-    // never won the strip), except a path into the planet and a burn being held (the line must not stand between the kid
-    // and RELEASE). Then a tutorial like the others, retired after GHOST_LESSON_SHOW_SEC.
+    id: 'tut-ghost-noswap-tab',
+    lesson: GHOST_NOSWAP_LESSON,
+    layer: 'mind',
+    priority: 'tutorial',
+    once: true,
+    leadInSec: GHOST_NOSWAP_LEAD_SEC,
+    maxShownSec: GHOST_LESSON_SHOW_SEC,
+    activeWhen: (ctx) => noSwapRepairDue(ctx) && inAmber(ctx),
+    preempts: noSwapPreempts,
+    text: () => REPO_TEXT.noSwapTab,
+    keys: ['TAB'],
+  },
+  {
     id: 'tut-ghost-noswap',
+    lesson: GHOST_NOSWAP_LESSON,
+    layer: 'mind',
+    priority: 'tutorial',
+    once: true,
+    leadInSec: GHOST_NOSWAP_LEAD_SEC,
+    maxShownSec: GHOST_LESSON_SHOW_SEC,
+    activeWhen: (ctx) => noSwapRepairDue(ctx) && !inAmber(ctx),
+    preempts: noSwapPreempts,
+    text: () => REPO_TEXT.noSwap,
+    highlight: (ctx) => toolStepTarget('repair', ctx.state.ui.activeTool?.kind ?? null, fileHintTarget('thrust-ctrl')),
+  },
+  {
+    id: 'tut-ghost-noswap-fly',
+    lesson: GHOST_NOSWAP_LESSON,
     layer: 'ship',
     priority: 'tutorial',
     once: true,
     leadInSec: GHOST_NOSWAP_LEAD_SEC,
     maxShownSec: GHOST_LESSON_SHOW_SEC,
-    activeWhen: (ctx) => noSwapForGhost(ctx.state),
-    preempts: (ctx) => (ctx.leadShownSec.get('tut-ghost-noswap') ?? 0) < GHOST_NOSWAP_LEAD_SEC
-      && ctx.pred.outcome !== 'impact' && !ctx.state.burn.firing,
-    text: () => REPO_TEXT.noSwap,
+    activeWhen: (ctx) => noSwapForGhost(ctx.state) && ghostRefusesSkip(ctx.state) && !thrustRepairPossible(ctx),
+    preempts: noSwapPreempts,
+    text: () => REPO_TEXT.noSwapFly,
   },
   {
     id: 'tut-ghost-pip',

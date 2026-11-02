@@ -1,12 +1,12 @@
 import type { GameState, VerbTelegraph, HollowState } from './schema';
 import type {
   Segment, RedundancySegment, FsToolSegment, CoreSegment, ToolSegment, SkillSegment, SegmentState, SegmentRole,
-  DriverSegment, SegmentType, HollowSegment, Infection, UpgradeSegment, UpgradeKind, FirewallSegment,
+  DriverSegment, SegmentType, HollowSegment, Infection, UpgradeSegment, UpgradeKind, FirewallSegment, ShipSegment,
 } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import {
   CORE_LOW_INTEGRITY, CORE_LOW_THREADS, BAND_OK_MIN, BAND_DEGRADED_MIN, BAND_FAILING_MIN, CORRUPTION_STEP,
-  INTEGRITY_MAX,
+  INTEGRITY_MAX, THRUST_CTRL_REPAIR_MAX,
 } from '@data/tuning';
 import { podCode } from '@data/landing-text';
 
@@ -206,6 +206,19 @@ export type RepairableSegment = CoreSegment | ToolSegment | SkillSegment | FsToo
 export function isRepairable(seg: Segment): seg is RepairableSegment {
   return seg.type === 'core' || seg.type === 'tool' || seg.type === 'skill' || seg.type === 'fs-tool' || seg.type === 'upgrade'
     || seg.type === 'driver';
+}
+
+// Slice 3b (Fran's decision, the limping engine): on the arm REPAIR also heals Thrust Ctrl, the one ship file it may touch
+// (SWAP to Thrust.alt, or a request for Swap, may be ships away). Every other ship file, and Thrust Ctrl on the classic
+// world, keeps phase 2's rule: SWAP or DELETE it.
+export function repairableShipFile(state: Readonly<Pick<GameState, 'run'>>, seg: Segment): seg is ShipSegment {
+  return state.run.map.world === 'arm' && seg.type === 'ship' && seg.role === 'thrust-ctrl';
+}
+
+// How far REPAIR heals `seg`: to 100, except the arm's Thrust Ctrl, healed only to THRUST_CTRL_REPAIR_MAX unless HOLLOW is
+// eating it (then the repair must reach 100 to win).
+export function repairCeiling(state: Readonly<Pick<GameState, 'run'>>, seg: Segment): number {
+  return repairableShipFile(state, seg) && seg.infected === undefined ? THRUST_CTRL_REPAIR_MAX : INTEGRITY_MAX;
 }
 
 // --- Pods and their drivers (01-landing §3.8) ----------------------------------------------------

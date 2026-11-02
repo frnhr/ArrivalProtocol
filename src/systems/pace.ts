@@ -5,7 +5,7 @@ import { isBurnHeld, isGhostFiring, ghostDueInSec, laterBurstWindow } from '@sys
 import { getPrediction, currentPrediction, secUntil, isFinishingBurn, skipWarp, type Prediction, type ZoneHit } from '@systems/predict';
 import { ZONE_WORD } from '@data/zone-text';
 import { ghostBurstsThisPhase, spreadPaused } from '@state/selectors';
-import { capabilitiesNow, ghostWithoutSwap } from '@systems/capabilities';
+import { capabilitiesNow, ghostRefusesSkip } from '@systems/capabilities';
 import { registerKeys } from '@systems/input';
 import { emit } from '@systems/events';
 import { getDropSolution } from '@systems/drop-cache';
@@ -345,7 +345,8 @@ function dodgeRefusal(state: Readonly<GameState>): string {
 // SKIP's refusal on a seeding ship until its first seed has come (WP9 review round 1).
 export const SKIP_REFUSAL_SEED_COMING = 'SOMETHING IS COMING';
 // Slice 3b review (item 1, the lead's decision): on the arm, once the engine has fired by itself and no Swap is aboard to
-// stop it, a flight's SKIP is refused for as long as bursts are due (capabilities ghostWithoutSwap). A SKIP used to fly
+// stop it, a flight's SKIP is refused while the frequent bursts are due (capabilities ghostRefusesSkip: Thrust Ctrl failing
+// or dead; once REPAIR has it in the degraded band its rare twitch is flown through as WP10 ruled). A SKIP used to fly
 // through every later burst (WP10's ruling, made when SWAP always came with the first burst): on VESPER flown without Swap
 // about 40 bursts went by in a few wall seconds, each costing FUEL, and the tank was gone before the kid saw why. At
 // CRUISE every burst is seen (the whump, ▼ DRIFT, the counter) and the strip's fix comes after it. Stopping the SKIP at
@@ -392,7 +393,7 @@ function skipInhibitor(state: Readonly<GameState>, pred: Prediction): string | n
   if (landingRefusal !== null) return landingRefusal;
   if (!landing && pred.acceptOnly) return SKIP_REFUSAL_STRANDED;
   // From the ship's first burst (the alarm moment, which a SKIP still lands on) while no Swap can stop the bursts.
-  if (!landing && state.burn.ghostBursts > 0 && ghostWithoutSwap(state)) return SKIP_REFUSAL_ENGINE_FAULT;
+  if (!landing && state.burn.ghostBursts > 0 && ghostRefusesSkip(state)) return SKIP_REFUSAL_ENGINE_FAULT;
   // A hazard zone is close or the ship is in it (WP9): the world runs TACTICAL there, and a SKIP would
   // only pretend to (it ends as the TACTICAL lead begins, earlier than §6.8's 15 s; see tuning.ts).
   const inside = zoneInside(state, pred);

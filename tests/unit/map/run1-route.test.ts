@@ -38,6 +38,9 @@ import { setRequest, recommendation, undeliveredFiles } from '@systems/repositor
 import { REPO_TEXT } from '@data/repo-text';
 import type { RepoFileId } from '@/types/repo';
 import type { GameState } from '@state/schema';
+import { actionRepair } from '@state/actions';
+import { getByRole } from '@state/selectors';
+import { getOpsBySeg } from '@systems/ops-core';
 
 const WORKED: readonly number[] = [0, 2, 5, 11, 15, 19];
 // 02 §3.14's requests, desk by desk along the worked route (CORMORANT's would never arrive: none).
@@ -48,6 +51,8 @@ mountStoryLog(h.store);
 const state = (): Readonly<GameState> => h.store.getState();
 // The kid plays for MERGE (wp11/full-run's even seeds): it heals the Core only back to its two threads, saving charge.
 const SAVER = { coreHealBelow: 50, coreHealTo: 60 };
+// The ships whose Thrust Ctrl the kid repaired when the strip asked (no Swap aboard).
+const thrustRepairs: string[] = [];
 
 interface Flown { route: readonly number[]; ended: string; ships: string; charge: number | null; failures: string[] }
 
@@ -57,6 +62,12 @@ function flyShip(): void {
     maxWall: 1500,
     mistake: () => {
       h.defend11(SAVER);
+      // The limping engine (slice 3b, Fran's decision): the strip says REPAIR THRUST CTRL, and the kid does.
+      const shown = state().director.shown?.id ?? '';
+      const thrust = getByRole(state(), 'thrust-ctrl');
+      if ((shown === 'tut-ghost-noswap' || shown === 'tut-ghost-noswap-tab') && thrust !== null && getOpsBySeg(thrust.id).length === 0 && !state().clock.paused) {
+        if (actionRepair(h.store, thrust) === null) thrustRepairs.push(state().level.shipName);
+      }
       const deal = state().hollow.deal;
       if (deal.phase === 'offered' && deal.entryId !== null) pickChoice(deal.entryId, DEAL_REFUSE);
       if (state().burn.auto.phase === 'idle' && autoburnAvailable(state(), getPrediction())) h.press('KeyB');
@@ -195,8 +206,9 @@ const vesper = state().run.ships.find((ship) => ship.shipName === 'VESPER');
 console.log(`INFO  risk 1, VESPER flown without SWAP (ENGINE FAULT, 16 pods): ${vesper?.outcome ?? 'not reached'} · ${vesper?.landedInLz ?? '-'} of ${vesper?.colonistsAboard ?? '-'} colonists in an LZ · stars ${vesper?.stars ?? '-'} · fuel left ${vesper ? Math.round(vesper.fuelLeftPct) : '-'}%`);
 // Slice 3b review (item 1): VESPER flown without Swap is a trade, never a dead end: it must not regress to stranded,
 // crashed or escaped (it ends with the orbit locked or accepted; the instant landing then lands its pods).
-check('…VESPER flown without SWAP ends with its orbit locked or accepted, never stranded, crashed or escaped (review item 1)',
-  vesper !== undefined && (vesper.outcome === 'locked' || vesper.outcome === 'partial'), vesper?.outcome ?? 'not reached');
+check('…VESPER flown without SWAP (the kid repairing Thrust Ctrl when the strip asks) locks or is accepted and lands at least half its colonists in an LZ (review item 1, the limping engine)',
+  vesper !== undefined && (vesper.outcome === 'locked' || vesper.outcome === 'partial') && vesper.landedInLz >= vesper.colonistsAboard / 2
+  && thrustRepairs.includes('VESPER'), `${vesper?.outcome ?? 'not reached'} · ${vesper?.landedInLz} of ${vesper?.colonistsAboard} · repaired on ${thrustRepairs.join(', ') || 'none'}`);
 console.log(`INFO  charge at the choice on the worked route (ends at CORMORANT → LAST LIGHT): ${worked.charge ?? 'not reached'}`);
 
 // --- Risk 6 at full depth: the other last ships before the final one -------------------------------------------------------
@@ -208,6 +220,8 @@ for (const last of others) {
   if (!route) { console.log(`INFO  no route ends through slot ${last}`); continue; }
   const flown = flyRoute(route, () => {}, route.slice(1).map(() => 'tag' as const));
   console.log(`INFO  charge at the choice, route [${route.join(', ')}], following the tag: ${flown.charge ?? 'not reached'} | ${flown.ended} | ${flown.ships}`
-    + ` | requested ${state().run.repo.requests.map((request) => `${request.file}:${request.status}`).join(' ') || 'nothing'}`);
+    + ` | requested ${state().run.repo.requests.map((request) => `${request.file}:${request.status}`).join(' ') || 'nothing'}`
+    + ` | CURLEW ${state().run.ships.filter((ship) => ship.shipName === 'CURLEW').map((ship) => `${ship.outcome} fuel ${Math.round(ship.fuelLeftPct)}% ${ship.landedInLz}/${ship.colonistsAboard}`).join('') || '-'}`
+    + ` | Thrust Ctrl repaired on ${thrustRepairs.splice(0).join(', ') || 'none'}`);
 }
 finish();

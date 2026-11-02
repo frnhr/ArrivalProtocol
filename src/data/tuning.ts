@@ -707,6 +707,27 @@ export const GHOST_BY_BAND: Readonly<Partial<Record<Band, GhostSpec>>> = {
   failing: { meanIntervalTac: 10, amp: 0.3, durTac: 1.0, stickChance: 0 },
   dead: { meanIntervalTac: 10, amp: 0.3, durTac: 1.0, stickChance: 0.3 },
 };
+// Slice 3b, Fran's decision (DECISIONS.md "During implementation"): on the arm SWAP comes only by request, so an ENGINE
+// FAULT ship is often met with no Swap aboard, and GHOST_BY_BAND's bursts (2.5% of VESPER's tank each, 27–40 of them on
+// its coast) emptied the tank whatever the kid did. The arm's engine LIMPS instead: half the push at the same rate while
+// Thrust Ctrl is failing or dead (amp 0.15: about 1.1% a burst), and REPAIR on Thrust Ctrl (up to
+// THRUST_CTRL_REPAIR_MAX, the degraded band) leaves a twitch: the same push every 20 tac s, half the failing band's
+// thrust over time. Measured on run 1's VESPER (seeds 3/5/7/11 × reaction 0.4/0.8 s, the strip-following kid): no repair
+// locks with 12–29% FUEL and 2,800–3,200 of 3,200 in an LZ; REPAIR when the strip asks, 26–41% and 2,400–3,200; SWAP
+// aboard, 31–43% and 2,600–3,200. (At a third of the push the repair matched SWAP: SWAP must stay the better answer.)
+// SWAP to Thrust.alt is still the only silence. No burst once the orbit is locked or accepted (capabilities.ts: the
+// limp ends with the flight, so the landing is not decayed by it). Measured with .tmp/fix3b/vesper.ts (the plan's
+// Deviations, review fixes 2).
+export const ARM_GHOST_BY_BAND: Readonly<Partial<Record<Band, GhostSpec>>> = {
+  degraded: { meanIntervalTac: 20, amp: 0.15, durTac: 1.0, stickChance: 0 },
+  failing: { meanIntervalTac: 10, amp: 0.15, durTac: 1.0, stickChance: 0 },
+  dead: { meanIntervalTac: 10, amp: 0.15, durTac: 1.0, stickChance: 0.3 },
+};
+// REPAIR heals the arm's Thrust Ctrl (a ship file, which REPAIR otherwise refuses) only this far: a field repair of a
+// faulty controller, into the degraded band's middle (BAND_DEGRADED_MIN 50 … BAND_OK_MIN 80), so its twitch stays
+// (ARM_GHOST_BY_BAND.degraded) and SWAP stays the full fix. A controller HOLLOW is eating heals to 100 as any file does
+// (the repair has to win the tug-of-war).
+export const THRUST_CTRL_REPAIR_MAX = 70;
 
 // Sensor Interp (C3): a degraded sensor rounds the path's readouts to ±(100 − integrity) × this
 // many km (78% → 330 km on ship 1: a visible ≈, never a wrong colour). A failing one only

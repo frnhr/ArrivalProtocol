@@ -23,6 +23,8 @@ export const TOOL_REFUSAL = {
   locked: 'LOCKED',
   healthy: 'ALREADY 100%',
   shipFile: "SHIP FILES CAN'T BE HEALED — SWAP OR DELETE IT",
+  // Slice 3b (the limping engine): the arm's Thrust Ctrl heals only to THRUST_CTRL_REPAIR_MAX; the rest is SWAP's.
+  fieldRepairMax: 'HEALED AS FAR AS IT GOES — SWAP FOR THE REST',
   noCharge: 'NO REPAIR CHARGE LEFT',
   chargeBusy: 'REPAIR CHARGE IS IN USE',
   needsV2: 'NEEDS REPAIR v2',

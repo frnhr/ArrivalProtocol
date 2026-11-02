@@ -2,7 +2,7 @@ import type { Segment, FsToolSegment, DriverSegment, HollowSegment, LogSegment }
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import {
-  getFsTool, getRedundancy, getFreeTotal, getSegmentById, selectCorruption, shownIntegrity, isRepairable,
+  getFsTool, getRedundancy, getFreeTotal, getSegmentById, selectCorruption, shownIntegrity, isRepairable, repairableShipFile,
   healthKnown, isInfected, type HealthSegment,
 } from '@state/selectors';
 import { INTEGRITY_MAX, BAND_FAILING_MIN } from '@data/tuning';
@@ -103,7 +103,7 @@ export function computeActions(seg: Segment, state: Readonly<GameState>): Comput
   }
   if (seg.type === 'driver' && state.run.phase === 'landing') out.primary.push(loadNextOption(state, seg));
 
-  if (isRepairable(seg) && seg.integrity < INTEGRITY_MAX) {
+  if ((isRepairable(seg) || repairableShipFile(state, seg)) && seg.integrity < INTEGRITY_MAX) {
     const repair = getFsTool(state, 'repair');
     const refusal = actionRefusal(state, 'repair', seg);
     const estimate = repairChargeEstimate(seg.integrity, seg.size);

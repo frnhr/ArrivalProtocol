@@ -7,7 +7,7 @@ import { finalFateOfAboard, parkedFateOf } from '@systems/landing-rules';
 import type { FsToolKind } from '@/types/fs-tool';
 import {
   getRedundancy, getFsTool, effectiveToolVersion, integrityState, isRepairable, hasIntegrity, shownIntegrity,
-  type HealthSegment,
+  repairableShipFile, repairCeiling, type HealthSegment,
 } from './selectors';
 import { startOp, cancelOp, canStartOp, type Op, type OpKind, type OpOwner, type OpSpec } from '@systems/ops-core';
 import {
@@ -333,7 +333,9 @@ export function actionRepair(store: Store<GameState>, seg: Segment): ToolRefusal
   const refusal = actionRefusal(state, 'repair', seg);
   if (refusal) return refuse(refusal);
   const charge = getRedundancy(state);
-  if (!isRepairable(seg) || !charge) throw new Error(`actionRepair: ${seg.name} passed the target rules without being repairable`);
+  if ((!isRepairable(seg) && !repairableShipFile(state, seg)) || !charge) throw new Error(`actionRepair: ${seg.name} passed the target rules without being repairable`);
+  // How far it heals: 100, or the arm's Thrust Ctrl's field-repair ceiling (selectors repairCeiling, slice 3b).
+  const ceiling = repairCeiling(state, seg);
 
   const healPerSec = repairRatePerSec(seg.size, effectiveToolVersion(state, 'repair'));
   const costPerPoint = chargePerPoint(seg.size);
@@ -346,7 +348,7 @@ export function actionRepair(store: Store<GameState>, seg: Segment): ToolRefusal
 
   const step = (dtAi: number): number => {
     if (dtAi > 0 && !outOfCharge) {
-      let heal = Math.min(healPerSec * dtAi, INTEGRITY_MAX - seg.integrity);
+      let heal = Math.max(0, Math.min(healPerSec * dtAi, ceiling - seg.integrity));
       while (owed + heal * costPerPoint > paid + FLOAT_SLACK && charge.used >= 1) {
         charge.used -= 1;
         paid += 1;
@@ -356,11 +358,11 @@ export function actionRepair(store: Store<GameState>, seg: Segment): ToolRefusal
         heal = Math.max(0, affordable);
         outOfCharge = true;
       }
-      seg.integrity = Math.min(INTEGRITY_MAX, seg.integrity + heal);
+      seg.integrity = Math.min(ceiling, seg.integrity + heal);
       owed += heal * costPerPoint;
     }
-    if (seg.integrity >= INTEGRITY_MAX - FLOAT_SLACK) {
-      seg.integrity = INTEGRITY_MAX;
+    if (seg.integrity >= ceiling - FLOAT_SLACK) {
+      seg.integrity = ceiling;
       return OP_COMPLETE_PCT;
     }
     return outOfCharge ? OP_COMPLETE_PCT : seg.integrity;
@@ -382,7 +384,7 @@ export function actionRepair(store: Store<GameState>, seg: Segment): ToolRefusal
     icon: TOOL_ICONS.repair,
     step,
     onComplete: () => {
-      const stopped = seg.integrity < INTEGRITY_MAX;
+      const stopped = seg.integrity < ceiling;
       // Healed to 100 while HOLLOW was eating it: the tug-of-war is won (systems/hollow.ts reads the
       // cure from the event; the strip repaints with finish's memoryRev bump).
       const cured = !stopped && seg.infected !== undefined;

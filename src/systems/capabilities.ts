@@ -6,7 +6,7 @@ import {
 } from '@state/selectors';
 import { threadsBusy } from '@systems/ops-core';
 import {
-  ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, REACTOR_THREAD_SHARE, GHOST_BY_BAND,
+  ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, REACTOR_THREAD_SHARE, GHOST_BY_BAND, ARM_GHOST_BY_BAND,
   SENSOR_FUZZ_KM_PER_POINT, PLOT_STALE_TAC, TELEMETRY_SCRAMBLE_BELOW, INTEGRITY_MAX,
   MAX_LINE_CHARS, COMMS_GARBLE_BY_BAND, FUEL_TRIM_DV_BONUS_FRAC,
   BAY_CADENCE_BY_BAND, SENSOR_DROP_FACTOR_BY_BAND, PLOTTER_DROP_FACTOR_BY_BAND, DRIVER_DROP_FACTOR_BY_BAND,
@@ -246,11 +246,18 @@ function validateCapabilityTables(): void {
     }
     previous = cadence;
   }
-  for (const [band, ghost] of Object.entries(GHOST_BY_BAND)) {
-    if (!ghost) continue;
-    if (!(ghost.meanIntervalTac > 0 && ghost.amp > 0 && ghost.durTac > 0 && ghost.stickChance >= 0 && ghost.stickChance <= 1)) {
-      throw new Error(`capabilities: GHOST_BY_BAND.${band} is not a valid ghost spec`);
+  for (const [name, table] of [['GHOST_BY_BAND', GHOST_BY_BAND], ['ARM_GHOST_BY_BAND', ARM_GHOST_BY_BAND]] as const) {
+    for (const [band, ghost] of Object.entries(table)) {
+      if (!ghost) continue;
+      if (!(ghost.meanIntervalTac > 0 && ghost.amp > 0 && ghost.durTac > 0 && ghost.stickChance >= 0 && ghost.stickChance <= 1)) {
+        throw new Error(`capabilities: ${name}.${band} is not a valid ghost spec`);
+      }
     }
+  }
+  // The limp is gentler than phase 2's ghost, and calmer as the controller heals (slice 3b, Fran's decision).
+  const push = (spec: GhostSpec | undefined): number => (spec === undefined ? 0 : spec.amp / spec.meanIntervalTac);
+  if (!(push(ARM_GHOST_BY_BAND.degraded) < push(ARM_GHOST_BY_BAND.failing) && push(ARM_GHOST_BY_BAND.failing) < push(GHOST_BY_BAND.failing))) {
+    throw new Error('capabilities: ARM_GHOST_BY_BAND must push less than GHOST_BY_BAND, and less again in the degraded band');
   }
 }
 validateCapabilityTables();
@@ -310,7 +317,7 @@ export function deriveCapabilities(state: Readonly<GameState>, threadsBusy: numb
       jitter: ENGINE_JITTER_BY_BAND[engine.band],
       offline: engine.offline,
     },
-    thrustCtrl: { band: thrustCtrl.band, ghost: GHOST_BY_BAND[thrustCtrl.band] ?? null },
+    thrustCtrl: { band: thrustCtrl.band, ghost: ghostSpecOf(state, thrustCtrl.band) },
     reactor: { band: reactor.band, bandCap, reactorCap },
     presets: roleHealth(state, 'autopilot').band,
     plot: {
@@ -338,6 +345,16 @@ export function deriveCapabilities(state: Readonly<GameState>, threadsBusy: numb
       'repair-patch': liveUpgrades(state.memory, 'repair-patch'),
     },
   };
+}
+
+// What a Thrust Ctrl in `band` fires (null: nothing). The classic world keeps phase 2's GHOST_BY_BAND (SWAP arrives with
+// its first burst). The arm's engine limps (slice 3b, Fran's decision): ARM_GHOST_BY_BAND, gentler, a twitch left in the
+// degraded band a field repair reaches, and nothing once the orbit is locked or accepted (the landing), so the pods' orbit
+// is not decayed by it.
+function ghostSpecOf(state: Readonly<GameState>, band: Band): GhostSpec | null {
+  if (state.run.map.world !== 'arm') return GHOST_BY_BAND[band] ?? null;
+  if (state.run.phase === 'landing') return null;
+  return ARM_GHOST_BY_BAND[band] ?? null;
 }
 
 // Bay Ctrl's capability for its band (§3.4): the one rule for the cadence and BAY OFFLINE. landing-rules reads it from
@@ -425,6 +442,14 @@ export function planningThrustCap(state: Readonly<GameState>, caps: Capabilities
 // swapAboard), with fuel left for a burst. On the arm SWAP comes only by request, so a kid can meet this with no cure; the
 // classic world licenses SWAP with the first burst and never meets it. The strip's no-Swap line (repository.ts
 // noSwapForGhost) and the flight's ENGINE FAULT SKIP refusal (pace.ts) both read it.
+// ...and the bursts are the frequent ones (Thrust Ctrl failing or dead): SKIP is refused then (pace.ts). A field repair to
+// the degraded band leaves a rare twitch a SKIP may fly through as WP10 ruled (and re-plan after).
+export function ghostRefusesSkip(state: Readonly<GameState>): boolean {
+  if (!ghostWithoutSwap(state)) return false;
+  const band = capabilitiesNow(state).thrustCtrl.band;
+  return band === 'failing' || band === 'dead';
+}
+
 export function ghostWithoutSwap(state: Readonly<GameState>): boolean {
   return state.run.map.world === 'arm' && state.burn.fuelPct > 0 && capabilitiesNow(state).thrustCtrl.ghost !== null && !swapAboard(state);
 }
