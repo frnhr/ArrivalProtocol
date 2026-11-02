@@ -36,7 +36,7 @@ function crash(): void {
 
 // --- A lost last ship --------------------------------------------------------------------------------
 // WP9: the last ship was KESTREL (ship 3); WP10: it is VESPER (ship 4). Read off the fleet, so the next ship changes nothing.
-// WP11: the last ship is LAST LIGHT, the flagship: its loss is §4.3's FLAGSHIP LOST (WP7's interim 'last-ship-lost' and
+// WP11: the last ship is LAST LIGHT, the flagship: its loss is §4.3's FLAGSHIP LOST, worded FINAL SHIP LOST since slice 3a (WP7's interim 'last-ship-lost' and
 // its `… LOST · END OF THE FLEET` title are gone with the fleet that ended early), and RUN END's tone is sombre.
 const LAST = CLASSIC_FIVE.length - 1;
 const LAST_NAME = classicShip(LAST).name;
@@ -48,9 +48,9 @@ const LAST_NAME = classicShip(LAST).name;
     && plan.cause === 'flagship-lost' && classicShip(LAST).final, JSON.stringify(plan));
   continueAfterLoss(h.store);
   const model = runEndModel(state());
-  check('…RUN END is sombre: FLAGSHIP LOST', model.title === 'FLAGSHIP LOST' && model.tone === 'sombre' && model.cause === 'flagship-lost',
+  check('…RUN END is sombre: FINAL SHIP LOST', model.title === 'FINAL SHIP LOST' && model.tone === 'sombre' && model.cause === 'flagship-lost',
     `${model.title} tone ${model.tone}`);
-  check('…its why line says what was lost', model.why === 'The flagship never made it.', model.why);
+  check('…its why line says what was lost', model.why === 'The final ship never made it.', model.why);
   check('BEAM OUT\'s question on the last ship says the run ends (no transit hits that never come)',
     BEAM_OUT_TEXT.detail('HALCYON', 2000, true) === '2,000 colonists stay on HALCYON. The run ends.'
     && /transit hits/.test(BEAM_OUT_TEXT.detail('HALCYON', 2000, false)));

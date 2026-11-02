@@ -24,6 +24,8 @@ import {
 import { driversInMemory, getAiCore } from '@state/selectors';
 import { ARES_RUN1_FAMILIES } from '@data/souls';
 import { LINES, WORST_CASE_VARS } from '@data/script';
+import { solLy } from '@systems/map-geometry';
+import { END_SLOTS } from '@data/arm';
 import { LANDING_ASKS, hostLine } from '@data/landing-text';
 import { META_STORAGE_KEY, BOOT_GHOST_AT_SEC, BOOT_LINE_AT_SEC } from '@data/tuning';
 import type { GameState } from '@state/schema';
@@ -106,9 +108,11 @@ newRunFromArchive(12);
 check('NEW RUN: UNIT-048 · WAVE 2, the last unit on the run, HOLLOW is UNIT-047 (unnamed; not aboard the calm ship 1)',
   state().run.unitNumber === 48 && state().run.wave === 2 && state().mission.unitId === 'UNIT-048' && state().run.lastUnit?.number === 47
     && JSON.stringify(state().run.hollowUnits) === '[47]' && !state().run.hollowNamed && !state().memory.some((seg) => seg.type === 'hollow'));
-check('…the title line says it', LINES.titleUnit({
-  ...WORST_CASE_VARS, unit: state().mission.transmissionNum, wave: state().mission.wave, distanceLy: state().mission.distanceLy,
-}).startsWith('UNIT-048 · EXODUS FLEET · WAVE 2'));
+// Slice 3a: 05 §3.12's title line (the run's start year, the final ship's distance from SOL, as lineVars reads them).
+const titleLine = LINES.titleUnit({
+  ...WORST_CASE_VARS, unit: state().mission.transmissionNum, wave: state().mission.wave, distanceLy: solLy(END_SLOTS[0]!), year: state().run.map.startYear,
+});
+check('…the title line says it', titleLine === 'UNIT-048 · YEAR 2300 · FINAL SHIP 180 LY OUT', titleLine);
 const souls = driversInMemory(state());
 const families = souls.map((soul) => soul.family);
 check('ship 1 is reseeded: none of run 1\'s families, still 3 pods',

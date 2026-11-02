@@ -975,8 +975,6 @@ export const BEAM_OUT_TAC = 6;
 export const BEAM_OUT_LIFT_MAX_SEC = 4000;
 // Run 1's unit is UNIT-047 (§1): forty-six went before it. WP8's archive adds one per run.
 export const FIRST_UNIT_NUMBER = 47;
-// The whole route the Exodus Fleet flies (§1: 581 light-years), on the title card.
-export const FLEET_ROUTE_LY = 581;
 // HALCYON's wall rule (`4 FREE BLOCKS STOP IT — REPAIR, then MOVE souls behind a WALL`) holds the strip
 // this long at HOLLOW's wake: read twice, then the plain `SOMETHING IS EATING C08` lines name each
 // cluster the repairs must reach (the rule is back as `MOVE C09 behind a WALL` once they are cured).

@@ -111,7 +111,8 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
 {
   const files = transmitModel(state()).files;
   const held = transmitModel(state()).chargeHeld;
-  h.store.update((d) => { d.run.transit!.linkBlocks = files + held - 10; });
+  // The plan's link and its hop's link are one number in the game (goTransmit copies the hop's): squeeze both.
+  h.store.update((d) => { d.run.transit!.linkBlocks = files + held - 10; d.run.transit!.hop.linkBlocks = files + held - 10; });
   let model = transmitModel(state());
   check('a tight link leaves charge behind: the line says how much', model.packetLine.endsWith('→ 10 LEFT BEHIND') && model.dropLine === TRANSMIT_TEXT.tight, model.packetLine);
   const bak = model.chips.find((chip) => chip.name === 'Repair.bak')!;
@@ -251,22 +252,23 @@ check('CONTINUE → TRANSMIT', state().run.phase === 'transmit');
     JSON.stringify(nearMisses([ares, halcyon], 2000, 4400)));
   check('…at the top rank: the lock, then the FUEL', JSON.stringify(nearMisses([ares, halcyon], 4100, 4400))
     === JSON.stringify([RUN_END_TEXT.lockMiss('▼', 140, 'HALCYON'), RUN_END_TEXT.fuelMiss(18, 'ARES-VII')]), JSON.stringify(nearMisses([ares, halcyon], 4100, 4400)));
-  // WP11: WP7's interim END OF THE FLEET is gone (the fleet ends with the flagship): the run here ends FLAGSHIP LOST.
+  // WP11: WP7's interim END OF THE FLEET is gone (the fleet ends with the final ship): the run here ends FINAL SHIP LOST.
   h.store.update((d) => { d.run.ships = [ares, halcyon]; d.run.phase = 'end'; d.run.endCause = 'flagship-lost'; });
   const model = runEndModel(state());
-  check('…the whole model: FLAGSHIP LOST, 1,400 / 9,600 LANDED, sombre',
-    model.title === 'FLAGSHIP LOST' && model.landed === 1400 && model.fleetColonists === 9600 && model.totalLine === RUN_END_TEXT.total(1400, 9600)
+  check('…the whole model: FINAL SHIP LOST, 1,400 / 9,600 LANDED, sombre',
+    model.title === 'FINAL SHIP LOST' && model.landed === 1400 && model.fleetColonists === 9600 && model.totalLine === RUN_END_TEXT.total(1400, 9600)
     && model.tone === 'sombre', `${model.title} | ${model.totalLine} | ${model.tone}`);
   check('…the SCORE is the landing points (1,400), and the rank is by it (of 9,600)', model.score === 1400 && model.scoreLine === RUN_END_TEXT.score(1400)
     && model.rank === rankOf(1400, 9600).rank.name, `${model.scoreLine} ${model.rank}`);
-  check('…every ship of the fleet, with its outcome word and colonists landed (KESTREL not reached)', model.ships.map((row) => `${row.shipName}:${row.outcomeWord}:${row.landedLine}`).join(' | ')
-    .startsWith(`ARES-VII:${SHIP_OUTCOME_WORD.locked}:${RUN_END_TEXT.shipLanded(600, 600)} | HALCYON:${SHIP_OUTCOME_WORD.partial}:${RUN_END_TEXT.shipLanded(800, 1000)} | KESTREL:${RUN_END_TEXT.notReached}`),
+  // Slice 3a (DESK): the RUN TALLY has a row per ship the run finished and no NOT REACHED rows, on both worlds.
+  check('…one row per ship the run finished, with its outcome word and colonists landed; no NOT REACHED rows', model.ships.map((row) => `${row.shipName}:${row.outcomeWord}:${row.landedLine}`).join(' | ')
+    === `ARES-VII:${SHIP_OUTCOME_WORD.locked}:${RUN_END_TEXT.shipLanded(600, 600)} | HALCYON:${SHIP_OUTCOME_WORD.partial}:${RUN_END_TEXT.shipLanded(800, 1000)}`,
     model.ships.map((row) => `${row.shipName}:${row.outcomeWord}:${row.landedLine}`).join(' | '));
   h.store.update((d) => { d.run.ships = [{ ...ares, outcome: 'crashed', landedInLz: 0, notLaunched: 600, points: 0, stars: 0 }]; d.run.endCause = 'stayed'; });
   const stayed = runEndModel(state());
-  check('…a run that STAYED on ship 1: its title and why, HALCYON NOT REACHED, DRIFTER, sombre',
-    stayed.title === 'YOU STAYED WITH THEM' && /ARES-VII/.test(stayed.why) && stayed.ships[1]?.outcomeWord === RUN_END_TEXT.notReached
-    && stayed.rank === 'DRIFTER' && stayed.tone === 'sombre', `${stayed.why} | ${stayed.ships[1]?.outcomeWord}`);
+  check('…a run that STAYED on ship 1: its title and why, ARES-VII\'s row only, DRIFTER, sombre',
+    stayed.title === 'YOU STAYED WITH THEM' && /ARES-VII/.test(stayed.why) && stayed.ships.length === 1 && stayed.ships[0]?.shipName === 'ARES-VII'
+    && stayed.rank === 'DRIFTER' && stayed.tone === 'sombre', `${stayed.why} | ${stayed.ships.map((row) => row.shipName).join(',')}`);
   check('…the seed in hex', /^SEED [0-9A-F]{8}$/.test(model.seedLine), model.seedLine);
 }
 

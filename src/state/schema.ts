@@ -15,7 +15,6 @@ export interface MissionMeta {
   unitId: string;          // e.g. 'UNIT-047'
   shipId: string;          // e.g. 'ARES-VII'
   destination: string;     // e.g. 'KEPLER-186F'
-  distanceLy: number;      // 581
   transmissionNum: number; // 47
   wave: number;            // the fleet wave this unit flies with (run 1 = wave 1)
   colonists: number;       // colonists aboard at arrival: the pods' (600 on ARES-VII)

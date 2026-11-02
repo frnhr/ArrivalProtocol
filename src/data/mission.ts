@@ -7,7 +7,6 @@ import type { Zone } from '@/types/zone';
 import { presetHeading } from '@systems/attitude';
 import { stateFromElements, inboundAnomalyAtRadius } from '@/types/orbit';
 import { unitName } from '@systems/say';
-import { FLEET_ROUTE_LY } from '@data/tuning';
 
 // Factories for the per-ship and per-run slices. Each call returns FRESH objects: nothing
 // here is a shared constant that the live store could alias and mutate.
@@ -86,7 +85,6 @@ export function createMissionMeta(ship: ShipDef, unitNumber: number, wave: numbe
     unitId: unitName(unitNumber),
     shipId: ship.name,
     destination: ship.world.toUpperCase(),
-    distanceLy: FLEET_ROUTE_LY,
     transmissionNum: unitNumber,
     wave,
     // Counted from the ship's pods by createShipSlices (the drivers its memory was built with).

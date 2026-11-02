@@ -20,10 +20,14 @@ for (const seed of [1, 7]) {
   for (let index = 0; index < CLASSIC_FIVE.length; index++) {
     const state = createInitialState({ seed, shipIndex: index, carried: index === 0 ? null : freshUnitRacks(classicShip(index)) });
     const { memoryClass, ...level } = state.level;
+    // Slice 3a's removal of MissionMeta.distanceLy (the old title's 581 LY, FLEET_ROUTE_LY) is written back in its old
+    // place, so the rest of the mission line is still checked byte for byte.
+    const { unitId, shipId, destination, ...missionRest } = state.mission;
+    const mission = { unitId, shipId, destination, distanceLy: 581, ...missionRest };
     check(`seed ${seed}, ${classicShip(index).name}: FULL, 384 blocks`, memoryClass === 'FULL' && layoutOf(state) === MEMORY_LAYOUTS.FULL
       && state.memory.reduce((sum, seg) => sum + seg.size, 0) === 384);
     const dump = JSON.stringify({
-      memory: state.memory, level, landing: state.landing, mission: state.mission, burn: state.burn, orbit: state.orbit,
+      memory: state.memory, level, landing: state.landing, mission, burn: state.burn, orbit: state.orbit,
       threat: state.run.threat, hollow: state.hollow,
     });
     // Generated ids (`free~12`) count from module load, so they are left out: the order of imports must not move a digest.
