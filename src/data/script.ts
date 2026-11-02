@@ -1049,6 +1049,14 @@ export const BEATS: readonly Beat[] = [
     lines: [{ speaker: 'mind-sys', text: () => ARCHIVE_TEXT.offline, critical: true }],
   },
   {
+    // Slice 3c (02 §3.11): a write of the run save threw (systems/save-write.ts): play goes on, and the TERMINAL says once
+    // that a reload will lose this run. The footer's NO SAVE stays as the reminder.
+    id: 'save-lost',
+    once: true,
+    when: (ctx) => ctx.events.has('save-lost'),
+    lines: [{ speaker: 'mind-sys', text: () => MAP_TEXT.save.offline, critical: true }],
+  },
+  {
     id: 'control-hello',
     once: true,
     when: (ctx) => ctx.phaseEntered === 'flight' && ctx.pred.outcome === 'impact' && !currentShip(ctx.state).final,

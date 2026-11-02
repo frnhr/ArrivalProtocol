@@ -4,6 +4,7 @@ import type { GameState } from '@state/schema';
 import { chargeLeft } from '@state/selectors';
 import { footerPods } from '@systems/landing-hud';
 import { ARCHIVE_TEXT } from '@data/script';
+import { MAP_TEXT } from '@data/map-text';
 import { onOpsChange, threadsBusy, threadsTotal } from '@systems/ops-core';
 import { onPostTick } from '@systems/clock';
 import { TERMINAL, thrustLimitModel, type Tone } from '@systems/flight-hud';
@@ -39,6 +40,8 @@ export function mountFooter(store: Store<GameState>): () => void {
   const limitEl = requireById('footLimit');
   const archiveEl = requireById('footArchive');
   archiveEl.title = ARCHIVE_TEXT.footerTitle;
+  const saveEl = requireById('footSave');
+  saveEl.title = MAP_TEXT.save.offline;
 
   const last = { pods: '', charge: '', threads: '', burn: '', limit: '' };
   const patch = (element: HTMLElement, key: keyof typeof last, text: string): void => {
@@ -94,11 +97,22 @@ export function mountFooter(store: Store<GameState>): () => void {
   }
   paintArchive(store.getState().archive.status, null);
   const unsubArchive = store.subscribe((s) => s.archive.status, paintArchive);
+
+  // Slice 3c (02 §3.11): the run save went offline (a write threw): `NO SAVE` stays, and flashes in when it happens mid-run
+  // (the TERMINAL's line and the buzz ride 'save-lost'). A page that opened offline says so on the title instead.
+  function paintSave(status: GameState['save']['status'], prev: GameState['save']['status'] | null): void {
+    const offline = status === 'offline';
+    saveEl.hidden = !offline;
+    saveEl.textContent = offline ? MAP_TEXT.save.footer : '';
+    if (prev === 'ok' && offline) replayAnimation(saveEl, 'archive-lost');
+  }
+  paintSave(store.getState().save.status, null);
+  const unsubSave = store.subscribe((s) => s.save.status, paintSave);
   const offOps = onOpsChange((change) => {
     if (change.type === 'progress') paintCharge();
     else paintAll();
   });
   const offTick = onPostTick(paintLimit);
 
-  return () => { unsubStore(); unsubArchive(); offOps(); offTick(); };
+  return () => { unsubStore(); unsubArchive(); unsubSave(); offOps(); offTick(); };
 }
