@@ -8,7 +8,7 @@ import type { ColonyRecord, Departure, UnitTrail } from '@/types/lineage';
 import { currentSlot, shipSummaryAt, worldSlotOf, isEndSlot } from '@systems/map-run';
 import { armShipAt } from '@systems/map-streams';
 import { unitTrailOf, olderColonies } from '@systems/lineage';
-import { unitName } from '@systems/say';
+import { unitName } from '@data/hollow-text';
 import { hopBetween, reachable, reachableFrom, hitsLanding } from '@systems/map-hop';
 import { layerOf, solLy } from '@systems/map-geometry';
 import { seedAllowance } from '@systems/map-noise';
@@ -29,7 +29,7 @@ import { SHIP_OUTCOME_WORD } from '@data/script';
 import { MAP_TEXT, MODIFIER_LABEL } from '@data/map-text';
 import { REPO_FILES } from '@data/repository';
 import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
-import { URGENT_SLACK_YEARS, BEAM_OUT_BLACKOUT_SEC, LEAVE_BLOCK_MAX_LINES } from '@data/tuning';
+import { URGENT_SLACK_YEARS, BEAM_OUT_BLACKOUT_SEC, LEAVE_BLOCK_MAX_LINES, TRAIL_CROSS_PAST_COLONY_LY } from '@data/tuning';
 
 export type { DeskWindowId };
 
@@ -309,19 +309,23 @@ export function chartTrail(run: Readonly<Pick<GameState['run'], 'lastUnit' | 'ma
     if (world === undefined) throw new Error(`chartTrail: unit ${trail.unit} was lost at slot ${lost.slot}, which is no world`);
     const cross = { year: lost.year, kind: 'lost' as const, ship: null, colony: null, passed: false, label: MAP_TEXT.chart.lostCross(unit) };
     const last = marks.at(-1);
-    if (lost.pastLy === 0 && last !== undefined && last.slot === lost.slot) {
-      // A unit lost aboard its last ship (Track WORLD: the cross on that stop's world, 0 LY past it): the cross is that
-      // stop's mark, offset along the trail as every stop's is.
+    const aboard = lost.pastLy === 0 && last !== undefined && last.slot === lost.slot;
+    if (aboard && last.colony === null) {
+      // A unit lost aboard its last ship (Track WORLD: the cross on that stop's world, 0 LY past it), which founded nothing:
+      // the cross is that stop's mark, offset along the trail as every stop's is.
       marks[marks.length - 1] = { ...last, ...cross };
     } else {
       // A cross past a world (046's, past Calder): along the leg that led there, from the stop before the world it was lost
-      // at, or from SOL when the trail has none.
+      // at, or from SOL when the trail has none. A unit lost after its last ship founded a colony (abandoned at that desk, or
+      // lost on the way on; review fix, minor 8, by 05 §3.5: the colony is real, and the grey cross marks where the unit was
+      // lost, at or past that world) keeps the colony's mark, and its cross stands TRAIL_CROSS_PAST_COLONY_LY past it.
+      const pastLy = aboard ? TRAIL_CROSS_PAST_COLONY_LY : lost.pastLy;
       const before = [...trail.stops].reverse().find((stop) => stop.slot !== lost.slot);
       const prev = before === undefined ? { x: 0, y: 0 } : WORLDS[before.slot]!;
       const len = Math.hypot(world.x - prev.x, world.y - prev.y) || 1;
       marks.push({
-        slot: lost.slot, x: world.x + ((world.x - prev.x) / len) * lost.pastLy, y: world.y + ((world.y - prev.y) / len) * lost.pastLy,
-        ...cross, offset: lost.pastLy === 0,
+        slot: lost.slot, x: world.x + ((world.x - prev.x) / len) * pastLy, y: world.y + ((world.y - prev.y) / len) * pastLy,
+        ...cross, offset: pastLy === 0,
       });
     }
   }

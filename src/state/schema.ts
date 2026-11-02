@@ -381,9 +381,6 @@ export interface RunState {
   // Who HOLLOW is on this run (§4.5's table, systems/meta.ts hollowUnitsAfter): [46] on run 1, the last unit
   // after most endings, both after a MERGE. Its blocks read `UNIT-046` once it has said who it is.
   hollowUnits: number[];
-  // The last run ended in a MERGE (§4.5, WP11): this unit came with the one it merged with, so its Core starts with
-  // MERGE_BONUS_CORE_CAPACITY threads and the screen keeps a faint shimmer for the whole run (MERGE_CORRUPTION_FLOOR).
-  mergeBonus: boolean;
   // The cards picked between ships this run, in order (§6.9, WP8): the Skills window lists them.
   upgrades: UpgradeId[];
   // This run plays the run-1 lessons and the written ARES-VII (systems/meta.ts playsTutorial): no unit before

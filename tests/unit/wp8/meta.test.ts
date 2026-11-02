@@ -174,7 +174,7 @@ const progress = (over: Partial<RunProgress> = {}): RunProgress => ({
   check('a worse run keeps the best SCORE', worse.bestScore === 4101 && worse.runs === 2 && worse.lastUnit?.number === 48);
   const merged = recordRunEnd(worse, { ...progress({ unit: 49 }), cause: 'won-merge', score: 0 });
   check('a MERGE is an ending seen; its next-run bonus is retired (slice 3c, risk 3: the lineage never carries it)', merged.endingsSeen.includes('merge')
-    && !lineageOf(merged).mergeBonus && !('mergeBonus' in merged));
+    && !('mergeBonus' in lineageOf(merged)) && !('mergeBonus' in merged));
   const lineage = lineageOf(ended);
   check('the lineage: UNIT-047 + runs on wave runs + 1', lineage.unitNumber === FIRST_UNIT_NUMBER + 1 && lineage.wave === 2 && lineage.lastUnit?.number === 47);
   // WP11: the fleet ends with the flagship, so RUN END's causes are §4.5's, kept one for one (WP7/WP8's interim

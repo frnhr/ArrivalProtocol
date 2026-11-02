@@ -281,7 +281,9 @@ export const MAP_TEXT = {
     keep: 'KEEP IT',
     resumeKey: 'RESUME ▸ [ENTER]',
     abandonKey: 'ABANDON RUN [ENTER]',
-    keepKey: 'KEEP IT [ESC]',
+    // Review fix (minor 1): NEW RUN's confirm abandons only by a click or its own key; ENTER and ESC keep the run.
+    abandonAskKey: 'ABANDON RUN [DEL]',
+    keepKey: 'KEEP IT [ENTER]',
     cantResume: (reason: string): string => `RUN SAVE CAN'T RESUME · ${reason}`,
     // The reasons, by save-codec's refusal kind (types/save.ts SaveRefusalKind).
     reason: {
@@ -293,10 +295,14 @@ export const MAP_TEXT = {
       'route': 'THE SAVE IS DAMAGED',
       'ship': 'A SAVED SHIP DOES NOT BUILD',
       'stale': 'THAT RUN ALREADY ENDED',
+      // Review fix (minor 7): another run is in progress (another tab's, or one started here after the save went offline).
+      'superseded': 'ANOTHER RUN HAS STARTED SINCE',
       'archive': 'THE ARCHIVE CAN\'T BE READ',
       'resume-threw': 'THE SAVE DOES NOT REBUILD',
     } satisfies Readonly<Record<SaveRefusalKind, string>>,
     offline: 'RUN SAVE OFFLINE — a reload will lose this run',
+    // Review fix (M2): the save went offline and the last one written could not be removed.
+    offlineStale: 'RUN SAVE OFFLINE — a reload may go back to an older save',
     offlineTitle: 'RUN SAVE OFFLINE',
     footer: 'NO SAVE',
     // The title's one-off notes (archive v2), said once then cleared.

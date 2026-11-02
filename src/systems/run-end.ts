@@ -14,9 +14,8 @@ import { REPO_FILES } from '@data/repository';
 import { REPO_TEXT } from '@data/repo-text';
 import { RUN_END_TITLE, RUN_END_WHY, RUN_END_PURGE_SHORT, RUN_END_NOBODY_LANDED, SHIP_OUTCOME_WORD } from '@data/script';
 import { RUN_END_TEXT } from '@data/landing-text';
-import { HOLLOW_FINALE } from '@data/hollow-text';
 import {
-  RANKS, RANK_FLEET_COLONISTS, RANK_ROUND_TO, NEAR_MISS_LINES_MAX, NEAR_MISS_FUEL_PCT, STAR_FUEL_PCT, MERGE_BONUS_CORE_CAPACITY,
+  RANKS, RANK_FLEET_COLONISTS, RANK_ROUND_TO, NEAR_MISS_LINES_MAX, NEAR_MISS_FUEL_PCT, STAR_FUEL_PCT,
 } from '@data/tuning';
 
 // RUN END's model (§4.4, §9 WP7 item 7, 01-landing §3.9), pure and DOM-free: how the run ended, the colonists LANDED
@@ -67,9 +66,8 @@ export interface RunEndModel {
   // The screen's mood (runEndTone): its colours, its glow and its music.
   tone: RunEndTone;
   // WP11 part 2: the ending the run won with (null: it was not won), which colours the victory screen (PURGE cold,
-  // MERGE pink into blue), and what a MERGE carries into the next run (null otherwise).
+  // MERGE pink into blue). (MERGE's next-run carry line went with the bonus: 3c plan risk 3, deleted in the review fixes.)
   ending: 'purge' | 'merge' | null;
-  carryLine: string | null;
   // Slice 3a: the RUN TALLY's title, the route (slots, for the mini chart) and the colonies founded.
   tallyTitle: string;
   route: number[];
@@ -246,8 +244,6 @@ export function runEndModel(state: Readonly<GameState>, nextArm: Readonly<ArmSta
     seedLine: RUN_END_TEXT.seed(run.seed),
     tone: runEndTone(cause, landedOnFlagship),
     ending: cause === 'won-purge' ? 'purge' : cause === 'won-merge' ? 'merge' : null,
-    // Slice 3c (3c plan risk 3, decided): MERGE's next-run thread retires on the arm, so only the classic world says it.
-    carryLine: cause === 'won-merge' && run.map.world === 'classic' ? HOLLOW_FINALE.mergeCarries(MERGE_BONUS_CORE_CAPACITY) : null,
     tallyTitle: MAP_TEXT.tally.title,
     route: run.map.route.map((stop) => stop.slot),
     colonies,

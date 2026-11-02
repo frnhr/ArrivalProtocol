@@ -5,7 +5,10 @@ import { receiveTransmission, skipBoot } from '@systems/boot';
 import { archiveMeta, wipeArchive, playWithoutArchive, isFirstRun, archiveNotesSaid, ENDINGS } from '@systems/meta';
 import { resumeRun, abandonRun } from '@systems/run-save';
 import { registerKeys } from '@systems/input';
-import { titleModel, type TitleModel, type TitleNotes } from '@systems/title';
+import {
+  titleModel, titleEnterAction, titleAbandonKey, TITLE_ABANDON_CODES, type TitleModel, type TitleNotes, type TitleSaveButton,
+  type TitleSaveAction,
+} from '@systems/title';
 import { play, unlockAudio } from '@systems/audio';
 import { requireById, make, replayAnimation } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
@@ -165,7 +168,7 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     newRunBtn.hidden = block?.kind !== 'resume' || asking;
     abandonBtn.hidden = !(block?.kind === 'cant-resume' || asking);
     keepBtn.hidden = !asking;
-    renderKeyCaps(abandonBtn, MAP_TEXT.save.abandonKey);
+    renderKeyCaps(abandonBtn, asking ? MAP_TEXT.save.abandonAskKey : MAP_TEXT.save.abandonKey);
     receiveBtn.hidden = !model.receive;
     noteEl.hidden = model.saveNote === null;
     noteEl.textContent = model.saveNote ?? '';
@@ -226,7 +229,7 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     archiveHints.hidden = !asking;
   };
   paintArchive();
-  const unsubArchive = store.subscribe((s) => s.archive.status, paintArchive);
+  const unsubArchive = store.subscribe((s) => s.archive.status, () => { paintArchive(); paintUnit(); });
 
   // CORRUPT's two answers (systems/meta.ts): the status changes, and the title follows it.
   // Each answer is a click: the gesture that lets the page make sound (the chime says it took).
@@ -294,16 +297,28 @@ export function mountTitleCard(store: Store<GameState>): () => void {
   newRunBtn.addEventListener('click', onNewRun);
   keepBtn.addEventListener('click', onKeep);
   abandonBtn.addEventListener('click', onAbandon);
-  // ENTER: RESUME, or ABANDON RUN where that is the way on (CAN'T RESUME, or NEW RUN's confirm); ESC takes the confirm back.
-  // RECEIVE TRANSMISSION's own ENTER (systems/boot.ts) stands down while a save is there (Track SAVE's guard).
+  // ENTER (systems/title.ts titleEnterAction): RESUME, ABANDON RUN on CAN'T RESUME (its only way on), KEEP IT on NEW RUN's
+  // confirm, and nothing more over a focused button (the browser clicks it: NEW RUN focused asks, never resumes). [DEL] is
+  // the confirm's deliberate ABANDON RUN; ESC takes the confirm back. RECEIVE TRANSMISSION's own ENTER and SPACE
+  // (systems/boot.ts) refuse while a save is there (receiveTransmission's guard, review fix B2).
+  const SAVE_BUTTONS: readonly [HTMLButtonElement, TitleSaveButton][] = [
+    [resumeBtn, 'resume'], [newRunBtn, 'new-run'], [abandonBtn, 'abandon'], [keepBtn, 'keep'],
+  ];
+  const focused = (): TitleSaveButton | null => SAVE_BUTTONS.find(([btn]) => !btn.hidden && document.activeElement === btn)?.[1] ?? null;
+  const act = (action: TitleSaveAction | null): void => {
+    if (action === 'resume') resume();
+    else if (action === 'ask') ask();
+    else if (action === 'abandon') abandon();
+    else if (action === 'keep') keep();
+  };
   const offKeys = [
     registerKeys({
       layer: 'title', codes: ['Enter', 'NumpadEnter'],
-      onDown: () => {
-        if (!onTitle() || model.save === null || model.save.kind === 'offline') return;
-        if (asking || model.save.kind === 'cant-resume') abandon();
-        else resume();
-      },
+      onDown: () => { if (onTitle()) act(titleEnterAction(model.save, asking, focused())); },
+    }),
+    registerKeys({
+      layer: 'title', codes: TITLE_ABANDON_CODES,
+      onDown: () => { if (onTitle()) act(titleAbandonKey(model.save, asking)); },
     }),
     registerKeys({ layer: 'title', codes: ['Escape'], onDown: keep }),
   ];

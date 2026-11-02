@@ -513,18 +513,23 @@ export function boardedBy(threat: Readonly<ShipThreat>): ArrivalReport['boarded'
 // before the phase changes: RUN END paints its archive line as it opens, so a write that fails here must
 // already have turned the status OFFLINE (`ARCHIVE OFFLINE — the next unit will not remember this run`).
 // Slice 3c (02 §3.11, one step): the archive's record, the world update (run.next) and the run save's deletion together.
+// Never half-ended (review fix, minor 2): the world update has its own fallback (meta.ts archiveRunEnded), and should the
+// record still throw (a bug), the run save is cleared and RUN END opens all the same before the error goes on up, loudly.
 export function endRun(store: Store<GameState>, cause: RunEndCause): void {
   abortAll();
-  archiveRunEnded(store, cause);
-  clearRunSave(store);
-  store.update((draft) => {
-    draft.run.phase = 'end';
-    draft.run.endCause = cause;
-    draft.run.beamOut = null;
-    draft.run.transit = null;
-    draft.clock.paused = true;
-    draft.ui.activeTool = null;
-  });
+  try {
+    archiveRunEnded(store, cause);
+  } finally {
+    clearRunSave(store);
+    store.update((draft) => {
+      draft.run.phase = 'end';
+      draft.run.endCause = cause;
+      draft.run.beamOut = null;
+      draft.run.transit = null;
+      draft.clock.paused = true;
+      draft.ui.activeTool = null;
+    });
+  }
 }
 
 // The LANDING REPORT's CONTINUE: the ship's result and its stars, then TRANSMIT, or, after the flagship (the last ship),

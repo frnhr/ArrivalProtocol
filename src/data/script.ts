@@ -419,6 +419,9 @@ const LINEAGE_END: Readonly<Record<LastCause, (last: Readonly<LastUnit>) => stri
   'flagship-lost': (last) => `lost ${last.shipName}`,
   abandoned: (last) => `abandoned at ${last.shipName}`,
   stayed: (last) => `stayed on ${last.shipName}`,
+  // Slice 3c review fix (minor 7): the save could not be read back (another version, content, a ship that no longer builds):
+  // nobody's fault, said so (PLACEHOLDER(05)).
+  'signal-lost': (last) => `signal lost at ${last.shipName}`,
 };
 
 // The title's lineage line for a run whose last unit was `lastUnit` (null: the first run, no line).
@@ -1055,6 +1058,13 @@ export const BEATS: readonly Beat[] = [
     once: true,
     when: (ctx) => ctx.events.has('save-lost'),
     lines: [{ speaker: 'mind-sys', text: () => MAP_TEXT.save.offline, critical: true }],
+  },
+  {
+    // Slice 3c review fix (M2): the save went offline and its slot could not be emptied: a reload may go back to it.
+    id: 'save-stale',
+    once: true,
+    when: (ctx) => ctx.events.has('save-stale'),
+    lines: [{ speaker: 'mind-sys', text: () => MAP_TEXT.save.offlineStale, critical: true }],
   },
   {
     id: 'control-hello',

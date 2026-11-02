@@ -1,7 +1,7 @@
 // Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
 import type { GameState } from '@state/schema';
 import type { ResumeLine } from '@/types/save';
-import { unitName } from '@systems/say';
+import { unitName } from '@data/hollow-text';
 import { launchOf } from '@systems/lineage';
 import { solLy } from '@systems/map-geometry';
 import { END_SLOTS } from '@data/arm';
@@ -74,7 +74,9 @@ export function titleLaunch(state: Readonly<Pick<GameState, 'run'>>): TitleLaunc
   return { fromYear: launch.startYear - years, toYear: launch.startYear, years, valveYears: launch.valveYears, last: unitName(last), stamp };
 }
 
-export function titleModel(state: Readonly<Pick<GameState, 'run' | 'save'>>, notes: Readonly<TitleNotes> | null): TitleModel {
+// `runs save between ships` is said only while a save would be written: the save works and the archive can vouch for it
+// (review fix M1: never beside ARCHIVE CORRUPT, OFFLINE or PLAYING WITHOUT; save-write.ts goes OFFLINE at RUN START then).
+export function titleModel(state: Readonly<Pick<GameState, 'run' | 'save' | 'archive'>>, notes: Readonly<TitleNotes> | null): TitleModel {
   const unit = unitName(state.run.unitNumber);
   const launch = titleLaunch(state);
   const unitLine = launch === null
@@ -93,10 +95,32 @@ export function titleModel(state: Readonly<Pick<GameState, 'run' | 'save'>>, not
   const receive = block === null || block.kind === 'offline';
   return {
     unit, unitLine, launch, save: block, receive,
-    saveNote: save.status === 'ok' && save.resume === null ? MAP_TEXT.title.savesBetweenShips : null,
+    saveNote: save.status === 'ok' && save.resume === null && state.archive.status === 'ok' ? MAP_TEXT.title.savesBetweenShips : null,
     notes: notes === null ? [] : [
       ...(notes.olderArchive ? [MAP_TEXT.save.olderArchive] : []),
       ...(notes.armReset ? [MAP_TEXT.save.armReset] : []),
     ],
   };
+}
+
+// ENTER on the title's save block (review fixes B2 and minor 1), pure so a suite drives it without a DOM. `asking`: NEW RUN's
+// inline confirm is up; `focus`: the save block's button that has the keyboard focus (null: none of them). A focused button
+// does what it says by itself (the browser clicks it on ENTER), so the key does nothing more there: with NEW RUN focused,
+// ENTER asks, never resumes. Otherwise ENTER is RESUME on the RESUME block, ABANDON RUN on CAN'T RESUME (its only way on),
+// and KEEP IT on NEW RUN's confirm: abandoning a run that could be resumed takes a click on ABANDON RUN or its own key,
+// [DEL] (titleAbandonKey). No save block (or RUN SAVE OFFLINE): RECEIVE TRANSMISSION's own ENTER (systems/boot.ts).
+export type TitleSaveButton = 'resume' | 'new-run' | 'abandon' | 'keep';
+export type TitleSaveAction = 'resume' | 'ask' | 'abandon' | 'keep';
+
+export function titleEnterAction(block: Readonly<TitleSaveBlock> | null, asking: boolean, focus: TitleSaveButton | null): TitleSaveAction | null {
+  if (block === null || block.kind === 'offline' || focus !== null) return null;
+  if (block.kind === 'cant-resume') return 'abandon';
+  return asking ? 'keep' : 'resume';
+}
+
+// NEW RUN's confirm's deliberate key for ABANDON RUN ([DEL]: Delete, or the Mac's backspace-labelled delete).
+export const TITLE_ABANDON_CODES: readonly string[] = ['Delete', 'Backspace'];
+
+export function titleAbandonKey(block: Readonly<TitleSaveBlock> | null, asking: boolean): TitleSaveAction | null {
+  return block?.kind === 'resume' && asking ? 'abandon' : null;
 }

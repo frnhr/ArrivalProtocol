@@ -417,6 +417,16 @@ export function nextLaunchOf(unitNumber: number, next: Readonly<ArmState>): Next
   return { unit: unitNumber + 1, run: next.run, startYear: next.startYear, gap: next.gap, valveYears: next.valveYears };
 }
 
+// The next run's arm when the update itself throws (a bug; slice 3c review fix, minor 2: RUN END and the abandon must never
+// be left half-done): a fresh roll for `nextRun` from the played arm's start year, its final-ship lineage carried (the next
+// serial, 02 §3.4's floor), as a content reset would make it.
+export function resetArmAfter(from: Readonly<UpdateInput['from']>, nextRun: number): ArmState {
+  const prev: ArmState = {
+    ...structuredClone(from) as UpdateInput['from'], gap: 0, valveYears: 0, ships: [], departures: [], content: armContent(),
+  };
+  return freshArmState(from.armSeed, nextRun, from.startYear, prev);
+}
+
 // A fresh arm state (run 1's assembled arm, or a fresh roll for `run`): the content reset's arm and the suites'. `prev` (the
 // arm it replaces) carries the lineage of final ships across a reset: the next serial's name, and 02 §3.4's floor (its
 // final year plus the years since its start, at least FINAL_FLOOR_MIN_GAP_YEARS); replacing an arm for the same run keeps

@@ -7,6 +7,7 @@ import type { ArmState } from '@/types/lineage';
 import { rollNoiseClouds } from '@systems/map-noise';
 import { FIRST_SLOT } from '@data/arm';
 import type { Hop, RouteStop, RunMapState, ShipSummary } from '@/types/map';
+import type { MapHistory } from '@/types/lineage';
 import type { LinkNoise } from '@/types/threat';
 import { CLASSIC_FIVE, CLASSIC_HOPS, CLASSIC_FACTS, classicShip } from '@data/classic-five';
 import { layoutFor, shipColonists, POD_RACK_KEYS } from '@data/memory';
@@ -75,38 +76,40 @@ export function classicRunMap(seed: number, shipIndex: number, run: number): Run
 // The map a NEW RUN starts on (systems/run.ts startRun, state/instance.ts's first page): the run number is the lineage's
 // wave (1 on run 1).
 // • A stored arm (`lineage.arm`, the world update's output kept in the archive, slice 3c): its ships, start year and arm
-//   seed as they are; its run must be the wave and its content this build's (the archive resets a stale arm first, so a
-//   mismatch here is a bug).
+//   seed as they are; its run must be the wave and its content this build's (the archive resets a stale arm first, and
+//   systems/meta.ts lineageOf hands a run only its own wave's arm, so a mismatch here is a bug).
 // • Else run 1: run 1's arm (§3.14's structure, details rolled from the arm seed: map-generator assembleRun1Arm), from
 //   RUN_START_YEAR.
 // • Else (a suite's run ≥ 2, `__ap.runNumber`): a fresh roll for the run (map-update freshArmState), from RUN_START_YEAR,
 //   its final ship named by serial run − 1 (3a's interim), which the history records so the next update names on from it.
 // The arm seed is the archive's (`lineage.armSeed`; null or left out, the run seed: the suites' worlds and a headless
 // archive, so their run-1 arm is the one they always had). The noise clouds roll fresh every run, from the run seed (02:
-// noise per run). The map's history is the lineage's (left out: none); a stored arm's gap, valve years, serial and
-// departures must agree with it.
+// noise per run). The map's history: the lineage's last unit, colonies and routes (left out: none), and the arm's own gap,
+// valve years, serial and departures, read off the arm (review fix, minor 5: never copied beside it, so nothing can
+// disagree at the page's open).
 export function createRunMap(
   lineage: Readonly<Pick<RunLineage, 'wave'> & Partial<Pick<RunLineage, 'armSeed' | 'arm' | 'history'>>>, seed: number,
 ): RunMapState {
   const run = lineage.wave;
   if (!(Number.isInteger(run) && run >= 1)) throw new Error(`createRunMap: run ${run}`);
-  const history = structuredClone(lineage.history ?? EMPTY_HISTORY);
+  const kept = lineage.history ?? EMPTY_HISTORY;
+  const base = { lastUnitNumber: kept.lastUnitNumber, colonies: structuredClone(kept.colonies), routes: structuredClone(kept.routes) };
   const stored = lineage.arm ?? null;
   let arm: Pick<ArmState, 'armSeed' | 'startYear' | 'ships'>;
+  let history: MapHistory;
   if (stored !== null) {
-    if (stored.gap !== history.gap || stored.valveYears !== history.valveYears || stored.finalSerial !== history.finalSerial
-      || JSON.stringify(stored.departures) !== JSON.stringify(history.departures)) {
-      throw new Error(`createRunMap: the stored arm (gap ${stored.gap}, serial ${stored.finalSerial}) and the lineage's history (gap ${history.gap}, serial ${history.finalSerial}) disagree`);
-    }
     if (stored.run !== run) throw new Error(`createRunMap: the stored arm is for run ${stored.run}, the lineage's wave is ${run}`);
     if (JSON.stringify(stored.content) !== JSON.stringify(armContent())) {
       throw new Error(`createRunMap: the stored arm was made by content ${JSON.stringify(stored.content)}, this build is ${JSON.stringify(armContent())}`);
     }
     arm = { armSeed: stored.armSeed, startYear: stored.startYear, ships: structuredClone(stored.ships) };
+    history = {
+      ...base, gap: stored.gap, valveYears: stored.valveYears, finalSerial: stored.finalSerial, departures: structuredClone(stored.departures),
+    };
   } else {
     const armSeed = (lineage.armSeed ?? seed) >>> 0;
     const fresh = freshArmState(armSeed, run, RUN_START_YEAR, null);
-    if (run > 1) history.finalSerial = fresh.finalSerial;
+    history = { ...base, gap: 0, valveYears: 0, finalSerial: run > 1 ? fresh.finalSerial : 0, departures: [] };
     arm = fresh;
   }
   return {

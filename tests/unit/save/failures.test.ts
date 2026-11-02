@@ -16,7 +16,8 @@ import type { GameState } from '@state/schema';
 import { createStore } from '@state/store';
 import { createInitialState } from '@state/initial';
 import { on } from '@systems/events';
-import { archiveMeta, abandonVisits, freshMeta, saveMeta, recordRunStart, recordRunEnd } from '@systems/meta';
+import { visitsOfTrail } from '@systems/lineage';
+import { archiveMeta, freshMeta, saveMeta, recordRunStart, recordRunEnd } from '@systems/meta';
 import { resumeRun, abandonRun } from '@systems/run-save';
 import { receiveTransmission } from '@systems/boot';
 import { continueAfterReport } from '@systems/run';
@@ -29,7 +30,9 @@ const SEED = 5;
 const store = createStore<GameState>(createInitialState({ seed: SEED }));
 const state = (): Readonly<GameState> => store.getState();
 let lost = 0;
+let staleLeft = 0;
 on('save-lost', () => { lost++; });
+on('save-stale', () => { staleLeft++; });
 const quiet = <T>(fn: () => T): T => {
   const error = console.error;
   console.error = () => {};
@@ -96,10 +99,11 @@ for (const how of ['reach', 'get'] as const) {
   finalReport(store);
   storage.fail.remove = true;
   lost = 0;
+  staleLeft = 0;
   quiet(() => continueAfterReport(store));
   storage.fail.remove = false;
-  check('a clear that throws at RUN END: OFFLINE and \'save-lost\'; the run still ends and the archive keeps it',
-    saveIs('offline') && lost === 1 && state().run.phase === 'end' && storage.data.has(RUN_SAVE_KEY)
+  check('a clear that throws at RUN END: OFFLINE, said as \'save-stale\' (the slot could not be emptied: review M2); the run still ends and the archive keeps it',
+    saveIs('offline') && lost === 0 && staleLeft === 1 && state().run.phase === 'end' && storage.data.has(RUN_SAVE_KEY)
     && (storedMeta(storage).lastUnit as { cause: string }).cause === 'won-purge');
   quiet(() => pageOpen(store, storage, SEED));
   check('…the save left behind reads stale on the next open (the run already ended): CAN\'T RESUME', saveIs('cant-resume', 'stale'));
@@ -137,11 +141,11 @@ for (const [what, corrupt, kind] of corruptions) {
   const before = structuredClone(archiveMeta());
   abandonRun(store, 31);
   const meta = storedMeta(storage) as { lastUnit: { cause: string; trail: { stops: { slot: number; outcome: string | null }[] } }; arm: { run: number } | null; activeRun: unknown; routes: { slots: number[] }[] };
-  check('ABANDON RUN: the run is the last unit, abandoned, its trail the route so far (ARES-VII, HALCYON done)',
-    meta.lastUnit.cause === 'abandoned' && JSON.stringify(meta.lastUnit.trail.stops.map((stop) => stop.slot)) === '[0,2]'
+  check('ABANDON RUN on CAN\'T RESUME: the run is the last unit, its trail the route so far (ARES-VII, HALCYON done), cause signal-lost (the game lost it: review minor 7)',
+    meta.lastUnit.cause === 'signal-lost' && JSON.stringify(meta.lastUnit.trail.stops.map((stop) => stop.slot)) === '[0,2]'
     && meta.lastUnit.trail.stops.every((stop) => stop.outcome === 'locked') && meta.activeRun === null, JSON.stringify(meta.lastUnit));
   check('…the world update ran with its ships done (the visits from its trail; the next arm is run 2\'s), and its route is kept',
-    JSON.stringify(abandonVisits(before.activeRun!.trail!).map((visit) => visit.slot)) === '[0,2]' && meta.arm?.run === 2
+    JSON.stringify(visitsOfTrail(before.activeRun!.trail!).map((visit) => visit.slot)) === '[0,2]' && meta.arm?.run === 2
     && JSON.stringify(meta.routes.at(-1)?.slots) === '[0,2]');
   check('…the save is cleared, and UNIT-048\'s title opens with a working save', !storage.data.has(RUN_SAVE_KEY) && saveIs('ok')
     && state().run.unitNumber === 48 && state().run.phase === 'title');
@@ -159,8 +163,8 @@ for (const [what, corrupt, kind] of corruptions) {
   { unit: 48, shipName: 'ARES-VIII', landed: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [47], trail: null }, 0);
   saveMeta(storage.provider, other);
   quiet(() => pageOpen(store, storage, SEED));
-  check('two tabs: this tab\'s save is unit 47\'s, the archive\'s run in progress unit 48\'s (written last): CAN\'T RESUME · stale',
-    saveIs('cant-resume', 'stale'));
+  check('two tabs: this tab\'s save is unit 47\'s, the archive\'s run in progress unit 48\'s (written last): CAN\'T RESUME · superseded (review minor 7)',
+    saveIs('cant-resume', 'superseded'));
   abandonRun(store, 41);
   check('…ABANDON RUN abandons the archive\'s run in progress (the other tab\'s: the last write wins, documented) and clears the save',
     (storedMeta(storage).lastUnit as { number: number; cause: string }).number === 48 && !storage.data.has(RUN_SAVE_KEY) && state().run.unitNumber === 49);

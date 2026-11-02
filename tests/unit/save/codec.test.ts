@@ -160,8 +160,8 @@ check('a ship that does not build → ship', kind(edit(desk, (save) => { save.pa
 const deskSave = written[3]!.save;
 const running = recordRunStart(freshMeta(), { unit: 47, shipName: 'ARES-VII', landed: 0, stats: { moves: 0, deletes: 0 }, hollowUnits: [46], trail: null }, 0);
 check('the archive vouches for its own run (unit and runs agree)', saveRefusal(deskSave, running) === null);
-check('…a save from a run the archive no longer has in progress, another unit, another run count, or no archive is refused',
-  saveRefusal(deskSave, freshMeta())?.kind === 'stale' && saveRefusal({ ...deskSave, unit: 48 }, running)?.kind === 'stale'
-  && saveRefusal({ ...deskSave, archiveRuns: 2 }, running)?.kind === 'stale' && saveRefusal(deskSave, null)?.kind === 'archive');
+check('…a save from a run the archive no longer has in progress (stale), another unit or run count (superseded: review minor 7), or no archive is refused',
+  saveRefusal(deskSave, freshMeta())?.kind === 'stale' && saveRefusal({ ...deskSave, unit: 48 }, running)?.kind === 'superseded'
+  && saveRefusal({ ...deskSave, archiveRuns: 2 }, running)?.kind === 'superseded' && saveRefusal(deskSave, null)?.kind === 'archive');
 
 finish();

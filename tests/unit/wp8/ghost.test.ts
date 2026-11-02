@@ -42,6 +42,9 @@ const expected: Record<LastCause, { hollow: string; line: string | null }> = {
   abandoned: { hollow: 'UNIT-047', line: "> hi 048. it's 047. i blinked and the run was gone." },
   // (WP8's interim 'reassigned', the end of a fleet that stopped before LAST LIGHT, is gone with that fleet: WP11.)
   stayed: { hollow: 'UNIT-046', line: null },
+  // Slice 3c review fix (minor 7): a run the game could not give back (its save refused): HOLLOW is that unit, and its ghost
+  // says nothing (no `i blinked`).
+  'signal-lost': { hollow: 'UNIT-047', line: null },
 };
 for (const cause of LAST_CAUSES) {
   const unit = last(cause);
@@ -104,7 +107,7 @@ check('a flagship lost on LAST LIGHT is "the flagship"; a record from before it 
   const longest = worst.reduce((a, b) => (b.length > a.length ? b : a), '');
   check(`every ghost line is ≤ ${MAX_LINE_CHARS} characters with 3-digit units, a merged HOLLOW and a ${NAME_MAX_CHARS}-letter ship`,
     worst.every((line) => line.length <= MAX_LINE_CHARS), `${longest.length}: ${longest}`);
-  check('every cause has an entry in the ghost table (silent only for STAYED)', LAST_CAUSES.every((cause) => (GHOST_LINE[cause] === null) === (cause === 'stayed')));
+  check('every cause has an entry in the ghost table (silent only for STAYED, and a run the game lost: signal-lost)', LAST_CAUSES.every((cause) => (GHOST_LINE[cause] === null) === (cause === 'stayed' || cause === 'signal-lost')));
   const story = [HOLLOW_STORY.remembers, HOLLOW_STORY.wasUnit([998]), HOLLOW_STORY.wasUnit([997, 998]), HOLLOW_STORY.decommissioned(hollowUnitName([997, 998])),
   ];
   check('the run-2 HOLLOW lines fit too', story.every((line) => line.length <= MAX_LINE_CHARS), story.join(' | '));

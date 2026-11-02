@@ -4,8 +4,8 @@ import type { ContentVersions } from '@/types/lineage';
 import type {
   RunSave, SavePoint, SavePayload, ResumeLine, BootParts, DecodeResult, SaveRefusal, SaveRefusalKind,
 } from '@/types/save';
-import type { Meta } from '@systems/meta';
-import { parseLastUnit, MetaCorrupt, FIRST_RUN_LINEAGE } from '@systems/meta';
+import type { Meta, RunLineage } from '@systems/meta';
+import { parseLastUnit, MetaCorrupt } from '@systems/meta-parse';
 import { createRunState, createInitialState } from '@state/initial';
 import { createRunLog } from '@state/log-selectors';
 import { createRunThreat, nominalShipThreat } from '@systems/threat-plan';
@@ -22,7 +22,8 @@ import { REPO_CATALOGUE_VERSION } from '@data/repository';
 import { shipDefOf, validateShipDef } from '@data/ships';
 import { shipSummaryAt } from '@systems/map-run';
 import { currentSlot } from '@systems/map-streams';
-import { RUN_SAVE_VERSION } from '@data/tuning';
+import { RUN_SAVE_VERSION, FIRST_UNIT_NUMBER } from '@data/tuning';
+import { withScratchSegIds } from '@systems/memory-ops';
 
 // The run save's codec and checks (phase 3 slice 3c, docs/phase3/impl/slice-3c-plan.md §2.1), pure: what a save holds at
 // each point (savePayloadAt, buildRunSave), its JSON (encodeRunSave, decodeRunSave) and why a stored one can't be resumed
@@ -190,17 +191,26 @@ const checkLastUnit: Check = (value, at) => {
 };
 
 // The references likeReference reads (built once, lazily: a fresh run, its threat memory and log, and a fresh arm world's
-// slices, from the code's own constructors, so a field a slice adds is in the reference the day it is added).
+// slices, from the code's own constructors, so a field a slice adds is in the reference the day it is added). Built on a
+// scratch segment counter (review fix, minor 6): the throwaway world's ids are never kept, so reading a save moves no id
+// counter, and the reference run takes a literal first-run lineage rather than importing the archive.
 let references: { run: RunState; slices: ShipSlices; shipThreat: Readonly<Record<string, unknown>> } | null = null;
+
+const REFERENCE_LINEAGE: Readonly<RunLineage> = {
+  unitNumber: FIRST_UNIT_NUMBER, wave: 1, lastUnit: null, hollowUnits: [FIRST_UNIT_NUMBER - 1], tutorialDone: false, armSeed: null,
+  arm: null, history: { lastUnitNumber: null, colonies: [], routes: [] },
+};
 
 function refs(): NonNullable<typeof references> {
   if (references === null) {
-    const world = createInitialState({ seed: 1, phase: 'title', map: createRunMap({ wave: 1 }, 1) });
-    references = {
-      run: createRunState(1, 'title', 0, FIRST_RUN_LINEAGE),
-      slices: shipSlicesOf(world),
-      shipThreat: nominalShipThreat(0) as unknown as Record<string, unknown>,
-    };
+    references = withScratchSegIds(() => {
+      const world = createInitialState({ seed: 1, phase: 'title', map: createRunMap({ wave: 1 }, 1) });
+      return {
+        run: createRunState(1, 'title', 0, REFERENCE_LINEAGE),
+        slices: shipSlicesOf(world),
+        shipThreat: nominalShipThreat(0) as unknown as Record<string, unknown>,
+      };
+    });
   }
   return references;
 }
@@ -211,7 +221,7 @@ function refs(): NonNullable<typeof references> {
 function checkSavedRun(value: unknown, at: string): void {
   rec({
     rev: whole, phase: oneOf(...RUN_PHASES), seed: whole, unitNumber: whole, wave: whole, lastUnit: nullable(checkLastUnit),
-    ghostSpoken: bool, hollowUnits: list(whole), mergeBonus: bool, upgrades: list(str), tutorial: bool, shipIndex: whole, map: checkMap,
+    ghostSpoken: bool, hollowUnits: list(whole), upgrades: list(str), tutorial: bool, shipIndex: whole, map: checkMap,
     licences: list(str), hollowNamed: bool, coreLost: bool, skillTrainedOn: nullable(whole), repairRenewedOn: nullable(whole),
     ships: list(checkShipResult),
     stats: rec({
@@ -415,7 +425,7 @@ export function decodeRunSave(raw: string): DecodeResult {
 export function saveRefusal(save: Readonly<RunSave>, meta: Readonly<Pick<Meta, 'runs' | 'activeRun'>> | null): SaveRefusal | null {
   if (meta === null) return { kind: 'archive', detail: 'the archive can\'t be read' };
   if (meta.activeRun === null) return { kind: 'stale', detail: 'the archive has no run in progress' };
-  if (meta.activeRun.unit !== save.unit) return { kind: 'stale', detail: `the archive's run is unit ${meta.activeRun.unit}'s, the save is unit ${save.unit}'s` };
-  if (meta.runs !== save.archiveRuns) return { kind: 'stale', detail: `the archive has counted ${meta.runs} runs, the save ${save.archiveRuns}` };
+  if (meta.activeRun.unit !== save.unit) return { kind: 'superseded', detail: `the archive's run is unit ${meta.activeRun.unit}'s, the save is unit ${save.unit}'s` };
+  if (meta.runs !== save.archiveRuns) return { kind: 'superseded', detail: `the archive has counted ${meta.runs} runs, the save ${save.archiveRuns}` };
   return null;
 }

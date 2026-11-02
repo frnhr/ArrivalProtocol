@@ -1,7 +1,7 @@
 import type { GameState, RunState, ShipResult } from '@state/schema';
 import type { RunMapState } from '@/types/map';
 import type {
-  LastCause, LastUnit, UnitTrail, TrailStop, ColonyRecord, RouteRecord, NotableEvent, ArmState, MapHistory, Visit, LetterSource, NextLaunch,
+  LastCause, LastUnit, UnitTrail, TrailStop, ColonyRecord, RouteRecord, NotableEvent, LineageHistory, Visit, LetterSource, NextLaunch,
 } from '@/types/lineage';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import { UNIT_046_TRAIL } from '@data/ship-names';
@@ -50,7 +50,7 @@ export function unitTrailOf(run: Readonly<Pick<RunState, 'lastUnit' | 'map'>>): 
 
 // The causes that leave a grey cross where the run ended (05 §3.5: the last unit was lost there); a won or unresolved run
 // reached its final ship and leaves none.
-const LOST_CAUSES: readonly LastCause[] = ['flagship-lost', 'stayed', 'overwritten', 'abandoned'];
+const LOST_CAUSES: readonly LastCause[] = ['flagship-lost', 'stayed', 'overwritten', 'abandoned', 'signal-lost'];
 
 // Who writes a colony's letter to the unit ahead (05 §3.3: "a featured colonist"): the first featured colonist of the first
 // pod down in an LZ, as systems/inbox.ts's postcards sign them. null when no pod in an LZ carries one (a hand-built result).
@@ -85,28 +85,30 @@ export function trailOf(run: Readonly<Pick<RunState, 'unitNumber' | 'map' | 'shi
   return { unit: run.unitNumber, run: map.run, startYear: map.startYear, stops, lost };
 }
 
-// The route's visits as the world update reads them (RUN END, abandoning, __ap.updateArm): each stop, with a colony when its
-// ship landed someone in an LZ (a ship not yet ended has none).
-export function visitsOf(run: Readonly<Pick<RunState, 'map' | 'ships'>>): Visit[] {
-  return run.map.route.map((stop, index) => {
-    const result = run.ships[index];
-    if (result !== undefined && result.slot !== stop.slot) throw new Error(`visitsOf: ship result ${index} is slot ${result.slot}, the route's stop is ${stop.slot}`);
-    return { slot: stop.slot, colony: (result?.landedInLz ?? 0) > 0 };
-  });
+// The visits the world update reads (02 §3.12 step 1; RUN END, abandoning, __ap.updateArm), from a trail: every stop, with a
+// colony where someone landed in an LZ (trailOf writes a stop's `landed` from ShipResult.landedInLz; the ship being flown,
+// never ended, has none). The one rule (review fix, minor 5): a run's are visitsOfTrail(trailOf(run, …)), an abandoned run's
+// its archived trail's.
+export function visitsOfTrail(trail: Readonly<UnitTrail>): Visit[] {
+  return trail.stops.map((stop) => ({ slot: stop.slot, colony: stop.landed > 0 }));
 }
 
-// What a run's map remembers of the runs before it (RunMapState.history), from the archive's parts (systems/meta.ts
-// lineageOf; the arm's own gap, valve years, serial and departures, so systems/map-run.ts createRunMap can check they agree).
-// No arm (run 1, or a fresh roll) is no gap and no departures.
+// A run's visits (RUN END's update, systems/map-update.ts updateAfterRun): its trail's. The cause only places the grey cross,
+// which the visits never read. The classic world keeps no trail and is never updated (throws).
+export function visitsOf(run: Readonly<Pick<RunState, 'unitNumber' | 'map' | 'ships'>>): Visit[] {
+  const trail = trailOf(run, 'abandoned');
+  if (trail === null) throw new Error('visitsOf: the classic world keeps no trail and is never updated');
+  return visitsOfTrail(trail);
+}
+
+// What a run's map remembers of the runs before it, from the archive's parts (systems/meta.ts lineageOf): the last unit's
+// number, the colonies and the routes. The arm's own gap, valve years, serial and departures are read off the arm itself
+// (systems/map-run.ts createRunMap), never copied beside it.
 export function mapHistoryOf(
-  arm: Readonly<ArmState> | null, lastUnit: Readonly<LastUnit> | null, colonies: readonly ColonyRecord[], routes: readonly RouteRecord[],
-): MapHistory {
+  lastUnit: Readonly<LastUnit> | null, colonies: readonly ColonyRecord[], routes: readonly RouteRecord[],
+): LineageHistory {
   return {
-    gap: arm?.gap ?? 0,
-    valveYears: arm?.valveYears ?? 0,
-    finalSerial: arm?.finalSerial ?? 0,
     lastUnitNumber: lastUnit?.number ?? null,
-    departures: structuredClone(arm?.departures ?? []),
     colonies: structuredClone([...colonies]),
     routes: structuredClone([...routes]),
   };

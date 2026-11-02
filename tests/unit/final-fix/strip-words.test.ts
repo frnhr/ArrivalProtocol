@@ -19,7 +19,7 @@ import { setMode } from '@systems/mode';
 import { lossPlan } from '@systems/run';
 import { GUIDE_RULES, WORST_CASE_VARS } from '@data/script';
 import { RUN_END_TEXT } from '@data/landing-text';
-import { CORE_LOST_TEXT, HOLLOW_FINALE, hollowUnitName } from '@data/hollow-text';
+import { CORE_LOST_TEXT, hollowUnitName } from '@data/hollow-text';
 import { TOOL_FILES, TOOL_HINT_TARGET, fileHintTarget } from '@data/fs-tools';
 import { UPGRADE_FILE_TEXT } from '@data/upgrades';
 import { MAX_LINE_CHARS } from '@data/tuning';
@@ -111,8 +111,6 @@ check(`the eaten-ship lines fit ${MAX_LINE_CHARS} characters with the worst-case
     CORE_LOST_TEXT.subRecoverable.endsWith('ARRIVAL CONTROL is pulling you out.') && CORE_LOST_TEXT.subOverwritten.endsWith('Nobody is left to think.'));
 }
 check('RUN END\'s near miss says points: `41 points short of CARETAKER`', RUN_END_TEXT.rankGap(41, 'CARETAKER') === '41 points short of CARETAKER');
-check('MERGE\'s carry line names the shimmer, in one line', HOLLOW_FINALE.mergeCarries(3) === 'NEXT RUN: your Core has 3 threads, and a faint glitch shimmer stays.'
-  && HOLLOW_FINALE.mergeCarries(9).length <= MAX_LINE_CHARS);
 const merged = { vars: { ...WORST_CASE_VARS, hollow: hollowUnitName([998, 999]) } };
 check('VESPER\'s COPY lesson names the enemy as the kid knows it, never HOLLOW, ≤ 70 with a merged name',
   rule('tut-copy-repair').text(merged) === 'UNIT-998·999 IS HUNTING YOUR TOOLS — COPY your Repair'

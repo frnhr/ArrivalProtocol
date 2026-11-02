@@ -148,8 +148,8 @@ const v2 = (armSeed: number): Raw => {
   check('…the route kept, the next arm from the world update (run 2, the run\'s own arm seed), run.next UNIT-048',
     JSON.stringify(meta.routes.at(-1)) === JSON.stringify({ run: 1, unit: 47, slots: WORKED_ROUTE }) && meta.arm?.run === 2 && meta.armSeed === 9
     && meta.arm.armSeed === 9 && store.getState().run.next?.unit === 48 && store.getState().run.next?.startYear === meta.arm.startYear);
-  check('…and the next lineage reads it: UNIT-048, wave 2, no MERGE bonus (retired), the history from the stored arm',
-    lineageOf(meta).unitNumber === 48 && !lineageOf(meta).mergeBonus && lineageOf(meta).history.gap === meta.arm?.gap
+  check('…and the next lineage reads it: UNIT-048, wave 2, no MERGE bonus (deleted), the stored arm, the last unit in the history',
+    lineageOf(meta).unitNumber === 48 && !('mergeBonus' in lineageOf(meta)) && lineageOf(meta).arm?.gap === meta.arm?.gap
     && lineageOf(meta).history.lastUnitNumber === 47);
 }
 

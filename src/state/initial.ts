@@ -18,7 +18,7 @@ import { hollowLabel } from '@systems/say';
 import { flightModsOf } from '@systems/capabilities';
 import { resolveZones } from '@systems/zones';
 import { FIRST_RUN_LINEAGE, playsTutorial, type RunLineage } from '@systems/meta';
-import { MERGE_BONUS_CORE_CAPACITY, LZ_WIDTH_KM } from '@data/tuning';
+import { LZ_WIDTH_KM } from '@data/tuning';
 
 export interface InitialStateOpts {
   seed: number;
@@ -72,7 +72,6 @@ export function createRunState(
     wave: lineage.wave,
     lastUnit: lineage.lastUnit === null ? null : structuredClone(lineage.lastUnit),
     hollowUnits: [...lineage.hollowUnits],
-    mergeBonus: lineage.mergeBonus,
     upgrades: [],
     tutorial: !lineage.tutorialDone,
     shipIndex,
@@ -125,13 +124,6 @@ export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks 
     ship, carried, shipRng(run, slot, ship.memory.drivers.familiesSeedStream), firstRun,
     hollowLabel(run), threat.rootBlocks === null ? null : { blocks: threat.rootBlocks }, hurt,
   );
-  // The run after a MERGE (§4.5, WP11): the fresh unit's Core comes with the unit it merged with, a thread more. Set on
-  // the unit ARRIVAL CONTROL builds (ship 1, and ship 1 again after the simulation); later ships carry this very Core.
-  if (carried === null && run.mergeBonus) {
-    const core = memory.find((seg) => seg.type === 'core');
-    if (!core || core.type !== 'core') throw new Error('createShipSlices: a fresh unit with no AI Core');
-    core.capacity = MERGE_BONUS_CORE_CAPACITY;
-  }
   // The ship's hazard zones for this run (WP9): the written debris rack on the tutorial run, a seeded one later.
   const zones = resolveZones(ship.zones, ship.flight, firstRun, shipRng(run, slot, 'zones'));
   // The carried upgrade files that work on arrival widen this ship's flight (FUEL TRIM, §6.9).

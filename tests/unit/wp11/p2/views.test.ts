@@ -68,7 +68,7 @@ const eventsSince = (from: number, name: string): { payload: unknown; wall: numb
     HOLLOW_FINALE.choiceTitle(hollowUnitName([999, 998])), HOLLOW_FINALE.purgeCmd(worstHollow), HOLLOW_FINALE.mergeCmd(worstHollow, ours),
     HOLLOW_FINALE.purgeCost('3,200'), HOLLOW_FINALE.mergeGain(sixteenPods), HOLLOW_FINALE.mergeGain(sixteenPods.slice(0, 5)),
     HOLLOW_FINALE.mergePrice(MERGE_COST_CHARGE, 999),
-    HOLLOW_FINALE.mergeNeeds(19), HOLLOW_FINALE.mergeCarries(3), endingsLine(['purge', 'merge'], ['purge', 'merge']),
+    HOLLOW_FINALE.mergeNeeds(19), endingsLine(['purge', 'merge'], ['purge', 'merge']),
   ];
   check('the card\'s words and RUN END\'s lines are one line each (≤ 70 characters)', cardWords.every((text) => text.length <= MAX_LINE_CHARS),
     JSON.stringify(cardWords.map((text) => text.length)));
@@ -220,8 +220,8 @@ check('say: a line with a look must be critical (a queued one would count down a
   check('…and the ending is no longer showing then', !finaleEndingShowing(state()) && !finalePending(state()));
   continueAfterReport(h.store);
   const model: RunEndModel = runEndModel(state());
-  check('RUN END after a PURGE: the victory tone, the ending, no carry line', model.tone === 'victory' && model.ending === 'purge' && model.carryLine === null,
-    JSON.stringify({ tone: model.tone, ending: model.ending, carry: model.carryLine }));
+  check('RUN END after a PURGE: the victory tone, the ending', model.tone === 'victory' && model.ending === 'purge',
+    JSON.stringify({ tone: model.tone, ending: model.ending }));
 }
 
 // --- MERGE: what it brought back, its glitch, and a skipped ending ------------------------------------------------------
@@ -267,8 +267,9 @@ check('say: a line with a look must be critical (a queued one would count down a
   while (state().run.phase === 'landing' && h.wall() < reportEnd) h.step();
   continueAfterReport(h.store);
   const model = runEndModel(state());
-  check('RUN END after a MERGE: the victory tone, the ending, what it carries into the next run', model.tone === 'victory' && model.ending === 'merge'
-    && model.carryLine === HOLLOW_FINALE.mergeCarries(3), JSON.stringify({ tone: model.tone, ending: model.ending, carry: model.carryLine }));
+  // Slice 3c (risk 3; the review fixes deleted the bonus and its carry line, untrue once nothing carried): no next-run line.
+  check('RUN END after a MERGE: the victory tone, the ending', model.tone === 'victory' && model.ending === 'merge',
+    JSON.stringify({ tone: model.tone, ending: model.ending }));
 }
 
 finish();

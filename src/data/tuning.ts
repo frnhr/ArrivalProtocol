@@ -1333,11 +1333,6 @@ export const ROOT_DELETE_SEC = 12;
 // What the root leaves when its DELETE completes (§6.6: "a single last block"): one block, in the middle of where the
 // root was, so a WALL stands on both sides of it (it no longer bites, but the strip must not read `GAP 2` beside it).
 export const LAST_BLOCK_SIZE = 1;
-// ...and the run after a MERGE (§4.5): the Core starts with this many threads, and the screen keeps this much
-// corruption for good (a faint shimmer of the unit that came along). The floor tints the screen only: the page-jerk
-// dice still roll on the Core's own damage, so a healthy merged unit never twitches.
-export const MERGE_BONUS_CORE_CAPACITY = 3;
-export const MERGE_CORRUPTION_FLOOR = 0.05;
 // glitchBurst (§7.3): a verb landing, HALCYON's naming and the duel's spikes flash the glitch overlay to this level
 // for this long (§9 WP11 item 3: glitchBurst(0.3, 400)). Under reduced motion it is a dim pulse of the same length.
 export const GLITCH_BURST_LEVEL = 0.3;
@@ -1864,6 +1859,10 @@ export const SLEEP_YEAR_ROLL_MS = 1500;
 // 046's written trail ends in a grey cross "past Calder" (05 §3.11): this many LY beyond the world along the trail's last
 // leg, so the cross reads as lost on the way, not as a colony at Calder.
 export const TRAIL_046_CROSS_PAST_LY = 6;
+// A unit lost after its last ship founded a colony (abandoned at that desk, slice 3c review fix minor 8): its grey cross is
+// drawn this many LY past that world along the trail's last leg, so the colony's mark stays readable beside it (the same
+// distance as 046's cross, the one the kid has learned to read as "lost on the way").
+export const TRAIL_CROSS_PAST_COLONY_LY = 6;
 // The STAR CHART's drawing (components/desk/chart-draw.ts), in screen pixels so the chart reads the same at any zoom: a
 // ship's square and an ark's (and the final ship's) bigger one (02 §4: "arks are bigger"); the margin round the arm, and
 // the room kept right of the outermost nodes for their `NAME · colonists` labels.

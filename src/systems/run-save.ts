@@ -7,7 +7,7 @@ import { resetWorld } from '@systems/reset';
 import { resetWorldForShip, deskUiOnOpen, startRun } from '@systems/run';
 import { startBootFromTitle, unlockAudioFromGesture } from '@systems/boot';
 import {
-  abandonActiveRun, archiveLineage, openRunArchive, archiveMeta, archiveStatusNow, type RunLineage,
+  abandonActiveRun, archiveLineage, activeLineageOf, openRunArchive, archiveMeta, archiveStatusNow, type RunLineage,
 } from '@systems/meta';
 import { highestSegId, reserveSegIds, assertMemoryInvariants } from '@systems/memory-ops';
 import { highestLogEntryId, reserveLogEntryIds } from '@systems/say';
@@ -15,6 +15,7 @@ import { newRunSeed } from '@systems/rng';
 import { createUiState, createInitialState } from '@state/initial';
 import { createRunMap, mapAtFirstShip } from '@systems/map-run';
 import { layoutOf } from '@data/memory';
+import { EMPTY_HISTORY } from '@data/map-state';
 import { pendingRunSave, takePendingRunSave, clearRunSave, runSaveSessionStatus, openRunSave } from '@systems/save-write';
 
 // Resuming and abandoning a saved run (phase 3 slice 3c, docs/phase3/impl/slice-3c-plan.md §2.2): the stateful half that
@@ -44,20 +45,55 @@ export function openPageStorage(provider: StorageProvider, seed: number): SaveSt
 }
 
 // The page's first state, once its storage is open: a resumable save opens on the saved run's title (its unit, its arm at
-// ship 1; nothing is updated before the kid chooses RESUME or NEW RUN), anything else on the next unit's title from the
-// archive's lineage, as before 3c.
+// ship 1; nothing is updated before the kid chooses RESUME or NEW RUN); a save that can't be resumed while the archive has a
+// run in progress opens on that run's title (its unit and wave, on the arm it was started on: the next unit's lineage would
+// count the run in progress twice and meet an arm stored for the run before it); anything else on the next unit's title
+// from the archive's lineage, as before 3c.
+// Never throws (review fix B1: the page used to open on nothing, with no title and no ABANDON RUN): a title that can't be
+// built from the archive and the save is logged loudly, and a plain title opens with RUN SAVE CAN'T RESUME, whose ABANDON
+// RUN clears the save and opens the next unit's title (plainTitleState).
 export function pageTitleState(seed: number, save: Readonly<SaveState>, reducedMotion: boolean): GameState {
+  try {
+    return titleStateOf(seed, save, reducedMotion);
+  } catch (error) {
+    console.error('[run save] the title could not be built from the archive and the save: a plain title opens instead', error);
+    takePendingRunSave();
+    return plainTitleState(seed, save, reducedMotion);
+  }
+}
+
+function titleStateOf(seed: number, save: Readonly<SaveState>, reducedMotion: boolean): GameState {
   const pending = pendingRunSave();
-  const lineage = pending === null ? archiveLineage() : lineageOfRun(pending.payload.run);
+  const archive = { status: archiveStatusNow() };
+  if (pending !== null) {
+    return createInitialState({
+      seed: pending.payload.run.seed, phase: 'title', reducedMotion, lineage: lineageOfRun(pending.payload.run), archive,
+      save: structuredClone(save) as SaveState, map: mapAtFirstShip(pending.payload.run.map),
+    });
+  }
+  const inProgress = save.status === 'cant-resume' && archive.status === 'ok' ? activeLineageOf(archiveMeta()) : null;
+  const lineage = inProgress ?? archiveLineage();
   return createInitialState({
-    seed: pending === null ? seed : pending.payload.run.seed,
-    phase: 'title',
-    reducedMotion,
-    lineage,
-    archive: { status: archiveStatusNow() },
-    save: structuredClone(save) as SaveState,
-    map: pending === null ? createRunMap(lineage, seed) : mapAtFirstShip(pending.payload.run.map),
+    seed, phase: 'title', reducedMotion, lineage, archive, save: structuredClone(save) as SaveState, map: createRunMap(lineage, seed),
   });
+}
+
+// The fallback title (a bug got past the archive's and the save's checks): the next unit's lineage on a fresh roll of its arm
+// (no stored arm, no history to disagree with), else run 1's, with RUN SAVE CAN'T RESUME (THE SAVE DOES NOT REBUILD) unless
+// the save is OFFLINE. Its ABANDON RUN goes the usual way (abandonRun).
+function plainTitleState(seed: number, save: Readonly<SaveState>, reducedMotion: boolean): GameState {
+  const refused: SaveState = save.status === 'offline' ? { status: 'offline', resume: null, refusal: null } : {
+    status: 'cant-resume', resume: null,
+    refusal: save.refusal ?? { kind: 'resume-threw', detail: 'the title could not be built from the archive and the save' },
+  };
+  const archive = { status: archiveStatusNow() };
+  try {
+    const lineage: RunLineage = { ...archiveLineage(), arm: null, history: structuredClone(EMPTY_HISTORY) };
+    return createInitialState({ seed, phase: 'title', reducedMotion, lineage, archive, save: refused, map: createRunMap(lineage, seed) });
+  } catch (error) {
+    console.error('[run save] the plain title could not use the archive\'s lineage either: run 1\'s title opens', error);
+    return createInitialState({ seed, phase: 'title', reducedMotion, archive, save: refused, map: createRunMap({ wave: 1 }, seed) });
+  }
 }
 
 // The lineage a saved run was started with (state/instance.ts builds the RESUME title from it: the saved run's unit, wave,
@@ -69,7 +105,6 @@ export function lineageOfRun(run: Readonly<RunState>): RunLineage {
     lastUnit: run.lastUnit === null ? null : structuredClone(run.lastUnit),
     hollowUnits: [...run.hollowUnits],
     tutorialDone: !run.tutorial,
-    mergeBonus: run.mergeBonus,
     armSeed: run.map.armSeed,
     arm: null,
     history: structuredClone(run.map.history),
@@ -157,14 +192,18 @@ export function resumeRun(store: Store<GameState>): void {
 }
 
 // [NEW RUN] over a save (after its inline confirm), [ABANDON RUN] and __ap.newRun (plan §2.2): the run the archive has in
-// progress is recorded as 'abandoned' (its ships count as done, and the world update runs with them: meta.ts
+// progress is recorded as abandoned (its ships count as done, and the world update runs with them: meta.ts
 // abandonActiveRun), the save is cleared, and the next unit's title opens on the arm. A stale save whose run already ended
-// only clears (nothing is in progress). Another tab's run (the stale rule's other case) is the archive's run in progress,
-// so it is the one abandoned: the last write wins, as the header of save-write.ts documents. `seed`: the next run's
-// (__ap.newRun's; the page's own is fresh).
+// only clears (nothing is in progress). Another tab's run (the stale rule's other case, 'superseded') is the archive's run
+// in progress, so it is the one abandoned: the last write wins, as the header of save-write.ts documents. `seed`: the next
+// run's (__ap.newRun's; the page's own is fresh).
+// The cause (review fix, minor 7): ABANDON RUN on a RUN SAVE CAN'T RESUME title records 'signal-lost' (the game could not
+// give the run back: another version or content, a damaged save, a ship that no longer builds; no ghost line blames the
+// kid); NEW RUN over a resumable save, the kid's choice, records 'abandoned'.
 export function abandonRun(store: Store<GameState>, seed: number = newRunSeed()): void {
+  const cause = store.getState().save.status === 'cant-resume' ? 'signal-lost' : 'abandoned';
   takePendingRunSave();
-  abandonActiveRun(store);
+  abandonActiveRun(store, cause);
   clearRunSave(store);
   const status = runSaveSessionStatus();
   store.update((draft) => {

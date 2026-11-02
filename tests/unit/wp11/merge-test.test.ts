@@ -5,10 +5,9 @@
 //   half credit is gone until slice 7); nothing is dropped. A driver the belt took to 0 was never HOLLOW's and stays
 //   lost (parked, dead). It costs 20 REPAIR CHARGE, and is refused below 20 with `NEEDS 20 CHARGE (you have 14)`
 //   (nothing changes then).
-// • RUN END after it is 'won-merge', the victory tone; the archive keeps mergeBonus and endingsSeen ['merge']; the next run
-//   starts with a Core of 3 threads and the corruption floor 0.05 (the jerk dice still roll on the Core alone).
-// • PURGE: every block of HOLLOW leaves memory; the eaten pods stay parked; 'won-purge'; endingsSeen gains 'purge' and the
-//   bonus is used up (mergeBonus false).
+// • RUN END after it is 'won-merge', the victory tone; the archive keeps endingsSeen ['merge']; the next run starts with a
+//   plain Core (slice 3c: MERGE's next-run bonus retired, risk 3, and deleted in the review fixes).
+// • PURGE: every block of HOLLOW leaves memory; the eaten pods stay parked; 'won-purge'; endingsSeen gains 'purge'.
 // • The root's DELETE: 12 AI s, its last block standing in the root's middle; HOLLOW stops (no bites, seeds or verbs) and
 //   lets go of what it was eating; INSPECT's words for the open root and the last block; the last block is locked.
 // • UNRESOLVED: with every Rm gone (and none to repair), the landing ends with the root standing: the ship ends unresolved,
@@ -30,14 +29,13 @@ import { podRecord } from '@systems/landing-rules';
 import { isPodCode } from '../support/pod-code';
 import { setLandingMode, landInstantly } from '../support/landing-instant';
 import { getOpsBySeg, threadsTotal } from '@systems/ops-core';
-import { corruptionFloor } from '@systems/glitch';
 import { openRunArchive, closeArchive, archiveMeta, archiveLineage, archiveRunStarted, type MetaStorage } from '@systems/meta';
 import { hollowInspectState, hollowInspectDesc, HOLLOW_DESC, HOLLOW_INSPECT } from '@data/hollow-text';
 import { targetRefusal } from '@systems/tool-targets';
 import { segmentStarts, assertMemoryInvariants } from '@systems/memory-ops';
 import { selectCorruption, chargeLeft, driversInMemory, isHollow } from '@state/selectors';
 import { RUN_END_NOBODY_LANDED } from '@data/script';
-import { LANDING_NONE_LEFT_SEC, ROOT_DELETE_SEC, MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, MERGE_BONUS_CORE_CAPACITY, MERGE_CORRUPTION_FLOOR } from '@data/tuning';
+import { LANDING_NONE_LEFT_SEC, ROOT_DELETE_SEC, MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY } from '@data/tuning';
 import { classicShip } from '@data/classic-five';
 import type { GameState } from '@state/schema';
 import type { HollowSegment, DriverSegment } from '@/types/segment';
@@ -195,15 +193,13 @@ check('RUN END: won-merge, the victory tone', state().run.phase === 'end' && sta
 check('…the archive keeps endingsSeen [merge] (and no mergeBonus: retired in 3c)', !('mergeBonus' in archiveMeta()) && JSON.stringify(archiveMeta().endingsSeen) === '["merge"]'
   && archiveMeta().lastUnit?.cause === 'won-merge', JSON.stringify(archiveMeta()));
 
-// The next run: no bonus any more (slice 3c, risk 3: the lineage gives false); the bonus itself is still built (a run
-// with run.mergeBonus set, as below, plays it) until slice 7 deletes it.
+// The next run: no bonus any more (slice 3c, risk 3; deleted in the review fixes).
 startRun(h.store, 77, archiveLineage());
 h.step();
 {
   const core = state().memory.find((seg) => seg.type === 'core');
-  check(`the next run: no MERGE bonus (retired in 3c): its unit's Core has fewer than ${MERGE_BONUS_CORE_CAPACITY} threads, no shimmer floor ${MERGE_CORRUPTION_FLOOR}`,
-    !state().run.mergeBonus && core?.type === 'core' && core.capacity < MERGE_BONUS_CORE_CAPACITY && corruptionFloor(state()) !== MERGE_CORRUPTION_FLOOR,
-    `${core?.type === 'core' ? core.capacity : '?'} ${corruptionFloor(state())} ${threadsTotal()}`);
+  check('the next run: no MERGE bonus (deleted in 3c): its unit\'s Core has fewer than 3 threads, and the run carries no bonus field',
+    !('mergeBonus' in state().run) && core?.type === 'core' && core.capacity < 3, `${core?.type === 'core' ? core.capacity : '?'} ${threadsTotal()}`);
   check('…and the Core reads healthy', selectCorruption(state()) === 0);
   check('…and HOLLOW is both of them now (UNIT-046·047)', JSON.stringify(state().run.hollowUnits) === '[46,47]', JSON.stringify(state().run.hollowUnits));
 }
@@ -212,7 +208,7 @@ h.step();
 closeArchive();
 openRunArchive(stubStorage());
 toTheDuel(h);
-h.store.update((d) => { d.archive = { status: 'ok' }; d.run.mergeBonus = true; });
+h.store.update((d) => { d.archive = { status: 'ok' }; });
 archiveRunStarted(h.store);
 eat(['POD 11']);
 deleteRoot();

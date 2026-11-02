@@ -115,7 +115,7 @@ check('…a calm run has only its best colony; the classic world none', isDeepSt
   && notableEvents({ ...run1, map: { ...run1.map, world: 'classic' } }).length === 0);
 
 // --- The update's input from a run --------------------------------------------------------------------------------------------
-check('visitsOf: the route\'s stops with a colony where someone landed in an LZ', isDeepStrictEqual(visitsOf({ map: run1.map, ships: crashed.stops.map((_, i) => (i === 2 ? resultOf(RUN1_RESULTS[2]!, 3, 'crashed', 0) : results[i]!)) }),
+check('visitsOf: the route\'s stops with a colony where someone landed in an LZ', isDeepStrictEqual(visitsOf({ unitNumber: 47, map: run1.map, ships: crashed.stops.map((_, i) => (i === 2 ? resultOf(RUN1_RESULTS[2]!, 3, 'crashed', 0) : results[i]!)) }),
   WORKED_ROUTE.map((slot, i) => ({ slot, colony: i !== 2 }))));
 const after = updateAfterRun(run1);
 check('updateAfterRun: the run\'s own arm and route → run 2\'s arm (the six done) and run.next for UNIT-048',

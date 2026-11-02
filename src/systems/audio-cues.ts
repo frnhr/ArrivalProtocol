@@ -224,6 +224,8 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     on('abandoned', () => play('transmitSweep', { seconds: BEAM_OUT_SWEEP_SEC })),
     // WP8: the archive stopped keeping this unit mid-run: one buzz with the TERMINAL's line (data/script.ts).
     on('archive-lost', () => play('buzz')),
+    on('save-lost', () => play('buzz')),
+    on('save-stale', () => play('buzz')),
     // WP9: the physical layer reaching into the mind, heard. Debris is one slam (the stamp's thud is part of it);
     // a belt hit is a smaller crackle of damaged data inside the Geiger's chatter.
     on('zone-hit', ({ kind }) => {

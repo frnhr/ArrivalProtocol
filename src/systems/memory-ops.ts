@@ -32,6 +32,23 @@ export function reserveSegIds(highest: number): void {
   segIdCounter = Math.max(segIdCounter, highest);
 }
 
+// Runs `build` and puts the counter back where it was (slice 3c review fix, minor 6): for a throwaway construction whose
+// segments never reach a world (the run save's references, save-codec refs()), so reading a save mints no id and moves no
+// counter. Anything `build` returns must stay out of the world: its ids will be minted again.
+export function withScratchSegIds<T>(build: () => T): T {
+  const before = segIdCounter;
+  try {
+    return build();
+  } finally {
+    segIdCounter = before;
+  }
+}
+
+// The counter now (the suites check that a pure read moved nothing).
+export function segIdsMinted(): number {
+  return segIdCounter;
+}
+
 export function freeSegment(size: number, reservedBy?: number): FreeSegment {
   const seg: FreeSegment = { id: newSegId('free'), name: 'Free', type: 'free', size };
   if (reservedBy !== undefined) seg.reservedBy = reservedBy;

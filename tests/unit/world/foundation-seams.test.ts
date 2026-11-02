@@ -53,15 +53,16 @@ check('a run save at RUN_SAVE_VERSION passes migrateRunSave as it is; an unknown
 
 // --- The history and the map ------------------------------------------------------------------------------------------------
 const arm = run2Arm(1);
-const history = mapHistoryOf(arm, RUN1_LAST_UNIT, run2History().colonies, run2History().routes);
-check('mapHistoryOf: the arm\'s gap, valve years, serial and departures, the last unit\'s number, the colonies and routes',
-  isDeepStrictEqual(history, run2History()), JSON.stringify(history).slice(0, 200));
-check('…no arm and no last unit is the empty history', isDeepStrictEqual(mapHistoryOf(null, null, [], []), {
-  gap: 0, valveYears: 0, finalSerial: 0, lastUnitNumber: null, departures: [], colonies: [], routes: [],
-}));
-check('createRunMap keeps the lineage\'s history, and throws when a stored arm disagrees with it',
-  isDeepStrictEqual(createRunMap({ wave: 2, armSeed: 1, arm, history }, 5).history, history)
-  && throws(() => createRunMap({ wave: 2, armSeed: 1, arm, history: { ...history, gap: 4 } }, 5)));
+const history = mapHistoryOf(RUN1_LAST_UNIT, run2History().colonies, run2History().routes);
+check('mapHistoryOf: the last unit\'s number, the colonies and routes (the arm\'s own fields are read off the arm)',
+  isDeepStrictEqual(history, { lastUnitNumber: run2History().lastUnitNumber, colonies: run2History().colonies, routes: run2History().routes }),
+  JSON.stringify(history).slice(0, 200));
+check('…no last unit is the empty history', isDeepStrictEqual(mapHistoryOf(null, [], []), { lastUnitNumber: null, colonies: [], routes: [] }));
+check('createRunMap reads the gap, valve years, serial and departures off the stored arm and the rest from the lineage (review minor 5: nothing to disagree)',
+  isDeepStrictEqual(createRunMap({ wave: 2, armSeed: 1, arm, history }, 5).history, run2History())
+  && isDeepStrictEqual(createRunMap({ wave: 2, armSeed: 1, arm, history: { ...history, gap: 4 } as typeof history }, 5).history, run2History()));
+check('…and still throws on a stored arm of another run (the archive never hands one over)',
+  throws(() => createRunMap({ wave: 3, armSeed: 1, arm, history }, 5)));
 
 // --- Visits, the beacon, the letters, the older colonies ----------------------------------------------------------------------
 const run1 = createInitialState({ seed: 3, phase: 'title', map: createRunMap(FIRST_RUN_LINEAGE, 3) });

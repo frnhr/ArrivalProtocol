@@ -117,7 +117,6 @@ export function mountRunEnd(store: Store<GameState>): () => void {
   const titleEl = requireById('reTitle');
   const whyEl = requireById('reWhy');
   const endingsEl = requireById('reEndings');
-  const carryEl = requireById('reCarry');
   const totalEl = requireById('reTotal');
   const missingEl = requireById('reMissing');
   const shipsEl = requireById('reShips');
@@ -223,8 +222,6 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     const endings = report.ending === null || state.archive.status === 'none' ? null : endingsLine(archiveMeta().endingsSeen, ENDINGS);
     endingsEl.hidden = endings === null;
     endingsEl.textContent = endings ?? '';
-    carryEl.hidden = report.carryLine === null;
-    carryEl.textContent = report.carryLine ?? '';
     totalEl.textContent = RUN_END_TEXT.total(0, report.fleetColonists);
     missingEl.textContent = '';
     missingEl.hidden = true;

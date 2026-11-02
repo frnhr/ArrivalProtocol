@@ -83,7 +83,7 @@ import { infectedSegments, fileLabel } from '@state/selectors';
 import type { HollowState } from '@state/schema';
 import {
   archiveLineage, archiveMeta, freshMeta, saveMeta, lineageOf, recordRunStart, recordRunEnd, recordTutorialDone, ghostLine, browserStorage,
-  type LastCause, type Meta,
+  LAST_CAUSES, type LastCause, type Meta,
 } from '@systems/meta';
 import { pickCard, draftContext, cardFiles, planPacket, type PickRefusal } from '@systems/draft';
 import { upgradeRepairsToV2 } from '@systems/delivery-boot';
@@ -365,6 +365,9 @@ const DEBUG_WORKED_ROUTE: readonly number[] = [0, 2, 5, 11, 15, 19];
 // __ap.archiveAs: the archive as if UNIT-047 had played run 1 on the worked route and ended with `cause`, through the real
 // record steps and the real world update (see DebugHooks.archiveAs).
 function debugArchiveAs(store: Store<GameState>, cause: LastCause, landed: number | undefined): Meta {
+  // A typo'd cause would be written and read back as ARCHIVE CORRUPT on the next page (review fix, minor 9).
+  if (!(LAST_CAUSES as readonly unknown[]).includes(cause)) throw new Error(`__ap.archiveAs: '${String(cause)}' is not a cause (${LAST_CAUSES.join(', ')})`);
+  if (landed !== undefined && !(Number.isInteger(landed) && landed >= 0)) throw new Error(`__ap.archiveAs: landed ${landed} is not a whole number`);
   const page = store.getState().run.map;
   const armSeed = page.world === 'arm' ? page.armSeed : newRunSeed();
   const first = lineageOf(freshMeta(armSeed));
@@ -372,7 +375,7 @@ function debugArchiveAs(store: Store<GameState>, cause: LastCause, landed: numbe
   map.route = DEBUG_WORKED_ROUTE.map((slot, i) => ({ slot, depth: i + 1, hop: i === 0 ? null : hopBetween(map, DEBUG_WORKED_ROUTE[i - 1]!, slot) }));
   map.galaxyYear = map.route.at(-1)!.hop!.approachYear;
   const lost = cause === 'flagship-lost' || cause === 'stayed' || cause === 'overwritten';
-  const ended = cause === 'abandoned' ? DEBUG_WORKED_ROUTE.length - 1 : DEBUG_WORKED_ROUTE.length;
+  const ended = cause === 'abandoned' || cause === 'signal-lost' ? DEBUG_WORKED_ROUTE.length - 1 : DEBUG_WORKED_ROUTE.length;
   const ships: ShipResult[] = DEBUG_WORKED_ROUTE.slice(0, ended).map((slot, i): ShipResult => {
     const def = shipDefAt(map, slot);
     const last = i === DEBUG_WORKED_ROUTE.length - 1;
@@ -543,6 +546,14 @@ function debugJump(store: Store<GameState>, index: number, threat: ShipThreat = 
 // the destination's room throw (the PACKET would hold the send).
 function debugArrive(store: Store<GameState>, hop: Hop, threat: ShipThreat): void {
   abortAll();
+  // The ship being left ends here with a debug result when it has none yet (__ap.slot from a flight; slice 3c review fix:
+  // every route stop before the current one has its result, as the trail, the update and the saves expect).
+  const left = store.getState().run;
+  if (left.ships.length < left.map.route.length) {
+    const missing = left.map.route.slice(left.ships.length).map((stop) => debugSkippedResult(left.map, stop.slot, stop.depth));
+    console.info(`[debug] ${missing.map((result) => result.shipName).join(', ')} skipped (in orbit, nobody landed)`);
+    store.update((draft) => { draft.run.ships.push(...missing); });
+  }
   const state = store.getState();
   const map = state.run.map;
   const ship = shipDefAt(map, hop.to);
@@ -596,10 +607,26 @@ function debugSlot(store: Store<GameState>, slot: number): Hop {
   return hop;
 }
 
+// The result of a ship __ap.route skipped (slice 3c review fix: the route's stops had no results, so the trail, RUN END's
+// update and a BEAM save disagreed with the route and threw or read DAMAGED): the ship reached orbit and nobody went down
+// (no colony, no stars, every colonist not launched). A debug result: nothing a played ship ends with looks like it (no
+// LZ, no pod records, 0 % fuel), and the console says which ships were skipped.
+function debugSkippedResult(map: Readonly<RunMapState>, slot: number, depth: number): ShipResult {
+  const def = shipDefAt(map, slot);
+  const aboard = map.arm[slot]!.pods * COLONISTS_PER_POD;
+  return {
+    shipId: def.id, shipName: def.name, slot, depth, outcome: 'locked', stars: 0, fuelLeftPct: 0, ringMiss: null,
+    colonistsAboard: aboard, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: aboard, landedInLz: 0, points: 0,
+    colony: null, pods: [],
+  };
+}
+
 // __ap.route([s0, …, sn]): the run on the route's last ship, flown headless: the route's stops and years, the threat as the
 // nominal route left it (TRACE 0, no DEAL: map-facts nominalRouteThreat), then the unit beamed into the last ship by its
 // hop. The route starts at the first ship and every hop must be reachable; the unit is the current one (from ship 1: the
-// fresh unit). `__ap.route([0, 2, 5, 11, 15])` is CORMORANT with HOLLOW's forced boarding on run 1.
+// fresh unit). `__ap.route([0, 2, 5, 11, 15])` is CORMORANT with HOLLOW's forced boarding on run 1. Every stop before the
+// last has a result (the run's own where it already ended that ship there, else debugSkippedResult), so the route, the
+// results, the trail, RUN END's update and the saves agree.
 function debugRoute(store: Store<GameState>, slots: readonly number[]): Hop {
   const map = armMapOf(store, 'route');
   if (slots.length < 2 || slots[0] !== FIRST_SLOT) throw new Error(`__ap.route: a route from slot ${FIRST_SLOT} with at least two ships (got [${slots.join(', ')}])`);
@@ -616,7 +643,12 @@ function debugRoute(store: Store<GameState>, slots: readonly number[]): Hop {
   const prior = nominalRouteThreat(map, before);
   const last = slots[slots.length - 1]!;
   const prev = before[before.length - 1]!;
+  const had = store.getState().run.ships;
+  const ships = before.map((slot, i) => (had[i]?.slot === slot ? structuredClone(had[i]!) : debugSkippedResult(map, slot, i + 1)));
+  const skipped = before.filter((slot, i) => had[i]?.slot !== slot).map((slot) => map.arm[slot]!.name);
+  if (skipped.length > 0) console.info(`[debug] __ap.route: ${skipped.join(', ')} skipped (in orbit, nobody landed)`);
   store.update((draft) => {
+    draft.run.ships = ships;
     draft.run.map.route = structuredClone(route);
     draft.run.map.galaxyYear = route.at(-1)!.hop?.approachYear ?? draft.run.map.startYear;
     draft.run.shipIndex = route.length - 1;

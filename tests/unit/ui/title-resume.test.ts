@@ -7,24 +7,24 @@ import { check, finish } from '../landing/checks';
 import type { GameState } from '@state/schema';
 import type { SaveState, ResumeLine } from '@/types/save';
 import { createInitialState } from '@state/initial';
-import { titleModel, titleLaunch, resumeLineText } from '@systems/title';
+import { titleModel, titleLaunch, resumeLineText, titleEnterAction, titleAbandonKey, TITLE_ABANDON_CODES } from '@systems/title';
 import { MAP_TEXT } from '@data/map-text';
 import { MAX_LINE_CHARS } from '@data/tuning';
 import { run2Map, RUN1_LAST_UNIT } from '../world/run2-fixture';
 
 const NO_SAVE: SaveState = { status: 'ok', resume: null, refusal: null };
 
-function run1(save: SaveState = NO_SAVE): Pick<GameState, 'run' | 'save'> {
+function run1(save: SaveState = NO_SAVE, archive: GameState['archive']['status'] = 'ok'): Pick<GameState, 'run' | 'save' | 'archive'> {
   const state = createInitialState({ seed: 1, phase: 'title' });
-  return { run: state.run, save };
+  return { run: state.run, save, archive: { status: archive } };
 }
 
-function run2(save: SaveState = NO_SAVE, history: Partial<GameState['run']['map']['history']> = {}): Pick<GameState, 'run' | 'save'> {
+function run2(save: SaveState = NO_SAVE, history: Partial<GameState['run']['map']['history']> = {}): Pick<GameState, 'run' | 'save' | 'archive'> {
   const state = createInitialState({ seed: 1, phase: 'title', map: run2Map(1) });
   state.run.unitNumber = 48;
   state.run.lastUnit = structuredClone(RUN1_LAST_UNIT);
   Object.assign(state.run.map.history, history);
-  return { run: state.run, save };
+  return { run: state.run, save, archive: { status: 'ok' } };
 }
 
 const one = titleModel(run1(), null);
@@ -77,6 +77,29 @@ check('the archive\'s one-off notes, each once (older archive, arm redrawn)',
   titleModel(run1(), { olderArchive: true, armReset: true }).notes.join(' | ') === `${MAP_TEXT.save.olderArchive} | ${MAP_TEXT.save.armReset}`
   && titleModel(run1(), { olderArchive: false, armReset: false }).notes.length === 0);
 
-const long = [two.unitLine, boot.save?.line ?? '', cant.save?.line ?? '', valve?.stamp ?? ''].filter((line) => line.length > MAX_LINE_CHARS);
+// --- Review fixes (slice 3c): the archive and the save, ENTER and [DEL] on the save block ------------------------------------
+for (const status of ['corrupt', 'offline', 'without'] as const) {
+  check(`review M1: no \`runs save between ships\` beside ARCHIVE ${status.toUpperCase()} (the save goes OFFLINE at RUN START)`,
+    titleModel(run1(NO_SAVE, status), null).saveNote === null);
+}
+const superseded = titleModel(run1({ status: 'cant-resume', resume: null, refusal: { kind: 'superseded', detail: 'unit 48 ≠ 49' } }), null);
+check('review minor 7: another run in progress reads `RUN SAVE CAN\'T RESUME · ANOTHER RUN HAS STARTED SINCE`, not THAT RUN ALREADY ENDED',
+  superseded.save?.line === 'RUN SAVE CAN\'T RESUME · ANOTHER RUN HAS STARTED SINCE', JSON.stringify(superseded.save));
+check('review minor 7: another version or content reads `SAVED BY ANOTHER VERSION` (nobody\'s fault)',
+  MAP_TEXT.save.reason.version === 'SAVED BY ANOTHER VERSION' && MAP_TEXT.save.reason.content === 'SAVED BY ANOTHER VERSION');
+const resumeBlock = boot.save;
+const cantBlock = cant.save;
+check('review B2: ENTER on the RESUME block resumes; on CAN\'T RESUME it abandons (its only way on)',
+  titleEnterAction(resumeBlock, false, null) === 'resume' && titleEnterAction(cantBlock, false, null) === 'abandon');
+check('review minor 1: with NEW RUN focused, ENTER never resumes (the focused button acts by itself: it asks)',
+  titleEnterAction(resumeBlock, false, 'new-run') === null && titleEnterAction(resumeBlock, false, 'resume') === null);
+check('review minor 1: on NEW RUN\'s confirm ENTER keeps the run; ABANDON RUN only by a click or [DEL]',
+  titleEnterAction(resumeBlock, true, null) === 'keep' && titleAbandonKey(resumeBlock, true) === 'abandon'
+  && titleAbandonKey(resumeBlock, false) === null && titleAbandonKey(cantBlock, false) === null && TITLE_ABANDON_CODES.includes('Delete')
+  && MAP_TEXT.save.abandonAskKey === 'ABANDON RUN [DEL]' && MAP_TEXT.save.keepKey === 'KEEP IT [ENTER]');
+check('…no save block, or RUN SAVE OFFLINE: ENTER is RECEIVE TRANSMISSION\'s (systems/boot.ts), not the block\'s',
+  titleEnterAction(null, false, null) === null && titleEnterAction(offline.save, false, null) === null);
+
+const long = [two.unitLine, boot.save?.line ?? '', cant.save?.line ?? '', superseded.save?.line ?? '', valve?.stamp ?? '', MAP_TEXT.save.offlineStale].filter((line) => line.length > MAX_LINE_CHARS);
 check(`every title line here fits ${MAX_LINE_CHARS} characters`, long.length === 0, long.join(' | '));
 finish();

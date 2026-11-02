@@ -86,6 +86,12 @@ export function unitDigits(unitNumber: number): string {
   return String(unitNumber).padStart(3, '0');
 }
 
+// A unit's name, `UNIT-047` (moved here from systems/say.ts in the slice 3c review fixes, minor 6: the pure title and desk
+// models read it from this data leaf rather than from the voice; say.ts re-exports it).
+export function unitName(unitNumber: number): string {
+  return `UNIT-${unitDigits(unitNumber)}`;
+}
+
 // HOLLOW's name once it has said who it is (say.ts hollowLabel): its units joined, `UNIT-046`, or after a
 // MERGE both of them, `UNIT-046·047` (§4.5).
 export function hollowUnitName(units: readonly number[]): string {
@@ -273,9 +279,6 @@ export const HOLLOW_FINALE = {
   // The endings found so far, an ending still to find (`ENDINGS 1/2 · PURGE · ???`: script.ts endingsLine), and what a
   // MERGE carries into the next run (RUN END).
   endingUnknown: '???',
-  // The shimmer is the glitch floor a MERGE leaves (tuning.ts MERGE_CORRUPTION_FLOOR): named, since nothing on RUN END
-  // shows one yet (final review: `The shimmer stays.` named nothing the kid had seen).
-  mergeCarries: (threads: number): string => `NEXT RUN: your Core has ${threads} threads, and a faint glitch shimmer stays.`,
   // UNRESOLVED (§4.3): the landing ended and nothing was left to delete the root with.
   unresolvedLine: '> you can\'t delete me now. i\'ll come with you.',
 } as const;
@@ -341,6 +344,8 @@ export const GHOST_LINE: Readonly<Record<LastCause, ((words: GhostWords) => stri
   'flagship-lost': (words) => `${hiFrom(words)} i lost ${words.lostShip}. then i got hungry.`,
   abandoned: (words) => `${hiFrom(words)} i blinked and the run was gone.`,
   stayed: null,
+  // Slice 3c review fix (minor 7): the game lost the run (a save it could no longer read), not the kid: no ghost line.
+  'signal-lost': null,
 };
 
 // A ship ended because HOLLOW ate the AI Core to 0 (§3.3 C5). WP6 shows a LOST card; WP7 replaces it

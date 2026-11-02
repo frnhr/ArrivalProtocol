@@ -88,31 +88,54 @@ export function runSaveSessionStatus(): 'none' | 'ok' | 'offline' {
   return session === null ? 'none' : session.status;
 }
 
-// A read, write or remove threw, or a save could not be built: OFFLINE for the rest of the page, said once.
+// A read, write or remove threw, a save could not be built, or the archive can't vouch for one: OFFLINE for the rest of the
+// page, said once ('save-lost': a TERMINAL line, a buzz, the footer's NO SAVE). The slot is emptied too (review fix M2: the
+// last save written stayed behind, so a reload resumed an older point of this run, or after a NEW RUN met a save of a run
+// the archive had moved past); when even that throws, the line says a reload may go back ('save-stale').
 function goOffline(store: Store<GameState> | null, why: string, error: unknown): void {
-  if (session !== null) session.status = 'offline';
-  console.error(`[run save] offline: ${why}`, error);
+  const wasOk = session !== null && session.status === 'ok';
+  console.error(`[run save] offline: ${why}`, error ?? '');
+  let staleLeft = false;
+  if (session !== null) {
+    session.status = 'offline';
+    session.pending = null;
+    try {
+      session.provider().removeItem(RUN_SAVE_KEY);
+    } catch (removeError) {
+      staleLeft = true;
+      console.error('[run save] the last save could not be removed either: a reload may resume it', removeError);
+    }
+  }
   if (store !== null && store.getState().save.status !== 'none') {
     store.update((draft) => { draft.save = { status: 'offline', resume: null, refusal: null }; });
   }
-  emit('save-lost', NO_PAYLOAD);
+  if (wasOk) emit(staleLeft ? 'save-stale' : 'save-lost', NO_PAYLOAD);
+}
+
+// Whether a save point writes now (the one gate every point goes through): the page has a working save (not 'none' in a
+// headless world, not 'offline' or 'cant-resume'), on the arm (the classic world is never saved). The archive must vouch for
+// it (a save is resumed only when the archive's run in progress is its run, so one written while the archive is corrupt,
+// played without or offline could never be resumed): while it can't, the save goes OFFLINE here, the one place it mirrors
+// the archive (review fix M1: saves used to stop silently, with no NO SAVE and no TERMINAL line).
+function writable(store: Store<GameState>): boolean {
+  const state = store.getState();
+  if (state.save.status !== 'ok' || state.run.map.world !== 'arm' || session === null || session.status !== 'ok') return false;
+  if (state.archive.status === 'ok') return true;
+  goOffline(store, `the archive is ${state.archive.status}: a save it can't vouch for could never be resumed`, null);
+  return false;
 }
 
 // The one entry point for every save point (3c plan §1.3: ironman later adds a 'tab-hidden' point here): builds the save
 // (save-codec buildRunSave), encodes it and writes it whole over the last one. `boot`: the BEAM and RUN START points' racks
-// and verdict (the store no longer holds them once the ship is built), null at the world points. A no-op while the page
-// has no working save (status 'none' in a headless world, 'offline', 'cant-resume'), on the classic world, and while the
-// archive can't vouch for a save (anything but 'ok': a save is resumed only when the archive's run in progress is its run,
-// so one written without it could never be resumed).
+// and verdict (the store no longer holds them once the ship is built), null at the world points. A no-op unless the page
+// can write a save (writable).
 // A save that can't be built or encoded (a point called at the wrong moment, a non-finite number) is a bug: the console
 // says it loudly with the stack, and the save goes OFFLINE like a write that threw, so play goes on and the kid is told.
 export function writeRunSave(store: Store<GameState>, point: SavePoint, boot: Readonly<BootParts> | null = null): void {
-  const state = store.getState();
-  if (state.save.status !== 'ok' || state.run.map.world !== 'arm' || session === null || session.status !== 'ok') return;
-  if (state.archive.status !== 'ok') return;
+  if (!writable(store) || session === null) return;
   let raw: string;
   try {
-    raw = encodeRunSave(buildRunSave(state, point, archiveMeta().runs, boot, Date.now()));
+    raw = encodeRunSave(buildRunSave(store.getState(), point, archiveMeta().runs, boot, Date.now()));
   } catch (error) {
     goOffline(store, `the ${point} save could not be built (a bug): ${(error as Error).message}`, error);
     return;
@@ -132,25 +155,32 @@ const DECIDED: readonly GameState['hollow']['finale']['phase'][] = ['purged', 'm
 // reserved by one, then the save. `flushOwed` says anything the finale still owed the radio (systems/finale.ts
 // sayOwedVerdict: CONTROL's verdict waits for the typed ending, and a resumed world has no module state to say it from), so
 // the save's log has it. The clock stays as it was (the report's own pause rule). Slice 7 moves this to step 2's confirm.
+// Only when a save will be written (review fix, minor 3): with no save this page (headless, offline, the classic world) none
+// of it runs, and the finale says its verdict in its own time. A block still reserved after the abort is a bug: said on the
+// console, and the save goes OFFLINE rather than crash the final LANDING REPORT.
 export function writeEndingChosen(store: Store<GameState>, flushOwed: (store: Store<GameState>) => void): void {
-  const state = store.getState();
-  if (state.run.map.world !== 'arm' || !DECIDED.includes(state.hollow.finale.phase)) return;
+  if (!DECIDED.includes(store.getState().hollow.finale.phase) || !writable(store)) return;
   abortAll();
   const reserved = store.getState().memory.filter((seg) => seg.type === 'free' && seg.reservedBy !== undefined);
-  if (reserved.length > 0) throw new Error(`writeEndingChosen: ${reserved.length} free block(s) still reserved after abortAll`);
+  if (reserved.length > 0) {
+    goOffline(store, `ENDING CHOSEN: ${reserved.length} free block(s) still reserved after abortAll (a bug)`, null);
+    return;
+  }
   flushOwed(store);
   writeRunSave(store, 'ending-chosen');
 }
 
-// Deletes the run save (RUN END's one step, abandoning a run). A no-op with no session (headless) and when the save is
-// already offline; a remove that throws turns it offline (said like a write that failed: the stale rule still refuses the
-// save left behind on the next page open). `store`: the page's store, whose save status follows.
+// Deletes the run save (RUN END's one step, abandoning a run), whatever the save's status (review fix M2: an OFFLINE page
+// used to leave the last save in the slot, stale or worse). A no-op with no session (headless). A remove that throws turns
+// a working save offline (said like a write that failed); on a page already offline it is said on the console. Either way
+// the stale rule refuses the save left behind on the next page open. `store`: the page's store, whose save status follows.
 export function clearRunSave(store: Store<GameState> | null = null): void {
-  if (session === null || session.status !== 'ok') return;
+  if (session === null) return;
   session.pending = null;
   try {
     session.provider().removeItem(RUN_SAVE_KEY);
   } catch (error) {
-    goOffline(store, `the clear failed (${(error as Error).message})`, error);
+    if (session.status === 'ok') goOffline(store, `the clear failed (${(error as Error).message})`, error);
+    else console.error('[run save] the clear failed on an offline page: the save left behind reads stale on the next open', error);
   }
 }

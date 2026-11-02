@@ -59,7 +59,7 @@ check('…a gap of 0: `UNIT-048 LEFT SOL IN THE SAME YEAR AS YOU, 2300.`',
 check('an archive arm made for another run says nothing (never something wrong)', runEndNext(NEXT, { ...arm, run: 3 })?.summary === null);
 check('no run.next (a world update that has not run): no summary, no bridge', runEndModel(endedRun(null), arm).next === null);
 const merge = runEndModel(endedRun(NEXT, 'won-merge'), arm);
-check('MERGE\'s next-run thread retires on the arm (risk 3): no carry line', merge.carryLine === null && merge.ending === 'merge');
+check('MERGE\'s next-run thread is gone (risk 3; the carry line deleted in the review fixes): the ending stands', merge.ending === 'merge');
 
 const lines = [next?.line, next?.summary, valve?.valve, next?.bridge, next?.bridgeTail,
   MAP_TEXT.tally.next('UNIT-999', 3999), MAP_TEXT.tally.update(19, 19, 19), MAP_TEXT.tally.valve(11), MAP_TEXT.runEnd.bridge('UNIT-999', 46, 3999)]

@@ -266,8 +266,12 @@ function sayNextLine(store: Store<GameState>): void {
   linesSaid++;
 }
 
+// Refused while the title holds a save (review fix B2): RESUME ▸ / NEW RUN, or CAN'T RESUME's ABANDON RUN, is the way on
+// there (components/title/TitleCard.ts), whether by ENTER, SPACE, a click or __ap; counting a run over it would overwrite
+// the save and drop its unit from the lineage.
 export function receiveTransmission(store: Store<GameState>): boolean {
-  if (store.getState().run.phase !== 'title') return false;
+  const { run, save } = store.getState();
+  if (run.phase !== 'title' || save.resume !== null || save.status === 'cant-resume') return false;
   // ARCHIVE CORRUPT: the run plays without the archive (nothing is written over the bad record), and the
   // status says so from here on (the title's box, the footer's NO ARCHIVE, RUN END's line).
   if (store.getState().archive.status === 'corrupt') playWithoutArchive(store);

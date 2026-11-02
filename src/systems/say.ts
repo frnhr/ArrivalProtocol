@@ -10,7 +10,7 @@ import { mindAlertActive } from '@systems/alerts';
 import { roleHealth } from '@systems/capabilities';
 import { garbleText } from '@systems/garble';
 import { emit } from '@systems/events';
-import { UNNAMED_HOLLOW, unitDigits, hollowUnitName } from '@data/hollow-text';
+import { UNNAMED_HOLLOW, unitName, hollowUnitName } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
 import {
   MAX_LINE_CHARS, SAY_QUEUE_TTL_SEC, SAY_FLUSH_INTERVAL_SEC, SAY_SPACING_SEC, TICKER_SHOW_SEC,
@@ -52,9 +52,8 @@ export function screenOfChannel(channel: Channel): ViewMode {
   return channel === 'mind' ? 'memory' : 'tools';
 }
 
-export function unitName(unitNumber: number): string {
-  return `UNIT-${unitDigits(unitNumber)}`;
-}
+// `UNIT-047`: data/hollow-text.ts's (a data leaf the pure models import), re-exported for the voice's callers.
+export { unitName };
 
 // What the kid calls HOLLOW right now: '???' until it has said who it is (`> i was 046.` on the ship it boards, or
 // finale.ts at the final ship's ORBIT LOCK: run.hollowNamed), then its units' name (run.hollowUnits:

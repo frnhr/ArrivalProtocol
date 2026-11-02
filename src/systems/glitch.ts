@@ -4,7 +4,7 @@ import { selectCorruption, quantizeCorruption } from '@state/selectors';
 import { onPostTick, isActivePhase } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { emit, on } from '@systems/events';
-import { MERGE_CORRUPTION_FLOOR, BOARD_TEAR_LEVEL, BOARD_TEAR_MS } from '@data/tuning';
+import { BOARD_TEAR_LEVEL, BOARD_TEAR_MS } from '@data/tuning';
 
 // --- glitchBurst (§7.3, §9 WP11 item 3) -----------------------------------------------------------------------
 // A moment's spike of the glitch overlay on top of the Core's own corruption: a verb landing, HALCYON's naming, the
@@ -41,11 +41,6 @@ function stepBurst(dtSec: number): void {
   if (burst === null) return;
   burst.leftSec -= dtSec;
   if (burst.leftSec <= 0) burst = null;
-}
-
-// The corruption the screen keeps for the whole run after a MERGE (§4.5: a faint permanent shimmer), whatever the Core.
-export function corruptionFloor(state: Readonly<GameState>): number {
-  return state.run.mergeBonus ? quantizeCorruption(MERGE_CORRUPTION_FLOOR) : 0;
 }
 
 const GLITCH_CHARS = '█▓▒░@#$%&*?/\\|<>=+-x:;.,';
@@ -130,7 +125,7 @@ function startJerk(): { cancel: () => void } {
 }
 
 // Drives the body-wide visual corruption effect.
-//   • WP11: what is drawn is the highest of the Core's damage, the MERGE floor (corruptionFloor) and a glitchBurst;
+//   • WP11: what is drawn is the highest of the Core's damage, and a glitchBurst (3c deleted the MERGE floor, risk 3);
 //     under reduced motion a burst dims the screen (--glitch-dim on <html>, the filter in base.css) instead.
 //   • Reads the AI Core segment's damage every tick (selectCorruption, in 5% steps: a repair
 //     heals the Core without a store update, and the static should calm as it climbs) → sets
@@ -239,7 +234,7 @@ export function mountGlitchDriver(store: Store<GameState>): () => void {
 
   // What the overlay draws: the Core's damage, the MERGE floor, and a burst unless reduced motion turns it into a dim.
   const drawnLevel = (state: Readonly<GameState>): number => {
-    const base = Math.max(selectCorruption(state), corruptionFloor(state));
+    const base = selectCorruption(state);
     return state.ui.reducedMotion ? base : Math.max(base, glitchBurstLevel());
   };
   const dimLevel = (state: Readonly<GameState>): number => (state.ui.reducedMotion ? glitchBurstLevel() : 0);

@@ -83,9 +83,11 @@ export interface SaveState {
 }
 
 // Why a stored save can't be resumed, in the order the decoder checks (3c plan §2.1 "content check on load"): the first
-// failure wins. 'stale' and 'archive' come from saveRefusal (the archive's view); 'resume-threw' from the resume itself.
+// failure wins. 'stale', 'superseded' and 'archive' come from saveRefusal (the archive's view): 'stale' when the archive has
+// no run in progress (the save's run already ended), 'superseded' when its run in progress is another (another tab's, or a
+// run started in this page after the save went OFFLINE; review fix, minor 7); 'resume-threw' from the resume itself.
 export type SaveRefusalKind =
-  | 'not-json' | 'version' | 'content' | 'shape' | 'classic' | 'route' | 'ship' | 'stale' | 'archive' | 'resume-threw';
+  | 'not-json' | 'version' | 'content' | 'shape' | 'classic' | 'route' | 'ship' | 'stale' | 'superseded' | 'archive' | 'resume-threw';
 
 export interface SaveRefusal {
   kind: SaveRefusalKind;

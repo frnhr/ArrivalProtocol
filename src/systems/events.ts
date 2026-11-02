@@ -131,6 +131,9 @@ export interface GameEvents {
   // game says so once (`RUN SAVE OFFLINE — a reload will lose this run`: a TERMINAL line and a buzz); the footer's NO SAVE
   // stays. Play goes on.
   'save-lost': Record<string, never>;
+  // ...and its slot could not be emptied either (slice 3c review fix M2): a reload may resume the last save written, an
+  // older point of this run (`RUN SAVE OFFLINE — a reload may go back to an older save`). Emitted instead of 'save-lost'.
+  'save-stale': Record<string, never>;
   // WP9: a hazard zone hit memory (systems/zones.ts): a debris contact (every file in its rack at once) or one
   // belt hit. `hits` are the files, the rack each was in, and their integrity before and after; `lostDrivers`
   // are the pods whose drivers it took to 0. The thud, shake, rack flash and `HIT · RACK C` stamp hang on it.

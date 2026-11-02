@@ -8,9 +8,11 @@ import type { ShipOutcome } from '@state/schema';
 
 // --- The last unit (systems/meta.ts's record; moved here so the pure lineage code never imports meta.ts) -----------------
 
-// How a unit's run ended, as the next run remembers it (§4.5's causes, one for one with RunEndCause).
+// How a unit's run ended, as the next run remembers it (§4.5's causes, one for one with RunEndCause), and 'signal-lost'
+// (slice 3c review fix, minor 7): a run abandoned because the game could not give it back (its save refused for another
+// version or content, a ship that no longer builds, a resume that threw), which no RUN END ever records.
 export type LastCause =
-  | 'won-purge' | 'won-merge' | 'unresolved' | 'flagship-lost' | 'overwritten' | 'stayed' | 'abandoned';
+  | 'won-purge' | 'won-merge' | 'unresolved' | 'flagship-lost' | 'overwritten' | 'stayed' | 'abandoned' | 'signal-lost';
 
 // What HOLLOW's verbs on the final ship are weighted by (§4.5: "it fights like you did", WP11).
 export interface UnitStats {
@@ -113,6 +115,12 @@ export interface MapHistory {
   colonies: ColonyRecord[];
   routes: RouteRecord[];
 }
+
+// The part of a map's history the archive hands a run (RunLineage.history, systems/lineage.ts mapHistoryOf): the last unit's
+// number, the colonies and the routes. The rest (gap, valve years, serial, departures) is the arm's own, and
+// systems/map-run.ts createRunMap reads it from the arm the run starts on (review fix, minor 5: one source, nothing to
+// disagree at the page's open).
+export type LineageHistory = Pick<MapHistory, 'lastUnitNumber' | 'colonies' | 'routes'>;
 
 // RUN END's bridging line (`UNIT-048 LEFT SOL 3 YEARS AFTER YOU, IN 2303`): the next unit, from the world update.
 export interface NextLaunch {
