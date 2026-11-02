@@ -15,6 +15,20 @@
 //   `> REPAIR CHARGE 0 · NO ROOM ON LAPWING` and a four-rack MIND (A B C E).
 // • The phone (390×844, touch): the title's beacon on the upright chart, the DESK whole on the screen, a tap on a ship opens
 //   its card as a bottom sheet, SET COURSE pinned at the bottom, ✕ closes the sheet, a tap on SET COURSE opens the PACKET.
+// Slice 3b (the repository, deliveries, the INBOX; slice-3b-plan §6.3):
+// • The tabs CARD / REPOSITORY [R] / INBOX [I] on the first DESK, their badges (`:)` while CONTROL recommends a file, the
+//   unread count); [R] shows the catalogue (no ship picked: no ETA; Mv tagged `:) RECOMMENDED FOR YOU`; three RESTRICTED
+//   rows), [I] the welcome, opened by a click (its stamps; the badge goes).
+// • Request toggling on ALBATROSS (1 YR LATE from ARES-VII): a click REQUESTs Mv (the badge names it, the card's DELIVERIES
+//   row `Mv ✗ 1 YR LATE` and its TIMELINE mark in red), a second click clears it, the number key [1] requests it again;
+//   on HALCYON it is IN TIME (`Mv ✓ WAITING HERE`, a green mark); the PACKET's chip; `> DELIVERY: mv (arrived 2337)`.
+// • The flight INBOX window on HALCYON: the dock reads `INBOX 2`, the window lists the mail, the reply opened by a click.
+// • SEND ON forced by __ap: Repair.bak requested for LAPWING (__ap.request) and the unit filled with spare files
+//   (__ap.give) until files + the delivery are over LAPWING's TIGHT room: TRANSMIT ▸ waits; a click on the chip sends it on
+//   (it waits in LAPWING's receiver) and the packet fits.
+// • The last-rm prompt: on LAPWING an rm given (__ap.give: DELETE licensed) and then taken out of memory by __ap's store;
+//   LAPWING's DESK opens on the REPOSITORY with Rm lit and the warning.
+// • The phone: the tab bar peeks at the bottom; a tap on a tab opens the sheet on it (REPOSITORY, a tap REQUESTs; INBOX).
 // Usage: node tests/e2e/scenarios/map-desk.mjs   (env E2E_BASE_URL; tests/e2e/run.mjs runs it). Shots: tests/.out/e2e/shots/map-desk-*.
 import { launch, BASE_URL, SHOTS, checker, pageKit, runKit } from '../lib.mjs';
 import { join } from 'node:path';
@@ -53,6 +67,8 @@ const titleLook = (st) => st(() => {
     nodes: chart?.querySelectorAll('[data-slot]').length ?? 0,
   };
 });
+
+const badgeOf = (look, id) => look.tabs.find((tab) => tab.id === id)?.badge ?? null;
 
 // RECEIVE, the boot skipped, ARES-VII locked at once and landed (__ap.landAll), its report through to the DESK.
 async function toFirstDesk({ page, kit, run }, tap = false) {
@@ -111,6 +127,44 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
     && view.nodes.filter((node) => node.state === 'out-of-range').length === 13, view.nodes.map((node) => `${node.slot}:${node.state}`).join(' '));
   await shot('02-first-desk');
 
+  // --- Slice 3b: the tabs, the REPOSITORY with no ship picked, the welcome in the INBOX tab ----------------------------------
+  let tabs = await run.deskTabs();
+  check('3b: the right window\'s tabs CARD / REPOSITORY [R] / INBOX [I], the card lit; badges `:)` (CONTROL recommends a file) and 1 (the welcome unread)',
+    tabs.tab === 'card' && tabs.tabs.map((tab) => tab.label).join(' / ') === 'CARD / REPOSITORY [R] / INBOX [I]' && tabs.tabs.find((tab) => tab.id === 'card')?.on
+    && badgeOf(tabs, 'repository') === ':)' && badgeOf(tabs, 'inbox') === '1' && badgeOf(tabs, 'card') === null, JSON.stringify(tabs.tabs));
+  check('…the first desk\'s guidance has three steps (A SHIP · A FILE · SET COURSE), the ship first', tabs.steps.join(' | ') === '1 A SHIP ◀ | 2 A FILE | 3 SET COURSE',
+    tabs.steps.join(' | '));
+  await page.keyboard.press('KeyR');
+  await page.waitForTimeout(400);
+  tabs = await run.deskTabs();
+  const noShip = 'PICK A SHIP TO SEE WHEN A FILE GETS THERE';
+  check('[R] opens the REPOSITORY: seven files in catalogue order with their keys, no ETA until a ship is picked, nothing requested',
+    tabs.tab === 'repository' && tabs.repoShown && !tabs.cardShown && tabs.rows.map((row) => row.file).join(',') === 'mv,rm,cp,swap,repair-bak,scan-bak,repair-v2'
+    && tabs.rows[0].text === 'Mv · 2 BLOCKS · MOVE' && tabs.rows.every((row) => row.eta === noShip && row.req === 'REQUEST' && !row.requested) && tabs.pick === null,
+    JSON.stringify(tabs.rows));
+  check('…ARRIVAL CONTROL tags Mv, and only Mv, `:) RECOMMENDED FOR YOU`', tabs.rows.filter((row) => row.tag !== null).map((row) => `${row.file}:${row.tag}`).join() === 'mv::) RECOMMENDED FOR YOU',
+    JSON.stringify(tabs.rows.map((row) => row.tag)));
+  check('…RESTRICTED: AUTOBURN.skl (Train it yourself :)), THREAD+ and FIREWALL.sys, locked; IN TRANSIT: nothing; ONE REQUEST PER TRANSMIT',
+    tabs.locked.length === 3 && tabs.locked.every((row) => /^LOCKED /.test(row)) && tabs.locked.some((row) => /AUTOBURN.*Train it yourself :\)/.test(row))
+    && tabs.transit.length === 0 && tabs.transitNone === 'NOTHING ON THE WAY' && /^ONE REQUEST PER TRANSMIT/.test(tabs.foot ?? ''), JSON.stringify({ locked: tabs.locked, transit: tabs.transit, none: tabs.transitNone, foot: tabs.foot }));
+  await shot('02b-repository');
+  await page.keyboard.press('KeyI');
+  await page.waitForTimeout(400);
+  tabs = await run.deskTabs();
+  check('[I] opens the INBOX: the welcome from ARRIVAL CONTROL · EARTH, unread, RECEIVED 2288', tabs.tab === 'inbox' && tabs.inboxShown && !tabs.repoShown
+    && tabs.mail.length === 1 && tabs.mail[0].id === 'welcome' && tabs.mail[0].from === 'ARRIVAL CONTROL · EARTH' && tabs.mail[0].subject === 'Welcome, Unit 47! :)'
+    && tabs.mail[0].received === '2288' && tabs.mail[0].unread && tabs.reader === null, JSON.stringify(tabs.mail));
+  await page.locator('#deskScreen .desk-inbox .ib-row[data-id="welcome"]').click();
+  await page.waitForTimeout(400);
+  tabs = await run.deskTabs();
+  check('…a click opens it: SENT 2280 · RECEIVED 2288, `Recommended for you: mv :)`; read, the INBOX badge gone', tabs.reader?.stamps === 'SENT 2280 · RECEIVED 2288'
+    && tabs.reader.lines.includes('Need software? Ask our repository. Recommended for you: mv :)') && !tabs.mail[0].unread && badgeOf(tabs, 'inbox') === null
+    && (await st(() => window.__ap.inbox().read.includes('welcome'))), JSON.stringify({ reader: tabs.reader, badge: badgeOf(tabs, 'inbox') }));
+  await shot('02c-inbox');
+  await page.keyboard.press('KeyI');
+  await page.waitForTimeout(300);
+  check('…[I] again goes back to the card', (await run.deskTabs()).tab === 'card');
+
   // A click on HALCYON: picked (chime), its card, SET COURSE names it.
   let from = await cues();
   const clicked = await run.clickNode(HALCYON);
@@ -128,6 +182,8 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
       'beam=21 LY · LINK 123', 'noise=NOISE CLEAN · SEEDS: none'].every((row) => card?.rows.includes(row))
     && card?.rows.some((row) => /^run=SHIP 2 OF YOUR RUN · \d(–\d)? MORE TO THE FINAL SHIP$/.test(row)), JSON.stringify(card?.rows));
   check('…and the TIMELINE `2300 you leave · 2321 you get there · 2352 ▲ approach`', card?.timeline === '2300 you leave · 2321 you get there · 2352 ▲ approach', card?.timeline);
+  check('3b: …the guidance moves to the file: `REQUEST mv · RECOMMENDED [R]` (the ship\'s step done)', view.step === 'REQUEST mv · RECOMMENDED [R]'
+    && (await run.deskTabs()).steps.join(' | ') === '1 A SHIP ✓ | 2 A FILE ◀ | 3 SET COURSE', `${view.step} / ${(await run.deskTabs()).steps.join(' | ')}`);
   // ALBATROSS, the ark at the end of a long line: ONLY FROM HERE (read by hovering is the tag; its card by a click).
   await run.clickNode(ALBATROSS);
   await page.waitForTimeout(300);
@@ -135,7 +191,53 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('…ALBATROSS\'s card: ARK, 51 LY · LINK 90 · 7 HITS, 14 YRS EARLY and ONLY FROM HERE in red', albatross?.name === 'ALBATROSS' && albatross.tags.includes('ARK')
     && albatross.rows.some((row) => /^beam=51 LY · LINK 90$/.test(row)) && /^7 HITS/.test(albatross.cost ?? '') && albatross.sched === '14 YRS EARLY'
     && albatross.rows.some((row) => /^only=ONLY FROM HERE/.test(row)), JSON.stringify(albatross));
+  // Slice 3b: ALBATROSS is in reach but a request from ARES-VII gets there a year late. Request toggling and the red mark.
+  await page.keyboard.press('KeyR');
+  await page.waitForTimeout(300);
+  tabs = await run.deskTabs();
+  const lateEta = '1 YR LATE → FOLLOWS YOUR ROUTE · SHIP 3 AT THE EARLIEST';
+  check('3b: the REPOSITORY for ALBATROSS: every file `1 YR LATE → FOLLOWS YOUR ROUTE · SHIP 3 AT THE EARLIEST` (amber)', tabs.tab === 'repository'
+    && tabs.rows.every((row) => row.eta === lateEta && row.tone === 'eta-late'), JSON.stringify(tabs.rows.map((row) => `${row.file}:${row.eta}:${row.tone}`)));
+  await page.locator('#deskScreen .rp-row[data-file="mv"]').click();
+  await page.waitForTimeout(300);
+  tabs = await run.deskTabs();
+  check('…a click on Mv REQUESTs it: the row says REQUESTED, the REPOSITORY badge names it (Mv)', tabs.pick === 'mv' && tabs.rows[0].requested
+    && tabs.rows[0].req === 'REQUESTED' && tabs.rows.filter((row) => row.requested).length === 1 && badgeOf(tabs, 'repository') === 'Mv', JSON.stringify({ pick: tabs.pick, badge: badgeOf(tabs, 'repository') }));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  const albatrossAsked = (await run.desk()).card;
+  const albatrossMarks = await run.deskMarks();
+  const approach = Number(/(\d{4}) ▲ approach/.exec(albatrossAsked?.timeline ?? '')?.[1]);
+  check('…ESC: ALBATROSS\'s card says DELIVERIES `Mv ✗ 1 YR LATE`, and its TIMELINE marks Mv in red after ▲', (await run.deskTabs()).tab === 'card'
+    && albatrossAsked?.rows.includes('deliveries=Mv ✗ 1 YR LATE') && albatrossMarks.length === 1 && albatrossMarks[0].late
+    && new RegExp(`^${approach + 1} Mv$`).test(albatrossMarks[0].text), JSON.stringify({ rows: albatrossAsked?.rows, timeline: albatrossAsked?.timeline, marks: albatrossMarks }));
+  await shot('03a-albatross-late-mark');
+  await page.keyboard.press('KeyR');
+  await page.waitForTimeout(300);
+  await page.locator('#deskScreen .rp-row[data-file="mv"]').click();
+  await page.waitForTimeout(300);
+  tabs = await run.deskTabs();
+  check('…a second click clears it (REQUEST again, the badge back to `:)`)', tabs.pick === null && !tabs.rows[0].requested && tabs.rows[0].req === 'REQUEST'
+    && badgeOf(tabs, 'repository') === ':)', JSON.stringify({ pick: tabs.pick, badge: badgeOf(tabs, 'repository') }));
+  await page.keyboard.press('Digit1');
+  await page.waitForTimeout(300);
+  tabs = await run.deskTabs();
+  check('…and its number key [1] requests it again', tabs.pick === 'mv' && tabs.rows[0].requested && badgeOf(tabs, 'repository') === 'Mv', JSON.stringify({ pick: tabs.pick }));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
   await run.clickNode(HALCYON);
+  await page.waitForTimeout(300);
+  view = await run.desk();
+  const halcyonMarks = await run.deskMarks();
+  check('…on HALCYON Mv is in time: `Mv ✓ WAITING HERE` and a green mark `2337 Mv`; the guidance is on SET COURSE', view.selected === HALCYON
+    && view.card?.rows.includes('deliveries=Mv ✓ WAITING HERE') && halcyonMarks.length === 1 && !halcyonMarks[0].late && halcyonMarks[0].text === '2337 Mv'
+    && (await run.deskTabs()).steps.join(' | ') === '1 A SHIP ✓ | 2 A FILE ✓ | 3 SET COURSE ◀', JSON.stringify({ rows: view.card?.rows, marks: halcyonMarks, steps: (await run.deskTabs()).steps }));
+  await page.keyboard.press('KeyR');
+  await page.waitForTimeout(300);
+  tabs = await run.deskTabs();
+  check('…and its REPOSITORY row reads `ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME`, tagged', tabs.rows[0].eta === 'ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME'
+    && tabs.rows[0].tone === 'eta-in-time' && tabs.rows[0].tag === ':) RECOMMENDED FOR YOU', JSON.stringify(tabs.rows[0]));
+  await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
   await shot('03-halcyon-card');
 
@@ -160,6 +262,18 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('…SPACE closes the reader and sends nothing; the PACKET: NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY, ◀ CHART [ESC], the room bar',
     !packet.reader && packet.phase === 'transmit' && packet.sent === 0 && packet.next === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY'
     && packet.back === '◀ CHART [ESC]' && packet.backShown && /ROOM 152 · FILES \d+ \+ FLOOR 12/.test(packet.room), JSON.stringify(packet));
+  const deliveryChips = () => st(() => ({
+    label: document.querySelector('#transmitScreen .tx-deliveries')?.hidden === false ? document.querySelector('#transmitScreen .tx-deliveries-label')?.textContent ?? null : null,
+    chips: [...document.querySelectorAll('#transmitScreen .tx-delivery')].map((chip) => ({ key: chip.dataset.key, label: chip.getAttribute('aria-label'),
+      name: chip.querySelector('.tx-chip-name')?.textContent ?? '', sentOn: chip.classList.contains('sent-on'), lost: chip.classList.contains('lost') })),
+    files: Number(/FILES (\d+)/.exec(document.getElementById('txPacketLine').innerText)?.[1]), room: window.__ap.transmitModel().room.line,
+    tooMany: window.__ap.transmitModel().room.tooMany, go: document.getElementById('txGo').innerText.replace(/\s+/g, ' ').trim(),
+    salvage: document.querySelector('#transmitScreen .tx-draft-title')?.textContent ?? null,
+  }));
+  const toHalcyon = await deliveryChips();
+  check('3b: …the PACKET\'s DELIVERIES row: `Mv · 2 BLOCKS · ARRIVED 2337 · [SEND ON]`; the draft is headed SALVAGE', toHalcyon.label === 'DELIVERIES'
+    && toHalcyon.chips.length === 1 && toHalcyon.chips[0].name === 'MV' && toHalcyon.chips[0].label === 'Mv · 2 BLOCKS · ARRIVED 2337 · [SEND ON]' && !toHalcyon.chips[0].sentOn
+    && toHalcyon.salvage === 'SALVAGE · PICK ONE TO CARRY', JSON.stringify(toHalcyon));
   await shot('04-packet');
   await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
@@ -194,6 +308,43 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   // --- HALCYON's DESK: the greying, a TOO LATE click -------------------------------------------------------------------
   await st(() => window.__ap.skipBoot());
   await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
+  await page.waitForTimeout(600);
+  // Slice 3b: the Mv requested at ARES-VII's desk arrived; the mail came; the flight INBOX window from the dock.
+  const halcyonArrived = await st(() => ({
+    lines: window.__ap.log().filter((entry) => /^> (DELIVERY|\d+ NEW MESSAGE)/.test(entry.text)).map((entry) => entry.text),
+    move: window.__ap.store.getState().run.licences.includes('move'), mv: window.__ap.store.getState().memory.some((seg) => seg.type === 'fs-tool' && seg.fsTool === 'move'),
+    dock: document.getElementById('inboxDockLabel').innerText, fresh: document.querySelector('.dock-item[data-tool="inbox"]').classList.contains('fresh-mail'),
+    win: !document.getElementById('inboxWin').hidden,
+  }));
+  check('3b: HALCYON\'s boot said `> DELIVERY: mv (arrived 2337)` and `> 2 NEW MESSAGES · INBOX`; MOVE reached the unit', halcyonArrived.lines.includes('> DELIVERY: mv (arrived 2337)')
+    && halcyonArrived.lines.at(-1) === '> 2 NEW MESSAGES · INBOX' && halcyonArrived.move && halcyonArrived.mv, JSON.stringify(halcyonArrived));
+  check('…the dock reads `INBOX 2` and pulses; the INBOX window is closed', halcyonArrived.dock === 'INBOX 2' && halcyonArrived.fresh && !halcyonArrived.win, JSON.stringify(halcyonArrived));
+  await page.locator('.dock-item[data-tool="inbox"]').click();
+  await page.waitForTimeout(400);
+  const flightInbox = () => st(() => {
+    const win = document.getElementById('inboxWin');
+    const box = win.getBoundingClientRect();
+    return {
+      shown: !win.hidden && box.width > 0 && box.height > 0, inView: box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight,
+      rows: [...win.querySelectorAll('.ib-row')].map((row) => `${row.dataset.id}${row.classList.contains('unread') ? '*' : ''}`),
+      reader: win.querySelector('.ib-reader') ? { stamps: win.querySelector('.ib-stamps')?.textContent ?? '', subject: win.querySelector('.ib-reader-subject .ib-v')?.textContent ?? '' } : null,
+      dock: document.getElementById('inboxDockLabel').innerText, fresh: document.querySelector('.dock-item[data-tool="inbox"]').classList.contains('fresh-mail'),
+      phase: window.__ap.store.getState().run.phase,
+    };
+  });
+  let mail = await flightInbox();
+  check('…a click on it opens the INBOX window in flight: the reply and RIVERSIDE\'s postcard unread on top, the welcome read; the pulse stops', mail.shown && mail.inView
+    && mail.rows.length === 3 && mail.rows.includes('reply:0*') && mail.rows.includes('postcard:0:1*') && mail.rows.at(-1) === 'welcome' && !mail.fresh && mail.phase === 'flight',
+    JSON.stringify(mail));
+  await page.locator('#inboxWin .ib-row[data-id="reply:0"]').click();
+  await page.waitForTimeout(400);
+  mail = await flightInbox();
+  check('…a click opens CONTROL\'s reply to ARES-VII: SENT 2308 · RECEIVED 2337; the dock reads `INBOX 1`', mail.reader?.stamps === 'SENT 2308 · RECEIVED 2337'
+    && /ARES-VII/.test(mail.reader.subject) && mail.dock === 'INBOX 1' && mail.rows.includes('reply:0'), JSON.stringify(mail));
+  await shot('05b-flight-inbox');
+  await page.locator('.dock-item[data-tool="inbox"]').click();
+  await page.waitForTimeout(300);
+  check('…the dock item closes it again', await st(() => document.getElementById('inboxWin').hidden));
   await run.lockInRing();
   await run.landToReport();
   await run.finishReport();
@@ -216,17 +367,20 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await shot('06-too-late');
 
   // --- TIGHT's 0-charge confirm (a forced unit: no REPAIR CHARGE, no star credit) -----------------------------------------
+  // Slice 3b: with a big delivery for LAPWING, Repair.bak (4 blocks), requested by __ap.
   await st(() => window.__ap.store.update((d) => {
     for (const seg of d.memory) if (seg.type === 'redundancy') seg.used = 0;
     d.run.pendingStarCredit = 0;
     d.run.pendingStars = 0;
     d.ui.memoryRev++;
   }));
+  await st(() => window.__ap.request('repair-bak'));
   await run.clickNode(LAPWING);
   await page.waitForTimeout(400);
   view = await run.desk();
   check('LAPWING (TIGHT) with no charge aboard: MEMORY 256 · TIGHT · ROOM FOR YOU 88, NO CHARGE ARRIVES', view.selected === LAPWING
     && view.card?.rows.includes('memory=MEMORY 256 · TIGHT · ROOM FOR YOU 88') && view.card.rows.includes('fit=NO CHARGE ARRIVES'), JSON.stringify(view.card?.rows));
+  check('3b: …and Repair.bak (requested by __ap) waits there: `Repair.bak ✓ WAITING HERE`', view.card?.rows.includes('deliveries=Repair.bak ✓ WAITING HERE'), JSON.stringify(view.card?.rows));
   await page.keyboard.press('Enter');
   await waitFor(() => window.__ap.store.getState().run.phase === 'transmit', 4000);
   await page.waitForTimeout(800);
@@ -236,9 +390,40 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   }));
   check('…the PACKET: ROOM 88 · FILES n · NO FLOOR and `→ 0 ON ARRIVAL`', zero.model.confirm !== null && /ROOM 88 · FILES \d+ · NO FLOOR/.test(zero.text) && /→ 0 ON ARRIVAL/.test(zero.text),
     JSON.stringify({ room: zero.model.line, charge: zero.model.charge }));
+  const bigChip = await deliveryChips();
+  check('3b: …its chip `Repair.bak · 4 BLOCKS · ARRIVED 2459 · [SEND ON]`, counted in FILES; it all fits', bigChip.chips.length === 1
+    && bigChip.chips[0].label === 'Repair.bak · 4 BLOCKS · ARRIVED 2459 · [SEND ON]' && bigChip.tooMany === null && bigChip.files === zero.model.fit.files, JSON.stringify(bigChip));
+  // SEND ON forced: ◀ CHART, the unit filled with spare files by __ap.give until its files fit LAPWING's room but not with the
+  // delivery beside them, ENTER again.
+  await page.keyboard.press('Escape');
+  await waitFor(() => window.__ap.store.getState().run.phase === 'desk', 4000);
+  const ownFiles = bigChip.files - 4;
+  const room = zero.model.fit.room;
+  const gifts = [];
+  let added = 0;
+  while (ownFiles + added + 3 <= room && ownFiles + added + 4 <= room) { gifts.push('cp'); added += 3; }
+  while (ownFiles + added + 4 <= room) { gifts.push('swap'); added += 1; }
+  const given = await st((files) => files.flatMap((file) => window.__ap.give(file)).map((seg) => seg.name), gifts);
+  await page.keyboard.press('Enter');
+  await waitFor(() => window.__ap.store.getState().run.phase === 'transmit', 4000);
+  await page.waitForTimeout(800);
+  const pickOffer = await st(() => window.__ap.draft()?.offer.map((card) => card.id) ?? []);
   // A card that is not the +12 charge (it would bring charge across).
-  const pickIndex = zero.offer.findIndex((id) => id !== 'charge');
-  check(`…a card that brings no charge picked ([${pickIndex + 1}])`, pickIndex >= 0 && (await run.pickCard(pickIndex)) === zero.offer[pickIndex], zero.offer.join(','));
+  const pickIndex = pickOffer.findIndex((id) => id !== 'charge');
+  check(`…a card that brings no charge picked ([${pickIndex + 1}])`, pickIndex >= 0 && (await run.pickCard(pickIndex)) === pickOffer[pickIndex], pickOffer.join(','));
+  await page.waitForTimeout(300);
+  const over = await deliveryChips();
+  check(`3b: SEND ON forced: ${added} blocks of spare files given (${given.join(', ')}), files + the delivery are over the room: TRANSMIT ▸ waits`,
+    over.files === ownFiles + added + 4 && over.files > room && ownFiles + added <= room && over.tooMany !== null && /TOO MANY/.test(over.tooMany)
+    && over.go === 'LEAVE FILES BEHIND FIRST', JSON.stringify(over));
+  await shot('06b-send-on-over');
+  await page.locator('#transmitScreen .tx-delivery').first().click();
+  await page.waitForTimeout(400);
+  const sentOn = await deliveryChips();
+  check('…a click on the chip sends it on (`SENT ON · RIDES YOUR NEXT HOP`): FILES drops by 4 and the packet fits', sentOn.chips[0]?.sentOn && !sentOn.chips[0].lost
+    && sentOn.chips[0].label === 'Repair.bak · 4 BLOCKS · ARRIVED 2459 · SENT ON · RIDES YOUR NEXT HOP' && sentOn.files === over.files - 4 && sentOn.tooMany === null
+    && (await st(() => window.__ap.repo().deliveries?.[0]?.sendOn === true)), JSON.stringify(sentOn));
+  await shot('06c-send-on');
   await page.keyboard.press('Enter');
   await page.waitForTimeout(400);
   const ask = await st(() => {
@@ -270,6 +455,47 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('ENTER, ENTER: sent; LAPWING boots `> REPAIR CHARGE 0 · NO ROOM ON LAPWING` on a TIGHT ship (racks A B C E, 256 blocks)', lapwing
     && tight.line.includes('> REPAIR CHARGE 0 · NO ROOM ON LAPWING') && tight.cls === 'TIGHT' && tight.racks === 'ABCE' && tight.total === 256, JSON.stringify(tight));
   await shot('08-lapwing-boot');
+  await waitFor(() => window.__ap.store.getState().run.phase === 'flight' || window.__ap.store.getState().run.phase === 'boot', 5000);
+  await st(() => window.__ap.skipBoot());
+  await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
+  const waiting = await st((n) => ({
+    delivery: window.__ap.log().filter((entry) => entry.id > n && /^> DELIVERY:/.test(entry.text)).map((entry) => entry.text),
+    requests: window.__ap.repo().state.requests.map((request) => ({ file: request.file, status: request.status, at: request.at })),
+  }), logFrom);
+  check('3b: …the sent-on Repair.bak did not arrive (no `> DELIVERY:` line); it waits in LAPWING\'s receiver for the next hop', waiting.delivery.length === 0
+    && waiting.requests.some((request) => request.file === 'repair-bak' && request.status === 'waiting' && request.at === LAPWING), JSON.stringify(waiting));
+
+  // --- Slice 3b: the last-rm prompt. An rm given (DELETE reaches the unit), then taken out of memory by __ap's store. ------
+  const rmGone = await st(() => {
+    const ap = window.__ap;
+    ap.give('rm');
+    ap.store.update((d) => {
+      const at = d.memory.findIndex((seg) => seg.type === 'fs-tool' && seg.fsTool === 'delete');
+      const rm = d.memory[at];
+      let lo = at;
+      let hi = at;
+      let size = rm.size;
+      if (d.memory[at - 1]?.type === 'free' && d.memory[at - 1].reservedBy === undefined) { lo--; size += d.memory[lo].size; }
+      if (d.memory[at + 1]?.type === 'free' && d.memory[at + 1].reservedBy === undefined) { hi++; size += d.memory[hi].size; }
+      d.memory.splice(lo, hi - lo + 1, { type: 'free', id: 'free_e2e_rm_gone', name: 'FREE', size });
+      d.ui.memoryRev++;
+    });
+    const s = ap.store.getState();
+    return { delete: s.run.licences.includes('delete'), rms: s.memory.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'delete').length, memory: ap.checkMemory() };
+  });
+  check('…on LAPWING an rm is given (DELETE licensed) and deleted by __ap: no rm left, memory whole', rmGone.delete && rmGone.rms === 0 && rmGone.memory === true, JSON.stringify(rmGone));
+  await run.lockInRing({ sleep: true });
+  await run.landToReport();
+  await run.finishReport();
+  await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 6000);
+  await page.waitForTimeout(1500);
+  tabs = await run.deskTabs();
+  const rmRow = tabs.rows.find((row) => row.file === 'rm');
+  check('LAPWING\'s DESK opens on the REPOSITORY with Rm lit and tagged, under `YOUR LAST RM IS GONE · NO RM, NO WAY TO DELETE THE ROOT`', tabs.tab === 'repository'
+    && tabs.repoShown && rmRow?.focus === true && rmRow.tag === ':) RECOMMENDED FOR YOU' && tabs.rows.filter((row) => row.focus).length === 1
+    && tabs.warn === 'YOUR LAST RM IS GONE · NO RM, NO WAY TO DELETE THE ROOT', JSON.stringify({ tab: tabs.tab, warn: tabs.warn, rows: tabs.rows.map((row) => `${row.file}${row.focus ? '!' : ''}${row.tag ? ':)' : ''}`) }));
+  check('…IN TRANSIT names the sent-on Repair.bak waiting in LAPWING\'s receiver', tabs.transit.includes('Repair.bak · WAITING IN LAPWING\'S RECEIVER'), JSON.stringify(tabs.transit));
+  await shot('09-last-rm');
   check('desktop: no page errors', errors.length === 0, errors.slice(0, 4).join(' | '));
   await context.close();
 }
@@ -306,6 +532,48 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('…SET COURSE pinned at the bottom of the screen', goBox !== null && goBox.bottom <= vh + 1 && goBox.bottom >= vh - 80 && goBox.left >= 0 && goBox.right <= vw,
     JSON.stringify(goBox));
   await shot('02-desk');
+  // Slice 3b: the sheet's tab bar peeks at the bottom on the arm; a tap on a tab opens the sheet on it.
+  const sheetLook = () => st(() => {
+    const root = document.getElementById('deskScreen');
+    const win = root.querySelector('.desk-card-win').getBoundingClientRect();
+    const bar = root.querySelector('.desk-tabs').getBoundingClientRect();
+    return { open: root.classList.contains('sheet-open'), tabs: root.classList.contains('has-tabs'),
+      win: { top: Math.round(win.top), bottom: Math.round(win.bottom), left: Math.round(win.left), right: Math.round(win.right) },
+      bar: { top: Math.round(bar.top), bottom: Math.round(bar.bottom), height: Math.round(bar.height) } };
+  });
+  const peek = await sheetLook();
+  const goPeek = await rect('#deskGo');
+  check('3b phone: the sheet\'s tab bar (CARD / REPOSITORY / INBOX) peeks at the bottom, just over SET COURSE, before a ship is picked', peek.tabs && !peek.open
+    && peek.bar.height > 0 && peek.bar.top >= vh * 0.75 && goPeek !== null && peek.bar.bottom <= goPeek.top + 1, JSON.stringify({ peek, go: goPeek }));
+  await page.tap('#deskScreen .desk-tab[data-tab="repository"]');
+  await page.waitForTimeout(600);
+  let phoneTabs = await run.deskTabs();
+  let sheetNow = await sheetLook();
+  check('…a tap on REPOSITORY opens the sheet on it, full width, the rows on screen', sheetNow.open && phoneTabs.tab === 'repository' && phoneTabs.repoShown
+    && phoneTabs.rows.length === 7 && sheetNow.win.left <= 1 && sheetNow.win.right >= vw - 1 && sheetNow.win.top > 40 && !(await overflow()), JSON.stringify({ sheetNow, tab: phoneTabs.tab }));
+  await page.tap('#deskScreen .rp-row[data-file="mv"]');
+  await page.waitForTimeout(400);
+  phoneTabs = await run.deskTabs();
+  check('…a tap on Mv REQUESTs it (the badge names it)', phoneTabs.pick === 'mv' && phoneTabs.rows[0].requested && badgeOf(phoneTabs, 'repository') === 'Mv', JSON.stringify({ pick: phoneTabs.pick }));
+  await shot('02b-sheet-repository');
+  await page.tap('#deskScreen .desk-tab[data-tab="inbox"]');
+  await page.waitForTimeout(500);
+  phoneTabs = await run.deskTabs();
+  check('…a tap on INBOX shows the welcome in the sheet', (await sheetLook()).open && phoneTabs.tab === 'inbox' && phoneTabs.inboxShown
+    && phoneTabs.mail.map((row) => row.id).join() === 'welcome' && badgeOf(phoneTabs, 'inbox') === '1', JSON.stringify(phoneTabs.mail));
+  await shot('02c-sheet-inbox');
+  await page.tap('#deskScreen .desk-tab[data-tab="card"]');
+  await page.waitForTimeout(400);
+  phoneTabs = await run.deskTabs();
+  // With no ship picked the card has nothing to show: the sheet may already be back down to its tab bar; else ✕ closes it.
+  const cardSheet = await sheetLook();
+  check('…a tap on CARD goes back to the card', phoneTabs.tab === 'card', JSON.stringify({ tab: phoneTabs.tab, open: cardSheet.open }));
+  if (cardSheet.open) {
+    await page.tap('#deskScreen .desk-sheet-close');
+    await page.waitForTimeout(500);
+  }
+  check(`…the sheet is down again, its tab bar peeking (${cardSheet.open ? 'closed by ✕' : 'by itself: no ship picked'})`, !(await sheetLook()).open && (await sheetLook()).bar.top >= vh * 0.75,
+    JSON.stringify(await sheetLook()));
   const tapped = await run.clickNode(HALCYON, { tap: true });
   await page.waitForTimeout(700);
   const sheet = await st(() => {

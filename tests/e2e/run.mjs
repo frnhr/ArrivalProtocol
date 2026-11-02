@@ -16,9 +16,9 @@ mkdirSync(OUT, { recursive: true });
 
 // Longest first, so the long ones start at once. Each runs in its own Chromium.
 const SCENARIOS = [
-  { name: 'playthrough', file: 'playthrough.mjs', what: 'a whole run played by the strip on run 1\'s arm: six ships through the DESK, the RUN TALLY, NEW RUN' },
+  { name: 'playthrough', file: 'playthrough.mjs', what: 'a whole run played by the strip on run 1\'s arm: six ships through the DESK with the worked route\'s requests, the RUN TALLY, NEW RUN' },
   { name: 'run-flow', file: 'run-flow.mjs', what: 'a run through every screen and the DESK, BEAM OUT, NEW RUN twice, HOLLOW on CORMORANT' },
-  { name: 'map-desk', file: 'map-desk.mjs', what: 'the galaxy map\'s DESK: chart, card, SET COURSE, ◀ CHART, TOO LATE, TIGHT\'s 0-charge confirm, the phone sheet, the title\'s beacon' },
+  { name: 'map-desk', file: 'map-desk.mjs', what: 'the galaxy map\'s DESK: chart, card, SET COURSE, ◀ CHART, TOO LATE, TIGHT\'s 0-charge confirm, the phone sheet, the title\'s beacon; 3b: the REPOSITORY and INBOX tabs, requests, SEND ON, last rm, the flight INBOX' },
   { name: 'label-hops', file: 'label-hops.mjs', what: 'NAV PLOT labels never hop, desktop and phone' },
   { name: 'phone', file: 'phone.mjs', what: 'the phone layout: touch, overflow, every strip line fits' },
   { name: 'desk', file: 'desk.mjs', what: 'the desk: plot chip, dragged windows across the breakpoint' },

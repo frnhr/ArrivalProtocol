@@ -159,5 +159,34 @@ export function runKit(page, kit) {
     }
     return null;
   };
-  return { lockInRing, landToReport, finishReport, capsText, desk, clickNode, pickCard };
+  // The desk's right window (slice 3b): the tabs and their badges, the REPOSITORY's rows, the INBOX's list and reader.
+  const deskTabs = () => st(() => {
+    const root = document.getElementById('deskScreen');
+    const shown = (el) => el !== null && !el.hidden && el.getBoundingClientRect().height > 0;
+    const repo = root.querySelector('.desk-repo');
+    const inbox = root.querySelector('.desk-inbox');
+    return {
+      tab: root.dataset.tab ?? null, pick: window.__ap.store.getState().run.repo.pick,
+      tabs: [...root.querySelectorAll('.desk-tab')].map((tab) => ({ id: tab.dataset.tab, label: tab.querySelector('.desk-tab-label')?.textContent ?? '',
+        on: tab.classList.contains('on'), badge: tab.querySelector('.desk-tab-badge')?.hidden === false ? tab.querySelector('.desk-tab-badge').textContent : null })),
+      repoShown: shown(repo), inboxShown: shown(inbox), cardShown: shown(root.querySelector('.desk-card:not(.desk-repo):not(.desk-inbox)')),
+      rows: [...(repo?.querySelectorAll('.rp-row') ?? [])].map((row) => ({ file: row.dataset.file, text: row.querySelector('.rp-text')?.textContent ?? '',
+        eta: row.querySelector('.rp-eta')?.textContent ?? null, tone: [...(row.querySelector('.rp-eta')?.classList ?? [])].find((c) => c.startsWith('eta-')) ?? null,
+        tag: row.querySelector('.rp-tag')?.textContent ?? null, req: row.querySelector('.rp-req')?.textContent ?? '',
+        requested: row.classList.contains('requested'), focus: row.classList.contains('focus') })),
+      transit: [...(repo?.querySelectorAll('.rp-transit-row') ?? [])].map((row) => row.textContent),
+      transitNone: repo?.querySelector('.rp-transit .rp-none')?.textContent ?? null,
+      locked: [...(repo?.querySelectorAll('.rp-locked') ?? [])].map((row) => row.innerText.replace(/\s+/g, ' ')),
+      warn: repo?.querySelector('.rp-warn')?.textContent ?? null, foot: repo?.querySelector('.rp-foot')?.textContent ?? null,
+      mail: [...(inbox?.querySelectorAll('.ib-row') ?? [])].map((row) => ({ id: row.dataset.id, from: row.querySelector('.ib-from')?.textContent ?? '',
+        subject: row.querySelector('.ib-subject')?.textContent ?? '', received: row.querySelector('.ib-received')?.textContent ?? '', unread: row.classList.contains('unread'),
+        tone: [...row.classList].find((c) => c.startsWith('tone-')) ?? null })),
+      reader: inbox?.querySelector('.ib-reader') ? { stamps: inbox.querySelector('.ib-stamps')?.textContent ?? '',
+        lines: [...inbox.querySelectorAll('.ib-line')].map((line) => line.textContent) } : null,
+      steps: [...root.querySelectorAll('.desk-step')].map((step) => `${step.textContent}${step.classList.contains('done') ? ' ✓' : ''}${step.classList.contains('now') ? ' ◀' : ''}`),
+    };
+  });
+  // The SHIP CARD's TIMELINE marks under its text (3b): `2629 Swap`, late (red) after ▲.
+  const deskMarks = () => st(() => [...document.querySelectorAll('#deskScreen .dc-tl-filetext')].map((mark) => ({ text: mark.textContent, late: mark.classList.contains('late') })));
+  return { lockInRing, landToReport, finishReport, capsText, desk, clickNode, pickCard, deskTabs, deskMarks };
 }
