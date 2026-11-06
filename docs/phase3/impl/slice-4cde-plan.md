@@ -826,14 +826,19 @@ what to change where they don't fit.
   - `landing-controls.ts`: [L] down and up, [G];
   - `landing-controller.ts`, after the FOUNDATION;
   - `landing-hud.ts`: `bayWindowModel.autodrop`, the pip, the plan table model;
-  - `landing-guidance.ts`, except the `v3Lower` slot, which stays as the FOUNDATION wired it;
+  - `landing-guidance.ts`, except the two v3 slots (`v3Lower` at L9, `v3Decay` at L10), which stay as the FOUNDATION wired
+    them;
   - `pace.ts`, only if the window rule needs more than the state argument;
   - `src/data/landing-text.ts`: BULLSEYE;
   - `src/components/tools-view/PodBayWindow.ts`, `PhoneFlightBar.ts`, `GroundTrack.ts` (optional), `src/styles/landing.css`;
+  - (foundation review m7) the POD BAY block of `index.html` (`#podBayWin`), with its empty containers `#pbAutodrop`,
+    `#pbPass` and `#pbPlan`, and any phone bay rules (in `landing.css`);
   - its rows only: `data/skills.ts` `autodrop.built`, `training-text.ts` AUTODROP's words, the `TRAINING_DEMO_ART.autodrop`
     line, `tuning.ts`'s 4c block.
 - **Tests:** §8.1 DROP; updates to `landing/pace-landing`, `skills/foundation`, `skills/ui-models` and
-  `skills/training-flow` (visit 1's two cards).
+  `skills/training-flow` (visit 1's two cards). In the shared suites (foundation review M1), only its own lines:
+  `skills/foundation` `built: AUTODROP` (:77) and the desk-1 check (:285–291); `skills/ui-models` the one-card desk-1
+  check (:60), the grid's branches and closed list (:116–120) and the eaten cells (:152).
 
 **Track SENTRY (4d)**
 - **Owns:**
@@ -842,7 +847,8 @@ what to change where they don't fit.
   - `run.ts`: `transmitNext`'s disguise roll and `arrival.seeds[].disguise`. The FOUNDATION wrote `endShip`'s record;
   - `carry.ts`: the disguise passes through `layoutCarried`;
   - `boot.ts`, `map-boot.ts`;
-  - in `data/script.ts`, only the SENTRY boot lines and the strip's disguise line;
+  - in `data/script.ts`, only the SENTRY boot lines (the `'sentry-seed'` and `'firewall'` plan lines and cases, and the ECC
+    `'seeds'` plan line and case, which leave a disguised seed out) and the strip's disguise line;
   - `hollow.ts` (the telegraph's pre-empt, `threateningSeeds`, `seedThreatText`, the `SOMETHING LANDED` hook) and
     `hollow-hud.ts`;
   - `state/actions.ts` (`deleteSec`, the SCAN and DELETE unmasking), `state/threat-selectors.ts` (`isDisguised`);
@@ -851,7 +857,12 @@ what to change where they don't fit.
   - `data/threat-text.ts`, `data/hollow-text.ts`, `data/tool-text.ts`;
   - `components/memory-view/HollowPainter.ts`, `SegmentBlock.ts`, `DetailPanel.ts`, and the click path that targets an
     outline (`MemoryStrip.ts`), `src/styles/threat.css`;
-  - its rows only: `sentry.built`, SENTRY's words and `TRAINING_DEMO_ART.sentry`, `tuning.ts`'s 4d block.
+  - (foundation review M3) `data/threat-rules.ts` (`beamSeedAboard` and the beam-seed lessons), `systems/move-preview.ts`
+    and `components/memory-view/MovePreviewLabels.ts` (the MOVE preview's HOLLOW readers), `systems/hollow-verbs.ts` (MV's
+    seed words). The rule there: a reader that tells HOLLOW from a file consults `isDisguised`; the counters (TRACE, the
+    tally, `beamSeedsInMemory`, `beamSeedCount`) still count a disguised seed;
+  - its rows only: `sentry.built`, SENTRY's words and `TRAINING_DEMO_ART.sentry`, `tuning.ts`'s 4d block; in
+    `skills/foundation`, `built: SENTRY` (:81).
 - **Tests:** §8.1 SENTRY; updates to `threat/beam-seeds` (it must stay byte-identical), `wp9/seed-test` and `map/repository`
   if a refusal word moves.
 
@@ -862,9 +873,12 @@ what to change where they don't fit.
   - `components/hud/plot-draw.ts`, `NavPlotWindow.ts`, `MiniHud.ts`, `EngineWindow.ts`;
   - `data/skill-text.ts`, the AUTOBURN parts of `game.css`;
   - its rows only: `autoburn.built`, `tuning.ts`'s 4e block;
+  - (foundation review m3) `data/script.ts`'s `AUTOBURN_RULES` entries;
   - `docs/playtest-checklist.md`'s AUTOBURN lines.
 - **Tests:** §8.1 ORBIT, gap G2, and the reworked `skills/autoburn-modes`, `skills/guidance-auto` and `skills/lock-range`
-  where v3 changes a mode.
+  where v3 changes a mode. In the shared suites (foundation review M1), only its own lines: `skills/foundation` `built:
+  AUTOBURN` (:75) and the migrated desk-2 check's v3 (:303–306); `skills/training-flow` desk 2's `v3 is not built` check
+  (:105–107); `skills/ui-models` AUTOBURN's desk-2 cells (:121–127), and :152's `autoburn:v3` if it moves.
 
 **Hot shared files after the FOUNDATION:**
 
@@ -884,8 +898,9 @@ what to change where they don't fit.
 **AUTODROP and v3 both touch landing.** The split:
 - DROP owns `landing.ts`, `landing-hud.ts`, `landing-guidance.ts` and `pace.ts`.
 - ORBIT owns `landing-orbit.ts`, `predict.ts` and `autoburn.ts`.
-- The two places where v3 meets the landing are built by the FOUNDATION: the `goLowerChoice` gate (`landing-rules.ts`)
-  and the L9 slot (`landing-guidance.ts`).
+- The places where v3 meets the landing are built by the FOUNDATION: the `goLowerChoice` gate (`landing-rules.ts`) and the
+  two v3 slots in `landing-guidance.ts` (L9's `v3Lower`, L10's `v3Decay`), which ORBIT fills through `LandingFlight`
+  (guidance.ts `landingFlightOf`).
 - ORBIT never edits a DROP file, and DROP never edits an ORBIT file. Their behaviour meets in `burnSpanBlocks`, which is
   frozen, and in the merged integration check (§8.3).
 
@@ -1208,3 +1223,67 @@ the entry points that change state throw") is applied to every stub, so a track 
   - emit `'autoburn-v3-lower'` (its cue is a stamp).
 - **The lead:** the shape pin reaches `landing.autodrop.*` (depth 3), so any field added to `AutodropState` is a save bump.
   The pin does not reach `seedTelegraph.preempted` or `arrival.seeds[].disguise`; the codec checks those.
+
+## Deviations (foundation, review follow-up)
+
+The changes after the independent review of 364f2a1..f0ab836 (`slice-4cde-foundation-review.md`), in two commits (df766fc,
+a76c8c8). §7.2 above is updated to match. The unit tier is green: 185 passed, 6 balance-only skipped, 122 s on 4 workers.
+Nothing a player can reach changes: the lesson and alarm edits (m3) only touch versions and phases that are not built.
+
+### Majors
+
+- **M1. Each track edits only its own test lines.** `skills/foundation` checks each skill's `built` on its own line, in
+  SKILL_IDS order, with a comment line between each (`:75` AUTOBURN, `:77` AUTODROP, `:79` SURVEY, `:81` SENTRY).
+  `skills/ui-models`' desk-2 grid is two checks with two comment lines between them: DROP's branches and closed list
+  (`:116–120`), and ORBIT's AUTOBURN cells (`:121–127`). §7.2 names every line each track may edit in `skills/foundation`,
+  `skills/training-flow` and `skills/ui-models`.
+- **M2. `'released'` joins `AutodropEnd` and the codec's `AUTODROP_ENDS`**: v1's [L] let go before the volley's first
+  launch, which R4's lesson reads. This is a value, not a field, so there is no bump. `save/codec` decodes a desk save
+  with `end: 'released'`, `endAtAi`, `pass`/`sent` set and `flownAs: 2`.
+- **M3. SENTRY owns four more files**: `data/threat-rules.ts`, `systems/move-preview.ts`,
+  `components/memory-view/MovePreviewLabels.ts` and `systems/hollow-verbs.ts`, each with its banner. threat-rules' stale
+  THREAT note is corrected. The rule there, as §7.2 now says: a reader that tells HOLLOW from a file consults
+  `isDisguised`, and the counters don't. The MOVE preview is treated as a label, which a decoy must not turn on.
+- **M4. The second v3 slot.** `LandingContext.v3Decay`, filled from `autoburn-v3.ts v3DecayLine(state, pred)` (a stub:
+  null), is said in L10's place (`landing-L10-v3`, L10's urgency and keys) before ORBIT DECAYING. ORBIT returns it only while
+  v3 holds below the DRAG line.
+  - This changes deviation 3 (with m8): both v3 slots reach the table through `LandingFlight` (`v3Lower?`, `v3Decay?`),
+    filled by guidance.ts `landingFlightOf` from `v3LowerLine(state, pred)` and `v3DecayLine(state, pred)`.
+  - So the line is made on the same (sensed) prediction as the row, and `landing-guidance.ts` no longer imports
+    `autoburn-v3.ts`.
+
+### Minors done
+
+- **m1:** `run.ts endShip` sets a standing outline's `preempted` back to false, in its update before SHIP DONE's save.
+  `skills/foundation` ends a ship with an armed pre-empt and decodes the save. SENTRY releases `'sentry-preempt'` from a
+  watcher in `mountSentry` (telegraph gone or not preempted), not from the call-off sites.
+- **m2:** `sentry.ts mountSentry(store)`, a built no-op, is mounted by `hollow.ts mountHollow`.
+- **m3:**
+  - `tut-autoburn-ready` fires at v1 only, and `tut-autoburn-v2` at v2 only (v3's lesson is `tut-autoburn-v3`);
+  - `alarm-autoburn-lost` covers LANDING too, as 03 §3.5 asks ("Falling to OFF is phase 2's drop: the klaxon");
+  - `AUTOBURN_RULES` is ORBIT's to edit.
+- **m4:** `BOOT_LINE_MAX` goes 18 → 22, with four more 1.3 s times in `BOOT_LINE_AT_SEC`: up to three SENTRY seed lines (a
+  beam brings at most three seeds) and the FIREWALL line.
+- **m5:** script.ts's banner and §7.2 name the ECC `'seeds'` plan line and its `bootLine` case as SENTRY's.
+- **m7:** the `#podBayWin` block of `index.html` is DROP's. It has empty, hidden containers `#pbAutodrop` (the pip and key
+  line), `#pbPass` (v2's rows) and `#pbPlan` (v3's table and check line). `responsive.css` has no bay rules, so phone rules
+  go in `landing.css`.
+- **m8:** `v3LowerLine(state, pred)` takes the prediction (see M4).
+- **m10:** `beam-seeds.ts validateDisguiseOdds` runs at load: `fromDepth` must strictly rise, and each chance must be in
+  [0, 1].
+- **m14:** G1's PACK AS case buys v2 and LOCK 270 at desk 2 (a `'story'` grant pays), carries them into KESTREL, packs them
+  as v1 at desk 3, and resumes at desk 4 at RESTORE 3.
+- **m15:** `save/codec` refuses a kept `armedAtTSec` and an unknown AUTODROP end, and passes AUTOBURN v3 holding its landing
+  orbit.
+
+### Left for the batch's fix pass
+
+- **m6:** each track checks its own words' worst cases in its own new suite (`autodrop-plan`, `sentry`, `v3-aim`), not by
+  appending to `support/words`.
+- **m9:** `AutodropOverride` has no `source`, so slice 7's MERGE resolver must either add one or re-wrap `decide`.
+- **m11:** the 3 → 4 step could also read the envelope's `done` (the seed lessons' ids) as evidence.
+- **m12:** `nominalRouteThreat` (`__ap.route`, `__ap.slot`, the fixtures) does not write `seedsMetAtDepth`. Until it does,
+  SENTRY's debug and e2e checks give the file by `__ap.skill`.
+- **m13:** ORBIT's worst-driver input (LOAD NEXT order) differs from AUTODROP v3's pod choice. This is conservative; it is a
+  line in §8.3's integration check.
+- **m1's option:** an at-rest assert in `savePayloadAt` in dev builds.
