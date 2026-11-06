@@ -143,6 +143,8 @@ export interface LandingContext {
   // L7b (review M2): the engine fires by itself (a failing Thrust Ctrl), it has done so in this landing, and a SWAP can
   // hand the job to its backup (tool-targets controllerSwapOf: the backup's name, and whether the Swap file can do it now).
   ghostSwap: ControllerSwap | null;
+  // Slice 4 (Track FLIGHT): AUTOBURN's tail on L13's waits (LandingFlight.autoTail), null with none.
+  autoTail?: { text: string; key: string | null } | null;
 }
 
 // The flight's part of the landing table, handed in by the caller (guidance landingFlightOf builds it from the flight
@@ -154,6 +156,9 @@ export interface LandingFlight {
   burnInTac: number | null;
   impact: boolean;          // the prediction hits the planet
   tankShort: boolean;       // FUEL is 0, or less than the plan's burn needs (Prediction.fuelShort)
+  // Slice 4 (Track FLIGHT, the ROUND tail): AUTOBURN's tail for the wait rows, ` · or [B] ROUND` while [B] would round the
+  // orbit, ` · AUTO ARMED` while it waits; `autoKey` the key the tail offers (B), or null. Absent: none.
+  autoTail?: { text: string; key: string | null } | null;
 }
 
 // The next window as L13 names it: the awaited window (landing-rules landingMoment's target), else the next window of any
@@ -256,7 +261,16 @@ export function buildLandingContext(
     impact: flight.impact,
     tankShort: flight.tankShort,
     ghostSwap: caps.thrustCtrl.ghost !== null && landing.ghostBursts > 0 ? controllerSwapOf(state) : null,
+    autoTail: flight.autoTail ?? null,
   };
+}
+
+// L13's waits carry AUTOBURN's tail (03 §3.7, slice 4: `WAIT — LZ-B in 2:10 ▸▸ · or [B] ROUND`) when it fits: only a tail, so
+// it never outranks a launch, a repair or a burn row.
+function withAutoTail(objective: LandingObjective, ctx: LandingContext): LandingObjective {
+  const tail = ctx.autoTail ?? null;
+  if (tail === null || (objective.text + tail.text).length > MAX_LINE_CHARS) return objective;
+  return { ...objective, text: objective.text + tail.text, keys: tail.key === null ? objective.keys : [...objective.keys, tail.key] };
 }
 
 function line(
@@ -430,14 +444,14 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
   if (ctx.aboard > 0 && ctx.noBandWindow) return line('L12', LANDING_LINES.L12band, [], 'now', 'ship', ctx, { id: 'landing-L12-band' });
   if (ctx.aboard > 0 && !ctx.roomInBand && next !== null && next.inBand) {
     const skip = ctx.skipAvailable;
-    return line('L13', LANDING_LINES.L13noRoom(next.lz, next.launchInTac, skip), skip ? ['F'] : [], 'wait', 'ship', ctx, { id: 'landing-L13-noroom' });
+    return withAutoTail(line('L13', LANDING_LINES.L13noRoom(next.lz, next.launchInTac, skip), skip ? ['F'] : [], 'wait', 'ship', ctx, { id: 'landing-L13-noroom' }), ctx);
   }
   // No drop dot and no flight row to lead (B1 of the foundation review): say why no window is named, never throw.
   if (ctx.aboard > 0 && ctx.noDrop) return line('L13', LANDING_NODROP_LINES.L13noDrop, [], 'wait', 'ship', ctx, { id: 'landing-L13-nodrop' });
   if (ctx.aboard === 0) return line('L12b', LANDING_LINES.L12b(ctx.falling), [], 'wait', 'ship', ctx);
   if (next !== null) {
     const skip = ctx.skipAvailable && next.inBand;
-    return line('L13', LANDING_LINES.L13(next.lz, next.launchInTac, skip, !next.inBand), skip ? ['F'] : [], 'wait', 'ship', ctx);
+    return withAutoTail(line('L13', LANDING_LINES.L13(next.lz, next.launchInTac, skip, !next.inBand), skip ? ['F'] : [], 'wait', 'ship', ctx), ctx);
   }
   return null;
 }

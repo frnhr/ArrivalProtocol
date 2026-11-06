@@ -9,7 +9,7 @@ import {
   universalAnomaly,
 } from '@/types/orbit';
 import { IS_DEV } from '@/env';
-import { notBuilt } from '@systems/not-built';
+import { driversThatCanEverLaunch, lzRemaining } from '@systems/landing-rules';
 import {
   DRAG_LINE_FRAC, DRAG_DV_MAX_KMS, DRAG_KICK_MIN_GAP_FRAC, DRAG_KICK_CATCH_UP_FRAC, GO_LOW_FLOOR_MARGIN_KM, LANDING_SURE_MIN_TAC,
   DROP_SOLVE_MAX_E, POD_AIM_RP_FRAC, LANDING_RELEASE_LEAD_TAC, DECAY_WARN_ORBITS,
@@ -449,12 +449,15 @@ function safetyBurn(reason: BurnPoint['reason']): boolean {
 // A go-low or lift the tank can't pay for in full is NOT offered (ORBIT's decision, foundation note): half a GO LOWER
 // leaves the dot still too wide and half a lift still sinks, so the strip would time a burn that buys nothing. Without
 // the offer neither pace nor L2 pulls the kid to it; the plan's own row still names it where L2 leads anyway.
+// Slice 4 (Track FLIGHT): while AUTOBURN is engaged the plan is its own (predict computePrediction) and it is always
+// offered: AUTOBURN flies it whatever the kid declined or ACCEPT's latch says, so pace must hold TACTICAL for it and a SKIP
+// must stop before it, as in the flight.
 export function landingBurnOffer(state: Readonly<GameState>, pred: Readonly<Prediction>): BurnPoint | null {
   if (state.run.phase !== 'landing' || state.landing.ended !== null) return null;
   if (state.burn.status !== 'locked' && state.burn.status !== 'accepted') return null;
   const burnPoint = pred.burnPoint;
   if (burnPoint === null) return null;
-  if (safetyBurn(burnPoint.reason)) return burnPoint;
+  if (safetyBurn(burnPoint.reason) || autoEngaged(state)) return burnPoint;
   if (pred.fuelShort) return null;
   const ringTrim = burnPoint.reason !== 'go-low' && burnPoint.reason !== 'lift';
   if (ringTrim && state.burn.acceptOnly) return null;
@@ -483,10 +486,34 @@ export function dropSolvable(orbit: Readonly<OrbitState>, planet: Readonly<Plane
   return [0, Math.PI].every((nu) => podKickFactorSq(stateFromElements(el.rp, el.e, el.omega, nu, planet.mu), planet.mu, aimRp) !== null);
 }
 
-// Slice 4 (plan §2.9's landing window rule, §7 R2; Track FLIGHT; 4e reuses it for v3's top-ups): whether a burn that starts
-// `startInSec` game seconds from now and lasts `burnSec` overlaps no in-band window of an LZ with room while a pod is ready
-// (launches are refused while firing, and the planet does not rotate, so a blocked apsis is blocked every pass). The drop
-// solution's windows carry no room or bay data, so the state is passed too (the LZs' room, the bay's ready pod). Pure.
+function autoEngaged(state: Readonly<GameState>): boolean {
+  const phase = state.burn.auto.phase;
+  return phase === 'armed' || phase === 'pointing' || phase === 'burning';
+}
+
+// Slice 4 (plan §2.9's landing window rule, §7 R2; Track FLIGHT; 4e reuses it for v3's top-ups): the LZ whose in-band
+// window a burn that starts `startInSec` game seconds from now and lasts `burnSec` overlaps, or null (launches are refused
+// while firing, and the planet does not rotate, so a blocked apsis is blocked every pass). Only an LZ with room counts, and
+// only while a pod aboard can still launch: a window nobody can use costs nothing. The drop solution's windows carry no
+// room or bay data, so the state is passed too. Each window is checked on this pass and the next two (a burn a loop away
+// meets the window's next pass). Pure.
+export function burnSpanBlocks(state: Readonly<GameState>, sol: Readonly<DropSolution>, startInSec: number, burnSec: number): string | null {
+  if (state.run.phase !== 'landing' || sol.block !== null || !(sol.periodSec > 0)) return null;
+  if (driversThatCanEverLaunch(state).length === 0) return null;
+  const room = lzRemaining(state);
+  const since = state.clock.tSec - sol.asOfTSec;
+  const endInSec = startInSec + Math.max(0, burnSec);
+  for (const window of sol.windows) {
+    if (window.inBandOpenInSec === null || window.inBandCloseInSec === null || (room[window.lz] ?? 0) <= 0) continue;
+    for (let pass = 0; pass < 3; pass++) {
+      const openIn = window.inBandOpenInSec - since + pass * sol.periodSec;
+      const closeIn = window.inBandCloseInSec - since + pass * sol.periodSec;
+      if (startInSec < closeIn && endInSec > openIn) return window.lz;
+    }
+  }
+  return null;
+}
+
 export function burnSpanClear(state: Readonly<GameState>, sol: Readonly<DropSolution>, startInSec: number, burnSec: number): boolean {
-  return notBuilt('burnSpanClear', 'FLIGHT', state, sol, startInSec, burnSec);
+  return burnSpanBlocks(state, sol, startInSec, burnSec) === null;
 }

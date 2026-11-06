@@ -16,7 +16,7 @@
 import { byDepth } from '../depth';
 import { check, finish } from '../wp1/harness';
 import { createHarness9 } from './harness9';
-import { autoburnRefusal, engageAutoburn, skillFiles } from '@systems/autoburn';
+import { autoburnRefusal, engageAutoburn, skillFiles, autoburnFireInTac } from '@systems/autoburn';
 import { autoburnDemoSkill } from '@systems/skill-tree';
 import { getPrediction } from '@systems/predict';
 import { threadsBusy } from '@systems/ops-core';
@@ -26,7 +26,7 @@ import { setPaused } from '@systems/clock';
 import { infectNow } from '@systems/hollow';
 import { ringFit, elementsFromState } from '@/types/orbit';
 import { AUTOBURN_TEXT, AUTOBURN_REFUSAL } from '@data/skill-text';
-import { AUTOBURN_LOST_ALARM_SEC, MAX_LINE_CHARS } from '@data/tuning';
+import { AUTOBURN_LOST_ALARM_SEC, AUTO_THREAD_CLAIM_TAC } from '@data/tuning';
 
 const h = createHarness9(5);
 const state = () => h.store.getState();
@@ -42,8 +42,10 @@ const closed = (): boolean => ringFit(elementsFromState(state().orbit, state().l
   check('…clamped to ±8 tac s, its ACCURACY floored at 40 and capped at 99', autoburnDemoSkill(demos([30, 30])).learnedOffsetTac === 8
     && autoburnDemoSkill(demos([-30, -20])).learnedOffsetTac === -8 && autoburnDemoSkill(demos([30, 30])).accuracy === 40
     && autoburnDemoSkill(demos([0, 0])).accuracy === 99);
-  check('the boot lines fit the strip with worst-case numbers', AUTOBURN_TEXT.retrained(12, 99).length <= MAX_LINE_CHARS
-    && AUTOBURN_TEXT.trained(2, 84) === '> SKILL TRAINED: AUTOBURN.skl · from your 2 captures · ACCURACY 84%');
+  // Slice 4 (plan §7 R3): no demos is UNTRAINED, 7.5 tac s late, which is what 40% means by the formula.
+  const untrained = autoburnDemoSkill(demos([]));
+  check('…no demos: UNTRAINED, 40%, firing 7.5 tac s late', untrained.untrained && untrained.accuracy === 40 && untrained.learnedOffsetTac === 7.5,
+    JSON.stringify(untrained));
 }
 
 // --- Flying a capture --------------------------------------------------------------------------------------------
@@ -72,9 +74,16 @@ for (const learned of byDepth([0], [-8, 0, 8])) {
   check(`learned ${learned}: offered within 90 tac s of the capture's START BURN`, inTac <= 90 && inTac > 85, inTac.toFixed(1));
   h.press('KeyB');
   h.step();
-  check(`learned ${learned}: [B] engages it: armed, RETRO, one thread held`, phase() === 'armed' && state().burn.sasMode === 'retrograde' && threadsBusy() === 1,
-    `${phase()} ${state().burn.sasMode} threads ${threadsBusy()}`);
+  // Slice 4 (03 §3.6): armed, it holds no thread and turns nothing while it only waits; it claims a thread and selects
+  // RETRO AUTO_THREAD_CLAIM_TAC before it fires.
+  check(`learned ${learned}: [B] engages it: armed in CAPTURE, no thread held while it waits`, phase() === 'armed' && state().burn.auto.mode === 'capture'
+    && threadsBusy() === 0 && !state().burn.auto.claimed, `${phase()} ${state().burn.auto.mode} threads ${threadsBusy()}`);
   check(`learned ${learned}: …the strip: AUTOBURN ARMED`, /^AUTOBURN ARMED — it brakes at ▼ in \d+:\d\d/.test(h.objective()?.text ?? ''), h.objective()?.text);
+  h.stepUntil(() => state().burn.auto.claimed || phase() !== 'armed', 120);
+  const claimIn = autoburnFireInTac(state(), getPrediction());
+  check(`learned ${learned}: …it claims a thread and selects RETRO ${AUTO_THREAD_CLAIM_TAC} tac s before it fires`, state().burn.auto.claimed && threadsBusy() === 1
+    && state().burn.sasMode === 'retrograde' && claimIn !== null && claimIn <= AUTO_THREAD_CLAIM_TAC && claimIn > AUTO_THREAD_CLAIM_TAC - 1,
+    `claimed ${state().burn.auto.claimed} threads ${threadsBusy()} ${state().burn.sasMode} fire in ${claimIn?.toFixed(2)}`);
   let firedAtTac: number | null = null;
   let sourceAuto = false;
   let burningLine = '';

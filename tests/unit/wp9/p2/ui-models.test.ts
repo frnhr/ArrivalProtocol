@@ -24,7 +24,7 @@ import { autoburnRefusal, skillFiles } from '@systems/autoburn';
 import { reserveThread, releaseThread, threadsTotal } from '@systems/ops-core';
 import { racksText, zoneVerdict } from '@/types/zone';
 import { ZONE_PLOT_TEXT, ZONE_STAMP_TEXT, RACK_TAG_TEXT } from '@data/zone-text';
-import { AUTO_BUTTON_TEXT, AUTOBURN_SKILL_ROW, AUTOBURN_REFUSAL } from '@data/skill-text';
+import { AUTO_BUTTON_TEXT, AUTO_BUTTON_REASON, AUTOBURN_SKILL_ROW, AUTOBURN_REFUSAL } from '@data/skill-text';
 import { SKILLS_TEXT } from '@data/script';
 import { MAX_LINE_CHARS, DEBRIS_HIT_DAMAGE, BAND_DEGRADED_MIN } from '@data/tuning';
 
@@ -157,7 +157,9 @@ const TIME = /^IN \d\d:\d\d$/;
   const owners: string[] = [];
   for (let i = 0; i < threadsTotal(); i++) { const owner = `test-${i}`; if (reserveThread(owner)) owners.push(owner); }
   const busy = autoButton(state(), getPrediction());
-  check('…with every thread busy: refused, `THREADS BUSY`', busy.look === 'blocked' && busy.note === 'THREADS BUSY', JSON.stringify(busy));
+  // Slice 4 (03 §3.6): no thread is taken at the press any more; it is claimed AUTO_THREAD_CLAIM_TAC before the burn.
+  check('…with every thread busy: still ready (the thread is claimed just before the burn)', busy.look === 'ready'
+    && busy.note === AUTO_BUTTON_TEXT.ready, JSON.stringify(busy));
   owners.forEach((owner) => releaseThread(owner));
   h.press('KeyB');
   h.step();
@@ -216,12 +218,14 @@ const TIME = /^IN \d\d:\d\d$/;
     .every((text) => text.length <= MAX_LINE_CHARS), stripLines.filter((text) => text.length > MAX_LINE_CHARS).join(' | '));
   // The AUTO button's corner: its notes in 9 px type on a ~270 px button beside `AUTO · B`: 24 characters at most.
   const AUTO_NOTE_MAX = 24;
-  const notes = [AUTO_BUTTON_TEXT.ready, AUTO_BUTTON_TEXT.armed('01:30'), AUTO_BUTTON_TEXT.burning,
-    ...Object.values(AUTOBURN_REFUSAL).map((reason) => (reason === AUTOBURN_REFUSAL.threads ? 'THREADS BUSY' : reason))];
+  // Slice 4: v2's notes, at LOCK 810's worst countdown (13:30), and every refusal (impact in its short form).
+  const notes = [AUTO_BUTTON_TEXT.ready, AUTO_BUTTON_TEXT.armed('01:30'), AUTO_BUTTON_TEXT.burning, AUTO_BUTTON_TEXT.readyGreen,
+    AUTO_BUTTON_TEXT.readyRound, AUTO_BUTTON_TEXT.armedTrim('13:30'), AUTO_BUTTON_TEXT.armedRound('13:30'), AUTO_BUTTON_TEXT.threadWait,
+    ...Object.values(AUTOBURN_REFUSAL).map((reason) => AUTO_BUTTON_REASON[reason] ?? reason)];
   // A key cap draws its key in a box about two characters wide, not its brackets. The armed countdown is at most
   // the offer window (90 tac s: 01:30).
   const shown = (text: string): number => text.replace(/\[([A-Z]+)\]/g, (_match, key: string) => `${key} `).length;
-  check(`every AUTO note fits its corner (≤ ${AUTO_NOTE_MAX} characters, the threads reason in its short form)`, notes.every((text) => shown(text) <= AUTO_NOTE_MAX),
+  check(`every AUTO note fits its corner (≤ ${AUTO_NOTE_MAX} characters, the short forms where they exist)`, notes.every((text) => shown(text) <= AUTO_NOTE_MAX),
     notes.filter((text) => shown(text) > AUTO_NOTE_MAX).join(' | '));
 }
 

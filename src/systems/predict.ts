@@ -1,8 +1,8 @@
 // Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): planToCircle, 'round', the armed
 // mode's planning. Others ask by message.
-import { notBuilt } from '@systems/not-built';
 import type { Store } from '@state/store';
 import type { GameState, BurnStatus, PresetMode, SasMode } from '@state/schema';
+import type { AutoMode } from '@/types/skill';
 import type { GoLowAim } from '@/types/landing';
 import { onGameTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
@@ -28,7 +28,7 @@ import {
   SHRINK_FUEL_RESERVE_FRAC, RADIUS_BISECT_STEPS, RP_RATE_PROBE_SEC,
   SHRINK_RESERVE_WAIT_TAC, STRANDED_RANGE_FRAC, STRAND_LINE_MARGIN, SKIP_DIVISOR, BELT_HIT_MEAN_SEC,
   DODGE_PROMISE_MARGIN_KM, DODGE_DEADLINE_RESOLUTION_TAC, DODGE_MEMO_RP_DECIMALS, DODGE_MEMO_ANGLE_DECIMALS,
-  DRAG_LIFT_MARGIN_KM, LIFT_HOLD_SLACK_KM,
+  DRAG_LIFT_MARGIN_KM, LIFT_HOLD_SLACK_KM, ROUND_E_TOL, ROUND_AIM_E,
 } from '@data/tuning';
 
 // The predicted path: what happens if nobody touches the throttle. Pure (computePrediction)
@@ -60,8 +60,10 @@ export interface PathSpan {
 // Slice 1b (landing only, plan §1.4): go-low: GO LOWER's RETRO burn, centred on an orbit angle ('point') half an orbit
 // before the awaited LZ's launch point; lift: PRO at ▲ to bring a decaying ▼ back up (landing-rules liftTargetKm; L10's key).
 // Neither is a trim (isTrim): TRIM_PROBLEM and trimTarget stay the ring's four.
+// Slice 4 (plan §2.9): round: AUTOBURN v2's ROUND (and 4e's landing orbit), an apsis burn toward a circle (planToCircle).
+// Planned only while AUTOBURN is engaged in that mode, so only its own rows ever word it.
 export type TrimReason = 'rp-low' | 'rp-high' | 'ra-high' | 'ra-low';
-export type BurnReason = 'capture' | 'missed' | 'shrink' | TrimReason | 'go-low' | 'lift';
+export type BurnReason = 'capture' | 'missed' | 'shrink' | TrimReason | 'go-low' | 'lift' | 'round';
 // 'point': centred on an orbit angle rather than an apsis (GO LOWER's ◇).
 export type BurnEvent = 'peri' | 'apo' | 'now' | 'point';
 
@@ -276,6 +278,9 @@ export interface BurnInputs {
   // the band reaches, and its too-big ▲ gets the ring trim at ▼, which the kid may decline (a shrink is "now" for the
   // whole climb, so it could never be declined, and held TACTICAL and the strip until ▲).
   landing: boolean;
+  // Slice 4 (plan §2.9): AUTOBURN engaged in GREEN plans no shrink. It flies only at ▼ and ▲ (03 §3.6), so its trims are
+  // phase 2's own targets, the cheapest green.
+  noShrink: boolean;
 }
 
 // A burn along PRO (+1) or RETRO (−1) flown from the current state one SIM_SUBSTEP_MAX_SEC step
@@ -308,7 +313,7 @@ function presetBurn(orbit: Readonly<OrbitState>, mu: number, ring: Ring, accel: 
 // RELEASE), and fails once the trimmed apsis passes the trim's target without that, or the
 // burn outgrows the tank or LATE_TRIM_DV_FACTOR × the on-time burn (see tuning.ts).
 function lateTrimLands(
-  input: BurnInputs, preset: BurnPoint['preset'], event: 'peri' | 'apo', targetRadius: number, onTimeDvKmS: number,
+  input: Pick<BurnInputs, 'orbit' | 'mu' | 'ring' | 'fit' | 'aEff' | 'fuelDvKmS'>, preset: BurnPoint['preset'], event: 'peri' | 'apo', targetRadius: number, onTimeDvKmS: number,
 ): boolean {
   const { orbit, mu, ring, fit, aEff, fuelDvKmS } = input;
   // No thrust (WP4: a dead engine) cannot land anything.
@@ -354,13 +359,15 @@ function apsisTimesOf(conic: KeplerConic, sinceRp: number): ApsisTimes {
 // apsis at its target (trimTarget). Slice 1b's 'lift' (landing only, risk 3) is the same burn with a target override:
 // PRO at ▲ lifting a decaying ▼ to the DRAG line + DRAG_LIFT_MARGIN_KM. Its loop is already in the ring, so "a late burn
 // still lands the loop in the ring" (lateTrimLands) says nothing for it: it is due now only within LATE_TRIM_TAC of ▲.
+// Slice 4: 'round' (planToCircle) is the same burn too, at the apsis `liftAt` names, due now only within LATE_TRIM_TAC.
 function planTrim(
-  input: BurnInputs, reason: TrimReason | 'lift', apsisTimes: ApsisTimes, firstOfTwo: boolean,
-  targetRadius: number = trimTarget(reason === 'lift' ? 'rp-low' : reason, input.ring),
+  input: Pick<BurnInputs, 'orbit' | 'mu' | 'ring' | 'fit' | 'aEff' | 'fuelDvKmS' | 'lateTrimSec'>, reason: TrimReason | 'lift' | 'round',
+  apsisTimes: ApsisTimes, firstOfTwo: boolean,
+  targetRadius: number = trimTarget(reason === 'lift' || reason === 'round' ? 'rp-low' : reason, input.ring),
   liftAt: 'apo' | 'peri' = 'apo',
 ): BurnPoint {
   const { mu, fit, aEff, lateTrimSec } = input;
-  const fixesLowest = reason === 'rp-low' || reason === 'rp-high' || (reason === 'lift' && liftAt === 'apo');
+  const fixesLowest = reason === 'rp-low' || reason === 'rp-high' || ((reason === 'lift' || reason === 'round') && liftAt === 'apo');
   const event = fixesLowest ? 'apo' : 'peri';
   const signedDvKmS = trimDvKmS(mu, fit, fixesLowest ? fit.ra : fit.rp, targetRadius);
   const preset = signedDvKmS > 0 ? 'prograde' : 'retrograde';
@@ -373,7 +380,7 @@ function planTrim(
   const sinceEventSec = apsisTimes.period - nextEventInSec;
   const departing = sinceEventSec < nextEventInSec;
   const dueNow = departing
-    && (sinceEventSec <= lateTrimSec || (reason !== 'lift' && lateTrimLands(input, preset, event, targetRadius, dvKmS)));
+    && (sinceEventSec <= lateTrimSec || (isTrim(reason) && lateTrimLands(input, preset, event, targetRadius, dvKmS)));
   return toBurnPoint({
     reason, preset, event, dvKmS, firstOfTwo,
     eventInSec: dueNow ? -sinceEventSec : nextEventInSec,
@@ -670,7 +677,7 @@ function computeBurnPoint(input: BurnInputs): BurnPoint | null {
   // FUEL was to blame for that SKIP could not cross in two minutes was dropped for ACCEPT ORBIT, the lead's
   // Rule 4, and LEAD-1's deviation 1 left a six-hour SKIP for a lock the tank paid for).
   const earlyClimb = outbound && apoInSec > SHRINK_MIN_APO_FRAC * periodSec;
-  if (!input.landing && (earlyClimb || (outbound && input.holdingShrink)) && fit.ra > ring.max && trim.inSec > shrinkWaitSec) {
+  if (!input.landing && !input.noShrink && (earlyClimb || (outbound && input.holdingShrink)) && fit.ra > ring.max && trim.inSec > shrinkWaitSec) {
     const shrink = planShrink(input);
     if (shrink) return shrink;
   }
@@ -1292,11 +1299,81 @@ export function liftPreset(
   return clearSpeed + reactionDvKmS < escapeSpeed ? 'prograde' : radial;
 }
 
-// Slice 4 (plan §2.9; Track FLIGHT): the burn that takes a closed loop to a circle of radius `targetKm` (ROUND's ▼ at
-// engagement; 4e's landing orbit): while |▼ − R*| is over tolerance, at ▲ to bring ▼ to R*; else at ▼ to bring ▲ to R*, with
-// planTrim's machinery and reason 'round'; null once the loop is that circle (within ROUND_E_TOL), with nothing to burn. Pure.
-export function planToCircle(input: Readonly<BurnInputs>, apsisTimes: Readonly<ApsisTimes>, targetKm: number): BurnPoint | null {
-  return notBuilt('planToCircle', 'FLIGHT', input, apsisTimes, targetKm);
+// --- AUTOBURN's modes (slice 4, plan §2.9; Track FLIGHT) ------------------------------------------------------------------
+
+// A loop's eccentricity from its two apsides (0 for a circle).
+export function loopEccentricity(loop: Readonly<{ rp: number; ra: number }>): number {
+  return (loop.ra - loop.rp) / (loop.ra + loop.rp);
+}
+
+// The loop is the circle of radius `targetKm` (ROUND's aim, ROUND_AIM_E): e under the aim, and its mean radius within
+// ROUND_E_TOL of the target. Both, so a near-circle at another height (4e's landing orbit after a drag kick) is not "done".
+export function atCircle(loop: Readonly<{ rp: number; ra: number }>, targetKm: number): boolean {
+  return loopEccentricity(loop) < ROUND_AIM_E && Math.abs((loop.rp + loop.ra) / 2 - targetKm) <= ROUND_E_TOL * targetKm;
+}
+
+// The next apsis burn toward the circle of radius `targetKm` (plan §2.9): while ▼ is off R* by more than half the
+// tolerance, at ▲ to bring ▼ to R* (first of two: the ▲ burn leaves ▲ where it was); else at ▼ to bring ▲ to R*. null at
+// the circle. The tick's stop reads this on the ship's exact state every tick, the planner on the 10 Hz prediction, so the
+// two always agree on which burn is which.
+export interface CircleStep {
+  at: 'peri' | 'apo';
+  targetRadius: number;
+  firstOfTwo: boolean;
+}
+
+export function circleStep(loop: Readonly<{ rp: number; ra: number }>, targetKm: number): CircleStep | null {
+  if (atCircle(loop, targetKm)) return null;
+  const tolKm = (ROUND_E_TOL / 2) * targetKm;
+  if (Math.abs(loop.rp - targetKm) > tolKm) return { at: 'apo', targetRadius: targetKm, firstOfTwo: Math.abs(loop.ra - targetKm) > tolKm };
+  return { at: 'peri', targetRadius: targetKm, firstOfTwo: false };
+}
+
+// Slice 4 (plan §2.9): the burn that takes a closed loop to a circle of radius `targetKm` (ROUND's R* at engagement; 4e's
+// landing orbit), as circleStep names it, with planTrim's machinery and reason 'round'; null once the loop is that circle
+// (atCircle). Pure.
+export function planToCircle(
+  input: Readonly<Pick<BurnInputs, 'orbit' | 'mu' | 'ring' | 'fit' | 'aEff' | 'fuelDvKmS' | 'lateTrimSec'>>,
+  apsisTimes: Readonly<ApsisTimes>, targetKm: number,
+): BurnPoint | null {
+  if (!input.fit.closed) throw new Error('planToCircle: an open path has no circle to aim at');
+  const step = circleStep(input.fit, targetKm);
+  if (step === null) return null;
+  return planTrim(input, 'round', apsisTimes, step.firstOfTwo, step.targetRadius, step.at);
+}
+
+// AUTOBURN engaged (armed, pointing or burning) in a mode, as the planner reads it (state.burn.auto; predict may not
+// import autoburn.ts, which imports it), or null.
+export function engagedAuto(state: Readonly<GameState>): { mode: AutoMode; targetKm: number | null } | null {
+  const auto = state.burn.auto;
+  const engaged = auto.phase === 'armed' || auto.phase === 'pointing' || auto.phase === 'burning';
+  return engaged && auto.mode !== null ? { mode: auto.mode, targetKm: auto.targetKm } : null;
+}
+
+// The burn AUTOBURN in `mode` would fly first, from a prediction made with or without it engaged (autoburn.ts
+// previewModeBurn: the NAV PLOT's ghost and LOCK bracket before the press, and its lock range at the press). The times are
+// the prediction's (game s after pred.asOfTSec), like pred.burnPoint's. While engaged in that mode the prediction already
+// plans it (computePrediction), so this is pred.burnPoint; before the press it is the same plan made from the prediction's
+// own scalars, cheaply (no path walk). null with nothing to fly (an impact course, an empty tank, a loop already there).
+export function planModeBurn(state: Readonly<GameState>, pred: Prediction, mode: AutoMode, targetKm: number | null): BurnPoint | null {
+  if (pred.outcome === 'impact' || state.burn.fuelPct <= 0) return null;
+  const engaged = engagedAuto(state);
+  if (engaged !== null && engaged.mode === mode && engaged.targetKm === targetKm) return pred.burnPoint;
+  const capture = pred.burnPoint !== null && (pred.burnPoint.reason === 'capture' || pred.burnPoint.reason === 'missed') ? pred.burnPoint : null;
+  if (pred.outcome === 'open') return mode === 'capture' || mode === 'green' ? capture : null;
+  if (mode === 'capture' || pred.periInSec === null || pred.apoInSec === null || pred.periodSec === null) return null;
+  const input = {
+    orbit: state.orbit, mu: state.level.planet.mu, ring: state.level.ring, fit: pred.fit, aEff: planningAccel(state),
+    fuelDvKmS: (state.burn.fuelPct / 100) * state.level.dvBudgetKmS, lateTrimSec: LATE_TRIM_TAC * state.level.tacticalWarp,
+  };
+  const times = { peri: pred.periInSec, apo: pred.apoInSec, period: pred.periodSec };
+  if (mode === 'round' || mode === 'landing-orbit') return targetKm === null ? null : planToCircle(input, times, targetKm);
+  // GREEN on a closed loop: the ring trim, the cheapest green, never a shrink.
+  if (pred.fit.inRing) return null;
+  if (pred.burnPoint !== null && isTrim(pred.burnPoint.reason)) return pred.burnPoint;
+  const reasons = trimReasons(pred.fit, state.level.ring);
+  const trims = reasons.map((reason) => planTrim(input, reason, times, reasons.length > 1));
+  return trims.reduce<BurnPoint | null>((first, next) => (first === null || next.eventInSec < first.eventInSec ? next : first), null);
 }
 
 export function computePrediction(state: Readonly<GameState>): Prediction {
@@ -1313,6 +1390,7 @@ export function computePrediction(state: Readonly<GameState>): Prediction {
   const impact = isImpactCourse(fit, planet.R, outbound);
   const fuelDvKmS = (state.burn.fuelPct / 100) * dvBudgetKmS;
   const outcome: PredictOutcome = impact ? 'impact' : fit.closed ? 'closed' : 'open';
+  const auto = engagedAuto(state);
 
   let periInSec: number | null = null;
   let apoInSec: number | null = null;
@@ -1383,9 +1461,17 @@ export function computePrediction(state: Readonly<GameState>): Prediction {
     reserveWaitSec: SHRINK_RESERVE_WAIT_TAC * tacticalWarp,
     holdingShrink: state.burn.firing && state.burn.firingFor === SHRINK_KEY,
     landing: state.run.phase === 'landing',
+    noShrink: auto?.mode === 'green',
   };
+  // Slice 4 (plan §2.9): while AUTOBURN is engaged the plan is its mode's, so the START BURN ticks are always its burns:
+  // ROUND (and 4e's landing orbit) the circle's burns on a closed loop, GREEN the ring's trims with no shrink; and the
+  // landing's in-ring GO LOWER and lift are not planned (one planner owns the engine).
+  const circle = auto !== null && (auto.mode === 'round' || auto.mode === 'landing-orbit') && auto.targetKm !== null && fit.closed
+    && periInSec !== null && apoInSec !== null && periodSec !== null
+    ? { targetKm: auto.targetKm, times: { peri: periInSec, apo: apoInSec, period: periodSec } } : null;
   const burnPoint = impact || outOfFuel || cannotClose ? null
-    : computeBurnPoint(burnInputs) ?? landingInRingBurn(state, burnInputs);
+    : circle !== null ? planToCircle(burnInputs, circle.times, circle.targetKm)
+      : computeBurnPoint(burnInputs) ?? (auto === null ? landingInRingBurn(state, burnInputs) : null);
   const greenFraction = outcome === 'closed' ? ringFraction(semiMajorAxis(elements), elements.e, ring) : 0;
   // ACCEPT ORBIT only (see Prediction.acceptOnly). Judged only while nothing burns: under a held burn the
   // plan ends early on purpose (a shrink held past its stop says RELEASE and lets the tank decide after the
