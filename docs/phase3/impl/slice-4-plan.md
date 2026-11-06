@@ -937,3 +937,124 @@ The changes after the independent review of `ee06350`, in one commit. The review
   - Read `offline` before `band` when showing `skillLive`, so a copy being repaired doesn't read as dead.
   - The Skills window's NEW pulse fires on a migrated resume (`bought` goes 0 → 1). Suppress it for cost-0, visit-0 purchases.
 
+
+## Deviations (Track TREE)
+
+Recorded by Track TREE (branch `tree-4`, from `f9ee3c1`). The unit tier is green at 118 s on 4 workers (181 passed, 6
+balance-only skipped). Each item changes §2–§5 above, with its reason.
+
+### The model and the desk
+
+1. **The levels are a leaf module, `systems/skill-levels.ts`** (`visitNow`, `levelAbove`, `fileLevel`, `held`, `paid`,
+   `lostLevels`, `restorePrice`). `skill-tree.ts` re-exports them unchanged. The reason is an import cycle: `skill-tree.ts`
+   imports `map-hop` for `poorAhead`, and DELETE's confirm (`tool-targets.ts`) needs RESTORE prices, so importing the whole
+   tree there broke the classic five's load order (`layoutFor` undefined at `validateShipDef`).
+2. **`deskBlocker` and the first-pick top-up both read `anyPaid(skills)`**, meaning a level bought or pending on any skill.
+   A run that already paid for a skill gets no top-up, no blocker, and its first desk opens on the card. `run.ts
+   firstPickTopUp(state)` is exported for the views.
+3. **The classic world has no tree.** `openBranchesAt` returns `[]` there, so every cell is closed, and `trainCell` and
+   `restoreSkill` refuse with `'closed'`. Earnings are still recorded on every world.
+4. **`branchToLatch(state, visit)`** (skill-tree.ts) names the `'after-seeds'` / `'poor-ahead'` branch that `openDesk`
+   latches. `training-flow` checks the latch with SENTRY's `built` raised for that one check, because 4a builds AUTOBURN
+   alone.
+5. **`trainCell` and the grid share one rule.** The refusal is `treeCells`' own cell refusal, so the look and the buy never
+   disagree. A version keeps the held lock, and a lock keeps the held version.
+6. **`commitTraining` does not check the phase.** It runs inside `transmitNext`, and also inside `__ap.slot` / `__ap.route`
+   (debug's arrive), so a desk's purchases cross there too. It re-reads the bank afterwards, which throws below 0.
+7. **Grants (slice 5's interface) are built.**
+   - `grantCycles` refuses anything but a positive whole number.
+   - `grantSkill` writes a `SkillGrant` plus a cost-0 `'grant'` purchase that keeps the paid lock.
+   - `grantAllowed`:
+     - never above `built` or into a closed branch;
+     - a `'card'` only gives v1 of a skill never paid for and not held;
+     - a `'gift'` only gives a version above the paid one.
+
+### The packet
+
+8. **`PacketPlan.skills: SkillPacketPlan` is required**, so every caller says what training does to its packet.
+   - `draft.ts transitPacket(state, plan, makeId)` is the shorthand for a transit plan. It is what the PACKET's model, its
+     toggles, `pickCard` and `transmitNext` call.
+   - `NO_SKILL_PLAN` is the empty plan.
+   - `ArrivalPlan` gains an optional `packAs` instead of `skills`, because the pending purchases are read from the state.
+     Left out, nothing is packed lower, which is right at the desk (UI's SHIP CARD and TRAINING preview need no change).
+9. **PACK AS lowers the version and keeps the lock**: `skill-files.ts lowerLevels`, matching §3 step 7's `PACK AS v1 (7) ·
+   RESTORE 3` for v2 + 270. `setPackAs` accepts any level below the file's (the lock may also go down), and throws otherwise.
+10. **The packed copy keeps the original file's id**, as well as its integrity and infection. The transit hits, the boot's
+    flashes and `ArrivalReport.skills` then all find the file the kid chose.
+11. **PACK AS and the drops exclude each other.**
+    - Leaving a packed file behind forgets its PACK AS (`toggleDrop`).
+    - PACK AS on a file left behind takes it back at that level.
+    - `planPacket` throws on a file that is both dropped and replaced or packed lower.
+12. **`Packet.skills: PacketSkill[]`** (carry.ts) names each fresh or packed-lower file. The PACKET's chips and
+    `run.ts arrivalSkills` (`ArrivalReport.skills`: trained, restored when every purchase behind it was a RESTORE, packed,
+    or carried) read it.
+13. **The `'trained'` DropLock is never returned by `dropLock`.** A fresh file is not in memory, so `transmit.ts` adds its
+    chip as locked, and `toggleDrop` on it returns `'locked'`. The file it replaces has no chip.
+14. **`PacketChip.skill: SkillChip | null`** carries:
+    - the level it crosses at, and its nominal level;
+    - `trained`, `packedAs`, and the RESTORE price if it is left behind;
+    - `packAs: PackAsOption[]`, each with its level, blocks, RESTORE, `active` and text.
+
+    Skills sort last among the files that can stay behind (`SKILLS_LAST`).
+15. **`skill-files.ts skillRelief(state)`** lists, cheapest RESTORE first, each skill file not trained here: left behind,
+    or packed at each lower version, with the blocks it frees. It is for the cheapest-to-leave hint (§1.1 4b item 5).
+    UI's `trainingModel` can read it.
+16. **Rack E's sort key** puts skills after the AI tools *and the card files*, in `SKILL_IDS` order.
+
+### The +2 CYCLES card
+
+17. **`UpgradeForm 'cycles'`**, with the tag `TRAINING`, and `CYCLES_CARD_CYCLES = 2` (tuning, in the TREE block).
+    - `DraftContext.tree?` and `DraftContext.toFinal?` are optional. `draftContext` / `dealDraft` take the destination as
+      `room.to`.
+    - The card is last in the pool and filtered before the draws, so classic deals are unchanged. Arm deals now include it
+      in their pool.
+    - When picked, it is **not** pushed into `run.upgrades`. `commitTraining` writes a `'salvage'` grant instead.
+    - **Forced one-line touches outside TREE's files, to keep `tsc` green:**
+      - `data/script.ts DRAFT_FORM_TAG.cycles`;
+      - `systems/skills.ts` (UI's): `case 'cycles': continue;`;
+      - the `Record<UpgradeId, …>` literals in `wp8/draft` and `wp8/p2/ui-models`.
+
+### The boot, the watcher, the end
+
+18. **At most one skill line per skill per boot.** A pending grant comes first, then a file trained or restored at the last
+    desk. A carried or packed file gets `RETRAINED` only when the skill was announced before (`announced !== null`) and the
+    demos have grown since. Files that were never announced therefore get no line, which covers the suites' `giveSkillFile`
+    and the classic world, and keeps the classic boot plans byte-equal.
+    - Saying a line sets `announced` to the demo count, or to 0 for a skill without demos.
+    - A granted skill is installed in place of the old file.
+    - The ONLINE stamp hangs on `'skill-trained'`.
+19. **`mountSkillWatch` is mounted by `mountRun`**, so `main.ts` needs no change and the suites get it too. It emits only
+    in `flight` and `landing`: elsewhere, including a grant installed at the boot, it follows silently.
+20. **`RunEndModel.skills: RunEndSkills | null`** gives `{ trained, total, unspent, unspentLine, tallyLine }`, on the arm
+    only.
+    - `trainedCycles` counts every paid level at its cell's price, whether lost or free.
+    - `LastUnit.skills` is `[]` for a run that ended holding no skill file. It stays null only for abandons.
+21. **DELETE's confirm on a skill file** is `PACKET_SKILL_TEXT.deleteEffect`: `No AUTOBURN until a desk's RESTORE (5
+    CYCLES).`
+    - The placeholder skill entries in `tool-text.ts DELETE_CARD_EFFECT` and `script.ts TRANSMIT_TEXT.withoutCard` are no
+      longer read for skills. They stay because both records are exhaustive.
+    - The RESTRICTED rows are built from `SKILL_IDS`, so there are four `.skl` rows.
+
+### The save
+
+22. **`checkSavedRun` also checks:**
+    - one earning per ended ship, each on that ship's slot;
+    - a bank of at least 0 (a `bankOf` throw becomes a shape refusal);
+    - `version` and `lock` on every skill-kind upgrade file, in both the world's memory and the boot's `carried.segs`;
+    - `arrival.skills` field by field.
+
+    Because the earnings check comes first, the codec suite's `ships.pop()` route case pops the earning too.
+
+### Tests and debug
+
+23. **Test edits outside the new suites:**
+    - `map/link-over`: the first pick's AUTOBURN v1 (6) takes the spare Telemetry copy's 6 blocks, so the narrative's
+      numbers stay the same.
+    - `map/repository`: the first desk opens on TRAINING, and there are six restricted rows.
+    - `map/delivery-packet`: the "nothing upgrades" check looks for the patch file only.
+    - `save/codec`: five new shape refusals.
+24. **Debug:**
+    - `__ap.bank()`, `__ap.train(id, row)`, `__ap.undo(index?)`, `__ap.restore(id)`, `__ap.packAs(segId, version | null)`
+      and `__ap.tree()`;
+    - `__ap.cycles` goes through `grantCycles`;
+    - `__ap.slot` / `__ap.route` record the earnings of the skipped ships.
