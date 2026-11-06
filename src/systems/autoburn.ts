@@ -19,7 +19,8 @@ import { say } from '@systems/say';
 import { emit } from '@systems/events';
 import { raiseAlert, clearAlert } from '@systems/alerts';
 import { skillFilesOf, engineOpen } from '@state/selectors';
-import { autoburnDemoSkill, paid } from '@systems/skill-tree';
+import { autoburnDemoSkill } from '@systems/skill-tree';
+import { paid } from '@systems/skill-levels';
 import { getDropSolution } from '@systems/drop-cache';
 import { burnSpanBlocks } from '@systems/landing-orbit';
 import {
