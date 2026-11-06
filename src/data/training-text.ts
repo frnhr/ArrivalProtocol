@@ -183,8 +183,8 @@ export const TRAINING_TEXT = {
 // The TRAINING cells' looping mini-demos (03 §4: "loops a 4-second mini-demo of the selected cell"), by data (review
 // architecture note: the view switched on 'autoburn-1' strings, so a new skill fell to the plain loop): a drawing per
 // version and one for LOCK RANGE (null for a skill without it). The drawings are TrainingWindow.ts demoSvg's; a new skill
-// names existing ones or adds its own there. Slices 4c–4e (plan §6): AUTODROP's and SENTRY's six kinds are named here and
-// drawn as 'plain' for now; the review-fix pass draws all six in one hand. Slice 6 refines SURVEY's.
+// names existing ones or adds its own there. Slices 4c–4e (plan §6): AUTODROP's and SENTRY's six kinds, drawn in one hand
+// by the review-fix pass. Slice 6 refines SURVEY's.
 export type DemoArt = 'capture' | 'green' | 'low-orbit' | 'lock' | 'plain'
   | 'centre' | 'pass' | 'plan'              // AUTODROP v1–v3 (4c)
   | 'sight' | 'quick-rm' | 'firewall';      // SENTRY v1–v3 (4d)

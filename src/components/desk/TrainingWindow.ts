@@ -44,12 +44,30 @@ export interface TrainingWindowView {
 
 const PHONE_QUERY = '(max-width: 768px)';
 
+// A pod leaving the orbit at (x, y) and falling to the LZ at (toX, toY), in its turn of the volley (`tr-d1`…`tr-d3`). The
+// pod is drawn a few units down its fall, so the bracket it left from does not hide it.
+function drop(turn: string, x: number, y: number, toX: number, toY: number): string {
+  const podY = y + 4;
+  const podX = x + ((toX - x) * 4) / (toY - y || 1);
+  return `<g class="${turn}"><path class="tr-demo-fall" d="M${x} ${y} L${toX} ${toY}"/>`
+    + `<circle class="tr-demo-pod" cx="${podX.toFixed(1)}" cy="${podY.toFixed(1)}" r="1.8"/></g>`;
+}
+
+// A row of AUTODROP v3's plan table, in its turn.
+function planRow(turn: string, y: number, words: string): string {
+  return `<g class="${turn}"><rect class="tr-demo-row" x="2" y="${y}" width="56" height="11"/>`
+    + `<text class="tr-demo-text" x="5" y="${y + 8.5}">${words}</text></g>`;
+}
+
 // A mini-demo (03 §4: "loops a 4-second mini-demo of the selected cell"), drawn in the desk's amber: a planet, then what
 // the cell does to the path. CSS (desk.css .tr-demo-*) loops it; reduced motion holds its last frame.
 // One drawing per DemoArt (the cells name theirs in data: training-text.ts TRAINING_DEMO_ART).
 function demoSvg(kind: DemoArt): string {
   const planet = '<circle class="tr-demo-planet" cx="60" cy="40" r="11"/>';
   const ring = '<circle class="tr-demo-ring" cx="60" cy="40" r="24"/>';
+  // AUTODROP's side view: the planet's limb below and the orbit's track above.
+  const ground = '<path class="tr-demo-planet" d="M0 80 V66 Q60 54 120 66 V80 z"/>';
+  const track = '<path class="tr-demo-orbit" d="M0 22 Q60 6 120 22"/>';
   switch (kind) {
     case 'capture':
       return `<svg class="tr-demo tr-demo-capture" viewBox="0 0 120 80">${ring}${planet}`
@@ -58,22 +76,54 @@ function demoSvg(kind: DemoArt): string {
     case 'green':
       return `<svg class="tr-demo tr-demo-green" viewBox="0 0 120 80">${ring}${planet}`
         + '<ellipse class="tr-demo-wide" cx="60" cy="34" rx="40" ry="28"/><circle class="tr-demo-round" cx="60" cy="40" r="24"/></svg>';
+    // AUTOBURN v3 LANDING ORBIT (03 §4: `a dashed ghost loop, LANDING ORBIT · EVERY LZ FITS`): the loop fades, the dashed
+    // ghost circle inside the band is flown round, and every LZ lights.
     case 'low-orbit':
-      return `<svg class="tr-demo tr-demo-low" viewBox="0 0 120 80">${planet}`
-        + '<circle class="tr-demo-round" cx="60" cy="40" r="17"/><path class="tr-demo-lz" d="M56 29 h8 M71 40 v8 M49 40 v8"/></svg>';
+      return `<svg class="tr-demo tr-demo-low" viewBox="0 0 120 80">${ring}${planet}`
+        + '<ellipse class="tr-demo-wide" cx="60" cy="34" rx="40" ry="28"/><circle class="tr-demo-ghost" cx="60" cy="40" r="22"/>'
+        + '<circle class="tr-demo-round" cx="60" cy="40" r="22"/><path class="tr-demo-lz" d="M56 29 h8 M71 37 v6 M49 37 v6"/></svg>';
     case 'lock':
       return `<svg class="tr-demo tr-demo-lock" viewBox="0 0 120 80">${ring}${planet}`
         + '<path class="tr-demo-flyby" d="M4 70 Q 48 52 60 14 Q 72 52 116 70"/><path class="tr-demo-bracket" d="M10 66 Q 48 50 58 16"/></svg>';
     case 'plain':
       return `<svg class="tr-demo tr-demo-plain" viewBox="0 0 120 80">${planet}<circle class="tr-demo-round" cx="60" cy="40" r="24"/></svg>`;
-    // Slices 4c–4e (plan §6): AUTODROP's and SENTRY's kinds, drawn as 'plain' until the review-fix pass draws them.
+    // AUTODROP v1 CENTRE (03 §3.8), seen from the side as the GROUND TRACK draws it: the orbit above, the ground below, the
+    // bracket over an LZ with its centre ticked, and a volley that straddles it: the pods leave one after another, the
+    // middle one on the centre.
     case 'centre':
+      return `<svg class="tr-demo tr-demo-centre" viewBox="0 0 120 80">${ground}${track}`
+        + '<path class="tr-demo-lz" d="M52 59.5 H68"/><path class="tr-demo-bracket" d="M44 14.6 Q60 13.2 76 14.6"/>'
+        + '<path class="tr-demo-mid" d="M60 7 v4"/>'
+        + drop('tr-d1', 54, 14.2, 57, 58) + drop('tr-d2', 60, 14, 60, 58) + drop('tr-d3', 66, 14.2, 63, 58) + '</svg>';
+    // AUTODROP v2 PASS: the pass's split (`A×2 · B×1`), then each LZ's window flies its own pods.
     case 'pass':
+      return `<svg class="tr-demo tr-demo-pass" viewBox="0 0 120 80">${ground}${track}`
+        + '<text class="tr-demo-text" x="2" y="8">A×2 · B×1</text>'
+        + '<path class="tr-demo-lz" d="M27 60.5 H41 M79 60.5 H93"/>'
+        + '<path class="tr-demo-bracket" d="M24 16.9 Q34 15 44 14.6"/><path class="tr-demo-bracket" d="M76 14.6 Q86 15 96 16.9"/>'
+        + drop('tr-d1', 31, 15.8, 32.5, 59) + drop('tr-d2', 37, 15.2, 35.5, 59) + drop('tr-d3', 86, 15.3, 86, 59) + '</svg>';
+    // AUTODROP v3 PLAN: the plan table's passes tick in one by one, its check line closes, and every LZ is lit.
     case 'plan':
+      return '<svg class="tr-demo tr-demo-plan" viewBox="0 0 120 80">'
+        + planRow('tr-d1', 12, '1 · A2 B1') + planRow('tr-d2', 26, '2 · A2 C1') + planRow('tr-d3', 40, '3 · B1 C2')
+        + '<text class="tr-demo-text tr-demo-check" x="4" y="64">PLAN ✓</text>'
+        + '<circle class="tr-demo-ring" cx="90" cy="40" r="20"/><circle class="tr-demo-orbit" cx="90" cy="40" r="20"/>'
+        + '<circle class="tr-demo-planet" cx="90" cy="40" r="10"/>'
+        + '<path class="tr-demo-lz" d="M87 30 h6 M100 37 v6 M80 37 v6"/></svg>';
+    // SENTRY v1 SIGHT (03 §3.10): a row of the unit's files; the small one is marked red as a seed, and bracketed.
     case 'sight':
+      return '<svg class="tr-demo tr-demo-sight" viewBox="0 0 120 80"><rect class="tr-demo-file" x="6" y="28" width="34" height="24"/>'
+        + '<rect class="tr-demo-file" x="44" y="28" width="34" height="24"/><rect class="tr-demo-file" x="90" y="28" width="16" height="24"/>'
+        + '<rect class="tr-demo-seed" x="90" y="28" width="16" height="24"/><path class="tr-demo-mark" d="M86 24 h24 v32 h-24 z"/></svg>';
+    // SENTRY v2 QUICK RM: a seed rm'd in half the time, and HOLLOW's blinking outline, where the next seed would land.
     case 'quick-rm':
+      return '<svg class="tr-demo tr-demo-quick-rm" viewBox="0 0 120 80"><rect class="tr-demo-file" x="6" y="28" width="34" height="24"/>'
+        + '<rect class="tr-demo-seed" x="52" y="28" width="16" height="24"/><path class="tr-demo-telegraph" d="M80 28 h16 v24 h-16 z"/>'
+        + '<path class="tr-demo-rm" d="M52 60 h16"/></svg>';
+    // SENTRY v3 FIREWALL: a FIREWALL.sys compiled between a seed and a file.
     case 'firewall':
-      return `<svg class="tr-demo tr-demo-plain tr-demo-${kind}" viewBox="0 0 120 80">${planet}<circle class="tr-demo-round" cx="60" cy="40" r="24"/></svg>`;
+      return '<svg class="tr-demo tr-demo-firewall" viewBox="0 0 120 80"><rect class="tr-demo-seed" x="6" y="28" width="16" height="24"/>'
+        + '<rect class="tr-demo-wall" x="34" y="28" width="16" height="24"/><rect class="tr-demo-file" x="62" y="28" width="34" height="24"/></svg>';
   }
 }
 
