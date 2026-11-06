@@ -141,7 +141,11 @@ export const SENTRY_TEXT = {
   deleteEcho: (decoy: string, freed: number): string => `> delete ${decoy} ... IT WAS A SEED · +${freed} FREE`,
   // The strip while a decoy's victim is being eaten (04 §3.6): it never names the culprit. (MOVE, COPY and REPAIR on a
   // decoy refuse with data/tool-text.ts TOOL_REFUSAL.tempFile: neutral words, never EATEN.)
-  somethingNextTo: (file: string): string => `SOMETHING NEXT TO ${file.toUpperCase()} IS EATING IT — SCAN its neighbours`,
+  // (A name too long for the whole hint keeps the verb: `… IS EATING IT — SCAN`, so the line stays one row.)
+  somethingNextTo: (file: string): string => {
+    const line = `SOMETHING NEXT TO ${file.toUpperCase()} IS EATING IT — SCAN its neighbours`;
+    return line.length <= MAX_LINE_CHARS ? line : `SOMETHING NEXT TO ${file.toUpperCase()} IS EATING IT — SCAN`;
+  },
   somethingNextToTab: (file: string): string => `SOMETHING NEXT TO ${file.toUpperCase()} IS EATING IT — [TAB], SCAN`,
   // v1 SIGHT at the boot (one line per disguised seed, after the ECC seeds line) and in the ship (HOLLOW's own seeds).
   bootSeed: (decoy: string, rack: string): string => `${ECC_PREFIX}${decoy} IS A SEED · RACK ${rack}`,
