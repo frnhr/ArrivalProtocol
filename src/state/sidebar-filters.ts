@@ -1,6 +1,7 @@
 import type { Segment } from '@/types/segment';
 import type { FilterKey, StatusKey } from './schema';
 import { healthKnown } from './selectors';
+import { isDisguised } from './threat-selectors';
 
 export const ALL_FILTER_KEYS: readonly FilterKey[] = ['ai', 'ship', 'pods', 'filesystem', 'free'];
 
@@ -11,6 +12,8 @@ export const ALL_FILTER_KEYS: readonly FilterKey[] = ['ai', 'ship', 'pods', 'fil
 // redundancy pool, FIREWALLs, HOLLOW's locked blocks, 046.log); Free = unallocated. Exhaustive: a new segment
 // type must pick its category here.
 export function categoryOf(seg: Segment): FilterKey {
+  // A disguised seed files as the unit file it pretends to be, or the AI filter would give it away.
+  if (isDisguised(seg)) return 'ai';
   switch (seg.type) {
     case 'core':
     case 'tool':
