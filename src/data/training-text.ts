@@ -3,6 +3,8 @@
 // data/skill-text.ts (Track FLIGHT's). Every strip and boot line is ≤ MAX_LINE_CHARS (70) with worst-case numbers
 // (tests/unit/support/words). The FOUNDATION seeded each section with the spec's own wording; the owners reword freely.
 
+import { MAX_LINE_CHARS } from '@data/tuning';
+
 // =======================================================================================================================
 // TRAINING_TEXT · Track UI: the TRAINING tab, the desk's first-pick step, the LANDING REPORT's cycles line, RUN END and
 // the RUN TALLY.
@@ -70,8 +72,11 @@ const captures = (demos: number): string => `${demos} capture${demos === 1 ? '' 
 
 export const BOOT_SKILL_TEXT = {
   // `> SKILL TRAINED: AUTOBURN.skl v1 · from your 1 capture · ACCURACY 92%` (plan §3 step 2).
-  trained: (file: string, version: number, demos: number, accuracy: number): string =>
-    `> SKILL TRAINED: ${file} v${version} · from your ${captures(demos)} · ACCURACY ${accuracy}%`,
+  // From 10 captures on, `your` goes (the line would pass MAX_LINE_CHARS: `from 12 captures`).
+  trained: (file: string, version: number, demos: number, accuracy: number): string => {
+    const line = `> SKILL TRAINED: ${file} v${version} · from your ${captures(demos)} · ACCURACY ${accuracy}%`;
+    return line.length <= MAX_LINE_CHARS ? line : `> SKILL TRAINED: ${file} v${version} · from ${captures(demos)} · ACCURACY ${accuracy}%`;
+  },
   // No demos yet (03 §3.3's loud UNTRAINED state).
   untrained: (file: string, version: number, accuracy: number): string => `> SKILL TRAINED: ${file} v${version} · UNTRAINED ${accuracy}%`,
   // A skill with no demos (SURVEY, SENTRY).

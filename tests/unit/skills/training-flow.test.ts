@@ -31,6 +31,8 @@ import { on } from '@systems/events';
 import { advance } from '@systems/clock';
 import { resumeRun } from '@systems/run-save';
 import { SKILL_TREE } from '@data/skills';
+import { BOOT_SKILL_TEXT, PACKET_SKILL_TEXT } from '@data/training-text';
+import { MAX_LINE_CHARS } from '@data/tuning';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { stubStorage, pageOpen, storedSave, receiveToReport, toDesk } from '../save/save-fixture';
 import { giveSkillFile } from '../support/skills';
@@ -214,6 +216,19 @@ offTrained();
   check('…at the desk it follows silently', steps.length === 0);
   unmount();
   off();
+}
+
+// --- The words fit the strip (MAX_LINE_CHARS, worst-case numbers) --------------------------------------------------------
+{
+  const files = Object.values(SKILL_TREE).map((def) => def.fileName);
+  const lines = files.flatMap((file) => [
+    BOOT_SKILL_TEXT.trained(file, 3, 1, 99), BOOT_SKILL_TEXT.trained(file, 3, 999, 99), BOOT_SKILL_TEXT.untrained(file, 3, 40),
+    BOOT_SKILL_TEXT.retrained(file, 3, 999, 99), BOOT_SKILL_TEXT.plain(file, 3),
+    PACKET_SKILL_TEXT.chip(file, 3, 12, PACKET_SKILL_TEXT.without.sentry, 27), PACKET_SKILL_TEXT.packAs(2, 11, 27),
+  ]);
+  const over = lines.filter((line) => line.length > MAX_LINE_CHARS);
+  check('every boot and PACKET skill line fits MAX_LINE_CHARS with worst-case numbers (`from your` goes from 10 captures)',
+    over.length === 0 && BOOT_SKILL_TEXT.trained('AUTOBURN.skl', 2, 12, 88) === '> SKILL TRAINED: AUTOBURN.skl v2 · from 12 captures · ACCURACY 88%', over.join(' | '));
 }
 
 // --- Reloads (each a page open on a copy of the storage as it was) -------------------------------------------------------

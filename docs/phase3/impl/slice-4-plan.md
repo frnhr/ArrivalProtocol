@@ -1023,6 +1023,8 @@ balance-only skipped). Each item changes §2–§5 above, with its reason.
     - Saying a line sets `announced` to the demo count, or to 0 for a skill without demos.
     - A granted skill is installed in place of the old file.
     - The ONLINE stamp hangs on `'skill-trained'`.
+    - From 10 captures on, `TRAINED`'s `from your n captures` becomes `from n captures`. The longer form would pass 70
+      characters (`training-flow` checks every boot and PACKET skill line with worst-case numbers).
 19. **`mountSkillWatch` is mounted by `mountRun`**, so `main.ts` needs no change and the suites get it too. It emits only
     in `flight` and `landing`: elsewhere, including a grant installed at the boot, it follows silently.
 20. **`RunEndModel.skills: RunEndSkills | null`** gives `{ trained, total, unspent, unspentLine, tallyLine }`, on the arm
