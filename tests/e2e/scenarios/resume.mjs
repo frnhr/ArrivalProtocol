@@ -1,9 +1,10 @@
 // The e2e run save (phase 3 slice 3c, docs/phase3/impl/slice-3c-plan.md §2.1–§2.2, §3 step 6, §6.3): one save slot written at
 // RUN START, SHIP DONE, BEAM and ENDING CHOSEN, and the title's RESUME block over it. On run 1's arm (seed 4, the worked
 // route), played like a kid between the reloads:
-// A. ARES-VII and HALCYON to the second DESK; a reload there: the RESUME block (`RESUME · UNIT-047 · SHIP 2 DONE · AT THE
-//    DESK · 2352`, RESUME ▸ [ENTER], NEW RUN, no RECEIVE TRANSMISSION), and ENTER resumes the same desk (the route, the year,
-//    the nodes, the INBOX's read marks, the requests, amber), with the run not counted again.
+// A. ARES-VII and HALCYON to the second DESK (slice 4: desk 1 opens on TRAINING, and its required first pick is made by [1],
+//    ENTER); a reload there: the RESUME block (`RESUME · UNIT-047 · SHIP 2 DONE · AT THE DESK · 2352`, RESUME ▸ [ENTER],
+//    NEW RUN, no RECEIVE TRANSMISSION), and ENTER resumes the same desk (the route, the year, the nodes, the INBOX's read
+//    marks, the requests, amber, the bought AUTOBURN v1 and the cycles), with the run not counted again.
 // B. SET COURSE to KESTREL, TRANSMIT: its boot typed in full, then a reload mid-flight: `RESUME · UNIT-047 · SHIP 3 · bound
 //    for KESTREL · …`, and a click on RESUME ▸ replays KESTREL from its boot with the same lines, hits and seeds.
 // C. KESTREL landed, a reload at its LANDING REPORT (no save point before the final ship: the line still names KESTREL's
@@ -107,6 +108,10 @@ const deskState = async ({ kit, screens }) => {
       shipIndex: s.run.shipIndex, year: s.run.map.galaxyYear, ships: s.run.ships.map((ship) => `${ship.shipName}:${ship.outcome}`),
       read: [...window.__ap.inbox().read].sort(), inbox: window.__ap.inbox().messages.map((m) => m.id), requests: JSON.stringify(s.run.repo.requests),
       memory: s.memory.map((seg) => `${seg.name}:${seg.size}`).join(','), mode: s.ui.mode, unit: s.run.unitNumber,
+      // Slice 4: the tree as the save keeps it (the bank's earnings, what was bought; nothing pending at a save point).
+      skills: JSON.stringify({ earned: s.run.skills.earned, grants: s.run.skills.grants, bought: s.run.skills.bought, pending: s.run.skills.pending }),
+      bought: s.run.skills.bought.map((buy) => `${buy.skill}:${buy.kind}:v${buy.to.version}`).join(),
+      tab: document.getElementById('deskScreen').dataset.tab ?? null,
     };
   });
   return { where: desk.where, title: desk.title, route: desk.route, nodes: desk.nodes.map((node) => `${node.slot}:${node.state}`).join(' '), ...more };
@@ -201,6 +206,19 @@ check('ARES-VII flown at once to its DESK', await flyToDesk(tab));
 const shipDone1 = await stored(kit);
 check('…SHIP DONE is written at the DESK (`SHIP 1 DONE · AT THE DESK`)', shipDone1.point === 'ship-done' && shipDone1.line?.depth === 1 && shipDone1.line?.ship === 'ARES-VII',
   JSON.stringify(shipDone1.line));
+// Slice 4: the run's first desk opens on TRAINING, and SET COURSE waits for the required first pick: [1] arms AUTOBURN v1,
+// ENTER fills the 1.5 s bar and trains it (pending until TRANSMIT ▸), ESC goes back to the card.
+const firstTab = (await screens.deskTabs()).tab;
+await page.keyboard.press('Digit1');
+await page.waitForTimeout(300);
+const armed = (await screens.desk()).go;
+await page.keyboard.press('Enter');
+const firstPick = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000);
+const pendingPick = await st(() => window.__ap.store.getState().run.skills.pending.map((buy) => `${buy.skill}:${buy.kind}:v${buy.to.version}`).join());
+check('desk 1 opens on TRAINING: [1] arms AUTOBURN v1 (`TRAIN ▸ 3 CYCLES [ENTER]`), ENTER trains it (pending)', firstTab === 'training'
+  && armed === 'TRAIN ▸ 3 CYCLES [ENTER]' && firstPick && pendingPick === 'autoburn:train:v1', JSON.stringify({ firstTab, armed, firstPick, pendingPick }));
+await page.keyboard.press('Escape');
+await page.waitForTimeout(300);
 // The welcome read in the INBOX (a read mark the save must keep), and Mv requested for HALCYON (the worked route's).
 await page.keyboard.press('KeyI');
 await page.waitForTimeout(400);
@@ -254,6 +272,9 @@ check('…the chart\'s nodes in the same states once the greying beat replays', 
 check('…the INBOX\'s messages and read marks kept, the requests as they were', same('read') && same('inbox') && same('requests'),
   JSON.stringify({ before: [desk2.read, desk2.requests], after: [desk2b.read, desk2b.requests] }));
 check('…the unit\'s memory as it was, the amber screen', same('memory') && desk2b.mode === 'tools', JSON.stringify({ mode: desk2b.mode, memory: same('memory') }));
+check('slice 4: …the training kept: AUTOBURN v1 bought at desk 1 and in memory, the same cycles and grants, nothing pending; the desk on the card (no first pick again)',
+  same('skills') && desk2b.bought === 'autoburn:train:v1' && /AUTOBURN\.skl:\d+/.test(desk2b.memory) && desk2b.tab === 'card' && desk2.tab === 'card',
+  JSON.stringify({ before: [desk2.bought, desk2.tab, desk2.skills], after: [desk2b.bought, desk2b.tab, desk2b.skills] }));
 await shot('3-resumed-desk');
 
 // ======================================================================================================================

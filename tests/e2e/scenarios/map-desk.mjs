@@ -17,8 +17,8 @@
 //   its card as a bottom sheet, SET COURSE pinned at the bottom, ✕ closes the sheet, a tap on SET COURSE opens the PACKET.
 // Slice 3b (the repository, deliveries, the INBOX; slice-3b-plan §6.3):
 // • The tabs CARD / REPOSITORY [R] / INBOX [I] on the first DESK, their badges (`:)` while CONTROL recommends a file, the
-//   unread count); [R] shows the catalogue (no ship picked: no ETA; Mv tagged `:) RECOMMENDED FOR YOU`; three RESTRICTED
-//   rows), [I] the welcome, opened by a click (its stamps; the badge goes).
+//   unread count); [R] shows the catalogue (no ship picked: no ETA; Mv tagged `:) RECOMMENDED FOR YOU`; six RESTRICTED
+//   rows since slice 4: the four .skl, THREAD+, FIREWALL.sys), [I] the welcome, opened by a click (its stamps; the badge goes).
 // • Request toggling on ALBATROSS (1 YR LATE from ARES-VII): a click REQUESTs Mv (the badge names it, the card's DELIVERIES
 //   row `Mv ✗ 1 YR LATE` and its TIMELINE mark in red), a second click clears it, the number key [1] requests it again;
 //   on HALCYON it is IN TIME (`Mv ✓ WAITING HERE`, a green mark); the PACKET's chip; `> DELIVERY: mv (arrived 2337)`.
@@ -175,8 +175,12 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
     JSON.stringify(tabs.rows));
   check('…ARRIVAL CONTROL tags Mv, and only Mv, `:) RECOMMENDED FOR YOU`', tabs.rows.filter((row) => row.tag !== null).map((row) => `${row.file}:${row.tag}`).join() === 'mv::) RECOMMENDED FOR YOU',
     JSON.stringify(tabs.rows.map((row) => row.tag)));
-  check('…RESTRICTED: AUTOBURN.skl (Train it yourself :)), THREAD+ and FIREWALL.sys, locked; IN TRANSIT: nothing; ONE REQUEST PER TRANSMIT',
-    tabs.locked.length === 3 && tabs.locked.every((row) => /^LOCKED /.test(row)) && tabs.locked.some((row) => /AUTOBURN.*Train it yourself :\)/.test(row))
+  // Slice 4 (03 §3.11; TREE deviation 21): every skill of the tree is restricted, a `.skl` row each in the tree's order
+  // (built yet or not), before the two system rows.
+  const RESTRICTED = ['LOCKED AUTOBURN.skl Train it yourself :)', 'LOCKED AUTODROP.skl Train it yourself :)', 'LOCKED SURVEY.skl Train it yourself :)',
+    'LOCKED SENTRY.skl Train it yourself :)', 'LOCKED THREAD+ Not available to caretakers :)', 'LOCKED FIREWALL.sys Not available to caretakers :)'];
+  check('…RESTRICTED: the four skills AUTOBURN/AUTODROP/SURVEY/SENTRY.skl (Train it yourself :)), THREAD+ and FIREWALL.sys (Not available to caretakers :)), in that order, locked; IN TRANSIT: nothing; ONE REQUEST PER TRANSMIT',
+    tabs.locked.join(' | ') === RESTRICTED.join(' | ')
     && tabs.transit.length === 0 && tabs.transitNone === 'NOTHING ON THE WAY' && /^ONE REQUEST PER TRANSMIT/.test(tabs.foot ?? ''), JSON.stringify({ locked: tabs.locked, transit: tabs.transit, none: tabs.transitNone, foot: tabs.foot }));
   await shot('02b-repository');
   await page.keyboard.press('KeyI');

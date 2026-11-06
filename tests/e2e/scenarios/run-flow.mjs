@@ -183,11 +183,22 @@ const tx = await st(() => ({
   arrival: document.getElementById('txArrival').innerText,
   drop: document.getElementById('txDropLine').innerText,
   go: document.getElementById('txGo').innerText,
+  // Slice 4: the skill chips, by what the PACKET draws (TransmitScreen skillChipNode).
+  skills: [...document.querySelectorAll('#txChips .tx-chip.skill-chip')].map((chip) => ({
+    name: chip.querySelector('.tx-chip-name')?.innerText ?? '', badge: chip.querySelector('.tx-chip-badge')?.innerText ?? '',
+    note: chip.querySelector('.tx-chip-note')?.innerText ?? '', locked: chip.classList.contains('locked'), fresh: chip.classList.contains('skill-fresh'),
+    packAs: chip.parentElement?.classList.contains('tx-chip-group') ? chip.parentElement.querySelectorAll('.tx-packas').length : 0,
+  })),
 }));
 // Slice 2: 046.log rides along as a fifth locked chip (it isn't yours to leave behind), and nothing uninvited rides yet.
-check('TRANSMIT shows NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY, the packet line, the files as chips (5 locked, 046.log among them)', tx.visible
-  && tx.next === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY' && /^LINK 123 · FILES \d+ · CHARGE \d+ → FITS$/.test(tx.packet) && tx.chips >= 9 && tx.locked === 5,
+// Slice 4 (plan §2.6, TREE deviation 13): the first pick's AUTOBURN v1 is a sixth, the fresh file trained at this desk
+// (DropLock 'trained': UNDO is the way back, not leaving it behind).
+check('TRANSMIT shows NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY, the packet line, the files as chips (6 locked: 046.log and the trained AUTOBURN.skl among them)', tx.visible
+  && tx.next === 'NEXT: HALCYON · 1,000 COLONISTS · 21 LY · 31 YRS EARLY' && /^LINK 123 · FILES \d+ · CHARGE \d+ → FITS$/.test(tx.packet) && tx.chips >= 10 && tx.locked === 6,
   JSON.stringify(tx));
+check('…slice 4: the one skill chip is the first pick\'s `AUTOBURN.skl v1`, locked `TRAINED HERE · ◀ CHART TO UNDO`, fresh, no PACK AS', tx.skills.length === 1
+  && tx.skills[0].name === 'AUTOBURN.skl' && tx.skills[0].badge === 'v1' && tx.skills[0].locked && tx.skills[0].fresh
+  && tx.skills[0].note === 'TRAINED HERE · ◀ CHART TO UNDO' && tx.skills[0].packAs === 0, JSON.stringify(tx.skills));
 const logChipTx = await st(() => {
   const chip = document.querySelector('#txChips .tx-chip.log-chip');
   return chip ? { name: chip.querySelector('.tx-chip-name')?.innerText ?? '', locked: chip.classList.contains('locked'), glow: chip.classList.contains('glow'), text: chip.innerText.replace(/\s+/g, ' ') } : null;
