@@ -106,7 +106,7 @@ const base: FlightContext = {
     thrust: false, open: null, nextWithRoom: 'LZ-B', roomInBand: true, canLaunch: true, bayReady: true, bayReadyInTac: 0, stuckPod: null,
     anyCanEver: true, next: { lz: 'LZ-B', inTac: 128, launchInTac: 130, inBand: true, full: false }, noBandWindow: false, skipAvailable: true,
     noDrop: false, firing: false, flight: null, flightBurnInTac: null, uncertain: null, tooWide: null, decay: null, bayOffline: false, lavaInReach: null,
-    impact: false, tankShort: false, ghostSwap: null, autodrop: null, v3Lower: null, ...over,
+    impact: false, tankShort: false, ghostSwap: null, autodrop: null, v3Lower: null, v3Decay: null, ...over,
   });
   const plain = landingObjective(lctx());
   const offered = landingObjective(lctx({ autoTail: { text: AUTOBURN_TEXT.offerMode('round'), key: 'B' } }));

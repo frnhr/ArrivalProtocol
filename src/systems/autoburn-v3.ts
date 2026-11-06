@@ -39,10 +39,19 @@ export function v3TopUp(state: Readonly<GameState>, pred: Readonly<Prediction>, 
   return null;
 }
 
-// L9's slot while v3 is engaged in its landing orbit (landing-guidance.ts reads it every tick; R16): `AUTOBURN v3 GOES LOWER
-// — LZ-B's dot will fit`, or null (L9 says its own line, or nothing). STUB: null.
-export function v3LowerLine(state: Readonly<GameState>): string | null {
-  void state;
+// L9's slot while v3 is engaged in its landing orbit (guidance.ts landingFlightOf carries it to the landing table every
+// tick, on the prediction the table is built on; R16): `AUTOBURN v3 GOES LOWER — LZ-B's dot will fit`, or null (L9 says its
+// own line, or nothing). STUB: null.
+export function v3LowerLine(state: Readonly<GameState>, pred: Readonly<Prediction>): string | null {
+  void state; void pred;
+  return null;
+}
+
+// L10's slot (foundation review M4): while v3 holds its landing orbit below the DRAG line, its words outrank L10's `ORBIT
+// DECAYING` (the decay is what it is handling): `AUTOBURN v3 TOPS UP AT ▼ IN 3:10 — it holds the orbit`. null: L10 says its
+// own line (or none). Carried like v3LowerLine. STUB: null.
+export function v3DecayLine(state: Readonly<GameState>, pred: Readonly<Prediction>): string | null {
+  void state; void pred;
   return null;
 }
 

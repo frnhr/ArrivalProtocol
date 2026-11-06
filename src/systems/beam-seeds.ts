@@ -110,6 +110,17 @@ export function rollDeliverySeeds(chips: readonly DeliveryChip[], packet: Readon
 
 // --- Slice 4d: disguised seeds (04 §3.6; slice-4cde-plan §4.1) ---------------------------------------------------------
 
+// DISGUISE_CHANCE_BY_DEPTH's rows rise by depth, each a chance (checked at load, foundation review m10: disguiseChanceAt
+// reads the last row that applies, so a re-ordered table would give wrong odds silently).
+export function validateDisguiseOdds(rows: readonly Readonly<{ fromDepth: number; chance: number }>[] = DISGUISE_CHANCE_BY_DEPTH): void {
+  rows.forEach((row, i) => {
+    if (!(Number.isInteger(row.fromDepth) && row.fromDepth >= 1)) throw new Error(`DISGUISE_CHANCE_BY_DEPTH[${i}]: fromDepth ${row.fromDepth}`);
+    if (i > 0 && !(row.fromDepth > rows[i - 1]!.fromDepth)) throw new Error(`DISGUISE_CHANCE_BY_DEPTH[${i}]: fromDepth must rise`);
+    if (!(row.chance >= 0 && row.chance <= 1)) throw new Error(`DISGUISE_CHANCE_BY_DEPTH[${i}]: chance ${row.chance} is not in [0, 1]`);
+  });
+}
+validateDisguiseOdds();
+
 // The chance a beam seed lands disguised at `depth` (DISGUISE_CHANCE_BY_DEPTH: the last row whose fromDepth is at most the
 // depth; 0 before the first). `__ap.disguiseOdds(depth)` reads it. BUILT.
 export function disguiseChanceAt(depth: number): number {

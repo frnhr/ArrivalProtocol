@@ -46,6 +46,7 @@ export {
   buildLandingContext, landingObjective, type LandingContext, type LandingFlight, type LandingObjective, type LandingRow,
 } from '@systems/landing-guidance';
 import type { LandingFlight } from '@systems/landing-guidance';
+import { v3LowerLine, v3DecayLine } from '@systems/autoburn-v3';
 
 export interface FlightObjective {
   id: string;           // stable per row and variant; the strip re-renders when id or text changes
@@ -967,6 +968,9 @@ export function landingFlightOf(state: Readonly<GameState>, pred: Prediction): L
     row: landingFlightRow(ctx), burnInTac: offerInTac(state, pred), impact: pred.outcome === 'impact',
     tankShort: state.burn.fuelPct <= 0 || pred.fuelShort,
     autoTail: landingAutoTail(ctx),
+    // Slice 4e (foundation review M4, m8): v3's slots, on the table's own prediction.
+    v3Lower: v3LowerLine(state, pred),
+    v3Decay: v3DecayLine(state, pred),
   };
 }
 

@@ -1,6 +1,8 @@
-// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); Track SENTRY writes only its boot
-// lines (the 'sentry-seed' and 'firewall' text lives in sentry.ts) and the strip's disguise line. The 4c–4e lessons'
-// conditions are in the track modules (SKILL_4CDE_RULES). Others ask by message.
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2). Track SENTRY writes only its boot lines: the
+// 'sentry-seed' and 'firewall' plan lines and cases (their text lives in sentry.ts), and the ECC 'seeds' plan line
+// (`if (arrival.seeds.length > 0)`) and its bootLine case, which leave a disguised seed out; and the strip's disguise line.
+// The 4c–4e lessons' conditions are in the track modules (SKILL_4CDE_RULES); Track ORBIT may edit AUTOBURN_RULES'
+// entries. Others ask by message.
 import type {
   GameState, Speaker, TransitHit, ArrivalReport, RunEndCause, ShipOutcome, VerbKind,
 } from '@state/schema';
@@ -1086,8 +1088,9 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
 }
 // The most a boot ever says (a later ship with the beam's seeds, arrival damage, an overflow, a skill trained, a log key
 // and HOLLOW's line; on the arm also the sleep, receiver and ECC-while-asleep lines, and since slice 3b up to
-// DELIVERY_BOOT_LINES_MAX delivery lines, the INBOX line and HOLLOW's reading line).
-export const BOOT_LINE_MAX = 18;
+// DELIVERY_BOOT_LINES_MAX delivery lines, the INBOX line and HOLLOW's reading line; since slice 4d up to three SENTRY seed
+// lines and its FIREWALL line: foundation review m4).
+export const BOOT_LINE_MAX = 22;
 
 // --- Beats: lines spoken on a moment (§6.3) ---------------------------------------------------
 
@@ -2003,7 +2006,8 @@ export const AUTOBURN_RULES: readonly GuideRule[] = [
     id: 'alarm-autoburn-lost',
     layer: 'ship',
     priority: 'alarm',
-    activeWhen: (ctx) => isFlying(ctx) && ctx.vars.autoburnDrop !== '',
+    // In LANDING too (03 §3.5: falling to OFF is phase 2's drop, wherever it flies; foundation review m3).
+    activeWhen: (ctx) => (isFlying(ctx) || ctx.phase === 'landing') && ctx.vars.autoburnDrop !== '',
     text: (ctx) => ctx.vars.autoburnDrop,
     keys: [],
   },
@@ -2013,7 +2017,7 @@ export const AUTOBURN_RULES: readonly GuideRule[] = [
     priority: 'tutorial',
     once: true,
     maxShownSec: AUTOBURN_READY_SHOW_SEC,
-    activeWhen: (ctx) => isFlying(ctx) && !autoburnV2(ctx) && autoburnAvailable(ctx.state, ctx.pred),
+    activeWhen: (ctx) => isFlying(ctx) && autoburnWorksAs(ctx) === 1 && autoburnAvailable(ctx.state, ctx.pred),
     // WP12 review (WP9's TODO): a kid who SKIPs to the capture lands at GET READY, a NOW line, and the lesson, a
     // tutorial, never showed: only the tail's `· or [B] AUTO` said the skill was there. Not yet shown out, it takes
     // GET READY's place (the header chip keeps the countdown); at HOLD [SPACE] NOW the flight's line is back.
@@ -2028,7 +2032,7 @@ export const AUTOBURN_RULES: readonly GuideRule[] = [
     priority: 'tutorial',
     once: true,
     maxShownSec: AUTOBURN_READY_SHOW_SEC,
-    activeWhen: (ctx) => isFlying(ctx) && autoburnV2(ctx) && autoburnAvailable(ctx.state, ctx.pred),
+    activeWhen: (ctx) => isFlying(ctx) && autoburnWorksAs(ctx) === 2 && autoburnAvailable(ctx.state, ctx.pred),
     preempts: (ctx) => ctx.flight?.id === 'F10-ready',
     text: () => AUTOBURN_TEXT.readyV2,
     keys: ['B'],
@@ -2036,9 +2040,10 @@ export const AUTOBURN_RULES: readonly GuideRule[] = [
   },
 ];
 
-// AUTOBURN works as v2 or better now (graded damage: a v2 at 64% works as v1, and says v1's lesson).
-function autoburnV2(ctx: DirectorCtx): boolean {
-  return skillLive(ctx.state.memory, 'autoburn').version >= 2;
+// The version AUTOBURN works as now (graded damage: a v2 at 64% works as v1, and says v1's lesson). Each version's lesson is
+// its own (foundation review m3): v3's is SKILL_4CDE_RULES' tut-autoburn-v3, so v2's no longer fires on a v3.
+function autoburnWorksAs(ctx: DirectorCtx): number {
+  return skillLive(ctx.state.memory, 'autoburn').version;
 }
 
 // Slices 4c–4e (slice-4cde-plan §3.7, §5.4): the new skills' once-only lessons. The FOUNDATION wrote the ids and the words'

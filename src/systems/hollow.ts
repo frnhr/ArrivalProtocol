@@ -48,6 +48,7 @@ import {
   TACTICAL_LEAD_BURN_TAC, MERGE_COST_CHARGE,
 } from '@data/tuning';
 import { visitRng } from '@systems/map-streams';
+import { mountSentry } from '@systems/sentry';
 
 // HOLLOW (§1, §6.6, §9 WP6): the caretaker of the previous wave, starving in the same memory as you.
 // One rule a kid can repeat: "It eats the file next to it. An eaten file turns into HOLLOW too.
@@ -1566,11 +1567,14 @@ export function mountHollow(store: Store<GameState>): () => void {
   const offReset = onWorldReset('hollow', resetHollow, () => ({
     curedTargetPending, rolled: hollowRng !== null, story: story !== null,
   }));
+  // Slice 4d (foundation review m2): SENTRY's subscriptions mount with HOLLOW, so every harness that mounts HOLLOW has them.
+  const offSentry = mountSentry(store);
   return () => {
     offTick();
     offOver();
     offCure();
     offReset();
+    offSentry();
     resetHollow();
     mounted = false;
   };

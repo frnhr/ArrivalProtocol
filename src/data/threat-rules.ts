@@ -1,3 +1,4 @@
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the beam-seed lessons' readers (a disguised seed is not a seed to them). Others ask by message.
 import type { GuideRule, DirectorCtx } from '@systems/director';
 import { beamSeedsInMemory, beamEatenInMemory } from '@state/threat-selectors';
 import { hasUsableTool } from '@state/selectors';
@@ -6,7 +7,7 @@ import { THREAT_TEXT } from '@data/threat-text';
 import { SEED_LESSON_SHOW_SEC, BEAM_SEED_NO_RM_AFTER_SEC } from '@data/tuning';
 
 // The strip's rules for the threat ladder (docs/phase3/04-threats.md §3.3, §3.5; slice-2-plan §2.1, §5.1): the beam
-// seeds' `RM THE SEED` lesson, its no-rm line, and the line for a file a seed ate (DELETE it too). Track THREAT owns this file; data/script.ts spreads THREAT_RULES into
+// seeds' `RM THE SEED` lesson, its no-rm line, and the line for a file a seed ate (DELETE it too). Track SENTRY owns this file in 4c–4e (above); data/script.ts spreads THREAT_RULES into
 // GUIDE_RULES right before SEED_RULES (a beam seed's line sits where phase 2's seed lines do: after HOLLOW's eating
 // lines, before the WALL and COPY lessons), so THREAT never edits script.ts.
 // • The RM lesson for beam seeds is two more wordings of phase 2's 'seed-first' lesson (script.ts SEED_RULES: the same

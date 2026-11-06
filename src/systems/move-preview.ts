@@ -1,3 +1,4 @@
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): its HOLLOW readers (a decoy alone turns no WALL / GAP label on). Others ask by message.
 import type { GameState, PendingPlacement } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import { resolvePlacement } from '@state/actions';

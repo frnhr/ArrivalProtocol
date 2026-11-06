@@ -1,3 +1,4 @@
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): its seed readers (MV's words never name a decoy). Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState, VerbTelegraph } from '@state/schema';
 import type { HollowSegment, Segment } from '@/types/segment';

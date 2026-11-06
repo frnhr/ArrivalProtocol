@@ -1,5 +1,6 @@
-// Slices 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2), except the `v3Lower` slot, which
-// stays as the FOUNDATION wired it (ORBIT fills it through autoburn-v3.ts v3LowerLine).
+// Slices 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2), except the two v3 slots (`v3Lower` at
+// L9, `v3Decay` at L10), which stay as the FOUNDATION wired them: ORBIT fills them through LandingFlight (guidance.ts
+// landingFlightOf, from autoburn-v3.ts v3LowerLine and v3DecayLine).
 import type { GameState, GuideLayer, Urgency } from '@state/schema';
 import type { AutodropLine, DropSolution, LzWindow, RepairHint, TooWide } from '@/types/landing';
 import type { Capabilities, CapabilityRole, PlotFaultCause } from '@systems/capabilities';
@@ -18,7 +19,6 @@ import { fileHintTarget, podHintTarget, toolStepTarget, ROOT_HINT_TARGET } from 
 import { LANDING_DECAY_LINES, LANDING_DROP_LINES, LANDING_GHOST_LINES, LANDING_LINES, LANDING_NODROP_LINES, podCode } from '@data/landing-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
 import { autodropLineOf } from '@systems/autodrop';
-import { v3LowerLine } from '@systems/autoburn-v3';
 import { IS_DEV } from '@/env';
 import {
   BAY_RELOAD_TAC, DROP_UNCERTAIN_LEAD_TAC, MAX_LINE_CHARS, MISLANDED_FACTOR, TACTICAL_LEAD_BURN_TAC,
@@ -156,6 +156,9 @@ export interface LandingContext {
   // Slice 4e (plan R16): while AUTOBURN v3 holds the landing orbit, L9's line is v3's (autoburn-v3.ts v3LowerLine:
   // `AUTOBURN v3 GOES LOWER — LZ-B's dot will fit`), and GO LOWER is not offered (landing-rules goLowerChoice). null: L9's own.
   v3Lower: string | null;
+  // Slice 4e (foundation review M4): while v3 holds below the DRAG line, L10's line is v3's (autoburn-v3.ts v3DecayLine:
+  // `AUTOBURN v3 TOPS UP AT ▼ IN 3:10 — it holds the orbit`). null: L10's own.
+  v3Decay: string | null;
 }
 
 // The flight's part of the landing table, handed in by the caller (guidance landingFlightOf builds it from the flight
@@ -170,6 +173,10 @@ export interface LandingFlight {
   // Slice 4 (Track FLIGHT, the ROUND tail): AUTOBURN's tail for the wait rows, ` · or [B] ROUND` while [B] would round the
   // orbit, ` · AUTO ARMED` while it waits; `autoKey` the key the tail offers (B), or null. Absent: none.
   autoTail?: { text: string; key: string | null } | null;
+  // Slice 4e (Track ORBIT, foundation-wired): AUTOBURN v3's words for L9's and L10's slots (LandingContext.v3Lower and
+  // .v3Decay), made on the same prediction as the row. Absent: none.
+  v3Lower?: string | null;
+  v3Decay?: string | null;
 }
 
 // The next window as L13 names it: the awaited window (landing-rules landingMoment's target), else the next window of any
@@ -274,7 +281,8 @@ export function buildLandingContext(
     ghostSwap: caps.thrustCtrl.ghost !== null && landing.ghostBursts > 0 ? controllerSwapOf(state) : null,
     autoTail: flight.autoTail ?? null,
     autodrop: autodropLineOf(state, sol),
-    v3Lower: v3LowerLine(state),
+    v3Lower: flight.v3Lower ?? null,
+    v3Decay: flight.v3Decay ?? null,
   };
 }
 
@@ -448,6 +456,11 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
   if (ctx.aboard > 0 && ctx.ghostSwap !== null) return ghostLine(ctx.ghostSwap, ctx);
   // L10 above L8 and L9: a sinking orbit undoes any repair or GO LOWER. It carries the 'lift' burn's key only (a LIFT-*
   // row; never GO LOWER's [S], which would sink it faster); the row leads as L2 once that burn is near.
+  // Slice 4e (foundation review M4): v3 holding below the DRAG line says its own words in L10's place.
+  if (ctx.aboard > 0 && ctx.v3Decay !== null) {
+    const keys = flight !== null && flight.id.startsWith('LIFT') ? flight.keys : [];
+    return line('L10', ctx.v3Decay, keys, 'soon', 'ship', ctx, { id: 'landing-L10-v3' });
+  }
   if (ctx.aboard > 0 && ctx.decay !== null) {
     const keys = flight !== null && flight.id.startsWith('LIFT') ? flight.keys : [];
     return line('L10', LANDING_DECAY_LINES.L10(ctx.decay.orbits), keys, 'soon', 'ship', ctx);

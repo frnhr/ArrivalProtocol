@@ -11,6 +11,16 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { notBuilt } from '@systems/not-built';
 
+// --- The mount (foundation review m2) -------------------------------------------------------------------------------------
+
+// Mounted with HOLLOW (hollow.ts mountHollow): SENTRY's subscriptions (`> SENTRY: SOMETHING LANDED · RACK D` on
+// 'seed-landed', and the pre-empt thread's watcher: telegraph gone or not preempted → release 'sentry-preempt'). Returns the
+// unmount. BUILT as a no-op: SENTRY adds its subscriptions here.
+export function mountSentry(store: Store<GameState>): () => void {
+  void store;
+  return () => {};
+}
+
 // --- The boot (data/script.ts bootLinePlan, bootLine) --------------------------------------------------------------------
 
 // How many `> ECC: cache.tmp IS A SEED · RACK D` lines this boot says (one per disguised seed, planned after 'seeds', while

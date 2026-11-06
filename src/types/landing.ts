@@ -409,8 +409,9 @@ export interface OnTargetTally {
 
 // What [G] armed: v2's one pass, or v3's whole plan.
 export type AutodropArm = 'pass' | 'plan';
-// Why the last pass or plan ended (the strip's words).
-export type AutodropEnd = 'pass-done' | 'plan-done' | 'cancel' | 'downgraded' | 'off' | 'offline' | 'landing-over';
+// Why the last pass or plan ended (the strip's words). 'released': v1's [L] let go before the volley's first launch, so
+// nothing went (R4's one-time `HOLD [L]` lesson reads it; foundation review M2).
+export type AutodropEnd = 'pass-done' | 'plan-done' | 'cancel' | 'downgraded' | 'off' | 'offline' | 'landing-over' | 'released';
 
 export interface AutodropState {
   held: boolean;                    // v1: [L] (or a LAUNCH button) held on the SHIP screen

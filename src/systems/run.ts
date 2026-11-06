@@ -287,6 +287,9 @@ export function endShip(store: Store<GameState>, outcome: ShipOutcome, stars = 0
     draft.run.threat.lastTally = tally;
     // Slice 4d's lasting record (slice-4cde-plan R11): the first ship that met a seed, written once (skill-tree seedsMet).
     if (draft.run.threat.seedsMetAtDepth === null && metSeeds) draft.run.threat.seedsMetAtDepth = result.depth;
+    // SENTRY v2's pre-empt never outlives its ship (foundation review m1): SHIP DONE's save follows, and the codec reads a
+    // standing outline as not armed. sentry.ts's watcher releases the 'sentry-preempt' thread on the change.
+    if (draft.hollow.seedTelegraph !== null) draft.hollow.seedTelegraph.preempted = false;
   });
   if (tally.traceAfter !== tally.traceBefore) emit('trace-changed', { from: tally.traceBefore, to: tally.traceAfter });
   return result;
