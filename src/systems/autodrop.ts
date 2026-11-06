@@ -20,7 +20,7 @@ import type {
 } from '@/types/landing';
 import type { EffectiveVersion, SkillVersion } from '@/types/skill';
 import { registerLandingController } from '@systems/landing-controller';
-import { capabilitiesNow, skillLive, ROLE_LABEL, type SkillLive } from '@systems/capabilities';
+import { capabilitiesNow, roleHealth, skillLive, ROLE_LABEL, type SkillLive } from '@systems/capabilities';
 import { onPostTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { emit } from '@systems/events';
@@ -33,7 +33,7 @@ import { dropFactors, landingView as landingViewOf, podCounts } from '@systems/l
 import { autoburnHoldsLandingOrbit, driversInMemory } from '@state/selectors';
 import { demoSkill, AUTODROP_DEMO_TUNING } from '@systems/skill-tree';
 import {
-  forgetPlanMemo, nextVolley, passCounts, passRows, planLanding, podSureSpan, windowsAt,
+  forgetPlanMemo, nextVolley, passCounts, passRows, planLanding, podSureSpan, windowsAhead, windowsAt,
   type LandingPlan, type NextVolley, type PassRow, type WindowAt,
 } from '@systems/autodrop-plan';
 import { SKILL_TREE } from '@data/skills';
@@ -466,9 +466,32 @@ function claimTick(store: Store<GameState>, next: Readonly<NextLaunch> | null): 
 }
 
 // PASS DONE (no volley left in the pass) and PLAN DONE (no row left), said with what was sent.
-function doneTick(store: Store<GameState>, next: Readonly<NextLaunch> | null): void {
-  const ad = store.getState().landing.autodrop;
+// The pass is over (plan §3.3): every LZ with pods still to send has no window of the pass left whose sure part is still
+// to come (or it is full). Judged by the windows' times, not by whether a volley fits right now: a factor that is only
+// passing (Sensor Interp or a driver under the kid's REPAIR, a bay reloading) must not end the pass with nothing sent.
+function passOver(state: Readonly<GameState>, view: Readonly<LandingView>): boolean {
+  const want = passWant(state);
+  const inPass = inPassOf(state, view);
+  const now = state.clock.tSec;
+  const ahead = windowsAhead(view.solution, now, 2);
+  return state.landing.lzs.every((lz) => want(lz.label) < 1 || (view.remaining[lz.label] ?? 0) < 1
+    || !ahead.some((win) => win.lz === lz.label && inPass(win) && (win.sure?.hi ?? win.close) > now));
+}
+
+// The plan is flown: no row left, and nothing it reads is only passing (a REPAIR or MOVE on Sensor Interp, Nav Plotter or
+// a driver aboard can bring a window back).
+function planOver(state: Readonly<GameState>): boolean {
+  const busy = (role: 'sensor' | 'navplot'): boolean => roleHealth(state, role).offline !== null;
+  const aboard = new Set(state.landing.pods.filter((record) => record.fate.kind === 'aboard').map((record) => record.pod));
+  const driverBusy = driversInMemory(state).some((driver) => aboard.has(driver.pod) && (driver.state === 'repairing' || driver.state === 'transferring'));
+  return !busy('sensor') && !busy('navplot') && !driverBusy;
+}
+
+function doneTick(store: Store<GameState>, next: Readonly<NextLaunch> | null, view: Readonly<LandingView>): void {
+  const state = store.getState();
+  const ad = state.landing.autodrop;
   if (ad.armed === null || next !== null) return;
+  if (ad.armed === 'pass' ? !passOver(state, view) : !planOver(state)) return;
   const sent = { ...ad.sent };
   const end: AutodropEnd = ad.armed === 'pass' ? 'pass-done' : 'plan-done';
   disarm(store, end);
@@ -498,9 +521,10 @@ export function autodropTick(store: Store<GameState>): void {
   }
   const sol = getDropSolution();
   if (sol === null) return;
-  const next = armedNext(now, viewOf(now, sol));
+  const view = viewOf(now, sol);
+  const next = armedNext(now, view);
   claimTick(store, next);
-  doneTick(store, next);
+  doneTick(store, next, view);
 }
 
 // --- Readers (hot paths: the guidance table, the director, the Skills window) --------------------------------------------
@@ -557,7 +581,7 @@ export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSol
     }
   }
   // The tails offer [G] only when it would fly something (no NOTHING SET: a pass with nothing that fits, an empty plan).
-  if (live.version === 2 && Object.values(passCounts(state, view)).some((n) => n > 0)) tail = { text: text.tailPass, key: 'G' };
+  if (live.version === 2 && passRows(state, view, passCounts(state, view)).some((r) => r.want > 0 && r.fits > 0)) tail = { text: text.tailPass, key: 'G' };
   else if (live.version >= 3 && planLanding(state, view).rows.length > 0) tail = { text: text.tailPlan, key: 'G' };
   return row === null && tail === null ? null : { row, tail };
 }
