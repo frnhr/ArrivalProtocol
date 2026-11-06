@@ -556,7 +556,8 @@ export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSol
         : { id: 'landing-AD-hold', text: text.hold(next.win.lz), keys: ['L'], urgency: 'now', layer: 'ship' };
     }
   }
-  if (live.version === 2) tail = { text: text.tailPass, key: 'G' };
+  // The tails offer [G] only when it would fly something (no NOTHING SET: a pass with nothing that fits, an empty plan).
+  if (live.version === 2 && Object.values(passCounts(state, view)).some((n) => n > 0)) tail = { text: text.tailPass, key: 'G' };
   else if (live.version >= 3 && planLanding(state, view).rows.length > 0) tail = { text: text.tailPlan, key: 'G' };
   return row === null && tail === null ? null : { row, tail };
 }

@@ -228,7 +228,6 @@ console.log(`INFO  AIM on CORMORANT LZ-A: trained ${aim.trained!.n} pods, mean o
   check('v3\'s lesson is due before [G]', autodropTutorialDue(st(), 3) && !autodropTutorialDue(st(), 2));
   h.press('KeyG');
   check('[G] arms the plan: `AUTODROP ARMED · THE PLAN: 2 PASSES · [F] BETWEEN THEM`', ad().armed === 'plan' && said(AUTODROP_TEXT.radio.armedPlan(2)));
-  const skipsBefore = h.events.filter((event) => event.name === 'skip-start').length;
   let fPresses = 0;
   stepUntil(() => st().landing.ended !== null, 2500, false, () => {
     if (st().clock.skipWarp === null && /\[F\]/.test(shown()) && skipBlockReason(st(), getPrediction()) === null) { h.press('KeyF'); fPresses++; }
@@ -237,7 +236,7 @@ console.log(`INFO  AIM on CORMORANT LZ-A: trained ${aim.trained!.n} pods, mean o
   const down = st().landing.pods.filter((record) => record.fate.kind === 'down' && record.fate.touchdown.place === 'lz');
   check('one [G] lands CORMORANT\'s 9 pods by the plan, every one AUTODROP\'s, into LZs with room', sent.length === 9 && down.length === 9
     && sent.every((pod) => pod.sure), `${sent.length} sent, ${down.length} in an LZ`);
-  check('…with an [F] per gap between its windows (no SKIP chaining: R7)', fPresses >= 2, `${fPresses} [F] (${h.events.filter((event) => event.name === 'skip-start').length - skipsBefore} skips)`);
+  check('…with an [F] per gap between its windows (no SKIP chaining: R7)', fPresses >= 2, `${fPresses} [F]`);
   check('…and AUTODROP at rest at the landing\'s end (the codec\'s rule)', ad().armed === null && !ad().claimed && ad().armedAtTSec === null && !ad().held);
 }
 
