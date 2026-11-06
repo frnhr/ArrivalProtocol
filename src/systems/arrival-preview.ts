@@ -5,6 +5,8 @@ import type { Hop, RoomFit } from '@/types/map';
 import type { ShipThreat } from '@/types/threat';
 import type { UpgradeId } from '@data/upgrades';
 import type { DeliveryChip } from '@/types/repo';
+import type { SkillLevel } from '@/types/skill';
+import { skillPacketPlan } from '@systems/skill-files';
 import { packedFiles, BEAM_SEED_LAYOUT_BLOCKS } from '@systems/carry';
 import { planPacket, pickCharge } from '@systems/draft';
 import { roomFit, linkBlocksFor } from '@systems/map-hop';
@@ -77,19 +79,27 @@ export function arrivalPreview(fit: Readonly<RoomFit>, credit: Readonly<ArrivalC
 // What a crossing to `hop` is planned with: the ladder's verdict for the destination (its seeds), the files left behind,
 // the card picked and the deliveries riding the hop (phase 3 slice 3b: TransitPlan.deliveries; the card: the hop's
 // deliveriesForHop, none dropped or picked yet).
+// Slice 4 (plan §2.6): the skills cross as this desk's training leaves them (the pending purchases' fresh files, read from
+// the state: skill-files.ts skillPacketPlan) and as the PACKET packs them (`packAs`, TransitPlan.packAs; left out: nothing
+// packed lower, as at the desk: the SHIP CARD and TRAINING's preview), so the card, the preview, the PACKET and the send
+// agree on the skills' blocks.
 export interface ArrivalPlan {
   hop: Readonly<Pick<Hop, 'linkBlocks' | 'room' | 'chargeFloor'>>;
   threat: Readonly<Pick<ShipThreat, 'act' | 'beamSeeds'>>;
   dropped: readonly string[];
   pick: UpgradeId | null;
   deliveries: readonly DeliveryChip[];
+  packAs?: Readonly<Record<string, SkillLevel>>;
 }
 
 // The unit's arrival over `plan`. `seedsExact`: the seeds the beam really rolled, the deliveries' own included
 // (transmitNext's check), in place of the allowance. The allowance is the verdict's beam seeds plus, at most, one seed per
 // delivery packed with a chance of one (phase 3 slice 3b, 04 §3.4: none on a first of kind, the patch, into a calm ship).
 export function unitArrival(state: Readonly<GameState>, plan: Readonly<ArrivalPlan>, seedsExact?: number): ArrivalPreview {
-  const packet = planPacket(state.memory, { linkBlocks: plan.hop.linkBlocks, dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries });
+  const packet = planPacket(state.memory, {
+    linkBlocks: plan.hop.linkBlocks, dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries,
+    skills: skillPacketPlan(state, plan.packAs ?? {}),
+  });
   const deliverySeedsMax = plan.deliveries.filter((chip) => !chip.sendOn && chip.seedChance > 0).length;
   const beam = seedAllowance(plan.threat, playsTutorial(state.run)) ?? { min: 0, max: 0 };
   const seeds = seedsExact !== undefined

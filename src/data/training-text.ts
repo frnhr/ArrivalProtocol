@@ -4,6 +4,8 @@
 // (tests/unit/support/words). The FOUNDATION seeded each section with the spec's own wording; the owners reword freely.
 import type { SkillId } from '@/types/skill';
 
+import { MAX_LINE_CHARS } from '@data/tuning';
+
 // =======================================================================================================================
 // TRAINING_TEXT · Track UI: the TRAINING tab, the desk's first-pick step, the LANDING REPORT's cycles line, RUN END and
 // the RUN TALLY.
@@ -171,7 +173,12 @@ export const PACKET_SKILL_TEXT = {
   chip: (file: string, version: number, blocks: number, without: string, restore: number): string =>
     `${file} v${version} (${blocks}) → ${without} · RESTORE ${restore}`,
   packAs: (version: number, blocks: number, restore: number): string => `PACK AS v${version} (${blocks}) · RESTORE ${restore}`,
-  cyclesCard: '+2 CYCLES',
+  // DELETE's inline confirm on a skill file (systems/tool-targets.ts deleteQuestion): it is lost until a desk's RESTORE.
+  deleteEffect: (skill: string, restore: number): string =>
+    restore > 0 ? `No ${skill} until a desk's RESTORE (${restore} CYCLES).` : `No ${skill}.`,
+  // The +n CYCLES salvage card (data/upgrades.ts): its title and its line.
+  cyclesCard: (cycles: number): string => `+${cycles} CYCLES`,
+  cyclesEffect: (cycles: number): string => `${cycles} more TRAINING CYCLES to spend at the next desk`,
 } as const;
 
 // =======================================================================================================================
@@ -182,8 +189,11 @@ const captures = (demos: number): string => `${demos} capture${demos === 1 ? '' 
 
 export const BOOT_SKILL_TEXT = {
   // `> SKILL TRAINED: AUTOBURN.skl v1 · from your 1 capture · ACCURACY 92%` (plan §3 step 2).
-  trained: (file: string, version: number, demos: number, accuracy: number): string =>
-    `> SKILL TRAINED: ${file} v${version} · from your ${captures(demos)} · ACCURACY ${accuracy}%`,
+  // From 10 captures on, `your` goes (the line would pass MAX_LINE_CHARS: `from 12 captures`).
+  trained: (file: string, version: number, demos: number, accuracy: number): string => {
+    const line = `> SKILL TRAINED: ${file} v${version} · from your ${captures(demos)} · ACCURACY ${accuracy}%`;
+    return line.length <= MAX_LINE_CHARS ? line : `> SKILL TRAINED: ${file} v${version} · from ${captures(demos)} · ACCURACY ${accuracy}%`;
+  },
   // No demos yet (03 §3.3's loud UNTRAINED state).
   untrained: (file: string, version: number, accuracy: number): string => `> SKILL TRAINED: ${file} v${version} · UNTRAINED ${accuracy}%`,
   // A skill with no demos (SURVEY, SENTRY).

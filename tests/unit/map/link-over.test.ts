@@ -1,5 +1,6 @@
 // Slice 3a review fixes (B1, M1, M2, m1): a unit whose files outgrow a short arm hop's link, and the one arrival preview.
-// • B1: a 90-block unit at VESPER on run 1's arm sets course to WAYFARER (58 LY, link 82, TIGHT): the card says LEAVE 8
+// • B1: a 90-block unit at VESPER on run 1's arm (84 blocks of files and the first desk's required AUTOBURN.skl v1, 6)
+//   sets course to WAYFARER (58 LY, link 82, TIGHT): the card says LEAVE 8
 //   BLOCKS BEHIND · TOO BIG FOR THE LINK before SET COURSE, SET COURSE reaches the PACKET (it threw in packUnit), the PACKET
 //   says `8 TOO MANY FOR THE LINK · LEAVE FILES BEHIND`, deals no file card, offers drops that buy no charge, holds
 //   TRANSMIT ▸ (transmitNext throws while over), and after the drops the unit crosses and boots on WAYFARER.
@@ -16,6 +17,7 @@ import { createRunMap, mapAtShip, shipDefAt } from '@systems/map-run';
 import { hopBetween, roomFit } from '@systems/map-hop';
 import { endShip, openDesk, transmitNext } from '@systems/run';
 import { setCourseFromDesk } from '../support/desk';
+import { pickFirstSkill } from '../support/skills';
 import { cardModel } from '@systems/desk';
 import { transmitModel, toggleDrop } from '@systems/transmit';
 import { pickCard } from '@systems/draft';
@@ -57,24 +59,25 @@ const filesOf = (state: Readonly<GameState>): number =>
 // --- B1: 90 blocks of files to an 82-block link -------------------------------------------------------------------------
 {
   const base = createInitialState({ seed: 3, map: createRunMap({ wave: 1 }, 3), lineage: FIRST_RUN_LINEAGE });
-  const telemetry = base.memory.find((seg) => seg.role === 'telemetry')!;
   const sensor = base.memory.find((seg) => seg.role === 'sensor')!;
-  // Every filesystem tool but SCAN (already aboard), spare Telemetry and Sensor copies, two FIREWALLs.
+  // Every filesystem tool but SCAN (already aboard), a spare Sensor copy, two FIREWALLs (slice 4: the first pick's
+  // AUTOBURN.skl v1 takes the 6 blocks a spare Telemetry copy took before the tree).
   const tools = (['repair', 'move', 'copy', 'delete', 'swap'] as const).flatMap((kind) => createToolFiles(kind));
   const spares: Segment[] = [
     ...tools,
-    { ...structuredClone(telemetry), id: 'telem-copy', name: 'Telemetry.cp' } as Segment,
     { ...structuredClone(sensor), id: 'sens-copy', name: 'Sensor Interp.cp' } as Segment,
     { id: 'fw-1', name: 'FIREWALL.sys', type: 'firewall', size: 2, desc: '' } as Segment,
     { id: 'fw-2', name: 'FIREWALL.sys', type: 'firewall', size: 2, desc: '' } as Segment,
   ];
   const store = unitAt([0, 2, 5, VESPER], spares);
-  check('the unit carries 90 blocks of files at VESPER', filesOf(store.getState()) === 90, String(filesOf(store.getState())));
+  check('the unit carries 84 blocks of files at VESPER', filesOf(store.getState()) === 84, String(filesOf(store.getState())));
   const hop = hopBetween(store.getState().run.map, VESPER, WAYFARER);
   check('…VESPER → WAYFARER is 58 LY, link 82, a TIGHT ship (room 88)', hop.distanceLy === 58 && hop.linkBlocks === 82 && hop.room === 88, JSON.stringify(hop));
 
   endShip(store, 'locked');
   openDesk(store, null);
+  // The run's first desk: the required first pick (AUTOBURN v1, 6 blocks) makes the unit 90.
+  pickFirstSkill(store);
   const card = cardModel(store.getState(), WAYFARER);
   check('the card says it before SET COURSE: LEAVE 8 BLOCKS BEHIND · TOO BIG FOR THE LINK (warn)',
     card.fit?.word === 'leave' && card.fit.overLink === 8

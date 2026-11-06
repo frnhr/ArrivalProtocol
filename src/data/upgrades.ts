@@ -9,7 +9,9 @@ import {
   DRAFT_THREAD_MILD_MIN, DRAFT_CHARGE_MILD_BELOW, DRAFT_FUEL_TRIM_MILD_BELOW_PCT, FIREWALL_BLOCKS, FUEL_TRIM_BLOCKS,
   FIREWALL_MAX_OWNED, FUEL_TRIM_MAX_OWNED, REPAIR_V2_MAX_OWNED, THREAD_PLUS_MAX_OWNED, CHARGE_CARD_BLOCKS, MAX_LINE_CHARS,
   FUEL_TRIM_DV_BONUS_FRAC, BAND_DEGRADED_MIN, DRIVER_BLOCKS, REPAIR_CHARGE_PER_POINT_PER_BLOCK, INTEGRITY_MAX,
+  CYCLES_CARD_CYCLES,
 } from '@data/tuning';
+import { PACKET_SKILL_TEXT } from '@data/training-text';
 
 // The cards between ships (§6.9 `PICK ONE TO CARRY`, §9 WP8 items 1–2): what the unit can carry on to the
 // next ship besides itself. The draft is pure: three distinct cards from this pool, drawn with the run's
@@ -25,12 +27,13 @@ import {
 // offered. Owned is counted from what the unit really has (systems/draft.ts ownedUpgrades): a FIREWALL that
 // was deleted, or a FUEL TRIM HOLLOW ate, can be drafted again.
 
-export type UpgradeId = 'firewall' | 'repair-v2' | 'thread-plus' | 'charge' | 'fuel-trim';
+export type UpgradeId = 'firewall' | 'repair-v2' | 'thread-plus' | 'charge' | 'fuel-trim' | 'cycles';
 
 // What picking a card gives: a new file in the packet (FIREWALL.sys, FUEL TRIM), a version bump on files
 // the unit carries (REPAIR v2 on every Repair copy), the Core's capacity (THREAD+), or REPAIR CHARGE on
-// arrival (+12). File-backed effects can be infected and consumed, and go with their file.
-export type UpgradeForm = 'file' | 'version' | 'core' | 'charge';
+// arrival (+12). File-backed effects can be infected and consumed, and go with their file. Slice 4: training cycles for the
+// next desk (+2 CYCLES: a grant, systems/training.ts commitTraining).
+export type UpgradeForm = 'file' | 'version' | 'core' | 'charge' | 'cycles';
 
 // What the draft reads (systems/draft.ts builds it at TRANSMIT).
 export interface DraftContext {
@@ -44,6 +47,10 @@ export interface DraftContext {
   // Phase 3 slice 3b: deal only the salvage pool's cards (UpgradeDef.salvage), on the arm. Left out (the classic world,
   // phase 2's suites): every card, as before.
   salvageOnly?: boolean;
+  // Slice 4: the unit has a skill tree (the arm; left out: none, the classic world) and the hop goes into a final ship
+  // (left out: not), where no desk follows: the +2 CYCLES card is dealt only with a tree and never into a final ship.
+  tree?: boolean;
+  toFinal?: boolean;
 }
 
 // A boost: the weight multiplier and the reason, in the kid's own terms.
@@ -60,7 +67,7 @@ export interface UpgradeDef {
   blocks: number;     // the file a 'file' card adds to the packet (link room), else 0
   maxOwned: number;   // Infinity: stackable without limit
   // In the arm's salvage pool (02 §3.10): REPAIR v2 moved to the repository (its patch, data/repository.ts), so the arm
-  // never deals it; the classic world deals every card. Slice 4 adds `+2 CYCLES` here.
+  // never deals it; the classic world deals every card but the tree's `+2 CYCLES` (usable only with a tree).
   salvage: boolean;
   // Whether the card can do anything for this unit now (REPAIR v2 needs a Repair to upgrade); a card that
   // could not is never offered. Every card also needs link room for its file (draftEntries).
@@ -178,6 +185,19 @@ export const UPGRADES: readonly UpgradeDef[] = [
           && { mult: DRAFT_MILD_BOOST, why: `${last.name} burned ${Math.round(100 - last.fuelLeftPct)}% of your FUEL` },
       );
     },
+  },
+  // Slice 4 (02 §3.10; plan §2.6): cycles for the next desk's TRAINING. Last in the pool, and filtered before the draws
+  // where it can't be used (no tree, a hop into a final ship), so the classic world's deals stay byte-identical.
+  {
+    id: 'cycles',
+    title: PACKET_SKILL_TEXT.cyclesCard(CYCLES_CARD_CYCLES),
+    effect: PACKET_SKILL_TEXT.cyclesEffect(CYCLES_CARD_CYCLES),
+    form: 'cycles',
+    blocks: 0,
+    maxOwned: Infinity,
+    salvage: true,
+    usable: (ctx) => ctx.tree === true && ctx.toFinal !== true,
+    boost: () => null,
   },
 ];
 

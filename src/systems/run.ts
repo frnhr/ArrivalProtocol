@@ -2,8 +2,10 @@
 // first pick, setCourse's blocker, transmitNext's commit; Track UI reads deskUiOnOpen. Others ask by message.
 import type { Store } from '@state/store';
 import type {
-  GameState, RunPhase, RunState, ShipOutcome, ShipResult, RunEndCause, ArrivalReport, TransitPlan, TransitHit, RingMiss, UiState,
+  GameState, RunPhase, RunState, ShipOutcome, ShipResult, RunEndCause, ArrivalReport, ArrivalSkill, TransitPlan, TransitHit, RingMiss,
+  UiState,
 } from '@state/schema';
+import type { Segment } from '@/types/segment';
 import type { CarriedRacks } from '@data/memory';
 import type { ArrivalDelivery, DeliveryChip } from '@/types/repo';
 import type { Packet } from '@systems/carry';
@@ -25,7 +27,12 @@ import { shipStars, starCharge } from '@systems/stars';
 import {
   packedFiles, rollTransitHits, emergencyCoreToll, arrivalCharge, layoutCarried, arrivalDamage,
 } from '@systems/carry';
-import { dealDraft, planPacket, applyPickToPacket, pickCharge } from '@systems/draft';
+import { dealDraft, planPacket, transitPacket, applyPickToPacket, pickCharge } from '@systems/draft';
+import { shipCycles } from '@systems/run-score';
+import { bankOf, branchToLatch, deskBlocker, anyPaid, visitNow } from '@systems/skill-tree';
+import { skillPacketPlan, mountSkillWatch } from '@systems/skill-files';
+import { commitTraining } from '@systems/training';
+import { isSkillFile } from '@state/selectors';
 import { archiveShipStarted, archiveShipDone, archiveRunEnded, archiveTutorialDone, playsTutorial, type RunLineage } from '@systems/meta';
 import { writeRunSave, clearRunSave } from '@systems/save-write';
 import { finaleRunCause } from '@systems/finale';
@@ -45,7 +52,7 @@ import { BEATS, LINES, perShipBeatIds } from '@data/script';
 import { TOOL_REFUSAL } from '@data/tool-text';
 import { elementsFromState, ringFit } from '@/types/orbit';
 import {
-  BEAM_OUT_TAC, BEAM_OUT_EXTRA_HITS, EMERGENCY_EXTRA_HITS, EMERGENCY_CORE_HIT,
+  BEAM_OUT_TAC, BEAM_OUT_EXTRA_HITS, EMERGENCY_EXTRA_HITS, EMERGENCY_CORE_HIT, FIRST_PICK_FLOOR_CYCLES,
 } from '@data/tuning';
 
 // The run (§4.1, §4.3, §9 WP7 items 1, 2, 6 and 8), DOM-free: a route of ships on the run's map (systems/map-run.ts),
@@ -262,13 +269,17 @@ export function startShip(
 // the beam-born blocks still in memory report home (TRACE) or, with HOLLOW aboard, feed its next root (run.threat.fed,
 // cumulative), exactly as the LANDING REPORT previewed it (state/threat-selectors.ts tallyPreview). The next ship's plan
 // (goTransmit) reads the result.
+// Slice 4 (03 §3.1): every ship's end pays its training cycles (run-score.ts shipCycles), on every world, recorded per ship
+// so a later rule never rewrites the past (the bank is derived: skill-tree.ts bankOf).
 export function endShip(store: Store<GameState>, outcome: ShipOutcome, stars = 0): ShipResult {
   const state = store.getState();
   if (state.run.ships.length > state.run.shipIndex) throw new Error(`endShip: ship ${state.run.shipIndex} already ended`);
   const result = shipResultOf(state, outcome, stars);
   const tally = tallyPreview(state);
+  const cycles = shipCycles(result);
   store.update((draft) => {
     draft.run.ships.push(result);
+    draft.run.skills.earned.push(cycles);
     draft.run.pendingStars = stars;
     draft.run.threat.trace = tally.traceAfter;
     if (tally.fed) draft.run.threat.fed += tally.left;
@@ -288,6 +299,10 @@ export function endShip(store: Store<GameState>, outcome: ShipOutcome, stars = 0
 // opens. `extra` is the way the ship ended's toll on the next hop (BEAM OUT +2, EMERGENCY +3 and Core −25; null after a
 // LANDING REPORT), held on the map until the kid picks the hop (RunMapState.pendingExtra). No reachable ship from a
 // non-final ship throws: the arm's checks 1 and 4 guarantee one.
+// Slice 4 (03 §3.1–§3.2; plan §2.4–§2.5), inside the same update, before SHIP DONE's save (so a reload resumes the same
+// bank and branches): a branch newly due by the map ('after-seeds', 'poor-ahead') is latched open, and at the run's first
+// desk on the arm the bank is raised to FIRST_PICK_FLOOR_CYCLES (`+2 CYCLES · FIRST SKILL ON THE HOUSE :)`) while no skill
+// is paid for, so the required first pick can always buy a root.
 export function openDesk(store: Store<GameState>, extra: PendingExtra | null): void {
   const state = store.getState();
   if (currentShip(state).final) throw new Error('openDesk: the final ship ends the run (endRun)');
@@ -297,7 +312,13 @@ export function openDesk(store: Store<GameState>, extra: PendingExtra | null): v
   abortAll();
   // Read after abortAll (the review follow-up): an op aborted here may have changed what the desk opens on.
   const ui = deskUiOnOpen(store.getState());
+  const opened = store.getState();
+  const visit = visitNow(opened.run);
+  const latch = opened.run.map.world === 'arm' ? branchToLatch(opened, visit) : null;
+  const topUp = firstPickTopUp(opened);
   store.update((draft) => {
+    if (latch !== null) draft.run.skills.opened.push({ skill: latch, visit });
+    if (topUp > 0) draft.run.skills.grants.push({ source: 'first-pick', cycles: topUp, visit, label: null });
     draft.run.phase = 'desk';
     draft.run.map.pendingExtra = extra === null ? null : { ...extra };
     draft.run.transit = null;
@@ -312,6 +333,19 @@ export function openDesk(store: Store<GameState>, extra: PendingExtra | null): v
   writeRunSave(store, 'ship-done');
 }
 
+// The first-pick floor (03 §3.1): the cycles the run's first desk adds on the arm while no skill is paid for (a crashed ship
+// 1 earned 1: +2). 0 elsewhere, and once the floor is met.
+export function firstPickTopUp(state: Readonly<GameState>): number {
+  const run = state.run;
+  if (run.map.world !== 'arm' || visitNow(run) !== 1 || anyPaid(run.skills)) return 0;
+  return Math.max(0, FIRST_PICK_FLOOR_CYCLES - bankOf(run.skills));
+}
+
+// The run's first desk on the arm opens on TRAINING while the required first pick is not made (plan §2.5).
+function firstPickDue(state: Readonly<GameState>): boolean {
+  return state.run.map.world === 'arm' && visitNow(state.run) === 1 && !anyPaid(state.run.skills);
+}
+
 // The UI fields the desk opens with (slice 3c, out of openDesk so a resumed desk opens the same way: systems/run-save.ts):
 // the tool put down, and the selection and tab. Read from the ended ship's state (the desk's or the save's).
 export function deskUiOnOpen(state: Readonly<GameState>): Pick<UiState, 'activeTool' | 'pickedSourceId' | 'pendingPlacement' | 'deskSelected' | 'deskWindow'> {
@@ -322,8 +356,9 @@ export function deskUiOnOpen(state: Readonly<GameState>): Pick<UiState, 'activeT
     pendingPlacement: null,
     // One ship in reach (the classic world) is already the selection: SET COURSE is the desk's only step.
     deskSelected: offered.length === 1 ? offered[0]! : null,
-    // The tab it opens on (phase 3 slice 3b: the SHIP CARD, or the REPOSITORY for the last-rm prompt; repository.ts).
-    deskWindow: deskWindowOnOpen(state),
+    // The tab it opens on (phase 3 slice 3b: the SHIP CARD, or the REPOSITORY for the last-rm prompt; repository.ts; slice
+    // 4: TRAINING at the run's first desk until the first pick is made).
+    deskWindow: firstPickDue(state) ? 'training' : deskWindowOnOpen(state),
   };
 }
 
@@ -332,15 +367,21 @@ function shipEnded(state: Readonly<GameState>): boolean {
   return state.run.ships.at(-1)?.shipId === state.level.shipId;
 }
 
-// SET COURSE ▸ (the desk's ENTER): the PACKET for the ship in `slot`.
+// SET COURSE ▸ (the desk's ENTER): the PACKET for the ship in `slot`. The run's first desk on the arm waits for the required
+// first pick (skill-tree.ts deskBlocker; the DESK's bar says `CHOOSE YOUR FIRST SKILL` instead of the key): a SET COURSE
+// before it is a bug, and throws.
 export function setCourse(store: Store<GameState>, slot: number): void {
-  const phase = store.getState().run.phase;
+  const state = store.getState();
+  const phase = state.run.phase;
   if (phase !== 'desk') throw new Error(`setCourse: not on the DESK (phase ${phase})`);
+  const blocker = deskBlocker(state);
+  if (blocker !== null) throw new Error(`setCourse: the desk is waiting for ${blocker} (train the first skill)`);
   goTransmit(store, slot);
 }
 
-// ◀ CHART (the PACKET's ESC): back to the desk. The drops and the pick are forgotten (a new destination deals against its
-// own link); the lost ship's extras stay on the map for whichever hop is picked.
+// ◀ CHART (the PACKET's ESC): back to the desk. The drops, the pick and PACK AS are forgotten with the plan (a new
+// destination deals against its own link); this desk's purchases stay pending (UNDO works until TRANSMIT ▸); the lost
+// ship's extras stay on the map for whichever hop is picked.
 export function backToChart(store: Store<GameState>): void {
   const phase = store.getState().run.phase;
   if (phase !== 'transmit') throw new Error(`backToChart: not on the PACKET (phase ${phase})`);
@@ -373,7 +414,7 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
   // Phase 3 slice 3b: the deliveries that catch up at the destination ride this hop (02 §3.9; their seed chance reads the
   // verdict), packed by planPacket with the unit's files, so the plan's numbers count them from the start.
   const deliveries = deliveriesForHop(state, fromSlot, toSlot, threat);
-  const packet = planPacket(store.getState().memory, { linkBlocks: hop.linkBlocks, dropped: [], pick: null, deliveries });
+  const packet = planPacket(store.getState().memory, { linkBlocks: hop.linkBlocks, dropped: [], pick: null, deliveries, skills: skillPacketPlan(store.getState(), {}) });
   const plan: TransitPlan = {
     toShipIndex,
     toSlot,
@@ -416,7 +457,7 @@ export function transmitNext(store: Store<GameState>): void {
   if (plan.offer.length > 0 && plan.pick === null) throw new Error('transmitNext: no card picked (PICK ONE TO CARRY is mandatory)');
   const ship = shipDefAt(state.run.map, plan.toSlot);
   const fromSlot = currentSlot(state.run);
-  const packet = planPacket(state.memory, plan, newSegId);
+  const packet = transitPacket(state, plan, newSegId);
   applyPickToPacket(packet, plan.pick);
   // The beam's hitchhikers (04 §3.4), rolled on the packet as it crosses (after the card's file is in it, before the
   // transit hits): they ride free, and land behind their targets at the boot. From the verdict, never the map's facts again.
@@ -429,7 +470,9 @@ export function transmitNext(store: Store<GameState>): void {
   // The arrival as the PACKET previewed it (systems/arrival-preview.ts), for the seeds the beam really rolled (the
   // deliveries' included). TRANSMIT ▸ waits while files (deliveries included) are over the link or files and the floor over
   // the room (01 §3.16; the review's B1 and the follow-up M2): a send that gets here over either is a bug, not a squeeze.
-  const preview = unitArrival(state, { hop: plan.hop, threat: plan.threat, dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries }, packet.seeds.length);
+  const preview = unitArrival(state, {
+    hop: plan.hop, threat: plan.threat, dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries, packAs: plan.packAs,
+  }, packet.seeds.length);
   const fit = preview.fit;
   if (fit.overLink > 0) throw new Error(`transmitNext: ${fit.files} blocks of files are ${fit.overLink} over the link of ${fit.link}`);
   if (fit.over > 0) throw new Error(`transmitNext: ${fit.files} blocks of files and a floor of ${fit.floor} are ${fit.over} over ${ship.name}'s room of ${fit.room}`);
@@ -465,20 +508,38 @@ export function transmitNext(store: Store<GameState>): void {
     seeds: layout.seeds,
     boarded: boardedBy(plan.threat),
     deliveries: arrivalDeliveries(plan.deliveries, packet.deliveries, deliverySeeds.map((seed) => seed.targetId)),
-    // Track TREE fills it from the packet's skill plan (plan §2.14).
-    skills: [],
+    // Slice 4 (plan §2.14): the skill files as laid out, and how each came (the boot's TRAINED / RETRAINED lines).
+    skills: arrivalSkills(state, packet, layout.racks.segs),
   };
   // The tool kinds this send brought for the first time (run.licences: "the kinds that have reached the unit", plan §2.2).
   const firstKinds = plan.deliveries.filter((chip) => chip.firstOfKind).map((chip) => repoToolKind(chip.file))
     .filter((kind): kind is NonNullable<typeof kind> => kind !== null);
   store.update((draft) => {
-    // The card goes with the unit: the run remembers it (the Skills window lists it, THREAD+ is owned by it).
-    if (plan.pick !== null) draft.run.upgrades.push(plan.pick);
+    // The card goes with the unit: the run remembers it (the Skills window lists it, THREAD+ is owned by it). +2 CYCLES is
+    // spent at a desk, never carried: commitTraining records it as a grant.
+    if (plan.pick !== null && plan.pick !== 'cycles') draft.run.upgrades.push(plan.pick);
     // Phase 3 slice 3b: the requests move on (delivered, waiting, lost, forwarded; the pick becomes a request).
     draft.run.repo = advanceRequests(draft.run.repo, plan, draft.run.map);
     for (const kind of firstKinds) if (!draft.run.licences.includes(kind)) draft.run.licences.push(kind);
   });
+  // Slice 4: this desk's purchases are bought as the packet crosses, before the ship starts, so the BEAM save holds none
+  // pending (the codec refuses one).
+  commitTraining(store);
   startShip(store, plan.toSlot, layout.racks, arrival, plan.threat, plan.hop);
+}
+
+// The skill files as they crossed (ArrivalReport.skills; plan §2.14), from the layout (after the hits: a file's level never
+// changes on the way): a fresh file is 'restored' when every purchase behind it at this desk was a RESTORE, else 'trained';
+// a copy packed lower is 'packed'; every other skill file was 'carried'. `state` is the desk's (its pending purchases).
+export function arrivalSkills(state: Readonly<GameState>, packet: Readonly<Packet>, segs: readonly Readonly<Segment>[]): ArrivalSkill[] {
+  return segs.filter(isSkillFile).map((seg): ArrivalSkill => {
+    const how = packet.skills.find((entry) => entry.segId === seg.id)?.how ?? null;
+    const purchases = state.run.skills.pending.filter((purchase) => purchase.skill === seg.upgrade);
+    const kind: ArrivalSkill['kind'] = how === 'packed' ? 'packed'
+      : how === 'fresh' ? (purchases.every((purchase) => purchase.kind === 'restore') ? 'restored' : 'trained')
+        : 'carried';
+    return { segId: seg.id, skill: seg.upgrade, level: { version: seg.version, lock: seg.lock }, kind };
+  });
 }
 
 // The deliveries as they crossed (ArrivalReport.deliveries; plan §2.3 step 4.6): each chip not sent on with the ids of the
@@ -721,7 +782,10 @@ export function mountRun(store: Store<GameState>): () => void {
   });
 
   const offReset = onWorldReset('run', resetRunModule, () => ({ pendingAny, captureOffsetTac, beamOutDone, orbitReached }));
+  // Slice 4 (plan §2.7): the skills' effective versions, watched after every tick ('skill-version': the stamps, the sweep).
+  const offSkillWatch = mountSkillWatch(store);
   return () => {
+    offSkillWatch();
     offs.forEach((off) => off());
     offGame();
     offPost();

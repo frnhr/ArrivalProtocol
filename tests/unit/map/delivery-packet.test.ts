@@ -194,7 +194,7 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   check('a patch hit below the usable band: its line makes no v2 claim (`· DAMAGED · NOT INSTALLED`)',
     deliveryBootLineText(at(broken), 0) === REPO_TEXT.boot.patchBroken(REPO_FILE_TEXT['repair-v2'].boot, brokenPatch.arrivedYear));
   receiveDeliveryAtBoot(broken, 0);
-  check('…used up all the same, and nothing upgrades', !at(broken).memory.some((seg) => seg.type === 'upgrade') && repairs(broken).every((seg) => seg.type === 'fs-tool' && seg.version === 1)
+  check('…used up all the same, and nothing upgrades', !at(broken).memory.some((seg) => seg.type === 'upgrade' && seg.upgrade === 'repair-patch') && repairs(broken).every((seg) => seg.type === 'fs-tool' && seg.version === 1)
     && !at(broken).run.upgrades.includes('repair-v2'));
 
   const early = armRun();

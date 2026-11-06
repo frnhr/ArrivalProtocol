@@ -477,6 +477,7 @@ const DRAFT_FORM_TAG: Readonly<Record<UpgradeForm, (blocks: number) => string>> 
   version: () => 'UPGRADE',
   core: () => 'AI CORE',
   charge: () => 'ON ARRIVAL',
+  cycles: () => 'TRAINING',
 };
 
 export const DRAFT_TEXT = {
