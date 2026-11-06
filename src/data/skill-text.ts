@@ -148,6 +148,25 @@ export const AUTO_BUTTON_TEXT = {
   titleNoSkill: 'AUTOBURN.skl is gone: RESTORE it at the next desk',
 } as const;
 
+// The NAV PLOT's AUTOBURN marks (03 §3.6–§3.7): the LOCK bracket's label, the late claim on the chip.
+export const AUTO_PLOT_TEXT = {
+  lock: 'LOCK',
+  late: (time: string): string => `AUTO LATE ${time} · NEEDS A THREAD`,
+} as const;
+
+// The Engine window's AUTOBURN pip (03 §4; 4b's graded damage: `v2▸v1`).
+export const AUTO_PIP_TEXT = {
+  label: 'AUTOBURN',
+  version: (version: number): string => `AUTOBURN v${version}`,
+  worksAs: (nominal: number, effective: number): string => (effective === 0 ? `AUTOBURN v${nominal}▸off` : `AUTOBURN v${nominal}▸v${effective}`),
+  ok: (version: number): string => `AUTOBURN.skl v${version} — click to see the file`,
+  damaged: (nominal: number, effective: number, okMin: number): string => (effective === 0
+    ? `AUTOBURN.skl v${nominal} — too damaged to work: REPAIR it`
+    : `AUTOBURN.skl v${nominal} — WORKS AS v${effective}: REPAIR it to ${okMin}% for v${nominal}`),
+  offline: (version: number): string => `AUTOBURN.skl v${version} — offline while REPAIR or MOVE runs`,
+  missing: 'AUTOBURN.skl is gone: RESTORE it at the next desk',
+} as const;
+
 // The mini-HUD card in the MIND while AUTOBURN works (the lead's note: show it flying while the kid fights in blue).
 export const AUTO_MINI_TEXT = {
   ready: 'AUTO READY · PRESS [B]',

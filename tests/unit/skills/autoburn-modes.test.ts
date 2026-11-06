@@ -26,7 +26,7 @@ import { landingFlightOf } from '@systems/guidance';
 import { ringFit, elementsFromState } from '@/types/orbit';
 import { AUTOBURN_TEXT, AUTOBURN_REFUSAL } from '@data/skill-text';
 import { DRIVER_RULES } from '@data/script';
-import { ROUND_E_TOL, AUTO_THREAD_CLAIM_TAC, AUTO_FUEL_RESERVE_PCT, AUTOBURN_UNTRAINED_OFFSET_TAC } from '@data/tuning';
+import { ROUND_E_TOL, AUTO_FUEL_RESERVE_PCT, AUTOBURN_UNTRAINED_OFFSET_TAC } from '@data/tuning';
 import type { GameState } from '@state/schema';
 import type { LockLevel, SkillVersion } from '@/types/skill';
 
@@ -301,12 +301,29 @@ function landingOn(e: number, argPeriDeg: number): void {
 }
 
 // --- UNTRAINED (R3): 7.5 tac s late, against a trained skill -------------------------------------------------------------
+// The trained run is also WP9's acceptance at quick depth (wp9/autoburn-sim flies its offsets −8, 0, +8 at full depth only,
+// slice 4 plan §7 R11): its own throttle, BRAKING, FUEL ≥ 25% at loop-closed, the hand-back, and no demo of its own.
 for (const offsets of [[] as number[], [0, 0]]) {
   kestrel(1, offsets, true);
   untilOffered();
+  const demosBefore = state().run.stats.demos.length;
   h.press('KeyB');
-  const flown = flyEngaged(300);
+  let fuelAtClosed: number | null = null;
+  let ownThrottle = false;
+  const flown = flyEngaged(300, () => {
+    if (fuelAtClosed === null && fitNow().closed) fuelAtClosed = state().burn.fuelPct;
+    if (phase() === 'burning' && state().burn.firing) ownThrottle ||= state().burn.firingSource === 'auto';
+  });
   h.step();
+  if (offsets.length > 0) {
+    const end = state().burn.auto.end;
+    const handBack = end === 'in-ring' ? AUTOBURN_TEXT.inRing : AUTOBURN_TEXT.braked;
+    check('trained: its own throttle (\'auto\'), BRAKING on the strip, FUEL ≥ 25% at loop-closed', ownThrottle
+      && flown.lines.includes(AUTOBURN_TEXT.burning) && fuelAtClosed !== null && fuelAtClosed >= 25, `${ownThrottle} ${fuelAtClosed}`);
+    check('…it flies the capture through and hands back (thread let go, the radio says so); its capture is no demo',
+      phase() === 'done' && (end === 'in-ring' || end === 'braked') && threadsBusy() === 0 && said(handBack)
+      && state().run.stats.demos.length === demosBefore, `${phase()} ${end}`);
+  }
   const lateTac = flown.burns[0]?.lateTac ?? NaN;
   const fit = fitNow();
   console.log(`INFO ${offsets.length === 0 ? 'UNTRAINED (40%)' : 'trained [0, 0] (99%)'}: fired ${lateTac.toFixed(1)} tac s after START BURN; `

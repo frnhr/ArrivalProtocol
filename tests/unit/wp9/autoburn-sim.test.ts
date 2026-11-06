@@ -64,7 +64,9 @@ function untilOffered(maxWall = 200): boolean {
 }
 
 // Quick depth flies offset 0 (slice 3b review, the unit tier's budget); −8 and +8 at full depth (npm run balance).
-for (const learned of byDepth([0], [-8, 0, 8])) {
+// Slice 4 (plan §7 R11): offset 0 moved to skills/autoburn-modes (its trained run checks the same at quick depth), so
+// quick depth flies none here; the claim's checks fly with the full run.
+for (const learned of byDepth([] as number[], [-8, 0, 8])) {
   correctedKestrel([2 * learned, 2 * learned]);
   const demosBefore = state().run.stats.demos.length;
   check(`learned ${learned}: before the window, B is refused (TOO FAR FROM ▼)`, autoburnRefusal(state(), getPrediction()) === AUTOBURN_REFUSAL.tooFar,

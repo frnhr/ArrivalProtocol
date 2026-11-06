@@ -8,7 +8,7 @@ import { getSensedPrediction, type Prediction } from '@systems/predict';
 import { isThrustOn, isGhostFiring } from '@systems/orbit-sim';
 import { capabilitiesNow } from '@systems/capabilities';
 import {
-  plotViewRadius, plotChip, plotReadouts, plotMarkers, plotZones, noSignalReason, decayChip, type Label, type PlotMarker, type Tone,
+  plotViewRadius, plotChip, plotReadouts, plotMarkers, plotZones, noSignalReason, decayChip, autoGhost, lockBracket, type Label, type PlotMarker, type Tone,
   type PlotZoneModel,
 } from '@systems/flight-hud';
 import { makeProjector, type Projector, type Vec2 } from '@/types/orbit';
@@ -18,10 +18,11 @@ import { isMobileViewport } from '@/utils/viewport';
 import { renderKeyCaps } from '@components/hud/keycaps';
 import { createScrambler } from '@components/hud/scrambler';
 import {
-  SVG_NS, svgEl, fmt, setCircle, annulus, circlePath, pathsByColour, hazardPath, bandWidth,
+  SVG_NS, svgEl, fmt, setCircle, annulus, circlePath, pathsByColour, hazardPath, bandWidth, pathRun, ghostLoop,
 } from '@components/hud/plot-draw';
 import { PLOT_FUZZ_MIN_UNITS, PLOT_UNCERTAIN_MIN_UNITS, PLOT_PLANET_MIN_UNITS, TOUCHDOWN_FLOAT_MS, DRAG_STAMP_MS } from '@data/tuning';
 import { BAND_TEXT, TOUCHDOWN_FLOAT_TEXT } from '@data/landing-text';
+import { AUTO_PLOT_TEXT } from '@data/skill-text';
 import { on } from '@systems/events';
 import { getDropSolution } from '@systems/drop-cache';
 import { plotLandingModel, ringLabel, dragStamp, type GoLowMarks } from '@systems/landing-hud';
@@ -209,6 +210,10 @@ interface PlotNodes {
   pathFlyby: SVGPathElement;
   pathGreen: SVGPathElement;
   pathImpact: SVGPathElement;
+  // Slice 4 (Track FLIGHT): AUTOBURN's dashed target (autoGhost) under the path, the LOCK bracket (lockBracket) over it.
+  autoGhost: SVGPathElement;
+  lockRun: SVGPathElement;
+  lockLabel: SVGTextElement;
   startBurn: MarkerNodes;
   goLow: MarkerNodes;
   goLowTarget: MarkerNodes;
@@ -268,6 +273,9 @@ function build(svg: SVGSVGElement): PlotNodes {
     pathFlyby: svgEl('path', 'np-path np-path-flyby'),
     pathGreen: svgEl('path', 'np-path np-path-green'),
     pathImpact: svgEl('path', 'np-path np-path-impact'),
+    autoGhost: svgEl('path', 'np-auto-ghost'),
+    lockRun: svgEl('path', 'np-lock'),
+    lockLabel: svgEl('text', 'np-label np-lock-label'),
     startBurn: marker(svgEl('line', 'np-burn-tick'), 'np-burn-label'),
     goLow: marker(svgEl('polygon', 'np-golow'), 'np-golow-label'),
     goLowTarget: marker(svgEl('line', 'np-golow-target'), 'np-golow-target-label'),
@@ -282,14 +290,21 @@ function build(svg: SVGSVGElement): PlotNodes {
   nodes.planet.setAttribute('fill', 'url(#planetFill)');
   // Back to front: later nodes paint on top.
   nodes.hazard.setAttribute('stroke', `url(#${ZONE_HATCH_IDS.hit})`);
+  // AUTOBURN's marks (slice 4). Styled inline until Track UI moves them to game.css: the ghost a thin dashed amber loop,
+  // the bracket a wide bright band along the path, the label the plot's own type in the bright amber.
+  Object.assign(nodes.autoGhost.style, { fill: 'none', stroke: 'var(--accent-bright)', strokeWidth: '1', strokeDasharray: '3 3', opacity: '0.7' });
+  Object.assign(nodes.lockRun.style, {
+    fill: 'none', stroke: 'var(--accent-bright)', strokeWidth: '5', strokeLinecap: 'round', opacity: '0.35',
+  });
+  Object.assign(nodes.lockLabel.style, { fill: 'var(--accent-bright)' });
 
   svg.append(
     nodes.planet, nodes.surface, nodes.atm, nodes.ring, nodes.ringLabel, nodes.zones,
-    nodes.band, nodes.pathFlyby, nodes.pathGreen, nodes.pathImpact, nodes.hazardCasing, nodes.hazard,
+    nodes.autoGhost, nodes.band, nodes.pathFlyby, nodes.pathGreen, nodes.pathImpact, nodes.lockRun, nodes.hazardCasing, nodes.hazard,
     nodes.startBurn.glyph, nodes.goLowTarget.glyph, nodes.goLow.glyph, nodes.impact.glyph, nodes.peri.glyph, nodes.apo.glyph,
     ...nodes.trail, nodes.flame, nodes.ship,
     nodes.zoneLabels, nodes.startBurn.label, nodes.goLow.label, nodes.goLowTarget.label, nodes.impact.label, nodes.peri.label,
-    nodes.apo.label, nodes.flyby,
+    nodes.apo.label, nodes.flyby, nodes.lockLabel,
   );
   return nodes;
 }
@@ -1095,6 +1110,19 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     } else {
       labelTurns.delete(nodes.flyby);
     }
+
+    // AUTOBURN (slice 4, 03 §3.6–§3.7): the dashed target its mode flies to, and the LOCK bracket ending at START BURN
+    // (where [B] works: the AUTO button glows inside it). Not on a blind plot: neither can be trusted there.
+    const seesPath = !noSignal && !blind;
+    const ghost = seesPath ? autoGhost(state, pred) : null;
+    nodes.autoGhost.setAttribute('d', ghost ? ghostLoop(ghost.rpKm, ghost.raKm, ghost.omega, proj) : '');
+    const bracket = seesPath ? lockBracket(state, pred) : null;
+    const run = bracket ? pathRun(pred, proj, state.clock.tSec, bracket.fromInSec, bracket.toInSec) : null;
+    nodes.lockRun.setAttribute('d', run?.d ?? '');
+    nodes.lockRun.style.opacity = bracket?.inside ? '0.6' : '0.35';
+    show(nodes.lockLabel, run !== null);
+    if (run) placeClear(nodes.lockLabel, [AUTO_PLOT_TEXT.lock], run.start, outwardFrom(half, run.start), obstacles, CHAR_W_TAG, path);
+    else labelTurns.delete(nodes.lockLabel);
 
     const newest = trail[trail.length - 1];
     if (!newest || Math.hypot(ship.x - newest.x, ship.y - newest.y) >= TRAIL_SPACING_FRAC * viewR) {
