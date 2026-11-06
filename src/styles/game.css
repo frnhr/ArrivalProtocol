@@ -3504,6 +3504,17 @@ body.reduced-motion .run-end.tone-victory::before { animation: none; opacity: 0.
 }
 
 /* ── Slice 4 (Track UI): the skill bits (03-skills §3.5, §4) ── */
+/* AUTOBURN on the NAV PLOT (Track FLIGHT's marks, NavPlotWindow): the dashed target its mode flies to, the LOCK bracket a
+   wide bright band along the path (brighter while the ship is inside it: [B] works), its label in the plot's bright type.
+   The Engine window's AUTOBURN pip wears the skill's amber until its band says otherwise. */
+.navplot-svg .np-auto-ghost { fill: none; stroke: var(--accent-bright); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.7; }
+.navplot-svg .np-lock { fill: none; stroke: var(--accent-bright); stroke-width: 5; stroke-linecap: round; opacity: 0.35; transition: opacity 0.3s; }
+.navplot-svg .np-lock.inside { opacity: 0.6; }
+.navplot-svg .np-label.np-lock-label { fill: var(--accent-bright); }
+body.reduced-motion .navplot-svg .np-lock { transition: none; }
+.pip[data-skill="autoburn"] .pip-label { color: var(--accent-bright); letter-spacing: 0.08em; }
+.pip[data-skill="autoburn"][data-look="ok"] .pip-reading { color: var(--accent-bright); }
+
 /* A skill file's chip in the MIND: the version badge where the size was (`v2`, or `v2▸v1` in the warning colour), and its
    health bar's ticks at 80, 50 and 25 (the version each zone keeps), labelled under the bar on a wide chip. The badge
    flickers for 400 ms when the version moves (components/hud/Stamp.ts); reduced motion only changes its colour. */

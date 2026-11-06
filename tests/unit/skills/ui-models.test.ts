@@ -222,8 +222,8 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
     && row.version.text === 'v2 · LOCK 270' && row.version.tone === 'good', JSON.stringify(row?.version));
   store.update((d) => { const f = d.memory.find((s) => s.id === seg.id) as SkillFileSegment; f.integrity = 64; });
   row = skillsModel(store.getState())[0];
-  check('…at 64%: `v2 · LOCK 270 · WORKS AS v1 · REPAIR TO 80% FOR v2 (≈ 3 CHARGE)`, warn',
-    row?.version?.text === 'v2 · LOCK 270 · WORKS AS v1 · REPAIR TO 80% FOR v2 (≈ 3 CHARGE)' && row.version.tone === 'warn', row?.version?.text);
+  check('…at 64%: the status (FLIGHT\'s) says `WORKS AS v1 — REPAIR IT FOR v2`, the version line `v2 · LOCK 270 · REPAIR TO 80% FOR v2 (≈ 3 CHARGE)`, warn',
+    row?.status.startsWith('WORKS AS v1') === true && row.version?.text === 'v2 · LOCK 270 · REPAIR TO 80% FOR v2 (≈ 3 CHARGE)' && row.version.tone === 'warn', `${row?.status} / ${row?.version?.text}`);
   check('the stamps: a step down `AUTOBURN v2 → v1` (danger, the falling sweep); back up `AUTOBURN v2 RESTORED` (the sparkle)',
     skillVersionStamp(store.getState(), 'autoburn', 2, 1)?.text === 'AUTOBURN v2 → v1' && skillVersionStamp(store.getState(), 'autoburn', 2, 1)?.sound === 'down'
       && (store.update((d) => { (d.memory.find((s) => s.id === seg.id) as SkillFileSegment).integrity = 100; }),

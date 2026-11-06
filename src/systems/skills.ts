@@ -233,7 +233,8 @@ function versionPips(version: number): string {
 
 // A skill's version line: the counting file (skillLive's) and its lock, what it works as, and what the run paid for and
 // lost (RESTORE at the next desk, half price; none past the final ship's).
-function skillVersionLine(state: Readonly<GameState>, id: SkillId): SkillRowVersion {
+// `status`: what the row already says (AUTOBURN's status names WORKS AS v1 itself: Track FLIGHT's autoburnStatus), not repeated.
+function skillVersionLine(state: Readonly<GameState>, id: SkillId, status: string): SkillRowVersion {
   const live = skillLive(state.memory, id);
   const paidLevel = paid(state.run.skills, id);
   const text = SKILLS_TEXT.skill;
@@ -249,7 +250,7 @@ function skillVersionLine(state: Readonly<GameState>, id: SkillId): SkillRowVers
   const view = skillFileView(live.file);
   const parts = [text.version(view.nominal)];
   if (live.file.lock > 0) parts.push(text.lock(LOCK_RANGE_TAC[live.file.lock]));
-  if (view.offline !== null || view.damaged || view.works === 0) parts.push(view.worksText);
+  if ((view.offline !== null || view.damaged || view.works === 0) && !status.includes(view.worksText)) parts.push(view.worksText);
   if (view.repair !== null && (view.damaged || view.works === 0)) parts.push(view.repair);
   const lostPart = lostLine();
   if (lostPart !== null) parts.push(lostPart);
@@ -271,7 +272,7 @@ function skillRow(state: Readonly<GameState>, id: SkillId): SkillRow | null {
       : { text: live.version === 0 ? SKILLS_TEXT.skill.off : SKILLS_TEXT.skill.ready(live.version), tone: live.version === 0 ? 'warn' as const : 'good' as const };
   return {
     id, title, count: '', effect: id === 'autoburn' ? AUTOBURN_SKILL_ROW.effect : TRAINING_TEXT.skills[id].pitch,
-    status: status.text, tone: status.tone, pips: pips.length > 0 ? pips : gonePips(1, title), version: skillVersionLine(state, id),
+    status: status.text, tone: status.tone, pips: pips.length > 0 ? pips : gonePips(1, title), version: skillVersionLine(state, id, status.text),
   };
 }
 

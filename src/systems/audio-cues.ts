@@ -263,7 +263,8 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     // it: its ignite (the relay and the whump) is what says the engine fired (WP10 review, the lead's ruling).
     on('ghost-start', ({ first }) => play('ghostIgnite', { first })),
     on('deal', ({ outcome }) => { if (outcome !== 'invalidated') play('stampHit', { heavy: outcome === 'accepted' }); }),
-    on('autoburn', ({ to }) => { if (to === 'armed') play('chime', { falling: false }); }),
+    // Armed by the kid's press (from idle, or again after an end), not each re-arm between v2's burns (Track FLIGHT).
+    on('autoburn', ({ from, to }) => { if (to === 'armed' && (from === 'idle' || from === 'done' || from === 'dropped')) play('chime', { falling: false }); }),
     on('skill-trained', () => {
       play('transmitIn');
       play('chime', { falling: false }, { delaySec: CHIME_AFTER_TRANSMIT_SEC });
