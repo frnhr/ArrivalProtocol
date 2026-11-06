@@ -45,7 +45,7 @@ export const SKILL_TREE: Readonly<Record<SkillId, SkillDef>> = {
       { version: 2, mode: 'PASS', price: 5, blocks: 7 },
       { version: 3, mode: 'PLAN', price: 8, blocks: 10 },
     ],
-    locks: [], opens: { kind: 'start' }, demos: 'drops', built: 0,
+    locks: [], opens: { kind: 'start' }, demos: 'drops', built: 3,
   },
   survey: {
     id: 'survey', branch: 'survey', fileName: 'SURVEY.skl', short: 'SV',

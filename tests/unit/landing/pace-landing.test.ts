@@ -4,7 +4,7 @@
 // pod falls and with an alarm; a SKIP lands 8 tac s before the target's launch moment (straight into GET READY and its
 // 5…1 beeps, ending on LAUNCH NOW) as one exact conic jump; WINDOW OPEN and PODS IN
 // FLIGHT refuse it; a full LZ's window neither holds TACTICAL nor stops a SKIP; a controller that drops inside a SKIP
-// (holdsTactical false) lifts the window rule; OVERCLOCK covers the landing.
+// (holdsTactical false) lifts the window rule, and AUTODROP's armed controller keeps it (4c, R7); OVERCLOCK covers the landing.
 import { check, finish } from './checks';
 import { lockOn } from './harness-landing';
 import { createHarness5 } from '../wp5/harness5';
@@ -12,7 +12,9 @@ import { createInitialState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
 import { resetWorld } from '@systems/reset';
 import { requestLaunch } from '@systems/landing';
-import { registerLandingController } from '@systems/landing-controller';
+import { activeLandingController, registerLandingController, windowRuleHolds } from '@systems/landing-controller';
+import { giveSkillFile } from '../support/skills';
+import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { choosePace, isOverclocked, requestSkip, skipBlockReason, windowLaunchInSec } from '@systems/pace';
 import { getPrediction } from '@systems/predict';
 import { getDropSolution } from '@systems/drop-cache';
@@ -160,6 +162,19 @@ const other = state().landing.lzs.find((lz) => lz.label !== first)?.label ?? '?'
   off();
   check('…and with no controller the window rule holds again', choosePace(openB, pred, false, 0.05) === 'tactical'
     && skipBlockReason(openB, pred) === LANDING_SKIP_REFUSAL.windowOpen);
+  // Slice 4c (plan R7): AUTODROP's own resolver, armed: its controller flies and holds TACTICAL (no drop inside a SKIP).
+  const file = giveSkillFile(h.store, 'autodrop', 2);
+  const armed: GameState = { ...openB, memory: state().memory, landing: { ...openB.landing, autodrop: { ...openB.landing.autodrop, armed: 'pass', armedAtTSec: state().clock.tSec } } };
+  const controller = activeLandingController(armed);
+  check('AUTODROP armed (R7): its controller flies from the MIND and keeps the window rule (TACTICAL, WINDOW OPEN)',
+    controller?.source === 'autodrop' && controller.holdsTactical && controller.launchesFromMind && windowRuleHolds(armed)
+      && choosePace(armed, pred, false, 0.05) === 'tactical' && skipBlockReason(armed, pred) === LANDING_SKIP_REFUSAL.windowOpen);
+  check('…not armed and not held, AUTODROP flies nothing', activeLandingController(openB) === null);
+  h.store.update((draft) => {
+    draft.memory = draft.memory.map((seg) => (seg.id === file.id ? freeSegment(seg.size) : seg));
+    mergeAdjacentFree(draft.memory);
+    draft.ui.memoryRev++;
+  });
 }
 
 // --- The SKIP flies to the other LZ (past the full one's next window when it comes first) -------------------------------
