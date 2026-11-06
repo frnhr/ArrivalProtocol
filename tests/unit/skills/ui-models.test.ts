@@ -118,11 +118,11 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
     !model.firstPick && model.cards.length === 0 && branches === 'FLIGHT:3+2'
       && model.closed.join() === 'LANDING · AUTODROP,SURVEY · SURVEY,DEFENCE · SENTRY', `${branches} ${model.closed.join()}`);
   // (end of DROP's check)
-  // AUTOBURN's cells: Track ORBIT edits this check when AUTOBURN v3 is built (v3 stops reading OPENS LATER).
-  check('…v1 TRAINED (owned), v2 affordable (`5 · 8`), v3 OPENS LATER (not built), LOCK 270 affordable (`1 · +1`), LOCK 810 NEEDS LOCK 270 FIRST',
+  // AUTOBURN's cells (Track ORBIT): v3 is built (slice 4e), so it reads NEEDS v2 FIRST.
+  check('…v1 TRAINED (owned), v2 affordable (`5 · 8`), v3 NEEDS v2 FIRST (dim), LOCK 270 affordable (`1 · +1`), LOCK 810 NEEDS LOCK 270 FIRST',
     look(model, 'autoburn:v1') === 'owned' && text(model, 'autoburn:v1') === TRAINING_TEXT.status.owned
       && look(model, 'autoburn:v2') === 'affordable' && model.cells.find((c) => c.key === 'autoburn:v2')?.cost === '5 · 8'
-      && text(model, 'autoburn:v3') === TRAINING_TEXT.opensLater && look(model, 'autoburn:L1') === 'affordable'
+      && look(model, 'autoburn:v3') === 'dim' && text(model, 'autoburn:v3') === TRAINING_TEXT.status.needsLower('v2') && look(model, 'autoburn:L1') === 'affordable'
       && model.cells.find((c) => c.key === 'autoburn:L1')?.cost === '1 · +1' && text(model, 'autoburn:L2') === TRAINING_TEXT.status.needsLower('LOCK 270'),
     model.cells.map((c) => `${c.key}:${c.look}:${c.status}`).join(' | '));
   check('…the traces: v2 hangs from v1, LOCK 270 from v1, LOCK 810 from LOCK 270; v1\'s is lit',

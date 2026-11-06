@@ -36,7 +36,7 @@ export const SKILL_TREE: Readonly<Record<SkillId, SkillDef>> = {
       { version: 3, mode: 'LANDING ORBIT', price: 8, blocks: 10 },
     ],
     locks: [{ level: 1, price: 1, blocks: 1 }, { level: 2, price: 2, blocks: 1 }],
-    opens: { kind: 'start' }, demos: 'captures', built: 2,
+    opens: { kind: 'start' }, demos: 'captures', built: 3,
   },
   autodrop: {
     id: 'autodrop', branch: 'landing', fileName: 'AUTODROP.skl', short: 'AD',
