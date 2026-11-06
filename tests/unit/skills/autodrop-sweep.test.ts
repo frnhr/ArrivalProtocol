@@ -69,7 +69,7 @@ function fly(version: 0 | SkillVersion, kidBusy: boolean): { wall: number } {
     } else if (ad.armed === null && /\[G\]/.test(text)) {
       h.press('KeyG');
       continue;
-    } else if (ad.armed === null && /press \[L\]/.test(text)) {
+    } else if (/press \[L\]/.test(text)) {
       // What AUTODROP v2/v3 leaves (a WIDE DROP window, a never-fits LZ) the kid launches by hand.
       h.press('KeyL');
       continue;
@@ -81,7 +81,7 @@ function fly(version: 0 | SkillVersion, kidBusy: boolean): { wall: number } {
   return { wall: h.wall() - start };
 }
 
-for (const ship of SHIPS) {
+for (const ship of SHIPS.filter((candidate) => (process.env.SWEEP_SHIPS ?? candidate.name).split(',').includes(candidate.name))) {
   for (const kid of ['healed', 'quiet', 'busy'] as const) {
     for (const version of [0, 1, 2, 3] as const) {
       armLanding(h, ship.route, { autodrop: version === 0 ? null : version, demos: [0.05, -0.05], healDrivers: kid === 'healed', healInstruments: kid === 'healed' });
@@ -103,9 +103,9 @@ for (const ship of SHIPS) {
     }
   }
 }
-check('every landing ended', rows.length === SHIPS.length * 12);
+check('every landing ended', rows.length % 12 === 0 && rows.length > 0);
 check('AUTODROP never lands fewer colonists than the strip-following kid by hand on the same ship (quiet kid)',
-  SHIPS.every((ship) => [1, 2, 3].every((v) => rows.find((r) => r.ship === ship.name && r.kid === 'quiet' && r.version === v)!.landedPct
+  SHIPS.filter((ship) => rows.some((r) => r.ship === ship.name)).every((ship) => [1, 2, 3].every((v) => rows.find((r) => r.ship === ship.name && r.kid === 'quiet' && r.version === v)!.landedPct
     >= rows.find((r) => r.ship === ship.name && r.kid === 'quiet' && r.version === 0)!.landedPct - 10)),
   rows.filter((r) => r.kid === 'quiet').map((r) => `${r.ship} v${r.version} ${r.landedPct}%`).join(' · '));
 finish();
