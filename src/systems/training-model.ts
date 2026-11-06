@@ -296,7 +296,7 @@ function aheadLine(state: Readonly<GameState>, slot: number | null): string {
   const map = state.run.map;
   const ship = shipSummaryAt(map, slot);
   const hop = hopBetween(map, currentSlot(state.run), slot);
-  const noise = `${NOISE_WORD[hop.noise]}${hop.noise > 0 ? ` · ${hop.noise}` : ''}`;
+  const noise = `${NOISE_WORD[hop.noise]}${hop.noise > 0 ? ` ${hop.noise}` : ''}`;
   return TRAINING_TEXT.ahead(ship.name, ship.kind === 'ark', ship.pods, layoutFor(ship.memoryClass).totalBlocks, ship.memoryClass, noise);
 }
 

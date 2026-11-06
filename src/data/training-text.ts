@@ -125,7 +125,7 @@ export const TRAINING_TEXT = {
   undo: 'UNDO',
   // The AHEAD row (03 §4): the ship selected on the STAR CHART, its memory class and noise written as its card writes them.
   ahead: (ship: string, ark: boolean, pods: number, memory: number, cls: string, noise: string): string =>
-    `NEXT: ${ship}${ark ? ' · ARK' : ''} · ${plural(pods, 'POD')} · MEMORY ${memory} · ${cls} · NOISE ${noise}`,
+    `NEXT: ${ship}${ark ? ' · ARK' : ''} · ${plural(pods, 'POD')} · MEMORY ${memory} ${cls} · NOISE ${noise}`,
   aheadNone: 'NEXT: PICK A SHIP ON THE CHART TO SEE WHAT IT ASKS',
   // The packet preview (03 §4), by the limit that binds: `FILES 72 + SKILLS 17 · LINK 86 · 3 BLOCKS OVER`.
   preview: {
