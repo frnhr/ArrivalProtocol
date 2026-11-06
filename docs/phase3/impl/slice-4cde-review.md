@@ -51,6 +51,8 @@ Counts: **2 B, 6 M, 14 m.** Seven questions for the designer, with numbers.
 
 ### B2. AUTODROP v3's PLAN never ends when only wrong-split leftovers are left: the landing stays open
 
+**Fixed (landing fix pass).** Both parts: `nextLaunchAtTSec` feeds pace, and v3 holds only the LZs it flies. The backstop is left (not needed once the moment is declared). Suite `skills/autodrop-review` (see the plan's "Deviations (review fixes, landing)").
+
 - **Where:**
   - `src/systems/autodrop-plan.ts:449–458`: the leftovers go "into a fitting LZ" that is already full;
   - `src/systems/pace.ts:150–200`: the landing's awaited window is "an in-band window of an LZ with room";
@@ -91,6 +93,8 @@ Counts: **2 B, 6 M, 14 m.** Seven questions for the designer, with numbers.
 
 ### M1. AUTODROP v1 held does worse than by hand when the queue mixes sure and WIDE pods (item (b), root cause)
 
+**Fixed.** The hold lets go in a window with nothing more to fly; the sweep's kid lets go with the strip. VESPER busy 50 → 81%.
+
 - **Where:** `src/systems/autodrop.ts:501–528` (`autodropTick`), and the v1 flow in general.
 - **Root cause.** It is **not** the REPAIRs taking queued drivers offline mid-volley (the busy kid's REPAIRs mostly
   stall, see the probe).
@@ -123,6 +127,8 @@ Counts: **2 B, 6 M, 14 m.** Seven questions for the designer, with numbers.
 
 ### M2. AUTODROP v3 on damaged VESPER is slow (item (c)): one pod per window, and every other window is held back
 
+**Fixed.** v3 leaves the windows of LZs it does not fly, with LOAD NEXT pinned to a pod outside the plan: 75% / 494 s → 81% / 400 s. Q3 (v3 throwing WIDE drops itself) stays open.
+
 - **Probe:** `probe-v3.ts`, VESPER as arrived. Sensor ×2.5, and drivers 1–4 and 13 at 1.5–2.
   - The plan is **11 one-pod volleys over 6 passes** (`1:LZ-Bx1, 1:LZ-Ax1, … 6:LZ-Ax1`), with LZ-C NEVER FITS.
   - Volleys flew at t = 80, 132, 160, 211, 239, 290, 318, 369, 397, 446 and 497 s, then `PLAN DONE · A +6 · B +5` at
@@ -140,6 +146,8 @@ Counts: **2 B, 6 M, 14 m.** Seven questions for the designer, with numbers.
   drops itself is the designer question (Q3).
 
 ### M3. The kid's own launches teach AUTODROP to fire early: an obedient ship 1 gives AIM 60% (new)
+
+**Fixed** by measuring against the cued slot (Q4's first option, consistent with 01-landing's `LAUNCH NOW`): an obedient ship 1 trains 94%.
 
 - **Where:** `src/systems/landing.ts:172` (`dropDemoOffset` per manual launch), as 03 §3.3 specifies.
 - **Problem:** the strip's `LAUNCH — press [L]` comes at the launch moment, where the whole dot **first** fits (pace's
@@ -164,6 +172,8 @@ Counts: **2 B, 6 M, 14 m.** Seven questions for the designer, with numbers.
 
 ### M4. On CORMORANT as arrived (all WIDE), nothing says why AUTODROP does nothing; [G]'s refusal points at the wrong fix (item (d))
 
+**Fixed.** `NO SURE WINDOW — REPAIR …`, v3's `NOTHING TO PLAN`, the lessons gated, v2's rows, and DROP's patch 1. The optional L5 tail is left.
+
 - **Probe:** `probe-corm.ts`, v1, v2 and v3 in turn.
   - **v1:** no AUTODROP line on the strip at all. The Skills row says `CENTRE · AIM 60% · 9 drops`.
   - **v2:**
@@ -182,6 +192,8 @@ Counts: **2 B, 6 M, 14 m.** Seven questions for the designer, with numbers.
   - optionally a WIDE-DROP tail on L5 while AUTODROP works: ` · AUTODROP: NO SURE PART`.
 
 ### M5. AUTOBURN v3's climb to the highest circle (R15 / item (a)): the "nearest above DRAG" rule removes the cost and changes nothing else
+
+**Fixed** (the lead's call; Fran to confirm): `V3_AIM_ABOVE_DRAG = 'nearest'`. `v3-sweep --full` reproduces the table's numbers.
 
 The alternative was measured with the real `v3-sweep`, `--full`, in a scratch copy of `autoburn-v3.ts computeAim`. Among
 the candidates with the best fit count (and pods), the rule picks the one with the least transfer Δv from the current
@@ -222,6 +234,8 @@ loop while it is above the DRAG line. Below the line, or with none above it, the
 
 ### M6. A refit-only-lower aim with a FUEL term can walk the circle down as FUEL drains (unverified risk)
 
+**Verified and fixed.** It walks (5,200 → 5,100 at 23% FUEL on a low VESPER); the refit now needs a fit change.
+
 - **Where:** `src/systems/autoburn-v3.ts:146–164`, and the refit at `autoburn.ts:630`.
 - `fuelAfterPct` is part of the candidate filter, and FUEL in whole percent is part of the memo key. As the transfer and
   the top-ups spend FUEL, the highest candidate that passes the reserve can drop a step. That triggers `GOES LOWER —
@@ -235,45 +249,45 @@ loop while it is above the DRAG line. Below the line, or with none above it, the
 
 ## m — minor
 
-1. **The v3 ARMED row never shows its SKIP tail.** `guidance.ts:828` `withTail(head, ' · [F] SKIP', '')`, and `armedOrbit`
+1. **The v3 ARMED row never shows its SKIP tail.** **[fixed, landing fix pass]** `guidance.ts:828` `withTail(head, ' · [F] SKIP', '')`, and `armedOrbit`
    is 67 characters at `12:34`, so it reaches 78 with the tail and the tail is dropped. [F] stays lit with no words.
    ROUND's row (67 with the tail) is fine. Shorten it (`AUTOBURN ARMED — orbit at ▲ in 3:10 · [B] to cancel`) or
    pass `' · [F]'` as the short tail.
-2. **Exactly circular locks make v3 chase ▲.** From an e = 0 lock (`lockOn`'s default, used by `autodrop-arm`), v3's
+2. **Exactly circular locks make v3 chase ▲.** **[fixed (planner; lockOn's default kept), landing fix pass]** From an e = 0 lock (`lockOn`'s default, used by `autodrop-arm`), v3's
    first burn read `▲ in 0:15` for **176 wall s**, counting down about 1 s per 12 s, with SKIP blocked (`BURN COMING
    UP`). From e ≥ 1e-4 it is normal. In-game ROUND stops at e ≈ 0.0045, so this is a harness trap for any future
    AUTOBURN + AUTODROP suite on `armLanding`. Pick the burn point at "now + a quarter period" when e < ~1e-5.
    **Mechanism unverified;** the symptom is measured.
-3. **The never-fits note's `AUTOBURN v3 GOES LOWER` can be false.** `autodrop-text.ts neverFits` says it whenever v3 is
+3. **The never-fits note's `AUTOBURN v3 GOES LOWER` can be false.** **[fixed, landing fix pass]** `autodrop-text.ts neverFits` says it whenever v3 is
    engaged, even when the LZ is in v3's own `aim.misses`, where v3 has decided it will not go lower for it. Use `REPAIR
    X` alone, or `v3 CAN'T FIT IT`, in that case.
-4. **AD rows outrank L9 and L10.** `landing-guidance.ts:417`: while v3 is armed, AD-armed stands in every open window,
+4. **AD rows outrank L9 and L10.** **[fixed (L10 over AD-armed), landing fix pass]** `landing-guidance.ts:417`: while v3 is armed, AD-armed stands in every open window,
    so `ORBIT DECAYING` (L10) is hidden for the window's length. Let L10 win, or give AD-armed a decay tail.
-5. **AUTODROP does not know when it is shadowed** (needed for slices 5 and 7). `autodropTick`, `claimTick` and
+5. **AUTODROP does not know when it is shadowed** **[fixed, landing fix pass]** (needed for slices 5 and 7). `autodropTick`, `claimTick` and
    `autodropLineOf` run whether or not AUTODROP is the active controller. With a MERGE or resident resolver flying,
    an armed AUTODROP would still claim a Core thread at T−8 and say `AUTODROP — LZ-A ×2 · LAUNCHING`. Gate them on
    `activeLandingController(state)?.source === 'autodrop'` (or "no higher source answers").
-6. **m9 stands, and goes further than `source`.** `autodropController(state, override)` returns `source: 'autodrop'`,
+6. **m9 stands, and goes further than `source`.** **[fixed at the seam (source; machine state left to slice 7), landing fix pass]** `autodropController(state, override)` returns `source: 'autodrop'`,
    so a `'merge'` resolver that wraps it throws in `activeLandingController`. `override.queue` is unread, and every
    `decide*` reads `state.landing.autodrop` (`armed`, `held`, `claimed`). MERGE's restored pods need their own machine
    state, or an override that bypasses it. Today's seam is only the version.
-7. **The plan memo can hold a row whose moment passed** (**unverified in play**). `planKey` has no "now" and no
+7. **The plan memo can hold a row whose moment passed** **[fixed, landing fix pass]** (**unverified in play**). `planKey` has no "now" and no
    `bay.cadenceLeftTac`. A row whose span passed without a launch (ENGINE FIRING, a late claim) stays row 0 until its
    window closes. Meanwhile the claim is held and AD-fly says `LAUNCHING`. Put `rows[0].atTSec < now − span` into the
    key, or drop the stale row at read.
 8. **The pre-empt outline is drawn armed after SENTRY falls below v2.** `HollowPainter.ts:282` uses `telegraph.preempted`
    alone, but `stepSeeds` lands the seed as usual then. Use `preempted && sentry ≥ SENTRY_QUICK_RM_VERSION`.
-9. **Hard-coded words in the POD BAY table.** `landing-hud.ts:732` builds `'NOW'` and `` `IN ${minSec(tac)}` `` inline;
+9. **Hard-coded words in the POD BAY table.** **[fixed, landing fix pass]** `landing-hud.ts:732` builds `'NOW'` and `` `IN ${minSec(tac)}` `` inline;
    move them to `AUTODROP_TEXT.bay`.
-10. **The plan's check line wraps at 1440** (the known item, not re-checked in a browser).
+10. **The plan's check line wraps at 1440** **[fixed (pods), landing fix pass]** (the known item, not re-checked in a browser).
     `PLAN · 3 PASSES · A 1,200 · B 1,000 · C 1,000 ✓` is 47 characters, and 4 LZs with two misses reach 62. Count pods,
     not colonists (`PLAN · 3 PASSES · A 6 · B 5 · C 5 ✓`, 35), which also matches the split's `A ×2` notation. Or put the
     per-LZ part on a second line.
-11. **BULLSEYE is decided in two places.** The echo decides in `landing.ts touchDown`, and the float (patch 2) would
+11. **BULLSEYE is decided in two places.** **[fixed (with DROP's patch 2), landing fix pass]** The echo decides in `landing.ts touchDown`, and the float (patch 2) would
     re-derive it from the record. Put `bullseye: boolean` on `'pod-landed'` (events.ts) and have both read it.
-12. **v3 with no fitting aim falls to ROUND silently.** The kid sees `[B] · ROUND` with no reason. The ghost could say
+12. **v3 with no fitting aim falls to ROUND silently.** **[fixed (ghost and Skills row), landing fix pass]** The kid sees `[B] · ROUND` with no reason. The ghost could say
     `NO LANDING ORBIT FITS — REPAIR SENSOR INTERP`.
-13. **Mode checks outside `MODE_RULES`.** `autoburn.ts` still compares `mode === 'landing-orbit'` at five sites (146, 230,
+13. **Mode checks outside `MODE_RULES`.** **[fixed, landing fix pass]** `autoburn.ts` still compares `mode === 'landing-orbit'` at five sites (146, 230,
     485, 553, 568). They are fine for now, but a fifth mode would need them found by hand. `then === 'hold'` already
     expresses most of them.
 14. **INSPECT parity of a decoy.** It shows title, type, size, INTACT, the desc and `◎ re-scan`. A real healthy tool's
@@ -388,12 +402,12 @@ loop while it is above the DRAG line. Below the line, or with none above it, the
 
 | # | Patch | Verdict |
 |---|---|---|
-| DROP 1 | `REFUSAL_LINES` `AUTODROP|<word>` (`script.ts:829`) | **Right**: same shape as `AUTO_REFUSAL_LINES`, data-only import. Fix the words first (M4): `NOTHING SET`'s `use the POD BAY's [+]` is wrong for v3 and for an all-WIDE ship, and `ONLY v1`'s key `[L]` is refused in the MIND, where [G] also works. |
-| DROP 2 | BULLSEYE float on `NavPlotWindow.ts:1206` | **Right.** The record is `'down'` when `'pod-landed'` fires, and the fourth argument exists. Prefer a `bullseye` field on the event (m11). |
+| DROP 1 | `REFUSAL_LINES` `AUTODROP|<word>` (`script.ts:829`) | **Right**: same shape as `AUTO_REFUSAL_LINES`, data-only import. Fix the words first (M4): `NOTHING SET`'s `use the POD BAY's [+]` is wrong for v3 and for an all-WIDE ship, and `ONLY v1`'s key `[L]` is refused in the MIND, where [G] also works. **Applied (landing fix pass), words fixed first (M4), no keys.** |
+| DROP 2 | BULLSEYE float on `NavPlotWindow.ts:1206` | **Right.** The record is `'down'` when `'pod-landed'` fires, and the fourth argument exists. Prefer a `bullseye` field on the event (m11). **Applied, reading the event's `bullseye` (m11).** |
 | DROP 3 | `training-model defaultSel` (`:274`) | **Take it:** prefer a `lost` cell whose RESTORE is affordable, then `affordable`, then `lost`, then `dim`. Today ENTER at desk 2 after a lost AUTOBURN buys AUTODROP v1, another branch, on a default. |
 | SENTRY | three mini-demo SVGs + CSS | **Unverified.** The plan's Track SENTRY deviations carry only the one-line note. The SVG text is not in the plan or the repo. Have the fix pass draw all six in one hand (§6) with the existing `tr-demo-*` tokens. |
-| ORBIT 1 | `skills.ts:28` comment | **Right.** Suggest: `` `built`: … AUTOBURN, AUTODROP and SENTRY v1–v3 (slices 4a–4e); SURVEY none until slice 6. `` |
-| ORBIT 2 | 03 §3.6 step 2 note | **Right** (planToCircle, not go-low, R17; the grid starts one step under the top). Also note that v3 can **climb** from a low loop: "goes down" is not the only case. And flag the "Why the highest" sentence for Q1. |
+| ORBIT 1 | `skills.ts:28` comment | **Right.** Suggest: `` `built`: … AUTOBURN, AUTODROP and SENTRY v1–v3 (slices 4a–4e); SURVEY none until slice 6. `` **Applied.** |
+| ORBIT 2 | 03 §3.6 step 2 note | **Right** (planToCircle, not go-low, R17; the grid starts one step under the top). Also note that v3 can **climb** from a low loop: "goes down" is not the only case. And flag the "Why the highest" sentence for Q1. **Applied, with the climb and the M5/M6 notes.** |
 
 ## Scratch scripts
 

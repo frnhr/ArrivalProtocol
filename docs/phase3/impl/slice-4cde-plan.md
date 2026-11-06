@@ -1667,3 +1667,90 @@ for v1, which R4's `'released'` reads).
    the pass rows `.pb-pass-step[data-lz][data-step]`, the plan `#pbPlanRows .pb-plan-row` and `#pbPlanCheck`; on a phone
    LAUNCH (`#podLaunchBtn`) is a pointer hold for v1 and [G] rides in `#phoneBar`.
 5. **The review-fix pass:** the `centre`, `pass` and `plan` mini-demos (still plain); AGENTS.md's "What's built".
+
+## Deviations (review fixes, landing)
+
+Recorded by the landing fix agent (on `claude/modest-hawking-209t0f` from 6f026d1): the review's B2, M1–M6 and minors
+m1–m7, m9–m13 for AUTODROP and AUTOBURN v3, DROP's patches 1 and 2, ORBIT's two patches, the §8.3 integration check, and
+the landing half of §8.5's e2e. No save bump and no saved field.
+
+### What changed
+
+1. **The controller names its next launch (B2).** `LandingController.nextLaunchAtTSec?(state)`; `landing-controller.ts
+   controllerLaunchInSec` reads it for a controller that holds TACTICAL, and `pace.ts` treats it as a window: TACTICAL
+   inside `WINDOW_TACTICAL_LEAD_TAC`, and a SKIP's next event. AUTODROP names the armed pass's volley, the plan's first
+   row, or v1's held volley. The review's backstop (end the plan when only unflown leftovers remain for a period) is not
+   built: with the moment declared, the leftover rows fly, and the B2 suite shows the plan ending.
+2. **v3 holds only the LZs it flies (B2, M2).** `armedFor` owns a window when the plan sends pods to its LZ (judged by the
+   LZ, not the window: by the window, the kid's WIDE drops into LZ-B's spent window each freed a planned pod, which was then
+   thrown WIDE too). In a window of another LZ with room, `pinTick` pins LOAD NEXT to the healthiest pod of the new
+   `LandingPlan.outside` (pods in no row and not kept for a pass past the table), and L4–L6 stand there. Out of such a window
+   a pin on an outside pod is cleared. A pin on an outside pod is never taken by `decidePlan` (the row flies its own pod).
+   The plan's ties now go by memory order, not LOAD NEXT's, so AUTODROP's own pin never moves its pod into the plan. With
+   no outside pod, AD-armed still stands (leftovers are flown at ¾ rather than thrown WIDE into a never-fit LZ).
+3. **A short sure part stays flyable.** `volleySlots`: when no count fits because the learned offset pushes even one pod
+   out of the sure part, one pod goes in the middle of what is left (found by the B2 probe: a 0.3 tac s sure part against a
+   0.33 s learned offset emptied the plan). R5's untrained 3-of-4 is unchanged.
+4. **v1 lets go (M1).** `heldTick`: held in an open window whose next volley is not in it (the next pod WIDE, the sure part
+   spent, a reloading bay), `held = false`, no lesson. The sweep's v1 kid lets go when the strip stops saying HOLD.
+5. **AIM against the cued slot (M3).** Chosen over "the strip cues the centre", because 01-landing teaches `LAUNCH NOW` the
+   moment the whole dot fits and "four calm taps" across the sure part; cueing the centre would cut a hand window's pods.
+   `autodrop-plan dropDemoOffset(sol, launch, warp, cadenceSec, earlier)`: the first launch of a window against its launch
+   moment (sure part ∩ band, else the in-band opening), each later one against one cadence after the launch before it.
+   The old centre measure is `centreOffsetTac` (the suites' centring checks). Known approximation: an empty bay's reload
+   is not part of the cue. 03 §2 carries a built note.
+6. **NO SURE WINDOW (M4).** New refusal words: `NO SURE WINDOW · SENSOR INTERP | NAV PLOTTER | DRIVERS` (`NO SURE WINDOW —
+   REPAIR …`, from `bestRepairForDrop` on the first LZ with room; a driver hint reads THE POD DRIVERS) and `NO SURE WINDOW`
+   (`… ON THIS ORBIT`); v3's empty plan says `NOTHING TO PLAN — NO POD CAN GO YET`, so `use the POD BAY's [+]` is v2's only.
+   `tut-autodrop-v2/v3` are due only when [G] would fly something. v2's rows say `NO SURE WINDOW THIS PASS` whenever
+   `fits` is 0. DROP's patch 1 is in `script.ts` REFUSAL_LINES, with no keys for any word (ONLY v1's [L] is refused in the
+   MIND, where [G] works). The optional L5 tail is not built.
+7. **AUTOBURN v3's aim (M5).** `tuning.ts V3_AIM_ABOVE_DRAG = 'nearest'` (WHY in place; `'highest'` restores 03's rule):
+   among the candidates that fit as many LZs and pods as the highest and lie above the DRAG line, the least transfer Δv.
+8. **No refit for FUEL (M6).** Measured: VESPER (Sensor Interp and drivers 70%) locked low at 0.05 of the band, the aim steps
+   5,200 → 5,100 at FUEL 23% with no fit change. `v3ArmedTick` now goes lower only when an LZ of the new aim does not fit on
+   the held circle (`newlyFitting`); the reserve stop ends it as before.
+9. **A loop with no apsis (m2).** `predict.ts planToCircle`: under `CIRCLE_NO_APSIS_E` (1e-5) both apsides are the next
+   quarter turn of the ship's polar angle, with a quarter-turn period, so a burn just past it is still due now (an AUTOBURN
+   offset). `lockOn`'s default e stays 0: the planner fix covers it, and changing the default would move the landing
+   suites' numbers.
+10. **Minors.** m1 `armedOrbit` shortened to `AUTOBURN ARMED — orbit at ▲ in 3:10 · [B] to cancel` and a long ARMED head
+    keeps ` · [F]`. m3 `neverFits(lz, repair, 'kid' | 'v3' | 'none')` via `autodrop.ts whoGoesLower` (v3's own misses read
+    `REPAIR X`, or `AUTOBURN v3 CAN'T FIT IT`). m4 L10 (and v3's L10 slot) outranks AD-armed (`decayLine`). m5 `shadowed`:
+    under a higher controller AUTODROP claims nothing, ends nothing and has no strip lines. m6 `AutodropOverride.source`
+    (intents carry it; a wrapping source's launches skip AUTODROP's claim, its thread being the wrapper's); the machine is
+    still `state.landing.autodrop` and `queue` is unread: MERGE's own machine state is slice 7's. m7 `PlanRow.untilTSec`; a
+    memo hit whose first row is past it re-plans. m9 `AUTODROP_TEXT.bay.planNow/planIn`. m10 the check line counts pods.
+    m11 `'pod-landed'.bullseye`, read by the echo and by NavPlotWindow's float (DROP's patch 2). m12 `autoburn-v3
+    v3NoAimLine`: the ROUND ghost's label and the Skills row (in LANDING) say `NO LANDING ORBIT FITS — REPAIR …` or `NO
+    LANDING ORBIT LEAVES 20% FUEL`. m13 `MODE_RULES` gains `target` and `fallsTo`; autoburn.ts has no `mode ===
+    'landing-orbit'` left.
+11. **ORBIT's patches.** `skills.ts`'s `built` comment; 03 §3.6 notes the scan one step under the top, the nearest rule, the
+    move with `planToCircle` that can climb, and the fit-only refit.
+
+### Measurements (before → after)
+
+- **B2** (VESPER, drivers healthy, its Sensor Interp ×2.5, v3, the strip's kid): 5 pods aboard at the 1,500 s cap → all 16
+  launched by AUTODROP (11 counts, 5 leftovers at ¾), the landing over at 522 wall s, 69% landed in an LZ with room.
+- **M1** (`autodrop-sweep`, VESPER): healed 88 → 94%, as arrived 75 → 81%, busy **50 → 81%**; HALCYON and CORMORANT
+  unchanged.
+- **M2** (VESPER as arrived, v3): **75% in 494 s → 81% in 400 s** (11 AUTODROP volleys, 5 WIDE pods by hand in LZ-C's
+  windows). Busy kid: 69% at the 1,500 s cap → 75% in 465 s.
+- **M3** (ship 1 by the strip, `followLanding`): demos −5.6 / −3.3 / −1.0 → +0.35 / +0.30 / +0.30 tac s; **AIM 60% → 94%**,
+  learned −1.00 → +0.16 tac s. HALCYON, KESTREL and healed VESPER also 94% (before 60 / 80 / 96).
+- **M5** (`v3-sweep --full`, five classic ships): healthy low ellipse v3 FUEL **−25.4% → −6.5%** (v2 ROUND −7.6%), landed
+  47/48 both, first drop 28 s both; to the landing orbit VESPER 117 → 63 s, LAST LIGHT 337 → 158 s, HALCYON 60 s, KESTREL
+  81 s. Capture-loop and damaged rows unchanged (−25.9%, −18.9%, −35.6%). LAST LIGHT's landings still reach the 1,500 s cap
+  (information only, slice 8). 60/60.
+- **M6**: the aim's FUEL step (5,200 → 5,100 at 23%) no longer moves the held circle.
+- **m2** (VESPER, an e = 0 lock at 6,850, Sensor Interp 70%): v3's first burn 7 wall s after [B]; none in 150 s before.
+- **§8.3** (healthy VESPER locked at ▼ 5,600, e 0.03; AUTOBURN v3 + AUTODROP v3, [B] [G] [F] only): R* 5,900, AUTOBURN
+  reached and held it, 100% landed in 193 wall s, FUEL 100 → 98%, 0 launches under thrust, no ENGINE FIRING refusal.
+
+### Tests
+
+- New: `skills/autodrop-review` (B2, m7, M1, M3, M4, m5, m6; ~14 s alone) and `skills/landing-v3` (M2, §8.3, m2; ~16 s),
+  sharing `skills/landing-kid.ts`. `autodrop-arm` takes the lock's `e`.
+- Changed: `autodrop-plan` (the cue demo, the check line, the never-fits words), `autodrop-flow` (the demos against the cue,
+  `centreOffsetTac`), `v3-aim` (the nearest rule, m12), `autodrop-sweep` (the v1 kid).
+- e2e: `tests/e2e/scenarios/skills-4cde-landing.mjs`, registered in `run.mjs`.
