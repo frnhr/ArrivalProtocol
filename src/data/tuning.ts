@@ -2155,6 +2155,12 @@ export const SENTRY_DELETE_FACTOR = 0.5;
 // SENTRY v3's FIREWALL (03 §3.10): one fresh FIREWALL.sys compiled at each boot while the unit holds fewer than
 // FIREWALL_MAX_OWNED (2), so the skill tops the unit up but never stacks walls past what the salvage cards allow.
 export const SENTRY_FIREWALLS_PER_BOOT = 1;
+// The version each of SENTRY's powers needs, as it works now (graded damage, 03 §3.5: v3 at 64% works as v2, so it compiles
+// no FIREWALL but still rm's quickly). The tree's order (data/skills.ts SKILL_TREE.sentry: SIGHT, QUICK RM, FIREWALL), named
+// so the rule code never compares against a bare 2.
+export const SENTRY_SIGHT_VERSION = 1;
+export const SENTRY_QUICK_RM_VERSION = 2;
+export const SENTRY_FIREWALL_VERSION = 3;
 
 // --- end of 4d SENTRY ----------------------------------------------------------------------------------------------------
 

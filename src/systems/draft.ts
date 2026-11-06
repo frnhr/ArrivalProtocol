@@ -9,10 +9,11 @@ import { packUnit, type Packet, type PacketSkill } from '@systems/carry';
 import { skillPacketPlan, applySkillPlan, type SkillPacketPlan } from '@systems/skill-files';
 import { shipSummaryAt } from '@systems/map-run';
 import { chargeLeft, upgradeFiles, isFirewall } from '@state/selectors';
+import { skillLive } from '@systems/capabilities';
 import { hollowLabel } from '@systems/say';
 import { draftCards, UPGRADE_FILE_TEXT, type UpgradeId, type DraftContext, type DraftCard } from '@data/upgrades';
 import {
-  REPAIR_V2_VERSION, THREAD_PLUS_THREADS, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, FUEL_TRIM_BLOCKS, INTEGRITY_MAX,
+  REPAIR_V2_VERSION, THREAD_PLUS_THREADS, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, FUEL_TRIM_BLOCKS, INTEGRITY_MAX, SENTRY_FIREWALL_VERSION,
 } from '@data/tuning';
 import { visitRng } from '@systems/map-streams';
 import { deliveryFileGroups } from '@systems/repository';
@@ -72,6 +73,8 @@ export function draftContext(
     salvageOnly: state.run.map.world === 'arm',
     tree,
     toFinal: room?.to !== undefined && shipSummaryAt(state.run.map, room.to).final,
+    // Slice 4d: SENTRY v3 working as the PACKET opens takes the FIREWALL card out of the deal (it compiles its own).
+    ...(skillLive(state.memory, 'sentry').version >= SENTRY_FIREWALL_VERSION ? { firewallCompiler: true } : {}),
   };
 }
 

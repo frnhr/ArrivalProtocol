@@ -78,7 +78,7 @@ check('built: AUTODROP v1–v3', SKILL_TREE.autodrop.built === 3);
 // SURVEY: slice 6.
 check('built: SURVEY not yet', SKILL_TREE.survey.built === 0);
 // DEFENCE: Track SENTRY raises SENTRY to v3 here.
-check('built: SENTRY not yet', SKILL_TREE.sentry.built === 0);
+check('built: SENTRY v1–v3', SKILL_TREE.sentry.built === 3);
 // (end of the built checks)
 
 // --- Graded damage (03 §3.5) -----------------------------------------------------------------------------------------------

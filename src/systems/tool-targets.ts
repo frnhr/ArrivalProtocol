@@ -1,5 +1,5 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the 'outline' target, the TEMP
-// FILE refusals. Others ask by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the 'outline' target (inSeedOutline),
+// a disguised seed under each tool (disguisedRefusal, its decoy's delete confirm). Others ask by message.
 import type { GameState } from '@state/schema';
 import type { Segment, FreeSegment, ShipSegment, ShipBackupSegment, SegmentRole } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
@@ -19,6 +19,7 @@ import { isSkillFile } from '@state/selectors';
 import { fileLevel, restoreCostOf } from '@systems/skill-levels';
 import { SKILL_TREE } from '@data/skills';
 import { PACKET_SKILL_TEXT } from '@data/training-text';
+import { isDisguised } from '@state/threat-selectors';
 
 // What deleting a skill file costs (slice 4): its skill until a desk's RESTORE, at the price the next desk will ask (the
 // levels the run paid for above what is left once it is gone: another copy, or nothing).
@@ -124,6 +125,7 @@ export function targetRefusal(seg: Segment, ctx: ValidTargetContext): ToolRefusa
   if ((activeKind === 'move' || activeKind === 'copy') && pickedSource) return placeRefusal(seg, ctx, pickedSource);
   if (seg.type === 'free') return TOOL_REFUSAL.notAFile;
   if (isBusy(seg)) return TOOL_REFUSAL.busy;
+  if (isDisguised(seg)) return disguisedRefusal(activeKind);
   switch (activeKind) {
     case 'scan':
       if (seg.type === 'driver') return TOOL_REFUSAL.driverScan;
@@ -163,6 +165,38 @@ export function targetRefusal(seg: Segment, ctx: ValidTargetContext): ToolRefusa
   }
 }
 
+// A disguised seed under each tool (slice 4d, plan R9): it plays as the harmless file it shows. SCAN works on it as on any
+// file (1.2 s, and it unmasks: state/actions.ts actionScan); DELETE works without a SCAN (detective work too: it runs as rm
+// on a seed); MOVE, COPY and REPAIR refuse with a temp file's neutral words, and SWAP with what it says to any unit file.
+// Never EATEN or LOCKED: a refusal must not give the seed away.
+function disguisedRefusal(kind: FsToolKind): ToolRefusal | null {
+  switch (kind) {
+    case 'scan':
+    case 'delete':
+      return null;
+    case 'move':
+    case 'copy':
+    case 'repair':
+      return TOOL_REFUSAL.tempFile;
+    case 'swap':
+      return TOOL_REFUSAL.swapShipOnly;
+  }
+}
+
+// SENTRY v2's 'outline' target (03 §3.10, plan §4.4): the block at `addr` lies inside HOLLOW's blinking seed outline, on
+// the open free space that holds it (hollow.ts openFreeHolding: where the seed will land, and where the outline is drawn).
+// Only the block test: whether SENTRY v2 works, DELETE is in hand and a thread is free is sentry.ts preemptSeed's to say.
+export function inSeedOutline(state: Readonly<GameState>, seg: Readonly<Segment>, addr: number): boolean {
+  const telegraph = state.hollow.seedTelegraph;
+  if (telegraph === null || !isOpenFree(seg as Segment)) return false;
+  if (!(addr >= telegraph.startAddr && addr < telegraph.startAddr + telegraph.size)) return false;
+  const at = state.memory.indexOf(seg as Segment);
+  if (at < 0) return false;
+  let start = 0;
+  for (let i = 0; i < at; i++) start += state.memory[i]!.size;
+  return start <= telegraph.startAddr && start + seg.size >= telegraph.startAddr + telegraph.size;
+}
+
 export function isValidTarget(seg: Segment, ctx: ValidTargetContext): boolean {
   return targetRefusal(seg, ctx) === null;
 }
@@ -173,6 +207,9 @@ export function isValidTarget(seg: Segment, ctx: ValidTargetContext): boolean {
 // last copy of one of your flight files (Engine I/O, Autopilot …) asks too, naming what the ship
 // loses: one stray click with DELETE must not silently kill the engine.
 export function deleteQuestion(state: Readonly<GameState>, seg: Segment): ConfirmText | null {
+  // Slice 4d (plan R9): a disguised seed asks its decoy's own confirm (`DELETE CACHE.TMP?` and the decoy's line), as the
+  // file it shows would; yes runs it as rm on a seed.
+  if (isDisguised(seg)) return CONFIRM_TEXT.deleteFile(seg.disguise.name, seg.disguise.desc, seg.size);
   if (seg.type === 'redundancy') return CONFIRM_TEXT.deleteCharge(seg.used, seg.size);
   // A card's file: the card a kid picked goes with it.
   if (seg.type === 'firewall') return CONFIRM_TEXT.deleteFile(seg.name, DELETE_CARD_EFFECT.firewall, seg.size);

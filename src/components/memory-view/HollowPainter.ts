@@ -1,4 +1,5 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): no reach and no beam tooltip on a
+// disguised seed, its stamps, the outline SENTRY v2 can aim at and arm. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState, VerbTelegraph, ArrivalSeed } from '@state/schema';
 import type { InfectionSide } from '@/types/segment';
@@ -14,7 +15,10 @@ import { requireById, partNumber, replayAnimation } from '@components/dom';
 import { heartbeatKind, heartbeatSvg, type Heartbeat } from './SegmentBlock';
 import { OUTCOME_WORDS, driverOutlook } from './DetailPanel';
 import { segmentStarts } from '@systems/memory-ops';
-import { THREAT_TEXT } from '@data/threat-text';
+import { THREAT_TEXT, SENTRY_TEXT } from '@data/threat-text';
+import { isDisguised } from '@state/threat-selectors';
+import { preemptAimable } from '@systems/sentry';
+import { showStamp } from '@components/hud/Stamp';
 import {
   HOLLOW_PAINT_HZ, INTEGRITY_MAX, HOLLOW_FX_MS, CURE_SPARKS, SEED_BLINK_SEC, BOARD_DROP_MS, SEED_LAND_FX_MS,
 } from '@data/tuning';
@@ -190,7 +194,9 @@ function paintMarks(root: HTMLElement, state: Readonly<GameState>): void {
   const clock = biteClock(state);
   if (clock.quiet) root.querySelectorAll<HTMLElement>('.seg.hollow').forEach((chip) => chip.classList.add('hollow-quiet'));
   // A beam seed's tooltip names where it came from and the file the ECC line put it beside (slice 2).
+  // A disguised seed keeps its decoy's own title (slice 4d): the beam's tooltip would name it.
   for (const seed of state.run.arrival?.seeds ?? []) {
+    if (state.memory.some((seg) => seg.id === seed.segId && isDisguised(seg))) continue;
     partsOf(root, seed.segId).forEach((part) => setTitle(part, beamSeedTitle(seed)));
   }
   const marks = reachMarks(state);
@@ -271,7 +277,10 @@ function paintTelegraph(root: HTMLElement, state: Readonly<GameState>): void {
   // The free segment that holds the spot is part of the key: a MOVE that takes or reserves it mid-telegraph
   // takes the outline away at once (the seed re-aims as it lands).
   const index = telegraph === null ? -1 : openFreeHolding(state.memory, telegraph.startAddr, telegraph.size);
-  const key = telegraph === null ? '' : `${telegraph.startAddr}|${telegraph.size}|${index}`;
+  // Slice 4d: SENTRY v2's DELETE can be aimed at the outline (`aimable`: DELETE in hand and QUICK RM working), and once it is
+  // the outline is drawn armed (`preempted`): the seed will be freed as it lands.
+  const look = telegraph === null ? '' : telegraph.preempted ? 'armed' : preemptAimable(state) ? 'aimable' : '';
+  const key = telegraph === null ? '' : `${telegraph.startAddr}|${telegraph.size}|${index}|${look}`;
   const marks = Array.from(root.querySelectorAll<HTMLElement>('.hollow-mark.seed-telegraph'));
   if (marks.length > 0 && marks.every((mark) => mark.dataset.key === key)) return;
   marks.forEach((mark) => mark.remove());
@@ -284,7 +293,7 @@ function paintTelegraph(root: HTMLElement, state: Readonly<GameState>): void {
     const from = Math.max(partStart, telegraph.startAddr);
     const to = Math.min(partStart + size, telegraph.startAddr + telegraph.size);
     if (to <= from) continue;
-    const mark = addMark(part, 'seed-telegraph');
+    const mark = addMark(part, `seed-telegraph${look === '' ? '' : ` ${look}`}`);
     mark.dataset.key = key;
     mark.style.left = `${((from - partStart) / size) * 100}%`;
     mark.style.width = `${((to - from) / size) * 100}%`;
@@ -499,6 +508,7 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
   document.body.appendChild(layer);
   aimLayer = layer;
   const inBlue = (): boolean => store.getState().ui.mode === 'memory';
+  const disguisedId = (segId: string): boolean => store.getState().memory.some((seg) => seg.id === segId && isDisguised(seg));
 
   paintMarks(memWrap, store.getState());
   // After MemoryStrip's rebuild (this subscribes later), and when HOLLOW wakes or goes quiet.
@@ -557,8 +567,9 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
       if (rect) fxBox(layer, `hollow-fx bite-flash at-${side}`, rect);
     }),
     // A WALL held: the free blocks that touch the hollow block flash green.
+    // (Not beside a disguised seed: a WALL flashing next to `cache.tmp` would name it. Its bite fizzles unseen.)
     on('hollow-wall', ({ hollowId, side }) => {
-      if (!inBlue()) return;
+      if (!inBlue() || disguisedId(hollowId)) return;
       const state = store.getState();
       const reach = hollowReach(state.memory, state.clock.aiSec).find((candidate) => candidate.hollowId === hollowId && candidate.side === side);
       const nearest = reach?.gapIds[0];
@@ -568,8 +579,12 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
       if (rect) fxBox(layer, `hollow-fx wall-flash at-${oppositeSide(side)}`, rect);
     }),
     // A FIREWALL held: its edge that faces the hollow block flashes green.
+    // (Not when only a disguised seed faces it: the flash would name the decoy.)
     on('hollow-firewall', ({ firewallId, side }) => {
       if (!inBlue()) return;
+      const state = store.getState();
+      const facing = hollowReach(state.memory, state.clock.aiSec).filter((reach) => reach.neighbourId === firewallId && reach.verdict === 'blocked');
+      if (facing.length > 0 && facing.every((reach) => disguisedId(reach.hollowId))) return;
       const part = edgePart(partsOf(memWrap, firewallId), oppositeSide(side));
       const rect = part ? rectOf(part) : null;
       if (rect) fxBox(layer, `hollow-fx wall-flash at-${oppositeSide(side)}`, rect);
@@ -577,6 +592,19 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
     on('hollow-cure', ({ segId }) => {
       if (inBlue()) sparkle(layer, partsOf(memWrap, segId));
     }),
+    // Slice 4d: a disguised seed unmasked by a SCAN (`NOT A FILE`) or a DELETE (`IT WAS A SEED`): the stamp, and the chip
+    // flashes as the seed it was. SENTRY's boot line names it with the ECC line's drop instead (seed-landed-beam), unstamped.
+    on('seed-unmasked', ({ segId, by }) => {
+      if (by === 'sentry') return;
+      showStamp(by === 'scan' ? SENTRY_TEXT.stamp.notAFile : SENTRY_TEXT.stamp.itWasASeed, 'danger');
+      if (!inBlue()) return;
+      partsOf(memWrap, segId).forEach((part) => {
+        const rect = rectOf(part);
+        if (rect) fxBox(layer, 'hollow-fx seed-land-flash', rect);
+      });
+    }),
+    // ...and SENTRY v2's pre-empt freed a seed where it landed.
+    on('seed-preempted', () => { showStamp(SENTRY_TEXT.stamp.preempted, 'good'); }),
     // Slice 2: a beam seed lands behind the file the ECC line names (the seedLand thunk plays with it).
     on('seed-landed-beam', ({ segId, targetId }) => {
       if (!inBlue()) return;

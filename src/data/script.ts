@@ -52,7 +52,7 @@ import {
   END_LANDING_REFUSAL_KEY, END_LANDING_REFUSAL_TEXT,
 } from '@data/landing-text';
 import { HARD_WORDS_POOL } from '@data/souls';
-import { THREAT_RULES } from '@data/threat-rules';
+import { THREAT_RULES, DISGUISE_RULES } from '@data/threat-rules';
 import { copyLessonDue, hollowAboard } from '@state/threat-selectors';
 import { THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
 import { LOG_TEXT, LOG_HINT_TARGET } from '@data/log-text';
@@ -987,7 +987,8 @@ export function bootLinePlan(state: Readonly<GameState>, skillLines: number): Bo
   if (arrival === null) return [...sleep, 'unpack', 'host', ...receiver, 'ecc', ...story];
   const unpack: BootLineKind = arrival.boarded !== null ? 'board' : 'unpack';
   const plan: BootLineKind[] = [...sleep, unpack, 'host', ...receiver, ...eccSleep, 'ecc'];
-  if (arrival.seeds.length > 0) plan.push('seeds');
+  // A disguised seed is left off the ECC seeds line (04 §3.6): with only disguised ones the line is not said at all.
+  if (arrival.seeds.some((seed) => seed.disguise === null)) plan.push('seeds');
   for (let line = 0; line < sentryBootLineCount(state); line++) plan.push('sentry-seed');
   if (arrival.scripted.length > 0) plan.push('scripted');
   for (let line = 0; line < deliveryBootLines(state).length; line++) plan.push('delivery');
@@ -1044,12 +1045,14 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
     case 'board': return THREAT_TEXT.boardUnpack(unitName(vars.unit));
     case 'host': return LINES.bootHost(vars);
     case 'ecc': return arrival === null ? eccLine(damagedAiFiles(state)) : transitEccLine(arrival.hits);
-    case 'seeds':
-      if (arrival === null || arrival.seeds.length === 0) throw new Error('bootLine: a seeds line with no beam seeds');
+    case 'seeds': {
+      const named = arrival === null ? [] : arrival.seeds.filter((seed) => seed.disguise === null);
+      if (named.length === 0) throw new Error('bootLine: a seeds line with no plain beam seeds');
       return eccSeedsLine(
-        arrival.seeds.filter((seed) => !seed.loose).map((seed) => seed.targetName),
-        arrival.seeds.filter((seed) => seed.loose).map((seed) => looseSeedRack(state, seed.segId)),
+        named.filter((seed) => !seed.loose).map((seed) => seed.targetName),
+        named.filter((seed) => seed.loose).map((seed) => looseSeedRack(state, seed.segId)),
       );
+    }
     case 'sentry-seed': return sentrySeedBootText(state, ordinal);
     case 'firewall': return firewallBootText(state);
     case 'log': {
@@ -2462,6 +2465,9 @@ export const GUIDE_RULES: readonly GuideRule[] = [
   // WP11: a verb's three seconds first among the mind's urgent lines, then the duel's DELETE THE ROOT (and the choice).
   ...VERB_RULES,
   ...FINALE_RULES,
+  // Slice 4d (04 §3.6): a disguised seed eating its neighbour: `SOMETHING NEXT TO … IS EATING IT — SCAN its neighbours`,
+  // ahead of HOLLOW's own eating lines (they would send the kid to REPAIR a file the seed keeps on eating).
+  ...DISGUISE_RULES,
   ...HOLLOW_RULES,
   // ...and while the root's DELETE runs, HOLLOW's eating lines come before "keep it running".
   ...FINALE_RUNNING_RULES,

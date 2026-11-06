@@ -21,7 +21,7 @@ import {
   isTutorialShip, commsUsable, beamOutRefusal, type BeamOutRefusal,
 } from '@systems/beam-out';
 import { logDivider, say, hollowLabel } from '@systems/say';
-import { rollBeamSeeds, rollDeliverySeeds } from '@systems/beam-seeds';
+import { rollBeamSeeds, rollDeliverySeeds, rollDisguises } from '@systems/beam-seeds';
 import { tallyPreview } from '@state/threat-selectors';
 import { shipStars, starCharge } from '@systems/stars';
 import {
@@ -468,7 +468,12 @@ export function transmitNext(store: Store<GameState>): void {
   // transit hits): they ride free, and land behind their targets at the boot. From the verdict, never the map's facts again.
   // Never behind a delivered file (phase 3 slice 3b): each delivery rolls its own, on its own stream (the beam's stays put).
   const delivered = packet.deliveries.flatMap((group) => group.segIds);
-  const beamSeeds = rollBeamSeeds(packet, beamSourceOf(plan.threat), playsTutorial(state.run), hopRng(state.run, fromSlot, plan.toSlot, 'beam-seeds'), delivered);
+  const source = beamSourceOf(plan.threat);
+  const rolled = rollBeamSeeds(packet, source, playsTutorial(state.run), hopRng(state.run, fromSlot, plan.toSlot, 'beam-seeds'), delivered);
+  // Slice 4d (04 §3.6, plan §4.1): from depth 5 a noise seed may land disguised as a harmless file, rolled on the beam's own
+  // 'disguise' stream (so the seeds above never move). Never the tutorial's scripted seed (R9), nor a delivery's (below).
+  const scriptedSeeds = source.kind === 'scripted' && playsTutorial(state.run);
+  const beamSeeds = scriptedSeeds ? rolled : rollDisguises(rolled, plan.threat.depth, hopRng(state.run, fromSlot, plan.toSlot, 'disguise'));
   const deliverySeeds = rollDeliverySeeds(plan.deliveries, packet, hopRng(state.run, fromSlot, plan.toSlot, 'delivery-seeds'));
   packet.seeds = [...beamSeeds, ...deliverySeeds];
   const files = packedFiles(packet);

@@ -65,7 +65,7 @@ export const SKILL_TREE: Readonly<Record<SkillId, SkillDef>> = {
       { version: 3, mode: 'FIREWALL', price: 5, blocks: 6 },
     ],
     // Visit 3: after the first seeds (KESTREL's beam on the worked route).
-    locks: [], opens: { kind: 'after-seeds', minVisit: 3 }, demos: null, built: 0,
+    locks: [], opens: { kind: 'after-seeds', minVisit: 3 }, demos: null, built: 3,
   },
 };
 
