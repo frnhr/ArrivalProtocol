@@ -1527,6 +1527,9 @@ let cached: Prediction | null = null;
 // land in the store after it (systems/run.ts resetWorldForShip), and anything that asked for the
 // prediction in between got the old ship's: a cache from another world is never served.
 let cachedRev: number | null = null;
+// ...and the AUTOBURN engagement it planned for (slice 4: the plan is the engaged mode's, so an engagement, a re-aim or an
+// end replans at once; else the 10 Hz cache served the old plan for a tick and the machine read "nothing to fly").
+let cachedAuto = '';
 let sinceRecomputeWall = 0;
 let lastFiring = false;
 let lastStatus: BurnStatus | null = null;
@@ -1536,10 +1539,16 @@ let sensed: Prediction | null = null;
 let sensedFrom: Prediction | null = null;
 let sensedKey = '';
 
+function autoKey(state: Readonly<GameState>): string {
+  const auto = engagedAuto(state);
+  return auto === null ? '' : `${auto.mode}|${auto.targetKm ?? ''}`;
+}
+
 function recompute(state: Readonly<GameState>): Prediction {
   const pred = computePrediction(state);
   cached = pred;
   cachedRev = state.run.rev;
+  cachedAuto = autoKey(state);
   sinceRecomputeWall = 0;
   lastFiring = state.burn.firing;
   lastStatus = state.burn.status;
@@ -1556,6 +1565,7 @@ export function mountPredictor(store: Store<GameState>): () => void {
   const offReset = onWorldReset('predict', () => {
     cached = null;
     cachedRev = null;
+    cachedAuto = '';
     sinceRecomputeWall = 0;
     lastFiring = false;
     lastStatus = null;
@@ -1573,6 +1583,7 @@ export function mountPredictor(store: Store<GameState>): () => void {
     sinceRecomputeWall += dtWall;
     if (cached === null
       || cachedRev !== state.run.rev
+      || cachedAuto !== autoKey(state)
       || sinceRecomputeWall >= 1 / PREDICT_HZ
       || state.burn.firing !== lastFiring
       || state.burn.status !== lastStatus
@@ -1600,7 +1611,7 @@ export function mountPredictor(store: Store<GameState>): () => void {
 export function getPrediction(): Prediction {
   if (!storeRef) throw new Error('getPrediction: mountPredictor has not run');
   const state = storeRef.getState();
-  return cached !== null && cachedRev === state.run.rev ? cached : recompute(state);
+  return cached !== null && cachedRev === state.run.rev && cachedAuto === autoKey(state) ? cached : recompute(state);
 }
 
 // The true prediction for the state as it is right now: recomputed when the cached one is from an earlier tick, with

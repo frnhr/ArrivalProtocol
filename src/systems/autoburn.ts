@@ -565,9 +565,11 @@ function burnVerdict(state: Readonly<GameState>, pred: Prediction, fit: RingFit,
     return null;
   }
   if (fit.inRing) return 'green';
+  // The same burn on this pass: its apsis still ahead (its START BURN moves later as the rest shrinks, so not "due"), or
+  // behind with the burn due now; the next pass's is a loop away, departing.
   const next = pred.burnPoint;
   const sameBurn = next !== null && next.reason === burn.reason && next.event === burn.event && next.preset === burn.preset
-    && secUntil(pred, next.inSec, state.clock.tSec) <= 0;
+    && (next.approaching || next.eventInSec <= 0);
   return sameBurn ? null : 'rearm';
 }
 
