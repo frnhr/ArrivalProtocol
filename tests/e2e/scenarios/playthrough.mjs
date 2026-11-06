@@ -812,13 +812,17 @@ for (const [index, name] of SHIPS.entries()) {
     // Slice 4: the run's first desk opens on TRAINING for the required first pick: the kid presses [1], then ENTER (the bar
     // fills over 1.5 s), and ESC back to the card.
     if (openedOn.tab === 'training') {
+      // Slices 4c–4e: two cards (AUTOBURN v1, AUTODROP v1); the kid's pick stays [1], so the run stays deterministic.
+      const cards = await st(() => [...document.querySelectorAll('#deskScreen .tr-card .tr-card-name')].map((name) => name.textContent));
       await page.keyboard.press('Digit1');
       await page.waitForTimeout(300);
       const armed = (await runScreens.desk()).go;
       await page.keyboard.press('Enter');
-      const picked = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100);
-      check(`${tag}: the first DESK opens on TRAINING: [1] arms AUTOBURN v1 (\`${armed}\`), ENTER trains it`, index === 0 && armed === 'TRAIN ▸ 3 CYCLES [ENTER]' && picked,
-        JSON.stringify({ index, armed, picked, steps: openedOn.steps }));
+      const picked = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100)
+        && (await st(() => window.__ap.store.getState().run.skills.pending[0]?.skill)) === 'autoburn';
+      check(`${tag}: the first DESK opens on TRAINING with two cards (${cards.join(', ')}): [1] arms AUTOBURN v1 (\`${armed}\`), ENTER trains it`,
+        index === 0 && cards.join(' | ') === 'AUTOBURN v1 | AUTODROP v1' && armed === 'TRAIN ▸ 3 CYCLES [ENTER]' && picked,
+        JSON.stringify({ index, cards, armed, picked, steps: openedOn.steps }));
       await page.keyboard.press('Escape');
       await page.waitForTimeout(300);
       openedOn = await runScreens.deskTabs();

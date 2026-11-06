@@ -29,6 +29,8 @@
 // • The last-rm prompt: on LAPWING an rm given (__ap.give: DELETE licensed) and then taken out of memory by __ap's store;
 //   LAPWING's DESK opens on the REPOSITORY with Rm lit and the warning.
 // • The phone: the tab bar peeks at the bottom; a tap on a tab opens the sheet on it (REPOSITORY, a tap REQUESTs; INBOX).
+// Slices 4c–4e: the first pick has two cards, [1] AUTOBURN v1 and [2] AUTODROP v1, each with its mini-demo; [2] arms
+// AUTODROP, [1] then AUTOBURN, and the kid keeps AUTOBURN (the run stays the same). On the phone both cards fit the width.
 // Slice 4 (the skill tree; its review's M3): the first DESK opens on TRAINING [T] (four tabs: CARD / REPOSITORY [R] /
 // TRAINING [T] / INBOX [I]) with the required first pick: the steps `1 A SKILL · 2 A SHIP · 3 A FILE · 4 SET COURSE`, the bar
 // `CHOOSE YOUR FIRST SKILL`, SPACE refused with a buzz; [1] arms the card (the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`), ENTER
@@ -74,6 +76,16 @@ const titleLook = (st) => st(() => {
 });
 
 const badgeOf = (look, id) => look.tabs.find((tab) => tab.id === id)?.badge ?? null;
+
+// The first desk's cards (slices 4c–4e: AUTOBURN v1 and AUTODROP v1): their key, name, the mini-demo's kind, picked, and box.
+const firstCards = (st) => st(() => [...document.querySelectorAll('#deskScreen .tr-card')].map((card) => {
+  const box = card.getBoundingClientRect();
+  return {
+    key: card.dataset.card, name: card.querySelector('.tr-card-name')?.textContent ?? '', selected: card.classList.contains('selected'),
+    demo: [...(card.querySelector('svg.tr-demo')?.classList ?? [])].find((name) => name !== 'tr-demo') ?? '',
+    left: Math.round(box.left), right: Math.round(box.right),
+  };
+}));
 
 // RECEIVE, the boot skipped, ARES-VII locked at once and landed (__ap.landAll), its report through to the DESK.
 async function toFirstDesk({ page, kit, run }, tap = false) {
@@ -134,12 +146,27 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await page.waitForTimeout(300);
   check('…SPACE before the pick is refused (a buzz), still the DESK', (await st(() => window.__ap.store.getState().run.phase)) === 'desk'
     && (await cuesSince(from)).includes('buzz'));
+  // Slices 4c–4e: two cards, AUTOBURN v1 and AUTODROP v1, each with its own mini-demo, neither picked; [2] arms AUTODROP,
+  // [1] then AUTOBURN (the kid's pick stays [1], so the run is the same as before).
+  let cards = await firstCards(st);
+  check('4c: the first pick shows two cards, [1] AUTOBURN v1 (the capture demo) and [2] AUTODROP v1 (the centre demo), neither picked',
+    cards.map((card) => `${card.key}:${card.name}:${card.demo}`).join(' | ') === '1:AUTOBURN v1:tr-demo-capture | 2:AUTODROP v1:tr-demo-centre'
+    && cards.every((card) => !card.selected), JSON.stringify(cards));
+  await page.keyboard.press('Digit2');
+  await page.waitForTimeout(300);
+  view = await run.desk();
+  cards = await firstCards(st);
+  check('…[2] arms AUTODROP v1: its card lit, the bar `TRAIN ▸ 3 CYCLES [ENTER]`', view.go === 'TRAIN ▸ 3 CYCLES [ENTER]'
+    && cards.map((card) => card.selected).join(',') === 'false,true', `${view.go} ${JSON.stringify(cards)}`);
   await page.keyboard.press('Digit1');
   await page.waitForTimeout(300);
   view = await run.desk();
-  check('…[1] arms AUTOBURN v1: the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`', view.go === 'TRAIN ▸ 3 CYCLES [ENTER]', view.go);
+  cards = await firstCards(st);
+  check('…[1] arms AUTOBURN v1 instead: the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`', view.go === 'TRAIN ▸ 3 CYCLES [ENTER]'
+    && cards.map((card) => card.selected).join(',') === 'true,false', `${view.go} ${JSON.stringify(cards)}`);
   await page.keyboard.press('Enter');
-  const trained = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100);
+  const trained = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100)
+    && (await st(() => window.__ap.store.getState().run.skills.pending[0]?.skill)) === 'autoburn';
   await page.waitForTimeout(300);
   view = await run.desk();
   tabs = await run.deskTabs();
@@ -571,12 +598,17 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   const firstTab = await run.deskTabs();
   check('slice 4 phone: the sheet is up on TRAINING, the bar `CHOOSE YOUR FIRST SKILL`', firstTab.tab === 'training'
     && (await run.capsText('#deskGo')) === 'CHOOSE YOUR FIRST SKILL', `${firstTab.tab} ${await run.capsText('#deskGo')}`);
+  // Slices 4c–4e: both cards, side by side or stacked, inside the screen's width.
+  const phoneCards = await firstCards(st);
+  check('4c phone: the two cards (AUTOBURN v1, AUTODROP v1) fit the width', phoneCards.map((card) => card.name).join(' | ') === 'AUTOBURN v1 | AUTODROP v1'
+    && phoneCards.every((card) => card.left >= 0 && card.right <= vw + 1) && !(await overflow()), JSON.stringify(phoneCards));
   await page.tap('#deskScreen .tr-card[data-card="1"]');
   await page.waitForTimeout(400);
   const armedGo = await run.capsText('#deskGo');
   await page.tap('#deskGo');
-  const phoneTrained = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100);
-  check('…a tap on the card arms it (the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`), a tap on the bar trains it', armedGo === 'TRAIN ▸ 3 CYCLES [ENTER]' && phoneTrained,
+  const phoneTrained = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100)
+    && (await st(() => window.__ap.store.getState().run.skills.pending[0]?.skill)) === 'autoburn';
+  check('…a tap on card 1 arms AUTOBURN (the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`), a tap on the bar trains it', armedGo === 'TRAIN ▸ 3 CYCLES [ENTER]' && phoneTrained,
     `${armedGo} ${phoneTrained}`);
   await page.tap('#deskScreen .desk-tab[data-tab="card"]');
   await page.waitForTimeout(500);

@@ -20,6 +20,7 @@ const SCENARIOS = [
   { name: 'run-flow', file: 'run-flow.mjs', what: 'a run through every screen and the DESK, BEAM OUT, NEW RUN twice, HOLLOW on CORMORANT' },
   { name: 'map-desk', file: 'map-desk.mjs', what: 'the galaxy map\'s DESK: chart, card, SET COURSE, ◀ CHART, TOO LATE, TIGHT\'s 0-charge confirm, the phone sheet, the title\'s beacon; 3b: the REPOSITORY and INBOX tabs, requests, SEND ON, last rm, the flight INBOX' },
   { name: 'resume', file: 'resume.mjs', what: 'slice 3c\'s run save: RESUME at a desk, mid-flight (the boot replayed), at the final report; NEW RUN\'s confirm (ENTER and ESC keep, DEL abandons); CAN\'T RESUME and ABANDON RUN; NO SAVE' },
+  { name: 'skills-4cde-sentry', file: 'skills-4cde-sentry.mjs', what: 'slices 4c–4e, SENTRY: a decoy in the MIND answers every tool as its file, SCAN and DELETE and MOVE unmask it, v2\'s pre-empt (and its outline below v2), v3\'s FIREWALL at the boot' },
   { name: 'label-hops', file: 'label-hops.mjs', what: 'NAV PLOT labels never hop, desktop and phone' },
   { name: 'phone', file: 'phone.mjs', what: 'the phone layout: touch, overflow, every strip line fits' },
   { name: 'run2', file: 'run2.mjs', what: 'slice 3c\'s run 2: the launch line and stamp, 047\'s trail on the title and the desk, REPORTED HOME, the ships that moved on, the beacon row, the FOR UNIT-047 letter, older colonies, the grey cross' },

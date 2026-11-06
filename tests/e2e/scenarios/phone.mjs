@@ -367,10 +367,18 @@ await overflow('DESK');
 await shot('10a-desk');
 // Slice 4: the first desk's sheet is up on TRAINING for the required first pick: a tap on the card, a tap on the bar (it
 // reads TRAIN while the card is armed), then the CARD tab (map-desk.mjs checks it in full).
+// Slices 4c–4e: two cards, AUTOBURN v1 and AUTODROP v1, both inside the width; the kid keeps card 1, AUTOBURN.
+const firstCards = await st(() => [...document.querySelectorAll('#deskScreen .tr-card')].map((card) => {
+  const box = card.getBoundingClientRect();
+  return { name: card.querySelector('.tr-card-name')?.textContent ?? '', left: Math.round(box.left), right: Math.round(box.right) };
+}));
+check('4c: the first pick\'s two cards, AUTOBURN v1 and AUTODROP v1, fit the width', firstCards.map((card) => card.name).join(' | ') === 'AUTOBURN v1 | AUTODROP v1'
+  && firstCards.every((card) => card.left >= 0 && card.right <= vw + 1), JSON.stringify(firstCards));
 await page.tap('#deskScreen .tr-card[data-card="1"]');
 await page.waitForTimeout(400);
 await page.tap('#deskGo');
-check('slice 4: …the first pick by taps (the card, then the bar)', await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100));
+check('slice 4: …the first pick by taps (card 1, then the bar): AUTOBURN v1', await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100)
+  && (await st(() => window.__ap.store.getState().run.skills.pending[0]?.skill)) === 'autoburn');
 await page.tap('#deskScreen .desk-tab[data-tab="card"]');
 await page.waitForTimeout(500);
 if (await st(() => document.getElementById('deskScreen').classList.contains('sheet-open'))) {
