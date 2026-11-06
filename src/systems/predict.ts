@@ -28,7 +28,7 @@ import {
   SHRINK_FUEL_RESERVE_FRAC, RADIUS_BISECT_STEPS, RP_RATE_PROBE_SEC,
   SHRINK_RESERVE_WAIT_TAC, STRANDED_RANGE_FRAC, STRAND_LINE_MARGIN, SKIP_DIVISOR, BELT_HIT_MEAN_SEC,
   DODGE_PROMISE_MARGIN_KM, DODGE_DEADLINE_RESOLUTION_TAC, DODGE_MEMO_RP_DECIMALS, DODGE_MEMO_ANGLE_DECIMALS,
-  DRAG_LIFT_MARGIN_KM, LIFT_HOLD_SLACK_KM, ROUND_E_TOL, ROUND_AIM_E,
+  DRAG_LIFT_MARGIN_KM, LIFT_HOLD_SLACK_KM, ROUND_E_TOL, ROUND_AIM_E, V3_HOLD_SLACK_KM,
 } from '@data/tuning';
 
 // The predicted path: what happens if nobody touches the throttle. Pure (computePrediction)
@@ -1314,17 +1314,23 @@ export function atCircle(loop: Readonly<{ rp: number; ra: number }>, targetKm: n
 
 // The next apsis burn toward the circle of radius `targetKm` (plan §2.9): while ▼ is off R* by more than half the
 // tolerance, at ▲ to bring ▼ to R* (first of two: the ▲ burn leaves ▲ where it was); else at ▼ to bring ▲ to R*. null at
-// the circle. The tick's stop reads this on the ship's exact state every tick, the planner on the 10 Hz prediction, so the
-// two always agree on which burn is which.
+// the circle. The planner reads it on the 10 Hz prediction; the machine's stop (autoburn.ts) reads the far side of the
+// ship's own loop against R* every tick, whichever apsis it burns at.
+// Slice 4e: a loop whose ▲ is above `bandMax` (AUTOBURN v3 right after its capture, or from a flyby whose ▼ is TOO WIDE)
+// is brought down at ▼ first, its ▲ to R*: the burn at ▲ of a just-captured loop is half of a days-long orbit away, and a
+// tiny Δv there swings ▼ by thousands of km. ROUND's loops are in the ring, so its order is unchanged.
 export interface CircleStep {
   at: 'peri' | 'apo';
   targetRadius: number;
   firstOfTwo: boolean;
 }
 
-export function circleStep(loop: Readonly<{ rp: number; ra: number }>, targetKm: number): CircleStep | null {
+export function circleStep(loop: Readonly<{ rp: number; ra: number }>, targetKm: number, bandMax = Infinity): CircleStep | null {
   if (atCircle(loop, targetKm)) return null;
   const tolKm = (ROUND_E_TOL / 2) * targetKm;
+  if (loop.ra > bandMax && Math.abs(loop.ra - targetKm) > tolKm) {
+    return { at: 'peri', targetRadius: targetKm, firstOfTwo: Math.abs(loop.rp - targetKm) > tolKm };
+  }
   if (Math.abs(loop.rp - targetKm) > tolKm) return { at: 'apo', targetRadius: targetKm, firstOfTwo: Math.abs(loop.ra - targetKm) > tolKm };
   return { at: 'peri', targetRadius: targetKm, firstOfTwo: false };
 }
@@ -1337,17 +1343,25 @@ export function planToCircle(
   apsisTimes: Readonly<ApsisTimes>, targetKm: number,
 ): BurnPoint | null {
   if (!input.fit.closed) throw new Error('planToCircle: an open path has no circle to aim at');
-  const step = circleStep(input.fit, targetKm);
+  const step = circleStep(input.fit, targetKm, input.ring.max);
   if (step === null) return null;
   return planTrim(input, 'round', apsisTimes, step.firstOfTwo, step.targetRadius, step.at);
 }
 
 // AUTOBURN engaged (armed, pointing or burning) in a mode, as the planner reads it (state.burn.auto; predict may not
 // import autoburn.ts, which imports it), or null.
-export function engagedAuto(state: Readonly<GameState>): { mode: AutoMode; targetKm: number | null } | null {
+export function engagedAuto(state: Readonly<GameState>): { mode: AutoMode; targetKm: number | null; holding: boolean } | null {
   const auto = state.burn.auto;
   const engaged = auto.phase === 'armed' || auto.phase === 'pointing' || auto.phase === 'burning';
-  return engaged && auto.mode !== null ? { mode: auto.mode, targetKm: auto.targetKm } : null;
+  return engaged && auto.mode !== null ? { mode: auto.mode, targetKm: auto.targetKm, holding: auto.holding } : null;
+}
+
+// AUTOBURN v3's hold breaks (plan §5.3): once it holds its circle R*, a top-up is planned only when ▼ or ▲ has sunk
+// V3_HOLD_SLACK_KM under R* (a grid step: about every one or two orbits under the DRAG line), or decay would take ▼ out of
+// the band within DECAY_WARN_ORBITS. A refit that changes the fit sets the circle lower and lets go of the hold itself
+// (autoburn.ts), so the fit needs no test here.
+export function holdBroken(state: Readonly<GameState>, loop: Readonly<{ rp: number; ra: number }>, targetKm: number): boolean {
+  return loop.rp < targetKm - V3_HOLD_SLACK_KM || loop.ra < targetKm - V3_HOLD_SLACK_KM || decayWarnOrbits(state) !== null;
 }
 
 // The burn AUTOBURN in `mode` would fly first, from a prediction made with or without it engaged (autoburn.ts
@@ -1466,7 +1480,9 @@ export function computePrediction(state: Readonly<GameState>): Prediction {
   // Slice 4 (plan §2.9): while AUTOBURN is engaged the plan is its mode's, so the START BURN ticks are always its burns:
   // ROUND (and 4e's landing orbit) the circle's burns on a closed loop, GREEN the ring's trims with no shrink; and the
   // landing's in-ring GO LOWER and lift are not planned (one planner owns the engine).
+  // While v3 holds its circle it plans only when the hold breaks (holdBroken): a top-up, through the circle's own burns.
   const circle = auto !== null && MODE_RULES[auto.mode].circle && auto.targetKm !== null && fit.closed
+    && (!auto.holding || holdBroken(state, fit, auto.targetKm))
     && periInSec !== null && apoInSec !== null && periodSec !== null
     ? { targetKm: auto.targetKm, times: { peri: periInSec, apo: apoInSec, period: periodSec } } : null;
   const burnPoint = impact || outOfFuel || cannotClose ? null
@@ -1541,7 +1557,7 @@ let sensedKey = '';
 
 function autoKey(state: Readonly<GameState>): string {
   const auto = engagedAuto(state);
-  return auto === null ? '' : `${auto.mode}|${auto.targetKm ?? ''}`;
+  return auto === null ? '' : `${auto.mode}|${auto.targetKm ?? ''}|${auto.holding ? 'hold' : ''}`;
 }
 
 function recompute(state: Readonly<GameState>): Prediction {

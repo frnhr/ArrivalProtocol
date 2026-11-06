@@ -19,7 +19,7 @@ import { controllerSwapOf } from '@systems/tool-targets';
 import {
   autoburnAvailable, autoburnArmedInTac, autoOfferMode, autoArmedBurn, autoFlyingKind, autoburnDoneLine, type AutoArmedBurn,
 } from '@systems/autoburn';
-import { AUTOBURN_TEXT } from '@data/skill-text';
+import { AUTOBURN_TEXT, type AutoBurnKind } from '@data/skill-text';
 import { debrisRack } from '@/types/zone';
 import { IS_DEV } from '@/env';
 import {
@@ -120,7 +120,7 @@ export interface FlightContext {
   // Optional, so the older suites' pure contexts read as v1.
   autoburn: {
     phase: AutoburnPhase; sinceSec: number; armedInTac: number; end: AutoburnEnd | null;
-    armed?: AutoArmedBurn | null; flying?: AutoArmedBurn['kind'] | null; doneLine?: string | null;
+    armed?: AutoArmedBurn | null; flying?: AutoBurnKind | null; doneLine?: string | null;
   };
   autoAvailable: boolean;
   autoOffer?: AutoMode | null;
@@ -771,11 +771,25 @@ function armedTail(objective: FlightObjective, ctx: FlightContext): FlightObject
 // if the kid should press them). Only SKIP, the one press that helps while it waits, is lit.
 // Slice 4 (plan §2.16 item 6): split in two. The flying and done rows (here) stay ahead of F4; the ARMED row
 // (autoburnArmedObjective) sits below the ▼ correction rows. The flying row names the burn (BRAKING, TRIMMING, ROUNDING).
-const FLYING_LINE: Readonly<Record<AutoArmedBurn['kind'], { ship: string; mind: string }>> = {
+const FLYING_LINE: Readonly<Record<AutoBurnKind, { ship: string; mind: string }>> = {
   capture: { ship: AUTOBURN_TEXT.burning, mind: AUTOBURN_TEXT.burningMind },
   trim: { ship: AUTOBURN_TEXT.trimming, mind: AUTOBURN_TEXT.trimmingMind },
   round: { ship: AUTOBURN_TEXT.rounding, mind: AUTOBURN_TEXT.roundingMind },
+  orbit: { ship: AUTOBURN_TEXT.orbiting, mind: AUTOBURN_TEXT.orbitingMind },
+  'top-up': { ship: AUTOBURN_TEXT.toppingUp, mind: AUTOBURN_TEXT.toppingUpMind },
 };
+
+// The ARMED row's head by the burn it waits for (v3's: on its way, holding, a top-up planned).
+function armedHead(armed: Readonly<AutoArmedBurn> | null, time: string): string {
+  switch (armed?.kind ?? 'capture') {
+    case 'capture': return AUTOBURN_TEXT.armed(time);
+    case 'trim': return AUTOBURN_TEXT.armedTrim(armed!.glyph, time);
+    case 'round': return AUTOBURN_TEXT.armedRound(armed!.glyph, time);
+    case 'orbit': return AUTOBURN_TEXT.armedOrbit(armed!.glyph, time);
+    case 'top-up': return AUTOBURN_TEXT.armedTopUp(armed!.glyph, time);
+    case 'hold': return AUTOBURN_TEXT.armedHold;
+  }
+}
 
 function autoburnFlyingObjective(ctx: FlightContext): FlightObjective | null {
   const auto = ctx.autoburn;
@@ -809,8 +823,7 @@ function autoburnArmedObjective(ctx: FlightContext): FlightObjective | null {
     if (ctx.inMind) return mindLine('AUTO-thread', due ? AUTOBURN_TEXT.threadWaitLate : AUTOBURN_TEXT.threadWait(time), [], 'now', ctx);
     return mindLine('AUTO-thread', due ? AUTOBURN_TEXT.threadWaitLateShip : AUTOBURN_TEXT.threadWaitShip(time), ['TAB'], 'now', ctx);
   }
-  const head = armed === null || armed.kind === 'capture' ? AUTOBURN_TEXT.armed(time)
-    : armed.kind === 'round' ? AUTOBURN_TEXT.armedRound(armed.glyph, time) : AUTOBURN_TEXT.armedTrim(armed.glyph, time);
+  const head = armedHead(armed, time);
   const skip = ctx.skipAvailable ? SKIP_HINT : '';
   return make('AUTO-armed', withTail(head, skip, ''), ctx.skipAvailable ? ['F'] : [], 'wait', ctx);
 }
@@ -955,7 +968,7 @@ function liftRows(ctx: FlightContext, burnPoint: TimedBurn): FlightObjective {
 // [B] offers ROUND), or that it waits.
 function landingAutoTail(ctx: FlightContext): { text: string; key: string | null } | null {
   if (ctx.autoburn.phase === 'armed') return { text: AUTOBURN_TEXT.armedTail, key: null };
-  if (ctx.autoAvailable && ctx.autoOffer) return { text: AUTOBURN_TEXT.offerMode(ctx.autoOffer), key: 'B' };
+  if (ctx.autoAvailable && ctx.autoOffer) return { text: AUTOBURN_TEXT.offerLanding(ctx.autoOffer), key: 'B' };
   return null;
 }
 
