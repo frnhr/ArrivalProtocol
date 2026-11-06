@@ -246,11 +246,15 @@
             <div class="pb-bay-row"><div class="pb-bay" id="pbBay"></div><span class="pb-ctrl" id="pbCtrl"></span></div>
             <div class="pb-next" id="pbNext"></div>
             <div class="pb-lzs" id="pbLzs"></div>
-            <!-- Slice 4c (Track DROP owns this POD BAY block): AUTODROP's pip and key line, v2's pass rows (`A [−] 2 [+]`), v3's
-                 plan table and its check line. Empty and hidden until DROP fills them (PodBayWindow). -->
-            <div class="pb-autodrop" id="pbAutodrop" hidden></div>
+            <!-- Slice 4c (Track DROP owns this POD BAY block): AUTODROP's key line and its [G] button (the pip itself joins the
+                 window's title pips, as the Engine window's AUTOBURN pip does), v2's pass rows (`A [−] 2 [+]`), v3's plan table
+                 and its check line. Hidden without AUTODROP (PodBayWindow). On a phone [G] rides in the flight bar. -->
+            <div class="pb-autodrop" id="pbAutodrop" hidden>
+              <span class="pb-ad-key" id="pbAdKey"></span>
+              <button class="pb-go" id="pbGoBtn" data-hint-key="G" tabindex="-1" hidden></button>
+            </div>
             <div class="pb-pass" id="pbPass" hidden></div>
-            <div class="pb-plan" id="pbPlan" hidden></div>
+            <div class="pb-plan" id="pbPlan" hidden><div class="pb-plan-rows" id="pbPlanRows"></div><div class="pb-plan-check" id="pbPlanCheck"></div><div class="pb-plan-notes" id="pbPlanNotes"></div></div>
             <!-- the class line (slice 1b): `PLAINS · off-site pods score half`, and `NO-GO: LAVA` on ships with no-go arcs -->
             <div class="pb-class"><span class="pb-class-text" id="pbClass"></span><span class="pb-nogo" id="pbNoGo" hidden></span></div>
             <div class="pb-foot"><span class="pb-cant" id="pbCant" hidden></span><button class="pb-end" id="pbEnd" tabindex="-1"></button></div>

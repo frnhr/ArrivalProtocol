@@ -9,17 +9,22 @@ import type { BurnPoint, Prediction, PredictOutcome } from '@systems/predict';
 import { elementsFromState, propagateConic, semiMajorAxis, type OrbitState, type Vec2 } from '@/types/orbit';
 import { driversInMemory, getByRole } from '@state/selectors';
 import { angleDelta, dropHalfWidthKm } from '@systems/landing-solve';
-import { capabilitiesNow, BAND_COPY, type Band, type Capabilities } from '@systems/capabilities';
+import { capabilitiesNow, skillLive, BAND_COPY, type Band, type Capabilities } from '@systems/capabilities';
 import { dragLineKm } from '@systems/landing-orbit';
+import { paid } from '@systems/skill-levels';
+import { passCounts, passRows, planLanding } from '@systems/autodrop-plan';
+import { repairWord, v3GoesLower } from '@systems/autodrop';
+import { AUTODROP_TEXT } from '@data/autodrop-text';
 import {
   bayMembers, bayShown, driverTouch, dropFactors, isLaunchable, launchGuard, launchRefusal, lzAt, lzDownFill, lzProjectedFill, nextToLaunch,
-  endLandingRefusal, landingMoment, onTargetTally, podCounts, podsWithFate,
+  endLandingRefusal, landingMoment, onTargetTally, podCounts, podsWithFate, landingView as landingViewOf,
 } from '@systems/landing-rules';
 import {
   BAND_TEXT, GROUND_TRACK_TEXT, LANDING_HUD_TEXT, LANDING_PLOT_TEXT, LAUNCH_REFUSAL_TEXT, MINI_LANDING_TEXT, POD_BAY_STATUS_TEXT,
   POD_BAY_TEXT, DRIVER_DETAIL_TEXT, LAUNCH_CONFIRM_TEXT, DRAG_STAMP_TEXT, END_LANDING_REFUSAL_TEXT, minSec,
 } from '@data/landing-text';
 import {
+  AUTODROP_PLAN_MAX_PASSES, BAND_OK_MIN, COLONISTS_PER_POD, WINDOW_TACTICAL_LEAD_TAC,
   BAND_FAILING_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEACON_LAG_FRAC, DRAG_STAMP_MIN_KM, GROUND_TRACK_AHEAD_MAX, GROUND_TRACK_SPAN_KM,
   POD_FIRST_DESCENT_SEC, STREAK_TRAIL_FRAC, TERRAIN_ALT_SHARE, TERRAIN_STRETCH_DEG,
 } from '@data/tuning';
@@ -647,6 +652,103 @@ export interface BayWindowModel {
   cantLaunch: number;               // pods aboard that can't launch now
   aboard: number;
   endLanding: { label: string; confirm: string; enabled: boolean };
+  // Slice 4c (plan §3.8): AUTODROP's pip, key line, v2's pass rows and v3's plan table; null while the unit has no
+  // AUTODROP.skl and never trained it.
+  autodrop: AutodropBayModel | null;
+}
+
+// --- AUTODROP in the POD BAY (slice 4c, plan §3.3, §3.4, §3.8) ------------------------------------------------------------
+
+export type AutodropPipLook = Band | 'offline';
+
+export interface AutodropBayModel {
+  // The BAY window's AUTODROP pip (03 §4: `AUTODROP v2▸v1`; a click jumps to the file, as every pip does).
+  pip: { segId: string | null; label: string; look: AutodropPipLook; glyph: string; reading: string; title: string };
+  version: number;                  // what it works as now (0: OFF)
+  // What [L] and [G] do now, and the [G] button (shown from v2: it arms, or cancels while armed).
+  key: { text: string; look: 'go' | 'armed' | 'off' | 'wait' };
+  go: { shown: boolean; label: string; armed: boolean };
+  // v2's rows (`A [−] 2 [+]`), while AUTODROP works as v2.
+  pass: { lz: string; n: number; max: number; warn: string | null }[] | null;
+  // v3's plan table, its check line and the never-fits lines, while it works as v3.
+  plan: {
+    rows: { text: string; forecast: boolean; mislanded: boolean; now: boolean }[];
+    check: string;
+    complete: boolean;
+    notes: string[];
+  } | null;
+}
+
+const AUTODROP_PIP_GLYPH: Readonly<Record<AutodropPipLook, string>> = {
+  ok: '●', degraded: '●', failing: '●', dead: '●', missing: '✕', offline: '↻',
+};
+
+// The plan table shows this many volleys (a 16-pod ark's 7 fit the window); the rest say `+n MORE`.
+const PLAN_ROWS_SHOWN = 7;
+
+export function autodropBayModel(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): AutodropBayModel | null {
+  const live = skillLive(state.memory, 'autodrop');
+  if (live.file === null && paid(state.run.skills, 'autodrop') === null) return null;
+  const words = AUTODROP_TEXT.bay;
+  const nominal = live.file?.version ?? 0;
+  const look: AutodropPipLook = live.file === null ? 'missing' : live.offline !== null ? 'offline' : live.band;
+  const pip = {
+    segId: live.file?.id ?? null,
+    label: live.file === null ? words.pipLabel : live.version === nominal ? words.pipVersion(nominal) : words.pipWorksAs(nominal, live.version),
+    look,
+    glyph: AUTODROP_PIP_GLYPH[look],
+    reading: live.file !== null && live.band !== 'ok' ? `${Math.round(live.file.integrity)}%` : '',
+    title: live.file === null ? words.pipMissing : live.offline !== null ? words.pipOffline(nominal)
+      : live.version === nominal ? words.pipOk(nominal) : words.pipDamaged(nominal, live.version, BAND_OK_MIN),
+  };
+  const ad = state.landing.autodrop;
+  const armed = ad.armed !== null && live.version >= 2;
+  let key: AutodropBayModel['key'];
+  if (live.version === 0) key = { text: words.keyOff, look: 'off' };
+  else if (armed && ad.waitingSinceTSec !== null) key = { text: words.keyWaiting, look: 'wait' };
+  else if (armed) key = { text: ad.armed === 'plan' ? words.keyArmedPlan : words.keyArmedPass, look: 'armed' };
+  else key = { text: live.version >= 3 ? words.keyPlan : live.version === 2 ? words.keyPass : words.keyHold, look: 'go' };
+  const go = { shown: live.version >= 2 || armed, label: armed ? words.goButtonArmed : words.goButton, armed };
+  const landing = state.run.phase === 'landing' && state.landing.ended === null && sol !== null && sol.block === null && sol.dot !== null;
+  if (!landing) return { pip, version: live.version, key, go: { ...go, shown: false }, pass: null, plan: null };
+  const view = landingViewOf(state, sol, capabilitiesNow(state).bay.cadenceTac);
+  let pass: AutodropBayModel['pass'] = null;
+  if (live.version === 2 || (armed && ad.armed === 'pass')) {
+    const counts = armed ? ad.pass : passCounts(state, view);
+    pass = passRows(state, view, counts).map((row) => ({
+      lz: row.lz, n: row.want, max: view.remaining[row.lz] ?? 0,
+      warn: row.want > 0 && row.fits === 0 ? words.noWindow(row.lz)
+        : row.bayHas !== null ? words.shortBay(row.lz, row.want, row.bayHas)
+          : row.fits < row.want ? words.shortFit(row.lz, row.want, row.fits) : null,
+    }));
+  }
+  let plan: AutodropBayModel['plan'] = null;
+  if (live.version >= 3 && ad.armed !== 'pass') {
+    const planned = planLanding(state, view);
+    const now = state.clock.tSec;
+    const rows = planned.rows.slice(0, PLAN_ROWS_SHOWN).map((row) => {
+      const tac = tacOf(state, row.atTSec - now);
+      return {
+        text: words.planRow(row.pass, row.lz, row.n, tac <= 0.05 ? 'NOW' : `IN ${minSec(tac)}`, row.mislanded),
+        forecast: row.forecast, mislanded: row.mislanded > 0, now: tac <= WINDOW_TACTICAL_LEAD_TAC,
+      };
+    });
+    const extra = planned.rows.length - rows.length;
+    if (extra > 0) rows.push({ text: words.planMore(extra), forecast: true, mislanded: false, now: false });
+    const missing = [...planned.neverFits.map((never) => never.lz),
+      ...state.landing.lzs.filter((lz) => (view.remaining[lz.label] ?? 0) > (planned.perLz[lz.label] ?? 0)
+        && !planned.neverFits.some((never) => never.lz === lz.label)).map((lz) => lz.label)];
+    const perLz: Record<string, number> = {};
+    for (const lz of state.landing.lzs) if ((view.remaining[lz.label] ?? 0) > 0) perLz[lz.label] = planned.perLz[lz.label] ?? 0;
+    const notes = planned.neverFits.map((never) => words.neverFits(never.lz, repairWord(never.repair), v3GoesLower(state)));
+    if (planned.laterPasses > 0) notes.push(words.planLater(planned.laterPasses, AUTODROP_PLAN_MAX_PASSES));
+    plan = {
+      rows: rows.length === 0 ? [{ text: words.planEmpty, forecast: true, mislanded: false, now: false }] : rows,
+      check: words.planCheck(planned.passes, perLz, [...new Set(missing)].sort(), COLONISTS_PER_POD),
+      complete: planned.complete, notes,
+    };
+  }
+  return { pip, version: live.version, key, go, pass, plan };
 }
 
 // `outcome`: the prediction's (getPrediction().outcome; END LANDING is refused on a path into the planet, review B1).
@@ -719,6 +821,7 @@ export function bayWindowModel(
       confirm: LAUNCH_CONFIRM_TEXT.endLanding(aboard.length),
       enabled: endRefusal === null,
     },
+    autodrop: autodropBayModel(state, sol),
   };
 }
 
