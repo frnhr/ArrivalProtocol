@@ -1667,3 +1667,83 @@ for v1, which R4's `'released'` reads).
    the pass rows `.pb-pass-step[data-lz][data-step]`, the plan `#pbPlanRows .pb-plan-row` and `#pbPlanCheck`; on a phone
    LAUNCH (`#podLaunchBtn`) is a pointer hold for v1 and [G] rides in `#phoneBar`.
 5. **The review-fix pass:** the `centre`, `pass` and `plan` mini-demos (still plain); AGENTS.md's "What's built".
+
+## Deviations (review fixes, SENTRY/UI)
+
+Recorded by the SENTRY/UI fix agent (branch `fix-ui-4cde`, from 6f026d1). It covers the review's B1, m8 and m14, DROP's patch 3,
+the six 4c–4e mini-demos, the e2e for desk 1's two cards and SENTRY, and AGENTS.md. The landing half (AUTODROP, AUTOBURN v3)
+is the other fix agent's.
+
+### What changed
+
+1. **B1: a disguised seed answers every tool as the file it shows.** This supersedes §4.2's tools table and R9's MOVE,
+   COPY and REPAIR row.
+   - `tool-targets.ts disguisedRefusal` judges the seed as its `decoyFileView`, a healthy unit `tool`, through
+     `targetRefusal` itself. The parity holds by construction, so a later tool rule cannot split them.
+   - SWAP is the one exception. Its rule looks the file up in memory, where the view never is, so it answers
+     `SWAP IS FOR SHIP FILES WITH A BACKUP` directly, as it does for any unit file.
+   - MOVE and COPY take the decoy as a source, and the placement is judged as for any file of its size (the same
+     placeholder, the same `NO ROOM`, the same `SAME SPOT`).
+   - The op is `actions.ts decoyPlaceOp`: the tool's own time on the seed alone (1.9 s for MOVE, 2.6 s for COPY, on 2
+     blocks). As it completes, it unmasks the seed as a SCAN does: `seen: 'scan'`, the `NOT A FILE` stamp, the echo
+     `> move cache.tmp ... NOT A FILE · A SEED` (`SENTRY_TEXT.opEcho`), and the seed's words once a ship.
+   - It reserves no space and moves or copies nothing. Its op kind is `'scan'` in the tool's label, so `stats.moves` does
+     not count it.
+   - REPAIR says `ALREADY 100%`. `TOOL_REFUSAL.tempFile` is gone.
+   - **More readers judged as the file (beyond the review's list):**
+     - the MOVE preview's hazard and infection (a belt's rack is named for a decoy, as for Autopilot);
+     - the cursor follower and the phone's tool pill. These printed the picked seed's own segment name: a free tell while
+       a decoy was picked.
+   - **The one tell left:** for the op's 1.9–2.6 s, a decoy's MOVE shows only its op bar. No clone is written at the
+     destination, and the source is not `transferring`. The op ends in the unmask anyway, so this costs the kid the same
+     click and wait.
+2. **m8:** `sentry.ts preemptArmed(state)` is `preempted && SENTRY ≥ SENTRY_QUICK_RM_VERSION`, the rule `stepSeeds` lands
+   by. `HollowPainter` draws the armed outline from it. Below v2 an armed outline is drawn plain (aimable never: the
+   refusal is `armed`).
+3. **m14:** the decoy's hand-built INSPECT panel is gone. `DetailPanel` renders every file through
+   `renderFileDetail(target, drawn, actual)`, with the decoy drawn as its view. `computeActions` takes the segment the
+   buttons are judged on and bound to.
+   - Rendered in Chromium beside a healthy Autopilot on KESTREL, the rows match one for one: title, `AI · Tool`, size,
+     `INTACT`, the desc, `◎ re-scan`.
+4. **DROP's patch 3:** `training-model defaultSel` picks, in order:
+   1. a lost cell whose RESTORE the bank covers;
+   2. a buyable cell;
+   3. any lost cell;
+   4. a dim cell.
+
+   It stays display-only (unarmed: slice 4's M3). `skills/ui-models` checks that desk 2 after an eaten AUTOBURN defaults
+   to `autoburn:v1` (RESTORE), unarmed.
+5. **The mini-demos** (`TrainingWindow.ts demoSvg`, `desk.css`), all 4 s loops that hold their last frame under reduced
+   motion.
+   - AUTODROP's `centre` and `pass` are a side view, as the GROUND TRACK reads: the orbit's track over the planet's limb.
+     - `centre`: the bracket over an LZ, its centre ticked, and three pods in turn, the middle one on the centre.
+     - `pass`: `A×2 · B×1`, two LZs, two pods to A and one to B.
+   - `plan`: the table's three rows tick in, `PLAN ✓` closes it, and three LZs light on a small planet.
+   - SENTRY's three are Track SENTRY's drawings with its CSS. One change: the `sight` bracket is its own closed
+     `.tr-demo-mark`. The shared `.tr-demo-bracket` dash (80) cut its 112-unit outline short.
+   - AUTOBURN v3's `low-orbit` was drawn but bare. It gains the dashed ghost circle inside the band: the loop fades, the
+     circle is flown round, and the LZs light.
+   - A gallery of all ten kinds was shot at 2× at five moments of the loop and reduced, and desk 1's two cards in
+     context.
+6. **e2e:**
+   - `map-desk`: desk 1's two cards (`1:AUTOBURN v1:tr-demo-capture | 2:AUTODROP v1:tr-demo-centre`), neither picked.
+     [2] arms AUTODROP, [1] then AUTOBURN, and ENTER trains `autoburn`. On the phone both cards fit the width.
+   - `phone`: the two cards fit, and card 1 trains `autoburn`.
+   - `playthrough`: the first desk has the two cards, and [1] trains `autoburn`. The pick is unchanged, so the run stays
+     deterministic.
+   - New `skills-4cde-sentry`, registered in `run.mjs`, covers:
+     - the decoy in the MIND, its INSPECT, and its target classes beside Autopilot's;
+     - SCAN, DELETE without a SCAN, and MOVE on a decoy;
+     - v2's pre-empt, and the outline below v2 (m8);
+     - v3's FIREWALL at VESPER's boot.
+   - §8.5's single `skills-4cde.mjs` is split. Its landing half, `skills-4cde-landing.mjs`, is the landing fix agent's and is
+     not on this branch (nor is its `run.mjs` entry); so are §8.5's `phone.mjs` POD BAY checks (the rows in the drawer,
+     v1's held launch button).
+7. **AGENTS.md:** "What's built" gains batch 4c–4e, and "Next logical steps" is RETIRE (§9, after Fran's playtest), then
+   slices 5, 6, 7 and 8.
+
+### For the lead
+
+- `events.ts 'seed-unmasked'.by` keeps its three values. A MOVE or COPY unmask reports `'scan'`, which is what the stamp and
+  the sound key on.
+- No file outside this agent's scope was edited, and no patch is requested.
