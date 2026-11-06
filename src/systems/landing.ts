@@ -1,5 +1,8 @@
 // Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the drop demos, the mount order,
 // AUTODROP's reset at 'landing-ended'. Others ask by message.
+// Slice 4c (Track DROP): the kid's launches into a bracket are AUTODROP's demos (requestLaunch, plan §3.6); a controller
+// launch tells autodrop.ts (its pass count, the volley's event); a pod AUTODROP sent that lands soft with room says
+// BULLSEYE; and the landing's end puts AUTODROP at rest with its thread let go (the codec's rule at every save point).
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
@@ -21,7 +24,8 @@ import { getPrediction, secUntil } from '@systems/predict';
 import { requestSkip, skipBlockReason } from '@systems/pace';
 import { declineKey, landingBurnOffer, travelSign } from '@systems/landing-orbit';
 import { activeLandingController } from '@systems/landing-controller';
-import { mountAutodrop } from '@systems/autodrop';
+import { autodropLandingOver, autodropLaunched, mountAutodrop } from '@systems/autodrop';
+import { dropDemoOffset } from '@systems/autodrop-plan';
 import {
   classifyLanding, colonyName, dropFactors, goLowerChoice, driverTouch, endLandingRefusal, isLaunchable, landingMoment, landingOutcome,
   landingStuck,
@@ -163,6 +167,10 @@ export function requestLaunch(store: Store<GameState>, intent: LaunchIntent): La
   if (!driver) throw new Error('requestLaunch: no driver to launch (launchRefusal said NO POD READY otherwise)');
   const launch = launchRecordFor(state, driver, sol, intent);
   launchDriver(store, driver, launch, true);
+  // AUTODROP's demos (03 §3.3, plan §3.6): each launch of the kid's into a bracket, its offset from the window's centre in
+  // tactical s. Off-site launches and the controllers' own are not demos.
+  const demo = intent.source === 'player' ? dropDemoOffset(sol, launch, state.level.tacticalWarp) : null;
+  if (demo !== null) store.update((draft) => { draft.run.stats.dropDemos.push({ offsetTac: demo }); });
   // A launch ends a decline (risk 2): the next burn the landing offers is offered again. A declined GO LOWER only on a
   // launch into its own LZ (review minor 4: a pod sent elsewhere leaves that LZ's dot as wide as it was, and clearing it
   // brought the declined burn back every orbit). And GO LOWER's aim (not held: a launch is refused under thrust) is let
@@ -216,7 +224,9 @@ function touchDown(store: Store<GameState>, pod: number): void {
   });
   emit('pod-landed', { pod, place: placement.place, lz: placement.lz, touch, points, firstOnShip, firstOfRun });
   if (fillsLz && lzDef) emit('lz-full', { lz: lzDef.label });
-  say('cmd', LANDING_ECHO.touchdown(pod, placement.place, placement.lz, touch), { critical: true });
+  // BULLSEYE (plan §3.2): a pod AUTODROP sent that came down soft in an LZ with room.
+  const bullseye = launch.source === 'autodrop' && placement.place === 'lz' && touch === 'soft';
+  say('cmd', LANDING_ECHO.touchdown(pod, placement.place, placement.lz, touch, bullseye), { critical: true });
 }
 
 // --- The end of the landing ------------------------------------------------------------------------------------------
@@ -246,6 +256,8 @@ function endNow(store: Store<GameState>, reason: LandingEnd): void {
   });
   // The burn being watched for a decline goes with the engine (review minor 5): MERGE's reopen starts its offers afresh.
   dueWatch = { ...NO_DUE_WATCH };
+  // AUTODROP at rest (plan §2.2: the codec refuses a save with it held, armed, claimed or waiting), its thread let go.
+  autodropLandingOver(store);
   if (parked > 0) emit('pods-parked', { count: parked });
   emit('landing-ended', { reason });
 }
@@ -407,7 +419,7 @@ function entryTick(state: Readonly<GameState>): void {
 // The active controller (AUTODROP 4c, the resident 5, MERGE's landing 7) is asked once per AI tick with the CACHED view
 // (a fresh solve per tick would cost a full solve a tick); a launch it asks for goes through requestLaunch, which
 // decides on the fresh solution like the kid's [L]. A SKIP it asks for is requested only when pace allows it, so a
-// controller asking every tick never buzzes. None in 1a.
+// controller asking every tick never buzzes. AUTODROP's (4c) is told of each launch it made (autodrop.ts autodropLaunched).
 function controllerTick(store: Store<GameState>): void {
   const state = store.getState();
   const controller = activeLandingController(state);
@@ -415,7 +427,8 @@ function controllerTick(store: Store<GameState>): void {
   if (state.landing.ended !== null || state.clock.paused) return;
   const sol = getDropSolution();
   if (sol === null) return;
-  const decision = controller.decide(landingViewOf(state, sol, capabilitiesNow(state).bay.cadenceTac), state);
+  const view = landingViewOf(state, sol, capabilitiesNow(state).bay.cadenceTac);
+  const decision = controller.decide(view, state);
   if (decision === null) return;
   if (decision === 'skip') {
     if (state.clock.skipWarp === null && skipBlockReason(state, getPrediction()) === null) requestSkip(store);
@@ -424,7 +437,8 @@ function controllerTick(store: Store<GameState>): void {
   if (decision.source !== controller.source) {
     throw new Error(`landing controller '${controller.source}' asked for a launch as '${decision.source}'`);
   }
-  requestLaunch(store, decision);
+  const result = requestLaunch(store, decision);
+  if (result.kind === 'launched' && decision.source === 'autodrop') autodropLaunched(store, result.pod, view);
 }
 
 // --- GO LOWER's aim and the declined burn (slice 1b, plan §1.4; landing-orbit is the math) ----------------------------
@@ -572,7 +586,7 @@ function tick(store: Store<GameState>, dtAi: number): void {
   // 2b. The burns the landing offers (slice 1b): GO LOWER's aim, and a decline when an offered burn passed unburned.
   goLowTick(store);
   declineTick(store);
-  // 3. The controller (none in 1a).
+  // 3. The controller (AUTODROP's, 4c).
   controllerTick(store);
   // 4. No more launches: every pod away, or no driver left for the pods aboard (risk 7).
   if (store.getState().landing.ended === null && podCounts(store.getState()).aboard === 0 && !landingEndHeld()) endNow(store, 'all-launched');

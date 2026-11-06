@@ -5,6 +5,7 @@ import type { GameState } from '@state/schema';
 import type { LaunchIntent, LaunchResult } from '@/types/landing';
 import { registerKeys } from '@systems/input';
 import { requestLaunch } from '@systems/landing';
+import { autodropKeyDown, autodropKeyUp, pressAutodrop } from '@systems/autodrop';
 
 // The kid's landing controls (01-landing §3.3, plan §1.4): [L] and every launch button (the POD BAY window, the phone
 // bar) go through playerLaunch, so the inline confirm loop lives in one place. DOM-free: the confirm is injected
@@ -34,14 +35,41 @@ export interface LandingKeyDeps {
 // [L] launches (game layer; input.ts drops auto-repeat, so holding it launches once). In the MIND it refuses with
 // SHIP SCREEN (requestLaunch: the buzz and `SHIP CONTROLS ARE ON THE AMBER SCREEN — [TAB]`), as SPACE does. Outside
 // LANDING it does nothing: no buzz for a key that means nothing yet.
-// [G] (KeyG) is reserved for the landing (prevented in input.ts) and bound by Track SIM if 01-landing gives it a job.
+// Slice 4c (plan §3.2, R4): with AUTODROP v1 or better working on the SHIP screen, [L] pressed in (or within GET READY of) a
+// window with a sure part is a HOLD: AUTODROP times the volley while it is down (autodrop.ts autodropKeyDown says 'held'),
+// and its keyup (or input.ts's release on a blur) lets go. Anywhere else [L] is the manual launch, with its confirms.
+// [G] (KeyG, prevented in input.ts) arms AUTODROP v2's pass or v3's plan from either screen, and cancels it again.
 export function registerLandingKeys(store: Store<GameState>, deps: LandingKeyDeps): () => void {
-  return registerKeys({
+  const offL = registerKeys({
     layer: 'game',
     codes: ['KeyL'],
+    onDown: () => { launchDown(store, deps.confirm); },
+    onUp: () => { launchUp(store); },
+  });
+  const offG = registerKeys({
+    layer: 'game',
+    codes: ['KeyG'],
     onDown: () => {
       if (store.getState().run.phase !== 'landing') return;
-      playerLaunch(store, deps.confirm);
+      pressAutodrop(store);
     },
   });
+  return () => {
+    offL();
+    offG();
+  };
+}
+
+// A launch control pressed ([L] down, the POD BAY's LAUNCH or the phone bar's pointer down): AUTODROP's hold when v1 can
+// take it, else the manual launch. Returns which (null outside the landing: nothing happens).
+export function launchDown(store: Store<GameState>, confirm: LaunchConfirm): 'held' | 'manual' | null {
+  if (store.getState().run.phase !== 'landing') return null;
+  if (autodropKeyDown(store) === 'held') return 'held';
+  playerLaunch(store, confirm);
+  return 'manual';
+}
+
+// The launch control let go: AUTODROP's hold ends (a tap that sent nothing is R4's `'released'`).
+export function launchUp(store: Store<GameState>): void {
+  autodropKeyUp(store);
 }

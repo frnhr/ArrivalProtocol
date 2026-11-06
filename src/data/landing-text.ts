@@ -3,6 +3,7 @@ import type { ForgivenessClass, LandingEnd, LaunchRefusal, Place, ParkReason, Te
 import { formatCount } from '@data/format';
 import { STAR_FUEL_PCT } from '@data/tuning';
 import { podTag } from '@data/pod-ids';
+import { AUTODROP_TEXT } from '@data/autodrop-text';
 
 // Every landing word (docs/phase3/01-landing.md, slice 1a) as a PLACEHOLDER: 05-story owns the final wording, and the
 // state words of §3.10 (CAN'T LAUNCH, PARKED IN ORBIT · fate unknown, NOT LAUNCHED) are the decided set. A pod is never
@@ -84,10 +85,11 @@ export const LAUNCH_CONFIRM_TEXT = {
 // The TERMINAL's echoes (§3.8): `> launch pod03 ... LZ-A`, then `> pod03 ... LANDED`.
 export const LANDING_ECHO = {
   launch: (pod: number, aimLz: string | null): string => `> launch ${podTag(pod)} ... ${aimLz ?? 'OFF-SITE'}`,
-  touchdown: (pod: number, place: Place, lz: string | null, touch: Touch): string => {
+  // `bullseye` (slice 4c): AUTODROP sent it and it came down soft in an LZ with room (`> pod03 ... LANDED · BULLSEYE`).
+  touchdown: (pod: number, place: Place, lz: string | null, touch: Touch, bullseye = false): string => {
     const hard = touch === 'hard' ? ' · HARD' : '';
     switch (place) {
-      case 'lz': return `> ${podTag(pod)} ... LANDED${hard}`;
+      case 'lz': return `> ${podTag(pod)} ... LANDED${hard}${bullseye && touch === 'soft' ? AUTODROP_TEXT.bullseye : ''}`;
       case 'mislanded': return `> ${podTag(pod)} ... LANDED · ${lz ?? '?'} FULL${hard}`;
       case 'off-site': return `> ${podTag(pod)} ... OFF-SITE${hard}`;
       case 'no-go': return `> ${podTag(pod)} ... NO-GO ZONE`;
