@@ -6,6 +6,7 @@ import type { FsToolSegment, Segment, UpgradeSegment } from '@/types/segment';
 import { TOOL_FILES, createToolFiles } from '@data/fs-tools';
 import { REPO_FILE_TEXT, RESTRICTED_WHY, REPO_TEXT } from '@data/repo-text';
 import { REPAIR_PATCH_BLOCKS, INTEGRITY_MAX, MAX_LINE_CHARS } from '@data/tuning';
+import { SKILL_IDS, SKILL_TREE } from '@data/skills';
 
 // The repository's catalogue v1 (02-map §3.8; slice-3b-plan §1.1 item 1, §4.1): what ARRIVAL CONTROL sends on request, as
 // data. A tool file is a fresh copy of the tool's own file (data/fs-tools.ts, so its size and words are the tool's); the
@@ -53,10 +54,11 @@ export const REPO_FILES: Readonly<Record<RepoFileId, RepoFileDef>> = Object.from
   blocks: copiedToolDef(id)?.size ?? REPAIR_PATCH_BLOCKS,
 }])) as Record<RepoFileId, RepoFileDef>;
 
-// The locked rows (02 §3.8: shown locked, never sent; no trace changes this list). Slice 4 appends the tree's skills as
-// `skl:<id>` rows.
+// The locked rows (02 §3.8: shown locked, never sent; no trace changes this list). Slice 4 (03 §3.11): every skill of the
+// tree is restricted permanently, as a `skl:<id>` row in the tree's order, whether its branch is built yet or not (the
+// repository never sends skills: they are what make a caretaker independent).
 export const RESTRICTED_ROWS: readonly RestrictedRowDef[] = [
-  { id: 'skl:autoburn', name: 'AUTOBURN.skl', why: RESTRICTED_WHY.skill },
+  ...SKILL_IDS.map((id): RestrictedRowDef => ({ id: `skl:${id}`, name: SKILL_TREE[id].fileName, why: RESTRICTED_WHY.skill })),
   { id: 'thread-plus', name: 'THREAD+', why: RESTRICTED_WHY.system },
   { id: 'firewall-sys', name: 'FIREWALL.sys', why: RESTRICTED_WHY.system },
 ];

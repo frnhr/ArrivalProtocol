@@ -5,91 +5,21 @@
 // Everything here is derived from the run's history (RunSkillState) and memory, never stored: see types/skill.ts.
 import type { Store } from '@state/store';
 import type { GameState, RunStats } from '@state/schema';
-import type { Segment } from '@/types/segment';
 import type {
-  SkillId, SkillLevel, SkillVersion, LockLevel, CellRow, LostLevel, RunSkillState, CycleEarning, CycleGrant, DemoSkill,
-  DemoTuning,
+  SkillId, SkillLevel, SkillVersion, CellRow, RunSkillState, CycleEarning, CycleGrant, DemoSkill,
+  DemoTuning, SkillRecord,
 } from '@/types/skill';
-import { skillFilesOf } from '@state/selectors';
 import { levelPrice, skillBlocks, SKILL_TREE, SKILL_IDS } from '@data/skills';
 import { reachableFrom } from '@systems/map-hop';
 import { currentSlot } from '@systems/map-streams';
-import { notBuilt } from '@systems/not-built';
 import {
-  RESTORE_FRACTION, AUTO_DEMO_WINDOW, AUTOBURN_OFFSET_FACTOR, AUTOBURN_OFFSET_MAX_TAC, AUTOBURN_ACCURACY_PER_TAC,
+  AUTO_DEMO_WINDOW, AUTOBURN_OFFSET_FACTOR, AUTOBURN_OFFSET_MAX_TAC, AUTOBURN_ACCURACY_PER_TAC,
   AUTOBURN_ACCURACY_MIN, AUTOBURN_ACCURACY_MAX, AUTOBURN_UNTRAINED_OFFSET_TAC,
 } from '@data/tuning';
 
-// --- Levels ----------------------------------------------------------------------------------------------------------
-
-// The desk visit the run is at: the ships ended so far (visit 1 is the desk after ship 1). Purchases and grants record it.
-export function visitNow(run: Readonly<Pick<GameState['run'], 'ships'>>): number {
-  return run.ships.length;
-}
-
-// a above b (by version, then lock): the order files and purchases are compared in.
-export function levelAbove(a: Readonly<SkillLevel>, b: Readonly<SkillLevel>): boolean {
-  return a.version > b.version || (a.version === b.version && a.lock > b.lock);
-}
-
-function highestLevel(levels: readonly Readonly<SkillLevel>[]): SkillLevel | null {
-  let best: SkillLevel | null = null;
-  for (const level of levels) if (best === null || levelAbove(level, best)) best = { version: level.version, lock: level.lock };
-  return best;
-}
-
-// The level of the skill file the unit carries (its highest copy, whatever its health or state: damage is not loss,
-// REPAIR answers it), or null with none in memory (eaten, unlinked, deleted, left behind).
-export function fileLevel(memory: readonly Segment[], id: SkillId): SkillLevel | null {
-  return highestLevel(skillFilesOf(memory, id).map((file) => ({ version: file.version, lock: file.lock })));
-}
-
-// What the unit holds of `id` once this desk's purchases land (plan §2.2): its file's level, raised by every pending
-// purchase (each `to` is the skill's whole level after it). Componentwise, since the levels are bought from below.
-export function held(state: Readonly<Pick<GameState, 'memory' | 'run'>>, id: SkillId): SkillLevel | null {
-  const base = fileLevel(state.memory, id);
-  const pending = state.run.skills.pending.filter((purchase) => purchase.skill === id).map((purchase) => purchase.to);
-  if (pending.length === 0) return base;
-  const levels = base === null ? pending : [base, ...pending];
-  return {
-    version: Math.max(...levels.map((level) => level.version)) as SkillVersion,
-    lock: Math.max(...levels.map((level) => level.lock)) as LockLevel,
-  };
-}
-
-// The highest level the run paid for (bought this run, or pending at this desk), or null if it never bought `id`.
-// Componentwise: a lock bought on v1 and a v2 bought later are both paid for.
-export function paid(skills: Readonly<RunSkillState>, id: SkillId): SkillLevel | null {
-  const tos = [...skills.bought, ...skills.pending].filter((purchase) => purchase.skill === id).map((purchase) => purchase.to);
-  if (tos.length === 0) return null;
-  return {
-    version: Math.max(...tos.map((level) => level.version)) as SkillVersion,
-    lock: Math.max(...tos.map((level) => level.lock)) as LockLevel,
-  };
-}
-
-// The levels paid for and no longer held (03 §3.3: eaten, unlinked, deleted, left behind, or packed at a lower version):
-// every version above the held one up to the paid one, then every LOCK RANGE level above the held lock up to the paid
-// lock, each with its price. Nothing held counts as v0 lock 0. [] when nothing is lost (or nothing was paid).
-export function lostLevels(id: SkillId, heldLevel: Readonly<SkillLevel> | null, paidLevel: Readonly<SkillLevel> | null): LostLevel[] {
-  if (paidLevel === null) return [];
-  const lost: LostLevel[] = [];
-  for (let version = (heldLevel?.version ?? 0) + 1; version <= paidLevel.version; version++) {
-    const row: CellRow = { kind: 'version', version: version as SkillVersion };
-    lost.push({ row, price: levelPrice(id, row) });
-  }
-  for (let level = (heldLevel?.lock ?? 0) + 1; level <= paidLevel.lock; level++) {
-    const row: CellRow = { kind: 'lock', level: level as 1 | 2 };
-    lost.push({ row, price: levelPrice(id, row) });
-  }
-  return lost;
-}
-
-// RESTORE's price (decision 16): RESTORE_FRACTION of the lost levels' prices, rounded up (LOCK RANGE counts, as part of
-// FLIGHT's cost). 0 when nothing is lost.
-export function restorePrice(lost: readonly LostLevel[]): number {
-  return Math.ceil(RESTORE_FRACTION * lost.reduce((sum, level) => sum + level.price, 0) - 1e-9);
-}
+// The levels (held, paid, lost, RESTORE's price) live in the leaf systems/skill-levels.ts; re-exported here with the rest.
+export { visitNow, levelAbove, fileLevel, held, paid, lostLevels, restorePrice } from '@systems/skill-levels';
+import { visitNow, fileLevel, held, paid } from '@systems/skill-levels';
 
 // --- The bank (03 §3.1) ------------------------------------------------------------------------------------------------
 
@@ -145,15 +75,21 @@ export function autoburnDemoSkill(stats: Readonly<Pick<RunStats, 'demos'>>): Dem
 
 // --- The desk ----------------------------------------------------------------------------------------------------------
 
-// What holds SET COURSE (plan §2.5): on the arm, the run's first desk waits for the required first pick (a pending
-// 'train'). Later desks, and the classic world (no tree), never block. Track TREE wires it (setCourse throws on it; the
-// DESK shows `CHOOSE YOUR FIRST SKILL`).
+// What holds SET COURSE (plan §2.5): on the arm, the run's first desk waits for the required first pick. Later desks, and
+// the classic world (no tree), never block. Any skill already paid for (bought, or pending at this desk) clears it: the
+// pick made, or a migrated run that kept phase 2's free AUTOBURN (the foundation review's note), which would otherwise be
+// asked to buy what it holds. setCourse throws on it (run.ts); the DESK shows `CHOOSE YOUR FIRST SKILL`.
 export type DeskBlocker = 'first-pick';
 
 export function deskBlocker(state: Readonly<GameState>): DeskBlocker | null {
   if (state.run.map.world !== 'arm' || state.run.phase !== 'desk') return null;
   if (visitNow(state.run) !== 1) return null;
-  return state.run.skills.pending.some((purchase) => purchase.kind === 'train') ? null : 'first-pick';
+  return anyPaid(state.run.skills) ? null : 'first-pick';
+}
+
+// The run has paid for some skill (bought this run, or pending at this desk).
+export function anyPaid(skills: Readonly<RunSkillState>): boolean {
+  return SKILL_IDS.some((id) => paid(skills, id) !== null);
 }
 
 // --- The grid (implemented by the FOUNDATION's review follow-up; Track TREE may refine it, its tests staying) -----------
@@ -264,6 +200,8 @@ function latchedRuleDue(state: Readonly<GameState>, id: SkillId, visit: number):
 //   due, the next ship needs SURVEY (a POOR planet is reachable): it opens first, SENTRY the visit after.
 // Pure: run.ts openDesk latches a newly due one.
 export function openBranchesAt(state: Readonly<GameState>, visit: number): SkillId[] {
+  // The classic world has no tree (plan §7 R10): its suites give skills through tests/unit/support/skills.ts.
+  if (state.run.map.world !== 'arm') return [];
   const latched = state.run.skills.opened;
   const open = new Set<SkillId>();
   for (const id of SKILL_IDS) {
@@ -283,11 +221,57 @@ export function openBranchesAt(state: Readonly<GameState>, visit: number): Skill
   return SKILL_IDS.filter((id) => open.has(id));
 }
 
-// --- Grants (slice 5's interface, 03 §5; typed now, plan §2.15) -----------------------------------------------------------
+// The 'after-seeds' / 'poor-ahead' branch newly due at this desk (openBranchesAt's one new branch), or null: run.ts openDesk
+// latches it into RunSkillState.opened, so a later visit keeps it open whatever the map says then.
+export function branchToLatch(state: Readonly<GameState>, visit: number): SkillId | null {
+  const latched = state.run.skills.opened;
+  return openBranchesAt(state, visit).find((id) => SKILL_TREE[id].opens.kind !== 'start' && !latched.some((entry) => entry.skill === id)) ?? null;
+}
 
-// n cycles into the bank from a resident, a story stop or a salvage card (03 §5: "added to the bank at the next visit").
+// --- The run's totals (RUN END, the RUN TALLY, the archive) ---------------------------------------------------------------
+
+// The cycles' worth of the tree the run paid for (the RUN TALLY's `TRAINED n of 54`): every level up to each skill's paid
+// level, at its price, whether or not it is still held (lost levels were trained all the same). Free purchases (a migrated
+// AUTOBURN, a grant) count at their cell's price: they are part of the tree the unit had.
+export function trainedCycles(skills: Readonly<RunSkillState>): number {
+  let total = 0;
+  for (const id of SKILL_IDS) {
+    const level = paid(skills, id);
+    if (level === null) continue;
+    for (const row of skillRows(id)) if (covers(level, row)) total += levelPrice(id, row);
+  }
+  return total;
+}
+
+// What a skill learned from the kid's demos, or null for a skill that has none (SURVEY, SENTRY) or whose learning is not
+// built yet (AUTODROP's drops: 4c gives it its own tuning).
+export function skillDemos(stats: Readonly<Pick<RunStats, 'demos'>>, id: SkillId): DemoSkill | null {
+  return SKILL_TREE[id].demos === 'captures' ? autoburnDemoSkill(stats) : null;
+}
+
+// The skills the unit ends the run with (03 §3.11, LastUnit.skills): each skill whose file is in memory, at its file's
+// level, with its demos' accuracy (null for a skill with no demos, or none yet: UNTRAINED). REASSIGNMENT (slice 7) hunts
+// the highest version.
+export function skillRecords(state: Readonly<Pick<GameState, 'memory' | 'run'>>): SkillRecord[] {
+  const records: SkillRecord[] = [];
+  for (const id of SKILL_IDS) {
+    const level = fileLevel(state.memory, id);
+    if (level === null) continue;
+    const demos = skillDemos(state.run.stats, id);
+    records.push({ skill: id, version: level.version, lock: level.lock, accuracy: demos === null || demos.untrained ? null : demos.accuracy });
+  }
+  return records;
+}
+
+// --- Grants (slice 5's interface, 03 §5; plan §2.15) -----------------------------------------------------------------------
+
+// n cycles into the bank from a resident, a story stop or a salvage card (03 §5: "added to the bank at the next visit"; the
+// bank is derived, so it reads them at once), recorded at this visit with the source's line (null: the built-in sources).
 export function grantCycles(store: Store<GameState>, cycles: number, source: CycleGrant['source'], label: string | null): void {
-  notBuilt('grantCycles', 'TREE', store, cycles, source, label);
+  if (!(Number.isInteger(cycles) && cycles > 0)) throw new Error(`grantCycles: ${cycles} is not a positive whole number of cycles`);
+  store.update((draft) => {
+    draft.run.skills.grants.push({ source, cycles, visit: visitNow(draft.run), label });
+  });
 }
 
 // The two grant rules (03 §5): a departed resident's salvage card ('card': one skill at v1 of an open branch the unit has
@@ -297,13 +281,25 @@ export type GrantRule = 'card' | 'gift';
 
 // A skill at a version, installed at the next boot with the TRAINED line naming `source` (`from the sleeper on CURLEW`): a
 // SkillGrant, and a 'grant' purchase (cost 0) so a granted skill eaten later is lost and can be restored like a bought one.
-// Throws where grantAllowed says no.
+// The purchase keeps the lock the run paid for (v2 given to a v1 + 270 AUTOBURN is v2 + 270). Throws where grantAllowed
+// says no.
 export function grantSkill(store: Store<GameState>, skill: SkillId, version: SkillVersion, source: string, rule: GrantRule): void {
-  notBuilt('grantSkill', 'TREE', store, skill, version, source, rule);
+  const state = store.getState();
+  if (!grantAllowed(state, skill, version, rule)) throw new Error(`grantSkill: ${SKILL_TREE[skill].fileName} v${version} can't be granted now (${rule})`);
+  const lock = paid(state.run.skills, skill)?.lock ?? 0;
+  store.update((draft) => {
+    draft.run.skills.skillGrants.push({ skill, version, source, installedAtDepth: null });
+    draft.run.skills.bought.push({ skill, kind: 'grant', to: { version, lock }, cost: 0, visit: visitNow(draft.run) });
+  });
 }
 
-// Whether a grant under `rule` may give `skill` at `version` now (03 §5): never above v3 or the built version, never a closed
-// branch, and for a 'card' never a skill the unit holds, has lost or cannot see yet.
+// Whether a grant under `rule` may give `skill` at `version` now (03 §5): never above the built version, never a closed
+// branch, never a version the run already paid for (nothing to give), and for a 'card' only v1 of a skill the run never paid
+// for (not one it holds, nor one it lost: RESTORE is the way back there).
 export function grantAllowed(state: Readonly<GameState>, skill: SkillId, version: SkillVersion, rule: GrantRule): boolean {
-  return notBuilt('grantAllowed', 'TREE', state, skill, version, rule);
+  if (version > SKILL_TREE[skill].built) return false;
+  if (!openBranchesAt(state, visitNow(state.run)).includes(skill)) return false;
+  const paidFor = paid(state.run.skills, skill);
+  if (rule === 'card') return version === 1 && paidFor === null && fileLevel(state.memory, skill) === null;
+  return paidFor === null || version > paidFor.version;
 }

@@ -171,6 +171,8 @@ export function skillsModel(state: Readonly<GameState>): SkillRow[] {
       case 'repair-v2': body = repairV2Row(state); break;
       case 'thread-plus': body = threadRow(state); break;
       case 'charge': body = { status: SKILLS_TEXT.status.charge(count * CHARGE_CARD_BLOCKS), tone: 'dim', pips: [] }; break;
+      // Slice 4 (Track TREE): +2 CYCLES is spent at the desk, never carried (run.upgrades never lists it).
+      case 'cycles': continue;
     }
     rows.push({ id, title: def.title, count: count > 1 ? SKILLS_TEXT.count(count) : '', effect: def.effect, ...body });
   }

@@ -5,7 +5,9 @@ import type { GameState, TransitPlan } from '@state/schema';
 import type { Segment, FirewallSegment, UpgradeSegment } from '@/types/segment';
 import type { Hop } from '@/types/map';
 import type { DeliveryChip } from '@/types/repo';
-import { packUnit, type Packet } from '@systems/carry';
+import { packUnit, type Packet, type PacketSkill } from '@systems/carry';
+import { skillPacketPlan, applySkillPlan, type SkillPacketPlan } from '@systems/skill-files';
+import { shipSummaryAt } from '@systems/map-run';
 import { chargeLeft, upgradeFiles, isFirewall } from '@state/selectors';
 import { hollowLabel } from '@systems/say';
 import { draftCards, UPGRADE_FILE_TEXT, type UpgradeId, type DraftContext, type DraftCard } from '@data/upgrades';
@@ -35,6 +37,7 @@ export function ownedUpgrades(state: Readonly<GameState>): Record<UpgradeId, num
     'thread-plus': state.run.upgrades.filter((id) => id === 'thread-plus').length,
     charge: 0,
     'fuel-trim': upgradeFiles(state.memory, 'fuel-trim').length,
+    cycles: 0,
   };
 }
 
@@ -47,12 +50,16 @@ export function ownedUpgrades(state: Readonly<GameState>): Record<UpgradeId, num
 // Phase 3 slice 3b: the files count the hop's deliveries as first packed (`deliveries`: the plan's chips, none sent on yet;
 // slice-3b-plan risk 17's reading: the deal stays keyed by the slot left, and a SEND ON later does not re-deal), and the arm
 // deals salvage only (UpgradeDef.salvage: REPAIR v2 moved to the repository, 02 §3.10).
+// Slice 4: the files count this desk's training (the pending purchases' files: skill-files.ts skillPacketPlan, nothing packed
+// lower yet), and the context says whether the unit has a tree (the arm) and whether the hop goes into a final ship
+// (`room.to`: the +2 CYCLES card is never dealt there, plan §7 R12; a bare link, the classic suites', goes nowhere final).
 export function draftContext(
-  state: Readonly<GameState>, linkBlocks: number, room?: Readonly<Pick<Hop, 'room' | 'chargeFloor'>>,
+  state: Readonly<GameState>, linkBlocks: number, room?: Readonly<Pick<Hop, 'room' | 'chargeFloor'> & Partial<Pick<Hop, 'to'>>>,
   deliveries: readonly DeliveryChip[] = [],
 ): DraftContext {
   const last = state.run.ships[state.run.ships.length - 1] ?? null;
-  const files = planPacket(state.memory, { linkBlocks, dropped: [], pick: null, deliveries }).filesBlocks;
+  const files = planPacket(state.memory, { linkBlocks, dropped: [], pick: null, deliveries, skills: skillPacketPlan(state, {}) }).filesBlocks;
+  const tree = state.run.map.world === 'arm';
   const roomLeft = room === undefined ? Infinity : room.room - room.chargeFloor - files;
   return {
     stats: state.run.stats,
@@ -63,13 +70,16 @@ export function draftContext(
     linkRoom: Math.max(0, Math.min(linkBlocks - files, roomLeft)),
     hollowLabel: hollowLabel(state.run),
     salvageOnly: state.run.map.world === 'arm',
+    tree,
+    toFinal: room?.to !== undefined && shipSummaryAt(state.run.map, room.to).final,
   };
 }
 
 // The cards for the TRANSMIT now being prepared (goTransmit), seeded by the ship being left: a hop (its link and room),
 // or a bare link (the classic suites), with the hop's delivery chips as first packed.
 export function dealDraft(
-  state: Readonly<GameState>, hop: number | Readonly<Pick<Hop, 'linkBlocks' | 'room' | 'chargeFloor'>>, deliveries: readonly DeliveryChip[] = [],
+  state: Readonly<GameState>, hop: number | Readonly<Pick<Hop, 'linkBlocks' | 'room' | 'chargeFloor'> & Partial<Pick<Hop, 'to'>>>,
+  deliveries: readonly DeliveryChip[] = [],
 ): DraftCard[] {
   const context = typeof hop === 'number' ? draftContext(state, hop, undefined, deliveries) : draftContext(state, hop.linkBlocks, hop, deliveries);
   return draftCards(context, visitRng(state.run, 'draft'));
@@ -97,6 +107,7 @@ export function cardFiles(id: UpgradeId | null, makeId: (prefix: string) => stri
     case 'repair-v2':
     case 'thread-plus':
     case 'charge':
+    case 'cycles':
       return [];
   }
 }
@@ -109,11 +120,15 @@ export const PREVIEW_ID = (prefix: string): string => `${prefix}~preview`;
 // files are added to a packet (slice-3b-plan §2.7 item 2): the PACKET's numbers, the preview, the draft's room and the send
 // all go through it, so no number counts a delivery twice or forgets it. The screen's numbers use preview ids; the send
 // passes newSegId (`makeId`), so the files that land have real ids.
+// Slice 4 (plan §2.6): the skill plan too (skill-files.ts skillPacketPlan: this desk's purchases and the PACKET's PACK AS).
+// Its replaced files and the originals packed lower leave the packet with the drops (never shown as drops), and the fresh
+// and lowered files join it beside the card's; packet.skills names them.
 export interface PacketPlan {
   linkBlocks: number;
   dropped: readonly string[];
   pick: TransitPlan['pick'];
   deliveries: readonly DeliveryChip[];
+  skills: Readonly<SkillPacketPlan>;
 }
 
 export function planPacket(
@@ -121,9 +136,34 @@ export function planPacket(
   makeId: (prefix: string) => string = PREVIEW_ID,
 ): Packet {
   const groups = deliveryFileGroups(plan.deliveries, memory, makeId);
-  const packet = packUnit(memory, plan.linkBlocks, plan.dropped, [...cardFiles(plan.pick, makeId), ...groups.flatMap((group) => group.segs)]);
+  const skills = applySkillPlan(memory, plan.skills, makeId);
+  // A file is left behind, replaced or packed lower, never two of these (setPackAs takes a dropped file back first).
+  const both = plan.dropped.find((id) => skills.removed.includes(id));
+  if (both !== undefined) throw new Error(`planPacket: ${both} is both left behind and replaced or packed lower`);
+  const packet = packUnit(memory, plan.linkBlocks, [...plan.dropped, ...skills.removed], [
+    ...cardFiles(plan.pick, makeId), ...groups.flatMap((group) => group.segs), ...skills.added,
+  ]);
   packet.deliveries = groups.map((group) => ({ key: group.key, segIds: group.segs.map((seg) => seg.id) }));
+  packet.skills = [
+    ...skills.fresh.map((entry): PacketSkill => ({ segId: entry.segId, skill: entry.skill, how: 'fresh' })),
+    ...Object.keys(plan.skills.packAs).map((segId): PacketSkill => {
+      const seg = skills.added.find((file) => file.id === segId);
+      if (seg === undefined) throw new Error(`planPacket: the packed-lower copy of ${segId} is missing`);
+      return { segId, skill: seg.upgrade, how: 'packed' };
+    }),
+  ];
   return packet;
+}
+
+// The packet for a transit plan as it stands (its drops, pick, deliveries and PACK AS) on the run's training: what the
+// PACKET's model, its toggles and the send read.
+export function transitPacket(
+  state: Readonly<GameState>, plan: Readonly<Pick<TransitPlan, 'linkBlocks' | 'dropped' | 'pick' | 'deliveries' | 'packAs'>>,
+  makeId: (prefix: string) => string = PREVIEW_ID,
+): Packet {
+  return planPacket(state.memory, {
+    linkBlocks: plan.linkBlocks, dropped: plan.dropped, pick: plan.pick, deliveries: plan.deliveries, skills: skillPacketPlan(state, plan.packAs),
+  }, makeId);
 }
 
 // The REPAIR CHARGE the pick brings on arrival.
@@ -155,7 +195,7 @@ export function pickCard(store: Store<GameState>, id: UpgradeId): PickRefusal | 
   const plan = state.run.transit;
   if (state.run.phase !== 'transmit' || plan === null) return 'no-transmit';
   if (!plan.offer.some((card) => card.id === id)) return 'not-offered';
-  const packet = planPacket(state.memory, { ...plan, pick: id });
+  const packet = transitPacket(state, { ...plan, pick: id });
   store.update((draft) => {
     if (!draft.run.transit) throw new Error('pickCard: the transit plan vanished');
     draft.run.transit.pick = id;

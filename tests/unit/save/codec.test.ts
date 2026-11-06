@@ -141,6 +141,16 @@ const shapes: [string, string][] = [
   ['a resume line at another depth', edit(desk, (save) => { save.resume.depth = 4; })],
   ['a resume line naming another ship', edit(desk, (save) => { save.resume.ship = 'VESPER'; })],
   ['a beam left with a transit plan', edit(beam, (save) => { save.payload.run.transit = save.payload.run.arrival; })],
+  // Slice 4 (TREE): the tree's history read as a whole, the skill files' levels, the arrival's skill files.
+  ['fewer earnings than ships ended', edit(desk, (save) => { save.payload.run.skills.earned.pop(); })],
+  ['an earning on another ship\'s slot', edit(desk, (save) => { save.payload.run.skills.earned[0].slot = 99; })],
+  ['a bank below 0', edit(desk, (save) => {
+    save.payload.run.skills.bought.push({ skill: 'autoburn', kind: 'train', to: { version: 2, lock: 0 }, cost: 99, visit: 1 });
+  })],
+  ['a skill file with no version (the carried racks)', edit(beam, (save) => {
+    delete (save.payload.carried.segs as Raw[]).find((seg) => seg.upgrade === 'autoburn')!.version;
+  })],
+  ['an arrival skill of an unknown kind', edit(beam, (save) => { save.payload.run.arrival.skills[0].kind = 'bought'; })],
 ];
 const wrongShape = shapes.filter(([, text]) => kind(text) !== 'shape');
 check('the shape, field by field → shape (the envelope, the run, the map, the slices, the copies against the run)', wrongShape.length === 0,
@@ -153,7 +163,7 @@ check('a classic map → classic', kind(edit(desk, (save) => {
 check('a route that does not match the point → route (the point, the depth, the ships ended)',
   kind(edit(desk, (save) => { save.point = 'ending-chosen'; save.resume.point = 'ending-chosen'; save.payload.phase = 'report'; save.payload.run.phase = 'report'; })) === 'route'
   && kind(edit(desk, (save) => { save.payload.run.shipIndex = 3; save.resume.depth = 4; })) === 'route'
-  && kind(edit(desk, (save) => { save.payload.run.ships.pop(); })) === 'route');
+  && kind(edit(desk, (save) => { save.payload.run.ships.pop(); save.payload.run.skills.earned.pop(); })) === 'route');
 check('ENDING CHOSEN with an undecided finale → route', kind(edit(ending.raw, (save) => { save.payload.slices.hollow.finale.phase = 'choice'; })) === 'route');
 check('a ship that does not build → ship', kind(edit(desk, (save) => { save.payload.run.map.arm[3].pods = 99; })) === 'ship');
 

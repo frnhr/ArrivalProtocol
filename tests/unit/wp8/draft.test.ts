@@ -39,7 +39,7 @@ import type { Segment, DriverSegment, FreeSegment, UpgradeSegment } from '@/type
 import { plantHalcyonRoot } from '../support/hollow-world';
 import { MEMORY_LAYOUTS, rackStartOf } from '@data/memory';
 
-const none: Record<UpgradeId, number> = { firewall: 0, 'repair-v2': 0, 'thread-plus': 0, charge: 0, 'fuel-trim': 0 };
+const none: Record<UpgradeId, number> = { firewall: 0, 'repair-v2': 0, 'thread-plus': 0, charge: 0, 'fuel-trim': 0, cycles: 0 };
 // The base context has no sign of trouble at all (a fresh unit's 36 charge, most of the FUEL left): every card
 // at its base weight.
 const ctx = (over: Partial<DraftContext> = {}): DraftContext => ({
