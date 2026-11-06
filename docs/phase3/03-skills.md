@@ -302,8 +302,14 @@ online copy. As for every file, a skill that is being repaired, moved or switche
        (Nav Plotter ×1.25 degraded, ×1.5 failing), and the worst driver among the pods the bay would send next (the
        LOAD NEXT order).
      - v3 tries round orbits from the top of the band down, in steps of 100 km (V3_STEP_KM), and takes the first one
-       where every LZ that still needs pods fits.
+       where every LZ that still needs pods fits. *Built (slice 4e):* the scan starts one step under the band's top
+       (`ring.max − V3_STEP_KM`), because a circle at the top itself leaves the ring within ROUND's own tolerance.
      - **Why the highest:** it decays least. Above the DRAG line it does not decay at all.
+       *Built (slice 4c–4e review M5, the lead's call; Fran may reverse it):* **above the DRAG line v3 takes the
+       fitting circle nearest the ship's loop** (the least transfer Δv), and the highest only below the line, where it
+       decays least. Above the line nothing decays, so the climb bought nothing: over the five classic ships from a low
+       ellipse, healthy, v3's FUEL went from −25.4% to −6.5% (v2 ROUND −7.6%) with the same pods landed and the same
+       first drop (`V3_AIM_ABOVE_DRAG` in `tuning.ts`; `'highest'` restores the rule as written).
      - **If no orbit fits every LZ,** v3 takes the highest orbit that fits the most LZs, and the strip names the REPAIR
        for the others, as GO LOWER does.
      - **The fuel reserve still applies.** Among the fitting orbits it takes the highest whose transfer, plus the
@@ -313,7 +319,10 @@ online copy. As for every file, a skill that is being repaired, moved or switche
      - **In FLIGHT,** it captures, then makes the apsis burns to the chosen round orbit with the planner (the same
        planner as v2, with v3's target), and HOLD STEADY locks it on that orbit.
      - **In LANDING,** it can also be engaged from an orbit that is already locked (`[B] · MOVE TO LANDING ORBIT`). It
-       goes down with 01-landing's `go-low` burn, then rounds the orbit.
+       goes down with 01-landing's `go-low` burn, then rounds the orbit. *Built (slice 4e, plan R17):* it moves with the
+       circle planner (`predict.ts planToCircle`, apsis burns to the circle), not 1b's `go-low` burn, because several LZs
+       need a circle, not one launch point. And it can **climb**: from a low loop the fitting circle may be above it, so
+       "goes down" is not the only case.
      - **While v3 is engaged,** the strip's GO LOWER offer becomes v3's own line: `AUTOBURN v3 GOES LOWER — LZ-B's dot
        will fit`.
   3. **Hold it.**
@@ -321,7 +330,8 @@ online copy. As for every file, a skill that is being repaired, moved or switche
        or would leave the band, v3 makes a small PRO top-up at the next apsis that is outside every window. Launches are
        refused while the engine fires (`01-landing.md` §3.3), so a top-up never costs a window. 01-landing puts the cost
        at about 1% of the tank per orbit.
-     - **When the fit changes** (a bite on a driver, a hurt sensor), v3 goes lower again.
+     - **When the fit changes** (a bite on a driver, a hurt sensor), v3 goes lower again. *Built (review M6):* only for
+       the fit, never for FUEL alone (near the reserve the aim could otherwise step down as the top-ups spend FUEL).
      - **It never climbs back up during a landing.** A climb costs about as much FUEL as the decay it would save, and
        the rule stays simple.
 

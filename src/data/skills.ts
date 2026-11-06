@@ -25,8 +25,8 @@ export const SKILL_IDS: readonly SkillId[] = ['autoburn', 'autodrop', 'survey', 
 // • SENTRY v3 5: a free wall on every ship is strong.
 // • Sizes: bigger versions cost link, room, charge and repair time, and give HOLLOW and the seeds more to bite (03 §3.4);
 //   the largest file is SKILL_MAX_BLOCKS.
-// • `built`: what this build implements (types/skill.ts SkillDef). 4a: AUTOBURN v1–v2 only. Slices 4c–4e: each track
-//   raises its own skill's `built` line only (DROP autodrop 0 → 3, SENTRY sentry 0 → 3, ORBIT autoburn 2 → 3).
+// • `built`: what this build implements (types/skill.ts SkillDef): AUTOBURN, AUTODROP and SENTRY v1–v3 (slices 4a–4e);
+//   SURVEY none until slice 6.
 export const SKILL_TREE: Readonly<Record<SkillId, SkillDef>> = {
   autoburn: {
     id: 'autoburn', branch: 'flight', fileName: 'AUTOBURN.skl', short: 'AB',
