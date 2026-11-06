@@ -556,9 +556,10 @@ export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSol
       row = { id: 'landing-AD-wait', text: text.wait(countdown(state, next.atTSec)), keys: [], urgency: 'now', layer: 'mind' };
     } else if (next !== null && Math.min(tacTo(state, next.atTSec), tacTo(state, next.opensAt)) <= WINDOW_TACTICAL_LEAD_TAC) {
       row = { id: 'landing-AD-fly', text: text.fly(next.lz, next.n, countdown(state, next.atTSec)), keys: ['G'], urgency: 'wait', layer: 'ship' };
-    } else if (state.landing.window !== null && state.landing.window.sure && armedFor(state, view, state.landing.window.lz)) {
-      // A sure window of an LZ the machine flies (its volley flown): it waits, so the strip doesn't offer the manual [L] of
-      // L4–L6 there. A WIDE DROP window, or one its pass or plan leaves alone, keeps the manual rows: the kid's hands.
+    } else if (state.landing.window !== null && armedFor(state, view, state.landing.window.lz)) {
+      // A window the machine owns: v2's sure window of an LZ its pass flies, or any window while v3's plan has rows (the plan
+      // holds every pod for the windows it chose). It waits, so the strip doesn't offer L4–L6's manual [L] there. A v2 pass
+      // leaves a WIDE DROP window, or an LZ it doesn't fly, to the kid's hands.
       const words = next === null ? text.armedIdle : text.armedNext(next.lz, next.n, minSec(Math.max(0, tacTo(state, next.atTSec))));
       row = { id: 'landing-AD-armed', text: words, keys: ['G'], urgency: 'wait', layer: 'ship' };
     } else {
@@ -586,12 +587,13 @@ export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSol
   return row === null && tail === null ? null : { row, tail };
 }
 
-// The armed machine flies `lz`: it has pods to send there this pass (v2), or a plan row there (v3), or sent some already.
+// The armed machine owns the open window of `lz`: v3 while its plan has rows; v2 when the window is sure and the pass sends
+// (or sent) pods there.
 function armedFor(state: Readonly<GameState>, view: Readonly<LandingView>, lz: string): boolean {
   const ad = state.landing.autodrop;
-  if ((ad.sent[lz] ?? 0) > 0) return true;
-  if (ad.armed === 'pass') return passWant(state)(lz) > 0;
-  return ad.armed === 'plan' && planLanding(state, view).rows.some((row) => row.lz === lz);
+  if (ad.armed === 'plan') return planLanding(state, view).rows.length > 0;
+  if (state.landing.window?.sure !== true) return false;
+  return (ad.sent[lz] ?? 0) > 0 || passWant(state)(lz) > 0;
 }
 
 // Whether version `version`'s once-only lesson is due now (data/script.ts SKILL_4CDE_RULES: tut-autodrop-v1/v2/v3):
