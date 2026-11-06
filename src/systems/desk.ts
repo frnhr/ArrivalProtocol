@@ -31,6 +31,11 @@ import { MAP_TEXT, MODIFIER_LABEL } from '@data/map-text';
 import { REPO_FILES } from '@data/repository';
 import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
 import { URGENT_SLACK_YEARS, BEAM_OUT_BLACKOUT_SEC, LEAVE_BLOCK_MAX_LINES, TRAIL_CROSS_PAST_COLONY_LY } from '@data/tuning';
+import type { SkillId, CellRow } from '@/types/skill';
+import { bankOf, deskBlocker, type TrainRefusal } from '@systems/skill-tree';
+import { trainCell, restoreSkill, undoPurchase, FIRST_PICK_ENFORCED } from '@systems/training';
+import { trainingModel, cellKey, TRAINING_HOLD_SEC } from '@systems/training-model';
+import { TRAINING_TEXT } from '@data/training-text';
 
 export type { DeskWindowId };
 
@@ -198,7 +203,7 @@ export interface CardModel {
 // first desk only; it guides, SET COURSE never waits for it: decision 19), slice 4 the required TRAINING pick first
 // (slice-3a-plan §2.10). `label` is the step's short name on the strip (`1 A SHIP · 2 A FILE · 3 SET COURSE`).
 export interface DeskStep {
-  id: 'pick-ship' | 'request' | 'set-course';
+  id: 'train' | 'pick-ship' | 'request' | 'set-course';
   label: string;
   text: string;
   done: boolean;
@@ -594,10 +599,28 @@ export function timelineMarks(outlook: readonly OutlookEntry[], hop: Readonly<Pi
 // The desk's guidance steps: pick a ship (done once one is selected), then SET COURSE to it. On a run's first desk on the
 // arm the recommended file comes between (02 §4: ship → file → SET COURSE): done once any request is set; it only
 // guides, SET COURSE never waits for it (decision 19; plan risk 2).
+// SET COURSE waits for the required first pick (slice 4, plan §2.5): skill-tree.ts deskBlocker, once the rule is on
+// (training.ts FIRST_PICK_ENFORCED, Track TREE's switch: until trainCell is built the desk can't make the pick, so it
+// must not wait for it). The DESK's bar, its step and ENTER read this one rule.
+export function firstPickWaits(state: Readonly<GameState>): boolean {
+  return FIRST_PICK_ENFORCED && deskBlocker(state) !== null;
+}
+
+// Slice 4 (plan §2.5): the run's first desk on the arm opens with the required first skill (`A SKILL`), done once this
+// desk's pick is pending (firstPickWaits clears); SET COURSE waits for it there.
 export function deskSteps(state: Readonly<GameState>): DeskStep[] {
   const selected = state.ui.deskSelected;
-  const steps: DeskStep[] = [{ id: 'pick-ship', label: MAP_TEXT.desk.stepPick, text: MAP_TEXT.desk.pickShip, done: selected !== null }];
-  if (state.run.map.world === 'arm' && state.run.map.route.length === 1) {
+  const steps: DeskStep[] = [];
+  const firstDesk = state.run.map.world === 'arm' && state.run.map.route.length === 1;
+  if (firstDesk) {
+    const pick = state.run.skills.pending.find((purchase) => purchase.kind === 'train');
+    const done = !firstPickWaits(state);
+    const text = pick !== undefined
+      ? TRAINING_TEXT.stepDone(TRAINING_TEXT.skills[pick.skill].name, pick.to.version) : TRAINING_TEXT.stepText;
+    steps.push({ id: 'train', label: TRAINING_TEXT.step, text, done });
+  }
+  steps.push({ id: 'pick-ship', label: MAP_TEXT.desk.stepPick, text: MAP_TEXT.desk.pickShip, done: selected !== null });
+  if (firstDesk) {
     const pick = state.run.repo.pick;
     const recommended = recommendation(state);
     const text = pick !== null
@@ -719,13 +742,92 @@ export function cycleShip(store: Store<GameState>, step: 1 | -1): number {
 
 // --- The desk's tabs (phase 3 slice 3b; 02 §4: R / I; slice-3b-plan §5.2 item 1) --------------------------------------
 
-// The tab beside the chart: the SHIP CARD (null), the REPOSITORY or the INBOX. Escape goes back to the card. Slice 4's
-// TRAINING has no window yet, so asking for it is a bug in the caller.
+// The tab beside the chart: the SHIP CARD (null), the REPOSITORY, TRAINING (slice 4, [T]) or the INBOX. Escape goes back
+// to the card. The REPOSITORY and TRAINING live on the arm only (the classic world has no repository and no tree): asking
+// for either there is a bug in the caller.
 export function openDeskWindow(store: Store<GameState>, id: DeskWindowId | null): void {
   const state = store.getState();
   if (state.run.phase !== 'desk') throw new Error(`openDeskWindow: not on the DESK (phase ${state.run.phase})`);
-  if (id === 'training') throw new Error("openDeskWindow: TRAINING is slice 4's");
+  if (id === 'training' && state.run.map.world !== 'arm') throw new Error('openDeskWindow: the classic world has no TRAINING');
   if (state.ui.deskWindow !== id) store.update((draft) => { draft.ui.deskWindow = id; });
+}
+
+// --- TRAINING's actions (slice 4; plan §2.5; the model is systems/training-model.ts) ---------------------------------------
+
+// A cell (a click, a card's [1] / [2], ↑ ↓ in the grid) becomes the selection; a TRAIN bar filling for another cell stops.
+export function selectTrainingCell(store: Store<GameState>, skill: SkillId, row: CellRow): void {
+  const state = store.getState();
+  if (state.run.phase !== 'desk') throw new Error(`selectTrainingCell: not on the DESK (phase ${state.run.phase})`);
+  const same = state.ui.trainingSel !== null && state.ui.trainingSel.skill === skill
+    && cellKey(state.ui.trainingSel.skill, state.ui.trainingSel.row) === cellKey(skill, row);
+  if (same) return;
+  store.update((draft) => {
+    draft.ui.trainingSel = { skill, row: { ...row } };
+    draft.ui.trainingHoldSec = null;
+  });
+}
+
+// ↑ ↓ in the grid: the next or previous cell that is open, in the model's order, from the selection (wrapping).
+export function stepTrainingCell(store: Store<GameState>, step: 1 | -1): void {
+  const model = trainingModel(store.getState());
+  const open = model.cells.filter((cell) => cell.look !== 'closed' && cell.look !== 'unbuilt');
+  if (open.length === 0) return;
+  const at = model.selected === null ? -1 : open.findIndex((cell) => cell.key === model.selected!.key);
+  const next = at < 0 ? open[step === 1 ? 0 : open.length - 1]! : open[(at + step + open.length) % open.length]!;
+  selectTrainingCell(store, next.skill, next.row);
+}
+
+// TRAIN (or RESTORE) on the selection starts its bar; the view advances it on wall time (advanceTrainingHold) and the
+// purchase lands when it is full. Returns false when there is nothing to buy there now (the view buzzes).
+export function startTrainingHold(store: Store<GameState>): boolean {
+  const state = store.getState();
+  if (state.run.phase !== 'desk' || state.ui.trainingHoldSec !== null) return false;
+  const action = trainingModel(state).detail?.action ?? null;
+  if (action === null || !action.enabled) return false;
+  const sel = trainingModel(state).selected;
+  if (sel === null) throw new Error('startTrainingHold: an action with no cell selected');
+  store.update((draft) => {
+    draft.ui.trainingSel = { skill: sel.skill, row: { ...sel.row } };
+    draft.ui.trainingHoldSec = 0;
+  });
+  return true;
+}
+
+export function cancelTrainingHold(store: Store<GameState>): void {
+  if (store.getState().ui.trainingHoldSec !== null) store.update((draft) => { draft.ui.trainingHoldSec = null; });
+}
+
+// The bar after `dtSec` more wall seconds. Full (TRAINING_HOLD_SEC): the selection is trained, or restored (training.ts
+// trainCell / restoreSkill), the bar goes, and the result says so: 'done', a refusal (the view buzzes), or 'filling'.
+export function advanceTrainingHold(store: Store<GameState>, dtSec: number): 'filling' | 'done' | TrainRefusal {
+  const state = store.getState();
+  const hold = state.ui.trainingHoldSec;
+  if (hold === null) throw new Error('advanceTrainingHold: no TRAIN bar is filling');
+  const next = hold + Math.max(0, dtSec);
+  if (next < TRAINING_HOLD_SEC) {
+    store.update((draft) => { draft.ui.trainingHoldSec = next; });
+    return 'filling';
+  }
+  const model = trainingModel(state);
+  const cell = model.selected;
+  const action = model.detail?.action ?? null;
+  store.update((draft) => { draft.ui.trainingHoldSec = null; });
+  if (cell === null || action === null) throw new Error('advanceTrainingHold: the bar filled with nothing selected');
+  const refusal = action.kind === 'restore' ? restoreSkill(store, cell.skill) : trainCell(store, cell.skill, cell.row);
+  return refusal ?? 'done';
+}
+
+// UNDO beside a purchase of this desk (training.ts undoPurchase: only the last of its skill). The selection moves to the
+// cell it gave back, so TRAIN buys it again with one key.
+export function undoTraining(store: Store<GameState>, index: number): void {
+  const purchase = store.getState().run.skills.pending[index];
+  if (purchase === undefined) throw new Error(`undoTraining: no pending purchase ${index}`);
+  undoPurchase(store, index);
+  const row: CellRow = purchase.kind === 'lock' ? { kind: 'lock', level: purchase.to.lock as 1 | 2 } : { kind: 'version', version: purchase.to.version };
+  store.update((draft) => {
+    draft.ui.trainingSel = { skill: purchase.skill, row };
+    draft.ui.trainingHoldSec = null;
+  });
 }
 
 // A REQUEST toggle on a REPOSITORY row (or its number key): request `file`, or clear it when it is already this desk's
@@ -738,17 +840,21 @@ export function toggleRequest(store: Store<GameState>, file: RepoFileId): RepoFi
 
 // The tab badges (02 §4: badges for unread mail): the INBOX's unread count; the REPOSITORY's names this desk's request,
 // or `:)` while CONTROL recommends a file and none is asked for. null shows none (and on the classic world, always).
+// Slice 4: TRAINING's names the cycles while any are unspent (`6 CYCLES`, 03 §4: the badge pulses while they are).
 export interface DeskTabBadges {
   repository: string | null;
+  training: string | null;
   inbox: string | null;
 }
 
 export function deskTabBadges(state: Readonly<GameState>): DeskTabBadges {
-  if (state.run.map.world !== 'arm') return { repository: null, inbox: null };
+  if (state.run.map.world !== 'arm') return { repository: null, training: null, inbox: null };
   const pick = state.run.repo.pick;
   const unread = inboxUnread(state).length;
+  const bank = bankOf(state.run.skills);
   return {
     repository: pick !== null ? REPO_FILES[pick].name : recommendation(state) !== null ? REPO_TEXT.desk.badgeRecommended : null,
+    training: bank > 0 ? TRAINING_TEXT.badge(bank) : null,
     inbox: unread > 0 ? String(unread) : null,
   };
 }

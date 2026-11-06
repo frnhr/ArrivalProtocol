@@ -4,6 +4,7 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { on } from '@systems/events';
 import { onPostTick } from '@systems/clock';
+import { skillVersionStamp } from '@systems/skills';
 import { registerKeys } from '@systems/input';
 import { getPrediction } from '@systems/predict';
 import { isThrustOn, engineAccel, thrustJitter } from '@systems/orbit-sim';
@@ -262,11 +263,22 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     // it: its ignite (the relay and the whump) is what says the engine fired (WP10 review, the lead's ruling).
     on('ghost-start', ({ first }) => play('ghostIgnite', { first })),
     on('deal', ({ outcome }) => { if (outcome !== 'invalidated') play('stampHit', { heavy: outcome === 'accepted' }); }),
-    on('autoburn', ({ to }) => { if (to === 'armed') play('chime', { falling: false }); }),
+    // Armed by the kid's press (from idle, or again after an end), not each re-arm between v2's burns (Track FLIGHT).
+    on('autoburn', ({ from, to }) => { if (to === 'armed' && (from === 'idle' || from === 'done' || from === 'dropped')) play('chime', { falling: false }); }),
     on('skill-trained', () => {
       play('transmitIn');
       play('chime', { falling: false }, { delaySec: CHIME_AFTER_TRANSMIT_SEC });
     }),
+    // Slice 4 (03 §4 audio): a skill's version lost under damage falls (phase 2's sombre sweep, free now that souls are
+    // gone), one restored sparkles (the repair-won cue); systems/skills.ts skillVersionStamp decides, as the stamp does.
+    // The ship entering AUTOBURN's LOCK bracket chimes (Track FLIGHT emits it). The desk's own (the TRAIN bar's chirps
+    // and arpeggio, UNDO) are TrainingWindow's, like every view that plays its own clicks.
+    on('skill-version', ({ skill, from, to }) => {
+      const sound = skillVersionStamp(store.getState(), skill, from, to)?.sound ?? null;
+      if (sound === 'down') onceThisTick('sombreFall');
+      else if (sound === 'restored') onceThisTick('driverSaved');
+    }),
+    on('autoburn-in-lock', () => play('chime', { falling: false })),
     // WP11 part 2: LAST LIGHT's verbs, the duel and the choice.
     on('verb-blocked', () => {
       play('verbBlocked');

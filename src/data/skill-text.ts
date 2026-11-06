@@ -170,7 +170,9 @@ export const AUTO_PIP_TEXT = {
 // The mini-HUD card in the MIND while AUTOBURN works (the lead's note: show it flying while the kid fights in blue).
 export const AUTO_MINI_TEXT = {
   ready: 'AUTO READY · PRESS [B]',
-  armed: (time: string): string => `AUTO ARMED · BRAKES IN ${time}`,
+  // What it does next, by the burn it is armed for (autoburn.ts autoArmedBurn): brakes into the capture, trims, or rounds.
+  armed: (time: string, kind: 'capture' | 'trim' | 'round' = 'capture'): string =>
+    `AUTO ARMED · ${kind === 'capture' ? 'BRAKES' : kind === 'trim' ? 'TRIMS' : 'ROUNDS'} IN ${time}`,
   flying: 'AUTOBURN IS FLYING THE SHIP',
 } as const;
 

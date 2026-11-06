@@ -290,13 +290,7 @@ function build(svg: SVGSVGElement): PlotNodes {
   nodes.planet.setAttribute('fill', 'url(#planetFill)');
   // Back to front: later nodes paint on top.
   nodes.hazard.setAttribute('stroke', `url(#${ZONE_HATCH_IDS.hit})`);
-  // AUTOBURN's marks (slice 4). Styled inline until Track UI moves them to game.css: the ghost a thin dashed amber loop,
-  // the bracket a wide bright band along the path, the label the plot's own type in the bright amber.
-  Object.assign(nodes.autoGhost.style, { fill: 'none', stroke: 'var(--accent-bright)', strokeWidth: '1', strokeDasharray: '3 3', opacity: '0.7' });
-  Object.assign(nodes.lockRun.style, {
-    fill: 'none', stroke: 'var(--accent-bright)', strokeWidth: '5', strokeLinecap: 'round', opacity: '0.35',
-  });
-  Object.assign(nodes.lockLabel.style, { fill: 'var(--accent-bright)' });
+  // AUTOBURN's marks (slice 4) are styled in game.css (.np-auto-ghost, .np-lock, .np-lock-label).
 
   svg.append(
     nodes.planet, nodes.surface, nodes.atm, nodes.ring, nodes.ringLabel, nodes.zones,
@@ -1119,7 +1113,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     const bracket = seesPath ? lockBracket(state, pred) : null;
     const run = bracket ? pathRun(pred, proj, state.clock.tSec, bracket.fromInSec, bracket.toInSec) : null;
     nodes.lockRun.setAttribute('d', run?.d ?? '');
-    nodes.lockRun.style.opacity = bracket?.inside ? '0.6' : '0.35';
+    nodes.lockRun.classList.toggle('inside', bracket?.inside === true);
     show(nodes.lockLabel, run !== null);
     if (run) placeClear(nodes.lockLabel, [AUTO_PLOT_TEXT.lock], run.start, outwardFrom(half, run.start), obstacles, CHAR_W_TAG, path);
     else labelTurns.delete(nodes.lockLabel);

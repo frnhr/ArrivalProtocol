@@ -11,6 +11,10 @@ import { LANDING_REPORT_TEXT, LANDING_REPORT_UI_TEXT, podCode } from '@data/land
 import { requireById, replayAnimation, make } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
 import { reportTraceLine } from '@systems/hollow-hud';
+import { cyclesReport } from '@systems/training-model';
+import { shipCycles } from '@systems/run-score';
+import { currentSlot } from '@systems/map-run';
+import { CYCLES_ARRIVED, CYCLES_LANDED_STEPS } from '@data/tuning';
 import {
   CREDITS_LINES_PER_SEC, CREDITS_END_AT_FRAC, REPORT_LEAD_HOLD_SEC, WALL_FRAME_MAX_SEC, REPORT_STAR_GAP_SEC,
   REPORT_CHARGE_AFTER_SEC, REPORT_CHOIR_EVERY_SEC, REPORT_STAR_CHIME_AFTER_SEC, REPORT_FANFARE_AFTER_SEC,
@@ -36,6 +40,11 @@ import {
 // motion: the rows and the credits stand still, the stars fade in.
 
 type Stage = 'rows' | 'credits' | 'stars' | 'done';
+
+// The cycles line rolls up after the charge has shown (slice 4): it starts this long into the last stage and counts a
+// cycle per step, so a six reads in about a second, well inside REPORT_CONTINUE_ARM_SEC's wait.
+const REPORT_CYCLES_START_SEC = 0.3;
+const REPORT_CYCLE_STEP_SEC = 0.1;
 
 const NEAR_MISSES_SHOWN = 2;
 
@@ -114,6 +123,12 @@ export function mountLandingReport(store: Store<GameState>): () => void {
   const traceEl = requireById('lrTrace');
   const skipEl = requireById<HTMLButtonElement>('lrSkip');
   const continueEl = requireById<HTMLButtonElement>('lrContinue');
+  // Slice 4: the cycles line and the first-pick top-up, under the charge (built here: index.html keeps phase 2's skeleton).
+  const cyclesEl = make('div', 'lr-cycles');
+  const topUpEl = make('div', 'lr-topup');
+  cyclesEl.hidden = true;
+  topUpEl.hidden = true;
+  chargeEl.after(cyclesEl, topUpEl);
 
   let model: LandingReportModel | null = null;
   let stage: Stage = 'rows';
@@ -307,11 +322,45 @@ export function mountLandingReport(store: Store<GameState>): () => void {
     const near = report.nearMisses.slice(0, NEAR_MISSES_SHOWN);
     nearEl.replaceChildren(...near.map((line) => make('div', 'lr-near-line', line)));
     nearEl.hidden = near.length === 0;
+    showCycles();
     skipEl.hidden = true;
     renderKeyCaps(continueEl, report.continueText, { own: 'SPACE' });
     continueEl.classList.add('arming');
     continueEl.hidden = false;
     later(REPORT_CONTINUE_ARM_SEC, () => continueEl.classList.remove('arming'));
+  }
+
+  // Slice 4 (plan §1.1 4a item 1, §2.4): the training cycles the ship pays, on the arm, rolled up under the charge
+  // (`TRAINING CYCLES +5 · ARRIVED +1 · LANDED 83% +4`, `PERFECT LANDING · +6`, the final ship's `NO DESK AHEAD`), a tick
+  // per cycle; on a run's first ship below the first-pick floor, `+2 CYCLES · FIRST SKILL ON THE HOUSE :)` under it. From
+  // the same earning endShip records at CONTINUE (run-score.ts shipCycles). Reduced motion: the line stands whole.
+  function showCycles(): void {
+    const report = model;
+    const state = store.getState();
+    cyclesEl.hidden = true;
+    topUpEl.hidden = true;
+    if (report === null || state.run.map.world !== 'arm' || report.aboard <= 0) return;
+    const cycles = cyclesReport(
+      shipCycles({ slot: currentSlot(state.run), points: report.points, colonistsAboard: report.aboard }),
+      report.lastShip, state.run.ships.length === 0,
+    );
+    cyclesEl.hidden = false;
+    cyclesEl.classList.toggle('perfect', cycles.total === CYCLES_ARRIVED + CYCLES_LANDED_STEPS);
+    topUpEl.textContent = cycles.topUp ?? '';
+    const done = (): void => {
+      cyclesEl.textContent = cycles.line;
+      topUpEl.hidden = cycles.topUp === null;
+    };
+    if (reducedMotion()) { done(); return; }
+    cyclesEl.textContent = cycles.lineAt(0);
+    for (let shown = 1; shown <= cycles.total; shown++) {
+      later(REPORT_CYCLES_START_SEC + REPORT_CYCLE_STEP_SEC * shown, () => {
+        cyclesEl.textContent = cycles.lineAt(shown);
+        replayAnimation(cyclesEl, 'bump');
+        play('typeTick', { voice: 'sys' });
+        if (shown === cycles.total) done();
+      });
+    }
   }
 
   function advance(): void {
@@ -339,6 +388,8 @@ export function mountLandingReport(store: Store<GameState>): () => void {
     breakdownEl.hidden = true;
     starsEl.hidden = true;
     chargeEl.hidden = true;
+    cyclesEl.hidden = true;
+    topUpEl.hidden = true;
     traceEl.hidden = true;
     nearEl.hidden = true;
     root.hidden = false;

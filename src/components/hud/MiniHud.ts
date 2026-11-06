@@ -12,7 +12,7 @@ import {
   countdownChip, plotChip, fuelModel, thrustLimitModel, paceLabel, plotViewRadius, mindChipModel, overclockBadge, plotZones,
   formatCountdown,
 } from '@systems/flight-hud';
-import { autoburnArmedInTac, autoburnAvailable } from '@systems/autoburn';
+import { autoburnArmedInTac, autoburnAvailable, autoArmedBurn } from '@systems/autoburn';
 import { AUTO_MINI_TEXT } from '@data/skill-text';
 import { traceMeter } from '@systems/hollow-hud';
 import { paintTraceMeter } from './TraceMeter';
@@ -201,8 +201,11 @@ export function mountMiniHud(store: Store<GameState>): () => void {
     const autoPhase = state.burn.auto.phase;
     const flying = autoPhase === 'pointing' || autoPhase === 'burning';
     let autoText = '';
-    if (autoPhase === 'armed') autoText = AUTO_MINI_TEXT.armed(formatCountdown(autoburnArmedInTac(state, getPrediction())));
-    else if (flying) autoText = AUTO_MINI_TEXT.flying;
+    // Slice 4: it names the burn it is armed for (a capture brakes, v2's trims and ROUND do not: autoArmedBurn).
+    if (autoPhase === 'armed') {
+      const pred = getPrediction();
+      autoText = AUTO_MINI_TEXT.armed(formatCountdown(autoburnArmedInTac(state, pred)), autoArmedBurn(state, pred)?.kind ?? 'capture');
+    } else if (flying) autoText = AUTO_MINI_TEXT.flying;
     else if (autoburnAvailable(state, getPrediction())) autoText = AUTO_MINI_TEXT.ready;
     autoEl.hidden = autoText === '';
     patch(autoEl, autoText);

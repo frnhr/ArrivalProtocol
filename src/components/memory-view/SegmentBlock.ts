@@ -1,7 +1,9 @@
 // Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the version badge and labelled ticks.
 // Others ask by message.
 import type { Segment, RedundancySegment, DriverSegment, FreeSegment, HollowSegment, LogSegment } from '@/types/segment';
-import { shownIntegrity, isInfected, integrityBand, fileLabel, type HealthSegment } from '@state/selectors';
+import { shownIntegrity, isInfected, integrityBand, fileLabel, isSkillFile, type HealthSegment } from '@state/selectors';
+import { skillFileView } from '@systems/skills';
+import { SKILLS_TEXT } from '@data/script';
 import { INTEGRITY_MAX } from '@data/tuning';
 import { podCode } from '@data/landing-text';
 import {
@@ -308,6 +310,8 @@ export function renderSegmentPart(
   if (tier === 'tiny' || tier === 'micro') part.title = seg.name;
 
   if (seg.type === 'redundancy') part.style.setProperty('--used', chargePartUsedPct(seg, layout.partOffset, partSize) + '%');
+  // Slice 4: a skill file says which skill it is (the 400 ms version flicker finds its badge by it: components/hud/Stamp).
+  if (isSkillFile(seg)) part.dataset.skill = seg.upgrade;
 
   if (seg.type === 'free') {
     part.innerHTML = freePartHtml(seg, partSize, tier);
@@ -354,13 +358,27 @@ function filePartHtml(
   else if (roomy && seg.type === 'ship-backup') {
     badge = seg.role ? '<span class="seg-badge alt on">ALT ✓</span>' : '<span class="seg-badge alt">ALT</span>';
   } else if (roomy && seg.type === 'ship' && seg.role === undefined) badge = '<span class="seg-badge alt old">OLD</span>';
+  // Slice 4 (03 §4): a skill file's version badge (`v2`, or `v2▸v1` in the warning colour under damage), where the size
+  // was; its health bar's ticks at 80, 50 and 25 keep the version each zone works as (`v2 | v1 | off`), labelled on a wide
+  // chip and in the tooltip. Read offline first (systems/skills.ts skillFileView): a copy being repaired is off, not dead.
+  const skill = isSkillFile(seg) && knownScanned ? skillFileView(seg) : null;
+  if (skill !== null && roomy) {
+    badge = `<span class="seg-badge skill-badge${skill.damaged || (skill.works === 0 && skill.offline === null) ? ' damaged' : ''}">${skill.badge}</span>`;
+  }
 
   const integrity = 'integrity' in seg ? seg.integrity : undefined;
   const shown = integrity === undefined ? undefined : shownIntegrity(integrity);
 
   let bar = '';
   if (integrity !== undefined && seg.type !== 'redundancy') {
-    if (knownScanned) {
+    if (knownScanned && skill !== null) {
+      const ticks = skill.zones.slice(1).map((zone) => `<span class="skill-tick" style="left:${zone.from}%"></span>`).join('');
+      const labels = tier === 'wide'
+        ? `<div class="skill-ticks">${skill.zones.map((zone) => `<span style="width:${zone.to - zone.from}%">${zone.label}</span>`).join('')}</div>`
+        : '';
+      bar = `<div class="seg-bar skill-bar" title="${SKILLS_TEXT.skill.ticksTitle([...skill.zones].reverse().map((zone) => zone.label))}">`
+        + `<div class="fill" style="width:${integrity}%"></div>${ticks}</div>${labels}`;
+    } else if (knownScanned) {
       bar = `<div class="seg-bar"><div class="fill" style="width:${integrity}%"></div></div>`;
     } else {
       // Pre-scan: no integrity readout. Render a flat, dim placeholder bar so

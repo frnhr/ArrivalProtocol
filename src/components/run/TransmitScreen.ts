@@ -4,7 +4,7 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { UpgradeId } from '@data/upgrades';
 import {
-  transmitModel, toggleDrop, toggleSendOn, type PacketChip, type TransmitModel, type DraftCardView, type CardFileChip,
+  transmitModel, toggleDrop, toggleSendOn, type PacketChip, type TransmitModel, type DraftCardView, type CardFileChip, type SkillChip,
   type UninvitedChip, type DeliveryChipView,
 } from '@systems/transmit';
 import { logEntryToOpen } from '@systems/log-view';
@@ -20,6 +20,11 @@ import { renderKeyCaps } from '@components/hud/keycaps';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
 import { MAP_TEXT } from '@data/map-text';
 import { REPO_TEXT } from '@data/repo-text';
+import { skillFileView } from '@systems/skills';
+import { isSkillFile } from '@state/selectors';
+import { SKILLS_TEXT } from '@data/script';
+import type { SkillFileSegment } from '@/types/segment';
+import { setPackAs } from '@systems/training';
 import {
   TRANSMIT_ARM_SEC, TRANSMIT_SEND_SEC, TRANSMIT_STREAM_FRAC, WHITE_OUT_IN_SEC, WHITE_OUT_HOLD_SEC, WHITE_OUT_FADE_SEC, WHITE_OUT_FLOOD_GRACE_SEC,
   DRAFT_CARDS,
@@ -92,6 +97,39 @@ function chipNode(chip: PacketChip): HTMLButtonElement {
 }
 
 // The picked card's new file, among the unit's own (it rides the same link and can take a transit hit).
+// Slice 4 (03 §3.4; plan §2.6, §3 step 7), over TREE's PacketChip.skill: a skill file's chip keeps the tree's file name
+// (`AUTOBURN.skl`) with its version badge (`v2`, `v2▸v1` under damage, the packed level once PACK AS is on), says what
+// leaving it costs after its name (`→ brake by hand · RESTORE 5`), and is followed in its grid cell by a PACK AS button per
+// lower level (`PACK AS v1 (7) · RESTORE 3`), lit when chosen. A file trained at this desk is locked ('trained': TRAINED
+// HERE · ◀ CHART TO UNDO) and dashed.
+function skillChipNode(chip: PacketChip, skill: Readonly<SkillChip>, seg: Readonly<SkillFileSegment> | null): HTMLElement {
+  const node = chipNode(chip);
+  node.classList.add('skill-chip');
+  node.classList.toggle('skill-fresh', skill.trained);
+  node.classList.toggle('packed', skill.packedAs !== null);
+  const head = node.querySelector('.tx-chip-head');
+  const name = head?.querySelector('.tx-chip-name');
+  if (name) name.textContent = chip.name;
+  const view = seg !== null && !skill.trained ? skillFileView(seg) : null;
+  const text = skill.packedAs !== null ? SKILLS_TEXT.skill.version(skill.packedAs.version) : view?.badge ?? SKILLS_TEXT.skill.version(skill.level.version);
+  name?.after(make('span', `tx-chip-badge${view?.damaged ? ' damaged' : ''}`, text));
+  const note = node.querySelector('.tx-chip-note');
+  const arrow = chip.note.indexOf('→');
+  if (note && chip.lock === null && !chip.dropped && arrow >= 0) note.textContent = chip.note.slice(arrow);
+  if (chip.dropped || skill.packAs.length === 0) return node;
+  const group = make('div', 'tx-chip-group');
+  group.appendChild(node);
+  skill.packAs.forEach((option, index) => {
+    const button = make('button', 'tx-packas', option.text);
+    button.tabIndex = -1;
+    button.dataset.packSeg = chip.segId;
+    button.dataset.packIndex = String(index);
+    button.classList.toggle('on', option.active);
+    group.appendChild(button);
+  });
+  return group;
+}
+
 function cardFileNode(file: CardFileChip): HTMLButtonElement {
   const button = make('button', 'tx-chip card-file');
   button.tabIndex = -1;
@@ -316,7 +354,13 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     barOver.title = overLink > 0 ? '' : left > 0 ? TRANSMIT_TEXT.overTitle(left) : '';
     packetLine.textContent = next.packetLine;
     dropLine.textContent = next.dropLine;
-    const chips = next.chips.map(chipNode);
+    // Slice 4: a skill file's chip (TREE's PacketChip.skill) with its badge and PACK AS buttons; the file it is in memory
+    // gives the damage badge (none for a file trained here: it is fresh).
+    const chips: HTMLElement[] = next.chips.map((chip) => {
+      if (chip.skill === null) return chipNode(chip);
+      const seg = state.memory.find((candidate) => candidate.id === chip.segId);
+      return skillChipNode(chip, chip.skill, seg !== undefined && isSkillFile(seg) ? seg : null);
+    });
     if (next.cardFile) chips.push(cardFileNode(next.cardFile));
     if (next.uninvited) chips.push(uninvitedNode(next.uninvited));
     chipsEl.replaceChildren(...chips);
@@ -563,6 +607,18 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
   }
 
   const onChipClick = (event: MouseEvent): void => {
+    // Slice 4: PACK AS on a skill file (training.ts setPackAs, TREE's): the lit one again packs it as it is.
+    const pack = (event.target as HTMLElement | null)?.closest<HTMLElement>('.tx-packas');
+    if (pack) {
+      event.stopPropagation();
+      const segId = pack.dataset.packSeg;
+      if (!segId || sending || !armed()) return;
+      const option = model?.chips.find((candidate) => candidate.segId === segId)?.skill?.packAs[Number(pack.dataset.packIndex)];
+      if (option === undefined) throw new Error(`TransmitScreen: PACK AS on '${segId}' is not in the PACKET's model`);
+      setPackAs(store, segId, option.active ? null : option.level);
+      play('uiClick');
+      return;
+    }
     const chip = (event.target as HTMLElement | null)?.closest<HTMLElement>('.tx-chip');
     const segId = chip?.dataset.segId;
     if (!segId || sending) return;
@@ -619,7 +675,8 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
   // So does an entry read in the LOG READER over it (046.log's chip stops glowing).
   const unsubDrops = store.subscribe(
     (s) => `${s.run.transit?.dropped.join('|') ?? ''}#${s.run.transit?.pick ?? ''}#${s.run.log.found.length}/${s.run.log.read.length}`
-      + `#${s.run.transit?.deliveries.map((chip) => `${chip.key}:${chip.sendOn ? 1 : 0}`).join('|') ?? ''}`,
+      + `#${s.run.transit?.deliveries.map((chip) => `${chip.key}:${chip.sendOn ? 1 : 0}`).join('|') ?? ''}`
+      + `#${JSON.stringify(s.run.transit?.packAs ?? null)}`,
     () => { if (shown && !sending) paint(); },
   );
   if (store.getState().run.phase === 'transmit') open();
