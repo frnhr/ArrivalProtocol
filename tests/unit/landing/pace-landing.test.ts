@@ -11,7 +11,8 @@ import { createHarness5 } from '../wp5/harness5';
 import { createInitialState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
 import { resetWorld } from '@systems/reset';
-import { requestLaunch, setLandingController } from '@systems/landing';
+import { requestLaunch } from '@systems/landing';
+import { registerLandingController } from '@systems/landing-controller';
 import { choosePace, isOverclocked, requestSkip, skipBlockReason, windowLaunchInSec } from '@systems/pace';
 import { getPrediction } from '@systems/predict';
 import { getDropSolution } from '@systems/drop-cache';
@@ -148,12 +149,17 @@ const other = state().landing.lzs.find((lz) => lz.label !== first)?.label ?? '?'
   const openB: GameState = { ...state(), landing: { ...state().landing, window: { lz: other, sure: true } } };
   check('an awaited window open: TACTICAL, WINDOW OPEN', choosePace(openB, pred, false, 0.05) === 'tactical'
     && skipBlockReason(openB, pred) === LANDING_SKIP_REFUSAL.windowOpen);
-  setLandingController({ source: 'autodrop', holdsTactical: false, launchesFromMind: true, decide: () => null });
+  // Slice 4c–4e (plan §2.4): a test resolver in the registry (AUTODROP's own is registered by mountLanding, and answers
+  // null with no AUTODROP.skl), derived from the state each time pace asks.
+  let holdsTactical = false;
+  const off = registerLandingController('resident', () => ({ source: 'resident', holdsTactical, launchesFromMind: true, decide: () => null }));
   check('a controller that drops inside a SKIP lifts the window rule', choosePace(openB, pred, false, 0.05) === 'cruise'
     && skipBlockReason(openB, pred) !== LANDING_SKIP_REFUSAL.windowOpen);
-  setLandingController({ source: 'autodrop', holdsTactical: true, launchesFromMind: true, decide: () => null });
+  holdsTactical = true;
   check('a controller that holds TACTICAL keeps it', choosePace(openB, pred, false, 0.05) === 'tactical');
-  setLandingController(null);
+  off();
+  check('…and with no controller the window rule holds again', choosePace(openB, pred, false, 0.05) === 'tactical'
+    && skipBlockReason(openB, pred) === LANDING_SKIP_REFUSAL.windowOpen);
 }
 
 // --- The SKIP flies to the other LZ (past the full one's next window when it comes first) -------------------------------

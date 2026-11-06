@@ -192,7 +192,7 @@ function landingPace(state: Readonly<GameState>, pred: Prediction, skipActive: b
   const tickAheadSec = skipActive ? 0 : state.level.cruiseWarp * Math.max(dtWall, TICK_MS / 1000);
   const toBurnTac = offerInTac(state, pred, tickAheadSec);
   if (toBurnTac !== null && toBurnTac <= TACTICAL_LEAD_BURN_TAC) return 'tactical';
-  if (windowRuleHolds()) {
+  if (windowRuleHolds(state)) {
     if (awaitedWindowOpen(state)) return 'tactical';
     const toWindow = windowLaunchInSec(state);
     if (toWindow !== null && tac(toWindow - tickAheadSec, state.level.tacticalWarp) <= WINDOW_TACTICAL_LEAD_TAC) return 'tactical';
@@ -219,7 +219,7 @@ function landingNextEvent(state: Readonly<GameState>, pred: Prediction): NextEve
 function landingSkipInhibitor(state: Readonly<GameState>): string | null {
   const falling = podCounts(state).falling > 0;
   if (state.landing.ended !== null) return falling ? LANDING_SKIP_REFUSAL.podsInFlight : LANDING_SKIP_REFUSAL.over;
-  if (windowRuleHolds() && awaitedWindowOpen(state)) return LANDING_SKIP_REFUSAL.windowOpen;
+  if (windowRuleHolds(state) && awaitedWindowOpen(state)) return LANDING_SKIP_REFUSAL.windowOpen;
   if (falling) return LANDING_SKIP_REFUSAL.podsInFlight;
   return null;
 }

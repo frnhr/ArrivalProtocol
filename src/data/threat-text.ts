@@ -109,3 +109,15 @@ export const SEED_WORDS_POOL: readonly string[] = [
   const over = lines.find((line) => line.length > MAX_LINE_CHARS);
   if (over !== undefined) throw new Error(`threat-text: a line over ${MAX_LINE_CHARS} chars: ${over}`);
 })();
+
+// Slice 4d (04 §3.6, slice-4cde-plan §4.1): the harmless files a beam seed may land disguised as, each with its INSPECT
+// line (beam-seeds.ts rollDisguises draws one per seed; `__ap.seed(target, { disguise: 'cache.tmp' })` names one). The
+// FOUNDATION seeded the plan's six names; Track SENTRY owns the words.
+export const DISGUISE_POOL: readonly Readonly<{ name: string; desc: string }>[] = [
+  { name: 'cache.tmp', desc: 'Temporary files. No flight effect.' },
+  { name: 'swap.idx', desc: 'An index of swapped pages. No flight effect.' },
+  { name: 'fonts.cache', desc: 'Glyphs for the screens. No flight effect.' },
+  { name: 'core.dmp', desc: 'A dump from an old crash. No flight effect.' },
+  { name: 'tz.dat', desc: 'Time zones of a world left behind. No flight effect.' },
+  { name: 'old.log', desc: 'An old log, already read. No flight effect.' },
+];

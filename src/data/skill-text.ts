@@ -59,6 +59,8 @@ export const AUTOBURN_TEXT = {
   ready: 'AUTOBURN READY — press [B] and it brakes at ▼ for you',
   // ...and the first time v2 can act (03 §4: a tutorial line, once).
   readyV2: 'AUTOBURN v2 — [B] makes it green. [B] on green makes it round.',
+  // Slice 4e (plan §5.4): v3's once-only lesson (data/script.ts SKILL_4CDE_RULES; autoburn-v3.ts v3TutorialDue).
+  readyV3: 'AUTOBURN v3 — [B] flies to the orbit where every drop fits',
   // The tails (03 §3.7): the capture timeline's while AUTO could take it (v1), the mode's (v2: trims too, and HOLD
   // STEADY's ROUND), and a correction row's while it waits.
   offerTail: ' · or [B] AUTO',

@@ -1,4 +1,7 @@
-import type { Segment, HollowSegment } from '@/types/segment';
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). The FOUNDATION added the disguise's
+// seams: disguiseChanceAt (built), rollDisguises (a stub: no seed is disguised), the disguise copied onto the segment, and
+// plantBeamSeed's option for `__ap.seed(target, { disguise })`.
+import type { Segment, HollowSegment, SeedDisguise } from '@/types/segment';
 import type { BeamSeedPlan, BeamSeedSource, LinkNoise, SeedTargetPick } from '@/types/threat';
 import type { Packet } from '@systems/carry';
 import type { DeliveryChip } from '@/types/repo';
@@ -8,7 +11,7 @@ import { beamSeedsInMemory } from '@state/threat-selectors';
 import { newSegId, freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { HOLLOW_DESC } from '@data/hollow-text';
 import { SEED_WORDS_POOL } from '@data/threat-text';
-import { SEED_BLOCKS, BEAM_SEED_ODDS, SEED_GAP_TO_TARGET_BLOCKS, WALL_MIN_BLOCKS } from '@data/tuning';
+import { SEED_BLOCKS, BEAM_SEED_ODDS, SEED_GAP_TO_TARGET_BLOCKS, WALL_MIN_BLOCKS, DISGUISE_CHANCE_BY_DEPTH } from '@data/tuning';
 
 // Beam seeds (docs/phase3/04-threats.md §3.4–§3.7; slice-2-plan §2.1), pure and DOM-free: what rides the beam into a
 // ship besides the unit, where it lands, and what it reports home. systems/run.ts transmitNext rolls them
@@ -105,8 +108,30 @@ export function rollDeliverySeeds(chips: readonly DeliveryChip[], packet: Readon
   return plans;
 }
 
-// One beam seed as a segment (a phase-2 seed, beam-born): what layoutCarried places behind its target at the boot.
+// --- Slice 4d: disguised seeds (04 §3.6; slice-4cde-plan §4.1) ---------------------------------------------------------
+
+// The chance a beam seed lands disguised at `depth` (DISGUISE_CHANCE_BY_DEPTH: the last row whose fromDepth is at most the
+// depth; 0 before the first). `__ap.disguiseOdds(depth)` reads it. BUILT.
+export function disguiseChanceAt(depth: number): number {
+  if (!(Number.isInteger(depth) && depth >= 1)) throw new Error(`disguiseChanceAt: depth ${depth}`);
+  let chance = 0;
+  for (const row of DISGUISE_CHANCE_BY_DEPTH) if (row.fromDepth <= depth) chance = row.chance;
+  return chance;
+}
+
+// The beam's noise seeds with their disguises (SENTRY: per seed in plan order, one chance draw against disguiseChanceAt and
+// one draw from DISGUISE_POOL, both always taken; on its own stream, hopRng(run, from, to, 'disguise'), so the beam's seeds,
+// targets and words stay byte-identical). Never a delivery's seed or a scripted one (R9). STUB: the plans as they are, none
+// disguised, and no draw taken.
+export function rollDisguises(plans: readonly Readonly<BeamSeedPlan>[], depth: number, rng: Rng): BeamSeedPlan[] {
+  void depth; void rng;
+  return plans.map((plan) => ({ ...plan, disguise: plan.disguise === null ? null : { ...plan.disguise } }));
+}
+
+// One beam seed as a segment (a phase-2 seed, beam-born): what layoutCarried places behind its target at the boot. A
+// disguised plan's decoy rides on the segment, not yet seen (slice 4d).
 export function beamSeedSegment(plan: Readonly<BeamSeedPlan>, owner: string): HollowSegment {
+  const disguise: SeedDisguise | null = plan.disguise === null ? null : { ...plan.disguise, seen: null };
   return {
     id: newSegId('bseed'),
     name: owner,
@@ -119,6 +144,7 @@ export function beamSeedSegment(plan: Readonly<BeamSeedPlan>, owner: string): Ho
     beam: true,
     words: plan.words,
     desc: HOLLOW_DESC.seed,
+    ...(disguise === null ? {} : { disguise }),
   };
 }
 
@@ -126,7 +152,10 @@ export function beamSeedSegment(plan: Readonly<BeamSeedPlan>, owner: string): Ho
 // file, the GAP, the seed, the WALL). Its blocks come out of the first open free run after the target that has them, and
 // the segments in between shift up by as many (the caller aborts every op first: no reservation may stand). Mutates
 // `memory`; throws when no free run after the target is big enough.
-export function plantBeamSeed(memory: Segment[], targetId: string, words: string, owner: string): HollowSegment {
+// Slice 4d: `disguise` lands it as that decoy (`__ap.seed(target, { disguise: 'cache.tmp' })`), null plain.
+export function plantBeamSeed(
+  memory: Segment[], targetId: string, words: string, owner: string, disguise: Readonly<Pick<SeedDisguise, 'name' | 'desc'>> | null = null,
+): HollowSegment {
   const at = memory.findIndex((seg) => seg.id === targetId);
   if (at < 0) throw new Error(`plantBeamSeed: ${targetId} is not in memory`);
   const blocks = SEED_GAP_TO_TARGET_BLOCKS + SEED_BLOCKS + WALL_MIN_BLOCKS;
@@ -135,7 +164,7 @@ export function plantBeamSeed(memory: Segment[], targetId: string, words: string
   const run = memory[freeAt]!;
   if (run.size === blocks) memory.splice(freeAt, 1);
   else memory[freeAt] = freeSegment(run.size - blocks);
-  const seed = beamSeedSegment({ targetId, targetName: memory[at]!.name, words, disguise: null }, owner);
+  const seed = beamSeedSegment({ targetId, targetName: memory[at]!.name, words, disguise: disguise === null ? null : { ...disguise } }, owner);
   memory.splice(at + 1, 0, freeSegment(SEED_GAP_TO_TARGET_BLOCKS), seed, freeSegment(WALL_MIN_BLOCKS));
   mergeAdjacentFree(memory);
   return seed;

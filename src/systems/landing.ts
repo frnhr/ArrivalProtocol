@@ -2,7 +2,7 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {
-  BayState, DropSolution, GoLowAim, LandingController, LandingEnd, LandingView, LandingWindow, LaunchIntent, LaunchRecord, LaunchResult,
+  BayState, DropSolution, GoLowAim, LandingEnd, LandingView, LandingWindow, LaunchIntent, LaunchRecord, LaunchResult,
 } from '@/types/landing';
 import { onAiTick, onGameTick, onPostTick } from '@systems/clock';
 import { fliesAlong } from '@systems/attitude';
@@ -18,7 +18,8 @@ import { dropHalfWidthKm } from '@systems/landing-solve';
 import { getPrediction, secUntil } from '@systems/predict';
 import { requestSkip, skipBlockReason } from '@systems/pace';
 import { declineKey, landingBurnOffer, travelSign } from '@systems/landing-orbit';
-import { activeLandingController, setActiveLandingController } from '@systems/landing-controller';
+import { activeLandingController } from '@systems/landing-controller';
+import { mountAutodrop } from '@systems/autodrop';
 import {
   classifyLanding, colonyName, dropFactors, goLowerChoice, driverTouch, endLandingRefusal, isLaunchable, landingMoment, landingOutcome,
   landingStuck,
@@ -130,10 +131,10 @@ function launchRecordFor(state: Readonly<GameState>, driver: DriverSegment, sol:
 }
 
 // Whether this asker may launch from the MIND: never the player; a controller only if it says so (like AUTOBURN), and
-// only the controller that is active now.
-function launchesFromMind(intent: LaunchIntent): boolean {
+// only the controller that is active now (derived from the state: landing-controller.ts's registry).
+function launchesFromMind(state: Readonly<GameState>, intent: LaunchIntent): boolean {
   if (intent.source === 'player') return false;
-  const controller = activeLandingController();
+  const controller = activeLandingController(state);
   if (controller === null || controller.source !== intent.source) {
     throw new Error(`requestLaunch: '${intent.source}' asked to launch but is not the active landing controller`);
   }
@@ -146,7 +147,7 @@ function launchesFromMind(intent: LaunchIntent): boolean {
 export function requestLaunch(store: Store<GameState>, intent: LaunchIntent): LaunchResult {
   const state = store.getState();
   const sol = state.run.phase === 'landing' ? currentDropSolution() : null;
-  const refusal = launchRefusal(state, sol, { source: intent.source, fromMind: launchesFromMind(intent) }, intent.pod);
+  const refusal = launchRefusal(state, sol, { source: intent.source, fromMind: launchesFromMind(state, intent) }, intent.pod);
   if (refusal !== null) {
     if (intent.source === 'player') emit('refused', { reason: launchRefusalKey(refusal) });
     return { kind: 'refused', reason: refusal };
@@ -406,9 +407,9 @@ function entryTick(state: Readonly<GameState>): void {
 // decides on the fresh solution like the kid's [L]. A SKIP it asks for is requested only when pace allows it, so a
 // controller asking every tick never buzzes. None in 1a.
 function controllerTick(store: Store<GameState>): void {
-  const controller = activeLandingController();
-  if (controller === null) return;
   const state = store.getState();
+  const controller = activeLandingController(state);
+  if (controller === null) return;
   if (state.landing.ended !== null || state.clock.paused) return;
   const sol = getDropSolution();
   if (sol === null) return;
@@ -620,17 +621,6 @@ export function endLanding(store: Store<GameState>, reason: LandingEnd = 'end-la
   return null;
 }
 
-// The seam for AUTODROP (4c), the resident (5) and MERGE's last landing (7): one controller at a time, asked every AI
-// tick (controllerTick). null takes it away. It is held in landing-controller.ts (pace reads its holdsTactical).
-// requestLaunch accepts a non-player source only from the controller set here (launchesFromMind).
-export function setLandingController(next: LandingController | null): void {
-  setActiveLandingController(next);
-}
-
-export function landingController(): LandingController | null {
-  return activeLandingController();
-}
-
 // Everything a controller may read (§3.14): the state, the drop solution as of its last refresh (never a fresh solve:
 // only requestLaunch decides on currentDropSolution) and Bay Ctrl's cadence.
 export function landingView(state: Readonly<GameState>): LandingView {
@@ -679,10 +669,10 @@ export function forceLandAll(store: Store<GameState>): number {
 
 let mounted = false;
 
-// The world reset (a new ship, NEW RUN, a test's reset): the drop stream, the controller and the per-ship moments.
+// The world reset (a new ship, NEW RUN, a test's reset): the drop stream and the per-ship moments. The controllers are
+// derived from the state (landing-controller.ts), so there is none to forget.
 function forget(): void {
   dropRng = null;
-  setActiveLandingController(null);
   entered.clear();
   beepWatch = { ...NO_BEEP_WATCH };
   dueWatch = { ...NO_DUE_WATCH };
@@ -695,14 +685,17 @@ export function mountLanding(store: Store<GameState>): () => void {
   const offBay = onGameTick((dtWorld) => bayTick(store, dtWorld));
   const offLost = onPostTick(() => shipLostTick(store));
   const offReset = onWorldReset('landing', forget, () => ({
-    rolled: dropRng !== null, controller: activeLandingController() !== null, entered: entered.size, beep: beepWatch.key,
+    rolled: dropRng !== null, entered: entered.size, beep: beepWatch.key,
     due: dueWatch.key,
   }));
+  // Slice 4c (plan §2.4, §3.1): AUTODROP's resolver joins the controller registry with the landing (Track DROP's mount).
+  const offAutodrop = mountAutodrop(store);
   return () => {
     offTick();
     offBay();
     offLost();
     offReset();
+    offAutodrop();
     forget();
     mounted = false;
   };

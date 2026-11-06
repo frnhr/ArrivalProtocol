@@ -7,7 +7,7 @@
 
 import type { Vec2 } from '@/types/orbit';
 import type { Colonist } from '@/types/segment';
-import type { GameState } from '@state/schema';
+import type { GameState, GuideLayer, Urgency } from '@state/schema';
 import type { EffectiveVersion } from '@/types/skill';
 
 export type LzWidth = 'wide' | 'standard' | 'narrow';            // km in tuning LZ_WIDTH_KM
@@ -306,7 +306,8 @@ export interface LandingView {
   falling: number;
 }
 
-// AUTODROP (4c), the resident (5), MERGE's landing (7): one controller at a time (landing.ts setLandingController).
+// AUTODROP (4c), the resident (5), MERGE's landing (7): one controller at a time, derived from the state each tick
+// (landing-controller.ts activeLandingController: a resolver per source, asked in LANDING_CONTROLLER_ORDER).
 export interface LandingController {
   source: Exclude<LaunchSource, 'player'>;
   holdsTactical: boolean;              // §3.14: a higher version may drop inside a SKIP
@@ -421,4 +422,12 @@ export interface AutodropState {
   flownAs: EffectiveVersion;        // the version it flew at the last tick (a downgrade acts once)
   end: AutodropEnd | null;          // why the last pass or plan ended (the strip's words)
   endAtAi: number | null;
+}
+
+// The guidance slot AUTODROP fills (slice-4cde-plan §3.7; autodrop.ts autodropLineOf, read by landing-guidance.ts
+// buildLandingContext): its own row (AD-hold, AD-fly, AD-wait, AD-done), checked after L2, L12-bay and L12-nodrop and before
+// L3–L7, and the tail it puts on L13's waits (` · [G] AUTODROP`). Either may be null.
+export interface AutodropLine {
+  row: { id: string; text: string; keys: string[]; urgency: Urgency; layer: GuideLayer } | null;
+  tail: { text: string; key: string | null } | null;
 }
