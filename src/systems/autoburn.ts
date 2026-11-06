@@ -718,7 +718,9 @@ function burnVerdict(state: Readonly<GameState>, pred: Prediction, fit: RingFit,
     const targetKm = auto.targetKm;
     if (targetKm === null) throw new Error(`autoburn: ${mode} without its circle`);
     if (!fit.closed) return 'rearm';
-    if (circleStep(fit, targetKm, state.level.ring.max) === null) return circleEnd(rule);
+    // ROUND stops the moment the loop is its circle (e < ROUND_AIM_E). v3 burns on to the far side's R*: a held circle that
+    // starts nearer R* goes longer before its first top-up.
+    if (rule.then !== 'hold' && circleStep(fit, targetKm, state.level.ring.max) === null) return circleEnd(rule);
     return circleBurnDone(state, burn.preset, targetKm) ? 'rearm' : null;
   }
   if (fit.inRing) return 'green';
