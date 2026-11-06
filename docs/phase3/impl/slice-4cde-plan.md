@@ -1287,3 +1287,103 @@ Nothing a player can reach changes: the lesson and alarm edits (m3) only touch v
 - **m13:** ORBIT's worst-driver input (LOAD NEXT order) differs from AUTODROP v3's pod choice. This is conservative; it is a
   line in §8.3's integration check.
 - **m1's option:** an at-rest assert in `savePayloadAt` in dev builds.
+
+## Deviations (Track SENTRY)
+
+Recorded by Track SENTRY (branch `sentry-4d`, from 0a6b211). §4 is built: disguised beam seeds and their readers, SCAN and
+DELETE unmasking, SENTRY v1–v3, `sentry.built` 3. No saved field was added and the save stays v4. New suites:
+`threat/disguise` and `skills/sentry`. `threat/beam-seeds` is unchanged and green.
+
+### Measured
+
+- **Disguised seeds by depth.** 800 arm runs (waves 1–8 × seeds 1–100, random routes, sent desk to desk). The shares
+  count every arrival seed, delivery seeds included (those are never disguised):
+
+  | Depth | Disguised seeds | Ships with a decoy |
+  |---|---|---|
+  | 2–4 | 0 | 0% |
+  | 5 | 136 / 418 (33%) | 15% |
+  | 6 | 55 / 231 (24%) | 7% |
+  | 7 | 31 / 67 (46%) | 9% |
+  | 8 | 3 / 5 | 8% |
+
+  The pure roll over 3000 beams a depth gives 0% before depth 5, 33–34% at depths 5–6, and 49–51% at 7–8.
+- **DELETE.** Without v2: a seed 2.0 s, a 6-block meal 4.0 s, the root 12 s. With v2 working: 1.0 s, 2.0 s, and 12 s (R10).
+  The suite measures a seed at 2.00 AI s without SENTRY and 1.00 s with v2.
+- **The pre-empt** (a scratch `stepHollow` sim, FINALE's 12 s bite, a kid who reacts 1.5 s after a landing):
+  - rm at 2.0 s: 59 infections started per 100 seeds;
+  - QUICK RM at 1.0 s: 42 per 100;
+  - pre-empted: 0 (the seed never stands in memory).
+
+  Each seed exposes both its neighbours for (reaction + rm) of the bite interval. In the sim's SEEDS and HUNT layouts the
+  seeds landed walled off (0 in every policy), so those numbers say nothing.
+
+### Deviations
+
+1. **The strip's disguise line is DISGUISE_RULES in `threat-rules.ts`.** `script.ts` spreads it into GUIDE_RULES just
+   before HOLLOW_RULES (one line). Otherwise `SOMETHING IS EATING … — REPAIR IT!` would always win.
+   - Rule texts render from LineVars alone, so the rule is live only while `vars.eating` (the file HOLLOW's eating lines
+     would name) is a decoy's victim, and its text reads that var.
+   - A name too long for the whole hint keeps only `— SCAN` (73 characters at SEG_NAME_MAX_CHARS). The amber twin is
+     `… IS EATING IT — [TAB], SCAN`.
+2. **A decoy is drawn as one of the unit's own files.** `threat-selectors.ts decoyFileView` gives a healthy `tool` with
+   the decoy's name, `OK` and a full bar. It is not an unscanned ship file, since it rides in rack E/F with the unit.
+   SegmentBlock, DetailPanel (INSPECT: `AI · Tool`, INTACT, the decoy's line, ◎ re-scan) and the mini-strip read it. SWAP
+   on a decoy says what it says to any unit file (`SWAP IS FOR SHIP FILES WITH A BACKUP`), not TEMP FILE.
+3. **The echoes.**
+   - SCAN: `> scan cache.tmp ... NOT A FILE · A SEED`, then the seed's words on a line of their own (`> it says: "…"`,
+     at most one voice a ship, as rm's). Together they would run past a row.
+   - DELETE without a SCAN: `> delete cache.tmp ... IT WAS A SEED · +2 FREE`, or rm's own `seedSaid` when the seed
+     speaks.
+   - The confirm is `DELETE CACHE.TMP?` with the decoy's line as its effect.
+4. **The stamps** (`NOT A FILE`, `IT WAS A SEED`, `PRE-EMPTED`) are slammed by HollowPainter through Stamp.ts's exported
+   `showStamp`, not from Stamp.ts.
+   - SENTRY's boot unmask is not stamped: it lands with the ECC line's drop and thunk, as R9's plain seeds do.
+   - In `audio-cues.ts` (own events only): `seed-unmasked` plays its stamp thud except by SENTRY, and `seed-preempted`
+     only thuds, because the pre-empt emits `'op-done'` (delete), which plays opDone and counts `stats.deletes`.
+5. **A pre-empted seed counts as landed** (`hollow.seedsLanded + 1`), so the seed lessons' "done" and R11's record read
+   it as met and deleted. No `'seed-landed'` is emitted for it, so SENTRY's `SOMETHING LANDED` is not said.
+6. **The click path.**
+   - `MemoryStrip.ts` wraps the strip's click. With DELETE in hand, a click on a free part works out the block under the
+     cursor. If that block is inside the outline (`tool-targets.ts inSeedOutline`), it calls `preemptSeed`.
+   - `targetRefusal` is unchanged for free space, so DELETE can never be started on free blocks. There is no `'outline'`
+     kind in it.
+   - The painter draws the outline `aimable` (DELETE in hand and QUICK RM working) and then `armed` (`threat.css`).
+7. **`PreemptRefusal`** gains `'paused'` and `'no-rm'`. Each refusal buzzes with words: `TOOL_REFUSAL.threads` (counted
+   as `capRefusals`), `.notAFile`, `.paused`, `.noTool`, and the new `.preemptArmed` (`ARMED — IT GOES AS IT LANDS`).
+8. **The thread watcher** is an `onPostTick` in `mountSentry`: `releaseThread('sentry-preempt')` whenever the telegraph
+   is not armed. That covers the landing, a call-off, the ship's end and SENTRY falling below v2. It is a no-op when
+   nothing is held.
+9. **More readers that tell HOLLOW from a file** consult `isDisguised` too:
+   - `hollow.ts mvBlock` (HOLLOW never MVs its decoy; `hollow-verbs.ts` asserts it);
+   - `hollow-hud.ts amberBite`;
+   - the painter's WALL and FIREWALL hold flashes beside a decoy, and its beam-seed tooltip;
+   - `tool-text.ts echoName` (the decoy's name in every echo);
+   - `seedsInMemory`, which also drives SEED_RULES and `tut-no-rm`.
+
+   The counters (`beamSeedsInMemory`, TRACE, the tally, the TRACE meter's visibility) still count a decoy.
+10. **v3's Skills row** reads `FIREWALL · n COMPILED BY SENTRY`: the compiled files still aboard, known by their INSPECT
+    line, `SENTRY_TEXT.firewallDesc`. "At the boot" would need a record of this boot, which is a saved field. v1 reads
+    `SIGHT · n SEEDS NAMED AT THE BOOT` from the arrival, and v2 reads `QUICK RM · a seed in 1.0 s`.
+11. **The FIREWALL compile.**
+    - `compileFirewall` writes `min(SENTRY_FIREWALLS_PER_BOOT, cap − held)` files when the line is said.
+    - "No room" means no open free run of 2 anywhere, which is when `unitInstallAddress` would throw. It returns
+      `'no-room'`, and the line, rendered before the compile, said NO ROOM.
+    - `compileFirewall` throws unless SENTRY works as v3.
+12. **New exports in `sentry.ts`:**
+    - `sentrySeedSaid(store, ordinal)`, called by `boot.ts` as each line is said. It unmasks the seed with `seen:
+      'sentry'` and emits `'seed-landed-beam'` and `'seed-unmasked'`.
+    - `preemptRefusal`, `preemptAimable` and `PREEMPT_THREAD_OWNER`.
+13. **`rollDisguises` never repeats a decoy on one beam.** A name already worn moves on to the pool's next, with no extra
+    draw, so both draws per seed hold. A plan that came disguised keeps its decoy.
+14. **Tuning, 4d block:** `SENTRY_SIGHT_VERSION` 1, `SENTRY_QUICK_RM_VERSION` 2 and `SENTRY_FIREWALL_VERSION` 3, so rule
+    code never compares with a bare 2.
+15. **`deleteSec(seg, sentry = 0)`.** The default keeps `threat/beam-seeds`' one-argument call byte-identical.
+
+### Left for the lead (patches in the track's report)
+
+- `state/sidebar-filters.ts categoryOf`: a decoy is FILESYSTEM there, so the AI filter dims it. It should be `'ai'`
+  while `isDisguised`.
+- The three SENTRY mini-demos (`TrainingWindow.ts demoSvg`, `desk.css`) are still drawn as `plain`. A drawing is offered
+  for the fix pass's one hand.
+- e2e (§8.5) and the batch review.

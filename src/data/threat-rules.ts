@@ -1,9 +1,12 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the beam-seed lessons' readers (a disguised seed is not a seed to them). Others ask by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the beam-seed lessons' readers (a
+// disguised seed is not a seed to them), and the strip's disguise line (DISGUISE_RULES). Others ask by message.
 import type { GuideRule, DirectorCtx } from '@systems/director';
-import { beamSeedsInMemory, beamEatenInMemory } from '@state/threat-selectors';
-import { hasUsableTool } from '@state/selectors';
+import type { Segment } from '@/types/segment';
+import { beamSeedsInMemory, beamEatenInMemory, isDisguised } from '@state/threat-selectors';
+import { hollowReach, oppositeSide } from '@systems/hollow';
+import { hasUsableTool, isInfected, fileLabel } from '@state/selectors';
 import { SEED_HINT_TARGET, BEAM_EATEN_HINT_TARGET, TOOL_HINT_TARGET, toolStepTarget } from '@data/fs-tools';
-import { THREAT_TEXT } from '@data/threat-text';
+import { THREAT_TEXT, SENTRY_TEXT } from '@data/threat-text';
 import { SEED_LESSON_SHOW_SEC, BEAM_SEED_NO_RM_AFTER_SEC } from '@data/tuning';
 
 // The strip's rules for the threat ladder (docs/phase3/04-threats.md §3.3, §3.5; slice-2-plan §2.1, §5.1): the beam
@@ -26,8 +29,24 @@ function inAmber(ctx: DirectorCtx): boolean {
   return ctx.mode === 'tools';
 }
 
+// A beam seed the kid can see is in memory: a disguised one is no seed to the lessons (slice 4d; the RM lesson would light
+// it, and the no-rm line would announce it). TRACE still counts it (beamSeedsInMemory).
 function beamSeedAboard(ctx: DirectorCtx): boolean {
-  return beamSeedsInMemory(ctx.state.memory).some((seg) => seg.seed === true);
+  return beamSeedsInMemory(ctx.state.memory).some((seg) => seg.seed === true && !isDisguised(seg));
+}
+
+// The files disguised seeds are eating right now (04 §3.6): each infected neighbour of a decoy whose red crawl comes in from
+// the decoy's side. What the strip names; never the culprit.
+function decoyVictims(ctx: DirectorCtx): Segment[] {
+  const { memory, clock } = ctx.state;
+  const victims: Segment[] = [];
+  for (const reach of hollowReach(memory, clock.aiSec)) {
+    if (reach.verdict !== 'infected' || reach.neighbourId === null) continue;
+    if (!memory.some((seg) => seg.id === reach.hollowId && isDisguised(seg))) continue;
+    const victim = memory.find((seg) => seg.id === reach.neighbourId);
+    if (victim !== undefined && isInfected(victim) && victim.infected.side === oppositeSide(reach.side)) victims.push(victim);
+  }
+  return victims;
 }
 
 // A beam seed is in memory and DELETE is in hand to rm it with.
@@ -128,5 +147,33 @@ export const THREAT_RULES: readonly GuideRule[] = [
     activeWhen: (ctx) => noRmLive(ctx) && !inAmber(ctx),
     text: () => THREAT_TEXT.seedNoRm,
     highlight: (ctx) => (ctx.state.ui.activeTool?.kind === 'repair' ? null : TOOL_HINT_TARGET.repair),
+  },
+];
+
+// The file HOLLOW's eating lines would name (LineVars.eating: the most urgent one nobody is repairing) is a decoy's victim.
+function decoyEatingLive(ctx: DirectorCtx): boolean {
+  if (!live(ctx) || ctx.vars.eating === '') return false;
+  return decoyVictims(ctx).some((victim) => fileLabel(victim) === ctx.vars.eating);
+}
+
+// Slice 4d (04 §3.6, plan §4.2): a disguised seed eating its neighbour. The strip says which file is being eaten and what to
+// do (SCAN its neighbours: the culprit is one of them), never which one it is. data/script.ts spreads these ahead of
+// HOLLOW_RULES, whose `SOMETHING IS EATING …` would send the kid to REPAIR a file the decoy keeps on eating.
+export const DISGUISE_RULES: readonly GuideRule[] = [
+  {
+    id: 'disguise-eating-tab',
+    layer: 'mind',
+    priority: 'mind-urgent',
+    activeWhen: (ctx) => decoyEatingLive(ctx) && inAmber(ctx),
+    text: (ctx) => SENTRY_TEXT.somethingNextToTab(ctx.vars.eating),
+    keys: ['TAB'],
+  },
+  {
+    id: 'disguise-eating',
+    layer: 'mind',
+    priority: 'mind-urgent',
+    activeWhen: (ctx) => decoyEatingLive(ctx) && !inAmber(ctx),
+    text: (ctx) => SENTRY_TEXT.somethingNextTo(ctx.vars.eating),
+    highlight: (ctx) => (ctx.state.ui.activeTool?.kind === 'scan' ? null : TOOL_HINT_TARGET.scan),
   },
 ];

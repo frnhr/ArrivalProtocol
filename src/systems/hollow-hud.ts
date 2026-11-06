@@ -1,8 +1,10 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): a disguised seed draws no reach and is a
+// file on the mini-strip; TRACE still counts it. Others ask by message.
 import type { GameState } from '@state/schema';
 import type { InfectionSide, Segment } from '@/types/segment';
 import {
   hollowReach, bitersOf, drainConditions, drainRatePerSec, healRatePerSec, netLossPerSec, oppositeSide, settledWakeAtAi, dealHolds, type ReachVerdict,
+  type Reach,
 } from '@systems/hollow';
 import { formatTac } from '@systems/guidance';
 import { dealEffectNow } from '@systems/hollow-deal';
@@ -13,7 +15,7 @@ import { infectedSegments, healthKnown, isInfected, isFirewall, type InfectedSeg
 import { driverTouch } from '@systems/landing-rules';
 import { HOLLOW_HUD_TEXT } from '@data/hollow-text';
 import { THREAT_TEXT, traceCells } from '@data/threat-text';
-import { traceFill, tallyPreview, beamSeedsInMemory } from '@state/threat-selectors';
+import { traceFill, tallyPreview, beamSeedsInMemory, isDisguised } from '@state/threat-selectors';
 import { hollowLabel } from '@systems/say';
 import {
   RACK_BLOCKS, INTEGRITY_MAX, HOLLOW_BITE_URGENT_SEC, CHEW_FULL_DRAIN, TUG_BEAT_PER_PCT, TUG_BEAT_MIN_HZ,
@@ -90,7 +92,7 @@ export function amberBite(state: Readonly<GameState>): { text: string; urgent: b
   if (state.hollow.phase !== 'awake') return null;
   const clock = biteClock(state);
   if (clock.secLeft === null) return null;
-  const reach = hollowReach(state.memory, state.clock.aiSec, bitersOf(state.memory, state.hollow.cfg));
+  const reach = visibleReach(state);
   if (!reach.some((candidate) => candidate.verdict === 'bite' || candidate.verdict === 'recoiling')) return null;
   return { text: HOLLOW_HUD_TEXT.amberBite(clock.time), urgent: clock.urgent };
 }
@@ -221,10 +223,17 @@ export interface ReachMarks {
 // or the end of memory, a short gap is no threat and is not labelled.
 const RED_GAP_VERDICTS: ReadonlySet<ReachVerdict> = new Set<ReachVerdict>(['bite', 'infected', 'recoiling']);
 
+// The reach the kid is shown: every biter's (bitersOf) but a disguised seed's (slice 4d, 04 §3.6: "no mouth, no arrows").
+// Its bites land all the same; the red crawl on its victim is the tell.
+function visibleReach(state: Readonly<GameState>): Reach[] {
+  return hollowReach(state.memory, state.clock.aiSec, bitersOf(state.memory, state.hollow.cfg))
+    .filter((reach) => !state.memory.some((seg) => seg.id === reach.hollowId && isDisguised(seg)));
+}
+
 export function reachMarks(state: Readonly<GameState>): ReachMarks {
   const marks: ReachMarks = { gaps: [], bites: [], shields: [] };
   if (state.hollow.phase === 'dormant') return marks;
-  for (const reach of hollowReach(state.memory, state.clock.aiSec, bitersOf(state.memory, state.hollow.cfg))) {
+  for (const reach of visibleReach(state)) {
     // Looking right, the gap's left edge touches the hollow block (and the other way round).
     const hollowEdge = oppositeSide(reach.side);
     const blocks = reach.gapBlocks;
@@ -272,6 +281,8 @@ export interface MiniCell {
 }
 
 function miniKind(seg: Segment): MiniKind {
+  // A disguised seed is a file on the mini-strip too (slice 4d).
+  if (isDisguised(seg)) return 'file';
   switch (seg.type) {
     case 'free': return 'free';
     case 'hollow': return 'hollow';

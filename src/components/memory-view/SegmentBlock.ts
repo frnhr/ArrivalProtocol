@@ -13,6 +13,7 @@ import { stripTier, stripName, type StripTier } from '@data/type-labels';
 import { HOLLOW_HUD_TEXT, HOLLOW_FINALE, UNNAMED_HOLLOW } from '@data/hollow-text';
 import { UPGRADE_FILE_TEXT } from '@data/upgrades';
 import { LOG_HINT_TARGET } from '@data/log-text';
+import { isDisguised, decoyFileView } from '@state/threat-selectors';
 
 interface SegmentPartLayout {
   partSize: number;
@@ -253,10 +254,13 @@ function driverPartHtml(driver: DriverSegment, layout: SegmentPartLayout): strin
 // What a chip shows also depends on its width (stripTier): a 4-block file at 1280 px is about 40 px
 // across, so it keeps a smaller name and its health and drops the rest (INSPECT has it all).
 export function renderSegmentPart(
-  seg: Segment,
+  real: Segment,
   layout: SegmentPartLayout,
   behavior: SegmentBehavior,
 ): HTMLElement {
+  // Slice 4d (04 §3.6): a disguised seed is drawn as the harmless file it shows (state/threat-selectors.ts decoyFileView:
+  // its name, a healthy bar, no mouth, no NEXT BITE, no SEED hint), while every click and hover still reaches the seed.
+  const seg: Segment = isDisguised(real) ? decoyFileView(real) : real;
   const { partSize, partIdx, totalParts } = layout;
   const isFirst = partIdx === 0;
   const isLast = partIdx === totalParts - 1;
@@ -324,7 +328,7 @@ export function renderSegmentPart(
     `;
   }
 
-  wire(part, seg, behavior);
+  wire(part, real, behavior);
   return part;
 }
 

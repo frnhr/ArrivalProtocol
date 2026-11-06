@@ -1,6 +1,6 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). The FOUNDATION added the disguise's
-// seams: disguiseChanceAt (built), rollDisguises (a stub: no seed is disguised), the disguise copied onto the segment, and
-// plantBeamSeed's option for `__ap.seed(target, { disguise })`.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the disguise's odds (disguiseChanceAt),
+// its roll (rollDisguises, on its own stream), the decoy copied onto the segment, and plantBeamSeed's option for
+// `__ap.seed(target, { disguise })`.
 import type { Segment, HollowSegment, SeedDisguise } from '@/types/segment';
 import type { BeamSeedPlan, BeamSeedSource, LinkNoise, SeedTargetPick } from '@/types/threat';
 import type { Packet } from '@systems/carry';
@@ -10,7 +10,7 @@ import { isInfectable } from '@state/selectors';
 import { beamSeedsInMemory } from '@state/threat-selectors';
 import { newSegId, freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { HOLLOW_DESC } from '@data/hollow-text';
-import { SEED_WORDS_POOL } from '@data/threat-text';
+import { SEED_WORDS_POOL, DISGUISE_POOL } from '@data/threat-text';
 import { SEED_BLOCKS, BEAM_SEED_ODDS, SEED_GAP_TO_TARGET_BLOCKS, WALL_MIN_BLOCKS, DISGUISE_CHANCE_BY_DEPTH } from '@data/tuning';
 
 // Beam seeds (docs/phase3/04-threats.md §3.4–§3.7; slice-2-plan §2.1), pure and DOM-free: what rides the beam into a
@@ -130,13 +130,26 @@ export function disguiseChanceAt(depth: number): number {
   return chance;
 }
 
-// The beam's noise seeds with their disguises (SENTRY: per seed in plan order, one chance draw against disguiseChanceAt and
-// one draw from DISGUISE_POOL, both always taken; on its own stream, hopRng(run, from, to, 'disguise'), so the beam's seeds,
-// targets and words stay byte-identical). Never a delivery's seed or a scripted one (R9). STUB: the plans as they are, none
-// disguised, and no draw taken.
+// The beam's noise seeds with their disguises (04 §3.6; plan §4.1): per seed in plan order, one chance draw against
+// disguiseChanceAt(depth) and one draw from DISGUISE_POOL, both always taken, so a seed's verdict never shifts the next
+// seed's numbers. The caller passes the beam's own 'disguise' stream (hopRng(run, from, to, 'disguise')), so the beam's
+// seeds, targets and words stay byte-identical with or without the roll. Only the beam's noise seeds come here, never a
+// delivery's seed (its chip already names its risk) or the tutorial's scripted one (R9). Two seeds on one beam never wear
+// the same decoy: a name already worn moves on to the pool's next one (no extra draw). A seed that came disguised already
+// keeps its decoy. Pure: new plans, `plans` untouched.
 export function rollDisguises(plans: readonly Readonly<BeamSeedPlan>[], depth: number, rng: Rng): BeamSeedPlan[] {
-  void depth; void rng;
-  return plans.map((plan) => ({ ...plan, disguise: plan.disguise === null ? null : { ...plan.disguise } }));
+  const chance = disguiseChanceAt(depth);
+  const worn = new Set(plans.flatMap((plan) => (plan.disguise === null ? [] : [plan.disguise.name])));
+  return plans.map((plan) => {
+    const roll = rng();
+    let pick = Math.floor(rng() * DISGUISE_POOL.length);
+    if (plan.disguise !== null) return { ...plan, disguise: { ...plan.disguise } };
+    if (!(roll < chance)) return { ...plan, disguise: null };
+    for (let tries = 0; tries < DISGUISE_POOL.length && worn.has(DISGUISE_POOL[pick]!.name); tries++) pick = (pick + 1) % DISGUISE_POOL.length;
+    const decoy = DISGUISE_POOL[pick]!;
+    worn.add(decoy.name);
+    return { ...plan, disguise: { name: decoy.name, desc: decoy.desc } };
+  });
 }
 
 // One beam seed as a segment (a phase-2 seed, beam-born): what layoutCarried places behind its target at the boot. A

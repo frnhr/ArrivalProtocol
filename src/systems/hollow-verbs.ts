@@ -14,6 +14,7 @@ import { glitchBurst } from '@systems/glitch';
 import { chooseVerb, landVerb, verbWeights, rootDeleteRunning, type Verb } from '@systems/hollow';
 import { assertMemoryInvariants } from '@systems/memory-ops';
 import { fileLabel, isHollow, verbSecondsLeft, spreadPaused, toolFilesOf, isUsableTool } from '@state/selectors';
+import { isDisguised } from '@state/threat-selectors';
 import { echoName, echoWord } from '@data/tool-text';
 import { layoutOf } from '@data/memory';
 import { HOLLOW_VERB } from '@data/hollow-text';
@@ -69,6 +70,8 @@ function rngFor(state: Readonly<GameState>): Rng {
 // The words an MV's block goes by: in HOLLOW's echo (`seed`, `pod_12`: what it ate) and on the strip (`its SEED`, `the
 // block that ATE POD 12`).
 function mvWords(block: Readonly<HollowSegment>): { word: string; label: string } {
+  // Slice 4d: hollow.ts mvBlock never picks a disguised seed (its words would name it).
+  if (isDisguised(block)) throw new Error(`hollow-verbs: MV aims at ${block.id}, a disguised seed`);
   if (block.seed) return { word: HOLLOW_VERB.mvSeedWord, label: HOLLOW_VERB.mvSeedLabel };
   const ate = block.atePod !== undefined ? podCode(block.atePod) : block.ate;
   if (ate === undefined) throw new Error(`hollow-verbs: MV's block ${block.id} is neither a seed nor an eaten file`);
