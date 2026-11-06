@@ -1,14 +1,37 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): isDisguised. Others ask by
-// message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): isDisguised, isVisibleHollow,
+// decoyFileView. Others ask by message.
 import type { GameState } from '@state/schema';
-import type { Segment, HollowSegment, FsToolSegment } from '@/types/segment';
+import type { Segment, HollowSegment, FsToolSegment, SeedDisguise, ToolSegment } from '@/types/segment';
 import type { ThreatTally } from '@/types/threat';
 import { isHollow, hasUsableTool, toolFilesOf, isUsableTool } from '@state/selectors';
-import { TRACE_CELLS, WALL_MIN_BLOCKS } from '@data/tuning';
+import { TRACE_CELLS, WALL_MIN_BLOCKS, INTEGRITY_MAX } from '@data/tuning';
 
 // Pure reads of the threat ladder's state (docs/phase3/04-threats.md §3.3–§3.8; slice-2-plan §2.1). Track THREAT owns this
 // file after the slice 2 foundation; UI reads it for the TRACE meter, the LANDING REPORT's TRACE line and the PACKET's
 // chips, and THREAT's endShip applies tallyPreview's result. DOM-free and store-free.
+
+// A disguised seed (04 §3.6; slice-4cde-plan §4.2): a beam seed drawn as a harmless file (`cache.tmp`) that no SCAN, SENTRY
+// line or DELETE has unmasked yet. The one predicate every reader that tells HOLLOW from a file consults: the strip's chip,
+// the painter's marks, INSPECT, the alerts, the lessons, the MOVE preview and the tools' words treat it as the file it
+// pretends to be. The counters (TRACE, the tally, beamSeedsInMemory) still count it: it reports home like any seed.
+export function isDisguised(seg: Readonly<Segment>): seg is HollowSegment & { disguise: SeedDisguise } {
+  return seg.type === 'hollow' && seg.disguise !== undefined && seg.disguise.seen === null;
+}
+
+// The file a disguised seed shows (04 §3.6: "an ordinary 2-block file with a harmless name and description"): one of the
+// unit's own files, healthy, with the seed's id and size, so the strip's chip, INSPECT and the mini-strip draw exactly what
+// a real `cache.tmp` would. A view for drawing only: never put in memory, never handed to an action (the seed is).
+export function decoyFileView(seg: Readonly<HollowSegment & { disguise: SeedDisguise }>): ToolSegment {
+  return {
+    id: seg.id, name: seg.disguise.name, type: 'tool', size: seg.size, desc: seg.disguise.desc,
+    integrity: INTEGRITY_MAX, scanned: true, state: 'intact', ...(seg.operating ? { operating: true } : {}),
+  };
+}
+
+// A hollow block the kid can see as HOLLOW's: any hollow block but a disguised seed.
+export function isVisibleHollow(seg: Readonly<Segment>): seg is HollowSegment {
+  return seg.type === 'hollow' && !isDisguised(seg);
+}
 
 // The beam-born hollow blocks in memory (04 §3.7): beam seeds, and blocks a beam-born block made by eating a file.
 export function beamSeedsInMemory(memory: readonly Segment[]): HollowSegment[] {

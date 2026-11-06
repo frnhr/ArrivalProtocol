@@ -122,3 +122,46 @@ export const DISGUISE_POOL: readonly Readonly<{ name: string; desc: string }>[] 
   { name: 'tz.dat', desc: 'Time zones of a world left behind. No flight effect.' },
   { name: 'old.log', desc: 'An old log, already read. No flight effect.' },
 ];
+
+// --- Slice 4d: disguised seeds and SENTRY (03 §3.10; 04 §3.6; slice-4cde-plan §4) --------------------------------------
+// Track SENTRY's words. Each line's worst case (the longest decoy, file and rack names) is checked in
+// tests/unit/skills/sentry.test.ts (foundation review m6): every one fits MAX_LINE_CHARS.
+export const SENTRY_TEXT = {
+  // The stamps (components/memory-view/HollowPainter.ts slams them on 'seed-unmasked' and 'seed-preempted').
+  stamp: {
+    notAFile: 'NOT A FILE',
+    itWasASeed: 'IT WAS A SEED',
+    preempted: 'PRE-EMPTED',
+  },
+  // SCAN on a decoy (04 §3.6: detective work, no skill needed): the echo, and the seed's words on a line of their own (at
+  // most SEED_WORDS_PER_SHIP a ship, as rm's): the echo and the words together would run past one row.
+  scanEcho: (decoy: string): string => `> scan ${decoy} ... NOT A FILE · A SEED`,
+  seedSays: (words: string): string => `> it says: "${words}"`,
+  // DELETE on a decoy without a SCAN (plan R9): it ran as rm on a seed. With words, rm's own echo says them (seedSaid).
+  deleteEcho: (decoy: string, freed: number): string => `> delete ${decoy} ... IT WAS A SEED · +${freed} FREE`,
+  // The strip while a decoy's victim is being eaten (04 §3.6): it never names the culprit. (MOVE, COPY and REPAIR on a
+  // decoy refuse with data/tool-text.ts TOOL_REFUSAL.tempFile: neutral words, never EATEN.)
+  somethingNextTo: (file: string): string => `SOMETHING NEXT TO ${file.toUpperCase()} IS EATING IT — SCAN its neighbours`,
+  somethingNextToTab: (file: string): string => `SOMETHING NEXT TO ${file.toUpperCase()} IS EATING IT — [TAB], SCAN`,
+  // v1 SIGHT at the boot (one line per disguised seed, after the ECC seeds line) and in the ship (HOLLOW's own seeds).
+  bootSeed: (decoy: string, rack: string): string => `${ECC_PREFIX}${decoy} IS A SEED · RACK ${rack}`,
+  // ...a decoy already gone by its line (nothing deletes during a boot: a fail-safe, said plainly).
+  bootSeedGone: (decoy: string): string => `${ECC_PREFIX}${decoy} WAS A SEED · GONE`,
+  somethingLanded: (rack: string): string => `> SENTRY: SOMETHING LANDED · RACK ${rack}`,
+  // v2 QUICK RM's pre-empt on HOLLOW's blinking outline: the echo as the seed is freed where it lands.
+  preemptEcho: (addr: string): string => `> rm seed ${addr} ... PRE-EMPTED`,
+  // v3 FIREWALL at the boot, after the charge line.
+  firewallCompiled: '> SENTRY: FIREWALL.sys COMPILED',
+  firewallNoRoom: '> SENTRY: NO ROOM TO COMPILE FIREWALL.sys',
+  // The compiled file's INSPECT line (phase 2's FIREWALL.sys otherwise: placed with MOVE). It also tells the Skills row
+  // which FIREWALLs SENTRY wrote (sentry.ts sentryStatus).
+  firewallDesc: 'Compiled by SENTRY at the boot. Nothing can eat it or bite past it. MOVE it into a GAP to seal that side.',
+  // The Skills row (systems/skills.ts SKILL_ROW_HOOKS → sentry.ts sentryStatus), by the version that works now.
+  status: {
+    sight: (named: number): string => (named === 0 ? 'SIGHT · NO SEED HID AT THE BOOT'
+      : `SIGHT · ${named} ${named === 1 ? 'SEED' : 'SEEDS'} NAMED AT THE BOOT`),
+    quickRm: (seedSec: number): string => `QUICK RM · a seed in ${seedSec.toFixed(1)} s`,
+    firewall: (compiled: number): string => (compiled === 0 ? 'FIREWALL · ONE AT EVERY BOOT'
+      : `FIREWALL · ${compiled} COMPILED BY SENTRY`),
+  },
+} as const;

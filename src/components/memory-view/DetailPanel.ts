@@ -34,6 +34,7 @@ import { visibleDamage } from './MemoryStats';
 import { logChip, LOG_UI_TEXT } from '@systems/log-view';
 import { hollowLabel } from '@systems/say';
 import { LOG_DESC } from '@data/log-text';
+import { isDisguised, decoyFileView } from '@state/threat-selectors';
 
 // The INSPECT panel: what the selected file is, and buttons for what can be done to it. The
 // buttons ask the actions' own rules (actionRefusal: pause, a usable tool, the target
@@ -402,6 +403,20 @@ function renderDetailPanel(target: HTMLElement, seg: Segment, deps: RenderDetail
       logBody += `<div class="action-section"><div class="action-section-label">primary</div>${actions.map(renderActionButton).join('')}</div>`;
     }
     target.innerHTML = logBody;
+    bindActionButtons(target, seg, deps);
+    return;
+  }
+  // Slice 4d (04 §3.6): a disguised seed inspects as the file it shows: its decoy's name and line, healthy, and a re-scan
+  // (the SCAN that unmasks it). Its buttons act on the seed itself.
+  if (isDisguised(seg)) {
+    const view = decoyFileView(seg);
+    target.innerHTML = `
+      <div class="detail-title">${escapeHtml(view.name)}</div>
+      <div class="detail-type">${segTypeLabel(view)}</div>
+      <div class="detail-row"><span class="k">size</span><span class="v">${sizeText(view.size)}</span></div>
+      <div class="detail-row"><span class="k">state</span><span class="v good">INTACT</span></div>
+      <div class="detail-desc">${escapeHtml(view.desc ?? '—')}</div>
+      <div class="action-section"><div class="action-section-label">primary</div>${renderActionButton(scanOption(deps.state, seg, '◎ re-scan'))}</div>`;
     bindActionButtons(target, seg, deps);
     return;
   }
