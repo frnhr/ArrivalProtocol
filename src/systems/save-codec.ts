@@ -1,5 +1,5 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the save's skills spec and
-// RUN_SAVE_MIGRATIONS. Others ask by message.
+// Slices 4c–4e: the lead owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2, the lead decision on save ownership):
+// the FOUNDATION made the one v3 → v4 bump for all three tracks. A track that needs another saved field asks the lead.
 import type { GameState, RunState } from '@state/schema';
 import type { ShipSlices } from '@state/initial';
 import type { ContentVersions } from '@/types/lineage';
@@ -8,7 +8,7 @@ import type {
 } from '@/types/save';
 import type { Meta, RunLineage } from '@systems/meta';
 import { parseLastUnit, MetaCorrupt } from '@systems/meta-parse';
-import { createRunState, createInitialState, createRunSkills } from '@state/initial';
+import { createRunState, createInitialState, createRunSkills, createAutodropState } from '@state/initial';
 import { createRunLog } from '@state/log-selectors';
 import { createRunThreat, nominalShipThreat } from '@systems/threat-plan';
 import { createRunMap } from '@systems/map-run';
@@ -240,14 +240,30 @@ const checkRunSkills = rec({
   announced: rec(Object.fromEntries(SKILL_IDS.map((id) => [id, nullable(whole)]))),
 });
 
-// The arrival's skill files (ArrivalReport.skills, slice 4): the boot's TRAINED / RETRAINED lines read them. The rest of
-// the arrival is the boot's to read (its own constructors).
+// The arrival's skill files (ArrivalReport.skills, slice 4): the boot's TRAINED / RETRAINED lines read them. Its beam seeds
+// each name their decoy or null (slice 4d, RUN_SAVE_VERSION 4: the boot's SENTRY line reads it). The rest of the arrival is
+// the boot's to read (its own constructors).
 const checkArrival: Check = (value, at) => {
   anyRecord(value, at);
+  const arrival = value as Record<string, unknown>;
   list(rec({
     segId: name, skill: SKILL_ID_CHECK, level: checkSkillLevel, kind: oneOf('trained', 'restored', 'packed', 'carried', 'granted'),
-  }))((value as Record<string, unknown>).skills, `${at}.skills`);
+  }))(arrival.skills, `${at}.skills`);
+  list((seed, where) => {
+    anyRecord(seed, where);
+    nullable(name)((seed as Record<string, unknown>).disguise, `${where}.disguise`);
+  })(arrival.seeds, `${at}.seeds`);
 };
+
+// The first ship that met a seed (slice 4d's lasting record, R11): null, or a depth on the route so far.
+function checkSeedsMet(run: Readonly<RunState>, at: string): void {
+  const depth = run.threat.seedsMetAtDepth;
+  if (depth === null) return;
+  whole(depth, `${at}.threat.seedsMetAtDepth`);
+  if (depth < 1 || depth > run.map.route.length) {
+    shapeFail(`${at}.threat.seedsMetAtDepth`, `is ${depth}, off the route's ${run.map.route.length} stop(s)`);
+  }
+}
 
 // The tree's history read as a whole (the foundation review's notes): one earning per ended ship, on the ship it names,
 // and a bank that never went below 0 (skill-tree.ts bankOf throws there: a purchase the run could not pay).
@@ -298,6 +314,7 @@ function checkSavedRun(value: unknown, at: string): void {
   const have = Object.keys(value as Record<string, unknown>);
   if (known.length !== have.length || known.some((key) => !have.includes(key))) shapeFail(at, 'does not have a fresh run\'s fields');
   checkSkillHistory(value as RunState, at);
+  checkSeedsMet(value as RunState, at);
 }
 
 // Memory (the world payload's): a list of segments, each with its id, name, type and size (the layout and every rule
@@ -338,6 +355,29 @@ function checkBurn(reference: Readonly<Record<string, unknown>>): Check {
     nullable(checkAutoBurn)(machine.flying, `${at}.auto.flying`);
     const flies = machine.phase === 'pointing' || machine.phase === 'burning';
     if (flies !== (machine.flying !== null)) shapeFail(`${at}.auto.flying`, flies ? 'is empty while it burns' : 'is set while it does not burn');
+    // AUTOBURN v3's hold (slice 4e, RUN_SAVE_VERSION 4): only a landing orbit is ever held.
+    bool(machine.holding, `${at}.auto.holding`);
+    if (machine.holding === true && machine.mode !== 'landing-orbit') shapeFail(`${at}.auto.holding`, `is set in mode '${String(machine.mode)}'`);
+  };
+}
+
+// AUTODROP's machine (slice 4c, RUN_SAVE_VERSION 4), read whole and at rest: every save point is outside a landing (the
+// landing ended resets it, plan R2), so nothing is held, armed, claimed or waiting. Its pass numbers are kept between
+// passes, and with the last end's words, they may stand.
+const AUTODROP_ENDS = ['pass-done', 'plan-done', 'cancel', 'downgraded', 'off', 'offline', 'landing-over'];
+const wholeCounts: Check = (value, at) => {
+  anyRecord(value, at);
+  for (const [lz, count] of Object.entries(value as Record<string, unknown>)) whole(count, `${at}.${lz}`);
+};
+const checkAutodrop = rec({
+  held: oneOf(false), armed: isNull, pass: wholeCounts, sent: wholeCounts, armedAtTSec: isNull, claimed: oneOf(false),
+  waitingSinceTSec: isNull, flownAs: oneOf(0, 1, 2, 3), end: nullable(oneOf(...AUTODROP_ENDS)), endAtAi: nullable(num),
+});
+function checkLanding(reference: Readonly<Record<string, unknown>>): Check {
+  const like = likeReference(reference);
+  return (value, at) => {
+    like(value, at);
+    checkAutodrop((value as Record<string, unknown>).autodrop, `${at}.autodrop`);
   };
 }
 
@@ -346,8 +386,11 @@ function checkSlices(value: unknown, at: string): void {
   rec({
     mission: likeReference(reference.mission!), memory: checkMemory, clock: likeReference(reference.clock!),
     burn: checkBurn(reference.burn!), orbit: likeReference(reference.orbit!), level: likeReference(reference.level!),
-    landing: likeReference(reference.landing!), hollow: likeReference(reference.hollow!), hazards: likeReference(reference.hazards!),
+    landing: checkLanding(reference.landing!), hollow: likeReference(reference.hollow!), hazards: likeReference(reference.hazards!),
   })(value, at);
+  // SENTRY v2's pre-empt (slice 4d, RUN_SAVE_VERSION 4): a standing outline is never armed at a save point.
+  const telegraph = ((value as Record<string, Record<string, unknown>>).hollow!).seedTelegraph;
+  if (telegraph !== null && telegraph !== undefined) oneOf(false)((telegraph as Record<string, unknown>).preempted, `${at}.hollow.seedTelegraph.preempted`);
 }
 
 // Check 4 (the envelope's keys and types, strict, like parseMeta; then the saved run and the payload field by field, every
@@ -520,9 +563,49 @@ function migrateRunSave2(save: Record<string, unknown>): Record<string, unknown>
   return next;
 }
 
+// 3 → 4 (slices 4c–4e, one bump for all three: slice-4cde-plan R1, §2.2). Every field is new and at rest at every save point:
+// • a world payload's landing gains AUTODROP's machine at rest (createAutodropState), burn.auto `holding: false`, and a
+//   standing seed outline `preempted: false`;
+// • every arrival seed names no decoy (`disguise: null`: nothing was disguised before 4d);
+// • run.threat.seedsMetAtDepth (R11) is written from the evidence 4a's rule read at the desk, so a run in flight opens
+//   SENTRY as it would have: HOLLOW's SEEDS stage played, TRACE, `fed`, the last tally's left blocks (all from ships already
+//   ended: the last ended ship's depth), else the current ship's own seeds (its arrival's, or HOLLOW's landed in a world
+//   payload: SHIP DONE's ship is ended, ENDING CHOSEN's and a boot point's are not: its depth); null without any.
+function migrateRunSave3(save: Record<string, unknown>): Record<string, unknown> {
+  const next = structuredClone(save);
+  const payload = isRecord(next.payload) ? next.payload : null;
+  const run = payload !== null && isRecord(payload.run) ? payload.run : null;
+  const slices = payload !== null && isRecord(payload.slices) ? payload.slices : null;
+  if (slices !== null) {
+    if (isRecord(slices.landing)) slices.landing.autodrop = createAutodropState();
+    if (isRecord(slices.burn) && isRecord(slices.burn.auto)) slices.burn.auto.holding = false;
+    if (isRecord(slices.hollow) && isRecord(slices.hollow.seedTelegraph)) slices.hollow.seedTelegraph.preempted = false;
+  }
+  if (run !== null) {
+    const arrival = isRecord(run.arrival) ? run.arrival : null;
+    const seeds = arrival !== null && Array.isArray(arrival.seeds) ? arrival.seeds.filter(isRecord) : [];
+    for (const seed of seeds) seed.disguise = null;
+    const threat = isRecord(run.threat) ? run.threat : null;
+    if (threat !== null) {
+      const ended = Array.isArray(run.ships) ? run.ships.length : 0;
+      const current = typeof run.shipIndex === 'number' ? run.shipIndex + 1 : ended + 1;
+      const tally = isRecord(threat.lastTally) ? threat.lastTally : null;
+      const before = (Array.isArray(threat.stagesPlayed) && threat.stagesPlayed.includes('seeds')) || Number(threat.trace) > 0
+        || Number(threat.fed) > 0 || Number(tally?.left ?? 0) > 0;
+      const hollow = slices !== null && isRecord(slices.hollow) ? slices.hollow : null;
+      const now = seeds.length > 0 || Number(hollow?.seedsLanded ?? 0) > 0;
+      const thisShip = next.point === 'ship-done' ? ended : current;
+      threat.seedsMetAtDepth = before && ended > 0 ? ended : now ? thisShip : before ? current : null;
+    }
+  }
+  next.saveVersion = 4;
+  return next;
+}
+
 export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
   1: migrateRunSave1,
   2: migrateRunSave2,
+  3: migrateRunSave3,
 };
 
 export function migrateRunSave(save: Record<string, unknown>): Record<string, unknown> {

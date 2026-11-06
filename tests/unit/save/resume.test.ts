@@ -9,6 +9,8 @@
 // • after every resume resetReport() is empty (nothing left running), the save is spent (no RESUME offered again), and the
 //   id counters are past the save's: in this process, and in a fresh one (the suite re-runs itself as a child with
 //   `node --import tsx`, resumes there and mints 50 segment ids and 50 log entry ids with no duplicate).
+// • gap G1 (slice 4c–4e plan §8.4): SHIP DONE with a skill DELETEd in ship 2, resumed: lost at RESTORE 2, restored, carried
+//   whole into KESTREL and said TRAINED at its boot; and a PACK AS v1 of v2 + LOCK 270 resumed a desk later at RESTORE 3.
 import { isDeepStrictEqual } from 'node:util';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -21,8 +23,17 @@ import { createStore } from '@state/store';
 import { createInitialState } from '@state/initial';
 import { resumeRun } from '@systems/run-save';
 import { pendingRunSave } from '@systems/save-write';
-import { backToChart, continueAfterReport } from '@systems/run';
+import { backToChart, continueAfterReport, transmitNext } from '@systems/run';
 import { setCourseFromDesk } from '../support/desk';
+import { pickFirstSkill, giveSkillFile } from '../support/skills';
+import { giveTools, fitPacket } from '../map/repo-fixture';
+import { actionDelete } from '@state/actions';
+import { skillFilesOf } from '@state/selectors';
+import { treeCells, visitNow, bankOf, lostLevels, paid, held as heldLevel } from '@systems/skill-tree';
+import { restoreSkill, setPackAs } from '@systems/training';
+import { restoreCost } from '@systems/training-model';
+import { pickCard } from '@systems/draft';
+import type { SkillFileSegment } from '@/types/segment';
 import { resetReport } from '@systems/reset';
 import { reachableFrom } from '@systems/map-hop';
 import { currentSlot, isEndSlot } from '@systems/map-streams';
@@ -195,6 +206,73 @@ continueAfterReport(h.store);
 check('…its CONTINUE ends run 2 once: UNIT-048 is the last unit, the arm is run 3\'s, the save is cleared', state().run.phase === 'end'
   && (storedMeta(storage).lastUnit as { number: number }).number === 48 && (storedMeta(storage).arm as { run: number }).run === 3
   && (storedMeta(storage).runs as number) === 2 && !storage.data.has(RUN_SAVE_KEY));
+
+// --- Gap G1 (slice 4c–4e plan §8.4): RESUME at a SHIP DONE desk with a lost skill, then RESTORE ---------------------------
+// The worked route: AUTOBURN v1 bought at desk 1, its file DELETEd during ship 2 (through actions), SHIP DONE; reloaded and
+// resumed, the cell reads lost at RESTORE 2 (⌈3 ÷ 2⌉), restoreSkill buys it back, and the BEAM into KESTREL carries the
+// file whole, the boot saying it is trained. On seed 7 (the v3 fixtures' walk) desk 1 deals the +2 CYCLES card, so desk 2's
+// bank pays the RESTORE without a landing flown.
+const G1_SEED = 7;
+{
+  const g1 = stubStorage();
+  pageOpen(h.store, g1, G1_SEED);
+  receiveToReport(h.store);
+  toDesk(h.store);
+  pickFirstSkill(h.store);
+  beamTo(h.store, WORKED_ROUTE[1]!);
+  playBoot(h.store);
+  giveTools(h.store, ['delete']);
+  const file = skillFilesOf(state().memory, 'autoburn')[0];
+  const refused = file === undefined ? 'no file' : actionDelete(h.store, file);
+  h.stepUntil(() => skillFilesOf(state().memory, 'autoburn').length === 0, 60);
+  check('G1: ship 2\'s AUTOBURN.skl (v1, bought at desk 1) is DELETEd through actions', refused === null
+    && skillFilesOf(state().memory, 'autoburn').length === 0, String(refused));
+  h.store.update((draft) => { draft.run.phase = 'report'; });
+  toDesk(h.store);
+  pageOpen(h.store, g1, G1_SEED + 100);
+  resumeRun(h.store);
+  const lostCell = treeCells(state(), visitNow(state().run)).find((cell) => cell.skill === 'autoburn' && cell.row.kind === 'version' && cell.row.version === 1);
+  check('G1: resumed at desk 2, the AUTOBURN v1 cell reads lost, at RESTORE 2', state().run.phase === 'desk' && lostCell?.look === 'lost'
+    && restoreCost(state(), 'autoburn') === 2, `${lostCell?.look} ${restoreCost(state(), 'autoburn')}`);
+  const bank = bankOf(state().run.skills);
+  const restored = restoreSkill(h.store, 'autoburn');
+  check('…restoreSkill buys it back for 2 cycles', restored === null && bankOf(state().run.skills) === bank - 2, `${String(restored)} ${bank}`);
+  beamTo(h.store, WORKED_ROUTE[2]!);
+  const beamSave = storedSave(g1).save;
+  const carried = beamSave.payload.kind === 'boot' ? beamSave.payload.carried?.segs ?? [] : [];
+  const carriedFile = carried.find((seg) => seg.type === 'upgrade' && seg.upgrade === 'autoburn') as SkillFileSegment | undefined;
+  check('…the BEAM save into KESTREL carries the restored AUTOBURN.skl v1 at 100%', beamSave.point === 'beam'
+    && carriedFile?.version === 1 && carriedFile.integrity === 100, JSON.stringify(carriedFile ?? null));
+  const lines = playBoot(h.store);
+  check('…and KESTREL\'s boot says it is trained', lines.some((line) => line.includes('SKILL TRAINED: AUTOBURN.skl v1')), lines.join(' / '));
+}
+// The PACK AS case: AUTOBURN v2 + LOCK 270 held at desk 2, PACKed AS v1 (lock 90) into KESTREL, resumed at desk 3: v2 and
+// LOCK 270 are lost, RESTORE ⌈(5 + 1) ÷ 2⌉ = 3.
+{
+  const g1 = stubStorage();
+  pageOpen(h.store, g1, G1_SEED);
+  receiveToReport(h.store);
+  toDesk(h.store);
+  pickFirstSkill(h.store);
+  beamTo(h.store, WORKED_ROUTE[1]!);
+  const held = giveSkillFile(h.store, 'autoburn', 2, 1);
+  h.store.update((draft) => { draft.run.phase = 'report'; });
+  toDesk(h.store);
+  setCourseFromDesk(h.store, WORKED_ROUTE[2]!);
+  setPackAs(h.store, held.id, { version: 1, lock: 0 });
+  const offer = state().run.transit!.offer;
+  if (offer.length > 0) pickCard(h.store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
+  fitPacket(h.store);
+  transmitNext(h.store);
+  h.store.update((draft) => { draft.run.phase = 'report'; });
+  toDesk(h.store);
+  pageOpen(h.store, g1, G1_SEED + 100);
+  resumeRun(h.store);
+  const lost = lostLevels('autoburn', heldLevel(state(), 'autoburn'), paid(state().run.skills, 'autoburn'));
+  const rows = lost.map((level) => (level.row.kind === 'version' ? `v${level.row.version}` : `L${level.row.level}`)).join(' ');
+  check('G1 (PACK AS): resumed at desk 3, v2 and LOCK 270 are lost, at RESTORE 3', state().run.phase === 'desk' && visitNow(state().run) === 3
+    && rows === 'v2 L1' && restoreCost(state(), 'autoburn') === 3, `${rows} ${restoreCost(state(), 'autoburn')}`);
+}
 
 // --- The id counters -------------------------------------------------------------------------------------------------------
 {

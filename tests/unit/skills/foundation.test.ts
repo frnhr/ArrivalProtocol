@@ -16,7 +16,12 @@
 //   with a pending purchase or a corrupt skills record is refused.
 // • The grid (follow-up M2/B2): 'start' branches are derived (AUTOBURN v1 from visit 1, the rest from visit 2), cells read
 //   owned, pending, lost, affordable, dim, closed and unbuilt on migrated desks; the first pick made clears deskBlocker.
+// • Slices 4c–4e FOUNDATION (slice-4cde-plan §7.1, §8.1): the v3 fixtures (tests/unit/save/fixtures/run-save-v3-*) migrate
+//   to v4, decode and resume with every new field at rest; the step's seedsMetAtDepth from the evidence; endShip's lasting
+//   record and seedsMet across a seedless ship (R11); the LandingController registry's order (R3); DEMO_WORDS' measure and
+//   AUTODROP's learning (R5, R21). The codec's v4 refusals are save/codec's; gap G1 is walked live in save/resume.
 import { readFileSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { check, finish } from '../landing/checks';
@@ -24,13 +29,17 @@ import type { GameState } from '@state/schema';
 import type { Segment, SkillFileSegment } from '@/types/segment';
 import type { RunSkillState, SkillPurchase } from '@/types/skill';
 import { createStore } from '@state/store';
-import { createInitialState, createRunSkills } from '@state/initial';
+import { createInitialState, createRunSkills, createAutodropState } from '@state/initial';
 import { SKILL_TREE, SKILL_IDS, skillBlocks, levelPrice, treeTotalCycles, fullSetBlocks, validateSkillTree } from '@data/skills';
 import { effectiveVersion, effectiveLock, skillLive, capabilitiesNow, type Band } from '@systems/capabilities';
 import {
   bankOf, held, paid, lostLevels, restorePrice, demoSkill, autoburnDemoSkill, AUTOBURN_DEMO_TUNING, deskBlocker, fileLevel,
-  treeCells, openBranchesAt, visitNow, type TreeCell,
+  treeCells, openBranchesAt, visitNow, seedsMet, AUTODROP_DEMO_TUNING, DEMO_SOURCES, type TreeCell,
 } from '@systems/skill-tree';
+import { registerLandingController, activeLandingController, windowRuleHolds, LANDING_CONTROLLER_ORDER } from '@systems/landing-controller';
+import { DEMO_WORDS, BOOT_SKILL_TEXT, TRAINING_TEXT } from '@data/training-text';
+import { SKILL_4CDE_RULES } from '@data/script';
+import { DISGUISE_POOL } from '@data/threat-text';
 import { shipCycles } from '@systems/run-score';
 import { decodeRunSave, migrateRunSave } from '@systems/save-codec';
 import { resumeRun } from '@systems/run-save';
@@ -38,9 +47,9 @@ import { pendingRunSave } from '@systems/save-write';
 import { skillFile } from '@systems/skill-files';
 import { assertMemoryInvariants, freeSegment, mergeAdjacentFree, segmentStarts, replaceRange } from '@systems/memory-ops';
 import { layoutOf } from '@data/memory';
-import { stubStorage, pageOpen, receiveToReport, toDesk } from '../save/save-fixture';
-import { giveSkillFile, pendPurchase } from '../support/skills';
-import { RUN_SAVE_VERSION, RUN_SAVE_KEY, META_STORAGE_KEY, SKILL_MAX_BLOCKS, FIRST_PICK_FLOOR_CYCLES } from '@data/tuning';
+import { stubStorage, pageOpen, receiveToReport, toDesk, beamTo, WORKED_ROUTE } from '../save/save-fixture';
+import { giveSkillFile, pendPurchase, pickFirstSkill } from '../support/skills';
+import { RUN_SAVE_VERSION, RUN_SAVE_KEY, META_STORAGE_KEY, SKILL_MAX_BLOCKS, FIRST_PICK_FLOOR_CYCLES, MAX_LINE_CHARS } from '@data/tuning';
 
 const throws = (run: () => unknown): boolean => { try { run(); return false; } catch { return true; } };
 
@@ -308,6 +317,127 @@ const look = (cells: readonly TreeCell[], row: string): string => {
   const refusedCorrupt = decodeRunSave(JSON.stringify(corrupt));
   check('…and one whose skills name an unknown skill', !refusedCorrupt.ok && refusedCorrupt.refusal.kind === 'shape'
     && refusedCorrupt.refusal.detail.includes('skills.bought[0].skill'), refusedCorrupt.ok ? '' : refusedCorrupt.refusal.detail);
+}
+
+// --- Slices 4c–4e FOUNDATION (slice-4cde-plan §7.1, §8.1) ------------------------------------------------------------------
+
+// The v3 fixtures (dumped before the v4 bump): each migrates to v4, decodes and resumes, with every new field at rest.
+for (const [file, point] of [
+  ['run-save-v3-ship-done-desk2.json', 'ship-done'], ['run-save-v3-beam-seeds.json', 'beam'], ['run-save-v3-ship-done-lost.json', 'ship-done'],
+] as const) {
+  const { save, meta } = fixture(file);
+  const migrated = migrateRunSave(save) as { saveVersion: number; payload: { run: GameState['run']; slices?: { landing: GameState['landing']; burn: GameState['burn'] } } };
+  const run = migrated.payload.run;
+  const decoded = decodeRunSave(JSON.stringify(save));
+  check(`${file}: a v3 ${point} save migrates to v${RUN_SAVE_VERSION} and decodes`, save.saveVersion === 3 && migrated.saveVersion === RUN_SAVE_VERSION
+    && decoded.ok, decoded.ok ? '' : `${decoded.refusal.kind}: ${decoded.refusal.detail}`);
+  const slices = migrated.payload.slices;
+  check('…AUTODROP at rest, burn.auto not holding (a world payload); every arrival seed names no decoy',
+    (slices === undefined || (isDeepStrictEqual(slices.landing.autodrop, createAutodropState()) && slices.burn.auto.holding === false))
+      && (run.arrival?.seeds ?? []).every((seed) => seed.disguise === null));
+  const seeded = (run.arrival?.seeds.length ?? 0) > 0;
+  check(`…seedsMetAtDepth from the evidence: ${seeded ? `the beam's seeds, KESTREL's depth ${run.shipIndex + 1}` : 'none met, null'}`,
+    run.threat.seedsMetAtDepth === (seeded ? run.shipIndex + 1 : null), String(run.threat.seedsMetAtDepth));
+  const storage = stubStorage({ [RUN_SAVE_KEY]: JSON.stringify(save), [META_STORAGE_KEY]: JSON.stringify(meta) });
+  const store = createStore<GameState>(createInitialState({ seed: 1 }));
+  pageOpen(store, storage, 1);
+  const offered = store.getState().save.status === 'ok' && pendingRunSave() !== null;
+  if (offered) resumeRun(store);
+  check(`…and resumes (${point === 'beam' ? 'KESTREL\'s boot' : 'the desk'})`, offered && store.getState().run.phase === (point === 'beam' ? 'boot' : 'desk'),
+    JSON.stringify(store.getState().save));
+  if (file === 'run-save-v3-ship-done-lost.json') {
+    const lost = lostLevels('autoburn', held(store.getState(), 'autoburn'), paid(store.getState().run.skills, 'autoburn'));
+    check('…the lost fixture (AUTOBURN v1 deleted in ship 2) offers RESTORE 2 (gap G1; save/resume walks it live)',
+      lost.length === 1 && restorePrice(lost) === 2 && fileLevel(store.getState().memory, 'autoburn') === null);
+  }
+}
+{
+  // A world point after a ship whose HOLLOW landed its own seeds; one of a run whose TRACE already counts an earlier ship.
+  const { save } = fixture('run-save-v3-ship-done-desk2.json');
+  const landed = structuredClone(save) as { payload: { run: GameState['run']; slices: { hollow: GameState['hollow'] } } };
+  landed.payload.slices.hollow.seedsLanded = 1;
+  const traced = structuredClone(save) as { payload: { run: GameState['run'] } };
+  traced.payload.run.threat.trace = 1;
+  const depthOf = (raw: unknown): number | null => (migrateRunSave(raw as Record<string, unknown>).payload as { run: GameState['run'] }).run.threat.seedsMetAtDepth;
+  check('the v3 → v4 step: HOLLOW\'s seeds landed on the ship just ended record its depth; TRACE records the last ended ship',
+    depthOf(landed) === 2 && depthOf(traced) === 2 && decodeRunSave(JSON.stringify(landed)).ok, `${depthOf(landed)} ${depthOf(traced)}`);
+}
+
+// The lasting record (R11): endShip writes the first ship that met a seed, once; seedsMet reads it, across a seedless ship.
+{
+  const storage = stubStorage();
+  const store = createStore<GameState>(createInitialState({ seed: 7 }));
+  pageOpen(store, storage, 7);
+  receiveToReport(store);
+  toDesk(store);
+  check('no seed met on ARES-VII: the record is null, and seedsMet false', store.getState().run.threat.seedsMetAtDepth === null && !seedsMet(store.getState()));
+  pickFirstSkill(store);
+  for (const slot of [WORKED_ROUTE[1]!, WORKED_ROUTE[2]!]) beamTo(store, slot);
+  const beamed = store.getState().run.arrival?.seeds.length ?? 0;
+  toDesk(store);
+  check('KESTREL arrived with beam seeds: its endShip records depth 3', beamed > 0 && store.getState().run.threat.seedsMetAtDepth === 3,
+    String(store.getState().run.threat.seedsMetAtDepth));
+  beamTo(store, WORKED_ROUTE[3]!);
+  store.update((draft) => {
+    // A seedless ship whose kid rm'd everything: none of 4a's fading evidence is left.
+    draft.run.arrival!.seeds = [];
+    draft.run.threat.trace = 0;
+    draft.run.threat.fed = 0;
+    draft.hollow.seedsLanded = 0;
+    draft.memory = draft.memory.map((seg) => (seg.type === 'hollow' && seg.beam === true ? freeSegment(seg.size) : seg));
+    mergeAdjacentFree(draft.memory);
+  });
+  toDesk(store);
+  const threat = store.getState().run.threat;
+  check('…after a seedless VESPER the record stays 3 and seedsMet holds (TRACE 0, no seed, nothing left)',
+    threat.seedsMetAtDepth === 3 && seedsMet(store.getState()) && threat.trace === 0 && (threat.lastTally?.left ?? 0) === 0,
+    JSON.stringify({ at: threat.seedsMetAtDepth, trace: threat.trace, left: threat.lastTally?.left }));
+}
+
+// The LandingController registry (R3): MERGE over the resident over AUTODROP, derived each time it is asked.
+{
+  const state = createInitialState({ seed: 3 });
+  const controller = (source: 'autodrop' | 'resident' | 'merge') => ({ source, holdsTactical: true, launchesFromMind: false, decide: () => null });
+  let mergeFlies = false;
+  const offs = [
+    registerLandingController('autodrop', () => controller('autodrop')),
+    registerLandingController('resident', () => controller('resident')),
+    registerLandingController('merge', () => (mergeFlies ? controller('merge') : null)),
+  ];
+  const resident = activeLandingController(state)?.source;
+  mergeFlies = true;
+  const merge = activeLandingController(state)?.source;
+  check('the registry asks in LANDING_CONTROLLER_ORDER (merge, resident, autodrop): the resident over AUTODROP, MERGE over both',
+    LANDING_CONTROLLER_ORDER.join() === 'merge,resident,autodrop' && resident === 'resident' && merge === 'merge');
+  check('…a second registration of a source throws', throws(() => registerLandingController('autodrop', () => null)));
+  for (const off of offs) off();
+  check('…unregistered, no controller: the window rule holds', activeLandingController(state) === null && windowRuleHolds(state));
+  const offWrong = registerLandingController('autodrop', () => controller('resident'));
+  check('…a resolver answering for another source throws', throws(() => activeLandingController(state)));
+  offWrong();
+}
+
+// The demo words and AUTODROP's learning (R5, R21).
+{
+  check('DEMO_WORDS: captures read ACCURACY, drops AIM, and a drop is a drop (not a landing)', DEMO_WORDS.captures.measure === 'ACCURACY'
+    && DEMO_WORDS.drops.measure === 'AIM' && DEMO_WORDS.drops.one === 'drop' && DEMO_WORDS.drops.many === 'drops');
+  const untrained = demoSkill([], AUTODROP_DEMO_TUNING);
+  const sloppy = demoSkill([{ offsetTac: 4 }, { offsetTac: 4 }], AUTODROP_DEMO_TUNING);
+  const tidy = demoSkill([{ offsetTac: 0.3 }, { offsetTac: -0.1 }], AUTODROP_DEMO_TUNING);
+  check('AUTODROP untrained: 1.5 tac s late, AIM 40%; its demos clamp at ±1 (AIM 60); a tidy kid (+0.3, −0.1) teaches AIM 98',
+    untrained.untrained && untrained.learnedOffsetTac === 1.5 && untrained.accuracy === 40 && sloppy.learnedOffsetTac === 1
+    && sloppy.accuracy === 60 && tidy.accuracy === 98 && DEMO_SOURCES.drops?.tuning === AUTODROP_DEMO_TUNING, JSON.stringify([untrained, sloppy, tidy]));
+  check('…the boot says it: `from your 3 drops · AIM 96%`', BOOT_SKILL_TEXT.trained('AUTODROP.skl', 1, 3, 'drops', 96)
+    === '> SKILL TRAINED: AUTODROP.skl v1 · from your 3 drops · AIM 96%');
+}
+
+// The FOUNDATION's own new words fit the strip: the four lessons, ARRIVAL CONTROL's v3 line, the decoys' INSPECT lines.
+{
+  const lines = [
+    ...SKILL_4CDE_RULES.map((rule) => rule.text({} as never)), TRAINING_TEXT.controlV3, ...DISGUISE_POOL.map((entry) => `${entry.name} · ${entry.desc}`),
+  ];
+  check(`the foundation's new lines are ≤ ${MAX_LINE_CHARS} characters`, SKILL_4CDE_RULES.length === 4 && lines.every((line) => line.length <= MAX_LINE_CHARS),
+    lines.filter((line) => line.length > MAX_LINE_CHARS).join(' | '));
 }
 
 finish();

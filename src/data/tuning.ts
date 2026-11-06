@@ -2011,7 +2011,9 @@ export const RUN_SAVE_KEY = 'arrival-protocol/run/v1';
 // version and lock (save-codec RUN_SAVE_MIGRATIONS[1]).
 // 3 (slice 4 review): burn.auto keeps the burn in hand and whether it captured (`flying`, `captured`), so 4c can save inside a
 // flight or a landing (RUN_SAVE_MIGRATIONS[2]).
-export const RUN_SAVE_VERSION = 3;
+// 4 (slices 4c–4e, one bump for the three: slice-4cde-plan R1): landing.autodrop, burn.auto.holding,
+// hollow.seedTelegraph.preempted, arrival.seeds[].disguise and run.threat.seedsMetAtDepth (RUN_SAVE_MIGRATIONS[3]).
+export const RUN_SAVE_VERSION = 4;
 // The archive (§4.5; 02 §3.12: v2 holds the arm, the trail, colonies, routes, events and traces). From slice 3c the key
 // stays `meta/v2` and versions migrate in place (systems/meta.ts migrateMeta, META_VERSION the record's); a new key is
 // only ever a deliberate reset. v1's key (phase 2's archive) was the one such reset: never written, read only to detect it

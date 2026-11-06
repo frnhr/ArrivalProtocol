@@ -116,8 +116,8 @@ const edit = (raw: string, change: (save: Raw) => void): string => {
 check('not JSON → not-json', kind('{ this is not a run save') === 'not-json');
 check('another save version → version', kind(edit(desk, (save) => { save.saveVersion = RUN_SAVE_VERSION + 1; })) === 'version');
 // Slice 4: the first step (1 → 2, the skill tree; its fixtures are migrated in tests/unit/skills/foundation.test.ts).
-check('migrateRunSave knows two steps (1 → 2, slice 4; 2 → 3, its review), and leaves an unknown version for check 2',
-  Object.keys(RUN_SAVE_MIGRATIONS).join() === '1,2' && isDeepStrictEqual(migrateRunSave({ saveVersion: 0 }), { saveVersion: 0 }));
+check('migrateRunSave knows three steps (1 → 2, slice 4; 2 → 3, its review; 3 → 4, slices 4c–4e), and leaves an unknown version for check 2',
+  Object.keys(RUN_SAVE_MIGRATIONS).join() === '1,2,3' && isDeepStrictEqual(migrateRunSave({ saveVersion: 0 }), { saveVersion: 0 }));
 // 2 → 3: a v2 save (burn.auto without flying / captured) steps up with both empty and decodes; a v3 save burning with its
 // burn in hand reads (4c's mid-flight saves).
 const v2 = edit(desk, (save) => { save.saveVersion = 2; delete save.payload.slices.burn.auto.flying; delete save.payload.slices.burn.auto.captured; });
@@ -172,12 +172,30 @@ const shapes: [string, string][] = [
     save.payload.slices.burn.auto.flying = { preset: 'radial-in', reason: 'capture', event: 'peri' };
   })],
   ['AUTOBURN without its capture flag (a v2 shape at v3)', edit(desk, (save) => { delete save.payload.slices.burn.auto.captured; })],
+  // Slices 4c–4e (v4): the new machines at rest, the lasting record on the route.
+  ['AUTODROP armed at a save point', edit(desk, (save) => { save.payload.slices.landing.autodrop.armed = 'pass'; })],
+  ['AUTODROP held at a save point', edit(desk, (save) => { save.payload.slices.landing.autodrop.held = true; })],
+  ['AUTODROP holding its thread', edit(desk, (save) => { save.payload.slices.landing.autodrop.claimed = true; })],
+  ['AUTODROP waiting for a thread', edit(desk, (save) => { save.payload.slices.landing.autodrop.waitingSinceTSec = 12; })],
+  ['an AUTODROP pass with half a pod', edit(desk, (save) => { save.payload.slices.landing.autodrop.pass = { 'LZ-A': 1.5 }; })],
+  ['AUTOBURN holding without the landing orbit', edit(desk, (save) => { save.payload.slices.burn.auto.holding = true; })],
+  ['seedsMetAtDepth past the route', edit(desk, (save) => { save.payload.run.threat.seedsMetAtDepth = 9; })],
+  ['seedsMetAtDepth at 0', edit(desk, (save) => { save.payload.run.threat.seedsMetAtDepth = 0; })],
+  ['a beam seed without its disguise field', edit(beam, (save) => { delete save.payload.run.arrival.seeds[0].disguise; })],
+  ['a beam seed disguised as nothing', edit(beam, (save) => { save.payload.run.arrival.seeds[0].disguise = ''; })],
+  ['a pre-empted seed outline at a save point', edit(desk, (save) => {
+    save.payload.slices.hollow.seedTelegraph = { startAddr: 10, size: 2, leftSec: 1, preempted: true };
+  })],
 ];
 const wrongShape = shapes.filter(([, text]) => kind(text) !== 'shape');
 check('the shape, field by field → shape (the envelope, the run, the map, the slices, the copies against the run)', wrongShape.length === 0,
   wrongShape.map(([what, text]) => `${what} → ${refusal(text)}`).join(' | '));
 check('…the refusal names the field (`payload.run.map.arm[3].late is not true or false`)',
   refusal(shapes[5]![1]).includes('payload.run.map.arm[3].late'), refusal(shapes[5]![1]));
+check('…a disguised arrival seed and a recorded first seed on the route pass the shape', kind(edit(beam, (save) => {
+  save.payload.run.arrival.seeds[0].disguise = 'cache.tmp';
+  save.payload.run.threat.seedsMetAtDepth = save.payload.run.map.route.length;
+})) !== 'shape');
 check('a classic map → classic', kind(edit(desk, (save) => {
   save.payload.run.map.world = 'classic';
 })) === 'classic');
