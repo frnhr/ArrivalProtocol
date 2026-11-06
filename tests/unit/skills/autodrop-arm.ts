@@ -30,6 +30,7 @@ export interface ArmLandingOpts {
   healDrivers?: boolean;            // every driver at 100 (default true): the arrival damage's wider dots aside
   healInstruments?: boolean;        // Sensor Interp, Nav Plotter and Bay Ctrl at 100 (default false: the ship's own damage)
   r?: number;                       // the lock's radius (default the ring's middle)
+  e?: number;                       // the lock's eccentricity (default 0: lockOn's), ▼ at the lock's radius
   keepSeeds?: boolean;              // keep the beam's seeds in memory (default: freed)
 }
 
@@ -65,7 +66,7 @@ export function armLanding(h: Harness7, route: readonly number[], opts: ArmLandi
   });
   const version = opts.autodrop === undefined ? 1 : opts.autodrop;
   if (version !== null) giveSkillFile(h.store, 'autodrop', version);
-  lockOn(h, opts.r === undefined ? {} : { r: opts.r });
+  lockOn(h, { ...(opts.r === undefined ? {} : { r: opts.r }), ...(opts.e === undefined ? {} : { e: opts.e }) });
   if (h.store.getState().run.phase !== 'landing') throw new Error('armLanding: the lock did not begin the landing');
 }
 
