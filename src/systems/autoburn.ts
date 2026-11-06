@@ -3,6 +3,7 @@ import type { Store } from '@state/store';
 import type { GameState, AutoburnPhase, AutoburnEnd, AutoburnState, AutoburnBurn } from '@state/schema';
 import type { Segment, SkillFileSegment } from '@/types/segment';
 import type { AutoMode, SkillVersion } from '@/types/skill';
+import { MODE_RULES } from '@data/autoburn-modes';
 import { onPostTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { stopSkipOnPress } from '@systems/pace';
@@ -68,9 +69,6 @@ import {
 //   brakes on for as long as the strip would tell a kid to KEEP HOLDING.)
 
 const OWNER = 'autoburn';
-
-// The version each mode needs (03 §3.6; 4e's landing orbit is v3's).
-const MODE_NEEDS: Readonly<Record<AutoMode, SkillVersion>> = { capture: 1, green: 2, round: 2, 'landing-orbit': 3 };
 
 // The burn in hand (state.burn.auto.flying) and whether this engagement captured (auto.captured) live in the saved state
 // (review fix, FLIGHT deviation 7: 4c saves inside a flight). Only the chime's edge stays here: the ship was inside the
@@ -313,19 +311,10 @@ export function autoburnDoneLine(state: Readonly<GameState>): string | null {
   return endLine(auto, state.run.phase === 'landing');
 }
 
-// The reserve's and the downgrade's words by the mode that stopped (one row per mode: 4e's landing orbit adds its own).
+// The reserve's and the downgrade's words by the mode that stopped (data/autoburn-modes.ts MODE_RULES, one row per mode).
 function stoppedLine(auto: Readonly<AutoburnState>, why: 'reserve' | 'downgraded'): string {
-  const mode = auto.mode;
-  switch (mode) {
-    case 'capture':
-    case 'green':
-      if (why === 'reserve') return auto.captured ? AUTOBURN_TEXT.reserveCaptured : AUTOBURN_TEXT.reserveGreen;
-      return auto.captured ? AUTOBURN_TEXT.downgradedCaptured : AUTOBURN_TEXT.downgradedGreen;
-    case 'round': return why === 'reserve' ? AUTOBURN_TEXT.reserveRound : AUTOBURN_TEXT.downgradedRound;
-    case 'landing-orbit':
-    case null:
-      throw new Error(`autoburn: no ${why} line for mode ${String(mode)}`);
-  }
+  if (auto.mode === null) throw new Error(`autoburn: no ${why} line without a mode`);
+  return MODE_RULES[auto.mode].stopped[why](auto.captured);
 }
 
 function endLine(auto: Readonly<AutoburnState>, landing: boolean): string | null {
@@ -349,7 +338,7 @@ function setPhase(store: Store<GameState>, to: AutoburnPhase, end: AutoburnEnd |
     auto.phase = to;
     auto.atAi = at;
     auto.end = end;
-    if (to === 'idle') { auto.mode = null; auto.targetKm = null; auto.captured = false; }
+    if (to === 'idle') { auto.mode = null; auto.targetKm = null; auto.captured = false; auto.holding = false; }
     if (!isEngaged(to)) { auto.claimed = false; auto.waitingSinceTSec = null; }
     if (to !== 'pointing' && to !== 'burning') auto.flying = null;
     Object.assign(auto, patch);
@@ -486,7 +475,7 @@ function tick(store: Store<GameState>): void {
   const mode = auto.mode;
   if (mode === null) throw new Error('autoburn tick: engaged without a mode');
   // v1's capture is the flight's only; v2's modes go on into LANDING on the same orbit (03 §3.6: [B] there offers ROUND).
-  if (!engineOpen(state) || (mode === 'capture' && state.run.phase !== 'flight')) { finish(store, 'idle', 'flight-over'); return; }
+  if (!engineOpen(state) || (MODE_RULES[mode].flightOnly && state.run.phase !== 'flight')) { finish(store, 'idle', 'flight-over'); return; }
   if (state.clock.paused) return;
   const playerFiring = state.burn.firing && state.burn.firingSource === 'player';
   const live = skillLive(state.memory, 'autoburn');
@@ -511,18 +500,17 @@ function armedTick(store: Store<GameState>, fit: RingFit, live: Readonly<SkillLi
   const auto = state.burn.auto;
   const mode = auto.mode!;
   const pred = getPrediction();
-  // Nothing left to fly: the mode is done (GREEN in the ring, ROUND at its circle), or the burn it waited for went away.
-  if (mode === 'capture' && fit.closed) { finish(store, 'idle', 'no-capture'); return; }
-  if (mode === 'green' && fit.inRing) { finish(store, 'done', 'green'); return; }
-  if ((mode === 'round' || mode === 'landing-orbit') && auto.targetKm !== null && fit.closed && atCircle(fit, auto.targetKm)) {
-    finish(store, 'done', 'round');
-    return;
+  // Nothing left to fly (MODE_RULES' doneWhen): the capture's loop closed, GREEN in the ring, ROUND at its circle; or the
+  // burn it waited for went away.
+  const rule = MODE_RULES[mode];
+  if (nothingLeft(rule.doneWhen, fit, auto.targetKm)) {
+    if (rule.then !== 'hold') { finish(store, rule.then.phase, rule.then.end); return; }
   }
   const burnPoint = pred.burnPoint;
   if (burnPoint === null || (mode === 'capture' && !isCaptureBurn(burnPoint.reason))) { finish(store, 'idle', 'no-capture'); return; }
   const capture = isCaptureBurn(burnPoint.reason);
   // Graded damage (4b): the burn left needs a version the file no longer works as. A capture is v1's, so it goes on.
-  if (live.version < MODE_NEEDS[mode] && !capture) { finish(store, 'done', 'downgraded'); return; }
+  if (live.version < rule.needs && !capture) { finish(store, 'done', 'downgraded'); return; }
   if (reserveRefuses(state, burnPoint)) { finish(store, 'done', 'reserve'); return; }
   const fireIn = fireInTac(state, pred, burnPoint);
   if (fireIn > AUTO_THREAD_CLAIM_TAC) {
@@ -567,10 +555,10 @@ function burnTick(store: Store<GameState>, fit: RingFit, live: Readonly<SkillLiv
   if (playerFiring || state.burn.sasMode !== flying.preset) { finish(store, 'idle', 'takeover'); return; }
   if (state.burn.fuelPct <= 0) { finish(store, 'done', 'fuel'); return; }
   const capture = isCaptureBurn(flying.reason);
-  if (live.version < MODE_NEEDS[mode] && !capture) { finish(store, 'done', 'downgraded'); return; }
+  if (live.version < MODE_RULES[mode].needs && !capture) { finish(store, 'done', 'downgraded'); return; }
   const verdict = burnVerdict(state, getPrediction(), fit, flying);
   if (verdict === 'rearm') {
-    if (live.version < MODE_NEEDS[mode]) { finish(store, 'done', 'downgraded'); return; }
+    if (live.version < MODE_RULES[mode].needs) { finish(store, 'done', 'downgraded'); return; }
     rearm(store);
     return;
   }
@@ -592,20 +580,21 @@ function burnTick(store: Store<GameState>, fit: RingFit, live: Readonly<SkillLiv
 function burnVerdict(state: Readonly<GameState>, pred: Prediction, fit: RingFit, burn: Readonly<AutoburnBurn>): AutoburnEnd | 'rearm' | null {
   const auto = state.burn.auto;
   const mode = auto.mode!;
+  const rule = MODE_RULES[mode];
   if (isCaptureBurn(burn.reason)) {
     const end = brakingEnd(pred, fit);
-    if (end === null || mode === 'capture') return end;
-    return end === 'in-ring' && mode === 'green' ? 'green' : 'rearm';
+    if (end === null || rule.afterCapture === 'end') return end;
+    return end === 'in-ring' && rule.doneWhen === 'in-ring' && rule.then !== 'hold' ? rule.then.end : 'rearm';
   }
-  if (mode === 'round' || mode === 'landing-orbit') {
+  if (rule.circle) {
     const targetKm = auto.targetKm;
     if (targetKm === null) throw new Error(`autoburn: ${mode} without its circle`);
     if (!fit.closed) return 'rearm';
     const step = circleStep(fit, targetKm);
-    if (step === null) return 'round';
+    if (step === null) return circleEnd(rule);
     const lowers = step.at === 'peri' ? fit.ra > step.targetRadius : fit.rp > step.targetRadius;
     if (step.at !== burn.event || (lowers ? 'retrograde' : 'prograde') !== burn.preset) {
-      return loopEccentricity(fit) < ROUND_E_TOL ? 'round' : 'rearm';
+      return loopEccentricity(fit) < ROUND_E_TOL ? circleEnd(rule) : 'rearm';
     }
     return null;
   }
@@ -616,6 +605,20 @@ function burnVerdict(state: Readonly<GameState>, pred: Prediction, fit: RingFit,
   const sameBurn = next !== null && next.reason === burn.reason && next.event === burn.event && next.preset === burn.preset
     && (next.approaching || next.eventInSec <= 0);
   return sameBurn ? null : 'rearm';
+}
+
+// The loop already gives the mode nothing to fly (MODE_RULES' doneWhen), by the ship's own loop.
+function nothingLeft(when: (typeof MODE_RULES)[AutoMode]['doneWhen'], fit: RingFit, targetKm: number | null): boolean {
+  switch (when) {
+    case 'loop-closed': return fit.closed;
+    case 'in-ring': return fit.inRing;
+    case 'circle': return targetKm !== null && fit.closed && atCircle(fit, targetKm);
+  }
+}
+
+// A circle burn reached its circle: the mode's end, or (a mode that holds) the next burn's re-arm, armed at the circle.
+function circleEnd(rule: (typeof MODE_RULES)[AutoMode]): AutoburnEnd | 'rearm' {
+  return rule.then === 'hold' ? 'rearm' : rule.then.end;
 }
 
 // Whether its capture is over (WP9 review round 1: it flies the capture through, not just to the loop closing). Past

@@ -2,6 +2,7 @@
 import type { Store } from '@state/store';
 import type { GameState, BurnStatus, PresetMode, SasMode } from '@state/schema';
 import type { AutoMode } from '@/types/skill';
+import { MODE_RULES } from '@data/autoburn-modes';
 import type { GoLowAim } from '@/types/landing';
 import { onGameTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
@@ -1359,14 +1360,14 @@ export function planModeBurn(state: Readonly<GameState>, pred: Prediction, mode:
   const engaged = engagedAuto(state);
   if (engaged !== null && engaged.mode === mode && engaged.targetKm === targetKm) return pred.burnPoint;
   const capture = pred.burnPoint !== null && (pred.burnPoint.reason === 'capture' || pred.burnPoint.reason === 'missed') ? pred.burnPoint : null;
-  if (pred.outcome === 'open') return mode === 'capture' || mode === 'green' ? capture : null;
+  if (pred.outcome === 'open') return MODE_RULES[mode].fromFlyby ? capture : null;
   if (mode === 'capture' || pred.periInSec === null || pred.apoInSec === null || pred.periodSec === null) return null;
   const input = {
     orbit: state.orbit, mu: state.level.planet.mu, ring: state.level.ring, fit: pred.fit, aEff: planningAccel(state),
     fuelDvKmS: (state.burn.fuelPct / 100) * state.level.dvBudgetKmS, lateTrimSec: LATE_TRIM_TAC * state.level.tacticalWarp,
   };
   const times = { peri: pred.periInSec, apo: pred.apoInSec, period: pred.periodSec };
-  if (mode === 'round' || mode === 'landing-orbit') return targetKm === null ? null : planToCircle(input, times, targetKm);
+  if (MODE_RULES[mode].circle) return targetKm === null ? null : planToCircle(input, times, targetKm);
   // GREEN on a closed loop: the ring trim, the cheapest green, never a shrink.
   if (pred.fit.inRing) return null;
   if (pred.burnPoint !== null && isTrim(pred.burnPoint.reason)) return pred.burnPoint;
@@ -1460,12 +1461,12 @@ export function computePrediction(state: Readonly<GameState>): Prediction {
     reserveWaitSec: SHRINK_RESERVE_WAIT_TAC * tacticalWarp,
     holdingShrink: state.burn.firing && state.burn.firingFor === SHRINK_KEY,
     landing: state.run.phase === 'landing',
-    noShrink: auto?.mode === 'green',
+    noShrink: auto !== null && MODE_RULES[auto.mode].noShrink,
   };
   // Slice 4 (plan §2.9): while AUTOBURN is engaged the plan is its mode's, so the START BURN ticks are always its burns:
   // ROUND (and 4e's landing orbit) the circle's burns on a closed loop, GREEN the ring's trims with no shrink; and the
   // landing's in-ring GO LOWER and lift are not planned (one planner owns the engine).
-  const circle = auto !== null && (auto.mode === 'round' || auto.mode === 'landing-orbit') && auto.targetKm !== null && fit.closed
+  const circle = auto !== null && MODE_RULES[auto.mode].circle && auto.targetKm !== null && fit.closed
     && periInSec !== null && apoInSec !== null && periodSec !== null
     ? { targetKm: auto.targetKm, times: { peri: periInSec, apo: apoInSec, period: periodSec } } : null;
   const burnPoint = impact || outOfFuel || cannotClose ? null

@@ -49,6 +49,10 @@ export const AUTOBURN_TEXT = {
   downgradedCaptured: 'AUTOBURN DAMAGED TO v1 — CAPTURED, trim it green yourself',
   downgradedGreen: 'AUTOBURN DAMAGED TO v1 — trim it green yourself',
   downgradedRound: 'AUTOBURN DAMAGED TO v1 — it can no longer round it',
+  // AUTOBURN v3 (4e, plan §5.2): the reserve stopped its transfer or a top-up; damage took it to v1 (v1 does not fly in
+  // LANDING, plan R14).
+  reserveOrbit: `AUTOBURN v3 KEEPS ${AUTO_FUEL_RESERVE_PCT}% FUEL — the orbit is yours`,
+  downgradedOrbit: 'AUTOBURN DAMAGED TO v1 — the landing orbit is yours',
   // ROUND in landing (plan §7 R2): the burns at ▼ and at ▲ both cross a window of an LZ with room, so it burns at ▼ anyway.
   roundCostsWindow: (lz: string): string => `AUTOBURN: ROUND COSTS ${lz}'s WINDOW`,
   // GREEN in landing (an accepted orbit) trims at its apsis whatever the window (slice 4 review (a)): said at the press, so
