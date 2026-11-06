@@ -138,6 +138,10 @@ Each cell shows the price in cycles and the size in blocks.
   - **AUTODROP** learns the same way from manual launches. A demo is the launch time minus the moment the dot was at the
     bracket centre, in tac s. The factor is 0.5 and the clamp ±1 tac s: half of the 2.0 s cadence, so a learned skill
     never shifts a volley by a whole slot. AIM = clamp(100 − 40 × |offset|, 40, 99).
+    *Built (slice 4c–4e review M3):* a demo is measured against the slot the strip cued, as AUTOBURN's are against START
+    BURN: the window's launch moment (`LAUNCH NOW`, where the whole dot first fits; a WIDE DROP's in-band opening) for
+    the first launch, one cadence after the launch before it for each later one. Against the centre, a kid who did
+    exactly what the strip said trained AUTODROP to AIM 60% and 1 s early on ship 1; now the same kid trains 94%.
   - **No demos** means `UNTRAINED` at 40%. That is a loud, designed state, not a hidden default.
   - Later manual captures and drops retrain the skill for free at the next boot (`> SKILL RETRAINED`), as in phase 2.
   - SURVEY and SENTRY have no demos.
