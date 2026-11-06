@@ -1145,3 +1145,78 @@ its reason; the measurements are from `skills/autoburn-modes`, `skills/lock-rang
 - **Lead (`script.ts`)**: the `AUTOBURN READY` tutorial fires whenever `autoburnAvailable`, now also in LANDING for v2;
   limit it to the flight, and add 03 §4's one-time v2 line (`AUTOBURN v2 — [B] makes it green. [B] on green makes it round.`).
 - **Lead (`AGENTS.md`)**: "AUTOBURN v2 (trims to green)" is no longer "designed but not built".
+
+## Deviations (Track UI)
+
+Recorded by Track UI (branch `ui-4`, from `f9ee3c1`, with `tree-4` and then `claude/modest-hawking-209t0f` (TREE + FLIGHT)
+merged in). New suite `skills/ui-models` (43 checks, under a second). Checked in Chromium at 1440×900, 1280×720 and
+390×844 on run 1's worked route, by the desk's own keys where the shot is about them (`tests/.out/ui-4/`).
+
+### What is built
+
+- **TRAINING [T]** (`components/desk/TrainingWindow.ts`, model `systems/training-model.ts`): visit 1's cards under `CHOOSE
+  YOUR FIRST SKILL` (AUTOBURN v1 alone, R5) with ARRIVAL CONTROL's line, [1] [2], TRAIN / ENTER and the 1.5 s bar
+  (`TRAINING AUTOBURN v1 · from your 1 capture`, op chirps, `lockArp`), the `TRAINED` stamp, `n CYCLES · SAVED FOR NEXT TIME`
+  and `MORE SKILLS OPEN AS YOU GO`; from visit 2 the grid (a column per open branch, LOCK RANGE on a side axis, traces lit
+  from the parent, `OPENS LATER` rows), the detail with a looping mini-demo and TRAIN or RESTORE, UNDO beside each
+  purchase, the AHEAD row, the packet preview and the `LAST UNIT TRAINED:` line. The bank rolls down on a purchase. On a
+  phone the branches are an accordion with the newest open.
+- **The desk** (`systems/desk.ts`, `DeskScreen`, `DeskTabs`): the `A SKILL` step first on the arm's first desk, the
+  TRAINING tab and its pulsing `n CYCLES` badge, [T], ENTER / [1] [2] / ↑ ↓ routed to the open tab, SET COURSE reading
+  `CHOOSE YOUR FIRST SKILL` (and refusing with a buzz that opens the tab) while `firstPickWaits`. The actions
+  `selectTrainingCell`, `stepTrainingCell`, `startTrainingHold`, `advanceTrainingHold`, `cancelTrainingHold` and
+  `undoTraining` drive TREE's `trainCell`, `restoreSkill` and `undoPurchase`.
+- **Reports**: the LANDING REPORT rolls up `TRAINING CYCLES +5 · ARRIVED +1 · LANDED 83% +4` / `PERFECT LANDING · +6` /
+  `… NO DESK AHEAD` under the charge, with `+2 CYCLES · FIRST SKILL ON THE HOUSE :)` after a run's first ship below the
+  floor (`cyclesReport` over `shipCycles`); RUN END shows `UNSPENT n` under the rank and the tally `TRAINED n of 54 ·
+  UNSPENT n`, from TREE's `RunEndModel.skills`.
+- **The PACKET**: skill chips over TREE's `PacketChip.skill` (the file name as the tree writes it, the version badge, `→
+  brake by hand · RESTORE 5`, PACK AS buttons in the same grid cell, the dashed `TRAINED HERE · ◀ CHART TO UNDO` chip).
+- **Graded damage on screen** (`systems/skills.ts`): `skillFileView` (badge `v2▸v1`, offline read before the band, the
+  INSPECT line `v2 · 64% · WORKS AS v1 · REPAIR TO 80% FOR v2 (≈ 3 CHARGE)`), `skillTickZones` (the bar's ticks at 80, 50,
+  25 labelled `v2 | v1 | off` on a wide chip and in its tooltip), one Skills row per skill with pips `▮▮▯` and a version
+  line (lock, the repair estimate, `LOST v2 · RESTORE 3 AT THE NEXT DESK`), and `skillVersionStamp` for the stamps
+  (`AUTOBURN v2 → v1`, `AUTOBURN v2 RESTORED`), the 400 ms badge flicker and the sounds. The ONLINE stamp hangs on
+  `'skill-trained'`.
+
+### Deviations
+
+1. **The cycles report line, the run-end lines and the stamps' rule live in UI's files** (`training-model.ts cyclesReport`,
+   `skills.ts skillVersionStamp`); `landing-report.ts` (UI's since 3c, unlisted in §5.2) is untouched. The LANDING REPORT
+   computes the line from its own tally (`points`, `aboard`) through `shipCycles`, the same earning `endShip` records.
+2. **`TRAINING_HOLD_SEC` (1.5), the report's roll timing and the bank's roll are view constants** in UI's files, with their
+   WHY, rather than in `tuning.ts` (TREE's after the FOUNDATION).
+3. **The guidance step's label is `A SKILL`** (the strip reads `1 A SKILL · 2 A SHIP · 3 A FILE · 4 SET COURSE`), not
+   `TRAIN`, to match the other steps. Its done-ness and SET COURSE's wait read one rule, `desk.ts firstPickWaits`
+   (`FIRST_PICK_ENFORCED && deskBlocker`).
+4. **Keys**: ENTER trains while TRAINING is open and its selection can be trained or restored, else it sets course; SPACE
+   always sets course. ↑ ↓ move through the grid while TRAINING is open (from visit 2); ← → keep cycling the ships, so the
+   AHEAD row follows the chart. [1] [2] pick a card on visit 1 and request a row on the REPOSITORY. ESC stops a filling bar.
+5. **The grid's default selection** is the first cell TRAIN can buy, else the first lost one (RESTORE), else the first dim
+   one; visit 1 starts with no card chosen until [1] or a click.
+6. **The AHEAD row leaves out SITE DATA** (POOR plays GOOD until slice 6, so it would mislead) and writes the noise without
+   its middle dot (`NOISE SEVERE 3`), so the worst case fits 70 characters: `NEXT: GOOD HOPE · ARK · 16 PODS · MEMORY 384
+   COMPACT · NOISE SEVERE 3`.
+7. **The preview's binding word** when everything fits is whichever of the link and the room is smaller; when it does not
+   fit, §2.5's `overLink >= over`. Its hint is UNDO when this desk bought something, else the cheapest PACK AS that frees
+   enough (TREE's `skillRelief`), else LEAVE FILES BEHIND.
+8. **The Skills row does not repeat `WORKS AS v1`** when FLIGHT's `autoburnStatus` already says it; its version line keeps
+   the repair estimate in CHARGE. Skills not built yet (AUTODROP, SURVEY, SENTRY) read `v1 READY` until their tracks add a
+   status.
+9. **A fall to OFF because the counting copy went offline** (the kid's repair or move) stamps nothing and plays nothing; the
+   chip says `↻` and INSPECT `OFF WHILE IT IS REPAIRED`. The restore stamp plays `driverSaved` and a loss `sombreFall`
+   (`soulLost` / `clusterSaved` are not cues any more).
+10. **The NEW pulse** follows bought purchases that are not free (cost 0 at visit 0), so a migrated resume or a `?debug` gift
+    does not pulse.
+11. **FLIGHT's requests, done here**: the NAV PLOT's `.np-auto-ghost`, `.np-lock` (`.inside` brighter) and `.np-lock-label`
+    and the Engine pip `[data-skill="autoburn"]` are styled in `game.css` (NavPlotWindow toggles a class instead of an
+    inline opacity); the armed chime only on a fresh arm; `MiniHud` reads `autoArmedBurn` and `AUTO_MINI_TEXT.armed` (in
+    FLIGHT's `skill-text.ts`, a one-line widening) takes the burn kind: `BRAKES` / `TRIMS` / `ROUNDS`.
+12. **Not built**: the trace "lights from its parent" as an animation (the trace is lit or not); the 4-second mini-demos are
+    CSS loops of a few SVG shapes per cell kind, not real plots.
+
+### Requests
+
+- **Lead**: `skills.ts` keeps TREE's `case 'cycles': continue;` (the +2 card is never in `run.upgrades`, so it has no row).
+  The e2e `map-desk` / `phone` / `playthrough` checks that read the desk's step list or tab labels will see `A SKILL` first
+  and four tabs (labels unchanged: a tab's `[R]` is now its own span, hidden under 1440 px).
