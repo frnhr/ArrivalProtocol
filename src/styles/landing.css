@@ -550,5 +550,5 @@ body.reduced-motion .pb-go.armed { animation: none; }
 .pb-plan-check.complete { color: var(--good); }
 .pb-plan-note { font-size: 9px; letter-spacing: 0.06em; color: var(--warn); }
 @media (max-width: 768px) {
-  body.landing .phone-bar > #pbGoBtn { grid-column: 1 / -1; min-height: 40px; font-size: 13px; }
+  body.landing .phone-bar > #pbGoBtn { grid-column: 1 / -1; min-height: 36px; margin-top: 6px; font-size: 13px; }
 }

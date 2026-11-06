@@ -201,7 +201,7 @@ const checkLine = (): string => {
     ...(Object.keys(t.refusal) as (keyof typeof t.refusal)[]).map((word) => t.radio.refused(word)),
     LANDING_ECHO.touchdown(16, 'lz', 'LZ-D', 'soft', true),
     t.bay.pipWorksAs(3, 2), t.bay.pipOk(3), t.bay.pipDamaged(3, 2, 80), t.bay.pipOffline(3), t.bay.pipMissing,
-    t.bay.keyHold, t.bay.keyPass, t.bay.keyPlan, t.bay.keyArmedPass, t.bay.keyArmedPlan, t.bay.keyOff, t.bay.keyWaiting,
+    t.bay.keyHold, t.bay.launchHeld, t.bay.keyPass, t.bay.keyPlan, t.bay.keyArmedPass, t.bay.keyArmedPlan, t.bay.keyOff, t.bay.keyWaiting,
     t.bay.shortBay('LZ-D', 4, 0), t.bay.shortFit('LZ-D', 4, 3), t.bay.noWindow('LZ-D'),
     t.bay.planRow(AUTODROP_PLAN_MAX_PASSES, 'LZ-D', 4, 'IN 59:59', 4), t.bay.planMore(40),
     t.bay.planCheck(AUTODROP_PLAN_MAX_PASSES, { 'LZ-A': 6, 'LZ-B': 6, 'LZ-C': 6, 'LZ-D': 6 }, ['LZ-A', 'LZ-B', 'LZ-C', 'LZ-D'], COLONISTS_PER_POD),

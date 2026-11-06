@@ -400,7 +400,9 @@ export const DRIVER_DETAIL_TEXT = {
 
 // The touchdown's float (§4 juice) and stamps.
 export const TOUCHDOWN_FLOAT_TEXT = {
-  lz: (points: number, lz: string, touch: Touch): string => `+${points} ${touch === 'hard' ? 'HARD' : 'LANDED'} · ${lz}`,
+  // `bullseye` (slice 4c): AUTODROP sent it soft into an LZ with room (`+200 LANDED · LZ-A · BULLSEYE`; NavPlotWindow passes it).
+  lz: (points: number, lz: string, touch: Touch, bullseye = false): string =>
+    `+${points} ${touch === 'hard' ? 'HARD' : 'LANDED'} · ${lz}${bullseye && touch === 'soft' ? AUTODROP_TEXT.bullseye : ''}`,
   mislanded: (points: number, lz: string): string => `+${points} MISLANDED · ${lz} FULL`,
   offSite: (points: number, touch: Touch): string => `+${points} ${touch === 'hard' ? 'HARD · ' : ''}OFF-SITE`,
   // In the arc's own word (slice 1b): `+0 LAVA`, `+0 CLIFFS`.

@@ -20,9 +20,9 @@ const BAR_PARTS = [
   { window: '.engine-win', part: ':scope .engine-body > .fuel-block' },
   { window: '.engine-win', part: ':scope .engine-body .preset-row' },
   { window: '.podbay-win', part: '#podLaunchBtn' },
-  // Slice 4c: AUTODROP's [G] beside LAUNCH (v2's pass, v3's plan; hidden by PodBayWindow without them).
-  { window: '.podbay-win', part: '#pbGoBtn' },
   { window: '.engine-win', part: '#burnBtn' },
+  // Slice 4c: AUTODROP's [G] under LAUNCH and BURN's row (v2's pass, v3's plan; hidden by PodBayWindow without them).
+  { window: '.podbay-win', part: '#pbGoBtn' },
   { window: '.engine-win', part: '#autoBtn' },
   { window: '.engine-win', part: '#acceptBtn' },
   { window: '.engine-win', part: '#beamBtn' },

@@ -683,8 +683,8 @@ const AUTODROP_PIP_GLYPH: Readonly<Record<AutodropPipLook, string>> = {
   ok: '●', degraded: '●', failing: '●', dead: '●', missing: '✕', offline: '↻',
 };
 
-// The plan table shows this many volleys (a 16-pod ark's 7 fit the window); the rest say `+n MORE`.
-const PLAN_ROWS_SHOWN = 7;
+// The plan table shows this many volleys (six keep the POD BAY above the desk's foot at 900 px); the rest say `+n MORE`.
+const PLAN_ROWS_SHOWN = 6;
 
 export function autodropBayModel(state: Readonly<GameState>, sol: Readonly<DropSolution> | null): AutodropBayModel | null {
   const live = skillLive(state.memory, 'autodrop');
@@ -781,6 +781,11 @@ export function bayWindowModel(
     status = LAUNCH_REFUSAL_TEXT['BAY OFFLINE'];
   }
   if (aboard.length === 0) status = POD_BAY_STATUS_TEXT.allAway;
+  // Slice 4c: held for AUTODROP v1, the button says AUTODROP times the volley (the dot's off-site ask is not the kid's).
+  else if (landing.autodrop.held) {
+    look = 'go';
+    status = AUTODROP_TEXT.bay.launchHeld;
+  }
 
   const nextDriver = nextToLaunch(state);
   // The NEXT pod's drop (risk 19: LOAD NEXT changes the dot): the solved dot's own width, which drop-cache solves for

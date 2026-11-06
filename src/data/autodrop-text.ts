@@ -101,6 +101,8 @@ export const AUTODROP_TEXT = {
     pipMissing: 'AUTODROP.skl is gone: RESTORE it at the next desk',
     // The key line under the pip, by what [L] / [G] does now.
     keyHold: 'HOLD [L] · AUTODROP CENTRES EVERY POD',
+    // The LAUNCH button's status while it (or [L]) is held for v1.
+    launchHeld: 'AUTODROP HOLDS · IT WAITS FOR THE CENTRE',
     keyPass: 'AUTODROP ▸ PASS [G]',
     keyPlan: 'AUTODROP ▸ PLAN [G]',
     keyArmedPass: 'AUTODROP FLIES THIS PASS · [G] CANCELS',
