@@ -6,7 +6,7 @@ import type { ChartNode } from '@systems/desk';
 import { pushModal, registerKeys } from '@systems/input';
 import {
   deskCandidates, selectShip, cycleShip, cardModel, chartModel, deskSteps, deskOpeningBeat, deskControlLine, deskOpening,
-  openDeskWindow, toggleRequest, deskTabBadges, deskDepartures, chartLegend,
+  openDeskWindow, toggleRequest, deskTabBadges, deskDepartures, chartLegend, firstPickWaits,
 } from '@systems/desk';
 import { repoModel } from '@systems/repository';
 import type { RepoFileId } from '@/types/repo';
@@ -23,6 +23,8 @@ import { renderShipCard } from '@components/desk/ShipCard';
 import { buildDeskTabs, type DeskTab } from '@components/desk/DeskTabs';
 import { renderRepository } from '@components/desk/RepositoryWindow';
 import { mountInboxView } from '@components/desk/InboxView';
+import { mountTrainingWindow } from '@components/desk/TrainingWindow';
+import { TRAINING_TEXT } from '@data/training-text';
 import { MAP_TEXT } from '@data/map-text';
 import { REPO_FILE_IDS } from '@data/repository';
 import { DESK_GREY_STEP_MS, DESK_TYPE_CPS, DESK_SHEET_PEEK_PX } from '@data/tuning';
@@ -105,7 +107,10 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   const inbox = mountInboxView(store, 'desk');
   const inboxHost = make('div', 'desk-card desk-inbox');
   inboxHost.appendChild(inbox.root);
-  cardWin.append(cardTitle, cardHost, repoHost, inboxHost);
+  // Slice 4: TRAINING [T] (components/desk/TrainingWindow.ts); the run's first desk opens on it (run.ts deskUiOnOpen).
+  const training = mountTrainingWindow(store);
+  const trainingHost = training.root;
+  cardWin.append(cardTitle, cardHost, repoHost, trainingHost, inboxHost);
   body.append(chartWin, cardWin);
 
   const foot = make('div', 'desk-foot');
@@ -168,8 +173,11 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     stepText.textContent = steps[at]?.text ?? '';
     const selected = state.ui.deskSelected;
     const course = steps.find((step) => step.id === 'set-course')!;
-    renderKeyCaps(goBtn, course.text);
-    goBtn.classList.toggle('waiting', selected === null);
+    // Slice 4: the run's first desk waits for the required first pick (desk.ts firstPickWaits): the bar says so.
+    const blocked = firstPickWaits(state);
+    renderKeyCaps(goBtn, blocked ? TRAINING_TEXT.chooseFirst : course.text);
+    goBtn.classList.toggle('waiting', selected === null || blocked);
+    goBtn.classList.toggle('blocked', blocked);
     const chartNow = chartModel(state);
     chart.paint(chartNow, beatPending, greenPending);
     const items = chartLegend(chartNow);
@@ -189,11 +197,13 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     cardHost.hidden = tab !== null;
     repoHost.hidden = tab !== 'repository';
     inboxHost.hidden = tab !== 'inbox';
+    trainingHost.hidden = tab !== 'training';
     root.dataset.tab = tab ?? 'card';
     if (tab === null) renderShipCard(cardHost, showing === null ? null : cardModel(state, showing), MAP_TEXT.desk.pickShip);
     // The REPOSITORY's ETAs are for the ship SET COURSE goes to (the selection, not a ship only inspected).
     if (tab === 'repository') renderRepository(repoHost, repoModel(state, selected));
     if (tab === 'inbox') inbox.paint();
+    if (tab === 'training') training.paint();
     const arm = state.run.map.world === 'arm';
     root.classList.toggle('sheet-open', sheetOpen && (showing !== null || tab !== null));
     root.classList.toggle('has-card', showing !== null || tab !== null);
@@ -212,7 +222,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     if (phone.matches) sheetOpen = true;
     paint();
   }
-  // R and I open their tab, or go back to the card when it is already open.
+  // R, T and I open their tab, or go back to the card when it is already open.
   function toggleTab(id: Exclude<DeskTab, 'card'>): void {
     if (store.getState().run.map.world !== 'arm') return;
     showTab(store.getState().ui.deskWindow === id ? 'card' : id);
@@ -252,12 +262,27 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   function go(): void {
     const state = store.getState();
     if (state.run.phase !== 'desk') return;
+    // Slice 4: SET COURSE waits for the first pick (setCourse throws on it): a buzz, and TRAINING comes up.
+    if (firstPickWaits(state)) {
+      play('buzz');
+      if (state.ui.deskWindow !== 'training') showTab('training', false);
+      return;
+    }
     if (state.ui.deskSelected === null || !deskCandidates(state).includes(state.ui.deskSelected)) {
       play('buzz');
       return;
     }
     play('lockArp');
     setCourse(store, state.ui.deskSelected);
+  }
+
+  // A key TRAINING takes while its tab is open (`act` says whether it did; then it ticks).
+  function trainingKey(act: () => boolean): boolean {
+    const state = store.getState();
+    if (state.run.phase !== 'desk' || state.ui.deskWindow !== 'training') return false;
+    if (!act()) return false;
+    play('uiClick');
+    return true;
   }
 
   function cycle(step: 1 | -1): void {
@@ -391,29 +416,41 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   cardClose.addEventListener('click', onClose);
   cardTitle.addEventListener('click', onHandle);
   const offs = [
-    registerKeys({ layer: 'desk', codes: ['Enter', 'NumpadEnter', 'Space'], onDown: go }),
-    registerKeys({ layer: 'desk', codes: ['ArrowRight', 'ArrowDown'], onDown: () => cycle(1) }),
-    registerKeys({ layer: 'desk', codes: ['ArrowLeft', 'ArrowUp'], onDown: () => cycle(-1) }),
+    // ENTER trains the selected cell while TRAINING is open and there is one to train (03 §4: [1], then ENTER); otherwise
+    // it sets course. SPACE always sets course.
+    registerKeys({ layer: 'desk', codes: ['Enter', 'NumpadEnter'], onDown: () => { if (!trainingKey(() => training.press())) go(); } }),
+    registerKeys({ layer: 'desk', codes: ['Space'], onDown: go }),
+    registerKeys({ layer: 'desk', codes: ['ArrowRight'], onDown: () => cycle(1) }),
+    registerKeys({ layer: 'desk', codes: ['ArrowLeft'], onDown: () => cycle(-1) }),
+    // ↑ ↓ move through the grid while TRAINING is open (from visit 2), else they cycle the ships like → ←.
+    registerKeys({ layer: 'desk', codes: ['ArrowDown'], onDown: () => { if (!trainingKey(() => training.step(1))) cycle(1); } }),
+    registerKeys({ layer: 'desk', codes: ['ArrowUp'], onDown: () => { if (!trainingKey(() => training.step(-1))) cycle(-1); } }),
     registerKeys({
       layer: 'desk', codes: ['Escape'],
       onDown: () => {
+        if (store.getState().ui.trainingHoldSec !== null) { training.cancel(); return; }
         if (store.getState().ui.deskWindow !== null && !(phone.matches && sheetOpen)) { showTab('card'); return; }
         if (sheetOpen) { sheetOpen = false; paint(); }
       },
     }),
     registerKeys({ layer: 'desk', codes: ['KeyR'], onDown: () => toggleTab('repository') }),
     registerKeys({ layer: 'desk', codes: ['KeyI'], onDown: () => toggleTab('inbox') }),
-    ...REQUEST_KEY_CODES.map((codes, index) => registerKeys({ layer: 'desk', codes, onDown: () => requestRow(index) })),
+    registerKeys({ layer: 'desk', codes: ['KeyT'], onDown: () => toggleTab('training') }),
+    // The number keys request a REPOSITORY row there, and pick a card on TRAINING's first visit ([1], [2]).
+    ...REQUEST_KEY_CODES.map((codes, index) => registerKeys({
+      layer: 'desk', codes, onDown: () => { if (!trainingKey(() => training.card(index))) requestRow(index); },
+    })),
   ];
   const unsubPhase = store.subscribe((s) => s.run.phase, (phase) => { if (phase === 'desk') open(); else close(); });
   const unsubPick = store.subscribe((s) => s.ui.deskSelected, () => { if (shown) paint(); });
   const unsubTrace = store.subscribe((s) => s.run.threat.trace, () => { if (shown) paint(); });
   // 3b: the tab (openDesk opens the REPOSITORY after the last rm), the request and the read marks.
   const unsubTabs = store.subscribe(
-    (s) => `${s.ui.deskWindow ?? ''}|${s.run.repo.pick ?? ''}|${s.run.inbox.read.length}`,
+    (s) => `${s.ui.deskWindow ?? ''}|${s.run.repo.pick ?? ''}|${s.run.inbox.read.length}|${s.run.skills.pending.length}`,
     () => {
       if (!shown) return;
-      if (phone.matches && store.getState().ui.deskWindow === 'repository' && !sheetOpen) sheetOpen = true;
+      const tabNow = store.getState().ui.deskWindow;
+      if (phone.matches && (tabNow === 'repository' || tabNow === 'training') && !sheetOpen) sheetOpen = true;
       paint();
     },
   );
@@ -431,6 +468,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     repoHost.removeEventListener('click', onRepoClick);
     leaveBox.removeEventListener('click', onLeaveClick);
     inbox.destroy();
+    training.destroy();
     close();
     chart.destroy();
     root.remove();

@@ -275,6 +275,30 @@ function skillRow(state: Readonly<GameState>, id: SkillId): SkillRow | null {
   };
 }
 
+// The stamp a skill's effective version moving earns (03 §3.5; plan §2.7: TREE's mountSkillWatch emits 'skill-version'),
+// or null: a fall to OFF because the counting copy went offline (the kid's own repair or move) is said by the chip, not
+// stamped. Back to its full version: `AUTOBURN v2 RESTORED`; any other step: `AUTOBURN v2 → v1` (danger down, plain up).
+export interface SkillStamp {
+  text: string;
+  tone: 'good' | 'danger' | 'plain';
+  sound: 'down' | 'restored' | null;   // audio-cues: the lost version's falling sweep, the repair-won sparkle
+}
+
+export function skillVersionStamp(state: Readonly<GameState>, skill: SkillId, from: EffectiveVersion, to: EffectiveVersion): SkillStamp | null {
+  const name = TRAINING_TEXT.skills[skill].name;
+  const live = skillLive(state.memory, skill);
+  if (to < from) {
+    if (to === 0 && live.offline !== null) return null;
+    return { text: SKILLS_TEXT.skill.stampDown(name, from, to), tone: 'danger', sound: 'down' };
+  }
+  if (to > from) {
+    const full = live.nominal?.version ?? to;
+    if (to >= full) return { text: SKILLS_TEXT.skill.stampRestored(name, to), tone: 'good', sound: 'restored' };
+    return { text: SKILLS_TEXT.skill.stampDown(name, from, to), tone: 'plain', sound: null };
+  }
+  return null;
+}
+
 // --- The PACKET's skill chips (03 §3.4; plan §2.6; slice-4 §3 step 7) ---------------------------------------------------
 
 // What the PACKET shows of the unit's skills, over TREE's chips (systems/transmit.ts):

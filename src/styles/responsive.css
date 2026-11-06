@@ -498,3 +498,24 @@
     max-height: 56px;
   }
 }
+
+/* ── Slice 4: TRAINING on a phone (03 §4: "one of the desk's tabs, with one accordion per branch and the newest branch
+      open"). The sheet takes most of the screen; the branches stack, a tap on a branch's head opens it, the detail is one
+      column, and the cards stack. ── */
+@media (max-width: 768px) {
+  .desk-screen[data-tab='training'] .desk-card-win { height: 78vh; max-height: 78vh; }
+  .desk-training { padding: 6px 10px 12px; }
+  .tr-grid { flex-direction: column; gap: 6px; }
+  .tr-branch-head { cursor: pointer; padding: 7px 8px; }
+  .tr-branch-head::after { content: '▸'; margin-left: 8px; color: var(--desk-dim); }
+  .tr-branch.open .tr-branch-head::after { content: '▾'; }
+  .tr-branch:not(.open) .tr-branch-body { display: none; }
+  .tr-bank { font-size: 26px; }
+  .tr-choose { font-size: 20px; letter-spacing: 0.14em; }
+  .tr-card { width: 100%; }
+  .tr-detail { grid-template-columns: 1fr; }
+  .tr-detail .tr-demo-box { grid-row: auto; }
+  .tr-detail .tr-action { grid-column: 1; }
+  .tr-train { padding: 10px 12px; }
+  .tr-cell-name { font-size: 11px; }
+}

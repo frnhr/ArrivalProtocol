@@ -31,6 +31,7 @@ import { SKILL_TREE, SKILL_IDS, skillBlocks } from '@data/skills';
 import { layoutFor } from '@data/memory';
 import { NOISE_WORD } from '@data/map-text';
 import { TRAINING_TEXT } from '@data/training-text';
+import { FIRST_PICK_ENFORCED } from '@systems/training';
 import { CHARGE_ARRIVAL_FLOOR, CYCLES_LANDED_STEPS, FIRST_PICK_FLOOR_CYCLES, LOCK_RANGE_TAC } from '@data/tuning';
 
 // The TRAIN bar fills over this many wall seconds before the purchase lands (03 §4's juice: "the training bar fills over
@@ -357,8 +358,9 @@ export function trainingModel(state: Readonly<GameState>): TrainingModel {
       }))
     : [];
 
-  const blocked = deskBlocker(state) !== null;
-  const picked = firstPick && !blocked;
+  // desk.ts firstPickWaits' rule (read here directly: desk.ts imports this file).
+  const blocked = FIRST_PICK_ENFORCED && deskBlocker(state) !== null;
+  const picked = firstPick && deskBlocker(state) === null;
   const topUp = firstPick
     ? run.skills.grants.filter((grant) => grant.source === 'first-pick').reduce((sum, grant) => sum + grant.cycles, 0) : 0;
   const lastSkills = run.lastUnit?.skills ?? null;

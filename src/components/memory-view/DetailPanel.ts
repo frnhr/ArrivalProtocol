@@ -4,9 +4,11 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import {
   getFsTool, getRedundancy, getFreeTotal, getSegmentById, selectCorruption, shownIntegrity, isRepairable, repairableShipFile,
-  healthKnown, isInfected, type HealthSegment,
+  healthKnown, isInfected, isSkillFile, type HealthSegment,
 } from '@state/selectors';
-import { INTEGRITY_MAX, BAND_FAILING_MIN } from '@data/tuning';
+import { INTEGRITY_MAX, BAND_FAILING_MIN, LOCK_RANGE_TAC } from '@data/tuning';
+import { skillFileView } from '@systems/skills';
+import { SKILLS_TEXT } from '@data/script';
 import { isLaunchable, driverTouch, dropFactors } from '@systems/landing-rules';
 import { driverLanding } from '@systems/landing-hud';
 import { getDropSolution } from '@systems/drop-cache';
@@ -445,6 +447,18 @@ function renderDetailPanel(target: HTMLElement, seg: Segment, deps: RenderDetail
     <div class="detail-row"><span class="k">size</span><span class="v">${sizeText(seg.size)}</span></div>
     <div class="detail-row"><span class="k">state</span><span class="v ${stateClass}"${live}>${stateText}</span></div>`;
   html += infectionRowHtml(seg, deps.state);
+
+  // Slice 4 (03 §3.5, §4): a skill file's version, what it works as now and the way back
+  // (`v2 · 64% · WORKS AS v1 · REPAIR TO 80% FOR v2 (≈ 3 CHARGE)`), its LOCK RANGE, and what its health keeps (`v2 | v1 | off`).
+  if (isSkillFile(seg) && knownScanned) {
+    const view = skillFileView(seg);
+    const tone = view.offline !== null ? 'partial' : view.damaged || view.works === 0 ? 'warn' : 'good';
+    html += `<div class="detail-row skill-version-row"><span class="k">version</span><span class="v ${tone}">${escapeHtml(view.inspect)}</span></div>`;
+    if (seg.lock > 0) {
+      html += `<div class="detail-row"><span class="k">lock range</span><span class="v">${SKILLS_TEXT.skill.lock(LOCK_RANGE_TAC[seg.lock])}</span></div>`;
+    }
+    html += `<div class="detail-row"><span class="k">health keeps</span><span class="v skill-ticks-row">${escapeHtml(view.ticks)}</span></div>`;
+  }
 
   if (seg.type === 'redundancy') {
     const wasted = Math.max(0, seg.size - seg.used);

@@ -14,6 +14,7 @@ import { RUN_END_TEXT } from '@data/landing-text';
 import { chartModel } from '@systems/desk';
 import { drawChart, LANDSCAPE_ROTATE_DEG } from '@components/desk/chart-draw';
 import { MAP_TEXT } from '@data/map-text';
+import { runEndSkillLines } from '@systems/skills';
 import {
   RUN_END_ARM_SEC, RUN_END_ROW_GAP_SEC, RUN_END_COUNT_SEC, BEAM_OUT_BLACKOUT_SEC, STARS_PER_SHIP, REPORT_COUNT_HEARTBEAT,
 } from '@data/tuning';
@@ -69,6 +70,7 @@ interface TallyParts {
   svg: SVGSVGElement;
   colonies: HTMLElement;
   undelivered: HTMLElement;
+  skills: HTMLElement;
   next: HTMLElement;
 }
 
@@ -104,11 +106,13 @@ function buildTally(shipsEl: HTMLElement): TallyParts {
   const undelivered = make('div', 're-tally-undelivered');
   // Slice 3c: the world update's summary (paintNext).
   const next = make('div', 're-tally-next');
-  side.append(make('div', 're-tally-route', MAP_TEXT.tally.route), chart, colonies, undelivered, next);
+  // Slice 4 (02 §4, 03 §3.1): the tree's line, `TRAINED 12 of 54 · UNSPENT 3`, under the files that never arrived.
+  const skills = make('div', 're-tally-skills');
+  side.append(make('div', 're-tally-route', MAP_TEXT.tally.route), chart, colonies, undelivered, skills, next);
   const list = make('div', 're-tally-list');
   list.append(title, shipsEl);
   tally.append(list, side);
-  return { title, chart, svg, colonies, undelivered, next };
+  return { title, chart, svg, colonies, undelivered, skills, next };
 }
 
 export function mountRunEnd(store: Store<GameState>): () => void {
@@ -132,6 +136,10 @@ export function mountRunEnd(store: Store<GameState>): () => void {
   const bridgeEl = make('div', 're-bridge');
   bridgeEl.hidden = true;
   newBtn.after(bridgeEl);
+  // Slice 4: RUN END's `UNSPENT n`, under the rank.
+  const unspentEl = make('div', 're-unspent');
+  unspentEl.hidden = true;
+  rankEl.after(unspentEl);
 
   let model: RunEndModel | null = null;
   let closeModal: (() => void) | null = null;
@@ -230,6 +238,13 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     tally.colonies.textContent = report.coloniesLine;
     tally.undelivered.hidden = report.undeliveredLine === null;
     tally.undelivered.textContent = report.undeliveredLine ?? '';
+    // Slice 4: the cycles left unspent (decision 18: only shown) under the rank, and the tally's TRAINED line; the arm only.
+    // INTEGRATION (the lead): read TREE's run-end.ts model fields once it carries these lines.
+    const skillLines = runEndSkillLines(state.run);
+    tally.skills.hidden = skillLines === null;
+    tally.skills.textContent = skillLines?.tally ?? '';
+    unspentEl.hidden = skillLines === null;
+    unspentEl.textContent = skillLines?.unspent ?? '';
     paintNext(tally.next, report.next);
     bridgeEl.hidden = report.next === null;
     bridgeEl.replaceChildren(...(report.next === null ? [] : [

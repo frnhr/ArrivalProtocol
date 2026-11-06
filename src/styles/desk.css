@@ -632,3 +632,184 @@ body.reduced-motion .ib-row.tone-hollow, body.reduced-motion .ib-reader.tone-hol
   .desk-screen[data-tab='repository'] .desk-card-win, .desk-screen[data-tab='inbox'] .desk-card-win { height: 70vh; }
   .ib-head, .ib-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 56px; }
 }
+
+/* ── Slice 4: TRAINING [T] (TrainingWindow; 03-skills §4) ── */
+/* The tab's key is its own span (DeskTabs), so a narrow card drops the four keys before the names; its badge pulses while
+   cycles are unspent and the tab is closed. */
+.desk-tab-key { margin-left: 0.45em; }
+.desk-tab.pulse .desk-tab-badge { animation: tr-badge 1.6s ease-in-out infinite; }
+@keyframes tr-badge { 50% { box-shadow: 0 0 12px var(--desk-bright); filter: brightness(1.25); } }
+body.reduced-motion .desk-tab.pulse .desk-tab-badge { animation: none; }
+@media (max-width: 1439px) { .desk-tab-key { display: none; } }
+.desk-go.blocked { color: var(--desk-accent); border-color: var(--desk-accent-dim); letter-spacing: 0.24em; }
+
+/* The right window widens while TRAINING is open: the grid and its detail need the room the card does not. */
+.desk-screen[data-tab='training'] .desk-body { grid-template-columns: minmax(0, 1fr) 620px; }
+@media (max-width: 1439px) { .desk-screen[data-tab='training'] .desk-body { grid-template-columns: minmax(0, 1fr) 540px; } }
+.desk-training { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; }
+
+.tr-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--desk-edge); }
+.tr-titles { min-width: 0; }
+.tr-title { font-size: 12px; letter-spacing: 0.24em; color: var(--desk-accent); }
+.tr-demos { margin-top: 2px; font-size: 9.5px; letter-spacing: 0.16em; color: var(--desk-dim); }
+.tr-bank {
+  flex: 0 0 auto; font-family: 'VT323', monospace; font-size: 30px; line-height: 0.9; letter-spacing: 0.08em;
+  color: var(--desk-bright); text-shadow: 0 0 12px color-mix(in srgb, var(--desk-accent) 45%, transparent);
+}
+.tr-control { font-size: 11px; letter-spacing: 0.04em; color: var(--desk-text); }
+.tr-control-tag { margin-right: 8px; font-size: 9px; letter-spacing: 0.2em; color: var(--layer-mind); }
+.tr-topup { font-size: 11px; letter-spacing: 0.1em; color: var(--desk-good); }
+.tr-section { padding-bottom: 3px; border-bottom: 1px solid var(--desk-edge); font-size: 9px; letter-spacing: 0.28em; color: var(--desk-dim); }
+
+/* Visit 1: the big cards under CHOOSE YOUR FIRST SKILL. */
+.tr-choose {
+  margin-top: 4px; text-align: center; font-family: 'VT323', monospace; font-size: 24px; letter-spacing: 0.22em;
+  color: var(--desk-accent); text-shadow: 0 0 10px color-mix(in srgb, var(--desk-accent) 35%, transparent);
+}
+.tr-cards { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.tr-card {
+  position: relative; display: flex; flex-direction: column; gap: 6px; width: 250px; max-width: 100%; padding: 10px 12px 12px;
+  background: rgba(0, 0, 0, 0.25); border: 1px solid var(--desk-edge-bright); cursor: pointer; text-align: left;
+  font-family: 'JetBrains Mono', monospace; color: var(--desk-text);
+}
+.tr-card:hover { border-color: var(--desk-accent-dim); }
+.tr-card.selected { border-color: var(--desk-accent); box-shadow: 0 0 16px color-mix(in srgb, var(--desk-accent) 35%, transparent), inset 0 0 18px var(--desk-glow); }
+.tr-card-top { display: flex; align-items: center; gap: 8px; }
+.tr-card-name { font-size: 14px; letter-spacing: 0.14em; color: var(--desk-bright); }
+.tr-card-pitch { font-size: 11px; line-height: 1.4; color: var(--desk-text); }
+.tr-card-cost { font-size: 10px; letter-spacing: 0.16em; color: var(--desk-accent); }
+.tr-card-stamp {
+  position: absolute; top: 34%; left: 50%; padding: 2px 12px; transform: translate(-50%, -50%) rotate(-8deg);
+  font-family: 'VT323', monospace; font-size: 30px; letter-spacing: 0.2em; color: var(--desk-good);
+  border: 2px solid var(--desk-good); background: rgba(7, 5, 3, 0.75); animation: tr-stamp 0.32s ease-out both;
+}
+@keyframes tr-stamp { from { transform: translate(-50%, -50%) rotate(-8deg) scale(1.8); opacity: 0; } }
+.desk-training.reduced .tr-card-stamp { animation: none; }
+.tr-saved { text-align: center; font-size: 12px; letter-spacing: 0.16em; color: var(--desk-bright); }
+.tr-later { text-align: center; font-size: 10px; letter-spacing: 0.2em; color: var(--desk-dim); }
+
+/* The mini-demo (03 §4: a 4-second loop): a planet, the ring, and what the cell does to the path. */
+.tr-demo-box { display: flex; justify-content: center; }
+.tr-demo { width: 120px; height: 80px; overflow: visible; }
+.tr-demo-planet { fill: var(--desk-accent-dim); }
+.tr-demo-ring { fill: none; stroke: var(--desk-good); stroke-opacity: 0.25; stroke-width: 7; }
+.tr-demo-flyby { fill: none; stroke: var(--desk-dim); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.tr-demo-loop, .tr-demo-wide, .tr-demo-round { fill: none; stroke: var(--desk-bright); stroke-width: 1.4; }
+.tr-demo-round { stroke: var(--desk-good); }
+.tr-demo-ship { fill: var(--desk-bright); }
+.tr-demo-bracket { fill: none; stroke: var(--desk-accent); stroke-width: 3; stroke-linecap: square; stroke-dasharray: 80; }
+.tr-demo-lz { fill: none; stroke: var(--desk-good); stroke-width: 2; }
+.tr-demo-capture .tr-demo-loop { animation: tr-loop-in 4s ease-in-out infinite; }
+.tr-demo-capture .tr-demo-flyby { animation: tr-flyby-out 4s ease-in-out infinite; }
+.tr-demo-green .tr-demo-wide { animation: tr-flyby-out 4s ease-in-out infinite; }
+.tr-demo-green .tr-demo-round { animation: tr-loop-in 4s ease-in-out infinite; }
+.tr-demo-lock .tr-demo-bracket { animation: tr-bracket 4s ease-in-out infinite; }
+.tr-demo-low .tr-demo-lz, .tr-demo-plain .tr-demo-round { animation: tr-loop-in 4s ease-in-out infinite; }
+@keyframes tr-loop-in { 0%, 35% { opacity: 0; } 60%, 92% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes tr-flyby-out { 0%, 40% { opacity: 1; } 65%, 100% { opacity: 0.15; } }
+@keyframes tr-bracket { 0% { stroke-dashoffset: 80; } 50%, 90% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 80; } }
+.desk-training.reduced .tr-demo * { animation: none !important; opacity: 1 !important; stroke-dashoffset: 0 !important; }
+
+/* From visit 2: the grid, one column per open branch, joined by circuit traces that light as nodes are held. */
+.tr-grid { display: flex; gap: 12px; }
+.tr-branch { flex: 1 1 0; min-width: 0; border: 1px solid var(--desk-edge); background: rgba(0, 0, 0, 0.18); }
+.tr-branch-head {
+  display: flex; width: 100%; justify-content: space-between; padding: 4px 8px; cursor: default;
+  background: linear-gradient(180deg, var(--desk-glow), transparent); border: none; border-bottom: 1px solid var(--desk-edge);
+  font-family: 'JetBrains Mono', monospace; font-size: 9.5px; letter-spacing: 0.24em; color: var(--desk-accent);
+}
+.tr-branch-skill { color: var(--desk-bright); letter-spacing: 0.16em; }
+.tr-branch-body { display: flex; gap: 10px; padding: 8px; }
+.tr-col { display: flex; flex-direction: column; min-width: 0; }
+.tr-col-main { flex: 1.35 1 0; }
+.tr-col-side { flex: 1 1 0; gap: 0; }
+.tr-side-label { margin-bottom: 4px; font-size: 8.5px; letter-spacing: 0.26em; color: var(--desk-dim); }
+.tr-side-row { display: flex; align-items: stretch; margin-bottom: 18px; }
+.tr-side-row .tr-cell { flex: 1 1 auto; }
+.tr-trace { align-self: center; width: 2px; height: 14px; background: var(--desk-edge-bright); }
+.tr-trace.lit { background: var(--desk-accent); box-shadow: 0 0 6px var(--desk-accent); }
+.tr-trace-side { align-self: center; width: 10px; height: 2px; margin-right: 2px; }
+.tr-cell {
+  display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; min-width: 0; cursor: pointer; text-align: left;
+  background: transparent; border: 1px solid var(--desk-edge-bright); font-family: 'JetBrains Mono', monospace; color: var(--desk-text);
+}
+.tr-cell-name { font-size: 11.5px; letter-spacing: 0.1em; color: var(--desk-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr-cell-mode { font-size: 9px; letter-spacing: 0.12em; color: var(--desk-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr-cell-foot { display: flex; justify-content: space-between; gap: 6px; font-size: 9.5px; letter-spacing: 0.08em; }
+.tr-cell-cost { color: var(--desk-accent); white-space: nowrap; }
+.tr-cell-status { color: var(--desk-dim); text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-cell:hover { border-color: var(--desk-accent-dim); }
+.tr-cell.look-owned { background: color-mix(in srgb, var(--desk-accent) 78%, transparent); border-color: var(--desk-accent); }
+.tr-cell.look-owned .tr-cell-name, .tr-cell.look-owned .tr-cell-mode, .tr-cell.look-owned .tr-cell-cost, .tr-cell.look-owned .tr-cell-status { color: var(--desk-bg); }
+.tr-cell.look-pending { background: color-mix(in srgb, var(--desk-accent) 30%, transparent); border-color: var(--desk-accent); border-style: dashed; }
+.tr-cell.look-pending .tr-cell-status { color: var(--desk-bright); }
+.tr-cell.look-affordable { border-color: var(--desk-accent); box-shadow: 0 0 10px color-mix(in srgb, var(--desk-accent) 40%, transparent); animation: tr-glow 2.4s ease-in-out infinite; }
+@keyframes tr-glow { 50% { box-shadow: 0 0 2px color-mix(in srgb, var(--desk-accent) 20%, transparent); } }
+.desk-training.reduced .tr-cell.look-affordable { animation: none; }
+.tr-cell.look-dim { opacity: 0.55; }
+.tr-cell.look-lost { border-color: var(--desk-warn); border-style: dashed; }
+.tr-cell.look-lost .tr-cell-status { color: var(--desk-warn); }
+.tr-cell.look-closed, .tr-cell.look-unbuilt { opacity: 0.35; cursor: default; }
+.tr-cell.selected { outline: 1px solid var(--desk-bright); outline-offset: 2px; }
+.tr-closed { display: flex; flex-direction: column; gap: 2px; }
+.tr-closed-row { display: flex; justify-content: space-between; padding: 3px 8px; border: 1px dashed var(--desk-edge); opacity: 0.6; font-size: 9.5px; letter-spacing: 0.2em; color: var(--desk-dim); }
+.tr-legend { font-size: 8.5px; letter-spacing: 0.24em; color: var(--desk-dim); text-align: right; }
+
+/* The selected cell's detail: its demo, what it is, NEXT SHIP, and TRAIN with its bar. */
+.tr-detail { display: grid; grid-template-columns: 124px minmax(0, 1fr); gap: 4px 12px; padding: 8px 10px; border: 1px solid var(--desk-edge-bright); background: rgba(0, 0, 0, 0.25); }
+.tr-detail-head { grid-column: 1 / -1; font-size: 13px; letter-spacing: 0.14em; color: var(--desk-bright); }
+.tr-detail .tr-demo-box { grid-row: 2 / span 2; align-items: center; }
+.tr-detail-lines { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; letter-spacing: 0.04em; line-height: 1.35; }
+.tr-detail-line.line-0 { color: var(--desk-accent); letter-spacing: 0.14em; }
+.tr-detail-line.line-2 { color: var(--desk-text); }
+.tr-detail-status { color: var(--desk-dim); letter-spacing: 0.1em; }
+.tr-detail.look-lost .tr-detail-status { color: var(--desk-warn); }
+.tr-detail.look-pending .tr-detail-status { color: var(--desk-good); }
+.tr-detail .tr-action { grid-column: 2; }
+.tr-action { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.desk-training.first-pick .tr-action { align-self: center; width: 420px; max-width: 100%; }
+.tr-train {
+  padding: 7px 14px; cursor: pointer; font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.18em;
+  color: var(--desk-bg); background: var(--desk-accent); border: 1px solid var(--desk-bright);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--desk-accent) 40%, transparent);
+}
+.tr-train:hover { background: var(--desk-bright); }
+.tr-train.waiting { color: var(--desk-dim); background: transparent; border-color: var(--desk-edge-bright); box-shadow: none; cursor: default; }
+.tr-train .keycap { color: inherit; border-color: currentColor; }
+.tr-action.kind-restore .tr-train:not(.waiting) { background: var(--desk-warn); border-color: var(--desk-warn); }
+.tr-hold { position: relative; height: 18px; border: 1px solid var(--desk-edge-bright); visibility: hidden; }
+.tr-hold.on { visibility: visible; }
+.tr-hold-fill {
+  position: absolute; inset: 0 auto 0 0; width: 0;
+  background: color-mix(in srgb, var(--desk-accent) 42%, transparent); box-shadow: 0 0 10px color-mix(in srgb, var(--desk-accent) 50%, transparent);
+}
+.tr-hold-text {
+  position: relative; padding: 0 6px; font-size: 9.5px; line-height: 16px; letter-spacing: 0.06em; text-align: center;
+  color: var(--desk-bright); text-shadow: 0 0 3px var(--desk-bg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tr-why { font-size: 10px; letter-spacing: 0.1em; color: var(--desk-dim); }
+
+/* This desk's purchases with UNDO; the AHEAD row and the packet preview; the last unit's line. */
+.tr-pending { display: flex; flex-direction: column; gap: 2px; }
+.tr-pending-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 3px 4px; border-bottom: 1px dotted var(--desk-edge); font-size: 11px; color: var(--desk-bright); }
+.tr-undo {
+  padding: 1px 8px; cursor: pointer; background: transparent; border: 1px solid var(--desk-edge-bright);
+  font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.2em; color: var(--desk-dim);
+}
+.tr-undo:hover { color: var(--desk-accent); border-color: var(--desk-accent); }
+.tr-ahead { display: flex; flex-direction: column; gap: 3px; padding: 6px 8px; border: 1px solid var(--desk-edge); background: rgba(0, 0, 0, 0.2); }
+.tr-ahead-line { font-size: 10.5px; letter-spacing: 0.06em; color: var(--desk-text); }
+.tr-preview { font-size: 10.5px; letter-spacing: 0.06em; color: var(--desk-accent); }
+.tr-preview.tone-warn { color: var(--desk-warn); }
+.tr-preview.tone-over { color: var(--hollow, #ff2a55); font-weight: 700; }
+.tr-hint { font-size: 10px; letter-spacing: 0.06em; color: var(--desk-text); }
+.tr-last { font-size: 9.5px; letter-spacing: 0.18em; color: var(--desk-dim); text-align: center; }
+
+@media (max-height: 760px) {
+  .desk-training { gap: 6px; padding-top: 6px; }
+  .tr-cell { padding: 4px 7px; }
+  .tr-trace { height: 9px; }
+  .tr-side-row { margin-bottom: 11px; }
+  .tr-detail .tr-demo-box .tr-demo { width: 96px; height: 64px; }
+  .tr-detail { grid-template-columns: 100px minmax(0, 1fr); }
+}

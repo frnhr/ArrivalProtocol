@@ -4,6 +4,9 @@ import { on } from '@systems/events';
 import { requireById } from '@components/dom';
 import { screenFocus } from './focus';
 import { STAMP_TEXT, FAULT_STAMP } from '@data/script';
+import type { SkillId } from '@/types/skill';
+import { skillVersionStamp } from '@systems/skills';
+import { TRAINING_TEXT, BOOT_SKILL_TEXT } from '@data/training-text';
 import { ZONE_STAMP_TEXT } from '@data/zone-text';
 import { HOLLOW_DEAL, HOLLOW_VERB } from '@data/hollow-text';
 import { racksText } from '@/types/zone';
@@ -62,6 +65,18 @@ export function showStamp(text: string, tone: StampTone, kind: string = text): b
   return true;
 }
 
+// The badge flicker on a version change (03 §4 juice: 400 ms; reduced motion: the colour changes without flickering).
+const SKILL_FLICKER_MS = 400;
+function flickerSkillBadges(skill: SkillId, reduced: boolean): void {
+  if (reduced) return;
+  document.querySelectorAll<HTMLElement>(`.seg[data-skill="${skill}"] .skill-badge`).forEach((badge) => {
+    badge.classList.remove('flicker');
+    void badge.offsetWidth;
+    badge.classList.add('flicker');
+    setTimeout(() => badge.classList.remove('flicker'), SKILL_FLICKER_MS);
+  });
+}
+
 export function mountStamps(store: Store<GameState>): () => void {
   if (layer) throw new Error('mountStamps: already mounted');
   storeRef = store;
@@ -106,6 +121,17 @@ export function mountStamps(store: Store<GameState>): () => void {
     on('last-rm-lost', () => { showStamp(THREAT_TEXT.lastRmStamp, 'danger'); }),
     on('all-pods-down', () => {
       if (store.getState().landing.pods.every((record) => record.fate.kind === 'down')) showStamp(LANDING_STAMP_TEXT.allDown, 'good');
+    }),
+    // Phase 3 slice 4 (03 §4; plan §2.7): the boot's TRAINED line stamps `AUTOBURN v2 ONLINE`; a skill's effective version
+    // moving stamps the step (`AUTOBURN v2 → v1`) or the way back (`AUTOBURN v2 RESTORED`), and its chip's badge flickers
+    // for 400 ms (a colour change with reduced motion). A copy the kid took offline (a repair, a move) stamps nothing on
+    // the way down: the repair it is getting is the point (skillVersionStamp).
+    on('skill-trained', ({ skill, level }) => { showStamp(BOOT_SKILL_TEXT.online(TRAINING_TEXT.skills[skill].name, level.version), 'good'); }),
+    on('skill-version', ({ skill, from, to }) => {
+      const stamp = skillVersionStamp(store.getState(), skill, from, to);
+      if (stamp === null) return;
+      showStamp(stamp.text, stamp.tone, `skill-version-${skill}`);
+      flickerSkillBadges(skill, store.getState().ui.reducedMotion);
     }),
   ];
 

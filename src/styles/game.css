@@ -3502,3 +3502,58 @@ body.reduced-motion .run-end.tone-victory::before { animation: none; opacity: 0.
   .phone-bar .preset-btn { min-height: 30px; font-size: 17px; }
   .phone-bar .burn-btn { height: 46px; }
 }
+
+/* ── Slice 4 (Track UI): the skill bits (03-skills §3.5, §4) ── */
+/* A skill file's chip in the MIND: the version badge where the size was (`v2`, or `v2▸v1` in the warning colour), and its
+   health bar's ticks at 80, 50 and 25 (the version each zone keeps), labelled under the bar on a wide chip. The badge
+   flickers for 400 ms when the version moves (components/hud/Stamp.ts); reduced motion only changes its colour. */
+.seg-meta .seg-badge.skill-badge { color: var(--accent-bright); border-color: var(--accent); font-size: 8px; letter-spacing: 0.04em; text-transform: none; }
+.seg-meta .seg-badge.skill-badge.damaged { color: var(--warn); border-color: var(--warn); }
+.seg-badge.skill-badge.flicker { animation: skill-flicker 0.4s steps(2) 2; }
+@keyframes skill-flicker { 50% { opacity: 0.15; } }
+.seg-bar.skill-bar { position: relative; overflow: visible; }
+.skill-tick { position: absolute; top: -1px; width: 1px; height: 4px; background: var(--text-dim); opacity: 0.8; }
+.skill-ticks { display: flex; margin-top: -1px; font-size: 6.5px; line-height: 1; letter-spacing: 0.02em; color: var(--text-dim); }
+.skill-ticks > span { overflow: hidden; white-space: nowrap; text-align: center; }
+.skill-ticks > span + span { border-left: 1px solid color-mix(in srgb, var(--text-dim) 40%, transparent); }
+.detail-row .v.skill-ticks-row { letter-spacing: 0.08em; }
+
+/* The Skills window's version line under a skill's status: `▮▮▯ v2 · LOCK 270 · WORKS AS v1 · REPAIR TO 80% FOR v2 (≈ 3 CHARGE)`. */
+.skill-version { display: flex; align-items: baseline; gap: 6px; font-size: 10px; letter-spacing: 0.08em; color: var(--good); }
+.skill-version-pips { flex: 0 0 auto; font-size: 11px; letter-spacing: 0.02em; color: var(--accent-bright); }
+.skill-version[data-tone='warn'] { color: var(--warn); }
+.skill-version-text { min-width: 0; }
+
+/* The LANDING REPORT's cycles line (rolled up under the charge) and the first-pick top-up. */
+.lr-cycles {
+  font-family: 'VT323', monospace; font-size: 22px; letter-spacing: 0.12em; color: var(--accent-bright); text-align: center;
+  animation: wr-in 0.5s ease-out both;
+}
+.lr-cycles.perfect { color: var(--star); text-shadow: 0 0 14px var(--star-glow); }
+.lr-cycles.bump { animation: lr-cycle-bump 0.18s ease-out; }
+@keyframes lr-cycle-bump { from { transform: scale(1.06); } }
+.lr-cycles[hidden], .lr-topup[hidden] { display: none; }
+.lr-topup { font-size: 12px; letter-spacing: 0.14em; color: var(--good); text-align: center; animation: wr-in 0.5s ease-out both; }
+.reduced .lr-cycles, .reduced .lr-topup { animation: none; }
+
+/* RUN END's UNSPENT under the rank, and the RUN TALLY's TRAINED line. */
+.re-unspent { font-size: 12px; letter-spacing: 0.22em; color: var(--report-dim); }
+.re-unspent[hidden], .re-tally-skills[hidden] { display: none; }
+.re-tally-skills { font-size: 11px; letter-spacing: 0.14em; color: var(--accent-bright); text-align: left; }
+
+/* The PACKET's skill chips: the version badge, the files trained here (locked: ◀ CHART to undo), PACK AS. */
+.tx-chip-badge { flex: 0 0 auto; padding: 0 4px; border: 1px solid var(--accent); font-size: 9px; letter-spacing: 0.04em; color: var(--accent-bright); }
+.tx-chip-badge.damaged { color: var(--warn); border-color: var(--warn); }
+.tx-chip.skill-chip .tx-chip-name { letter-spacing: 0.02em; }
+.tx-chip.skill-chip .tx-chip-head { gap: 5px; }
+.tx-chip.skill-fresh { border-color: var(--accent); border-style: dashed; background: color-mix(in srgb, var(--accent) 6%, var(--report-bg)); }
+.tx-chip.skill-fresh .tx-chip-note { color: var(--accent-bright); }
+.tx-chip-group { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tx-packas {
+  align-self: stretch; padding: 3px 8px; cursor: pointer; text-align: left;
+  border: 1px dashed color-mix(in srgb, var(--transmit-line) 55%, transparent); background: transparent;
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.08em; color: var(--transmit-line);
+}
+.tx-packas:hover { border-style: solid; box-shadow: 0 0 8px var(--transmit-glow); }
+.tx-packas.on { border-style: solid; color: var(--report-bg); background: var(--transmit-line); }
+.transmit-screen.sending .tx-packas { opacity: 0; transition: opacity 0.3s; }

@@ -554,6 +554,9 @@ export const SKILLS_TEXT = {
     restoreNever: (version: number): string => `LOST v${version} · NO DESK AHEAD`,
     // A skill whose flight words are not built yet (4c, 4d, slice 6): its version and what it does.
     ready: (version: number): string => `v${version} READY`,
+    // The stamps when a skill's effective version moves (03 §3.5; plan §2.7): `AUTOBURN v2 → v1`, `AUTOBURN v2 RESTORED`.
+    stampDown: (skill: string, from: number, to: number): string => `${skill} v${from} → ${to === 0 ? 'OFF' : `v${to}`}`,
+    stampRestored: (skill: string, version: number): string => `${skill} v${version} RESTORED`,
   },
 } as const;
 
