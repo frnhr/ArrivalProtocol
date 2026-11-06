@@ -14,12 +14,15 @@ import { requireById, requireIn } from '@components/dom';
 
 // The parts that ride in the bar, in the bar's order (top to bottom): the Engine window's, and (slice 1a, 01-landing §4
 // "LAUNCH joins PhoneFlightBar") the POD BAY's launch button, shown only while landing (body.landing: its own rule in
-// landing.css, since the bar is outside the .landing-only window).
+// landing.css, since the bar is outside the .landing-only window). Slice 4c: LAUNCH is a hold for AUTODROP v1 (its pointer
+// down and up are PodBayWindow's), and AUTODROP's [G] button rides beside it.
 const BAR_PARTS = [
   { window: '.engine-win', part: ':scope .engine-body > .fuel-block' },
   { window: '.engine-win', part: ':scope .engine-body .preset-row' },
   { window: '.podbay-win', part: '#podLaunchBtn' },
   { window: '.engine-win', part: '#burnBtn' },
+  // Slice 4c: AUTODROP's [G] under LAUNCH and BURN's row (v2's pass, v3's plan; hidden by PodBayWindow without them).
+  { window: '.podbay-win', part: '#pbGoBtn' },
   { window: '.engine-win', part: '#autoBtn' },
   { window: '.engine-win', part: '#acceptBtn' },
   { window: '.engine-win', part: '#beamBtn' },

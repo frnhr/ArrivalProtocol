@@ -56,8 +56,10 @@ toDesk(store);
 
 // --- Desk 1: the required pick ---------------------------------------------------------------------------------------------
 check('the first pick is enforced: SET COURSE throws until it is made', deskBlocker(store.getState()) === 'first-pick' && throws(() => setCourse(store, 2)) && store.getState().run.phase === 'desk');
-check('…visit 1 opens AUTOBURN v1 alone: v2 and LOCK RANGE are closed, the other branches too',
-  trainCell(store, 'autoburn', v(2)) === 'closed' && trainCell(store, 'autoburn', lock(1)) === 'closed' && trainCell(store, 'sentry', v(1)) === 'closed');
+// Slice 4c (plan R19): the first desk's two roots, AUTOBURN v1 and AUTODROP v1 (the second card).
+check('…visit 1 opens AUTOBURN v1 and AUTODROP v1: their v2s and LOCK RANGE are closed, the other branches too',
+  openBranchesAt(store.getState(), 1).join() === 'autoburn,autodrop' && trainCell(store, 'autoburn', v(2)) === 'closed'
+    && trainCell(store, 'autoburn', lock(1)) === 'closed' && trainCell(store, 'autodrop', v(2)) === 'closed' && trainCell(store, 'sentry', v(1)) === 'closed');
 check('…the pick (3 of the floor\'s 3) is pending, the bank 0, and the desk free', trainCell(store, 'autoburn', v(1)) === null
   && store.getState().run.skills.pending.length === 1 && bankOf(store.getState().run.skills) === 0 && deskBlocker(store.getState()) === null);
 check('…buying it twice is refused (owned)', trainCell(store, 'autoburn', v(1)) === 'owned');

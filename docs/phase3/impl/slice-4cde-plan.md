@@ -1531,3 +1531,139 @@ Changed suites:
   and `skills/ui-models` (AUTOBURN's cells: v3 reads `NEEDS v2 FIRST`).
 
 The integration check with AUTODROP v3 (§8.3) is the lead's, at the ORBIT merge.
+
+## Deviations (Track DROP)
+
+Recorded by Track DROP (branch `drop-4c`, from 0a6b211, SENTRY and ORBIT merged in). §3 is built and AUTODROP's `built` is 3.
+No save bump and no saved field: the machine runs on the pinned `AutodropState` (`sent` doubles as "launched during this hold"
+for v1, which R4's `'released'` reads).
+
+### What is built
+
+- **`autodrop-plan.ts`** (pure): `centredVolley` and the lower `volleySlots` (n = min(bay by the first launch, room, what
+  fits); first = max(centre − (n − 1) × cadence × 0.5 + offset, the earliest launch), the last slot an edge margin inside
+  the sure part), `bayBy` (the double window), `passRows` / `passCounts` (v2's rows and the first-time prefill),
+  `planLanding` (the counts, the schedule, never-fits with `bestRepairForDrop`, the wrong-split leftovers last, forecast
+  rows, the one-entry memo), `dropDemoOffset`, `windowsAt` / `windowsAhead` (windows in absolute game time).
+- **`autodrop.ts`**: the resolver (v1 held on the SHIP screen; v2/v3 armed, from either screen; every version
+  `holdsTactical`, R7), `autodropKeyDown` / `autodropKeyUp` (R4), `pressAutodrop` (with its refusals, said on the TERMINAL
+  with the buzz), `setPassCount`, the post tick (the Core thread claimed `AUTODROP_CLAIM_TAC` before a volley, let go between
+  windows, the wait; PASS DONE / PLAN DONE; the steps down v3 → v2 → v1 → OFF and `'offline'`; the hold let go on a switch
+  to the MIND, a pause or the file failing), `autodropLineOf` (AD rows and L13 tails), `autodropTutorialDue`,
+  `autodropStatus`, `autodropDebug`, `autodropLaunched`, `autodropLandingOver`.
+- **`landing.ts`**: the kid's drop demos in `requestLaunch`; `controllerTick` tells AUTODROP of its launches; BULLSEYE on the
+  echo; `endNow` puts AUTODROP at rest with its thread released.
+- **`landing-controls.ts`**: [L] down and up (`launchDown` / `launchUp`, shared with the POD BAY's and the phone bar's
+  LAUNCH, now a pointer hold), [G].
+- **POD BAY** (`landing-hud.ts bayWindowModel.autodrop`, `PodBayWindow.ts`, `index.html #pbAutodrop/#pbPass/#pbPlan`,
+  `landing.css`): the AUTODROP pip in the title's pips, the key line and the [G] button, v2's `A [−] n [+]` rows with
+  `BAY HAS n BY THEN` / `n FIT THIS PASS`, v3's plan table (six volleys, forecast rows dim, the check line, the never-fits
+  and `+n PASSES` notes). The held LAUNCH reads `AUTODROP HOLDS · IT WAITS FOR THE CENTRE`. On a phone [G] rides in the
+  flight bar under the LAUNCH / BURN row.
+- **Suites:** `skills/autodrop-plan` (pure, < 1 s plus a few arm locks; the words' worst cases, review m6),
+  `skills/autodrop-flow` (store and keys on run 1's arm), `skills/autodrop-sweep` (BALANCE_ONLY), the shared fixture
+  `skills/autodrop-arm.ts`; DROP's lines in `skills/foundation`, `ui-models`, `training-flow`, and a check in
+  `landing/pace-landing`.
+
+### Deviations
+
+1. **Two more AD rows.** Beside AD-hold, AD-fly, AD-wait and AD-done: `landing-AD-held` (`HOLD [L] — AUTODROP · LZ-B ×2 ·
+   first in 0:10`, while held) and `landing-AD-armed` (armed, a window open that the pass or plan leaves alone: `AUTODROP
+   ARMED — next LZ-A ×2 in 7:30 · [G] to cancel`). Without the second the strip offered L4–L6's manual [L] inside a window
+   the plan had already flown. AD-fly also stands from GET READY's lead (the window's sure part within 8 tac s), not only
+   8 tac s before the volley's first slot, which comes later when the volley is centred.
+2. **The pass's windows** (§3.3 "until one period after armedAtTSec"): a window belongs to the pass when its sure part ends
+   within (armedAt + lead, armedAt + lead + period], lead being one cadence and the edge margin. A [G] pressed at the tail of
+   a window (its sure part over or too short for a launch) gives that LZ its next window instead of ending the pass at once
+   with nothing sent. PASS DONE comes when every LZ with pods still to send has no window of the pass left (or is full),
+   judged by the windows' times, not on the first tick no volley fits: a passing factor (Sensor Interp or a driver under the
+   kid's REPAIR, a reloading bay) no longer ends a pass with nothing sent. PLAN DONE likewise waits while Sensor Interp,
+   Nav Plotter or a driver aboard is offline. L13's `· [G] AUTODROP` tail shows only while a set count has a window it fits
+   this pass (found by the sweep: on a ship of WIDE DROP windows the kept counts re-armed empty passes).
+3. **New tuning numbers in the 4c block** (each with its WHY): `AUTODROP_EDGE_MARGIN_TAC` 0.1 (a slot never on the sure
+   part's close: the controller launches up to a tick late on a solution up to 0.1 tac s old), `AUTODROP_RELEASE_MARGIN_TAC`
+   2 (claim/release hysteresis; a double window keeps its thread), `AUTODROP_DAMAGED_ALERT_SEC` (= the DONE line's).
+4. **Per-pod sure parts for v3** come from the window's geometry: the pod the solution was solved for keeps the solved
+   edges; any other pod's sure half-length is the open half-length × (half-width − s) ÷ half-width (the dot sweeps a
+   bracket at an even rate on the band's near-circular orbits). No re-solve per pod. `decidePlan` checks the named pod's
+   own span at the moment of launch.
+5. **The volley is not stored.** Each tick recomputes it from the window and "now" (first = max(the centred slot, now + the
+   bay's cadence left)), so after the first launch the rest follow the cadence and the count shrinks by itself when a hold
+   or a claim comes late. No `wasInWindow` module variable: the arm chime is `'autodrop'`'s (`audio-cues`, unchanged). The
+   plan memo lives in `autodrop-plan.ts`, not `autodrop.ts` (plan §2.3's list otherwise holds; the world reset forgets it).
+6. **`AutodropRefusal` gains `'ONLY v1'`** (v1 has no [G]: `AUTODROP v1 — HOLD [L] IN A WINDOW`). The refusals buzz
+   (`'refused'` with `AUTODROP|<word>`) and say `> [G] …` on the TERMINAL; the strip's flash needs REFUSAL_LINES entries
+   (patch requested). A finished landing refuses as `NOT LANDING`.
+7. **`LandingPlan` gains `laterPasses`** (whole passes past `AUTODROP_PLAN_MAX_PASSES`, for the table's `+n PASSES`).
+8. **Signatures added**: `autodropLaunched(store, pod, view)`, `autodropLandingOver(store)`, `restAutodrop(draft, end,
+   atAi)`, `repairWord`, `v3GoesLower`, `autodropBayModel`, `launchDown` / `launchUp`, `nextVolley`, `passCounts`,
+   `podSureSpan`, `windowsAt`, `windowsAhead`, `forgetPlanMemo`. `bayBy` keeps the foundation's signature (its
+   `cadenceTac` is unused: the launches it is given are already spaced).
+9. **v3 → v2** resets `armedAtTSec` to the moment of the step and takes as the pass's numbers the plan's count rows within
+   one period from then (leftover rows are not numbers: v2 has no wrong split). An eaten file ends the machine `'off'` with
+   the warning alert, as a bite to OFF does.
+10. **The lessons**: `tut-autodrop-v1` is due while `end === 'released'`; the director shows it after the window (AD rows are
+    `now`, a tutorial waits). v2's and v3's are due on a landing where AUTODROP works as exactly that version, unarmed, with
+    pods aboard.
+11. **BULLSEYE** is on the TERMINAL echo (`> pod01 ... LANDED · BULLSEYE`). The plot's float (`+200 LANDED · LZ-A ·
+    BULLSEYE`) needs NavPlotWindow (ORBIT's) to pass the launch's source: `TOUCHDOWN_FLOAT_TEXT.lz` already takes it (patch
+    requested).
+12. **The GROUND TRACK's planned-volley ticks** (optional) are not drawn. The six mini-demos stay plain (the fix pass's).
+13. **AD-armed stands only over a sure window of an LZ the machine flies**; a WIDE DROP window, or one the pass leaves alone,
+    keeps L4–L6's manual [L] (a kid may launch by hand while AUTODROP is armed: `requestLaunch` lets the player through).
+14. **TRAINING's default selection** (lead's `training-model defaultSel`) now picks AUTODROP v1, buyable, over the RESTORE of
+    a lost AUTOBURN v1 at desk 2; `ui-models`' eaten-cell check selects v1 itself. The lead may prefer RESTORE first.
+
+### Measurements
+
+- **AIM (R5)**, `skills/autodrop-flow`, CORMORANT's LZ-A (6 pods, STANDARD) held through one window: trained (demos ±0.05:
+  AIM 99) sends 4 pods at −3, −1, +1, +3 tac s, mean offset 0.02; untrained (AIM 40) sends 3, mean offset 1.52 tac s late.
+  HALCYON's 2-pod LZ-B lands both centred (−0.96, +1.04) and BULLSEYE.
+- **Landed % by version** (`skills/autodrop-sweep`, BALANCE_ONLY; a kid who obeys the strip, the ship locked mid-band; % of
+  the colonists landed in an LZ with room; v2/v3 kids launch by hand what the strip still asks of them):
+
+  | Ship (pods) | kid | v0 | v1 | v2 | v3 |
+  |---|---|---|---|---|---|
+  | HALCYON (5) | healed | 100 | 100 | 100 | 100 |
+  | HALCYON | as arrived | 100 | 100 | 100 | 100 |
+  | HALCYON | busy in the MIND | 100 | 100 | 100 | 100 |
+  | CORMORANT (9) | healed | 100 | 100 | 100 | 100 |
+  | CORMORANT | as arrived | 67 | 67 | 67 | 67 |
+  | CORMORANT | busy | 89 | 89 | 89 | 100 |
+  | VESPER (16) | healed | 88 | 88 | 94 | 100 |
+  | VESPER | as arrived | 69 | 75 | 81 | 75 |
+  | VESPER | busy | 69 | 50 | 81 | 69 |
+
+  - "As arrived" CORMORANT's drivers carry their transit damage, so every window is a WIDE DROP on a mid-band orbit:
+    AUTODROP has no sure part to fly (v1 never flies a WIDE DROP, R4), and every version lands what the kid does by hand.
+    A kid who REPAIRs while landing ("busy") gives AUTODROP its windows back; v3 then lands all 9.
+  - On the healthy ark (VESPER healed) the strip's exact kid lands 88% by hand and 100% with v3 in the same 7 windows
+    (169 wall s each), 94% with v2 (the kid's own [L] where the strip still asks for one costs a pod). The "really felt"
+    gap for this exact kid is the attention v2/v3 free (they fly from the MIND) more than the score; slice 8 should judge it
+    with a sloppy kid.
+  - Damaged VESPER (Sensor Interp failing, LZ-C NEVER FITS): v3's plan takes 494 wall s for 75% (11 volleys over up to 8
+    passes, LZ-C's pods sent last at the wrong-split rate), and with the busy kid it runs past the sweep's 1,500 wall s
+    (69%). v3 waits for windows that fit instead of throwing WIDE DROPs: slow on a blind ship, a slice 8 question.
+  - VESPER busy v1 (50%) is below v0: the v1 kid holds [L] only on AD-hold, and the busy kid's REPAIRs take queued drivers
+    offline mid-volley, so held volleys end short. Noted, not tuned.
+- **Thread waits (R8)**: 0 in all 36 sweep landings, including the busy kid (its REPAIRs are short and two threads are
+  rarely both busy at T−8). A wait only shows when the MIND holds every thread at the claim (`skills/autodrop-flow` forces
+  it: `AUTODROP NEEDS A THREAD`, the volley launched 1.5 tac s late, still inside the sure part). The HOLLOW fights of the
+  late ships are where it will bite; slice 8's harness should count it there.
+- **Cost**: `planLanding` on the 16-pod ark 0.3–0.4 ms cold, 0.06–0.09 ms memoised (R18).
+
+### Patches requested (files DROP does not own)
+
+1. **`data/script.ts` REFUSAL_LINES (lead):** a refused [G] flashes its words on the strip:
+   `...Object.fromEntries((Object.keys(AUTODROP_TEXT.refusal) as AutodropRefusalWord[]).map((word) => [`AUTODROP|${word}`,
+   { text: AUTODROP_TEXT.refusal[word], keys: word === 'ONLY v1' ? ['L'] : [] }]))`. Today it buzzes and says `> [G] …` on the
+   TERMINAL.
+2. **`components/tools-view/NavPlotWindow.ts` (ORBIT / lead):** the touchdown float says BULLSEYE. In the `'pod-landed'`
+   handler: `TOUCHDOWN_FLOAT_TEXT.lz(points, lz ?? '?', touch, record !== undefined && record.fate.kind === 'down' &&
+   record.fate.launch.source === 'autodrop')` (the words' fourth argument exists).
+3. **`systems/training-model.ts defaultSel` (lead, optional):** prefer a lost cell's RESTORE over a buyable cell of another
+   skill at the desk, if the lead wants a lost AUTOBURN to come first (see deviation 14).
+4. **e2e (lead, §8.5):** `skills-4cde.mjs`'s AUTODROP parts and `map-desk.mjs`'s two cards. The POD BAY's [G] is `#pbGoBtn`,
+   the pass rows `.pb-pass-step[data-lz][data-step]`, the plan `#pbPlanRows .pb-plan-row` and `#pbPlanCheck`; on a phone
+   LAUNCH (`#podLaunchBtn`) is a pointer hold for v1 and [G] rides in `#phoneBar`.
+5. **The review-fix pass:** the `centre`, `pass` and `plan` mini-demos (still plain); AGENTS.md's "What's built".

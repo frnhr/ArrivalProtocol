@@ -57,9 +57,13 @@ const look = (model: Readonly<TrainingModel>, key: string): string | undefined =
   toDesk(store);
   const bank = bankOf(store.getState().run.skills);
   let model = trainingModel(store.getState());
-  check('desk 1 opens on TRAINING (run.ts deskUiOnOpen) and its model is the first pick: one card, AUTOBURN v1, `3 CYCLES · 6 BLOCKS`',
-    store.getState().ui.deskWindow === 'training' && model.firstPick && model.cards.length === 1 && model.cards[0]!.name === 'AUTOBURN v1'
-      && model.cards[0]!.cost === '3 CYCLES · 6 BLOCKS' && model.cards[0]!.key === '1' && !model.cards[0]!.trained, JSON.stringify(model.cards));
+  // Slice 4c (plan R19): AUTODROP v1 is built, so its card joins AUTOBURN's: two cards, [1] and [2].
+  check('desk 1 opens on TRAINING (run.ts deskUiOnOpen) and its model is the first pick: two cards, AUTOBURN v1 `3 CYCLES · 6 BLOCKS` [1] and AUTODROP v1 `3 CYCLES · 4 BLOCKS` [2]',
+    store.getState().ui.deskWindow === 'training' && model.firstPick && model.cards.length === 2 && model.cards[0]!.name === 'AUTOBURN v1'
+      && model.cards[0]!.cost === '3 CYCLES · 6 BLOCKS' && model.cards[0]!.key === '1' && !model.cards[0]!.trained
+      && model.cards[1]!.name === 'AUTODROP v1' && model.cards[1]!.cost === '3 CYCLES · 4 BLOCKS' && model.cards[1]!.key === '2'
+      && model.cards[1]!.pitch === TRAINING_TEXT.skills.autodrop.pitch && model.cards[1]!.demo === 'centre' && !model.cards[1]!.trained,
+    JSON.stringify(model.cards));
   check('…ARRIVAL CONTROL: `Training outside approved hours is discouraged. :)`, the head `TRAINING · UNIT-047` and the bank',
     model.control === TRAINING_TEXT.controlFirstVisit && model.title === 'TRAINING · UNIT-047' && model.bankText === TRAINING_TEXT.bank(bank) && bank >= 3);
   check('…SET COURSE waits (firstPickWaits), the strip\'s first step is A SKILL, the tab\'s badge names the cycles',
@@ -114,9 +118,9 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
   let model = trainingModel(store.getState());
   const branches = model.branches.map((branch) => `${branch.branch}:${branch.versions.length}+${branch.locks.length}`).join();
   // The branches and the closed list: Track DROP edits this check when AUTODROP's branch opens (review M1).
-  check('desk 2: the grid, FLIGHT open (v1–v3 and LOCK RANGE beside), the three others one OPENS LATER row each',
-    !model.firstPick && model.cards.length === 0 && branches === 'FLIGHT:3+2'
-      && model.closed.join() === 'LANDING · AUTODROP,SURVEY · SURVEY,DEFENCE · SENTRY', `${branches} ${model.closed.join()}`);
+  check('desk 2: the grid, FLIGHT open (v1–v3 and LOCK RANGE beside) and LANDING (AUTODROP v1–v3), the two others one OPENS LATER row each',
+    !model.firstPick && model.cards.length === 0 && branches === 'FLIGHT:3+2,LANDING:3+0'
+      && model.closed.join() === 'SURVEY · SURVEY,DEFENCE · SENTRY', `${branches} ${model.closed.join()}`);
   // (end of DROP's check)
   // AUTOBURN's cells (Track ORBIT): v3 is built (slice 4e), so it reads NEEDS v2 FIRST.
   check('…v1 TRAINED (owned), v2 affordable (`5 · 8`), v3 NEEDS v2 FIRST (dim), LOCK 270 affordable (`1 · +1`), LOCK 810 NEEDS LOCK 270 FIRST',
@@ -149,11 +153,16 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
   mergeAdjacentFree(memory);
   store.update((d) => { d.ui.trainingSel = null; });
   model = trainingModel(store.getState());
-  check('the file eaten: v1 reads `LOST · RESTORE 2`, v2 NEEDS v1 FIRST, and the default selection is v1 with RESTORE v1 ▸ 2 CYCLES',
+  // Slice 4c: with AUTODROP built the first cell TRAIN can buy is AUTODROP v1, which the default selection prefers to a
+  // RESTORE (training-model defaultSel); v1's own cell, selected, offers the RESTORE.
+  const defaultKey = model.selected?.key;
+  selectTrainingCell(store, 'autoburn', { kind: 'version', version: 1 });
+  model = trainingModel(store.getState());
+  check('the file eaten: v1 reads `LOST · RESTORE 2`, v2 NEEDS v1 FIRST, and v1 selected offers RESTORE v1 ▸ 2 CYCLES (the default: AUTODROP v1, buyable)',
     look(model, 'autoburn:v1') === 'lost' && text(model, 'autoburn:v1') === TRAINING_TEXT.lost(2)
-      && text(model, 'autoburn:v2') === TRAINING_TEXT.status.needsLower('v1') && model.selected?.key === 'autoburn:v1'
+      && text(model, 'autoburn:v2') === TRAINING_TEXT.status.needsLower('v1') && defaultKey === 'autodrop:v1' && model.selected?.key === 'autoburn:v1'
       && model.detail?.action?.kind === 'restore' && model.detail.action.label === TRAINING_TEXT.restore(1, 2) && model.detail.action.enabled,
-    model.cells.map((c) => `${c.key}:${c.look}:${c.status}`).join(' | '));
+    `${defaultKey} · ${model.cells.map((c) => `${c.key}:${c.look}:${c.status}`).join(' | ')}`);
   const rows = skillsModel(store.getState());
   check('…and the Skills row says so: ▯▯▯, `LOST v1 · RESTORE 2 AT THE NEXT DESK`', rows[0]?.id === 'autoburn'
     && rows[0].version?.pips === '▯▯▯' && rows[0].version.text === SKILLS_TEXT.skill.restoreAt(1, 2) && rows[0].version.tone === 'warn',

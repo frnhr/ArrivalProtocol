@@ -2124,6 +2124,18 @@ export const AUTODROP_CLAIM_TAC = AUTO_THREAD_CLAIM_TAC;
 export const AUTODROP_PLAN_MAX_PASSES = 8;
 // `PASS DONE · A +2 · B +1` stands on the strip as long as AUTOBURN's hand-backs do: one length for "the skill is done".
 export const AUTODROP_DONE_LINE_SEC = AUTOBURN_DONE_LINE_SEC;
+// Track DROP: a volley's last slot sits this many tactical s inside the sure part's close. The controller is asked once an
+// AI tick (0.05 tac s at TACTICAL ×20, a quarter of that under OVERCLOCK) and launches up to a tick after its slot, and the
+// drop solution it times by is up to a refresh (0.1 tac s) old: two ticks of margin keep the last pod's dot inside.
+export const AUTODROP_EDGE_MARGIN_TAC = 0.1;
+// Track DROP: a claimed thread is let go once the next volley is more than AUTODROP_CLAIM_TAC + this away (plan R8: one
+// thread per window, none between). The margin keeps a volley whose first slot jitters across the claim's edge (the drop
+// solution re-solves at 10 Hz) from claiming and releasing tick by tick; a double window (two LZs within 40° of arc, 01
+// §3.4) keeps its one thread across the gap.
+export const AUTODROP_RELEASE_MARGIN_TAC = 2;
+// Track DROP: the warning alert `AUTODROP.skl DAMAGED — DROP BY HAND` stands this long (AI s), as long as PASS DONE does:
+// no crash follows a dead AUTODROP (plan §3.1), so it warns without the klaxon and goes.
+export const AUTODROP_DAMAGED_ALERT_SEC = AUTODROP_DONE_LINE_SEC;
 
 // --- end of 4c AUTODROP --------------------------------------------------------------------------------------------------
 

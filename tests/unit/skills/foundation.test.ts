@@ -74,7 +74,7 @@ check('prices by cell: roots 3 (SURVEY and SENTRY 2), v2 5, v3 8; LOCK 270 1, LO
 // FLIGHT: AUTOBURN v1–v3 (Track ORBIT, slice 4e).
 check('built: AUTOBURN v1–v3', SKILL_TREE.autoburn.built === 3);
 // LANDING: Track DROP raises AUTODROP to v3 here.
-check('built: AUTODROP not yet', SKILL_TREE.autodrop.built === 0);
+check('built: AUTODROP v1–v3', SKILL_TREE.autodrop.built === 3);
 // SURVEY: slice 6.
 check('built: SURVEY not yet', SKILL_TREE.survey.built === 0);
 // DEFENCE: Track SENTRY raises SENTRY to v3 here.
@@ -282,13 +282,20 @@ const look = (cells: readonly TreeCell[], row: string): string => {
   const store = resumeFixture('run-save-v1-ship-done.json');
   const visit = visitNow(store.getState().run);
   const cells = treeCells(store.getState(), visit);
-  check('desk 1 (migrated): only the \'start\' branches that are built are open, derived (AUTOBURN; AUTODROP not built yet)',
-    visit === 1 && openBranchesAt(store.getState(), 1).join() === 'autoburn' && store.getState().run.skills.opened.length === 0);
-  check('…AUTOBURN v1 is affordable for the floor\'s 3; v2, v3 and LOCK RANGE open from visit 2; the other branches closed',
+  // Slice 4c (plan R19): AUTODROP is built, so desk 1 opens both 'start' roots: AUTOBURN v1 and AUTODROP v1.
+  const dropLook = (row: number): string => {
+    const cell = cells.find((c) => c.skill === 'autodrop' && c.row.kind === 'version' && c.row.version === row);
+    return cell === undefined ? 'none' : `${cell.look}${cell.refusal === null ? '' : `/${cell.refusal}`}`;
+  };
+  check('desk 1 (migrated): only the \'start\' branches that are built are open, derived (AUTOBURN and AUTODROP)',
+    visit === 1 && openBranchesAt(store.getState(), 1).join() === 'autoburn,autodrop' && store.getState().run.skills.opened.length === 0);
+  check('…AUTOBURN v1 and AUTODROP v1 are affordable for the floor\'s 3; their higher rows open from visit 2; the other branches closed',
     look(cells, 'v1') === 'affordable' && look(cells, 'v2') === 'closed/closed' && look(cells, 'v3') === 'closed/closed'
-      && look(cells, 'L1') === 'closed/closed' && cells.filter((cell) => cell.skill !== 'autoburn').every((cell) => cell.look === 'closed')
-      && cells.find((cell) => cell.skill === 'autoburn' && cell.row.kind === 'version' && cell.row.version === 1)?.blocks === 6,
-    ['v1', 'v2', 'v3', 'L1', 'L2'].map((row) => look(cells, row)).join(' '));
+      && look(cells, 'L1') === 'closed/closed' && dropLook(1) === 'affordable' && dropLook(2) === 'closed/closed' && dropLook(3) === 'closed/closed'
+      && cells.filter((cell) => cell.skill !== 'autoburn' && cell.skill !== 'autodrop').every((cell) => cell.look === 'closed')
+      && cells.find((cell) => cell.skill === 'autoburn' && cell.row.kind === 'version' && cell.row.version === 1)?.blocks === 6
+      && cells.find((cell) => cell.skill === 'autodrop' && cell.row.kind === 'version' && cell.row.version === 1)?.blocks === 4,
+    [...['v1', 'v2', 'v3', 'L1', 'L2'].map((row) => look(cells, row)), ...[1, 2, 3].map(dropLook)].join(' '));
   check('…SET COURSE waits for the pick', deskBlocker(store.getState()) === 'first-pick');
   pendPurchase(store, { skill: 'autoburn', kind: 'train', to: { version: 1, lock: 0 }, cost: 3, visit: 1 });
   check('…the pick made (pending): deskBlocker clears, v1 reads pending, the bank is 0', deskBlocker(store.getState()) === null
