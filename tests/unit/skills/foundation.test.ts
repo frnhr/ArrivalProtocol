@@ -71,8 +71,8 @@ check('prices by cell: roots 3 (SURVEY and SENTRY 2), v2 5, v3 8; LOCK 270 1, LO
   && levelPrice('autoburn', { kind: 'version', version: 3 }) === 8 && levelPrice('survey', { kind: 'version', version: 1 }) === 2
   && levelPrice('autoburn', { kind: 'lock', level: 1 }) === 1 && levelPrice('autoburn', { kind: 'lock', level: 2 }) === 2);
 // What this build implements, one check per skill so each track raises only its own line (slice-4cde foundation review M1).
-// FLIGHT: Track ORBIT raises AUTOBURN to v3 here.
-check('built: AUTOBURN v1–v2', SKILL_TREE.autoburn.built === 2);
+// FLIGHT: AUTOBURN v1–v3 (Track ORBIT, slice 4e).
+check('built: AUTOBURN v1–v3', SKILL_TREE.autoburn.built === 3);
 // LANDING: Track DROP raises AUTODROP to v3 here.
 check('built: AUTODROP v1–v3', SKILL_TREE.autodrop.built === 3);
 // SURVEY: slice 6.
@@ -307,9 +307,9 @@ const look = (cells: readonly TreeCell[], row: string): string => {
   const bank = bankOf(state.run.skills);
   const cells = treeCells(state, visitNow(state.run));
   const v2 = look(cells, 'v2');
-  check('desk 2 (migrated, phase 2\'s AUTOBURN): v1 owned, v2 and LOCK 270 open (affordable or dim by the bank), v3 unbuilt, LOCK 810 needs 270',
+  check('desk 2 (migrated, phase 2\'s AUTOBURN): v1 owned, v2 and LOCK 270 open (affordable or dim by the bank), v3 needs v2, LOCK 810 needs 270',
     visitNow(state.run) === 2 && look(cells, 'v1') === 'owned/owned' && v2 === (bank >= 5 ? 'affordable' : 'dim/unaffordable')
-      && look(cells, 'v3') === 'unbuilt/closed' && look(cells, 'L2') === 'dim/needs-lower',
+      && look(cells, 'v3') === 'dim/needs-lower' && look(cells, 'L2') === 'dim/needs-lower',
     `bank ${bank}: ${['v1', 'v2', 'v3', 'L1', 'L2'].map((row) => look(cells, row)).join(' ')}`);
   const memory = store.getState().memory;
   const index = memory.findIndex((seg) => seg.type === 'upgrade' && seg.upgrade === 'autoburn');

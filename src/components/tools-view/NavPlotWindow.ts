@@ -211,6 +211,8 @@ interface PlotNodes {
   pathImpact: SVGPathElement;
   // Slice 4 (Track FLIGHT): AUTOBURN's dashed target (autoGhost) under the path, the LOCK bracket (lockBracket) over it.
   autoGhost: SVGPathElement;
+  // Slice 4e: AUTOBURN v3's label on its ghost circle (autoGhost.label), at the circle's far side from ▼.
+  autoGhostLabel: SVGTextElement;
   lockRun: SVGPathElement;
   lockLabel: SVGTextElement;
   startBurn: MarkerNodes;
@@ -273,6 +275,7 @@ function build(svg: SVGSVGElement): PlotNodes {
     pathGreen: svgEl('path', 'np-path np-path-green'),
     pathImpact: svgEl('path', 'np-path np-path-impact'),
     autoGhost: svgEl('path', 'np-auto-ghost'),
+    autoGhostLabel: svgEl('text', 'np-label np-auto-ghost-label'),
     lockRun: svgEl('path', 'np-lock'),
     lockLabel: svgEl('text', 'np-label np-lock-label'),
     startBurn: marker(svgEl('line', 'np-burn-tick'), 'np-burn-label'),
@@ -297,7 +300,7 @@ function build(svg: SVGSVGElement): PlotNodes {
     nodes.startBurn.glyph, nodes.goLowTarget.glyph, nodes.goLow.glyph, nodes.impact.glyph, nodes.peri.glyph, nodes.apo.glyph,
     ...nodes.trail, nodes.flame, nodes.ship,
     nodes.zoneLabels, nodes.startBurn.label, nodes.goLow.label, nodes.goLowTarget.label, nodes.impact.label, nodes.peri.label,
-    nodes.apo.label, nodes.flyby, nodes.lockLabel,
+    nodes.apo.label, nodes.flyby, nodes.lockLabel, nodes.autoGhostLabel,
   );
   return nodes;
 }
@@ -1109,6 +1112,17 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     const seesPath = !noSignal && !blind;
     const ghost = seesPath ? autoGhost(state, pred) : null;
     nodes.autoGhost.setAttribute('d', ghost ? ghostLoop(ghost.rpKm, ghost.raKm, ghost.omega, proj) : '');
+    // v3's label (03 §4: `LANDING ORBIT · EVERY LZ FITS · DROP ±70 km · FUEL −9%`) in two lines, the name over the rest, on the
+    // circle opposite ▼ (the side the path's own ▼ label is not on).
+    show(nodes.autoGhostLabel, ghost?.label != null);
+    if (ghost?.label) {
+      const at = ghost.omega + Math.PI;
+      const spot = proj.project({ x: ghost.raKm * Math.cos(at), y: ghost.raKm * Math.sin(at) });
+      const [head, ...rest] = ghost.label.split(' · ');
+      placeClear(nodes.autoGhostLabel, [head ?? '', rest.join(' · ')], spot, outwardFrom(half, spot), obstacles, CHAR_W_TAG, path);
+    } else {
+      labelTurns.delete(nodes.autoGhostLabel);
+    }
     const bracket = seesPath ? lockBracket(state, pred) : null;
     const run = bracket ? pathRun(pred, proj, state.clock.tSec, bracket.fromInSec, bracket.toInSec) : null;
     nodes.lockRun.setAttribute('d', run?.d ?? '');

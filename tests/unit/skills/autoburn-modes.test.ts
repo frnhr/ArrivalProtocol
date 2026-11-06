@@ -17,6 +17,7 @@
 // • GREEN pressed in LANDING across an LZ window says which window it costs (review (a)).
 // • UNTRAINED (plan §7 R3): no demos fire 7.5 tac s late (measured against a trained skill).
 // • Graded damage (4b): v2 → v1 mid-capture finishes the capture, then hands back (`'downgraded'`).
+// • Gap G2 (slice 4e, Track ORBIT): v2 → v1 during a GREEN trim ends it at once; so does v1 while ROUND is armed in LANDING.
 import { check, finish } from '../wp1/harness';
 import { createHarness9 } from '../wp9/harness9';
 import { lockOn, ensureLandingKeys } from '../landing/harness-landing';
@@ -493,6 +494,52 @@ for (const offsets of [[] as number[], [0, 0]]) {
   flyEngaged(200);
   check('…then hands back: DAMAGED TO v1 — CAPTURED, trim it green yourself', phase() === 'done' && state().burn.auto.end === 'downgraded'
     && said(AUTOBURN_TEXT.downgradedCaptured) && fitNow().closed, `${phase()} ${state().burn.auto.end}`);
+}
+
+// --- Gap G2 (slice-4cde-plan §8.4, Track ORBIT): v2 → v1 during a GREEN trim, and while ROUND is armed in LANDING ------------
+{
+  kestrel(2, [0, 0], false);
+  untilOffered();
+  h.press('KeyB');
+  const trimming = (): boolean => {
+    const flying = state().burn.auto.flying;
+    return phase() === 'burning' && flying !== null && flying.reason !== 'capture' && flying.reason !== 'missed';
+  };
+  // As flyEngaged flies it (one [F] per coast), to the first tick of its first trim.
+  const end = h.wall() + 600;
+  while (h.wall() < end && engaged() && !trimming()) {
+    const fireIn = autoburnFireInTac(state(), getPrediction());
+    if (phase() === 'armed' && state().clock.skipWarp === null && (h.shown()?.keys ?? []).includes('F') && fireIn !== null && fireIn > 30) h.press('KeyF');
+    h.step();
+  }
+  const trim = state().burn.auto.flying?.reason ?? 'none';
+  const before = { firing: state().burn.firing, threads: threadsBusy(), captured: state().burn.auto.captured };
+  const file = skillLive(state().memory, 'autoburn').file!;
+  h.store.update((draft) => { const seg = draft.memory.find((candidate) => candidate.id === file.id); if (seg && 'integrity' in seg) seg.integrity = 64; });
+  h.step();
+  check(`G2: v2 → v1 during GREEN's first trim (${trim}): it ends 'downgraded' at once (a trim is v2's)`, before.firing && before.threads === 1
+    && before.captured && phase() === 'done' && state().burn.auto.end === 'downgraded', `${JSON.stringify(before)} ${phase()} ${state().burn.auto.end}`);
+  check('…the throttle and the thread let go, and the radio says `DAMAGED TO v1 — CAPTURED, trim it green yourself`', !state().burn.firing
+    && state().burn.firingSource === null && threadsBusy() === 0 && said(AUTOBURN_TEXT.downgradedCaptured), `${state().burn.firing} ${threadsBusy()}`);
+}
+{
+  landingOn(0.05, 0);
+  h.stepUntil(() => autoburnRefusal(state(), getPrediction()) === null, 200);
+  h.press('KeyB');
+  h.step();
+  const armedAs = `${phase()} ${state().burn.auto.mode} claimed ${state().burn.auto.claimed}`;
+  const armed = phase() === 'armed' && state().burn.auto.mode === 'round' && !state().burn.firing;
+  const file = skillLive(state().memory, 'autoburn').file!;
+  h.store.update((draft) => { const seg = draft.memory.find((candidate) => candidate.id === file.id); if (seg && 'integrity' in seg) seg.integrity = 64; });
+  h.step();
+  check('G2: ROUND armed in LANDING (its burn claimed, not yet fired), the file to 64% (v1): done \'downgraded\', `it can no longer round it`, its thread let go',
+    armed && phase() === 'done' && state().burn.auto.end === 'downgraded' && said(AUTOBURN_TEXT.downgradedRound) && threadsBusy() === 0
+    && !state().burn.firing, `${armedAs} → ${phase()} ${state().burn.auto.end}`);
+  const refused = autoburnRefusal(state(), getPrediction());
+  h.press('KeyB');
+  h.step();
+  check('…and [B] is then refused as FLIGHT OVER (v1 does not fly in LANDING)', refused === AUTOBURN_REFUSAL.over && phase() === 'done',
+    `${refused} ${phase()}`);
 }
 
 finish();

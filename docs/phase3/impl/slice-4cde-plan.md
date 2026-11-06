@@ -1387,3 +1387,147 @@ DELETE unmasking, SENTRY v1–v3, `sentry.built` 3. No saved field was added and
 - The three SENTRY mini-demos (`TrainingWindow.ts demoSvg`, `desk.css`) are still drawn as `plain`. A drawing is offered
   for the fix pass's one hand.
 - e2e (§8.5) and the batch review.
+
+## Deviations (Track ORBIT)
+
+Recorded by Track ORBIT (branch `orbit-4e`, from 0a6b211, SENTRY merged in). §5 is built and AUTOBURN's `built` is 3. No save
+bump and no saved field: v3 runs on `burn.auto.mode`, `targetKm` and the foundation's `holding`.
+
+### What is built
+
+- **`MODE_RULES`** (`src/data/autoburn-modes.ts`, a new data file): `needs`, `fromFlyby`, `flightOnly`, `circle`, `noShrink`,
+  `afterCapture`, `doneWhen` / `then` (`'hold'` for v3) and the `stopped` words. The machine and `predict.ts` both read it
+  (predict may not import `autoburn.ts`). This was step 1, with no behaviour change; the suites were green before v3.
+- **The aim** (`autoburn-v3.ts landingOrbitAim`): the grid, the fits, the most-LZs fallback with its REPAIR, the fuel line, and
+  the memo. Also `v3TopUp`, `v3LowerLine`, `v3DecayLine`, `v3GhostLabel`, `v3TutorialDue` and `v3Debug` (`__ap.v3()` also
+  returns the label).
+- **The machine** (`autoburn.ts`): `MODES_BY_VERSION[3]`; engaging from a flyby or a lock; the hold (`AUTOBURN v3: LANDING
+  ORBIT — it holds it`); refits that only go lower (`'autoburn-v3-lower'`); the top-up window rule; R14; the reserve; and the
+  landing's end (`'flight-over'`, `LANDING OVER — it lets go of the orbit`). `roundAim` is memoised (m13).
+- **The planner** (`predict.ts`): `holdBroken` (▼ or ▲ a slack under R*, or decay warned) gates the circle plan while v3
+  holds. `engagedAuto` carries `holding`, and the cache key carries it too.
+- **HUD and words:** the ghost's label (`AutoGhost.label`, drawn on the NAV PLOT as two lines opposite ▼), the AUTO head
+  and notes, the mini-HUD kinds, the ARMED and flying rows, the Skills row's `HOLDS THE LANDING ORBIT · 3,510 km`, the
+  landing tail `· [B] MOVE TO LANDING ORBIT`, and L9's and L10's slots. All the words are in `skill-text.ts` (`V3_TEXT` and
+  the new `AUTOBURN_TEXT` / `AUTO_BUTTON_TEXT` entries). `AUTOBURN_RULES` needed no change.
+
+### Deviations
+
+1. **The grid starts one step under the band's top** (`ring.max − V3_STEP_KM`), not at `ring.max`. A circle exactly at the
+   top leaves the ring within ROUND's own tolerance (atCircle's ±1%), and in the flight the lock then never comes.
+2. **The fuel line's capture on an open path is braking at ▼ straight into the transfer ellipse**, by vis-viva. It does not
+   add the planner's capture (to ▲ at 0.95 of the top) and then a transfer, because that is not what v3 flies (item 3).
+   Measured on KESTREL: expected 27.4%, flown 28.1%.
+3. **A loop whose ▲ is above the band is brought down at ▼ first.** `circleStep` takes an optional `bandMax`. Without it, v3
+   aimed its first burn at ▲ of a just-captured 5.9-million-km loop: half of a days-long orbit away, where a tiny Δv swings
+   ▼ by thousands of km. In the first build that burn crashed the ship. ROUND's loops are in the ring, so its order is
+   unchanged.
+4. **A circle burn stops on the far side of the ship's own loop.** The far side is `radiusAtAngle` half an orbit on. The
+   burn stops when that radius reaches R* within ROUND_E_TOL / 8, whatever the apsis is called. This replaces "the step
+   turned to the other apsis".
+   - v3's R* is a grid point, not one of the loop's apsides, so the far side crosses the burn point mid-burn and ▼ and ▲
+     swap names. The old stop read that swap as done, or braked on past R*.
+   - A capture in a circle mode becomes a circle burn once the loop closes, so one RETRO carries the capture into the
+     transfer.
+   - ROUND still stops the moment its loop is a circle, so its measurements are unchanged (e 0.0045). v3 burns on to the far
+     side's R*, so a held circle starts nearer R* and goes longer before its first top-up.
+5. **The hold has no "an LZ in fits loses its sure window" test in the planner.** The refit covers it: a change in the fit
+   moves the aim lower, which lets go of the hold and plans the new circle. The planner's hold test (`holdBroken`) is
+   therefore the slack and the decay warning only.
+6. **On its circle above the DRAG line v3 uses v2's rule** (`ALREADY ROUND`): there is nothing to fly or hold there. On its
+   circle below the line, [B] engages it already holding: no burn and no lock range to judge (`autoburnRefusal`'s
+   `holdsAlready`).
+7. **An aim that fits no LZ at all is null** (v2's rule), not "the highest orbit that fits the most" with zero fits.
+8. **The ghost circle's label appears whenever the ghost does.** That is while engaged, or while [B] would engage it. The
+   label always describes the current aim, even after the engaged circle has gone lower.
+9. **`roundAim`'s memo lives in `autoburn.ts`**, beside `roundAim`, not in `autoburn-v3.ts` as §2.3 lists it. Its key is
+   the prediction object, the drop solution, the phase and the LZ room. Two module-level edges are added under §2.3's rule,
+   both cleared by the world reset: `roundMemo`, and `saidTopUpCosts` (the last `TOP-UP COSTS` said, so each top-up says
+   it once).
+10. **`v3TutorialDue(state)` reads the cached prediction (`getPrediction`).** Its signature is the foundation's, and the
+    lesson's entry is the foundation's. The rule: the file works as v3, it is not engaged, no SKIP is running, and the
+    landing orbit's first burn is inside the LOCK RANGE.
+11. **The words added beyond §5.4:**
+    - `lowerKeeps` (`GOES LOWER — it keeps LZ-B's window`, for R13's re-aim) and `lowerAlt` (a refit with no newly
+      fitting LZ);
+    - `decayHolds`, L10's slot while the decay is warned before a top-up is planned;
+    - `orbiting` and `toppingUp`, the rows while it flies;
+    - the AUTO head and notes: `AUTO TO ORBIT`, `TO ORBIT IN 0:12 · [B] OFF`, `HOLDS THE ORBIT · [B] OFF`;
+    - `titleV3`.
+
+    `AutoArmedBurn.kind` gains `'orbit'`, `'top-up'` and `'hold'` (skill-text `AutoArmedKind`).
+
+### Gap G2
+
+No bug was found.
+- A v2 → v1 drop (64%) during GREEN's first trim (rp-high) ends the engagement `'downgraded'` on the next tick. The throttle
+  and the thread are let go, and the radio says `DAMAGED TO v1 — CAPTURED, trim it green yourself`.
+- In LANDING, with ROUND armed (its burn claimed but not yet fired), the same drop ends it `'downgraded'` with
+  `it can no longer round it` and releases the thread. [B] is then refused as FLIGHT OVER.
+
+### Measurements
+
+These are classic ships. "Quick" suites are `skills/autoburn-v3`, `skills/v3-aim` and probes; the full sweep is
+`skills/v3-sweep`, 60 whole landings by the strip.
+
+- **R15. v3 does not beat v2 ROUND on these ships.**
+  - **Setup:** the ships were locked in LANDING either on a low ellipse (▼ at 0.45 of the band, e 0.03) or on a capture's
+    loop (▼ at 0.3, ▲ near the top). Each was healthy or damaged (Sensor Interp and every driver at 70%, a ×2.25 drop).
+    Each row is the sum over the five ships.
+
+  | Start | Ship state | v2 ROUND FUEL | v3 FUEL | v2 landed | v3 landed | v2 points | v3 points | v2 first drop | v3 first drop |
+  |---|---|---|---|---|---|---|---|---|---|
+  | low ellipse | healthy | −7.6% | −25.4% | 47/48 | 47/48 | 9,500 | 9,500 | 31 s | 28 s |
+  | capture loop | healthy | −35.9% | −25.9% | 47/48 | 46/48 | 9,500 | 9,400 | 31 s | 27 s |
+  | low ellipse | damaged | −7.6% | −18.9% | 40/48 | 40/48 | 8,550 | 8,350 | 34 s | 29 s |
+  | capture loop | damaged | −35.9% | −35.6% | 41/48 | 40/48 | 8,650 | 8,450 | 32 s | 28 s |
+
+  - **Why v3 costs more from a low ellipse:** it climbs to the highest circle that fits (KESTREL 6,900 from 5,900), and
+    above the DRAG line the climb buys nothing. 03 says "the highest" because it decays least, but above the line nothing
+    decays.
+  - **Why v3 rarely changes what lands:** the kid following the strip drops most pods from the first loop while v3 is still
+    on its way (one or two orbits). VESPER damaged reached its landing orbit in no run before its pods were down.
+  - **Where v3 helps:** a slightly sooner first drop (no ROUND burn in the way), and a narrow or damaged drop that a long
+    landing waits for.
+  - **For Fran:** v3 could take the fitting circle nearest the loop while that circle is above the DRAG line, and the
+    highest one only below it. This was not built (R15 says build as specified). It would remove the climb.
+- **R13. About one top-up in fourteen costs a window.** Measured on VESPER ×2.25 holding R* 5,200 (under the DRAG line at
+  5,500), with no pods launched:
+  - the quick suite: 0 of 6 top-ups (two orientations), then 0 of 2 at quick depth;
+  - a 1,400 s probe: 1 of 6 (`TOP-UP COSTS LZ-C's WINDOW`, an LZ that does not fit anyway);
+  - none was re-aimed lower.
+
+  Each top-up costs 0.4–0.7% FUEL and comes about one per kick, which is 01's 1% per orbit. In the sweep's landings no
+  top-up happened before the pods were down.
+- **Time to reach the landing orbit.**
+  - **FLIGHT**, KESTREL from the flyby with ▼ corrected and LOCK 810: R* 6,900 was one continuous RETRO, at the circle and
+    locked 40 wall s after [B], FUEL 90.2 → 28.1%. The same flight left uncorrected (▼ TOO WIDE at 9,000) took 42 s and
+    ended at 21.4%.
+  - **From a lock**, wall seconds with one [F] per coast, two or three burns:
+    - VESPER from 6,200 × 6,453 to 6,900: 131 s;
+    - VESPER from the same loop to 5,200: 198 s;
+    - in the sweep: KESTREL 80 s, VESPER 117–121 s, LAST LIGHT 337–422 s.
+- **R18. The memos are fast.** On the 16-pod ark a fresh `landingOrbitAim` takes 0.20 ms, a memo hit 0.05 ms, and
+  `roundAim`'s memo 0.01 ms.
+
+### Patches requested
+
+- None to other tracks' files.
+- **Lead (`src/data/skills.ts` line 28's comment):** it still says `4a: AUTOBURN v1–v2 only`. ORBIT edited only the `built`
+  line.
+- **Lead, for the fix pass (`docs/phase3/03-skills.md` §3.6 step 2):** say that v3 goes down with the circle planner, not
+  1b's go-low burn (R17), and that the grid starts one step under the top (deviation 1).
+
+### Tests
+
+New suites:
+- `skills/v3-aim`: 14 checks, under 1 s.
+- `skills/autoburn-v3`: 19 checks, about 10–14 s, with the KESTREL flight flown once (`flyOnce`).
+- `skills/v3-sweep`: BALANCE_ONLY.
+
+Changed suites:
+- `skills/autoburn-modes` gains G2 (+2 s).
+- Each track's own lines in `skills/foundation` (:74–75 and the migrated desk-2 check), `skills/training-flow` (desk 2's v3)
+  and `skills/ui-models` (AUTOBURN's cells: v3 reads `NEEDS v2 FIRST`).
+
+The integration check with AUTODROP v3 (§8.3) is the lead's, at the ORBIT merge.
