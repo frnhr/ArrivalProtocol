@@ -825,7 +825,8 @@ function autoburnArmedObjective(ctx: FlightContext): FlightObjective | null {
   }
   const head = armedHead(armed, time);
   const skip = ctx.skipAvailable ? SKIP_HINT : '';
-  return make('AUTO-armed', withTail(head, skip, ''), ctx.skipAvailable ? ['F'] : [], 'wait', ctx);
+  // Review m1: a head too long for the full tail keeps [F] on the line (` · [F]`), never a lit key with no words.
+  return make('AUTO-armed', withTail(head, skip, ctx.skipAvailable ? ' · [F]' : ''), ctx.skipAvailable ? ['F'] : [], 'wait', ctx);
 }
 
 // WP12 review (the lead's ruling of 2026-10-21 17:45): in the MIND the ship's controls are refused (flight-controls'

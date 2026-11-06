@@ -30,7 +30,7 @@ import { engineOpen } from '@state/selectors';
 import { podCode } from '@data/landing-text';
 import { V3_TEXT } from '@data/skill-text';
 import {
-  V3_STEP_KM, V3_FLOOR_MARGIN_KM, LANDING_TACTICAL_WARP, LANDING_SURE_MIN_TAC, AUTO_FUEL_RESERVE_PCT, BAY_SLOTS, RA_TARGET_FRAC,
+  V3_STEP_KM, V3_FLOOR_MARGIN_KM, V3_AIM_ABOVE_DRAG, LANDING_TACTICAL_WARP, LANDING_SURE_MIN_TAC, AUTO_FUEL_RESERVE_PCT, BAY_SLOTS, RA_TARGET_FRAC,
   LOCK_RANGE_TAC,
 } from '@data/tuning';
 
@@ -151,7 +151,8 @@ function computeAim(state: Readonly<GameState>, input: Readonly<AimInputs>): Lan
   if (candidates.length === 0) return null;
   // The grid runs from the top down, so the first of the best is the highest.
   const every = candidates.find((c) => c.fits.length === input.lzs.length);
-  const best = every ?? candidates.reduce((a, b) => (b.fits.length > a.fits.length || (b.fits.length === a.fits.length && b.pods > a.pods) ? b : a));
+  const highest = every ?? candidates.reduce((a, b) => (b.fits.length > a.fits.length || (b.fits.length === a.fits.length && b.pods > a.pods) ? b : a));
+  const best = V3_AIM_ABOVE_DRAG === 'nearest' ? nearestAboveDrag(state, input, candidates, highest) : highest;
   const fitLabels = new Set(best.fits.map((lz) => lz.label));
   return {
     targetKm: best.R,
@@ -161,6 +162,17 @@ function computeAim(state: Readonly<GameState>, input: Readonly<AimInputs>): Lan
     fuelAfterPct: best.fuelAfterPct,
     belowDrag: best.belowDrag,
   };
+}
+
+// Review M5 (tuning V3_AIM_ABOVE_DRAG): among the candidates that fit as well as `highest` (the same LZs' count and pods)
+// and lie above the DRAG line, the one whose transfer from the loop costs the least Δv; `highest` itself when none is above
+// the line (below it the highest decays least, 03 §3.6's WHY). The highest is the first of the best, so when it is below
+// the line every peer is too.
+function nearestAboveDrag(state: Readonly<GameState>, input: Readonly<AimInputs>, candidates: readonly Candidate[], highest: Readonly<Candidate>): Candidate {
+  const peers = candidates.filter((c) => !c.belowDrag && c.fits.length === highest.fits.length && c.pods === highest.pods);
+  if (peers.length === 0) return highest;
+  const dv = (c: Readonly<Candidate>): number => circleTransferDvKmS(state.level.planet.mu, input.loop.rp, input.loop.ra, c.R);
+  return peers.reduce((a, b) => (dv(b) < dv(a) ? b : a));
 }
 
 // The landing orbit now, or null: nothing leaves AUTO_FUEL_RESERVE_PCT, no LZ with room or pod aboard, or an impact course,
@@ -175,6 +187,21 @@ export function landingOrbitAim(state: Readonly<GameState>, pred: Readonly<Predi
   const aim = computeAim(state, input);
   memo = { key, aim };
   return aim;
+}
+
+// Review m12: why v3 has no landing orbit now, in the ghost's and the Skills row's words, or null (it has one, or nothing
+// asks for one: no LZ with room, no pod aboard, an impact course). No orbit on the grid fits any LZ: the REPAIR that would
+// give the first LZ a sure window at the grid's lowest circle (the narrowest dot), else that none fits; some fit, but none
+// leaves the reserve: the FUEL.
+export function v3NoAimLine(state: Readonly<GameState>, pred: Readonly<Prediction>): string | null {
+  const input = aimInputs(state, pred);
+  if (input === null || landingOrbitAim(state, pred) !== null) return null;
+  const grid = landingOrbitGrid(state.level.ring);
+  if (grid.some((R) => candidateAt(state, input, R).fits.length > 0)) return V3_TEXT.noOrbitFuel(AUTO_FUEL_RESERVE_PCT);
+  const lowest = grid[grid.length - 1];
+  const lz = input.lzs[0];
+  const hint = lowest === undefined || lz === undefined ? null : bestRepairForDrop(state, capabilitiesNow(state), lz, lowest);
+  return V3_TEXT.noOrbit(hint === null ? null : repairName(hint));
 }
 
 // For the memo's suite (v3-aim): the key the last call stored, and a way to drop it.

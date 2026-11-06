@@ -28,7 +28,7 @@ import {
   SHRINK_FUEL_RESERVE_FRAC, RADIUS_BISECT_STEPS, RP_RATE_PROBE_SEC,
   SHRINK_RESERVE_WAIT_TAC, STRANDED_RANGE_FRAC, STRAND_LINE_MARGIN, SKIP_DIVISOR, BELT_HIT_MEAN_SEC,
   DODGE_PROMISE_MARGIN_KM, DODGE_DEADLINE_RESOLUTION_TAC, DODGE_MEMO_RP_DECIMALS, DODGE_MEMO_ANGLE_DECIMALS,
-  DRAG_LIFT_MARGIN_KM, LIFT_HOLD_SLACK_KM, ROUND_E_TOL, ROUND_AIM_E, V3_HOLD_SLACK_KM,
+  DRAG_LIFT_MARGIN_KM, LIFT_HOLD_SLACK_KM, ROUND_E_TOL, ROUND_AIM_E, V3_HOLD_SLACK_KM, CIRCLE_NO_APSIS_E,
 } from '@data/tuning';
 
 // The predicted path: what happens if nobody touches the throttle. Pure (computePrediction)
@@ -1345,7 +1345,24 @@ export function planToCircle(
   if (!input.fit.closed) throw new Error('planToCircle: an open path has no circle to aim at');
   const step = circleStep(input.fit, targetKm, input.ring.max);
   if (step === null) return null;
-  return planTrim(input, 'round', apsisTimes, step.firstOfTwo, step.targetRadius, step.at);
+  const times = loopEccentricity(input.fit) < CIRCLE_NO_APSIS_E ? quarterTurnTimes(input.orbit, apsisTimes.period) : apsisTimes;
+  return planTrim(input, 'round', times, step.firstOfTwo, step.targetRadius, step.at);
+}
+
+// Review m2: on a loop with no apsis to speak of (CIRCLE_NO_APSIS_E), both "apsides" are the next quarter turn of the ship's
+// polar angle (0°, 90°, 180°, 270° in the plane, in its direction of travel): a fixed point in space, so the countdown to
+// it runs down as the ship flies, where the noise of ▼'s angle would move it every tick. Once the burn starts the loop is
+// no longer round and its real apsides take over.
+function quarterTurnTimes(orbit: Readonly<OrbitState>, period: number): ApsisTimes {
+  const quarter = Math.PI / 2;
+  const angle = Math.atan2(orbit.y, orbit.x);
+  const prograde = orbit.x * orbit.vy - orbit.y * orbit.vx >= 0;
+  const into = ((angle % quarter) + quarter) % quarter;
+  const ahead = prograde ? quarter - into : into;
+  const inSec = (ahead / (2 * Math.PI)) * period;
+  // The "period" between two such points is a quarter turn: planTrim reads it for the time since the last one, so a burn
+  // whose point has just gone by (an AUTOBURN offset, a late claim) is still due now (lateTrimSec), as at an apsis.
+  return { peri: inSec, apo: inSec, period: period / 4 };
 }
 
 // AUTOBURN engaged (armed, pointing or burning) in a mode, as the planner reads it (state.burn.auto; predict may not

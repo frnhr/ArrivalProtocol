@@ -2176,5 +2176,18 @@ export const V3_HOLD_SLACK_KM = V3_STEP_KM;
 // The lowest circle v3 tries: the same hard floor above the band's bottom as the kid's GO LOWER (one rule for "too low").
 export const V3_FLOOR_MARGIN_KM = GO_LOW_FLOOR_MARGIN_KM;
 // v3's fuel line reuses AUTO_FUEL_RESERVE_PCT (20): one reserve for every AUTOBURN mode.
+// Which of the circles that fit best v3 takes while they are above the DRAG line (slice 4c–4e review M5, the lead's call;
+// Fran is told with the numbers and may reverse it): `nearest`, the one the transfer from the loop costs least, or
+// `highest`, 03 §3.6's literal rule. WHY nearest: 03 says the highest because it decays least, but above the DRAG line
+// nothing decays, so the climb bought nothing. Over the five classic ships from a low ellipse, healthy, the climb cost
+// −25.4% FUEL against −6.5% for the nearest (v2 ROUND −7.6%), with the same pods landed and the same first drop, and the
+// landing orbit reached up to twice as soon (VESPER 117 → 63 s, LAST LIGHT 337 → 158 s). Below the line the highest stands
+// (it decays least), as do aims with no circle above it.
+export const V3_AIM_ABOVE_DRAG: 'nearest' | 'highest' = 'nearest';
+// A loop rounder than this has no apsis to burn at (slice 4c–4e review m2): its ▼ and ▲ are numerical noise that moves
+// every tick, so a circle burn planned at them never comes (from an exactly circular lock v3's first burn read `▲ in 0:15`
+// for 176 wall s). Under it the circle planner burns at the next quarter turn instead (predict planToCircle), a fixed
+// point in space. In play ROUND stops at e ≈ 0.0045 and drag keeps e far above this; the harness's e = 0 lock is the case.
+export const CIRCLE_NO_APSIS_E = 1e-5;
 
 // --- end of 4e ORBIT -----------------------------------------------------------------------------------------------------

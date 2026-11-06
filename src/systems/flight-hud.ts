@@ -23,7 +23,7 @@ import { GHOST_TEXT } from '@data/ghost-text';
 import { ghostCountShown, ghostDriftKm } from '@systems/ghost-thrust';
 import { ZONE_WORD, ZONE_PLOT_TEXT, RACK_TAG_TEXT } from '@data/zone-text';
 import { AUTO_BUTTON_TEXT, AUTO_BUTTON_REASON, AUTO_PLOT_TEXT, AUTO_PIP_TEXT, type AutoBurnKind, type AutoArmedKind } from '@data/skill-text';
-import { landingOrbitAim, v3GhostLabel } from '@systems/autoburn-v3';
+import { landingOrbitAim, v3GhostLabel, v3NoAimLine } from '@systems/autoburn-v3';
 import {
   autoburnRefusal, autoburnEverTrained, autoModeFor, autoOfferMode, autoArmedBurn, autoFlyingKind, autoburnFireInTac, isEngaged,
   lockRangeTac, modeTargetKm, previewModeBurn,
@@ -918,7 +918,9 @@ export function autoGhost(state: Readonly<GameState>, pred: Prediction): AutoGho
     const targetKm = modeTargetKm(state, pred, mode);
     if (targetKm === null) return null;
     const aim = mode === 'landing-orbit' ? landingOrbitAim(state, pred) : null;
-    return { mode, rpKm: targetKm, raKm: targetKm, omega: pred.omega, label: aim === null ? null : v3GhostLabel(state, aim) };
+    // Review m12: v3 flying v2's ROUND because no landing orbit fits says why on the ghost.
+    const why = mode === 'round' && skillLive(state.memory, 'autoburn').version >= 3 ? v3NoAimLine(state, pred) : null;
+    return { mode, rpKm: targetKm, raKm: targetKm, omega: pred.omega, label: aim === null ? why : v3GhostLabel(state, aim) };
   }
   return { mode, ...greenTarget(pred, state.level.ring), omega: pred.omega, label: null };
 }

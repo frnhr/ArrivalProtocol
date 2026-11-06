@@ -23,7 +23,8 @@ export const AUTOBURN_TEXT = {
   armedTrim: (glyph: string, time: string): string => `AUTOBURN ARMED — trims at ${glyph} in ${time} · [B] to cancel`,
   armedRound: (glyph: string, time: string): string => `AUTOBURN ARMED — rounds it at ${glyph} in ${time} · [B] to cancel`,
   // AUTOBURN v3 (4e, plan §5.4): on its way to the landing orbit, holding it, and a top-up planned while it holds.
-  armedOrbit: (glyph: string, time: string): string => `AUTOBURN ARMED — to the landing orbit at ${glyph} in ${time} · [B] to cancel`,
+  // Review m1: short enough at `12:34` for the ARMED row's ` · [F] SKIP` tail (62 characters with it).
+  armedOrbit: (glyph: string, time: string): string => `AUTOBURN ARMED — orbit at ${glyph} in ${time} · [B] to cancel`,
   armedHold: 'AUTOBURN ARMED — it holds the landing orbit · [B] to cancel',
   armedTopUp: (glyph: string, time: string): string => `AUTOBURN v3 TOPS UP AT ${glyph} IN ${time} · [B] to cancel`,
   // Its claim found every Core thread busy (03 §3.6, plan §7 R6: hack or burn, no pre-emption): urgent, and it names the
@@ -116,6 +117,9 @@ export const V3_TEXT = {
   ghostEvery: (dropKm: number, costPct: number): string => `LANDING ORBIT · EVERY LZ FITS · DROP ±${dropKm} km · FUEL −${costPct}%`,
   ghostSome: (fits: readonly string[], repair: string | null, miss: string): string =>
     `LANDING ORBIT · ${fits.join(', ')} FIT${fits.length === 1 ? 'S' : ''} · ${repair === null ? `${miss} WON'T FIT` : `REPAIR ${repair} FOR ${miss}`}`,
+  // Review m12: v3 works but has no landing orbit, so [B] flies v2's rule; the ROUND ghost and the Skills row say why.
+  noOrbit: (repair: string | null): string => (repair === null ? 'NO LANDING ORBIT FITS ANY LZ' : `NO LANDING ORBIT FITS — REPAIR ${repair}`),
+  noOrbitFuel: (reservePct: number): string => `NO LANDING ORBIT LEAVES ${reservePct}% FUEL`,
 } as const;
 
 // A drop mid-flight (§6.10: the file consumed mid-burn → `AUTOBURN.skl LOST — MANUAL`, and the klaxon): the

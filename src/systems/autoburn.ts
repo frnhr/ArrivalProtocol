@@ -24,7 +24,7 @@ import { paid } from '@systems/skill-levels';
 import { getDropSolution } from '@systems/drop-cache';
 import { burnSpanBlocks, lzRemaining } from '@systems/landing-rules';
 import { radiusAtAngle } from '@systems/landing-orbit';
-import { landingOrbitAim, v3TopUp, newlyFitting } from '@systems/autoburn-v3';
+import { landingOrbitAim, v3TopUp, newlyFitting, v3NoAimLine } from '@systems/autoburn-v3';
 import {
   AUTOBURN_TEXT, AUTOBURN_DROP_TEXT, AUTOBURN_DROP_TAB, AUTOBURN_REFUSAL, AUTOBURN_SKILL_ROW, V3_TEXT, autoRefusalKey, type AutoburnRefusal,
   type AutoBurnKind, type AutoArmedKind,
@@ -120,6 +120,9 @@ export function autoburnStatus(state: Readonly<GameState>): AutoburnStatus {
     return { text: AUTOBURN_SKILL_ROW.armed[auto.mode], tone: 'good' };
   }
   if (isEngaged(auto.phase)) return { text: AUTOBURN_SKILL_ROW.flying, tone: 'good' };
+  // Review m12: in LANDING, v3 with no landing orbit flies v2's rule; the row says why.
+  const noAim = state.run.phase === 'landing' && live.version >= 3 ? v3NoAimLine(state, getPrediction()) : null;
+  if (noAim !== null) return { text: noAim, tone: 'warn' };
   if (live.nominal !== null && live.version < live.nominal.version) {
     return { text: AUTOBURN_SKILL_ROW.worksAs(live.version, live.nominal.version), tone: 'warn' };
   }
@@ -227,8 +230,9 @@ export function previewModeBurn(state: Readonly<GameState>, mode: AutoMode, pred
 export function modeTargetKm(state: Readonly<GameState>, pred: Prediction, mode: AutoMode): number | null {
   const auto = state.burn.auto;
   if (isEngaged(auto.phase) && auto.mode === mode) return auto.targetKm;
-  if (mode === 'landing-orbit') return landingOrbitAim(state, pred)?.targetKm ?? null;
-  return mode === 'round' ? roundAim(state, pred).targetKm : null;
+  const target = MODE_RULES[mode].target;
+  if (target === 'landing-orbit') return landingOrbitAim(state, pred)?.targetKm ?? null;
+  return target === 'round' ? roundAim(state, pred).targetKm : null;
 }
 
 // --- Using it --------------------------------------------------------------------------------------------
@@ -274,7 +278,7 @@ export function autoburnRefusal(state: Readonly<GameState>, pred: Prediction): A
   if (mode === 'capture' && !(pred.rp > state.level.planet.R)) return AUTOBURN_REFUSAL.noCapture;
   const burnPoint = previewModeBurn(state, mode, pred);
   // v3 on its circle under the DRAG line has no burn yet, only the hold: [B] engages it holding (no lock range to judge).
-  const holdsAlready = mode === 'landing-orbit' && burnPoint === null && onCircle(pred, modeTargetKm(state, pred, mode) ?? NaN);
+  const holdsAlready = MODE_RULES[mode].then === 'hold' && burnPoint === null && onCircle(pred, modeTargetKm(state, pred, mode) ?? NaN);
   if (burnPoint === null && !holdsAlready) return AUTOBURN_REFUSAL.noCapture;
   if (burnPoint !== null) {
     const range = lockRangeTac(live);
@@ -337,7 +341,7 @@ export interface AutoArmedBurn {
 function burnKind(auto: Readonly<AutoburnState>, reason: BurnReason): AutoBurnKind {
   if (isCaptureBurn(reason)) return 'capture';
   if (reason !== 'round') return 'trim';
-  if (auto.mode !== 'landing-orbit') return 'round';
+  if (auto.mode === null || MODE_RULES[auto.mode].then !== 'hold') return 'round';
   return auto.holding ? 'top-up' : 'orbit';
 }
 
@@ -433,7 +437,8 @@ const LOST_ALERT_ID = 'autoburn-lost';
 function finish(store: Store<GameState>, phase: Extract<AutoburnPhase, 'idle' | 'done' | 'dropped'>, end: AutoburnEnd): void {
   const offline = end === 'offline' ? skillLive(store.getState().memory, 'autoburn').offline : null;
   // v3 letting go as the landing ends (the engine closes): its own words, read before the idle phase clears the mode.
-  const orbitOver = end === 'flight-over' && store.getState().burn.auto.mode === 'landing-orbit' && store.getState().run.phase === 'landing';
+  const endingMode = store.getState().burn.auto.mode;
+  const orbitOver = end === 'flight-over' && endingMode !== null && MODE_RULES[endingMode].then === 'hold' && store.getState().run.phase === 'landing';
   hold(store, false);
   releaseThread(OWNER);
   setPhase(store, phase, end);
@@ -481,9 +486,10 @@ export function engageAutoburn(store: Store<GameState>): AutoburnRefusal | null 
   }
   const mode = autoModeFor(state, pred, skillLive(state.memory, 'autoburn'));
   if (mode === null) throw new Error('engageAutoburn: no mode although autoburnRefusal found none');
-  const aim = mode === 'round' ? roundAim(state, pred) : null;
-  const orbit = mode === 'landing-orbit' ? landingOrbitAim(state, pred) : null;
-  if (mode === 'landing-orbit' && orbit === null) throw new Error('engageAutoburn: LANDING ORBIT with no aim');
+  const target = MODE_RULES[mode].target;
+  const aim = target === 'round' ? roundAim(state, pred) : null;
+  const orbit = target === 'landing-orbit' ? landingOrbitAim(state, pred) : null;
+  if (target === 'landing-orbit' && orbit === null) throw new Error('engageAutoburn: LANDING ORBIT with no aim');
   setPhase(store, 'armed', null, {
     mode, targetKm: orbit?.targetKm ?? aim?.targetKm ?? null, claimed: false, waitingSinceTSec: null, captured: false, holding: false,
   });
@@ -549,8 +555,9 @@ function tick(store: Store<GameState>): void {
   }
   // v3 → v2 while engaged (plan R14, 03 §3.5 "finishes with what the lower version can do"): it goes on as ROUND at the same
   // circle (v2 flies circle burns), but no longer holds or refits it. v3 → v1 is the needs rule below ('downgraded').
-  if (mode === 'landing-orbit' && live.version === 2) {
-    store.update((draft) => { draft.burn.auto.mode = 'round'; draft.burn.auto.holding = false; });
+  const fallsTo = MODE_RULES[mode].fallsTo;
+  if (fallsTo !== null && live.version < MODE_RULES[mode].needs && live.version >= MODE_RULES[fallsTo].needs) {
+    store.update((draft) => { draft.burn.auto.mode = fallsTo; draft.burn.auto.holding = false; });
     say('sys', V3_TEXT.toV2, { critical: true });
   }
   const caps = capabilitiesNow(state);
@@ -565,7 +572,8 @@ function tick(store: Store<GameState>): void {
 
 // Armed: waiting for its moment, on a burn that is still there and still its to fly.
 function armedTick(store: Store<GameState>, fit: RingFit, live: Readonly<SkillLive>, playerFiring: boolean): void {
-  if (store.getState().burn.auto.mode === 'landing-orbit' && live.version >= MODE_RULES['landing-orbit'].needs && v3ArmedTick(store, fit)) return;
+  const armedMode = store.getState().burn.auto.mode;
+  if (armedMode !== null && MODE_RULES[armedMode].then === 'hold' && live.version >= MODE_RULES[armedMode].needs && v3ArmedTick(store, fit)) return;
   const state = store.getState();
   const auto = state.burn.auto;
   const mode = auto.mode!;
@@ -628,8 +636,13 @@ function v3ArmedTick(store: Store<GameState>, fit: RingFit): boolean {
   if (targetKm === null) throw new Error('autoburn v3: armed without its circle');
   const pred = getPrediction();
   const aim = landingOrbitAim(state, pred);
-  if (aim !== null && aim.targetKm <= targetKm - V3_STEP_KM + 1e-6) {
-    goLower(store, aim.targetKm, newlyFitting(state, pred, aim.fits, targetKm), 'fit');
+  // Review M6: lower only for a fit (an LZ the new aim fits does not fit on the held circle now: a bite widened a drop),
+  // never for FUEL alone. The aim's reserve filter reads FUEL now, and near the reserve the circle it allows can drop a step
+  // as the transfer and the top-ups spend it (VESPER from a low loop: 5,200 → 5,100 at 23%), which buys no window; the
+  // reserve stop ('reserve') is what ends v3 when a burn would leave too little.
+  const forLz = aim === null ? null : newlyFitting(state, pred, aim.fits, targetKm);
+  if (aim !== null && forLz !== null && aim.targetKm <= targetKm - V3_STEP_KM + 1e-6) {
+    goLower(store, aim.targetKm, forLz, 'fit');
     return true;
   }
   if (fit.closed && atCircle(fit, targetKm) && !auto.holding) {

@@ -1,7 +1,7 @@
 // Slice 4e, Track ORBIT (slice-4cde-plan §5.1, §8.1): AUTOBURN v3's aim, headless, on constructed classic ships (no flight
 // flown, so under a second).
-// • The grid (R12): the aim is a grid point one step under the band's top, then down by V3_STEP_KM; every grid point above it
-//   misses an LZ with room, and at it every LZ fits (LANDING_SURE_MIN_TAC at LANDING_TACTICAL_WARP).
+// • The grid (R12): one step under the band's top, then down by V3_STEP_KM; the aim is a grid point where every LZ fits
+//   (LANDING_SURE_MIN_TAC at LANDING_TACTICAL_WARP), above the DRAG line the nearest such one (review M5), below it the highest.
 // • The most-LZs fallback with its REPAIR (VESPER's narrow LZ-C never fits; with Sensor Interp degraded the label names it).
 // • The fuel line: the transfer by vis-viva above the DRAG line; the holds under it; v2's rule when nothing leaves 20%.
 // • Warp 20 in FLIGHT (R12): the level's own tactical warp (30 on VESPER) would aim elsewhere.
@@ -14,16 +14,17 @@ import { lockOn, ensureLandingKeys } from '../landing/harness-landing';
 import { giveSkillFile } from '../support/skills';
 import { setLandingMode } from '../support/landing-instant';
 import {
-  landingOrbitAim, landingOrbitGrid, landingOrbitAimKey, clearLandingOrbitMemo, circleTransferDvKmS, v3GhostLabel,
+  landingOrbitAim, landingOrbitGrid, landingOrbitAimKey, clearLandingOrbitMemo, circleTransferDvKmS, v3GhostLabel, v3NoAimLine,
 } from '@systems/autoburn-v3';
-import { autoModeFor, roundAim } from '@systems/autoburn';
+import { autoModeFor, autoburnStatus, roundAim } from '@systems/autoburn';
+import { autoGhost } from '@systems/flight-hud';
 import { getPrediction } from '@systems/predict';
 import { skillLive, capabilitiesNow } from '@systems/capabilities';
 import { sureTacAt, dragLineKm } from '@systems/landing-orbit';
 import { dropFactors, launchQueue } from '@systems/landing-rules';
 import { DRIVER_RULES } from '@data/script';
 import { AUTOBURN_TEXT, AUTO_BUTTON_TEXT, AUTOBURN_SKILL_ROW, AUTO_MINI_TEXT, V3_TEXT } from '@data/skill-text';
-import { V3_STEP_KM, LANDING_SURE_MIN_TAC, LANDING_TACTICAL_WARP, AUTO_FUEL_RESERVE_PCT, BAY_SLOTS } from '@data/tuning';
+import { V3_STEP_KM, LANDING_SURE_MIN_TAC, LANDING_TACTICAL_WARP, AUTO_FUEL_RESERVE_PCT, BAY_SLOTS, V3_AIM_ABOVE_DRAG } from '@data/tuning';
 import type { GameState } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import { stateFromElements } from '@/types/orbit';
@@ -79,6 +80,13 @@ function factorsNow(): { sensor: number; plotter: number; driver: number } {
   return { ...dropFactors(caps, null), driver };
 }
 
+// Of `Rs`, the circle the transfer from the loop now costs least (review M5's rule), or null.
+function nearestOf(Rs: readonly number[]): number | null {
+  const pred = getPrediction();
+  const dv = (R: number): number => circleTransferDvKmS(state().level.planet.mu, pred.fit.rp, pred.fit.ra, R);
+  return Rs.reduce<number | null>((best, R) => (best === null || dv(R) < dv(best) ? R : best), null);
+}
+
 function fitsAt(R: number, labels: readonly string[], warp = LANDING_TACTICAL_WARP): boolean {
   const { planet } = state().level;
   return state().landing.lzs.filter((lz) => labels.includes(lz.label))
@@ -94,9 +102,14 @@ function fitsAt(R: number, labels: readonly string[], warp = LANDING_TACTICAL_WA
   check('the grid: one step under the band\'s top, then down by V3_STEP_KM to the floor', grid[0] === ring.max - V3_STEP_KM
     && grid.every((R, i) => i === 0 || grid[i - 1]! - R === V3_STEP_KM) && grid[grid.length - 1]! >= ring.min + V3_STEP_KM, grid.join(' '));
   const labels = state().landing.lzs.map((lz) => lz.label);
-  check('KESTREL healthy: every LZ fits, on the grid, and no grid point above it fits them all', aim !== null && aim.misses.length === 0
-    && aim.fits.length === labels.length && grid.includes(aim.targetKm) && fitsAt(aim.targetKm, labels)
-    && grid.filter((R) => R > aim.targetKm).every((R) => !fitsAt(R, labels)), JSON.stringify(aim));
+  // Review M5 (V3_AIM_ABOVE_DRAG 'nearest'): above the DRAG line, of the grid points where every LZ fits, the one the transfer
+  // from the loop costs least; the highest only below the line.
+  const highest = grid.find((R) => fitsAt(R, labels)) ?? null;
+  check('KESTREL healthy (M5): every LZ fits, on the grid, above the DRAG line, and no grid point that fits them all above the '
+    + 'line costs a smaller transfer', V3_AIM_ABOVE_DRAG === 'nearest' && aim !== null && aim.misses.length === 0
+    && aim.fits.length === labels.length && grid.includes(aim.targetKm) && fitsAt(aim.targetKm, labels) && !aim.belowDrag
+    && nearestOf(grid.filter((R) => fitsAt(R, labels) && R >= dragLineKm(ring))) === aim.targetKm, `${JSON.stringify(aim)} highest ${highest}`);
+  console.log(`INFO M5 KESTREL healthy from a lock at 0.6 of the band: the nearest R* ${aim?.targetKm}, the highest that fits every LZ ${highest}`);
   console.log(`INFO KESTREL healthy: R* ${aim?.targetKm} (${(aim?.targetKm ?? 0) - state().level.planet.R} km up), drop ±${aim?.dropKm.toFixed(0)} km, `
     + `FUEL after ${aim?.fuelAfterPct.toFixed(1)}%, label "${aim ? v3GhostLabel(state(), aim) : ''}"`);
   check('…[B] on a locked orbit offers LANDING ORBIT, not ROUND', autoModeFor(state(), getPrediction(), skillLive(state().memory, 'autoburn')) === 'landing-orbit');
@@ -115,9 +128,9 @@ function fitsAt(R: number, labels: readonly string[], warp = LANDING_TACTICAL_WA
   console.log(`INFO VESPER, Sensor Interp 70%: R* ${aim?.targetKm}, fits ${aim?.fits.join(',')}, misses ${JSON.stringify(aim?.misses)}, `
     + `label "${aim ? v3GhostLabel(state(), aim) : ''}"`);
   const grid = landingOrbitGrid(state().level.ring);
-  check('VESPER, Sensor Interp degraded: no orbit fits LZ-C, so the highest orbit fitting the most (LZ-A and LZ-B)', aim !== null
-    && aim.fits.join() === 'LZ-A,LZ-B' && aim.misses.length === 1 && aim.misses[0]!.lz === 'LZ-C'
-    && grid.filter((R) => R > aim.targetKm).every((R) => !fitsAt(R, aim.fits)), JSON.stringify(aim));
+  check('VESPER, Sensor Interp degraded: no orbit fits LZ-C, so the orbit fitting the most (LZ-A and LZ-B), nearest above the line (M5)',
+    aim !== null && aim.fits.join() === 'LZ-A,LZ-B' && aim.misses.length === 1 && aim.misses[0]!.lz === 'LZ-C'
+    && nearestOf(grid.filter((R) => fitsAt(R, aim.fits) && R >= dragLineKm(state().level.ring))) === aim.targetKm, JSON.stringify(aim));
   check('…the miss names the REPAIR that narrows its dot (L9\'s rule: Sensor Interp), and the label says it',
     aim?.misses[0]?.repair?.file === 'sensor' && v3GhostLabel(state(), aim) === 'LANDING ORBIT · LZ-A, LZ-B FIT · REPAIR SENSOR INTERP FOR LZ-C',
     aim ? v3GhostLabel(state(), aim) : '');
@@ -140,6 +153,17 @@ function fitsAt(R: number, labels: readonly string[], warp = LANDING_TACTICAL_WA
   const mode = autoModeFor(state(), getPrediction(), skillLive(state().memory, 'autoburn'));
   check('…with no orbit leaving 20% FUEL the aim is null and v3 flies v2\'s rule (ROUND on a locked ellipse)', none === null && mode === 'round',
     `${JSON.stringify(none)} ${mode}`);
+  // Review m12: v3 flying v2's ROUND says why, on the ghost and the Skills row.
+  const short = getPrediction();
+  check('…and the Skills row says why (m12): `NO LANDING ORBIT LEAVES 20% FUEL`',
+    v3NoAimLine(state(), short) === V3_TEXT.noOrbitFuel(AUTO_FUEL_RESERVE_PCT) && autoburnStatus(state()).text === V3_TEXT.noOrbitFuel(AUTO_FUEL_RESERVE_PCT),
+    `${v3NoAimLine(state(), short)} · ${autoburnStatus(state()).text}`);
+  shipAt(VESPER, { sensor: 10, driver: 100, repair: true });
+  const blind = getPrediction();
+  const ghost = autoGhost(state(), blind);
+  check('…no orbit on the grid fits any LZ: [B] offers ROUND, whose ghost names the REPAIR (`NO LANDING ORBIT FITS — REPAIR SENSOR INTERP`)',
+    landingOrbitAim(state(), blind) === null && v3NoAimLine(state(), blind) === V3_TEXT.noOrbit('SENSOR INTERP') && ghost?.mode === 'round'
+      && ghost.label === V3_TEXT.noOrbit('SENSOR INTERP'), `${v3NoAimLine(state(), blind)} · ${JSON.stringify(ghost)}`);
 }
 
 // --- R12: judged at the landing's warp in FLIGHT too -------------------------------------------------------------------------
@@ -190,6 +214,7 @@ function fitsAt(R: number, labels: readonly string[], warp = LANDING_TACTICAL_WA
     V3_TEXT.holds, V3_TEXT.lower(lz), V3_TEXT.lowerKeeps(lz), V3_TEXT.lowerAlt('9,999'), V3_TEXT.topUpCosts(lz), V3_TEXT.toV2,
     V3_TEXT.landingOver, V3_TEXT.decayTopUp('▲', time), V3_TEXT.decayHolds, V3_TEXT.ghostEvery(999, 100),
     V3_TEXT.ghostSome(['LZ-A', 'LZ-B', 'LZ-C'], 'NAV PLOTTER', lz), V3_TEXT.ghostSome(['LZ-A', 'LZ-B', 'LZ-C'], null, lz),
+    V3_TEXT.noOrbit('SENSOR INTERP'), V3_TEXT.noOrbit('NAV PLOTTER'), V3_TEXT.noOrbit(null), V3_TEXT.noOrbitFuel(AUTO_FUEL_RESERVE_PCT),
     AUTOBURN_TEXT.armedOrbit('▲', time), AUTOBURN_TEXT.armedHold, AUTOBURN_TEXT.armedTopUp('▲', time) + ' · [F] SKIP',
     AUTOBURN_TEXT.orbiting, AUTOBURN_TEXT.orbitingMind, AUTOBURN_TEXT.toppingUp, AUTOBURN_TEXT.toppingUpMind, AUTOBURN_TEXT.reserveOrbit,
     AUTOBURN_TEXT.downgradedOrbit, AUTOBURN_TEXT.readyV3, AUTOBURN_SKILL_ROW.holding('9,999'), AUTO_MINI_TEXT.armed(time, 'orbit'),

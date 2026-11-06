@@ -27,6 +27,12 @@ export interface ModeRule {
   then: { phase: 'idle' | 'done'; end: AutoburnEnd } | 'hold';
   // The radio when the fuel reserve or a downgrade stops it, by whether this engagement flew a capture.
   stopped: { reserve: (captured: boolean) => string; downgraded: (captured: boolean) => string };
+  // Slice 4c–4e review m13: where its circle comes from at engagement (`round`: ROUND's aim at ▼, or ▲ when ▼'s burn costs a
+  // window; `landing-orbit`: AUTOBURN v3's aim; none for the modes that fly no circle).
+  target: 'none' | 'round' | 'landing-orbit';
+  // The mode it goes on as when the file falls to the version below `needs` (03 §3.5 "finishes with what the lower
+  // version can do"; plan R14: v3 → v2 rounds at the same circle), or null: the needs rule ends it ('downgraded').
+  fallsTo: AutoMode | null;
 }
 
 const CAPTURE_STOPPED: ModeRule['stopped'] = {
@@ -37,16 +43,17 @@ const CAPTURE_STOPPED: ModeRule['stopped'] = {
 export const MODE_RULES: Readonly<Record<AutoMode, ModeRule>> = {
   capture: {
     needs: 1, fromFlyby: true, flightOnly: true, circle: false, noShrink: false, afterCapture: 'end',
-    doneWhen: 'loop-closed', then: { phase: 'idle', end: 'no-capture' }, stopped: CAPTURE_STOPPED,
+    doneWhen: 'loop-closed', then: { phase: 'idle', end: 'no-capture' }, stopped: CAPTURE_STOPPED, target: 'none', fallsTo: null,
   },
   green: {
     needs: 2, fromFlyby: true, flightOnly: false, circle: false, noShrink: true, afterCapture: 'continue',
-    doneWhen: 'in-ring', then: { phase: 'done', end: 'green' }, stopped: CAPTURE_STOPPED,
+    doneWhen: 'in-ring', then: { phase: 'done', end: 'green' }, stopped: CAPTURE_STOPPED, target: 'none', fallsTo: null,
   },
   round: {
     needs: 2, fromFlyby: false, flightOnly: false, circle: true, noShrink: false, afterCapture: 'continue',
     doneWhen: 'circle', then: { phase: 'done', end: 'round' },
     stopped: { reserve: () => AUTOBURN_TEXT.reserveRound, downgraded: () => AUTOBURN_TEXT.downgradedRound },
+    target: 'round', fallsTo: null,
   },
   'landing-orbit': {
     needs: 3, fromFlyby: true, flightOnly: false, circle: true, noShrink: true, afterCapture: 'continue',
@@ -55,5 +62,6 @@ export const MODE_RULES: Readonly<Record<AutoMode, ModeRule>> = {
       reserve: () => AUTOBURN_TEXT.reserveOrbit,
       downgraded: (captured) => (captured ? AUTOBURN_TEXT.downgradedCaptured : AUTOBURN_TEXT.downgradedOrbit),
     },
+    target: 'landing-orbit', fallsTo: 'round',
   },
 };
