@@ -1784,6 +1784,9 @@ body.reduced-motion .mode-toggle-opt.alerting:not(.unread) { color: var(--alerti
 /* ── The LOST card's pods line ── */
 .burn-result-pods { font-size: 14px; letter-spacing: 0.06em; color: var(--text); margin: -10px 0 var(--sp-8); min-height: 1.4em; }
 .burn-result-pods[hidden] { display: none; }
+.burn-result-cycles { font-size: 12px; letter-spacing: 0.08em; color: var(--accent); margin: -6px 0 var(--sp-8); }
+.burn-result-cycles[hidden] { display: none; }
+.burn-result-cycles .burn-result-topup { color: var(--text); margin-top: 2px; }
 
 /* ── The mini-HUD while landing ── */
 .mh-landing { display: flex; align-items: center; justify-content: space-between; gap: 6px; }

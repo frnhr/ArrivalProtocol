@@ -1,9 +1,11 @@
 import type { Store } from '@state/store';
 import type { GameState, BurnStatus, RunPhase, TerminalStatus } from '@state/schema';
 import { TERMINAL } from '@systems/flight-hud';
-import { shipLost, lossPlan, continueAfterLoss, shipOutcomeOf, type LossPlan } from '@systems/run';
+import { shipLost, lossPlan, continueAfterLoss, shipOutcomeOf, shipResultOf, type LossPlan } from '@systems/run';
+import { shipCycles } from '@systems/run-score';
+import { cyclesReport } from '@systems/training-model';
 import { landingResult } from '@systems/landing-rules';
-import { requireById } from '@components/dom';
+import { requireById, make } from '@components/dom';
 import { MAP_TEXT } from '@data/map-text';
 import { LOSS_BUTTON } from '@data/script';
 import { RESULT_BANNER_DELAY_MS } from '@data/tuning';
@@ -46,6 +48,7 @@ export function mountBurnResult(store: Store<GameState>): () => void {
   const titleEl = requireById('burnResultTitle');
   const subEl = requireById('burnResultSub');
   const podsEl = requireById('burnResultPods');
+  const cyclesEl = requireById('burnResultCycles');
   const retryEl = requireById('burnResultRetry');
 
   // Cosmetic, wall clock: the card is presentation, and the flight is already over.
@@ -67,6 +70,25 @@ export function mountBurnResult(store: Store<GameState>): () => void {
     podsEl.hidden = false;
     podsEl.textContent = notLaunched > 0 ? LOST_CARD_TEXT.podsFate(notLaunched, POD_STATE_TEXT.notLaunched, landed)
       : parked > 0 ? LOST_CARD_TEXT.podsFate(parked, POD_STATE_TEXT.parked, landed) : LOST_CARD_TEXT.allDown(landed);
+    showCycles();
+  }
+
+  // Slice 4 (the review's designer Q4): a lost ship still pays its training cycles (ARRIVED +1, and whatever landed before
+  // it was lost), and BEAM OUT and EMERGENCY ships have no LANDING REPORT to say so: the card says it in the report's words,
+  // from the same earning endShip records at the button (run-score.ts shipCycles; training-model.ts cyclesReport), with the
+  // first pick's top-up under it on a run's first ship. Not on the classic world (no tree), nor before the simulation's
+  // retry (the ship is flown again, nothing is earned).
+  function showCycles(): void {
+    const state = store.getState();
+    cyclesEl.hidden = true;
+    const plan = lossPlan(state);
+    if (state.run.map.world !== 'arm' || plan.kind === 'simulation') return;
+    const result = shipResultOf(state, shipOutcomeOf(state), 0);
+    if (result.colonistsAboard <= 0) return;
+    const report = cyclesReport(shipCycles(result), plan.kind === 'end', state.run.ships.length === 0);
+    cyclesEl.replaceChildren(make('div', 'burn-result-cycles-line', report.line),
+      ...(report.topUp === null ? [] : [make('div', 'burn-result-topup', report.topUp)]));
+    cyclesEl.hidden = false;
   }
 
   // The card shows its outcome after RESULT_BANNER_DELAY_MS (the outcome's stamp and chord first).
@@ -75,6 +97,7 @@ export function mountBurnResult(store: Store<GameState>): () => void {
     root.dataset.outcome = outcome;
     subEl.textContent = sub;
     podsEl.hidden = true;
+    cyclesEl.hidden = true;
     showTimer = setTimeout(() => {
       root.hidden = false;
       showTimer = null;
