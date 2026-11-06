@@ -1220,3 +1220,100 @@ merged in). New suite `skills/ui-models` (43 checks, under a second). Checked in
 - **Lead**: `skills.ts` keeps TREE's `case 'cycles': continue;` (the +2 card is never in `run.upgrades`, so it has no row).
   The e2e `map-desk` / `phone` / `playthrough` checks that read the desk's step list or tab labels will see `A SKILL` first
   and four tabs (labels unchanged: a tab's `[R]` is now its own span, hidden under 1440 px).
+
+## Deviations (review fixes)
+
+Recorded by the fix pass for batch 4a+4b (`slice-4-review.md`, each finding marked there). The lead's decisions for the
+pass are built as given; what follows is where the build chose a detail, and the measurements and notes it was asked for.
+
+### AUTOBURN
+
+1. **M1's follow-on:** a claim (or a wait) is let go once the burn it was made for is more than
+   `AUTO_THREAD_RELEASE_TAC` (2 × `AUTO_THREAD_CLAIM_TAC`, 16 tac s) away again. The margin keeps a START BURN that jitters
+   across the window's edge from claiming and releasing tick by tick.
+2. **M2:** the preset is selected once, on the tick the burn enters the claim window (not under the kid's own burn); a
+   preset the kid picks after that stands; at the fire moment, with the kid not firing, it takes its preset back and
+   fires. A kid still firing IN at the moment makes it wait, as before.
+3. **m2:** a new `AutoburnEnd`, `'offline'` (phase `idle`): the radio says `AUTOBURN OFF WHILE IT IS REPAIRED — you have the
+   controls` (MOVE and a switched-off file have their own words). No alert, no klaxon.
+4. **m3:** "in the bracket" is the mode's first burn against the effective lock range (`inLockRange`), minus the refusals
+   that mean it can't fly at all (no file, damaged, no presets, engine, flight over). The chime's edge starts unknown after
+   a world reset, so a ship (or a reload) that begins inside the bracket does not chime on its first tick.
+5. **(a):** GREEN pressed in LANDING says `AUTOBURN: GREEN COSTS LZ-x's WINDOW` when its first planned trim's span crosses an
+   in-band window of an LZ with room (`greenCostsLz`, the same `burnSpanBlocks` ROUND reads). The trim still fires at its
+   apsis.
+6. **FLIGHT deviation 7:** `flying` and `captured` are `burn.auto.flying` / `burn.auto.captured`. The save's
+   `likeReference` check is strict (no optional keys, by 3c's rule), so the field cannot be "optional with a default":
+   **RUN_SAVE_VERSION is 3**, `RUN_SAVE_MIGRATIONS[2]` adds both empty, the shape is pinned under 3, and the codec checks
+   the machine whole (`flying` set exactly while pointing or burning, its preset and apsis known). `wasInLock` (the chime's
+   edge) stays module-level: it is a sound's edge, not the machine.
+7. **Architecture:** `MODES_BY_VERSION` (a `Record<SkillVersion, …>`, so a new version is a type error until it has a row;
+   v3 flies v2's modes until 4e), `AUTOBURN_SKILL_ROW.armed[mode]`, and `stoppedLine` (the reserve's and the downgrade's
+   words per mode; `landing-orbit` throws until 4e words it).
+8. **m6:** `tut-autoburn-v2` (`AUTOBURN v2 — [B] makes it green. [B] on green makes it round.`), once, the flight's like
+   READY; READY steps aside while the file works as v2. FLIGHT's request to limit READY to the flight needed no change:
+   its `isFlying` is `run.phase === 'flight'` already.
+
+### The desk
+
+9. **M3:** `ui.trainingArmed` marks a pick made this visit (`selectTrainingCell`: [1]/[2], ↑ ↓, a click). `desk.ts
+   deskEnter` is the one rule: `'train'` while a filling bar stands, or an armed cell on the open tab has an action; else
+   `'set-course'`. While it says train, the bottom bar reads the action (`TRAIN ▸ 1 CYCLE [ENTER]`) and a click on it trains
+   (the bar does what it shows); the step reads `SET COURSE ▸ X [SPACE]`. The TRAIN button inside the tab carries `[ENTER]`
+   only while armed. UNDO leaves its cell selected but unarmed. ESC disarms first only when ENTER would train; an armed cell
+   with nothing to do (the first desk's pick once made) goes straight back to the card, so ESC is never a dead key.
+10. **M4:** `goTransmit` clears the bar and disarms, so every SET COURSE path (SPACE, the bar, `__ap.course`) is covered.
+11. **m9 (kept):** the run's first desk opens on TRAINING even when the REPOSITORY's last-rm prompt would open. Ship 1 is
+    calm (no seed reaches the rm before desk 1), and the REPOSITORY is one key away.
+12. **m14:** `skill-tree.ts isFirstDesk(run)` (visit 1: one ship ended) and `firstPickOwed(run)`; `deskSteps` now reads
+    `isFirstDesk`, so a crafted desk with no ship ended is not the first desk (`map/desk-models` records ARES-VII's result).
+
+### Words, data and one home per rule
+
+13. **m5:** `skill-tree.ts DEMO_SOURCES` (a row per demo kind; `drops: null` until 4c) and `demoKindOf`; the words'
+    `DEMO_WORDS` (captures, landings). The TRAINING head lists one count per kind a built skill learns from (`YOUR DEMOS ·
+    1 CAPTURE`); a skill with no demos trains as `TRAINING SENTRY v1`. The boot lines take the kind.
+14. **The mini-demos** are named in data (`training-text.ts TRAINING_DEMO_ART`: `capture`, `green`, `low-orbit`, `lock`,
+    `plain`); `demoSvg` switches over those, exhaustively.
+15. **The Skills row** takes a per-skill hook (`skills.ts SKILL_ROW_HOOKS`: title, effect, status); AUTOBURN's is Track
+    FLIGHT's `autoburnStatus`.
+16. **One home each:** `skill-levels.ts restoreCostOf(state, id, level?)` (the cell, RESTORE itself, the PACKET's chips and
+    PACK AS, the Skills row, DELETE's confirm, the relief hints); `capabilities.ts fileWorksAs` (the chip, INSPECT,
+    `skillLive`). Not changed: the preview's FILES head (`fit.files − heldSkillBlocks`), which the desk never previews PACK
+    AS against.
+17. **m8:** `TRAINING_HOLD_SEC`, `TRAINING_CHIRP_SEC`, `TRAINING_BANK_ROLL_SEC`, `REPORT_CYCLES_START_SEC`,
+    `REPORT_CYCLE_STEP_SEC` and `SKILL_FLICKER_MS` are in `tuning.ts` with their WHYs (`training-model.ts` re-exports the
+    first).
+18. **Words:** `AUTOBURN_REFUSAL.untrained` is `NO AUTOBURN YET`; `FROM YOUR 1 CAPTURE`; the effect's `[B]`.
+19. **m10, m11:** `SkillChip.without` and `PACKET_SKILL_TEXT.loss` (the view composes the chip's own line); `trainedChips`
+    reads `packet.skills`.
+
+### Measurements and notes
+
+20. **ROUND re-aimed to ▲ (designer Q3), measured** (a fix-pass probe, `roundAim` then `sureTacAt` per LZ with room at the
+    ▼-circle and the ▲-circle, healthy drivers; locked ellipses e 0.03 / 0.05 with ▼ at 0.2, 0.35 and 0.5 of the band, ▼'s
+    direction every 10°):
+    - **KESTREL** (three 500 km LZs): 3 of 36 orbits re-aim to ▲ in each case; sure window 10.7–11.4 tac s at ▼'s circle,
+      11.0–11.7 at ▲'s (it *rises*: the slower sweep outruns the wider dot). No LZ loses its fit.
+    - **HALCYON** (500 and 400 km): 0–2 of 36 re-aim; LZ-B 8.0 → 7.7–8.0 tac s, LZ-A 11.2–11.5 → 11.5–11.8. No LZ loses its fit.
+    - **VESPER** (400, 400, 250 km), ▼ at half the band only: 3 of 36 re-aim; LZ-A and LZ-B 8.0 → 7.9–8.0, the narrow LZ-C
+      3.1 → 2.6 (e 0.03) or 2.1 (e 0.05) tac s: under `LANDING_SURE_MIN_TAC` (4) at both apsides, still reachable at ▲.
+    - **LAST LIGHT:** no orbit re-aims.
+    - Nothing becomes impossible, so the behaviour is unchanged. For the designer: on a narrow LZ the climb shortens an
+      already short window by up to a third (VESPER LZ-C).
+21. **RESTORE after PACK AS (designer note).** 03 §3.3 lists "packed at a lower version" under **Lost skills**: "Only the
+    versions above it are lost, and restoring them costs half of their price." So a voluntary PACK AS is a loss the spec
+    answers with RESTORE, and the code matches. The heal (a 64% v2 packed as v1, restored for 3 cycles, comes back a fresh
+    v2 at 100%) follows from §3.3's "new code heals"; the spec does not say whether a RESTORE after a PACK AS should keep the
+    file's damage. Left as built; for the designer, next to the playtest's R7: is the fresh file intended, or should the
+    restore carry the packed file's health?
+22. **The lost ship's cycles (designer Q4):** the LOST card shows the LANDING REPORT's cycles line (`cyclesReport` over
+    `shipCycles` of `shipResultOf`, the earning `endShip` records at its button) and the first pick's top-up on a run's first
+    ship; on the arm only, never before the simulation's retry.
+23. **e2e (not run here):** `map-desk` (the first desk opens on TRAINING: four tabs, `1 A SKILL · 2 A SHIP · 3 A FILE · 4 SET
+    COURSE`, SPACE refused, [1] then ENTER, ESC to the card; the phone: a tap on the card, a tap on the bar, the CARD tab),
+    `playthrough` and `run-flow` (the first pick by keys), `phone` (by taps). `run2` reads the chart only and needed nothing.
+24. **Tests:** `skills/autoburn-modes` gains M1 (each GREEN burn holds one thread; a trim with every thread busy), M2, m2,
+    m3, (a) and m6; `skills/ui-models` the desk's keys at the model (M3, M4); `skills/training-flow` the watcher's offline
+    spells (m1) and the boot words per kind; `save/codec` and `save/shape-pin` v3. Still open from the review's gaps: RESUME
+    at a SHIP DONE desk with a lost skill, a downgrade during a GREEN trim or an armed ROUND in LANDING.

@@ -100,6 +100,17 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
   update (`src/systems/map-update.ts`, matched to `docs/phase3/map-sim/`) moves the same arm on: the next unit launches
   0–35 years later, visited ships are colonies, skipped ships age or leave, new ships report home, and the last unit's
   trail, grey cross, beacon and letters are found where it went.
+- The skill tree, batch 4a+4b (phase 3 slice 4, `docs/phase3/03-skills.md`; plan and deviations in
+  `docs/phase3/impl/slice-4-plan.md`): four skills as data (`src/data/skills.ts`; AUTOBURN v1–v2 built, AUTODROP, SURVEY
+  and SENTRY `OPENS LATER`), bought with TRAINING CYCLES that every ship pays (ARRIVED +1, LANDED up to +5; the LANDING
+  REPORT and the LOST card say them) at the desk's TRAINING [T] tab (`TrainingWindow.ts`, model
+  `systems/training-model.ts`): the required first pick at the run's first desk ([1], then ENTER: the 1.5 s bar), the grid
+  from desk 2 (ENTER trains only a cell the kid picked, SPACE always sets course), UNDO until TRANSMIT ▸. Skills are files
+  (`AUTOBURN.skl`) that cross in the packet: PACK AS a lower version, RESTORE at half price what was lost (eaten, deleted,
+  left behind, packed lower). Graded damage costs a version per colour of damage (`capabilities.ts skillLive`), stamped
+  `v2 → v1` / `RESTORED`. AUTOBURN v1 flies the capture, v2 GREEN (capture, then trims) and ROUND (`[B] makes it green; [B]
+  on green makes it round`), each within its LOCK RANGE (90 / 270 / 810 tac s, the NAV PLOT's bracket), claiming a Core
+  thread for each burn (`× AN OP` when none is free), never steering (`systems/autoburn.ts`).
 - A full run (phase 2's, now the classic fixture): five ships (ARES-VII, HALCYON, KESTREL, VESPER, LAST LIGHT), each
   with its own rule, TRANSMIT between
   them (a link budget, transit damage, one card of three to carry), soft fails instead of reloads, RUN END with score,
@@ -124,7 +135,7 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 
 ## Designed but not built (deliberately deferred)
 
-- Aerobraking and an ENTRY gauge; AUTOBURN v2 (trims to green); moons, slingshots, binary stars (TASK 800); a solar
+- Aerobraking and an ENTRY gauge; moons, slingshots, binary stars (TASK 800); a solar
   flare; the encrypted-fragment hunt; a sector map; LLM-trained skills (AUTOBURN is the deterministic stand-in); a mid-run
   save; mass uncertainty as a readable upgrade; alien contact and colony prep.
 
@@ -132,8 +143,11 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 
 1. **Fran's playtest**: one full run by `docs/playtest-checklist.md`.
 2. **Phase 3** (`docs/PHASE3.md`, specs in `docs/phase3/`): landing, the calm opening and the galaxy map (slices 1a, 1b, 2
-   and 3a built; plans and deviations in `docs/phase3/impl/`), 3b (the repository, deliveries, the INBOX) and 3c (the save,
-   archive v2, the arm carried between runs) also built; then the skill tree, residents, SURVEY, new endings.
+   and 3a built; plans and deviations in `docs/phase3/impl/`), 3b (the repository, deliveries, the INBOX), 3c (the save,
+   archive v2, the arm carried between runs) and the skill tree's batch 4a+4b also built. Next, by `slice-4-plan.md`
+   §5.4: 4c AUTODROP v1–v3 (the LandingController seam, `DEMO_SOURCES.drops`), 4d SENTRY and disguised seeds, 4e AUTOBURN
+   v3 LANDING ORBIT; then slice 5 (residents and the grants), 6 (SURVEY), 7 (REASSIGNMENT, MERGE's pods, SUNSET) and 8 (the
+   rebalance).
 3. **The refactors parked until after the playtest** (discuss the split before writing code): `src/data/script.ts`
    into its text and its director rules, `src/styles/game.css` by surface, `tuning.ts` and `script.ts` grouped by
    domain.
