@@ -42,14 +42,20 @@ const long = 'W'.repeat(SEG_NAME_MAX_CHARS);
 // --- AUTOBURN ---------------------------------------------------------------------------------------------------
 {
   const lines = [
-    AUTOBURN_TEXT.trained(9, 99), AUTOBURN_TEXT.retrained(12, 99), AUTOBURN_TEXT.armed('99:59'), AUTOBURN_TEXT.burning, AUTOBURN_TEXT.burningMind,
+    AUTOBURN_TEXT.armed('99:59'), AUTOBURN_TEXT.burning, AUTOBURN_TEXT.burningMind,
+    // Slice 4 (03 §3.6–§3.7): v2's waits, burns and hand-backs, the thread wait (worst case 13:30, LOCK 810), the tails.
+    AUTOBURN_TEXT.armedTrim('▲', '99:59'), AUTOBURN_TEXT.armedRound('▼', '99:59'), AUTOBURN_TEXT.threadWait('99:59'),
+    AUTOBURN_TEXT.threadWaitShip('99:59'), AUTOBURN_TEXT.threadWaitLate, AUTOBURN_TEXT.threadWaitLateShip, AUTOBURN_TEXT.trimming,
+    AUTOBURN_TEXT.trimmingMind, AUTOBURN_TEXT.rounding, AUTOBURN_TEXT.roundingMind, AUTOBURN_TEXT.green, AUTOBURN_TEXT.greenLanding,
+    AUTOBURN_TEXT.round, AUTOBURN_TEXT.roundLanding, AUTOBURN_TEXT.reserveCaptured, AUTOBURN_TEXT.reserveGreen, AUTOBURN_TEXT.reserveRound,
+    AUTOBURN_TEXT.downgradedCaptured, AUTOBURN_TEXT.downgradedGreen, AUTOBURN_TEXT.downgradedRound, AUTOBURN_TEXT.roundCostsWindow('LZ-WW'),
     // WP9 fix round 1: the hand-back is CAPTURED (a trim left for later) or IN THE RING; refused [B]s have strip lines.
     AUTOBURN_TEXT.braked, AUTOBURN_TEXT.brakedTab, AUTOBURN_TEXT.inRing, AUTOBURN_TEXT.ready, AUTOBURN_TEXT.off,
     ...Object.values(AUTOBURN_DROP_TEXT).map((text) => `${text}${AUTOBURN_DROP_TAB}`), ...Object.values(AUTOBURN_REFUSAL),
     ...Object.values(AUTO_REFUSAL_LINES).map((line) => line!.text),
   ];
   const bad = lines.filter((line) => !fits(line));
-  check('every AUTOBURN line fits (boot, strip, alarms with [TAB], radio, refusals)', bad.length === 0, bad.join(' | '));
+  check('every AUTOBURN line fits (strip, alarms with [TAB], radio, refusals)', bad.length === 0, bad.join(' | '));
   check('the drop line says §6.10\'s words', AUTOBURN_DROP_TEXT.lost === 'AUTOBURN.skl LOST — MANUAL');
   check('the file name fits a segment name', SKILL_FILE_TEXT.autoburn.name.length <= SEG_NAME_MAX_CHARS && SKILL_FILE_TEXT.autoburn.name === 'AUTOBURN.skl');
 }
