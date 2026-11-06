@@ -17,10 +17,11 @@ import type { GameState } from '@state/schema';
 import type { RoomFit } from '@/types/map';
 import type { SkillId, SkillPurchase, CellRow, SkillVersion, CycleEarning } from '@/types/skill';
 import {
-  treeCells, bankOf, deskBlocker, visitNow, held, paid, lostLevels, restorePrice, fileLevel, type TreeCell, type CellLook,
+  treeCells, bankOf, deskBlocker, visitNow, held, paid, lostLevels, restorePrice, type TreeCell, type CellLook,
   type TrainRefusal,
 } from '@systems/skill-tree';
 import { unitArrival } from '@systems/arrival-preview';
+import { skillRelief } from '@systems/skill-files';
 import { deliveriesForHop } from '@systems/repository';
 import { mapFacts } from '@systems/map-facts';
 import { planThreat, threatInputFor } from '@systems/threat-plan';
@@ -279,19 +280,15 @@ export function packetPreview(fit: Readonly<RoomFit>, skills: number, tight: boo
   return { text: [head, limit, tail].join(' · '), tone: fit.chargeArrives < CHARGE_ARRIVAL_FLOOR ? 'warn' : 'quiet', binding, hint: null };
 }
 
-// The cheapest way to make an over packet fit, named before the PACKET: undo a purchase made here, else pack the carried
-// skill file that frees the most as v1, else leave files behind.
-function overHint(state: Readonly<GameState>): string {
+// The cheapest way to make an over packet fit, named before the PACKET: undo a purchase made here, else the cheapest PACK
+// AS that frees enough (skill-files.ts skillRelief, TREE's: cheapest RESTORE first), else leave files behind.
+export function overHint(state: Readonly<GameState>, over: number): string {
   const text = TRAINING_TEXT.preview;
   if (state.run.skills.pending.length > 0) return text.hintUndo;
-  let best: { skill: SkillId; saves: number } | null = null;
-  for (const id of SKILL_IDS) {
-    const level = fileLevel(state.memory, id);
-    if (level === null || level.version === 1) continue;
-    const saves = skillBlocks(id, level.version, level.lock) - skillBlocks(id, 1, level.lock);
-    if (best === null || saves > best.saves) best = { skill: id, saves };
-  }
-  return best === null ? text.hintLeave : text.hintPack(TRAINING_TEXT.skills[best.skill].name, 1, best.saves);
+  const packs = skillRelief(state).filter((option) => option.level !== null);
+  const pack = packs.find((option) => option.frees >= over) ?? packs[0];
+  if (pack === undefined || pack.level === null) return text.hintLeave;
+  return text.hintPack(TRAINING_TEXT.skills[pack.skill].name, pack.level.version, pack.frees);
 }
 
 function aheadLine(state: Readonly<GameState>, slot: number | null): string {
@@ -305,9 +302,8 @@ function aheadLine(state: Readonly<GameState>, slot: number | null): string {
 
 // The fit is the SHIP CARD's (desk.ts cardModel, the same plan: the selected hop, the ladder's verdict for it, the
 // deliveries riding it, nothing left behind or picked yet), through the one arrival preview.
-// INTEGRATION (the lead, plan §5.2 "order dependencies"): pass this desk's skill plan here (ArrivalPlan.skills, TREE's
-// skill-files.ts skillPacketPlan) once planPacket adds it; the fit then counts the trained files at their new sizes and
-// FILES = fit.files − the held skills' blocks is exact. Until then the fit counts the files in memory as they are.
+// unitArrival reads this desk's pending purchases from the state (TREE's skillPacketPlan), so the fit counts the trained
+// files at their new sizes and FILES = fit.files − the held skills' blocks. Nothing is packed lower at the desk.
 function previewFor(state: Readonly<GameState>, slot: number | null): TrainingPreview | null {
   const map = state.run.map;
   const from = currentSlot(state.run);
@@ -316,7 +312,7 @@ function previewFor(state: Readonly<GameState>, slot: number | null): TrainingPr
   const verdict = planThreat(threatInputFor(state.run.threat, mapFacts(map, from, slot, map.route.length + 1), state.run.stats.deal !== null));
   const fit = unitArrival(state, { hop, threat: verdict, dropped: [], pick: null, deliveries: deliveriesForHop(state, from, slot, verdict) }).fit;
   const tight = shipSummaryAt(map, slot).memoryClass === 'TIGHT';
-  return packetPreview(fit, heldSkillBlocks(state), tight, fit.word === 'leave' ? overHint(state) : null);
+  return packetPreview(fit, heldSkillBlocks(state), tight, fit.word === 'leave' ? overHint(state, Math.max(fit.over, fit.overLink)) : null);
 }
 
 // --- The model ---------------------------------------------------------------------------------------------------------

@@ -14,12 +14,12 @@ import { autoburnStatus } from '@systems/autoburn';
 import { AUTOBURN_SKILL_ROW } from '@data/skill-text';
 import { REPAIR_V2_VERSION, CHARGE_CARD_BLOCKS, CORE_LOW_INTEGRITY, FUEL_TRIM_DV_BONUS_FRAC } from '@data/tuning';
 import type { SkillFileSegment } from '@/types/segment';
-import type { SkillId, SkillLevel, SkillVersion, EffectiveVersion, RunSkillState } from '@/types/skill';
+import type { SkillId, SkillVersion, EffectiveVersion } from '@/types/skill';
 import { skillFilesOf } from '@state/selectors';
 import { skillLive, effectiveVersion, type OfflineReason } from '@systems/capabilities';
-import { paid, held, fileLevel, lostLevels, restorePrice, bankOf } from '@systems/skill-tree';
-import { SKILL_TREE, SKILL_IDS, skillBlocks, levelPrice, treeTotalCycles } from '@data/skills';
-import { TRAINING_TEXT, PACKET_SKILL_TEXT } from '@data/training-text';
+import { paid, fileLevel, lostLevels, restorePrice } from '@systems/skill-tree';
+import { SKILL_TREE, SKILL_IDS } from '@data/skills';
+import { TRAINING_TEXT } from '@data/training-text';
 import {
   BAND_OK_MIN, BAND_DEGRADED_MIN, BAND_FAILING_MIN, INTEGRITY_MAX, LOCK_RANGE_TAC, REPAIR_CHARGE_PER_POINT_PER_BLOCK, FLOAT_SLACK,
 } from '@data/tuning';
@@ -297,120 +297,6 @@ export function skillVersionStamp(state: Readonly<GameState>, skill: SkillId, fr
     return { text: SKILLS_TEXT.skill.stampDown(name, from, to), tone: 'plain', sound: null };
   }
   return null;
-}
-
-// --- The PACKET's skill chips (03 §3.4; plan §2.6; slice-4 §3 step 7) ---------------------------------------------------
-
-// What the PACKET shows of the unit's skills, over TREE's chips (systems/transmit.ts):
-// • fresh: a file trained, upgraded or restored at this desk, locked (`AUTOBURN.skl v1 (6) · TRAINED HERE · ◀ CHART TO
-//   UNDO`): leaving behind what was just paid for is UNDO's job (plan §2.3's 'trained' lock, risk R8);
-// • replaced: the files those replace (never shown: the fresh file is the skill now);
-// • carried: each carried skill file's version badge, what leaving it costs (`AUTOBURN.skl v2 (8) → brake by hand · RESTORE
-//   4`), and a PACK AS button per lower version (`PACK AS v1 (6) · RESTORE 3`), lit when chosen (TransitPlan.packAs).
-// INTEGRATION (the lead): TREE's PacketChip may carry these itself; then the screen reads its fields and this goes.
-export interface PacketSkillFresh {
-  skill: SkillId;
-  name: string;
-  version: SkillVersion;
-  blocks: number;
-  text: string;
-}
-
-export interface PacketPackAs {
-  segId: string;
-  level: SkillLevel;
-  blocks: number;
-  label: string;
-  on: boolean;
-}
-
-export interface PacketSkillCarried {
-  segId: string;
-  skill: SkillId;
-  badge: string;
-  leftBehind: string;          // the chip's line: what leaving it behind costs
-  packAs: PacketPackAs[];      // lower versions first
-  packed: SkillLevel | null;   // the PACK AS chosen
-}
-
-export interface PacketSkillView {
-  fresh: PacketSkillFresh[];
-  replaced: string[];
-  carried: PacketSkillCarried[];
-}
-
-export function packetSkillView(state: Readonly<GameState>): PacketSkillView {
-  const packAs = state.run.transit?.packAs ?? {};
-  const fresh: PacketSkillFresh[] = [];
-  const replaced: string[] = [];
-  const carried: PacketSkillCarried[] = [];
-  for (const id of SKILL_IDS) {
-    const files = skillFilesOf(state.memory, id);
-    const def = SKILL_TREE[id];
-    const paidLevel = paid(state.run.skills, id);
-    if (state.run.skills.pending.some((purchase) => purchase.skill === id)) {
-      const level = held(state, id);
-      if (level === null) throw new Error(`packetSkillView: ${id} has pending purchases and no level`);
-      const blocks = skillBlocks(id, level.version, level.lock);
-      fresh.push({
-        skill: id, name: def.fileName, version: level.version, blocks,
-        text: `${def.fileName} v${level.version} (${blocks}) · ${PACKET_SKILL_TEXT.trainedHere}`,
-      });
-      replaced.push(...files.map((seg) => seg.id));
-      continue;
-    }
-    for (const seg of files) {
-      const own = { version: seg.version, lock: seg.lock };
-      const ceiling = paidLevel ?? own;
-      const restoreLeft = restorePrice(lostLevels(id, null, ceiling));
-      const options: PacketPackAs[] = [];
-      for (let version = 1; version < seg.version; version++) {
-        const level: SkillLevel = { version: version as SkillVersion, lock: seg.lock };
-        const blocks = skillBlocks(id, level.version, level.lock);
-        options.push({
-          segId: seg.id, level, blocks,
-          label: PACKET_SKILL_TEXT.packAs(version, blocks, restorePrice(lostLevels(id, level, ceiling))),
-          on: packAs[seg.id]?.version === version && packAs[seg.id]?.lock === level.lock,
-        });
-      }
-      carried.push({
-        segId: seg.id, skill: id, badge: skillFileView(seg).badge,
-        leftBehind: PACKET_SKILL_TEXT.chip(def.fileName, seg.version, seg.size, PACKET_SKILL_TEXT.without[id], restoreLeft),
-        packAs: options, packed: packAs[seg.id] ?? null,
-      });
-    }
-  }
-  return { fresh, replaced, carried };
-}
-
-// --- RUN END and the RUN TALLY (03 §3.1; 02 §4) --------------------------------------------------------------------------
-
-// The cycles the run's skills are worth: every level it paid for (a version and the ones below it, a LOCK RANGE level and
-// the ones below it), at its price. The RUN TALLY's `TRAINED n of 54` (RESTOREs and free grants paid nothing new).
-export function trainedCycles(skills: Readonly<RunSkillState>): number {
-  return SKILL_IDS.reduce((sum, id) => {
-    const level = paid(skills, id);
-    if (level === null) return sum;
-    let cycles = 0;
-    for (let version = 1; version <= level.version; version++) cycles += levelPrice(id, { kind: 'version', version: version as SkillVersion });
-    for (let lock = 1; lock <= level.lock; lock++) cycles += levelPrice(id, { kind: 'lock', level: lock as 1 | 2 });
-    return sum + cycles;
-  }, 0);
-}
-
-export interface RunEndSkillLines {
-  unspent: string;             // RUN END: UNSPENT 3
-  tally: string;               // the RUN TALLY: TRAINED 12 of 54 · UNSPENT 3
-}
-
-// null on the classic world (no tree).
-export function runEndSkillLines(run: Readonly<Pick<GameState['run'], 'skills' | 'map'>>): RunEndSkillLines | null {
-  if (run.map.world !== 'arm') return null;
-  const unspent = bankOf(run.skills);
-  return {
-    unspent: TRAINING_TEXT.runEnd.unspent(unspent),
-    tally: TRAINING_TEXT.runEnd.tally(trainedCycles(run.skills), treeTotalCycles(), unspent),
-  };
 }
 
 export function skillsModel(state: Readonly<GameState>): SkillRow[] {

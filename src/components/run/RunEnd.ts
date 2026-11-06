@@ -14,7 +14,6 @@ import { RUN_END_TEXT } from '@data/landing-text';
 import { chartModel } from '@systems/desk';
 import { drawChart, LANDSCAPE_ROTATE_DEG } from '@components/desk/chart-draw';
 import { MAP_TEXT } from '@data/map-text';
-import { runEndSkillLines } from '@systems/skills';
 import {
   RUN_END_ARM_SEC, RUN_END_ROW_GAP_SEC, RUN_END_COUNT_SEC, BEAM_OUT_BLACKOUT_SEC, STARS_PER_SHIP, REPORT_COUNT_HEARTBEAT,
 } from '@data/tuning';
@@ -239,12 +238,12 @@ export function mountRunEnd(store: Store<GameState>): () => void {
     tally.undelivered.hidden = report.undeliveredLine === null;
     tally.undelivered.textContent = report.undeliveredLine ?? '';
     // Slice 4: the cycles left unspent (decision 18: only shown) under the rank, and the tally's TRAINED line; the arm only.
-    // INTEGRATION (the lead): read TREE's run-end.ts model fields once it carries these lines.
-    const skillLines = runEndSkillLines(state.run);
+    // (run-end.ts RunEndModel.skills, Track TREE's; null on the classic world.)
+    const skillLines = report.skills;
     tally.skills.hidden = skillLines === null;
-    tally.skills.textContent = skillLines?.tally ?? '';
+    tally.skills.textContent = skillLines?.tallyLine ?? '';
     unspentEl.hidden = skillLines === null;
-    unspentEl.textContent = skillLines?.unspent ?? '';
+    unspentEl.textContent = skillLines?.unspentLine ?? '';
     paintNext(tally.next, report.next);
     bridgeEl.hidden = report.next === null;
     bridgeEl.replaceChildren(...(report.next === null ? [] : [

@@ -4,7 +4,7 @@ import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { UpgradeId } from '@data/upgrades';
 import {
-  transmitModel, toggleDrop, toggleSendOn, type PacketChip, type TransmitModel, type DraftCardView, type CardFileChip,
+  transmitModel, toggleDrop, toggleSendOn, type PacketChip, type TransmitModel, type DraftCardView, type CardFileChip, type SkillChip,
   type UninvitedChip, type DeliveryChipView,
 } from '@systems/transmit';
 import { logEntryToOpen } from '@systems/log-view';
@@ -20,9 +20,11 @@ import { renderKeyCaps } from '@components/hud/keycaps';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
 import { MAP_TEXT } from '@data/map-text';
 import { REPO_TEXT } from '@data/repo-text';
-import { packetSkillView, type PacketSkillCarried, type PacketSkillFresh } from '@systems/skills';
+import { skillFileView } from '@systems/skills';
+import { isSkillFile } from '@state/selectors';
+import { SKILLS_TEXT } from '@data/script';
+import type { SkillFileSegment } from '@/types/segment';
 import { setPackAs } from '@systems/training';
-import { PACKET_SKILL_TEXT } from '@data/training-text';
 import {
   TRANSMIT_ARM_SEC, TRANSMIT_SEND_SEC, TRANSMIT_STREAM_FRAC, WHITE_OUT_IN_SEC, WHITE_OUT_HOLD_SEC, WHITE_OUT_FADE_SEC, WHITE_OUT_FLOOD_GRACE_SEC,
   DRAFT_CARDS,
@@ -95,52 +97,37 @@ function chipNode(chip: PacketChip): HTMLButtonElement {
 }
 
 // The picked card's new file, among the unit's own (it rides the same link and can take a transit hit).
-// Slice 4 (03 §3.4; plan §2.6, §3 step 7): a carried skill file's chip carries its version badge (`v2`, `v2▸v1` under
-// damage), says what leaving it costs (`AUTOBURN.skl v2 (8) → brake by hand · RESTORE 4`), and is followed by a PACK AS
-// button per lower version (`PACK AS v1 (6) · RESTORE 3`), lit when chosen: a smaller file crosses, and only the versions
-// above it are lost. Packed, the chip shows the size that crosses.
-function skillChipNode(chip: PacketChip, view: PacketSkillCarried): HTMLElement {
+// Slice 4 (03 §3.4; plan §2.6, §3 step 7), over TREE's PacketChip.skill: a skill file's chip keeps the tree's file name
+// (`AUTOBURN.skl`) with its version badge (`v2`, `v2▸v1` under damage, the packed level once PACK AS is on), says what
+// leaving it costs after its name (`→ brake by hand · RESTORE 5`), and is followed in its grid cell by a PACK AS button per
+// lower level (`PACK AS v1 (7) · RESTORE 3`), lit when chosen. A file trained at this desk is locked ('trained': TRAINED
+// HERE · ◀ CHART TO UNDO) and dashed.
+function skillChipNode(chip: PacketChip, skill: Readonly<SkillChip>, seg: Readonly<SkillFileSegment> | null): HTMLElement {
   const node = chipNode(chip);
   node.classList.add('skill-chip');
+  node.classList.toggle('skill-fresh', skill.trained);
+  node.classList.toggle('packed', skill.packedAs !== null);
   const head = node.querySelector('.tx-chip-head');
-  // A skill keeps its file's name as the tree writes it (`AUTOBURN.skl`), with its version badge beside it.
   const name = head?.querySelector('.tx-chip-name');
   if (name) name.textContent = chip.name;
-  const badge = make('span', `tx-chip-badge${view.badge.includes('▸') ? ' damaged' : ''}`, view.badge);
-  name?.after(badge);
-  const packed = view.packAs.find((option) => option.on) ?? null;
-  const size = head?.querySelector('.tx-chip-size');
-  if (packed !== null && size) size.textContent = `${packed.blocks}B`;
-  // What leaving it behind costs, after its name (`→ brake by hand · RESTORE 4`).
+  const view = seg !== null && !skill.trained ? skillFileView(seg) : null;
+  const text = skill.packedAs !== null ? SKILLS_TEXT.skill.version(skill.packedAs.version) : view?.badge ?? SKILLS_TEXT.skill.version(skill.level.version);
+  name?.after(make('span', `tx-chip-badge${view?.damaged ? ' damaged' : ''}`, text));
   const note = node.querySelector('.tx-chip-note');
-  const arrow = view.leftBehind.indexOf('→');
-  if (note && chip.lock === null && !chip.dropped) note.textContent = arrow >= 0 ? view.leftBehind.slice(arrow) : view.leftBehind;
-  if (chip.dropped || view.packAs.length === 0) return node;
-  // The chip and its PACK AS buttons share one cell of the grid.
+  const arrow = chip.note.indexOf('→');
+  if (note && chip.lock === null && !chip.dropped && arrow >= 0) note.textContent = chip.note.slice(arrow);
+  if (chip.dropped || skill.packAs.length === 0) return node;
   const group = make('div', 'tx-chip-group');
   group.appendChild(node);
-  for (const option of view.packAs) {
-    const button = make('button', 'tx-packas', option.label);
+  skill.packAs.forEach((option, index) => {
+    const button = make('button', 'tx-packas', option.text);
     button.tabIndex = -1;
-    button.dataset.packSeg = option.segId;
-    button.dataset.packVersion = String(option.level.version);
-    button.classList.toggle('on', option.on);
+    button.dataset.packSeg = chip.segId;
+    button.dataset.packIndex = String(index);
+    button.classList.toggle('on', option.active);
     group.appendChild(button);
-  }
+  });
   return group;
-}
-
-// A file trained at this desk (plan §2.3's 'trained' lock): it rides at its new size, and UNDO is the desk's (◀ CHART).
-function freshSkillNode(fresh: PacketSkillFresh): HTMLButtonElement {
-  const button = make('button', 'tx-chip skill-chip skill-fresh locked');
-  button.tabIndex = -1;
-  button.dataset.skill = fresh.skill;
-  button.setAttribute('aria-label', fresh.text);
-  const head = make('span', 'tx-chip-head');
-  head.append(make('span', 'tx-chip-name', fresh.name), make('span', 'tx-chip-badge', `v${fresh.version}`),
-    make('span', 'tx-chip-size', `${fresh.blocks}B`));
-  button.append(head, make('span', 'tx-chip-note', PACKET_SKILL_TEXT.trainedHere));
-  return button;
 }
 
 function cardFileNode(file: CardFileChip): HTMLButtonElement {
@@ -367,16 +354,13 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     barOver.title = overLink > 0 ? '' : left > 0 ? TRANSMIT_TEXT.overTitle(left) : '';
     packetLine.textContent = next.packetLine;
     dropLine.textContent = next.dropLine;
-    // Slice 4: the skill files (systems/skills.ts packetSkillView): a carried one with its badge and PACK AS buttons, a file
-    // replaced by this desk's training hidden, and the files trained here as locked chips after the unit's own.
-    const skills = packetSkillView(state);
-    const replaced = new Set(skills.replaced);
-    const carried = new Map(skills.carried.map((view) => [view.segId, view]));
-    const chips: HTMLElement[] = next.chips.filter((chip) => !replaced.has(chip.segId)).flatMap((chip) => {
-      const view = carried.get(chip.segId);
-      return view === undefined ? [chipNode(chip)] : [skillChipNode(chip, view)];
+    // Slice 4: a skill file's chip (TREE's PacketChip.skill) with its badge and PACK AS buttons; the file it is in memory
+    // gives the damage badge (none for a file trained here: it is fresh).
+    const chips: HTMLElement[] = next.chips.map((chip) => {
+      if (chip.skill === null) return chipNode(chip);
+      const seg = state.memory.find((candidate) => candidate.id === chip.segId);
+      return skillChipNode(chip, chip.skill, seg !== undefined && isSkillFile(seg) ? seg : null);
     });
-    chips.push(...skills.fresh.map(freshSkillNode));
     if (next.cardFile) chips.push(cardFileNode(next.cardFile));
     if (next.uninvited) chips.push(uninvitedNode(next.uninvited));
     chipsEl.replaceChildren(...chips);
@@ -629,10 +613,9 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
       event.stopPropagation();
       const segId = pack.dataset.packSeg;
       if (!segId || sending || !armed()) return;
-      const view = packetSkillView(store.getState()).carried.find((candidate) => candidate.segId === segId);
-      const option = view?.packAs.find((candidate) => String(candidate.level.version) === pack.dataset.packVersion);
-      if (view === undefined || option === undefined) throw new Error(`TransmitScreen: PACK AS on '${segId}' is not in the view`);
-      setPackAs(store, segId, option.on ? null : option.level);
+      const option = model?.chips.find((candidate) => candidate.segId === segId)?.skill?.packAs[Number(pack.dataset.packIndex)];
+      if (option === undefined) throw new Error(`TransmitScreen: PACK AS on '${segId}' is not in the PACKET's model`);
+      setPackAs(store, segId, option.active ? null : option.level);
       play('uiClick');
       return;
     }
