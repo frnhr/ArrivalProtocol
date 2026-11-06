@@ -8,7 +8,13 @@
 // • The other-apsis rule (plan §7 R2): with ▼'s burn across an LZ's window it rounds at ▲ (burnSpanBlocks; measured).
 // • The fuel reserve (plan §7 R4): a trim or a ROUND burn that would leave < 20% ends it SAVING FUEL; never the capture.
 // • The claim (plan §7 R6): every thread busy at T−8: `AUTOBURN NEEDS A THREAD … × AN OP`, and it fires late (measured).
-// • While armed an IN/OUT correction does not cancel it (the claim re-selects RETRO); SPACE on RETRO does.
+// • While armed an IN/OUT correction does not cancel it (the claim selects RETRO once); SPACE on RETRO does. An IN
+//   correction flown inside the claim window (T−5) stands, and it fires RETRO at its moment (review M2).
+// • v2's later burns claim a thread each (review M1): every burn GREEN starts holds one; with every thread busy a trim
+//   waits, `NEEDS A THREAD`, and fires late once one frees.
+// • The kid's REPAIR of an armed file ends it plainly (`'offline'`, no klaxon: review m2); the LOCK chime sounds once per
+//   way into the bracket, not on each flip of the refusal inside it (review m3).
+// • GREEN pressed in LANDING across an LZ window says which window it costs (review (a)).
 // • UNTRAINED (plan §7 R3): no demos fire 7.5 tac s late (measured against a trained skill).
 // • Graded damage (4b): v2 → v1 mid-capture finishes the capture, then hands back (`'downgraded'`).
 import { check, finish } from '../wp1/harness';
@@ -16,17 +22,18 @@ import { createHarness9 } from '../wp9/harness9';
 import { lockOn, ensureLandingKeys } from '../landing/harness-landing';
 import { giveSkillFile } from '../support/skills';
 import { setLandingMode } from '../support/landing-instant';
-import { autoburnRefusal, autoModeFor, autoburnFireInTac, previewModeBurn, roundAim } from '@systems/autoburn';
+import { autoburnRefusal, autoModeFor, autoburnFireInTac, previewModeBurn, roundAim, greenCostsLz } from '@systems/autoburn';
 import { getPrediction, secUntil, loopEccentricity, planModeBurn } from '@systems/predict';
 import { skillLive } from '@systems/capabilities';
 import { threadsBusy, threadsTotal, reserveThread, releaseThread } from '@systems/ops-core';
 import { getDropSolution } from '@systems/drop-cache';
-import { burnSpanBlocks } from '@systems/landing-orbit';
+import { burnSpanBlocks } from '@systems/landing-rules';
 import { landingFlightOf } from '@systems/guidance';
 import { ringFit, elementsFromState } from '@/types/orbit';
 import { AUTOBURN_TEXT, AUTOBURN_REFUSAL } from '@data/skill-text';
 import { DRIVER_RULES } from '@data/script';
-import { ROUND_E_TOL, AUTO_FUEL_RESERVE_PCT, AUTOBURN_UNTRAINED_OFFSET_TAC } from '@data/tuning';
+import { ROUND_E_TOL, AUTO_FUEL_RESERVE_PCT, AUTOBURN_UNTRAINED_OFFSET_TAC, AUTO_THREAD_CLAIM_TAC } from '@data/tuning';
+import { on } from '@systems/events';
 import type { GameState } from '@state/schema';
 import type { LockLevel, SkillVersion } from '@/types/skill';
 
@@ -64,13 +71,21 @@ function untilOffered(maxWall = 200): boolean {
 // Steps while AUTOBURN is engaged, recording each burn it starts (with how late against its START BURN, in tac s), the
 // most threads it held while armed and unclaimed, the strip's AUTOBURN lines (the flight table's and the director's) and
 // whether the plan ever shrank. Armed with its burn far off it presses [F], as the strip offers (one SKIP per coast).
-interface Flown { burns: { reason: string; fuelPct: number; lateTac: number }[]; heldWhileWaiting: number; lines: string[]; shrink: boolean; skips: number }
+// `heldWhileWaiting` is sampled while armed with the burn still outside the claim window (review M1: sampled on `!claimed`,
+// it measured nothing once the flag stuck after the first burn); `threads` is how many threads were busy as each burn began.
+interface Flown {
+  burns: { reason: string; fuelPct: number; lateTac: number; threads: number }[];
+  heldWhileWaiting: number; lines: string[]; shrink: boolean; skips: number;
+}
 function flyEngaged(maxWall: number, each?: () => void): Flown {
   const flown: Flown = { burns: [], heldWhileWaiting: 0, lines: [], shrink: false, skips: 0 };
   const end = h.wall() + maxWall;
   while (h.wall() < end && engaged()) {
     const before = phase();
-    if (before === 'armed' && !state().burn.auto.claimed) flown.heldWhileWaiting = Math.max(flown.heldWhileWaiting, threadsBusy());
+    const fireIn = autoburnFireInTac(state(), getPrediction());
+    if (before === 'armed' && fireIn !== null && fireIn > AUTO_THREAD_CLAIM_TAC + 1) {
+      flown.heldWhileWaiting = Math.max(flown.heldWhileWaiting, threadsBusy());
+    }
     const bp = getPrediction().burnPoint;
     const lateTac = bp ? -tacTo(bp.inSec) : 0;
     if (before === 'armed' && state().clock.skipWarp === null && (h.shown()?.keys ?? []).includes('F') && lateTac < -30) {
@@ -84,7 +99,7 @@ function flyEngaged(maxWall: number, each?: () => void): Flown {
       if (text && text.startsWith('AUTOBURN') && !/\d:\d\d/.test(text) && !flown.lines.includes(text)) flown.lines.push(text);
     }
     if (before === 'armed' && (phase() === 'pointing' || phase() === 'burning')) {
-      flown.burns.push({ reason: bp?.reason ?? 'none', fuelPct: state().burn.fuelPct, lateTac });
+      flown.burns.push({ reason: bp?.reason ?? 'none', fuelPct: state().burn.fuelPct, lateTac, threads: threadsBusy() });
     }
   }
   return flown;
@@ -119,6 +134,8 @@ function describe(flown: Flown): string {
   check('…no thread held while it only waited; no shrink planned while engaged', flown.heldWhileWaiting === 0 && !flown.shrink,
     `${flown.heldWhileWaiting} shrink ${flown.shrink}`);
   check('…TRIMMING while it trimmed', flown.lines.includes(AUTOBURN_TEXT.trimming), flown.lines.join(' | '));
+  check('…every burn it flew held one Core thread (the trims claim theirs too: review M1)', flown.burns.every((burn) => burn.threads === 1),
+    flown.burns.map((burn) => `${burn.reason}:${burn.threads}`).join(' '));
   // ROUND in the flight lives HOLD STEADY's 3 AI s (plan §7 R1): its burn at ▼ is a loop away, past LOCK 90.
   const pred = getPrediction();
   const roundBurn = previewModeBurn(state(), 'round', pred);
@@ -223,6 +240,33 @@ function landingOn(e: number, argPeriDeg: number): void {
   }
 }
 
+// Review (a): GREEN pressed in LANDING on an accepted orbit fires its trim at the apsis whatever the window, and the radio
+// names the window it costs at the press (ROUND's pattern), so the kid can drop it first.
+function acceptedOn(argPeriDeg: number): void {
+  landingOn(0, 0);
+  const ring = state().level.ring;
+  lockOn(h, { r: ring.min + 0.35 * (ring.max - ring.min), e: 0.15, argPeriDeg, status: 'accepted' });
+  h.stepFor(0.2);
+}
+{
+  let costs: string | null = null;
+  for (let argDeg = 0; argDeg < 360 && costs === null; argDeg += 10) {
+    acceptedOn(argDeg);
+    if (autoModeFor(state(), getPrediction(), skillLive(state().memory, 'autoburn')) !== 'green') continue;
+    h.stepUntil(() => autoburnRefusal(state(), getPrediction()) === null, 200);
+    if (autoburnRefusal(state(), getPrediction()) === null) costs = greenCostsLz(state(), getPrediction());
+  }
+  check('setup: an accepted orbit in LANDING whose GREEN trim crosses an LZ window', costs !== null);
+  if (costs !== null) {
+    h.press('KeyB');
+    h.step();
+    check('…[B] arms GREEN and the radio says `AUTOBURN: GREEN COSTS LZ-x\'s WINDOW`', phase() === 'armed' && state().burn.auto.mode === 'green'
+      && said(AUTOBURN_TEXT.greenCostsWindow(costs)), `${phase()} ${state().burn.auto.mode} ${costs}`);
+    h.press('KeyB');
+    h.step();
+  }
+}
+
 // --- The fuel reserve: never the capture, always a trim or ROUND -----------------------------------------------------------
 {
   landingOn(0.05, 0);
@@ -274,6 +318,103 @@ function landingOn(e: number, argPeriDeg: number): void {
     && state().burn.auto.claimed && threadsBusy() === 1, `"${lateLine}" ${phase()}`);
   flyEngaged(200);
   console.log(`INFO …the late capture ended ${state().burn.auto.end}, loop ${fitNow().closed ? 'closed' : 'open'}, FUEL ${state().burn.fuelPct.toFixed(1)}%`);
+}
+
+// --- Review M1: a GREEN trim with every thread busy waits for one ---------------------------------------------------------
+{
+  kestrel(2, [0, 0], false, 2);
+  untilOffered();
+  h.press('KeyB');
+  h.stepUntil(() => phase() === 'burning', 300);
+  h.stepUntil(() => phase() !== 'burning' && phase() !== 'pointing', 300);
+  const afterCapture = { phase: phase(), claimed: state().burn.auto.claimed, threads: threadsBusy(), next: getPrediction().burnPoint?.reason };
+  check('M1: re-armed after the capture, the claim is cleared and no thread is held', afterCapture.phase === 'armed' && !afterCapture.claimed
+    && afterCapture.threads === 0, JSON.stringify(afterCapture));
+  const owners: string[] = [];
+  for (let i = 0; i < threadsTotal(); i++) if (reserveThread(`trim-op-${i}`)) owners.push(`trim-op-${i}`);
+  let waitLine = '';
+  let firedWhileBusy = false;
+  const end = h.wall() + 400;
+  while (h.wall() < end && phase() === 'armed' && state().burn.auto.waitingSinceTSec === null) {
+    const fireIn = autoburnFireInTac(state(), getPrediction()) ?? 0;
+    if (state().clock.skipWarp === null && (h.shown()?.keys ?? []).includes('F') && fireIn > 30) h.press('KeyF');
+    h.step();
+  }
+  waitLine = h.objective()?.text ?? '';
+  const waiting = state().burn.auto.waitingSinceTSec !== null;
+  // Hold every thread until 2 tac s past its moment: it must not fire.
+  h.stepUntil(() => { firedWhileBusy ||= phase() === 'burning' || phase() === 'pointing'; return (autoburnFireInTac(state(), getPrediction()) ?? 0) <= -2; }, 60);
+  const lateLine = h.objective()?.text ?? '';
+  for (const owner of owners) releaseThread(owner);
+  h.stepUntil(() => phase() !== 'armed', 10);
+  console.log(`INFO M1: the trim (${getPrediction().burnPoint?.reason}) waited "${waitLine}", then "${lateLine}"; freed 2 tac s late: ${phase()}`);
+  check('…with every thread busy its trim waits: `AUTOBURN NEEDS A THREAD IN 0:0n`, and does not fire', waiting && !firedWhileBusy
+    && /^AUTOBURN NEEDS A THREAD IN 0:0\d/.test(waitLine), `${waiting} ${firedWhileBusy} "${waitLine}"`);
+  check('…overdue it says NOW; a thread freed, the trim claims it and fires late', /^AUTOBURN NEEDS A THREAD NOW/.test(lateLine)
+    && (phase() === 'burning' || phase() === 'pointing') && state().burn.auto.claimed && threadsBusy() === 1, `"${lateLine}" ${phase()}`);
+  flyEngaged(300);
+}
+
+// --- Review M2: an IN correction inside the claim window stands; RETRO is taken back at the fire moment --------------------
+{
+  kestrel(1, [0, 0], false);
+  untilOffered();
+  h.press('KeyB');
+  h.step();
+  h.stepUntil(() => state().burn.auto.claimed, 200);
+  const atClaim = state().burn.sasMode;
+  h.stepUntil(() => (autoburnFireInTac(state(), getPrediction()) ?? 0) <= 5, 30);
+  h.press('KeyA');
+  h.step();
+  h.step();
+  const afterA = state().burn.sasMode;
+  h.stepUntil(() => !state().burn.presetAligning, 10);
+  h.keyDown('Space');
+  h.stepFor(0.4);
+  const whileIn = { phase: phase(), sas: state().burn.sasMode, end: state().burn.auto.end };
+  h.keyUp('Space');
+  h.stepUntil(() => phase() !== 'armed', 30);
+  check('M2: inside the claim window [A] stands (no re-select over it)', atClaim === 'retrograde' && afterA === 'radial-in', `${atClaim} → ${afterA}`);
+  check('…the kid\'s IN burn at T−5 is no takeover', whileIn.phase === 'armed' && whileIn.sas === 'radial-in', JSON.stringify(whileIn));
+  check('…and at its moment it takes RETRO back and flies the capture', (phase() === 'pointing' || phase() === 'burning')
+    && state().burn.sasMode === 'retrograde' && state().burn.firingSource === 'auto', `${phase()} ${state().burn.sasMode} ${state().burn.firingSource}`);
+  flyEngaged(300);
+}
+
+// --- Review m2: the kid's REPAIR takes an armed file offline: a plain end, no klaxon --------------------------------------
+{
+  kestrel(1, [0, 0], false);
+  untilOffered();
+  h.press('KeyB');
+  h.step();
+  const file = skillLive(state().memory, 'autoburn').file!;
+  h.store.update((draft) => { const seg = draft.memory.find((candidate) => candidate.id === file.id); if (seg && 'integrity' in seg) seg.state = 'repairing'; });
+  h.step();
+  const alarm = state().alerts.list.some((alert) => alert.id === 'autoburn-lost');
+  check('m2: repaired while armed it ends \'offline\' with its own line, no drop and no klaxon', phase() === 'idle' && state().burn.auto.end === 'offline'
+    && !alarm && said(AUTOBURN_TEXT.offline.repairing) && threadsBusy() === 0, `${phase()} ${state().burn.auto.end} alarm ${alarm}`);
+  h.store.update((draft) => { const seg = draft.memory.find((candidate) => candidate.id === file.id); if (seg && 'integrity' in seg) seg.state = 'intact'; });
+}
+
+// --- Review m3: the LOCK chime sounds once on the way in, not on each flip inside the bracket -------------------------------
+{
+  let chimes = 0;
+  const off = on('autoburn-in-lock', () => { chimes++; });
+  kestrel(1, [0, 0], false);
+  untilOffered();
+  h.step();
+  const atEntry = chimes;
+  // Inside the bracket the kid flies an IN correction (the refusal flips to YOU ARE BURNING and back), twice.
+  for (let i = 0; i < 2; i++) {
+    h.press('KeyA');
+    h.stepUntil(() => !state().burn.presetAligning, 10);
+    h.keyDown('Space');
+    h.stepFor(0.3);
+    h.keyUp('Space');
+    h.stepFor(0.3);
+  }
+  off();
+  check('m3: one chime into the bracket, none for the flips while the kid burns inside it', atEntry === 1 && chimes === 1, `${atEntry} ${chimes}`);
 }
 
 // --- Takeovers while armed: IN/OUT is not one, RETRO is ----------------------------------------------------------------------

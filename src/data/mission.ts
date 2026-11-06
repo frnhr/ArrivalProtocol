@@ -73,7 +73,7 @@ export function createFlight(ship: ShipDef, rng: Rng, mods: FlightMods, zones: r
     coastAtAi: null,
     ghost: null,
     ghostBursts: 0,
-    auto: { phase: 'idle', atAi: 0, end: null, mode: null, targetKm: null, claimed: false, waitingSinceTSec: null },
+    auto: { phase: 'idle', atAi: 0, end: null, mode: null, targetKm: null, claimed: false, waitingSinceTSec: null, flying: null, captured: false },
   };
 
   return { level, orbit: { x: orbit.x, y: orbit.y, vx: orbit.vx, vy: orbit.vy }, burn };

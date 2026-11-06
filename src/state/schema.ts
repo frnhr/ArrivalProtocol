@@ -14,6 +14,7 @@ import type { SaveState } from '@/types/save';
 import type { DeliveryChip, ArrivalDelivery, RunRepoState } from '@/types/repo';
 import type { RunInboxState } from '@/types/inbox';
 import type { SkillId, SkillLevel, AutoMode, RunSkillState, CellRow } from '@/types/skill';
+import type { BurnReason, BurnEvent } from '@systems/predict';
 
 export type ViewMode = 'tools' | 'memory';
 
@@ -86,7 +87,15 @@ export type AutoburnPhase = 'idle' | 'armed' | 'pointing' | 'burning' | 'done' |
 // version its mode needs: it hands the rest back).
 export type AutoburnEnd =
   | 'in-ring' | 'braked' | 'fuel' | 'takeover' | 'cancel' | 'lost' | 'damaged' | 'engine' | 'presets' | 'no-capture' | 'flight-over'
-  | 'green' | 'round' | 'reserve' | 'downgraded';
+  | 'green' | 'round' | 'reserve' | 'downgraded' | 'offline';
+
+// The burn AUTOBURN is flying now (the preset it selected, and which burn of the plan it is): a takeover is the kid picking
+// another preset, and a trim or a ROUND burn ends when the plan's burn is no longer this one.
+export interface AutoburnBurn {
+  preset: 'prograde' | 'retrograde';
+  reason: BurnReason;
+  event: BurnEvent;
+}
 
 export interface AutoburnState {
   phase: AutoburnPhase;
@@ -101,6 +110,11 @@ export interface AutoburnState {
   // Its claim found no thread free (game seconds, clock.tSec, when it started waiting): it fires late, and the plot shows
   // how late. null while it is not waiting.
   waitingSinceTSec: number | null;
+  // Slice 4 review (FLIGHT deviation 7): the burn in hand while it points or burns (null otherwise), and whether this
+  // engagement flew a capture (the reserve's and the downgrade's `CAPTURED` words). In the state, not the module, so a
+  // save inside a flight or a landing (4c) resumes the machine whole (RUN_SAVE_VERSION 3).
+  flying: AutoburnBurn | null;
+  captured: boolean;
 }
 
 export interface BurnState {

@@ -166,7 +166,7 @@ const TIME = /^IN \d\d:\d\d$/;
   const armed = autoButton(state(), getPrediction());
   check('[B]: `AUTO ARMED` / `BRAKES IN 00:mm · [B] OFF`', armed.look === 'armed' && armed.head === AUTO_BUTTON_TEXT.armedHead
     && /^BRAKES IN \d\d:\d\d · \[B\] OFF$/.test(armed.note), JSON.stringify(armed));
-  check('…the Skills row: `ARMED — IT BRAKES AT ▼`', skillsModel(state())[0]?.status === AUTOBURN_SKILL_ROW.armed);
+  check('…the Skills row: `ARMED — IT BRAKES AT ▼`', skillsModel(state())[0]?.status === AUTOBURN_SKILL_ROW.armed.capture);
   h.stepUntil(() => state().burn.auto.phase === 'burning', 120);
   const flying = autoButton(state(), getPrediction());
   check('…burning: `AUTO BRAKING` / `[SPACE] TAKES OVER`, the row `FLYING THE SHIP NOW`', flying.look === 'flying' && flying.head === AUTO_BUTTON_TEXT.burningHead

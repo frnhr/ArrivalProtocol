@@ -1,6 +1,5 @@
-// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): burnSpanClear. Others ask by message.
 import type { OrbitState, PlanetParams, Ring } from '@/types/orbit';
-import type { DecayState, DragKick, DropFactors, GoLowAim, GoLowerFit, LzState, DropSolution } from '@/types/landing';
+import type { DecayState, DragKick, DropFactors, GoLowAim, GoLowerFit, LzState } from '@/types/landing';
 import type { GameState } from '@state/schema';
 import type { BurnPoint, Prediction } from '@systems/predict';
 import { dropHalfWidthKm, podImpact, podKickFactorSq, podKickState } from '@systems/landing-solve';
@@ -9,7 +8,6 @@ import {
   universalAnomaly,
 } from '@/types/orbit';
 import { IS_DEV } from '@/env';
-import { driversThatCanEverLaunch, lzRemaining } from '@systems/landing-rules';
 import {
   DRAG_LINE_FRAC, DRAG_DV_MAX_KMS, DRAG_KICK_MIN_GAP_FRAC, DRAG_KICK_CATCH_UP_FRAC, GO_LOW_FLOOR_MARGIN_KM, LANDING_SURE_MIN_TAC,
   DROP_SOLVE_MAX_E, POD_AIM_RP_FRAC, LANDING_RELEASE_LEAD_TAC, DECAY_WARN_ORBITS,
@@ -491,29 +489,3 @@ function autoEngaged(state: Readonly<GameState>): boolean {
   return phase === 'armed' || phase === 'pointing' || phase === 'burning';
 }
 
-// Slice 4 (plan §2.9's landing window rule, §7 R2; Track FLIGHT; 4e reuses it for v3's top-ups): the LZ whose in-band
-// window a burn that starts `startInSec` game seconds from now and lasts `burnSec` overlaps, or null (launches are refused
-// while firing, and the planet does not rotate, so a blocked apsis is blocked every pass). Only an LZ with room counts, and
-// only while a pod aboard can still launch: a window nobody can use costs nothing. The drop solution's windows carry no
-// room or bay data, so the state is passed too. Each window is checked on this pass and the next two (a burn a loop away
-// meets the window's next pass). Pure.
-export function burnSpanBlocks(state: Readonly<GameState>, sol: Readonly<DropSolution>, startInSec: number, burnSec: number): string | null {
-  if (state.run.phase !== 'landing' || sol.block !== null || !(sol.periodSec > 0)) return null;
-  if (driversThatCanEverLaunch(state).length === 0) return null;
-  const room = lzRemaining(state);
-  const since = state.clock.tSec - sol.asOfTSec;
-  const endInSec = startInSec + Math.max(0, burnSec);
-  for (const window of sol.windows) {
-    if (window.inBandOpenInSec === null || window.inBandCloseInSec === null || (room[window.lz] ?? 0) <= 0) continue;
-    for (let pass = 0; pass < 3; pass++) {
-      const openIn = window.inBandOpenInSec - since + pass * sol.periodSec;
-      const closeIn = window.inBandCloseInSec - since + pass * sol.periodSec;
-      if (startInSec < closeIn && endInSec > openIn) return window.lz;
-    }
-  }
-  return null;
-}
-
-export function burnSpanClear(state: Readonly<GameState>, sol: Readonly<DropSolution>, startInSec: number, burnSec: number): boolean {
-  return burnSpanBlocks(state, sol, startInSec, burnSec) === null;
-}

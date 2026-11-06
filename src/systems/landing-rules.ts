@@ -828,3 +828,27 @@ export function colonyName(def: Pick<ShipLandingDef, 'colonyFirstRun'>, firstFam
   if (name === undefined) throw new Error('colonyName: the colony name pool is empty');
   return name;
 }
+
+// Slice 4 (Track FLIGHT; moved here from landing-orbit.ts by the review's m12, which broke the import cycle between them).
+// Slice 4 (plan §2.9's landing window rule, §7 R2; Track FLIGHT; 4e reuses it for v3's top-ups): the LZ whose in-band
+// window a burn that starts `startInSec` game seconds from now and lasts `burnSec` overlaps, or null (launches are refused
+// while firing, and the planet does not rotate, so a blocked apsis is blocked every pass). Only an LZ with room counts, and
+// only while a pod aboard can still launch: a window nobody can use costs nothing. The drop solution's windows carry no
+// room or bay data, so the state is passed too. Each window is checked on this pass and the next two (a burn a loop away
+// meets the window's next pass). Pure.
+export function burnSpanBlocks(state: Readonly<GameState>, sol: Readonly<DropSolution>, startInSec: number, burnSec: number): string | null {
+  if (state.run.phase !== 'landing' || sol.block !== null || !(sol.periodSec > 0)) return null;
+  if (driversThatCanEverLaunch(state).length === 0) return null;
+  const room = lzRemaining(state);
+  const since = state.clock.tSec - sol.asOfTSec;
+  const endInSec = startInSec + Math.max(0, burnSec);
+  for (const window of sol.windows) {
+    if (window.inBandOpenInSec === null || window.inBandCloseInSec === null || (room[window.lz] ?? 0) <= 0) continue;
+    for (let pass = 0; pass < 3; pass++) {
+      const openIn = window.inBandOpenInSec - since + pass * sol.periodSec;
+      const closeIn = window.inBandCloseInSec - since + pass * sol.periodSec;
+      if (startInSec < closeIn && endInSec > openIn) return window.lz;
+    }
+  }
+  return null;
+}

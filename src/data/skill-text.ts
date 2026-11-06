@@ -7,6 +7,7 @@
 
 import type { AutoburnEnd } from '@state/schema';
 import type { AutoMode } from '@/types/skill';
+import type { OfflineReason } from '@systems/capabilities';
 import { BAND_DEGRADED_MIN, AUTO_FUEL_RESERVE_PCT } from '@data/tuning';
 
 // The mode's word on the tails and the AUTO button (03 §3.6: `[B] AUTO · GREEN`).
@@ -51,6 +52,9 @@ export const AUTOBURN_TEXT = {
   downgradedRound: 'AUTOBURN DAMAGED TO v1 — it can no longer round it',
   // ROUND in landing (plan §7 R2): the burns at ▼ and at ▲ both cross a window of an LZ with room, so it burns at ▼ anyway.
   roundCostsWindow: (lz: string): string => `AUTOBURN: ROUND COSTS ${lz}'s WINDOW`,
+  // GREEN in landing (an accepted orbit) trims at its apsis whatever the window (slice 4 review (a)): said at the press, so
+  // the kid can drop that window first and press [B] after it.
+  greenCostsWindow: (lz: string): string => `AUTOBURN: GREEN COSTS ${lz}'s WINDOW`,
   // The first time it can be used this run (script.ts, a tutorial).
   ready: 'AUTOBURN READY — press [B] and it brakes at ▼ for you',
   // The tails (03 §3.7): the capture timeline's while AUTO could take it (v1), the mode's (v2: trims too, and HOLD
@@ -60,6 +64,12 @@ export const AUTOBURN_TEXT = {
   armedTail: ' · AUTO ARMED',
   // The radio, when the kid lets go of it or takes the throttle.
   off: 'AUTOBURN OFF — you have the controls',
+  // The kid's own REPAIR or MOVE took the file offline while it was engaged (03 §3.5: a choice, so no klaxon; review m2).
+  offline: {
+    repairing: 'AUTOBURN OFF WHILE IT IS REPAIRED — you have the controls',
+    transferring: 'AUTOBURN OFF WHILE IT MOVES — you have the controls',
+    inactive: 'AUTOBURN.skl SWITCHED OFF — you have the controls',
+  } satisfies Record<OfflineReason, string>,
 } as const;
 
 // A drop mid-flight (§6.10: the file consumed mid-burn → `AUTOBURN.skl LOST — MANUAL`, and the klaxon): the
@@ -188,9 +198,13 @@ export const AUTOBURN_SKILL_ROW = {
   trained: (accuracy: number, demos: number): string => `ACCURACY ${accuracy}% · FROM YOUR ${demos} CAPTURES`,
   // 03 §3.3's loud UNTRAINED state: no demos yet, so it fires late (plan §7 R3).
   untrained: (accuracy: number): string => `UNTRAINED ${accuracy}% · CAPTURE BY HAND TO TEACH IT`,
-  armed: 'ARMED — IT BRAKES AT ▼',
-  armedGreen: 'ARMED — IT MAKES THE ORBIT GREEN',
-  armedRound: 'ARMED — IT ROUNDS THE ORBIT',
+  // Armed, by the mode it flies (one row per mode: 4e's landing orbit has its own).
+  armed: {
+    capture: 'ARMED — IT BRAKES AT ▼',
+    green: 'ARMED — IT MAKES THE ORBIT GREEN',
+    round: 'ARMED — IT ROUNDS THE ORBIT',
+    'landing-orbit': 'ARMED — IT FLIES THE LANDING ORBIT',
+  } satisfies Record<AutoMode, string>,
   waiting: 'WAITING FOR A THREAD — × AN OP',
   flying: 'FLYING THE SHIP NOW',
   damaged: (min: number): string => `DAMAGED — REPAIR IT TO ${min}% OR MORE`,

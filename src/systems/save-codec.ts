@@ -320,11 +320,32 @@ const checkMemory: Check = (value, at) => {
   });
 };
 
+// The burn slice as its reference, and AUTOBURN's machine read whole (RUN_SAVE_VERSION 3): its burn in hand is one of the
+// plan's burns, and it has one exactly while it points or burns (autoburn.ts burnTick throws on a burning machine without).
+const AUTO_PHASES = ['idle', 'armed', 'pointing', 'burning', 'done', 'dropped'];
+const checkAutoBurn = rec({
+  preset: oneOf('prograde', 'retrograde'), reason: name, event: oneOf('peri', 'apo', 'now', 'point'),
+});
+function checkBurn(reference: Readonly<Record<string, unknown>>): Check {
+  const like = likeReference(reference);
+  const autoLike = likeReference(reference.auto as Record<string, unknown>);
+  return (value, at) => {
+    like(value, at);
+    const auto = (value as Record<string, unknown>).auto;
+    autoLike(auto, `${at}.auto`);
+    const machine = auto as Record<string, unknown>;
+    oneOf(...AUTO_PHASES)(machine.phase, `${at}.auto.phase`);
+    nullable(checkAutoBurn)(machine.flying, `${at}.auto.flying`);
+    const flies = machine.phase === 'pointing' || machine.phase === 'burning';
+    if (flies !== (machine.flying !== null)) shapeFail(`${at}.auto.flying`, flies ? 'is empty while it burns' : 'is set while it does not burn');
+  };
+}
+
 function checkSlices(value: unknown, at: string): void {
   const reference = refs().slices as unknown as Record<string, Record<string, unknown>>;
   rec({
     mission: likeReference(reference.mission!), memory: checkMemory, clock: likeReference(reference.clock!),
-    burn: likeReference(reference.burn!), orbit: likeReference(reference.orbit!), level: likeReference(reference.level!),
+    burn: checkBurn(reference.burn!), orbit: likeReference(reference.orbit!), level: likeReference(reference.level!),
     landing: likeReference(reference.landing!), hollow: likeReference(reference.hollow!), hazards: likeReference(reference.hazards!),
   })(value, at);
 }
@@ -433,7 +454,8 @@ const PHASE2_DEMOS_TO_TRAIN = 2;
 // • An install phase 2 still owed (a SHIP DONE or BEAM save after the second capture, before the boot that would have
 //   installed AUTOBURN.skl: no file, two or more demos, more than it was last trained on) can't happen any more, so the run
 //   is paid AUTOBURN v1's price in cycles instead (a 'migration' grant): the kid buys it back at the next desk.
-// • burn.auto gains its mode fields, all empty (no save point is mid-flight: an engaged AUTOBURN is never saved).
+// • burn.auto gains its mode fields, all empty (no save point is mid-flight: an engaged AUTOBURN is never saved; step 2
+//   adds the rest).
 // • arrival.skills is empty (no skill line is owed at a boot the save replays: phase 2's install path is gone).
 function migrateRunSave1(save: Record<string, unknown>): Record<string, unknown> {
   const next = structuredClone(save);
@@ -487,8 +509,20 @@ function migrateRunSave1(save: Record<string, unknown>): Record<string, unknown>
   return next;
 }
 
+// 2 → 3 (slice 4 review, FLIGHT deviation 7): burn.auto gains the burn in hand and the capture flag, both empty (every save
+// point so far is outside a flight: no AUTOBURN is engaged in a saved world).
+function migrateRunSave2(save: Record<string, unknown>): Record<string, unknown> {
+  const next = structuredClone(save);
+  const payload = isRecord(next.payload) ? next.payload : null;
+  const burn = payload !== null && isRecord(payload.slices) && isRecord(payload.slices.burn) ? payload.slices.burn : null;
+  if (burn !== null && isRecord(burn.auto)) Object.assign(burn.auto, { flying: null, captured: false });
+  next.saveVersion = 3;
+  return next;
+}
+
 export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
   1: migrateRunSave1,
+  2: migrateRunSave2,
 };
 
 export function migrateRunSave(save: Record<string, unknown>): Record<string, unknown> {

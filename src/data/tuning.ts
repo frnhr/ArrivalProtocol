@@ -1992,7 +1992,9 @@ export const NOTABLE_EVENTS_MAX = 4;
 export const RUN_SAVE_KEY = 'arrival-protocol/run/v1';
 // 2 (slice 4): run.skills replaces skillTrainedOn, run.stats.dropDemos, burn.auto's mode fields, arrival.skills, skill files'
 // version and lock (save-codec RUN_SAVE_MIGRATIONS[1]).
-export const RUN_SAVE_VERSION = 2;
+// 3 (slice 4 review): burn.auto keeps the burn in hand and whether it captured (`flying`, `captured`), so 4c can save inside a
+// flight or a landing (RUN_SAVE_MIGRATIONS[2]).
+export const RUN_SAVE_VERSION = 3;
 // The archive (§4.5; 02 §3.12: v2 holds the arm, the trail, colonies, routes, events and traces). From slice 3c the key
 // stays `meta/v2` and versions migrate in place (systems/meta.ts migrateMeta, META_VERSION the record's); a new key is
 // only ever a deliberate reset. v1's key (phase 2's archive) was the one such reset: never written, read only to detect it
@@ -2053,6 +2055,10 @@ export const LOCK_RANGE_TAC: readonly [number, number, number] = [90, 270, 810];
 // claim lands when the world slows down for the burn anyway, and no thread is held while it only waits. Equal to
 // TACTICAL_LEAD_BURN_TAC (data/skills.ts checks it).
 export const AUTO_THREAD_CLAIM_TAC = 8;
+// ...and lets it go again (or stops waiting for one) once the burn it claimed for is this far off again: a wait that
+// outlasted a trim's apsis leaves the plan's next burn a loop away (slice 4 review M1). Twice the claim lead, so a START
+// BURN that jitters across the window's edge does not claim and release the thread tick by tick.
+export const AUTO_THREAD_RELEASE_TAC = 2 * AUTO_THREAD_CLAIM_TAC;
 // AUTOBURN never plans a trim, a ROUND burn or (4e) a landing-orbit burn that would leave less FUEL than this (03 §3.6):
 // `GREEN, NOT ROUND — SAVING FUEL`. Never the capture (plan §7 R4): refusing it would leave the kid the same burn by hand.
 export const AUTO_FUEL_RESERVE_PCT = 20;

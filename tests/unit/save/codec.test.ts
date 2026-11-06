@@ -116,8 +116,19 @@ const edit = (raw: string, change: (save: Raw) => void): string => {
 check('not JSON → not-json', kind('{ this is not a run save') === 'not-json');
 check('another save version → version', kind(edit(desk, (save) => { save.saveVersion = RUN_SAVE_VERSION + 1; })) === 'version');
 // Slice 4: the first step (1 → 2, the skill tree; its fixtures are migrated in tests/unit/skills/foundation.test.ts).
-check('migrateRunSave knows one step (1 → 2, slice 4), and leaves an unknown version for check 2',
-  Object.keys(RUN_SAVE_MIGRATIONS).join() === '1' && isDeepStrictEqual(migrateRunSave({ saveVersion: 0 }), { saveVersion: 0 }));
+check('migrateRunSave knows two steps (1 → 2, slice 4; 2 → 3, its review), and leaves an unknown version for check 2',
+  Object.keys(RUN_SAVE_MIGRATIONS).join() === '1,2' && isDeepStrictEqual(migrateRunSave({ saveVersion: 0 }), { saveVersion: 0 }));
+// 2 → 3: a v2 save (burn.auto without flying / captured) steps up with both empty and decodes; a v3 save burning with its
+// burn in hand reads (4c's mid-flight saves).
+const v2 = edit(desk, (save) => { save.saveVersion = 2; delete save.payload.slices.burn.auto.flying; delete save.payload.slices.burn.auto.captured; });
+const v2Up = decodeRunSave(v2);
+check('a v2 save (no burn.auto.flying, captured) migrates to v3 with both empty, and decodes', v2Up.ok
+  && v2Up.save.payload.kind === 'world' && v2Up.save.payload.slices.burn.auto.flying === null && v2Up.save.payload.slices.burn.auto.captured === false,
+  v2Up.ok ? '' : `${v2Up.refusal.kind}: ${v2Up.refusal.detail}`);
+check('…a machine burning with its burn in hand passes the shape', kind(edit(desk, (save) => {
+  Object.assign(save.payload.slices.burn.auto, { phase: 'burning', mode: 'capture', claimed: true, captured: true,
+    flying: { preset: 'retrograde', reason: 'capture', event: 'peri' } });
+})) !== 'shape');
 const contentKeys = Object.keys(contentVersions()) as (keyof ReturnType<typeof contentVersions>)[];
 const contentRefused = contentKeys.filter((key) => kind(edit(desk, (save) => { save.content[key] += 1; })) === 'content');
 check('each content version mismatched in turn → content', contentRefused.length === contentKeys.length, contentRefused.join(', '));
@@ -151,6 +162,16 @@ const shapes: [string, string][] = [
     delete (save.payload.carried.segs as Raw[]).find((seg) => seg.upgrade === 'autoburn')!.version;
   })],
   ['an arrival skill of an unknown kind', edit(beam, (save) => { save.payload.run.arrival.skills[0].kind = 'bought'; })],
+  // Slice 4 review (v3): AUTOBURN's machine, read whole: a burning machine has its burn in hand, an idle one none.
+  ['AUTOBURN burning with no burn in hand', edit(desk, (save) => { save.payload.slices.burn.auto.phase = 'burning'; })],
+  ['AUTOBURN idle with a burn in hand', edit(desk, (save) => {
+    save.payload.slices.burn.auto.flying = { preset: 'retrograde', reason: 'capture', event: 'peri' };
+  })],
+  ['AUTOBURN\'s burn in hand on an unknown preset', edit(desk, (save) => {
+    save.payload.slices.burn.auto.phase = 'burning';
+    save.payload.slices.burn.auto.flying = { preset: 'radial-in', reason: 'capture', event: 'peri' };
+  })],
+  ['AUTOBURN without its capture flag (a v2 shape at v3)', edit(desk, (save) => { delete save.payload.slices.burn.auto.captured; })],
 ];
 const wrongShape = shapes.filter(([, text]) => kind(text) !== 'shape');
 check('the shape, field by field → shape (the envelope, the run, the map, the slices, the copies against the run)', wrongShape.length === 0,
