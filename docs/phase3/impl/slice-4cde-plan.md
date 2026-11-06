@@ -1,5 +1,16 @@
 # Slice 4c–4e plan: AUTODROP, SENTRY, AUTOBURN v3
 
+**Lead decisions (2026-11-06).**
+- **Recommendations:** all of R1–R21 are adopted as written. Fran asked for a playtest once slice 4 is complete and said
+  that most open calls will settle as the full plan lands. So the [FRAN] items (R4, R5, R9, R10, R13, R15) are built as
+  recommended here, and reported to Fran with numbers after the batch, not asked beforehand.
+- **R20, retiring the classic world:** this is engineering only and changes no gameplay. Its phases 2–3 migrate 166
+  suites. They are therefore split off and run after Fran's playtest of slice 4, not before it.
+  - Phase 1, the parity probe that moves the authored ship data into the arm's own file, runs in the fix pass only if
+    it is small and safe. Otherwise it waits with phases 2–3.
+- **Save ownership:** the lead owns the save. The FOUNDATION makes the single v3 → v4 bump. A track that needs a new
+  saved field asks the lead; it never bumps the save itself.
+
 I wrote this from HEAD ff09a80 on `claude/modest-hawking-209t0f`. Paths are relative to `/home/user/ArrivalProtocol`. The
 spec is `docs/phase3/03-skills.md` ("03"). `§` cites 03 unless another spec is named: 01 is `01-landing.md`, 04 is
 `04-threats.md`. "Plan 4" is `slice-4-plan.md` with its Deviations sections, which describe the 4a+4b code as built.
