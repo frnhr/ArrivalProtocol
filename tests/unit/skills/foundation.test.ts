@@ -39,6 +39,8 @@ import {
 import { registerLandingController, activeLandingController, windowRuleHolds, LANDING_CONTROLLER_ORDER } from '@systems/landing-controller';
 import { DEMO_WORDS, BOOT_SKILL_TEXT, TRAINING_TEXT } from '@data/training-text';
 import { SKILL_4CDE_RULES } from '@data/script';
+import { trainingModel } from '@systems/training-model';
+import { autoburnHoldsLandingOrbit } from '@state/selectors';
 import { DISGUISE_POOL } from '@data/threat-text';
 import { shipCycles } from '@systems/run-score';
 import { decodeRunSave, migrateRunSave } from '@systems/save-codec';
@@ -429,6 +431,22 @@ for (const [file, point] of [
     && sloppy.accuracy === 60 && tidy.accuracy === 98 && DEMO_SOURCES.drops?.tuning === AUTODROP_DEMO_TUNING, JSON.stringify([untrained, sloppy, tidy]));
   check('…the boot says it: `from your 3 drops · AIM 96%`', BOOT_SKILL_TEXT.trained('AUTODROP.skl', 1, 3, 'drops', 96)
     === '> SKILL TRAINED: AUTODROP.skl v1 · from your 3 drops · AIM 96%');
+}
+
+// ARRIVAL CONTROL's v3 line (03 §7) at a desk whose purchases train a v3, any skill; and the GO LOWER gate's selector (R16).
+{
+  const store = resumeFixture('run-save-v3-ship-done-desk2.json');
+  const before = trainingModel(store.getState()).control;
+  pendPurchase(store, { skill: 'autodrop', kind: 'train', to: { version: 3, lock: 0 }, cost: 0, visit: 2 });
+  check('ARRIVAL CONTROL says `Our repository has everything you need. :)` once this desk trains a v3 (none before)',
+    before === null && trainingModel(store.getState()).control === TRAINING_TEXT.controlV3, `${before} / ${trainingModel(store.getState()).control}`);
+  const engaged = (phase: GameState['burn']['auto']['phase'], mode: GameState['burn']['auto']['mode']): boolean => {
+    const state = createInitialState({ seed: 3 });
+    return autoburnHoldsLandingOrbit({ ...state, burn: { ...state.burn, auto: { ...state.burn.auto, phase, mode } } });
+  };
+  check('autoburnHoldsLandingOrbit: armed, pointing or burning in \'landing-orbit\' only',
+    engaged('armed', 'landing-orbit') && engaged('burning', 'landing-orbit') && !engaged('done', 'landing-orbit') && !engaged('armed', 'round')
+      && !engaged('idle', null));
 }
 
 // The FOUNDATION's own new words fit the strip: the four lessons, ARRIVAL CONTROL's v3 line, the decoys' INSPECT lines.

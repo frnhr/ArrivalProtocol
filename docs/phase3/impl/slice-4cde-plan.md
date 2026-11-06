@@ -1074,3 +1074,137 @@ come first. Phase 2 is the bulk, and nothing in slices 5–7 depends on it.
   `/home/user/ArrivalProtocol/tests/unit/save/shape-pin.test.ts`
 - `/home/user/ArrivalProtocol/src/systems/skill-tree.ts` (`seedsMet`, `DEMO_SOURCES`),
   `/home/user/ArrivalProtocol/src/data/training-text.ts` (`DEMO_WORDS`, `TRAINING_DEMO_ART`)
+
+---
+
+## Deviations (foundation)
+
+Recorded by the FOUNDATION agent (from HEAD 364f2a1, nine commits from faf7e86). Steps 0–7 of §7.1 are built. The unit tier
+is green with no behaviour change: the classic world's digests (`map/memory-refactor`) are unchanged once the three new
+fields are left out, `built` stays 2 / 0 / 0 / 0, and every 4c–4e stub on a hot path answers neutrally.
+
+### What the tracks stand on
+
+**Built (lead-owned from here):**
+- the state (§2.2) with `createAutodropState()`, `seedsMetAtDepth: null`, `holding: false`, `preempted: false`,
+  `disguise: null`;
+- the three tuning blocks (§2.6) at the end of `tuning.ts`, each closed by an `end of …` line; `data/skills.ts` checks
+  `AUTODROP_CLAIM_TAC === WINDOW_TACTICAL_LEAD_TAC`;
+- the LandingController registry (`landing-controller.ts`), `DEMO_SOURCES.drops` with `AUTODROP_DEMO_TUNING`, `DEMO_WORDS`'s
+  measure, the boot lines with it, the six `DemoArt` kinds (drawn plain, with a `tr-demo-<kind>` class), ARRIVAL CONTROL's
+  v3 line, AUTODROP's and SENTRY's Skills row hooks;
+- the guidance slots, the GO LOWER gate (`selectors.ts autoburnHoldsLandingOrbit`), `seedsMetAtDepth`'s writer
+  (`run.ts endShip` through `skill-tree.ts shipMetSeeds`) and reader (`seedsMet`), the boot kinds, the four lessons
+  (`script.ts SKILL_4CDE_RULES`), every event with its cue, the debug hooks;
+- save v4 (§2.2) with its codec checks and the shape pin; the v3 fixtures; gap G1.
+
+**The contract, per track.** "Neutral" stubs return the value shown and are safe on every tick; "throws" stubs throw
+through `not-built.ts notBuilt(what, track)` until built. Each file opens with its track's banner.
+
+| Track | Function (file) | Signature | Now |
+|---|---|---|---|
+| DROP | `autodropController` (autodrop.ts) | `(state, override?: AutodropOverride) => LandingController \| null` | neutral: null |
+| DROP | `mountAutodrop` | `(store) => () => void` | built: registers the resolver; DROP adds its subscriptions |
+| DROP | `autodropKeyDown` | `(store) => 'held' \| 'manual'` | throws |
+| DROP | `pressAutodrop` | `(store) => AutodropRefusal \| null` | throws |
+| DROP | `setPassCount` | `(store, lz, n) => void` | throws |
+| DROP | `autodropLineOf` | `(state, sol) => AutodropLine \| null` | neutral: null |
+| DROP | `autodropTutorialDue` | `(state, version: SkillVersion) => boolean` | neutral: false |
+| DROP | `autodropStatus` | `(state) => { text; tone } \| null` (null: the plain row) | neutral: null |
+| DROP | `autodropDebug` | `(state) => AutodropDebug` | reads the machine and the version; volley, pass, plan null |
+| DROP | `setDropDemos` | `(store, offsets: readonly number[]) => void` | built (debug) |
+| DROP | `centredVolley` (autodrop-plan.ts) | `(view, w, nowTSec, offsetTac, cadenceTac, warp, room, bay) => Volley \| null` | neutral: null |
+| DROP | `bayBy` | `(bay, cadenceTac, launchesBefore, nowTSec, atTSec, warp) => number` | neutral: 0 |
+| DROP | `passRows` | `(state, view, pass) => PassRow[]` | neutral: [] |
+| DROP | `planLanding` | `(state, view) => LandingPlan` | neutral: the empty plan |
+| DROP | `dropDemoOffset` | `(sol, launch, warp) => number \| null` | neutral: null |
+| DROP | `AUTODROP_TEXT` (autodrop-text.ts) | the lessons' words | seeded |
+| SENTRY | `sentryBootLineCount` (sentry.ts) | `(state) => number` | neutral: 0 |
+| SENTRY | `firewallBootLineDue` | `(state) => boolean` | neutral: false |
+| SENTRY | `sentrySeedBootText`, `firewallBootText` | `(state, ordinal) => string`, `(state) => string` | throw (unreachable at 0 / false) |
+| SENTRY | `compileFirewall` | `(store) => FirewallCompile` | throws |
+| SENTRY | `preemptSeed` | `(store) => PreemptRefusal \| null` | throws |
+| SENTRY | `sentryStatus` | `(state) => { text; tone } \| null` | neutral: null |
+| SENTRY | `rollDisguises` (beam-seeds.ts) | `(plans, depth, rng) => BeamSeedPlan[]` | neutral: the plans copied, no draw |
+| SENTRY | `disguiseChanceAt` | `(depth) => number` | built |
+| SENTRY | `beamSeedSegment`, `plantBeamSeed(…, disguise = null)` | the plan's decoy copied onto the segment, `seen: null` | built |
+| SENTRY | `DISGUISE_POOL` (threat-text.ts) | six `{ name, desc }` | seeded |
+| ORBIT | `landingOrbitAim` (autoburn-v3.ts) | `(state, pred) => LandingOrbitAim \| null` | neutral: null (v2's rule) |
+| ORBIT | `v3TopUp` | `(state, pred, aim) => V3TopUp \| null` | neutral: null |
+| ORBIT | `v3LowerLine` | `(state) => string \| null` | neutral: null |
+| ORBIT | `v3GhostLabel` | `(state, aim) => string` | neutral: '' |
+| ORBIT | `v3TutorialDue` | `(state) => boolean` | neutral: false |
+| ORBIT | `v3Debug` | `(state, pred) => { aim; key }` | the aim (null), no key |
+
+The pure helpers of `autodrop-plan.ts` return neutral values too, though nothing calls them yet: the lead's rule ("only
+the entry points that change state throw") is applied to every stub, so a track can wire a caller before it builds the body.
+
+### Deviations
+
+1. **The desk-2 fixture cannot hold a bought v2.** v2 opens at visit 2 and stays pending until TRANSMIT ▸, so no SHIP DONE
+   save at desk 2 holds it. The fixtures are one walk on seed 7 (desk 1 deals the +2 CYCLES card):
+   - `run-save-v3-ship-done-desk2.json`: AUTOBURN v1 bought at desk 1, and a 5-cycle `'story'` grant (labelled `FIXTURE`)
+     so v2 is affordable on the resumed desk;
+   - `run-save-v3-beam-seeds.json`: the same walk with v2 bought at desk 2, then the BEAM into KESTREL with its beam seed;
+   - `run-save-v3-ship-done-lost.json`: desk 2 with the AUTOBURN file removed from memory by the dump script. G1 itself is
+     walked live in `save/resume` with `actionDelete` (below).
+2. **`AutodropLine` is `{ row, tail }`** (types/landing.ts), not the flat `{ id, text, keys, urgency, layer, tail }`: L13's
+   tail stands without a row and a row without a tail. The row's `LandingRow` is the new `'AD'`, its id the track's. The
+   row is checked only with pods aboard, right after the burn-near L2 check (so every flight row still leads), before
+   L3–L7. The tail goes on L13 after AUTOBURN's, each only when it fits.
+3. **The `v3Lower` slot is `string | null`**, said as L9 (`landing-L9-v3`, `soon`, ship) with L9's SKIP tail, and checked
+   before `tooWide`. With the gate, `goLowerChoice` is null while v3 is engaged, so `dropTooWide` may return null and could
+   not carry v3's line.
+4. **The record's writer reads a superset of R11's evidence**: the arrival's seeds, HOLLOW's `seedsLanded` and the tally's
+   left blocks, plus 4a's own (SEEDS played, TRACE after the tally, `fed`). So SENTRY never opens later than 4a's rule did.
+   The predicate is `skill-tree.ts shipMetSeeds(state, tally)`, so `run.ts` (SENTRY's) only calls it.
+5. **The migration's depth.** Evidence from ended ships (SEEDS, TRACE, `fed`, the last tally) records the last ended ship's
+   depth. Only the current ship's own seeds (its arrival's, or HOLLOW's landed in a world payload) record its depth: the
+   ended ship at SHIP DONE, `shipIndex + 1` at a boot point or ENDING CHOSEN.
+6. **The codec's "at rest"** also needs `armedAtTSec === null`. `pass`, `sent`, `flownAs`, `end` and `endAtAi` may stand.
+   A standing seed outline must not be `preempted` (R2's rule, not in §2.2's list). An arrival seed's `disguise` is null or a
+   non-empty name. The refusals are tested in `save/codec` (eleven cases), not in `skills/foundation`.
+7. **The registry's mount.** AUTODROP's resolver is registered by `mountAutodrop(store)`, which `mountLanding` calls, so
+   every harness that mounts the landing has it. The resolvers outlive a world reset by design (they hold no data), so
+   `landing.ts`'s reset report lost its `controller` field. `pace-landing` registers a `'resident'` test resolver, because
+   `'autodrop'` is taken. `activeLandingController` throws when a resolver answers for another source.
+8. **`bayBy` takes `nowTSec`**, since the reload's progress needs "now". `PassRow` is `{ lz, want, fits, bayHas }`.
+9. **The 'firewall' kind is a boolean** (`firewallBootLineDue`), and both boot kinds take their words from `sentry.ts`.
+   `BOOT_LINE_MAX` (18) is not raised: SENTRY raises it when its lines can make a boot longer.
+10. **The two status hooks return `| null`** (null: the plain row). `autodrop.ts` and `sentry.ts` cannot import
+    `skills.ts`'s `plainSkillStatus` or `script.ts`'s words (both import them back), so `SKILL_ROW_HOOKS` falls back.
+11. **The lessons** are `script.ts SKILL_4CDE_RULES`, after AUTOBURN's tutorials: `once`, no `doneWhen`, `maxShownSec` as
+    AUTOBURN's. `tut-autodrop-v1` says R4's lesson (`HOLD [L] — AUTODROP waits for the centre`), since AD-hold names the LZ.
+    v3's words are `skill-text.ts AUTOBURN_TEXT.readyV3`.
+12. **Debug.** `__ap.seed(target, { disguise })` takes a decoy name from `DISGUISE_POOL`, and an unknown name throws.
+    `__ap.dropDemos` is built. `__ap.preempt` throws until SENTRY.
+13. **Test edits outside the plan's list:**
+    - `map/memory-refactor` leaves the three new fields out of the classic digest;
+    - `skills/training-flow`'s AUTODROP boot line reads `from your 1 drop · AIM 90%` (R21);
+    - `landing/rules`, `landing/table` and `skills/guidance-auto` fill the new fields of their fake states;
+    - seven suites that build a seed plan, an arrival seed or a telegraph by hand gain `disguise: null` or
+      `preempted: false`.
+14. **Banners.** Every §7.2 file opens with its track's banner. Slice 4's stale TREE / FLIGHT / UI banners are replaced, and
+    the hot files name the lead.
+
+### Notes for the tracks
+
+- **DROP:**
+  - wire [L] down and up and [G] in `landing-controls.ts` (`KeyG` is already prevented);
+  - record demos in `requestLaunch` through `dropDemoOffset`;
+  - reset `landing.autodrop` to rest at `'landing-ended'`. The codec refuses a save with it held, armed, claimed, waiting
+    or with `armedAtTSec` set;
+  - AD rows go in `autodropLineOf`'s `row`, L13 tails in its `tail`;
+  - raising `autodrop.built` brings the second first-pick card. Update the suites that expect AUTOBURN alone at desk 1.
+- **SENTRY:**
+  - `carry.ts` already copies a plan's decoy name into `ArrivalSeed.disguise`;
+  - `rollDisguises` must take both draws for every seed (the stub takes none) on `hopRng(…, 'disguise')`;
+  - the boot's say effects (`seen: 'sentry'`, the thunk) are `boot.ts`'s;
+  - `seedTelegraph.preempted` must be false again by any save point;
+  - `threat/beam-seeds` is green with the new `disguise: null` fields.
+- **ORBIT:**
+  - the codec refuses `holding: true` outside `'landing-orbit'`;
+  - L9's swap is only `v3LowerLine`'s text. The gate (`autoburnHoldsLandingOrbit`) and the slot's place are the lead's;
+  - emit `'autoburn-v3-lower'` (its cue is a stamp).
+- **The lead:** the shape pin reaches `landing.autodrop.*` (depth 3), so any field added to `AutodropState` is a save bump.
+  The pin does not reach `seedTelegraph.preempted` or `arrival.seeds[].disguise`; the codec checks those.
