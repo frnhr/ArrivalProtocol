@@ -33,7 +33,7 @@ import { WALL_FRAME_MAX_SEC } from '@data/tuning';
 export interface TrainingWindowView {
   root: HTMLElement;
   paint: () => void;
-  // The keys, while the tab is open: ENTER (TRAIN; false when there is nothing to train, so ENTER sets course), a card's
+  // The keys, while the tab is open: ENTER on an armed cell (TRAIN; DeskScreen asks desk.ts deskEnter first), a card's
   // number (false when there is no such card), ↑ ↓ in the grid (false on visit 1).
   press: () => boolean;
   card: (index: number) => boolean;
@@ -396,6 +396,7 @@ export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView
   root.addEventListener('click', onClick);
   const unsub = store.subscribe(
     (s) => `${s.run.phase}|${s.ui.deskWindow ?? ''}|${s.ui.deskSelected ?? ''}|${JSON.stringify(s.ui.trainingSel)}|${s.ui.trainingHoldSec === null ? 0 : 1}`
+      + `|${s.ui.trainingArmed ? 1 : 0}`
       + `|${s.run.skills.pending.length}|${s.memory.length}`,
     () => paint(),
   );

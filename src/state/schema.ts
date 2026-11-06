@@ -808,6 +808,10 @@ export interface UiState {
   // them, and a resumed desk opens with nothing selected.
   trainingSel: { skill: SkillId; row: CellRow } | null;
   trainingHoldSec: number | null;
+  // Slice 4 review (M3): the selection was picked by the kid this visit ([1] / [2], ↑ ↓, a click), so ENTER trains it. The
+  // grid's default selection, a selection UNDO moved, ESC and another tab leave it unarmed: ENTER sets course, as
+  // everywhere else (systems/desk.ts deskEnter).
+  trainingArmed: boolean;
 }
 
 // The archive behind this page (§4.5, systems/meta.ts). 'ok': loaded (or empty) and written at the run's

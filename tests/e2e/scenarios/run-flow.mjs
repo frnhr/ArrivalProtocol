@@ -54,6 +54,16 @@ async function throughDesk(slot, name, request = null) {
   await page.waitForTimeout(400);
   // The tab the desk opened on (the REPOSITORY for the last-rm prompt), before the kid touches anything.
   const openedOn = await st(() => document.getElementById('deskScreen').dataset.tab ?? null);
+  // Slice 4: the run's first desk opens on TRAINING for the required first pick: [1], then ENTER (the 1.5 s bar), then ESC.
+  if (openedOn === 'training') {
+    await page.keyboard.press('Digit1');
+    await page.waitForTimeout(300);
+    await page.keyboard.press('Enter');
+    const picked = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000);
+    check(`the first DESK opens on TRAINING: [1], ENTER trains AUTOBURN v1 before ${name}`, picked);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+  }
   const clicked = await kit.clickNode(slot);
   await page.waitForTimeout(300);
   const picked = await st(() => window.__ap.store.getState().ui.deskSelected);

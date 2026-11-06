@@ -808,7 +808,21 @@ for (const [index, name] of SHIPS.entries()) {
     const deskUp = await waitFor(() => window.__ap.store.getState().run.phase === 'desk' && !document.getElementById('deskScreen').hidden, 6000);
     await page.waitForTimeout(800);
     // Slice 3b: a desk opens on the REPOSITORY (Rm lit) when the last rm was lost (a seed ate it): noted, then back to the card.
-    const openedOn = await runScreens.deskTabs();
+    let openedOn = await runScreens.deskTabs();
+    // Slice 4: the run's first desk opens on TRAINING for the required first pick: the kid presses [1], then ENTER (the bar
+    // fills over 1.5 s), and ESC back to the card.
+    if (openedOn.tab === 'training') {
+      await page.keyboard.press('Digit1');
+      await page.waitForTimeout(300);
+      const armed = (await runScreens.desk()).go;
+      await page.keyboard.press('Enter');
+      const picked = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100);
+      check(`${tag}: the first DESK opens on TRAINING: [1] arms AUTOBURN v1 (\`${armed}\`), ENTER trains it`, index === 0 && armed === 'TRAIN ▸ 3 CYCLES [ENTER]' && picked,
+        JSON.stringify({ index, armed, picked, steps: openedOn.steps }));
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(300);
+      openedOn = await runScreens.deskTabs();
+    }
     if (openedOn.tab !== 'card') {
       const rmRow = openedOn.rows.find((row) => row.file === 'rm');
       log(`${tag}: the DESK opened on the ${openedOn.tab} (${openedOn.warn ?? 'no warning'})`);

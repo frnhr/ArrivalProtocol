@@ -29,6 +29,11 @@
 // • The last-rm prompt: on LAPWING an rm given (__ap.give: DELETE licensed) and then taken out of memory by __ap's store;
 //   LAPWING's DESK opens on the REPOSITORY with Rm lit and the warning.
 // • The phone: the tab bar peeks at the bottom; a tap on a tab opens the sheet on it (REPOSITORY, a tap REQUESTs; INBOX).
+// Slice 4 (the skill tree; its review's M3): the first DESK opens on TRAINING [T] (four tabs: CARD / REPOSITORY [R] /
+// TRAINING [T] / INBOX [I]) with the required first pick: the steps `1 A SKILL · 2 A SHIP · 3 A FILE · 4 SET COURSE`, the bar
+// `CHOOSE YOUR FIRST SKILL`, SPACE refused with a buzz; [1] arms the card (the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`), ENTER
+// fills the 1.5 s bar and trains AUTOBURN v1 (A SKILL ✓), ESC goes back to the card. On the phone the sheet opens on
+// TRAINING: a tap on the card, a tap on the bar (it reads TRAIN), then the CARD tab.
 // Usage: node tests/e2e/scenarios/map-desk.mjs   (env E2E_BASE_URL; tests/e2e/run.mjs runs it). Shots: tests/.out/e2e/shots/map-desk-*.
 import { launch, BASE_URL, SHOTS, checker, pageKit, runKit } from '../lib.mjs';
 import { join } from 'node:path';
@@ -118,6 +123,32 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('ARES-VII\'s report → the DESK: STAR CHART, UNIT-047 · YEAR 2300 · ARES-VII, both clocks stopped, no LOG READER yet', reached && view.shown
     && view.phase === 'desk' && view.title === 'STAR CHART' && view.where === 'UNIT-047 · YEAR 2300 · ARES-VII' && clocks.paused && !clocks.reader,
     JSON.stringify({ reached, ...view, nodes: undefined, names: undefined, clocks }));
+  // --- Slice 4: the required first pick, by the desk's keys ([1], then ENTER) -----------------------------------------------
+  let tabs = await run.deskTabs();
+  check('slice 4: the first desk opens on TRAINING: four tabs, `1 A SKILL ◀ | 2 A SHIP | 3 A FILE | 4 SET COURSE`, the bar `CHOOSE YOUR FIRST SKILL`',
+    tabs.tab === 'training' && tabs.tabs.map((tab) => tab.label).join(' / ') === 'CARD / REPOSITORY [R] / TRAINING [T] / INBOX [I]'
+    && tabs.steps.join(' | ') === '1 A SKILL ◀ | 2 A SHIP | 3 A FILE | 4 SET COURSE' && view.step === 'CHOOSE YOUR FIRST SKILL — [1], then [ENTER]'
+    && view.go === 'CHOOSE YOUR FIRST SKILL', JSON.stringify({ tab: tabs.tab, labels: tabs.tabs.map((tab) => tab.label), steps: tabs.steps, step: view.step, go: view.go }));
+  let from = await cues();
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(300);
+  check('…SPACE before the pick is refused (a buzz), still the DESK', (await st(() => window.__ap.store.getState().run.phase)) === 'desk'
+    && (await cuesSince(from)).includes('buzz'));
+  await page.keyboard.press('Digit1');
+  await page.waitForTimeout(300);
+  view = await run.desk();
+  check('…[1] arms AUTOBURN v1: the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`', view.go === 'TRAIN ▸ 3 CYCLES [ENTER]', view.go);
+  await page.keyboard.press('Enter');
+  const trained = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100);
+  await page.waitForTimeout(300);
+  view = await run.desk();
+  tabs = await run.deskTabs();
+  check('…ENTER fills the bar and trains it: A SKILL ✓, the ship next, the bar back to SET COURSE', trained && tabs.steps.join(' | ') === '1 A SKILL ✓ | 2 A SHIP ◀ | 3 A FILE | 4 SET COURSE'
+    && view.go === 'SET COURSE ▸ … [ENTER]', JSON.stringify({ trained, steps: tabs.steps, go: view.go }));
+  await shot('02a-first-pick');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(400);
+  view = await run.desk();
   check('…the strip says PICK YOUR NEXT SHIP — click a ship or ← →, CONTROL types `Lovely work, Unit 47! :) Pick your next ship.`, nothing picked',
     view.step === 'PICK YOUR NEXT SHIP — click a ship or ← →' && view.control === 'Lovely work, Unit 47! :) Pick your next ship.' && view.selected === null
     && view.card === null && view.go === 'SET COURSE ▸ … [ENTER]', JSON.stringify({ step: view.step, control: view.control, go: view.go }));
@@ -128,11 +159,11 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   await shot('02-first-desk');
 
   // --- Slice 3b: the tabs, the REPOSITORY with no ship picked, the welcome in the INBOX tab ----------------------------------
-  let tabs = await run.deskTabs();
-  check('3b: the right window\'s tabs CARD / REPOSITORY [R] / INBOX [I], the card lit; badges `:)` (CONTROL recommends a file) and 1 (the welcome unread)',
-    tabs.tab === 'card' && tabs.tabs.map((tab) => tab.label).join(' / ') === 'CARD / REPOSITORY [R] / INBOX [I]' && tabs.tabs.find((tab) => tab.id === 'card')?.on
+  tabs = await run.deskTabs();
+  check('3b: ESC → the right window\'s tabs CARD / REPOSITORY [R] / TRAINING [T] / INBOX [I], the card lit; badges `:)` (CONTROL recommends a file) and 1 (the welcome unread)',
+    tabs.tab === 'card' && tabs.tabs.map((tab) => tab.label).join(' / ') === 'CARD / REPOSITORY [R] / TRAINING [T] / INBOX [I]' && tabs.tabs.find((tab) => tab.id === 'card')?.on
     && badgeOf(tabs, 'repository') === ':)' && badgeOf(tabs, 'inbox') === '1' && badgeOf(tabs, 'card') === null, JSON.stringify(tabs.tabs));
-  check('…the first desk\'s guidance has three steps (A SHIP · A FILE · SET COURSE), the ship first', tabs.steps.join(' | ') === '1 A SHIP ◀ | 2 A FILE | 3 SET COURSE',
+  check('…the first desk\'s guidance has four steps (A SKILL · A SHIP · A FILE · SET COURSE), the ship next', tabs.steps.join(' | ') === '1 A SKILL ✓ | 2 A SHIP ◀ | 3 A FILE | 4 SET COURSE',
     tabs.steps.join(' | '));
   await page.keyboard.press('KeyR');
   await page.waitForTimeout(400);
@@ -166,7 +197,7 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('…[I] again goes back to the card', (await run.deskTabs()).tab === 'card');
 
   // A click on HALCYON: picked (chime), its card, SET COURSE names it.
-  let from = await cues();
+  from = await cues();
   const clicked = await run.clickNode(HALCYON);
   await page.waitForTimeout(400);
   view = await run.desk();
@@ -183,7 +214,7 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
     && card?.rows.some((row) => /^run=SHIP 2 OF YOUR RUN · \d(–\d)? MORE TO THE FINAL SHIP$/.test(row)), JSON.stringify(card?.rows));
   check('…and the TIMELINE `2300 you leave · 2321 you get there · 2352 ▲ approach`', card?.timeline === '2300 you leave · 2321 you get there · 2352 ▲ approach', card?.timeline);
   check('3b: …the guidance moves to the file: `REQUEST mv · RECOMMENDED [R]` (the ship\'s step done)', view.step === 'REQUEST mv · RECOMMENDED [R]'
-    && (await run.deskTabs()).steps.join(' | ') === '1 A SHIP ✓ | 2 A FILE ◀ | 3 SET COURSE', `${view.step} / ${(await run.deskTabs()).steps.join(' | ')}`);
+    && (await run.deskTabs()).steps.join(' | ') === '1 A SKILL ✓ | 2 A SHIP ✓ | 3 A FILE ◀ | 4 SET COURSE', `${view.step} / ${(await run.deskTabs()).steps.join(' | ')}`);
   // ALBATROSS, the ark at the end of a long line: ONLY FROM HERE (read by hovering is the tag; its card by a click).
   await run.clickNode(ALBATROSS);
   await page.waitForTimeout(300);
@@ -231,7 +262,7 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   const halcyonMarks = await run.deskMarks();
   check('…on HALCYON Mv is in time: `Mv ✓ WAITING HERE` and a green mark `2337 Mv`; the guidance is on SET COURSE', view.selected === HALCYON
     && view.card?.rows.includes('deliveries=Mv ✓ WAITING HERE') && halcyonMarks.length === 1 && !halcyonMarks[0].late && halcyonMarks[0].text === '2337 Mv'
-    && (await run.deskTabs()).steps.join(' | ') === '1 A SHIP ✓ | 2 A FILE ✓ | 3 SET COURSE ◀', JSON.stringify({ rows: view.card?.rows, marks: halcyonMarks, steps: (await run.deskTabs()).steps }));
+    && (await run.deskTabs()).steps.join(' | ') === '1 A SKILL ✓ | 2 A SHIP ✓ | 3 A FILE ✓ | 4 SET COURSE ◀', JSON.stringify({ rows: view.card?.rows, marks: halcyonMarks, steps: (await run.deskTabs()).steps }));
   await page.keyboard.press('KeyR');
   await page.waitForTimeout(300);
   tabs = await run.deskTabs();
@@ -532,6 +563,23 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('…SET COURSE pinned at the bottom of the screen', goBox !== null && goBox.bottom <= vh + 1 && goBox.bottom >= vh - 80 && goBox.left >= 0 && goBox.right <= vw,
     JSON.stringify(goBox));
   await shot('02-desk');
+  // Slice 4: the sheet opens on TRAINING for the required first pick: a tap on the card arms it, a tap on the bar trains it.
+  const firstTab = await run.deskTabs();
+  check('slice 4 phone: the sheet is up on TRAINING, the bar `CHOOSE YOUR FIRST SKILL`', firstTab.tab === 'training'
+    && (await run.capsText('#deskGo')) === 'CHOOSE YOUR FIRST SKILL', `${firstTab.tab} ${await run.capsText('#deskGo')}`);
+  await page.tap('#deskScreen .tr-card[data-card="1"]');
+  await page.waitForTimeout(400);
+  const armedGo = await run.capsText('#deskGo');
+  await page.tap('#deskGo');
+  const phoneTrained = await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100);
+  check('…a tap on the card arms it (the bar reads `TRAIN ▸ 3 CYCLES [ENTER]`), a tap on the bar trains it', armedGo === 'TRAIN ▸ 3 CYCLES [ENTER]' && phoneTrained,
+    `${armedGo} ${phoneTrained}`);
+  await page.tap('#deskScreen .desk-tab[data-tab="card"]');
+  await page.waitForTimeout(500);
+  if (await st(() => document.getElementById('deskScreen').classList.contains('sheet-open'))) {
+    await page.tap('#deskScreen .desk-sheet-close');
+    await page.waitForTimeout(500);
+  }
   // Slice 3b: the sheet's tab bar peeks at the bottom on the arm; a tap on a tab opens the sheet on it.
   const sheetLook = () => st(() => {
     const root = document.getElementById('deskScreen');

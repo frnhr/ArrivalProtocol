@@ -52,10 +52,12 @@ export const TRAINING_TEXT = {
   cardKey: (key: string): string => `[${key}]`,
   stamped: 'TRAINED',
   // The TRAIN button and its bar (03 §4 juice: it fills over 1.5 s): `TRAINING AUTOBURN v1 · from your 1 capture`.
-  train: (cost: number): string => `TRAIN ▸ ${cycles(cost)} [ENTER]`,
+  // The key goes on only while the cell is armed (picked by the kid: desk.ts deskEnter); unarmed, TRAIN is a click.
+  train: (cost: number): string => `TRAIN ▸ ${cycles(cost)}`,
+  enterKey: (label: string): string => `${label} [ENTER]`,
   training: (skill: string, version: number, captures: number): string => `TRAINING ${skill} v${version} · ${fromDemos(captures)}`,
   trainingLock: (tac: number): string => `TRAINING LOCK ${tac}`,
-  restore: (version: number, cost: number): string => `RESTORE v${version} ▸ ${cycles(cost)} [ENTER]`,
+  restore: (version: number, cost: number): string => `RESTORE v${version} ▸ ${cycles(cost)}`,
   restoring: (skill: string, version: number): string => `RESTORING ${skill} v${version}`,
   // A cell: `AUTOBURN v2` / `LOCK 270`, and its price and size (`5 · 8`, a lock adds one block: `1 · +1`).
   cellName: (skill: string, version: number): string => `${skill} v${version}`,

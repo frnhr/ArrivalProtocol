@@ -442,6 +442,10 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
     draft.ui.pickedSourceId = null;
     draft.ui.pendingPlacement = null;
     draft.ui.deskSelected = toSlot;
+    // SET COURSE while a TRAIN bar fills stops it (review M4: no purchase lands without the bar on screen, nor after ◀
+    // CHART), and the TRAINING selection is unarmed again.
+    draft.ui.trainingHoldSec = null;
+    draft.ui.trainingArmed = false;
     draft.ui.memoryRev++;
   });
 }

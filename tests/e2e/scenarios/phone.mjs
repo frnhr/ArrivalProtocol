@@ -1,5 +1,6 @@
 // Phase 3 slice 3a (the galaxy map): the page plays run 1's arm, so ship 1 is the arm's ARES-VII (COMPACT: five racks,
-// A B C E F, each in two rows); its report's CONTINUE opens the DESK (a tap on HALCYON's node, a tap on SET COURSE), then
+// A B C E F, each in two rows); its report's CONTINUE opens the DESK (slice 4: the first pick by taps on TRAINING; then a
+// tap on HALCYON's node, a tap on SET COURSE), then
 // the PACKET with the LOG READER on top. HALCYON's BEAM OUT and KESTREL stay the classic ships (__ap.ship); one arm ship
 // more, PETREL (TIGHT: four racks, A B C E) by __ap.slot(1), is checked in blue: its four racks with no free-tail row, files whole, the
 // header and the strip, nothing spilling sideways.
@@ -364,6 +365,18 @@ check('CONTINUE (tapped) brings up the DESK', await waitFor(() => window.__ap.st
 await page.waitForTimeout(800);
 await overflow('DESK');
 await shot('10a-desk');
+// Slice 4: the first desk's sheet is up on TRAINING for the required first pick: a tap on the card, a tap on the bar (it
+// reads TRAIN while the card is armed), then the CARD tab (map-desk.mjs checks it in full).
+await page.tap('#deskScreen .tr-card[data-card="1"]');
+await page.waitForTimeout(400);
+await page.tap('#deskGo');
+check('slice 4: …the first pick by taps (the card, then the bar)', await waitFor(() => window.__ap.store.getState().run.skills.pending.length === 1, 4000, 100));
+await page.tap('#deskScreen .desk-tab[data-tab="card"]');
+await page.waitForTimeout(500);
+if (await st(() => document.getElementById('deskScreen').classList.contains('sheet-open'))) {
+  await page.tap('#deskScreen .desk-sheet-close');
+  await page.waitForTimeout(500);
+}
 let deskTap = 'no tap';
 try { await page.locator('#deskScreen [data-slot="2"] .cn-box').first().tap({ timeout: 4000 }); deskTap = 'ok'; } catch (err) { deskTap = String(err).split('\n')[0]; }
 await page.waitForTimeout(500);

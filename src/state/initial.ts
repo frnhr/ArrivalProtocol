@@ -289,5 +289,6 @@ export function createUiState(phase: RunPhase, reducedMotion: boolean): GameStat
     deskWindow: null,
     trainingSel: null,
     trainingHoldSec: null,
+    trainingArmed: false,
   };
 }

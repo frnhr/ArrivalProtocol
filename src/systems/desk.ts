@@ -34,7 +34,7 @@ import { URGENT_SLACK_YEARS, BEAM_OUT_BLACKOUT_SEC, LEAVE_BLOCK_MAX_LINES, TRAIL
 import type { SkillId, CellRow } from '@/types/skill';
 import { bankOf, deskBlocker, type TrainRefusal } from '@systems/skill-tree';
 import { trainCell, restoreSkill, undoPurchase, FIRST_PICK_ENFORCED } from '@systems/training';
-import { trainingModel, cellKey, TRAINING_HOLD_SEC } from '@systems/training-model';
+import { trainingModel, trainingArmed, cellKey, TRAINING_HOLD_SEC } from '@systems/training-model';
 import { TRAINING_TEXT } from '@data/training-text';
 
 export type { DeskWindowId };
@@ -628,11 +628,25 @@ export function deskSteps(state: Readonly<GameState>): DeskStep[] {
       : recommended !== null ? REPO_TEXT.desk.request(REPO_FILE_TEXT[recommended].boot) : REPO_TEXT.desk.requestAny;
     steps.push({ id: 'request', label: MAP_TEXT.desk.stepFile, text, done: pick !== null });
   }
+  // While a TRAINING cell is armed ENTER trains it, so the step names SPACE (review M3).
+  const ship = selected === null ? '…' : shipSummaryAt(state.run.map, selected).name;
   steps.push({
     id: 'set-course', label: MAP_TEXT.desk.stepCourse,
-    text: MAP_TEXT.desk.setCourse(selected === null ? '…' : shipSummaryAt(state.run.map, selected).name), done: false,
+    text: deskEnter(state) === 'train' ? MAP_TEXT.desk.setCourseSpace(ship) : MAP_TEXT.desk.setCourse(ship), done: false,
   });
   return steps;
+}
+
+// What ENTER does on the desk (slice 4 review M3, the lead's ruling): it trains (or restores) only a TRAINING cell the kid
+// picked this visit, while the tab is open and the cell has an action (a dim one buzzes); a filling bar keeps it (nothing
+// happens). Otherwise it sets course, as everywhere else. SPACE always sets course.
+export type DeskEnter = 'train' | 'set-course';
+
+export function deskEnter(state: Readonly<GameState>): DeskEnter {
+  if (state.run.phase !== 'desk' || state.run.map.world !== 'arm') return 'set-course';
+  if (state.ui.trainingHoldSec !== null) return 'train';
+  if (!trainingArmed(state)) return 'set-course';
+  return trainingModel(state).detail?.action ? 'train' : 'set-course';
 }
 
 // The ships whose approach passed since the last desk (02 §4's opening beat), earliest first: their approach year is
@@ -749,22 +763,35 @@ export function openDeskWindow(store: Store<GameState>, id: DeskWindowId | null)
   const state = store.getState();
   if (state.run.phase !== 'desk') throw new Error(`openDeskWindow: not on the DESK (phase ${state.run.phase})`);
   if (id === 'training' && state.run.map.world !== 'arm') throw new Error('openDeskWindow: the classic world has no TRAINING');
-  if (state.ui.deskWindow !== id) store.update((draft) => { draft.ui.deskWindow = id; });
+  if (state.ui.deskWindow === id) return;
+  store.update((draft) => {
+    draft.ui.deskWindow = id;
+    // Another tab disarms TRAINING and stops a filling bar (review M3).
+    if (id !== 'training') { draft.ui.trainingArmed = false; draft.ui.trainingHoldSec = null; }
+  });
 }
 
 // --- TRAINING's actions (slice 4; plan §2.5; the model is systems/training-model.ts) ---------------------------------------
 
-// A cell (a click, a card's [1] / [2], ↑ ↓ in the grid) becomes the selection; a TRAIN bar filling for another cell stops.
+// A cell (a click, a card's [1] / [2], ↑ ↓ in the grid) becomes the selection, armed (ENTER trains it: review M3); a TRAIN
+// bar filling for another cell stops.
 export function selectTrainingCell(store: Store<GameState>, skill: SkillId, row: CellRow): void {
   const state = store.getState();
   if (state.run.phase !== 'desk') throw new Error(`selectTrainingCell: not on the DESK (phase ${state.run.phase})`);
   const same = state.ui.trainingSel !== null && state.ui.trainingSel.skill === skill
     && cellKey(state.ui.trainingSel.skill, state.ui.trainingSel.row) === cellKey(skill, row);
-  if (same) return;
+  if (same && state.ui.trainingArmed) return;
   store.update((draft) => {
     draft.ui.trainingSel = { skill, row: { ...row } };
-    draft.ui.trainingHoldSec = null;
+    draft.ui.trainingArmed = true;
+    if (!same) draft.ui.trainingHoldSec = null;
   });
+}
+
+// ESC on an armed cell: the selection stays on screen, and ENTER sets course again (review M3).
+export function disarmTraining(store: Store<GameState>): void {
+  const ui = store.getState().ui;
+  if (ui.trainingArmed || ui.trainingHoldSec !== null) store.update((draft) => { draft.ui.trainingArmed = false; draft.ui.trainingHoldSec = null; });
 }
 
 // ↑ ↓ in the grid: the next or previous cell that is open, in the model's order, from the selection (wrapping).
@@ -818,7 +845,7 @@ export function advanceTrainingHold(store: Store<GameState>, dtSec: number): 'fi
 }
 
 // UNDO beside a purchase of this desk (training.ts undoPurchase: only the last of its skill). The selection moves to the
-// cell it gave back, so TRAIN buys it again with one key.
+// cell it gave back, unarmed (review M3: an ENTER after an UNDO sets course; TRAIN or a click buys it again).
 export function undoTraining(store: Store<GameState>, index: number): void {
   const purchase = store.getState().run.skills.pending[index];
   if (purchase === undefined) throw new Error(`undoTraining: no pending purchase ${index}`);
@@ -827,6 +854,7 @@ export function undoTraining(store: Store<GameState>, index: number): void {
   store.update((draft) => {
     draft.ui.trainingSel = { skill: purchase.skill, row };
     draft.ui.trainingHoldSec = null;
+    draft.ui.trainingArmed = false;
   });
 }
 

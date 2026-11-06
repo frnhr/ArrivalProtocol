@@ -26,8 +26,13 @@ import {
 } from '@systems/training-model';
 import {
   deskSteps, deskTabBadges, selectTrainingCell, startTrainingHold, advanceTrainingHold, undoTraining, firstPickWaits,
-  openDeskWindow, selectShip, deskCandidates,
+  openDeskWindow, selectShip, deskCandidates, deskEnter, disarmTraining, stepTrainingCell,
 } from '@systems/desk';
+import { setCourse, transmitNext, backToChart } from '@systems/run';
+import { pickCard } from '@systems/draft';
+import { trainCell } from '@systems/training';
+import { createRunMap } from '@systems/map-run';
+import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { skillsModel, skillFileView, skillTickZones, skillVersionStamp } from '@systems/skills';
 import { bankOf } from '@systems/skill-tree';
 import { skillFile } from '@systems/skill-files';
@@ -64,8 +69,9 @@ const look = (model: Readonly<TrainingModel>, key: string): string | undefined =
   selectTrainingCell(store, 'autoburn', { kind: 'version', version: 1 });
   model = trainingModel(store.getState());
   const captures = store.getState().run.stats.demos.length;
-  check('[1]: the card is chosen, TRAIN ▸ 3 CYCLES [ENTER] is offered', model.cards[0]!.selected && model.detail?.action?.kind === 'train'
-    && model.detail.action.enabled && model.detail.action.label === TRAINING_TEXT.train(3));
+  check('[1]: the card is chosen and armed, TRAIN ▸ 3 CYCLES [ENTER] is offered, ENTER trains', model.cards[0]!.selected && model.armed
+    && model.detail?.action?.kind === 'train' && model.detail.action.enabled && model.detail.action.label === TRAINING_TEXT.enterKey(TRAINING_TEXT.train(3))
+    && deskEnter(store.getState()) === 'train');
   check('…TRAIN starts the bar: `TRAINING AUTOBURN v1 · …` at 0', startTrainingHold(store) && trainingModel(store.getState()).hold === 0
     && trainingModel(store.getState()).holdText === TRAINING_TEXT.training('AUTOBURN', 1, captures));
   const half = advanceTrainingHold(store, TRAINING_HOLD_SEC / 2);
@@ -149,6 +155,68 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
   check('…and the Skills row says so: ▯▯▯, `LOST v1 · RESTORE 2 AT THE NEXT DESK`', rows[0]?.id === 'autoburn'
     && rows[0].version?.pips === '▯▯▯' && rows[0].version.text === SKILLS_TEXT.skill.restoreAt(1, 2) && rows[0].version.tone === 'warn',
     JSON.stringify(rows[0]?.version));
+}
+
+// --- Review M3 / M4: the desk's keys at desk 2, at the model ------------------------------------------------------------
+// ENTER trains only a cell picked this visit ([1]/[2], ↑ ↓, a click); the default selection fills the detail and is not armed;
+// ESC and another tab disarm; a dim armed cell buzzes; SET COURSE while the bar fills cancels it, and nothing lands after
+// ◀ CHART either.
+{
+  const storage = stubStorage();
+  const store = createStore<GameState>(createInitialState({ seed: 3, map: createRunMap({ wave: 1 }, 3), lineage: FIRST_RUN_LINEAGE }));
+  pageOpen(store, storage, 3);
+  receiveToReport(store);
+  store.update((d) => { d.run.stats.demos = [{ offsetTac: 2 }]; });
+  toDesk(store);
+  trainCell(store, 'autoburn', { kind: 'version', version: 1 });
+  setCourse(store, deskCandidates(store.getState())[0]!);
+  const offer = store.getState().run.transit!.offer;
+  if (offer.length > 0) pickCard(store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
+  transmitNext(store);
+  toDesk(store);
+  const slot = deskCandidates(store.getState())[0]!;
+  selectShip(store, slot);
+  openDeskWindow(store, 'training');
+  const course = (): string => deskSteps(store.getState()).find((step) => step.id === 'set-course')!.text;
+  let model = trainingModel(store.getState());
+  const bank = bankOf(store.getState().run.skills);
+  check('M3: desk 2, TRAINING open: the default selection fills the detail, unarmed: TRAIN has no key, ENTER sets course',
+    model.selected !== null && model.detail?.action !== null && !model.armed && !(model.detail?.action?.label ?? '').includes('[ENTER]')
+      && deskEnter(store.getState()) === 'set-course' && course().endsWith('[ENTER]'), `${model.selected?.key} bank ${bank} ${model.detail?.action?.label} "${course()}"`);
+  stepTrainingCell(store, 1);
+  model = trainingModel(store.getState());
+  const armedAction = model.detail?.action ?? null;
+  check('…↓ picks a cell: armed; with an action ENTER trains it, its label carries [ENTER], and the step says SET COURSE [SPACE]',
+    model.armed && (armedAction === null ? deskEnter(store.getState()) === 'set-course'
+      : deskEnter(store.getState()) === 'train' && armedAction.label.endsWith('[ENTER]') && course().endsWith('[SPACE]')),
+    `${model.selected?.key} ${armedAction?.label} "${course()}"`);
+  disarmTraining(store);
+  check('…ESC disarms: the selection stays on screen, ENTER sets course', !trainingModel(store.getState()).armed
+    && trainingModel(store.getState()).selected?.key === model.selected?.key && deskEnter(store.getState()) === 'set-course');
+  // A cell the bank can't pay, picked: ENTER buzzes (startTrainingHold refuses), never sets course behind the kid's back.
+  const dim = trainingModel(store.getState()).cells.find((cell) => cell.look === 'dim');
+  if (dim !== undefined) {
+    selectTrainingCell(store, dim.skill, dim.row);
+    check('…a dim cell picked: ENTER is TRAIN\'s and buzzes (no bar)', deskEnter(store.getState()) === 'train' && !startTrainingHold(store)
+      && store.getState().ui.trainingHoldSec === null, dim.key);
+  }
+  openDeskWindow(store, null);
+  check('…another tab disarms', !store.getState().ui.trainingArmed && deskEnter(store.getState()) === 'set-course');
+  openDeskWindow(store, 'training');
+  check('…and back on TRAINING it stays unarmed until a pick', deskEnter(store.getState()) === 'set-course');
+  // SET COURSE while a bar fills (M4).
+  const affordable = trainingModel(store.getState()).cells.find((cell) => cell.look === 'affordable');
+  check('setup: a cell the bank can buy at desk 2', affordable !== undefined, String(bank));
+  if (affordable !== undefined) {
+    selectTrainingCell(store, affordable.skill, affordable.row);
+    check('M4 setup: TRAIN starts the bar', startTrainingHold(store) && advanceTrainingHold(store, TRAINING_HOLD_SEC / 2) === 'filling');
+    setCourse(store, slot);
+    check('M4: SET COURSE mid-bar: the bar stops, nothing pending, TRAINING unarmed', store.getState().run.phase === 'transmit'
+      && store.getState().ui.trainingHoldSec === null && store.getState().run.skills.pending.length === 0 && !store.getState().ui.trainingArmed);
+    backToChart(store);
+    check('…◀ CHART: no bar to resume, no ghost purchase, the bank whole', store.getState().ui.trainingHoldSec === null
+      && store.getState().run.skills.pending.length === 0 && bankOf(store.getState().run.skills) === bank && deskEnter(store.getState()) === 'set-course');
+  }
 }
 
 // --- The packet preview and the AHEAD row (03 §4) ---------------------------------------------------------------------------

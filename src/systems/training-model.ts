@@ -84,7 +84,7 @@ export interface TrainingCard {
 // What TRAIN does on the selection: train it, or RESTORE what was lost (decision 16), and whether it can now.
 export interface TrainingAction {
   kind: 'train' | 'restore';
-  label: string;               // TRAIN ▸ 3 CYCLES [ENTER] / RESTORE v2 ▸ 3 CYCLES [ENTER]
+  label: string;               // TRAIN ▸ 3 CYCLES / RESTORE v2 ▸ 3 CYCLES, with [ENTER] while the cell is armed
   cost: number;
   enabled: boolean;
   why: string | null;          // why not (the cell's status)
@@ -115,6 +115,7 @@ export interface TrainingPreview {
 export interface TrainingModel {
   visit: number;
   firstPick: boolean;          // visit 1: the cards, not the grid
+  armed: boolean;              // the selection was picked this visit, so ENTER trains it (review M3; desk.ts deskEnter)
   title: string;               // TRAINING · UNIT-047
   bank: number;
   bankText: string;            // 5 CYCLES
@@ -195,8 +196,21 @@ export function restoreCost(state: Readonly<GameState>, skill: SkillId): number 
   return restorePrice(lostLevels(skill, held(state, skill), paid(state.run.skills, skill)));
 }
 
-// What TRAIN would do on a cell, or null when there is nothing to do there (held, pending, closed).
+// The selection is armed: the kid picked it this visit ([1] / [2], ↑ ↓, a click: UiState.trainingArmed) on the open tab. The
+// default selection only fills the detail (review M3).
+export function trainingArmed(state: Readonly<GameState>): boolean {
+  return state.ui.trainingArmed && state.ui.trainingSel !== null && state.ui.deskWindow === 'training';
+}
+
+// What TRAIN would do on a cell, or null when there is nothing to do there (held, pending, closed). Its key is shown only
+// while the cell is armed.
 function cellAction(state: Readonly<GameState>, cell: Readonly<TrainingCellView>, bank: number): TrainingAction | null {
+  const action = cellActionBare(state, cell, bank);
+  if (action === null || !trainingArmed(state)) return action;
+  return { ...action, label: TRAINING_TEXT.enterKey(action.label) };
+}
+
+function cellActionBare(state: Readonly<GameState>, cell: Readonly<TrainingCellView>, bank: number): TrainingAction | null {
   const captures = state.run.stats.demos.length;
   const name = TRAINING_TEXT.skills[cell.skill].name;
   if (cell.look === 'lost') {
@@ -364,7 +378,7 @@ export function trainingModel(state: Readonly<GameState>): TrainingModel {
   const detail = selected === null ? null : detailOf(state, selected, bank);
   const slot = state.ui.deskSelected;
   return {
-    visit, firstPick, title: TRAINING_TEXT.title(unitName(run.unitNumber)), bank, bankText: TRAINING_TEXT.bank(bank),
+    visit, firstPick, armed: trainingArmed(state), title: TRAINING_TEXT.title(unitName(run.unitNumber)), bank, bankText: TRAINING_TEXT.bank(bank),
     demos: TRAINING_TEXT.demos(run.stats.demos.length),
     control: firstPick ? TRAINING_TEXT.controlFirstVisit : null,
     topUp: topUp > 0 ? TRAINING_TEXT.onTheHouse(topUp) : null,

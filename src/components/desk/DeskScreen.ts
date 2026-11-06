@@ -6,8 +6,9 @@ import type { ChartNode } from '@systems/desk';
 import { pushModal, registerKeys } from '@systems/input';
 import {
   deskCandidates, selectShip, cycleShip, cardModel, chartModel, deskSteps, deskOpeningBeat, deskControlLine, deskOpening,
-  openDeskWindow, toggleRequest, deskTabBadges, deskDepartures, chartLegend, firstPickWaits,
+  openDeskWindow, toggleRequest, deskTabBadges, deskDepartures, chartLegend, firstPickWaits, deskEnter, disarmTraining,
 } from '@systems/desk';
+import { trainingModel } from '@systems/training-model';
 import { repoModel } from '@systems/repository';
 import type { RepoFileId } from '@/types/repo';
 import { setCourse } from '@systems/run';
@@ -175,9 +176,13 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     const course = steps.find((step) => step.id === 'set-course')!;
     // Slice 4: the run's first desk waits for the required first pick (desk.ts firstPickWaits): the bar says so.
     const blocked = firstPickWaits(state);
-    renderKeyCaps(goBtn, blocked ? TRAINING_TEXT.chooseFirst : course.text);
-    goBtn.classList.toggle('waiting', selected === null || blocked);
-    goBtn.classList.toggle('blocked', blocked);
+    // Review M3: while a TRAINING cell is armed the bar shows what ENTER does (`TRAIN ▸ 1 CYCLE [ENTER]`), and a click on it
+    // does the same; SPACE still sets course (the step says so).
+    const trains = deskEnter(state) === 'train' ? trainingModel(state).detail?.action ?? null : null;
+    goBtn.dataset.does = trains === null ? 'set-course' : 'train';
+    renderKeyCaps(goBtn, trains !== null ? trains.label : blocked ? TRAINING_TEXT.chooseFirst : course.text);
+    goBtn.classList.toggle('waiting', trains !== null ? !trains.enabled : selected === null || blocked);
+    goBtn.classList.toggle('blocked', trains === null && blocked);
     const chartNow = chartModel(state);
     chart.paint(chartNow, beatPending, greenPending);
     const items = chartLegend(chartNow);
@@ -268,6 +273,7 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
       if (state.ui.deskWindow !== 'training') showTab('training', false);
       return;
     }
+    // A TRAIN bar still filling stops here (goTransmit clears it: review M4), so nothing lands, now or after ◀ CHART.
     if (state.ui.deskSelected === null || !deskCandidates(state).includes(state.ui.deskSelected)) {
       play('buzz');
       return;
@@ -393,7 +399,12 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     closeModal = null;
   }
 
-  const onGo = (event: MouseEvent): void => { event.stopPropagation(); go(); };
+  // The bar does what it shows: TRAIN while a cell is armed, else SET COURSE.
+  const onGo = (event: MouseEvent): void => {
+    event.stopPropagation();
+    if (deskEnter(store.getState()) === 'train') { training.press(); paint(); return; }
+    go();
+  };
   const onClose = (event: MouseEvent): void => { event.stopPropagation(); sheetOpen = false; paint(); };
   const onHandle = (event: MouseEvent): void => {
     const tab = (event.target as HTMLElement | null)?.closest<HTMLElement>('.desk-tab')?.dataset.tab as DeskTab | undefined;
@@ -416,9 +427,12 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   cardClose.addEventListener('click', onClose);
   cardTitle.addEventListener('click', onHandle);
   const offs = [
-    // ENTER trains the selected cell while TRAINING is open and there is one to train (03 §4: [1], then ENTER); otherwise
-    // it sets course. SPACE always sets course.
-    registerKeys({ layer: 'desk', codes: ['Enter', 'NumpadEnter'], onDown: () => { if (!trainingKey(() => training.press())) go(); } }),
+    // ENTER trains only a TRAINING cell the kid picked this visit (03 §4: [1], then ENTER; review M3: systems/desk.ts
+    // deskEnter); otherwise it sets course. SPACE always sets course.
+    registerKeys({
+      layer: 'desk', codes: ['Enter', 'NumpadEnter'],
+      onDown: () => { if (deskEnter(store.getState()) !== 'train' || !trainingKey(() => training.press())) go(); paint(); },
+    }),
     registerKeys({ layer: 'desk', codes: ['Space'], onDown: go }),
     registerKeys({ layer: 'desk', codes: ['ArrowRight'], onDown: () => cycle(1) }),
     registerKeys({ layer: 'desk', codes: ['ArrowLeft'], onDown: () => cycle(-1) }),
@@ -428,7 +442,9 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
     registerKeys({
       layer: 'desk', codes: ['Escape'],
       onDown: () => {
-        if (store.getState().ui.trainingHoldSec !== null) { training.cancel(); return; }
+        if (store.getState().ui.trainingHoldSec !== null) { training.cancel(); paint(); return; }
+        // An armed cell is disarmed first (review M3): the tab stays, ENTER sets course again.
+        if (deskEnter(store.getState()) === 'train') { disarmTraining(store); training.paint(); paint(); return; }
         if (store.getState().ui.deskWindow !== null && !(phone.matches && sheetOpen)) { showTab('card'); return; }
         if (sheetOpen) { sheetOpen = false; paint(); }
       },
@@ -446,7 +462,8 @@ export function mountDeskScreen(store: Store<GameState>): () => void {
   const unsubTrace = store.subscribe((s) => s.run.threat.trace, () => { if (shown) paint(); });
   // 3b: the tab (openDesk opens the REPOSITORY after the last rm), the request and the read marks.
   const unsubTabs = store.subscribe(
-    (s) => `${s.ui.deskWindow ?? ''}|${s.run.repo.pick ?? ''}|${s.run.inbox.read.length}|${s.run.skills.pending.length}`,
+    (s) => `${s.ui.deskWindow ?? ''}|${s.run.repo.pick ?? ''}|${s.run.inbox.read.length}|${s.run.skills.pending.length}`
+      + `|${s.ui.trainingArmed ? 1 : 0}|${JSON.stringify(s.ui.trainingSel)}|${s.ui.trainingHoldSec === null ? 0 : 1}`,
     () => {
       if (!shown) return;
       const tabNow = store.getState().ui.deskWindow;

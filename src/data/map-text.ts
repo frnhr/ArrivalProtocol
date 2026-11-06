@@ -59,6 +59,8 @@ export const MAP_TEXT = {
     title: 'STAR CHART',
     pickShip: 'PICK YOUR NEXT SHIP — click a ship or ← →',
     setCourse: (ship: string): string => `SET COURSE ▸ ${ship} [ENTER]`,
+    // Slice 4 review (M3): while a TRAINING cell is armed ENTER trains it, so the step names SET COURSE's other key.
+    setCourseSpace: (ship: string): string => `SET COURSE ▸ ${ship} [SPACE]`,
     controlPick: (unit: number): string => `Lovely work, Unit ${unit}! :) Pick your next ship.`,
     greyed: (count: number): string => `${count} ${count === 1 ? 'SHIP' : 'SHIPS'} NOW OUT OF YOUR REACH`,
     onlyNext: 'ONE SHIP IN REACH',
