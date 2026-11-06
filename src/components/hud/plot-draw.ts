@@ -1,7 +1,7 @@
 // Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the LOCK bracket and the ghost. Others
 // ask by message.
 import type { Prediction } from '@systems/predict';
-import type { Projector } from '@/types/orbit';
+import type { Projector, Vec2 } from '@/types/orbit';
 
 // SVG building blocks shared by the NAV PLOT (components/tools-view/NavPlotWindow) and the
 // mini-HUD's plot (components/hud/MiniHud): the same path, coloured the same way, at two sizes.
@@ -86,4 +86,44 @@ export function pathsByColour(pred: Prediction, proj: Projector): ColouredPaths 
 // at least ±minUnits so it never hides under the line itself.
 export function bandWidth(fuzzKm: number, proj: Projector, minUnits: number): number {
   return 2 * Math.max(minUnits, fuzzKm * proj.scale);
+}
+
+// --- Slice 4 (Track FLIGHT): AUTOBURN's marks ---------------------------------------------------------------------------
+
+// The run of the drawn path between `fromInSec` and `toInSec` game seconds from `nowTSec` (the LOCK bracket, flight-hud
+// lockBracket), as one `d`, plus its first point (where the LOCK label goes); null when no drawn point falls inside it.
+// The path's times are game s after pred.asOfTSec.
+export function pathRun(
+  pred: Prediction, proj: Projector, nowTSec: number, fromInSec: number, toInSec: number,
+): { d: string; start: Vec2 } | null {
+  const since = nowTSec - pred.asOfTSec;
+  let pathData = '';
+  let start: Vec2 | null = null;
+  for (let i = 0; i < pred.points.length; i++) {
+    const inSec = (pred.times[i] ?? 0) - since;
+    if (inSec < fromInSec || inSec > toInSec) continue;
+    const point = pred.points[i];
+    if (!point) throw new Error(`plot: path point ${i} missing`);
+    const screen = proj.project(point);
+    pathData += `${start === null ? 'M' : 'L'}${fmt(screen.x)},${fmt(screen.y)}`;
+    start ??= screen;
+  }
+  return start === null ? null : { d: pathData, start };
+}
+
+// AUTOBURN's dashed target (flight-hud autoGhost): the conic with these apsides and ▼ toward `omega`, the planet at its
+// focus, as one closed `d` of GHOST_SAMPLES points.
+const GHOST_SAMPLES = 120;
+
+export function ghostLoop(rpKm: number, raKm: number, omega: number, proj: Projector): string {
+  const e = (raKm - rpKm) / (raKm + rpKm);
+  const semiLatus = rpKm * (1 + e);
+  let pathData = '';
+  for (let i = 0; i <= GHOST_SAMPLES; i++) {
+    const nu = (2 * Math.PI * i) / GHOST_SAMPLES;
+    const radius = semiLatus / (1 + e * Math.cos(nu));
+    const screen = proj.project({ x: radius * Math.cos(nu + omega), y: radius * Math.sin(nu + omega) });
+    pathData += `${i === 0 ? 'M' : 'L'}${fmt(screen.x)},${fmt(screen.y)}`;
+  }
+  return `${pathData}Z`;
 }

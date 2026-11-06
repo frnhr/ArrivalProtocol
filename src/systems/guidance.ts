@@ -2,6 +2,7 @@
 // Others ask by message.
 import type { GameState, BurnStatus, SasMode, PresetMode, Urgency, GuideLayer, AutoburnPhase, AutoburnEnd } from '@state/schema';
 import type { Ring } from '@/types/orbit';
+import type { AutoMode } from '@/types/skill';
 import { isThrustOn, engineAccel } from '@systems/orbit-sim';
 import { fliesAlong } from '@systems/attitude';
 import {
@@ -16,7 +17,9 @@ import { skipBlockReason } from '@systems/pace';
 import { goLowReleased, landingBurnOffer, launchRadiusRate, offerInTac } from '@systems/landing-orbit';
 import { LANDING_FLIGHT_LINES } from '@data/landing-text';
 import { controllerSwapOf } from '@systems/tool-targets';
-import { autoburnAvailable, autoburnArmedInTac } from '@systems/autoburn';
+import {
+  autoburnAvailable, autoburnArmedInTac, autoOfferMode, autoArmedBurn, autoFlyingKind, autoburnDoneLine, type AutoArmedBurn,
+} from '@systems/autoburn';
 import { AUTOBURN_TEXT } from '@data/skill-text';
 import { debrisRack } from '@/types/zone';
 import { IS_DEV } from '@/env';
@@ -111,8 +114,16 @@ export interface FlightContext {
   debris: { rack: string; dodgeInTac: number | null } | null;
   // WP9, AUTOBURN (§6.10): its phase, AI seconds since that phase began, tactical seconds until it fires (the
   // armed countdown), and why its last engagement ended; `autoAvailable`: [B] would engage it now.
-  autoburn: { phase: AutoburnPhase; sinceSec: number; armedInTac: number; end: AutoburnEnd | null };
+  // Slice 4 (03 §3.6–§3.7): `armed`, what the armed AUTOBURN waits for (its kind, its apsis, whether its claim waits for a
+  // thread); `flying`, the kind of burn it flies now; `doneLine`, v2's hand-back while it stands (autoburn
+  // autoburnDoneLine); `autoOffer`, the mode a press would engage now (the tails name it), null when [B] would not.
+  // Optional, so the older suites' pure contexts read as v1.
+  autoburn: {
+    phase: AutoburnPhase; sinceSec: number; armedInTac: number; end: AutoburnEnd | null;
+    armed?: AutoArmedBurn | null; flying?: AutoArmedBurn['kind'] | null; doneLine?: string | null;
+  };
   autoAvailable: boolean;
+  autoOffer?: AutoMode | null;
 }
 
 // The key and the kid word for each preset. The HUD buttons, the key bindings and the hint
@@ -194,8 +205,12 @@ export function buildFlightContext(state: Readonly<GameState>, pred: Prediction)
       sinceSec: state.clock.aiSec - state.burn.auto.atAi,
       armedInTac: autoburnArmedInTac(state, pred),
       end: state.burn.auto.end,
+      armed: autoArmedBurn(state, pred),
+      flying: autoFlyingKind(state),
+      doneLine: autoburnDoneLine(state),
     },
     autoAvailable: autoburnAvailable(state, pred),
+    autoOffer: autoOfferMode(state, pred),
   };
 }
 
@@ -548,10 +563,15 @@ function earlyBurnRow(ctx: FlightContext, burnPoint: FlightContext['burnPoint'])
 function evaluatePath(ctx: FlightContext): FlightObjective {
   const burnPoint = ctx.burnPoint;
 
-  // F3 / F3b: the whole loop is green (the lock hold runs even on an empty tank).
+  // F3 / F3b: the whole loop is green (the lock hold runs even on an empty tank). AUTOBURN rounding it (slice 4) is not
+  // the kid's hold to release. HOLD STEADY offers ROUND as a tail only (03 §3.7: it never outranks anything).
   if (ctx.inRing) {
+    if (ctx.autoburn.phase === 'burning' || ctx.autoburn.phase === 'pointing') {
+      const flyingRow = autoburnFlyingObjective(ctx);
+      if (flyingRow) return flyingRow;
+    }
     if (ctx.thrustOn || ctx.firing) return make('F3', 'RELEASE [SPACE]!', ['SPACE'], 'now', ctx);
-    return make('F3b', 'HOLD STEADY…', [], 'now', ctx);
+    return offerAuto(make('F3b', 'HOLD STEADY…', [], 'now', ctx), ctx);
   }
 
   if (ctx.outOfFuel) return outOfFuelObjective(ctx);
@@ -559,9 +579,10 @@ function evaluatePath(ctx: FlightContext): FlightObjective {
   // the moment the ship recedes (WP1-rules 3b), so no burn is asked for.
   if (ctx.cannotClose) return flyPast('LOWFUEL-open', 'NOT ENOUGH FUEL', ctx);
 
-  // AUTOBURN at work (WP9): ahead of every burn row, but never ahead of DON'T HIT THE PLANET (F4, next).
+  // AUTOBURN flying, or just done (WP9): ahead of every burn row, but never ahead of DON'T HIT THE PLANET (F4, next). Its
+  // ARMED row comes later (slice 4, 03 §3.7): below the ▼ correction rows, which carry ` · AUTO ARMED` instead.
   if (ctx.outcome !== 'impact') {
-    const auto = autoburnObjective(ctx);
+    const auto = autoburnFlyingObjective(ctx);
     if (auto) return auto;
   }
 
@@ -597,8 +618,10 @@ function evaluatePath(ctx: FlightContext): FlightObjective {
     if (!burnPoint) throw new Error('flightObjective: open path with fuel but without a burn point');
 
     // F9: ▼ already passed. Brake now or fly away. Once the kid has let it ride (WP1-rules 3a),
-    // SKIP to the end is allowed too, and the line says so like every WAIT does.
+    // SKIP to the end is allowed too, and the line says so like every WAIT does. An armed AUTOBURN fires at once there.
     if (ctx.outbound) {
+      const armed = autoburnArmedObjective(ctx);
+      if (armed) return armed;
       if (ctx.firing && ctx.sasMode === 'retrograde') {
         return make('F9-keep', 'KEEP HOLDING — close the loop', ['SPACE'], 'now', ctx);
       }
@@ -624,11 +647,11 @@ function evaluatePath(ctx: FlightContext): FlightObjective {
       const releaseEarly = short && !dodging && towardMiddle && (middle - ctx.rp) / ctx.rpRateTac <= RELEASE_LEAD_TAC;
       if (short && !releaseEarly) {
         const text = goingUp ? 'KEEP HOLDING — push ▼ up into the ring' : 'KEEP HOLDING — pull ▼ down into the ring';
-        return make('F6-keep', text, ['SPACE'], 'now', ctx);
+        return armedTail(make('F6-keep', text, ['SPACE'], 'now', ctx), ctx);
       }
-      if (past) return make('F6-past', 'RELEASE — too far', ['SPACE'], 'now', ctx);
-      if (dodging && ctx.debris) return make('F6-dodge', `KEEP HOLDING — dodge DEBRIS ${ctx.debris.rack}`, ['SPACE'], 'now', ctx);
-      return make('F6-release', 'RELEASE [SPACE]', ['SPACE'], 'now', ctx);
+      if (past) return armedTail(make('F6-past', 'RELEASE — too far', ['SPACE'], 'now', ctx), ctx);
+      if (dodging && ctx.debris) return armedTail(make('F6-dodge', `KEEP HOLDING — dodge DEBRIS ${ctx.debris.rack}`, ['SPACE'], 'now', ctx), ctx);
+      return armedTail(make('F6-release', 'RELEASE [SPACE]', ['SPACE'], 'now', ctx), ctx);
     }
     // F6-resume: the correction let go in the ring with the path still running into a debris cloud that holding on
     // (its preset is still selected) can still take it off: say so, with the countdown (WP9 review round 2: before,
@@ -636,24 +659,28 @@ function evaluatePath(ctx: FlightContext): FlightObjective {
     const inRingNow = ctx.rp >= ctx.ring.min && ctx.rp <= ctx.ring.max;
     if (early && !ctx.firing && inRingNow && ctx.debris && ctx.debris.dodgeInTac !== null) {
       const tail = DODGE_IN(formatTac(ctx.debris.dodgeInTac), ctx.debris.rack);
-      return dodgeWarn(make('F6-resume', `${DODGE_RESUME}${tail}`, ['SPACE'], 'now', ctx), ctx.debris.dodgeInTac);
+      return armedTail(dodgeWarn(make('F6-resume', `${DODGE_RESUME}${tail}`, ['SPACE'], 'now', ctx), ctx.debris.dodgeInTac), ctx);
     }
 
     const soonOrNow: Urgency = ctx.periTac !== null && ctx.periTac < COUNTDOWN_RED_TAC ? 'now' : 'soon';
     // F7 / F8: ▼ misses the ring and there is still time to correct.
-    if (early && ctx.rp < ctx.ring.min) return fixWith('F7', '▼ TOO LOW', 'radial-out', soonOrNow, ctx);
+    if (early && ctx.rp < ctx.ring.min) return armedTail(fixWith('F7', '▼ TOO LOW', 'radial-out', soonOrNow, ctx), ctx);
     if (early && ctx.rp > ctx.ring.max) {
       const debris = ctx.debris;
-      if (debris === null) return fixWith('F8', 'TOO WIDE', 'radial-in', soonOrNow, ctx);
+      if (debris === null) return armedTail(fixWith('F8', 'TOO WIDE', 'radial-in', soonOrNow, ctx), ctx);
       if (debris.dodgeInTac === null) {
-        return fixWithTail('F8-debris-late', 'TOO WIDE', 'radial-in', soonOrNow, ctx, DODGE_TOO_LATE(debris.rack), DODGE_TOO_LATE_SHORT(debris.rack));
+        return armedTail(fixWithTail('F8-debris-late', 'TOO WIDE', 'radial-in', soonOrNow, ctx, DODGE_TOO_LATE(debris.rack), DODGE_TOO_LATE_SHORT(debris.rack)), ctx);
       }
       // A deadline, so urgent all the way (WP9 review round 1): the ship's one decision that runs out, ahead of
       // the MIND's lines and the tutorials (a carried FIREWALL's placing hint used to stand over the countdown).
       const time = formatTac(debris.dodgeInTac);
       const line = fixWithTail('F8-debris', 'TOO WIDE', 'radial-in', 'now', ctx, DODGE_IN(time, debris.rack), DODGE_IN_SHORT(time));
-      return dodgeWarn(line, debris.dodgeInTac);
+      return armedTail(dodgeWarn(line, debris.dodgeInTac), ctx);
     }
+
+    // AUTOBURN armed for the capture (slice 4): below the correction rows above, above the capture timeline it flies.
+    const armedCapture = autoburnArmedObjective(ctx);
+    if (armedCapture) return armedCapture;
 
     // F10: the capture timeline (also late corrections: brake anyway, trim later).
     const outside = ctx.rp < ctx.ring.min || ctx.rp > ctx.ring.max;
@@ -669,6 +696,10 @@ function evaluatePath(ctx: FlightContext): FlightObjective {
     }
     return offerAuto(burnTimeline('F10', burnPoint, ctx, lateSuffix), ctx);
   }
+
+  // AUTOBURN armed between GREEN's burns (slice 4): it flies the trim the rows below would ask for.
+  const armedTrim = autoburnArmedObjective(ctx);
+  if (armedTrim) return armedTrim;
 
   if (!burnPoint) throw new Error('flightObjective: closed loop outside the ring with fuel but without a burn point');
   if (burnPoint.reason === 'capture' || burnPoint.reason === 'missed') {
@@ -687,6 +718,8 @@ function evaluatePath(ctx: FlightContext): FlightObjective {
   if (burnPoint.reason === 'go-low' || burnPoint.reason === 'lift') {
     throw new Error(`flightObjective: a landing-only '${burnPoint.reason}' burn during the flight`);
   }
+  // A ROUND burn is planned only while AUTOBURN is engaged in ROUND, and its own rows above word it.
+  if (burnPoint.reason === 'round') throw new Error('flightObjective: a ROUND burn with AUTOBURN not flying it');
 
   // F11: a closed loop that is not green yet: trim it. (With nothing left but ACCEPT ORBIT, the
   // F11-stranded / F11-accept rows above.) A trim the tank can't pay for but whose burn still saves the
@@ -706,16 +739,27 @@ function evaluatePath(ctx: FlightContext): FlightObjective {
     const urgency: Urgency = burnPoint.inTac <= TACTICAL_LEAD_BURN_TAC ? 'now' : 'soon';
     const ahead = `${TRIM_PROBLEM[reason]} — at ${EVENT_GLYPH[burnPoint.event]} ${press.text} and burn`;
     const text = withTail(ahead, acceptSuffix, ctx.showAccept ? ACCEPT_HINT_SHORT : '');
-    return make(`F11-${reason}`, text, press.keys, urgency, ctx);
+    return offerAuto(make(`F11-${reason}`, text, press.keys, urgency, ctx), ctx);
   }
-  return burnTimeline('F11', burnPoint, ctx, acceptSuffix);
+  return offerAuto(burnTimeline('F11', burnPoint, ctx, acceptSuffix), ctx);
 }
 
 // WP9: while AUTOBURN could take the capture, the capture timeline's lines offer it (` · or [B] AUTO`), when the
-// tail fits: the kid learns the skill is there the moment it can help.
+// tail fits: the kid learns the skill is there the moment it can help. Slice 4 (03 §3.7): from v2 the tail names the mode
+// (` · or [B] GREEN`) and the trim lines carry it too; HOLD STEADY carries ` · or [B] ROUND`. A tail only: it never
+// changes which row wins. A context without the mode (an older suite's) reads v1's tail.
 function offerAuto(objective: FlightObjective, ctx: FlightContext): FlightObjective {
-  if (!ctx.autoAvailable || (objective.text + AUTOBURN_TEXT.offerTail).length > MAX_LINE_CHARS) return objective;
-  return { ...objective, text: objective.text + AUTOBURN_TEXT.offerTail, keys: [...objective.keys, 'B'] };
+  if (!ctx.autoAvailable) return objective;
+  const tail = AUTOBURN_TEXT.offerMode(ctx.autoOffer ?? 'capture');
+  if ((objective.text + tail).length > MAX_LINE_CHARS) return objective;
+  return { ...objective, text: objective.text + tail, keys: [...objective.keys, 'B'] };
+}
+
+// A ▼ correction row while AUTOBURN waits (03 §3.7): ` · AUTO ARMED` when it fits, so the kid sees the correction does not
+// cancel it.
+function armedTail(objective: FlightObjective, ctx: FlightContext): FlightObjective {
+  if (ctx.autoburn.phase !== 'armed') return objective;
+  return { ...objective, text: withTail(objective.text, AUTOBURN_TEXT.armedTail, '') };
 }
 
 // AUTOBURN's rows (§6.10, WP9), ahead of every burn row: while it flies the ship, the strip says what it does
@@ -725,15 +769,19 @@ function offerAuto(objective: FlightObjective, ctx: FlightContext): FlightObject
 // The words name the take-over (`[SPACE] takes over`) and the cancel (`[B] to cancel`), but the keys do not: a key on a
 // line glows as the next step, and while AUTOBURN flies the next step is to let it (final review: SPACE and B lit up as
 // if the kid should press them). Only SKIP, the one press that helps while it waits, is lit.
-function autoburnObjective(ctx: FlightContext): FlightObjective | null {
+// Slice 4 (plan §2.16 item 6): split in two. The flying and done rows (here) stay ahead of F4; the ARMED row
+// (autoburnArmedObjective) sits below the ▼ correction rows. The flying row names the burn (BRAKING, TRIMMING, ROUNDING).
+const FLYING_LINE: Readonly<Record<AutoArmedBurn['kind'], { ship: string; mind: string }>> = {
+  capture: { ship: AUTOBURN_TEXT.burning, mind: AUTOBURN_TEXT.burningMind },
+  trim: { ship: AUTOBURN_TEXT.trimming, mind: AUTOBURN_TEXT.trimmingMind },
+  round: { ship: AUTOBURN_TEXT.rounding, mind: AUTOBURN_TEXT.roundingMind },
+};
+
+function autoburnFlyingObjective(ctx: FlightContext): FlightObjective | null {
   const auto = ctx.autoburn;
   if (auto.phase === 'burning' || auto.phase === 'pointing') {
-    return make('AUTO-burning', ctx.inMind ? AUTOBURN_TEXT.burningMind : AUTOBURN_TEXT.burning, [], 'soon', ctx);
-  }
-  if (auto.phase === 'armed') {
-    const time = formatTac(auto.armedInTac);
-    const skip = ctx.skipAvailable ? SKIP_HINT : '';
-    return make('AUTO-armed', withTail(AUTOBURN_TEXT.armed(time), skip, ''), ctx.skipAvailable ? ['F'] : [], 'wait', ctx);
+    const line = FLYING_LINE[auto.flying ?? 'capture'];
+    return make('AUTO-burning', ctx.inMind ? line.mind : line.ship, [], 'soon', ctx);
   }
   if (auto.phase === 'done' && auto.end === 'braked' && auto.sinceSec < AUTOBURN_DONE_LINE_SEC) {
     return make('AUTO-done', ctx.inMind ? AUTOBURN_TEXT.brakedTab : AUTOBURN_TEXT.braked, ctx.inMind ? ['TAB'] : [], 'now', ctx);
@@ -743,7 +791,28 @@ function autoburnObjective(ctx: FlightContext): FlightObjective | null {
   if (auto.phase === 'done' && auto.end === 'in-ring' && auto.sinceSec < AUTOBURN_DONE_LINE_SEC) {
     return make('AUTO-done', AUTOBURN_TEXT.inRing, [], 'now', ctx);
   }
+  // v2's hand-backs (GREEN, ROUND, SAVING FUEL, a downgrade): the kid has the ship back.
+  if (auto.phase === 'done' && auto.doneLine) return make('AUTO-done', auto.doneLine, [], 'now', ctx);
   return null;
+}
+
+// The ARMED row (03 §3.7): it keeps its `wait` urgency, so in the MIND the eating alerts come first, and names the burn it
+// waits for and where (`trims at ▲ in 7:12`) and SKIP while that helps. Its urgent variant is the thread wait (plan §7
+// R6: hack or burn, no pre-emption): every Core thread is busy at the claim, and the fix is an op's × in the MIND.
+function autoburnArmedObjective(ctx: FlightContext): FlightObjective | null {
+  const auto = ctx.autoburn;
+  if (auto.phase !== 'armed') return null;
+  const armed = auto.armed ?? null;
+  const time = formatTac(armed?.inTac ?? auto.armedInTac);
+  if (armed?.waiting) {
+    const due = armed.inTac <= 0;
+    if (ctx.inMind) return mindLine('AUTO-thread', due ? AUTOBURN_TEXT.threadWaitLate : AUTOBURN_TEXT.threadWait(time), [], 'now', ctx);
+    return mindLine('AUTO-thread', due ? AUTOBURN_TEXT.threadWaitLateShip : AUTOBURN_TEXT.threadWaitShip(time), ['TAB'], 'now', ctx);
+  }
+  const head = armed === null || armed.kind === 'capture' ? AUTOBURN_TEXT.armed(time)
+    : armed.kind === 'round' ? AUTOBURN_TEXT.armedRound(armed.glyph, time) : AUTOBURN_TEXT.armedTrim(armed.glyph, time);
+  const skip = ctx.skipAvailable ? SKIP_HINT : '';
+  return make('AUTO-armed', withTail(head, skip, ''), ctx.skipAvailable ? ['F'] : [], 'wait', ctx);
 }
 
 // WP12 review (the lead's ruling of 2026-10-21 17:45): in the MIND the ship's controls are refused (flight-controls'
@@ -822,6 +891,9 @@ export function shipObjective(ctx: FlightContext): FlightObjective | null {
 function evaluateLanding(ctx: FlightContext): FlightObjective | null {
   const burnPoint = ctx.burnPoint;
   if (ctx.inRing) {
+    // AUTOBURN v2 in landing (slice 4): ROUND on a locked orbit. Its own rows, as in the flight.
+    const auto = autoburnFlyingObjective(ctx) ?? autoburnArmedObjective(ctx);
+    if (auto) return auto;
     const aim = ctx.goLow;
     const goLow = burnPoint?.reason === 'go-low' ? burnPoint : null;
     // The held GO LOWER keeps its rows to the end, also once its plan is done (the launch point reached the target).
@@ -879,6 +951,14 @@ function liftRows(ctx: FlightContext, burnPoint: TimedBurn): FlightObjective {
   return burnTimeline('LIFT', burnPoint, ctx, '');
 }
 
+// AUTOBURN's tail on the landing's wait rows (slice 4): the ROUND offer (03 §3.7: in LANDING a locked orbit is green, so
+// [B] offers ROUND), or that it waits.
+function landingAutoTail(ctx: FlightContext): { text: string; key: string | null } | null {
+  if (ctx.autoburn.phase === 'armed') return { text: AUTOBURN_TEXT.armedTail, key: null };
+  if (ctx.autoAvailable && ctx.autoOffer) return { text: AUTOBURN_TEXT.offerMode(ctx.autoOffer), key: 'B' };
+  return null;
+}
+
 // What the landing table's L2 reads of the flight, for landing-guidance buildLandingContext: the row above, and how far
 // the OFFERED burn's START BURN is (tactical s; a declined or unpaid burn never pulls L2 forward). Built here so
 // landing-guidance stays pure and imports no guidance values.
@@ -887,6 +967,7 @@ export function landingFlightOf(state: Readonly<GameState>, pred: Prediction): L
   return {
     row: landingFlightRow(ctx), burnInTac: offerInTac(state, pred), impact: pred.outcome === 'impact',
     tankShort: state.burn.fuelPct <= 0 || pred.fuelShort,
+    autoTail: landingAutoTail(ctx),
   };
 }
 

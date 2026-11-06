@@ -1060,3 +1060,88 @@ balance-only skipped). Each item changes §2–§5 above, with its reason.
       and `__ap.tree()`;
     - `__ap.cycles` goes through `grantCycles`;
     - `__ap.slot` / `__ap.route` record the earnings of the skipped ships.
+
+## Deviations (Track FLIGHT)
+
+Recorded by Track FLIGHT (branch `flight-4`, merged with `tree-4`). Each item changes §2.9, §5.2 or §7 above and gives
+its reason; the measurements are from `skills/autoburn-modes`, `skills/lock-range` and a Chromium check on KESTREL.
+
+### What is built
+
+- **Modes** (`autoburn.ts`): `autoModeFor` as §2.9; `lockRangeTac` reads the effective lock; `previewModeBurn(state, mode,
+  pred?)` takes an optional prediction (the HUD passes its sensed one; default the cached true one, so it is not strictly
+  pure); `roundAim` picks ROUND's circle (R2); `autoOfferMode`, `autoArmedBurn`, `autoFlyingKind` and `autoburnDoneLine`
+  feed the strip and the HUD. `autoburnStatus` gains `UNTRAINED 40%`, `WORKS AS v1 — REPAIR IT FOR v2`, the mode and the
+  thread wait.
+- **Planner** (`predict.ts`): `'round'` BurnReason; `planToCircle` over a new `circleStep` (the stop reads the same rule on
+  the ship's exact state); `planModeBurn(state, pred, mode, targetKm)` plans a mode from the prediction's scalars (no
+  path walk) for the preview; `noShrink` in BurnInputs for GREEN; `landingInRingBurn` suppressed while engaged.
+- **Machine**: the claim at `AUTO_THREAD_CLAIM_TAC`, the late fire, re-arm between v2's burns, the reserve, downgrades,
+  takeovers by phase, and `'autoburn-in-lock'` on entering the bracket.
+- **Landing**: `burnSpanBlocks` (the LZ a burn span would cost; `burnSpanClear` is its boolean), and `landingBurnOffer`
+  always offers an engaged AUTOBURN's burn (pace's TACTICAL lead and the SKIP stop), whatever was declined or latched.
+- **HUD**: `lockBracket`, `autoGhost` (gains `omega`, ▼'s direction), `autoLateTac` (the chip's `AUTO LATE 00:03 ·
+  NEEDS A THREAD`), `autoburnPip`, mode heads and notes; the NAV PLOT's bracket, `LOCK` label and dashed ghost; the
+  Engine window's AUTOBURN pip.
+- **Guidance**: §2.9's precedence and tails, the thread-wait row, TRIMMING / ROUNDING, v2's hand-backs, AUTO rows in
+  landing's L2, L13's tail (`LandingFlight.autoTail`, optional in `LandingContext`).
+
+### Deviations
+
+1. **ROUND's circle in landing re-aims to ▲'s altitude, one burn at ▲** (the other-apsis rule). When both apsides' burns
+   cross a window it rounds at ▼ and says `AUTOBURN: ROUND COSTS LZ-B's WINDOW` on the radio at the press (not on the
+   strip). The rule applies to ROUND only. A GREEN trim in landing (an accepted orbit) fires at its apsis whatever the
+   window: moving a trim to the other apsis changes which end it fixes, and with the planet not rotating it would wait
+   for ever. Measured on KESTREL: with ▼ at 60° its ROUND burn crosses LZ-B's window, and the rule rounds at ▲ (2,910 km)
+   instead, losing no window.
+2. **The predictor's cache is keyed by the engaged mode** (`predict.ts` `cachedAuto`): an engagement replans at once.
+   Without it the armed machine read the pre-press plan (nothing to fly in the ring) and stood down.
+3. **A GREEN trim burns while the plan's burn is the same burn this pass** (same reason, apsis and preset, approaching or
+   due), not while its START BURN is "due": that tick moves later as the remaining burn shrinks, and the trim re-fired in
+   slices.
+4. **The fuel reserve also refuses the press** (`SAVING FUEL`, `AUTOBURN KEEPS 20% FUEL — this burn is yours`) when the
+   mode's first burn is a trim or a ROUND burn under it; armed, the same check ends it `'reserve'`. Never the capture.
+5. **v1 refuses in LANDING as FLIGHT OVER**, as before; a v2 file damaged to v1 does too. A v1 capture engaged in the
+   flight ends `'flight-over'` at the lock; GREEN and ROUND go on into LANDING on the same orbit.
+6. **Refusal words**: `threads` is gone (the claim replaced it); `tooFar` reads `TOO FAR FROM THE BURN` with the line
+   `TOO FAR — [B] works once the ship is in the LOCK bracket` (one line for every lock level and mode); new `round`
+   (`ALREADY ROUND`), `impact` (`FIX THE PATH FIRST`) and `reserve`.
+7. **The mode and its circle stay on `burn.auto` after `done`/`dropped`** (cleared at idle), so the hand-back words know
+   what ended. Two module flags never saved (no save is mid-flight): the burn in hand (`flying`) and whether this
+   engagement captured (`captured`, for `CAPTURED, NOT GREEN`).
+8. **AUTOBURN's marks on the NAV PLOT and the pip are styled inline** (CSS custom properties in `style`), because the CSS
+   files are Track UI's. Neither is drawn on a blind plot (PATH UNCERTAIN, NO SIGNAL). The ghost shows while engaged or
+   while [B] would engage it (inside the bracket), not across the whole coast.
+9. **The Engine pip is built by EngineWindow**, not WindowGrip: a skill is no CapabilityRole. It is appended to the
+   window's pip row on the first paint that finds it and jumps to the file on a click.
+10. **Tests**: `wp9/autoburn-sim`'s quick-depth capture (offset 0) moved into `autoburn-modes`'s trained run (R11); its
+    −8 / +8 run at full depth. `wp9/fix2` holds no AUTOBURN case, so nothing was cut there. No `round-sweep`
+    BALANCE_ONLY suite was written (time); the measurements below come from the quick suites.
+
+### Measurements (KESTREL, quick suites)
+
+- **R1, ROUND in the flight vs in landing.** After KESTREL's capture the loop is in the ring with e ≈ 0.0105 (TOO WIDE path:
+  e 0.0028 after GREEN's trims). ROUND's burn at ▼ is a whole loop away (658 tac s), so LOCK 90 and 270 refuse it in the 3 s
+  of HOLD STEADY; only LOCK 810 offers it. Pressed there, it stays armed through the lock and rounds in LANDING: e 0.0105 →
+  0.0045 for 0.4% FUEL, one loop later. From a locked e = 0.05 ellipse in landing: one burn at ▼, e → 0.0045, 3.0% FUEL.
+  ROUND is a landing tool, as R1 said.
+- **GREEN from TOO WIDE**: capture (100 → 43.5%), trim at ▲ (rp-high, → 36.7%), trim at ▼ (ra-high) into the ring: FUEL
+  100 → 28.3%, three burns, one [F] per coast.
+- **R2, a window lost**: none with the other-apsis rule (above). A ROUND burn lasts a few tac s at KESTREL's thrust.
+- **R6, the claim**: both threads busy from T−8, one freed 3 tac s after START BURN: the capture fired 3 s late and still
+  ended in the ring (FUEL 28.6%, the same as on time).
+- **R3, untrained vs trained (v1, corrected KESTREL)**: untrained fired 7.0 tac s late (▼ came first) and ended CAPTURED with
+  ▼ 3,040 km, ▲ 3,841 km, a trim left, FUEL 27.9%; trained [0, 0] fired on the tick and ended in the ring (▼ 3,433, ▲ 3,578),
+  FUEL 28.6%.
+- **LOCK bracket** 300 tac s before KESTREL's capture: 90 → 270 → 300 tac s (the whole coast left).
+
+### Patches requested from other tracks
+
+- **UI (`audio-cues.ts`)**: `'autoburn'` with `to: 'armed'` now also fires on each re-arm between v2's burns; chime only when
+  `from` is `'idle'`, `'done'` or `'dropped'`. Map `'autoburn-in-lock'` to the chime (03 §4).
+- **UI (`game.css`)**: move the inline styles of `.np-auto-ghost`, `.np-lock`, `.np-lock-label` and the Engine pip
+  `[data-skill="autoburn"]` into the stylesheet.
+- **UI (`MiniHud.ts`)**: `AUTO_MINI_TEXT.armed` says BRAKES for trims and ROUND too; read `autoArmedBurn` for the kind.
+- **Lead (`script.ts`)**: the `AUTOBURN READY` tutorial fires whenever `autoburnAvailable`, now also in LANDING for v2;
+  limit it to the flight, and add 03 §4's one-time v2 line (`AUTOBURN v2 — [B] makes it green. [B] on green makes it round.`).
+- **Lead (`AGENTS.md`)**: "AUTOBURN v2 (trims to green)" is no longer "designed but not built".

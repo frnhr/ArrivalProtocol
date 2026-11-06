@@ -9,9 +9,10 @@ import {
 } from '@systems/flight-controls';
 import {
   burnButton, presetHint, fuelModel, acceptModel, acceptLabel, thrustLimitModel, reactorModel, windowPip, percentFloor,
-  autoButton, PRESET_KEY, PRESET_NAME, PRESET_TIP, type BurnLook,
+  autoButton, autoburnPip, PRESET_KEY, PRESET_NAME, PRESET_TIP, type BurnLook,
 } from '@systems/flight-hud';
 import { pressAutoburn } from '@systems/autoburn';
+import { setMode } from '@systems/mode';
 import { capabilitiesNow, presetsAvailable } from '@systems/capabilities';
 import { landingBurnOffer } from '@systems/landing-orbit';
 import { onOpsChange } from '@systems/ops-core';
@@ -122,6 +123,43 @@ export function mountEngineWindow(store: Store<GameState>): () => void {
     renderKeyCaps(autoNote, model.note, { own: 'B' });
     autoBtn.dataset.look = model.look;
     autoBtn.title = model.title;
+  }
+
+  // --- the AUTOBURN pip (slice 4, 03 §4): beside the window's file pips (WindowGrip builds that row), the skill's band,
+  // its version and what it works as (`AUTOBURN v2▸v1`); a click jumps to the file in the MIND, as every pip does. Built
+  // here, not by WindowGrip: a skill is no CapabilityRole. Attached on the first paint that finds the row.
+  const autoPip = document.createElement('button');
+  autoPip.className = 'pip';
+  autoPip.tabIndex = -1;
+  autoPip.dataset.skill = 'autoburn';
+  const autoPipGlyph = document.createElement('span');
+  autoPipGlyph.className = 'pip-glyph';
+  const autoPipLabel = document.createElement('span');
+  autoPipLabel.className = 'pip-label';
+  const autoPipReading = document.createElement('span');
+  autoPipReading.className = 'pip-reading';
+  autoPip.append(autoPipGlyph, autoPipLabel, autoPipReading);
+  autoPip.hidden = true;
+  listen(autoPip, 'click', () => {
+    const model = autoburnPip(store.getState());
+    setMode(store, 'memory');
+    if (model?.segId) { const segId = model.segId; store.update((draft) => { draft.ui.selectedId = segId; }); }
+  });
+  let lastAutoPip = '';
+  function paintAutoPip(): void {
+    if (!autoPip.isConnected) document.querySelector('.engine-win .window-pips')?.appendChild(autoPip);
+    const model = autoburnPip(store.getState());
+    const key = model === null ? '' : `${model.look}|${model.label}|${model.reading}|${model.title}`;
+    if (key === lastAutoPip) return;
+    lastAutoPip = key;
+    autoPip.hidden = model === null;
+    if (model === null) return;
+    autoPip.dataset.look = model.look;
+    autoPipGlyph.textContent = model.glyph;
+    autoPipLabel.textContent = model.label;
+    autoPipReading.textContent = model.reading;
+    autoPipReading.hidden = model.reading === '';
+    autoPip.title = model.title;
   }
 
   // --- presets ---
@@ -344,6 +382,7 @@ export function mountEngineWindow(store: Store<GameState>): () => void {
   function paintLive(): void {
     paintBurn();
     paintAuto();
+    paintAutoPip();
     paintFuel();
     paintLimit();
     paintReactor();

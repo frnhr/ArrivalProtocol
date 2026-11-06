@@ -2058,3 +2058,7 @@ export const AUTO_THREAD_CLAIM_TAC = 8;
 export const AUTO_FUEL_RESERVE_PCT = 20;
 // ROUND (03 §3.6, decision 15) is done below this eccentricity: the drop width is then the same on every pass.
 export const ROUND_E_TOL = 0.01;
+// ROUND aims for half the tolerance (a circle within ROUND_E_TOL × R* of R*, and e below this): a finite burn spread
+// around its apsis and the 10 Hz plot never stop exactly on the aim, and an orbit that ends a hair under 0.01 would
+// read "not round" again after one drag kick. The stop itself is the ship's exact state, so the margin is never spent.
+export const ROUND_AIM_E = ROUND_E_TOL / 2;

@@ -1,11 +1,10 @@
 // Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the AUTO button's mode, lockBracket,
 // autoGhost, the Engine pip's model. Others ask by message.
-import { notBuilt } from '@systems/not-built';
 import type { AutoMode } from '@/types/skill';
 import { MAP_TEXT } from '@data/map-text';
 import type { GameState, Pace, PresetMode, TerminalStatus, LogEntry } from '@state/schema';
 import type { Ring, Vec2 } from '@/types/orbit';
-import { secUntil, samplePath, loopProblem, type BurnPoint, type Prediction } from '@systems/predict';
+import { secUntil, samplePath, loopProblem, sweetZone, type BurnPoint, type Prediction } from '@systems/predict';
 import { decayWarned, type DecayForecast } from '@systems/landing-orbit';
 import { tac, mainCountdown, skipBlockReason, apsisTimesHidden, type CountdownKind } from '@systems/pace';
 import {
@@ -13,7 +12,7 @@ import {
 } from '@systems/guidance';
 import { isThrustOn, isGhostFiring } from '@systems/orbit-sim';
 import {
-  capabilitiesNow, engineFault, presetsAvailable, roleHealth, thrustCap, BAND_COPY, ROLE_LABEL, AUTOPILOT_DAMAGED_LINE,
+  capabilitiesNow, engineFault, presetsAvailable, roleHealth, thrustCap, skillLive, BAND_COPY, ROLE_LABEL, AUTOPILOT_DAMAGED_LINE,
   type EngineFault, type Capabilities, type Band, type CapabilityRole,
 } from '@systems/capabilities';
 import { getByRole, shownIntegrity, chargeLeft, verbSecondsLeft, engineOpen } from '@state/selectors';
@@ -24,8 +23,11 @@ import { choiceSecondsLeft, choiceTimerRunning } from '@systems/say';
 import { GHOST_TEXT } from '@data/ghost-text';
 import { ghostCountShown, ghostDriftKm } from '@systems/ghost-thrust';
 import { ZONE_WORD, ZONE_PLOT_TEXT, RACK_TAG_TEXT } from '@data/zone-text';
-import { AUTO_BUTTON_TEXT, AUTO_BUTTON_REASON } from '@data/skill-text';
-import { autoburnRefusal, autoburnArmedInTac, skillFiles, autoburnEverTrained } from '@systems/autoburn';
+import { AUTO_BUTTON_TEXT, AUTO_BUTTON_REASON, AUTO_PLOT_TEXT, AUTO_PIP_TEXT } from '@data/skill-text';
+import {
+  autoburnRefusal, autoburnEverTrained, autoModeFor, autoOfferMode, autoArmedBurn, autoFlyingKind, autoburnFireInTac, isEngaged,
+  lockRangeTac, modeTargetKm, previewModeBurn,
+} from '@systems/autoburn';
 import { autoburnDemoSkill } from '@systems/skill-tree';
 import { zoneVerdict, zoneRacks, racksText, debrisRack, type Zone, type ZoneHit, type ZoneVerdict } from '@/types/zone';
 import { mindZonesBlind } from '@systems/zones';
@@ -35,7 +37,7 @@ import { landingMoment } from '@systems/landing-rules';
 import {
   COUNTDOWN_RED_TAC, LOCK_HOLD_AI_SEC, PLOT_SHIP_MARGIN, PLOT_RING_FACTOR, PLOT_FLYBY_TAG_FRAC,
   STRANDED_RANGE_FRAC, TACTICAL_LEAD_BURN_TAC, UPCOMING_EVENTS_MAX, UPCOMING_HORIZON_TAC,
-  OVERCLOCK_FACTOR, REACTOR_THREAD_SHARE, CHOICE_URGENT_SEC, GHOST_DRIFT_ROUND_KM,
+  OVERCLOCK_FACTOR, REACTOR_THREAD_SHARE, CHOICE_URGENT_SEC, GHOST_DRIFT_ROUND_KM, RA_TARGET_FRAC, BAND_OK_MIN,
 } from '@data/tuning';
 
 // What the flight HUD shows, as plain data: the header countdown chip, pace label and SKIP
@@ -459,6 +461,9 @@ export function noSignalReason(state: Readonly<GameState>): string {
 // says DON'T HIT THE PLANET).
 export function plotChip(state: Readonly<GameState>, pred: Prediction, plot: PlotCaps = capabilitiesNow(state).plot): Label {
   const status = state.burn.status;
+  // Slice 4 (03 §3.6): an armed AUTOBURN whose claim found no thread free fires late, and the plot shows how late.
+  const late = autoLateTac(state, pred);
+  if (late !== null && plot.mode !== 'no-signal') return { text: AUTO_PLOT_TEXT.late(formatCountdown(late)), tone: 'danger' };
   // LANDING with the engine open (slice 1b): the lock's word stays on the chip, unless a burn has put the path on the
   // planet or flung it open, which the plot must say as the flight does (the line under the chip is red or dashed).
   if (status !== 'approaching' && engineOpen(state) && plot.mode !== 'no-signal') {
@@ -818,47 +823,136 @@ export interface AutoButtonModel {
   title: string;
 }
 
+// Slice 4 (03 §3.6): the head names the mode [B] would fly (`AUTO · GREEN [B]`, `AUTO · ROUND [B]`; v1's capture keeps
+// `AUTO · [B]`), the notes name the burn it waits for or flies, and the button shows in LANDING while a v2 file is aboard
+// (ROUND on a locked orbit). It glows ('ready') only while [B] would engage it: inside the LOCK bracket.
+const READY_NOTE: Readonly<Record<AutoMode, string>> = {
+  capture: AUTO_BUTTON_TEXT.ready, green: AUTO_BUTTON_TEXT.readyGreen, round: AUTO_BUTTON_TEXT.readyRound, 'landing-orbit': AUTO_BUTTON_TEXT.readyRound,
+};
+const FLYING_HEAD = { capture: AUTO_BUTTON_TEXT.burningHead, trim: AUTO_BUTTON_TEXT.trimmingHead, round: AUTO_BUTTON_TEXT.roundingHead } as const;
+
 export function autoButton(state: Readonly<GameState>, pred: Prediction): AutoButtonModel {
   const hidden: AutoButtonModel = { shown: false, head: '', note: '', look: 'blocked', title: '' };
-  if (state.run.phase !== 'flight' || state.burn.status !== 'approaching') return hidden;
-  const hasFile = skillFiles(state.memory).length > 0;
-  if (!hasFile && !autoburnEverTrained(state)) return hidden;
-  const title = hasFile ? AUTO_BUTTON_TEXT.title(autoburnDemoSkill(state.run.stats).accuracy) : AUTO_BUTTON_TEXT.titleNoSkill;
+  if (!engineOpen(state)) return hidden;
+  const live = skillLive(state.memory, 'autoburn');
+  const hasFile = live.file !== null;
+  const nominal = live.nominal?.version ?? 0;
+  if (state.run.phase === 'landing' ? !(hasFile && nominal >= 2) : !hasFile && !autoburnEverTrained(state)) return hidden;
+  const accuracy = autoburnDemoSkill(state.run.stats).accuracy;
+  const title = !hasFile ? AUTO_BUTTON_TEXT.titleNoSkill : nominal >= 2 ? AUTO_BUTTON_TEXT.titleV2(accuracy) : AUTO_BUTTON_TEXT.title(accuracy);
   const phase = state.burn.auto.phase;
   if (phase === 'armed') {
-    const note = AUTO_BUTTON_TEXT.armed(formatCountdown(autoburnArmedInTac(state, pred)));
+    const armed = autoArmedBurn(state, pred);
+    if (armed?.waiting) return { shown: true, head: AUTO_BUTTON_TEXT.armedHead, note: AUTO_BUTTON_TEXT.threadWait, look: 'armed', title };
+    const time = formatCountdown(armed?.inTac ?? 0);
+    const note = armed?.kind === 'trim' ? AUTO_BUTTON_TEXT.armedTrim(time) : armed?.kind === 'round' ? AUTO_BUTTON_TEXT.armedRound(time)
+      : AUTO_BUTTON_TEXT.armed(time);
     return { shown: true, head: AUTO_BUTTON_TEXT.armedHead, note, look: 'armed', title };
   }
   if (phase === 'pointing') return { shown: true, head: AUTO_BUTTON_TEXT.pointingHead, note: AUTO_BUTTON_TEXT.burning, look: 'flying', title };
-  if (phase === 'burning') return { shown: true, head: AUTO_BUTTON_TEXT.burningHead, note: AUTO_BUTTON_TEXT.burning, look: 'flying', title };
+  if (phase === 'burning') {
+    return { shown: true, head: FLYING_HEAD[autoFlyingKind(state) ?? 'capture'], note: AUTO_BUTTON_TEXT.burning, look: 'flying', title };
+  }
+  const mode = autoModeFor(state, pred, live);
+  const head = mode === null ? AUTO_BUTTON_TEXT.head : AUTO_BUTTON_TEXT.modeHead(mode);
   const refusal = autoburnRefusal(state, pred);
-  if (refusal === null) return { shown: true, head: AUTO_BUTTON_TEXT.head, note: AUTO_BUTTON_TEXT.ready, look: 'ready', title };
-  return { shown: true, head: AUTO_BUTTON_TEXT.head, note: AUTO_BUTTON_REASON[refusal] ?? refusal, look: 'blocked', title };
+  if (refusal === null) return { shown: true, head, note: READY_NOTE[mode ?? 'capture'], look: 'ready', title };
+  return { shown: true, head, note: AUTO_BUTTON_REASON[refusal] ?? refusal, look: 'blocked', title };
 }
 
-// --- Slice 4 (plan §2.9; Track FLIGHT): stubs with their final signatures ------------------------------------------------
+// --- Slice 4 (plan §2.9; Track FLIGHT): the LOCK bracket, the ghost, the late claim, the AUTOBURN pip ----------------------
 
-// The stretch of the path inside AUTOBURN's lock range (the NAV PLOT's `LOCK` bracket, ending at the mode's first burn), in
-// game seconds from now; null when there is no skill to lock or nothing to fly.
+// The stretch of the path inside AUTOBURN's lock range (the NAV PLOT's `LOCK` bracket, ending at the mode's first burn's
+// START BURN), in game seconds from now (the prediction's points are times after pred.asOfTSec: the plot rebases); null when
+// there is no working skill, nothing to fly, it is already engaged, or the burn is due now. `inside`: the ship is in it
+// (the AUTO button glows, and 'autoburn-in-lock' chimed on the way in). Buying LOCK 270 visibly triples it (03 §3.7).
 export interface LockBracket {
   fromInSec: number;
   toInSec: number;
+  mode: AutoMode;
+  inside: boolean;
 }
 
 export function lockBracket(state: Readonly<GameState>, pred: Prediction): LockBracket | null {
-  return notBuilt('lockBracket', 'FLIGHT', state, pred);
+  if (!engineOpen(state) || isEngaged(state.burn.auto.phase)) return null;
+  const live = skillLive(state.memory, 'autoburn');
+  const range = lockRangeTac(live);
+  if (range === null || (state.run.phase === 'landing' && live.version < 2)) return null;
+  const mode = autoModeFor(state, pred, live);
+  if (mode === null) return null;
+  const burnPoint = previewModeBurn(state, mode, pred);
+  if (burnPoint === null) return null;
+  const toInSec = secUntil(pred, burnPoint.inSec, state.clock.tSec);
+  if (!(toInSec > 0)) return null;
+  const fromInSec = Math.max(0, toInSec - range * state.level.tacticalWarp);
+  return { fromInSec, toInSec, mode, inside: fromInSec === 0 };
 }
 
-// The dashed target AUTOBURN's mode would fly to (the band-hugging loop for GREEN, the circle for ROUND and v3), as its
-// apsides; null with nothing to show.
+// The dashed target AUTOBURN's mode would fly to (03 §3.6: the band-hugging green loop for GREEN, the circle for ROUND and
+// v3), as its apsides and ▼'s direction (the loop it flies keeps ▼ where it is, since it burns only at the apsides): while
+// engaged, its own; before the press, while [B] would engage it (inside the LOCK bracket). null with nothing to show (v1's
+// capture draws none: its START BURN tick is enough).
 export interface AutoGhost {
   mode: AutoMode;
   rpKm: number;
   raKm: number;
+  omega: number;
 }
 
 export function autoGhost(state: Readonly<GameState>, pred: Prediction): AutoGhost | null {
-  return notBuilt('autoGhost', 'FLIGHT', state, pred);
+  if (!engineOpen(state) || pred.outcome === 'impact') return null;
+  const auto = state.burn.auto;
+  const mode = isEngaged(auto.phase) ? auto.mode : autoOfferMode(state, pred);
+  if (mode === null || mode === 'capture') return null;
+  if (mode === 'round' || mode === 'landing-orbit') {
+    const targetKm = modeTargetKm(state, pred, mode);
+    return targetKm === null ? null : { mode, rpKm: targetKm, raKm: targetKm, omega: pred.omega };
+  }
+  return { mode, ...greenTarget(pred, state.level.ring), omega: pred.omega };
+}
+
+// GREEN's target loop (phase 2's own targets, predict trimTarget): ▼ kept if in the ring, else moved into the sweet zone;
+// ▲ at RA_TARGET_FRAC of the ring's edge on a flyby or a too-big loop, the sweet zone's low edge on a too-small one.
+function greenTarget(pred: Prediction, ring: Ring): { rpKm: number; raKm: number } {
+  const sweet = sweetZone(ring);
+  const fit = pred.fit;
+  const rpKm = fit.rp < ring.min ? sweet.lo : fit.rp > ring.max ? sweet.hi : fit.rp;
+  const raKm = !fit.closed || fit.ra > ring.max ? Math.max(rpKm, RA_TARGET_FRAC * ring.max) : fit.ra < ring.min ? sweet.lo : fit.ra;
+  return { rpKm, raKm: Math.max(rpKm, raKm) };
+}
+
+// Tactical s an armed AUTOBURN is late because its claim found no thread free (03 §3.6: "the plot shows how late"), or null.
+export function autoLateTac(state: Readonly<GameState>, pred: Prediction): number | null {
+  if (state.burn.auto.phase !== 'armed' || state.burn.auto.waitingSinceTSec === null) return null;
+  const fireIn = autoburnFireInTac(state, pred);
+  return fireIn !== null && fireIn < 0 ? -fireIn : null;
+}
+
+// The Engine window's AUTOBURN pip (03 §4, 4b's graded damage): the file's band, its version and what it works as
+// (`AUTOBURN v2▸v1`), a click away from the file; null while the run never trained it and no file is aboard.
+export interface AutoPipModel {
+  segId: string | null;
+  label: string;
+  look: PipLook;
+  glyph: string;
+  reading: string;
+  title: string;
+}
+
+export function autoburnPip(state: Readonly<GameState>): AutoPipModel | null {
+  const live = skillLive(state.memory, 'autoburn');
+  if (live.file === null) {
+    if (!autoburnEverTrained(state)) return null;
+    return { segId: null, label: AUTO_PIP_TEXT.label, look: 'missing', glyph: PIP_GLYPH.missing, reading: '', title: AUTO_PIP_TEXT.missing };
+  }
+  const nominal = live.file.version;
+  const look: PipLook = live.offline !== null ? 'offline' : live.band;
+  const label = live.version === nominal ? AUTO_PIP_TEXT.version(nominal) : AUTO_PIP_TEXT.worksAs(nominal, live.version);
+  const reading = live.band !== 'ok' ? `${shownIntegrity(live.file.integrity)}%` : '';
+  const title = live.offline !== null ? AUTO_PIP_TEXT.offline(nominal)
+    : live.version === nominal ? AUTO_PIP_TEXT.ok(nominal)
+      : AUTO_PIP_TEXT.damaged(nominal, live.version, BAND_OK_MIN);
+  return { segId: live.file.id, label, look, glyph: PIP_GLYPH[look], reading, title };
 }
 
 // One line per preset that says what it does to the path, in kid words (also the tooltips).
