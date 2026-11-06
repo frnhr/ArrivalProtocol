@@ -87,7 +87,9 @@ export interface GameEvents {
   // (`firstOnShip` names the colony and sends the radio line; `firstOfRun` is the first landing's moment).
   'pod-launched': { pod: number; source: LaunchSource; segId: string };
   'pod-entry': { pod: number; first: boolean };   // first: run 1's first pod (LaunchRecord.firstOfRun)
-  'pod-landed': { pod: number; place: Place; lz: string | null; touch: Touch; points: number; firstOnShip: boolean; firstOfRun: boolean };
+  // `bullseye` (slice 4c review m11): AUTODROP sent it, and it came down soft in an LZ with room. Decided once, here (landing.ts
+  // touchDown), for the echo and the NAV PLOT's float.
+  'pod-landed': { pod: number; place: Place; lz: string | null; touch: Touch; points: number; firstOnShip: boolean; firstOfRun: boolean; bullseye: boolean };
   // An LZ reached its count (the chord), every pod is down, pods were parked in orbit, the landing ended (and why).
   'lz-full': { lz: string };
   'all-pods-down': { parked: number };   // the ship's last pod is down; `parked`: pods that never launched

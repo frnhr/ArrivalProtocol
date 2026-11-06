@@ -12,7 +12,7 @@ import { registerKeys } from '@systems/input';
 import { emit } from '@systems/events';
 import { getDropSolution } from '@systems/drop-cache';
 import { landingMoment, podCounts, type LandingMoment } from '@systems/landing-rules';
-import { windowRuleHolds } from '@systems/landing-controller';
+import { controllerLaunchInSec, windowRuleHolds } from '@systems/landing-controller';
 import { offerInTac } from '@systems/landing-orbit';
 import type { DropSolution } from '@/types/landing';
 import { LANDING_SKIP_REFUSAL } from '@data/landing-text';
@@ -198,6 +198,9 @@ function landingPace(state: Readonly<GameState>, pred: Prediction, skipActive: b
     if (awaitedWindowOpen(state)) return 'tactical';
     const toWindow = windowLaunchInSec(state);
     if (toWindow !== null && tac(toWindow - tickAheadSec, state.level.tacticalWarp) <= WINDOW_TACTICAL_LEAD_TAC) return 'tactical';
+    // Slice 4c review B2: the controller's own next launch is a window too (its LZ may be one the landing does not wait on).
+    const toLaunch = controllerLaunchInSec(state);
+    if (toLaunch !== null && tac(toLaunch - tickAheadSec, state.level.tacticalWarp) <= WINDOW_TACTICAL_LEAD_TAC) return 'tactical';
   }
   return skipActive ? 'skip' : 'cruise';
 }
@@ -210,6 +213,9 @@ function landingNextEvent(state: Readonly<GameState>, pred: Prediction): NextEve
   if (zone !== null) candidates.push({ kind: 'zone', inSec: zone.inSec });
   const toWindow = windowLaunchInSec(state);
   if (toWindow !== null) candidates.push({ kind: 'window', inSec: toWindow });
+  // Slice 4c review B2: a SKIP stops before a TACTICAL-holding controller's next launch (null for one that drops in a SKIP).
+  const toLaunch = controllerLaunchInSec(state);
+  if (toLaunch !== null) candidates.push({ kind: 'window', inSec: toLaunch });
   const toBurnTac = offerInTac(state, pred);
   if (toBurnTac !== null) candidates.push({ kind: 'burn', inSec: toBurnTac * state.level.tacticalWarp });
   if (candidates.length > 0) return candidates.reduce((first, candidate) => (candidate.inSec < first.inSec ? candidate : first));

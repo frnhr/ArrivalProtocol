@@ -169,7 +169,7 @@ export function requestLaunch(store: Store<GameState>, intent: LaunchIntent): La
   launchDriver(store, driver, launch, true);
   // AUTODROP's demos (03 §3.3, plan §3.6): each launch of the kid's into a bracket, its offset from the window's centre in
   // tactical s. Off-site launches and the controllers' own are not demos.
-  const demo = intent.source === 'player' ? dropDemoOffset(sol, launch, state.level.tacticalWarp) : null;
+  const demo = intent.source === 'player' ? playerDemo(state, sol, launch) : null;
   if (demo !== null) store.update((draft) => { draft.run.stats.dropDemos.push({ offsetTac: demo }); });
   // A launch ends a decline (risk 2): the next burn the landing offers is offered again. A declined GO LOWER only on a
   // launch into its own LZ (review minor 4: a pod sent elsewhere leaves that LZ's dot as wide as it was, and clearing it
@@ -185,6 +185,13 @@ export function requestLaunch(store: Store<GameState>, intent: LaunchIntent): La
     });
   }
   return { kind: 'launched', pod: driver.pod };
+}
+
+// The kid's launch as a drop demo (review M3: against the slot the strip cued, autodrop-plan dropDemoOffset), or null.
+function playerDemo(state: Readonly<GameState>, sol: Readonly<DropSolution>, launch: Readonly<LaunchRecord>): number | null {
+  const earlier = state.landing.pods.flatMap((record) => (record.fate.kind === 'falling' || record.fate.kind === 'down') ? [record.fate.launch.atTSec] : []);
+  const cadenceSec = (capabilitiesNow(state).bay.cadenceTac ?? 0) * state.level.tacticalWarp;
+  return dropDemoOffset(sol, launch, state.level.tacticalWarp, cadenceSec, earlier);
 }
 
 // --- Touchdown --------------------------------------------------------------------------------------------------------
@@ -222,10 +229,11 @@ function touchDown(store: Store<GameState>, pod: number): void {
     // A GO LOWER declined for this LZ ends when it fills (review minor 4): nothing is left to go lower for there.
     if (fillsLz && draft.landing.declined !== null && draft.landing.declined.untilLz === lzDef?.label) draft.landing.declined = null;
   });
-  emit('pod-landed', { pod, place: placement.place, lz: placement.lz, touch, points, firstOnShip, firstOfRun });
-  if (fillsLz && lzDef) emit('lz-full', { lz: lzDef.label });
-  // BULLSEYE (plan §3.2): a pod AUTODROP sent that came down soft in an LZ with room.
+  // BULLSEYE (plan §3.2): a pod AUTODROP sent that came down soft in an LZ with room. On the event (review m11), so the
+  // echo and the NAV PLOT's float read the one answer.
   const bullseye = launch.source === 'autodrop' && placement.place === 'lz' && touch === 'soft';
+  emit('pod-landed', { pod, place: placement.place, lz: placement.lz, touch, points, firstOnShip, firstOfRun, bullseye });
+  if (fillsLz && lzDef) emit('lz-full', { lz: lzDef.label });
   say('cmd', LANDING_ECHO.touchdown(pod, placement.place, placement.lz, touch, bullseye), { critical: true });
 }
 

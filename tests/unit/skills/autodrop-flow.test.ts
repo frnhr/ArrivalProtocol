@@ -23,7 +23,7 @@ import { receiveTransmission } from '@systems/boot';
 import { setMode } from '@systems/mode';
 import { requestLaunch } from '@systems/landing';
 import { autodropLineOf, autodropTutorialDue, setPassCount } from '@systems/autodrop';
-import { dropDemoOffset, windowsAt } from '@systems/autodrop-plan';
+import { centreOffsetTac, windowsAt } from '@systems/autodrop-plan';
 import { activeLandingController } from '@systems/landing-controller';
 import { getDropSolution } from '@systems/drop-cache';
 import { getPrediction } from '@systems/predict';
@@ -62,7 +62,7 @@ function watchLaunches(): void {
     const lz = st().landing.lzs.find((candidate) => candidate.label === launch.aimLz);
     const sureKm = lz === undefined ? -1 : lz.widthKm / 2 - launch.halfWidthKm
       - Math.abs(((launch.dotRad - lz.centreRad + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) * st().level.planet.R;
-    sent.push({ pod: record.pod, lz: launch.aimLz ?? '?', atTSec: launch.atTSec, offsetTac: dropDemoOffset(sol, launch, st().level.tacticalWarp) ?? NaN, sure: sureKm >= 0 });
+    sent.push({ pod: record.pod, lz: launch.aimLz ?? '?', atTSec: launch.atTSec, offsetTac: centreOffsetTac(sol, launch, st().level.tacticalWarp) ?? NaN, sure: sureKm >= 0 });
   }
 }
 // A new count: the pods launched so far (falling or down) are not this count's.
@@ -303,16 +303,19 @@ console.log(`INFO  AIM on CORMORANT LZ-A: trained ${aim.trained!.n} pods, mean o
   h.store.update((draft) => { draft.hollow.phase = 'dormant'; for (const seg of draft.memory) if (seg.type === 'driver') seg.integrity = 100; });
   lockOn(h);
   const offsets: number[] = [];
-  for (const late of [-2, 0.5, 3]) {
+  // Review M3: each the first launch of its window, so its cue is the window's launch moment (the sure part's opening).
+  const LATE = [0.25, 0.5, 1.5];
+  for (const late of LATE) {
     stepUntil(() => sureOpen() && st().landing.bay.cadenceLeftTac <= 0, 900, true);
     const sol = getDropSolution()!;
     const win = windowsAt(sol, st().clock.tSec)[0]!;
-    stepUntil(() => st().clock.tSec >= win.centre + late * st().level.tacticalWarp, 30);
+    stepUntil(() => st().clock.tSec >= win.sure!.lo + late * st().level.tacticalWarp, 30);
     const result = requestLaunch(h.store, { source: 'player' });
     if (result.kind === 'launched') offsets.push(st().run.stats.dropDemos.at(-1)?.offsetTac ?? NaN);
+    stepUntil(() => !windowOpen(), 60);
   }
-  check('ARES-VII by hand: each launch into the bracket is a demo, its offset from the centre (−2, +0.5, +3 tac s)',
-    st().run.stats.dropDemos.length === 3 && offsets.every((offset, i) => Math.abs(offset - [-2, 0.5, 3][i]!) < 0.1), offsets.map((x) => x.toFixed(2)).join(' '));
+  check('ARES-VII by hand: each launch into the bracket is a demo, its offset from the slot the strip cued (+0.25, +0.5, +1.5 tac s)',
+    st().run.stats.dropDemos.length === 3 && offsets.every((offset, i) => Math.abs(offset - LATE[i]!) < 0.1), offsets.map((x) => x.toFixed(2)).join(' '));
   stepUntil(() => st().run.phase === 'report', 120);
   toDesk(h.store);
   const cards = trainingModel(st()).cards;

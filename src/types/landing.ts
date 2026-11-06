@@ -314,6 +314,11 @@ export interface LandingController {
   holdsTactical: boolean;              // §3.14: a higher version may drop inside a SKIP
   launchesFromMind: boolean;           // like AUTOBURN, the only launch allowed from MIND
   decide(view: LandingView, state: Readonly<GameState>): LaunchIntent | 'skip' | null;
+  // Slice 4c review B2: the game time (s) of the controller's next launch, or null with none planned. A controller that
+  // holds TACTICAL names it, and pace treats it as a window (TACTICAL inside its lead, a SKIP stops before it): the landing's
+  // own awaited window (landing-rules landingMoment) need not be the one the controller flies (a v3 plan's leftovers into a
+  // full LZ, a v2 pass into an LZ the landing does not wait on). Absent: the landing's window rule alone.
+  nextLaunchAtTSec?(state: Readonly<GameState>): number | null;
 }
 
 // --- L9: DROP TOO WIDE (§3.11, plan §1.5; landing-rules dropTooWide and bestRepairForDrop) ---

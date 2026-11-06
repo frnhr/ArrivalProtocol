@@ -13,7 +13,7 @@ import { capabilitiesNow, skillLive, BAND_COPY, type Band, type Capabilities } f
 import { dragLineKm } from '@systems/landing-orbit';
 import { paid } from '@systems/skill-levels';
 import { passCounts, passRows, planLanding } from '@systems/autodrop-plan';
-import { repairWord, v3GoesLower } from '@systems/autodrop';
+import { repairWord, whoGoesLower } from '@systems/autodrop';
 import { AUTODROP_TEXT } from '@data/autodrop-text';
 import {
   bayMembers, bayShown, driverTouch, dropFactors, isLaunchable, launchGuard, launchRefusal, lzAt, lzDownFill, lzProjectedFill, nextToLaunch,
@@ -24,7 +24,7 @@ import {
   POD_BAY_TEXT, DRIVER_DETAIL_TEXT, LAUNCH_CONFIRM_TEXT, DRAG_STAMP_TEXT, END_LANDING_REFUSAL_TEXT, minSec,
 } from '@data/landing-text';
 import {
-  AUTODROP_PLAN_MAX_PASSES, BAND_OK_MIN, COLONISTS_PER_POD, WINDOW_TACTICAL_LEAD_TAC,
+  AUTODROP_PLAN_MAX_PASSES, BAND_OK_MIN, WINDOW_TACTICAL_LEAD_TAC,
   BAND_FAILING_MIN, BAY_RELOAD_TAC, BAY_SLOTS, BEACON_LAG_FRAC, DRAG_STAMP_MIN_KM, GROUND_TRACK_AHEAD_MAX, GROUND_TRACK_SPAN_KM,
   POD_FIRST_DESCENT_SEC, STREAK_TRAIL_FRAC, TERRAIN_ALT_SHARE, TERRAIN_STRETCH_DEG,
 } from '@data/tuning';
@@ -717,7 +717,7 @@ export function autodropBayModel(state: Readonly<GameState>, sol: Readonly<DropS
     const counts = armed ? ad.pass : passCounts(state, view);
     pass = passRows(state, view, counts).map((row) => ({
       lz: row.lz, n: row.want, max: view.remaining[row.lz] ?? 0,
-      warn: row.want > 0 && row.fits === 0 ? words.noWindow(row.lz)
+      warn: row.fits === 0 ? words.noWindow(row.lz)
         : row.bayHas !== null ? words.shortBay(row.lz, row.want, row.bayHas)
           : row.fits < row.want ? words.shortFit(row.lz, row.want, row.fits) : null,
     }));
@@ -729,7 +729,7 @@ export function autodropBayModel(state: Readonly<GameState>, sol: Readonly<DropS
     const rows = planned.rows.slice(0, PLAN_ROWS_SHOWN).map((row) => {
       const tac = tacOf(state, row.atTSec - now);
       return {
-        text: words.planRow(row.pass, row.lz, row.n, tac <= 0.05 ? 'NOW' : `IN ${minSec(tac)}`, row.mislanded),
+        text: words.planRow(row.pass, row.lz, row.n, tac <= 0.05 ? words.planNow : words.planIn(minSec(tac)), row.mislanded),
         forecast: row.forecast, mislanded: row.mislanded > 0, now: tac <= WINDOW_TACTICAL_LEAD_TAC,
       };
     });
@@ -740,11 +740,11 @@ export function autodropBayModel(state: Readonly<GameState>, sol: Readonly<DropS
         && !planned.neverFits.some((never) => never.lz === lz.label)).map((lz) => lz.label)];
     const perLz: Record<string, number> = {};
     for (const lz of state.landing.lzs) if ((view.remaining[lz.label] ?? 0) > 0) perLz[lz.label] = planned.perLz[lz.label] ?? 0;
-    const notes = planned.neverFits.map((never) => words.neverFits(never.lz, repairWord(never.repair), v3GoesLower(state)));
+    const notes = planned.neverFits.map((never) => words.neverFits(never.lz, repairWord(never.repair), whoGoesLower(state, never.lz)));
     if (planned.laterPasses > 0) notes.push(words.planLater(planned.laterPasses, AUTODROP_PLAN_MAX_PASSES));
     plan = {
       rows: rows.length === 0 ? [{ text: words.planEmpty, forecast: true, mislanded: false, now: false }] : rows,
-      check: words.planCheck(planned.passes, perLz, [...new Set(missing)].sort(), COLONISTS_PER_POD),
+      check: words.planCheck(planned.passes, perLz, [...new Set(missing)].sort()),
       complete: planned.complete, notes,
     };
   }

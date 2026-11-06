@@ -16,7 +16,8 @@ import type { DriverSegment } from '@/types/segment';
 import type { BayState, DropSolution, LandingView, LaunchRecord, LzState, LzWindow, RepairHint } from '@/types/landing';
 import { capabilitiesNow } from '@systems/capabilities';
 import { dropHalfWidthKm } from '@systems/landing-solve';
-import { bestRepairForDrop, dropFactors, launchQueue, windowsAsOf } from '@systems/landing-rules';
+import { bestRepairForDrop, dropFactors, isLaunchable, windowsAsOf } from '@systems/landing-rules';
+import { driversInMemory } from '@state/selectors';
 import { demoSkill, AUTODROP_DEMO_TUNING } from '@systems/skill-tree';
 import {
   AUTODROP_EDGE_MARGIN_TAC, AUTODROP_PLAN_MAX_PASSES, AUTODROP_SPACING_FRAC, BAY_RELOAD_TAC, BAY_SLOTS,
@@ -119,6 +120,10 @@ export function volleySlots(
     const first = Math.max(centre - (n - 1) * cadenceSec * AUTODROP_SPACING_FRAC + offsetSec, lo);
     if (first + (n - 1) * cadenceSec <= hi) return { n, first };
   }
+  // An offset pushed even one pod out of a short sure part (review B2's probe: a 0.3 tac s sure part against a learned 0.33 s
+  // late): the one pod goes in the middle of what is left of it instead (not on its edge, which the AI tick can pass). The
+  // offset trims a volley (R5: trained by you is felt), but never makes a window that has room for a launch unflyable.
+  if (maxN >= 1 && lo <= hi) return { n: 1, first: (lo + hi) / 2 };
   return null;
 }
 
@@ -295,6 +300,9 @@ export interface PlanRow {
   pods: number[];
   mislanded: number;      // pods sent at the wrong-split rate (×MISLANDED_FACTOR): the leftovers, in the last rows
   forecast: boolean;      // after DropSolution.validUntilTSec: drawn dim, re-planned at the kick
+  // Review m7: the last moment (game s) any of its pods can still leave (the chosen pods' sure part, an edge margin in). A row
+  // past it was missed (ENGINE FIRING, a late claim) and the memo re-plans instead of holding it as row 0.
+  untilTSec: number;
 }
 
 export interface LandingPlan {
@@ -306,15 +314,19 @@ export interface LandingPlan {
   // Slice 4c (Track DROP): pods with a fitting LZ that lie past AUTODROP_PLAN_MAX_PASSES, as whole passes more (the table's
   // `+n PASSES`); 0 when the plan holds them all.
   laterPasses: number;
+  // Review M2: the pods aboard the plan holds for no window (in no row, and not kept for a pass past the table), healthiest
+  // first. In a window the plan does not use, AUTODROP pins LOAD NEXT to the first of them, so the kid's [L] there throws one
+  // of these and never a pod the plan kept for a sure window.
+  outside: number[];
 }
 
-const EMPTY_PLAN: LandingPlan = { rows: [], passes: 0, perLz: {}, neverFits: [], complete: false, laterPasses: 0 };
+const EMPTY_PLAN: LandingPlan = { rows: [], passes: 0, perLz: {}, neverFits: [], complete: false, laterPasses: 0, outside: [] };
 
 interface PlanPod {
   pod: number;
   driver: DriverSegment;
   widthFactor: number;   // the product of its drop factors: the smaller, the healthier (the narrower its dot)
-  order: number;         // its place in the launch queue
+  order: number;         // its place in memory order (the launch queue without LOAD NEXT's pin: review M2)
 }
 
 // The plan memo (plan §2.3, R18): one entry, keyed on everything the plan reads.
@@ -348,14 +360,17 @@ export function planLanding(state: Readonly<GameState>, view: Readonly<LandingVi
   const now = state.clock.tSec;
   const caps = capabilitiesNow(state);
   const R = state.level.planet.R;
-  const queue = launchQueue(state);
+  // Address order, not LOAD NEXT's (review M2): the plan's ties go the same way whatever is pinned, so AUTODROP's own pin of
+  // a pod outside the plan never moves that pod into it.
+  const queue = driversInMemory(state).filter(isLaunchable);
   const pods: PlanPod[] = queue.map((driver, order) => {
     const f = dropFactors(caps, driver);
     return { pod: driver.pod, driver, widthFactor: f.sensor * f.plotter * f.driver, order };
   });
   const wins = windowsAhead(sol, now, AUTODROP_PLAN_MAX_PASSES);
   const key = planKey(state, view, pods, wins);
-  if (key === memoKey) return memoPlan;
+  // A first row whose moment passed with no launch is re-planned from now (review m7: the key has no "now").
+  if (key === memoKey && !((memoPlan.rows[0]?.untilTSec ?? Infinity) < now)) return memoPlan;
   const plan = computePlan(state, view, pods, wins, cadenceTac, caps, R);
   memoKey = key;
   memoPlan = plan;
@@ -432,6 +447,7 @@ function computePlan(
       rows.push({
         pass: win.pass + 1, lz: win.lz, n: k, atTSec: volley.firstAtTSec, pods: chosen.map((pod) => pod.pod), mislanded: mislanded ? k : 0,
         forecast: sol.validUntilTSec !== null && volley.firstAtTSec > sol.validUntilTSec,
+        untilTSec: span.hi - AUTODROP_EDGE_MARGIN_TAC * warp,
       });
       return chosen;
     }
@@ -460,20 +476,45 @@ function computePlan(
   // Whole passes more for what lies past the table (at least one per BAY_SLOTS pods left that fit).
   const laterPasses = unscheduled > 0 ? Math.ceil(unscheduled / BAY_SLOTS) : 0;
   const complete = neverFits.length === 0 && [...need].every(([lz, n]) => (perLz[lz] ?? 0) >= n);
+  const held = new Set([...rows.flatMap((row) => row.pods), ...[...assigned.values()].flatMap((list) => list.map((pod) => pod.pod))]);
+  const outside = byHealth.filter((pod) => !held.has(pod.pod)).map((pod) => pod.pod);
   return {
-    rows, passes: rows.reduce((most, row) => Math.max(most, row.pass), 0), perLz, neverFits, complete, laterPasses,
+    rows, passes: rows.reduce((most, row) => Math.max(most, row.pass), 0), perLz, neverFits, complete, laterPasses, outside,
   };
 }
 
-// --- Demos (plan §3.6) ---------------------------------------------------------------------------------------------------
+// --- Demos (plan §3.6; review M3) ----------------------------------------------------------------------------------------
 
-// A manual launch as a drop demo (plan §3.6): (the launch's time − the moment the dot's centre crossed the bracket's
-// centre) ÷ the tactical warp, tactical s; null when it is not a demo (off-site: no bracket under the dot's centre).
-export function dropDemoOffset(sol: Readonly<DropSolution>, launch: Readonly<LaunchRecord>, warp: number): number | null {
+// A launch's offset from its window's centre (where the dot's centre crosses the bracket's centre), tactical s; null
+// off-site or outside its window. What AUTODROP's centring is measured by (the suites), not what it learns from.
+export function centreOffsetTac(sol: Readonly<DropSolution>, launch: Readonly<LaunchRecord>, warp: number): number | null {
+  const win = launchWindow(sol, launch, warp);
+  return win === null ? null : (launch.atTSec - win.centre) / warp;
+}
+
+// A manual launch as a drop demo (review M3, a deviation from 03 §2's "minus the moment the dot was at the bracket centre"):
+// the launch's time − the slot the strip cued it at, ÷ the tactical warp. The first launch into a window is cued at its
+// launch moment (landing-rules launchMomentInSec: where the whole dot first fits, `LAUNCH NOW`; its in-band opening for a
+// WIDE DROP, `LAUNCH — press [L]`), each later one a cadence after the launch before it in the same window (the bay's
+// `RELOADING` → `LAUNCH NOW`). So a kid who does exactly what the strip says teaches AUTODROP no offset, and AUTODROP's
+// centring stays its own, as AUTOBURN's demos are measured against START BURN. `earlier`: the game times of the launches
+// already made (any source; those outside this window are ignored), `cadenceSec` the bay's cadence in game s. null when
+// it is not a demo (off-site: no bracket under the dot's centre).
+export function dropDemoOffset(
+  sol: Readonly<DropSolution>, launch: Readonly<LaunchRecord>, warp: number, cadenceSec: number, earlier: readonly number[],
+): number | null {
+  const win = launchWindow(sol, launch, warp);
+  if (win === null) return null;
+  const moment = win.sure?.lo ?? win.inBand?.lo ?? win.open;
+  const before = earlier.filter((at) => at >= win.open && at < launch.atTSec);
+  const cue = before.length === 0 ? moment : Math.max(moment, Math.max(...before) + cadenceSec);
+  return (launch.atTSec - cue) / warp;
+}
+
+function launchWindow(sol: Readonly<DropSolution>, launch: Readonly<LaunchRecord>, warp: number): WindowAt | null {
   if (launch.aimLz === null || sol.block !== null || !(warp > 0)) return null;
   const w = windowsAsOf(sol, launch.atTSec).find((candidate) => candidate.lz === launch.aimLz);
   if (w === undefined) return null;
   const win = windowAt(sol, w, 0);
-  if (launch.atTSec < win.open || launch.atTSec > win.close) return null;
-  return (launch.atTSec - win.centre) / warp;
+  return launch.atTSec < win.open || launch.atTSec > win.close ? null : win;
 }

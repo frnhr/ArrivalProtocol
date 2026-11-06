@@ -62,7 +62,7 @@ import { autoburnDropLine, autoburnAvailable } from '@systems/autoburn';
 import { sentryBootLineCount, firewallBootLineDue, sentrySeedBootText, firewallBootText } from '@systems/sentry';
 import { autodropTutorialDue } from '@systems/autodrop';
 import { v3TutorialDue } from '@systems/autoburn-v3';
-import { AUTODROP_TEXT } from '@data/autodrop-text';
+import { AUTODROP_TEXT, type AutodropRefusalWord } from '@data/autodrop-text';
 import { blocksInRack, knownHitRacks } from '@systems/zones';
 import { safestSpot, placementRack } from '@systems/move-preview';
 import { findBackup } from '@systems/tool-targets';
@@ -835,6 +835,11 @@ export const REFUSAL_LINES: Readonly<Record<string, { text: string; keys: readon
   ...LAUNCH_REFUSAL_LINES,
   // Slice 1b (review B1): END LANDING refused on a path into the planet.
   [END_LANDING_REFUSAL_KEY]: { text: END_LANDING_REFUSAL_TEXT, keys: [] },
+  // Slice 4c (Track DROP's patch 1, review M4): a refused [G] (autodrop.ts pressAutodrop) flashes its words, as [B]'s do.
+  // No keys: `ONLY v1`'s [L] is refused in the MIND, where [G] also works.
+  ...Object.fromEntries((Object.keys(AUTODROP_TEXT.refusal) as AutodropRefusalWord[]).map((word) => [
+    `AUTODROP|${word}`, { text: AUTODROP_TEXT.refusal[word], keys: [] },
+  ])),
 };
 
 export interface DamagedFile {

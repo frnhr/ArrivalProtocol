@@ -7,7 +7,8 @@
 //   2 LZs in 2 passes; VESPER's 16-pod ark, complete; the healthiest drivers to the narrowest LZ; never-fits with the REPAIR
 //   that fixes it and the wrong-split leftovers in the last rows; rows past validUntilTSec drawn as a forecast; the memo
 //   (R18) under 1 ms on the ark.
-// • dropDemoOffset: a launch's offset from its window's centre, null off-site.
+// • centreOffsetTac: a launch's offset from its window's centre; dropDemoOffset (review M3): against the strip's cued slot;
+//   both null off-site.
 // • Every AUTODROP string at its worst case ≤ MAX_LINE_CHARS (foundation review m6: in the track's own suite).
 import { check, finish } from '../landing/checks';
 import { createHarness7 } from '../wp7/harness7';
@@ -15,14 +16,14 @@ import { armLanding, ARM } from './autodrop-arm';
 import type { GameState } from '@state/schema';
 import type { BayState, DropSolution, LandingView, LaunchRecord, LzWindow } from '@/types/landing';
 import {
-  bayBy, centredVolley, dropDemoOffset, forgetPlanMemo, passRows, planLanding, volleySlots,
+  bayBy, centredVolley, centreOffsetTac, dropDemoOffset, forgetPlanMemo, passRows, planLanding, volleySlots,
 } from '@systems/autodrop-plan';
 import { getDropSolution } from '@systems/drop-cache';
 import { landingView } from '@systems/landing-rules';
 import { capabilitiesNow } from '@systems/capabilities';
 import { AUTODROP_TEXT } from '@data/autodrop-text';
 import { LANDING_ECHO } from '@data/landing-text';
-import { AUTODROP_PLAN_MAX_PASSES, COLONISTS_PER_POD, MAX_LINE_CHARS } from '@data/tuning';
+import { AUTODROP_PLAN_MAX_PASSES, MAX_LINE_CHARS } from '@data/tuning';
 
 const WARP = 20;
 const near = (a: number, b: number, tol = 1e-6): boolean => Math.abs(a - b) <= tol;
@@ -99,16 +100,26 @@ function slotsOf(volley: ReturnType<typeof centredVolley>, centre = 1000): numbe
   check('…a count is clamped to the LZ\'s room and never below 0', clamped[0]!.want === 4 && clamped[1]!.want === 0, JSON.stringify(clamped));
 }
 
-// --- dropDemoOffset ---------------------------------------------------------------------------------------------------------
+// --- centreOffsetTac and dropDemoOffset -----------------------------------------------------------------------------------
 {
   const sol = solutionOf([W]);
   const launch = (atTSec: number, aimLz: string | null): LaunchRecord => ({
     atTSec, atAi: 0, source: 'player', launchRadius: 6000, dotRad: 0, halfWidthKm: 50, aimLz, landingRad: 0, predictedTouch: 'soft',
     driverIntegrity: 100, arc: [], descentSec: 3.5, firstOfRun: false,
   });
-  check('dropDemoOffset: (launch − the window\'s centre) ÷ the tactical warp', near(dropDemoOffset(sol, launch(1030, 'LZ-A'), WARP)!, 1.5)
-    && near(dropDemoOffset(sol, launch(960, 'LZ-A'), WARP)!, -2));
-  check('…off-site is no demo', dropDemoOffset(sol, launch(1030, null), WARP) === null);
+  check('centreOffsetTac: (launch − the window\'s centre) ÷ the tactical warp', near(centreOffsetTac(sol, launch(1030, 'LZ-A'), WARP)!, 1.5)
+    && near(centreOffsetTac(sol, launch(960, 'LZ-A'), WARP)!, -2));
+  // Review M3: a demo is measured against the slot the strip cued (`LAUNCH NOW` at the sure part's opening, 920; each later
+  // launch a cadence after the one before it), so the obedient kid teaches no offset.
+  const CADENCE = 2 * WARP;
+  check('dropDemoOffset (M3): the first launch against the window\'s launch moment (sure open 920: 930 → +0.5)',
+    near(dropDemoOffset(sol, launch(930, 'LZ-A'), WARP, CADENCE, [])!, 0.5));
+  check('…a later launch against its cadence slot (930 + 40 = 970: 960 → −0.5; 975 → +0.25)',
+    near(dropDemoOffset(sol, launch(960, 'LZ-A'), WARP, CADENCE, [930])!, -0.5)
+    && near(dropDemoOffset(sol, launch(975, 'LZ-A'), WARP, CADENCE, [930, 500])!, 0.25));
+  check('…the obedient kid at each cue (920, 960, 1000, 1040) scores 0', [920, 960, 1000, 1040].every((at, i, all) =>
+    near(dropDemoOffset(sol, launch(at, 'LZ-A'), WARP, CADENCE, all.slice(0, i))!, 0)));
+  check('…off-site is no demo', dropDemoOffset(sol, launch(1030, null), WARP, CADENCE, []) === null);
 }
 
 // --- planLanding on run 1's arm ---------------------------------------------------------------------------------------------
@@ -119,7 +130,7 @@ const checkLine = (): string => {
   const plan = planLanding(st(), viewNow());
   const perLz: Record<string, number> = {};
   for (const lz of st().landing.lzs) perLz[lz.label] = plan.perLz[lz.label] ?? 0;
-  return AUTODROP_TEXT.bay.planCheck(plan.passes, perLz, plan.neverFits.map((never) => never.lz), COLONISTS_PER_POD);
+  return AUTODROP_TEXT.bay.planCheck(plan.passes, perLz, plan.neverFits.map((never) => never.lz));
 };
 {
   armLanding(h, [ARM.ARES, ARM.HALCYON, ARM.KESTREL, ARM.VESPER, ARM.CORMORANT], { autodrop: 3, demos: [0], healInstruments: true });
@@ -131,7 +142,7 @@ const checkLine = (): string => {
   check('…its rows are in time order, at most 4 a volley, each pod once', plan.rows.every((row, i) => i === 0 || row.atTSec > plan.rows[i - 1]!.atTSec)
     && plan.rows.every((row) => row.n <= 4 && row.pods.length === row.n)
     && new Set(plan.rows.flatMap((row) => row.pods)).size === 9);
-  check('…the check line: `PLAN · 2 PASSES · A 1,200 · B 600 ✓`', checkLine() === 'PLAN · 2 PASSES · A 1,200 · B 600 ✓', checkLine());
+  check('…the check line: `PLAN · 2 PASSES · A 6 · B 3 ✓`', checkLine() === 'PLAN · 2 PASSES · A 6 · B 3 ✓', checkLine());
   const sol = getDropSolution()!;
   const firstAt = plan.rows[1]!.atTSec;
   const forecastView = { ...viewNow(), solution: { ...sol, validUntilTSec: firstAt - 1 } };
@@ -183,7 +194,10 @@ const checkLine = (): string => {
     blind.rows.map((row) => `${row.pass}:${row.lz}×${row.n}${row.mislanded > 0 ? '¾' : ''}`).join(' '));
   check(`…the table holds at most ${AUTODROP_PLAN_MAX_PASSES} passes`, blind.passes <= AUTODROP_PLAN_MAX_PASSES);
   check('…the never-fits line: `LZ-C NEVER FITS — REPAIR SENSOR INTERP, or fly lower`',
-    AUTODROP_TEXT.bay.neverFits('LZ-C', 'SENSOR INTERP', false) === 'LZ-C NEVER FITS — REPAIR SENSOR INTERP, or fly lower');
+    AUTODROP_TEXT.bay.neverFits('LZ-C', 'SENSOR INTERP', 'kid') === 'LZ-C NEVER FITS — REPAIR SENSOR INTERP, or fly lower');
+  check('…in v3\'s own misses it names the REPAIR alone (review m3), or that v3 can\'t fit it',
+    AUTODROP_TEXT.bay.neverFits('LZ-C', 'SENSOR INTERP', 'none') === 'LZ-C NEVER FITS — REPAIR SENSOR INTERP'
+      && AUTODROP_TEXT.bay.neverFits('LZ-C', null, 'none') === 'LZ-C NEVER FITS — AUTOBURN v3 CAN\'T FIT IT');
 }
 
 // --- The words at their worst (≤ MAX_LINE_CHARS) ----------------------------------------------------------------------------
@@ -204,8 +218,9 @@ const checkLine = (): string => {
     t.bay.keyHold, t.bay.launchHeld, t.bay.keyPass, t.bay.keyPlan, t.bay.keyArmedPass, t.bay.keyArmedPlan, t.bay.keyOff, t.bay.keyWaiting,
     t.bay.shortBay('LZ-D', 4, 0), t.bay.shortFit('LZ-D', 4, 3), t.bay.noWindow('LZ-D'),
     t.bay.planRow(AUTODROP_PLAN_MAX_PASSES, 'LZ-D', 4, 'IN 59:59', 4), t.bay.planMore(40),
-    t.bay.planCheck(AUTODROP_PLAN_MAX_PASSES, { 'LZ-A': 6, 'LZ-B': 6, 'LZ-C': 6, 'LZ-D': 6 }, ['LZ-A', 'LZ-B', 'LZ-C', 'LZ-D'], COLONISTS_PER_POD),
-    t.bay.planLater(9, AUTODROP_PLAN_MAX_PASSES), t.bay.neverFits('LZ-D', 'SENSOR INTERP', true), t.bay.neverFits('LZ-D', null, true),
+    t.bay.planCheck(AUTODROP_PLAN_MAX_PASSES, { 'LZ-A': 16, 'LZ-B': 16, 'LZ-C': 16, 'LZ-D': 16 }, ['LZ-A', 'LZ-B', 'LZ-C', 'LZ-D']),
+    t.bay.planLater(9, AUTODROP_PLAN_MAX_PASSES), t.bay.neverFits('LZ-D', 'SENSOR INTERP', 'v3'), t.bay.neverFits('LZ-D', null, 'v3'),
+    t.bay.neverFits('LZ-D', 'SENSOR INTERP', 'none'), t.bay.neverFits('LZ-D', null, 'none'), t.bay.planIn('59:59'),
     t.status.trained('CENTRE', 99, 999), t.status.untrained('CENTRE', 40), t.status.armed('LZ-D', 4, '59:59'), t.status.armedIdle,
     t.status.holding, t.status.waiting, t.status.worksAs(2, 3),
   ];
@@ -216,8 +231,10 @@ const checkLine = (): string => {
     t.radio.passDone({ 'LZ-A': 2, 'LZ-B': 1 }) === 'PASS DONE · A +2 · B +1'
       && LANDING_ECHO.touchdown(3, 'lz', 'LZ-A', 'soft', true) === '> pod03 ... LANDED · BULLSEYE'
       && LANDING_ECHO.touchdown(3, 'lz', 'LZ-A', 'hard', true) === '> pod03 ... LANDED · HARD'
-      && t.bay.planCheck(2, { 'LZ-A': 5, 'LZ-B': 4 }, [], COLONISTS_PER_POD) === 'PLAN · 2 PASSES · A 1,000 · B 800 ✓'
-      && t.bay.planCheck(2, { 'LZ-A': 5, 'LZ-C': 0 }, ['LZ-C'], COLONISTS_PER_POD) === 'PLAN · 2 PASSES · A 1,000 · C 0 ✗ LZ-C');
+      && t.bay.planCheck(2, { 'LZ-A': 5, 'LZ-B': 4 }, []) === 'PLAN · 2 PASSES · A 5 · B 4 ✓'
+      && t.bay.planCheck(2, { 'LZ-A': 5, 'LZ-C': 0 }, ['LZ-C']) === 'PLAN · 2 PASSES · A 5 · C 0 ✗ LZ-C');
+  check('the check line counts pods (review m10): `PLAN · 3 PASSES · A 6 · B 5 · C 5 ✓`, 35 characters',
+    t.bay.planCheck(3, { 'LZ-A': 6, 'LZ-B': 5, 'LZ-C': 5 }, []) === 'PLAN · 3 PASSES · A 6 · B 5 · C 5 ✓');
 }
 
 finish();

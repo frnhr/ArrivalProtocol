@@ -16,13 +16,12 @@ function split(counts: Readonly<Record<string, number>>, sign: '×' | '+'): stri
   return parts.length === 0 ? (sign === '+' ? 'NONE SENT' : 'NONE') : parts.join(' · ');
 }
 
-// `1,000`: colonists as the plan's check line counts them.
-function count(n: number): string {
-  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
-
-// The [G] refusals (autodrop.ts AutodropRefusal), said on the TERMINAL as the key buzzes.
-export type AutodropRefusalWord = 'NOT LANDING' | 'NO AUTODROP' | 'AUTODROP OFF' | 'NOTHING SET' | 'PAUSED' | 'ONLY v1';
+// The [G] refusals (autodrop.ts AutodropRefusal), said on the TERMINAL as the key buzzes and flashed on the strip
+// (data/script.ts REFUSAL_LINES, `AUTODROP|<word>`). Review M4: `NOTHING SET` is v2's (its [+]); v3 has no [+] and says
+// `NOTHING TO PLAN`; and with no sure window on this orbit for any LZ, either says `NO SURE WINDOW` with the REPAIR that
+// would give one (landing-rules bestRepairForDrop), one word per fix so the strip's flash can name it.
+export type AutodropRefusalWord = 'NOT LANDING' | 'NO AUTODROP' | 'AUTODROP OFF' | 'NOTHING SET' | 'NOTHING TO PLAN' | 'PAUSED' | 'ONLY v1'
+  | 'NO SURE WINDOW' | 'NO SURE WINDOW · SENSOR INTERP' | 'NO SURE WINDOW · NAV PLOTTER' | 'NO SURE WINDOW · DRIVERS';
 
 export const AUTODROP_TEXT = {
   // The once-only lessons (data/script.ts SKILL_4CDE_RULES; their conditions are autodrop.ts autodropTutorialDue's).
@@ -79,8 +78,13 @@ export const AUTODROP_TEXT = {
     'NO AUTODROP': 'NO AUTODROP.skl ABOARD',
     'AUTODROP OFF': 'AUTODROP.skl IS TOO DAMAGED — REPAIR IT',
     'NOTHING SET': 'NOTHING SET — use the POD BAY\'s [+]',
+    'NOTHING TO PLAN': 'NOTHING TO PLAN — NO POD CAN GO YET',
     PAUSED: 'PAUSED',
     'ONLY v1': 'AUTODROP v1 — HOLD [L] IN A WINDOW',
+    'NO SURE WINDOW': 'NO SURE WINDOW ON THIS ORBIT',
+    'NO SURE WINDOW · SENSOR INTERP': 'NO SURE WINDOW — REPAIR SENSOR INTERP',
+    'NO SURE WINDOW · NAV PLOTTER': 'NO SURE WINDOW — REPAIR NAV PLOTTER',
+    'NO SURE WINDOW · DRIVERS': 'NO SURE WINDOW — REPAIR THE POD DRIVERS',
   } satisfies Record<AutodropRefusalWord, string>,
 
   // The pod's touchdown echo when AUTODROP launched it soft into an LZ with room (plan §3.2).
@@ -118,8 +122,13 @@ export const AUTODROP_TEXT = {
     planHead: 'PLAN',
     planRow: (pass: number, lz: string, n: number, time: string, mislanded: number): string =>
       `P${pass} · ${lz} ×${n} · ${time}${mislanded > 0 ? ' · ¾' : ''}`,
-    planCheck: (passes: number, perLz: Readonly<Record<string, number>>, missing: readonly string[], colonistsPerPod: number): string => {
-      const lzs = Object.keys(perLz).sort().map((lz) => `${lzLetter(lz)} ${count((perLz[lz] ?? 0) * colonistsPerPod)}`).join(' · ');
+    // A row's time (review m9): `NOW` once its moment has come, else `IN 0:42`.
+    planNow: 'NOW',
+    planIn: (time: string): string => `IN ${time}`,
+    // Review m10: pods, not colonists (`PLAN · 3 PASSES · A 6 · B 5 · C 5 ✓`), as the split's `A ×2` counts them, so four
+    // LZs with two misses still fit the POD BAY's line at 1440.
+    planCheck: (passes: number, perLz: Readonly<Record<string, number>>, missing: readonly string[]): string => {
+      const lzs = Object.keys(perLz).sort().map((lz) => `${lzLetter(lz)} ${perLz[lz] ?? 0}`).join(' · ');
       // One LZ short reads `✗ LZ-C`; several by their letters (`✗ B, C`), so four LZs still fit the line.
       const verdict = missing.length === 0 ? '✓' : missing.length === 1 ? `✗ ${missing[0]}` : `✗ ${missing.map(lzLetter).join(', ')}`;
       return `PLAN · ${passes} PASS${passes === 1 ? '' : 'ES'} · ${lzs} ${verdict}`;
@@ -128,10 +137,13 @@ export const AUTODROP_TEXT = {
     planLater: (passes: number, maxPasses: number): string => `+${passes} PASS${passes === 1 ? '' : 'ES'} PAST ${maxPasses} — [G] AGAIN AFTER`,
     planEmpty: 'NOTHING LEFT TO PLAN',
     planMore: (rows: number): string => `+${rows} MORE`,
-    // `LZ-B NEVER FITS — REPAIR POD 05, or fly lower`; with AUTOBURN v3 holding the landing orbit it says that instead.
-    neverFits: (lz: string, repair: string | null, v3Lower: boolean): string => {
-      const lower = v3Lower ? 'AUTOBURN v3 GOES LOWER' : 'fly lower';
-      return repair === null ? `${lz} NEVER FITS — ${lower}` : `${lz} NEVER FITS — REPAIR ${repair}, or ${lower}`;
+    // `LZ-B NEVER FITS — REPAIR POD 05, or fly lower`. `lower`: who goes lower, `kid` (fly lower), `v3` (AUTOBURN v3 holds the
+    // landing orbit and will go lower for it), or `none` (review m3: the LZ is in v3's own misses, so v3 decided it will not;
+    // the REPAIR alone, or `AUTOBURN v3 CAN'T FIT IT` with none).
+    neverFits: (lz: string, repair: string | null, lower: 'kid' | 'v3' | 'none'): string => {
+      if (lower === 'none') return repair === null ? `${lz} NEVER FITS — AUTOBURN v3 CAN'T FIT IT` : `${lz} NEVER FITS — REPAIR ${repair}`;
+      const how = lower === 'v3' ? 'AUTOBURN v3 GOES LOWER' : 'fly lower';
+      return repair === null ? `${lz} NEVER FITS — ${how}` : `${lz} NEVER FITS — REPAIR ${repair}, or ${how}`;
     },
     goButton: '[G] AUTODROP',
     goButtonArmed: '[G] CANCEL',

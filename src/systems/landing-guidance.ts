@@ -388,6 +388,18 @@ function uncertainLine(cause: PlotFaultCause, ctx: LandingContext): LandingObjec
   }
 }
 
+// L10: decay takes ▼ out of the band soon. It carries the 'lift' burn's key only (a LIFT-* row; never GO LOWER's [S], which
+// would sink it faster); the row leads as L2 once that burn is near. Slice 4e (foundation review M4): v3 holding below the
+// DRAG line says its own words in L10's place. null: no decay warned, or no pod aboard.
+function decayLine(ctx: LandingContext): LandingObjective | null {
+  if (ctx.aboard === 0) return null;
+  const flight = ctx.flight;
+  const keys = flight !== null && flight.id.startsWith('LIFT') ? flight.keys : [];
+  if (ctx.v3Decay !== null) return line('L10', ctx.v3Decay, keys, 'soon', 'ship', ctx, { id: 'landing-L10-v3' });
+  if (ctx.decay !== null) return line('L10', LANDING_DECAY_LINES.L10(ctx.decay.orbits), keys, 'soon', 'ship', ctx);
+  return null;
+}
+
 function evaluate(ctx: LandingContext): LandingObjective | null {
   const empty = ctx.aboard === 0 && ctx.falling === 0;
   // L0: the final ship is empty and the root is still to delete; the report waits for the duel (finalePending). EVERY
@@ -416,6 +428,10 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
   // Slice 4c (plan §3.7): AUTODROP's own row, before the window rows it flies (AD-hold, AD-fly, AD-wait, AD-done).
   const autodropRow = ctx.aboard > 0 ? ctx.autodrop?.row ?? null : null;
   if (autodropRow !== null) {
+    // Review m4: AD-armed is only a wait over a window the machine leaves alone; a sinking orbit outranks it (L10, as it
+    // outranks L8 and L9 below), so the decay is never hidden for a window's length.
+    const decay = autodropRow.id === 'landing-AD-armed' ? decayLine(ctx) : null;
+    if (decay !== null) return decay;
     return line('AD', autodropRow.text, autodropRow.keys, autodropRow.urgency, autodropRow.layer, ctx, { id: autodropRow.id });
   }
   if (open !== null && ctx.aboard > 0) {
@@ -454,17 +470,9 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
   // L7b (review M2): the engine fires by itself. Its bursts sink ▼ under the planet in minutes, mostly unseen inside
   // SKIPs (only the landing's first stops one), so the strip names the cause and its fix before any wait.
   if (ctx.aboard > 0 && ctx.ghostSwap !== null) return ghostLine(ctx.ghostSwap, ctx);
-  // L10 above L8 and L9: a sinking orbit undoes any repair or GO LOWER. It carries the 'lift' burn's key only (a LIFT-*
-  // row; never GO LOWER's [S], which would sink it faster); the row leads as L2 once that burn is near.
-  // Slice 4e (foundation review M4): v3 holding below the DRAG line says its own words in L10's place.
-  if (ctx.aboard > 0 && ctx.v3Decay !== null) {
-    const keys = flight !== null && flight.id.startsWith('LIFT') ? flight.keys : [];
-    return line('L10', ctx.v3Decay, keys, 'soon', 'ship', ctx, { id: 'landing-L10-v3' });
-  }
-  if (ctx.aboard > 0 && ctx.decay !== null) {
-    const keys = flight !== null && flight.id.startsWith('LIFT') ? flight.keys : [];
-    return line('L10', LANDING_DECAY_LINES.L10(ctx.decay.orbits), keys, 'soon', 'ship', ctx);
-  }
+  // L10 above L8 and L9: a sinking orbit undoes any repair or GO LOWER.
+  const decay = decayLine(ctx);
+  if (decay !== null) return decay;
   if (ctx.aboard > 0 && ctx.uncertain !== null) return uncertainLine(ctx.uncertain.cause, ctx);
   // Slice 4e (plan R16): L9's slot is v3's while it holds the landing orbit (it goes lower itself; GO LOWER is gated).
   if (ctx.aboard > 0 && ctx.v3Lower !== null) {

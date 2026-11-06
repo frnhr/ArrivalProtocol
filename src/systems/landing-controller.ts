@@ -51,3 +51,13 @@ export function windowRuleHolds(state: Readonly<GameState>): boolean {
   const controller = activeLandingController(state);
   return controller === null || controller.holdsTactical;
 }
+
+// Slice 4c review B2: game seconds from now to the active controller's next launch (≤ 0: its moment has come), or null: no
+// controller, one that does not hold TACTICAL (it drops inside a SKIP), or one with nothing planned. Pace treats it as a
+// window, so a controller that holds TACTICAL never has its own moment skipped.
+export function controllerLaunchInSec(state: Readonly<GameState>): number | null {
+  const controller = activeLandingController(state);
+  if (controller === null || !controller.holdsTactical || controller.nextLaunchAtTSec === undefined) return null;
+  const at = controller.nextLaunchAtTSec(state);
+  return at === null ? null : at - state.clock.tSec;
+}

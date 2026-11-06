@@ -2,7 +2,7 @@
 // Slice 4c, Track DROP. Each ship (HALCYON 5 pods, CORMORANT 9, VESPER 16) locked mid-band as it arrived (its own transit
 // damage: VESPER's Sensor Interp, drivers hurt by the hops), HOLLOW asleep, landed by a kid who obeys the strip:
 // • v0: by hand (landing/harness-landing followLanding: [L] when the strip names it);
-// • v1: holds [L] while the strip says `hold [L]` (and lets go when the window closes), [L] by hand otherwise;
+// • v1: holds [L] while the strip says `hold [L]` (and lets go when it stops saying it: review M1), [L] by hand otherwise;
 // • v2: [G] with the prefilled split at every pass (the strip's `· [G] AUTODROP`), [F] between windows;
 // • v3: [G] when the strip offers the plan, [F] per gap;
 // • v2 and v3: [L] by hand where the strip asks for it (a WIDE DROP window, a never-fits LZ: what they leave).
@@ -64,7 +64,9 @@ function fly(version: 0 | SkillVersion, kidBusy: boolean): { wall: number } {
     const ad = st().landing.autodrop;
     if (version === 1) {
       if (!held && /hold \[L\]/.test(text)) { h.keyDown('KeyL'); held = true; continue; }
-      if (held && (!ad.held || (st().landing.window === null && Object.values(ad.sent).some((n) => n > 0)))) { h.keyUp('KeyL'); held = false; continue; }
+      // Review M1: it lets go when the strip stops saying HOLD (AUTODROP let go of a window it has nothing more to fly in, or
+      // the volley is over), as a real kid would, and presses [L] by hand where the strip then asks for it.
+      if (held && (!ad.held || !/hold \[L\]/i.test(text))) { h.keyUp('KeyL'); held = false; continue; }
       if (!held && /press \[L\]/.test(text)) { h.press('KeyL'); continue; }
     } else if (ad.armed === null && /\[G\]/.test(text)) {
       h.press('KeyG');

@@ -1195,7 +1195,8 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
 
   // A touchdown (01-landing §4): `+200 LANDED · LZ-A` floats up from its bracket (from the landing point off-site) and
   // the launch band's ring pulses once. A pod in a no-go arc floats `+0 LAVA`, in the arc's own word (slice 1b).
-  const offLanded = on('pod-landed', ({ pod, place, lz, touch, points }) => {
+  // Slice 4c (Track DROP's patch 2, review m11): an AUTODROP pod's `· BULLSEYE`, as the event decided it.
+  const offLanded = on('pod-landed', ({ pod, place, lz, touch, points, bullseye }) => {
     const state = store.getState();
     const record = state.landing.pods.find((candidate) => candidate.pod === pod);
     const bracket = lz === null ? undefined : state.landing.lzs.find((candidate) => candidate.label === lz);
@@ -1203,7 +1204,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     if (rad === null || rad === undefined) return;
     const noGoWord = place === 'no-go' ? noGoAt(state.landing.noGo, rad)?.word ?? null : null;
     if (place === 'no-go' && noGoWord === null) throw new Error(`pod-landed: POD ${pod} in a no-go arc with no arc under it`);
-    const text = place === 'lz' ? TOUCHDOWN_FLOAT_TEXT.lz(points, lz ?? '?', touch)
+    const text = place === 'lz' ? TOUCHDOWN_FLOAT_TEXT.lz(points, lz ?? '?', touch, bullseye)
       : place === 'mislanded' ? TOUCHDOWN_FLOAT_TEXT.mislanded(points, lz ?? '?')
         : place === 'off-site' ? TOUCHDOWN_FLOAT_TEXT.offSite(points, touch) : TOUCHDOWN_FLOAT_TEXT.noGo(noGoWord ?? '');
     const tone = place === 'lz' ? (touch === 'hard' ? 'hard' : 'good') : place === 'mislanded' ? 'mislanded'
