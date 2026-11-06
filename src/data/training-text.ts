@@ -54,7 +54,9 @@ export const PACKET_SKILL_TEXT = {
   chip: (file: string, version: number, blocks: number, without: string, restore: number): string =>
     `${file} v${version} (${blocks}) → ${without} · RESTORE ${restore}`,
   packAs: (version: number, blocks: number, restore: number): string => `PACK AS v${version} (${blocks}) · RESTORE ${restore}`,
-  cyclesCard: '+2 CYCLES',
+  // The +n CYCLES salvage card (data/upgrades.ts): its title and its line.
+  cyclesCard: (cycles: number): string => `+${cycles} CYCLES`,
+  cyclesEffect: (cycles: number): string => `${cycles} more TRAINING CYCLES to spend at the next desk`,
 } as const;
 
 // =======================================================================================================================

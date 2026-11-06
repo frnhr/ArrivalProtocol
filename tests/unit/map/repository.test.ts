@@ -155,7 +155,7 @@ check('…Swap arrived here (delivered at CORMORANT, 2659); Cp is still behind a
     && repoModel(store.getState(), null).available.every((entry) => !entry.focus));
   const never = armRun();
   toDesk(never);
-  check('…a unit that never had DELETE gets no prompt (ARES-VII\'s desk opens on the card)', never.getState().ui.deskWindow === null);
+  check('…a unit that never had DELETE gets no prompt (ARES-VII\'s desk opens on TRAINING, the first pick: slice 4)', never.getState().ui.deskWindow === 'training');
 }
 
 // --- REPAIR v2 left the arm's salvage pool (02 §3.10) ------------------------------------------------------------------------

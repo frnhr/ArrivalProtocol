@@ -53,7 +53,7 @@ import type { ShipDef, HollowDef } from '@data/ships';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat, nominalRunThreat, planThreat, threatInputFor, fixedShipFacts } from '@systems/threat-plan';
 import { rollBeamSeeds, rollDeliverySeeds, plantBeamSeed, seedTargetsOf } from '@systems/beam-seeds';
-import { beamSourceOf, arrivalDeliveries } from '@systems/run';
+import { beamSourceOf, arrivalDeliveries, arrivalSkills } from '@systems/run';
 import { playsTutorial } from '@systems/meta';
 import { SEED_WORDS_POOL } from '@data/threat-text';
 import { SEEDS_ONLY_DEF } from '@data/threats';
@@ -96,10 +96,13 @@ import { skillsModel, type SkillRow } from '@systems/skills';
 import { arrivalDamage } from '@systems/carry';
 import { autoburnRefusal, toggleAutoburn } from '@systems/autoburn';
 import { autoburnDemoSkill, deskBlocker } from '@systems/skill-tree';
-import { trainCell, FIRST_PICK_ENFORCED } from '@systems/training';
+import { trainCell, FIRST_PICK_ENFORCED, undoPurchase, restoreSkill, setPackAs, commitTraining } from '@systems/training';
 import { giveSkill } from '@systems/skill-files';
 import { skillLive, type SkillLive } from '@systems/capabilities';
-import type { SkillId, SkillVersion, LockLevel, DemoSkill } from '@/types/skill';
+import type { SkillId, SkillVersion, LockLevel, DemoSkill, CellRow, RunSkillState } from '@/types/skill';
+import { grantCycles, bankOf, treeCells, visitNow, type TrainRefusal, type TreeCell } from '@systems/skill-tree';
+import { skillPacketPlan } from '@systems/skill-files';
+import { shipCycles } from '@systems/run-score';
 import type { SkillFileSegment } from '@/types/segment';
 import { seedSpotFor, seedsInMemory, threateningSeeds } from '@systems/hollow';
 import { knownHitRacks } from '@systems/zones';
@@ -305,6 +308,16 @@ interface DebugHooks {
   // grant labelled DEBUG).
   skill: (id: SkillId, version: SkillVersion, lock?: LockLevel) => SkillFileSegment;
   cycles: (n: number) => void;
+  // The tree at the desk, as the TRAINING tab drives it (training.ts): the bank; train a cell (`{kind:'version',version:2}`
+  // or `{kind:'lock',level:1}`; the refusal, or null); UNDO a pending purchase (the last by default); RESTORE a lost skill;
+  // PACK AS on the PACKET (a skill file's id and the version to pack it as, the lock kept; null: as it is); and the grid's
+  // cells with the run's skill history.
+  bank: () => number;
+  train: (id: SkillId, row: CellRow) => TrainRefusal | null;
+  undo: (index?: number) => void;
+  restore: (id: SkillId) => TrainRefusal | null;
+  packAs: (segId: string, version: SkillVersion | null) => void;
+  tree: () => { bank: number; cells: TreeCell[]; skills: RunSkillState };
   // WP9 part 2: what the screens show of the zones and AUTOBURN, as data: the NAV PLOT's zone glyphs and labels,
   // the MIND's rack tags (both from the sensed prediction) and the Engine window's AUTO button.
   zonesHud: () => { plot: PlotZoneModel[]; racks: RackZoneTag[]; auto: AutoButtonModel };
@@ -562,13 +575,17 @@ function debugArrive(store: Store<GameState>, hop: Hop, threat: ShipThreat): voi
   if (left.ships.length < left.map.route.length) {
     const missing = left.map.route.slice(left.ships.length).map((stop) => debugSkippedResult(left.map, stop.slot, stop.depth));
     console.info(`[debug] ${missing.map((result) => result.shipName).join(', ')} skipped (in orbit, nobody landed)`);
-    store.update((draft) => { draft.run.ships.push(...missing); });
+    store.update((draft) => {
+      draft.run.ships.push(...missing);
+      draft.run.skills.earned.push(...missing.map((result) => shipCycles(result)));
+    });
   }
   const state = store.getState();
   const map = state.run.map;
   const ship = shipDefAt(map, hop.to);
   const deliveries = deliveriesForHop(state, hop.from, hop.to, threat);
-  const packet = planPacket(state.memory, { linkBlocks: hop.linkBlocks, dropped: [], pick: null, deliveries }, newSegId);
+  // Slice 4: this desk's training (if any) crosses as transmitNext sends it, and is bought as it does.
+  const packet = planPacket(state.memory, { linkBlocks: hop.linkBlocks, dropped: [], pick: null, deliveries, skills: skillPacketPlan(state, {}) }, newSegId);
   const fit = roomFit({ files: packedFiles(packet), charge: packet.chargeHeld }, hop);
   if (fit.over > 0 || fit.overLink > 0) throw new Error(`__ap: the unit's ${fit.files} blocks of files (and a floor of ${fit.floor}) are over ${ship.name}'s link (${fit.link}) or room (${fit.room})`);
   const delivered = packet.deliveries.flatMap((group) => group.segIds);
@@ -581,6 +598,7 @@ function debugArrive(store: Store<GameState>, hop: Hop, threat: ShipThreat): voi
   const layout = layoutCarried(packet, charge.blocks, ship, threat, hollowLabel(state.run));
   const scripted = arrivalDamage(layout.racks.segs, ship.arrivalDamage);
   const plan = { toSlot: hop.to, hop, deliveries };
+  commitTraining(store);
   store.update((draft) => {
     draft.run.transit = null;
     draft.run.repo = advanceRequests(draft.run.repo, plan, draft.run.map);
@@ -593,7 +611,7 @@ function debugArrive(store: Store<GameState>, hop: Hop, threat: ShipThreat): voi
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: charge.floorAdded,
     chargeOverflowLost: layout.overflowLost, scripted, eccCorrected: 0, seeds: layout.seeds, boarded: boardedBy(threat),
     deliveries: arrivalDeliveries(deliveries, packet.deliveries, deliverySeeds.map((seed) => seed.targetId)),
-    skills: [],
+    skills: arrivalSkills(state, packet, layout.racks.segs),
   }, threat, hop);
 }
 
@@ -658,8 +676,10 @@ function debugRoute(store: Store<GameState>, slots: readonly number[]): Hop {
   const ships = before.map((slot, i) => (had[i]?.slot === slot ? structuredClone(had[i]!) : debugSkippedResult(map, slot, i + 1)));
   const skipped = before.filter((slot, i) => had[i]?.slot !== slot).map((slot) => map.arm[slot]!.name);
   if (skipped.length > 0) console.info(`[debug] __ap.route: ${skipped.join(', ')} skipped (in orbit, nobody landed)`);
+  const earned = store.getState().run.skills.earned;
   store.update((draft) => {
     draft.run.ships = ships;
+    draft.run.skills.earned = ships.map((result, i) => (had[i]?.slot === result.slot && earned[i] !== undefined ? { ...earned[i]! } : shipCycles(result)));
     draft.run.map.route = structuredClone(route);
     draft.run.map.galaxyYear = route.at(-1)!.hop?.approachYear ?? draft.run.map.startYear;
     draft.run.shipIndex = route.length - 1;
@@ -1052,11 +1072,19 @@ export function mountDebug(store: Store<GameState>): void {
       return over;
     },
     skill: (id, version, lock = 0) => giveSkill(store, id, { version, lock }),
-    cycles: (n) => {
-      if (!(Number.isInteger(n) && n > 0)) throw new Error(`__ap.cycles: ${n} is not a positive whole number`);
-      store.update((draft) => {
-        draft.run.skills.grants.push({ source: 'story', cycles: n, visit: draft.run.ships.length, label: 'DEBUG' });
-      });
+    cycles: (n) => { grantCycles(store, n, 'story', 'DEBUG'); },
+    bank: () => bankOf(store.getState().run.skills),
+    train: (id, row) => trainCell(store, id, row),
+    undo: (index) => { undoPurchase(store, index ?? store.getState().run.skills.pending.length - 1); },
+    restore: (id) => restoreSkill(store, id),
+    packAs: (segId, version) => {
+      const seg = store.getState().memory.find((candidate) => candidate.id === segId);
+      if (seg === undefined || seg.type !== 'upgrade' || !('lock' in seg)) throw new Error(`__ap.packAs: ${segId} is not a skill file`);
+      setPackAs(store, segId, version === null ? null : { version, lock: seg.lock });
+    },
+    tree: () => {
+      const state = store.getState();
+      return { bank: bankOf(state.run.skills), cells: treeCells(state, visitNow(state.run)), skills: structuredClone(state.run.skills) };
     },
     audio: {
       isAudioUnlocked,

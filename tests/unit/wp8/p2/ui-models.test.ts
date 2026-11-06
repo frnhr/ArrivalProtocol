@@ -76,7 +76,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
   check('TRANSMIT shows the 3 cards dealt, keyed 1, 2, 3, none picked yet', model.cards.length === 3
     && model.cards.map((card) => card.key).join() === '1,2,3' && model.pick === null && model.cards.every((card) => !card.picked));
   const tags: Record<UpgradeId, string> = {
-    firewall: `FILE · ${FIREWALL_BLOCKS} BLOCKS`, 'fuel-trim': `FILE · ${FUEL_TRIM_BLOCKS} BLOCKS`, 'repair-v2': 'UPGRADE', 'thread-plus': 'AI CORE', charge: 'ON ARRIVAL',
+    firewall: `FILE · ${FIREWALL_BLOCKS} BLOCKS`, 'fuel-trim': `FILE · ${FUEL_TRIM_BLOCKS} BLOCKS`, 'repair-v2': 'UPGRADE', 'thread-plus': 'AI CORE', charge: 'ON ARRIVAL', cycles: 'TRAINING',
   };
   check('each card says what kind of thing it is (FILE · 2 BLOCKS, UPGRADE, AI CORE, ON ARRIVAL)', model.cards.every((card) => card.tag === tags[card.id]),
     model.cards.map((card) => `${card.id}=${card.tag}`).join(' '));
