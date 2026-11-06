@@ -2,7 +2,7 @@
 import type {
   FiringSource, ViewMode, TransitHit, AutoburnPhase, AutoburnEnd, DealOutcome, VerbKind,
 } from '@state/schema';
-import type { DragKick, LandingEnd, LaunchSource, Place, Touch } from '@/types/landing';
+import type { AutodropArm, AutodropEnd, DragKick, LandingEnd, LaunchSource, Place, Touch } from '@/types/landing';
 import type { SegmentRole, InfectionSide } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { SkillId, SkillLevel, EffectiveVersion } from '@/types/skill';
@@ -197,6 +197,31 @@ export interface GameEvents {
   'log-scanned': Record<string, never>;
   // The unit's last working rm was deleted or eaten (04 §3.3): the stamp and echo, information only.
   'last-rm-lost': Record<string, never>;
+
+  // === Slices 4c–4e (docs/phase3/impl/slice-4cde-plan.md §2.5): the FOUNDATION named every event; each track emits its own.
+
+  // --- 4c AUTODROP (Track DROP, systems/autodrop.ts) ---
+  // [G] armed or disarmed it (`from` / `to`: null at rest), and why a pass or plan ended.
+  'autodrop': { from: AutodropArm | null; to: AutodropArm | null; end: AutodropEnd | null };
+  // A volley was planned for `lz`: `n` pods, the first at `firstAtTSec` (game s). Each launch plays its own podLaunch.
+  'autodrop-volley': { lz: string; n: number; firstAtTSec: number };
+  // Its claim found no Core thread free for `lz`'s volley (it launches late: `AUTODROP NEEDS A THREAD`).
+  'autodrop-wait': { lz: string };
+  // --- end of 4c ---
+
+  // --- 4d SENTRY (Track SENTRY, systems/sentry.ts and the seed paths) ---
+  // A disguised seed was unmasked: by a SCAN (`NOT A FILE`), SENTRY's boot line, or a DELETE (`IT WAS A SEED`).
+  'seed-unmasked': { segId: string; by: 'scan' | 'sentry' | 'delete' };
+  // SENTRY v2's DELETE on HOLLOW's outline freed the seed as it landed (`PRE-EMPTED`).
+  'seed-preempted': { startAddr: number };
+  // SENTRY v3 compiled a FIREWALL.sys at the boot.
+  'firewall-compiled': { segId: string };
+  // --- end of 4d ---
+
+  // --- 4e ORBIT (Track ORBIT, systems/autoburn.ts) ---
+  // AUTOBURN v3 lowered its landing orbit (`AUTOBURN v3 GOES LOWER — LZ-B's dot will fit`).
+  'autoburn-v3-lower': { fromKm: number; toKm: number; lz: string };
+  // --- end of 4e ---
 }
 
 export type ZoneForecast = 'hit' | 'clear' | 'unknown';

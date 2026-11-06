@@ -81,7 +81,7 @@ function fakeState(opts: FakeOpts): GameState {
     run: { phase: opts.phase ?? 'landing' },
     clock: { paused: opts.paused ?? false, tSec: 0 },
     ui: { mode: opts.mode ?? 'tools' },
-    burn: { lastTickDvKmS: opts.dv ?? 0 },
+    burn: { lastTickDvKmS: opts.dv ?? 0, auto: { phase: 'idle', mode: null } },
     memory: opts.bay === null ? opts.memory : [...opts.memory, bayCtrl(opts.bay ?? 100)],
     level: { planet: { R } },
     landing,

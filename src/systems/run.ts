@@ -29,7 +29,7 @@ import {
 } from '@systems/carry';
 import { dealDraft, planPacket, transitPacket, applyPickToPacket, pickCharge } from '@systems/draft';
 import { shipCycles } from '@systems/run-score';
-import { bankOf, branchToLatch, deskBlocker, firstPickOwed, visitNow } from '@systems/skill-tree';
+import { bankOf, branchToLatch, deskBlocker, firstPickOwed, visitNow, shipMetSeeds } from '@systems/skill-tree';
 import { skillPacketPlan, mountSkillWatch } from '@systems/skill-files';
 import { commitTraining } from '@systems/training';
 import { isSkillFile } from '@state/selectors';
@@ -277,6 +277,7 @@ export function endShip(store: Store<GameState>, outcome: ShipOutcome, stars = 0
   const result = shipResultOf(state, outcome, stars);
   const tally = tallyPreview(state);
   const cycles = shipCycles(result);
+  const metSeeds = shipMetSeeds(state, tally);
   store.update((draft) => {
     draft.run.ships.push(result);
     draft.run.skills.earned.push(cycles);
@@ -284,6 +285,8 @@ export function endShip(store: Store<GameState>, outcome: ShipOutcome, stars = 0
     draft.run.threat.trace = tally.traceAfter;
     if (tally.fed) draft.run.threat.fed += tally.left;
     draft.run.threat.lastTally = tally;
+    // Slice 4d's lasting record (slice-4cde-plan R11): the first ship that met a seed, written once (skill-tree seedsMet).
+    if (draft.run.threat.seedsMetAtDepth === null && metSeeds) draft.run.threat.seedsMetAtDepth = result.depth;
   });
   if (tally.traceAfter !== tally.traceBefore) emit('trace-changed', { from: tally.traceBefore, to: tally.traceAfter });
   return result;

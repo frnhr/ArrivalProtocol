@@ -5,6 +5,7 @@
 // Everything here is derived from the run's history (RunSkillState) and memory, never stored: see types/skill.ts.
 import type { Store } from '@state/store';
 import type { GameState, RunStats } from '@state/schema';
+import type { ThreatTally } from '@/types/threat';
 import type {
   SkillId, SkillLevel, SkillVersion, CellRow, RunSkillState, CycleEarning, CycleGrant, DemoSkill,
   DemoTuning, SkillRecord, DemoKind,
@@ -216,13 +217,21 @@ export function treeCells(state: Readonly<GameState>, visit: number): TreeCell[]
 
 // --- The opening rule (03 §3.2) ------------------------------------------------------------------------------------------
 
-// The run has met seeds by now (DEFENCE's 'after-seeds'): HOLLOW's SEEDS stage played, beam-born blocks were left or fed
-// (TRACE, `fed`, the last tally), or the ship being left arrived with beam seeds. Track 4d may sharpen it (a sticky record
-// of the first ship that met a seed), since a tie can push SENTRY a visit past the evidence; SENTRY is not built in 4a.
-function seedsMet(state: Readonly<GameState>): boolean {
+// The run has met seeds by now (DEFENCE's 'after-seeds'): the lasting record run.ts endShip writes (slice-4cde-plan R11).
+// It never fades: a kid who rm's every seed leaves TRACE at 0, and a tie (SURVEY first, slice 6) can push SENTRY a visit
+// past a seedless ship, so the evidence itself can't be read at the desk.
+export function seedsMet(state: Readonly<GameState>): boolean {
+  return state.run.threat.seedsMetAtDepth !== null;
+}
+
+// The ship now ending met a seed, or the run already had (endShip's record, R11): it arrived with beam seeds, HOLLOW's own
+// seeds landed on it, beam-born blocks were left at its end (`tally`, the one endShip applies), or the run's earlier
+// evidence holds (HOLLOW's SEEDS stage played, TRACE, `fed`: what 4a's rule read at the desk, so the record opens SENTRY at
+// least as early as that rule did).
+export function shipMetSeeds(state: Readonly<GameState>, tally: Readonly<ThreatTally>): boolean {
   const threat = state.run.threat;
-  return threat.stagesPlayed.includes('seeds') || threat.trace > 0 || threat.fed > 0 || (threat.lastTally?.left ?? 0) > 0
-    || (state.run.arrival?.seeds.length ?? 0) > 0;
+  return (state.run.arrival?.seeds.length ?? 0) > 0 || state.hollow.seedsLanded > 0 || tally.left > 0
+    || threat.stagesPlayed.includes('seeds') || tally.traceAfter > 0 || threat.fed > 0;
 }
 
 // A possible next ship has POOR site data (SURVEY's 'poor-ahead'; 01 §3.13): among the ships reachable from here. Only the

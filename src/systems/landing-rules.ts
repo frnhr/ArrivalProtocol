@@ -9,7 +9,7 @@ import type { SegmentRole } from '@/types/segment';
 import type { Capabilities } from '@systems/capabilities';
 import type { PredictOutcome } from '@systems/predict';
 import type { Rng } from '@systems/rng';
-import { driversInMemory, filesWithRole, integrityBand, repairPossible } from '@state/selectors';
+import { autoburnHoldsLandingOrbit, driversInMemory, filesWithRole, integrityBand, repairPossible } from '@state/selectors';
 import { bayCapability, capabilitiesNow, roleHealth } from '@systems/capabilities';
 import { angleDelta, dropHalfWidthKm, secFromNow } from '@systems/landing-solve';
 import {
@@ -306,7 +306,9 @@ export interface GoLowerChoice {
   launchInSec: number;   // game s from now to that window's launch moment (the pass the burn is for)
 }
 
+// Slice 4e (plan R16): none while AUTOBURN v3 holds the landing orbit: it goes lower itself, and L9's slot is its own.
 export function goLowerChoice(state: Readonly<GameState>, sol: Readonly<DropSolution>, caps: Readonly<Capabilities>): GoLowerChoice | null {
+  if (autoburnHoldsLandingOrbit(state)) return null;
   if (sol.block !== null || caps.bay.offline || decayWarnOrbits(state) !== null) return null;
   const moment = landingMoment(state, sol, state.clock.tSec, caps.bay.offline);
   if (!moment.awaited) return null;

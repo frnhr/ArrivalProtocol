@@ -1,5 +1,5 @@
-// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): skill-version, autoburn-in-lock, the
-// training sounds. Others ask by message.
+// Slices 4c–4e: the lead owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2); a track may change the cue on its own
+// events' lines only (the 4c, 4d and 4e blocks at the end of mountAudioCues).
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { on } from '@systems/events';
@@ -289,6 +289,30 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     on('duel-spike', ({ progress }) => play('duelSpike', { progress })),
     on('root-deleted', () => play('rootDeleted')),
     on('finale-chosen', ({ choice }) => play(choice === 'purge' ? 'purgeTone' : 'mergeChord')),
+
+    // === Slices 4c–4e (slice-4cde-plan §2.5): existing cues only; a track may change the cue on its own events' lines.
+
+    // --- 4c AUTODROP: a chime as [G] arms it (not on each re-arm), a buzz when its claim finds no thread. A volley plays
+    // nothing of its own: each launch already plays podLaunch.
+    on('autodrop', ({ from, to }) => { if (from === null && to !== null) play('chime', { falling: false }); }),
+    on('autodrop-wait', () => play('buzz')),
+    // --- end of 4c ---
+
+    // --- 4d SENTRY: an unmasked seed warns and stamps; a pre-empt and a compiled FIREWALL sound as a finished op.
+    on('seed-unmasked', () => {
+      play('seedWarn');
+      play('stampHit', { heavy: false });
+    }),
+    on('seed-preempted', () => {
+      play('opDone');
+      play('stampHit', { heavy: false });
+    }),
+    on('firewall-compiled', () => play('opDone')),
+    // --- end of 4d ---
+
+    // --- 4e ORBIT: AUTOBURN v3 going lower stamps.
+    on('autoburn-v3-lower', () => play('stampHit', { heavy: false })),
+    // --- end of 4e ---
   ];
   offs.push(onPostTick(() => playedThisTick.clear()));
 

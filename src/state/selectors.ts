@@ -405,3 +405,11 @@ export function quantizeCorruption(level: number): number {
   const stepsPerWhole = Math.round(1 / CORRUPTION_STEP);
   return Math.min(1, Math.round(clamped * stepsPerWhole) / stepsPerWhole);
 }
+
+// Slice 4e (docs/phase3/impl/slice-4cde-plan.md R16): AUTOBURN v3 is engaged (armed, pointing or burning) in its LANDING
+// ORBIT. While it is, GO LOWER and L9's `or fly lower` are its own: landing-rules goLowerChoice offers and plans none.
+export function autoburnHoldsLandingOrbit(state: Readonly<GameState>): boolean {
+  const auto = state.burn.auto;
+  const engaged = auto.phase === 'armed' || auto.phase === 'pointing' || auto.phase === 'burning';
+  return engaged && auto.mode === 'landing-orbit';
+}

@@ -1,5 +1,5 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): __ap.skill, __ap.cycles and any tree
-// hooks; FLIGHT and UI ask by message.
+// Slices 4c–4e: the lead owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2); the 4c–4e hooks' bodies are in the
+// track modules (autodrop.ts, sentry.ts, beam-seeds.ts, autoburn-v3.ts). Tracks ask by message.
 import type { Store } from '@state/store';
 import type { GameState, Speaker, ObjectiveLine, LogEntry, ViewMode, TerminalStatus, EndingLine } from '@state/schema';
 import { getPrediction, getSensedPrediction, type Prediction } from '@systems/predict';
@@ -52,10 +52,13 @@ import { podCode } from '@data/landing-text';
 import type { ShipDef, HollowDef } from '@data/ships';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat, nominalRunThreat, planThreat, threatInputFor, fixedShipFacts } from '@systems/threat-plan';
-import { rollBeamSeeds, rollDeliverySeeds, plantBeamSeed, seedTargetsOf } from '@systems/beam-seeds';
+import { rollBeamSeeds, rollDeliverySeeds, plantBeamSeed, seedTargetsOf, disguiseChanceAt } from '@systems/beam-seeds';
+import { autodropDebug, setPassCount, setDropDemos, type AutodropDebug } from '@systems/autodrop';
+import { preemptSeed, type PreemptRefusal } from '@systems/sentry';
+import { v3Debug, type LandingOrbitAim } from '@systems/autoburn-v3';
 import { beamSourceOf, arrivalDeliveries, arrivalSkills } from '@systems/run';
 import { playsTutorial } from '@systems/meta';
-import { SEED_WORDS_POOL } from '@data/threat-text';
+import { SEED_WORDS_POOL, DISGUISE_POOL } from '@data/threat-text';
 import { SEEDS_ONLY_DEF } from '@data/threats';
 import type { ShipThreat } from '@/types/threat';
 import { childRng } from '@systems/rng';
@@ -214,7 +217,8 @@ interface DebugHooks {
   ship: (index: number) => void;
   // Phase 3 slice 2 (THREAT): a beam seed behind this file now (returns its id); HOLLOW boards on the beam into this ship
   // (its boot replayed with the 108% unpack; VESPER on the fixed five).
-  seed: (target: string) => string;
+  // Slice 4d: `{ disguise: 'cache.tmp' }` lands it as that decoy (a name from threat-text.ts DISGUISE_POOL).
+  seed: (target: string, opts?: { disguise?: string }) => string;
   board: () => ShipThreat;
   // Phase 3 slice 3a (the galaxy map; Track GEN owns them, DESK and TESTS request more): slot(s) jumps to the ship in
   // slot s as a beam from the current ship would bring it; route([...]) flies the route's ships headless to its last one;
@@ -318,6 +322,16 @@ interface DebugHooks {
   restore: (id: SkillId) => TrainRefusal | null;
   packAs: (segId: string, version: SkillVersion | null) => void;
   tree: () => { bank: number; cells: TreeCell[]; skills: RunSkillState };
+  // Slices 4c–4e (slice-4cde-plan §3.8, §4.6, §5.4); each body is its track module's. autodrop: AUTODROP's machine, the
+  // version it works as, the volley, the pass rows and the plan; dropPass sets this pass's counts per LZ (`{ 'LZ-A': 2 }`);
+  // dropDemos sets the kid's drop demos (tactical s from each window's centre); disguiseOdds is the chance a beam seed lands
+  // disguised at a depth; preempt arms SENTRY v2's DELETE on HOLLOW's blinking outline; v3 is AUTOBURN v3's aim and its key.
+  autodrop: () => AutodropDebug;
+  dropPass: (counts: Readonly<Record<string, number>>) => void;
+  dropDemos: (offsets: readonly number[]) => void;
+  disguiseOdds: (depth: number) => number;
+  preempt: () => PreemptRefusal | null;
+  v3: () => { aim: LandingOrbitAim | null; key: string | null };
   // WP9 part 2: what the screens show of the zones and AUTOBURN, as data: the NAV PLOT's zone glyphs and labels,
   // the MIND's rack tags (both from the sensed prediction) and the Engine window's AUTO button.
   zonesHud: () => { plot: PlotZoneModel[]; racks: RackZoneTag[]; auto: AutoButtonModel };
@@ -722,7 +736,10 @@ function debugBoard(store: Store<GameState>): ShipThreat {
 // __ap.seed(target): a beam seed laid out behind this file now, as the unpack lays one (GAP 1, the seed, WALL 4), with
 // words from 05's pool. On a calm ship (nothing there would ever wake) HOLLOW takes the seeds-only config, so the seed
 // bites after its calm seconds as on KESTREL. Returns the seed's id.
-function debugSeed(store: Store<GameState>, target: string): string {
+// Slice 4d: `disguise`, a name from DISGUISE_POOL, lands it as that decoy (an unknown name throws).
+function debugSeed(store: Store<GameState>, target: string, disguise: string | null): string {
+  const decoy = disguise === null ? null : DISGUISE_POOL.find((entry) => entry.name === disguise) ?? null;
+  if (disguise !== null && decoy === null) throw new Error(`__ap.seed: '${disguise}' is not a decoy (${DISGUISE_POOL.map((entry) => entry.name).join(', ')})`);
   const seg = debugTarget(store, target);
   if (!seedTargetsOf([seg]).includes(seg)) throw new Error(`__ap.seed: ${seg.name} is never a beam seed's target`);
   abortAll();
@@ -730,7 +747,7 @@ function debugSeed(store: Store<GameState>, target: string): string {
   let seedId = '';
   // In the update (the review's nit: the memory was mutated outside it, so subscribers never heard the change).
   store.update((draft) => {
-    seedId = plantBeamSeed(draft.memory, seg.id, words, hollowLabel(draft.run)).id;
+    seedId = plantBeamSeed(draft.memory, seg.id, words, hollowLabel(draft.run), decoy).id;
     assertMemoryInvariants(draft.memory, layoutOf(draft).totalBlocks);
     if (draft.hollow.cfg.wake === 'never') draft.hollow.cfg = structuredClone(SEEDS_ONLY_DEF);
     draft.ui.memoryRev++;
@@ -894,7 +911,7 @@ export function mountDebug(store: Store<GameState>): void {
       }
       setCourse(store, slot);
     },
-    seed: (target) => debugSeed(store, target),
+    seed: (target, opts) => debugSeed(store, target, opts?.disguise ?? null),
     board: () => debugBoard(store),
     run: () => store.getState().run,
     resetReport,
@@ -1086,6 +1103,12 @@ export function mountDebug(store: Store<GameState>): void {
       const state = store.getState();
       return { bank: bankOf(state.run.skills), cells: treeCells(state, visitNow(state.run)), skills: structuredClone(state.run.skills) };
     },
+    autodrop: () => autodropDebug(store.getState()),
+    dropPass: (counts) => { for (const [lz, n] of Object.entries(counts)) setPassCount(store, lz, n); },
+    dropDemos: (offsets) => setDropDemos(store, offsets),
+    disguiseOdds: (depth) => disguiseChanceAt(depth),
+    preempt: () => preemptSeed(store),
+    v3: () => v3Debug(store.getState(), getPrediction()),
     audio: {
       isAudioUnlocked,
       isMuted,

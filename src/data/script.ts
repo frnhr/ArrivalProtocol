@@ -56,6 +56,10 @@ import { LOG_TEXT, LOG_HINT_TARGET } from '@data/log-text';
 import { bootLogKeys, logKnown } from '@state/log-selectors';
 import type { PodRecord } from '@/types/landing';
 import { autoburnDropLine, autoburnAvailable } from '@systems/autoburn';
+import { sentryBootLineCount, firewallBootLineDue, sentrySeedBootText, firewallBootText } from '@systems/sentry';
+import { autodropTutorialDue } from '@systems/autodrop';
+import { v3TutorialDue } from '@systems/autoburn-v3';
+import { AUTODROP_TEXT } from '@data/autodrop-text';
 import { blocksInRack, knownHitRacks } from '@systems/zones';
 import { safestSpot, placementRack } from '@systems/move-preview';
 import { findBackup } from '@systems/tool-targets';
@@ -937,9 +941,13 @@ export function scriptedDamageLine(hits: readonly TransitHit[]): string {
 //   just before the log key line;
 // • 'inbox': `> n NEW MESSAGES · INBOX` (systems/inbox.ts newMessagesAtBoot), right after the log key line and before
 //   HOLLOW's own line, which still closes the boot.
+// Slice 4d (slice-4cde-plan §4.3, §4.5; Track SENTRY's lines, the FOUNDATION's kinds):
+// • 'sentry-seed': SENTRY v1's `> ECC: cache.tmp IS A SEED · RACK D`, one per disguised seed (a kind that repeats, with
+//   ordinals, as 'delivery' does), right after 'seeds'; the count is sentry.ts sentryBootLineCount's;
+// • 'firewall': SENTRY v3's `> SENTRY: FIREWALL.sys COMPILED`, after 'charge', when sentry.ts firewallBootLineDue says so.
 export type BootLineKind =
-  | 'sleep' | 'unpack' | 'board' | 'host' | 'receiver' | 'ecc-sleep' | 'ecc' | 'seeds' | 'scripted' | 'delivery' | 'charge'
-  | 'overflow' | 'skill' | 'reading' | 'log' | 'inbox' | 'hollow';
+  | 'sleep' | 'unpack' | 'board' | 'host' | 'receiver' | 'ecc-sleep' | 'ecc' | 'seeds' | 'sentry-seed' | 'scripted' | 'delivery'
+  | 'charge' | 'firewall' | 'overflow' | 'skill' | 'reading' | 'log' | 'inbox' | 'hollow';
 
 // The entries this boot's keys open (05 §3.2, the interim keys of state/log-selectors.ts logEntriesAtBoot) that the run has
 // not found yet. Pure in the state: the boot plans its 'log' line from it, before anything marks them found.
@@ -977,9 +985,11 @@ export function bootLinePlan(state: Readonly<GameState>, skillLines: number): Bo
   const unpack: BootLineKind = arrival.boarded !== null ? 'board' : 'unpack';
   const plan: BootLineKind[] = [...sleep, unpack, 'host', ...receiver, ...eccSleep, 'ecc'];
   if (arrival.seeds.length > 0) plan.push('seeds');
+  for (let line = 0; line < sentryBootLineCount(state); line++) plan.push('sentry-seed');
   if (arrival.scripted.length > 0) plan.push('scripted');
   for (let line = 0; line < deliveryBootLines(state).length; line++) plan.push('delivery');
   plan.push('charge');
+  if (firewallBootLineDue(state)) plan.push('firewall');
   // A TIGHT arrival with no charge laid out says its loss on the charge line itself (M1: one honest line, not `REPAIR
   // CHARGE 0 · NO ROOM` and then `CHARGE OVERFLOW · 54 LOST`).
   if (arrival.chargeOverflowLost > 0 && !zeroChargeArrival(state)) plan.push('overflow');
@@ -1020,7 +1030,9 @@ export function bootLicensesRepair(state: Readonly<GameState>): boolean {
 // own group by it.
 export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: LineVars, ordinal = 0): string {
   const arrival = state.run.arrival;
-  if (kind !== 'delivery' && kind !== 'skill' && ordinal !== 0) throw new Error(`bootLine: a '${kind}' line never repeats (ordinal ${ordinal})`);
+  if (kind !== 'delivery' && kind !== 'skill' && kind !== 'sentry-seed' && ordinal !== 0) {
+    throw new Error(`bootLine: a '${kind}' line never repeats (ordinal ${ordinal})`);
+  }
   switch (kind) {
     case 'sleep':
     case 'receiver':
@@ -1035,6 +1047,8 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
         arrival.seeds.filter((seed) => !seed.loose).map((seed) => seed.targetName),
         arrival.seeds.filter((seed) => seed.loose).map((seed) => looseSeedRack(state, seed.segId)),
       );
+    case 'sentry-seed': return sentrySeedBootText(state, ordinal);
+    case 'firewall': return firewallBootText(state);
     case 'log': {
       const entries = bootLogEntries(state);
       if (entries.length === 0) throw new Error('bootLine: a log line with no key found');
@@ -2026,6 +2040,32 @@ function autoburnV2(ctx: DirectorCtx): boolean {
   return skillLive(ctx.state.memory, 'autoburn').version >= 2;
 }
 
+// Slices 4c–4e (slice-4cde-plan §3.7, §5.4): the new skills' once-only lessons. The FOUNDATION wrote the ids and the words'
+// homes; when each is due is its track's (autodrop.ts autodropTutorialDue, autoburn-v3.ts v3TutorialDue), so the tracks
+// never edit these entries. Done once shown and no longer due (a once-rule without doneWhen).
+export const SKILL_4CDE_RULES: readonly GuideRule[] = [
+  ...([1, 2, 3] as const).map((version): GuideRule => ({
+    id: `tut-autodrop-v${version}`,
+    layer: 'ship',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: AUTOBURN_READY_SHOW_SEC,
+    activeWhen: (ctx) => autodropTutorialDue(ctx.state, version),
+    text: () => AUTODROP_TEXT.tutorial[`v${version}`],
+    keys: [version === 1 ? 'L' : 'G'],
+  })),
+  {
+    id: 'tut-autoburn-v3',
+    layer: 'ship',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: AUTOBURN_READY_SHOW_SEC,
+    activeWhen: (ctx) => v3TutorialDue(ctx.state),
+    text: () => AUTOBURN_TEXT.readyV3,
+    keys: ['B'],
+  },
+];
+
 // --- VESPER (WP10): the engine firing by itself, SWAP, COPY ------------------------------------------------------
 // The ship's first uncommanded burst is an alarm (systems/ghost-thrust.ts raises it: the klaxon, TACTICAL): its line
 // says what happened and that it is not the kid's doing (the lead's note: ▼ drifts, and nobody touched SPACE). After the
@@ -2432,6 +2472,7 @@ export const GUIDE_RULES: readonly GuideRule[] = [
   ...MISSING_TOOL_RULES,
   ...BELT_RULES,
   ...AUTOBURN_RULES.filter((rule) => rule.priority !== 'alarm'),
+  ...SKILL_4CDE_RULES,
   ...ENGINE_BEAT_RULES,
   // Slice 2: the landing's general lessons before the hurt driver's particular one; the SCAN lesson after it (it waits
   // for POD 02 to be settled).

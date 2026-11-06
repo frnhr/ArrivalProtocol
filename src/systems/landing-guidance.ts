@@ -1,6 +1,7 @@
-// Slice 4: Track FLIGHT edits this file for the ROUND tail only (docs/phase3/impl/slice-4-plan.md §5.2).
+// Slices 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2), except the `v3Lower` slot, which
+// stays as the FOUNDATION wired it (ORBIT fills it through autoburn-v3.ts v3LowerLine).
 import type { GameState, GuideLayer, Urgency } from '@state/schema';
-import type { DropSolution, LzWindow, RepairHint, TooWide } from '@/types/landing';
+import type { AutodropLine, DropSolution, LzWindow, RepairHint, TooWide } from '@/types/landing';
 import type { Capabilities, CapabilityRole, PlotFaultCause } from '@systems/capabilities';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { FlightObjective } from '@systems/guidance';
@@ -16,6 +17,8 @@ import { controllerSwapOf, type ControllerSwap } from '@systems/tool-targets';
 import { fileHintTarget, podHintTarget, toolStepTarget, ROOT_HINT_TARGET } from '@data/fs-tools';
 import { LANDING_DECAY_LINES, LANDING_DROP_LINES, LANDING_GHOST_LINES, LANDING_LINES, LANDING_NODROP_LINES, podCode } from '@data/landing-text';
 import { HOLLOW_FINALE } from '@data/hollow-text';
+import { autodropLineOf } from '@systems/autodrop';
+import { v3LowerLine } from '@systems/autoburn-v3';
 import { IS_DEV } from '@/env';
 import {
   BAY_RELOAD_TAC, DROP_UNCERTAIN_LEAD_TAC, MAX_LINE_CHARS, MISLANDED_FACTOR, TACTICAL_LEAD_BURN_TAC,
@@ -82,7 +85,9 @@ import {
 // state.landing.window (landing.ts writes it from the in-band span, risk 13); L13 names an out-of-band window only when
 // the landing waits on nothing in band (OUT OF BAND).
 
-export type LandingRow = 'L0' | 'L1' | 'L2' | 'L3' | 'L3b' | 'L4' | 'L5' | 'L6' | 'L7' | 'L7b' | 'L8' | 'L9' | 'L10' | 'L11' | 'L12' | 'L12b' | 'L13';
+// 'AD' (slice 4c): AUTODROP's own rows (AD-hold, AD-fly, AD-wait, AD-done; their ids are autodrop.ts's).
+export type LandingRow = 'L0' | 'L1' | 'L2' | 'L3' | 'L3b' | 'L4' | 'L5' | 'L6' | 'L7' | 'L7b' | 'L8' | 'L9' | 'L10' | 'L11' | 'L12' | 'L12b' | 'L13'
+  | 'AD';
 
 export interface LandingObjective {
   // `landing-L4` (twins: `landing-L12-band`, `landing-L12-bay`, `landing-L13-noroom`, `landing-L5-nogo`, `landing-L8-busy`,
@@ -145,6 +150,12 @@ export interface LandingContext {
   ghostSwap: ControllerSwap | null;
   // Slice 4 (Track FLIGHT): AUTOBURN's tail on L13's waits (LandingFlight.autoTail), null with none.
   autoTail?: { text: string; key: string | null } | null;
+  // Slice 4c (plan §3.7): AUTODROP's slot (autodrop.ts autodropLineOf): its own row, after L2, L12-bay and L12-nodrop and
+  // before L3–L7, and its tail on L13's waits. null: AUTODROP says nothing.
+  autodrop: AutodropLine | null;
+  // Slice 4e (plan R16): while AUTOBURN v3 holds the landing orbit, L9's line is v3's (autoburn-v3.ts v3LowerLine:
+  // `AUTOBURN v3 GOES LOWER — LZ-B's dot will fit`), and GO LOWER is not offered (landing-rules goLowerChoice). null: L9's own.
+  v3Lower: string | null;
 }
 
 // The flight's part of the landing table, handed in by the caller (guidance landingFlightOf builds it from the flight
@@ -262,15 +273,18 @@ export function buildLandingContext(
     tankShort: flight.tankShort,
     ghostSwap: caps.thrustCtrl.ghost !== null && landing.ghostBursts > 0 ? controllerSwapOf(state) : null,
     autoTail: flight.autoTail ?? null,
+    autodrop: autodropLineOf(state, sol),
+    v3Lower: v3LowerLine(state),
   };
 }
 
-// L13's waits carry AUTOBURN's tail (03 §3.7, slice 4: `WAIT — LZ-B in 2:10 ▸▸ · or [B] ROUND`) when it fits: only a tail, so
-// it never outranks a launch, a repair or a burn row.
+// L13's waits carry AUTOBURN's tail (03 §3.7, slice 4: `WAIT — LZ-B in 2:10 ▸▸ · or [B] ROUND`) and AUTODROP's (slice 4c:
+// ` · [G] AUTODROP`), each when it still fits: only tails, so they never outrank a launch, a repair or a burn row.
 function withAutoTail(objective: LandingObjective, ctx: LandingContext): LandingObjective {
-  const tail = ctx.autoTail ?? null;
-  if (tail === null || (objective.text + tail.text).length > MAX_LINE_CHARS) return objective;
-  return { ...objective, text: objective.text + tail.text, keys: tail.key === null ? objective.keys : [...objective.keys, tail.key] };
+  return [ctx.autoTail ?? null, ctx.autodrop?.tail ?? null].reduce((shown, tail) => {
+    if (tail === null || (shown.text + tail.text).length > MAX_LINE_CHARS) return shown;
+    return { ...shown, text: shown.text + tail.text, keys: tail.key === null ? shown.keys : [...shown.keys, tail.key] };
+  }, objective);
 }
 
 function line(
@@ -391,6 +405,11 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
   const open = ctx.open;
   const burnNear = flightBurnNear(ctx);
   if (flight !== null && burnNear && !(open !== null && ctx.aboard > 0 && ctx.canLaunch)) return flightLine(flight, ctx);
+  // Slice 4c (plan §3.7): AUTODROP's own row, before the window rows it flies (AD-hold, AD-fly, AD-wait, AD-done).
+  const autodropRow = ctx.aboard > 0 ? ctx.autodrop?.row ?? null : null;
+  if (autodropRow !== null) {
+    return line('AD', autodropRow.text, autodropRow.keys, autodropRow.urgency, autodropRow.layer, ctx, { id: autodropRow.id });
+  }
   if (open !== null && ctx.aboard > 0) {
     if (open.full && ctx.roomInBand) return line('L3', LANDING_LINES.L3(open.lz, ctx.nextWithRoom), [], 'now', 'ship', ctx);
     // No in-band LZ has room (review M1): this full window is the one launch left, at the mislanded score. Until its
@@ -434,6 +453,11 @@ function evaluate(ctx: LandingContext): LandingObjective | null {
     return line('L10', LANDING_DECAY_LINES.L10(ctx.decay.orbits), keys, 'soon', 'ship', ctx);
   }
   if (ctx.aboard > 0 && ctx.uncertain !== null) return uncertainLine(ctx.uncertain.cause, ctx);
+  // Slice 4e (plan R16): L9's slot is v3's while it holds the landing orbit (it goes lower itself; GO LOWER is gated).
+  if (ctx.aboard > 0 && ctx.v3Lower !== null) {
+    const { text, keys } = withSkip(ctx.v3Lower, ctx);
+    return line('L9', text, keys, 'soon', 'ship', ctx, { id: 'landing-L9-v3' });
+  }
   if (ctx.aboard > 0 && ctx.tooWide !== null) return tooWideLine(ctx.tooWide, ctx);
   if (ctx.aboard > 0 && ctx.stuckPod !== null) {
     const highlight = ctx.inMind ? toolStepTarget('repair', ctx.heldTool, podHintTarget(podCode(ctx.stuckPod))) : null;
