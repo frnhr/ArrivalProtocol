@@ -12,12 +12,20 @@ import { BAND_DEGRADED_MIN, AUTO_FUEL_RESERVE_PCT } from '@data/tuning';
 // The mode's word on the tails and the AUTO button (03 §3.6: `[B] AUTO · GREEN`).
 const MODE_WORD: Readonly<Record<Exclude<AutoMode, 'capture'>, string>> = { green: 'GREEN', round: 'ROUND', 'landing-orbit': 'LANDING ORBIT' };
 
+function offerTail(mode: AutoMode): string {
+  return mode === 'capture' ? ' · or [B] AUTO' : ` · or [B] ${MODE_WORD[mode]}`;
+}
+
 export const AUTOBURN_TEXT = {
   // The strip while it waits (guidance's AUTO rows): the capture (v1, and v2's first burn), a ring trim (GREEN) and a
   // circle burn (ROUND), each at the apsis it burns at.
   armed: (time: string): string => `AUTOBURN ARMED — it brakes at ▼ in ${time} · [B] to cancel`,
   armedTrim: (glyph: string, time: string): string => `AUTOBURN ARMED — trims at ${glyph} in ${time} · [B] to cancel`,
   armedRound: (glyph: string, time: string): string => `AUTOBURN ARMED — rounds it at ${glyph} in ${time} · [B] to cancel`,
+  // AUTOBURN v3 (4e, plan §5.4): on its way to the landing orbit, holding it, and a top-up planned while it holds.
+  armedOrbit: (glyph: string, time: string): string => `AUTOBURN ARMED — to the landing orbit at ${glyph} in ${time} · [B] to cancel`,
+  armedHold: 'AUTOBURN ARMED — it holds the landing orbit · [B] to cancel',
+  armedTopUp: (glyph: string, time: string): string => `AUTOBURN v3 TOPS UP AT ${glyph} IN ${time} · [B] to cancel`,
   // Its claim found every Core thread busy (03 §3.6, plan §7 R6: hack or burn, no pre-emption): urgent, and it names the
   // fix, an op's × in the MIND (from the ship, [TAB] first).
   threadWait: (time: string): string => `AUTOBURN NEEDS A THREAD IN ${time} — × AN OP`,
@@ -31,6 +39,10 @@ export const AUTOBURN_TEXT = {
   trimmingMind: 'AUTOBURN TRIMMING — it flies the ship while you fight',
   rounding: 'AUTOBURN ROUNDING — [SPACE] takes over',
   roundingMind: 'AUTOBURN ROUNDING — it flies the ship while you fight',
+  orbiting: 'AUTOBURN TO THE LANDING ORBIT — [SPACE] takes over',
+  orbitingMind: 'AUTOBURN TO THE LANDING ORBIT — it flies the ship while you fight',
+  toppingUp: 'AUTOBURN TOPPING UP — [SPACE] takes over',
+  toppingUpMind: 'AUTOBURN TOPPING UP — it holds the orbit while you fight',
   // The hand-back (strip and radio): it flew the capture through, and what is left is a trim later (a burn at ▲,
   // or the next pass), or nothing but HOLD STEADY.
   braked: 'AUTOBURN: CAPTURED — trim it green yourself',
@@ -49,6 +61,10 @@ export const AUTOBURN_TEXT = {
   downgradedCaptured: 'AUTOBURN DAMAGED TO v1 — CAPTURED, trim it green yourself',
   downgradedGreen: 'AUTOBURN DAMAGED TO v1 — trim it green yourself',
   downgradedRound: 'AUTOBURN DAMAGED TO v1 — it can no longer round it',
+  // AUTOBURN v3 (4e, plan §5.2): the reserve stopped its transfer or a top-up; damage took it to v1 (v1 does not fly in
+  // LANDING, plan R14).
+  reserveOrbit: `AUTOBURN v3 KEEPS ${AUTO_FUEL_RESERVE_PCT}% FUEL — the orbit is yours`,
+  downgradedOrbit: 'AUTOBURN DAMAGED TO v1 — the landing orbit is yours',
   // ROUND in landing (plan §7 R2): the burns at ▼ and at ▲ both cross a window of an LZ with room, so it burns at ▼ anyway.
   roundCostsWindow: (lz: string): string => `AUTOBURN: ROUND COSTS ${lz}'s WINDOW`,
   // GREEN in landing (an accepted orbit) trims at its apsis whatever the window (slice 4 review (a)): said at the press, so
@@ -63,7 +79,9 @@ export const AUTOBURN_TEXT = {
   // The tails (03 §3.7): the capture timeline's while AUTO could take it (v1), the mode's (v2: trims too, and HOLD
   // STEADY's ROUND), and a correction row's while it waits.
   offerTail: ' · or [B] AUTO',
-  offerMode: (mode: AutoMode): string => (mode === 'capture' ? ' · or [B] AUTO' : ` · or [B] ${MODE_WORD[mode]}`),
+  offerMode: (mode: AutoMode): string => offerTail(mode),
+  // ...in LANDING, where v3 is engaged from the locked orbit (03 §3.6 step 2: `[B] · MOVE TO LANDING ORBIT`).
+  offerLanding: (mode: AutoMode): string => (mode === 'landing-orbit' ? ' · [B] MOVE TO LANDING ORBIT' : offerTail(mode)),
   armedTail: ' · AUTO ARMED',
   // The radio, when the kid lets go of it or takes the throttle.
   off: 'AUTOBURN OFF — you have the controls',
@@ -73,6 +91,31 @@ export const AUTOBURN_TEXT = {
     transferring: 'AUTOBURN OFF WHILE IT MOVES — you have the controls',
     inactive: 'AUTOBURN.skl SWITCHED OFF — you have the controls',
   } satisfies Record<OfflineReason, string>,
+} as const;
+
+// AUTOBURN v3 LANDING ORBIT's own words (4e; systems/autoburn-v3.ts and the machine in autoburn.ts): the radio, L9's and
+// L10's slots, and the NAV PLOT's label on the ghost circle. Each ≤ 70 characters at its worst case (skills/v3-aim checks).
+export const V3_TEXT = {
+  // The radio: it reached the circle once and holds it (it does not stand down: 03 §3.6 step 3).
+  holds: 'AUTOBURN v3: LANDING ORBIT — it holds it',
+  // A refit took the circle lower (a bite widened a drop), or a top-up re-aimed down to keep a window (plan R13). L9's slot
+  // reads the first while it flies down.
+  lower: (lz: string): string => `AUTOBURN v3 GOES LOWER — ${lz}'s dot will fit`,
+  lowerKeeps: (lz: string): string => `AUTOBURN v3 GOES LOWER — it keeps ${lz}'s window`,
+  lowerAlt: (altKm: string): string => `AUTOBURN v3 GOES LOWER — to ${altKm} km`,
+  // A top-up that crosses a window at both apsides burns anyway (R13), said once per top-up.
+  topUpCosts: (lz: string): string => `AUTOBURN v3: TOP-UP COSTS ${lz}'s WINDOW`,
+  // v3 → v2 while engaged (R14): the engagement goes on as ROUND at the same circle, without holding it.
+  toV2: 'AUTOBURN v3 → v2 — it rounds, but won\'t hold the orbit',
+  // The landing ended under it (the engine closes): it lets go.
+  landingOver: 'AUTOBURN v3: LANDING OVER — it lets go of the orbit',
+  // L10's slot while it holds under the DRAG line (foundation review M4).
+  decayTopUp: (glyph: string, time: string): string => `AUTOBURN v3 TOPS UP AT ${glyph} IN ${time} — it holds the orbit`,
+  decayHolds: 'AUTOBURN v3 HOLDS THE ORBIT — it tops up against the decay',
+  // The ghost circle's label (03 §4).
+  ghostEvery: (dropKm: number, costPct: number): string => `LANDING ORBIT · EVERY LZ FITS · DROP ±${dropKm} km · FUEL −${costPct}%`,
+  ghostSome: (fits: readonly string[], repair: string | null, miss: string): string =>
+    `LANDING ORBIT · ${fits.join(', ')} FIT${fits.length === 1 ? 'S' : ''} · ${repair === null ? `${miss} WON'T FIT` : `REPAIR ${repair} FOR ${miss}`}`,
 } as const;
 
 // A drop mid-flight (§6.10: the file consumed mid-burn → `AUTOBURN.skl LOST — MANUAL`, and the klaxon): the
@@ -147,18 +190,26 @@ export const AUTO_BUTTON_TEXT = {
   burningHead: 'AUTO BRAKING',
   trimmingHead: 'AUTO TRIMMING',
   roundingHead: 'AUTO ROUNDING',
+  orbitingHead: 'AUTO TO ORBIT',
+  toppingUpHead: 'AUTO TOPPING UP',
   ready: 'BRAKES AT ▼ FOR YOU',
   readyGreen: 'MAKES IT GREEN',
   readyRound: 'MAKES IT ROUND',
+  readyOrbit: 'FLIES TO THE LANDING ORBIT',
   armed: (time: string): string => `BRAKES IN ${time} · [B] OFF`,
   armedTrim: (time: string): string => `TRIMS IN ${time} · [B] OFF`,
   armedRound: (time: string): string => `ROUNDS IN ${time} · [B] OFF`,
+  armedOrbit: (time: string): string => `TO ORBIT IN ${time} · [B] OFF`,
+  armedTopUp: (time: string): string => `TOPS UP IN ${time} · [B] OFF`,
+  armedHold: 'HOLDS THE ORBIT · [B] OFF',
   threadWait: 'NEEDS A THREAD',
   burning: '[SPACE] TAKES OVER',
   title: (accuracy: number): string =>
     `AUTOBURN.skl flies the capture at ▼ for you (accuracy ${accuracy}%). [B] or click; works from the MIND too`,
   titleV2: (accuracy: number): string =>
     `AUTOBURN.skl v2: [B] makes it green, [B] on green makes it round (accuracy ${accuracy}%). Works from the MIND too`,
+  titleV3: (accuracy: number): string =>
+    `AUTOBURN.skl v3: [B] flies to the orbit where every drop fits, and holds it (accuracy ${accuracy}%). Works from the MIND too`,
   titleNoSkill: 'AUTOBURN.skl is gone: RESTORE it at the next desk',
 } as const;
 
@@ -181,12 +232,18 @@ export const AUTO_PIP_TEXT = {
   missing: 'AUTOBURN.skl is gone: RESTORE it at the next desk',
 } as const;
 
+// What the armed AUTOBURN waits for (autoburn.ts autoArmedBurn's kind): the capture, a GREEN trim, a ROUND burn, v3's
+// burns to its landing orbit, a top-up while it holds it, or (holding, nothing planned) the hold itself.
+export type AutoBurnKind = 'capture' | 'trim' | 'round' | 'orbit' | 'top-up';
+export type AutoArmedKind = AutoBurnKind | 'hold';
+const MINI_VERB: Readonly<Record<AutoBurnKind, string>> = { capture: 'BRAKES', trim: 'TRIMS', round: 'ROUNDS', orbit: 'TO ORBIT', 'top-up': 'TOPS UP' };
+
 // The mini-HUD card in the MIND while AUTOBURN works (the lead's note: show it flying while the kid fights in blue).
 export const AUTO_MINI_TEXT = {
   ready: 'AUTO READY · PRESS [B]',
   // What it does next, by the burn it is armed for (autoburn.ts autoArmedBurn): brakes into the capture, trims, or rounds.
-  armed: (time: string, kind: 'capture' | 'trim' | 'round' = 'capture'): string =>
-    `AUTO ARMED · ${kind === 'capture' ? 'BRAKES' : kind === 'trim' ? 'TRIMS' : 'ROUNDS'} IN ${time}`,
+  armed: (time: string, kind: AutoArmedKind = 'capture'): string =>
+    (kind === 'hold' ? 'AUTO ARMED · HOLDS THE ORBIT' : `AUTO ARMED · ${MINI_VERB[kind]} IN ${time}`),
   flying: 'AUTOBURN IS FLYING THE SHIP',
 } as const;
 
@@ -211,6 +268,8 @@ export const AUTOBURN_SKILL_ROW = {
   } satisfies Record<AutoMode, string>,
   waiting: 'WAITING FOR A THREAD — × AN OP',
   flying: 'FLYING THE SHIP NOW',
+  // AUTOBURN v3 holding its landing orbit (plan §5.4), at the altitude it holds.
+  holding: (altKm: string): string => `HOLDS THE LANDING ORBIT · ${altKm} km`,
   damaged: (min: number): string => `DAMAGED — REPAIR IT TO ${min}% OR MORE`,
   // 4b (03 §3.5): graded damage costs a version per colour.
   worksAs: (version: number, nominal: number): string => `WORKS AS v${version} — REPAIR IT FOR v${nominal}`,

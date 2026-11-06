@@ -22,7 +22,8 @@ import { choiceSecondsLeft, choiceTimerRunning } from '@systems/say';
 import { GHOST_TEXT } from '@data/ghost-text';
 import { ghostCountShown, ghostDriftKm } from '@systems/ghost-thrust';
 import { ZONE_WORD, ZONE_PLOT_TEXT, RACK_TAG_TEXT } from '@data/zone-text';
-import { AUTO_BUTTON_TEXT, AUTO_BUTTON_REASON, AUTO_PLOT_TEXT, AUTO_PIP_TEXT } from '@data/skill-text';
+import { AUTO_BUTTON_TEXT, AUTO_BUTTON_REASON, AUTO_PLOT_TEXT, AUTO_PIP_TEXT, type AutoBurnKind, type AutoArmedKind } from '@data/skill-text';
+import { landingOrbitAim, v3GhostLabel } from '@systems/autoburn-v3';
 import {
   autoburnRefusal, autoburnEverTrained, autoModeFor, autoOfferMode, autoArmedBurn, autoFlyingKind, autoburnFireInTac, isEngaged,
   lockRangeTac, modeTargetKm, previewModeBurn,
@@ -826,9 +827,16 @@ export interface AutoButtonModel {
 // `AUTO · [B]`), the notes name the burn it waits for or flies, and the button shows in LANDING while a v2 file is aboard
 // (ROUND on a locked orbit). It glows ('ready') only while [B] would engage it: inside the LOCK bracket.
 const READY_NOTE: Readonly<Record<AutoMode, string>> = {
-  capture: AUTO_BUTTON_TEXT.ready, green: AUTO_BUTTON_TEXT.readyGreen, round: AUTO_BUTTON_TEXT.readyRound, 'landing-orbit': AUTO_BUTTON_TEXT.readyRound,
+  capture: AUTO_BUTTON_TEXT.ready, green: AUTO_BUTTON_TEXT.readyGreen, round: AUTO_BUTTON_TEXT.readyRound, 'landing-orbit': AUTO_BUTTON_TEXT.readyOrbit,
 };
-const FLYING_HEAD = { capture: AUTO_BUTTON_TEXT.burningHead, trim: AUTO_BUTTON_TEXT.trimmingHead, round: AUTO_BUTTON_TEXT.roundingHead } as const;
+const FLYING_HEAD: Readonly<Record<AutoBurnKind, string>> = {
+  capture: AUTO_BUTTON_TEXT.burningHead, trim: AUTO_BUTTON_TEXT.trimmingHead, round: AUTO_BUTTON_TEXT.roundingHead,
+  orbit: AUTO_BUTTON_TEXT.orbitingHead, 'top-up': AUTO_BUTTON_TEXT.toppingUpHead,
+};
+const ARMED_NOTE: Readonly<Record<AutoArmedKind, (time: string) => string>> = {
+  capture: AUTO_BUTTON_TEXT.armed, trim: AUTO_BUTTON_TEXT.armedTrim, round: AUTO_BUTTON_TEXT.armedRound,
+  orbit: AUTO_BUTTON_TEXT.armedOrbit, 'top-up': AUTO_BUTTON_TEXT.armedTopUp, hold: () => AUTO_BUTTON_TEXT.armedHold,
+};
 
 export function autoButton(state: Readonly<GameState>, pred: Prediction): AutoButtonModel {
   const hidden: AutoButtonModel = { shown: false, head: '', note: '', look: 'blocked', title: '' };
@@ -838,14 +846,14 @@ export function autoButton(state: Readonly<GameState>, pred: Prediction): AutoBu
   const nominal = live.nominal?.version ?? 0;
   if (state.run.phase === 'landing' ? !(hasFile && nominal >= 2) : !hasFile && !autoburnEverTrained(state)) return hidden;
   const accuracy = autoburnDemoSkill(state.run.stats).accuracy;
-  const title = !hasFile ? AUTO_BUTTON_TEXT.titleNoSkill : nominal >= 2 ? AUTO_BUTTON_TEXT.titleV2(accuracy) : AUTO_BUTTON_TEXT.title(accuracy);
+  const title = !hasFile ? AUTO_BUTTON_TEXT.titleNoSkill : nominal >= 3 ? AUTO_BUTTON_TEXT.titleV3(accuracy)
+    : nominal >= 2 ? AUTO_BUTTON_TEXT.titleV2(accuracy) : AUTO_BUTTON_TEXT.title(accuracy);
   const phase = state.burn.auto.phase;
   if (phase === 'armed') {
     const armed = autoArmedBurn(state, pred);
     if (armed?.waiting) return { shown: true, head: AUTO_BUTTON_TEXT.armedHead, note: AUTO_BUTTON_TEXT.threadWait, look: 'armed', title };
     const time = formatCountdown(armed?.inTac ?? 0);
-    const note = armed?.kind === 'trim' ? AUTO_BUTTON_TEXT.armedTrim(time) : armed?.kind === 'round' ? AUTO_BUTTON_TEXT.armedRound(time)
-      : AUTO_BUTTON_TEXT.armed(time);
+    const note = ARMED_NOTE[armed?.kind ?? 'capture'](time);
     return { shown: true, head: AUTO_BUTTON_TEXT.armedHead, note, look: 'armed', title };
   }
   if (phase === 'pointing') return { shown: true, head: AUTO_BUTTON_TEXT.pointingHead, note: AUTO_BUTTON_TEXT.burning, look: 'flying', title };
@@ -896,6 +904,9 @@ export interface AutoGhost {
   rpKm: number;
   raKm: number;
   omega: number;
+  // AUTOBURN v3's label on its circle (autoburn-v3 v3GhostLabel: `LANDING ORBIT · EVERY LZ FITS · DROP ±70 km · FUEL −9%`);
+  // null for the other modes.
+  label: string | null;
 }
 
 export function autoGhost(state: Readonly<GameState>, pred: Prediction): AutoGhost | null {
@@ -905,9 +916,11 @@ export function autoGhost(state: Readonly<GameState>, pred: Prediction): AutoGho
   if (mode === null || mode === 'capture') return null;
   if (mode === 'round' || mode === 'landing-orbit') {
     const targetKm = modeTargetKm(state, pred, mode);
-    return targetKm === null ? null : { mode, rpKm: targetKm, raKm: targetKm, omega: pred.omega };
+    if (targetKm === null) return null;
+    const aim = mode === 'landing-orbit' ? landingOrbitAim(state, pred) : null;
+    return { mode, rpKm: targetKm, raKm: targetKm, omega: pred.omega, label: aim === null ? null : v3GhostLabel(state, aim) };
   }
-  return { mode, ...greenTarget(pred, state.level.ring), omega: pred.omega };
+  return { mode, ...greenTarget(pred, state.level.ring), omega: pred.omega, label: null };
 }
 
 // GREEN's target loop (phase 2's own targets, predict trimTarget): ▼ kept if in the ring, else moved into the sweet zone;

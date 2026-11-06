@@ -102,9 +102,9 @@ const offTrained = on('skill-trained', (payload) => { trained.push({ skill: payl
 toDesk(store);
 {
   const bank = bankOf(store.getState().run.skills);
-  check('desk 2 (bank 1): v2 is unaffordable, LOCK 810 needs 270 first, v3 is not built',
+  check('desk 2 (bank 1): v2 is unaffordable, LOCK 810 needs 270 first, v3 needs v2 first (built in 4e)',
     bank === 1 && trainCell(store, 'autoburn', v(2)) === 'unaffordable' && trainCell(store, 'autoburn', lock(2)) === 'needs-lower'
-      && trainCell(store, 'autoburn', v(3)) === 'closed', String(bank));
+      && trainCell(store, 'autoburn', v(3)) === 'needs-lower', String(bank));
   grantCycles(store, 6, 'story', null);
   check('…with 7: v2 then LOCK 270 bought (5 + 1), the bank 1', trainCell(store, 'autoburn', v(2)) === null
     && trainCell(store, 'autoburn', lock(1)) === null && bankOf(store.getState().run.skills) === 1

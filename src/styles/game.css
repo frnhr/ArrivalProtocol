@@ -3514,6 +3514,7 @@ body.reduced-motion .run-end.tone-victory::before { animation: none; opacity: 0.
 .navplot-svg .np-lock { fill: none; stroke: var(--accent-bright); stroke-width: 5; stroke-linecap: round; opacity: 0.35; transition: opacity 0.3s; }
 .navplot-svg .np-lock.inside { opacity: 0.6; }
 .navplot-svg .np-label.np-lock-label { fill: var(--accent-bright); }
+.navplot-svg .np-label.np-auto-ghost-label { fill: var(--accent-bright); opacity: 0.85; }
 body.reduced-motion .navplot-svg .np-lock { transition: none; }
 .pip[data-skill="autoburn"] .pip-label { color: var(--accent-bright); letter-spacing: 0.08em; }
 .pip[data-skill="autoburn"][data-look="ok"] .pip-reading { color: var(--accent-bright); }
