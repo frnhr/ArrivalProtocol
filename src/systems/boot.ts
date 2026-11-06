@@ -1,5 +1,6 @@
 // Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the SENTRY lines as they are
-// said. Others ask by message.
+// said (a disguised seed named, the FIREWALL compiled), and the ECC seeds line's drop leaving a disguised seed out. Others
+// ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { onPostTick } from '@systems/clock';
@@ -16,6 +17,7 @@ import { skillBootLines, applySkillBootLine, type SkillBootLine } from '@systems
 import { bootLine, bootLinePlan, bootLineSpeaker, bootLogEntries, lineVars, BOOT_LINE_MAX, type BootLineKind } from '@data/script';
 import type { Speaker } from '@state/schema';
 import { beamSeedTarget } from '@systems/beam-seeds';
+import { sentrySeedSaid, compileFirewall } from '@systems/sentry';
 import { receiveDeliveryAtBoot } from '@systems/delivery-boot';
 import { newMessagesAtBoot } from '@systems/inbox';
 import { writeRunSave } from '@systems/save-write';
@@ -258,9 +260,10 @@ function sayNextLine(store: Store<GameState>): void {
   // The beam's seeds (phase 3 slice 2, 04 §4): the ECC seeds line names each, and each lands as it is said (the drop, the
   // flash and the seedLand thunk hang on the event; Track UI). A seed already gone (rm'd in a skipped boot) says nothing;
   // a stray (the no-room rule) lands next to no file it was named for (targetId null: the review's minor 4).
+  // Slice 4d (04 §3.6): a disguised seed is not on that line and lands with no thunk; SENTRY v1's own line names it.
   if (kind === 'seeds' && arrival !== null) {
     for (const seed of arrival.seeds) {
-      if (!state.memory.some((seg) => seg.id === seed.segId)) continue;
+      if (seed.disguise !== null || !state.memory.some((seg) => seg.id === seed.segId)) continue;
       const target = seed.loose ? null : beamSeedTarget(state.memory, seed.segId);
       if (seed.loose || target !== null) emit('seed-landed-beam', { segId: seed.segId, targetId: target?.id ?? null });
     }
@@ -281,6 +284,10 @@ function sayNextLine(store: Store<GameState>): void {
   if (kind === 'delivery') receiveDeliveryAtBoot(store, ordinal);
   // A unit that crossed with no working REPAIR gets it back with its charge (WP12: licences.ts renewRepairAtBoot).
   if (kind === 'charge') renewRepairAtBoot(store);
+  // Slice 4d: SENTRY v1 names a disguised seed (it is unmasked, and lands with the ECC line's drop); v3 compiles its
+  // FIREWALL.sys as its line is said (a line that said NO ROOM writes nothing).
+  if (kind === 'sentry-seed') sentrySeedSaid(store, ordinal);
+  if (kind === 'firewall') compileFirewall(store);
   linesSaid++;
 }
 

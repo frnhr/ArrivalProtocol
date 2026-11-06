@@ -229,3 +229,19 @@ body.reduced-motion .lg-text.typing::after { animation: none; }
   /* The mini-HUD is a one-row top bar on a phone: TRACE stays in the MIND header right under it. */
   .mini-hud .mh-trace { display: none; }
 }
+
+/* ── Slice 4d: SENTRY v2's pre-empt on HOLLOW's blinking seed outline (components/memory-view/HollowPainter.ts). With
+ *    DELETE in hand and QUICK RM working the outline is `aimable` (a brighter edge: click it); once armed it is drawn in the
+ *    good colour and stops blinking (the seed goes as it lands). A disguised seed needs no style of its own: it is drawn as
+ *    the unit file it shows (SegmentBlock), which is the point. ── */
+.seg .hollow-mark.seed-telegraph.aimable {
+  border-style: solid;
+  box-shadow: 0 0 14px var(--hollow-static), inset 0 0 0 1px var(--hollow-red);
+}
+.seg .hollow-mark.seed-telegraph.armed {
+  border: 1px solid var(--good);
+  background: color-mix(in srgb, var(--good) 22%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--good) 60%, transparent);
+  animation: none;
+}
+body.tool-delete .seg.free:has(.hollow-mark.seed-telegraph.aimable) { cursor: crosshair; }

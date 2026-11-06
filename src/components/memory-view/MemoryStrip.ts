@@ -8,7 +8,10 @@ import { rackOf, rackLabelParts, layoutOfMemory, RACK_LABEL_SEP } from '@data/me
 import type { MemoryLayout } from '@/types/map';
 import { RACK_BLOCKS } from '@data/tuning';
 import { renderSegmentPart, type SegmentBehavior } from './SegmentBlock';
-import { guardPresses } from '@components/dom';
+import { guardPresses, partNumber } from '@components/dom';
+import { segmentStarts } from '@systems/memory-ops';
+import { inSeedOutline } from '@systems/tool-targets';
+import { preemptSeed } from '@systems/sentry';
 
 // One row of the strip. Memory is six RACKS of 64 blocks (§3.2): on desktop a row is a rack, on a
 // phone a rack is two rows of 32. The first row of each rack carries its label, `RACK C · 0x080`
@@ -143,6 +146,17 @@ function renderMemoryStrip(
   container.appendChild(row);
 }
 
+// The block address a click on a part landed on: the segment's start, the part's offset in it, and how far across the part
+// the click fell (a part's blocks are drawn evenly across its width). null when the segment is no longer in memory.
+function clickedBlock(memory: readonly Segment[], seg: Segment, part: HTMLElement, event: MouseEvent): number | null {
+  const index = memory.indexOf(seg);
+  if (index < 0) return null;
+  const rect = part.getBoundingClientRect();
+  const size = partNumber(part, 'partSize');
+  const across = rect.width > 0 ? Math.min(size - 1, Math.max(0, Math.floor(((event.clientX - rect.left) / rect.width) * size))) : 0;
+  return segmentStarts(memory)[index]! + partNumber(part, 'partOffset') + across;
+}
+
 // Mount MemoryStrip as a store subscriber. Subscribes to state.ui.memoryRev
 // (bumped by action functions after in-place memory mutations) with default
 // Object.is equality — so it ONLY rebuilds when memory actually changed, not
@@ -164,14 +178,33 @@ export function mountMemoryStrip(
   behavior: SegmentBehavior,
 ): () => void {
   let lastPerRow = getMemoryBlocksPerRow();
-  renderMemoryStrip(container, store.getState().memory, behavior);
+  // Slice 4d (03 §3.10, plan §4.4): with DELETE in hand, a click on a block inside HOLLOW's blinking seed outline is SENTRY
+  // v2's pre-empt (sentry.ts preemptSeed: armed, or refused with its reason), never a DELETE of free space. Any other click
+  // is the page's own.
+  const strip: SegmentBehavior = {
+    ...behavior,
+    onClick: (seg, event) => {
+      const state = store.getState();
+      const part = (event.currentTarget as HTMLElement | null);
+      if (state.ui.activeTool?.kind === 'delete' && seg.type === 'free' && part !== null) {
+        const addr = clickedBlock(state.memory, seg, part, event);
+        if (addr !== null && inSeedOutline(state, seg, addr)) {
+          event.stopPropagation();
+          preemptSeed(store);
+          return;
+        }
+      }
+      behavior.onClick(seg, event);
+    },
+  };
+  renderMemoryStrip(container, store.getState().memory, strip);
 
   const presses = guardPresses(container, () => store.update((draft) => { draft.ui.memoryRev++; }));
   const unsubscribe = store.subscribe(
     (s) => s.ui.memoryRev,
     () => {
       if (presses.holds()) return;
-      renderMemoryStrip(container, store.getState().memory, behavior);
+      renderMemoryStrip(container, store.getState().memory, strip);
     },
   );
 

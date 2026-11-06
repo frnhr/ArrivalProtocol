@@ -51,6 +51,9 @@ export interface DraftContext {
   // (left out: not), where no desk follows: the +2 CYCLES card is dealt only with a tree and never into a final ship.
   tree?: boolean;
   toFinal?: boolean;
+  // Slice 4d (03 §3.10, plan §4.5): SENTRY works as v3 as the PACKET opens, so a FIREWALL.sys is compiled at every boot and
+  // the salvage's FIREWALL card is not dealt. Left out (or false): dealt as before, so a deal without SENTRY v3 is unchanged.
+  firewallCompiler?: boolean;
 }
 
 // A boost: the weight multiplier and the reason, in the kid's own terms.
@@ -108,6 +111,8 @@ export const UPGRADES: readonly UpgradeDef[] = [
     blocks: FIREWALL_BLOCKS,
     maxOwned: FIREWALL_MAX_OWNED,
     salvage: true,
+    // SENTRY v3 compiles one at each boot instead (filtered before the draws, as '+2 CYCLES' is without a tree).
+    usable: (ctx) => ctx.firewallCompiler !== true,
     boost: (ctx) => {
       const { driversLost: lost, driversBitten: bitten } = ctx.stats;
       return boostOf(
