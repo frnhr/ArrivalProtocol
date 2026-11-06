@@ -59,13 +59,19 @@ function viewOf(state: Readonly<GameState>, sol: Readonly<DropSolution>): Landin
 }
 
 // The pass's window rule (plan §3.3): the next window of each LZ with pods to send, until one period after [G]. A window
-// counts when it closes within (armedAt, armedAt + period]: the window open at [G] is this pass's, and the same LZ's next
-// one (a period on) is the next pass's.
+// counts when its sure part ends within (armedAt + lead, armedAt + lead + period] (its close, for one with no sure part),
+// `lead` being one cadence and the edge margin: a window whose sure part can still take a launch after [G] is this pass's,
+// and the same LZ's next one (a period on) the next pass's; one whose sure part is over, or too nearly over for a launch,
+// at [G] (a [G] pressed at the tail of a window) is replaced by its next.
 function inPassOf(state: Readonly<GameState>, view: Readonly<LandingView>): (win: Readonly<WindowAt>) => boolean {
   const armedAt = state.landing.autodrop.armedAtTSec;
   const period = view.solution.periodSec;
   if (armedAt === null) return () => false;
-  return (win) => win.close > armedAt && win.close <= armedAt + period;
+  const lead = ((view.bay.cadenceTac ?? 0) + AUTODROP_EDGE_MARGIN_TAC) * state.level.tacticalWarp;
+  return (win) => {
+    const ends = win.sure?.hi ?? win.close;
+    return ends > armedAt + lead && ends <= armedAt + lead + period;
+  };
 }
 
 function passWant(state: Readonly<GameState>): (lz: string) => number {

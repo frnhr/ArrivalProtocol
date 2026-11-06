@@ -71,7 +71,7 @@ export function windowsAt(sol: Readonly<DropSolution>, nowTSec: number): WindowA
 }
 
 // The windows `passes` orbits deep (v3's plan), by opening.
-function windowsAhead(sol: Readonly<DropSolution>, nowTSec: number, passes: number): WindowAt[] {
+export function windowsAhead(sol: Readonly<DropSolution>, nowTSec: number, passes: number): WindowAt[] {
   if (!(sol.periodSec > 0) || !Number.isFinite(sol.periodSec)) return windowsAt(sol, nowTSec);
   const first = windowsAsOf(sol, nowTSec).filter((w) => w.inBandOpenInSec !== null);
   const all: WindowAt[] = [];
@@ -209,7 +209,8 @@ export function nextVolley(
   const now = state.clock.tSec;
   const warp = state.level.tacticalWarp;
   const offset = autodropOffsetTac(state);
-  for (const win of windowsAt(view.solution, now)) {
+  // Two passes deep: a window whose sure part is over while it is still open is followed by its next, a period on.
+  for (const win of windowsAhead(view.solution, now, 2)) {
     const n = Math.min(want(win.lz), view.remaining[win.lz] ?? 0);
     if (n < 1 || win.sure === null || win.sure.hi <= now || !inPass(win)) continue;
     const volley = volleyOn(win, win.sure, now, offset, cadenceTac, warp, n, view.bay, []);
