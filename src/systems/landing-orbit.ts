@@ -1,5 +1,6 @@
+// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): burnSpanClear. Others ask by message.
 import type { OrbitState, PlanetParams, Ring } from '@/types/orbit';
-import type { DecayState, DragKick, DropFactors, GoLowAim, GoLowerFit, LzState } from '@/types/landing';
+import type { DecayState, DragKick, DropFactors, GoLowAim, GoLowerFit, LzState, DropSolution } from '@/types/landing';
 import type { GameState } from '@state/schema';
 import type { BurnPoint, Prediction } from '@systems/predict';
 import { dropHalfWidthKm, podImpact, podKickFactorSq, podKickState } from '@systems/landing-solve';
@@ -8,6 +9,7 @@ import {
   universalAnomaly,
 } from '@/types/orbit';
 import { IS_DEV } from '@/env';
+import { notBuilt } from '@systems/not-built';
 import {
   DRAG_LINE_FRAC, DRAG_DV_MAX_KMS, DRAG_KICK_MIN_GAP_FRAC, DRAG_KICK_CATCH_UP_FRAC, GO_LOW_FLOOR_MARGIN_KM, LANDING_SURE_MIN_TAC,
   DROP_SOLVE_MAX_E, POD_AIM_RP_FRAC, LANDING_RELEASE_LEAD_TAC, DECAY_WARN_ORBITS,
@@ -479,4 +481,11 @@ export function dropSolvable(orbit: Readonly<OrbitState>, planet: Readonly<Plane
   if (!(el.e < DROP_SOLVE_MAX_E) || !(el.rp > planet.rAtm)) return false;
   const aimRp = POD_AIM_RP_FRAC * planet.R;
   return [0, Math.PI].every((nu) => podKickFactorSq(stateFromElements(el.rp, el.e, el.omega, nu, planet.mu), planet.mu, aimRp) !== null);
+}
+
+// Slice 4 (plan §2.9's landing window rule, §7 R2; Track FLIGHT; 4e reuses it for v3's top-ups): whether a burn that starts
+// `startInSec` game seconds from now and lasts `burnSec` overlaps no in-band window of an LZ with room while a pod is ready
+// (launches are refused while firing, and the planet does not rotate, so a blocked apsis is blocked every pass). Pure.
+export function burnSpanClear(sol: Readonly<DropSolution>, startInSec: number, burnSec: number): boolean {
+  return notBuilt('burnSpanClear', 'FLIGHT', sol, startInSec, burnSec);
 }

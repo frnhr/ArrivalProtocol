@@ -1,5 +1,6 @@
 import type { ArmShip } from '@/types/map';
 import type { ShipOutcome } from '@state/schema';
+import type { SkillRecord } from '@/types/skill';
 
 // What outlives a run besides the archive's counters (phase 3 slice 3c, docs/phase3/impl/slice-3c-plan.md §2.5; 02-map
 // §3.12, 05-story §3.3, §3.5): the last unit and its trail, the arm the next unit starts on and why ships left it, the
@@ -32,8 +33,10 @@ export interface LastUnit {
   hollowUnits: number[];
   // Its route with the year and outcome per ship, and where it was lost (null: the classic world, which keeps no trail).
   trail: UnitTrail | null;
-  // Slice 4 (03 §3.11) fills it with the unit's skills; until then always null (the type widens then, no META bump).
-  skills: null;
+  // The skills it ended with (03 §3.11, slice 4; systems/meta.ts recordRunEnd from RunEnd.skills): REASSIGNMENT's root hunts
+  // the highest version first (slice 7), and the next run's TRAINING says `LAST UNIT TRAINED: …`. null for an abandoned run
+  // (the archive's activeRun keeps no skills) and for records written before slice 4 (the type widened, no META bump).
+  skills: SkillRecord[] | null;
 }
 
 // --- The trail (02 §3.12 "the last unit's trail", 05 §3.5 the grey cross) ------------------------------------------------

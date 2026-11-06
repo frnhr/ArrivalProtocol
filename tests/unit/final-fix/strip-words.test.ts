@@ -9,6 +9,7 @@
 // • VESPER's COPY lesson names the enemy by the name the kid knows, within 70 characters with a merged name.
 // • INSPECT: Repair names the colonists; AUTOBURN.skl flies the capture into the ring or until a trim is left.
 // Usage: node_modules/.bin/tsx --tsconfig tsconfig.json tests/unit/final-fix/strip-words.test.ts
+import { SKILL_FILE_TEXT } from '@data/skills';
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
 import { infectNow } from '@systems/hollow';
@@ -21,7 +22,6 @@ import { GUIDE_RULES, WORST_CASE_VARS } from '@data/script';
 import { RUN_END_TEXT } from '@data/landing-text';
 import { CORE_LOST_TEXT, hollowUnitName } from '@data/hollow-text';
 import { TOOL_FILES, TOOL_HINT_TARGET, fileHintTarget } from '@data/fs-tools';
-import { UPGRADE_FILE_TEXT } from '@data/upgrades';
 import { MAX_LINE_CHARS } from '@data/tuning';
 import type { GameState, ObjectiveLine } from '@state/schema';
 import type { Segment } from '@/types/segment';
@@ -119,7 +119,7 @@ check('VESPER\'s COPY lesson names the enemy as the kid knows it, never HOLLOW, 
 check('INSPECT on Repair names the colonists and what ship files need instead',
   TOOL_FILES.repair[0]!.desc.includes('your AI files and the colonists') && TOOL_FILES.repair[0]!.desc.includes("Ship files can't be healed: SWAP or DELETE them."));
 check('INSPECT on AUTOBURN.skl: it flies the capture into the ring or until a trim is left',
-  UPGRADE_FILE_TEXT.autoburn.desc.includes('it flies the capture for you, into the ring or until a trim is left')
-  && !UPGRADE_FILE_TEXT.autoburn.desc.includes('until the loop closes'));
+  SKILL_FILE_TEXT.autoburn.desc.includes('it flies the capture for you, into the ring or until a trim is left')
+  && !SKILL_FILE_TEXT.autoburn.desc.includes('until the loop closes'));
 
 finish();

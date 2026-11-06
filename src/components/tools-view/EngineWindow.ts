@@ -1,3 +1,5 @@
+// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the AUTOBURN pip. Others ask by
+// message.
 import type { Store } from '@state/store';
 import type { GameState, PresetMode, SasMode } from '@state/schema';
 import { onGameTick, onAiTick } from '@systems/clock';

@@ -43,7 +43,7 @@ const none: Record<UpgradeId, number> = { firewall: 0, 'repair-v2': 0, 'thread-p
 // The base context has no sign of trouble at all (a fresh unit's 36 charge, most of the FUEL left): every card
 // at its base weight.
 const ctx = (over: Partial<DraftContext> = {}): DraftContext => ({
-  stats: { manualCaptures: 0, demos: [], repairs: 0, moves: 0, deletes: 0, driversLost: 0, driversBitten: 0, capRefusals: 0, deal: null },
+  stats: { manualCaptures: 0, demos: [], dropDemos: [], repairs: 0, moves: 0, deletes: 0, driversLost: 0, driversBitten: 0, capRefusals: 0, deal: null },
   chargeHeld: 36, lastShip: { name: 'ARES-VII', fuelLeftPct: 70 }, owned: none, hasRepair: true, linkRoom: 50, hollowLabel: '???', ...over,
 });
 const ids = (cards: { id: UpgradeId }[]): string => cards.map((card) => card.id).join(',');

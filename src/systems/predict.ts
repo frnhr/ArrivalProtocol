@@ -1,3 +1,6 @@
+// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): planToCircle, 'round', the armed
+// mode's planning. Others ask by message.
+import { notBuilt } from '@systems/not-built';
 import type { Store } from '@state/store';
 import type { GameState, BurnStatus, PresetMode, SasMode } from '@state/schema';
 import type { GoLowAim } from '@/types/landing';
@@ -243,7 +246,7 @@ function trimPlanDvKmS(fit: RingFit, ring: Ring, mu: number): number {
   return total;
 }
 
-interface BurnInputs {
+export interface BurnInputs {
   orbit: Readonly<OrbitState>;
   mu: number;
   ring: Ring;
@@ -335,7 +338,7 @@ function toBurnPoint(
 }
 
 // Game seconds to the next ▼ and ▲ of a closed loop, and its period.
-interface ApsisTimes {
+export interface ApsisTimes {
   peri: number;
   apo: number;
   period: number;
@@ -1287,6 +1290,13 @@ export function liftPreset(
   const clearSpeed = Math.sqrt((2 * mu * (1 / surfaceR - 1 / radius)) / missRatioSq);
   const escapeSpeed = Math.sqrt((2 * mu) / radius);
   return clearSpeed + reactionDvKmS < escapeSpeed ? 'prograde' : radial;
+}
+
+// Slice 4 (plan §2.9; Track FLIGHT): the burn that takes a closed loop to a circle of radius `targetKm` (ROUND's ▼ at
+// engagement; 4e's landing orbit): while |▼ − R*| is over tolerance, at ▲ to bring ▼ to R*; else at ▼ to bring ▲ to R*, with
+// planTrim's machinery and reason 'round'. Pure.
+export function planToCircle(input: Readonly<BurnInputs>, apsisTimes: Readonly<ApsisTimes>, targetKm: number): BurnPoint {
+  return notBuilt('planToCircle', 'FLIGHT', input, apsisTimes, targetKm);
 }
 
 export function computePrediction(state: Readonly<GameState>): Prediction {

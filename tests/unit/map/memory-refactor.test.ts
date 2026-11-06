@@ -26,8 +26,13 @@ for (const seed of [1, 7]) {
     const mission = { unitId, shipId, destination, distanceLy: 581, ...missionRest };
     check(`seed ${seed}, ${classicShip(index).name}: FULL, 384 blocks`, memoryClass === 'FULL' && layoutOf(state) === MEMORY_LAYOUTS.FULL
       && state.memory.reduce((sum, seg) => sum + seg.size, 0) === 384);
+    // Slice 4's AUTOBURN mode fields (burn.auto.mode, targetKm, claimed, waitingSinceTSec) are left out the same way: the
+    // rest of the flight is still checked byte for byte.
+    const { mode, targetKm, claimed, waitingSinceTSec, ...auto } = state.burn.auto;
+    void mode; void targetKm; void claimed; void waitingSinceTSec;
+    const burn = { ...state.burn, auto };
     const dump = JSON.stringify({
-      memory: state.memory, level, landing: state.landing, mission, burn: state.burn, orbit: state.orbit,
+      memory: state.memory, level, landing: state.landing, mission, burn, orbit: state.orbit,
       threat: state.run.threat, hollow: state.hollow,
     });
     // Generated ids (`free~12`) count from module load, so they are left out: the order of imports must not move a digest.

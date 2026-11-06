@@ -1,4 +1,5 @@
-// Slice 3c: the foundation owns this file; the tracks add lead-approved one-liners only (slice-3c-plan §5.4).
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2); FLIGHT and UI ask by message, no direct
+// edits.
 import type { Segment, SegmentRole } from '@/types/segment';
 import type { LandingState, LandingTally } from '@/types/landing';
 import type { FsToolKind } from '@/types/fs-tool';
@@ -12,6 +13,7 @@ import type { LastUnit, NextLaunch } from '@/types/lineage';
 import type { SaveState } from '@/types/save';
 import type { DeliveryChip, ArrivalDelivery, RunRepoState } from '@/types/repo';
 import type { RunInboxState } from '@/types/inbox';
+import type { SkillId, SkillLevel, AutoMode, RunSkillState } from '@/types/skill';
 
 export type ViewMode = 'tools' | 'memory';
 
@@ -79,13 +81,26 @@ export type FiringSource = 'player' | 'auto';
 // dropped (it lost what it needs mid-way). `atAi` is when the phase began (the strip's done/lost lines stand a
 // few seconds); `end` says why the last engagement ended.
 export type AutoburnPhase = 'idle' | 'armed' | 'pointing' | 'burning' | 'done' | 'dropped';
+// Slice 4 (03 §3.6, plan §2.9): 'green' (v2 made the orbit green), 'round' (v2 rounded it), 'reserve' (it stopped short to
+// keep AUTO_FUEL_RESERVE_PCT: `GREEN, NOT ROUND — SAVING FUEL`; never on a capture), 'downgraded' (damage took it below the
+// version its mode needs: it hands the rest back).
 export type AutoburnEnd =
-  | 'in-ring' | 'braked' | 'fuel' | 'takeover' | 'cancel' | 'lost' | 'damaged' | 'engine' | 'presets' | 'no-capture' | 'flight-over';
+  | 'in-ring' | 'braked' | 'fuel' | 'takeover' | 'cancel' | 'lost' | 'damaged' | 'engine' | 'presets' | 'no-capture' | 'flight-over'
+  | 'green' | 'round' | 'reserve' | 'downgraded';
 
 export interface AutoburnState {
   phase: AutoburnPhase;
   atAi: number;
   end: AutoburnEnd | null;
+  // Slice 4 (plan §2.9). What it flies, fixed at engagement (skill.ts AutoMode; null while idle).
+  mode: AutoMode | null;
+  // The circle it flies to: ROUND's (▼ at engagement), or AUTOBURN v3's landing orbit (4e); null otherwise.
+  targetKm: number | null;
+  // It holds its Core thread for the burn at hand: from the claim lead (AUTO_THREAD_CLAIM_TAC) to the burn's end.
+  claimed: boolean;
+  // Its claim found no thread free (game seconds, clock.tSec, when it started waiting): it fires late, and the plot shows
+  // how late. null while it is not waiting.
+  waitingSinceTSec: number | null;
 }
 
 export interface BurnState {
@@ -239,6 +254,9 @@ export interface RunStats {
   // when the burn started minus when the tick said to, in tactical seconds (negative: early).
   manualCaptures: number;
   demos: { offsetTac: number }[];
+  // Slice 4 (4c fills it; 03 §3.3): each manual launch's timing error against the bracket centre, in tac s, AUTODROP's
+  // demos. Empty until 4c (added with slice 4's save bump, so 4c needs none for it).
+  dropDemos: { offsetTac: number }[];
   repairs: number;          // REPAIR ops that finished (healed to 100 or ran out of charge)
   moves: number;            // MOVE ops that finished
   deletes: number;          // DELETE ops that finished
@@ -309,6 +327,17 @@ export interface ArrivalReport {
   // boot's `> DELIVERY:` lines, the patch's install (systems/delivery-boot.ts receiveDeliveryAtBoot) and the untried kinds
   // read it. Empty on the classic world and on ship 1.
   deliveries: ArrivalDelivery[];
+  // Slice 4 (plan §2.14): the skill files that crossed, as laid out: trained or restored at the desk, packed lower (PACK
+  // AS), carried as they were, or granted (slice 5). The boot's TRAINED / RETRAINED lines read it. Empty on ship 1.
+  skills: ArrivalSkill[];
+}
+
+// One skill file as it arrived (its file's id, the skill, its level, and how it came).
+export interface ArrivalSkill {
+  segId: string;
+  skill: SkillId;
+  level: SkillLevel;
+  kind: 'trained' | 'restored' | 'packed' | 'carried' | 'granted';
 }
 
 // One beam seed as it arrived (04 §3.4): the file it was rolled to ride behind, and `loose` when the no-room rule made it a
@@ -346,6 +375,9 @@ export interface TransitPlan {
   // goTransmit; the PACKET's SEND ON toggles them). The ones not sent on are files of the packet (systems/draft.ts
   // planPacket is the one adder), so the link, the room, the draft and the gate count them once. Empty on the classic world.
   deliveries: DeliveryChip[];
+  // Slice 4 (4b, 03 §3.3 round-2 decision 10): the skill files the PACKET packs at a lower level (PACK AS v1), by segment id.
+  // ◀ CHART forgets it like the drops. The packed copy keeps its integrity and infection, at the lower version's size.
+  packAs: Record<string, SkillLevel>;
 }
 
 // 046.log's progress through the run (05 §3.2; systems/story-log.ts): kept on the run, not the segment, because the
@@ -405,9 +437,10 @@ export interface RunState {
   // HOLLOW ate the AI Core to 0 (§3.3 C5): this ship is over (the clock stops under its card, then
   // EMERGENCY TRANSMIT or, on the last ship, OVERWRITTEN).
   coreLost: boolean;
-  // AUTOBURN.skl (WP9, §6.10): how many manual captures it was last trained on (installed or retrained at a
-  // boot); null until it first installs. A later boot retrains it when there are more.
-  skillTrainedOn: number | null;
+  // The skill tree's history (phase 3 slice 4, types/skill.ts RunSkillState; replaces phase 2's skillTrainedOn): what each
+  // ship earned, the grants, what was bought and what this desk has pending. The bank and the levels are derived from it
+  // and memory (systems/skill-tree.ts). Kept on every world (the classic world earns but has no desk to spend at).
+  skills: RunSkillState;
   // The ship whose boot reissued REPAIR (WP12, the lead's ruling of 2026-10-21 06:20): the unit arrived with no
   // working copy of it, so ARRIVAL CONTROL renewed the licence (systems/licences.ts renewRepairAtBoot); CONTROL says
   // so once that ship's flight starts. null until it happens.

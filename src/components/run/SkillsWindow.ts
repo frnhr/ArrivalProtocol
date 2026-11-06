@@ -1,3 +1,4 @@
+// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2). Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { onPostTick } from '@systems/clock';
@@ -150,12 +151,12 @@ export function mountSkillsWindow(store: Store<GameState>): () => void {
     paint();
   });
 
-  // WP9: AUTOBURN.skl trained (or retrained) at a boot pulses NEW the same way: the kid's own captures became
-  // a skill, and the window is where it says how good it is.
-  const unsubSkill = store.subscribe((s) => s.run.skillTrainedOn, (trainedOn, prev) => {
-    if (trainedOn !== null && (prev === null || trainedOn > prev) && !dockItem.classList.contains('open')) dockItem.classList.add('fresh');
-    // A NEW RUN forgets the skill: with no card either, nothing is new.
-    if (trainedOn === null && store.getState().run.upgrades.length === 0) dockItem.classList.remove('fresh');
+  // A skill bought at a desk (slice 4: the run's committed purchases grew, at TRANSMIT ▸) pulses NEW the same way: the
+  // window is where it says how good it is. A NEW RUN forgets the skills: with no card either, nothing is new. (Track UI
+  // may move the pulse to the boot's TRAINED line.)
+  const unsubSkill = store.subscribe((s) => s.run.skills.bought.length, (count, prev) => {
+    if (count > prev && !dockItem.classList.contains('open')) dockItem.classList.add('fresh');
+    if (count === 0 && store.getState().run.upgrades.length === 0) dockItem.classList.remove('fresh');
     paint();
   });
 

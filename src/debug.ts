@@ -1,4 +1,5 @@
-// Slice 3c: Track SAVE owns this file (docs/phase3/impl/slice-3c-plan.md §5.2); WORLD and UI request helpers by message.
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): __ap.skill, __ap.cycles and any tree
+// hooks; FLIGHT and UI ask by message.
 import type { Store } from '@state/store';
 import type { GameState, Speaker, ObjectiveLine, LogEntry, ViewMode, TerminalStatus, EndingLine } from '@state/schema';
 import { getPrediction, getSensedPrediction, type Prediction } from '@systems/predict';
@@ -60,7 +61,9 @@ import type { ShipThreat } from '@/types/threat';
 import { childRng } from '@systems/rng';
 import { createHollowState } from '@state/initial';
 import { getOps, threadsBusy, threadsTotal, cancelOp, abortAll } from '@systems/ops-core';
-import { assertMemoryInvariants, segmentStarts } from '@systems/memory-ops';
+import {
+  assertMemoryInvariants, segmentStarts, unitInstallAddress, replaceRange, mergeAdjacentFree, newSegId,
+} from '@systems/memory-ops';
 import { layoutOf } from '@data/memory';
 import { META_STORAGE_KEY, RUN_SAVE_KEY, ROOT_BLOCKS, COLONISTS_PER_POD } from '@data/tuning';
 import type { SaveState } from '@/types/save';
@@ -87,13 +90,16 @@ import {
 } from '@systems/meta';
 import { pickCard, draftContext, cardFiles, planPacket, type PickRefusal } from '@systems/draft';
 import { upgradeRepairsToV2 } from '@systems/delivery-boot';
-import { installAddress } from '@systems/licences';
-import { replaceRange, mergeAdjacentFree, newSegId } from '@systems/memory-ops';
 import { REPAIR_V2_VERSION, THREAD_PLUS_THREADS } from '@data/tuning';
 import type { UpgradeId, DraftContext, DraftCard } from '@data/upgrades';
 import { skillsModel, type SkillRow } from '@systems/skills';
 import { arrivalDamage } from '@systems/carry';
-import { autoburnSkill, autoburnRefusal, toggleAutoburn, trainSkillAtBoot, skillBootDue, type AutoburnSkill } from '@systems/autoburn';
+import { autoburnRefusal, toggleAutoburn } from '@systems/autoburn';
+import { autoburnDemoSkill } from '@systems/skill-tree';
+import { giveSkill } from '@systems/skill-files';
+import { skillLive, type SkillLive } from '@systems/capabilities';
+import type { SkillId, SkillVersion, LockLevel, DemoSkill } from '@/types/skill';
+import type { SkillFileSegment } from '@/types/segment';
 import { seedSpotFor, seedsInMemory, threateningSeeds } from '@systems/hollow';
 import { knownHitRacks } from '@systems/zones';
 import { nextZoneEntry, zoneInside } from '@systems/pace';
@@ -286,15 +292,18 @@ interface DebugHooks {
   skills: () => SkillRow[];
   // WP9 (KESTREL). zones: this flight's hazard zones, what was hit, and what the true and sensed paths do with
   // them; seedNow telegraphs a seed at once (HOLLOW must be awake on a seeding ship); seeds lists them with the
-  // ones that can bite; autoburn is the machine's state, the skill and why [B] would be refused; auto toggles
-  // it; trainAutoburn records manual captures with these START BURN offsets (tactical s) and installs or
-  // retrains AUTOBURN.skl now, as the next boot would.
+  // ones that can bite; autoburn is the machine's state, what the demos taught the skill, how its file works now
+  // (skillLive) and why [B] would be refused; auto toggles it.
   zones: () => { zones: readonly Zone[]; hitIds: string[]; truth: ZoneHit[]; sensed: ZoneHit[]; inside: string | null; nextEntryTac: number | null };
   seedNow: () => void;
   seeds: () => { seeds: string[]; threatening: string[]; next: ReturnType<typeof seedSpotFor> | null; state: GameState['hollow'] };
-  autoburn: () => { auto: GameState['burn']['auto']; skill: AutoburnSkill | null; refusal: string | null };
+  autoburn: () => { auto: GameState['burn']['auto']; skill: DemoSkill; live: SkillLive; refusal: string | null };
   auto: () => string | null;
-  trainAutoburn: (offsetsTac: number[]) => string;
+  // Slice 4: a skill file at a version (and AUTOBURN's lock) given now, as the suites' giveSkillFile gives it (any old file
+  // of the skill replaced, a free purchase recorded: skill-files.ts giveSkill); and n cycles into the bank (a 'story'
+  // grant labelled DEBUG).
+  skill: (id: SkillId, version: SkillVersion, lock?: LockLevel) => SkillFileSegment;
+  cycles: (n: number) => void;
   // WP9 part 2: what the screens show of the zones and AUTOBURN, as data: the NAV PLOT's zone glyphs and labels,
   // the MIND's rack tags (both from the sensed prediction) and the Engine window's AUTO button.
   zonesHud: () => { plot: PlotZoneModel[]; racks: RackZoneTag[]; auto: AutoButtonModel };
@@ -450,7 +459,7 @@ function giveCard(store: Store<GameState>, id: UpgradeId): Segment[] {
   const files = cardFiles(id, newSegId);
   const memory = store.getState().memory;
   for (const file of files) {
-    const addr = installAddress(memory, file.size);
+    const addr = unitInstallAddress(memory, file.size);
     replaceRange(memory, addr, addr + file.size, [file], { opId: null, own: [] });
   }
   mergeAdjacentFree(memory);
@@ -467,7 +476,7 @@ function giveCard(store: Store<GameState>, id: UpgradeId): Segment[] {
 }
 
 // __ap.give(file): a repository file written into memory now (phase 3 slice 3b), where a licence's files go (the receiver's
-// free run after REPAIR CHARGE: licences.ts installAddress). A tool kind's first delivery (systems/repository.ts
+// free run after REPAIR CHARGE: memory-ops.ts unitInstallAddress). A tool kind's first delivery (systems/repository.ts
 // deliveryFirstOfKind: never REPAIR or SCAN, whose .bak is a spare) is recorded as the send would record it: run.licences,
 // and HOLLOW leaves it alone until the kid has tried it (untriedTools); anything else arrives as a spare copy. The REPAIR v2 patch installs at once, as at its boot
 // line: every Repair copy becomes v2, run.upgrades gains 'repair-v2', and the patch leaves no file. Emits 'delivery'.
@@ -481,7 +490,7 @@ function giveRepoFile(store: Store<GameState>, file: RepoFileId): Segment[] {
   const memory = store.getState().memory;
   const files = repoFileSegments(file, newSegId, bestRepairVersion(memory));
   for (const seg of files) {
-    const addr = installAddress(memory, seg.size);
+    const addr = unitInstallAddress(memory, seg.size);
     replaceRange(memory, addr, addr + seg.size, [seg], { opId: null, own: [] });
   }
   mergeAdjacentFree(memory);
@@ -533,7 +542,7 @@ function debugJump(store: Store<GameState>, index: number, threat: ShipThreat = 
   });
   startShip(store, index, layout.racks, {
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0,
-    chargeOverflowLost: 0, scripted, eccCorrected: 0, seeds: layout.seeds, boarded: boardedBy(threat), deliveries: [],
+    chargeOverflowLost: 0, scripted, eccCorrected: 0, seeds: layout.seeds, boarded: boardedBy(threat), deliveries: [], skills: [],
   }, threat);
 }
 
@@ -583,6 +592,7 @@ function debugArrive(store: Store<GameState>, hop: Hop, threat: ShipThreat): voi
     hits: [], chargeCarried: packet.chargeCarried, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: charge.floorAdded,
     chargeOverflowLost: layout.overflowLost, scripted, eccCorrected: 0, seeds: layout.seeds, boarded: boardedBy(threat),
     deliveries: arrivalDeliveries(deliveries, packet.deliveries, deliverySeeds.map((seed) => seed.targetId)),
+    skills: [],
   }, threat, hop);
 }
 
@@ -955,7 +965,10 @@ export function mountDebug(store: Store<GameState>): void {
     },
     autoburn: () => {
       const state = store.getState();
-      return { auto: state.burn.auto, skill: autoburnSkill(state.run.stats), refusal: autoburnRefusal(state, getPrediction()) };
+      return {
+        auto: state.burn.auto, skill: autoburnDemoSkill(state.run.stats), live: skillLive(state.memory, 'autoburn'),
+        refusal: autoburnRefusal(state, getPrediction()),
+      };
     },
     auto: () => toggleAutoburn(store),
     zonesHud: () => {
@@ -1029,10 +1042,12 @@ export function mountDebug(store: Store<GameState>): void {
       textEl.replaceChildren(...kept);
       return over;
     },
-    trainAutoburn: (offsetsTac) => {
-      store.update((draft) => { draft.run.stats.demos.push(...offsetsTac.map((offsetTac) => ({ offsetTac }))); });
-      if (skillBootDue(store.getState()) === null) throw new Error('__ap.trainAutoburn: no skill is due (fewer than 2 captures, or none new)');
-      return trainSkillAtBoot(store);
+    skill: (id, version, lock = 0) => giveSkill(store, id, { version, lock }),
+    cycles: (n) => {
+      if (!(Number.isInteger(n) && n > 0)) throw new Error(`__ap.cycles: ${n} is not a positive whole number`);
+      store.update((draft) => {
+        draft.run.skills.grants.push({ source: 'story', cycles: n, visit: draft.run.ships.length, label: 'DEBUG' });
+      });
     },
     audio: {
       isAudioUnlocked,

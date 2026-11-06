@@ -1,4 +1,4 @@
-// Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
+// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): TRAINING [T]. Others ask by message.
 import type { DeskWindowId } from '@/types/map';
 import type { DeskTabBadges } from '@systems/desk';
 import { make } from '@components/dom';

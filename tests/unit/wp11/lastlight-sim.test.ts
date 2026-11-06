@@ -65,7 +65,7 @@ h.lastLight(7);
     `root at ${at(root.id)}, POD 11 at ${at(pod11.id)}, POD 12 at ${at(pod12.id)}, POD 13 at ${at(pod13.id)}`);
   check('…POD 12 (right of the root) leads the credits', state().landing.lead === 12);
   check('…its boot plan closes on HOLLOW\'s line, which is `> last ship, 047. i\'m so tired.`',
-    bootLinePlan({ ...state(), run: { ...state().run, arrival: { hits: [], chargeCarried: 0, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0, chargeOverflowLost: 0, eccCorrected: 0, scripted: [], seeds: [], boarded: null, deliveries: [] } } }, false).at(-1) === 'hollow'
+    bootLinePlan({ ...state(), run: { ...state().run, arrival: { hits: [], chargeCarried: 0, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0, chargeOverflowLost: 0, eccCorrected: 0, scripted: [], seeds: [], boarded: null, deliveries: [], skills: [] } } }, 0).at(-1) === 'hollow'
     && HOLLOW_STORY.lastShip(47) === "> last ship, 047. i'm so tired.");
   check('…the MERGE 20 tick\'s data on the flagship (and none elsewhere)', mergeTickCharge(state()) === MERGE_COST_CHARGE);
 }

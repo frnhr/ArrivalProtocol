@@ -1,12 +1,12 @@
 import type {
-  Segment, ShipSegment, ShipBackupSegment, CoreSegment, ToolSegment, SkillSegment, FsToolSegment,
+  Segment, ShipSegment, ShipBackupSegment, CoreSegment, ToolSegment, FsToolSegment,
   RedundancySegment, DriverSegment, HollowSegment, LogSegment, SegmentRole,
 } from '@/types/segment';
 import type { ShipDef } from '@data/ships';
 import type { GameState } from '@state/schema';
 import type { MemoryClass, MemoryLayout, RackName, PodRackName } from '@/types/map';
 import type { Rng } from '@systems/rng';
-import { assertMemoryInvariants, freeSegment, mergeAdjacentFree, segmentStarts, newSegId } from '@systems/memory-ops';
+import { assertMemoryInvariants, freeSegment, mergeAdjacentFree, segmentStarts, newSegId, isUnitFileType } from '@systems/memory-ops';
 import { createToolFiles } from '@data/fs-tools';
 import { rollRoster, rollChildAge, type ScriptedRoster } from '@data/souls';
 import {
@@ -130,7 +130,7 @@ export interface FreeSpec {
 }
 
 export type ShipFileSpec = ShipSegment | ShipBackupSegment;
-export type AiFileSpec = CoreSegment | ToolSegment | SkillSegment | FsToolSegment | RedundancySegment | LogSegment;
+export type AiFileSpec = CoreSegment | ToolSegment | FsToolSegment | RedundancySegment | LogSegment;
 export type RackItem<Spec> = Spec | FreeSpec;
 
 // A driver that arrives hurt (01-landing §3.8: run 1's POD 02 at 44%). Pod numbers are 1-based, as on screen.
@@ -406,10 +406,7 @@ function assertSingleRoles(segs: readonly Segment[], fail: (why: string) => neve
 // The unit's own files: what carries from ship to ship (§6.9): the Core, the AI tools and skills, the
 // fs-tools, the upgrade files and FIREWALLs picked between ships, REPAIR CHARGE, and 046.log (05 §3.2: locked in the
 // packet). Ship files, drivers and HOLLOW stay.
-export function isUnitFileType(seg: Segment): boolean {
-  return seg.type === 'core' || seg.type === 'tool' || seg.type === 'skill' || seg.type === 'fs-tool' || seg.type === 'redundancy'
-    || seg.type === 'upgrade' || seg.type === 'firewall' || seg.type === 'log';
-}
+export { isUnitFileType };
 
 // The unit's own files as they arrive on a later ship (systems/carry.ts packs them): the segments
 // from `startAddr` to the end of memory, free fillers included. They start at rack E (the layout's unitStart) unless the

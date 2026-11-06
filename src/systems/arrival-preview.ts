@@ -1,3 +1,5 @@
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): ArrivalPlan.skills. Others ask by
+// message.
 import type { GameState } from '@state/schema';
 import type { Hop, RoomFit } from '@/types/map';
 import type { ShipThreat } from '@/types/threat';

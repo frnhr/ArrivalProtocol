@@ -1,4 +1,4 @@
-// Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
+// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): UNSPENT. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { runEndModel, type RunEndModel, type RunEndShipRow, type RunEndNext } from '@systems/run-end';

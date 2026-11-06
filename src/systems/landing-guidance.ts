@@ -1,3 +1,4 @@
+// Slice 4: Track FLIGHT edits this file for the ROUND tail only (docs/phase3/impl/slice-4-plan.md §5.2).
 import type { GameState, GuideLayer, Urgency } from '@state/schema';
 import type { DropSolution, LzWindow, RepairHint, TooWide } from '@/types/landing';
 import type { Capabilities, CapabilityRole, PlotFaultCause } from '@systems/capabilities';

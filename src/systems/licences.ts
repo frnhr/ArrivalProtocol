@@ -4,13 +4,12 @@ import type { Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { RunMapState } from '@/types/map';
 import { onPostTick, isLivePhase } from '@systems/clock';
-import { replaceRange, mergeAdjacentFree, segmentStarts, assertMemoryInvariants, newSegId } from '@systems/memory-ops';
-import { isOpenFree } from '@systems/tool-targets';
+import { replaceRange, mergeAdjacentFree, assertMemoryInvariants, newSegId, unitInstallAddress } from '@systems/memory-ops';
 import { say } from '@systems/say';
 import { emit } from '@systems/events';
 import { mindAlertActive } from '@systems/alerts';
 import { createToolFiles, TOOL_HINT_TARGET } from '@data/fs-tools';
-import { layoutOf, isUnitFileType } from '@data/memory';
+import { layoutOf } from '@data/memory';
 import { LICENCE_LINES } from '@data/script';
 import { CLASSIC_LICENCES } from '@data/classic-five';
 import { IS_DEV } from '@/env';
@@ -38,33 +37,11 @@ export interface TimedLicence {
 // unlocking it: the tool's files transmit into memory (transmitIn, a chime, the chip slides in)
 // and CONTROL says so. DOM-free; the chip row reads the files (components/memory-view/FsStatusBar).
 //
-// Placement: each file goes at the start of the LAST open free region that fits it, scanning
-// back from the end of memory: the receiver's free run right after REPAIR CHARGE (the unit's block is files, seeds, then
-// the charge, from rack E's start), on every memory class (slice 3a: a TIGHT ship's receiver is rack E alone, it has no
-// rack F), so new tools land next to the old ones and REPAIR CHARGE. A full receiver sends the file to the last free
-// run among the pods. Space a running move or copy reserved is never used. No room at
-// all is a design error (a layout that can't take its own licences), so it throws.
+// Placement: memory-ops.ts unitInstallAddress, the one rule for every unit file written mid-run (slice 4): the receiver's
+// free run right after REPAIR CHARGE, so new tools land next to the old ones and REPAIR CHARGE.
 
 export function isLicensed(state: Readonly<GameState>, kind: FsToolKind): boolean {
   return state.run.licences.includes(kind);
-}
-
-// The address a new file of `size` blocks goes to (see the header).
-export function installAddress(memory: readonly Segment[], size: number): number {
-  const starts = segmentStarts(memory);
-  const charge = memory.findIndex((seg) => seg.type === 'redundancy');
-  for (let i = memory.length - 1; i >= 0; i--) {
-    const seg = memory[i]!;
-    if (!isOpenFree(seg) || seg.size < size) continue;
-    // A receiver with no room after REPAIR CHARGE (a TIGHT ship's unit spilled back into the tail, slice 3a): the file
-    // goes flush against the unit's block from below, not at the far end of the pod rack's free run.
-    // That region ends at the AI Core (the block's start); a free run inside the receiver keeps the rule above.
-    if (charge >= 0 && i < charge && memory[i + 1]?.type === 'core' && memory.slice(i + 1, charge).every(isUnitFileType)) {
-      return starts[i]! + seg.size - size;
-    }
-    return starts[i]!;
-  }
-  throw new Error(`licences: no free space for a ${size}-block tool file`);
 }
 
 // Writes a licence's files into memory (see the header for where), with fresh ids when `freshIds` (a reissue: an
@@ -73,7 +50,7 @@ function writeToolFiles(store: Store<GameState>, kind: FsToolKind, freshIds: boo
   const memory = store.getState().memory;
   const files = createToolFiles(kind).map((file) => (freshIds ? { ...file, id: newSegId(file.id) } : file));
   for (const file of files) {
-    const addr = installAddress(memory, file.size);
+    const addr = unitInstallAddress(memory, file.size);
     replaceRange(memory, addr, addr + file.size, [file], { opId: null, own: [] });
   }
   mergeAdjacentFree(memory);

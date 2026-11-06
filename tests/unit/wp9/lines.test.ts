@@ -3,6 +3,7 @@
 // strip's AUTOBURN rows and alarms, the seed and debris rules, TOO WIDE's dodge, the capture lines' AUTO tail, the
 // SKIP refusals near a zone, INSPECT's seed text. Also: the ECC line for the arrival damage falls back to the
 // files alone when the consequence does not fit (VESPER's Thrust Ctrl, WP10).
+import { SKILL_FILE_TEXT } from '@data/skills';
 import { check, finish } from '../wp1/harness';
 import { debrisHitLine, beltHitLine, zoneLostLine } from '@data/zone-text';
 import { scriptedDamageLine, GUIDE_RULES, SEED_RULES, DEBRIS_RULES, AUTOBURN_RULES, WORST_CASE_VARS } from '@data/script';
@@ -10,7 +11,6 @@ import { AUTOBURN_TEXT, AUTOBURN_DROP_TEXT, AUTOBURN_DROP_TAB, AUTOBURN_REFUSAL,
 import { skipRefusalZoneAhead, skipRefusalInZone } from '@systems/pace';
 import { flightObjective, type FlightContext } from '@systems/guidance';
 import { HOLLOW_INSPECT, HOLLOW_DESC, HOLLOW_STORY, HOLLOW_ECHO, HOLLOW_ALERT_TEXT, hollowUnitName } from '@data/hollow-text';
-import { UPGRADE_FILE_TEXT } from '@data/upgrades';
 import { podCode } from '@data/landing-text';
 import { MAX_LINE_CHARS, SEG_NAME_MAX_CHARS } from '@data/tuning';
 
@@ -51,7 +51,7 @@ const long = 'W'.repeat(SEG_NAME_MAX_CHARS);
   const bad = lines.filter((line) => !fits(line));
   check('every AUTOBURN line fits (boot, strip, alarms with [TAB], radio, refusals)', bad.length === 0, bad.join(' | '));
   check('the drop line says §6.10\'s words', AUTOBURN_DROP_TEXT.lost === 'AUTOBURN.skl LOST — MANUAL');
-  check('the file name fits a segment name', UPGRADE_FILE_TEXT.autoburn.name.length <= SEG_NAME_MAX_CHARS && UPGRADE_FILE_TEXT.autoburn.name === 'AUTOBURN.skl');
+  check('the file name fits a segment name', SKILL_FILE_TEXT.autoburn.name.length <= SEG_NAME_MAX_CHARS && SKILL_FILE_TEXT.autoburn.name === 'AUTOBURN.skl');
 }
 
 // --- The strip's WP9 rules, rendered with worst-case vars ---------------------------------------------------------

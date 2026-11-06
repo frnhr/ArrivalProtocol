@@ -1,10 +1,12 @@
-// Slice 3c: Track SAVE owns this file (docs/phase3/impl/slice-3c-plan.md §5.2); WORLD and UI request helpers by message.
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): RunEnd.skills into LastUnit.skills.
+// Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState, RunEndCause, RunStats, ArchiveStatus, RunState } from '@state/schema';
 import type {
   LastCause, LastUnit, UnitStats, UnitTrail, ArmState, ColonyRecord, RouteRecord, NotableEvent, LineageHistory, NextLaunch,
 } from '@/types/lineage';
 import type { StorageProvider } from '@systems/storage';
+import type { SkillRecord } from '@/types/skill';
 import {
   MetaCorrupt, corrupt, isRecord, wholeNumber, text, flag, list_, exactRecord, parseLastUnit, parseTrail, parseColony,
   parseRoute, parseEvent, unitList, unitStats,
@@ -424,6 +426,9 @@ export interface RunEnd extends RunProgress {
   nextArm?: ArmState | null;
   // The run's notable events (systems/lineage.ts notableEvents; at most NOTABLE_EVENTS_MAX are kept); left out, none.
   events?: readonly NotableEvent[];
+  // The skills the unit ended with (slice 4, 03 §3.11: LastUnit.skills; Track TREE fills it at RUN END from skill-tree.ts
+  // skillRecords). Left out or null: none recorded.
+  skills?: readonly SkillRecord[] | null;
 }
 
 // The colonies kept: the newest COLONY_HISTORY_MAX_PER_WORLD per world (slot), in the order they were founded.
@@ -465,7 +470,8 @@ export function recordRunEnd(meta: Readonly<Meta>, end: RunEnd): Meta {
   if (ending !== null && !endingsSeen.includes(ending)) endingsSeen.push(ending);
   const lastUnit: LastUnit = {
     number: end.unit, landed: end.landed, shipName: end.shipName, cause: end.cause, stats: { ...end.stats },
-    hollowUnits: [...end.hollowUnits], trail: end.trail === null ? null : structuredClone(end.trail), skills: null,
+    hollowUnits: [...end.hollowUnits], trail: end.trail === null ? null : structuredClone(end.trail),
+    skills: end.skills === undefined || end.skills === null ? null : structuredClone(end.skills) as SkillRecord[],
   };
   return { ...recordUnitEnd(meta, lastUnit, end.nextArm ?? null, end.events ?? []), bestScore: Math.max(meta.bestScore, Math.round(end.score)), endingsSeen };
 }

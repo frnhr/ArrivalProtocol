@@ -14,7 +14,6 @@ export function categoryOf(seg: Segment): FilterKey {
   switch (seg.type) {
     case 'core':
     case 'tool':
-    case 'skill':
     case 'upgrade':
       return 'ai';
     case 'ship':

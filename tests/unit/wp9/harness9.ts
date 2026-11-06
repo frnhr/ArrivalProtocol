@@ -5,7 +5,9 @@
 // One harness per test file (systems are module singletons).
 import { createHarness7, type Harness7 } from '../wp7/harness7';
 import { mountZones } from '@systems/zones';
-import { mountAutoburn, registerAutoburnKeys, trainSkillAtBoot, skillBootDue } from '@systems/autoburn';
+import { mountAutoburn, registerAutoburnKeys } from '@systems/autoburn';
+import { giveSkillFile } from '../support/skills';
+import type { SkillFileSegment } from '@/types/segment';
 import { threateningSeeds } from '@systems/hollow';
 import { freshUnitRacks, arrivalDamage } from '@systems/carry';
 import { resetWorld } from '@systems/reset';
@@ -38,8 +40,8 @@ export interface Harness9 extends Harness7 {
   // One tick of the KESTREL defender (the WP7 defender, plus the blind sensor and the seeds).
   defend9: () => boolean;
   flyDefending9: (maxWall: number) => string[];
-  // Records manual captures with these START BURN offsets and installs/retrains AUTOBURN.skl now.
-  giveSkill: (offsetsTac: number[]) => string;
+  // Records manual captures with these START BURN offsets and gives AUTOBURN.skl v1 now.
+  giveSkill: (offsetsTac: number[]) => SkillFileSegment;
   zoneHits: () => { zoneId: string; hits: number; lost: string[] }[];
   segById: (id: string) => Segment | undefined;
 }
@@ -93,10 +95,11 @@ export function createHarness9(seed = 1, opts: { soulsFound?: boolean } = {}): H
     flyDefending9(maxWall) {
       return followDirector(base, { reactionSec: 0.4, maxWall, mistake: () => { defend9(); return false; } });
     },
+    // Slice 4: the captures recorded as demos, and AUTOBURN v1 given (phase 2 installed it at the boot after two captures;
+    // the tree sells it now, and the classic world has none: tests/unit/support/skills.ts).
     giveSkill(offsetsTac) {
       base.store.update((d) => { d.run.stats.demos.push(...offsetsTac.map((offsetTac) => ({ offsetTac }))); });
-      if (skillBootDue(state()) === null) throw new Error('harness9.giveSkill: no skill due');
-      return trainSkillAtBoot(base.store);
+      return giveSkillFile(base.store, 'autoburn', 1);
     },
     zoneHits() {
       return base.events.filter((event) => event.name === 'zone-hit').map((event) => {

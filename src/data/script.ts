@@ -1,4 +1,5 @@
-// Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
+// Slice 4: Track UI owns SKILLS_TEXT's skill rows here (docs/phase3/impl/slice-4-plan.md §5.2); the rest of the file
+// is unchanged by slice 4, ask by message.
 import type {
   GameState, Speaker, TransitHit, ArrivalReport, RunEndCause, ShipOutcome, VerbKind,
 } from '@state/schema';
@@ -704,6 +705,9 @@ export const TRANSMIT_TEXT = {
     firewall: 'Without it, one wall less.',
     'fuel-trim': 'Without it, no extra FUEL on arrival.',
     autoburn: 'Without it, no AUTOBURN.',
+    autodrop: 'Without it, no AUTODROP.',
+    survey: 'Without it, no SURVEY.',
+    sentry: 'Without it, no SENTRY.',
     // The REPAIR v2 patch (phase 3 slice 3b) is used up at its boot, so no packed copy is ever offered as a drop; the
     // record is exhaustive over the upgrade kinds.
     'repair-patch': 'Without it, Repair stays as it is.',
@@ -820,7 +824,7 @@ export function eccLine(files: readonly DamagedFile[]): string {
 export function damagedAiFiles(state: Readonly<GameState>): DamagedFile[] {
   const files: DamagedFile[] = [];
   for (const seg of state.memory) {
-    if (seg.type !== 'core' && seg.type !== 'tool' && seg.type !== 'skill') continue;
+    if (seg.type !== 'core' && seg.type !== 'tool') continue;
     if (seg.integrity < 100) files.push({ name: seg.name, integrity: seg.integrity });
   }
   return files;
@@ -921,7 +925,9 @@ function bootHollowLine(state: Readonly<GameState>): string | null {
   return null;
 }
 
-export function bootLinePlan(state: Readonly<GameState>, skill: boolean): BootLineKind[] {
+// `skillLines`: how many skill lines this boot types (slice 4: skill-files.ts skillBootLines, one per skill trained,
+// retrained or granted; the boot plans them before anything is said).
+export function bootLinePlan(state: Readonly<GameState>, skillLines: number): BootLineKind[] {
   const arrival = state.run.arrival;
   const hollow: BootLineKind[] = bootHollowLine(state) !== null ? ['hollow'] : [];
   const log: BootLineKind[] = bootLogEntries(state).length > 0 ? ['log'] : [];
@@ -944,7 +950,7 @@ export function bootLinePlan(state: Readonly<GameState>, skill: boolean): BootLi
   // A TIGHT arrival with no charge laid out says its loss on the charge line itself (M1: one honest line, not `REPAIR
   // CHARGE 0 · NO ROOM` and then `CHARGE OVERFLOW · 54 LOST`).
   if (arrival.chargeOverflowLost > 0 && !zeroChargeArrival(state)) plan.push('overflow');
-  if (skill) plan.push('skill');
+  for (let line = 0; line < skillLines; line++) plan.push('skill');
   plan.push(...story);
   return plan;
 }
@@ -975,12 +981,13 @@ export function bootLicensesRepair(state: Readonly<GameState>): boolean {
   return state.run.arrival === null && !playsTutorial(state.run);
 }
 
-// One boot line, rendered from the live state at the moment it is typed. The skill line is the training's own
-// (systems/autoburn.ts trainSkillAtBoot says what it did), so it is not rendered here. `ordinal` is the line's place among
-// the plan's lines of its kind (0 for the first): only 'delivery' repeats, and it renders its own group by it.
+// One boot line, rendered from the live state at the moment it is typed. A skill line is the training's own (slice 4:
+// systems/boot.ts types the planned skill-files.ts SkillBootLine), so it is not rendered here. `ordinal` is the line's
+// place among the plan's lines of its kind (0 for the first): 'delivery' and 'skill' repeat, and a delivery line renders its
+// own group by it.
 export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: LineVars, ordinal = 0): string {
   const arrival = state.run.arrival;
-  if (kind !== 'delivery' && ordinal !== 0) throw new Error(`bootLine: a '${kind}' line never repeats (ordinal ${ordinal})`);
+  if (kind !== 'delivery' && kind !== 'skill' && ordinal !== 0) throw new Error(`bootLine: a '${kind}' line never repeats (ordinal ${ordinal})`);
   switch (kind) {
     case 'sleep':
     case 'receiver':
@@ -1021,7 +1028,7 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
       if (arrival === null) throw new Error('bootLine: an overflow line on a ship nothing transmitted to');
       // On the arm the line names the ship whose room had none left (01 §3.16, map-boot.ts).
       return state.run.map.world === 'arm' ? mapOverflowLineText(state) : chargeOverflowLine(arrival.chargeOverflowLost);
-    case 'skill': throw new Error('bootLine: the skill line is trainSkillAtBoot\'s');
+    case 'skill': throw new Error('bootLine: a skill line is the boot\'s own (skill-files.ts SkillBootLine)');
     case 'hollow': {
       const line = bootHollowLine(state);
       if (line === null) throw new Error(`bootLine: ${state.level.shipName}'s HOLLOW has no boot line`);

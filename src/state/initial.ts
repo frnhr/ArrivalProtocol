@@ -1,4 +1,5 @@
-// Slice 3c: Track SAVE owns this file (docs/phase3/impl/slice-3c-plan.md §5.2); WORLD and UI request helpers by message.
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2); FLIGHT and UI ask by message, no direct
+// edits.
 import type { GameState, RunPhase, RunState, HollowState, RunStats, ArchiveState, HazardsState } from './schema';
 import type { Segment } from '@/types/segment';
 import type { LandingState, PodRecord, ShipLandingDef } from '@/types/landing';
@@ -6,6 +7,8 @@ import type { HollowDef, ShipThreat } from '@/types/threat';
 import type { RunMapState } from '@/types/map';
 import type { SaveState } from '@/types/save';
 import type { FsToolKind } from '@/types/fs-tool';
+import type { SkillId, RunSkillState } from '@/types/skill';
+import { SKILL_IDS } from '@data/skills';
 import { repoToolKind } from '@data/repository';
 import { buildShipMemory, type CarriedRacks, type HurtDriver } from '@data/memory';
 import { hurtDriversFor } from '@data/driver-damage';
@@ -49,7 +52,19 @@ export interface InitialStateOpts {
 }
 
 export function createRunStats(): RunStats {
-  return { manualCaptures: 0, demos: [], repairs: 0, moves: 0, deletes: 0, driversLost: 0, driversBitten: 0, capRefusals: 0, deal: null };
+  return {
+    manualCaptures: 0, demos: [], dropDemos: [], repairs: 0, moves: 0, deletes: 0, driversLost: 0, driversBitten: 0, capRefusals: 0,
+    deal: null,
+  };
+}
+
+// A fresh unit's skill history (phase 3 slice 4, 03 §3.11: NEW RUN empties the bank, the skills and the demos; a new core is
+// untrained): nothing earned, granted, bought or opened.
+export function createRunSkills(): RunSkillState {
+  return {
+    earned: [], grants: [], bought: [], pending: [], skillGrants: [], opened: [],
+    announced: Object.fromEntries(SKILL_IDS.map((id) => [id, null])) as Record<SkillId, number | null>,
+  };
 }
 
 // A fresh run (§4.1): its unit, wave, last unit and HOLLOW from the archive's lineage (§4.5: UNIT-047 on
@@ -81,7 +96,7 @@ export function createRunState(
     licences: ['scan'],
     hollowNamed: false,
     coreLost: false,
-    skillTrainedOn: null,
+    skills: createRunSkills(),
     repairRenewedOn: null,
     ships: [],
     stats: createRunStats(),

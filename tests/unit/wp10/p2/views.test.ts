@@ -195,7 +195,7 @@ function bootLastLight(seed: number): void {
 
 {
   bootLastLight(8);
-  const plan = bootLinePlan(state(), false);
+  const plan = bootLinePlan(state(), 0);
   const vars = lineVars(state(), getPrediction());
   const text = bootLine('hollow', state(), vars);
   check('LAST LIGHT\'s boot plan ends with HOLLOW\'s line, said by HOLLOW', plan[plan.length - 1] === 'hollow' && bootLineSpeaker('hollow') === 'hollow'
@@ -215,9 +215,9 @@ function bootLastLight(seed: number): void {
     && endedAt >= saidAt + typing + BOOT_AFTER_HOLLOW_LINE_SEC - 0.05, `said ${saidAt}, typed ${(saidAt ?? 0) + typing}, flight ${endedAt}`);
   // Other ships' boots have no such line (VESPER's keepCharge moved to its landing, slice 2 risk 6).
   h.shipAlone(2, 9);
-  check('KESTREL\'s boot has no HOLLOW line', !bootLinePlan(state(), false).includes('hollow'));
+  check('KESTREL\'s boot has no HOLLOW line', !bootLinePlan(state(), 0).includes('hollow'));
   h.vesper(9);
-  check('VESPER\'s boot has no HOLLOW line (HOLLOW boards silent)', !bootLinePlan(state(), false).includes('hollow'));
+  check('VESPER\'s boot has no HOLLOW line (HOLLOW boards silent)', !bootLinePlan(state(), 0).includes('hollow'));
 }
 
 {

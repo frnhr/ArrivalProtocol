@@ -1,7 +1,7 @@
 // WP9 acceptance 5 (§6.10, §9 WP9 item 5): AUTOBURN, headless, on KESTREL.
-// • Training: two manual captures make the skill (learned offset = half their mean START BURN offset, clamped ±8;
-//   ACCURACY 100 − 8 × |offset|, within 40..99); it installs AUTOBURN.skl (6 blocks, rack E) and says so, retrains
-//   on new captures, and installs again after a loss only once a new capture came in.
+// • Training: the captures teach the skill (learned offset = half their mean START BURN offset, clamped ±8; ACCURACY
+//   100 − 8 × |offset|, within 40..99). (Slice 4: the skill is bought at a desk now; phase 2's install after two captures,
+//   its retrain and its reinstall asserts went with that path. The file is given by tests/unit/support/skills.ts.)
 // • From KESTREL's geometry after the IN correction, AUTOBURN alone reaches loop-closed with FUEL ≥ 25% for learned
 //   offsets −8, 0 and +8: it holds a Core thread (reserveThread) and the throttle (firingSource 'auto'), turns RETRO,
 //   fires at the START BURN tick + its offset, and hands back; its captures are no demos. (WP9 fix round 1: it no
@@ -16,66 +16,34 @@
 import { byDepth } from '../depth';
 import { check, finish } from '../wp1/harness';
 import { createHarness9 } from './harness9';
-import {
-  autoburnSkill, autoburnRefusal, skillBootDue, trainSkillAtBoot, engageAutoburn, skillFiles,
-} from '@systems/autoburn';
+import { autoburnRefusal, engageAutoburn, skillFiles } from '@systems/autoburn';
+import { autoburnDemoSkill } from '@systems/skill-tree';
 import { getPrediction } from '@systems/predict';
 import { threadsBusy } from '@systems/ops-core';
 import { isThrustOn } from '@systems/orbit-sim';
 import { setMode } from '@systems/mode';
 import { setPaused } from '@systems/clock';
 import { infectNow } from '@systems/hollow';
-import { segmentStarts } from '@systems/memory-ops';
 import { ringFit, elementsFromState } from '@/types/orbit';
 import { AUTOBURN_TEXT, AUTOBURN_REFUSAL } from '@data/skill-text';
-import { AUTOBURN_LOST_ALARM_SEC, AUTOBURN_SKILL_BLOCKS, MAX_LINE_CHARS } from '@data/tuning';
-import { MEMORY_LAYOUTS } from '@data/memory';
+import { AUTOBURN_LOST_ALARM_SEC, MAX_LINE_CHARS } from '@data/tuning';
 
 const h = createHarness9(5);
 const state = () => h.store.getState();
 const phase = () => state().burn.auto.phase;
 const closed = (): boolean => ringFit(elementsFromState(state().orbit, state().level.planet.mu), state().level.ring).closed;
 
-// --- Training --------------------------------------------------------------------------------------------------
+// --- Training ----------------------------------------------------------------------------------------------------
 {
   const demos = (offsets: number[]) => ({ demos: offsets.map((offsetTac) => ({ offsetTac })) });
-  const skill = autoburnSkill(demos([4, 4]));
-  check('one capture is no skill; two make one', autoburnSkill(demos([])) === null && autoburnSkill(demos([3])) === null && skill !== null);
-  check('…it learns half the mean offset: [4, 4] → +2 tac s, ACCURACY 84% (§5.1\'s example)', skill?.learnedOffsetTac === 2 && skill.accuracy === 84,
+  const skill = autoburnDemoSkill(demos([4, 4]));
+  check('…it learns half the mean offset: [4, 4] → +2 tac s, ACCURACY 84% (§5.1\'s example)', skill.learnedOffsetTac === 2 && skill.accuracy === 84,
     JSON.stringify(skill));
-  check('…clamped to ±8 tac s, its ACCURACY floored at 40 and capped at 99', autoburnSkill(demos([30, 30]))?.learnedOffsetTac === 8
-    && autoburnSkill(demos([-30, -20]))?.learnedOffsetTac === -8 && autoburnSkill(demos([30, 30]))?.accuracy === 40
-    && autoburnSkill(demos([0, 0]))?.accuracy === 99);
+  check('…clamped to ±8 tac s, its ACCURACY floored at 40 and capped at 99', autoburnDemoSkill(demos([30, 30])).learnedOffsetTac === 8
+    && autoburnDemoSkill(demos([-30, -20])).learnedOffsetTac === -8 && autoburnDemoSkill(demos([30, 30])).accuracy === 40
+    && autoburnDemoSkill(demos([0, 0])).accuracy === 99);
   check('the boot lines fit the strip with worst-case numbers', AUTOBURN_TEXT.retrained(12, 99).length <= MAX_LINE_CHARS
     && AUTOBURN_TEXT.trained(2, 84) === '> SKILL TRAINED: AUTOBURN.skl · from your 2 captures · ACCURACY 84%');
-
-  h.kestrel(5, { hollowAsleep: true, sensorHealed: true });
-  check('KESTREL with no captures recorded: nothing to train', skillBootDue(state()) === null && skillFiles(state().memory).length === 0);
-  h.store.update((d) => { d.run.stats.demos.push({ offsetTac: 4 }, { offsetTac: 4 }); });
-  check('…two captures recorded: the skill is due to install', skillBootDue(state()) === 'install');
-  const line = trainSkillAtBoot(h.store);
-  const file = skillFiles(state().memory)[0];
-  const at = file ? segmentStarts(state().memory)[state().memory.indexOf(file)]! : -1;
-  // Slice 1a: 01-landing §3.16's pooled receiver lays racks E and F out back to back, so the first free run in the unit's
-  // racks (where the skill goes) is after REPAIR CHARGE, in rack F on a fresh unit.
-  check('it installs AUTOBURN.skl (6 blocks, in the unit\'s racks E–F: the first free run there), and the boot says so', line === AUTOBURN_TEXT.trained(2, 84) && file !== undefined
-    && file.size === AUTOBURN_SKILL_BLOCKS && file.name === 'AUTOBURN.skl' && at >= MEMORY_LAYOUTS.FULL.unitStart && at < MEMORY_LAYOUTS.FULL.unitStart + 128
-    && state().memory.slice(0, state().memory.indexOf(file)).every((seg, i) => segmentStarts(state().memory)[i]! < MEMORY_LAYOUTS.FULL.unitStart || seg.type !== 'free'), `${line} @${at}`);
-  check('…and moments later nothing more is due', skillBootDue(state()) === null && state().run.skillTrainedOn === 2);
-  h.store.update((d) => { d.run.stats.demos.push({ offsetTac: 1 }); });
-  check('a third capture retrains it at the next boot (the file stays)', skillBootDue(state()) === 'retrain'
-    && trainSkillAtBoot(h.store) === AUTOBURN_TEXT.retrained(3, autoburnSkill(state().run.stats)!.accuracy) && skillFiles(state().memory).length === 1);
-  h.store.update((d) => { d.memory = d.memory.map((seg) => (seg.type === 'upgrade' && seg.upgrade === 'autoburn' ? { id: 'gone', name: 'Free', type: 'free', size: seg.size } : seg)); });
-  h.store.update((d) => {
-    for (let i = d.memory.length - 1; i > 0; i--) {
-      const current = d.memory[i]!;
-      const prev = d.memory[i - 1]!;
-      if (current.type === 'free' && prev.type === 'free') { prev.size += current.size; d.memory.splice(i, 1); }
-    }
-  });
-  check('a lost skill does not come back without a new capture', skillBootDue(state()) === null);
-  h.store.update((d) => { d.run.stats.demos.push({ offsetTac: 0 }); });
-  check('…with one, it installs again', skillBootDue(state()) === 'install');
 }
 
 // --- Flying a capture --------------------------------------------------------------------------------------------
@@ -235,9 +203,9 @@ for (const learned of byDepth([0], [-8, 0, 8])) {
   // WP12 p3: a unit that never trained AUTOBURN is refused as NOT TRAINED YET (nothing of it is "gone"); one whose
   // trained file was lost keeps NO AUTOBURN.skl (`AUTOBURN.skl IS GONE — …`).
   check('no skill file, never trained: NOT TRAINED YET', autoburnRefusal(state(), getPrediction()) === AUTOBURN_REFUSAL.untrained);
-  h.store.update((d) => { d.run.skillTrainedOn = 2; });
+  h.store.update((d) => { d.run.skills.bought.push({ skill: 'autoburn', kind: 'train', to: { version: 1, lock: 0 }, cost: 0, visit: 0 }); });
   check('no skill file, trained before: NO AUTOBURN.skl', autoburnRefusal(state(), getPrediction()) === AUTOBURN_REFUSAL.noFile);
-  h.store.update((d) => { d.run.skillTrainedOn = null; });
+  h.store.update((d) => { d.run.skills.bought = []; });
   h.giveSkill([0, 0]);
   h.store.update((d) => { const skill = d.memory.find((seg) => seg.type === 'upgrade' && seg.upgrade === 'autoburn'); if (skill && 'integrity' in skill) skill.integrity = 40; });
   check('its file below 50: AUTOBURN.skl DAMAGED', autoburnRefusal(state(), getPrediction()) === AUTOBURN_REFUSAL.damaged);

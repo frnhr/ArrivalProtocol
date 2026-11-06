@@ -13,8 +13,9 @@ import { endShip, openDesk, setCourse, transmitNext } from '@systems/run';
 import { setRequest } from '@systems/repository';
 import { pickCard } from '@systems/draft';
 import { transmitModel, toggleSendOn, toggleDrop } from '@systems/transmit';
-import { installAddress } from '@systems/licences';
-import { replaceRange, mergeAdjacentFree, assertMemoryInvariants, newSegId, freeSegment } from '@systems/memory-ops';
+import {
+  unitInstallAddress, replaceRange, mergeAdjacentFree, assertMemoryInvariants, newSegId, freeSegment,
+} from '@systems/memory-ops';
 import { createToolFiles } from '@data/fs-tools';
 import { layoutOf } from '@data/memory';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
@@ -74,7 +75,7 @@ export function giveTools(store: Store<GameState>, kinds: readonly FsToolKind[])
   const memory = store.getState().memory;
   for (const kind of kinds) {
     for (const file of createToolFiles(kind).map((seg) => ({ ...seg, id: newSegId(seg.id) }))) {
-      const addr = installAddress(memory, file.size);
+      const addr = unitInstallAddress(memory, file.size);
       replaceRange(memory, addr, addr + file.size, [file], { opId: null, own: [] });
     }
   }

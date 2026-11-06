@@ -1,3 +1,5 @@
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): LastUnit.skills' reader. Others ask by
+// message.
 // The archive's record, read field by field (phase 3 slice 3c; moved out of systems/meta.ts in the review fixes, minor 6):
 // pure, no store, no storage, no world, so the run save's codec (systems/save-codec.ts) reads the last unit a saved run
 // holds without importing the stateful archive. MetaCorrupt names what is wrong; systems/meta.ts parseMeta builds the whole
@@ -6,6 +8,8 @@ import type { ShipOutcome } from '@state/schema';
 import type {
   LastCause, LastUnit, UnitStats, UnitTrail, TrailStop, TrailLost, ColonyRecord, RouteRecord, NotableEvent,
 } from '@/types/lineage';
+import type { SkillId, SkillVersion, LockLevel, SkillRecord } from '@/types/skill';
+import { SKILL_IDS, SKILL_TREE } from '@data/skills';
 
 // How a unit's run ended, as the next run remembers it (§4.5's causes; the type is types/lineage.ts LastCause). (WP8's
 // interim 'reassigned' is gone with that fleet: a record that holds it reads ARCHIVE CORRUPT.)
@@ -134,7 +138,6 @@ export function unitStats(value: unknown, field: string): UnitStats {
 export function parseLastUnit(value: unknown): LastUnit | null {
   if (value === null) return null;
   const unit = exactRecord(value, 'lastUnit', ['number', 'landed', 'shipName', 'cause', 'stats', 'hollowUnits', 'trail', 'skills']);
-  if (unit.skills !== null) corrupt('lastUnit.skills is not null (slice 4 fills it)');
   return {
     number: wholeNumber(unit.number, 'lastUnit.number'),
     landed: wholeNumber(unit.landed, 'lastUnit.landed'),
@@ -143,6 +146,31 @@ export function parseLastUnit(value: unknown): LastUnit | null {
     stats: unitStats(unit.stats, 'lastUnit.stats'),
     hollowUnits: unitList(unit.hollowUnits, 'lastUnit.hollowUnits'),
     trail: parseTrail(unit.trail, 'lastUnit.trail'),
-    skills: null,
+    skills: parseSkillRecords(unit.skills, 'lastUnit.skills'),
   };
+}
+
+function parseSkillRecords(value: unknown, field: string): SkillRecord[] | null {
+  if (value === null) return null;
+  const records = list_(value, field).map((record, i) => parseSkillRecord(record, `${field}[${i}]`));
+  if (new Set(records.map((record) => record.skill)).size !== records.length) corrupt(`${field} names a skill twice`);
+  return records;
+}
+
+const SKILL_VERSIONS: readonly unknown[] = [1, 2, 3];
+const LOCK_LEVELS: readonly unknown[] = [0, 1, 2];
+
+// One skill the last unit ended with (slice 4, types/skill.ts SkillRecord): a known skill at a version 1–3 and a lock 0–2
+// (a lock only on AUTOBURN), each skill once, and an accuracy 0–100 or null.
+export function parseSkillRecord(value: unknown, field: string): SkillRecord {
+  const r = exactRecord(value, field, ['skill', 'version', 'lock', 'accuracy']);
+  if (!(SKILL_IDS as readonly unknown[]).includes(r.skill)) corrupt(`${field}.skill '${String(r.skill)}' is unknown`);
+  if (!SKILL_VERSIONS.includes(r.version)) corrupt(`${field}.version is not 1, 2 or 3`);
+  if (!LOCK_LEVELS.includes(r.lock)) corrupt(`${field}.lock is not 0, 1 or 2`);
+  const skill = r.skill as SkillId;
+  if (r.lock !== 0 && SKILL_TREE[skill].locks.length === 0) corrupt(`${field}.lock: ${skill} has no LOCK RANGE`);
+  if (r.accuracy !== null && (typeof r.accuracy !== 'number' || !Number.isFinite(r.accuracy) || r.accuracy < 0 || r.accuracy > 100)) {
+    corrupt(`${field}.accuracy is not a percentage or null`);
+  }
+  return { skill, version: r.version as SkillVersion, lock: r.lock as LockLevel, accuracy: r.accuracy as number | null };
 }

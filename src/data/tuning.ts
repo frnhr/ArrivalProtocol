@@ -1,3 +1,5 @@
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2); Track FLIGHT edits values only in its '4
+// FLIGHT' block (AUTO_*, LOCK_*, ROUND_*).
 // Global tuning. Every number a rule depends on lives here (or per ship in ships.ts), with
 // the reason it has that value. Rule code imports these names and carries no numeric
 // literals of its own, so balancing never means hunting through systems.
@@ -1204,19 +1206,20 @@ export const DEBRIS_MOVE_HINT_TAC = 90;
 export const SEED_BLOCKS = 2;
 export const SEED_TELEGRAPH_SEC = 2;
 
-// AUTOBURN (§6.10): trained from the kid's own captures. It installs at the next boot once this many manual
-// captures are recorded; it learns half their mean START BURN offset (a sloppy teacher makes a sloppy skill),
-// clamped to ±8 tactical s, and its ACCURACY is 100 − 8 per tactical second of that, within 40..99.
-export const AUTOBURN_DEMOS_TO_TRAIN = 2;
+// AUTOBURN's demos (§6.10; 03 §3.3): it learns half the mean START BURN offset of the kid's last AUTO_DEMO_WINDOW manual
+// captures (a sloppy teacher makes a sloppy skill), clamped to ±8 tactical s, and its ACCURACY is 100 − 8 per tactical
+// second of that, within 40..99 (systems/skill-tree.ts demoSkill, AUTOBURN_DEMO_TUNING). Phase 2 counted every capture;
+// "the last 8" lets improvement show. Slice 4: the skill is bought (data/skills.ts), no longer installed after two captures.
 export const AUTOBURN_OFFSET_FACTOR = 0.5;
 export const AUTOBURN_OFFSET_MAX_TAC = 8;
 export const AUTOBURN_ACCURACY_PER_TAC = 8;
 export const AUTOBURN_ACCURACY_MIN = 40;
 export const AUTOBURN_ACCURACY_MAX = 99;
-// AUTOBURN.skl's file (§6.10: 6 blocks, in rack E with the unit's other files).
-export const AUTOBURN_SKILL_BLOCKS = 6;
-// AUTO is offered while the capture's START BURN is at most this many tactical seconds away (§6.10).
-export const AUTOBURN_WINDOW_TAC = 90;
+export const AUTO_DEMO_WINDOW = 8;
+// A skill bought before any manual capture is UNTRAINED (03 §3.3: 40%). Read through the ACCURACY rule, 40% is an offset
+// of (100 − 40) ÷ 8 = 7.5 tac s, so it fires that late (plan §7 R3, the lead's decision): at offset 0 an untrained skill
+// would be perfect, and buying without ever capturing by hand would be the best AUTOBURN ("trained by you" would die).
+export const AUTOBURN_UNTRAINED_OFFSET_TAC = 7.5;
 // `AUTOBURN: CAPTURED — trim it green yourself` stays on the strip this many AI seconds after the hand-back.
 export const AUTOBURN_DONE_LINE_SEC = 4;
 // A lost skill mid-burn (§6.10): the klaxon and `AUTOBURN.skl LOST — MANUAL` stand this long, then the flight's
@@ -1987,7 +1990,9 @@ export const NOTABLE_EVENTS_MAX = 4;
 // so a new field never strands a save in flight. A version this build can't migrate is refused loudly (RUN SAVE CAN'T
 // RESUME), never reinterpreted.
 export const RUN_SAVE_KEY = 'arrival-protocol/run/v1';
-export const RUN_SAVE_VERSION = 1;
+// 2 (slice 4): run.skills replaces skillTrainedOn, run.stats.dropDemos, burn.auto's mode fields, arrival.skills, skill files'
+// version and lock (save-codec RUN_SAVE_MIGRATIONS[1]).
+export const RUN_SAVE_VERSION = 2;
 // The archive (§4.5; 02 §3.12: v2 holds the arm, the trail, colonies, routes, events and traces). From slice 3c the key
 // stays `meta/v2` and versions migrate in place (systems/meta.ts migrateMeta, META_VERSION the record's); a new key is
 // only ever a deliberate reset. v1's key (phase 2's archive) was the one such reset: never written, read only to detect it
@@ -2015,3 +2020,37 @@ export const LEAVE_BLOCK_MAX_LINES = 6;
 export const TITLE_LAUNCH_ROLL_DELAY_SEC = 0.7;
 export const TITLE_LAUNCH_ROLL_SEC = 1.4;
 export const TITLE_LAUNCH_STAMP_AFTER_SEC = 0.25;
+
+// --- 4 TREE (owned by Track TREE): training cycles, the bank and the tree's rules (03 §3.1–§3.4) -------------------------
+
+// Training cycles per ship (03 §3.1): 1 + floor(5 × points ÷ colonists aboard). ARRIVED pays 1 even on a crash, so a bad
+// ship never means no skills and so more bad ships (no death spiral); LANDED pays one more for every full 20%, five steps a
+// kid can read off the LANDING REPORT, the fifth needing every point (`PERFECT LANDING · +6`). run-score.ts shipCycles.
+export const CYCLES_ARRIVED = 1;
+export const CYCLES_PER_STEP_PCT = 20;
+export const CYCLES_LANDED_STEPS = 5;
+// The first-pick guarantee (03 §3.1, signed off): the run's first desk raises the bank to this if it is lower (ship 1
+// crashed: 1 earned, +2), so the required first pick can always buy a root (every root costs 3).
+export const FIRST_PICK_FLOOR_CYCLES = 3;
+// RESTORE (decision 16): a lost skill comes back for half of what its lost levels cost, rounded up. Losing hurts (the
+// spec's AUTODROP v3: 8 of 16), but never as much as buying it again, so a long hop or a TIGHT ship is a price, not a trap.
+export const RESTORE_FRACTION = 0.5;
+// The largest skill file (03 §3.4): AUTOBURN v3 with LOCK 810, 10 + 2. A repair started before zero must still win (§6.6):
+// REPAIR v1 heals 100 ÷ (3 + 0.3 × 12) = 15.2 %/s, above 1.5 × the worst drain (5 %/s × 2 = 10, so 15); at 14 blocks it
+// would be 13.9 and the rule would break. data/skills.ts checks the table and the rule at load.
+export const SKILL_MAX_BLOCKS = 12;
+
+// --- 4 FLIGHT (owned by Track FLIGHT; it edits values only in this block): AUTOBURN v1–v3's flying (03 §3.6–§3.7) -------
+
+// LOCK RANGE (03 §3.7), by LockLevel: AUTO is offered while the mode's first burn is at most this many tactical seconds
+// away. 90 is phase 2's window (it comes with v1); 270 and 810 each triple it, so one [F] SKIP can carry an armed coast.
+export const LOCK_RANGE_TAC: readonly [number, number, number] = [90, 270, 810];
+// An armed AUTOBURN claims its Core thread this many tactical seconds before its burn (03 §3.7): the TACTICAL lead, so the
+// claim lands when the world slows down for the burn anyway, and no thread is held while it only waits. Equal to
+// TACTICAL_LEAD_BURN_TAC (data/skills.ts checks it).
+export const AUTO_THREAD_CLAIM_TAC = 8;
+// AUTOBURN never plans a trim, a ROUND burn or (4e) a landing-orbit burn that would leave less FUEL than this (03 §3.6):
+// `GREEN, NOT ROUND — SAVING FUEL`. Never the capture (plan §7 R4): refusing it would leave the kid the same burn by hand.
+export const AUTO_FUEL_RESERVE_PCT = 20;
+// ROUND (03 §3.6, decision 15) is done below this eccentricity: the drop width is then the same on every pass.
+export const ROUND_E_TOL = 0.01;

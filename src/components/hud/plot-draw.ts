@@ -1,3 +1,5 @@
+// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the LOCK bracket and the ghost. Others
+// ask by message.
 import type { Prediction } from '@systems/predict';
 import type { Projector } from '@/types/orbit';
 

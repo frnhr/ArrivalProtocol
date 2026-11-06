@@ -226,16 +226,16 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
     deliveries.map((entry) => entry.file).join() === 'repair-v2,mv,rm,cp,swap'
     && groups.map((group) => group.map((entry) => entry.file).join('+')).join(' | ') === 'repair-v2 | mv | rm+cp+swap'
     && deliveryBootLineText(at(store), 2) === REPO_TEXT.boot.folded(['rm', 'cp', 'swap'], 2331, 2333)
-    && bootLinePlan(at(store), false).filter((kind) => kind === 'delivery').length === 3,
+    && bootLinePlan(at(store), 0).filter((kind) => kind === 'delivery').length === 3,
     groups.map((group) => group.map((entry) => entry.file).join('+')).join(' | '));
   // Review nit: three patches and a file made four lines (every patch had one of its own).
   const many = [chip('rq6', 'repair-v2', 2330), chip('rq7', 'repair-v2', 2331), chip('rq8', 'repair-v2', 2332), chip('rq9', 'mv', 2333)];
   store.update((draft) => { draft.run.arrival!.deliveries = arrivalDeliveries(many, many.map((entry) => ({ key: entry.key, segIds: [`seg-${entry.key}`] })), []); });
   const manyGroups = deliveryBootLines(at(store)).map((group) => group.map((entry) => entry.file).join('+')).join(' | ');
   check('three patches and a file: still three lines (the first patch alone, then mv, the other two patches folded)',
-    manyGroups === 'repair-v2 | mv | repair-v2+repair-v2' && bootLinePlan(at(store), false).filter((kind) => kind === 'delivery').length === 3, manyGroups);
+    manyGroups === 'repair-v2 | mv | repair-v2+repair-v2' && bootLinePlan(at(store), 0).filter((kind) => kind === 'delivery').length === 3, manyGroups);
   store.update((draft) => { draft.run.arrival!.deliveries = deliveries; });
-  const plan = bootLinePlan(at(store), false);
+  const plan = bootLinePlan(at(store), 0);
   check('…the delivery lines come after the ship\'s own damage and before the charge (02 §4 steps 5–7)',
     plan.indexOf('delivery') > plan.indexOf('ecc') && plan.lastIndexOf('delivery') < plan.indexOf('charge'), plan.join(' '));
 }
@@ -321,10 +321,11 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
         chargeCarried: 30, starCredit: variant === 'hits' ? 12 : 0, stars: variant === 'hits' ? 2 : 0, card: null, cardCharge: 0,
         chargeFloorAdded: 0, chargeOverflowLost: 0, scripted: [], eccCorrected: 0, seeds: [], boarded: null,
         deliveries: variant === 'hits' ? [{ key: 'rq1', file: 'mv', segIds: ['x'], arrivedYear: 2400, firstOfKind: true, seeded: false }] : [],
+        skills: [],
       };
       const state = { ...base, run: { ...base.run, arrival } } as GameState;
       for (const skill of [false, true]) {
-        const lines = bootLinePlan(state, skill).map((kind) => (kind === 'skill' ? 'skill' : `${kind}: ${bootLine(kind, state, {} as never)}`));
+        const lines = bootLinePlan(state, skill ? 1 : 0).map((kind) => (kind === 'skill' ? 'skill' : `${kind}: ${bootLine(kind, state, {} as never)}`));
         out.push(`${index} ${variant} ${skill} ${lines.join(' | ')}`);
       }
     }

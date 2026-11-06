@@ -1,5 +1,7 @@
-// Slice 3c: Track SAVE owns this file (docs/phase3/impl/slice-3c-plan.md §5.2); WORLD and UI request helpers by message.
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2: unitInstallAddress, the skill
+// invariants); others ask by message.
 import type { Segment, FreeSegment } from '@/types/segment';
+import { skillBlocks, skillDef } from '@data/skills';
 
 // Structural memory helpers (§6.12). The strip is one ordered array; a segment's address is the
 // running sum of the sizes before it. Ops, HOLLOW, the printer, seeds and verbs all reshape it
@@ -167,7 +169,8 @@ export function releaseReservations(memory: Segment[], opId: number): void {
 }
 
 // The invariants (§6.12): the sizes sum to the strip's total, every size is a whole number ≥ 1,
-// ids are unique, and no two free segments touch unless one of them is reserved by an op.
+// ids are unique, and no two free segments touch unless one of them is reserved by an op. A skill file (slice 4) is the
+// size its version and lock make (data/skills.ts skillBlocks), and only AUTOBURN has a lock.
 // Throws on the first violation, naming it.
 export function assertMemoryInvariants(memory: readonly Segment[], total: number): void {
   const ids = new Set<string>();
@@ -176,6 +179,11 @@ export function assertMemoryInvariants(memory: readonly Segment[], total: number
     const seg = memory[i]!;
     if (!Number.isInteger(seg.size) || seg.size < 1) throw new Error(`memory: ${seg.name} (${seg.id}) has size ${seg.size}`);
     if (ids.has(seg.id)) throw new Error(`memory: duplicate id ${seg.id}`);
+    if (seg.type === 'upgrade' && 'version' in seg) {
+      if (seg.lock !== 0 && skillDef(seg.upgrade).locks.length === 0) throw new Error(`memory: ${seg.name} (${seg.id}) has lock ${seg.lock}`);
+      const want = skillBlocks(seg.upgrade, seg.version, seg.lock);
+      if (seg.size !== want) throw new Error(`memory: ${seg.name} (${seg.id}) v${seg.version} lock ${seg.lock} is ${seg.size} blocks, not ${want}`);
+    }
     ids.add(seg.id);
     sum += seg.size;
     const prev = i > 0 ? memory[i - 1]! : null;
@@ -185,4 +193,36 @@ export function assertMemoryInvariants(memory: readonly Segment[], total: number
     }
   }
   if (sum !== total) throw new Error(`memory: sizes sum to ${sum}, not ${total}`);
+}
+
+// The unit's own files: what carries from ship to ship (§6.9): the Core, the AI tools, the skills, the fs-tools, the upgrade
+// files and FIREWALLs picked between ships, REPAIR CHARGE, and 046.log (05 §3.2: locked in the packet). Ship files, drivers
+// and HOLLOW stay. (data/memory.ts re-exports it, where its callers have always found it.)
+export function isUnitFileType(seg: Segment): boolean {
+  return seg.type === 'core' || seg.type === 'tool' || seg.type === 'fs-tool' || seg.type === 'redundancy'
+    || seg.type === 'upgrade' || seg.type === 'firewall' || seg.type === 'log';
+}
+
+// Where a new unit file of `size` blocks goes when it is written into memory mid-run (slice 4, plan §2.16 item 3: one rule
+// for the licences' tool files, the repository's deliveries written by __ap.give, a granted or debug skill
+// (skill-files.ts installSkillFile) and 4d's FIREWALL): the start of the LAST open free region that fits, scanning back from
+// the end of memory. That is the receiver's free run right after REPAIR CHARGE (the unit's block is files, seeds, then the
+// charge, from rack E's start), on every memory class (a TIGHT ship's receiver is rack E alone), so a new file lands next to
+// the unit's others. A receiver with no room after the charge (a TIGHT unit spilled back into the tail) puts it flush
+// against the unit's block from below, not at the far end of the pod rack's free run. A full receiver sends it to the last
+// free run among the pods. Space a running move or copy reserved is never used. No room at all is a design error (a
+// layout that can't take its own files): throws. (Phase 2 had two rules: licences' and AUTOBURN's skillAddress, which
+// looked forward from rack E; the skill rule was the only one that disagreed, and its install path is gone.)
+export function unitInstallAddress(memory: readonly Segment[], size: number): number {
+  const starts = segmentStarts(memory);
+  const charge = memory.findIndex((seg) => seg.type === 'redundancy');
+  for (let i = memory.length - 1; i >= 0; i--) {
+    const seg = memory[i]!;
+    if (seg.type !== 'free' || seg.reservedBy !== undefined || seg.size < size) continue;
+    if (charge >= 0 && i < charge && memory[i + 1]?.type === 'core' && memory.slice(i + 1, charge).every(isUnitFileType)) {
+      return starts[i]! + seg.size - size;
+    }
+    return starts[i]!;
+  }
+  throw new Error(`memory: no free space for a ${size}-block unit file`);
 }

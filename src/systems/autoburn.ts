@@ -1,42 +1,37 @@
+// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): versions and modes, LOCK RANGE, the
+// claim, takeovers. Others ask by message.
 import type { Store } from '@state/store';
-import type { GameState, AutoburnPhase, AutoburnEnd, RunStats } from '@state/schema';
-import type { Segment, UpgradeSegment } from '@/types/segment';
+import type { GameState, AutoburnPhase, AutoburnEnd } from '@state/schema';
+import type { Segment, SkillFileSegment } from '@/types/segment';
+import type { AutoMode } from '@/types/skill';
 import { onPostTick } from '@systems/clock';
 import { stopSkipOnPress } from '@systems/pace';
-import { getPrediction, secUntil, burnKey, type Prediction } from '@systems/predict';
-import { capabilitiesNow, engineFault, presetsAvailable, liveUpgrades } from '@systems/capabilities';
+import { getPrediction, secUntil, burnKey, type Prediction, type BurnPoint } from '@systems/predict';
+import { capabilitiesNow, engineFault, presetsAvailable, skillLive, type SkillLive } from '@systems/capabilities';
 import { reserveThread, releaseThread, canStartOp } from '@systems/ops-core';
 import { isPresetAligning } from '@systems/attitude';
 import { registerKeys } from '@systems/input';
 import { say } from '@systems/say';
 import { emit } from '@systems/events';
 import { raiseAlert, clearAlert } from '@systems/alerts';
-import { replaceRange, segmentStarts, newSegId, assertMemoryInvariants } from '@systems/memory-ops';
-import { upgradeFiles } from '@state/selectors';
-import { isOpenFree } from '@systems/tool-targets';
-import { layoutOf, layoutOfMemory } from '@data/memory';
-import { UPGRADE_FILE_TEXT } from '@data/upgrades';
+import { skillFilesOf } from '@state/selectors';
+import { autoburnDemoSkill, paid } from '@systems/skill-tree';
+import { notBuilt } from '@systems/not-built';
 import {
   AUTOBURN_TEXT, AUTOBURN_DROP_TEXT, AUTOBURN_DROP_TAB, AUTOBURN_REFUSAL, autoRefusalKey, type AutoburnRefusal,
 } from '@data/skill-text';
 import { ringFit, elementsFromState, type RingFit } from '@/types/orbit';
-import { IS_DEV } from '@/env';
-import {
-  AUTOBURN_DEMOS_TO_TRAIN, AUTOBURN_OFFSET_FACTOR, AUTOBURN_OFFSET_MAX_TAC, AUTOBURN_ACCURACY_PER_TAC,
-  AUTOBURN_ACCURACY_MIN, AUTOBURN_ACCURACY_MAX, AUTOBURN_SKILL_BLOCKS, AUTOBURN_WINDOW_TAC, AUTOBURN_LOST_ALARM_SEC,
-  INTEGRITY_MAX,
-} from '@data/tuning';
+import { LOCK_RANGE_TAC, AUTOBURN_LOST_ALARM_SEC } from '@data/tuning';
 
 // AUTOBURN (§6.10, §9 WP9 item 5): a skill the kid trained by capturing by hand, DOM-free.
 //
-// • TRAINING. Every manual capture (a player burn that closed the loop) is a demo: how late the kid started
-//   against the START BURN tick (run.stats.demos, systems/run.ts). Once AUTOBURN_DEMOS_TO_TRAIN are in, the
-//   next ship's boot installs AUTOBURN.skl (6 blocks, rack E) and says so: `> SKILL TRAINED: AUTOBURN.skl ·
-//   from your 2 captures · ACCURACY 84%`. It learns half the kid's mean offset (a sloppy teacher makes a
-//   sloppy skill), clamped to ±8 tactical s; later manual captures retrain it at the next boot. A skill that
-//   was eaten installs again only after a new capture.
-// • USE. [B] (or the Engine window's AUTO button) engages it when the file is live and healthy, the presets and the engine
-//   work, the path is a flyby above the surface, the capture's START BURN is within 90 tactical s, and a Core
+// • TRAINING (phase 3 slice 4, 03 §3.3, §3.6). AUTOBURN.skl is bought at a desk (systems/training.ts) and arrives in the
+//   packet; phase 2's free install after two captures is gone. Every manual capture (a player burn that closed the loop)
+//   is still a demo: how late the kid started against the START BURN tick (run.stats.demos, systems/run.ts), and the
+//   skill learns half the mean offset of the last AUTO_DEMO_WINDOW (skill-tree.ts demoSkill; with none it is UNTRAINED).
+//   Its version under damage is capabilities.ts skillLive's.
+// • USE. [B] (or the Engine window's AUTO button) engages it when the file works (skillLive), the presets and the engine
+//   work, the path is a flyby above the surface, the capture's START BURN is within its lock range, and a Core
 //   thread is free: it holds that thread (ops-core reserveThread: THRUST LIMIT 75%, one op fewer) until it ends.
 // • THE MACHINE. idle → armed (RETRO selected at once, waiting) → pointing (its moment came, the ship still
 //   turns) → burning (it holds the throttle, firingSource 'auto', at the burn point + its learned offset) →
@@ -52,81 +47,36 @@ import {
 
 const OWNER = 'autoburn';
 
-// --- The skill ------------------------------------------------------------------------------------------
+// --- The skill (slice 4) ------------------------------------------------------------------------------------------------
 
-export interface AutoburnSkill {
-  demos: number;
-  learnedOffsetTac: number;   // + late, − early: when it fires against the START BURN tick
-  accuracy: number;           // % (the boot line, the Skills row)
+// The unit's AUTOBURN.skl copies, whatever their health (skillLive picks the one that counts).
+export function skillFiles(memory: readonly Segment[]): SkillFileSegment[] {
+  return skillFilesOf(memory, 'autoburn');
 }
 
-// What the kid's captures taught it (§6.10), or null before AUTOBURN_DEMOS_TO_TRAIN. Pure.
-export function autoburnSkill(stats: Readonly<Pick<RunStats, 'demos'>>): AutoburnSkill | null {
-  const demos = stats.demos;
-  if (demos.length < AUTOBURN_DEMOS_TO_TRAIN) return null;
-  const mean = demos.reduce((sum, demo) => sum + demo.offsetTac, 0) / demos.length;
-  const learned = Math.max(-AUTOBURN_OFFSET_MAX_TAC, Math.min(AUTOBURN_OFFSET_MAX_TAC, AUTOBURN_OFFSET_FACTOR * mean));
-  const accuracy = Math.round(Math.max(AUTOBURN_ACCURACY_MIN, Math.min(AUTOBURN_ACCURACY_MAX, 100 - AUTOBURN_ACCURACY_PER_TAC * Math.abs(learned))));
-  return { demos: demos.length, learnedOffsetTac: learned, accuracy };
+// The run has bought AUTOBURN (at a desk, or a migrated save's free one): a unit without the file has lost it, rather than
+// never trained it (the refusal's words, the AUTO button and the Skills row).
+export function autoburnEverTrained(state: Readonly<GameState>): boolean {
+  return paid(state.run.skills, 'autoburn') !== null;
 }
 
-export function skillFiles(memory: readonly Segment[]): UpgradeSegment[] {
-  return upgradeFiles(memory, 'autoburn');
+// --- Track FLIGHT: stubs with their final signatures (slice 4 plan §2.9) ---------------------------------------------------
+
+// What [B] would fly now (03 §3.6: "[B] makes it green; [B] on green makes it round"), from the effective version: v1 the
+// capture on an open path; v2+ GREEN until the loop is in the ring, then ROUND while e ≥ ROUND_E_TOL; null when there is
+// nothing to fly. Pure.
+export function autoModeFor(state: Readonly<GameState>, pred: Prediction, live: Readonly<SkillLive>): AutoMode | null {
+  return notBuilt('autoModeFor', 'FLIGHT', state, pred, live);
 }
 
-// What this boot does with the skill: installs it (the first time, or again after the file was lost and a new
-// capture came in), retrains the file the unit carries (more captures since), or nothing. Pure.
-export type SkillBoot = 'install' | 'retrain' | null;
-
-export function skillBootDue(state: Readonly<GameState>): SkillBoot {
-  const skill = autoburnSkill(state.run.stats);
-  if (skill === null) return null;
-  const trainedOn = state.run.skillTrainedOn;
-  if (trainedOn !== null && skill.demos <= trainedOn) return null;
-  return skillFiles(state.memory).length > 0 ? 'retrain' : 'install';
+// The lock range in tactical seconds at the file's effective lock (LOCK_RANGE_TAC; null: the skill does not work).
+export function lockRangeTac(live: Readonly<SkillLive>): number | null {
+  return notBuilt('lockRangeTac', 'FLIGHT', live);
 }
 
-// The open free space a new skill file goes to: the first that fits from rack E on (the unit's own files), else
-// the end of the last one before rack E (rack D's free tail, beside the unit). That second case is real: the star
-// credit and the +12 card can fill racks E–F with REPAIR CHARGE past the link (carry.ts spills it into rack D),
-// leaving no 6 blocks there; licences spill backward the same way (licences.ts installAddress). WP9 review round 1
-// asks Fran to sign this order off. No room anywhere is a layout that can't take its own unit: throws.
-function skillAddress(memory: readonly Segment[], size: number): number {
-  const starts = segmentStarts(memory);
-  const { unitStart } = layoutOfMemory(memory);
-  const fits = (seg: Segment): boolean => isOpenFree(seg) && seg.size >= size;
-  for (let i = 0; i < memory.length; i++) {
-    if (starts[i]! >= unitStart && fits(memory[i]!)) return starts[i]!;
-  }
-  for (let i = memory.length - 1; i >= 0; i--) {
-    if (fits(memory[i]!)) return Math.max(starts[i]!, Math.min(starts[i]! + memory[i]!.size, unitStart) - size);
-  }
-  throw new Error(`autoburn: no free space for the ${size}-block skill file`);
-}
-
-// The boot's skill line (systems/boot.ts): trains the skill now (installs or retrains it) and returns the line
-// that says so. Throws when nothing is due (the boot counted a line it should not have).
-export function trainSkillAtBoot(store: Store<GameState>): string {
-  const state = store.getState();
-  const due = skillBootDue(state);
-  const skill = autoburnSkill(state.run.stats);
-  if (due === null || skill === null) throw new Error('trainSkillAtBoot: no skill is due at this boot');
-  if (due === 'install') {
-    const memory = state.memory;
-    const addr = skillAddress(memory, AUTOBURN_SKILL_BLOCKS);
-    const file: UpgradeSegment = {
-      id: newSegId('autoburn'), name: UPGRADE_FILE_TEXT.autoburn.name, type: 'upgrade', upgrade: 'autoburn',
-      size: AUTOBURN_SKILL_BLOCKS, integrity: INTEGRITY_MAX, state: 'intact', scanned: true, desc: UPGRADE_FILE_TEXT.autoburn.desc,
-    };
-    replaceRange(memory, addr, addr + file.size, [file], { opId: null, own: [] });
-    if (IS_DEV) assertMemoryInvariants(memory, layoutOf(state).totalBlocks);
-  }
-  store.update((draft) => {
-    draft.run.skillTrainedOn = skill.demos;
-    draft.ui.memoryRev++;
-  });
-  emit('skill-trained', { demos: skill.demos, accuracy: skill.accuracy, retrained: due === 'retrain' });
-  return due === 'install' ? AUTOBURN_TEXT.trained(skill.demos, skill.accuracy) : AUTOBURN_TEXT.retrained(skill.demos, skill.accuracy);
+// The burn `mode` would fly first, before the press (the NAV PLOT's ghost and LOCK bracket). Pure.
+export function previewModeBurn(state: Readonly<GameState>, mode: AutoMode): BurnPoint | null {
+  return notBuilt('previewModeBurn', 'FLIGHT', state, mode);
 }
 
 // --- Using it --------------------------------------------------------------------------------------------
@@ -149,16 +99,17 @@ function captureInTac(state: Readonly<GameState>, pred: Prediction): number | nu
 export function autoburnRefusal(state: Readonly<GameState>, pred: Prediction): AutoburnRefusal | null {
   if (state.run.phase !== 'flight' || state.burn.status !== 'approaching') return AUTOBURN_REFUSAL.over;
   if (state.clock.paused) return AUTOBURN_REFUSAL.paused;
-  const memory = state.memory;
-  if (skillFiles(memory).length === 0) return state.run.skillTrainedOn === null ? AUTOBURN_REFUSAL.untrained : AUTOBURN_REFUSAL.noFile;
-  if (liveUpgrades(memory, 'autoburn') === 0) return AUTOBURN_REFUSAL.damaged;
+  const live = skillLive(state.memory, 'autoburn');
+  if (live.file === null) return autoburnEverTrained(state) ? AUTOBURN_REFUSAL.noFile : AUTOBURN_REFUSAL.untrained;
+  if (live.version === 0) return AUTOBURN_REFUSAL.damaged;
   const caps = capabilitiesNow(state);
   if (!presetsAvailable(caps)) return AUTOBURN_REFUSAL.presets;
   if (engineFault(caps) !== null) return AUTOBURN_REFUSAL.engine;
   if (pred.outcome !== 'open' || !(pred.rp > state.level.planet.R)) return AUTOBURN_REFUSAL.noCapture;
   const inTac = captureInTac(state, pred);
   if (inTac === null) return AUTOBURN_REFUSAL.noCapture;
-  if (inTac > AUTOBURN_WINDOW_TAC) return AUTOBURN_REFUSAL.tooFar;
+  // FOUNDATION: v1's range (Track FLIGHT reads lockRangeTac(live) and the mode's first burn).
+  if (inTac > LOCK_RANGE_TAC[0]) return AUTOBURN_REFUSAL.tooFar;
   if (state.burn.firing && state.burn.firingSource === 'player') return AUTOBURN_REFUSAL.burning;
   if (!canStartOp()) return AUTOBURN_REFUSAL.threads;
   // Last, so it only stands for "[B] would engage it, but a press during a SKIP only stops the SKIP" (pressAutoburn):
@@ -176,9 +127,9 @@ export function autoburnAvailable(state: Readonly<GameState>, pred: Prediction):
 // A late skill can still be waiting when ▼ goes by: the capture is then MISSED ▼, due now, and it fires at once
 // (its START BURN stays a few seconds behind the ship, so the offset would never come round).
 export function autoburnFireInTac(state: Readonly<GameState>, pred: Prediction): number | null {
-  const skill = autoburnSkill(state.run.stats);
+  const skill = autoburnDemoSkill(state.run.stats);
   const inTac = captureInTac(state, pred);
-  if (skill === null || inTac === null) return null;
+  if (inTac === null) return null;
   if (pred.burnPoint?.reason === 'missed') return Math.min(0, inTac + skill.learnedOffsetTac);
   return inTac + skill.learnedOffsetTac;
 }
@@ -192,7 +143,16 @@ export function autoburnArmedInTac(state: Readonly<GameState>, pred: Prediction)
 function setPhase(store: Store<GameState>, to: AutoburnPhase, end: AutoburnEnd | null): void {
   const from = store.getState().burn.auto.phase;
   const at = store.getState().clock.aiSec;
-  store.update((draft) => { draft.burn.auto = { phase: to, atAi: at, end }; });
+  store.update((draft) => {
+    draft.burn.auto.phase = to;
+    draft.burn.auto.atAi = at;
+    draft.burn.auto.end = end;
+    // FOUNDATION: v1 flies only the capture, and holds its thread from engagement to its end (Track FLIGHT: the claim).
+    const engaged = isEngaged(to);
+    draft.burn.auto.mode = engaged ? 'capture' : null;
+    draft.burn.auto.claimed = engaged;
+    if (!engaged) { draft.burn.auto.targetKm = null; draft.burn.auto.waitingSinceTSec = null; }
+  });
   emit('autoburn', { from, to, end });
 }
 
@@ -298,8 +258,8 @@ function tick(store: Store<GameState>): void {
   if (state.run.phase !== 'flight' || state.burn.status !== 'approaching') { finish(store, 'idle', 'flight-over'); return; }
   if (state.clock.paused) return;
   if (state.burn.firing && state.burn.firingSource === 'player') { finish(store, 'idle', 'takeover'); return; }
-  const memory = state.memory;
-  if (liveUpgrades(memory, 'autoburn') === 0) { finish(store, 'dropped', skillFiles(memory).length === 0 ? 'lost' : 'damaged'); return; }
+  const live = skillLive(state.memory, 'autoburn');
+  if (live.version === 0) { finish(store, 'dropped', live.file === null ? 'lost' : 'damaged'); return; }
   const caps = capabilitiesNow(state);
   if (engineFault(caps) !== null) { finish(store, 'dropped', 'engine'); return; }
   if (!presetsAvailable(caps)) { finish(store, 'dropped', 'presets'); return; }

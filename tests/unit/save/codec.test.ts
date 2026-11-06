@@ -115,8 +115,9 @@ const edit = (raw: string, change: (save: Raw) => void): string => {
 };
 check('not JSON → not-json', kind('{ this is not a run save') === 'not-json');
 check('another save version → version', kind(edit(desk, (save) => { save.saveVersion = RUN_SAVE_VERSION + 1; })) === 'version');
-check('migrateRunSave knows no step yet (version 1 is the first), and leaves an unknown version for check 2',
-  Object.keys(RUN_SAVE_MIGRATIONS).length === 0 && isDeepStrictEqual(migrateRunSave({ saveVersion: 0 }), { saveVersion: 0 }));
+// Slice 4: the first step (1 → 2, the skill tree; its fixtures are migrated in tests/unit/skills/foundation.test.ts).
+check('migrateRunSave knows one step (1 → 2, slice 4), and leaves an unknown version for check 2',
+  Object.keys(RUN_SAVE_MIGRATIONS).join() === '1' && isDeepStrictEqual(migrateRunSave({ saveVersion: 0 }), { saveVersion: 0 }));
 const contentKeys = Object.keys(contentVersions()) as (keyof ReturnType<typeof contentVersions>)[];
 const contentRefused = contentKeys.filter((key) => kind(edit(desk, (save) => { save.content[key] += 1; })) === 'content');
 check('each content version mismatched in turn → content', contentRefused.length === contentKeys.length, contentRefused.join(', '));

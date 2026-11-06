@@ -4,12 +4,12 @@ import { RACK_A, FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F } from '@data/memory';
 import { STRIP_NARROW_MAX_BLOCKS, STRIP_TINY_MAX_BLOCKS, STRIP_MICRO_MAX_BLOCKS } from '@data/tuning';
 import { HOLLOW_TYPE_LABEL } from '@data/hollow-text';
 import { UPGRADE_FILE_TEXT } from '@data/upgrades';
+import { SKILL_FILE_TEXT } from '@data/skills';
 import { LOG_TYPE_LABEL } from '@data/log-text';
 
 export const TYPE_LABELS: Record<SegmentType, string> = {
   core: 'AI · Core Process',
   tool: 'AI · Tool',
-  skill: 'AI · Skills',
   'fs-tool': 'Filesystem Utility · in memory',
   ship: 'Ship System · Active',
   'ship-backup': 'Ship System · Backup',
@@ -60,7 +60,7 @@ const NAME_BREAKS: Readonly<Record<string, string>> = {
   'Repair.bak': `Repair${ZERO_WIDTH_BREAK}.bak`,
   // WP9 review round 1: a 6-block chip at 1280 px cut it as `AUTOBUR` / `N.SKL`. Now `AUTOBURN` / `.SKL` where the
   // word fits (1440 px), else `AUTO-` / `BURN` (the name is whole in the title and INSPECT).
-  [UPGRADE_FILE_TEXT.autoburn.name]: `AUTO${SOFT_HYPHEN}BURN${ZERO_WIDTH_BREAK}.skl`,
+  [SKILL_FILE_TEXT.autoburn.name]: `AUTO${SOFT_HYPHEN}BURN${ZERO_WIDTH_BREAK}.skl`,
 };
 
 function validateNameBreaks(): void {
@@ -68,6 +68,7 @@ function validateNameBreaks(): void {
   for (const item of [...RACK_A, ...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]) if ('name' in item) names.add(item.name);
   for (const kind of FS_TOOL_KINDS) for (const file of TOOL_FILES[kind]) names.add(file.name);
   for (const file of Object.values(UPGRADE_FILE_TEXT)) names.add(file.name);
+  for (const file of Object.values(SKILL_FILE_TEXT)) names.add(file.name);
   for (const [name, broken] of Object.entries(NAME_BREAKS)) {
     if (!names.has(name)) throw new Error(`type-labels.ts: NAME_BREAKS names '${name}', which is no file in the game`);
     if (broken.replace(/[\u00AD\u200B]/g, '') !== name) throw new Error(`type-labels.ts: NAME_BREAKS '${name}' spells another name`);

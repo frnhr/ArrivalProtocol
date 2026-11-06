@@ -7,7 +7,8 @@ import { createHarness4 } from './harness4';
 import { createInitialState } from '@state/initial';
 import type { GameState } from '@state/schema';
 import type { Segment, ShipSegment } from '@/types/segment';
-import { installTool, installAddress, isLicensed, licenceSchedule } from '@systems/licences';
+import { installTool, isLicensed, licenceSchedule } from '@systems/licences';
+import { unitInstallAddress, freeSegment, assertMemoryInvariants } from '@systems/memory-ops';
 import { getPrediction, getSensedPrediction, sensePrediction } from '@systems/predict';
 import { buildFlightContext, flightObjective, type FlightContext } from '@systems/guidance';
 import { buildDirectorCtx, composeObjective } from '@systems/director';
@@ -20,7 +21,6 @@ import { actionSwap } from '@state/actions';
 import { getOps } from '@systems/ops-core';
 import { deleteQuestion } from '@systems/tool-targets';
 import { selectCorruption, coreThreads, getByRole } from '@state/selectors';
-import { freeSegment, assertMemoryInvariants } from '@systems/memory-ops';
 import { GUIDE_RULES, LICENCE_LINES } from '@data/script';
 import { TOOL_FILES } from '@data/fs-tools';
 import { MAX_LINE_CHARS, PLOT_STALE_TAC, BOOT_SKIP_GRACE_SEC } from '@data/tuning';
@@ -101,13 +101,13 @@ const names = (): string[] => memory().map((seg) => seg.name);
   const fake = createInitialState({ seed: 1 });
   const trailing = fake.memory[fake.memory.length - 1]!;
   if (trailing.type === 'free') trailing.reservedBy = 99;
-  const addr = installAddress(fake.memory, 4);
+  const addr = unitInstallAddress(fake.memory, 4);
   const addrSeg = (() => { let at = 0; for (const seg of fake.memory) { if (at === addr) return seg; at += seg.size; } return null; })();
   check('licence: never into space a running op reserved', addrSeg?.type === 'free' && addrSeg.reservedBy === undefined && addrSeg !== trailing);
   const full = createInitialState({ seed: 1 });
   full.memory = full.memory.map((seg) => (seg.type === 'free' ? { ...freeSegment(seg.size, 7) } : seg));
   let noRoom = false;
-  try { installAddress(full.memory, 4); } catch { noRoom = true; }
+  try { unitInstallAddress(full.memory, 4); } catch { noRoom = true; }
   check('licence: no room at all throws (a layout bug, never a silent skip)', noRoom);
 }
 

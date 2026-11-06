@@ -5,6 +5,7 @@ import type {
 import type { DragKick, LandingEnd, LaunchSource, Place, Touch } from '@/types/landing';
 import type { SegmentRole, InfectionSide } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
+import type { SkillId, SkillLevel, EffectiveVersion } from '@/types/skill';
 import type { RepoFileId } from '@/types/repo';
 import type { LineState } from '@systems/flight-events';
 import type { OpKind } from '@systems/ops-core';
@@ -158,8 +159,14 @@ export interface GameEvents {
   // WP10: THE DEAL (systems/hollow-deal.ts) was offered in the TERMINAL, naming `pod`; and how it ended.
   'deal-offered': { pod: number };
   'deal': { outcome: DealOutcome; pod: number };
-  // WP9: AUTOBURN.skl was trained at this boot from the kid's captures (installed, or retrained with more).
-  'skill-trained': { demos: number; accuracy: number; retrained: boolean };
+  // Slice 4: a skill line of the boot (systems/skill-files.ts applySkillBootLine): a skill trained, retrained by new demos,
+  // or granted; `accuracy` null for a skill with no demos. The ONLINE stamp and the chime hang on it.
+  'skill-trained': { skill: SkillId; level: SkillLevel; kind: 'trained' | 'retrained' | 'granted'; demos: number; accuracy: number | null };
+  // Slice 4 (03 §3.5): a skill's effective version moved (skill-files.ts mountSkillWatch): a step down is stamped
+  // (`AUTOBURN v2 → v1`), a step back up through REPAIR too (`AUTOBURN v2 RESTORED`).
+  'skill-version': { skill: SkillId; from: EffectiveVersion; to: EffectiveVersion };
+  // Slice 4 (03 §3.7): the path entered AUTOBURN's lock range (the AUTO button glows; a chime).
+  'autoburn-in-lock': Record<string, never>;
   // WP11: a glitchBurst (systems/glitch.ts): the overlay spikes to `level` for `ms` (a dim pulse under reduced motion).
   'glitch-burst': { level: number; ms: number };
   // WP11: HOLLOW's verbs (systems/hollow-verbs.ts): one started counting down at `targetId`; an op touched its target

@@ -141,15 +141,15 @@ check('…an id the INBOX does not hold throws', threw);
 
 // The classic world has no mail and no INBOX line.
 const classic = createInitialState({ seed: 1, shipIndex: 0, phase: 'boot' });
-check('the classic world: no messages, no `inbox` boot line', inboxMessages(classic).length === 0 && !bootLinePlan(classic, false).includes('inbox'));
+check('the classic world: no messages, no `inbox` boot line', inboxMessages(classic).length === 0 && !bootLinePlan(classic, 0).includes('inbox'));
 const ship1 = runAt(1, false);
-check('the arm\'s first boot plans the INBOX line', bootLinePlan(ship1, false).includes('inbox'));
+check('the arm\'s first boot plans the INBOX line', bootLinePlan(ship1, 0).includes('inbox'));
 
 // HOLLOW's reading line: once entry 05 is read, once a run, on the arm.
 const reading = runAt(4, false);
 check('the reading line: not due before entry 05 is read', !readingLineDue(reading));
 reading.run.log.read = [1, 2, 3, 4, 5];
-check('…due once it is read (and planned before the log line)', readingLineDue(reading) && bootLinePlan(reading, false).includes('reading'));
+check('…due once it is read (and planned before the log line)', readingLineDue(reading) && bootLinePlan(reading, 0).includes('reading'));
 reading.run.log.toldReading = true;
 check('…never again once said', !readingLineDue(reading));
 const classicRead = createInitialState({ seed: 1, shipIndex: 0, phase: 'boot' });

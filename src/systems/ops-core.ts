@@ -1,3 +1,4 @@
+// Slice 4: Track FLIGHT may add the claim's hook here, nothing else (docs/phase3/impl/slice-4-plan.md §5.2).
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { onAiTick } from '@systems/clock';

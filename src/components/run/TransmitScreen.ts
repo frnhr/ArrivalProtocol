@@ -1,3 +1,5 @@
+// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the skill chips and PACK AS buttons over
+// TREE's model. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { UpgradeId } from '@data/upgrades';

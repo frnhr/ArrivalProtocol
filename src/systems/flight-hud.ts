@@ -1,3 +1,7 @@
+// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the AUTO button's mode, lockBracket,
+// autoGhost, the Engine pip's model. Others ask by message.
+import { notBuilt } from '@systems/not-built';
+import type { AutoMode } from '@/types/skill';
 import { MAP_TEXT } from '@data/map-text';
 import type { GameState, Pace, PresetMode, TerminalStatus, LogEntry } from '@state/schema';
 import type { Ring, Vec2 } from '@/types/orbit';
@@ -21,7 +25,8 @@ import { GHOST_TEXT } from '@data/ghost-text';
 import { ghostCountShown, ghostDriftKm } from '@systems/ghost-thrust';
 import { ZONE_WORD, ZONE_PLOT_TEXT, RACK_TAG_TEXT } from '@data/zone-text';
 import { AUTO_BUTTON_TEXT, AUTO_BUTTON_REASON } from '@data/skill-text';
-import { autoburnSkill, autoburnRefusal, autoburnArmedInTac, skillFiles } from '@systems/autoburn';
+import { autoburnRefusal, autoburnArmedInTac, skillFiles, autoburnEverTrained } from '@systems/autoburn';
+import { autoburnDemoSkill } from '@systems/skill-tree';
 import { zoneVerdict, zoneRacks, racksText, debrisRack, type Zone, type ZoneHit, type ZoneVerdict } from '@/types/zone';
 import { mindZonesBlind } from '@systems/zones';
 import { LANDING_HUD_TEXT, LANDING_REPORT_TEXT, BAND_TEXT, LANDING_PLOT_TEXT, DECAY_CHIP_TEXT } from '@data/landing-text';
@@ -817,9 +822,8 @@ export function autoButton(state: Readonly<GameState>, pred: Prediction): AutoBu
   const hidden: AutoButtonModel = { shown: false, head: '', note: '', look: 'blocked', title: '' };
   if (state.run.phase !== 'flight' || state.burn.status !== 'approaching') return hidden;
   const hasFile = skillFiles(state.memory).length > 0;
-  if (!hasFile && state.run.skillTrainedOn === null) return hidden;
-  const skill = autoburnSkill(state.run.stats);
-  const title = hasFile && skill ? AUTO_BUTTON_TEXT.title(skill.accuracy) : AUTO_BUTTON_TEXT.titleNoSkill;
+  if (!hasFile && !autoburnEverTrained(state)) return hidden;
+  const title = hasFile ? AUTO_BUTTON_TEXT.title(autoburnDemoSkill(state.run.stats).accuracy) : AUTO_BUTTON_TEXT.titleNoSkill;
   const phase = state.burn.auto.phase;
   if (phase === 'armed') {
     const note = AUTO_BUTTON_TEXT.armed(formatCountdown(autoburnArmedInTac(state, pred)));
@@ -830,6 +834,31 @@ export function autoButton(state: Readonly<GameState>, pred: Prediction): AutoBu
   const refusal = autoburnRefusal(state, pred);
   if (refusal === null) return { shown: true, head: AUTO_BUTTON_TEXT.head, note: AUTO_BUTTON_TEXT.ready, look: 'ready', title };
   return { shown: true, head: AUTO_BUTTON_TEXT.head, note: AUTO_BUTTON_REASON[refusal] ?? refusal, look: 'blocked', title };
+}
+
+// --- Slice 4 (plan §2.9; Track FLIGHT): stubs with their final signatures ------------------------------------------------
+
+// The stretch of the path inside AUTOBURN's lock range (the NAV PLOT's `LOCK` bracket, ending at the mode's first burn), in
+// game seconds from now; null when there is no skill to lock or nothing to fly.
+export interface LockBracket {
+  fromInSec: number;
+  toInSec: number;
+}
+
+export function lockBracket(state: Readonly<GameState>, pred: Prediction): LockBracket | null {
+  return notBuilt('lockBracket', 'FLIGHT', state, pred);
+}
+
+// The dashed target AUTOBURN's mode would fly to (the band-hugging loop for GREEN, the circle for ROUND and v3), as its
+// apsides; null with nothing to show.
+export interface AutoGhost {
+  mode: AutoMode;
+  rpKm: number;
+  raKm: number;
+}
+
+export function autoGhost(state: Readonly<GameState>, pred: Prediction): AutoGhost | null {
+  return notBuilt('autoGhost', 'FLIGHT', state, pred);
 }
 
 // One line per preset that says what it does to the path, in kid words (also the tooltips).

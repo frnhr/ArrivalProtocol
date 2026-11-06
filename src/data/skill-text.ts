@@ -1,9 +1,11 @@
+// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): every AUTOBURN line, each ≤ 70. Others
+// ask by message.
 // The words AUTOBURN says (WP9, §6.10): its boot line, its radio lines and why it can't engage. Kept apart from
 // script.ts (like tool-text.ts) so systems/autoburn.ts and guidance can import them without the director.
 // Every line is checked against the strip width with worst-case numbers by tests/unit/wp9 tests (≤ 70 chars).
 
 import type { AutoburnEnd } from '@state/schema';
-import { AUTOBURN_WINDOW_TAC, BAND_DEGRADED_MIN } from '@data/tuning';
+import { LOCK_RANGE_TAC, BAND_DEGRADED_MIN } from '@data/tuning';
 
 export const AUTOBURN_TEXT = {
   // The boot (§5.1 4:40), the moment the kid's two captures became a skill (the lead: say so when it installs).
@@ -67,7 +69,9 @@ export function autoRefusalKey(refusal: AutoburnRefusal): string {
   return `AUTO|${refusal}`;
 }
 
-const AUTO_WINDOW_TEXT = `${Math.floor(AUTOBURN_WINDOW_TAC / 60)}:${String(AUTOBURN_WINDOW_TAC % 60).padStart(2, '0')}`;
+// The lock range a v1 file has (slice 4: LOCK RANGE level 0; Track FLIGHT words it per level).
+const AUTO_WINDOW_TAC = LOCK_RANGE_TAC[0];
+const AUTO_WINDOW_TEXT = `${Math.floor(AUTO_WINDOW_TAC / 60)}:${String(AUTO_WINDOW_TAC % 60).padStart(2, '0')}`;
 
 export const AUTO_REFUSAL_LINES: Readonly<Partial<Record<AutoburnRefusal, { text: string; keys: readonly string[] }>>> = {
   [AUTOBURN_REFUSAL.noFile]: { text: 'AUTOBURN.skl IS GONE — capture by hand to train it again', keys: [] },

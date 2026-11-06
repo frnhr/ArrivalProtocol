@@ -11,8 +11,7 @@ import { packUnit, layoutCarried, arrivalCharge, type Packet } from '@systems/ca
 import { roomFit, hopBetween } from '@systems/map-hop';
 import { shipDefAt } from '@systems/map-run';
 import { routes } from '@systems/map-route';
-import { installAddress } from '@systems/licences';
-import { segmentStarts } from '@systems/memory-ops';
+import { unitInstallAddress, segmentStarts } from '@systems/memory-ops';
 import { createRng } from '@systems/rng';
 import { freshArm } from '@systems/map-generator';
 import { validateShipDef } from '@data/ships';
@@ -122,11 +121,11 @@ const roomy = tightAt(57, 3);
 const starts = segmentStarts(roomy);
 const chargeIndex = roomy.findIndex((seg) => seg.type === 'redundancy');
 check('a licence on a TIGHT ship lands right after REPAIR CHARGE, in rack E (it has no rack F)',
-  installAddress(roomy, 4) === starts[chargeIndex]! + roomy[chargeIndex]!.size && installAddress(roomy, 4) >= layoutFor('TIGHT').unitStart);
+  unitInstallAddress(roomy, 4) === starts[chargeIndex]! + roomy[chargeIndex]!.size && unitInstallAddress(roomy, 4) >= layoutFor('TIGHT').unitStart);
 const full = tightAt(65, 10);
 const unitStartAt = segmentStarts(full)[full.findIndex((seg) => seg.type === 'core')]!;
 check('…a full receiver (the unit spilled into the tail): flush against the unit\'s block, not at the far end of rack C',
-  installAddress(full, 4) + 4 === unitStartAt, `${installAddress(full, 4)} / ${unitStartAt}`);
+  unitInstallAddress(full, 4) + 4 === unitStartAt, `${unitInstallAddress(full, 4)} / ${unitStartAt}`);
 
 // --- Risk 16: depth-3 TIGHT hops never leave a 3a unit with 0 charge ------------------------------------------------------
 // A 3a depth-3 unit: the fresh kit, MOVE (2) from a depth-2 DEBRIS ship, a card's file (2), AUTOBURN (4): at most 73 files.

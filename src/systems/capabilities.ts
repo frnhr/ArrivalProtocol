@@ -1,10 +1,14 @@
+// Slice 4: the FOUNDATION built skillLive; Track TREE owns this file after it (docs/phase3/impl/slice-4-plan.md §5.2);
+// FLIGHT and UI read it.
 import type { GameState } from '@state/schema';
-import type { Segment, SegmentRole, SegmentState, UpgradeKind } from '@/types/segment';
+import type { Segment, SegmentRole, SegmentState, CardFileKind, SkillFileSegment } from '@/types/segment';
+import type { SkillId, SkillLevel, EffectiveVersion, LockLevel, SkillVersion } from '@/types/skill';
 import type { FlightMods } from '@data/mission';
 import {
-  filesWithRole, hasIntegrity, integrityBand, coreThreads, upgradeFiles, swapAboard, type HealthSegment,
+  filesWithRole, hasIntegrity, integrityBand, coreThreads, upgradeFiles, skillFilesOf, swapAboard, type HealthSegment,
 } from '@state/selectors';
 import { threadsBusy } from '@systems/ops-core';
+import { SKILL_IDS } from '@data/skills';
 import {
   ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, REACTOR_THREAD_SHARE, GHOST_BY_BAND, ARM_GHOST_BY_BAND,
   SENSOR_FUZZ_KM_PER_POINT, PLOT_STALE_TAC, TELEMETRY_SCRAMBLE_BELOW, INTEGRITY_MAX,
@@ -69,14 +73,16 @@ export interface Capabilities {
   // (Sensor Interp failing, dead or missing: the grey dot, DROP UNCERTAIN).
   drop: { solution: boolean; sensorFactor: number; plotterFactor: number; uncertain: boolean };
   threads: number;                                                                           // Core capacity (1 below 50)
-  // Carried upgrade files that work right now, by kind (§6.9, WP8: FUEL TRIM; AUTOBURN.skl in WP9).
-  upgrades: Readonly<Record<UpgradeKind, number>>;
+  // Carried card files that work right now, by kind (§6.9, WP8: FUEL TRIM).
+  upgrades: Readonly<Record<CardFileKind, number>>;
+  // Each skill as it works right now (phase 3 slice 4, skillLive): its effective version and lock under damage.
+  skills: Readonly<Record<SkillId, SkillLive>>;
 }
 
 // How many carried upgrade files of a kind work right now (§9 WP8 item 2: "a consumed file, or one below 50,
 // gives no effect"): live (not inactive, moving or repairing: offline like any file) and degraded or better.
 // A consumed file is gone (it turned into HOLLOW), so it is simply not counted.
-export function liveUpgrades(memory: readonly Segment[], kind: UpgradeKind): number {
+export function liveUpgrades(memory: readonly Segment[], kind: CardFileKind): number {
   return upgradeFiles(memory, kind).filter((seg) => {
     const band = integrityBand(seg.integrity);
     return (band === 'ok' || band === 'degraded') && offlineReason(seg) === null;
@@ -88,6 +94,70 @@ export function liveUpgrades(memory: readonly Segment[], kind: UpgradeKind): num
 // from the next arrival (§9 WP8 edge case).
 export function flightModsOf(memory: readonly Segment[]): FlightMods {
   return { dvBonusFrac: FUEL_TRIM_DV_BONUS_FRAC * liveUpgrades(memory, 'fuel-trim') };
+}
+
+// --- Skills (phase 3 slice 4; 03 §3.5, plan §2.7) ----------------------------------------------------------------------
+// A skill works at an EFFECTIVE version set by its file's band: "each colour of damage costs one version; v1 still works
+// when only damaged". The v1 column is phase 2's AUTOBURN rule (it worked at 50 or more: liveUpgrades), and PHASE3's
+// example holds (v3 at 50% works as v2). LOCK RANGE is graded too (810 → 270 → 90).
+//
+// | band     | v1  | v2  | v3  | lock          |
+// | ok       | v1  | v2  | v3  | its level     |
+// | degraded | v1  | v1  | v2  | one lower     |
+// | failing  | OFF | OFF | v1  | 90 (level 0)  |
+// | dead / missing / offline: OFF, no lock      |
+
+export interface SkillLive {
+  file: SkillFileSegment | null;     // the copy that counts (null: no file of the skill in memory)
+  version: EffectiveVersion;          // what it works as now (0: OFF)
+  lock: LockLevel | null;             // its effective LOCK RANGE level (null: it does not work at all)
+  band: Band;                         // the counting copy's band ('missing' with no file; 'dead' when every copy is offline)
+  offline: OfflineReason | null;      // why every copy is offline, if they are
+  nominal: SkillLevel | null;         // the counting copy's own level (what REPAIR brings back)
+}
+
+export function effectiveVersion(nominal: SkillVersion, band: Band): EffectiveVersion {
+  switch (band) {
+    case 'ok': return nominal;
+    case 'degraded': return Math.max(1, nominal - 1) as SkillVersion;
+    case 'failing': return Math.max(0, nominal - 2) as EffectiveVersion;
+    case 'dead':
+    case 'missing': return 0;
+  }
+}
+
+export function effectiveLock(level: LockLevel, band: Band): LockLevel | null {
+  switch (band) {
+    case 'ok': return level;
+    case 'degraded': return Math.max(0, level - 1) as LockLevel;
+    case 'failing': return 0;
+    case 'dead':
+    case 'missing': return null;
+  }
+}
+
+// How skill `id` works right now (see above). Pure. The copy that counts is the online one that works best (highest
+// effective version, then lock, then integrity), as roleHealth counts a role's best online copy; with every copy offline
+// (repairing, moving, switched off) the skill is OFF and says why. COPY refuses skill files, so a second copy is rare (a
+// test's, a PACK AS mid-flight never happens: the packet is cut at the desk), but the rule is total.
+export function skillLive(memory: readonly Segment[], id: SkillId): SkillLive {
+  const copies = skillFilesOf(memory, id);
+  if (copies.length === 0) return { file: null, version: 0, lock: null, band: 'missing', offline: null, nominal: null };
+  let best: { file: SkillFileSegment; band: Band; version: EffectiveVersion; lock: LockLevel | null } | null = null;
+  for (const file of copies) {
+    if (offlineReason(file) !== null) continue;
+    const band = integrityBand(file.integrity);
+    const version = effectiveVersion(file.version, band);
+    const lock = version === 0 ? null : effectiveLock(file.lock, band);
+    const better = best === null || version > best.version || (version === best.version && (lock ?? -1) > (best.lock ?? -1))
+      || (version === best.version && lock === best.lock && file.integrity > best.file.integrity);
+    if (better) best = { file, band, version, lock };
+  }
+  if (best === null) {
+    const file = copies.reduce((a, b) => (b.integrity > a.integrity ? b : a));
+    return { file, version: 0, lock: null, band: 'dead', offline: offlineReason(file), nominal: { version: file.version, lock: file.lock } };
+  }
+  return { file: best.file, version: best.version, lock: best.lock, band: best.band, offline: null, nominal: { version: best.file.version, lock: best.file.lock } };
 }
 
 // The roles that drive a capability, and what each band means for the ship, in the words a pip,
@@ -339,11 +409,11 @@ export function deriveCapabilities(state: Readonly<GameState>, threadsBusy: numb
     threads: coreThreads(state),
     upgrades: {
       'fuel-trim': liveUpgrades(state.memory, 'fuel-trim'),
-      autoburn: liveUpgrades(state.memory, 'autoburn'),
       // Phase 3 slice 3b: the REPAIR v2 patch is a file only between its crossing and its boot line (it is used up there);
       // its effect is the Repair copies' version, not a live capability. Counted like the others for an honest record.
       'repair-patch': liveUpgrades(state.memory, 'repair-patch'),
     },
+    skills: Object.fromEntries(SKILL_IDS.map((id) => [id, skillLive(state.memory, id)])) as Record<SkillId, SkillLive>,
   };
 }
 

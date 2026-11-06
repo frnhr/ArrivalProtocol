@@ -25,8 +25,7 @@ import { HOLLOW_FINALE } from '@data/hollow-text';
 import { CORE_LOW_INTEGRITY } from '@data/tuning';
 import type { FreeSegment } from '@/types/segment';
 import { cardFiles } from '@systems/draft';
-import { installAddress } from '@systems/licences';
-import { newSegId, replaceRange, mergeAdjacentFree } from '@systems/memory-ops';
+import { unitInstallAddress, newSegId, replaceRange, mergeAdjacentFree } from '@systems/memory-ops';
 import { setLandingMode, landInstantly } from '../../support/landing-instant';
 
 const h = createHarness11(5);
@@ -123,7 +122,7 @@ const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { e
   for (let i = 0; i < 2; i++) {
     const memory = state().memory;
     for (const file of cardFiles('firewall', newSegId)) {
-      const addr = installAddress(memory, file.size);
+      const addr = unitInstallAddress(memory, file.size);
       replaceRange(memory, addr, addr + file.size, [file], { opId: null, own: [] });
     }
     mergeAdjacentFree(memory);

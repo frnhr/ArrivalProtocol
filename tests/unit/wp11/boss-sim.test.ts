@@ -127,7 +127,7 @@ function shakenMemory(seed: number): Segment[] {
     place(memory, trim, rng);
   }
   if (rng() < 0.3) {
-    const skill: UpgradeSegment = { id: newSegId('skill'), name: 'AUTOBURN.skl', type: 'upgrade', upgrade: 'autoburn', size: 6, integrity: health(rng), scanned: true };
+    const skill: UpgradeSegment = { id: newSegId('skill'), name: 'AUTOBURN.skl', type: 'upgrade', upgrade: 'autoburn', version: 1, lock: 0, size: 6, integrity: health(rng), scanned: true };
     place(memory, skill, rng);
   }
   if (rng() < 0.4) {

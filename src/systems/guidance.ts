@@ -1,3 +1,5 @@
+// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the AUTO rows' precedence and tails.
+// Others ask by message.
 import type { GameState, BurnStatus, SasMode, PresetMode, Urgency, GuideLayer, AutoburnPhase, AutoburnEnd } from '@state/schema';
 import type { Ring } from '@/types/orbit';
 import { isThrustOn, engineAccel } from '@systems/orbit-sim';

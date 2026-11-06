@@ -1,3 +1,5 @@
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the four skl: restricted rows. Others
+// ask by message.
 import type { FsToolKind } from '@/types/fs-tool';
 import type { RepoFileDef, RepoFileId, RestrictedRowDef } from '@/types/repo';
 import type { FsToolSegment, Segment, UpgradeSegment } from '@/types/segment';

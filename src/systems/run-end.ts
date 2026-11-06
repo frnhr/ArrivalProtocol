@@ -1,4 +1,5 @@
-// Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): UNSPENT and the tally's TRAINED n of 54
+// (the words are TRAINING_TEXT's, Track UI's). Others ask by message.
 import type { GameState, RunEndCause, ShipOutcome, ShipResult } from '@state/schema';
 import { runScore, runLanded } from '@systems/run';
 import { fleetHome } from '@systems/run-score';

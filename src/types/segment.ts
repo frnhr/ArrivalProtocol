@@ -1,11 +1,13 @@
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2); FLIGHT and UI ask by message, no direct
+// edits.
 // Segment is the unit of the memory strip. A memory layout is an ordered list of segments.
 
 import type { FsToolKind } from '@/types/fs-tool';
+import type { SkillId, SkillVersion, LockLevel } from '@/types/skill';
 
 export type SegmentType =
   | 'core'
   | 'tool'
-  | 'skill'
   | 'fs-tool'
   | 'ship'
   | 'ship-backup'
@@ -88,13 +90,6 @@ export interface CoreSegment extends SegmentBase, Infectable {
 
 export interface ToolSegment extends SegmentBase, Infectable {
   type: 'tool';
-  integrity: number;
-  scanned: boolean;
-  state?: SegmentState;
-}
-
-export interface SkillSegment extends SegmentBase, Infectable {
-  type: 'skill';
   integrity: number;
   scanned: boolean;
   state?: SegmentState;
@@ -196,19 +191,35 @@ export interface DriverSegment extends SegmentBase, Infectable {
   featured: Colonist[];
 }
 
-// A carried upgrade file (§6.9, WP8): a card picked between ships that works only while its file does.
-// FUEL TRIM widens the Δv budget on each arrival; AUTOBURN.skl (WP9) is the skill trained from your own
-// captures. Food for HOLLOW, healed by REPAIR, like the AI's own files: a consumed file, or one below 50,
-// gives no effect (systems/capabilities.ts liveUpgrades).
-export type UpgradeKind = 'fuel-trim' | 'autoburn' | 'repair-patch';
+// A carried upgrade file (§6.9, WP8): a card picked between ships, or a skill (phase 3 slice 4), that works only while its
+// file does. FUEL TRIM widens the Δv budget on each arrival; the REPAIR v2 patch is a file only between its crossing and its
+// boot line (slice 3b). Food for HOLLOW, healed by REPAIR, like the AI's own files: a consumed file, or one below 50, gives
+// no effect (systems/capabilities.ts liveUpgrades).
+// A skill (03 §3.4, §6) is an upgrade file too, so HOLLOW, the carry, COPY's refusal (cardCopy), transit hits and rmTargets'
+// second tier already handle it: AUTOBURN.skl, AUTODROP.skl, SURVEY.skl, SENTRY.skl, each at a version (and AUTOBURN at a
+// LOCK RANGE level), sized by data/skills.ts skillBlocks (assertMemoryInvariants checks it). Its effective version under
+// damage is capabilities.ts skillLive's.
+export type CardFileKind = 'fuel-trim' | 'repair-patch';
+export type UpgradeKind = CardFileKind | SkillId;
 
-export interface UpgradeSegment extends SegmentBase, Infectable {
+interface UpgradeBase extends SegmentBase, Infectable {
   type: 'upgrade';
-  upgrade: UpgradeKind;
   integrity: number;
   scanned: boolean;
   state?: SegmentState;
 }
+
+export interface CardFileSegment extends UpgradeBase {
+  upgrade: CardFileKind;
+}
+
+export interface SkillFileSegment extends UpgradeBase {
+  upgrade: SkillId;
+  version: SkillVersion;
+  lock: LockLevel;
+}
+
+export type UpgradeSegment = CardFileSegment | SkillFileSegment;
 
 // FIREWALL.sys (§6.6, §6.9, WP8): a 2-block file HOLLOW can't infect and can't bite past. It has no
 // health to eat or heal: it is a wall the kid places with MOVE (next to the root, it blocks that side
@@ -232,7 +243,6 @@ export interface LogSegment extends SegmentBase {
 export type Segment =
   | CoreSegment
   | ToolSegment
-  | SkillSegment
   | FsToolSegment
   | ShipSegment
   | ShipBackupSegment

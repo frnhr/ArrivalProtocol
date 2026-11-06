@@ -1,3 +1,5 @@
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): skill chips, the drop order, the PACK AS
+// model. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState, ShipOutcome, TransitPlan } from '@state/schema';
 import type { Segment } from '@/types/segment';

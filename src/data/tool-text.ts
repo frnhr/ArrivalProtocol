@@ -101,7 +101,11 @@ export const NO_FLIGHT_EFFECT = 'No flight effect.';
 export const DELETE_CARD_EFFECT = {
   firewall: 'Bites can pass there again.',
   'fuel-trim': 'No extra FUEL on arrival.',
+  // Slice 4: the four skills (Track TREE words them; a skill deleted is lost until RESTORE).
   autoburn: 'No AUTOBURN.',
+  autodrop: 'No AUTODROP.',
+  survey: 'No SURVEY.',
+  sentry: 'No SENTRY.',
   // Phase 3 slice 3b: the REPAIR v2 patch installs and is used up at its boot, before DELETE can reach it; exhaustive.
   'repair-patch': 'Repair stays as it is.',
 } as const;

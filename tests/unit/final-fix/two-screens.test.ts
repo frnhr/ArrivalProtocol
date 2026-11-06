@@ -17,9 +17,9 @@ import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
 import { followDirector } from '../wp2/harness2';
 import { setMode } from '@systems/mode';
-import { installTool, installAddress } from '@systems/licences';
+import { installTool } from '@systems/licences';
+import { unitInstallAddress, replaceRange, mergeAdjacentFree, newSegId } from '@systems/memory-ops';
 import { cardFiles } from '@systems/draft';
-import { replaceRange, mergeAdjacentFree, newSegId } from '@systems/memory-ops';
 import { setIntegrity } from '@state/actions';
 import { outlivedOneShots, lessonOf } from '@systems/director';
 import { GUIDE_RULES } from '@data/script';
@@ -127,7 +127,7 @@ function playLesson(name: string, amberId: string, blueId: string, retireBy: num
   // A FIREWALL carried in, as a card's file arrives (debug.ts giveCard), and HOLLOW awake with its timers held still.
   h.store.update((d) => {
     for (const file of cardFiles('firewall', newSegId)) {
-      const addr = installAddress(d.memory, file.size);
+      const addr = unitInstallAddress(d.memory, file.size);
       replaceRange(d.memory, addr, addr + file.size, [file], { opId: null, own: [] });
     }
     mergeAdjacentFree(d.memory);

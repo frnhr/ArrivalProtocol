@@ -22,7 +22,8 @@ import { getPrediction, getSensedPrediction } from '@systems/predict';
 import { requestSkip, SKIP_REFUSAL_DODGE, SKIP_REFUSAL_BLIND_DODGE, SKIP_REFUSAL_SEED_COMING } from '@systems/pace';
 import { rackZoneTags } from '@systems/flight-hud';
 import { flightObjective, isCorrectionRow, type FlightContext } from '@systems/guidance';
-import { engageAutoburn, trainSkillAtBoot, skillFiles } from '@systems/autoburn';
+import { engageAutoburn, skillFiles } from '@systems/autoburn';
+import { giveSkillFile } from '../../support/skills';
 import { podRecord } from '@systems/landing-rules';
 import { setMode } from '@systems/mode';
 import { installTool } from '@systems/licences';
@@ -362,6 +363,7 @@ const correctIn = (): void => {
   check('AUTOBURN.skl\'s chip name breaks at its dot or as AUTO- / BURN, never mid-word', stripName(skill, 6) === 'AUTO\u00ADBURN\u200B.skl');
 
   // Racks E–F full (the charge filled past the link): the skill goes to the end of rack D's free tail, beside the unit.
+  // (Slice 4: the one mid-run install rule, memory-ops.ts unitInstallAddress, which a given skill shares with licences.)
   h.kestrel(5, { phase2Hollow: true, hollowAsleep: true });
   h.store.update((d) => {
     const starts = segmentStarts(d.memory);
@@ -377,7 +379,7 @@ const correctIn = (): void => {
     d.run.stats.demos.push({ offsetTac: 0 }, { offsetTac: 0 });
     d.ui.memoryRev++;
   });
-  trainSkillAtBoot(h.store);
+  giveSkillFile(h.store, 'autoburn', 1);
   const placed = skillFiles(state().memory)[0]!;
   const at = segmentStarts(state().memory)[state().memory.indexOf(placed)]!;
   check('racks E–F full: AUTOBURN.skl goes to the end of rack D\'s free tail, beside the unit', at + placed.size === MEMORY_LAYOUTS.FULL.unitStart, String(at));

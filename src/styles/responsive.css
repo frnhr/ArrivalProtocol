@@ -1,3 +1,4 @@
+/* Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the phone's TRAINING accordion. */
 /* Mobile / narrow layouts — desktop behavior unchanged above 768px */
 
 /* On desktop, drawer wrappers are no-ops: bodies always flow and the toggle

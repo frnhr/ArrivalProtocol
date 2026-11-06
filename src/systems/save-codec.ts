@@ -1,3 +1,5 @@
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the save's skills spec and
+// RUN_SAVE_MIGRATIONS. Others ask by message.
 import type { GameState, RunState } from '@state/schema';
 import type { ShipSlices } from '@state/initial';
 import type { ContentVersions } from '@/types/lineage';
@@ -6,7 +8,7 @@ import type {
 } from '@/types/save';
 import type { Meta, RunLineage } from '@systems/meta';
 import { parseLastUnit, MetaCorrupt } from '@systems/meta-parse';
-import { createRunState, createInitialState } from '@state/initial';
+import { createRunState, createInitialState, createRunSkills } from '@state/initial';
 import { createRunLog } from '@state/log-selectors';
 import { createRunThreat, nominalShipThreat } from '@systems/threat-plan';
 import { createRunMap } from '@systems/map-run';
@@ -22,7 +24,9 @@ import { REPO_CATALOGUE_VERSION } from '@data/repository';
 import { shipDefOf, validateShipDef } from '@data/ships';
 import { shipSummaryAt } from '@systems/map-run';
 import { currentSlot } from '@systems/map-streams';
-import { RUN_SAVE_VERSION, FIRST_UNIT_NUMBER } from '@data/tuning';
+import { RUN_SAVE_VERSION, FIRST_UNIT_NUMBER, CYCLES_ARRIVED, FIRST_PICK_FLOOR_CYCLES } from '@data/tuning';
+import { shipCycles } from '@systems/run-score';
+import { SKILL_IDS } from '@data/skills';
 import { withScratchSegIds } from '@systems/memory-ops';
 
 // The run save's codec and checks (phase 3 slice 3c, docs/phase3/impl/slice-3c-plan.md §2.1), pure: what a save holds at
@@ -215,17 +219,38 @@ function refs(): NonNullable<typeof references> {
   return references;
 }
 
+// The skill tree's history (slice 4, types/skill.ts RunSkillState), field by field. `pending` is always empty at a save
+// point (the desk's purchases are undoable until TRANSMIT ▸ and become part of the save at BEAM: a reload at the desk
+// restores SHIP DONE's bank, 03 §5), like `transit`.
+const SKILL_ID_CHECK = oneOf(...SKILL_IDS);
+const SKILL_VERSION_CHECK = oneOf(1, 2, 3);
+const checkSkillLevel = rec({ version: SKILL_VERSION_CHECK, lock: oneOf(0, 1, 2) });
+const checkEmptyList: Check = (value, at) => {
+  list(anyRecord)(value, at);
+  if ((value as unknown[]).length !== 0) shapeFail(at, 'is not empty (purchases are undoable until TRANSMIT ▸, never saved)');
+};
+const checkRunSkills = rec({
+  earned: list(rec({ slot: whole, arrived: oneOf(1), landed: whole, pct: whole })),
+  grants: list(rec({ source: oneOf('first-pick', 'salvage', 'resident', 'story'), cycles: whole, visit: whole, label: nullable(str) })),
+  bought: list(rec({ skill: SKILL_ID_CHECK, kind: oneOf('train', 'lock', 'restore'), to: checkSkillLevel, cost: whole, visit: whole })),
+  pending: checkEmptyList,
+  skillGrants: list(rec({ skill: SKILL_ID_CHECK, version: SKILL_VERSION_CHECK, source: name, installedAtDepth: nullable(whole) })),
+  opened: list(rec({ skill: SKILL_ID_CHECK, visit: whole })),
+  announced: rec(Object.fromEntries(SKILL_IDS.map((id) => [id, nullable(whole)]))),
+});
+
 // The saved RunState, field by field (every key, exactly: a field a later slice adds bumps RUN_SAVE_VERSION, joins this
-// spec, and gets a migration step; slice 4's run.skills is the first). The fields a save point always has empty are
-// checked empty: no beam out, no transit, no end cause.
+// spec, and gets a migration step; slice 4's run.skills was the first). The fields a save point always has empty are
+// checked empty: no beam out, no transit, no end cause, no pending purchase.
 function checkSavedRun(value: unknown, at: string): void {
   rec({
     rev: whole, phase: oneOf(...RUN_PHASES), seed: whole, unitNumber: whole, wave: whole, lastUnit: nullable(checkLastUnit),
     ghostSpoken: bool, hollowUnits: list(whole), upgrades: list(str), tutorial: bool, shipIndex: whole, map: checkMap,
-    licences: list(str), hollowNamed: bool, coreLost: bool, skillTrainedOn: nullable(whole), repairRenewedOn: nullable(whole),
+    licences: list(str), hollowNamed: bool, coreLost: bool, skills: checkRunSkills, repairRenewedOn: nullable(whole),
     ships: list(checkShipResult),
     stats: rec({
-      manualCaptures: whole, demos: list(rec({ offsetTac: num })), repairs: whole, moves: whole, deletes: whole, driversLost: whole,
+      manualCaptures: whole, demos: list(rec({ offsetTac: num })), dropDemos: list(rec({ offsetTac: num })), repairs: whole, moves: whole,
+      deletes: whole, driversLost: whole,
       driversBitten: whole, capRefusals: whole, deal: nullable(anyRecord),
     }),
     pendingStarCredit: num, pendingStars: whole, simulationRetryUsed: bool, beamOut: isNull, transit: isNull, arrival: nullable(anyRecord),
@@ -344,9 +369,80 @@ function checkShape(data: Record<string, unknown>): string | null {
 
 // Run save migrations (slice 3c review follow-up), as the archive's (systems/meta.ts migrateMeta): the key stays
 // RUN_SAVE_KEY, and a save of an older version is brought up to RUN_SAVE_VERSION here, one version at a time, before the
-// checks: slice 4's `run.skills` is a step that adds it, not a RUN SAVE CAN'T RESUME for every save in flight. Version 1 is
-// the first, so there is none yet. A version this build does not know is left as it is (check 2 refuses it).
-export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {};
+// checks, rather than refused (RUN SAVE CAN'T RESUME for every save in flight). A version this build does not know is left
+// as it is (check 2 refuses it). Each step works on a copy of the JSON and returns the next version's; it trusts nothing it
+// does not touch (the checks after it read the whole result), and throws on nothing: a save it can't make sense of is left
+// for the checks to refuse.
+
+// Every memory strip a payload holds: a world point's ship memory, a boot point's carried racks (their strays are seeds).
+function payloadStrips(payload: Record<string, unknown>): Record<string, unknown>[][] {
+  const strips: unknown[] = [];
+  if (isRecord(payload.slices)) strips.push(payload.slices.memory);
+  if (isRecord(payload.carried)) strips.push(payload.carried.segs);
+  return strips.filter(Array.isArray).map((strip) => (strip as unknown[]).filter(isRecord));
+}
+
+// 1 → 2 (slice 4, plan §2.14): the skill tree.
+// • run.skillTrainedOn goes; run.skills is a fresh history (createRunSkills), and run.stats.dropDemos is empty (4c fills it).
+// • A unit that arrived at phase 2's free AUTOBURN.skl (the install after two captures; arm runs in flight may carry one)
+//   keeps it as AUTOBURN v1 with LOCK RANGE 90 (version 1, lock 0: its 6 blocks are v1's), in the world payload's memory and
+//   in a boot payload's carried racks, and the run records it as bought for nothing before the tree (cost 0, visit 0): the
+//   bank does not move, and a file eaten since is offered for RESTORE (2 cycles) instead of reading as never trained.
+// • Every ship ended so far earns its training cycles now (run-score.ts shipCycles, as endShip records them from slice 4 on),
+//   so the bank at the next desk is what the same run would have from the start, and `earned` keeps one entry per ended
+//   ship. A SHIP DONE save at the run's first desk also gets that desk's first-pick top-up (03 §3.1's floor): run.ts
+//   openDesk writes it before the save, and a resumed desk does not open again, so without it the required first pick
+//   could be unaffordable there.
+// • burn.auto gains its mode fields, all empty (no save point is mid-flight: an engaged AUTOBURN is never saved).
+// • arrival.skills is empty (no skill line is owed at a boot the save replays: phase 2's install path is gone).
+function migrateRunSave1(save: Record<string, unknown>): Record<string, unknown> {
+  const next = structuredClone(save);
+  const payload = isRecord(next.payload) ? next.payload : null;
+  const run = payload !== null && isRecord(payload.run) ? payload.run : null;
+  if (payload !== null && run !== null) {
+    const strips = payloadStrips(payload);
+    let carriesAutoburn = false;
+    for (const strip of strips) {
+      for (const seg of strip) {
+        if (seg.type !== 'upgrade' || seg.upgrade !== 'autoburn') continue;
+        seg.version = 1;
+        seg.lock = 0;
+        carriesAutoburn = true;
+      }
+    }
+    const trained = run.skillTrainedOn;
+    delete run.skillTrainedOn;
+    const skills = createRunSkills();
+    if ((trained !== null && trained !== undefined) || carriesAutoburn) {
+      skills.bought.push({ skill: 'autoburn', kind: 'train', to: { version: 1, lock: 0 }, cost: 0, visit: 0 });
+    }
+    const ships = Array.isArray(run.ships) ? run.ships.filter(isRecord) : [];
+    // A result shipCycles can't read (nobody aboard, points out of range: an edited save) earns ARRIVED alone here; the
+    // checks after the step judge the rest of it.
+    skills.earned = ships.map((ship) => {
+      const aboard = ship.colonistsAboard;
+      const points = ship.points;
+      const readable = typeof aboard === 'number' && aboard > 0 && typeof points === 'number' && points >= 0 && points <= aboard;
+      return readable ? shipCycles({ slot: Number(ship.slot), points, colonistsAboard: aboard }) : { slot: Number(ship.slot), arrived: CYCLES_ARRIVED, landed: 0, pct: 0 };
+    });
+    const world = isRecord(run.map) ? run.map.world : null;
+    if (next.point === 'ship-done' && ships.length === 1 && world === 'arm') {
+      const bank = skills.earned.reduce((sum, earning) => sum + earning.arrived + earning.landed, 0);
+      if (bank < FIRST_PICK_FLOOR_CYCLES) skills.grants.push({ source: 'first-pick', cycles: FIRST_PICK_FLOOR_CYCLES - bank, visit: 1, label: null });
+    }
+    run.skills = skills;
+    if (isRecord(run.stats)) run.stats.dropDemos = [];
+    if (isRecord(run.arrival)) run.arrival.skills = [];
+    const burn = isRecord(payload.slices) && isRecord(payload.slices.burn) ? payload.slices.burn : null;
+    if (burn !== null && isRecord(burn.auto)) Object.assign(burn.auto, { mode: null, targetKm: null, claimed: false, waitingSinceTSec: null });
+  }
+  next.saveVersion = 2;
+  return next;
+}
+
+export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
+  1: migrateRunSave1,
+};
 
 export function migrateRunSave(save: Record<string, unknown>): Record<string, unknown> {
   let current = save;

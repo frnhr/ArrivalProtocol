@@ -1,3 +1,4 @@
+/* Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the TRAINING tab. */
 /* The DESK (phase 3 slice 3a, docs/phase3/02-map.md §4; components/desk/*): the STAR CHART, the SHIP CARD, the guidance
    strip, SET COURSE, the phone bottom sheet; the chart's look where it is shared (the title card's faint chart, the RUN
    TALLY's mini route). Amber whichever screen the kid was on: every colour is a --desk-* token (tokens.css). */

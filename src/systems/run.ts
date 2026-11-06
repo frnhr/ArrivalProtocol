@@ -1,4 +1,5 @@
-// Slice 3c: Track SAVE owns this file (docs/phase3/impl/slice-3c-plan.md §5.2); WORLD and UI request helpers by message.
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): endShip's earnings, openDesk's latch and
+// first pick, setCourse's blocker, transmitNext's commit; Track UI reads deskUiOnOpen. Others ask by message.
 import type { Store } from '@state/store';
 import type {
   GameState, RunPhase, RunState, ShipOutcome, ShipResult, RunEndCause, ArrivalReport, TransitPlan, TransitHit, RingMiss, UiState,
@@ -389,6 +390,7 @@ export function goTransmit(store: Store<GameState>, toSlot: number): void {
     pick: null,
     threat,
     deliveries,
+    packAs: {},
   };
   store.update((draft) => {
     draft.run.phase = 'transmit';
@@ -463,6 +465,8 @@ export function transmitNext(store: Store<GameState>): void {
     seeds: layout.seeds,
     boarded: boardedBy(plan.threat),
     deliveries: arrivalDeliveries(plan.deliveries, packet.deliveries, deliverySeeds.map((seed) => seed.targetId)),
+    // Track TREE fills it from the packet's skill plan (plan §2.14).
+    skills: [],
   };
   // The tool kinds this send brought for the first time (run.licences: "the kinds that have reached the unit", plan §2.2).
   const firstKinds = plan.deliveries.filter((chip) => chip.firstOfKind).map((chip) => repoToolKind(chip.file))

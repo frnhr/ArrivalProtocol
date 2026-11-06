@@ -1,4 +1,5 @@
-// Slice 3c: Track SAVE owns this file (docs/phase3/impl/slice-3c-plan.md §5.2); WORLD and UI request helpers by message.
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the TRAINED / RETRAINED lines and the
+// ONLINE event. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { onPostTick } from '@systems/clock';
@@ -11,7 +12,7 @@ import { play } from '@systems/audio';
 import { emit } from '@systems/events';
 import { archiveRunStarted, ghostLineDue, playWithoutArchive } from '@systems/meta';
 import { installBootLicences, renewRepairAtBoot } from '@systems/licences';
-import { skillBootDue, trainSkillAtBoot } from '@systems/autoburn';
+import { skillBootLines, applySkillBootLine, type SkillBootLine } from '@systems/skill-files';
 import { bootLine, bootLinePlan, bootLineSpeaker, bootLogEntries, lineVars, BOOT_LINE_MAX, type BootLineKind } from '@data/script';
 import type { Speaker } from '@state/schema';
 import { beamSeedTarget } from '@systems/beam-seeds';
@@ -97,8 +98,10 @@ let saidLines: { speaker: Speaker; text: string; atSec: number }[] = [];
 let klaxonPlayed = false;
 let ghost: GhostBeat | null = null;
 let ghostPlanned = false;
-// The boot's lines, planned at its first tick (bootLinePlan); null before.
+// The boot's lines, planned at its first tick (bootLinePlan); null before. Its skill lines (slice 4) are planned with it:
+// saying one records it, so they are read once, not re-derived as they are said.
 let plan: BootLineKind[] | null = null;
+let skillLines: SkillBootLine[] = [];
 let closeModal: (() => void) | null = null;
 
 function resetBootTimers(): void {
@@ -109,12 +112,14 @@ function resetBootTimers(): void {
   ghost = null;
   ghostPlanned = false;
   plan = null;
+  skillLines = [];
 }
 
 function linePlan(store: Store<GameState>): BootLineKind[] {
   if (plan === null) {
     const state = store.getState();
-    plan = bootLinePlan(state, state.run.arrival !== null && skillBootDue(state) !== null);
+    skillLines = skillBootLines(state);
+    plan = bootLinePlan(state, skillLines.length);
   }
   return plan;
 }
@@ -151,16 +156,21 @@ function lineTypedAtSec(store: Store<GameState>, index: number): number {
   return typedBy;
 }
 
-// A line's words before it is said: rendered as it would be now (a skill line's are the training's own; its length
-// only shifts a later line's typing by a fraction of a second, so an estimate of the same shape is enough).
+// A line's words before it is said: rendered as it would be now (a skill line's are its planned text).
 function plannedText(store: Store<GameState>, kind: BootLineKind, ordinal: number): string {
-  if (kind === 'skill') return '';
+  if (kind === 'skill') return plannedSkillLine(ordinal).text;
   const state = store.getState();
   return bootLine(kind, state, lineVars(state, getPrediction()), ordinal);
 }
 
+function plannedSkillLine(ordinal: number): SkillBootLine {
+  const line = skillLines[ordinal];
+  if (line === undefined) throw new Error(`boot: no skill line ${ordinal} in this boot's plan`);
+  return line;
+}
+
 // Line `index`'s place among the plan's lines of its kind (phase 3 slice 3b: 'delivery' repeats, one line per group of
-// deliveries; every other kind is 0).
+// deliveries; slice 4: 'skill', one per skill line; every other kind is 0).
 function lineOrdinal(store: Store<GameState>, index: number): number {
   const plan = linePlan(store);
   const kind = plan[index];
@@ -227,7 +237,14 @@ function sayNextLine(store: Store<GameState>): void {
   const kind = linePlan(store)[linesSaid];
   if (kind === undefined) throw new Error(`boot: no line ${linesSaid} in this boot's plan`);
   const ordinal = lineOrdinal(store, linesSaid);
-  const text = kind === 'skill' ? trainSkillAtBoot(store) : bootLine(kind, state, lineVars(state, getPrediction()), ordinal);
+  let text: string;
+  if (kind === 'skill') {
+    const line = plannedSkillLine(ordinal);
+    applySkillBootLine(store, line);
+    text = line.text;
+  } else {
+    text = bootLine(kind, state, lineVars(state, getPrediction()), ordinal);
+  }
   const speaker = bootLineSpeaker(kind);
   say(speaker, text, { critical: true });
   saidLines.push({ speaker, text, atSec: elapsedSec });

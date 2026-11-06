@@ -1,14 +1,17 @@
+// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the general skill rows; Track FLIGHT owns
+// its autoburnStatus export only.
 import type { GameState } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import { getUpgrade, UPGRADES, type UpgradeId } from '@data/upgrades';
 import { currentShip } from '@systems/map-run';
 import { isFirewall, upgradeFiles, integrityBand, getAiCore, coreThreads, shownIntegrity, type HealthSegment } from '@state/selectors';
-import { liveUpgrades, offlineReason, type Band } from '@systems/capabilities';
+import { liveUpgrades, skillLive, offlineReason, type Band } from '@systems/capabilities';
 import { reachMarks } from '@systems/hollow-hud';
 import { ownedUpgrades } from '@systems/draft';
 import { hollowLabel } from '@systems/say';
 import { SKILLS_TEXT } from '@data/script';
-import { autoburnSkill, skillFiles, isEngaged } from '@systems/autoburn';
+import { skillFiles, isEngaged, autoburnEverTrained } from '@systems/autoburn';
+import { autoburnDemoSkill } from '@systems/skill-tree';
 import { AUTOBURN_SKILL_ROW } from '@data/skill-text';
 import { REPAIR_V2_VERSION, CHARGE_CARD_BLOCKS, CORE_LOW_INTEGRITY, FUEL_TRIM_DV_BONUS_FRAC, BAND_DEGRADED_MIN } from '@data/tuning';
 
@@ -140,12 +143,12 @@ function threadRow(state: Readonly<GameState>): Pick<SkillRow, 'status' | 'tone'
     : { status: SKILLS_TEXT.status.threads(threads), tone: 'good', pips };
 }
 
-// AUTOBURN.skl's row: shown once the run trained the skill (or the unit carries the file). Its numbers are read
-// live from the kid's captures (autoburnSkill), like the boot line that installed it.
+// AUTOBURN.skl's row: shown once the run bought the skill (or the unit carries the file). Its numbers are read
+// live from the kid's captures (skill-tree.ts autoburnDemoSkill), like the boot line that trained it.
 function autoburnRow(state: Readonly<GameState>): SkillRow | null {
   const files = skillFiles(state.memory);
-  if (files.length === 0 && state.run.skillTrainedOn === null) return null;
-  const skill = autoburnSkill(state.run.stats);
+  if (files.length === 0 && !autoburnEverTrained(state)) return null;
+  const skill = autoburnDemoSkill(state.run.stats);
   const label = AUTOBURN_SKILL_ROW.title.toUpperCase();
   const pips: SkillPip[] = files.map((seg) => healthPip(seg, label, `${shownIntegrity(seg.integrity)}%`));
   const row = (status: string, tone: SkillTone): SkillRow => ({
@@ -153,10 +156,9 @@ function autoburnRow(state: Readonly<GameState>): SkillRow | null {
     pips: pips.length > 0 ? pips : gonePips(1, AUTOBURN_SKILL_ROW.title),
   });
   if (files.length === 0) return row(AUTOBURN_SKILL_ROW.gone, 'warn');
-  if (liveUpgrades(state.memory, 'autoburn') === 0) return row(AUTOBURN_SKILL_ROW.damaged(BAND_DEGRADED_MIN), 'warn');
+  if (skillLive(state.memory, 'autoburn').version === 0) return row(AUTOBURN_SKILL_ROW.damaged(BAND_DEGRADED_MIN), 'warn');
   const phase = state.burn.auto.phase;
   if (isEngaged(phase)) return row(phase === 'armed' ? AUTOBURN_SKILL_ROW.armed : AUTOBURN_SKILL_ROW.flying, 'good');
-  if (skill === null) throw new Error('skillsModel: AUTOBURN.skl is in memory but the run has no trained skill');
   return row(AUTOBURN_SKILL_ROW.trained(skill.accuracy, skill.demos), 'good');
 }
 

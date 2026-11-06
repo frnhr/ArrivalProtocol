@@ -1,9 +1,10 @@
 import type { GameState, VerbTelegraph, HollowState } from './schema';
 import type {
-  Segment, RedundancySegment, FsToolSegment, CoreSegment, ToolSegment, SkillSegment, SegmentState, SegmentRole,
+  Segment, RedundancySegment, FsToolSegment, CoreSegment, ToolSegment, SkillFileSegment, SegmentState, SegmentRole,
   DriverSegment, SegmentType, HollowSegment, Infection, UpgradeSegment, UpgradeKind, FirewallSegment, ShipSegment,
 } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
+import type { SkillId } from '@/types/skill';
 import {
   CORE_LOW_INTEGRITY, CORE_LOW_THREADS, BAND_OK_MIN, BAND_DEGRADED_MIN, BAND_FAILING_MIN, CORRUPTION_STEP,
   INTEGRITY_MAX, THRUST_CTRL_REPAIR_MAX,
@@ -104,7 +105,7 @@ export function hasIntegrity(seg: Segment): seg is HealthSegment {
 // filesystem tools, the ship's files, the pods' drivers, the upgrade files you carry). Free space, other
 // hollow, REPAIR CHARGE and a FIREWALL are not food: they stop the spread on that side (§6.6). A list,
 // not "has an integrity", so a new file type has to choose.
-const INFECTABLE_TYPES: ReadonlySet<SegmentType> = new Set<SegmentType>(['core', 'tool', 'skill', 'fs-tool', 'ship', 'ship-backup', 'driver', 'upgrade']);
+const INFECTABLE_TYPES: ReadonlySet<SegmentType> = new Set<SegmentType>(['core', 'tool', 'fs-tool', 'ship', 'ship-backup', 'driver', 'upgrade']);
 
 export function isInfectable(seg: Segment): seg is HealthSegment {
   return INFECTABLE_TYPES.has(seg.type) && hasIntegrity(seg);
@@ -123,7 +124,7 @@ export function isShipFile(seg: Segment): boolean {
 // One of the unit's own files that is not a filesystem tool: the Core, the AI tools (Engine I/O, Sensor Interp…) and
 // the carried skills and cards. Rack E holds them on arrival.
 export function isAiFile(seg: Segment): boolean {
-  return seg.type === 'core' || seg.type === 'tool' || seg.type === 'skill' || seg.type === 'upgrade';
+  return seg.type === 'core' || seg.type === 'tool' || seg.type === 'upgrade';
 }
 
 export function isFirewall(seg: Segment): seg is FirewallSegment {
@@ -134,6 +135,17 @@ export function isFirewall(seg: Segment): seg is FirewallSegment {
 // readers (systems/capabilities.ts liveUpgrades) and the draft's "owned" count read this.
 export function upgradeFiles(memory: readonly Segment[], kind: UpgradeKind): UpgradeSegment[] {
   return memory.filter((seg): seg is UpgradeSegment => seg.type === 'upgrade' && seg.upgrade === kind);
+}
+
+// A skill file (phase 3 slice 4; types/segment.ts SkillFileSegment): an upgrade file of a skill kind, with a version.
+export function isSkillFile(seg: Segment): seg is SkillFileSegment {
+  return seg.type === 'upgrade' && 'version' in seg;
+}
+
+// The skill files of one skill, whatever their health or state, in memory order (capabilities.ts skillLive picks the one
+// that counts).
+export function skillFilesOf(memory: readonly Segment[], id: SkillId): SkillFileSegment[] {
+  return memory.filter((seg): seg is SkillFileSegment => isSkillFile(seg) && seg.upgrade === id);
 }
 
 // A file being eaten right now: its infection is set, so readers need no `!` on it. (A guard that
@@ -201,11 +213,10 @@ export function effectiveToolVersion(state: Readonly<GameState>, kind: FsToolKin
 // The segments REPAIR can heal: the AI's own files (Core, tools, skills, fs-tools, upgrade files) and the pods'
 // drivers (§6.5: no scan gate for them). Ship files can't be healed (SWAP or DELETE them); REPAIR CHARGE is "repaired"
 // only by v2's squeeze; a FIREWALL has no health to heal.
-export type RepairableSegment = CoreSegment | ToolSegment | SkillSegment | FsToolSegment | DriverSegment | UpgradeSegment;
+export type RepairableSegment = CoreSegment | ToolSegment | FsToolSegment | DriverSegment | UpgradeSegment;
 
 export function isRepairable(seg: Segment): seg is RepairableSegment {
-  return seg.type === 'core' || seg.type === 'tool' || seg.type === 'skill' || seg.type === 'fs-tool' || seg.type === 'upgrade'
-    || seg.type === 'driver';
+  return seg.type === 'core' || seg.type === 'tool' || seg.type === 'fs-tool' || seg.type === 'upgrade' || seg.type === 'driver';
 }
 
 // Slice 3b (Fran's decision, the limping engine): on the arm REPAIR also heals Thrust Ctrl, the one ship file it may touch

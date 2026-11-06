@@ -1,3 +1,5 @@
+// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the +2 CYCLES card. Others ask by
+// message.
 import type { RunStats } from '@state/schema';
 import type { Rng } from '@systems/rng';
 import {
@@ -194,13 +196,6 @@ export const UPGRADE_FILE_TEXT = {
     name: 'Fuel Trim',
     short: 'FT',
     desc: `Tunes the engine on arrival: +${Math.round(FUEL_TRIM_DV_BONUS_FRAC * 100)}% FUEL budget while it is healthy (${BAND_DEGRADED_MIN}% or more). It can be eaten.`,
-  },
-  // WP9 (§6.10): not a card but a skill, trained from the kid's own captures (systems/autoburn.ts).
-  autoburn: {
-    name: 'AUTOBURN.skl',
-    short: 'AB',
-    // The lead's WP9 ruling: it flies the capture into the ring or until a trim is left, not only until the loop closes.
-    desc: `A skill you trained by braking at ▼ yourself. Press [B] near ▼ and it flies the capture for you, into the ring or until a trim is left, even while you are in the MIND. Works while healthy (${BAND_DEGRADED_MIN}% or more). It can be eaten.`,
   },
 } as const;
 

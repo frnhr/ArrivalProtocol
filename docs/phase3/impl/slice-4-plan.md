@@ -746,3 +746,94 @@ Each track does its 4a items first, so a 4a-only cut is playable:
 - `/home/user/ArrivalProtocol/src/state/schema.ts` with `/home/user/ArrivalProtocol/src/systems/save-codec.ts` (and `/home/user/ArrivalProtocol/tests/unit/save/shape-pin.test.ts`)
 - `/home/user/ArrivalProtocol/src/systems/guidance.ts`
 - New: `/home/user/ArrivalProtocol/src/systems/skill-tree.ts`, `/home/user/ArrivalProtocol/src/data/skills.ts`, `/home/user/ArrivalProtocol/src/components/desk/TrainingWindow.ts`
+---
+
+## Deviations (foundation)
+
+Recorded by the FOUNDATION agent. Each item changes §2–§5 above and gives its reason. Behaviour changes only where §5.1
+says: phase 2's free install after two captures is gone, and AUTOBURN learns from its last 8 demos (UNTRAINED with none).
+The page plays run 1 to the second desk with no console errors, and a run-1 save written before this change still
+resumes (checked in Chromium).
+
+### What the tracks stand on
+
+- **Types** (`src/types/skill.ts`): §2.2's model, plus three additions:
+  - `CellRow` (`{kind:'version',version} | {kind:'lock',level}`) names a cell;
+  - `LostLevel { row, price }` is one lost level;
+  - `DemoSkill` / `DemoTuning` are what `demoSkill` returns and reads.
+- **Pure cores, implemented:**
+  - in `skill-tree.ts`: `visitNow`, `levelAbove`, `fileLevel`, `held`, `paid`, `lostLevels`, `restorePrice`, `earnedCycles`, `bankOf`, `demoSkill`, `autoburnDemoSkill`, `deskBlocker`;
+  - in `capabilities.ts`: `skillLive`, `effectiveVersion`, `effectiveLock`;
+  - in `run-score.ts`: `shipCycles`;
+  - in `skill-files.ts`: `skillFile`, `installSkillFile`, `giveSkill`.
+- **Stubs** (they throw through `systems/not-built.ts notBuilt(what, track, ...args)`; the batch review deletes that file once nothing calls it):
+  - TREE: `treeCells`, `openBranchesAt`, `grantCycles`, `grantSkill`, `grantAllowed`, `trainCell`, `undoPurchase`, `restoreSkill`, `setPackAs`, `commitTraining`, `skillPacketPlan`, `applySkillPlan`, `applySkillBootLine`, `mountSkillWatch`;
+  - UI: `trainingModel`;
+  - FLIGHT: `autoModeFor`, `lockRangeTac`, `previewModeBurn`, `planToCircle`, `lockBracket`, `autoGhost`, `burnSpanClear`.
+- **Ownership:** each file §5.2 hands to a track carries a `// Slice 4: Track X owns this file …` banner on its first line; the CSS files carry it as a `/* */` comment.
+
+### Deviations
+
+1. **The v1 fixtures were dumped by a one-off script**, not by an `AP_SAVE_DUMP=1` branch in `shape-pin`. The script ran before anything changed and was then deleted: the AUTOBURN fixtures needed phase 2's `trainSkillAtBoot`, which this change removes, so the branch could not have stayed. There are three fixtures in `tests/unit/save/fixtures/`, and each holds `{ save, meta }`, so a suite can resume it against its own archive:
+   - `run-save-v1-ship-done.json`: desk 1, with no skill;
+   - `run-save-v1-ship-done-autoburn.json`: desk 2, carrying phase 2's AUTOBURN.skl, with `skillTrainedOn: 2`;
+   - `run-save-v1-beam-autoburn.json`: the BEAM into KESTREL, with the file in `carried.segs`.
+2. **The migration back-fills the earnings, and tops up desk 1.** `RUN_SAVE_MIGRATIONS[1]` does everything §2.14 lists, and two things more:
+   - Every ship already ended earns its cycles (`shipCycles`), so `earned.length === ships.length` holds for migrated runs too. A migrated run would otherwise have 0 cycles at its next desk.
+   - A SHIP DONE save at the run's first desk on the arm gets the first-pick grant. `openDesk` writes that grant before the save, and a resumed desk never opens again. Without the grant, the required first pick (which `setCourse` will throw on) could be unaffordable, and the run would be stuck.
+   - It also records the free `bought` entry when an AUTOBURN file is in the save even though `skillTrainedOn` is null.
+   - A result that `shipCycles` can't read earns ARRIVED alone, so the step never throws.
+3. **`SkillGrant.installedAtDepth: number | null`** was added, so that a grant is installed only once. This saves slice 5 a save bump.
+4. **`OpenRule.minVisit` is a `number`** rather than a literal type, so that the data names it.
+5. **`lostLevels(id, held, paid)` takes the skill**, and returns `LostLevel[]` with each price. `restorePrice(lost)` sums them, takes RESTORE_FRACTION and rounds up. All four of the plan's cross-checks hold (8, 7, 5, 3).
+6. **`held` and `paid` are componentwise maxima:**
+   - `held` takes the file's level, raised by each pending purchase's `to`;
+   - `paid` takes the highest level across bought ∪ pending.
+   Levels are bought from below, so a lock bought on v1 followed by a v2 reads v2 + lock. The file's level is taken from any copy, healthy or not, because damage is not loss.
+7. **`skillLive` counts the online copy that works best** (by effective version, then lock, then integrity), not the copy with the highest integrity. With only one copy the two rules agree; with two, this one never prefers a weaker copy.
+8. **One install rule: the licences' rule.** `memory-ops.ts unitInstallAddress` is licences' old `installAddress`, which scans back from the end of memory. AUTOBURN's forward `skillAddress` is gone.
+   - The one skill placement check that survives, wp9/fix1's "racks E–F full → the end of rack D's tail, beside the unit", passes unchanged under this rule.
+   - `installAddress` is gone from `licences.ts`, and every importer now uses `unitInstallAddress`.
+   - `isUnitFileType` moved into `memory-ops.ts` to avoid an import cycle; `data/memory.ts` re-exports it.
+9. **`giveSkill(store, id, level)`** (in `skill-files.ts`) is the one helper behind `__ap.skill` and the suites' `giveSkillFile`. It replaces any old file of that skill and records a free purchase (cost 0, visit 0, like the migration does), so a lost file reads `NO AUTOBURN.skl`, not `NOT TRAINED YET`. `harness9.giveSkill(offsets)` now records the demos, gives v1 and returns the file.
+10. **Boot lines:**
+    - `skillBootLines(state): SkillBootLine[]` is pure. It returns `[]` until TREE fills it.
+    - `boot.ts` plans and caches the lines at its first tick, and says each one through `applySkillBootLine(store, line)`. That function is stateful (it updates `announced` and installs grants), so the lines are never re-derived while they are being said.
+    - `bootLinePlan(state, skillLines: number)` now takes a count instead of a boolean. `'skill'` repeats with ordinals, as `'delivery'` does.
+    - The suites that passed `false` now pass `0`.
+11. **`applySkillPlan(memory, plan, makeId): SkillPacketEdit { removed, added }`** is the shape `planPacket` feeds to `packUnit`. Removed ids are the replaced files and the originals that PACK AS lowers; they are internal and never shown as drops. Added files are the fresh files and the lowered copies, and carry's sort key places them.
+12. **What AUTOBURN does after FOUNDATION:**
+    - its demos come from `autoburnDemoSkill`, which counts the last 8, and a file with no demos fires 7.5 s late;
+    - refusals and drops read `skillLive`, which gives the same bands as `liveUpgrades` for v1 and v2;
+    - its window is `LOCK_RANGE_TAC[0]` (90);
+    - while engaged, `burn.auto.mode` is `'capture'` and `claimed` is true. It still takes its thread at engagement; FLIGHT moves that to the claim.
+    - "Ever trained" is `paid(...) !== null` (`autoburnEverTrained`), and it decides the refusal words, whether the AUTO button shows, and the Skills row.
+    - The Skills window's NEW pulse now follows `run.skills.bought.length`.
+13. **The validator applies "v3 above one ship's pay" only to the branches open from the start.** SURVEY v3 costs 4 and SENTRY v3 costs 5 by 03 §3.2. The repair-fairness check takes the worst drain over `HOLLOW_STAGES` and `SEEDS_ONLY_DEF`, using the larger multiplier. The validator also checks `AUTO_THREAD_CLAIM_TAC === TACTICAL_LEAD_BURN_TAC`, a total of 54 cycles, 34 blocks for a full set, and a largest file of 12 blocks.
+14. **The file words live with the tree.** `SKILL_FILE_TEXT` in `data/skills.ts` replaces `UPGRADE_FILE_TEXT.autoburn`, and `type-labels.ts` reads it. AUTOBURN's description is phase 2's, apart from the training wording. `DELETE_CARD_EFFECT` and `TRANSMIT_TEXT.withoutCard` gained placeholder lines for AUTODROP, SURVEY and SENTRY, because the record is exhaustive; TREE writes the real words.
+15. **Events:**
+    - `'skill-trained'` now carries `{skill, level, kind, demos, accuracy}`. Nothing emits it until TREE's `applySkillBootLine` does.
+    - `'skill-version'` and `'autoburn-in-lock'` were added, typed and not yet emitted.
+16. **Archive:**
+    - `RunEnd.skills?` is optional, and `recordRunEnd` copies it. Callers pass nothing until TREE does, so `LastUnit.skills` stays `null` for now.
+    - `parseSkillRecord` refuses an unknown skill, a version or lock out of range, a lock on a skill without LOCK RANGE, an accuracy outside 0–100, and a skill listed twice.
+17. **Save checks:**
+    - `run.skills` is checked field by field, and `pending` must be empty.
+    - `burn.auto` gets no inner check, because the slices are `likeReference` and only top-level keys are compared there. The shape pin holds `burn.auto.*` at depth 3 instead.
+18. **Tuning not added:** `AUTODROP_*`, `SENTRY_DELETE_FACTOR` and `V3_STEP_KM`. Their sub-slices add them, so 4a carries no dead numbers. The new constants are in two banner blocks, `4 TREE` and `4 FLIGHT`. `AUTO_DEMO_WINDOW` and `AUTOBURN_UNTRAINED_OFFSET_TAC` sit with the existing AUTOBURN demo numbers, because `demoSkill` (TREE) reads them.
+19. **Duplicate boot text left in place on purpose:** `AUTOBURN_TEXT.trained/retrained` (in `skill-text.ts`, FLIGHT's) remains next to the new `BOOT_SKILL_TEXT` (TREE's). When TREE's lines are live, FLIGHT should delete the old pair.
+20. **Other shapes:**
+    - `deskBlocker` returns null outside the desk phase.
+    - `visitNow(run)` is `run.ships.length`.
+    - `TransitPlan.packAs` is a mutable `Record<string, SkillLevel>`, so drafts can write it.
+    - `Capabilities.upgrades` is now keyed by `CardFileKind`.
+    - `predict.ts` exports the types `BurnInputs` and `ApsisTimes`, for `planToCircle`'s signature.
+
+### The model against the later sub-slices and slices
+
+- **4c:** `stats.dropDemos` is already saved. `demoSkill` takes AUTODROP's own tuning. `SkillDef.built` opens the branch. 4c's `landing.autodrop` state will need its own bump (R13).
+- **4d:** the `after-seeds` rule and `SENTRY` are in the table. `HollowSegment.disguise` lives in memory, which the save pin treats as opaque. `unitInstallAddress` serves the FIREWALL.
+- **4e:** `burn.auto.targetKm` and `AutoMode 'landing-orbit'` are typed. `planToCircle` and `burnSpanClear` are stubbed with final signatures.
+- **Slice 5:** `CycleGrant.source` already includes `'resident' | 'story'` and has a `label`. `SkillGrant` has `installedAtDepth`. `grantCycles`, `grantSkill` and `grantAllowed` are stubbed.
+- **Slice 6:** SURVEY's `built: 0` and its `poor-ahead` rule are in the table.
+- **Slice 7:** `LastUnit.skills: SkillRecord[] | null` is parsed and stored, and `ArrivalSkill.kind 'granted'` exists.

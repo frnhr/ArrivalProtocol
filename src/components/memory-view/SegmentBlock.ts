@@ -1,3 +1,5 @@
+// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the version badge and labelled ticks.
+// Others ask by message.
 import type { Segment, RedundancySegment, DriverSegment, FreeSegment, HollowSegment, LogSegment } from '@/types/segment';
 import { shownIntegrity, isInfected, integrityBand, fileLabel, type HealthSegment } from '@state/selectors';
 import { INTEGRITY_MAX } from '@data/tuning';
