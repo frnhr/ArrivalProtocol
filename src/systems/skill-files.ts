@@ -12,7 +12,7 @@ import {
 import { layoutOf } from '@data/memory';
 import { skillBlocks, SKILL_FILE_TEXT, SKILL_TREE, SKILL_IDS } from '@data/skills';
 import { skillFilesOf, isSkillFile } from '@state/selectors';
-import { held, paid, levelAbove, skillDemos, lostLevels, restorePrice } from '@systems/skill-tree';
+import { held, paid, levelAbove, skillDemos, demoKindOf, restoreCostOf } from '@systems/skill-tree';
 import { skillLive } from '@systems/capabilities';
 import { onPostTick } from '@systems/clock';
 import { emit } from '@systems/events';
@@ -161,12 +161,11 @@ export function skillRelief(state: Readonly<GameState>): SkillRelief[] {
   const options: SkillRelief[] = [];
   for (const id of SKILL_IDS) {
     if (state.run.skills.pending.some((purchase) => purchase.skill === id)) continue;
-    const paidFor = paid(state.run.skills, id);
     for (const seg of skillFilesOf(state.memory, id)) {
       const levels: (SkillLevel | null)[] = [null, ...lowerLevels({ version: seg.version, lock: seg.lock })];
       for (const level of levels) {
         const blocks = level === null ? 0 : skillBlocks(id, level.version, level.lock);
-        options.push({ skill: id, segId: seg.id, level, blocks, frees: seg.size - blocks, restore: restorePrice(lostLevels(id, level, paidFor)) });
+        options.push({ skill: id, segId: seg.id, level, blocks, frees: seg.size - blocks, restore: restoreCostOf(state, id, level) });
       }
     }
   }
@@ -196,9 +195,11 @@ export interface SkillBootLine {
 function trainedText(state: Readonly<GameState>, id: SkillId, level: Readonly<SkillLevel>, kind: 'trained' | 'retrained'): string {
   const file = SKILL_TREE[id].fileName;
   const demos = skillDemos(state.run.stats, id);
-  if (demos === null) return BOOT_SKILL_TEXT.plain(file, level.version);
-  if (kind === 'retrained') return BOOT_SKILL_TEXT.retrained(file, level.version, demos.demos, demos.accuracy);
-  return demos.untrained ? BOOT_SKILL_TEXT.untrained(file, level.version, demos.accuracy) : BOOT_SKILL_TEXT.trained(file, level.version, demos.demos, demos.accuracy);
+  const demoKind = demoKindOf(id);
+  if (demos === null || demoKind === null) return BOOT_SKILL_TEXT.plain(file, level.version);
+  if (kind === 'retrained') return BOOT_SKILL_TEXT.retrained(file, level.version, demos.demos, demoKind, demos.accuracy);
+  return demos.untrained ? BOOT_SKILL_TEXT.untrained(file, level.version, demos.accuracy)
+    : BOOT_SKILL_TEXT.trained(file, level.version, demos.demos, demoKind, demos.accuracy);
 }
 
 // The skill lines this boot types, in SKILL_IDS order, at most one per skill:
@@ -261,21 +262,32 @@ export function applySkillBootLine(store: Store<GameState>, line: Readonly<Skill
 const WATCHED_PHASES: readonly GameState['run']['phase'][] = ['flight', 'landing'];
 
 // Mounted post-tick (systems/run.ts mountRun mounts it): emits 'skill-version' {skill, from, to} when a skill's effective
-// version moves (a bite, a REPAIR, a file taken offline), silent on a ship's first tick (keyed by run.rev) and outside
-// the flight and the landing. Nothing is stored: a resume re-reads it silently. Returns the unmount.
+// version moves (a bite, a REPAIR), silent on a ship's first tick (keyed by run.rev) and outside the flight and the
+// landing. A spell offline (the kid's REPAIR or MOVE: OFF, said by the chip) is no step: it is measured from the version
+// before it to the one after (review m1: an `mv` of a healthy file, or a top-up REPAIR from 85%, stamped RESTORED). Nothing
+// is stored: a resume re-reads it silently. Returns the unmount.
 export function mountSkillWatch(store: Store<GameState>): () => void {
   let rev: number | null = null;
   const last = new Map<SkillId, EffectiveVersion>();
+  const beforeOffline = new Map<SkillId, EffectiveVersion>();
   return onPostTick(() => {
     const state = store.getState();
     const fresh = rev !== state.run.rev;
     rev = state.run.rev;
+    if (fresh) beforeOffline.clear();
     const loud = !fresh && WATCHED_PHASES.includes(state.run.phase);
     for (const id of SKILL_IDS) {
-      const to = skillLive(state.memory, id).version;
+      const live = skillLive(state.memory, id);
+      const to = live.version;
       const from = last.get(id);
       last.set(id, to);
-      if (loud && from !== undefined && from !== to) emit('skill-version', { skill: id, from, to });
+      if (to === 0 && live.offline !== null) {
+        if (from !== undefined && !beforeOffline.has(id)) beforeOffline.set(id, from);
+        continue;
+      }
+      const was = beforeOffline.get(id) ?? from;
+      beforeOffline.delete(id);
+      if (loud && was !== undefined && was !== to) emit('skill-version', { skill: id, from: was, to });
     }
   });
 }

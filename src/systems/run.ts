@@ -29,7 +29,7 @@ import {
 } from '@systems/carry';
 import { dealDraft, planPacket, transitPacket, applyPickToPacket, pickCharge } from '@systems/draft';
 import { shipCycles } from '@systems/run-score';
-import { bankOf, branchToLatch, deskBlocker, anyPaid, visitNow } from '@systems/skill-tree';
+import { bankOf, branchToLatch, deskBlocker, firstPickOwed, visitNow } from '@systems/skill-tree';
 import { skillPacketPlan, mountSkillWatch } from '@systems/skill-files';
 import { commitTraining } from '@systems/training';
 import { isSkillFile } from '@state/selectors';
@@ -337,13 +337,8 @@ export function openDesk(store: Store<GameState>, extra: PendingExtra | null): v
 // 1 earned 1: +2). 0 elsewhere, and once the floor is met.
 export function firstPickTopUp(state: Readonly<GameState>): number {
   const run = state.run;
-  if (run.map.world !== 'arm' || visitNow(run) !== 1 || anyPaid(run.skills)) return 0;
+  if (!firstPickOwed(run)) return 0;
   return Math.max(0, FIRST_PICK_FLOOR_CYCLES - bankOf(run.skills));
-}
-
-// The run's first desk on the arm opens on TRAINING while the required first pick is not made (plan §2.5).
-function firstPickDue(state: Readonly<GameState>): boolean {
-  return state.run.map.world === 'arm' && visitNow(state.run) === 1 && !anyPaid(state.run.skills);
 }
 
 // The UI fields the desk opens with (slice 3c, out of openDesk so a resumed desk opens the same way: systems/run-save.ts):
@@ -358,7 +353,7 @@ export function deskUiOnOpen(state: Readonly<GameState>): Pick<UiState, 'activeT
     deskSelected: offered.length === 1 ? offered[0]! : null,
     // The tab it opens on (phase 3 slice 3b: the SHIP CARD, or the REPOSITORY for the last-rm prompt; repository.ts; slice
     // 4: TRAINING at the run's first desk until the first pick is made).
-    deskWindow: firstPickDue(state) ? 'training' : deskWindowOnOpen(state),
+    deskWindow: firstPickOwed(state.run) ? 'training' : deskWindowOnOpen(state),
   };
 }
 

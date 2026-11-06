@@ -73,7 +73,7 @@ const look = (model: Readonly<TrainingModel>, key: string): string | undefined =
     && model.detail?.action?.kind === 'train' && model.detail.action.enabled && model.detail.action.label === TRAINING_TEXT.enterKey(TRAINING_TEXT.train(3))
     && deskEnter(store.getState()) === 'train');
   check('…TRAIN starts the bar: `TRAINING AUTOBURN v1 · …` at 0', startTrainingHold(store) && trainingModel(store.getState()).hold === 0
-    && trainingModel(store.getState()).holdText === TRAINING_TEXT.training('AUTOBURN', 1, captures));
+    && trainingModel(store.getState()).holdText === TRAINING_TEXT.training('AUTOBURN', 1, { count: captures, kind: 'captures' }));
   const half = advanceTrainingHold(store, TRAINING_HOLD_SEC / 2);
   check('…half way it is still filling, nothing bought', half === 'filling' && Math.abs((trainingModel(store.getState()).hold ?? 0) - 0.5) < 1e-9
     && store.getState().run.skills.pending.length === 0);
@@ -305,9 +305,11 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
 {
   const T = TRAINING_TEXT;
   const lines = [
-    T.badge(54), T.title('UNIT-999'), T.demos(999), T.chooseFirst, T.stepText, T.stepDone('AUTODROP', 3), T.controlFirstVisit,
-    T.onTheHouse(2), T.saved(54), T.moreLater, T.opensLater, T.lost(27), T.cardCost(8, 12), T.train(8), T.training('AUTOBURN', 3, 999),
-    T.training('AUTOBURN', 1, 0), T.trainingLock(810), T.restore(3, 27), T.restoring('AUTOBURN', 3), T.detailCost(8, 12), T.detailLockCost(2, 12),
+    T.badge(54), T.title('UNIT-999'), T.demos([{ count: 999, kind: 'captures' }, { count: 999, kind: 'drops' }]), T.demos([]),
+    T.chooseFirst, T.stepText, T.stepDone('AUTODROP', 3), T.controlFirstVisit,
+    T.onTheHouse(2), T.saved(54), T.moreLater, T.opensLater, T.lost(27), T.cardCost(8, 12), T.enterKey(T.train(8)),
+    T.training('AUTOBURN', 3, { count: 999, kind: 'captures' }), T.training('AUTODROP', 3, { count: 999, kind: 'drops' }),
+    T.training('AUTOBURN', 1, { count: 0, kind: 'captures' }), T.training('SENTRY', 3, null), T.trainingLock(810), T.enterKey(T.restore(3, 27)), T.restoring('AUTOBURN', 3), T.detailCost(8, 12), T.detailLockCost(2, 12),
     T.status.pendingLong, T.status.needsLower('LOCK 270'), T.status.unaffordable(8), ...T.nextLock,
     ...Object.values(T.skills).flatMap((words) => [words.pitch, ...words.next]),
     T.pendingRow('AUTOBURN LOCK 810', 8), T.pendingRestore('AUTOBURN v3', 27),

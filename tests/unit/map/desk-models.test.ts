@@ -27,6 +27,7 @@ import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
 import { recommendation } from '@systems/repository';
 import { THREAT_TEXT } from '@data/threat-text';
 import { run1Map } from './run1-fixture';
+import { shipResultOf } from '@systems/run';
 
 // The unit on run 1's arm at the end of `route` (slots, ARES-VII first), on the DESK.
 function deskAt(route: readonly number[]): Store<GameState> {
@@ -98,7 +99,10 @@ check('an OUT OF RANGE ship\'s card has no BEAM row, only the range (Hop.inRange
 
 // Picking and cycling.
 // 3b: the run's first desk has three steps (02 §4: ship → file → SET COURSE); the file step only guides. Slice 4 prepends
-// the required first skill (A SKILL); its done-ness is skills/ui-models' (this crafted desk has no ship ended: no visit 1).
+// the required first skill (A SKILL); its done-ness is skills/ui-models'. The first desk is visit 1 (skill-tree.ts
+// isFirstDesk: one ship ended, the review's m14), so this crafted desk records ARES-VII's result first.
+ares.update((draft) => { draft.run.ships = [shipResultOf(draft, 'locked', 0)]; });
+state = ares.getState();
 const firstSteps = deskSteps(state);
 const stepOf = (steps: ReturnType<typeof deskSteps>, id: string) => steps.find((step) => step.id === id)!;
 check('steps: a skill, a ship, a file, SET COURSE (the first desk); pick a ship first, SET COURSE ▸ … not yet',

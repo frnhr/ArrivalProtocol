@@ -9,8 +9,8 @@ import {
 import { play } from '@systems/audio';
 import { make } from '@components/dom';
 import { renderKeyCaps } from '@components/hud/keycaps';
-import { TRAINING_TEXT } from '@data/training-text';
-import { WALL_FRAME_MAX_SEC } from '@data/tuning';
+import { TRAINING_TEXT, type DemoArt } from '@data/training-text';
+import { WALL_FRAME_MAX_SEC, TRAINING_BANK_ROLL_SEC, TRAINING_CHIRP_SEC } from '@data/tuning';
 
 // TRAINING (phase 3 slice 4; 03-skills §4; slice-4-plan §2.5, §3 steps 1 and 3): the desk's [T] tab, drawn from
 // systems/training-model.ts trainingModel only. In the desk's amber, in the right window, which widens while it is open
@@ -42,32 +42,29 @@ export interface TrainingWindowView {
   destroy: () => void;
 }
 
-// The bank rolls down to its new value over this long after a purchase (03 §4 juice: "the counter rolls down").
-const BANK_ROLL_SEC = 0.6;
-// The op chirps under a filling TRAIN bar (03 §4 audio: opChirp while training), one per this many wall seconds.
-const HOLD_CHIRP_SEC = 0.18;
 const PHONE_QUERY = '(max-width: 768px)';
 
 // A mini-demo (03 §4: "loops a 4-second mini-demo of the selected cell"), drawn in the desk's amber: a planet, then what
 // the cell does to the path. CSS (desk.css .tr-demo-*) loops it; reduced motion holds its last frame.
-function demoSvg(kind: string): string {
+// One drawing per DemoArt (the cells name theirs in data: training-text.ts TRAINING_DEMO_ART).
+function demoSvg(kind: DemoArt): string {
   const planet = '<circle class="tr-demo-planet" cx="60" cy="40" r="11"/>';
   const ring = '<circle class="tr-demo-ring" cx="60" cy="40" r="24"/>';
   switch (kind) {
-    case 'autoburn-1':
+    case 'capture':
       return `<svg class="tr-demo tr-demo-capture" viewBox="0 0 120 80">${ring}${planet}`
         + '<path class="tr-demo-flyby" d="M4 70 Q 48 52 60 14 Q 72 52 116 70"/>'
         + '<ellipse class="tr-demo-loop" cx="60" cy="32" rx="22" ry="20"/><circle class="tr-demo-ship" cx="60" cy="12" r="2.6"/></svg>';
-    case 'autoburn-2':
+    case 'green':
       return `<svg class="tr-demo tr-demo-green" viewBox="0 0 120 80">${ring}${planet}`
         + '<ellipse class="tr-demo-wide" cx="60" cy="34" rx="40" ry="28"/><circle class="tr-demo-round" cx="60" cy="40" r="24"/></svg>';
-    case 'autoburn-3':
+    case 'low-orbit':
       return `<svg class="tr-demo tr-demo-low" viewBox="0 0 120 80">${planet}`
         + '<circle class="tr-demo-round" cx="60" cy="40" r="17"/><path class="tr-demo-lz" d="M56 29 h8 M71 40 v8 M49 40 v8"/></svg>';
-    case 'autoburn-lock':
+    case 'lock':
       return `<svg class="tr-demo tr-demo-lock" viewBox="0 0 120 80">${ring}${planet}`
         + '<path class="tr-demo-flyby" d="M4 70 Q 48 52 60 14 Q 72 52 116 70"/><path class="tr-demo-bracket" d="M10 66 Q 48 50 58 16"/></svg>';
-    default:
+    case 'plain':
       return `<svg class="tr-demo tr-demo-plain" viewBox="0 0 120 80">${planet}<circle class="tr-demo-round" cx="60" cy="40" r="24"/></svg>`;
   }
 }
@@ -133,7 +130,7 @@ function cardNode(card: TrainingCard): HTMLButtonElement {
   node.classList.toggle('trained', card.trained);
   const top = make('span', 'tr-card-top');
   top.append(make('kbd', 'keycap', card.key), make('span', 'tr-card-name', card.name));
-  node.append(top, svgNode(demoSvg(`${card.skill}-1`)), make('span', 'tr-card-pitch', card.pitch), make('span', 'tr-card-cost', card.cost));
+  node.append(top, svgNode(demoSvg(card.demo)), make('span', 'tr-card-pitch', card.pitch), make('span', 'tr-card-cost', card.cost));
   if (card.trained) node.appendChild(make('span', 'tr-card-stamp', TRAINING_TEXT.stamped));
   return node;
 }
@@ -205,7 +202,7 @@ export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView
       ensureFrame();
     }
     if (rollStartMs > 0) {
-      const t = Math.min(1, (performance.now() - rollStartMs) / 1000 / BANK_ROLL_SEC);
+      const t = Math.min(1, (performance.now() - rollStartMs) / 1000 / TRAINING_BANK_ROLL_SEC);
       const value = Math.round(rollFrom + (model.bank - rollFrom) * t);
       bankEl.textContent = TRAINING_TEXT.bank(value);
       if (t >= 1) { rollStartMs = 0; shownBank = model.bank; }
@@ -325,7 +322,7 @@ export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView
     if (state.run.phase !== 'desk') return;
     if (state.ui.trainingHoldSec !== null) {
       chirpIn -= dtSec;
-      if (chirpIn <= 0) { play('opChirp'); chirpIn = HOLD_CHIRP_SEC; }
+      if (chirpIn <= 0) { play('opChirp'); chirpIn = TRAINING_CHIRP_SEC; }
       const kind = trainingModel(state).detail?.action?.kind ?? 'train';
       const result = advanceTrainingHold(store, dtSec);
       if (result === 'done') play(kind === 'restore' ? 'driverSaved' : 'lockArp');

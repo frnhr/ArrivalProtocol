@@ -14,7 +14,7 @@ import { reportTraceLine } from '@systems/hollow-hud';
 import { cyclesReport } from '@systems/training-model';
 import { shipCycles } from '@systems/run-score';
 import { currentSlot } from '@systems/map-run';
-import { CYCLES_ARRIVED, CYCLES_LANDED_STEPS } from '@data/tuning';
+import { CYCLES_ARRIVED, CYCLES_LANDED_STEPS, REPORT_CYCLES_START_SEC, REPORT_CYCLE_STEP_SEC } from '@data/tuning';
 import {
   CREDITS_LINES_PER_SEC, CREDITS_END_AT_FRAC, REPORT_LEAD_HOLD_SEC, WALL_FRAME_MAX_SEC, REPORT_STAR_GAP_SEC,
   REPORT_CHARGE_AFTER_SEC, REPORT_CHOIR_EVERY_SEC, REPORT_STAR_CHIME_AFTER_SEC, REPORT_FANFARE_AFTER_SEC,
@@ -40,11 +40,6 @@ import {
 // motion: the rows and the credits stand still, the stars fade in.
 
 type Stage = 'rows' | 'credits' | 'stars' | 'done';
-
-// The cycles line rolls up after the charge has shown (slice 4): it starts this long into the last stage and counts a
-// cycle per step, so a six reads in about a second, well inside REPORT_CONTINUE_ARM_SEC's wait.
-const REPORT_CYCLES_START_SEC = 0.3;
-const REPORT_CYCLE_STEP_SEC = 0.1;
 
 const NEAR_MISSES_SHOWN = 2;
 

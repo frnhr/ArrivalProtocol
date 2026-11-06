@@ -20,6 +20,7 @@ import { renderKeyCaps } from '@components/hud/keycaps';
 import { TRANSMIT_TEXT, DRAFT_TEXT } from '@data/script';
 import { MAP_TEXT } from '@data/map-text';
 import { REPO_TEXT } from '@data/repo-text';
+import { PACKET_SKILL_TEXT } from '@data/training-text';
 import { skillFileView } from '@systems/skills';
 import { isSkillFile } from '@state/selectors';
 import { SKILLS_TEXT } from '@data/script';
@@ -114,8 +115,8 @@ function skillChipNode(chip: PacketChip, skill: Readonly<SkillChip>, seg: Readon
   const text = skill.packedAs !== null ? SKILLS_TEXT.skill.version(skill.packedAs.version) : view?.badge ?? SKILLS_TEXT.skill.version(skill.level.version);
   name?.after(make('span', `tx-chip-badge${view?.damaged ? ' damaged' : ''}`, text));
   const note = node.querySelector('.tx-chip-note');
-  const arrow = chip.note.indexOf('→');
-  if (note && chip.lock === null && !chip.dropped && arrow >= 0) note.textContent = chip.note.slice(arrow);
+  // The loss under the name (review m10: composed from the chip's fields, not cut out of TREE's line).
+  if (note && chip.lock === null && !chip.dropped && !skill.trained) note.textContent = PACKET_SKILL_TEXT.loss(skill.without, skill.restore);
   if (chip.dropped || skill.packAs.length === 0) return node;
   const group = make('div', 'tx-chip-group');
   group.appendChild(node);

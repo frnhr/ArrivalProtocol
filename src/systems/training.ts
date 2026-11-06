@@ -9,17 +9,13 @@ import type { Store } from '@state/store';
 import type { GameState, TransitPlan } from '@state/schema';
 import type { SkillId, SkillLevel, CellRow, SkillPurchase } from '@/types/skill';
 import {
-  treeCells, visitNow, held, paid, lostLevels, restorePrice, bankOf, levelAbove, type TrainRefusal,
+  treeCells, visitNow, held, paid, restoreCostOf, bankOf, levelAbove, type TrainRefusal,
 } from '@systems/skill-tree';
 import { skillPacketPlan } from '@systems/skill-files';
 import { planPacket } from '@systems/draft';
 import { isSkillFile } from '@state/selectors';
 import { skillBlocks, SKILL_TREE } from '@data/skills';
 import { CYCLES_CARD_CYCLES } from '@data/tuning';
-
-// The required first pick is enforced: setCourse throws on skill-tree.ts deskBlocker, and the helpers that make the pick for
-// a caller that only wants to sail (the suites' tests/unit/support/desk.ts setCourseFromDesk, __ap.course) make it.
-export const FIRST_PICK_ENFORCED = true;
 
 function sameRow(a: CellRow, b: CellRow): boolean {
   return a.kind === 'version' ? b.kind === 'version' && a.version === b.version : b.kind === 'lock' && a.level === b.level;
@@ -65,9 +61,8 @@ export function restoreSkill(store: Store<GameState>, skill: SkillId): TrainRefu
   if (state.run.phase !== 'desk') return 'not-desk';
   if (state.run.map.world !== 'arm') return 'closed';
   const paidFor = paid(state.run.skills, skill);
-  const lost = lostLevels(skill, held(state, skill), paidFor);
-  if (paidFor === null || lost.length === 0) return 'owned';
-  const cost = restorePrice(lost);
+  const cost = restoreCostOf(state, skill);
+  if (paidFor === null || cost === 0) return 'owned';
   if (cost > bankOf(state.run.skills)) return 'unaffordable';
   const purchase: SkillPurchase = { skill, kind: 'restore', to: { ...paidFor }, cost, visit: visitNow(state.run) };
   store.update((draft) => { draft.run.skills.pending.push(purchase); });

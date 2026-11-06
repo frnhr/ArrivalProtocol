@@ -17,8 +17,8 @@ import type { GameState } from '@state/schema';
 import type { RoomFit } from '@/types/map';
 import type { SkillId, SkillPurchase, CellRow, SkillVersion, CycleEarning } from '@/types/skill';
 import {
-  treeCells, bankOf, deskBlocker, visitNow, held, paid, lostLevels, restorePrice, type TreeCell, type CellLook,
-  type TrainRefusal,
+  treeCells, bankOf, deskBlocker, visitNow, held, paid, restoreCostOf, isFirstDesk, skillDemos, demoKindOf, type TreeCell,
+  type CellLook, type TrainRefusal,
 } from '@systems/skill-tree';
 import { unitArrival } from '@systems/arrival-preview';
 import { skillRelief } from '@systems/skill-files';
@@ -31,13 +31,11 @@ import { unitName } from '@systems/say';
 import { SKILL_TREE, SKILL_IDS, skillBlocks } from '@data/skills';
 import { layoutFor } from '@data/memory';
 import { NOISE_WORD } from '@data/map-text';
-import { TRAINING_TEXT } from '@data/training-text';
-import { FIRST_PICK_ENFORCED } from '@systems/training';
-import { CHARGE_ARRIVAL_FLOOR, CYCLES_LANDED_STEPS, FIRST_PICK_FLOOR_CYCLES, LOCK_RANGE_TAC } from '@data/tuning';
+import { TRAINING_TEXT, TRAINING_DEMO_ART, type DemoCount, type DemoArt } from '@data/training-text';
+import { CHARGE_ARRIVAL_FLOOR, CYCLES_LANDED_STEPS, FIRST_PICK_FLOOR_CYCLES, LOCK_RANGE_TAC, TRAINING_HOLD_SEC } from '@data/tuning';
 
-// The TRAIN bar fills over this many wall seconds before the purchase lands (03 §4's juice: "the training bar fills over
-// 1.5 s"), long enough to read `TRAINING AUTOBURN v1 · from your 1 capture` and hear the chirps, short enough not to wait.
-export const TRAINING_HOLD_SEC = 1.5;
+// The TRAIN bar's length lives in tuning.ts (the review's m8); re-exported for the desk's actions and the suites.
+export { TRAINING_HOLD_SEC } from '@data/tuning';
 
 // The cell a click or a key chose (UiState.trainingSel), as the model and the view name it.
 export type TrainingSel = NonNullable<GameState['ui']['trainingSel']>;
@@ -77,6 +75,7 @@ export interface TrainingCard {
   pitch: string;
   cost: string;                // 3 CYCLES · 6 BLOCKS
   trained: boolean;            // picked at this desk (or held already): stamped TRAINED
+  demo: DemoArt;               // its v1's mini-demo
   selected: boolean;
   refusal: TrainRefusal | null;
 }
@@ -93,7 +92,7 @@ export interface TrainingAction {
 
 export interface TrainingDetail {
   cell: TrainingCellView;
-  demo: string;                // the mini-demo's loop (the view's drawing): 'autoburn-1', 'autoburn-lock' …
+  demo: DemoArt;               // the mini-demo's loop (the view's drawing, by data: training-text.ts TRAINING_DEMO_ART)
   lines: string[];             // mode, price and size, NEXT SHIP
   status: string | null;       // the long form of why it can't be bought, or that it was bought here
   action: TrainingAction | null;
@@ -191,9 +190,9 @@ function cellView(state: Readonly<GameState>, cell: Readonly<TreeCell>, bank: nu
   };
 }
 
-// RESTORE's price for a skill now (decision 16): half of every level paid for and not held, rounded up.
+// RESTORE's price for a skill now (decision 16): skill-levels.ts restoreCostOf, at what the unit holds.
 export function restoreCost(state: Readonly<GameState>, skill: SkillId): number {
-  return restorePrice(lostLevels(skill, held(state, skill), paid(state.run.skills, skill)));
+  return restoreCostOf(state, skill);
 }
 
 // The selection is armed: the kid picked it this visit ([1] / [2], ↑ ↓, a click: UiState.trainingArmed) on the open tab. The
@@ -211,7 +210,6 @@ function cellAction(state: Readonly<GameState>, cell: Readonly<TrainingCellView>
 }
 
 function cellActionBare(state: Readonly<GameState>, cell: Readonly<TrainingCellView>, bank: number): TrainingAction | null {
-  const captures = state.run.stats.demos.length;
   const name = TRAINING_TEXT.skills[cell.skill].name;
   if (cell.look === 'lost') {
     const cost = restoreCost(state, cell.skill);
@@ -227,9 +225,36 @@ function cellActionBare(state: Readonly<GameState>, cell: Readonly<TrainingCellV
   return {
     kind: 'train', cost: cell.price, label: TRAINING_TEXT.train(cell.price), enabled: cell.look === 'affordable',
     why: cell.look === 'affordable' ? null : cell.status,
-    holdText: cell.row.kind === 'version' ? TRAINING_TEXT.training(name, cell.row.version, captures)
+    holdText: cell.row.kind === 'version' ? TRAINING_TEXT.training(name, cell.row.version, demoCount(state, cell.skill))
       : TRAINING_TEXT.trainingLock(LOCK_RANGE_TAC[cell.row.level]),
   };
+}
+
+// A skill's demos as the bar counts them (its kind from data/skills.ts: AUTOBURN's captures, AUTODROP's landings), or null
+// for a skill with none (review m5: every skill's bar said `from your n captures`).
+function demoCount(state: Readonly<GameState>, skill: SkillId): DemoCount | null {
+  const kind = demoKindOf(skill);
+  const demos = skillDemos(state.run.stats, skill);
+  return kind === null || demos === null ? null : { count: demos.demos, kind };
+}
+
+// The head's demos: one count per demo kind a built skill of the tree learns from, in SKILL_IDS order.
+function headDemos(state: Readonly<GameState>): DemoCount[] {
+  const counts: DemoCount[] = [];
+  for (const id of SKILL_IDS) {
+    if (SKILL_TREE[id].built === 0) continue;
+    const count = demoCount(state, id);
+    if (count !== null && !counts.some((other) => other.kind === count.kind)) counts.push(count);
+  }
+  return counts;
+}
+
+// The cell's mini-demo, by data (TRAINING_DEMO_ART: a skill names its drawing per version and for LOCK RANGE).
+function cellArt(skill: SkillId, row: CellRow): DemoArt {
+  const art = TRAINING_DEMO_ART[skill];
+  if (row.kind === 'version') return art.versions[row.version - 1]!;
+  if (art.lock === null) throw new Error(`trainingModel: ${skill} has a LOCK RANGE cell but no lock art`);
+  return art.lock;
 }
 
 function detailOf(state: Readonly<GameState>, cell: TrainingCellView, bank: number): TrainingDetail {
@@ -237,7 +262,7 @@ function detailOf(state: Readonly<GameState>, cell: TrainingCellView, bank: numb
     ? TRAINING_TEXT.detailCost(cell.price, cell.blocks) : TRAINING_TEXT.detailLockCost(cell.price, cell.blocks);
   return {
     cell,
-    demo: `${cell.skill}-${cell.row.kind === 'version' ? cell.row.version : 'lock'}`,
+    demo: cellArt(cell.skill, cell.row),
     lines: [cell.mode, longCost, cell.nextShip],
     status: cell.look === 'pending' ? TRAINING_TEXT.status.pendingLong : cell.status === '' ? null : cell.status,
     action: cellAction(state, cell, bank),
@@ -336,7 +361,7 @@ export function trainingModel(state: Readonly<GameState>): TrainingModel {
   const visit = visitNow(run);
   const bank = bankOf(run.skills);
   const sel = state.ui.trainingSel;
-  const firstPick = run.map.world === 'arm' && visit === 1;
+  const firstPick = isFirstDesk(run);
   const all = treeCells(state, visit).map((cell) => cellView(state, cell, bank, sel));
   const chosen = sel ?? (firstPick ? null : defaultSel(all));
   const cells = sel === null && chosen !== null
@@ -363,13 +388,13 @@ export function trainingModel(state: Readonly<GameState>): TrainingModel {
     ? cells.filter((cell) => cell.row.kind === 'version' && cell.row.version === 1 && cell.look !== 'closed' && cell.look !== 'unbuilt')
       .map((cell, i) => ({
         key: String(i + 1), skill: cell.skill, name: cell.name, pitch: TRAINING_TEXT.skills[cell.skill].pitch,
-        cost: TRAINING_TEXT.cardCost(cell.price, cell.blocks), trained: cell.look === 'owned' || cell.look === 'pending',
+        cost: TRAINING_TEXT.cardCost(cell.price, cell.blocks), trained: cell.look === 'owned' || cell.look === 'pending', demo: cellArt(cell.skill, cell.row),
         selected: cell.selected, refusal: cell.refusal,
       }))
     : [];
 
   // desk.ts firstPickWaits' rule (read here directly: desk.ts imports this file).
-  const blocked = FIRST_PICK_ENFORCED && deskBlocker(state) !== null;
+  const blocked = deskBlocker(state) !== null;
   const picked = firstPick && deskBlocker(state) === null;
   const topUp = firstPick
     ? run.skills.grants.filter((grant) => grant.source === 'first-pick').reduce((sum, grant) => sum + grant.cycles, 0) : 0;
@@ -379,7 +404,7 @@ export function trainingModel(state: Readonly<GameState>): TrainingModel {
   const slot = state.ui.deskSelected;
   return {
     visit, firstPick, armed: trainingArmed(state), title: TRAINING_TEXT.title(unitName(run.unitNumber)), bank, bankText: TRAINING_TEXT.bank(bank),
-    demos: TRAINING_TEXT.demos(run.stats.demos.length),
+    demos: TRAINING_TEXT.demos(headDemos(state)),
     control: firstPick ? TRAINING_TEXT.controlFirstVisit : null,
     topUp: topUp > 0 ? TRAINING_TEXT.onTheHouse(topUp) : null,
     blocked, cards, branches, closed, cells, selected, detail,

@@ -5,7 +5,7 @@ import type {
 } from '@state/schema';
 import type { SegmentRole, Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
-import { AUTOPILOT_DAMAGED_LINE, BAND_COPY, CAPABILITY_ROLES, ghostRefusesSkip, type Band, type CapabilityRole } from '@systems/capabilities';
+import { AUTOPILOT_DAMAGED_LINE, BAND_COPY, CAPABILITY_ROLES, ghostRefusesSkip, skillLive, type Band, type CapabilityRole } from '@systems/capabilities';
 import { integrityBand } from '@state/selectors';
 import { formatCount } from '@data/format';
 import type { Hopeless } from '@systems/beam-out';
@@ -1981,7 +1981,8 @@ export const DEBRIS_RULES: readonly GuideRule[] = [
 
 // AUTOBURN (§6.10): a drop mid-flight is an alarm (its klaxon is the alert's, systems/autoburn.ts), worded for the
 // screen; and the first time this run it could take a capture, the strip says what [B] does (the capture lines
-// offer ` · or [B] AUTO` from then on).
+// offer ` · or [B] AUTO` from then on). Slice 4: the first moment v2 can act it says v2's rule instead (03 §4), once; both
+// lessons are the flight's, never LANDING's (a v2 [B] there is ROUND's or GREEN's on the landing's own rows).
 export const AUTOBURN_RULES: readonly GuideRule[] = [
   {
     id: 'alarm-autoburn-lost',
@@ -1997,7 +1998,7 @@ export const AUTOBURN_RULES: readonly GuideRule[] = [
     priority: 'tutorial',
     once: true,
     maxShownSec: AUTOBURN_READY_SHOW_SEC,
-    activeWhen: (ctx) => isFlying(ctx) && autoburnAvailable(ctx.state, ctx.pred),
+    activeWhen: (ctx) => isFlying(ctx) && !autoburnV2(ctx) && autoburnAvailable(ctx.state, ctx.pred),
     // WP12 review (WP9's TODO): a kid who SKIPs to the capture lands at GET READY, a NOW line, and the lesson, a
     // tutorial, never showed: only the tail's `· or [B] AUTO` said the skill was there. Not yet shown out, it takes
     // GET READY's place (the header chip keeps the countdown); at HOLD [SPACE] NOW the flight's line is back.
@@ -2006,7 +2007,24 @@ export const AUTOBURN_RULES: readonly GuideRule[] = [
     keys: ['B'],
     doneWhen: (ctx) => ctx.state.burn.auto.phase !== 'idle',
   },
+  {
+    id: 'tut-autoburn-v2',
+    layer: 'ship',
+    priority: 'tutorial',
+    once: true,
+    maxShownSec: AUTOBURN_READY_SHOW_SEC,
+    activeWhen: (ctx) => isFlying(ctx) && autoburnV2(ctx) && autoburnAvailable(ctx.state, ctx.pred),
+    preempts: (ctx) => ctx.flight?.id === 'F10-ready',
+    text: () => AUTOBURN_TEXT.readyV2,
+    keys: ['B'],
+    doneWhen: (ctx) => ctx.state.burn.auto.phase !== 'idle',
+  },
 ];
+
+// AUTOBURN works as v2 or better now (graded damage: a v2 at 64% works as v1, and says v1's lesson).
+function autoburnV2(ctx: DirectorCtx): boolean {
+  return skillLive(ctx.state.memory, 'autoburn').version >= 2;
+}
 
 // --- VESPER (WP10): the engine firing by itself, SWAP, COPY ------------------------------------------------------
 // The ship's first uncommanded burst is an alarm (systems/ghost-thrust.ts raises it: the klaxon, TACTICAL): its line

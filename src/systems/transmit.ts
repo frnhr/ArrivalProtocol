@@ -4,10 +4,10 @@ import type { Store } from '@state/store';
 import type { GameState, ShipOutcome, TransitPlan } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import type { RoomFit } from '@/types/map';
-import { unitFilesIn, dropLock, toolKindOf, arrivalCharge, crashCoreToll, type DropLock } from '@systems/carry';
+import { unitFilesIn, dropLock, toolKindOf, arrivalCharge, crashCoreToll, type DropLock, type Packet } from '@systems/carry';
 import { transitPacket, pickCharge, cardFiles, PREVIEW_ID } from '@systems/draft';
-import { skillPacketPlan, skillFile, lowerLevels } from '@systems/skill-files';
-import { held, paid, lostLevels, restorePrice } from '@systems/skill-tree';
+import { skillPacketPlan, lowerLevels } from '@systems/skill-files';
+import { held, restoreCostOf } from '@systems/skill-tree';
 import { isSkillFile } from '@state/selectors';
 import { SKILL_TREE, skillBlocks } from '@data/skills';
 import { PACKET_SKILL_TEXT } from '@data/training-text';
@@ -100,6 +100,7 @@ export interface SkillChip {
   trained: boolean;
   packedAs: SkillLevel | null;  // PACK AS in effect (null: it crosses as it is)
   restore: number;              // the RESTORE the next desk asks if it is left behind
+  without: string;              // what leaving it costs the kid (`brake by hand`): the view composes the loss with restore
   packAs: PackAsOption[];       // the lower levels it may cross as, highest first (none on a trained chip)
 }
 
@@ -404,7 +405,7 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
       order: dropped ? 0 : dropOrder(kept, seg),
     };
   });
-  chips.push(...trainedChips(state, skillPlan.fresh).map((chip) => ({ ...chip, order: LOCKED_LAST })));
+  chips.push(...trainedChips(state, packet).map((chip) => ({ ...chip, order: LOCKED_LAST })));
   // Stable: files of one rank keep the packing order (the original before its copy).
   chips.sort((a, b) => a.order - b.order);
 
@@ -537,7 +538,7 @@ export function toggleDrop(store: Store<GameState>, segId: string): DropRefusal 
 
 // The RESTORE the next desk would ask for `id` if it crossed at `level` (null: left behind), against what the run paid.
 function restoreAt(state: Readonly<GameState>, id: SkillId, level: Readonly<SkillLevel> | null): number {
-  return restorePrice(lostLevels(id, level, paid(state.run.skills, id)));
+  return restoreCostOf(state, id, level);
 }
 
 // A skill file of the unit's on the PACKET (not trained at this desk), packed at `packedAs` (null: as it is).
@@ -546,7 +547,7 @@ function skillChip(state: Readonly<GameState>, seg: Readonly<SkillFileSegment>, 
   const level = packedAs ?? nominal;
   return {
     skill: seg.upgrade, level: { ...level }, nominal, trained: false, packedAs: packedAs === null ? null : { ...packedAs },
-    restore: restoreAt(state, seg.upgrade, null),
+    restore: restoreAt(state, seg.upgrade, null), without: PACKET_SKILL_TEXT.without[seg.upgrade],
     packAs: lowerLevels(nominal).map((lower): PackAsOption => {
       const blocks = skillBlocks(seg.upgrade, lower.version, lower.lock);
       const restore = restoreAt(state, seg.upgrade, lower);
@@ -562,19 +563,24 @@ function skillChip(state: Readonly<GameState>, seg: Readonly<SkillFileSegment>, 
 function skillNote(skill: Readonly<SkillChip>): string {
   const def = SKILL_TREE[skill.skill];
   return PACKET_SKILL_TEXT.chip(def.fileName, skill.level.version, skillBlocks(skill.skill, skill.level.version, skill.level.lock),
-    PACKET_SKILL_TEXT.without[skill.skill], skill.restore);
+    skill.without, skill.restore);
 }
 
-// The fresh files this desk's training puts in the packet, each a locked chip (`TRAINED HERE · ◀ CHART TO UNDO`, plan §7 R8)
-// with the preview id planPacket gives it.
-function trainedChips(state: Readonly<GameState>, fresh: readonly { skill: SkillId; level: SkillLevel }[]): PacketChip[] {
-  return fresh.map((entry): PacketChip => {
-    const file = skillFile(entry.skill, entry.level, PREVIEW_ID);
-    const level = held(state, entry.skill) ?? entry.level;
+// The fresh files this desk's training puts in the packet, each a locked chip (`TRAINED HERE · ◀ CHART TO UNDO`, plan §7 R8):
+// the files planPacket itself named fresh (packet.skills; review m11: the chips derived the preview ids again).
+function trainedChips(state: Readonly<GameState>, packet: Readonly<Packet>): PacketChip[] {
+  const packed = [...packet.rackE, ...packet.rackF];
+  return packet.skills.filter((entry) => entry.how === 'fresh').map((entry): PacketChip => {
+    const file = packed.find((seg) => seg.id === entry.segId);
+    if (file === undefined || !isSkillFile(file)) throw new Error(`trainedChips: the fresh ${entry.skill} file ${entry.segId} is not in the packet`);
+    const level = held(state, entry.skill) ?? { version: file.version, lock: file.lock };
     return {
       segId: file.id, name: file.name, blocks: file.size, integrity: file.integrity, infected: false, dropped: false, lock: 'trained',
       toggleable: false, note: PACKET_SKILL_TEXT.trainedHere, chargeGain: 0, arriveGain: 0, log: false, glow: false,
-      skill: { skill: entry.skill, level: { ...level }, nominal: { ...level }, trained: true, packedAs: null, restore: 0, packAs: [] },
+      skill: {
+        skill: entry.skill, level: { ...level }, nominal: { ...level }, trained: true, packedAs: null, restore: 0,
+        without: PACKET_SKILL_TEXT.without[entry.skill], packAs: [],
+      },
     };
   });
 }

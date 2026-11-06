@@ -45,6 +45,10 @@ export type OpenRule =
   | { kind: 'after-seeds'; minVisit: number }
   | { kind: 'poor-ahead'; minVisit: number };
 
+// What a skill's demos are (SkillDef.demos): the kid's manual captures or launches. Their learning and their words are one
+// row per kind (skill-tree.ts DEMO_SOURCES, training-text.ts DEMO_WORDS).
+export type DemoKind = 'captures' | 'drops';
+
 export interface SkillDef {
   id: SkillId;
   branch: SkillBranch;
@@ -55,7 +59,7 @@ export interface SkillDef {
   opens: OpenRule;
   // Where its precision comes from (03 §3.3): the kid's manual captures (run.stats.demos), launches (stats.dropDemos), or
   // nothing (SURVEY and SENTRY have no demos).
-  demos: 'captures' | 'drops' | null;
+  demos: DemoKind | null;
   // The highest version this build implements (0: the branch is not built and never opens; its row reads OPENS LATER).
   // 4a: AUTOBURN 2, the rest 0; 4c AUTODROP 3, 4d SENTRY 3, 4e AUTOBURN 3, slice 6 SURVEY 3.
   built: EffectiveVersion;

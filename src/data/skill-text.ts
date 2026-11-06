@@ -57,6 +57,8 @@ export const AUTOBURN_TEXT = {
   greenCostsWindow: (lz: string): string => `AUTOBURN: GREEN COSTS ${lz}'s WINDOW`,
   // The first time it can be used this run (script.ts, a tutorial).
   ready: 'AUTOBURN READY — press [B] and it brakes at ▼ for you',
+  // ...and the first time v2 can act (03 §4: a tutorial line, once).
+  readyV2: 'AUTOBURN v2 — [B] makes it green. [B] on green makes it round.',
   // The tails (03 §3.7): the capture timeline's while AUTO could take it (v1), the mode's (v2: trims too, and HOLD
   // STEADY's ROUND), and a correction row's while it waits.
   offerTail: ' · or [B] AUTO',
@@ -89,7 +91,8 @@ export const AUTOBURN_REFUSAL = {
   paused: 'PAUSED',
   noFile: 'NO AUTOBURN.skl',
   // WP12 p3 (LEAD-2's wording item): a unit that never trained it (ships 1–2 of a run) has nothing that is "gone".
-  untrained: 'NOT TRAINED YET',
+  // Review (words): not `NOT TRAINED YET`, which a kid reads as the UNTRAINED of a skill with no demos.
+  untrained: 'NO AUTOBURN YET',
   damaged: 'AUTOBURN.skl DAMAGED',
   presets: 'AUTOPILOT DAMAGED',
   engine: 'ENGINE NOT RESPONDING',
@@ -194,8 +197,8 @@ export const AUTO_BUTTON_REASON: Readonly<Partial<Record<AutoburnRefusal, string
 // The Skills window's AUTOBURN.skl row (systems/skills.ts): a trained skill, not a card.
 export const AUTOBURN_SKILL_ROW = {
   title: 'AUTOBURN.skl',
-  effect: 'Brakes at ▼ for you, even from the MIND: press B when ▼ is near',
-  trained: (accuracy: number, demos: number): string => `ACCURACY ${accuracy}% · FROM YOUR ${demos} CAPTURES`,
+  effect: 'Brakes at ▼ for you, even from the MIND: press [B] when ▼ is near',
+  trained: (accuracy: number, demos: number): string => `ACCURACY ${accuracy}% · FROM YOUR ${demos} CAPTURE${demos === 1 ? '' : 'S'}`,
   // 03 §3.3's loud UNTRAINED state: no demos yet, so it fires late (plan §7 R3).
   untrained: (accuracy: number): string => `UNTRAINED ${accuracy}% · CAPTURE BY HAND TO TEACH IT`,
   // Armed, by the mode it flies (one row per mode: 4e's landing orbit has its own).

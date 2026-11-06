@@ -32,8 +32,8 @@ import { REPO_FILES } from '@data/repository';
 import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
 import { URGENT_SLACK_YEARS, BEAM_OUT_BLACKOUT_SEC, LEAVE_BLOCK_MAX_LINES, TRAIL_CROSS_PAST_COLONY_LY } from '@data/tuning';
 import type { SkillId, CellRow } from '@/types/skill';
-import { bankOf, deskBlocker, type TrainRefusal } from '@systems/skill-tree';
-import { trainCell, restoreSkill, undoPurchase, FIRST_PICK_ENFORCED } from '@systems/training';
+import { bankOf, deskBlocker, isFirstDesk, type TrainRefusal } from '@systems/skill-tree';
+import { trainCell, restoreSkill, undoPurchase } from '@systems/training';
 import { trainingModel, trainingArmed, cellKey, TRAINING_HOLD_SEC } from '@systems/training-model';
 import { TRAINING_TEXT } from '@data/training-text';
 
@@ -599,11 +599,10 @@ export function timelineMarks(outlook: readonly OutlookEntry[], hop: Readonly<Pi
 // The desk's guidance steps: pick a ship (done once one is selected), then SET COURSE to it. On a run's first desk on the
 // arm the recommended file comes between (02 §4: ship → file → SET COURSE): done once any request is set; it only
 // guides, SET COURSE never waits for it (decision 19; plan risk 2).
-// SET COURSE waits for the required first pick (slice 4, plan §2.5): skill-tree.ts deskBlocker, once the rule is on
-// (training.ts FIRST_PICK_ENFORCED, Track TREE's switch: until trainCell is built the desk can't make the pick, so it
-// must not wait for it). The DESK's bar, its step and ENTER read this one rule.
+// SET COURSE waits for the required first pick (slice 4, plan §2.5): skill-tree.ts deskBlocker. The DESK's bar, its step
+// and ENTER read this one rule.
 export function firstPickWaits(state: Readonly<GameState>): boolean {
-  return FIRST_PICK_ENFORCED && deskBlocker(state) !== null;
+  return deskBlocker(state) !== null;
 }
 
 // Slice 4 (plan §2.5): the run's first desk on the arm opens with the required first skill (`A SKILL`), done once this
@@ -611,7 +610,7 @@ export function firstPickWaits(state: Readonly<GameState>): boolean {
 export function deskSteps(state: Readonly<GameState>): DeskStep[] {
   const selected = state.ui.deskSelected;
   const steps: DeskStep[] = [];
-  const firstDesk = state.run.map.world === 'arm' && state.run.map.route.length === 1;
+  const firstDesk = isFirstDesk(state.run);
   if (firstDesk) {
     const pick = state.run.skills.pending.find((purchase) => purchase.kind === 'train');
     const done = !firstPickWaits(state);

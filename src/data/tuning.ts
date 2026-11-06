@@ -868,6 +868,23 @@ export const REPORT_ADVANCE_LOCK_SEC = 0.8;
 export const REPORT_STAR_HURRY_GAP_SEC = 0.15;
 // CONTINUE leaves the report for good, so it takes input only once its line has been up this long.
 export const REPORT_CONTINUE_ARM_SEC = 1.0;
+// Slice 4 (moved here from the views by the review's m8). The cycles line rolls up after the charge has shown: it starts this
+// long into the last stage and counts a cycle per REPORT_CYCLE_STEP_SEC, so a six reads in about a second, well inside
+// REPORT_CONTINUE_ARM_SEC's wait.
+export const REPORT_CYCLES_START_SEC = 0.3;
+export const REPORT_CYCLE_STEP_SEC = 0.1;
+// The TRAIN bar fills over this many wall seconds before the purchase lands (03 §4's juice: "the training bar fills over
+// 1.5 s"): long enough to read `TRAINING AUTOBURN v1 · from your 1 capture` and hear the chirps, short enough not to wait.
+export const TRAINING_HOLD_SEC = 1.5;
+// The op chirps under a filling TRAIN bar (03 §4 audio: opChirp while training), one per this many wall seconds: about
+// eight over the bar, the same busy patter an op makes.
+export const TRAINING_CHIRP_SEC = 0.18;
+// The bank rolls down to its new value over this long after a purchase (03 §4 juice: "the counter rolls down"): quick
+// enough to land with the ORBIT LOCKED arpeggio, slow enough to read the old number go.
+export const TRAINING_BANK_ROLL_SEC = 0.6;
+// A skill chip's version badge flickers this long on a version change (03 §4 juice: 400 ms; reduced motion: the colour
+// changes without flickering).
+export const SKILL_FLICKER_MS = 400;
 // The archive's heartbeat bed (§7.2 heartbeat: "soul racks in view, very quiet"): in blue, once the
 // colonists are found and while any are still in memory, one soft lub-dub every HEARTBEAT_BED_SEC
 // (AI time, so it stops with pause), at a strength felt more than heard under the ops' chirps. A hurt

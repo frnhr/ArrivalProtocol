@@ -22,7 +22,7 @@ import { createInitialState } from '@state/initial';
 import { createRunMap } from '@systems/map-run';
 import { setCourse, backToChart, transmitNext, openDesk, endShip } from '@systems/run';
 import { pickCard } from '@systems/draft';
-import { trainCell, undoPurchase, restoreSkill, FIRST_PICK_ENFORCED } from '@systems/training';
+import { trainCell, undoPurchase, restoreSkill } from '@systems/training';
 import { bankOf, deskBlocker, visitNow, grantCycles, openBranchesAt } from '@systems/skill-tree';
 import { skillBootLines, applySkillBootLine, mountSkillWatch } from '@systems/skill-files';
 import { skillFilesOf } from '@state/selectors';
@@ -55,8 +55,7 @@ store.update((draft) => { draft.run.stats.demos = [{ offsetTac: 2 }]; });
 toDesk(store);
 
 // --- Desk 1: the required pick ---------------------------------------------------------------------------------------------
-check('the first pick is enforced (FIRST_PICK_ENFORCED): SET COURSE throws until it is made', FIRST_PICK_ENFORCED
-  && deskBlocker(store.getState()) === 'first-pick' && throws(() => setCourse(store, 2)) && store.getState().run.phase === 'desk');
+check('the first pick is enforced: SET COURSE throws until it is made', deskBlocker(store.getState()) === 'first-pick' && throws(() => setCourse(store, 2)) && store.getState().run.phase === 'desk');
 check('…visit 1 opens AUTOBURN v1 alone: v2 and LOCK RANGE are closed, the other branches too',
   trainCell(store, 'autoburn', v(2)) === 'closed' && trainCell(store, 'autoburn', lock(1)) === 'closed' && trainCell(store, 'sentry', v(1)) === 'closed');
 check('…the pick (3 of the floor\'s 3) is pending, the bank 0, and the desk free', trainCell(store, 'autoburn', v(1)) === null
@@ -209,7 +208,18 @@ offTrained();
   check('…a bite to 64% steps v2 → v1, to 30% v1 → off, a REPAIR to 90% off → v2 (each once)', steps.join(' ') === 'autoburn:2>1 autoburn:1>0 autoburn:0>2', steps.join(' '));
   steps.length = 0;
   setHealth(90, 'repairing');
-  check('…a file under REPAIR is offline: OFF', steps.join(' ') === 'autoburn:2>0', steps.join(' '));
+  setHealth(95);
+  check('…a healthy file under a top-up REPAIR goes OFF and back to v2: no step at all (review m1: no RESTORED)', steps.length === 0, steps.join(' '));
+  setHealth(64);
+  steps.length = 0;
+  setHealth(70, 'repairing');
+  setHealth(85);
+  check('…a v1 (64%) repaired past 80% steps v1 → v2 once, the spell offline between not counted', steps.join(' ') === 'autoburn:1>2', steps.join(' '));
+  steps.length = 0;
+  setHealth(85, 'repairing');
+  flight.update((draft) => { const seg = skillFilesOf(draft.memory, 'autoburn')[0]!; seg.integrity = 10; });
+  setHealth(10);
+  check('…a file that went offline and came back dead steps v2 → off', steps.join(' ') === 'autoburn:2>0', steps.join(' '));
   flight.update((draft) => { draft.run.phase = 'desk'; });
   steps.length = 0;
   setHealth(30);
@@ -222,13 +232,16 @@ offTrained();
 {
   const files = Object.values(SKILL_TREE).map((def) => def.fileName);
   const lines = files.flatMap((file) => [
-    BOOT_SKILL_TEXT.trained(file, 3, 1, 99), BOOT_SKILL_TEXT.trained(file, 3, 999, 99), BOOT_SKILL_TEXT.untrained(file, 3, 40),
-    BOOT_SKILL_TEXT.retrained(file, 3, 999, 99), BOOT_SKILL_TEXT.plain(file, 3),
+    ...(['captures', 'drops'] as const).flatMap((kind) => [
+      BOOT_SKILL_TEXT.trained(file, 3, 1, kind, 99), BOOT_SKILL_TEXT.trained(file, 3, 999, kind, 99), BOOT_SKILL_TEXT.retrained(file, 3, 999, kind, 99),
+    ]),
+    BOOT_SKILL_TEXT.untrained(file, 3, 40), BOOT_SKILL_TEXT.plain(file, 3),
     PACKET_SKILL_TEXT.chip(file, 3, 12, PACKET_SKILL_TEXT.without.sentry, 27), PACKET_SKILL_TEXT.packAs(2, 11, 27),
   ]);
   const over = lines.filter((line) => line.length > MAX_LINE_CHARS);
   check('every boot and PACKET skill line fits MAX_LINE_CHARS with worst-case numbers (`from your` goes from 10 captures)',
-    over.length === 0 && BOOT_SKILL_TEXT.trained('AUTOBURN.skl', 2, 12, 88) === '> SKILL TRAINED: AUTOBURN.skl v2 · from 12 captures · ACCURACY 88%', over.join(' | '));
+    over.length === 0 && BOOT_SKILL_TEXT.trained('AUTOBURN.skl', 2, 12, 'captures', 88) === '> SKILL TRAINED: AUTOBURN.skl v2 · from 12 captures · ACCURACY 88%'
+    && BOOT_SKILL_TEXT.trained('AUTODROP.skl', 1, 1, 'drops', 90) === '> SKILL TRAINED: AUTODROP.skl v1 · from your 1 landing · ACCURACY 90%', over.join(' | '));
 }
 
 // --- Reloads (each a page open on a copy of the storage as it was) -------------------------------------------------------

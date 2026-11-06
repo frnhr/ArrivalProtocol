@@ -96,7 +96,7 @@ import { skillsModel, type SkillRow } from '@systems/skills';
 import { arrivalDamage } from '@systems/carry';
 import { autoburnRefusal, toggleAutoburn } from '@systems/autoburn';
 import { autoburnDemoSkill, deskBlocker } from '@systems/skill-tree';
-import { trainCell, FIRST_PICK_ENFORCED, undoPurchase, restoreSkill, setPackAs, commitTraining } from '@systems/training';
+import { trainCell, undoPurchase, restoreSkill, setPackAs, commitTraining } from '@systems/training';
 import { giveSkill } from '@systems/skill-files';
 import { skillLive, type SkillLive } from '@systems/capabilities';
 import type { SkillId, SkillVersion, LockLevel, DemoSkill, CellRow, RunSkillState } from '@/types/skill';
@@ -885,10 +885,10 @@ export function mountDebug(store: Store<GameState>): void {
     runNumber: (run) => debugRunNumber(store, run),
     arm: () => structuredClone(store.getState().run.map) as RunMapState,
     hop: (from, to) => hopBetween(store.getState().run.map, from, to),
-    // Slice 4: the arm's first desk requires the first skill pick: __ap.course makes it (AUTOBURN v1) once the rule is
-    // enforced (training.ts FIRST_PICK_ENFORCED), so a script that only sails still sails.
+    // Slice 4: the arm's first desk requires the first skill pick: __ap.course makes it (AUTOBURN v1), so a script that only
+    // sails still sails.
     course: (slot) => {
-      if (FIRST_PICK_ENFORCED && deskBlocker(store.getState()) === 'first-pick') {
+      if (deskBlocker(store.getState()) === 'first-pick') {
         const refusal = trainCell(store, 'autoburn', { kind: 'version', version: 1 });
         if (refusal !== null) throw new Error(`__ap.course: the first pick (AUTOBURN v1) was refused (${refusal})`);
       }

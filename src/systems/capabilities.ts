@@ -136,6 +136,12 @@ export function effectiveLock(level: LockLevel, band: Band): LockLevel | null {
   }
 }
 
+// What one skill file works as now (the one rule the MIND's chip, INSPECT and skillLive share): OFF while it is offline
+// (repairing, moving, switched off), else its version at its band.
+export function fileWorksAs(file: Readonly<SkillFileSegment>): EffectiveVersion {
+  return offlineReason(file) !== null ? 0 : effectiveVersion(file.version, integrityBand(file.integrity));
+}
+
 // How skill `id` works right now (see above). Pure. The copy that counts is the online one that works best (highest
 // effective version, then lock, then integrity), as roleHealth counts a role's best online copy; with every copy offline
 // (repairing, moving, switched off) the skill is OFF and says why. COPY refuses skill files, so a second copy is rare (a
@@ -147,7 +153,7 @@ export function skillLive(memory: readonly Segment[], id: SkillId): SkillLive {
   for (const file of copies) {
     if (offlineReason(file) !== null) continue;
     const band = integrityBand(file.integrity);
-    const version = effectiveVersion(file.version, band);
+    const version = fileWorksAs(file);
     const lock = version === 0 ? null : effectiveLock(file.lock, band);
     const better = best === null || version > best.version || (version === best.version && (lock ?? -1) > (best.lock ?? -1))
       || (version === best.version && lock === best.lock && file.integrity > best.file.integrity);

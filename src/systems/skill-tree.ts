@@ -7,7 +7,7 @@ import type { Store } from '@state/store';
 import type { GameState, RunStats } from '@state/schema';
 import type {
   SkillId, SkillLevel, SkillVersion, CellRow, RunSkillState, CycleEarning, CycleGrant, DemoSkill,
-  DemoTuning, SkillRecord,
+  DemoTuning, SkillRecord, DemoKind,
 } from '@/types/skill';
 import { levelPrice, skillBlocks, SKILL_TREE, SKILL_IDS } from '@data/skills';
 import { reachableFrom } from '@systems/map-hop';
@@ -18,7 +18,7 @@ import {
 } from '@data/tuning';
 
 // The levels (held, paid, lost, RESTORE's price) live in the leaf systems/skill-levels.ts; re-exported here with the rest.
-export { visitNow, levelAbove, fileLevel, held, paid, lostLevels, restorePrice } from '@systems/skill-levels';
+export { visitNow, levelAbove, fileLevel, held, paid, lostLevels, restorePrice, restoreCostOf } from '@systems/skill-levels';
 import { visitNow, fileLevel, held, paid } from '@systems/skill-levels';
 
 // --- The bank (03 §3.1) ------------------------------------------------------------------------------------------------
@@ -73,6 +73,28 @@ export function autoburnDemoSkill(stats: Readonly<Pick<RunStats, 'demos'>>): Dem
   return demoSkill(stats.demos, AUTOBURN_DEMO_TUNING);
 }
 
+// The run's demo records a skill learns from, by kind.
+export type DemoStats = Pick<RunStats, 'demos' | 'dropDemos'>;
+
+interface DemoSource {
+  tuning: Readonly<DemoTuning>;
+  of: (stats: Readonly<DemoStats>) => readonly Readonly<{ offsetTac: number }>[];
+}
+
+// Where each demo kind's learning comes from (SkillDef.demos; review architecture note): one row per kind. A kind whose
+// learning is not built yet is null, and its skills read as having no demos (4c fills `drops` with AUTODROP's tuning, 03
+// §3.3: factor 0.5, ±1 tac s, AIM = clamp(100 − 40 × |offset|, 40, 99), from run.stats.dropDemos).
+export const DEMO_SOURCES: Readonly<Record<DemoKind, DemoSource | null>> = {
+  captures: { tuning: AUTOBURN_DEMO_TUNING, of: (stats) => stats.demos },
+  drops: null,
+};
+
+// The demo kind a skill learns from now, or null for one with no demos (SURVEY, SENTRY) or whose learning is not built.
+export function demoKindOf(id: SkillId): DemoKind | null {
+  const kind = SKILL_TREE[id].demos;
+  return kind !== null && DEMO_SOURCES[kind] !== null ? kind : null;
+}
+
 // --- The desk ----------------------------------------------------------------------------------------------------------
 
 // What holds SET COURSE (plan §2.5): on the arm, the run's first desk waits for the required first pick. Later desks, and
@@ -82,9 +104,20 @@ export function autoburnDemoSkill(stats: Readonly<Pick<RunStats, 'demos'>>): Dem
 export type DeskBlocker = 'first-pick';
 
 export function deskBlocker(state: Readonly<GameState>): DeskBlocker | null {
-  if (state.run.map.world !== 'arm' || state.run.phase !== 'desk') return null;
-  if (visitNow(state.run) !== 1) return null;
-  return anyPaid(state.run.skills) ? null : 'first-pick';
+  if (state.run.phase !== 'desk') return null;
+  return firstPickOwed(state.run) ? 'first-pick' : null;
+}
+
+// The run's first desk on the arm (visit 1: the desk after ship 1), the one predicate (review m14: the desk's steps read the
+// route's length, the tree the ships ended; they agree today, a debug jump or a migrated route could split them).
+export function isFirstDesk(run: Readonly<Pick<GameState['run'], 'map' | 'ships'>>): boolean {
+  return run.map.world === 'arm' && visitNow(run) === 1;
+}
+
+// The required first pick is still owed (03 §3.1–§3.2): the first desk, and no skill paid for yet. deskBlocker (at the desk),
+// the desk's opening tab and its first-pick top-up read it.
+export function firstPickOwed(run: Readonly<Pick<GameState['run'], 'map' | 'ships' | 'skills'>>): boolean {
+  return isFirstDesk(run) && !anyPaid(run.skills);
 }
 
 // The run has paid for some skill (bought this run, or pending at this desk).
@@ -243,10 +276,13 @@ export function trainedCycles(skills: Readonly<RunSkillState>): number {
   return total;
 }
 
-// What a skill learned from the kid's demos, or null for a skill that has none (SURVEY, SENTRY) or whose learning is not
-// built yet (AUTODROP's drops: 4c gives it its own tuning).
-export function skillDemos(stats: Readonly<Pick<RunStats, 'demos'>>, id: SkillId): DemoSkill | null {
-  return SKILL_TREE[id].demos === 'captures' ? autoburnDemoSkill(stats) : null;
+// What a skill learned from the kid's demos (its kind's DEMO_SOURCES row), or null for a skill that has none (SURVEY,
+// SENTRY) or whose learning is not built yet.
+export function skillDemos(stats: Readonly<DemoStats>, id: SkillId): DemoSkill | null {
+  const kind = demoKindOf(id);
+  if (kind === null) return null;
+  const source = DEMO_SOURCES[kind]!;
+  return demoSkill(source.of(stats), source.tuning);
 }
 
 // The skills the unit ends the run with (03 §3.11, LastUnit.skills): each skill whose file is in memory, at its file's

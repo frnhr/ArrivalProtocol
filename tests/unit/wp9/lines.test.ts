@@ -51,6 +51,8 @@ const long = 'W'.repeat(SEG_NAME_MAX_CHARS);
     AUTOBURN_TEXT.downgradedCaptured, AUTOBURN_TEXT.downgradedGreen, AUTOBURN_TEXT.downgradedRound, AUTOBURN_TEXT.roundCostsWindow('LZ-WW'),
     // WP9 fix round 1: the hand-back is CAPTURED (a trim left for later) or IN THE RING; refused [B]s have strip lines.
     AUTOBURN_TEXT.braked, AUTOBURN_TEXT.brakedTab, AUTOBURN_TEXT.inRing, AUTOBURN_TEXT.ready, AUTOBURN_TEXT.off,
+    // Slice 4 review: v2's lesson, GREEN's window in landing, the kid's own REPAIR or MOVE of an engaged file.
+    AUTOBURN_TEXT.readyV2, AUTOBURN_TEXT.greenCostsWindow('LZ-WW'), ...Object.values(AUTOBURN_TEXT.offline),
     ...Object.values(AUTOBURN_DROP_TEXT).map((text) => `${text}${AUTOBURN_DROP_TAB}`), ...Object.values(AUTOBURN_REFUSAL),
     ...Object.values(AUTO_REFUSAL_LINES).map((line) => line!.text),
   ];
@@ -65,7 +67,7 @@ const long = 'W'.repeat(SEG_NAME_MAX_CHARS);
   const rules = [...SEED_RULES, ...DEBRIS_RULES, ...AUTOBURN_RULES];
   const rendered = rules.map((rule) => rule.text({ vars: WORST_CASE_VARS }));
   const bad = rendered.filter((line) => !fits(line));
-  check('every WP9 strip rule fits with worst-case vars', bad.length === 0 && rendered.length === 8, bad.join(' | ') || rendered.join(' | '));
+  check('every WP9 strip rule fits with worst-case vars', bad.length === 0 && rendered.length === 9, bad.join(' | ') || rendered.join(' | '));
   check('…and all of them are in GUIDE_RULES', rules.every((rule) => GUIDE_RULES.includes(rule)));
   check('the debris rule names the rack and the countdown', DEBRIS_RULES[0]!.text({ vars: { ...WORST_CASE_VARS, debrisRack: 'C', debrisInTac: 70 } })
     === 'DEBRIS HITS RACK C IN 1:10 — [TAB], MOVE drivers out of it', DEBRIS_RULES[0]!.text({ vars: { ...WORST_CASE_VARS, debrisRack: 'C', debrisInTac: 70 } }));

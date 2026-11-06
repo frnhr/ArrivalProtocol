@@ -16,8 +16,8 @@ import { REPAIR_V2_VERSION, CHARGE_CARD_BLOCKS, CORE_LOW_INTEGRITY, FUEL_TRIM_DV
 import type { SkillFileSegment } from '@/types/segment';
 import type { SkillId, SkillVersion, EffectiveVersion } from '@/types/skill';
 import { skillFilesOf } from '@state/selectors';
-import { skillLive, effectiveVersion, type OfflineReason } from '@systems/capabilities';
-import { paid, fileLevel, lostLevels, restorePrice } from '@systems/skill-tree';
+import { skillLive, effectiveVersion, fileWorksAs, type OfflineReason } from '@systems/capabilities';
+import { paid, fileLevel, restoreCostOf } from '@systems/skill-tree';
 import { SKILL_TREE, SKILL_IDS } from '@data/skills';
 import { TRAINING_TEXT } from '@data/training-text';
 import {
@@ -211,7 +211,7 @@ function chargeTo(integrity: number, size: number, to: number): number {
 
 export function skillFileView(seg: Readonly<SkillFileSegment>): SkillFileView {
   const offline = offlineReason(seg);
-  const works = offline !== null ? 0 : effectiveVersion(seg.version, integrityBand(seg.integrity));
+  const works = fileWorksAs(seg);
   const damaged = offline === null && works < seg.version;
   const text = SKILLS_TEXT.skill;
   const zones = skillTickZones(seg.version);
@@ -238,10 +238,9 @@ function skillVersionLine(state: Readonly<GameState>, id: SkillId, status: strin
   const live = skillLive(state.memory, id);
   const paidLevel = paid(state.run.skills, id);
   const text = SKILLS_TEXT.skill;
-  const lost = lostLevels(id, fileLevel(state.memory, id), paidLevel);
+  const cost = restoreCostOf(state, id, fileLevel(state.memory, id));
   const lostLine = (): string | null => {
-    if (lost.length === 0 || paidLevel === null) return null;
-    const cost = restorePrice(lost);
+    if (cost === 0 || paidLevel === null) return null;
     return currentShip(state).final ? text.restoreNever(paidLevel.version) : text.restoreAt(paidLevel.version, cost);
   };
   if (live.file === null) {
@@ -258,20 +257,35 @@ function skillVersionLine(state: Readonly<GameState>, id: SkillId, status: strin
   return { pips: versionPips(view.nominal), text: parts.join(' · '), tone: warn ? 'warn' : 'good' };
 }
 
-// A skill's row: shown once the run bought it (or the unit carries its file). AUTOBURN's numbers are read live from the
-// kid's captures (skill-tree.ts autoburnDemoSkill), like the boot line that trained it; what it is doing now is Track
-// FLIGHT's (autoburn.ts autoburnStatus). The skills later sub-slices build say only that they are ready.
+// A skill whose own module words its row (review architecture note: 4c and 4d add autodrop's and sentry's here, instead of a
+// ternary per skill): its title, its effect, and what it is doing now. Track FLIGHT's autoburnStatus reads the kid's
+// captures (skill-tree.ts autoburnDemoSkill) live, like the boot line that trained it.
+interface SkillRowHook {
+  title: string;
+  effect: string;
+  status: (state: Readonly<GameState>) => { text: string; tone: 'good' | 'warn' };
+}
+const SKILL_ROW_HOOKS: Readonly<Partial<Record<SkillId, SkillRowHook>>> = {
+  autoburn: { title: AUTOBURN_SKILL_ROW.title, effect: AUTOBURN_SKILL_ROW.effect, status: autoburnStatus },
+};
+
+// A skill without a hook: its file's name, its pitch, and only whether it works.
+function plainSkillStatus(state: Readonly<GameState>, id: SkillId): { text: string; tone: 'good' | 'warn' } {
+  const live = skillLive(state.memory, id);
+  if (live.file === null) return { text: SKILLS_TEXT.status.gone, tone: 'warn' };
+  return live.version === 0 ? { text: SKILLS_TEXT.skill.off, tone: 'warn' } : { text: SKILLS_TEXT.skill.ready(live.version), tone: 'good' };
+}
+
+// A skill's row: shown once the run bought it (or the unit carries its file).
 function skillRow(state: Readonly<GameState>, id: SkillId): SkillRow | null {
   const files = skillFilesOf(state.memory, id);
   if (files.length === 0 && paid(state.run.skills, id) === null) return null;
-  const title = id === 'autoburn' ? AUTOBURN_SKILL_ROW.title : SKILL_TREE[id].fileName;
+  const hook = SKILL_ROW_HOOKS[id];
+  const title = hook?.title ?? SKILL_TREE[id].fileName;
   const pips: SkillPip[] = files.map((seg) => healthPip(seg, title.toUpperCase(), `${shownIntegrity(seg.integrity)}%`));
-  const live = skillLive(state.memory, id);
-  const status = id === 'autoburn' ? autoburnStatus(state)
-    : live.file === null ? { text: SKILLS_TEXT.status.gone, tone: 'warn' as const }
-      : { text: live.version === 0 ? SKILLS_TEXT.skill.off : SKILLS_TEXT.skill.ready(live.version), tone: live.version === 0 ? 'warn' as const : 'good' as const };
+  const status = hook?.status(state) ?? plainSkillStatus(state, id);
   return {
-    id, title, count: '', effect: id === 'autoburn' ? AUTOBURN_SKILL_ROW.effect : TRAINING_TEXT.skills[id].pitch,
+    id, title, count: '', effect: hook?.effect ?? TRAINING_TEXT.skills[id].pitch,
     status: status.text, tone: status.tone, pips: pips.length > 0 ? pips : gonePips(1, title), version: skillVersionLine(state, id, status.text),
   };
 }

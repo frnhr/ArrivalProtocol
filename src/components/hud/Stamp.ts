@@ -12,7 +12,7 @@ import { HOLLOW_DEAL, HOLLOW_VERB } from '@data/hollow-text';
 import { racksText } from '@/types/zone';
 import { podCode, LANDING_STAMP_TEXT } from '@data/landing-text';
 import { THREAT_TEXT } from '@data/threat-text';
-import { STAMP_DEBOUNCE_MS, STAMP_IN_MS, STAMP_SHOW_MS, STAMP_MAX_WIDTH_FRAC } from '@data/tuning';
+import { STAMP_DEBOUNCE_MS, STAMP_IN_MS, STAMP_SHOW_MS, STAMP_MAX_WIDTH_FRAC, SKILL_FLICKER_MS } from '@data/tuning';
 
 // Stamps (§7.3): two or three words in VT323 slammed over the middle of the screen on a moment
 // (CLEAR OF THE PLANET, CAPTURED, ORBIT LOCKED …). They scale in over STAMP_IN_MS with a
@@ -65,8 +65,6 @@ export function showStamp(text: string, tone: StampTone, kind: string = text): b
   return true;
 }
 
-// The badge flicker on a version change (03 §4 juice: 400 ms; reduced motion: the colour changes without flickering).
-const SKILL_FLICKER_MS = 400;
 function flickerSkillBadges(skill: SkillId, reduced: boolean): void {
   if (reduced) return;
   document.querySelectorAll<HTMLElement>(`.seg[data-skill="${skill}"] .skill-badge`).forEach((badge) => {

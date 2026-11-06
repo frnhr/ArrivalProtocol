@@ -79,3 +79,11 @@ export function lostLevels(id: SkillId, heldLevel: Readonly<SkillLevel> | null, 
 export function restorePrice(lost: readonly LostLevel[]): number {
   return Math.ceil(RESTORE_FRACTION * lost.reduce((sum, level) => sum + level.price, 0) - 1e-9);
 }
+
+// RESTORE's price for `id` now (decision 16), the one composer (review: the desk's cell, the PACKET's chips and PACK AS,
+// the Skills row, DELETE's confirm and the relief hints each built it): the levels the run paid for above `level`. `level`
+// is what would be held: by default what the unit holds once this desk's purchases land (held); null for nothing (left
+// behind, deleted); a lower level for PACK AS.
+export function restoreCostOf(state: Readonly<Pick<GameState, 'memory' | 'run'>>, id: SkillId, level?: Readonly<SkillLevel> | null): number {
+  return restorePrice(lostLevels(id, level === undefined ? held(state, id) : level, paid(state.run.skills, id)));
+}

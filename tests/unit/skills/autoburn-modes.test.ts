@@ -115,7 +115,13 @@ function describe(flown: Flown): string {
   check('setup: v2 works as v2, the path open with ▼ above the ring', skillLive(state().memory, 'autoburn').version === 2
     && getPrediction().outcome === 'open' && getPrediction().fit.rp > state().level.ring.max);
   check('[B] would fly GREEN from the flyby', autoModeFor(state(), getPrediction(), skillLive(state().memory, 'autoburn')) === 'green');
-  untilOffered();
+  const lessons = new Set<string>();
+  h.stepUntil(() => {
+    for (const id of [h.shown()?.id, h.objective()?.id]) if (id?.startsWith('tut-autoburn')) lessons.add(id);
+    return autoburnRefusal(state(), getPrediction()) === null && lessons.size > 0;
+  }, 200);
+  check('review m6: the first moment v2 can act the strip says its rule once (`AUTOBURN v2 — [B] makes it green…`), not v1\'s READY',
+    [...lessons].join() === 'tut-autoburn-v2', [...lessons].join());
   const fuel0 = state().burn.fuelPct;
   const wall0 = h.wall();
   h.press('KeyB');

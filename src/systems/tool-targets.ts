@@ -16,7 +16,7 @@ import { TOOL_HINTS } from '@data/fs-tools';
 import { INTEGRITY_MAX, REPAIR_V2_VERSION } from '@data/tuning';
 import type { SkillFileSegment } from '@/types/segment';
 import { isSkillFile } from '@state/selectors';
-import { fileLevel, lostLevels, paid, restorePrice } from '@systems/skill-levels';
+import { fileLevel, restoreCostOf } from '@systems/skill-levels';
 import { SKILL_TREE } from '@data/skills';
 import { PACKET_SKILL_TEXT } from '@data/training-text';
 
@@ -24,7 +24,7 @@ import { PACKET_SKILL_TEXT } from '@data/training-text';
 // levels the run paid for above what is left once it is gone: another copy, or nothing).
 function skillDeleteEffect(state: Readonly<GameState>, seg: Readonly<SkillFileSegment>): string {
   const left = fileLevel(state.memory.filter((other) => other !== seg), seg.upgrade);
-  const restore = restorePrice(lostLevels(seg.upgrade, left, paid(state.run.skills, seg.upgrade)));
+  const restore = restoreCostOf(state, seg.upgrade, left);
   return PACKET_SKILL_TEXT.deleteEffect(SKILL_TREE[seg.upgrade].fileName.replace('.skl', ''), restore);
 }
 

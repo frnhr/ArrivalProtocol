@@ -2,7 +2,7 @@
 // track so the three can write in parallel without touching each other's lines. AUTOBURN's own flight lines stay in
 // data/skill-text.ts (Track FLIGHT's). Every strip and boot line is ≤ MAX_LINE_CHARS (70) with worst-case numbers
 // (tests/unit/support/words). The FOUNDATION seeded each section with the spec's own wording; the owners reword freely.
-import type { SkillId } from '@/types/skill';
+import type { SkillId, DemoKind } from '@/types/skill';
 
 import { MAX_LINE_CHARS } from '@data/tuning';
 
@@ -13,7 +13,20 @@ import { MAX_LINE_CHARS } from '@data/tuning';
 
 const cycles = (n: number): string => `${n} CYCLE${n === 1 ? '' : 'S'}`;
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 'S'}`;
-const fromDemos = (n: number): string => (n === 0 ? 'no captures yet: UNTRAINED' : `from your ${n} capture${n === 1 ? '' : 's'}`);
+
+// A demo kind's noun (03 §3.3; review m5): AUTOBURN learns from the kid's captures, AUTODROP (4c) from landings.
+export const DEMO_WORDS: Readonly<Record<DemoKind, { one: string; many: string }>> = {
+  captures: { one: 'capture', many: 'captures' },
+  drops: { one: 'landing', many: 'landings' },
+};
+const demosOf = (n: number, kind: DemoKind): string => `${n} ${n === 1 ? DEMO_WORDS[kind].one : DEMO_WORDS[kind].many}`;
+const fromDemos = (n: number, kind: DemoKind): string => (n === 0 ? `no ${DEMO_WORDS[kind].many} yet: UNTRAINED` : `from your ${demosOf(n, kind)}`);
+
+// A count of one demo kind (the head's `YOUR DEMOS · 1 CAPTURE`, the bar's `from your 1 capture`).
+export interface DemoCount {
+  count: number;
+  kind: DemoKind;
+}
 
 // One skill's words on the tab: the cell's head, the column's branch, visit 1's card (its v1 only) and NEXT SHIP per version
 // (03 §4's table, "the 12-year-old bar"). The branches 4c, 4d and slice 6 build carry placeholders.
@@ -31,7 +44,8 @@ export const TRAINING_TEXT = {
   // The window's head (03 §4): `TRAINING · UNIT-047`, the bank in VT323 on the right, the demos on the left.
   title: (unit: string): string => `TRAINING · ${unit}`,
   bank: (n: number): string => cycles(n),
-  demos: (captures: number): string => `YOUR DEMOS · ${plural(captures, 'CAPTURE')}`,
+  demos: (counts: readonly DemoCount[]): string =>
+    `YOUR DEMOS · ${counts.length === 0 ? 'NONE YET' : counts.map((demo) => demosOf(demo.count, demo.kind).toUpperCase()).join(' · ')}`,
   // The SET COURSE bar on the run's first desk until the required pick (skill-tree.ts deskBlocker).
   chooseFirst: 'CHOOSE YOUR FIRST SKILL',
   // The desk's guidance strip: the step's name, what it says until the pick is made, and after.
@@ -55,7 +69,9 @@ export const TRAINING_TEXT = {
   // The key goes on only while the cell is armed (picked by the kid: desk.ts deskEnter); unarmed, TRAIN is a click.
   train: (cost: number): string => `TRAIN ▸ ${cycles(cost)}`,
   enterKey: (label: string): string => `${label} [ENTER]`,
-  training: (skill: string, version: number, captures: number): string => `TRAINING ${skill} v${version} · ${fromDemos(captures)}`,
+  // `demos` null: a skill with no demos (SURVEY, SENTRY): `TRAINING SENTRY v1`.
+  training: (skill: string, version: number, demos: DemoCount | null): string =>
+    `TRAINING ${skill} v${version}${demos === null ? '' : ` · ${fromDemos(demos.count, demos.kind)}`}`,
   trainingLock: (tac: number): string => `TRAINING LOCK ${tac}`,
   restore: (version: number, cost: number): string => `RESTORE v${version} ▸ ${cycles(cost)}`,
   restoring: (skill: string, version: number): string => `RESTORING ${skill} v${version}`,
@@ -158,6 +174,19 @@ export const TRAINING_TEXT = {
   },
 } as const;
 
+// The TRAINING cells' looping mini-demos (03 §4: "loops a 4-second mini-demo of the selected cell"), by data (review
+// architecture note: the view switched on 'autoburn-1' strings, so a new skill fell to the plain loop): a drawing per
+// version and one for LOCK RANGE (null for a skill without it). The drawings are TrainingWindow.ts demoSvg's; a new skill
+// names existing ones or adds its own there. 4c, 4d and slice 6 refine AUTODROP's, SENTRY's and SURVEY's.
+export type DemoArt = 'capture' | 'green' | 'low-orbit' | 'lock' | 'plain';
+
+export const TRAINING_DEMO_ART: Readonly<Record<SkillId, { versions: readonly [DemoArt, DemoArt, DemoArt]; lock: DemoArt | null }>> = {
+  autoburn: { versions: ['capture', 'green', 'low-orbit'], lock: 'lock' },
+  autodrop: { versions: ['plain', 'plain', 'plain'], lock: null },
+  survey: { versions: ['plain', 'plain', 'plain'], lock: null },
+  sentry: { versions: ['plain', 'plain', 'plain'], lock: null },
+};
+
 // =======================================================================================================================
 // PACKET_SKILL_TEXT · Track TREE: the PACKET's skill chips (systems/transmit.ts), PACK AS and the +2 CYCLES card.
 // =======================================================================================================================
@@ -173,7 +202,9 @@ export const PACKET_SKILL_TEXT = {
     sentry: 'find the seeds by SCAN',
   },
   chip: (file: string, version: number, blocks: number, without: string, restore: number): string =>
-    `${file} v${version} (${blocks}) → ${without} · RESTORE ${restore}`,
+    `${file} v${version} (${blocks}) ${PACKET_SKILL_TEXT.loss(without, restore)}`,
+  // The loss alone (the chip's own line under its name: `→ brake by hand · RESTORE 5`).
+  loss: (without: string, restore: number): string => `→ ${without} · RESTORE ${restore}`,
   packAs: (version: number, blocks: number, restore: number): string => `PACK AS v${version} (${blocks}) · RESTORE ${restore}`,
   // DELETE's inline confirm on a skill file (systems/tool-targets.ts deleteQuestion): it is lost until a desk's RESTORE.
   deleteEffect: (skill: string, restore: number): string =>
@@ -187,21 +218,19 @@ export const PACKET_SKILL_TEXT = {
 // BOOT_SKILL_TEXT · Track TREE: the boot's skill lines (systems/skill-files.ts skillBootLines) and the ONLINE stamp.
 // =======================================================================================================================
 
-const captures = (demos: number): string => `${demos} capture${demos === 1 ? '' : 's'}`;
-
 export const BOOT_SKILL_TEXT = {
-  // `> SKILL TRAINED: AUTOBURN.skl v1 · from your 1 capture · ACCURACY 92%` (plan §3 step 2).
-  // From 10 captures on, `your` goes (the line would pass MAX_LINE_CHARS: `from 12 captures`).
-  trained: (file: string, version: number, demos: number, accuracy: number): string => {
-    const line = `> SKILL TRAINED: ${file} v${version} · from your ${captures(demos)} · ACCURACY ${accuracy}%`;
-    return line.length <= MAX_LINE_CHARS ? line : `> SKILL TRAINED: ${file} v${version} · from ${captures(demos)} · ACCURACY ${accuracy}%`;
+  // `> SKILL TRAINED: AUTOBURN.skl v1 · from your 1 capture · ACCURACY 92%` (plan §3 step 2), the noun by the skill's demo
+  // kind (AUTODROP: landings). Past MAX_LINE_CHARS `your` goes (`from 12 captures`).
+  trained: (file: string, version: number, demos: number, kind: DemoKind, accuracy: number): string => {
+    const line = `> SKILL TRAINED: ${file} v${version} · from your ${demosOf(demos, kind)} · ACCURACY ${accuracy}%`;
+    return line.length <= MAX_LINE_CHARS ? line : `> SKILL TRAINED: ${file} v${version} · from ${demosOf(demos, kind)} · ACCURACY ${accuracy}%`;
   },
   // No demos yet (03 §3.3's loud UNTRAINED state).
   untrained: (file: string, version: number, accuracy: number): string => `> SKILL TRAINED: ${file} v${version} · UNTRAINED ${accuracy}%`,
   // A skill with no demos (SURVEY, SENTRY).
   plain: (file: string, version: number): string => `> SKILL TRAINED: ${file} v${version}`,
-  retrained: (file: string, version: number, demos: number, accuracy: number): string =>
-    `> SKILL RETRAINED: ${file} v${version} · ${captures(demos)} · ACCURACY ${accuracy}%`,
+  retrained: (file: string, version: number, demos: number, kind: DemoKind, accuracy: number): string =>
+    `> SKILL RETRAINED: ${file} v${version} · ${demosOf(demos, kind)} · ACCURACY ${accuracy}%`,
   // Slice 5's grants (`from the sleeper on CURLEW`).
   granted: (file: string, version: number, source: string): string => `> SKILL TRAINED: ${file} v${version} · ${source}`,
   online: (skill: string, version: number): string => `${skill} v${version} ONLINE`,
