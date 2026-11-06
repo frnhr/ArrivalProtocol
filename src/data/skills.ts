@@ -5,7 +5,8 @@
 import type { SkillId, SkillDef, SkillVersion, LockLevel, CellRow } from '@/types/skill';
 import {
   SKILL_MAX_BLOCKS, FIRST_PICK_FLOOR_CYCLES, CYCLES_ARRIVED, CYCLES_LANDED_STEPS, CYCLES_PER_STEP_PCT, LOCK_RANGE_TAC,
-  AUTO_THREAD_CLAIM_TAC, TACTICAL_LEAD_BURN_TAC, HEAL_BEATS_DRAIN_FACTOR, BAND_DEGRADED_MIN,
+  AUTO_THREAD_CLAIM_TAC, TACTICAL_LEAD_BURN_TAC, HEAL_BEATS_DRAIN_FACTOR, BAND_DEGRADED_MIN, AUTODROP_CLAIM_TAC,
+  WINDOW_TACTICAL_LEAD_TAC,
 } from '@data/tuning';
 import { HOLLOW_STAGES, SEEDS_ONLY_DEF } from '@data/threats';
 import { repairRatePerSec } from '@data/fs-tools';
@@ -23,7 +24,8 @@ export const SKILL_IDS: readonly SkillId[] = ['autoburn', 'autodrop', 'survey', 
 // • SENTRY v3 5: a free wall on every ship is strong.
 // • Sizes: bigger versions cost link, room, charge and repair time, and give HOLLOW and the seeds more to bite (03 §3.4);
 //   the largest file is SKILL_MAX_BLOCKS.
-// • `built`: what this build implements (types/skill.ts SkillDef). 4a: AUTOBURN v1–v2 only.
+// • `built`: what this build implements (types/skill.ts SkillDef). 4a: AUTOBURN v1–v2 only. Slices 4c–4e: each track
+//   raises its own skill's `built` line only (DROP autodrop 0 → 3, SENTRY sentry 0 → 3, ORBIT autoburn 2 → 3).
 export const SKILL_TREE: Readonly<Record<SkillId, SkillDef>> = {
   autoburn: {
     id: 'autoburn', branch: 'flight', fileName: 'AUTOBURN.skl', short: 'AB',
@@ -175,6 +177,8 @@ export function validateSkillTree(): void {
   if (CYCLES_LANDED_STEPS * CYCLES_PER_STEP_PCT !== 100) fail('CYCLES_LANDED_STEPS × CYCLES_PER_STEP_PCT must be 100 (the fifth step needs every point)');
   // 03 §3.7: the claim lands with the burn's TACTICAL lead.
   if (AUTO_THREAD_CLAIM_TAC !== TACTICAL_LEAD_BURN_TAC) fail('AUTO_THREAD_CLAIM_TAC must equal TACTICAL_LEAD_BURN_TAC');
+  // Slice 4c (plan §2.6): AUTODROP claims with the window's TACTICAL lead, so its claim never costs a thread at CRUISE.
+  if (AUTODROP_CLAIM_TAC !== WINDOW_TACTICAL_LEAD_TAC) fail('AUTODROP_CLAIM_TAC must equal WINDOW_TACTICAL_LEAD_TAC');
   // 03 §3.4's fairness rule (§6.6): a repair started before zero on the largest skill outruns every HOLLOW's worst drain,
   // the larger multiplier applying, never the product (04-threats.md). A drain that rises shrinks SKILL_MAX_BLOCKS.
   const defs = [...Object.values(HOLLOW_STAGES).map((stage) => stage.hollow), SEEDS_ONLY_DEF];

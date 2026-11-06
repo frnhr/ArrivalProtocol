@@ -1,5 +1,5 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2); Track FLIGHT edits values only in its '4
-// FLIGHT' block (AUTO_*, LOCK_*, ROUND_*).
+// Slices 4c–4e: the lead owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2); Tracks DROP, SENTRY and ORBIT edit
+// values only in their own blocks at the end ('4c AUTODROP', '4d SENTRY', '4e ORBIT').
 // Global tuning. Every number a rule depends on lives here (or per ship in ships.ts), with
 // the reason it has that value. Rule code imports these names and carries no numeric
 // literals of its own, so balancing never means hunting through systems.
@@ -2085,3 +2085,75 @@ export const ROUND_E_TOL = 0.01;
 // around its apsis and the 10 Hz plot never stop exactly on the aim, and an orbit that ends a hair under 0.01 would
 // read "not round" again after one drag kick. The stop itself is the ship's exact state, so the margin is never spent.
 export const ROUND_AIM_E = ROUND_E_TOL / 2;
+
+// =====================================================================================================================
+// --- Phase 3 slices 4c–4e (docs/phase3/impl/slice-4cde-plan.md §2.6). The FOUNDATION wrote every number below; each
+// track edits values only in its own block (4c DROP, 4d SENTRY, 4e ORBIT), and a new number goes at the end of its
+// own block. The blocks are kept apart by these banners so that the three tracks' hunks never touch.
+// =====================================================================================================================
+
+// --- 4c AUTODROP (owned by Track DROP; it edits values only in this block): AUTODROP v1–v3 (03 §3.3, §3.8) ------------
+
+// AUTODROP learns from the kid's own launches (03 §3.3; systems/skill-tree.ts AUTODROP_DEMO_TUNING): half the mean offset
+// of the last AUTO_DEMO_WINDOW drops (the share AUTOBURN learns too, so "trained by you" means the same on both skills),
+// clamped to ±1 tac s: half the healthy bay's 2.0 s cadence, so a learned skill never shifts a volley by a whole slot.
+export const AUTODROP_OFFSET_FACTOR = 0.5;
+export const AUTODROP_OFFSET_MAX_TAC = 1.0;
+// AIM (03 §3.3, §6: `AIM 91%`) is 100 − 40 per tactical second of that offset, within 40..99: at the clamp (±1 s) a sloppy
+// teacher still leaves AIM 60, and only an untrained skill reads the floor.
+export const AUTODROP_AIM_PER_TAC = 40;
+export const AUTODROP_AIM_MIN = 40;
+export const AUTODROP_AIM_MAX = 99;
+// An AUTODROP bought before any manual launch is UNTRAINED (03 §3.3: 40%; plan R5): read through the AIM rule, 40% is an
+// offset of (100 − 40) ÷ 40 = 1.5 tac s, so it fires that late. The ±1 clamp applies only to what demos teach; at offset 0
+// an untrained skill would be perfect, and buying it without one manual drop would be the best AUTODROP.
+export const AUTODROP_UNTRAINED_OFFSET_TAC = 1.5;
+// A volley straddles the window's centre (plan R6): its first launch is centre − (n − 1) × cadence × this, each later one a
+// cadence on. Half of the cadence Bay Ctrl gives NOW (2.0 healthy, 2.7 degraded, 4.0 failing), so a damaged bay's volley is
+// still centred instead of overrunning the bracket's far edge.
+export const AUTODROP_SPACING_FRAC = 0.5;
+// v2 and v3 claim a Core thread this many tactical seconds before a volley's first launch (plan R8: "hack or drop"). The
+// TACTICAL lead, as AUTOBURN's claim: the world goes TACTICAL there anyway, so the claim never costs a thread at CRUISE.
+// Equal to WINDOW_TACTICAL_LEAD_TAC (data/skills.ts checks it at load).
+export const AUTODROP_CLAIM_TAC = AUTO_THREAD_CLAIM_TAC;
+// v3's plan table looks this many passes ahead (03 §3.8): a 16-pod ark at two pods a pass on its worst LZ. Past it the
+// table says `+n PASSES` rather than growing past the POD BAY window.
+export const AUTODROP_PLAN_MAX_PASSES = 8;
+// `PASS DONE · A +2 · B +1` stands on the strip as long as AUTOBURN's hand-backs do: one length for "the skill is done".
+export const AUTODROP_DONE_LINE_SEC = AUTOBURN_DONE_LINE_SEC;
+
+// --- end of 4c AUTODROP --------------------------------------------------------------------------------------------------
+
+// --- 4d SENTRY (owned by Track SENTRY; it edits values only in this block): disguised seeds, SENTRY v1–v3 (03 §3.10) --
+
+// A beam seed lands disguised as a harmless 2-block file (04 §3.6, decision 22) with this chance, by the receiver's depth:
+// the first row whose fromDepth is at most the depth counts (read from the last). Before depth 5 the kid is still learning
+// what a seed looks like; from 7 the arm is HOLLOW's, and half its seeds hide. Noise seeds on the beam only (plan R9).
+export const DISGUISE_CHANCE_BY_DEPTH: readonly Readonly<{ fromDepth: number; chance: number }>[] = [
+  { fromDepth: 5, chance: 1 / 3 },
+  { fromDepth: 7, chance: 1 / 2 },
+];
+// SENTRY v2's QUICK RM (03 §3.10): DELETE on a hollow block that is not the root takes this share of its time, so a seed
+// goes in 1.0 s instead of 2.0, and a 6-block meal in 2.0 s instead of 4.0. The root's ROOT_DELETE_SEC is untouched (plan
+// R10): the duel's length is the finale's design, not one 3-cycle purchase's.
+export const SENTRY_DELETE_FACTOR = 0.5;
+// SENTRY v3's FIREWALL (03 §3.10): one fresh FIREWALL.sys compiled at each boot while the unit holds fewer than
+// FIREWALL_MAX_OWNED (2), so the skill tops the unit up but never stacks walls past what the salvage cards allow.
+export const SENTRY_FIREWALLS_PER_BOOT = 1;
+
+// --- end of 4d SENTRY ----------------------------------------------------------------------------------------------------
+
+// --- 4e ORBIT (owned by Track ORBIT; it edits values only in this block): AUTOBURN v3 LANDING ORBIT (03 §3.6) ---------
+
+// v3 tries round orbits from the top of the band down in steps of this (03 §3.6; plan R12): a target on a 100 km grid is
+// readable on the plot (`6,100 km`) and does not twitch while a drop factor drifts, as a bisection's would.
+export const V3_STEP_KM = 100;
+// The hold's slack (plan §2.6): a top-up comes once ▼ or ▲ sinks one grid step under R*, about every one or two orbits
+// under the DRAG line (01 §3.7's kicks of 15–24 m/s). So the hold costs about 01's 1% of the tank per orbit, in a few
+// burns instead of one a pass.
+export const V3_HOLD_SLACK_KM = V3_STEP_KM;
+// The lowest circle v3 tries: the same hard floor above the band's bottom as the kid's GO LOWER (one rule for "too low").
+export const V3_FLOOR_MARGIN_KM = GO_LOW_FLOOR_MARGIN_KM;
+// v3's fuel line reuses AUTO_FUEL_RESERVE_PCT (20): one reserve for every AUTOBURN mode.
+
+// --- end of 4e ORBIT -----------------------------------------------------------------------------------------------------
