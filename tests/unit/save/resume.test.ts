@@ -10,7 +10,8 @@
 //   id counters are past the save's: in this process, and in a fresh one (the suite re-runs itself as a child with
 //   `node --import tsx`, resumes there and mints 50 segment ids and 50 log entry ids with no duplicate).
 // • gap G1 (slice 4c–4e plan §8.4): SHIP DONE with a skill DELETEd in ship 2, resumed: lost at RESTORE 2, restored, carried
-//   whole into KESTREL and said TRAINED at its boot; and a PACK AS v1 of v2 + LOCK 270 resumed a desk later at RESTORE 3.
+//   whole into KESTREL and said TRAINED at its boot; and v2 + LOCK 270 bought at desk 2, PACKed AS v1 at desk 3, resumed at
+//   desk 4 at RESTORE 3.
 import { isDeepStrictEqual } from 'node:util';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -25,12 +26,12 @@ import { resumeRun } from '@systems/run-save';
 import { pendingRunSave } from '@systems/save-write';
 import { backToChart, continueAfterReport, transmitNext } from '@systems/run';
 import { setCourseFromDesk } from '../support/desk';
-import { pickFirstSkill, giveSkillFile } from '../support/skills';
+import { pickFirstSkill } from '../support/skills';
 import { giveTools, fitPacket } from '../map/repo-fixture';
 import { actionDelete } from '@state/actions';
 import { skillFilesOf } from '@state/selectors';
-import { treeCells, visitNow, bankOf, lostLevels, paid, held as heldLevel } from '@systems/skill-tree';
-import { restoreSkill, setPackAs } from '@systems/training';
+import { treeCells, visitNow, bankOf, lostLevels, paid, held as heldLevel, grantCycles } from '@systems/skill-tree';
+import { restoreSkill, setPackAs, trainCell } from '@systems/training';
 import { restoreCost } from '@systems/training-model';
 import { pickCard } from '@systems/draft';
 import type { SkillFileSegment } from '@/types/segment';
@@ -246,8 +247,9 @@ const G1_SEED = 7;
   const lines = playBoot(h.store);
   check('…and KESTREL\'s boot says it is trained', lines.some((line) => line.includes('SKILL TRAINED: AUTOBURN.skl v1')), lines.join(' / '));
 }
-// The PACK AS case: AUTOBURN v2 + LOCK 270 held at desk 2, PACKed AS v1 (lock 90) into KESTREL, resumed at desk 3: v2 and
-// LOCK 270 are lost, RESTORE ⌈(5 + 1) ÷ 2⌉ = 3.
+// The PACK AS case (review m14: bought, not given): AUTOBURN v2 + LOCK 270 bought at desk 2 (a 'story' grant pays, as in the
+// desk-2 fixture) and carried into KESTREL; at desk 3 PACKed AS v1 (lock 90) into VESPER; resumed at desk 4, v2 and LOCK
+// 270 are lost, RESTORE ⌈(5 + 1) ÷ 2⌉ = 3.
 {
   const g1 = stubStorage();
   pageOpen(h.store, g1, G1_SEED);
@@ -255,11 +257,18 @@ const G1_SEED = 7;
   toDesk(h.store);
   pickFirstSkill(h.store);
   beamTo(h.store, WORKED_ROUTE[1]!);
-  const held = giveSkillFile(h.store, 'autoburn', 2, 1);
+  grantCycles(h.store, 6, 'story', 'TEST');
   h.store.update((draft) => { draft.run.phase = 'report'; });
   toDesk(h.store);
-  setCourseFromDesk(h.store, WORKED_ROUTE[2]!);
-  setPackAs(h.store, held.id, { version: 1, lock: 0 });
+  const bought = [trainCell(h.store, 'autoburn', { kind: 'version', version: 2 }), trainCell(h.store, 'autoburn', { kind: 'lock', level: 1 })];
+  beamTo(h.store, WORKED_ROUTE[2]!);
+  const held = skillFilesOf(state().memory, 'autoburn')[0];
+  check('G1 (PACK AS): AUTOBURN v2 + LOCK 270 bought at desk 2 and carried into KESTREL', bought.every((refusal) => refusal === null)
+    && held?.version === 2 && held.lock === 1, `${bought.join()} ${JSON.stringify(held ?? null)}`);
+  h.store.update((draft) => { draft.run.phase = 'report'; });
+  toDesk(h.store);
+  setCourseFromDesk(h.store, WORKED_ROUTE[3]!);
+  setPackAs(h.store, held!.id, { version: 1, lock: 0 });
   const offer = state().run.transit!.offer;
   if (offer.length > 0) pickCard(h.store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
   fitPacket(h.store);
@@ -270,7 +279,7 @@ const G1_SEED = 7;
   resumeRun(h.store);
   const lost = lostLevels('autoburn', heldLevel(state(), 'autoburn'), paid(state().run.skills, 'autoburn'));
   const rows = lost.map((level) => (level.row.kind === 'version' ? `v${level.row.version}` : `L${level.row.level}`)).join(' ');
-  check('G1 (PACK AS): resumed at desk 3, v2 and LOCK 270 are lost, at RESTORE 3', state().run.phase === 'desk' && visitNow(state().run) === 3
+  check('G1 (PACK AS): resumed at desk 4, v2 and LOCK 270 are lost, at RESTORE 3', state().run.phase === 'desk' && visitNow(state().run) === 4
     && rows === 'v2 L1' && restoreCost(state(), 'autoburn') === 3, `${rows} ${restoreCost(state(), 'autoburn')}`);
 }
 

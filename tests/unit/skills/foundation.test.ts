@@ -70,7 +70,16 @@ check('prices by cell: roots 3 (SURVEY and SENTRY 2), v2 5, v3 8; LOCK 270 1, LO
   levelPrice('autoburn', { kind: 'version', version: 1 }) === 3 && levelPrice('autodrop', { kind: 'version', version: 2 }) === 5
   && levelPrice('autoburn', { kind: 'version', version: 3 }) === 8 && levelPrice('survey', { kind: 'version', version: 1 }) === 2
   && levelPrice('autoburn', { kind: 'lock', level: 1 }) === 1 && levelPrice('autoburn', { kind: 'lock', level: 2 }) === 2);
-check('4a builds AUTOBURN v1–v2 only', SKILL_TREE.autoburn.built === 2 && SKILL_IDS.filter((id) => id !== 'autoburn').every((id) => SKILL_TREE[id].built === 0));
+// What this build implements, one check per skill so each track raises only its own line (slice-4cde foundation review M1).
+// FLIGHT: Track ORBIT raises AUTOBURN to v3 here.
+check('built: AUTOBURN v1–v2', SKILL_TREE.autoburn.built === 2);
+// LANDING: Track DROP raises AUTODROP to v3 here.
+check('built: AUTODROP not yet', SKILL_TREE.autodrop.built === 0);
+// SURVEY: slice 6.
+check('built: SURVEY not yet', SKILL_TREE.survey.built === 0);
+// DEFENCE: Track SENTRY raises SENTRY to v3 here.
+check('built: SENTRY not yet', SKILL_TREE.sentry.built === 0);
+// (end of the built checks)
 
 // --- Graded damage (03 §3.5) -----------------------------------------------------------------------------------------------
 const bands: Band[] = ['ok', 'degraded', 'failing', 'dead', 'missing'];
@@ -394,6 +403,21 @@ for (const [file, point] of [
   check('…after a seedless VESPER the record stays 3 and seedsMet holds (TRACE 0, no seed, nothing left)',
     threat.seedsMetAtDepth === 3 && seedsMet(store.getState()) && threat.trace === 0 && (threat.lastTally?.left ?? 0) === 0,
     JSON.stringify({ at: threat.seedsMetAtDepth, trace: threat.trace, left: threat.lastTally?.left }));
+}
+
+// A ship that ends with SENTRY's pre-empt armed (review m1): endShip lets it go, so SHIP DONE's save resumes.
+{
+  const storage = stubStorage();
+  const store = createStore<GameState>(createInitialState({ seed: 7 }));
+  pageOpen(store, storage, 7);
+  receiveToReport(store);
+  store.update((draft) => { draft.hollow.seedTelegraph = { startAddr: 40, size: 2, leftSec: 1, preempted: true }; });
+  toDesk(store);
+  const raw = storage.data.get(RUN_SAVE_KEY);
+  const decoded = raw === undefined ? null : decodeRunSave(raw);
+  check('a ship ending with an armed pre-empt: endShip clears it, and the SHIP DONE save decodes (the outline kept, not armed)',
+    store.getState().hollow.seedTelegraph?.preempted === false && decoded?.ok === true,
+    decoded === null ? 'no save' : decoded.ok ? '' : decoded.refusal.detail);
 }
 
 // The LandingController registry (R3): MERGE over the resident over AUTODROP, derived each time it is asked.

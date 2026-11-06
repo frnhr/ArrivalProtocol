@@ -177,6 +177,8 @@ const shapes: [string, string][] = [
   ['AUTODROP held at a save point', edit(desk, (save) => { save.payload.slices.landing.autodrop.held = true; })],
   ['AUTODROP holding its thread', edit(desk, (save) => { save.payload.slices.landing.autodrop.claimed = true; })],
   ['AUTODROP waiting for a thread', edit(desk, (save) => { save.payload.slices.landing.autodrop.waitingSinceTSec = 12; })],
+  ['AUTODROP with its [G] moment kept', edit(desk, (save) => { save.payload.slices.landing.autodrop.armedAtTSec = 300; })],
+  ['AUTODROP with an end this build does not know', edit(desk, (save) => { save.payload.slices.landing.autodrop.end = 'tapped'; })],
   ['an AUTODROP pass with half a pod', edit(desk, (save) => { save.payload.slices.landing.autodrop.pass = { 'LZ-A': 1.5 }; })],
   ['AUTOBURN holding without the landing orbit', edit(desk, (save) => { save.payload.slices.burn.auto.holding = true; })],
   ['seedsMetAtDepth past the route', edit(desk, (save) => { save.payload.run.threat.seedsMetAtDepth = 9; })],
@@ -192,6 +194,12 @@ check('the shape, field by field → shape (the envelope, the run, the map, the 
   wrongShape.map(([what, text]) => `${what} → ${refusal(text)}`).join(' | '));
 check('…the refusal names the field (`payload.run.map.arm[3].late is not true or false`)',
   refusal(shapes[5]![1]).includes('payload.run.map.arm[3].late'), refusal(shapes[5]![1]));
+check('…AUTODROP at rest with what may stand (the review\'s M2 \'released\' end, its moment, the pass numbers, flownAs 2) decodes', decodeRunSave(edit(desk, (save) => {
+  Object.assign(save.payload.slices.landing.autodrop, { end: 'released', endAtAi: 812.5, pass: { 'LZ-A': 2, 'LZ-B': 1 }, sent: { 'LZ-A': 2 }, flownAs: 2 });
+})).ok);
+check('…AUTOBURN v3 holding its landing orbit passes the shape', kind(edit(desk, (save) => {
+  Object.assign(save.payload.slices.burn.auto, { phase: 'armed', mode: 'landing-orbit', targetKm: 6100, holding: true });
+})) !== 'shape');
 check('…a disguised arrival seed and a recorded first seed on the route pass the shape', kind(edit(beam, (save) => {
   save.payload.run.arrival.seeds[0].disguise = 'cache.tmp';
   save.payload.run.threat.seedsMetAtDepth = save.payload.run.map.route.length;

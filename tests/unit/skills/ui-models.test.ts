@@ -113,9 +113,12 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
   store.update((d) => { d.run.skills.grants.push({ source: 'story', cycles: 8, visit: 2, label: null }); });
   let model = trainingModel(store.getState());
   const branches = model.branches.map((branch) => `${branch.branch}:${branch.versions.length}+${branch.locks.length}`).join();
+  // The branches and the closed list: Track DROP edits this check when AUTODROP's branch opens (review M1).
   check('desk 2: the grid, FLIGHT open (v1–v3 and LOCK RANGE beside), the three others one OPENS LATER row each',
     !model.firstPick && model.cards.length === 0 && branches === 'FLIGHT:3+2'
       && model.closed.join() === 'LANDING · AUTODROP,SURVEY · SURVEY,DEFENCE · SENTRY', `${branches} ${model.closed.join()}`);
+  // (end of DROP's check)
+  // AUTOBURN's cells: Track ORBIT edits this check when AUTOBURN v3 is built (v3 stops reading OPENS LATER).
   check('…v1 TRAINED (owned), v2 affordable (`5 · 8`), v3 OPENS LATER (not built), LOCK 270 affordable (`1 · +1`), LOCK 810 NEEDS LOCK 270 FIRST',
     look(model, 'autoburn:v1') === 'owned' && text(model, 'autoburn:v1') === TRAINING_TEXT.status.owned
       && look(model, 'autoburn:v2') === 'affordable' && model.cells.find((c) => c.key === 'autoburn:v2')?.cost === '5 · 8'
