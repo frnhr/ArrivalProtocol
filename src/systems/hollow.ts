@@ -1,5 +1,6 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the telegraph's pre-empt,
-// threateningSeeds, seedThreatText, SOMETHING LANDED. Others ask by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the telegraph's pre-empt (stepSeeds),
+// threateningSeeds, seedsInMemory and mvBlock (a disguised seed is no seed to them), SOMETHING LANDED (sentry.ts, mounted
+// here). Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState, HollowState } from '@state/schema';
 import type { Segment, HollowSegment, InfectionSide, DriverSegment } from '@/types/segment';
@@ -35,8 +36,8 @@ import { repairRatePerSec } from '@data/fs-tools';
 import { FRESH_UNIT_CHARGE, hexAddr, layoutOf, layoutOfMemory } from '@data/memory';
 import { HOLLOW_ALERT_TEXT, HOLLOW_DESC, HOLLOW_STORY, HOLLOW_ECHO, hollowUnitName } from '@data/hollow-text';
 import { SEEDS_ONLY_DEF } from '@data/threats';
-import { THREAT_TEXT } from '@data/threat-text';
-import { keepChargeDue } from '@state/threat-selectors';
+import { THREAT_TEXT, SENTRY_TEXT } from '@data/threat-text';
+import { keepChargeDue, isDisguised } from '@state/threat-selectors';
 import { driverName } from '@data/landing-text';
 import { echoName } from '@data/tool-text';
 import { IS_DEV } from '@/env';
@@ -45,10 +46,11 @@ import {
   WAKE_AFTER_DODGE_SEC, HOLLOW_CONTROL_AFTER_SEC, HOLLOW_SCRIPTED_BITE_DELAY_SEC, HOLLOW_STORY_READ_SEC,
   HOLLOW_NAME_AFTER_TYPED_SEC, SEED_BLOCKS, SEED_TELEGRAPH_SEC, SEED_TOOL_GAP_BLOCKS, DEAL_REFUSE_INTERVAL_FACTOR,
   DEAL_SEED_CALLED_OFF_SEC, RACK_BLOCKS, VERB_WEIGHT_PER_STAT, VERB_MV_NEAR_BLOCKS, OP_COMPLETE_PCT, BITTEN_AGAIN_COUNT,
-  TACTICAL_LEAD_BURN_TAC, MERGE_COST_CHARGE,
+  TACTICAL_LEAD_BURN_TAC, MERGE_COST_CHARGE, SENTRY_QUICK_RM_VERSION,
 } from '@data/tuning';
 import { visitRng } from '@systems/map-streams';
 import { mountSentry } from '@systems/sentry';
+import { skillLive } from '@systems/capabilities';
 
 // HOLLOW (§1, §6.6, §9 WP6): the caretaker of the previous wave, starving in the same memory as you.
 // One rule a kid can repeat: "It eats the file next to it. An eaten file turns into HOLLOW too.
@@ -120,7 +122,9 @@ export type HollowEvent =
   | { kind: 'bite' }
   // WP9: a seed's outline started blinking at these blocks, and a seed landed (structural).
   | { kind: 'seed-telegraph'; startAddr: number; size: number }
-  | { kind: 'seed'; block: HollowSegment; startAddr: number };
+  | { kind: 'seed'; block: HollowSegment; startAddr: number }
+  // Slice 4d: SENTRY v2's pre-empt freed a seed where it landed (nothing changed in memory).
+  | { kind: 'seed-preempted'; startAddr: number };
 
 export interface HollowStepCtx {
   thrustDelivered: boolean;   // the engine delivers thrust this tick (player, AUTOBURN or ghost)
@@ -472,7 +476,14 @@ function stepSeeds(memory: Segment[], dtAi: number, seed: SeedDef, ctx: HollowSt
       hollow.seedTelegraph = null;
       const stillFree = openFreeHolding(memory, telegraph.startAddr, telegraph.size) >= 0;
       const startAddr = stillFree ? telegraph.startAddr : seedSpotFor(memory, seed.target, hollow.untriedTools)?.startAddr ?? null;
-      if (startAddr !== null) {
+      // Slice 4d (03 §3.10, plan §4.4): SENTRY v2's DELETE armed on the outline frees the seed the moment it lands, in this
+      // step (it never bites, never stands in memory). It counts as landed (and so as deleted: the seed lessons read it so).
+      // SENTRY fallen below v2 by now: it lands as usual (sentry.ts's watcher hands the thread back either way).
+      const preempted = telegraph.preempted && skillLive(memory, 'sentry').version >= SENTRY_QUICK_RM_VERSION;
+      if (startAddr !== null && preempted) {
+        events.push({ kind: 'seed-preempted', startAddr });
+        hollow.seedsLanded++;
+      } else if (startAddr !== null) {
         events.push({ kind: 'seed', block: landSeed(memory, startAddr, ctx.owner), startAddr });
         hollow.seedsLanded++;
       }
@@ -514,14 +525,16 @@ function seedThreatText(state: Readonly<GameState>): string | null {
 }
 
 // The seeds that can bite a file at the next bite (one of their sides reaches food across a GAP): the ones
-// the strip asks the kid to DELETE first. Pure.
+// the strip asks the kid to DELETE first. A disguised seed is not among them (slice 4d, 04 §3.6): it still bites, but the
+// `SEED NEXT TO …` alert and the RM lines stay quiet about it; only its victim's red crawl gives it away. Pure.
 export function threateningSeeds(memory: readonly Segment[], aiNow: number): HollowSegment[] {
   const ids = new Set(hollowReach(memory, aiNow).filter((reach) => reach.verdict === 'bite').map((reach) => reach.hollowId));
-  return memory.filter((seg): seg is HollowSegment => isHollow(seg) && seg.seed === true && ids.has(seg.id));
+  return seedsInMemory(memory).filter((seg) => ids.has(seg.id));
 }
 
+// The seeds the kid can see as seeds (every seed but a disguised one): what the strip's seed lessons count.
 export function seedsInMemory(memory: readonly Segment[]): HollowSegment[] {
-  return memory.filter((seg): seg is HollowSegment => isHollow(seg) && seg.seed === true);
+  return memory.filter((seg): seg is HollowSegment => isHollow(seg) && seg.seed === true && !isDisguised(seg));
 }
 
 // A seed whose next bite reaches the AI Core or another AI file (selectors isAiFile): the strip's RM THE SEED then comes
@@ -612,11 +625,12 @@ export function rmTargets(memory: readonly Segment[], untried: readonly FsToolKi
 }
 
 // MV's block: HOLLOW's smallest block that is neither the root nor the last block (a seed, or a block that ate a file),
-// the lowest address first. null: none.
+// the lowest address first. null: none. Never a disguised seed (slice 4d): HOLLOW moving a `cache.tmp` toward the pods
+// would name it.
 export function mvBlock(memory: readonly Segment[]): HollowSegment | null {
   let best: HollowSegment | null = null;
   for (const seg of memory) {
-    if (!isHollow(seg) || seg.root || seg.last) continue;
+    if (!isHollow(seg) || seg.root || seg.last || isDisguised(seg)) continue;
     if (best === null || seg.size < best.size) best = seg;
   }
   return best;
@@ -1408,6 +1422,12 @@ function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], ph
       case 'seed':
         echoHollow(store, HOLLOW_ECHO.seed(hexAddr(event.startAddr), hollowUser(store.getState())));
         emit('seed-landed', { segId: event.block.id, startAddr: event.startAddr });
+        break;
+      case 'seed-preempted':
+        // The kid's own DELETE did it (stats.deletes counts it through 'op-done'); the stamp hangs on 'seed-preempted'.
+        say('cmd', SENTRY_TEXT.preemptEcho(hexAddr(event.startAddr)), { critical: true });
+        emit('seed-preempted', { startAddr: event.startAddr });
+        emit('op-done', { kind: 'delete', result: 'done' });
         break;
       case 'core-zero':
         endCoreLost(store);

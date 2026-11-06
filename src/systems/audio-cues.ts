@@ -299,12 +299,12 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     // --- end of 4c ---
 
     // --- 4d SENTRY: an unmasked seed warns and stamps; a pre-empt and a compiled FIREWALL sound as a finished op.
-    on('seed-unmasked', () => {
+    // (SENTRY's boot line names a decoy with the ECC line's thunk, unstamped; a pre-empt's opDone is its 'op-done'.)
+    on('seed-unmasked', ({ by }) => {
       play('seedWarn');
-      play('stampHit', { heavy: false });
+      if (by !== 'sentry') play('stampHit', { heavy: false });
     }),
     on('seed-preempted', () => {
-      play('opDone');
       play('stampHit', { heavy: false });
     }),
     on('firewall-compiled', () => play('opDone')),

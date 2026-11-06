@@ -1,9 +1,11 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): TEMP FILE, a decoy's echo name.
+// Others ask by message.
 import type { Segment, SegmentRole } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import { DRIVER_TOOL_TEXT } from '@data/landing-text';
 import { podTag } from '@data/pod-ids';
 import { LOG_TEXT } from '@data/log-text';
+import { isDisguised } from '@state/threat-selectors';
 
 // The words the filesystem tools say (WP3): why a click did nothing (shown next to the cursor),
 // the inline confirm's questions, and the TERMINAL's line when a repair runs out of charge.
@@ -44,6 +46,12 @@ export const TOOL_REFUSAL = {
   // it already ate is no file any more.
   infected: 'STILL INFECTED — REPAIR FIRST',
   eaten: 'THIS FILE WAS EATEN — ONLY DELETE WORKS',
+  // Slice 4d (plan R9): MOVE, COPY and REPAIR on a disguised seed (a decoy like `cache.tmp`): the words a harmless temp
+  // file would get, never EATEN, so the refusal gives nothing away (SWAP says what it says to any unit file). SCAN unmasks
+  // it; DELETE works on it.
+  tempFile: 'TEMP FILE — NOTHING TO DO',
+  // SENTRY v2's DELETE on HOLLOW's outline, already armed: the seed goes as it lands.
+  preemptArmed: 'ARMED — IT GOES AS IT LANDS',
   // A pod's driver (01-landing §3.8): always visible, so no scan, and never copied or deleted, so a mistake never costs
   // a pod. The last two are the spec's own sentences, not shouted.
   driverScan: DRIVER_TOOL_TEXT.scan,
@@ -152,6 +160,8 @@ export const OP_LINES = {
 // HOLLOW owns by its owner's name (`???`, later `unit-046`).
 export function echoName(seg: Segment): string {
   if (seg.type === 'driver') return podTag(seg.pod);
+  // A disguised seed goes by its decoy's name (slice 4d: `> scan cache.tmp ...`), never HOLLOW's.
+  if (isDisguised(seg)) return echoWord(seg.disguise.name);
   if (seg.type === 'hollow') return seg.owner.toLowerCase();
   return echoWord(seg.name);
 }

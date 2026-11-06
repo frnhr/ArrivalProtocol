@@ -1,8 +1,9 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): deleteSec, the SCAN and DELETE
-// unmasking. Others ask by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): deleteSec (SENTRY v2's QUICK RM),
+// the SCAN and DELETE unmasking of a disguised seed. Others ask by message.
 import type { Store } from './store';
 import type { GameState, PendingPlacement } from './schema';
-import type { Segment, RedundancySegment, SegmentState, DriverSegment } from '@/types/segment';
+import type { Segment, RedundancySegment, SegmentState, DriverSegment, HollowSegment } from '@/types/segment';
+import type { EffectiveVersion } from '@/types/skill';
 import type { DriverLoss } from '@/types/landing';
 import type { ShipOutcome } from './schema';
 import { finalFateOfAboard, parkedFateOf } from '@systems/landing-rules';
@@ -31,8 +32,11 @@ import {
   COPY_PER_BLOCK_SEC, DELETE_SEC, COMPACT_SEC, REPAIR_CHARGE_PER_POINT_PER_BLOCK, INTEGRITY_MAX,
   OP_COMPLETE_PCT, FLOAT_SLACK, DELETE_HOLLOW_BASE_SEC, DELETE_HOLLOW_PER_BLOCK_SEC, HOLLOW_RECOIL_SEC, SWAP_SEC,
   SEG_NAME_MAX_CHARS, ROOT_DELETE_SEC, BAY_SLOTS, LANDING_TACTICAL_WARP, LANDING_CRUISE_WARP, SEED_WORDS_PER_SHIP,
+  SENTRY_DELETE_FACTOR, SENTRY_QUICK_RM_VERSION,
 } from '@data/tuning';
-import { THREAT_TEXT } from '@data/threat-text';
+import { THREAT_TEXT, SENTRY_TEXT } from '@data/threat-text';
+import { isDisguised } from '@state/threat-selectors';
+import { skillLive } from '@systems/capabilities';
 
 // A ship file's backup copy is called `<name>.alt` (Thrust.alt); a swapped-out primary `<name>.old` (§6.5).
 const BACKUP_SUFFIX = '.alt';
@@ -214,9 +218,14 @@ function timedStep(durationSec: number): (dtAi: number) => number {
 export function scanSec(size: number): number { return SCAN_BASE_SEC + SCAN_PER_BLOCK_SEC * size; }
 // A file deletes in DELETE_SEC; a block HOLLOW ate takes longer the bigger it is (§6.5); LAST LIGHT's root, open for the
 // duel (WP11), takes ROOT_DELETE_SEC whatever its size: the finale's one long op, fought over while it runs.
-export function deleteSec(seg: Segment): number {
+// Slice 4d: `sentry` is the version SENTRY.skl works as at the click (capabilities skillLive). From v2 QUICK RM (03 §3.10)
+// a hollow block that is not the root goes in SENTRY_DELETE_FACTOR of its time (a seed 1.0 s, a 6-block meal 2.0 s); the
+// root's duel keeps its length (plan R10). A disguised seed deletes as the seed it is.
+export function deleteSec(seg: Segment, sentry: EffectiveVersion = 0): number {
   if (seg.type !== 'hollow') return DELETE_SEC;
-  return seg.root ? ROOT_DELETE_SEC : DELETE_HOLLOW_BASE_SEC + DELETE_HOLLOW_PER_BLOCK_SEC * seg.size;
+  if (seg.root) return ROOT_DELETE_SEC;
+  const base = DELETE_HOLLOW_BASE_SEC + DELETE_HOLLOW_PER_BLOCK_SEC * seg.size;
+  return sentry >= SENTRY_QUICK_RM_VERSION ? base * SENTRY_DELETE_FACTOR : base;
 }
 export function moveSec(size: number): number { return MOVE_BASE_SEC + MOVE_PER_BLOCK_SEC * size; }
 export function copySec(size: number): number { return COPY_BASE_SEC + COPY_PER_BLOCK_SEC * size; }
@@ -249,9 +258,10 @@ function startToolOp(store: Store<GameState>, toolKind: FsToolKind, spec: OpSpec
 // the part a small file's bar cut off).
 // Its echo: `doneEcho` once it completes (read after `apply`, so it can say what the op found or
 // freed), else `> scan stasis ... STOPPED` / `... EATEN`.
+// `afterEcho` runs once the echo is said (a disguised seed's words follow its scan's echo: slice 4d).
 function runQuickOp(
   store: Store<GameState>, seg: Segment, kind: OpKind, toolKind: FsToolKind, durationSec: number, apply: () => void,
-  doneEcho: () => string,
+  doneEcho: () => string, afterEcho: () => void = () => {},
 ): void {
   const name = echoName(seg);
   const release = (): void => { setOperating(seg, false); bumpMemory(store); };
@@ -268,6 +278,7 @@ function runQuickOp(
       apply();
       bumpMemory(store);
       echo(doneEcho());
+      afterEcho();
       emit('op-done', { kind, result: 'done' });
     },
     onCancel: () => {
@@ -296,6 +307,18 @@ export function actionScan(store: Store<GameState>, seg: Segment): ToolRefusal |
   if (seg.type === 'log') {
     runQuickOp(store, seg, 'scan', 'scan', scanSec(seg.size), () => { emit('log-scanned', NO_PAYLOAD); },
       () => OP_ECHO.scan(echoName(seg), LOG_TEXT.scan(store.getState().run.log.found.length)));
+    return null;
+  }
+  // Slice 4d (04 §3.6, plan R9): a disguised seed scans as the file it shows (1.0 + 0.1 per block: 1.2 s) and is unmasked:
+  // `NOT A FILE` (the stamp, on 'seed-unmasked'), its echo, and its words at most once a ship, as rm's are.
+  if (isDisguised(seg)) {
+    const decoy = echoName(seg);
+    let words: string | null = null;
+    runQuickOp(store, seg, 'scan', 'scan', scanSec(seg.size), () => {
+      unmask(seg, 'scan');
+      words = claimSeedWords(store, seg);
+    // ...its words on a line of their own, after the echo.
+    }, () => SENTRY_TEXT.scanEcho(decoy), () => { if (words !== null) say('hollow', SENTRY_TEXT.seedSays(words), { critical: true }); });
     return null;
   }
   runQuickOp(store, seg, 'scan', 'scan', scanSec(seg.size), () => {
@@ -455,7 +478,11 @@ export function actionDelete(store: Store<GameState>, seg: Segment): ToolRefusal
   // A beam seed's words (phase 3 slice 2, 04 §3.6, 05 §3.5): at most SEED_WORDS_PER_SHIP seeds a ship say theirs as they
   // go, in the delete's own echo (`> rm seed ... OK · it said: "…"`); the others go quietly.
   let saidWords: string | null = null;
-  runQuickOp(store, seg, 'delete', 'delete', deleteSec(seg), () => {
+  // Slice 4d: a disguised seed deleted without a SCAN (plan R9) runs as rm on a seed and is unmasked as it goes: `IT WAS A
+  // SEED`. SENTRY v2 is read at the click (deleteSec).
+  const decoy = isDisguised(seg) ? echoName(seg) : null;
+  runQuickOp(store, seg, 'delete', 'delete', deleteSec(seg, skillLive(store.getState().memory, 'sentry').version), () => {
+    if (decoy !== null && seg.type === 'hollow') unmask(seg, 'delete');
     if (seg.type === 'hollow' && seg.seed) {
       saidWords = claimSeedWords(store, seg);
       emit('seed-deleted', { segId: seg.id, beam: seg.beam === true, words: seg.words ?? null });
@@ -478,9 +505,19 @@ export function actionDelete(store: Store<GameState>, seg: Segment): ToolRefusal
     if (isRoot) emit('root-deleted', NO_PAYLOAD);
   }, () => {
     if (saidWords !== null) return THREAT_TEXT.seedSaid(saidWords);
+    if (decoy !== null) return SENTRY_TEXT.deleteEcho(decoy, seg.size);
     return seg.type === 'hollow' && seg.root ? OP_ECHO.deleteRoot(echoWord(seg.owner)) : OP_ECHO.delete(echoName(seg), seg.size);
   });
   return null;
+}
+
+// A disguised seed is unmasked (slice 4d, 04 §3.6): from now on every reader sees it as the seed it is (state/threat-
+// selectors.ts isDisguised), and 'seed-unmasked' stamps `NOT A FILE` / `IT WAS A SEED`. Mutates `seg` (memory is mutated in
+// place, as every op's effect; the op's own memoryRev bump follows).
+function unmask(seg: HollowSegment, by: 'scan' | 'delete'): void {
+  if (seg.disguise === undefined) throw new Error(`unmask: ${seg.id} wears no disguise`);
+  seg.disguise.seen = by;
+  emit('seed-unmasked', { segId: seg.id, by });
 }
 
 // The director's one-shot ids that count a ship's seed words (director.done keeps every id that is not a per-ship beat

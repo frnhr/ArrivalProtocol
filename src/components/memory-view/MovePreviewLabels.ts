@@ -2,7 +2,8 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { movePreview, type MovePreview } from '@systems/move-preview';
-import { getSegmentById, isHollow } from '@state/selectors';
+import { getSegmentById } from '@state/selectors';
+import { isVisibleHollow } from '@state/threat-selectors';
 import { requireById } from '@components/dom';
 import { MOVE_PREVIEW_TEXT } from '@data/hollow-text';
 import { ZONE_WORD } from '@data/zone-text';
@@ -118,7 +119,8 @@ export function mountMovePreviewLabels(store: Store<GameState>): () => void {
     const state = store.getState();
     const placement = state.ui.pendingPlacement;
     if (state.ui.mode !== 'memory' || state.ui.activeTool?.kind !== 'move' || !state.ui.pickedSourceId || !placement) return;
-    if (!state.memory.some(isHollow)) return;
+    // Slice 4d: a decoy alone turns no label on (the MOVE preview would name it).
+    if (!state.memory.some(isVisibleHollow)) return;
     const source = getSegmentById(state, state.ui.pickedSourceId);
     if (!source) return;
     const preview = movePreview(state, source, placement, knownHitRacks(state, getSensedPrediction()));

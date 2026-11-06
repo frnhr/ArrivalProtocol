@@ -9,6 +9,7 @@ import { blocksInRack } from '@systems/zones';
 import { isOpenFree } from '@systems/tool-targets';
 import { isHollow, isInfectable, isInfected, hasIntegrity } from '@state/selectors';
 import type { RackHazard } from '@/types/zone';
+import { isVisibleHollow } from '@state/threat-selectors';
 import { RACK_BLOCKS, WALL_MIN_BLOCKS, SEED_BLOCKS } from '@data/tuning';
 
 // The MOVE preview (§6.5, §9 WP7 item 5), pure and DOM-free: what a MOVE to the placement under the
@@ -74,8 +75,10 @@ interface ReachedVia {
 export function hollowReachAll(memory: readonly Segment[]): Map<number, ReachedVia> {
   const reached = new Map<number, ReachedVia>();
   const queue: number[] = [];
+  // Slice 4d: a disguised seed is the file it shows here (a label a decoy turned on would name it): it starts no reach, and
+  // a reach that gets to it goes on through it as through any file (isHollow lets it pass the food test below).
   memory.forEach((seg, index) => {
-    if (isHollow(seg)) { reached.set(index, { gapBlocks: 0 }); queue.push(index); }
+    if (isVisibleHollow(seg)) { reached.set(index, { gapBlocks: 0 }); queue.push(index); }
   });
   while (queue.length > 0) {
     const from = queue.shift()!;
@@ -98,7 +101,7 @@ export function reachesRackE(memory: readonly Segment[]): boolean {
   const starts = segmentStarts(memory);
   for (const [index] of hollowReachAll(memory)) {
     const seg = memory[index]!;
-    if (isHollow(seg)) continue;
+    if (isVisibleHollow(seg)) continue;
     const start = starts[index]!;
     if (start < rackEEnd && start + seg.size > unitStart) return true;
   }
@@ -118,7 +121,7 @@ function sourceGap(after: readonly Segment[], sourceStart: number, size: number)
   if (!found) return null;
   const left = after[found.index - 1];
   const right = after[found.index + 1];
-  if (!(left && isHollow(left)) && !(right && isHollow(right))) return null;
+  if (!(left && isVisibleHollow(left)) && !(right && isVisibleHollow(right))) return null;
   const blocks = after[found.index]!.size;
   return { blocks, wall: isWall(blocks) };
 }
@@ -169,7 +172,7 @@ function freeBeside(memory: readonly Segment[], index: number): [number, number]
 // with MERGE's 20 charge in 57 of 192 runs instead of 154 of 198 (the final fix pass's playthrough experiments). null: nowhere is SAFE. Pure.
 export function safestSpot(state: Readonly<GameState>, source: Segment, hazards: readonly RackHazard[]): PendingPlacement | null {
   const memory = state.memory;
-  const hollowAddrs = memory.filter(isHollow).map((block) => requireAddr(memory, block));
+  const hollowAddrs = memory.filter(isVisibleHollow).map((block) => requireAddr(memory, block));
   let best: { spot: PendingPlacement; seedProof: boolean; distance: number } | null = null;
   for (const region of memory) {
     if (!isOpenFree(region) || region.size < source.size) continue;
