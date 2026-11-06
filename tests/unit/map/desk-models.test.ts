@@ -97,26 +97,30 @@ check('an OUT OF RANGE ship\'s card has no BEAM row, only the range (Hop.inRange
   && row(far, 'fit') === undefined && far.fit === null && far.cost === null);
 
 // Picking and cycling.
-// 3b: the run's first desk has three steps (02 §4: ship → file → SET COURSE); the file step only guides.
+// 3b: the run's first desk has three steps (02 §4: ship → file → SET COURSE); the file step only guides. Slice 4 prepends
+// the required first skill (A SKILL); its done-ness is skills/ui-models' (this crafted desk has no ship ended: no visit 1).
 const firstSteps = deskSteps(state);
-check('steps: a ship, a file, SET COURSE (the first desk); pick a ship first, SET COURSE ▸ … not yet',
-  firstSteps.map((step) => step.id).join() === 'pick-ship,request,set-course' && !firstSteps[0]!.done && !firstSteps[1]!.done
-  && firstSteps[2]!.text === MAP_TEXT.desk.setCourse('…') && firstSteps.map((step) => step.label).join() === 'A SHIP,A FILE,SET COURSE');
+const stepOf = (steps: ReturnType<typeof deskSteps>, id: string) => steps.find((step) => step.id === id)!;
+check('steps: a skill, a ship, a file, SET COURSE (the first desk); pick a ship first, SET COURSE ▸ … not yet',
+  firstSteps.map((step) => step.id).join() === 'train,pick-ship,request,set-course' && !stepOf(firstSteps, 'pick-ship').done
+  && !stepOf(firstSteps, 'request').done && stepOf(firstSteps, 'set-course').text === MAP_TEXT.desk.setCourse('…')
+  && firstSteps.map((step) => step.label).join() === 'A SKILL,A SHIP,A FILE,SET COURSE');
 const recommendedNow = recommendation(state);
 check('…the file step names CONTROL\'s recommendation (`REQUEST mv · RECOMMENDED [R]`), or any file while it has none',
-  firstSteps[1]!.text === (recommendedNow === null ? REPO_TEXT.desk.requestAny : REPO_TEXT.desk.request(REPO_FILE_TEXT[recommendedNow].boot)), firstSteps[1]!.text);
+  stepOf(firstSteps, 'request').text === (recommendedNow === null ? REPO_TEXT.desk.requestAny : REPO_TEXT.desk.request(REPO_FILE_TEXT[recommendedNow].boot)),
+  stepOf(firstSteps, 'request').text);
 check('a TOO LATE or OUT OF RANGE click is refused', !selectShip(ares, 8) && ares.getState().ui.deskSelected === null);
 check('← → cycle the six in slot order, wrapping', cycleShip(ares, 1) === 1 && cycleShip(ares, 1) === 2 && cycleShip(ares, -1) === 1 && cycleShip(ares, -1) === 6);
 selectShip(ares, 2);
 state = ares.getState();
-check('…a pick moves the strip on (the file step, then `SET COURSE ▸ HALCYON [ENTER]`)', deskSteps(state)[0]!.done && deskSteps(state)[2]!.text === 'SET COURSE ▸ HALCYON [ENTER]'
-  && chartModel(state).selected === 2);
+check('…a pick moves the strip on (the file step, then `SET COURSE ▸ HALCYON [ENTER]`)', stepOf(deskSteps(state), 'pick-ship').done
+  && stepOf(deskSteps(state), 'set-course').text === 'SET COURSE ▸ HALCYON [ENTER]' && chartModel(state).selected === 2);
 
 // 3b: a request on the first desk (Mv to HALCYON: in time, 2337 before the 2352 approach), from the one outlook rule.
 check('no request yet: HALCYON\'s card has no DELIVERIES row and no TIMELINE marks',
   row(cardModel(state, 2), 'deliveries') === undefined && cardModel(state, 2).timeline?.marks.length === 0);
 check('toggleRequest(mv) requests it; the file step is done and says `mv REQUESTED`',
-  toggleRequest(ares, 'mv') === 'mv' && deskSteps(ares.getState())[1]!.done && deskSteps(ares.getState())[1]!.text === 'mv REQUESTED');
+  toggleRequest(ares, 'mv') === 'mv' && stepOf(deskSteps(ares.getState()), 'request').done && stepOf(deskSteps(ares.getState()), 'request').text === 'mv REQUESTED');
 state = ares.getState();
 const mvCard = cardModel(state, 2);
 check('HALCYON: `DELIVERIES · Mv ✓ WAITING HERE` in green, TIMELINE mark `2337 Mv` before ▲ (green)',

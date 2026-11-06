@@ -2,29 +2,146 @@
 // track so the three can write in parallel without touching each other's lines. AUTOBURN's own flight lines stay in
 // data/skill-text.ts (Track FLIGHT's). Every strip and boot line is ≤ MAX_LINE_CHARS (70) with worst-case numbers
 // (tests/unit/support/words). The FOUNDATION seeded each section with the spec's own wording; the owners reword freely.
+import type { SkillId } from '@/types/skill';
 
 // =======================================================================================================================
 // TRAINING_TEXT · Track UI: the TRAINING tab, the desk's first-pick step, the LANDING REPORT's cycles line, RUN END and
 // the RUN TALLY.
 // =======================================================================================================================
 
+const cycles = (n: number): string => `${n} CYCLE${n === 1 ? '' : 'S'}`;
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 'S'}`;
+const fromDemos = (n: number): string => (n === 0 ? 'no captures yet: UNTRAINED' : `from your ${n} capture${n === 1 ? '' : 's'}`);
+
+// One skill's words on the tab: the cell's head, the column's branch, visit 1's card (its v1 only) and NEXT SHIP per version
+// (03 §4's table, "the 12-year-old bar"). The branches 4c, 4d and slice 6 build carry placeholders.
+interface SkillWords {
+  name: string;
+  branch: string;
+  pitch: string;
+  next: readonly [string, string, string];
+}
+
 export const TRAINING_TEXT = {
-  tab: 'TRAINING',
+  tab: 'TRAINING [T]',
   // The tab's badge while cycles are unspent (desk.ts deskTabBadges.training).
-  badge: (cycles: number): string => `${cycles} CYCLES`,
+  badge: (n: number): string => cycles(n),
+  // The window's head (03 §4): `TRAINING · UNIT-047`, the bank in VT323 on the right, the demos on the left.
+  title: (unit: string): string => `TRAINING · ${unit}`,
+  bank: (n: number): string => cycles(n),
+  demos: (captures: number): string => `YOUR DEMOS · ${plural(captures, 'CAPTURE')}`,
   // The SET COURSE bar on the run's first desk until the required pick (skill-tree.ts deskBlocker).
   chooseFirst: 'CHOOSE YOUR FIRST SKILL',
+  // The desk's guidance strip: the step's name, what it says until the pick is made, and after.
+  step: 'A SKILL',
+  stepText: 'CHOOSE YOUR FIRST SKILL — [1], then [ENTER]',
+  stepDone: (skill: string, version: number): string => `${skill} v${version} TRAINED · UNDO TILL TRANSMIT ▸`,
   // ARRIVAL CONTROL on the first visit (03 §7).
+  controlTag: 'ARRIVAL CONTROL',
   controlFirstVisit: 'Training outside approved hours is discouraged. :)',
-  // The first-pick floor (03 §3.1).
-  onTheHouse: (cycles: number): string => `+${cycles} CYCLES · FIRST SKILL ON THE HOUSE :)`,
-  saved: (cycles: number): string => `${cycles} CYCLES · SAVED FOR NEXT TIME`,
+  // The first-pick floor (03 §3.1): on the report of a run's first ship, and in the window's head at the first desk.
+  onTheHouse: (n: number): string => `+${cycles(n)} · FIRST SKILL ON THE HOUSE :)`,
+  saved: (n: number): string => `${cycles(n)} · SAVED FOR NEXT TIME`,
+  moreLater: 'MORE SKILLS OPEN AS YOU GO',
   opensLater: 'OPENS LATER',
   lost: (restore: number): string => `LOST · RESTORE ${restore}`,
+  // Visit 1's cards (03 §2): CHOOSE YOUR FIRST SKILL over one card per open root, with its key.
+  cardCost: (price: number, blocks: number): string => `${cycles(price)} · ${plural(blocks, 'BLOCK')}`,
+  cardKey: (key: string): string => `[${key}]`,
+  stamped: 'TRAINED',
+  // The TRAIN button and its bar (03 §4 juice: it fills over 1.5 s): `TRAINING AUTOBURN v1 · from your 1 capture`.
+  train: (cost: number): string => `TRAIN ▸ ${cycles(cost)} [ENTER]`,
+  training: (skill: string, version: number, captures: number): string => `TRAINING ${skill} v${version} · ${fromDemos(captures)}`,
+  trainingLock: (tac: number): string => `TRAINING LOCK ${tac}`,
+  restore: (version: number, cost: number): string => `RESTORE v${version} ▸ ${cycles(cost)} [ENTER]`,
+  restoring: (skill: string, version: number): string => `RESTORING ${skill} v${version}`,
+  // A cell: `AUTOBURN v2` / `LOCK 270`, and its price and size (`5 · 8`, a lock adds one block: `1 · +1`).
+  cellName: (skill: string, version: number): string => `${skill} v${version}`,
+  lockName: (tac: number): string => `LOCK ${tac}`,
+  lockMode: 'LOCK RANGE',
+  cellCost: (price: number, blocks: number): string => `${price} · ${blocks}`,
+  lockCost: (price: number): string => `${price} · +1`,
+  costLegend: 'CYCLES · BLOCKS',
+  detailCost: (price: number, blocks: number): string => `${cycles(price)} · FILE ${plural(blocks, 'BLOCK')}`,
+  detailLockCost: (price: number, blocks: number): string => `${cycles(price)} · +1 BLOCK (FILE ${blocks})`,
+  // Why a cell can't be bought now (skill-tree.ts TrainRefusal), on the cell and in the detail panel.
+  status: {
+    owned: 'TRAINED',
+    pending: 'TRAINED HERE',
+    pendingLong: 'TRAINED HERE · UNDO IT TILL TRANSMIT ▸',
+    needsLower: (what: string): string => `NEEDS ${what} FIRST`,
+    unaffordable: (short: number): string => `NEEDS ${cycles(short)} MORE`,
+    notDesk: 'TRAIN AT A DESK',
+  },
+  // NEXT SHIP for LOCK RANGE 270 and 810 (03 §4: the bracket triples, then reaches back to the start of the coast).
+  nextLock: [
+    'NEXT SHIP: [B] WORKS 3× EARLIER · THE LOCK BRACKET TRIPLES',
+    'NEXT SHIP: [B] WORKS FROM THE START OF THE COAST',
+  ] as const,
+  skills: {
+    autoburn: {
+      name: 'AUTOBURN', branch: 'FLIGHT',
+      pitch: 'It brakes into orbit for you. Press [B] near ▼, even from the MIND.',
+      next: [
+        "NEXT SHIP: [AUTO · B] LIGHTS UP · IT BRAKES WHILE YOU'RE IN THE MIND",
+        'NEXT SHIP: ONE PRESS AND THE LOOP SETTLES GREEN; AGAIN: ROUND',
+        'NEXT SHIP: IT FLIES THE LANDING ORBIT, WHERE EVERY LZ FITS',
+      ],
+    },
+    autodrop: {
+      name: 'AUTODROP', branch: 'LANDING',
+      pitch: 'Hold [L] in a window: every pod waits for the dead centre.',
+      next: [
+        'NEXT SHIP: HOLD [L] AND EACH POD LEAVES DEAD CENTRE',
+        'NEXT SHIP: SET THE SPLIT, PRESS ONCE, THE PASS FLIES ITSELF',
+        'NEXT SHIP: THE PLAN TABLE · ONE PRESS DROPS THE WHOLE SHIP',
+      ],
+    },
+    survey: {
+      name: 'SURVEY', branch: 'SURVEY',
+      pitch: 'Sites pop up under the swath, with their ROOM and WIDTH.',
+      next: [
+        'NEXT SHIP: CANDIDATE SITES POP UP UNDER THE SWATH',
+        'NEXT SHIP: GROUND SHOWN, ★ RATINGS · SWAP A BAD GUESS',
+        'NEXT SHIP: TWICE THE SWATH, AND IT HOLDS NO THREAD',
+      ],
+    },
+    sentry: {
+      name: 'SENTRY', branch: 'DEFENCE',
+      pitch: 'It sees the seeds that hide as files, at the boot.',
+      next: [
+        'NEXT SHIP: THE BOOT NAMES EVERY DISGUISED SEED',
+        "NEXT SHIP: rm ON HOLLOW TWICE AS FAST, AIMED AT A SEED'S OUTLINE",
+        'NEXT SHIP: A NEW FIREWALL.sys AT EVERY BOOT',
+      ],
+    },
+  } satisfies Record<SkillId, SkillWords>,
+  // UNDO beside each purchase of this desk (03 §3.3: until TRANSMIT ▸).
+  pendingTitle: 'TRAINED AT THIS DESK',
+  pendingRow: (what: string, cost: number): string => `${what} · ${cycles(cost)}`,
+  pendingRestore: (what: string, cost: number): string => `RESTORED ${what} · ${cycles(cost)}`,
+  undo: 'UNDO',
+  // The AHEAD row (03 §4): the ship selected on the STAR CHART, its memory class and noise written as its card writes them.
+  ahead: (ship: string, ark: boolean, pods: number, memory: number, cls: string, noise: string): string =>
+    `NEXT: ${ship}${ark ? ' · ARK' : ''} · ${plural(pods, 'POD')} · MEMORY ${memory} · ${cls} · NOISE ${noise}`,
+  aheadNone: 'NEXT: PICK A SHIP ON THE CHART TO SEE WHAT IT ASKS',
+  // The packet preview (03 §4), by the limit that binds: `FILES 72 + SKILLS 17 · LINK 86 · 3 BLOCKS OVER`.
+  preview: {
+    head: (files: number, skills: number): string => `FILES ${files} + SKILLS ${skills}`,
+    link: (link: number): string => `LINK ${link}`,
+    room: (room: number, tight: boolean): string => `ROOM ${room}${tight ? ' · TIGHT' : ''}`,
+    over: (blocks: number): string => `${plural(blocks, 'BLOCK')} OVER`,
+    roomFor: (charge: number): string => `ROOM FOR ${charge} CHARGE`,
+    noCharge: 'NO CHARGE ARRIVES',
+    // When it does not fit: the cheapest way out, named before the PACKET (03 §4).
+    hintPack: (skill: string, version: number, saves: number): string => `ON THE PACKET: PACK ${skill} AS v${version} · −${saves}`,
+    hintUndo: 'UNDO A SKILL, OR LEAVE FILES BEHIND ON THE PACKET',
+    hintLeave: 'LEAVE FILES BEHIND ON THE PACKET',
+  },
   // The flavour line from the archive (03 §3.11): `LAST UNIT TRAINED: AUTODROP v3 · SENTRY v2`.
   lastUnit: (skills: readonly string[]): string => `LAST UNIT TRAINED: ${skills.join(' · ')}`,
   report: {
-    // The LANDING REPORT's line (plan §1.1 4a item 1).
+    // The LANDING REPORT's line (plan §1.1 4a item 1), rolled up.
     cycles: (total: number, landedPct: number, landed: number): string =>
       `TRAINING CYCLES +${total} · ARRIVED +1 · LANDED ${landedPct}% +${landed}`,
     perfect: (total: number): string => `PERFECT LANDING · +${total}`,
@@ -32,7 +149,7 @@ export const TRAINING_TEXT = {
     noDesk: (total: number): string => `+${total} TRAINING CYCLES · NO DESK AHEAD`,
   },
   runEnd: {
-    unspent: (cycles: number): string => `UNSPENT ${cycles}`,
+    unspent: (n: number): string => `UNSPENT ${n}`,
     tally: (trained: number, total: number, unspent: number): string => `TRAINED ${trained} of ${total} · UNSPENT ${unspent}`,
   },
 } as const;

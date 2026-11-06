@@ -43,6 +43,7 @@ interface PipView {
 interface RowView {
   node: HTMLElement;
   status: HTMLElement;
+  version: { root: HTMLElement; pips: HTMLElement; text: HTMLElement } | null;
   pips: PipView[];
   key: string;
 }
@@ -77,29 +78,49 @@ function rowView(row: SkillRow): RowView {
   head.append(make('span', 'skill-title', row.title));
   if (row.count) head.append(make('span', 'skill-count', row.count));
   const status = make('div', 'skill-status');
-  node.append(head, status, make('div', 'skill-effect', row.effect));
+  // Slice 4: a skill's version line under its status (`▮▮▯ v2 · WORKS AS v1 · REPAIR TO 80% FOR v2 (≈ 3 CHARGE)`).
+  let version: RowView['version'] = null;
+  if (row.version !== null) {
+    const root = make('div', 'skill-version');
+    const pipsEl = make('span', 'skill-version-pips');
+    const text = make('span', 'skill-version-text');
+    root.append(pipsEl, text);
+    version = { root, pips: pipsEl, text };
+  }
+  node.append(head, status, ...(version === null ? [] : [version.root]), make('div', 'skill-effect', row.effect));
   const pips = row.pips.map(pipView);
   if (pips.length > 0) {
     const pipsEl = make('div', 'skill-pips');
     pipsEl.append(...pips.map((pip) => pip.button));
     node.append(pipsEl);
   }
-  return { node, status, pips, key: '' };
+  return { node, status, version, pips, key: '' };
 }
 
 function paintRow(view: RowView, row: SkillRow): void {
   row.pips.forEach((pip, i) => paintPip(view.pips[i]!, pip));
-  const key = `${row.tone}|${row.status}`;
+  const key = `${row.tone}|${row.status}|${row.version?.pips ?? ''}|${row.version?.text ?? ''}|${row.version?.tone ?? ''}`;
   if (key === view.key) return;
   view.key = key;
   view.node.className = `skill-row tone-${row.tone}`;
   view.status.textContent = row.status;
+  if (view.version !== null && row.version !== null) {
+    view.version.root.dataset.tone = row.version.tone;
+    view.version.pips.textContent = row.version.pips;
+    view.version.text.textContent = row.version.text;
+  }
 }
 
 // What the rows are, as opposed to what they read: the cards, their names and effects, and which files their
 // pips stand for. A change here rebuilds the list; anything else is patched in place.
 function structureKey(rows: readonly SkillRow[]): string {
-  return JSON.stringify(rows.map((row) => [row.id, row.title, row.count, row.effect, row.pips.map((pip) => [pip.segId, pip.label])]));
+  return JSON.stringify(rows.map((row) => [row.id, row.title, row.count, row.effect, row.version !== null, row.pips.map((pip) => [pip.segId, pip.label])]));
+}
+
+// The purchases that pulse NEW: a skill really bought at a desk. A free entry (cost 0 at visit 0: a migrated save's phase-2
+// AUTOBURN, a suite's or ?debug's gift) is no news, so a resumed save does not pulse (FOUNDATION review note for UI).
+function boughtNews(state: Readonly<GameState>): number {
+  return state.run.skills.bought.filter((purchase) => !(purchase.cost === 0 && purchase.visit === 0)).length;
 }
 
 export function mountSkillsWindow(store: Store<GameState>): () => void {
@@ -152,9 +173,9 @@ export function mountSkillsWindow(store: Store<GameState>): () => void {
   });
 
   // A skill bought at a desk (slice 4: the run's committed purchases grew, at TRANSMIT ▸) pulses NEW the same way: the
-  // window is where it says how good it is. A NEW RUN forgets the skills: with no card either, nothing is new. (Track UI
-  // may move the pulse to the boot's TRAINED line.)
-  const unsubSkill = store.subscribe((s) => s.run.skills.bought.length, (count, prev) => {
+  // window is where it says how good it is. A NEW RUN forgets the skills: with no card either, nothing is new. Free
+  // entries (boughtNews) never pulse.
+  const unsubSkill = store.subscribe(boughtNews, (count, prev) => {
     if (count > prev && !dockItem.classList.contains('open')) dockItem.classList.add('fresh');
     if (count === 0 && store.getState().run.upgrades.length === 0) dockItem.classList.remove('fresh');
     paint();

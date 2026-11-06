@@ -498,7 +498,7 @@ export const DRAFT_TEXT = {
 export const SKILLS_TEXT = {
   // WP9: the window lists the trained skill too (AUTOBURN.skl).
   empty: 'NO CARDS OR SKILLS YET',
-  emptyHint: 'Pick a card between ships. Capture twice by hand to train a skill.',
+  emptyHint: 'Pick a card between ships. Train a skill at the desk, in TRAINING.',
   count: (count: number): string => `×${count}`,
   // Each card's line about what it is doing right now.
   status: {
@@ -525,6 +525,35 @@ export const SKILLS_TEXT = {
   pipTitle: {
     file: (name: string): string => `${name} — click to see the file`,
     gone: (name: string): string => `${name} is no longer in memory: deleted, eaten or left behind`,
+  },
+  // Slice 4 (Track UI; 03 §3.5, §4): a skill's row (systems/skills.ts skillRow) and its file's chip and INSPECT. The row
+  // shows its version pips (`▮▮▯`: the versions it owns), what it works as under damage, and the way back from a loss.
+  skill: {
+    pipOwned: '▮',
+    pipEmpty: '▯',
+    version: (version: number): string => `v${version}`,
+    lock: (tac: number): string => `LOCK ${tac}`,
+    // The chip's badge (`v2`, or `v2▸v1` in the warning colour under damage; `v2▸off` when it no longer works).
+    badge: (nominal: number, works: number): string => (works === nominal ? `v${nominal}` : `v${nominal}▸${works === 0 ? 'off' : `v${works}`}`),
+    worksAs: (version: number): string => (version === 0 ? 'OFF' : `WORKS AS v${version}`),
+    works: (version: number): string => `WORKS AS v${version}`,
+    off: 'OFF — TOO DAMAGED TO WORK',
+    // A file being repaired, moved or switched off is offline (03 §3.5): it says so before its health does.
+    offline: { repairing: 'OFF WHILE IT IS REPAIRED', transferring: 'OFF WHILE IT MOVES', inactive: 'SWITCHED OFF' },
+    // `REPAIR TO 80% FOR v2 (≈ 3 CHARGE)`: the way back from damage.
+    repairFor: (pct: number, version: number, charge: number): string => `REPAIR TO ${pct}% FOR v${version} (≈ ${charge} CHARGE)`,
+    // INSPECT's line (03 §4): `v2 · 64% · WORKS AS v1 · REPAIR TO 80% FOR v2 (≈ 3 CHARGE)`.
+    inspect: (parts: readonly string[]): string => parts.join(' · '),
+    // The labelled ticks under the health bar (`v2 | v1 | off`), and INSPECT's spelled-out version.
+    tick: (version: number): string => (version === 0 ? 'off' : `v${version}`),
+    ticksTitle: (zones: readonly string[]): string => `health keeps: ${zones.join(' | ')}`,
+    ticksRow: (zones: readonly string[]): string => zones.join(' | '),
+    // A skill paid for and no longer held (eaten, unlinked, deleted, left behind): RESTORE at half price (decision 16).
+    lost: (version: number): string => `LOST v${version}`,
+    restoreAt: (version: number, cost: number): string => `LOST v${version} · RESTORE ${cost} AT THE NEXT DESK`,
+    restoreNever: (version: number): string => `LOST v${version} · NO DESK AHEAD`,
+    // A skill whose flight words are not built yet (4c, 4d, slice 6): its version and what it does.
+    ready: (version: number): string => `v${version} READY`,
   },
 } as const;
 

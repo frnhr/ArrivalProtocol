@@ -10,9 +10,19 @@ import { reachMarks } from '@systems/hollow-hud';
 import { ownedUpgrades } from '@systems/draft';
 import { hollowLabel } from '@systems/say';
 import { SKILLS_TEXT } from '@data/script';
-import { skillFiles, autoburnEverTrained, autoburnStatus } from '@systems/autoburn';
+import { autoburnStatus } from '@systems/autoburn';
 import { AUTOBURN_SKILL_ROW } from '@data/skill-text';
 import { REPAIR_V2_VERSION, CHARGE_CARD_BLOCKS, CORE_LOW_INTEGRITY, FUEL_TRIM_DV_BONUS_FRAC } from '@data/tuning';
+import type { SkillFileSegment } from '@/types/segment';
+import type { SkillId, SkillLevel, SkillVersion, EffectiveVersion, RunSkillState } from '@/types/skill';
+import { skillFilesOf } from '@state/selectors';
+import { skillLive, effectiveVersion, type OfflineReason } from '@systems/capabilities';
+import { paid, held, fileLevel, lostLevels, restorePrice, bankOf } from '@systems/skill-tree';
+import { SKILL_TREE, SKILL_IDS, skillBlocks, levelPrice, treeTotalCycles } from '@data/skills';
+import { TRAINING_TEXT, PACKET_SKILL_TEXT } from '@data/training-text';
+import {
+  BAND_OK_MIN, BAND_DEGRADED_MIN, BAND_FAILING_MIN, INTEGRITY_MAX, LOCK_RANGE_TAC, REPAIR_CHARGE_PER_POINT_PER_BLOCK, FLOAT_SLACK,
+} from '@data/tuning';
 
 // The Skills window's model (§9 WP8 item 3), pure: the cards this unit carries, each with its one-line
 // effect, what it is doing right now, and a health pip for every file it lives in (pillar 4: every
@@ -42,8 +52,16 @@ export interface SkillPip {
   title: string;          // the tooltip
 }
 
-// A row is a card (its id) or the trained skill.
-export type SkillRowId = UpgradeId | 'autoburn';
+// A row is a card (its id) or a skill (slice 4: one row per skill the run bought or the unit carries, SKILL_IDS order).
+export type SkillRowId = UpgradeId | SkillId;
+
+// A skill row's version line (03 §4): the pips of the versions it owns (`▮▮▯`), and what it works as now
+// (`v2 · LOCK 270 · WORKS AS v1 · REPAIR TO 80% FOR v2 (≈ 3 CHARGE)`, `LOST v2 · RESTORE 3 AT THE NEXT DESK`).
+export interface SkillRowVersion {
+  pips: string;
+  text: string;
+  tone: SkillTone;
+}
 
 export interface SkillRow {
   id: SkillRowId;
@@ -53,6 +71,7 @@ export interface SkillRow {
   status: string;         // what it is doing right now
   tone: SkillTone;
   pips: SkillPip[];
+  version: SkillRowVersion | null;   // a skill's (null on a card)
 }
 
 const PIP_GLYPH: Readonly<Record<SkillPipLook, string>> = {
@@ -142,26 +161,240 @@ function threadRow(state: Readonly<GameState>): Pick<SkillRow, 'status' | 'tone'
     : { status: SKILLS_TEXT.status.threads(threads), tone: 'good', pips };
 }
 
-// AUTOBURN.skl's row: shown once the run bought the skill (or the unit carries the file). Its numbers are read
-// live from the kid's captures (skill-tree.ts autoburnDemoSkill), like the boot line that trained it.
-function autoburnRow(state: Readonly<GameState>): SkillRow | null {
-  const files = skillFiles(state.memory);
-  if (files.length === 0 && !autoburnEverTrained(state)) return null;
-  const label = AUTOBURN_SKILL_ROW.title.toUpperCase();
-  const pips: SkillPip[] = files.map((seg) => healthPip(seg, label, `${shownIntegrity(seg.integrity)}%`));
-  const row = (status: string, tone: SkillTone): SkillRow => ({
-    id: 'autoburn', title: AUTOBURN_SKILL_ROW.title, count: '', effect: AUTOBURN_SKILL_ROW.effect, status, tone,
-    pips: pips.length > 0 ? pips : gonePips(1, AUTOBURN_SKILL_ROW.title),
+// --- Skills (phase 3 slice 4; 03 §3.5, §4) ------------------------------------------------------------------------------
+
+// One skill file as its chip, its INSPECT and its row read it (03 §3.5's graded damage, per file): the version it is, what
+// it works as now (offline first: a copy being repaired or moved is off, not dead), and what REPAIR brings back.
+export interface SkillFileView {
+  nominal: SkillVersion;
+  works: EffectiveVersion;
+  offline: OfflineReason | null;
+  damaged: boolean;                // it works below its version (not offline)
+  badge: string;                   // v2, v2▸v1, v2▸off
+  zones: SkillTickZone[];          // the health bar's labelled ticks, low to high
+  ticks: string;                   // `v2 | v1 | off`
+  worksText: string;               // WORKS AS v1 / OFF — TOO DAMAGED TO WORK / OFF WHILE IT IS REPAIRED
+  repair: string | null;           // REPAIR TO 80% FOR v2 (≈ 3 CHARGE): below the band its version needs
+  inspect: string;                 // v2 · 64% · WORKS AS v1 · REPAIR TO 80% FOR v2 (≈ 3 CHARGE)
+}
+
+// One span of the health bar (03 §4: ticks at 80, 50 and 25), from `from`% to `to`%, and the version a file keeps there.
+export interface SkillTickZone {
+  from: number;
+  to: number;
+  works: EffectiveVersion;
+  label: string;
+}
+
+const BAND_EDGES: readonly { from: number; band: Band }[] = [
+  { from: 0, band: 'dead' }, { from: BAND_FAILING_MIN, band: 'failing' }, { from: BAND_DEGRADED_MIN, band: 'degraded' }, { from: BAND_OK_MIN, band: 'ok' },
+];
+
+// The bar's zones for a file of `version`, merged where neighbours keep the same version (a v2 reads `v2 | v1 | off`, a v1
+// `v1 | off`, a v3 `v3 | v2 | v1 | off`).
+export function skillTickZones(version: SkillVersion): SkillTickZone[] {
+  const zones: SkillTickZone[] = [];
+  BAND_EDGES.forEach((edge, i) => {
+    const to = BAND_EDGES[i + 1]?.from ?? INTEGRITY_MAX;
+    const works = effectiveVersion(version, edge.band);
+    const last = zones.at(-1);
+    if (last !== undefined && last.works === works) last.to = to;
+    else zones.push({ from: edge.from, to, works, label: SKILLS_TEXT.skill.tick(works) });
   });
-  // What it is doing now is Track FLIGHT's (autoburn.ts autoburnStatus); the row around it is this file's.
-  const status = autoburnStatus(state);
-  return row(status.text, status.tone);
+  return zones;
+}
+
+// What healing a file to `to`% costs in REPAIR CHARGE (state/actions.ts repairChargeEstimate's rule, to a band's edge).
+function chargeTo(integrity: number, size: number, to: number): number {
+  return Math.max(0, Math.ceil((to - integrity) * size * REPAIR_CHARGE_PER_POINT_PER_BLOCK - FLOAT_SLACK));
+}
+
+export function skillFileView(seg: Readonly<SkillFileSegment>): SkillFileView {
+  const offline = offlineReason(seg);
+  const works = offline !== null ? 0 : effectiveVersion(seg.version, integrityBand(seg.integrity));
+  const damaged = offline === null && works < seg.version;
+  const text = SKILLS_TEXT.skill;
+  const zones = skillTickZones(seg.version);
+  const worksText = offline !== null ? text.offline[offline] : works === 0 ? text.off : text.works(works);
+  const repair = seg.integrity < BAND_OK_MIN ? text.repairFor(BAND_OK_MIN, seg.version, chargeTo(seg.integrity, seg.size, BAND_OK_MIN)) : null;
+  return {
+    nominal: seg.version, works, offline, damaged,
+    badge: offline !== null ? text.version(seg.version) : text.badge(seg.version, works),
+    zones, ticks: text.ticksRow([...zones].reverse().map((zone) => zone.label)),
+    worksText, repair,
+    inspect: text.inspect([text.version(seg.version), `${shownIntegrity(seg.integrity)}%`, worksText, ...(repair === null ? [] : [repair])]),
+  };
+}
+
+// The pips of the versions a level owns: ▮ per version held, ▯ for the rest of the three.
+function versionPips(version: number): string {
+  return SKILLS_TEXT.skill.pipOwned.repeat(version) + SKILLS_TEXT.skill.pipEmpty.repeat(3 - version);
+}
+
+// A skill's version line: the counting file (skillLive's) and its lock, what it works as, and what the run paid for and
+// lost (RESTORE at the next desk, half price; none past the final ship's).
+function skillVersionLine(state: Readonly<GameState>, id: SkillId): SkillRowVersion {
+  const live = skillLive(state.memory, id);
+  const paidLevel = paid(state.run.skills, id);
+  const text = SKILLS_TEXT.skill;
+  const lost = lostLevels(id, fileLevel(state.memory, id), paidLevel);
+  const lostLine = (): string | null => {
+    if (lost.length === 0 || paidLevel === null) return null;
+    const cost = restorePrice(lost);
+    return currentShip(state).final ? text.restoreNever(paidLevel.version) : text.restoreAt(paidLevel.version, cost);
+  };
+  if (live.file === null) {
+    return { pips: versionPips(0), text: lostLine() ?? text.lost(paidLevel?.version ?? 1), tone: 'warn' };
+  }
+  const view = skillFileView(live.file);
+  const parts = [text.version(view.nominal)];
+  if (live.file.lock > 0) parts.push(text.lock(LOCK_RANGE_TAC[live.file.lock]));
+  if (view.offline !== null || view.damaged || view.works === 0) parts.push(view.worksText);
+  if (view.repair !== null && (view.damaged || view.works === 0)) parts.push(view.repair);
+  const lostPart = lostLine();
+  if (lostPart !== null) parts.push(lostPart);
+  const warn = view.offline !== null || view.damaged || view.works === 0 || lostPart !== null;
+  return { pips: versionPips(view.nominal), text: parts.join(' · '), tone: warn ? 'warn' : 'good' };
+}
+
+// A skill's row: shown once the run bought it (or the unit carries its file). AUTOBURN's numbers are read live from the
+// kid's captures (skill-tree.ts autoburnDemoSkill), like the boot line that trained it; what it is doing now is Track
+// FLIGHT's (autoburn.ts autoburnStatus). The skills later sub-slices build say only that they are ready.
+function skillRow(state: Readonly<GameState>, id: SkillId): SkillRow | null {
+  const files = skillFilesOf(state.memory, id);
+  if (files.length === 0 && paid(state.run.skills, id) === null) return null;
+  const title = id === 'autoburn' ? AUTOBURN_SKILL_ROW.title : SKILL_TREE[id].fileName;
+  const pips: SkillPip[] = files.map((seg) => healthPip(seg, title.toUpperCase(), `${shownIntegrity(seg.integrity)}%`));
+  const live = skillLive(state.memory, id);
+  const status = id === 'autoburn' ? autoburnStatus(state)
+    : live.file === null ? { text: SKILLS_TEXT.status.gone, tone: 'warn' as const }
+      : { text: live.version === 0 ? SKILLS_TEXT.skill.off : SKILLS_TEXT.skill.ready(live.version), tone: live.version === 0 ? 'warn' as const : 'good' as const };
+  return {
+    id, title, count: '', effect: id === 'autoburn' ? AUTOBURN_SKILL_ROW.effect : TRAINING_TEXT.skills[id].pitch,
+    status: status.text, tone: status.tone, pips: pips.length > 0 ? pips : gonePips(1, title), version: skillVersionLine(state, id),
+  };
+}
+
+// --- The PACKET's skill chips (03 §3.4; plan §2.6; slice-4 §3 step 7) ---------------------------------------------------
+
+// What the PACKET shows of the unit's skills, over TREE's chips (systems/transmit.ts):
+// • fresh: a file trained, upgraded or restored at this desk, locked (`AUTOBURN.skl v1 (6) · TRAINED HERE · ◀ CHART TO
+//   UNDO`): leaving behind what was just paid for is UNDO's job (plan §2.3's 'trained' lock, risk R8);
+// • replaced: the files those replace (never shown: the fresh file is the skill now);
+// • carried: each carried skill file's version badge, what leaving it costs (`AUTOBURN.skl v2 (8) → brake by hand · RESTORE
+//   4`), and a PACK AS button per lower version (`PACK AS v1 (6) · RESTORE 3`), lit when chosen (TransitPlan.packAs).
+// INTEGRATION (the lead): TREE's PacketChip may carry these itself; then the screen reads its fields and this goes.
+export interface PacketSkillFresh {
+  skill: SkillId;
+  name: string;
+  version: SkillVersion;
+  blocks: number;
+  text: string;
+}
+
+export interface PacketPackAs {
+  segId: string;
+  level: SkillLevel;
+  blocks: number;
+  label: string;
+  on: boolean;
+}
+
+export interface PacketSkillCarried {
+  segId: string;
+  skill: SkillId;
+  badge: string;
+  leftBehind: string;          // the chip's line: what leaving it behind costs
+  packAs: PacketPackAs[];      // lower versions first
+  packed: SkillLevel | null;   // the PACK AS chosen
+}
+
+export interface PacketSkillView {
+  fresh: PacketSkillFresh[];
+  replaced: string[];
+  carried: PacketSkillCarried[];
+}
+
+export function packetSkillView(state: Readonly<GameState>): PacketSkillView {
+  const packAs = state.run.transit?.packAs ?? {};
+  const fresh: PacketSkillFresh[] = [];
+  const replaced: string[] = [];
+  const carried: PacketSkillCarried[] = [];
+  for (const id of SKILL_IDS) {
+    const files = skillFilesOf(state.memory, id);
+    const def = SKILL_TREE[id];
+    const paidLevel = paid(state.run.skills, id);
+    if (state.run.skills.pending.some((purchase) => purchase.skill === id)) {
+      const level = held(state, id);
+      if (level === null) throw new Error(`packetSkillView: ${id} has pending purchases and no level`);
+      const blocks = skillBlocks(id, level.version, level.lock);
+      fresh.push({
+        skill: id, name: def.fileName, version: level.version, blocks,
+        text: `${def.fileName} v${level.version} (${blocks}) · ${PACKET_SKILL_TEXT.trainedHere}`,
+      });
+      replaced.push(...files.map((seg) => seg.id));
+      continue;
+    }
+    for (const seg of files) {
+      const own = { version: seg.version, lock: seg.lock };
+      const ceiling = paidLevel ?? own;
+      const restoreLeft = restorePrice(lostLevels(id, null, ceiling));
+      const options: PacketPackAs[] = [];
+      for (let version = 1; version < seg.version; version++) {
+        const level: SkillLevel = { version: version as SkillVersion, lock: seg.lock };
+        const blocks = skillBlocks(id, level.version, level.lock);
+        options.push({
+          segId: seg.id, level, blocks,
+          label: PACKET_SKILL_TEXT.packAs(version, blocks, restorePrice(lostLevels(id, level, ceiling))),
+          on: packAs[seg.id]?.version === version && packAs[seg.id]?.lock === level.lock,
+        });
+      }
+      carried.push({
+        segId: seg.id, skill: id, badge: skillFileView(seg).badge,
+        leftBehind: PACKET_SKILL_TEXT.chip(def.fileName, seg.version, seg.size, PACKET_SKILL_TEXT.without[id], restoreLeft),
+        packAs: options, packed: packAs[seg.id] ?? null,
+      });
+    }
+  }
+  return { fresh, replaced, carried };
+}
+
+// --- RUN END and the RUN TALLY (03 §3.1; 02 §4) --------------------------------------------------------------------------
+
+// The cycles the run's skills are worth: every level it paid for (a version and the ones below it, a LOCK RANGE level and
+// the ones below it), at its price. The RUN TALLY's `TRAINED n of 54` (RESTOREs and free grants paid nothing new).
+export function trainedCycles(skills: Readonly<RunSkillState>): number {
+  return SKILL_IDS.reduce((sum, id) => {
+    const level = paid(skills, id);
+    if (level === null) return sum;
+    let cycles = 0;
+    for (let version = 1; version <= level.version; version++) cycles += levelPrice(id, { kind: 'version', version: version as SkillVersion });
+    for (let lock = 1; lock <= level.lock; lock++) cycles += levelPrice(id, { kind: 'lock', level: lock as 1 | 2 });
+    return sum + cycles;
+  }, 0);
+}
+
+export interface RunEndSkillLines {
+  unspent: string;             // RUN END: UNSPENT 3
+  tally: string;               // the RUN TALLY: TRAINED 12 of 54 · UNSPENT 3
+}
+
+// null on the classic world (no tree).
+export function runEndSkillLines(run: Readonly<Pick<GameState['run'], 'skills' | 'map'>>): RunEndSkillLines | null {
+  if (run.map.world !== 'arm') return null;
+  const unspent = bankOf(run.skills);
+  return {
+    unspent: TRAINING_TEXT.runEnd.unspent(unspent),
+    tally: TRAINING_TEXT.runEnd.tally(trainedCycles(run.skills), treeTotalCycles(), unspent),
+  };
 }
 
 export function skillsModel(state: Readonly<GameState>): SkillRow[] {
   const rows: SkillRow[] = [];
-  const skillRow = autoburnRow(state);
-  if (skillRow) rows.push(skillRow);
+  for (const id of SKILL_IDS) {
+    const row = skillRow(state, id);
+    if (row) rows.push(row);
+  }
   for (const [id, count] of cardCounts(state)) {
     const def = getUpgrade(id);
     let body: Pick<SkillRow, 'status' | 'tone' | 'pips'>;
@@ -172,7 +405,7 @@ export function skillsModel(state: Readonly<GameState>): SkillRow[] {
       case 'thread-plus': body = threadRow(state); break;
       case 'charge': body = { status: SKILLS_TEXT.status.charge(count * CHARGE_CARD_BLOCKS), tone: 'dim', pips: [] }; break;
     }
-    rows.push({ id, title: def.title, count: count > 1 ? SKILLS_TEXT.count(count) : '', effect: def.effect, ...body });
+    rows.push({ id, title: def.title, count: count > 1 ? SKILLS_TEXT.count(count) : '', effect: def.effect, ...body, version: null });
   }
   return rows;
 }
