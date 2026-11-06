@@ -26,7 +26,7 @@ import { shipSummaryAt } from '@systems/map-run';
 import { currentSlot } from '@systems/map-streams';
 import { RUN_SAVE_VERSION, FIRST_UNIT_NUMBER, CYCLES_ARRIVED, FIRST_PICK_FLOOR_CYCLES } from '@data/tuning';
 import { shipCycles } from '@systems/run-score';
-import { SKILL_IDS } from '@data/skills';
+import { SKILL_IDS, levelPrice } from '@data/skills';
 import { withScratchSegIds } from '@systems/memory-ops';
 
 // The run save's codec and checks (phase 3 slice 3c, docs/phase3/impl/slice-3c-plan.md §2.1), pure: what a save holds at
@@ -231,8 +231,8 @@ const checkEmptyList: Check = (value, at) => {
 };
 const checkRunSkills = rec({
   earned: list(rec({ slot: whole, arrived: oneOf(1), landed: whole, pct: whole })),
-  grants: list(rec({ source: oneOf('first-pick', 'salvage', 'resident', 'story'), cycles: whole, visit: whole, label: nullable(str) })),
-  bought: list(rec({ skill: SKILL_ID_CHECK, kind: oneOf('train', 'lock', 'restore'), to: checkSkillLevel, cost: whole, visit: whole })),
+  grants: list(rec({ source: oneOf('first-pick', 'salvage', 'resident', 'story', 'migration'), cycles: whole, visit: whole, label: nullable(str) })),
+  bought: list(rec({ skill: SKILL_ID_CHECK, kind: oneOf('train', 'lock', 'restore', 'grant'), to: checkSkillLevel, cost: whole, visit: whole })),
   pending: checkEmptyList,
   skillGrants: list(rec({ skill: SKILL_ID_CHECK, version: SKILL_VERSION_CHECK, source: name, installedAtDepth: nullable(whole) })),
   opened: list(rec({ skill: SKILL_ID_CHECK, visit: whole })),
@@ -382,6 +382,9 @@ function payloadStrips(payload: Record<string, unknown>): Record<string, unknown
   return strips.filter(Array.isArray).map((strip) => (strip as unknown[]).filter(isRecord));
 }
 
+// Phase 2's AUTOBURN install rule (WP9: the boot after the second manual capture), kept only to migrate saves made under it.
+const PHASE2_DEMOS_TO_TRAIN = 2;
+
 // 1 → 2 (slice 4, plan §2.14): the skill tree.
 // • run.skillTrainedOn goes; run.skills is a fresh history (createRunSkills), and run.stats.dropDemos is empty (4c fills it).
 // • A unit that arrived at phase 2's free AUTOBURN.skl (the install after two captures; arm runs in flight may carry one)
@@ -393,6 +396,12 @@ function payloadStrips(payload: Record<string, unknown>): Record<string, unknown
 //   ship. A SHIP DONE save at the run's first desk also gets that desk's first-pick top-up (03 §3.1's floor): run.ts
 //   openDesk writes it before the save, and a resumed desk does not open again, so without it the required first pick
 //   could be unaffordable there.
+// • `announced.autoburn` keeps what phase 2's boot last said: the captures it was trained on (skillTrainedOn), or for a
+//   carried file with no count, every capture so far; null when it was never trained. New captures after it retrain the
+//   skill at the next boot, as they did.
+// • An install phase 2 still owed (a SHIP DONE or BEAM save after the second capture, before the boot that would have
+//   installed AUTOBURN.skl: no file, two or more demos, more than it was last trained on) can't happen any more, so the run
+//   is paid AUTOBURN v1's price in cycles instead (a 'migration' grant): the kid buys it back at the next desk.
 // • burn.auto gains its mode fields, all empty (no save point is mid-flight: an engaged AUTOBURN is never saved).
 // • arrival.skills is empty (no skill line is owed at a boot the save replays: phase 2's install path is gone).
 function migrateRunSave1(save: Record<string, unknown>): Record<string, unknown> {
@@ -416,6 +425,10 @@ function migrateRunSave1(save: Record<string, unknown>): Record<string, unknown>
     if ((trained !== null && trained !== undefined) || carriesAutoburn) {
       skills.bought.push({ skill: 'autoburn', kind: 'train', to: { version: 1, lock: 0 }, cost: 0, visit: 0 });
     }
+    const demos = isRecord(run.stats) && Array.isArray(run.stats.demos) ? run.stats.demos.length : 0;
+    skills.announced.autoburn = typeof trained === 'number' ? trained : carriesAutoburn ? demos : null;
+    const owedInstall = !carriesAutoburn && demos >= PHASE2_DEMOS_TO_TRAIN && (typeof trained !== 'number' || demos > trained)
+      && (next.point === 'ship-done' || next.point === 'beam');
     const ships = Array.isArray(run.ships) ? run.ships.filter(isRecord) : [];
     // A result shipCycles can't read (nobody aboard, points out of range: an edited save) earns ARRIVED alone here; the
     // checks after the step judge the rest of it.
@@ -429,6 +442,9 @@ function migrateRunSave1(save: Record<string, unknown>): Record<string, unknown>
     if (next.point === 'ship-done' && ships.length === 1 && world === 'arm') {
       const bank = skills.earned.reduce((sum, earning) => sum + earning.arrived + earning.landed, 0);
       if (bank < FIRST_PICK_FLOOR_CYCLES) skills.grants.push({ source: 'first-pick', cycles: FIRST_PICK_FLOOR_CYCLES - bank, visit: 1, label: null });
+    }
+    if (owedInstall) {
+      skills.grants.push({ source: 'migration', cycles: levelPrice('autoburn', { kind: 'version', version: 1 }), visit: ships.length, label: null });
     }
     run.skills = skills;
     if (isRecord(run.stats)) run.stats.dropDemos = [];

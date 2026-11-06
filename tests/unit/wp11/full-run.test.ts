@@ -34,6 +34,7 @@ import { shipLost } from '@systems/run';
 import { continueAfterReport, continueAfterLoss } from '../support/classic-flow';
 import { runEndModel } from '@systems/run-end';
 import { autoburnAvailable } from '@systems/autoburn';
+import { giveSkillFile } from '../support/skills';
 import { getPrediction } from '@systems/predict';
 import { followDirector } from '../wp2/harness2';
 import { pickChoice } from '@systems/say';
@@ -121,6 +122,9 @@ function transmitChecked(): void {
   h.transmit();
   const arrival = state().run.arrival!;
   const ship = classicShip(state().run.shipIndex);
+  // Slice 4 (the lead's decision): the classic world has no tree, so where phase 2's boot installed AUTOBURN.skl from the
+  // two manual captures (KESTREL's), the suite gives it (classic-only test setup; the arm sells it at the desk).
+  if (ship.id === 'kestrel' && state().run.stats.demos.length >= 2) giveSkillFile(h.store, 'autoburn', 1);
   let memoryOk = true;
   try { assertMemoryInvariants(state().memory, MEMORY_LAYOUTS.FULL.totalBlocks); } catch { memoryOk = false; }
   expect('every hand-over: no op running, memory 384 and valid, every reset module in its initial state',
@@ -173,9 +177,9 @@ function bootChecked(): void {
     expect('KESTREL\'s boot (run 1): one beam seed, next to Telemetry, named on the ECC seeds line',
       arrival.seeds.length === 1 && arrival.seeds[0]!.targetName === 'Telemetry' && lines.includes(eccSeedsLine(['Telemetry']))
         && beamSeedsInMemory(state().memory).length === 1, JSON.stringify(arrival.seeds));
-    expect('KESTREL\'s boot: AUTOBURN.skl trained from the two manual captures, in memory',
-      state().memory.some((seg) => seg.type === 'upgrade' && seg.upgrade === 'autoburn') && lines.some((text) => text.startsWith('> SKILL TRAINED')),
-      lines.join(' | '));
+    expect('KESTREL\'s boot: AUTOBURN.skl v1 in memory after the two manual captures (given: the classic world has no tree)',
+      state().run.stats.demos.length >= 2 && state().memory.some((seg) => seg.type === 'upgrade' && seg.upgrade === 'autoburn'),
+      `${state().run.stats.demos.length} captures`);
     expect('KESTREL flies blind at first (PATH UNCERTAIN)', capabilitiesNow(state()).plot.mode === 'uncertain', capabilitiesNow(state()).plot.mode);
   }
   if (ship.id === 'vesper') {

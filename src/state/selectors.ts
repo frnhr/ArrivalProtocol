@@ -5,6 +5,7 @@ import type {
 } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { SkillId } from '@/types/skill';
+import { SKILL_IDS } from '@data/skills';
 import {
   CORE_LOW_INTEGRITY, CORE_LOW_THREADS, BAND_OK_MIN, BAND_DEGRADED_MIN, BAND_FAILING_MIN, CORRUPTION_STEP,
   INTEGRITY_MAX, THRUST_CTRL_REPAIR_MAX,
@@ -139,7 +140,7 @@ export function upgradeFiles(memory: readonly Segment[], kind: UpgradeKind): Upg
 
 // A skill file (phase 3 slice 4; types/segment.ts SkillFileSegment): an upgrade file of a skill kind, with a version.
 export function isSkillFile(seg: Segment): seg is SkillFileSegment {
-  return seg.type === 'upgrade' && 'version' in seg;
+  return seg.type === 'upgrade' && (SKILL_IDS as readonly string[]).includes(seg.upgrade);
 }
 
 // The skill files of one skill, whatever their health or state, in memory order (capabilities.ts skillLive picks the one

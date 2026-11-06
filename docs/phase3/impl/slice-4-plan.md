@@ -100,7 +100,8 @@ tier (under 300 s, budget 265 s) → one e2e run. 4c, 4d and 4e each get their o
 | **`src/types/skill.ts`** | types | §2.2's types |
 | **`src/data/skills.ts`** | data | `SKILL_TREE`, `SKILL_FILE_TEXT`, `skillBlocks()`, `levelPrice()`, the load validator |
 | **`src/systems/skill-tree.ts`** | pure | the bank, held / paid / lost, cells, restore price, opening rule, `deskBlocker`, demo skills |
-| **`src/systems/training.ts`** | stateful + model | `trainCell`, `undoPurchase`, `restoreSkill`, `commitTraining`, `trainingModel(state)` |
+| **`src/systems/training.ts`** | stateful | `trainCell`, `undoPurchase`, `restoreSkill`, `setPackAs`, `commitTraining`, `FIRST_PICK_ENFORCED` |
+| **`src/systems/training-model.ts`** | model | `trainingModel(state)` (Track UI) |
 | **`src/systems/skill-files.ts`** | pure + one install | `skillFile()`, `skillPacketPlan()`, `applySkillPlan()`, `installSkillFile()`, `skillBootLines()` |
 | `src/systems/capabilities.ts` | pure | + `skillLive(memory, id)`; `Capabilities.skills` replaces `upgrades.autoburn` |
 | `src/systems/autoburn.ts` | stateful | versions and modes, lock range, thread claim, takeovers |
@@ -145,7 +146,7 @@ export interface RunSkillState {
   bought: SkillPurchase[];       // committed at TRANSMIT ▸
   pending: SkillPurchase[];      // this desk's, undoable; [] at every save point
   skillGrants: SkillGrant[];     // slice 5; [] until then
-  opened: { skill: SkillId; visit: number }[];   // latched at openDesk (at most one new branch per visit)
+  opened: { skill: SkillId; visit: number }[];   // 'after-seeds' / 'poor-ahead' branches latched at openDesk (one per visit)
   announced: Record<SkillId, number | null>;     // demo count at the last TRAINED/RETRAINED line
 }
 export interface SkillRecord { skill: SkillId; version: SkillVersion; lock: LockLevel; accuracy: number | null } // LastUnit.skills
@@ -160,9 +161,11 @@ export type AutoMode = 'capture' | 'green' | 'round' | 'landing-orbit';
   - `paid(s, id)` is the highest level in `bought ∪ pending`;
   - `lostLevels(held, paid)` lists the versions and lock levels above `held`, up to `paid`.
   - These are derived from memory and history, so "eaten, unlinked, deleted, left behind, packed lower" all fall out without event bookkeeping.
-- **The opening rule:** `openBranchesAt(state, visit)` is pure. The results are latched into `opened` because "one per visit" depends on past visits' map facts.
+- **The opening rule:** `openBranchesAt(state, visit)` is pure (built in the foundation's review follow-up).
+  - A branch with `built: 0` never opens.
+  - **`'start'` branches (FLIGHT, LANDING) are derived, never latched:** v1 from visit 1, the higher versions and LOCK RANGE from visit 2.
+  - **`'after-seeds'` and `'poor-ahead'` branches are latched into `opened`** at openDesk, because whether one is due depends on past visits' map facts. "At most one new branch per visit" counts only these.
   - Ties go to "the next ship needs it": among the reachable candidates, SURVEY if any has POOR site data, else SENTRY.
-  - Branches with `built: 0` never latch.
 
 ### 2.3 Skill files in memory
 
@@ -545,7 +548,8 @@ Restore cross-checks:
 
 **Track TREE** (model, cycles, buying, PACK AS, RESTORE, save, boot):
 - **Owns:**
-  - `src/systems/skill-tree.ts`, `src/systems/training.ts` (except `trainingModel`), `src/systems/skill-files.ts`;
+  - `src/systems/skill-tree.ts`, `src/systems/training.ts`, `src/systems/skill-files.ts`;
+  - `src/state/selectors.ts` and `src/types/lineage.ts` (named in the review follow-up);
   - `src/systems/run.ts`:
     - endShip appends earnings;
     - openDesk latches `opened`, writes the first-pick grant and opens TRAINING on visit 1 through `deskUiOnOpen`'s `deskWindow`;
@@ -561,6 +565,7 @@ Restore cross-checks:
 **Track FLIGHT** (AUTOBURN v1/v2, GREEN/ROUND, LOCK RANGE, claim, precedence, graded damage in flight):
 - **Owns:**
   - `src/systems/autoburn.ts`, `src/systems/predict.ts` (`planToCircle`, `'round'`, no-shrink for green, armed-mode planning, `previewModeBurn`);
+  - `src/systems/landing.ts`, `src/systems/landing-hud.ts`: ROUND in landing only (named in the review follow-up);
   - `src/systems/guidance.ts`, `src/systems/landing-guidance.ts` (ROUND tail only), `src/systems/landing-orbit.ts` (`burnSpanClear`);
   - `src/systems/flight-hud.ts` (AUTO button mode, `lockBracket`, `autoGhost`, Engine pip model), `src/components/hud/plot-draw.ts` + `src/components/tools-view/NavPlotWindow.ts` (bracket and ghost), `src/components/tools-view/EngineWindow.ts` (pip);
   - `src/data/skill-text.ts` (every AUTOBURN line ≤ 70: `armedTail`, `threadWait`, `green`, `round`, `reserve*`, `downgraded*`, `offerMode`, `roundTail`, untrained wording);
@@ -571,7 +576,7 @@ Restore cross-checks:
 **Track UI** (TRAINING tab, Skills window, chips, badges, report and tally lines):
 - **Owns:**
   - `src/components/desk/TrainingWindow.ts` (new), `DeskTabs.ts`, `DeskScreen.ts` (the [T] key, the step list, the SET COURSE bar's blocker text);
-  - `src/systems/desk.ts` (`deskSteps`, `openDeskWindow`, `deskTabBadges.training`), `src/systems/training.ts trainingModel` (its one function; the file's other exports are TREE's);
+  - `src/systems/desk.ts` (`deskSteps`, `openDeskWindow`, `deskTabBadges.training`), `src/systems/training-model.ts` (`trainingModel`, `TrainingModel`), `UiState.trainingSel` / `trainingHoldSec`;
   - `src/systems/skills.ts` (except `autoburnStatus`) + `src/components/run/SkillsWindow.ts`;
   - `src/components/run/LandingReport.ts` (the cycles line), `RunEnd.ts` (UNSPENT), `TransmitScreen.ts` (skill chips and PACK AS buttons over TREE's model);
   - `src/components/memory-view/SegmentBlock.ts` + `DetailPanel.ts` (version badge, labelled ticks, WORKS AS), `src/components/hud/Stamp.ts` users and `src/systems/audio-cues.ts` (`skill-version`, `autoburn-in-lock`, training sounds);
@@ -587,7 +592,10 @@ Restore cross-checks:
 | `tuning.ts` | TREE | FLIGHT edits values only in the `AUTO_*` / `LOCK_*` / `ROUND_*` block |
 | `skill-text.ts` / `training-text.ts` | FLIGHT / UI | TREE's two sections in `training-text.ts` are TREE's |
 | `run.ts` | TREE | UI reads `deskUiOnOpen` |
-| `skills.ts` | UI | FLIGHT's `autoburnStatus` only |
+| `skills.ts` | UI | `skillRow` reads FLIGHT's `autoburn.ts autoburnStatus` (that function is FLIGHT's) |
+| `selectors.ts`, `types/lineage.ts` | TREE | ask by message |
+| `events.ts` | lead | one-line additions on request; FLIGHT may add its own `autoburn-*` events directly |
+| `landing.ts`, `landing-hud.ts` | FLIGHT, for ROUND in landing only | |
 | `capabilities.ts` | FOUNDATION, then TREE | FLIGHT reads |
 | `debug.ts` | TREE | |
 | e2e scenarios | lead, at batch end | |
@@ -837,3 +845,95 @@ resumes (checked in Chromium).
 - **Slice 5:** `CycleGrant.source` already includes `'resident' | 'story'` and has a `label`. `SkillGrant` has `installedAtDepth`. `grantCycles`, `grantSkill` and `grantAllowed` are stubbed.
 - **Slice 6:** SURVEY's `built: 0` and its `poor-ahead` rule are in the table.
 - **Slice 7:** `LastUnit.skills: SkillRecord[] | null` is parsed and stored, and `ArrivalSkill.kind 'granted'` exists.
+
+## Deviations (foundation, review follow-up)
+
+The changes after the independent review of `ee06350`, in one commit. The review confirmed `bankOf`, graded damage, the held / paid / lost / restore numbers, the size invariant, the migration's coverage of the fixtures, and the shape pin, and found no import cycles. §2.2 and the §5.2 ownership and hot-file tables above are updated to match.
+
+### Blockers
+
+- **B1. `wp11/full-run` (BALANCE_ONLY) no longer expects KESTREL's boot to install AUTOBURN.**
+  - Lead decision: the classic world keeps its coverage by being given the file.
+  - Right after the beam into KESTREL, with two or more manual captures, the suite calls `giveSkillFile(h.store, 'autoburn', 1)`. This is a classic-only test setup.
+  - The check now reads `AUTOBURN.skl v1 in memory after the two manual captures (given: the classic world has no tree)`.
+- **B2. `'start'` branches are derived, never latched.**
+  - They open when `built > 0`: v1 from visit 1, the rest from visit 2.
+  - `RunSkillState.opened` holds only `'after-seeds'` and `'poor-ahead'`, and "one new branch per visit" counts only those.
+  - Changed together: `types/skill.ts`'s comment, §2.2, and `openBranchesAt`.
+  - `foundation.test`: the migrated desk-1 fixture, once the pick is pushed as pending, clears `deskBlocker`.
+
+### Majors
+
+- **M1. The migration keeps `announced`.** `announced.autoburn` is phase 2's `skillTrainedOn` when that was a number. Otherwise it is the demo count if a file is carried, else null. `foundation.test` asserts it on all three fixtures.
+- **M2. `treeCells`, `openBranchesAt` and `skillRows` are implemented.** They are pure reads over `held`, `paid`, `fileLevel`, `bankOf` and `SKILL_TREE`, and TREE may refine them as long as their tests stay.
+  - A cell's look and refusal are checked in this order:
+
+    | Order | When | Look / refusal |
+    |---|---|---|
+    | 1 | the file covers the row | `owned` / `owned` |
+    | 2 | a pending purchase covers it | `pending` / `owned` |
+    | 3 | it is paid but not held | `lost` / `lost` |
+    | 4 | the branch or row is not open | `closed` / `closed` |
+    | 5 | the version is above `built` | `unbuilt` / `closed` |
+    | 6 | otherwise | `affordable` (no refusal), or `dim` with `not-desk`, then `needs-lower`, then `unaffordable` |
+
+  - `TrainRefusal` gains `'lost'`, because RESTORE is the way back for a lost cell.
+  - `seedsMet` (for `'after-seeds'`) reads `stagesPlayed` `'seeds'`, TRACE, `fed`, the last tally, and the current arrival's seeds. **For 4d:** a tie can push SENTRY a visit past that evidence, so 4d may want a sticky record of the first ship that met a seed. SENTRY is not built yet.
+  - `poorAhead` reads `reserved.site` of the ships reachable from here, on the arm only.
+  - `tests/unit/support/skills.ts` gains `pendPurchase(store, purchase)`, a raw push to `pending`, for the UI suites' pending, owned and lost states.
+  - `foundation.test` covers:
+    - desk 1: AUTOBURN v1 affordable, v2, v3 and LOCK RANGE closed, the other branches closed;
+    - desk 2: v1 owned, v2 dim when the bank can't pay, v3 unbuilt, LOCK 810 needing 270;
+    - desk 2 with the file eaten: v1 lost, v2 needing v1 first.
+- **M3. Ownership is split cleanly.**
+  - `trainingModel` and `TrainingModel` moved to `systems/training-model.ts`, which is UI's.
+  - `autoburn.ts autoburnStatus(state): { text, tone }` is FLIGHT's, and is built (not a stub). It holds the status rule that used to be inside the Skills row, unchanged.
+  - `skills.ts autoburnRow` (UI's, to become `skillRow`) now reads `autoburnStatus`.
+- **M4. `tests/unit/support/desk.ts setCourseFromDesk(store, slot)`** makes the first pick when `deskBlocker` asks for it, then sets course.
+  - The arm's `setCourse` callers moved onto it mechanically: 17 sites in 7 files (repository, desk-flow, repo-fixture, link-over, delivery-packet, run1-route, save/resume).
+  - The classic world's `support/classic-flow.ts` keeps `setCourse`.
+  - `__ap.course` makes the pick itself through `trainCell`.
+  - **Deviation:** both helpers are gated by `training.ts FIRST_PICK_ENFORCED = false`. `trainCell` and `commitTraining` are still stubs, endShip records no earnings yet, and a pending purchase can't be saved. Making the pick today would throw, or would write a BEAM save the codec refuses. TREE sets the flag to `true` in the same change that lands the `deskBlocker` throw in `setCourse`, and no other suite needs touching.
+
+### Minors
+
+- **Grants.**
+  - `PurchaseKind` gains `'grant'` (cost 0), pushed by `grantSkill` (still a stub), so a granted skill that is later eaten is lost and can be restored by the same rule.
+  - `GrantRule = 'card' | 'gift'`. Both `grantSkill` and `grantAllowed` take it.
+  - The save accepts `'grant'`.
+- **Migration edge.** A v1 SHIP DONE or BEAM save from after the second capture, but before the boot that would have installed AUTOBURN, had an install owed. That boot never comes now. The test for it: no file, two or more demos, and more demos than it was last trained on. The run is paid AUTOBURN v1's price, 3 cycles, as a `'migration'` grant (a new `CycleGrant.source`), so the kid can buy it back at the next desk.
+  - The review named BEAM only. SHIP DONE has the same gap, because its next boot also never comes, so both are covered.
+  - `foundation.test` asserts it.
+- **FLIGHT signatures.**
+  - `planToCircle` returns `BurnPoint | null` (null once the loop is that circle).
+  - `burnSpanClear(state, sol, startInSec, burnSec)` takes the state, because the drop solution's windows carry no room or bay data.
+- **UI state.** `UiState.trainingSel: { skill; row } | null` (the cell chosen by a click or by [1] / [2]) and `trainingHoldSec: number | null` (the TRAIN bar's hold). Both are cleared by a world reset and not saved.
+- **`isSkillFile`** now reads `SKILL_IDS.includes(seg.upgrade)`. `assertMemoryInvariants` uses the same test, and throws on a skill-kind upgrade file that has no version or lock.
+- **Ownership gaps**, now named in §5.2:
+
+  | File | Owner |
+  |---|---|
+  | `state/selectors.ts` | TREE |
+  | `types/lineage.ts` | TREE |
+  | `systems/events.ts` | lead, with one-line additions on request; FLIGHT may add its own `autoburn-*` events directly |
+  | `systems/landing.ts`, `landing-hud.ts` | FLIGHT, for ROUND in landing only |
+
+### Notes for the tracks (not built)
+
+- **TREE:**
+  - **`checkSavedRun`** should also check:
+    - `bankOf >= 0`;
+    - `earned.length === ships.length`;
+    - every skill-kind upgrade segment in memory or `carried.segs` has a `version` and a `lock`;
+    - `arrival.skills` gets a real check (today it is `anyRecord`).
+  - **`deskBlocker`** should return null when any skill is already paid (a migrated run that kept its AUTOBURN).
+  - **`undoPurchase`** throws outside the desk phase.
+  - **`run.ts` order:**
+    - the first-pick grant goes inside openDesk's `store.update`, before `writeRunSave('ship-done')`;
+    - `commitTraining` runs before `startShip` in `transmitNext`, so the BEAM save holds no pending purchase;
+    - set `FIRST_PICK_ENFORCED = true` in the same change.
+- **FLIGHT:** update the stale wording in `skill-text.ts` (~line 78, `NO AUTOBURN YET — capture by hand…`, which becomes `NO AUTOBURN — train it between ships`) and in `docs/playtest-checklist.md` (~line 32).
+- **UI:**
+  - Read `offline` before `band` when showing `skillLive`, so a copy being repaired doesn't read as dead.
+  - The Skills window's NEW pulse fires on a migrated resume (`bought` goes 0 → 1). Suppress it for cost-0, visit-0 purchases.
+

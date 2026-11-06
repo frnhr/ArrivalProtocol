@@ -13,7 +13,7 @@ import type { LastUnit, NextLaunch } from '@/types/lineage';
 import type { SaveState } from '@/types/save';
 import type { DeliveryChip, ArrivalDelivery, RunRepoState } from '@/types/repo';
 import type { RunInboxState } from '@/types/inbox';
-import type { SkillId, SkillLevel, AutoMode, RunSkillState } from '@/types/skill';
+import type { SkillId, SkillLevel, AutoMode, RunSkillState, CellRow } from '@/types/skill';
 
 export type ViewMode = 'tools' | 'memory';
 
@@ -789,6 +789,11 @@ export interface UiState {
   // the SHIP CARD (the default tab; it has no id). openDesk sets it from systems/repository.ts deskWindowOnOpen.
   // The PACKET's TIGHT confirm (`ARRIVE WITH NO REPAIR CHARGE?`) is the inline confirm's, not state here.
   deskWindow: DeskWindowId | null;
+  // Slice 4 (Track UI; plan §2.5): the TRAINING cell the kid has selected (a click, or [1] / [2] on visit 1's cards), and how
+  // long TRAIN (ENTER) has been held on it, in seconds (the 1.5 s bar; null while not held). Not saved: a world reset clears
+  // them, and a resumed desk opens with nothing selected.
+  trainingSel: { skill: SkillId; row: CellRow } | null;
+  trainingHoldSec: number | null;
 }
 
 // The archive behind this page (§4.5, systems/meta.ts). 'ok': loaded (or empty) and written at the run's

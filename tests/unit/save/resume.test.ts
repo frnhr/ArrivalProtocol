@@ -21,7 +21,8 @@ import { createStore } from '@state/store';
 import { createInitialState } from '@state/initial';
 import { resumeRun } from '@systems/run-save';
 import { pendingRunSave } from '@systems/save-write';
-import { setCourse, backToChart, continueAfterReport } from '@systems/run';
+import { backToChart, continueAfterReport } from '@systems/run';
+import { setCourseFromDesk } from '../support/desk';
 import { resetReport } from '@systems/reset';
 import { reachableFrom } from '@systems/map-hop';
 import { currentSlot, isEndSlot } from '@systems/map-streams';
@@ -113,7 +114,7 @@ h.store.update((draft) => { draft.run.phase = 'report'; });
 toDesk(h.store);
 const atDesk = comparable(state());
 const deskUi = { selected: state().ui.deskSelected, window: state().ui.deskWindow };
-setCourse(h.store, WORKED_ROUTE[1]!);
+setCourseFromDesk(h.store, WORKED_ROUTE[1]!);
 const plan = structuredClone(state().run.transit);
 backToChart(h.store);
 reloadAndResume('SHIP DONE');
@@ -121,7 +122,7 @@ check('SHIP DONE: the same desk (phase desk, the clock paused, the run and the s
   && state().clock.paused && isDeepStrictEqual(comparable(state()), atDesk), differs(comparable(state()), atDesk));
 check('…the desk opens as openDesk opens it (deskUiOnOpen: the selection and the tab, no tool held)',
   state().ui.deskSelected === deskUi.selected && state().ui.deskWindow === deskUi.window && state().ui.activeTool === null);
-setCourse(h.store, WORKED_ROUTE[1]!);
+setCourseFromDesk(h.store, WORKED_ROUTE[1]!);
 check('…SET COURSE then gives the same plan, offer and deliveries as before the reload', isDeepStrictEqual(state().run.transit, plan),
   JSON.stringify(state().run.transit?.offer.map((card) => card.id)));
 backToChart(h.store);

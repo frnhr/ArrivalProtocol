@@ -34,10 +34,12 @@ export interface LockDef {
   blocks: 1;
 }
 
-// When a branch opens (03 §3.2). 'start': v1 at visit 1, the higher versions (and LOCK RANGE) from visit 2 (FLIGHT,
-// LANDING). 'after-seeds': the first visit from `minVisit` after a ship that met seeds (DEFENCE). 'poor-ahead': the first
-// visit from `minVisit` with a POOR-data planet among the reachable next ships (SURVEY). At most one new branch per visit
-// past visit 2 (skill-tree.ts openBranchesAt; latched in RunSkillState.opened).
+// When a branch opens (03 §3.2; skill-tree.ts openBranchesAt). A branch with `built: 0` never opens.
+// • 'start' (FLIGHT, LANDING) is DERIVED, never latched: v1 from visit 1, the higher versions (and LOCK RANGE) from visit 2.
+// • 'after-seeds' (DEFENCE): the first visit from `minVisit` after a ship that met seeds. 'poor-ahead' (SURVEY): the first
+//   visit from `minVisit` with a POOR-data planet among the reachable next ships. These two are LATCHED at openDesk
+//   (RunSkillState.opened), because whether one is due depends on past visits' map facts, and at most one of them opens
+//   per visit (the "one new branch per visit" rule counts only these).
 export type OpenRule =
   | { kind: 'start' }
   | { kind: 'after-seeds'; minVisit: number }
@@ -77,8 +79,10 @@ export interface LostLevel {
 
 // A purchase at a desk (03 §3.3): train a version, a LOCK RANGE level, or RESTORE what was lost. `to` is the skill's whole
 // level once the purchase lands (a lock bought on v2 is {2, 1}). `visit` is the desk's (run.ships.length there: 1 after
-// ship 1); 0 marks a purchase from before the tree (a migrated save's free AUTOBURN, a suite's giveSkillFile).
-export type PurchaseKind = 'train' | 'lock' | 'restore';
+// ship 1); 0 marks a purchase from before the tree (a migrated save's free AUTOBURN, a suite's giveSkillFile). 'grant' (slice
+// 5, cost 0) is a skill given by a resident or the sleeper (skill-tree.ts grantSkill): recorded like a purchase, so a granted
+// skill that is eaten later is lost and can be restored by the same rule.
+export type PurchaseKind = 'train' | 'lock' | 'restore' | 'grant';
 
 export interface SkillPurchase {
   skill: SkillId;
@@ -99,9 +103,10 @@ export interface CycleEarning {
 }
 
 // Cycles from anywhere but a ship's landing: the first-pick floor (visit 1), the +2 CYCLES salvage card, a resident or a
-// story stop (slice 5). `label` is the line a slice-5 source shows (`taught by MOTH`); null for the built-in sources.
+// story stop (slice 5), or the v1 → v2 save migration ('migration': an AUTOBURN install phase 2 still owed, paid back as
+// v1's price; save-codec.ts). `label` is the line a source shows (`taught by MOTH`); null for the built-in sources.
 export interface CycleGrant {
-  source: 'first-pick' | 'salvage' | 'resident' | 'story';
+  source: 'first-pick' | 'salvage' | 'resident' | 'story' | 'migration';
   cycles: number;
   visit: number;
   label: string | null;
@@ -123,7 +128,7 @@ export interface RunSkillState {
   bought: SkillPurchase[];       // committed at TRANSMIT ▸ (training.ts commitTraining)
   pending: SkillPurchase[];      // this desk's, undoable; [] at every save point (the codec checks it)
   skillGrants: SkillGrant[];     // slice 5; [] until then
-  opened: { skill: SkillId; visit: number }[];   // the branches latched open, at openDesk
+  opened: { skill: SkillId; visit: number }[];   // the 'after-seeds' / 'poor-ahead' branches latched open, at openDesk
   // The demo count each skill's last TRAINED / RETRAINED boot line named (null: never announced): later demos retrain it
   // at the next boot (03 §3.3: `> SKILL RETRAINED`).
   announced: Record<SkillId, number | null>;

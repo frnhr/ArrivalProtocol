@@ -1,11 +1,17 @@
 // TRAINING at the DESK (phase 3 slice 4; docs/phase3/03-skills.md §3.3, §4; slice-4-plan §2.4–§2.6): buying a cell, UNDO,
-// RESTORE, PACK AS on the PACKET, the commit at TRANSMIT ▸, and the tab's model. Ownership after the FOUNDATION (plan §5.2):
-// Track TREE owns every export but trainingModel (and its TrainingModel type), which is Track UI's.
+// RESTORE, PACK AS on the PACKET, and the commit at TRANSMIT ▸. Track TREE owns this file after the FOUNDATION (plan §5.2);
+// the tab's model is Track UI's systems/training-model.ts.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import type { SkillId, SkillLevel, CellRow, SkillPurchase } from '@/types/skill';
-import type { TrainRefusal, TreeCell } from '@systems/skill-tree';
+import type { SkillId, SkillLevel, CellRow } from '@/types/skill';
+import type { TrainRefusal } from '@systems/skill-tree';
 import { notBuilt } from '@systems/not-built';
+
+// The required first pick is enforced: setCourse throws on skill-tree.ts deskBlocker. Track TREE turns it on in the same
+// change that lands that throw (with trainCell, commitTraining and openDesk's first-pick grant); until then the helpers that
+// make the pick for a caller that only wants to sail (the suites' tests/unit/support/desk.ts setCourseFromDesk, __ap.course)
+// leave it unmade, since trainCell is not built. One switch, so no suite changes when the rule lands.
+export const FIRST_PICK_ENFORCED = false;
 
 // --- Track TREE ----------------------------------------------------------------------------------------------------------
 
@@ -36,26 +42,4 @@ export function setPackAs(store: Store<GameState>, segId: string, level: Readonl
 // was the pick) becomes a grant.
 export function commitTraining(store: Store<GameState>): void {
   notBuilt('commitTraining', 'TREE', store);
-}
-
-// --- Track UI -----------------------------------------------------------------------------------------------------------
-
-// The TRAINING tab as it draws (plan §2.5). The fields are Track UI's to shape; these are what the plan names: the bank
-// header, visit 1's required first pick (root cards only), the grid from visit 2, the pending purchases UNDO lists, the
-// AHEAD row and the packet preview with their binding limit, and the last unit's flavour line.
-export interface TrainingModel {
-  visit: number;
-  bank: number;
-  firstPick: boolean;
-  cards: TreeCell[];
-  cells: TreeCell[];
-  pending: SkillPurchase[];
-  ahead: string | null;
-  preview: string | null;
-  binding: 'link' | 'room' | null;
-  lastUnitLine: string | null;
-}
-
-export function trainingModel(state: Readonly<GameState>): TrainingModel {
-  return notBuilt('trainingModel', 'UI', state);
 }

@@ -1,7 +1,7 @@
 // Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2: unitInstallAddress, the skill
 // invariants); others ask by message.
 import type { Segment, FreeSegment } from '@/types/segment';
-import { skillBlocks, skillDef } from '@data/skills';
+import { skillBlocks, skillDef, SKILL_IDS } from '@data/skills';
 
 // Structural memory helpers (§6.12). The strip is one ordered array; a segment's address is the
 // running sum of the sizes before it. Ops, HOLLOW, the printer, seeds and verbs all reshape it
@@ -179,7 +179,8 @@ export function assertMemoryInvariants(memory: readonly Segment[], total: number
     const seg = memory[i]!;
     if (!Number.isInteger(seg.size) || seg.size < 1) throw new Error(`memory: ${seg.name} (${seg.id}) has size ${seg.size}`);
     if (ids.has(seg.id)) throw new Error(`memory: duplicate id ${seg.id}`);
-    if (seg.type === 'upgrade' && 'version' in seg) {
+    if (seg.type === 'upgrade' && (SKILL_IDS as readonly string[]).includes(seg.upgrade)) {
+      if (!('version' in seg) || !('lock' in seg)) throw new Error(`memory: ${seg.name} (${seg.id}) is a skill file with no version or lock`);
       if (seg.lock !== 0 && skillDef(seg.upgrade).locks.length === 0) throw new Error(`memory: ${seg.name} (${seg.id}) has lock ${seg.lock}`);
       const want = skillBlocks(seg.upgrade, seg.version, seg.lock);
       if (seg.size !== want) throw new Error(`memory: ${seg.name} (${seg.id}) v${seg.version} lock ${seg.lock} is ${seg.size} blocks, not ${want}`);

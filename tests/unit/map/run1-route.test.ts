@@ -15,7 +15,8 @@
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
 import { receiveTransmission } from '@systems/boot';
-import { shipLost, startRun, continueAfterReport, continueAfterLoss, setCourse } from '@systems/run';
+import { shipLost, startRun, continueAfterReport, continueAfterLoss } from '@systems/run';
+import { setCourseFromDesk } from '../support/desk';
 import { autoburnAvailable } from '@systems/autoburn';
 import { getPrediction } from '@systems/predict';
 import { followDirector } from '../wp2/harness2';
@@ -124,7 +125,7 @@ function flyRoute(route: readonly number[], record: (event: string, at: Readonly
       const wanted = requests[state().run.shipIndex] ?? null;
       const ask = wanted === 'tag' ? recommendation(state()) : wanted;
       if (ask !== null) setRequest(h.store, ask);
-      setCourse(h.store, next);
+      setCourseFromDesk(h.store, next);
       record('packet', state());
       h.transmit();
       h.stepUntil(() => state().run.phase === 'flight', 25);

@@ -9,7 +9,8 @@ import type { FsToolKind } from '@/types/fs-tool';
 import type { RepoFileId, RepoRequest } from '@/types/repo';
 import { createInitialState } from '@state/initial';
 import { createRunMap } from '@systems/map-run';
-import { endShip, openDesk, setCourse, transmitNext } from '@systems/run';
+import { endShip, openDesk, transmitNext } from '@systems/run';
+import { setCourseFromDesk } from '../support/desk';
 import { setRequest } from '@systems/repository';
 import { pickCard } from '@systems/draft';
 import { transmitModel, toggleSendOn, toggleDrop } from '@systems/transmit';
@@ -42,7 +43,7 @@ export function toDesk(store: Store<GameState>): void {
 export function send(store: Store<GameState>, slot: number, ask: RepoFileId | null = null): GameState['run']['transit'] {
   toDesk(store);
   if (ask !== null) setRequest(store, ask);
-  setCourse(store, slot);
+  setCourseFromDesk(store, slot);
   const offer = store.getState().run.transit!.offer;
   if (offer.length > 0) pickCard(store, offer.some((card) => card.id === 'charge') ? 'charge' : offer[0]!.id);
   fitPacket(store);

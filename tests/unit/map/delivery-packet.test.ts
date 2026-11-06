@@ -17,7 +17,8 @@ import { check, finish } from '../landing/checks';
 import type { Store } from '@state/store';
 import type { GameState, ArrivalReport } from '@state/schema';
 import type { DeliveryChip, RepoFileId } from '@/types/repo';
-import { setCourse, goTransmit, transmitNext, arrivalDeliveries } from '@systems/run';
+import { goTransmit, transmitNext, arrivalDeliveries } from '@systems/run';
+import { setCourseFromDesk } from '../support/desk';
 import { transmitModel, toggleSendOn } from '@systems/transmit';
 import { pickCard } from '@systems/draft';
 import { undeliveredFiles } from '@systems/repository';
@@ -52,7 +53,7 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   const lateness = (hopBetween(at(store).run.map, 5, 11).slackYears) - 10;
   addRequest(store, { file: 'cp', status: 'in-transit', lateness });
   addRequest(store, { file: 'scan-bak', status: 'in-transit', lateness: 500 });
-  setCourse(store, 11);
+  setCourseFromDesk(store, 11);
   check('a request in transit whose lateness reaches 0 at the hop rides it as a caught-up chip; one still behind does not',
     chipsOf(store).map((chip) => `${chip.file}:${chip.source}`).join() === 'cp:caught-up'
     && transmitModel(at(store)).inTransit === REPO_TEXT.packet.inTransit('Scan.bak', 500 - hopBetween(at(store).run.map, 5, 11).slackYears),
@@ -77,7 +78,7 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   check('…after the send it waits in VESPER\'s receiver; nothing of it was laid out', cp.status === 'waiting' && cp.at === 11
     && !at(store).run.arrival!.deliveries.some((delivery) => delivery.key === cpKey));
   toDesk(store);
-  setCourse(store, 15);
+  setCourseFromDesk(store, 15);
   check('…and rides the next hop as a sent-on chip (into CORMORANT)', chipsOf(store).map((chip) => `${chip.key}:${chip.source}`).includes(`${cpKey}:sent-on`), JSON.stringify(chipsOf(store)));
 }
 
@@ -88,7 +89,7 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   toDesk(store);
   const slack = hopBetween(at(store).run.map, 5, 11).slackYears;
   for (const file of ['repair-bak', 'repair-bak', 'repair-bak', 'repair-bak', 'cp', 'cp', 'cp', 'cp', 'scan-bak', 'scan-bak'] as RepoFileId[]) addRequest(store, { file, status: 'in-transit', lateness: slack - 1 });
-  setCourse(store, 11);
+  setCourseFromDesk(store, 11);
   const model = transmitModel(at(store));
   check(`the deliveries push the packet over KESTREL → VESPER's link (${model.link}): TRANSMIT ▸ waits, the send throws`,
     model.room.tooMany !== null && model.room.fit.overLink > 0 && throws(() => transmitNext(at(store).run.transit!.offer.length > 0
@@ -136,7 +137,7 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   const slack = hopBetween(at(store).run.map, 5, 11).slackYears;
   addRequest(store, { file: 'mv', status: 'in-transit', lateness: slack - 5 });
   addRequest(store, { file: 'mv', status: 'in-transit', lateness: slack - 2 });
-  setCourse(store, 11);
+  setCourseFromDesk(store, 11);
   const noise = at(store).run.transit!.hop.noise;
   const [first, second] = chipsOf(store);
   check(`two Mv chips on one hop (noise ${noise}, into VESPER): the first is MOVE's first (no seed), the second a spare (${DELIVERY_SEED_CHANCE[noise]})`,
@@ -158,7 +159,7 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   toDesk(store);
   const vesperSlack = hopBetween(at(store).run.map, 11, 15).slackYears;
   addRequest(store, { file: 'mv', status: 'in-transit', lateness: vesperSlack - 1 });
-  setCourse(store, 15);
+  setCourseFromDesk(store, 15);
   check('a delivery of a kind already here is a spare: not first of kind, not untried', !chipsOf(store)[0]!.firstOfKind);
   fitPacket(store);
   if (at(store).run.transit!.offer.length > 0) pickCard(store, at(store).run.transit!.offer[0]!.id);
@@ -266,7 +267,7 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
     const slack = hopBetween(at(store).run.map, here, to).slackYears;
     const count = 1 + Math.floor(rng() * 4);
     for (let n = 0; n < count; n++) addRequest(store, { file: files[Math.floor(rng() * files.length)]!, status: 'in-transit', lateness: slack - Math.floor(rng() * 20) });
-    setCourse(store, to);
+    setCourseFromDesk(store, to);
     for (const entry of chipsOf(store)) if (rng() < 0.2) toggleSendOn(store, entry.key);
     fitPacket(store);
     const offer = at(store).run.transit!.offer;

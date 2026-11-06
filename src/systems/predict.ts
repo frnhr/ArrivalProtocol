@@ -1294,8 +1294,8 @@ export function liftPreset(
 
 // Slice 4 (plan §2.9; Track FLIGHT): the burn that takes a closed loop to a circle of radius `targetKm` (ROUND's ▼ at
 // engagement; 4e's landing orbit): while |▼ − R*| is over tolerance, at ▲ to bring ▼ to R*; else at ▼ to bring ▲ to R*, with
-// planTrim's machinery and reason 'round'. Pure.
-export function planToCircle(input: Readonly<BurnInputs>, apsisTimes: Readonly<ApsisTimes>, targetKm: number): BurnPoint {
+// planTrim's machinery and reason 'round'; null once the loop is that circle (within ROUND_E_TOL), with nothing to burn. Pure.
+export function planToCircle(input: Readonly<BurnInputs>, apsisTimes: Readonly<ApsisTimes>, targetKm: number): BurnPoint | null {
   return notBuilt('planToCircle', 'FLIGHT', input, apsisTimes, targetKm);
 }
 

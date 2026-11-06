@@ -287,5 +287,7 @@ export function createUiState(phase: RunPhase, reducedMotion: boolean): GameStat
     logReader: null,
     deskSelected: null,
     deskWindow: null,
+    trainingSel: null,
+    trainingHoldSec: null,
   };
 }

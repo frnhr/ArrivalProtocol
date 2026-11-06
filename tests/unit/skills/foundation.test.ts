@@ -12,7 +12,10 @@
 // • The save: v1 saves dumped before the tree (tests/unit/save/fixtures/, a SHIP DONE at desk 1, one at desk 2 carrying
 //   phase 2's free AUTOBURN.skl, and a BEAM into KESTREL carrying it) migrate to v2, decode and resume; the old AUTOBURN is
 //   v1 lock 0 and bought for nothing, so eaten it costs RESTORE 2; the ships ended earn their cycles; desk 1 gets the
-//   first-pick floor; a v2 save with a pending purchase or a corrupt skills record is refused.
+//   first-pick floor; announced keeps phase 2's trained count; an install phase 2 still owed is paid as v1's price; a v2 save
+//   with a pending purchase or a corrupt skills record is refused.
+// • The grid (follow-up M2/B2): 'start' branches are derived (AUTOBURN v1 from visit 1, the rest from visit 2), cells read
+//   owned, pending, lost, affordable, dim, closed and unbuilt on migrated desks; the first pick made clears deskBlocker.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -26,6 +29,7 @@ import { SKILL_TREE, SKILL_IDS, skillBlocks, levelPrice, treeTotalCycles, fullSe
 import { effectiveVersion, effectiveLock, skillLive, capabilitiesNow, type Band } from '@systems/capabilities';
 import {
   bankOf, held, paid, lostLevels, restorePrice, demoSkill, autoburnDemoSkill, AUTOBURN_DEMO_TUNING, deskBlocker, fileLevel,
+  treeCells, openBranchesAt, visitNow, type TreeCell,
 } from '@systems/skill-tree';
 import { shipCycles } from '@systems/run-score';
 import { decodeRunSave, migrateRunSave } from '@systems/save-codec';
@@ -35,7 +39,7 @@ import { skillFile } from '@systems/skill-files';
 import { assertMemoryInvariants, freeSegment, mergeAdjacentFree, segmentStarts, replaceRange } from '@systems/memory-ops';
 import { layoutOf } from '@data/memory';
 import { stubStorage, pageOpen, receiveToReport, toDesk } from '../save/save-fixture';
-import { giveSkillFile } from '../support/skills';
+import { giveSkillFile, pendPurchase } from '../support/skills';
 import { RUN_SAVE_VERSION, RUN_SAVE_KEY, META_STORAGE_KEY, SKILL_MAX_BLOCKS, FIRST_PICK_FLOOR_CYCLES } from '@data/tuning';
 
 const throws = (run: () => unknown): boolean => { try { run(); return false; } catch { return true; } };
@@ -195,6 +199,8 @@ for (const [file, point, carries] of [
     ? autoburn.length === 1 && autoburn[0]!.version === 1 && autoburn[0]!.lock === 0 && autoburn[0]!.size === 6
       && run.skills.bought.length === 1 && run.skills.bought[0]!.cost === 0 && run.skills.bought[0]!.visit === 0
     : autoburn.length === 0 && run.skills.bought.length === 0);
+  check(`…announced keeps what phase 2's boot last said (${carries ? 'trained on 2 captures' : 'never trained'})`,
+    run.skills.announced.autoburn === (carries ? 2 : null) && run.skills.grants.every((grant) => grant.source !== 'migration'));
   if (point === 'ship-done' && run.ships.length === 1) {
     check('…at the first desk the bank is topped up to the first-pick floor (the resumed desk does not open again)',
       bankOf(run.skills) === FIRST_PICK_FLOOR_CYCLES && run.skills.grants.some((grant) => grant.source === 'first-pick'), String(bankOf(run.skills)));
@@ -225,6 +231,67 @@ for (const [file, point, carries] of [
     const lost = lostLevels('autoburn', held(store.getState(), 'autoburn'), paid(store.getState().run.skills, 'autoburn'));
     check('…eaten since, the migrated AUTOBURN is offered for RESTORE 2', lost.length === 1 && restorePrice(lost) === 2);
   }
+}
+
+// An install phase 2 still owed: two captures, no file yet (the boot that would have installed it never comes).
+{
+  const { save } = fixture('run-save-v1-ship-done.json');
+  const owed = structuredClone(save) as { payload: { run: Record<string, unknown> & { stats: { demos: unknown[] } } } };
+  owed.payload.run.stats.demos = [{ offsetTac: 3 }, { offsetTac: 1 }];
+  const run = (migrateRunSave(owed as unknown as Record<string, unknown>).payload as { run: GameState['run'] }).run;
+  const grant = run.skills.grants.find((entry) => entry.source === 'migration');
+  check('a v1 save owed phase 2\'s install (2 captures, no file) is paid AUTOBURN v1\'s price: +3 cycles, nothing bought',
+    grant?.cycles === 3 && run.skills.bought.length === 0 && run.skills.announced.autoburn === null && decodeRunSave(JSON.stringify(owed)).ok,
+    JSON.stringify(run.skills.grants));
+}
+
+// The grid on resumed desks (follow-up B2, M2).
+const resumeFixture = (file: string): ReturnType<typeof createStore<GameState>> => {
+  const { save, meta } = fixture(file);
+  const storage = stubStorage({ [RUN_SAVE_KEY]: JSON.stringify(save), [META_STORAGE_KEY]: JSON.stringify(meta) });
+  const store = createStore<GameState>(createInitialState({ seed: 1 }));
+  pageOpen(store, storage, 1);
+  resumeRun(store);
+  return store;
+};
+const look = (cells: readonly TreeCell[], row: string): string => {
+  const cell = cells.find((c) => c.skill === 'autoburn' && (c.row.kind === 'version' ? `v${c.row.version}` : `L${c.row.level}`) === row);
+  return cell === undefined ? 'none' : `${cell.look}${cell.refusal === null ? '' : `/${cell.refusal}`}`;
+};
+{
+  const store = resumeFixture('run-save-v1-ship-done.json');
+  const visit = visitNow(store.getState().run);
+  const cells = treeCells(store.getState(), visit);
+  check('desk 1 (migrated): only the \'start\' branches that are built are open, derived (AUTOBURN; AUTODROP not built yet)',
+    visit === 1 && openBranchesAt(store.getState(), 1).join() === 'autoburn' && store.getState().run.skills.opened.length === 0);
+  check('…AUTOBURN v1 is affordable for the floor\'s 3; v2, v3 and LOCK RANGE open from visit 2; the other branches closed',
+    look(cells, 'v1') === 'affordable' && look(cells, 'v2') === 'closed/closed' && look(cells, 'v3') === 'closed/closed'
+      && look(cells, 'L1') === 'closed/closed' && cells.filter((cell) => cell.skill !== 'autoburn').every((cell) => cell.look === 'closed')
+      && cells.find((cell) => cell.skill === 'autoburn' && cell.row.kind === 'version' && cell.row.version === 1)?.blocks === 6,
+    ['v1', 'v2', 'v3', 'L1', 'L2'].map((row) => look(cells, row)).join(' '));
+  check('…SET COURSE waits for the pick', deskBlocker(store.getState()) === 'first-pick');
+  pendPurchase(store, { skill: 'autoburn', kind: 'train', to: { version: 1, lock: 0 }, cost: 3, visit: 1 });
+  check('…the pick made (pending): deskBlocker clears, v1 reads pending, the bank is 0', deskBlocker(store.getState()) === null
+    && look(treeCells(store.getState(), 1), 'v1') === 'pending/owned' && bankOf(store.getState().run.skills) === 0);
+}
+{
+  const store = resumeFixture('run-save-v1-ship-done-autoburn.json');
+  const state = store.getState();
+  const bank = bankOf(state.run.skills);
+  const cells = treeCells(state, visitNow(state.run));
+  const v2 = look(cells, 'v2');
+  check('desk 2 (migrated, phase 2\'s AUTOBURN): v1 owned, v2 and LOCK 270 open (affordable or dim by the bank), v3 unbuilt, LOCK 810 needs 270',
+    visitNow(state.run) === 2 && look(cells, 'v1') === 'owned/owned' && v2 === (bank >= 5 ? 'affordable' : 'dim/unaffordable')
+      && look(cells, 'v3') === 'unbuilt/closed' && look(cells, 'L2') === 'dim/needs-lower',
+    `bank ${bank}: ${['v1', 'v2', 'v3', 'L1', 'L2'].map((row) => look(cells, row)).join(' ')}`);
+  const memory = store.getState().memory;
+  const index = memory.findIndex((seg) => seg.type === 'upgrade' && seg.upgrade === 'autoburn');
+  const addr = segmentStarts(memory)[index]!;
+  replaceRange(memory, addr, addr + memory[index]!.size, [freeSegment(memory[index]!.size)], { opId: null, own: [memory[index]!] });
+  mergeAdjacentFree(memory);
+  const lostCells = treeCells(store.getState(), 2);
+  check('…its file eaten: v1 reads lost (RESTORE is the way back), and v2 needs it first', look(lostCells, 'v1') === 'lost/lost'
+    && look(lostCells, 'v2') === 'dim/needs-lower', ['v1', 'v2'].map((row) => look(lostCells, row)).join(' '));
 }
 
 {

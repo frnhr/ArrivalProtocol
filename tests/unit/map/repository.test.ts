@@ -24,7 +24,8 @@ import { createRunMap } from '@systems/map-run';
 import { REPO_SWAP_LOOKAHEAD_LAYERS } from '@data/tuning';
 import { REPO_FILES, REPO_FILE_IDS, RESTRICTED_ROWS, validateCatalogue, REPO_CATALOGUE_VERSION } from '@data/repository';
 import { REPO_TEXT } from '@data/repo-text';
-import { setCourse, backToChart, openDesk } from '@systems/run';
+import { backToChart, openDesk } from '@systems/run';
+import { setCourseFromDesk } from '../support/desk';
 import { draftContext } from '@systems/draft';
 import { draftCards, draftEntries } from '@data/upgrades';
 import { reachableFrom } from '@systems/map-hop';
@@ -65,12 +66,12 @@ check('…no ship selected: no ETA; RESTRICTED lists the three locked rows',
 check('…a restricted or unknown file is refused (throws), the pick unchanged', throws(() => setRequest(run, 'thread-plus' as never))
   && throws(() => setRequest(run, 'skl:autoburn' as never)) && state(run).run.repo.pick === null);
 setRequest(run, 'mv');
-setCourse(run, 2);
+setCourseFromDesk(run, 2);
 check('the pick rides as a chip into HALCYON (in time), keyed rq1', state(run).run.transit!.deliveries.map((chip) => `${chip.key}:${chip.file}:${chip.source}`).join() === 'rq1:mv:new');
 backToChart(run);
 check('…◀ CHART keeps the pick; it can be changed and cleared until TRANSMIT ▸', state(run).run.repo.pick === 'mv'
   && (setRequest(run, 'scan-bak'), state(run).run.repo.pick === 'scan-bak') && (setRequest(run, null), state(run).run.repo.pick === null)
-  && throws(() => { setCourse(run, 2); setRequest(run, 'mv'); }));
+  && throws(() => { setCourseFromDesk(run, 2); setRequest(run, 'mv'); }));
 backToChart(run);
 send(run, 2, 'mv');
 check('…TRANSMIT ▸ clears the pick and records rq1, delivered at HALCYON in 2337', state(run).run.repo.pick === null

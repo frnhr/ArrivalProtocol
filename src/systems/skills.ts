@@ -5,15 +5,14 @@ import type { Segment } from '@/types/segment';
 import { getUpgrade, UPGRADES, type UpgradeId } from '@data/upgrades';
 import { currentShip } from '@systems/map-run';
 import { isFirewall, upgradeFiles, integrityBand, getAiCore, coreThreads, shownIntegrity, type HealthSegment } from '@state/selectors';
-import { liveUpgrades, skillLive, offlineReason, type Band } from '@systems/capabilities';
+import { liveUpgrades, offlineReason, type Band } from '@systems/capabilities';
 import { reachMarks } from '@systems/hollow-hud';
 import { ownedUpgrades } from '@systems/draft';
 import { hollowLabel } from '@systems/say';
 import { SKILLS_TEXT } from '@data/script';
-import { skillFiles, isEngaged, autoburnEverTrained } from '@systems/autoburn';
-import { autoburnDemoSkill } from '@systems/skill-tree';
+import { skillFiles, autoburnEverTrained, autoburnStatus } from '@systems/autoburn';
 import { AUTOBURN_SKILL_ROW } from '@data/skill-text';
-import { REPAIR_V2_VERSION, CHARGE_CARD_BLOCKS, CORE_LOW_INTEGRITY, FUEL_TRIM_DV_BONUS_FRAC, BAND_DEGRADED_MIN } from '@data/tuning';
+import { REPAIR_V2_VERSION, CHARGE_CARD_BLOCKS, CORE_LOW_INTEGRITY, FUEL_TRIM_DV_BONUS_FRAC } from '@data/tuning';
 
 // The Skills window's model (§9 WP8 item 3), pure: the cards this unit carries, each with its one-line
 // effect, what it is doing right now, and a health pip for every file it lives in (pillar 4: every
@@ -148,18 +147,15 @@ function threadRow(state: Readonly<GameState>): Pick<SkillRow, 'status' | 'tone'
 function autoburnRow(state: Readonly<GameState>): SkillRow | null {
   const files = skillFiles(state.memory);
   if (files.length === 0 && !autoburnEverTrained(state)) return null;
-  const skill = autoburnDemoSkill(state.run.stats);
   const label = AUTOBURN_SKILL_ROW.title.toUpperCase();
   const pips: SkillPip[] = files.map((seg) => healthPip(seg, label, `${shownIntegrity(seg.integrity)}%`));
   const row = (status: string, tone: SkillTone): SkillRow => ({
     id: 'autoburn', title: AUTOBURN_SKILL_ROW.title, count: '', effect: AUTOBURN_SKILL_ROW.effect, status, tone,
     pips: pips.length > 0 ? pips : gonePips(1, AUTOBURN_SKILL_ROW.title),
   });
-  if (files.length === 0) return row(AUTOBURN_SKILL_ROW.gone, 'warn');
-  if (skillLive(state.memory, 'autoburn').version === 0) return row(AUTOBURN_SKILL_ROW.damaged(BAND_DEGRADED_MIN), 'warn');
-  const phase = state.burn.auto.phase;
-  if (isEngaged(phase)) return row(phase === 'armed' ? AUTOBURN_SKILL_ROW.armed : AUTOBURN_SKILL_ROW.flying, 'good');
-  return row(AUTOBURN_SKILL_ROW.trained(skill.accuracy, skill.demos), 'good');
+  // What it is doing now is Track FLIGHT's (autoburn.ts autoburnStatus); the row around it is this file's.
+  const status = autoburnStatus(state);
+  return row(status.text, status.tone);
 }
 
 export function skillsModel(state: Readonly<GameState>): SkillRow[] {

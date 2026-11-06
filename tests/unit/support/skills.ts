@@ -6,10 +6,12 @@
 //   are the suite's own (run.stats.demos).
 // • pickFirstSkill: the arm's first desk's required pick through the real training path (training.ts trainCell), AUTOBURN
 //   v1 by default. Track TREE builds trainCell: until then it throws (not built).
+// • pendPurchase: a raw push to this desk's pending purchases, no rule checked (for the UI suites: the pending, owned and
+//   lost looks of skill-tree.ts treeCells). Never sail with one in a save: the codec refuses pending purchases.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { SkillFileSegment } from '@/types/segment';
-import type { SkillId, SkillVersion, LockLevel } from '@/types/skill';
+import type { SkillId, SkillVersion, LockLevel, SkillPurchase } from '@/types/skill';
 import { giveSkill } from '@systems/skill-files';
 import { trainCell } from '@systems/training';
 
@@ -20,4 +22,8 @@ export function giveSkillFile(store: Store<GameState>, id: SkillId, version: Ski
 export function pickFirstSkill(store: Store<GameState>, id: SkillId = 'autoburn'): void {
   const refusal = trainCell(store, id, { kind: 'version', version: 1 });
   if (refusal !== null) throw new Error(`pickFirstSkill: ${id} v1 refused (${refusal})`);
+}
+
+export function pendPurchase(store: Store<GameState>, purchase: Readonly<SkillPurchase>): void {
+  store.update((draft) => { draft.run.skills.pending.push(structuredClone(purchase) as SkillPurchase); });
 }

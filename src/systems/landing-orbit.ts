@@ -485,7 +485,8 @@ export function dropSolvable(orbit: Readonly<OrbitState>, planet: Readonly<Plane
 
 // Slice 4 (plan §2.9's landing window rule, §7 R2; Track FLIGHT; 4e reuses it for v3's top-ups): whether a burn that starts
 // `startInSec` game seconds from now and lasts `burnSec` overlaps no in-band window of an LZ with room while a pod is ready
-// (launches are refused while firing, and the planet does not rotate, so a blocked apsis is blocked every pass). Pure.
-export function burnSpanClear(sol: Readonly<DropSolution>, startInSec: number, burnSec: number): boolean {
-  return notBuilt('burnSpanClear', 'FLIGHT', sol, startInSec, burnSec);
+// (launches are refused while firing, and the planet does not rotate, so a blocked apsis is blocked every pass). The drop
+// solution's windows carry no room or bay data, so the state is passed too (the LZs' room, the bay's ready pod). Pure.
+export function burnSpanClear(state: Readonly<GameState>, sol: Readonly<DropSolution>, startInSec: number, burnSec: number): boolean {
+  return notBuilt('burnSpanClear', 'FLIGHT', state, sol, startInSec, burnSec);
 }

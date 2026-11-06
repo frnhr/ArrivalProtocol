@@ -18,10 +18,10 @@ import { skillFilesOf } from '@state/selectors';
 import { autoburnDemoSkill, paid } from '@systems/skill-tree';
 import { notBuilt } from '@systems/not-built';
 import {
-  AUTOBURN_TEXT, AUTOBURN_DROP_TEXT, AUTOBURN_DROP_TAB, AUTOBURN_REFUSAL, autoRefusalKey, type AutoburnRefusal,
+  AUTOBURN_TEXT, AUTOBURN_DROP_TEXT, AUTOBURN_DROP_TAB, AUTOBURN_REFUSAL, AUTOBURN_SKILL_ROW, autoRefusalKey, type AutoburnRefusal,
 } from '@data/skill-text';
 import { ringFit, elementsFromState, type RingFit } from '@/types/orbit';
-import { LOCK_RANGE_TAC, AUTOBURN_LOST_ALARM_SEC } from '@data/tuning';
+import { LOCK_RANGE_TAC, AUTOBURN_LOST_ALARM_SEC, BAND_DEGRADED_MIN } from '@data/tuning';
 
 // AUTOBURN (§6.10, §9 WP9 item 5): a skill the kid trained by capturing by hand, DOM-free.
 //
@@ -58,6 +58,24 @@ export function skillFiles(memory: readonly Segment[]): SkillFileSegment[] {
 // never trained it (the refusal's words, the AUTO button and the Skills row).
 export function autoburnEverTrained(state: Readonly<GameState>): boolean {
   return paid(state.run.skills, 'autoburn') !== null;
+}
+
+// What AUTOBURN is doing now, for the Skills window's row (Track UI's skills.ts skillRow reads it; the words and the rule are
+// this file's): its file gone, too damaged to work, armed, flying, or trained and how well. Pure. (4b: the effective version
+// and what each mode is doing join it.)
+export interface AutoburnStatus {
+  text: string;
+  tone: 'good' | 'warn';
+}
+
+export function autoburnStatus(state: Readonly<GameState>): AutoburnStatus {
+  const live = skillLive(state.memory, 'autoburn');
+  if (live.file === null) return { text: AUTOBURN_SKILL_ROW.gone, tone: 'warn' };
+  if (live.version === 0) return { text: AUTOBURN_SKILL_ROW.damaged(BAND_DEGRADED_MIN), tone: 'warn' };
+  const phase = state.burn.auto.phase;
+  if (isEngaged(phase)) return { text: phase === 'armed' ? AUTOBURN_SKILL_ROW.armed : AUTOBURN_SKILL_ROW.flying, tone: 'good' };
+  const skill = autoburnDemoSkill(state.run.stats);
+  return { text: AUTOBURN_SKILL_ROW.trained(skill.accuracy, skill.demos), tone: 'good' };
 }
 
 // --- Track FLIGHT: stubs with their final signatures (slice 4 plan §2.9) ---------------------------------------------------

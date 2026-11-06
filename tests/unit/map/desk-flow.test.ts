@@ -8,7 +8,8 @@ import type { GameState } from '@state/schema';
 import { createInitialState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
-import { endShip, openDesk, setCourse, backToChart, goTransmit } from '@systems/run';
+import { endShip, openDesk, backToChart, goTransmit } from '@systems/run';
+import { setCourseFromDesk } from '../support/desk';
 import { deskCandidates, deskSteps, selectShip, cycleShip, cardModel } from '@systems/desk';
 import { hopBetween } from '@systems/map-hop';
 import { MAP_TEXT } from '@data/map-text';
@@ -30,8 +31,8 @@ check('…its steps: the ship is picked, SET COURSE ▸ KESTREL [ENTER] is next'
   deskSteps(state)[0]!.done && deskSteps(state)[1]!.text === MAP_TEXT.desk.setCourse('KESTREL'));
 check('…the card names the ship (top line)', cardModel(state, 2).top === MAP_TEXT.card.top('KESTREL', 'Brine', 2400, 12) && cardModel(state, 2).reachable);
 check('…a ship out of reach cannot be picked; ← → stay on the one ship', !selectShip(store, 3) && cycleShip(store, 1) === 2 && cycleShip(store, -1) === 2);
-check('…SET COURSE to a ship out of reach throws', throws(() => setCourse(store, 3)) && store.getState().run.phase === 'desk');
-setCourse(store, 2);
+check('…SET COURSE to a ship out of reach throws', throws(() => setCourseFromDesk(store, 3)) && store.getState().run.phase === 'desk');
+setCourseFromDesk(store, 2);
 state = store.getState();
 const plan = state.run.transit!;
 check('SET COURSE ▸ KESTREL: the PACKET against the hop (link 112, 4 hits, 27 LY, no ECC on the classic world)',
@@ -46,9 +47,9 @@ check('…◀ CHART off the PACKET throws', throws(() => backToChart(store)));
 const lost = halcyonOver();
 openDesk(lost, { extraHits: 3, coreHit: 25, coreReset: false });
 check('a lost ship\'s extras wait on the map for the hop the kid picks', lost.getState().run.map.pendingExtra?.extraHits === 3);
-setCourse(lost, 2);
+setCourseFromDesk(lost, 2);
 backToChart(lost);
-setCourse(lost, 2);
+setCourseFromDesk(lost, 2);
 check('…and survive ◀ CHART: the PACKET carries +3 hits and the Core\'s −25', lost.getState().run.transit?.extraHits === 3 && lost.getState().run.transit?.coreHit === 25);
 
 const final = createStore<GameState>(createInitialState({ seed: 4, shipIndex: 4, carried: freshUnitRacks(classicShip(4)) }));

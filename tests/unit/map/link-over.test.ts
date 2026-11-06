@@ -14,7 +14,8 @@ import type { Segment } from '@/types/segment';
 import { createInitialState } from '@state/initial';
 import { createRunMap, mapAtShip, shipDefAt } from '@systems/map-run';
 import { hopBetween, roomFit } from '@systems/map-hop';
-import { endShip, openDesk, setCourse, transmitNext } from '@systems/run';
+import { endShip, openDesk, transmitNext } from '@systems/run';
+import { setCourseFromDesk } from '../support/desk';
 import { cardModel } from '@systems/desk';
 import { transmitModel, toggleDrop } from '@systems/transmit';
 import { pickCard } from '@systems/draft';
@@ -81,7 +82,7 @@ const filesOf = (state: Readonly<GameState>): number =>
     && card.rows.find((row) => row.key === 'fit')?.tone === 'warn', JSON.stringify(card.rows[0]));
 
   let threw: string | null = null;
-  try { setCourse(store, WAYFARER); } catch (error) { threw = (error as Error).message; }
+  try { setCourseFromDesk(store, WAYFARER); } catch (error) { threw = (error as Error).message; }
   check('SET COURSE reaches the PACKET (packUnit no longer throws)', threw === null && store.getState().run.phase === 'transmit', threw ?? '');
   const plan = store.getState().run.transit!;
   check('…the draft deals no file card (no link room)', plan.offer.every((offer) => getUpgrade(offer.id).blocks === 0) && plan.offer.length > 0,

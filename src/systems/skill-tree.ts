@@ -11,7 +11,9 @@ import type {
   DemoTuning,
 } from '@/types/skill';
 import { skillFilesOf } from '@state/selectors';
-import { levelPrice } from '@data/skills';
+import { levelPrice, skillBlocks, SKILL_TREE, SKILL_IDS } from '@data/skills';
+import { reachableFrom } from '@systems/map-hop';
+import { currentSlot } from '@systems/map-streams';
 import { notBuilt } from '@systems/not-built';
 import {
   RESTORE_FRACTION, AUTO_DEMO_WINDOW, AUTOBURN_OFFSET_FACTOR, AUTOBURN_OFFSET_MAX_TAC, AUTOBURN_ACCURACY_PER_TAC,
@@ -154,14 +156,15 @@ export function deskBlocker(state: Readonly<GameState>): DeskBlocker | null {
   return state.run.skills.pending.some((purchase) => purchase.kind === 'train') ? null : 'first-pick';
 }
 
-// --- The grid (Track TREE: stubs with their final signatures) -------------------------------------------------------
+// --- The grid (implemented by the FOUNDATION's review follow-up; Track TREE may refine it, its tests staying) -----------
 
-// Why a cell can't be bought now (training.ts trainCell's refusal): its branch is closed (or not built), the bank can't
-// pay, the version below is not held, it is already held, or the run is not at a desk.
-export type TrainRefusal = 'closed' | 'unaffordable' | 'needs-lower' | 'owned' | 'not-desk';
+// Why a cell can't be bought now (training.ts trainCell's refusal): its branch or row is closed (or not built), the bank
+// can't pay, the level below is not held, it is already held (or pending), it was paid for and lost (RESTORE is the way
+// back, training.ts restoreSkill), or the run is not at a desk.
+export type TrainRefusal = 'closed' | 'unaffordable' | 'needs-lower' | 'owned' | 'lost' | 'not-desk';
 
 // How a cell looks (plan §2.5): held (owned), bought at this desk (pending), buyable (affordable), open but not buyable now
-// (dim), paid for and no longer held (lost: `LOST · RESTORE n`), its branch not open yet (closed: `OPENS LATER`), or
+// (dim), paid for and no longer held (lost: `LOST · RESTORE n`), its branch or row not open yet (closed: `OPENS LATER`), or
 // above what this build implements (unbuilt).
 export type CellLook = 'owned' | 'pending' | 'affordable' | 'dim' | 'lost' | 'closed' | 'unbuilt';
 
@@ -174,16 +177,110 @@ export interface TreeCell {
   refusal: TrainRefusal | null;     // why trainCell would refuse it now (null: it would buy it)
 }
 
-// Every cell of the grid at `visit`, by branch (SKILL_IDS order) and row (v1 v2 v3, then LOCK 270 and LOCK 810). Pure.
-export function treeCells(state: Readonly<GameState>, visit: number): TreeCell[] {
-  return notBuilt('treeCells', 'TREE', state, visit);
+// A level covers a row: it holds that version (or more), or that LOCK RANGE level (or more).
+function covers(level: Readonly<SkillLevel> | null, row: CellRow): boolean {
+  if (level === null) return false;
+  return row.kind === 'version' ? level.version >= row.version : level.lock >= row.level;
 }
 
-// The skills whose branch is open at `visit` (03 §3.2, plan §2.2): the latched ones (RunSkillState.opened), plus at most
-// one branch newly due at this visit (ties: SURVEY if a reachable next ship has POOR site data, else SENTRY). A branch
-// with `built: 0` never opens. Pure: run.ts openDesk latches what it returns.
+// The rows of a skill, in the grid's order: v1 v2 v3, then its LOCK RANGE levels.
+export function skillRows(id: SkillId): CellRow[] {
+  const def = SKILL_TREE[id];
+  return [
+    ...def.versions.map((version): CellRow => ({ kind: 'version', version: version.version })),
+    ...def.locks.map((lock): CellRow => ({ kind: 'lock', level: lock.level })),
+  ];
+}
+
+// Whether a row of an open branch is open at `visit` (03 §3.2): a 'start' branch shows its root from visit 1 and the rest
+// (higher versions, LOCK RANGE) from visit 2; a branch latched later opens whole.
+function rowOpenAt(id: SkillId, row: CellRow, visit: number): boolean {
+  if (SKILL_TREE[id].opens.kind !== 'start') return true;
+  return row.kind === 'version' && row.version === 1 ? visit >= 1 : visit >= 2;
+}
+
+// Every cell of the grid at `visit`, by branch (SKILL_IDS order) and row (skillRows). Pure: reads the open branches, the
+// file in memory, what this desk has pending, what the run paid for, and the bank.
+export function treeCells(state: Readonly<GameState>, visit: number): TreeCell[] {
+  const open = new Set(openBranchesAt(state, visit));
+  const bank = bankOf(state.run.skills);
+  const atDesk = state.run.phase === 'desk';
+  const cells: TreeCell[] = [];
+  for (const id of SKILL_IDS) {
+    const def = SKILL_TREE[id];
+    const inFile = fileLevel(state.memory, id);
+    const heldNow = held(state, id);
+    const paidFor = paid(state.run.skills, id);
+    for (const row of skillRows(id)) {
+      const price = levelPrice(id, row);
+      const blocks = row.kind === 'version'
+        ? skillBlocks(id, row.version, heldNow?.lock ?? 0)
+        : skillBlocks(id, heldNow?.version ?? 1, row.level);
+      const cell = (look: CellLook, refusal: TrainRefusal | null): TreeCell => ({ skill: id, row, look, price, blocks, refusal });
+      if (covers(inFile, row)) { cells.push(cell('owned', 'owned')); continue; }
+      if (covers(heldNow, row)) { cells.push(cell('pending', 'owned')); continue; }
+      if (covers(paidFor, row)) { cells.push(cell('lost', 'lost')); continue; }
+      if (!open.has(id) || !rowOpenAt(id, row, visit)) { cells.push(cell('closed', 'closed')); continue; }
+      if (row.kind === 'version' && row.version > def.built) { cells.push(cell('unbuilt', 'closed')); continue; }
+      const lowerHeld = row.kind === 'version'
+        ? row.version === 1 || covers(heldNow, { kind: 'version', version: (row.version - 1) as SkillVersion })
+        : heldNow !== null && (row.level === 1 || heldNow.lock >= row.level - 1);
+      const refusal: TrainRefusal | null = !atDesk ? 'not-desk' : !lowerHeld ? 'needs-lower' : price > bank ? 'unaffordable' : null;
+      cells.push(cell(refusal === null ? 'affordable' : 'dim', refusal));
+    }
+  }
+  return cells;
+}
+
+// --- The opening rule (03 §3.2) ------------------------------------------------------------------------------------------
+
+// The run has met seeds by now (DEFENCE's 'after-seeds'): HOLLOW's SEEDS stage played, beam-born blocks were left or fed
+// (TRACE, `fed`, the last tally), or the ship being left arrived with beam seeds. Track 4d may sharpen it (a sticky record
+// of the first ship that met a seed), since a tie can push SENTRY a visit past the evidence; SENTRY is not built in 4a.
+function seedsMet(state: Readonly<GameState>): boolean {
+  const threat = state.run.threat;
+  return threat.stagesPlayed.includes('seeds') || threat.trace > 0 || threat.fed > 0 || (threat.lastTally?.left ?? 0) > 0
+    || (state.run.arrival?.seeds.length ?? 0) > 0;
+}
+
+// A possible next ship has POOR site data (SURVEY's 'poor-ahead'; 01 §3.13): among the ships reachable from here. Only the
+// arm has site data.
+function poorAhead(state: Readonly<GameState>): boolean {
+  const map = state.run.map;
+  if (map.world !== 'arm') return false;
+  return reachableFrom(map, currentSlot(state.run)).some((slot) => map.arm[slot]?.reserved.site === 'poor');
+}
+
+function latchedRuleDue(state: Readonly<GameState>, id: SkillId, visit: number): boolean {
+  const opens = SKILL_TREE[id].opens;
+  if (opens.kind === 'start' || visit < opens.minVisit) return false;
+  return opens.kind === 'after-seeds' ? seedsMet(state) : poorAhead(state);
+}
+
+// The skills whose branch is open at `visit` (03 §3.2; types/skill.ts OpenRule). A branch with `built: 0` never opens.
+// • 'start' branches are derived: open from visit 1 (their rows by rowOpenAt).
+// • 'after-seeds' / 'poor-ahead' branches: the ones latched in RunSkillState.opened at or before `visit`, plus at most one
+//   newly due at this visit when none was latched at it ("one new branch per visit" counts only these). When both are
+//   due, the next ship needs SURVEY (a POOR planet is reachable): it opens first, SENTRY the visit after.
+// Pure: run.ts openDesk latches a newly due one.
 export function openBranchesAt(state: Readonly<GameState>, visit: number): SkillId[] {
-  return notBuilt('openBranchesAt', 'TREE', state, visit);
+  const latched = state.run.skills.opened;
+  const open = new Set<SkillId>();
+  for (const id of SKILL_IDS) {
+    const def = SKILL_TREE[id];
+    if (def.built === 0) continue;
+    if (def.opens.kind === 'start') {
+      if (visit >= 1) open.add(id);
+    } else if (latched.some((entry) => entry.skill === id && entry.visit <= visit)) {
+      open.add(id);
+    }
+  }
+  if (!latched.some((entry) => entry.visit === visit)) {
+    const due = SKILL_IDS.filter((id) => SKILL_TREE[id].built > 0 && !open.has(id) && latchedRuleDue(state, id, visit));
+    const first = due.includes('survey') ? 'survey' : due[0];
+    if (first !== undefined) open.add(first);
+  }
+  return SKILL_IDS.filter((id) => open.has(id));
 }
 
 // --- Grants (slice 5's interface, 03 §5; typed now, plan §2.15) -----------------------------------------------------------
@@ -193,14 +290,20 @@ export function grantCycles(store: Store<GameState>, cycles: number, source: Cyc
   notBuilt('grantCycles', 'TREE', store, cycles, source, label);
 }
 
-// A skill at a version, installed at the next boot with the TRAINED line naming `source` (`from the sleeper on CURLEW`).
+// The two grant rules (03 §5): a departed resident's salvage card ('card': one skill at v1 of an open branch the unit has
+// not owned this run, picked on the PACKET) and a gift ('gift': the sleeper's skill at any version up to v3 and the built
+// one, installed at the next boot).
+export type GrantRule = 'card' | 'gift';
+
+// A skill at a version, installed at the next boot with the TRAINED line naming `source` (`from the sleeper on CURLEW`): a
+// SkillGrant, and a 'grant' purchase (cost 0) so a granted skill eaten later is lost and can be restored like a bought one.
 // Throws where grantAllowed says no.
-export function grantSkill(store: Store<GameState>, skill: SkillId, version: SkillVersion, source: string): void {
-  notBuilt('grantSkill', 'TREE', store, skill, version, source);
+export function grantSkill(store: Store<GameState>, skill: SkillId, version: SkillVersion, source: string, rule: GrantRule): void {
+  notBuilt('grantSkill', 'TREE', store, skill, version, source, rule);
 }
 
-// Whether a grant may give `skill` at `version` now (03 §5): never above v3 or the built version, never a closed branch,
-// and (a resident's salvage card) never a skill the unit holds, has lost or cannot see yet.
-export function grantAllowed(state: Readonly<GameState>, skill: SkillId, version: SkillVersion): boolean {
-  return notBuilt('grantAllowed', 'TREE', state, skill, version);
+// Whether a grant under `rule` may give `skill` at `version` now (03 §5): never above v3 or the built version, never a closed
+// branch, and for a 'card' never a skill the unit holds, has lost or cannot see yet.
+export function grantAllowed(state: Readonly<GameState>, skill: SkillId, version: SkillVersion, rule: GrantRule): boolean {
+  return notBuilt('grantAllowed', 'TREE', state, skill, version, rule);
 }
