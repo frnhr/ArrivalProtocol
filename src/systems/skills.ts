@@ -1,5 +1,5 @@
-// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the general skill rows; Track FLIGHT owns
-// its autoburnStatus export only.
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2): AUTODROP's and SENTRY's rows are
+// pre-registered (SKILL_ROW_HOOKS), their status in autodrop.ts / sentry.ts; Track ORBIT owns autoburnStatus (autoburn.ts).
 import type { GameState } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import { getUpgrade, UPGRADES, type UpgradeId } from '@data/upgrades';

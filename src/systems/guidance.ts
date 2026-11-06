@@ -1,5 +1,4 @@
-// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the AUTO rows' precedence and tails.
-// Others ask by message.
+// Slice 4c–4e: Track ORBIT owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 import type { GameState, BurnStatus, SasMode, PresetMode, Urgency, GuideLayer, AutoburnPhase, AutoburnEnd } from '@state/schema';
 import type { Ring } from '@/types/orbit';
 import type { AutoMode } from '@/types/skill';

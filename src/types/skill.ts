@@ -1,3 +1,4 @@
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); tracks ask by message.
 // The skill tree's types (phase 3 slice 4, docs/phase3/03-skills.md; docs/phase3/impl/slice-4-plan.md §2.2). After the
 // FOUNDATION, Track TREE owns this file (plan §5.2): the other tracks ask by message.
 //

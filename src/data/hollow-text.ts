@@ -1,3 +1,4 @@
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 // The words HOLLOW's system says (WP6, §6.6): what the thing in the memory is called before it
 // names itself, its alerts and the lines after the first fight. Kept apart from
 // script.ts (like tool-text.ts) so systems/hollow.ts and the memory builder can import them without

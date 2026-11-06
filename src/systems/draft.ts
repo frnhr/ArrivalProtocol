@@ -1,5 +1,5 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): planPacket adds the skills,
-// draftContext.tree/toFinal. Others ask by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): DraftContext.firewallCompiler.
+// Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState, TransitPlan } from '@state/schema';
 import type { Segment, FirewallSegment, UpgradeSegment } from '@/types/segment';

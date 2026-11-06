@@ -1,3 +1,5 @@
+// Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the drop demos, the mount order,
+// AUTODROP's reset at 'landing-ended'. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';

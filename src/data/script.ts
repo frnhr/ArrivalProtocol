@@ -1,5 +1,6 @@
-// Slice 4: Track UI owns SKILLS_TEXT's skill rows here (docs/phase3/impl/slice-4-plan.md §5.2); the rest of the file
-// is unchanged by slice 4, ask by message.
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); Track SENTRY writes only its boot
+// lines (the 'sentry-seed' and 'firewall' text lives in sentry.ts) and the strip's disguise line. The 4c–4e lessons'
+// conditions are in the track modules (SKILL_4CDE_RULES). Others ask by message.
 import type {
   GameState, Speaker, TransitHit, ArrivalReport, RunEndCause, ShipOutcome, VerbKind,
 } from '@state/schema';

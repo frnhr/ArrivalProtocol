@@ -1,5 +1,5 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the +2 CYCLES card. Others ask by
-// message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the FIREWALL card's usable.
+// Others ask by message.
 import type { RunStats } from '@state/schema';
 import type { Rng } from '@systems/rng';
 import {

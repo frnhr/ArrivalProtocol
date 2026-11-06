@@ -1,5 +1,5 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): endShip's earnings, openDesk's latch and
-// first pick, setCourse's blocker, transmitNext's commit; Track UI reads deskUiOnOpen. Others ask by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): transmitNext's disguise roll and
+// arrival.seeds[].disguise only (endShip's seedsMetAtDepth record is the lead's). Others ask by message.
 import type { Store } from '@state/store';
 import type {
   GameState, RunPhase, RunState, ShipOutcome, ShipResult, RunEndCause, ArrivalReport, ArrivalSkill, TransitPlan, TransitHit, RingMiss,

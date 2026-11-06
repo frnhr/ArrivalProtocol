@@ -1,3 +1,5 @@
+// Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): [L] down and up, [G]. Others ask
+// by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { LaunchIntent, LaunchResult } from '@/types/landing';

@@ -1,3 +1,4 @@
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); each track edits only its own skill's `built` line.
 // The skill tree as data (phase 3 slice 4; docs/phase3/03-skills.md §3.2, §3.4; slice-4-plan §4.1): four skills, one per
 // branch, three versions each, and AUTOBURN's LOCK RANGE side axis; the files' names and sizes; and the validator every
 // number passes at load. Data only: the rules that read it are systems/skill-tree.ts's. After the FOUNDATION, Track TREE

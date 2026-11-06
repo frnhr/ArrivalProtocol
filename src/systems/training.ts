@@ -1,3 +1,4 @@
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); tracks ask by message.
 // TRAINING at the DESK (phase 3 slice 4; docs/phase3/03-skills.md §3.3, §4; slice-4-plan §2.4–§2.6): buying a cell, UNDO,
 // RESTORE, PACK AS on the PACKET, and the commit at TRANSMIT ▸. Track TREE owns this file after the FOUNDATION (plan §5.2);
 // the tab's model is Track UI's systems/training-model.ts.

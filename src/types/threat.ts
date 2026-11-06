@@ -1,3 +1,4 @@
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); tracks ask by message.
 // The threat ladder's types (docs/phase3/04-threats.md §3.1–§3.10, slice-2-plan §2.2): which act a ship plays, whether
 // HOLLOW boards on the beam into it, which of HOLLOW's stages it plays, and what the run remembers between ships.
 // Types only: the numbers live in src/data/threats.ts and tuning.ts, the rule in src/systems/threat-plan.ts.

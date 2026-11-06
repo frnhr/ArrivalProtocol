@@ -1,3 +1,5 @@
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): only if SCAN's completion needs
+// a hook. Others ask by message.
 import type { Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { GameState } from '@state/schema';

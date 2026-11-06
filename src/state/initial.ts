@@ -1,5 +1,4 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2); FLIGHT and UI ask by message, no direct
-// edits.
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); tracks ask by message.
 import type { GameState, RunPhase, RunState, HollowState, RunStats, ArchiveState, HazardsState } from './schema';
 import type { Segment } from '@/types/segment';
 import type { LandingState, PodRecord, ShipLandingDef, AutodropState } from '@/types/landing';

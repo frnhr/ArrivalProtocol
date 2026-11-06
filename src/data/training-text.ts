@@ -1,3 +1,5 @@
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); each track edits only its own skill's lines (its
+// TRAINING_TEXT.skills entry, its PACKET `without`, its TRAINING_DEMO_ART line).
 // The skill tree's words (phase 3 slice 4; docs/phase3/03-skills.md §4, §7; slice-4-plan §5.1 item 8), one section per
 // track so the three can write in parallel without touching each other's lines. AUTOBURN's own flight lines stay in
 // data/skill-text.ts (Track FLIGHT's). Every strip and boot line is ≤ MAX_LINE_CHARS (70) with worst-case numbers

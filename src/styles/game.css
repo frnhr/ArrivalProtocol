@@ -1,4 +1,4 @@
-/* Slice 4: Track UI owns the skill bits of this file (docs/phase3/impl/slice-4-plan.md §5.2). */
+/* Slice 4c–4e: Track ORBIT owns the AUTOBURN parts of this file (docs/phase3/impl/slice-4cde-plan.md §7.2); the rest is the lead's. */
 /* Game HUD (the overhaul's new UI): objective strip, header time controls, the flight windows'
  * layout, NAV PLOT, Engine and the pause veil. Colours come from tokens only (tokens.css +
  * modes.css), so everything here reskins with the mode. Imported before responsive.css. */

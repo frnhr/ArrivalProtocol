@@ -1,3 +1,4 @@
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); tracks ask by message.
 // The skill tree's rules (phase 3 slice 4; docs/phase3/03-skills.md §3.1–§3.3, slice-4-plan §2.2, §2.4, §2.15), pure but
 // for the grant writers: the bank, what the unit holds, what it paid for and lost, RESTORE's price, the cells of the
 // TRAINING grid, the opening rule, the desk's required first pick, and the demos' learning. Track TREE owns this file

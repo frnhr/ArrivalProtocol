@@ -1,3 +1,4 @@
+// Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): BULLSEYE. Others ask by message.
 import type { ForgivenessClass, LandingEnd, LaunchRefusal, Place, ParkReason, TerrainWord, Touch } from '@/types/landing';
 import { formatCount } from '@data/format';
 import { STAR_FUEL_PCT } from '@data/tuning';

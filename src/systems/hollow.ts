@@ -1,3 +1,5 @@
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the telegraph's pre-empt,
+// threateningSeeds, seedThreatText, SOMETHING LANDED. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState, HollowState } from '@state/schema';
 import type { Segment, HollowSegment, InfectionSide, DriverSegment } from '@/types/segment';

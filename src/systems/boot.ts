@@ -1,5 +1,5 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the TRAINED / RETRAINED lines and the
-// ONLINE event. Others ask by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the SENTRY lines as they are
+// said. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { onPostTick } from '@systems/clock';

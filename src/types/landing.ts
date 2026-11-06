@@ -1,3 +1,4 @@
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); tracks ask by message.
 // Every landing type (docs/phase3/01-landing.md, slice 1a). Type-only imports: Vec2 (types/orbit), Colonist
 // (types/segment) and GameState (state/schema, for the controller seam; schema imports this file back, which is fine
 // for types). The pure solver, the rules, the sim and the views all speak these.

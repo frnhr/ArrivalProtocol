@@ -1,3 +1,4 @@
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); tracks ask by message.
 import type { BurnStatus, GameState, ShipOutcome } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {

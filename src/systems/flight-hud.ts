@@ -1,5 +1,4 @@
-// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the AUTO button's mode, lockBracket,
-// autoGhost, the Engine pip's model. Others ask by message.
+// Slice 4c–4e: Track ORBIT owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 import type { AutoMode } from '@/types/skill';
 import { MAP_TEXT } from '@data/map-text';
 import type { GameState, Pace, PresetMode, TerminalStatus, LogEntry } from '@state/schema';

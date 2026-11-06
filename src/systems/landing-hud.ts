@@ -1,3 +1,5 @@
+// Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): bayWindowModel.autodrop, the
+// AUTODROP pip, the plan table's model. Others ask by message.
 import type { GameState } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {

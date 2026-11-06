@@ -1,4 +1,4 @@
-// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2). Others ask by message.
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2). Others ask by message.
 // The TRAINING tab's model (phase 3 slice 4; docs/phase3/03-skills.md §4; slice-4-plan §2.5, §3): pure, over TREE's reads
 // (skill-tree.ts treeCells, bankOf, held, paid, lostLevels, deskBlocker) and the desk's selection (UiState.trainingSel,
 // trainingHoldSec). The view (components/desk/TrainingWindow.ts) only lays it out.

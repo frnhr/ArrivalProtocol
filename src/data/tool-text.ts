@@ -1,3 +1,4 @@
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 import type { Segment, SegmentRole } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import { DRIVER_TOOL_TEXT } from '@data/landing-text';

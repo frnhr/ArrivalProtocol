@@ -1,3 +1,4 @@
+// Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 import { MOBILE_MEDIA_QUERY } from '@/utils/viewport';
 import { requireById, requireIn } from '@components/dom';
 

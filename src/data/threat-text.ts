@@ -1,3 +1,4 @@
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 import { MAX_LINE_CHARS, TRACE_CELLS } from '@data/tuning';
 
 // The threat ladder's words (docs/phase3/04-threats.md §3.3–§3.8, §4; 05-story.md §3.5; slice-2-plan §2.1). Track THREAT

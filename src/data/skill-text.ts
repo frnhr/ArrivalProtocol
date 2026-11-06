@@ -1,5 +1,4 @@
-// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): every AUTOBURN line, each ≤ 70. Others
-// ask by message.
+// Slice 4c–4e: Track ORBIT owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 // The words AUTOBURN says (WP9, §6.10): its radio lines and why it can't engage. Kept apart from script.ts (like
 // tool-text.ts) so systems/autoburn.ts and guidance can import them without the director.
 // Every line is checked against the strip width with worst-case numbers by tests/unit/wp9 tests (≤ 70 chars).

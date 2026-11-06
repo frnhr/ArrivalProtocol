@@ -1,5 +1,5 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): DELETE_CARD_EFFECT's skills. Others ask
-// by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the 'outline' target, the TEMP
+// FILE refusals. Others ask by message.
 import type { GameState } from '@state/schema';
 import type { Segment, FreeSegment, ShipSegment, ShipBackupSegment, SegmentRole } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';

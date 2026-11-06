@@ -1,3 +1,5 @@
+// Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): only if the window rule needs more
+// than the state argument. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState, Pace, LevelState, SkipWaypoint } from '@state/schema';
 import { onPreTick, isActivePhase, setPaused } from '@systems/clock';

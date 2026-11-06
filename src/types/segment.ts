@@ -1,5 +1,4 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2); FLIGHT and UI ask by message, no direct
-// edits.
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); tracks ask by message.
 // Segment is the unit of the memory strip. A memory layout is an ordered list of segments.
 
 import type { FsToolKind } from '@/types/fs-tool';

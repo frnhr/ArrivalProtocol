@@ -1,4 +1,4 @@
-// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the version badge and labelled ticks.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the decoy drawn as a file.
 // Others ask by message.
 import type { Segment, RedundancySegment, DriverSegment, FreeSegment, HollowSegment, LogSegment } from '@/types/segment';
 import { shownIntegrity, isInfected, integrityBand, fileLabel, isSkillFile, type HealthSegment } from '@state/selectors';

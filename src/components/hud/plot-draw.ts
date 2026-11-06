@@ -1,5 +1,4 @@
-// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the LOCK bracket and the ghost. Others
-// ask by message.
+// Slice 4c–4e: Track ORBIT owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 import type { Prediction } from '@systems/predict';
 import type { Projector, Vec2 } from '@/types/orbit';
 

@@ -1,4 +1,5 @@
-// Slice 3c: the foundation owns this file; the tracks add lead-approved one-liners only (slice-3c-plan §5.4).
+// Slices 4c–4e: the lead owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2); every 4c–4e event is named in the
+// blocks at the end of GameEvents, and a track emits its own. Others ask by message.
 import type {
   FiringSource, ViewMode, TransitHit, AutoburnPhase, AutoburnEnd, DealOutcome, VerbKind,
 } from '@state/schema';

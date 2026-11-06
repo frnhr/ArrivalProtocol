@@ -1,3 +1,4 @@
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); tracks ask by message.
 // The skill tree's levels (phase 3 slice 4; slice-4-plan §2.2): what the unit holds, what the run paid for, what it lost
 // and RESTORE's price, read from memory and the run's history alone. A leaf (data and selectors only, no map): DELETE's
 // confirm (tool-targets.ts) and the other low modules read it without pulling the map in; systems/skill-tree.ts re-exports

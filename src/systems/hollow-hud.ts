@@ -1,3 +1,4 @@
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 import type { GameState } from '@state/schema';
 import type { InfectionSide, Segment } from '@/types/segment';
 import {

@@ -1,4 +1,5 @@
-// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): WORKS AS v1. Others ask by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the decoy's name and line.
+// Others ask by message.
 import type { Segment, FsToolSegment, DriverSegment, HollowSegment, LogSegment } from '@/types/segment';
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';

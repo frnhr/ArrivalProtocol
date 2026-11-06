@@ -1,5 +1,5 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): skills sort after the AI tools, the
-// 'trained' lock. Others ask by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the disguise through
+// layoutCarried. Others ask by message.
 import type { Segment, RedundancySegment, SegmentRole } from '@/types/segment';
 import type { TransitHit, ArrivalSeed } from '@state/schema';
 import type { ShipDef, ArrivalDamage } from '@data/ships';

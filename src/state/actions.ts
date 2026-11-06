@@ -1,3 +1,5 @@
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): deleteSec, the SCAN and DELETE
+// unmasking. Others ask by message.
 import type { Store } from './store';
 import type { GameState, PendingPlacement } from './schema';
 import type { Segment, RedundancySegment, SegmentState, DriverSegment } from '@/types/segment';

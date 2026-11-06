@@ -1,3 +1,4 @@
+// Slice 4c–4e: Track ORBIT owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 import type { OrbitState, PlanetParams, Ring } from '@/types/orbit';
 import type { DecayState, DragKick, DropFactors, GoLowAim, GoLowerFit, LzState } from '@/types/landing';
 import type { GameState } from '@state/schema';

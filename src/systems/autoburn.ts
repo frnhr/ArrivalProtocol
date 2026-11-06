@@ -1,5 +1,4 @@
-// Slice 4: Track FLIGHT owns this file (docs/phase3/impl/slice-4-plan.md §5.2): versions and modes, LOCK RANGE, the
-// claim, takeovers. Others ask by message.
+// Slice 4c–4e: Track ORBIT owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState, AutoburnPhase, AutoburnEnd, AutoburnState, AutoburnBurn } from '@state/schema';
 import type { Segment, SkillFileSegment } from '@/types/segment';
