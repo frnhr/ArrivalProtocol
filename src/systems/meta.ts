@@ -7,6 +7,7 @@ import type {
 } from '@/types/lineage';
 import type { StorageProvider } from '@systems/storage';
 import type { SkillRecord } from '@/types/skill';
+import { skillRecords } from '@systems/skill-tree';
 import {
   MetaCorrupt, corrupt, isRecord, wholeNumber, text, flag, list_, exactRecord, parseLastUnit, parseTrail, parseColony,
   parseRoute, parseEvent, unitList, unitStats,
@@ -426,7 +427,7 @@ export interface RunEnd extends RunProgress {
   nextArm?: ArmState | null;
   // The run's notable events (systems/lineage.ts notableEvents; at most NOTABLE_EVENTS_MAX are kept); left out, none.
   events?: readonly NotableEvent[];
-  // The skills the unit ended with (slice 4, 03 §3.11: LastUnit.skills; Track TREE fills it at RUN END from skill-tree.ts
+  // The skills the unit ended with (slice 4, 03 §3.11: LastUnit.skills; archiveRunEnded fills it from skill-tree.ts
   // skillRecords). Left out or null: none recorded.
   skills?: readonly SkillRecord[] | null;
 }
@@ -838,6 +839,8 @@ export function archiveRunEnded(store: Store<GameState>, cause: RunEndCause): vo
     const ended = recordRunEnd(current.meta, {
       ...progressOf(state, lastCauseOf(cause)), cause: lastCauseOf(cause), score: runScore(state.run.ships), nextArm: after?.arm ?? null,
       events: after === null || after.reset ? [] : safeEvents(state.run),
+      // Slice 4 (03 §3.11): the skills it ended with (REASSIGNMENT's hunt, the next run's `LAST UNIT TRAINED:` line).
+      skills: skillRecords(state),
     });
     current.meta = after?.reset === true ? { ...ended, arm: after.arm, notes: { ...ended.notes, armReset: true } } : ended;
     write();

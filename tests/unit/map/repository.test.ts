@@ -48,8 +48,8 @@ const forecast = (store: Store<GameState>, selected: number | null) => repoModel
 check('catalogue v1: Mv 2, Rm 1, Cp 3, Swap 1, Repair.bak 4, Scan.bak 3, REPAIR v2 patch 2, in that order, sound',
   REPO_FILE_IDS.map((id) => `${REPO_FILES[id].name}:${REPO_FILES[id].blocks}`).join() === 'Mv:2,Rm:1,Cp:3,Swap:1,Repair.bak:4,Scan.bak:3,REPAIR v2 patch:2'
   && validateCatalogue().length === 0 && REPO_CATALOGUE_VERSION === 1, validateCatalogue().join('; '));
-check('…the restricted rows: AUTOBURN.skl (Train it yourself :)), THREAD+, FIREWALL.sys',
-  RESTRICTED_ROWS.map((entry) => entry.name).join() === 'AUTOBURN.skl,THREAD+,FIREWALL.sys' && RESTRICTED_ROWS[0]!.why === 'Train it yourself :)');
+check('…the restricted rows: the four .skl files (Train it yourself :)), THREAD+, FIREWALL.sys',
+  RESTRICTED_ROWS.map((entry) => entry.name).join() === 'AUTOBURN.skl,AUTODROP.skl,SURVEY.skl,SENTRY.skl,THREAD+,FIREWALL.sys' && RESTRICTED_ROWS[0]!.why === 'Train it yourself :)');
 
 // --- Run 1's worked route, desk by desk ------------------------------------------------------------------------------------
 const run = armRun();
@@ -61,8 +61,8 @@ check('…Mv toward HALCYON: `ARRIVES 2337 · HALCYON APPROACH 2352 · IN TIME` 
   eta(run, 2) ?? 'null');
 const outOfReach = state(run).run.map.arm.map((ship) => ship.slot).find((slot) => slot !== 0 && !reachableFrom(state(run).run.map, 0).includes(slot))!;
 check(`…a ship out of reach (slot ${outOfReach}) gets no ETA (forecast null)`, forecast(run, outOfReach) === null && eta(run, outOfReach) === null);
-check('…no ship selected: no ETA; RESTRICTED lists the three locked rows',
-  eta(run, null) === null && repoModel(state(run), null).restricted.length === 3);
+check('…no ship selected: no ETA; RESTRICTED lists the six locked rows (slice 4: all four .skl)',
+  eta(run, null) === null && repoModel(state(run), null).restricted.length === 6);
 check('…a restricted or unknown file is refused (throws), the pick unchanged', throws(() => setRequest(run, 'thread-plus' as never))
   && throws(() => setRequest(run, 'skl:autoburn' as never)) && state(run).run.repo.pick === null);
 setRequest(run, 'mv');

@@ -54,6 +54,9 @@ export const PACKET_SKILL_TEXT = {
   chip: (file: string, version: number, blocks: number, without: string, restore: number): string =>
     `${file} v${version} (${blocks}) → ${without} · RESTORE ${restore}`,
   packAs: (version: number, blocks: number, restore: number): string => `PACK AS v${version} (${blocks}) · RESTORE ${restore}`,
+  // DELETE's inline confirm on a skill file (systems/tool-targets.ts deleteQuestion): it is lost until a desk's RESTORE.
+  deleteEffect: (skill: string, restore: number): string =>
+    restore > 0 ? `No ${skill} until a desk's RESTORE (${restore} CYCLES).` : `No ${skill}.`,
   // The +n CYCLES salvage card (data/upgrades.ts): its title and its line.
   cyclesCard: (cycles: number): string => `+${cycles} CYCLES`,
   cyclesEffect: (cycles: number): string => `${cycles} more TRAINING CYCLES to spend at the next desk`,
