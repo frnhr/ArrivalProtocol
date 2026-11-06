@@ -21,7 +21,7 @@ import { armRun, send, toDesk } from '../map/repo-fixture';
 import { WORKED_ROUTE } from '../map/run1-fixture';
 import { createStore } from '@state/store';
 import {
-  sentryBootLineCount, sentrySeedBootText, firewallBootLineDue, firewallBootText, compileFirewall, preemptSeed, sentryStatus,
+  sentryBootLineCount, sentrySeedBootText, firewallBootLineDue, firewallBootText, compileFirewall, preemptSeed, preemptArmed, sentryStatus,
   PREEMPT_THREAD_OWNER,
 } from '@systems/sentry';
 import { openBranchesAt } from '@systems/skill-tree';
@@ -57,7 +57,7 @@ import type { GameState } from '@state/schema';
     SENTRY_TEXT.somethingNextTo(longestFile), SENTRY_TEXT.somethingNextToTab(longestFile), SENTRY_TEXT.bootSeed(longestDecoy, 'F'),
     SENTRY_TEXT.bootSeedGone(longestDecoy), SENTRY_TEXT.somethingLanded('F'), SENTRY_TEXT.preemptEcho('0x17F'),
     SENTRY_TEXT.firewallCompiled, SENTRY_TEXT.firewallNoRoom, SENTRY_TEXT.status.sight(3), SENTRY_TEXT.status.quickRm(1),
-    SENTRY_TEXT.status.firewall(2), TOOL_REFUSAL.tempFile, TOOL_REFUSAL.preemptArmed,
+    SENTRY_TEXT.status.firewall(2), SENTRY_TEXT.opEcho('copy', longestDecoy), TOOL_REFUSAL.preemptArmed,
   ];
   const over = lines.filter((line) => line.length > MAX_LINE_CHARS);
   check(`every SENTRY and decoy line fits one row (≤ ${MAX_LINE_CHARS}) with the worst-case names`, over.length === 0,
@@ -237,7 +237,11 @@ const hollowSeeds = (): HollowSegment[] => s().memory.filter((seg): seg is Hollo
   nextTelegraph();
   const busy = threadsBusy();
   preemptSeed(h.store);
+  const armedAtV2 = preemptArmed(s());
   setSentry(30);
+  // Review m8: the painter draws the outline armed only while QUICK RM still works (it is what frees the seed).
+  check('…the outline reads armed at v2, and no longer once SENTRY falls below v2 (still `preempted`, the seed will land)',
+    armedAtV2 && s().hollow.seedTelegraph?.preempted === true && !preemptArmed(s()));
   const seedsBefore = hollowSeeds().length;
   untilLanded();
   check('SENTRY falling below v2 before the landing (30%: works as v1): the armed seed lands as usual, and the thread comes back',

@@ -1,4 +1,4 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): its HOLLOW readers (a decoy alone turns no WALL / GAP label on). Others ask by message.
+// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): its HOLLOW readers (a decoy alone turns no WALL / GAP label on; a decoy moved is previewed as the file it shows). Others ask by message.
 import type { GameState, PendingPlacement } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import { resolvePlacement } from '@state/actions';
@@ -9,7 +9,7 @@ import { blocksInRack } from '@systems/zones';
 import { isOpenFree } from '@systems/tool-targets';
 import { isHollow, isInfectable, isInfected, hasIntegrity } from '@state/selectors';
 import type { RackHazard } from '@/types/zone';
-import { isVisibleHollow } from '@state/threat-selectors';
+import { isVisibleHollow, isDisguised, decoyFileView } from '@state/threat-selectors';
 import { RACK_BLOCKS, WALL_MIN_BLOCKS, SEED_BLOCKS } from '@data/tuning';
 
 // The MOVE preview (§6.5, §9 WP7 item 5), pure and DOM-free: what a MOVE to the placement under the
@@ -136,8 +136,10 @@ export function movePreview(
   const destIndex = after.findIndex((seg) => seg.id === source.id);
   const via = reach.get(destIndex);
   const destAddr = segmentStarts(after)[destIndex]!;
-  // A zone hurts only files with a health number (zones.ts damageable): a FIREWALL in the belt's rack is fine.
-  const hazard = hasIntegrity(source)
+  // A zone hurts only files with a health number (zones.ts damageable): a FIREWALL in the belt's rack is fine. A decoy is
+  // judged as the healthy unit file it shows (review B1: its preview may not tell it from one).
+  const shown = isDisguised(source) ? decoyFileView(source) : source;
+  const hazard = hasIntegrity(shown)
     ? hazards.find((candidate) => blocksInRack(destAddr, source.size, candidate.rack, layoutOf(state)) > 0) ?? null
     : null;
   return {
@@ -146,7 +148,7 @@ export function movePreview(
     bridges: reachesRackE(after) && !reachesRackE(state.memory),
     seals: source.type === 'firewall'
       && hollowReach(after, state.clock.aiSec).some((reach) => reach.verdict === 'blocked' && reach.neighbourId === source.id),
-    infected: isInfected(source),
+    infected: isInfected(shown),
     hazard,
   };
 }

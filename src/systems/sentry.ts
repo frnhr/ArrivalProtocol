@@ -192,6 +192,12 @@ export function preemptRefusal(state: Readonly<GameState>): PreemptRefusal | nul
   return null;
 }
 
+// The outline is armed and SENTRY still works as QUICK RM (review m8): the seed will be freed as it lands. Armed but with
+// SENTRY fallen below v2 since the click, stepSeeds lands it as usual, so the painter draws it plain.
+export function preemptArmed(state: Readonly<GameState>): boolean {
+  return state.hollow.seedTelegraph?.preempted === true && sentryNow(state.memory) >= SENTRY_QUICK_RM_VERSION;
+}
+
 // The outline can take DELETE right now, with DELETE in hand (HollowPainter draws it aimable; the strip's click path aims it).
 export function preemptAimable(state: Readonly<GameState>): boolean {
   return state.ui.activeTool?.kind === 'delete' && preemptRefusal(state) === null;

@@ -46,10 +46,6 @@ export const TOOL_REFUSAL = {
   // it already ate is no file any more.
   infected: 'STILL INFECTED — REPAIR FIRST',
   eaten: 'THIS FILE WAS EATEN — ONLY DELETE WORKS',
-  // Slice 4d (plan R9): MOVE, COPY and REPAIR on a disguised seed (a decoy like `cache.tmp`): the words a harmless temp
-  // file would get, never EATEN, so the refusal gives nothing away (SWAP says what it says to any unit file). SCAN unmasks
-  // it; DELETE works on it.
-  tempFile: 'TEMP FILE — NOTHING TO DO',
   // SENTRY v2's DELETE on HOLLOW's outline, already armed: the seed goes as it lands.
   preemptArmed: 'ARMED — IT GOES AS IT LANDS',
   // A pod's driver (01-landing §3.8): always visible, so no scan, and never copied or deleted, so a mistake never costs

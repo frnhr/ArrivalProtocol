@@ -1,5 +1,5 @@
 // Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): isDisguised, isVisibleHollow,
-// decoyFileView. Others ask by message.
+// decoyFileView, shownSegment. Others ask by message.
 import type { GameState } from '@state/schema';
 import type { Segment, HollowSegment, FsToolSegment, SeedDisguise, ToolSegment } from '@/types/segment';
 import type { ThreatTally } from '@/types/threat';
@@ -26,6 +26,12 @@ export function decoyFileView(seg: Readonly<HollowSegment & { disguise: SeedDisg
     id: seg.id, name: seg.disguise.name, type: 'tool', size: seg.size, desc: seg.disguise.desc,
     integrity: INTEGRITY_MAX, scanned: true, state: 'intact', ...(seg.operating ? { operating: true } : {}),
   };
+}
+
+// What a segment shows the kid: a decoy's file view, else the segment itself. For the readers that draw a picked or hovered
+// file's name and size (the cursor follower, the phone's tool pill; review B1), so no label names a decoy's seed.
+export function shownSegment(seg: Readonly<Segment>): Readonly<Segment> {
+  return isDisguised(seg) ? decoyFileView(seg) : seg;
 }
 
 // A hollow block the kid can see as HOLLOW's: any hollow block but a disguised seed.

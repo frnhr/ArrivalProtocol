@@ -17,7 +17,7 @@ import { OUTCOME_WORDS, driverOutlook } from './DetailPanel';
 import { segmentStarts } from '@systems/memory-ops';
 import { THREAT_TEXT, SENTRY_TEXT } from '@data/threat-text';
 import { isDisguised } from '@state/threat-selectors';
-import { preemptAimable } from '@systems/sentry';
+import { preemptAimable, preemptArmed } from '@systems/sentry';
 import { showStamp } from '@components/hud/Stamp';
 import {
   HOLLOW_PAINT_HZ, INTEGRITY_MAX, HOLLOW_FX_MS, CURE_SPARKS, SEED_BLINK_SEC, BOARD_DROP_MS, SEED_LAND_FX_MS,
@@ -278,8 +278,8 @@ function paintTelegraph(root: HTMLElement, state: Readonly<GameState>): void {
   // takes the outline away at once (the seed re-aims as it lands).
   const index = telegraph === null ? -1 : openFreeHolding(state.memory, telegraph.startAddr, telegraph.size);
   // Slice 4d: SENTRY v2's DELETE can be aimed at the outline (`aimable`: DELETE in hand and QUICK RM working), and once it is
-  // the outline is drawn armed (`preempted`): the seed will be freed as it lands.
-  const look = telegraph === null ? '' : telegraph.preempted ? 'armed' : preemptAimable(state) ? 'aimable' : '';
+  // the outline is drawn armed (`preempted`, while SENTRY still works as v2: review m8): the seed will be freed as it lands.
+  const look = telegraph === null ? '' : preemptArmed(state) ? 'armed' : preemptAimable(state) ? 'aimable' : '';
   const key = telegraph === null ? '' : `${telegraph.startAddr}|${telegraph.size}|${index}|${look}`;
   const marks = Array.from(root.querySelectorAll<HTMLElement>('.hollow-mark.seed-telegraph'));
   if (marks.length > 0 && marks.every((mark) => mark.dataset.key === key)) return;

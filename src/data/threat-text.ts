@@ -126,6 +126,11 @@ export const DISGUISE_POOL: readonly Readonly<{ name: string; desc: string }>[] 
 // --- Slice 4d: disguised seeds and SENTRY (03 §3.10; 04 §3.6; slice-4cde-plan §4) --------------------------------------
 // Track SENTRY's words. Each line's worst case (the longest decoy, file and rack names) is checked in
 // tests/unit/skills/sentry.test.ts (foundation review m6): every one fits MAX_LINE_CHARS.
+// An op that unmasked a decoy as it completed (SCAN, and MOVE or COPY: review B1).
+function decoyOpEcho(tool: 'scan' | 'move' | 'copy', decoy: string): string {
+  return `> ${tool} ${decoy} ... NOT A FILE · A SEED`;
+}
+
 export const SENTRY_TEXT = {
   // The stamps (components/memory-view/HollowPainter.ts slams them on 'seed-unmasked' and 'seed-preempted').
   stamp: {
@@ -135,12 +140,14 @@ export const SENTRY_TEXT = {
   },
   // SCAN on a decoy (04 §3.6: detective work, no skill needed): the echo, and the seed's words on a line of their own (at
   // most SEED_WORDS_PER_SHIP a ship, as rm's): the echo and the words together would run past one row.
-  scanEcho: (decoy: string): string => `> scan ${decoy} ... NOT A FILE · A SEED`,
+  scanEcho: (decoy: string): string => decoyOpEcho('scan', decoy),
+  // ...and MOVE or COPY on one (review B1): the op takes it as a unit file, and unmasks it as it completes.
+  opEcho: decoyOpEcho,
   seedSays: (words: string): string => `> it says: "${words}"`,
   // DELETE on a decoy without a SCAN (plan R9): it ran as rm on a seed. With words, rm's own echo says them (seedSaid).
   deleteEcho: (decoy: string, freed: number): string => `> delete ${decoy} ... IT WAS A SEED · +${freed} FREE`,
-  // The strip while a decoy's victim is being eaten (04 §3.6): it never names the culprit. (MOVE, COPY and REPAIR on a
-  // decoy refuse with data/tool-text.ts TOOL_REFUSAL.tempFile: neutral words, never EATEN.)
+  // The strip while a decoy's victim is being eaten (04 §3.6): it never names the culprit. (Every tool answers a decoy as the
+  // file it shows: systems/tool-targets.ts disguisedRefusal.)
   // (A name too long for the whole hint keeps the verb: `… IS EATING IT — SCAN`, so the line stays one row.)
   somethingNextTo: (file: string): string => {
     const line = `SOMETHING NEXT TO ${file.toUpperCase()} IS EATING IT — SCAN its neighbours`;

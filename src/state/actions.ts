@@ -520,6 +520,21 @@ function unmask(seg: HollowSegment, by: 'scan' | 'delete'): void {
   emit('seed-unmasked', { segId: seg.id, by });
 }
 
+// MOVE or COPY of a disguised seed (review B1): the tool took it as the unit file it shows (tool-targets.ts
+// disguisedRefusal) and the placement was judged as for any file, so the kid paid the click and the wait. The op runs for
+// the tool's own time on the seed alone and, as it completes, unmasks it as a SCAN does (`NOT A FILE`, the echo, its words
+// once a ship). It moves and copies nothing, reserves no space, and counts as no move: a scan in the tool's clothes.
+function decoyPlaceOp(store: Store<GameState>, seg: HollowSegment, kind: 'move' | 'copy'): null {
+  const decoy = echoName(seg);
+  let words: string | null = null;
+  const durationSec = kind === 'move' ? moveSec(seg.size) : copySec(seg.size);
+  runQuickOp(store, seg, 'scan', kind, durationSec, () => {
+    unmask(seg, 'scan');
+    words = claimSeedWords(store, seg);
+  }, () => SENTRY_TEXT.opEcho(kind, decoy), () => { if (words !== null) say('hollow', SENTRY_TEXT.seedSays(words), { critical: true }); });
+  return null;
+}
+
 // The director's one-shot ids that count a ship's seed words (director.done keeps every id that is not a per-ship beat
 // across ships, so the ship's index in the id makes the count per ship; a simulation retry replays ship 1, which has no
 // seeds).
@@ -624,6 +639,7 @@ export function actionMove(store: Store<GameState>, source: Segment, placement: 
   const sourceEnd = sourceStart + source.size;
   const slide = sourceStart >= dest.regionStart && sourceEnd <= dest.regionEnd;
   if (slide && dest.destAddr === sourceStart) return refuse(TOOL_REFUSAL.sameSpot);
+  if (isDisguised(source)) return decoyPlaceOp(store, source, 'move');
   // An overlapping move to the right fills tail first (memmove), so the bar reads that way.
   const destEnd = dest.destAddr + source.size;
   const reverseFill = dest.destAddr < sourceEnd && sourceStart < destEnd && dest.destAddr > sourceStart;
@@ -719,6 +735,7 @@ export function actionCopy(store: Store<GameState>, source: Segment, placement: 
   const memory = state.memory;
   const dest = resolvePlacement(memory, placement, source, 'copy');
   if (typeof dest === 'string') return refuse(dest);
+  if (isDisguised(source)) return decoyPlaceOp(store, source, 'copy');
   const sourceState = stateOf(source);
   const name = echoName(source);
 
