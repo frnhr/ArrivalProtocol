@@ -15,6 +15,9 @@ import { REPO_FILES } from '@data/repository';
 import { REPO_TEXT } from '@data/repo-text';
 import { RUN_END_TITLE, RUN_END_WHY, RUN_END_PURGE_SHORT, RUN_END_NOBODY_LANDED, SHIP_OUTCOME_WORD } from '@data/script';
 import { RUN_END_TEXT } from '@data/landing-text';
+import { TRAINING_TEXT } from '@data/training-text';
+import { trainedCycles, bankOf } from '@systems/skill-tree';
+import { treeTotalCycles } from '@data/skills';
 import {
   RANKS, RANK_FLEET_COLONISTS, RANK_ROUND_TO, NEAR_MISS_LINES_MAX, NEAR_MISS_FUEL_PCT, STAR_FUEL_PCT,
 } from '@data/tuning';
@@ -79,6 +82,28 @@ export interface RunEndModel {
   undeliveredLine: string | null;
   // Slice 3c (02 §3.12, §4; 05 §3.12): what the world update made of the run's end (run.next), null on the classic world.
   next: RunEndNext | null;
+  // Slice 4 (03 §3.1, 02 §4): the tree's totals, null on the classic world (no tree).
+  skills: RunEndSkills | null;
+}
+
+// RUN END's `UNSPENT n` (the last ship's cycles and the bank left: they do nothing more, decision 18 deferred) and the RUN
+// TALLY's `TRAINED n of 54 · UNSPENT n` (the cycles' worth of the tree the run paid for: skill-tree.ts trainedCycles).
+export interface RunEndSkills {
+  trained: number;
+  total: number;
+  unspent: number;
+  unspentLine: string;
+  tallyLine: string;
+}
+
+function runEndSkills(run: Readonly<GameState['run']>): RunEndSkills | null {
+  if (run.map.world !== 'arm') return null;
+  const trained = trainedCycles(run.skills);
+  const total = treeTotalCycles();
+  const unspent = bankOf(run.skills);
+  return {
+    trained, total, unspent, unspentLine: TRAINING_TEXT.runEnd.unspent(unspent), tallyLine: TRAINING_TEXT.runEnd.tally(trained, total, unspent),
+  };
 }
 
 // The RUN TALLY's update summary and RUN END's bridging line (slice 3c): run.next is the next unit (the update ran as the
@@ -254,6 +279,7 @@ export function runEndModel(state: Readonly<GameState>, nextArm: Readonly<ArmSta
     undeliveredLine: run.map.world === 'arm' && run.repo.requests.length > 0
       ? REPO_TEXT.tally.neverArrived(undeliveredFiles(run).map((request) => REPO_FILES[request.file].name)) : null,
     next: run.map.world === 'arm' ? runEndNext(run.next, nextArm) : null,
+    skills: runEndSkills(run),
   };
 }
 

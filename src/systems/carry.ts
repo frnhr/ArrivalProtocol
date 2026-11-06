@@ -7,7 +7,9 @@ import type { ShipThreat, BeamSeedPlan } from '@/types/threat';
 import type { Rng } from '@systems/rng';
 import { freeSegment, newSegId } from '@systems/memory-ops';
 import { beamSeedSegment } from '@systems/beam-seeds';
-import { hasIntegrity, type HealthSegment } from '@state/selectors';
+import { hasIntegrity, isSkillFile, type HealthSegment } from '@state/selectors';
+import { SKILL_IDS } from '@data/skills';
+import type { SkillId } from '@/types/skill';
 import { setIntegrity } from '@state/actions';
 import { FS_TOOL_KINDS } from '@data/fs-tools';
 import { CLASSIC_FIVE, CLASSIC_HOPS } from '@data/classic-five';
@@ -71,7 +73,10 @@ export function toolKindOf(seg: Segment): string | null {
 // CHARGE is never "dropped": it fills whatever the files leave. `files` is the unit's files that are
 // still going (dropping one copy of Repair makes the other its last).
 // 046.log is locked too (05 §3.2: `LOCKED · 046 ASKED YOU TO CARRY IT`).
-export type DropLock = 'core' | 'engine' | 'navplot' | 'last-copy' | 'charge' | 'log';
+// Slice 4: a skill file trained at this desk ('trained': `TRAINED HERE · ◀ CHART TO UNDO`, plan §2.3, §7 R8): leaving behind
+// what was just paid for is UNDO's job. Its fresh file is not in memory (the packet's skill plan adds it), so the PACKET
+// marks its chip; dropLock never sees it.
+export type DropLock = 'core' | 'engine' | 'navplot' | 'last-copy' | 'charge' | 'log' | 'trained';
 
 export function dropLock(files: readonly Segment[], seg: Segment): DropLock | null {
   if (seg.type === 'core') return 'core';
@@ -86,8 +91,12 @@ export function dropLock(files: readonly Segment[], seg: Segment): DropLock | nu
 
 function rackESortKey(seg: Segment): number {
   const roleIndex = seg.role ? RACK_E_ROLE_ORDER.indexOf(seg.role) : -1;
-  // Files with no listed role (skills, upgrades) go after every AI tool.
-  return roleIndex >= 0 ? roleIndex : RACK_E_ROLE_ORDER.length;
+  if (roleIndex >= 0) return roleIndex;
+  // Skills go last, after the AI tools and the card files, in SKILL_IDS order (slice 4, 03 §3.4): a fresh file that replaces
+  // a skill's old one (an upgrade, a RESTORE) or a packed-lower copy keeps the place the old one had.
+  if (isSkillFile(seg)) return RACK_E_ROLE_ORDER.length + 1 + SKILL_IDS.indexOf(seg.upgrade);
+  // The other files with no listed role (the card files) go after every AI tool.
+  return RACK_E_ROLE_ORDER.length;
 }
 
 // Rack F: the fs-tools by kind, then FIREWALLs (§6.9), then 046.log (as the fresh unit's rack F has it, before REPAIR
@@ -127,6 +136,16 @@ export interface Packet {
   // knows no chips): each chip not sent on and the ids of the files it laid out, in chip order. The send reads it for
   // the delivery seeds (behind their own file), the beam seeds' exclusion and ArrivalReport.deliveries.
   deliveries: PacketDelivery[];
+  // Slice 4: the skill files the packet's skill plan changed (systems/draft.ts planPacket fills it; packUnit knows no plan):
+  // each fresh one (trained, upgraded or restored at this desk) and each packed lower (PACK AS), by id. A skill file not
+  // listed crosses as it was. The PACKET's chips and ArrivalReport.skills read it.
+  skills: PacketSkill[];
+}
+
+export interface PacketSkill {
+  segId: string;
+  skill: SkillId;
+  how: 'fresh' | 'packed';
 }
 
 export interface PacketDelivery {
@@ -163,7 +182,7 @@ export function packUnit(memory: readonly Segment[], linkBlocks: number, dropped
   const chargeHeld = held ? held.used : 0;
   const chargeCarried = Math.max(0, Math.min(chargeHeld, linkBlocks - filesBlocks));
   const charge = held ? packedCopy(held) as RedundancySegment : null;
-  return { linkBlocks, rackE, rackF, charge, filesBlocks, overLink, chargeHeld, chargeCarried, seeds: [], deliveries: [] };
+  return { linkBlocks, rackE, rackF, charge, filesBlocks, overLink, chargeHeld, chargeCarried, seeds: [], deliveries: [], skills: [] };
 }
 
 // Every packed file a hit can land on (charge is not a file: §6.9 hits "packed non-charge files").

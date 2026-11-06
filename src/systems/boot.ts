@@ -35,9 +35,10 @@ import {
 // flash has been seen. The modal stays up until the flight starts, so a key held through the boot
 // (SPACE!) needs a fresh press before it does anything in the game.
 // On a later ship the crossing's ECC line flashes the files it hit; the ship's own arrival damage (KESTREL's
-// sensor, WP9) has a line of its own that flashes its file; and when the kid's captures have trained AUTOBURN,
-// the boot installs AUTOBURN.skl and says so (`> SKILL TRAINED: AUTOBURN.skl · from your 2 captures …`). The
-// lines are planned once, at the boot's first tick, so a line said (a skill installed) never changes the count.
+// sensor, WP9) has a line of its own that flashes its file; and a skill trained or restored at the last desk, or retrained
+// by the kid's new demos, says so (slice 4: `> SKILL TRAINED: AUTOBURN.skl v1 · from your 1 capture · ACCURACY 92%`; the
+// lines are skill-files.ts skillBootLines', and saying one records it and fires the ONLINE stamp's 'skill-trained'). The
+// lines are planned once, at the boot's first tick, so a line said (a grant installed) never changes the count.
 // A returning unit (run 2+, §5.2) boots ship 1 differently, so it feels different within seconds: after the ECC line,
 // `> SOUL ARCHIVE · 2,400 · you know what they are`: the slabs crack at once (no STASIS step), and REPAIR is licensed in
 // the same moment (the ENGINE I/O FAULT will want it).

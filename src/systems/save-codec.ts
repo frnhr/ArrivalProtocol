@@ -26,6 +26,7 @@ import { shipSummaryAt } from '@systems/map-run';
 import { currentSlot } from '@systems/map-streams';
 import { RUN_SAVE_VERSION, FIRST_UNIT_NUMBER, CYCLES_ARRIVED, FIRST_PICK_FLOOR_CYCLES } from '@data/tuning';
 import { shipCycles } from '@systems/run-score';
+import { bankOf } from '@systems/skill-tree';
 import { SKILL_IDS, levelPrice } from '@data/skills';
 import { withScratchSegIds } from '@systems/memory-ops';
 
@@ -239,6 +240,30 @@ const checkRunSkills = rec({
   announced: rec(Object.fromEntries(SKILL_IDS.map((id) => [id, nullable(whole)]))),
 });
 
+// The arrival's skill files (ArrivalReport.skills, slice 4): the boot's TRAINED / RETRAINED lines read them. The rest of
+// the arrival is the boot's to read (its own constructors).
+const checkArrival: Check = (value, at) => {
+  anyRecord(value, at);
+  list(rec({
+    segId: name, skill: SKILL_ID_CHECK, level: checkSkillLevel, kind: oneOf('trained', 'restored', 'packed', 'carried', 'granted'),
+  }))((value as Record<string, unknown>).skills, `${at}.skills`);
+};
+
+// The tree's history read as a whole (the foundation review's notes): one earning per ended ship, on the ship it names,
+// and a bank that never went below 0 (skill-tree.ts bankOf throws there: a purchase the run could not pay).
+function checkSkillHistory(run: Readonly<RunState>, at: string): void {
+  const { earned } = run.skills;
+  if (earned.length !== run.ships.length) shapeFail(`${at}.skills.earned`, `has ${earned.length} earnings for ${run.ships.length} ended ships`);
+  earned.forEach((earning, i) => {
+    if (earning.slot !== run.ships[i]!.slot) shapeFail(`${at}.skills.earned[${i}]`, `is slot ${earning.slot}'s, the ship ended there slot ${run.ships[i]!.slot}'s`);
+  });
+  try {
+    bankOf(run.skills);
+  } catch {
+    shapeFail(`${at}.skills`, 'spends more cycles than the run earned and was granted');
+  }
+}
+
 // The saved RunState, field by field (every key, exactly: a field a later slice adds bumps RUN_SAVE_VERSION, joins this
 // spec, and gets a migration step; slice 4's run.skills was the first). The fields a save point always has empty are
 // checked empty: no beam out, no transit, no end cause, no pending purchase.
@@ -253,7 +278,7 @@ function checkSavedRun(value: unknown, at: string): void {
       deletes: whole, driversLost: whole,
       driversBitten: whole, capRefusals: whole, deal: nullable(anyRecord),
     }),
-    pendingStarCredit: num, pendingStars: whole, simulationRetryUsed: bool, beamOut: isNull, transit: isNull, arrival: nullable(anyRecord),
+    pendingStarCredit: num, pendingStars: whole, simulationRetryUsed: bool, beamOut: isNull, transit: isNull, arrival: nullable(checkArrival),
     endCause: isNull,
     threat: likeReference(createRunThreat() as unknown as Record<string, unknown>),
     log: likeReference(createRunLog() as unknown as Record<string, unknown>),
@@ -272,10 +297,12 @@ function checkSavedRun(value: unknown, at: string): void {
   const known = Object.keys(refs().run);
   const have = Object.keys(value as Record<string, unknown>);
   if (known.length !== have.length || known.some((key) => !have.includes(key))) shapeFail(at, 'does not have a fresh run\'s fields');
+  checkSkillHistory(value as RunState, at);
 }
 
 // Memory (the world payload's): a list of segments, each with its id, name, type and size (the layout and every rule
-// past that are assertMemoryInvariants', which the resume runs).
+// past that are assertMemoryInvariants', which the resume runs). A skill file (slice 4) also carries its version and its
+// lock: its size and its powers are read from them.
 const checkMemory: Check = (value, at) => {
   if (!Array.isArray(value)) shapeFail(at, 'is not a list');
   value.forEach((seg, i) => {
@@ -286,6 +313,10 @@ const checkMemory: Check = (value, at) => {
     str(entry.name, `${where}.name`);
     name(entry.type, `${where}.type`);
     whole(entry.size, `${where}.size`);
+    if (entry.type === 'upgrade' && (SKILL_IDS as readonly unknown[]).includes(entry.upgrade)) {
+      SKILL_VERSION_CHECK(entry.version, `${where}.version`);
+      oneOf(0, 1, 2)(entry.lock, `${where}.lock`);
+    }
   });
 };
 

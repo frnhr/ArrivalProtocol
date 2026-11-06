@@ -2039,6 +2039,10 @@ export const RESTORE_FRACTION = 0.5;
 // REPAIR v1 heals 100 ÷ (3 + 0.3 × 12) = 15.2 %/s, above 1.5 × the worst drain (5 %/s × 2 = 10, so 15); at 14 blocks it
 // would be 13.9 and the rule would break. data/skills.ts checks the table and the rule at load.
 export const SKILL_MAX_BLOCKS = 12;
+// The `+2 CYCLES` salvage card (02 §3.10): about half a ship's pay for skipping a file or charge, so it is a real choice
+// against FIREWALL or +12 CHARGE without buying a v2 outright. Never dealt into the final ship (no desk follows: plan §7
+// R12), nor on the classic world (no tree).
+export const CYCLES_CARD_CYCLES = 2;
 
 // --- 4 FLIGHT (owned by Track FLIGHT; it edits values only in this block): AUTOBURN v1–v3's flying (03 §3.6–§3.7) -------
 

@@ -14,6 +14,19 @@ import {
 } from '@data/tool-text';
 import { TOOL_HINTS } from '@data/fs-tools';
 import { INTEGRITY_MAX, REPAIR_V2_VERSION } from '@data/tuning';
+import type { SkillFileSegment } from '@/types/segment';
+import { isSkillFile } from '@state/selectors';
+import { fileLevel, lostLevels, paid, restorePrice } from '@systems/skill-levels';
+import { SKILL_TREE } from '@data/skills';
+import { PACKET_SKILL_TEXT } from '@data/training-text';
+
+// What deleting a skill file costs (slice 4): its skill until a desk's RESTORE, at the price the next desk will ask (the
+// levels the run paid for above what is left once it is gone: another copy, or nothing).
+function skillDeleteEffect(state: Readonly<GameState>, seg: Readonly<SkillFileSegment>): string {
+  const left = fileLevel(state.memory.filter((other) => other !== seg), seg.upgrade);
+  const restore = restorePrice(lostLevels(seg.upgrade, left, paid(state.run.skills, seg.upgrade)));
+  return PACKET_SKILL_TEXT.deleteEffect(SKILL_TREE[seg.upgrade].fileName.replace('.skl', ''), restore);
+}
 
 // What each fs-tool may be used on, and why not (§6.5). Pure: the strip's valid/invalid target
 // classes, a click on a segment, the detail panel's buttons and the actions themselves all ask
@@ -163,6 +176,8 @@ export function deleteQuestion(state: Readonly<GameState>, seg: Segment): Confir
   if (seg.type === 'redundancy') return CONFIRM_TEXT.deleteCharge(seg.used, seg.size);
   // A card's file: the card a kid picked goes with it.
   if (seg.type === 'firewall') return CONFIRM_TEXT.deleteFile(seg.name, DELETE_CARD_EFFECT.firewall, seg.size);
+  // Slice 4: a skill deleted is lost until a desk's RESTORE (03 §3.3), at the price the next desk will ask.
+  if (isSkillFile(seg)) return CONFIRM_TEXT.deleteFile(seg.name, skillDeleteEffect(state, seg), seg.size);
   if (seg.type === 'upgrade') return CONFIRM_TEXT.deleteFile(seg.name, DELETE_CARD_EFFECT[seg.upgrade], seg.size);
   if (seg.type === 'ship' || seg.type === 'ship-backup') {
     return CONFIRM_TEXT.deleteFile(seg.name, shipDeleteEffect(state, seg), seg.size);
