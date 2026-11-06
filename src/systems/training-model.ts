@@ -356,6 +356,11 @@ function previewFor(state: Readonly<GameState>, slot: number | null): TrainingPr
 
 // --- The model ---------------------------------------------------------------------------------------------------------
 
+// This desk's purchases train some skill's v3 (ARRIVAL CONTROL's line, 03 §7): a 'train' to version 3, any skill.
+function trainsV3(pending: readonly SkillPurchase[]): boolean {
+  return pending.some((purchase) => purchase.kind === 'train' && purchase.to.version === 3);
+}
+
 export function trainingModel(state: Readonly<GameState>): TrainingModel {
   const run = state.run;
   const visit = visitNow(run);
@@ -405,7 +410,7 @@ export function trainingModel(state: Readonly<GameState>): TrainingModel {
   return {
     visit, firstPick, armed: trainingArmed(state), title: TRAINING_TEXT.title(unitName(run.unitNumber)), bank, bankText: TRAINING_TEXT.bank(bank),
     demos: TRAINING_TEXT.demos(headDemos(state)),
-    control: firstPick ? TRAINING_TEXT.controlFirstVisit : null,
+    control: firstPick ? TRAINING_TEXT.controlFirstVisit : trainsV3(run.skills.pending) ? TRAINING_TEXT.controlV3 : null,
     topUp: topUp > 0 ? TRAINING_TEXT.onTheHouse(topUp) : null,
     blocked, cards, branches, closed, cells, selected, detail,
     pending: trainingPending(run.skills.pending),

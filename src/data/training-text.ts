@@ -14,10 +14,12 @@ import { MAX_LINE_CHARS } from '@data/tuning';
 const cycles = (n: number): string => `${n} CYCLE${n === 1 ? '' : 'S'}`;
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 'S'}`;
 
-// A demo kind's noun (03 §3.3; review m5): AUTOBURN learns from the kid's captures, AUTODROP (4c) from landings.
-export const DEMO_WORDS: Readonly<Record<DemoKind, { one: string; many: string }>> = {
-  captures: { one: 'capture', many: 'captures' },
-  drops: { one: 'landing', many: 'landings' },
+// A demo kind's noun and its measure (03 §3.3, §6; review m5; slice-4cde-plan R21): AUTOBURN learns from the kid's
+// captures and reads ACCURACY, AUTODROP (4c) from drops (a ship 1 has one landing and three drops, so `3 landings`
+// misread) and reads AIM (03 writes `AIM 91%`).
+export const DEMO_WORDS: Readonly<Record<DemoKind, { one: string; many: string; measure: string }>> = {
+  captures: { one: 'capture', many: 'captures', measure: 'ACCURACY' },
+  drops: { one: 'drop', many: 'drops', measure: 'AIM' },
 };
 const demosOf = (n: number, kind: DemoKind): string => `${n} ${n === 1 ? DEMO_WORDS[kind].one : DEMO_WORDS[kind].many}`;
 const fromDemos = (n: number, kind: DemoKind): string => (n === 0 ? `no ${DEMO_WORDS[kind].many} yet: UNTRAINED` : `from your ${demosOf(n, kind)}`);
@@ -55,6 +57,8 @@ export const TRAINING_TEXT = {
   // ARRIVAL CONTROL on the first visit (03 §7).
   controlTag: 'ARRIVAL CONTROL',
   controlFirstVisit: 'Training outside approved hours is discouraged. :)',
+  // ...and at a desk whose purchases train a v3 (03 §7; slice-4cde-plan §5.4), for any skill.
+  controlV3: 'Our repository has everything you need. :)',
   // The first-pick floor (03 §3.1): on the report of a run's first ship, and in the window's head at the first desk.
   onTheHouse: (n: number): string => `+${cycles(n)} · FIRST SKILL ON THE HOUSE :)`,
   saved: (n: number): string => `${cycles(n)} · SAVED FOR NEXT TIME`,
@@ -177,14 +181,18 @@ export const TRAINING_TEXT = {
 // The TRAINING cells' looping mini-demos (03 §4: "loops a 4-second mini-demo of the selected cell"), by data (review
 // architecture note: the view switched on 'autoburn-1' strings, so a new skill fell to the plain loop): a drawing per
 // version and one for LOCK RANGE (null for a skill without it). The drawings are TrainingWindow.ts demoSvg's; a new skill
-// names existing ones or adds its own there. 4c, 4d and slice 6 refine AUTODROP's, SENTRY's and SURVEY's.
-export type DemoArt = 'capture' | 'green' | 'low-orbit' | 'lock' | 'plain';
+// names existing ones or adds its own there. Slices 4c–4e (plan §6): AUTODROP's and SENTRY's six kinds are named here and
+// drawn as 'plain' for now; the review-fix pass draws all six in one hand. Slice 6 refines SURVEY's.
+export type DemoArt = 'capture' | 'green' | 'low-orbit' | 'lock' | 'plain'
+  | 'centre' | 'pass' | 'plan'              // AUTODROP v1–v3 (4c)
+  | 'sight' | 'quick-rm' | 'firewall';      // SENTRY v1–v3 (4d)
 
+// One line per skill, so each track edits only its own.
 export const TRAINING_DEMO_ART: Readonly<Record<SkillId, { versions: readonly [DemoArt, DemoArt, DemoArt]; lock: DemoArt | null }>> = {
   autoburn: { versions: ['capture', 'green', 'low-orbit'], lock: 'lock' },
-  autodrop: { versions: ['plain', 'plain', 'plain'], lock: null },
+  autodrop: { versions: ['centre', 'pass', 'plan'], lock: null },
   survey: { versions: ['plain', 'plain', 'plain'], lock: null },
-  sentry: { versions: ['plain', 'plain', 'plain'], lock: null },
+  sentry: { versions: ['sight', 'quick-rm', 'firewall'], lock: null },
 };
 
 // =======================================================================================================================
@@ -219,18 +227,19 @@ export const PACKET_SKILL_TEXT = {
 // =======================================================================================================================
 
 export const BOOT_SKILL_TEXT = {
-  // `> SKILL TRAINED: AUTOBURN.skl v1 · from your 1 capture · ACCURACY 92%` (plan §3 step 2), the noun by the skill's demo
-  // kind (AUTODROP: landings). Past MAX_LINE_CHARS `your` goes (`from 12 captures`).
+  // `> SKILL TRAINED: AUTOBURN.skl v1 · from your 1 capture · ACCURACY 92%` (plan §3 step 2), the noun and the measure by
+  // the skill's demo kind (AUTODROP: `from your 3 drops · AIM 91%`). Past MAX_LINE_CHARS `your` goes (`from 12 captures`).
   trained: (file: string, version: number, demos: number, kind: DemoKind, accuracy: number): string => {
-    const line = `> SKILL TRAINED: ${file} v${version} · from your ${demosOf(demos, kind)} · ACCURACY ${accuracy}%`;
-    return line.length <= MAX_LINE_CHARS ? line : `> SKILL TRAINED: ${file} v${version} · from ${demosOf(demos, kind)} · ACCURACY ${accuracy}%`;
+    const measure = DEMO_WORDS[kind].measure;
+    const line = `> SKILL TRAINED: ${file} v${version} · from your ${demosOf(demos, kind)} · ${measure} ${accuracy}%`;
+    return line.length <= MAX_LINE_CHARS ? line : `> SKILL TRAINED: ${file} v${version} · from ${demosOf(demos, kind)} · ${measure} ${accuracy}%`;
   },
   // No demos yet (03 §3.3's loud UNTRAINED state).
   untrained: (file: string, version: number, accuracy: number): string => `> SKILL TRAINED: ${file} v${version} · UNTRAINED ${accuracy}%`,
   // A skill with no demos (SURVEY, SENTRY).
   plain: (file: string, version: number): string => `> SKILL TRAINED: ${file} v${version}`,
   retrained: (file: string, version: number, demos: number, kind: DemoKind, accuracy: number): string =>
-    `> SKILL RETRAINED: ${file} v${version} · ${demosOf(demos, kind)} · ACCURACY ${accuracy}%`,
+    `> SKILL RETRAINED: ${file} v${version} · ${demosOf(demos, kind)} · ${DEMO_WORDS[kind].measure} ${accuracy}%`,
   // Slice 5's grants (`from the sleeper on CURLEW`).
   granted: (file: string, version: number, source: string): string => `> SKILL TRAINED: ${file} v${version} · ${source}`,
   online: (skill: string, version: number): string => `${skill} v${version} ONLINE`,

@@ -14,7 +14,8 @@ import { reachableFrom } from '@systems/map-hop';
 import { currentSlot } from '@systems/map-streams';
 import {
   AUTO_DEMO_WINDOW, AUTOBURN_OFFSET_FACTOR, AUTOBURN_OFFSET_MAX_TAC, AUTOBURN_ACCURACY_PER_TAC,
-  AUTOBURN_ACCURACY_MIN, AUTOBURN_ACCURACY_MAX, AUTOBURN_UNTRAINED_OFFSET_TAC,
+  AUTOBURN_ACCURACY_MIN, AUTOBURN_ACCURACY_MAX, AUTOBURN_UNTRAINED_OFFSET_TAC, AUTODROP_OFFSET_FACTOR, AUTODROP_OFFSET_MAX_TAC,
+  AUTODROP_AIM_PER_TAC, AUTODROP_AIM_MIN, AUTODROP_AIM_MAX, AUTODROP_UNTRAINED_OFFSET_TAC,
 } from '@data/tuning';
 
 // The levels (held, paid, lost, RESTORE's price) live in the leaf systems/skill-levels.ts; re-exported here with the rest.
@@ -68,6 +69,18 @@ export function demoSkill(offsets: readonly Readonly<{ offsetTac: number }>[], t
   return { demos: offsets.length, learnedOffsetTac: learned, accuracy: accuracyOf(learned, tuning), untrained: false };
 }
 
+// AUTODROP's (03 §3.3; slice-4cde-plan §2.6, R5): half the mean offset of the last 8 drops, ±1 tac s, AIM = clamp(100 −
+// 40 × |offset|, 40, 99); untrained, 1.5 tac s late (AIM 40%). DemoSkill.accuracy is its AIM.
+export const AUTODROP_DEMO_TUNING: Readonly<DemoTuning> = {
+  window: AUTO_DEMO_WINDOW,
+  factor: AUTODROP_OFFSET_FACTOR,
+  maxOffsetTac: AUTODROP_OFFSET_MAX_TAC,
+  accuracyPerTac: AUTODROP_AIM_PER_TAC,
+  accuracyMin: AUTODROP_AIM_MIN,
+  accuracyMax: AUTODROP_AIM_MAX,
+  untrainedOffsetTac: AUTODROP_UNTRAINED_OFFSET_TAC,
+};
+
 // AUTOBURN's, from the run's capture demos.
 export function autoburnDemoSkill(stats: Readonly<Pick<RunStats, 'demos'>>): DemoSkill {
   return demoSkill(stats.demos, AUTOBURN_DEMO_TUNING);
@@ -82,11 +95,11 @@ interface DemoSource {
 }
 
 // Where each demo kind's learning comes from (SkillDef.demos; review architecture note): one row per kind. A kind whose
-// learning is not built yet is null, and its skills read as having no demos (4c fills `drops` with AUTODROP's tuning, 03
-// §3.3: factor 0.5, ±1 tac s, AIM = clamp(100 − 40 × |offset|, 40, 99), from run.stats.dropDemos).
+// learning is not built yet is null, and its skills read as having no demos. Slice 4c's foundation filled `drops`: the
+// kid's launches (run.stats.dropDemos, recorded by Track DROP in landing.ts requestLaunch) with AUTODROP's tuning.
 export const DEMO_SOURCES: Readonly<Record<DemoKind, DemoSource | null>> = {
   captures: { tuning: AUTOBURN_DEMO_TUNING, of: (stats) => stats.demos },
-  drops: null,
+  drops: { tuning: AUTODROP_DEMO_TUNING, of: (stats) => stats.dropDemos },
 };
 
 // The demo kind a skill learns from now, or null for one with no demos (SURVEY, SENTRY) or whose learning is not built.

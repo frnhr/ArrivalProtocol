@@ -11,6 +11,8 @@ import { ownedUpgrades } from '@systems/draft';
 import { hollowLabel } from '@systems/say';
 import { SKILLS_TEXT } from '@data/script';
 import { autoburnStatus } from '@systems/autoburn';
+import { autodropStatus } from '@systems/autodrop';
+import { sentryStatus } from '@systems/sentry';
 import { AUTOBURN_SKILL_ROW } from '@data/skill-text';
 import { REPAIR_V2_VERSION, CHARGE_CARD_BLOCKS, CORE_LOW_INTEGRITY, FUEL_TRIM_DV_BONUS_FRAC } from '@data/tuning';
 import type { SkillFileSegment } from '@/types/segment';
@@ -265,8 +267,18 @@ interface SkillRowHook {
   effect: string;
   status: (state: Readonly<GameState>) => { text: string; tone: 'good' | 'warn' };
 }
+// Slices 4c–4e (plan §6): AUTODROP's and SENTRY's rows are pre-registered here, so the tracks never edit this literal: their
+// own module's status answers (autodrop.ts autodropStatus, sentry.ts sentryStatus), and null from it reads as the plain row.
 const SKILL_ROW_HOOKS: Readonly<Partial<Record<SkillId, SkillRowHook>>> = {
   autoburn: { title: AUTOBURN_SKILL_ROW.title, effect: AUTOBURN_SKILL_ROW.effect, status: autoburnStatus },
+  autodrop: {
+    title: SKILL_TREE.autodrop.fileName, effect: TRAINING_TEXT.skills.autodrop.pitch,
+    status: (state) => autodropStatus(state) ?? plainSkillStatus(state, 'autodrop'),
+  },
+  sentry: {
+    title: SKILL_TREE.sentry.fileName, effect: TRAINING_TEXT.skills.sentry.pitch,
+    status: (state) => sentryStatus(state) ?? plainSkillStatus(state, 'sentry'),
+  },
 };
 
 // A skill without a hook: its file's name, its pitch, and only whether it works.

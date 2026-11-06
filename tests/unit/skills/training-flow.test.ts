@@ -241,7 +241,8 @@ offTrained();
   const over = lines.filter((line) => line.length > MAX_LINE_CHARS);
   check('every boot and PACKET skill line fits MAX_LINE_CHARS with worst-case numbers (`from your` goes from 10 captures)',
     over.length === 0 && BOOT_SKILL_TEXT.trained('AUTOBURN.skl', 2, 12, 'captures', 88) === '> SKILL TRAINED: AUTOBURN.skl v2 · from 12 captures · ACCURACY 88%'
-    && BOOT_SKILL_TEXT.trained('AUTODROP.skl', 1, 1, 'drops', 90) === '> SKILL TRAINED: AUTODROP.skl v1 · from your 1 landing · ACCURACY 90%', over.join(' | '));
+    // Slice 4c–4e (plan R21): AUTODROP learns from drops and reads AIM.
+    && BOOT_SKILL_TEXT.trained('AUTODROP.skl', 1, 1, 'drops', 90) === '> SKILL TRAINED: AUTODROP.skl v1 · from your 1 drop · AIM 90%', over.join(' | '));
 }
 
 // --- Reloads (each a page open on a copy of the storage as it was) -------------------------------------------------------

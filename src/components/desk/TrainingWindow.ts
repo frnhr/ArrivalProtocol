@@ -66,6 +66,14 @@ function demoSvg(kind: DemoArt): string {
         + '<path class="tr-demo-flyby" d="M4 70 Q 48 52 60 14 Q 72 52 116 70"/><path class="tr-demo-bracket" d="M10 66 Q 48 50 58 16"/></svg>';
     case 'plain':
       return `<svg class="tr-demo tr-demo-plain" viewBox="0 0 120 80">${planet}<circle class="tr-demo-round" cx="60" cy="40" r="24"/></svg>`;
+    // Slices 4c–4e (plan §6): AUTODROP's and SENTRY's kinds, drawn as 'plain' until the review-fix pass draws them.
+    case 'centre':
+    case 'pass':
+    case 'plan':
+    case 'sight':
+    case 'quick-rm':
+    case 'firewall':
+      return `<svg class="tr-demo tr-demo-plain tr-demo-${kind}" viewBox="0 0 120 80">${planet}<circle class="tr-demo-round" cx="60" cy="40" r="24"/></svg>`;
   }
 }
 
