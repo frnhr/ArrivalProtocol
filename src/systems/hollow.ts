@@ -488,7 +488,7 @@ function stepSeeds(memory: Segment[], dtAi: number, seed: SeedDef, ctx: HollowSt
   hollow.seedMoments++;
   const spot = seedSpotFor(memory, seed.target, hollow.untriedTools);
   if (spot === null) return;
-  hollow.seedTelegraph = { startAddr: spot.startAddr, size: SEED_BLOCKS, leftSec: SEED_TELEGRAPH_SEC };
+  hollow.seedTelegraph = { startAddr: spot.startAddr, size: SEED_BLOCKS, leftSec: SEED_TELEGRAPH_SEC, preempted: false };
   events.push({ kind: 'seed-telegraph', startAddr: spot.startAddr, size: SEED_BLOCKS });
 }
 

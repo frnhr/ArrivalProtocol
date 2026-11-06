@@ -92,6 +92,7 @@ export function createRunThreat(): RunThreatState {
   return {
     trace: 0, aboard: false, age: 0, boardedAtDepth: null, boardCause: null, fed: 0, stagesPlayed: [],
     told: { noticed: false, keepCharge: false }, eatenDrivers: [], lastTally: null, current: null,
+    seedsMetAtDepth: null,
   };
 }
 

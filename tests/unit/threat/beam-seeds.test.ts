@@ -120,7 +120,7 @@ function freshPacket(): Packet {
 
   // The no-room rule: a receiver with no room left after the files and the charge floor.
   const room = MEMORY_LAYOUTS.FULL.totalBlocks - 256 + 24;
-  const crowded: Packet = { ...packet, seeds: [...packet.seeds, { targetId: packet.rackE.find((s) => s.role === 'autopilot')!.id, targetName: 'Autopilot', words: 'x' }] };
+  const crowded: Packet = { ...packet, seeds: [...packet.seeds, { targetId: packet.rackE.find((s) => s.role === 'autopilot')!.id, targetName: 'Autopilot', words: 'x', disguise: null }] };
   const filler: Segment = { id: 'big-skill', name: 'Filler', type: 'skill', size: room - packet.filesBlocks - CHARGE_ARRIVAL_FLOOR - BEAM_SEED_LAYOUT_BLOCKS - 2, integrity: 100 } as unknown as Segment;
   crowded.rackE = [...crowded.rackE, filler];
   const tight = layoutCarried(crowded, 40, kestrel, nominalShipThreat(KESTREL), '???');
@@ -197,7 +197,7 @@ function freshPacket(): Packet {
   for (const end = ai + 100; ai < end; ai += dt) stepHollow(memory, dt, SEEDS_ONLY_DEF, ctx(ai, false));
   check('…and after the seed is rm\'d the eaten block still bites nothing, and still reports home (tally 1)',
     aiFiles.filter((id) => id !== telemetry.id).every(intact) && tallyBeamBorn(memory) === 1);
-  check(`rm takes 2 s on a seed (1.0 + 0.5 per block)`, Math.abs(deleteSec(beamSeedSegment({ targetId: 'x', targetName: 'x', words: 'x' }, '???')) - 2) < 1e-9);
+  check(`rm takes 2 s on a seed (1.0 + 0.5 per block)`, Math.abs(deleteSec(beamSeedSegment({ targetId: 'x', targetName: 'x', words: 'x', disguise: null }, '???')) - 2) < 1e-9);
 }
 
 // --- One store: the beam into KESTREL ---------------------------------------------------------------------------------
@@ -318,7 +318,7 @@ h.untilPhase('flight', 60);
   const memory = s().memory;
   const region = memory.reduce((best, seg, index) => (seg.type === 'free' && seg.size > (memory[best]?.size ?? 0) ? index : best), -1);
   const free = memory[region]!;
-  const block = beamSeedSegment({ targetId: 'x', targetName: 'x', words: 'x' }, memory.find((seg) => seg.type === 'hollow')!.name);
+  const block = beamSeedSegment({ targetId: 'x', targetName: 'x', words: 'x', disguise: null }, memory.find((seg) => seg.type === 'hollow')!.name);
   memory.splice(region, 1, { ...free, size: free.size - block.size }, block);
   assertMemoryInvariants(memory, MEMORY_LAYOUTS.FULL.totalBlocks);
 }

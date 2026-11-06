@@ -8,6 +8,7 @@
 import type { Vec2 } from '@/types/orbit';
 import type { Colonist } from '@/types/segment';
 import type { GameState } from '@state/schema';
+import type { EffectiveVersion } from '@/types/skill';
 
 export type LzWidth = 'wide' | 'standard' | 'narrow';            // km in tuning LZ_WIDTH_KM
 export type ForgivenessClass = 'gentle' | 'rough' | 'harsh';     // off-site score in tuning OFF_SITE_SCORE_BY_CLASS
@@ -209,6 +210,9 @@ export interface LandingState {
   // Review M2: ghost bursts fired during this landing (orbit-sim counts them with burn.ghostBursts): its first is a SKIP's
   // stop (selectors ghostBurstsThisPhase), and from then the strip's SWAP THRUST CTRL row stands while the engine fires.
   ghostBursts: number;
+  // Slice 4c (AUTODROP, docs/phase3/impl/slice-4cde-plan.md §2.2): its machine, in the state so a controller is derived
+  // from it each tick (landing-controller.ts) and dies with its file. At rest at every save point (save-codec checks it).
+  autodrop: AutodropState;
 }
 
 // The window open now (§3.2, risk 13): the dot's centre in `lz`'s bracket while the ship is in the launch band; `sure`
@@ -397,4 +401,24 @@ export interface OnTargetTally {
   colonists: number;
   earned: boolean;     // at least STAR_ON_TARGET_FRAC of the colonists (so far, or for good once the landing is over)
   possible: boolean;   // it can still be earned: every pod not yet down would have to land soft on target
+}
+
+// --- Slice 4c: AUTODROP's machine (slice-4cde-plan §2.2, §3; Track DROP fills it, the FOUNDATION typed it) ---
+
+// What [G] armed: v2's one pass, or v3's whole plan.
+export type AutodropArm = 'pass' | 'plan';
+// Why the last pass or plan ended (the strip's words).
+export type AutodropEnd = 'pass-done' | 'plan-done' | 'cancel' | 'downgraded' | 'off' | 'offline' | 'landing-over';
+
+export interface AutodropState {
+  held: boolean;                    // v1: [L] (or a LAUNCH button) held on the SHIP screen
+  armed: AutodropArm | null;        // v2's [G] (this pass), v3's [G] (the plan)
+  pass: Record<string, number>;     // v2: pods per LZ for this pass (the POD BAY's [−] n [+]), kept between passes
+  sent: Record<string, number>;     // launched since [G] (`PASS DONE · A +2 · B +1`)
+  armedAtTSec: number | null;       // game s at [G]: a pass ends one period later
+  claimed: boolean;                 // holds its Core thread for the volley at hand
+  waitingSinceTSec: number | null;  // its claim found no thread free (it launches late)
+  flownAs: EffectiveVersion;        // the version it flew at the last tick (a downgrade acts once)
+  end: AutodropEnd | null;          // why the last pass or plan ended (the strip's words)
+  endAtAi: number | null;
 }

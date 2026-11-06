@@ -107,7 +107,7 @@ check('arrivalCharge: the floor is the destination\'s (12 by default, 0 on TIGHT
 // The no-room seed rule on TIGHT (04 §3.4): a seed with no room behind its target lands among the pods.
 const seedy = packUnit(unit(85, 10), 131, []);
 const target = seedy.rackE.find((seg) => seg.role === 'telemetry')!;
-seedy.seeds = [{ targetId: target.id, targetName: target.name, words: 'hello' }];
+seedy.seeds = [{ targetId: target.id, targetName: target.name, words: 'hello', disguise: null }];
 const seeded = layoutCarried(seedy, arrivalCharge(seedy.chargeCarried, 0, 0, 0).blocks, petrel, calm, '???');
 const seededMemory = buildShipMemory(petrel, seeded.racks as CarriedRacks, createRng(1), false, '???', null);
 const strayAt = segmentStarts(seededMemory)[seededMemory.findIndex((seg) => seg.type === 'hollow')]!;

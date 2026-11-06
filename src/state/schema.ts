@@ -115,6 +115,9 @@ export interface AutoburnState {
   // save inside a flight or a landing (4c) resumes the machine whole (RUN_SAVE_VERSION 3).
   flying: AutoburnBurn | null;
   captured: boolean;
+  // Slice 4e (slice-4cde-plan §2.2, §5.2): AUTOBURN v3 reached its landing orbit once; from then top-ups are gated (the
+  // hold). False unless mode is 'landing-orbit' (save-codec checks it).
+  holding: boolean;
 }
 
 export interface BurnState {
@@ -360,6 +363,8 @@ export interface ArrivalSeed {
   segId: string;
   targetName: string;
   loose?: true;
+  // Slice 4d (slice-4cde-plan §2.2): the decoy's name when it lands disguised (the boot's SENTRY line reads it), else null.
+  disguise: string | null;
 }
 
 // The transmission being prepared ('transmit'): the next ship, the link and how the unit's files pack
@@ -655,6 +660,8 @@ export interface SeedTelegraph {
   startAddr: number;
   size: number;
   leftSec: number;
+  // Slice 4d (slice-4cde-plan §4.4): SENTRY v2's DELETE armed on the outline; the seed is freed as it lands.
+  preempted: boolean;
 }
 
 export type AlertLayer = 'ship' | 'mind';

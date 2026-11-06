@@ -354,7 +354,7 @@ export function layoutCarried(
   if (free > 0) segs.push(freeSegment(free));
   const strays = seedSegs.slice(placed);
   const seeds = packet.seeds.map((plan, index): ArrivalSeed => ({
-    segId: seedSegs[index]!.id, targetName: plan.targetName, ...(index >= placed ? { loose: true as const } : {}),
+    segId: seedSegs[index]!.id, targetName: plan.targetName, disguise: plan.disguise?.name ?? null, ...(index >= placed ? { loose: true as const } : {}),
   }));
   return { racks: { startAddr, segs, ...(strays.length > 0 ? { strays } : {}) }, chargeBlocks: charge, overflowLost, seeds };
 }

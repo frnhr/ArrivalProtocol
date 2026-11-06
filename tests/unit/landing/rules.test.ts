@@ -12,6 +12,7 @@ import type {
   DropSolution, ForgivenessClass, LandingState, LaunchRecord, LzState, LzWidth, LzWindow, Place, PodFate, PodRecord, Touch,
 } from '@/types/landing';
 import { createRng } from '@systems/rng';
+import { createAutodropState } from '@state/initial';
 import { validateLandingDef } from '@data/landing-def';
 import { shipColonists, shipPodCount, validatePodRacks } from '@data/memory';
 import { LAUNCH_CONFIRM_TEXT, LANDING_REPORT_TEXT, COLONY_NAME_POOL } from '@data/landing-text';
@@ -74,6 +75,7 @@ function fakeState(opts: FakeOpts): GameState {
     bay: { loaded: opts.loaded ?? BAY_SLOTS, reloadTac: 0, cadenceLeftTac: opts.cadenceLeftTac ?? 0 },
     loadNext: opts.loadNext ?? null, startedAtTSec: 0, ended: opts.ended ?? null, lingerAiSec: null, noDriverAiSec: 0,
     window: null, fuelAtEndPct: null, orbitEpoch: 0, decay: { lastKickTSec: null, kicks: 0, last: null }, goLow: null, declined: null, ghostBursts: 0,
+    autodrop: createAutodropState(),
   };
   return {
     run: { phase: opts.phase ?? 'landing' },

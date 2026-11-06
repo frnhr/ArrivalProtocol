@@ -77,7 +77,7 @@ export function rollBeamSeeds(
     const words = SEED_WORDS_POOL[Math.floor(rng() * SEED_WORDS_POOL.length)]!;
     if (target === null) break;
     pool.splice(pool.indexOf(target), 1);
-    plans.push({ targetId: target.id, targetName: target.name, words });
+    plans.push({ targetId: target.id, targetName: target.name, words, disguise: null });
   }
   return plans;
 }
@@ -100,7 +100,7 @@ export function rollDeliverySeeds(chips: readonly DeliveryChip[], packet: Readon
     if (!(roll < chip.seedChance)) continue;
     const target = files.find((seg) => seg.id === packed.segIds[0]);
     if (target === undefined || !isInfectable(target)) throw new Error(`rollDeliverySeeds: ${chip.file}'s file is not an infectable packed file`);
-    plans.push({ targetId: target.id, targetName: target.name, words });
+    plans.push({ targetId: target.id, targetName: target.name, words, disguise: null });
   }
   return plans;
 }
@@ -135,7 +135,7 @@ export function plantBeamSeed(memory: Segment[], targetId: string, words: string
   const run = memory[freeAt]!;
   if (run.size === blocks) memory.splice(freeAt, 1);
   else memory[freeAt] = freeSegment(run.size - blocks);
-  const seed = beamSeedSegment({ targetId, targetName: memory[at]!.name, words }, owner);
+  const seed = beamSeedSegment({ targetId, targetName: memory[at]!.name, words, disguise: null }, owner);
   memory.splice(at + 1, 0, freeSegment(SEED_GAP_TO_TARGET_BLOCKS), seed, freeSegment(WALL_MIN_BLOCKS));
   mergeAdjacentFree(memory);
   return seed;

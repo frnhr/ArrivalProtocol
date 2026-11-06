@@ -326,7 +326,7 @@ function telegraphWhileBurning(fromAi: number, forSec: number): boolean {
     const spot = d.memory.findIndex((seg) => seg.type === 'free' && seg.size >= 8);
     let addr = 0;
     for (let i = 0; i < spot; i++) addr += d.memory[i]!.size;
-    d.hollow.seedTelegraph = { startAddr: addr + 2, size: 2, leftSec: SEED_TELEGRAPH_SEC };
+    d.hollow.seedTelegraph = { startAddr: addr + 2, size: 2, leftSec: SEED_TELEGRAPH_SEC, preempted: false };
     d.hollow.seedMoments = 1;
     d.hollow.seedInSec = 40;
   });

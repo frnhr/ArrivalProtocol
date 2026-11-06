@@ -108,7 +108,7 @@ function removeBeamSeeds(store: Store<GameState>): void {
   store.update((draft) => {
     draft.run.arrival = {
       hits: [], chargeCarried: 0, starCredit: 0, stars: 0, card: null, cardCharge: 0, chargeFloorAdded: 0, chargeOverflowLost: 0, eccCorrected: 0,
-      scripted: [], seeds: [{ segId: 'beam-seed-c', targetName: 'Telemetry' }], boarded: null, deliveries: [], skills: [],
+      scripted: [], seeds: [{ segId: 'beam-seed-c', targetName: 'Telemetry', disguise: null }], boarded: null, deliveries: [], skills: [],
     };
   });
   const clean = reportTraceLine(store.getState());

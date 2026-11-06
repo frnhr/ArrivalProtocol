@@ -7,7 +7,7 @@
 // threat-plan.ts all name it, so the type sits below all three and no data module has to import another for a type.
 // Owned like state/schema.ts: written by the slice 2 foundation; additions after it go through the lead (slice-2-plan §5.4).
 
-import type { SegmentRole } from '@/types/segment';
+import type { SegmentRole, SeedDisguise } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 
 // --- HOLLOW on one ship (§4.2, §6.6; 04 §3.9) ------------------------------------------------------------------------
@@ -142,6 +142,8 @@ export interface BeamSeedPlan {
   targetId: string;
   targetName: string;
   words: string;
+  // Slice 4d (slice-4cde-plan §4.1): the decoy it lands as (beam-seeds.ts rollDisguises, on its own stream), null: plain.
+  disguise: Pick<SeedDisguise, 'name' | 'desc'> | null;
 }
 
 // The record of one driver HOLLOW ate (slice 7's MERGE restores them; cheap to fill now).
@@ -183,6 +185,9 @@ export interface RunThreatState {
   // the first ship): hollow.ts keys `keepCharge` on aboard && oneHopFromFinal, the PACKET and INSPECT read isFinal.
   // Slice 3's map sets the same fields from the route; slice 5's resident hook can read them too.
   current: ShipThreatNow | null;
+  // Slice 4d (slice-4cde-plan R11): the depth of the first ship that met a seed, written once by run.ts endShip and never
+  // cleared, so SENTRY's 'after-seeds' opening reads a lasting record, not evidence that fades (TRACE, the last tally).
+  seedsMetAtDepth: number | null;
 }
 
 // The facts of the current ship's verdict that the world reads during it (RunThreatState.current).

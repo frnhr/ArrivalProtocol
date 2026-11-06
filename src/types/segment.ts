@@ -159,6 +159,15 @@ export interface HollowSegment extends SegmentBase {
   beam?: true;
   words?: string;
   last?: true;
+  // Slice 4d (slice-4cde-plan §2.2, §4.2): a beam seed drawn as a harmless file until SCAN, SENTRY or DELETE unmasks it.
+  disguise?: SeedDisguise;
+}
+
+// A disguised seed's decoy (04 §3.6): its file name and INSPECT line, and what unmasked it (null: not yet).
+export interface SeedDisguise {
+  name: string;
+  desc: string;
+  seen: 'scan' | 'sentry' | 'delete' | null;
 }
 
 export interface RedundancySegment extends SegmentBase {

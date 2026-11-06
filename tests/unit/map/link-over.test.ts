@@ -131,7 +131,7 @@ const filesOf = (state: Readonly<GameState>): number =>
       packet.filesBlocks += Math.max(1, filler);
       if (packet.filesBlocks + floor > room) continue;
       const seeds = Math.floor(rng() * 4);
-      packet.seeds = packet.rackE.slice(0, seeds).map((seg) => ({ targetId: seg.id, targetName: seg.name, words: 'x' }));
+      packet.seeds = packet.rackE.slice(0, seeds).map((seg) => ({ targetId: seg.id, targetName: seg.name, words: 'x', disguise: null }));
       const wanted = floor + Math.floor(rng() * 60);
       const layout = layoutCarried(packet, wanted, ship, nominalShipThreat(4), '???');
       const fit = roomFit({

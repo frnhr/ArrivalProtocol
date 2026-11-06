@@ -46,7 +46,7 @@ h.store.update((d) => {
   d.hollow.phase = 'awake';
   const freeSeg = d.memory.find((seg) => seg.id === free.id);
   if (!freeSeg) throw new Error('fixes.test: the free run went');
-  d.hollow.seedTelegraph = { startAddr: requireAddr(d.memory, freeSeg), size: 2, leftSec: 5 };
+  d.hollow.seedTelegraph = { startAddr: requireAddr(d.memory, freeSeg), size: 2, leftSec: 5, preempted: false };
 });
 const soul = state().memory.find((seg) => seg.type === 'driver');
 if (!soul) throw new Error('fixes.test: no driver on VESPER');

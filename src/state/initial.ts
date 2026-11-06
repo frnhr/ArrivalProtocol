@@ -2,7 +2,7 @@
 // edits.
 import type { GameState, RunPhase, RunState, HollowState, RunStats, ArchiveState, HazardsState } from './schema';
 import type { Segment } from '@/types/segment';
-import type { LandingState, PodRecord, ShipLandingDef } from '@/types/landing';
+import type { LandingState, PodRecord, ShipLandingDef, AutodropState } from '@/types/landing';
 import type { HollowDef, ShipThreat } from '@/types/threat';
 import type { RunMapState } from '@/types/map';
 import type { SaveState } from '@/types/save';
@@ -221,6 +221,16 @@ export function createLandingState(def: ShipLandingDef, memory: readonly Segment
     goLow: null,
     declined: null,
     ghostBursts: 0,
+    autodrop: createAutodropState(),
+  };
+}
+
+// AUTODROP at rest (slice 4c, slice-4cde-plan §2.2): nothing held or armed, no pass set. Every landing starts here, and
+// the migration to save v4 writes it into a saved world.
+export function createAutodropState(): AutodropState {
+  return {
+    held: false, armed: null, pass: {}, sent: {}, armedAtTSec: null, claimed: false, waitingSinceTSec: null, flownAs: 0,
+    end: null, endAtAi: null,
   };
 }
 
