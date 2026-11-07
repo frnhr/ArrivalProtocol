@@ -75,3 +75,9 @@ Status words:
 19. **The `?` ship cards and the old-colony and signal events wait for slice 7** (R18). DEFERRED. Only the notes
     collect signals now, at most 3 on an arm.
 20. **The receiver bypass animation is deferred to slice 8** (R19). DEFERRED. The line is in slice 5.
+21. **A departed resident's leftover skill card takes no link room.** BUILT. It is granted and installs at the next
+    boot, the same way the +2 CYCLES card does. This keeps the leftover deck a pure bonus. To change: route it through
+    the packet in `draft.ts applyLeftoverPick`.
+22. **MOTH's gift (4 cycles) is paid whenever the sleeper was woken,** whether the ship lands or is lost. BUILT.
+23. **MOTH's job keys are R, H and T.** BUILT. The spec's D/W/M clash with keys already bound in play: M mutes the game,
+    and W and D are flight presets.
