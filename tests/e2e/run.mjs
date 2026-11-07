@@ -19,6 +19,7 @@ const SCENARIOS = [
   { name: 'playthrough', file: 'playthrough.mjs', what: 'a whole run played by the strip on run 1\'s arm: six ships through the DESK with the worked route\'s requests, the RUN TALLY, NEW RUN' },
   { name: 'run-flow', file: 'run-flow.mjs', what: 'a run through every screen and the DESK, BEAM OUT, NEW RUN twice, HOLLOW on CORMORANT' },
   { name: 'map-desk', file: 'map-desk.mjs', what: 'the galaxy map\'s DESK: chart, card, SET COURSE, ◀ CHART, TOO LATE, TIGHT\'s 0-charge confirm, the phone sheet, the title\'s beacon; 3b: the REPOSITORY and INBOX tabs, requests, SEND ON, last rm, the flight INBOX' },
+  { name: 'skills-4cde-landing', file: 'skills-4cde-landing.mjs', what: 'slices 4c and 4e in the page: AUTODROP v1 held to BULLSEYE, v2\'s pass from the POD BAY flown from the MIND, v3\'s plan and [F] per gap, AUTOBURN v3 to its landing orbit' },
   { name: 'resume', file: 'resume.mjs', what: 'slice 3c\'s run save: RESUME at a desk, mid-flight (the boot replayed), at the final report; NEW RUN\'s confirm (ENTER and ESC keep, DEL abandons); CAN\'T RESUME and ABANDON RUN; NO SAVE' },
   { name: 'label-hops', file: 'label-hops.mjs', what: 'NAV PLOT labels never hop, desktop and phone' },
   { name: 'phone', file: 'phone.mjs', what: 'the phone layout: touch, overflow, every strip line fits' },
