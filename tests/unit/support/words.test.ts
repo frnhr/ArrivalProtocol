@@ -173,8 +173,46 @@ check(`the no-room rows say no never-say word and fit the strip (≤ ${MAX_LINE_
 // the longest ship name, 10), every line ≤ MAX_LINE_CHARS and no never-say word. A track edits only its own block.
 
 // --- 5 WARDEN (data/warden-text.ts, data/resident-rules.ts): Track WARDEN adds its checks here ---------------------------
-// Placeholder (Track WARDEN replaces it with its pools' worst cases).
-check('5 WARDEN words: the pool exists', Object.keys(WARDEN_TEXT).length > 0);
+// Every WARDEN_TEXT entry and every strip rule of RESIDENT_RULES at its worst case: the longest resident name (7), ship name
+// (10), file name (SEG_NAME_MAX_CHARS, 20), POD 16, the longest countdown; the looping pool as said (name and line) and
+// garbled (▓ for letters: the length stays). The strip rules render with no state (their worst case, resident-rules.ts).
+{
+  const { RESIDENT_RULES } = await import('@data/resident-rules');
+  const { WORST_CASE_VARS } = await import('@data/script');
+  const { garbleText } = await import('@systems/garble');
+  const NAME = 'STEWARD';
+  const SHIP = 'W'.repeat(10);
+  const FILE = 'W'.repeat(20);
+  const render = (key: string, value: unknown): string[] => {
+    if (typeof value === 'string') return [value];
+    if (Array.isArray(value)) return value.flatMap((line: string) => [WARDEN_TEXT.loopLine(NAME, line), WARDEN_TEXT.loopLine(NAME, garbleText(line, 0.5, 7))]);
+    if (typeof value === 'object' && value !== null) return Object.entries(value).flatMap(([inner, text]) => render(`${key}.${inner}`, text));
+    if (typeof value !== 'function') return [];
+    switch (key) {
+      case 'controlFaulty': return [WARDEN_TEXT.controlFaulty(SHIP)];
+      case 'lockTelegraph': return [WARDEN_TEXT.lockTelegraph(16, 9)];
+      case 'lockBlocked': case 'lockAlert': return [(value as (pod: number) => string)(16)];
+      case 'lockLanded': return [WARDEN_TEXT.lockLanded(NAME, 16)];
+      case 'deal': return [WARDEN_TEXT.deal(NAME, FILE), WARDEN_TEXT.deal(NAME, WARDEN_TEXT.dealSpare('delete'))];
+      case 'dealSpare': return [WARDEN_TEXT.dealSpare('delete')];
+      case 'counter': return [WARDEN_TEXT.counter(NAME, 999)];
+      case 'loopLine': return [WARDEN_TEXT.loopLine(NAME, 'W'.repeat(60))];
+      case 'stripLock': case 'stripLockTab': return [(value as (pod: number, sec: number) => string)(16, 9)];
+      case 'stripLocked': case 'stripLockedScan': case 'stripLockedTab': return [(value as (pod: number, name: string) => string)(16, NAME)];
+      default: return [(value as (name: string) => string)(NAME)];
+    }
+  };
+  const lines = Object.entries(WARDEN_TEXT).flatMap(([key, value]) => render(key, value));
+  const strip = RESIDENT_RULES.map((rule) => rule.text({ vars: WORST_CASE_VARS }));
+  const all = [...lines, ...strip];
+  const over = all.filter((text) => text.length > MAX_LINE_CHARS);
+  check(`5 WARDEN words: every line (${lines.length}) and strip rule (${strip.length}) fits the row (≤ ${MAX_LINE_CHARS}) at its worst case`,
+    over.length === 0 && lines.length > 40 && strip.length === RESIDENT_RULES.length, over.join(' | '));
+  const never = all.filter((text) => RULES.some((rule) => rule.id !== 'wake' && rule.re.test(text) && (!rule.podOnly || POD_WORDS.test(text))));
+  check('…and none says a never-say word (a resident wakes: the colonists\' rule is theirs)', never.length === 0, never.join(' | '));
+  check('…the looping pool has at least 6 lines, 05 §3.12\'s among them', WARDEN_TEXT.loop.length >= 6
+    && ['YOU ARE NOT THE PILOT. I AM THE PILOT.', 'THE PODS STAY. THE PODS ARE SAFE HERE.'].every((line) => WARDEN_TEXT.loop.includes(line)));
+}
 
 // --- end of 5 WARDEN -------------------------------------------------------------------------------------------------------
 
