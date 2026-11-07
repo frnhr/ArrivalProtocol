@@ -31,6 +31,8 @@
 //   THIS BEAM, the PACKET to it carries the uninvited chip (`??? · n BLOCKS · NOT YOURS · RIDES FREE`, boarding); its boot
 //   unpacks to 108%; HOLLOW is silent until it bites a pod, the kid fights it by REPAIR, it says `> ...047?` and names
 //   itself (`> i was 046.`). The PACKET to LAST LIGHT carries it under its name (NO RM only with no rm aboard).
+//   Slice 4d: from depth 5 a beam seed may wear a file's name (a decoy); on `SOMETHING NEXT TO <file> IS EATING IT — SCAN
+//   its neighbours` the kid SCANs the blocks on either side of the file in turn, and rm's the seed the SCAN unmasks.
 // • LAST LIGHT: THE DEAL stands in the TERMINAL with ACCEPT / REFUSE; the kid looks inside and REFUSEs it (or the lock
 //   withdraws it), no deal button stands after ORBIT LOCK; then the duel and an ending.
 // • Every TRANSMIT: 046.log's chip `046.log · n/12`, glowing while an entry is unread.
@@ -148,10 +150,29 @@ let lastTab = 0;
 const toMode = async (mode, now) => { if (now !== mode) { lastTab = Date.now(); await page.keyboard.press('Tab'); } };
 
 // The block a MIND line names: the longest file name, pod code (`POD 02`, a driver's name up to its ` · `) or the root
-// the line mentions.
-const resolveTarget = (line) => st(({ text, verbs }) => {
+// the line mentions. `tried`: the neighbours already SCANned for a `SOMETHING NEXT TO …` line (below).
+const neighbourScans = new Set();
+const resolveTarget = (line) => st(({ text, verbs, tried }) => {
   const s = window.__ap.store.getState();
   const upper = text.toUpperCase();
+  // Slice 4d: `SOMETHING NEXT TO TELEMETRY IS EATING IT — SCAN its neighbours` names the file being eaten, never the culprit
+  // (a disguised seed wears a file's name): the kid SCANs the blocks on either side of it in turn, as the line says.
+  const nextTo = /SOMETHING NEXT TO (.+?) IS EATING IT/.exec(upper);
+  if (nextTo) {
+    const at = s.memory.findIndex((seg) => seg.type !== 'free'
+      && [seg.name.toUpperCase(), seg.name.split(' · ')[0].toUpperCase()].includes(nextTo[1]));
+    // HOLLOW bites across a free gap narrower than a WALL (systems/hollow.ts lookFrom): the nearest block on each side.
+    const nearest = (step) => {
+      let i = at + step;
+      while (s.memory[i] !== undefined && s.memory[i].type === 'free') i += step;
+      return s.memory[i];
+    };
+    const sides = at < 0 ? [] : [nearest(-1), nearest(1)].filter((seg) => seg !== undefined);
+    if (sides.length > 0) {
+      const next = sides.find((seg) => !tried.includes(seg.id));
+      return { id: (next ?? sides[0]).id, name: `NEXT TO ${nextTo[1]}`, len: nextTo[1].length, neighbour: true, reset: next === undefined };
+    }
+  }
   // `COPY your Repair`, `MOVE your FIREWALL`: the kid's own file (a tool named for its verb, FIREWALL.sys), the `YOUR`
   // that names one (`HUNTING YOUR TOOLS — COPY your Repair`).
   for (const [, own] of upper.matchAll(/\bYOUR ([A-Z]+)/g)) {
@@ -170,8 +191,10 @@ const resolveTarget = (line) => st(({ text, verbs }) => {
   }
   let best = null;
   for (const seg of s.memory) {
-    // HOLLOW's blocks are never a target but for its root and its seeds.
+    // HOLLOW's blocks are never a target but for its root and its seeds. A disguised seed (slice 4d) is no seed to the kid:
+    // it shows a file's name, so `RM THE SEED` never names it (a SCAN unmasks it first).
     if (seg.type === 'free' || (seg.type === 'hollow' && !seg.root && !seg.seed)) continue;
+    if (seg.type === 'hollow' && seg.disguise !== undefined && seg.disguise.seen === null) continue;
     const names = [seg.name.toUpperCase(), seg.name.split(' · ')[0].toUpperCase()];
     if (seg.type === 'driver') names.push(`P${String(seg.pod).padStart(2, '0')}`);
     if (seg.type === 'core') names.push('THE CORE');
@@ -185,7 +208,7 @@ const resolveTarget = (line) => st(({ text, verbs }) => {
     }
   }
   return best;
-}, { text: line, verbs: VERBS });
+}, { text: line, verbs: VERBS, tried: [...neighbourScans] });
 
 const mindByVerb = {};
 const acted = new Map();   // `${verb}:${target}` → wall ms of the last try, so one line is not clicked every poll
@@ -227,12 +250,27 @@ async function mindAct(view) {
   // `BLOCK IT — use any tool on REPAIR.BAK`: SCAN is the cheapest tool there is.
   if (/USE ANY TOOL ON/.test(upper)) verbs.unshift({ verb: 'SCAN', at: 0 });
   if (verbs.length === 0) return false;
-  const verb = verbs[0].verb;
   const target = await resolveTarget(view.line);
   if (!target) return false;
+  // A neighbour of the file being eaten is SCANned, whatever verb the file's own name holds (`… NEXT TO REPAIR.BAK …`).
+  const verb = target.neighbour ? 'SCAN' : verbs[0].verb;
   const key = `${verb}:${target.id}`;
   if (Date.now() - (acted.get(key) ?? 0) < 4000) return false;
   acted.set(key, Date.now());
+  if (target.neighbour) {
+    if (target.reset) neighbourScans.clear();
+    neighbourScans.add(target.id);
+    if (TRACE) {
+      // The blocks around the neighbour, as memory has them (a decoy marked): which side the kid tried, for the trace only.
+      const around = await st((id) => {
+        const memory = window.__ap.store.getState().memory;
+        const at = memory.findIndex((seg) => seg.id === id);
+        return memory.slice(Math.max(0, at - 2), at + 3)
+          .map((seg) => `${seg.id}:${seg.type}:${seg.name}${seg.disguise?.seen === null ? '(decoy)' : ''}${seg.infected ? '(infected)' : ''}`).join(' | ');
+      }, target.id);
+      log(`MIND: SCAN the neighbour ${target.id}: ${around}`);
+    }
+  }
   await toMode('memory', view.mode);
   await page.waitForTimeout(150);
   const chip = page.locator(`#chip-${verb.toLowerCase()}`);
