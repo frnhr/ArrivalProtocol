@@ -1,5 +1,6 @@
-// Slices 4c–4e: the lead owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2); the 4c–4e hooks' bodies are in the
-// track modules (autodrop.ts, sentry.ts, beam-seeds.ts, autoburn-v3.ts). Tracks ask by message.
+// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §2.12, §5); the 4c–4e and slice 5 hooks' bodies are in
+// the track modules (autodrop.ts, sentry.ts, beam-seeds.ts, autoburn-v3.ts; resident-corrupted.ts, resident-sleeper.ts).
+// Tracks ask by message.
 import type { Store } from '@state/store';
 import type { GameState, Speaker, ObjectiveLine, LogEntry, ViewMode, TerminalStatus, EndingLine } from '@state/schema';
 import { getPrediction, getSensedPrediction, type Prediction } from '@systems/predict';
@@ -58,6 +59,11 @@ import { preemptSeed, type PreemptRefusal } from '@systems/sentry';
 import { v3Debug, type LandingOrbitAim } from '@systems/autoburn-v3';
 import { beamSourceOf, arrivalDeliveries, arrivalSkills } from '@systems/run';
 import { playsTutorial } from '@systems/meta';
+import type { ResidentKind, ResidentShown, SleeperJob, SignalRecord } from '@/types/resident';
+import { residentDebug, type ResidentDebug } from '@systems/residents';
+import { wakeResidentNow, lockNow, offerResidentDealNow, angerResidentNow } from '@systems/resident-corrupted';
+import { wakeSleeperNow, pickSleeperJob } from '@systems/resident-sleeper';
+import { RESIDENT_BUILT } from '@data/residents';
 import { SEED_WORDS_POOL, DISGUISE_POOL } from '@data/threat-text';
 import { SEEDS_ONLY_DEF } from '@data/threats';
 import type { ShipThreat } from '@/types/threat';
@@ -332,6 +338,20 @@ interface DebugHooks {
   disguiseOdds: (depth: number) => number;
   preempt: () => PreemptRefusal | null;
   v3: () => { aim: LandingOrbitAim | null; key: string | null };
+  // Slice 5 (slice-5-plan §2.12). resident(): the ship's resident slice and the run's records (met, signals). resident.place
+  // writes a resident of `kind` into this ship's reservation (shown, name and fragments default to faulty or unknown, WARDEN
+  // or MOTH, 0) and restarts the ship from its boot, so any arm ship but the first and the final can host any kind (a kind
+  // not built plays as none). WARDEN's: wake, lock (a pod, default the next in launch order), deal, angry. KIN's: the
+  // sleeper's wake and job, and the signals found.
+  resident: (() => ResidentDebug) & {
+    place: (kind: ResidentKind, opts?: { shown?: ResidentShown; name?: string; fragments?: number }) => void;
+    wake: () => void;
+    lock: (pod?: number) => void;
+    deal: () => void;
+    angry: () => void;
+  };
+  sleeper: { wake: () => void; job: (job: SleeperJob) => void };
+  signals: () => SignalRecord[];
   // WP9 part 2: what the screens show of the zones and AUTOBURN, as data: the NAV PLOT's zone glyphs and labels,
   // the MIND's rack tags (both from the sensed prediction) and the Engine window's AUTO button.
   zonesHud: () => { plot: PlotZoneModel[]; racks: RackZoneTag[]; auto: AutoButtonModel };
@@ -705,6 +725,33 @@ function debugRoute(store: Store<GameState>, slots: readonly number[]): Hop {
   const facts = mapFacts(map, prev, last, slots.length);
   debugArrive(store, hop, planThreat(threatInputFor(prior, facts, false)));
   return hop;
+}
+
+// __ap.resident.place(kind, opts): this ship's reservation holds a resident of `kind` (02 §3.5's, as the map would have rolled
+// it), then the ship restarts from its boot: the route as it stands, re-arrived at its last stop (debugRoute: the unit's
+// files as they are now, the nominal route's threat). Not on the first ship (it meets a fresh unit) or a final ship (02: never
+// a resident there). A name is 1–7 capitals (the words' worst case, 05 §3.11's pools); fragments only on a departed one.
+function debugPlaceResident(store: Store<GameState>, kind: ResidentKind, opts: { shown?: ResidentShown; name?: string; fragments?: number }): void {
+  const map = armMapOf(store, 'resident.place');
+  const state = store.getState();
+  const slot = currentSlot(state.run);
+  const route = map.route.map((stop) => stop.slot);
+  if (route.length < 2) throw new Error('__ap.resident.place: not on the first ship (it meets a fresh unit); go further out with __ap.slot');
+  if (shipDefAt(map, slot).final) throw new Error('__ap.resident.place: a final ship never has a resident (02-map)');
+  const name = opts.name ?? (kind === 'sleeping' ? 'MOTH' : 'WARDEN');
+  if (!/^[A-Z]{1,7}$/.test(name)) throw new Error(`__ap.resident.place: '${name}' is not 1–7 capital letters`);
+  const fragments = opts.fragments ?? 0;
+  if (!(Number.isInteger(fragments) && fragments >= 0 && fragments <= 1) || (fragments > 0 && kind !== 'left')) {
+    throw new Error(`__ap.resident.place: ${fragments} fragment(s) on a ${kind} resident (a departed resident's note carries 0 or 1)`);
+  }
+  const shown = opts.shown ?? (kind === 'corrupted' ? 'faulty' : 'unknown');
+  store.update((draft) => {
+    const reserved = draft.run.map.arm[slot]!.reserved;
+    reserved.resident = { kind, shown, name };
+    reserved.fragments = fragments;
+  });
+  if (!RESIDENT_BUILT[kind]) console.info(`[debug] __ap.resident.place: '${kind}' is not built yet: the ship plays with no resident`);
+  debugRoute(store, route);
 }
 
 // __ap.runNumber(n): a NEW RUN now, as run `n` of the arm (run 1: run 1's arm; later: a fresh roll with ARES-(VI + n) and
@@ -1109,6 +1156,15 @@ export function mountDebug(store: Store<GameState>): void {
     disguiseOdds: (depth) => disguiseChanceAt(depth),
     preempt: () => preemptSeed(store),
     v3: () => v3Debug(store.getState(), getPrediction()),
+    resident: Object.assign(() => residentDebug(store.getState()), {
+      place: (kind: ResidentKind, opts: { shown?: ResidentShown; name?: string; fragments?: number } = {}) => { debugPlaceResident(store, kind, opts); },
+      wake: () => wakeResidentNow(store),
+      lock: (pod?: number) => lockNow(store, pod),
+      deal: () => offerResidentDealNow(store),
+      angry: () => angerResidentNow(store),
+    }),
+    sleeper: { wake: () => wakeSleeperNow(store), job: (job) => pickSleeperJob(store, job) },
+    signals: () => structuredClone(store.getState().run.residents.signals),
     audio: {
       isAudioUnlocked,
       isMuted,
