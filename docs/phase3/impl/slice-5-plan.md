@@ -1297,3 +1297,102 @@ skipped, 130 s on 4 workers. Every follow-up below is either a type, a field at 
   - uses `shipLaunchYear` for INSPECT's year.
   - Test lines: `support/words.test.ts:191–195`, `tuning.ts:2289–2297`, `audio-cues.ts:317–335`.
 - **The lead** now also owns `WindowGrip.ts` and `ObjectiveStrip.ts` (§5).
+
+## Deviations (Track KIN)
+
+Recorded by Track KIN (branch `kin-5`, from 2f3c2de). Parts c and d are built and raised, `sleeping` first and `left` last,
+each with its `built` check. The unit tier is green with both raised (see the end of this section).
+
+### A lead patch (requested, applied as its own commit so the lead can take or replace it)
+
+1. **The `data/ships.ts` → `systems/zones.ts` load cycle** (commit 8959492). `data/ships.ts` imported `systems/zones` only
+   for its load-time zone checks, and that system's imports (`state/actions` → `systems/residents`) put every resident module
+   inside `data/ships.ts`'s own load. The moment a resident module imports anything that reaches `data/classic-five.ts`
+   (`systems/autodrop` for RUN THE DROPS, `systems/hollow`, `systems/skill-tree`, `systems/draft`, `systems/map-run`), classic-five's
+   load-time checks run before `data/ships.ts` has (`TypeError: __name is not a function` in every suite). The FOUNDATION's
+   stubs imported nothing heavy, so it never showed. The fix moves `inboundPoint` and `validateZoneDefs` unchanged into a new
+   data module, `data/zone-check.ts`; `zones.ts` re-exports them, `ships.ts` imports from the data module. No behaviour change.
+   WARDEN's `resident-corrupted.ts` will meet the same wall as soon as it imports `hollow.ts` (`rmTargets`): if WARDEN fixed it
+   another way, drop this commit.
+
+### Deviations
+
+2. **R22: nothing moved.** Raised in a scratch run before `left.test` existed, `left` failed only its own `built` check: the
+   195 other suites stayed green, the eight measured movers among them. The harnesses pick `charge` when it is dealt and
+   `offer[0]` otherwise, and the deck's first two cards are pool cards (R14), so their checks hold. No suite was edited for
+   R22.
+3. **The cards' roll** is a post tick in `mountResidentLeft` (every phase, so the boot's first tick), whenever a leftover has
+   no card yet; `draftContext(state, Infinity)` (no link bound at the boot: the PACKET checks the hop's room). With fewer than
+   two pool cards it throws. A second roll rolls the same cards.
+4. **The deck's stand-ins** are plain cards (no `leftover` field), so FACE can tell a leftover's card from the normal deal's:
+   an eaten leftover, a pool card `draftEntries` no longer deals on this hop, and a skill card with no skill and no room for
+   `+2 CYCLES` (not dealt into a final ship, or a pool card is already it). `+2 CYCLES` standing in for the skill keeps its
+   leftover. A leftover card's `why` is `HELM left it behind` unless a boost has a reason. The normal deal's rng is drawn as
+   before, so the stand-ins are its cards in its order.
+5. **The skill card's title and effect** are KIN's (`AUTODROP.skl v1`, `A skill left behind: it installs at the next boot,
+   free`); FACE paints the chip from `RESIDENT_UI_TEXT.deck`. Its grant label is 05's `from the resident that left HERON`
+   when the TRAINED line fits 70, else `left behind on PROVIDENCE` (AUTOBURN.skl from a 10-letter ship is 73).
+6. **`applyLeftoverPick`** also skips when `grantAllowed` says no at the send (as well as a pending purchase), and throws on a
+   skill card that names no skill.
+7. **Refusals.** The note: SCAN only (DELETE `logDelete`, MOVE `noteMove`, COPY `logCopy`, REPAIR `logRepair`). A leftover's
+   COPY is `logCopy` (`IT ISN'T YOURS TO COPY`), not `logDelete`. The lock's COPY is `logCopy`. MOTH awake: DELETE `logDelete`,
+   REPAIR `firewallHealth`; asleep, the plan's. MOTH.wall: DELETE `wallDelete`, MOVE `wallMove`, COPY `sleeperCopy`, REPAIR
+   `firewallHealth`. SWAP on every KIN file is `swapShipOnly`.
+8. **The wake's words.** Three lines (`…oh! hello…`, `372 years…`, `i'm MOTH. i sing to the pods.`), then the offer is its own
+   line, `MOTH: would you like some help?`, so a re-offer after a DEAL says only that. The years are the ship's `approachYear`
+   less `shipLaunchYear`. The woken file's desc becomes `MOTH. A nursery AI. It sings to the pods.` and it is marked scanned.
+9. **R23, generalised:** MOTH's offer is withdrawn when HOLLOW's DEAL is offered **or any other choice opens**, or when its
+   log line has left the log, and it is made again only when nothing else stands. An answer that came in the same tick wins
+   over a withdrawal.
+10. **HOLD A WALL's spot.** For each hollow block (a disguised seed does not count: the button would give it away), each side
+    whose open free run (unreserved) is at least 4: the drivers beyond it, walking out through food and free space until a
+    blocker or another hollow block; the most drivers wins, ties to the first. The wall is the run's 4 blocks at its far end,
+    flush against what the drivers are behind. If the spot went between the offer and the button, MOTH says `oh dear. there's
+    no room to stand now.` and offers again. **Note for Fran (R13):** a free run that fits a 4-block wall is already a WALL by
+    the kid's rule, so MOTH.wall never stops a bite that would otherwise land: it keeps that run from being filled (a seed's
+    landing, a MOVE, HOLLOW's mv). On run 1's CURLEW the beam's seed is in rack E with no driver in reach, so the wall offered
+    there guards the unit's files.
+11. **MEND DRIVERS** stays on the driver it is healing while that one needs it, else takes the lowest; it skips a driver with
+    an op on it (the kid's REPAIR or MOVE). At 100 an infected driver is cured through `hollow.ts cureNow`. No line per
+    driver.
+12. **RUN THE DROPS' SKIP:** `'skip'` when the plan's own decide says nothing, no window is open, and the plan names a later
+    launch. A pod the plan cannot fit (a hurt driver: AUTODROP v3's rule, OPEN-DECISIONS 5) stays aboard for the kid, and the
+    landing does not end by itself while it does.
+13. **`wakeSleeperNow`** deletes the lock as an rm would (its blocks freed) before the wake; `pickSleeperJob` answers a standing
+    offer and throws while asleep, once working, or for a wall with no spot.
+14. **The gift** is paid in `sleeperShipEnd` before the record (R12, m10). A standing offer is withdrawn there (`'awake'`).
+15. **Tests beyond §7.1:** `residents/sleeper-sweep.test.ts` (BALANCE_ONLY, §7.2's sleeper sweep: five seeds × five rows).
+    The corrupted sweep is WARDEN's.
+
+### Measurements
+
+- **The leftover deck** (run 1's arms, seeds 1–30, every departed resident's ship reached by its shortest route, 150 decks): pool
+  cards charge 72, fuel-trim 63, cycles 58, firewall 57, thread-plus 44; 6 plain stand-ins (a file card with no link room).
+  The skill card was AUTODROP v1 in all 150, because the fixture's unit owns AUTOBURN from desk 1 and SENTRY's branch is not
+  open that early; a kid who took AUTODROP first gets AUTOBURN.
+- **The sleeper on CURLEW** (`residents/sleeper-sweep`, seeds 1, 3, 5, 7 and 9; landed % of colonists in an LZ; the drivers as
+  the hops left them):
+
+  | Row | 1 | 3 | 5 | 7 | 9 | mean |
+  |---|---|---|---|---|---|---|
+  | by hand | 86 | 71 | 86 | 57 | 57 | 71 |
+  | RUN THE DROPS, no hands (pods left aboard) | 57 (3) | 86 (1) | 86 (1) | 86 (1) | 71 (1) | 77 |
+  | RUN THE DROPS + the kid's hands | 71 | 57 | 86 | 57 | 57 | 66 |
+  | MEND 20 s, then by hand | 86 | 86 | 100 | 71 | 71 | 83 |
+  | AUTODROP v3 bought, [G] | 71 | 86 | 100 | 86 | 71 | 83 |
+
+  MEND heals every driver to 100 within 20 s of the approach on all five seeds. RUN THE DROPS flies as well as a bought v3 on
+  the pods it can fit, but leaves the hurt drivers' pods aboard. **With the kid's hands it is worse than by hand:** the strip
+  still says `press [L]` while MOTH flies (a patch requested below), so the kid launches first, out of MOTH's plan.
+- **CURLEW on seed 7's route (ARES-VII → PETREL → CURLEW) brings SCAN and REPAIR only**, so the kid cannot wake MOTH there
+  without a requested DELETE or MOVE. Information for slice 8.
+- A Playwright pass on seed 7 (`__ap.slot(7)`, dev server): `BARNABY.sys` grey, the three green lines and two buttons, then
+  [T], [R] and [H] each start their job by key; RUN THE DROPS' first launch is MOTH's; BARNABY.wall stands after
+  `__ap.seed`. No page error.
+
+### Patches requested
+
+- **Lead (applied here, item 1):** the `ships.ts` → `zones.ts` cycle break.
+- **Lead (`landing-guidance.ts` / the strip):** while the `'resident'` controller flies the landing, the strip's `press [L]`
+  cue should stand aside as it does for AUTODROP armed (no sleeper line, R21: only silence). Today it makes the kid race MOTH.
+- **FACE:** paint `DraftCard.leftover` only where it is set (stand-ins carry none); the MOTH lines are the `sleeper` speaker.
