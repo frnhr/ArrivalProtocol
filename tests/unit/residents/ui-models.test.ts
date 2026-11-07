@@ -5,7 +5,8 @@
 //   left · LOOKOUT, friendly · BARNABY (a sleeper nobody woke stays unknown), none for a kind not built, none on the classic
 //   world; cardModel places it after KNOWN PROBLEMS;
 // • the chart's ▓░ glyph (R18): only once the run holds a signal, only on ships ahead whose departed resident's note carries
-//   one, never a visited ship, never a kind not built; the legend says it;
+//   one, never a visited ship, never a kind not built; review D4: only where the card already shows the kind, so nowhere in
+//   slice 5; the legend says it;
 // • the LANDING REPORT's rows: MOTH's gift once woken (R12), WARDEN's goodnight by R24 (awake, not deleted, every pod down),
 //   a locked pod among the PARKED rows (`POD 07 · LOCKED BY WARDEN · PARKED IN ORBIT`) in landingReportModel's rows;
 // • the strip's looks and INSPECT's rows for every resident file (`?` until scanned, IDLE asleep, the chain, the who-line
@@ -86,13 +87,22 @@ withResidentsBuilt(ALL, () => {
   check('glyph: none before the run holds a signal (PLOVER and SKYLARK carry one)', !signalGlyph(desk, 10) && !signalGlyph(desk, 12));
   const found = deskAt([0, 2, 4]);
   found.run.residents.signals.push({ slot: 4, depth: 3 });
-  check('glyph: once one is found (HERON\'s), on PLOVER and SKYLARK (fragments ahead)', signalGlyph(found, 10) && signalGlyph(found, 12));
+  // Review D4: never where the card says `unknown` (it would tell a departed resident from a sleeper or a surprise), and in
+  // slice 5 every card ahead does: the glyph shows nowhere yet.
+  check('glyph (review D4): once one is found (HERON\'s), still none on PLOVER and SKYLARK: their cards say `unknown`',
+    !signalGlyph(found, 10) && !signalGlyph(found, 12) && residentCardRow(found, 10)?.value === T.card.unknown
+    && !chartModel(found).nodes.some((node) => node.signal));
+  // A card that already shows the kind (slice 7's; here a record of the ship put in by hand, off the route) gets it.
+  const named = structuredClone(found);
+  named.run.residents.met.push({ slot: 10, depth: 4, kind: 'left', name: 'BOSUN', shown: 'unknown', job: null, fate: 'left', podsParkedLocked: 0, leftoversEaten: 0 });
+  check('glyph: where the card names the kind (`left · BOSUN`) and a fragment is ahead, it shows; SKYLARK\'s `unknown` card still none',
+    residentCardRow(named, 10)?.value === T.card.left('BOSUN') && signalGlyph(named, 10) && !signalGlyph(named, 12));
   check('glyph: never on the visited HERON, a ship with no fragment (CORMORANT), a sleeper or a corrupted ship',
-    !signalGlyph(found, 4) && !signalGlyph(found, 15) && !signalGlyph(found, 7) && !signalGlyph(found, 9));
-  const chart = chartModel(found);
-  check('glyph: the chart\'s nodes carry it, and the legend names it', chart.nodes.filter((node) => node.signal).map((node) => node.slot).join() === '10,12'
+    !signalGlyph(named, 4) && !signalGlyph(named, 15) && !signalGlyph(named, 7) && !signalGlyph(named, 9));
+  const chart = chartModel(named);
+  check('glyph: the chart\'s nodes carry it, and the legend names it', chart.nodes.filter((node) => node.signal).map((node) => node.slot).join() === '10'
     && chartLegend(chart).some((item) => item.kind === 'signal' && item.words === T.chart.legend));
-  withResidents({ left: false }, () => check('glyph: never for a kind this build does not play', !signalGlyph(found, 10)));
+  withResidents({ left: false }, () => check('glyph: never for a kind this build does not play', !signalGlyph(named, 10)));
 });
 
 // --- The LANDING REPORT (R12, R24, R7) --------------------------------------------------------------------------------------

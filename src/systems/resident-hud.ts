@@ -49,10 +49,16 @@ export function residentCardRow(state: Readonly<GameState>, slot: number): Resid
 
 // The chart's `▓░` glyph (plan R18): on a ship still ahead whose departed resident's note carries a fragment, once the run
 // has found one (a kid who has never scanned a note learns nothing from the chart). Only fragments this build can collect.
+// Review D4 (the lead's decision): and only where the ship's card already shows the resident's kind. On an `unknown` card the
+// glyph would narrow it to a departed resident, telling it from a sleeper or a late surprise. In slice 5 no card ahead names
+// a departed resident (it reads `unknown` until the ship is met), so the glyph shows nowhere yet; slice 7's cards that do
+// (the `?` signal ship's) get it with no change here.
 export function signalGlyph(state: Readonly<GameState>, slot: number): boolean {
   const map = state.run.map;
   if (map.world !== 'arm' || state.run.residents.signals.length === 0) return false;
   if (map.route.some((stop) => stop.slot === slot)) return false;
+  const card = residentCardRow(state, slot);
+  if (card === null || card.value === T.card.unknown || card.value === T.card.none) return false;
   const reserved = shipSummaryAt(map, slot).reserved;
   if (reserved === null || reserved.resident === null || reserved.fragments <= 0) return false;
   return builtResident({ ...reserved.resident, fragments: reserved.fragments })?.kind === 'left';
