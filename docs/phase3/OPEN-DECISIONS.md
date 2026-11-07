@@ -105,3 +105,13 @@ Status words:
 27. **To wake BARNABY on CURLEW, the kid needs DELETE or MOVE.** On seed 7's route the unit arrives with only SCAN and
     REPAIR, so the sleeper can be missed unless the kid requested DELETE or MOVE. BUILT as specified (the wake is an rm
     of the lock, or a MOVE of the sleeper). DEFERRED to slice 8, or ASK: should a SCAN plus REPAIR also wake it?
+28. **A locked pod that nothing aboard can free stops holding the landing open** (slice 5 review M3). BUILT in the fix
+    pass. "Nothing" means no DELETE, too little charge to cure, and no DEAL left.
+    - The pod parks locked, the landing ends the normal way, and the strip names it.
+    - If a remedy appears later, the pod is launchable again.
+29. **On HOLLOW's boarding ship, the late surprise may wake in the landing and only lock pods** (review D1). BUILT.
+    WARDEN waits for HOLLOW's first fight, so its engine moment happens only on a ship where HOLLOW isn't new.
+30. **A departed resident's leftover skill card picks at random among the allowed skills** (review D2). BUILT in the
+    fix pass. It was always the first open branch (AUTODROP in 150 of 150 decks).
+31. **The chart's signal glyph shows only where the ship card already shows the resident's kind** (review D4). BUILT in
+    the fix pass, so it never narrows an `unknown` card.
