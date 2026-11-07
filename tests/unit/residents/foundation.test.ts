@@ -70,9 +70,9 @@ const BUILT_AT_LOAD = { ...RESIDENT_BUILT };
 // CORRUPTED: Track WARDEN raises it (`=== true`, `built: corrupted residents (Track WARDEN)`).
 check('built: corrupted residents (Track WARDEN)', RESIDENT_BUILT.corrupted === true);
 // LEFT: Track KIN raises it, last (`=== true`, `built: departed residents (Track KIN)`).
-check('built: departed residents not yet', RESIDENT_BUILT.left === false);
+check('built: departed residents (Track KIN)', RESIDENT_BUILT.left === true);
 // SLEEPING: Track KIN raises it, first (`=== true`, `built: the sleeper (Track KIN)`).
-check('built: the sleeper not yet', RESIDENT_BUILT.sleeping === false);
+check('built: the sleeper (Track KIN)', RESIDENT_BUILT.sleeping === true);
 // (end of the built checks)
 
 // --- ShipDef.resident from the reservations ------------------------------------------------------------------------------
