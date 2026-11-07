@@ -8,6 +8,8 @@
 // • LAST LIGHT's folded DEAL: offered at the wake (before ORBIT LOCK); the verbs' clock stands still while it stands and
 //   through the pause an ACCEPT buys, and runs again after a REFUSE. ORBIT LOCK withdraws a standing offer and ends the
 //   pause (the review's M2): the duel runs with its verbs, and no deal UI stands beside FinaleChoice.
+// • Slice 5 (plan R8, Track WARDEN): one deal per ship. On a ship whose corrupted resident already offered its own DEAL,
+//   HOLLOW's waits: LAST LIGHT's folded DEAL is not offered at the wake (it comes on a later ship by its own rule).
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { lockOn } from '../landing/harness-landing';
@@ -24,7 +26,7 @@ import { hollowFirstFightDecided, keepChargeDue, copyLessonDue } from '@state/th
 import { buildDirectorCtx } from '@systems/director';
 import { getPrediction } from '@systems/predict';
 import { GUIDE_RULES } from '@data/script';
-import { createInitialState } from '@state/initial';
+import { createInitialState, createResidentState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
 import { installTool } from '@systems/licences';
 import { HOLLOW_STORY, HOLLOW_DEAL } from '@data/hollow-text';
@@ -284,6 +286,28 @@ check('REFUSE: `> ok.`, and nothing of the deal holds the verbs any more', s().r
     !before && unlinked !== null && s().hollow.unlinkedLastSpare && copyLessonDue(s()), `${unlinked}`);
   for (let i = 0; i < 200 && s().hollow.verb !== null; i++) h.step();
   check('…and it stays due once the verb is over, so the lesson follows BLOCK IT on the strip', s().hollow.verb === null && copyLessonDue(s()) && lessonLive());
+}
+
+// Slice 5 (plan R8): LAST LIGHT on the seed whose wake offers the folded DEAL (13, above), with a corrupted resident's DEAL
+// already settled on it (its file deleted: only the ship's one deal is left of it). HOLLOW wakes and bites, and offers none.
+{
+  setLandingMode('instant');
+  h.shipAlone(LAST_LIGHT, 13);
+  installTool(h.store, 'repair');
+  h.store.update((draft) => {
+    draft.resident = createResidentState({ kind: 'corrupted', shown: 'faulty', name: 'WARDEN', fragments: 0 });
+    draft.resident.corrupted!.phase = 'deleted';
+    draft.resident.corrupted!.deal = { phase: 'done', fileId: null, fileName: null, entryId: null, outcome: 'refused' };
+  });
+  let wokeAtStep: number | null = null;
+  for (let i = 0; i < 1600 && (wokeAtStep === null || i < wokeAtStep + 120); i++) {
+    h.step();
+    if (wokeAtStep === null && s().hollow.phase === 'awake') wokeAtStep = i;
+  }
+  check('one deal per ship (R8): a resident\'s DEAL settled on LAST LIGHT, HOLLOW wakes and offers none of its own',
+    wokeAtStep !== null && s().hollow.deal.phase === 'none' && s().run.stats.deal === null && openChoiceEntry(s()) === null,
+    `${s().hollow.phase} ${s().hollow.deal.phase}`);
+  h.store.update((draft) => { draft.resident = createResidentState(null); });
 }
 
 finish();

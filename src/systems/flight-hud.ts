@@ -2,7 +2,8 @@
 import type { AutoMode } from '@/types/skill';
 import { MAP_TEXT } from '@data/map-text';
 import type { GameState, Pace, PresetMode, TerminalStatus, LogEntry, Speaker } from '@state/schema';
-import { liveLockText } from '@state/resident-selectors';
+import { liveLockText, engineOverriddenBy } from '@state/resident-selectors';
+import { WARDEN_TEXT } from '@data/warden-text';
 import type { Ring, Vec2 } from '@/types/orbit';
 import { secUntil, samplePath, loopProblem, sweetZone, type BurnPoint, type Prediction } from '@systems/predict';
 import { decayWarned, type DecayForecast } from '@systems/landing-orbit';
@@ -1135,11 +1136,23 @@ function hiddenShipFile(state: Readonly<GameState>, role: CapabilityRole): boole
 // One pip per file behind a window (§7.1 title pips, C3: "window title pips name the backing
 // file"). A ship file the kid has not scanned is a `?`: its damage stays hidden (§3.2). The THRUST CTRL pip carries
 // the uncommanded bursts so far, counted as the warning counts them (ghost-thrust.ts ghostCountShown).
+// Slice 5 (Track WARDEN's pip block, plan §2.7 step 3, review B2): while a corrupted resident fires the engine the pip is
+// OVERRIDDEN by it (`100% · OVERRIDDEN · WARDEN.sys`: a mind, not a fault, so a healthy controller still reads its 100%),
+// its count is the resident's own bursts, and a click jumps to the resident's file (pillar 4: the cause of the loss).
 export function windowPip(state: Readonly<GameState>, role: CapabilityRole): PipModel {
   const model = filePip(state, role);
-  const fired = role === 'thrust-ctrl' ? ghostCountShown(state) : 0;
-  if (fired === 0) return model;
-  return { ...model, count: GHOST_TEXT.pipCount(fired), title: `${model.title} · ${GHOST_TEXT.pipTitle(fired)}` };
+  if (role !== 'thrust-ctrl') return model;
+  const fired = ghostCountShown(state);
+  const counted = fired === 0 ? model : { ...model, count: GHOST_TEXT.pipCount(fired), title: `${model.title} · ${GHOST_TEXT.pipTitle(fired)}` };
+  const by = engineOverriddenBy(state);
+  if (by === null) return counted;
+  return {
+    ...counted,
+    reading: counted.reading === '' && counted.look === 'ok' ? WARDEN_TEXT.pipHealthy : counted.reading,
+    title: `${counted.title} · ${WARDEN_TEXT.pipTitle(by.name)}`,
+    jumpId: by.fileId,
+    override: WARDEN_TEXT.pipOverride(by.name),
+  };
 }
 
 function filePip(state: Readonly<GameState>, role: CapabilityRole): PipModel {
