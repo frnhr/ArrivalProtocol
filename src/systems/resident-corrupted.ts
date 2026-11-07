@@ -28,7 +28,7 @@ import { IS_DEV } from '@/env';
 import {
   RESIDENT_DELETE_BASE_SEC, RESIDENT_DELETE_PER_BLOCK_SEC, RESIDENT_LOCK_FIRST_SEC, RESIDENT_LOCK_EVERY_SEC,
   RESIDENT_LOCK_TELEGRAPH_SEC, RESIDENT_ANGRY_LOCK_FACTOR, RESIDENT_ANGRY_SEC, SURPRISE_WAKE_SEC, SURPRISE_FIRST_LOCK_SEC,
-  RESIDENT_GARBLE, DEAL_TIMEOUT_SEC, INTEGRITY_MAX,
+  RESIDENT_GARBLE, RESIDENT_LINE_EVERY_SEC, DEAL_TIMEOUT_SEC, INTEGRITY_MAX,
 } from '@data/tuning';
 
 // The corrupted resident (04 §3.12, plan §2.7), DOM-free: its wake (R9), the locks (R6), its DEAL (R8), DELETE (R25) and the
@@ -109,8 +109,10 @@ function descNow(state: Readonly<GameState>, file: Readonly<ResidentSegment>, co
   }
 }
 
+// Due now (see the header). On HOLLOW's ship the first fight may be decided only after ORBIT LOCK (HOLLOW boarded there sleeps
+// until the loop closes): it wakes in the landing then, where it locks but never fires the engine (R4).
 function wakeDue(state: Readonly<GameState>, corrupted: Readonly<CorruptedState>): boolean {
-  if (state.run.phase !== 'flight') return false;
+  if (!live(state)) return false;
   if (corrupted.surprise && corrupted.calmAiSec < SURPRISE_WAKE_SEC) return false;
   // On a ship HOLLOW is aboard (the ship it boards, or one after): only once its first fight here is decided (04 §3.12).
   return !state.run.threat.aboard || hollowFirstFightDecided(state);
@@ -439,11 +441,18 @@ function cured(store: Store<GameState>): void {
 
 // One looping line at a burst of its own, in pool order, garbled at RESIDENT_GARBLE (05 §3.12: it reads as failing; the
 // mask is seeded by the run, the ship and the line, so a replay says the same). Not said under a choice standing (its DEAL,
-// the sleeper's offer: the TERMINAL's line there is the question) or a lock's countdown.
+// the sleeper's offer: the TERMINAL's line there is the question) or a lock's countdown, nor within RESIDENT_LINE_EVERY_SEC
+// of its last line.
 function sayLoopLine(store: Store<GameState>): void {
   const state = store.getState();
   const corrupted = state.resident.corrupted!;
   if (corrupted.lock !== null || openChoiceEntry(state) !== null) return;
+  const entries = state.log.entries;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i]!;
+    if (state.clock.aiSec - entry.t >= RESIDENT_LINE_EVERY_SEC) break;
+    if (entry.speaker === 'resident') return;
+  }
   const line = WARDEN_TEXT.loop[corrupted.line % WARDEN_TEXT.loop.length]!;
   const seed = childSeed(state.run.seed, currentSlot(state.run), `warden-line-${corrupted.line}`);
   say('resident', WARDEN_TEXT.loopLine(nameOf(state), garbleText(line, RESIDENT_GARBLE, seed)), { critical: true });
