@@ -14,7 +14,8 @@
 //   the ship (R8); each ship's SHIP DONE record (deleted, cured, paid, ignored) in a save that decodes;
 // • the late surprise (GANNET's card made `unknown`): the 20 s grace, its health shown at the wake, no SCAN hunt, no CONTROL
 //   line, the first lock at 45 s; and PROVIDENCE (slot 16, `unknown`), where HOLLOW boards: it waits for HOLLOW's first
-//   fight there (threat-selectors hollowFirstFightDecided).
+//   fight there (threat-selectors hollowFirstFightDecided), but not on a later ship of HOLLOW's (review m6); HOLLOW's DEAL
+//   standing holds its lock clock (review m5).
 import { check, finish } from '../landing/checks';
 import type { GameState } from '@state/schema';
 import type { Reservations } from '@/types/map';
@@ -438,6 +439,29 @@ withResidentsBuilt(['corrupted'], () => {
       !early && machine().phase === 'awake' && hollowFirstFightDecided(s()) && said('resident', 'PILOT: NOBODY REPORTED ME. GOOD.')
       && residentGhostSpec(s()) === null, `woke at ${machine().wokeAtAi?.toFixed(1)}, phase ${s().run.phase}, hollow ${s().hollow.phase}`);
     setLandingMode('instant');
+  }
+  // Review m6: on a later ship HOLLOW is aboard (PROVIDENCE via CORMORANT: HOLLOW boarded there), it is not new, so the surprise
+  // wakes at its grace with no wait for HOLLOW's fight.
+  {
+    arrive([2, 5, 11, 15, PROVIDENCE]);
+    const boarded = s().run.threat.aboard && s().run.threat.age === 2;
+    stepUntil(() => machine().phase === 'awake', 300);
+    check(`m6: PROVIDENCE after CORMORANT (HOLLOW aboard since there, age 2): the surprise wakes at its ${SURPRISE_WAKE_SEC} s in flight`,
+      boarded && s().run.phase === 'flight' && Math.abs(machine().calmAiSec - SURPRISE_WAKE_SEC) < 0.25,
+      `age ${s().run.threat.age} · calm ${machine().calmAiSec.toFixed(2)} · ${s().run.phase}`);
+  }
+  // Review m5: HOLLOW's DEAL standing holds the lock clock, as its own DEAL does (Deviation 10).
+  {
+    toGannet();
+    stepFor(2);
+    h.store.update((draft) => { draft.hollow.deal.phase = 'offered'; });
+    const before = { lockIn: machine().lockInSec, calm: machine().calmAiSec };
+    stepFor(4);
+    const held = machine().lockInSec === before.lockIn && machine().calmAiSec === before.calm;
+    h.store.update((draft) => { draft.hollow.deal.phase = 'none'; });
+    stepUntil(() => machine().calmAiSec > before.calm, 30);
+    check('m5: while HOLLOW\'s DEAL stands, WARDEN\'s calm and lock clocks stand still; they run again once it is gone',
+      held && machine().calmAiSec > before.calm && (machine().lockInSec ?? 0) < (before.lockIn ?? 0), JSON.stringify(before));
   }
 });
 

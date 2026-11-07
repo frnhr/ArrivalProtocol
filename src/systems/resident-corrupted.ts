@@ -41,11 +41,12 @@ import {
 // with the world.
 // • THE WAKE. A `reported faulty` resident wakes at the flight's first AI tick; a late surprise (its card said `unknown`)
 //   after SURPRISE_WAKE_SEC of calm flight (04's grace), its file's health shown at once (04: no SCAN hunt) and the stamp's
-//   event; on a ship HOLLOW is aboard, only once HOLLOW's first fight there is decided (threat-selectors
-//   hollowFirstFightDecided: a kid never learns two new foes at once). Its first line comes then, and on a faulty ship
+//   event; on the ship HOLLOW boards (review m6: that ship only), only once HOLLOW's first fight there is decided
+//   (threat-selectors hollowFirstFightDecided: a kid never learns two new foes at once). Its first line comes then, and on a faulty ship
 //   CONTROL's radio line after it.
 // • THE CALM CLOCK. calmAiSec, the surprise's wake and the lock clock (lockInSec, a telegraph's leftSec) run on AI time
-//   only while the ship is calm: never at TACTICAL in flight, never in a launch window, never while its DEAL stands (04
+//   only while the ship is calm: never at TACTICAL in flight, never in a launch window, never while a DEAL stands (its own or
+//   HOLLOW's: review m5) (04
 //   §3.12, plan R6), so a lock never lands under a burn's NOW line and the kid always has the calm to block it.
 // • THE LOCKS. RESIDENT_LOCK_FIRST_SEC after the wake (SURPRISE_FIRST_LOCK_SEC into the flight for a surprise), then every
 //   RESIDENT_LOCK_EVERY_SEC from one telegraph's start to the next (× RESIDENT_ANGRY_LOCK_FACTOR while angry), it aims at
@@ -94,7 +95,9 @@ function live(state: Readonly<GameState>): boolean {
 
 // The calm clock stands still (see the header).
 function clockHeld(state: Readonly<GameState>, corrupted: Readonly<CorruptedState>): boolean {
-  if (corrupted.deal.phase === 'offered') return true;
+  // Its own DEAL standing (Deviation 10), or HOLLOW's (review m5: no lock lands while the kid reads HOLLOW's 15 s offer, as
+  // HOLLOW's verbs wait on it).
+  if (corrupted.deal.phase === 'offered' || state.hollow.deal.phase === 'offered') return true;
   if (state.run.phase === 'flight') return state.clock.pace === 'tactical';
   return state.landing.window !== null;
 }
@@ -116,8 +119,11 @@ function descNow(state: Readonly<GameState>, file: Readonly<ResidentSegment>, co
 function wakeDue(state: Readonly<GameState>, corrupted: Readonly<CorruptedState>): boolean {
   if (!live(state)) return false;
   if (corrupted.surprise && corrupted.calmAiSec < SURPRISE_WAKE_SEC) return false;
-  // On a ship HOLLOW is aboard (the ship it boards, or one after): only once its first fight here is decided (04 §3.12).
-  return !state.run.threat.aboard || hollowFirstFightDecided(state);
+  // On the ship HOLLOW boards (R9; its first ship aboard, age 1): only once its first fight here is decided (04 §3.12: a kid
+  // never learns two new foes at once). Review m6: on a later ship HOLLOW is no longer new, so the wake is the flight's first
+  // tick (or the surprise's 20 s) as anywhere else.
+  const boardsHere = state.run.threat.aboard && state.run.threat.age === 1;
+  return !boardsHere || hollowFirstFightDecided(state);
 }
 
 function wake(store: Store<GameState>): void {

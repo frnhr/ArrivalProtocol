@@ -139,8 +139,11 @@ export function blocksInRack(start: number, size: number, rack: string, layout: 
 }
 
 // The files a zone can hurt: everything with a health number (drivers, ship files, your tools). HOLLOW, free
-// space, REPAIR CHARGE and a FIREWALL have none (§6.8 "hollow is excluded").
-const damageable = hasIntegrity;
+// space, REPAIR CHARGE and a FIREWALL have none (§6.8 "hollow is excluded"). Slice 5 review m7: nor a corrupted resident's
+// own mind (WARDEN.sys, rack A, which the radiation belt peppers). Its health is the cure's price and nothing else (04 §3.12:
+// REPAIR to 100 cures it; it is a blocker, never food), so a belt hit would only raise the price at random, and at 0% it
+// would stop firing but go on locking and dealing, a state the spec never designs. A leftover (food) still takes hits.
+const damageable = (seg: Segment): seg is HealthSegment => hasIntegrity(seg) && seg.type !== 'resident';
 
 // The AI Core lives in rack E, which no zone reaches: one in a hit rack is an undesigned state (what would a
 // debris hit on the Core even mean for the run?), so the plans below throw on it rather than guess.

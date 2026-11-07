@@ -20,6 +20,8 @@ import { residentToolRule, residentDeleteSec } from '@systems/residents';
 import { capabilitiesNow, ghostPush, ghostWithoutSwap } from '@systems/capabilities';
 import { targetRefusal, deleteQuestion } from '@systems/tool-targets';
 import { rmTargets } from '@systems/hollow';
+import { debrisDamagePlan, beltTarget } from '@systems/zones';
+import { createRng } from '@systems/rng';
 import { deleteSec, chargePerPoint, repairRatePerSec } from '@state/actions';
 import { windowPip } from '@systems/flight-hud';
 import { ghostCountShown } from '@systems/ghost-thrust';
@@ -143,6 +145,22 @@ const thrustOf = (state: GameState): Segment => state.memory.find((seg) => seg.r
     + 'its chip (`WARDEN: GIVE ME YOUR SPARE REPAIR. THEN I LET THE PODS GO.`)',
     named?.name === 'Thrust.alt' && WARDEN_TEXT.deal('WARDEN', WARDEN_TEXT.dealSpare('repair')) === 'WARDEN: GIVE ME YOUR SPARE REPAIR. THEN I LET THE PODS GO.',
     named?.name ?? 'none');
+}
+
+// --- Review m7: no zone lowers WARDEN.sys (rack A, which the radiation belt peppers) ----------------------------------------
+{
+  const g = gannet(awake);
+  const id = wardenOf(g).id;
+  const debris = debrisDamagePlan(g.memory, 'A');
+  let picks = 0;
+  let wardenPicked = false;
+  for (let seed = 1; seed <= 200; seed++) {
+    const pick = beltTarget(g.memory, ['A', 'B'], createRng(seed));
+    if (pick !== null) picks++;
+    if (pick?.id === id) wardenPicked = true;
+  }
+  check('m7: a debris hit on rack A and the belt\'s picks in racks A–B never touch WARDEN.sys (its health is the cure\'s price only)',
+    debris.length > 0 && !debris.some((hit) => hit.segId === id) && picks > 0 && !wardenPicked, `${debris.length} debris hits, ${picks} belt picks`);
 }
 
 // --- The tools (R25) ---------------------------------------------------------------------------------------------------------
