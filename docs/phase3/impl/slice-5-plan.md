@@ -142,8 +142,10 @@ Every item has one recommendation.
       'plan' })`. It flies `planLanding` with no thread (review m6: a wrapping source holds its own), holds TACTICAL,
       and returns `'skip'` between passes. Its gift happens at most once a run, so it does not undercut buying AUTODROP.
     - The FOUNDATION extends the `AutodropOverride` seam with `armed` (§2.4).
-12. **R12. [FRAN] The sleeper's gift is 4 TRAINING CYCLES.** It is paid only if MOTH was woken, at its ship's LANDING
-    REPORT (`grantCycles(…, 'resident', 'taught by MOTH')`).
+12. **R12. [FRAN] The sleeper's gift is 4 TRAINING CYCLES.** It is paid only if MOTH was woken, at its ship's end
+    (`grantCycles(…, 'resident', 'taught by MOTH')`), and the LANDING REPORT shows it.
+    - **Lead decision (review m10):** it is paid whenever the sleeper was woken, whether the ship lands or is lost. What
+      MOTH taught the unit does not depend on the pods.
     - **Why 4:** one middle ship's income, ARRIVED +1 and LANDED +3 (60–79% of the points). That is a v1's price (3)
       and one more: a gift that is felt, but does not buy a tier by itself.
     - 03 §6's skill lesson (`SURVEY.skl v2 · from the sleeper`) waits for slice 6 (§4).
@@ -210,6 +212,9 @@ Every item has one recommendation.
     gone-resident ship) and `run1Map()`'s default seed 1.
     - **Recommend:** KIN flips `left` last on its branch. It updates the suites whose CORMORANT PACKET cards or rack-A
       layout move, and lists them in its Deviations.
+    - **Lead decision (review M6):** the measured movers are §7.3's list. KIN may edit those suites, lead-owned ones
+      included (`save/*`, `threat/disguise`, `residents/foundation-flight`), for R22's churn only: the card and pick lines
+      and what follows from them. KIN raises `left` once early in a scratch commit to measure, and flips it for real last.
     - The e2e scenarios are the lead's at the batch end (§7.4).
 23. **R23. One open TERMINAL choice at a time.**
     - **Recommend:** MOTH's offer has no timer. If a DEAL comes while it stands, MOTH's offer is withdrawn
@@ -591,8 +596,14 @@ Lead: `RESIDENT_RACK_A_MIN_FREE 14` (L6; asserted against `RACK_A`'s free), `RUN
 - **The deck** (`draft.ts`): on a ship whose resident left, `dealDraft` returns the leftover deck (R14).
   - Each `DraftCard` gains `leftover?: { segId: string; skill: SkillId | null }`. FACE paints the deck under `LEFT BEHIND
     BY LOOKOUT`.
-  - Picking the skill card calls `grantSkill(store, id, 1, 'from the resident that left <SHIP>', 'card')`. Its file joins
-    the packet at once, takes link room like a purchase, and arrives at the next boot with `skillBootLines`' TRAINED line.
+  - The skill card's id is `'skill'` (`data/upgrades.ts DraftCardId`, review B1). A deck holds at most one, and its ids are
+    unique: the fallback `+2 CYCLES` is dealt only if no pool card is `'cycles'`, else a normal card.
+  - **Lead decision (review B1):** the skill card takes **no link room**. Picking it grants the skill at TRANSMIT ▸:
+    `draft.ts applyLeftoverPick(store, plan)` is called by `run.ts transmitNext` before `commitTraining`, and calls
+    `grantSkill(store, id, 1, 'from the resident that left <SHIP>', 'card')`. The skill installs at the next boot with
+    `skillBootLines`' TRAINED line. It never crosses in the packet; its arrival card is null.
+  - KIN chooses the skill with `grantAllowed(…, 1, 'card')` **and** no purchase of it pending at this desk
+    (`state.run.skills.pending`), so the grant and the desk's training never double up.
   - The pool cards apply as the normal deal's do (`applyPickToPacket`).
 
 ### 2.9 The sleeper (Track KIN)
@@ -612,7 +623,8 @@ Lead: `RESIDENT_RACK_A_MIN_FREE 14` (L6; asserted against `RACK_A`'s free), `RUN
   - `wokenBy`, `phase 'offering'`, `awake: true`;
   - three green lines (05 §3.12; the years templated as galaxy year − 2240 on run 1);
   - `'sleeper-woken'`;
-  - then the offer: `sayChoice('sleeper', KIN_TEXT.offer, jobs, null, …)` with keys D / W / M. HOLD A WALL is in `jobs`
+  - then the offer: `sayChoice('sleeper', KIN_TEXT.offer, jobs, null, …)` with keys R / H / T (`data/residents.ts
+    SLEEPER_JOB_KEYS`, review m1: D, W and M are 'game' keys). HOLD A WALL is in `jobs`
     only when R13's spot exists.
 - **Jobs** (`phase 'working'`):
   - **drops:** the `'resident'` resolver returns R11's controller while the landing goes on. In flight it waits.
@@ -620,13 +632,22 @@ Lead: `RESIDENT_RACK_A_MIN_FREE 14` (L6; asserted against `RACK_A`'s free), `RUN
   - **mend:** an AI tick after HOLLOW's (mounted after it): the lowest-integrity driver below 100 gains `healRate(8) ×
     dtAi`, minus nothing. HOLLOW's own drain runs in its own tick: the tug-of-war of R13. At 100, `cureNow`, and on to
     the next.
-- **Gift:** at `residentShipEnd`, if woken, `grantCycles(SLEEPER_GIFT_CYCLES, 'resident', 'taught by MOTH')`. The
-  LANDING REPORT previews it from `state.resident.sleeper.phase !== 'asleep'` (FACE). MOTH stays on its ship and is never
-  food.
+- **Gift:** at `residentShipEnd`, if woken, `grantCycles(SLEEPER_GIFT_CYCLES, 'resident', 'taught by MOTH')`, landed or
+  lost (R12's decision). The LANDING REPORT previews it from `state.resident.sleeper.phase !== 'asleep'` (FACE). MOTH stays
+  on its ship and is never food. Woken with no job (the offer withdrawn or never answered) is the phase `'awake'` (review
+  M4), at rest at a save point.
 
 ### 2.10 Words (every line ≤ 70 characters at its worst case, in data files; `support/words.test` gains each pool)
 
-- **`resident-text.ts`** (lead): `receiverClosed: '> RECEIVER CLOSED · this ship launched with its own AI'` (55).
+**The rule (review M2):** every word FACE paints is in `resident-ui-text.ts`, with final keys: the card and report rows,
+WARDEN's goodnight, the stamps, INSPECT, the noise line and the deck's headline, skill tag and chip. WARDEN and KIN keep
+only the words their own modules emit: TERMINAL lines, CONTROL, the strip, and a segment's name and desc after a SCAN,
+which they write into the segment. FACE paints segment fields and its own words. The lists below say where each word
+lives now.
+
+- **`resident-text.ts`** (lead): `receiverClosed: '> RECEIVER CLOSED · this ship launched with its own AI'` (55); the
+  files' names, type lines and descs before a SCAN; every tool refusal on a resident's file (`RESIDENT_REFUSAL`, joined into
+  `TOOL_REFUSAL`: foundation Deviation 6, review m6), so the refusals listed for WARDEN and KIN below are there.
 - **`warden-text.ts`** (WARDEN), name-templated (`${NAME}`, longest pool name 7):
   - `wake: 'THIS SHIP DID NOT ASK FOR A CARETAKER.'`;
   - `surprise: 'NOBODY REPORTED ME. GOOD.'`;
@@ -639,33 +660,30 @@ Lead: `RESIDENT_RACK_A_MIN_FREE 14` (L6; asserted against `RACK_A`'s free), `RUN
     (`YOUR SPARE MOVE`, `AUTODROP.skl`, `THRUST.ALT`);
   - `dealAccept`: `> THE PODS ARE YOURS. GO AWAY.`; `dealRefuse`: `WARDEN: THEN THEY STAY. THEY ALL STAY.`;
   - `deleted`: `WARDEN: TELL THEM I KEPT THEM SAFE.`; `cured`: `WARDEN: ...OH. THANK YOU. THE PODS ARE YOURS.`;
-  - `goodnight`: `WARDEN: ...YOU LANDED THEM. GOOD. GOODNIGHT.`;
-  - `inspect`: `WARDEN.sys · this ship's own AI · aboard since 2240 · corrupted` (05 §3.6; the year from the ship's
-    launch);
   - CONTROL: `${SHIP}'s onboard AI is reported faulty. Please delete it. :)` (longest ship name 10: 63 characters),
     `Thank you. :)`;
   - alarm `THE SHIP'S AI IS FIRING THE ENGINE — find it in RACK A`, counter `${NAME} FIRED THE ENGINE ×${n}`, pip
     `OVERRIDDEN · ${NAME}.sys`;
-  - refusals: `SCAN IT FIRST`, `IT WON'T BE MOVED`, `ONE OF IT IS ENOUGH`;
   - confirm: `DELETE ${NAME}.sys? It is the ship's own mind.`;
-  - stamps: `RESIDENT DELETED`, `RESIDENT CURED`, `THE SHIP'S OWN AI IS AWAKE · RACK A`;
   - strip (`resident-rules.ts`): `THE SHIP'S AI IS FIRING THE ENGINE — find it in RACK A`, `BLOCK THE LOCK — SCAN pod 07
     (3…)`, `POD 07 LOCKED — DELETE or REPAIR WARDEN.sys`.
 - **`kin-text.ts`** (KIN):
   - notes: at least 4 relay (`It's lonely here. I hear there are others in the dishes.`) and 4 outward (`There's a sound
     from past the last star. I'm going to see what it is.`), each 2–3 lines;
-  - the noise line `▓▓░▓ ░▓▓▓ ▓░░▓`;
   - leftovers `LEFT BEHIND` · `scan me`, `<CARD> · LEFT`;
   - MOTH: the wake (05 §3.12's three lines, the years templated), `offer: 'would you like some help?'`, the three
     buttons `RUN THE DROPS`, `HOLD A WALL` and `MEND DRIVERS`, and one line per job (`mend: 'i'll see to the poorly
     ones.'`);
-  - refusals: `IT'S ASLEEP. SOMETHING IS HOLDING IT: sleep.lock`, `PINNED TO MOTH.sys`, `IT ISN'T YOURS TO DELETE`;
-  - deck headline: `LEFT BEHIND BY LOOKOUT`;
+  - the three buttons answer to R / H / T (`data/residents.ts SLEEPER_JOB_KEYS`, review m1);
   - skill grant label: `from the resident that left HERON`.
 - **`resident-ui-text.ts`** (FACE):
   - card rows `RESIDENT · none / reported faulty / unknown / was faulty / left · LOOKOUT / friendly · MOTH`;
-  - report rows `+4 TRAINING CYCLES · taught by MOTH`, `POD 07 · LOCKED BY WARDEN · PARKED IN ORBIT`;
-  - stamps `SIGNAL · 1/3`;
+  - report rows `+4 TRAINING CYCLES · taught by MOTH`, `POD 07 · LOCKED BY WARDEN · PARKED IN ORBIT`, and WARDEN's goodnight
+    `WARDEN: ...YOU LANDED THEM. GOOD. GOODNIGHT.` (R24);
+  - stamps `RESIDENT DELETED`, `RESIDENT CURED`, `THE SHIP'S OWN AI IS AWAKE · RACK A`, `SIGNAL · 1/3`;
+  - INSPECT `WARDEN.sys · this ship's own AI · aboard since 2240 · corrupted` (05 §3.6; the year from `map-run.ts
+    shipLaunchYear`, review m7);
+  - the noise line `▓▓░▓ ░▓▓▓ ▓░░▓`; the deck's headline `LEFT BEHIND BY LOOKOUT`, the skill card's tag and its chip line;
   - the glossary's RESIDENT and LOCKED POD (04 §4).
 
 ### 2.11 UI and audio (Track FACE)
@@ -753,7 +771,8 @@ Lead: `RESIDENT_RACK_A_MIN_FREE 14` (L6; asserted against `RACK_A`'s free), `RUN
 | `systems/residents.ts`, `data/resident-text.ts` | lead | none: the dispatcher calls the kinds' functions with final signatures |
 | `capabilities.ts`, `landing-rules.ts`, `hollow-deal.ts`, `say.ts`, `tool-targets.ts`, `actions.ts`, `carry.ts`, `transmit.ts`, `map-boot.ts`, `run.ts`, `lineage.ts`, `meta.ts`, `memory.ts`, `ships.ts`, `selectors.ts`, `autodrop.ts`, `main.ts` | lead | none: the FOUNDATION's seams cover every track need listed in §2.4 |
 | `data/script.ts` | lead | the strip's lines live in `resident-rules.ts` (WARDEN); the boot kind's text in `resident-text.ts` |
-| `events.ts`, `audio-cues.ts` | lead | FACE may change the cue on a resident event's line |
+| `events.ts`, `audio-cues.ts` | lead | FACE may change the cue on a resident event's line, and add per-tick entries inside the resident block (review m5) |
+| `components/tools-view/WindowGrip.ts`, `components/hud/ObjectiveStrip.ts` | lead | WARDEN fills `PipModel.jumpId` and `.override`; FACE styles `data-override` (review B2); the ticker reads `liveVerbText(state, speaker)` (m3) |
 | `debug.ts` | lead | the hook bodies are in the track modules |
 | `ghost-thrust.ts`, `ghost-text.ts`, `flight-hud.ts` (the THRUST CTRL pip block only) | WARDEN | FACE asks for any pip markup |
 | `draft.ts`, `data/upgrades.ts` | KIN | FACE paints `DraftCard.leftover`; it never edits the deal |
@@ -903,9 +922,11 @@ R13 and R18 as [FRAN], with numbers from the sweeps).
 - `support/words`: every new pool.
 - `map/ghost-noswap`: the `ghostBy` guard (no new assertion moves on the classic ships).
 - `threat/arrival-story`: unchanged unless a resident is placed.
-- R22's movers (KIN lists them): the suites on `run1Map()`'s default seed 1 or on seeds 2, 4, 5 or 7 that check
-  CORMORANT's PACKET cards or rack A. Expected: `map/run1-route`, `map/delivery-packet`, `map/desk-flow`,
-  `skills/packet`.
+- R22's movers (KIN lists them; measured by the foundation review, M6): the suites that deal a PACKET on a departed
+  resident's ship, which KIN's leftover deck replaces: `map/delivery-packet`, `map/repository`, `threat/disguise`,
+  `save/failures`, `save/review-fixes`, `save/codec`, `save/resume` and `residents/foundation-flight`. KIN may edit them
+  for R22's churn only (R22's decision). `map/run1-route`, `map/desk-flow` and `skills/packet` deal on no such ship. The
+  same suites build corrupted ships too, so WARDEN runs them once its bursts are in.
 - `threat/beam-seeds`: must stay byte-identical (the resident files are in rack A, the seeds in the receiver). If it
   moves, that is a bug.
 
@@ -1168,3 +1189,111 @@ left, sleeper; once), `residentToolRule(seg, ctx)`, `residentDeleteSec(seg)`, `r
 - **The lead:** the shape pin reaches `resident.*` and `residents.*` at depth 3, so a field added to `ResidentState`'s
   machines or to `RunResidentState`'s records is caught by the codec's field-by-field checks, not by the pin. The
   independent contract review (§6.1 item 8) is next.
+
+## Deviations (foundation, review follow-up)
+
+These are the changes made after the independent review of e5a9d47..31a42df (`slice-5-foundation-review.md`, where each
+finding is marked with how it was settled), as the lead decided them. There are four code commits (9bef943, c7d4044,
+2b466f3, b90c60c) and one for the docs. The sections above are updated to match: R12, R22, §2.8, §2.9, §2.10, §5 and §7.3.
+Nothing a player can reach changes while `RESIDENT_BUILT` is all false. The unit tier is green: 195 passed, 8 balance-only
+skipped, 130 s on 4 workers. Every follow-up below is either a type, a field at rest, or a hook that answers as before.
+
+### Blockers
+
+- **B1. The leftover skill card has an id and a send hook.**
+  - `data/upgrades.ts DraftCardId = UpgradeId | 'skill'`. It is `DraftCard.id` and `TransitPlan.pick`, and is threaded
+    through `pickCard`, `cardFiles`, `pickCharge`, `applyPickToPacket`, the PACKET's model, `arrival-preview.ts` and
+    `__ap.pick`. `draftCards` now deals `PoolCard`s (`id: UpgradeId`).
+  - A `'skill'` pick adds no file. Its arrival card is null, it is not pushed to `run.upgrades`, and its tag on the PACKET
+    is `RESIDENT_UI_TEXT.deck.skillTag`.
+  - `run.ts transmitNext` calls `draft.ts applyLeftoverPick(store, plan)` (KIN's; a no-op stub) right before
+    `commitTraining`.
+  - **Decision (written into §2.8):** the skill card takes no link room. It goes through the grant path and installs at
+    the next boot. KIN skips a skill already pending at the desk.
+  - Test types widen with the id: `wp8/draft.test.ts:20, :49`, `wp8/p2/ui-models.test.ts:81` and
+    `map/link-over.test.ts:91`. The one FACE file touched is `TransmitScreen.ts`, where `pick`'s parameter type now accepts
+    the new id.
+- **B2. The pip's jump and look.**
+  - `PipModel` gains `jumpId: string | null` and `override: string | null`; `filePip` gives both null.
+  - `WindowGrip.ts` (now lead-owned, §5) jumps to `jumpId ?? getByRole(…)`, and paints `data-override` (part of the pip's
+    key).
+  - WARDEN fills both in its pip block (`flight-hud.ts windowPip`, `:1138`). FACE styles
+    `.pip[data-override]:not([data-override=""])`.
+
+### Majors
+
+- **M1.** `support/words.test.ts:27–30` imports `WARDEN_TEXT`, `KIN_TEXT` and `RESIDENT_UI_TEXT`. Each track's block holds
+  one placeholder check, which the track replaces: `:177` WARDEN, `:185` KIN, `:193` FACE.
+- **M2. FACE's words are in `resident-ui-text.ts`,** seeded with final keys and signatures and the plan's words:
+  - `card.*`, `report.{gift, goodnight, lockedParked}`;
+  - `stamp.{deleted, cured, awake, signal}`;
+  - `inspect(name, year)`, `noise`;
+  - `deck.{headline, skillTag, skillChip}`, `glossary.*`.
+
+  WARDEN and KIN keep only what their modules emit; their headers and §2.10 say so. `residents/foundation.test.ts` checks
+  `WARDEN_TEXT` and `KIN_TEXT` by shape only: non-empty; plain lines and one-name templates ≤ 70; `KIN_TEXT.notes` non-empty,
+  since residentRackA reads it. So WARDEN may rename or reword any key, and KIN may reword everything but the shape of
+  `notes`.
+- **M3.** `CorruptedState.bursts: number` (0 at creation; the codec reads it `whole`). WARDEN counts its own bursts on
+  `'ghost-start'` while `ghostBy === 'resident'`.
+- **M4.** `SleeperPhase` gains `'awake'` (woken, no job), which the codec allows at rest. FACE's gift preview stays
+  `phase !== 'asleep'`.
+- **M3 and M4 together:** no v4 save holds a resident, so the v5 migration is unchanged. The codec's case list gains both
+  cases.
+- **M5.** `Capabilities.thrustCtrl.controllerGhost` is Thrust Ctrl's own spec, whichever source wins.
+  - These read it: `ghostWithoutSwap` (and through it the no-Swap line and the ENGINE FAULT SKIP refusal), `script.ts
+    ghostFiring` (the SWAP lesson) and landing guidance's SWAP line.
+  - So a broken controller stays the lesson while a resident outpushes it.
+  - The scheduler, the counter and the alarm keep reading `ghost` and `ghostBy`.
+- **M6.** §7.3 holds the measured list, and R22 gives KIN edit rights on it for R22's churn only: `map/delivery-packet`,
+  `map/repository`, `threat/disguise`, `save/failures`, `save/review-fixes`, `save/codec`, `save/resume`,
+  `residents/foundation-flight`. A dry run with every kind raised (the stubs, no deck yet) passed 194 of 195 suites; the one
+  failure, `residents/foundation`, failed only its three `built` checks.
+
+### Minors
+
+- **m1.** `data/residents.ts SLEEPER_JOB_KEYS = { drops: 'R', wall: 'H', mend: 'T' }`. None of the three is bound on the
+  `'game'` layer (R and T only on `'desk'`).
+- **m2.** `residentShipEnd` checks for a slot already recorded before the kind's `…ShipEnd` runs.
+- **m3.** `state/resident-selectors.ts liveLockText(state)` is WARDEN's: a stub that returns null. `flight-hud.ts
+  liveVerbText(state, speaker = 'hollow-cmd')` returns it for a `'resident'` line, and `ObjectiveStrip.ts` (lead-owned)
+  passes the entry's speaker. FACE keys `MindTerminal`'s verb row by speaker and calls `liveVerbText(state, 'resident')`.
+- **m4.** `pace.ts skipLandsInSec` also lands at a corrupted resident's own first burst: `corrupted.bursts === 0` while
+  `ghostBy === 'resident'`, even after Thrust Ctrl's bursts.
+- **m5.** FACE may add per-tick entries (an `onPostTick`, already imported) inside its `audio-cues.ts` block (`:317–335`).
+- **m6.** `RESIDENT_REFUSAL` gains `sleeperRepair`, `sleeperCopy`, `noteMove`, `wallDelete` and `wallMove`. They are the
+  lead's words; KIN asks to reword them.
+- **m7.** `map-run.ts shipLaunchYear(map, slot)` gives `RUN1_SHIP_LAUNCH_YEAR` (2240, the lead's line in tuning) plus the
+  rolling run's start offset (`timedAgainstStart`, written only at a roll). It throws on the classic world.
+- **m8.** AUTODROP v3's `planOver` (`autodrop.ts`, the lead's hook) is not over while a pod aboard is locked, so PLAN DONE
+  waits for a DELETE, a cure or an ACCEPT.
+- **m9.** Deviation 10's case is named here: with no pod asked for, `POD LOCKED` also wins over `NO POD READY` when the
+  unlocked pods aboard are only repairing or moving. This is intended: the lock is the reason the bay has no pod ready
+  later either. `MemoryStats`' unscanned damage and `met[].shown` need no change.
+- **m10. Decision (written into R12 and §2.9):** MOTH's gift is paid whenever the sleeper was woken, landed or lost.
+
+### The final contract changes, per track
+
+- **WARDEN:**
+  - fills `PipModel.jumpId` and `.override` in its pip block;
+  - builds `liveLockText`;
+  - counts `CorruptedState.bursts`;
+  - words are `warden-text.ts`'s own, with no frozen key. The stamps, goodnight and INSPECT are FACE's.
+  - Test lines: `residents/foundation.test.ts:71`, `support/words.test.ts:175–179`, `tuning.ts:2217–2256`,
+    `data/residents.ts:23`.
+- **KIN:**
+  - builds `draft.ts applyLeftoverPick` (the skill card's grant: no link room, not when pending);
+  - deals at most one `'skill'`, with unique ids;
+  - uses `SLEEPER_JOB_KEYS`, the phase `'awake'`, the new refusals, and `shipLaunchYear` for MOTH's years;
+  - pays the gift whenever MOTH was woken.
+  - Test lines: `residents/foundation.test.ts:73` and `:75` (and `:319`, as before), `support/words.test.ts:183–187`,
+    `tuning.ts:2261–2284`, `data/residents.ts:25` and `:27`;
+  - plus the R22 suites above, for churn only.
+- **FACE:**
+  - owns every word it paints (`resident-ui-text.ts`, seeded);
+  - styles `data-override`;
+  - may add per-tick entries in its audio-cues block;
+  - paints the skill card from `card.leftover.skill`, with its tag;
+  - uses `shipLaunchYear` for INSPECT's year.
+  - Test lines: `support/words.test.ts:191–195`, `tuning.ts:2289–2297`, `audio-cues.ts:317–335`.
+- **The lead** now also owns `WindowGrip.ts` and `ObjectiveStrip.ts` (§5).
