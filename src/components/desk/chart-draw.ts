@@ -1,6 +1,7 @@
 // Slice 3c: Track UI owns this file (docs/phase3/impl/slice-3c-plan.md §5.3); WORLD and SAVE request words by message.
 import type { ChartModel, ChartNode, OlderColonyDot } from '@systems/desk';
 import { MAP_TEXT } from '@data/map-text';
+import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 import {
   CHART_NODE_PX, CHART_ARK_PX, CHART_PAD_PX, CHART_LABEL_ROOM_PX, CHART_STARS, CHART_PHONE_PX_PER_LY, CHART_PORTRAIT_DEG, CHART_LANDSCAPE_DEG,
   TAKEN_MARK_OFFSET_PX,
@@ -346,7 +347,8 @@ export function drawChart(svg: SVGSVGElement, model: Readonly<ChartModel>, opts:
     const { px, py } = at(node.x, node.y);
     const g = el('g', { 'data-slot': node.slot },
       `cn state-${node.state} kind-${node.kind}${node.tight ? ' tight' : ''}${node.isFinal ? ' final' : ''}${node.onlyFromHere ? ' only' : ''}`
-      + `${model.selected === node.slot ? ' selected' : ''}${node.taken !== null ? ' taken' : ''}${node.tag !== null ? ' tagged' : ''}`);
+      + `${model.selected === node.slot ? ' selected' : ''}${node.taken !== null ? ' taken' : ''}${node.tag !== null ? ' tagged' : ''}`
+      + `${node.signal ? ' signal' : ''}`);
     // A generous hit area: the squares are small, a kid's click is not.
     g.append(el('circle', { cx: px.toFixed(1), cy: py.toFixed(1), r: 13 }, 'cn-hit'));
     if (node.isFinal) {
@@ -372,6 +374,12 @@ export function drawChart(svg: SVGSVGElement, model: Readonly<ChartModel>, opts:
       const d = 2.6;
       // Top-left: labels start right of the node more often than anywhere else.
       g.append(el('path', { d: `M${px - c},${py - c - d} L${px - c + d},${py - c} L${px - c},${py - c + d} L${px - c - d},${py - c} Z` }, 'cn-new'));
+    }
+    // Slice 5 (plan R18): a signal fragment still on this ship, its noise glyph at the lower-left corner (the label starts
+    // right of the node more often than anywhere else, and REPORTED HOME's diamond takes the upper-left).
+    if (node.signal) {
+      const c = (node.kind === 'ark' || node.isFinal ? CHART_ARK_PX : CHART_NODE_PX) / 2 + 2;
+      g.append(text(px - c, py + c + 7, RESIDENT_UI_TEXT.chart.glyph, 'cn-signal', 'end'));
     }
     const showLabel = opts.labels === 'all'
       || (opts.labels === 'beacon' && node.isFinal)
