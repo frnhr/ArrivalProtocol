@@ -28,8 +28,11 @@ import {
 // --- Drivers and the bay -----------------------------------------------------------------------------------------------
 
 // A driver the bay may launch now (§3.4): not being eaten, not worked on, not moving, repairing or offline, and not dead
-// (integrity ≥ BAND_FAILING_MIN). A repair started before its turn therefore always finishes first.
+// (integrity ≥ BAND_FAILING_MIN). A repair started before its turn therefore always finishes first. Slice 5 (plan R7): and
+// not locked by a corrupted resident (DriverSegment.lockedBy), so the queue, the bay's count and AUTODROP's view (all from
+// launchQueue) leave a locked pod out.
 export function isLaunchable(d: Readonly<DriverSegment>): boolean {
+  if (d.lockedBy !== undefined) return false;
   if (d.infected || d.operating) return false;
   if (d.state === 'transferring' || d.state === 'repairing' || d.state === 'offline') return false;
   return d.integrity >= BAND_FAILING_MIN;
@@ -86,6 +89,8 @@ export function bayMembers(state: Readonly<GameState>): { bay: number[]; next: n
 // infection is cured or eats it, an op ends); below it (dead) it needs a REPAIR: one already running on it, or one the
 // kid can still start (selectors repairPossible: a usable Repair and charge ≥ 1, as the root's duel judges its Rm).
 // Without that its pod can never launch, so L12 and the risk-7 auto-end take over instead of a landing open for good.
+// Slice 5 (plan R7): a lock (lockedBy) does not change it: a locked pod can still launch some day (the resident deleted,
+// cured or paid), so the auto-end never ends a landing the kid could still free. END LANDING parks it.
 export function driverCanEverLaunch(state: Readonly<GameState>, driver: Readonly<DriverSegment>): boolean {
   if (driver.integrity >= BAND_FAILING_MIN || driver.state === 'repairing') return true;
   return repairPossible(state);
@@ -573,6 +578,11 @@ function driverFor(state: Readonly<GameState>, pod: number | undefined): DriverS
   return driversInMemory(state).find((driver) => driver.pod === pod) ?? null;
 }
 
+// A pod aboard whose driver is held by a resident's lock (slice 5): what makes an empty queue POD LOCKED, not NO POD READY.
+function lockedPodAboard(state: Readonly<GameState>): boolean {
+  return driversInMemory(state).some((driver) => driver.lockedBy !== undefined && podRecord(state, driver.pod).fate.kind === 'aboard');
+}
+
 // Who is asking for a launch: the source, and whether it may launch while the kid is in the MIND (the blue screen).
 // requestLaunch derives fromMind: false for the player, the active controller's launchesFromMind otherwise.
 export interface LaunchFrom {
@@ -595,6 +605,8 @@ export function launchRefusal(
   if (sol === null || sol.block !== null || sol.dot === null) return 'NO DROP SOLUTION';
   if (!sol.dot.inBand) return 'OUT OF THE LAUNCH BAND';
   const driver = driverFor(state, pod);
+  // Slice 5 (plan R7): the asked-for pod is locked, or, asked for none, nothing is ready but a locked pod.
+  if (driver?.lockedBy !== undefined || (driver === null && pod === undefined && lockedPodAboard(state))) return 'POD LOCKED';
   if (driver === null || !isLaunchable(driver)) return 'NO POD READY';
   if (state.landing.bay.cadenceLeftTac > 0) return 'RELOADING';
   if (state.landing.bay.loaded < 1) return 'BAY EMPTY';

@@ -1,5 +1,5 @@
-// Slices 4c–4e: the lead owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2); a track may change the cue on its own
-// events' lines only (the 4c, 4d and 4e blocks at the end of mountAudioCues).
+// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §5); a track may change the cue on its own events'
+// lines only (the 4c, 4d and 4e blocks, and slice 5's resident block, at the end of mountAudioCues: Track FACE's to tune).
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { on } from '@systems/events';
@@ -313,6 +313,25 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     // --- 4e ORBIT: AUTOBURN v3 going lower stamps.
     on('autoburn-v3-lower', () => play('stampHit', { heavy: false })),
     // --- end of 4e ---
+
+    // === Slice 5 (slice-5-plan §2.5): existing cues only; Track FACE may change the cue on these lines (MOTH's lullaby, the
+    // surprise's glitch).
+
+    // --- 5 residents: a wake warns as a seed does; a landed lock buzzes and a blocked one sounds as a finished op; the
+    // resident's DEAL ends as HOLLOW's does; a deletion stamps, a cure and the sleeper's wake chime, its job a finished op,
+    // a signal found the transmit's swell (05 §4: a key found). A leftover read is SCAN's own sound.
+    on('resident-wake', () => play('seedWarn')),
+    on('resident-lock', ({ phase }) => {
+      if (phase === 'landed') play('buzz');
+      else if (phase === 'blocked') play('opDone');
+    }),
+    on('resident-deal', ({ outcome }) => { if (outcome !== 'invalidated') play('stampHit', { heavy: outcome === 'accepted' }); }),
+    on('resident-deleted', () => play('stampHit', { heavy: false })),
+    on('resident-cured', () => play('chime', { falling: false })),
+    on('sleeper-woken', () => play('chime', { falling: false })),
+    on('sleeper-job', () => play('opDone')),
+    on('signal-found', () => play('transmitIn')),
+    // --- end of 5 residents ---
   ];
   offs.push(onPostTick(() => playedThisTick.clear()));
 

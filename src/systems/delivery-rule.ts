@@ -63,8 +63,10 @@ export function deliveryForecast(map: Readonly<RunMapState>, from: number, to: n
 }
 
 // A receiver that will not hold a delivery (slice 5's RECEIVER CLOSED on a resident's ship, plan risk 14): nothing catches
-// up there (it is not a stop a file can wait at), though a file may still be forwarded past it. Slice 5 decides; until then
-// every receiver is open. The one seam: the forecast's walk and systems/repository.ts hopOutlook both read it.
+// up there (it is not a stop a file can wait at), though a file may still be forwarded past it. The one seam: the
+// forecast's walk and systems/repository.ts hopOutlook both read it. Slice 5 decided (slice-5-plan R10, [FRAN]): every
+// receiver stays open. A closed one would turn the desk's ETA into NEVER on the sleeper's and the late surprise's ships and
+// spoil both on the map; the boot's bypass opens the receiver, for the unit and for what follows it.
 export function receiverClosed(map: Readonly<RunMapState>, slot: number): boolean {
   void map;
   void slot;

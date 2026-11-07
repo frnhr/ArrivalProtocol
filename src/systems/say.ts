@@ -307,14 +307,17 @@ export interface ChoiceLook {
 // the picked option, or null when the timer (AI seconds) ran out. The timer starts once the line has typed (WP2 review:
 // buttons and a running bar under a line still typing gave the kid less than its timeout to read it and decide).
 // `look` null: buttons only (the ?debug sayChoice), and the ticker shows the line itself.
+// Slice 5 (plan R23): `timeoutAiSec` null is a choice with no timer (the sleeper's offer): it stands until it is answered or
+// withdrawn, and onResolve never gets a timeout's null. At most one choice stands at a time (openChoiceEntry): the one who
+// would open a second withdraws the first (withdrawChoice), or waits.
 export function sayChoice(
-  speaker: Speaker, text: string, options: readonly string[], timeoutAiSec: number,
+  speaker: Speaker, text: string, options: readonly string[], timeoutAiSec: number | null,
   onResolve: (picked: string | null) => void, look: ChoiceLook | null = null,
 ): number {
   const store = requireStore();
   assertLineFits(text);
   if (options.length === 0) throw new Error(`sayChoice('${text}'): no options`);
-  if (!(timeoutAiSec > 0)) throw new Error(`sayChoice('${text}'): timeout must be positive`);
+  if (timeoutAiSec !== null && !(timeoutAiSec > 0)) throw new Error(`sayChoice('${text}'): timeout must be positive`);
   if (look !== null) {
     if (look.keys.length !== options.length) throw new Error(`sayChoice('${text}'): ${look.keys.length} keys for ${options.length} options`);
     if (new Set(look.keys).size !== look.keys.length) throw new Error(`sayChoice('${text}'): two options share a key`);
@@ -322,7 +325,7 @@ export function sayChoice(
     assertLineFits(look.tickerWords);
   }
   const id = append(store, speaker, text, {
-    options: [...options], timeoutAiSec, leftAiSec: timeoutAiSec, open: true, picked: null,
+    options: [...options], timeoutAiSec, leftAiSec: timeoutAiSec ?? 0, open: true, picked: null,
     keys: look === null ? null : [...look.keys], tickerWords: look?.tickerWords ?? null,
   });
   choiceHandlers.set(id, onResolve);
@@ -334,9 +337,10 @@ export function openChoiceEntry(state: Readonly<GameState>): LogEntry | null {
   return state.log.entries.find((entry) => entry.choice?.open === true) ?? null;
 }
 
-// The choice's timer is running: its line has typed (sayChoice), so the kid is now spending its seconds.
+// The choice's timer is running: its line has typed (sayChoice), so the kid is now spending its seconds. Never for a choice
+// with no timer (slice 5): no clock, no tock, no ticker countdown.
 export function choiceTimerRunning(state: Readonly<GameState>, entry: Readonly<LogEntry>): boolean {
-  return entry.choice?.open === true && state.clock.aiSec >= entryTypedAtAi(state, entry.id);
+  return entry.choice?.open === true && entry.choice.timeoutAiSec !== null && state.clock.aiSec >= entryTypedAtAi(state, entry.id);
 }
 
 // Whole seconds a choice has left, as its timer and the ticker count them (`0:12`; 0 only once it has run out).
@@ -480,7 +484,7 @@ function tickChoices(store: Store<GameState>, dtAi: number): void {
   const state = store.getState();
   const now = state.clock.aiSec;
   // Only a choice whose line has typed counts down (sayChoice), and only the AI time since then.
-  const running = state.log.entries.filter((entry) => entry.choice?.open === true)
+  const running = state.log.entries.filter((entry) => entry.choice?.open === true && entry.choice.timeoutAiSec !== null)
     .map((entry) => ({ id: entry.id, dt: Math.max(0, Math.min(dtAi, now - entryTypedAtAi(state, entry.id))) }))
     .filter((choice) => choice.dt > 0);
   if (running.length === 0) return;

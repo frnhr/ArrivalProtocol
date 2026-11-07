@@ -46,6 +46,9 @@ export const LAUNCH_REFUSAL_TEXT: Readonly<Record<LaunchRefusal, string>> = {
   'ENGINE FIRING': "ENGINE FIRING — can't launch under thrust",
   'NO DROP SOLUTION': 'NO DROP SOLUTION — REPAIR NAV PLOTTER',
   'OUT OF THE LAUNCH BAND': 'OUT OF THE LAUNCH BAND',
+  // Slice 5 (04 §3.12, plan R7): a corrupted resident's lock. The table is static, so it names the ship's AI, not the
+  // resident (the strip's own resident line names it: data/resident-rules.ts).
+  'POD LOCKED': 'CAN\'T LAUNCH · LOCKED BY THE SHIP\'S AI',
   'NO POD READY': 'NO POD READY — REPAIR a driver',
   'RELOADING': 'RELOADING',
   'BAY EMPTY': 'BAY EMPTY — reloading',

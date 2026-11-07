@@ -1,5 +1,5 @@
-// Slices 4c–4e: the lead owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2); every 4c–4e event is named in the
-// blocks at the end of GameEvents, and a track emits its own. Others ask by message.
+// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §2.5, §5); every slice 4c–4e and slice 5 event is named
+// in the blocks at the end of GameEvents, and a track emits its own. Others ask by message.
 import type {
   FiringSource, ViewMode, TransitHit, AutoburnPhase, AutoburnEnd, DealOutcome, VerbKind,
 } from '@state/schema';
@@ -11,6 +11,7 @@ import type { RepoFileId } from '@/types/repo';
 import type { LineState } from '@systems/flight-events';
 import type { OpKind } from '@systems/ops-core';
 import type { PlotMode } from '@systems/capabilities';
+import type { ResidentKind, ResidentDealOutcome, SleeperJob } from '@/types/resident';
 
 // The game's event bus (§9 WP2): moments, not state. Systems emit what just happened (the line
 // turned green, the flight ended, an input was refused); audio, juice and the director react.
@@ -51,8 +52,11 @@ export interface GameEvents {
   // marks a filesystem-tool refusal: its reason is shown next to the cursor (WP3).
   'refused': { reason: string; tool?: boolean };
   // An fs-tool op finished its work: 'done', or a repair that stopped because REPAIR CHARGE ran
-  // out. Cancelled and aborted ops say nothing.
-  'op-done': { kind: OpKind; result: 'done' | 'no-charge' };
+  // out. Cancelled and aborted ops say nothing. Slice 5 (plan §2.4): `segId`, the file it worked on (a MOVE's: the file
+  // where it now stands; a COPY's: the source; a SWAP's: the backup that took the job), so a resident's module can react to
+  // "the lock was deleted" or "the sleeper was moved" without a hook in actions.ts; null for SENTRY v2's pre-empt (the
+  // seed it took never stood as a file).
+  'op-done': { kind: OpKind; result: 'done' | 'no-charge'; segId: string | null };
   'ui-click': Record<string, never>;
   // WP4. ARRIVAL CONTROL installed a licensed tool's files (transmitIn, chime, the chip slides in).
   'licence': { kind: FsToolKind };
@@ -225,6 +229,33 @@ export interface GameEvents {
   // AUTOBURN v3 lowered its landing orbit (`AUTOBURN v3 GOES LOWER — LZ-B's dot will fit`).
   'autoburn-v3-lower': { fromKm: number; toKm: number; lz: string };
   // --- end of 4e ---
+
+  // === Slice 5 (docs/phase3/impl/slice-5-plan.md §2.5): the FOUNDATION named every event; each track emits its own.
+  // 'scanned', 'op-done' (with its segId), 'skill-trained' (kind 'granted') and 'ghost-start' are reused.
+
+  // --- 5 WARDEN (systems/resident-corrupted.ts) and KIN (the sleeper's wake) ---
+  // A resident woke: a corrupted one (`surprise`: the late surprise's, with the stamp `THE SHIP'S OWN AI IS AWAKE · RACK A`),
+  // or the sleeper (KIN emits 'sleeper-woken' too).
+  'resident-wake': { kind: ResidentKind; name: string; surprise: boolean };
+  // A lock on `pod`: telegraphed (`> LOCK POD 07 ... 3`), blocked by an op on the driver, landed, or released (a DELETE, a
+  // cure or an ACCEPT frees every lock: one event per pod).
+  'resident-lock': { pod: number; phase: 'telegraph' | 'blocked' | 'landed' | 'released' };
+  // The resident's DEAL ended, and the file it named.
+  'resident-deal': { outcome: ResidentDealOutcome; fileName: string | null };
+  // Its DELETE completed (`RESIDENT DELETED`); REPAIR healed it to 100 (`RESIDENT CURED`).
+  'resident-deleted': { name: string };
+  'resident-cured': { name: string };
+  // --- end of 5 WARDEN ---
+
+  // --- 5 KIN (systems/resident-left.ts, systems/resident-sleeper.ts) ---
+  // The sleeper woke, by an rm of its lock or a MOVE of it off the lock; it took a job.
+  'sleeper-woken': { name: string; by: 'rm' | 'move' };
+  'sleeper-job': { job: SleeperJob };
+  // A note's signal fragment was found (`SIGNAL · n/3`: `count` signals in the run now).
+  'signal-found': { slot: number; count: number };
+  // A SCAN read a leftover (its card's name shows).
+  'leftover-read': { segId: string };
+  // --- end of 5 KIN ---
 }
 
 export type ZoneForecast = 'hit' | 'clear' | 'unknown';

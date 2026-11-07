@@ -1,4 +1,5 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): deleteSec (SENTRY v2's QUICK RM),
+// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §5): deleteSec sends a resident's file to its kind
+// (systems/residents.ts), and every 'op-done' names the file it worked on. Slice 4d's deleteSec (SENTRY v2's QUICK RM),
 // the SCAN and DELETE unmasking of a disguised seed. Others ask by message.
 import type { Store } from './store';
 import type { GameState, PendingPlacement } from './schema';
@@ -36,6 +37,8 @@ import {
 } from '@data/tuning';
 import { THREAT_TEXT, SENTRY_TEXT } from '@data/threat-text';
 import { isDisguised } from '@state/threat-selectors';
+import { isResidentFile } from '@state/selectors';
+import { residentDeleteSec } from '@systems/residents';
 import { skillLive } from '@systems/capabilities';
 
 // A ship file's backup copy is called `<name>.alt` (Thrust.alt); a swapped-out primary `<name>.old` (§6.5).
@@ -222,7 +225,9 @@ export function scanSec(size: number): number { return SCAN_BASE_SEC + SCAN_PER_
 // Slice 4d: `sentry` is the version SENTRY.skl works as at the click (capabilities skillLive). From v2 QUICK RM (03 §3.10)
 // a hollow block that is not the root goes in SENTRY_DELETE_FACTOR of its time (a seed 1.0 s, a 6-block meal 2.0 s); the
 // root's duel keeps its length (plan R10). A disguised seed deletes as the seed it is.
+// Slice 5: a resident's file deletes in its kind's time (systems/residents.ts residentDeleteSec: WARDEN.sys 6.0 s).
 export function deleteSec(seg: Segment, sentry: EffectiveVersion = 0): number {
+  if (isResidentFile(seg)) return residentDeleteSec(seg);
   if (seg.type !== 'hollow') return DELETE_SEC;
   if (seg.root) return ROOT_DELETE_SEC;
   const base = DELETE_HOLLOW_BASE_SEC + DELETE_HOLLOW_PER_BLOCK_SEC * seg.size;
@@ -280,7 +285,7 @@ function runQuickOp(
       bumpMemory(store);
       echo(doneEcho());
       afterEcho();
-      emit('op-done', { kind, result: 'done' });
+      emit('op-done', { kind, result: 'done', segId: seg.id });
     },
     onCancel: () => {
       release();
@@ -421,7 +426,7 @@ export function actionRepair(store: Store<GameState>, seg: Segment): ToolRefusal
       if (stopped) say('mind-sys', OP_LINES.noCharge(seg.name), { critical: true });
       else echo(OP_ECHO.repair(name, paid));
       if (cured) emit('hollow-cure', { segId: seg.id });
-      emit('op-done', { kind: 'repair', result: stopped ? 'no-charge' : 'done' });
+      emit('op-done', { kind: 'repair', result: stopped ? 'no-charge' : 'done', segId: seg.id });
     },
     onCancel: () => {
       finish();
@@ -700,7 +705,7 @@ export function actionMove(store: Store<GameState>, source: Segment, placement: 
       checkMemory(store, mem);
       store.update((draft) => { draft.ui.selectedId = clone.id; draft.ui.memoryRev++; });
       echo(OP_ECHO.done('move', name));
-      emit('op-done', { kind: 'move', result: 'done' });
+      emit('op-done', { kind: 'move', result: 'done', segId: clone.id });
     },
     onCancel: () => {
       restore();
@@ -781,7 +786,7 @@ export function actionCopy(store: Store<GameState>, source: Segment, placement: 
       checkMemory(store, mem);
       store.update((draft) => { draft.ui.selectedId = copy.id; draft.ui.memoryRev++; });
       echo(OP_ECHO.done('copy', name));
-      emit('op-done', { kind: 'copy', result: 'done' });
+      emit('op-done', { kind: 'copy', result: 'done', segId: source.id });
     },
     onCancel: () => {
       restore();
@@ -892,7 +897,7 @@ export function actionSwap(store: Store<GameState>, seg: Segment): ToolRefusal |
         draft.ui.memoryRev++;
       });
       echo(primary === null ? OP_ECHO.done('swap', handedTo) : OP_ECHO.swap(echoed, handedTo));
-      emit('op-done', { kind: 'swap', result: 'done' });
+      emit('op-done', { kind: 'swap', result: 'done', segId: backup.id });
     },
     onCancel: () => {
       release();

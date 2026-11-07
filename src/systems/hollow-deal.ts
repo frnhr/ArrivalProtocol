@@ -9,6 +9,7 @@ import { hollowReach, acceptDeal, biteIntervalSec } from '@systems/hollow';
 import { getOpsBySeg } from '@systems/ops-core';
 import { segmentStarts } from '@systems/memory-ops';
 import { driversInMemory } from '@state/selectors';
+import { residentDealOnThisShip } from '@state/resident-selectors';
 import { podCode } from '@data/landing-text';
 import { HOLLOW_DEAL } from '@data/hollow-text';
 import {
@@ -77,11 +78,13 @@ function dealLive(state: Readonly<GameState>): boolean {
 }
 
 // The deal may be offered now: a dealing HOLLOW awake on a live ship (dealLive), nothing offered yet on this ship or in
-// this run, and enough drivers left to bargain over.
+// this run, and enough drivers left to bargain over. Slice 5 (04 §3.9's one deal per ship, plan R8): not on a ship whose
+// corrupted resident offered its own DEAL first; HOLLOW's then comes on a later ship by this same rule.
 function dealOpen(state: Readonly<GameState>): boolean {
   const hollow = state.hollow;
   return hollow.cfg.deal && hollow.phase === 'awake' && hollow.deal.phase !== 'offered' && hollow.deal.phase !== 'done'
-    && state.run.stats.deal === null && dealLive(state) && driversInMemory(state).length >= DEAL_MIN_DRIVERS;
+    && state.run.stats.deal === null && dealLive(state) && driversInMemory(state).length >= DEAL_MIN_DRIVERS
+    && !residentDealOnThisShip(state);
 }
 
 // Why the named driver can no longer be bargained over (null: the offer still stands): HOLLOW ate it while the kid

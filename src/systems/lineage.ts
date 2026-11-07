@@ -1,7 +1,9 @@
 import type { GameState, RunState, ShipResult } from '@state/schema';
 import type { RunMapState } from '@/types/map';
+import type { ResidentFate } from '@/types/resident';
 import type {
-  LastCause, LastUnit, UnitTrail, TrailStop, ColonyRecord, RouteRecord, NotableEvent, LineageHistory, Visit, LetterSource, NextLaunch,
+  LastCause, LastUnit, UnitTrail, TrailStop, ColonyRecord, RouteRecord, NotableEvent, NotableEventKind, LineageHistory, Visit,
+  LetterSource, NextLaunch,
 } from '@/types/lineage';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import { UNIT_046_TRAIL } from '@data/ship-names';
@@ -121,11 +123,17 @@ export function coloniesOf(trail: Readonly<UnitTrail>): ColonyRecord[] {
   }]));
 }
 
+// Which resident fates are notable (slice 5, plan R27): a deletion, a cure, a sleeper woken. Every other fate is not.
+const RESIDENT_EVENT_OF: Readonly<Record<ResidentFate, NotableEventKind | null>> = {
+  deleted: 'resident-deleted', cured: 'resident-cured', woken: 'sleeper-woken', paid: null, ignored: null, left: null, slept: null,
+};
+
 // The run's notable events (05 §3.8: at most NOTABLE_EVENTS_MAX, in its rank order): a DEAL accepted (value: the pod given
 // up), the best colony (the ship that landed the most in an LZ; value: colonists), then each ship lost, in route order
 // (value: its depth). A ship is lost when it never reached orbit or the landing lost it (any outcome but locked or partial).
-// None on the classic world. Residents deleted or woken are slice 5's (they come after the DEAL in 05's rank).
-export function notableEvents(run: Readonly<Pick<RunState, 'map' | 'ships' | 'stats'>>): NotableEvent[] {
+// None on the classic world. Slice 5 (plan R27; 05 §3.8: "a DEAL accepted, a resident deleted or woken, the best colony, a
+// ship lost"): after the DEAL, each resident deleted, cured or woken, in route order (value: its depth).
+export function notableEvents(run: Readonly<Pick<RunState, 'map' | 'ships' | 'stats' | 'residents'>>): NotableEvent[] {
   if (run.map.world !== 'arm') return [];
   const events: NotableEvent[] = [];
   const deal = run.stats.deal;
@@ -133,6 +141,13 @@ export function notableEvents(run: Readonly<Pick<RunState, 'map' | 'ships' | 'st
     const ship = run.ships.find((result) => result.shipId === deal.shipId);
     if (ship === undefined) throw new Error(`notableEvents: the accepted DEAL names ship ${deal.shipId}, which this run never ended`);
     events.push({ kind: 'deal-accepted', slot: ship.slot, shipName: ship.shipName, value: deal.pod });
+  }
+  for (const met of run.residents.met) {
+    const kind = RESIDENT_EVENT_OF[met.fate];
+    if (kind === null) continue;
+    const ship = run.ships.find((result) => result.slot === met.slot);
+    if (ship === undefined) throw new Error(`notableEvents: ${met.name} was met on slot ${met.slot}, which this run never ended`);
+    events.push({ kind, slot: met.slot, shipName: ship.shipName, value: met.depth });
   }
   const best = run.ships.reduce<ShipResult | null>((top, result) => (result.landedInLz > (top?.landedInLz ?? 0) ? result : top), null);
   if (best !== null) events.push({ kind: 'best-colony', slot: best.slot, shipName: best.shipName, value: best.landedInLz });

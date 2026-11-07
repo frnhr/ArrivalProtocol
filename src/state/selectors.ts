@@ -1,7 +1,7 @@
 import type { GameState, VerbTelegraph, HollowState } from './schema';
 import type {
   Segment, RedundancySegment, FsToolSegment, CoreSegment, ToolSegment, SkillFileSegment, SegmentState, SegmentRole,
-  DriverSegment, SegmentType, HollowSegment, Infection, UpgradeSegment, UpgradeKind, FirewallSegment, ShipSegment,
+  DriverSegment, SegmentType, HollowSegment, Infection, UpgradeSegment, UpgradeKind, FirewallSegment, ShipSegment, ResidentFileSegment,
 } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { SkillId } from '@/types/skill';
@@ -114,6 +114,14 @@ const INFECTABLE_TYPES: ReadonlySet<SegmentType> = new Set<SegmentType>(['core',
 
 export function isInfectable(seg: Segment): seg is HealthSegment {
   return INFECTABLE_TYPES.has(seg.type) && hasIntegrity(seg);
+}
+
+// One of a resident's rack-A files (slice 5, plan R15): WARDEN.sys, the sleeper's files, its lock, a note or a leftover.
+// systems/residents.ts sends each type to its kind's module (the tool rules, DELETE's time and confirm).
+const RESIDENT_FILE_TYPES: ReadonlySet<SegmentType> = new Set<SegmentType>(['resident', 'sleeper', 'sleep-lock', 'note', 'leftover']);
+
+export function isResidentFile(seg: Readonly<Segment>): seg is ResidentFileSegment {
+  return RESIDENT_FILE_TYPES.has(seg.type);
 }
 
 export function isHollow(seg: Segment): seg is HollowSegment {

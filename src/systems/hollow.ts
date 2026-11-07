@@ -1427,7 +1427,7 @@ function applyEvents(store: Store<GameState>, events: readonly HollowEvent[], ph
         // The kid's own DELETE did it (stats.deletes counts it through 'op-done'); the stamp hangs on 'seed-preempted'.
         say('cmd', SENTRY_TEXT.preemptEcho(hexAddr(event.startAddr)), { critical: true });
         emit('seed-preempted', { startAddr: event.startAddr });
-        emit('op-done', { kind: 'delete', result: 'done' });
+        emit('op-done', { kind: 'delete', result: 'done', segId: null });
         break;
       case 'core-zero':
         endCoreLost(store);

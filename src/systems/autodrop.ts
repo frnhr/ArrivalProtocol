@@ -105,8 +105,8 @@ interface NextLaunch {
   opensAt: number;   // its window's sure part opens (game s): the strip names the volley from GET READY's lead
 }
 
-function armedNext(state: Readonly<GameState>, view: Readonly<LandingView>): NextLaunch | null {
-  const armed = state.landing.autodrop.armed;
+// `armed` is the machine's arm: the kid's (state.landing.autodrop.armed) or a wrapping source's (AutodropOverride.armed).
+function armedNext(state: Readonly<GameState>, view: Readonly<LandingView>, armed: AutodropArm | null): NextLaunch | null {
   if (armed === 'pass') {
     const next = passVolley(state, view);
     return next === null ? null : volleyNext(next);
@@ -126,15 +126,18 @@ function volleyNext(next: Readonly<NextVolley>): NextLaunch {
 
 // --- The controller (plan §3.1) ------------------------------------------------------------------------------------------
 
-// What slice 7's MERGE resolver passes to fly restored pods at AUTODROP's effective version with its own queue (01 §3.17).
-// 4c builds only the seam. Review m6: `source` is the wrapping resolver's (registerLandingController checks a resolver
-// answers for its own source), and every intent the controller makes carries it. The machine (armed, held, claimed) is
-// still state.landing.autodrop and `queue` is not read: MERGE's own machine state is slice 7's (see the plan's
-// Deviations, review fixes).
+// What a wrapping resolver passes to fly the landing at AUTODROP's rules with its own say: slice 5's sleeper (RUN THE DROPS:
+// v3 PLAN, source 'resident', armed 'plan', slice-5-plan R11) and slice 7's MERGE (restored pods at the effective version
+// with its own queue, 01 §3.17). Review m6: `source` is the wrapping resolver's (registerLandingController checks a resolver
+// answers for its own source), and every intent the controller makes carries it. Slice 5: `armed` arms the machine for the
+// wrapper (the kid's [G] is not needed), read wherever the controller reads the arm (armedNext and the decision), threaded
+// as a parameter (no module variable); held and claimed are still state.landing.autodrop's, and `queue` is not read (MERGE's
+// own machine state is slice 7's).
 export interface AutodropOverride {
   version: EffectiveVersion;
   queue: readonly number[];
   source?: ControllerSource;
+  armed?: AutodropArm;
 }
 
 // v1, held: the volley's next slot has come, and the window is sure for it now.
@@ -198,13 +201,15 @@ export function autodropController(state: Readonly<GameState>, override?: Readon
   const source = override?.source ?? 'autodrop';
   const as = (intent: LaunchIntent | null): LaunchIntent | null => (intent === null ? null : { ...intent, source });
   const ad = state.landing.autodrop;
-  // AUTODROP's own Core thread gates its armed launches; a wrapping source (slice 7's MERGE) holds its own (review m6).
+  const armed = override?.armed ?? ad.armed;
+  // AUTODROP's own Core thread gates its armed launches; a wrapping source (slice 5's sleeper, slice 7's MERGE) holds its
+  // own (review m6).
   const claimed = source !== 'autodrop' || ad.claimed;
-  if (ad.armed !== null && version >= 2) {
+  if (armed !== null && version >= 2) {
     return {
       source, holdsTactical: true, launchesFromMind: true,
-      decide: (view, now) => (claimed ? as(ad.armed === 'plan' && version >= 3 ? decidePlan(view, now) : decidePass(view, now)) : null),
-      nextLaunchAtTSec: (now) => withView(now, (view) => armedNext(now, view)?.atTSec ?? null),
+      decide: (view, now) => (claimed ? as(armed === 'plan' && version >= 3 ? decidePlan(view, now) : decidePass(view, now)) : null),
+      nextLaunchAtTSec: (now) => withView(now, (view) => armedNext(now, view, armed)?.atTSec ?? null),
     };
   }
   if (ad.held && state.ui.mode === 'tools') {
@@ -305,7 +310,7 @@ export function autodropLaunched(store: Store<GameState>, pod: number, view: Rea
   if (!firstOfVolley) return;
   const sol = getDropSolution();
   const after = store.getState();
-  const rest = sol === null ? null : armedNext(after, viewOf(after, sol)) ?? (after.landing.autodrop.held ? heldNext(after, viewOf(after, sol)) : null);
+  const rest = sol === null ? null : armedNext(after, viewOf(after, sol), after.landing.autodrop.armed) ?? (after.landing.autodrop.held ? heldNext(after, viewOf(after, sol)) : null);
   emit('autodrop-volley', { lz, n: 1 + (rest !== null && rest.lz === lz ? rest.n : 0), firstAtTSec: launch.atTSec });
 }
 
@@ -582,7 +587,7 @@ export function autodropTick(store: Store<GameState>): void {
   if (machine.armed === 'plan') pinTick(store, view);
   const after = store.getState();
   if (after.landing.autodrop.armed === null) return;
-  const next = armedNext(after, view);
+  const next = armedNext(after, view, after.landing.autodrop.armed);
   claimTick(store, next);
   doneTick(store, next, view);
 }
@@ -655,7 +660,7 @@ export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSol
   let row: AutodropLine['row'] = null;
   let tail: AutodropLine['tail'] = null;
   if (ad.armed !== null && live.version >= 2) {
-    const next = armedNext(state, view);
+    const next = armedNext(state, view, state.landing.autodrop.armed);
     if (ad.waitingSinceTSec !== null && next !== null) {
       row = { id: 'landing-AD-wait', text: text.wait(countdown(state, next.atTSec)), keys: [], urgency: 'now', layer: 'mind' };
     } else if (next !== null && Math.min(tacTo(state, next.atTSec), tacTo(state, next.opensAt)) <= WINDOW_TACTICAL_LEAD_TAC) {
@@ -731,7 +736,7 @@ export function autodropStatus(state: Readonly<GameState>): { text: string; tone
   if (landingOn(state) && ad.armed !== null) {
     if (ad.waitingSinceTSec !== null) return { text: words.waiting, tone: 'warn' };
     const sol = getDropSolution();
-    const next = sol === null ? null : armedNext(state, viewOf(state, sol));
+    const next = sol === null ? null : armedNext(state, viewOf(state, sol), state.landing.autodrop.armed);
     return { text: next === null ? words.armedIdle : words.armed(next.lz, next.n, minSec(Math.max(0, tacTo(state, next.atTSec)))), tone: 'good' };
   }
   if (landingOn(state) && ad.held) return { text: words.holding, tone: 'good' };

@@ -14,7 +14,7 @@ import {
 } from '@systems/lineage';
 import { updateAfterRun } from '@systems/map-update';
 import { hopBetween } from '@systems/map-hop';
-import { createRunStats } from '@state/initial';
+import { createRunStats, createRunResidents } from '@state/initial';
 import { NOTABLE_EVENTS_MAX } from '@data/tuning';
 import { run1Map, WORKED_ROUTE } from '../map/run1-fixture';
 import { RUN1_RESULTS, RUN1_TRAIL, RUN1_LAST_UNIT, run2Map, type Run1Result } from './run2-fixture';
@@ -41,7 +41,9 @@ function mapAlong(slots: readonly number[], base: RunMapState = run1Map(1)): Run
   };
 }
 const results = RUN1_RESULTS.map((row, i) => resultOf(row, i + 1));
-const run1: Pick<RunState, 'unitNumber' | 'map' | 'ships' | 'stats'> = { unitNumber: 47, map: mapAlong(WORKED_ROUTE), ships: results, stats: createRunStats() };
+const run1: Pick<RunState, 'unitNumber' | 'map' | 'ships' | 'stats' | 'residents'> = {
+  unitNumber: 47, map: mapAlong(WORKED_ROUTE), ships: results, stats: createRunStats(), residents: createRunResidents(),
+};
 
 // --- trailOf ------------------------------------------------------------------------------------------------------------------
 const won = trailOf(run1, 'won-purge');
@@ -106,7 +108,7 @@ check('…none from a colony that landed nobody; none on run 1 (046\'s MERIDIAN 
 // --- Notable events ---------------------------------------------------------------------------------------------------------
 const stats = { ...createRunStats(), deal: { outcome: 'accepted' as const, pod: 4, shipId: 'vesper' } };
 const lossy = results.map((result, i) => (i === 1 || i === 2 || i === 4 ? resultOf(RUN1_RESULTS[i]!, i + 1, 'crashed', 0) : result));
-const events = notableEvents({ map: run1.map, ships: lossy, stats });
+const events = notableEvents({ map: run1.map, ships: lossy, stats, residents: run1.residents });
 check(`notable events (05 §3.8's rank, at most ${NOTABLE_EVENTS_MAX}): the DEAL accepted, the best colony, then the ships lost in route order`,
   isDeepStrictEqual(events.map((event) => `${event.kind}:${event.shipName}:${event.value}`), [
     'deal-accepted:VESPER:4', 'best-colony:VESPER:3200', 'ship-lost:HALCYON:2', 'ship-lost:KESTREL:3',

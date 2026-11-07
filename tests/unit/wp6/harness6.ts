@@ -5,6 +5,9 @@
 import { createHarness5, type Harness5 } from '../wp5/harness5';
 import { mountHollow } from '@systems/hollow';
 import { mountHollowDeal } from '@systems/hollow-deal';
+// Slice 5: the residents, right after THE DEAL as main.ts mounts them (inert while no kind is built, and on every ship with
+// no resident).
+import { mountResidents } from '@systems/residents';
 // WP11: HOLLOW's verbs and LAST LIGHT's finale, mounted after THE DEAL as main.ts does (inert on a ship without verbs,
 // and on every ship but the flagship).
 import { mountHollowVerbs } from '@systems/hollow-verbs';
@@ -26,6 +29,7 @@ export function createHarness6(seed = 1, opts: { soulsFound?: boolean } = {}): H
   mountHollow(base.store);
   // WP10: THE DEAL after HOLLOW, as main.ts mounts it (inert on a ship whose HOLLOW does not deal).
   mountHollowDeal(base.store);
+  mountResidents(base.store);
   mountHollowVerbs(base.store);
   mountFinale(base.store);
   return {

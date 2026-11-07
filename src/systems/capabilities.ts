@@ -1,5 +1,5 @@
-// Slice 4: the FOUNDATION built skillLive; Track TREE owns this file after it (docs/phase3/impl/slice-4-plan.md §5.2);
-// FLIGHT and UI read it.
+// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §5): the FOUNDATION composed the resident's ghost
+// source with Thrust Ctrl's (R5). Tracks ask by message.
 import type { GameState } from '@state/schema';
 import type { Segment, SegmentRole, SegmentState, CardFileKind, SkillFileSegment } from '@/types/segment';
 import type { SkillId, SkillLevel, EffectiveVersion, LockLevel, SkillVersion } from '@/types/skill';
@@ -8,10 +8,11 @@ import {
   filesWithRole, hasIntegrity, integrityBand, coreThreads, upgradeFiles, skillFilesOf, swapAboard, type HealthSegment,
 } from '@state/selectors';
 import { threadsBusy } from '@systems/ops-core';
+import { residentGhostSpec } from '@state/resident-selectors';
 import { SKILL_IDS } from '@data/skills';
 import {
   ENGINE_POWER_BY_BAND, ENGINE_JITTER_BY_BAND, REACTOR_CAP_BY_BAND, REACTOR_THREAD_SHARE, GHOST_BY_BAND, ARM_GHOST_BY_BAND,
-  SENSOR_FUZZ_KM_PER_POINT, PLOT_STALE_TAC, TELEMETRY_SCRAMBLE_BELOW, INTEGRITY_MAX,
+  SENSOR_FUZZ_KM_PER_POINT, PLOT_STALE_TAC, TELEMETRY_SCRAMBLE_BELOW, INTEGRITY_MAX, RESIDENT_GHOST,
   MAX_LINE_CHARS, COMMS_GARBLE_BY_BAND, FUEL_TRIM_DV_BONUS_FRAC,
   BAY_CADENCE_BY_BAND, SENSOR_DROP_FACTOR_BY_BAND, PLOTTER_DROP_FACTOR_BY_BAND, DRIVER_DROP_FACTOR_BY_BAND,
 } from '@data/tuning';
@@ -56,9 +57,16 @@ export interface RoleHealth {
   offline: OfflineReason | null;  // set when the band is dead because every copy is offline
 }
 
+// Who fires the engine by itself (slice 5, plan R5): a damaged Thrust Ctrl ('controller'), a corrupted resident
+// ('resident'), or nobody (null).
+export type GhostSource = 'controller' | 'resident';
+
 export interface Capabilities {
   engine: { band: Band; powerCap: number; jitter: number; offline: OfflineReason | null };  // Engine I/O
-  thrustCtrl: { band: Band; ghost: GhostSpec | null };                                       // Thrust Ctrl (ship)
+  // Thrust Ctrl (ship). `ghost` is the spec orbit-sim's one scheduler fires: the stronger push of Thrust Ctrl's own and the
+  // resident's (slice 5, plan R5), and `ghostBy` its source (null exactly when `ghost` is). The SWAP-only readers
+  // (ghostWithoutSwap, the ghost lesson, landing guidance's SWAP line) read only a controller's.
+  thrustCtrl: { band: Band; ghost: GhostSpec | null; ghostBy: GhostSource | null };
   reactor: { band: Band; bandCap: number; reactorCap: number };                              // Reactor (ship) × threads
   presets: Band;                                                                             // Autopilot
   // Sensor Interp + Nav Plotter; offline: why the file that blinds the plot is offline, if it is.
@@ -331,10 +339,20 @@ function validateCapabilityTables(): void {
     }
   }
   // The limp is gentler than phase 2's ghost, and calmer as the controller heals (slice 3b, Fran's decision).
-  const push = (spec: GhostSpec | undefined): number => (spec === undefined ? 0 : spec.amp / spec.meanIntervalTac);
+  const push = (spec: Readonly<GhostSpec> | undefined): number => (spec === undefined ? 0 : spec.amp / spec.meanIntervalTac);
   if (!(push(ARM_GHOST_BY_BAND.degraded) < push(ARM_GHOST_BY_BAND.failing) && push(ARM_GHOST_BY_BAND.failing) < push(GHOST_BY_BAND.failing))) {
     throw new Error('capabilities: ARM_GHOST_BY_BAND must push less than GHOST_BY_BAND, and less again in the degraded band');
   }
+  // Slice 5 (plan R3): a corrupted resident pushes less than the arm's failing controller it is meant to be gentler than
+  // (04 §3.12: "about two thirds of an unfixed VESPER").
+  if (!(push(RESIDENT_GHOST) < push(ARM_GHOST_BY_BAND.failing))) {
+    throw new Error('capabilities: RESIDENT_GHOST must push less than ARM_GHOST_BY_BAND.failing');
+  }
+}
+
+// The push of a ghost spec (share of thrust per tactical second): how two sources are compared (slice 5, plan R5).
+export function ghostPush(spec: Readonly<GhostSpec>): number {
+  return spec.amp / spec.meanIntervalTac;
 }
 validateCapabilityTables();
 
@@ -393,7 +411,7 @@ export function deriveCapabilities(state: Readonly<GameState>, threadsBusy: numb
       jitter: ENGINE_JITTER_BY_BAND[engine.band],
       offline: engine.offline,
     },
-    thrustCtrl: { band: thrustCtrl.band, ghost: ghostSpecOf(state, thrustCtrl.band) },
+    thrustCtrl: { band: thrustCtrl.band, ...ghostOf(state, thrustCtrl.band) },
     reactor: { band: reactor.band, bandCap, reactorCap },
     presets: roleHealth(state, 'autopilot').band,
     plot: {
@@ -431,6 +449,16 @@ function ghostSpecOf(state: Readonly<GameState>, band: Band): GhostSpec | null {
   if (state.run.map.world !== 'arm') return GHOST_BY_BAND[band] ?? null;
   if (state.run.phase === 'landing') return null;
   return ARM_GHOST_BY_BAND[band] ?? null;
+}
+
+// The engine's one ghost source now (slice 5, plan R5): Thrust Ctrl's own (ghostSpecOf) and the corrupted resident's
+// (state/resident-selectors.ts residentGhostSpec), whichever pushes harder; a tie is the controller's. So orbit-sim, the
+// SKIP waypoints and the counter keep one scheduler, and the readers that only a SWAP can satisfy ask `ghostBy`.
+function ghostOf(state: Readonly<GameState>, band: Band): { ghost: GhostSpec | null; ghostBy: GhostSource | null } {
+  const own = ghostSpecOf(state, band);
+  const resident = residentGhostSpec(state);
+  if (resident !== null && (own === null || ghostPush(resident) > ghostPush(own))) return { ghost: resident, ghostBy: 'resident' };
+  return own === null ? { ghost: null, ghostBy: null } : { ghost: own, ghostBy: 'controller' };
 }
 
 // Bay Ctrl's capability for its band (§3.4): the one rule for the cadence and BAY OFFLINE. landing-rules reads it from
@@ -517,7 +545,8 @@ export function planningThrustCap(state: Readonly<GameState>, caps: Capabilities
 // dead (a ghost source, whatever put it there: ENGINE FAULT, a transit hit, a bite) and no Swap is aboard (selectors
 // swapAboard), with fuel left for a burst. On the arm SWAP comes only by request, so a kid can meet this with no cure; the
 // classic world licenses SWAP with the first burst and never meets it. The strip's no-Swap line (repository.ts
-// noSwapForGhost) and the flight's ENGINE FAULT SKIP refusal (pace.ts) both read it.
+// noSwapForGhost) and the flight's ENGINE FAULT SKIP refusal (pace.ts) both read it. Slice 5 (plan R5): only Thrust Ctrl's
+// own bursts: SWAP does not stop a resident, so its bursts never raise the no-Swap line or refuse a SKIP.
 // ...and the bursts are the frequent ones (Thrust Ctrl failing or dead): SKIP is refused then (pace.ts). A field repair to
 // the degraded band leaves a rare twitch a SKIP may fly through as WP10 ruled (and re-plan after).
 export function ghostRefusesSkip(state: Readonly<GameState>): boolean {
@@ -527,5 +556,6 @@ export function ghostRefusesSkip(state: Readonly<GameState>): boolean {
 }
 
 export function ghostWithoutSwap(state: Readonly<GameState>): boolean {
-  return state.run.map.world === 'arm' && state.burn.fuelPct > 0 && capabilitiesNow(state).thrustCtrl.ghost !== null && !swapAboard(state);
+  const ctrl = capabilitiesNow(state).thrustCtrl;
+  return state.run.map.world === 'arm' && state.burn.fuelPct > 0 && ctrl.ghost !== null && ctrl.ghostBy === 'controller' && !swapAboard(state);
 }

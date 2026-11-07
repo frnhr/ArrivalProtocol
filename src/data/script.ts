@@ -1,10 +1,8 @@
-// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2). Track SENTRY writes only its boot lines: the
-// 'sentry-seed' and 'firewall' plan lines and cases (their text lives in sentry.ts), and the ECC 'seeds' plan line
-// (`if (arrival.seeds.length > 0)`) and its bootLine case, which leave a disguised seed out; and the strip's disguise line.
-// The 4c–4e lessons' conditions are in the track modules (SKILL_4CDE_RULES); Track ORBIT may edit AUTOBURN_RULES'
-// entries. Others ask by message.
+// Slice 5: the lead owns this file (slice-5-plan.md §5). The strip's corrupted-resident lines live in data/resident-rules.ts
+// (Track WARDEN's RESIDENT_RULES, spread into GUIDE_RULES before GHOST_ALARM_RULES); the boot's 'receiver-closed' line's words
+// are data/resident-text.ts's. Tracks ask by message.
 import type {
-  GameState, Speaker, TransitHit, ArrivalReport, RunEndCause, ShipOutcome, VerbKind,
+  GameState, Speaker, TransitHit, ArrivalReport, RunEndCause, ShipOutcome, VerbKind, LineTone,
 } from '@state/schema';
 import type { SegmentRole, Segment } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
@@ -53,6 +51,7 @@ import {
 } from '@data/landing-text';
 import { HARD_WORDS_POOL } from '@data/souls';
 import { THREAT_RULES, DISGUISE_RULES } from '@data/threat-rules';
+import { RESIDENT_RULES } from '@data/resident-rules';
 import { copyLessonDue, hollowAboard } from '@state/threat-selectors';
 import { THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
 import { LOG_TEXT, LOG_HINT_TARGET } from '@data/log-text';
@@ -953,9 +952,12 @@ export function scriptedDamageLine(hits: readonly TransitHit[]): string {
 // • 'sentry-seed': SENTRY v1's `> ECC: cache.tmp IS A SEED · RACK D`, one per disguised seed (a kind that repeats, with
 //   ordinals, as 'delivery' does), right after 'seeds'; the count is sentry.ts sentryBootLineCount's;
 // • 'firewall': SENTRY v3's `> SENTRY: FIREWALL.sys COMPILED`, after 'charge', when sentry.ts firewallBootLineDue says so.
+// Slice 5 (04 §3.15, plan §2.4): 'receiver-closed', `> RECEIVER CLOSED · this ship launched with its own AI`, on every
+// resident ship (any kind this build plays: systems/map-boot.ts), right after the sleep line and before the unpack (02 §4's
+// line order 3), in amber (bootLineTone).
 export type BootLineKind =
-  | 'sleep' | 'unpack' | 'board' | 'host' | 'receiver' | 'ecc-sleep' | 'ecc' | 'seeds' | 'sentry-seed' | 'scripted' | 'delivery'
-  | 'charge' | 'firewall' | 'overflow' | 'skill' | 'reading' | 'log' | 'inbox' | 'hollow';
+  | 'sleep' | 'receiver-closed' | 'unpack' | 'board' | 'host' | 'receiver' | 'ecc-sleep' | 'ecc' | 'seeds' | 'sentry-seed'
+  | 'scripted' | 'delivery' | 'charge' | 'firewall' | 'overflow' | 'skill' | 'reading' | 'log' | 'inbox' | 'hollow';
 
 // The entries this boot's keys open (05 §3.2, the interim keys of state/log-selectors.ts logEntriesAtBoot) that the run has
 // not found yet. Pure in the state: the boot plans its 'log' line from it, before anything marks them found.
@@ -981,7 +983,7 @@ export function bootLinePlan(state: Readonly<GameState>, skillLines: number): Bo
   const hollow: BootLineKind[] = bootHollowLine(state) !== null ? ['hollow'] : [];
   const log: BootLineKind[] = bootLogEntries(state).length > 0 ? ['log'] : [];
   const map = mapBootLines(state);
-  const sleep: BootLineKind[] = map.includes('sleep') ? ['sleep'] : [];
+  const sleep: BootLineKind[] = [...(map.includes('sleep') ? ['sleep' as const] : []), ...(map.includes('receiver-closed') ? ['receiver-closed' as const] : [])];
   const receiver: BootLineKind[] = map.includes('receiver') ? ['receiver'] : [];
   const eccSleep: BootLineKind[] = map.includes('ecc-sleep') ? ['ecc-sleep'] : [];
   // 3b: the mail and HOLLOW's reading line (arm only: the classic world has neither), around the log key line.
@@ -1027,6 +1029,12 @@ export function bootLineSpeaker(kind: BootLineKind): Speaker {
   return kind === 'hollow' || kind === 'reading' ? 'hollow' : 'mind-sys';
 }
 
+// How a boot line is coloured beyond its speaker (slice 5): the RECEIVER CLOSED line types in amber ('resident', plan R9:
+// on every resident ship, so its colour gives no kind away); every other line plain.
+export function bootLineTone(kind: BootLineKind): LineTone | null {
+  return kind === 'receiver-closed' ? 'resident' : null;
+}
+
 // A returning unit's ship-1 boot licenses REPAIR (§5.2; systems/boot.ts, at the host line): a fresh unit's boot that is
 // not the tutorial run's.
 export function bootLicensesRepair(state: Readonly<GameState>): boolean {
@@ -1044,6 +1052,7 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
   }
   switch (kind) {
     case 'sleep':
+    case 'receiver-closed':
     case 'receiver':
     case 'ecc-sleep': return mapBootLineText(kind, state);
     case 'unpack': return LINES.bootUnpack(vars);
@@ -1097,8 +1106,8 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
 // The most a boot ever says (a later ship with the beam's seeds, arrival damage, an overflow, a skill trained, a log key
 // and HOLLOW's line; on the arm also the sleep, receiver and ECC-while-asleep lines, and since slice 3b up to
 // DELIVERY_BOOT_LINES_MAX delivery lines, the INBOX line and HOLLOW's reading line; since slice 4d up to three SENTRY seed
-// lines and its FIREWALL line: foundation review m4).
-export const BOOT_LINE_MAX = 22;
+// lines and its FIREWALL line: foundation review m4; since slice 5 the RECEIVER CLOSED line).
+export const BOOT_LINE_MAX = 23;
 
 // --- Beats: lines spoken on a moment (§6.3) ---------------------------------------------------
 
@@ -2088,8 +2097,9 @@ export const SKILL_4CDE_RULES: readonly GuideRule[] = [
 // controller is fixed (no ghost any more), or after GHOST_LESSON_SHOW_SEC on the strip (the counter and the pip stay).
 // The COPY lesson (§9 WP10 item 4): once seeds come for your tools, keep a spare Repair somewhere else.
 
+// Slice 5 (plan R5): the lesson is SWAP's, so only Thrust Ctrl's own bursts count: a resident's never start it.
 function ghostFiring(ctx: DirectorCtx): boolean {
-  return ctx.caps.thrustCtrl.ghost !== null;
+  return ctx.caps.thrustCtrl.ghost !== null && ctx.caps.thrustCtrl.ghostBy === 'controller';
 }
 
 // The lesson's moment has come on this ship (the second burst): only from then can its steps be done, or a ship with a
@@ -2460,6 +2470,8 @@ const BELT_RULES: readonly GuideRule[] = [
 
 export const GUIDE_RULES: readonly GuideRule[] = [
   ...AUTOBURN_RULES.filter((rule) => rule.priority === 'alarm'),
+  // Slice 5 (Track WARDEN's, data/resident-rules.ts): a corrupted resident's lines where the engine's alarm lines are.
+  ...RESIDENT_RULES,
   ...GHOST_ALARM_RULES,
   // WP10: the ghost lesson first among the tutorials: every burst it waits costs FUEL and drags ▼ down.
   ...GHOST_LESSON_RULES,

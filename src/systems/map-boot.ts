@@ -1,7 +1,8 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
+// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §5): the 'receiver-closed' line. Others ask by message.
 import type { GameState } from '@state/schema';
 import type { ArrivalDelivery } from '@/types/repo';
 import { MAP_TEXT } from '@data/map-text';
+import { RESIDENT_TEXT } from '@data/resident-text';
 import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
 import { DELIVERY_BOOT_LINES_MAX } from '@data/tuning';
 import { layoutFor } from '@data/memory';
@@ -15,7 +16,7 @@ import { patchInstalls } from '@systems/repository';
 // receiver line after the host line, the ECC block before the hits line. Track GEN owns this file (its conditions and
 // words) after the foundation.
 
-export type MapBootLineKind = 'sleep' | 'receiver' | 'ecc-sleep';
+export type MapBootLineKind = 'sleep' | 'receiver-closed' | 'receiver' | 'ecc-sleep';
 
 // The hop that brought the unit to this ship, on the arm (null on a first ship and on the classic world, whose hops are
 // fixtures with no years: always switch on `world` before currentStop).
@@ -32,6 +33,8 @@ export function mapBootLines(state: Readonly<GameState>): MapBootLineKind[] {
   const lines: MapBootLineKind[] = [];
   const hop = arrivalHop(state);
   if (hop !== null && state.run.arrival !== null) lines.push('sleep');
+  // Slice 5 (04 §3.15, plan R9): every resident ship, of a kind this build plays (the slice's def is null otherwise).
+  if (state.run.map.world === 'arm' && state.resident.def !== null) lines.push('receiver-closed');
   if (state.run.map.world === 'arm' && state.level.memoryClass === 'TIGHT') lines.push('receiver');
   const corrected = state.run.arrival?.eccCorrected ?? 0;
   if (corrected > 0) lines.push('ecc-sleep');
@@ -51,6 +54,9 @@ export function mapBootLineText(kind: MapBootLineKind, state: Readonly<GameState
       if (hop === null) throw new Error('mapBootLineText: a sleep line on a ship no beam reached');
       return MAP_TEXT.boot.sleep(state.level.shipName, hop.arriveYear, hop.approachYear);
     }
+    case 'receiver-closed':
+      if (state.resident.def === null) throw new Error('mapBootLineText: a RECEIVER CLOSED line on a ship with no resident');
+      return RESIDENT_TEXT.receiverClosed;
     case 'receiver': {
       const layout = layoutFor(state.level.memoryClass);
       return MAP_TEXT.boot.receiver(layout.racks.filter((rack) => rack === 'E' || rack === 'F').length, layout.roomForUnit);

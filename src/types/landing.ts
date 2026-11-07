@@ -288,9 +288,10 @@ export interface LaunchIntent {
 }
 
 // In the order launchRefusal checks them. BAY OFFLINE: Bay Ctrl missing (§3.4); its words on screen avoid "offline"
-// (§3.10: next to pods it would read as theirs), see LAUNCH_REFUSAL_TEXT.
+// (§3.10: next to pods it would read as theirs), see LAUNCH_REFUSAL_TEXT. POD LOCKED (slice 5, plan R7): the pod it would
+// launch is held by a corrupted resident's lock (DriverSegment.lockedBy), checked before NO POD READY.
 export type LaunchRefusal = 'NOT LANDING' | 'LANDING OVER' | 'PAUSED' | 'SHIP SCREEN' | 'BAY OFFLINE' | 'ENGINE FIRING'
-  | 'NO DROP SOLUTION' | 'OUT OF THE LAUNCH BAND' | 'NO POD READY' | 'RELOADING' | 'BAY EMPTY';
+  | 'NO DROP SOLUTION' | 'OUT OF THE LAUNCH BAND' | 'POD LOCKED' | 'NO POD READY' | 'RELOADING' | 'BAY EMPTY';
 
 export type LaunchResult =
   | { kind: 'launched'; pod: number }

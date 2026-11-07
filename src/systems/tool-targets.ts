@@ -1,5 +1,6 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the 'outline' target (inSeedOutline),
-// a disguised seed under each tool (disguisedRefusal: as the file it shows; its decoy's delete confirm). Others ask by message.
+// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §5): a resident's file goes to its kind's tool rule and
+// DELETE confirm (systems/residents.ts). Slice 4d's 'outline' target and disguised seed (disguisedRefusal) stay as built.
+// Tracks ask by message.
 import type { GameState } from '@state/schema';
 import type { Segment, FreeSegment, ShipSegment, ShipBackupSegment, SegmentRole, HollowSegment, SeedDisguise } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
@@ -20,6 +21,8 @@ import { fileLevel, restoreCostOf } from '@systems/skill-levels';
 import { SKILL_TREE } from '@data/skills';
 import { PACKET_SKILL_TEXT } from '@data/training-text';
 import { isDisguised, decoyFileView } from '@state/threat-selectors';
+import { isResidentFile } from '@state/selectors';
+import { residentToolRule, residentDeleteQuestion } from '@systems/residents';
 
 // What deleting a skill file costs (slice 4): its skill until a desk's RESTORE, at the price the next desk will ask (the
 // levels the run paid for above what is left once it is gone: another copy, or nothing).
@@ -126,6 +129,8 @@ export function targetRefusal(seg: Segment, ctx: ValidTargetContext): ToolRefusa
   if (seg.type === 'free') return TOOL_REFUSAL.notAFile;
   if (isBusy(seg)) return TOOL_REFUSAL.busy;
   if (isDisguised(seg)) return disguisedRefusal(seg, ctx);
+  // Slice 5 (plan §2.4): a resident's rack-A file answers by its kind's rule (WARDEN's, KIN's), every tool.
+  if (isResidentFile(seg)) return residentToolRule(seg, ctx);
   switch (activeKind) {
     case 'scan':
       if (seg.type === 'driver') return TOOL_REFUSAL.driverScan;
@@ -203,6 +208,8 @@ export function deleteQuestion(state: Readonly<GameState>, seg: Segment): Confir
   // Slice 4d (plan R9): a disguised seed asks its decoy's own confirm (`DELETE CACHE.TMP?` and the decoy's line), as the
   // file it shows would; yes runs it as rm on a seed.
   if (isDisguised(seg)) return CONFIRM_TEXT.deleteFile(seg.disguise.name, seg.disguise.desc, seg.size);
+  // Slice 5: a resident's file asks its kind's confirm (WARDEN.sys: `It is the ship's own mind.`), or none.
+  if (isResidentFile(seg)) return residentDeleteQuestion(state, seg);
   if (seg.type === 'redundancy') return CONFIRM_TEXT.deleteCharge(seg.used, seg.size);
   // A card's file: the card a kid picked goes with it.
   if (seg.type === 'firewall') return CONFIRM_TEXT.deleteFile(seg.name, DELETE_CARD_EFFECT.firewall, seg.size);

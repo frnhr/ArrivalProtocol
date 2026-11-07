@@ -115,7 +115,8 @@ export function parseRoute(value: unknown, field: string): RouteRecord {
   };
 }
 
-const EVENT_KINDS: readonly NotableEvent['kind'][] = ['deal-accepted', 'best-colony', 'ship-lost'];
+// Slice 5 (plan R27): the residents' three kinds join; an older archive's events read as before.
+const EVENT_KINDS: readonly NotableEvent['kind'][] = ['deal-accepted', 'resident-deleted', 'resident-cured', 'sleeper-woken', 'best-colony', 'ship-lost'];
 
 export function parseEvent(value: unknown, field: string): NotableEvent {
   const e = exactRecord(value, field, ['kind', 'slot', 'shipName', 'value']);

@@ -1,6 +1,7 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): transmitNext's disguise roll and
-// arrival.seeds[].disguise only (endShip's seedsMetAtDepth record is the lead's). Others ask by message.
+// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §5): endShip's resident record (systems/residents.ts
+// residentShipEnd). Slice 4d's transmitNext disguise roll and arrival.seeds[].disguise stay as built. Others ask by message.
 import type { Store } from '@state/store';
+import { residentShipEnd } from '@systems/residents';
 import type {
   GameState, RunPhase, RunState, ShipOutcome, ShipResult, RunEndCause, ArrivalReport, ArrivalSkill, TransitPlan, TransitHit, RingMiss,
   UiState,
@@ -291,6 +292,9 @@ export function endShip(store: Store<GameState>, outcome: ShipOutcome, stars = 0
     // standing outline as not armed. sentry.ts's watcher releases the 'sentry-preempt' thread on the change.
     if (draft.hollow.seedTelegraph !== null) draft.hollow.seedTelegraph.preempted = false;
   });
+  // Slice 5 (plan §2.2, R2): the ship's resident ends whatever runs (a lock, an offer, a job) and the run keeps its record,
+  // before SHIP DONE's save (openDesk) reads the slice at rest. Nothing on a ship with no resident.
+  residentShipEnd(store, result);
   if (tally.traceAfter !== tally.traceBefore) emit('trace-changed', { from: tally.traceBefore, to: tally.traceAfter });
   return result;
 }

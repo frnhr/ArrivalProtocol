@@ -10,6 +10,7 @@ import './styles/landing.css';
 import './styles/threat.css';
 import './styles/desk.css';
 import './styles/responsive.css';
+import './styles/resident.css';
 
 import { store } from '@state/instance';
 import { getByRole, getSegmentById } from '@state/selectors';
@@ -24,6 +25,7 @@ import { mountSay } from '@systems/say';
 import { mountFlightEvents } from '@systems/flight-events';
 import { mountGhostThrust } from '@systems/ghost-thrust';
 import { mountHollowDeal } from '@systems/hollow-deal';
+import { mountResidents } from '@systems/residents';
 import { mountHollowVerbs } from '@systems/hollow-verbs';
 import { mountFinale } from '@systems/finale';
 import { mountDirector } from '@systems/director';
@@ -156,6 +158,8 @@ registerLandingKeys(store, { confirm: launchConfirm });
 mountHollow(store);
 // WP10: THE DEAL, after HOLLOW (this tick's bite is in before it looks at the front).
 mountHollowDeal(store);
+// Slice 5: the residents (systems/residents.ts), right after THE DEAL: their AI ticks run after HOLLOW's and its deal's.
+mountResidents(store);
 // WP11: HOLLOW's verbs after it (a bite or a seed of this tick is in before a verb aims), then LAST LIGHT's finale (the
 // root's DELETE completes in the ops core's tick, so the finale sees the last block standing in the same one).
 mountHollowVerbs(store);

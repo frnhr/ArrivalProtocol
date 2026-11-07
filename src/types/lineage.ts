@@ -171,9 +171,12 @@ export interface RouteRecord {
   slots: number[];
 }
 
-// At most NOTABLE_EVENTS_MAX a run (05 §3.8 ranks them; slice 7's 047.log reads them). Residents' events are slice 5's.
+// At most NOTABLE_EVENTS_MAX a run (05 §3.8 ranks them; slice 7's 047.log reads them). Slice 5 (plan R27): a resident
+// deleted, cured or woken (value: its depth), ranked after a DEAL accepted. Old archives stay valid (META_VERSION holds).
+export type NotableEventKind = 'deal-accepted' | 'resident-deleted' | 'resident-cured' | 'sleeper-woken' | 'best-colony' | 'ship-lost';
+
 export interface NotableEvent {
-  kind: 'deal-accepted' | 'best-colony' | 'ship-lost';
+  kind: NotableEventKind;
   slot: number;
   shipName: string;
   value: number;

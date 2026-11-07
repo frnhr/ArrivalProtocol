@@ -402,9 +402,11 @@ export const BEEP_JUMP_TAC = 1.5;
 // `> DELIVERY:` lines, DELIVERY_BOOT_LINES_MAX, the INBOX line and HOLLOW's reading line: data/script.ts BOOT_LINE_MAX 18),
 // all on the same 1.3 s step (boot.ts checks at load that every possible line has its time). Slice 4d four more: up to three
 // SENTRY `> ECC: cache.tmp IS A SEED` lines (a beam brings at most three seeds, BEAM_SEED_ODDS) and its FIREWALL line (22).
+// Slice 5 one more: the resident ship's `> RECEIVER CLOSED` line (23).
 export const BOOT_ASSEMBLE_SEC = 1.5;
 export const BOOT_LINE_AT_SEC: readonly number[] = [
   0.5, 1.8, 3.1, 4.4, 5.7, 7.0, 8.3, 9.6, 10.9, 12.2, 13.5, 14.8, 16.1, 17.4, 18.7, 20.0, 21.3, 22.6, 23.9, 25.2, 26.5, 27.8,
+  29.1,
 ];
 export const BOOT_KLAXON_AFTER_LAST_LINE_SEC = 1.4;
 export const BOOT_END_AFTER_KLAXON_SEC = 0.4;

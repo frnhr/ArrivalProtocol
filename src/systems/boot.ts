@@ -14,7 +14,7 @@ import { emit } from '@systems/events';
 import { archiveRunStarted, ghostLineDue, playWithoutArchive } from '@systems/meta';
 import { installBootLicences, renewRepairAtBoot } from '@systems/licences';
 import { skillBootLines, applySkillBootLine, type SkillBootLine } from '@systems/skill-files';
-import { bootLine, bootLinePlan, bootLineSpeaker, bootLogEntries, lineVars, BOOT_LINE_MAX, type BootLineKind } from '@data/script';
+import { bootLine, bootLinePlan, bootLineSpeaker, bootLineTone, bootLogEntries, lineVars, BOOT_LINE_MAX, type BootLineKind } from '@data/script';
 import type { Speaker } from '@state/schema';
 import { beamSeedTarget } from '@systems/beam-seeds';
 import { sentrySeedSaid, compileFirewall } from '@systems/sentry';
@@ -249,7 +249,9 @@ function sayNextLine(store: Store<GameState>): void {
     text = bootLine(kind, state, lineVars(state, getPrediction()), ordinal);
   }
   const speaker = bootLineSpeaker(kind);
-  say(speaker, text, { critical: true });
+  // Slice 5: the RECEIVER CLOSED line's amber (script.ts bootLineTone); every other line plain, as before.
+  const tone = bootLineTone(kind);
+  say(speaker, text, tone === null ? { critical: true } : { critical: true, tone });
   saidLines.push({ speaker, text, atSec: elapsedSec });
   const arrival = state.run.arrival;
   if (kind === 'ecc' && arrival !== null && arrival.hits.length > 0) emit('arrival-hits', { hits: [...arrival.hits] });
