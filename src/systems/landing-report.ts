@@ -11,6 +11,7 @@ import { MAP_TEXT } from '@data/map-text';
 import { LANDING_REPORT_TEXT, LANDING_REPORT_UI_TEXT, PARK_REASON_TEXT, podCode } from '@data/landing-text';
 import { HARD_WORDS_POOL } from '@data/souls';
 import { COLONISTS_PER_POD, STAR_CHARGE_BONUS } from '@data/tuning';
+import { residentReportRows, type ResidentReportRow } from '@systems/resident-hud';
 
 // The LANDING REPORT's view model (01-landing §4, plan §1.4), pure: everything the screen shows, from landingResult and
 // the stars, so the screen (components/run/LandingReport.ts) only lays it out and times it. It plays in three stages:
@@ -47,6 +48,7 @@ export interface ReportRow {
   tone: 'good' | 'short' | 'plain' | 'muted';
   line: string;         // the whole row as one line (the stub's lzRows / otherRows entry)
   why: string | null;   // a parked pod's reason
+  locked?: true;        // slice 5: a pod its resident still held (drawn in the resident's amber)
 }
 
 export interface LandingReportModel {
@@ -76,6 +78,10 @@ export interface LandingReportModel {
   charge: number;             // REPAIR CHARGE the stars carry
   chargeLine: string;         // `+18 REPAIR CHARGE ON NEXT SHIP`, or the last ship's line
   lastShip: boolean;
+  // Slice 5 (plan §2.11): the sleeper's gift (after the cycles line), WARDEN's goodnight (under the colony, 05's story line)
+  // and the pods a resident still held when the landing ended (drawn in their PARKED rows: `POD 07 · LOCKED BY WARDEN ·
+  // PARKED IN ORBIT`). systems/resident-hud.ts residentReportRows.
+  resident: ResidentReportRow[];
 }
 
 function podIcon(pod: PodSummary): PodIcon {
@@ -93,7 +99,8 @@ function podIcon(pod: PodSummary): PodIcon {
   }
 }
 
-function reportRows(tally: LandingTally): ReportRow[] {
+// `locked`: the resident's report rows for pods parked with a lock still on their driver (slice 5), by pod.
+function reportRows(tally: LandingTally, locked: ReadonlyMap<number, ResidentReportRow>): ReportRow[] {
   const rows: ReportRow[] = [];
   for (const row of tally.lzs) {
     const inLz = tally.pods.filter((pod) => pod.fate === 'down' && pod.lz === row.lz && pod.place === 'lz');
@@ -116,6 +123,16 @@ function reportRows(tally: LandingTally): ReportRow[] {
     rows.push({ kind: 'no-go', label: 'NO-GO', text: line.slice('NO-GO '.length), icons: noGo.map(podIcon), tone: 'muted', line, why: null });
   }
   for (const parked of tally.parked) {
+    // A pod its resident still held (slice 5, plan R7): the lock is why it never launched, so the row says that and no other
+    // reason (`no time` would blame the kid's pace).
+    const lock = locked.get(parked.pod);
+    if (lock !== undefined) {
+      const label = podCode(parked.pod);
+      rows.push({
+        kind: 'parked', label, text: lock.text.slice(label.length + 3), icons: ['parked'], tone: 'muted', line: lock.text, why: null, locked: true,
+      });
+      continue;
+    }
     const line = LANDING_REPORT_TEXT.parked(parked.pod);
     rows.push({
       kind: 'parked', label: podCode(parked.pod), text: line.slice(podCode(parked.pod).length + 3), icons: ['parked'], tone: 'muted', line,
@@ -192,7 +209,9 @@ function beaconLine(state: Readonly<GameState>): string | null {
 export function landingReportModel(state: Readonly<GameState>): LandingReportModel {
   const { landing } = state;
   const tally = landingResult(state, landingOutcome(state.burn.status));
-  const rows = reportRows(tally);
+  const resident = residentReportRows(state);
+  const locked = new Map(resident.flatMap((row) => (row.kind === 'locked' && row.pod !== null ? [[row.pod, row] as const] : [])));
+  const rows = reportRows(tally, locked);
   // Near misses: pods down off-site or in a no-go arc, by their km to the nearest bracket edge, naming that LZ.
   const misses: { km: number; text: string }[] = [];
   for (const record of landing.pods) {
@@ -245,5 +264,6 @@ export function landingReportModel(state: Readonly<GameState>): LandingReportMod
     charge,
     chargeLine: lastShip ? LANDING_REPORT_UI_TEXT.lastShip : LANDING_REPORT_UI_TEXT.charge(charge, STAR_CHARGE_BONUS),
     lastShip,
+    resident,
   };
 }

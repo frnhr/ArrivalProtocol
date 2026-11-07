@@ -1,4 +1,5 @@
-// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the cycles line. Others ask by message.
+// Slice 5: Track FACE owns this file (docs/phase3/impl/slice-5-plan.md §6.2): the resident rows (slice 4's cycles line
+// stands). Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { ShipStar } from '@systems/stars';
@@ -82,7 +83,7 @@ function credit(entry: LandingReportCredit): HTMLElement {
 }
 
 function rowNode(row: ReportRow): HTMLElement {
-  const box = make('div', `lr-row kind-${row.kind} tone-${row.tone}`);
+  const box = make('div', `lr-row kind-${row.kind} tone-${row.tone}${row.locked ? ' res-locked' : ''}`);
   box.appendChild(make('span', 'lr-label', row.label));
   const icons = make('span', 'lr-icons');
   for (const icon of row.icons) icons.appendChild(make('span', `lr-icon icon-${icon}`, ICON_GLYPH[icon]));
@@ -123,7 +124,14 @@ export function mountLandingReport(store: Store<GameState>): () => void {
   const topUpEl = make('div', 'lr-topup');
   cyclesEl.hidden = true;
   topUpEl.hidden = true;
-  chargeEl.after(cyclesEl, topUpEl);
+  // Slice 5 (plan §2.11): the sleeper's gift under the cycles line (01's slot order: what the ship pays, then what it was
+  // given), and WARDEN's goodnight under the colony and the beacon (05's story line).
+  const giftEl = make('div', 'lr-gift');
+  giftEl.hidden = true;
+  chargeEl.after(cyclesEl, topUpEl, giftEl);
+  const goodnightEl = make('div', 'lr-goodnight');
+  goodnightEl.hidden = true;
+  beaconEl.after(goodnightEl);
 
   let model: LandingReportModel | null = null;
   let stage: Stage = 'rows';
@@ -317,7 +325,7 @@ export function mountLandingReport(store: Store<GameState>): () => void {
     const near = report.nearMisses.slice(0, NEAR_MISSES_SHOWN);
     nearEl.replaceChildren(...near.map((line) => make('div', 'lr-near-line', line)));
     nearEl.hidden = near.length === 0;
-    showCycles();
+    showGift(report, showCycles());
     skipEl.hidden = true;
     renderKeyCaps(continueEl, report.continueText, { own: 'SPACE' });
     continueEl.classList.add('arming');
@@ -329,12 +337,13 @@ export function mountLandingReport(store: Store<GameState>): () => void {
   // (`TRAINING CYCLES +5 · ARRIVED +1 · LANDED 83% +4`, `PERFECT LANDING · +6`, the final ship's `NO DESK AHEAD`), a tick
   // per cycle; on a run's first ship below the first-pick floor, `+2 CYCLES · FIRST SKILL ON THE HOUSE :)` under it. From
   // the same earning endShip records at CONTINUE (run-score.ts shipCycles). Reduced motion: the line stands whole.
-  function showCycles(): void {
+  // Returns the seconds its roll takes (0 with no line, or under reduced motion), for the gift's line under it (slice 5).
+  function showCycles(): number {
     const report = model;
     const state = store.getState();
     cyclesEl.hidden = true;
     topUpEl.hidden = true;
-    if (report === null || state.run.map.world !== 'arm' || report.aboard <= 0) return;
+    if (report === null || state.run.map.world !== 'arm' || report.aboard <= 0) return 0;
     const cycles = cyclesReport(
       shipCycles({ slot: currentSlot(state.run), points: report.points, colonistsAboard: report.aboard }),
       report.lastShip, state.run.ships.length === 0,
@@ -346,7 +355,7 @@ export function mountLandingReport(store: Store<GameState>): () => void {
       cyclesEl.textContent = cycles.line;
       topUpEl.hidden = cycles.topUp === null;
     };
-    if (reducedMotion()) { done(); return; }
+    if (reducedMotion()) { done(); return 0; }
     cyclesEl.textContent = cycles.lineAt(0);
     for (let shown = 1; shown <= cycles.total; shown++) {
       later(REPORT_CYCLES_START_SEC + REPORT_CYCLE_STEP_SEC * shown, () => {
@@ -356,6 +365,20 @@ export function mountLandingReport(store: Store<GameState>): () => void {
         if (shown === cycles.total) done();
       });
     }
+    return REPORT_CYCLES_START_SEC + REPORT_CYCLE_STEP_SEC * cycles.total;
+  }
+
+  // Slice 5 (plan R12): MOTH's gift, one step after the cycles have rolled up (`afterSec`: showCycles' roll), with a chime.
+  function showGift(report: LandingReportModel, afterSec: number): void {
+    const gift = report.resident.find((row) => row.kind === 'gift');
+    giftEl.hidden = true;
+    if (gift === undefined) return;
+    giftEl.textContent = gift.text;
+    if (reducedMotion()) { giftEl.hidden = false; return; }
+    later(afterSec + REPORT_CYCLE_STEP_SEC, () => {
+      giftEl.hidden = false;
+      play('chime', { falling: false });
+    });
   }
 
   function advance(): void {
@@ -378,6 +401,11 @@ export function mountLandingReport(store: Store<GameState>): () => void {
     // Slice 3c: ship 1's beacon (05 §3.5), under the colony: the last unit was here first.
     beaconEl.hidden = report.beaconLine === null;
     beaconEl.textContent = report.beaconLine ?? '';
+    // Slice 5 (R24): the resident that was not deleted says goodnight when every pod went down.
+    const goodnight = report.resident.find((row) => row.kind === 'goodnight');
+    goodnightEl.hidden = goodnight === undefined;
+    goodnightEl.textContent = goodnight?.text ?? '';
+    giftEl.hidden = true;
     creditsEl.hidden = true;
     rollEl.replaceChildren();
     breakdownEl.hidden = true;
