@@ -11,6 +11,7 @@ import { CONFIRM_TEXT } from '@data/tool-text';
 import { on } from '@systems/events';
 import { TOOL_REFUSAL_FLASH_MS } from '@data/tuning';
 import { requireById } from '@components/dom';
+import { shownSegment } from '@state/threat-selectors';
 
 // In-panel mirror of the cursor follower for touch-driven layouts (mobile).
 // While a tool is active, this pill replaces the filesystem chips so the
@@ -48,8 +49,9 @@ function renderPill(
   }
   const icon = TOOL_ICONS[kind] || '▶';
   const verBadge = version > 1 ? `<span class="ver">v${version}</span>` : '';
+  // A picked decoy goes by the file it shows (review B1).
   const sourceLine = picked
-    ? `<span class="source">${picked.name} ${picked.size}B</span>`
+    ? `<span class="source">${shownSegment(picked).name} ${picked.size}B</span>`
     : '';
 
   element.innerHTML = `

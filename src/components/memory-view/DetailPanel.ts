@@ -90,7 +90,8 @@ function loadNextOption(state: Readonly<GameState>, driver: DriverSegment): Acti
   };
 }
 
-export function computeActions(seg: Segment, state: Readonly<GameState>): ComputedActions {
+// `actual` is the segment the buttons act on: `seg` itself, but for a decoy, which is drawn as its file view (review m14).
+export function computeActions(seg: Segment, state: Readonly<GameState>, actual: Segment = seg): ComputedActions {
   const out: ComputedActions = { primary: [], notesHtml: '' };
   const segState = 'state' in seg ? seg.state : undefined;
   // WP10: the swap button is gone (SWAP is a tool file now, §8): a ship file with a backup says where its job can
@@ -103,14 +104,14 @@ export function computeActions(seg: Segment, state: Readonly<GameState>): Comput
   // very state the player hasn't discovered yet. Offer only Scan, the obvious next step.
   const knownScanned = 'scanned' in seg ? seg.scanned : true;
   if (!knownScanned) {
-    out.primary.push(scanOption(state, seg, '◎ scan for integrity'));
+    out.primary.push(scanOption(state, actual, '◎ scan for integrity'));
     return out;
   }
   if (seg.type === 'driver' && state.run.phase === 'landing') out.primary.push(loadNextOption(state, seg));
 
   if ((isRepairable(seg) || repairableShipFile(state, seg)) && seg.integrity < INTEGRITY_MAX) {
     const repair = getFsTool(state, 'repair');
-    const refusal = actionRefusal(state, 'repair', seg);
+    const refusal = actionRefusal(state, 'repair', actual);
     const estimate = repairChargeEstimate(seg.integrity, seg.size);
     out.primary.push({
       id: 'repair', label: '▸ repair', cost: refusal ?? `~${estimate} charge`,
@@ -131,13 +132,13 @@ export function computeActions(seg: Segment, state: Readonly<GameState>): Comput
     out.primary.push({ id: 'noop', label: seg.last ? '⊘ purge or merge' : '⊘ locked', cost: '—', disabled: true });
   }
   if (seg.type === 'redundancy') {
-    const refusal = actionRefusal(state, 'delete', seg);
+    const refusal = actionRefusal(state, 'delete', actual);
     out.primary.push({
       id: 'delete_charge', label: '× delete repair charge', cost: refusal ?? `frees ${seg.size} blk`,
       disabled: refusal !== null, cls: refusal ? 'disabled' : 'warn',
     });
   }
-  if ('scanned' in seg) out.primary.push(scanOption(state, seg, '◎ re-scan'));
+  if ('scanned' in seg) out.primary.push(scanOption(state, actual, '◎ re-scan'));
 
   return out;
 }
@@ -406,21 +407,7 @@ function renderDetailPanel(target: HTMLElement, seg: Segment, deps: RenderDetail
     bindActionButtons(target, seg, deps);
     return;
   }
-  // Slice 4d (04 §3.6): a disguised seed inspects as the file it shows: its decoy's name and line, healthy, and a re-scan
-  // (the SCAN that unmasks it). Its buttons act on the seed itself.
-  if (isDisguised(seg)) {
-    const view = decoyFileView(seg);
-    target.innerHTML = `
-      <div class="detail-title">${escapeHtml(view.name)}</div>
-      <div class="detail-type">${segTypeLabel(view)}</div>
-      <div class="detail-row"><span class="k">size</span><span class="v">${sizeText(view.size)}</span></div>
-      <div class="detail-row"><span class="k">state</span><span class="v good">INTACT</span></div>
-      <div class="detail-desc">${escapeHtml(view.desc ?? '—')}</div>
-      <div class="action-section"><div class="action-section-label">primary</div>${renderActionButton(scanOption(deps.state, seg, '◎ re-scan'))}</div>`;
-    bindActionButtons(target, seg, deps);
-    return;
-  }
-  if (seg.type === 'hollow') {
+  if (seg.type === 'hollow' && !isDisguised(seg)) {
     let hollowBody = hollowHtml(seg, deps.state);
     const actions = computeActions(seg, deps.state);
     if (actions.primary.length) {
@@ -430,6 +417,14 @@ function renderDetailPanel(target: HTMLElement, seg: Segment, deps: RenderDetail
     bindActionButtons(target, seg, deps);
     return;
   }
+  // Slice 4d (04 §3.6; review m14): a disguised seed inspects as the file it shows, through the very rows a healthy unit
+  // file gets (decoyFileView), so the two panels match row for row. Its buttons are judged on, and act on, the seed.
+  renderFileDetail(target, isDisguised(seg) ? decoyFileView(seg) : seg, seg, deps);
+}
+
+// A file's panel: `seg` is what is drawn, `actual` what the buttons are judged on and act on (the same segment, but for a
+// decoy, drawn as its file view).
+function renderFileDetail(target: HTMLElement, seg: Segment, actual: Segment, deps: RenderDetailDeps): void {
   const typeLabel = segTypeLabel(seg);
   const state = 'state' in seg ? seg.state : undefined;
   const integrity = 'integrity' in seg ? seg.integrity : undefined;
@@ -506,7 +501,7 @@ function renderDetailPanel(target: HTMLElement, seg: Segment, deps: RenderDetail
     html += `<div class="detail-desc"><em>Integrity unknown. Scan this segment to inspect its contents.</em></div>`;
   }
 
-  const actions = computeActions(seg, deps.state);
+  const actions = computeActions(seg, deps.state, actual);
   if (actions.primary.length || actions.notesHtml || seg.type === 'core') {
     if (actions.primary.length) {
       html += `<div class="action-section"><div class="action-section-label">primary</div>`;
@@ -526,7 +521,7 @@ function renderDetailPanel(target: HTMLElement, seg: Segment, deps: RenderDetail
   }
 
   target.innerHTML = html;
-  bindActionButtons(target, seg, deps);
+  bindActionButtons(target, actual, deps);
 
   if (deps.onCorruptionSliderInput) {
     const slider = target.querySelector<HTMLInputElement>('#demoCorruptSlider');

@@ -708,6 +708,36 @@ body.reduced-motion .desk-tab.pulse .desk-tab-badge { animation: none; }
 @keyframes tr-loop-in { 0%, 35% { opacity: 0; } 60%, 92% { opacity: 1; } 100% { opacity: 0; } }
 @keyframes tr-flyby-out { 0%, 40% { opacity: 1; } 65%, 100% { opacity: 0.15; } }
 @keyframes tr-bracket { 0% { stroke-dashoffset: 80; } 50%, 90% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 80; } }
+/* Slices 4c–4e: AUTODROP's and SENTRY's drawings, and AUTOBURN v3's ghost circle (one hand with the ones above). */
+.tr-demo-orbit { fill: none; stroke: var(--desk-dim); stroke-width: 0.8; }
+.tr-demo-ghost { fill: none; stroke: var(--desk-bright); stroke-width: 1.2; stroke-dasharray: 3 2.4; }
+.tr-demo-pod { fill: var(--desk-bright); }
+.tr-demo-fall { fill: none; stroke: var(--desk-bright); stroke-width: 0.9; stroke-dasharray: 1.5 1.5; }
+.tr-demo-mid { fill: none; stroke: var(--desk-bright); stroke-width: 1.2; }
+.tr-demo-text { fill: var(--desk-accent); font-family: 'VT323', monospace; font-size: 10px; letter-spacing: 0.06em; }
+.tr-demo-row { fill: none; stroke: var(--desk-edge-bright); stroke-width: 1; }
+.tr-demo-check { fill: var(--desk-good); }
+.tr-demo-file { fill: none; stroke: var(--desk-dim); stroke-width: 1.2; }
+.tr-demo-seed { fill: var(--desk-warn); fill-opacity: 0.55; stroke: var(--desk-warn); }
+.tr-demo-wall { fill: var(--desk-good); fill-opacity: 0.25; stroke: var(--desk-good); }
+.tr-demo-telegraph { fill: none; stroke: var(--desk-warn); stroke-dasharray: 3 2; }
+.tr-demo-mark { fill: none; stroke: var(--desk-warn); stroke-width: 1.4; }
+.tr-demo-rm { stroke: var(--desk-bright); stroke-width: 3; stroke-dasharray: 16; }
+.tr-demo-low .tr-demo-wide { animation: tr-flyby-out 4s ease-in-out infinite; }
+.tr-demo-low .tr-demo-round { animation: tr-loop-in 4s ease-in-out infinite; }
+.tr-demo-centre .tr-demo-bracket, .tr-demo-pass .tr-demo-bracket { animation: tr-bracket 4s ease-in-out infinite; }
+.tr-demo .tr-d1 { animation: tr-turn-1 4s ease-in-out infinite; }
+.tr-demo .tr-d2 { animation: tr-turn-2 4s ease-in-out infinite; }
+.tr-demo .tr-d3 { animation: tr-turn-3 4s ease-in-out infinite; }
+.tr-demo-plan .tr-demo-check, .tr-demo-plan .tr-demo-lz { animation: tr-turn-4 4s ease-in-out infinite; }
+.tr-demo-sight .tr-demo-seed, .tr-demo-sight .tr-demo-mark, .tr-demo-firewall .tr-demo-wall { animation: tr-loop-in 4s ease-in-out infinite; }
+.tr-demo-quick-rm .tr-demo-seed, .tr-demo-quick-rm .tr-demo-telegraph { animation: tr-flyby-out 4s ease-in-out infinite; }
+.tr-demo-quick-rm .tr-demo-rm { animation: tr-rm 4s ease-in-out infinite; }
+@keyframes tr-turn-1 { 0%, 24% { opacity: 0; } 32%, 92% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes tr-turn-2 { 0%, 38% { opacity: 0; } 46%, 92% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes tr-turn-3 { 0%, 52% { opacity: 0; } 60%, 92% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes tr-turn-4 { 0%, 66% { opacity: 0.15; } 74%, 92% { opacity: 1; } 100% { opacity: 0.15; } }
+@keyframes tr-rm { 0% { stroke-dashoffset: 16; } 40%, 90% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 16; } }
 .desk-training.reduced .tr-demo * { animation: none !important; opacity: 1 !important; stroke-dashoffset: 0 !important; }
 
 /* From visit 2: the grid, one column per open branch, joined by circuit traces that light as nodes are held. */

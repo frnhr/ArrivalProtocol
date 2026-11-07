@@ -101,8 +101,8 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
   0–35 years later, visited ships are colonies, skipped ships age or leave, new ships report home, and the last unit's
   trail, grey cross, beacon and letters are found where it went.
 - The skill tree, batch 4a+4b (phase 3 slice 4, `docs/phase3/03-skills.md`; plan and deviations in
-  `docs/phase3/impl/slice-4-plan.md`): four skills as data (`src/data/skills.ts`; AUTOBURN v1–v2 built, AUTODROP, SURVEY
-  and SENTRY `OPENS LATER`), bought with TRAINING CYCLES that every ship pays (ARRIVED +1, LANDED up to +5; the LANDING
+  `docs/phase3/impl/slice-4-plan.md`): four skills as data (`src/data/skills.ts`; AUTOBURN, AUTODROP and SENTRY built to
+  v3 by slices 4a–4e, SURVEY `OPENS LATER`), bought with TRAINING CYCLES that every ship pays (ARRIVED +1, LANDED up to +5; the LANDING
   REPORT and the LOST card say them) at the desk's TRAINING [T] tab (`TrainingWindow.ts`, model
   `systems/training-model.ts`): the required first pick at the run's first desk ([1], then ENTER: the 1.5 s bar), the grid
   from desk 2 (ENTER trains only a cell the kid picked, SPACE always sets course), UNDO until TRANSMIT ▸. Skills are files
@@ -111,6 +111,18 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
   `v2 → v1` / `RESTORED`. AUTOBURN v1 flies the capture, v2 GREEN (capture, then trims) and ROUND (`[B] makes it green; [B]
   on green makes it round`), each within its LOCK RANGE (90 / 270 / 810 tac s, the NAV PLOT's bracket), claiming a Core
   thread for each burn (`× AN OP` when none is free), never steering (`systems/autoburn.ts`).
+- The skill tree, batch 4c–4e (`docs/phase3/impl/slice-4cde-plan.md` with its Deviations): desk 1 offers two cards,
+  AUTOBURN v1 and AUTODROP v1, each with a looping mini-demo. **AUTODROP** (the LANDING branch, `systems/autodrop*.ts`,
+  a resolver in the LandingController registry `landing-controller.ts`): v1 CENTRE (hold [L]: the volley straddles the
+  bracket's centre, trained by the kid's own launches as AIM), v2 PASS (the POD BAY's `A [−] 2 [+]` rows, [G], flies from
+  the MIND too, a Core thread per window), v3 PLAN (the plan table and its check line; one [G], one [F] per gap).
+  **SENTRY** (the DEFENCE branch, `systems/sentry.ts`) and disguised seeds: from depth 5 a beam seed may wear a harmless
+  name (`cache.tmp`, `threat-selectors.ts isDisguised`) and answers every tool as the file it shows until a SCAN, a DELETE,
+  a MOVE or COPY op, or SENTRY unmasks it; v1 SIGHT names them at the boot, v2 QUICK RM halves rm on HOLLOW blocks and
+  pre-empts a seed on HOLLOW's blinking outline (`PRE-EMPTED`), v3 compiles a FIREWALL.sys at every boot. **AUTOBURN v3**
+  LANDING ORBIT (`systems/autoburn-v3.ts`, `data/autoburn-modes.ts MODE_RULES`): the highest round orbit where every LZ
+  with room gets a sure window, a dashed ghost circle with its label, held with top-ups away from the windows, `GOES
+  LOWER` when a bite widens a drop. The save is v4 (one bump for the batch).
 - A full run (phase 2's, now the classic fixture): five ships (ARES-VII, HALCYON, KESTREL, VESPER, LAST LIGHT), each
   with its own rule, TRANSMIT between
   them (a link budget, transit damage, one card of three to carry), soft fails instead of reloads, RUN END with score,
@@ -144,10 +156,10 @@ These are non-negotiable design tokens, defined as CSS custom properties in `src
 1. **Fran's playtest**: one full run by `docs/playtest-checklist.md`.
 2. **Phase 3** (`docs/PHASE3.md`, specs in `docs/phase3/`): landing, the calm opening and the galaxy map (slices 1a, 1b, 2
    and 3a built; plans and deviations in `docs/phase3/impl/`), 3b (the repository, deliveries, the INBOX), 3c (the save,
-   archive v2, the arm carried between runs) and the skill tree's batch 4a+4b also built. Next, by `slice-4-plan.md`
-   §5.4: 4c AUTODROP v1–v3 (the LandingController seam, `DEMO_SOURCES.drops`), 4d SENTRY and disguised seeds, 4e AUTOBURN
-   v3 LANDING ORBIT; then slice 5 (residents and the grants), 6 (SURVEY), 7 (REASSIGNMENT, MERGE's pods, SUNSET) and 8 (the
-   rebalance).
+   archive v2, the arm carried between runs) and the skill tree's batches 4a+4b and 4c–4e also built. Next: retire the
+   classic world (`slice-4cde-plan.md` §9: the parity probe, then the suites' migration, then the deletion; after Fran's
+   playtest of slice 4), then slice 5 (residents and the grants), 6 (SURVEY), 7 (REASSIGNMENT, MERGE's pods, SUNSET, the
+   endings) and 8 (the rebalance).
 3. **The refactors parked until after the playtest** (discuss the split before writing code): `src/data/script.ts`
    into its text and its director rules, `src/styles/game.css` by surface, `tuning.ts` and `script.ts` grouped by
    domain.

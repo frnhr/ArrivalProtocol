@@ -269,10 +269,13 @@ function detailOf(state: Readonly<GameState>, cell: TrainingCellView, bank: numb
   };
 }
 
-// The selection when the kid has made none (from visit 2): the first cell TRAIN could buy, else the first lost one (RESTORE),
-// else the first one still to come; null on a grid with nothing open to buy.
-function defaultSel(cells: readonly TrainingCellView[]): TrainingSel | null {
-  const pick = cells.find((cell) => cell.look === 'affordable') ?? cells.find((cell) => cell.look === 'lost')
+// The selection when the kid has made none (from visit 2): the first lost cell whose RESTORE the bank covers (what was lost
+// comes back before another branch is bought: slice 4c–4e review, DROP's patch 3), else the first cell TRAIN could buy, else
+// the first lost one, else the first one still to come; null on a grid with nothing open to buy. Display only: the default
+// fills the detail and is never armed, so ENTER buys nothing on it (review M3; trainingArmed).
+function defaultSel(state: Readonly<GameState>, cells: readonly TrainingCellView[], bank: number): TrainingSel | null {
+  const pick = cells.find((cell) => cell.look === 'lost' && restoreCost(state, cell.skill) <= bank)
+    ?? cells.find((cell) => cell.look === 'affordable') ?? cells.find((cell) => cell.look === 'lost')
     ?? cells.find((cell) => cell.look === 'dim');
   return pick === undefined ? null : { skill: pick.skill, row: pick.row };
 }
@@ -368,7 +371,7 @@ export function trainingModel(state: Readonly<GameState>): TrainingModel {
   const sel = state.ui.trainingSel;
   const firstPick = isFirstDesk(run);
   const all = treeCells(state, visit).map((cell) => cellView(state, cell, bank, sel));
-  const chosen = sel ?? (firstPick ? null : defaultSel(all));
+  const chosen = sel ?? (firstPick ? null : defaultSel(state, all, bank));
   const cells = sel === null && chosen !== null
     ? all.map((cell) => ({ ...cell, selected: cell.skill === chosen.skill && sameRow(cell.row, chosen.row) }))
     : all;

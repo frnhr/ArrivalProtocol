@@ -153,14 +153,16 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), '..', 'save', 'fi
   mergeAdjacentFree(memory);
   store.update((d) => { d.ui.trainingSel = null; });
   model = trainingModel(store.getState());
-  // Slice 4c: with AUTODROP built the first cell TRAIN can buy is AUTODROP v1, which the default selection prefers to a
-  // RESTORE (training-model defaultSel); v1's own cell, selected, offers the RESTORE.
+  // Slice 4c–4e review (DROP's patch 3): an affordable RESTORE comes before AUTODROP v1, another branch's buyable cell, in the
+  // default selection (training-model defaultSel). It only fills the detail: it is not armed, so ENTER buys nothing on it.
   const defaultKey = model.selected?.key;
+  const defaultArmed = model.armed;
   selectTrainingCell(store, 'autoburn', { kind: 'version', version: 1 });
   model = trainingModel(store.getState());
-  check('the file eaten: v1 reads `LOST · RESTORE 2`, v2 NEEDS v1 FIRST, and v1 selected offers RESTORE v1 ▸ 2 CYCLES (the default: AUTODROP v1, buyable)',
+  check('the file eaten: v1 reads `LOST · RESTORE 2`, v2 NEEDS v1 FIRST, and v1 selected offers RESTORE v1 ▸ 2 CYCLES (the default too, unarmed)',
     look(model, 'autoburn:v1') === 'lost' && text(model, 'autoburn:v1') === TRAINING_TEXT.lost(2)
-      && text(model, 'autoburn:v2') === TRAINING_TEXT.status.needsLower('v1') && defaultKey === 'autodrop:v1' && model.selected?.key === 'autoburn:v1'
+      && text(model, 'autoburn:v2') === TRAINING_TEXT.status.needsLower('v1') && defaultKey === 'autoburn:v1' && !defaultArmed
+      && model.selected?.key === 'autoburn:v1'
       && model.detail?.action?.kind === 'restore' && model.detail.action.label === TRAINING_TEXT.restore(1, 2) && model.detail.action.enabled,
     `${defaultKey} · ${model.cells.map((c) => `${c.key}:${c.look}:${c.status}`).join(' | ')}`);
   const rows = skillsModel(store.getState());

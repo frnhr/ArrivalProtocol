@@ -11,6 +11,7 @@ import { TOOL_ICONS } from '@data/fs-tools';
 import { TOOL_REFUSAL } from '@data/tool-text';
 import { TOOL_REFUSAL_FLASH_MS, CAP_FULL_FLASH_MS } from '@data/tuning';
 import { requireById } from '@components/dom';
+import { shownSegment } from '@state/threat-selectors';
 
 // The chip that follows the cursor while a tool is in hand: the tool, its version, the picked
 // source and what to click next. When every Core thread is busy it says so before the click.
@@ -45,7 +46,8 @@ function renderCursorFollower(
   const icon = TOOL_ICONS[activeKind] || '▶';
   const verBadge = version > 1 ? ` <span class="ver">v${version}</span>` : '';
   let body = `<span class="icon">${icon}</span><span>${activeKind.toUpperCase()}</span>${verBadge}`;
-  if (pickedSource) body += ` <span class="source">| ${pickedSource.name} ${pickedSource.size}B</span>`;
+  // A picked decoy goes by the file it shows (review B1).
+  if (pickedSource) body += ` <span class="source">| ${shownSegment(pickedSource).name} ${pickedSource.size}B</span>`;
   body += threadsNote !== null
     ? `<span class="meta warn">${threadsNote}</span>`
     : `<span class="meta">${hint}</span>`;

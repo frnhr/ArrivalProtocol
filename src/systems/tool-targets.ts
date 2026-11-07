@@ -1,7 +1,7 @@
 // Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the 'outline' target (inSeedOutline),
-// a disguised seed under each tool (disguisedRefusal, its decoy's delete confirm). Others ask by message.
+// a disguised seed under each tool (disguisedRefusal: as the file it shows; its decoy's delete confirm). Others ask by message.
 import type { GameState } from '@state/schema';
-import type { Segment, FreeSegment, ShipSegment, ShipBackupSegment, SegmentRole } from '@/types/segment';
+import type { Segment, FreeSegment, ShipSegment, ShipBackupSegment, SegmentRole, HollowSegment, SeedDisguise } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import {
   getRedundancy, isRepairable, isUsableTool, effectiveToolVersion, filesWithRole, isInfected, toolFilesOf, repairableShipFile, repairCeiling,
@@ -19,7 +19,7 @@ import { isSkillFile } from '@state/selectors';
 import { fileLevel, restoreCostOf } from '@systems/skill-levels';
 import { SKILL_TREE } from '@data/skills';
 import { PACKET_SKILL_TEXT } from '@data/training-text';
-import { isDisguised } from '@state/threat-selectors';
+import { isDisguised, decoyFileView } from '@state/threat-selectors';
 
 // What deleting a skill file costs (slice 4): its skill until a desk's RESTORE, at the price the next desk will ask (the
 // levels the run paid for above what is left once it is gone: another copy, or nothing).
@@ -125,7 +125,7 @@ export function targetRefusal(seg: Segment, ctx: ValidTargetContext): ToolRefusa
   if ((activeKind === 'move' || activeKind === 'copy') && pickedSource) return placeRefusal(seg, ctx, pickedSource);
   if (seg.type === 'free') return TOOL_REFUSAL.notAFile;
   if (isBusy(seg)) return TOOL_REFUSAL.busy;
-  if (isDisguised(seg)) return disguisedRefusal(activeKind);
+  if (isDisguised(seg)) return disguisedRefusal(seg, ctx);
   switch (activeKind) {
     case 'scan':
       if (seg.type === 'driver') return TOOL_REFUSAL.driverScan;
@@ -165,22 +165,15 @@ export function targetRefusal(seg: Segment, ctx: ValidTargetContext): ToolRefusa
   }
 }
 
-// A disguised seed under each tool (slice 4d, plan R9): it plays as the harmless file it shows. SCAN works on it as on any
-// file (1.2 s, and it unmasks: state/actions.ts actionScan); DELETE works without a SCAN (detective work too: it runs as rm
-// on a seed); MOVE, COPY and REPAIR refuse with a temp file's neutral words, and SWAP with what it says to any unit file.
-// Never EATEN or LOCKED: a refusal must not give the seed away.
-function disguisedRefusal(kind: FsToolKind): ToolRefusal | null {
-  switch (kind) {
-    case 'scan':
-    case 'delete':
-      return null;
-    case 'move':
-    case 'copy':
-    case 'repair':
-      return TOOL_REFUSAL.tempFile;
-    case 'swap':
-      return TOOL_REFUSAL.swapShipOnly;
-  }
+// A disguised seed under each tool (slice 4d, plan R9; review B1): it answers every tool exactly as the healthy unit file it
+// shows (decoyFileView) would, so no highlight, hover word or refusal tells it from a real one. SCAN works on it (1.2 s, and
+// it unmasks: state/actions.ts actionScan); DELETE works without a SCAN (it runs as rm on a seed); MOVE and COPY take it
+// as a source like any unit file (the op unmasks it as it completes, `NOT A FILE`, and moves nothing: actions.ts
+// decoyPlaceOp); REPAIR says `ALREADY 100%`. SWAP is the one tool judged apart: its rule looks the file up in memory, where
+// the view never is, and on any unit file it says SWAP IS FOR SHIP FILES.
+function disguisedRefusal(seg: HollowSegment & { disguise: SeedDisguise }, ctx: ValidTargetContext): ToolRefusal | null {
+  if (ctx.activeKind === 'swap') return TOOL_REFUSAL.swapShipOnly;
+  return targetRefusal(decoyFileView(seg), ctx);
 }
 
 // SENTRY v2's 'outline' target (03 §3.10, plan §4.4): the block at `addr` lies inside HOLLOW's blinking seed outline, on

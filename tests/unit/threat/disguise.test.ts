@@ -5,9 +5,11 @@
 // • the layout: the decoy rides onto the segment (`seen: null`) and the arrival names it;
 // • one store (KESTREL alone, a decoy planted behind Telemetry): every reader that tells HOLLOW from a file sees a file (no
 //   reach marks, no amber bite, a file on the mini-strip, no seed lessons or alert, no MOVE label, its decoy's echo name),
-//   while TRACE still counts it; MOVE, COPY and REPAIR refuse with TEMP FILE words; its bite is the tell and the strip says
+//   while TRACE still counts it; every tool answers it as a healthy unit file (review B1: MOVE and COPY take it, REPAIR says
+//   ALREADY 100%, the placement and the MOVE preview as for a file); its bite is the tell and the strip says
 //   `SOMETHING NEXT TO TELEMETRY IS EATING IT — SCAN its neighbours`; SCAN unmasks it in 1.2 s (`NOT A FILE`); DELETE works
-//   on another without a SCAN, after its decoy's own confirm, in 2.0 s (`IT WAS A SEED`);
+//   on another without a SCAN, after its decoy's own confirm, in 2.0 s (`IT WAS A SEED`); MOVE and COPY on others run their
+//   own time, unmask them (`NOT A FILE`) and move or copy nothing;
 // • the boot: the ECC seeds line leaves a decoy out, and it lands with no thunk.
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
@@ -20,23 +22,24 @@ import { packUnit, layoutCarried } from '@systems/carry';
 import { seedsInMemory, threateningSeeds } from '@systems/hollow';
 import { reachMarks, miniStripRows, amberBite } from '@systems/hollow-hud';
 import { movePreview } from '@systems/move-preview';
-import { targetRefusal, deleteQuestion } from '@systems/tool-targets';
+import { targetRefusal, deleteQuestion, computeMoveRegion } from '@systems/tool-targets';
 import { requestDelete } from '@systems/fs-tools';
-import { actionScan } from '@state/actions';
+import { installTool } from '@systems/licences';
+import { actionScan, actionMove, actionCopy, moveSec, copySec } from '@state/actions';
 import { getOps } from '@systems/ops-core';
 import { getPrediction } from '@systems/predict';
 import { buildDirectorCtx } from '@systems/director';
 import { reachableFrom } from '@systems/map-hop';
 import { currentSlot } from '@systems/map-run';
 import { createRng, type Rng } from '@systems/rng';
-import { assertMemoryInvariants } from '@systems/memory-ops';
+import { assertMemoryInvariants, requireAddr } from '@systems/memory-ops';
 import { isDisguised, isVisibleHollow, decoyFileView, beamSeedsInMemory, tallyPreview } from '@state/threat-selectors';
 import { THREAT_RULES, DISGUISE_RULES } from '@data/threat-rules';
 import { SEED_ALERT_ID } from '@systems/alerts';
 import { SEEDS_ONLY_DEF } from '@data/threats';
 import { DISGUISE_POOL, SENTRY_TEXT, THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
 import { TOOL_REFUSAL, echoName } from '@data/tool-text';
-import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, MEMORY_LAYOUTS } from '@data/memory';
+import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, MEMORY_LAYOUTS, rackOf, layoutOf } from '@data/memory';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat } from '@systems/threat-plan';
 import { DISGUISE_CHANCE_BY_DEPTH, SEED_BLOCKS } from '@data/tuning';
@@ -186,6 +189,19 @@ function runOps(maxTicks = 400): number {
   return s().clock.aiSec - startAi;
 }
 
+// A healthy unit file of the decoy's kind (decoyFileView draws a `tool`), to answer the tools beside the decoy.
+function healthyUnitTool(state: Readonly<GameState>): Segment {
+  const found = state.memory.find((seg) => seg.type === 'tool' && seg.integrity === 100 && seg.infected === undefined && !seg.operating);
+  if (found === undefined) throw new Error('disguise.test: no healthy unit tool in KESTREL\'s memory');
+  return found;
+}
+
+// A free run that is part of the source's own MOVE footprint answers by the slide rule (the source's size and its neighbours),
+// which is the decoy's own; only the other runs are compared with a stand-in.
+function computeRegionHas(state: Readonly<GameState>, source: Segment, seg: Segment): boolean {
+  return computeMoveRegion(state.memory, source)?.segs.includes(seg) === true;
+}
+
 h.shipAlone(KESTREL, 7);
 h.store.update((draft) => {
   // KESTREL's PATH UNCERTAIN (its Sensor Interp) is fixed first, as a kid would, so the strip is the mind's.
@@ -220,11 +236,27 @@ const decoy = plantDecoy('telemetry', decoyDef, 'hungry. sorry.');
   const preview = movePreview(state, telemetry, { regionSegIds: [free.id], col: 0 }, []);
   check('…the MOVE preview turns on no label for it (Telemetry leaves no WALL / GAP beside a decoy)', preview !== null && preview.source === null
     && !state.memory.some(isVisibleHollow));
-  const refusals = (['move', 'copy', 'repair', 'swap', 'scan', 'delete'] as FsToolKind[])
-    .map((kind) => `${kind}:${targetRefusal(decoy, { state, activeKind: kind, pickedSource: null }) ?? 'ok'}`);
-  check(`…MOVE, COPY and REPAIR refuse with \`${TOOL_REFUSAL.tempFile}\`, SWAP as on any unit file; SCAN and DELETE work`,
-    refusals.join(' ') === `move:${TOOL_REFUSAL.tempFile} copy:${TOOL_REFUSAL.tempFile} repair:${TOOL_REFUSAL.tempFile} swap:${TOOL_REFUSAL.swapShipOnly} scan:ok delete:ok`,
-    refusals.join(' '));
+  // Review B1: every tool answers a decoy as a healthy unit file of its kind (`tool`, 100%: decoyFileView) is answered, so the
+  // strip's valid/invalid classes (fs-tools paintTargetClasses reads targetRefusal) and the hover words never tell them apart.
+  const real = healthyUnitTool(state);
+  const answers = (seg: Segment): string => (['move', 'copy', 'repair', 'swap', 'scan', 'delete'] as FsToolKind[])
+    .map((kind) => `${kind}:${targetRefusal(seg, { state, activeKind: kind, pickedSource: null }) ?? 'ok'}`).join(' ');
+  check(`…every tool answers it as a healthy unit file (${real.name}): MOVE and COPY take it, REPAIR says \`${TOOL_REFUSAL.healthy}\``,
+    answers(decoy) === answers(real) && answers(decoy) === `move:ok copy:ok repair:${TOOL_REFUSAL.healthy} swap:${TOOL_REFUSAL.swapShipOnly} scan:ok delete:ok`,
+    `decoy ${answers(decoy)} | real ${answers(real)}`);
+  // ...and once picked as a MOVE or COPY source, every place on the strip answers as for a real file of its size.
+  const sameSize = { ...structuredClone(real), size: decoy.size } as Segment;
+  const placeDiffers = (['move', 'copy'] as FsToolKind[]).flatMap((kind) => state.memory
+    .filter((seg) => seg.type === 'free')
+    .filter((seg) => (kind === 'copy' || !computeRegionHas(state, decoy, seg))
+      && targetRefusal(seg, { state, activeKind: kind, pickedSource: decoy }) !== targetRefusal(seg, { state, activeKind: kind, pickedSource: sameSize }))
+    .map((seg) => `${kind}@${seg.id}`));
+  check('…picked as a MOVE or COPY source, each free run answers as for a real file of its size', placeDiffers.length === 0, placeDiffers.join(','));
+  const zone = rackOf(requireAddr(state.memory, free), layoutOf(state));
+  const hazards = [{ rack: zone, kind: 'debris' as const }];
+  check(`…the MOVE preview judges it as a file too (a hazard in rack ${zone} is named for it, as for ${real.name})`,
+    movePreview(state, decoy, { regionSegIds: [free.id], col: 0 }, hazards)?.hazard?.rack === zone
+    && movePreview(state, real, { regionSegIds: [free.id], col: 0 }, hazards)?.hazard?.rack === zone);
   const question = deleteQuestion(state, decoy);
   check(`…DELETE asks its decoy's own confirm: \`${question?.question}\``, question?.question === `DELETE ${decoyDef.name.toUpperCase()}?`
     && question.detail.startsWith(decoyDef.desc), question?.detail);
@@ -272,6 +304,34 @@ for (let i = 0; i < 2400 && !(s().memory.find((seg) => seg.role === 'telemetry')
     refusal === null && asked === `DELETE ${DISGUISE_POOL[3]!.name.toUpperCase()}?` && Math.abs(took - 2.0) < 0.1
     && !s().memory.some((seg) => seg.id === second.id) && unmasked.length === 1 && unmasked[0]!.by === 'delete' && deleted.length === 1
     && s().log.entries.some((entry) => entry.text === echo), `${s().log.entries.slice(-2).map((e) => e.text).join(' | ')}`);
+}
+
+// MOVE and COPY take a decoy as a source (review B1): the op runs its own time on the seed, unmasks it as it completes, as a
+// SCAN does (`NOT A FILE`), and moves and copies nothing.
+for (const kind of ['move', 'copy'] as const) {
+  const role: Segment['role'] = kind === 'move' ? 'engine-io' : 'navplot';
+  const planted = plantDecoy(role, DISGUISE_POOL[kind === 'move' ? 1 : 2]!, `${kind} words`);
+  const name = DISGUISE_POOL[kind === 'move' ? 1 : 2]!.name;
+  if (!s().run.licences.includes(kind)) installTool(h.store, kind);
+  const before = s().memory.map((seg) => `${seg.type}:${seg.size}`).join(',');
+  const addr = requireAddr(s().memory, s().memory.find((seg) => seg.id === planted.id)!);
+  const target = s().memory.filter((seg) => seg.type === 'free' && seg.reservedBy === undefined && seg.size >= planted.size
+    && !computeRegionHas(s(), planted, seg)).sort((a, b) => b.size - a.size)[0]!;
+  h.events.length = 0;
+  const live = s().memory.find((seg) => seg.id === planted.id)!;
+  const refusal = kind === 'move' ? actionMove(h.store, live, { regionSegIds: [target.id], col: 0 }) : actionCopy(h.store, live, { regionSegIds: [target.id], col: 0 });
+  const took = runOps();
+  const seg = s().memory.find((candidate) => candidate.id === planted.id) as HollowSegment | undefined;
+  const unmasked = h.events.filter((event) => event.name === 'seed-unmasked').map((event) => event.payload as { by: string });
+  const want = kind === 'move' ? moveSec(planted.size) : copySec(planted.size);
+  const echo = SENTRY_TEXT.opEcho(kind, name);
+  check(`${kind.toUpperCase()} of a decoy runs ${took.toFixed(2)} AI s (${want.toFixed(1)}), unmasks it \`${echo}\` (NOT A FILE, by scan)`,
+    refusal === null && Math.abs(took - want) < 0.1 && seg !== undefined && seg.disguise?.seen === 'scan' && !isDisguised(seg)
+    && unmasked.length === 1 && unmasked[0]!.by === 'scan' && s().log.entries.some((entry) => entry.text === echo),
+    `${refusal ?? 'started'} · ${s().log.entries.slice(-2).map((e) => e.text).join(' | ')}`);
+  check(`…and ${kind === 'move' ? 'moves' : 'copies'} nothing: the seed stays at its address, memory keeps its shape, no ${kind} counted`,
+    seg !== undefined && requireAddr(s().memory, seg) === addr && s().memory.map((m) => `${m.type}:${m.size}`).join(',') === before
+    && !h.events.some((event) => event.name === 'op-done' && (event.payload as { kind: string }).kind === kind));
 }
 
 // --- The boot: the ECC seeds line leaves a decoy out, and it lands with no thunk -----------------------------------------
