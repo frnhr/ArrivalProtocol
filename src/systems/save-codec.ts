@@ -316,11 +316,11 @@ const checkResidentDeal = rec({
 });
 const checkCorrupted = rec({
   phase: oneOf('dormant', 'awake', 'quiet', 'deleted', 'cured'), surprise: bool, calmAiSec: num, wokeAtAi: nullable(num),
-  lockInSec: nullable(num), lock: nullable(checkLock), locksLanded: whole, locksBlocked: whole, deal: checkResidentDeal,
+  lockInSec: nullable(num), lock: nullable(checkLock), locksLanded: whole, locksBlocked: whole, bursts: whole, deal: checkResidentDeal,
   angryUntilAi: nullable(num), line: whole,
 });
 const checkSleeper = rec({
-  phase: oneOf('asleep', 'offering', 'working'), wokenBy: nullable(oneOf('rm', 'move')), wokeAtAi: nullable(num),
+  phase: oneOf('asleep', 'awake', 'offering', 'working'), wokenBy: nullable(oneOf('rm', 'move')), wokeAtAi: nullable(num),
   job: nullable(oneOf(...SLEEPER_JOBS)), entryId: nullable(whole), mendingId: nullable(name), wallId: nullable(name),
 });
 const checkResidentSlice: Check = (value, at) => {

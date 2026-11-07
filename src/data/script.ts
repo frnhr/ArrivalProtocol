@@ -2100,9 +2100,10 @@ export const SKILL_4CDE_RULES: readonly GuideRule[] = [
 // controller is fixed (no ghost any more), or after GHOST_LESSON_SHOW_SEC on the strip (the counter and the pip stay).
 // The COPY lesson (§9 WP10 item 4): once seeds come for your tools, keep a spare Repair somewhere else.
 
-// Slice 5 (plan R5): the lesson is SWAP's, so only Thrust Ctrl's own bursts count: a resident's never start it.
+// Slice 5 (plan R5, review M5): the lesson is SWAP's, so it reads Thrust Ctrl's own ghost (controllerGhost), firing whether or
+// not a resident outpushes it: a resident alone never starts it.
 function ghostFiring(ctx: DirectorCtx): boolean {
-  return ctx.caps.thrustCtrl.ghost !== null && ctx.caps.thrustCtrl.ghostBy === 'controller';
+  return ctx.caps.thrustCtrl.controllerGhost !== null;
 }
 
 // The lesson's moment has come on this ship (the second burst): only from then can its steps be done, or a ship with a

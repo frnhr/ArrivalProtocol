@@ -188,7 +188,8 @@ const look = (segs: readonly Segment[]): string => segs.map((seg) => `${seg.type
   const calm = capabilitiesNow(healthy).thrustCtrl;
   const firing = capabilitiesNow(hurt).thrustCtrl;
   check('ghostBy: null with a healthy controller, \'controller\' for a failing one (no resident fires: its spec stub is null)',
-    calm.ghost === null && calm.ghostBy === null && firing.ghost !== null && firing.ghostBy === 'controller' && residentGhostSpec(hurt) === null);
+    calm.ghost === null && calm.ghostBy === null && firing.ghost !== null && firing.ghostBy === 'controller' && residentGhostSpec(hurt) === null
+    && calm.controllerGhost === null && firing.controllerGhost === firing.ghost);
   const ratio = ghostPush(RESIDENT_GHOST) / ghostPush(ARM_GHOST_BY_BAND.failing!);
   check(`the resident's push is ${(ratio * 100).toFixed(0)}% of the arm's failing controller's (R3: under it, 04's "about two thirds")`,
     ratio < 1 && Math.abs(ratio - 0.714) < 0.01, ratio.toFixed(3));
@@ -344,7 +345,7 @@ withResidentsBuilt(['left'], () => {
     change(resident);
     raw.payload.slices.resident = resident;
   };
-  const sleeping = (phase: 'asleep' | 'offering' | 'working') => (raw: Raw): void => {
+  const sleeping = (phase: 'asleep' | 'awake' | 'offering' | 'working') => (raw: Raw): void => {
     const resident = createResidentState({ kind: 'sleeping', shown: 'unknown', name: 'MOTH', fragments: 0 });
     resident.sleeper!.phase = phase;
     raw.payload.slices.resident = resident;
@@ -356,6 +357,8 @@ withResidentsBuilt(['left'], () => {
     ['…its DEAL standing open', edit(corrupted((resident) => { resident.corrupted!.deal.phase = 'offered'; })), false],
     ['…its DEAL settled', edit(corrupted((resident) => { resident.corrupted!.deal = { phase: 'done', fileId: 'x', fileName: 'Swap', entryId: 9, outcome: 'refused' }; })), true],
     ['a sleeper working', edit(sleeping('working')), true],
+    ['…woken with no job (review M4)', edit(sleeping('awake')), true],
+    ['a corrupted resident with no burst count (review M3)', edit(corrupted((resident) => { delete (resident.corrupted as unknown as Record<string, unknown>).bursts; })), false],
     ['…offering', edit(sleeping('offering')), false],
     ['a machine of another kind (a departed def with a sleeper)', edit((raw) => { raw.payload.slices.resident.sleeper = createSleeperState(); }), false],
     ['an unknown field', edit((raw) => { (raw.payload.slices.resident as unknown as Record<string, unknown>).extra = 1; }), false],

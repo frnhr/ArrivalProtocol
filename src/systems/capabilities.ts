@@ -64,9 +64,11 @@ export type GhostSource = 'controller' | 'resident';
 export interface Capabilities {
   engine: { band: Band; powerCap: number; jitter: number; offline: OfflineReason | null };  // Engine I/O
   // Thrust Ctrl (ship). `ghost` is the spec orbit-sim's one scheduler fires: the stronger push of Thrust Ctrl's own and the
-  // resident's (slice 5, plan R5), and `ghostBy` its source (null exactly when `ghost` is). The SWAP-only readers
-  // (ghostWithoutSwap, the ghost lesson, landing guidance's SWAP line) read only a controller's.
-  thrustCtrl: { band: Band; ghost: GhostSpec | null; ghostBy: GhostSource | null };
+  // resident's (slice 5, plan R5), and `ghostBy` its source (null exactly when `ghost` is). `controllerGhost` is Thrust
+  // Ctrl's own spec whichever wins (review M5): the readers only a SWAP satisfies (ghostWithoutSwap and so the no-Swap line
+  // and the ENGINE FAULT SKIP refusal, the SWAP lesson, landing guidance's SWAP line) read it, so they stay keyed to a broken
+  // controller even while a resident outpushes it.
+  thrustCtrl: { band: Band; ghost: GhostSpec | null; ghostBy: GhostSource | null; controllerGhost: GhostSpec | null };
   reactor: { band: Band; bandCap: number; reactorCap: number };                              // Reactor (ship) × threads
   presets: Band;                                                                             // Autopilot
   // Sensor Interp + Nav Plotter; offline: why the file that blinds the plot is offline, if it is.
@@ -454,11 +456,13 @@ function ghostSpecOf(state: Readonly<GameState>, band: Band): GhostSpec | null {
 // The engine's one ghost source now (slice 5, plan R5): Thrust Ctrl's own (ghostSpecOf) and the corrupted resident's
 // (state/resident-selectors.ts residentGhostSpec), whichever pushes harder; a tie is the controller's. So orbit-sim, the
 // SKIP waypoints and the counter keep one scheduler, and the readers that only a SWAP can satisfy ask `ghostBy`.
-function ghostOf(state: Readonly<GameState>, band: Band): { ghost: GhostSpec | null; ghostBy: GhostSource | null } {
+function ghostOf(
+  state: Readonly<GameState>, band: Band,
+): { ghost: GhostSpec | null; ghostBy: GhostSource | null; controllerGhost: GhostSpec | null } {
   const own = ghostSpecOf(state, band);
   const resident = residentGhostSpec(state);
-  if (resident !== null && (own === null || ghostPush(resident) > ghostPush(own))) return { ghost: resident, ghostBy: 'resident' };
-  return own === null ? { ghost: null, ghostBy: null } : { ghost: own, ghostBy: 'controller' };
+  if (resident !== null && (own === null || ghostPush(resident) > ghostPush(own))) return { ghost: resident, ghostBy: 'resident', controllerGhost: own };
+  return own === null ? { ghost: null, ghostBy: null, controllerGhost: null } : { ghost: own, ghostBy: 'controller', controllerGhost: own };
 }
 
 // Bay Ctrl's capability for its band (§3.4): the one rule for the cadence and BAY OFFLINE. landing-rules reads it from
@@ -545,8 +549,9 @@ export function planningThrustCap(state: Readonly<GameState>, caps: Capabilities
 // dead (a ghost source, whatever put it there: ENGINE FAULT, a transit hit, a bite) and no Swap is aboard (selectors
 // swapAboard), with fuel left for a burst. On the arm SWAP comes only by request, so a kid can meet this with no cure; the
 // classic world licenses SWAP with the first burst and never meets it. The strip's no-Swap line (repository.ts
-// noSwapForGhost) and the flight's ENGINE FAULT SKIP refusal (pace.ts) both read it. Slice 5 (plan R5): only Thrust Ctrl's
-// own bursts: SWAP does not stop a resident, so its bursts never raise the no-Swap line or refuse a SKIP.
+// noSwapForGhost) and the flight's ENGINE FAULT SKIP refusal (pace.ts) both read it. Slice 5 (plan R5, review M5): only
+// Thrust Ctrl's own ghost (controllerGhost, whether or not a resident outpushes it): SWAP does not stop a resident, so a
+// resident alone never raises the no-Swap line or refuses a SKIP, and a broken controller always does.
 // ...and the bursts are the frequent ones (Thrust Ctrl failing or dead): SKIP is refused then (pace.ts). A field repair to
 // the degraded band leaves a rare twitch a SKIP may fly through as WP10 ruled (and re-plan after).
 export function ghostRefusesSkip(state: Readonly<GameState>): boolean {
@@ -557,5 +562,5 @@ export function ghostRefusesSkip(state: Readonly<GameState>): boolean {
 
 export function ghostWithoutSwap(state: Readonly<GameState>): boolean {
   const ctrl = capabilitiesNow(state).thrustCtrl;
-  return state.run.map.world === 'arm' && state.burn.fuelPct > 0 && ctrl.ghost !== null && ctrl.ghostBy === 'controller' && !swapAboard(state);
+  return state.run.map.world === 'arm' && state.burn.fuelPct > 0 && ctrl.controllerGhost !== null && !swapAboard(state);
 }

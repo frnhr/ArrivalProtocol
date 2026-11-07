@@ -60,6 +60,10 @@ export interface CorruptedState {
   lock: LockTelegraph | null;
   locksLanded: number;
   locksBlocked: number;
+  // Review M3: its own engine bursts on this ship (burn.ghostBursts counts Thrust Ctrl's too): the counter `WARDEN FIRED THE
+  // ENGINE ×3`, the first burst's alarm and SKIP stop, the surprise's scan at its first burst. WARDEN counts it on
+  // 'ghost-start' while capabilities' ghostBy is 'resident'.
+  bursts: number;
   deal: ResidentDealState;
   angryUntilAi: number | null;       // REFUSE or a timeout: locks and bursts come faster until then (plan R8)
   line: number;                      // its next looping line (warden-text's pool)
@@ -68,7 +72,9 @@ export interface CorruptedState {
 // --- The sleeper (Track KIN, plan §2.9) ----------------------------------------------------------------------------------
 
 export type SleeperJob = 'drops' | 'wall' | 'mend';
-export type SleeperPhase = 'asleep' | 'offering' | 'working';
+// Review M4: 'awake' is woken with no job (the offer withdrawn, or never answered: it has no timer), at rest at a save point;
+// 'offering' never is (the codec refuses it).
+export type SleeperPhase = 'asleep' | 'awake' | 'offering' | 'working';
 
 export interface SleeperState {
   phase: SleeperPhase;

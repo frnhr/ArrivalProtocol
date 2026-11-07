@@ -191,7 +191,7 @@ export function createResidentState(def: Readonly<ShipResidentDef> | null): Resi
 // `unknown` (the late surprise's grace and stamp, no SCAN hunt).
 export function createCorruptedState(surprise: boolean): CorruptedState {
   return {
-    phase: 'dormant', surprise, calmAiSec: 0, wokeAtAi: null, lockInSec: null, lock: null, locksLanded: 0, locksBlocked: 0,
+    phase: 'dormant', surprise, calmAiSec: 0, wokeAtAi: null, lockInSec: null, lock: null, locksLanded: 0, locksBlocked: 0, bursts: 0,
     deal: { phase: 'none', fileId: null, fileName: null, entryId: null, outcome: null },
     angryUntilAi: null, line: 0,
   };

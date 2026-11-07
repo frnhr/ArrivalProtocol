@@ -278,8 +278,8 @@ export function buildLandingContext(
     lavaInReach: sol.dot === null ? null : noGoInReach(landing.noGo, sol.dot, state.level.planet.R)?.word ?? null,
     impact: flight.impact,
     tankShort: flight.tankShort,
-    // Slice 5 (plan R5): SWAP's line only for Thrust Ctrl's own bursts (a resident never fires in the landing anyway, R4).
-    ghostSwap: caps.thrustCtrl.ghost !== null && caps.thrustCtrl.ghostBy === 'controller' && landing.ghostBursts > 0 ? controllerSwapOf(state) : null,
+    // Slice 5 (plan R5, review M5): SWAP's line only for Thrust Ctrl's own ghost (a resident never fires in the landing, R4).
+    ghostSwap: caps.thrustCtrl.controllerGhost !== null && landing.ghostBursts > 0 ? controllerSwapOf(state) : null,
     autoTail: flight.autoTail ?? null,
     autodrop: autodropLineOf(state, sol),
     v3Lower: flight.v3Lower ?? null,
