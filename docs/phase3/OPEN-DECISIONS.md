@@ -89,3 +89,19 @@ Status words:
     The resident pushes about 0.7–0.8× as hard as the controller, but over a whole approach that still drains the tank.
     The pressure to act seems right, but it is harsh for a kid who never opens the MIND. DEFERRED to slice 8: a lower
     amp, or bursts that stop after the first lock.
+25. **HOLD A WALL adds little.** Any free run with room for the 4-block wall already counts as a WALL under the kid's
+    own rule. So MOTH.wall never stops a bite that would otherwise land; it only keeps that run from being filled.
+    - BUILT as specified.
+    - ASK, or DEFERRED to slice 8: make the job do more. For example, wall off the nearest seed's reach, or let the
+      wall heal.
+26. **The sleeper's help, measured on CURLEW over five seeds (landed %):**
+    - by hand: 71%;
+    - RUN THE DROPS, no hands: 77%;
+    - MEND DRIVERS, then by hand: 83%;
+    - AUTODROP v3 bought: 83%;
+    - RUN THE DROPS with the kid launching as well: 66%.
+
+    The last row is low because the strip still said `press [L]`, which the slice 5 fix pass silences.
+27. **To wake BARNABY on CURLEW, the kid needs DELETE or MOVE.** On seed 7's route the unit arrives with only SCAN and
+    REPAIR, so the sleeper can be missed unless the kid requested DELETE or MOVE. BUILT as specified (the wake is an rm
+    of the lock, or a MOVE of the sleeper). DEFERRED to slice 8, or ASK: should a SCAN plus REPAIR also wake it?

@@ -22,9 +22,9 @@ export const RESIDENT_BUILT: Readonly<Record<ResidentKind, boolean>> = {
   // Track WARDEN raises this line (the corrupted resident, parts a, b, e).
   corrupted: true,
   // Track KIN raises this line last (the resident that left, part c: it moves the most fixtures, plan R22).
-  left: false,
+  left: true,
   // Track KIN raises this line first (the sleeper, part d).
-  sleeping: false,
+  sleeping: true,
 };
 
 // The ship's resident as this build plays it: the map's roll when its kind is built, else none (null). The one gate every
