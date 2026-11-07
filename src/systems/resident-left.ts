@@ -20,8 +20,9 @@ export function mountResidentLeft(store: Store<GameState>): () => void {
 }
 
 // Why the active tool can't be used on a note or a leftover (plan §2.8: SCAN, REPAIR and MOVE on a leftover; DELETE and COPY
-// refused with the log's words; the note takes SCAN only), or null when it can. tool-targets.ts asks it through
-// residents.ts residentToolRule. FOUNDATION stub (hot path, neutral): NOTHING TO DO THERE.
+// refused with the log's words; the note takes SCAN only), or null when the kind allows it: the tools' own rules then still
+// apply (REPAIR's charge, ALREADY 100%, an infection). tool-targets.ts asks it through residents.ts residentToolRule.
+// FOUNDATION stub (hot path, neutral): NOTHING TO DO THERE.
 export function leftToolRule(seg: Readonly<NoteSegment | LeftoverSegment>, ctx: Readonly<ValidTargetContext>): ToolRefusal | null {
   void seg;
   void ctx;

@@ -39,8 +39,8 @@ export function mountResidentSleeper(store: Store<GameState>): () => void {
 
 // Why the active tool can't be used on the sleeper or its lock (plan §2.9: DELETE on the sleeper refused with its hint,
 // REPAIR and COPY refused on it; MOVE allowed; DELETE on the lock allowed, MOVE refused `PINNED TO MOTH.sys`), or null when
-// it can. tool-targets.ts asks it through residents.ts residentToolRule. FOUNDATION stub (hot path, neutral): NOTHING TO DO
-// THERE.
+// the kind allows it: the tools' own rules then still apply. tool-targets.ts asks it through residents.ts residentToolRule.
+// FOUNDATION stub (hot path, neutral): NOTHING TO DO THERE.
 export function sleeperToolRule(seg: Readonly<SleeperSegment | SleepLockSegment>, ctx: Readonly<ValidTargetContext>): ToolRefusal | null {
   void seg;
   void ctx;

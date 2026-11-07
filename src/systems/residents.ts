@@ -31,8 +31,10 @@ export function mountResidents(store: Store<GameState>): () => void {
   };
 }
 
-// Why the active tool can't be used on a resident's file, or null when it can: its kind's rule (tool-targets.ts
-// targetRefusal asks here for every resident file type, after the busy and disguise checks and before the tools' own rules).
+// Why the active tool can't be used on a resident's file, or null when its kind allows it: its kind's rule (tool-targets.ts
+// targetRefusal asks here for every resident file type, after the busy and disguise checks). On null the tools' own rules
+// still apply after it (REPAIR's charge and ALREADY 100%, MOVE's and COPY's infection), so a kind's rule says only what is
+// its own (SCAN IT FIRST, IT WON'T BE MOVED, PINNED TO MOTH.sys …).
 export function residentToolRule(seg: Readonly<ResidentFileSegment>, ctx: Readonly<ValidTargetContext>): ToolRefusal | null {
   switch (seg.type) {
     case 'resident': return corruptedToolRule(seg, ctx);

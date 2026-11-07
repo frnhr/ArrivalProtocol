@@ -2,6 +2,7 @@ import type { GameState, VerbTelegraph, HollowState } from './schema';
 import type {
   Segment, RedundancySegment, FsToolSegment, CoreSegment, ToolSegment, SkillFileSegment, SegmentState, SegmentRole,
   DriverSegment, SegmentType, HollowSegment, Infection, UpgradeSegment, UpgradeKind, FirewallSegment, ShipSegment, ResidentFileSegment,
+  ResidentSegment, LeftoverSegment,
 } from '@/types/segment';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { SkillId } from '@/types/skill';
@@ -225,11 +226,13 @@ export function effectiveToolVersion(state: Readonly<GameState>, kind: FsToolKin
 
 // The segments REPAIR can heal: the AI's own files (Core, tools, skills, fs-tools, upgrade files) and the pods'
 // drivers (§6.5: no scan gate for them). Ship files can't be healed (SWAP or DELETE them); REPAIR CHARGE is "repaired"
-// only by v2's squeeze; a FIREWALL has no health to heal.
-export type RepairableSegment = CoreSegment | ToolSegment | FsToolSegment | DriverSegment | UpgradeSegment;
+// only by v2's squeeze; a FIREWALL has no health to heal. Slice 5: a corrupted resident's own file (the cure, 04 §3.12 part b)
+// and a departed resident's leftovers (protect them, plan §2.8), whose kinds' tool rules (systems/residents.ts) say when.
+export type RepairableSegment = CoreSegment | ToolSegment | FsToolSegment | DriverSegment | UpgradeSegment | ResidentSegment | LeftoverSegment;
 
 export function isRepairable(seg: Segment): seg is RepairableSegment {
-  return seg.type === 'core' || seg.type === 'tool' || seg.type === 'fs-tool' || seg.type === 'upgrade' || seg.type === 'driver';
+  return seg.type === 'core' || seg.type === 'tool' || seg.type === 'fs-tool' || seg.type === 'upgrade' || seg.type === 'driver'
+    || seg.type === 'resident' || seg.type === 'leftover';
 }
 
 // Slice 3b (Fran's decision, the limping engine): on the arm REPAIR also heals Thrust Ctrl, the one ship file it may touch

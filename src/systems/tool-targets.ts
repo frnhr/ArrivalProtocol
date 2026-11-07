@@ -129,8 +129,12 @@ export function targetRefusal(seg: Segment, ctx: ValidTargetContext): ToolRefusa
   if (seg.type === 'free') return TOOL_REFUSAL.notAFile;
   if (isBusy(seg)) return TOOL_REFUSAL.busy;
   if (isDisguised(seg)) return disguisedRefusal(seg, ctx);
-  // Slice 5 (plan §2.4): a resident's rack-A file answers by its kind's rule (WARDEN's, KIN's), every tool.
-  if (isResidentFile(seg)) return residentToolRule(seg, ctx);
+  // Slice 5 (plan §2.4): a resident's rack-A file asks its kind's rule first (WARDEN's, KIN's); when that allows the tool,
+  // the tools' own rules below still apply (REPAIR's charge and ALREADY 100%, MOVE's and COPY's infection).
+  if (isResidentFile(seg)) {
+    const refusal = residentToolRule(seg, ctx);
+    if (refusal !== null) return refusal;
+  }
   switch (activeKind) {
     case 'scan':
       if (seg.type === 'driver') return TOOL_REFUSAL.driverScan;

@@ -23,7 +23,8 @@ export function mountResidentCorrupted(store: Store<GameState>): () => void {
 }
 
 // Why the active tool can't be used on WARDEN.sys (plan R25: SCAN IT FIRST before a SCAN on a `reported faulty` ship, MOVE
-// and COPY refused), or null when it can. tool-targets.ts targetRefusal asks it through residents.ts residentToolRule.
+// and COPY refused), or null when the kind allows it: the tools' own rules then still apply (REPAIR's charge, ALREADY 100%,
+// an infection). tool-targets.ts targetRefusal asks it through residents.ts residentToolRule.
 // FOUNDATION stub (hot path, neutral): NOTHING TO DO THERE (no such file exists until WARDEN raises RESIDENT_BUILT).
 export function corruptedToolRule(seg: Readonly<ResidentSegment>, ctx: Readonly<ValidTargetContext>): ToolRefusal | null {
   void seg;
