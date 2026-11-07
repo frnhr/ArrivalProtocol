@@ -6,7 +6,8 @@
 //   alarm line, the pip's override and jump; the counter; SWAP does not stop it; no ENGINE FAULT SKIP refusal;
 // • the lock clock: the first telegraph 30 calm s after the wake, the next 40 after a telegraph's start, 3 s each, frozen at
 //   TACTICAL, none without a free thread; a lock blocked by SCAN; one landed (`POD LOCKED`, the strip's line) and still
-//   locked at END LANDING (parked, `podsParkedLocked`); the cap (GANNET: 2);
+//   locked at END LANDING (parked, `podsParkedLocked`); the cap (GANNET: 2); review M3: with no remedy aboard a locked pod
+//   can never launch (its strip line, the auto-end parks it), and a remedy given later makes it launchable again;
 // • DELETE: SCAN IT FIRST, then 6 s with the DELETING bursts, every lock released, the event, the last line and CONTROL's
 //   thanks; REPAIR: the cure for about 12 charge in about 3.6 s, its thank-you; the DEAL accepted (the named file deleted,
 //   quiet for the ship), refused and timed out (angry: faster bursts and locks), and not offered while HOLLOW's deal holds
@@ -26,14 +27,15 @@ import { lockOn } from '../landing/harness-landing';
 import { setLandingMode } from '../support/landing-instant';
 import { actionScan, actionDelete, actionRepair, actionSwap } from '@state/actions';
 import { residentGhostSpec, residentFile, liveLockText, lockedDrivers } from '@state/resident-selectors';
-import { lockNow, offerResidentDealNow } from '@systems/resident-corrupted';
+import { lockNow, offerResidentDealNow, lockRemedy } from '@systems/resident-corrupted';
 import { residentSegmentLook } from '@systems/resident-hud';
 import { capabilitiesNow, ghostRefusesSkip, ghostWithoutSwap } from '@systems/capabilities';
 import { windowPip } from '@systems/flight-hud';
 import { getOpsBySeg, reserveThread, releaseThread } from '@systems/ops-core';
 import { pickChoice, openChoiceEntry } from '@systems/say';
 import { endLanding } from '@systems/landing';
-import { isLaunchable, launchQueue } from '@systems/landing-rules';
+import { isLaunchable, launchQueue, canEverLaunch, driversThatCanEverLaunch } from '@systems/landing-rules';
+import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { hollowFirstFightDecided } from '@state/threat-selectors';
 import { chargeLeft } from '@state/selectors';
 import { GHOST_ALARM_ID, GHOST_WARN_ID } from '@systems/alerts';
@@ -185,6 +187,72 @@ withResidentsBuilt(['corrupted'], () => {
     setLandingMode('instant');
     const done = shipDone();
     check('SHIP DONE: WARDEN ignored, 2 pods parked locked, in a save that decodes', done.fate === 'ignored' && done.parked === 2 && done.decodes,
+      JSON.stringify(done));
+  }
+
+  // --- Review M3: a locked pod nothing aboard can free parks by itself; a remedy makes it launchable again ---------------------
+  {
+    toGannet();
+    h.store.update((draft) => {
+      draft.hollow.phase = 'dormant';
+      draft.memory = draft.memory.map((block) => (block.type === 'hollow' ? freeSegment(block.size) : block));
+      mergeAdjacentFree(draft.memory);
+    });
+    const setCharge = (used: number): void => {
+      h.store.update((draft) => {
+        const charge = draft.memory.find((seg) => seg.type === 'redundancy');
+        if (charge === undefined || charge.type !== 'redundancy') throw new Error('M3: no REPAIR CHARGE aboard');
+        charge.used = used;
+      });
+    };
+    // Every pod locked (lockNow passes the cap), the DEAL refused: SCAN and REPAIR aboard, no DELETE (seed 7's route).
+    const pods = s().landing.pods.length;
+    for (let i = 0; i < pods; i++) {
+      landALock();
+      const choice = openChoiceEntry(s());
+      if (choice !== null && choice.speaker === 'resident') pickChoice(choice.id, 'REFUSE');
+      h.step();
+    }
+    const allLocked = lockedDrivers(s()).length === pods && machine().deal.phase === 'done';
+    check(`with every pod locked and the DEAL refused, ${chargeLeft(s())} charge (the cure costs 12) and no DELETE are a remedy: the cure`,
+      allLocked && lockRemedy(s()) === 'cure' && canEverLaunch(s(), 1) && ruleLine('resident-stuck') === null, `${lockRemedy(s())}`);
+    setCharge(5);
+    for (let i = 0; i < 3; i++) h.step();
+    check('…at 5 charge nothing aboard can free them: no remedy, and a locked pod can never launch (as a dead driver with no REPAIR)',
+      lockRemedy(s()) === null && !canEverLaunch(s(), 1) && driversThatCanEverLaunch(s()).length === 0);
+    check('…the strip says so in one line, and no longer asks for DELETE or REPAIR: `POD 01 STAYS LOCKED — nothing aboard can free it`',
+      ruleLine('resident-stuck') === 'POD 01 STAYS LOCKED — nothing aboard can free it' && ruleLine('resident-locked-tab') === null
+      && ruleLine('resident-locked') === null && WARDEN_TEXT.stripStuck(16).length <= 70, ruleLine('resident-stuck') ?? 'none');
+    // The other direction: a remedy that comes later (a DELETE in hand, or the charge back) makes the pod launchable again.
+    giveTools(h.store, ['delete']);
+    const withDelete = lockRemedy(s());
+    const launchable = canEverLaunch(s(), 1);
+    h.store.update((draft) => {
+      draft.memory = draft.memory.map((block) => (block.type === 'fs-tool' && block.fsTool === 'delete' ? freeSegment(block.size) : block));
+      mergeAdjacentFree(draft.memory);
+    });
+    check('…a DELETE given makes them launchable again (remedy delete); taken away, stuck again',
+      withDelete === 'delete' && launchable && lockRemedy(s()) === null && !canEverLaunch(s(), 1), `${withDelete} ${launchable}`);
+    setCharge(24);
+    check('…and so does the charge for the cure', lockRemedy(s()) === 'cure' && canEverLaunch(s(), 1) && ruleLine('resident-locked-tab') !== null);
+    // Review m9: a landing with only locked pods, a remedy aboard: it waits (no auto-end), and the strip names the lock, not L11.
+    setLandingMode('manual');
+    lockOn(h);
+    const shownIds = new Set<string>();
+    stepFor(12);
+    for (let i = 0; i < 5; i++) { h.step(); shownIds.add(shownId()); }
+    check('a landing with only locked pods and the cure aboard waits past the auto-end\'s grace, the strip on the lock (not L11)',
+      s().landing.ended === null && [...shownIds].some((id) => id === 'resident-locked-tab' || id === 'resident-locked') && !shownIds.has('landing-L11'),
+      [...shownIds].join(', '));
+    setCharge(5);
+    stepUntil(() => s().landing.ended !== null, 120);
+    const parked = s().landing.pods.filter((record) => record.fate.kind === 'parked').length;
+    check(`…the charge gone, the auto-end fires by itself (no END LANDING): all ${pods} pods parked, locked`, s().landing.ended === 'no-driver-left'
+      && parked === pods && lockedDrivers(s()).length === pods, `${s().landing.ended} · ${parked} parked`);
+    stepUntil(() => s().run.phase !== 'landing', 120);
+    setLandingMode('instant');
+    const done = shipDone();
+    check('SHIP DONE: WARDEN ignored, every pod parked locked, in a save that decodes', done.fate === 'ignored' && done.parked === pods && done.decodes,
       JSON.stringify(done));
   }
 

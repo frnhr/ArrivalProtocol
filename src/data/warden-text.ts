@@ -79,6 +79,8 @@ export const WARDEN_TEXT = {
   stripLocked: (pod: number, name: string): string => `${pod2(pod)} LOCKED — DELETE or REPAIR ${name}.sys`,
   stripLockedScan: (pod: number, name: string): string => `${pod2(pod)} LOCKED — SCAN ${name}.sys, then DELETE or REPAIR`,
   stripLockedTab: (pod: number, name: string): string => `${pod2(pod)} LOCKED — [TAB], DELETE or REPAIR ${name}.sys`,
+  // Review M3: a pod held with no remedy aboard (no DELETE, too little charge to cure, no DEAL left): it parks locked.
+  stripStuck: (pod: number): string => `${pod2(pod)} STAYS LOCKED — nothing aboard can free it`,
   // After the first burst's alarm, once: the way to the cause stays on the strip a while.
   stripFiring: (name: string): string => `${name}.sys FIRES THE ENGINE — DELETE or REPAIR it in RACK A`,
   stripFiringScan: (name: string): string => `${name}.sys FIRES THE ENGINE — SCAN it in RACK A first`,

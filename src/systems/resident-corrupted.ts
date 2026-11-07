@@ -13,11 +13,12 @@ import { raiseAlert, clearAlert } from '@systems/alerts';
 import { say, sayChoice, withdrawChoice, openChoiceEntry } from '@systems/say';
 import { capabilitiesNow } from '@systems/capabilities';
 import { garbleText } from '@systems/garble';
-import { launchQueue } from '@systems/landing-rules';
+import { launchQueue, registerLockRemedy } from '@systems/landing-rules';
 import { assertMemoryInvariants, requireAddr, replaceRange, freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { childSeed } from '@systems/rng';
 import { currentSlot } from '@systems/map-streams';
-import { integrityState } from '@state/selectors';
+import { integrityState, getFsTool, chargeLeft } from '@state/selectors';
+import { repairChargeEstimate } from '@state/actions';
 import { hollowFirstFightDecided } from '@state/threat-selectors';
 import { residentFile, lockedDrivers, lockCap, lockSecondsLeft, residentAngry } from '@state/resident-selectors';
 import { TOOL_REFUSAL, type ToolRefusal, type ConfirmText } from '@data/tool-text';
@@ -467,6 +468,29 @@ function tick(store: Store<GameState>, dtAi: number): void {
   }
 }
 
+// --- Can its locks still be freed? (review M3) ------------------------------------------------------------------------------
+
+export type LockRemedy = 'op' | 'delete' | 'cure' | 'deal';
+
+// What could still free its locks on this ship, or null: nothing aboard can (it then holds them to the landing's end, and the
+// landing treats a locked pod as one that can never launch: landing-rules driverCanEverLaunch). In order: an op already on
+// WARDEN.sys (a DELETE or REPAIR running); a DELETE in hand; a REPAIR in hand with the charge for the whole cure (state/actions
+// repairChargeEstimate: 12 from 40%, more after a hit); its DEAL standing, or still to come (none offered on this ship, HOLLOW's
+// idle, a fair-tier file to name). A file not yet scanned needs a SCAN in hand first (R25). The lock never lets go by itself.
+// Anything but an awake resident holding a lock answers 'op' (no lock of its to judge: R7's rule stands).
+export function lockRemedy(state: Readonly<GameState>): LockRemedy | null {
+  const corrupted = state.resident.corrupted;
+  const file = residentFile(state);
+  if (corrupted === null || file === null || corrupted.phase !== 'awake') return 'op';
+  if (file.operating === true || getOpsBySeg(file.id).length > 0) return 'op';
+  const canTouch = file.scanned || getFsTool(state, 'scan') !== undefined;
+  if (canTouch && getFsTool(state, 'delete') !== undefined) return 'delete';
+  if (canTouch && getFsTool(state, 'repair') !== undefined && chargeLeft(state) >= repairChargeEstimate(file.integrity, file.size)) return 'cure';
+  if (corrupted.deal.phase === 'offered') return 'deal';
+  if (corrupted.deal.phase === 'none' && state.hollow.deal.phase === 'none' && dealFile(state) !== null) return 'deal';
+  return null;
+}
+
 // --- What the dispatcher asks (systems/residents.ts) -----------------------------------------------------------------------
 
 let mounted = false;
@@ -487,6 +511,7 @@ export function mountResidentCorrupted(store: Store<GameState>): () => void {
     if (state.resident.corrupted?.phase === 'awake' && capabilitiesNow(state).thrustCtrl.ghostBy === 'resident') burstHeard = true;
   });
   const offTick = onAiTick((dtAi) => tick(store, dtAi));
+  const offRemedy = registerLockRemedy((state) => lockRemedy(state) !== null);
   // A ship that is over (lost, landed, its landing ended) takes a countdown and an open offer with it, and the warning.
   const offOver = onPostTick(() => {
     const state = store.getState();
@@ -500,6 +525,7 @@ export function mountResidentCorrupted(store: Store<GameState>): () => void {
     offOps();
     offBurst();
     offTick();
+    offRemedy();
     offOver();
     offReset();
     resetCorrupted();

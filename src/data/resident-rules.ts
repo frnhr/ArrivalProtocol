@@ -8,6 +8,7 @@ import type { DirectorCtx, GuideRule, TextCtx } from '@systems/director';
 import { isLivePhase } from '@systems/clock';
 import { GHOST_ALARM_ID } from '@systems/alerts';
 import { residentFile, lockedDrivers, lockSecondsLeft } from '@state/resident-selectors';
+import { lockCanBeFreed } from '@systems/landing-rules';
 import { WARDEN_TEXT } from '@data/warden-text';
 import { TOOL_HINT_TARGET } from '@data/fs-tools';
 import { GHOST_LESSON_SHOW_SEC } from '@data/tuning';
@@ -18,7 +19,8 @@ import { GHOST_LESSON_SHOW_SEC } from '@data/tuning';
 //   with its word (`THE SHIP'S AI IS FIRING THE ENGINE`): where the cause is. On the late surprise it is the strip's first
 //   word about it (04 §3.12: the strip names rack A at once).
 // • THE LOCK (mind-urgent, before a lesson's lead-in, as a HOLLOW verb is): a lock counting down, and the cheap block.
-// • A LOCKED POD (tutorial): a pod held, and the two ways to free it (SCAN first on a `reported faulty` ship, R25).
+// • A LOCKED POD (tutorial): a pod held, and the two ways to free it (SCAN first on a `reported faulty` ship, R25); with
+//   nothing aboard to free it (review M3), `POD 07 STAYS LOCKED — nothing aboard can free it`.
 // • ITS LESSON (tutorial, once): after the alarm, the way to the cause stays a while (GHOST_LESSON_SHOW_SEC), until the kid
 //   is at the file or it stops.
 // A template is rendered by the tests with no state (TextCtx only: the corpus and the words checks); then it says its
@@ -66,10 +68,21 @@ function lockedPod(state: Readonly<GameState> | null): number {
   return lockedDrivers(state).find((driver) => driver.lockedBy === name)?.pod ?? WORST_POD;
 }
 
-function lockedLive(ctx: DirectorCtx): boolean {
+function holdsLock(ctx: DirectorCtx): boolean {
   const state = ctx.state;
   return isLivePhase(state) && state.resident.corrupted?.phase === 'awake' && state.landing.ended === null
     && lockedDrivers(state).some((driver) => driver.lockedBy === state.resident.def?.name);
+}
+
+// A pod held, and something aboard can still free it (the two ways: DELETE or REPAIR; or its DEAL).
+function lockedLive(ctx: DirectorCtx): boolean {
+  return holdsLock(ctx) && lockCanBeFreed(ctx.state);
+}
+
+// Review M3: a pod held with no remedy aboard. The strip says so in one line (no tool to light, no [TAB]: nothing in the MIND
+// helps), and the landing parks it locked by itself (landing-rules driverCanEverLaunch).
+function stuckLive(ctx: DirectorCtx): boolean {
+  return holdsLock(ctx) && !lockCanBeFreed(ctx.state);
 }
 
 function scanned(state: Readonly<GameState> | null): boolean {
@@ -141,6 +154,13 @@ export const RESIDENT_RULES: readonly GuideRule[] = [
       return scanned(state) ? WARDEN_TEXT.stripLocked(lockedPod(state), nameOf(state)) : WARDEN_TEXT.stripLockedScan(lockedPod(state), nameOf(state));
     },
     highlight: (ctx) => chip(ctx, scanned(ctx.state) ? 'delete' : 'scan'),
+  },
+  {
+    id: 'resident-stuck',
+    layer: 'ship',
+    priority: 'tutorial',
+    activeWhen: (ctx) => stuckLive(ctx),
+    text: (ctx) => WARDEN_TEXT.stripStuck(lockedPod(stateOf(ctx))),
   },
   {
     id: 'tut-resident-firing-tab',

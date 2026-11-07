@@ -85,13 +85,35 @@ export function bayMembers(state: Readonly<GameState>): { bay: number[]; next: n
   return { bay: queue.slice(0, bayShown(state)).map((driver) => driver.pod), next: queue[0]?.pod ?? null };
 }
 
+// Slice 5 review M3: whether a resident's lock can still be freed on this ship. The corrupted resident's module answers
+// (resident-corrupted.ts lockRemedy: a DELETE in hand, the charge for the cure, its DEAL standing or still to come, or an op
+// already on its file); with none registered every lock counts as freeable (plan R7). A resolver of the state, no data of its
+// own (as landing-controller.ts's registry), so this module stays free of the residents' stateful imports.
+type LockFreeable = (state: Readonly<GameState>) => boolean;
+let lockFreeable: LockFreeable | null = null;
+
+export function registerLockRemedy(resolve: LockFreeable): () => void {
+  if (lockFreeable !== null) throw new Error('registerLockRemedy: a lock remedy is already registered');
+  lockFreeable = resolve;
+  return () => {
+    if (lockFreeable === resolve) lockFreeable = null;
+  };
+}
+
+export function lockCanBeFreed(state: Readonly<GameState>): boolean {
+  return lockFreeable === null || lockFreeable(state);
+}
+
 // A driver in memory can launch some day (review M2): at or above the failing band it only waits for what holds it (an
 // infection is cured or eats it, an op ends); below it (dead) it needs a REPAIR: one already running on it, or one the
 // kid can still start (selectors repairPossible: a usable Repair and charge ≥ 1, as the root's duel judges its Rm).
 // Without that its pod can never launch, so L12 and the risk-7 auto-end take over instead of a landing open for good.
-// Slice 5 (plan R7): a lock (lockedBy) does not change it: a locked pod can still launch some day (the resident deleted,
-// cured or paid), so the auto-end never ends a landing the kid could still free. END LANDING parks it.
+// Slice 5 (plan R7): a lock (lockedBy) does not change it while it can be freed (the resident deleted, cured or paid), so
+// the auto-end never ends a landing the kid could still free; END LANDING parks it. Review M3: a lock nothing aboard can
+// free is a pod that can never launch, as a dead driver with no REPAIR is: L12 and the auto-end take over, and it parks
+// locked. A remedy that comes later (a DELETE, a spare for the DEAL) makes it launchable again.
 export function driverCanEverLaunch(state: Readonly<GameState>, driver: Readonly<DriverSegment>): boolean {
+  if (driver.lockedBy !== undefined && !lockCanBeFreed(state)) return false;
   if (driver.integrity >= BAND_FAILING_MIN || driver.state === 'repairing') return true;
   return repairPossible(state);
 }
