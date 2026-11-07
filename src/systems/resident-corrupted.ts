@@ -17,13 +17,14 @@ import { launchQueue } from '@systems/landing-rules';
 import { assertMemoryInvariants, requireAddr, replaceRange, freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { childSeed } from '@systems/rng';
 import { currentSlot } from '@systems/map-streams';
-import { integrityState, integrityBand, isUsableTool, hasIntegrity } from '@state/selectors';
+import { integrityState } from '@state/selectors';
 import { hollowFirstFightDecided } from '@state/threat-selectors';
 import { residentFile, lockedDrivers, lockCap, lockSecondsLeft, residentAngry } from '@state/resident-selectors';
 import { TOOL_REFUSAL, type ToolRefusal, type ConfirmText } from '@data/tool-text';
 import { RESIDENT_TEXT } from '@data/resident-text';
 import { WARDEN_TEXT } from '@data/warden-text';
 import { layoutOf } from '@data/memory';
+import { rmTargets } from '@systems/hollow';
 import { IS_DEV } from '@/env';
 import {
   RESIDENT_DELETE_BASE_SEC, RESIDENT_DELETE_PER_BLOCK_SEC, RESIDENT_LOCK_FIRST_SEC, RESIDENT_LOCK_EVERY_SEC,
@@ -246,47 +247,11 @@ function lockTick(store: Store<GameState>, dtAi: number, held: boolean): void {
 
 // --- Its DEAL --------------------------------------------------------------------------------------------------------------
 
-// 04 §3.3's fair tiers, as hollow.ts rmTargets has them (plan R8: the DEAL names `rmTargets(memory, untried)[0]`): a spare
-// whose kind keeps another working copy (a .bak or .cp first), else an upgrade file, else a ship backup still in reserve.
-// Written again here, not imported: hollow.ts reaches carry.ts and the classic five, and this module sits under
-// state/actions.ts (through the residents' dispatcher), which data/ships.ts reaches while it loads, so the import closed a
-// cycle that ran classic-five's load-time check before ships.ts had loaded. residents/corrupted-model pins it to rmTargets.
-const SPARE_NAME = /\.(bak|cp)$/i;
-
-function spareKindOf(seg: Readonly<Segment>): string | null {
-  if (seg.type === 'upgrade') return `upgrade:${seg.upgrade}`;
-  if (seg.type === 'fs-tool') return `fs:${seg.fsTool}`;
-  if (seg.type === 'tool' && seg.role) return `role:${seg.role}`;
-  return null;
-}
-
-function worksAsCopy(seg: Readonly<Segment>): boolean {
-  if (seg.type === 'fs-tool') return isUsableTool(seg);
-  if (!hasIntegrity(seg) || seg.state === 'inactive') return false;
-  const band = integrityBand(seg.integrity);
-  return band === 'ok' || band === 'degraded';
-}
-
-export function fairDealTargets(memory: readonly Segment[], untried: readonly string[]): Segment[] {
-  const spares = memory.filter((seg) => {
-    if (seg.type !== 'fs-tool' && seg.type !== 'tool') return false;
-    if (seg.role === 'engine-io' || seg.role === 'navplot') return false;
-    if (seg.type === 'fs-tool' && untried.includes(seg.fsTool)) return false;
-    const kind = spareKindOf(seg);
-    return kind !== null && memory.some((other) => other !== seg && spareKindOf(other) === kind && worksAsCopy(other));
-  });
-  if (spares.length > 0) {
-    const named = spares.filter((seg) => SPARE_NAME.test(seg.name));
-    return named.length > 0 ? named : spares;
-  }
-  const upgrades = memory.filter((seg) => seg.type === 'upgrade');
-  if (upgrades.length > 0) return upgrades;
-  return memory.filter((seg) => seg.type === 'ship-backup' && seg.role === undefined);
-}
-
-// The fair tier's file, never one being moved or deleted; null: none, so no deal.
+// The fair tier's file (04 §3.3, hollow.ts rmTargets: plan R8), never one being moved or deleted; null: none, so no deal.
+// Imported since the review fix pass (M4): data/zone-check.ts took data/ships.ts off the stateful systems, so the import no
+// longer closes the classic-five load cycle (support/import-guard pins that).
 function dealFile(state: Readonly<GameState>): Segment | null {
-  return fairDealTargets(state.memory, state.hollow.untriedTools)
+  return rmTargets(state.memory, state.hollow.untriedTools)
     .find((seg) => !getOpsBySeg(seg.id).some((operation) => operation.kind === 'move' || operation.kind === 'delete')) ?? null;
 }
 

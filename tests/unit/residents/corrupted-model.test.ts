@@ -4,8 +4,7 @@
 //   composite's choice and ghostBy against a healthy and a failing Thrust Ctrl, controllerGhost kept (review M5);
 // • the pushes (R3): the resident's under the arm's failing controller (71%), the DELETING and ANGRY specs over it;
 // • the lock cap ceil(pods ÷ 4) ≤ 3; the lock's live text; the THRUST CTRL pip's override and jump (review B2);
-// • the DEAL's file: the fair tiers written again in resident-corrupted.ts (fairDealTargets) are rmTargets' (pinned here on
-//   the classic five and on the arm), and its word;
+// • the DEAL's file: hollow.ts rmTargets' first (imported since the review fix pass, M4), and its word;
 // • the tool rules (R25): SCAN IT FIRST, MOVE and COPY refused, the tools' own rules after a SCAN; SCAN on the driver a lock
 //   aims at (and on no other); DELETE 6.0 s with its own confirm; the cure's price, 12 charge in 3.6 s.
 import { check, finish } from '../landing/checks';
@@ -16,7 +15,7 @@ import { withResidentsBuilt, armShipSlices } from '../support/residents';
 import {
   residentGhostSpec, residentFile, lockCap, liveLockText, lockAimsAt, engineOverriddenBy, corruptedAwake, residentDealOnThisShip,
 } from '@state/resident-selectors';
-import { corruptedToolRule, corruptedDeleteQuestion, fairDealTargets } from '@systems/resident-corrupted';
+import { corruptedToolRule, corruptedDeleteQuestion } from '@systems/resident-corrupted';
 import { residentToolRule, residentDeleteSec } from '@systems/residents';
 import { capabilitiesNow, ghostPush, ghostWithoutSwap } from '@systems/capabilities';
 import { targetRefusal, deleteQuestion } from '@systems/tool-targets';
@@ -24,8 +23,6 @@ import { rmTargets } from '@systems/hollow';
 import { deleteSec, chargePerPoint, repairRatePerSec } from '@state/actions';
 import { windowPip } from '@systems/flight-hud';
 import { ghostCountShown } from '@systems/ghost-thrust';
-import { freshUnitRacks } from '@systems/carry';
-import { classicShip } from '@data/classic-five';
 import { TOOL_REFUSAL, type ToolRefusal } from '@data/tool-text';
 import { WARDEN_TEXT } from '@data/warden-text';
 import type { FsToolKind } from '@/types/fs-tool';
@@ -138,24 +135,10 @@ const thrustOf = (state: GameState): Segment => state.memory.find((seg) => seg.r
     ghostCountShown(mixed) === 2 && ghostCountShown(ctrlFires) === 3);
 }
 
-// --- The DEAL's file: the fair tiers, pinned to hollow.ts rmTargets ---------------------------------------------------------
+// --- The DEAL's file: hollow.ts rmTargets' first (plan R8; review M4: the copy is gone) --------------------------------------
 {
-  const memories: { label: string; memory: Segment[]; untried: FsToolKind[] }[] = [];
-  for (let index = 0; index < 5; index++) {
-    const state = index === 0 ? createInitialState({ seed: 4 }) : createInitialState({ seed: 4 + index, shipIndex: index, carried: freshUnitRacks(classicShip(index)) });
-    memories.push({ label: `classic ${index}`, memory: state.memory, untried: [] });
-    memories.push({ label: `classic ${index} untried`, memory: state.memory, untried: ['repair', 'scan', 'move'] });
-  }
   const g = gannet();
-  memories.push({ label: 'GANNET', memory: g.memory, untried: [] });
-  const noSpare = g.memory.filter((seg) => seg.name !== 'Repair.bak');
-  memories.push({ label: 'GANNET without Repair.bak', memory: noSpare, untried: [] });
-  const providence = withResidentsBuilt(['corrupted'], () => armShipSlices(SEED, 16).slices.memory);
-  memories.push({ label: 'PROVIDENCE', memory: providence, untried: [] });
-  const differ = memories.filter(({ memory, untried }) => fairDealTargets(memory, untried).map((seg) => seg.id).join() !== rmTargets(memory, untried).map((seg) => seg.id).join());
-  check('the DEAL\'s fair tiers are hollow.ts rmTargets\' on the classic five and the arm (untried tools spared too)', differ.length === 0,
-    differ.map((entry) => entry.label).join(', '));
-  const named = fairDealTargets(g.memory, [])[0];
+  const named = rmTargets(g.memory, [])[0];
   check('…a fresh unit on GANNET (its Scan only) has no spare and no card: it names the ship\'s backup, Thrust.alt; a spare tool is named by '
     + 'its chip (`WARDEN: GIVE ME YOUR SPARE REPAIR. THEN I LET THE PODS GO.`)',
     named?.name === 'Thrust.alt' && WARDEN_TEXT.deal('WARDEN', WARDEN_TEXT.dealSpare('repair')) === 'WARDEN: GIVE ME YOUR SPARE REPAIR. THEN I LET THE PODS GO.',
