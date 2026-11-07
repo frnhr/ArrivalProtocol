@@ -12,6 +12,9 @@
 //   the charge's or a file's (CORE LOST, FLAGSHIP LOST, IMPACT on a crash course, ARCHIVE OFFLINE).
 // Allowed uses are listed one by one in ALLOWED, each with its reason; an allowance nothing matches any more fails too,
 // so the list can't rot. tests/unit/landing/table.test.ts keeps its own check over the landing table's lines.
+// Slice 5 (slice-5-plan §2.10): a resident AI is a mind, not a colonist: it wakes (`THE SHIP'S OWN AI IS AWAKE`, the sleeper
+// woken), so the `wake` rule skips the residents' word modules (RESIDENT_WORD_FILES); every other rule still reads them. At
+// the end, each track renders its own pools at their worst case in its own block (5 WARDEN, 5 KIN, 5 FACE).
 import ts from 'typescript';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -41,6 +44,10 @@ const RULES: readonly Rule[] = [
   { id: 'impact', re: /\bimpact/i, podOnly: true },
   { id: 'lost', re: /\blost\b|\boffline\b|\bnot recovered\b/i, podOnly: true },
 ];
+
+// The residents' word modules (slice 5): the lead's shared words and each track's. The `wake` rule is the colonists'.
+const RESIDENT_WORD_FILES: readonly string[] = ['resident-text.ts', 'warden-text.ts', 'kin-text.ts', 'resident-ui-text.ts'];
+const RESIDENT_WAKE_OK = (rule: Rule, file: string): boolean => rule.id === 'wake' && RESIDENT_WORD_FILES.includes(file);
 
 const POD_WORDS = /\b(?:pods?|lz(?:-[a-z])?|landing|landed|lands?|launch\w*|drivers?|colonists?|sleepers?|ate|eaten)\b/i;
 
@@ -106,12 +113,12 @@ function literalsOf(file: string): Literal[] {
 const files = readdirSync(DATA).filter((name) => name.endsWith('.ts')).sort();
 const literals = files.flatMap(literalsOf);
 check('the guard reads every data module, the text modules among them',
-  ['hollow-text.ts', 'script.ts', 'tool-text.ts', 'landing-text.ts', 'zone-text.ts', 'skill-text.ts', 'ghost-text.ts'].every((name) => files.includes(name))
+  ['hollow-text.ts', 'script.ts', 'tool-text.ts', 'landing-text.ts', 'zone-text.ts', 'skill-text.ts', 'ghost-text.ts', ...RESIDENT_WORD_FILES].every((name) => files.includes(name))
   && literals.length > 1000, `${files.length} files, ${literals.length} strings`);
 
 const used = new Set<Allowance>();
 for (const rule of RULES) {
-  const hits = literals.filter((literal) => rule.re.test(literal.text)
+  const hits = literals.filter((literal) => rule.re.test(literal.text) && !RESIDENT_WAKE_OK(rule, literal.file)
     && (!rule.podOnly || literal.file === 'landing-text.ts' || POD_WORDS.test(literal.text)));
   const banned = hits.filter((literal) => {
     const allowance = ALLOWED.find((candidate) => candidate.file === literal.file && candidate.rule === rule.id && candidate.text.test(literal.text));
@@ -157,5 +164,24 @@ check('SCAN STASIS finds the sleepers, not `0 pods`', scanFinding('stasis', 100)
 const noRoom = [LANDING_LINES.L3b(0.75), LANDING_LINES.L3b(0.6), LANDING_LINES.L13noRoom('LZ-D', 5999, true)];
 check(`the no-room rows say no never-say word and fit the strip (≤ ${MAX_LINE_CHARS})`,
   noRoom.every((text) => text.length <= MAX_LINE_CHARS && !RULES.some((rule) => rule.re.test(text))), JSON.stringify(noRoom));
+
+// === Slice 5 (slice-5-plan §2.10): each track's pools, rendered at their worst case (the longest resident name, 7 letters;
+// the longest ship name, 10), every line ≤ MAX_LINE_CHARS and no never-say word. A track edits only its own block.
+
+// --- 5 WARDEN (data/warden-text.ts, data/resident-rules.ts): Track WARDEN adds its checks here ---------------------------
+
+// --- end of 5 WARDEN -------------------------------------------------------------------------------------------------------
+
+
+
+// --- 5 KIN (data/kin-text.ts): Track KIN adds its checks here ----------------------------------------------------------------
+
+// --- end of 5 KIN ----------------------------------------------------------------------------------------------------------
+
+
+
+// --- 5 FACE (data/resident-ui-text.ts): Track FACE adds its checks here ------------------------------------------------------
+
+// --- end of 5 FACE ---------------------------------------------------------------------------------------------------------
 
 finish();
