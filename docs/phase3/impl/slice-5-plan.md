@@ -1,5 +1,12 @@
 # Slice 5 plan: resident AIs
 
+**Lead decisions (2026-11-07).** Every recommendation in R1–R28 is adopted as written. Fran asked for best judgement on
+dilemmas, with a running list. So the [FRAN] items (R3, R4, R10, R11, R12, R13 and R18) are built as recommended here,
+and each one is logged in `docs/phase3/OPEN-DECISIONS.md`, section "Slice 5". The process is the one slice 4c–4e used:
+FOUNDATION, then a contract review, then the WARDEN, KIN and FACE tracks in worktrees, then a merge, a full review,
+fixes, the unit tier and one e2e run. The lead owns the files the plan lists as the lead's. Tracks request changes to
+those files; they never make them.
+
 I wrote this from HEAD be0b21f on `claude/modest-hawking-209t0f`. Paths are relative to `/home/user/ArrivalProtocol`. The
 spec is `docs/phase3/04-threats.md` ("04"): §3.11–§3.15 and §8's slice 5 (a)–(f). `05-story.md` ("05") §3.6, §3.11 and
 §8.5 own the words. 01 is `01-landing.md`, 02 `02-map.md`, 03 `03-skills.md`. "Plan 4cde" is `slice-4cde-plan.md` with

@@ -57,3 +57,21 @@ Status words:
     - The classic world is still the default test fixture for 166 suites, and retiring it changes no gameplay.
     - Doing it before slices 5–7 would conflict with every one of their tracks.
     - Slice 8's sweeps should run on the arm, so that is when it has to be done.
+
+## Slice 5 (residents)
+
+13. **A corrupted resident's engine bursts are amp 0.15 every 14 tac s, not the spec's 25%** (R3). BUILT.
+    - At 25% a resident would push 1.2× harder than a failing Thrust Ctrl, which it is meant to be gentler than.
+    - At 0.15 it pushes about 71% as hard, matching the spec's "two thirds of an unfixed VESPER".
+14. **Resident bursts happen only during the approach, never in the landing** (R4). Pod locks happen in both. BUILT.
+15. **RECEIVER CLOSED does not block deliveries** (R10). BUILT. Blocking them would let the desk forecast give away the
+    hidden sleeper and the late surprise.
+16. **The sleeper's RUN THE DROPS flies as AUTODROP v3's plan**, and skips between passes on its own (R11). BUILT.
+    AUTODROP v2 needs input from the kid that a helper can't ask for.
+17. **The sleeper's gift is 4 training cycles** (R12). BUILT.
+18. **HOLD A WALL and MEND DRIVERS** (R13). BUILT.
+    - HOLD A WALL places a 4-block wall once, and only when something hostile is in memory.
+    - MEND DRIVERS heals at REPAIR v1's rate, costs no thread and no charge, and leaves the driver launchable.
+19. **The `?` ship cards and the old-colony and signal events wait for slice 7** (R18). DEFERRED. Only the notes
+    collect signals now, at most 3 on an arm.
+20. **The receiver bypass animation is deferred to slice 8** (R19). DEFERRED. The line is in slice 5.
