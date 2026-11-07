@@ -11,7 +11,7 @@ import { shipSummaryAt } from '@systems/map-run';
 import { chargeLeft, upgradeFiles, isFirewall } from '@state/selectors';
 import { skillLive } from '@systems/capabilities';
 import { hollowLabel } from '@systems/say';
-import { draftCards, UPGRADE_FILE_TEXT, type UpgradeId, type DraftContext, type DraftCard } from '@data/upgrades';
+import { draftCards, UPGRADE_FILE_TEXT, type UpgradeId, type DraftContext, type DraftCard, type DraftCardId } from '@data/upgrades';
 import {
   REPAIR_V2_VERSION, THREAD_PLUS_THREADS, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, FUEL_TRIM_BLOCKS, INTEGRITY_MAX, SENTRY_FIREWALL_VERSION,
 } from '@data/tuning';
@@ -89,8 +89,9 @@ export function dealDraft(
 }
 
 // The new file a file card adds to the packet, with an id from `makeId` (the real send mints one; the
-// screen's numbers only need its size). Not a file card: none.
-export function cardFiles(id: UpgradeId | null, makeId: (prefix: string) => string): Segment[] {
+// screen's numbers only need its size). Not a file card: none (slice 5: nor a departed resident's skill card, whose skill is
+// granted and installs at the next boot: it takes no link room, slice-5-plan §2.8).
+export function cardFiles(id: DraftCardId | null, makeId: (prefix: string) => string): Segment[] {
   if (id === null) return [];
   switch (id) {
     case 'firewall': {
@@ -111,6 +112,7 @@ export function cardFiles(id: UpgradeId | null, makeId: (prefix: string) => stri
     case 'thread-plus':
     case 'charge':
     case 'cycles':
+    case 'skill':
       return [];
   }
 }
@@ -170,13 +172,13 @@ export function transitPacket(
 }
 
 // The REPAIR CHARGE the pick brings on arrival.
-export function pickCharge(id: UpgradeId | null): number {
+export function pickCharge(id: DraftCardId | null): number {
   return id === 'charge' ? CHARGE_CARD_BLOCKS : 0;
 }
 
 // What the pick does to the files already packed (the send, after packUnit): REPAIR v2 on every Repair copy
 // (heal ×2, and COMPACT on REPAIR CHARGE is kept: it is v2's own), THREAD+ on the Core. In place.
-export function applyPickToPacket(packet: Packet, id: UpgradeId | null): void {
+export function applyPickToPacket(packet: Packet, id: DraftCardId | null): void {
   if (id === 'repair-v2') {
     const repairs = packet.rackF.filter((seg) => seg.type === 'fs-tool' && seg.fsTool === 'repair');
     if (repairs.length === 0) throw new Error('applyPickToPacket: REPAIR v2 with no Repair in the packet');
@@ -188,12 +190,22 @@ export function applyPickToPacket(packet: Packet, id: UpgradeId | null): void {
   }
 }
 
+// Slice 5 (review B1; Track KIN builds it): at TRANSMIT ▸ (run.ts transmitNext, after the layout and before commitTraining),
+// the departed resident's skill card, when it is the pick, is granted (skill-tree.ts grantSkill(store, id, 1, `from the
+// resident that left <SHIP>`, 'card')): no link room, installed at the next boot with its TRAINED line (§2.8). KIN picks the
+// skill at the deal with grantAllowed(…, 1, 'card') and no purchase of it pending at this desk. FOUNDATION stub: nothing to
+// grant (no deck is dealt yet), so it does nothing.
+export function applyLeftoverPick(store: Store<GameState>, plan: Readonly<TransitPlan>): void {
+  void store;
+  void plan;
+}
+
 // Why a pick was refused.
 export type PickRefusal = 'not-offered' | 'no-transmit';
 
 // The kid picks a card on the TRANSMIT screen (a click, or [1]–[3]); the send waits for one. One update: the
 // pick, and the packet's numbers worked out again with the card's file in it.
-export function pickCard(store: Store<GameState>, id: UpgradeId): PickRefusal | null {
+export function pickCard(store: Store<GameState>, id: DraftCardId): PickRefusal | null {
   const state = store.getState();
   const plan = state.run.transit;
   if (state.run.phase !== 'transmit' || plan === null) return 'no-transmit';

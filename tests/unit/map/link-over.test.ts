@@ -88,7 +88,7 @@ const filesOf = (state: Readonly<GameState>): number =>
   try { setCourseFromDesk(store, WAYFARER); } catch (error) { threw = (error as Error).message; }
   check('SET COURSE reaches the PACKET (packUnit no longer throws)', threw === null && store.getState().run.phase === 'transmit', threw ?? '');
   const plan = store.getState().run.transit!;
-  check('…the draft deals no file card (no link room)', plan.offer.every((offer) => getUpgrade(offer.id).blocks === 0) && plan.offer.length > 0,
+  check('…the draft deals no file card (no link room)', plan.offer.every((offer) => offer.id !== 'skill' && getUpgrade(offer.id).blocks === 0) && plan.offer.length > 0,
     plan.offer.map((offer) => offer.id).join());
   let model = transmitModel(store.getState());
   check('…the PACKET: `8 TOO MANY FOR THE LINK · LEAVE FILES BEHIND`, TRANSMIT ▸ held, the drop line says it',

@@ -17,7 +17,7 @@
 // • a FIREWALL can be MOVEd next to HOLLOW's root and holds that side when HOLLOW wakes; it can't be copied.
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from './../wp7/harness7';
-import { draftCards, draftEntries, UPGRADES, BASE_WHY, type DraftContext, type UpgradeId } from '@data/upgrades';
+import { draftCards, draftEntries, UPGRADES, BASE_WHY, type DraftContext, type UpgradeId, type DraftCardId } from '@data/upgrades';
 import { dealDraft, draftContext, pickCard, ownedUpgrades, PREVIEW_ID } from '@systems/draft';
 import { transmitNext } from '@systems/run';
 import { continueAfterLoss } from '../support/classic-flow';
@@ -46,7 +46,7 @@ const ctx = (over: Partial<DraftContext> = {}): DraftContext => ({
   stats: { manualCaptures: 0, demos: [], dropDemos: [], repairs: 0, moves: 0, deletes: 0, driversLost: 0, driversBitten: 0, capRefusals: 0, deal: null },
   chargeHeld: 36, lastShip: { name: 'ARES-VII', fuelLeftPct: 70 }, owned: none, hasRepair: true, linkRoom: 50, hollowLabel: '???', ...over,
 });
-const ids = (cards: { id: UpgradeId }[]): string => cards.map((card) => card.id).join(',');
+const ids = (cards: readonly { id: DraftCardId }[]): string => cards.map((card) => card.id).join(',');
 const share = (context: DraftContext, id: UpgradeId, seeds = 1000): number => {
   let hits = 0;
   for (let seed = 1; seed <= seeds; seed++) if (draftCards(context, createRng(seed)).some((card) => card.id === id)) hits++;

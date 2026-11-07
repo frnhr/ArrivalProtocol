@@ -97,10 +97,12 @@ function buildPip(role: CapabilityRole): PipView {
 }
 
 function paintPip(view: PipView, model: PipModel): void {
-  const key = `${model.look}|${model.reading}|${model.title}|${model.count}`;
+  const key = `${model.look}|${model.reading}|${model.title}|${model.count}|${model.override ?? ''}`;
   if (key === view.key) return;
   view.key = key;
   view.button.dataset.look = model.look;
+  // Slice 5 (review B2): a resident overriding the file (FACE styles `.pip[data-override]:not([data-override=""])`).
+  view.button.dataset.override = model.override ?? '';
   view.glyph.textContent = model.glyph;
   view.label.textContent = model.label;
   view.reading.textContent = model.reading;
@@ -168,14 +170,16 @@ export function mountWindowGrips(store: Store<GameState>): () => void {
   }
 
   // A pip jumps to its file in the MIND (selected, so INSPECT shows it). A missing file has
-  // nothing to select: the jump still shows the MIND, where the hole is.
+  // nothing to select: the jump still shows the MIND, where the hole is. Slice 5 (review B2): the pip's own jump first (the
+  // THRUST CTRL pip to WARDEN.sys while a resident fires the engine).
   const onClick = (event: MouseEvent): void => {
     const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>('.window-pips .pip');
     const role = button?.dataset.role;
     if (!role || !isCapabilityRole(role)) return;
-    const file = getByRole(store.getState(), role);
+    const state = store.getState();
+    const fileId = windowPip(state, role).jumpId ?? getByRole(state, role)?.id ?? null;
     setMode(store, 'memory');
-    if (file) store.update((draft) => { draft.ui.selectedId = file.id; });
+    if (fileId !== null) store.update((draft) => { draft.ui.selectedId = fileId; });
   };
   document.addEventListener('click', onClick);
 

@@ -78,7 +78,7 @@ function deal(ids: UpgradeId[], pick?: UpgradeId): void {
   const tags: Record<UpgradeId, string> = {
     firewall: `FILE · ${FIREWALL_BLOCKS} BLOCKS`, 'fuel-trim': `FILE · ${FUEL_TRIM_BLOCKS} BLOCKS`, 'repair-v2': 'UPGRADE', 'thread-plus': 'AI CORE', charge: 'ON ARRIVAL', cycles: 'TRAINING',
   };
-  check('each card says what kind of thing it is (FILE · 2 BLOCKS, UPGRADE, AI CORE, ON ARRIVAL)', model.cards.every((card) => card.tag === tags[card.id]),
+  check('each card says what kind of thing it is (FILE · 2 BLOCKS, UPGRADE, AI CORE, ON ARRIVAL)', model.cards.every((card) => card.id !== 'skill' && card.tag === tags[card.id]),
     model.cards.map((card) => `${card.id}=${card.tag}`).join(' '));
   const firewall = model.cards.find((card) => card.id === 'firewall');
   check('after a driver lost to HOLLOW, FIREWALL.sys is boosted and says why, naming it as the strip does (`because you lost a driver to ???`)',

@@ -2,7 +2,7 @@
 // TREE's model. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
-import type { UpgradeId } from '@data/upgrades';
+import type { DraftCardId } from '@data/upgrades';
 import {
   transmitModel, toggleDrop, toggleSendOn, type PacketChip, type TransmitModel, type DraftCardView, type CardFileChip, type SkillChip,
   type UninvitedChip, type DeliveryChipView,
@@ -435,7 +435,7 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
   // A card is picked (a click, or its key), once the screen has armed. Changing the pick is allowed until
   // the send; picking the one already picked does nothing.
   const armed = (): boolean => shown && !sending && !root.hidden && performance.now() >= inputFromMs;
-  function pick(id: UpgradeId): void {
+  function pick(id: DraftCardId): void {
     if (!armed() || model?.pick === id) return;
     const refusal = pickCard(store, id);
     if (refusal !== null) throw new Error(`TransmitScreen: the card '${id}' on screen could not be picked (${refusal})`);

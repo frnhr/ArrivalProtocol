@@ -28,7 +28,7 @@ import { shipStars, starCharge } from '@systems/stars';
 import {
   packedFiles, rollTransitHits, emergencyCoreToll, arrivalCharge, layoutCarried, arrivalDamage,
 } from '@systems/carry';
-import { dealDraft, planPacket, transitPacket, applyPickToPacket, pickCharge } from '@systems/draft';
+import { dealDraft, planPacket, transitPacket, applyPickToPacket, pickCharge, applyLeftoverPick } from '@systems/draft';
 import { shipCycles } from '@systems/run-score';
 import { bankOf, branchToLatch, deskBlocker, firstPickOwed, visitNow, shipMetSeeds } from '@systems/skill-tree';
 import { skillPacketPlan, mountSkillWatch } from '@systems/skill-files';
@@ -512,7 +512,8 @@ export function transmitNext(store: Store<GameState>): void {
     chargeCarried: packet.chargeCarried,
     starCredit: state.run.pendingStarCredit,
     stars: state.run.pendingStars,
-    card: plan.pick,
+    // Slice 5 (review B1): the leftover skill card is no card on arrival (its skill is granted, and installs at the boot).
+    card: plan.pick === 'skill' ? null : plan.pick,
     cardCharge,
     chargeFloorAdded: charge.floorAdded,
     chargeOverflowLost: layout.overflowLost,
@@ -531,11 +532,15 @@ export function transmitNext(store: Store<GameState>): void {
   store.update((draft) => {
     // The card goes with the unit: the run remembers it (the Skills window lists it, THREAD+ is owned by it). +2 CYCLES is
     // spent at a desk, never carried: commitTraining records it as a grant.
-    if (plan.pick !== null && plan.pick !== 'cycles') draft.run.upgrades.push(plan.pick);
+    // Slice 5: nor is a departed resident's skill card (its skill is the run's through the grant, applyLeftoverPick).
+    if (plan.pick !== null && plan.pick !== 'cycles' && plan.pick !== 'skill') draft.run.upgrades.push(plan.pick);
     // Phase 3 slice 3b: the requests move on (delivered, waiting, lost, forwarded; the pick becomes a request).
     draft.run.repo = advanceRequests(draft.run.repo, plan, draft.run.map);
     for (const kind of firstKinds) if (!draft.run.licences.includes(kind)) draft.run.licences.push(kind);
   });
+  // Slice 5 (review B1): a departed resident's leftover pick (the skill card's grant: Track KIN's draft.ts), before this desk's
+  // purchases are bought, so a grant never doubles a skill trained here.
+  applyLeftoverPick(store, plan);
   // Slice 4: this desk's purchases are bought as the packet crosses, before the ship starts, so the BEAM save holds none
   // pending (the codec refuses one).
   commitTraining(store);

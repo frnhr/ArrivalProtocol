@@ -100,7 +100,7 @@ import {
 import { pickCard, draftContext, cardFiles, planPacket, type PickRefusal } from '@systems/draft';
 import { upgradeRepairsToV2 } from '@systems/delivery-boot';
 import { REPAIR_V2_VERSION, THREAD_PLUS_THREADS } from '@data/tuning';
-import type { UpgradeId, DraftContext, DraftCard } from '@data/upgrades';
+import type { UpgradeId, DraftContext, DraftCard, DraftCardId } from '@data/upgrades';
 import { skillsModel, type SkillRow } from '@systems/skills';
 import { arrivalDamage } from '@systems/carry';
 import { autoburnRefusal, toggleAutoburn } from '@systems/autoburn';
@@ -280,8 +280,8 @@ interface DebugHooks {
   abandon: () => void;
   updateArm: (route?: readonly number[]) => ArmUpdate;
   ghost: () => string | null;
-  draft: () => { offer: DraftCard[]; pick: UpgradeId | null; context: DraftContext } | null;
-  pick: (id: UpgradeId) => PickRefusal | null;
+  draft: () => { offer: DraftCard[]; pick: DraftCardId | null; context: DraftContext } | null;
+  pick: (id: DraftCardId) => PickRefusal | null;
   // Gives the unit a card now, on the ship being flown, as if it had been picked and carried here (a look at
   // FIREWALL.sys or FUEL TRIM on the strip without flying to a TRANSMIT; FUEL TRIM's Δv applies from the next
   // arrival, as it would).

@@ -79,8 +79,13 @@ export interface UpgradeDef {
   boost(ctx: DraftContext): DraftBoost | null;
 }
 
+// A card's id on the PACKET (slice 5, review B1): one of the salvage pool's, or a departed resident's skill card ('skill':
+// its skill is DraftCard.leftover.skill, granted through skill-tree.ts grantSkill at TRANSMIT ▸, draft.ts
+// applyLeftoverPick). A deck holds at most one 'skill', and its ids are unique.
+export type DraftCardId = UpgradeId | 'skill';
+
 export interface DraftCard {
-  id: UpgradeId;
+  id: DraftCardId;
   title: string;
   effect: string;
   why: string;        // why it was offered (a boost's reason, or BASE_WHY)
@@ -89,6 +94,11 @@ export interface DraftCard {
   // resident's leftover deck, naming its leftover's segment, and the skill a skill card grants (null: a pool card). Absent
   // on the normal deal. Never saved (a save point holds no transit).
   leftover?: { segId: string; skill: SkillId | null };
+}
+
+// A card of the salvage pool (draftCards): always one of the pool's ids.
+export interface PoolCard extends DraftCard {
+  id: UpgradeId;
 }
 
 // The reason a card at its base weight was offered: honest, and in ARRIVAL CONTROL's world.
@@ -257,9 +267,9 @@ export function draftEntries(ctx: DraftContext): DraftEntry[] {
 // (four drafts, at most three picks before the last) at least three cards are always eligible. Fewer is
 // possible only when cards can't be used (REPAIR v2 with no Repair, a file with no link room) on top of
 // owned ones, or in a hand-built state (?debug): the draft then deals every card it can, never a duplicate.
-export function draftCards(ctx: DraftContext, rng: Rng): DraftCard[] {
+export function draftCards(ctx: DraftContext, rng: Rng): PoolCard[] {
   const left = draftEntries(ctx);
-  const dealt: DraftCard[] = [];
+  const dealt: PoolCard[] = [];
   while (dealt.length < DRAFT_CARDS && left.length > 0) {
     const total = left.reduce((sum, entry) => sum + entry.weight, 0);
     let roll = rng() * total;

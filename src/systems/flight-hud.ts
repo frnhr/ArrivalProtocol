@@ -1114,6 +1114,12 @@ export interface PipModel {
   // WP10: what the file is doing to the ship right now, counted (the THRUST CTRL pip: `FIRED ×3` while the controller
   // fires the engine by itself), so the counter sits on the way to its cause. '' for every other pip.
   count: string;
+  // Slice 5 (review B2; Track WARDEN fills them in the THRUST CTRL pip block, windowPip): the file a click jumps to instead of
+  // the role's own (WARDEN.sys while a resident fires the engine: pillar 4, the loss's cause), and the overriding mind's
+  // words (`OVERRIDDEN · WARDEN.sys`), which the pip shows as data-override for FACE's amber. null: the role's own file, no
+  // override.
+  jumpId: string | null;
+  override: string | null;
 }
 
 const PIP_GLYPH: Readonly<Record<PipLook, string>> = {
@@ -1138,7 +1144,10 @@ export function windowPip(state: Readonly<GameState>, role: CapabilityRole): Pip
 function filePip(state: Readonly<GameState>, role: CapabilityRole): PipModel {
   const label = ROLE_LABEL[role];
   if (hiddenShipFile(state, role)) {
-    return { role, label, look: 'unknown', glyph: PIP_GLYPH.unknown, reading: '', title: `${label} · not scanned yet: SCAN it in the MIND`, count: '' };
+    return {
+      role, label, look: 'unknown', glyph: PIP_GLYPH.unknown, reading: '', title: `${label} · not scanned yet: SCAN it in the MIND`, count: '',
+      jumpId: null, override: null,
+    };
   }
   const health = roleHealth(state, role);
   const look: PipLook = health.offline ? 'offline' : health.band;
@@ -1148,7 +1157,7 @@ function filePip(state: Readonly<GameState>, role: CapabilityRole): PipModel {
   const title = health.offline
     ? `${label} · ${health.offline === 'repairing' ? 'REPAIRING' : 'OFFLINE'}`
     : BAND_COPY[role][health.band];
-  return { role, label, look, glyph: PIP_GLYPH[look], reading, title, count: '' };
+  return { role, label, look, glyph: PIP_GLYPH[look], reading, title, count: '', jumpId: null, override: null };
 }
 
 // The mode toggle's label for the OTHER screen (§7.1, §9 WP4 item 12): its top problem, so the kid

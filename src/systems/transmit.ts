@@ -13,7 +13,8 @@ import { SKILL_TREE, skillBlocks } from '@data/skills';
 import { PACKET_SKILL_TEXT } from '@data/training-text';
 import type { SkillId, SkillLevel } from '@/types/skill';
 import type { SkillFileSegment } from '@/types/segment';
-import { getUpgrade, type DraftCard, type UpgradeId } from '@data/upgrades';
+import { getUpgrade, type DraftCard, type DraftCardId } from '@data/upgrades';
+import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 import { hasIntegrity, isInfected, getAiCore } from '@state/selectors';
 import { shipSummaryAt } from '@systems/map-run';
 import { hitsLanding } from '@systems/map-hop';
@@ -165,7 +166,7 @@ export interface TransmitModel {
   // PICK ONE TO CARRY (WP8): the cards dealt for this crossing, each with what it does and why it was
   // offered, and the one picked (null until the kid picks; the send needs one when cards were dealt).
   cards: DraftCardView[];
-  pick: UpgradeId | null;
+  pick: DraftCardId | null;
   cardFile: CardFileChip | null;
   // Slice 2: the threat the beam carries.
   uninvited: UninvitedChip | null;
@@ -442,8 +443,10 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
       : chargeShort || plan.dropped.length > 0 || fit.roomLost > 0 ? TRANSMIT_TEXT.tight : TRANSMIT_TEXT.fits,
     chips: chips.map(({ order: _order, ...chip }) => chip),
     cards: plan.offer.map((card, i) => {
-      const def = getUpgrade(card.id);
-      return { ...card, tag: DRAFT_TEXT.form(def.form, def.blocks), key: String(i + 1), picked: card.id === plan.pick };
+      // Slice 5 (review B1): a departed resident's skill card has no pool form (its skill is granted, no link room).
+      const def = card.id === 'skill' ? null : getUpgrade(card.id);
+      const tag = def === null ? RESIDENT_UI_TEXT.deck.skillTag : DRAFT_TEXT.form(def.form, def.blocks);
+      return { ...card, tag, key: String(i + 1), picked: card.id === plan.pick };
     }),
     pick: plan.pick,
     cardFile: cardFileChip(plan.pick),
@@ -478,7 +481,7 @@ function inTransitLine(state: Readonly<GameState>, plan: Readonly<TransitPlan>):
   return REPO_TEXT.packet.inTransit(REPO_FILES[behind[0]!.file].name, behind[0]!.yearsLate);
 }
 
-function cardFileChip(pick: UpgradeId | null): CardFileChip | null {
+function cardFileChip(pick: DraftCardId | null): CardFileChip | null {
   const [file] = cardFiles(pick, PREVIEW_ID);
   return file === undefined ? null : { name: file.name, blocks: file.size };
 }

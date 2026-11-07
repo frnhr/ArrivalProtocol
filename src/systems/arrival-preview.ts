@@ -3,7 +3,7 @@
 import type { GameState } from '@state/schema';
 import type { Hop, RoomFit } from '@/types/map';
 import type { ShipThreat } from '@/types/threat';
-import type { UpgradeId } from '@data/upgrades';
+import type { DraftCardId } from '@data/upgrades';
 import type { DeliveryChip } from '@/types/repo';
 import type { SkillLevel } from '@/types/skill';
 import { skillPacketPlan } from '@systems/skill-files';
@@ -87,7 +87,7 @@ export interface ArrivalPlan {
   hop: Readonly<Pick<Hop, 'linkBlocks' | 'room' | 'chargeFloor'>>;
   threat: Readonly<Pick<ShipThreat, 'act' | 'beamSeeds'>>;
   dropped: readonly string[];
-  pick: UpgradeId | null;
+  pick: DraftCardId | null;
   deliveries: readonly DeliveryChip[];
   packAs?: Readonly<Record<string, SkillLevel>>;
 }

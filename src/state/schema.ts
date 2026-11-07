@@ -8,7 +8,7 @@ import type { Zone } from '@/types/zone';
 import type { ShrinkTuning } from '@data/ships';
 import type { MemoryClass, RunMapState, Hop, DeskWindowId } from '@/types/map';
 import type { HollowDef, RunThreatState, ShipThreat } from '@/types/threat';
-import type { UpgradeId, DraftCard } from '@data/upgrades';
+import type { UpgradeId, DraftCard, DraftCardId } from '@data/upgrades';
 import type { LastUnit, NextLaunch } from '@/types/lineage';
 import type { SaveState } from '@/types/save';
 import type { DeliveryChip, ArrivalDelivery, RunRepoState } from '@/types/repo';
@@ -387,7 +387,7 @@ export interface TransitPlan {
   // PICK ONE TO CARRY (§6.9, WP8): the cards dealt for this transmission (seeded, weighted by the run's
   // stats, fixed once dealt), and the one picked. The pick is mandatory: transmitNext refuses without it.
   offer: DraftCard[];
-  pick: UpgradeId | null;
+  pick: DraftCardId | null;   // slice 5: 'skill' is a departed resident's skill card (no file, no arrival card)
   // The ladder's verdict for the ship being beamed to (systems/threat-plan.ts planThreat, from run.threat after this
   // ship's tally): the PACKET's uninvited chip reads `boards` and `rootBlocks`; transmitNext builds the ship with it.
   threat: ShipThreat;
