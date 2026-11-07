@@ -7,7 +7,7 @@ import type { ShipKind, TemplateId, ModifierId, MemoryClass } from '@/types/map'
 import type { ShipResidentDef } from '@/types/resident';
 import { NAME_MAX_CHARS, INTEGRITY_MAX, ROOT_SLOT_FROM_LAYER } from '@data/tuning';
 import { validateLandingDef } from '@data/landing-def';
-import { validateZoneDefs } from '@systems/zones';
+import { validateZoneDefs } from '@data/zone-check';
 import {
   buildShipMemory, validatePodRacks, rootSlotRack, maxRootFor, layoutFor, shipPodCount, type ShipMemoryDef,
 } from '@data/memory';
