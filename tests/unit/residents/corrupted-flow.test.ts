@@ -27,6 +27,7 @@ import { setLandingMode } from '../support/landing-instant';
 import { actionScan, actionDelete, actionRepair, actionSwap } from '@state/actions';
 import { residentGhostSpec, residentFile, liveLockText, lockedDrivers } from '@state/resident-selectors';
 import { lockNow, offerResidentDealNow } from '@systems/resident-corrupted';
+import { residentSegmentLook } from '@systems/resident-hud';
 import { capabilitiesNow, ghostRefusesSkip, ghostWithoutSwap } from '@systems/capabilities';
 import { windowPip } from '@systems/flight-hud';
 import { getOpsBySeg, reserveThread, releaseThread } from '@systems/ops-core';
@@ -333,7 +334,10 @@ withResidentsBuilt(['corrupted'], () => {
     toGannet((reserved) => { reserved.resident = { kind: 'corrupted', shown: 'unknown', name: 'WARDEN' }; });
     check('a surprise is dormant at the flight\'s start (04\'s grace), its file plain `The ship\'s own AI.`',
       machine().surprise && machine().phase === 'dormant' && warden().desc === 'The ship\'s own AI.' && residentGhostSpec(s()) === null);
+    check('…and drawn as a plain ship file until it wakes (review M2: `hidden`, no amber edge)', warden().hidden === true
+      && residentSegmentLook(warden())?.className.includes('res-corrupted') === false);
     stepUntil(() => machine().phase === 'awake', 300);
+    check('…its wake clears `hidden`: amber from then on', warden().hidden === undefined && residentSegmentLook(warden())?.className.includes('res-corrupted') === true);
     check(`…it wakes at ${SURPRISE_WAKE_SEC} calm s: \`WARDEN: NOBODY REPORTED ME. GOOD.\`, no CONTROL line, its health shown at once (no SCAN hunt)`,
       Math.abs(machine().calmAiSec - SURPRISE_WAKE_SEC) < 0.25 && said('resident', 'WARDEN: NOBODY REPORTED ME. GOOD.')
       && !said('control', 'GANNET\'s onboard AI is reported faulty. Please delete it. :)') && warden().scanned

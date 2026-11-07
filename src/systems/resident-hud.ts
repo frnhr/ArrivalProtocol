@@ -133,6 +133,9 @@ function fileLook(seg: Readonly<ResidentFileSegment>): ResidentSegmentLook {
   const unknown = look('', T.strip.unknown, 'unknown');
   switch (seg.type) {
     case 'resident': {
+      // Review M2: a late surprise before its wake is a plain ship file (the ship-file look, its own health rules: `?` until a
+      // SCAN), so rack A gives nothing away before the engine coughs (R9: the boot's amber line is the only tell).
+      if (seg.hidden === true) return look('ship res-hidden', null);
       if (!seg.scanned) return { ...unknown, className: 'res-mind res-corrupted' };
       const band = integrityBand(seg.integrity);
       const cls = band === 'ok' ? 'good' : band === 'degraded' ? 'partial' : 'warn';

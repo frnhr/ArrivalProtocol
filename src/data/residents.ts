@@ -80,6 +80,8 @@ function corruptedFiles(def: Readonly<ShipResidentDef>): ResidentSegment[] {
     id: RESIDENT_SEG_IDS.resident, name: RESIDENT_TEXT.file.resident(def.name), type: 'resident', size: RESIDENT_FILE_BLOCKS,
     integrity: RESIDENT_START_INTEGRITY, owner: def.name, scanned: false,
     desc: def.shown === 'faulty' ? RESIDENT_TEXT.desc.faulty : RESIDENT_TEXT.desc.surprise,
+    // Review M2: a surprise is drawn as a plain ship file until it wakes.
+    ...(def.shown === 'unknown' ? { hidden: true as const } : {}),
   }];
 }
 

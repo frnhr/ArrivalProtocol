@@ -159,6 +159,17 @@ const filesOf = (def: ShipResidentDef): Segment[] => residentRackA(def, shipRng(
   const scanned = residentSegmentLook({ ...wardenSeg, scanned: true });
   check('strip: …scanned, its 40% in the warning colour', scanned?.health === '40%' && scanned.healthCls === 'warn');
   check('strip: …its own reading while REPAIR heals it (the live ↻ readout)', residentSegmentLook({ ...wardenSeg, scanned: true, state: 'repairing' })?.health === null);
+  // Review M2: the late surprise, before its wake, is a plain ship file (no amber edge, the chip's own reading), scanned or not.
+  const [pilotSeg] = filesOf({ kind: 'corrupted', shown: 'unknown', name: 'PILOT', fragments: 0 }) as [ResidentSegment];
+  const hidden = residentSegmentLook(pilotSeg);
+  const hiddenScanned = residentSegmentLook({ ...pilotSeg, scanned: true });
+  const { hidden: _gone, ...woken } = pilotSeg;
+  void _gone;
+  check('strip (review M2): a dormant surprise is drawn as a plain ship file, never `res-corrupted`, even scanned; amber once it wakes',
+    pilotSeg.hidden === true && wardenSeg.hidden === undefined
+    && hidden !== null && hidden.className.split(' ').includes('ship') && !hidden.className.includes('res-corrupted') && hidden.health === null
+    && hiddenScanned !== null && !hiddenScanned.className.includes('res-corrupted')
+    && residentSegmentLook({ ...woken, scanned: true })?.className.includes('res-corrupted') === true, JSON.stringify(hidden));
   const [mothSeg, lockSeg] = filesOf(moth) as [SleeperSegment, SleepLockSegment];
   const asleep = residentSegmentLook(mothSeg);
   check('strip: MOTH.sys asleep is a grey inactive backup, IDLE', asleep !== null && asleep.className.includes('inactive') && asleep.health === T.strip.asleep);

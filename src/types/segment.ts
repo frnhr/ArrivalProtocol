@@ -271,6 +271,9 @@ export interface ResidentSegment extends SegmentBase, Infectable {
   state?: SegmentState;
   owner: string;
   scanned: boolean;
+  // Slice 5 review M2: a late surprise before its wake (its card said `unknown`). The strip draws it as a plain ship file, so
+  // no colour or edge gives it away before the wake (R9); its wake clears it (resident-corrupted.ts wake).
+  hidden?: true;
 }
 
 // The sleeper (`MOTH.sys`, 12 blocks, part 'mind'), drawn as an inactive backup until it wakes, and the 4-block wall it may

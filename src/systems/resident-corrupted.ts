@@ -131,6 +131,11 @@ function wake(store: Store<GameState>): void {
     machine.lockInSec = surprise ? SURPRISE_FIRST_LOCK_SEC - SURPRISE_WAKE_SEC : RESIDENT_LOCK_FIRST_SEC;
     // The late surprise skips the hunt (04 §3.12): its health shows from its wake, and SCAN IT FIRST never applies.
     const file = draft.memory.find((seg): seg is ResidentSegment => seg.type === 'resident');
+    // Review M2: drawn as a plain ship file until now; its own amber from the wake.
+    if (file?.hidden === true) {
+      delete file.hidden;
+      draft.ui.memoryRev++;
+    }
     if (surprise && file !== undefined && !file.scanned) {
       file.scanned = true;
       if (file.state === undefined || file.state === 'intact' || file.state === 'partial' || file.state === 'corrupt') {
