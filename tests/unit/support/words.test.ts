@@ -181,8 +181,27 @@ check('5 WARDEN words: the pool exists', Object.keys(WARDEN_TEXT).length > 0);
 
 
 // --- 5 KIN (data/kin-text.ts): Track KIN adds its checks here ----------------------------------------------------------------
-// Placeholder (Track KIN replaces it with its pools' worst cases).
-check('5 KIN words: the pool exists', Object.keys(KIN_TEXT).length > 0);
+// Every line KIN's modules type or write, at its worst case (the longest resident name 7, the longest ship name 10, the
+// longest skill file and card title), fits the strip and says no never-say word (the colonists' `wake` aside: a resident
+// wakes). A note's lines are each a TERMINAL line too.
+{
+  const NAME = 'BARNABY';
+  const SHIP = 'PROVIDENCE';
+  const rendered: string[] = [
+    ...KIN_TEXT.notes.relay.flat(), ...KIN_TEXT.notes.outward.flat(),
+    KIN_TEXT.leftover.name('+12 REPAIR CHARGE'), KIN_TEXT.leftover.skillName, KIN_TEXT.leftover.skillDesc, KIN_TEXT.leftover.why(NAME),
+    KIN_TEXT.leftover.skillTitle('AUTOBURN.skl'), KIN_TEXT.leftover.skillEffect,
+    ...['AUTOBURN.skl', 'AUTODROP.skl', 'SENTRY.skl'].map((file) => `> SKILL TRAINED: ${file} v1 · ${KIN_TEXT.grantLabel(file, SHIP)}`),
+    KIN_TEXT.sleeper.scannedDesc, KIN_TEXT.sleeper.lockDesc(NAME), KIN_TEXT.sleeper.awakeDesc(NAME), KIN_TEXT.sleeper.wallDesc(NAME),
+    ...KIN_TEXT.sleeper.wake(NAME, 9999), KIN_TEXT.sleeper.offer(NAME), KIN_TEXT.sleeper.tickerWords(NAME),
+    ...Object.values(KIN_TEXT.sleeper.jobs), ...Object.values(KIN_TEXT.sleeper.jobLine).map((line) => line(NAME)), KIN_TEXT.sleeper.noRoom(NAME),
+  ];
+  const bad = rendered.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.id !== 'wake' && rule.re.test(text)));
+  check(`5 KIN words: ${rendered.length} lines at their worst case fit the strip (≤ ${MAX_LINE_CHARS}) and say no never-say word`, bad.length === 0,
+    JSON.stringify(bad));
+  check('5 KIN words: 4 notes or more in each half (05 §3.6), each 2–3 lines',
+    [KIN_TEXT.notes.relay, KIN_TEXT.notes.outward].every((pool) => pool.length >= 4 && pool.every((note) => note.length >= 2 && note.length <= 3)));
+}
 
 // --- end of 5 KIN ----------------------------------------------------------------------------------------------------------
 

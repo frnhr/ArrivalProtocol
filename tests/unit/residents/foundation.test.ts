@@ -72,7 +72,7 @@ check('built: corrupted residents not yet', RESIDENT_BUILT.corrupted === false);
 // LEFT: Track KIN raises it, last (`=== true`, `built: departed residents (Track KIN)`).
 check('built: departed residents not yet', RESIDENT_BUILT.left === false);
 // SLEEPING: Track KIN raises it, first (`=== true`, `built: the sleeper (Track KIN)`).
-check('built: the sleeper not yet', RESIDENT_BUILT.sleeping === false);
+check('built: the sleeper (Track KIN)', RESIDENT_BUILT.sleeping === true);
 // (end of the built checks)
 
 // --- ShipDef.resident from the reservations ------------------------------------------------------------------------------
