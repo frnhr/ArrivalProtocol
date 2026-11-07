@@ -40,7 +40,7 @@ import { TOOL_REFUSAL } from '@data/tool-text';
 import { shipDefAt } from '@systems/map-run';
 import { receiverClosed } from '@systems/delivery-rule';
 import { mapBootLines } from '@systems/map-boot';
-import { bootLinePlan, bootLine, bootLineTone } from '@data/script';
+import { bootLinePlan, bootLine, bootLineTone, speakerTag } from '@data/script';
 import { capabilitiesNow, ghostPush, ghostWithoutSwap } from '@systems/capabilities';
 import { residentGhostSpec, residentDealOnThisShip, lockedDrivers } from '@state/resident-selectors';
 import { isLaunchable, driverCanEverLaunch, driversThatCanEverLaunch, launchQueue, landingView, launchRefusal } from '@systems/landing-rules';
@@ -239,8 +239,9 @@ const look = (segs: readonly Segment[]): string => segs.map((seg) => `${seg.type
     entry?.id === id && entry.choice?.timeoutAiSec === null && !choiceTimerRunning(store.getState(), entry) && withdrawChoice(id)
     && openChoiceEntry(store.getState()) === null && picked === undefined);
   off();
-  check('the residents speak in the TERMINAL: the resident at its pace, the sleeper slow and soft', CHANNEL_OF.resident === 'mind'
-    && CHANNEL_OF.sleeper === 'mind' && lineTypeCps('resident') === TERMINAL_TYPE_CPS && lineTypeCps('sleeper') === HOLLOW_TYPE_CPS);
+  check('the residents speak in the TERMINAL: the resident at its pace, the sleeper slow and soft; the ticker tags both SHIP AI',
+    CHANNEL_OF.resident === 'mind' && CHANNEL_OF.sleeper === 'mind' && lineTypeCps('resident') === TERMINAL_TYPE_CPS
+    && lineTypeCps('sleeper') === HOLLOW_TYPE_CPS && speakerTag('resident', {} as never) === 'SHIP AI' && speakerTag('sleeper', {} as never) === 'SHIP AI');
 }
 
 // --- Notable events (R27) --------------------------------------------------------------------------------------------------------

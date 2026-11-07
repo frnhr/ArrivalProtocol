@@ -801,6 +801,9 @@ export function speakerTag(speaker: Speaker, vars: LineVars): string {
     case 'hollow-cmd': return vars.hollow;
     case 'cmd': return 'YOU';
     case 'mind-sys': return 'MIND';
+    // Slice 5: a resident's lines carry its own name (`WARDEN: …`), so the tag says only whose mind it is.
+    case 'resident':
+    case 'sleeper': return 'SHIP AI';
     default: throw new Error(`speakerTag: unknown speaker '${String(speaker)}'`);
   }
 }
