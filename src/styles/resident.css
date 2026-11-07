@@ -127,6 +127,10 @@ body.reduced-motion .res-note-noise { animation: none; }
   outline: 1px dashed var(--resident-dim);
   outline-offset: 1px;
 }
+/* The words are WARDEN's (`OVERRIDDEN · WARDEN.sys`, flight-hud.ts windowPip's `override`, painted as data-override by
+   WindowGrip): shown after the reading, before the burst count (`100% · OVERRIDDEN · WARDEN.sys ×3`). */
+.pip[data-override]:not([data-override=""])::after { content: '· ' attr(data-override); order: 1; }
+.pip[data-override]:not([data-override=""]) .pip-count { order: 2; }
 .pip[data-override]:not([data-override=""]) .pip-glyph,
 .pip[data-override]:not([data-override=""]) .pip-count { color: var(--resident); animation: none; }
 .pip[data-override]:not([data-override=""]).flash { animation: res-pip-flash 0.3s step-end infinite; }
