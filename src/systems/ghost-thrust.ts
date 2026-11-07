@@ -5,12 +5,13 @@ import { onPostTick, isLivePhase } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { on } from '@systems/events';
 import { raiseAlert, clearAlert, GHOST_ALARM_ID, GHOST_WARN_ID } from '@systems/alerts';
-import { capabilitiesNow } from '@systems/capabilities';
+import { capabilitiesNow, type GhostSource } from '@systems/capabilities';
 import { getPrediction, currentPrediction, sensePrediction, type Prediction, type PredictOutcome } from '@systems/predict';
 import { buildFlightContext, shipObjective } from '@systems/guidance';
 import { engineOpen } from '@state/selectors';
 import { skipTarget, stopSkip, replanSkip, type SkipTarget } from '@systems/pace';
 import { GHOST_TEXT } from '@data/ghost-text';
+import { WARDEN_TEXT } from '@data/warden-text';
 import { GHOST_ALARM_MIN_SEC, SKIP_REPLAN_TICKS, TICK_MS, GHOST_DRIFT_SHOW_SEC, GHOST_DRIFT_MIN_KM } from '@data/tuning';
 
 // The engine firing by itself (C2, §9 WP10 item 2), as the ship tells the kid, DOM-free. The bursts themselves are
@@ -29,6 +30,11 @@ import { GHOST_ALARM_MIN_SEC, SKIP_REPLAN_TICKS, TICK_MS, GHOST_DRIFT_SHOW_SEC, 
 //   CRUISE. The verdict reads game state only (the ship right after the burst against the ship right before it), never
 //   how the wall clock happened to cut the SKIP into ticks, so a pause or a slow frame moves no stop.
 // Events only mark what happened; the post-tick acts on them (never inside an emit, §9).
+// Slice 5 (Track WARDEN, plan R5, §2.7 step 3): a corrupted resident is a second source on the one scheduler
+// (capabilities.ts ghostBy). Its bursts are counted apart (CorruptedState.bursts, review M3: counted here, on 'ghost-start'
+// while ghostBy is 'resident', with a silent mutate so no listener fans out inside the emit), and worded by their cause:
+// its FIRST burst is an alarm moment of its own even after Thrust Ctrl's bursts (`THE SHIP'S AI IS FIRING THE ENGINE`, the
+// strip's `— find it in RACK A`: data/resident-rules.ts), and the counter names it (`WARDEN FIRED THE ENGINE ×3`).
 
 // What a SKIP is doing, as a later burst may change it: the line the strip shows, where the path goes, what it flies
 // to and the burn waiting there, whether ▼ and ▲ sit in the ring, whether the tank pays for the fix, and Rule 4's
@@ -99,6 +105,10 @@ export function skipTickSec(skipWarp: number): number {
 
 let firstStartedAtAi: number | null = null;  // the ship's first burst began (its alarm stands from then)
 let alarmUp = false;
+// Whose first burst the standing alarm is (slice 5: the controller's, or the resident's own), and the ship's burst count
+// at it (a later burst ends the alarm's hold).
+let alarmBy: GhostSource = 'controller';
+let alarmAtCount = 0;
 let burstEndedInSkip = false;               // a later burst a SKIP flew through ended in this tick
 let burstThisTick = false;
 // The plan a later burst is judged against: as of the tick just before it. Kept on every quiet tick, and after every
@@ -115,6 +125,8 @@ let driftEndedAtAi: number | null = null;
 function resetGhostThrust(): void {
   firstStartedAtAi = null;
   alarmUp = false;
+  alarmBy = 'controller';
+  alarmAtCount = 0;
   burstEndedInSkip = false;
   burstThisTick = false;
   lastPlan = null;
@@ -149,16 +161,18 @@ function flying(state: Readonly<GameState>): boolean {
   return engineOpen(state) && isLivePhase(state);
 }
 
-// The first burst's alarm: up from its start until the burst is over and the line has stood GHOST_ALARM_MIN_SEC.
+// The first burst's alarm: up from its start until the burst is over and the line has stood GHOST_ALARM_MIN_SEC. Its word
+// names the cause (slice 5): the resident's own first burst says the ship's AI fires the engine.
 function syncAlarm(store: Store<GameState>): void {
   const state = store.getState();
   if (firstStartedAtAi === null) return;
   if (!alarmUp) {
-    raiseAlert(store, { id: GHOST_ALARM_ID, layer: 'ship', severity: 'alarm', text: GHOST_TEXT.alarm, inhibitsSkip: true });
+    const text = alarmBy === 'resident' ? WARDEN_TEXT.alarm : GHOST_TEXT.alarm;
+    raiseAlert(store, { id: GHOST_ALARM_ID, layer: 'ship', severity: 'alarm', text, inhibitsSkip: true });
     alarmUp = true;
     return;
   }
-  const over = state.burn.ghost === null || state.burn.ghostBursts > 1;
+  const over = state.burn.ghost === null || state.burn.ghostBursts > alarmAtCount;
   if (over && state.clock.aiSec - firstStartedAtAi >= GHOST_ALARM_MIN_SEC) {
     clearAlert(store, GHOST_ALARM_ID);
     firstStartedAtAi = null;
@@ -166,13 +180,18 @@ function syncAlarm(store: Store<GameState>): void {
 }
 
 // The bursts the kid is shown as still happening: while the controller still fires (a ghost spec), from the first one.
-// The warn counter and the THRUST CTRL pip's `FIRED ×n` both read it, so they never disagree.
+// The warn counter and the THRUST CTRL pip's `FIRED ×n` both read it, so they never disagree. Slice 5: the bursts of the
+// source firing now, the resident's own (CorruptedState.bursts) while it is the source, else the controller's (the ship's
+// bursts less the resident's).
 export function ghostCountShown(state: Readonly<GameState>): number {
   if (state.burn.ghostBursts === 0) return 0;
-  return capabilitiesNow(state).thrustCtrl.ghost === null ? 0 : state.burn.ghostBursts;
+  const ctrl = capabilitiesNow(state).thrustCtrl;
+  if (ctrl.ghost === null) return 0;
+  const residentBursts = state.resident.corrupted?.bursts ?? 0;
+  return ctrl.ghostBy === 'resident' ? residentBursts : state.burn.ghostBursts - residentBursts;
 }
 
-// The counter: the bursts shown, once the first one's alarm is down.
+// The counter: the bursts shown, once the first one's alarm is down, named by their cause.
 function syncCounter(store: Store<GameState>): void {
   const state = store.getState();
   const count = ghostCountShown(state);
@@ -180,7 +199,9 @@ function syncCounter(store: Store<GameState>): void {
     clearAlert(store, GHOST_WARN_ID);
     return;
   }
-  raiseAlert(store, { id: GHOST_WARN_ID, layer: 'ship', severity: 'warn', text: GHOST_TEXT.counter(count), inhibitsSkip: false });
+  const resident = capabilitiesNow(state).thrustCtrl.ghostBy === 'resident' ? state.resident.def : null;
+  const text = resident === null ? GHOST_TEXT.counter(count) : WARDEN_TEXT.counter(resident.name, count);
+  raiseAlert(store, { id: GHOST_WARN_ID, layer: 'ship', severity: 'warn', text, inhibitsSkip: false });
 }
 
 // Right after a later burst a SKIP flew through: fly on (re-timed), or stop on the new line. The burst is over (it ended
@@ -210,8 +231,19 @@ export function mountGhostThrust(store: Store<GameState>): () => void {
   mounted = true;
   const offStart = on('ghost-start', ({ first }) => {
     burstThisTick = true;
-    const aiNow = store.getState().clock.aiSec;
-    if (first) firstStartedAtAi = aiNow;
+    const state = store.getState();
+    const aiNow = state.clock.aiSec;
+    // Slice 5 (review M3): a burst of the resident's own is counted on its machine; its first is its own alarm moment.
+    const corrupted = state.resident.corrupted;
+    const byResident = corrupted !== null && capabilitiesNow(state).thrustCtrl.ghostBy === 'resident';
+    const residentFirst = byResident && corrupted.bursts === 0;
+    if (byResident) store.mutate((draft) => { draft.resident.corrupted!.bursts++; });
+    if (first || residentFirst) {
+      firstStartedAtAi = aiNow;
+      alarmBy = byResident ? 'resident' : 'controller';
+      alarmAtCount = state.burn.ghostBursts;
+      alarmUp = false;
+    }
     // The burst's thrust of this tick is in, but the cached prediction is still the one from before it: ▼ as it was.
     if (!driftShown(aiNow)) driftFromRp = getPrediction().rp;
     driftEndedAtAi = null;
@@ -255,7 +287,7 @@ export function mountGhostThrust(store: Store<GameState>): () => void {
     burstThisTick = false;
   });
   const offReset = onWorldReset('ghost-thrust', resetGhostThrust, () => ({
-    firstStartedAtAi, alarmUp, burstEndedInSkip, burstThisTick, plan: lastPlan !== null, lastChange, driftFromRp, driftEndedAtAi,
+    firstStartedAtAi, alarmUp, alarmBy, alarmAtCount, burstEndedInSkip, burstThisTick, plan: lastPlan !== null, lastChange, driftFromRp, driftEndedAtAi,
   }));
   return () => {
     offStart();
