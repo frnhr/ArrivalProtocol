@@ -81,3 +81,11 @@ Status words:
 22. **MOTH's gift (4 cycles) is paid whenever the sleeper was woken,** whether the ship lands or is lost. BUILT.
 23. **MOTH's job keys are R, H and T.** BUILT. The spec's D/W/M clash with keys already bound in play: M mutes the game,
     and W and D are flight presets.
+24. **An ignored corrupted resident empties the tank before ORBIT LOCK,** just as an unfixed failing Thrust Ctrl does.
+    BUILT, and measured on GANNET, seed 7:
+    - an ignored resident ends the flight at 0% FUEL, with 41 bursts and 2 pods parked locked;
+    - any answer saves the flight: DEAL accepted 19.6%, deleted 20.8%, cured 23.3%, against 23.7% with no resident.
+
+    The resident pushes about 0.7–0.8× as hard as the controller, but over a whole approach that still drains the tank.
+    The pressure to act seems right, but it is harsh for a kid who never opens the MIND. DEFERRED to slice 8: a lower
+    amp, or bursts that stop after the first lock.

@@ -23,6 +23,7 @@ import { PACKET_SKILL_TEXT } from '@data/training-text';
 import { isDisguised, decoyFileView } from '@state/threat-selectors';
 import { isResidentFile } from '@state/selectors';
 import { residentToolRule, residentDeleteQuestion } from '@systems/residents';
+import { lockAimsAt } from '@state/resident-selectors';
 
 // What deleting a skill file costs (slice 4): its skill until a desk's RESTORE, at the price the next desk will ask (the
 // levels the run paid for above what is left once it is gone: another copy, or nothing).
@@ -137,7 +138,8 @@ export function targetRefusal(seg: Segment, ctx: ValidTargetContext): ToolRefusa
   }
   switch (activeKind) {
     case 'scan':
-      if (seg.type === 'driver') return TOOL_REFUSAL.driverScan;
+      // Slice 5 (Track WARDEN's request, 04 §3.12): a driver a resident's lock counts down on takes a SCAN, the cheap block.
+      if (seg.type === 'driver') return lockAimsAt(state, seg.id) ? null : TOOL_REFUSAL.driverScan;
       if (seg.type === 'firewall') return TOOL_REFUSAL.firewallHealth;
       // 046.log: SCAN reads its header (05 §3.2), the one tool that works on it.
       if (seg.type === 'log') return null;

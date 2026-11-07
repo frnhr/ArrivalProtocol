@@ -1298,6 +1298,162 @@ skipped, 130 s on 4 workers. Every follow-up below is either a type, a field at 
   - Test lines: `support/words.test.ts:191–195`, `tuning.ts:2289–2297`, `audio-cues.ts:317–335`.
 - **The lead** now also owns `WindowGrip.ts` and `ObjectiveStrip.ts` (§5).
 
+## Deviations (Track WARDEN)
+
+Recorded by Track WARDEN (branch `warden-5`, from 2f3c2de). §2.7 is built whole, with parts a, b and e:
+`RESIDENT_BUILT.corrupted` is raised, and so is its `built` line in `residents/foundation`. The unit tier is green: 197
+passed, 0 failed and 9 balance-only skipped, in 274 s on 4 workers. That run shared the machine with the other tracks
+(load average about 11 on 4 cores). The new suites take about 12 s of CPU together.
+
+### What is built
+
+- **`systems/resident-corrupted.ts`** holds the machine, and all of its state is in `state.resident.corrupted`:
+  - **The wake.** A faulty resident wakes at the first AI tick of the flight. A surprise wakes after
+    `SURPRISE_WAKE_SEC` of calm. On a ship where HOLLOW is aboard, it waits for `hollowFirstFightDecided`.
+  - **The locks.** The first comes 30 calm s after the wake, or 25 s after the wake for a surprise, which is 45 s into
+    the flight. Then one comes every 40 s from the start of the last telegraph, × 0.6 while it is angry. Each lock counts
+    down for 3 s, aims at `launchQueue[0]`, and lands only while a thread is free. Any op on the driver blocks it. The cap
+    is `lockCap`.
+  - **The DEAL** follows R8, and DELETE and the cure end it. CONTROL's two lines, the looping lines and the record
+    (`corruptedShipEnd`) are here too.
+- **`state/resident-selectors.ts`** holds `residentGhostSpec` (awake, deleting and angry; none in the landing),
+  `liveLockText`, `lockAimsAt`, `lockCap`, `engineOverriddenBy`, `residentFile`, `residentDeleting` and `residentAngry`.
+- **`systems/ghost-thrust.ts`**:
+  - counts `CorruptedState.bursts` on `'ghost-start'` while `ghostBy === 'resident'` (review M3);
+  - gives the resident's first burst an alarm of its own, even after Thrust Ctrl's bursts
+    (`THE SHIP'S AI IS FIRING THE ENGINE`);
+  - names the counter (`WARDEN FIRED THE ENGINE ×n`). `ghostCountShown` counts the source that fires now.
+- **The THRUST CTRL pip block (`flight-hud.ts windowPip`)** fills `PipModel.override` (`OVERRIDDEN · WARDEN.sys`) and
+  `jumpId` (WARDEN.sys) once the resident has fired, and only while its spec is live (review B2). A healthy controller that
+  has been scanned reads `100%` beside the override.
+- **`data/resident-rules.ts`** holds the strip. Each line has two wordings, `[TAB]` in amber and the plain line in blue:
+  - the alarm (priority `alarm`);
+  - the lock's countdown (`mind-urgent`, `outranksLeadIn`);
+  - a locked pod (`tutorial`, with SCAN first before the file is scanned);
+  - a lesson shown once after the alarm (`tutorial`, `GHOST_LESSON_SHOW_SEC`).
+- **`data/warden-text.ts`** holds every word the modules above emit.
+- **`controllerGhost` is kept intact.** The SWAP-only readers keep the controller's own ghost. `map/ghost-noswap` pins
+  it: an angry resident outpushes a failing controller, and the no-Swap moment and the ENGINE FAULT refusal stay.
+
+### Deviations
+
+1. **The DEAL's file uses a second copy of the fair tiers.** `resident-corrupted.ts fairDealTargets` re-implements
+   `hollow.ts rmTargets`; it is not imported.
+   - Importing `hollow.ts` closed an import cycle: `data/ships.ts` → `zones` → `state/actions` → `residents` →
+     `resident-corrupted` → `hollow` → `carry` → `classic-five`.
+   - The cycle made `classic-five`'s load-time check run before `ships.ts` had loaded (`__name is not a function`), and 18
+     suites failed.
+   - `residents/corrupted-model` pins the copy to `rmTargets` on the five classic ships (with and without untried
+     tools), GANNET, GANNET without its spare, and PROVIDENCE.
+   - See the patch request below.
+2. **SCAN on the driver a lock aims at needs a lead patch.** `tool-targets.ts` refused SCAN on every driver (`NO SCAN
+   NEEDED`), so the plan's "SCAN is the cheap block" could not happen. Commit 1196735 changes one line in that file (the
+   lead's): the driver that `lockAimsAt` names takes SCAN, and every other driver still refuses it.
+3. **One import line in `flight-hud.ts`, outside the pip block.** It adds `engineOverriddenBy` to the lead's
+   `resident-selectors` import, and imports `WARDEN_TEXT`.
+4. **Bursts are counted in `ghost-thrust.ts`, not in `resident-corrupted.ts`.** The count is a silent `mutate` inside the
+   `'ghost-start'` handler. It must hold whatever the mount order: `main.ts` mounts the residents before `ghost-thrust`,
+   and the harnesses mount them after. `ghost-thrust` also decides the resident's first alarm, so both readings use one
+   count.
+5. **One more module variable, `burstHeard`,** beside `touched` and the DEAL's answer (§2.3). It records that one of the
+   resident's own bursts started since the last tick, so its looping line is said then. It is reset with the world.
+6. **The looping lines are spaced out.** At CRUISE the bursts come every few seconds of wall time, because the scheduler
+   runs on game time. A line at each burst buried the TERMINAL. A new 5 WARDEN constant, `RESIDENT_LINE_EVERY_SEC` (20),
+   keeps a looping line at least 20 AI s after the resident's last line. No looping line comes during a lock's countdown
+   or while a choice stands. The lines are garbled at `RESIDENT_GARBLE`, with the run, the ship and the line as the seed.
+7. **The late surprise is scanned at its wake, not at its first burst.** The wake raises `'resident-wake'` with `surprise:
+   true` (FACE's stamp) and shows the health at once. The first burst is random, a mean of 14 tac s later, and a stamp
+   naming rack A over a `?` file would send the kid on the hunt that 04 skips. The "engine coughs" of §0.1 is FACE's
+   `glitchBurst` on the wake: a burst cannot be forced without editing `orbit-sim.ts`.
+8. **On HOLLOW's ship it can wake in the landing.** HOLLOW boarded there sleeps until the loop closes, so its first fight
+   may be decided only after ORBIT LOCK. The resident then wakes in the landing, where it locks but never fires (R4).
+   `residents/corrupted-flow` covers it on PROVIDENCE.
+9. **A lock with no thread free waits at 0.** HOLLOW's verbs skip their turn instead. Here the lock telegraphs on the
+   first tick a thread is free. Skipping 40 s would make a busy Core a shield.
+10. **The lock clock also stands still while the resident's DEAL stands.** No lock telegraphs mid-offer, as HOLLOW's verbs
+    wait on HOLLOW's DEAL.
+11. **The rules of the DEAL in detail:**
+    - it names the fair tier's first file that is not being moved or deleted;
+    - it is withdrawn when that file goes or a MOVE starts on it (`WARDEN: KEEP IT, THEN. THEY STAY.`), and when the ship
+      or its landing ends;
+    - ACCEPT stops any other op on the file before deleting it;
+    - it may come in the landing too, until the landing ends;
+    - a spare tool is named by its chip (`YOUR SPARE REPAIR`), and any other file by its name. A fresh unit has no spare
+      and no card, so it names the ship's backup (`Thrust.alt`);
+    - `offerResidentDealNow` (`__ap.resident.deal()`) needs no locked pod, but it still needs HOLLOW's DEAL idle and no
+      choice standing.
+12. **Words:**
+    - ACCEPT reads `WARDEN: THE PODS ARE YOURS. GO AWAY.` (§2.10 had `> …`);
+    - 05's broken record ends two letters sooner (`… ALL PA`), so a 7-letter name fits the 70-character row;
+    - the pool holds 7 lines;
+    - after a SCAN the desc tells how the resident stands (`WARDEN_TEXT.desc`). The tick writes it into the segment.
+13. **How the end is detected.** DELETE is detected when the file leaves memory (nothing else removes it: it is not food,
+    and MOVE refuses it). The cure is detected when its integrity reaches 100. Both are seen on the AI tick, with no hook
+    in `actions.ts`.
+14. **The cap counts landed locks only.** A blocked lock does not count, so a kid who blocks every lock meets a telegraph
+    every 40 s. `corruptedDeleteQuestion` always returns its confirm (non-null).
+15. **The strip's texts read the state through a cast.** `GuideRule.text` gets a `TextCtx`. At run time that is a
+    `DirectorCtx`, so the rules read `state` through a cast. With no state (the corpus and words tests) they render their
+    worst case: STEWARD, POD 16 and `9…`.
+
+### Patches requested from the lead
+
+- **Keep or redo commit 1196735** (Deviation 2, `tool-targets.ts`, one line).
+- **Give `rmTargets` a home outside the cycle.** For example, move `rmTargets` with `spareKindOf`, `worksAsCopy` and
+  `carry.ts toolKindOf` into a module that does not reach `carry.ts`. `resident-corrupted.ts` can then import it, and its
+  copy (Deviation 1) goes. Until then, `residents/corrupted-model` pins the two together.
+
+### Tests
+
+| Suite | Checks | Wall (alone) |
+|---|---|---|
+| `residents/corrupted-model` (new) | 21 | 0.6 s (1.4 s in the tier) |
+| `residents/corrupted-flow` (new) | 48 | 7 s (11 s in the tier) |
+| `residents/corrupted-sweep` (new, BALANCE_ONLY) | 9 | 11 s |
+| `support/words` (WARDEN's block: 3 checks) | +3 | +0.1 s |
+| `threat/arrival-story` (+1 check: HOLLOW's DEAL waits on a resident's ship) | 28 | +0.6 s |
+| `map/ghost-noswap` (+1 check: the `ghostBy` guard) | 18 | ±0 |
+| `residents/foundation` (its `built: corrupted` line) | — | ±0 |
+
+`threat/beam-seeds` is unchanged and green. The R22 suites that build corrupted ships are green with the bursts in:
+`map/delivery-packet`, `map/repository`, `threat/disguise` and `save/*`.
+
+### Measurements (`residents/corrupted-sweep`, BALANCE_ONLY; GANNET on seed 7, flown by the strip with the WP7 defender)
+
+| GANNET | end of flight | FUEL | bursts / AI s | locks landed / blocked | DEAL | pods down / parked |
+|---|---|---|---|---|---|---|
+| no resident | locked | 23.7% | 0 / 130 | — | — | 7 / 0 |
+| failing Thrust Ctrl, no resident | accepted | 0.0% | 46 / 185 | — | — | 7 / 0 |
+| ignored | accepted | 0.0% | 41 / 201 | 2 / 0 | timeout | 5 / 2 |
+| refused | accepted | 0.0% | 41 / 203 | 2 / 0 | refused | 5 / 2 |
+| every lock blocked by SCAN | accepted | 0.0% | 20 / 132 | 0 / 3 | — | 7 / 0 |
+| paid (ACCEPT; Repair.bak deleted) | locked | 19.6% | 10 / 138 | 1 / 0 | accepted | 7 / 0 |
+| deleted at 11 s | locked | 20.8% | 7 / 137 | 0 / 0 | — | 7 / 0 |
+| cured at 9 s | locked | 23.3% | 1 / 133 | 0 / 0 | — | 7 / 0 |
+
+- **R3's push.** On paper the resident's push is 71% of a failing controller's. Measured, an ignored resident fires 0.204
+  bursts per AI s against the failing controller's 0.248, a ratio of 0.82, which includes the 30 s of anger after the
+  timed-out DEAL. Each burst has the same Δv (amp 0.15 for 1 tac s). With the kid's corrections, a burst costs GANNET
+  about 1.2% FUEL. Both an ignored resident and an unfixed controller drain the tank from 23.7% to 0 before ORBIT LOCK,
+  and end ACCEPTED. **This is for the R3 entry in OPEN-DECISIONS:** on a CAPTURE ship of this size, "two thirds of an
+  unfixed VESPER" is still a full tank. Even a kid who blocks every lock loses the tank (20 bursts) unless the resident is
+  dealt with early.
+- **Pods locked per ship.** GANNET (7 pods) takes 2, the cap. PROVIDENCE (10 pods) has a cap of 3. Left alone, GANNET's
+  two locks park 2 of its 7 pods at END LANDING (`podsParkedLocked` 2).
+- **How the DEAL plays out.** It comes on the tick the first lock lands, so about 33 AI s into GANNET's flight. On seed
+  7's route it names `Repair.bak` (`WARDEN: GIVE ME YOUR SPARE REPAIR. THEN I LET THE PODS GO.`).
+  - ACCEPT costs the spare and saves the tank (19.6% left) and every pod.
+  - REFUSE or the timer makes the resident angry: the next lock comes at × 0.6 (37 s left becomes 22 s), and the bursts
+    come every 7 tac s for 30 s.
+  - The cure is the cheapest answer: 12 charge in 3.60 s, measured.
+  - DELETE takes 6.00 s and fires 6 bursts at the DELETING rate meanwhile.
+- **In the browser.** A Playwright check ran on the dev server, seed 7, `__ap.route([0, 2, 9])`, and showed:
+  - the amber RECEIVER CLOSED line, WARDEN's first line and CONTROL's line;
+  - at the first burst, the pip's `data-override="OVERRIDDEN · WARDEN.sys"` and the strip's
+    `THE SHIP'S AI IS FIRING THE ENGINE — [TAB], find it in RACK A`;
+  - a click on the pip, which opened the MIND with WARDEN.sys selected;
+  - `__ap.resident.lock()`, which landed a lock, and then the DEAL's line. No page errors.
+
 ## Deviations (Track KIN)
 
 Recorded by Track KIN (branch `kin-5`, from 2f3c2de). Parts c and d are built and raised, `sleeping` first and `left` last,
@@ -1312,8 +1468,8 @@ each with its `built` check. The unit tier is green with both raised (see the en
    load-time checks run before `data/ships.ts` has (`TypeError: __name is not a function` in every suite). The FOUNDATION's
    stubs imported nothing heavy, so it never showed. The fix moves `inboundPoint` and `validateZoneDefs` unchanged into a new
    data module, `data/zone-check.ts`; `zones.ts` re-exports them, `ships.ts` imports from the data module. No behaviour change.
-   WARDEN's `resident-corrupted.ts` will meet the same wall as soon as it imports `hollow.ts` (`rmTargets`): if WARDEN fixed it
-   another way, drop this commit.
+   WARDEN's `resident-corrupted.ts` (merged at c5a382d) imports nothing that reaches classic-five, so it never met the wall;
+   any later resident module that does needs this commit.
 
 ### Deviations
 

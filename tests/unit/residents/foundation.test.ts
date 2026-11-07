@@ -68,7 +68,7 @@ const BUILT_AT_LOAD = { ...RESIDENT_BUILT };
 
 // --- What this build plays (plan §5: one check per kind, so each track raises only its own line) ---------------------------
 // CORRUPTED: Track WARDEN raises it (`=== true`, `built: corrupted residents (Track WARDEN)`).
-check('built: corrupted residents not yet', RESIDENT_BUILT.corrupted === false);
+check('built: corrupted residents (Track WARDEN)', RESIDENT_BUILT.corrupted === true);
 // LEFT: Track KIN raises it, last (`=== true`, `built: departed residents (Track KIN)`).
 check('built: departed residents (Track KIN)', RESIDENT_BUILT.left === true);
 // SLEEPING: Track KIN raises it, first (`=== true`, `built: the sleeper (Track KIN)`).
