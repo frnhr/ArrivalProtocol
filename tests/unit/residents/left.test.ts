@@ -9,8 +9,8 @@
 //   an unusable card each deal a plain card from the normal deal; the skill card falls back to `+2 CYCLES`, and to a plain
 //   card when a pool card already is +2 CYCLES or the hop goes into a final ship; a skill pending at the desk is never the
 //   card's;
-// • the skill card's pick takes no link room and installs at the next boot: `> SKILL TRAINED: AUTODROP.skl v1 · from the
-//   resident that left HERON`; skipped when that skill is pending;
+// • the skill card's pick takes no link room and installs at the next boot: `> SKILL TRAINED: <the dealt skill> v1 · from the
+//   resident that left HERON` (review D2: drawn among the allowed skills); a pick of a pending skill throws (review m8);
 // • the ship's record counts the leftovers eaten.
 import { check, finish } from '../landing/checks';
 import type { GameState, TransitPlan } from '@state/schema';
@@ -27,6 +27,8 @@ import { receiveTransmission } from '@systems/boot';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { on } from '@systems/events';
 import { dealDraft, pickCard, transitPacket, applyLeftoverPick, leftoverSkill } from '@systems/draft';
+import { grantAllowed } from '@systems/skill-tree';
+import { SKILL_TREE } from '@data/skills';
 import { rollLeftoverCards, noteLines } from '@systems/resident-left';
 import { hopBetween, reachableFrom } from '@systems/map-hop';
 import { targetRefusal } from '@systems/tool-targets';
@@ -127,8 +129,11 @@ fresh();
   check('the PACKET deals the leftover deck: pool, pool, skill, in the leftovers\' order', offer.length === 3 && offer[0]?.id === cards[0]
     && offer[1]?.id === cards[1] && offer[2]?.id === 'skill' && offer.map((card) => card.leftover?.segId).join() === 'leftover1,leftover2,leftover3',
     JSON.stringify(offer));
-  check('…the skill card is AUTODROP.skl v1 (the first open branch the run never had: AUTOBURN is owned), its ids unique',
-    offer[2]?.leftover?.skill === 'autodrop' && offer[2].title === 'AUTODROP.skl v1' && new Set(offer.map((card) => card.id)).size === 3,
+  const dealtSkill = offer[2]?.leftover?.skill ?? null;
+  check('…the skill card is a v1 of an open branch the run never had (review D2: drawn among them, not always the first; AUTOBURN '
+    + 'is owned), the same as leftoverSkill says, its ids unique',
+    dealtSkill !== null && dealtSkill !== 'autoburn' && dealtSkill === leftoverSkill(st()) && grantAllowed(st(), dealtSkill, 1, 'card')
+    && offer[2]!.title === `${SKILL_TREE[dealtSkill].fileName} v1` && new Set(offer.map((card) => card.id)).size === 3,
     JSON.stringify(offer[2]));
   check('…each says HELM left it behind (unless a boost says more)', offer.every((card) => card.boosted || card.why === 'HELM left it behind'),
     offer.map((card) => card.why).join(' | '));
@@ -188,23 +193,27 @@ fresh();
   check('a skill pending at the desk is never the skill card\'s', leftoverSkill(st()) !== 'autodrop', String(leftoverSkill(st())));
   const grants = st().run.skills.skillGrants.length;
   const plan = { pick: 'skill', offer: [{ id: 'skill', title: '', effect: '', why: '', boosted: false, leftover: { segId: 'leftover3', skill: 'autodrop' } }] } as unknown as TransitPlan;
-  applyLeftoverPick(h.store, plan);
-  check('…and a pick of it is skipped at TRANSMIT ▸ when that skill was bought here since the deal', st().run.skills.skillGrants.length === grants);
+  let threw = false;
+  try { applyLeftoverPick(h.store, plan); } catch { threw = true; }
+  check('…and a pick of a skill pending at the send is a bug (review m8: unreachable, so it throws, never a silent skip)',
+    threw && st().run.skills.skillGrants.length === grants);
 }
 fresh();
 {
   toDesk(h.store);
   setCourseFromDesk(h.store, NEXT);
   check('the skill card is picked like any card', pickCard(h.store, 'skill') === null && st().run.transit?.pick === 'skill');
+  const skill = st().run.transit!.offer.find((card) => card.id === 'skill')!.leftover!.skill!;
   fitPacket(h.store);
   const from = st().log.entries.length;
   transmitNext(h.store);
   h.stepUntil(() => st().run.phase === 'flight', 40);
   const trained = st().log.entries.slice(from).map((entry) => entry.text).filter((text) => text.startsWith('> SKILL TRAINED'));
-  const file = st().memory.find((block) => block.type === 'upgrade' && block.upgrade === 'autodrop');
-  check('…and installs at the next boot: `> SKILL TRAINED: AUTODROP.skl v1 · from the resident that left HERON`',
-    trained.includes('> SKILL TRAINED: AUTODROP.skl v1 · from the resident that left HERON') && file !== undefined
-    && st().run.skills.skillGrants.some((grant) => grant.skill === 'autodrop' && grant.installedAtDepth !== null)
+  const file = st().memory.find((block) => block.type === 'upgrade' && block.upgrade === skill);
+  const line = `> SKILL TRAINED: ${SKILL_TREE[skill].fileName} v1 · from the resident that left HERON`;
+  check(`…and installs at the next boot: \`${line}\``,
+    trained.includes(line) && file !== undefined
+    && st().run.skills.skillGrants.some((grant) => grant.skill === skill && grant.installedAtDepth !== null)
     && st().run.arrival?.card === null && !st().run.upgrades.includes('skill' as never), JSON.stringify(trained));
 }
 

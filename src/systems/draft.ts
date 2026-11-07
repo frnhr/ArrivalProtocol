@@ -23,7 +23,7 @@ import {
   REPAIR_V2_VERSION, THREAD_PLUS_THREADS, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, FUEL_TRIM_BLOCKS, INTEGRITY_MAX, SENTRY_FIREWALL_VERSION,
   LEFTOVER_COUNT,
 } from '@data/tuning';
-import { visitRng } from '@systems/map-streams';
+import { visitRng, shipRng, currentSlot } from '@systems/map-streams';
 import { deliveryFileGroups } from '@systems/repository';
 
 // PICK ONE TO CARRY (§6.9, §9 WP8 items 1–2), the systems half: the draft dealt at TRANSMIT from the run's
@@ -99,12 +99,18 @@ export function dealDraft(
 
 // --- The leftover deck (slice 5: 04 §3.13, plan R14, §2.8) ------------------------------------------------------------------
 
-// The skill a departed resident's skill card grants at this PACKET: the first of SKILL_IDS a 'card' grant may give at v1 (an
-// open branch the run never paid for, skill-tree.ts grantAllowed) with no purchase of it pending at this desk, so the grant
-// and the desk's training never double up. null: none qualifies.
+// The skill a departed resident's skill card grants at this PACKET: one of the skills a 'card' grant may give at v1 (an open
+// branch the run never paid for, skill-tree.ts grantAllowed) with no purchase of it pending at this desk, so the grant and the
+// desk's training never double up. null: none qualifies. Review D2: drawn at random among them on the ship's own leftover
+// roll (shipRng, the 'leftovers-skill' stream beside the pool cards' 'leftovers', so the pick does not move with how many
+// draws the pool cards took): not always the first open branch (AUTODROP in 150 of 150 decks before). The same ship deals the
+// same skill again after a ◀ CHART, unless the allowed set changed.
 export function leftoverSkill(state: Readonly<GameState>): SkillId | null {
   const pending = state.run.skills.pending;
-  return SKILL_IDS.find((id) => grantAllowed(state, id, 1, 'card') && !pending.some((purchase) => purchase.skill === id)) ?? null;
+  const allowed = SKILL_IDS.filter((id) => grantAllowed(state, id, 1, 'card') && !pending.some((purchase) => purchase.skill === id));
+  if (allowed.length === 0) return null;
+  const rng = shipRng(state.run, currentSlot(state.run), 'leftovers-skill');
+  return allowed[Math.min(allowed.length - 1, Math.floor(rng() * allowed.length))]!;
 }
 
 // A leftover's pool card as the PACKET deals it: the pool's own words, and why it is offered (the resident left it, unless
@@ -272,8 +278,12 @@ export function applyLeftoverPick(store: Store<GameState>, plan: Readonly<Transi
   const skill = plan.offer.find((card) => card.id === 'skill')?.leftover?.skill ?? null;
   if (skill === null) throw new Error('applyLeftoverPick: the skill card names no skill');
   const state = store.getState();
-  // Skipped when the desk's training took it since the deal (a pending purchase), or a grant could no longer give it.
-  if (state.run.skills.pending.some((purchase) => purchase.skill === skill) || !grantAllowed(state, skill, 1, 'card')) return;
+  // Review m8: the deal (goTransmit, after abortAll) already required both, and nothing between it and the send can change
+  // them: ◀ CHART discards the plan (training needs the desk, and a new deal follows), and the PACKET runs no op on memory.
+  // So a skip here could only be a bug that loses the kid's pick without a word: it throws instead.
+  if (state.run.skills.pending.some((purchase) => purchase.skill === skill) || !grantAllowed(state, skill, 1, 'card')) {
+    throw new Error(`applyLeftoverPick: ${skill} was dealt but can no longer be granted at the send (pending or not allowed)`);
+  }
   grantSkill(store, skill, 1, KIN_TEXT.grantLabel(SKILL_TREE[skill].fileName, state.level.shipName), 'card');
 }
 
