@@ -1,3 +1,5 @@
+// Slice 5: Track FACE owns this file (docs/phase3/impl/slice-5-plan.md §6.2): the residents' voices, the lock's countdown
+// row and the untimed choice. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState, LogEntry } from '@state/schema';
 import { play } from '@systems/audio';
@@ -8,6 +10,7 @@ import { requireById, replayAnimation } from '@components/dom';
 import { formatTac } from '@systems/guidance';
 import { liveVerbText } from '@systems/flight-hud';
 import { verbSecondsLeft } from '@state/selectors';
+import { terminalVoice, choiceHasTimer, lockAimView } from '@systems/resident-hud';
 import { createTypeQueue } from '@components/hud/typewriter';
 import { sleepLineYears } from '@data/map-text';
 import {
@@ -40,6 +43,10 @@ import {
 // rolls its approach year up from the arrival year as it types, over SLEEP_YEAR_ROLL_MS of wall time, with a soft tick
 // ratchet every SLEEP_YEAR_TICK_YEARS: the years are felt, not just read. The line keeps its length (the year keeps its
 // digits), so the typing is the same; a line shown at once (a catch-up, reduced motion) shows its true year.
+// Slice 5 (04 §4, plan §2.11): a ship's own AI types in amber capitals with its flat one-note blip, the sleeper in the good
+// green with its soft sine (systems/resident-hud.ts terminalVoice). A resident's lock (`> LOCK POD 07 ... 3`) counts down as
+// a verb does, from state.resident.corrupted.lock (liveVerbText(state, 'resident')), in its own row: the verb rows are keyed
+// by speaker, so a HOLLOW verb and a lock never end each other. The sleeper's offer has no timer: no bar, no clock.
 
 interface ChoiceButton {
   option: string;
@@ -59,7 +66,11 @@ interface ChoiceView {
 }
 
 // A verb's telegraph line (WP11 part 2): its text node, the bar under it, and whether it has typed and is still live.
+// Slice 5: whose countdown it is (HOLLOW's verb, or a resident's lock).
+type VerbSource = 'hollow' | 'resident';
+
 interface VerbRow {
+  source: VerbSource;
   entryId: number;
   row: HTMLElement;
   text: HTMLElement;
@@ -118,34 +129,50 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
 
   const queue = createTypeQueue(() => store.getState().ui.mode === 'memory');
   const choices = new Map<number, ChoiceView>();
-  // The verb telegraph still counting (at most one: the newest; an older one is over).
-  let verbRow: VerbRow | null = null;
+  // The telegraphs still counting, one per source (each the newest of its kind; an older one is over).
+  const verbRows = new Map<VerbSource, VerbRow>();
   let lastId = 0;
 
-  // The verb's line stops counting: greyed where it stands, its bar gone.
-  function endVerbRow(): void {
-    if (verbRow === null) return;
-    verbRow.row.classList.add('verb-over');
-    verbRow.row.classList.remove('verb-live', 'verb-urgent');
-    verbRow.timer.remove();
-    verbRow = null;
+  // A verb's line stops counting: greyed where it stands, its bar gone.
+  function endVerbRow(source: VerbSource): void {
+    const row = verbRows.get(source);
+    if (row === undefined) return;
+    row.row.classList.add('verb-over');
+    row.row.classList.remove('verb-live', 'verb-urgent');
+    row.timer.remove();
+    verbRows.delete(source);
   }
 
-  // Per tick: the live verb's number and bar, or its end.
-  function paintVerbRow(): void {
-    if (verbRow === null) return;
-    const state = store.getState();
+  // What a source's countdown reads now: its text, its share left (0..1) and its whole second; null once it has ended. A
+  // lock is the one its row was said for (its entryId): a lock telegraphed after it starts its own row.
+  function liveCount(row: Readonly<VerbRow>, state: Readonly<GameState>): { text: string; share: number; second: number } | null {
+    if (row.source === 'resident') {
+      const lock = state.resident.corrupted?.lock ?? null;
+      const aim = lockAimView(state);
+      const text = liveVerbText(state, 'resident');
+      if (lock === null || aim === null || text === null || lock.entryId !== row.entryId) return null;
+      return { text, share: aim.progress, second: aim.second };
+    }
     const verb = state.hollow.verb;
-    const live = liveVerbText(state);
-    if (verb === null || live === null) { endVerbRow(); return; }
+    const text = liveVerbText(state);
+    if (verb === null || text === null) return null;
     // Drained from the countdown this verb started with (the ship's first one is longer: tuning.ts).
-    verbRow.fill.style.width = `${Math.max(0, Math.min(100, (100 * verb.leftSec) / verb.totalSec))}%`;
-    if (!verbRow.typed) return;
-    if (verbRow.text.textContent !== live) verbRow.text.textContent = live;
-    const second = verbSecondsLeft(verb);
-    if (verbRow.second !== null && second < verbRow.second) replayAnimation(verbRow.row, 'verb-tick');
-    verbRow.second = second;
-    verbRow.row.classList.toggle('verb-urgent', second <= 1);
+    return { text, share: verb.leftSec / verb.totalSec, second: verbSecondsLeft(verb) };
+  }
+
+  // Per tick: each live countdown's number and bar, or its end.
+  function paintVerbRows(): void {
+    const state = store.getState();
+    for (const row of [...verbRows.values()]) {
+      const live = liveCount(row, state);
+      if (live === null) { endVerbRow(row.source); continue; }
+      row.fill.style.width = `${Math.max(0, Math.min(100, 100 * live.share))}%`;
+      if (!row.typed) continue;
+      if (row.text.textContent !== live.text) row.text.textContent = live.text;
+      if (row.second !== null && live.second < row.second) replayAnimation(row.row, 'verb-tick');
+      row.second = live.second;
+      row.row.classList.toggle('verb-urgent', live.second <= 1);
+    }
   }
 
   const scrollToEnd = (): void => { linesEl.scrollTop = linesEl.scrollHeight; };
@@ -155,10 +182,11 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
     const choice = entry.choice;
     if (!choice?.open) return;
     const left = choiceSecondsLeft(choice);
+    // Slice 5 (plan R23): a choice with no timer (the sleeper's offer) has no clock and no bar (paintChoice hides both).
+    if (choice.timeoutAiSec === null) return;
     const text = formatTac(left);
     if (view.clock.textContent !== text) view.clock.textContent = text;
-    // Slice 5 (plan R23): a choice with no timer has no bar (Track FACE draws it so; the FOUNDATION keeps it empty).
-    view.fill.style.width = choice.timeoutAiSec === null ? '0%' : `${(100 * choice.leftAiSec) / choice.timeoutAiSec}%`;
+    view.fill.style.width = `${(100 * choice.leftAiSec) / choice.timeoutAiSec}%`;
     const running = choiceTimerRunning(store.getState(), entry);
     view.row.classList.toggle('urgent', running && left <= CHOICE_URGENT_SEC);
   }
@@ -170,8 +198,10 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
       button.element.disabled = !choice.open;
       button.element.classList.toggle('picked', choice.picked === button.option);
     });
-    view.timer.hidden = !choice.open || !view.shown;
-    view.clock.hidden = !choice.open;
+    const timed = choiceHasTimer(choice);
+    view.timer.hidden = !timed || !choice.open || !view.shown;
+    view.clock.hidden = !timed || !choice.open;
+    view.row.classList.toggle('untimed', !timed);
     view.row.classList.toggle('choice-open', choice.open);
     view.row.classList.toggle('timed-out', !choice.open && choice.picked === null);
     if (!choice.open) {
@@ -219,17 +249,19 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
   function addLine(entry: LogEntry): void {
     if (entry.divider) { addDivider(entry); return; }
     const row = document.createElement('div');
-    row.className = `term-line speaker-${entry.speaker}${entry.tone ? ` tone-${entry.tone}` : ''}`;
+    const voice = terminalVoice(entry.speaker);
+    row.className = `term-line ${voice.className}${entry.tone ? ` tone-${entry.tone}` : ''}`;
     row.hidden = true;
     const text = document.createElement('span');
     text.className = 'term-text';
     row.appendChild(text);
     const view = choiceView(entry, row);
     if (view) choices.set(entry.id, view);
-    // A verb's telegraph: the newest one counts, any older one is over (one verb at a time).
+    // A verb's telegraph: the newest one of its source counts, any older one is over (one verb, one lock at a time).
     let verb: VerbRow | null = null;
     if (entry.verbCountdown) {
-      endVerbRow();
+      const source: VerbSource = entry.speaker === 'resident' ? 'resident' : 'hollow';
+      endVerbRow(source);
       // It jumps the queue: whatever is still waiting to type shows at once, so its seconds start now
       // (VERB_TELEGRAPH_TYPE_CPS).
       queue.finishAll();
@@ -239,8 +271,8 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
       const fill = document.createElement('span');
       timer.appendChild(fill);
       row.appendChild(timer);
-      verb = { entryId: entry.id, row, text, timer, fill, typed: false, second: null };
-      verbRow = verb;
+      verb = { source, entryId: entry.id, row, text, timer, fill, typed: false, second: null };
+      verbRows.set(source, verb);
     }
     linesEl.appendChild(row);
     while (linesEl.childElementCount > LOG_VIEW_KEEP_ROWS) linesEl.firstElementChild?.remove();
@@ -277,12 +309,15 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
       },
       onUnit: (index) => {
         if (entry.text[index] === ' ') return;
-        play('typeTick', { voice: hollow ? 'hollow' : 'sys' });
+        // Slice 5: a resident's and the sleeper's own voices (04 §4).
+        if (voice.sound === 'residentBlip') play('residentBlip');
+        else if (voice.sound === 'sleeperVoice') play('sleeperVoice');
+        else play('typeTick', { voice: hollow ? 'hollow' : 'sys' });
       },
       paint: (count, done) => {
         if (row.hidden) reveal();
         // A live verb types its number as it is now (the same length: one digit), then counts on per tick.
-        const live = verb !== null && verbRow === verb ? liveVerbText(store.getState()) : null;
+        const live = verb !== null && verbRows.get(verb.source) === verb ? liveCount(verb, store.getState())?.text ?? null : null;
         text.textContent = (live ?? rolledText()).slice(0, count);
         // Typed before its roll is over: the year rolls on in place to its end.
         if (done && rollFromMs !== null) requestAnimationFrame(rollOn);
@@ -300,7 +335,7 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
       queue.clear();
       choices.forEach((view) => view.offKeys?.());
       choices.clear();
-      verbRow = null;
+      verbRows.clear();
       linesEl.replaceChildren();
       lastId = 0;
       return;
@@ -335,7 +370,7 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
   });
   // The clocks drain with leftAiSec, which say.ts mutates per AI tick (no store update); a verb's with hollow.verb.
   const offTick = onPostTick(() => {
-    paintVerbRow();
+    paintVerbRows();
     if (choices.size === 0) return;
     const entries = store.getState().log.entries;
     for (const [entryId, view] of choices) {
