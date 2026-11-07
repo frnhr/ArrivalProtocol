@@ -6,6 +6,7 @@ import { HOLLOW_TYPE_LABEL } from '@data/hollow-text';
 import { UPGRADE_FILE_TEXT } from '@data/upgrades';
 import { SKILL_FILE_TEXT } from '@data/skills';
 import { LOG_TYPE_LABEL } from '@data/log-text';
+import { RESIDENT_TEXT } from '@data/resident-text';
 
 export const TYPE_LABELS: Record<SegmentType, string> = {
   core: 'AI · Core Process',
@@ -20,6 +21,8 @@ export const TYPE_LABELS: Record<SegmentType, string> = {
   upgrade: 'AI · Upgrade file',
   firewall: 'Firewall · nothing bites past it',
   log: LOG_TYPE_LABEL,
+  // Slice 5: the residents' files read as the ship's own before a SCAN (data/resident-text.ts; FACE paints what a SCAN shows).
+  ...RESIDENT_TEXT.typeLabel,
 };
 
 // INSPECT's type line for one file. A SWAP (WP10) leaves a pair the plain type labels misname: the backup now doing

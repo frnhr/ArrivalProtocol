@@ -1,4 +1,4 @@
-// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); tracks ask by message.
+// Slice 5: the lead owns this file (slice-5-plan.md §5); tracks ask by message.
 import type { GameState, RunPhase, RunState, HollowState, RunStats, ArchiveState, HazardsState } from './schema';
 import type { Segment } from '@/types/segment';
 import type { LandingState, PodRecord, ShipLandingDef, AutodropState } from '@/types/landing';
@@ -7,6 +7,8 @@ import type { RunMapState } from '@/types/map';
 import type { SaveState } from '@/types/save';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { SkillId, RunSkillState } from '@/types/skill';
+import type { ResidentState, RunResidentState, ShipResidentDef, CorruptedState, SleeperState } from '@/types/resident';
+import { builtResident, residentRackA } from '@data/residents';
 import { SKILL_IDS } from '@data/skills';
 import { repoToolKind } from '@data/repository';
 import { buildShipMemory, type CarriedRacks, type HurtDriver } from '@data/memory';
@@ -116,7 +118,15 @@ export function createRunState(
     inbox: { read: [] },
     // Phase 3 slice 3c: the world update fills it at RUN END.
     next: null,
+    // Phase 3 slice 5: no resident met yet.
+    residents: createRunResidents(),
   };
+}
+
+// A run that has met no resident and found no signal (slice 5, plan §2.2): every new run, and the v4 → v5 migration (no
+// resident was ever built before v5, so this is the truth for every older save).
+export function createRunResidents(): RunResidentState {
+  return { met: [], signals: [] };
 }
 
 // The slices that belong to one ship (§9 WP7 item 2: systems/run.ts resetWorldForShip assigns them in
@@ -124,7 +134,10 @@ export function createRunState(
 // `run` gives the seed, the ship, the unit and what HOLLOW is called by now. `threat` is the ladder's verdict for this
 // ship (systems/threat-plan.ts planThreat): HOLLOW's config, and its root in the layout's slot (buildShipMemory lays it
 // out from the verdict's rootBlocks; the Packet carries no root, slice 2 review follow-up M5).
-export type ShipSlices = Pick<GameState, 'mission' | 'memory' | 'clock' | 'burn' | 'orbit' | 'level' | 'landing' | 'hollow' | 'hazards'>;
+// Slice 5: and the ship's resident (createResidentState), built only for a kind this build plays (data/residents.ts
+// builtResident): its rack-A files from the ship's own stream ('resident-files'), so the same ship rolls the same files on
+// any route and on a resumed BEAM.
+export type ShipSlices = Pick<GameState, 'mission' | 'memory' | 'clock' | 'burn' | 'orbit' | 'level' | 'landing' | 'hollow' | 'hazards' | 'resident'>;
 
 export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks | null, threat: Readonly<ShipThreat>): ShipSlices {
   const slot = currentSlot(run);
@@ -134,9 +147,11 @@ export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks 
   // meets ship 1 reseeded, the hurt driver too (never the lead, §5.2).
   const firstRun = playsTutorial(run);
   const hurt = hurtDriversFor(ship, firstRun, shipRng(run, slot, 'hurt'));
+  const resident = builtResident(ship.resident);
   const memory = buildShipMemory(
     ship, carried, shipRng(run, slot, ship.memory.drivers.familiesSeedStream), firstRun,
     hollowLabel(run), threat.rootBlocks === null ? null : { blocks: threat.rootBlocks }, hurt,
+    resident === null ? [] : residentRackA(resident, shipRng(run, slot, 'resident-files')),
   );
   // The ship's hazard zones for this run (WP9): the written debris rack on the tutorial run, a seeded one later.
   const zones = resolveZones(ship.zones, ship.flight, firstRun, shipRng(run, slot, 'zones'));
@@ -156,7 +171,35 @@ export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks 
     landing,
     hollow: { ...createHollowState(threat.hollow), untriedTools: untriedOnArrival(run) },
     hazards: createHazardsState(),
+    resident: createResidentState(resident),
   };
+}
+
+// The ship's resident slice (slice 5, plan §2.2) for the resident this build plays here (data/residents.ts builtResident's
+// answer; null: none): its kind's machine at the start of the ship, every other machine null. The codec's reference is
+// createResidentState(null).
+export function createResidentState(def: Readonly<ShipResidentDef> | null): ResidentState {
+  return {
+    def: def === null ? null : { ...def },
+    corrupted: def?.kind === 'corrupted' ? createCorruptedState(def.shown === 'unknown') : null,
+    sleeper: def?.kind === 'sleeping' ? createSleeperState() : null,
+    left: def?.kind === 'left' ? { noteRead: false } : null,
+  };
+}
+
+// A corrupted resident before its wake (04 §3.12): dormant, nothing telegraphed, no deal yet. `surprise`: its card said
+// `unknown` (the late surprise's grace and stamp, no SCAN hunt).
+export function createCorruptedState(surprise: boolean): CorruptedState {
+  return {
+    phase: 'dormant', surprise, calmAiSec: 0, wokeAtAi: null, lockInSec: null, lock: null, locksLanded: 0, locksBlocked: 0,
+    deal: { phase: 'none', fileId: null, fileName: null, entryId: null, outcome: null },
+    angryUntilAi: null, line: 0,
+  };
+}
+
+// The sleeper before anything woke it (04 §3.14).
+export function createSleeperState(): SleeperState {
+  return { phase: 'asleep', wokenBy: null, wokeAtAi: null, job: null, entryId: null, mendingId: null, wallId: null };
 }
 
 // Nothing has hit the ship yet (WP9).

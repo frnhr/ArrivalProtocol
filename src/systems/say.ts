@@ -40,6 +40,9 @@ export const CHANNEL_OF: Record<Speaker, Channel> = {
   'hollow-cmd': 'mind',
   cmd: 'mind',
   'mind-sys': 'mind',
+  // Slice 5 (plan §2.4): the residents speak in the TERMINAL.
+  resident: 'mind',
+  sleeper: 'mind',
 };
 
 // The channel on screen in each mode: COMMS lives in amber, the TERMINAL in blue.
@@ -68,8 +71,9 @@ export function hollowLabel(run: Readonly<Pick<RunState, 'hollowUnits' | 'hollow
 // WP11's verbs every few seconds would otherwise type behind what they say), the radio at its own, and a CONTROL
 // line only after its chime. Story beats are timed with the same numbers (systems/hollow.ts), so a silence
 // starts once a line has finished typing, not while it is still typing.
+// Slice 5: a corrupted resident types at the TERMINAL's pace (it falls through), the sleeper slow and soft, as HOLLOW does.
 export function lineTypeCps(speaker: Speaker): number {
-  if (speaker === 'hollow') return HOLLOW_TYPE_CPS;
+  if (speaker === 'hollow' || speaker === 'sleeper') return HOLLOW_TYPE_CPS;
   return CHANNEL_OF[speaker] === 'mind' ? TERMINAL_TYPE_CPS : COMMS_TYPE_CPS;
 }
 

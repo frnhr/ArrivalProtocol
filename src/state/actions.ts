@@ -112,9 +112,10 @@ function stateOf(seg: Segment): SegmentState | undefined {
 }
 
 // Sets (or clears, with undefined) a segment's state. Only the types that carry one are touched:
-// REPAIR CHARGE, free space, HOLLOW, a FIREWALL and 046.log have none.
+// REPAIR CHARGE, free space, HOLLOW, a FIREWALL and 046.log have none, nor (slice 5) the sleeper's files, its lock or a note.
 function setState(seg: Segment, state: SegmentState | undefined): void {
   if (seg.type === 'free' || seg.type === 'redundancy' || seg.type === 'hollow' || seg.type === 'firewall' || seg.type === 'log') return;
+  if (seg.type === 'sleeper' || seg.type === 'sleep-lock' || seg.type === 'note') return;
   if (state === undefined) delete seg.state;
   else seg.state = state;
 }
@@ -324,7 +325,8 @@ export function actionScan(store: Store<GameState>, seg: Segment): ToolRefusal |
   runQuickOp(store, seg, 'scan', 'scan', scanSec(seg.size), () => {
     if (!('scanned' in seg)) return;
     seg.scanned = true;
-    if (isHealthLabel(seg.state)) seg.state = integrityState(seg.integrity);
+    // Slice 5: the sleeper's files and a note are scanned without a health to show.
+    if (hasIntegrity(seg) && isHealthLabel(seg.state)) seg.state = integrityState(seg.integrity);
     // What a scan finds can matter beyond the file (STASIS: where the colonists are, §1).
     emit('scanned', { segId: seg.id, role: seg.role ?? null });
   }, () => OP_ECHO.scan(echoName(seg), scanFinding(seg.role, hasIntegrity(seg) ? shownIntegrity(seg.integrity) : null)));

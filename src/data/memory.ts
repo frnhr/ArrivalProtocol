@@ -1,6 +1,6 @@
 import type {
   Segment, ShipSegment, ShipBackupSegment, CoreSegment, ToolSegment, FsToolSegment,
-  RedundancySegment, DriverSegment, HollowSegment, LogSegment, SegmentRole,
+  RedundancySegment, DriverSegment, HollowSegment, LogSegment, SegmentRole, ResidentFileSegment,
 } from '@/types/segment';
 import type { ShipDef } from '@data/ships';
 import type { GameState } from '@state/schema';
@@ -12,8 +12,9 @@ import { rollRoster, rollChildAge, type ScriptedRoster } from '@data/souls';
 import {
   SEG_NAME_MAX_CHARS, RACK_BLOCKS, DRIVER_BLOCKS, COLONISTS_PER_POD, INTEGRITY_MAX, LAST_BLOCK_SIZE,
   POD_RACK_MIN_FREE, UNIT_TAIL_BLOCKS, WALL_MIN_BLOCKS, PRE_FINAL_ROOT_CAP, FINAL_ROOT_MAX_BLOCKS, CHARGE_ARRIVAL_FLOOR,
-  SEED_BLOCKS, SEED_GAP_TO_TARGET_BLOCKS,
+  SEED_BLOCKS, SEED_GAP_TO_TARGET_BLOCKS, RESIDENT_RACK_A_MIN_FREE,
 } from '@data/tuning';
+import { RESIDENT_KIND_MAX_BLOCKS } from '@data/residents';
 import { integrityState } from '@state/selectors';
 import { HOLLOW_DESC } from '@data/hollow-text';
 import { driverName } from '@data/landing-text';
@@ -195,6 +196,18 @@ export const RACK_A: readonly RackItem<ShipFileSpec>[] = [
     desc: 'Holds inventory. No flight effect.' },
   { free: 18 },
 ];
+
+// Slice 5 (04 §3.11's L6, plan R16): a resident's files take the head of rack A's trailing free run, so RACK_A keeps at least
+// RESIDENT_RACK_A_MIN_FREE free there, and the largest kind still leaves a WALL's width behind it (the free run that always
+// separates them from the pods). Checked at load.
+(function validateRackAForResidents(): void {
+  const last = RACK_A[RACK_A.length - 1];
+  const free = last !== undefined && 'free' in last ? last.free : 0;
+  const largest = Math.max(...Object.values(RESIDENT_KIND_MAX_BLOCKS));
+  if (free < RESIDENT_RACK_A_MIN_FREE || free - largest < WALL_MIN_BLOCKS) {
+    throw new Error(`memory: rack A ends in ${free} free blocks: residents need ${RESIDENT_RACK_A_MIN_FREE}, and ${largest} + ${WALL_MIN_BLOCKS} for the largest kind`);
+  }
+})();
 
 // --- Racks E and F for a fresh unit (ship 1, §4.2) -------------------------------------------------
 // Engine I/O and Sensor Interp arrive hurt by the transmission (the boot's ECC line names them).
@@ -435,11 +448,12 @@ export { hurtDriversFor } from '@data/driver-damage';
 // the drivers that arrive hurt.
 function buildShipRacks(
   ship: ShipDef, rng: Rng, firstRun: boolean, hollowOwner: string, root: { blocks: number } | null, hurt: readonly HurtDriver[],
-  fail: (why: string) => never,
+  residentFiles: readonly ResidentFileSegment[], fail: (why: string) => never,
 ): Segment[] {
   const def = ship.memory;
   const rackA = buildWrittenRack('A', def.rackA, fail);
   damageShipFiles(rackA, ship, fail);
+  placeResidentFiles(rackA, residentFiles, fail);
   if (root !== null && rootSlotRack(ship) === null) fail(`a ${root.blocks}-block root, but the layout has no root slot (S)`);
   const layouts = podRackLayouts(ship).map(({ rack, tokens }) => ({ rack, tokens: placeRoot(tokens, root, fail) }));
   const podCount = layouts.reduce((pods, { tokens }) => pods + tokens.filter((token) => token.kind === 'driver').length, 0);
@@ -487,6 +501,20 @@ function buildShipRacks(
     }
   }
   return [...rackA, ...podRacks];
+}
+
+// A resident's files (slice 5, plan R16; data/residents.ts residentRackA) in rack A right after Cargo Ctrl: they take the
+// head of the rack's trailing free run, which must hold RESIDENT_RACK_A_MIN_FREE blocks and keep a WALL's width behind them.
+// Nothing to place (no resident, or its kind not built) changes nothing.
+function placeResidentFiles(rackA: Segment[], files: readonly ResidentFileSegment[], fail: (why: string) => never): void {
+  if (files.length === 0) return;
+  const tail = rackA[rackA.length - 1];
+  if (!tail || tail.type !== 'free') return fail('rack A does not end in free blocks for a resident');
+  if (tail.size < RESIDENT_RACK_A_MIN_FREE) fail(`rack A ends in ${tail.size} free blocks, under a resident's ${RESIDENT_RACK_A_MIN_FREE}`);
+  const blocks = files.reduce((sum, seg) => sum + seg.size, 0);
+  const left = tail.size - blocks;
+  if (left < WALL_MIN_BLOCKS) fail(`a resident's ${blocks} blocks leave ${left} free in rack A, under a wall's ${WALL_MIN_BLOCKS}`);
+  rackA.splice(rackA.length - 1, 1, ...files.map((seg) => structuredClone(seg)), freeSegment(left));
 }
 
 // The ship's own files that arrive damaged (§6.9, WP10: VESPER's Thrust Ctrl at 31%; "rack A belongs to the ship"):
@@ -596,16 +624,17 @@ function trimTrailingFree(segs: Segment[], blocks: number, fail: (why: string) =
 // (systems/threat-plan.ts ShipThreat.rootBlocks; slice 2's THREAT track carries it in the Packet): written into the
 // layout's `S` slot, and a root on a ship with no slot throws; null on a ship HOLLOW is not aboard. `hurt` are the
 // drivers that arrive hurt on this run (state/initial.ts passes hurtDriversFor's); left out, the ship's written ones
-// (the layout suites).
+// (the layout suites). `residentFiles` are the ship's resident's rack-A files (slice 5: data/residents.ts residentRackA, for a
+// kind this build plays), placed after Cargo Ctrl; left out, none.
 export function buildShipMemory(
   ship: ShipDef, carried: CarriedRacks | null, rng: Rng, firstRun: boolean, hollowOwner: string, root: { blocks: number } | null,
-  hurt: readonly HurtDriver[] = ship.memory.drivers.hurt,
+  hurt: readonly HurtDriver[] = ship.memory.drivers.hurt, residentFiles: readonly ResidentFileSegment[] = [],
 ): Segment[] {
   const fail = failFor(ship);
   if (typeof hollowOwner !== 'string' || hollowOwner === '') fail('HOLLOW\'s root needs an owner name (say.ts hollowLabel)');
   const layout = layoutFor(ship.memoryClass);
   const aiFiles = ship.memory.aiFiles;
-  const shipRacks = buildShipRacks(ship, rng, firstRun, hollowOwner, root, hurt, fail);
+  const shipRacks = buildShipRacks(ship, rng, firstRun, hollowOwner, root, hurt, residentFiles, fail);
   let unitRacks: Segment[];
   if (carried === null) {
     if (!aiFiles) return fail('a ship without written racks E–F (aiFiles) needs the unit\'s carried files');

@@ -1,3 +1,4 @@
+import type { ResidentKind, ResidentShown } from '@/types/resident';
 import type { ShipLandingDef, ForgivenessClass, TerrainWord } from '@/types/landing';
 import type { LinkNoise } from '@/types/threat';
 import type { MapHistory } from '@/types/lineage';
@@ -51,7 +52,7 @@ export interface ShipKey {
 // What a ship holds for later slices (02 §3.5): rolled in 3a from their own named streams (so a slice that starts
 // showing one never moves the arm's other rolls), stored, and not shown until their slice.
 export interface Reservations {
-  resident: { kind: 'corrupted' | 'left' | 'sleeping'; shown: 'faulty' | 'unknown'; name: string } | null;   // slice 5
+  resident: { kind: ResidentKind; shown: ResidentShown; name: string } | null;   // slice 5 (data/ships.ts ShipDef.resident)
   unknownEvent: 'old-colony' | 'gone-resident' | 'signal' | null;   // a `?` ship (slice 5)
   fragments: number;                                                  // slice 5
   site: 'good' | 'poor';                                              // POOR plays GOOD until slice 6

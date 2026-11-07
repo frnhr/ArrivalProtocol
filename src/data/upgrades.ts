@@ -1,6 +1,7 @@
 // Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the FIREWALL card's usable.
 // Others ask by message.
 import type { RunStats } from '@state/schema';
+import type { SkillId } from '@/types/skill';
 import type { Rng } from '@systems/rng';
 import {
   DRAFT_CARDS, DRAFT_BASE_WEIGHT, DRAFT_FIREWALL_BOOST, DRAFT_FIREWALL_LOST_MIN, DRAFT_REPAIR_V2_BOOST,
@@ -84,6 +85,10 @@ export interface DraftCard {
   effect: string;
   why: string;        // why it was offered (a boost's reason, or BASE_WHY)
   boosted: boolean;
+  // Slice 5 (04 §3.13, plan §2.8; the FOUNDATION's field, Track KIN deals it, Track FACE paints it): a card of a departed
+  // resident's leftover deck, naming its leftover's segment, and the skill a skill card grants (null: a pool card). Absent
+  // on the normal deal. Never saved (a save point holds no transit).
+  leftover?: { segId: string; skill: SkillId | null };
 }
 
 // The reason a card at its base weight was offered: honest, and in ARRIVAL CONTROL's world.

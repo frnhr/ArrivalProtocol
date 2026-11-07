@@ -1,5 +1,5 @@
-// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); a track that needs a new saved field asks
-// the lead (the one v4 bump is the FOUNDATION's).
+// Slice 5: the lead owns this file (slice-5-plan.md §5); a track that needs a new saved field asks the lead (the one
+// v4 → v5 bump is the FOUNDATION's, plan R1).
 import type { Segment, SegmentRole } from '@/types/segment';
 import type { LandingState, LandingTally } from '@/types/landing';
 import type { FsToolKind } from '@/types/fs-tool';
@@ -15,6 +15,7 @@ import type { DeliveryChip, ArrivalDelivery, RunRepoState } from '@/types/repo';
 import type { RunInboxState } from '@/types/inbox';
 import type { SkillId, SkillLevel, AutoMode, RunSkillState, CellRow } from '@/types/skill';
 import type { BurnReason, BurnEvent } from '@systems/predict';
+import type { ResidentState, RunResidentState } from '@/types/resident';
 
 export type ViewMode = 'tools' | 'memory';
 
@@ -487,6 +488,9 @@ export interface RunState {
   // Phase 3 slice 3c: the next unit, as the world update at RUN END worked it out (RUN END's bridging line `UNIT-048 LEFT
   // SOL 3 YEARS AFTER YOU, IN 2303`). null until the run ends, and on the classic world (never updated).
   next: NextLaunch | null;
+  // Phase 3 slice 5 (plan §2.2): every resident met (one record per resident ship ended, systems/residents.ts
+  // residentShipEnd) and the signal fragments found in departed residents' notes.
+  residents: RunResidentState;
 }
 
 // --- HOLLOW (systems/hollow.ts, §6.6) -----------------------------------------------------------
@@ -687,15 +691,19 @@ export interface AlertsState {
 // memory, in its own words (slow); hollow-cmd: its commands echoed in your TERMINAL (`> infect c12   [user: ???]`,
 // its verbs' countdowns: WP11), in its pink but at the TERMINAL's pace, so LAST LIGHT's verbs every few seconds never
 // fall behind what they echo; cmd: your command echoes; mind-sys: the unit's own boot and ECC lines.
-export type Speaker = 'control' | 'sys' | 'hollow' | 'hollow-cmd' | 'cmd' | 'mind-sys';
+// Slice 5 (plan §2.4): resident: a corrupted resident's voice (amber capitals, the TERMINAL's pace); sleeper: the sleeper's
+// (lowercase, the good green, slow and soft). Both speak in the TERMINAL.
+export type Speaker = 'control' | 'sys' | 'hollow' | 'hollow-cmd' | 'cmd' | 'mind-sys' | 'resident' | 'sleeper';
 // Where a line appears: the amber COMMS radio, or the blue TERMINAL inside the mind.
 export type Channel = 'radio' | 'mind';
 
 // An inline choice in the TERMINAL (sayChoice): buttons with a timer bar. leftAiSec is mutated
 // per AI tick; open/picked change with update.
+// Slice 5 (plan R23): timeoutAiSec null is a choice with no timer (the sleeper's offer): no bar, no clock, never timed out;
+// its leftAiSec stays 0 and is never read.
 export interface LogChoice {
   options: string[];
-  timeoutAiSec: number;
+  timeoutAiSec: number | null;
   leftAiSec: number;
   open: boolean;
   picked: string | null;   // null while open, and when it timed out
@@ -728,7 +736,8 @@ export interface LogEntry {
   tone?: LineTone;
 }
 
-export type LineTone = 'good' | 'danger';
+// Slice 5: 'resident' (the boot's `RECEIVER CLOSED` line, amber on every resident ship of any kind: plan R9).
+export type LineTone = 'good' | 'danger' | 'resident';
 
 // Appended in place by say.ts (update), then rev bumps. Subscribers select s.log.rev.
 export interface LogState {
@@ -846,6 +855,8 @@ export interface GameState {
   landing: LandingState;
   hollow: HollowState;
   hazards: HazardsState;
+  // The ship's resident AI and its machine (slice 5, types/resident.ts; systems/residents.ts): a ship slice like HOLLOW's.
+  resident: ResidentState;
   ui: UiState;
   // Lives across every world reset (it is the page's, not the ship's or the run's).
   archive: ArchiveState;

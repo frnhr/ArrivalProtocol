@@ -94,7 +94,9 @@ export function swapAboard(state: Readonly<Pick<GameState, 'memory'>>): boolean 
 
 // A segment that carries a health number (everything but free space, HOLLOW, REPAIR CHARGE and a
 // FIREWALL, which is a wall, not something with health).
-export type HealthSegment = Exclude<Segment, { type: 'free' | 'hollow' | 'redundancy' | 'firewall' | 'log' }>;
+// Slice 5: the sleeper (its mind and its wall), its lock and a departed resident's note have no health either; a corrupted
+// resident's file and a leftover do.
+export type HealthSegment = Exclude<Segment, { type: 'free' | 'hollow' | 'redundancy' | 'firewall' | 'log' | 'sleeper' | 'sleep-lock' | 'note' }>;
 
 export function hasIntegrity(seg: Segment): seg is HealthSegment {
   return 'integrity' in seg;
@@ -105,8 +107,10 @@ export function hasIntegrity(seg: Segment): seg is HealthSegment {
 // What HOLLOW can bite: every file with a health number (the Core, your tools and skills, the
 // filesystem tools, the ship's files, the pods' drivers, the upgrade files you carry). Free space, other
 // hollow, REPAIR CHARGE and a FIREWALL are not food: they stop the spread on that side (§6.6). A list,
-// not "has an integrity", so a new file type has to choose.
-const INFECTABLE_TYPES: ReadonlySet<SegmentType> = new Set<SegmentType>(['core', 'tool', 'fs-tool', 'ship', 'ship-backup', 'driver', 'upgrade']);
+// not "has an integrity", so a new file type has to choose. Slice 5 (04 §3.11, §3.13): a departed resident's leftovers are
+// food (an eaten one deals a plain card); a corrupted resident's own file is a blocker, like REPAIR CHARGE, and so are the
+// sleeper's files and the note.
+const INFECTABLE_TYPES: ReadonlySet<SegmentType> = new Set<SegmentType>(['core', 'tool', 'fs-tool', 'ship', 'ship-backup', 'driver', 'upgrade', 'leftover']);
 
 export function isInfectable(seg: Segment): seg is HealthSegment {
   return INFECTABLE_TYPES.has(seg.type) && hasIntegrity(seg);

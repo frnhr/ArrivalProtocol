@@ -10,7 +10,7 @@ export const ALL_FILTER_KEYS: readonly FilterKey[] = ['ai', 'ship', 'pods', 'fil
 // abilities (upgrade files included: they are what the unit carries); Ship = vessel subsystems;
 // Pods = the pods' drivers (the colonists' filter); Filesystem = managed storage entities (fs-tools,
 // redundancy pool, FIREWALLs, HOLLOW's locked blocks, 046.log); Free = unallocated. Exhaustive: a new segment
-// type must pick its category here.
+// type must pick its category here. Slice 5: a resident's rack-A files are the ship's (plan §2.4): the ship's own mind.
 export function categoryOf(seg: Segment): FilterKey {
   // A disguised seed files as the unit file it pretends to be, or the AI filter would give it away.
   if (isDisguised(seg)) return 'ai';
@@ -21,6 +21,11 @@ export function categoryOf(seg: Segment): FilterKey {
       return 'ai';
     case 'ship':
     case 'ship-backup':
+    case 'resident':
+    case 'sleeper':
+    case 'sleep-lock':
+    case 'note':
+    case 'leftover':
       return 'ship';
     case 'fs-tool':
     case 'hollow':

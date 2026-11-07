@@ -157,7 +157,8 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
     const left = choiceSecondsLeft(choice);
     const text = formatTac(left);
     if (view.clock.textContent !== text) view.clock.textContent = text;
-    view.fill.style.width = `${(100 * choice.leftAiSec) / choice.timeoutAiSec}%`;
+    // Slice 5 (plan R23): a choice with no timer has no bar (Track FACE draws it so; the FOUNDATION keeps it empty).
+    view.fill.style.width = choice.timeoutAiSec === null ? '0%' : `${(100 * choice.leftAiSec) / choice.timeoutAiSec}%`;
     const running = choiceTimerRunning(store.getState(), entry);
     view.row.classList.toggle('urgent', running && left <= CHOICE_URGENT_SEC);
   }

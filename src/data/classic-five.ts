@@ -38,6 +38,7 @@ const ARES_VII: ShipDef = {
   arrivalDamage: [],
   zones: [],
   final: false,
+  resident: null,
   // A calm ship (phase 3 slice 2, 04 §3.2, 01-landing §3.16): three pods at the start of rack B and no root slot (no
   // HOLLOW aboard). POD 01 OKAFOR is Ada's family, first in the credits. POD 02 BRANDT arrives at 44% (it would land hard:
   // the coast's one REPAIR, 01-landing §3.8's scripted damage). Still FULL 384 (memory classes are slice 3).
@@ -88,6 +89,7 @@ const HALCYON: ShipDef = {
   arrivalDamage: [{ role: 'sensor', maxIntegrity: 62 }],
   zones: [],
   final: false,
+  resident: null,
   // A calm ship (01-landing §3.16): five pods at the start of rack B, no root slot; the families are seeded, and
   // ceil(5 ÷ 5) = 1 driver arrives degraded (data/driver-damage.ts). POD 05 leads the credits.
   memory: {
@@ -143,6 +145,7 @@ const KESTREL: ShipDef = {
   // §4.2: rack C on the written run (the story's C07–C12), rack B or C (seeded) on a later one.
   zones: [{ kind: 'debris', id: 'kestrel-debris', centre: { onInboundAtR: 14000 }, r: 900, rack: 'C', laterRacks: ['B', 'C'] }],
   final: false,
+  resident: null,
   // Twelve pods, six in rack B and six in rack C (the debris's rack on the written run: the story's C07–C12), no root
   // slot (01-landing §3.16: HOLLOW never boards before depth 4); rack D is empty (room to MOVE them out of the debris's
   // rack). POD 10 leads the credits. ceil(12 ÷ 5) = 3 drivers arrive degraded (data/driver-damage.ts).
@@ -202,6 +205,7 @@ const VESPER: ShipDef = {
   arrivalDamage: [{ role: 'thrust-ctrl', maxIntegrity: 31 }],
   zones: [],
   final: false,
+  resident: null,
   // Twelve pods (01-landing §3.16): six in rack B, five in rack C around the root slot `S` (POD 08 a 2-block GAP on its
   // left, POD 09 a 1-block GAP on its right, so the scripted bite takes POD 09), and POD 12 in rack D, whose 56 free
   // blocks are the room to MOVE drivers behind a WALL. The slot's rack ends in 21 free: the 10-block root lands there
@@ -265,6 +269,7 @@ const LAST_LIGHT: ShipDef = {
   // §9 WP11 item 1: the belt (WP9's belt kind) hits racks A–B.
   zones: [{ kind: 'belt', id: 'last-light-belt', rIn: 9000, rOut: 12000, racks: ['A', 'B'] }],
   final: true,
+  resident: null,
   // 01-landing §3.16's final-ship layout (plan §2, risk 4: it moves the boss geometry, so boss-sim is re-measured):
   // sixteen pods, seven in rack B (the belt hits A–B), the root slot `S` in rack C between POD 11 (a 2-block GAP) and
   // POD 12 (a 1-block GAP, bitten first), and four in rack D with its last 32 blocks free. The slot's rack ends in 21 free:

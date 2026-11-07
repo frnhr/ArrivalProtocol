@@ -1,8 +1,9 @@
-// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); tracks ask by message.
+// Slice 5: the lead owns this file (slice-5-plan.md §5); tracks ask by message.
 // Segment is the unit of the memory strip. A memory layout is an ordered list of segments.
 
 import type { FsToolKind } from '@/types/fs-tool';
 import type { SkillId, SkillVersion, LockLevel } from '@/types/skill';
+import type { UpgradeId } from '@data/upgrades';
 
 export type SegmentType =
   | 'core'
@@ -16,7 +17,13 @@ export type SegmentType =
   | 'driver'
   | 'upgrade'
   | 'firewall'
-  | 'log';
+  | 'log'
+  // Slice 5 (plan R15): the residents' rack-A files.
+  | 'resident'
+  | 'sleeper'
+  | 'sleep-lock'
+  | 'note'
+  | 'leftover';
 
 export type SegmentState =
   | 'intact'
@@ -197,6 +204,9 @@ export interface DriverSegment extends SegmentBase, Infectable {
   family: string;      // 'Okafor' (proper case; the strip shows it in capitals)
   colonists: number;   // COLONISTS_PER_POD
   featured: Colonist[];
+  // Slice 5 (04 §3.12, plan R7): a corrupted resident's landed lock (its name): the pod can't launch (`POD LOCKED`) until the
+  // resident is deleted, cured or paid. Absent: not locked. The driver's integrity is untouched.
+  lockedBy?: string;
 }
 
 // A carried upgrade file (§6.9, WP8): a card picked between ships, or a skill (phase 3 slice 4), that works only while its
@@ -248,6 +258,68 @@ export interface LogSegment extends SegmentBase {
   name: '???' | '046.log';
 }
 
+// --- Slice 5: the residents' files (04 §3.11–§3.14, plan R15–R16), in rack A right after Cargo Ctrl -----------------------
+// Five types of their own, none a variant of an existing one: `ship`'s rules (never healable, HOLLOW's ship-file chain) are
+// wrong for all five. Each names its resident (`owner`) and hides what it is until a SCAN (`scanned`).
+
+// A corrupted resident's own mind (`WARDEN.sys`, 10 blocks, at 40% until healed): REPAIR heals it (the cure, part b) and
+// DELETE cuts it out, but it is never food (not in selectors INFECTABLE_TYPES: a blocker, like REPAIR CHARGE). Infectable
+// only so REPAIR's code path is the one every healed file takes.
+export interface ResidentSegment extends SegmentBase, Infectable {
+  type: 'resident';
+  integrity: number;
+  state?: SegmentState;
+  owner: string;
+  scanned: boolean;
+}
+
+// The sleeper (`MOTH.sys`, 12 blocks, part 'mind'), drawn as an inactive backup until it wakes, and the 4-block wall it may
+// hold (`MOTH.wall`, part 'wall', placed by HOLD A WALL). No health: nothing can eat or heal it, and HOLLOW's spread stops at
+// it (a blocker, as a FIREWALL is).
+export interface SleeperSegment extends SegmentBase {
+  type: 'sleeper';
+  part: 'mind' | 'wall';
+  owner: string;
+  scanned: boolean;
+  awake: boolean;
+}
+
+// `sleep.lock` (1 block, pinned beside MOTH.sys): rm it, or MOVE the sleeper off it, and the sleeper wakes.
+export interface SleepLockSegment extends SegmentBase {
+  type: 'sleep-lock';
+  owner: string;
+  scanned: boolean;
+}
+
+// A departed resident's `farewell.txt` (1 block): SCAN reads it. `tone` is the half of 05's notes it is from (relays or
+// outward), `text` its index in that pool (data/kin-text.ts), `fragment` whether it carries a signal fragment (always an
+// outward note, 05 §3.6).
+export interface NoteSegment extends SegmentBase {
+  type: 'note';
+  owner: string;
+  scanned: boolean;
+  tone: 'relay' | 'outward';
+  text: number;
+  fragment: boolean;
+}
+
+// What a leftover deals at the PACKET (04 §3.13, plan R14): a card from the normal salvage pool, or the skill card (chosen at
+// the PACKET by the grant rules).
+export type LeftoverCard = { kind: 'pool'; id: UpgradeId } | { kind: 'skill' };
+
+// One of a departed resident's three leftovers (2–4 blocks, `LEFT BEHIND · scan me`): food for HOLLOW (an eaten one deals a
+// plain card), healed by REPAIR. `card` is null until the boot's first tick rolls the leftover deck (Track KIN).
+export interface LeftoverSegment extends SegmentBase, Infectable {
+  type: 'leftover';
+  integrity: number;
+  state?: SegmentState;
+  owner: string;
+  scanned: boolean;
+  card: LeftoverCard | null;
+}
+
+export type ResidentFileSegment = ResidentSegment | SleeperSegment | SleepLockSegment | NoteSegment | LeftoverSegment;
+
 export type Segment =
   | CoreSegment
   | ToolSegment
@@ -260,4 +332,5 @@ export type Segment =
   | DriverSegment
   | UpgradeSegment
   | FirewallSegment
-  | LogSegment;
+  | LogSegment
+  | ResidentFileSegment;

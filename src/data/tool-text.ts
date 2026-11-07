@@ -5,6 +5,7 @@ import type { FsToolKind } from '@/types/fs-tool';
 import { DRIVER_TOOL_TEXT } from '@data/landing-text';
 import { podTag } from '@data/pod-ids';
 import { LOG_TEXT } from '@data/log-text';
+import { RESIDENT_REFUSAL, type PinnedRefusal } from '@data/resident-text';
 import { isDisguised } from '@state/threat-selectors';
 
 // The words the filesystem tools say (WP3): why a click did nothing (shown next to the cursor),
@@ -62,9 +63,12 @@ export const TOOL_REFUSAL = {
   logMove: LOG_TEXT.refuseMove,
   logCopy: LOG_TEXT.refuseCopy,
   logRepair: LOG_TEXT.refuseRepair,
+  // Slice 5 (plan §2.10): the residents' files (data/resident-text.ts; each kind's tool rule returns them).
+  ...RESIDENT_REFUSAL,
 } as const;
 
-export type ToolRefusal = (typeof TOOL_REFUSAL)[keyof typeof TOOL_REFUSAL];
+// Slice 5: `PINNED TO MOTH.sys` names its sleeper (data/resident-text.ts pinnedRefusal), so it is a template, not a constant.
+export type ToolRefusal = (typeof TOOL_REFUSAL)[keyof typeof TOOL_REFUSAL] | PinnedRefusal;
 
 // The inline confirm before a delete that can't be undone (§6.5): the question, and what it costs.
 export interface ConfirmText {
