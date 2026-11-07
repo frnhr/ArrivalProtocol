@@ -3,6 +3,8 @@
 // • withResidentsBuilt(kinds, fn): `fn` runs with those kinds built (the rest as data/residents.ts has them), and the flags
 //   are put back after, even when it throws. Every ship built inside (state/initial.ts createShipSlices: a world reset, a
 //   resume, startShip) plays those kinds; a ship built before keeps what it was built with.
+// • withResidents(flags, fn): the same with each named kind set as given, built or not (a check about a kind that is not
+//   built holds whatever data/residents.ts raises).
 // • armShipSlices(seed, slot): run 1's arm ship in `slot` (run1Map(seed)) as the beam from ARES-VII would build it: its ship
 //   slices, store-free, on a calm verdict (no HOLLOW aboard) and a fresh unit's files over a link wide enough for all of them
 //   (a far ship's real hop from ARES-VII is too thin), for the suites that only look at the built ship (its rack A, its
@@ -20,16 +22,23 @@ import { nominalShipThreat } from '@systems/threat-plan';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { run1Map } from '../map/run1-fixture';
 
-export function withResidentsBuilt<T>(kinds: readonly ResidentKind[], fn: () => T): T {
+export function withResidents<T>(set: Readonly<Partial<Record<ResidentKind, boolean>>>, fn: () => T): T {
   const flags = RESIDENT_BUILT as Record<ResidentKind, boolean>;
   const before = { ...flags };
-  for (const kind of kinds) flags[kind] = true;
+  Object.assign(flags, set);
   try {
     return fn();
   } finally {
     Object.assign(flags, before);
   }
 }
+
+export function withResidentsBuilt<T>(kinds: readonly ResidentKind[], fn: () => T): T {
+  return withResidents(Object.fromEntries(kinds.map((kind) => [kind, true])), fn);
+}
+
+// No kind built: the world before slice 5 (a v4 save's).
+export const NO_RESIDENTS: Readonly<Record<ResidentKind, boolean>> = { corrupted: false, left: false, sleeping: false };
 
 // Wider than any fresh unit's files: armShipSlices is about the ship, not the beam.
 const WIDE_LINK_BLOCKS = 1000;

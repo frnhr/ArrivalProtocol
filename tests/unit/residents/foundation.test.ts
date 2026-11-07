@@ -36,7 +36,6 @@ import { RACK_A, layoutOf } from '@data/memory';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import { TYPE_LABELS } from '@data/type-labels';
 import { LAUNCH_REFUSAL_TEXT } from '@data/landing-text';
-import { TOOL_REFUSAL } from '@data/tool-text';
 import { shipDefAt } from '@systems/map-run';
 import { receiverClosed } from '@systems/delivery-rule';
 import { mapBootLines } from '@systems/map-boot';
@@ -46,6 +45,7 @@ import { residentGhostSpec, residentDealOnThisShip, lockedDrivers } from '@state
 import { isLaunchable, driverCanEverLaunch, driversThatCanEverLaunch, launchQueue, landingView, launchRefusal } from '@systems/landing-rules';
 import { mountSay, sayChoice, openChoiceEntry, choiceTimerRunning, withdrawChoice, CHANNEL_OF, lineTypeCps } from '@systems/say';
 import { targetRefusal, deleteQuestion } from '@systems/tool-targets';
+import { residentToolRule, residentDeleteQuestion } from '@systems/residents';
 import { deleteSec } from '@state/actions';
 import { isInfectable, hasIntegrity, isResidentFile } from '@state/selectors';
 import { categoryOf } from '@state/sidebar-filters';
@@ -56,7 +56,7 @@ import { resumeRun } from '@systems/run-save';
 import { pendingRunSave } from '@systems/save-write';
 import { assertMemoryInvariants } from '@systems/memory-ops';
 import { run1Map } from '../map/run1-fixture';
-import { withResidentsBuilt, armShipSlices } from '../support/residents';
+import { withResidentsBuilt, withResidents, armShipSlices, NO_RESIDENTS } from '../support/residents';
 import { stubStorage, pageOpen, storedSave, toDesk } from '../save/save-fixture';
 import {
   RUN_SAVE_VERSION, RUN_SAVE_KEY, META_STORAGE_KEY, MAX_LINE_CHARS, WALL_MIN_BLOCKS, RESIDENT_RACK_A_MIN_FREE, RESIDENT_GHOST,
@@ -64,6 +64,7 @@ import {
 } from '@data/tuning';
 
 const throws = (run: () => unknown): boolean => { try { run(); return false; } catch { return true; } };
+const BUILT_AT_LOAD = { ...RESIDENT_BUILT };
 
 // --- What this build plays (plan §5: one check per kind, so each track raises only its own line) ---------------------------
 // CORRUPTED: Track WARDEN raises it (`=== true`, `built: corrupted residents (Track WARDEN)`).
@@ -108,12 +109,12 @@ const rackAOf = (memory: readonly Segment[]): Segment[] => {
 };
 const look = (segs: readonly Segment[]): string => segs.map((seg) => `${seg.type}:${seg.name}:${seg.size}`).join(' ');
 {
-  const plain = armShipSlices(SEED, 9).slices;
+  const plain = withResidents(NO_RESIDENTS, () => armShipSlices(SEED, 9).slices);
   check('a kind not built is no resident: GANNET\'s rack A is RACK_A, its slice holds nothing', look(rackAOf(plain.memory)) === look(rackAOf(armShipSlices(SEED, 2).slices.memory))
     && !plain.memory.some((seg) => FILE_TYPES.includes(seg.type)) && isDeepStrictEqual(plain.resident, createResidentState(null)));
-  check('builtResident: the map\'s roll when its kind is built, else null', builtResident(shipDefAt(map7, 9).resident) === null
+  check('builtResident: the map\'s roll when its kind is built, else null', withResidents(NO_RESIDENTS, () => builtResident(shipDefAt(map7, 9).resident)) === null
     && withResidentsBuilt(['corrupted'], () => builtResident(shipDefAt(map7, 9).resident)?.name === 'WARDEN')
-    && withResidentsBuilt(['left', 'sleeping'], () => builtResident(shipDefAt(map7, 9).resident) === null) && RESIDENT_BUILT.corrupted === false);
+    && withResidents({ ...NO_RESIDENTS, left: true, sleeping: true }, () => builtResident(shipDefAt(map7, 9).resident) === null));
   const cargoEnd = RACK_A.slice(0, -1).reduce((sum, item) => sum + ('free' in item ? item.free : item.size), 0);
   for (const [slot, kind, files] of [
     [9, 'corrupted', 'resident:WARDEN.sys:10'], [16, 'corrupted', 'resident:PILOT.sys:10'],
@@ -167,9 +168,14 @@ const look = (segs: readonly Segment[]): string => segs.map((seg) => `${seg.type
   const state = { ...createInitialState({ seed: 3 }), memory: gannet.memory } as GameState;
   const tools: FsToolKind[] = ['scan', 'repair', 'delete', 'move', 'copy', 'swap'];
   const lock = curlew.memory.find((seg) => seg.type === 'sleep-lock')!;
-  check('every tool on a resident file goes to its kind\'s rule (FOUNDATION stubs: NOTHING TO DO THERE); no DELETE question yet',
-    all.every((seg) => tools.every((tool) => targetRefusal(seg, { state, activeKind: tool, pickedSource: null }) === TOOL_REFUSAL.notAFile)
-      && deleteQuestion(state, seg) === null));
+  // The dispatch, not the answer (the stubs refuse NOTHING TO DO THERE; the tracks' rules say their own): a kind's refusal is
+  // the tool's, and DELETE's question is the kind's.
+  check('every tool on a resident file asks its kind\'s rule first (its refusal is the tool\'s); DELETE asks its kind\'s question',
+    all.every((seg) => tools.every((tool) => {
+      const ctx = { state, activeKind: tool, pickedSource: null };
+      const own = residentToolRule(seg, ctx);
+      return own === null || targetRefusal(seg, ctx) === own;
+    }) && isDeepStrictEqual(deleteQuestion(state, seg), residentDeleteQuestion(state, seg))));
   check('…DELETE takes 6.0 s on WARDEN.sys (1.0 + 0.5 × 10), DELETE_SEC on sleep.lock', deleteSec(warden!) === 6 && deleteSec(lock) === DELETE_SEC);
 }
 
@@ -279,6 +285,8 @@ function resumeFixture(file: string): ReturnType<typeof createStore<GameState>> 
   return Object.assign(store, { storage });
 }
 
+// Resumed as a v4 save's world was: no kind built (with `left` built, CORMORANT's resumed boot has LOOKOUT: below).
+withResidents(NO_RESIDENTS, () => {
 for (const [file, point] of [['run-save-v4-ship-done-desk3.json', 'ship-done'], ['run-save-v4-beam-cormorant.json', 'beam']] as const) {
   const { save } = fixture(file);
   const migrated = migrateRunSave(save) as { saveVersion: number; payload: { run: GameState['run']; slices?: { resident: ResidentState } } };
@@ -292,6 +300,7 @@ for (const [file, point] of [['run-save-v4-ship-done-desk3.json', 'ship-done'], 
     store.getState().run.phase === (point === 'beam' ? 'boot' : 'desk') && !store.getState().memory.some(isResidentFile)
     && store.getState().resident.def === null);
 }
+});
 
 // The CORMORANT BEAM with departed residents built: LOOKOUT's files in rack A as a fresh boot of the same ship builds them, the
 // boot's amber line, then its SHIP DONE: LOOKOUT recorded, the slice at rest, and the save decodes.
@@ -371,7 +380,7 @@ withResidentsBuilt(['left'], () => {
   check('the codec reads the residents at rest: open locks, standing DEALs, an offering sleeper, a wrong machine, a met resident off the route or not the map\'s, and too many signals are refused',
     wrong.length === 0, wrong.map(([name, raw]) => `${name} → ${kind(raw)}`).join(' | '));
 });
-check('…withResidentsBuilt puts the flags back', !RESIDENT_BUILT.corrupted && !RESIDENT_BUILT.left && !RESIDENT_BUILT.sleeping);
+check('…withResidentsBuilt puts the flags back', isDeepStrictEqual(RESIDENT_BUILT, BUILT_AT_LOAD));
 
 // --- Words (every FOUNDATION line ≤ MAX_LINE_CHARS at its worst case: the longest pool name, 7 letters) -------------------------
 {
