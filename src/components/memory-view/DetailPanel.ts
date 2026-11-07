@@ -519,8 +519,9 @@ function renderFileDetail(target: HTMLElement, seg: Segment, actual: Segment, de
   // Pre-scan, the `desc` field (which carries lore about damage / cause) is
   // hidden — descs name specific corruption that the player shouldn't know yet.
   // After scan, the full description reveals the cause along with integrity.
+  // Slice 5: a read note's lines are drawn above, line by line and signed, so its desc (KIN's: the same lines in one) is not.
   if (knownScanned) {
-    html += `<div class="detail-desc">${seg.desc || '—'}</div>`;
+    if (!resident?.note) html += `<div class="detail-desc">${seg.desc || '—'}</div>`;
   } else {
     html += `<div class="detail-desc"><em>Integrity unknown. Scan this segment to inspect its contents.</em></div>`;
   }
