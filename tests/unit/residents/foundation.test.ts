@@ -28,7 +28,7 @@ import type { DropSolution } from '@/types/landing';
 import type { FsToolKind } from '@/types/fs-tool';
 import { createStore } from '@state/store';
 import { createInitialState, createResidentState, createCorruptedState, createSleeperState, createShipSlices, createRunResidents } from '@state/initial';
-import { RESIDENT_BUILT, residentRackA, builtResident, RESIDENT_KIND_MAX_BLOCKS } from '@data/residents';
+import { RESIDENT_BUILT, residentRackA, builtResident, RESIDENT_KIND_MAX_BLOCKS, SLEEPER_JOB_KEYS } from '@data/residents';
 import { RESIDENT_TEXT, RESIDENT_REFUSAL, pinnedRefusal } from '@data/resident-text';
 import { WARDEN_TEXT } from '@data/warden-text';
 import { KIN_TEXT } from '@data/kin-text';
@@ -36,7 +36,7 @@ import { RACK_A, layoutOf } from '@data/memory';
 import { CLASSIC_FIVE } from '@data/classic-five';
 import { TYPE_LABELS } from '@data/type-labels';
 import { LAUNCH_REFUSAL_TEXT } from '@data/landing-text';
-import { shipDefAt } from '@systems/map-run';
+import { shipDefAt, shipLaunchYear, classicRunMap } from '@systems/map-run';
 import { receiverClosed } from '@systems/delivery-rule';
 import { mapBootLines } from '@systems/map-boot';
 import { bootLinePlan, bootLine, bootLineTone, speakerTag } from '@data/script';
@@ -93,6 +93,10 @@ const map7 = run1Map(SEED);
     && CLASSIC_FIVE.every((ship) => ship.resident === null));
   check('receiverClosed stays false on every slot (R10: no closed receiver spoils a sleeper or a surprise on the map)',
     map7.arm.every((ship) => !receiverClosed(map7, ship.slot)));
+  check('shipLaunchYear: run 1\'s ships launched in 2240 (05 §3.6: `aboard since 2240`); the classic world has none (review m7)',
+    map7.arm.every((ship) => shipLaunchYear(map7, ship.slot) === 2240) && throws(() => shipLaunchYear(classicRunMap(1, 0, 1), 0)));
+  check('the sleeper\'s offer answers to R, H and T (review m1: no \'game\' key)', SLEEPER_JOB_KEYS.drops === 'R'
+    && SLEEPER_JOB_KEYS.wall === 'H' && SLEEPER_JOB_KEYS.mend === 'T');
 }
 
 // --- The rack-A files per kind (R15–R16) ------------------------------------------------------------------------------------

@@ -12,7 +12,7 @@ import type { LinkNoise } from '@/types/threat';
 import { CLASSIC_FIVE, CLASSIC_HOPS, CLASSIC_FACTS, classicShip } from '@data/classic-five';
 import { layoutFor, shipColonists, POD_RACK_KEYS } from '@data/memory';
 import { WORLDS } from '@data/arm';
-import { RUN_START_YEAR, COLONISTS_PER_POD } from '@data/tuning';
+import { RUN_START_YEAR, COLONISTS_PER_POD, RUN1_SHIP_LAUNCH_YEAR } from '@data/tuning';
 import { currentSlot, armShipAt, worldSlotOf, noiseRng } from '@systems/map-streams';
 import { MAP_STATE_VERSION, EMPTY_HISTORY } from '@data/map-state';
 
@@ -200,3 +200,13 @@ export function fleetOf(map: Readonly<RunMapState>): readonly ShipDef[] {
   return map.route.map((stop) => shipDefAt(map, stop.slot));
 }
 
+// The year an arm ship launched from SOL (slice 5, review m7; 05 §3.6: WARDEN's `aboard since 2240`, the sleeper's years
+// asleep): run 1's ships in RUN1_SHIP_LAUNCH_YEAR, a ship a later run rolled as much later as that run started (its
+// timedAgainstStart: the start year it was rolled against, written only at its roll; a re-timed ship is a new roll). Throws
+// on the classic world (its fixtures have no years) and on a slot the arm does not have.
+export function shipLaunchYear(map: Readonly<RunMapState>, slot: number): number {
+  if (map.world !== 'arm') throw new Error('shipLaunchYear: the classic world has no launch years');
+  const ship = map.arm[slot];
+  if (ship === undefined) throw new Error(`shipLaunchYear: no ship in slot ${slot}`);
+  return RUN1_SHIP_LAUNCH_YEAR + (ship.timedAgainstStart - RUN_START_YEAR);
+}

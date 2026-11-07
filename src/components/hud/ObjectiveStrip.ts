@@ -180,7 +180,7 @@ export function mountObjectiveStrip(store: Store<GameState>): () => void {
     // A standing choice: its words and its clock, patched as the seconds go (the line itself is in the TERMINAL). A verb's
     // telegraph counts down here as it does in the TERMINAL (WP11 review).
     const choice = entry ? choiceTicker(state, entry) : null;
-    const counting = entry?.verbCountdown === true ? liveVerbText(state) : null;
+    const counting = entry?.verbCountdown === true ? liveVerbText(state, entry.speaker) : null;
     const choiceKey = choice ? `${choice.text}|${choice.urgent}` : counting !== null ? `verb|${counting}` : '';
     if (choiceKey !== tickerChoiceKey) {
       tickerChoiceKey = choiceKey;

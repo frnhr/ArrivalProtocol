@@ -24,6 +24,14 @@ export function corruptedAwake(state: Readonly<GameState>): boolean {
   return false;
 }
 
+// A lock's telegraph as it reads now (`> LOCK POD 07 ... 2`): its number from state.resident.corrupted.lock's own clock, the
+// way the TERMINAL counts it and the ticker shows it from amber (flight-hud.ts liveVerbText reads it for a 'resident' line:
+// review m3). null while no lock counts down. FOUNDATION stub (hot path, neutral): null.
+export function liveLockText(state: Readonly<GameState>): string | null {
+  void state;
+  return null;
+}
+
 // The drivers a resident has locked (DriverSegment.lockedBy set), in address order. Built by the FOUNDATION: no lock is
 // ever landed until WARDEN, so it is empty.
 export function lockedDrivers(state: Readonly<GameState>): DriverSegment[] {

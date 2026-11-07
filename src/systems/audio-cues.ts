@@ -315,7 +315,8 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     // --- end of 4e ---
 
     // === Slice 5 (slice-5-plan §2.5): existing cues only; Track FACE may change the cue on these lines (MOTH's lullaby, the
-    // surprise's glitch).
+    // surprise's glitch), and add per-tick entries inside this block (review m5: an onPostTick, already imported, returns its own
+    // unsubscribe, as these do: the sleeper's breath, heartbeat at SLEEPER_BREATH_GAIN while rack A is on screen).
 
     // --- 5 residents: a wake warns as a seed does; a landed lock buzzes and a blocked one sounds as a finished op; the
     // resident's DEAL ends as HOLLOW's does; a deletion stamps, a cure and the sleeper's wake chime, its job a finished op,

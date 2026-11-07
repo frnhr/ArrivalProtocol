@@ -63,6 +63,10 @@ export function residentDeleteQuestion(state: Readonly<GameState>, seg: Readonly
 export function residentShipEnd(store: Store<GameState>, result: Readonly<ShipResult>): void {
   const def = store.getState().resident.def;
   if (def === null) return;
+  // Review m2: before the kind runs (a sleeper's gift must not be paid on a ship already recorded).
+  if (store.getState().run.residents.met.some((met) => met.slot === result.slot)) {
+    throw new Error(`residentShipEnd: ${def.name} on slot ${result.slot} is already recorded`);
+  }
   const base: Omit<ResidentRecord, 'fate'> = {
     slot: result.slot, depth: result.depth, kind: def.kind, name: def.name, shown: def.shown, job: null, podsParkedLocked: 0,
     leftoversEaten: 0,
@@ -84,9 +88,6 @@ export function residentShipEnd(store: Store<GameState>, result: Readonly<ShipRe
       record = { ...base, fate: end.fate, job: end.job };
       break;
     }
-  }
-  if (store.getState().run.residents.met.some((met) => met.slot === record.slot)) {
-    throw new Error(`residentShipEnd: ${def.name} on slot ${record.slot} is already recorded`);
   }
   store.update((draft) => { draft.run.residents.met.push(record); });
 }

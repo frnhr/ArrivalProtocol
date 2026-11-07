@@ -2206,6 +2206,10 @@ export const CIRCLE_NO_APSIS_E = 1e-5;
 // lock, 13 blocks, with a block to spare). RACK_A keeps 18 free on every class (data/memory.ts checks it against this at
 // load), so a resident may sit on any class; data/residents.ts residentRackA throws on a rack A with less.
 export const RESIDENT_RACK_A_MIN_FREE = 14;
+// The year run 1's ships launched from SOL with their own AIs (05 §3.6: `aboard since 2240`, the sleeper's years asleep): 60
+// years before run 1's start, so a run-1 arm ship's resident has been aboard about a lifetime. A ship a later run rolled
+// launched as much later as that run started (systems/map-run.ts shipLaunchYear; review m7).
+export const RUN1_SHIP_LAUNCH_YEAR = 2240;
 
 
 

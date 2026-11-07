@@ -253,7 +253,11 @@ function nextEvent(state: Readonly<GameState>, pred: Prediction): NextEvent | nu
 // lands. The landing has its ghost bursts too since 1b: its engine is open.)
 export function skipLandsInSec(state: Readonly<GameState>, pred: Prediction): number | null {
   const event = nextEvent(state, pred);
-  const ghostInSec = ghostBurstsThisPhase(state) === 0 ? ghostDueInSec(state) : null;
+  // Slice 5 (review m4): a corrupted resident's own first burst is its alarm moment too, even after Thrust Ctrl's bursts
+  // (CorruptedState.bursts counts the resident's alone; the next burst is the resident's while it fires: ghostBy).
+  const corrupted = state.resident.corrupted;
+  const residentFirst = corrupted !== null && corrupted.bursts === 0 && capabilitiesNow(state).thrustCtrl.ghostBy === 'resident';
+  const ghostInSec = ghostBurstsThisPhase(state) === 0 || residentFirst ? ghostDueInSec(state) : null;
   const toEvent = event === null ? null : event.inSec - endLeadTac(event) * state.level.tacticalWarp;
   if (ghostInSec === null) return toEvent;
   return toEvent === null ? ghostInSec : Math.min(toEvent, ghostInSec);

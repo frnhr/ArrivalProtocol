@@ -47,6 +47,13 @@ export const RESIDENT_REFUSAL = {
   residentCopy: 'ONE OF IT IS ENOUGH',
   // DELETE on the sleeper (04 §3.14): the hint is the way in.
   sleeperAsleep: 'IT\'S ASLEEP. SOMETHING IS HOLDING IT: sleep.lock',
+  // Review m6: the rest of KIN's refusals (plan §2.9's REPAIR and COPY on the sleeper, the note's MOVE, its wall's DELETE and
+  // MOVE). The words are the lead's: KIN asks to reword them.
+  sleeperRepair: 'IT\'S ASLEEP, NOT HURT',
+  sleeperCopy: 'YOU CAN\'T COPY A SLEEPER',
+  noteMove: 'IT STAYS WHERE IT WAS LEFT',
+  wallDelete: 'IT IS HOLDING THE WALL FOR YOU',
+  wallMove: 'IT HOLDS THE WALL WHERE IT STANDS',
 } as const;
 
 // MOVE on `sleep.lock` (plan §2.9): `PINNED TO MOTH.sys`, named after its sleeper (names are rolled: plan R17).

@@ -539,11 +539,13 @@ function passOver(state: Readonly<GameState>, view: Readonly<LandingView>): bool
 }
 
 // The plan is flown: no row left, and nothing it reads is only passing (a REPAIR or MOVE on Sensor Interp, Nav Plotter or
-// a driver aboard can bring a window back).
+// a driver aboard can bring a window back). Slice 5 (the lead's hook, review m8): nor a pod aboard held by a resident's lock
+// (DriverSegment.lockedBy: it leaves the queue, and a DELETE, a cure or an ACCEPT frees it into the plan).
 function planOver(state: Readonly<GameState>): boolean {
   const busy = (role: 'sensor' | 'navplot'): boolean => roleHealth(state, role).offline !== null;
   const aboard = new Set(state.landing.pods.filter((record) => record.fate.kind === 'aboard').map((record) => record.pod));
-  const driverBusy = driversInMemory(state).some((driver) => aboard.has(driver.pod) && (driver.state === 'repairing' || driver.state === 'transferring'));
+  const driverBusy = driversInMemory(state).some((driver) => aboard.has(driver.pod)
+    && (driver.state === 'repairing' || driver.state === 'transferring' || driver.lockedBy !== undefined));
   return !busy('sensor') && !busy('navplot') && !driverBusy;
 }
 

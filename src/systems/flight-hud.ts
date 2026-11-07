@@ -1,7 +1,8 @@
 // Slice 4c–4e: Track ORBIT owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
 import type { AutoMode } from '@/types/skill';
 import { MAP_TEXT } from '@data/map-text';
-import type { GameState, Pace, PresetMode, TerminalStatus, LogEntry } from '@state/schema';
+import type { GameState, Pace, PresetMode, TerminalStatus, LogEntry, Speaker } from '@state/schema';
+import { liveLockText } from '@state/resident-selectors';
 import type { Ring, Vec2 } from '@/types/orbit';
 import { secUntil, samplePath, loopProblem, sweetZone, type BurnPoint, type Prediction } from '@systems/predict';
 import { decayWarned, type DecayForecast } from '@systems/landing-orbit';
@@ -1238,8 +1239,10 @@ export function choiceTicker(state: Readonly<GameState>, entry: Readonly<LogEntr
 
 // A HOLLOW verb's telegraph as it reads now (`> unlink repair.bak ... 2`): its number from the live verb, the way the
 // TERMINAL counts it (WP11 part 2) and the ticker shows it from amber (WP11 review: the ticker kept `... 3` while the
-// strip counted 2, 1). null while no verb counts down.
-export function liveVerbText(state: Readonly<GameState>): string | null {
+// strip counted 2, 1). null while no verb counts down. Slice 5 (review m3): a corrupted resident's lock line (`speaker`
+// 'resident') counts down from its own lock (state/resident-selectors.ts liveLockText, WARDEN's), never from HOLLOW's verb.
+export function liveVerbText(state: Readonly<GameState>, speaker: Speaker = 'hollow-cmd'): string | null {
+  if (speaker === 'resident') return liveLockText(state);
   const verb = state.hollow.verb;
   return verb === null ? null : HOLLOW_VERB.telegraph(verb.kind, verb.targetWord, verbSecondsLeft(verb));
 }

@@ -1,6 +1,6 @@
 // Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §5). RESIDENT_BUILT: Track WARDEN edits the
 // `corrupted` line, Track KIN the `left` and `sleeping` lines (one key per line, as SKILL_TREE[id].built was in slice 4).
-import type { ResidentKind, ShipResidentDef } from '@/types/resident';
+import type { ResidentKind, ShipResidentDef, SleeperJob } from '@/types/resident';
 import type {
   ResidentFileSegment, ResidentSegment, SleeperSegment, SleepLockSegment, NoteSegment, LeftoverSegment,
 } from '@/types/segment';
@@ -42,6 +42,11 @@ export const RESIDENT_SEG_IDS = {
   note: 'note',
   leftover: (index: number): string => `leftover${index + 1}`,
 } as const;
+
+// The keys that answer the sleeper's offer in the TERMINAL (review m1; say.ts sayChoice's look.keys, in the jobs' order):
+// letters bound on no 'game'-layer key, so a pick never also mutes the game ([M]) or presses a flight preset ([D], [W]).
+// R RUN THE DROPS, H HOLD A WALL, T (tend) MEND DRIVERS.
+export const SLEEPER_JOB_KEYS: Readonly<Record<SleeperJob, string>> = { drops: 'R', wall: 'H', mend: 'T' };
 
 // The most blocks a kind's files take (04 §3.11's L6): a corrupted resident 10, a sleeper 12 + 1, a departed one 1 + 3 × 4.
 export const RESIDENT_KIND_MAX_BLOCKS: Readonly<Record<ResidentKind, number>> = {
