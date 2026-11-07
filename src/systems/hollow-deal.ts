@@ -3,7 +3,7 @@ import type { GameState, DealOutcome } from '@state/schema';
 import type { Segment, DriverSegment } from '@/types/segment';
 import { onAiTick, onPostTick, isLivePhase } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
-import { say, sayChoice, withdrawChoice } from '@systems/say';
+import { say, sayChoice, withdrawChoice, choiceMayOpen } from '@systems/say';
 import { emit } from '@systems/events';
 import { hollowReach, acceptDeal, biteIntervalSec } from '@systems/hollow';
 import { getOpsBySeg } from '@systems/ops-core';
@@ -84,7 +84,7 @@ function dealOpen(state: Readonly<GameState>): boolean {
   const hollow = state.hollow;
   return hollow.cfg.deal && hollow.phase === 'awake' && hollow.deal.phase !== 'offered' && hollow.deal.phase !== 'done'
     && state.run.stats.deal === null && dealLive(state) && driversInMemory(state).length >= DEAL_MIN_DRIVERS
-    && !residentDealOnThisShip(state);
+    && !residentDealOnThisShip(state) && choiceMayOpen(state, true);
 }
 
 // Why the named driver can no longer be bargained over (null: the offer still stands): HOLLOW ate it while the kid

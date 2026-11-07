@@ -12,7 +12,7 @@ import { autodropController } from '@systems/autodrop';
 import { onAiTick, isLivePhase } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { on, emit } from '@systems/events';
-import { say, sayChoice, withdrawChoice, openChoiceEntry } from '@systems/say';
+import { say, sayChoice, withdrawChoice, otherOpenChoice, choiceMayOpen } from '@systems/say';
 import { getOpsBySeg } from '@systems/ops-core';
 import { segmentStarts, replaceRange, newSegId, assertMemoryInvariants, freeSegment, mergeAdjacentFree, requireAddr } from '@systems/memory-ops';
 import { cureNow } from '@systems/hollow';
@@ -32,8 +32,8 @@ import { TOOL_REFUSAL, type ToolRefusal } from '@data/tool-text';
 import { INTEGRITY_MAX, SLEEPER_WALL_BLOCKS, SLEEPER_GIFT_CYCLES } from '@data/tuning';
 
 // The sleeper (04 §3.14, plan §2.9): asleep behind sleep.lock, woken by one file op (on 'op-done' with the lock's or its own
-// segId), its offer with no timer (say.ts sayChoice with timeoutAiSec null; R23's rule through openChoiceEntry and
-// withdrawChoice), its three jobs, the 'resident' controller for RUN THE DROPS (R11) and the gift (R12). All its machine state
+// segId), its offer with no timer (say.ts sayChoice with timeoutAiSec null; R23's rule through say.ts's arbiter,
+// choiceMayOpen and otherOpenChoice), its three jobs, the 'resident' controller for RUN THE DROPS (R11) and the gift (R12). All its machine state
 // is state.resident.sleeper (plan R2); module state is only what the bus brought between ticks (an op done, a SCAN, the
 // offer's answer: §2.3), acted on at the next AI tick and reset with the world.
 // • The wake: `phase 'awake'` (woken, no job) at once, its three green lines, 'resident-wake' and 'sleeper-woken', then the
@@ -308,7 +308,6 @@ function tick(store: Store<GameState>, dtAi: number): void {
   const sleeper = sleeperOf(state)!;
   if (sleeper.phase === 'offering') {
     const entryId = sleeper.entryId!;
-    const other = openChoiceEntry(state);
     if (answer !== null) {
       // The kid's button (the choice closed with it): the job, or HOLD A WALL whose spot went since the offer.
       const { picked } = answer;
@@ -317,11 +316,12 @@ function tick(store: Store<GameState>, dtAi: number): void {
         if (picked !== null) say('sleeper', KIN_TEXT.sleeper.noRoom(state.resident.def!.name), { critical: true });
         withdrawOffer(store);
       }
-    } else if (state.hollow.deal.phase === 'offered' || (other !== null && other.id !== entryId) || !offerStands(state, entryId)) {
-      // R23: a DEAL (or any other choice) takes the offer back; so does a line that left the log with it.
+    } else if (otherOpenChoice(state, entryId) !== null || !offerStands(state, entryId)) {
+      // R23 (review m1: say.ts's arbiter): any other choice takes the offer back (a timed one opening withdrew its line
+      // already); so does a line that left the log with it.
       withdrawOffer(store);
     }
-  } else if (sleeper.phase === 'awake' && state.hollow.deal.phase !== 'offered' && openChoiceEntry(state) === null) {
+  } else if (sleeper.phase === 'awake' && choiceMayOpen(state, false)) {
     offer(store);
   } else if (sleeper.phase === 'working' && sleeper.job === 'mend') {
     mendTick(store, dtAi);

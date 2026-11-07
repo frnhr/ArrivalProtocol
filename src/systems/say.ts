@@ -308,8 +308,8 @@ export interface ChoiceLook {
 // buttons and a running bar under a line still typing gave the kid less than its timeout to read it and decide).
 // `look` null: buttons only (the ?debug sayChoice), and the ticker shows the line itself.
 // Slice 5 (plan R23): `timeoutAiSec` null is a choice with no timer (the sleeper's offer): it stands until it is answered or
-// withdrawn, and onResolve never gets a timeout's null. At most one choice stands at a time (openChoiceEntry): the one who
-// would open a second withdraws the first (withdrawChoice), or waits.
+// withdrawn, and onResolve never gets a timeout's null. At most one choice stands at a time, by the arbiter below
+// (choiceMayOpen): a timed choice opening over an untimed one withdraws it here, and any other second choice throws.
 export function sayChoice(
   speaker: Speaker, text: string, options: readonly string[], timeoutAiSec: number | null,
   onResolve: (picked: string | null) => void, look: ChoiceLook | null = null,
@@ -324,6 +324,14 @@ export function sayChoice(
     if (look.keys.some((key) => !/^[A-Z]$/.test(key))) throw new Error(`sayChoice('${text}'): a choice key is one capital letter`);
     assertLineFits(look.tickerWords);
   }
+  const standing = openChoices(store.getState());
+  if (standing.length > 0) {
+    if (!choiceMayOpen(store.getState(), timeoutAiSec !== null)) {
+      throw new Error(`sayChoice('${text}'): a choice already stands (${standing.map((entry) => `'${entry.text}'`).join(', ')}); ask choiceMayOpen first`);
+    }
+    // The untimed offer yields to the timed choice (R23): its owner sees its line closed and offers again once none stands.
+    for (const entry of standing) withdrawChoice(entry.id);
+  }
   const id = append(store, speaker, text, {
     options: [...options], timeoutAiSec, leftAiSec: timeoutAiSec ?? 0, open: true, picked: null,
     keys: look === null ? null : [...look.keys], tickerWords: look?.tickerWords ?? null,
@@ -332,9 +340,33 @@ export function sayChoice(
   return id;
 }
 
-// The choice still standing in the log (the TERMINAL shows at most one at a time: THE DEAL), or null.
+// --- The one choice arbiter (slice 5 review m1, architecture 3) ------------------------------------------------------------
+// Every module that asks the kid something (HOLLOW's DEAL, the corrupted resident's DEAL, the sleeper's offer; slice 7's
+// CONTACT, STAY and the endings) asks here before it opens a choice, so the rule lives in one place:
+// • at most one choice stands at a time;
+// • a timed choice (a DEAL's 15 s) may open over untimed ones (the sleeper's offer), which sayChoice then withdraws: a timed
+//   question is never stuck behind one that never times out (R23), and the untimed one is made again once none stands;
+// • nothing else may open while a choice stands (sayChoice throws: two at once is a bug).
+
+function openChoices(state: Readonly<GameState>): LogEntry[] {
+  return state.log.entries.filter((entry) => entry.choice?.open === true);
+}
+
+// A choice (timed or not) may open now.
+export function choiceMayOpen(state: Readonly<GameState>, timed: boolean): boolean {
+  const standing = openChoices(state);
+  return standing.length === 0 || (timed && standing.every((entry) => entry.choice!.timeoutAiSec === null));
+}
+
+// A choice other than `entryId` stands (the owner of `entryId` yields to it), or null.
+export function otherOpenChoice(state: Readonly<GameState>, entryId: number): LogEntry | null {
+  return openChoices(state).find((entry) => entry.id !== entryId) ?? null;
+}
+
+// The choice standing in the log (the TERMINAL shows one at a time), or null: the newest, so a reader never sees an older
+// one the arbiter is about to withdraw.
 export function openChoiceEntry(state: Readonly<GameState>): LogEntry | null {
-  return state.log.entries.find((entry) => entry.choice?.open === true) ?? null;
+  return openChoices(state).at(-1) ?? null;
 }
 
 // The choice's timer is running: its line has typed (sayChoice), so the kid is now spending its seconds. Never for a choice

@@ -10,7 +10,7 @@ import { onWorldReset } from '@systems/reset';
 import { on, emit } from '@systems/events';
 import { onOpsChange, getOpsBySeg, canStartOp, abortOp } from '@systems/ops-core';
 import { raiseAlert, clearAlert } from '@systems/alerts';
-import { say, sayChoice, withdrawChoice, openChoiceEntry } from '@systems/say';
+import { say, sayChoice, withdrawChoice, openChoiceEntry, choiceMayOpen } from '@systems/say';
 import { capabilitiesNow } from '@systems/capabilities';
 import { garbleText } from '@systems/garble';
 import { launchQueue, registerLockRemedy } from '@systems/landing-rules';
@@ -268,7 +268,7 @@ function dealWord(seg: Readonly<Segment>): string {
 
 function dealOpen(state: Readonly<GameState>, corrupted: Readonly<CorruptedState>): boolean {
   return corrupted.phase === 'awake' && corrupted.deal.phase === 'none' && state.hollow.deal.phase === 'none'
-    && openChoiceEntry(state) === null && live(state) && lockedDrivers(state).length > 0;
+    && choiceMayOpen(state, true) && live(state) && lockedDrivers(state).length > 0;
 }
 
 function offerDeal(store: Store<GameState>, file: Readonly<Segment>): void {
@@ -618,7 +618,7 @@ export function offerResidentDealNow(store: Store<GameState>): void {
   if (corrupted.phase !== 'awake') throw new Error(`offerResidentDealNow: it is ${corrupted.phase}, not awake`);
   if (corrupted.deal.phase !== 'none') throw new Error('offerResidentDealNow: its DEAL was already offered on this ship');
   if (state.hollow.deal.phase !== 'none') throw new Error('offerResidentDealNow: HOLLOW\'s DEAL holds this ship\'s one deal');
-  if (openChoiceEntry(state) !== null) throw new Error('offerResidentDealNow: another TERMINAL choice stands');
+  if (!choiceMayOpen(state, true)) throw new Error('offerResidentDealNow: another TERMINAL choice stands');
   const file = dealFile(state);
   if (file === null) throw new Error('offerResidentDealNow: no file to name (the fair tiers are empty)');
   offerDeal(store, file);

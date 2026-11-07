@@ -5,7 +5,8 @@
 //   tools' rules on the three files (the lock's DELETE asks no question, MOVE is PINNED TO BARNABY.sys);
 // • the wake by rm of the lock: three green lines with 05's years (2612 − 2240 = 372), 'resident-wake' and 'sleeper-woken',
 //   then the offer with no timer, keys R and T, and no HOLD A WALL on a calm ship;
-// • R23: a DEAL withdraws the standing offer, and MOTH offers again once it is settled;
+// • R23: a DEAL withdraws the standing offer, and MOTH offers again once it is settled; review m1: so does any other timed
+//   choice (say.ts's one arbiter), and nothing else opens while one stands;
 // • MEND DRIVERS: an infected driver under HOLLOW's drain is healed to 100 and cured, never `repairing`, then the next;
 // • the gift at the ship's end (`taught by BARNABY`, 4 cycles), the record (woken, mend) and the notable event;
 // • the wake by MOVE, its offer left standing at a LOST ship's end: woken with no job ('awake'), the gift paid all the same;
@@ -27,7 +28,7 @@ import { startRun, endShip, openDesk } from '@systems/run';
 import { receiveTransmission } from '@systems/boot';
 import { FIRST_RUN_LINEAGE } from '@systems/meta';
 import { on } from '@systems/events';
-import { openChoiceEntry, choiceTimerRunning, pickChoice } from '@systems/say';
+import { openChoiceEntry, choiceTimerRunning, pickChoice, sayChoice, otherOpenChoice, choiceMayOpen } from '@systems/say';
 import { offerDealNow } from '@systems/hollow-deal';
 import { infectNow, hollowReach } from '@systems/hollow';
 import { activeLandingController } from '@systems/landing-controller';
@@ -155,6 +156,27 @@ until(() => sleeper().phase === 'offering', 10);
   until(() => sleeper().phase === 'offering', 5);
   check('…once the DEAL is settled, MOTH offers again', st().hollow.deal.phase === 'done' && sleeper().phase === 'offering'
     && sleeper().entryId !== first && openChoiceEntry(st())?.speaker === 'sleeper', JSON.stringify(sleeper()));
+}
+
+// --- Review m1: say.ts's one arbiter, with a second choice that is not a DEAL (slice 7's CONTACT, say) ------------------------
+{
+  const before = sleeper().entryId!;
+  let answered: string | null | undefined;
+  const contact = sayChoice('sys', 'CONTACT? A SIGNAL ANSWERS', ['ANSWER', 'IGNORE'], 15, (picked) => { answered = picked; });
+  h.step();
+  check('m1: any timed choice takes MOTH\'s offer back (not only HOLLOW\'s DEAL): one choice stands, the new one',
+    sleeper().phase === 'awake' && sleeper().entryId === null && st().log.entries.find((entry) => entry.id === before)?.choice?.open === false
+    && openChoiceEntry(st())?.id === contact && otherOpenChoice(st(), contact) === null, JSON.stringify(sleeper()));
+  let threw = false;
+  try { sayChoice('sys', 'A SECOND QUESTION', ['A', 'B'], 15, () => {}); } catch { threw = true; }
+  check('…while it stands nothing else may open (choiceMayOpen false either way; a second sayChoice throws)',
+    !choiceMayOpen(st(), false) && !choiceMayOpen(st(), true) && threw);
+  until(() => false, 2);
+  check('…and MOTH waits under it', sleeper().phase === 'awake' && openChoiceEntry(st())?.id === contact);
+  pickChoice(contact, 'IGNORE');
+  until(() => sleeper().phase === 'offering', 5);
+  check('…once it is answered, MOTH offers again', answered === 'IGNORE' && sleeper().phase === 'offering' && sleeper().entryId !== before
+    && openChoiceEntry(st())?.speaker === 'sleeper');
 }
 
 // --- MEND DRIVERS ---------------------------------------------------------------------------------------------------------
