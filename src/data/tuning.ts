@@ -2191,3 +2191,99 @@ export const V3_AIM_ABOVE_DRAG: 'nearest' | 'highest' = 'nearest';
 export const CIRCLE_NO_APSIS_E = 1e-5;
 
 // --- end of 4e ORBIT -----------------------------------------------------------------------------------------------------
+
+// =====================================================================================================================
+// --- Phase 3 slice 5, resident AIs (docs/phase3/impl/slice-5-plan.md §2.6). The FOUNDATION wrote every number below; each
+// track edits values only in its own block (5 WARDEN, 5 KIN, 5 FACE), and a new number goes at the end of its own block.
+// The blocks are kept apart by these banners so that the three tracks' hunks never touch.
+// =====================================================================================================================
+
+// The lead's: a resident's files need this many free blocks in rack A (04 §3.11's L6: the largest kind, MOTH.sys and its
+// lock, 13 blocks, with a block to spare). RACK_A keeps 18 free on every class (data/memory.ts checks it against this at
+// load), so a resident may sit on any class; data/residents.ts residentRackA throws on a rack A with less.
+export const RESIDENT_RACK_A_MIN_FREE = 14;
+
+
+
+
+// --- 5 WARDEN (owned by Track WARDEN; it edits values only in this block): the corrupted resident (04 §3.12) -----------
+
+// WARDEN.sys (04 §3.12): 10 blocks at 40%. REPAIR to 100 costs 60 × 10 × 0.02 = 12 charge in 60 ÷ (100 ÷ (3.0 + 3.0)) =
+// 3.6 s: 04's "about one bite fight", against a 6 s DELETE.
+export const RESIDENT_FILE_BLOCKS = 10;
+export const RESIDENT_START_INTEGRITY = 40;
+// HOLLOW's per-block DELETE (DELETE_HOLLOW_BASE_SEC, DELETE_HOLLOW_PER_BLOCK_SEC): 6.0 s for 10 blocks. It is cut out like
+// something that grew there, not deleted like a file.
+export const RESIDENT_DELETE_BASE_SEC = 1.0;
+export const RESIDENT_DELETE_PER_BLOCK_SEC = 0.5;
+// The engine bursts (plan R3, [FRAN]): 04's 14 tac s and 1 tac s, at the arm's limp amp (ARM_GHOST_BY_BAND: 0.15, Fran's
+// halving of slice 3b) instead of 04's 25%. Its push (0.15 ÷ 14 = 0.0107 per tac s) is 71% of the arm's failing
+// controller (0.015): 04's "about two thirds of an unfixed VESPER" on the arm's own scale. capabilities.ts checks it stays
+// under the failing controller's. To reverse: amp 0.25.
+export const RESIDENT_GHOST: Readonly<GhostSpec> = { meanIntervalTac: 14, amp: 0.15, durTac: 1.0, stickChance: 0 };
+// While a DELETE runs on it (04: "a burst every 4 tac s meanwhile"): the 6 s DELETE costs about 1.5 bursts, so it is felt,
+// but never a reason not to.
+export const RESIDENT_GHOST_DELETING: Readonly<GhostSpec> = { meanIntervalTac: 4, amp: 0.15, durTac: 1.0, stickChance: 0 };
+// After REFUSE or a timeout (04 §3.12): twice as often, for RESIDENT_ANGRY_SEC.
+export const RESIDENT_GHOST_ANGRY: Readonly<GhostSpec> = { meanIntervalTac: 7, amp: 0.15, durTac: 1.0, stickChance: 0 };
+export const RESIDENT_ANGRY_SEC = 30;
+// The locks (04 §3.12): phase 2's verb drill. The first 30 AI s after the wake, then every 40 (room for the flight between
+// them), each telegraphed for 3 s.
+export const RESIDENT_LOCK_FIRST_SEC = 30;
+export const RESIDENT_LOCK_EVERY_SEC = 40;
+export const RESIDENT_LOCK_TELEGRAPH_SEC = 3;
+// At most ceil(pods ÷ 4) locks a ship, never more than 3 (04 §3.12): a TIGHT ship (at most 8 pods) gets 2.
+export const RESIDENT_LOCK_PODS_PER = 4;
+export const RESIDENT_LOCK_MAX = 3;
+// An angry resident's lock interval (04 §3.12: 0.6 × the interval).
+export const RESIDENT_ANGRY_LOCK_FACTOR = 0.6;
+// The late surprise's grace (04 §3.12): it wakes 20 AI s into calm flight, and its first lock comes at 45 instead of 30.
+export const SURPRISE_WAKE_SEC = 20;
+export const SURPRISE_FIRST_LOCK_SEC = 45;
+// The share of a looping line's characters drawn as `▓` (05 §3.12): enough to read as failing (like a degraded AI Comms),
+// little enough that every line stays readable.
+export const RESIDENT_GARBLE = 0.15;
+// The resident's DEAL reuses DEAL_TIMEOUT_SEC (15): both deals give the same time to read and decide.
+
+// --- end of 5 WARDEN -----------------------------------------------------------------------------------------------------
+
+
+
+
+// --- 5 KIN (owned by Track KIN; it edits values only in this block): the residents that left and the sleeper (04 §3.13–14)
+
+// A departed resident's files (04 §3.13): a 1-block note and three leftovers of 2–4 blocks. At most 13 blocks, so rack A
+// keeps at least 5 free (a WALL's width and one).
+export const NOTE_BLOCKS = 1;
+export const LEFTOVER_COUNT = 3;
+export const LEFTOVER_BLOCKS_MIN = 2;
+export const LEFTOVER_BLOCKS_MAX = 4;
+// They wait, untouched, until something eats them.
+export const LEFTOVER_START_INTEGRITY = 100;
+// The sleeper (04 §3.14): MOVE takes 1.5 + 0.2 × 12 = 3.9 s, and rm on its lock 1.0 s.
+export const SLEEPER_FILE_BLOCKS = 12;
+export const SLEEP_LOCK_BLOCKS = 1;
+// HOLD A WALL: a WALL's width (WALL_MIN_BLOCKS), so the wall it holds is the one the kid already knows.
+export const SLEEPER_WALL_BLOCKS = 4;
+// The sleeper's gift (plan R12, [FRAN]): one middle ship's income (ARRIVED +1, LANDED +3 at 60–79%): a v1's price and one
+// more, a gift that is felt but does not buy a tier by itself.
+export const SLEEPER_GIFT_CYCLES = 4;
+// MEND DRIVERS heals at REPAIR v1's rate (REPAIR_BASE_SEC, REPAIR_PER_BLOCK_SEC at 1×), so it has no number of its own:
+// "at REPAIR v1's rate" stays true if REPAIR is retuned.
+// 05 §3.7: CONTACT needs three signals; the stamp reads `SIGNAL · n/3`, and slice 7's CONTACT reads it.
+export const SIGNALS_FOR_CONTACT = 3;
+
+// --- end of 5 KIN --------------------------------------------------------------------------------------------------------
+
+
+
+
+// --- 5 FACE (owned by Track FACE; it edits values only in this block): the residents' look and sound (04 §4) ------------
+
+// The sleeper's breath (04 §4: "the heartbeat cue at low gain", `heartbeat`'s strength). FACE tunes it by ear.
+export const SLEEPER_BREATH_GAIN = 0.08;
+// One breath every 5 s: slower than any warning pulse, so it never reads as an alarm.
+export const SLEEPER_BREATH_HZ = 0.2;
+// The resident stamps reuse STAMP_SHOW_MS.
+
+// --- end of 5 FACE -------------------------------------------------------------------------------------------------------
