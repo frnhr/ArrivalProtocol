@@ -1,5 +1,5 @@
-// Slices 4c–4e: the lead owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2, the lead decision on save ownership):
-// the FOUNDATION made the one v3 → v4 bump for all three tracks. A track that needs another saved field asks the lead.
+// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §5, as slices 4c–4e's decision on save ownership): the
+// FOUNDATION made the one v4 → v5 bump for all three tracks. A track that needs another saved field asks the lead.
 import type { GameState, RunState } from '@state/schema';
 import type { ShipSlices } from '@state/initial';
 import type { ContentVersions } from '@/types/lineage';
@@ -8,7 +8,7 @@ import type {
 } from '@/types/save';
 import type { Meta, RunLineage } from '@systems/meta';
 import { parseLastUnit, MetaCorrupt } from '@systems/meta-parse';
-import { createRunState, createInitialState, createRunSkills, createAutodropState } from '@state/initial';
+import { createRunState, createInitialState, createRunSkills, createAutodropState, createRunResidents, createResidentState } from '@state/initial';
 import { createRunLog } from '@state/log-selectors';
 import { createRunThreat, nominalShipThreat } from '@systems/threat-plan';
 import { createRunMap } from '@systems/map-run';
@@ -60,7 +60,7 @@ const POINT_PHASE: Readonly<Record<SavePoint, RunState['phase']>> = {
 function shipSlicesOf(state: Readonly<GameState>): ShipSlices {
   return structuredClone({
     mission: state.mission, memory: state.memory, clock: state.clock, burn: state.burn, orbit: state.orbit, level: state.level,
-    landing: state.landing, hollow: state.hollow, hazards: state.hazards,
+    landing: state.landing, hollow: state.hollow, hazards: state.hazards, resident: state.resident,
   }) as ShipSlices;
 }
 
@@ -147,7 +147,7 @@ const ENVELOPE_KEYS = ['saveVersion', 'mode', 'content', 'writtenAt', 'unit', 'r
 const RESUME_KEYS = ['unit', 'depth', 'ship', 'year', 'point'];
 const BOOT_KEYS = ['kind', 'run', 'carried', 'threat'];
 const WORLD_KEYS = ['kind', 'phase', 'run', 'slices'];
-const SLICE_KEYS = ['mission', 'memory', 'clock', 'burn', 'orbit', 'level', 'landing', 'hollow', 'hazards'];
+const SLICE_KEYS = ['mission', 'memory', 'clock', 'burn', 'orbit', 'level', 'landing', 'hollow', 'hazards', 'resident'];
 
 // --- Check 4: the shape, field by field ------------------------------------------------------------------------------
 
@@ -265,6 +265,82 @@ function checkSeedsMet(run: Readonly<RunState>, at: string): void {
   }
 }
 
+// --- Slice 5: the residents (RUN_SAVE_VERSION 5, plan §2.2) ------------------------------------------------------------
+
+const RESIDENT_KINDS = ['corrupted', 'left', 'sleeping'];
+const RESIDENT_SHOWN = ['faulty', 'unknown'];
+const SLEEPER_JOBS = ['drops', 'wall', 'mend'];
+const checkResidentRecord = rec({
+  slot: whole, depth: whole, kind: oneOf(...RESIDENT_KINDS), name: name, shown: oneOf(...RESIDENT_SHOWN),
+  fate: oneOf('deleted', 'cured', 'paid', 'ignored', 'left', 'slept', 'woken'), job: nullable(oneOf(...SLEEPER_JOBS)),
+  podsParkedLocked: whole, leftoversEaten: whole,
+});
+
+// The residents met, read as a whole: each on the route at its own depth, once, and of the kind the map placed there; and
+// the signals found, only on a departed resident's ship on the route, never more than its note carried.
+function checkResidentHistory(run: Readonly<RunState>, at: string): void {
+  const { met, signals } = run.residents;
+  const seen = new Set<number>();
+  met.forEach((record, i) => {
+    const where = `${at}.residents.met[${i}]`;
+    if (seen.has(record.slot)) shapeFail(where, `meets slot ${record.slot}'s resident twice`);
+    seen.add(record.slot);
+    const stop = run.map.route[record.depth - 1];
+    if (stop === undefined || stop.slot !== record.slot) shapeFail(where, `is slot ${record.slot} at depth ${record.depth}, off the route`);
+    const placed = run.map.arm[record.slot]?.reserved.resident ?? null;
+    if (placed === null || placed.kind !== record.kind || placed.name !== record.name) shapeFail(where, `is not the resident the map placed in slot ${record.slot}`);
+  });
+  const bySlot = new Map<number, number>();
+  signals.forEach((signal, i) => {
+    const where = `${at}.residents.signals[${i}]`;
+    const stop = run.map.route[signal.depth - 1];
+    if (stop === undefined || stop.slot !== signal.slot) shapeFail(where, `is slot ${signal.slot} at depth ${signal.depth}, off the route`);
+    // Found during its ship (a SCAN of the note), so it never needs the ship's record: only a departed resident's ship, and
+    // no more than its note carries.
+    const count = (bySlot.get(signal.slot) ?? 0) + 1;
+    bySlot.set(signal.slot, count);
+    const fragments = run.map.arm[signal.slot]?.reserved.fragments ?? 0;
+    if (count > fragments || run.map.arm[signal.slot]?.reserved.resident?.kind !== 'left') {
+      shapeFail(where, `is fragment ${count} of slot ${signal.slot}, whose note carries ${fragments}`);
+    }
+  });
+}
+
+// The ship's resident slice (plan §2.2), field by field, and at rest: every save point is outside a flight (residentShipEnd
+// ends every telegraph, offer and job at SHIP DONE; the final ship has none; a boot point holds no slices), so no lock
+// counts down, no DEAL stands and no sleeper's offer is open. Exactly the def's kind has a machine.
+const checkLock = rec({ pod: whole, segId: name, leftSec: num, totalSec: num, entryId: whole });
+const checkResidentDeal = rec({
+  phase: oneOf('none', 'offered', 'done'), fileId: nullable(name), fileName: nullable(name), entryId: nullable(whole),
+  outcome: nullable(oneOf('accepted', 'refused', 'timeout', 'invalidated')),
+});
+const checkCorrupted = rec({
+  phase: oneOf('dormant', 'awake', 'quiet', 'deleted', 'cured'), surprise: bool, calmAiSec: num, wokeAtAi: nullable(num),
+  lockInSec: nullable(num), lock: nullable(checkLock), locksLanded: whole, locksBlocked: whole, deal: checkResidentDeal,
+  angryUntilAi: nullable(num), line: whole,
+});
+const checkSleeper = rec({
+  phase: oneOf('asleep', 'offering', 'working'), wokenBy: nullable(oneOf('rm', 'move')), wokeAtAi: nullable(num),
+  job: nullable(oneOf(...SLEEPER_JOBS)), entryId: nullable(whole), mendingId: nullable(name), wallId: nullable(name),
+});
+const checkResidentSlice: Check = (value, at) => {
+  rec({
+    def: nullable(rec({ kind: oneOf(...RESIDENT_KINDS), shown: oneOf(...RESIDENT_SHOWN), name: name, fragments: whole })),
+    corrupted: nullable(checkCorrupted), sleeper: nullable(checkSleeper), left: nullable(rec({ noteRead: bool })),
+  })(value, at);
+  const slice = value as GameState['resident'];
+  const kind = slice.def?.kind ?? null;
+  if ((slice.corrupted !== null) !== (kind === 'corrupted') || (slice.sleeper !== null) !== (kind === 'sleeping')
+    || (slice.left !== null) !== (kind === 'left')) {
+    shapeFail(at, `holds a machine for a resident that is not '${String(kind)}'`);
+  }
+  if (slice.corrupted !== null) {
+    if (slice.corrupted.lock !== null) shapeFail(`${at}.corrupted.lock`, 'counts down at a save point');
+    if (slice.corrupted.deal.phase === 'offered') shapeFail(`${at}.corrupted.deal`, 'stands open at a save point');
+  }
+  if (slice.sleeper !== null && slice.sleeper.phase === 'offering') shapeFail(`${at}.sleeper`, 'is offering at a save point');
+};
+
 // The tree's history read as a whole (the foundation review's notes): one earning per ended ship, on the ship it names,
 // and a bank that never went below 0 (skill-tree.ts bankOf throws there: a purchase the run could not pay).
 function checkSkillHistory(run: Readonly<RunState>, at: string): void {
@@ -308,6 +384,7 @@ function checkSavedRun(value: unknown, at: string): void {
     }),
     inbox: rec({ read: list(str) }),
     next: nullable(rec({ unit: whole, run: whole, startYear: whole, gap: whole, valveYears: whole })),
+    residents: rec({ met: list(checkResidentRecord), signals: list(rec({ slot: whole, depth: whole })) }),
   })(value, at);
   // Every key of a fresh run is in the spec above (a field a slice adds fails here first, in the round-trip suite).
   const known = Object.keys(refs().run);
@@ -315,6 +392,7 @@ function checkSavedRun(value: unknown, at: string): void {
   if (known.length !== have.length || known.some((key) => !have.includes(key))) shapeFail(at, 'does not have a fresh run\'s fields');
   checkSkillHistory(value as RunState, at);
   checkSeedsMet(value as RunState, at);
+  checkResidentHistory(value as RunState, at);
 }
 
 // Memory (the world payload's): a list of segments, each with its id, name, type and size (the layout and every rule
@@ -387,6 +465,7 @@ function checkSlices(value: unknown, at: string): void {
     mission: likeReference(reference.mission!), memory: checkMemory, clock: likeReference(reference.clock!),
     burn: checkBurn(reference.burn!), orbit: likeReference(reference.orbit!), level: likeReference(reference.level!),
     landing: checkLanding(reference.landing!), hollow: likeReference(reference.hollow!), hazards: likeReference(reference.hazards!),
+    resident: checkResidentSlice,
   })(value, at);
   // SENTRY v2's pre-empt (slice 4d, RUN_SAVE_VERSION 4): a standing outline is never armed at a save point.
   const telegraph = ((value as Record<string, Record<string, unknown>>).hollow!).seedTelegraph;
@@ -602,10 +681,25 @@ function migrateRunSave3(save: Record<string, unknown>): Record<string, unknown>
   return next;
 }
 
+// 4 → 5 (slice 5, one bump for the three tracks: slice-5-plan R1, §2.2). No resident was ever built before v5, so:
+// • run.residents is empty (createRunResidents): nothing met, no signal found;
+// • a world payload's slices gain the resident slice with no resident (createResidentState(null));
+// • memory needs nothing: no v4 save holds the residents' five segment types or a driver's lockedBy, and the log's entries
+//   are read as any record, so the new speakers and a choice with no timer pass as they are.
+function migrateRunSave4(save: Record<string, unknown>): Record<string, unknown> {
+  const next = structuredClone(save);
+  const payload = isRecord(next.payload) ? next.payload : null;
+  if (payload !== null && isRecord(payload.run)) payload.run.residents = createRunResidents();
+  if (payload !== null && isRecord(payload.slices)) payload.slices.resident = createResidentState(null);
+  next.saveVersion = 5;
+  return next;
+}
+
 export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
   1: migrateRunSave1,
   2: migrateRunSave2,
   3: migrateRunSave3,
+  4: migrateRunSave4,
 };
 
 export function migrateRunSave(save: Record<string, unknown>): Record<string, unknown> {

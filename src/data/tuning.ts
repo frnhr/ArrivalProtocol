@@ -2014,7 +2014,9 @@ export const RUN_SAVE_KEY = 'arrival-protocol/run/v1';
 // flight or a landing (RUN_SAVE_MIGRATIONS[2]).
 // 4 (slices 4c–4e, one bump for the three: slice-4cde-plan R1): landing.autodrop, burn.auto.holding,
 // hollow.seedTelegraph.preempted, arrival.seeds[].disguise and run.threat.seedsMetAtDepth (RUN_SAVE_MIGRATIONS[3]).
-export const RUN_SAVE_VERSION = 4;
+// 5 (slice 5, one bump for the three tracks: slice-5-plan R1): run.residents, the ship slice `resident`, the residents' five
+// segment types, DriverSegment.lockedBy and a nullable LogChoice.timeoutAiSec (RUN_SAVE_MIGRATIONS[4]).
+export const RUN_SAVE_VERSION = 5;
 // The archive (§4.5; 02 §3.12: v2 holds the arm, the trail, colonies, routes, events and traces). From slice 3c the key
 // stays `meta/v2` and versions migrate in place (systems/meta.ts migrateMeta, META_VERSION the record's); a new key is
 // only ever a deliberate reset. v1's key (phase 2's archive) was the one such reset: never written, read only to detect it
