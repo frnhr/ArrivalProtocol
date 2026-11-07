@@ -159,6 +159,8 @@ body.reduced-motion .pip[data-override]:not([data-override=""]).flash { animatio
   text-shadow: 0 0 10px var(--sleeper-glow); animation: wr-in 0.5s ease-out both;
 }
 .reduced .lr-gift { animation: none; }
+/* Review m2: the same gift on the LOST card, under its cycles. */
+.burn-result-cycles .burn-result-gift { color: var(--sleeper); text-shadow: 0 0 8px var(--sleeper-glow); margin-top: 2px; }
 
 /* A pod its resident still held: its PARKED row in the resident's amber, the lock named. */
 .lr-row.res-locked .lr-text, .lr-row.res-locked .lr-icon { color: var(--resident); opacity: 0.85; }

@@ -328,7 +328,9 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     // its tear; a reported resident's wake warns as a seed does.
     on('resident-wake', ({ surprise }) => {
       if (!surprise) { play('seedWarn'); return; }
-      play('engineCough');
+      // Review m3: the cough only where it can fire the engine (R4: never in the landing, where HOLLOW's boarding ship may
+      // wake it, D1); the blip and the stamp stay.
+      if (store.getState().run.phase === 'flight') play('engineCough');
       play('residentBlip', undefined, { delaySec: RESIDENT_WAKE_BLIP_AFTER_SEC });
     }),
     on('resident-lock', ({ phase }) => {

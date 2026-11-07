@@ -5,6 +5,7 @@ import { shipLost, lossPlan, continueAfterLoss, shipOutcomeOf, shipResultOf, typ
 import { shipCycles } from '@systems/run-score';
 import { cyclesReport } from '@systems/training-model';
 import { landingResult } from '@systems/landing-rules';
+import { residentReportRows } from '@systems/resident-hud';
 import { requireById, make } from '@components/dom';
 import { MAP_TEXT } from '@data/map-text';
 import { LOSS_BUTTON } from '@data/script';
@@ -83,11 +84,17 @@ export function mountBurnResult(store: Store<GameState>): () => void {
     cyclesEl.hidden = true;
     const plan = lossPlan(state);
     if (state.run.map.world !== 'arm' || plan.kind === 'simulation') return;
+    // Slice 5 review m2: the sleeper's gift is paid landed or lost (R12, review m10), so the LOST card says it too, under the
+    // cycles in the LANDING REPORT's words (resident-hud residentReportRows).
+    const gifts = residentReportRows(state).filter((row) => row.kind === 'gift').map((row) => make('div', 'burn-result-gift', row.text));
     const result = shipResultOf(state, shipOutcomeOf(state), 0);
-    if (result.colonistsAboard <= 0) return;
-    const report = cyclesReport(shipCycles(result), plan.kind === 'end', state.run.ships.length === 0);
-    cyclesEl.replaceChildren(make('div', 'burn-result-cycles-line', report.line),
-      ...(report.topUp === null ? [] : [make('div', 'burn-result-topup', report.topUp)]));
+    const lines: HTMLElement[] = [];
+    if (result.colonistsAboard > 0) {
+      const report = cyclesReport(shipCycles(result), plan.kind === 'end', state.run.ships.length === 0);
+      lines.push(make('div', 'burn-result-cycles-line', report.line), ...(report.topUp === null ? [] : [make('div', 'burn-result-topup', report.topUp)]));
+    }
+    if (lines.length + gifts.length === 0) return;
+    cyclesEl.replaceChildren(...lines, ...gifts);
     cyclesEl.hidden = false;
   }
 
