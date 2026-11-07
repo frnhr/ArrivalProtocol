@@ -2293,5 +2293,11 @@ export const SLEEPER_BREATH_GAIN = 0.08;
 // One breath every 5 s: slower than any warning pulse, so it never reads as an alarm.
 export const SLEEPER_BREATH_HZ = 0.2;
 // The resident stamps reuse STAMP_SHOW_MS.
+// The late surprise's wake (04 §4: `glitchBurst(0.3, 400)`): a small tear, half HOLLOW boarding's and shorter, so it
+// reads as a mind waking in the ship and not as HOLLOW arriving.
+export const SURPRISE_GLITCH_LEVEL = 0.3;
+export const SURPRISE_GLITCH_MS = 400;
+// The surprise's own blip after the wake's warning (04 §4), late enough to be heard apart from it.
+export const RESIDENT_WAKE_BLIP_AFTER_SEC = 0.35;
 
 // --- end of 5 FACE -------------------------------------------------------------------------------------------------------
