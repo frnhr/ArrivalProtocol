@@ -967,3 +967,204 @@ R13 and R18 as [FRAN], with numbers from the sweeps).
 - `src/data/memory.ts` (rack A), `src/data/ships.ts` (`ShipDef.resident`), `src/systems/map-generator.ts` (read only)
 - `src/systems/draft.ts`, `src/systems/skill-tree.ts` (`grantSkill`, `grantCycles`, as built)
 - `src/data/script.ts`, `src/systems/map-boot.ts`, `src/systems/say.ts`
+
+---
+
+## Deviations (foundation)
+
+Recorded by the FOUNDATION agent (from HEAD e5a9d47, thirteen commits from 0097fa2). Steps 0–7 of §6.1 are built. The unit tier
+is green with no behaviour change: 194 passed, 8 balance-only skipped, 133 s on 4 workers. `RESIDENT_BUILT` stays all
+false. As a dry run, with every line raised only the three `built` checks fail and the other 194 suites stay green: the
+rack-A files and the boot line alone move no existing suite (R22's churn will come with KIN's leftover deck).
+
+### What the tracks stand on
+
+**Built (lead-owned from here):**
+- the state (§2.2) in `types/resident.ts`, with `createResidentState`, `createCorruptedState`, `createSleeperState` and
+  `createRunResidents` in `state/initial.ts`; the five segment types and `DriverSegment.lockedBy` in `types/segment.ts`;
+- the three tuning blocks (§2.6) at the end of `tuning.ts`, behind a banner, each closed by an `end of …` line;
+- `data/residents.ts`: `RESIDENT_BUILT`, `builtResident`, `residentRackA` for all three kinds, `RESIDENT_SEG_IDS`;
+  `data/resident-text.ts` (the boot line, the files' names, type lines and descs before a SCAN, the tools' resident refusals);
+- `ShipDef.resident`; rack A's room checked at load (`data/memory.ts`);
+- the dispatcher `systems/residents.ts` and every seam of §2.4, the events and cues of §2.5, the debug hooks of §2.12;
+- save v5 with its migration, codec checks and shape pin; the v4 fixtures;
+- `tests/unit/residents/foundation.test.ts` (51 checks, about 1 s), `residents/foundation-flight.test.ts` (10 checks,
+  about 2 s), `tests/unit/support/residents.ts`.
+
+**The contract, per track.** "Neutral" stubs return the value shown and are safe on every tick. "Throws" stubs throw
+through `not-built.ts notBuilt(what, track)` until built. Each file opens with its track's banner.
+
+| Track | Function (file) | Signature | Now |
+|---|---|---|---|
+| WARDEN | `residentGhostSpec` (state/resident-selectors.ts) | `(state) => GhostSpec \| null` | neutral: null |
+| WARDEN | `corruptedAwake` | `(state) => boolean` | neutral: false |
+| WARDEN | `lockedDrivers` | `(state) => DriverSegment[]` | built: the drivers with `lockedBy` |
+| WARDEN | `residentDealOnThisShip` | `(state) => boolean` | built: `corrupted.deal.phase !== 'none'` |
+| WARDEN | `mountResidentCorrupted` (systems/resident-corrupted.ts) | `(store) => () => void` | built: a no-op mount |
+| WARDEN | `corruptedToolRule` | `(seg: ResidentSegment, ctx: ValidTargetContext) => ToolRefusal \| null` | neutral: `NOTHING TO DO THERE` |
+| WARDEN | `corruptedDeleteSec` | `(seg) => number` | built: 1.0 + 0.5 × size (6.0 s) |
+| WARDEN | `corruptedDeleteQuestion` | `(state, seg) => ConfirmText \| null` | neutral: null |
+| WARDEN | `corruptedShipEnd` | `(store) => { fate: 'deleted' \| 'cured' \| 'paid' \| 'ignored'; podsParkedLocked }` | neutral: ignored, 0 |
+| WARDEN | `wakeResidentNow`, `offerResidentDealNow`, `angerResidentNow` | `(store) => void` | throw |
+| WARDEN | `lockNow` | `(store, pod?: number) => void` | throws |
+| WARDEN | `WARDEN_TEXT` (data/warden-text.ts) | its words | seeded: `wake(name)`, `surprise(name)` |
+| WARDEN | `RESIDENT_RULES` (data/resident-rules.ts) | `readonly GuideRule[]` | empty |
+| KIN | `mountResidentLeft` (systems/resident-left.ts) | `(store) => () => void` | built: a no-op mount |
+| KIN | `leftToolRule` | `(seg: NoteSegment \| LeftoverSegment, ctx) => ToolRefusal \| null` | neutral: `NOTHING TO DO THERE` |
+| KIN | `leftShipEnd` | `(store) => { fate: 'left'; leftoversEaten }` | neutral: left, 0 |
+| KIN | `rollLeftoverCards` | `(store) => void` | throws |
+| KIN | `sleeperController` (systems/resident-sleeper.ts) | `(state) => LandingController \| null` | neutral: null |
+| KIN | `mountResidentSleeper` | `(store) => () => void` | built: registers the `'resident'` resolver |
+| KIN | `sleeperToolRule` | `(seg: SleeperSegment \| SleepLockSegment, ctx) => ToolRefusal \| null` | neutral: `NOTHING TO DO THERE` |
+| KIN | `sleeperShipEnd` | `(store) => { fate: 'slept' \| 'woken'; job: SleeperJob \| null }` | neutral: slept, null |
+| KIN | `wakeSleeperNow` | `(store) => void` | throws |
+| KIN | `pickSleeperJob` | `(store, job: SleeperJob) => void` | throws |
+| KIN | `KIN_TEXT` (data/kin-text.ts) | its words | seeded: one relay and one outward note (05 §3.6's) |
+| FACE | `residentCardRow` (systems/resident-hud.ts) | `(state, slot) => ResidentCardRow \| null` | neutral: null |
+| FACE | `residentReportRows` | `(state) => ResidentReportRow[]` | neutral: [] |
+| FACE | `residentSegmentLook` | `(state, seg) => ResidentSegmentLook \| null` | neutral: null |
+| FACE | `lockAimView` | `(state) => LockAimView \| null` | neutral: null |
+| FACE | `sleeperBreathing` | `(state) => boolean` | neutral: false |
+| FACE | `RESIDENT_UI_TEXT` (data/resident-ui-text.ts), `styles/resident.css` | its words, its css | empty (the css is imported by main.ts) |
+
+The lead's dispatcher (`systems/residents.ts`, never edited by a track) calls them: `mountResidents(store)` (corrupted,
+left, sleeper; once), `residentToolRule(seg, ctx)`, `residentDeleteSec(seg)`, `residentDeleteQuestion(state, seg)`,
+`residentShipEnd(store, result)` and `residentDebug(state)`. The model types in `resident-hud.ts` are FACE's to widen.
+
+**The test lines each track edits** (nothing else in the lead's suites):
+- WARDEN: `residents/foundation.test.ts:71` (`built: corrupted …`, its comment `:70` says the new words);
+  `support/words.test.ts` block `:171–173`; tuning's 5 WARDEN block (`tuning.ts:2213–2252`); `data/residents.ts:23`.
+- KIN: `residents/foundation.test.ts:73` (`left`) and `:75` (`sleeping`); `support/words.test.ts` block `:177–179`; tuning's
+  5 KIN block (`:2257–2280`); `data/residents.ts:25` and `:27`.
+- FACE: `support/words.test.ts` block `:183–185`; tuning's 5 FACE block (`:2285–2293`); the resident block of
+  `audio-cues.ts` (`:317–334`).
+- `residents/foundation-flight.test.ts` checks only what holds whatever the tracks build (no kid acts in it). A track whose
+  build breaks one of its lines asks the lead.
+
+### Deviations
+
+1. **The resident's DEAL reuses HOLLOW's phases and outcomes.** `ResidentDealPhase` is `state/schema.ts DealPhase`
+   (`'none' | 'offered' | 'done'`), not `'idle' | …`, and `ResidentDealOutcome` is `DealOutcome`. HOLLOW's own idle phase
+   is `'none'`, not `'idle'` as R8 says: WARDEN checks `state.hollow.deal.phase === 'none'`. The deal's record is named
+   `ResidentDealState`; `CorruptedPhase` and `SleeperPhase` are named too.
+2. **A leftover's card is `LeftoverCard | null`**, null until KIN's boot roll, rather than a placeholder card that the roll
+   overwrites. A placeholder would be a real-looking card in every save until the roll.
+3. **The rack-A files are passed into `buildShipMemory`**, as an 8th parameter (`residentFiles`, default `[]`).
+   `data/memory.ts` has no run, so it can't call `shipRng(run, slot, 'resident-files')`. `state/initial.ts createShipSlices`
+   gates with `builtResident(ship.resident)`, rolls `residentRackA` on that stream, and builds the slice from the same answer.
+   `placeResidentFiles` throws on a rack A whose trailing free is under `RESIDENT_RACK_A_MIN_FREE`, or that would leave
+   under `WALL_MIN_BLOCKS` behind the files. At load, RACK_A's 18 free are checked against 14 and against the largest kind
+   (13) plus a wall's width.
+4. **Fixed segment ids** (`resident`, `sleeper`, `sleep_lock`, `note`, `leftover1`–`3`; `RESIDENT_SEG_IDS`), as rack A's own
+   files have. A rebuilt ship (a BEAM resume) has the same ids, and KIN's wake reads `'op-done'`'s `segId` against them.
+5. **A note's text is an index into `KIN_TEXT.notes[tone]`**, drawn on the resident-files stream in this order: the tone
+   (unless a fragment forces `outward`), the text, then the three leftover sizes. The FOUNDATION seeded each pool with one of
+   05 §3.6's two samples. When KIN grows a pool, the index range moves which note is drawn, and no other roll.
+6. **The resident refusals are in `TOOL_REFUSAL`** (spread from `resident-text.ts RESIDENT_REFUSAL`: `scanFirst`,
+   `residentMove`, `residentCopy`, `sleeperAsleep`), and `ToolRefusal` gains the template `PinnedRefusal`
+   (`pinnedRefusal(name)`: `PINNED TO BARNABY.sys`; names are rolled, R17). §2.10 put these words in warden-text and
+   kin-text, but `ToolRefusal` is a closed union, so a track would have had to edit `tool-text.ts`. A leftover's DELETE
+   and COPY reuse `TOOL_REFUSAL.logDelete` (`IT ISN'T YOURS TO DELETE`).
+7. **A kind's tool rule refuses first, and null falls through** to the tools' own rules (REPAIR's charge and `ALREADY 100%`,
+   MOVE's and COPY's infection), so no track re-implements them. `residentDeleteQuestion` joins the dispatcher (the plan
+   names only the tool rule and the DELETE time). `isRepairable` takes `resident` and `leftover`, which `actionRepair`'s
+   assertion needs for the cure (part b) and for a leftover.
+8. **`residentShipEnd(store, result)`, not `(draft, result)`.** It runs in `endShip` right after its update and before
+   `openDesk`'s SHIP DONE save. So a kind can withdraw a choice (`withdrawChoice` is a store call) and pay the gift
+   (`grantCycles` is a store call). It throws if a slot is recorded twice.
+9. **`'op-done'` has six emitters**: the five in `actions.ts` (a MOVE's `segId` is the moved file's, which keeps its id; a
+   COPY's the source's; a SWAP's the backup that took the job) and SENTRY v2's pre-empt in `hollow.ts` (`segId: null`).
+10. **`POD LOCKED`'s words are static**: `CAN'T LAUNCH · LOCKED BY THE SHIP'S AI`. `LAUNCH_REFUSAL_TEXT` is a table, and the
+    strip's resident line names the resident (WARDEN's `resident-rules.ts`). With no pod asked for and only locked pods
+    aboard, [L] says `POD LOCKED`, not `NO POD READY`. `driverCanEverLaunch` needed no change: a lock leaves the integrity
+    alone.
+11. **The boot line.** `BOOT_LINE_MAX` goes 22 → 23 and `BOOT_LINE_AT_SEC` gains a 23rd time (29.1 s, the step's own). The
+    tone is `script.ts bootLineTone(kind)`, which `boot.ts` passes to `say`. `LineTone` gains `'resident'`. The line is said
+    on the arm only (the classic five have no resident), and also on a ship no beam reached (none has a resident).
+12. **`speakerTag` gives both voices `SHIP AI`.** It threw on an unknown speaker, and the ticker labels every line. A
+    resident's own lines carry its name (`WARDEN: …`).
+13. **The untimed choice.** `sayChoice(…, null, …)` stores `leftAiSec: 0`; `choiceTimerRunning` is false for it (no clock, no
+    tock, no ticker countdown), and the timer tick skips it. `MindTerminal.ts:160` paints its bar at 0% (FACE's to finish).
+    `openChoiceEntry` and `withdrawChoice` were already built (WP10).
+14. **Capabilities.** `GhostSource` is a named type and `ghostPush` is exported. `validateCapabilityTables` checks
+    `RESIDENT_GHOST`'s push against `ARM_GHOST_BY_BAND.failing`'s (71%). The DELETING (4 s) and ANGRY (7 s) specs push
+    harder than a failing controller, so the composite picks them over it.
+15. **Built rather than stubbed:** `lockedDrivers`, `residentDealOnThisShip` (both neutral with no resident) and
+    `corruptedDeleteSec` (a pure formula). `angerResidentNow` is added for `__ap.resident.angry()`.
+16. **The `'resident'` resolver is registered by the FOUNDATION** in `mountResidentSleeper`, around the stub
+    `sleeperController`. `landing/pace-landing.test.ts:157` and `skills/foundation.test.ts:437` register their own
+    `'resident'` resolver. They run on harness5 or no harness (no `mountResidents`), so they do not collide.
+17. **`DraftCard.leftover`** (`{ segId; skill: SkillId | null }`, optional) is added to `data/upgrades.ts` (KIN's file), so
+    FACE can paint the deck before KIN deals it. It is never saved: a save point holds no transit.
+18. **Notable events** take `residents` in their `Pick`. The order is the DEAL, then each resident deleted, cured or woken in
+    route order (`value`: its depth), then the best colony and the ships lost. `NotableEventKind` is a named type.
+    `world/lineage.test.ts:44` and `:110` pass `residents`.
+19. **The codec** reads `run.residents` field by field, plus `checkResidentHistory`. Each met resident is on the route at its
+    depth, once, and is the kind and name the map placed there. A signal is on the route, on a `left` reservation, and no
+    more than its note carries. It does not need the ship's record, because a signal is found during its ship. The slice
+    is read field by field: exactly the def's kind has a machine, no lock, no DEAL offered, no sleeper offering. The
+    refusals are tested in `residents/foundation`, as §7.1 says, not in `save/codec`. `save/codec`'s step count is 1–4.
+20. **`support/words`**: a resident is a mind, not a colonist, so the colonists' `wake` rule skips the four resident word
+    modules. Otherwise "woken" and `IS AWAKE` would need allowances in the shared list. Each track has an empty block at the
+    end.
+21. **Type lines and descs before a SCAN** are the lead's (`RESIDENT_TEXT.typeLabel`, `.desc`), so the type line gives no
+    kind away: `Ship System · Onboard AI`, `· Backup` (the sleeper), `· Lock file`, `· Text file`, `· Left behind`. The
+    sleeper's desc is `Inactive. A backup the ship's builders left.` FACE and KIN ask the lead to change them.
+22. **No case was needed in `carry.ts`, `transmit.ts` or `script.ts`.** The carry packs only `isUnitFileType` files and the
+    PACKET's chips are packed files, so rack A never crosses. Only `sidebar-filters.ts` is exhaustive over the segment
+    types (the five list as SHIP). `actions.ts setState` and SCAN's health label skip the types with no health.
+    `isResidentFile` is in `state/selectors.ts`.
+23. **Names the plan cites that differ:** `healRate(8)` is `data/fs-tools.ts repairRatePerSec(size, version)` (and
+    `hollow.ts healRatePerSec` is something else); HOLLOW's idle deal phase is `'none'` (1). Every other name was checked
+    and stands: `ghostSpecOf`, `ARM_GHOST_BY_BAND`, `driversThatCanEverLaunch`, `landingView`, `rmTargets`, `cureNow`,
+    `draftCards`, `draftContext`, `dealDraft`, `applyPickToPacket`, `grantCycles`, `grantSkill`, `grantAllowed`,
+    `hollowFirstFightDecided`, `getOpsBySeg`, `skillBootLines`, `topUpReservations`, the desk's reserved `'resident'` row.
+24. **`?seed=7` gives `armSeed` 7** by the page's own path: `state/instance.ts pickRunSeed` → `openPageStorage` →
+    `pageTitleState`, the calls the save fixture's `pageOpen` makes. That walk printed `armSeed 7` while dumping the fixtures,
+    and §1.2's seed-7 table matches the code (`residents/foundation`). This holds on a cleared archive. With an archive, the
+    arm comes from it. No browser was run.
+25. **Tests beyond §7.1:** `residents/foundation-flight.test.ts` (every kind built, flown on the WP7 harness);
+    `support/residents.ts` also has `withResidents(flags, fn)`, `NO_RESIDENTS` and `armShipSlices(seed, slot)`. The
+    `built` checks are the only foundation lines a flag moves.
+26. **Banners.** Every §6.2 file opens with its track's. `map-boot.ts`, `tool-targets.ts`, `actions.ts` and `run.ts` change
+    from SENTRY's (4cde) to the lead's. `capabilities.ts` changes from TREE's (4) to the lead's. `not-built.ts`'s `Track`
+    is `WARDEN | KIN | FACE`.
+
+### Notes for the tracks
+
+- **WARDEN:**
+  - `residentGhostSpec` is the only thing that makes the engine fire; `capabilities.ts` picks it over Thrust Ctrl's when it
+    pushes harder and sets `ghostBy: 'resident'`. `ghost-thrust.ts` and the THRUST CTRL pip word themselves by `ghostBy`;
+  - `corruptedShipEnd` must leave the slice at rest: `lock: null`, a standing DEAL withdrawn (`withdrawChoice`) and settled.
+    The codec refuses a SHIP DONE save otherwise;
+  - land a lock by setting `driver.lockedBy` (memory is mutated in place, then `memoryRev`), and release it by deleting the
+    field. The lock's target is `launchQueue(state)[0]`, which already skips locked pods;
+  - before the DEAL, check `state.hollow.deal.phase === 'none'` and `openChoiceEntry(state) === null`;
+  - `CONFIRM_TEXT.deleteFile` upper-cases the name (`DELETE WARDEN.SYS?`). Build the `ConfirmText` yourself to keep
+    `WARDEN.sys`;
+  - a lock's TERMINAL countdown (`verbCountdown`) is painted live today only from `hollow.verb`. FACE paints the resident's
+    from `state.resident.corrupted.lock`.
+- **KIN:**
+  - grow both note pools to at least 4;
+  - roll the cards in `rollLeftoverCards`, called from your mount at the boot's first tick. A BEAM resume replays it from
+    the same streams. `residents/foundation.test.ts:314` compares a resumed rack A, before any tick, with a fresh build; if
+    the cards are rolled anywhere else, that line is yours to adjust (ask the lead);
+  - wake on `'op-done'` with `kind 'delete'` and `segId === RESIDENT_SEG_IDS.sleepLock`, or `kind 'move'` and `segId ===
+    RESIDENT_SEG_IDS.sleeper`;
+  - R23: your AI tick runs after HOLLOW's DEAL (mounted after it). Withdraw MOTH's offer in the tick HOLLOW's `deal.phase`
+    becomes `'offered'`, offer again when it is `'done'`, and never offer while `openChoiceEntry` is set;
+  - RUN THE DROPS: `autodropController(state, { version: 3, queue: [], source: 'resident', armed: 'plan' })`. AUTODROP's own
+    `shadowed()` already stands aside for a higher source;
+  - the gift: `grantCycles(store, SLEEPER_GIFT_CYCLES, 'resident', \`taught by ${name}\`)` in `sleeperShipEnd`;
+  - MOTH.wall: a `sleeper` segment, `part: 'wall'`. HOLLOW stops at any neighbour that is not food (`hollow.ts:195`), with
+    no change there;
+  - the signal: push `{ slot, depth }` to `run.residents.signals`; the codec allows it on a `left` reservation, up to its
+    fragments.
+- **FACE:**
+  - the voices already carry the classes `speaker-resident` / `speaker-sleeper` (`MindTerminal`'s
+    `speaker-${entry.speaker}`) and the RECEIVER CLOSED line `tone-resident`;
+  - `resident.css` is imported after `responsive.css`;
+  - the strip, INSPECT's type line and the ticker's `SHIP AI` tag are the lead's words: ask to change them.
+- **The lead:** the shape pin reaches `resident.*` and `residents.*` at depth 3, so a field added to `ResidentState`'s
+  machines or to `RunResidentState`'s records is caught by the codec's field-by-field checks, not by the pin. The
+  independent contract review (§6.1 item 8) is next.
