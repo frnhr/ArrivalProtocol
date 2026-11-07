@@ -2251,6 +2251,9 @@ export const SURPRISE_FIRST_LOCK_SEC = 45;
 // The share of a looping line's characters drawn as `▓` (05 §3.12): enough to read as failing (like a degraded AI Comms),
 // little enough that every line stays readable.
 export const RESIDENT_GARBLE = 0.15;
+// Its looping lines come at its bursts, but never within this many AI s of its last line of any kind: at CRUISE the bursts
+// come every few seconds of wall time (the scheduler runs on game time), and a line at each one buried the TERMINAL.
+export const RESIDENT_LINE_EVERY_SEC = 20;
 // The resident's DEAL reuses DEAL_TIMEOUT_SEC (15): both deals give the same time to read and decide.
 
 // --- end of 5 WARDEN -----------------------------------------------------------------------------------------------------

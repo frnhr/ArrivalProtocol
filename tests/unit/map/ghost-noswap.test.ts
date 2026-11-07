@@ -20,16 +20,16 @@ import { seedsInMemory } from '@systems/hollow';
 import { REPO_TEXT } from '@data/repo-text';
 import { MAX_LINE_CHARS } from '@data/tuning';
 import { send, giveTools } from './repo-fixture';
-import { capabilitiesNow } from '@systems/capabilities';
+import { capabilitiesNow, ghostRefusesSkip } from '@systems/capabilities';
 import { actionRepair } from '@state/actions';
 import { getByRole, chargeLeft } from '@state/selectors';
 import { getOpsBySeg } from '@systems/ops-core';
 import { targetRefusal } from '@systems/tool-targets';
-import { createInitialState } from '@state/initial';
+import { createInitialState, createResidentState } from '@state/initial';
 import { freshUnitRacks } from '@systems/carry';
 import { classicShip } from '@data/classic-five';
 import { TOOL_REFUSAL } from '@data/tool-text';
-import { ARM_GHOST_BY_BAND, GHOST_BY_BAND, THRUST_CTRL_REPAIR_MAX } from '@data/tuning';
+import { ARM_GHOST_BY_BAND, GHOST_BY_BAND, THRUST_CTRL_REPAIR_MAX, RESIDENT_GHOST_ANGRY } from '@data/tuning';
 import type { Segment } from '@/types/segment';
 const noSwapLines = ['tut-ghost-noswap', 'tut-ghost-noswap-tab', 'tut-ghost-noswap-fly'];
 import type { GameState } from '@state/schema';
@@ -80,6 +80,20 @@ check('the limp (Fran\'s decision): the arm\'s failing controller fires ARM_GHOS
 check('…and none once the orbit is locked or accepted (the landing)', capabilitiesNow({ ...st(), run: { ...st().run, phase: 'landing' } }).thrustCtrl.ghost === null);
 h.stepUntil(() => st().burn.ghost === null, 5);
 check('…and the moment stands between bursts', st().burn.ghost === null && noSwapForGhost(st()));
+{
+  // Slice 5 (plan R5, review M5; Track WARDEN): a corrupted resident angry enough to outpush this failing controller is the
+  // scheduler's source (ghostBy), but the SWAP-only readers keep Thrust Ctrl's own ghost (controllerGhost): the no-Swap
+  // moment and the ENGINE FAULT refusal stand, and VESPER's own bursts are still the controller's.
+  const withResident = structuredClone(st()) as GameState;
+  withResident.resident = createResidentState({ kind: 'corrupted', shown: 'faulty', name: 'WARDEN', fragments: 0 });
+  withResident.resident.corrupted!.phase = 'awake';
+  withResident.resident.corrupted!.angryUntilAi = withResident.clock.aiSec + 10;
+  withResident.memory.push({ id: 'resident', name: 'WARDEN.sys', type: 'resident', size: 10, integrity: 40, owner: 'WARDEN', scanned: false });
+  const ctrl = capabilitiesNow(withResident).thrustCtrl;
+  check('slice 5: an angry resident outpushing it fires instead (ghostBy), yet the no-Swap moment and ENGINE FAULT\'s refusal stand',
+    ctrl.ghostBy === 'resident' && ctrl.ghost === RESIDENT_GHOST_ANGRY && ctrl.controllerGhost === ARM_GHOST_BY_BAND.failing
+    && noSwapForGhost(withResident) && ghostRefusesSkip(withResident) && capabilitiesNow(st()).thrustCtrl.ghostBy === 'controller');
+}
 
 // The seed on the beam holds its own SKIP refusal: the defender (who has Rm) clears it first.
 // (and an infection the KESTREL seed left is healed: their alerts hold SKIP refusals of their own).
