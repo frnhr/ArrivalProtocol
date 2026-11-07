@@ -972,8 +972,8 @@ R13 and R18 as [FRAN], with numbers from the sweeps).
 
 ## Deviations (foundation)
 
-Recorded by the FOUNDATION agent (from HEAD e5a9d47, thirteen commits from 0097fa2). Steps 0–7 of §6.1 are built. The unit tier
-is green with no behaviour change: 194 passed, 8 balance-only skipped, 133 s on 4 workers. `RESIDENT_BUILT` stays all
+Recorded by the FOUNDATION agent (from HEAD e5a9d47, fifteen commits from 0097fa2). Steps 0–7 of §6.1 are built. The unit tier
+is green with no behaviour change: 195 passed (the two new suites among them), 8 balance-only skipped, 130 s on 4 workers. `RESIDENT_BUILT` stays all
 false. As a dry run, with every line raised only the three `built` checks fail and the other 194 suites stay green: the
 rack-A files and the boot line alone move no existing suite (R22's churn will come with KIN's leftover deck).
 
