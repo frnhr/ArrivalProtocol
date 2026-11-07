@@ -37,7 +37,7 @@ import { getDropSolution } from '@systems/drop-cache';
 import { getPrediction } from '@systems/predict';
 import { landingOrbitAim } from '@systems/autoburn-v3';
 import { dropHalfWidthKm } from '@systems/landing-solve';
-import { bestRepairForDrop, dropFactors, landingView as landingViewOf, podCounts } from '@systems/landing-rules';
+import { bestRepairForDrop, dropFactors, landingView as landingViewOf, podCounts, lockCanBeFreed } from '@systems/landing-rules';
 import { autoburnHoldsLandingOrbit, driversInMemory } from '@state/selectors';
 import { demoSkill, AUTODROP_DEMO_TUNING } from '@systems/skill-tree';
 import {
@@ -567,12 +567,13 @@ function passOver(state: Readonly<GameState>, view: Readonly<LandingView>): bool
 
 // The plan is flown: no row left, and nothing it reads is only passing (a REPAIR or MOVE on Sensor Interp, Nav Plotter or
 // a driver aboard can bring a window back). Slice 5 (the lead's hook, review m8): nor a pod aboard held by a resident's lock
-// (DriverSegment.lockedBy: it leaves the queue, and a DELETE, a cure or an ACCEPT frees it into the plan).
+// (DriverSegment.lockedBy: it leaves the queue, and a DELETE, a cure or an ACCEPT frees it into the plan), while something
+// aboard can still free it (slice 5 review M3: a lock nothing can free is the pod's fate, not a passing factor).
 function planOver(state: Readonly<GameState>): boolean {
   const busy = (role: 'sensor' | 'navplot'): boolean => roleHealth(state, role).offline !== null;
   const aboard = new Set(state.landing.pods.filter((record) => record.fate.kind === 'aboard').map((record) => record.pod));
   const driverBusy = driversInMemory(state).some((driver) => aboard.has(driver.pod)
-    && (driver.state === 'repairing' || driver.state === 'transferring' || driver.lockedBy !== undefined));
+    && (driver.state === 'repairing' || driver.state === 'transferring' || (driver.lockedBy !== undefined && lockCanBeFreed(state))));
   return !busy('sensor') && !busy('navplot') && !driverBusy;
 }
 

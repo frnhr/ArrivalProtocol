@@ -35,10 +35,12 @@ import { windowPip } from '@systems/flight-hud';
 import { getOpsBySeg, reserveThread, releaseThread } from '@systems/ops-core';
 import { pickChoice, openChoiceEntry } from '@systems/say';
 import { endLanding } from '@systems/landing';
+import { pressAutodrop, autodropDebug } from '@systems/autodrop';
+import { giveSkillFile } from '../support/skills';
 import { isLaunchable, launchQueue, canEverLaunch, driversThatCanEverLaunch } from '@systems/landing-rules';
 import { freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
 import { hollowFirstFightDecided } from '@state/threat-selectors';
-import { chargeLeft } from '@state/selectors';
+import { chargeLeft, driversInMemory } from '@state/selectors';
 import { GHOST_ALARM_ID, GHOST_WARN_ID } from '@systems/alerts';
 import { WARDEN_TEXT } from '@data/warden-text';
 import { GUIDE_RULES } from '@data/script';
@@ -450,6 +452,41 @@ withResidentsBuilt(['corrupted'], () => {
       boarded && s().run.phase === 'flight' && Math.abs(machine().calmAiSec - SURPRISE_WAKE_SEC) < 0.25,
       `age ${s().run.threat.age} · calm ${machine().calmAiSec.toFixed(2)} · ${s().run.phase}`);
   }
+  // Review m9 (the foundation's m8): AUTODROP v3 armed with a locked pod aboard ends no plan until the pod is freed (its thread
+  // let go meanwhile), and then plans it again.
+  {
+    toGannet();
+    giveSkillFile(h.store, 'autodrop', 3);
+    h.store.update((draft) => { for (const seg of draft.memory) if (seg.type === 'driver') seg.integrity = 100; });
+    const pods = s().landing.pods.length;
+    for (let i = 0; i < pods - 1; i++) {
+      landALock();
+      const choice = openChoiceEntry(s());
+      if (choice !== null && choice.speaker === 'resident') pickChoice(choice.id, 'REFUSE');
+      h.step();
+    }
+    setLandingMode('manual');
+    lockOn(h);
+    h.step();
+    const refusal = pressAutodrop(h.store);
+    const free = driversInMemory(s()).find((d) => d.lockedBy === undefined)!.pod;
+    stepUntil(() => s().landing.pods.find((record) => record.pod === free)?.fate.kind !== 'aboard', 400);
+    stepFor(20);
+    const ad = s().landing.autodrop;
+    const rows = (): number => ((autodropDebug(s()).plan as { rows: unknown[] } | null)?.rows.length ?? 0);
+    // Its thread is let go while it has nothing to fly (claimTick: no next launch), so the kid's SCAN, DELETE or REPAIR has it.
+    check(`v3 armed with ${pods - 1} pods locked (the cure aboard): it flies the free pod, then stays armed with no PLAN DONE while `
+      + 'they are locked, its thread let go (nothing to fly)',
+      refusal === null && ad.armed === 'plan' && !ad.claimed && ad.end !== 'plan-done' && lockedDrivers(s()).length === pods - 1 && rows() === 0
+      && s().landing.ended === null, JSON.stringify({ refusal, armed: ad.armed, claimed: ad.claimed, end: ad.end, rows: rows() }));
+    h.store.update((draft) => { (draft.memory.find((seg) => seg.type === 'resident') as ResidentSegment).integrity = INTEGRITY_MAX; });
+    stepUntil(() => machine().phase === 'cured', 10);
+    stepFor(2);
+    check('…freed (the cure), the plan has the pods again, still armed', lockedDrivers(s()).length === 0 && rows() > 0
+      && s().landing.autodrop.armed === 'plan', `${rows()} rows`);
+    setLandingMode('instant');
+  }
+
   // Review m5: HOLLOW's DEAL standing holds the lock clock, as its own DEAL does (Deviation 10).
   {
     toGannet();
