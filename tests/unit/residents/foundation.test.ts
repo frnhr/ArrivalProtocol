@@ -390,13 +390,24 @@ check('…withResidentsBuilt puts the flags back', isDeepStrictEqual(RESIDENT_BU
   const NAME = 'STEWARD';
   const lines = [
     RESIDENT_TEXT.receiverClosed, ...Object.values(RESIDENT_TEXT.desc), ...Object.values(RESIDENT_TEXT.typeLabel),
-    ...Object.values(RESIDENT_REFUSAL), pinnedRefusal(NAME), WARDEN_TEXT.wake(NAME), WARDEN_TEXT.surprise(NAME),
-    ...KIN_TEXT.notes.relay.flat(), ...KIN_TEXT.notes.outward.flat(), LAUNCH_REFUSAL_TEXT['POD LOCKED'],
+    ...Object.values(RESIDENT_REFUSAL), pinnedRefusal(NAME), LAUNCH_REFUSAL_TEXT['POD LOCKED'],
     `${RESIDENT_TEXT.file.resident(NAME)} · ${RESIDENT_TEXT.desc.faulty}`, `${RESIDENT_TEXT.file.leftover} · ${RESIDENT_TEXT.desc.leftover}`,
   ];
   check(`the foundation's new lines are ≤ ${MAX_LINE_CHARS} characters`, lines.every((line) => line.length <= MAX_LINE_CHARS),
     lines.filter((line) => line.length > MAX_LINE_CHARS).join(' | '));
   check('RECEIVER CLOSED is 04 §3.15\'s line', RESIDENT_TEXT.receiverClosed === '> RECEIVER CLOSED · this ship launched with its own AI');
+  // The tracks' word modules, by shape only (review M2: WARDEN and KIN reword freely; each renders its own pools in its
+  // support/words block). Every entry is non-empty; a line, or a one-name template rendered with the longest name, fits.
+  const shaped = (module: Readonly<Record<string, unknown>>): string[] => Object.values(module).flatMap((value) => {
+    if (typeof value === 'string') return [value];
+    if (typeof value === 'function' && value.length === 1) return [String((value as (name: string) => unknown)(NAME))];
+    return [];
+  });
+  const warden = shaped(WARDEN_TEXT);
+  check('WARDEN_TEXT and KIN_TEXT have words; their plain lines and one-name templates fit; KIN_TEXT.notes (residentRackA\'s pools) are non-empty',
+    Object.keys(WARDEN_TEXT).length > 0 && warden.every((line) => line.length > 0 && line.length <= MAX_LINE_CHARS)
+    && [KIN_TEXT.notes.relay, KIN_TEXT.notes.outward].every((pool) => pool.length > 0 && pool.every((note) => note.length > 0)),
+    warden.filter((line) => line.length > MAX_LINE_CHARS).join(' | '));
 }
 
 finish();

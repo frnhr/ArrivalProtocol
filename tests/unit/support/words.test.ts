@@ -24,6 +24,10 @@ import { POD_STATE_TEXT, LANDING_LINES } from '@data/landing-text';
 import { lineageLine, RUN_END_NOBODY_LANDED } from '@data/script';
 import { scanFinding } from '@data/tool-text';
 import { MAX_LINE_CHARS } from '@data/tuning';
+// Slice 5 (review M1): each track's word module, for its own block at the end (the imports are the lead's: one line each).
+import { WARDEN_TEXT } from '@data/warden-text';
+import { KIN_TEXT } from '@data/kin-text';
+import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 
 const DATA = join(import.meta.dirname, '..', '..', '..', 'src', 'data');
 
@@ -169,18 +173,24 @@ check(`the no-room rows say no never-say word and fit the strip (≤ ${MAX_LINE_
 // the longest ship name, 10), every line ≤ MAX_LINE_CHARS and no never-say word. A track edits only its own block.
 
 // --- 5 WARDEN (data/warden-text.ts, data/resident-rules.ts): Track WARDEN adds its checks here ---------------------------
+// Placeholder (Track WARDEN replaces it with its pools' worst cases).
+check('5 WARDEN words: the pool exists', Object.keys(WARDEN_TEXT).length > 0);
 
 // --- end of 5 WARDEN -------------------------------------------------------------------------------------------------------
 
 
 
 // --- 5 KIN (data/kin-text.ts): Track KIN adds its checks here ----------------------------------------------------------------
+// Placeholder (Track KIN replaces it with its pools' worst cases).
+check('5 KIN words: the pool exists', Object.keys(KIN_TEXT).length > 0);
 
 // --- end of 5 KIN ----------------------------------------------------------------------------------------------------------
 
 
 
 // --- 5 FACE (data/resident-ui-text.ts): Track FACE adds its checks here ------------------------------------------------------
+// Placeholder (Track FACE replaces it with its pools' worst cases).
+check('5 FACE words: the pool exists', Object.keys(RESIDENT_UI_TEXT).length > 0);
 
 // --- end of 5 FACE ---------------------------------------------------------------------------------------------------------
 

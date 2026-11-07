@@ -1,8 +1,9 @@
-// Slice 5: Track KIN owns this file (docs/phase3/impl/slice-5-plan.md §2.10, §6.2): every word of the residents that left
-// and of the sleeper (the notes, the noise line, the leftovers after a SCAN, MOTH's lines and buttons, the deck's headline,
-// the skill grant's label). The FOUNDATION seeded the notes with 05 §3.6's two samples, one per tone, because
-// data/residents.ts residentRackA draws a note's `text` as an index into these pools (KIN grows each to at least 4: a
-// longer pool moves which note is drawn, no other roll). Every line ≤ MAX_LINE_CHARS (70) at its worst case. Data only: no
+// Slice 5: Track KIN owns this file (docs/phase3/impl/slice-5-plan.md §2.10, §6.2): the words KIN's own modules emit (the
+// notes, the leftovers' name and desc after a SCAN, MOTH's lines and buttons, the skill grant's label). Every word FACE
+// paints (the deck's headline and skill chip, the noise line, the gift's report row) is data/resident-ui-text.ts's (review
+// M2). `notes` keeps its shape: data/residents.ts residentRackA draws a note's `text` as an index into its pools. The
+// FOUNDATION seeded them with 05 §3.6's two samples, one per tone; KIN grows each to at least 4 (a longer pool moves which
+// note is drawn, no other roll). Every line ≤ MAX_LINE_CHARS (70) at its worst case. Data only: no
 // system imports, so the words never close an import cycle.
 
 export const KIN_TEXT = {
