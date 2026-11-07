@@ -1,5 +1,5 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): DraftContext.firewallCompiler.
-// Others ask by message.
+// Slice 5: Track KIN owns this file (docs/phase3/impl/slice-5-plan.md §2.8, §6.2): the leftover deck and the skill card's
+// grant. (Slice 4c–4e: Track SENTRY's DraftContext.firewallCompiler.) Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState, TransitPlan } from '@state/schema';
 import type { Segment, FirewallSegment, UpgradeSegment } from '@/types/segment';
@@ -11,9 +11,17 @@ import { shipSummaryAt } from '@systems/map-run';
 import { chargeLeft, upgradeFiles, isFirewall } from '@state/selectors';
 import { skillLive } from '@systems/capabilities';
 import { hollowLabel } from '@systems/say';
-import { draftCards, UPGRADE_FILE_TEXT, type UpgradeId, type DraftContext, type DraftCard, type DraftCardId } from '@data/upgrades';
+import {
+  draftCards, draftEntries, UPGRADE_FILE_TEXT, type UpgradeId, type DraftContext, type DraftCard, type DraftCardId, type DraftEntry,
+} from '@data/upgrades';
+import type { SkillId } from '@/types/skill';
+import { grantAllowed, grantSkill } from '@systems/skill-tree';
+import { SKILL_IDS, SKILL_TREE } from '@data/skills';
+import { RESIDENT_SEG_IDS } from '@data/residents';
+import { KIN_TEXT } from '@data/kin-text';
 import {
   REPAIR_V2_VERSION, THREAD_PLUS_THREADS, CHARGE_CARD_BLOCKS, FIREWALL_BLOCKS, FUEL_TRIM_BLOCKS, INTEGRITY_MAX, SENTRY_FIREWALL_VERSION,
+  LEFTOVER_COUNT,
 } from '@data/tuning';
 import { visitRng } from '@systems/map-streams';
 import { deliveryFileGroups } from '@systems/repository';
@@ -85,7 +93,72 @@ export function dealDraft(
   deliveries: readonly DeliveryChip[] = [],
 ): DraftCard[] {
   const context = typeof hop === 'number' ? draftContext(state, hop, undefined, deliveries) : draftContext(state, hop.linkBlocks, hop, deliveries);
-  return draftCards(context, visitRng(state.run, 'draft'));
+  const normal = draftCards(context, visitRng(state.run, 'draft'));
+  return leftoverDeck(state, context, normal) ?? normal;
+}
+
+// --- The leftover deck (slice 5: 04 §3.13, plan R14, §2.8) ------------------------------------------------------------------
+
+// The skill a departed resident's skill card grants at this PACKET: the first of SKILL_IDS a 'card' grant may give at v1 (an
+// open branch the run never paid for, skill-tree.ts grantAllowed) with no purchase of it pending at this desk, so the grant
+// and the desk's training never double up. null: none qualifies.
+export function leftoverSkill(state: Readonly<GameState>): SkillId | null {
+  const pending = state.run.skills.pending;
+  return SKILL_IDS.find((id) => grantAllowed(state, id, 1, 'card') && !pending.some((purchase) => purchase.skill === id)) ?? null;
+}
+
+// A leftover's pool card as the PACKET deals it: the pool's own words, and why it is offered (the resident left it, unless
+// the run's trouble boosts it).
+function leftoverPoolCard(entry: Readonly<DraftEntry>, name: string, segId: string): DraftCard {
+  return {
+    id: entry.def.id, title: entry.def.title, effect: entry.def.effect, why: entry.boosted ? entry.why : KIN_TEXT.leftover.why(name),
+    boosted: entry.boosted, leftover: { segId, skill: null },
+  };
+}
+
+// On a ship whose resident left, the cards its three leftovers deal instead of the normal deal (R14), in leftover order: two
+// pool cards (rolled at the boot onto the files, resident-left.ts rollLeftoverCards), then the skill card. Each id at most
+// once (one 'skill' at most). A leftover deals a card from the normal deal (`normal`, the cards not in the deck yet, in its
+// order) in its place when it was eaten, when its pool card can't be dealt on this hop (not usable, owned out, no link room
+// for its file, `+2 CYCLES` into a final ship: draftEntries says), or when no skill qualifies for the skill card and `+2
+// CYCLES` can't stand in (not dealt here, or a pool card already is). Such a stand-in is a plain card (no `leftover`).
+// null: not a departed resident's ship.
+export function leftoverDeck(state: Readonly<GameState>, ctx: Readonly<DraftContext>, normal: readonly DraftCard[]): DraftCard[] | null {
+  const def = state.resident.def;
+  if (def === null || def.kind !== 'left') return null;
+  const entries = draftEntries(ctx);
+  const entryOf = (id: UpgradeId): DraftEntry | null => entries.find((entry) => entry.def.id === id) ?? null;
+  const leftovers = Array.from({ length: LEFTOVER_COUNT }, (_, index) => {
+    const seg = state.memory.find((candidate) => candidate.id === RESIDENT_SEG_IDS.leftover(index));
+    return seg !== undefined && seg.type === 'leftover' ? seg : null;
+  });
+  const deck: (DraftCard | null)[] = leftovers.map((seg) => {
+    if (seg === null || seg.card === null || seg.card.kind !== 'pool') return null;
+    const entry = entryOf(seg.card.id);
+    return entry === null ? null : leftoverPoolCard(entry, def.name, seg.id);
+  });
+  leftovers.forEach((seg, index) => {
+    if (seg === null || seg.card?.kind !== 'skill') return;
+    const skill = leftoverSkill(state);
+    if (skill !== null) {
+      deck[index] = {
+        id: 'skill', title: KIN_TEXT.leftover.skillTitle(SKILL_TREE[skill].fileName), effect: KIN_TEXT.leftover.skillEffect,
+        why: KIN_TEXT.leftover.why(def.name), boosted: false, leftover: { segId: seg.id, skill },
+      };
+      return;
+    }
+    const cycles = entryOf('cycles');
+    if (cycles !== null && !deck.some((card) => card?.id === 'cycles')) deck[index] = leftoverPoolCard(cycles, def.name, seg.id);
+  });
+  const dealt = new Set(deck.filter((card): card is DraftCard => card !== null).map((card) => card.id));
+  for (let index = 0; index < deck.length; index++) {
+    if (deck[index] !== null) continue;
+    const plain = normal.find((card) => !dealt.has(card.id));
+    if (plain === undefined) continue;
+    deck[index] = plain;
+    dealt.add(plain.id);
+  }
+  return deck.filter((card): card is DraftCard => card !== null);
 }
 
 // The new file a file card adds to the packet, with an id from `makeId` (the real send mints one; the
@@ -190,14 +263,18 @@ export function applyPickToPacket(packet: Packet, id: DraftCardId | null): void 
   }
 }
 
-// Slice 5 (review B1; Track KIN builds it): at TRANSMIT ▸ (run.ts transmitNext, after the layout and before commitTraining),
-// the departed resident's skill card, when it is the pick, is granted (skill-tree.ts grantSkill(store, id, 1, `from the
-// resident that left <SHIP>`, 'card')): no link room, installed at the next boot with its TRAINED line (§2.8). KIN picks the
-// skill at the deal with grantAllowed(…, 1, 'card') and no purchase of it pending at this desk. FOUNDATION stub: nothing to
-// grant (no deck is dealt yet), so it does nothing.
+// Slice 5 (review B1): at TRANSMIT ▸ (run.ts transmitNext, after the layout and before commitTraining), the departed
+// resident's skill card, when it is the pick, is granted (skill-tree.ts grantSkill(store, id, 1, `from the resident that left
+// <SHIP>`, 'card')): no link room, installed at the next boot with its TRAINED line (§2.8). The deal chose the skill
+// (leftoverSkill).
 export function applyLeftoverPick(store: Store<GameState>, plan: Readonly<TransitPlan>): void {
-  void store;
-  void plan;
+  if (plan.pick !== 'skill') return;
+  const skill = plan.offer.find((card) => card.id === 'skill')?.leftover?.skill ?? null;
+  if (skill === null) throw new Error('applyLeftoverPick: the skill card names no skill');
+  const state = store.getState();
+  // Skipped when the desk's training took it since the deal (a pending purchase), or a grant could no longer give it.
+  if (state.run.skills.pending.some((purchase) => purchase.skill === skill) || !grantAllowed(state, skill, 1, 'card')) return;
+  grantSkill(store, skill, 1, KIN_TEXT.grantLabel(SKILL_TREE[skill].fileName, state.level.shipName), 'card');
 }
 
 // Why a pick was refused.
