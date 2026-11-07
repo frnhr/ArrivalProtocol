@@ -1,5 +1,5 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the decoy drawn as a file.
-// Others ask by message.
+// Slice 5: Track FACE owns this file (docs/phase3/impl/slice-5-plan.md §6.2): the residents' files and a locked driver's
+// chain (slice 4d's decoy drawn as a file stands). Others ask by message.
 import type { Segment, RedundancySegment, DriverSegment, FreeSegment, HollowSegment, LogSegment } from '@/types/segment';
 import { shownIntegrity, isInfected, integrityBand, fileLabel, isSkillFile, type HealthSegment } from '@state/selectors';
 import { skillFileView } from '@systems/skills';
@@ -14,6 +14,7 @@ import { HOLLOW_HUD_TEXT, HOLLOW_FINALE, UNNAMED_HOLLOW } from '@data/hollow-tex
 import { UPGRADE_FILE_TEXT } from '@data/upgrades';
 import { LOG_HINT_TARGET } from '@data/log-text';
 import { isDisguised, decoyFileView } from '@state/threat-selectors';
+import { residentSegmentLook, type ResidentSegmentLook } from '@systems/resident-hud';
 
 interface SegmentPartLayout {
   partSize: number;
@@ -239,12 +240,20 @@ function driverPartHtml(driver: DriverSegment, layout: SegmentPartLayout): strin
     health = driver.state === 'transferring' ? `<span class="health partial">↻ XFER</span>` : `<span class="health${healthCls}">${shown}%</span>`;
   }
   const code = podCode(driver.pod);
+  // Slice 5 (04 §4): a resident's lock, an amber chain across the chip's top corner (its tooltip names who holds it).
+  const chain = driver.lockedBy !== undefined ? CHAIN_SVG : '';
   return `
+    ${chain}
     <span class="drv-tag" data-pod-tag="${driver.pod}"></span>
     <div class="drv-family">${driver.family.toUpperCase()}</div>
     ${heartbeatSvg(heartbeatOf(driver))}
     <div class="seg-meta"><span class="drv-code"><span class="drv-code-long">${code}</span><span class="drv-code-short">${code.replace('POD ', 'P')}</span><span class="drv-count">${driver.colonists}</span></span>${health}</div>`;
 }
+
+// Slice 5: a locked driver's chain, three links drawn in the resident's amber (resident.css .res-chain).
+const CHAIN_SVG = '<svg class="res-chain" viewBox="0 0 22 9" aria-hidden="true">'
+  + '<rect x="0.8" y="2" width="8" height="5" rx="2.5"/><rect x="7" y="0.8" width="8" height="5" rx="2.5" transform="rotate(8 11 3.3)"/>'
+  + '<rect x="13.2" y="2" width="8" height="5" rx="2.5"/></svg>';
 
 // Builds a single visual part of a memory segment.
 // For non-split segments, totalParts === 1 and partSize === seg.size.
@@ -289,6 +298,10 @@ export function renderSegmentPart(
   if (state === 'repairing') cls += ' repairing';
   if (state === 'offline') cls += ' offline offline-state';
   if (state === 'inactive') cls += ' inactive';
+  // Slice 5 (plan §2.11): a resident's file (WARDEN.sys amber-edged; MOTH.sys grey and IDLE until it wakes; the note, the
+  // lock and the leftovers grey with `?` until scanned).
+  const resident = residentSegmentLook(seg);
+  if (resident !== null) cls += ` res-file ${resident.className}`;
   // WP10: a backup a SWAP put to work is a ship file doing its job now: drawn as one, not as a dashed spare.
   if (seg.type === 'ship-backup' && seg.role) cls += ' in-use';
   // Free space a running move/copy carved out around its clone: part of that op, not usable.
@@ -320,7 +333,7 @@ export function renderSegmentPart(
   if (seg.type === 'free') {
     part.innerHTML = freePartHtml(seg, partSize, tier);
   } else if (isFirst) {
-    part.innerHTML = filePartHtml(seg, layout, tier, knownScanned, state);
+    part.innerHTML = filePartHtml(seg, layout, tier, knownScanned, state, resident);
   } else {
     part.innerHTML = `
       <div class="seg-cont-marker">↪</div>
@@ -349,6 +362,7 @@ function filePartHtml(
   tier: StripTier,
   knownScanned: boolean,
   state: string | undefined,
+  resident: ResidentSegmentLook | null = null,
 ): string {
   const { partSize, totalParts } = layout;
   const roomy = tier === 'wide' || tier === 'narrow';
@@ -416,6 +430,11 @@ function filePartHtml(
   else if (state === 'partial') metaR = `<span class="health partial">${shown}%</span>`;
   else metaR = `<span class="health">OK</span>`;
 
+  // Slice 5: a resident's file says what it shows (its `?`, IDLE, AWAKE, WALL …) unless an op is changing it (a repair, a move).
+  if (resident !== null && resident.health !== null && state !== 'repairing' && state !== 'transferring') {
+    metaR = `<span class="health ${resident.healthCls}">${resident.health}</span>`;
+  }
+
   const sizeLabel = totalParts > 1 ? `${partSize}/${seg.size}B` : `${seg.size}B`;
   const metaL = !roomy ? '' : badge || `<span>${sizeLabel}</span>`;
 
@@ -461,10 +480,13 @@ function renderDriverPart(part: HTMLElement, driver: DriverSegment, layout: Segm
     if (partIdx < totalParts - 1) cls += ' part-continues-right';
     if (!isFirst) cls += ' part-continues-left';
   }
+  const resident = residentSegmentLook(driver);
+  if (resident !== null) cls += ` ${resident.className}`;
   part.className = cls;
   stampPart(part, driver, layout);
   setEaten(part, driver, true);
   part.dataset.pod = String(driver.pod);
+  if (resident?.title) part.title = resident.title;
   // A strip line can point at a driver by its pod (POD 02 WILL LAND HARD).
   if (isFirst) part.dataset.hintTarget = podHintTarget(fileLabel(driver));
   part.innerHTML = driverPartHtml(driver, layout);

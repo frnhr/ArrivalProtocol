@@ -1,5 +1,5 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): the decoy's name and line.
-// Others ask by message.
+// Slice 5: Track FACE owns this file (docs/phase3/impl/slice-5-plan.md §6.2): the residents' INSPECT rows (slice 4d's decoy
+// name and line stand). Others ask by message.
 import type { Segment, FsToolSegment, DriverSegment, HollowSegment, LogSegment } from '@/types/segment';
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
@@ -35,6 +35,7 @@ import { logChip, LOG_UI_TEXT } from '@systems/log-view';
 import { hollowLabel } from '@systems/say';
 import { LOG_DESC } from '@data/log-text';
 import { isDisguised, decoyFileView } from '@state/threat-selectors';
+import { residentInspect, type ResidentInspect } from '@systems/resident-hud';
 
 // The INSPECT panel: what the selected file is, and buttons for what can be done to it. The
 // buttons ask the actions' own rules (actionRefusal: pause, a usable tool, the target
@@ -208,9 +209,28 @@ function driverHtml(seg: DriverSegment, state: Readonly<GameState>): string {
     <div class="driver-heart hb-${heartbeatKind(seg.integrity)}" data-live-outcome="${seg.id}" data-outcome-part="heart">${heartbeatSvg(heartbeatKind(seg.integrity))}</div>
     <div class="detail-row"><span class="k">health</span>${stateRow}</div>
     ${infectionRowHtml(seg, state)}
+    ${residentHtml(residentInspect(state, seg))}
     <div class="detail-row"><span class="k">if launched now</span><span class="v ${words.cls}" data-live-outcome="${seg.id}" data-outcome-part="words">${outlookText}</span></div>
     ${landing}
     <ul class="colonists">${people}</ul>`;
+}
+
+// --- Slice 5: the residents (plan §2.11) ----------------------------------------------------------------------------
+
+// A resident's rows (systems/resident-hud.ts residentInspect): WARDEN.sys's who-line, MOTH's job, a locked driver's lock,
+// and a read note's lines, signed, with its fragment's noise under them.
+function residentHtml(inspect: Readonly<ResidentInspect> | null): string {
+  if (inspect === null) return '';
+  const rows = inspect.rows.map((row) => (row.key === ''
+    ? `<div class="detail-row res-row res-wide"><span class="v ${row.cls}">${escapeHtml(row.value)}</span></div>`
+    : `<div class="detail-row res-row"><span class="k">${escapeHtml(row.key)}</span><span class="v ${row.cls}">${escapeHtml(row.value)}</span></div>`)).join('');
+  const note = inspect.note === null ? '' : `
+    <div class="res-note">
+      ${inspect.note.lines.map((line) => `<div class="res-note-line">${escapeHtml(line)}</div>`).join('')}
+      <div class="res-note-sign">${escapeHtml(inspect.note.signature)}</div>
+      ${inspect.note.noise === null ? '' : `<div class="res-note-noise">${escapeHtml(inspect.note.noise)}</div>`}
+    </div>`;
+  return rows + note;
 }
 
 // --- HOLLOW (§6.6) ---------------------------------------------------------------------------------
@@ -451,6 +471,9 @@ function renderFileDetail(target: HTMLElement, seg: Segment, actual: Segment, de
   if (knownScanned && integrity !== undefined && !isInfected(seg) && (state === 'corrupt' || state === 'partial')) {
     stateText += ` · ${shownIntegrity(integrity)}%`;
   }
+  // Slice 5: a scanned sleeper is ASLEEP or AWAKE, a read note READ (plan §2.11).
+  const resident = residentInspect(deps.state, seg);
+  if (resident?.state) { stateText = resident.state.text; stateClass = resident.state.cls; live = ''; }
 
   let html = `
     <div class="detail-title">${seg.name}</div>
@@ -458,6 +481,7 @@ function renderFileDetail(target: HTMLElement, seg: Segment, actual: Segment, de
     <div class="detail-row"><span class="k">size</span><span class="v">${sizeText(seg.size)}</span></div>
     <div class="detail-row"><span class="k">state</span><span class="v ${stateClass}"${live}>${stateText}</span></div>`;
   html += infectionRowHtml(seg, deps.state);
+  html += residentHtml(resident);
 
   // Slice 4 (03 §3.5, §4): a skill file's version, what it works as now and the way back
   // (`v2 · 64% · WORKS AS v1 · REPAIR TO 80% FOR v2 (≈ 3 CHARGE)`), its LOCK RANGE, and what its health keeps (`v2 | v1 | off`).
@@ -495,8 +519,9 @@ function renderFileDetail(target: HTMLElement, seg: Segment, actual: Segment, de
   // Pre-scan, the `desc` field (which carries lore about damage / cause) is
   // hidden — descs name specific corruption that the player shouldn't know yet.
   // After scan, the full description reveals the cause along with integrity.
+  // Slice 5: a read note's lines are drawn above, line by line and signed, so its desc (KIN's: the same lines in one) is not.
   if (knownScanned) {
-    html += `<div class="detail-desc">${seg.desc || '—'}</div>`;
+    if (!resident?.note) html += `<div class="detail-desc">${seg.desc || '—'}</div>`;
   } else {
     html += `<div class="detail-desc"><em>Integrity unknown. Scan this segment to inspect its contents.</em></div>`;
   }

@@ -2,6 +2,7 @@
 import type { ChartModel, ChartNode } from '@systems/desk';
 import { drawChart, PORTRAIT_ROTATE_DEG, LANDSCAPE_ROTATE_DEG, type ChartDrawOpts, type ChartGeometry } from '@components/desk/chart-draw';
 import { make } from '@components/dom';
+import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 
 // The DESK's STAR CHART window body (02-map §4): the SVG (components/desk/chart-draw.ts), redrawn when the model or the
 // host's size changes, a hover tag with the node's label and reason (`TOO LATE BY 18 YRS`), and the node clicks handed
@@ -144,8 +145,10 @@ export function mountStarChart(host: HTMLElement, opts: StarChartOpts): StarChar
     tipReason.hidden = node.reason === null;
     tipHistory.textContent = node.history ?? '';
     tipHistory.hidden = node.history === null;
-    tipTaken.textContent = node.taken ?? '';
-    tipTaken.hidden = node.taken === null;
+    // Slice 5 (plan R18): the last unit's claim, else a signal fragment still on this ship (one line: the claim wins).
+    const taken = node.taken ?? (node.signal ? RESIDENT_UI_TEXT.chart.tip : null);
+    tipTaken.textContent = taken ?? '';
+    tipTaken.hidden = taken === null;
     tip.dataset.state = node.state;
     const p = geo.at(node.x, node.y);
     place(p.px, p.py);

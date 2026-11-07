@@ -13,6 +13,9 @@ import {
   HEARTBEAT_BED_SEC, HEARTBEAT_BED_HURT_SEC, HEARTBEAT_BED_STRENGTH, HEARTBEAT_BED_INFECTED_SEC,
   HEARTBEAT_BED_JITTER, ARRIVAL_HIT_STAGGER_SEC, BEAM_OUT_SWEEP_SEC,
 } from '@data/tuning';
+// Slice 5, Track FACE's block (below): the sleeper's breath and the surprise's blip.
+import { SLEEPER_BREATH_GAIN, SLEEPER_BREATH_HZ, RESIDENT_WAKE_BLIP_AFTER_SEC } from '@data/tuning';
+import { sleeperBreathing } from '@systems/resident-hud';
 import { driversInMemory, verbSecondsLeft, engineOpen } from '@state/selectors';
 import { driverTouch } from '@systems/landing-rules';
 import {
@@ -321,7 +324,13 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     // --- 5 residents: a wake warns as a seed does; a landed lock buzzes and a blocked one sounds as a finished op; the
     // resident's DEAL ends as HOLLOW's does; a deletion stamps, a cure and the sleeper's wake chime, its job a finished op,
     // a signal found the transmit's swell (05 §4: a key found). A leftover read is SCAN's own sound.
-    on('resident-wake', () => play('seedWarn')),
+    // FACE: the late surprise's wake (04 §4, plan §0.1): the engine coughs, then the resident's own blip, under its stamp and
+    // its tear; a reported resident's wake warns as a seed does.
+    on('resident-wake', ({ surprise }) => {
+      if (!surprise) { play('seedWarn'); return; }
+      play('engineCough');
+      play('residentBlip', undefined, { delaySec: RESIDENT_WAKE_BLIP_AFTER_SEC });
+    }),
     on('resident-lock', ({ phase }) => {
       if (phase === 'landed') play('buzz');
       else if (phase === 'blocked') play('opDone');
@@ -329,9 +338,25 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     on('resident-deal', ({ outcome }) => { if (outcome !== 'invalidated') play('stampHit', { heavy: outcome === 'accepted' }); }),
     on('resident-deleted', () => play('stampHit', { heavy: false })),
     on('resident-cured', () => play('chime', { falling: false })),
-    on('sleeper-woken', () => play('chime', { falling: false })),
+    // FACE: MOTH's lullaby (05 §4), in place of the chime.
+    on('sleeper-woken', () => play('mothLullaby')),
     on('sleeper-job', () => play('opDone')),
     on('signal-found', () => play('transmitIn')),
+    // FACE (review m5): the sleeper's breath, the heartbeat at SLEEPER_BREATH_GAIN once every 1 / SLEEPER_BREATH_HZ s of AI
+    // time while it sleeps in memory and the MIND is on screen (the rack breathes with it: HollowPainter). Its own clock, so
+    // it never lands on the drivers' bed in step.
+    ((): (() => void) => {
+      let nextBreathIn = 1 / SLEEPER_BREATH_HZ;
+      return onPostTick((_dtWall, dtAi) => {
+        const state = store.getState();
+        if (dtAi <= 0 || state.ui.mode !== 'memory' || !sleeperBreathing(state)) { nextBreathIn = 1 / SLEEPER_BREATH_HZ; return; }
+        while (nextBreathIn < dtAi) {
+          play('heartbeat', { strength: SLEEPER_BREATH_GAIN }, { delaySec: nextBreathIn });
+          nextBreathIn += 1 / SLEEPER_BREATH_HZ;
+        }
+        nextBreathIn -= dtAi;
+      });
+    })(),
     // --- end of 5 residents ---
   ];
   offs.push(onPostTick(() => playedThisTick.clear()));

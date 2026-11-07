@@ -104,6 +104,12 @@ export interface CueParams {
   finaleHold: undefined;
   purgeTone: undefined;
   mergeChord: undefined;
+  // Slice 5 (04 §4, 05 §4; Track FACE): the residents' voices in the TERMINAL, one per letter typed: a corrupted resident's
+  // flat triangle blip that repeats one note (apart from HOLLOW's detuned minor squares), the sleeper's soft sine on a
+  // major scale (the one friendly voice there); and MOTH's lullaby as it wakes, four sine notes on the ambient bus.
+  residentBlip: undefined;
+  sleeperVoice: undefined;
+  mothLullaby: undefined;
 }
 
 export type Cue = keyof CueParams;
@@ -1002,7 +1008,7 @@ function cueTouchdownBell(mix: Graph, t0: number, lz: number, landing: Touchdown
 // without the chatter (a tick per typed letter, the ops' 12 Hz chirps, the heartbeat bed), which
 // would push a moment out of it in seconds.
 const CUE_LOG_KEEP = 200;
-const CUE_LOG_SKIPS: ReadonlySet<string> = new Set<Cue>(['typeTick', 'opChirp', 'heartbeat', 'uiClick', 'geiger']);
+const CUE_LOG_SKIPS: ReadonlySet<string> = new Set<Cue>(['typeTick', 'opChirp', 'heartbeat', 'uiClick', 'geiger', 'residentBlip', 'sleeperVoice']);
 const cueLog: string[] = [];
 
 function logCue(name: string): void {
@@ -1383,6 +1389,48 @@ function cueDealTick(mix: Graph, t0: number, urgent: boolean): void {
   voice.osc('sine', HOLLOW_SCALE[4]! * 4, t0 + 0.01, blipEnd + 0.01, blip);
 }
 
+// --- Slice 5: the residents (04 §4, 05 §4) -----------------------------------------------------------------------
+
+// A corrupted resident's letter: one triangle note, always the same (E♭4), dry and short through a lowpass, with a faint
+// fifth on top so a laptop speaker hears it. It never moves: a mind stuck on one thought. Gapped like the unit's own keys.
+const RESIDENT_BLIP_HZ = 311.13;
+const lastResidentKeyAt = new WeakMap<BaseAudioContext, number>();
+
+function cueResidentBlip(mix: Graph, t0: number): void {
+  const lastAt = lastResidentKeyAt.get(mix.ctx) ?? -Infinity;
+  if (t0 - lastAt < SYS_KEY_MIN_GAP_SEC) return;
+  lastResidentKeyAt.set(mix.ctx, t0);
+  const voice = makeVoice(mix.ctx);
+  const amp = voice.gain(0, mix.buses.ui);
+  const flat = voice.filter('lowpass', 1800, 0.7, amp);
+  const end = pluck(amp.gain, t0, 0.24, 0.002, 0.06);
+  voice.osc('triangle', RESIDENT_BLIP_HZ, t0, end + 0.01, flat);
+  voice.osc('triangle', RESIDENT_BLIP_HZ * 1.5, t0, end + 0.01, voice.gain(0.18, flat));
+}
+
+// The sleeper's letter: the unit's soft sine key, an octave up on C major's pentatonic, slower to fade (it types at HOLLOW's
+// slow pace, so each note has room).
+const SLEEPER_SCALE = [523.25, 587.33, 659.25, 783.99, 880];
+
+function cueSleeperVoice(mix: Graph, t0: number): void {
+  softKey(mix, makeVoice(mix.ctx), t0, SLEEPER_SCALE, 0.3, 0.16);
+}
+
+// MOTH's lullaby at its wake (05 §4): four sine notes falling and settling (G E F C, the last one held), each with a soft
+// octave under it, on the ambient bus, so it sits under the TERMINAL's lines instead of over them.
+const LULLABY: readonly [number, number][] = [[783.99, 0], [659.25, 0.42], [698.46, 0.84], [523.25, 1.26]];
+
+function cueMothLullaby(mix: Graph, t0: number): void {
+  const voice = makeVoice(mix.ctx);
+  LULLABY.forEach(([freq, offset], i) => {
+    const at = t0 + offset;
+    const amp = voice.gain(0, mix.buses.ambient);
+    const end = swell(amp.gain, at, 0.22, 0.03, i === LULLABY.length - 1 ? 1.6 : 0.7);
+    voice.osc('sine', freq, at, end + 0.02, amp);
+    voice.osc('sine', freq / 2, at, end + 0.02, voice.gain(0.3, amp));
+  });
+}
+
 // --- LAST LIGHT (WP11 part 2) ---------------------------------------------------------------------------------
 
 // A verb's telegraph, one whole second (§6.6: `> rm repair.bak ... 3`): a command clock in HOLLOW's voice, two detuned
@@ -1660,6 +1708,9 @@ function playOn(mix: Graph, cue: Cue, params: CueParams[Cue] | undefined, t0: nu
     case 'finaleHold': cueFinaleHold(mix, t0); return;
     case 'purgeTone': cuePurgeTone(mix, t0); return;
     case 'mergeChord': cueMergeChord(mix, t0); return;
+    case 'residentBlip': cueResidentBlip(mix, t0); return;
+    case 'sleeperVoice': cueSleeperVoice(mix, t0); return;
+    case 'mothLullaby': cueMothLullaby(mix, t0); return;
     default: throw new Error(`play: unknown cue '${String(cue)}'`);
   }
 }

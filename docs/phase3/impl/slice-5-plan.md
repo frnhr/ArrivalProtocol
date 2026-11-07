@@ -1552,3 +1552,62 @@ each with its `built` check. The unit tier is green with both raised (see the en
 - **Lead (`landing-guidance.ts` / the strip):** while the `'resident'` controller flies the landing, the strip's `press [L]`
   cue should stand aside as it does for AUTODROP armed (no sleeper line, R21: only silence). Today it makes the kid race MOTH.
 - **FACE:** paint `DraftCard.leftover` only where it is set (stand-ins carry none); the MOTH lines are the `sleeper` speaker.
+
+## Deviations (Track FACE)
+
+Recorded by the FACE agent on branch `face-5` (from 2f3c2de, with WARDEN's c5a382d and KIN's 5790e74 merged in). §2.11 is
+built whole: FACE paints state through `systems/resident-hud.ts`'s models, every word is `data/resident-ui-text.ts`'s but
+the notes' lines (KIN's pool, read by the segment's index), and `tests/unit/residents/ui-models.test.ts` (59 checks, about
+1 s) builds its states by hand. Shots of every surface at 1440×900, 1280×720 and 390×844 are in `tests/.out/face-5/`.
+
+1. **The models' signatures.** `residentSegmentLook(seg)` takes the segment alone: the strip (`SegmentBlock.renderSegmentPart`)
+   renders without the state, and everything it shows is on the segment (`scanned`, `awake`, `part`, `fragment`, `lockedBy`).
+   The models FACE widened or added: `ResidentCardRow.label`, `ResidentReportRow.pod`, `LockAimView.{pod, progress, badge}`,
+   and `signalGlyph`, `residentInspect`, `terminalVoice`, `choiceHasTimer`, `wakeStamp` / `deletedStamp` / `curedStamp` /
+   `signalStamp` and `leftoverDeckView`. No other module calls them.
+2. **The SHIP CARD's RESIDENT row** follows KNOWN PROBLEMS. A kind this build does not play reads `none` (`builtResident`: the
+   ship will hold no files of it). After the ship, a sleeper nobody woke (`fate 'slept'`) still reads `unknown`: the kid never
+   met it, and it may sleep there next run (04 §3.11). `reported faulty` is in the card's warning tone, `friendly · MOTH` in
+   its good tone. The row is `null` (no row) on the classic world.
+3. **The chart's glyph** (R18): `ChartNode.signal` (desk.ts), drawn `▓░` at the node's lower-left corner; the hover's TAKEN
+   line carries `A SIGNAL FRAGMENT IS ON THIS SHIP` when the world is not TAKEN; the legend gains `kind 'signal'`. Only ships
+   still ahead, only once `run.residents.signals` holds one, only on a built `left` reservation with a fragment.
+4. **The LANDING REPORT.** `LandingReportModel.resident` (the rows) and `ReportRow.locked?: true`. A pod parked with a lock on
+   its driver is drawn in its own PARKED row as `POD 07 · LOCKED BY WARDEN · PARKED IN ORBIT`, in amber, with no `why` (`no
+   time` would blame the kid's pace); a pod still `aboard` as the report opens counts, as the tally parks it. WARDEN's goodnight
+   (R24) also needs the resident to have woken (`phase !== 'dormant'`): a surprise that never woke says nothing. The gift line
+   lands one cycle-step after the cycles roll, with a chime; the goodnight sits under the colony and the beacon.
+5. **INSPECT.** WARDEN.sys, the sleeper and the note carry no `SegmentState`, so the generic `INTACT` is replaced: `CORRUPTED ·
+   40%` (or `CURED · 100%`) in its band's colour, `ASLEEP` / `AWAKE` / `HOLDING A WALL`, `READ`. A read note's lines are drawn
+   one per row, signed (`— HELM`), with the noise under them when it carries a fragment; its `desc` (KIN's `noteDesc`, the same
+   lines in one) is then not drawn. A locked driver gains `locked · LOCKED BY WARDEN · CAN'T LAUNCH` and how to free it.
+6. **The THRUST CTRL pip.** `WindowGrip.ts` writes WARDEN's words only into `data-override`; `resident.css` shows them with
+   `::after { content: '· ' attr(data-override) }` between the reading and the count, and the pip takes its row's whole width
+   (it wraps there rather than cut the name).
+7. **The TERMINAL.** The verb rows are a map by source (`hollow`, `resident`); a lock's row counts from
+   `state.resident.corrupted.lock` (its `entryId` must be the row's) through `liveVerbText(state, 'resident')`, and re-inks the
+   bar and the tick amber (`--hollow` overridden on the row). A resident types in amber capitals with `residentBlip`, the
+   sleeper in green with `sleeperVoice`. An untimed choice (`timeoutAiSec === null`) hides both clock and bar, and on a phone
+   its buttons wrap under the line.
+8. **The strip.** Classes `res-file` plus `res-corrupted` / `res-asleep` (with `inactive`) / `res-awake` / `res-wall` /
+   `res-grey`; a locked driver `res-locked` with an SVG chain (no chain glyph exists in the fonts). The lock's reticle is the
+   verb aim's own code in HollowPainter (`placeAim` now takes the share left), with its own module aim (a verb and a lock may
+   count at once), its target class `lock-target`, and `lock-aim` re-inking the reticle and badge (`LOCK 3`). The breath is
+   `.mem-strip-wrap.sleeper-breath` on rack A's rows (rack A is always the sleeper's, R16).
+9. **Stamps and audio.** Only the late surprise's wake stamps (`THE SHIP'S OWN AI IS AWAKE · RACK A`, the danger tone, with
+   `glitchBurst(SURPRISE_GLITCH_LEVEL, SURPRISE_GLITCH_MS)`): a reported resident was announced by CONTROL already. DELETED,
+   CURED and `SIGNAL · n/3` stamp in the good tone. In the audio-cues resident block: the surprise's wake plays `engineCough`
+   (WARDEN left the cough to FACE) and then `residentBlip` (in place of `seedWarn`, which a reported wake keeps);
+   `sleeper-woken` plays `mothLullaby` in place of the chime; the breath plays `heartbeat` at `SLEEPER_BREATH_GAIN` every
+   `1 / SLEEPER_BREATH_HZ` AI s while the MIND is on screen and the sleeper sleeps in flight or landing. audio-cues has no DOM,
+   so "rack A on screen" is approximated by "the MIND on screen" (on a phone rack A may be scrolled away).
+10. **Lines FACE touched outside its files,** each the minimum: one import line at the top of `audio-cues.ts` for its block
+    (`sleeperBreathing`, the three tuning names); the 5 FACE tuning block gains `SURPRISE_GLITCH_LEVEL 0.3`,
+    `SURPRISE_GLITCH_MS 400` and `RESIDENT_WAKE_BLIP_AFTER_SEC 0.35`. `map-text.ts` and `index.html` are unchanged (every word is
+    in `resident-ui-text.ts`, every container built in code).
+11. **The glossary's RESIDENT and LOCKED POD** stay words only: the game has no glossary screen to paint them on.
+12. **Words FACE added** (all ≤ 70 at their worst case, `support/words` block 5 FACE renders every template and fails on one it
+    does not know): `chart.*`, `strip.*`, `lockBadge`, `detail.*` (with `detail.state.*`), `inspectCured`, `deck.leftMark`.
+
+**Requests to the lead:** none blocking. Two optional ones: `WindowGrip.ts` could write the override words itself (the
+`::after` is enough today); and a glossary screen, if one is ever built, has its two words waiting.

@@ -1,3 +1,4 @@
+// Slice 5: Track FACE owns the resident stamps' wiring here (docs/phase3/impl/slice-5-plan.md §6.2).
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { on } from '@systems/events';
@@ -12,7 +13,9 @@ import { HOLLOW_DEAL, HOLLOW_VERB } from '@data/hollow-text';
 import { racksText } from '@/types/zone';
 import { podCode, LANDING_STAMP_TEXT } from '@data/landing-text';
 import { THREAT_TEXT } from '@data/threat-text';
-import { STAMP_DEBOUNCE_MS, STAMP_IN_MS, STAMP_SHOW_MS, STAMP_MAX_WIDTH_FRAC, SKILL_FLICKER_MS } from '@data/tuning';
+import { glitchBurst } from '@systems/glitch';
+import { wakeStamp, deletedStamp, curedStamp, signalStamp, type ResidentStamp } from '@systems/resident-hud';
+import { STAMP_DEBOUNCE_MS, STAMP_IN_MS, STAMP_SHOW_MS, STAMP_MAX_WIDTH_FRAC, SKILL_FLICKER_MS, SURPRISE_GLITCH_LEVEL, SURPRISE_GLITCH_MS } from '@data/tuning';
 
 // Stamps (§7.3): two or three words in VT323 slammed over the middle of the screen on a moment
 // (CLEAR OF THE PLANET, CAPTURED, ORBIT LOCKED …). They scale in over STAMP_IN_MS with a
@@ -75,6 +78,13 @@ function flickerSkillBadges(skill: SkillId, reduced: boolean): void {
   });
 }
 
+// Slice 5 (plan §2.11; Track FACE's lines below): a resident's moment, stamped, and the late surprise's small tear.
+function showResidentStamp(stamp: ResidentStamp | null, kind: string): void {
+  if (stamp === null) return;
+  showStamp(stamp.text, stamp.tone, kind);
+  if (stamp.glitch) glitchBurst(SURPRISE_GLITCH_LEVEL, SURPRISE_GLITCH_MS);
+}
+
 export function mountStamps(store: Store<GameState>): () => void {
   if (layer) throw new Error('mountStamps: already mounted');
   storeRef = store;
@@ -131,6 +141,12 @@ export function mountStamps(store: Store<GameState>): () => void {
       showStamp(stamp.text, stamp.tone, `skill-version-${skill}`);
       flickerSkillBadges(skill, store.getState().ui.reducedMotion);
     }),
+    // Slice 5 (04 §4, plan §2.11): the late surprise's wake (`THE SHIP'S OWN AI IS AWAKE · RACK A`, with a small tear), a
+    // resident deleted or cured, and a signal fragment found (`SIGNAL · 1/3`).
+    on('resident-wake', (payload) => showResidentStamp(wakeStamp(payload), 'resident-wake')),
+    on('resident-deleted', () => showResidentStamp(deletedStamp(), 'resident-deleted')),
+    on('resident-cured', () => showResidentStamp(curedStamp(), 'resident-cured')),
+    on('signal-found', ({ count }) => showResidentStamp(signalStamp(count), 'signal-found')),
   ];
 
   return () => {

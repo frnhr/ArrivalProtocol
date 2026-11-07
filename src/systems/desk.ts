@@ -36,6 +36,8 @@ import { bankOf, deskBlocker, isFirstDesk, type TrainRefusal } from '@systems/sk
 import { trainCell, restoreSkill, undoPurchase } from '@systems/training';
 import { trainingModel, trainingArmed, cellKey, TRAINING_HOLD_SEC } from '@systems/training-model';
 import { TRAINING_TEXT } from '@data/training-text';
+import { residentCardRow, signalGlyph } from '@systems/resident-hud';
+import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 
 export type { DeskWindowId };
 
@@ -77,6 +79,9 @@ export interface ChartNode {
   history: string | null;
   // `REPORTED HOME` beside the year on the run's first desk (the walk's "new nodes tagged REPORTED HOME"), else null.
   tag: string | null;
+  // Slice 5 (plan R18): a ship ahead whose departed resident's note carries a signal fragment, once the run has found one
+  // (the `▓░` glyph beside its node; systems/resident-hud.ts signalGlyph).
+  signal: boolean;
 }
 
 export interface ChartLine {
@@ -151,7 +156,7 @@ export interface ChartModel {
 }
 
 // One row of the SHIP CARD (02 §4: KNOWN PROBLEMS, MEMORY and its fit line, PLANET, LZ, BEAM, DELIVERIES, SHIP n OF YOUR
-// RUN …). 'resident' (slice 5) and 'site' (slice 6) are reserved. 'deliveries' is 3b's (`Swap ✗ 4 YRS LATE`, `✓ CATCHES
+// RUN …). 'resident' is slice 5's (`RESIDENT · reported faulty`, after KNOWN PROBLEMS); 'site' (slice 6) is reserved. 'deliveries' is 3b's (`Swap ✗ 4 YRS LATE`, `✓ CATCHES
 // UP HERE`). 3c adds 'history' (`REPORTED HOME` / `2ND RUN ON THE CHART`, from run 2) and 'trail' (the last unit's mark at
 // this ship's world: what the hover says on a desktop, readable on a phone, whose chart has no hover).
 export interface CardRow {
@@ -403,6 +408,7 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
       taken: taken && trail !== null ? MAP_TEXT.chart.takenNoShip(unitName(trail.unit)) : null,
       history,
       tag: history === MAP_TEXT.chart.reportedHome && seen.state !== 'current' ? history : null,
+      signal: signalGlyph(state, slot),
     };
   });
   const lines = offered.map((to): ChartLine => {
@@ -418,7 +424,7 @@ export function chartModel(state: Readonly<GameState>): ChartModel {
 
 // The chart's key for the slice-3c marks (the desk shows it in a corner): one entry per kind of mark the chart has now, in a
 // fixed order. The hover and the card carry each mark's own words; the key says what the glyphs are.
-export type ChartLegendKind = 'taken' | 'colony' | 'lost' | 'new' | 'older';
+export type ChartLegendKind = 'taken' | 'colony' | 'lost' | 'new' | 'older' | 'signal';
 
 export interface ChartLegendItem {
   kind: ChartLegendKind;
@@ -435,6 +441,7 @@ export function chartLegend(model: Readonly<ChartModel>): ChartLegendItem[] {
   if (has('lost')) items.push({ kind: 'lost', words: MAP_TEXT.chart.legendLost(unit) });
   if (model.older.length > 0) items.push({ kind: 'older', words: MAP_TEXT.chart.legendOlder });
   if (model.nodes.some((node) => node.tag !== null)) items.push({ kind: 'new', words: MAP_TEXT.chart.reportedHome });
+  if (model.nodes.some((node) => node.signal)) items.push({ kind: 'signal', words: RESIDENT_UI_TEXT.chart.legend });
   return items;
 }
 
@@ -484,6 +491,9 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
     row('fit', MAP_TEXT.card.fitLabel, preview.card, fitTone(fit));
   }
   row('problems', MAP_TEXT.card.problemsLabel, MAP_TEXT.card.problems(problemLabels(ship)), ship.modifiers.length > 0 ? 'warn' : 'plain');
+  // Slice 5 (02 §8 slice 5): what the ship's own AI is reported as, and after the ship what it was (systems/resident-hud.ts).
+  const resident = residentCardRow(state, slot);
+  if (resident !== null) row('resident', resident.label, resident.value, resident.tone);
   // 3b: what the requests (and this desk's pick) do on this hop (02 §4's DELIVERIES row, the TIMELINE's marks), from the one
   // outlook rule, for a ship SET COURSE can go to (review m1: as repoModel; a ship behind the unit or out of range is
   // never sent toward, so its card promised nothing).

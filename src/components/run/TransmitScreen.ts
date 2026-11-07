@@ -1,5 +1,5 @@
-// Slice 4: Track UI owns this file (docs/phase3/impl/slice-4-plan.md §5.2): the skill chips and PACK AS buttons over
-// TREE's model. Others ask by message.
+// Slice 5: Track FACE owns this file (docs/phase3/impl/slice-5-plan.md §6.2): the leftover deck's look (slice 4's skill chips
+// and PACK AS buttons over TREE's model stand). Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { DraftCardId } from '@data/upgrades';
@@ -10,6 +10,7 @@ import {
 import { logEntryToOpen } from '@systems/log-view';
 import { openLogReader } from '@systems/story-log';
 import { transmitNext, backToChart } from '@systems/run';
+import { leftoverDeckView, type LeftoverDeckView } from '@systems/resident-hud';
 import { pickCard } from '@systems/draft';
 import { unitName } from '@systems/say';
 import { pushModal, registerKeys } from '@systems/input';
@@ -168,17 +169,23 @@ function uninvitedNode(chip: UninvitedChip): HTMLButtonElement {
   return button;
 }
 
-function cardNode(card: DraftCardView): HTMLButtonElement {
+// Slice 5 (04 §3.13, plan §2.11): a card of a departed resident's leftover deck wears its look: the skill card is drawn as a
+// `.skl` chip (`AUTODROP.skl v1 · FROM THE RESIDENT THAT LEFT`, in the skill green), a pool card carries a small `LEFT` mark.
+function cardNode(card: DraftCardView, look: LeftoverDeckView['cards'][number] | undefined): HTMLButtonElement {
   const button = make('button', 'tx-card');
   button.tabIndex = -1;
   button.dataset.card = card.id;
   button.classList.toggle('boosted', card.boosted);
   button.classList.toggle('picked', card.picked);
+  button.classList.toggle('leftover', card.leftover !== undefined);
+  button.classList.toggle('leftover-skill', look?.skillChip != null);
   const top = make('span', 'tx-card-top');
   const key = make('kbd', 'keycap', card.key);
   top.append(key, make('span', 'tx-card-tag', card.tag));
+  if (look?.leftMark != null) top.appendChild(make('span', 'tx-card-left', look.leftMark));
+  button.appendChild(top);
+  if (look?.skillChip != null) button.appendChild(make('span', 'tx-card-skl', look.skillChip));
   button.append(
-    top,
     make('span', 'tx-card-title', card.title),
     make('span', 'tx-card-effect', card.effect),
     make('span', 'tx-card-why', DRAFT_TEXT.why(card.why)),
@@ -369,15 +376,18 @@ export function mountTransmitScreen(store: Store<GameState>): () => void {
     parts.deliveryChips.replaceChildren(...next.deliveries.map(deliveryNode));
     parts.inTransit.hidden = next.inTransit === null;
     parts.inTransit.textContent = next.inTransit ?? '';
-    draftTitle.textContent = next.salvageTitle ?? DRAFT_TEXT.title;
+    // Slice 5: on a ship whose resident left, the deck is what it left behind (`LEFT BEHIND BY LOOKOUT`).
+    const deck = leftoverDeckView(state, next.cards);
+    draftTitle.textContent = deck.headline ?? next.salvageTitle ?? DRAFT_TEXT.title;
+    draftEl.classList.toggle('leftover-deck', deck.headline !== null);
     draftEl.hidden = next.cards.length === 0;
     renderKeyCaps(draftKeys, DRAFT_TEXT.keys(next.cards.length));
     // The same deal as on screen (a pick, a drop): the cards are patched in place, so the picked one's lift
     // and glow animate; a new deal (a new TRANSMIT) builds them.
-    const dealKey = next.cards.map((card) => `${card.id}|${card.why}`).join(',');
+    const dealKey = next.cards.map((card) => `${card.id}|${card.why}|${card.leftover?.segId ?? ''}`).join(',');
     if (dealKey !== shownDeal) {
       shownDeal = dealKey;
-      cardsEl.replaceChildren(...next.cards.map(cardNode));
+      cardsEl.replaceChildren(...next.cards.map((card, i) => cardNode(card, deck.cards[i])));
     } else {
       cardsEl.querySelectorAll<HTMLElement>('.tx-card').forEach((node) => node.classList.toggle('picked', node.dataset.card === next.pick));
     }

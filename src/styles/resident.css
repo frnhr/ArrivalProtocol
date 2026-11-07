@@ -1,4 +1,188 @@
-/* Slice 5: Track FACE owns this file (docs/phase3/impl/slice-5-plan.md §2.11, §6.2): the residents' look. The amber voice
-   and the boot's RECEIVER CLOSED line (.term-line.speaker-resident, .term-line.tone-resident), the sleeper's green
-   lowercase voice (.term-line.speaker-sleeper), the lock's chain and reticle (.lock-aim), the grey files and MOTH's breath.
-   The FOUNDATION imports it from main.ts after responsive.css and leaves it empty. */
+/* Slice 5: Track FACE owns this file (docs/phase3/impl/slice-5-plan.md §2.11, §6.2): the residents' look. Imported from
+   main.ts after responsive.css, so its phone rules sit here too.
+   • the TERMINAL: a ship's own AI in amber capitals inside the blue (--resident: it is the ship's mind, so the ship's colour
+     says who is talking), the sleeper in the good green (--sleeper), the boot's RECEIVER CLOSED line in amber, a lock's
+     countdown row in amber, the sleeper's untimed offer with no bar and buttons that wrap on a phone;
+   • the MIND strip: WARDEN.sys amber-edged, MOTH.sys a grey inactive backup until it wakes (then green), its rack breathing,
+     the note, the lock and the leftovers grey with `?`, a locked driver's amber chain, the lock's reticle (HollowPainter's
+     verb aim, re-inked amber);
+   • INSPECT's resident rows and a read note; the THRUST CTRL pip OVERRIDDEN in amber (a mind, not a fault);
+   • the SHIP CARD's RESIDENT row, the chart's ▓░ glyph and its legend; the LANDING REPORT's gift and goodnight; the PACKET's
+     leftover deck. */
+
+/* ── The TERMINAL ─────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.term-line.speaker-resident {
+  /* The lock row's tick flash and bar read --hollow (game.css .verb-live): re-inked amber for a resident's line. */
+  --hollow: var(--resident);
+  color: var(--resident);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 8px var(--resident-glow);
+}
+.term-line.speaker-resident .term-choice-btn { color: var(--resident); }
+.term-line.tone-resident {
+  color: var(--resident);
+  text-shadow: 0 0 8px var(--resident-glow);
+}
+.term-line.speaker-sleeper {
+  color: var(--sleeper);
+  text-shadow: 0 0 8px var(--sleeper-glow);
+}
+/* The sleeper's offer has no timer (plan R23): no bar and no clock, so its row needs no room under it. */
+.term-line.has-choice.untimed { padding-bottom: 0; }
+.term-line.untimed .term-clock { display: none; }
+
+/* ── The MIND strip ───────────────────────────────────────────────────────────────────────────────────────────────────── */
+/* WARDEN.sys: a ship's own file, edged in the resident's amber (the colour it speaks in), its health `?` until a SCAN. */
+.seg.res-file.res-corrupted {
+  background: linear-gradient(180deg, rgba(255, 167, 38, 0.16), rgba(255, 167, 38, 0.04));
+  border-color: var(--resident);
+  box-shadow: inset 0 0 0 1px rgba(255, 209, 128, 0.18), 0 0 10px rgba(255, 167, 38, 0.18);
+}
+.seg.res-file.res-corrupted .seg-name { color: var(--resident); }
+.seg.res-file.res-corrupted .seg-bar .fill { background: var(--resident); }
+.seg.res-file .seg-meta .health.unknown { color: var(--text-dim); font-size: 15px; letter-spacing: 0; }
+.seg.res-file .seg-meta .health.signal { color: var(--layer-mind); letter-spacing: 0; }
+/* The grey files: the note, the lock, the leftovers (and the sleeper asleep, below). */
+.seg.res-file.res-grey, .seg.res-file.res-asleep {
+  background: repeating-linear-gradient(135deg, rgba(160, 170, 180, 0.04), rgba(160, 170, 180, 0.04) 4px, rgba(160, 170, 180, 0.09) 4px, rgba(160, 170, 180, 0.09) 8px);
+  border-color: rgba(150, 165, 178, 0.45);
+  border-style: dashed;
+}
+.seg.res-file.res-grey .seg-name, .seg.res-file.res-asleep .seg-name { color: #9aa7b2; }
+.seg.res-file.res-leftover.res-scanned { border-style: solid; }
+.seg.res-file.res-leftover.res-scanned .seg-name { color: #c4ced6; }
+/* The sleeper awake, and the wall it holds: the good green, solid (a FIREWALL's look, its own colour). */
+.seg.res-file.res-sleeper.res-awake, .seg.res-file.res-sleeper.res-wall {
+  background: linear-gradient(180deg, rgba(125, 255, 178, 0.14), rgba(125, 255, 178, 0.04));
+  border-color: var(--sleeper);
+  border-style: solid;
+  opacity: 1;
+  filter: none;
+}
+.seg.res-file.res-sleeper.res-wall {
+  background: repeating-linear-gradient(135deg, var(--firewall-stripe-a), var(--firewall-stripe-a) 4px, var(--firewall-stripe-b) 4px, var(--firewall-stripe-b) 8px);
+}
+.seg.res-file.res-sleeper.res-awake .seg-name, .seg.res-file.res-sleeper.res-wall .seg-name { color: var(--sleeper); }
+
+/* Its rack breathes while it sleeps (04 §3.14: very faintly; one breath every 1 / SLEEPER_BREATH_HZ = 5 s). Rack A is always
+   its rack (plan R16). Off under reduced motion. */
+.mem-strip-wrap.sleeper-breath .addr-row[data-rack="A"] .mem-strip { animation: res-breath 5s ease-in-out infinite; }
+@keyframes res-breath { 0%, 100% { opacity: 1; } 50% { opacity: 0.96; } }
+body.reduced-motion .mem-strip-wrap.sleeper-breath .addr-row[data-rack="A"] .mem-strip { animation: none; }
+
+/* A locked driver: an amber chain over the chip's top-left corner, and its edge in amber. */
+.seg.driver.res-locked { border-color: var(--resident); box-shadow: inset 0 0 0 1px rgba(255, 209, 128, 0.25); }
+.seg.driver .res-chain {
+  position: absolute; top: 2px; left: 3px; z-index: 2;
+  width: 22px; height: 9px;
+  fill: none; stroke: var(--resident); stroke-width: 1.6;
+  filter: drop-shadow(0 0 3px var(--resident-glow));
+}
+.seg.driver.res-locked .drv-family { padding-left: 24px; }
+
+/* The lock's telegraph (HollowPainter): the verb's aim, re-inked amber (the aim's CSS reads --hollow), on a target chip
+   that wears its own class. */
+.verb-aim.lock-aim { --hollow: var(--resident); --hollow-bg: #1a1004; }
+.seg.lock-target {
+  outline: 3px solid var(--resident); outline-offset: -3px; z-index: 3;
+  box-shadow: 0 0 14px var(--resident-glow), inset 0 0 12px rgba(255, 209, 128, 0.25);
+}
+.seg.lock-target.lock-urgent { background: color-mix(in srgb, var(--resident) 16%, var(--bg)); }
+.seg.lock-target.verb-beat { animation: res-lock-beat 0.6s ease-out; }
+@keyframes res-lock-beat { from { box-shadow: 0 0 30px var(--resident), inset 0 0 22px rgba(255, 209, 128, 0.55); } }
+body.reduced-motion .seg.lock-target { animation: none; }
+
+/* ── INSPECT ──────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.detail-row .v.resident { color: var(--resident); text-shadow: 0 0 6px var(--resident-glow); }
+.detail-row .v.resident-dim { color: var(--resident-dim); }
+.detail-row .v.sleeper { color: var(--sleeper); }
+.detail-row.res-wide .v { text-align: left; white-space: normal; line-height: 1.45; }
+.res-note {
+  margin: 8px 0 4px; padding: 8px 10px;
+  border-left: 2px solid rgba(150, 165, 178, 0.5);
+  background: rgba(150, 165, 178, 0.06);
+  font-size: 11px; line-height: 1.5; color: #d2dbe2;
+}
+.res-note-line { white-space: normal; }
+.res-note-sign { margin-top: 4px; text-align: right; color: #9aa7b2; letter-spacing: 0.1em; }
+.res-note-noise {
+  margin-top: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: 0.12em; color: var(--layer-mind);
+  opacity: 0.9; text-shadow: 0 0 6px color-mix(in srgb, var(--layer-mind) 50%, transparent);
+  animation: res-noise 2.4s steps(1) infinite;
+}
+@keyframes res-noise { 0%, 100% { opacity: 1; } 47% { opacity: 0.55; } 50% { opacity: 1; } 83% { opacity: 0.7; } }
+body.reduced-motion .res-note-noise { animation: none; }
+
+/* ── The SHIP screen: the THRUST CTRL pip OVERRIDDEN (review B2), in the resident's amber, not the fault's red ────────── */
+/* It takes the pip row's whole width (`100% · OVERRIDDEN · WARDEN.sys` is longer than any fault's reading) and may wrap there,
+   so the name the kid must find is never cut off. */
+.pip[data-override]:not([data-override=""]) {
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  white-space: normal;
+  justify-self: start;
+  color: var(--resident);
+  text-shadow: 0 0 6px var(--resident-glow);
+  outline: 1px dashed var(--resident-dim);
+  outline-offset: 1px;
+}
+/* The words are WARDEN's (`OVERRIDDEN · WARDEN.sys`, flight-hud.ts windowPip's `override`, painted as data-override by
+   WindowGrip): shown after the reading, before the burst count (`100% · OVERRIDDEN · WARDEN.sys ×3`). */
+.pip[data-override]:not([data-override=""])::after { content: '· ' attr(data-override); order: 1; }
+.pip[data-override]:not([data-override=""]) .pip-count { order: 2; }
+.pip[data-override]:not([data-override=""]) .pip-glyph,
+.pip[data-override]:not([data-override=""]) .pip-count { color: var(--resident); animation: none; }
+.pip[data-override]:not([data-override=""]).flash { animation: res-pip-flash 0.3s step-end infinite; }
+@keyframes res-pip-flash { 50% { background: var(--resident); color: var(--bg); } }
+body.reduced-motion .pip[data-override]:not([data-override=""]).flash { animation: none; background: var(--resident); color: var(--bg); }
+
+/* ── The DESK ─────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+.dc-row.key-resident.tone-good .dc-v { color: var(--desk-good); }
+.star-chart .cn-signal {
+  font-family: 'VT323', monospace; font-size: 11px; letter-spacing: 0; fill: var(--layer-mind);
+  opacity: 0.85; pointer-events: none;
+}
+.desk-legend-item.kind-signal .desk-legend-glyph {
+  width: auto; flex-basis: auto; height: auto; font-family: 'VT323', monospace; font-size: 11px; line-height: 8px; color: var(--layer-mind);
+}
+.desk-legend-item.kind-signal .desk-legend-glyph::before { content: '▓░'; }
+
+/* ── The LANDING REPORT ───────────────────────────────────────────────────────────────────────────────────────────────── */
+.lr-goodnight {
+  margin-top: 6px; font-size: 12px; letter-spacing: 0.14em; color: var(--resident);
+  text-shadow: 0 0 10px var(--resident-glow);
+}
+.lr-goodnight[hidden], .lr-gift[hidden] { display: none; }
+.lr-gift {
+  font-size: 12px; letter-spacing: 0.14em; text-align: center; color: var(--sleeper);
+  text-shadow: 0 0 10px var(--sleeper-glow); animation: wr-in 0.5s ease-out both;
+}
+.reduced .lr-gift { animation: none; }
+
+/* A pod its resident still held: its PARKED row in the resident's amber, the lock named. */
+.lr-row.res-locked .lr-text, .lr-row.res-locked .lr-icon { color: var(--resident); opacity: 0.85; }
+
+/* ── The PACKET's leftover deck ───────────────────────────────────────────────────────────────────────────────────────── */
+.tx-draft.leftover-deck .tx-draft-title { color: #c4ced6; letter-spacing: 0.18em; }
+.tx-card.leftover { border-style: dashed; }
+.tx-card-left {
+  margin-left: auto; padding: 0 5px; font-size: 9px; letter-spacing: 0.16em;
+  color: #9aa7b2; border: 1px solid rgba(150, 165, 178, 0.5);
+}
+.tx-card-skl {
+  align-self: flex-start; max-width: 100%; box-sizing: border-box; padding: 2px 7px; font-size: 10px; line-height: 1.35;
+  letter-spacing: 0.04em; white-space: normal;
+  color: var(--good); border: 1px solid color-mix(in srgb, var(--good) 60%, transparent);
+  background: linear-gradient(180deg, var(--seg-skill-top), var(--seg-skill-bot));
+}
+.tx-card.leftover-skill { border-color: color-mix(in srgb, var(--good) 55%, transparent); }
+
+/* ── Phone (≤ 768 px): the sleeper's buttons wrap in the TERMINAL sheet; INSPECT's resident rows fit 360 px ─────────── */
+@media (max-width: 768px) {
+  .term-line.has-choice.untimed { white-space: normal; }
+  .term-line.has-choice.untimed .term-choice { display: flex; flex-wrap: wrap; margin: 4px 0 2px; gap: 6px; }
+  .term-line.has-choice.untimed .term-choice[hidden] { display: none; }
+  .term-line.has-choice.untimed .term-choice-btn { line-height: 22px; }
+  .detail-row.res-row:not(.res-wide) .v { white-space: normal; text-align: right; }
+}

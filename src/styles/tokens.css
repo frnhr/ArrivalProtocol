@@ -28,6 +28,13 @@
   --hollow: #ff6ec7;
   /* the ship's bright readout colour, for the mini-HUD in blue (the amber accent-bright) */
   --layer-ship-bright: #ffd180;
+  /* Slice 5 (04 §4): a ship's own AI speaks in amber inside the blue TERMINAL (the ship's colour: it is the ship's mind),
+     and the sleeper in the good green (the colour --firewall already uses). The same on both screens: they name a voice. */
+  --resident: #ffd180;
+  --resident-dim: rgba(255, 209, 128, 0.45);
+  --resident-glow: rgba(255, 167, 38, 0.55);
+  --sleeper: #7dffb2;
+  --sleeper-glow: rgba(125, 255, 178, 0.40);
 
   /* ── timings ── */
   --t-fast: 0.12s;

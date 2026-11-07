@@ -1,7 +1,8 @@
-// Slice 4c–4e: Track SENTRY owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): no reach and no beam tooltip on a
-// disguised seed, its stamps, the outline SENTRY v2 can aim at and arm. Others ask by message.
+// Slice 5: Track FACE owns this file (docs/phase3/impl/slice-5-plan.md §6.2): the lock's reticle and the sleeper's breath
+// (slice 4d's disguised seed with no reach and no beam tooltip, its stamps, the outline SENTRY v2 can aim at and arm, stand).
+// Others ask by message.
 import type { Store } from '@state/store';
-import type { GameState, VerbTelegraph, ArrivalSeed } from '@state/schema';
+import type { GameState, ArrivalSeed } from '@state/schema';
 import type { InfectionSide } from '@/types/segment';
 import { onPostTick } from '@systems/clock';
 import { on } from '@systems/events';
@@ -19,6 +20,7 @@ import { THREAT_TEXT, SENTRY_TEXT } from '@data/threat-text';
 import { isDisguised } from '@state/threat-selectors';
 import { preemptAimable, preemptArmed } from '@systems/sentry';
 import { showStamp } from '@components/hud/Stamp';
+import { lockAimView, sleeperBreathing } from '@systems/resident-hud';
 import {
   HOLLOW_PAINT_HZ, INTEGRITY_MAX, HOLLOW_FX_MS, CURE_SPARKS, SEED_BLINK_SEC, BOARD_DROP_MS, SEED_LAND_FX_MS,
 } from '@data/tuning';
@@ -51,6 +53,9 @@ import {
 //   (`seed-landed-beam`: the chip falls and flashes, and `SEED NEXT TO TELEMETRY` floats up off it); HOLLOW boarding
 //   (`hollow-boarded`, the 108% unpack) drops its root slab into the bay's slot with a pink flash under the shake and
 //   the tear.
+// • slice 5 (04 §4, plan §2.11): a resident's lock counting down on a driver reuses the verb's aim in the resident's amber
+//   (`lock-aim`: the chip's edge, the reticle and a `LOCK 3` badge, from systems/resident-hud.ts lockAimView), and the rack
+//   of a sleeping resident breathes (`sleeper-breath` on the strip; resident.css: off under reduced motion).
 // The marks are rebuilt after every strip rebuild (memoryRev: an infection, a cure, an op, an eaten
 // file all bump it; this subscribes after MemoryStrip); the numbers are patched at most
 // HOLLOW_PAINT_HZ in between. Sparkle scatter uses Math.random: cosmetic, like the glitch jerk.
@@ -326,6 +331,10 @@ let verbAim: VerbAim | null = null;
 // The fx layer the aim is drawn in (mountHollowPainter's).
 let aimLayer: HTMLElement | null = null;
 
+// Slice 5: a resident's lock aims the same way, in its own aim (a HOLLOW verb and a lock may count at once on the ship HOLLOW
+// boards), drawn in the resident's amber (`lock-aim`); its target chip wears `lock-target`, not the verb's class.
+let lockAim: VerbAim | null = null;
+
 function aimMark(cls: string): HTMLElement {
   if (aimLayer === null) throw new Error('HollowPainter: a verb aimed before the painter was mounted');
   const mark = document.createElement('div');
@@ -342,6 +351,40 @@ function clearVerbAim(root: HTMLElement): void {
   verbAim?.reticles.forEach((reticle) => reticle.remove());
   verbAim?.badge.remove();
   verbAim = null;
+}
+
+function clearLockAim(root: HTMLElement): void {
+  root.querySelectorAll('.seg.lock-target').forEach((part) => part.classList.remove('lock-target', 'lock-urgent', 'verb-beat'));
+  lockAim?.reticles.forEach((reticle) => reticle.remove());
+  lockAim?.badge.remove();
+  lockAim = null;
+}
+
+function paintLockAim(root: HTMLElement, state: Readonly<GameState>): void {
+  const view = lockAimView(state);
+  const parts = view === null ? [] : partsOf(root, view.segId);
+  const key = view === null ? '' : `${view.segId}|${view.pod}|${parts.length}`;
+  const current = lockAim !== null && lockAim.key === key && parts.every((part) => part.classList.contains('lock-target'));
+  if (!current) {
+    const kept = lockAim !== null && lockAim.key === key ? { second: lockAim.second, shown: lockAim.shown } : { second: null, shown: false };
+    clearLockAim(root);
+    if (view === null || parts.length === 0) return;
+    parts.forEach((part) => part.classList.add('lock-target'));
+    lockAim = { key, reticles: parts.map(() => aimMark('verb-reticle lock-aim')), badge: aimMark('verb-aim-badge lock-aim'), ...kept };
+  }
+  if (view === null || lockAim === null) return;
+  const aim = lockAim;
+  patchText(aim.badge, view.badge);
+  parts.forEach((part) => part.classList.toggle('lock-urgent', view.second <= 1));
+  if (aim.second === null || view.second < aim.second) [...parts, ...aim.reticles].forEach((element) => replayAnimation(element, 'verb-beat'));
+  aim.second = view.second;
+  placeAim(root, aim, parts, view.progress, state);
+}
+
+// The sleeper's rack breathes while it sleeps (04 §3.14: very faintly, when in view): the strip marks it, resident.css
+// draws the breath on the rack that holds MOTH.sys.
+function paintBreath(root: HTMLElement, state: Readonly<GameState>): void {
+  root.classList.toggle('sleeper-breath', sleeperBreathing(state));
 }
 
 function paintVerb(root: HTMLElement, state: Readonly<GameState>): void {
@@ -368,7 +411,7 @@ function paintVerb(root: HTMLElement, state: Readonly<GameState>): void {
   // One beat per countdown second, the first as it appears (CSS: none under reduced motion).
   if (aim.second === null || second < aim.second) [...parts, ...aim.reticles].forEach((element) => replayAnimation(element, 'verb-beat'));
   aim.second = second;
-  placeAim(root, aim, parts, verb, state);
+  placeAim(root, aim, parts, verb.leftSec / verb.totalSec, state);
   if (state.ui.mode === 'memory') {
     const rects = parts.map(rectOf).filter((rect): rect is DOMRect => rect !== null);
     if (rects.length > 0) lastVerbRects = { kind: verb.kind, rects };
@@ -378,7 +421,8 @@ function paintVerb(root: HTMLElement, state: Readonly<GameState>): void {
 // The reticles around the parts the strip shows, the badge over the first of them (kept inside the strip's width, its
 // tail pointing at the chip). A part scrolled out of the strip gets none (the layer is fixed: it would draw over the
 // panels around the strip).
-function placeAim(root: HTMLElement, aim: VerbAim, parts: readonly HTMLElement[], verb: Readonly<VerbTelegraph>, state: Readonly<GameState>): void {
+// `share`: how much of the countdown is left (0..1), which sets how far the brackets have closed in.
+function placeAim(root: HTMLElement, aim: VerbAim, parts: readonly HTMLElement[], share: number, state: Readonly<GameState>): void {
   const inBlue = state.ui.mode === 'memory';
   const view = root.getBoundingClientRect();
   const inView = (rect: DOMRect | null): rect is DOMRect => rect !== null && rect.top >= view.top - 1 && rect.bottom <= view.bottom + 1;
@@ -390,7 +434,7 @@ function placeAim(root: HTMLElement, aim: VerbAim, parts: readonly HTMLElement[]
       root.scrollTo({ top: root.scrollTop + first.top - view.top - AIM_SCROLL_ROOM_PX, behavior: state.ui.reducedMotion ? 'auto' : 'smooth' });
     }
   }
-  const progress = Math.max(0, Math.min(1, verb.leftSec / verb.totalSec));
+  const progress = Math.max(0, Math.min(1, share));
   const gap = state.ui.reducedMotion ? RETICLE_GAP_END_PX : RETICLE_GAP_END_PX + (RETICLE_GAP_START_PX - RETICLE_GAP_END_PX) * progress;
   aim.reticles.forEach((reticle, index) => {
     const rect = rects[index] ?? null;
@@ -437,6 +481,8 @@ function paintNumbers(root: HTMLElement, state: Readonly<GameState>): void {
   paintBiteClock(root, state);
   paintTelegraph(root, state);
   paintVerb(root, state);
+  paintLockAim(root, state);
+  paintBreath(root, state);
   for (const seg of infectedSegments(state)) {
     if (!healthKnown(seg)) continue;
     const eaten = `${Math.max(0, INTEGRITY_MAX - seg.integrity)}%`;
@@ -522,6 +568,8 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
     // A verb's badge counts with the TERMINAL's line, every tick (WP11 part 2: the two must never read 3 and 2), and
     // its aim follows the strip as it scrolls.
     if (store.getState().hollow.verb !== null) paintVerb(memWrap, store.getState());
+    // Slice 5: a lock's badge counts with its TERMINAL line too, and its aim goes the tick the lock ends.
+    if (store.getState().resident.corrupted?.lock != null || lockAim !== null) paintLockAim(memWrap, store.getState());
     sincePaint += dtWall;
     if (sincePaint < PAINT_EVERY_SEC) return;
     sincePaint = 0;
@@ -654,8 +702,8 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
 
   const offReset = onWorldReset(
     'hollow-painter-verb',
-    () => { lastVerbRects = null; clearVerbAim(memWrap); },
-    () => ({ rects: lastVerbRects !== null, aim: verbAim !== null }),
+    () => { lastVerbRects = null; clearVerbAim(memWrap); clearLockAim(memWrap); },
+    () => ({ rects: lastVerbRects !== null, aim: verbAim !== null, lock: lockAim !== null }),
   );
 
   return () => {
@@ -664,6 +712,7 @@ export function mountHollowPainter(store: Store<GameState>): () => void {
     offReset();
     offs.forEach((off) => off());
     clearVerbAim(memWrap);
+    clearLockAim(memWrap);
     layer.remove();
     aimLayer = null;
     lastVerbRects = null;
