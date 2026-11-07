@@ -324,10 +324,12 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     // --- 5 residents: a wake warns as a seed does; a landed lock buzzes and a blocked one sounds as a finished op; the
     // resident's DEAL ends as HOLLOW's does; a deletion stamps, a cure and the sleeper's wake chime, its job a finished op,
     // a signal found the transmit's swell (05 §4: a key found). A leftover read is SCAN's own sound.
-    // FACE: the late surprise's wake is also the resident's own blip (04 §4), under its stamp and tear.
+    // FACE: the late surprise's wake (04 §4, plan §0.1): the engine coughs, then the resident's own blip, under its stamp and
+    // its tear; a reported resident's wake warns as a seed does.
     on('resident-wake', ({ surprise }) => {
-      play('seedWarn');
-      if (surprise) play('residentBlip', undefined, { delaySec: RESIDENT_WAKE_BLIP_AFTER_SEC });
+      if (!surprise) { play('seedWarn'); return; }
+      play('engineCough');
+      play('residentBlip', undefined, { delaySec: RESIDENT_WAKE_BLIP_AFTER_SEC });
     }),
     on('resident-lock', ({ phase }) => {
       if (phase === 'landed') play('buzz');
