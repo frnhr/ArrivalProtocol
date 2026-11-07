@@ -1731,6 +1731,18 @@ is the other fix agent's.
    - `phone`: the two cards fit, and card 1 trains `autoburn`.
    - `playthrough`: the first desk has the two cards, and [1] trains `autoburn`. The pick is unchanged, so the run stays
      deterministic.
+   - `playthrough`'s kid, taught the decoy. The scenario failed 8–9 checks at 6f026d1 already, the same on this branch:
+     CORMORANT's POD BAY counters read `▓/▓` at ORBIT LOCK and never advanced, and LAST LIGHT opened with its telemetry
+     scrambled and could not land. The cause was slice 4d's decoy, not desk 1's pick. CORMORANT is depth 5, and its beam
+     seed beside Telemetry came disguised (the ECC line names 2 foreign blocks, not 3). The scripted kid had two stale
+     habits:
+     - `RM THE SEED` resolved to any seed in memory, the decoy first. DELETE on the decoy asks its file's confirm, so
+       nothing started, the visible seeds stayed, and HOLLOW ate MV, NAV PLOTTER and TELEMETRY.
+     - `SOMETHING NEXT TO TELEMETRY IS EATING IT — SCAN its neighbours` SCANned Telemetry itself.
+
+     Now a disguised seed is never `SEED` to the kid, and the neighbours line SCANs the nearest block on each side of the
+     file in turn (across a free gap narrower than a WALL, as `hollow.ts lookFrom` bites). The SCAN unmasks the decoy,
+     and `RM THE SEED` then rm's it. No check changed. `PLAY_TRACE=1` logs which neighbour was tried.
    - New `skills-4cde-sentry`, registered in `run.mjs`, covers:
      - the decoy in the MIND, its INSPECT, and its target classes beside Autopilot's;
      - SCAN, DELETE without a SCAN, and MOVE on a decoy;
@@ -1747,3 +1759,5 @@ is the other fix agent's.
 - `events.ts 'seed-unmasked'.by` keeps its three values. A MOVE or COPY unmask reports `'scan'`, which is what the stamp and
   the sound key on.
 - No file outside this agent's scope was edited, and no patch is requested.
+- `tests/e2e/run.mjs` gains `skills-4cde-sentry` here, and the landing agent's `skills-4cde-landing` goes in the same list:
+  a small conflict to resolve at the merge (keep both rows).
