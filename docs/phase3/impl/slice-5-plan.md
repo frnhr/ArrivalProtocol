@@ -1084,7 +1084,7 @@ left, sleeper; once), `residentToolRule(seg, ctx)`, `residentDeleteSec(seg)`, `r
 12. **`speakerTag` gives both voices `SHIP AI`.** It threw on an unknown speaker, and the ticker labels every line. A
     resident's own lines carry its name (`WARDEN: …`).
 13. **The untimed choice.** `sayChoice(…, null, …)` stores `leftAiSec: 0`; `choiceTimerRunning` is false for it (no clock, no
-    tock, no ticker countdown), and the timer tick skips it. `MindTerminal.ts:160` paints its bar at 0% (FACE's to finish).
+    tock, no ticker countdown), and the timer tick skips it. `MindTerminal.ts:161` paints its bar at 0% (FACE's to finish).
     `openChoiceEntry` and `withdrawChoice` were already built (WP10).
 14. **Capabilities.** `GhostSource` is a named type and `ghostPush` is exported. `validateCapabilityTables` checks
     `RESIDENT_GHOST`'s push against `ARM_GHOST_BY_BAND.failing`'s (71%). The DELETING (4 s) and ANGRY (7 s) specs push
@@ -1098,7 +1098,7 @@ left, sleeper; once), `residentToolRule(seg, ctx)`, `residentDeleteSec(seg)`, `r
     FACE can paint the deck before KIN deals it. It is never saved: a save point holds no transit.
 18. **Notable events** take `residents` in their `Pick`. The order is the DEAL, then each resident deleted, cured or woken in
     route order (`value`: its depth), then the best colony and the ships lost. `NotableEventKind` is a named type.
-    `world/lineage.test.ts:44` and `:110` pass `residents`.
+    `world/lineage.test.ts:44–46` and `:111` pass `residents`.
 19. **The codec** reads `run.residents` field by field, plus `checkResidentHistory`. Each met resident is on the route at its
     depth, once, and is the kind and name the map placed there. A signal is on the route, on a `left` reservation, and no
     more than its note carries. It does not need the ship's record, because a signal is found during its ship. The slice
