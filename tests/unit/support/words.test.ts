@@ -189,8 +189,37 @@ check('5 KIN words: the pool exists', Object.keys(KIN_TEXT).length > 0);
 
 
 // --- 5 FACE (data/resident-ui-text.ts): Track FACE adds its checks here ------------------------------------------------------
-// Placeholder (Track FACE replaces it with its pools' worst cases).
-check('5 FACE words: the pool exists', Object.keys(RESIDENT_UI_TEXT).length > 0);
+// Every string RESIDENT_UI_TEXT can paint, each template at its worst case: the longest resident name (7: LOOKOUT,
+// BARNABY), the longest pod code (`POD 99`), a 5-digit year, the longest .skl file name, two-digit counts.
+{
+  const name = 'BARNABY';
+  const walk = (value: unknown, out: string[]): string[] => {
+    if (typeof value === 'string') out.push(value);
+    else if (typeof value === 'function') {
+      const fn = value as (...args: unknown[]) => unknown;
+      // By the template's own parameters: (name), (name, year), (pod, name), (count, of), (cycles, name), (file, version). A
+      // template not listed fails the suite, so a new one is rendered at its worst case too.
+      const byShape: Record<string, unknown[]> = {
+        gift: [99, name], goodnight: [name], lockedParked: ['POD 99', name], signal: [99, 99], inspect: [name, 99999],
+        inspectCured: [name, 99999], headline: [name], skillChip: ['AUTOBURN.skl', 9], lockBadge: [99], lockedTitle: ['POD 99', name],
+        lockedBy: [name], signature: [name], left: [name], friendly: [name], corrupted: [100],
+      };
+      const args = byShape[fn.name];
+      if (args === undefined) throw new Error(`words: RESIDENT_UI_TEXT's template '${fn.name}' has no worst case here`);
+      out.push(String(fn(...args)));
+    } else if (typeof value === 'object' && value !== null) Object.values(value).forEach((child) => walk(child, out));
+    return out;
+  };
+  const lines = walk(RESIDENT_UI_TEXT, []);
+  const long = lines.filter((text) => text.length > MAX_LINE_CHARS);
+  check(`5 FACE words: every resident UI line fits the strip at its worst case (≤ ${MAX_LINE_CHARS}; ${lines.length} lines)`,
+    lines.length >= 40 && long.length === 0, long.join(' | '));
+  const said = lines.filter((text) => RULES.some((rule) => rule.id !== 'wake' && rule.re.test(text)));
+  check('5 FACE words: no never-say word (a resident wakes: the wake rule is the colonists\')', said.length === 0, said.join(' | '));
+  check('5 FACE words: a parked pod keeps its decided words (PARKED IN ORBIT), a locked one CAN\'T LAUNCH (01 §3.10)',
+    RESIDENT_UI_TEXT.report.lockedParked('POD 07', 'WARDEN') === 'POD 07 · LOCKED BY WARDEN · PARKED IN ORBIT'
+    && RESIDENT_UI_TEXT.detail.lockedBy('WARDEN').includes(POD_STATE_TEXT.cantLaunch));
+}
 
 // --- end of 5 FACE ---------------------------------------------------------------------------------------------------------
 
