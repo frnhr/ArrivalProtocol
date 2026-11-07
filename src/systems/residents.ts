@@ -1,6 +1,6 @@
 // Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §2.1, §5): the residents' dispatcher. It sends each
 // rack-A file type to its kind's module (WARDEN: `resident`; KIN: `sleeper`, `sleep-lock`, `note`, `leftover`), mounts the
-// three modules, and writes the run's record of every resident met. Tracks never edit it: the kinds' functions it calls have
+// three modules, registers the 'resident' landing controller, and writes the run's record of every resident met. Tracks never edit it: the kinds' functions it calls have
 // their final signatures (plan §6.1 item 5). A ship holds one resident (02), so WARDEN's and KIN's modules never run on the
 // same ship.
 import type { Store } from '@state/store';
@@ -8,12 +8,14 @@ import type { GameState, ShipResult } from '@state/schema';
 import type { ResidentFileSegment } from '@/types/segment';
 import type { ResidentRecord, ResidentState, RunResidentState } from '@/types/resident';
 import type { ValidTargetContext } from '@systems/tool-targets';
+import type { LandingController } from '@/types/landing';
 import type { ToolRefusal, ConfirmText } from '@data/tool-text';
 import {
   mountResidentCorrupted, corruptedToolRule, corruptedDeleteSec, corruptedDeleteQuestion, corruptedShipEnd,
 } from '@systems/resident-corrupted';
 import { mountResidentLeft, leftToolRule, leftShipEnd } from '@systems/resident-left';
-import { mountResidentSleeper, sleeperToolRule, sleeperShipEnd } from '@systems/resident-sleeper';
+import { mountResidentSleeper, sleeperToolRule, sleeperShipEnd, sleeperController } from '@systems/resident-sleeper';
+import { registerLandingController } from '@systems/landing-controller';
 import { DELETE_SEC } from '@data/tuning';
 
 let mounted = false;
@@ -24,11 +26,27 @@ let mounted = false;
 export function mountResidents(store: Store<GameState>): () => void {
   if (mounted) throw new Error('mountResidents: already mounted');
   mounted = true;
-  const offs = [mountResidentCorrupted(store), mountResidentLeft(store), mountResidentSleeper(store)];
+  const offs = [
+    mountResidentCorrupted(store), mountResidentLeft(store), mountResidentSleeper(store),
+    registerLandingController('resident', residentController),
+  ];
   return () => {
     for (const off of offs.reverse()) off();
     mounted = false;
   };
+}
+
+// The 'resident' landing controller (landing-controller.ts asks it in LANDING_CONTROLLER_ORDER, under MERGE, over AUTODROP):
+// the one slot every resident kind shares, dispatched on the ship's kind as the tool rules are (review architecture 1), so a
+// second kind that wants the landing (04's "fights for the helm", slice 7's STAY) adds a case here, not a registration.
+// Today only the sleeper flies it (RUN THE DROPS, R11).
+function residentController(state: Readonly<GameState>): LandingController | null {
+  switch (state.resident.def?.kind) {
+    case 'sleeping': return sleeperController(state);
+    case 'corrupted':
+    case 'left':
+    case undefined: return null;
+  }
 }
 
 // Why the active tool can't be used on a resident's file, or null when its kind allows it: its kind's rule (tool-targets.ts

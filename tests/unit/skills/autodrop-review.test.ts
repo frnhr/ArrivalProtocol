@@ -133,11 +133,15 @@ for (const version of [2, 3] as const) {
   launches.length = 0;
   let claimed = false;
   let lines = false;
+  let waits = 0;
   let threw = false;
   try {
     h.stepUntil(() => {
       if (ad().claimed) claimed = true;
-      if (autodropLineOf(st(), getDropSolution()!) !== null) lines = true;
+      const line = autodropLineOf(st(), getDropSolution()!);
+      // Slice 5 review M1: the wrapper's own keyless WAIT over a window it flies is not AUTODROP's row.
+      if (line !== null && line.row?.keys.length === 0 && line.row.text.startsWith('WAIT — ') && line.tail === null) waits++;
+      else if (line !== null) lines = true;
       return launches.length > 0;
     }, 900);
   } catch (error) {
@@ -148,7 +152,8 @@ for (const version of [2, 3] as const) {
   off();
   check('m6: a \'merge\' resolver wrapping AUTODROP (source \'merge\') answers as itself: no throw, and its launches are MERGE\'s',
     !threw && active?.source === 'merge' && launches.length > 0 && launches.every((launch) => launch.source === 'merge'), JSON.stringify(launches));
-  check('m5: under it AUTODROP\'s own machinery stands aside: no Core thread claimed, no strip rows', !claimed && !lines, `claimed ${claimed} lines ${lines}`);
+  check('m5: under it AUTODROP\'s own machinery stands aside: no Core thread claimed, no strip rows of its own', !claimed && !lines, `claimed ${claimed} lines ${lines}`);
+  check('…and the wrapper owns the window it flies (slice 5 review M1, MERGE inherits it): a WAIT row with no key, no [L]', waits > 0, `${waits} ticks`);
 }
 
 finish();

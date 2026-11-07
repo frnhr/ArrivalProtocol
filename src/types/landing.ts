@@ -320,6 +320,11 @@ export interface LandingController {
   // own awaited window (landing-rules landingMoment) need not be the one the controller flies (a v3 plan's leftovers into a
   // full LZ, a v2 pass into an LZ the landing does not wait on). Absent: the landing's window rule alone.
   nextLaunchAtTSec?(state: Readonly<GameState>): number | null;
+  // Slice 5 review fix pass (M1): a controller other than AUTODROP's own and the kid's hands (the sleeper's RUN THE DROPS 5,
+  // MERGE 7) names the launch it waits for (its LZ, the pods of that volley, when), or null with nothing left to fly. While it names one it owns every open window:
+  // the strip shows a wait row with no key (no `press [L]`, the rule an armed AUTODROP v3 keeps), and the kid's rows come
+  // back once it has nothing left. Absent: it never owns a window. AUTODROP's own rows are autodrop.ts's (armedFor).
+  waitsFor?(state: Readonly<GameState>): { lz: string; n: number; atTSec: number } | null;
 }
 
 // --- L9: DROP TOO WIDE (§3.11, plan §1.5; landing-rules dropTooWide and bestRepairForDrop) ---

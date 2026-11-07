@@ -46,7 +46,7 @@ import {
 } from '@systems/autodrop-plan';
 import { SKILL_TREE } from '@data/skills';
 import { AUTODROP_TEXT, type AutodropRefusalWord } from '@data/autodrop-text';
-import { minSec, podCode } from '@data/landing-text';
+import { minSec, podCode, LANDING_LINES } from '@data/landing-text';
 import {
   AUTODROP_CLAIM_TAC, AUTODROP_DAMAGED_ALERT_SEC, AUTODROP_DONE_LINE_SEC, AUTODROP_EDGE_MARGIN_TAC, AUTODROP_RELEASE_MARGIN_TAC,
   WINDOW_TACTICAL_LEAD_TAC,
@@ -133,11 +133,16 @@ function volleyNext(next: Readonly<NextVolley>): NextLaunch {
 // wrapper (the kid's [G] is not needed), read wherever the controller reads the arm (armedNext and the decision), threaded
 // as a parameter (no module variable); held and claimed are still state.landing.autodrop's, and `queue` is not read (MERGE's
 // own machine state is slice 7's).
+// Slice 5 review fix pass (architecture 2): `skipBetween` asks for the SKIP between passes itself (the [F] the kid would
+// press under an armed v3: no window open, nothing to decide, a later launch planned; pace stops that SKIP before it), so
+// the sleeper's RUN THE DROPS and MERGE's restored drivers share one rule. A wrapping source also names what it waits for
+// (`waitsFor`: the strip's wait row, review M1) and is told of its launches (`autodropLaunched`: the volley event, m4).
 export interface AutodropOverride {
   version: EffectiveVersion;
   queue: readonly number[];
   source?: ControllerSource;
   armed?: AutodropArm;
+  skipBetween?: true;
 }
 
 // v1, held: the volley's next slot has come, and the window is sure for it now.
@@ -206,10 +211,23 @@ export function autodropController(state: Readonly<GameState>, override?: Readon
   // own (review m6).
   const claimed = source !== 'autodrop' || ad.claimed;
   if (armed !== null && version >= 2) {
+    const decideArmed = (view: LandingView, now: Readonly<GameState>): LaunchIntent | null =>
+      (claimed ? as(armed === 'plan' && version >= 3 ? decidePlan(view, now) : decidePass(view, now)) : null);
+    const nextLaunchAtTSec = (now: Readonly<GameState>): number | null => withView(now, (view) => armedNext(now, view, armed)?.atTSec ?? null);
+    const controller: LandingController = { source, holdsTactical: true, launchesFromMind: true, decide: decideArmed, nextLaunchAtTSec };
+    if (source === 'autodrop') return controller;
     return {
-      source, holdsTactical: true, launchesFromMind: true,
-      decide: (view, now) => (claimed ? as(armed === 'plan' && version >= 3 ? decidePlan(view, now) : decidePass(view, now)) : null),
-      nextLaunchAtTSec: (now) => withView(now, (view) => armedNext(now, view, armed)?.atTSec ?? null),
+      ...controller,
+      decide: (view, now) => {
+        const decision = decideArmed(view, now);
+        if (decision !== null || override?.skipBetween !== true) return decision;
+        const next = nextLaunchAtTSec(now);
+        return now.landing.window === null && next !== null && next > now.clock.tSec ? 'skip' : null;
+      },
+      waitsFor: (now) => withView(now, (view) => {
+        const next = armedNext(now, view, armed);
+        return next === null ? null : { lz: next.lz, n: next.n, atTSec: next.atTSec };
+      }),
     };
   }
   if (ad.held && state.ui.mode === 'tools') {
@@ -291,9 +309,11 @@ export function autodropLandingOver(store: Store<GameState>): void {
   if (from !== null) emit('autodrop', { from, to: null, end: 'landing-over' });
 }
 
-// After a controller launch (landing.ts controllerTick): this pass's sent count, and the volley's event on its first pod
-// (no AUTODROP pod into the same LZ within two cadences before it). Its size: this pod and what the volley still holds.
-export function autodropLaunched(store: Store<GameState>, pod: number, view: Readonly<LandingView>): void {
+// After a controller launch (landing.ts controllerTick): this pass's sent count (AUTODROP's own launches only: under a
+// wrapping source its machine stays as the kid left it), and the volley's event on its first pod (no pod of the same
+// source into the same LZ within two cadences before it), for any controller: review m4, a launch that is not the kid's
+// hands is a volley whoever flies it (the sleeper 5, MERGE 7). Its size: this pod and what the volley still holds.
+export function autodropLaunched(store: Store<GameState>, pod: number, view: Readonly<LandingView>, controller: Readonly<LandingController>): void {
   const state = store.getState();
   const record = state.landing.pods.find((candidate) => candidate.pod === pod);
   if (record === undefined || record.fate.kind !== 'falling') throw new Error(`autodropLaunched: pod ${pod} is not falling`);
@@ -302,15 +322,22 @@ export function autodropLaunched(store: Store<GameState>, pod: number, view: Rea
   if (lz === null) throw new Error(`autodropLaunched: AUTODROP launched pod ${pod} off-site`);
   const cadenceSec = (view.bay.cadenceTac ?? 0) * state.level.tacticalWarp;
   const firstOfVolley = !state.landing.pods.some((other) => other.pod !== pod && (other.fate.kind === 'falling' || other.fate.kind === 'down')
-    && other.fate.launch.source === 'autodrop' && other.fate.launch.aimLz === lz && launch.atTSec - other.fate.launch.atTSec <= 2 * cadenceSec);
-  store.update((draft) => {
-    const sent = draft.landing.autodrop.sent;
-    sent[lz] = (sent[lz] ?? 0) + 1;
-  });
+    && other.fate.launch.source === launch.source && other.fate.launch.aimLz === lz && launch.atTSec - other.fate.launch.atTSec <= 2 * cadenceSec);
+  if (controller.source === 'autodrop') {
+    store.update((draft) => {
+      const sent = draft.landing.autodrop.sent;
+      sent[lz] = (sent[lz] ?? 0) + 1;
+    });
+  }
   if (!firstOfVolley) return;
   const sol = getDropSolution();
   const after = store.getState();
-  const rest = sol === null ? null : armedNext(after, viewOf(after, sol), after.landing.autodrop.armed) ?? (after.landing.autodrop.held ? heldNext(after, viewOf(after, sol)) : null);
+  let rest: { lz: string; n: number } | null = null;
+  if (controller.source !== 'autodrop') {
+    rest = controller.waitsFor?.(after) ?? null;
+  } else if (sol !== null) {
+    rest = armedNext(after, viewOf(after, sol), after.landing.autodrop.armed) ?? (after.landing.autodrop.held ? heldNext(after, viewOf(after, sol)) : null);
+  }
   emit('autodrop-volley', { lz, n: 1 + (rest !== null && rest.lz === lz ? rest.n : 0), firstAtTSec: launch.atTSec });
 }
 
@@ -653,7 +680,8 @@ function countdown(state: Readonly<GameState>, atTSec: number): string | null {
 // AUTODROP's guidance slot (plan §3.7; landing-guidance.ts buildLandingContext reads it every tick): its own row (AD-wait,
 // AD-fly, AD-done, AD-held, AD-hold, in that order) and its tail on L13's waits.
 export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSolution>): AutodropLine | null {
-  if (!landingOn(state) || sol.block !== null || sol.dot === null || shadowed(state)) return null;
+  if (!landingOn(state) || sol.block !== null || sol.dot === null) return null;
+  if (shadowed(state)) return controllerWaitLine(state);
   const live = skillLive(state.memory, 'autodrop');
   const ad = state.landing.autodrop;
   if (live.version < 1 && ad.end === null) return null;
@@ -696,6 +724,22 @@ export function autodropLineOf(state: Readonly<GameState>, sol: Readonly<DropSol
   if (live.version === 2 && passRows(state, view, passCounts(state, view)).some((r) => r.want > 0 && r.fits > 0)) tail = { text: text.tailPass, key: 'G' };
   else if (live.version >= 3 && planLanding(state, view).rows.length > 0) tail = { text: text.tailPlan, key: 'G' };
   return row === null && tail === null ? null : { row, tail };
+}
+
+// Slice 5 review fix pass (M1): a controller other than AUTODROP's own flies (the sleeper's RUN THE DROPS 5, MERGE 7: never
+// the kid's hands), so AUTODROP's rows stand aside, and while it names a launch it waits for it owns every open window: a
+// wait row with no key, so the strip never says `press [L]` for a launch out of its plan (the kid raced MOTH there: 66% landed
+// against 77% with no hands). The rule an armed v3 keeps (armedFor), with one difference: a wrapping source runs no pinTick
+// (AUTODROP's machine is shadowed), so the windows of an LZ the plan does not fly are its too, or the kid's [L] there would
+// throw queue[0], which may be a pod the plan holds for a later window. With nothing left to fly (a hurt driver's pod the plan
+// cannot fit) it names none, and the kid's rows come back (L4, L5, L9, L11). The id is AD-armed's, so a sinking orbit (L10)
+// still outranks it (review m4 of 4c); no name, no sleeper line (R21).
+function controllerWaitLine(state: Readonly<GameState>): AutodropLine | null {
+  if (state.landing.window === null) return null;
+  const waits = activeLandingController(state)?.waitsFor?.(state) ?? null;
+  if (waits === null) return null;
+  const text = LANDING_LINES.L13controller(waits.lz, Math.max(0, tacTo(state, waits.atTSec)));
+  return { row: { id: 'landing-AD-armed', text, keys: [], urgency: 'wait', layer: 'ship' }, tail: null };
 }
 
 // The armed machine owns the open window of `lz`: v3 when its plan sends pods to that LZ, or when it has rows and no pod

@@ -427,7 +427,7 @@ function entryTick(state: Readonly<GameState>): void {
 // The active controller (AUTODROP 4c, the resident 5, MERGE's landing 7) is asked once per AI tick with the CACHED view
 // (a fresh solve per tick would cost a full solve a tick); a launch it asks for goes through requestLaunch, which
 // decides on the fresh solution like the kid's [L]. A SKIP it asks for is requested only when pace allows it, so a
-// controller asking every tick never buzzes. AUTODROP's (4c) is told of each launch it made (autodrop.ts autodropLaunched).
+// controller asking every tick never buzzes. The controller is told of each launch it made (autodrop.ts autodropLaunched).
 function controllerTick(store: Store<GameState>): void {
   const state = store.getState();
   const controller = activeLandingController(state);
@@ -446,7 +446,9 @@ function controllerTick(store: Store<GameState>): void {
     throw new Error(`landing controller '${controller.source}' asked for a launch as '${decision.source}'`);
   }
   const result = requestLaunch(store, decision);
-  if (result.kind === 'launched' && decision.source === 'autodrop') autodropLaunched(store, result.pod, view);
+  // Review m4 (slice 5): every controller launch is AUTODROP-built (AUTODROP, the sleeper's RUN THE DROPS, MERGE's), so the
+  // volley event is emitted whoever flies; AUTODROP's own sent count only for its own launches.
+  if (result.kind === 'launched') autodropLaunched(store, result.pod, view, controller);
 }
 
 // --- GO LOWER's aim and the declined burn (slice 1b, plan §1.4; landing-orbit is the math) ----------------------------

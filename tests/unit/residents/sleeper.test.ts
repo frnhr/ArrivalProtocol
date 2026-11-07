@@ -12,7 +12,8 @@
 // • HOLD A WALL: offered with a seed in memory; MOTH.wall stands on the drivers' side of the seed's free run, and the seed's
 //   bites stop at it;
 // • RUN THE DROPS: the 'resident' controller flies the landing (AUTODROP shadowed and unclaimed, no thread), every pod
-//   launched with no key pressed, its own SKIPs between passes; MOTH is never food.
+//   launched with no key pressed, its own SKIPs between passes; MOTH is never food. Review M1: no `press [L]` in a window its
+//   plan owns, the kid's rows back once the plan is empty (hurt drivers); m4: its volleys emit.
 import { check, finish } from '../landing/checks';
 import type { GameState } from '@state/schema';
 import type { DriverSegment, Segment, HollowSegment } from '@/types/segment';
@@ -273,19 +274,70 @@ fresh();
     activeLandingController(st())?.source === 'resident' && st().landing.autodrop.claimed === false && st().landing.autodrop.armed === null);
   let skips = 0;
   let skipping = false;
+  // Review M1: in every window MOTH's plan owns, the strip waits with no key (no `press [L]`); review m4: its volleys emit.
+  let ownedWindowTicks = 0;
+  const lInOwned: string[] = [];
+  let volleys = 0;
+  const offVolley = on('autodrop-volley', () => { volleys++; });
   until(() => {
     const now = st().clock.skipWarp !== null;
     if (now && !skipping) skips++;
     skipping = now;
+    const shown = st().director.shown;
+    if (st().landing.window !== null && activeLandingController(st())?.waitsFor?.(st()) != null && shown !== null) {
+      ownedWindowTicks++;
+      if (shown.keys.includes('L') || /\[L\]/.test(shown.text)) lInOwned.push(`${shown.id}: ${shown.text}`);
+    }
     return st().landing.ended !== null || aboard() === 0;
   }, 600);
   offLaunch();
+  offVolley();
+  check('review M1: while MOTH\'s plan has rows, every open window shows a wait row with no key (never `press [L]`)',
+    ownedWindowTicks > 0 && lInOwned.length === 0, `${ownedWindowTicks} ticks · ${[...new Set(lInOwned)].slice(0, 2).join(' | ')}`);
+  check('review m4: MOTH\'s launches emit \'autodrop-volley\' (a volley is any launch that is not the kid\'s hands)', volleys > 0, `${volleys} volleys`);
   const tally = landingResult(st(), 'locked');
   const pct = Math.round((100 * tally.landedInLz) / Math.max(1, tally.colonistsAboard));
   check(`…every one of the ${pods} pods launched by it with no key pressed (${skips} SKIPs of its own between passes), ${pct}% landed in an LZ`,
     pods > 0 && launches.length === pods && launches.every((source) => source === 'resident') && aboard() === 0 && skips > 0 && pct >= 50,
     JSON.stringify({ launches, skips, pct, ended: st().landing.ended }));
   check('…and MOTH is still aboard, never food', seg(RESIDENT_SEG_IDS.sleeper)?.type === 'sleeper' && st().memory.every((block) => block.type !== 'hollow'));
+}
+
+// --- RUN THE DROPS with hurt drivers: the plan ends, the kid's rows come back (review M1, m9) --------------------------------
+fresh();
+{
+  giveSkillFile(h.store, 'autodrop', 1);
+  // Two drivers so hurt their drops fit no LZ (AUTODROP v3's plan leaves them to the kid), the rest healthy.
+  h.store.update((draft) => {
+    let hurt = 0;
+    for (const driver of draft.memory) {
+      if (driver.type !== 'driver') continue;
+      driver.integrity = hurt < 2 ? 35 : 100;
+      hurt++;
+    }
+  });
+  wakeSleeperNow(h.store);
+  pickSleeperJob(h.store, 'drops');
+  lockOn(h);
+  h.step();
+  const aboard = (): number => st().landing.pods.filter((record) => record.fate.kind === 'aboard').length;
+  until(() => st().landing.ended !== null || activeLandingController(st())?.waitsFor?.(st()) === null, 600);
+  const left = aboard();
+  check('with two drivers at 35%, MOTH flies the plan and leaves their pods aboard; the landing does not end by itself',
+    left > 0 && st().landing.ended === null && activeLandingController(st())?.source === 'resident', `${left} aboard · ended ${st().landing.ended}`);
+  const shown = new Set<string>();
+  const named = (): boolean => [...shown].some((id) => id.startsWith('landing-L9') || id === 'landing-L11');
+  let lOffered = false;
+  until(() => {
+    const line = st().director.shown;
+    if (line !== null) {
+      shown.add(line.id);
+      if (st().landing.window !== null && line.keys.includes('L')) lOffered = true;
+    }
+    return lOffered && named();
+  }, 300);
+  check('…then the kid\'s rows come back: L9 (DROP TOO WIDE … REPAIR) or L11 names the hurt pods, and a window offers [L] again',
+    lOffered && named() && st().landing.ended === null, [...shown].join(', '));
 }
 
 finish();

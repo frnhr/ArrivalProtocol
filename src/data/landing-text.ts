@@ -155,6 +155,9 @@ export const LANDING_LINES = {
   // `· [F] to SKIP` only while a SKIP would start (as the flight's WAIT rows offer it).
   L13: (lz: string, inSec: number, skip: boolean, outOfBand: boolean): string =>
     `WAIT — ${lz} in ${minSec(inSec)} ▸▸${skip ? ' · [F] to SKIP' : ''}${outOfBand ? ' · OUT OF BAND' : ''}`,
+  // Slice 5 review fix pass (M1): an open window another controller flies (autodrop.ts controllerWaitLine: the sleeper's
+  // RUN THE DROPS, MERGE's landing): its next launch, with no key and no name (R21).
+  L13controller: (lz: string, inSec: number): string => `WAIT — ${lz} in ${minSec(inSec)}`,
 } as const;
 
 // The landing's SKIP inhibitors (§3.12), and its "too close" refusal (the window's GET READY is about to start).

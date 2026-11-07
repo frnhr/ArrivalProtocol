@@ -8,7 +8,6 @@ import type { SleeperJob } from '@/types/resident';
 import type { LandingController } from '@/types/landing';
 import type { ValidTargetContext } from '@systems/tool-targets';
 import type { OpKind } from '@systems/ops-core';
-import { registerLandingController } from '@systems/landing-controller';
 import { autodropController } from '@systems/autodrop';
 import { onAiTick, isLivePhase } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
@@ -42,7 +41,8 @@ import { INTEGRITY_MAX, SLEEPER_WALL_BLOCKS, SLEEPER_GIFT_CYCLES } from '@data/t
 //   (`'awake'` again), and it is made again once the DEAL is settled (R23). Woken with no job is at rest at a save point
 //   (review M4).
 // • RUN THE DROPS: AUTODROP v3's PLAN flown for MOTH (no thread of the kid's, AUTODROP itself shadowed), which also asks for
-//   the SKIP between its passes, the [F] the kid would press (R11). In flight it waits.
+//   the SKIP between its passes, the [F] the kid would press (R11). In flight it waits. While its plan has rows the strip
+//   shows a wait row in every window (no [L]: review M1, autodrop.ts controllerWaitLine).
 // • HOLD A WALL: a 4-block MOTH.wall (a `sleeper` segment, part 'wall': no health, so HOLLOW's spread stops at it) at R13's
 //   spot, once. Offered only while something hostile shows in memory (a disguised seed shows as a harmless file, so it
 //   does not count: the button must not give it away) and the spot exists.
@@ -123,22 +123,13 @@ export function sleeperJobsNow(state: Readonly<GameState>): SleeperJob[] {
 // --- The 'resident' landing controller (plan R11) ------------------------------------------------------------------------
 
 // AUTODROP v3 PLAN flown for the sleeper while it runs the drops (autodrop.ts autodropController with the 'resident' source,
-// armed 'plan': no thread, AUTODROP's own machine shadowed), else null. Between its passes (no window open and a launch
-// planned) it asks for the SKIP itself; pace stops that SKIP before its next launch (it holds TACTICAL and names it).
+// armed 'plan': no thread, AUTODROP's own machine shadowed), else null. Between its passes it asks for the SKIP itself
+// (AutodropOverride.skipBetween, review architecture 2: the rule MERGE's drivers share); pace stops that SKIP before its next
+// launch (it holds TACTICAL and names it). systems/residents.ts registers the 'resident' resolver and asks it here.
 export function sleeperController(state: Readonly<GameState>): LandingController | null {
   const sleeper = sleeperOf(state);
   if (sleeper === null || sleeper.phase !== 'working' || sleeper.job !== 'drops') return null;
-  const inner = autodropController(state, { version: 3, queue: [], source: 'resident', armed: 'plan' });
-  if (inner === null) return null;
-  return {
-    ...inner,
-    decide: (view, now) => {
-      const decision = inner.decide(view, now);
-      if (decision !== null) return decision;
-      const next = inner.nextLaunchAtTSec?.(now) ?? null;
-      return now.landing.window === null && next !== null && next > now.clock.tSec ? 'skip' : null;
-    },
-  };
+  return autodropController(state, { version: 3, queue: [], source: 'resident', armed: 'plan', skipBetween: true });
 }
 
 // --- The machine ---------------------------------------------------------------------------------------------------------
@@ -340,12 +331,11 @@ function tick(store: Store<GameState>, dtAi: number): void {
 let mounted = false;
 
 // Mounted by systems/residents.ts mountResidents (after the corrupted and departed residents' modules, so after HOLLOW and
-// its DEAL: MEND's tug-of-war, R23's withdrawal the tick a DEAL is offered). It registers the 'resident' resolver (the
-// registry asks it in LANDING_CONTROLLER_ORDER, under MERGE, over AUTODROP). Returns the unmount.
+// its DEAL: MEND's tug-of-war, R23's withdrawal the tick a DEAL is offered). Returns the unmount. (The 'resident' landing
+// resolver is the dispatcher's since the review fix pass: residents.ts mountResidents.)
 export function mountResidentSleeper(store: Store<GameState>): () => void {
   if (mounted) throw new Error('mountResidentSleeper: already mounted');
   mounted = true;
-  const offResolver = registerLandingController('resident', (state) => sleeperController(state));
   const offOp = on('op-done', ({ kind, result, segId }) => {
     if (result === 'done' && segId !== null && sleeperOf(store.getState()) !== null) opsDone.push({ kind, segId });
   });
@@ -355,7 +345,6 @@ export function mountResidentSleeper(store: Store<GameState>): () => void {
   const offTick = onAiTick((dtAi) => tick(store, dtAi));
   const offReset = onWorldReset('resident-sleeper', resetSleeper, () => ({ opsDone, scanned, answer }));
   return () => {
-    offResolver();
     offOp();
     offScan();
     offTick();

@@ -4,7 +4,8 @@
 // row restores the same ship in flight, locks mid-band and lands it:
 // • by hand: the kid who obeys the strip ([L] when it says so, [F] when it offers a SKIP; skills/landing-kid);
 // • RUN THE DROPS, no hands: MOTH alone (a pod that fits no LZ stays aboard: AUTODROP v3's rule, OPEN-DECISIONS 5);
-// • RUN THE DROPS with the kid's hands too (the strip still says `press [L]`, so the kid races MOTH);
+// • RUN THE DROPS with the kid's hands too (since the review fix pass, M1, the strip waits with no [L] in the windows MOTH's
+//   plan owns, and gives the kid's rows back once the plan is empty);
 // • MEND DRIVERS for 20 AI s of the approach, then by hand;
 // • AUTODROP v3 bought instead, the kid arming it with [G] (the comparison R11 asks for).
 // It prints landed % (colonists in an LZ) and the launches by source per row. Its hard checks: MEND leaves every driver
