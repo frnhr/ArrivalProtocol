@@ -1,5 +1,6 @@
-// Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): optional: a dim tick per planned
-// volley. Others ask by message.
+// Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §5, review B1): the overview line's unmapped rim
+// (`gt-p-unmapped`) and each bracket node's `data-site` (a SURVEY candidate's site id, '' on an LZ: SITES delegates its
+// click). Slice 4c–4e's Track DROP part stands (optional: a dim tick per planned volley). Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { onGameTick } from '@systems/clock';
@@ -90,7 +91,9 @@ export function mountGroundTrack(store: Store<GameState>): () => void {
   const planetDot = make('span', 'gt-p-dot');
   const planetView = make('span', 'gt-p-view');
   planetEl.append(planetView, planetDot);
-  const spanPool = { noGoStrip: [] as HTMLElement[], noGoPlanet: [] as HTMLElement[], oobPlanet: [] as HTMLElement[] };
+  const spanPool = {
+    noGoStrip: [] as HTMLElement[], noGoPlanet: [] as HTMLElement[], oobPlanet: [] as HTMLElement[], unmappedPlanet: [] as HTMLElement[],
+  };
 
   function pool(list: HTMLElement[], count: number, parent: HTMLElement, cls: string): HTMLElement[] {
     while (list.length < count) { const node = make('span', cls); parent.appendChild(node); list.push(node); }
@@ -116,6 +119,7 @@ export function mountGroundTrack(store: Store<GameState>): () => void {
         stripBrackets.set(bracket.lz, nodes);
       }
       nodes.box.className = `gt-bracket look-${bracket.look}${bracket.outOfBand ? ' out-of-band' : ''}`;
+      nodes.box.dataset.site = bracket.site ?? '';
       placeSpan(nodes.box, bracket);
       patchText(nodes.label, garble(`b-${bracket.lz}`, bracket.label, scramble));
     }
@@ -158,6 +162,7 @@ export function mountGroundTrack(store: Store<GameState>): () => void {
       node.style.left = pct(mid - half);
       node.style.width = pct(2 * half);
       node.className = `gt-p-lz look-${bracket.look}`;
+      node.dataset.site = bracket.site ?? '';
     }
     const wrap = (span: Span): Span => {
       const mid = (((span.from + span.to) / 2) % 1 + 1) % 1;
@@ -166,6 +171,8 @@ export function mountGroundTrack(store: Store<GameState>): () => void {
     };
     pool(spanPool.noGoPlanet, planet.noGo.length, planetEl, 'gt-p-nogo').forEach((node, i) => { const span = planet.noGo[i]; if (span) placeSpan(node, wrap(span)); });
     pool(spanPool.oobPlanet, planet.outOfBand.length, planetEl, 'gt-p-oob').forEach((node, i) => { const span = planet.outOfBand[i]; if (span) placeSpan(node, wrap(span)); });
+    // Slice 6 (review B1): the rim SURVEY has not mapped (`░`, styled by SITES's survey.css); none on a GOOD planet.
+    pool(spanPool.unmappedPlanet, planet.unmapped.length, planetEl, 'gt-p-unmapped').forEach((node, i) => { const span = planet.unmapped[i]; if (span) placeSpan(node, wrap(span)); });
     paintMarks(planetMarks, planet.marks, planetEl, 'gt-p-mark');
     planetDot.hidden = planet.dot === null;
     if (planet.dot !== null) planetDot.style.left = pct(planet.dot);

@@ -687,10 +687,11 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
   const nodes = build(svg);
   const half = VIEWBOX / 2;
   // 01-landing §4: the brackets on the rim, the pod arc, the dot, the streaks, the marks and the beacons (plot-landing).
-  // Slice 6 (plan §2.4): SURVEY's swath, mapped rim and found sites, under the landing layer (made first, so its nodes go
-  // in right after the surface line and the landing layer's after them).
-  const surveyLayer = createPlotSurveyLayer(svg, nodes.surface);
+  // Slice 6 (plan §2.4, review M3): SURVEY's swath, mapped rim and found sites, under the landing layer. Each layer goes in
+  // right after the surface line (Element.after), so the one made last sits lowest: the survey layer is made after the
+  // landing layer, and its nodes land between the surface and the landing's drag line, rim and brackets.
   const landingLayer = createPlotLandingLayer(svg, nodes.surface, nodes.startBurn.glyph);
+  const surveyLayer = createPlotSurveyLayer(svg, nodes.surface);
   let ringText: string = RING_LABEL_TEXT;
   let lastPred: Prediction | null = null;
   let lastViewR = 0;
@@ -1061,12 +1062,13 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     // The landing's layer first (01-landing §4): its brackets' names are obstacles for the markers' labels.
     const planetUnits = Math.max(planet.R * scale, PLOT_PLANET_MIN_UNITS);
     // Slice 6: the survey's layer, in flight and landing (its model is null on a GOOD planet and under NO SIGNAL's veil).
-    surveyLayer.paint(noSignal ? null : surveyPlotModel(state), proj, half, half, planetUnits);
+    // Its label boxes (`SITE 4`) are obstacles for the markers' labels, as the brackets' names are (review M3's note).
+    const surveyBoxes = surveyLayer.paint(noSignal ? null : surveyPlotModel(state), proj, half, half, planetUnits);
     const landingModel = noSignal ? null : plotLandingModel(state, landing ? getDropSolution() : null, pred, offer);
     const goLow = landingModel?.goLow ?? null;
     const bracketBoxes = landingLayer.paint(landingModel, proj, half, half, planetUnits);
     const obstacles: Obstacles = {
-      boxes: [boxAround(shipAt, SHIP_TIP + OBSTACLE_PAD), ...bracketBoxes.map((box) => padded(box, OBSTACLE_PAD))],
+      boxes: [boxAround(shipAt, SHIP_TIP + OBSTACLE_PAD), ...[...bracketBoxes, ...surveyBoxes].map((box) => padded(box, OBSTACLE_PAD))],
       labels: [...zoneLabelBoxes], ring: smallRing, disc: { cx: half, cy: half, radius: ringOuterUnits + OBSTACLE_PAD },
     };
     for (const marker of [markers.impact, markers.peri, apo]) {

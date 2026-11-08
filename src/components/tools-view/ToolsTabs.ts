@@ -30,6 +30,16 @@ export function closeToolWindow(id: string): void {
   closeWindow(id);
 }
 
+// Slice 6 (review M6, SITES_AUTO_OPEN): opens one window from code. On the desktop it joins the open windows (an open one stays
+// open, never toggled shut); on a phone it takes the tab only with `onPhone` (the boot keeps the NAV PLOT's tab by default).
+// Set while mounted.
+let openWindow: ((id: string, onPhone: boolean) => void) | null = null;
+
+export function openToolWindow(id: string, opts: Readonly<{ onPhone?: boolean }> = {}): void {
+  if (!openWindow) throw new Error('openToolWindow: the tools tabs are not mounted');
+  openWindow(id, opts.onPhone ?? false);
+}
+
 // On mobile, the bottom dock's tool items double as a tab bar: at most one window is visible at a time, and clicking
 // an item switches to it. On desktop, dock items are independent open/close toggles that hide/show their panel.
 // The two meanings of a dock item's `open` mark live apart: which windows are open on the desk is kept in
@@ -145,10 +155,17 @@ export function mountToolsTabs(): () => void {
     if (activeTab === id) activeTab = DEFAULT_TAB;
     sync();
   };
+  openWindow = (id, onPhone) => {
+    windowOf(id);
+    desktopOpen.add(id);
+    if (onPhone) activeTab = id;
+    sync();
+  };
 
   return () => {
     dock.removeEventListener('click', onClick, true);
     mq.removeEventListener('change', sync);
     closeWindow = null;
+    openWindow = null;
   };
 }

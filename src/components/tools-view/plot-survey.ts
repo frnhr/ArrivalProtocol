@@ -5,14 +5,17 @@
 // red `✕` once bad. A click on a bracket selects it in SITES. It paints systems/survey-hud.ts surveyPlotModel.
 import type { Projector } from '@/types/orbit';
 import type { SurveyPlotModel } from '@systems/survey-hud';
+import type { LabelBox } from './plot-landing';
 
 export interface PlotSurveyLayer {
-  // `cx`, `cy`: the planet's centre in viewBox units; `planetUnits`: its radius there (as plot-landing's paint).
-  paint(model: SurveyPlotModel | null, proj: Projector, cx: number, cy: number, planetUnits: number): void;
+  // `cx`, `cy`: the planet's centre in viewBox units; `planetUnits`: its radius there (as plot-landing's paint). Returns the
+  // boxes of the labels it drew (`SITE 4`), which the plot's other labels keep off.
+  paint(model: SurveyPlotModel | null, proj: Projector, cx: number, cy: number, planetUnits: number): LabelBox[];
   clear(): void;
 }
 
-// NavPlotWindow creates it once, right before the landing layer, with the plot's svg and the surface line it goes over.
+// NavPlotWindow creates it once, right after the landing layer, with the plot's svg and the surface line: nodes put in with
+// `below.after(…)` then sit between the surface and the landing layer's (Element.after: the layer made last is the lowest).
 // FOUNDATION stub: a layer that draws nothing (no nodes are made).
 export function createPlotSurveyLayer(svg: SVGSVGElement, below: SVGElement): PlotSurveyLayer {
   void svg;
@@ -24,6 +27,7 @@ export function createPlotSurveyLayer(svg: SVGSVGElement, below: SVGElement): Pl
       void cx;
       void cy;
       void planetUnits;
+      return [];
     },
     clear() {},
   };
