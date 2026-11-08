@@ -45,7 +45,7 @@ export function mountSitesWindow(store: Store<GameState>): () => void {
   const title = make('span', 'sw-title');
   const pauseBtn = make('button', 'sw-pause');
   pauseBtn.tabIndex = -1;
-  pauseBtn.title = SITES_TEXT.window.pauseTitle;
+  pauseBtn.title = SITES_TEXT.window.pauseTitle;   // the model's own title (review m2: v3's pause frees no thread) on paint
   head.append(title, pauseBtn);
   const rim = make('div', 'sw-rim');
   const status = make('div', 'sw-status');
@@ -123,6 +123,7 @@ export function mountSitesWindow(store: Store<GameState>): () => void {
     pauseBtn.hidden = model.pause === null;
     patch(pauseBtn, model.pause?.label ?? '');
     pauseBtn.classList.toggle('paused', model.pause?.paused === true);
+    if (model.pause !== null && pauseBtn.title !== model.pause.title) pauseBtn.title = model.pause.title;
     patch(rim, model.rim);
     patch(status, model.status);
     status.className = `sw-status tone-${model.tone}`;

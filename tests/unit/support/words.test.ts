@@ -406,10 +406,13 @@ function renderSlice6(value: unknown, out: string[], owner: string, extra: Reado
   // `stars`: ★★★; `glyph`: an LZ's plot mark; `lzs`: every LZ of a 4-LZ ship moved.
   const SITES_WORST: Readonly<Record<string, unknown>> = {
     groundWord: 'FLAT ★★★', where: 'SITE 12', why: 'SITE 12 HOLDS 3,200 · LZ-D NEEDS 3,200 · LZ-D!!', stars: 3, glyph: '✕',
-    lzs: 'LZ-A, LZ-B, LZ-C, LZ-D',
+    lzs: 'LZ-A, LZ-B, LZ-C, LZ-D', podCount: 16,
   };
   const lines = renderSlice6(SITES_TEXT, [], 'SITES_TEXT', SITES_WORST);
-  const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
+  // A pod-only rule (`offline`, `lost`) binds a line about pods, as the guard above reads it: `SURVEY OFFLINE — REPAIR IT`
+  // (review m1) names a skill file, as `ARCHIVE OFFLINE` and `RUN SAVE OFFLINE` do.
+  const bad = lines.filter((text) => text.length > MAX_LINE_CHARS
+    || RULES.some((rule) => rule.re.test(text) && (!rule.podOnly || POD_WORDS.test(text))));
   check(`6 SITES words: every line (${lines.length}) fits the strip (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
     lines.length > 0 && bad.length === 0, JSON.stringify(bad));
 }

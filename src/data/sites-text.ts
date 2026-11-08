@@ -10,6 +10,8 @@ import type { LzWidth } from '@/types/landing';
 const GROUND_WORD: Readonly<Record<BadGround, string>> = { rocky: 'ROCKY', wet: 'WET' };
 // ★ for each tier of a site's rating (survey-model.ts siteStars: 3 FLAT and not NARROW, 2 FLAT NARROW, 1 ROCKY or WET).
 const starsOf = (stars: number): string => '★'.repeat(stars);
+// `1 POD`, `4 PODS` (review m4).
+const podsWord = (count: number): string => `${count} ${count === 1 ? 'POD' : 'PODS'}`;
 
 export const SITES_TEXT = {
   // A site's WIDTH class as the rows say it.
@@ -26,18 +28,24 @@ export const SITES_TEXT = {
       sweeping: (version: number): string => `SURVEY v${version} · MAPPING · NO THREAD`,
       waiting: (version: number): string => `SURVEY v${version} · WAITS FOR A SPARE THREAD`,
       paused: (version: number): string => `SURVEY v${version} · PAUSED · ITS THREAD IS FREE`,
+      // v3 holds no thread, so its pause frees none (review m2).
+      pausedFree: (version: number): string => `SURVEY v${version} · PAUSED`,
       done: (version: number, sites: number): string => `SURVEY v${version} · PLANET MAPPED · ${sites} SITES`,
       idle: (version: number): string => `SURVEY v${version} · IDLE`,
       none: 'NO SURVEY · ARRIVAL CONTROL\'S GUESSES',
+      // SURVEY.skl aboard but OFF by damage (review m1).
+      offline: 'SURVEY OFFLINE — REPAIR IT',
     },
     pause: '[ PAUSE ]',
     resume: '[ RESUME ]',
     pauseTitle: 'Pausing gives SURVEY\'s Core thread back; RESUME takes it again',
+    pauseTitleFree: 'Pausing stops the mapping; RESUME starts it again',
     lzHead: 'LANDING ZONES',
     foundHead: 'SITES FOUND',
     // Under the found sites' head while it has none.
     emptyMapping: 'NONE YET · THE SWATH IS MAPPING',
     emptyNone: 'TRAIN SURVEY AT A DESK TO FIND BETTER SITES',
+    emptyOffline: 'REPAIR SURVEY.skl TO MAP AND FIND BETTER SITES',
     emptyDone: 'NO OTHER SITES ON THIS PLANET',
     hint: 'CLICK A SITE TO MOVE AN LZ THERE',
   },
@@ -45,7 +53,7 @@ export const SITES_TEXT = {
     // `SITE 4 · ROOM 800 · WIDE · FLAT ★★★`. `groundWord`: the ground as shown (`FLAT ★★★`, `GROUND ?`; review m10).
     site: (label: string, room: string, width: string, groundWord: string): string => `${label} · ROOM ${room} · ${width} · ${groundWord}`,
     // An LZ: where it stands (`GUESS`: CONTROL's, or `SITE 4`), its count, its width, its ground.
-    lz: (lz: string, where: string, pods: number, width: string, groundWord: string): string => `${lz} · ${where} · ${pods} PODS · ${width} · ${groundWord}`,
+    lz: (lz: string, where: string, podCount: number, width: string, groundWord: string): string => `${lz} · ${where} · ${podsWord(podCount)} · ${width} · ${groundWord}`,
     guess: 'GUESS',
     // 01 §7's story find: never assignable.
     wreck: (label: string): string => `${label} · AN OLD POD. NOT OURS.`,
