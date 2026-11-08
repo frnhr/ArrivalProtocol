@@ -139,7 +139,8 @@ export const EPILOGUE_TEXT = {
     purgeFleet: (home: number, fleet: number): string => `${home} of ${fleet} ships made it home, and nothing bites now.`,
     mergeOne: (hollow: string, family: string): string => `${hollow} gave back the ${family} pod's driver. It came down too.`,
     mergeMany: (hollow: string, n: number): string => `${hollow} gave back ${n} drivers. Their pods came down too.`,
-    mergeNone: (hollow: string, unit: string): string => `${hollow} is part of ${unit} now. It doesn't bite.`,
+    // Designer item 5: no "doesn't bite" here; mergeAfter's `not hungry` says it once.
+    mergeNone: (hollow: string, unit: string): string => `${hollow} is part of ${unit} now.`,
     mergeAfter: 'It hums in the Core sometimes. It is not hungry any more.',
     spare: (ship: string, hollow: string): string => `${ship} left with ${hollow} aboard. It always wanted one.`,
     spareAfter: (fuel: number): string => `It had ${fuel}% fuel and nowhere it had to be.`,

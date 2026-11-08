@@ -33,7 +33,7 @@ export function builtPieces(): EndingPiece[] {
 export type PriceKind = 'none' | 'charge' | 'empty-ship' | 'on-target' | 'signals';
 
 // One row of a FINALE step: its key cap (the card's [1]–[4]), its piece, its price, and the step-2 piece it rules out
-// (SPARE gives the ship to the root: `046 HAS THE SHIP` greys SUNSET, R8). The next run's trace is the piece's own (7c's
+// (SPARE gives the ship to the root: `SPARE GIVES IT THE SHIP` greys SUNSET, R8). The next run's trace is the piece's own (7c's
 // TraceKind is the piece; 'followed' leaves none).
 export interface EndingOption<P extends EndingPiece> {
   key: 1 | 2 | 3 | 4;

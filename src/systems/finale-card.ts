@@ -65,7 +65,7 @@ export interface MeterModel {
 // • needs: the same, greyed, its caption the need line (`NEEDS FUEL 20% · you have 12%`);
 // • unknown: an option out of reach and never chosen before: `???` and its need line, nothing else.
 // `nextRun` is the NEXT RUN: row's line (R12: none until 7c builds the traces; the row keeps its room). `picked`: step 1's
-// pick kept after [ESC] BACK (R7). `ruledOut`: SPARE gave the ship away (`046 HAS THE SHIP` on SUNSET, R8).
+// pick kept after [ESC] BACK (R7). `ruledOut`: SPARE gave the ship away (`SPARE GIVES IT THE SHIP` on SUNSET, R8).
 export interface CardRow {
   key: number;
   piece: EndingPiece;

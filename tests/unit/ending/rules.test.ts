@@ -7,7 +7,7 @@
 //   everyone aboard, unlaunched pods counted), the final ship by its live tally, newest first, at most STAY_PICK_MAX, each
 //   with its colony and its route year;
 // • optionState (R11): open with its meter and NOW:, needs with its line and meter, `named` only when seen before, PURGE and
-//   REASSIGNMENT always open, SUNSET greyed by a SPARE pick (`046 HAS THE SHIP`), CONTACT hidden;
+//   REASSIGNMENT always open, SUNSET greyed by a SPARE pick (`SPARE GIVES IT THE SHIP`, named), CONTACT hidden;
 // • endingRecordAt / endingRecordOf (M4), finaleRunCause (R17), reportEndingLine with NIGHT's titles (B1).
 import { check, finish } from '../landing/checks';
 import type { GameState, ShipResult } from '@state/schema';

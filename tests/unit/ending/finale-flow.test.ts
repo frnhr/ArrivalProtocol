@@ -4,9 +4,10 @@
 // • ASLEEP (R6): the root's DELETE leaves its last block asleep: `> 047. wait. finish your landing. i'll be here.`, no bite,
 //   seed or verb after, the landing goes on; the card comes once the landing has settled, FINALE_OPEN_DELAY_SEC on (no pick
 //   before it), entry 12 found as it opens, the arbiter shut.
+// • THE LANDING OVER FIRST (designer item 2): `> 047. wait.` and the card at once.
 // • THE CARD (R7, R8, R11, M6): step 1's rows and prices; a pick is a pick ([ESC] back keeps it, nothing applied); MERGE
 //   refused at 19; MERGE picked at 21 and a REPAIR under the card draining it: the confirm goes back to step 1; SPARE refused
-//   at FUEL 19% and greying SUNSET (`046 HAS THE SHIP`).
+//   at FUEL 19% and greying SUNSET (`SPARE GIVES IT THE SHIP`, named: designer item 3).
 // • STAY (R9, M3): 0 ships (needs), 1 (confirms at once), 3 (WHICH COLONY?, pickStay, a stray slot refused); the record
 //   names the colony and its year; the ENDING CHOSEN save of it encodes and decodes (the codec's STAY and record checks).
 // • THE VERDICT (R13): at most 3 lines, the commands echoed in the TERMINAL, CONTROL's line on the radio once typed, 'done'
@@ -175,6 +176,19 @@ check('LAST LIGHT on seed 7\'s arm: the final ship, locked, the duel on', state(
   check('…then it is', finaleAtStep1(state()));
 }
 
+// --- The landing over before the root falls (designer item 2): the short line, the card at once ----------------------------
+toArmDuel();
+{
+  landInstantly(h.store);
+  const from = state().log.entries.length;
+  deleteRoot();
+  const finale = state().hollow.finale;
+  const lines = state().log.entries.slice(from).map((entry) => entry.text);
+  check('every pod down, then the root falls: `> 047. wait.` (nothing to finish), step 1 at once, its card the open delay on',
+    finale.phase === 'step1' && finale.rootFell && finale.cardAtAi !== null && Math.abs(finale.cardAtAi - state().clock.aiSec - FINALE_OPEN_DELAY_SEC) < 0.2
+    && lines.includes(FINALE_TEXT.asleepLanded('047')) && !lines.includes(FINALE_TEXT.asleep('047')), `${finale.phase} ${JSON.stringify(lines)}`);
+}
+
 // --- The card: step 1's rows, a pick is a pick, the prices judged again (R7, R8, R11, M6) ---------------------------------
 toArmCard();
 {
@@ -218,8 +232,8 @@ toArmCard();
   setFuel(19);
   check('SPARE at FUEL 19%: refused `NEEDS FUEL 20% · you have 19%`', pickStep1(h.store, 'spare') === FINALE_TEXT.needs.fuel(19));
   setFuel(25);
-  check('…at 25% SPARE picks; SUNSET greys `046 HAS THE SHIP` and is refused', pickStep1(h.store, 'spare') === null
-    && (() => { const sunset = optionState(state(), 'sunset', []); return sunset.kind === 'needs' && sunset.need === FINALE_TEXT.needs.shipTaken; })()
+  check('…at 25% SPARE picks; SUNSET greys `SPARE GIVES IT THE SHIP`, named, and is refused', pickStep1(h.store, 'spare') === null
+    && (() => { const sunset = optionState(state(), 'sunset', []); return sunset.kind === 'needs' && sunset.need === FINALE_TEXT.needs.shipTaken && sunset.named; })()
     && pickStep2(h.store, 'sunset') === FINALE_TEXT.needs.shipTaken && state().hollow.finale.phase === 'step2');
 }
 

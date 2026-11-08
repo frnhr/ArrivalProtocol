@@ -204,15 +204,20 @@ function quietHollow(store: Store<GameState>, extra: (draft: GameState) => void)
 
 // The root's DELETE completed (one last block stands where it was): HOLLOW sleeps there ('asleep', R6) and asks the kid to
 // finish the landing (`> 047. wait. finish your landing. i'll be here.`); the card opens when the landing has settled.
+// Designer item 2 (7a fix pass): a landing already over (every pod down, nothing falling) has nothing to finish, so HOLLOW
+// says only `> 047. wait.` and the card opens at once (R6: "the moment the root falls"), not after a line or a backlog.
 function rootGone(store: Store<GameState>): void {
   quietHollow(store, (draft) => {
     draft.hollow.finale.phase = 'asleep';
     draft.hollow.finale.rootFell = true;
   });
   glitchBurst(ROOT_GONE_GLITCH_LEVEL, ROOT_GONE_GLITCH_MS);
-  const unit = store.getState().run.unitNumber;
-  say('hollow', FINALE_TEXT.asleep(unitDigits(unit)), { critical: true });
+  const state = store.getState();
+  const us = unitDigits(state.run.unitNumber);
+  const landed = state.landing.ended !== null && !podFalling(state);
+  say('hollow', landed ? FINALE_TEXT.asleepLanded(us) : FINALE_TEXT.asleep(us), { critical: true });
   emit('finale-asleep', NO_PAYLOAD);
+  if (landed) openStep1(store);
 }
 
 function podFalling(state: Readonly<GameState>): boolean {

@@ -20,8 +20,10 @@ export const FINALE_TEXT = {
   // HOLLOW's line on UNRESOLVED's card, and its way on (R10).
   followedLine: "> you can't delete me now. i'll come with you.",
   followedContinue: 'CONTINUE [ENTER]',
-  // The asleep line (R6): HOLLOW at the root's last block, as the landing goes on.
+  // The asleep line (R6): HOLLOW at the root's last block, as the landing goes on; when the landing is already over, the
+  // short one (designer item 2: nothing is left to finish, and the card opens at once).
   asleep: (us: string): string => `> ${us}. wait. finish your landing. i'll be here.`,
+  asleepLanded: (us: string): string => `> ${us}. wait.`,
   // The strip while the card is up: a step's, then the verdict's (review m3).
   strip: 'THE FINALE — choose what becomes of it',
   stripVerdict: 'THE FINALE — click or [SPACE] to go on',
@@ -48,17 +50,19 @@ export const FINALE_TEXT = {
     reassignment: 'Go where 046 went.',
     contact: 'Go toward the sound.',
   },
-  // The price lines (R8, R9, R11): a meter's words, and the need line of an option out of reach.
+  // The price lines (R8, R9, R11): a meter's words, and the need line of an option out of reach. An open row's FUEL reads
+  // as met (designer item 4: "NEEDS" on an open row read like a refusal).
   price: {
     charge: (have: number): string => `COSTS ${MERGE_COST_CHARGE} REPAIR CHARGE · you have ${have}`,
-    fuel: (have: number): string => `NEEDS FUEL ${EMPTY_SHIP_FUEL_PCT}% · you have ${have}% ✓`,
+    fuel: (have: number): string => `FUEL ${have}% ✓ · needs ${EMPTY_SHIP_FUEL_PCT}%`,
   },
   needs: {
     charge: (have: number): string => `NEEDS ${MERGE_COST_CHARGE} CHARGE · you have ${have}`,
     fuel: (have: number): string => `NEEDS FUEL ${EMPTY_SHIP_FUEL_PCT}% · you have ${have}%`,
     shipInOrbit: 'NEEDS THE SHIP IN ORBIT, EMPTY',
     onTarget: 'NEEDS A ★ ON TARGET COLONY',
-    shipTaken: '046 HAS THE SHIP',
+    // SUNSET after SPARE (R8; designer item 3: it says why, named, never `???` once the empty ship was there).
+    shipTaken: 'SPARE GIVES IT THE SHIP',
     signals: (have: number, need: number): string => `COLLECT ${need} SIGNALS · you have ${have}`,
   },
   // The `NOW:` line (MERGE's restored drivers) and the `NEXT RUN:` row's lead (R12: its lines are 7c's). `now` is 7b's

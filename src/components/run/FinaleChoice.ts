@@ -38,7 +38,7 @@ import { FINALE_STEP_ARM_SEC, FINALE_ENDING_CPS, CONTROL_CHIME_LEAD_SEC, FINALE_
 //   NEXT RUN: row's room (R12: its lines are 7c's). An option out of reach that was never chosen reads `???` with its need.
 // • UNRESOLVED (R10): step 1 is IT FOLLOWED YOU, HOLLOW's line, CONTINUE [ENTER].
 // • STEP 2, WHAT BECOMES OF YOU? THE ARM IS DONE, CONTROL's quote, step 1's pick above the question, [1] SUNSET, [2] STAY,
-//   [3] REASSIGNMENT (and [4] CONTACT from 7d). SPARE greys SUNSET (`046 HAS THE SHIP`, FINALE's need). [ESC] BACK returns
+//   [3] REASSIGNMENT (and [4] CONTACT from 7d). SPARE greys SUNSET (`SPARE GIVES IT THE SHIP`, FINALE's need). [ESC] BACK returns
 //   to step 1 with its pick kept as a pick (R7). STAY with several ★ ON TARGET ships opens the sub-row WHICH COLONY?, newest
 //   first, keys 1–8; ESC closes it (M3).
 // • THE VERDICT (R13): the confirm writes it (≤ 3 lines: the two echoes and CONTROL); the card types it on the verdict's

@@ -133,7 +133,7 @@ function emptyShipOption(state: Readonly<GameState>, piece: EndingPiece, seen: r
 // endingsSeen (the card's `???`); the rules' own checks pass [] (only the kind matters there).
 // • PURGE, REASSIGNMENT: always open, free.
 // • MERGE: MERGE_COST_CHARGE REPAIR CHARGE (its meter); `NOW:` names the drivers it would give back (R15's interim words).
-// • SPARE: THE EMPTY SHIP. SUNSET: THE EMPTY SHIP, unless step 1's pick gave it to the root (`046 HAS THE SHIP`, R8).
+// • SPARE: THE EMPTY SHIP. SUNSET: THE EMPTY SHIP, unless step 1's pick gave it to the root (`SPARE GIVES IT THE SHIP`, R8).
 // • STAY: a ★ ON TARGET ship of this run (R9).
 // • CONTACT: absent until 7d (R11).
 export function optionState(state: Readonly<GameState>, piece: EndingPiece, seen: readonly EndingPiece[]): OptionState {
@@ -151,7 +151,11 @@ export function optionState(state: Readonly<GameState>, piece: EndingPiece, seen
     case 'spare':
       return emptyShipOption(state, piece, seen);
     case 'sunset':
-      if (state.hollow.finale.hollow === 'spare') return needs(piece, seen, FINALE_TEXT.needs.shipTaken, null);
+      // Designer item 3: after SPARE the row says why, and it is named whenever its price was met (the empty ship was
+      // there: SPARE's own price), never `???`.
+      if (state.hollow.finale.hollow === 'spare') {
+        return { kind: 'needs', need: FINALE_TEXT.needs.shipTaken, named: emptyShip(state).ok || seen.includes(piece), price: null };
+      }
       return emptyShipOption(state, piece, seen);
     case 'stay':
       return stayCandidates(state).length > 0 ? { kind: 'open', price: null, now: null } : needs(piece, seen, FINALE_TEXT.needs.onTarget, null);

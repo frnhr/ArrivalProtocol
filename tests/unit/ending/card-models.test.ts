@@ -137,7 +137,7 @@ function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial
   check('step 1: MERGE open: its charge meter, `COSTS 20 REPAIR CHARGE · you have 26`, and NOW:',
     merge?.kind === 'open' && merge.meter?.kind === 'charge' && merge.meter.ok && merge.caption === FINALE_TEXT.price.charge(26) && merge.now === NOW_MERGE,
     JSON.stringify(merge));
-  check('step 1: SPARE open: the FUEL meter and `NEEDS FUEL 20% · you have 23% ✓`',
+  check('step 1: SPARE open: the FUEL meter and `FUEL 23% ✓ · needs 20%` (met, designer item 4)',
     spare?.kind === 'open' && spare.meter?.kind === 'fuel' && spare.caption === FINALE_TEXT.price.fuel(23), JSON.stringify(spare));
   check('step 1: the NEXT RUN: row holds no line in 7a (R12: its traces are 7c\'s; the row keeps its room)',
     model.rows.every((row) => row.nextRun === null));

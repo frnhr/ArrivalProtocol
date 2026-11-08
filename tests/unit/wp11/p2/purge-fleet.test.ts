@@ -94,8 +94,9 @@ const root = theRoot(state().memory);
 check('…its ORBIT LOCK opens the root', root !== null && !root.locked && state().hollow.finale.phase === 'duel');
 if (root) actionDelete(h.store, root);
 h.stepFor(ROOT_DELETE_SEC + 0.5);
-check('…its DELETE puts HOLLOW to sleep; once the landing settles the choice is up, PURGE is taken', state().hollow.finale.phase === 'asleep'
-  && chooseEnding(h.store, 'purge', 'reassignment', { step: () => h.step() }) === null && decidedAs(state()) === 'purge');
+// Designer item 2 (7a fix pass): over a landing already over the root's fall opens step 1 at once ('asleep' otherwise).
+check('…its DELETE puts HOLLOW to sleep; once the landing settles the choice is up, PURGE is taken', state().hollow.finale.rootFell
+  && ['asleep', 'step1'].includes(state().hollow.finale.phase) && chooseEnding(h.store, 'purge', 'reassignment', { step: () => h.step() }) === null && decidedAs(state()) === 'purge');
 {
   const lines = state().hollow.finale.ending?.lines.map((line) => line.text) ?? [];
   check('the typed verdict claims nothing of the fleet (never `the fleet is home.`, R13)', lines.length === 3
