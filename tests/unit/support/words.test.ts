@@ -511,18 +511,30 @@ const SLICE7_BASE: Readonly<Record<string, unknown>> = {
 // --- 7c TRACE (data/trace-text.ts TRACE_TEXT): Track TRACE adds its checks here ----------------------------------------------
 {
   // The widest unit name a cache names (a MERGE root's two), the longest upgrade file, the widest colony, three-digit charge
-  // and the most seeds a beam brings.
+  // and the most seeds a beam brings. SUNSET's cache names one unit (the last), at its widest three digits.
   const TRACE_WORST: Readonly<Record<string, unknown>> = {
-    unitName: 'UNIT-046·047', charge: 999, what: 'FIREWALL.sys', seeds: 3, threads: 9, years: 999,
+    unitName: 'UNIT-046·047', charge: 999, what: 'FIREWALL.sys', seeds: 3, threads: 9, years: 999, file: 'FIREWALL.sys',
   };
   const { stayLetter, ...rest } = TRACE_TEXT;
+  const colony = String(SLICE7_BASE.colony);
   const lines = [
-    ...renderSlice6({ ...rest, from: stayLetter.from }, [], 'TRACE_TEXT', { ...SLICE7_BASE, ...TRACE_WORST }),
-    ...stayLetter.lines(String(SLICE7_BASE.colony), 999),
+    ...renderSlice6({ ...rest, from: stayLetter.from, subject: stayLetter.subject }, [], 'TRACE_TEXT', { ...SLICE7_BASE, ...TRACE_WORST }),
+    ...stayLetter.lines(colony, 999),
+    // A file with no room, in its cache's line: SPARE's widest root with its widest file, SUNSET's widest unit with its tool,
+    // at a two-digit gift (a gift's charge is TRACE_GIFT_CHARGE, 15).
+    TRACE_TEXT.cache('UNIT-046·047', 99, TRACE_TEXT.noRoom('FIREWALL.sys')),
+    TRACE_TEXT.leftCache('UNIT-147', 99, TRACE_TEXT.noRoom('Repair.bak')),
   ];
   const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
   check(`7c TRACE words: every line (${lines.length}) fits (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
     lines.length > 0 && bad.length === 0 && stayLetter.lines('X', 1).length <= 6, JSON.stringify(bad));
+  check('…the boot lines read as R32 / R33 write them',
+    TRACE_TEXT.cache('UNIT-046', 15, 'THREAD+') === "> 046'S CACHE · +15 REPAIR CHARGE · THREAD+"
+    && TRACE_TEXT.leftCache('UNIT-047', 15, 'Rm') === '> UNIT-047 LEFT A CACHE HERE · +15 REPAIR CHARGE · Rm'
+    && TRACE_TEXT.supply('RIVERSIDE', 15) === "> RIVERSIDE'S SUPPLY PACKET · +15 REPAIR CHARGE"
+    && TRACE_TEXT.wiped(2) === '> THE DISH HERE WAS WIPED · 2 SEEDS GONE' && TRACE_TEXT.wild(1) === '> THE DISH HERE RUNS WILD · 1 SEED CAME IN'
+    && TRACE_TEXT.thread(1) === '> A THREAD IN THE DISH · +1 THREAD' && TRACE_TEXT.allowance(15) === '> AN ALLOWANCE FOR THE WAIT · +15 REPAIR CHARGE'
+    && stayLetter.from('RIVERSIDE', 'UNIT-047') === 'RIVERSIDE · FOUNDED BY UNIT-047');
 }
 
 // --- end of 7c TRACE -------------------------------------------------------------------------------------------------------
