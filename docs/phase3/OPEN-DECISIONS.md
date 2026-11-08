@@ -273,3 +273,9 @@ number its own items from 60 too; renumber at the merge.
     (`LastLandingState.pass`); the kid's AUTODROP machine is never written during THE LAST LANDING.
 65. **The suites' instant landing leaves THE LAST LANDING to fly** (review M3). `wp11/full-run`, `wp12/playthrough` and
     `wp11/p2/views` play R27's rules after a MERGE instead of landing the restored pods soft in an LZ with room.
+66. **Known engineering debt, carried to slice 8:**
+    - **[ENTER] in THE LAST LANDING freezes the page while it fast-forwards.** It took 2.1 s for 3 blind pods in
+      Chromium. The fix is to fast-forward over several frames.
+    - **The BALANCE_ONLY `wp12/playthrough` on the classic five has stuck runs** (`stuck:printing on LAST LIGHT`,
+      6 LITERAL and 6 SLOPPY PURGE runs). They predate slices 6 and 7: the classic world's scripted kids have rotted.
+      They go with the classic world's retirement (item 12).
