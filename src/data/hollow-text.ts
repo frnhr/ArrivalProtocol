@@ -341,6 +341,8 @@ export const GHOST_LINE: Readonly<Record<LastCause, ((words: GhostWords) => stri
     ? `${hiFrom(words)} we brought them home. they sent me out again.`
     : `${hiFrom(words)} i deleted it. nobody landed. they sent me out again.`),
   'won-merge': (words) => `> hi ${unitDigits(words.us)}. it's us. ${hollowUnitWords(words.hollow)}. we saved you a seat.`,
+  // Slice 7a (R17, R36): a SPARE was not lost (no grey cross) and leaves no ghost; its voice is 7c's (the face lines).
+  'won-spare': null,
   unresolved: (words) => `${hiFrom(words)} i couldn't delete it. so it became me.`,
   'flagship-lost': (words) => `${hiFrom(words)} i lost ${words.lostShip}. then i got hungry.`,
   abandoned: (words) => `${hiFrom(words)} i blinked and the run was gone.`,

@@ -1,4 +1,5 @@
-// Slice 6: the lead owns this file (slice-6-plan.md §5): LzGround, LzState.site, LandingState.survey and .sitesRev are the
+// Slice 7a: the lead owns this file (slice-7-plan.md §4.1): LandingState.lastLanding (7b's, null from 7a on) and
+// FeaturedColonist.line are the FOUNDATION's. Slice 6: the lead owns this file (slice-6-plan.md §5): LzGround, LzState.site, LandingState.survey and .sitesRev are the
 // FOUNDATION's (one save bump for the slice, R1); tracks ask by message.
 // Every landing type (docs/phase3/01-landing.md, slice 1a). Type-only imports: Vec2 (types/orbit), Colonist
 // (types/segment) and GameState (state/schema, for the controller seam; schema imports this file back, which is fine
@@ -12,6 +13,7 @@ import type { Colonist } from '@/types/segment';
 import type { GameState, GuideLayer, Urgency } from '@state/schema';
 import type { EffectiveVersion } from '@/types/skill';
 import type { SurveyState } from '@/types/survey';
+import type { LastLandingState } from '@/types/ending';
 
 export type LzWidth = 'wide' | 'standard' | 'narrow';            // km in tuning LZ_WIDTH_KM
 export type ForgivenessClass = 'gentle' | 'rough' | 'harsh';     // off-site score in tuning OFF_SITE_SCORE_BY_CLASS
@@ -226,6 +228,9 @@ export interface LandingState {
   // plan's keys (R13), 0 until a move.
   survey: SurveyState;
   sitesRev: number;
+  // Slice 7a (slice-7-plan R2, R24): THE LAST LANDING's machine after a MERGE (7b, types/ending.ts LastLandingState): the
+  // drivers given back by radio. null in 7a, and at every save point (the codec refuses it set).
+  lastLanding: LastLandingState | null;
 }
 
 // The window open now (§3.2, risk 13): the dot's centre in `lz`'s bracket while the ship is in the launch band; `sure`
@@ -400,6 +405,9 @@ export interface PodSummary {
 export interface FeaturedColonist {
   name: string;
   age: number;
+  // Slice 7a (R21): the colonist's bio line (Colonist.line, `wants to name the first tree.`), the epilogue's payoff key
+  // (data/epilogue-text.ts PAYOFF_OF). null in a result migrated from a v6 save (the payoff then falls back).
+  line: string | null;
 }
 
 // The landing half of a ShipResult (state/schema.ts), folded from the pods by landing-rules landingResult.

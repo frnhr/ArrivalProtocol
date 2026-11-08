@@ -791,7 +791,7 @@ export function landingResult(state: Readonly<GameState>, outcome: ShipOutcome):
     if (record.restored) tally.restored += record.colonists;
     const summary: PodSummary = {
       pod: record.pod, family: record.family, colonists: record.colonists, fate: fate.kind, place: null, lz: null, touch: null,
-      points: 0, parkedWhy: null, restored: record.restored, featured: record.featured.map((colonist) => ({ name: colonist.name, age: colonist.age })),
+      points: 0, parkedWhy: null, restored: record.restored, featured: record.featured.map((colonist) => ({ name: colonist.name, age: colonist.age, line: colonist.line })),
     };
     switch (fate.kind) {
       case 'falling':

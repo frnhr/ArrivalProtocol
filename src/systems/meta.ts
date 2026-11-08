@@ -1,5 +1,5 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): RunEnd.skills into LastUnit.skills.
-// Others ask by message.
+// Slice 7a: the lead owns this file (docs/phase3/impl/slice-7-plan.md §4.1: META 4, the ending record, endingsSeen's
+// pieces). Slice 4: Track TREE's RunEnd.skills into LastUnit.skills stands. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState, RunEndCause, RunStats, ArchiveStatus, RunState } from '@state/schema';
 import type {
@@ -7,10 +7,13 @@ import type {
 } from '@/types/lineage';
 import type { StorageProvider } from '@systems/storage';
 import type { SkillRecord } from '@/types/skill';
+import type { EndingPiece, EndingRecord } from '@/types/ending';
 import { skillRecords } from '@systems/skill-tree';
+import { endingRecordOf } from '@systems/ending-rules';
+import { ENDING_PIECES } from '@data/endings';
 import {
   MetaCorrupt, corrupt, isRecord, wholeNumber, text, flag, list_, exactRecord, parseLastUnit, parseTrail, parseColony,
-  parseRoute, parseEvent, unitList, unitStats,
+  parseRoute, parseEvent, unitList, unitStats, endingOfV3LastUnit,
 } from '@systems/meta-parse';
 import { runScore, runLanded } from '@systems/run-score';
 import { emit, NO_PAYLOAD } from '@systems/events';
@@ -78,6 +81,9 @@ export { ghostShipIndex, ghostPlaceReached } from '@systems/lineage';
 //   carried over (notes.olderArchive); an arm made by other content is replaced by a fresh roll (notes.armReset, 02 §10).
 //   `mergeBonus` is gone (plan risk 3, decided: MERGE's next-run thread retires): version 3 dropped it, and a version-2
 //   record (the foundation's) is migrated in place (META_MIGRATIONS).
+// • Archive v4 (slice 7a, slice-7-plan R3, R16): the last unit keeps how its FINALE ended (lastUnit.ending, the ending
+//   record: both choices and every fact the next run's traces need), endingsSeen holds the seven pieces, and `traces` is
+//   gone (a trace lasts one run: the last unit's ending is the next run's traces). A version-3 record migrates in place.
 //
 // The pure half (loadMeta, saveMeta, the record* steps, lineageOf, hollowName) takes its storage as an
 // argument, so the headless suites run it on stubs. The live half (openRunArchive and the archive* calls) holds
@@ -85,8 +91,9 @@ export { ghostShipIndex, ghostPlaceReached } from '@systems/lineage';
 
 // --- The record (§4.5's shape; archive v2, slice 3c plan §2.4) ---------------------------------------------
 
-export type Ending = 'purge' | 'merge';
-// Every ending there is (the title's ENDINGS n/2 counts against it).
+// WP11's two endings, the ones the title's ENDINGS n/2 and RUN END's endings line count until Track NIGHT moves them to the
+// built pieces (data/endings.ts builtPieces: ENDINGS n/6, R22). endingsSeen itself holds pieces (META 4).
+export type Ending = Extract<EndingPiece, 'purge' | 'merge'>;
 export const ENDINGS: readonly Ending[] = ['purge', 'merge'];
 
 // The run in progress (§4.5's { unit, startedAt }), brought up to date at each ship's start so a run left
@@ -115,7 +122,8 @@ export interface Meta {
   version: typeof META_VERSION;
   runs: number;
   bestScore: number;
-  endingsSeen: Ending[];
+  // The ending pieces found (slice 7a: both choices of every won or unresolved run, R22; a 'followed' step 1 is no piece).
+  endingsSeen: EndingPiece[];
   // A unit has flown ARES-VII through (see the header): later runs skip the run-1 lessons (WP8 fix round 1;
   // §4.5's shape has no field for it).
   tutorialDone: boolean;
@@ -125,13 +133,13 @@ export interface Meta {
   // seed, so `?seed=N` on a cleared archive replays run 1 exactly; null, a headless archive's, means "the run seed": the
   // suites' worlds roll run 1's arm from their own seed, as before 3c), the next run's arm (null: run 1's assembled arm, rebuilt
   // from armSeed on demand), the colonies (at most COLONY_HISTORY_MAX_PER_WORLD per world), the last ROUTE_HISTORY_RUNS
-  // routes, the last run's notable events (at most NOTABLE_EVENTS_MAX), slice 7's traces, and the title's one-off notes.
+  // routes, the last run's notable events (at most NOTABLE_EVENTS_MAX), and the title's one-off notes. (Slice 7a: `traces`,
+  // always empty since 3c, is gone; a run's traces come from the last unit's ending.)
   armSeed: number | null;
   arm: ArmState | null;
   colonies: ColonyRecord[];
   routes: RouteRecord[];
   events: NotableEvent[];
-  traces: [];
   notes: ArchiveNotes;
 }
 
@@ -140,7 +148,7 @@ export interface Meta {
 export function freshMeta(armSeed: number | null = null): Meta {
   return {
     version: META_VERSION, runs: 0, bestScore: 0, endingsSeen: [], tutorialDone: false, activeRun: null, lastUnit: null,
-    armSeed: armSeed === null ? null : armSeed >>> 0, arm: null, colonies: [], routes: [], events: [], traces: [], notes: { olderArchive: false, armReset: false },
+    armSeed: armSeed === null ? null : armSeed >>> 0, arm: null, colonies: [], routes: [], events: [], notes: { olderArchive: false, armReset: false },
   };
 }
 
@@ -227,6 +235,13 @@ function parseActiveRun(value: unknown): ActiveRun | null {
 //   takes that run's arm seed at its end. A run in progress then cannot be placed on an arm (its trail's slots belong to an
 //   arm the archive can't rebuild): its trail goes, so abandoning it records where it was without a world update.
 // A version-2 record never holds an arm (the foundation read any as corrupt), so nothing else changes.
+// 3 → 4 (slice 7a, slice-7-plan R3, R16): truthful, so an old archive gets exactly the next run it had before slice 7:
+// • lastUnit.ending: a won or unresolved unit had one step, and CONTROL stood it by for reassignment (`purgeControl`; the
+//   MERGE ghost's `we saved you a seat`), so 'won-purge' → PURGE, 'won-merge' → MERGE, 'unresolved' → followed, each with
+//   REASSIGNMENT; who the root was is the HOLLOW it faced, the final ship its trail's last stop (none on a classic record
+//   with no trail: its name only), and nothing else was kept (no STAY, no kit, no FUEL, no charge). Every other cause: null.
+// • endingsSeen keeps its values and gains 'reassignment' when it holds any (the old endings stood the unit by).
+// • `traces` (always empty) is dropped.
 export const META_MIGRATIONS: Readonly<Record<number, (record: Record<string, unknown>) => Record<string, unknown>>> = {
   2: (record) => {
     const { mergeBonus: _retired, ...rest } = record;
@@ -240,7 +255,21 @@ export const META_MIGRATIONS: Readonly<Record<number, (record: Record<string, un
       activeRun: placeholderSeed && isRecord(active) ? { ...active, trail: null } : active,
     };
   },
+  3: (record) => {
+    const { traces: _dropped, ...rest } = record;
+    void _dropped;
+    const seen = rest.endingsSeen;
+    const endingsSeen = Array.isArray(seen) && seen.length > 0 && !seen.includes('reassignment') ? [...seen, 'reassignment'] : seen;
+    const lastUnit = rest.lastUnit;
+    return {
+      ...rest,
+      version: 4,
+      endingsSeen,
+      lastUnit: isRecord(lastUnit) ? { ...lastUnit, ending: endingOfV3LastUnit(lastUnit) } : lastUnit,
+    };
+  },
 };
+
 export const META_FIRST_VERSION = 2;
 
 export function migrateMeta(record: Record<string, unknown>): Record<string, unknown> {
@@ -278,17 +307,17 @@ export function readMeta(raw: string): { meta: Meta; changed: boolean } {
   const data = migrateMeta(parsed);
   exactRecord(data, 'the archive', [
     'version', 'runs', 'bestScore', 'endingsSeen', 'tutorialDone', 'activeRun', 'lastUnit', 'armSeed', 'arm', 'colonies',
-    'routes', 'events', 'traces', 'notes',
+    'routes', 'events', 'notes',
   ]);
   const endings = data.endingsSeen;
-  if (!Array.isArray(endings) || endings.some((ending) => !(ENDINGS as readonly unknown[]).includes(ending))) corrupt('endingsSeen is not a list of endings');
-  if (list_(data.traces, 'traces').length > 0) corrupt('traces is not empty (slice 7 places them)');
+  if (!Array.isArray(endings) || endings.some((ending) => !(ENDING_PIECES as readonly unknown[]).includes(ending))) corrupt('endingsSeen is not a list of endings');
+  if (new Set(endings).size !== endings.length) corrupt('endingsSeen names an ending twice');
   const notes = exactRecord(data.notes, 'notes', ['olderArchive', 'armReset']);
   const meta: Meta = {
     version: META_VERSION,
     runs: wholeNumber(data.runs, 'runs'),
     bestScore: wholeNumber(data.bestScore, 'bestScore'),
-    endingsSeen: [...(endings as Ending[])],
+    endingsSeen: [...(endings as EndingPiece[])],
     tutorialDone: flag(data.tutorialDone, 'tutorialDone'),
     activeRun: parseActiveRun(data.activeRun),
     lastUnit: parseLastUnit(data.lastUnit),
@@ -297,7 +326,6 @@ export function readMeta(raw: string): { meta: Meta; changed: boolean } {
     colonies: list_(data.colonies, 'colonies').map((colony, i) => parseColony(colony, `colonies[${i}]`)),
     routes: list_(data.routes, 'routes').map((route, i) => parseRoute(route, `routes[${i}]`)),
     events: list_(data.events, 'events').map((event, i) => parseEvent(event, `events[${i}]`)),
-    traces: [],
     notes: { olderArchive: flag(notes.olderArchive, 'notes.olderArchive'), armReset: flag(notes.armReset, 'notes.armReset') },
   };
   const arm = parseArm(data.arm);
@@ -430,6 +458,9 @@ export interface RunEnd extends RunProgress {
   // The skills the unit ended with (slice 4, 03 §3.11: LastUnit.skills; archiveRunEnded fills it from skill-tree.ts
   // skillRecords). Left out or null: none recorded.
   skills?: readonly SkillRecord[] | null;
+  // Slice 7a (R3): how its FINALE ended (systems/ending-rules.ts endingRecordOf; archiveRunEnded fills it). Left out or
+  // null: a run lost on the way (no ending, no pieces found).
+  ending?: EndingRecord | null;
 }
 
 // The colonies kept: the newest COLONY_HISTORY_MAX_PER_WORLD per world (slot), in the order they were founded.
@@ -465,14 +496,17 @@ function recordUnitEnd(meta: Readonly<Meta>, lastUnit: LastUnit, nextArm: ArmSta
   };
 }
 
+// Slice 7a (R22): both of the ending's pieces join endingsSeen (a 'followed' step 1 is none), each once.
 export function recordRunEnd(meta: Readonly<Meta>, end: RunEnd): Meta {
   const endingsSeen = [...meta.endingsSeen];
-  const ending: Ending | null = end.cause === 'won-purge' ? 'purge' : end.cause === 'won-merge' ? 'merge' : null;
-  if (ending !== null && !endingsSeen.includes(ending)) endingsSeen.push(ending);
+  const ending = end.ending ?? null;
+  const pieces: EndingPiece[] = ending === null ? [] : [...(ending.hollow === 'followed' ? [] : [ending.hollow]), ending.you];
+  for (const piece of pieces) if (!endingsSeen.includes(piece)) endingsSeen.push(piece);
   const lastUnit: LastUnit = {
     number: end.unit, landed: end.landed, shipName: end.shipName, cause: end.cause, stats: { ...end.stats },
     hollowUnits: [...end.hollowUnits], trail: end.trail === null ? null : structuredClone(end.trail),
     skills: end.skills === undefined || end.skills === null ? null : structuredClone(end.skills) as SkillRecord[],
+    ending: ending === null ? null : structuredClone(ending),
   };
   return { ...recordUnitEnd(meta, lastUnit, end.nextArm ?? null, end.events ?? []), bestScore: Math.max(meta.bestScore, Math.round(end.score)), endingsSeen };
 }
@@ -494,7 +528,7 @@ export function recordAbandon(meta: Readonly<Meta>, nextArm: ArmState | null, ca
   if (trail?.lost) trail.lost.cause = cause;
   const lastUnit: LastUnit = {
     number: run.unit, landed: run.landed, shipName: run.shipName, cause, stats: { ...run.stats },
-    hollowUnits: [...run.hollowUnits], trail, skills: null,
+    hollowUnits: [...run.hollowUnits], trail, skills: null, ending: null,
   };
   return recordUnitEnd(meta, lastUnit, nextArm, []);
 }
@@ -841,6 +875,8 @@ export function archiveRunEnded(store: Store<GameState>, cause: RunEndCause): vo
       events: after === null || after.reset ? [] : safeEvents(state.run),
       // Slice 4 (03 §3.11): the skills it ended with (REASSIGNMENT's hunt, the next run's `LAST UNIT TRAINED:` line).
       skills: skillRecords(state),
+      // Slice 7a (R3): how its FINALE ended (null on a run lost on the way).
+      ending: endingRecordOf(state),
     });
     current.meta = after?.reset === true ? { ...ended, arm: after.arm, notes: { ...ended.notes, armReset: true } } : ended;
     write();

@@ -1,5 +1,5 @@
-// Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §5, as slices 4c–4e's and 5's decision on save
-// ownership): the FOUNDATION made the one v5 → v6 bump for both tracks. A track that needs another saved field asks the lead.
+// Slice 7a: the lead owns this file (docs/phase3/impl/slice-7-plan.md §4.1): the FOUNDATION made the one v6 → v7 bump for
+// 7a's three tracks and 7b (R2). A track that needs another saved field asks the lead. (Slice 6's v5 → v6 stands.)
 import type { GameState, RunState } from '@state/schema';
 import type { ShipSlices } from '@state/initial';
 import type { ContentVersions } from '@/types/lineage';
@@ -9,7 +9,10 @@ import type {
 import type { Meta, RunLineage } from '@systems/meta';
 import type { LzState } from '@/types/landing';
 import type { SurveyState } from '@/types/survey';
-import { parseLastUnit, MetaCorrupt } from '@systems/meta-parse';
+import { parseLastUnit, MetaCorrupt, endingOfV3LastUnit } from '@systems/meta-parse';
+import type { FinaleState } from '@state/schema';
+import type { FinalePhase } from '@/types/ending';
+import { HOLLOW_PIECES, YOU_PIECES } from '@data/endings';
 import {
   createRunState, createInitialState, createRunSkills, createAutodropState, createRunResidents, createResidentState, createSurveyState,
 } from '@state/initial';
@@ -543,6 +546,31 @@ function checkLanding(reference: Readonly<Record<string, unknown>>): Check {
     like(value, at);
     checkAutodrop((value as Record<string, unknown>).autodrop, `${at}.autodrop`);
     checkSurvey(value as Record<string, unknown>, at);
+    // Slice 7a (R2): THE LAST LANDING never stands at a save point (it ends before the final LANDING REPORT).
+    isNull((value as Record<string, unknown>).lastLanding, `${at}.lastLanding`);
+  };
+}
+
+// The FINALE (slice 7a, RUN_SAVE_VERSION 7; schema FinaleState) field by field. Its cross-checks against the point and the
+// pods are finaleRefusal's (decodeRunSave).
+const FINALE_PHASES: readonly FinalePhase[] = ['none', 'duel', 'asleep', 'step1', 'step2', 'verdict', 'last-landing', 'done'];
+const HOLLOW_FATE_CHECK = oneOf(...HOLLOW_PIECES, 'followed', null);
+const YOU_CHECK = oneOf(...YOU_PIECES, null);
+const checkFinale = rec({
+  phase: oneOf(...FINALE_PHASES), rootFell: bool, hollow: HOLLOW_FATE_CHECK, you: YOU_CHECK, stay: nullable(whole), restored: list(whole),
+  cardAtAi: nullable(num),
+  ending: nullable(rec({
+    choice: rec({ hollow: oneOf(...HOLLOW_PIECES, 'followed'), you: oneOf(...YOU_PIECES) }),
+    lines: list(rec({ voice: oneOf('cmd', 'us', 'story', 'control'), text: str })), startAi: num, untilAi: num,
+  })),
+  unresolvedUntilAi: nullable(num),
+});
+
+function checkHollow(reference: Readonly<Record<string, unknown>>): Check {
+  const like = likeReference(reference);
+  return (value, at) => {
+    like(value, at);
+    checkFinale((value as Record<string, unknown>).finale, `${at}.finale`);
   };
 }
 
@@ -551,7 +579,7 @@ function checkSlices(value: unknown, at: string): void {
   rec({
     mission: likeReference(reference.mission!), memory: checkMemory, clock: likeReference(reference.clock!),
     burn: checkBurn(reference.burn!), orbit: likeReference(reference.orbit!), level: likeReference(reference.level!),
-    landing: checkLanding(reference.landing!), hollow: likeReference(reference.hollow!), hazards: likeReference(reference.hazards!),
+    landing: checkLanding(reference.landing!), hollow: checkHollow(reference.hollow!), hazards: likeReference(reference.hazards!),
     resident: checkResidentSlice,
   })(value, at);
   // SENTRY v2's pre-empt (slice 4d, RUN_SAVE_VERSION 4): a standing outline is never armed at a save point.
@@ -805,12 +833,64 @@ function migrateRunSave5(save: Record<string, unknown>): Record<string, unknown>
   return next;
 }
 
+// 6 → 7 (slice 7a, one bump for its three tracks and 7b: slice-7-plan R2, R16). Before slice 7 a won run had one step, and
+// CONTROL stood the unit by for reassignment, so a decided finale migrates to its step 1 and REASSIGNMENT:
+// • a world payload's hollow.finale: 'purged' → PURGE, 'merged' → MERGE (restored: the pods restored in place), each with
+//   the root fallen; 'unresolved' → followed, the root standing; all three 'done' with REASSIGNMENT. 'none' and 'duel' stay
+//   (a v6 'choice' never stood at a save point; read as step 1 after the fall). restoredHalf goes, STAY's ship and the
+//   card's AI second are null, and a typed ending's choice becomes { hollow, you };
+// • its landing slice: THE LAST LANDING null (7b's, R2);
+// • every ended ship's pods (run.ships[], in a world and a boot payload): each featured colonist's bio line null (R21: the
+//   epilogue's payoff then falls back);
+// • run.lastUnit.ending by META 4's rule (meta-parse endingOfV3LastUnit).
+function migrateRunSave6(save: Record<string, unknown>): Record<string, unknown> {
+  const next = structuredClone(save);
+  const payload = isRecord(next.payload) ? next.payload : null;
+  const slices = payload !== null && isRecord(payload.slices) ? payload.slices : null;
+  if (slices !== null && isRecord(slices.hollow) && isRecord(slices.hollow.finale)) {
+    const old = slices.hollow.finale;
+    const decided: Record<string, { hollow: string; rootFell: boolean }> = {
+      purged: { hollow: 'purge', rootFell: true }, merged: { hollow: 'merge', rootFell: true }, unresolved: { hollow: 'followed', rootFell: false },
+    };
+    const done = typeof old.phase === 'string' ? decided[old.phase] : undefined;
+    const ending = isRecord(old.ending) && done !== undefined ? { ...old.ending, choice: { hollow: done.hollow, you: 'reassignment' } } : old.ending;
+    const finale: Record<string, unknown> = {
+      phase: done !== undefined ? 'done' : old.phase === 'choice' ? 'step1' : old.phase,
+      rootFell: done?.rootFell ?? old.phase === 'choice',
+      hollow: done?.hollow ?? null,
+      you: done !== undefined ? 'reassignment' : null,
+      stay: null,
+      restored: old.phase === 'merged' && Array.isArray(old.restoredInPlace) ? old.restoredInPlace : [],
+      cardAtAi: null,
+      ending,
+      unresolvedUntilAi: old.unresolvedUntilAi,
+    };
+    slices.hollow.finale = finale;
+  }
+  if (slices !== null && isRecord(slices.landing)) slices.landing.lastLanding = null;
+  if (payload !== null && isRecord(payload.run)) {
+    const run = payload.run;
+    if (Array.isArray(run.ships)) {
+      for (const ship of run.ships.filter(isRecord)) {
+        if (!Array.isArray(ship.pods)) continue;
+        for (const pod of ship.pods.filter(isRecord)) {
+          if (Array.isArray(pod.featured)) for (const colonist of pod.featured.filter(isRecord)) colonist.line = null;
+        }
+      }
+    }
+    if (isRecord(run.lastUnit)) run.lastUnit.ending = endingOfV3LastUnit(run.lastUnit);
+  }
+  next.saveVersion = 7;
+  return next;
+}
+
 export const RUN_SAVE_MIGRATIONS: Readonly<Record<number, (save: Record<string, unknown>) => Record<string, unknown>>> = {
   1: migrateRunSave1,
   2: migrateRunSave2,
   3: migrateRunSave3,
   4: migrateRunSave4,
   5: migrateRunSave5,
+  6: migrateRunSave6,
 };
 
 export function migrateRunSave(save: Record<string, unknown>): Record<string, unknown> {
@@ -878,11 +958,37 @@ export function decodeRunSave(raw: string): DecodeResult {
   if (save.payload.kind === 'world') {
     const slices = save.payload.slices;
     if (slices.level.shipName !== current) return refuse('shape', `the slices are ${slices.level.shipName}'s, the run is on ${current}`);
-    if (save.point === 'ending-chosen' && (!slices.landing.finalShip || !['purged', 'merged', 'unresolved'].includes(slices.hollow.finale.phase))) {
+    if (save.point === 'ending-chosen' && (!slices.landing.finalShip || slices.hollow.finale.phase !== 'done')) {
       return refuse('route', `ENDING CHOSEN on ${current} with the finale '${slices.hollow.finale.phase}'`);
     }
+    const finale = finaleRefusal(save.point, slices.hollow.finale, slices.landing, run, currentSlot(run));
+    if (finale !== null) return refuse('shape', finale);
   }
   return { ok: true, save };
+}
+
+// The FINALE against the point and the ship (slice 7a, R2, R7–R9, R14), or what is wrong:
+// • SHIP DONE is on a ship whose FINALE never opened ('none'); ENDING CHOSEN is 'done' (decodeRunSave's route check);
+// • a decided FINALE has both choices, and its root fell exactly when step 1 was not 'followed'; SPARE rules out SUNSET;
+// • STAY names a ship (a slot of an ended ship, or the final ship's), and nothing else names one;
+// • the pods MERGE gave back are pods of this ship restored by it (7a's interim restores in place, so their driver is no
+//   longer lost: their records say `restored`).
+// STAY's ship being ★ ON TARGET is Track FINALE's rule (ending-rules stayCandidates); its check joins here when it is built.
+function finaleRefusal(
+  point: SavePoint, finale: Readonly<FinaleState>, landing: Readonly<ShipSlices['landing']>, run: Readonly<RunState>, slot: number,
+): string | null {
+  if (point === 'ship-done' && finale.phase !== 'none') return `SHIP DONE with the finale '${finale.phase}'`;
+  if (finale.phase === 'done') {
+    if (finale.hollow === null || finale.you === null) return 'a decided finale without both choices';
+    if (finale.rootFell !== (finale.hollow !== 'followed')) return `the root ${finale.rootFell ? 'fell' : 'stands'} with step 1 '${finale.hollow}'`;
+  }
+  if (finale.hollow === 'spare' && finale.you === 'sunset') return 'SPARE with SUNSET (SPARE gives the root the ship)';
+  if ((finale.you === 'stay') !== (finale.stay !== null)) return `STAY's ship is ${finale.stay === null ? 'missing' : 'set without STAY'}`;
+  if (finale.stay !== null && finale.stay !== slot && !run.ships.some((ship) => ship.slot === finale.stay)) return `STAY names slot ${finale.stay}, no ship of this run`;
+  const restorable = new Set(landing.pods.filter((record) => record.restored).map((record) => record.pod));
+  const stray = finale.restored.find((pod) => !restorable.has(pod));
+  if (stray !== undefined) return `MERGE restored pod ${stray}, which it never gave back`;
+  return null;
 }
 
 // Check 8 (3c plan §2.1): the save belongs to the run the archive has in progress, or it is stale (the run already ended,

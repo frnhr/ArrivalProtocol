@@ -1,5 +1,5 @@
-// Slice 4: Track TREE owns this file (docs/phase3/impl/slice-4-plan.md §5.2): LastUnit.skills' reader. Others ask by
-// message.
+// Slice 7a: the lead owns this file (docs/phase3/impl/slice-7-plan.md §4.1: parseEnding, LastUnit.ending). Slice 4: Track
+// TREE's LastUnit.skills reader stands. Others ask by message.
 // The archive's record, read field by field (phase 3 slice 3c; moved out of systems/meta.ts in the review fixes, minor 6):
 // pure, no store, no storage, no world, so the run save's codec (systems/save-codec.ts) reads the last unit a saved run
 // holds without importing the stateful archive. MetaCorrupt names what is wrong; systems/meta.ts parseMeta builds the whole
@@ -9,12 +9,16 @@ import type {
   LastCause, LastUnit, UnitStats, UnitTrail, TrailStop, TrailLost, ColonyRecord, RouteRecord, NotableEvent,
 } from '@/types/lineage';
 import type { SkillId, SkillVersion, LockLevel, SkillRecord } from '@/types/skill';
+import type { EndingRecord, HollowFate, YouChoice } from '@/types/ending';
+import type { FsToolKind } from '@/types/fs-tool';
 import { SKILL_IDS, SKILL_TREE } from '@data/skills';
+import { HOLLOW_PIECES, YOU_PIECES } from '@data/endings';
+import { FS_TOOL_KINDS } from '@data/fs-tools';
 
 // How a unit's run ended, as the next run remembers it (§4.5's causes; the type is types/lineage.ts LastCause). (WP8's
 // interim 'reassigned' is gone with that fleet: a record that holds it reads ARCHIVE CORRUPT.)
 export const LAST_CAUSES: readonly LastCause[] = [
-  'won-purge', 'won-merge', 'unresolved', 'flagship-lost', 'overwritten', 'stayed', 'abandoned', 'signal-lost',
+  'won-purge', 'won-merge', 'won-spare', 'unresolved', 'flagship-lost', 'overwritten', 'stayed', 'abandoned', 'signal-lost',
 ];
 
 export class MetaCorrupt extends Error {}
@@ -138,7 +142,7 @@ export function unitStats(value: unknown, field: string): UnitStats {
 // RunState holds (run.lastUnit) through it too.
 export function parseLastUnit(value: unknown): LastUnit | null {
   if (value === null) return null;
-  const unit = exactRecord(value, 'lastUnit', ['number', 'landed', 'shipName', 'cause', 'stats', 'hollowUnits', 'trail', 'skills']);
+  const unit = exactRecord(value, 'lastUnit', ['number', 'landed', 'shipName', 'cause', 'stats', 'hollowUnits', 'trail', 'skills', 'ending']);
   return {
     number: wholeNumber(unit.number, 'lastUnit.number'),
     landed: wholeNumber(unit.landed, 'lastUnit.landed'),
@@ -148,6 +152,54 @@ export function parseLastUnit(value: unknown): LastUnit | null {
     hollowUnits: unitList(unit.hollowUnits, 'lastUnit.hollowUnits'),
     trail: parseTrail(unit.trail, 'lastUnit.trail'),
     skills: parseSkillRecords(unit.skills, 'lastUnit.skills'),
+    ending: parseEnding(unit.ending, 'lastUnit.ending'),
+  };
+}
+
+const HOLLOW_FATES: readonly HollowFate[] = [...HOLLOW_PIECES, 'followed'];
+
+function nullOr<T>(value: unknown, read: (value: unknown) => T): T | null {
+  return value === null ? null : read(value);
+}
+
+// How a won (or unresolved) run ended (slice 7a, types/ending.ts EndingRecord; META 4's lastUnit.ending, and the run save's
+// run.lastUnit.ending through parseLastUnit), field by field and strict. Its choices must hang together: SPARE rules out
+// SUNSET (R8), STAY names its colony and nothing else does, and the empty ship's FUEL is kept exactly for SPARE and SUNSET.
+export function parseEnding(value: unknown, field: string): EndingRecord | null {
+  if (value === null) return null;
+  const e = exactRecord(value, field, ['hollow', 'you', 'rootUnits', 'finalSlot', 'finalShip', 'finalYear', 'stay', 'kit', 'fuelPct', 'charge']);
+  if (!(HOLLOW_FATES as readonly unknown[]).includes(e.hollow)) corrupt(`${field}.hollow '${String(e.hollow)}' is unknown`);
+  if (!(YOU_PIECES as readonly unknown[]).includes(e.you)) corrupt(`${field}.you '${String(e.you)}' is unknown`);
+  const hollow = e.hollow as HollowFate;
+  const you = e.you as YouChoice;
+  const kit = list_(e.kit, `${field}.kit`).map((kind, i) => {
+    if (!(FS_TOOL_KINDS as readonly unknown[]).includes(kind)) corrupt(`${field}.kit[${i}] '${String(kind)}' is not a tool`);
+    return kind as FsToolKind;
+  });
+  if (new Set(kit).size !== kit.length) corrupt(`${field}.kit names a tool twice`);
+  const stay = nullOr(e.stay, (raw) => {
+    const s = exactRecord(raw, `${field}.stay`, ['slot', 'colony', 'year']);
+    return { slot: wholeNumber(s.slot, `${field}.stay.slot`), colony: text(s.colony, `${field}.stay.colony`), year: wholeNumber(s.year, `${field}.stay.year`) };
+  });
+  const fuelPct = nullOr(e.fuelPct, (raw) => {
+    const pct = wholeNumber(raw, `${field}.fuelPct`);
+    if (pct > 100) corrupt(`${field}.fuelPct is over 100`);
+    return pct;
+  });
+  if (hollow === 'spare' && you === 'sunset') corrupt(`${field}: SPARE rules out SUNSET`);
+  if ((you === 'stay') !== (stay !== null)) corrupt(`${field}.stay is ${stay === null ? 'missing for' : 'set without'} STAY`);
+  if ((hollow === 'spare' || you === 'sunset') !== (fuelPct !== null)) corrupt(`${field}.fuelPct is kept exactly for SPARE and SUNSET`);
+  return {
+    hollow,
+    you,
+    rootUnits: unitList(e.rootUnits, `${field}.rootUnits`),
+    finalSlot: nullOr(e.finalSlot, (raw) => wholeNumber(raw, `${field}.finalSlot`)),
+    finalShip: text(e.finalShip, `${field}.finalShip`),
+    finalYear: nullOr(e.finalYear, (raw) => wholeNumber(raw, `${field}.finalYear`)),
+    stay,
+    kit,
+    fuelPct,
+    charge: wholeNumber(e.charge, `${field}.charge`),
   };
 }
 
@@ -174,4 +226,22 @@ export function parseSkillRecord(value: unknown, field: string): SkillRecord {
     corrupt(`${field}.accuracy is not a percentage or null`);
   }
   return { skill, version: r.version as SkillVersion, lock: r.lock as LockLevel, accuracy: r.accuracy as number | null };
+}
+
+// A version-3 last unit's ending (systems/meta.ts META_MIGRATIONS[3], and save-codec's v6 → v7 for run.lastUnit: slice 7a
+// R16); null for a cause with no FINALE. Unchecked input: what it can't read
+// it copies as it is, and the strict parse after it refuses.
+export function endingOfV3LastUnit(unit: Record<string, unknown>): Record<string, unknown> | null {
+  const hollow = unit.cause === 'won-purge' ? 'purge' : unit.cause === 'won-merge' ? 'merge' : unit.cause === 'unresolved' ? 'followed' : null;
+  if (hollow === null) return null;
+  const trail = isRecord(unit.trail) ? unit.trail : null;
+  const stops = trail !== null && Array.isArray(trail.stops) ? trail.stops : [];
+  const last = stops.length > 0 && isRecord(stops[stops.length - 1]) ? stops[stops.length - 1] as Record<string, unknown> : null;
+  return {
+    hollow, you: 'reassignment', rootUnits: unit.hollowUnits,
+    finalSlot: last === null ? null : last.slot,
+    finalShip: last === null || last.shipName === null ? unit.shipName : last.shipName,
+    finalYear: last === null ? null : last.year,
+    stay: null, kit: [], fuelPct: null, charge: 0,
+  };
 }

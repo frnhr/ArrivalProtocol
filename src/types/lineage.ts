@@ -1,19 +1,23 @@
 import type { ArmShip } from '@/types/map';
 import type { ShipOutcome } from '@state/schema';
 import type { SkillRecord } from '@/types/skill';
+import type { EndingRecord } from '@/types/ending';
 
 // What outlives a run besides the archive's counters (phase 3 slice 3c, docs/phase3/impl/slice-3c-plan.md §2.5; 02-map
 // §3.12, 05-story §3.3, §3.5): the last unit and its trail, the arm the next unit starts on and why ships left it, the
 // colonies, the routes and the notable events. Every type here is flat and JSON-safe: the archive (systems/meta.ts) and
 // the run save (types/save.ts) store them as they are. The foundation lays them down; Track WORLD owns this file after.
+// Slice 7a: the lead owns this file (slice-7-plan.md §4.1: 'won-spare', LastUnit.ending, META 4).
 
 // --- The last unit (systems/meta.ts's record; moved here so the pure lineage code never imports meta.ts) -----------------
 
 // How a unit's run ended, as the next run remembers it (§4.5's causes, one for one with RunEndCause), and 'signal-lost'
 // (slice 3c review fix, minor 7): a run abandoned because the game could not give it back (its save refused for another
 // version or content, a ship that no longer builds, a resume that threw), which no RUN END ever records.
+// Slice 7a (R17): 'won-spare' joins, as RunEndCause's.
 export type LastCause =
-  | 'won-purge' | 'won-merge' | 'unresolved' | 'flagship-lost' | 'overwritten' | 'stayed' | 'abandoned' | 'signal-lost';
+  | 'won-purge' | 'won-merge' | 'won-spare' | 'unresolved' | 'flagship-lost' | 'overwritten' | 'stayed' | 'abandoned'
+  | 'signal-lost';
 
 // What HOLLOW's verbs on the final ship are weighted by (§4.5: "it fights like you did", WP11).
 export interface UnitStats {
@@ -37,6 +41,10 @@ export interface LastUnit {
   // the highest version first (slice 7), and the next run's TRAINING says `LAST UNIT TRAINED: …`. null for an abandoned run
   // (the archive's activeRun keeps no skills) and for records written before slice 4 (the type widened, no META bump).
   skills: SkillRecord[] | null;
+  // Slice 7a (R3, META 4): how its FINALE ended (types/ending.ts EndingRecord: both choices and every fact the next run's
+  // traces need), from systems/ending-rules.ts endingRecordOf at RUN END. null for a run lost or abandoned on the way, and
+  // for a record migrated with such a cause (R16: an old won or unresolved record migrates to its step 1 + REASSIGNMENT).
+  ending: EndingRecord | null;
 }
 
 // --- The trail (02 §3.12 "the last unit's trail", 05 §3.5 the grey cross) ------------------------------------------------

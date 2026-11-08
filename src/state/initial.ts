@@ -1,4 +1,5 @@
-// Slice 6: the lead owns this file (slice-6-plan.md §5); tracks ask by message.
+// Slice 7a: the lead owns this file (slice-7-plan.md §4.1: the finale v7, landing.lastLanding, ui.runEndStage); tracks ask by
+// message. Slice 6: the lead owns this file (slice-6-plan.md §5); tracks ask by message.
 import type { GameState, RunPhase, RunState, HollowState, RunStats, ArchiveState, HazardsState } from './schema';
 import type { Segment } from '@/types/segment';
 import type { LandingState, PodRecord, ShipLandingDef, AutodropState } from '@/types/landing';
@@ -289,6 +290,8 @@ export function createLandingState(def: ShipLandingDef, memory: readonly Segment
     autodrop: createAutodropState(),
     survey: createSurveyState(sites === null ? 'good' : 'poor', sites ?? []),
     sitesRev: 0,
+    // Slice 7a (R2): 7b's THE LAST LANDING, null until 7b sets it after a MERGE (and at every save point).
+    lastLanding: null,
   };
 }
 
@@ -327,7 +330,7 @@ export function createHollowState(cfg: Readonly<HollowDef>): HollowState {
     seedInSec: null, seedTelegraph: null, seedMoments: 0, seedsLanded: 0, wakeHeld: false, wakeHoldEndedAtAi: null,
     deal: createDealState(),
     verbInSec: null, verb: null, verbMoments: 0, verbTelegraphs: 0, verbsLanded: 0, verbsBlocked: 0, untriedTools: [], bitesAt: [],
-    finale: { phase: 'none', restoredInPlace: [], restoredHalf: [], ending: null, unresolvedUntilAi: null },
+    finale: createFinaleState(),
     calmAiSec: 0, unlinkedLastSpare: false,
   };
 }
@@ -358,6 +361,14 @@ export function createInitialState(opts: InitialStateOpts): GameState {
   };
 }
 
+// The FINALE before anything happened (slice 7a, schema FinaleState): the root still LOCKED.
+export function createFinaleState(): HollowState['finale'] {
+  return {
+    phase: 'none', rootFell: false, hollow: null, you: null, stay: null, restored: [], cardAtAi: null, ending: null,
+    unresolvedUntilAi: null,
+  };
+}
+
 // The UI slice of a fresh world. The title and the boot happen in blue (the unit wakes up inside the
 // mind); the boot cuts to amber when the flight starts.
 export function createUiState(phase: RunPhase, reducedMotion: boolean): GameState['ui'] {
@@ -377,5 +388,6 @@ export function createUiState(phase: RunPhase, reducedMotion: boolean): GameStat
     trainingSel: null,
     trainingHoldSec: null,
     trainingArmed: false,
+    runEndStage: 'tally',
   };
 }

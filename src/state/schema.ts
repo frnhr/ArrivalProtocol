@@ -1,4 +1,5 @@
-// Slice 6: the lead owns this file (slice-6-plan.md §5); a track that needs a new saved field asks the lead (the one
+// Slice 7a: the lead owns this file (slice-7-plan.md §4.1: FinaleState v7, 'won-spare', ui.runEndStage); slice 6's note below
+// stands. Slice 6: the lead owns this file (slice-6-plan.md §5); a track that needs a new saved field asks the lead (the one
 // v5 → v6 bump is the FOUNDATION's, plan R1).
 import type { Segment, SegmentRole } from '@/types/segment';
 import type { LandingState, LandingTally } from '@/types/landing';
@@ -17,6 +18,9 @@ import type { SkillId, SkillLevel, AutoMode, RunSkillState, CellRow } from '@/ty
 import type { BurnReason, BurnEvent } from '@systems/predict';
 import type { ResidentState, RunResidentState } from '@/types/resident';
 import type { SurveyRecord } from '@/types/survey';
+import type { FinalePhase, HollowFate, YouChoice, RunEndStage } from '@/types/ending';
+
+export type { FinalePhase } from '@/types/ending';
 
 export type ViewMode = 'tools' | 'memory';
 
@@ -304,8 +308,10 @@ export interface DealRecord {
 // Why a run ended (§4.3, §4.5's causes; RUN END and WP8's archive read it). The fleet ends with LAST LIGHT, the
 // flagship (WP11): its finale ends a run 'won-purge', 'won-merge' or 'unresolved'; losing it is 'flagship-lost'. (WP7's
 // interim 'end-of-fleet' and 'last-ship-lost' were for a fleet that ended before it, and are gone with it.)
+// Slice 7a (R17): 'won-spare', by step 1 (systems/ending-rules.ts finaleRunCause). Titles and the epilogue read the ending
+// record's two choices (types/ending.ts EndingRecord), never the cause.
 export type RunEndCause =
-  | 'won-purge' | 'won-merge' | 'unresolved' | 'flagship-lost' | 'overwritten' | 'stayed' | 'abandoned';
+  | 'won-purge' | 'won-merge' | 'won-spare' | 'unresolved' | 'flagship-lost' | 'overwritten' | 'stayed' | 'abandoned';
 
 // BEAM OUT (§4.3, §9 WP7 item 6): a TRANSMITTING bar that races the impact, in tactical seconds of
 // world time (it is the ship's antenna, not the mind). null while not beaming. (mutate)
@@ -599,28 +605,27 @@ export type VerbTelegraph =
   | (VerbTelegraphBase & { kind: 'rm'; toAddr: null })
   | (VerbTelegraphBase & { kind: 'mv'; toAddr: number });
 
-// LAST LIGHT's finale (§6.6, §9 WP11 items 4–5). none: the root is still LOCKED (or this is not the flagship).
-// duel: the orbit is locked or accepted and the root is open: DELETE THE ROOT (a ROOT_DELETE_SEC op while its verbs come
-// every duelEverySec). choice: the root is gone, one last block is left, and HOLLOW has stopped (no bites, seeds or
-// verbs): PURGE or MERGE. purged / merged: the kid chose. unresolved: the landing ended with the root alive and nothing
-// left to delete it with (§4.3 UNRESOLVED). The LANDING REPORT waits while the duel or the choice stands.
-export type FinalePhase = 'none' | 'duel' | 'choice' | 'purged' | 'merged' | 'unresolved';
-
+// The final ship's FINALE (§6.6, §9 WP11 items 4–5; slice 7a, slice-7-plan §2.2 and R6–R15): its phases are
+// types/ending.ts FinalePhase. Saved (the hollow slice of a world payload); at ENDING CHOSEN it is 'done' (R14).
 export interface FinaleState {
   phase: FinalePhase;
-  // MERGE's restoration (plan risk 9; 01-landing §3.17 is slice 7): the pods whose eaten drivers turned back into
-  // drivers in place (their pods launch again), and the pods whose blocks were gone (moved away by the kid's DELETE, or
-  // MV'd and deleted): those stay parked, restorable, for slice 7's last landing.
-  restoredInPlace: number[];
-  restoredHalf: number[];
-  // WP11 part 2: the typed ending the choice brought (FinaleChoice types it over the screen), and the AI second until
-  // which it holds the LANDING REPORT back (finalePending): its lines have typed and been read. null before the choice
-  // (and after an UNRESOLVED end, which has no typed ending). Written in the same update as the choice's phase, so no
-  // listener ever sees a chosen finale without its ending.
+  // The root's DELETE left its last block (false before it, and on an UNRESOLVED end: 'followed').
+  rootFell: boolean;
+  // Step 1's pick and step 2's (R7: a pick until step 2's confirm applies both; set for good from 'verdict' on).
+  hollow: HollowFate | null;
+  you: YouChoice | null;
+  // STAY's ship (R9): its slot on the arm, its route index on the classic world. null for every other step 2.
+  stay: number | null;
+  // The pods MERGE gave back (7a: their drivers restored in place, R15; 7b: by radio). Only pods whose driver was eaten.
+  restored: number[];
+  // The card may come up from this AI second (R6: FINALE_OPEN_DELAY_SEC after the landing settled), null before.
+  cardAtAi: number | null;
+  // The typed verdict step 2's confirm brought (R13; before 7a's FINALE track, the WP11 typed ending), and the AI second
+  // until which it holds the LANDING REPORT back (finalePending). null before the confirm (and after an UNRESOLVED end
+  // with no typed verdict). Written in the same update as the phase it comes with.
   ending: FinaleEnding | null;
   // UNRESOLVED's last line (`> you can't delete me now. i'll come with you.`) holds the LANDING REPORT back until this AI
-  // second: it has typed in the TERMINAL and been read (WP11 review: the report used to cut it off mid-word). null
-  // before an UNRESOLVED end.
+  // second: it has typed in the TERMINAL and been read (WP11 review). null before an UNRESOLVED end.
   unresolvedUntilAi: number | null;
 }
 
@@ -636,7 +641,8 @@ export interface EndingLine {
 // `startAi` is the AI second its first line begins to type (FinaleChoice types every line to finaleEndingLineStartsSec
 // from there, on AI time: the card can neither fall behind nor be cut off by the report, and pause holds both).
 export interface FinaleEnding {
-  choice: 'purge' | 'merge';
+  // Slice 7a: the two choices (step 1's fate and step 2's), widened from WP11's 'purge' | 'merge'.
+  choice: { hollow: HollowFate; you: YouChoice };
   lines: EndingLine[];
   startAi: number;
   untilAi: number;
@@ -832,6 +838,9 @@ export interface UiState {
   // grid's default selection, a selection UNDO moved, ESC and another tab leave it unarmed: ENTER sets course, as
   // everywhere else (systems/desk.ts deskEnter).
   trainingArmed: boolean;
+  // Slice 7a (R19): which of the run end's three screens is up after CONTINUE (the RUN TALLY, the EPILOGUE, the FINAL CARD).
+  // 'tally' until the run end goes on; a world reset (a NEW RUN) puts it back. Not saved (the run save is cleared at endRun).
+  runEndStage: RunEndStage;
 }
 
 // The archive behind this page (§4.5, systems/meta.ts). 'ok': loaded (or empty) and written at the run's
