@@ -285,33 +285,105 @@ check(`the no-room rows say no never-say word and fit the strip (≤ ${MAX_LINE_
 
 
 
-// === Slice 6 (slice-6-plan §2.13): each track's pools, rendered at their worst case (LZ-D, `SITE 12`, ROOM 3,200, STANDARD,
-// 100%, 12 sites). The FOUNDATION seeded each block with a walk of the seeded words; each track owns its block.
-// Every template is rendered with the worst case its own parameter names ask for (a template whose parameter name is not
-// listed fails the suite, so a new one is rendered at its worst case too).
-const SLICE6_WORST: Readonly<Record<string, unknown>> = {
+// === Slice 6 (slice-6-plan §2.13): each track's pools, rendered at their worst case. The FOUNDATION seeded each block with a
+// walk of the seeded words; each track owns its block.
+// Every template is rendered with the worst case its own parameter names ask for: the shared base below (the lead's), merged
+// under the table each track keeps in its own block (review M5: SWATH_WORST, SITES_WORST, so the tracks never edit one
+// literal). A parameter name in neither table fails the suite, so a new one is rendered at its worst case too. The parser
+// reads arrow functions and `function` declarations, plain, defaulted (`n = 1`: the table's worst case, not the default) and
+// destructured (`({ lz, site })`: an object of the named keys' worst cases) parameters; a parameter list it can't read throws.
+// The transpiler renames a parameter that shadows a top-level name of its own module (`pods` → `pods2`): such a name then
+// fails here as unknown, so give the parameter another name.
+// A `ground` parameter is a BadGround and is rendered once more as WET; a display word for the ground takes another name
+// (review m10: `groundWord`, worst `FLAT ★★★`).
+const SLICE6_BASE: Readonly<Record<string, unknown>> = {
   lz: 'LZ-D', site: 'SITE 12', label: 'SITE 12 · WRECKAGE', room: '3,200', width: 'STANDARD', ground: 'rocky', pct: 100, sites: 12,
   pods: 16, count: 4, version: 3,
 };
-function renderSlice6(value: unknown, out: string[], owner: string): string[] {
+
+// The top-level pieces of a parameter list, split on commas outside brackets.
+function splitParams(list: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let at = '';
+  for (const char of list) {
+    if ('({['.includes(char)) depth++;
+    if (')}]'.includes(char)) depth--;
+    if (char === ',' && depth === 0) { out.push(at.trim()); at = ''; } else at += char;
+  }
+  if (at.trim() !== '') out.push(at.trim());
+  return out;
+}
+
+// A template's parameters: a name, or the keys of a destructured object.
+function templateParams(fn: (...args: unknown[]) => unknown, owner: string): (string | string[])[] {
+  const source = fn.toString().trim();
+  let list: string;
+  const bare = /^(?:async\s+)?([A-Za-z_$][\w$]*)\s*=>/.exec(source);
+  if (bare !== null) list = bare[1]!;
+  else {
+    const open = source.indexOf('(');
+    if (open < 0 || !(source.startsWith('(') || source.startsWith('function') || source.startsWith('async'))) {
+      throw new Error(`words: ${owner}'s template has a parameter list this suite can't read: ${source.slice(0, 60)}`);
+    }
+    let depth = 0;
+    let close = -1;
+    for (let i = open; i < source.length; i++) {
+      if (source[i] === '(') depth++;
+      if (source[i] === ')') { depth--; if (depth === 0) { close = i; break; } }
+    }
+    if (close < 0) throw new Error(`words: ${owner}'s template has a parameter list this suite can't read: ${source.slice(0, 60)}`);
+    list = source.slice(open + 1, close);
+  }
+  return splitParams(list).map((param) => {
+    const head = param.split('=')[0]!.trim();
+    if (head.startsWith('{')) {
+      const keys = splitParams(head.slice(1, head.lastIndexOf('}'))).map((key) => key.split(/[:=]/)[0]!.trim()).filter(Boolean);
+      if (keys.length === 0) throw new Error(`words: ${owner}'s template destructures nothing: ${param}`);
+      return keys;
+    }
+    if (!/^[A-Za-z_$][\w$]*$/.test(head)) throw new Error(`words: ${owner}'s template parameter '${param}' can't be read`);
+    return head;
+  });
+}
+
+function renderSlice6(value: unknown, out: string[], owner: string, extra: Readonly<Record<string, unknown>>): string[] {
+  const worst: Readonly<Record<string, unknown>> = { ...SLICE6_BASE, ...extra };
+  const of = (name: string): unknown => {
+    if (!(name in worst)) throw new Error(`words: ${owner}'s template parameter '${name}' has no worst case here`);
+    return worst[name];
+  };
   if (typeof value === 'string') out.push(value);
   else if (typeof value === 'function') {
     const fn = value as (...args: unknown[]) => unknown;
-    const params = /^\(?([^)=]*)\)?\s*=>/.exec(fn.toString())?.[1]?.split(',').map((param) => param.trim().split(':')[0]!.trim()).filter(Boolean) ?? [];
-    const args = params.map((param) => {
-      if (!(param in SLICE6_WORST)) throw new Error(`words: ${owner}'s template parameter '${param}' has no worst case here`);
-      return SLICE6_WORST[param];
-    });
-    out.push(String(fn(...args)));
+    const params = templateParams(fn, owner);
+    const args = (ground: unknown): unknown[] => params.map((param) => (Array.isArray(param)
+      ? Object.fromEntries(param.map((key) => [key, key === 'ground' ? ground : of(key)]))
+      : param === 'ground' ? ground : of(param)));
+    out.push(String(fn(...args(of('ground')))));
     // The other ground too: a WET line is shorter, but its own words are checked.
-    if (params.includes('ground')) out.push(String(fn(...params.map((param) => (param === 'ground' ? 'wet' : SLICE6_WORST[param])))));
-  } else if (typeof value === 'object' && value !== null) Object.values(value).forEach((child) => renderSlice6(child, out, owner));
+    if (params.some((param) => param === 'ground' || (Array.isArray(param) && param.includes('ground')))) out.push(String(fn(...args('wet'))));
+  } else if (typeof value === 'object' && value !== null) Object.values(value).forEach((child) => renderSlice6(child, out, owner, extra));
   return out;
+}
+{
+  // The parser itself: a destructured, a defaulted and a `function` template are read; an unreadable one throws.
+  const lines = renderSlice6({
+    a: ({ lz, site }: { lz: string; site: string }) => `${lz}/${site}`,
+    b: (version = 1) => `v${version}`,
+    c: function named(lz: string) { return lz; },
+  }, [], 'the parser', {});
+  check('6 words: the template parser reads destructured, defaulted and `function` templates', lines.join() === 'LZ-D/SITE 12,v3,LZ-D');
+  let threw = false;
+  try { renderSlice6({ d: (unknownName: string) => unknownName }, [], 'the parser', {}); } catch { threw = true; }
+  check('…and a parameter with no worst case throws', threw);
 }
 
 // --- 6 SWATH (data/swath-text.ts): Track SWATH adds its checks here (and its strip rules' worst case) ---------------------
 {
-  const lines = renderSlice6(SWATH_TEXT, [], 'SWATH_TEXT');
+  // SWATH's own worst cases, beside the shared base (review M5).
+  const SWATH_WORST: Readonly<Record<string, unknown>> = {};
+  const lines = renderSlice6(SWATH_TEXT, [], 'SWATH_TEXT', SWATH_WORST);
   const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
   check(`6 SWATH words: every line (${lines.length}) fits the strip (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
     lines.length > 0 && bad.length === 0, JSON.stringify(bad));
@@ -323,7 +395,9 @@ function renderSlice6(value: unknown, out: string[], owner: string): string[] {
 
 // --- 6 SITES (data/sites-text.ts): Track SITES adds its checks here ----------------------------------------------------------
 {
-  const lines = renderSlice6(SITES_TEXT, [], 'SITES_TEXT');
+  // SITES's own worst cases, beside the shared base (review M5, m10: the ground's display word).
+  const SITES_WORST: Readonly<Record<string, unknown>> = { groundWord: 'FLAT ★★★' };
+  const lines = renderSlice6(SITES_TEXT, [], 'SITES_TEXT', SITES_WORST);
   const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
   check(`6 SITES words: every line (${lines.length}) fits the strip (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
     lines.length > 0 && bad.length === 0, JSON.stringify(bad));

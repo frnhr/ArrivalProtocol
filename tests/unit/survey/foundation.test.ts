@@ -48,6 +48,12 @@ import { run1Map } from '../map/run1-fixture';
 import { armShipSlices } from '../support/residents';
 import { withSurvey, withSurveyBuilt, NO_SURVEY } from '../support/survey';
 import { stubStorage, pageOpen, storedSave, toDesk } from '../save/save-fixture';
+import { siteStars, surveyRunning, swathHalfRad } from '@systems/survey-model';
+import { splitRimArcs } from '@systems/landing-hud';
+import { angleDelta } from '@systems/landing-solve';
+import { openBranchesAt } from '@systems/skill-tree';
+import { visitNow } from '@systems/skill-levels';
+import { LANDING_ECHO } from '@data/landing-text';
 import {
   RUN_SAVE_VERSION, RUN_SAVE_KEY, META_STORAGE_KEY, MAX_LINE_CHARS, LZ_WIDTH_KM, WET_WIDTH_FACTOR, SURVEY_CELLS, SURVEY_EXTRA_SITES,
   BOOT_LINE_AT_SEC,
@@ -166,7 +172,7 @@ const PLANET_R = FLIGHT_TEMPLATES.wide.flight.planet.R;
   check('…the record says POOR, nothing run, the bad LZ kept unknown; a GOOD planet keeps none (ShipResult.survey null)',
     isDeepStrictEqual(surveyRecordOf(poor), {
       ranAt: 0, mappedPct: 0, found: 0, moves: [],
-      badKept: [{ lz: poor.lzs.find((lz) => lz.site === bad.id)!.label, ground: bad.ground, known: null }],
+      badKept: [{ lz: poor.lzs.find((lz) => lz.site === bad.id)!.label, ground: bad.ground, known: null }], movedOff: [],
     }) && surveyRecordOf(good) === null);
   // The other slices are the GOOD build's: the survey draws its own stream (the families, the hurt drivers, the zones, the
   // flight and the memory are unchanged).
@@ -314,14 +320,28 @@ withSurveyBuilt(() => {
     ['an LZ moved to a candidate, with its move and sitesRev', edit((raw) => {
       const site = candidate(raw);
       if (site.roomPods < raw.payload.slices.landing.lzs[0]!.pods) site.roomPods = raw.payload.slices.landing.lzs[0]!.pods;
+      const from = raw.payload.slices.landing.lzs[0]!.site!;
       moveTo(raw, 0, site);
-      raw.payload.slices.landing.survey.moves.push({ lz: raw.payload.slices.landing.lzs[0]!.label, site: site.id });
+      raw.payload.slices.landing.survey.moves.push({ lz: raw.payload.slices.landing.lzs[0]!.label, from, site: site.id });
       raw.payload.slices.landing.sitesRev = 1;
     }), true],
     ['…the move made, sitesRev left at 0', edit((raw) => {
       const site = candidate(raw);
+      const from = raw.payload.slices.landing.lzs[0]!.site!;
       moveTo(raw, 0, site);
-      raw.payload.slices.landing.survey.moves.push({ lz: raw.payload.slices.landing.lzs[0]!.label, site: site.id });
+      raw.payload.slices.landing.survey.moves.push({ lz: raw.payload.slices.landing.lzs[0]!.label, from, site: site.id });
+    }), false],
+    ['a move with no `from` (review M7)', edit((raw) => {
+      const site = candidate(raw);
+      moveTo(raw, 0, site);
+      raw.payload.slices.landing.survey.moves.push({ lz: raw.payload.slices.landing.lzs[0]!.label, site: site.id } as never);
+      raw.payload.slices.landing.sitesRev = 1;
+    }), false],
+    ['…a move off a site the survey does not have', edit((raw) => {
+      const site = candidate(raw);
+      moveTo(raw, 0, site);
+      raw.payload.slices.landing.survey.moves.push({ lz: raw.payload.slices.landing.lzs[0]!.label, from: 'site-99', site: site.id });
+      raw.payload.slices.landing.sitesRev = 1;
     }), false],
     ['SURVEY holding its thread at a save point', edit((raw) => { raw.payload.slices.landing.survey.claimed = true; }), false],
     ['…its last angle kept', edit((raw) => { raw.payload.slices.landing.survey.lastRad = 1.2; }), false],
@@ -339,19 +359,113 @@ withSurveyBuilt(() => {
       moveTo(raw, 0, wreck);
     }), false],
     ['71 mapped cells', edit((raw) => { raw.payload.slices.landing.survey.mapped.pop(); }), false],
-    ['a move naming no LZ', edit((raw) => { raw.payload.slices.landing.survey.moves.push({ lz: 'LZ-Z', site: 'site-1' }); raw.payload.slices.landing.sitesRev = 1; }), false],
+    ['a move naming no LZ', edit((raw) => { raw.payload.slices.landing.survey.moves.push({ lz: 'LZ-Z', from: 'guess-A', site: 'site-1' }); raw.payload.slices.landing.sitesRev = 1; }), false],
     ['a reveal naming no site', edit((raw) => { raw.payload.slices.landing.survey.reveals.push({ site: 'site-99', by: 'survey' }); }), false],
     ['two sites with one id', edit((raw) => { raw.payload.slices.landing.survey.sites.push(structuredClone(raw.payload.slices.landing.survey.sites.at(-1)!)); }), false],
     ['a POOR planet\'s LZ on no site', edit((raw) => { raw.payload.slices.landing.lzs[0]!.site = null; }), false],
     ['sites on a GOOD planet', edit((raw) => { raw.payload.slices.landing.survey.site = 'good'; }), false],
     ['a ship\'s record mapping 101%', edit((raw) => { raw.payload.run.ships.at(-1)!.survey!.mappedPct = 101; }), false],
     ['…with no survey field', edit((raw) => { delete (raw.payload.run.ships.at(-1) as unknown as Record<string, unknown>).survey; }), false],
+    ['…with no movedOff (review M7)', edit((raw) => { delete (raw.payload.run.ships.at(-1)!.survey as unknown as Record<string, unknown>).movedOff; }), false],
+    ['a GOOD planet\'s LZ on ROCKY ground (review m9)', edit((raw) => {
+      const landing = raw.payload.slices.landing;
+      landing.survey = createSurveyState('good', []);
+      for (const lz of landing.lzs) Object.assign(lz, { site: null, ground: 'flat' });
+      landing.lzs[0]!.ground = 'rocky';
+    }), false],
+    ['…the same planet with every LZ FLAT', edit((raw) => {
+      const landing = raw.payload.slices.landing;
+      landing.survey = createSurveyState('good', []);
+      for (const lz of landing.lzs) Object.assign(lz, { site: null, ground: 'flat' });
+    }), true],
   ];
   const wrong = cases.filter(([, raw, ok]) => (kind(raw) === 'ok') !== ok);
   check('the codec reads the survey at rest: a held thread, a kept angle, an LZ off its site or on another\'s, the wrong cell count, moves and reveals naming nothing, a short sitesRev and a bad record are refused',
     wrong.length === 0, wrong.map(([name, raw]) => `${name} → ${kind(raw)}`).join(' | '));
 });
 check('…withSurvey puts the gates back', SURVEY_BUILT.poor === GATES_AT_LOAD.poor && SKILL_TREE.survey.built === GATES_AT_LOAD.built);
+
+// --- The review's follow-up (slice-6-foundation-review.md) ---------------------------------------------------------------
+{
+  // M8: siteStars is R11's, built now.
+  const site = (kind: SurveySite['kind'], ground: SurveySite['ground'], width: LzWidth) => ({ kind, ground, width });
+  check('siteStars (R11): ★★★ FLAT and not NARROW, ★★ FLAT NARROW, ★ ROCKY or WET, none on a wreck',
+    siteStars(site('candidate', 'flat', 'wide')) === 3 && siteStars(site('guess', 'flat', 'standard')) === 3
+    && siteStars(site('candidate', 'flat', 'narrow')) === 2 && siteStars(site('candidate', 'rocky', 'wide')) === 1
+    && siteStars(site('guess', 'wet', 'narrow')) === 1 && siteStars(site('wreck', 'rocky', 'standard')) === 0);
+  // M2: the run rule and the swath width, neutral until SWATH.
+  check('surveyRunning and swathHalfRad answer neutrally until SWATH builds them (\'off\', 0)',
+    surveyRunning(createInitialState({ seed: 1 })) === 'off' && swathHalfRad(3) === 0);
+  // M4: a long unmapped arc is cut so the strip lays it out on the right side of the dot, and the overview line never wraps.
+  const arc = { fromRad: 0.1, toRad: 6.2 };
+  const pieces = splitRimArcs([arc]);
+  const covered = pieces.reduce((sum, piece) => sum + (piece.toRad - piece.fromRad), 0);
+  // The strip's rule (landing-hud stripSpan): a stretch sits at its middle's wrapped angle from the dot, ± its half.
+  const placedAt = (dot: number, point: number): number | null => {
+    const piece = pieces.find((p) => {
+      const at = ((point % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      return at >= p.fromRad && at < p.toRad;
+    });
+    if (piece === undefined) return null;
+    const mid = (piece.fromRad + piece.toRad) / 2;
+    return angleDelta(dot, mid) + (point - mid);
+  };
+  const near = [0.12, 0.3, 6.15, 6.0, 1.0].every((point) => {
+    const at = placedAt(0, point);
+    return at !== null && Math.abs(at - angleDelta(0, point)) < 1e-9;
+  });
+  check(`splitRimArcs: the boot's whole-rim arc (0.1 to 6.2 rad) is ${pieces.length} pieces ≤ π inside one turn, the ground just ahead of the dot lands ahead of it`,
+    pieces.every((p) => p.toRad - p.fromRad <= Math.PI + 1e-12 && p.fromRad >= 0 && p.toRad <= 2 * Math.PI + 1e-12)
+    && Math.abs(covered - (arc.toRad - arc.fromRad)) < 1e-9 && near);
+  const wrapped = splitRimArcs([{ fromRad: 6.0, toRad: 6.6 }, { fromRad: -1, toRad: 9 }]);
+  check('…an arc across angle 0 is cut there, a whole turn or more is the whole rim once',
+    Math.abs(wrapped[0]!.toRad - 2 * Math.PI) < 1e-12 && wrapped[1]!.fromRad === 0
+    && Math.abs(wrapped.slice(2).reduce((sum, p) => sum + (p.toRad - p.fromRad), 0) - 2 * Math.PI) < 1e-9);
+  // m1: a jammed placement starts over on the same stream, up to SITE_PLACE_TRIES, then throws. A rim with room for one site
+  // only: every try places one site (one draw) and jams on the second.
+  const jam: ShipLandingDef = {
+    lzs: [{ label: 'LZ-A', centreDeg: 0, width: 'wide', pods: 4 }], forgiveness: 'gentle', terrain: 'PLAINS', colonyFirstRun: null, drag: true,
+    noGo: Array.from({ length: 44 }, (_, i) => ({ centreDeg: (119 + 8 * i) % 360, widthDeg: 8, word: 'LAKE' })),
+  };
+  const counted = (tries: number): { calls: number; threw: boolean } => {
+    const inner = createRng(11);
+    let calls = 0;
+    const rng = (): number => { calls++; return inner(); };
+    const threw = throws(() => rollSurveySites(jam, PLANET_R, rng, tries));
+    return { calls, threw };
+  };
+  const once = counted(1);
+  const eight = counted(8);
+  check('the site roll retries a jammed placement on the same stream (review m1): 8 tries draw 7 more placements than 1, then it throws',
+    once.threw && eight.threw && eight.calls - once.calls === 7 && throws(() => rollSurveySites(jam, PLANET_R, createRng(3))), `${once.calls} → ${eight.calls} draws`);
+  // M7: the record keeps the bad ground an LZ moved off.
+  const landing = withSurveyBuilt(() => armShipSlices(SEED, CORMORANT).slices.landing);
+  const bad = landing.lzs.find((lz) => lz.ground !== 'flat')!;
+  const to = landing.survey.sites.find((s) => s.kind === 'candidate' && s.ground === 'flat' && s.roomPods >= bad.pods)!;
+  const moved = structuredClone(landing);
+  const lz = moved.lzs.find((zone) => zone.label === bad.label)!;
+  const from = lz.site!;
+  Object.assign(lz, { centreRad: to.centreRad, halfWidthRad: to.halfWidthRad, widthKm: to.widthKm, ground: to.ground, site: to.id });
+  moved.survey.moves.push({ lz: lz.label, from, site: to.id });
+  moved.sitesRev = 1;
+  const record = surveyRecordOf(moved)!;
+  check(`the record of ${bad.label} moved off its ${bad.ground.toUpperCase()} guess to ${to.id}: the move with its \`from\`, nothing bad kept, the ground it left in movedOff (review M7)`,
+    record.badKept.length === 0 && isDeepStrictEqual(record.moves, [{ lz: bad.label, from, site: to.id }])
+    && isDeepStrictEqual(record.movedOff, [{ lz: bad.label, ground: bad.ground, known: null }]), JSON.stringify(record));
+  // M1: the echo takes the reveal as a sixth argument; left out (and null) the words are as before.
+  check('LANDING_ECHO.touchdown takes `revealing` sixth; without it the words are as before (the tail is SWATH\'s)',
+    LANDING_ECHO.touchdown(3, 'lz', 'LZ-B', 'hard') === '> pod03 ... LANDED · HARD'
+    && LANDING_ECHO.touchdown(3, 'lz', 'LZ-B', 'hard', false, null) === '> pod03 ... LANDED · HARD');
+}
+// m2: SURVEY's branch opens only for a planet that plays POOR: at VESPER's desk (CORMORANT in reach), not with POOR down.
+{
+  const desk = (gates: typeof NO_SURVEY): boolean => withSurvey(gates, () => {
+    const state = resumeFixture('run-save-v5-ship-done-desk4.json').getState();
+    return openBranchesAt(state, visitNow(state.run)).includes('survey');
+  });
+  check('poorAhead goes through the POOR gate (review m2): SURVEY opens at VESPER\'s desk with both gates up, not with POOR down',
+    desk({ poor: true, built: 3 }) && !desk({ poor: false, built: 3 }));
+}
 
 // --- Words (every lead line ≤ MAX_LINE_CHARS at its worst case; SWATH's and SITES's by shape only: theirs to reword) ----------
 {

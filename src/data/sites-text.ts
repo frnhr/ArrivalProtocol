@@ -20,9 +20,10 @@ export const SITES_TEXT = {
   },
   row: {
     // `SITE 4 · ROOM 800 · WIDE · FLAT ★★★`, `LZ-B GUESS · ROOM 800 · STANDARD · GROUND ?`.
-    site: (label: string, room: string, width: string, ground: string): string => `${label} · ROOM ${room} · ${width} · ${ground}`,
+    // `groundWord`: the ground as shown (`FLAT ★★★`, `GROUND ?`; review m10: not a BadGround).
+    site: (label: string, room: string, width: string, groundWord: string): string => `${label} · ROOM ${room} · ${width} · ${groundWord}`,
     groundUnknown: 'GROUND ?',
-    lz: (lz: string, site: string, pods: number, ground: string): string => `${lz} · on ${site} · ${pods} PODS · ${ground}`,
+    lz: (lz: string, site: string, pods: number, groundWord: string): string => `${lz} · on ${site} · ${pods} PODS · ${groundWord}`,
   },
   pill: (lz: string, room: string): string => `SET AS ${lz} (${room})`,
   stamp: {
