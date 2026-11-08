@@ -2459,6 +2459,9 @@ export const FINALE_CARD_FADE_MS = 600;
 export const EPILOGUE_CPS = 26;
 export const EPILOGUE_LINE_GAP_SEC = 0.5;
 export const EPILOGUE_HOLD_SEC = 3;
+// The epilogue starts typing this long after it comes up (the tally is seen to go), and answers no key or click before it:
+// the ENTER that left the tally never also skips the typing (one keydown reaches every 'end'-layer binding).
+export const EPILOGUE_ARM_SEC = 0.6;
 // NEW RUN on the final card is not hit by the key that ended the epilogue.
 export const FINAL_CARD_ARM_SEC = 1.2;
 

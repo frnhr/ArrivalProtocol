@@ -209,7 +209,7 @@ check(`…every line ≤ ${MAX_LINE_CHARS}, at most ${EPILOGUE_MAX_LINES}`, line
 
 // Every pair: at most 16 lines, each ≤ 70, with eight colonies of two lines each (the fold takes the oldest).
 {
-  const route = [0, 2, 5, 8, 11, 14, 16, 19];
+  const route = [0, 1, 4, 7, 10, 13, 16, 19];   // a reachable 8-ship route on the arm
   const bigName = 'wants to hear what the wind sounds like.';
   const eight = route.map((slot, i) => ship(`SHIP${i}`, slot, i + 1, `MONTGOMERY LANDING`.slice(0, 12 + (i % 6)), [
     { family: 'Montgomery', place: 'lz', colonists: 200, lines: [bigName] },

@@ -179,7 +179,7 @@ export const EPILOGUE_TEXT = {
     lost: (unitNo: number): string => `ARRIVAL CONTROL: Thank you, Unit ${unitNo}. Another unit is on its way. :)`,
   },
   // The epilogue's way on, once it has typed (one click finishes the typing, a second goes on: §2.10).
-  goOn: '▸ [ENTER]',
+  goOn: 'GO ON ▸ [ENTER]',
   // The final card (R22).
   endings: (found: number, total: number): string => `ENDINGS ${found}/${total}`,
   rowHollow: 'HOLLOW',

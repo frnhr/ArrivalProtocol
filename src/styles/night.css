@@ -1,3 +1,131 @@
 /* Slice 7a: Track NIGHT owns this file (docs/phase3/impl/slice-7-plan.md §2.10, §4.1): the EPILOGUE (#epilogue) and the FINAL
-   CARD (#finalCard), in RUN END's night palette (.run-end's). Imported by main.ts after ending.css. The FOUNDATION's file is
-   empty: both screens stay hidden (index.html) until ENDINGS_BUILT.night. */
+   CARD (#finalCard), in RUN END's night palette (.run-end's: --report-bg, --report-text, its scanlines). Both stand over the
+   RUN TALLY, which steps aside while they are up (RunEnd's .night-on). Imported by main.ts after ending.css. */
+
+.run-end.night-on { display: none; }
+
+.night-epilogue,
+.night-final {
+  position: fixed; inset: 0; z-index: 705;
+  display: flex; justify-content: center; overflow-y: auto;
+  background: radial-gradient(ellipse at 50% 40%, var(--report-glow) 0%, transparent 64%), var(--report-bg);
+  color: var(--report-text); font-family: 'JetBrains Mono', monospace;
+  animation: wr-in 0.9s ease-out both;
+}
+.night-epilogue[hidden],
+.night-final[hidden] { display: none; }
+.night-epilogue::after,
+.night-final::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, var(--scan) 0 1px, transparent 1px 3px);
+}
+
+/* ── The EPILOGUE: typed lines, forty years on. Each line is laid out whole from the start (its rest transparent). ── */
+.night-epilogue { cursor: pointer; }
+/* 72ch of the lines' own size: a 70-character line never wraps on the desk. */
+.ne-inner {
+  position: relative; width: min(72ch, calc(100% - 32px)); font-size: 14px;
+  display: flex; flex-direction: column; gap: 18px; margin: auto 0; padding: 40px 0 32px;
+}
+.ne-lines { display: flex; flex-direction: column; gap: 7px; font-size: 14px; line-height: 1.45; }
+.ne-line { opacity: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ne-line.shown { opacity: 1; }
+.ne-rest { color: transparent; }
+.ne-line.kind-header {
+  margin-bottom: 10px; font-family: 'VT323', monospace; font-size: 30px; line-height: 1; letter-spacing: 0.14em;
+  color: var(--star); text-shadow: 0 0 14px var(--star-glow);
+}
+.ne-line.kind-colony { color: var(--report-text); }
+.ne-line.kind-payoff { padding-left: 2ch; color: var(--soul); }
+.ne-line.kind-older { color: var(--report-dim); letter-spacing: 0.14em; font-size: 12px; }
+.ne-line.kind-step1 { color: var(--purge); }
+.ne-line.kind-step1:not(.kind-step1 + .kind-step1) { margin-top: 10px; }
+.ne-line.kind-step2 { color: var(--report-text); }
+.ne-line.kind-us { color: var(--hollow); text-shadow: 0 0 10px var(--merge-glow); }
+.ne-line.kind-next { margin-top: 10px; color: var(--report-dim); }
+.ne-line.kind-control { color: var(--layer-ship-bright); }
+.ne-line.kind-next + .ne-line.kind-control { margin-top: 0; }
+.ne-line.kind-step2 + .ne-line.kind-control,
+.ne-line.kind-us + .ne-line.kind-control,
+.ne-line.kind-colony + .ne-line.kind-control,
+.ne-line.kind-payoff + .ne-line.kind-control { margin-top: 10px; }
+.ne-foot { display: flex; justify-content: flex-end; min-height: 34px; }
+.ne-on {
+  font: inherit; font-size: 12px; letter-spacing: 0.22em; padding: 7px 18px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  background: transparent; border: 1px solid var(--soul-dim); color: var(--soul);
+  opacity: 0; pointer-events: none; transition: opacity 0.6s ease-out;
+}
+.night-epilogue.typed .ne-on { opacity: 1; pointer-events: auto; animation: wr-glow 1.6s ease-in-out infinite; }
+.night-epilogue.reduced .ne-on { transition: none; animation: none; }
+
+/* ── The FINAL CARD: the ending's title, the endings found, NEXT RUN, the bridge, NEW RUN ── */
+.nf-inner {
+  position: relative; width: min(820px, calc(100% - 32px));
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  margin: auto 0; padding: 40px 0 30px; text-align: center;
+}
+.nf-inner > * { animation: wr-in 0.7s ease-out both; }
+.nf-inner > :nth-child(2) { animation-delay: 0.2s; }
+.nf-inner > :nth-child(3) { animation-delay: 0.6s; }
+.nf-inner > :nth-child(4) { animation-delay: 0.8s; }
+.nf-inner > :nth-child(5) { animation-delay: 1s; }
+.nf-inner > :nth-child(6) { animation-delay: 1.2s; }
+.nf-inner > :nth-child(7) { animation-delay: 1.3s; }
+.night-final.reduced .nf-inner > * { animation: wr-in 0.3s ease-out both; }
+.nf-kicker { font-size: 11px; letter-spacing: 0.3em; color: var(--report-dim); }
+.nf-title {
+  font-family: 'VT323', monospace; font-size: 58px; line-height: 1; letter-spacing: 0.14em;
+  color: var(--soul); text-shadow: 0 0 20px var(--soul-dim);
+}
+/* The ending's colour (RUN END's re-title tones): PURGE a cold white, MERGE HOLLOW's pink running into the mind's blue,
+   SPARE the good green going out into amber (it left with the ship), UNRESOLVED HOLLOW's pink, dim; a lost run the warning. */
+.night-final.ending-purge .nf-title { color: var(--purge); text-shadow: 0 0 22px var(--purge-glow); }
+.night-final.ending-merge .nf-title,
+.night-final.ending-spare .nf-title {
+  -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none;
+}
+.night-final.ending-merge .nf-title {
+  background-image: linear-gradient(90deg, var(--hollow), var(--layer-mind)); filter: drop-shadow(0 0 12px var(--merge-glow));
+}
+.night-final.ending-spare .nf-title {
+  background-image: linear-gradient(90deg, var(--soul), var(--star)); filter: drop-shadow(0 0 12px var(--star-glow));
+}
+.night-final.ending-followed .nf-title { color: var(--hollow); opacity: 0.85; text-shadow: 0 0 18px var(--merge-glow); }
+.night-final.lost .nf-title { color: var(--warn); text-shadow: 0 0 18px color-mix(in srgb, var(--warn) 40%, transparent); }
+.night-final.lost { background: radial-gradient(ellipse at 50% 40%, var(--report-glow-sombre) 0%, transparent 64%), var(--report-bg); }
+.nf-endings { margin-top: 6px; font-size: 12px; letter-spacing: 0.32em; color: var(--star); }
+.night-final.lost .nf-endings { color: var(--report-dim); }
+.nf-rows { display: flex; flex-direction: column; gap: 8px; }
+.nf-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 4px 10px; font-size: 13px; letter-spacing: 0.16em; }
+.nf-row-label { min-width: 7ch; text-align: right; color: var(--report-dim); }
+.nf-sep { color: var(--star-missed); }
+.nf-piece { color: var(--star-missed); }
+.nf-piece.found { color: var(--report-text); }
+.nf-piece.now { color: var(--star); text-shadow: 0 0 10px var(--star-glow); }
+/* 7c's NEXT RUN lines: the room is kept while there are none (R12), so nothing moves when they turn on. */
+.nf-next { display: flex; flex-direction: column; gap: 4px; min-height: calc(2 * 1.5em + 4px); font-size: 12px; line-height: 1.5; color: var(--soul); }
+.nf-bridge { max-width: 640px; font-size: 11px; letter-spacing: 0.14em; line-height: 1.6; color: var(--report-dim); }
+.nf-bridge[hidden] { display: none; }
+.nf-bridge-line { color: var(--report-text); }
+.nf-foot { display: flex; justify-content: center; min-height: 36px; margin-top: 4px; }
+.nf-new {
+  font: inherit; font-size: 12px; letter-spacing: 0.22em; padding: 8px 22px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  background: transparent; border: 1px solid var(--soul-dim); color: var(--soul);
+  animation: wr-glow 1.6s ease-in-out infinite;
+}
+.nf-new.arming { opacity: 0.4; animation: none; }
+.night-final.reduced .nf-new { animation: none; }
+
+@media (max-width: 768px) {
+  .ne-inner { padding: 28px 0 24px; gap: 14px; }
+  .ne-lines { font-size: 13px; gap: 6px; }
+  .ne-line.kind-header { font-size: 26px; }
+  .ne-foot { justify-content: center; }
+  .nf-inner { gap: 12px; padding: 28px 0 24px; }
+  .nf-title { font-size: 38px; letter-spacing: 0.1em; }
+  .nf-row { font-size: 12px; letter-spacing: 0.1em; gap: 3px 7px; }
+  .nf-row-label { min-width: 0; flex: 1 0 100%; text-align: center; }
+  .nf-row-label + .nf-sep { display: none; }
+}
