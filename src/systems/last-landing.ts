@@ -30,7 +30,10 @@
 //   (AutodropOverride.skipBetween for v2/v3, the same rule here for v1 and blind). The cadence (LastLandingState.
 //   cadenceLeftSec, set by landing.ts launchDriver) counts down in tactical s of world time, as the bay's does.
 // • [ENTER] (skipLastLanding, R28): clock.advance in a loop at the clock's own step until the last landing is over, capped
-//   at LAST_LANDING_SKIP_MAX_STEPS (throws). The same rules and streams fly it.
+//   at LAST_LANDING_SKIP_MAX_STEPS (throws). The same rules and streams fly it. In the page (slice 8 POLISH, OD 66) the key
+//   and the header's button run the same loop over frames (skipLastLandingFrames): LAST_LANDING_SKIP_FRAME_MS of steps per
+//   slice, each slice its own task, the wall clock held meanwhile, so the page never freezes and the pods land where the one-call skip
+//   lands them. While it runs only M is heard (P would stop a world the skip must fly; a second [ENTER] does nothing).
 // • The end: every restored pod down (or parked as the landing ended), nothing of theirs falling: landing.lastLanding
 //   cleared and the FINALE 'done' in the same update (the codec refuses lastLanding set at ENDING CHOSEN), then
 //   'last-landing-end'. Nothing to fly for LANDING_NONE_LEFT_SEC (no drop dot, no in-band window: the ship out of the band)
@@ -50,7 +53,7 @@ import { autodropOffsetTac, passRows, podSureSpan, windowsAhead, type WindowAt }
 import { dropHalfWidthKm } from '@systems/landing-solve';
 import { getDropSolution } from '@systems/drop-cache';
 import { capabilitiesNow, skillLive } from '@systems/capabilities';
-import { advance, onAiTick, onGameTick, onPostTick, setPaused } from '@systems/clock';
+import { advance, holdWallClock, onAiTick, onGameTick, onPostTick, setPaused } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
 import { emit } from '@systems/events';
 import { say, markChannelRead, visibleChannel } from '@systems/say';
@@ -63,7 +66,7 @@ import { restoredDriver } from '@systems/ending-rules';
 import { LAST_LANDING_TEXT } from '@data/last-landing-text';
 import {
   AUTODROP_EDGE_MARGIN_TAC, BAY_SLOTS, BLIND_MARGIN_KM, LANDING_NONE_LEFT_SEC, LAST_LANDING_AUTODROP_ORBITS,
-  LAST_LANDING_CADENCE_SEC, LAST_LANDING_SKIP_MAX_STEPS, TICK_MS,
+  LAST_LANDING_CADENCE_SEC, LAST_LANDING_SKIP_FRAME_MS, LAST_LANDING_SKIP_MAX_STEPS, TICK_MS,
 } from '@data/tuning';
 
 // How many passes ahead a turn looks for its window (one pod per window: a full pass of windows, plus the next).
@@ -416,6 +419,117 @@ export function skipLastLanding(store: Store<GameState>): void {
   throw new Error(`skipLastLanding: THE LAST LANDING did not end in ${LAST_LANDING_SKIP_MAX_STEPS} steps`);
 }
 
+// --- [ENTER] over frames (slice 8 POLISH, OD 66) -------------------------------------------------------------------------
+
+// Runs `frame` as a later task (the page's: nextTask below; a suite passes its own).
+export type FrameScheduler = (frame: () => void) => void;
+
+export interface SkipFrameOptions {
+  schedule?: FrameScheduler;
+  now?: () => number;                    // wall ms (performance.now): how much of the frame's budget is spent
+  frameMs?: number;                      // the budget per frame (LAST_LANDING_SKIP_FRAME_MS)
+}
+
+// The skip running over frames: the steps flown so far (the cap counts across frames), the frames, the wall clock's hold, and
+// whether the clock was paused when the last frame ended (a pause between frames came from outside: a hidden tab).
+interface FramedSkip {
+  steps: number;
+  frames: number;
+  letGo: () => void;
+  pausedAtFrameEnd: boolean;
+}
+
+let framed: FramedSkip | null = null;
+
+// A skip is running over frames (the header says SKIPPING, the page takes no input but M).
+export function lastLandingSkipping(): boolean {
+  return framed !== null;
+}
+
+function endFramed(run: FramedSkip): void {
+  run.letGo();
+  if (framed === run) framed = null;
+}
+
+// The page's next turn of the event loop: a message posted to itself, so each slice is its own task and the browser paints and
+// takes input between two of them whenever it is ready. Not requestAnimationFrame: a frame waits for the compositor, and on a
+// slow raster (software, a busy laptop) that leaves the main thread idle most of the skip; slices back to back keep the skip
+// as fast as the one-call loop while no task is long.
+let channel: MessageChannel | null = null;
+const queued: (() => void)[] = [];
+const nextTask: FrameScheduler = (frame) => {
+  if (channel === null) {
+    channel = new MessageChannel();
+    channel.port1.onmessage = () => { queued.shift()?.(); };
+  }
+  queued.push(frame);
+  channel.port2.postMessage(null);
+};
+
+// [ENTER] SKIP TO THE END in the page: skipLastLanding's loop, run LAST_LANDING_SKIP_FRAME_MS at a time, each slice (a
+// "frame" of the skip) its own task, until the last landing is over. The steps are skipLastLanding's (the clock's own step, a paused clock let go
+// first, `skipped` set, the same cap), and nothing else advances the world between two frames: the wall clock is held, input
+// is shut (the 'last-landing' layer hears only M, and the header's view swallows clicks), so the landing ends exactly as the
+// one-call skip ends it (ending/last-landing-frames). A pause between two frames (a hidden tab: clock.ts) is let go at the
+// next, as at the start. False: a skip is already running (a second [ENTER] does nothing).
+export function skipLastLandingFrames(store: Store<GameState>, options: SkipFrameOptions = {}): boolean {
+  if (framed !== null) return false;
+  const schedule = options.schedule ?? nextTask;
+  const now = options.now ?? (() => performance.now());
+  const frameMs = options.frameMs ?? LAST_LANDING_SKIP_FRAME_MS;
+  const state = store.getState();
+  if (state.landing.lastLanding === null) throw new Error('skipLastLandingFrames: THE LAST LANDING is not running');
+  if (state.clock.paused && !setPaused(store, false)) throw new Error('skipLastLandingFrames: the clock will not run (the ship is not live)');
+  const run: FramedSkip = { steps: 0, frames: 0, letGo: holdWallClock(), pausedAtFrameEnd: false };
+  framed = run;
+  store.update((draft) => { draft.landing.lastLanding!.skipped = true; });
+  const frame = (): void => {
+    // A world reset (a new run, the debug ladder) ended this skip between frames.
+    if (framed !== run) return;
+    try {
+      const started = now();
+      if (store.getState().landing.lastLanding !== null && store.getState().clock.paused && !run.pausedAtFrameEnd
+        && !setPaused(store, false)) {
+        throw new Error('skipLastLandingFrames: the clock will not run again (the ship is not live)');
+      }
+      for (;;) {
+        if (store.getState().landing.lastLanding === null) { endFramed(run); return; }
+        if (run.steps >= LAST_LANDING_SKIP_MAX_STEPS) {
+          throw new Error(`skipLastLandingFrames: THE LAST LANDING did not end in ${LAST_LANDING_SKIP_MAX_STEPS} steps`);
+        }
+        advance(store, TICK_MS / 1000);
+        run.steps++;
+        if (now() - started >= frameMs) break;
+      }
+      run.frames++;
+      run.pausedAtFrameEnd = store.getState().clock.paused;
+    } catch (error) {
+      endFramed(run);
+      throw error;
+    }
+    schedule(frame);
+  };
+  frame();
+  return true;
+}
+
+// How the skip over frames went, for the suites and the debug console: the steps and frames so far, or null (none running).
+export function framedSkipProgress(): { steps: number; frames: number } | null {
+  return framed === null ? null : { steps: framed.steps, frames: framed.frames };
+}
+
+// [ENTER] and the header's button: over frames in the page; the one-call skip where there are no frames (the headless
+// suites, whose 'last-landing' layer [ENTER] is one keypress: ending/last-landing).
+export function pressSkipLastLanding(store: Store<GameState>): void {
+  if (store.getState().landing.lastLanding === null) return;
+  if (typeof MessageChannel === 'function' && typeof requestAnimationFrame === 'function') skipLastLandingFrames(store);
+  else skipLastLanding(store);
+}
+
+function cancelFramed(): void {
+  if (framed !== null) endFramed(framed);
+}
+
 // --- Mount ---------------------------------------------------------------------------------------------------------------
 
 let mounted = false;
@@ -440,12 +554,14 @@ export function mountLastLanding(store: Store<GameState>): () => void {
     layer: 'last-landing',
     codes: ['Enter', 'NumpadEnter', 'KeyP', 'KeyM'],
     onDown: (code) => {
-      if (code === 'KeyP') togglePause(store);
-      else if (code === 'KeyM') toggleMuted();
-      else if (store.getState().landing.lastLanding !== null) skipLastLanding(store);
+      if (code === 'KeyM') toggleMuted();
+      else if (framed !== null) return;
+      else if (code === 'KeyP') togglePause(store);
+      else pressSkipLastLanding(store);
     },
   });
-  const offReset = onWorldReset('last-landing', letGoOfLayer, () => ({ layer: closeLayer !== null }));
+  const offReset = onWorldReset('last-landing', () => { cancelFramed(); letGoOfLayer(); },
+    () => ({ layer: closeLayer !== null, skipping: framed !== null }));
   return () => {
     offResolver();
     offAi();
@@ -453,6 +569,7 @@ export function mountLastLanding(store: Store<GameState>): () => void {
     offPost();
     offKeys();
     offReset();
+    cancelFramed();
     letGoOfLayer();
     mounted = false;
   };

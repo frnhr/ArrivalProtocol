@@ -19,6 +19,7 @@ import { MAP_TEXT } from '@data/map-text';
 import { REPO_TEXT } from '@data/repo-text';
 import type { DeliveryChip, RepoRequest } from '@/types/repo';
 import { run1Map } from './run1-fixture';
+import { unknownShown } from '@systems/signals';
 
 // The unit on run 1's arm at the end of `route`, its ship ended, on the PACKET to `to`.
 function packetTo(
@@ -132,5 +133,20 @@ check('IN TRANSIT: a request still behind after this hop (200 − 103 = 97): `IN
   model.inTransit === 'IN TRANSIT: Swap · 97 YRS BEHIND YOU', model.inTransit ?? 'null');
 check('…none: no IN TRANSIT line, no chips', transmitModel(packetTo([0, 2, 5], 11).getState()).inTransit === null
   && transmitModel(packetTo([0, 2, 5], 11).getState()).deliveries.length === 0);
+
+// Slice 8 POLISH (the 7d review's NOTED edge): a `?` ship's PACKET headline keeps its colonists to itself until its boot, as
+// its SHIP CARD does (`??? COLONISTS`); an ordinary ship's names them.
+{
+  // Seed 4's `?` ships, the first one KESTREL's PACKET can name (a hop the map builds).
+  const slots = run1Map(4).arm.flatMap((ship) => (ship !== null && ship.reserved.unknownEvent !== null ? [ship.slot] : []));
+  const to = slots.find((slot) => { try { packetTo([0, 2, 5], slot); return true; } catch { return false; } });
+  if (to === undefined) throw new Error(`packet-room: no \`?\` ship in reach on seed 4 (${slots.join()})`);
+  const state = packetTo([0, 2, 5], to).getState();
+  const ship = state.run.map.arm[to]!;
+  const unknown = transmitModel(state).headline;
+  check(`a \`?\` ship (${ship.name}, ${ship.reserved.unknownEvent}): NEXT: ${ship.name} · ??? COLONISTS · …`, unknownShown(state.run, to)
+    && unknown === MAP_TEXT.packet.headline(ship.name, null, state.run.transit!.hop.distanceLy, state.run.transit!.hop.slackYears)
+    && unknown.includes('??? COLONISTS') && !/\d COLONISTS/.test(unknown), unknown);
+}
 
 finish();

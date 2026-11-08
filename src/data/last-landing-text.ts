@@ -10,6 +10,8 @@ export const LAST_LANDING_TEXT = {
   // The header strip over the SHIP view while THE LAST LANDING flies (01 §3.17), and its hint (R28).
   header: 'THE LAST LANDING',
   skipHint: '[ENTER] SKIP TO THE END',
+  // Slice 8 POLISH (OD 66): the hint while [ENTER]'s skip flies the rest over frames (a second press does nothing).
+  skipping: (left: number): string => `SKIPPING… ${formatCount(left)} LEFT`,
   // The strip's count of the restored pods still to come down (falling ones too: they are not down yet), and once the last
   // is down, for the moment before the report.
   left: (left: number, count: number): string => (left > 0

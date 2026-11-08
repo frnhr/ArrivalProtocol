@@ -2596,3 +2596,32 @@ export const CONTACT_STOP_FRAGMENTS = 1;
 export const SIGNAL_FILE_BLOCKS = 1;
 
 // --- end of 7d lead ----------------------------------------------------------------------------------------------------
+
+
+// =====================================================================================================================
+// --- Phase 3 slice 8 POLISH (docs/phase3/impl/slice-8-plan.md §2.11, §2.12; OPEN-DECISIONS 20, 66). No balance number:
+// the [ENTER] skip's frames and the receiver bypass's look.
+// =====================================================================================================================
+
+// [ENTER] in THE LAST LANDING flies the rest of the landing in slices (systems/last-landing.ts skipLastLandingFrames): at
+// most this much wall time of clock steps per slice, each slice its own task, so the page paints and takes input between
+// two. WHY 12: under a 60 Hz frame's 16.7 ms, so a slice never costs the page a frame by itself, and far under the 50 ms a
+// long task starts at even with the one step that crosses it (a step is a few ms in Chromium).
+export const LAST_LANDING_SKIP_FRAME_MS = 12;
+
+// The boot's `> RECEIVER CLOSED` line (04 §3.15) resolves like Uplink's password breaker: its letters roll, then lock left
+// to right, the whole line locked this long after it appears. WHY 1.2: it must end inside the line's own boot step
+// (BOOT_LINE_AT_SEC's 1.3 s), so no later line, no director beat and no e2e wait moves (04 asked 2.5 s; the plan's §2.12).
+export const BYPASS_RESOLVE_SEC = 1.2;
+// How far ahead of its place in the line a letter may lock, in letters (each letter's share from garble.ts's mask, seeded by
+// the log entry, so the TERMINAL and a replay lock the same ones). WHY 6: the front reads as a ragged edge running right,
+// not a typewriter (0) and not noise (the whole line).
+export const BYPASS_LOCK_SPREAD_CHARS = 6;
+// The unlocked letters re-roll this many times a second. WHY 24: fast enough to read as a breaker's churn, slow enough
+// that each glyph is seen (a 60 Hz roll is a grey blur).
+export const BYPASS_ROLL_HZ = 24;
+// What an unlocked letter or digit shows while it rolls; spaces and punctuation stand from the start, so the line keeps its
+// shape (garble.ts's rule for a damaged CONTROL line).
+export const BYPASS_ROLL_GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#%&@$';
+
+// --- end of 8 POLISH -------------------------------------------------------------------------------------------------

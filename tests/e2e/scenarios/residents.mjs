@@ -1,7 +1,8 @@
 // Slice 5, the resident AIs in the page (slice-5-plan §7.4; the lead's e2e, written in the review fix pass). Seed 7, run 1's
 // arm, each ship reached headless by __ap.route (the kinds' own machines driven by __ap.resident and __ap.sleeper where waiting
 // for their clocks would only cost time):
-// • GANNET (slot 9, WARDEN, `reported faulty`): the amber `RECEIVER CLOSED` line, CONTROL's line in COMMS, the first burst's
+// • GANNET (slot 9, WARDEN, `reported faulty`): the amber `RECEIVER CLOSED` line and its receiver bypass (slice 8: watched
+//   to its end within 1.3 s; on the second visit a click resolves it), CONTROL's line in COMMS, the first burst's
 //   alarm and the strip's line, the THRUST CTRL pip's override and a click on it selecting WARDEN.sys in the MIND; a lock
 //   telegraph blocked by a SCAN on its driver; a landed lock and the DEAL ACCEPTed by key Y (the named file gone, every lock
 //   released); SCAN WARDEN.sys (40%), REPAIR it: its thank-you line and the RESIDENT CURED stamp. GANNET again: DELETE, its own
@@ -68,27 +69,73 @@ await page.locator('#titleReceive').click();
 await waitFor(() => ['boot', 'flight'].includes(window.__ap.store.getState().run.phase), 8000);
 await st(() => window.__ap.skipBoot());
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 20000);
-async function arrive(route, name) {
+const RECEIVER = '> RECEIVER CLOSED · this ship launched with its own AI';
+// Slice 8 POLISH (OD 20, plan §2.12): the RECEIVER CLOSED line's frames in the TERMINAL, recorded per animation frame from
+// the moment its row shows (each text change, with its time and whether the row still rolls).
+const recordBypass = () => st(() => {
+  window.__bp = [];
+  // The newest such row: an earlier visit's line may still be in the TERMINAL.
+  const newest = () => [...document.querySelectorAll('#mindTermLines .term-line.tone-resident')].pop() ?? null;
+  window.__bpRow = newest;
+  const before = newest();
+  const loop = () => {
+    const row = newest() === before ? null : newest();
+    if (row && !row.hidden) {
+      const text = row.querySelector('.term-text')?.textContent ?? '';
+      const last = window.__bp[window.__bp.length - 1];
+      if (!last || last.text !== text) window.__bp.push({ t: performance.now(), text, rolling: row.classList.contains('bypass-rolling') });
+    }
+    if (window.__bp.length === 0 || window.__bp[window.__bp.length - 1].rolling) requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+});
+// `bypass`: the boot is watched, not skipped, until its RECEIVER CLOSED line has shown (`'watch'`: to its end; `'click'`: a
+// click on the TERMINAL's lines once it rolls), then skipped as every other arrival's.
+async function arrive(route, name, bypass = null) {
   const from = await logMark();
+  if (bypass !== null) await recordBypass();
   await st((slots) => window.__ap.route(slots), route);
+  let clicked = null;
+  if (bypass !== null) {
+    await waitFor((ship) => window.__ap.store.getState().run.phase === 'boot' && window.__ap.store.getState().level.shipName === ship, 30000, 50, name);
+    await waitFor(() => window.__bp.length > 0, 30000, 20);
+    if (bypass === 'click') {
+      await page.waitForTimeout(250);
+      clicked = await st(() => {
+        const before = window.__bp[window.__bp.length - 1];
+        document.getElementById('mindTermLines').click();
+        const row = window.__bpRow();
+        return { before: before.text, rolledBefore: before.rolling, after: row.querySelector('.term-text').textContent, rolling: row.classList.contains('bypass-rolling') };
+      });
+    } else {
+      await waitFor(() => !window.__bp[window.__bp.length - 1].rolling, 4000, 20);
+    }
+  }
   const ok = await waitFor((ship) => {
     const s = window.__ap.store.getState();
     if (s.run.phase === 'boot') window.__ap.skipBoot();
     return s.run.phase === 'flight' && s.level.shipName === ship;
   }, 30000, 100, name);
   await page.waitForTimeout(400);
-  return { ok, from };
+  const frames = bypass === null ? null : await st(() => window.__bp.map((frame, i, all) => ({ ms: Math.round(frame.t - all[0].t), text: frame.text, rolling: frame.rolling })));
+  return { ok, from, frames, clicked };
 }
-const RECEIVER = '> RECEIVER CLOSED · this ship launched with its own AI';
 
 // --- GANNET: WARDEN, reported faulty ---------------------------------------------------------------------------------------
 {
-  const { ok, from } = await arrive([0, 2, 9], 'GANNET');
+  const { ok, from, frames } = await arrive([0, 2, 9], 'GANNET', 'watch');
   await page.waitForTimeout(600);
   const lines = await logSince(from);
   const receiver = lines.find((line) => line.text === RECEIVER);
   check('GANNET: the boot types `> RECEIVER CLOSED · this ship launched with its own AI` in the resident\'s amber', ok && receiver?.tone === 'resident',
     JSON.stringify(receiver ?? null));
+  // The receiver bypass (slice 8 POLISH): the line shows whole and scrambled, its letters lock, and it reads true within 1.3 s
+  // of showing (the boot's line step, which it never holds up).
+  const resolved = frames.find((frame) => frame.text === RECEIVER && !frame.rolling);
+  const scrambled = frames.filter((frame) => frame.rolling && frame.text.length === RECEIVER.length && frame.text !== RECEIVER);
+  check(`…the receiver bypass: whole and scrambled as it shows (${scrambled.length} rolling frames), its letters locking, true at ${resolved?.ms ?? '—'} ms (≤ 1,300)`,
+    frames.length > 0 && frames[0].text.length === RECEIVER.length && frames[0].text !== RECEIVER && scrambled.length >= 3
+    && resolved !== undefined && resolved.ms <= 1300, JSON.stringify(frames.slice(0, 4)));
   check('…WARDEN wakes at the flight\'s first tick (`WARDEN: THIS SHIP DID NOT ASK FOR A CARETAKER.`), CONTROL says it on the radio (COMMS)',
     lines.some((line) => line.speaker === 'resident' && line.text === 'WARDEN: THIS SHIP DID NOT ASK FOR A CARETAKER.')
     && lines.some((line) => line.speaker === 'control' && line.channel === 'radio' && line.text === 'GANNET\'s onboard AI is reported faulty. Please delete it. :)'),
@@ -159,7 +206,9 @@ const RECEIVER = '> RECEIVER CLOSED · this ship launched with its own AI';
 
 // --- GANNET again: DELETE -------------------------------------------------------------------------------------------------
 {
-  const { ok } = await arrive([0, 2, 9], 'GANNET');
+  const { ok, clicked } = await arrive([0, 2, 9], 'GANNET', 'click');
+  check('GANNET again: a click on the TERMINAL resolves the rolling RECEIVER CLOSED line at once', clicked !== null && clicked.rolledBefore
+    && clicked.before !== RECEIVER && clicked.after === RECEIVER && !clicked.rolling, JSON.stringify(clicked));
   await st(() => { if (!window.__ap.store.getState().run.licences.includes('delete')) window.__ap.install('delete'); });
   await toMind();
   await hold('scan');

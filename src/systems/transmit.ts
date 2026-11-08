@@ -18,6 +18,7 @@ import { getUpgrade, type DraftCard, type DraftCardId } from '@data/upgrades';
 import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 import { hasIntegrity, isInfected, getAiCore } from '@state/selectors';
 import { shipSummaryAt } from '@systems/map-run';
+import { unknownShown } from '@systems/signals';
 import { hitsLanding } from '@systems/map-hop';
 import { unitArrival, type ArrivalPreview } from '@systems/arrival-preview';
 import { MAP_TEXT } from '@data/map-text';
@@ -427,7 +428,8 @@ export function transmitModel(state: Readonly<GameState>): TransmitModel {
     shipName: ship.name,
     distanceLy: plan.hop.distanceLy,
     headline: arm
-      ? MAP_TEXT.packet.headline(ship.name, ship.colonists, plan.hop.distanceLy, plan.hop.slackYears)
+      // A `?` ship keeps its colonists to itself until its boot names them (slice 8 POLISH; its SHIP CARD's `??? COLONISTS`).
+      ? MAP_TEXT.packet.headline(ship.name, unknownShown(state.run, plan.toSlot) ? null : ship.colonists, plan.hop.distanceLy, plan.hop.slackYears)
       : TRANSMIT_TEXT.next(ship.name, ship.colonists, plan.hop.distanceLy),
     why: whyLine(outcome, fromShip, crashCoreToll(core.integrity, plan.coreHit)),
     emergency: outcome === 'crashed' || outcome === 'emergency',

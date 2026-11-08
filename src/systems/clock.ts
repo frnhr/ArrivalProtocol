@@ -182,6 +182,21 @@ export function setPaused(store: Store<GameState>, paused: boolean): boolean {
   return true;
 }
 
+// Slice 8 POLISH (OD 66): THE LAST LANDING's [ENTER] flies the world itself, frame by frame, at the clock's own step
+// (last-landing.ts skipLastLandingFrames). While it holds the clock, the wall interval adds no tick of its own between those
+// frames: a skip over frames must land every pod where the one-call skip lands it. Each hold is let go once.
+let wallHolds = 0;
+
+export function holdWallClock(): () => void {
+  wallHolds++;
+  let held = true;
+  return () => {
+    if (!held) return;
+    held = false;
+    wallHolds--;
+  };
+}
+
 let mounted = false;
 
 export function mountClock(store: Store<GameState>): () => void {
@@ -193,6 +208,7 @@ export function mountClock(store: Store<GameState>): () => void {
     const now = performance.now();
     const dtWall = (now - lastWall) / 1000;
     lastWall = now;
+    if (wallHolds > 0) return;
     advance(store, dtWall);
   }, TICK_MS);
 

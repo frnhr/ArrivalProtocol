@@ -991,6 +991,10 @@ function migrateRunSave7(save: Record<string, unknown>): Record<string, unknown>
 // 8 → 9 (slice 7d, one bump: slice-7-plan R2, §2.2 7d). Before 7d only a departed resident's note found a signal, one
 // fragment each (slice 5's R18), so every record is a note's: `source` 'note', `n` 1. No v8 memory holds the `▓▓░▓` file
 // (SegmentType 'signal'), and the old colony's letter is derived from the route, never stored.
+// Slice 8 POLISH (the 7d review's NOTED edge): an old colony `?` ship the run had already booted on carries a letter now that
+// it never had then. Its id goes into run.inbox.read, so a resumed run does not flag that old mail new at a boot long past.
+// A stop whose boot is still to come (the last stop of a BEAM or RUN START save, replayed from its boot) keeps its letter to
+// be read there.
 function migrateRunSave8(save: Record<string, unknown>): Record<string, unknown> {
   const next = structuredClone(save);
   const payload = isRecord(next.payload) ? next.payload : null;
@@ -999,6 +1003,16 @@ function migrateRunSave8(save: Record<string, unknown>): Record<string, unknown>
     for (const record of run.residents.signals.filter(isRecord)) {
       record.source = 'note';
       record.n = 1;
+    }
+  }
+  const map = run !== null && isRecord(run.map) ? run.map : null;
+  const inbox = run !== null && isRecord(run.inbox) ? run.inbox : null;
+  if (map !== null && Array.isArray(map.route) && Array.isArray(map.arm) && inbox !== null && Array.isArray(inbox.read)) {
+    const pending = next.point === 'beam' || next.point === 'run-start' ? 1 : 0;
+    for (const stop of map.route.slice(0, Math.max(0, map.route.length - pending)).filter(isRecord)) {
+      const ship = typeof stop.slot === 'number' ? map.arm[stop.slot] : undefined;
+      const id = `old-colony:${String(stop.slot)}`;
+      if (isRecord(ship) && isRecord(ship.reserved) && ship.reserved.unknownEvent === 'old-colony' && !inbox.read.includes(id)) inbox.read.push(id);
     }
   }
   next.saveVersion = 9;

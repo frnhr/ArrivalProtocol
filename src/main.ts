@@ -14,6 +14,7 @@ import './styles/night.css';
 import './styles/responsive.css';
 import './styles/resident.css';
 import './styles/survey.css';
+import './styles/polish.css';
 
 import { store } from '@state/instance';
 import { getByRole, getSegmentById } from '@state/selectors';

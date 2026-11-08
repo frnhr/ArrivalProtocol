@@ -75,7 +75,10 @@ Status words:
 19. **The `?` ship cards and the old-colony and signal events wait for slice 7** (R18). BUILT in slice 7d (items 75–78):
     the three `?` cards read `??? · NO TRANSPONDER`, the old colony sends a letter, the signal ship holds a `▓▓░▓` file worth
     2, and signals are found in notes, that file and CONTACT's stops.
-20. **The receiver bypass animation is deferred to slice 8** (R19). DEFERRED. The line is in slice 5.
+20. **The receiver bypass animation is deferred to slice 8** (R19). BUILT in slice 8 (POLISH, slice-8-plan §2.12; item 116):
+    the `RECEIVER CLOSED` line rolls and locks left to right in 1.2 s, inside its own 1.3 s boot step, instead of 04's 2.5 s,
+    so no boot time moves. **For Fran, a confirm:** is 1.2 s enough of a tell? To lengthen it, the boot's line step would
+    have to grow for that line (`BOOT_LINE_AT_SEC`) and every boot wait after it.
 21. **A departed resident's leftover skill card takes no link room.** BUILT. It is granted and installs at the next
     boot, the same way the +2 CYCLES card does. This keeps the leftover deck a pure bonus. To change: route it through
     the packet in `draft.ts applyLeftoverPick`.
@@ -288,9 +291,10 @@ number its own items from 60 too; renumber at the merge.
     (`LastLandingState.pass`); the kid's AUTODROP machine is never written during THE LAST LANDING.
 65. **The suites' instant landing leaves THE LAST LANDING to fly** (review M3). `wp11/full-run`, `wp12/playthrough` and
     `wp11/p2/views` play R27's rules after a MERGE instead of landing the restored pods soft in an LZ with room.
-66. **Known engineering debt, carried to slice 8:**
+66. **Known engineering debt, carried to slice 8:** BUILT in slice 8 (POLISH, slice-8-plan §2.11; items 113–115).
     - **[ENTER] in THE LAST LANDING freezes the page while it fast-forwards.** It took 2.1 s for 3 blind pods in
-      Chromium. The fix is to fast-forward over several frames.
+      Chromium. The fix is to fast-forward over several frames. BUILT: the skip runs in 12 ms slices, so the longest task
+      is under 100 ms. It ends in exactly the one-call skip's state (`ending/last-landing-frames`).
     - **The BALANCE_ONLY `wp12/playthrough` on the classic five has stuck runs** (`stuck:printing on LAST LIGHT`,
       6 LITERAL and 6 SLOPPY PURGE runs). They predate slices 6 and 7: the classic world's scripted kids have rotted.
       They go with the classic world's retirement (item 12).
@@ -430,3 +434,36 @@ list.
     first ghost. DECIDED (RETIRE): 03 §6 retires that schedule, so the arm has nothing for those checks to test.
     - Checks in the same suites that test behaviour the arm keeps (the DEAL, SWAP pairing, the ghost) move to the arm.
     - Each deletion is listed in slice-4cde-plan "Deviations (RETIRE)".
+
+## Slice 8 POLISH, built
+
+POLISH's calls (`docs/phase3/impl/slice-8-plan.md` §2.11, §2.12 and "Deviations (POLISH)"). The lead renumbers them at CLOSE.
+
+113. **[ENTER]'s skip runs in task slices, not one slice per animation frame** (§2.11 said `requestAnimationFrame`).
+     BUILT: each 12 ms slice (`LAST_LANDING_SKIP_FRAME_MS`) is its own task, posted through a `MessageChannel`, and the
+     browser paints between slices when it is ready. With one slice per frame, Chromium in the cloud VM took 15–17 s for 3
+     blind pods: a frame waits for the compositor, about 90 ms there, and the main thread sat idle. With tasks the skip takes
+     2.1–3.1 s, about as long as the frozen skip took, and on a quiet VM it has no long task. To reverse: pass `schedule` (a `requestAnimationFrame`
+     scheduler) in `last-landing.ts pressSkipLastLanding`.
+114. **16 blind pods still take about 13 s to skip in Chromium; the plan asked for 4 s or less.** DEFERRED, with a lever. The
+     page no longer freezes (the old skip was one 10 s task), but the steps themselves cost 10 s in the cloud VM. About half
+     of that is the SHIP view painting on every game tick: the NAV PLOT, GROUND TRACK, TELEMETRY, the POD BAY and the
+     header's controls. **For the lead:** a view-quiet mode would roughly halve it. In that mode the clock tells view tick
+     listeners that a fast-forward is running, and they paint once per slice instead of once per step. It touches about six
+     component files outside POLISH's ownership. The other lever is to make the steps cheaper (the drop cache's solve and
+     `capabilities`), which moves no result but is a profiling job of its own.
+115. **While the skip runs, only M is heard** (§2.11 kept P). BUILT: P would pause the world that the skip is flying. A
+     second [ENTER] and the header's button do nothing. Every click, tap and wheel on the page is swallowed. A pause that
+     comes from outside between two slices (a hidden tab pauses the game) is let go at the next slice, as the skip's start
+     lets go of a pause. To keep P: let it suspend the slices and resume them on the next P.
+116. **The receiver bypass keeps the TERMINAL's typing time, and two small debts are closed** (§2.12; the 7d review's NOTED
+     edges). BUILT:
+     - The line shows whole as it starts, rolling, and holds the TERMINAL's queue for its usual typing time (1.35 s at 40
+       cps). So every line after it types when it always did, and the roll is over at 1.2 s.
+     - Only the TERMINAL draws it: the line is on the mind channel, which COMMS never draws (§2.12 named both).
+     - Reduced motion shows it resolved and still.
+     - A `?` ship's PACKET headline reads `??? COLONISTS` until its boot, as its SHIP CARD does.
+     - A v8 run resumed past an old colony finds that colony's letter already read: the 8 → 9 migration marks it. A stop
+       whose boot is still to come keeps its letter unread.
+     - To reverse the last two: `transmit.ts` passes `ship.colonists`, and `save-codec.ts migrateRunSave8` drops its
+       `inbox.read` loop.
