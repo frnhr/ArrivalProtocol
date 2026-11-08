@@ -656,7 +656,7 @@ after MERGE only, **THE LAST LANDING** (`01-landing.md` §3.17: the restored dri
 the choices come while the duel is still warm and before any score is shown (decision 23), MERGE's pods land and are
 scored by the normal rules before the report (round 2, 15), and the tally is the score screen. The tally lists visited ships only (`3 · KESTREL ·
 2467 · LANDED 1,000 / 1,200`, with stars), the route on a small chart, `4 COLONIES FOUNDED`, any delivery that never
-arrived, `03-skills.md`'s `TRAINED n of 54 · UNSPENT n`, the score, the rank and the near misses. Phase 2's absolute
+arrived, `03-skills.md`'s `TRAINED n of 50 · UNSPENT n`, the score, the rank and the near misses. Phase 2's absolute
 ranks stay, in SCORE points (SHEPHERD 3,000, CARETAKER 6,800, ARK ANGEL 10,700): a run's best route is worth 13,400–13,800
 (10th to 90th percentile) whatever its length and whatever the last run did, so absolute ranks stay fair across runs.
 
@@ -683,7 +683,7 @@ the card can compute the fit before the hop.
 
 **I need from `03-skills.md`:** skill file sizes per version (they press on the link and on the room); the TRAINING
 window with its required first pick; the grant rules behind the leftover skill card and the `+2 CYCLES` card; the
-`TRAINED n of 54 · UNSPENT n` line; its boot lines; its save slice; the second packet limit (files + 12 ≤ the next
+`TRAINED n of 50 · UNSPENT n` line; its boot lines; its save slice; the second packet limit (files + 12 ≤ the next
 ship's room, files alone on a TIGHT ship). The tree resets each run (UNIT-048 inherits nothing).
 
 **I need from `04-threats.md`:** its seed table, rolled with my hop streams; the resident kinds and map lines; **"late"
