@@ -59,7 +59,8 @@ of the 166 classic suites moves.
   LZ-B`.
 - **v3 SWEEP (4, 6 blocks)** doubles the swath to ±40° and holds no thread. The THREADS counter and the THRUST LIMIT
   hatch clear at once, and 46–56% of the planet is mapped by the capture.
-- **The LANDING REPORT** names each LZ's site and ground (`LZ-B · SITE 4 · 800 / 800 ✓`, `LZ-A · ROCKY · 5 HARD`).
+- **The LANDING REPORT** names each LZ's site and ground after its count (`LZ-B 800 / 800 ✓ · SITE 4`, `LZ-A 1,000 / 1,000 ✓ ·
+  ROCKY · 5 HARD`: the suffix in 01's LZ-row slot, review m8).
 - **Damage** costs a version as for every skill. Whatever was mapped or rated stays known.
 
 ### 0.2 Process
@@ -417,7 +418,7 @@ from its boot, and then plays POOR (R2). That is intended, and the migration tes
 | Where | What | Why it may stay a module variable |
 |---|---|---|
 | `ops-core.ts` | the reservation's `yieldable` flag | beside `reservedThreads`, reset with the world |
-| `survey.ts` | none: the machine is `landing.survey`; whether it holds a thread is `claimed`, reconciled each tick with `holdsThread('survey')` | |
+| `survey.ts` | `lastRunning`, the last `'survey-state'` it emitted (review m3), reset through `onWorldReset`; the machine itself is `landing.survey`, and whether it holds a thread is `claimed`, reconciled each tick with `holdsThread('survey')` | an emit "on a change" needs the last state, and a saved field for it would be a save change |
 | `survey-hud.ts` | none | |
 
 ### 2.4 Seams the FOUNDATION builds (behaviour-neutral)
@@ -1220,3 +1221,116 @@ SWATH's.
   - the model types in `survey-hud.ts` are yours to widen; the words are `sites-text.ts`'s, the labels and refusals
     `survey-text.ts`'s.
 - **The lead:** the independent contract review (§6.1 item 10) is next.
+
+## Deviations (foundation, review follow-up)
+
+These are the changes made after the independent review of 546e56b..c53a7e3 (`slice-6-foundation-review.md`, where each
+finding is marked with how it was settled), as the lead decided them. Nothing a player can reach changes while both gates are
+down. The unit tier is green: 203 passed, 0 failed, 10 balance-only skipped, 147 s on 4 workers, with `npm run typecheck` and the tests' tsc clean. The sections above stand except where this one says otherwise (§0.1's report row
+and §2.3's module state are corrected in place).
+
+### Blocker
+
+- **B1. The GROUND TRACK's hooks (lead, `GroundTrack.ts`, now lead-owned).** `paintPlanet` pools `planet.unmapped` into
+  `gt-p-unmapped` spans on the overview line, as it does the no-go arcs. Both bracket nodes (the strip's `gt-bracket` and the
+  overview's `gt-p-lz`) carry `data-site`: a candidate's site id, '' on an LZ. SITES delegates the click from
+  `SitesWindow.ts` (`closest('[data-site]:not([data-site=""])')`) and styles `.gt-p-unmapped` and `.look-candidate` in
+  `survey.css`. Deviation 7's "CSS only" stands for SITES: it needs no edit in `GroundTrack.ts`.
+
+### Majors
+
+- **M1. The echo's reveal.** `landing.ts touchDown` works out `revealing` (the LZ's ROCKY or WET when this touchdown makes it
+  known: its ground is bad and `groundKnownAt` is false) before `emit('pod-landed')`, where SWATH's reveal handler marks it
+  known, and passes it as `LANDING_ECHO.touchdown`'s sixth argument (default null, so every other caller keeps its words).
+  SWATH's one line in `landing-text.ts` (`:97–99`, marked `Slice 6 SWATH`, now `void revealing;`) appends
+  `SWATH_TEXT.echoTail(lz, revealing)`.
+- **M2. One run rule.** `survey-model.ts` gains `surveyRunning(state): SurveyRunning` (stub `'off'`) and
+  `swathHalfRad(version): number` (stub 0), SWATH's to build; its tick uses them too, SITES's header and wedge read them.
+  `surveyRunning` returns the five-state `SurveyRunning` rather than a boolean: SITES's header needs `running | waiting |
+  paused | done | off`, and `'off'` is the neutral answer.
+- **M3. The NAV PLOT's order.** The survey layer is made after the landing layer: each puts its nodes in right after the
+  surface line, so the one made last sits lowest, under the LZ brackets. The comments in `NavPlotWindow.ts` and
+  `plot-survey.ts` say so. The review's note is taken too: the layer's `paint` returns its labels' boxes (`LabelBox[]`, stub
+  []), which the plot's marker labels keep off beside the brackets'.
+- **M4. Long arcs.** `landing-hud.ts splitRimArcs` cuts the unmapped arcs into pieces at most π wide that never cross a
+  multiple of 2π, for both the strip's terrain (`terrainStretches`) and the overview's `planet.unmapped`. So `surveyUnmapped`
+  may return any arcs (the whole rim as one at the boot). `survey/foundation` pins the review's worked example (0.1 to
+  6.2 rad, the dot at 0: the ground just ahead of the dot lands ahead of it), the cut at angle 0 and a whole turn.
+- **M5. The words tables.** `support/words.test.ts` keeps a shared base (`SLICE6_BASE`, the lead's) and each track its own
+  table inside its own block (`SWATH_WORST`, `SITES_WORST`), merged by `renderSlice6`'s fourth argument. The parser reads
+  arrow and `function` templates with plain, defaulted (the table's worst case, never the default) and destructured
+  parameters, and throws on a list it can't read; a check pins it. A parameter that shadows a top-level name of its own
+  module is renamed by the transpiler (`pods` → `pods2`) and then fails as unknown: rename it.
+- **M6. `openToolWindow(id, { onPhone })`** is exported beside `closeToolWindow` (`ToolsTabs.ts:33–41`, now lead-owned): on
+  the desktop the window joins the open ones (never toggled shut); on a phone it takes the tab only with `onPhone: true`.
+  SITES calls it for SITES_AUTO_OPEN, and calls `closeToolWindow('sites')` when `body.survey` goes away, so a phone left on
+  the SITES tab never shows a blank panel on the next GOOD ship.
+- **M7. The record knows what an LZ moved off** (inside v6). `SurveyMove` gains `from` (the site left). `SurveyRecord` gains
+  `movedOff: { lz; ground: BadGround; known: RevealBy | null }[]`, every move off a bad site in order (`surveyRecordOf`). The
+  codec reads both (a move's `from` and `site` must be sites the slice has, and differ). The shape pin does not move: `moves`
+  items and `run.ships[].survey` sit below its depth. No migration default is needed: a v5 world has no moves and every v5
+  record is null.
+- **M8. `siteStars` is built** (R11: 3 FLAT and not NARROW, 2 FLAT NARROW, 1 ROCKY or WET, 0 a wreck). `assignRefusal` and
+  `assignableLzs` stay neutral: SITES writes its pill checks to their contract, and they go green only after SITES rebases onto
+  SWATH (merge order §6.3).
+
+### Minors
+
+- **m1.** A jammed placement starts over on the continuing stream, up to `SITE_PLACE_TRIES` (8, the lead's tuning block)
+  placements in all, then throws; every draw before placement is untouched, so no roll that placed at the first try moves.
+  `survey/foundation` forces a jam (a rim with room for one site) and counts the draws: 8 tries draw 7 more than 1.
+  `placeOn` keeps its centre below its span's end.
+- **m2.** `skill-tree.ts poorAhead` goes through `siteDataOf`, so SURVEY opens only for planets that play POOR
+  (`survey/foundation` pins it at VESPER's desk). **R23 moves with it:** with `built` raised alone SURVEY no longer opens, so
+  `skills/sentry.test.ts:110–111` now moves only once both gates are up (the review's merge probe saw it so).
+- **m3.** §2.3 allows `survey.ts` one module variable, `lastRunning`, reset through `onWorldReset` (corrected in place).
+- **m4, m5, m6:** SWATH's (its notes below).
+- **m7.** SWATH's test lines are corrected below (the imports this follow-up added moved them again).
+- **m8.** The report row reads `LZ-B 800 / 800 ✓ · SITE 4`, as built (the suffix in 01's LZ-row slot); §0.1 is corrected.
+- **m9.** The codec refuses a non-FLAT LZ on a GOOD planet.
+- **m10.** `SITES_TEXT.row.site/lz`'s display word is `groundWord` (`SITES_WORST.groundWord` is `FLAT ★★★`); `ground` stays
+  a BadGround.
+- **m11, m12:** SITES's and the lead's notes below.
+
+### The final contract changes, per track
+
+- **SWATH:**
+  - builds `surveyRunning` and `swathHalfRad` (M2), and its tick uses both;
+  - fills the echo tail in `landing-text.ts:97–99` (M1: `revealing` arrives as the sixth argument);
+  - writes `SurveyMove.from` with every move (M7; `'lz-moved'` already carries it);
+  - keeps `lastRunning` as its one module variable, reset on the world reset (m3);
+  - **m4:** while it holds its thread, releases it when `threadsTotal() < 1 + SURVEY_KEEP_FREE_THREADS` (a worn Core down to
+    one thread), and its R8 flow case pins it;
+  - **m5:** `assignRefusal` also refuses while `landing.goLow?.held && goLow.lz === lz` (the burn would fly to the old
+    geometry), under `'window-open'` or a refusal of its own in `AssignRefusal` (ask the lead for the type and the words);
+  - **m6:** its BALANCE_ONLY sweep (§7.3) counts, by version, HOLLOW's skipped verb moments and the corrupted resident's
+    lock delays while SURVEY holds its thread (both start only when `canStartOp()`), and R16's SURVEY/SENTRY ties; the
+    numbers go to OPEN-DECISIONS with R8;
+  - **R23's churn,** once both gates are up: replace `skills/sentry.test.ts:110–111` with the review's edit:
+    ```ts
+    const tie = openBranchesAt(unseeded, 4);
+    unseeded.run.skills.opened.push({ skill: 'survey', visit: 4 });
+    check('…a record written at depth 4 opens it at visit 4, or at visit 5 when SURVEY takes visit 4 (R16)',
+      shut && (tie.includes('sentry') || (tie.includes('survey') && openBranchesAt(unseeded, 5).includes('sentry'))));
+    ```
+  - **Test lines (m7, as of this follow-up):** `survey/foundation.test.ts:67` (POOR; comment `:66`) and `:69` (SURVEY;
+    comment `:68`); `skills/foundation.test.ts:79`; `support/words.test.ts:382–392` (its block, with `SWATH_WORST`);
+    `tuning.ts:2362–2381`; the gates `data/survey.ts:11` and `data/skills.ts:58`; `landing-text.ts:97–99`;
+    `skills/sentry.test.ts:110–111`.
+- **SITES:**
+  - paints `planet.unmapped` through the `gt-p-unmapped` spans and delegates candidate clicks by `data-site` (B1), with no
+    edit in `GroundTrack.ts`;
+  - reads `surveyRunning` and `swathHalfRad` for the header and the wedge (M2), and `siteStars` for the ★ (M8);
+  - draws under the LZ brackets with `below.after(…)` and returns its labels' boxes from `paint` (M3);
+  - may return the unmapped rim as any arcs, whole-rim included (M4);
+  - keeps its worst cases in `SITES_WORST` inside its words block (M5), and names display words `groundWord` (m10);
+  - opens the window with `openToolWindow('sites')` and closes the phone tab with `closeToolWindow('sites')` when
+    `body.survey` goes away (M6);
+  - writes its pill checks to `assignableLzs`'s contract: they go green after the rebase onto SWATH (M8);
+  - **m11:** a visited ship that is POOR on the map but has `ShipResult.survey === null` (played before v6: a migrated SHIP
+    DONE) reads `POOR · NOT SURVEYED`, or no row, never GOOD;
+  - **Test lines:** `support/words.test.ts:396–406` (with `SITES_WORST`); `tuning.ts:2386–2394`; `audio-cues.ts:365–374`;
+    `TrainingWindow.ts:88–94`, `ToolsTabs.ts:16–17`, `index.html:75–76` and `:176–185`.
+- **The lead:** now owns `GroundTrack.ts` and `ToolsTabs.ts` beyond SITES's marked lines (B1, M6). **m12:** the SITES dock
+  item and window are in `index.html`, hidden while `body:not(.survey)`; no e2e scenario iterates dock items today, so
+  nothing moves, but a later one that does must skip `survey-only` items.
