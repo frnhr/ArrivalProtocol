@@ -115,3 +115,7 @@ Status words:
     fix pass. It was always the first open branch (AUTODROP in 150 of 150 decks).
 31. **The chart's signal glyph shows only where the ship card already shows the resident's kind** (review D4). BUILT in
     the fix pass, so it never narrows an `unknown` card.
+32. **No hazard zone damages a corrupted resident's file** (slice 5 review m7). BUILT in the fix pass. The radiation belt
+    peppers racks A and B, where WARDEN.sys sits, so a belt ship could lower it. Its health is only the cure's price (04
+    §3.12), so a hit would raise that price at random, and at 0% it would stop firing but still lock and deal. Leftovers still
+    take hits. To change: `zones.ts damageable`.

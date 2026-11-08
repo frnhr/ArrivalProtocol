@@ -1611,3 +1611,107 @@ the notes' lines (KIN's pool, read by the segment's index), and `tests/unit/resi
 
 **Requests to the lead:** none blocking. Two optional ones: `WindowGrip.ts` could write the override words itself (the
 `::after` is enough today); and a glossary screen, if one is ever built, has its two words waiting.
+
+## Deviations (review fixes)
+
+Recorded by the fix agent (from HEAD 8eaa267 on `claude/modest-hawking-209t0f`), after `slice-5-review.md`. Every finding is
+fixed or decided as the lead asked; the review file marks each one. The commits are titled `Slice 5 fixes: …`.
+
+### What changed, by finding
+
+1. **M1, the `press [L]` race.** `LandingController` gains `waitsFor(state)`: the launch a controller other than AUTODROP's own
+   (and never the kid's hands) waits for, or null with nothing left to fly. `autodropController` names it for every wrapping
+   source, so slice 7's MERGE has it for free. While a shadowing controller names one, `autodrop.ts controllerWaitLine` puts a
+   keyless wait row over every open window: `WAIT — LZ-A in 0:12` (`landing-text.ts L13controller`, no name: R21), with AD-armed's
+   id, so L10 still outranks it. Once it names none (MOTH's plan is empty: a hurt driver's pod the plan cannot fit) the kid's rows
+   come back (L4, L5, L9, L11).
+   - **Deviation from the review's prototype:** the prototype kept v3's `planPin` clause (a window of an LZ the plan does not fly
+     is the kid's). A wrapping source runs no `pinTick` (AUTODROP's machine is shadowed), so the kid's [L] there would throw
+     `queue[0]`, which may be a pod the plan holds. The wrapper therefore owns every window while it names a launch.
+   - **Measured** (`residents/sleeper-sweep`, seeds 1, 3, 5, 7, 9): RUN THE DROPS with the kid's hands **88.4%** (71, 100, 100,
+     100, 71), was 65.6%. The other rows are unchanged: by hand 71.4%, RUN THE DROPS alone 77.2%, MEND then by hand 82.8%, AUTODROP
+     v3 bought 82.8%.
+2. **Architecture 1 and 2.** The `'resident'` landing resolver is registered by `residents.ts mountResidents` and dispatched on
+   the ship's kind (`residentController`; only `sleeping` answers today). `AutodropOverride.skipBetween` carries the SKIP between
+   passes, so `sleeperController` is one call. Every controller launch goes through `autodropLaunched(…, controller)`.
+3. **m4.** `'autodrop-volley'` is emitted for any controller's launch (keyed on the controller, not on `source === 'autodrop'`);
+   AUTODROP's own `sent` count moves only for its own launches.
+4. **M2.** `ResidentSegment.hidden?: true`, set by `data/residents.ts` on a surprise (`shown 'unknown'`), cleared at the wake.
+   The strip draws a hidden file with the ship-file look (`ship res-hidden`) and its own reading, scanned or not. A SCAN before
+   the wake still shows INSPECT's `Corrupted. It is waiting.`: that is the kid looking, which the review accepted.
+5. **M3, the lead's decision.** `landing-rules.ts` gains a lock-remedy seam (`registerLockRemedy`, `lockCanBeFreed`), a
+   resolver of the state with no data, as `landing-controller.ts`'s registry is. `resident-corrupted.ts lockRemedy` answers
+   it: an op on WARDEN.sys, a DELETE in hand, a REPAIR in hand with the charge for the whole cure (`repairChargeEstimate`), or
+   its DEAL standing or still to come (none offered, HOLLOW's idle, a fair-tier file); a file not yet scanned needs a SCAN in
+   hand too. With none, `driverCanEverLaunch` is false for a locked driver, so L12 and the auto-end take over and the pod parks
+   locked. A remedy that comes later makes it launchable again. The strip's `resident-stuck` rule says `POD 07 STAYS LOCKED —
+   nothing aboard can free it` (`warden-text.ts stripStuck`, 48 at its worst). AUTODROP v3's `planOver` no longer waits for a
+   lock nothing can free.
+   - **Tested both ways** (`residents/corrupted-flow`, GANNET with all 7 pods locked and the DEAL refused): at 24 charge the
+     remedy is the cure, the pods can launch some day, and a landing with only locked pods waits past the auto-end's grace with the
+     strip on the lock; at 5 charge there is no remedy, the stuck line shows, and the landing ends by itself (`no-driver-left`, 7
+     parked locked, SHIP DONE `ignored` with 7 parked, a save that decodes). A DELETE given makes them launchable again, and so
+     does the charge.
+6. **M4.** `fairDealTargets` is gone; `dealFile` imports `rmTargets` from `hollow.ts`. The equivalence pin compared a function
+   with itself, so it went; the check that GANNET's DEAL names `Thrust.alt` stays.
+7. **The zone-check guard.** `tests/unit/support/import-guard.test.ts` walks src's runtime import graph (type-only imports
+   dropped) from `data/ships.ts` and `data/classic-five.ts`: both may reach only `data/*`, `types/*` and three pure helpers
+   (`state/selectors`, `systems/memory-ops`, `systems/rng`), and `data/ships.ts` must not reach `classic-five`. It then loads
+   `data/ships.ts` alone. Re-adding the old `systems/zones` import fails three checks, each naming the path that closes the cycle.
+8. **m1.** `say.ts` holds the one choice arbiter: `choiceMayOpen(state, timed)` (a timed choice may open over untimed ones,
+   which `sayChoice` then withdraws; anything else while a choice stands throws), `otherOpenChoice`, and `openChoiceEntry`
+   returns the newest. HOLLOW's DEAL, WARDEN's DEAL and the sleeper ask it. `residents/sleeper` checks it with a second choice
+   that is not a DEAL.
+9. **m2.** The LOST card shows the gift row under its cycles (`burn-result-gift`, in the sleeper's green).
+10. **m3.** `engineCough` plays at the surprise's wake only in flight.
+11. **m5.** Verified: HOLLOW's standing DEAL did **not** hold WARDEN's clocks. It does now (`clockHeld`).
+12. **m6, a deviation from WARDEN's build, back to R9.** WARDEN waits for HOLLOW's first fight only on the ship HOLLOW boards
+    (`run.threat.age === 1`). On a later ship of HOLLOW's it wakes as anywhere else: PROVIDENCE via CORMORANT now wakes at 20 s in
+    flight (the review saw 30 s). R9 named the boarding ship; WARDEN's code applied the rule to every ship HOLLOW was aboard.
+13. **m7.** Verified by reading and by test: the radiation belt peppers racks A and B, so a belt ship could lower WARDEN.sys.
+    **Decision:** zones no longer damage a `resident` file (`zones.ts damageable`). Its health is the cure's price and nothing
+    else in 04 §3.12 (REPAIR to 100 cures it; it is a blocker, never food), so a belt hit only raised the price at random, and a
+    0% resident stopped firing but went on locking and dealing, a state the spec never designs. Leftovers (food) still take hits.
+    This changes the belt's pick list on a corrupted resident's belt ship, so those flights' belt rolls move.
+14. **m8.** Unreachable, as the review thought: the deal (in `goTransmit`, after `abortAll`) requires the same, and nothing
+    between it and the send changes it (◀ CHART discards the plan; the PACKET runs no op). `applyLeftoverPick` throws instead.
+15. **m9.** New `residents/saves` (2 s): BEAM and SHIP DONE on CURLEW (RUN THE DROPS into the landing), HERON (note read; the
+    skill card installed at the next boot) and PROVIDENCE (awake), each RESUMEd with `resetReport()` empty. In corrupted-flow:
+    AUTODROP v3 armed with locked pods ends no plan while they are locked and plans them once freed. **Correction to the review:**
+    its thread is *let go* while it waits (`claimTick` with no next launch), not held; that is the better behaviour and is what
+    the check pins. The other gaps came with their fixes.
+16. **m10.** `DetailPanel` escapes `seg.desc`.
+17. **D1, accepted.** On HOLLOW's boarding ship the late surprise may wake in the landing and only lock (WARDEN Deviation 8).
+18. **D2, the lead's decision.** `draft.ts leftoverSkill` draws among the skills a card grant allows, on the ship's own
+    `'leftovers-skill'` stream. **Deviation:** a sibling of the pool cards' `'leftovers'` stream rather than that stream itself, so
+    the pick does not move with how many draws the pool cards took at the boot. Measured over run 1's 150 decks (seeds 1–30,
+    every departed resident's ship by its shortest route from ARES-VII, its PACKET to the first reachable ship): **AUTODROP 110,
+    SENTRY 40** (was AUTODROP 150). SENTRY's branch is open on fewer of those ships, which is why it is not half.
+19. **D4, the lead's decision.** `signalGlyph` also needs the ship's card to show the resident's kind already. Every card ahead
+    reads `unknown` in slice 5, so the glyph shows nowhere until slice 7 gives a card that names the kind (the `?` signal ship's);
+    `ui-models` checks a hand-made card that does.
+
+### The e2e tier (plan §7.4)
+
+- **New `residents.mjs`** (seed 7, registered in `run.mjs`): **27/27**, 145 s. GANNET (the amber line, CONTROL in COMMS, the
+  first burst's strip line, the pip's override and jump, a lock blocked by SCAN, the DEAL by Y, SCAN 40%, the cure; DELETE and
+  its confirm on a second visit), PROVIDENCE via CORMORANT (M2's plain file, the stamp at 20 s, m3's cough in flight), CURLEW
+  (IDLE, SCAN, DELETE's hint, the wake, [T] MEND, the report's gift) and HERON (SIGNAL 1/3, a leftover's name, the deck).
+  - A choice's keys are heard only once its line has typed and its buttons are up: about 16 s for the sleeper's wake and offer.
+    The scenario waits for the buttons, as a kid does.
+- **`playthrough`**: CORMORANT's boot types the amber RECEIVER CLOSED line (and no other ship's), and its PACKET to LAST LIGHT
+  is LOOKOUT's deck (`firewall, charge, skill` on seed 7); the kid's [1] still picks a pool card. No other check needed to move:
+  the strip never names the note or the leftovers (R21), and the desk's card checks read rows by key.
+- **`run-flow`**: seed 4's CORMORANT (PURSER left) types the line and deals PURSER's deck. Its headless CORMORANT waited a fixed
+  2.5 s for the unpack's 108%, which the extra boot line pushed later; it now waits for the line itself.
+- **`map-desk`**: the RESIDENT row on HALCYON (`none`), ALBATROSS (`unknown`), GANNET (`reported faulty`, warning tone) and CURLEW
+  (`unknown`). **`phone`**: the sleeper's untimed offer at 360 × 740, every button on screen, a tap answers it.
+- Results, each run alone: residents 27/27 (145 s), phone 111/111 (133 s), map-desk 85/85 (146 s), run-flow 78/78 (380 s),
+  playthrough **269/269** (1548 s; six more checks, the RECEIVER CLOSED line per ship). Before the edits the playthrough failed
+  only its CORMORANT PACKET title check (262/263, 1524 s), so its 25 minutes alone are not this pass's: the lead's full-tier run
+  will say whether that is the machine or the slice.
+
+### The unit tier
+
+`npm test`, quiet machine: **202 passed, 0 failed, 10 balance-only skipped, 134 s** on 4 workers (136 s before the fix pass).
+New suites: `support/import-guard` (0.4 s), `residents/saves` (2 s). `npm run typecheck` and the tests' tsc pass.
