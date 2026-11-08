@@ -278,7 +278,7 @@ export function mountRunEnd(store: Store<GameState>): () => void {
 
   const onNew = (event: MouseEvent): void => { event.stopPropagation(); newRun(); };
   newBtn.addEventListener('click', onNew);
-  const offKeys = registerKeys({ layer: 'end', codes: ['Space', 'Enter'], onDown: newRun });
+  const offKeys = registerKeys({ layer: 'end', codes: ['Space', 'Enter', 'NumpadEnter'], onDown: newRun });
   const offMute = registerKeys({ layer: 'end', codes: ['KeyM'], onDown: () => toggleMuted() });
   const unsub = store.subscribe((s) => s.run.phase, (phase) => {
     if (phase === 'end') open();

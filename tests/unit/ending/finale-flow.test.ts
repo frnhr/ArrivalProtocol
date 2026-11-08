@@ -14,7 +14,7 @@
 // • MERGE (R15): the drivers back in place at the confirm, the landing reopened after the verdict ('last-landing'), the
 //   restored pod lands, then 'done'; the record keeps the charge as the confirm left it.
 // • MERGE + SUNSET at FUEL 22% (review M1): the reopened landing's engine is shut, so the ship leaves with the record's FUEL.
-// • UNRESOLVED (R10): IT FOLLOWED YOU (no entry 12, no step-1 pick), CONTINUE, SUNSET still allowed, the root stays.
+// • UNRESOLVED (R10): its card held while a pod falls (review m5); IT FOLLOWED YOU (no entry 12, no step-1 pick), CONTINUE, SUNSET still allowed, the root stays.
 import { check, finish } from '../wp1/harness';
 import { createHarness11 } from '../wp11/harness11';
 import { toTheDuel } from '../wp11/duel';
@@ -380,9 +380,25 @@ toArmDuel();
     d.ui.memoryRev++;
   });
   landInstantly(h.store);
+  // Review m5: the landing over with a pod still falling (as END LANDING mid-drop leaves it): the card waits for it.
+  const fallingPod = state().landing.pods.find((record) => record.fate.kind === 'down')!.pod;
+  const landsAt = state().clock.aiSec + 20;
+  h.store.update((d) => {
+    const record = d.landing.pods.find((candidate) => candidate.pod === fallingPod)!;
+    if (record.fate.kind !== 'down') throw new Error('finale-flow: the pod is not down');
+    record.fate = { kind: 'falling', launch: { ...record.fate.launch, atAi: landsAt - record.fate.launch.descentSec } };
+  });
   const up = (): boolean => { const f = state().hollow.finale; return f.phase === 'step1' && !f.rootFell && f.cardAtAi !== null && state().clock.aiSec >= f.cardAtAi; };
+  const heldEnd = h.wall() + 12;
+  while (state().hollow.finale.phase !== 'step1' && h.wall() < heldEnd) h.step();
+  h.stepFor(8);
+  check('UNRESOLVED over a falling pod: step 1, but no card while it falls (review m5)', state().hollow.finale.phase === 'step1'
+    && !state().hollow.finale.rootFell && state().hollow.finale.cardAtAi === null && !up()
+    && state().landing.pods.some((record) => record.pod === fallingPod && record.fate.kind === 'falling'), `${state().hollow.finale.phase} ${state().hollow.finale.cardAtAi}`);
   const end = h.wall() + 60;
   while (!up() && h.wall() < end) h.step();
+  check('…the card comes after its touchdown', up() && state().hollow.finale.cardAtAi! >= landsAt
+    && state().landing.pods.some((record) => record.pod === fallingPod && record.fate.kind === 'down'), String(state().hollow.finale.cardAtAi));
   check('UNRESOLVED: IT FOLLOWED YOU (step 1, the root standing), no entry 12, no step-1 pick, HOLLOW quiet', up() && !state().run.log.found.includes(12)
     && theRoot(state().memory) !== null && pickStep1(h.store, 'purge') === 'NOT NOW' && state().hollow.phase === 'dormant', state().hollow.finale.phase);
   setFuel(31);

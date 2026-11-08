@@ -153,7 +153,7 @@ export function mountEpilogue(store: Store<GameState>): () => void {
   };
   const onClick = (event: MouseEvent): void => { event.stopPropagation(); press(); };
   root.addEventListener('click', onClick);
-  const offKeys = registerKeys({ layer: 'end', codes: ['Space', 'Enter'], onDown: press });
+  const offKeys = registerKeys({ layer: 'end', codes: ['Space', 'Enter', 'NumpadEnter'], onDown: press });
   const unsub = store.subscribe((s) => `${s.run.phase}|${s.ui.runEndStage}`, sync);
   sync();
   return () => {

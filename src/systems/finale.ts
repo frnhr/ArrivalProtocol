@@ -214,11 +214,14 @@ function rootGone(store: Store<GameState>): void {
   emit('finale-asleep', NO_PAYLOAD);
 }
 
+function podFalling(state: Readonly<GameState>): boolean {
+  return state.landing.pods.some((record) => record.fate.kind === 'falling');
+}
+
 // The landing is settled (R6): it has ended, no pod is falling, and HOLLOW's line has typed in the TERMINAL. The card may
 // come up then (a touchdown bell under a card that asks a question reads like an answer).
 function landingSettled(state: Readonly<GameState>): boolean {
-  return state.landing.ended !== null && !state.landing.pods.some((record) => record.fate.kind === 'falling')
-    && mindTypedByAi(state) <= state.clock.aiSec;
+  return state.landing.ended !== null && !podFalling(state) && mindTypedByAi(state) <= state.clock.aiSec;
 }
 
 // The FINALE's card opens on step 1 (R6, R18): FINALE_OPEN_DELAY_SEC from now, and any untimed choice standing in the
@@ -237,7 +240,8 @@ function openStep1(store: Store<GameState>): void {
 // last touchdown and cut it off at `> you can't delete`).
 // Slice 7a (R10): UNRESOLVED is step 1's IT FOLLOWED YOU card (rootFell false) once the line has typed, and
 // continueFollowed goes on to step 2; HOLLOW goes quiet under the card (it comes with you: a root biting under a modal
-// would be a fight nobody can fight).
+// would be a fight nobody can fight). Review m5: the landing can be over (END LANDING) with a pod still falling, and R6's
+// rule holds here too: the card waits for its touchdown (cardAtAi stays null until then: the tick sets it).
 function unresolve(store: Store<GameState>): void {
   const state = store.getState();
   const line = HOLLOW_FINALE.unresolvedLine;
@@ -247,7 +251,7 @@ function unresolve(store: Store<GameState>): void {
     const finale = draft.hollow.finale;
     finale.unresolvedUntilAi = typedBy + FINALE_ENDING_HOLD_SEC;
     finale.phase = 'step1';
-    finale.cardAtAi = typedBy + FINALE_OPEN_DELAY_SEC;
+    finale.cardAtAi = podFalling(draft) ? null : typedBy + FINALE_OPEN_DELAY_SEC;
   });
   say('hollow', line, { critical: true });
   withdrawUntimedChoices();
@@ -590,13 +594,20 @@ function tick(store: Store<GameState>, dtAi: number): void {
     if (landingSettled(state)) openStep1(store);
     return;
   }
+  // Review m5: UNRESOLVED's card held while a pod fell comes FINALE_OPEN_DELAY_SEC after its touchdown (and HOLLOW's line).
+  if (phase === 'step1' && !state.hollow.finale.rootFell && state.hollow.finale.cardAtAi === null) {
+    if (!podFalling(state)) {
+      store.update((draft) => { draft.hollow.finale.cardAtAi = Math.max(draft.clock.aiSec, mindTypedByAi(draft)) + FINALE_OPEN_DELAY_SEC; });
+    }
+    return;
+  }
   if (phase === 'verdict') {
     if (!finaleEndingShowing(state)) verdictDone(store);
     return;
   }
   if (phase === 'last-landing') {
     // R15's reopened landing is over once it has ended again and nothing is falling: the report may come.
-    if (state.landing.ended !== null && !state.landing.pods.some((record) => record.fate.kind === 'falling')) {
+    if (state.landing.ended !== null && !podFalling(state)) {
       store.update((draft) => { draft.hollow.finale.phase = 'done'; });
     }
     return;
