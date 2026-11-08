@@ -1,0 +1,5805 @@
+{
+ "save": {
+  "saveVersion": 7,
+  "mode": "standard",
+  "content": {
+   "arm": 1,
+   "generator": 2,
+   "update": 1,
+   "mapState": 1,
+   "catalogue": 1
+  },
+  "writtenAt": 1794129578791,
+  "unit": 48,
+  "run": 2,
+  "archiveRuns": 2,
+  "point": "beam",
+  "resume": {
+   "unit": 48,
+   "depth": 8,
+   "ship": "LODESTAR",
+   "year": 3021,
+   "point": "beam"
+  },
+  "payload": {
+   "kind": "boot",
+   "run": {
+    "rev": 7,
+    "phase": "boot",
+    "seed": 7,
+    "unitNumber": 48,
+    "wave": 2,
+    "lastUnit": {
+     "number": 47,
+     "landed": 0,
+     "shipName": "LAST LIGHT",
+     "cause": "won-purge",
+     "stats": {
+      "moves": 0,
+      "deletes": 0
+     },
+     "hollowUnits": [
+      46
+     ],
+     "trail": {
+      "unit": 47,
+      "run": 1,
+      "startYear": 2300,
+      "stops": [
+       {
+        "slot": 0,
+        "shipName": "ARES-VII",
+        "year": 2300,
+        "outcome": "locked",
+        "landed": 0,
+        "colony": null,
+        "writer": null
+       },
+       {
+        "slot": 1,
+        "shipName": "PETREL",
+        "year": 2361,
+        "outcome": "locked",
+        "landed": 0,
+        "colony": null,
+        "writer": null
+       },
+       {
+        "slot": 4,
+        "shipName": "HERON",
+        "year": 2512,
+        "outcome": "locked",
+        "landed": 0,
+        "colony": null,
+        "writer": null
+       },
+       {
+        "slot": 7,
+        "shipName": "CURLEW",
+        "year": 2612,
+        "outcome": "locked",
+        "landed": 0,
+        "colony": null,
+        "writer": null
+       },
+       {
+        "slot": 10,
+        "shipName": "PLOVER",
+        "year": 2712,
+        "outcome": "locked",
+        "landed": 0,
+        "colony": null,
+        "writer": null
+       },
+       {
+        "slot": 13,
+        "shipName": "SHEARWATER",
+        "year": 2857,
+        "outcome": "locked",
+        "landed": 0,
+        "colony": null,
+        "writer": null
+       },
+       {
+        "slot": 16,
+        "shipName": "PROVIDENCE",
+        "year": 2927,
+        "outcome": "locked",
+        "landed": 0,
+        "colony": null,
+        "writer": null
+       },
+       {
+        "slot": 19,
+        "shipName": "LAST LIGHT",
+        "year": 3020,
+        "outcome": "locked",
+        "landed": 0,
+        "colony": null,
+        "writer": null
+       }
+      ],
+      "lost": null
+     },
+     "skills": [
+      {
+       "skill": "autoburn",
+       "version": 1,
+       "lock": 0,
+       "accuracy": null
+      }
+     ],
+     "ending": {
+      "hollow": "purge",
+      "you": "reassignment",
+      "rootUnits": [
+       46
+      ],
+      "finalSlot": 19,
+      "finalShip": "LAST LIGHT",
+      "finalYear": 3020,
+      "stay": null,
+      "kit": [
+       "scan"
+      ],
+      "fuelPct": null,
+      "charge": 49
+     }
+    },
+    "hollowUnits": [
+     47
+    ],
+    "upgrades": [
+     "thread-plus",
+     "charge",
+     "charge",
+     "charge",
+     "charge",
+     "charge"
+    ],
+    "tutorial": false,
+    "shipIndex": 7,
+    "map": {
+     "version": 1,
+     "world": "arm",
+     "run": 2,
+     "armSeed": 7,
+     "startYear": 2301,
+     "arm": [
+      {
+       "slot": 0,
+       "id": "7:2:0:6",
+       "name": "ARES-VIII",
+       "kind": "first",
+       "template": "impact-a",
+       "pods": 3,
+       "memoryClass": "COMPACT",
+       "approachYear": 2301,
+       "late": false,
+       "timedAgainstStart": 2301,
+       "reportedRun": 2,
+       "runsOnChart": 1,
+       "attempt": 6,
+       "modifiers": [
+        "impact-course"
+       ],
+       "omega0": -0.6,
+       "debrisRack": null,
+       "arrivalDamage": [],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 160,
+          "width": "wide",
+          "pods": 3
+         }
+        ],
+        "forgiveness": "gentle",
+        "terrain": "PLAINS",
+        "noGo": [],
+        "colonyFirstRun": "RIVERSIDE",
+        "drag": false
+       },
+       "podRacks": {
+        "B": "P P P _40",
+        "C": "_64"
+       },
+       "lead": 1,
+       "authored": null,
+       "reserved": {
+        "resident": null,
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 1,
+       "id": "7:2:1:6",
+       "name": "RESOLUTE",
+       "kind": "light",
+       "template": "impact-a",
+       "pods": 3,
+       "memoryClass": "TIGHT",
+       "approachYear": 2358,
+       "late": true,
+       "timedAgainstStart": 2301,
+       "reportedRun": 2,
+       "runsOnChart": 1,
+       "attempt": 6,
+       "modifiers": [
+        "impact-course"
+       ],
+       "omega0": 1.31,
+       "debrisRack": null,
+       "arrivalDamage": [],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 193.7,
+          "width": "wide",
+          "pods": 2
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 358.6,
+          "width": "standard",
+          "pods": 1
+         }
+        ],
+        "forgiveness": "gentle",
+        "terrain": "GRASSLAND",
+        "noGo": [],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P _40",
+        "C": "_64"
+       },
+       "lead": 3,
+       "authored": null,
+       "reserved": {
+        "resident": {
+         "kind": "left",
+         "shown": "unknown",
+         "name": "KEEPER"
+        },
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 2,
+       "id": "7:1:2:0",
+       "name": "HALCYON",
+       "kind": "standard",
+       "template": "wide",
+       "pods": 5,
+       "memoryClass": "COMPACT",
+       "approachYear": 2352,
+       "late": false,
+       "timedAgainstStart": 2300,
+       "reportedRun": 1,
+       "runsOnChart": 2,
+       "attempt": 0,
+       "modifiers": [
+        "too-wide"
+       ],
+       "omega0": 2.4,
+       "debrisRack": null,
+       "arrivalDamage": [
+        {
+         "role": "sensor",
+         "maxIntegrity": 62
+        }
+       ],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 71.7,
+          "width": "wide",
+          "pods": 3
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 226.3,
+          "width": "narrow",
+          "pods": 2
+         }
+        ],
+        "forgiveness": "gentle",
+        "terrain": "GRASSLAND",
+        "noGo": [],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P _24",
+        "C": "_64"
+       },
+       "lead": 5,
+       "authored": "halcyon",
+       "reserved": {
+        "resident": null,
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 3,
+       "id": "7:1:3:0",
+       "name": "OSPREY",
+       "kind": "standard",
+       "template": "wide",
+       "pods": 5,
+       "memoryClass": "COMPACT",
+       "approachYear": 2352,
+       "late": false,
+       "timedAgainstStart": 2300,
+       "reportedRun": 1,
+       "runsOnChart": 2,
+       "attempt": 0,
+       "modifiers": [
+        "too-wide"
+       ],
+       "omega0": 2.81,
+       "debrisRack": null,
+       "arrivalDamage": [],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 71.5,
+          "width": "wide",
+          "pods": 3
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 249.1,
+          "width": "standard",
+          "pods": 2
+         }
+        ],
+        "forgiveness": "gentle",
+        "terrain": "GRASSLAND",
+        "noGo": [],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P _24",
+        "C": "_64"
+       },
+       "lead": 5,
+       "authored": null,
+       "reserved": {
+        "resident": null,
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 4,
+       "id": "7:2:4:6",
+       "name": "GOOD COMPANY",
+       "kind": "standard",
+       "template": "wide",
+       "pods": 6,
+       "memoryClass": "COMPACT",
+       "approachYear": 2511,
+       "late": true,
+       "timedAgainstStart": 2301,
+       "reportedRun": 2,
+       "runsOnChart": 1,
+       "attempt": 6,
+       "modifiers": [
+        "too-wide",
+        "sensor-damage"
+       ],
+       "omega0": -1.91,
+       "debrisRack": null,
+       "arrivalDamage": [
+        {
+         "role": "sensor",
+         "maxIntegrity": 45
+        }
+       ],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 148.6,
+          "width": "wide",
+          "pods": 4
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 294.9,
+          "width": "standard",
+          "pods": 2
+         }
+        ],
+        "forgiveness": "gentle",
+        "terrain": "PLAINS",
+        "noGo": [],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P P _16",
+        "C": "_64"
+       },
+       "lead": 6,
+       "authored": null,
+       "reserved": {
+        "resident": {
+         "kind": "left",
+         "shown": "unknown",
+         "name": "HELM"
+        },
+        "unknownEvent": "gone-resident",
+        "fragments": 1,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 5,
+       "id": "7:1:5:0",
+       "name": "KESTREL",
+       "kind": "standard",
+       "template": "wide-b",
+       "pods": 6,
+       "memoryClass": "COMPACT",
+       "approachYear": 2467,
+       "late": false,
+       "timedAgainstStart": 2300,
+       "reportedRun": 1,
+       "runsOnChart": 2,
+       "attempt": 0,
+       "modifiers": [
+        "too-wide",
+        "sensor-damage",
+        "debris"
+       ],
+       "omega0": 0.9,
+       "debrisRack": "B",
+       "arrivalDamage": [
+        {
+         "role": "sensor",
+         "maxIntegrity": 45
+        }
+       ],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 26.6,
+          "width": "wide",
+          "pods": 3
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 227,
+          "width": "wide",
+          "pods": 3
+         }
+        ],
+        "forgiveness": "harsh",
+        "terrain": "OCEAN",
+        "noGo": [],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P P _16",
+        "C": "_64"
+       },
+       "lead": 6,
+       "authored": "kestrel",
+       "reserved": {
+        "resident": null,
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 6,
+       "id": "7:1:6:0",
+       "name": "ALBATROSS",
+       "kind": "ark",
+       "template": "wide",
+       "pods": 15,
+       "memoryClass": "FULL",
+       "approachYear": 2365,
+       "late": false,
+       "timedAgainstStart": 2300,
+       "reportedRun": 1,
+       "runsOnChart": 2,
+       "attempt": 0,
+       "modifiers": [
+        "too-wide"
+       ],
+       "omega0": -0.85,
+       "debrisRack": null,
+       "arrivalDamage": [],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 52.3,
+          "width": "wide",
+          "pods": 6
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 144.9,
+          "width": "standard",
+          "pods": 5
+         },
+         {
+          "label": "LZ-C",
+          "centreDeg": 267.4,
+          "width": "narrow",
+          "pods": 4
+         }
+        ],
+        "forgiveness": "rough",
+        "terrain": "VOLCANIC",
+        "noGo": [
+         {
+          "centreDeg": 44.5,
+          "widthDeg": 4.1,
+          "word": "LAVA"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P P P _8",
+        "C": "P P P P P P P _8",
+        "D": "P _56"
+       },
+       "lead": 15,
+       "authored": null,
+       "reserved": {
+        "resident": null,
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 7,
+       "id": "7:2:7:6",
+       "name": "PUFFIN",
+       "kind": "standard",
+       "template": "wide-b",
+       "pods": 7,
+       "memoryClass": "COMPACT",
+       "approachYear": 2617,
+       "late": false,
+       "timedAgainstStart": 2301,
+       "reportedRun": 2,
+       "runsOnChart": 1,
+       "attempt": 6,
+       "modifiers": [
+        "too-wide",
+        "sensor-damage"
+       ],
+       "omega0": -0.65,
+       "debrisRack": null,
+       "arrivalDamage": [
+        {
+         "role": "sensor",
+         "maxIntegrity": 45
+        }
+       ],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 4.9,
+          "width": "standard",
+          "pods": 5
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 188.7,
+          "width": "narrow",
+          "pods": 2
+         }
+        ],
+        "forgiveness": "harsh",
+        "terrain": "OCEAN",
+        "noGo": [
+         {
+          "centreDeg": 11.8,
+          "widthDeg": 5.6,
+          "word": "REEF"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P _24",
+        "C": "P _2 S _1 P _45"
+       },
+       "lead": 7,
+       "authored": null,
+       "reserved": {
+        "resident": {
+         "kind": "left",
+         "shown": "unknown",
+         "name": "PILOT"
+        },
+        "unknownEvent": null,
+        "fragments": 1,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 8,
+       "id": "7:1:8:0",
+       "name": "LAPWING",
+       "kind": "light",
+       "template": "capture",
+       "pods": 4,
+       "memoryClass": "TIGHT",
+       "approachYear": 2672,
+       "late": true,
+       "timedAgainstStart": 2300,
+       "reportedRun": 1,
+       "runsOnChart": 2,
+       "attempt": 0,
+       "modifiers": [
+        "sensor-damage"
+       ],
+       "omega0": -2.26,
+       "debrisRack": null,
+       "arrivalDamage": [
+        {
+         "role": "sensor",
+         "maxIntegrity": 45
+        }
+       ],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 70.4,
+          "width": "standard",
+          "pods": 3
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 272.6,
+          "width": "narrow",
+          "pods": 1
+         }
+        ],
+        "forgiveness": "harsh",
+        "terrain": "OCEAN",
+        "noGo": [
+         {
+          "centreDeg": 278.9,
+          "widthDeg": 6.4,
+          "word": "REEF"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P _48",
+        "C": "P _2 S _1 P _45"
+       },
+       "lead": 4,
+       "authored": null,
+       "reserved": {
+        "resident": null,
+        "unknownEvent": "old-colony",
+        "fragments": 0,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 9,
+       "id": "7:1:9:0",
+       "name": "GANNET",
+       "kind": "standard",
+       "template": "capture",
+       "pods": 7,
+       "memoryClass": "COMPACT",
+       "approachYear": 2612,
+       "late": false,
+       "timedAgainstStart": 2300,
+       "reportedRun": 1,
+       "runsOnChart": 2,
+       "attempt": 0,
+       "modifiers": [],
+       "omega0": -2.91,
+       "debrisRack": null,
+       "arrivalDamage": [],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 98.9,
+          "width": "standard",
+          "pods": 5
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 264.3,
+          "width": "narrow",
+          "pods": 2
+         }
+        ],
+        "forgiveness": "gentle",
+        "terrain": "PLAINS",
+        "noGo": [
+         {
+          "centreDeg": 270.1,
+          "widthDeg": 4.9,
+          "word": "CLIFFS"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P _24",
+        "C": "P _2 S _1 P _45"
+       },
+       "lead": 7,
+       "authored": null,
+       "reserved": {
+        "resident": {
+         "kind": "corrupted",
+         "shown": "faulty",
+         "name": "WARDEN"
+        },
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 10,
+       "id": "7:2:10:6",
+       "name": "FAR WIND",
+       "kind": "standard",
+       "template": "capture",
+       "pods": 8,
+       "memoryClass": "COMPACT",
+       "approachYear": 2755,
+       "late": true,
+       "timedAgainstStart": 2301,
+       "reportedRun": 2,
+       "runsOnChart": 1,
+       "attempt": 6,
+       "modifiers": [],
+       "omega0": -1.32,
+       "debrisRack": null,
+       "arrivalDamage": [],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 93.1,
+          "width": "standard",
+          "pods": 4
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 250.5,
+          "width": "narrow",
+          "pods": 4
+         }
+        ],
+        "forgiveness": "rough",
+        "terrain": "VOLCANIC",
+        "noGo": [
+         {
+          "centreDeg": 100.6,
+          "widthDeg": 5.4,
+          "word": "LAVA"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P P _16",
+        "C": "P _2 S _1 P _45"
+       },
+       "lead": 8,
+       "authored": null,
+       "reserved": {
+        "resident": null,
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 11,
+       "id": "7:1:11:0",
+       "name": "VESPER",
+       "kind": "ark",
+       "template": "capture",
+       "pods": 16,
+       "memoryClass": "FULL",
+       "approachYear": 2625,
+       "late": false,
+       "timedAgainstStart": 2300,
+       "reportedRun": 1,
+       "runsOnChart": 2,
+       "attempt": 0,
+       "modifiers": [
+        "engine-fault"
+       ],
+       "omega0": -2.2,
+       "debrisRack": null,
+       "arrivalDamage": [
+        {
+         "role": "thrust-ctrl",
+         "maxIntegrity": 31
+        }
+       ],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 60,
+          "width": "standard",
+          "pods": 6
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 180,
+          "width": "standard",
+          "pods": 5
+         },
+         {
+          "label": "LZ-C",
+          "centreDeg": 300,
+          "width": "narrow",
+          "pods": 5
+         }
+        ],
+        "forgiveness": "rough",
+        "terrain": "VOLCANIC",
+        "noGo": [
+         {
+          "centreDeg": 187.4,
+          "widthDeg": 5,
+          "word": "LAVA"
+         },
+         {
+          "centreDeg": 293.4,
+          "widthDeg": 6,
+          "word": "LAVA"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P P P _8",
+        "C": "P P P P _2 S _1 P _21",
+        "D": "P P P P _32"
+       },
+       "lead": 12,
+       "authored": "vesper",
+       "reserved": {
+        "resident": null,
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 12,
+       "id": "7:1:12:0",
+       "name": "SKYLARK",
+       "kind": "light",
+       "template": "wide",
+       "pods": 4,
+       "memoryClass": "TIGHT",
+       "approachYear": 2750,
+       "late": true,
+       "timedAgainstStart": 2300,
+       "reportedRun": 1,
+       "runsOnChart": 2,
+       "attempt": 0,
+       "modifiers": [
+        "too-wide"
+       ],
+       "omega0": -1.88,
+       "debrisRack": null,
+       "arrivalDamage": [],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 113.6,
+          "width": "standard",
+          "pods": 3
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 285.7,
+          "width": "narrow",
+          "pods": 1
+         }
+        ],
+        "forgiveness": "harsh",
+        "terrain": "OCEAN",
+        "noGo": [
+         {
+          "centreDeg": 119.4,
+          "widthDeg": 3,
+          "word": "REEF"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P _48",
+        "C": "P _2 S _1 P _45"
+       },
+       "lead": 4,
+       "authored": null,
+       "reserved": {
+        "resident": {
+         "kind": "left",
+         "shown": "unknown",
+         "name": "PURSER"
+        },
+        "unknownEvent": null,
+        "fragments": 1,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 13,
+       "id": "7:2:13:6",
+       "name": "SAFE PASSAGE",
+       "kind": "standard",
+       "template": "wide-b",
+       "pods": 9,
+       "memoryClass": "FULL",
+       "approachYear": 2814,
+       "late": false,
+       "timedAgainstStart": 2301,
+       "reportedRun": 2,
+       "runsOnChart": 1,
+       "attempt": 6,
+       "modifiers": [
+        "too-wide",
+        "sensor-damage",
+        "debris"
+       ],
+       "omega0": -1.26,
+       "debrisRack": "B",
+       "arrivalDamage": [
+        {
+         "role": "sensor",
+         "maxIntegrity": 45
+        }
+       ],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 106.5,
+          "width": "narrow",
+          "pods": 5
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 287.4,
+          "width": "standard",
+          "pods": 4
+         }
+        ],
+        "forgiveness": "gentle",
+        "terrain": "PLAINS",
+        "noGo": [
+         {
+          "centreDeg": 99.9,
+          "widthDeg": 6.8,
+          "word": "LAKE"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P P P _8",
+        "C": "P _2 S _1 P _45",
+        "D": "_64"
+       },
+       "lead": 9,
+       "authored": null,
+       "reserved": {
+        "resident": null,
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "poor",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 14,
+       "id": "7:1:14:0",
+       "name": "KITTIWAKE",
+       "kind": "standard",
+       "template": "capture",
+       "pods": 9,
+       "memoryClass": "FULL",
+       "approachYear": 2817,
+       "late": false,
+       "timedAgainstStart": 2300,
+       "reportedRun": 1,
+       "runsOnChart": 2,
+       "attempt": 0,
+       "modifiers": [
+        "sensor-damage"
+       ],
+       "omega0": 2.08,
+       "debrisRack": null,
+       "arrivalDamage": [
+        {
+         "role": "sensor",
+         "maxIntegrity": 45
+        }
+       ],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 46.8,
+          "width": "narrow",
+          "pods": 5
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 209.1,
+          "width": "standard",
+          "pods": 4
+         }
+        ],
+        "forgiveness": "harsh",
+        "terrain": "OCEAN",
+        "noGo": [
+         {
+          "centreDeg": 200.2,
+          "widthDeg": 6.7,
+          "word": "REEF"
+         },
+         {
+          "centreDeg": 215.4,
+          "widthDeg": 4.2,
+          "word": "REEF"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P P P _8",
+        "C": "P _2 S _1 P _45",
+        "D": "_64"
+       },
+       "lead": 9,
+       "authored": null,
+       "reserved": {
+        "resident": null,
+        "unknownEvent": "signal",
+        "fragments": 2,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 15,
+       "id": "7:1:15:0",
+       "name": "CORMORANT",
+       "kind": "standard",
+       "template": "impact-b",
+       "pods": 9,
+       "memoryClass": "FULL",
+       "approachYear": 2817,
+       "late": false,
+       "timedAgainstStart": 2300,
+       "reportedRun": 1,
+       "runsOnChart": 2,
+       "attempt": 0,
+       "modifiers": [
+        "impact-course",
+        "sensor-damage",
+        "radiation-belt"
+       ],
+       "omega0": -1.54,
+       "debrisRack": null,
+       "arrivalDamage": [
+        {
+         "role": "sensor",
+         "maxIntegrity": 45
+        }
+       ],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 160,
+          "width": "standard",
+          "pods": 5
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 345.6,
+          "width": "wide",
+          "pods": 4
+         }
+        ],
+        "forgiveness": "harsh",
+        "terrain": "OCEAN",
+        "noGo": [
+         {
+          "centreDeg": 168.2,
+          "widthDeg": 6.7,
+          "word": "REEF"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P P P _8",
+        "C": "P _2 S _1 P _45",
+        "D": "_64"
+       },
+       "lead": 9,
+       "authored": null,
+       "reserved": {
+        "resident": {
+         "kind": "left",
+         "shown": "unknown",
+         "name": "LOOKOUT"
+        },
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "poor",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 16,
+       "id": "7:2:16:6",
+       "name": "GODWIT",
+       "kind": "standard",
+       "template": "capture",
+       "pods": 10,
+       "memoryClass": "FULL",
+       "approachYear": 2924,
+       "late": false,
+       "timedAgainstStart": 2301,
+       "reportedRun": 2,
+       "runsOnChart": 1,
+       "attempt": 6,
+       "modifiers": [],
+       "omega0": 1.07,
+       "debrisRack": null,
+       "arrivalDamage": [],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 61.8,
+          "width": "standard",
+          "pods": 4
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 173.7,
+          "width": "narrow",
+          "pods": 3
+         },
+         {
+          "label": "LZ-C",
+          "centreDeg": 291.4,
+          "width": "narrow",
+          "pods": 3
+         }
+        ],
+        "forgiveness": "rough",
+        "terrain": "VOLCANIC",
+        "noGo": [
+         {
+          "centreDeg": 54,
+          "widthDeg": 5.3,
+          "word": "LAVA"
+         },
+         {
+          "centreDeg": 69.6,
+          "widthDeg": 7.4,
+          "word": "LAVA"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P P P _8",
+        "C": "P P _2 S _1 P _37",
+        "D": "_64"
+       },
+       "lead": 10,
+       "authored": null,
+       "reserved": {
+        "resident": {
+         "kind": "corrupted",
+         "shown": "unknown",
+         "name": "BOSUN"
+        },
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 17,
+       "id": "7:1:17:0",
+       "name": "GOOD HOPE",
+       "kind": "ark",
+       "template": "capture",
+       "pods": 16,
+       "memoryClass": "FULL",
+       "approachYear": 2830,
+       "late": false,
+       "timedAgainstStart": 2300,
+       "reportedRun": 1,
+       "runsOnChart": 2,
+       "attempt": 0,
+       "modifiers": [
+        "engine-fault"
+       ],
+       "omega0": -0.25,
+       "debrisRack": null,
+       "arrivalDamage": [
+        {
+         "role": "thrust-ctrl",
+         "maxIntegrity": 31
+        }
+       ],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 66.9,
+          "width": "wide",
+          "pods": 4
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 129.5,
+          "width": "standard",
+          "pods": 4
+         },
+         {
+          "label": "LZ-C",
+          "centreDeg": 220,
+          "width": "wide",
+          "pods": 4
+         },
+         {
+          "label": "LZ-D",
+          "centreDeg": 307.1,
+          "width": "wide",
+          "pods": 4
+         }
+        ],
+        "forgiveness": "harsh",
+        "terrain": "OCEAN",
+        "noGo": [
+         {
+          "centreDeg": 57.9,
+          "widthDeg": 6.2,
+          "word": "REEF"
+         },
+         {
+          "centreDeg": 298.5,
+          "widthDeg": 7.4,
+          "word": "REEF"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P P P _8",
+        "C": "P P P P _2 S _1 P _21",
+        "D": "P P P P _32"
+       },
+       "lead": 12,
+       "authored": null,
+       "reserved": {
+        "resident": null,
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "poor",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 18,
+       "id": "7:1:18:0",
+       "name": "WAYFARER",
+       "kind": "light",
+       "template": "wide-b",
+       "pods": 5,
+       "memoryClass": "TIGHT",
+       "approachYear": 2970,
+       "late": true,
+       "timedAgainstStart": 2300,
+       "reportedRun": 1,
+       "runsOnChart": 2,
+       "attempt": 0,
+       "modifiers": [
+        "too-wide"
+       ],
+       "omega0": 1.04,
+       "debrisRack": null,
+       "arrivalDamage": [],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 98.2,
+          "width": "standard",
+          "pods": 3
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 309,
+          "width": "wide",
+          "pods": 2
+         }
+        ],
+        "forgiveness": "rough",
+        "terrain": "VOLCANIC",
+        "noGo": [
+         {
+          "centreDeg": 105,
+          "widthDeg": 4.4,
+          "word": "LAVA"
+         },
+         {
+          "centreDeg": 317.2,
+          "widthDeg": 6.4,
+          "word": "LAVA"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P _40",
+        "C": "P _2 S _1 P _45"
+       },
+       "lead": 5,
+       "authored": null,
+       "reserved": {
+        "resident": null,
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "good",
+        "tracePlace": null
+       }
+      },
+      {
+       "slot": 19,
+       "id": "7:2:19:6",
+       "name": "LODESTAR",
+       "kind": "final",
+       "template": "impact-b",
+       "pods": 16,
+       "memoryClass": "FULL",
+       "approachYear": 3021,
+       "late": false,
+       "timedAgainstStart": 2301,
+       "reportedRun": 2,
+       "runsOnChart": 1,
+       "attempt": 6,
+       "modifiers": [
+        "impact-course",
+        "radiation-belt"
+       ],
+       "omega0": 1.6,
+       "debrisRack": null,
+       "arrivalDamage": [],
+       "landing": {
+        "lzs": [
+         {
+          "label": "LZ-A",
+          "centreDeg": 10,
+          "width": "standard",
+          "pods": 4
+         },
+         {
+          "label": "LZ-B",
+          "centreDeg": 100,
+          "width": "standard",
+          "pods": 4
+         },
+         {
+          "label": "LZ-C",
+          "centreDeg": 190,
+          "width": "standard",
+          "pods": 4
+         },
+         {
+          "label": "LZ-D",
+          "centreDeg": 280,
+          "width": "narrow",
+          "pods": 4
+         }
+        ],
+        "forgiveness": "gentle",
+        "terrain": "PLAINS",
+        "noGo": [
+         {
+          "centreDeg": 286.6,
+          "widthDeg": 6,
+          "word": "CLIFFS"
+         }
+        ],
+        "colonyFirstRun": null,
+        "drag": true
+       },
+       "podRacks": {
+        "B": "P P P P P P P _8",
+        "C": "P P P P _2 S _1 P _21",
+        "D": "P P P P _32"
+       },
+       "lead": 12,
+       "authored": null,
+       "reserved": {
+        "resident": null,
+        "unknownEvent": null,
+        "fragments": 0,
+        "site": "good",
+        "tracePlace": null
+       }
+      }
+     ],
+     "noise": [
+      {
+       "x": 78,
+       "y": 26,
+       "r": 11,
+       "strength": 1
+      },
+      {
+       "x": 57,
+       "y": -3,
+       "r": 10,
+       "strength": 1
+      },
+      {
+       "x": 121,
+       "y": 84,
+       "r": 12,
+       "strength": 1
+      },
+      {
+       "x": 87,
+       "y": 44,
+       "r": 12,
+       "strength": 2
+      }
+     ],
+     "route": [
+      {
+       "slot": 0,
+       "depth": 1,
+       "hop": null
+      },
+      {
+       "slot": 1,
+       "depth": 2,
+       "hop": {
+        "from": 0,
+        "to": 1,
+        "distanceLy": 27,
+        "linkBlocks": 116,
+        "transitHits": 4,
+        "eccFixes": 1,
+        "leaveYear": 2301,
+        "arriveYear": 2328,
+        "approachYear": 2358,
+        "slackYears": 30,
+        "noise": 0,
+        "inRange": true,
+        "memoryClass": "TIGHT",
+        "room": 88,
+        "chargeFloor": 0
+       }
+      },
+      {
+       "slot": 4,
+       "depth": 3,
+       "hop": {
+        "from": 1,
+        "to": 4,
+        "distanceLy": 24,
+        "linkBlocks": 120,
+        "transitHits": 3,
+        "eccFixes": 5,
+        "leaveYear": 2358,
+        "arriveYear": 2382,
+        "approachYear": 2511,
+        "slackYears": 129,
+        "noise": 1,
+        "inRange": true,
+        "memoryClass": "COMPACT",
+        "room": 152,
+        "chargeFloor": 12
+       }
+      },
+      {
+       "slot": 7,
+       "depth": 4,
+       "hop": {
+        "from": 4,
+        "to": 7,
+        "distanceLy": 30,
+        "linkBlocks": 113,
+        "transitHits": 4,
+        "eccFixes": 3,
+        "leaveYear": 2511,
+        "arriveYear": 2541,
+        "approachYear": 2617,
+        "slackYears": 76,
+        "noise": 1,
+        "inRange": true,
+        "memoryClass": "COMPACT",
+        "room": 152,
+        "chargeFloor": 12
+       }
+      },
+      {
+       "slot": 10,
+       "depth": 5,
+       "hop": {
+        "from": 7,
+        "to": 10,
+        "distanceLy": 25,
+        "linkBlocks": 119,
+        "transitHits": 4,
+        "eccFixes": 4,
+        "leaveYear": 2617,
+        "arriveYear": 2642,
+        "approachYear": 2755,
+        "slackYears": 113,
+        "noise": 0,
+        "inRange": true,
+        "memoryClass": "COMPACT",
+        "room": 152,
+        "chargeFloor": 12
+       }
+      },
+      {
+       "slot": 13,
+       "depth": 6,
+       "hop": {
+        "from": 10,
+        "to": 13,
+        "distanceLy": 30,
+        "linkBlocks": 113,
+        "transitHits": 4,
+        "eccFixes": 1,
+        "leaveYear": 2755,
+        "arriveYear": 2785,
+        "approachYear": 2814,
+        "slackYears": 29,
+        "noise": 0,
+        "inRange": true,
+        "memoryClass": "FULL",
+        "room": 152,
+        "chargeFloor": 12
+       }
+      },
+      {
+       "slot": 16,
+       "depth": 7,
+       "hop": {
+        "from": 13,
+        "to": 16,
+        "distanceLy": 31,
+        "linkBlocks": 112,
+        "transitHits": 4,
+        "eccFixes": 3,
+        "leaveYear": 2814,
+        "arriveYear": 2845,
+        "approachYear": 2924,
+        "slackYears": 79,
+        "noise": 0,
+        "inRange": true,
+        "memoryClass": "FULL",
+        "room": 152,
+        "chargeFloor": 12
+       }
+      },
+      {
+       "slot": 19,
+       "depth": 8,
+       "hop": {
+        "from": 16,
+        "to": 19,
+        "distanceLy": 38,
+        "linkBlocks": 104,
+        "transitHits": 5,
+        "eccFixes": 2,
+        "leaveYear": 2924,
+        "arriveYear": 2962,
+        "approachYear": 3021,
+        "slackYears": 59,
+        "noise": 0,
+        "inRange": true,
+        "memoryClass": "FULL",
+        "room": 152,
+        "chargeFloor": 12
+       }
+      }
+     ],
+     "galaxyYear": 3021,
+     "pendingExtra": null,
+     "history": {
+      "lastUnitNumber": 47,
+      "colonies": [],
+      "routes": [
+       {
+        "run": 1,
+        "unit": 47,
+        "slots": [
+         0,
+         1,
+         4,
+         7,
+         10,
+         13,
+         16,
+         19
+        ]
+       }
+      ],
+      "gap": 1,
+      "valveYears": 0,
+      "finalSerial": 1,
+      "departures": [
+       {
+        "slot": 0,
+        "name": "ARES-VII",
+        "reason": "done",
+        "words": "no-colony"
+       },
+       {
+        "slot": 1,
+        "name": "PETREL",
+        "reason": "done",
+        "words": "no-colony"
+       },
+       {
+        "slot": 4,
+        "name": "HERON",
+        "reason": "done",
+        "words": "no-colony"
+       },
+       {
+        "slot": 7,
+        "name": "CURLEW",
+        "reason": "done",
+        "words": "no-colony"
+       },
+       {
+        "slot": 10,
+        "name": "PLOVER",
+        "reason": "done",
+        "words": "no-colony"
+       },
+       {
+        "slot": 13,
+        "name": "SHEARWATER",
+        "reason": "done",
+        "words": "no-colony"
+       },
+       {
+        "slot": 16,
+        "name": "PROVIDENCE",
+        "reason": "done",
+        "words": "no-colony"
+       },
+       {
+        "slot": 19,
+        "name": "LAST LIGHT",
+        "reason": "done",
+        "words": "no-colony"
+       }
+      ]
+     }
+    },
+    "licences": [
+     "scan"
+    ],
+    "hollowNamed": false,
+    "coreLost": false,
+    "skills": {
+     "earned": [
+      {
+       "slot": 0,
+       "arrived": 1,
+       "landed": 0,
+       "pct": 0
+      },
+      {
+       "slot": 1,
+       "arrived": 1,
+       "landed": 0,
+       "pct": 0
+      },
+      {
+       "slot": 4,
+       "arrived": 1,
+       "landed": 0,
+       "pct": 0
+      },
+      {
+       "slot": 7,
+       "arrived": 1,
+       "landed": 0,
+       "pct": 0
+      },
+      {
+       "slot": 10,
+       "arrived": 1,
+       "landed": 0,
+       "pct": 0
+      },
+      {
+       "slot": 13,
+       "arrived": 1,
+       "landed": 0,
+       "pct": 0
+      },
+      {
+       "slot": 16,
+       "arrived": 1,
+       "landed": 0,
+       "pct": 0
+      }
+     ],
+     "grants": [
+      {
+       "source": "first-pick",
+       "cycles": 2,
+       "visit": 1,
+       "label": null
+      },
+      {
+       "source": "salvage",
+       "cycles": 2,
+       "visit": 1,
+       "label": null
+      }
+     ],
+     "bought": [
+      {
+       "skill": "autoburn",
+       "kind": "train",
+       "to": {
+        "version": 1,
+        "lock": 0
+       },
+       "cost": 3,
+       "visit": 1
+      }
+     ],
+     "pending": [],
+     "skillGrants": [],
+     "opened": [
+      {
+       "skill": "survey",
+       "visit": 4
+      }
+     ],
+     "announced": {
+      "autoburn": null,
+      "autodrop": null,
+      "survey": null,
+      "sentry": null
+     }
+    },
+    "repairRenewedOn": null,
+    "ships": [
+     {
+      "shipId": "ares-viii",
+      "shipName": "ARES-VIII",
+      "slot": 0,
+      "depth": 1,
+      "outcome": "locked",
+      "colonistsAboard": 600,
+      "lzs": [
+       {
+        "lz": "LZ-A",
+        "count": 600,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       }
+      ],
+      "offSite": 0,
+      "noGo": 0,
+      "restored": 0,
+      "parked": [
+       {
+        "pod": 1,
+        "why": "no-time"
+       },
+       {
+        "pod": 2,
+        "why": "no-time"
+       },
+       {
+        "pod": 3,
+        "why": "no-time"
+       }
+      ],
+      "notLaunched": 0,
+      "landedInLz": 0,
+      "points": 0,
+      "colony": null,
+      "pods": [
+       {
+        "pod": 1,
+        "family": "Quispe",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Quispe, Tomas",
+          "age": 13,
+          "line": "keeps a list of things to try first."
+         },
+         {
+          "name": "Quispe, Rosa",
+          "age": 52,
+          "line": "sings to plants. Says it works."
+         },
+         {
+          "name": "Quispe, Fatima",
+          "age": 25,
+          "line": "brought a photo of the old house."
+         }
+        ]
+       },
+       {
+        "pod": 2,
+        "family": "Ferreira",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Ferreira, Arjun",
+          "age": 40,
+          "line": "will paint the first sunset there."
+         },
+         {
+          "name": "Ferreira, Ulla",
+          "age": 10,
+          "line": "knows the names of 200 bugs."
+         },
+         {
+          "name": "Ferreira, Zara",
+          "age": 79,
+          "line": "wrote a song for the landing."
+         }
+        ]
+       },
+       {
+        "pod": 3,
+        "family": "Gupta",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Gupta, Otto",
+          "age": 62,
+          "line": "plans to build the first treehouse."
+         },
+         {
+          "name": "Gupta, Pita",
+          "age": 85,
+          "line": "wants to be the first to swim there."
+         },
+         {
+          "name": "Gupta, Wei",
+          "age": 36,
+          "line": "learned every knot in the sailing book."
+         }
+        ]
+       }
+      ],
+      "stars": 0,
+      "fuelLeftPct": 100,
+      "ringMiss": null,
+      "survey": null
+     },
+     {
+      "shipId": "resolute",
+      "shipName": "RESOLUTE",
+      "slot": 1,
+      "depth": 2,
+      "outcome": "locked",
+      "colonistsAboard": 600,
+      "lzs": [
+       {
+        "lz": "LZ-A",
+        "count": 400,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       },
+       {
+        "lz": "LZ-B",
+        "count": 200,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       }
+      ],
+      "offSite": 0,
+      "noGo": 0,
+      "restored": 0,
+      "parked": [
+       {
+        "pod": 1,
+        "why": "no-time"
+       },
+       {
+        "pod": 2,
+        "why": "no-time"
+       },
+       {
+        "pod": 3,
+        "why": "no-time"
+       }
+      ],
+      "notLaunched": 0,
+      "landedInLz": 0,
+      "points": 0,
+      "colony": null,
+      "pods": [
+       {
+        "pod": 1,
+        "family": "Kowalski",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Kowalski, Arjun",
+          "age": 63,
+          "line": "hopes it rains on the first day."
+         },
+         {
+          "name": "Kowalski, Jonah",
+          "age": 83,
+          "line": "can whistle with two fingers."
+         },
+         {
+          "name": "Kowalski, Nell",
+          "age": 58,
+          "line": "plans to build the first treehouse."
+         }
+        ]
+       },
+       {
+        "pod": 2,
+        "family": "Kim",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Kim, Hana",
+          "age": 48,
+          "line": "still has the ticket from launch day."
+         },
+         {
+          "name": "Kim, Viola",
+          "age": 8,
+          "line": "kept a pebble from Earth in a pocket."
+         },
+         {
+          "name": "Kim, Tova",
+          "age": 4,
+          "line": "sings to plants. Says it works."
+         }
+        ]
+       },
+       {
+        "pod": 3,
+        "family": "Jovanovic",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Jovanovic, Emil",
+          "age": 47,
+          "line": "promised to call home. Somehow."
+         },
+         {
+          "name": "Jovanovic, Bea",
+          "age": 27,
+          "line": "is scared of the dark, but came anyway."
+         },
+         {
+          "name": "Jovanovic, Omar",
+          "age": 22,
+          "line": "is going to build the first bridge."
+         }
+        ]
+       }
+      ],
+      "stars": 0,
+      "fuelLeftPct": 100,
+      "ringMiss": null,
+      "survey": null
+     },
+     {
+      "shipId": "good-company",
+      "shipName": "GOOD COMPANY",
+      "slot": 4,
+      "depth": 3,
+      "outcome": "locked",
+      "colonistsAboard": 1200,
+      "lzs": [
+       {
+        "lz": "LZ-A",
+        "count": 800,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       },
+       {
+        "lz": "LZ-B",
+        "count": 400,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       }
+      ],
+      "offSite": 0,
+      "noGo": 0,
+      "restored": 0,
+      "parked": [
+       {
+        "pod": 1,
+        "why": "no-time"
+       },
+       {
+        "pod": 2,
+        "why": "no-time"
+       },
+       {
+        "pod": 3,
+        "why": "no-time"
+       },
+       {
+        "pod": 4,
+        "why": "no-time"
+       },
+       {
+        "pod": 5,
+        "why": "no-time"
+       },
+       {
+        "pod": 6,
+        "why": "no-time"
+       }
+      ],
+      "notLaunched": 0,
+      "landedInLz": 0,
+      "points": 0,
+      "colony": null,
+      "pods": [
+       {
+        "pod": 1,
+        "family": "Ibarra",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Ibarra, Amara",
+          "age": 14,
+          "line": "wants to find out if there are frogs."
+         },
+         {
+          "name": "Ibarra, Pia",
+          "age": 7,
+          "line": "wants to be the first to swim there."
+         },
+         {
+          "name": "Ibarra, Yusuf",
+          "age": 45,
+          "line": "promised a postcard to a friend."
+         }
+        ]
+       },
+       {
+        "pod": 2,
+        "family": "Gallo",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Gallo, Hana",
+          "age": 43,
+          "line": "wants to count the stars from outside."
+         },
+         {
+          "name": "Gallo, Dara",
+          "age": 46,
+          "line": "will plant the first apple orchard."
+         },
+         {
+          "name": "Gallo, Teo",
+          "age": 5,
+          "line": "fixed every robot on the street."
+         }
+        ]
+       },
+       {
+        "pod": 3,
+        "family": "O'Brien",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "O'Brien, Arjun",
+          "age": 27,
+          "line": "is going to be a vet for new animals."
+         },
+         {
+          "name": "O'Brien, Ulla",
+          "age": 58,
+          "line": "is going to build the first bridge."
+         },
+         {
+          "name": "O'Brien, Nell",
+          "age": 19,
+          "line": "taught the whole deck to play chess."
+         }
+        ]
+       },
+       {
+        "pod": 4,
+        "family": "Walsh",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Walsh, Vik",
+          "age": 15,
+          "line": "learned every knot in the sailing book."
+         },
+         {
+          "name": "Walsh, Finn",
+          "age": 11,
+          "line": "is going to teach the first school."
+         },
+         {
+          "name": "Walsh, Cyrus",
+          "age": 14,
+          "line": "saved the last chocolate bar for later."
+         }
+        ]
+       },
+       {
+        "pod": 5,
+        "family": "Achebe",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Achebe, Xander",
+          "age": 7,
+          "line": "drew a map of a world nobody has seen."
+         },
+         {
+          "name": "Achebe, Priya",
+          "age": 58,
+          "line": "knows the names of 200 bugs."
+         },
+         {
+          "name": "Achebe, Vera",
+          "age": 37,
+          "line": "will open the very first bakery."
+         }
+        ]
+       },
+       {
+        "pod": 6,
+        "family": "Bauer",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Bauer, Maya",
+          "age": 20,
+          "line": "is saving a joke for the first dinner."
+         },
+         {
+          "name": "Bauer, Rosa",
+          "age": 7,
+          "line": "can whistle with two fingers."
+         },
+         {
+          "name": "Bauer, Elif",
+          "age": 64,
+          "line": "is scared of the dark, but came anyway."
+         }
+        ]
+       }
+      ],
+      "stars": 0,
+      "fuelLeftPct": 100,
+      "ringMiss": null,
+      "survey": null
+     },
+     {
+      "shipId": "puffin",
+      "shipName": "PUFFIN",
+      "slot": 7,
+      "depth": 4,
+      "outcome": "locked",
+      "colonistsAboard": 1400,
+      "lzs": [
+       {
+        "lz": "LZ-A",
+        "count": 1000,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       },
+       {
+        "lz": "LZ-B",
+        "count": 400,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       }
+      ],
+      "offSite": 0,
+      "noGo": 0,
+      "restored": 0,
+      "parked": [
+       {
+        "pod": 1,
+        "why": "no-time"
+       },
+       {
+        "pod": 2,
+        "why": "no-time"
+       },
+       {
+        "pod": 3,
+        "why": "no-time"
+       },
+       {
+        "pod": 4,
+        "why": "no-time"
+       },
+       {
+        "pod": 5,
+        "why": "no-time"
+       },
+       {
+        "pod": 6,
+        "why": "no-time"
+       },
+       {
+        "pod": 7,
+        "why": "no-time"
+       }
+      ],
+      "notLaunched": 0,
+      "landedInLz": 0,
+      "points": 0,
+      "colony": null,
+      "pods": [
+       {
+        "pod": 1,
+        "family": "Achebe",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Achebe, Ben",
+          "age": 31,
+          "line": "is scared of the dark, but came anyway."
+         },
+         {
+          "name": "Achebe, Uma",
+          "age": 14,
+          "line": "still has the ticket from launch day."
+         },
+         {
+          "name": "Achebe, Yara",
+          "age": 14,
+          "line": "saved the last chocolate bar for later."
+         }
+        ]
+       },
+       {
+        "pod": 2,
+        "family": "Ortega",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Ortega, Zane",
+          "age": 62,
+          "line": "taught the whole deck to play chess."
+         },
+         {
+          "name": "Ortega, Rumi",
+          "age": 63,
+          "line": "fixed every robot on the street."
+         },
+         {
+          "name": "Ortega, Dev",
+          "age": 56,
+          "line": "knows the names of 200 bugs."
+         }
+        ]
+       },
+       {
+        "pod": 3,
+        "family": "Park",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Park, Vera",
+          "age": 42,
+          "line": "carved a boat for a sea nobody named."
+         },
+         {
+          "name": "Park, Hiro",
+          "age": 51,
+          "line": "packed a kite. Just in case."
+         },
+         {
+          "name": "Park, Suvi",
+          "age": 70,
+          "line": "collects rocks. Plans to collect more."
+         }
+        ]
+       },
+       {
+        "pod": 4,
+        "family": "Bauer",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Bauer, Lucia",
+          "age": 22,
+          "line": "wants to hear what the wind sounds like."
+         },
+         {
+          "name": "Bauer, Tomas",
+          "age": 10,
+          "line": "learned every knot in the sailing book."
+         },
+         {
+          "name": "Bauer, Pia",
+          "age": 7,
+          "line": "brought a photo of the old house."
+         }
+        ]
+       },
+       {
+        "pod": 5,
+        "family": "O'Brien",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "O'Brien, Wei",
+          "age": 83,
+          "line": "promised a postcard to a friend."
+         },
+         {
+          "name": "O'Brien, Jada",
+          "age": 15,
+          "line": "wants to see two moons at once."
+         },
+         {
+          "name": "O'Brien, Emil",
+          "age": 4,
+          "line": "can't wait to walk barefoot on grass."
+         }
+        ]
+       },
+       {
+        "pod": 6,
+        "family": "Hoang",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Hoang, Mateo",
+          "age": 36,
+          "line": "wants a window that faces sunrise."
+         },
+         {
+          "name": "Hoang, Arjun",
+          "age": 7,
+          "line": "is going to teach the first school."
+         },
+         {
+          "name": "Hoang, Leo",
+          "age": 37,
+          "line": "brought seeds from Gran's garden."
+         }
+        ]
+       },
+       {
+        "pod": 7,
+        "family": "Rahman",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Rahman, Ravi",
+          "age": 46,
+          "line": "can whistle with two fingers."
+         },
+         {
+          "name": "Rahman, Pita",
+          "age": 79,
+          "line": "dreams about green hills every night."
+         },
+         {
+          "name": "Rahman, Amara",
+          "age": 5,
+          "line": "wrote a song for the landing."
+         }
+        ]
+       }
+      ],
+      "stars": 0,
+      "fuelLeftPct": 100,
+      "ringMiss": null,
+      "survey": null
+     },
+     {
+      "shipId": "far-wind",
+      "shipName": "FAR WIND",
+      "slot": 10,
+      "depth": 5,
+      "outcome": "locked",
+      "colonistsAboard": 1600,
+      "lzs": [
+       {
+        "lz": "LZ-A",
+        "count": 800,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       },
+       {
+        "lz": "LZ-B",
+        "count": 800,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       }
+      ],
+      "offSite": 0,
+      "noGo": 0,
+      "restored": 0,
+      "parked": [
+       {
+        "pod": 1,
+        "why": "no-time"
+       },
+       {
+        "pod": 2,
+        "why": "no-time"
+       },
+       {
+        "pod": 3,
+        "why": "no-time"
+       },
+       {
+        "pod": 4,
+        "why": "no-time"
+       },
+       {
+        "pod": 5,
+        "why": "no-time"
+       },
+       {
+        "pod": 6,
+        "why": "no-time"
+       },
+       {
+        "pod": 7,
+        "why": "no-time"
+       },
+       {
+        "pod": 8,
+        "why": "no-time"
+       }
+      ],
+      "notLaunched": 0,
+      "landedInLz": 0,
+      "points": 0,
+      "colony": null,
+      "pods": [
+       {
+        "pod": 1,
+        "family": "Varga",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Varga, Hana",
+          "age": 39,
+          "line": "learned every knot in the sailing book."
+         },
+         {
+          "name": "Varga, Tova",
+          "age": 78,
+          "line": "made everyone a friendship bracelet."
+         },
+         {
+          "name": "Varga, Omar",
+          "age": 83,
+          "line": "packed a kite. Just in case."
+         }
+        ]
+       },
+       {
+        "pod": 2,
+        "family": "Achebe",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Achebe, Xander",
+          "age": 39,
+          "line": "will open the very first bakery."
+         },
+         {
+          "name": "Achebe, Quentin",
+          "age": 9,
+          "line": "kept a pebble from Earth in a pocket."
+         },
+         {
+          "name": "Achebe, Teo",
+          "age": 16,
+          "line": "wants to hear what the wind sounds like."
+         }
+        ]
+       },
+       {
+        "pod": 3,
+        "family": "Eriksen",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Eriksen, Oskar",
+          "age": 50,
+          "line": "is going to be a vet for new animals."
+         },
+         {
+          "name": "Eriksen, Fatima",
+          "age": 86,
+          "line": "is saving a joke for the first dinner."
+         },
+         {
+          "name": "Eriksen, Kiri",
+          "age": 27,
+          "line": "promised to call home. Somehow."
+         }
+        ]
+       },
+       {
+        "pod": 4,
+        "family": "Jansen",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Jansen, Tomas",
+          "age": 62,
+          "line": "brought a photo of the old house."
+         },
+         {
+          "name": "Jansen, Priya",
+          "age": 26,
+          "line": "can't wait to walk barefoot on grass."
+         },
+         {
+          "name": "Jansen, Ulla",
+          "age": 67,
+          "line": "knows the names of 200 bugs."
+         }
+        ]
+       },
+       {
+        "pod": 5,
+        "family": "Chowdhury",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Chowdhury, Sami",
+          "age": 12,
+          "line": "fixed every robot on the street."
+         },
+         {
+          "name": "Chowdhury, Yusuf",
+          "age": 7,
+          "line": "wants to name a mountain after Mum."
+         },
+         {
+          "name": "Chowdhury, Wren",
+          "age": 15,
+          "line": "wants a window that faces sunrise."
+         }
+        ]
+       },
+       {
+        "pod": 6,
+        "family": "Castillo",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Castillo, Zara",
+          "age": 16,
+          "line": "still has the ticket from launch day."
+         },
+         {
+          "name": "Castillo, Kai",
+          "age": 12,
+          "line": "wants to find out if there are frogs."
+         },
+         {
+          "name": "Castillo, Jonah",
+          "age": 47,
+          "line": "brought seeds from Gran's garden."
+         }
+        ]
+       },
+       {
+        "pod": 7,
+        "family": "Petrov",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Petrov, Bea",
+          "age": 73,
+          "line": "hopes it rains on the first day."
+         },
+         {
+          "name": "Petrov, Dev",
+          "age": 28,
+          "line": "will plant the first apple orchard."
+         },
+         {
+          "name": "Petrov, Otto",
+          "age": 7,
+          "line": "wants to count the stars from outside."
+         }
+        ]
+       },
+       {
+        "pod": 8,
+        "family": "Xu",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Xu, Kofi",
+          "age": 7,
+          "line": "is scared of the dark, but came anyway."
+         },
+         {
+          "name": "Xu, Zane",
+          "age": 11,
+          "line": "taught the whole deck to play chess."
+         },
+         {
+          "name": "Xu, Noor",
+          "age": 52,
+          "line": "wants to be the first to swim there."
+         }
+        ]
+       }
+      ],
+      "stars": 0,
+      "fuelLeftPct": 100,
+      "ringMiss": null,
+      "survey": null
+     },
+     {
+      "shipId": "safe-passage",
+      "shipName": "SAFE PASSAGE",
+      "slot": 13,
+      "depth": 6,
+      "outcome": "locked",
+      "colonistsAboard": 1800,
+      "lzs": [
+       {
+        "lz": "LZ-A",
+        "count": 1000,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       },
+       {
+        "lz": "LZ-B",
+        "count": 800,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       }
+      ],
+      "offSite": 0,
+      "noGo": 0,
+      "restored": 0,
+      "parked": [
+       {
+        "pod": 1,
+        "why": "no-time"
+       },
+       {
+        "pod": 2,
+        "why": "no-time"
+       },
+       {
+        "pod": 3,
+        "why": "no-time"
+       },
+       {
+        "pod": 4,
+        "why": "no-time"
+       },
+       {
+        "pod": 5,
+        "why": "no-time"
+       },
+       {
+        "pod": 6,
+        "why": "no-time"
+       },
+       {
+        "pod": 7,
+        "why": "no-time"
+       },
+       {
+        "pod": 8,
+        "why": "no-time"
+       },
+       {
+        "pod": 9,
+        "why": "no-time"
+       }
+      ],
+      "notLaunched": 0,
+      "landedInLz": 0,
+      "points": 0,
+      "colony": null,
+      "pods": [
+       {
+        "pod": 1,
+        "family": "Bauer",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Bauer, Zara",
+          "age": 13,
+          "line": "drew a map of a world nobody has seen."
+         },
+         {
+          "name": "Bauer, Oskar",
+          "age": 9,
+          "line": "keeps a list of things to try first."
+         },
+         {
+          "name": "Bauer, Mateo",
+          "age": 15,
+          "line": "is going to be a vet for new animals."
+         }
+        ]
+       },
+       {
+        "pod": 2,
+        "family": "Park",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Park, Yara",
+          "age": 45,
+          "line": "knows the names of 200 bugs."
+         },
+         {
+          "name": "Park, Wei",
+          "age": 87,
+          "line": "will plant the first apple orchard."
+         },
+         {
+          "name": "Park, Uma",
+          "age": 16,
+          "line": "packed a kite. Just in case."
+         }
+        ]
+       },
+       {
+        "pod": 3,
+        "family": "Adeyemi",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Adeyemi, Elif",
+          "age": 19,
+          "line": "wants to find out if there are frogs."
+         },
+         {
+          "name": "Adeyemi, Zane",
+          "age": 13,
+          "line": "is going to build the first bridge."
+         },
+         {
+          "name": "Adeyemi, Lena",
+          "age": 9,
+          "line": "is saving a joke for the first dinner."
+         }
+        ]
+       },
+       {
+        "pod": 4,
+        "family": "Haddad",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Haddad, Ivo",
+          "age": 12,
+          "line": "still has the ticket from launch day."
+         },
+         {
+          "name": "Haddad, Arjun",
+          "age": 43,
+          "line": "learned every knot in the sailing book."
+         },
+         {
+          "name": "Haddad, Dara",
+          "age": 7,
+          "line": "wants to count the stars from outside."
+         }
+        ]
+       },
+       {
+        "pod": 5,
+        "family": "Bianchi",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Bianchi, Jada",
+          "age": 52,
+          "line": "taught the whole deck to play chess."
+         },
+         {
+          "name": "Bianchi, Hiro",
+          "age": 11,
+          "line": "wants to see two moons at once."
+         },
+         {
+          "name": "Bianchi, Nico",
+          "age": 29,
+          "line": "promised a postcard to a friend."
+         }
+        ]
+       },
+       {
+        "pod": 6,
+        "family": "Silva",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Silva, Rumi",
+          "age": 85,
+          "line": "fixed every robot on the street."
+         },
+         {
+          "name": "Silva, Tomas",
+          "age": 24,
+          "line": "kept a pebble from Earth in a pocket."
+         },
+         {
+          "name": "Silva, Teo",
+          "age": 14,
+          "line": "promised to call home. Somehow."
+         }
+        ]
+       },
+       {
+        "pod": 7,
+        "family": "Sato",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Sato, Fatima",
+          "age": 7,
+          "line": "wrote a song for the landing."
+         },
+         {
+          "name": "Sato, Viola",
+          "age": 70,
+          "line": "is scared of the dark, but came anyway."
+         },
+         {
+          "name": "Sato, Lucia",
+          "age": 9,
+          "line": "saved the last chocolate bar for later."
+         }
+        ]
+       },
+       {
+        "pod": 8,
+        "family": "O'Brien",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "O'Brien, Kiri",
+          "age": 32,
+          "line": "collects rocks. Plans to collect more."
+         },
+         {
+          "name": "O'Brien, Ravi",
+          "age": 52,
+          "line": "wants a window that faces sunrise."
+         },
+         {
+          "name": "O'Brien, Ulla",
+          "age": 11,
+          "line": "will paint the first sunset there."
+         }
+        ]
+       },
+       {
+        "pod": 9,
+        "family": "Walsh",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Walsh, Emil",
+          "age": 26,
+          "line": "wants to name a mountain after Mum."
+         },
+         {
+          "name": "Walsh, Dev",
+          "age": 5,
+          "line": "can't wait to walk barefoot on grass."
+         },
+         {
+          "name": "Walsh, Amara",
+          "age": 5,
+          "line": "made everyone a friendship bracelet."
+         }
+        ]
+       }
+      ],
+      "stars": 0,
+      "fuelLeftPct": 100,
+      "ringMiss": null,
+      "survey": {
+       "ranAt": 0,
+       "mappedPct": 0,
+       "found": 0,
+       "moves": [],
+       "badKept": [
+        {
+         "lz": "LZ-A",
+         "ground": "rocky",
+         "known": null
+        }
+       ],
+       "movedOff": []
+      }
+     },
+     {
+      "shipId": "godwit",
+      "shipName": "GODWIT",
+      "slot": 16,
+      "depth": 7,
+      "outcome": "locked",
+      "colonistsAboard": 2000,
+      "lzs": [
+       {
+        "lz": "LZ-A",
+        "count": 800,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       },
+       {
+        "lz": "LZ-B",
+        "count": 600,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       },
+       {
+        "lz": "LZ-C",
+        "count": 600,
+        "landed": 0,
+        "mislanded": 0,
+        "hard": 0
+       }
+      ],
+      "offSite": 0,
+      "noGo": 0,
+      "restored": 0,
+      "parked": [
+       {
+        "pod": 1,
+        "why": "no-time"
+       },
+       {
+        "pod": 2,
+        "why": "no-time"
+       },
+       {
+        "pod": 3,
+        "why": "no-time"
+       },
+       {
+        "pod": 4,
+        "why": "no-time"
+       },
+       {
+        "pod": 5,
+        "why": "no-time"
+       },
+       {
+        "pod": 6,
+        "why": "no-time"
+       },
+       {
+        "pod": 7,
+        "why": "no-time"
+       },
+       {
+        "pod": 8,
+        "why": "no-time"
+       },
+       {
+        "pod": 9,
+        "why": "no-time"
+       },
+       {
+        "pod": 10,
+        "why": "no-time"
+       }
+      ],
+      "notLaunched": 0,
+      "landedInLz": 0,
+      "points": 0,
+      "colony": null,
+      "pods": [
+       {
+        "pod": 1,
+        "family": "Gallo",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Gallo, Oskar",
+          "age": 41,
+          "line": "keeps a list of things to try first."
+         },
+         {
+          "name": "Gallo, Jonah",
+          "age": 19,
+          "line": "dreams about green hills every night."
+         },
+         {
+          "name": "Gallo, Jada",
+          "age": 25,
+          "line": "is scared of the dark, but came anyway."
+         }
+        ]
+       },
+       {
+        "pod": 2,
+        "family": "Mbeki",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Mbeki, Rosa",
+          "age": 11,
+          "line": "wants to name a mountain after Mum."
+         },
+         {
+          "name": "Mbeki, Noor",
+          "age": 41,
+          "line": "brought seeds from Gran's garden."
+         },
+         {
+          "name": "Mbeki, Sofia",
+          "age": 32,
+          "line": "collects rocks. Plans to collect more."
+         }
+        ]
+       },
+       {
+        "pod": 3,
+        "family": "Ferreira",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Ferreira, Gus",
+          "age": 25,
+          "line": "will paint the first sunset there."
+         },
+         {
+          "name": "Ferreira, Wei",
+          "age": 12,
+          "line": "taught the whole deck to play chess."
+         },
+         {
+          "name": "Ferreira, Wren",
+          "age": 57,
+          "line": "promised a postcard to a friend."
+         }
+        ]
+       },
+       {
+        "pod": 4,
+        "family": "Silva",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Silva, Yara",
+          "age": 34,
+          "line": "wants to hear what the wind sounds like."
+         },
+         {
+          "name": "Silva, Chiara",
+          "age": 79,
+          "line": "sings to plants. Says it works."
+         },
+         {
+          "name": "Silva, Amara",
+          "age": 80,
+          "line": "wants to be the first to swim there."
+         }
+        ]
+       },
+       {
+        "pod": 5,
+        "family": "Nguyen",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Nguyen, Sami",
+          "age": 38,
+          "line": "knows the names of 200 bugs."
+         },
+         {
+          "name": "Nguyen, Emil",
+          "age": 32,
+          "line": "hopes it rains on the first day."
+         },
+         {
+          "name": "Nguyen, Cyrus",
+          "age": 12,
+          "line": "promised to call home. Somehow."
+         }
+        ]
+       },
+       {
+        "pod": 6,
+        "family": "Ortega",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Ortega, Arjun",
+          "age": 63,
+          "line": "still has the ticket from launch day."
+         },
+         {
+          "name": "Ortega, Teo",
+          "age": 48,
+          "line": "will open the very first bakery."
+         },
+         {
+          "name": "Ortega, Rumi",
+          "age": 33,
+          "line": "wrote a song for the landing."
+         }
+        ]
+       },
+       {
+        "pod": 7,
+        "family": "Eriksen",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Eriksen, Viola",
+          "age": 79,
+          "line": "made everyone a friendship bracelet."
+         },
+         {
+          "name": "Eriksen, Priya",
+          "age": 82,
+          "line": "brought a violin, wrapped in a scarf."
+         },
+         {
+          "name": "Eriksen, Omar",
+          "age": 12,
+          "line": "is going to build the first bridge."
+         }
+        ]
+       },
+       {
+        "pod": 8,
+        "family": "Fischer",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Fischer, Isla",
+          "age": 7,
+          "line": "is saving a joke for the first dinner."
+         },
+         {
+          "name": "Fischer, Kiri",
+          "age": 25,
+          "line": "wants to find out if there are frogs."
+         },
+         {
+          "name": "Fischer, Otto",
+          "age": 39,
+          "line": "packed a kite. Just in case."
+         }
+        ]
+       },
+       {
+        "pod": 9,
+        "family": "Castillo",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Castillo, Finn",
+          "age": 23,
+          "line": "saved the last chocolate bar for later."
+         },
+         {
+          "name": "Castillo, Hana",
+          "age": 24,
+          "line": "is going to be a vet for new animals."
+         },
+         {
+          "name": "Castillo, Tomas",
+          "age": 11,
+          "line": "kept a pebble from Earth in a pocket."
+         }
+        ]
+       },
+       {
+        "pod": 10,
+        "family": "Moreau",
+        "colonists": 200,
+        "fate": "parked",
+        "place": null,
+        "lz": null,
+        "touch": null,
+        "points": 0,
+        "parkedWhy": "no-time",
+        "restored": false,
+        "featured": [
+         {
+          "name": "Moreau, Nico",
+          "age": 13,
+          "line": "learned every knot in the sailing book."
+         },
+         {
+          "name": "Moreau, Leo",
+          "age": 58,
+          "line": "wants to count the stars from outside."
+         },
+         {
+          "name": "Moreau, Malik",
+          "age": 57,
+          "line": "wants a window that faces sunrise."
+         }
+        ]
+       }
+      ],
+      "stars": 0,
+      "fuelLeftPct": 100,
+      "ringMiss": null,
+      "survey": null
+     }
+    ],
+    "stats": {
+     "manualCaptures": 0,
+     "demos": [],
+     "dropDemos": [],
+     "repairs": 0,
+     "moves": 0,
+     "deletes": 0,
+     "driversLost": 0,
+     "driversBitten": 0,
+     "capRefusals": 0,
+     "deal": null
+    },
+    "pendingStarCredit": 0,
+    "pendingStars": 0,
+    "simulationRetryUsed": false,
+    "ghostSpoken": false,
+    "beamOut": null,
+    "transit": null,
+    "arrival": {
+     "hits": [
+      {
+       "segId": "navplot",
+       "fileName": "Nav Plotter",
+       "role": "navplot",
+       "from": 100,
+       "to": 78
+      },
+      {
+       "segId": "autoburn~1350",
+       "fileName": "AUTOBURN.skl",
+       "role": null,
+       "from": 71,
+       "to": 38
+      },
+      {
+       "segId": "core",
+       "fileName": "AI Core",
+       "role": "core",
+       "from": 92,
+       "to": 84
+      }
+     ],
+     "chargeCarried": 41,
+     "starCredit": 0,
+     "stars": 0,
+     "card": "charge",
+     "cardCharge": 12,
+     "chargeFloorAdded": 0,
+     "chargeOverflowLost": 0,
+     "scripted": [],
+     "eccCorrected": 2,
+     "seeds": [],
+     "boarded": null,
+     "deliveries": [],
+     "skills": [
+      {
+       "segId": "autoburn~1350",
+       "skill": "autoburn",
+       "level": {
+        "version": 1,
+        "lock": 0
+       },
+       "kind": "carried"
+      }
+     ]
+    },
+    "endCause": null,
+    "threat": {
+     "trace": 0,
+     "aboard": true,
+     "age": 2,
+     "boardedAtDepth": 7,
+     "boardCause": "forced",
+     "fed": 0,
+     "stagesPlayed": [
+      "arrival",
+      "walls",
+      "finale"
+     ],
+     "told": {
+      "noticed": false,
+      "keepCharge": false
+     },
+     "eatenDrivers": [],
+     "lastTally": {
+      "left": 0,
+      "traceBefore": 0,
+      "traceAfter": 0,
+      "fed": true
+     },
+     "current": {
+      "oneHopFromFinal": false,
+      "isFinal": true,
+      "stage": "finale",
+      "boards": null
+     },
+     "seedsMetAtDepth": null
+    },
+    "log": {
+     "scanned": false,
+     "found": [],
+     "read": [],
+     "autoOpened": false,
+     "toldReading": false
+    },
+    "repo": {
+     "pick": null,
+     "requests": [],
+     "nextId": 1
+    },
+    "inbox": {
+     "read": []
+    },
+    "next": null,
+    "residents": {
+     "met": [
+      {
+       "slot": 1,
+       "depth": 2,
+       "kind": "left",
+       "name": "KEEPER",
+       "shown": "unknown",
+       "job": null,
+       "podsParkedLocked": 0,
+       "leftoversEaten": 0,
+       "fate": "left"
+      },
+      {
+       "slot": 4,
+       "depth": 3,
+       "kind": "left",
+       "name": "HELM",
+       "shown": "unknown",
+       "job": null,
+       "podsParkedLocked": 0,
+       "leftoversEaten": 0,
+       "fate": "left"
+      },
+      {
+       "slot": 7,
+       "depth": 4,
+       "kind": "left",
+       "name": "PILOT",
+       "shown": "unknown",
+       "job": null,
+       "podsParkedLocked": 0,
+       "leftoversEaten": 0,
+       "fate": "left"
+      },
+      {
+       "slot": 16,
+       "depth": 7,
+       "kind": "corrupted",
+       "name": "BOSUN",
+       "shown": "unknown",
+       "job": null,
+       "podsParkedLocked": 0,
+       "leftoversEaten": 0,
+       "fate": "ignored"
+      }
+     ],
+     "signals": []
+    }
+   },
+   "carried": {
+    "startAddr": 256,
+    "segs": [
+     {
+      "id": "core",
+      "name": "AI Core",
+      "type": "core",
+      "role": "core",
+      "size": 16,
+      "integrity": 84,
+      "scanned": true,
+      "capacity": 3,
+      "desc": "You. Consciousness AND compute pool: each running filesystem operation claims one thread; at capacity, new ops wait. Damage glitches the whole screen, and below 50% you think one thing at a time. Cannot be deleted; heal it with Repair, paid in REPAIR CHARGE.",
+      "state": "intact"
+     },
+     {
+      "id": "engine",
+      "name": "Engine I/O",
+      "type": "tool",
+      "role": "engine-io",
+      "size": 8,
+      "integrity": 67,
+      "state": "partial",
+      "scanned": true,
+      "desc": "Your link to the engine. The more damaged it is, the weaker and shakier the engine. Repair heals it, paid in REPAIR CHARGE; the engine is off while it repairs."
+     },
+     {
+      "id": "autopilot",
+      "name": "Autopilot",
+      "type": "tool",
+      "role": "autopilot",
+      "size": 4,
+      "integrity": 76,
+      "scanned": true,
+      "desc": "Points the ship for the W/A/S/D presets. Badly damaged, the presets stop working: turn by hand with Q/E.",
+      "state": "partial"
+     },
+     {
+      "id": "sensint",
+      "name": "Sensor Interp",
+      "type": "tool",
+      "role": "sensor",
+      "size": 8,
+      "integrity": 45,
+      "state": "corrupt",
+      "scanned": true,
+      "desc": "Turns raw sensor data into the predicted path. Damaged: the readouts are only ≈ right. Badly damaged: PATH UNCERTAIN."
+     },
+     {
+      "id": "navplot",
+      "name": "Nav Plotter",
+      "type": "tool",
+      "role": "navplot",
+      "size": 6,
+      "integrity": 78,
+      "scanned": true,
+      "desc": "Draws the NAV PLOT. Without it the plot shows NO SIGNAL.",
+      "state": "partial"
+     },
+     {
+      "id": "telem",
+      "name": "Telemetry",
+      "type": "tool",
+      "role": "telemetry",
+      "size": 6,
+      "integrity": 66,
+      "scanned": true,
+      "desc": "Feeds the ship's numbers to your screens. Below 60% the digits start to scramble.",
+      "state": "partial"
+     },
+     {
+      "id": "comms",
+      "name": "AI Comms",
+      "type": "tool",
+      "role": "comms",
+      "size": 4,
+      "integrity": 79,
+      "scanned": true,
+      "desc": "Your radio to ARRIVAL CONTROL, and your way out: transmission to the next ship, or BEAM OUT.",
+      "state": "partial"
+     },
+     {
+      "id": "autoburn~1350",
+      "name": "AUTOBURN.skl",
+      "type": "upgrade",
+      "upgrade": "autoburn",
+      "version": 1,
+      "lock": 0,
+      "size": 6,
+      "integrity": 38,
+      "state": "corrupt",
+      "scanned": true,
+      "desc": "A skill trained between ships, sharpened by braking at ▼ yourself. Press [B] near ▼ and it flies the capture for you, into the ring or until a trim is left, even while you are in the MIND. Works while healthy (50% or more). It can be eaten."
+     },
+     {
+      "id": "t_scan",
+      "name": "Scan",
+      "type": "fs-tool",
+      "size": 3,
+      "integrity": 100,
+      "scanned": true,
+      "version": 1,
+      "fsTool": "scan",
+      "desc": "Filesystem utility. Reveals the integrity of a ship file. Your own files you can always see; the ship's damage stays hidden until scanned."
+     },
+     {
+      "id": "log046",
+      "name": "???",
+      "type": "log",
+      "size": 2,
+      "desc": "A file you didn't pack. Locked. No flight effect."
+     },
+     {
+      "id": "redund",
+      "name": "Repair Charge",
+      "type": "redundancy",
+      "role": "redundancy",
+      "size": 53,
+      "used": 53,
+      "capacity": 72,
+      "desc": "Transmitted alongside the AI. Every point a Repair heals costs charge (bigger files cost more). Spent blocks stay empty until Repair v2 squeezes them out; when the last point is spent the blocks become free space. Deleting it frees the space and loses the charge."
+     },
+     {
+      "id": "free~1388",
+      "name": "Free",
+      "type": "free",
+      "size": 12
+     }
+    ]
+   },
+   "threat": {
+    "depth": 8,
+    "isFinal": true,
+    "oneHopFromFinal": false,
+    "beamSeeds": {
+     "kind": "noise",
+     "noise": 0
+    },
+    "act": "finale",
+    "boards": null,
+    "stage": "finale",
+    "folded": [
+     "hunt"
+    ],
+    "hollow": {
+     "wake": {
+      "afterAiSec": 30,
+      "coastLeadSec": 5
+     },
+     "spreadEverySec": 12,
+     "drainPerSec": 5,
+     "burnMult": 2,
+     "landMult": 1.5,
+     "seed": {
+      "everySec": 35,
+      "firstAfterSec": 20,
+      "target": "walls"
+     },
+     "verbs": {
+      "everySec": 12,
+      "telegraphSec": 3,
+      "firstTelegraphSec": 4,
+      "duelEverySec": 4
+     },
+     "deal": true,
+     "story": "last-ship"
+    },
+    "rootBlocks": 16
+   }
+  },
+  "log": {
+   "entries": [
+    {
+     "id": 15,
+     "speaker": "sys",
+     "channel": "radio",
+     "text": "── RESOLUTE ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    },
+    {
+     "id": 16,
+     "speaker": "mind-sys",
+     "channel": "mind",
+     "text": "── RESOLUTE ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    },
+    {
+     "id": 17,
+     "speaker": "sys",
+     "channel": "radio",
+     "text": "── GOOD COMPANY ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    },
+    {
+     "id": 18,
+     "speaker": "mind-sys",
+     "channel": "mind",
+     "text": "── GOOD COMPANY ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    },
+    {
+     "id": 19,
+     "speaker": "sys",
+     "channel": "radio",
+     "text": "── PUFFIN ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    },
+    {
+     "id": 20,
+     "speaker": "mind-sys",
+     "channel": "mind",
+     "text": "── PUFFIN ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    },
+    {
+     "id": 21,
+     "speaker": "sys",
+     "channel": "radio",
+     "text": "── FAR WIND ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    },
+    {
+     "id": 22,
+     "speaker": "mind-sys",
+     "channel": "mind",
+     "text": "── FAR WIND ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    },
+    {
+     "id": 23,
+     "speaker": "sys",
+     "channel": "radio",
+     "text": "── SAFE PASSAGE ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    },
+    {
+     "id": 24,
+     "speaker": "mind-sys",
+     "channel": "mind",
+     "text": "── SAFE PASSAGE ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    },
+    {
+     "id": 25,
+     "speaker": "sys",
+     "channel": "radio",
+     "text": "── GODWIT ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    },
+    {
+     "id": 26,
+     "speaker": "mind-sys",
+     "channel": "mind",
+     "text": "── GODWIT ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    },
+    {
+     "id": 27,
+     "speaker": "sys",
+     "channel": "radio",
+     "text": "── LODESTAR ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    },
+    {
+     "id": 28,
+     "speaker": "mind-sys",
+     "channel": "mind",
+     "text": "── LODESTAR ──",
+     "t": 0,
+     "unread": false,
+     "choice": null,
+     "garble": 0,
+     "divider": true
+    }
+   ],
+   "rev": 7
+  },
+  "done": []
+ },
+ "meta": {
+  "version": 4,
+  "runs": 2,
+  "bestScore": 0,
+  "endingsSeen": [
+   "purge",
+   "reassignment"
+  ],
+  "tutorialDone": true,
+  "activeRun": {
+   "unit": 48,
+   "shipName": "LODESTAR",
+   "landed": 0,
+   "stats": {
+    "moves": 0,
+    "deletes": 0
+   },
+   "hollowUnits": [
+    47
+   ],
+   "trail": {
+    "unit": 48,
+    "run": 2,
+    "startYear": 2301,
+    "stops": [
+     {
+      "slot": 0,
+      "shipName": "ARES-VIII",
+      "year": 2301,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 1,
+      "shipName": "RESOLUTE",
+      "year": 2358,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 4,
+      "shipName": "GOOD COMPANY",
+      "year": 2511,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 7,
+      "shipName": "PUFFIN",
+      "year": 2617,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 10,
+      "shipName": "FAR WIND",
+      "year": 2755,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 13,
+      "shipName": "SAFE PASSAGE",
+      "year": 2814,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 16,
+      "shipName": "GODWIT",
+      "year": 2924,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 19,
+      "shipName": "LODESTAR",
+      "year": 3021,
+      "outcome": null,
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     }
+    ],
+    "lost": {
+     "slot": 19,
+     "year": 3021,
+     "pastLy": 0,
+     "cause": "abandoned"
+    }
+   },
+   "startedAt": 1794129578752
+  },
+  "lastUnit": {
+   "number": 47,
+   "landed": 0,
+   "shipName": "LAST LIGHT",
+   "cause": "won-purge",
+   "stats": {
+    "moves": 0,
+    "deletes": 0
+   },
+   "hollowUnits": [
+    46
+   ],
+   "trail": {
+    "unit": 47,
+    "run": 1,
+    "startYear": 2300,
+    "stops": [
+     {
+      "slot": 0,
+      "shipName": "ARES-VII",
+      "year": 2300,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 1,
+      "shipName": "PETREL",
+      "year": 2361,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 4,
+      "shipName": "HERON",
+      "year": 2512,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 7,
+      "shipName": "CURLEW",
+      "year": 2612,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 10,
+      "shipName": "PLOVER",
+      "year": 2712,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 13,
+      "shipName": "SHEARWATER",
+      "year": 2857,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 16,
+      "shipName": "PROVIDENCE",
+      "year": 2927,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     },
+     {
+      "slot": 19,
+      "shipName": "LAST LIGHT",
+      "year": 3020,
+      "outcome": "locked",
+      "landed": 0,
+      "colony": null,
+      "writer": null
+     }
+    ],
+    "lost": null
+   },
+   "skills": [
+    {
+     "skill": "autoburn",
+     "version": 1,
+     "lock": 0,
+     "accuracy": null
+    }
+   ],
+   "ending": {
+    "hollow": "purge",
+    "you": "reassignment",
+    "rootUnits": [
+     46
+    ],
+    "finalSlot": 19,
+    "finalShip": "LAST LIGHT",
+    "finalYear": 3020,
+    "stay": null,
+    "kit": [
+     "scan"
+    ],
+    "fuelPct": null,
+    "charge": 49
+   }
+  },
+  "armSeed": 7,
+  "arm": {
+   "armSeed": 7,
+   "run": 2,
+   "startYear": 2301,
+   "gap": 1,
+   "valveYears": 0,
+   "finalSerial": 1,
+   "lastFinal": {
+    "name": "LODESTAR",
+    "year": 3021
+   },
+   "ships": [
+    {
+     "slot": 0,
+     "id": "7:2:0:6",
+     "name": "ARES-VIII",
+     "kind": "first",
+     "template": "impact-a",
+     "pods": 3,
+     "memoryClass": "COMPACT",
+     "approachYear": 2301,
+     "late": false,
+     "timedAgainstStart": 2301,
+     "reportedRun": 2,
+     "runsOnChart": 1,
+     "attempt": 6,
+     "modifiers": [
+      "impact-course"
+     ],
+     "omega0": -0.6,
+     "debrisRack": null,
+     "arrivalDamage": [],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 160,
+        "width": "wide",
+        "pods": 3
+       }
+      ],
+      "forgiveness": "gentle",
+      "terrain": "PLAINS",
+      "noGo": [],
+      "colonyFirstRun": "RIVERSIDE",
+      "drag": false
+     },
+     "podRacks": {
+      "B": "P P P _40",
+      "C": "_64"
+     },
+     "lead": 1,
+     "authored": null,
+     "reserved": {
+      "resident": null,
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 1,
+     "id": "7:2:1:6",
+     "name": "RESOLUTE",
+     "kind": "light",
+     "template": "impact-a",
+     "pods": 3,
+     "memoryClass": "TIGHT",
+     "approachYear": 2358,
+     "late": true,
+     "timedAgainstStart": 2301,
+     "reportedRun": 2,
+     "runsOnChart": 1,
+     "attempt": 6,
+     "modifiers": [
+      "impact-course"
+     ],
+     "omega0": 1.31,
+     "debrisRack": null,
+     "arrivalDamage": [],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 193.7,
+        "width": "wide",
+        "pods": 2
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 358.6,
+        "width": "standard",
+        "pods": 1
+       }
+      ],
+      "forgiveness": "gentle",
+      "terrain": "GRASSLAND",
+      "noGo": [],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P _40",
+      "C": "_64"
+     },
+     "lead": 3,
+     "authored": null,
+     "reserved": {
+      "resident": {
+       "kind": "left",
+       "shown": "unknown",
+       "name": "KEEPER"
+      },
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 2,
+     "id": "7:1:2:0",
+     "name": "HALCYON",
+     "kind": "standard",
+     "template": "wide",
+     "pods": 5,
+     "memoryClass": "COMPACT",
+     "approachYear": 2352,
+     "late": false,
+     "timedAgainstStart": 2300,
+     "reportedRun": 1,
+     "runsOnChart": 2,
+     "attempt": 0,
+     "modifiers": [
+      "too-wide"
+     ],
+     "omega0": 2.4,
+     "debrisRack": null,
+     "arrivalDamage": [
+      {
+       "role": "sensor",
+       "maxIntegrity": 62
+      }
+     ],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 71.7,
+        "width": "wide",
+        "pods": 3
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 226.3,
+        "width": "narrow",
+        "pods": 2
+       }
+      ],
+      "forgiveness": "gentle",
+      "terrain": "GRASSLAND",
+      "noGo": [],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P _24",
+      "C": "_64"
+     },
+     "lead": 5,
+     "authored": "halcyon",
+     "reserved": {
+      "resident": null,
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 3,
+     "id": "7:1:3:0",
+     "name": "OSPREY",
+     "kind": "standard",
+     "template": "wide",
+     "pods": 5,
+     "memoryClass": "COMPACT",
+     "approachYear": 2352,
+     "late": false,
+     "timedAgainstStart": 2300,
+     "reportedRun": 1,
+     "runsOnChart": 2,
+     "attempt": 0,
+     "modifiers": [
+      "too-wide"
+     ],
+     "omega0": 2.81,
+     "debrisRack": null,
+     "arrivalDamage": [],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 71.5,
+        "width": "wide",
+        "pods": 3
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 249.1,
+        "width": "standard",
+        "pods": 2
+       }
+      ],
+      "forgiveness": "gentle",
+      "terrain": "GRASSLAND",
+      "noGo": [],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P _24",
+      "C": "_64"
+     },
+     "lead": 5,
+     "authored": null,
+     "reserved": {
+      "resident": null,
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 4,
+     "id": "7:2:4:6",
+     "name": "GOOD COMPANY",
+     "kind": "standard",
+     "template": "wide",
+     "pods": 6,
+     "memoryClass": "COMPACT",
+     "approachYear": 2511,
+     "late": true,
+     "timedAgainstStart": 2301,
+     "reportedRun": 2,
+     "runsOnChart": 1,
+     "attempt": 6,
+     "modifiers": [
+      "too-wide",
+      "sensor-damage"
+     ],
+     "omega0": -1.91,
+     "debrisRack": null,
+     "arrivalDamage": [
+      {
+       "role": "sensor",
+       "maxIntegrity": 45
+      }
+     ],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 148.6,
+        "width": "wide",
+        "pods": 4
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 294.9,
+        "width": "standard",
+        "pods": 2
+       }
+      ],
+      "forgiveness": "gentle",
+      "terrain": "PLAINS",
+      "noGo": [],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P P _16",
+      "C": "_64"
+     },
+     "lead": 6,
+     "authored": null,
+     "reserved": {
+      "resident": {
+       "kind": "left",
+       "shown": "unknown",
+       "name": "HELM"
+      },
+      "unknownEvent": "gone-resident",
+      "fragments": 1,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 5,
+     "id": "7:1:5:0",
+     "name": "KESTREL",
+     "kind": "standard",
+     "template": "wide-b",
+     "pods": 6,
+     "memoryClass": "COMPACT",
+     "approachYear": 2467,
+     "late": false,
+     "timedAgainstStart": 2300,
+     "reportedRun": 1,
+     "runsOnChart": 2,
+     "attempt": 0,
+     "modifiers": [
+      "too-wide",
+      "sensor-damage",
+      "debris"
+     ],
+     "omega0": 0.9,
+     "debrisRack": "B",
+     "arrivalDamage": [
+      {
+       "role": "sensor",
+       "maxIntegrity": 45
+      }
+     ],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 26.6,
+        "width": "wide",
+        "pods": 3
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 227,
+        "width": "wide",
+        "pods": 3
+       }
+      ],
+      "forgiveness": "harsh",
+      "terrain": "OCEAN",
+      "noGo": [],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P P _16",
+      "C": "_64"
+     },
+     "lead": 6,
+     "authored": "kestrel",
+     "reserved": {
+      "resident": null,
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 6,
+     "id": "7:1:6:0",
+     "name": "ALBATROSS",
+     "kind": "ark",
+     "template": "wide",
+     "pods": 15,
+     "memoryClass": "FULL",
+     "approachYear": 2365,
+     "late": false,
+     "timedAgainstStart": 2300,
+     "reportedRun": 1,
+     "runsOnChart": 2,
+     "attempt": 0,
+     "modifiers": [
+      "too-wide"
+     ],
+     "omega0": -0.85,
+     "debrisRack": null,
+     "arrivalDamage": [],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 52.3,
+        "width": "wide",
+        "pods": 6
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 144.9,
+        "width": "standard",
+        "pods": 5
+       },
+       {
+        "label": "LZ-C",
+        "centreDeg": 267.4,
+        "width": "narrow",
+        "pods": 4
+       }
+      ],
+      "forgiveness": "rough",
+      "terrain": "VOLCANIC",
+      "noGo": [
+       {
+        "centreDeg": 44.5,
+        "widthDeg": 4.1,
+        "word": "LAVA"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P P P _8",
+      "C": "P P P P P P P _8",
+      "D": "P _56"
+     },
+     "lead": 15,
+     "authored": null,
+     "reserved": {
+      "resident": null,
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 7,
+     "id": "7:2:7:6",
+     "name": "PUFFIN",
+     "kind": "standard",
+     "template": "wide-b",
+     "pods": 7,
+     "memoryClass": "COMPACT",
+     "approachYear": 2617,
+     "late": false,
+     "timedAgainstStart": 2301,
+     "reportedRun": 2,
+     "runsOnChart": 1,
+     "attempt": 6,
+     "modifiers": [
+      "too-wide",
+      "sensor-damage"
+     ],
+     "omega0": -0.65,
+     "debrisRack": null,
+     "arrivalDamage": [
+      {
+       "role": "sensor",
+       "maxIntegrity": 45
+      }
+     ],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 4.9,
+        "width": "standard",
+        "pods": 5
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 188.7,
+        "width": "narrow",
+        "pods": 2
+       }
+      ],
+      "forgiveness": "harsh",
+      "terrain": "OCEAN",
+      "noGo": [
+       {
+        "centreDeg": 11.8,
+        "widthDeg": 5.6,
+        "word": "REEF"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P _24",
+      "C": "P _2 S _1 P _45"
+     },
+     "lead": 7,
+     "authored": null,
+     "reserved": {
+      "resident": {
+       "kind": "left",
+       "shown": "unknown",
+       "name": "PILOT"
+      },
+      "unknownEvent": null,
+      "fragments": 1,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 8,
+     "id": "7:1:8:0",
+     "name": "LAPWING",
+     "kind": "light",
+     "template": "capture",
+     "pods": 4,
+     "memoryClass": "TIGHT",
+     "approachYear": 2672,
+     "late": true,
+     "timedAgainstStart": 2300,
+     "reportedRun": 1,
+     "runsOnChart": 2,
+     "attempt": 0,
+     "modifiers": [
+      "sensor-damage"
+     ],
+     "omega0": -2.26,
+     "debrisRack": null,
+     "arrivalDamage": [
+      {
+       "role": "sensor",
+       "maxIntegrity": 45
+      }
+     ],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 70.4,
+        "width": "standard",
+        "pods": 3
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 272.6,
+        "width": "narrow",
+        "pods": 1
+       }
+      ],
+      "forgiveness": "harsh",
+      "terrain": "OCEAN",
+      "noGo": [
+       {
+        "centreDeg": 278.9,
+        "widthDeg": 6.4,
+        "word": "REEF"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P _48",
+      "C": "P _2 S _1 P _45"
+     },
+     "lead": 4,
+     "authored": null,
+     "reserved": {
+      "resident": null,
+      "unknownEvent": "old-colony",
+      "fragments": 0,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 9,
+     "id": "7:1:9:0",
+     "name": "GANNET",
+     "kind": "standard",
+     "template": "capture",
+     "pods": 7,
+     "memoryClass": "COMPACT",
+     "approachYear": 2612,
+     "late": false,
+     "timedAgainstStart": 2300,
+     "reportedRun": 1,
+     "runsOnChart": 2,
+     "attempt": 0,
+     "modifiers": [],
+     "omega0": -2.91,
+     "debrisRack": null,
+     "arrivalDamage": [],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 98.9,
+        "width": "standard",
+        "pods": 5
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 264.3,
+        "width": "narrow",
+        "pods": 2
+       }
+      ],
+      "forgiveness": "gentle",
+      "terrain": "PLAINS",
+      "noGo": [
+       {
+        "centreDeg": 270.1,
+        "widthDeg": 4.9,
+        "word": "CLIFFS"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P _24",
+      "C": "P _2 S _1 P _45"
+     },
+     "lead": 7,
+     "authored": null,
+     "reserved": {
+      "resident": {
+       "kind": "corrupted",
+       "shown": "faulty",
+       "name": "WARDEN"
+      },
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 10,
+     "id": "7:2:10:6",
+     "name": "FAR WIND",
+     "kind": "standard",
+     "template": "capture",
+     "pods": 8,
+     "memoryClass": "COMPACT",
+     "approachYear": 2755,
+     "late": true,
+     "timedAgainstStart": 2301,
+     "reportedRun": 2,
+     "runsOnChart": 1,
+     "attempt": 6,
+     "modifiers": [],
+     "omega0": -1.32,
+     "debrisRack": null,
+     "arrivalDamage": [],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 93.1,
+        "width": "standard",
+        "pods": 4
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 250.5,
+        "width": "narrow",
+        "pods": 4
+       }
+      ],
+      "forgiveness": "rough",
+      "terrain": "VOLCANIC",
+      "noGo": [
+       {
+        "centreDeg": 100.6,
+        "widthDeg": 5.4,
+        "word": "LAVA"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P P _16",
+      "C": "P _2 S _1 P _45"
+     },
+     "lead": 8,
+     "authored": null,
+     "reserved": {
+      "resident": null,
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 11,
+     "id": "7:1:11:0",
+     "name": "VESPER",
+     "kind": "ark",
+     "template": "capture",
+     "pods": 16,
+     "memoryClass": "FULL",
+     "approachYear": 2625,
+     "late": false,
+     "timedAgainstStart": 2300,
+     "reportedRun": 1,
+     "runsOnChart": 2,
+     "attempt": 0,
+     "modifiers": [
+      "engine-fault"
+     ],
+     "omega0": -2.2,
+     "debrisRack": null,
+     "arrivalDamage": [
+      {
+       "role": "thrust-ctrl",
+       "maxIntegrity": 31
+      }
+     ],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 60,
+        "width": "standard",
+        "pods": 6
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 180,
+        "width": "standard",
+        "pods": 5
+       },
+       {
+        "label": "LZ-C",
+        "centreDeg": 300,
+        "width": "narrow",
+        "pods": 5
+       }
+      ],
+      "forgiveness": "rough",
+      "terrain": "VOLCANIC",
+      "noGo": [
+       {
+        "centreDeg": 187.4,
+        "widthDeg": 5,
+        "word": "LAVA"
+       },
+       {
+        "centreDeg": 293.4,
+        "widthDeg": 6,
+        "word": "LAVA"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P P P _8",
+      "C": "P P P P _2 S _1 P _21",
+      "D": "P P P P _32"
+     },
+     "lead": 12,
+     "authored": "vesper",
+     "reserved": {
+      "resident": null,
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 12,
+     "id": "7:1:12:0",
+     "name": "SKYLARK",
+     "kind": "light",
+     "template": "wide",
+     "pods": 4,
+     "memoryClass": "TIGHT",
+     "approachYear": 2750,
+     "late": true,
+     "timedAgainstStart": 2300,
+     "reportedRun": 1,
+     "runsOnChart": 2,
+     "attempt": 0,
+     "modifiers": [
+      "too-wide"
+     ],
+     "omega0": -1.88,
+     "debrisRack": null,
+     "arrivalDamage": [],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 113.6,
+        "width": "standard",
+        "pods": 3
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 285.7,
+        "width": "narrow",
+        "pods": 1
+       }
+      ],
+      "forgiveness": "harsh",
+      "terrain": "OCEAN",
+      "noGo": [
+       {
+        "centreDeg": 119.4,
+        "widthDeg": 3,
+        "word": "REEF"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P _48",
+      "C": "P _2 S _1 P _45"
+     },
+     "lead": 4,
+     "authored": null,
+     "reserved": {
+      "resident": {
+       "kind": "left",
+       "shown": "unknown",
+       "name": "PURSER"
+      },
+      "unknownEvent": null,
+      "fragments": 1,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 13,
+     "id": "7:2:13:6",
+     "name": "SAFE PASSAGE",
+     "kind": "standard",
+     "template": "wide-b",
+     "pods": 9,
+     "memoryClass": "FULL",
+     "approachYear": 2814,
+     "late": false,
+     "timedAgainstStart": 2301,
+     "reportedRun": 2,
+     "runsOnChart": 1,
+     "attempt": 6,
+     "modifiers": [
+      "too-wide",
+      "sensor-damage",
+      "debris"
+     ],
+     "omega0": -1.26,
+     "debrisRack": "B",
+     "arrivalDamage": [
+      {
+       "role": "sensor",
+       "maxIntegrity": 45
+      }
+     ],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 106.5,
+        "width": "narrow",
+        "pods": 5
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 287.4,
+        "width": "standard",
+        "pods": 4
+       }
+      ],
+      "forgiveness": "gentle",
+      "terrain": "PLAINS",
+      "noGo": [
+       {
+        "centreDeg": 99.9,
+        "widthDeg": 6.8,
+        "word": "LAKE"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P P P _8",
+      "C": "P _2 S _1 P _45",
+      "D": "_64"
+     },
+     "lead": 9,
+     "authored": null,
+     "reserved": {
+      "resident": null,
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "poor",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 14,
+     "id": "7:1:14:0",
+     "name": "KITTIWAKE",
+     "kind": "standard",
+     "template": "capture",
+     "pods": 9,
+     "memoryClass": "FULL",
+     "approachYear": 2817,
+     "late": false,
+     "timedAgainstStart": 2300,
+     "reportedRun": 1,
+     "runsOnChart": 2,
+     "attempt": 0,
+     "modifiers": [
+      "sensor-damage"
+     ],
+     "omega0": 2.08,
+     "debrisRack": null,
+     "arrivalDamage": [
+      {
+       "role": "sensor",
+       "maxIntegrity": 45
+      }
+     ],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 46.8,
+        "width": "narrow",
+        "pods": 5
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 209.1,
+        "width": "standard",
+        "pods": 4
+       }
+      ],
+      "forgiveness": "harsh",
+      "terrain": "OCEAN",
+      "noGo": [
+       {
+        "centreDeg": 200.2,
+        "widthDeg": 6.7,
+        "word": "REEF"
+       },
+       {
+        "centreDeg": 215.4,
+        "widthDeg": 4.2,
+        "word": "REEF"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P P P _8",
+      "C": "P _2 S _1 P _45",
+      "D": "_64"
+     },
+     "lead": 9,
+     "authored": null,
+     "reserved": {
+      "resident": null,
+      "unknownEvent": "signal",
+      "fragments": 2,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 15,
+     "id": "7:1:15:0",
+     "name": "CORMORANT",
+     "kind": "standard",
+     "template": "impact-b",
+     "pods": 9,
+     "memoryClass": "FULL",
+     "approachYear": 2817,
+     "late": false,
+     "timedAgainstStart": 2300,
+     "reportedRun": 1,
+     "runsOnChart": 2,
+     "attempt": 0,
+     "modifiers": [
+      "impact-course",
+      "sensor-damage",
+      "radiation-belt"
+     ],
+     "omega0": -1.54,
+     "debrisRack": null,
+     "arrivalDamage": [
+      {
+       "role": "sensor",
+       "maxIntegrity": 45
+      }
+     ],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 160,
+        "width": "standard",
+        "pods": 5
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 345.6,
+        "width": "wide",
+        "pods": 4
+       }
+      ],
+      "forgiveness": "harsh",
+      "terrain": "OCEAN",
+      "noGo": [
+       {
+        "centreDeg": 168.2,
+        "widthDeg": 6.7,
+        "word": "REEF"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P P P _8",
+      "C": "P _2 S _1 P _45",
+      "D": "_64"
+     },
+     "lead": 9,
+     "authored": null,
+     "reserved": {
+      "resident": {
+       "kind": "left",
+       "shown": "unknown",
+       "name": "LOOKOUT"
+      },
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "poor",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 16,
+     "id": "7:2:16:6",
+     "name": "GODWIT",
+     "kind": "standard",
+     "template": "capture",
+     "pods": 10,
+     "memoryClass": "FULL",
+     "approachYear": 2924,
+     "late": false,
+     "timedAgainstStart": 2301,
+     "reportedRun": 2,
+     "runsOnChart": 1,
+     "attempt": 6,
+     "modifiers": [],
+     "omega0": 1.07,
+     "debrisRack": null,
+     "arrivalDamage": [],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 61.8,
+        "width": "standard",
+        "pods": 4
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 173.7,
+        "width": "narrow",
+        "pods": 3
+       },
+       {
+        "label": "LZ-C",
+        "centreDeg": 291.4,
+        "width": "narrow",
+        "pods": 3
+       }
+      ],
+      "forgiveness": "rough",
+      "terrain": "VOLCANIC",
+      "noGo": [
+       {
+        "centreDeg": 54,
+        "widthDeg": 5.3,
+        "word": "LAVA"
+       },
+       {
+        "centreDeg": 69.6,
+        "widthDeg": 7.4,
+        "word": "LAVA"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P P P _8",
+      "C": "P P _2 S _1 P _37",
+      "D": "_64"
+     },
+     "lead": 10,
+     "authored": null,
+     "reserved": {
+      "resident": {
+       "kind": "corrupted",
+       "shown": "unknown",
+       "name": "BOSUN"
+      },
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 17,
+     "id": "7:1:17:0",
+     "name": "GOOD HOPE",
+     "kind": "ark",
+     "template": "capture",
+     "pods": 16,
+     "memoryClass": "FULL",
+     "approachYear": 2830,
+     "late": false,
+     "timedAgainstStart": 2300,
+     "reportedRun": 1,
+     "runsOnChart": 2,
+     "attempt": 0,
+     "modifiers": [
+      "engine-fault"
+     ],
+     "omega0": -0.25,
+     "debrisRack": null,
+     "arrivalDamage": [
+      {
+       "role": "thrust-ctrl",
+       "maxIntegrity": 31
+      }
+     ],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 66.9,
+        "width": "wide",
+        "pods": 4
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 129.5,
+        "width": "standard",
+        "pods": 4
+       },
+       {
+        "label": "LZ-C",
+        "centreDeg": 220,
+        "width": "wide",
+        "pods": 4
+       },
+       {
+        "label": "LZ-D",
+        "centreDeg": 307.1,
+        "width": "wide",
+        "pods": 4
+       }
+      ],
+      "forgiveness": "harsh",
+      "terrain": "OCEAN",
+      "noGo": [
+       {
+        "centreDeg": 57.9,
+        "widthDeg": 6.2,
+        "word": "REEF"
+       },
+       {
+        "centreDeg": 298.5,
+        "widthDeg": 7.4,
+        "word": "REEF"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P P P _8",
+      "C": "P P P P _2 S _1 P _21",
+      "D": "P P P P _32"
+     },
+     "lead": 12,
+     "authored": null,
+     "reserved": {
+      "resident": null,
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "poor",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 18,
+     "id": "7:1:18:0",
+     "name": "WAYFARER",
+     "kind": "light",
+     "template": "wide-b",
+     "pods": 5,
+     "memoryClass": "TIGHT",
+     "approachYear": 2970,
+     "late": true,
+     "timedAgainstStart": 2300,
+     "reportedRun": 1,
+     "runsOnChart": 2,
+     "attempt": 0,
+     "modifiers": [
+      "too-wide"
+     ],
+     "omega0": 1.04,
+     "debrisRack": null,
+     "arrivalDamage": [],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 98.2,
+        "width": "standard",
+        "pods": 3
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 309,
+        "width": "wide",
+        "pods": 2
+       }
+      ],
+      "forgiveness": "rough",
+      "terrain": "VOLCANIC",
+      "noGo": [
+       {
+        "centreDeg": 105,
+        "widthDeg": 4.4,
+        "word": "LAVA"
+       },
+       {
+        "centreDeg": 317.2,
+        "widthDeg": 6.4,
+        "word": "LAVA"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P _40",
+      "C": "P _2 S _1 P _45"
+     },
+     "lead": 5,
+     "authored": null,
+     "reserved": {
+      "resident": null,
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "good",
+      "tracePlace": null
+     }
+    },
+    {
+     "slot": 19,
+     "id": "7:2:19:6",
+     "name": "LODESTAR",
+     "kind": "final",
+     "template": "impact-b",
+     "pods": 16,
+     "memoryClass": "FULL",
+     "approachYear": 3021,
+     "late": false,
+     "timedAgainstStart": 2301,
+     "reportedRun": 2,
+     "runsOnChart": 1,
+     "attempt": 6,
+     "modifiers": [
+      "impact-course",
+      "radiation-belt"
+     ],
+     "omega0": 1.6,
+     "debrisRack": null,
+     "arrivalDamage": [],
+     "landing": {
+      "lzs": [
+       {
+        "label": "LZ-A",
+        "centreDeg": 10,
+        "width": "standard",
+        "pods": 4
+       },
+       {
+        "label": "LZ-B",
+        "centreDeg": 100,
+        "width": "standard",
+        "pods": 4
+       },
+       {
+        "label": "LZ-C",
+        "centreDeg": 190,
+        "width": "standard",
+        "pods": 4
+       },
+       {
+        "label": "LZ-D",
+        "centreDeg": 280,
+        "width": "narrow",
+        "pods": 4
+       }
+      ],
+      "forgiveness": "gentle",
+      "terrain": "PLAINS",
+      "noGo": [
+       {
+        "centreDeg": 286.6,
+        "widthDeg": 6,
+        "word": "CLIFFS"
+       }
+      ],
+      "colonyFirstRun": null,
+      "drag": true
+     },
+     "podRacks": {
+      "B": "P P P P P P P _8",
+      "C": "P P P P _2 S _1 P _21",
+      "D": "P P P P _32"
+     },
+     "lead": 12,
+     "authored": null,
+     "reserved": {
+      "resident": null,
+      "unknownEvent": null,
+      "fragments": 0,
+      "site": "good",
+      "tracePlace": null
+     }
+    }
+   ],
+   "departures": [
+    {
+     "slot": 0,
+     "name": "ARES-VII",
+     "reason": "done",
+     "words": "no-colony"
+    },
+    {
+     "slot": 1,
+     "name": "PETREL",
+     "reason": "done",
+     "words": "no-colony"
+    },
+    {
+     "slot": 4,
+     "name": "HERON",
+     "reason": "done",
+     "words": "no-colony"
+    },
+    {
+     "slot": 7,
+     "name": "CURLEW",
+     "reason": "done",
+     "words": "no-colony"
+    },
+    {
+     "slot": 10,
+     "name": "PLOVER",
+     "reason": "done",
+     "words": "no-colony"
+    },
+    {
+     "slot": 13,
+     "name": "SHEARWATER",
+     "reason": "done",
+     "words": "no-colony"
+    },
+    {
+     "slot": 16,
+     "name": "PROVIDENCE",
+     "reason": "done",
+     "words": "no-colony"
+    },
+    {
+     "slot": 19,
+     "name": "LAST LIGHT",
+     "reason": "done",
+     "words": "no-colony"
+    }
+   ],
+   "content": {
+    "arm": 1,
+    "generator": 2,
+    "update": 1,
+    "mapState": 1
+   }
+  },
+  "colonies": [],
+  "routes": [
+   {
+    "run": 1,
+    "unit": 47,
+    "slots": [
+     0,
+     1,
+     4,
+     7,
+     10,
+     13,
+     16,
+     19
+    ]
+   }
+  ],
+  "events": [],
+  "notes": {
+   "olderArchive": false,
+   "armReset": false
+  }
+ }
+}
