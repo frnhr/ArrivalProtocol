@@ -12,7 +12,6 @@
 // • The title's RECEIVE TRANSMISSION plays through a CORRUPT archive without it (WP8 fix round 1, the lead's
 //   note: the game continues without saving; the bad record is left as it was).
 // • The header crumb carries the wave (UNIT-047 · WAVE 1; WAVE 2 on the next run).
-import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness7 } from '../../wp7/harness7';
 import { transmitModel } from '@systems/transmit';

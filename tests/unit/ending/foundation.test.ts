@@ -8,7 +8,8 @@
 //   'reassignment', traces dropped), each cause's migration, parseEnding strict, recordRunEnd's pieces;
 // • the gates and tables: data/endings.ts all down, its option tables, the title keys; the neutral stubs' answers and the
 //   throwing ones; finaleRunCause and endingRecordOf; the arbiter shut while the card is up.
-import '../support/classic-world';
+import { withClassicWorld } from '../support/classic-fixture';
+import { currentSlot } from '@systems/map-run';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -90,12 +91,18 @@ check('a title is keyed by step 2, then step 1; SPARE + SUNSET has none (R8, R23
     decideFinale(draft, 'merge');
   });
   const record = endingRecordOf(store.getState());
-  // A headless world is the classic one: no arm slot, its real year (review m6).
-  check('a decided FINALE on a final ship: its frozen record (MERGE + REASSIGNMENT, the root, no slot on the classic world but its year, the kit, no FUEL) and won-merge',
+  // A headless world is run 1's arm (Track RETIRE): the record names the slot it was decided on, and its real year.
+  check('a decided FINALE on a final ship: its frozen record (MERGE + REASSIGNMENT, the root, its slot and year, the kit, no FUEL) and won-merge',
     record !== null && record === store.getState().hollow.finale.record && record.hollow === 'merge' && record.you === 'reassignment'
-    && JSON.stringify(record.rootUnits) === '[46]' && store.getState().run.map.world === 'classic' && record.finalSlot === null
+    && JSON.stringify(record.rootUnits) === '[46]' && store.getState().run.map.world === 'arm' && record.finalSlot === currentSlot(store.getState().run)
     && record.finalYear === store.getState().run.map.galaxyYear && record.kit.includes('scan')
     && record.fuelPct === null && finaleRunCause(store.getState()) === 'won-merge', JSON.stringify(record));
+  // The classic world's own branch (review m6; it goes with the classic five): no arm slot, its real year.
+  const classic = withClassicWorld(() => createInitialState({ seed: 7 }));
+  classic.landing.finalShip = true;
+  decideFinale(classic, 'merge');
+  check('…on the classic world: no slot, but its year', classic.hollow.finale.record?.finalSlot === null
+    && classic.hollow.finale.record?.finalYear === classic.run.map.galaxyYear, JSON.stringify(classic.hollow.finale.record));
   for (const [fate, cause] of [['purge', 'won-purge'], ['spare', 'won-spare'], ['followed', 'unresolved']] as const) {
     store.update((draft) => { decideFinale(draft, fate); });
     check(`…step 1 ${fate} is ${cause} (R17)`, finaleRunCause(store.getState()) === cause);

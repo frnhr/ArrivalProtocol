@@ -4,7 +4,7 @@
 // since the review, m8: a policy reminder rides in a reply at the same boot), the stamps, the joined
 // postcards, no postcard without landed colonists, the stale greeting, the ring crossings of a two-layer hop, arm only,
 // stable ids, the read marks, and HOLLOW's reading line once a run.
-import '../support/classic-world';
+import { withClassicWorld } from '../support/classic-fixture';
 import { check, finish } from '../landing/checks';
 import { createStore } from '@state/store';
 import type { GameState, ShipResult } from '@state/schema';
@@ -141,7 +141,7 @@ try { markMessageRead(final, 'nope'); } catch { threw = true; }
 check('…an id the INBOX does not hold throws', threw);
 
 // The classic world has no mail and no INBOX line.
-const classic = createInitialState({ seed: 1, shipIndex: 0, phase: 'boot' });
+const classic = withClassicWorld(() => createInitialState({ seed: 1, shipIndex: 0, phase: 'boot' }));
 check('the classic world: no messages, no `inbox` boot line', inboxMessages(classic).length === 0 && !bootLinePlan(classic, 0).includes('inbox'));
 const ship1 = runAt(1, false);
 check('the arm\'s first boot plans the INBOX line', bootLinePlan(ship1, 0).includes('inbox'));
@@ -153,7 +153,7 @@ reading.run.log.read = [1, 2, 3, 4, 5];
 check('…due once it is read (and planned before the log line)', readingLineDue(reading) && bootLinePlan(reading, 0).includes('reading'));
 reading.run.log.toldReading = true;
 check('…never again once said', !readingLineDue(reading));
-const classicRead = createInitialState({ seed: 1, shipIndex: 0, phase: 'boot' });
+const classicRead = withClassicWorld(() => createInitialState({ seed: 1, shipIndex: 0, phase: 'boot' }));
 classicRead.run.log.read = [5];
 check('…never on the classic world', !readingLineDue(classicRead));
 

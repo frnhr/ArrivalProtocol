@@ -6,7 +6,7 @@
 //   while a burst ran, a third of a second at CRUISE, and never won the strip);
 // • from then on a SKIP is refused (`ENGINE FAULT — NO SKIP`) and no burst is flown through in a SKIP;
 // • a Swap aboard lifts both (the WP10 rules again: the lesson, and a SKIP flies through later bursts).
-import '../support/classic-world';
+import { withClassicWorld } from '../support/classic-fixture';
 import { check, finish } from '../landing/checks';
 import { createHarness11 } from '../wp11/harness11';
 import { startRun } from '@systems/run';
@@ -128,7 +128,7 @@ for (let i = 0; i < 4; i++) h.step();
 check('…the no-Swap lines step aside, and SKIP is offered again (the twitch is flown through)', !noSwapLines.includes(st().director.shown?.id ?? '')
   && skipBlockReason(st(), currentPrediction()) !== SKIP_REFUSAL_ENGINE_FAULT, `${st().director.shown?.text} | ${skipBlockReason(st(), currentPrediction())}`);
 {
-  const classic = createInitialState({ seed: 4, shipIndex: 3, carried: 'fresh' });
+  const classic = withClassicWorld(() => createInitialState({ seed: 4, shipIndex: 3, carried: 'fresh' }));
   const file = classic.memory.find((seg) => seg.type === 'ship' && seg.role === 'thrust-ctrl')!;
   check('the classic world keeps phase 2: its VESPER fires GHOST_BY_BAND, and REPAIR refuses Thrust Ctrl (SWAP OR DELETE IT)',
     capabilitiesNow(classic).thrustCtrl.ghost === GHOST_BY_BAND.failing

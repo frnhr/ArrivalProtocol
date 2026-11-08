@@ -13,7 +13,6 @@
 // • (C, the colonists ask standing aside for an owed reveal: gone with the reveal.)
 // • D: say.ts createStory: a beat ready from its first check waits for the voices only; one seen not ready counts its
 //   silence from the moment it became ready.
-import '../../support/classic-world';
 import { check, finish, followStrip } from '../../wp1/harness';
 import { createHarness6 } from '../../wp6/harness6';
 import { actionRepair } from '@state/actions';

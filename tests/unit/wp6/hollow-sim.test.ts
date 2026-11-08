@@ -7,7 +7,6 @@
 // • the 40% engine flown by the strip (a kid who burns and never TABs): it locks, and the strip never shows an alarm;
 // • the landing (instant, tests/unit/support/landing-instant.ts) reaches the LANDING REPORT promptly: no HOLLOW story to
 //   wait for (01-landing §2; slice-2-plan §3.3), and the pause stops nothing that isn't there.
-import '../support/classic-world';
 import { check, finish, followStrip } from '../wp1/harness';
 import { createHarness6 } from './harness6';
 import { reserveThread, releaseThread } from '@systems/ops-core';

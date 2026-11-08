@@ -9,7 +9,7 @@
 //   the classic world.
 // • The archive (03 §3.11): LastUnit.skills at RUN END, each skill's file level and AUTOBURN's accuracy, through the real
 //   archive write and back through the parser.
-import '../support/classic-world';
+import { withClassicWorld } from '../support/classic-fixture';
 import { check, finish } from '../landing/checks';
 import { createStore, type Store } from '@state/store';
 import type { GameState } from '@state/schema';
@@ -68,7 +68,7 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
     store.getState().run.skills.grants.length === 0 && deskBlocker(store.getState()) === null && store.getState().ui.deskWindow === null);
 }
 {
-  const classic = createStore<GameState>(createInitialState({ seed: 7 }));
+  const classic = createStore<GameState>(withClassicWorld(() => createInitialState({ seed: 7 })));
   classic.update((draft) => { draft.run.phase = 'report'; });
   endShip(classic, 'locked');
   openDesk(classic, null);
@@ -93,7 +93,7 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
   check('…on the arm it can be dealt into a ship with a desk after it, never into a final ship (no desk follows)',
     toTwo.tree === true && !toTwo.toFinal && ids(toTwo).includes('cycles') && toFinal.toFinal === true && !ids(toFinal).includes('cycles'),
     `${ids(toTwo)} | ${ids(toFinal)}`);
-  const classic = createStore<GameState>(createInitialState({ seed: 7 }));
+  const classic = createStore<GameState>(withClassicWorld(() => createInitialState({ seed: 7 })));
   const classicCtx = draftContext(classic.getState(), 200);
   check('…never on the classic world (no tree): filtered before the draws, so its deals are unchanged',
     classicCtx.tree === false && !ids(classicCtx).includes('cycles') && ids(classicCtx) === ids((({ tree: _tree, toFinal: _toFinal, ...rest }) => rest)(classicCtx)));
@@ -132,7 +132,7 @@ const throws = (run: () => unknown): boolean => { try { run(); return false; } c
   check('RUN END: `UNSPENT n` and the tally\'s `TRAINED 9 of 54 · UNSPENT n`', model.skills !== null && model.skills.trained === 9
     && model.skills.total === 54 && model.skills.unspent === bank && model.skills.unspentLine === `UNSPENT ${bank}`
     && model.skills.tallyLine === `TRAINED 9 of 54 · UNSPENT ${bank}`, JSON.stringify(model.skills));
-  const classic = createStore<GameState>(createInitialState({ seed: 7 }));
+  const classic = createStore<GameState>(withClassicWorld(() => createInitialState({ seed: 7 })));
   classic.update((draft) => { draft.run.phase = 'end'; draft.run.endCause = 'stayed'; });
   check('…the classic world has no tree line', runEndModel(classic.getState()).skills === null);
 }

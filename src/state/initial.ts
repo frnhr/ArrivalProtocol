@@ -18,7 +18,8 @@ import { SKILL_IDS } from '@data/skills';
 import { repoToolKind } from '@data/repository';
 import { buildShipMemory, type CarriedRacks, type HurtDriver } from '@data/memory';
 import { hurtDriversFor } from '@data/driver-damage';
-import { classicRunMap, shipDefAt, currentSlot, shipRng, createRunMap } from '@systems/map-run';
+import { classicRunMap, shipDefAt, currentSlot, shipRng, createRunMap, noiseRng } from '@systems/map-run';
+import { rollNoiseClouds } from '@systems/map-noise';
 import { mapAlong, nominalAlong, workedRouteTo, authoredSlot } from '@systems/arm-fixture';
 import { freshUnitRacks } from '@systems/carry';
 import { classicShip } from '@data/classic-five';
@@ -76,6 +77,18 @@ export function useClassicFixture(): void {
   fixtureWorld = 'classic';
 }
 
+// The fixture world set to `world` while `fn` runs, then put back (even when it throws): a suite on the arm that still
+// checks a classic-world branch builds that state inside (tests/unit/support/classic-fixture.ts withClassicWorld).
+export function inFixtureWorld<T>(world: FixtureWorld, fn: () => T): T {
+  const before = fixtureWorld;
+  fixtureWorld = world;
+  try {
+    return fn();
+  } finally {
+    fixtureWorld = before;
+  }
+}
+
 export function fixtureWorldNow(): FixtureWorld {
   return fixtureWorld;
 }
@@ -87,10 +100,35 @@ interface FixtureStop {
   verdict: ShipThreat;
 }
 
+// Memoized (pure in their inputs): a suite that builds thousands of states (wp3/memory-safety) would roll the arm and its
+// noise clouds for each. The arm is rolled once per arm seed (createRunMap's; the run seed only rolls the noise clouds, as
+// createRunMap does), and every caller gets its own copy.
+const fixtureStops = new Map<string, FixtureStop>();
+const fixtureArms = new Map<string, RunMapState>();
+
+function fixtureArm(lineage: Readonly<RunLineage>, seed: number): RunMapState {
+  const armSeed = (lineage.armSeed ?? seed) >>> 0;
+  const key = JSON.stringify([armSeed, lineage.wave, lineage.arm ?? null, lineage.history ?? null]);
+  let base = fixtureArms.get(key);
+  if (base === undefined) {
+    base = createRunMap({ ...lineage, armSeed }, seed);
+    fixtureArms.set(key, base);
+  }
+  const map = structuredClone(base);
+  map.noise = rollNoiseClouds(noiseRng(seed >>> 0));
+  return map;
+}
+
 function fixtureStop(seed: number, shipIndex: number, lineage: Readonly<RunLineage>): FixtureStop {
-  const slots = workedRouteTo(authoredSlot(shipIndex));
-  const map = mapAlong(createRunMap(lineage, seed), slots);
-  return { map, slots, ...nominalAlong(map, slots) };
+  const key = JSON.stringify([seed >>> 0, shipIndex, lineage.wave, lineage.armSeed ?? null, lineage.arm ?? null, lineage.history ?? null]);
+  let stop = fixtureStops.get(key);
+  if (stop === undefined) {
+    const slots = workedRouteTo(authoredSlot(shipIndex));
+    const map = mapAlong(fixtureArm(lineage, seed), slots);
+    stop = { map, slots, ...nominalAlong(map, slots) };
+    fixtureStops.set(key, stop);
+  }
+  return structuredClone(stop);
 }
 
 export function createRunStats(): RunStats {

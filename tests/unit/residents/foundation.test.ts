@@ -16,7 +16,7 @@
 //   and its SHIP DONE records LOOKOUT and decodes; the codec's v5 refusals (an open lock, an offered DEAL, an offering
 //   sleeper, a machine of another kind, a met resident off the route or not the map's, too many signals);
 // • the FOUNDATION's words fit the strip.
-import '../support/classic-world';
+import { withClassicWorld } from '../support/classic-fixture';
 import { readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -198,7 +198,11 @@ const look = (segs: readonly Segment[]): string => segs.map((seg) => `${seg.type
   const ratio = ghostPush(RESIDENT_GHOST) / ghostPush(ARM_GHOST_BY_BAND.failing!);
   check(`the resident's push is ${(ratio * 100).toFixed(0)}% of the arm's failing controller's (R3: under it, 04's "about two thirds")`,
     ratio < 1 && Math.abs(ratio - 0.714) < 0.01, ratio.toFixed(3));
-  check('…ghostWithoutSwap reads only a controller\'s bursts (the classic world: never)', !ghostWithoutSwap(hurt));
+  // The classic world's own branch (Track RETIRE: it goes with the classic five), on the classic ARES-VII hurt the same way.
+  const classicHurt = withClassicWorld(() => createInitialState({ seed: 3 }));
+  const classicThrust = classicHurt.memory.find((seg) => seg.role === 'thrust-ctrl');
+  if (classicThrust?.type === 'ship') classicThrust.integrity = 30;
+  check('…ghostWithoutSwap reads only a controller\'s bursts (the classic world: never)', !ghostWithoutSwap(classicHurt));
 }
 
 // --- The landing: POD LOCKED (R7) ------------------------------------------------------------------------------------------------

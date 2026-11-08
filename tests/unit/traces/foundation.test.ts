@@ -10,7 +10,7 @@
 //   the book, the strangers), while planThreat's final rule, fed by hand, plays R33's numbers;
 // • RUN START: a run 2 from the fixture's archive holds its last unit's traces;
 // • the stubs: the neutral ones' answers, the throwing ones'.
-import '../support/classic-world';
+import { withClassicWorld } from '../support/classic-fixture';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -187,7 +187,7 @@ const asRun = (map: RunMapState, traces: RunTraces, lastUnit: LastUnit): Pick<Ru
     && placeExcluded({ ...shipAt(run1, 7), authored: null, memoryClass: 'TIGHT' }, 'stay') === 'a TIGHT ship'
     && placeExcluded({ ...shipAt(run1, 7), authored: null, reserved: { ...shipAt(run1, 7).reserved, unknownEvent: 'signal' } }, 'spare') === 'a `?` ship');
   check('…the classic world holds none, and PURGE / MERGE / REASSIGNMENT place nothing',
-    runTracesOf(lastUnitWith(ending('spare', 'stay', { stay: { slot: 2, colony: 'X', year: 2300 } }), null), createInitialState({ seed: 1 }).run.map, 1).from === null
+    runTracesOf(lastUnitWith(ending('spare', 'stay', { stay: { slot: 2, colony: 'X', year: 2300 } }), null), withClassicWorld(() => createInitialState({ seed: 1 })).run.map, 1).from === null
     && runTracesOf(lastUnitWith(ending('merge', 'reassignment'), null), run1, 1).places.length === 0
     && tracesRng(1)() !== tracesRng(2)());
 }
@@ -361,7 +361,7 @@ for (const [what, file, raw] of [['run 2\'s first desk', 'run-save-v7-ship-done-
 {
   // Built by Track CHART (traces/ui-models has the rest): the classic world holds no traces, so no row and no ◆; the final
   // card's lines follow the gates (one a built kind, none while both are down).
-  const state = createInitialState({ seed: 7 });
+  const state = withClassicWorld(() => createInitialState({ seed: 7 }));
   const want = (['purge', 'reassignment'] as const).filter((kind) => TRACES_BUILT[kind]).length;
   check('CHART\'s models: no card row or ◆ on the classic world; a NEXT RUN: line per built trace', traceCardRow(state, 0) === null && !traceOnChart(state, 0)
     && traceNextLines(ending('purge', 'reassignment')).length === want);

@@ -5,7 +5,6 @@
 // typed everything said before it, plus its own silence. Slice 1a: the reveal (and the radio's `Oh, you found them!`
 // that came with it) is gone; the ship-1 paths check that `> ...047?` waits for the fight's own echo (the slow eat echo
 // on the lose path) and that `> ...047?` and CONTROL never type at once. HOLLOW's first bite is POD 01.
-import '../support/classic-world';
 import { check, finish, followStrip } from '../wp1/harness';
 import { createHarness6 } from '../wp6/harness6';
 import {

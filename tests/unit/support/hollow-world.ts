@@ -11,7 +11,7 @@ import { HOLLOW_STAGES } from '@data/threats';
 import { HOLLOW_DESC, UNNAMED_HOLLOW } from '@data/hollow-text';
 import { RACK_BLOCKS, ROOT_BLOCKS } from '@data/tuning';
 import { segmentStarts, assertMemoryInvariants, freeSegment, mergeAdjacentFree } from '@systems/memory-ops';
-import { buildShipMemory, MEMORY_LAYOUTS } from '@data/memory';
+import { buildShipMemory, MEMORY_LAYOUTS, layoutOf } from '@data/memory';
 import { createHollowState, createLandingState } from '@state/initial';
 import { hollowLabel } from '@systems/say';
 import { childRng } from '@systems/rng';
@@ -33,8 +33,9 @@ export const PHASE2_ROOT_ADDR = RACK_BLOCKS;
 
 // HOLLOW's root planted at `addr` (the start of a segment, or a free block), its blocks taken from the first free run at
 // or after `addr`, so the segments in between shift up by as many: ARES-VII's `P P P _40` with plantRoot(memory, 64)
-// is phase 2's `R P P P _32`. Mutates `memory` and checks it; throws when no free run after `addr` has the blocks.
-export function plantRoot(memory: Segment[], addr: number, blocks = ROOT_BLOCKS, owner = UNNAMED_HOLLOW): HollowSegment {
+// is phase 2's `R P P P _32`. Mutates `memory` and checks it against `totalBlocks` (its class's size: FULL's 384 unless
+// given); throws when no free run after `addr` has the blocks.
+export function plantRoot(memory: Segment[], addr: number, blocks = ROOT_BLOCKS, owner = UNNAMED_HOLLOW, totalBlocks = MEMORY_LAYOUTS.FULL.totalBlocks): HollowSegment {
   const starts = segmentStarts(memory);
   let at = starts.indexOf(addr);
   if (at < 0) {
@@ -56,7 +57,7 @@ export function plantRoot(memory: Segment[], addr: number, blocks = ROOT_BLOCKS,
   };
   memory.splice(at, 0, root);
   mergeAdjacentFree(memory);
-  assertMemoryInvariants(memory, MEMORY_LAYOUTS.FULL.totalBlocks);
+  assertMemoryInvariants(memory, totalBlocks);
   return root;
 }
 
@@ -113,7 +114,7 @@ export function phase2Ship(store: Store<GameState>, index: 1 | 2, cfg: HollowDef
 export function phase2ShipOne(store: Store<GameState>, cfg: HollowDef = phase2HollowOf(0)): HollowSegment {
   let root: HollowSegment | null = null;
   store.update((draft) => {
-    root = plantRoot(draft.memory, PHASE2_ROOT_ADDR, ROOT_BLOCKS, hollowLabel(draft.run));
+    root = plantRoot(draft.memory, PHASE2_ROOT_ADDR, ROOT_BLOCKS, hollowLabel(draft.run), layoutOf(draft).totalBlocks);
     draft.hollow = createHollowState(cfg);
     draft.ui.memoryRev++;
   });

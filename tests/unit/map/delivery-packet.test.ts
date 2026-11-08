@@ -12,7 +12,7 @@
 //   Repair.bak never cancelling the renewal;
 // • the boot's delivery lines in order, the patch first and never folded, folded past 3;
 // • the classic world's boot plans byte-equal to the pre-3b tree's (classic-boot-plans.txt, from 28ddee8).
-import '../support/classic-world';
+import { withClassicWorld } from '../support/classic-fixture';
 import { readFileSync } from 'node:fs';
 import { check, finish } from '../landing/checks';
 import type { Store } from '@state/store';
@@ -314,7 +314,7 @@ const repairs = (store: Store<GameState>) => at(store).memory.filter((seg) => se
   const out: string[] = [];
   for (let index = 0; index <= 4; index++) {
     for (const variant of ['bare', 'hits'] as const) {
-      const base = createInitialState({ seed: 4, shipIndex: index, carried: 'fresh', phase: 'boot' });
+      const base = withClassicWorld(() => createInitialState({ seed: 4, shipIndex: index, carried: 'fresh', phase: 'boot' }));
       // A classic arrival that somehow carried a delivery still boots as phase 2's (the classic world has no repository).
       const arrival: ArrivalReport | null = index === 0 ? null : {
         hits: variant === 'hits' ? [{ segId: 'x', fileName: 'Telemetry', role: 'telemetry', from: 100, to: 70 }] : [],

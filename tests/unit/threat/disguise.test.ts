@@ -40,7 +40,7 @@ import { SEED_ALERT_ID } from '@systems/alerts';
 import { SEEDS_ONLY_DEF } from '@data/threats';
 import { DISGUISE_POOL, SENTRY_TEXT, THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
 import { TOOL_REFUSAL, echoName } from '@data/tool-text';
-import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, MEMORY_LAYOUTS, rackOf, layoutOf } from '@data/memory';
+import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, rackOf, layoutOf } from '@data/memory';
 import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
 import { nominalShipThreat } from '@systems/threat-plan';
 import { DISGUISE_CHANCE_BY_DEPTH, SEED_BLOCKS } from '@data/tuning';
@@ -175,7 +175,7 @@ function plantDecoy(targetRole: Segment['role'], decoy: { name: string; desc: st
   h.store.update((draft) => {
     const target = draft.memory.find((seg) => seg.role === targetRole)!;
     planted = plantBeamSeed(draft.memory, target.id, words, '???', decoy);
-    assertMemoryInvariants(draft.memory, MEMORY_LAYOUTS.FULL.totalBlocks);
+    assertMemoryInvariants(draft.memory, layoutOf(draft).totalBlocks);
     if (draft.hollow.cfg.wake === 'never') draft.hollow.cfg = structuredClone(SEEDS_ONLY_DEF);
     if (!draft.run.licences.includes('delete')) draft.run.licences.push('delete');
     if (!draft.run.licences.includes('scan')) draft.run.licences.push('scan');
