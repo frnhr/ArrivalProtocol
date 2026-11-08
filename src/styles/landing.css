@@ -617,8 +617,12 @@ body:has(#pauseVeil:not([hidden])) .last-landing { top: calc(var(--header-h) + v
 @keyframes ll-title { 0% { opacity: 0.2; } 25% { opacity: 1; } 37% { opacity: 0.4; } 50%, 100% { opacity: 1; } }
 body.reduced-motion .last-landing.ll-arrive .ll-strip,
 body.reduced-motion .last-landing.ll-arrive .ll-title { animation: none; }
-/* What THE LAST LANDING shuts (R26: the MIND, the dock; only [ENTER], P and M) reads as shut. */
-body.ll-on .dock, body.ll-on #modeToggle { opacity: 0.35; pointer-events: none; }
+/* What THE LAST LANDING shuts (R26: the MIND, the dock; only [ENTER], P and M) reads as shut, and takes no pointer: the
+   POD BAY's LAUNCH, [G] and END LANDING (the input layer stops their keys, not their buttons; on a phone LAUNCH and [G]
+   ride in the flight bar, found by id), and the bay's count, which no restored pod spends (R26: no bay). */
+body.ll-on .dock, body.ll-on #modeToggle,
+body.ll-on #podLaunchBtn, body.ll-on #pbGoBtn, body.ll-on #pbEnd { opacity: 0.35; pointer-events: none; }
+body.ll-on .pb-bay-row { opacity: 0.35; }
 /* On a phone the header and the strip flow in two or three rows, so the strip sits at the foot instead, over the view tabs
    and the SHIP / MIND toggle that THE LAST LANDING shuts anyway; its button is the skip (no keyboard there). */
 @media (max-width: 768px) {
