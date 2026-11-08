@@ -45,6 +45,11 @@
 //   so CONTACT's price is measured. PT_SCAN_SIGNALS=0 turns it off.
 // • PT_VARIANT=no-<skill>[-v<n>] (COMPETENT only): that skill, or its versions from n up, is dropped from the kid's buys, so
 //   the cycles go to the list's next item (the leave-one-out of §3.2: "this skill against the next best buy").
+// • PT_LANDING=strip: every landing is flown by the strip, with the kid's own reaction (support/landing-instant 'manual';
+//   [L] when the line names it, [G] when it offers AUTODROP unarmed, [F] when it offers a SKIP, END LANDING on L12's rows,
+//   each after the kid's reactionSec of the same line), instead of the default instant landing (every pod that can launch
+//   lands soft in an LZ with room: OPEN-DECISIONS 65). Only then can AUTODROP, AUTOBURN v3 and the kid's own landing move
+//   the pods landed, so the leave-one-out's worth needs it (Step 0's finding).
 import { createHarness11, type Harness11, type DefendOpts } from '../wp11/harness11';
 import { receiveTransmission } from '@systems/boot';
 import { shipLost, startBeamOut, startRun, setCourse, continueAfterReport, continueAfterLoss } from '@systems/run';
@@ -89,6 +94,10 @@ import { bankOf, earnedCycles, trainedCycles } from '@systems/skill-tree';
 import { signalCount } from '@systems/signals';
 import { emptyShip } from '@systems/ending-rules';
 import { armShipAt } from '@systems/map-streams';
+import { setLandingMode } from '../support/landing-instant';
+import { ensureLandingKeys } from '../landing/harness-landing';
+import { endLanding } from '@systems/landing';
+import { skipBlockReason } from '@systems/pace';
 import type { GameState, ObjectiveLine, PendingPlacement, ShipOutcome } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import type { UpgradeId } from '@data/upgrades';
@@ -298,6 +307,11 @@ export interface RunRecord {
 }
 
 const POD_COLONISTS = 200;
+// Slice 8 (Step 0's finding): 'instant' (default: the suites' instant landing) or 'strip' (the kid flies every landing).
+const PT_LANDING = process.env.PT_LANDING ?? 'instant';
+if (PT_LANDING !== 'instant' && PT_LANDING !== 'strip') throw new Error(`PT_LANDING=${PT_LANDING} is neither instant nor strip`);
+// The strip rows that ask for END LANDING (landing/harness-landing's, exactly).
+const END_LANDING_ROWS: ReadonlySet<string> = new Set(['landing-L12', 'landing-L12-band', 'landing-L12-bay', 'landing-L12-nodrop']);
 
 // PT_TRACE=1: every strip line and every kid action, with the wall clock, FUEL and pace (for reading one run).
 const TRACE = process.env.PT_TRACE === '1';
@@ -770,6 +784,32 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
   };
 
   // Printing (and on the flagship the duel and the choice) until the WAKE REPORT, the MIND kid still at work.
+  // PT_LANDING=strip: the landing by the strip, one key per reaction (a countdown ticking is the same line).
+  let landingSeen: { text: string; at: number } | null = null;
+  let landingPressAt = -Infinity;
+  let landingHeld = false;
+  const releaseL = (): void => { if (landingHeld) { harness.keyUp('KeyL'); landingHeld = false; trace('landing L up'); } };
+  const flyLanding = (): void => {
+    const now = state();
+    if (now.clock.paused || now.landing.ended !== null) { releaseL(); return; }
+    const line = now.director.shown;
+    const text = line?.text ?? '';
+    // AUTODROP v1 (CENTRE) is held: [L] down while the strip says `hold [L]`, up as soon as it stops (autodrop-sweep's v1 kid).
+    if (landingHeld && !/hold \[L\]/i.test(text)) releaseL();
+    const generic = text.replace(/\d+/g, '#');
+    if (landingSeen === null || landingSeen.text !== generic) landingSeen = { text: generic, at: harness.wall() };
+    if (harness.wall() - landingSeen.at < player.reactionSec - 1e-9 || harness.wall() - landingPressAt < player.reactionSec - 1e-9) return;
+    const press = (code: string): void => { toShip(); harness.press(code); landingPressAt = harness.wall(); trace(`landing ${code}`); };
+    if (line !== null && END_LANDING_ROWS.has(line.id)) { endLanding(harness.store); landingPressAt = harness.wall(); return; }
+    if (/hold \[L\]/i.test(text)) {
+      if (!landingHeld) { toShip(); harness.keyDown('KeyL'); landingHeld = true; landingPressAt = harness.wall(); trace('landing L down'); }
+      return;
+    }
+    if (text.includes('[L]')) { press('KeyL'); return; }
+    if (text.includes('[G]') && now.landing.autodrop.armed === null) { press('KeyG'); return; }
+    if (text.includes('[F]') && now.clock.skipWarp === null && skipBlockReason(now, getPrediction()) === null) press('KeyF');
+  };
+
   const printing = (): void => {
     const end = harness.wall() + PRINT_MAX_WALL_SEC;
     let chose = false;
@@ -777,6 +817,8 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
       step();
       shipCall = false;
       mindTick();
+      if (PT_LANDING === 'strip') flyLanding();
+      else releaseL();
       const now = state();
       if (!chose && finaleAtStep1(now)) {
         chose = true;
@@ -790,6 +832,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
         if (refusal !== null) throw new Error(`playthrough: the finale refused ${pick} (${refusal})`);
       }
     }
+    releaseL();
     if (state().run.phase === 'landing' && !state().run.coreLost) record.cause = `stuck:printing on ${state().level.shipName}`;
     if (currentShip(state()).final) {
       record.lastLightLost = state().landing.pods.filter((pod) => pod.driverLost !== null).length;
@@ -847,6 +890,7 @@ export function playRun(harness: Harness11, seed: number, player: Player): RunRe
 
   // --- the run ------------------------------------------------------------------------------------------------------
   harness.newRun(seed);
+  if (PT_LANDING === 'strip') { setLandingMode('manual'); ensureLandingKeys(harness); }
   startRun(harness.store, seed, FIRST_RUN_LINEAGE, 'arm');
   stepFor(player.titleSec);
   receiveTransmission(harness.store);

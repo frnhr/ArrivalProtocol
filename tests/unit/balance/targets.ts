@@ -52,15 +52,15 @@ const PT_MAIN_OUT = 'tests/.out/balance/pt-main';
 export const SWEEPS: readonly SweepJob[] = [
   {
     id: 'playthrough', source: 'playthrough', file: 'tests/unit/wp12/playthrough.test.ts', group: 'playthrough',
-    quick: { PT_SEEDS: '24', PT_PLAYERS: 'COMPETENT,SLOPPY,LITERAL', PT_ROUTES: 'worked', PT_OUT: PT_MAIN_OUT },
-    full: { PT_SEEDS: '200', PT_PLAYERS: 'COMPETENT,SLOPPY,LITERAL', PT_ROUTES: 'set', PT_OUT: PT_MAIN_OUT },
+    quick: { PT_SEEDS: '24', PT_PLAYERS: 'COMPETENT,SLOPPY,LITERAL', PT_ROUTES: 'worked', PT_LANDING: 'strip', PT_OUT: PT_MAIN_OUT },
+    full: { PT_SEEDS: '200', PT_PLAYERS: 'COMPETENT,SLOPPY,LITERAL', PT_ROUTES: 'set', PT_LANDING: 'strip', PT_OUT: PT_MAIN_OUT },
   },
   ...LOO_VARIANTS.full.map((variant): SweepJob => ({
     id: `playthrough-${variant}`, source: 'playthrough-loo', file: 'tests/unit/wp12/playthrough.test.ts', group: 'playthrough',
     quick: LOO_VARIANTS.quick.includes(variant)
-      ? { PT_SEEDS: '24', PT_PLAYERS: 'COMPETENT', PT_ROUTES: 'worked', PT_VARIANT: variant, PT_BASE: PT_MAIN_OUT, PT_OUT: `tests/.out/balance/pt-${variant}` }
+      ? { PT_SEEDS: '24', PT_PLAYERS: 'COMPETENT', PT_ROUTES: 'worked', PT_LANDING: 'strip', PT_VARIANT: variant, PT_BASE: PT_MAIN_OUT, PT_OUT: `tests/.out/balance/pt-${variant}` }
       : null,
-    full: { PT_SEEDS: '50', PT_PLAYERS: 'COMPETENT', PT_ROUTES: 'worked', PT_VARIANT: variant, PT_BASE: PT_MAIN_OUT, PT_OUT: `tests/.out/balance/pt-${variant}` },
+    full: { PT_SEEDS: '50', PT_PLAYERS: 'COMPETENT', PT_ROUTES: 'worked', PT_LANDING: 'strip', PT_VARIANT: variant, PT_BASE: PT_MAIN_OUT, PT_OUT: `tests/.out/balance/pt-${variant}` },
   })),
   { id: 'full-run', source: 'full-run', file: 'tests/unit/wp11/full-run.test.ts', group: 'pool', quick: { RUN_SEEDS: '10' }, full: { RUN_SEEDS: '50' } },
   { id: 'traces-sweep', source: 'traces-sweep', file: 'tests/unit/traces/traces-sweep.test.ts', group: 'pool', quick: { TS_SEEDS: '6', TS_CONTACT: '1' }, full: { TS_SEEDS: '20', TS_CONTACT: '1' } },
