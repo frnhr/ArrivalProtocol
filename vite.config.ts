@@ -28,6 +28,8 @@ export default defineConfig({
     open: true,
     // .tmp/ is gitignored scratch (tests, screenshots, unpacked snapshots). A copied index.html
     // or tsconfig.json in there would otherwise force a full reload of every open game tab.
-    watch: { ignored: ['**/.tmp/**'] },
+    // .claude/ holds agents' git worktrees (whole copies of the repo, index.html included), and
+    // tests/.out/ holds e2e output: an edit in either reloaded the e2e tier's page mid-flight.
+    watch: { ignored: ['**/.tmp/**', '**/.claude/**', '**/tests/.out/**'] },
   },
 });
