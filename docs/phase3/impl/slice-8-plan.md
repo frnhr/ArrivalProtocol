@@ -1131,3 +1131,81 @@ HIGH §2.6 moth.wall.Δeaten: MOTH.wall a 2-block blocker in a GAP (§2.6)
 sweeps (quick): playthrough 584 s · playthrough-no-autoburn-v2 255 s · playthrough-no-autoburn-v3 206 s · playthrough-no-autodrop 153 s · playthrough-no-sentry 154 s · sleeper-sweep 141 s · survey-sweep 232 s · last-landing-sweep 133 s · v3-sweep 337 s · traces-sweep 364 s · full-run 134 s · decoy-stats 13 s · signal-stats 6 s · survey-busy 66 s · corrupted-sweep 40 s · autodrop-sweep 140 s
 their own checks failed (numbers kept): full-run (exit 1), survey-busy (exit 1), corrupted-sweep (exit 1)
 ```
+
+## Deviations (Track ECONOMY)
+
+Branch `economy-8` from af1e1d4 (HARNESS and POLISH merged), not pushed. OPEN-DECISIONS items 90–96 hold the calls; 89
+was taken by RETIRE, so ECONOMY's range starts at 90.
+
+**What is built.**
+- §2.1: SURVEY v1 costs 1 (OD item 90), and v1's rough tell (item 91): a guess the ship's swath passed reads `FLAT ?` or
+  `ROUGH ?` in SITES, unrated (`survey-model.ts guessTell`).
+- §2.2: AUTOBURN v3 costs 7 (item 92).
+- §2.15: AUTOBURN v2 costs 4 (item 93), by §2.15's rule for a cell under 0.10 pod per cycle with no time value.
+- §2.4's fallback, priced here: SENTRY v1 costs 1 (item 94), conditional on THREAT's decoy rates.
+- The tree costs **50** (54): `SPEC_TREE_CYCLES`, 03 §3.2's table, totals and WHYs, 03's intro, the worked sample's note and
+  the `TRAINED n of 50` words in 03, `skills.ts`, `skill-tree.ts`, `run-end.ts` and `RunEnd.ts` (comments only).
+- Not built: AUTODROP (item 95), §2.2's decay hold (its condition is not met), §2.1 change 3 (`SURVEY_SWEEP_FACTOR`: OD 54's
+  measure is not valid yet, item 96), any §2.15 / §2.16 number (item 96).
+
+**Deviations.**
+1. **AUTOBURN v2 4 is beyond the brief's list** (SURVEY v1, AUTOBURN v3, AUTODROP if needed, SENTRY v1). It is §2.15's own
+   rule, and G4 measured v2 at about 0.01 pod per cycle with 11 s per ship of time. The lead may drop it: one value and the
+   movers listed in item 93.
+2. **AUTODROP's §2.15 rule is not applied.** AUTODROP reads under 0.10 (−0.09), and §2.15 would take a cycle off each of its
+   cells. The traces (item 95) show the loss is a rule (v2's split, the strip's WIDE [L] while armed) and the next best buy,
+   not the price. A cheaper AUTODROP would be bought sooner and lose more, so the prices stay 3 / 5 / 8.
+3. **The tell's words** are `FLAT ?` / `ROUGH ?`, not the plan's `FLAT?` / `GROUND ?`: `GROUND ?` already means "not looked at"
+   in SITES. Its words live in `data/sites-text.ts` (Track SITES's file in slice 6, outside §4.2's list) beside the other row
+   words, and `survey-hud.ts groundShown` reads it (also outside the list): the tell has to be painted somewhere.
+4. **The v3-sweep and survey-busy rows were read, not trusted** (R1):
+   - survey-busy's "OK" (+1.0 pod, v3 over v2) compares two flights that both lose the Core (item 96).
+   - v3-sweep's ×2.25 rows: v3 lands fewer pods than v2 ROUND, which no price and no decay hold moves (item 92).
+5. **The A/B measured all four prices together** (`ab.mjs econ-prices`: survey v1 1, autoburn v2 4 and v3 7, sentry v1 1,
+   `SPEC_TREE_CYCLES` 50), COMPETENT only, 24 seeds, the quick leave-one-out. The report's own A/B run was stopped at its
+   30-minute limit under a load of 27, so the same jobs were run by hand with the report's knobs (scratch script; each
+   job's `BALANCE_JSON` is what the report reads). SLOPPY and LITERAL were not flown in the A/B.
+
+**Spec edits (R10), already made in 03:** §3.2's table (AUTOBURN v2 4 and v3 7, SURVEY v1 1 with the tell, SENTRY v1 1),
+the totals line (FLIGHT 17, SURVEY 8, DEFENCE 9: 50), the WHYs, the intro's 50, the worked sample's "at the prices before
+slice 8", and §8's `TRAINED n of 50`. **For the lead:** 02-map.md lines 659 and 686 still say `TRAINED n of 54`.
+
+**Rows, before and after** (quick; "before" is Step 0's report at 1546a2b, re-run for the pool rows at af1e1d4 with the same
+numbers):
+
+| Row | Target | Before | After | | Why |
+|---|---|---|---|---|---|
+| §2.1 SURVEY v1 closes of the none→GOOD gap | ≥ 40% | 21% | 29% | LOW | the tell (item 91) comes after the first window on most ships |
+| §2.1 SURVEY v2 / v3 against GOOD | ≥ −3 | −0.2 / −0.2 | −0.2 / −0.2 | OK | |
+| §2.1 SURVEY v1 cycles per POOR ship over none | info | 0.4 | 0.5 | INFO | at price 1: pays back after 2 POOR ships |
+| §2.1 busy CORMORANT: v3 over v2 | ≥ 0.5 | +1.0 | (not re-run) | OK, not valid | both flights lose the Core (item 96) |
+| §2.2 v3 over v2, ×2.25 (worst) | ≥ +1 | −4.0 | −4.0 (no price in the sweep) | LOW | item 92 |
+| §2.2 v3 first drop against v2, ×2.25 | ≤ −30 s | −7.5 s | −7.5 s | HIGH | item 92 |
+| §2.2 v3 FUEL against v2 ROUND, healthy | ≤ 0 | −0.2 | −0.2 | OK | |
+| §2.3 sloppy AUTODROP v1 on CORMORANT | ≥ +10% | 0% | 0% (unchanged) | LOW | every window there is WIDE (OD 5); item 95 |
+| §2.3 sloppy AUTODROP v3 on VESPER | ≥ +15% | +19% | +19% | OK | |
+| §2.3 AUTODROP worst row against v0 | ≥ 0% | −6% | −6% | LOW | one seed's sloppy luck (item 95) |
+| G4 AUTOBURN v2 + v3 | 0.10–0.5 | 0.04 ± 0.04 | 0.03 ± 0.04 | LOW | v2 pays nothing in pods (item 93) |
+| G4 AUTOBURN v3 | 0.10–0.5 | 0.13 ± 0.07 | 0.03 ± 0.04 | LOW | inside the noise of 24 seeds (item 92) |
+| G4 AUTOBURN v3 over v2 | ≥ 0.4 | 3.00 | 1.03 | OK | |
+| G4 AUTODROP path | 0.10–0.5 | −0.09 ± 0.07 | −0.09 ± 0.08 | LOW | a rule, not a price (item 95) |
+| G4 SENTRY path | 0.10–0.5 | 0.06 ± 0.10 | 0.14 ± 0.16 | OK (noise) | item 94 |
+| G3 COMPETENT cycles earned | 24–32 | 28.1 | 28.0 | OK | |
+| G3 COMPETENT spent | info | 23.6 | 23.9 | INFO | |
+| G3 COMPETENT unspent at the last desk | ≤ 3 | 1.6 | 1.3 | OK | |
+| G3 COMPETENT trains of the tree | 40–60% | 44% (of 54) | 48% (of 50) | OK | |
+| G2 COMPETENT pods landed | ≥ 85% | 78% | 77% | LOW | not ECONOMY's lever (§2.16: only if every kid misses) |
+| G1 COMPETENT wins | ≥ 90% | 79% | 79% | LOW | |
+
+"After" for G1–G4 is the A/B of items 90–94 (COMPETENT, 24 seeds, quick leave-one-out); for §2.1 the survey-sweep quick
+on this branch; §2.2 and §2.3 give the skill file directly, so a price does not enter them and they were not re-run.
+SLOPPY's G3 rows were not flown in the A/B: SLOPPY buys the cheapest cell, and three cells got cheaper, so its rows will move
+at CLOSE.
+
+**Traces read (R1).** Seed 10 and seed 19, COMPETENT, full kid against no-AUTODROP (item 95); seed 7's busy CORMORANT
+(item 96). The trace hook used to read them (strip lines and pod events under `PT_TRACE=1`) was a local edit, not committed.
+
+**The tier.** `npm run typecheck` clean. `npm test` (quick): 214 passed, 13 failed, 15 balance-only skipped, in **1244 s** on
+4 workers at a **load average of 23–27** (other agents' sweeps and tiers). All 13 failures are time: 11 suites over the 90 s
+per-suite budget, and two R18 sub-millisecond checks (`skills/autodrop-plan` 4.2 ms, `skills/v3-aim` 1.08 ms); none is a
+wrong result. The 265 s cap cannot be judged on this machine today; the lead should re-time it quiet at the merge.

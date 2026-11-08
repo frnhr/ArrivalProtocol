@@ -24,11 +24,11 @@ Status words:
      - VESPER reaches its orbit in 63 s instead of 117 s.
    - To reverse: set `V3_AIM_ABOVE_DRAG = 'highest'` in `tuning.ts`.
 3. **AUTOBURN v3 is a thin upgrade on healthy ships** (R15). Even with item 2, v3 mostly saves time, not pods.
-   - DEFERRED to the slice 8 rebalance (price, or what v3 adds).
+   - DEFERRED to the slice 8 rebalance (price, or what v3 adds). Slice 8: v3 costs 7 (item 92).
 4. **Disguised seeds are rare per run.** BUILT to the spec's per-seed rate: about 33% of seeds at depths 5–6 and about
    50% at depth 7 and beyond.
    - But only about 1 run in 3 meets a decoy, so SENTRY v1 names nothing in about 2 runs of 3.
-   - DEFERRED to slice 8: raise the rate, or give SENTRY v1 more to do.
+   - DEFERRED to slice 8: raise the rate, or give SENTRY v1 more to do. Slice 8: SENTRY v1 costs 1 (item 94).
 5. **AUTODROP v3 leaves pods that fit no LZ for the kid**; it doesn't throw them WIDE itself.
    - BUILT. The strip names the REPAIR.
    - To change: add a WIDE pass to `planLanding`.
@@ -44,7 +44,7 @@ Status words:
    - BUILT. ROUND alone moves to the other apsis.
 9. **AUTODROP adds little on healthy ships.** Every version lands the same as by hand there; the value is on hard
    ships, for example the 16-pod VESPER healed: 88% by hand, 100% at v3.
-   - DEFERRED to slice 8.
+   - DEFERRED to slice 8. Slice 8: no change, with a finding (item 95).
 10. **AUTOBURN v1 is untrained at first** and fires 7.5 s late (40% accuracy) until the kid's own captures train it
     (R3).
     - BUILT.
@@ -221,10 +221,12 @@ Status words:
     - price v1 at 1 cycle (03 §3.2 already says "SURVEY cheaper");
     - let v1 rate ground roughly (say, `GROUND ?` against `FLAT?` on a guess the swath passes);
     - or raise the POOR odds where SURVEY can open.
+
+    Slice 8 took the first two (items 90, 91).
 54. **v3 over v2 adds +0.02 cycles for 4 more** (+0.7 points in the sweep). Its value is only the thread: the kid's
     second op on a 2-thread Core, and mapping on a worn Core where v1/v2 wait all ship. The sweep can't see that, since
     its kid runs no ops. DEFERRED to slice 8, to be measured with a kid who SCANs and DELETEs seeds on a POOR ship that
-    HOLLOW boards (CORMORANT, seed 7).
+    HOLLOW boards (CORMORANT, seed 7). Slice 8: that measure is not valid yet (item 96).
 55. **SURVEY steps aside while AUTOBURN or AUTODROP holds a thread** (slice 6 review M1; the lead's decision). BUILT in the
     review fixes. Before, AUTOBURN's claim at START BURN took the thread SURVEY keeps free, so both held one and the capture
     flew at a 0.5 reactor cap, not 0.75 (0.43 degraded, 0.30 failing), a burn the kid never chose. Now a preempting claim
@@ -434,6 +436,86 @@ list, and the classic licence schedule's checks deleted (three, per the lead's d
     first ghost. DECIDED (RETIRE): 03 §6 retires that schedule, so the arm has nothing for those checks to test.
     - Checks in the same suites that test behaviour the arm keeps (the DEAL, SWAP pairing, the ghost) move to the arm.
     - Each deletion is listed in slice-4cde-plan "Deviations (RETIRE)".
+
+## Slice 8 ECONOMY, built
+
+ECONOMY's calls (`docs/phase3/impl/slice-8-plan.md` §2.1–§2.3, §2.15, §2.16 and "Deviations (Track ECONOMY)"). The lead
+renumbers them at CLOSE. "Before" is the Step 0 quick report (1546a2b, the same numbers at af1e1d4); "after" is this branch,
+quick profile, under a shared machine (load 20–28).
+
+90. **SURVEY v1 costs 1 cycle** (OD 53; §2.1 change 1). BUILT (`data/skills.ts`). SURVEY is 1 / 3 / 4.
+    - v1 earns 0.5 cycles per POOR ship over none (0.4 before the tell, item 91), so it pays back after 2 POOR ships
+      (8 before). v1 + v2 cost 4 and pay back after about 2.5 POOR ships (3.5 before).
+    - A price moves no point, so `survey.gap.v1` is not this item's: item 91 is.
+    - To reverse: `SKILL_TREE.survey.versions[0].price` 2, `SPEC_TREE_CYCLES` + 1, 03 §3.2.
+91. **[FRAN] SURVEY v1 gives a rough tell** (OD 53; §2.1 change 2, triggered: v1 closed 21% of the gap, under 40%). BUILT
+    (`survey-model.ts guessTell`, `survey-hud.ts`, `sites-text.ts`).
+    - A CONTROL guess the ship's own swath has passed, not rated, reads `FLAT ?` or `ROUGH ?` in SITES. The plan's words were
+      `GROUND ?` against `FLAT?`; `GROUND ?` already means "not looked at", so the bad one reads `ROUGH ?`.
+    - It only tells. The ground stays unknown: no ✕, no reveal, no strip swap (`knownBad` and `bestSwap` stay v2's), and a
+      move to a found candidate is blind. The drop-dot swath (OD 52) stays v2's.
+    - **Measured** (survey-sweep quick, 14 POOR ships): v1 closes **29%** of the none→GOOD gap (21% before); v2 and v3 stay
+      at −0.2 points against GOOD. **Still LOW.** The tell comes too late on most ships: the drop dot leads the ship by
+      about 80° (OD 52), so the first window of the bad guess usually opens before the ship's own swath reaches it. On 8 of
+      14 ships v1's kid still lands pods on the bad guess (`r:touchdown`), as before the tell. The plan's
+      fallbacks for v1 are both built; the next lever would be the drop-dot swath at v1, which is OD 52's v2 power.
+    - To reverse: `guessTell` returns null (and survey-sweep's v1 kid stops reading it).
+92. **AUTOBURN v3 costs 7** (OD 3; §2.2 change 1). BUILT. 7 is the lowest the validator allows on a start branch (more
+    than one ship's 6).
+    - `worth.autoburn.v3`: 0.13 ± 0.07 → **0.03 ± 0.04** (LOW; A/B of items 90–94 together, 24 seeds; Δpods 0.25 → 0.13 per
+      run, over 3.8 cycles a run spends on v3 now). The move is about one standard error of the difference: 24 seeds
+      cannot tell 7 from 8, and the re-priced tree changes what the kid buys when. `worth.autoburn.v3ratio` stays OK (1.0).
+      The full profile (50 seeds) at CLOSE should settle it.
+    - **§2.2's fallback (v3 holds any landing orbit the kid chose against decay) is not built.** Its trigger is this row,
+      which read OK before the re-price and reads LOW inside its noise after. And it could not move the row: it acts only on
+      an orbit the kid chose (GO LOWER, a hand burn), while COMPETENT always engages v3's own LANDING ORBIT, so the
+      leave-one-out would not see it. If the full profile confirms v3 under 0.10, it is the next step (`autoburn-v3.ts`).
+    - §2.2's own rows do not move with a price, and **stay LOW**: on the ×2.25 ships v3 lands 4 pods fewer than v2 ROUND
+      (VESPER's capture start, 9 against 13) and its first drop is only 7.5 s sooner. v3 flies down to the lowest circle where
+      the ×2.25 drop fits (1810 km), which takes 199–392 s, and lands fewer (not read further). No decay hold touches
+      this. **For the lead:** v3's descent on a damaged ship is the next thing to read.
+    - To reverse: `SKILL_TREE.autoburn.versions[2].price` 8, `SPEC_TREE_CYCLES` + 1.
+93. **AUTOBURN v2 costs 4** (§2.15: "a cell below 0.10 pod per cycle with no logged time value comes down by 1"). BUILT.
+    - v2 on its own paid about 0.01 pod per cycle (no-autoburn-v2's 0.29 pods per run less no-autoburn-v3's 0.25, over
+      5 cycles), and saved 11 ± 4 wall s per ship, under G4's 20 s time value.
+    - `worth.autoburn.v2` (v2 + v3 together): 0.04 ± 0.04 → **0.03 ± 0.04**. **Still LOW**: one cycle off cannot lift a cell
+      that pays about nothing. v2's value is a prerequisite (v3 pays) and FUEL, not pods.
+    - Movers: RESTORE prices (`packet`, `foundation`), the desk's `4 · 8` (`ui-models`), `training-flow`, `cycles`.
+    - To reverse: `SKILL_TREE.autoburn.versions[1].price` 5, `SPEC_TREE_CYCLES` + 1.
+94. **SENTRY v1 costs 1** (OD 4; §2.4's fallback, priced by ECONOMY). BUILT, **conditional on THREAT's rates**.
+    - The plan's rates (1/2, 2/3) give `decoy.run` 33% (decoy-stats A/B), under 40%, so the fallback holds.
+    - `worth.sentry.v1` (the path): 0.06 ± 0.10 → **0.14 ± 0.16** (nominally OK, inside its noise). SENTRY's value is
+      mostly time and threads (v2's quick rm, v3's wall), which the pod worth does not see.
+    - **For the lead at the merge:** if THREAT lands higher rates (its `threat-decoy-hi` A/B, 3/4 and 1, gives 43%), put
+      SENTRY v1 back to 2 (`SPEC_TREE_CYCLES` + 1, 03 §3.2).
+95. **AUTODROP: no change** (OD 9, OD 5; §2.3). DEFERRED, with the finding and a lever.
+    - The rows: sloppy kid v1 on CORMORANT +0% (LOW), v3 on VESPER +19% (OK), worst row −6% (LOW: VESPER sloppy v1 on
+      one seed, where the sloppy v0 lands 81% against the quiet v0's 69%, so it is the sloppy kid's own luck). `worth.autodrop.v1`
+      −0.09 ± 0.07 → −0.09 ± 0.08 (AUTODROP's prices are unchanged).
+    - **Read (R1), two seeds' traces.** The landing follower is not at fault: it does what the strip says.
+      - Seed 10, LAST LIGHT: the full kid lands 9 of 16 with AUTODROP v2, the no-AUTODROP kid 15 of 16. The variant spent
+        the cycles on AUTOBURN v3, whose landing orbit makes every drop sure; the full kid's v2 ROUND orbit leaves WIDE
+        drops. That is the leave-one-out working: AUTOBURN v3 is the better buy there.
+      - Seed 19, CORMORANT: the full kid lands 5 of 9 with AUTODROP v2, the hand kid 9 of 9. v2's PASS split flies LZ-B ×2
+        in the window's centre; the hand kid launched 3 into LZ-B from `LAUNCH NOW`, 4.5 s earlier. After v2's 2 pods, the
+        strip offers `LAUNCH — press [L] · WIDE DROP, some may miss` for the rest of the window while AUTODROP is armed, and
+        the kid's 2 WIDE pods land off-site.
+    - The plan's conditional (v2+ fly a WIDE DROP's in-band opening) is triggered by the v1 row, but it is a v2+ rule, so it
+      cannot move that row, and it would not touch either loss above. So it is not built.
+    - **Lever, for the lead / [FRAN]:** v2's PASS fills a sure window as a prompt hand kid does (start when the dot fits,
+      not at the centre), and the strip does not offer a WIDE [L] for an LZ that AUTODROP's split still has room in.
+      Both are `autodrop-plan.ts` / director rules, not numbers.
+96. **The rest of §2.15 and §2.16: kept.** NOTED.
+    - The cycle rule (`CYCLES_ARRIVED`, `CYCLES_PER_STEP_PCT`, `FIRST_PICK_FLOOR_CYCLES`, `RESTORE_FRACTION`,
+      `CYCLES_CARD_CYCLES`): G3 is OK (COMPETENT earns 28.1, leaves 1.6 unspent, trains 44%) → earns 28.0, spends 23.9, leaves 1.3
+      unspent, trains 48% of the 50-cycle tree. Still OK.
+    - `AUTO_FUEL_RESERVE_PCT` 20: COMPETENT ends 23% of ships under the ★ 20% (≤ 30%), so kept.
+    - 01's widths, drag and score factors: G2 does not miss for every kid (LITERAL 79%, SLOPPY 67% are OK), so kept.
+    - **OD 54 is not measured yet.** survey-busy's +1.0 pod (v3 over v2, "OK") compares two broken flights: with any SURVEY
+      version aboard, seed 7's busy CORMORANT loses the Core before its LANDING REPORT (coreLost at about 1170 wall s, 5 of 9
+      pods never launched), while the GOOD and no-SURVEY flights report with 5 pods. It is not SURVEY's thread: v3 holds none
+      and dies too. So `SURVEY_SWEEP_FACTOR` stays 2. **For HARNESS / the lead:** the busy kid's defence with a SURVEY file
+      aboard is the thing to read.
 
 ## Slice 8 POLISH, built
 
