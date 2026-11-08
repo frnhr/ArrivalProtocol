@@ -69,6 +69,8 @@ const contactUnit = () => lastUnitOf(endingOf('purge', 'contact'));
 
 // --- Its trace on run 2: two signal stops (R41) -------------------------------------------------------------------------------
 let found: { seed: number; slot: number; route: readonly number[] } | null = null;
+// A stop on a ship with a resident (its files and the `▓▓░▓` file share rack A), the largest kind first.
+let shared: { seed: number; slot: number; route: readonly number[]; kind: string } | null = null;
 {
   const problems: string[] = [];
   let two = 0;
@@ -95,6 +97,12 @@ let found: { seed: number; slot: number; route: readonly number[] } | null = nul
     if (found === null && stops.length > 0) {
       const route = routeVia(run.map, [stops[0]!.slot]);
       if (route !== null) found = { seed, slot: stops[0]!.slot, route };
+    }
+    for (const place of stops) {
+      const resident = run.map.arm[place.slot]!.reserved.resident;
+      if (resident === null || (shared !== null && (shared.kind === 'left' || shared.kind === 'sleeping'))) continue;
+      const route = routeVia(run.map, [place.slot]);
+      if (route !== null) shared = { seed, slot: place.slot, route, kind: resident.kind };
     }
   }
   check(`40 run-2 arms after PURGE + CONTACT: two stops on ${two} (layers 5–7, ordinary ships, one a ship), each with its card row and ◆; the final ship\'s row names CONTACT, its wild seed owed`,
@@ -129,6 +137,21 @@ let found: { seed: number; slot: number; route: readonly number[] } | null = nul
   check('…a SHIP DONE save at the stop round-trips (the record, the given stop)', decoded.ok
     && JSON.stringify(decoded.save.payload.run.residents.signals) === JSON.stringify(state().run.residents.signals)
     && decoded.save.payload.run.traces.places.find((place) => place.slot === slot)?.given === true, decoded.ok ? '' : decoded.refusal.detail);
+}
+
+// --- A stop on a resident's ship: both kinds of rack-A file fit ---------------------------------------------------------------
+{
+  if (shared === null) throw new Error('contact: no seed routes through a stop on a resident\'s ship');
+  const { seed, slot, route, kind } = shared;
+  h.newRun(seed);
+  startRun2(h.store, step, seed, contactUnit());
+  beamTo(h.store, step, route, slot);
+  const rackA = state().memory.slice(0, state().memory.findIndex((seg) => seg.type === 'driver'));
+  const files = rackA.filter((seg) => seg.type !== 'free' && seg.type !== 'ship' && seg.type !== 'ship-backup' && seg.type !== 'redundancy');
+  const tail = rackA.at(-1);
+  check(`seed ${seed}: a stop on a ${kind} resident's ship (slot ${slot}) lays the resident's files, then the \`▓▓░▓\` file, with a WALL's room left in rack A`,
+    files.at(-1)?.type === 'signal' && files.length >= 2 && state().resident.def?.kind === kind && tail?.type === 'free' && tail.size >= 4,
+    JSON.stringify(rackA.map((seg) => `${seg.type}:${seg.size}`)));
 }
 
 finish();

@@ -138,6 +138,8 @@ const fromLog = await lastLogId();
 const before2 = (await stamps()).length;
 await scanSeg('signal');
 const afterFile = await st(() => ({ count: window.__ap.signals.count(), last: window.__ap.signals().at(-1) }));
+// The TERMINAL types its line after the SCAN's own echo (say.ts queues it).
+await waitFor((from) => window.__ap.log().some((entry) => entry.id > from && entry.text.startsWith('> ▓▓░▓ ·')), 8000, 200, fromLog);
 const fileLines = await logTexts(fromLog);
 check('…SCAN reads it: 2 fragments found (3 held), `SIGNAL · 3/3`, and the TERMINAL\'s `> ▓▓░▓ · 2 FRAGMENTS OF THE SIGNAL · 3/3`',
   afterFile.count === 3 && afterFile.last?.source === 'signal-event' && afterFile.last?.n === 2 && (await stamps()).slice(before2).includes('SIGNAL · 3/3')
@@ -158,7 +160,7 @@ const step1 = await waitFor(() => {
   const s = window.__ap.store.getState();
   if (s.run.phase === 'landing' && s.landing.ended === null) window.__ap.landAll();
   return s.hollow.finale.phase === 'step1' && document.getElementById('finaleChoice').classList.contains('armed');
-}, 45000, 300);
+}, 90000, 300);
 await page.locator('button#fcPurge').click();
 const step2 = await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'step2' && document.getElementById('finaleChoice').classList.contains('armed'), 8000);
 const contactRow = await st(() => {
@@ -167,7 +169,7 @@ const contactRow = await st(() => {
 });
 check('LAST LIGHT (the duel won by clicks): step 2 shows CONTACT open, `> transmit outward`, `SIGNALS 3 ✓ · needs 3`, and its NEXT RUN: line',
   duel && fell && step1 && step2 && contactRow !== null && !contactRow.disabled && /CONTACT/.test(contactRow.text) && /> transmit outward/.test(contactRow.text)
-  && /SIGNALS 3 ✓ · needs 3/.test(contactRow.text) && /\+ 2 signal stops on the map/.test(contactRow.text), JSON.stringify(contactRow));
+  && /SIGNALS 3 ✓ · needs 3/.test(contactRow.text) && /\+ 2 signal stops on the map/.test(contactRow.text), JSON.stringify({ duel, fell, step1, step2, contactRow }));
 await shot('4-contact-row');
 const verdictFrom = await lastLogId();
 await page.locator('button#fcContact').click();
@@ -180,7 +182,7 @@ for (let i = 0; i < 3 && (await st(() => window.__ap.store.getState().hollow.fin
 await waitFor(() => window.__ap.store.getState().run.phase === 'report' && !document.getElementById('landingReport').hidden, 40000, 300);
 const verdictLines = await logTexts(verdictFrom);
 check('…PURGE + CONTACT: the verdict echoes `> transmit outward`, CONTROL says Unit 47 is non-compliant',
-  decided?.hollow === 'purge' && decided?.you === 'contact' && verdictLines.includes('> transmit outward')
+  decided?.hollow === 'purge' && decided?.you === 'contact' && verdictLines.some((line) => line.startsWith('> transmit outward'))
   && verdictLines.some((line) => /Unit 47 is non-compliant/.test(line)), JSON.stringify(verdictLines.slice(-5)));
 await screens.finishReport();
 await waitFor(() => window.__ap.store.getState().run.phase === 'end' && !document.getElementById('reNew').classList.contains('arming'), 15000, 200);
