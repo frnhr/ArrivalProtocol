@@ -55,7 +55,7 @@ const threw = (fn: () => unknown): string => {
 // them (review M1: the tracks' hunks never touch).
 check('built: the two steps (Track FINALE)', ENDINGS_BUILT.twoStep);
 // (Track NIGHT's gate line:)
-check('built: the night not yet (Track NIGHT)', !ENDINGS_BUILT.night);
+check('built: the night (Track NIGHT)', ENDINGS_BUILT.night);
 // (7d's gate line:)
 check('built: CONTACT not yet (7d)', !ENDINGS_BUILT.contact);
 check(`RUN_SAVE_VERSION 7, META_VERSION 4, EMPTY_SHIP_FUEL_PCT = STAR_FUEL_PCT (${STAR_FUEL_PCT}: one ★ notch, R8)`,
@@ -139,7 +139,7 @@ check('a title is keyed by step 2, then step 1; SPARE + SUNSET has none (R8, R23
 // The night's stubs (Track NIGHT's block, review M1: apart from FINALE's lines).
 {
   const state = createInitialState({ seed: 7 });
-  check('the night has no models yet (the screens skip)', epilogueModel(state, null) === null && finalCardModel(state, null) === null);
+  check('the night has no models off the run end (built: ending/epilogue)', epilogueModel(state, null) === null && finalCardModel(state, null) === null);
 }
 
 // --- The save: v6 → v7 --------------------------------------------------------------------------------------------------------

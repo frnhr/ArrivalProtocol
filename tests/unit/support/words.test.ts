@@ -32,7 +32,7 @@ import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 import { SWATH_TEXT } from '@data/swath-text';
 import { SITES_TEXT } from '@data/sites-text';
 import { FINALE_TEXT } from '@data/finale-text';
-import { EPILOGUE_TEXT, ENDING_TITLE, SPARE_RUN_END } from '@data/epilogue-text';
+import { EPILOGUE_TEXT, ENDING_TITLE, SPARE_RUN_END, PAYOFF_OF, WALKED_IN } from '@data/epilogue-text';
 
 const DATA = join(import.meta.dirname, '..', '..', '..', 'src', 'data');
 
@@ -450,14 +450,23 @@ const SLICE7_BASE: Readonly<Record<string, unknown>> = {
 
 // --- 7a NIGHT (data/epilogue-text.ts): Track NIGHT adds its checks here (PAYOFF_OF's cover of LINE_POOL among them) ----------
 {
+  // The longest names a line can meet: a 7-letter first name, a 10-letter family, a 12-letter ship, the oldest colony's
+  // three-digit age and its people, a 3-digit unit and REPAIR CHARGE (384 blocks: the whole memory), a valve-widened gap.
   const NIGHT_WORST: Readonly<Record<string, unknown>> = {
-    age: 800, people: '8,200,000', count: 12, unit: 'UNIT-148', gap: 35, found: 7, total: 7, hollowName: 'UNIT-046·047',
+    age: 800, people: '8,200,000', count: 12, unit: 'UNIT-148', gap: 99, found: 7, total: 7, hollowName: 'UNIT-046·047',
+    years: 70, first: 'Quentin', family: 'Montgomery', name: 'BARNABY', ship: 'MORNING STAR', fuel: 100, charge: 384, n: 16,
+    home: 8, fleet: 8, unitNo: 148,
   };
   // The titles (review B1: FINALE's report line reads them too) and the RUN TALLY's SPARE words (review m4) are NIGHT's.
-  const lines = renderSlice6({ EPILOGUE_TEXT, ENDING_TITLE, SPARE_RUN_END }, [], 'EPILOGUE_TEXT', { ...SLICE7_BASE, ...NIGHT_WORST });
+  const lines = renderSlice6({ EPILOGUE_TEXT, ENDING_TITLE, SPARE_RUN_END, PAYOFF_OF, WALKED_IN }, [], 'EPILOGUE_TEXT', { ...SLICE7_BASE, ...NIGHT_WORST });
   const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
   check(`7a NIGHT words: every line (${lines.length}) fits (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
     lines.length > 0 && bad.length === 0, JSON.stringify(bad));
+  // R21: a payoff for every bio (the load check throws first; this pins the count), the colony's name at its worst inside.
+  const { LINE_POOL, ADA } = await import('@data/souls');
+  const bios = [...LINE_POOL, ADA.line];
+  check(`…PAYOFF_OF covers every bio (${bios.length}: LINE_POOL and Ada's), and nothing else`,
+    bios.every((line) => PAYOFF_OF[line] !== undefined) && Object.keys(PAYOFF_OF).length === bios.length);
 }
 
 // --- end of 7a NIGHT -------------------------------------------------------------------------------------------------------
