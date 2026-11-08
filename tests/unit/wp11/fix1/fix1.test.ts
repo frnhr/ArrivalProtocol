@@ -18,7 +18,6 @@
 // • THE TRAP (the lead's ruling of 21:30): a driver bitten twice in the same spot gets `MOVE it behind a WALL` on the strip
 //   once it is cured, never in front of a flight NOW line; a driver that moved starts its count over.
 // Slice 1a: the landing stands while a scenario sets up ('manual' landing mode) and lands at once when it lets it go.
-import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../harness11';
 import { theRoot, bittenAgainDrivers, infectNow } from '@systems/hollow';
@@ -330,8 +329,9 @@ check('the open root\'s tag: `ROOT · 16`', HOLLOW_FINALE.rootTag(16) === 'ROOT 
 check('PURGE\'s short-fleet title is short (`LAST LIGHT · 4 OF 5 HOME`)', RUN_END_PURGE_SHORT.title(4, 5) === 'LAST LIGHT · 4 OF 5 HOME');
 
 // --- The trap: bitten again in the same spot ----------------------------------------------------------------------------
-// A kid who only REPAIRs (the browser's strip follower): POD 11 and POD 12 in the root's GAPs are bitten again and again.
-h.lastLight(127);
+// A kid who only REPAIRs (the browser's strip follower): the drivers in the root's GAPs are bitten again and again. LAST
+// LIGHT alone carries the worked route's tools (MOVE among them: the strip's ask needs it), as the classic schedule's did.
+h.lastLight(127, { kit: true });
 {
   let shownAgain = 0;
   let underNow = 0;

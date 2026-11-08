@@ -10,7 +10,6 @@
 //   the MERGE 20 tick's data;
 // • the lead's WP9 context: a verb's clock and its countdown, and the first seed, wait while the flight is at TACTICAL
 //   (never under a NOW / KEEP HOLDING / RELEASE line); SKIP waits for the first verb (the coast is its stage).
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness11, LAST_LIGHT } from './harness11';
 import { shipColonists } from '@data/memory';
@@ -24,14 +23,24 @@ import { secUntil } from '@systems/predict';
 import { onPostTick } from '@systems/clock';
 import { isHollow } from '@state/selectors';
 import { MERGE_COST_CHARGE } from '@data/tuning';
-import { classicShip, CLASSIC_FIVE, CLASSIC_HOPS } from '@data/classic-five';
+import { createInitialState } from '@state/initial';
+import { currentShip } from '@systems/map-run';
+import { hitsLanding } from '@systems/map-hop';
+import { WORKED_ROUTE } from '@systems/arm-fixture';
 import type { GameState } from '@state/schema';
 import { phase2HollowOf } from '../support/hollow-world';
 
-const ship = classicShip(LAST_LIGHT);
-check('LAST LIGHT is ship 5: the flagship and the last ship; 3,200 colonists in 16 pods; link 98, 6 hits, no arrival damage',
-  ship.name === 'LAST LIGHT' && ship.final && (LAST_LIGHT === CLASSIC_FIVE.length - 1) && CLASSIC_FIVE.filter((candidate) => candidate.final).length === 1
-  && shipColonists(ship) === 3200 && CLASSIC_HOPS[ship.slot]!.linkBlocks === 98 && CLASSIC_HOPS[ship.slot]!.transitHits === 6 && ship.arrivalDamage.length === 0);
+// Track RETIRE: run 1's arm LAST LIGHT (the fixture's authored ship 4), reached along the worked route from CORMORANT; the
+// classic five's was ship 5 at the end of their one route (link 98, 6 hits).
+const fixture = createInitialState({ seed: 7, shipIndex: LAST_LIGHT, carried: 'fresh' });
+const ship = currentShip(fixture);
+const authored = [0, 1, 2, 3, 4].map((index) => currentShip(createInitialState({ seed: 7, shipIndex: index, carried: index === 0 ? null : 'fresh' })));
+const lastHop = fixture.run.map.route.at(-1)!.hop!;
+check('LAST LIGHT is the flagship, the worked route\'s last ship (slot 19, depth 6); 3,200 colonists in 16 pods; from CORMORANT 54 LY, link 87, 8 hits (5 fixed by ECC, 3 land), no arrival damage',
+  ship.name === 'LAST LIGHT' && ship.final && ship.slot === WORKED_ROUTE.at(-1) && fixture.run.map.route.length === 6
+  && authored.filter((candidate) => candidate.final).length === 1 && shipColonists(ship) === 3200
+  && lastHop.from === 15 && lastHop.distanceLy === 54 && lastHop.linkBlocks === 87 && lastHop.transitHits === 8 && hitsLanding(lastHop, 0) === 3
+  && ship.arrivalDamage.length === 0, JSON.stringify(lastHop));
 const { start, ring, tacticalWarp, cruiseWarp, dvBudgetKmS } = ship.flight;
 check('…§9 WP11 item 1\'s flight: r0 18,000, rp0 3,200, v∞ 1.5, ring 5,000–7,000, FUEL 2.5, ×30 / ×60, OUT engaged',
   start.r0 === 18000 && start.rp0 === 3200 && start.vInf === 1.5 && ring.min === 5000 && ring.max === 7000 && dvBudgetKmS === 2.5
@@ -44,11 +53,12 @@ check('…its HOLLOW: spread 12, drain 5, ×2 / ×1.5, seeds every 35 s in the w
   && hollow.seed?.everySec === 35 && hollow.seed.target === 'walls'
   && JSON.stringify(hollow.verbs) === JSON.stringify({ everySec: 12, telegraphSec: 3, firstTelegraphSec: 4, duelEverySec: 4 })
   && !hollow.deal && hollow.story === 'last-ship');
-check('…no other ship has verbs (the finale is the flagship\'s)', CLASSIC_FIVE.every((candidate, index) => (phase2HollowOf(index).verbs !== null) === candidate.final));
+check('…no other ship has verbs (the finale is the flagship\'s)', authored.every((candidate, index) => (phase2HollowOf(index).verbs !== null) === candidate.final));
 
 const h = createHarness11(7);
 const state = (): Readonly<GameState> => h.store.getState();
-h.lastLight(7);
+// With the worked route's tools by LAST LIGHT (support/arm-ship), as the classic five's schedule licensed them.
+h.lastLight(7, { kit: true });
 {
   const memory = state().memory;
   const starts = segmentStarts(memory);
@@ -85,7 +95,7 @@ h.step();
 
 // Flown by the strip-following kid with the defender, recording what the TACTICAL hold has to promise.
 {
-  h.lastLight(7);
+  h.lastLight(7, { kit: true });
   let verbUnderTactical = 0;
   let firstSeedUnderTactical = false;
   let verbsSeen = 0;
@@ -93,7 +103,7 @@ h.step();
   let skipBeforeFirstVerb = '';
   const off = onPostTick(() => {
     const s = state();
-    if (s.run.shipIndex !== LAST_LIGHT || s.run.phase !== 'flight') return;
+    if (!currentShip(s).final || s.run.phase !== 'flight') return;
     const verb = s.hollow.verb;
     const key = verb === null ? null : `${verb.kind}:${verb.targetId}:${s.hollow.verbMoments}`;
     if (key !== null && key !== lastVerb) {

@@ -7,7 +7,9 @@
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import type { FsToolKind } from '@/types/fs-tool';
-import { currentSlot } from '@systems/map-run';
+import type { ShipDef } from '@data/ships';
+import { currentSlot, currentShip } from '@systems/map-run';
+import { createInitialState } from '@state/initial';
 import { giveTools } from '../map/repo-fixture';
 
 export const WORKED_KIT: Readonly<Record<number, readonly FsToolKind[]>> = {
@@ -22,4 +24,10 @@ export function giveWorkedKit(store: Store<GameState>): void {
   const kit = WORKED_KIT[currentSlot(state.run)];
   if (kit === undefined) throw new Error(`giveWorkedKit: slot ${currentSlot(state.run)} is not on the worked route`);
   giveTools(store, kit);
+}
+
+// Run 1's authored ship `index` (0 ARES-VII … 4 LAST LIGHT) as the fixture world builds it: its ShipDef (state/initial.ts,
+// the worked route; the details rolled from `seed`, which is the arm seed there). In place of classicShip(index).
+export function fixtureShip(index: number, seed = 1): ShipDef {
+  return currentShip(createInitialState({ seed, shipIndex: index, carried: index === 0 ? null : 'fresh' }));
 }

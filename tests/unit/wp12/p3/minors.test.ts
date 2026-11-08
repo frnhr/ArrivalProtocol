@@ -7,7 +7,6 @@
 // • WP7 verify: the MOVE preview of a driver bitten after the pick says STILL INFECTED, not SAFE.
 // • WP8 verify: with two FIREWALLs the placing line lights the one still to place, and is done once both hold.
 // • WP11 TODO: a Core worn below CORE_LOW_INTEGRITY (a thread lost, nothing infected) is named on a quiet coast in blue.
-import '../../support/classic-world';
 import { check, finish } from '../../wp1/harness';
 import { createHarness11 } from '../../wp11/harness11';
 import { buildDirectorCtx, type DirectorCtx } from '@systems/director';
@@ -36,7 +35,8 @@ const ctxNow = (): DirectorCtx => buildDirectorCtx(state(), getPrediction(), { e
 
 // --- LAST LIGHT's duel with one thread, then every pod down -----------------------------------------------------------
 {
-  h.lastLight(5);
+  // With the worked route's tools by LAST LIGHT (support/arm-ship), as the classic five's schedule licensed them.
+  h.lastLight(5, { kit: true });
   h.flyLastLight(900, { deleteRoot: false });
   if (h.status() !== 'locked') throw new Error(`minors: LAST LIGHT seed 5 did not lock (${h.status()})`);
   h.step();
