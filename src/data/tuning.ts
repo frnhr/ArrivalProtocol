@@ -2280,8 +2280,11 @@ export const LEFTOVER_START_INTEGRITY = 100;
 // The sleeper (04 §3.14): MOVE takes 1.5 + 0.2 × 12 = 3.9 s, and rm on its lock 1.0 s.
 export const SLEEPER_FILE_BLOCKS = 12;
 export const SLEEP_LOCK_BLOCKS = 1;
-// HOLD A WALL: a WALL's width (WALL_MIN_BLOCKS), so the wall it holds is the one the kid already knows.
-export const SLEEPER_WALL_BLOCKS = 4;
+// HOLD A WALL (slice 8, §2.6, OD 25): MOTH.wall stands in a GAP (1 to WALL_MIN_BLOCKS − 1 free blocks between something
+// hostile and a file), a blocker bites can't cross, FIREWALL_BLOCKS wide (or the whole GAP when it is narrower: a beam seed
+// lands one block from its target). Slice 5's 4-block wall went only where 4 free blocks already were a WALL, so it never
+// stopped a bite (sleeper-sweep: 0.0 drivers eaten against none). To reverse: 4, and resident-sleeper.ts wallSpot's old run.
+export const SLEEPER_WALL_BLOCKS = 2;
 // The sleeper's gift (plan R12, [FRAN]): one middle ship's income (ARRIVED +1, LANDED +3 at 60–79%): a v1's price and one
 // more, a gift that is felt but does not buy a tier by itself.
 export const SLEEPER_GIFT_CYCLES = 4;

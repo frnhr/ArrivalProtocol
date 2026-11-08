@@ -69,7 +69,7 @@ export const KIN_TEXT = {
     // One line per job, as it starts.
     jobLine: {
       drops: (name: string): string => `${name}: i'll take the pods down. you rest.`,
-      wall: (name: string): string => `${name}: i'll stand between it and the little ones.`,
+      wall: (name: string): string => `${name}: i'll stand in the gap. it won't get past me.`,
       mend: (name: string): string => `${name}: i'll see to the poorly ones.`,
     },
     // HOLD A WALL picked, but its spot went between the offer and the answer.
