@@ -1,13 +1,13 @@
-// Slice 7a THE ENDING in the page (docs/phase3/impl/slice-7-plan.md §6.4; the 7a review's (b)), on seed 7's run 1 arm, its
+// Slice 7a THE ENDING in the page (7b review: MERGE + SUNSET's landing is THE LAST LANDING now) (docs/phase3/impl/slice-7-plan.md §6.4; the 7a review's (b)), on seed 7's run 1 arm, its
 // LAST LIGHT reached by __ap jumps (__ap.route over the worked route, the boot skipped, locked at once), the root deleted by
 // clicks, the card driven by its real keys and clicks:
 // • PURGE + REASSIGNMENT by keys: [1], [ESC] BACK (the pick kept), [1], [3]; the verdict's three lines; the LANDING REPORT's
 //   ending line; the RUN TALLY → EPILOGUE → FINAL CARD (`STAND BY`) → NEW RUN, and the title's `ENDINGS 2/6`.
 // • A reload at step 2 (R14): the title offers RESUME at LAST LIGHT's BEAM, and RESUME replays it from its boot with the
 //   FINALE at 'none'.
-// • On that replay, MERGE + SUNSET (R15's interim last landing) with an eaten driver and FUEL 22%: the verdict, then
-//   'last-landing' with the engine shut (a held throttle burns nothing: review M1), the restored pod lands, and the report
-//   reads `ENDING · MERGE · WE TOOK THE SHIP` with the record's FUEL the ship left with.
+// • On that replay, MERGE + SUNSET with an eaten driver and FUEL 22%: the verdict, then THE LAST LANDING (7b) with the engine
+//   shut (a held throttle burns nothing: review M1), [ENTER] to its end, and the report reads `ENDING · MERGE · WE TOOK THE
+//   SHIP` with the record's FUEL the ship left with.
 // • UNRESOLVED (no rm aboard): IT FOLLOWED YOU, CONTINUE by [ENTER], step 2, REASSIGNMENT: two lines (no step-1 echo), and
 //   `ENDING · FOLLOWED · IT FOLLOWED ME TO THE DISH`.
 // Usage: node tests/e2e/scenarios/ending.mjs   (env SHOT_VIEWPORT, E2E_BASE_URL; tests/e2e/run.mjs runs it)
@@ -188,7 +188,7 @@ const eaten = await st(() => {
 await deleteRoot();
 check('MERGE + SUNSET: step 1 up with POD ' + eaten + '\'s driver eaten', await step1Armed());
 const merge = await st(() => ({ now: document.querySelector('#fcMerge .fc-now')?.textContent ?? '', open: document.getElementById('fcMerge')?.classList.contains('open') }));
-check('…MERGE open, its NOW: giving the driver back', merge.open && merge.now === 'NOW: + 1 eaten driver comes back · launch its pod', JSON.stringify(merge));
+check('…MERGE open, its NOW: the driver back, its pod landing on its own (7b)', merge.open && merge.now === 'NOW: + 1 eaten driver comes back · its pod lands on its own', JSON.stringify(merge));
 await page.locator('button#fcMerge').click();
 await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'step2', 3000);
 await armed();
@@ -199,13 +199,14 @@ const verdict2 = await readVerdict();
 check('…the verdict: `> merge unit_046 -> unit_047 ... OK`, `> launch last_light ... OK`, non-compliant', verdict2.up
   && JSON.stringify(verdict2.lines) === JSON.stringify(['> merge unit_046 -> unit_047 ... OK', '> launch last_light ... OK', 'Unit 47 is non-compliant. :)']),
   JSON.stringify(verdict2.lines));
-const reopened = await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'last-landing' && window.__ap.store.getState().landing.ended === null, 6000);
-check('…then \'last-landing\': the landing reopened with POD ' + eaten + ' aboard, the card gone', reopened
+const reopened = await waitFor(() => window.__ap.store.getState().hollow.finale.phase === 'last-landing' && window.__ap.store.getState().landing.lastLanding !== null, 6000);
+check('…then THE LAST LANDING (7b): POD ' + eaten + ' released aboard by radio, the strip up, the SHIP view, the card gone', reopened
   && await st((pod) => {
     const card = document.getElementById('finaleChoice');
-    return window.__ap.store.getState().landing.pods.find((record) => record.pod === pod)?.fate.kind === 'aboard' && (card.hidden || card.classList.contains('closing'));
+    const s = window.__ap.store.getState();
+    return s.landing.pods.find((record) => record.pod === pod)?.fate.kind === 'aboard' && JSON.stringify(s.landing.lastLanding?.pods) === JSON.stringify([pod])
+      && s.ui.mode === 'tools' && !document.getElementById('lastLanding').hidden && (card.hidden || card.classList.contains('closing'));
   }, eaten));
-if ((await st(() => window.__ap.store.getState().ui.mode)) !== 'tools') await page.keyboard.press('Tab');
 await page.waitForTimeout(500);
 const fuelBefore = await st(() => window.__ap.store.getState().burn.fuelPct);
 await page.keyboard.down('Space');
@@ -214,7 +215,10 @@ const held = await st(() => ({ firing: window.__ap.store.getState().burn.firing,
 await page.keyboard.up('Space');
 check('…the engine is shut there: a held [SPACE] fires nothing and burns no FUEL, no GO LOWER (review M1)', !held.firing && Math.abs(held.fuel - fuelBefore) < 1e-6 && held.goLow === null,
   JSON.stringify({ fuelBefore, ...held }));
-await st(() => window.__ap.landAll());
+await page.keyboard.press('Enter');
+const skipped = await waitFor(() => window.__ap.store.getState().landing.lastLanding === null && window.__ap.store.getState().hollow.finale.phase === 'done', 8000, 50);
+check('…[ENTER] skips THE LAST LANDING to its end (\'done\'), its pod flown by \'merge\'', skipped
+  && await st((pod) => window.__ap.store.getState().landing.pods.find((record) => record.pod === pod)?.fate.launch?.source === 'merge', eaten));
 const report2 = await finalReport();
 const left = await st(() => ({ record: window.__ap.store.getState().hollow.finale.record?.fuelPct ?? null, end: window.__ap.store.getState().landing.fuelAtEndPct,
   pod: window.__ap.store.getState().landing.pods.find((record) => record.restored)?.fate.kind ?? null }));
