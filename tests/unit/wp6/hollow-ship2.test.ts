@@ -12,7 +12,6 @@
 //   bitten, then MOVE the drivers next to HOLLOW out to rack D, so both sides become WALLs) loses
 //   no pod's driver;
 // • an idle defender loses both (POD 04 and POD 05), and the spread stops at the WALLs.
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness6 } from './harness6';
 import { hollowReach } from '@systems/hollow';
@@ -29,23 +28,27 @@ import { driversInMemory, getRedundancy, isInfected } from '@state/selectors';
 import { stateFromElements } from '@/types/orbit';
 import type { DriverSegment, FreeSegment } from '@/types/segment';
 import { WALL_MIN_BLOCKS, ROOT_BLOCKS } from '@data/tuning';
-import { CLASSIC_FIVE } from '@data/classic-five';
-import { phase2HalcyonDef } from '../support/hollow-world';
+import { phase2HalcyonDef, PHASE2_LANDINGS } from '../support/hollow-world';
+import { fixtureShip } from '../support/arm-ship';
 
 const HALCYON_HOLLOW: HollowDef = {
   wake: { afterAiSec: 30, coastLeadSec: null }, spreadEverySec: 25, drainPerSec: 3.5, burnMult: 2, landMult: 1.5, seed: null, verbs: null, deal: false, story: 'none',
 };
-const ares = CLASSIC_FIVE[0]!;
+// Track RETIRE: run 1's ARES-VII (its fresh unit's written racks E–F) with phase 2's FULL HALCYON geometry, drivers and
+// landing (support/hollow-world), as the classic five's ARES-VII and HALCYON made it.
+const ares = fixtureShip(0);
+const halcyon = phase2HalcyonDef();
 const HALCYON: ShipDef = {
   ...ares,
   id: 'halcyon-test',
   name: 'HALCYON',
+  memoryClass: 'FULL',
   memory: {
     ...ares.memory,
-    podRacks: phase2HalcyonDef().memory.podRacks,
-    drivers: CLASSIC_FIVE[1]!.memory.drivers,
+    podRacks: halcyon.memory.podRacks,
+    drivers: halcyon.memory.drivers,
   },
-  landing: CLASSIC_FIVE[1]!.landing,
+  landing: structuredClone(PHASE2_LANDINGS[1]) as ShipDef['landing'],
 };
 const CHARGE = 32;
 const RUN_SEC = 180;
@@ -66,6 +69,7 @@ function setUp(): void {
   const orbit = stateFromElements(rp, (ra - rp) / (ra + rp), 0, 0, state.level.planet.mu);
   h.store.update((d) => {
     d.memory = memory;
+    d.level.memoryClass = 'FULL';
     d.hollow = createHollowState(HALCYON_HOLLOW);
     d.landing = createLandingState(HALCYON.landing, memory, { finalShip: false, lead: 5, hurt: [], planetR: d.level.planet.R });
     d.mission.colonists = d.landing.pods.reduce((sum, record) => sum + record.colonists, 0);

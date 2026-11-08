@@ -11,7 +11,6 @@
 //   on another without a SCAN, after its decoy's own confirm, in 2.0 s (`IT WAS A SEED`); MOVE and COPY on others run their
 //   own time, unmask them (`NOT A FILE`) and move or copy nothing;
 // • the boot: the ECC seeds line leaves a decoy out, and it lands with no thunk.
-import '../support/classic-world';
 import { check, finish } from '../wp1/harness';
 import { createHarness7 } from '../wp7/harness7';
 import { lockOn } from '../landing/harness-landing';
@@ -41,7 +40,8 @@ import { SEEDS_ONLY_DEF } from '@data/threats';
 import { DISGUISE_POOL, SENTRY_TEXT, THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
 import { TOOL_REFUSAL, echoName } from '@data/tool-text';
 import { FRESH_UNIT_RACK_E, FRESH_UNIT_RACK_F, rackOf, layoutOf } from '@data/memory';
-import { classicShip, CLASSIC_HOPS } from '@data/classic-five';
+import { createInitialState as fixtureState } from '@state/initial';
+import { currentShip } from '@systems/map-run';
 import { nominalShipThreat } from '@systems/threat-plan';
 import { DISGUISE_CHANCE_BY_DEPTH, SEED_BLOCKS } from '@data/tuning';
 import type { BeamSeedPlan } from '@/types/threat';
@@ -50,7 +50,11 @@ import type { GameState } from '@state/schema';
 import type { FsToolKind } from '@/types/fs-tool';
 
 const KESTREL = 2;
-const kestrel = classicShip(KESTREL);
+// Track RETIRE: run 1's arm KESTREL (COMPACT: the unit's racks E–F from block 192), its link the worked route's hop from
+// HALCYON; the classic one was FULL (the unit at 256) on a link of 112.
+const KESTREL_WORLD = fixtureState({ seed: 1, shipIndex: KESTREL, carried: 'fresh' });
+const kestrel = currentShip(KESTREL_WORLD);
+const KESTREL_LINK = KESTREL_WORLD.run.map.route.at(-1)!.hop!.linkBlocks;
 
 function plan(index: number): BeamSeedPlan {
   return { targetId: `t${index}`, targetName: `File ${index}`, words: `words ${index}`, disguise: null };
@@ -106,7 +110,7 @@ function counting(seed: number): { rng: Rng; draws: () => number } {
   // The beam's own roll (KESTREL's later-run noise) is the same with and without a disguise roll after it.
   const files = [...FRESH_UNIT_RACK_E, ...FRESH_UNIT_RACK_F]
     .filter((item): item is Exclude<typeof item, { free: number }> => !('free' in item)).map((item) => structuredClone(item) as Segment);
-  const packet = packUnit(files, CLASSIC_HOPS[kestrel.slot]!.linkBlocks, []);
+  const packet = packUnit(files, KESTREL_LINK, []);
   const source = { kind: 'noise', noise: 3 } as const;
   const alone = rollBeamSeeds(packet, source, false, createRng(41));
   const withRoll = rollBeamSeeds(packet, source, false, createRng(41));
@@ -173,14 +177,24 @@ const decoyDef = DISGUISE_POOL[0]!;
 function plantDecoy(targetRole: Segment['role'], decoy: { name: string; desc: string }, words: string): HollowSegment {
   let planted: HollowSegment | null = null;
   h.store.update((draft) => {
-    const target = draft.memory.find((seg) => seg.role === targetRole)!;
-    planted = plantBeamSeed(draft.memory, target.id, words, '???', decoy);
+    // Beside the file of `targetRole`, or (Track RETIRE: run 1's arm KESTREL packs its unit tighter, so the free runs after it
+    // can run out) beside the unit's file with the most free room after it.
+    const roomAfter = (i: number): number => (draft.memory[i + 1]?.type === 'free' ? draft.memory[i + 1]!.size : 0);
+    const at = draft.memory.findIndex((seg) => seg.role === targetRole);
+    try {
+      planted = plantBeamSeed(draft.memory, draft.memory[at]!.id, words, '???', decoy);
+    } catch {
+      const roomy = draft.memory.reduce((best, seg, i) => (seg.type !== 'free' && seg.type !== 'hollow' && roomAfter(i) > roomAfter(best) ? i : best), at);
+      planted = plantBeamSeed(draft.memory, draft.memory[roomy]!.id, words, '???', decoy);
+    }
     assertMemoryInvariants(draft.memory, layoutOf(draft).totalBlocks);
     if (draft.hollow.cfg.wake === 'never') draft.hollow.cfg = structuredClone(SEEDS_ONLY_DEF);
-    if (!draft.run.licences.includes('delete')) draft.run.licences.push('delete');
     if (!draft.run.licences.includes('scan')) draft.run.licences.push('scan');
     draft.ui.memoryRev++;
   });
+  // DELETE's files as its licence installs them (the classic schedule licensed it at KESTREL's start; on run 1's arm it
+  // is delivered there).
+  if (!s().run.licences.includes('delete')) installTool(h.store, 'delete');
   return s().memory.find((seg) => seg.id === planted!.id) as HollowSegment;
 }
 

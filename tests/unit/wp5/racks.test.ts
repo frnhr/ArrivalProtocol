@@ -8,7 +8,6 @@
 //   and validatePodRacks throwing on each rule;
 // • the live ★ ON TARGET tally (landing-rules onTargetTally) that the MiniHud reads.
 // The DOM side (six rows, labels, nothing clipped, no console errors) is the e2e tier.
-import '../support/classic-world';
 import { check, finish, harnessState } from '../wp1/harness';
 import {
   rackLabel, hexAddr, podRackLayouts, shipPodCount, lastPodRackTrailingFree, validatePodRacks, rootSlotRack,
@@ -20,11 +19,12 @@ import { memStatsModel, stripRangeLabel } from '@components/memory-view/MemorySt
 import { onTargetTally } from '@systems/landing-rules';
 import { segmentStarts } from '@systems/memory-ops';
 import { createInitialState } from '@state/initial';
-import { freshUnitRacks } from '@systems/carry';
 import type { GameState } from '@state/schema';
 import type { LaunchRecord, Touchdown } from '@/types/landing';
 import { POD_RACK_MIN_FREE, RACK_BLOCKS, UNIT_TAIL_BLOCKS, WALL_MIN_BLOCKS } from '@data/tuning';
-import { CLASSIC_FIVE } from '@data/classic-five';
+import { fixtureShip } from '../support/arm-ship';
+// Track RETIRE: run 1's five authored ships (the fixture world's), in place of the classic five.
+const AUTHORED: readonly ShipDef[] = [0, 1, 2, 3, 4].map((index) => fixtureShip(index));
 
 // --- Rack labels -------------------------------------------------------------------------------------
 check('rack labels: RACK A · 0x000 … RACK F · 0x140', MEMORY_LAYOUTS.FULL.racks.map((_, i) => rackLabel(i * RACK_BLOCKS, MEMORY_LAYOUTS.FULL)).join()
@@ -98,28 +98,32 @@ check('no ship-1 file straddles two racks (every chip is whole in its row)', cro
   // Track UI's words: PODS ABOARD 3, `600 colonists` under it.
   check('stats: 3 pods aboard, 600 colonists (no sealed archive: the drivers are files from the start)', stats.pods.label === 'pods aboard'
     && stats.pods.value === '3' && stats.pods.small === '600 colonists', JSON.stringify(stats.pods));
-  check('stats: REPAIR CHARGE 36 blk, MEMORY 384 blk · 6 racks', stats.charge.value === '36' && stats.total.value === '384' && stats.total.small === 'blk · 6 racks');
+  // Run 1's ARES-VII is COMPACT: racks A B C E F, 320 blocks (the classic one was FULL, 384 in six).
+  check('stats: REPAIR CHARGE 36 blk, MEMORY 320 blk · 5 racks', stats.charge.value === '36' && stats.total.value === '320' && stats.total.small === 'blk · 5 racks',
+    JSON.stringify(stats.total));
   const free = state.memory.filter((seg) => seg.type === 'free').reduce((sum, seg) => sum + seg.size, 0);
   check(`stats: FREE ${free} blk (computed)`, stats.free.value === String(free));
   check('stats: DAMAGE counts what the kid can see: Engine I/O 85%, Sensor Interp 78% and POD 02 at 44% (ship files stay hidden)',
     stats.damage.label === 'damage' && stats.damage.tone === 'warn' && stats.damage.value === String(Math.round(0.15 * 8 + 0.22 * 8 + 0.56 * 8)), JSON.stringify(stats.damage));
-  check('the strip header range: RACK A → F · 0x000 → 0x17F', stripRangeLabel(state) === 'RACK A → F · 0x000 → 0x17F', stripRangeLabel(state));
+  check('the strip header range: RACK A → F · 0x000 → 0x13F', stripRangeLabel(state) === 'RACK A → F · 0x000 → 0x13F', stripRangeLabel(state));
 }
 
 // --- Every ship's pod racks ----------------------------------------------------------------------------------
 // A ship's built memory (ship 1 as the harness builds it; a later ship with a fresh unit carried in).
 function builtMemory(ship: ShipDef): GameState['memory'] {
-  const index = CLASSIC_FIVE.indexOf(ship);
-  return index === 0 ? harnessState(1, false).memory : createInitialState({ seed: 1, shipIndex: index, carried: freshUnitRacks(ship) }).memory;
+  const index = AUTHORED.indexOf(ship);
+  return index === 0 ? harnessState(1, false).memory : createInitialState({ seed: 1, shipIndex: index, carried: 'fresh' }).memory;
 }
 {
   // slice-2-plan §4 (01-landing §3.16): the pod racks with the root slot `S` (calm ships have none), the free blocks in
   // them (the slot's GAPs and the largest root it may hold not counted) and the last rack's tail.
   const expected: Record<string, { racks: string[]; free: number; tail: number; pods: number }> = {
-    'ARES-VII': { racks: ['P P P _40', '_64', '_64'], free: 168, tail: 64, pods: 3 },
-    HALCYON: { racks: ['P P P P P _24', '_64', '_64'], free: 152, tail: 64, pods: 5 },
-    KESTREL: { racks: ['P P P P P P _16', 'P P P P P P _16', '_64'], free: 96, tail: 64, pods: 12 },
-    VESPER: { racks: ['P P P P P P _16', 'P P _2 S _1 P P P _21', 'P _56'], free: 93 - 14, tail: 56, pods: 12 },
+    // Run 1's arm (Track RETIRE): ARES-VII, HALCYON and KESTREL COMPACT (racks B, C), VESPER an ark of 16 FULL with
+    // LAST LIGHT's layout (its slot between POD 11 and POD 12).
+    'ARES-VII': { racks: ['P P P _40', '_64'], free: 104, tail: 64, pods: 3 },
+    HALCYON: { racks: ['P P P P P _24', '_64'], free: 88, tail: 64, pods: 5 },
+    KESTREL: { racks: ['P P P P P P _16', '_64'], free: 80, tail: 64, pods: 6 },
+    VESPER: { racks: ['P P P P P P P _8', 'P P P P _2 S _1 P _21', 'P P P P _32'], free: 61 - 14, tail: 32, pods: 16 },
     'LAST LIGHT': { racks: ['P P P P P P P _8', 'P P P P _2 S _1 P _21', 'P P P P _32'], free: 61 - 18, tail: 32, pods: 16 },
   };
   const freeOutsideGaps = (ship: ShipDef): number => podRackLayouts(ship).reduce((sum, { tokens }) => sum + tokens.reduce((rackSum, token, index) => {
@@ -128,10 +132,10 @@ function builtMemory(ship: ShipDef): GameState['memory'] {
     const nextToRoot = isRoot(tokens[index - 1]) || isRoot(tokens[index + 1]);
     return rackSum + (nextToRoot && token.size < WALL_MIN_BLOCKS ? 0 : token.size);
   }, 0), 0) - (rootSlotRack(ship) === null ? 0 : maxRootFor(ship));
-  for (const ship of CLASSIC_FIVE) {
+  for (const ship of AUTHORED) {
     const want = expected[ship.name];
     const lzPods = ship.landing.lzs.reduce((sum, lz) => sum + lz.pods, 0);
-    const racks = [ship.memory.podRacks.B, ship.memory.podRacks.C, ship.memory.podRacks.D];
+    const racks = [ship.memory.podRacks.B, ship.memory.podRacks.C, ship.memory.podRacks.D].filter((rack) => rack !== undefined);
     check(`${ship.name}: pod racks ${racks.join(' | ')}; ${shipPodCount(ship)} drivers = the LZ sum ${lzPods}; ${freeOutsideGaps(ship)} free, tail ${lastPodRackTrailingFree(ship)}`,
       want !== undefined && JSON.stringify(racks) === JSON.stringify(want.racks) && shipPodCount(ship) === want.pods && lzPods === want.pods
       && freeOutsideGaps(ship) === want.free && lastPodRackTrailingFree(ship) === want.tail
@@ -150,16 +154,16 @@ function builtMemory(ship: ShipDef): GameState['memory'] {
       return { ok: pattern.test(message), message };
     }
   };
-  const lastLight = CLASSIC_FIVE[4]!;
+  const lastLight = AUTHORED[4]!;
   const tooFull = throws(lastLight, { B: 'P P P P P P P P', D: 'P P P P P _24' }, /27 free blocks \(root gaps and the largest root not counted\), under 40/);
   check('validatePodRacks: under 40 free blocks in the pod racks throws', tooFull.ok, tooFull.message);
   // VESPER with racks B and D full: only rack C's 21 trailing free blocks count, less its largest root (14), not the slot's
   // GAPs of 2 and 1.
-  const gapsOnly = throws(CLASSIC_FIVE[3]!, { B: 'P P P P P P P P', D: 'P P P P P P P P' }, /7 free blocks \(root gaps and the largest root not counted\), under 40/);
+  const gapsOnly = throws(AUTHORED[3]!, { B: 'P P P P P P P P', D: 'P P P P P P P P' }, /7 free blocks \(root gaps and the largest root not counted\), under 40/);
   check('…the root\'s GAPs (shorter than a WALL, next to an R) do not count as room', gapsOnly.ok, gapsOnly.message);
   const shortTail = throws(lastLight, { D: '_16 P P P P _16' }, /ends in 16 free blocks, under the unit's 24-block tail/);
   check('validatePodRacks: a last pod rack ending in fewer than 24 free blocks throws', shortTail.ok, shortTail.message);
-  const extraPod = throws(CLASSIC_FIVE[0]!, { B: 'P P P P _32' }, /4 drivers in the pod racks, but the LZ counts sum to 3 pods/);
+  const extraPod = throws(AUTHORED[0]!, { B: 'P P P P _32' }, /4 drivers in the pod racks, but the LZ counts sum to 3 pods/);
   check('validatePodRacks: a driver more than the LZ counts throws', extraPod.ok, extraPod.message);
 }
 
