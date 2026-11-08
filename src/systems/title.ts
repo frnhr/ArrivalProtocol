@@ -6,6 +6,7 @@ import { launchOf } from '@systems/lineage';
 import { solLy } from '@systems/map-geometry';
 import { END_SLOTS } from '@data/arm';
 import { MAP_TEXT } from '@data/map-text';
+import { traceNextLines } from '@systems/trace-hud';
 
 // The title card's model (02-map §3.11, §4; 05-story §3.9, §3.12; slice-3c-plan §3 steps 2 and 6), pure in the state:
 // • the unit line: run 1's `UNIT-047 · YEAR 2300 · FINAL SHIP 180 LY OUT`, and from run 2 the launch line `UNIT-048 · YEAR
@@ -41,6 +42,9 @@ export interface TitleModel {
   receive: boolean;         // RECEIVE TRANSMISSION is offered
   saveNote: string | null;  // `runs save between ships`
   notes: string[];          // the archive's one-off notes
+  // Slice 7c (02 §3.12: the traces are "shown on the title and the final card"): the NEXT RUN: lines the last unit's ending
+  // left this run (systems/trace-hud.ts traceNextLines, the final card's own), none on run 1 or after a run with no ending.
+  traces: string[];
 }
 
 // The archive's one-off notes as the title reads them (systems/meta.ts Meta.notes; null with no archive behind the page).
@@ -93,8 +97,10 @@ export function titleModel(state: Readonly<Pick<GameState, 'run' | 'save' | 'arc
     block = { kind: 'offline', line: MAP_TEXT.save.offlineTitle };
   }
   const receive = block === null || block.kind === 'offline';
+  const ending = state.run.lastUnit?.ending ?? null;
   return {
     unit, unitLine, launch, save: block, receive,
+    traces: ending === null ? [] : traceNextLines(ending),
     saveNote: save.status === 'ok' && save.resume === null && state.archive.status === 'ok' ? MAP_TEXT.title.savesBetweenShips : null,
     notes: notes === null ? [] : [
       ...(notes.olderArchive ? [MAP_TEXT.save.olderArchive] : []),

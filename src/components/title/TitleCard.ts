@@ -55,6 +55,7 @@ export function mountTitleCard(store: Store<GameState>): () => void {
   const wipeBtn = requireById<HTMLButtonElement>('titleWipe');
   const withoutBtn = requireById<HTMLButtonElement>('titlePlayWithout');
   const lineageEl = requireById('titleLineage');
+  const tracesEl = requireById('titleTraces');
   const endingsEl = requireById('titleEndings');
   const stampEl = requireById('titleStamp');
   const saveEl = requireById('titleSave');
@@ -199,6 +200,9 @@ export function mountTitleCard(store: Store<GameState>): () => void {
     endingsEl.textContent = returning ? ARCHIVE_TEXT.endings(seen.length, pieces.length) : '';
     // WP11 part 2: lit once an ending has been found (the FINAL CARD names them).
     endingsEl.classList.toggle('found', seen.length > 0);
+    // Slice 7c (02 §3.12): the last ending's traces, as the final card said them.
+    tracesEl.hidden = model.traces.length === 0;
+    tracesEl.replaceChildren(...model.traces.map((line) => make('div', 'title-traces-line', line)));
   };
   paintUnit();
 

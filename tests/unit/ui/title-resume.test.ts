@@ -45,6 +45,12 @@ const same = titleModel(run2(NO_SAVE, { gap: 0 }), null);
 check('…a gap of 0: `LAUNCHED IN THE SAME YEAR AS UNIT-047`, stamp `SAME YEAR`',
   same.unitLine.endsWith('LAUNCHED IN THE SAME YEAR AS UNIT-047') && same.launch?.stamp === 'SAME YEAR', same.unitLine);
 check('…a run whose history names no last unit keeps the plain line', titleLaunch(run2(NO_SAVE, { lastUnitNumber: null })) === null);
+// Slice 7c (02 §3.12, the 7c review): the title shows the traces the last ending left, as the final card said them.
+check('the traces: run 1 none; run 2 after PURGE + REASSIGNMENT its two NEXT RUN: lines (the final card\'s); a lost last unit none',
+  one.traces.length === 0 && JSON.stringify(two.traces) === JSON.stringify([
+    'NEXT RUN: + your seeds die at the final ship · − a hungrier finale', 'NEXT RUN: + 15 charge at the final ship · − the last root is you',
+  ]) && titleModel({ ...run2(), run: { ...run2().run, lastUnit: { ...RUN1_LAST_UNIT, cause: 'overwritten', ending: null } } }, null).traces.length === 0,
+  JSON.stringify(two.traces));
 
 // --- The RESUME block ---------------------------------------------------------------------------------------------------------
 const resume = (point: ResumeLine['point'], depth: number, ship: string, year: number): SaveState =>

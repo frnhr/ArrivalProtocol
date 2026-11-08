@@ -20,6 +20,8 @@ import { STEP1_OPTIONS, step2Options, pieceBuilt, type EndingOption } from '@dat
 import { FINALE_TEXT } from '@data/finale-text';
 import { echoWord } from '@data/tool-text';
 import { STAY_PICK_MAX, HOLLOW_TYPE_CPS, FINALE_ENDING_GAP_SEC } from '@data/tuning';
+import { TRACE_RULES, traceBuilt } from '@data/traces';
+import { nextRunBody } from '@systems/trace-hud';
 
 // --- Which face is up ------------------------------------------------------------------------------------------------
 
@@ -64,7 +66,8 @@ export interface MeterModel {
 // • open: its word, command and meaning, its meter with the price caption, and NOW:;
 // • needs: the same, greyed, its caption the need line (`NEEDS FUEL 20% · you have 12%`);
 // • unknown: an option out of reach and never chosen before: `???` and its need line, nothing else.
-// `nextRun` is the NEXT RUN: row's line (R12: none until 7c builds the traces; the row keeps its room). `picked`: step 1's
+// `nextRun` is the NEXT RUN: row's line (R12, built in 7c: systems/trace-hud.ts nextRunBody, the trace the piece leaves; none
+// for an unknown row or a trace the build does not play, and the row keeps its room). `picked`: step 1's
 // pick kept after [ESC] BACK (R7). `ruledOut`: SPARE gave the ship away (`SPARE GIVES IT THE SHIP` on SUNSET, R8).
 export interface CardRow {
   key: number;
@@ -127,6 +130,16 @@ export interface CardInput {
   stay: readonly StayCandidate[];
   // The sub-row is open (CARD-local, unsaved: M3).
   stayOpen: boolean;
+  // Who the root is (systems/traces.ts rootUnits): SPARE's NEXT RUN: line names its cache (`046's cache`).
+  rootUnits: readonly number[];
+}
+
+// The NEXT RUN: line of `piece`'s row (R12). On step 2 after a non-compliant step 1 (SPARE), the wild seed was said on
+// that step's row, so a second non-compliant line says it is the same seed (R33: one seed a run), as the final card does.
+function nextRunOf(piece: EndingPiece, input: Readonly<CardInput>): string | null {
+  const first = input.step === 2 ? input.hollow : null;
+  const wildSaid = first !== null && first !== 'followed' && TRACE_RULES[first].cost === 'wild-seed' && traceBuilt(first);
+  return nextRunBody(piece, input.rootUnits, wildSaid);
 }
 
 export function meterModel(price: Readonly<PriceMeter>): MeterModel {
@@ -186,7 +199,8 @@ function rowOf(option: Readonly<EndingOption<EndingPiece>>, input: Readonly<Card
   }
   const base = {
     key: option.key, piece, word: FINALE_TEXT.word[piece], command: commandOf(piece, input.names, input.stay),
-    meaning: FINALE_TEXT.meaning[piece], meter: state.price === null ? null : meterModel(state.price), nextRun: null, picked, ruledOut,
+    meaning: FINALE_TEXT.meaning[piece], meter: state.price === null ? null : meterModel(state.price), nextRun: nextRunOf(piece, input),
+    picked, ruledOut,
   };
   if (state.kind === 'open') return { ...base, kind: 'open', caption: state.price === null ? null : priceCaption(state.price), now: state.now };
   return { ...base, kind: 'needs', caption: state.need, now: null };

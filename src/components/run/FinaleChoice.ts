@@ -16,6 +16,7 @@ import {
 } from '@systems/finale-card';
 import { hollowLabel, unitName } from '@systems/say';
 import { archiveMeta } from '@systems/meta';
+import { rootUnits } from '@systems/traces';
 import { pushModal, registerKeys } from '@systems/input';
 import { togglePause } from '@systems/pace';
 import { onPostTick } from '@systems/clock';
@@ -211,6 +212,7 @@ export function mountFinaleChoice(store: Store<GameState>): () => void {
       option: (piece) => optionState(state, piece, seen),
       stay: stage === 'step2' ? stayCandidates(state) : [],
       stayOpen,
+      rootUnits: rootUnits(state),
     };
   }
 

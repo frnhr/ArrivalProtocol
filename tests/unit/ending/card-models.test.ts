@@ -113,7 +113,7 @@ const STAY3: StayCandidate[] = [
 ];
 function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial<CardInput> = {}): CardInput {
   return {
-    step: 1, hollow: null, followed: false, names: NAMES, stay: [], stayOpen: false,
+    step: 1, hollow: null, followed: false, names: NAMES, stay: [], stayOpen: false, rootUnits: [46],
     option: (piece) => options[piece] ?? { kind: 'hidden' },
     ...more,
   };
@@ -139,8 +139,12 @@ function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial
     JSON.stringify(merge));
   check('step 1: SPARE open: the FUEL meter and `FUEL 23% ✓ · needs 20%` (met, designer item 4)',
     spare?.kind === 'open' && spare.meter?.kind === 'fuel' && spare.caption === FINALE_TEXT.price.fuel(23), JSON.stringify(spare));
-  check('step 1: the NEXT RUN: row holds no line in 7a (R12: its traces are 7c\'s; the row keeps its room)',
-    model.rows.every((row) => row.nextRun === null));
+  // R12, built in 7c (the review: the FINALE card's row fills from systems/trace-hud.ts nextRunBody, 05 §3.12's words).
+  check('step 1: each row\'s NEXT RUN: line is the trace it leaves (PURGE\'s wipe, MERGE\'s thread, SPARE\'s cache and its seed)',
+    purge?.nextRun === '+ your seeds die at the final ship · − a hungrier finale'
+    && merge?.nextRun === '+ 1 thread at the final ship · − a root of 18 blocks'
+    && spare?.nextRun === "+ 046's cache on the map · − 1 more seed at the end",
+    JSON.stringify(model.rows.map((row) => row.nextRun)));
   check('step 1: rowForKey finds [2], none for [4]', rowForKey(model, 2)?.piece === 'merge' && rowForKey(model, 4) === null);
 }
 {
@@ -164,7 +168,8 @@ function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial
   })).rows[2];
   check('step 1: SPARE never earned: `???` and its need line only (no command, meaning or meter: it names nothing)',
     unknown?.kind === 'unknown' && unknown.word === FINALE_TEXT.unknown && unknown.command === null && unknown.meaning === null
-    && unknown.meter === null && unknown.caption === needSpare && unknown.key === 3, JSON.stringify(unknown));
+    && unknown.meter === null && unknown.caption === needSpare && unknown.key === 3 && unknown.nextRun === null, JSON.stringify(unknown));
+  check('step 1: a greyed (needs) row keeps its NEXT RUN: line', merge?.kind === 'needs' && merge.nextRun !== null && spare?.nextRun !== null);
   const hidden = finaleCardModel(input({ purge: OPEN(), merge: OPEN({ kind: 'charge', have: 30, need: 20 }) }));
   check('step 1: a hidden option is not on the card (the others keep their keys)',
     hidden.rows.map((row) => row.key).join() === '1,2');
@@ -206,6 +211,11 @@ function input(options: Partial<Record<EndingPiece, OptionState>>, more: Partial
   check('step 2 after SPARE: SUNSET greyed with `046 HAS THE SHIP` and marked ruled out (R8); the rest not',
     spared.rows[0]?.kind === 'needs' && spared.rows[0].ruledOut && spared.rows[0].caption === FINALE_TEXT.needs.shipTaken
     && spared.rows.slice(1).every((row) => !row.ruledOut) && model.rows.every((row) => !row.ruledOut));
+  check('step 2: the NEXT RUN: lines; after PURGE SUNSET\'s seed is `1 more`, after SPARE `that same seed` (R33: once a run)',
+    model.rows.map((row) => row.nextRun).join(' | ') === '+ a cache you left on the way · − 1 more seed at the end | + a packet from your colony · − 1 more seed at the end | + 15 charge at the final ship · − the last root is you'
+    && spared.rows[0]?.nextRun === '+ a cache you left on the way · − that same seed'
+    && spared.rows[1]?.nextRun === '+ a packet from your colony · − that same seed' && spared.rows[2]?.nextRun === model.rows[2]?.nextRun,
+    JSON.stringify([model.rows.map((row) => row.nextRun), spared.rows.map((row) => row.nextRun)]));
   const followed = finaleCardModel(input(options, { step: 2, hollow: 'followed', stay: STAY3 }));
   check('step 2 after UNRESOLVED: the pick reads IT FOLLOWED YOU with no command; SUNSET is not ruled out (it comes with you)',
     followed.picked?.word === FINALE_TEXT.header.followed && followed.picked.command === null && !followed.rows[0]?.ruledOut);

@@ -612,6 +612,9 @@ kbd.keycap[hidden] { display: none; }
 .title-lineage[hidden] { display: none; }
 .title-endings { font-size: 10px; letter-spacing: 0.3em; color: var(--text-dim); }
 .title-endings[hidden] { display: none; }
+/* Slice 7c (02 §3.12): the traces the last ending left, in the final card's NEXT RUN: colour, one line each. */
+.title-traces { display: flex; flex-direction: column; gap: 2px; font-size: 11px; letter-spacing: 0.06em; color: var(--soul); }
+.title-traces[hidden] { display: none; }
 /* The archive not behind this page (WP8, §4.5): a warning box under the unit, never a quiet one. CORRUPT
    asks its question in it, with two buttons; RECEIVE TRANSMISSION waits for the answer. */
 .title-archive {
