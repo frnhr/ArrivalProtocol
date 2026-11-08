@@ -62,9 +62,12 @@ export interface SurveyState {
 }
 
 // Why a site can't take an LZ (R10; survey-model.ts assignRefusal, words in data/survey-text.ts SURVEY_TEXT.refusal).
-// 'closed': SURVEY can't assign here (the gate not built, a GOOD planet, no SURVEY aboard that works).
+// 'closed': SURVEY can't assign here (the gate not built, a GOOD planet, no SURVEY aboard, a phase with no flight).
+// 'offline': SURVEY.skl is aboard but OFF by damage (review m1: the kid needs a REPAIR, not a desk).
+// 'falling-under': a pod already falling would come down elsewhere, or score otherwise, once the LZ stood on the site (review B1).
 export type AssignRefusal =
-  | 'closed' | 'not-found' | 'wreck' | 'too-small' | 'taken' | 'pods-down' | 'falling' | 'window-open' | 'landing-over' | 'same';
+  | 'closed' | 'offline' | 'not-found' | 'wreck' | 'too-small' | 'taken' | 'pods-down' | 'falling' | 'falling-under' | 'window-open'
+  | 'landing-over' | 'same';
 
 // The ship's survey as its result keeps it (ShipResult.survey; null on a GOOD planet): the LANDING REPORT, slice 7's epilogue
 // (`RIVERSIDE stayed dry: you moved LZ-B off the lake`) and slice 8's sweeps.

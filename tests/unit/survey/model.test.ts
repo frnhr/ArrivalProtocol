@@ -13,7 +13,9 @@ import type { GameState } from '@state/schema';
 import type { LaunchRecord } from '@/types/landing';
 import { createStore } from '@state/store';
 import { createInitialState } from '@state/initial';
-import { mappedPct } from '@state/survey-selectors';
+import { mappedPct, surveyNetOutcome } from '@state/survey-selectors';
+import type { SurveyRecord } from '@/types/survey';
+import { SURVEY_TEXT } from '@data/survey-text';
 import {
   sweptCells, cellOf, siteStars, swathHalfRad, surveyRunning, assignRefusal, assignableLzs, bestSwap, surveySwap, knownBad,
 } from '@systems/survey-model';
@@ -101,6 +103,11 @@ withSurveyBuilt(() => {
   // assignRefusal
   const refuse = (lz: string, site: string): string => String(assignRefusal(s(), lz, site));
   check('closed with no SURVEY aboard', assignRefusal(cormorant(0).getState(), 'LZ-B', id(5)) === 'closed');
+  {
+    const off = cormorant(1);
+    off.update((d) => { for (const seg of d.memory) if (seg.type === 'upgrade' && 'version' in seg && seg.upgrade === 'survey') seg.integrity = 0; });
+    check('offline (review m1) with SURVEY.skl aboard but OFF by damage', assignRefusal(off.getState(), 'LZ-B', 'guess-A') === 'offline');
+  }
   check('not-found before the site is mapped; a guess is never not-found', refuse('LZ-B', id(5)) === 'not-found' && refuse('LZ-A', 'guess-B') !== 'not-found');
   store.update((d) => { for (const site of d.landing.survey.sites) site.found = true; });
   check('wreck, same, too-small (SITE 3 holds 4 pods, LZ-A needs 5), taken (LZ-B onto LZ-A\'s guess)',
@@ -126,6 +133,20 @@ withSurveyBuilt(() => {
   store.update((d) => { d.landing.ended = 'end-landing'; });
   check('landing-over once the landing has ended', refuse('LZ-B', id(5)) === 'landing-over');
   store.update((d) => { d.landing.ended = null; d.landing.pods[0]!.fate = { kind: 'aboard' }; d.run.phase = 'flight'; d.burn.status = 'approaching'; });
+  // Review B1: a pod falling off-site over SITE 1 (NARROW FLAT ROOM 5, free): LZ-A (5 pods) may not move under it, since the
+  // pod would then land in LZ-A for full points. A move that leaves every falling pod where it was is still free.
+  const siteOne = sites.find((site) => site.id === id(1))!;
+  const inGuessA = s().landing.lzs.find((one) => one.label === 'LZ-A')!.centreRad;
+  store.update((d) => { d.run.phase = 'landing'; d.burn.status = 'locked'; d.landing.pods[0]!.fate = { kind: 'falling', launch: launch(null, siteOne.centreRad) }; });
+  check('falling-under (B1): a pod falling off-site over SITE 1 refuses LZ-A onto SITE 1; LZ-A onto SITE 2 and LZ-B onto SITE 5 are free',
+    refuse('LZ-A', id(1)) === 'falling-under' && refuse('LZ-A', id(2)) === 'null' && refuse('LZ-B', id(5)) === 'null'
+    && SURVEY_TEXT.refusal['falling-under']() === 'A POD IS FALLING — WAIT FOR IT',
+    `${refuse('LZ-A', id(1))} ${refuse('LZ-A', id(2))} ${refuse('LZ-B', id(5))}`);
+  // …and the other way: a pod falling into LZ-A, aimed at nothing (a free launch), makes LZ-A 'falling' (it would land off-site).
+  store.update((d) => { d.landing.pods[0]!.fate = { kind: 'falling', launch: launch(null, inGuessA) }; });
+  check('…a pod falling into LZ-A where it stands refuses LZ-A\'s move (`falling`), and LZ-B onto LZ-A\'s old ground is no issue',
+    refuse('LZ-A', id(2)) === 'falling' && refuse('LZ-B', id(5)) === 'null');
+  store.update((d) => { d.landing.pods[0]!.fate = { kind: 'aboard' }; d.run.phase = 'flight'; d.burn.status = 'approaching'; });
   check('assignableLzs: every LZ in label order with its refusal', JSON.stringify(assignableLzs(s(), id(5))) === '[{"lz":"LZ-A","refusal":null},{"lz":"LZ-B","refusal":null}]'
     && JSON.stringify(assignableLzs(s(), id(3))) === '[{"lz":"LZ-A","refusal":"too-small"},{"lz":"LZ-B","refusal":null}]');
   check('an unknown LZ or site throws', throws(() => assignRefusal(s(), 'LZ-Q', id(5))) && throws(() => assignRefusal(s(), 'LZ-B', 'site-99')));
@@ -141,5 +162,27 @@ withSurveyBuilt(() => {
     surveySwap(s())?.lz === 'LZ-B' && surveySwap(s())?.site.id === id(2)
     && (store.update((d) => { d.landing.window = { lz: 'LZ-A', sure: true }; }), surveySwap(s()) === null));
 });
+
+// --- surveyNetOutcome (review m5, A1): each LZ's net outcome from the record alone ------------------------------------------
+{
+  const record = (patch: Partial<SurveyRecord>): SurveyRecord => ({ ranAt: 2, mappedPct: 100, found: 4, moves: [], badKept: [], movedOff: [], ...patch });
+  const net = (patch: Partial<SurveyRecord>): string => JSON.stringify(surveyNetOutcome(record(patch)));
+  check('surveyNetOutcome: nothing happened, nothing to say', net({}) === '[]');
+  check('…LZ-B moved off its ROCKY guess (known by SURVEY) to SITE 5: moved, ROCKY → FLAT',
+    net({ moves: [{ lz: 'LZ-B', from: 'guess-B', site: 'site-5' }], movedOff: [{ lz: 'LZ-B', ground: 'rocky', known: 'survey' }] })
+    === '[{"lz":"LZ-B","endedSite":"site-5","moved":true,"groundBefore":"rocky","groundAfter":"flat","knownBefore":"survey","knownAfter":null}]');
+  check('…LZ-B moved away and back onto its WET guess: not moved, WET → WET, kept as known',
+    net({ moves: [{ lz: 'LZ-B', from: 'guess-B', site: 'site-5' }, { lz: 'LZ-B', from: 'site-5', site: 'guess-B' }],
+      movedOff: [{ lz: 'LZ-B', ground: 'wet', known: 'survey' }], badKept: [{ lz: 'LZ-B', ground: 'wet', known: 'survey' }] })
+    === '[{"lz":"LZ-B","endedSite":null,"moved":false,"groundBefore":"wet","groundAfter":"wet","knownBefore":"survey","knownAfter":"survey"}]');
+  check('…LZ-A never moved and kept a ROCKY guess shown by a touchdown; LZ-B off a FLAT guess onto a WET candidate',
+    net({ moves: [{ lz: 'LZ-B', from: 'guess-B', site: 'site-3' }], badKept: [{ lz: 'LZ-A', ground: 'rocky', known: 'touchdown' }, { lz: 'LZ-B', ground: 'wet', known: null }] })
+    === '[{"lz":"LZ-A","endedSite":null,"moved":false,"groundBefore":"rocky","groundAfter":"rocky","knownBefore":"touchdown","knownAfter":"touchdown"},'
+      + '{"lz":"LZ-B","endedSite":"site-3","moved":true,"groundBefore":"flat","groundAfter":"wet","knownBefore":null,"knownAfter":null}]');
+  check('…two moves, one off bad ground: the record can\'t tell which, so the guess\'s ground is null (nothing claimed about it)',
+    surveyNetOutcome(record({ moves: [{ lz: 'LZ-B', from: 'guess-B', site: 'site-3' }, { lz: 'LZ-B', from: 'site-3', site: 'site-5' }],
+      movedOff: [{ lz: 'LZ-B', ground: 'wet', known: 'survey' }] }))[0]?.groundBefore === null);
+  check('…a move off bad ground the moves don\'t have throws', throws(() => surveyNetOutcome(record({ movedOff: [{ lz: 'LZ-B', ground: 'wet', known: null }] }))));
+}
 
 finish();
