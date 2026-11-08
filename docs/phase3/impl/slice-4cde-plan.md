@@ -1865,42 +1865,50 @@ Track RETIRE, on branch `retire` from baffe52. OPEN-DECISIONS items 85–88 hold
 
 ### Phase 2, partial
 
-- Moved: 33 of the 88, plus both BALANCE_ONLY harnesses (`wp12/playthrough`, `wp11/full-run`).
-- Deleted: none. `map/desk-flow` was the candidate, but it is the only suite that checks a lost ship's extras surviving
-  ◀ CHART, so it moved to HALCYON's arm desk instead.
-- **55 suites are left**, by what stops them on the arm:
-  - **The classic world itself:** `map/memory-refactor`, the classic digest. It goes with the classic five, and
-    `map/arm-parity` is its arm twin.
-  - **VESPER as phase 2's HOLLOW ship.** The arm's VESPER is calm and has no SWAP; HOLLOW is forced aboard at CORMORANT.
-    Each suite should move to CORMORANT, or to VESPER with a given verdict and `kit`.
-    - wp10: `copy-test`, `deal-test`, `fix1/fixes`, `p2/views`, `vesper-flow`, `vesper-sim`, `skip-through`.
-    - `final-fix/seed-spots`, `final-fix/two-screens`.
-    - `landing/engine-landing`, `landing/review-fixes`.
-    - `threat/arrival-story`, `ui/threat-models`.
-    - `wp12/p3/swap-pairing`, `wp12/fix1/fixes`.
+- **First pass** (merged at 46cf188): 33 of the 88 moved, plus both BALANCE_ONLY harnesses (`wp12/playthrough`,
+  `wp11/full-run`).
+- **Second pass** (after the merge): 18 more moved, by group.
+  - **KESTREL's arm facts**, all four: `wp9/zones-sim`, `wp9/p2/ui-models`, `lead2/kestrel-debris` (and its scenario),
+    `lead2/fix3/kestrel-skip-press`. The debris is on rack B, where the arm KESTREL's six pods are.
+  - **LAST LIGHT alone**, all six: `wp11/boss-sim`, `wp11/fix1/fix1`, `wp11/lastlight-sim`, `wp11/p2/views`,
+    `wp12/p3/minors`, `ending/rules`. Each carries the worked route's kit. The hop and the results are re-measured on the
+    worked route.
+  - **Phase 2's FULL geometry**, five of twelve: `lead2/dodge-rules`, `wp7/bridge-test`, `wp9/fix1/fixes`,
+    `wp9/fix2/fixes2`, `wp9/seed-test`. `support/hollow-world phase2Ship` now builds phase 2's FULL memory, pod racks,
+    landing and debris rack on the ship being flown.
+  - **VESPER as HOLLOW's ship**, two of eighteen: `final-fix/seed-spots` and `wp10/fix1/fixes`.
+    - `harness10 vesper({ hunt })` builds run 1's VESPER with phase 2's HUNT verdict. The tools it fought with are given
+      too: the kit's MOVE and DELETE, and the COPY and SWAP the classic schedule licensed.
+    - `wp10/fix1`'s drift scenario moved to seed 27: on seed 25 the second burst falls outside the show time with the
+      arm's ghost bands.
+- Every moved suite keeps its classic check count. The one exception is `wp11/p2/views`, which gained a check: the
+  fixture's five passed results are present and all in orbit.
+- **Deleted:** `map/memory-refactor`, the classic five's digest. `map/arm-parity` pins run 1's arm in its place.
+- **37 suites are left**, by what stops them on the arm:
+  - **VESPER as phase 2's HOLLOW ship (16).** The arm's VESPER is calm, its POD 12 leads, and it has no SWAP. Each suite
+    needs `vesper({ hunt })` or a given verdict, the kit or the tools given, and its pods re-measured. Some of their
+    checks test the classic licence schedule itself (COPY at the boot, SWAP at the first ghost), which 03 §6 retires; those
+    go with it.
+    - wp10: `copy-test`, `deal-test`, `p2/views`, `vesper-flow`, `vesper-sim`, `skip-through`.
+    - `final-fix/two-screens`, `landing/engine-landing`, `landing/review-fixes`.
+    - `threat/arrival-story`, `ui/threat-models`, `wp12/p3/swap-pairing`, `wp12/fix1/fixes`.
     - Ghost: `lead2/ghost-warp`, `wp4/capabilities`, `wp4/ghost-sim`. The arm's ghost bands are `ARM_GHOST_BY_BAND`.
-  - **Phase 2's FULL geometry.** `support/hollow-world` phase2Ship and phase2Halcyon need rack D and the unit at block
-    256, and run 1's HALCYON and KESTREL are COMPACT.
-    - `lead2/dodge-rules`, `wp7/bridge-test`, `wp7/p2-models`, `wp8/fix1/fixes`.
-    - `wp9/fix1/fixes`, `wp9/fix2/fixes2`, `wp9/seed-test`.
-    - `wp6/hollow-ship2`, `wp6/p2-hud`, `wp5/racks`.
-    - `threat/beam-seeds`, `threat/disguise`.
-  - **KESTREL's arm facts** (6 pods, the debris on rack B, the LZs rolled): `lead2/kestrel-debris` and its scenario,
-    `lead2/fix3/kestrel-skip-press`, `wp9/p2/ui-models`, `wp9/zones-sim`.
-  - **LAST LIGHT flown alone.** The arm rolls its approach (omega0), so the classic seeds' numbers move. Each needs `kit`
-    and seeds re-measured: `wp11/boss-sim`, `wp11/fix1/fix1` (one check), `wp11/lastlight-sim`, `wp11/p2/views`,
-    `wp12/p3/minors`, `ending/rules`.
-  - **The classic route's hops and numbers** (22 LY, 3 + 3 hits, LAST LIGHT as ship 5, HALCYON's two LZs).
+  - **Hand-built FULL memories (7):** `wp7/p2-models`, `wp8/fix1/fixes`, `wp6/hollow-ship2`, `wp6/p2-hud`, `wp5/racks`,
+    `threat/beam-seeds`, `threat/disguise`.
+    - Each builds a memory from `CLASSIC_FIVE` or `CLASSIC_HOPS` itself, or assumes 384 blocks.
+    - `wp8/fix1` also plays several runs through the archive. Its run 2+ is a fresh roll, so its "HALCYON" is a TIGHT ship
+      there.
+  - **The classic route's numbers (14):** hop lengths and hits, 22 LY, LAST LIGHT as ship 5, HALCYON's two LZs.
     - wp7: `soft-fails`, `fix1/run-end-and-boot`.
     - wp8: `run-flow`, `draft`.
     - `wp11/p2/purge-fleet`, `wp12/p3/repair-renewed`, `wp4/flight-coupling`.
     - `opening/ghost-placement`, `opening/calm-ships`, `skills/sentry`.
     - landing: `flow`, `pace-landing`, `report`, `review-1b`.
-- The tier stayed green at every commit. Its time was 206 s twice (four workers, the lead's e2e on the same machine).
+- The tier passed at every commit, in 198–234 s on four workers with other work on the machine.
 
 ### Phase 3, not started
 
-- Gate: the 55 above are gone.
+- Gate: the 37 above are gone.
 - Then delete:
   - `classic-five.ts` and `classic-slots.ts`;
   - `useClassicFixture` / `inFixtureWorld` (state/initial.ts), `support/classic-world`, `support/classic-fixture` and the 17
