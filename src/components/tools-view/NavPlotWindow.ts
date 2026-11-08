@@ -1,4 +1,5 @@
-// Slice 4c–4e: Track ORBIT owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2). Others ask by message.
+// Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §5): the survey layer's hook (Track SITES's
+// plot-survey.ts, from systems/survey-hud.ts surveyPlotModel). Slice 4c–4e's Track ORBIT parts stand. Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { onGameTick } from '@systems/clock';
@@ -29,6 +30,8 @@ import { landingBurnOffer, decayForecast } from '@systems/landing-orbit';
 import { noGoAt } from '@systems/landing-rules';
 import { replayAnimation } from '@components/dom';
 import { createPlotLandingLayer } from './plot-landing';
+import { createPlotSurveyLayer } from './plot-survey';
+import { surveyPlotModel } from '@systems/survey-hud';
 
 // NAV PLOT, the hero window (§7.1). Everything on it comes from the predicted path
 // (systems/predict) and the HUD model (systems/flight-hud):
@@ -684,6 +687,9 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
   const nodes = build(svg);
   const half = VIEWBOX / 2;
   // 01-landing §4: the brackets on the rim, the pod arc, the dot, the streaks, the marks and the beacons (plot-landing).
+  // Slice 6 (plan §2.4): SURVEY's swath, mapped rim and found sites, under the landing layer (made first, so its nodes go
+  // in right after the surface line and the landing layer's after them).
+  const surveyLayer = createPlotSurveyLayer(svg, nodes.surface);
   const landingLayer = createPlotLandingLayer(svg, nodes.surface, nodes.startBurn.glyph);
   let ringText: string = RING_LABEL_TEXT;
   let lastPred: Prediction | null = null;
@@ -694,7 +700,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
   const zoneNodes = new Map<string, ZoneNodes>();
   // World positions the ship passed, oldest first (the trail).
   const trail: Vec2[] = [];
-  const offReset = onWorldReset('navplot-trail', () => { trail.length = 0; landingLayer.clear(); }, () => ({ trail: trail.length }));
+  const offReset = onWorldReset('navplot-trail', () => { trail.length = 0; landingLayer.clear(); surveyLayer.clear(); }, () => ({ trail: trail.length }));
 
   // The side each marker's label last took (an index into LABEL_TRY_TURNS_DEG) and when it moved there (performance.now()
   // ms), kept as LABEL_TRY_TURNS_DEG says.
@@ -1054,6 +1060,8 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     // chip, the zones' labels, and each label placed before (in this order: IMPACT, ▼, ▲, START BURN, FLYBY).
     // The landing's layer first (01-landing §4): its brackets' names are obstacles for the markers' labels.
     const planetUnits = Math.max(planet.R * scale, PLOT_PLANET_MIN_UNITS);
+    // Slice 6: the survey's layer, in flight and landing (its model is null on a GOOD planet and under NO SIGNAL's veil).
+    surveyLayer.paint(noSignal ? null : surveyPlotModel(state), proj, half, half, planetUnits);
     const landingModel = noSignal ? null : plotLandingModel(state, landing ? getDropSolution() : null, pred, offer);
     const goLow = landingModel?.goLow ?? null;
     const bracketBoxes = landingLayer.paint(landingModel, proj, half, half, planetUnits);
@@ -1229,6 +1237,7 @@ export function mountNavPlotWindow(store: Store<GameState>): () => void {
     offLanded();
     offKick();
     landingLayer.clear();
+    surveyLayer.clear();
     resizeObserver.disconnect();
   };
 }

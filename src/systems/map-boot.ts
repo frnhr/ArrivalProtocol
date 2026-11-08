@@ -1,8 +1,10 @@
-// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §5): the 'receiver-closed' line. Others ask by message.
+// Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §5): the 'site-data' line, and slice 5's
+// 'receiver-closed'. Others ask by message.
 import type { GameState } from '@state/schema';
 import type { ArrivalDelivery } from '@/types/repo';
 import { MAP_TEXT } from '@data/map-text';
 import { RESIDENT_TEXT } from '@data/resident-text';
+import { SURVEY_TEXT } from '@data/survey-text';
 import { REPO_TEXT, REPO_FILE_TEXT } from '@data/repo-text';
 import { DELIVERY_BOOT_LINES_MAX } from '@data/tuning';
 import { layoutFor } from '@data/memory';
@@ -16,7 +18,7 @@ import { patchInstalls } from '@systems/repository';
 // receiver line after the host line, the ECC block before the hits line. Track GEN owns this file (its conditions and
 // words) after the foundation.
 
-export type MapBootLineKind = 'sleep' | 'receiver-closed' | 'receiver' | 'ecc-sleep';
+export type MapBootLineKind = 'sleep' | 'receiver-closed' | 'receiver' | 'ecc-sleep' | 'site-data';
 
 // The hop that brought the unit to this ship, on the arm (null on a first ship and on the classic world, whose hops are
 // fixtures with no years: always switch on `world` before currentStop).
@@ -38,6 +40,9 @@ export function mapBootLines(state: Readonly<GameState>): MapBootLineKind[] {
   if (state.run.map.world === 'arm' && state.level.memoryClass === 'TIGHT') lines.push('receiver');
   const corrected = state.run.arrival?.eccCorrected ?? 0;
   if (corrected > 0) lines.push('ecc-sleep');
+  // Slice 6 (02 §4, plan §2.4): `> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs` on a planet that plays POOR (the slice's
+  // site data: GOOD until SURVEY_BUILT.poor).
+  if (state.landing.survey.site === 'poor') lines.push('site-data');
   return lines;
 }
 
@@ -57,6 +62,9 @@ export function mapBootLineText(kind: MapBootLineKind, state: Readonly<GameState
     case 'receiver-closed':
       if (state.resident.def === null) throw new Error('mapBootLineText: a RECEIVER CLOSED line on a ship with no resident');
       return RESIDENT_TEXT.receiverClosed;
+    case 'site-data':
+      if (state.landing.survey.site !== 'poor') throw new Error('mapBootLineText: a SITE DATA POOR line on a planet that plays GOOD');
+      return SURVEY_TEXT.boot(state.landing.lzs.length);
     case 'receiver': {
       const layout = layoutFor(state.level.memoryClass);
       return MAP_TEXT.boot.receiver(layout.racks.filter((rack) => rack === 'E' || rack === 'F').length, layout.roomForUnit);

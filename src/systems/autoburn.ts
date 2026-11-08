@@ -12,7 +12,7 @@ import {
   type Prediction, type BurnPoint, type BurnReason,
 } from '@systems/predict';
 import { capabilitiesNow, engineFault, presetsAvailable, skillLive, type SkillLive } from '@systems/capabilities';
-import { reserveThread, releaseThread, canStartOp } from '@systems/ops-core';
+import { reserveThread, releaseThread, canClaimThread } from '@systems/ops-core';
 import { isPresetAligning } from '@systems/attitude';
 import { registerKeys } from '@systems/input';
 import { say } from '@systems/say';
@@ -606,8 +606,9 @@ function armedTick(store: Store<GameState>, fit: RingFit, live: Readonly<SkillLi
   // correction is the kid's, review M2) until the fire moment. No thread free: it waits, late.
   if (!auto.claimed) {
     const entering = auto.waitingSinceTSec === null;
-    if (canStartOp()) {
-      if (!reserveThread(OWNER)) throw new Error('autoburn claim: no thread although canStartOp found one');
+    // Slice 6 (R8): a yieldable thread (SURVEY's) is taken when none is free.
+    if (canClaimThread()) {
+      if (!reserveThread(OWNER, { preempt: true })) throw new Error('autoburn claim: no thread although canClaimThread found one');
       store.update((draft) => { draft.burn.auto.claimed = true; draft.burn.auto.waitingSinceTSec = null; });
     } else if (entering) {
       const since = state.clock.tSec;

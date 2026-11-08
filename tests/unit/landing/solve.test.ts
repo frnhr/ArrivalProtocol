@@ -27,7 +27,7 @@ function circular(r: number, atDeg = 0): OrbitState {
 
 function lz(label: string, centreDeg: number, width: LzWidth, pods = 3): LzState {
   const widthKm = LZ_WIDTH_KM[width];
-  return { label, centreRad: wrap(centreDeg * DEG), halfWidthRad: widthKm / 2 / R, widthKm, pods, ground: 'flat' };
+  return { label, centreRad: wrap(centreDeg * DEG), halfWidthRad: widthKm / 2 / R, widthKm, pods, ground: 'flat', site: null };
 }
 
 function input(state: OrbitState, lzs: LzState[], factors: DropFactors = ONE): DropSolveInput {

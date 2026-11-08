@@ -1,4 +1,4 @@
-// Slice 5: the lead owns this file (slice-5-plan.md §5); tracks ask by message.
+// Slice 6: the lead owns this file (slice-6-plan.md §5); tracks ask by message.
 import type { GameState, RunPhase, RunState, HollowState, RunStats, ArchiveState, HazardsState } from './schema';
 import type { Segment } from '@/types/segment';
 import type { LandingState, PodRecord, ShipLandingDef, AutodropState } from '@/types/landing';
@@ -8,7 +8,10 @@ import type { SaveState } from '@/types/save';
 import type { FsToolKind } from '@/types/fs-tool';
 import type { SkillId, RunSkillState } from '@/types/skill';
 import type { ResidentState, RunResidentState, ShipResidentDef, CorruptedState, SleeperState } from '@/types/resident';
+import type { SiteData, SurveySite, SurveyState } from '@/types/survey';
 import { builtResident, residentRackA } from '@data/residents';
+import { siteDataOf } from '@data/survey';
+import { rollSurveySites } from '@data/survey-sites';
 import { SKILL_IDS } from '@data/skills';
 import { repoToolKind } from '@data/repository';
 import { buildShipMemory, type CarriedRacks, type HurtDriver } from '@data/memory';
@@ -22,7 +25,7 @@ import { hollowLabel } from '@systems/say';
 import { flightModsOf } from '@systems/capabilities';
 import { resolveZones } from '@systems/zones';
 import { FIRST_RUN_LINEAGE, playsTutorial, type RunLineage } from '@systems/meta';
-import { LZ_WIDTH_KM } from '@data/tuning';
+import { LZ_WIDTH_KM, SURVEY_CELLS } from '@data/tuning';
 
 export interface InitialStateOpts {
   seed: number;
@@ -137,6 +140,9 @@ export function createRunResidents(): RunResidentState {
 // Slice 5: and the ship's resident (createResidentState), built only for a kind this build plays (data/residents.ts
 // builtResident): its rack-A files from the ship's own stream ('resident-files'), so the same ship rolls the same files on
 // any route and on a resumed BEAM.
+// Slice 6: and a POOR planet's sites (data/survey-sites.ts rollSurveySites), for the site data this build plays
+// (data/survey.ts siteDataOf: GOOD until SURVEY_BUILT.poor), from the ship's own stream ('survey'): the same sites on any
+// route, on a resumed BEAM and next run (plan R2). The LZs stand on CONTROL's guesses (createLandingState).
 export type ShipSlices = Pick<GameState, 'mission' | 'memory' | 'clock' | 'burn' | 'orbit' | 'level' | 'landing' | 'hollow' | 'hazards' | 'resident'>;
 
 export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks | null, threat: Readonly<ShipThreat>): ShipSlices {
@@ -157,8 +163,10 @@ export function createShipSlices(run: Readonly<RunState>, carried: CarriedRacks 
   const zones = resolveZones(ship.zones, ship.flight, firstRun, shipRng(run, slot, 'zones'));
   // The carried upgrade files that work on arrival widen this ship's flight (FUEL TRIM, §6.9).
   const flight = createFlight(ship, shipRng(run, slot, 'flight'), flightModsOf(memory), zones);
+  const site = siteDataOf(ship);
+  const sites = site === 'poor' ? rollSurveySites(ship.landing, ship.flight.planet.R, shipRng(run, slot, 'survey')) : null;
   const landing = createLandingState(ship.landing, memory, {
-    finalShip: ship.final, lead: ship.memory.drivers.lead, hurt, planetR: ship.flight.planet.R,
+    finalShip: ship.final, lead: ship.memory.drivers.lead, hurt, planetR: ship.flight.planet.R, sites,
   });
   mission.colonists = landing.pods.reduce((sum, record) => sum + record.colonists, 0);
   return {
@@ -217,6 +225,9 @@ export interface LandingSliceOpts {
   lead: number;                     // the story pod (ShipDef.memory.drivers.lead)
   hurt: readonly HurtDriver[];      // the drivers the memory was built hurt with
   planetR: number;
+  // Slice 6: a POOR planet's sites (data/survey-sites.ts rollSurveySites: CONTROL's guesses first, in LZ order), each LZ built
+  // on its guess (its centre, width and hidden ground); null or left out: a GOOD planet, the LZs as the def has them.
+  sites?: readonly SurveySite[] | null;
 }
 
 export function createLandingState(def: ShipLandingDef, memory: readonly Segment[], opts: LandingSliceOpts): LandingState {
@@ -235,10 +246,22 @@ export function createLandingState(def: ShipLandingDef, memory: readonly Segment
   });
   const podTotal = def.lzs.reduce((sum, lz) => sum + lz.pods, 0);
   if (pods.length !== podTotal) throw new Error(`createLandingState: ${pods.length} drivers in memory for ${podTotal} pods in the LZs`);
+  const sites = opts.sites ?? null;
   return {
-    lzs: def.lzs.map((lz) => {
+    lzs: def.lzs.map((lz, index) => {
+      if (sites !== null) {
+        const guess = sites[index];
+        if (guess === undefined || guess.kind !== 'guess' || guess.number !== index) throw new Error(`createLandingState: ${lz.label} has no guess site`);
+        return {
+          label: lz.label, centreRad: guess.centreRad, halfWidthRad: guess.halfWidthRad, widthKm: guess.widthKm, pods: lz.pods,
+          ground: guess.ground, site: guess.id,
+        };
+      }
       const widthKm = LZ_WIDTH_KM[lz.width];
-      return { label: lz.label, centreRad: lz.centreDeg * toRad, halfWidthRad: widthKm / 2 / opts.planetR, widthKm, pods: lz.pods, ground: 'flat' };
+      return {
+        label: lz.label, centreRad: lz.centreDeg * toRad, halfWidthRad: widthKm / 2 / opts.planetR, widthKm, pods: lz.pods, ground: 'flat',
+        site: null,
+      };
     }),
     noGo: def.noGo.map((arc) => ({ centreRad: arc.centreDeg * toRad, halfWidthRad: (arc.widthDeg / 2) * toRad, word: arc.word })),
     forgiveness: def.forgiveness,
@@ -264,6 +287,18 @@ export function createLandingState(def: ShipLandingDef, memory: readonly Segment
     declined: null,
     ghostBursts: 0,
     autodrop: createAutodropState(),
+    survey: createSurveyState(sites === null ? 'good' : 'poor', sites ?? []),
+    sitesRev: 0,
+  };
+}
+
+// The ship's survey at the boot (slice 6, plan §2.2): nothing mapped, paused, claimed or said; the sites as rolled (none on a
+// GOOD planet). The migration to save v6 writes createSurveyState('good', []) into a saved world.
+export function createSurveyState(site: SiteData, sites: readonly SurveySite[]): SurveyState {
+  if ((site === 'good') !== (sites.length === 0)) throw new Error(`createSurveyState: ${sites.length} sites on a ${site.toUpperCase()} planet`);
+  return {
+    site, sites: structuredClone(sites) as SurveySite[], mapped: Array.from({ length: SURVEY_CELLS }, () => false), paused: false, claimed: false,
+    lastRad: null, ranAt: 0, moves: [], reveals: [], lines: { firstFind: false, mapped: false, controlBoot: false, controlMoved: false },
   };
 }
 

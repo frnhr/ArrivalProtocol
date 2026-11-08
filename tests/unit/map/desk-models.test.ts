@@ -77,7 +77,7 @@ check('…MEMORY 320 · COMPACT · ROOM FOR YOU 152, and the fit line from roomF
   row(halcyon, 'memory') === 'MEMORY 320 · COMPACT · ROOM FOR YOU 152' && row(halcyon, 'fit') === 'YOU FIT' && halcyon.fit?.word === 'fits', row(halcyon, 'fit'));
 check('…the planet with its off-site words and the LZ count (Tessaly: GRASSLAND, GENTLE), SET BY ARRIVAL CONTROL',
   row(halcyon, 'planet') === 'GRASSLAND · off-site pods score half'
-  && row(halcyon, 'lzs') === MAP_TEXT.card.lzs(shipSummaryAt(state.run.map, 2).lzCount), `${row(halcyon, 'planet')} ${row(halcyon, 'lzs')}`);
+  && row(halcyon, 'lzs') === MAP_TEXT.card.lzs(shipSummaryAt(state.run.map, 2).lzCount, 'good'), `${row(halcyon, 'planet')} ${row(halcyon, 'lzs')}`);
 check('…BEAM `21 LY · LINK 123`, `NOISE CLEAN · SEEDS: none` (depth 2)',
   row(halcyon, 'beam') === '21 LY · LINK 123' && row(halcyon, 'noise') === 'NOISE CLEAN · SEEDS: none');
 // 3–6: HALCYON → a layer-4 ship → a layer-6 ship → LAST LIGHT is a route of 5 (plan §3's sample says 4–6).

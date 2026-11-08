@@ -187,13 +187,14 @@ export const TRAINING_TEXT = {
 // by the review-fix pass. Slice 6 refines SURVEY's.
 export type DemoArt = 'capture' | 'green' | 'low-orbit' | 'lock' | 'plain'
   | 'centre' | 'pass' | 'plan'              // AUTODROP v1–v3 (4c)
-  | 'sight' | 'quick-rm' | 'firewall';      // SENTRY v1–v3 (4d)
+  | 'sight' | 'quick-rm' | 'firewall'       // SENTRY v1–v3 (4d)
+  | 'find' | 'rate' | 'sweep';              // SURVEY v1–v3 (slice 6: Track SITES draws them, TrainingWindow.ts demoSvg)
 
 // One line per skill, so each track edits only its own.
 export const TRAINING_DEMO_ART: Readonly<Record<SkillId, { versions: readonly [DemoArt, DemoArt, DemoArt]; lock: DemoArt | null }>> = {
   autoburn: { versions: ['capture', 'green', 'low-orbit'], lock: 'lock' },
   autodrop: { versions: ['centre', 'pass', 'plan'], lock: null },
-  survey: { versions: ['plain', 'plain', 'plain'], lock: null },
+  survey: { versions: ['find', 'rate', 'sweep'], lock: null },
   sentry: { versions: ['sight', 'quick-rm', 'firewall'], lock: null },
 };
 

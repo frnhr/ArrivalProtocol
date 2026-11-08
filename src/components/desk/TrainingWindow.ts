@@ -85,6 +85,13 @@ function demoSvg(kind: DemoArt): string {
     case 'lock':
       return `<svg class="tr-demo tr-demo-lock" viewBox="0 0 120 80">${ring}${planet}`
         + '<path class="tr-demo-flyby" d="M4 70 Q 48 52 60 14 Q 72 52 116 70"/><path class="tr-demo-bracket" d="M10 66 Q 48 50 58 16"/></svg>';
+    // Slice 6 SITES: SURVEY's three demos (plan §2.14: 'find' a wedge sweeps a tiny rim and a dashed bracket pops; 'rate' a
+    // bracket stamped `WET ✕` hands its label to a ★★★ one; 'sweep' a double wedge and a THREADS pip going dark) draw as
+    // 'plain' until Track SITES draws them here.
+    case 'find':
+    case 'rate':
+    case 'sweep':
+    // (end of Slice 6 SITES)
     case 'plain':
       return `<svg class="tr-demo tr-demo-plain" viewBox="0 0 120 80">${planet}<circle class="tr-demo-round" cx="60" cy="40" r="24"/></svg>`;
     // AUTODROP v1 CENTRE (03 §3.8), seen from the side as the GROUND TRACK draws it: the orbit above, the ground below, the
@@ -229,7 +236,7 @@ function structureKey(model: Readonly<TrainingModel>, openBranch: string | null)
   return JSON.stringify([
     model.visit, model.firstPick, model.title, model.bank, model.demos, model.control, model.topUp, model.cards, model.closed,
     model.branches.map((branch) => [branch.skill, branch.versions, branch.locks]), model.detail, model.pending, model.saved,
-    model.moreLater, model.ahead, model.preview, model.lastUnitLine, model.hold !== null, model.holdText, openBranch,
+    model.moreLater, model.ahead, model.aheadSite, model.preview, model.lastUnitLine, model.hold !== null, model.holdText, openBranch,
   ]);
 }
 
@@ -339,6 +346,8 @@ export function mountTrainingWindow(store: Store<GameState>): TrainingWindowView
     }
     const ahead = make('div', 'tr-ahead');
     ahead.appendChild(make('div', 'tr-ahead-line', model.ahead));
+    // Slice 6 (R15): the selected ship's site data, a second line (the AHEAD line is 69 characters at its worst).
+    if (model.aheadSite !== null) ahead.appendChild(make('div', 'tr-ahead-line tr-ahead-site', model.aheadSite));
     if (model.preview !== null) {
       const preview = make('div', `tr-preview tone-${model.preview.tone}`, model.preview.text);
       preview.dataset.binding = model.preview.binding;

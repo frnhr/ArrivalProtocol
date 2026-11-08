@@ -194,7 +194,7 @@ check('say: a line with a look must be critical (a queued one would count down a
   h.store.update((d) => {
     d.run.ships = CLASSIC_FIVE.filter((ship) => !ship.final).map((ship, index): ShipResult => ({
       shipId: ship.id, shipName: ship.name, slot: index, depth: index + 1, outcome: 'locked', colonistsAboard: 0, lzs: [], offSite: 0, noGo: 0,
-      restored: 0, parked: [], notLaunched: 0, landedInLz: 0, points: 0, stars: 0, fuelLeftPct: 0, ringMiss: null, colony: null, pods: [],
+      restored: 0, parked: [], notLaunched: 0, landedInLz: 0, points: 0, stars: 0, fuelLeftPct: 0, ringMiss: null, survey: null, colony: null, pods: [],
     }));
   });
   const refusal = chooseFinale(h.store, 'purge');

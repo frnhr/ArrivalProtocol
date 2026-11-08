@@ -28,13 +28,15 @@ for (const seed of [1, 7]) {
       && state.memory.reduce((sum, seg) => sum + seg.size, 0) === 384);
     // Slice 4's AUTOBURN mode fields (burn.auto.mode, targetKm, claimed, waitingSinceTSec, and its review's flying and
     // captured) are left out the same way: the rest of the flight is still checked byte for byte.
-    // Slices 4c–4e's fields (burn.auto.holding, landing.autodrop, run.threat.seedsMetAtDepth) likewise.
+    // Slices 4c–4e's fields (burn.auto.holding, landing.autodrop, run.threat.seedsMetAtDepth) likewise, and slice 6's
+    // (landing.survey, landing.sitesRev, each LZ's site: the classic five are GOOD, so every LZ stands where it did).
     const { mode, targetKm, claimed, waitingSinceTSec, flying, captured, holding, ...auto } = state.burn.auto;
     void mode; void targetKm; void claimed; void waitingSinceTSec; void flying; void captured; void holding;
     const burn = { ...state.burn, auto };
-    const { autodrop, ...landing } = state.landing;
+    const { autodrop, survey, sitesRev, ...landingRest } = state.landing;
+    const landing = { ...landingRest, lzs: landingRest.lzs.map(({ site, ...lz }) => { void site; return lz; }) };
     const { seedsMetAtDepth, ...threat } = state.run.threat;
-    void autodrop; void seedsMetAtDepth;
+    void autodrop; void seedsMetAtDepth; void survey; void sitesRev;
     const dump = JSON.stringify({
       memory: state.memory, level, landing, mission, burn, orbit: state.orbit,
       threat, hollow: state.hollow,

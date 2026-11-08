@@ -46,7 +46,7 @@ function shipResult(fields: Pick<ShipResult, 'shipId' | 'shipName' | 'slot' | 'o
     ...fields, depth: fields.slot + 1,
     lzs: [{ lz: 'LZ-A', count: fields.colonistsAboard, landed: fields.landedInLz, mislanded: 0, hard: 0 }],
     offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: fields.colonistsAboard - fields.landedInLz,
-    colony: null, pods: [],
+    colony: null, pods: [], survey: null,
   };
 }
 const state = () => h.store.getState();

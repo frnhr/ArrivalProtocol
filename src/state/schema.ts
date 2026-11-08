@@ -1,5 +1,5 @@
-// Slice 5: the lead owns this file (slice-5-plan.md §5); a track that needs a new saved field asks the lead (the one
-// v4 → v5 bump is the FOUNDATION's, plan R1).
+// Slice 6: the lead owns this file (slice-6-plan.md §5); a track that needs a new saved field asks the lead (the one
+// v5 → v6 bump is the FOUNDATION's, plan R1).
 import type { Segment, SegmentRole } from '@/types/segment';
 import type { LandingState, LandingTally } from '@/types/landing';
 import type { FsToolKind } from '@/types/fs-tool';
@@ -16,6 +16,7 @@ import type { RunInboxState } from '@/types/inbox';
 import type { SkillId, SkillLevel, AutoMode, RunSkillState, CellRow } from '@/types/skill';
 import type { BurnReason, BurnEvent } from '@systems/predict';
 import type { ResidentState, RunResidentState } from '@/types/resident';
+import type { SurveyRecord } from '@/types/survey';
 
 export type ViewMode = 'tools' | 'memory';
 
@@ -258,6 +259,9 @@ export interface ShipResult extends LandingTally {
   // from a perfect lock`): the end of the loop furthest outside the ring and by how many km. null for
   // every other outcome.
   ringMiss: RingMiss | null;
+  // Slice 6 (SURVEY, slice-6-plan §2.2): the ship's survey (state/survey-selectors.ts surveyRecordOf; run.ts endShip takes it
+  // from survey.ts surveyShipEnd), or null on a GOOD planet: the report, slice 7's epilogue and slice 8's sweeps read it.
+  survey: SurveyRecord | null;
 }
 
 export interface RingMiss {

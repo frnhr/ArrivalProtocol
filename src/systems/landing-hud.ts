@@ -1,5 +1,6 @@
-// Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §7.2): bayWindowModel.autodrop, the
-// AUTODROP pip, the plan table's model. Others ask by message.
+// Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §5): the GROUND TRACK's survey hooks (Track SITES's
+// models in systems/survey-hud.ts: the candidate brackets and the unmapped rim). Slice 4c–4e's Track DROP parts stand:
+// bayWindowModel.autodrop, the AUTODROP pip, the plan table's model. Others ask by message.
 import type { GameState } from '@state/schema';
 import type { DriverSegment } from '@/types/segment';
 import type {
@@ -15,6 +16,7 @@ import { paid } from '@systems/skill-levels';
 import { passCounts, passRows, planLanding } from '@systems/autodrop-plan';
 import { repairWord, whoGoesLower } from '@systems/autodrop';
 import { AUTODROP_TEXT } from '@data/autodrop-text';
+import { surveyGroundBrackets, surveyUnmapped, type RimArc } from '@systems/survey-hud';
 import {
   bayMembers, bayShown, driverTouch, dropFactors, isLaunchable, launchGuard, launchRefusal, lzAt, lzDownFill, lzProjectedFill, nextToLaunch,
   endLandingRefusal, landingMoment, onTargetTally, podCounts, podsWithFate, landingView as landingViewOf,
@@ -382,10 +384,11 @@ export interface Span {
 }
 
 export interface GroundBracket extends Span {
-  lz: string;
+  lz: string;             // the LZ's label; a candidate's (look 'candidate', slice 6) is its site's id, so the nodes stay keyed
   look: BracketLook;
-  label: string;          // `[ LZ-A · 1/3 ]`
+  label: string;          // `[ LZ-A · 1/3 ]`; a candidate's `SITE 4`
   outOfBand: boolean;
+  site: string | null;    // slice 6: a SURVEY candidate's site id (a click selects it in SITES); null on an LZ's bracket
 }
 
 export interface GroundMark {
@@ -423,8 +426,12 @@ export function terrainGlyph(terrain: TerrainWord): string {
   return TERRAIN_PATTERN[terrain].ground;
 }
 
-// One stretch of the planet's ground, in world angles (from < to, possibly past ±π: callers take angleDelta).
-export type TerrainKind = 'no-go' | 'site' | 'ground';
+// One stretch of the planet's ground, in world angles (from < to, possibly past ±π: callers take angleDelta). 'unmapped'
+// (slice 6): ground SURVEY has not mapped yet on a POOR planet, drawn UNMAPPED_GLYPH.
+export type TerrainKind = 'no-go' | 'site' | 'unmapped' | 'ground';
+
+// Slice 6 (plan §2.14): the glyph of ground not mapped yet (`░`); Track SITES paints the rest of the look.
+export const UNMAPPED_GLYPH = '░';
 
 export interface TerrainArc {
   fromRad: number;
@@ -442,9 +449,10 @@ function stretchHash(index: number): number {
 }
 
 // The planet's ground as stretches, highest priority first (the first that covers a place gives its glyph): the no-go
-// arcs, the LZs' brackets, then the ground in TERRAIN_STRETCH_DEG stretches of the terrain's main or second glyph. Pure,
-// from the landing's own data, so slice 6's survey can hand mapped stretches through the same shape.
-export function terrainStretches(landing: Readonly<Pick<LandingState, 'terrain' | 'lzs' | 'noGo'>>): TerrainArc[] {
+// arcs, the LZs' brackets, the rim SURVEY has not mapped (`unmapped`, slice 6: systems/survey-hud.ts surveyUnmapped; none on
+// a GOOD planet), then the ground in TERRAIN_STRETCH_DEG stretches of the terrain's main or second glyph. Pure, from the
+// landing's own data.
+export function terrainStretches(landing: Readonly<Pick<LandingState, 'terrain' | 'lzs' | 'noGo'>>, unmapped: readonly RimArc[] = []): TerrainArc[] {
   const pattern = TERRAIN_PATTERN[landing.terrain];
   const arcs: TerrainArc[] = [
     ...landing.noGo.map((arc): TerrainArc => ({
@@ -453,6 +461,7 @@ export function terrainStretches(landing: Readonly<Pick<LandingState, 'terrain' 
     ...landing.lzs.map((lz): TerrainArc => ({
       fromRad: lz.centreRad - lz.halfWidthRad, toRad: lz.centreRad + lz.halfWidthRad, glyph: pattern.site, kind: 'site', word: null,
     })),
+    ...unmapped.map((arc): TerrainArc => ({ fromRad: arc.fromRad, toRad: arc.toRad, glyph: UNMAPPED_GLYPH, kind: 'unmapped', word: null })),
   ];
   const count = Math.round(360 / TERRAIN_STRETCH_DEG);
   const step = (2 * Math.PI) / count;
@@ -480,6 +489,7 @@ export interface GroundTrackModel {
   planet: {
     brackets: GroundBracket[];
     noGo: Span[];
+    unmapped: Span[];           // slice 6: the rim SURVEY has not mapped (`░` on the overview line); none on a GOOD planet
     outOfBand: Span[];
     marks: GroundMark[];
     dot: number | null;
@@ -536,10 +546,18 @@ export function groundTrackModel(state: Readonly<GameState>, sol: Readonly<DropS
     return { from: mid - halfFrac, to: mid + halfFrac };
   };
   const bracketOn = (model: BracketModel, span: Span, label: string): GroundBracket => ({
-    ...span, lz: model.lz, look: model.look, label, outOfBand: model.outOfBand,
+    ...span, lz: model.lz, look: model.look, label, outOfBand: model.outOfBand, site: null,
   });
-  const stripBrackets = brackets.map((model) => bracketOn(model, stripSpan(model.centreRad, model.halfWidthRad),
-    GROUND_TRACK_TEXT.bracket(model.lz, model.down, model.count)));
+  // Slice 6 (plan §2.4): SURVEY's found sites as dashed 'candidate' brackets after the LZs' (Track SITES's model).
+  const candidates = surveyGroundBrackets(state);
+  const candidateOn = (bracket: (typeof candidates)[number], span: Span): GroundBracket => ({
+    ...span, lz: bracket.site, look: 'candidate', label: bracket.label, outOfBand: false, site: bracket.site,
+  });
+  const stripBrackets = [
+    ...brackets.map((model) => bracketOn(model, stripSpan(model.centreRad, model.halfWidthRad),
+      GROUND_TRACK_TEXT.bracket(model.lz, model.down, model.count))),
+    ...candidates.map((bracket) => candidateOn(bracket, stripSpan(bracket.centreRad, bracket.halfWidthRad))),
+  ];
   const onStrip = (span: Span): boolean => span.to > 0 && span.from < 1;
 
   // The next LZs past the right edge, soonest launch moment first, with its countdown: the in-band windows as of now
@@ -577,7 +595,8 @@ export function groundTrackModel(state: Readonly<GameState>, sol: Readonly<DropS
   const blocked = sol !== null && sol.block !== null ? GROUND_TRACK_TEXT.noSolution
     : dot === null ? GROUND_TRACK_TEXT.noDot : null;
   // The terrain under the strip: the planet's stretches that reach it, in priority order (terrainAt takes the first).
-  const terrain: TerrainStretch[] = terrainStretches(landing).flatMap((arc): TerrainStretch[] => {
+  const unmapped = surveyUnmapped(state);
+  const terrain: TerrainStretch[] = terrainStretches(landing, unmapped).flatMap((arc): TerrainStretch[] => {
     const span = stripSpan((arc.fromRad + arc.toRad) / 2, (arc.toRad - arc.fromRad) / 2);
     return onStrip(span) ? [{ ...span, glyph: arc.glyph, kind: arc.kind }] : [];
   });
@@ -587,8 +606,12 @@ export function groundTrackModel(state: Readonly<GameState>, sol: Readonly<DropS
   return {
     header: GROUND_TRACK_TEXT.header(state.mission.destination, landing.colony),
     planet: {
-      brackets: brackets.map((model) => bracketOn(model, planetSpan(model.centreRad, model.halfWidthRad), model.lz)),
+      brackets: [
+        ...brackets.map((model) => bracketOn(model, planetSpan(model.centreRad, model.halfWidthRad), model.lz)),
+        ...candidates.map((bracket) => candidateOn(bracket, planetSpan(bracket.centreRad, bracket.halfWidthRad))),
+      ],
       noGo: landing.noGo.map((arc) => planetSpan(arc.centreRad, arc.halfWidthRad)),
+      unmapped: unmapped.map((arc) => planetSpan((arc.fromRad + arc.toRad) / 2, (arc.toRad - arc.fromRad) / 2)),
       outOfBand: brackets.filter((model) => model.outOfBand).map((model) => planetSpan(model.centreRad, model.halfWidthRad)),
       marks: marks.map((mark) => ({ pod: mark.pod, at: planetFrac(mark.rad, sign), place: mark.place, touch: mark.touch })),
       dot: dot === null ? null : planetFrac(dot.rad, sign),

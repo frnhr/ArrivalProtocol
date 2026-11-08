@@ -11,6 +11,7 @@ import './styles/threat.css';
 import './styles/desk.css';
 import './styles/responsive.css';
 import './styles/resident.css';
+import './styles/survey.css';
 
 import { store } from '@state/instance';
 import { getByRole, getSegmentById } from '@state/selectors';
@@ -26,6 +27,7 @@ import { mountFlightEvents } from '@systems/flight-events';
 import { mountGhostThrust } from '@systems/ghost-thrust';
 import { mountHollowDeal } from '@systems/hollow-deal';
 import { mountResidents } from '@systems/residents';
+import { mountSurvey } from '@systems/survey';
 import { mountHollowVerbs } from '@systems/hollow-verbs';
 import { mountFinale } from '@systems/finale';
 import { mountDirector } from '@systems/director';
@@ -96,6 +98,7 @@ import { mountPodTags } from '@components/memory-view/PodTags';
 import { mountFinaleChoice } from '@components/run/FinaleChoice';
 import { mountSkillsWindow } from '@components/run/SkillsWindow';
 import { mountInboxWindow } from '@components/run/InboxWindow';
+import { mountSitesWindow } from '@components/tools-view/SitesWindow';
 import { mountArrivalFlash } from '@components/run/ArrivalFlash';
 import { mountHollowNameFx } from '@components/memory-view/HollowNameFx';
 import { mountMovePreviewLabels } from '@components/memory-view/MovePreviewLabels';
@@ -160,6 +163,8 @@ mountHollow(store);
 mountHollowDeal(store);
 // Slice 5: the residents (systems/residents.ts), right after THE DEAL: their AI ticks run after HOLLOW's and its deal's.
 mountResidents(store);
+// Slice 6: SURVEY (systems/survey.ts), right after the residents: after the landing and the ops core in the tick.
+mountSurvey(store);
 // WP11: HOLLOW's verbs after it (a bite or a seed of this tick is in before a verb aims), then LAST LIGHT's finale (the
 // root's DELETE completes in the ops core's tick, so the finale sees the last block standing in the same one).
 mountHollowVerbs(store);
@@ -205,6 +210,8 @@ mountCommsWindow(store);
 mountSkillsWindow(store);
 // Slice 3b: the INBOX (the dock's SYSTEM item), read in flight and between ships.
 mountInboxWindow(store);
+// Slice 6: the SITES window (Track SITES's).
+mountSitesWindow(store);
 mountMindTerminal(store);
 mountWindowGrips(store);
 // After the windows: the strip lights the controls its line names ([data-hint-key]).

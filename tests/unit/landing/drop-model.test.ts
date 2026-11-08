@@ -86,7 +86,7 @@ const product = (f: DropFactors): number => f.sensor * f.plotter * f.driver;
 // --- §3.2's table, m = 1.5 / 2 / 3, against windowsFor ------------------------------------------------------------------
 {
   const circular = (r: number): OrbitState => stateFromElements(r, 0, 0, 0, MU);
-  const standard: LzState = { label: 'LZ-A', centreRad: 150 * DEG, halfWidthRad: LZ_WIDTH_KM.standard / 2 / R, widthKm: LZ_WIDTH_KM.standard, pods: 4, ground: 'flat' };
+  const standard: LzState = { label: 'LZ-A', centreRad: 150 * DEG, halfWidthRad: LZ_WIDTH_KM.standard / 2 / R, widthKm: LZ_WIDTH_KM.standard, pods: 4, ground: 'flat', site: null };
   const input = (r: number, factors: DropFactors): DropSolveInput => ({
     state: circular(r), tSec: 0, mu: MU, R, ring: { min: 4000, max: 10000 }, lzs: [standard], factors, solution: true, uncertain: false,
     validUntilTSec: null, solvable: true,
@@ -144,7 +144,7 @@ function bayCtrl(integrity: number): Segment {
   return { id: 'bay', name: 'Bay Ctrl', type: 'ship', role: 'bay', size: 6, integrity, scanned: false } as Segment;
 }
 function lzAt(label: string, centreDeg: number, width: LzWidth, pods = 4): LzState {
-  return { label, centreRad: centreDeg * DEG, halfWidthRad: LZ_WIDTH_KM[width] / 2 / R, widthKm: LZ_WIDTH_KM[width], pods, ground: 'flat' };
+  return { label, centreRad: centreDeg * DEG, halfWidthRad: LZ_WIDTH_KM[width] / 2 / R, widthKm: LZ_WIDTH_KM[width], pods, ground: 'flat', site: null };
 }
 function fake(opts: Fake = {}): GameState {
   const memory = opts.memory ?? [driver(1, 100)];

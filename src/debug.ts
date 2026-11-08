@@ -1,6 +1,6 @@
-// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §2.12, §5); the 4c–4e and slice 5 hooks' bodies are in
-// the track modules (autodrop.ts, sentry.ts, beam-seeds.ts, autoburn-v3.ts; resident-corrupted.ts, resident-sleeper.ts).
-// Tracks ask by message.
+// Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §2.15, §5); the 4c–4e, slice 5 and slice 6 hooks'
+// bodies are in the track modules (autodrop.ts, sentry.ts, beam-seeds.ts, autoburn-v3.ts; resident-corrupted.ts,
+// resident-sleeper.ts; survey.ts). Tracks ask by message.
 import type { Store } from '@state/store';
 import type { GameState, Speaker, ObjectiveLine, LogEntry, ViewMode, TerminalStatus, EndingLine } from '@state/schema';
 import { getPrediction, getSensedPrediction, type Prediction } from '@systems/predict';
@@ -64,6 +64,9 @@ import { residentDebug, type ResidentDebug } from '@systems/residents';
 import { wakeResidentNow, lockNow, offerResidentDealNow, angerResidentNow } from '@systems/resident-corrupted';
 import { wakeSleeperNow, pickSleeperJob } from '@systems/resident-sleeper';
 import { RESIDENT_BUILT } from '@data/residents';
+import type { AssignRefusal } from '@/types/survey';
+import { surveyDebug, mapNow, assignSite, toggleSurveyPause, type SurveyDebug } from '@systems/survey';
+import { SURVEY_BUILT } from '@data/survey';
 import { SEED_WORDS_POOL, DISGUISE_POOL } from '@data/threat-text';
 import { SEEDS_ONLY_DEF } from '@data/threats';
 import type { ShipThreat } from '@/types/threat';
@@ -352,6 +355,16 @@ interface DebugHooks {
   };
   sleeper: { wake: () => void; job: (job: SleeperJob) => void };
   signals: () => SignalRecord[];
+  // Slice 6 (slice-6-plan §2.15). survey(): the ship's survey (the sites, mapped %, paused, claimed, the best version it ran at,
+  // the moves and reveals, the version it works at now). survey.poor writes POOR site data into this ship's reservation and
+  // restarts the ship from its boot (it plays POOR once SURVEY_BUILT.poor is raised). SWATH's: map (mark `pct` of the rim,
+  // default 100, finding and rating as the tick would), set (assignSite: the refusal or null), pause.
+  survey: (() => SurveyDebug) & {
+    poor: () => void;
+    map: (pct?: number) => void;
+    set: (lz: string, siteId: string) => AssignRefusal | null;
+    pause: () => void;
+  };
   // WP9 part 2: what the screens show of the zones and AUTOBURN, as data: the NAV PLOT's zone glyphs and labels,
   // the MIND's rack tags (both from the sensed prediction) and the Engine window's AUTO button.
   zonesHud: () => { plot: PlotZoneModel[]; racks: RackZoneTag[]; auto: AutoButtonModel };
@@ -442,7 +455,7 @@ function debugArchiveAs(store: Store<GameState>, cause: LastCause, landed: numbe
     return {
       shipId: def.id, shipName: def.name, slot, depth: i + 1, outcome, stars: down > 0 ? 2 : 0, fuelLeftPct: 30, ringMiss: null,
       colonistsAboard: aboard, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: aboard - down, landedInLz: down,
-      points: down, colony: down > 0 ? (def.landing.colonyFirstRun ?? def.world.toUpperCase()) : null, pods: [],
+      points: down, colony: down > 0 ? (def.landing.colonyFirstRun ?? def.world.toUpperCase()) : null, pods: [], survey: null,
     };
   });
   const run = { ...createRunState(armSeed, 'end', 0, first), map, shipIndex: DEBUG_WORKED_ROUTE.length - 1, ships, tutorial: false };
@@ -680,7 +693,7 @@ function debugSkippedResult(map: Readonly<RunMapState>, slot: number, depth: num
   return {
     shipId: def.id, shipName: def.name, slot, depth, outcome: 'locked', stars: 0, fuelLeftPct: 0, ringMiss: null,
     colonistsAboard: aboard, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: aboard, landedInLz: 0, points: 0,
-    colony: null, pods: [],
+    colony: null, pods: [], survey: null,
   };
 }
 
@@ -751,6 +764,20 @@ function debugPlaceResident(store: Store<GameState>, kind: ResidentKind, opts: {
     reserved.fragments = fragments;
   });
   if (!RESIDENT_BUILT[kind]) console.info(`[debug] __ap.resident.place: '${kind}' is not built yet: the ship plays with no resident`);
+  debugRoute(store, route);
+}
+
+// __ap.survey.poor(): this ship's reservation holds POOR site data (02 §3.5's, as the map would have rolled it), then the ship
+// restarts from its boot as __ap.resident.place does. Not on the first ship (it meets a fresh unit) or a final ship (02: its
+// site data is authored GOOD).
+function debugSurveyPoor(store: Store<GameState>): void {
+  const map = armMapOf(store, 'survey.poor');
+  const slot = currentSlot(store.getState().run);
+  const route = map.route.map((stop) => stop.slot);
+  if (route.length < 2) throw new Error('__ap.survey.poor: not on the first ship (it meets a fresh unit); go further out with __ap.slot');
+  if (shipDefAt(map, slot).final) throw new Error('__ap.survey.poor: a final ship\'s site data is GOOD (02-map)');
+  store.update((draft) => { draft.run.map.arm[slot]!.reserved.site = 'poor'; });
+  if (!SURVEY_BUILT.poor) console.info('[debug] __ap.survey.poor: POOR is not built yet: the ship plays GOOD');
   debugRoute(store, route);
 }
 
@@ -1165,6 +1192,12 @@ export function mountDebug(store: Store<GameState>): void {
     }),
     sleeper: { wake: () => wakeSleeperNow(store), job: (job) => pickSleeperJob(store, job) },
     signals: () => structuredClone(store.getState().run.residents.signals),
+    survey: Object.assign(() => surveyDebug(store.getState()), {
+      poor: () => { debugSurveyPoor(store); },
+      map: (pct = 100) => mapNow(store, pct),
+      set: (lz: string, siteId: string) => assignSite(store, lz, siteId),
+      pause: () => toggleSurveyPause(store),
+    }),
     audio: {
       isAudioUnlocked,
       isMuted,

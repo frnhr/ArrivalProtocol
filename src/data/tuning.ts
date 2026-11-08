@@ -5,7 +5,7 @@
 // literals of its own, so balancing never means hunting through systems.
 
 import type { Band, GhostSpec } from '@systems/capabilities';
-import type { ForgivenessClass, LzWidth } from '@/types/landing';
+import type { ForgivenessClass, LzWidth, LzGround } from '@/types/landing';
 import type { LinkNoise } from '@/types/threat';
 
 // --- Heartbeat -------------------------------------------------------------------------
@@ -402,11 +402,12 @@ export const BEEP_JUMP_TAC = 1.5;
 // `> DELIVERY:` lines, DELIVERY_BOOT_LINES_MAX, the INBOX line and HOLLOW's reading line: data/script.ts BOOT_LINE_MAX 18),
 // all on the same 1.3 s step (boot.ts checks at load that every possible line has its time). Slice 4d four more: up to three
 // SENTRY `> ECC: cache.tmp IS A SEED` lines (a beam brings at most three seeds, BEAM_SEED_ODDS) and its FIREWALL line (22).
-// Slice 5 one more: the resident ship's `> RECEIVER CLOSED` line (23).
+// Slice 5 one more: the resident ship's `> RECEIVER CLOSED` line (23). Slice 6 one more: a POOR planet's `> SITE DATA POOR`
+// line (24).
 export const BOOT_ASSEMBLE_SEC = 1.5;
 export const BOOT_LINE_AT_SEC: readonly number[] = [
   0.5, 1.8, 3.1, 4.4, 5.7, 7.0, 8.3, 9.6, 10.9, 12.2, 13.5, 14.8, 16.1, 17.4, 18.7, 20.0, 21.3, 22.6, 23.9, 25.2, 26.5, 27.8,
-  29.1,
+  29.1, 30.4,
 ];
 export const BOOT_KLAXON_AFTER_LAST_LINE_SEC = 1.4;
 export const BOOT_END_AFTER_KLAXON_SEC = 0.4;
@@ -2018,7 +2019,9 @@ export const RUN_SAVE_KEY = 'arrival-protocol/run/v1';
 // hollow.seedTelegraph.preempted, arrival.seeds[].disguise and run.threat.seedsMetAtDepth (RUN_SAVE_MIGRATIONS[3]).
 // 5 (slice 5, one bump for the three tracks: slice-5-plan R1): run.residents, the ship slice `resident`, the residents' five
 // segment types, DriverSegment.lockedBy and a nullable LogChoice.timeoutAiSec (RUN_SAVE_MIGRATIONS[4]).
-export const RUN_SAVE_VERSION = 5;
+// 6 (slice 6, one bump for the two tracks: slice-6-plan R1): landing.survey and landing.sitesRev, LzState.site and the widened
+// LzGround, run.ships[].survey (RUN_SAVE_MIGRATIONS[5]).
+export const RUN_SAVE_VERSION = 6;
 // The archive (§4.5; 02 §3.12: v2 holds the arm, the trail, colonies, routes, events and traces). From slice 3c the key
 // stays `meta/v2` and versions migrate in place (systems/meta.ts migrateMeta, META_VERSION the record's); a new key is
 // only ever a deliberate reset. v1's key (phase 2's archive) was the one such reset: never written, read only to detect it
@@ -2304,3 +2307,84 @@ export const SURPRISE_GLITCH_MS = 400;
 export const RESIDENT_WAKE_BLIP_AFTER_SEC = 0.35;
 
 // --- end of 5 FACE -------------------------------------------------------------------------------------------------------
+
+
+
+
+// =====================================================================================================================
+// --- Phase 3 slice 6, SURVEY (docs/phase3/impl/slice-6-plan.md §2.6). The FOUNDATION wrote every number below; each track
+// edits values only in its own block (6 SWATH, 6 SITES), and a new number goes at the end of its own block. The lead's
+// block holds the site roll's numbers (data/survey-sites.ts). The blocks are kept apart by these banners so that the
+// tracks' hunks never touch. RUN_SAVE_VERSION (6) stays with the save's keys above (3c SAVE).
+// =====================================================================================================================
+
+// --- 6 lead: the site roll (R3, R4, R9; data/survey-sites.ts rollSurveySites) -------------------------------------------
+
+// One bad guess per POOR planet (plan R3, [FRAN]): CONTROL's one joke (`LZ-B is in a lake :)`), which v2 finds; about one
+// cycle step of points before the kid reacts. Every other guess is FLAT. To reverse: POOR_EXTRA_BAD_GUESS_ODDS = 1 / 3
+// (each other guess bad 1 in 3: a 2-LZ ship would lose about a third of its points, harsher than "worse but playable").
+// The extra draw is made for every other guess whatever the odds, so raising them moves no other roll.
+export const POOR_BAD_GUESSES = 1;
+export const POOR_EXTRA_BAD_GUESS_ODDS = 0;
+// A bad ground is ROCKY or WET evenly: ROCKY costs the touch only, WET the touch and the fit, so half and half gives both.
+export const BAD_GROUND_WET_SHARE = 0.5;
+// WET's bracket is a third narrower (01 §3.13: "the bracket shrinks by a third"; plan R4, [FRAN]): the site's true width,
+// drawn and scored from the boot, guesses included, so a reveal changes no geometry and no pod in flight is re-judged. A
+// WET NARROW site is 167 km, under a healthy low-orbit dot's 2 × 70: hard, but it fits.
+export const WET_WIDTH_FACTOR = 2 / 3;
+// The candidates (01 §3.13: "the LZ count plus 3"): one guaranteed FLAT site per LZ, and this many extras.
+export const SURVEY_EXTRA_SITES = 3;
+// A guaranteed site's ROOM is its LZ's count plus 0..this many pods: room to spare reads as a find, and it is never less
+// than the count (01 §3.15's check: a FLAT candidate with enough ROOM for each LZ).
+export const GUARANTEED_SITE_ROOM_SPARE_PODS = 2;
+// Never NARROW, so v2's swap of a bad guess for a guaranteed site is always an improvement (plan R9).
+export const GUARANTEED_SITE_WIDTHS: readonly LzWidth[] = ['wide', 'standard'];
+// The extras' ground: v1's blind pick beats the guesses on average without being a sure thing, so v2's ★ is worth its 3
+// cycles. Width: WIDE, STANDARD or NARROW, 1/3 each. ROOM: 1..(the largest count + EXTRA_SITE_ROOM_SPARE_PODS) pods.
+export const EXTRA_SITE_GROUND_ODDS: Readonly<Record<LzGround, number>> = { flat: 0.5, rocky: 0.25, wet: 0.25 };
+export const EXTRA_SITE_WIDTHS: readonly LzWidth[] = ['wide', 'standard', 'narrow'];
+export const EXTRA_SITE_ROOM_SPARE_PODS = 2;
+// The story find (01 §7, plan R9): the last extra is `SITE 5 · ROOM 0 · WRECKAGE · OLD POD` on 1 POOR planet in 3, often
+// enough to be found in a run (2–5 POOR ships), rare enough to stay a find. It can never take an LZ.
+export const WRECK_SITE_ODDS = 1 / 3;
+// The roller keeps every site LZ_MIN_GAP_DEG from every other edge to edge (by its class width, so a narrowed WET keeps the
+// nominal gap: windows never overlap whichever site an LZ moves to) and NO_GO_EDGE_GAP_MIN_KM from every no-go arc's edge.
+
+// --- end of 6 lead -------------------------------------------------------------------------------------------------------
+
+
+
+
+// --- 6 SWATH (owned by Track SWATH; it edits values only in this block): the survey machine (01 §3.13, 03 §3.9) -------
+
+// The swath (01 §3.13: ±20° under the ship); v3 SWEEP twice as wide (03 §3.9: ±40°).
+export const SURVEY_SWATH_DEG = 20;
+export const SURVEY_SWEEP_FACTOR = 2;
+// The mapped rim in cells of SURVEY_CELL_DEG (SURVEY_CELLS = 360 / SURVEY_CELL_DEG, checked at load): finer than any swath
+// (a pass maps 8 cells at ±20°); a site is found when its centre's cell is mapped, so a NARROW 4.2° site needs no finer
+// grid; and 72 booleans keep the save small. A change of either is a save change (the codec reads SURVEY_CELLS cells).
+export const SURVEY_CELL_DEG = 5;
+export const SURVEY_CELLS = 72;
+// The versions' gates by name (as SENTRY_SIGHT_VERSION): v2 rates GROUND, v3 sweeps and holds no thread.
+export const SURVEY_RATE_VERSION = 2;
+export const SURVEY_SWEEP_VERSION = 3;
+// A polite tenant of the Core (plan R8, [FRAN]): it claims a thread only when this many stay free after the claim, so it
+// never takes the kid's last thread, and it yields to AUTOBURN's and AUTODROP's claims (ops-core reserveThread yieldable).
+export const SURVEY_KEEP_FREE_THREADS = 1;
+// What the numbers give (FLIGHT_TEMPLATES: the true anomaly at r0 is −84° wide to −122° impact-b): v1/v2 map 124–162°
+// (34–45%) by a capture at ▼, v3 164–202° (46–56%), both within the first orbit. SWATH's flow suite pins CORMORANT's.
+
+// --- end of 6 SWATH ------------------------------------------------------------------------------------------------------
+
+
+
+
+// --- 6 SITES (owned by Track SITES; it edits values only in this block): SURVEY's look and sound (01 §4) ---------------
+
+// The find's sonar ping, under the op chirps, so seven finds never read as alarms. SITES tunes it by ear.
+export const SURVEY_PING_GAIN = 0.12;
+// The SITES window opens itself at the first find, and once per ship at the boot of a POOR planet without SURVEY (showing
+// the guesses as UNSURVEYED).
+export const SITES_AUTO_OPEN = true;
+
+// --- end of 6 SITES ------------------------------------------------------------------------------------------------------

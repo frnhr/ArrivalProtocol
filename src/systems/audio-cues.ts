@@ -1,5 +1,6 @@
-// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §5); a track may change the cue on its own events'
-// lines only (the 4c, 4d and 4e blocks, and slice 5's resident block, at the end of mountAudioCues: Track FACE's to tune).
+// Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §5); a track may change the cue on its own events'
+// lines only (the 4c, 4d and 4e blocks, slice 5's resident block, and slice 6's survey block, Track SITES's to tune, at the
+// end of mountAudioCues).
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { on } from '@systems/events';
@@ -360,6 +361,17 @@ export function mountAudioCues(store: Store<GameState>): () => void {
       });
     })(),
     // --- end of 5 residents ---
+
+    // === Slice 6 (slice-6-plan §2.5): existing cues only; Track SITES may change the cue on these lines (its surveyPing,
+    // siteSting and siteSet, audio.ts) and add per-tick entries inside this block.
+
+    // --- 6 survey: the planet mapped and an LZ moved sound as a finished op; a find chirps as an op's progress does; a bad
+    // ground made known warns as a seed does. A rating plays nothing.
+    on('survey-state', ({ running }) => { if (running === 'done') play('opDone'); }),
+    on('site-found', () => play('opChirp')),
+    on('site-revealed', () => play('seedWarn')),
+    on('lz-moved', () => play('opDone')),
+    // --- end of 6 survey ---
   ];
   offs.push(onPostTick(() => playedThisTick.clear()));
 

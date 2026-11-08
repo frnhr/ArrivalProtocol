@@ -1031,3 +1031,192 @@ BALANCE_ONLY.
   (`SKILL_ROW_HOOKS`)
 - `src/systems/landing-hud.ts`, `src/components/tools-view/NavPlotWindow.ts`, `GroundTrack.ts`, `src/systems/desk.ts`,
   `src/systems/training-model.ts`, `src/systems/landing-report.ts`, `src/components/desk/TrainingWindow.ts`
+
+## Deviations (foundation)
+
+Recorded by the FOUNDATION agent (branch `found-6`, from 546e56b). Steps 0–9 of §6.1 are built. The unit tier is green with
+no behaviour change: 203 passed (the new `survey/foundation` among them), 10 balance-only skipped, 0 failed, 143 s on 4 workers, with `npm run typecheck` and the tests' tsc clean. (A first, cold run took 355 s, over the 300 s cap: the fly-once cache was empty in this worktree and the lead's e2e loaded the machine; the warm runs took 140–181 s). Both gates stay down: `SURVEY_BUILT.poor` false, `SKILL_TREE.survey.built` 0. The dry run
+of R23 is below.
+
+### What the tracks stand on
+
+**Built (lead-owned from here):**
+- the types (§2.2) in `types/survey.ts` (`SiteData`, `SiteKind`, `BadGround`, `SurveySite`, `SurveyRunning`, `RevealBy`,
+  `SurveyMove`, `SurveyReveal`, `SurveyState`, `AssignRefusal`, `SurveyRecord`) and `types/landing.ts` (`LzGround` FLAT /
+  ROCKY / WET, `LzState.site`, `LandingState.survey`, `.sitesRev`); `ShipResult.survey`; `ShipDef.site` (the map's roll,
+  GOOD on the classic five);
+- `data/survey.ts` (`SURVEY_BUILT`, `siteDataOf`, the load check that the cells tile the rim); `data/survey-sites.ts`
+  (`rollSurveySites`, `validateSurveySites`, `lzLetter`, `guessSiteId`); `data/survey-text.ts` (`SURVEY_TEXT.boot`, `.room`,
+  `.refusal`, `siteLabel`); `state/survey-selectors.ts` (`lzSiteOf`, `groundAt`, `groundKnownAt`, `surveyVersion`,
+  `foundSites`, `mappedPct`, `surveyRecordOf`); `state/initial.ts createSurveyState` and the POOR build in
+  `createShipSlices` / `createLandingState(…, { sites })`;
+- the three tuning blocks (§2.6) at the end of `tuning.ts`, each closed by an `end of …` line;
+- every seam of §2.4, the events and cues of §2.5, the debug hooks of §2.15;
+- save v6 with its migration, codec checks and shape pin; the v5 fixtures (`run-save-v5-ship-done-desk4.json`,
+  `run-save-v5-beam-cormorant.json`, dumped before any change);
+- `tests/unit/survey/foundation.test.ts` (43 checks, about 2 s), `tests/unit/support/survey.ts` (`withSurvey`,
+  `withSurveyBuilt`, `NO_SURVEY`, `SURVEY_ALL_BUILT`).
+
+**Seed 7's POOR ships as the roll builds them** (both gates raised; the e2e and SWATH's flow suite can lean on these):
+- CORMORANT (15): LZ-A 5 pods at 160° (STANDARD, FLAT), **LZ-B 4 pods at 346° (WIDE, ROCKY: `LZ-B is a little rocky :)`)**;
+  SITE 1 NARROW FLAT ROOM 5 at 63°, SITE 2 STANDARD FLAT ROOM 5 at 132°, SITE 3 NARROW WET ROOM 4 at 232°, **SITE 4 ·
+  WRECKAGE** at 252°, SITE 5 WIDE FLAT ROOM 6 at 304° (v2's swap for LZ-B).
+- SHEARWATER (13): LZ-B (1 pod, STANDARD) ROCKY; 5 sites, no wreck.
+- GOOD HOPE (17): LZ-A (WIDE) WET; 7 sites, SITE 7 a wreck.
+
+**The contract, per track.** "Neutral" stubs return the value shown and are safe on every tick and paint. "Throws" stubs
+throw through `not-built.ts notBuilt(what, track)` until built. Each file opens with its track's banner.
+
+| Track | Function (file) | Signature | Now |
+|---|---|---|---|
+| SWATH | `mountSurvey` (systems/survey.ts) | `(store) => () => void` | built: a no-op mount (main.ts and harness6 mount it after `mountResidents`) |
+| SWATH | `assignSite` | `(store, lz: string, siteId: string) => AssignRefusal \| null` | throws |
+| SWATH | `toggleSurveyPause` | `(store) => void` | throws |
+| SWATH | `surveyShipEnd` | `(store) => SurveyRecord \| null` | built: releases `'survey'`'s thread, `claimed` false, `lastRad` null, `surveyRecordOf` |
+| SWATH | `surveyStatus` | `(state) => { text; tone: 'good' \| 'warn' } \| null` | neutral: null (the plain row) |
+| SWATH | `surveyDebug` | `(state) => SurveyDebug` | built (pure) |
+| SWATH | `mapNow` | `(store, pct: number) => void` | throws |
+| SWATH | `SURVEY_THREAD_OWNER` | `'survey'` | built |
+| SWATH | `sweptCells` (systems/survey-model.ts) | `(fromRad, toRad, dir: 1 \| -1, swathRad) => number[]` | neutral: [] |
+| SWATH | `siteStars` | `(site) => SiteStars` (`0 \| 1 \| 2 \| 3`) | neutral: 0 |
+| SWATH | `assignRefusal` | `(state, lz, siteId) => AssignRefusal \| null` | neutral: `'closed'` |
+| SWATH | `assignableLzs` | `(state, siteId) => { lz; refusal: AssignRefusal \| null }[]` | neutral: [] |
+| SWATH | `bestSwap` | `(state, lz) => string \| null` (a site id) | neutral: null |
+| SWATH | `SWATH_TEXT` (data/swath-text.ts) | `control.{boot, reveal, moved}`, `terminal.{found, revealed, wreck, mapped}`, `strip.swap`, `status.*`, `echoTail` | seeded with the plan's words |
+| SWATH | `SURVEY_RULES` (data/survey-rules.ts) | `readonly GuideRule[]` | empty |
+| SITES | `surveyGroundBrackets` (systems/survey-hud.ts) | `(state) => SurveyBracket[]` | neutral: [] |
+| SITES | `surveyUnmapped` | `(state) => RimArc[]` | neutral: [] |
+| SITES | `surveyPlotModel` | `(state) => SurveyPlotModel \| null` | neutral: null |
+| SITES | `surveyCardRow` | `(state, slot) => SurveyCardRow \| null` | neutral: null |
+| SITES | `surveyAheadLine` | `(state, slot: number \| null) => string \| null` | neutral: null |
+| SITES | `surveyLzRowSuffix` | `(state, lz) => string` | neutral: '' |
+| SITES | `sitesWindowModel` | `(state) => SitesWindowModel \| null` | neutral: null |
+| SITES | `mountSitesWindow` (components/tools-view/SitesWindow.ts) | `(store) => () => void` | built: a no-op (main.ts mounts it) |
+| SITES | `createPlotSurveyLayer` (components/tools-view/plot-survey.ts) | `(svg, below) => { paint(model, proj, cx, cy, planetUnits); clear() }` | built: draws nothing |
+| SITES | `SITES_TEXT` (data/sites-text.ts) | `window.*`, `row.*`, `pill`, `stamp.*`, `card.*` (with `lzs(count)`), `ahead.*`, `report.*`, `glossary.*` | seeded with the plan's words |
+| SITES | `styles/survey.css` | | the FOUNDATION's one rule: `body:not(.survey) .survey-only { display: none !important; }` |
+
+The model types in `survey-hud.ts` are SITES's to widen; `survey-model.ts`'s `SiteStars` and the `SurveyDebug` fields are
+SWATH's.
+
+**The test lines each track edits** (nothing else in the lead's suites):
+- SWATH:
+  - `survey/foundation.test.ts:61` (`built: POOR …`, its comment `:60` names the new words: `=== true`, `built: POOR plays
+    POOR (Track SWATH)`) and `:63` (`built: SURVEY …`, comment `:62`: `=== 3`, `built: SURVEY v1–v3 (Track SWATH)`);
+  - `skills/foundation.test.ts:79` (`built: SURVEY not yet` → `SKILL_TREE.survey.built === 3`);
+  - `support/words.test.ts` block `:312–320` (6 SWATH);
+  - tuning's 6 SWATH block (`tuning.ts:2358–2377`);
+  - the gates: `data/survey.ts:11` (`poor`) and `data/skills.ts:58` (survey's `built: 0`, on the line it shares with `locks`
+    and `opens`);
+  - R23's movers (below), for the churn only;
+  - the touchdown echo's tail in `landing-text.ts` (one line, by request, §2.9).
+- SITES:
+  - `support/words.test.ts` block `:324–332` (6 SITES);
+  - tuning's 6 SITES block (`tuning.ts:2382–2390`);
+  - the survey block of `audio-cues.ts` (`:365–374`);
+  - the marked edits: `TrainingWindow.ts:88–94` (the three demo cases), `ToolsTabs.ts:16–17` (the `sites` entry),
+    `index.html:75–76` (the dock item) and `:176–185` (`#sitesWin`), `GroundTrack.ts`'s candidate look (its bracket class
+    already reads `look-${bracket.look}`, so `look-candidate` needs CSS only, in `survey.css`).
+- `survey/foundation.test.ts`'s other checks hold whatever the tracks build (no machine runs in it). A track whose build
+  breaks one asks the lead.
+
+### R23: the dry run (each gate raised alone, the quick tier, then dropped)
+
+- **`SURVEY_BUILT.poor` alone:** 202 of 203 suites pass, 181 s. The one failure is `survey/foundation`'s own `built: POOR`
+  line. No quick suite lands a POOR ship (the worked route's CORMORANT is only booted and ended, never landed, in the quick
+  tier), so POOR moves nothing there: its boot line, hidden ground and narrower WET bracket wait for the BALANCE_ONLY
+  `wp12/playthrough` (which lands CORMORANT) and the e2e (`playthrough.mjs`), neither run here.
+- **`SKILL_TREE.survey.built` 3 alone:** 200 of 203 suites pass, 140 s. Two failures are the `built` lines
+  (`survey/foundation.test.ts:63`, `skills/foundation.test.ts:79`). The third is churn, SWATH's to edit:
+  `skills/sentry.test.ts:110–111` (`…a seedless ship 3 keeps it shut at visit 3; a record written at depth 4 opens it at visit
+  4`): on that synthetic desk 4 a POOR ship is in reach, so R16's tie goes to SURVEY and SENTRY's branch does not open there.
+  `skills/ui-models.test.ts:123` (desk 2's closed list) does not move, and no quick suite deals the leftover card SURVEY v1
+  (R18).
+- **Not measured** (outside the quick tier): the BALANCE_ONLY suites (`wp12/playthrough` lands CORMORANT POOR; the sweeps)
+  and the e2e. SWATH's edit rights for churn (R23) cover the two lines above and whatever the full depth shows.
+
+### Deviations
+
+1. **Placement samples the rim's free arcs directly** (`survey-sites.ts freeSpans`, `placeOn`): one draw per site, a
+   uniform centre in what LZ_MIN_GAP_DEG and NO_GO_EDGE_GAP_MIN_KM leave free. That is the same law as rejection sampling
+   with no attempt limit, so `SITE_PLACE_ATTEMPTS` is not in tuning; the roller still throws (loudly) when the rim has no
+   room left. 2,031 rolls never met that.
+2. **Signatures:** `rollSurveySites(def, planetR, rng)` has no `layer` (nothing in R9 depends on it, and `__ap.survey.poor`
+   may make any ship POOR); `validateSurveySites(def, planetR, sites)` takes the radius it needs for km.
+3. **`mappedPct` and the record are the lead's** (`state/survey-selectors.ts mappedPct`, `surveyRecordOf`), not
+   `survey-model.ts`'s: the record needs the share, and `run.ts shipResultOf` (the LOST card's preview) builds the record
+   from the slice. `endShip` calls `surveyShipEnd(store)` first, after its already-ended check, and puts its record in the
+   result; `surveyShipEnd` is built (release, at rest, the record).
+4. **`'site-found'` plays `opChirp`:** `audio.ts` has no `scanTick` cue (§2.5 named one). SITES's `surveyPing` replaces it.
+5. **Refusals are keyed by `AssignRefusal`** (`SURVEY_TEXT.refusal[kind](words)`, one `RefusalWords` argument: site, LZ,
+   colonists held and needed). `'closed'` reads `NO SURVEY · SITES STAY AS GUESSED`; `SURVEY_TEXT.room(pods)` gives ROOM in
+   colonists. `AssignRefusal` and the named record types are in `types/survey.ts`.
+6. **`touchAtTouchdown(launch, ground)`'s ground is required**, so no caller forgets it: `landing/rules.test.ts:371` passes
+   `'flat'`.
+7. **The GROUND TRACK's hooks:** `GroundBracket` gains `site: string | null` (a candidate's site id; null on an LZ's
+   bracket), and a candidate's `lz` is its site id, since `GroundTrack.ts` keys its nodes by `lz`.
+   `GroundTrackModel.planet.unmapped: Span[]` is added for the overview line. `TerrainKind` gains `'unmapped'`
+   (`UNMAPPED_GLYPH` `░`, after the sites and before the ground). `terrainStretches(landing, unmapped: RimArc[] = [])` takes
+   world-radian arcs (`survey-hud.ts RimArc`), not the strip's fractions.
+8. **The NAV PLOT's layer is an object,** `createPlotSurveyLayer(svg, below)` with `paint` and `clear`, as plot-landing's
+   (§2.4 named a `paintSurveyLayer`). It is made right before the landing layer, so its nodes sit under it, and it is
+   cleared on the world reset.
+9. **The SITES window:** `mountSitesWindow(store)`, mounted by main.ts, so SITES never edits main.ts. The container is
+   `#sitesWin` (class `window sites-win survey-only`, as `#skillsWin` and `#inboxWin`), with its dock item
+   `data-tool="sites"`. `ToolsTabs` refuses a window without a `TAB_WINDOWS` entry at mount, so the FOUNDATION added
+   `sites: '.sites-win'` (marked `Slice 6 SITES`). Both stay hidden by `survey.css`'s one rule until SITES sets
+   `body.survey`. `sitesWindowModel` is added to `survey-hud.ts` for it.
+10. **The card:** the SITE DATA row sits right before the LZ row (after PLANET and its no-go row). `MAP_TEXT.card.lzs(count,
+    site)` keeps today's words on GOOD and takes SITES's `SITES_TEXT.card.lzs(count)` on POOR, so SITES owns the words it
+    shows. desk.ts reads the site data from the ship's summary (`reserved.site`, through `siteDataOf`), so the card builds
+    no ShipDef. `map/desk-models.test.ts:80` and `map/text.test.ts:63` pass `'good'`.
+11. **The thread:** a preempting claim takes the oldest yieldable reservation, and none when dropping it would still leave
+    no thread free (a worn Core under its reservations). `holdsThread` is exported for SWATH's reconcile. The world reset's
+    snapshot carries the yieldable count; the drop cache's carries `cachedSitesRev`.
+12. **The boot line** also follows `ecc` on a ship no beam reached (the first ship's branch), for completeness; nothing
+    makes a first ship POOR (`__ap.survey.poor` refuses it).
+13. **The codec reads `lzs` field by field now** (`checkLz`): before v6 likeReference left them opaque. The shape pin keeps
+    `lzs` opaque; the codec's checks reach `site` and the widened `ground`.
+14. **`sitesRev` in the three keys is checked by reading the key functions' source** (`survey/foundation`): the keys are
+    private. SWATH's flow suite exercises a move behaviourally.
+15. **Test literals and digests** that build `LzState`, `LandingState` or `ShipResult` by hand gain the new fields (`site:
+    null`, `survey: null`, `createSurveyState('good', [])` and `sitesRev: 0`): `landing/drop-model`, `landing/rules`,
+    `landing/solve`, `map/inbox`, `map/packet-room`, `map/run-tally`, `map/run2-tally`, `world/lineage`,
+    `wp11/p2/purge-fleet`, `wp11/p2/views`, `wp7/p2-models`. `map/memory-refactor` leaves the survey's fields out of its
+    classic digests as it does AUTODROP's; `save/codec` counts five steps; the debug route's two hand-built results record
+    no survey.
+16. **`SURVEY_TEXT`'s lines are checked in `survey/foundation`** (the lead's block); `support/words` gains a 6 SWATH and a 6
+    SITES block that render each track's seeded words by their templates' own parameter names (`SLICE6_WORST`), so a new
+    template with a new parameter name fails until its worst case is listed. One seeded glossary line was shortened to fit.
+17. **Banners:** the files §5 hands to the lead now say so (`types/landing.ts`, `schema.ts`, `initial.ts`, `ops-core.ts`,
+    `run.ts`, `save-codec.ts`, `events.ts`, `audio-cues.ts`, `map-boot.ts`, `script.ts`, `skills.ts`, `training-model.ts`,
+    `landing-hud.ts`, `NavPlotWindow.ts`, `debug.ts`). In the track-owned files with one lead line (`autoburn.ts`,
+    `autodrop.ts`, `drop-cache.ts`, `autoburn-v3.ts`, `autodrop-plan.ts`, `landing.ts`, `landing-rules.ts`) the line carries a
+    `Slice 6` comment instead. `not-built.ts`'s `Track` is `SWATH | SITES`.
+18. **Names the plan cites, checked against HEAD:** `RUN_SAVE_VERSION` was 5; §1.2's POOR table matches seeds 1, 4 and 7
+    (and CORMORANT is POOR on 8 of 10, every seed has 2–5); `landing.ts:209` is the touchdown (now `:210`),
+    `pendingTouchdowns` is near `landing-rules.ts:755`, AUTOBURN's claim `autoburn.ts:609`, AUTODROP's `autodrop.ts:542`;
+    `skills/foundation.test.ts:79` and `skills/ui-models.test.ts:123` are as cited; `BracketLook`'s reserved `'candidate'`,
+    desk.ts's reserved `'site'` row, `DemoArt`, `TRAINING_DEMO_ART`, `SKILL_ROW_HOOKS`, `plainSkillStatus`,
+    `DROP_LESSON_RULES`, `BOOT_LINE_MAX` (23 → 24) and `BOOT_LINE_AT_SEC` (+30.4) stand. Every other name stands.
+19. **Seed 7's CORMORANT rolls a ROCKY LZ-B** (not a lake): its quip is `LZ-B is a little rocky :)`. The e2e reads the
+    ground from `__ap.survey()`, as §7.4 says.
+
+### Notes for the tracks
+
+- **SWATH:**
+  - raise `SURVEY_BUILT.poor` first, then `SKILL_TREE.survey.built`, then run the tier (R19, R23);
+  - reconcile `claimed` with `holdsThread(SURVEY_THREAD_OWNER)` each tick; claim with `reserveThread(SURVEY_THREAD_OWNER, {
+    yieldable: true })` only while `threadsTotal() − threadsBusy() ≥ 1 + SURVEY_KEEP_FREE_THREADS`;
+  - `surveyVersion(state)` is the version capped by `built`; `groundAt` / `lzSiteOf` / `groundKnownAt` are the lead's
+    readers;
+  - an LZ move rewrites `centreRad`, `halfWidthRad`, `widthKm`, `ground` and `site` from the site, bumps `sitesRev` and
+    pushes `moves`: the codec refuses an LZ off its site's geometry or a `sitesRev` under the moves;
+  - every survey line said once per ship has its flag in `survey.lines`.
+- **SITES:**
+  - show the window and its dock item by toggling `body.survey` (the `survey-only` rule), as `body.landing` does;
+  - `GroundBracket.site` is set on the candidates; `planet.unmapped` and the strip's `unmapped` terrain stretches are yours to
+    paint;
+  - the model types in `survey-hud.ts` are yours to widen; the words are `sites-text.ts`'s, the labels and refusals
+    `survey-text.ts`'s.
+- **The lead:** the independent contract review (§6.1 item 10) is next.

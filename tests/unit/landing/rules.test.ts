@@ -12,7 +12,7 @@ import type {
   DropSolution, ForgivenessClass, LandingState, LaunchRecord, LzState, LzWidth, LzWindow, Place, PodFate, PodRecord, Touch,
 } from '@/types/landing';
 import { createRng } from '@systems/rng';
-import { createAutodropState } from '@state/initial';
+import { createAutodropState, createSurveyState } from '@state/initial';
 import { validateLandingDef } from '@data/landing-def';
 import { shipColonists, shipPodCount, validatePodRacks } from '@data/memory';
 import { LAUNCH_CONFIRM_TEXT, LANDING_REPORT_TEXT, COLONY_NAME_POOL } from '@data/landing-text';
@@ -24,7 +24,7 @@ const DEG = Math.PI / 180;
 
 function lz(label: string, centreDeg: number, pods: number, width: LzWidth = 'standard'): LzState {
   const widthKm = LZ_WIDTH_KM[width];
-  return { label, centreRad: centreDeg * DEG, halfWidthRad: widthKm / 2 / R, widthKm, pods, ground: 'flat' };
+  return { label, centreRad: centreDeg * DEG, halfWidthRad: widthKm / 2 / R, widthKm, pods, ground: 'flat', site: null };
 }
 
 function driver(pod: number, integrity = 100, extra: Partial<DriverSegment> = {}): DriverSegment {
@@ -75,7 +75,7 @@ function fakeState(opts: FakeOpts): GameState {
     bay: { loaded: opts.loaded ?? BAY_SLOTS, reloadTac: 0, cadenceLeftTac: opts.cadenceLeftTac ?? 0 },
     loadNext: opts.loadNext ?? null, startedAtTSec: 0, ended: opts.ended ?? null, lingerAiSec: null, noDriverAiSec: 0,
     window: null, fuelAtEndPct: null, orbitEpoch: 0, decay: { lastKickTSec: null, kicks: 0, last: null }, goLow: null, declined: null, ghostBursts: 0,
-    autodrop: createAutodropState(),
+    autodrop: createAutodropState(), survey: createSurveyState('good', []), sitesRev: 0,
   };
   return {
     run: { phase: opts.phase ?? 'landing' },
@@ -368,7 +368,7 @@ function solution(dotDeg: number, inBand = true, block: DropSolution['block'] = 
 // --- Touch is decided at touchdown, and the result reads it from there ---
 {
   const record = { ...launch(90 * DEG, 'soft'), driverIntegrity: 40 };
-  check('touchAtTouchdown reads the driver at launch, not the predicted touch', touchAtTouchdown(record) === 'hard');
+  check('touchAtTouchdown reads the driver at launch, not the predicted touch', touchAtTouchdown(record, 'flat') === 'hard');
   const lzs = [lz('LZ-A', 90, 1)];
   const hardDown = fakeState({ lzs, memory: [], pods: [{
     ...pod(1, { kind: 'down', launch: launch(90 * DEG, 'soft'), touchdown: { place: 'lz', lz: 'LZ-A', points: 100, missKm: null, touch: 'hard', atAi: 1 } }),

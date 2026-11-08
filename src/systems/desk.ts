@@ -37,6 +37,8 @@ import { trainCell, restoreSkill, undoPurchase } from '@systems/training';
 import { trainingModel, trainingArmed, cellKey, TRAINING_HOLD_SEC } from '@systems/training-model';
 import { TRAINING_TEXT } from '@data/training-text';
 import { residentCardRow, signalGlyph } from '@systems/resident-hud';
+import { surveyCardRow } from '@systems/survey-hud';
+import { siteDataOf } from '@data/survey';
 import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 
 export type { DeskWindowId };
@@ -156,7 +158,8 @@ export interface ChartModel {
 }
 
 // One row of the SHIP CARD (02 §4: KNOWN PROBLEMS, MEMORY and its fit line, PLANET, LZ, BEAM, DELIVERIES, SHIP n OF YOUR
-// RUN …). 'resident' is slice 5's (`RESIDENT · reported faulty`, after KNOWN PROBLEMS); 'site' (slice 6) is reserved. 'deliveries' is 3b's (`Swap ✗ 4 YRS LATE`, `✓ CATCHES
+// RUN …). 'resident' is slice 5's (`RESIDENT · reported faulty`, after KNOWN PROBLEMS); 'site' is slice 6's (`SITE DATA ·
+// POOR · ARRIVAL CONTROL GUESSED`, after PLANET and its no-go row: systems/survey-hud.ts surveyCardRow). 'deliveries' is 3b's (`Swap ✗ 4 YRS LATE`, `✓ CATCHES
 // UP HERE`). 3c adds 'history' (`REPORTED HOME` / `2ND RUN ON THE CHART`, from run 2) and 'trail' (the last unit's mark at
 // this ship's world: what the hover says on a desktop, readable on a phone, whose chart has no hover).
 export interface CardRow {
@@ -508,7 +511,10 @@ export function cardModel(state: Readonly<GameState>, slot: number): CardModel {
 
   row('planet', MAP_TEXT.card.planetLabel, MAP_TEXT.card.planet(ship.terrain, FORGIVENESS_TEXT[ship.forgiveness].offSite));
   if (ship.noGoWords.length > 0) row('nogo', MAP_TEXT.card.noGoLabel, MAP_TEXT.card.noGo(ship.noGoWords), 'warn');
-  row('lzs', MAP_TEXT.card.lzLabel, MAP_TEXT.card.lzs(ship.lzCount));
+  // Slice 6 (R15): the SITE DATA row (Track SITES's model), and the LZ row's words by the site data this build plays.
+  const site = surveyCardRow(state, slot);
+  if (site !== null) row('site', site.label, site.value, site.tone);
+  row('lzs', MAP_TEXT.card.lzLabel, MAP_TEXT.card.lzs(ship.lzCount, siteDataOf({ site: ship.reserved?.site ?? 'good' })));
 
   if (hop !== null && hop.inRange) {
     const seeds = verdict === null ? null : seedAllowance(verdict, playsTutorial(state.run));

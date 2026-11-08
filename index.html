@@ -72,6 +72,8 @@
         <div class="dock-item" data-tool="skills"><span class="mark">○</span><span>Skills</span><span class="dock-new">NEW</span></div>
         <!-- Phase 3 slice 3b: the INBOX (InboxWindow); its label reads `INBOX n` and pulses while mail is unread -->
         <div class="dock-item" data-tool="inbox"><span class="mark">○</span><span class="dock-label" id="inboxDockLabel">Inbox</span></div>
+        <!-- Phase 3 slice 6: SITES (SitesWindow, Track SITES): a POOR planet's sites; hidden (survey-only) until SITES shows it -->
+        <div class="dock-item survey-only" data-tool="sites"><span class="mark">○</span><span>Sites</span></div>
       </div>
 
       <div class="dock-content memory-view">
@@ -169,6 +171,17 @@
             <span class="ctl">−</span><span class="ctl">×</span>
           </div>
           <div class="window-body inbox-body" id="inboxBody"></div>
+        </div>
+
+        <!-- SITES (phase 3 slice 6, SitesWindow, Track SITES's to fill and show): a POOR planet's LZs and the sites SURVEY
+             found, and a click's SET AS pills. Hidden (body.survey shows the survey-only parts, styles/survey.css). -->
+        <div class="window sites-win survey-only" id="sitesWin" hidden>
+          <div class="window-title">
+            <span class="grip intact" data-grip><span class="bar"></span><span class="bar"></span><span class="bar"></span></span>
+            <span class="name">Sites</span>
+            <span class="ctl">−</span><span class="ctl">×</span>
+          </div>
+          <div class="window-body sites-body" id="sitesBody"></div>
         </div>
 
         <div class="window engine-win" data-roles="engine-io thrust-ctrl reactor autopilot">

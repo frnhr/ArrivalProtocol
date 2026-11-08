@@ -35,6 +35,7 @@ import {
 } from '@systems/landing-rules';
 import { forgetDriver, parkPodsAboard } from '@state/actions';
 import { driversInMemory, finalePending, scriptFightOpen } from '@state/selectors';
+import { groundAt } from '@state/survey-selectors';
 import { layoutOf } from '@data/memory';
 import { END_LANDING_REFUSAL_KEY, LANDING_ECHO, launchRefusalKey } from '@data/landing-text';
 import { IS_DEV } from '@/env';
@@ -206,7 +207,7 @@ function touchDown(store: Store<GameState>, pod: number): void {
   const { landing } = state;
   const fill = lzDownFill(state);
   const placement = classifyLanding(landing.lzs, landing.noGo, launch.landingRad, fill);
-  const touch = touchAtTouchdown(launch);
+  const touch = touchAtTouchdown(launch, groundAt(landing, placement.lz));
   const points = podPoints(placement.place, touch, landing.forgiveness, record.colonists);
   const firstOnShip = !landing.pods.some((candidate) => candidate.fate.kind === 'down');
   const firstOfRun = firstOnShip && !state.run.ships.some((ship) => ship.pods.some((summary) => summary.fate === 'down'));

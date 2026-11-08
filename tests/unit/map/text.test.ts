@@ -60,7 +60,7 @@ const lines: [string, string][] = [
   ['card.fit no-charge', MAP_TEXT.card.fit({ ...FIT, chargeArrives: 0, chargeArrivesMin: 0, word: 'no-charge' })],
   ['card.planet', MAP_TEXT.card.planet('GRASSLAND', 'off-site pods score a quarter')],
   ['card.noGo', MAP_TEXT.card.noGo(['LAVA', 'CLIFFS'])],
-  ['card.lzs', MAP_TEXT.card.lzs(4)],
+  ['card.lzs', MAP_TEXT.card.lzs(4, 'good')],
   ['card.beam', MAP_TEXT.card.beam(LY, 123)],
   ['card.noise', MAP_TEXT.card.noise(3, MAP_TEXT.card.seeds({ min: 0, max: 3 }))],
   ['card.noise none', MAP_TEXT.card.noise(3, MAP_TEXT.card.seeds(null))],
