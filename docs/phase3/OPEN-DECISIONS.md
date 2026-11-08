@@ -29,6 +29,8 @@ Status words:
    50% at depth 7 and beyond.
    - But only about 1 run in 3 meets a decoy, so SENTRY v1 names nothing in about 2 runs of 3.
    - DEFERRED to slice 8: raise the rate, or give SENTRY v1 more to do.
+   - BUILT in slice 8 (THREAT, item 97): 1/2 from depth 5 and 2/3 from depth 7; a depth-5 run now meets a decoy 33% of the
+     time (was 25%). SENTRY v1's price is the other half of the answer (ECONOMY's).
 5. **AUTODROP v3 leaves pods that fit no LZ for the kid**; it doesn't throw them WIDE itself.
    - BUILT. The strip names the REPAIR.
    - To change: add a WIDE pass to `planLanding`.
@@ -93,11 +95,15 @@ Status words:
     The resident pushes about 0.7–0.8× as hard as the controller, but over a whole approach that still drains the tank.
     The pressure to act seems right, but it is harsh for a kid who never opens the MIND. DEFERRED to slice 8: a lower
     amp, or bursts that stop after the first lock.
+    - BUILT in slice 8 (THREAT, item 98): amp 0.10. An ignored resident no longer strands a flight; it still empties the
+      tank by ORBIT LOCK.
 25. **HOLD A WALL adds little.** Any free run with room for the 4-block wall already counts as a WALL under the kid's
     own rule. So MOTH.wall never stops a bite that would otherwise land; it only keeps that run from being filled.
     - BUILT as specified.
     - ASK, or DEFERRED to slice 8: make the job do more. For example, wall off the nearest seed's reach, or let the
       wall heal.
+    - BUILT in slice 8 (THREAT, item 99): MOTH.wall stands in a GAP, 2 blocks or the whole GAP, and stops every bite
+      across it.
 26. **The sleeper's help, measured on CURLEW over five seeds (landed %):**
     - by hand: 71%;
     - RUN THE DROPS, no hands: 77%;
@@ -109,6 +115,8 @@ Status words:
 27. **To wake BARNABY on CURLEW, the kid needs DELETE or MOVE.** On seed 7's route the unit arrives with only SCAN and
     REPAIR, so the sleeper can be missed unless the kid requested DELETE or MOVE. BUILT as specified (the wake is an rm
     of the lock, or a MOVE of the sleeper). DEFERRED to slice 8, or ASK: should a SCAN plus REPAIR also wake it?
+    - BUILT in slice 8 with no change (THREAT, item 100): a kid who requests what ARRIVAL CONTROL tags reaches CURLEW with
+      DELETE and MOVE. "SCAN and REPAIR only" came from the old sweep's own sends, which requested nothing.
 28. **A locked pod that nothing aboard can free stops holding the landing open** (slice 5 review M3). BUILT in the fix
     pass. "Nothing" means no DELETE, too little charge to cure, and no DEAL left.
     - The pod parks locked, the landing ends the normal way, and the strip names it.
@@ -467,3 +475,61 @@ POLISH's calls (`docs/phase3/impl/slice-8-plan.md` §2.11, §2.12 and "Deviation
        whose boot is still to come keeps its letter unread.
      - To reverse the last two: `transmit.ts` passes `ship.colonists`, and `save-codec.ts migrateRunSave8` drops its
        `inbox.read` loop.
+
+## Slice 8 THREAT, built
+
+THREAT's calls (`docs/phase3/impl/slice-8-plan.md` §2.4–§2.7, §2.16 and "Deviations (Track THREAT)"). The lead renumbers them
+at CLOSE. Each says before → after, measured on the branch.
+
+97. **Disguised seeds: 1/2 from depth 5, 2/3 from depth 7** (§2.4; item 4). BUILT (`DISGUISE_CHANCE_BY_DEPTH`, from 1/3 and
+    1/2). A depth-5 run meets a decoy 24.6% → 33.0% of the time (`balance/decoy-stats`, 800 runs; the worked route 34.6%),
+    under the 40% target. The rate alone can't reach 40% without hiding nearly every deep seed (3/4 and 1: 43%), so §2.4's
+    fallback applies: **SENTRY v1 at 1 cycle**, ECONOMY's price (`data/skills.ts`), not built here. To reverse: 1/3 and 1/2.
+98. **A corrupted resident's bursts at amp 0.10** (§2.5; items 13, 24). BUILT (`RESIDENT_GHOST`, `_DELETING`, `_ANGRY`, from
+    0.15): it pushes 48% as hard as the arm's failing Thrust Ctrl (was 71%). Measured on GANNET, seeds 3–11, strip and
+    sloppy kids:
+    - ignored, the flight locks or accepts: 70% → 100% (3 SLOPPY flights stranded before, none now);
+    - ignored FUEL at the end 0.0% → 2.0%, 18 points under no resident: the pressure to act stays;
+    - accept, delete and cure within 1.6 points of no resident (was 3.5).
+
+    **Missed:** "FUEL ≥ 5% in 4 of 5 ignored flights" (10%). The FUEL left has a cliff: 0.08 gives 40%, 0.07 gives 80% but
+    only 6 points of pressure, and refusing the DEAL then costs almost nothing. **For Fran, a confirm:** 0.10 (ignoring it
+    costs the reserve, not the ship) or 0.07 (gentler). At 0.10 an angry resident (95% of a failing controller) no longer
+    outpushes a failing Thrust Ctrl on a ship that has both. To reverse: 0.15.
+99. **HOLD A WALL stands in a GAP** (§2.6; items 18, 25). BUILT (`resident-sleeper.ts wallSpot`, `SLEEPER_WALL_BLOCKS` 4 → 2,
+    MOTH's line `i'll stand in the gap. it won't get past me.`): MOTH.wall goes into a GAP (1 to 3 free blocks) between the
+    hostile block with the most drivers in reach and those drivers, flush against them, 2 blocks wide or the whole GAP when
+    it is narrower. §2.6 said 2–3 blocks; a beam seed lands 1 block from its target, so the 1-block GAP is the common one.
+    The job is offered only when such a GAP exists. Drivers "in reach" now stop at a WALL of free blocks (they counted
+    across one, so a seed by Telemetry won the spot over the seed by POD 01). sleeper-sweep's HOLLOW row (seeds 1,3,5,7,9):
+    drivers eaten with the wall less without 0.00 → −0.80, every driver bite stopped (4 → 0); −0.80 is that scenario's floor
+    (one bite per seed at most), so the plan's ≤ −1.0 can't be read there. To reverse: 4 and the old free-run spot.
+100. **Waking BARNABY stays rm or MOVE** (§2.7; item 27). BUILT with no change: a kid who requests what ARRIVAL CONTROL tags
+     reaches CURLEW with DELETE and MOVE and wakes the sleeper on 5 of 5 seeds (rm `sleep.lock`); 0 of 200 run-1 arms on a
+     random route through CURLEW arrive with neither. "SCAN and REPAIR only" came from the old sweep's own sends. REPAIR on
+     the sleeper still says `IT'S ASLEEP, NOT HURT`.
+101. **TRACE boarding is left as it is** (§2.16, G5 `board.trace.sloppy` 0%). NOTED, no change. On the worked route HOLLOW
+     is forced aboard at CORMORANT; a TRACE boarding one ship earlier needs 3 seeds left at KESTREL's end, which come in
+     0.8% of run-1 arms even if nobody deletes them, and SLOPPY deletes every seed the strip names. Neither
+     `BEAM_SEED_ODDS[1]` nor `TRACE_BOARD_AT` moves the row. **For the lead:** the row needs a kid who misses seeds, or
+     routes where HOLLOW is not forced next (HARNESS's).
+102. **Every lost ship and Core-dead run in the quick report is the playthrough's follower** (G2b, G5; R1). NOTED, for the
+     lead. On 5 seeds in 24 the beam into CORMORANT hurts Sensor Interp. The strip asks `hold [SPACE]` (F4), then
+     `PATH UNCERTAIN — [TAB], REPAIR SENSOR INTERP`, and the kid, still holding, never TABs (`wp12/playthrough.ts flyShip`:
+     `shipCall` stays true while it holds). It burns the tank and flies away, then again at LAST LIGHT. On seed 7 HOLLOW eats
+     the Core meanwhile. All three kids lose the same ships on the same seeds. One line in the follower (let go of SPACE on a
+     `[TAB]` line on the MIND layer) wins seeds 3, 7 and 8 with no ship lost. Not a threat number, and not THREAT's file.
+     A game-side question: should F1 say RELEASE first while a burn is held?
+103. **SLOPPY wins too often, and the threat ladder can't change that** (G1 79%, target 30–65%; G2b `lost1.sloppy`). ASK.
+     SLOPPY's only losses are item 102's seeds. In the MIND it does what the strip asks at 1.2 s (rm every seed, block every
+     verb, delete the root), so seeds and bites cost it pods (drivers eaten 8.5 per run, in band) but never a run. A PURGE that
+     lands no pod is a win (SLOPPY seeds 6, 19 and 22 land 0 of LAST LIGHT's 16 and win). The levers that could make a careless run lose are the duel
+     (`data/threats.ts`, WP11's block) and the win rule (R6, ENDINGS and Fran), not THREAT's blocks. **For Fran:** is 30–65%
+     the right band for a kid who follows every MIND line?
+104. **The busy CORMORANT loses its Core because the sweep's unit has no Rm** (survey-busy, seed 7; ECONOMY's finding). NOTED,
+     for the lead or ECONOMY. `survey/survey-sweep`'s `arrive` requests nothing at the desks, so the unit reaches CORMORANT
+     with no DELETE (`A SEED — no rm aboard`). The WP11 defender REPAIRs the bites until the charge is gone (about 220 AI
+     s), then HOLLOW eats the tools and, at about 345 AI s, the Core. The no-SURVEY landing ends just before that, and every
+     SURVEY landing a little after, so it looked like SURVEY's. With the worked kit (DELETE, MOVE) given at the flight's start,
+     none, v1 and v3 keep the Core and land all 9 pods. Not a threat number: the sweep should request what CONTROL tags, as
+     sleeper-sweep's `SLEEPER_KIT=route` does.

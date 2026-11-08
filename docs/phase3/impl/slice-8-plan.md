@@ -1131,3 +1131,176 @@ HIGH §2.6 moth.wall.Δeaten: MOTH.wall a 2-block blocker in a GAP (§2.6)
 sweeps (quick): playthrough 584 s · playthrough-no-autoburn-v2 255 s · playthrough-no-autoburn-v3 206 s · playthrough-no-autodrop 153 s · playthrough-no-sentry 154 s · sleeper-sweep 141 s · survey-sweep 232 s · last-landing-sweep 133 s · v3-sweep 337 s · traces-sweep 364 s · full-run 134 s · decoy-stats 13 s · signal-stats 6 s · survey-busy 66 s · corrupted-sweep 40 s · autodrop-sweep 140 s
 their own checks failed (numbers kept): full-run (exit 1), survey-busy (exit 1), corrupted-sweep (exit 1)
 ```
+
+## Deviations (Track THREAT)
+
+Branch `threat-8` from af1e1d4 (Step 0 HARNESS merged; RETIRE's last 9 classic suites still out), not pushed. Every number
+below was measured on this branch: the "before" column is the tree at af1e1d4 (or the Step 0 quick report where it says
+so), the "after" column the committed value. A/B copies via `balance/ab.mjs` decided each value before it went into `src/`.
+The machine was shared (load average 20–28 on 4 cores during the sweeps), so times are high; no number depends on time.
+
+**What changed** (OPEN-DECISIONS 97–99; 100–103 are findings):
+
+| Item | Change | Measure | Before | After | Target | |
+|---|---|---|---|---|---|---|
+| §2.4, OD 4 | `DISGUISE_CHANCE_BY_DEPTH` 1/3, 1/2 → **1/2, 2/3** | `decoy.run` (decoy-stats, 800 runs) | 24.6% | 33.0% | ≥ 40% | LOW: SENTRY v1 at 1 cycle is §2.4's fallback (ECONOMY) |
+| | | ships with a decoy, depth 5 / 6 / 7 | 14.7 / 9.8 / 9.7% | 20.9 / 14.1 / 12.4% | info | |
+| | | the worked route, P(≥ 1 decoy) | — | 34.6% | info | |
+| §2.5, OD 24 | `RESIDENT_GHOST*.amp` 0.15 → **0.10** | ignored flights that lock or accept (corrupted-sweep, seeds 3,5,7,9,11 × strip, sloppy) | 70% (3 SLOPPY flights stranded) | 100% | 100% | OK |
+| | | ignored flights ending with FUEL ≥ 5% (`res.ok.ignore`) | 0% | 10% | ≥ 80% | LOW (below) |
+| | | FUEL ignored under no resident (`res.press.ignore`) | 20.0 | 18.0 | ≥ 8 | OK |
+| | | worst of accept / delete / cure against no resident | 3.5 | 1.6 | ≤ 4 | OK |
+| | | `res.answerGap` as the sweep computes it (with refuse and block) | 20.0 | 20.0 | ≤ 4 | HIGH (below) |
+| §2.6, OD 25 | MOTH.wall in a **GAP**, `SLEEPER_WALL_BLOCKS` 4 → **2** | `moth.wall.Δeaten` (sleeper-sweep HOLLOW row, seeds 1,3,5,7,9) | 0.00 | −0.80 | ≤ −1.0 | the scenario's floor (below) |
+| | | driver bites, with the wall | 4 of 5 seeds | 0 | | |
+| §2.7, OD 27 | **none** | `sleeper.woken` (route kit, seeds 1,3,5,7,9) | 100% | 100% | 100% | OK |
+| | | sleeper reached with neither DELETE nor MOVE (200 run-1 arms) | 0% | 0% | info | |
+
+**The playthrough rows** (quick profile, 24 seeds × 3 kids, strip landings, worked route; "before" is Step 0's quick report,
+whose playthrough-relevant code is this branch's base):
+
+| # | Goal | Target | Before (Step 0) | After (ee2602f) | |
+|---|---|---|---|---|---|
+| G1 | COMPETENT wins | ≥ 90% | 79% | 79% | LOW (item 6) |
+| G1 | LITERAL wins | ≥ 80% | 79% | 79% | LOW (item 6) |
+| G1 | SLOPPY wins | 30–65% | 79% | 79% | HIGH (items 6, 7) |
+| G1b | SLOPPY ends sombre | ≥ 15% | 21% | 21% | OK |
+| G2b | COMPETENT ships lost per run | ≤ 0.1 | 0.4 | 0.4 | HIGH (item 6) |
+| G2b | SLOPPY loses ≥ 1 ship | ≥ 50% | 21% | 21% | LOW (items 6, 8) |
+| G2b | SLOPPY ships lost per run | ≤ 2.5 | 0.4 | 0.4 | OK |
+| G5 | SLOPPY boarded by TRACE | 15–35% | 0% | 0% | LOW (item 5) |
+| G5 | COMPETENT boarded by TRACE | ≤ 10% | 0% | 0% | OK |
+| G5 | drivers eaten per run, COMPETENT / SLOPPY | ≤ 2 / 4–12 | 0.3 / 8.5 | 0.3 / 8.5 | OK |
+| G5 | COMPETENT Core-dead runs | 0% | 4% | 4% | HIGH (item 6) |
+| G5 | COMPETENT Core lowest, median | ≥ 40 | 84 | 84 | OK |
+| G5b | a depth-5 run meets a decoy | ≥ 40% | 25% | 33% | LOW (item 1) |
+
+The playthrough rows did not move: the worked route has no resident and no sleeper, and the new disguise rate flips
+only the draws between 1/3 and 1/2 on CORMORANT's beam (depth 5), and every kid there owns SENTRY v1 by
+then (SLOPPY buys it as the cheapest cell), whose SIGHT names a decoy at boot. The playthrough took 1167 s at a load average of 25.
+
+**Deviations and findings.**
+1. **§2.4: the fallback triggers.** At 1/2 and 2/3, `decoy.run` is 33%. An A/B at 3/4 and 1 gives 43%, but then nearly every
+   seed from depth 5 hides, and a decoy stops being a surprise, so I kept the plan's rates. SENTRY v1 → 1 cycle is
+   `data/skills.ts`, ECONOMY's file and ECONOMY's price (the task's split): **ECONOMY or the lead applies it.** The tree then
+   loses a cycle with §2.1's movers (`SPEC_TREE_CYCLES`).
+2. **§2.5: 0.10 removes the stranding, not the empty tank.** The FUEL-left criterion has a cliff between 0.07 and 0.08
+   (GANNET, 5 seeds × 2 kids, A/B copies):
+
+   | amp | ignored, FUEL ≥ 5% | ignored FUEL | under no resident | refuse | block | accept / delete / cure |
+   |---|---|---|---|---|---|---|
+   | 0.15 (before) | 0% | 0.0 | 20.0 | 0.0 | 0.1 | 16.5 / 18.7 / 19.8 |
+   | **0.10 (built)** | 10% | 2.0 | 18.0 | 0.0 | 8.7 | 18.4 / 19.1 / 19.7 |
+   | 0.09 | 20% | 3.6 | 16.4 | 4.6 | 12.8 | 18.5 / 19.1 / 19.8 |
+   | 0.08 | 40% | 6.3 | 13.7 | 9.0 | 17.0 | 18.6 / 19.1 / 19.9 |
+   | 0.07 | 80% | 13.8 | 6.1 | 15.1 | 17.2 | 19.1 / 19.3 / 19.9 |
+   | 0.05 | 100% | 17.5 | 2.5 | 17.5 | 17.9 | 19.2 / 19.7 / 19.9 |
+
+   No amp meets both "FUEL ≥ 5% in 4 of 5" and "≥ 8 points under no resident". The plan's 0.10 is the lead's adopted value,
+   and it fixes OD 24's harsh part: no ignored flight strands any more (each locks its orbit, 5 pods down, 2 parked locked),
+   and every real answer is within 2 points of no resident. The tank is still empty at the lock. **For Fran, a confirm:**
+   0.10 (the pressure stays: ignoring costs the whole reserve) or 0.07 (gentle: ignoring costs about 4 points, and refusing
+   the DEAL becomes nearly free). The plan's other fallback, "bursts stop after the first lock", is not needed for
+   stranding, so I did not build it.
+   - `res.answerGap` (the sweep's own row) counts REFUSE and BLOCK as answers. Neither silences the resident (REFUSE makes it
+     angry), so the row stays HIGH at every amp above 0.07. The lead may want the row to read accept, delete and cure only
+     (`residents/corrupted-sweep.test.ts`'s `answers`; HARNESS's hunk, so I left it).
+   - At 0.10 an angry resident pushes 95% as hard as a failing Thrust Ctrl, so on a ship with both, the composite now fires
+     the controller's (it fires whichever pushes harder). `residents/corrupted-model` checks the resident branch against a
+     degraded controller instead.
+   - The two push checks move: `residents/foundation` and `residents/corrupted-model` (71% → 48%).
+3. **§2.6: the GAP rule takes a 1-block GAP too.** §2.6 said a GAP of `FIREWALL_BLOCKS` (2) to 3. A beam seed lands
+   `SEED_GAP_TO_TARGET_BLOCKS` (1) from its target, so the commonest hostile next to a driver leaves a 1-block GAP, and a
+   2-to-3 rule would never offer the job there (the sweep's planted seed is one). MOTH.wall is `SLEEPER_WALL_BLOCKS` (2)
+   wide, or the whole GAP when it is narrower. The job is also not offered when the file past the GAP is not food.
+   - **A bug the measure found:** `wallSpot` counted "drivers in reach" across WALLs of free blocks, so a beam seed next to
+     Telemetry won the spot over the seed next to POD 01 (6 "drivers" beyond a 45-block run). It now stops at a WALL. With
+     that fix, the wall stops every driver bite (4 → 0).
+   - `moth.wall.Δeaten` is −0.80, not ≤ −1.0, because the scenario has at most one driver bite per seed (seed 3 has none).
+     The wall stopped all of them, so −0.80 is the scenario's floor. A stricter row needs a scenario with more bites
+     (two planted seeds), which is HARNESS's sweep.
+   - `residents/sleeper` (quick) moves to the GAP rule: no offer beside a WALL; the GAP of 3 (2-block wall flush against
+     POD 05, the seed's reach then `blocked`, 60 s of bites never reach a driver); a 1-block GAP.
+   - `KIN_TEXT.sleeper.jobLine.wall`: `MOTH: i'll stand in the gap. it won't get past me.`
+4. **§2.7: OD 27 is closed with no change**, as the task said: the route's kit wakes the sleeper 100% (5 seeds, each by rm
+   sleep.lock) and 0 of 200 run-1 arms reach CURLEW with neither DELETE nor MOVE. The REPAIR wake is not built, and
+   `TOOL_REFUSAL.sleeperRepair` (`IT'S ASLEEP, NOT HURT`) stays.
+5. **G5 `board.trace.sloppy` (0%, LOW): no change; neither §2.16 lever can move it on the worked route.**
+   - On the worked route HOLLOW is forced aboard at CORMORANT (depth 5, one hop from LAST LIGHT). A TRACE boarding changes
+     anything only if it comes one ship earlier, at VESPER, which needs TRACE 3 after KESTREL: 3 seeds left in memory at
+     KESTREL's end (the beams into ARES-VII and HALCYON carry none, `SEEDS_MIN_DEPTH`). At CORMORANT itself 'trace' and
+     'forced' are the same boarding with a different label. The same holds for tight; on r5 the first seeded ship is
+     already the one before the forced ship, so r5 never boards by TRACE early (0 of 200 arms).
+   - KESTREL's beam noise over 200 run-1 arms is 0 / 1 / 2 / 3 on 126 / 50 / 22 / 2 arms, so 3 seeds on it come in 0.8% of
+     runs even with nobody deleting. `BEAM_SEED_ODDS[1]` gives noise 1 no 3-seed draw at all.
+   - And SLOPPY rm's every seed the strip names (it has DELETE by KESTREL), as COMPETENT does, so TRACE stays 0 for both.
+     TRACE counts seeds *left*; only a seed the kid can't see or can't reach would raise it. Raising the odds until 3 seeds
+     are common at noise 1 would give every kid more seeds to delete, and SLOPPY still none left.
+   - `TRACE_BOARD_AT` 3 → 2 is a word on screen (`TRACE ■■□`) and still needs seeds left.
+   - **For the lead:** on run 1 the row measures a rare event, not SLOPPY's carelessness. It needs a kid who misses seeds
+     (a SLOPPY that rm's only after the first bite, say) or routes where HOLLOW is not forced next (an 8-ship route: r8 has a
+     seeded beam early enough on 162 of 200 arms). Both are HARNESS's.
+6. **COMPETENT's lost ships and Core-dead runs are the playthrough's follower, not the threat (R1).** I read the traces of
+   COMPETENT seeds 3 and 7 (`PT_TRACE=1`): on seeds 3, 7, 8, 13 and 15 the beam into CORMORANT hits Sensor Interp
+   (100 → 45). The strip says `DON'T HIT THE PLANET — hold [SPACE]`, the kid holds, and 2.5 s later the line becomes
+   `PATH UNCERTAIN — [TAB], REPAIR SENSOR INTERP`. `wp12/playthrough.ts flyShip` keeps `shipCall` true while it holds, so
+   the kid never TABs or lets go, burns the whole tank and flies away. The sensor is still hurt at LAST LIGHT, and the same
+   thing happens there; on seed 7 HOLLOW then eats the Core while the kid holds (`CORE INFECTED — [TAB]` unread). The
+   three kids lose exactly the same ships on the same seeds, which is how it shows. All 10 lost ships in the quick report
+   are this path, and so is the one Core-dead run.
+   - A probe copy of the playthrough with one line in `react` (a `[TAB]` line on the MIND layer while holding lets go of
+     SPACE) wins seeds 3, 7 and 8 with no ship lost and no Core-dead run.
+   - `playthrough.ts` is HARNESS's file (the lead's after Step 0), so I did not change it. **For the lead:** the line, in
+     `react` before the RELEASE rule:
+     `if (line.layer === 'mind' && holding && /\[TAB\]/.test(text)) { setHolding(false); return; }`.
+     There is a game-side question too: while a burn is held under F4-keep, should F1 say RELEASE first? A real kid
+     probably lets go when the line stops saying KEEP HOLDING, but nothing on the strip says so.
+   - With that fixed, COMPETENT's G2b and G5 Core-dead rows should read about 0, and every kid's win rate rises by
+     about 5 seeds in 24 (21 points), SLOPPY's included (item 7).
+6b. **The busy CORMORANT's Core loss (survey-busy, seed 7, ECONOMY's report) is the sweep's kit, not SURVEY or the threat.**
+   `survey/survey-sweep`'s `arrive` beams the unit desk to desk without requesting anything, so it reaches CORMORANT with no
+   Rm (the strip says `A SEED — no rm aboard` from the first seconds). The WP11 defender can only REPAIR the bites: the
+   charge runs from 47 to 0 by about 220 AI s, then HOLLOW eats the tools and, at about 345 AI s, the Core. The no-SURVEY
+   flight's landing ends at about 330 AI s, just before that; every SURVEY flight lands a little longer (its LZ moves and
+   waits) and loses the Core first. The sweep then waits out `followLanding`'s 900 wall s, hence ECONOMY's "about 1170
+   wall seconds". A probe copy that gives the unit DELETE and MOVE at the flight's start (the worked route's kit,
+   `WORKED_KIT`) flies none, v1 and v3 with no Core loss, all 9 pods landed, each to its report. **For the lead or ECONOMY:**
+   `arrive` should request what CONTROL tags at each desk (`send(..., recommendation(...))`, as sleeper-sweep's
+   `SLEEPER_KIT=route` does) or give the worked kit; this is the same artifact as OD 27's "SCAN and REPAIR only".
+7. **SLOPPY wins too often, and THREAT has no lever for it on the worked route.** SLOPPY's five lost runs in the quick
+   report are item 6's five seeds. Every other SLOPPY run is won (PURGE), even runs that land 0 of LAST LIGHT's 16 pods
+   (seeds 6, 19 and 22 at Step 0). In the MIND, SLOPPY does what the strip asks at 1.2 s: it rm's every seed the strip
+   names, blocks every verb and deletes the root, so the ladder's bites cost it pods (G5 drivers eaten 8.5, OK; G2 pods 67%,
+   OK) but never the run. What could make a careless run lose, and whose it is:
+   - TRACE boarding earlier: as good as impossible on the worked route (item 5).
+   - Bigger or faster seeds (`BEAM_SEED_*`): §2.16 moves them only if `eaten.sloppy` misses, and it is in band. Seeds
+     never cost SLOPPY a run, since it rm's them when the strip asks.
+   - The FINALE's verbs and the root (`data/threats.ts`, WP11's block): the only place a strip-following kid can lose the run.
+     They are not THREAT's blocks.
+   - G1's win rule (R6): a PURGE that lands no pod is a win. A sombre ending for a flagship landing under some share would
+     make SLOPPY's careless landings count. That is ENDINGS' and Fran's.
+   - **For the lead and Fran, an ASK:** is SLOPPY's 30–65% the right target for a kid who follows every MIND line? If
+     yes, the lever is the duel or the win rule, not the threat ladder.
+8. **G2b `lost1.sloppy` (21%, LOW)** is the same as item 6: SLOPPY loses no ship of its own. Nothing THREAT owns loses a
+   careless kid a ship on the worked route without also eating COMPETENT's: the corrupted resident (GANNET) and the sleeper
+   (CURLEW) are not on it.
+9. **Files outside §4.2's list:** `src/systems/capabilities.ts` (one comment: the resident's push is "about half" now),
+   `tests/unit/map/ghost-noswap.test.ts` (a mover: at 0.10 an angry resident no longer outpushes a failing controller, so its
+   resident-branch check uses a degraded one), and `residents/foundation`, `residents/corrupted-model` (push checks).
+   Probe copies of the playthrough and survey-sweep are in `.tmp/threat/` (ignored), not committed.
+10. **Spec text (R10), for the lead to apply:**
+    - 04 §3.6 (line 238): "From depth 5, one beam seed in two arrives disguised; from depth 7, two in three."
+    - 04 §3.12 (line 420): "Ignoring it costs fuel and drift (about half an unfixed VESPER: by ORBIT LOCK it has emptied
+      the tank) plus the locked pods."
+    - 04 §3.14 (line 480): "**HOLD A WALL**: it stands in the GAP between the hollow block or seed with the most drivers in
+      reach and those drivers, a 2-block blocker (FIREWALL rules; the whole GAP when it is narrower), for the rest of the
+      ship. It is offered only when such a GAP exists."
+11. **OPEN-DECISIONS drafts** are in the file as items 97–103 under "Slice 8 THREAT, built", and items 4, 24, 25 and 27
+    each carry a BUILT line.
+12. **SENTRY v1's price.** I ship the plan's rates (1/2, 2/3: 33%), not the 3/4-and-1 A/B (43%), so ECONOMY's SENTRY v1 at 1
+    cycle stands.
+13. **Tests.** `npm run typecheck` clean. The quick tier: 226 passed, 1 failed (`map/ghost-noswap`, the mover above, fixed
+    in ec9b7dc and green alone with tsc-tests: 19/19), 15 balance-only skipped, in **471 s** on 4 workers at a load average
+    of 16.5 at the start and 12 at the end (RETIRE and ENDINGS running). That is over the 300 s budget only because of the
+    shared cores; no suite of mine got slower (`residents/sleeper` adds two small parts). The lead should re-time it on a
+    quiet machine. e2e `residents.mjs` alone: 29/29 in 179 s.
