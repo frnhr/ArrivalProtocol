@@ -246,3 +246,30 @@ Status words:
     endings, echoes and refusal), the RUN TALLY's own NEW RUN, endings line and bridge, the title's `ENDINGS n/2`, and
     `__ap.choose` / `__ap.endingLines`. `ENDINGS_BUILT` keeps only `contact` (7d). Not reversible by a flag: restoring a
     one-step FINALE would mean restoring that code from git (before 60a47be).
+
+## Slice 7b, built
+
+The 7b review's gameplay calls (`docs/phase3/impl/slice-7b-review.md`; the plan's "Deviations (7b review fixes)"). 7c may
+number its own items from 60 too; renumber at the merge.
+
+60. **No drop solution during THE LAST LANDING drops the pods blind** (review M1; 01 §3.17, R27). With Nav Plotter dead or
+    missing, the drop cache still solves the geometry while THE LAST LANDING runs (the pods' own motors find their fall),
+    its dot grey and uncertain, and every pod drops blind (±(W/2 + 150 km), ×2 spread). A flier that loses the plotter
+    mid-landing (a belt hit; the MIND is shut, so nothing repairs it) turns blind for the pods left, and the strip says so.
+    It used to end the landing after 6 s with the pods parked. To reverse: drop `plotted` in `drop-cache.ts recompute` and
+    the switch in `last-landing.ts tick`.
+61. **Out of the band, THE LAST LANDING still parks the pods** after `LANDING_NONE_LEFT_SEC` (review m3). 01 §3.17 lists "the
+    ship out of the band" under the blind drop. Kept because the band is the one rule every launch meets, a launch from
+    outside it would need its own refusal and window rules, and the engine is shut there (57), so nothing the kid does
+    changes it. To build 01's version: let a blind `'merge'` launch skip OUT OF THE LAUNCH BAND and let `nextTurn` take
+    windows with no in-band part.
+62. **Bay Ctrl missing does not end THE LAST LANDING** (review B2). Its pods leave from no bay (R26), so `landingStuck`'s
+    `'bay-offline'` does not apply while it runs.
+63. **A ship lost during THE LAST LANDING takes it along** (review B3). The landing ends `'ship-lost'`, the restored pods
+    still aboard are NOT LAUNCHED, the machine clears to `'done'` in the post tick, and the LOST card's run end follows
+    (`flagship-lost`). The header and the POD BAY row paint nothing then.
+64. **The kid's AUTODROP is shut while MERGE flies** (review M2). [G] (and the POD BAY's [G]) is refused `MERGE IS FLYING THEM
+    — [ENTER] SKIPS TO THE END`, and the pass's [−]/[+] do nothing (dimmed). MERGE's v2 flies its own pass
+    (`LastLandingState.pass`); the kid's AUTODROP machine is never written during THE LAST LANDING.
+65. **The suites' instant landing leaves THE LAST LANDING to fly** (review M3). `wp11/full-run`, `wp12/playthrough` and
+    `wp11/p2/views` play R27's rules after a MERGE instead of landing the restored pods soft in an LZ with room.

@@ -2370,3 +2370,69 @@ no tuning number (the `7b VIEW` block stays empty). The unit tier is green: 214 
   falling pod). With the guard, the check stages by `forceLandAll` or DROP's machine instead.
 - **The lead (e2e, §6.4):** the header strip (`#lastLanding`, hidden through 7a's interim), `.pb-restored`,
   `.np-beacon.restored` and `.lr-row.kind-restored` are the selectors to check once DROP's machine flies.
+
+## Deviations (7b review fixes)
+
+Recorded by the 7b review-and-fix agent (on `claude/modest-hawking-209t0f`, from 9a7b3eb). The findings are in
+`slice-7b-review.md`; the gameplay calls are OPEN-DECISIONS 60–65 ("Slice 7b, built"). **No save bump**:
+`LastLandingState.pass` is new, and the machine still never reaches a save. Commits: 7954f3b (B1, B2, B3, M1, M2), a73021d
+(M3), 9299e96 (M4 and the new e2e), 6970f3e (MERGE with no driver eaten: a check), and the docs commit.
+
+### How each finding was fixed
+
+- **B1 (tsc-tests red).** `ending/last-landing-models`' hand-built machine has DROP's fields. The foundation suite's gains
+  `pass: null`.
+- **B2 (Bay Ctrl missing parked every restored pod).** `landing-rules.ts landingStuck` gives no `'bay-offline'` while
+  `landing.lastLanding` is set (R26: no bay). OPEN-DECISIONS 62.
+- **B3 (a ship lost mid-landing).**
+  - `last-landing.ts lostTick`, on the post tick (it runs while the clock is paused under the LOST card), calls `finish` once
+    the landing ended `'ship-lost'`: the machine is cleared, the phase is `'done'`, and the layer goes down.
+  - `last-landing-hud.ts restoredPodStates` returns null on a `'ship-lost'` landing, so the strip and the POD BAY row hide
+    instead of throwing on the NOT LAUNCHED pods. Any other pod that leaves the orbit still throws.
+  - OPEN-DECISIONS 63.
+- **M1 (no drop solution parked the pods).**
+  - `drop-cache.ts recompute` solves with `plotted = caps.drop.solution || landing.lastLanding !== null`. The dot is
+    `uncertain` when the plotter is down.
+  - `startLastLanding` names the flier blind when `capabilities.drop.solution` is false, as well as on the old rules.
+  - The AI tick turns a v1/v2/v3 flier blind when the plotter is lost: `flier`, `autodropUntilTSec`, `target` and `pass` are
+    reset.
+  - `autodropFlies` also needs the solution.
+  - The ship out of the band keeps DROP's stuck rule (OPEN-DECISIONS 61). OPEN-DECISIONS 60.
+- **M2 (the POD BAY's [−]/[+] reached MERGE's pass; v2 wrote the kid's machine).** DROP's optional cleanup was taken:
+  - `autodrop.ts AutodropOverride` gains `pass?: AutodropPassFields` and `view?: (state, view) => LandingView`.
+    `inPassOf`, `passWant`, `passVolley`, `decidePass` and `armedNext` take the pass fields (the kid's machine by default).
+    The wrapper's `decide`, `nextLaunchAtTSec` and `waitsFor` all read the mapped view.
+  - `types/ending.ts LastLandingState.pass: LastLandingPass | null` (`pass`, `sent`, `armedAtTSec`) is v2's own pass.
+    `passTick` writes it, and `finish` no longer touches `landing.autodrop`. DROP's Deviation 4 is gone.
+  - `lastLandingController` passes `pass` and `view: lastLandingView`. Its wrapper only adds the always-SKIP between windows.
+  - `pressAutodrop` is refused `'MERGE FLYING'` (a new `AutodropRefusalWord`, worded as the launch's). `setPassCount` does
+    nothing while MERGE flies. `landing.css` dims `.pb-pass-step` with the other shut buttons.
+  - `autodropLaunched`'s off-site change was not needed (v1 and blind still launch from the machine's tick).
+  - OPEN-DECISIONS 64.
+- **M3 (the harness gap).** `support/landing-instant.ts tick` returns while `landing.lastLanding` is set, so the machine
+  flies itself. OPEN-DECISIONS 65.
+- **M4 (`ending.mjs` part 2 played 7a's interim).** Part 2 checks 7b's `NOW:` line, THE LAST LANDING with the engine shut,
+  and [ENTER] to its end. `last-landing.mjs` is new.
+- **Minors:** m1 ([ENTER] freezes the page for about 2 s on 3 blind pods) is OPEN for the lead. m2 (`not-built.ts` kept
+  for 7c), m4 (`setLoadNext` on a radio pod, debug only) and m5 (the start event's flier) are NOTED. m3 is OPEN-DECISIONS 61.
+- **`ending/last-landing`** gains these checks:
+  - the v2 pass on the machine's own fields, with the kid's [−]/[+] and [G] refused;
+  - Nav Plotter dead: blind, on the grey geometry, every pod down;
+  - Nav Plotter killed mid-landing: blind from there;
+  - Bay Ctrl missing: nothing ends early;
+  - MERGE with no driver eaten: no LAST LANDING;
+  - the ship lost mid-landing.
+  The old "no drop solution parks the pods" check is replaced. `last-landing-arm.ts armLastLanding` accepts `eaten: 0`.
+
+### Tests
+
+- `npm run typecheck` and the tests' tsc are clean.
+- **The quick tier, once after the fixes:** 214 passed, 0 failed, 12 balance-only skipped, **190 s** on 4 workers (budget
+  265 s). The 1-minute load average was 5.65 at the start (typecheck had just run, and 7c's agent may have been busy) and
+  7.66 at its peak (sampled every 15 s). At 9a7b3eb it was red (B1): 181 s, with the load going from 0.06 to 7.52.
+  - `ending/last-landing` 21.3 s (19 s at 9a7b3eb), `ending/finale-flow` 10.1 s, `wp11/p2/views` 8.5 s.
+- **`wp11/full-run` (BALANCE_ONLY, `--full`):** green, 319 s, with the instant landing standing aside.
+- **`wp12/playthrough` (`--full`, `PT_SEEDS=8`):** the same table before and after M3's change. Its 6 LITERAL and 6 SLOPPY
+  `stuck:printing on LAST LIGHT` runs (PURGE runs) are identical at 9a7b3eb and at 53ca68a, so they come from before 7b. They
+  are for the lead.
+- **e2e (Chromium, each scenario alone):** `last-landing` 19/19 (83 s), `ending` 29/29 (276 s). There were no page errors.
