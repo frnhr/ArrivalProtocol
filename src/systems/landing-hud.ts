@@ -1,3 +1,5 @@
+// Slice 7b: the lead owns this file (slice-7-plan.md §4.2): the launchDrivers swap (R24) and the beacons' `restored` (R29:
+// THE LAST LANDING's pods ride as steady amber beacons; Track VIEW draws them in plot-landing.ts).
 // Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §5): the GROUND TRACK's survey hooks (Track SITES's
 // models in systems/survey-hud.ts: the candidate brackets and the unmapped rim). Slice 4c–4e's Track DROP parts stand:
 // bayWindowModel.autodrop, the AUTODROP pip, the plan table's model. Others ask by message.
@@ -8,7 +10,7 @@ import type {
 } from '@/types/landing';
 import type { BurnPoint, Prediction, PredictOutcome } from '@systems/predict';
 import { elementsFromState, propagateConic, semiMajorAxis, type OrbitState, type Vec2 } from '@/types/orbit';
-import { driversInMemory, getByRole } from '@state/selectors';
+import { getByRole, launchDrivers } from '@state/selectors';
 import { angleDelta, dropHalfWidthKm } from '@systems/landing-solve';
 import { capabilitiesNow, skillLive, BAND_COPY, type Band, type Capabilities } from '@systems/capabilities';
 import { dragLineKm } from '@systems/landing-orbit';
@@ -237,13 +239,17 @@ export function landMarks(state: Readonly<GameState>): LandMark[] {
 
 // The pods parked in orbit (§3.10), riding the ship's orbit as small blinking beacons, BEACON_LAG_FRAC of a period
 // apart behind the ship (they left it when the landing ended).
+// Slice 7b (R25, R29): during THE LAST LANDING the restored pods still to fly (released: aboard, with a driver by radio) ride
+// as beacons too, `restored` (steady amber, 01 §3.17), in pod order with the parked ones.
 export interface Beacon {
   pod: number;
   pos: Vec2;
+  restored: boolean;
 }
 
 export function parkedBeacons(state: Readonly<GameState>): Beacon[] {
-  const parked = state.landing.pods.filter((record) => record.fate.kind === 'parked');
+  const radio = new Set(state.landing.lastLanding?.drivers.map((driver) => driver.pod) ?? []);
+  const parked = state.landing.pods.filter((record) => record.fate.kind === 'parked' || (record.fate.kind === 'aboard' && radio.has(record.pod)));
   if (parked.length === 0) return [];
   const { mu } = state.level.planet;
   const el = elementsFromState(state.orbit, mu);
@@ -253,7 +259,7 @@ export function parkedBeacons(state: Readonly<GameState>): Beacon[] {
   return parked.map((record, i) => {
     // Behind the ship by (i + 1) lags: forward by the rest of the period.
     const at = propagateConic(state.orbit, mu, period * (1 - BEACON_LAG_FRAC * (i + 1)));
-    return { pod: record.pod, pos: { x: at.x, y: at.y } };
+    return { pod: record.pod, pos: { x: at.x, y: at.y }, restored: radio.has(record.pod) };
   });
 }
 
@@ -844,7 +850,7 @@ export function bayWindowModel(
   const bayHidden = bayFile !== null && (bayFile.type === 'ship' || bayFile.type === 'ship-backup') && !bayFile.scanned;
   const ctrlBand: Band | 'unknown' = ctrlOffline ? 'missing' : bayHidden ? 'unknown' : caps.bay.band;
   const noGoWords = [...new Set(landing.noGo.map((arc) => arc.word))];
-  const launchable = new Set(driversInMemory(state).filter(isLaunchable).map((driver) => driver.pod));
+  const launchable = new Set(launchDrivers(state).filter(isLaunchable).map((driver) => driver.pod));
   const cantLaunch = aboard.filter((record) => !launchable.has(record.pod)).length;
   const endRefusal = endLandingRefusal(state, outcome);
   return {
@@ -927,7 +933,7 @@ export interface FooterPods {
 }
 
 export function footerPods(state: Readonly<GameState>): FooterPods {
-  const launchable = new Set(driversInMemory(state).filter(isLaunchable).map((driver) => driver.pod));
+  const launchable = new Set(launchDrivers(state).filter(isLaunchable).map((driver) => driver.pod));
   let aboard = 0;
   let landed = 0;
   let cantLaunch = 0;

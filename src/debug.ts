@@ -1,3 +1,5 @@
+// Slice 7b: the lead owns this file (slice-7-plan.md §2.12): __ap.lastLanding() and .skip() (the machine is Track DROP's,
+// systems/last-landing.ts); __ap.ending skips THE LAST LANDING once its gate is up.
 // Slice 7a: the lead owns this file (docs/phase3/impl/slice-7-plan.md §2.12): __ap.finale's options and actions, __ap.ending,
 // __ap.night and archiveAs's ending; their bodies' rules are the tracks' (finale.ts, ending-rules.ts, epilogue.ts).
 // Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §2.15, §5); the 4c–4e, slice 5 and slice 6 hooks'
@@ -97,10 +99,12 @@ import {
   pickStep1, pickStep2, pickStay, backToStep1, continueFollowed, decideFinaleNow,
 } from '@systems/finale';
 import { optionState, type OptionState } from '@systems/ending-rules';
+import { skipLastLanding } from '@systems/last-landing';
+import { LAST_LANDING_BUILT } from '@data/last-landing';
 import { epilogueModel, finalCardModel, type EpilogueModel, type FinalCardModel } from '@systems/epilogue';
 import { parseEnding } from '@systems/meta-parse';
 import { STEP1_OPTIONS, step2Options } from '@data/endings';
-import type { EndingPiece, EndingRecord, HollowChoice, HollowFate, YouChoice, RunEndStage } from '@/types/ending';
+import type { EndingPiece, EndingRecord, HollowChoice, HollowFate, YouChoice, RunEndStage, LastLandingState } from '@/types/ending';
 import { glitchBurst } from '@systems/glitch';
 import { infectedSegments, fileLabel } from '@state/selectors';
 import type { HollowState } from '@state/schema';
@@ -407,6 +411,9 @@ interface DebugHooks {
   finale: FinaleDebug;
   ending: (hollow: HollowFate, you: YouChoice, opts?: { stay?: number }) => void;
   night: () => { stage: RunEndStage; epilogue: EpilogueModel | null; card: FinalCardModel | null };
+  // Slice 7b (§2.12): THE LAST LANDING's machine (null when it is not running) with the FINALE's phase and the gate; skip is
+  // its [ENTER] (Track DROP's skipLastLanding: throws until built).
+  lastLanding: LastLandingDebug;
   skipEnding: () => boolean;
   // WP11 part 2: the game's events lately (name and payload, newest last; DEBUG_EVENT_KEEP of them), so a browser run
   // can count what happened (belt hits on racks A–B, BLOCKED, the duel's spikes) without a listener of its own.
@@ -451,6 +458,12 @@ interface FinaleDebug {
   pick: (step: 1 | 2, piece: EndingPiece, stay?: number) => string | null;
   back: () => string | null;
   cont: () => string | null;
+}
+
+// __ap.lastLanding: THE LAST LANDING's state, and its [ENTER] (slice 7b, §2.12).
+interface LastLandingDebug {
+  (): { state: LastLandingState | null; phase: GameState['hollow']['finale']['phase']; built: boolean };
+  skip: () => void;
 }
 
 // __ap.archiveAs's ending (slice 7a): a won or unresolved cause's step 1, as META 4's migration reads it.
@@ -1185,13 +1198,21 @@ export function mountDebug(store: Store<GameState>): void {
       // Track FINALE's body: the landing landed (as landAll does), then the FINALE decided through the real picks.
       if (store.getState().landing.ended === null) forceLandAll(store);
       decideFinaleNow(store, hollow, you, opts?.stay);
-      if (store.getState().hollow.finale.phase === 'last-landing') forceLandAll(store);
+      // MERGE's restored pods: THE LAST LANDING skipped to its end (7b, gate up), else 7a's reopened landing landed.
+      if (store.getState().hollow.finale.phase === 'last-landing') {
+        if (LAST_LANDING_BUILT) skipLastLanding(store);
+        else forceLandAll(store);
+      }
     },
     night: () => {
       const state = store.getState();
       const meta = state.archive.status === 'ok' ? archiveMeta() : null;
       return { stage: state.ui.runEndStage, epilogue: epilogueModel(state, meta), card: finalCardModel(state, meta) };
     },
+    lastLanding: Object.assign(() => {
+      const state = store.getState();
+      return { state: state.landing.lastLanding, phase: state.hollow.finale.phase, built: LAST_LANDING_BUILT };
+    }, { skip: () => skipLastLanding(store) }),
     skipEnding: () => skipFinaleEnding(store),
     events: (name) => recentEvents.filter((event) => name === undefined || event.name === name),
     glitch: (level, ms) => glitchBurst(level, ms),

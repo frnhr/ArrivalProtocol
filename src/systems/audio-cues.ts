@@ -1,3 +1,4 @@
+// Slice 7b: the lead owns this file (slice-7-plan.md §4.2): Track VIEW changes cues in the 7b LAST LANDING block.
 // Slice 7a: the lead owns this file (slice-7-plan.md §4.1): Track CARD and Track NIGHT change cues in the 7 ENDING block.
 // Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §5); a track may change the cue on its own events'
 // lines only (the 4c, 4d and 4e blocks, slice 5's resident block, and slice 6's survey block, Track SITES's to tune, at the
@@ -395,6 +396,13 @@ export function mountAudioCues(store: Store<GameState>): () => void {
     on('epilogue-line', () => play('typeTick', { voice: 'sys' })),
     // (end of NIGHT's cues)
     // --- end of 7 ENDING ---
+
+    // === Slice 7b (slice-7-plan §2.5): existing cues only; Track VIEW may change THE LAST LANDING's cues on these lines.
+
+    // --- 7b LAST LANDING. The drivers come back on the radio's sweep. Its end plays nothing of its own: the last restored
+    // pod's touchdown rings 'all-pods-down''s lockArp already (a bell needs an LZ, and a second one reads as a second pod).
+    on('last-landing-start', () => play('transmitIn')),
+    // --- end of 7b LAST LANDING ---
   ];
   offs.push(onPostTick(() => playedThisTick.clear()));
 

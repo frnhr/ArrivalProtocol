@@ -1,0 +1,23 @@
+// Slice 7b: Track VIEW owns this file (docs/phase3/impl/slice-7-plan.md §2.9, §4.2). Data only (support/import-guard); each
+// line ≤ 70 characters at its worst case (support/words.test's 7b VIEW block). The FOUNDATION seeded it with §2.9's and
+// 01 §3.17's words; VIEW may reword them. Track DROP reads `radio` (the TERMINAL's line per pod, said as THE LAST LANDING
+// starts); VIEW reads the rest (the header strip, the POD BAY's row, the report's row and credits).
+import { podTag } from '@data/pod-ids';
+import { formatCount } from '@data/format';
+
+export const LAST_LANDING_TEXT = {
+  // The header strip over the SHIP view while THE LAST LANDING flies (01 §3.17), and its hint (R28).
+  header: 'THE LAST LANDING',
+  skipHint: '[ENTER] SKIP TO THE END',
+  // The TERMINAL, one line per restored pod (01 §3.17): `> pod07 ... DRIVER RESTORED · OKAFOR`.
+  radio: (pod: number, family: string): string => `> ${podTag(pod)} ... DRIVER RESTORED · ${family.toUpperCase()}`,
+  // The POD BAY window's row (R29): `RESTORED 4`.
+  bayRow: (count: number): string => `RESTORED ${formatCount(count)}`,
+  // The report's RESTORED BY MERGE row's counts, in pods (R29): `4 RESTORED · 3 LANDED · 1 OFF-SITE`. A part with 0 is left
+  // out; the first always stands.
+  reportRow: ({ restored, landed, offSite, noGo }: { restored: number; landed: number; offSite: number; noGo: number }): string =>
+    [`${restored} RESTORED`, landed > 0 ? `${landed} LANDED` : '', offSite > 0 ? `${offSite} OFF-SITE` : '', noGo > 0 ? `${noGo} NO-GO` : '']
+      .filter((part) => part !== '').join(' · '),
+  // A restored pod's credit on the report (R29), after its place.
+  credit: ' (restored)',
+} as const;

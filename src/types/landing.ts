@@ -248,6 +248,9 @@ export interface DropFactors {
   sensor: number;
   plotter: number;
   driver: number;
+  // Slice 7b (R27): THE LAST LANDING's blind drop, ×BLIND_DROP_MULT (no unit steers the pod's motor); absent: 1. Set only
+  // on a launch record's factors (landing.ts launchRecordFor, for a 'merge' intent with `blind`), never on the solution's.
+  blind?: number;
 }
 
 // Where a pod launched now would land: the dot's centre, its half-width, and whether the ship is in the launch band.
@@ -302,6 +305,9 @@ export interface LaunchIntent {
   source: LaunchSource;
   pod?: number;                    // a specific pod, else nextToLaunch
   confirmed?: LaunchAsk;           // the inline confirm was answered for this ask
+  // Slice 7b (R27): THE LAST LANDING drops this pod blind (its spread ×BLIND_DROP_MULT). 'merge' only, and only while
+  // landing.lastLanding is set: otherwise it throws (landing.ts requestLaunch).
+  blind?: true;
 }
 
 // In the order launchRefusal checks them. BAY OFFLINE: Bay Ctrl missing (§3.4); its words on screen avoid "offline"

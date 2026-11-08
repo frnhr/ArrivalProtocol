@@ -1,3 +1,5 @@
+// Slice 7b: the FOUNDATION swapped its drivers-to-launch reads to selectors launchDrivers (slice-7-plan R24: THE LAST
+// LANDING's radio drivers are never in memory); nothing else here changed.
 // Slice 4c–4e: Track DROP owns this file (docs/phase3/impl/slice-4cde-plan.md §2.1, §3.2–§3.4, §3.6, §7.2). Pure: AUTODROP's
 // volleys, the bay's count by a moment, v2's pass rows, v3's plan and the drop demos' offsets (03 §3.3, §3.8; 01 §3.2–§3.4).
 // Everything reads the state and the cached drop solution (LandingView) and changes nothing, so the controller
@@ -17,7 +19,7 @@ import type { BayState, DropSolution, LandingView, LaunchRecord, LzState, LzWind
 import { capabilitiesNow } from '@systems/capabilities';
 import { dropHalfWidthKm } from '@systems/landing-solve';
 import { bestRepairForDrop, dropFactors, isLaunchable, windowsAsOf } from '@systems/landing-rules';
-import { driversInMemory } from '@state/selectors';
+import { launchDrivers } from '@state/selectors';
 import { demoSkill, AUTODROP_DEMO_TUNING } from '@systems/skill-tree';
 import {
   AUTODROP_EDGE_MARGIN_TAC, AUTODROP_PLAN_MAX_PASSES, AUTODROP_SPACING_FRAC, BAY_RELOAD_TAC, BAY_SLOTS,
@@ -363,7 +365,7 @@ export function planLanding(state: Readonly<GameState>, view: Readonly<LandingVi
   const R = state.level.planet.R;
   // Address order, not LOAD NEXT's (review M2): the plan's ties go the same way whatever is pinned, so AUTODROP's own pin of
   // a pod outside the plan never moves that pod into it.
-  const queue = driversInMemory(state).filter(isLaunchable);
+  const queue = launchDrivers(state).filter(isLaunchable);
   const pods: PlanPod[] = queue.map((driver, order) => {
     const f = dropFactors(caps, driver);
     return { pod: driver.pod, driver, widthFactor: f.sensor * f.plotter * f.driver, order };

@@ -33,6 +33,8 @@ import { SWATH_TEXT } from '@data/swath-text';
 import { SITES_TEXT } from '@data/sites-text';
 import { FINALE_TEXT } from '@data/finale-text';
 import { EPILOGUE_TEXT, ENDING_TITLE, SPARE_RUN_END, PAYOFF_OF, WALKED_IN } from '@data/epilogue-text';
+// Slice 7b (the 7b blocks below).
+import { LAST_LANDING_TEXT } from '@data/last-landing-text';
 
 const DATA = join(import.meta.dirname, '..', '..', '..', 'src', 'data');
 
@@ -465,5 +467,28 @@ const SLICE7_BASE: Readonly<Record<string, unknown>> = {
 }
 
 // --- end of 7a NIGHT -------------------------------------------------------------------------------------------------------
+
+// === Slice 7b (slice-7-plan §2.9): each track's pools, rendered at their worst case by slice 6's renderer over the 7a base
+// (SLICE7_BASE) and each track's own table inside its own block.
+
+// --- 7b DROP: Track DROP adds its checks here (it says VIEW's LAST_LANDING_TEXT.radio; any word of its own goes here) ------
+
+// --- end of 7b DROP --------------------------------------------------------------------------------------------------------
+
+
+
+// --- 7b VIEW (data/last-landing-text.ts): Track VIEW adds its checks here --------------------------------------------------
+{
+  // A 10-letter family, two-digit pods and counts (16 pods: the largest ship).
+  const VIEW_WORST: Readonly<Record<string, unknown>> = {
+    pod: 16, family: 'Montgomery', count: 16, restored: 16, landed: 16, offSite: 16, noGo: 16,
+  };
+  const lines = renderSlice6(LAST_LANDING_TEXT, [], 'LAST_LANDING_TEXT', { ...SLICE7_BASE, ...VIEW_WORST });
+  const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
+  check(`7b VIEW words: every line (${lines.length}) fits (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
+    lines.length > 0 && bad.length === 0, JSON.stringify(bad));
+}
+
+// --- end of 7b VIEW --------------------------------------------------------------------------------------------------------
 
 finish();

@@ -67,8 +67,11 @@ export const FINALE_TEXT = {
   },
   // The `NOW:` line (MERGE's restored drivers) and the `NEXT RUN:` row's lead (R12: its lines are 7c's). `now` is 7b's
   // (THE LAST LANDING flies them); until 7b, R15's interim gives the drivers back to the kid's hands, so the card says that
-  // (nowInterim: a line that promised pods landing on their own would be a lie the kid acts on).
-  now: (drivers: number): string => `NOW: + ${drivers} eaten drivers come back · their pods land on their own`,
+  // (nowInterim: a line that promised pods landing on their own would be a lie the kid acts on). Which one the card shows
+  // follows data/last-landing.ts LAST_LANDING_BUILT (ending-rules optionState). 7b FOUNDATION: `now` names one driver too.
+  now: (drivers: number): string => (drivers === 1
+    ? 'NOW: + 1 eaten driver comes back · its pod lands on its own'
+    : `NOW: + ${drivers} eaten drivers come back · their pods land on their own`),
   nowInterim: (drivers: number): string => (drivers === 1
     ? 'NOW: + 1 eaten driver comes back · launch its pod'
     : `NOW: + ${drivers} eaten drivers come back · launch their pods`),

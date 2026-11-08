@@ -1,3 +1,6 @@
+// Slice 7b: the lead owns this file in 7b (slice-7-plan.md §4.2): MERGE's two gated lines (data/last-landing.ts
+// LAST_LANDING_BUILT, Track DROP's): mergeIn hands the drivers back by radio, and verdictDone calls last-landing.ts
+// startLastLanding; until the gate is raised, R15's interim below runs as built in 7a.
 // Slice 7a: Track FINALE owns this file after the FOUNDATION (docs/phase3/impl/slice-7-plan.md §4.1, §5.1): the phases (R6),
 // the pick and the confirm (R7) with their prices (systems/ending-rules.ts, R8, R9, R11), the apply (PURGE, MERGE's interim
 // R15, SPARE), UNRESOLVED (R10) and the verdict (R13). The 7a fix pass dropped the twoStep gate and WP11's one-step paths
@@ -5,7 +8,7 @@
 import type { Store } from '@state/store';
 import type { GameState, EndingLine } from '@state/schema';
 import type { HollowChoice, HollowFate, YouChoice } from '@/types/ending';
-import type { HollowSegment, Segment, DriverSegment } from '@/types/segment';
+import type { HollowSegment, Segment } from '@/types/segment';
 import type { PodRecord } from '@/types/landing';
 import { onAiTick } from '@systems/clock';
 import { onWorldReset } from '@systems/reset';
@@ -17,18 +20,18 @@ import { theRoot, rootDeleteRunning, rootDeleteProgress, nameHollow } from '@sys
 import { clearAlert, VERB_ALERT_ID, SEED_ALERT_ID } from '@systems/alerts';
 import { replaceRange, mergeAdjacentFree, requireAddr, freeSegment, assertMemoryInvariants } from '@systems/memory-ops';
 import { spendCharge, cureInfection } from '@state/actions';
-import { infectedSegments, isHollow, integrityState, rootDeletable } from '@state/selectors';
-import { driverName } from '@data/landing-text';
-import { driverSegId } from '@data/pod-ids';
+import { infectedSegments, isHollow, rootDeletable } from '@state/selectors';
 import { echoWord, TOOL_REFUSAL } from '@data/tool-text';
 import { layoutOf } from '@data/memory';
 import { HOLLOW_FINALE, unitDigits } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
-import { optionState, stayCandidates, endingRecordAt, controlCompliant } from '@systems/ending-rules';
+import { optionState, stayCandidates, endingRecordAt, controlCompliant, lastLandingPods, restoredDriver } from '@systems/ending-rules';
+import { startLastLanding } from '@systems/last-landing';
+import { LAST_LANDING_BUILT } from '@data/last-landing';
 import { FINALE_TEXT } from '@data/finale-text';
 import { pieceCommand } from '@systems/finale-card';
 import {
-  MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, DRIVER_BLOCKS, GLITCH_BURST_LEVEL, GLITCH_BURST_MS,
+  MERGE_COST_CHARGE, DRIVER_BLOCKS, GLITCH_BURST_LEVEL, GLITCH_BURST_MS,
   DUEL_SPIKE_EVERY_START_SEC, DUEL_SPIKE_EVERY_END_SEC, DUEL_SPIKE_LEVEL_START, DUEL_SPIKE_LEVEL_END, DUEL_SPIKE_MS,
   ROOT_GONE_GLITCH_LEVEL, ROOT_GONE_GLITCH_MS, MERGE_GLITCH_LEVEL, MERGE_GLITCH_MS,
   FINALE_ENDING_CPS, FINALE_ENDING_GAP_SEC, FINALE_ENDING_HOLD_SEC, CONTROL_CHIME_LEAD_SEC, FINALE_OPEN_DELAY_SEC,
@@ -275,22 +278,6 @@ function removeBlocks(memory: Segment[], blocks: readonly HollowSegment[]): void
   mergeAdjacentFree(memory);
 }
 
-// A driver HOLLOW ate, back from its pod's record (the pod outlived it), at MERGE_DRIVER_INTEGRITY.
-function driverFromRecord(record: Readonly<PodRecord>): DriverSegment {
-  return {
-    id: driverSegId(record.pod),
-    name: driverName(record.pod, record.family),
-    type: 'driver',
-    size: DRIVER_BLOCKS,
-    integrity: MERGE_DRIVER_INTEGRITY,
-    state: integrityState(MERGE_DRIVER_INTEGRITY),
-    pod: record.pod,
-    family: record.family,
-    colonists: record.colonists,
-    featured: structuredClone(record.featured),
-  };
-}
-
 // --- Step 2's confirm: the apply and the verdict (R7, R13, R15) ---------------------------------------------------------
 
 // PURGE and SPARE: every block of HOLLOW leaves memory (deleted, or moved to the empty ship: the last block, its seeds, the
@@ -307,8 +294,11 @@ function removeHollow(store: Store<GameState>): Set<string> {
 // back into a driver in place at MERGE_DRIVER_INTEGRITY (R15's interim: 1a's merge(), now at the confirm); the rest of
 // HOLLOW goes into you. A pod whose block is gone (the kid DELETEd it) stays parked, restorable, for 7b. Returns the pods
 // given back and the ids that left.
+// 7b, its gate raised (R24, R25): every block of HOLLOW goes into you, and THE LAST LANDING's pods (lastLandingPods: eaten,
+// still in orbit, whatever became of their blocks) get their drivers back by radio when it starts (verdictDone).
 function mergeIn(store: Store<GameState>): { inPlace: number[]; gone: Set<string> } {
   spendCharge(store, MERGE_COST_CHARGE);
+  if (LAST_LANDING_BUILT) return { inPlace: lastLandingPods(store.getState()), gone: removeHollow(store) };
   const state = store.getState();
   const memory = state.memory;
   const eaten = podsEatenHere(state);
@@ -320,7 +310,7 @@ function mergeIn(store: Store<GameState>): { inPlace: number[]; gone: Set<string
     if (block === undefined) continue;
     if (block.size !== DRIVER_BLOCKS) throw new Error(`finale: pod ${record.pod}'s block is ${block.size} blocks, not a driver's`);
     const start = requireAddr(memory, block);
-    replaceRange(memory, start, start + block.size, [driverFromRecord(record)], { opId: null, own: [block] });
+    replaceRange(memory, start, start + block.size, [restoredDriver(record)], { opId: null, own: [block] });
     inPlace.push(record.pod);
   }
   removeBlocks(memory, memory.filter(isHollow));
@@ -415,7 +405,15 @@ function confirm(store: Store<GameState>, hollow: HollowFate, you: YouChoice, st
 
 // The verdict has typed (or was skipped): MERGE with drivers given back reopens the landing for the kid's hands
 // ('last-landing', R15's interim until 7b's THE LAST LANDING); every other ending is decided ('done').
+// 7b, its gate raised: THE LAST LANDING starts instead (last-landing.ts startLastLanding moves the phase to 'last-landing'
+// in its first update, and its own end moves it to 'done').
 function verdictDone(store: Store<GameState>): void {
+  const { phase, restored } = store.getState().hollow.finale;
+  if (phase !== 'verdict') throw new Error(`verdictDone: the finale is '${phase}'`);
+  if (LAST_LANDING_BUILT && restored.length > 0) {
+    startLastLanding(store, restored);
+    return;
+  }
   store.update((draft) => {
     const finale = draft.hollow.finale;
     if (finale.phase !== 'verdict') throw new Error(`verdictDone: the finale is '${finale.phase}'`);
@@ -604,8 +602,9 @@ function tick(store: Store<GameState>, dtAi: number): void {
     return;
   }
   if (phase === 'last-landing') {
-    // R15's reopened landing is over once it has ended again and nothing is falling: the report may come.
-    if (state.landing.ended !== null && !podFalling(state)) {
+    // R15's reopened landing is over once it has ended again and nothing is falling: the report may come. THE LAST LANDING
+    // (7b: landing.lastLanding set) ends itself (last-landing.ts clears its machine and moves to 'done' in one update).
+    if (state.landing.lastLanding === null && state.landing.ended !== null && !podFalling(state)) {
       store.update((draft) => { draft.hollow.finale.phase = 'done'; });
     }
     return;

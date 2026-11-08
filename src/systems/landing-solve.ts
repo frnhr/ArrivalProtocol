@@ -155,7 +155,7 @@ export function podArc(shipState: OrbitState, mu: number, R: number, aimRp: numb
 // The drop width (§3.3): half-width s in km of surface for a pod launched at `launchRadius`.
 export function dropHalfWidthKm(launchRadius: number, R: number, f: DropFactors): number {
   if (!(launchRadius > R)) throw new Error(`dropHalfWidthKm: launch radius ${launchRadius} is not above the surface ${R}`);
-  return DROP_KM_PER_1000 * ((launchRadius - R) / 1000) * f.sensor * f.plotter * f.driver;
+  return DROP_KM_PER_1000 * ((launchRadius - R) / 1000) * f.sensor * f.plotter * f.driver * (f.blind ?? 1);
 }
 
 // Where a pod launched from `state` lands, in the CCW frame, unwrapped to lie ahead of the ship.

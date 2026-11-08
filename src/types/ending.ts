@@ -55,6 +55,9 @@ export interface EndingRecord {
 
 // THE LAST LANDING (7b; 01 §3.17): the drivers MERGE gave back by radio, and how they fly. Always null in 7a, and null at
 // every save point (the codec refuses it set).
+// Slice 7b: Track DROP may change the fields below (not `pods` and `drivers`, which the lead's seams read: selectors
+// launchDrivers, landing.ts launchDriver, landing-hud parkedBeacons): it never reaches a save, so no bump follows. It asks
+// the lead by message, who makes the edit (this file is the lead's).
 export interface LastLandingState {
   pods: number[];                       // restored pods, in pod order
   drivers: DriverSegment[];             // by radio, at MERGE_DRIVER_INTEGRITY; never in memory (R24)
