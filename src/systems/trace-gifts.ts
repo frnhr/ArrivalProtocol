@@ -184,9 +184,9 @@ function sunsetFileOf(run: Readonly<Pick<RunState, 'traces'>>): RepoFileId | nul
   return kind === undefined ? null : SUNSET_SPARE_FILE[kind];
 }
 
-// A free run of at least `size` blocks no op reserved (where unitInstallAddress writes a unit file).
+// A free run of at least `size` blocks no op reserved (where unitInstallAddress writes a unit file); THREAD+ takes none.
 function roomFor(memory: readonly Segment[], size: number): boolean {
-  return memory.some((seg) => seg.type === 'free' && seg.reservedBy === undefined && seg.size >= size);
+  return size <= 0 || memory.some((seg) => seg.type === 'free' && seg.reservedBy === undefined && seg.size >= size);
 }
 
 function sunsetBlocks(file: RepoFileId): number {
@@ -275,10 +275,11 @@ export function traceBootLineText(state: Readonly<GameState>, kind: TraceBootLin
   const gift = place as TracePlace & { kind: GiftKind };
   const charge = run.arrival === null ? firstShipChargeRoom(state.memory) : TRACE_GIFT_CHARGE;
   const file = giftFileNow(state, gift.kind);
-  const what = file === null ? null : roomFor(state.memory, file.blocks) ? file.name : TRACE_TEXT.noRoom(file.name);
+  const roomy = file === null || roomFor(state.memory, file.blocks);
+  const what = file === null ? null : roomy ? file.name : TRACE_TEXT.noRoom(file.name);
   const text = cacheLine(run, gift, charge, what);
   // The arrival's words were rendered at the TRANSMIT from what crossed; the boot sees the same files (fail loudly if not).
-  if (run.arrival !== null && file !== null && what === file.name && text !== line.text) {
+  if (run.arrival !== null && roomy && text !== line.text) {
     throw new Error(`traceBootLineText: the TRANSMIT said "${line.text}", the boot says "${text}"`);
   }
   return text;
