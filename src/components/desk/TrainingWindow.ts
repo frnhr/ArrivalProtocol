@@ -87,27 +87,31 @@ function demoSvg(kind: DemoArt): string {
         + '<path class="tr-demo-flyby" d="M4 70 Q 48 52 60 14 Q 72 52 116 70"/><path class="tr-demo-bracket" d="M10 66 Q 48 50 58 16"/></svg>';
     // Slice 6 SITES: SURVEY's three demos (plan §2.14; styles/survey.css loops them): 'find' a wedge sweeps a tiny rim, mapping
     // it, and a dashed bracket pops up as it passes (`SITE 4`); 'rate' a bracket stamped `WET ✕` hands LZ-B to a ★★★ one;
-    // 'sweep' a wedge twice as wide, and a THREADS pip going dark.
+    // 'sweep' a wedge twice as wide, and a THREADS pip going dark. Angles in degrees, counter-clockwise from the right.
     case 'find':
+    case 'rate':
     case 'sweep': {
-      const wide = kind === 'sweep';
-      const swath = wide ? '<path class="tr-demo-swath" d="M60 40 L82.98 59.28 A30 30 0 0 0 82.98 20.72 Z"/>'
-        : '<path class="tr-demo-swath" d="M60 40 L88.19 50.26 A30 30 0 0 0 88.19 29.74 Z"/>';
-      const rim = '<path class="tr-demo-rim" d="M79 40 A19 19 0 1 0 41 40 A19 19 0 1 0 79 40"/>'
-        + '<path class="tr-demo-mapped" d="M79 40 A19 19 0 1 0 41 40 A19 19 0 1 0 79 40" pathLength="80"/>';
-      const site = '<path class="tr-demo-site" d="M45.61 26.11 A20 20 0 0 0 42.34 30.61"/><text class="tr-demo-tag" x="40" y="19" text-anchor="end">SITE 4</text>';
+      const at = (r: number, deg: number): string =>
+        `${(60 + r * Math.cos((deg * Math.PI) / 180)).toFixed(2)} ${(40 - r * Math.sin((deg * Math.PI) / 180)).toFixed(2)}`;
+      const arc = (r: number, from: number, to: number): string => `M${at(r, from)} A${r} ${r} 0 0 0 ${at(r, to)}`;
+      // The rim from the wedge's start, round the way it turns (pathLength: the mapping's dash runs 80 → 0).
+      const rimPath = `M${at(14.5, 0)} A14.5 14.5 0 1 0 ${at(14.5, 180)} A14.5 14.5 0 1 0 ${at(14.5, 0)}`;
+      const globe = `<circle class="tr-demo-planet" cx="60" cy="40" r="12"/><path class="tr-demo-rim" d="${rimPath}"/>`;
+      if (kind === 'rate') {
+        return `<svg class="tr-demo tr-demo-rate" viewBox="0 0 120 80">${globe}<path class="tr-demo-site bad" d="${arc(17, 150, 170)}"/>`
+          + '<text class="tr-demo-tag bad" x="2" y="26">LZ-B</text><text class="tr-demo-tag bad" x="2" y="37">WET ✕</text>'
+          + `<path class="tr-demo-site good" d="${arc(17, 10, 30)}"/>`
+          + '<text class="tr-demo-tag good" x="118" y="26" text-anchor="end">LZ-B</text>'
+          + '<text class="tr-demo-tag good" x="118" y="37" text-anchor="end">★★★</text></svg>';
+      }
+      const half = kind === 'sweep' ? 40 : 20;
+      const swath = `<path class="tr-demo-swath" d="M60 40 L${at(36, -half)} A36 36 0 0 0 ${at(36, half)} Z"/>`;
+      const mapped = `<path class="tr-demo-mapped" d="${rimPath}" pathLength="80"/>`;
+      const site = `<path class="tr-demo-site" d="${arc(17, 134, 154)}"/><text class="tr-demo-tag" x="44" y="14" text-anchor="end">SITE 4</text>`;
       const threads = '<text class="tr-demo-text" x="2" y="77">THREADS</text>'
         + '<rect class="tr-demo-pip held" x="40" y="70" width="5" height="5"/><rect class="tr-demo-pip free" x="48" y="70" width="5" height="5"/>';
-      return `<svg class="tr-demo tr-demo-${kind}" viewBox="0 0 120 80">${swath}<circle class="tr-demo-planet" cx="60" cy="40" r="17"/>${rim}`
-        + `${wide ? threads : site}</svg>`;
+      return `<svg class="tr-demo tr-demo-${kind}" viewBox="0 0 120 80">${swath}${globe}${mapped}${kind === 'sweep' ? threads : site}</svg>`;
     }
-    case 'rate':
-      return '<svg class="tr-demo tr-demo-rate" viewBox="0 0 120 80"><circle class="tr-demo-planet" cx="60" cy="40" r="17"/>'
-        + '<path class="tr-demo-rim" d="M79 40 A19 19 0 1 0 41 40 A19 19 0 1 0 79 40"/>'
-        + '<path class="tr-demo-site bad" d="M42.34 30.61 A20 20 0 0 0 40.44 35.84"/>'
-        + '<text class="tr-demo-tag bad" x="2" y="22">LZ-B</text><text class="tr-demo-tag bad" x="2" y="32">WET ✕</text>'
-        + '<path class="tr-demo-site good" d="M79.56 35.84 A20 20 0 0 0 77.66 30.61"/>'
-        + '<text class="tr-demo-tag good" x="84" y="22">LZ-B</text><text class="tr-demo-tag good" x="84" y="32">★★★</text></svg>';
     // (end of Slice 6 SITES)
     case 'plain':
       return `<svg class="tr-demo tr-demo-plain" viewBox="0 0 120 80">${planet}<circle class="tr-demo-round" cx="60" cy="40" r="24"/></svg>`;

@@ -133,11 +133,11 @@ body.reduced-motion .np-swath, body.reduced-motion .navplot-svg .np-lz-glyph.bad
 .tr-ahead-line.tr-ahead-site { color: var(--desk-warn); letter-spacing: 0.08em; }
 .tr-demo-rim { fill: none; stroke: var(--desk-dim); stroke-width: 1.2; stroke-dasharray: 0.8 1.8; }
 .tr-demo-mapped { fill: none; stroke: var(--desk-accent); stroke-width: 1.6; stroke-dasharray: 80; }
-.tr-demo-swath { fill: var(--desk-accent); fill-opacity: 0.16; stroke: var(--desk-accent); stroke-opacity: 0.5; stroke-width: 0.6; }
-.tr-demo-site { fill: none; stroke: var(--desk-bright); stroke-width: 2.4; stroke-dasharray: 1.6 1.2; }
+.tr-demo-swath { fill: var(--desk-accent); fill-opacity: 0.22; stroke: var(--desk-accent); stroke-opacity: 0.5; stroke-width: 0.6; }
+.tr-demo-site { fill: none; stroke: var(--desk-bright); stroke-width: 3.4; stroke-dasharray: 2 1.4; }
 .tr-demo-site.bad { stroke: var(--desk-warn); }
 .tr-demo-site.good { stroke: var(--desk-good); stroke-dasharray: none; }
-.tr-demo-tag { fill: var(--desk-bright); font-family: 'VT323', monospace; font-size: 10px; letter-spacing: 0.04em; }
+.tr-demo-tag { fill: var(--desk-bright); font-family: 'VT323', monospace; font-size: 12px; letter-spacing: 0.04em; }
 .tr-demo-tag.bad { fill: var(--desk-warn); }
 .tr-demo-tag.good { fill: var(--desk-good); }
 .tr-demo-pip { fill: var(--desk-accent); stroke: var(--desk-accent); stroke-width: 0.8; }
