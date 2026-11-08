@@ -11,6 +11,7 @@
     "test": "node tests/unit/run.mjs",
     "test:e2e": "node tests/e2e/run.mjs",
     "balance": "node tests/unit/run.mjs --full",
+    "balance:report": "node tests/unit/balance/report.mjs",
     "screenshots": "npx -p playwright@1.50.0 node scripts/capture-screenshots.mjs"
   },
   "devDependencies": {
