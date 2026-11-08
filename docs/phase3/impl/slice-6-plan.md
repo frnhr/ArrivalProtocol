@@ -1470,7 +1470,10 @@ beyond those was touched and the save is untouched.
 4. **The plot layer** also draws, in FLIGHT only, each LZ's thin outline and name (`LZ-B ?`, `LZ-B ✕`), since the landing
    layer draws LZs only in LANDING; in LANDING it adds just the glyph inside the planet. The wedge reaches
    `SURVEY_WEDGE_REACH` (0.9) of the planet's radius past the rim, with the swath's footprint lit on the rim. Site names
-   are dropped when the planet is under 18 viewBox units (zoomed far out) or when two would overlap.
+   are dropped when the planet is under 18 viewBox units (zoomed far out) or when two would overlap. The model's
+   `wedges` is a list (`{ at: 'ship' | 'dot', centreRad, halfRad }`): in the LANDING at v2+ (`dropSwathOn`, OPEN-DECISIONS
+   52) a second wedge sits at the drop dot. `surveyPlotModel(state, dotRad)` reads the dot from `getDropSolution()` by
+   default in the LANDING; the suite passes it.
 5. **The card's SITE DATA row waits on `SURVEY_BUILT.poor`** (R19 puts the card rows under that gate): with the gate down no
    card gains a row. On the arm with it up every ship has the row (`GOOD` plain, `POOR · ARRIVAL CONTROL GUESSED` warn).
 6. **The AHEAD line's "open"** is SURVEY's branch open at this desk (`openBranchesAt`), a SURVEY file held, or a SURVEY

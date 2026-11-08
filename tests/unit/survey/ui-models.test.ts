@@ -219,7 +219,7 @@ built(() => {
   check('…in FLIGHT each LZ is outlined and named: LZ-A known FLAT (no glyph, `LZ-A`), LZ-B not yet rated (`LZ-B ?`)',
     lzA?.glyph === null && lzA.label === 'LZ-A' && lzB?.glyph === SITES_TEXT.plot.unknown && lzB.label === 'LZ-B ?', JSON.stringify(plot?.lzs));
   const all = giveSurvey(cormorant((s) => { mapCells(s, 0, SURVEY_CELLS, true); s.run.phase = 'landing'; }), 2);
-  const landingPlot = surveyPlotModel(all);
+  const landingPlot = surveyPlotModel(all, null);
   check('…once rated bad LZ-B reads `✕` (red); in LANDING the glyph alone (the landing layer names the LZ)',
     landingPlot?.lzs.find((lz) => lz.lz === 'LZ-B')?.glyph === SITES_TEXT.plot.bad && landingPlot.lzs.every((lz) => lz.label === null)
     && landingPlot.mapped.length === 1 && landingPlot.mapped[0]!.toRad === TAU && landingPlot.unmapped.length === 0);
@@ -230,6 +230,18 @@ built(() => {
     wedge3 !== null && wedge3.halfRad === swathHalfRad(3) && Math.abs(swathHalfRad(3) - 2 * swathHalfRad(1)) < 1e-12 && swathHalfRad(1) > 0
     && Math.abs(wedge3.centreRad - Math.atan2(v3.orbit.y, v3.orbit.x)) < 1e-12, JSON.stringify(wedge3));
   check('…no wedge while SURVEY does not map (no SURVEY aboard)', surveyPlotModel(cormorant())?.wedges.length === 0);
+  // In the LANDING at v2+ a second swath around the drop dot (OPEN-DECISIONS 52: survey-model.ts dropSwathOn), as wide.
+  const dropAt = (version: 1 | 2): GameState => giveSurvey(cormorant((s) => {
+    mapCells(s, 0, 10, false);
+    s.run.phase = 'landing';
+    s.burn.status = 'locked';
+    s.landing.survey.claimed = true;
+  }), version);
+  const dot2 = surveyPlotModel(dropAt(2), 1.25)?.wedges ?? [];
+  const dot1 = surveyPlotModel(dropAt(1), 1.25)?.wedges ?? [];
+  check('…LANDING at v2: a second wedge at the drop dot, ±swathHalfRad(2); at v1, or with no dot, the ship\'s alone',
+    dot2.length === 2 && dot2[1]!.at === 'dot' && dot2[1]!.centreRad === 1.25 && dot2[1]!.halfRad === swathHalfRad(2)
+    && dot1.length === 1 && surveyPlotModel(dropAt(2), null)?.wedges.length === 1, JSON.stringify(dot2));
 
   // The GROUND TRACK (LANDING): candidates dashed and clickable by their site id, the unmapped rim as `░`.
   const ground = giveSurvey(cormorant((s) => { mapCells(s, 0, 36, true); s.run.phase = 'landing'; }), 2);

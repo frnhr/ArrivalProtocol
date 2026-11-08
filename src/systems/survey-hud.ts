@@ -12,7 +12,8 @@ import { siteLabel, SURVEY_TEXT } from '@data/survey-text';
 import { SITES_TEXT as T } from '@data/sites-text';
 import { COLONISTS_PER_POD, SITES_RIM_BAR_CELLS } from '@data/tuning';
 import { surveyVersion, mappedPct, lzSiteOf } from '@state/survey-selectors';
-import { surveyRunning, swathHalfRad, siteStars, assignableLzs, type SiteStars } from '@systems/survey-model';
+import { surveyRunning, swathHalfRad, siteStars, assignableLzs, dropSwathOn, type SiteStars } from '@systems/survey-model';
+import { getDropSolution } from '@systems/drop-cache';
 import { shipSummaryAt } from '@systems/map-run';
 import { openBranchesAt } from '@systems/skill-tree';
 import { visitNow, fileLevel } from '@systems/skill-levels';
@@ -120,8 +121,7 @@ export interface SurveyPlotLz {
   label: string | null;           // FLIGHT only
 }
 
-// A swath SURVEY maps now: ±halfRad around a world angle (`at`: under the ship; a later 'dot' swath, SWATH's planned
-// follow-up mapping around the drop dot during the landing, joins the list with the dot's angle and the same swathHalfRad).
+// A swath SURVEY maps now: ±halfRad around a world angle (`at`: under the ship, or around the drop dot in the LANDING at v2+).
 export interface SurveyWedge {
   at: 'ship' | 'dot';
   centreRad: number;
@@ -139,7 +139,11 @@ export interface SurveyPlotModel {
   lzs: SurveyPlotLz[];
 }
 
-export function surveyPlotModel(state: Readonly<GameState>): SurveyPlotModel | null {
+// `dotRad`: the drop dot's angle (systems/drop-cache.ts getDropSolution, read by default; a suite passes its own): in the LANDING
+// at v2+ SURVEY also maps a swath around it (survey-model.ts dropSwathOn, OPEN-DECISIONS 52), drawn as a second wedge.
+export function surveyPlotModel(
+  state: Readonly<GameState>, dotRad: number | null = state.run.phase === 'landing' ? getDropSolution()?.dot?.rad ?? null : null,
+): SurveyPlotModel | null {
   const survey = poorSurvey(state);
   const phase = state.run.phase;
   if (survey === null || (phase !== 'flight' && phase !== 'landing')) return null;
@@ -155,7 +159,10 @@ export function surveyPlotModel(state: Readonly<GameState>): SurveyPlotModel | n
     };
   });
   return {
-    wedges: halfRad > 0 ? [{ at: 'ship', centreRad: Math.atan2(state.orbit.y, state.orbit.x), halfRad }] : [],
+    wedges: halfRad <= 0 ? [] : [
+      { at: 'ship', centreRad: Math.atan2(state.orbit.y, state.orbit.x), halfRad },
+      ...(dotRad !== null && dropSwathOn(state) ? [{ at: 'dot' as const, centreRad: dotRad, halfRad }] : []),
+    ],
     mapped: cellArcs(survey.mapped, true),
     unmapped: cellArcs(survey.mapped, false),
     brackets: freeSites(state).map((site) => ({
