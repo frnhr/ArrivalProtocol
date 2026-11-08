@@ -12,7 +12,8 @@
 //   block it (`ALL THREADS BUSY — × AN OP TO BLOCK IT`), any other click the plain words.
 // • A won finale over a flagship where nobody woke: RUN END's title and line say so (PURGE and MERGE), sombre; the
 //   waiting strip says NO POD LEFT TO LAUNCH, never EVERY POD IS DOWN.
-// • The lineage line never claims the fleet; the ghost after a PURGE that landed nobody does not say `we brought them home`.
+// • The lineage line never claims the fleet; the ghost after a PURGE that landed nobody does not say `we brought them home`
+//   (slice 7c, R36: a PURGE leaves no ghost at all).
 // • The words: `unit_046_047`, the chip's `M20`, the open root's `ROOT · 16`, the short PURGE title on one line.
 // • THE TRAP (the lead's ruling of 21:30): a driver bitten twice in the same spot gets `MOVE it behind a WALL` on the strip
 //   once it is cured, never in front of a flight NOW line; a driver that moved starts its count over.
@@ -315,9 +316,10 @@ check('the nobody-landed words fit one line', [RUN_END_NOBODY_LANDED.title, ...O
   const lineage = lineageLine(unit(3200));
   check('the title\'s lineage after a PURGE names what the unit did, never the fleet', lineage === 'last: UNIT-047 · 3,200 landed · deleted it at LAST LIGHT'
     && !/fleet/.test(lineage ?? ''), String(lineage));
-  const ghostWords = (woke: number): string => GHOST_LINE['won-purge']!({ us: 48, last: unit(woke), hollow: [47], lostShip: 'the flagship' });
-  check('the ghost after a PURGE: `we brought them home` when someone landed, never when nobody did', /we brought them home/.test(ghostWords(3200))
-    && !/brought them home/.test(ghostWords(0)) && /nobody landed/.test(ghostWords(0)), `${ghostWords(3200)} | ${ghostWords(0)}`);
+  // Slice 7c (R36): a won last unit was not lost (no grey cross), so a PURGE leaves no ghost at all, landed or not: its voice
+  // is the face line at the final ship after REASSIGNMENT (traces/lineage). So no ghost ever says `we brought them home`.
+  check('the ghost after a PURGE: none (R36: a won unit was not lost), so never `we brought them home`', GHOST_LINE['won-purge'] === null,
+    String(GHOST_LINE['won-purge']));
 }
 
 // --- The words -------------------------------------------------------------------------------------------------------
