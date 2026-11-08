@@ -265,16 +265,6 @@ export const LANDING_NODROP_LINES = {
   L12noDrop: 'NO DROP DOT ON THIS ORBIT — END LANDING parks them in orbit',
 } as const;
 
-// L7b (review M2): the engine fires by itself during the landing (a failing Thrust Ctrl), and a SWAP fixes it. The flight
-// table's F2 words a SWAP the same way (`[TAB], SWAP …` from the ship; `REPAIR Swap first` while the Swap file is too
-// damaged); in the MIND it reads as the VESPER lesson (GHOST_TEXT.swapLesson) with the backup's name.
-export const LANDING_GHOST_LINES = {
-  swap: 'THE ENGINE FIRES BY ITSELF — [TAB], SWAP THRUST CTRL',
-  swapMind: (spare: string): string => `THE ENGINE FIRES BY ITSELF — SWAP THRUST CTRL to ${spare}`,
-  fixSwap: 'THE ENGINE FIRES BY ITSELF — [TAB], REPAIR Swap first',
-  fixSwapMind: 'THE ENGINE FIRES BY ITSELF — REPAIR Swap, then SWAP THRUST CTRL',
-} as const;
-
 // The drag kick's stamp on the NAV PLOT (§3.7), from DRAG_STAMP_MIN_KM: the far apsis that moved, and by how much.
 export const DRAG_STAMP_TEXT = {
   kick: (apsis: '▲' | '▼', dropKm: number): string => `DRAG · ${apsis} −${formatCount(Math.round(dropKm))} km`,

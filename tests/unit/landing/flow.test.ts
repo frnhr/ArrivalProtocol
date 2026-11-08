@@ -49,10 +49,8 @@ function boardShip(index: number, seed = 1): void {
     draft.hollow.phase = 'dormant';
     draft.director.done.push(...DRIVER_RULES.map((rule) => rule.id), 'engine-io-fault');
     if (draft.landing.finalShip) decideFinale(draft, 'purge');
-    // Slice 1b (risk 5): the engine is open in landing, so VESPER's failing Thrust Ctrl fires there too, and this kid
-    // presses no SPACE: unswapped, its RETRO bursts take ▼ under the planet in 95–190 s (review M2's measurement), and it
-    // does not follow L7b's SWAP. The flight's tutorial has the kid SWAP Thrust.alt in first (wp10 vesper-flow);
-    // engine-landing.test and review-1b.test cover bursts during the landing.
+    // Slice 1b (risk 5) had VESPER's failing Thrust Ctrl fire in the landing too; on the arm it fires nothing once the orbit
+    // is locked (landing/engine-landing checks that), and the flight here is not under test, so the controller is healthy.
     for (const seg of draft.memory) if (seg.role === 'thrust-ctrl' && 'integrity' in seg) seg.integrity = 100;
   });
 }

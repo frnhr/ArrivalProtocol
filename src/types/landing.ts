@@ -218,7 +218,8 @@ export interface LandingState {
   goLow: GoLowAim | null;
   declined: DeclinedBurn | null;
   // Review M2: ghost bursts fired during this landing (orbit-sim counts them with burn.ghostBursts): its first is a SKIP's
-  // stop (selectors ghostBurstsThisPhase), and from then the strip's SWAP THRUST CTRL row stands while the engine fires.
+  // stop (selectors ghostBurstsThisPhase). On the arm nothing fires once the orbit is locked (capabilities ghostSpecOf; a
+  // resident only in flight), so it stays 0; kept as the save's field (Track RETIRE phase 3 removed the L7b row it fed).
   ghostBursts: number;
   // Slice 4c (AUTODROP, docs/phase3/impl/slice-4cde-plan.md §2.2): its machine, in the state so a controller is derived
   // from it each tick (landing-controller.ts) and dies with its file. At rest at every save point (save-codec checks it).

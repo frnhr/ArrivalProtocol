@@ -1,13 +1,16 @@
 // Slice 1b's review fixes (docs/phase3/impl/slice-1b-plan.md "Deviations (review fixes)"), each from a small state built
 // here (and the two follow-up fixes: GO LOWER aimed at a window its ◇ precedes, the lift holding a needed low orbit): B1 (END LANDING and the auto-ends on a path into the planet; a crash after the landing ended, LAST LIGHT too), M1
-// (no drop dot with no fuel: L12-nodrop and its auto-end), M2 (ghost thrust in landing: the SWAP row, the SKIP's stop on
-// the landing's first burst, the bursts at LANDING_BURN_POWER), and the minors' checks (L9 with an empty tank, the decay
+// (no drop dot with no fuel: L12-nodrop and its auto-end), and the minors' checks (L9 with an empty tank, the decay
 // chip and L10 at 0 orbits, a declined GO LOWER's lifetime, GO LOWER held by hand under MANUAL, L3b's WIDE DROP twin, the
 // GROUND TRACK with NO BAY CTRL, GO LOWER under the DRAG line).
-import '../support/classic-world';
+// Track RETIRE (phase 3): on run 1's arm. M2's five checks (ghost thrust in the landing: a SKIP stopping on the landing's
+// first burst, that burst at TACTICAL and LANDING_BURN_POWER, L7b's SWAP THRUST CTRL row and its SWAP) are deleted: the arm's
+// engine fires nothing once the orbit is locked (capabilities.ts ghostSpecOf, slice 3b), so they tested the classic world
+// only; landing/engine-landing checks the arm's rule. L7b went with them (unreachable on the arm).
 import { check, finish } from './checks';
 import { lockOn, ensureLandingKeys } from './harness-landing';
 import { createHarness7 } from '../wp7/harness7';
+import { phase2Ship } from '../support/hollow-world';
 import { endLanding, requestLaunch } from '@systems/landing';
 import { resetReport } from '@systems/reset';
 import { getPrediction } from '@systems/predict';
@@ -18,16 +21,14 @@ import { decayForecast, decayLiftAhead, dragLineKm, landingBurnOffer, offerInTac
 import { lossPlan, shipLost } from '@systems/run';
 import { elementsFromState, stateFromElements } from '@/types/orbit';
 import { DRIVER_RULES, LANDING_LESSON_RULES } from '@data/script';
-import { END_LANDING_REFUSAL_TEXT, LANDING_GHOST_LINES, LANDING_NODROP_LINES } from '@data/landing-text';
-import { DECAY_WARN_ORBITS, GO_LOW_FLOOR_MARGIN_KM, LANDING_BURN_POWER, LANDING_NONE_LEFT_SEC } from '@data/tuning';
+import { END_LANDING_REFUSAL_TEXT, LANDING_NODROP_LINES } from '@data/landing-text';
+import { DECAY_WARN_ORBITS, GO_LOW_FLOOR_MARGIN_KM, LANDING_NONE_LEFT_SEC } from '@data/tuning';
 import { on } from '@systems/events';
 import { capabilitiesNow } from '@systems/capabilities';
-import { actionSwap } from '@state/actions';
 import type { GameState } from '@state/schema';
 
 const ARES = 0;
 const KESTREL = 2;
-const VESPER = 3;
 const LAST_LIGHT = 4;
 const h = createHarness7(1);
 const state = (): GameState => h.store.getState();
@@ -275,8 +276,14 @@ crashAfterEnd(LAST_LIGHT, 'LAST LIGHT');
 {
   // KESTREL (band 5,000–7,000, the DRAG line at 5,500) from a circular 6,800 km, one LZ 190 km wide: GO LOWER's target is
   // the floor (5,100 km), under the line. One LZ, so the go-low's ◇ comes before the window it is for.
+  // Track RETIRE: with phase 2's twelve pods (phase2Ship). Run 1's arm KESTREL has six, and lands them in three windows
+  // before decay matters (▼ 5,093 km, 5.6 orbits left at the report, the lift never due): the lift's timing needs a landing
+  // that outlasts it. With twelve the lift is offered at 4.0 orbits, after four windows have closed, between windows.
   board(KESTREL);
+  phase2Ship(h.store, 2);
   h.store.update((draft) => {
+    draft.hollow.phase = 'dormant';
+    for (const seg of draft.memory) if ('integrity' in seg) (seg as { integrity: number }).integrity = 100;
     draft.landing.lzs = [{ ...draft.landing.lzs[0]!, pods: draft.landing.pods.length, widthKm: 190, halfWidthRad: 95 / draft.level.planet.R }];
   });
   lockOn(h, { r: 6800 });
@@ -409,55 +416,6 @@ function followThroughGoLower(maxWall: number, onTick: () => void = () => {}): {
   check('…every pod lands in the LZ, ▼ in the band throughout', placed.every((place) => place === 'lz') && run.minRp >= state().level.ring.min,
     `${placed.join(',')} · ▼ ≥ ${run.minRp.toFixed(0)} km`);
   check('…and the landing over, the normal lift is back (no LZ with room needs the low orbit)', liftHold(state()) === null);
-}
-
-// --- M2: ghost thrust in the landing ---------------------------------------------------------------------------------
-{
-  // The landing's first burst is a SKIP's stop and a TACTICAL moment, though the flight had its bursts (keyed per phase).
-  board(VESPER, false);
-  h.store.update((draft) => { draft.burn.ghostBursts = 5; });
-  lockOn(h);
-  h.stepFor(0.3);
-  const starts: { inSkip: boolean; count: number }[] = [];
-  const off = on('ghost-start', (payload) => { starts.push({ inSkip: payload.inSkip, count: payload.count }); });
-  let skipped = false;
-  let paceAtBurst: string | null = null;
-  let accelRatio: number | null = null;
-  const end = h.wall() + 60;
-  while (h.wall() < end && state().landing.ghostBursts === 0) {
-    if (state().clock.skipWarp === null && !skipped && h.shown()?.keys.includes('F')) { h.press('KeyF'); skipped = state().clock.skipWarp !== null; }
-    h.step();
-  }
-  if (state().landing.ghostBursts > 0) {
-    h.step();
-    paceAtBurst = state().clock.pace;
-    // A tick wholly inside the burst: the Δv it delivered against the burst's own push at the landing's power.
-    const t0 = state().clock.tSec;
-    h.step();
-    const ghost = state().burn.ghost;
-    const dt = state().clock.tSec - t0;
-    if (ghost !== null && ghost.startTSec <= t0 && ghost.endTSec >= state().clock.tSec && dt > 0) {
-      accelRatio = state().burn.lastTickDvKmS / dt / (state().level.aNominalKmS2 * ghost.amp);
-    }
-  }
-  off();
-  const first = starts[0];
-  check('M2: a SKIP during the landing stops on the landing\'s FIRST burst (not flown through), though the flight had 5',
-    skipped && first !== undefined && !first.inSkip && first.count === 6 && state().landing.ghostBursts >= 1, JSON.stringify(starts.slice(0, 2)));
-  check('…and that burst runs at TACTICAL', paceAtBurst === 'tactical', String(paceAtBurst));
-  check(`…at LANDING_BURN_POWER (${LANDING_BURN_POWER}) of its push`, accelRatio !== null && Math.abs(accelRatio - LANDING_BURN_POWER) < 0.02,
-    String(accelRatio?.toFixed(3)));
-  // From the first burst on, the strip names the cause and its fix.
-  h.stepFor(4);
-  const row = h.shown();
-  check('M2: …then the strip says THE ENGINE FIRES BY ITSELF — [TAB], SWAP THRUST CTRL (L7b)',
-    row?.id === 'landing-L7b' && row.text.startsWith(LANDING_GHOST_LINES.swap) && row.keys.includes('TAB'), `${row?.id} '${row?.text}'`);
-  const controller = state().memory.find((seg) => seg.role === 'thrust-ctrl');
-  const refusal = controller === undefined ? 'no controller' : actionSwap(h.store, controller);
-  h.stepUntil(() => capabilitiesNow(state()).thrustCtrl.ghost === null, 20);
-  h.stepFor(3);
-  check('…a SWAP to Thrust.alt silences it, and the row goes', refusal === null && capabilitiesNow(state()).thrustCtrl.ghost === null
-    && !(h.shown()?.id ?? '').startsWith('landing-L7b'), `${refusal} · ${h.shown()?.id}`);
 }
 
 finish();
