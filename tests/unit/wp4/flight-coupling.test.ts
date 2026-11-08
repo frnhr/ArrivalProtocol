@@ -6,7 +6,8 @@
 //     the licence arrives, REPAIR on Engine I/O, TAB back) still reaches `locked`.
 // Plus the fault beat itself: when it strikes, that it waits while paused, and that it strikes
 // once and only on ship 1.
-import '../support/classic-world';
+import { createInitialState } from '@state/initial';
+import { resetWorld } from '@systems/reset';
 import { check, finish, TICK } from '../wp1/harness';
 import { followDirector, scriptOf } from '../wp2/harness2';
 import { createHarness4 } from './harness4';
@@ -116,8 +117,11 @@ function deliveredShare(ticks: number): number {
   check('fault: …and strikes once the burn goes on', h.file('engine-io').integrity === 38);
 
   // Ship 2 (shipIndex 1) has no scripted fault.
+  // (Track RETIRE: the fixture world's ship 2, run 1's HALCYON on the worked route, a fresh unit carried in; the classic
+  // five's test bumped run.shipIndex on ship 1's state.)
   h.resetTo('flight');
-  h.store.update((d) => { d.run.shipIndex = 1; });
+  h.store.update((d) => { Object.assign(d, createInitialState({ seed: 1, shipIndex: 1, carried: 'fresh' })); });
+  resetWorld();
   h.keyDown('Space');
   for (let i = 0; i < 100; i++) h.step();
   h.keyUp('Space');
