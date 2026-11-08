@@ -28,6 +28,9 @@ import { MAX_LINE_CHARS } from '@data/tuning';
 import { WARDEN_TEXT } from '@data/warden-text';
 import { KIN_TEXT } from '@data/kin-text';
 import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
+// Slice 6: each track's word module, for its own block at the end (the imports are the lead's: one line each).
+import { SWATH_TEXT } from '@data/swath-text';
+import { SITES_TEXT } from '@data/sites-text';
 
 const DATA = join(import.meta.dirname, '..', '..', '..', 'src', 'data');
 
@@ -279,5 +282,53 @@ check(`the no-room rows say no never-say word and fit the strip (≤ ${MAX_LINE_
 }
 
 // --- end of 5 FACE ---------------------------------------------------------------------------------------------------------
+
+
+
+// === Slice 6 (slice-6-plan §2.13): each track's pools, rendered at their worst case (LZ-D, `SITE 12`, ROOM 3,200, STANDARD,
+// 100%, 12 sites). The FOUNDATION seeded each block with a walk of the seeded words; each track owns its block.
+// Every template is rendered with the worst case its own parameter names ask for (a template whose parameter name is not
+// listed fails the suite, so a new one is rendered at its worst case too).
+const SLICE6_WORST: Readonly<Record<string, unknown>> = {
+  lz: 'LZ-D', site: 'SITE 12', label: 'SITE 12 · WRECKAGE', room: '3,200', width: 'STANDARD', ground: 'rocky', pct: 100, sites: 12,
+  pods: 16, count: 4, version: 3,
+};
+function renderSlice6(value: unknown, out: string[], owner: string): string[] {
+  if (typeof value === 'string') out.push(value);
+  else if (typeof value === 'function') {
+    const fn = value as (...args: unknown[]) => unknown;
+    const params = /^\(?([^)=]*)\)?\s*=>/.exec(fn.toString())?.[1]?.split(',').map((param) => param.trim().split(':')[0]!.trim()).filter(Boolean) ?? [];
+    const args = params.map((param) => {
+      if (!(param in SLICE6_WORST)) throw new Error(`words: ${owner}'s template parameter '${param}' has no worst case here`);
+      return SLICE6_WORST[param];
+    });
+    out.push(String(fn(...args)));
+    // The other ground too: a WET line is shorter, but its own words are checked.
+    if (params.includes('ground')) out.push(String(fn(...params.map((param) => (param === 'ground' ? 'wet' : SLICE6_WORST[param])))));
+  } else if (typeof value === 'object' && value !== null) Object.values(value).forEach((child) => renderSlice6(child, out, owner));
+  return out;
+}
+
+// --- 6 SWATH (data/swath-text.ts): Track SWATH adds its checks here (and its strip rules' worst case) ---------------------
+{
+  const lines = renderSlice6(SWATH_TEXT, [], 'SWATH_TEXT');
+  const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
+  check(`6 SWATH words: every line (${lines.length}) fits the strip (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
+    lines.length > 0 && bad.length === 0, JSON.stringify(bad));
+}
+
+// --- end of 6 SWATH --------------------------------------------------------------------------------------------------------
+
+
+
+// --- 6 SITES (data/sites-text.ts): Track SITES adds its checks here ----------------------------------------------------------
+{
+  const lines = renderSlice6(SITES_TEXT, [], 'SITES_TEXT');
+  const bad = lines.filter((text) => text.length > MAX_LINE_CHARS || RULES.some((rule) => rule.re.test(text)));
+  check(`6 SITES words: every line (${lines.length}) fits the strip (≤ ${MAX_LINE_CHARS}) at its worst case and says no never-say word`,
+    lines.length > 0 && bad.length === 0, JSON.stringify(bad));
+}
+
+// --- end of 6 SITES --------------------------------------------------------------------------------------------------------
 
 finish();
