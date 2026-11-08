@@ -22,7 +22,7 @@ import { RUN1_RESULTS, RUN1_TRAIL, RUN1_LAST_UNIT, run2Map, type Run1Result } fr
 // A ShipResult for one of run 1's ships: its pods down in LZ-A, the first carrying the fixture's writer.
 function resultOf(row: Readonly<Run1Result>, depth: number, outcome: ShipResult['outcome'] = row.outcome, landed = row.landed): ShipResult {
   return {
-    shipId: row.ship.toLowerCase(), shipName: row.ship, slot: row.slot, depth, outcome, stars: 0, fuelLeftPct: 0, ringMiss: null,
+    shipId: row.ship.toLowerCase(), shipName: row.ship, slot: row.slot, depth, outcome, stars: 0, fuelLeftPct: 0, ringMiss: null, survey: null,
     colonistsAboard: row.landed, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: 0, landedInLz: landed, points: 0,
     colony: landed > 0 ? row.colony : null,
     pods: landed > 0 ? [{

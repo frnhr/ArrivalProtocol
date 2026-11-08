@@ -5,6 +5,7 @@ import type { ZoneDef } from '@/types/zone';
 import type { ShipLandingDef } from '@/types/landing';
 import type { ShipKind, TemplateId, ModifierId, MemoryClass } from '@/types/map';
 import type { ShipResidentDef } from '@/types/resident';
+import type { SiteData } from '@/types/survey';
 import { NAME_MAX_CHARS, INTEGRITY_MAX, ROOT_SLOT_FROM_LAYER } from '@data/tuning';
 import { validateLandingDef } from '@data/landing-def';
 import { validateZoneDefs } from '@data/zone-check';
@@ -124,6 +125,9 @@ export interface ShipDef {
   // The resident AI the map rolled for this ship (slice 5, 04 §3.11; ArmShip.reserved.resident with its fragments), whether
   // or not this build plays its kind (data/residents.ts builtResident decides). null: none, and always on the classic five.
   resident: ShipResidentDef | null;
+  // The site data the map rolled (slice 6, 02 §3.5: ArmShip.reserved.site; 'good' on the classic five), whether or not this
+  // build plays POOR (data/survey.ts siteDataOf decides).
+  site: SiteData;
 }
 
 // The modifier each zone kind and arrival-damage role is the visible form of (02-map §3.5): a ship that has the effect
@@ -311,6 +315,7 @@ export function shipDefOf(arm: Readonly<ArmShip>): ShipDef {
     },
     landing: structuredClone(arm.landing) as ShipLandingDef,
     resident: arm.reserved.resident === null ? null : { ...arm.reserved.resident, fragments: arm.reserved.fragments },
+    site: arm.reserved.site,
   };
   if (SHIP_DEF_CACHE.size >= SHIP_DEF_CACHE_MAX) SHIP_DEF_CACHE.clear();
   SHIP_DEF_CACHE.set(key, ship);

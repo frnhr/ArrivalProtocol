@@ -18,7 +18,7 @@ import { run2Arm } from '../world/run2-fixture';
 
 function result(name: string, slot: number, depth: number, outcome: ShipOutcome, landed: number): ShipResult {
   return {
-    shipId: `ship-${slot}`, shipName: name, slot, depth, outcome, stars: 2, fuelLeftPct: 30, ringMiss: null,
+    shipId: `ship-${slot}`, shipName: name, slot, depth, outcome, stars: 2, fuelLeftPct: 30, ringMiss: null, survey: null,
     colonistsAboard: landed, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: 0, landedInLz: landed, points: landed,
     colony: landed > 0 ? 'X' : null, pods: [],
   };

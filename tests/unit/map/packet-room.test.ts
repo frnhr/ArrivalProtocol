@@ -51,7 +51,7 @@ function packetTo(
   store.update((draft) => {
     draft.run.ships.push({
       shipId: draft.level.shipId, shipName: 'KESTREL', slot: from, depth: route.length, outcome: 'locked', stars: 2, fuelLeftPct: 40,
-      ringMiss: null, colonistsAboard: 1200, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: 0, landedInLz: 1200,
+      ringMiss: null, survey: null, colonistsAboard: 1200, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: 0, landedInLz: 1200,
       points: 1200, colony: null, pods: [],
     });
     draft.run.pendingStarCredit = opts.starCredit ?? 0;

@@ -24,7 +24,7 @@ const COLONIES = ['RIVERSIDE', 'OKAFOR LANDING', 'HARBOUR', 'ORCHARD', 'SALTMARS
 function result(depth: number, landed: number, stars = 2): ShipResult {
   const slot = WORKED_ROUTE[depth - 1]!;
   return {
-    shipId: `ship-${slot}`, shipName: NAMES[depth - 1]!, slot, depth, outcome: 'locked', stars, fuelLeftPct: 30, ringMiss: null,
+    shipId: `ship-${slot}`, shipName: NAMES[depth - 1]!, slot, depth, outcome: 'locked', stars, fuelLeftPct: 30, ringMiss: null, survey: null,
     colonistsAboard: landed, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: 0, landedInLz: landed,
     points: landed, colony: landed > 0 ? COLONIES[depth - 1]! : null,
     pods: [{

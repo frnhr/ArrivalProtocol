@@ -1,7 +1,10 @@
-// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §5): endShip's resident record (systems/residents.ts
-// residentShipEnd). Slice 4d's transmitNext disguise roll and arrival.seeds[].disguise stay as built. Others ask by message.
+// Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §5): endShip's survey record (systems/survey.ts
+// surveyShipEnd) and, from slice 5, its resident record (systems/residents.ts residentShipEnd). Slice 4d's transmitNext
+// disguise roll and arrival.seeds[].disguise stay as built. Others ask by message.
 import type { Store } from '@state/store';
 import { residentShipEnd } from '@systems/residents';
+import { surveyShipEnd } from '@systems/survey';
+import { surveyRecordOf } from '@state/survey-selectors';
 import type {
   GameState, RunPhase, RunState, ShipOutcome, ShipResult, RunEndCause, ArrivalReport, ArrivalSkill, TransitPlan, TransitHit, RingMiss,
   UiState,
@@ -114,6 +117,9 @@ export function shipResultOf(state: Readonly<GameState>, outcome: ShipOutcome, s
     stars,
     fuelLeftPct: state.burn.fuelPct,
     ringMiss: outcome === 'partial' ? ringMissOf(state) : null,
+    // Slice 6: the survey as the slice stands (endShip takes survey.ts surveyShipEnd's, the same record with the machine at
+    // rest; the LOST card's preview reads this one).
+    survey: surveyRecordOf(state.landing),
   };
 }
 
@@ -273,9 +279,12 @@ export function startShip(
 // Slice 4 (03 §3.1): every ship's end pays its training cycles (run-score.ts shipCycles), on every world, recorded per ship
 // so a later rule never rewrites the past (the bank is derived: skill-tree.ts bankOf).
 export function endShip(store: Store<GameState>, outcome: ShipOutcome, stars = 0): ShipResult {
+  if (store.getState().run.ships.length > store.getState().run.shipIndex) throw new Error(`endShip: ship ${store.getState().run.shipIndex} already ended`);
+  // Slice 6 (plan §2.4, R20): the survey machine at rest first (its thread released; SHIP DONE's save reads the slice so),
+  // and its record into the result.
+  const survey = surveyShipEnd(store);
   const state = store.getState();
-  if (state.run.ships.length > state.run.shipIndex) throw new Error(`endShip: ship ${state.run.shipIndex} already ended`);
-  const result = shipResultOf(state, outcome, stars);
+  const result: ShipResult = { ...shipResultOf(state, outcome, stars), survey };
   const tally = tallyPreview(state);
   const cycles = shipCycles(result);
   const metSeeds = shipMetSeeds(state, tally);

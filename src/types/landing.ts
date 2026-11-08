@@ -1,4 +1,5 @@
-// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2); tracks ask by message.
+// Slice 6: the lead owns this file (slice-6-plan.md §5): LzGround, LzState.site, LandingState.survey and .sitesRev are the
+// FOUNDATION's (one save bump for the slice, R1); tracks ask by message.
 // Every landing type (docs/phase3/01-landing.md, slice 1a). Type-only imports: Vec2 (types/orbit), Colonist
 // (types/segment) and GameState (state/schema, for the controller seam; schema imports this file back, which is fine
 // for types). The pure solver, the rules, the sim and the views all speak these.
@@ -10,10 +11,13 @@ import type { Vec2 } from '@/types/orbit';
 import type { Colonist } from '@/types/segment';
 import type { GameState, GuideLayer, Urgency } from '@state/schema';
 import type { EffectiveVersion } from '@/types/skill';
+import type { SurveyState } from '@/types/survey';
 
 export type LzWidth = 'wide' | 'standard' | 'narrow';            // km in tuning LZ_WIDTH_KM
 export type ForgivenessClass = 'gentle' | 'rough' | 'harsh';     // off-site score in tuning OFF_SITE_SCORE_BY_CLASS
-export type LzGround = 'flat';                                   // SURVEY (slice 6) adds 'rocky' | 'wet'
+// GROUND (01 §3.13): FLAT is normal; a pod that lands on ROCKY or WET lands hard (landing-rules touchAtTouchdown), and a
+// WET site's bracket is a third narrower (its true width, from the boot: slice-6-plan R4). Only POOR planets have bad ground.
+export type LzGround = 'flat' | 'rocky' | 'wet';
 export type TerrainWord = 'PLAINS' | 'GRASSLAND' | 'OCEAN' | 'VOLCANIC';
 
 // --- Data: ShipDef.landing. The map's roller (slice 3) returns exactly this type, checked by validateLandingDef. ---
@@ -52,6 +56,9 @@ export interface LzState {
   widthKm: number;
   pods: number;         // its count in pods
   ground: LzGround;
+  // Slice 6: the SurveySite it stands on (types/survey.ts; its centre, half-width, widthKm and ground are this LZ's), or null
+  // on a GOOD planet. SURVEY's assignSite moves it to another site (the label and the count stay).
+  site: string | null;
 }
 
 export interface NoGoArcState {
@@ -214,6 +221,11 @@ export interface LandingState {
   // Slice 4c (AUTODROP, docs/phase3/impl/slice-4cde-plan.md §2.2): its machine, in the state so a controller is derived
   // from it each tick (landing-controller.ts) and dies with its file. At rest at every save point (save-codec checks it).
   autodrop: AutodropState;
+  // Slice 6 (SURVEY, slice-6-plan §2.2): the ship's survey (a GOOD planet: site 'good', no sites), at rest at every save point
+  // (save-codec checks it), and a counter bumped by every LZ move: the drop cache's, AUTOBURN v3's aim's and AUTODROP v3's
+  // plan's keys (R13), 0 until a move.
+  survey: SurveyState;
+  sitesRev: number;
 }
 
 // The window open now (§3.2, risk 13): the dot's centre in `lz`'s bracket while the ship is in the launch band; `sure`

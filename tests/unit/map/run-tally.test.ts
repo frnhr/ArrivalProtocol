@@ -17,7 +17,7 @@ import { run1Map, WORKED_ROUTE } from './run1-fixture';
 
 function result(name: string, slot: number, depth: number, outcome: ShipOutcome, landed: number, points: number): ShipResult {
   return {
-    shipId: `ship-${slot}`, shipName: name, slot, depth, outcome, stars: landed > 0 ? 2 : 0, fuelLeftPct: 30, ringMiss: null,
+    shipId: `ship-${slot}`, shipName: name, slot, depth, outcome, stars: landed > 0 ? 2 : 0, fuelLeftPct: 30, ringMiss: null, survey: null,
     colonistsAboard: landed, lzs: [], offSite: 0, noGo: 0, restored: 0, parked: [], notLaunched: 0, landedInLz: landed, points,
     colony: landed > 0 ? 'X' : null, pods: [],
   };
