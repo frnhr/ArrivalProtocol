@@ -512,6 +512,18 @@ const step2Armed = await waitFor(() => window.__ap.store.getState().hollow.final
   && document.getElementById('finaleChoice').classList.contains('armed'), 8000);
 await shot('26-finale-step2');
 await overflow('FINALE step 2');
+// Slice 8 POLISH (the 7d review's NOTED edge): step 2 has four rows now (CONTACT's, `???` while closed); on 390 px each is a
+// button at least 44 px tall inside the width, and the last one scrolls onto the screen.
+const sheet2 = await st(() => [...document.querySelectorAll('#fcOptions .fc-row')].filter((row) => row.getClientRects().length > 0).map((row) => {
+  const r = row.getBoundingClientRect();
+  return { tag: row.tagName, cls: row.className, left: Math.round(r.left), right: Math.round(r.right), height: Math.round(r.height) };
+}));
+const lastRow = await st(() => { const rows = [...document.querySelectorAll('#fcOptions .fc-row')].filter((row) => row.getClientRects().length > 0); return rows[rows.length - 1]?.id || null; });
+if (lastRow) await page.locator(`#${lastRow}`).scrollIntoViewIfNeeded();
+const lastShown = lastRow === null ? false : await st((id) => { const r = document.getElementById(id).getBoundingClientRect(); return r.top >= 0 && r.bottom <= window.innerHeight; }, lastRow);
+check('FINALE step 2 on a phone: four rows, each a button ≥ 44 px tall inside the width, the last scrolled onto the screen', step2Armed
+  && sheet2.length === 4 && sheet2.every((row) => row.tag === 'BUTTON' && row.height >= 44 && row.left >= 0 && row.right <= vw) && lastShown,
+  JSON.stringify({ sheet2, lastRow, lastShown }));
 await page.locator('#fcBack').scrollIntoViewIfNeeded();
 await onScreen('FINALE step 2', '#fcBack');
 check('…a tap on PURGE opens step 2; its [ESC] BACK is a button', step2Armed && await st(() => document.getElementById('fcBack').tagName === 'BUTTON'));

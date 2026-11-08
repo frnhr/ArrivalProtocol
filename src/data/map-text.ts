@@ -205,8 +205,9 @@ export const MAP_TEXT = {
 
   // --- The PACKET (02 §4; 01 §3.16's room bar) -------------------------------------------------------------------------
   packet: {
-    headline: (ship: string, colonists: number, ly: number, slack: number): string =>
-      `NEXT: ${ship} · ${formatCount(colonists)} COLONISTS · ${ly} LY · ${yrs(slack)} EARLY`,
+    // `colonists` null: a `?` ship not visited yet (slice 8 POLISH): its card said `??? COLONISTS`, and so does the PACKET.
+    headline: (ship: string, colonists: number | null, ly: number, slack: number): string =>
+      `NEXT: ${ship} · ${colonists === null ? '???' : formatCount(colonists)} COLONISTS · ${ly} LY · ${yrs(slack)} EARLY`,
     room: (room: number, files: number, floor: number): string => `ROOM ${room} · FILES ${files} + FLOOR ${floor}`,
     roomNoFloor: (room: number, files: number): string => `ROOM ${room} · FILES ${files} · NO FLOOR`,
     squeeze: (held: number, arrives: number, lost: number): string => `CHARGE ${held} → ${arrives} ON ARRIVAL · ${lost} WON'T FIT`,

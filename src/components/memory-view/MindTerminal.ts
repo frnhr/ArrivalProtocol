@@ -13,6 +13,7 @@ import { verbSecondsLeft } from '@state/selectors';
 import { terminalVoice, choiceHasTimer, lockAimView } from '@systems/resident-hud';
 import { createTypeQueue } from '@components/hud/typewriter';
 import { sleepLineYears } from '@data/map-text';
+import { isBypassLine, bypassMask, bypassResolvedSec, bypassParts } from '@systems/receiver-bypass';
 import {
   TERMINAL_VISIBLE_LINES, LOG_VIEW_KEEP_ROWS, CHOICE_URGENT_SEC, VERB_TELEGRAPH_TYPE_CPS, SLEEP_YEAR_ROLL_MS, SLEEP_YEAR_TICK_YEARS,
 } from '@data/tuning';
@@ -47,6 +48,10 @@ import {
 // green with its soft sine (systems/resident-hud.ts terminalVoice). A resident's lock (`> LOCK POD 07 ... 3`) counts down as
 // a verb does, from state.resident.corrupted.lock (liveVerbText(state, 'resident')), in its own row: the verb rows are keyed
 // by speaker, so a HOLLOW verb and a lock never end each other. The sleeper's offer has no timer: no bar, no clock.
+// Slice 8 POLISH (04 §3.15, OD 20): the boot's RECEIVER CLOSED line (the 'resident' tone) is a receiver bypass. It shows
+// whole as it starts, its letters rolling, and they lock left to right (systems/receiver-bypass.ts) over BYPASS_RESOLVE_SEC
+// of its own typing time; the line keeps the queue as long as it always did (its length at TERMINAL_TYPE_CPS), so every line
+// after it types when it always did. A click on the lines, the boot's end or reduced motion shows it resolved.
 
 interface ChoiceButton {
   option: string;
@@ -300,9 +305,37 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
       row.hidden = false;
       scrollToEnd();
     };
+    const cps = verb !== null ? VERB_TELEGRAPH_TYPE_CPS : lineTypeCps(entry.speaker);
+    // Slice 8: the receiver bypass's mask and the second its last letter locks (null: an ordinary line).
+    const bypass = isBypassLine(entry) ? { mask: bypassMask(entry.text, entry.id), resolvedSec: 0 } : null;
+    if (bypass !== null) {
+      bypass.resolvedSec = bypassResolvedSec(entry.text, bypass.mask);
+      row.classList.add('bypass');
+    }
+    // The bypass as drawn after `count` units of its typing time: rolling, or resolved (done, reduced motion, the boot over).
+    const paintBypass = (count: number, done: boolean): void => {
+      if (bypass === null) return;
+      const state = store.getState();
+      const elapsedSec = count / cps;
+      const resolved = done || state.ui.reducedMotion || state.run.phase !== 'boot' || elapsedSec >= bypass.resolvedSec;
+      if (resolved) {
+        if (text.childElementCount > 0 || text.textContent !== entry.text) text.textContent = entry.text;
+      } else {
+        // A rolling run in its own dimmer span, a locked one as plain text.
+        text.replaceChildren(...bypassParts(entry.text, elapsedSec, bypass.mask, entry.id).map((part) => {
+          if (!part.rolling) return document.createTextNode(part.text);
+          const span = document.createElement('span');
+          span.className = 'bp-roll';
+          span.textContent = part.text;
+          return span;
+        }));
+      }
+      if (resolved && row.classList.contains('bypass-rolling')) replayAnimation(row, 'bypass-locked');
+      row.classList.toggle('bypass-rolling', !resolved);
+    };
     queue.push({
       length: entry.text.length,
-      cps: verb !== null ? VERB_TELEGRAPH_TYPE_CPS : lineTypeCps(entry.speaker),
+      cps,
       onStart: () => {
         if (roll !== null) rollFromMs = performance.now();
         reveal();
@@ -318,7 +351,8 @@ export function mountMindTerminal(store: Store<GameState>): () => void {
         if (row.hidden) reveal();
         // A live verb types its number as it is now (the same length: one digit), then counts on per tick.
         const live = verb !== null && verbRows.get(verb.source) === verb ? liveCount(verb, store.getState())?.text ?? null : null;
-        text.textContent = (live ?? rolledText()).slice(0, count);
+        if (bypass !== null) paintBypass(count, done);
+        else text.textContent = (live ?? rolledText()).slice(0, count);
         // Typed before its roll is over: the year rolls on in place to its end.
         if (done && rollFromMs !== null) requestAnimationFrame(rollOn);
         row.classList.toggle('typing', !done);
