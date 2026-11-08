@@ -433,6 +433,29 @@ export type TerrainKind = 'no-go' | 'site' | 'unmapped' | 'ground';
 // Slice 6 (plan §2.14): the glyph of ground not mapped yet (`░`); Track SITES paints the rest of the look.
 export const UNMAPPED_GLYPH = '░';
 
+// Slice 6 (review M4): rim arcs cut where the views need them. The strip places a stretch by its middle's wrapped angle from
+// the dot (angleDelta, in (−π, π]), so a stretch wider than π (the whole rim, unmapped at the boot) would be laid out behind
+// the dot; the overview line draws a span from its middle and cuts what wraps past its ends at angle 0. Each piece is at
+// most π wide and never crosses a multiple of 2π; a whole turn or more is the whole rim.
+const TAU = 2 * Math.PI;
+export function splitRimArcs(arcs: readonly RimArc[]): RimArc[] {
+  const out: RimArc[] = [];
+  for (const arc of arcs) {
+    const width = Math.min(arc.toRad - arc.fromRad, TAU);
+    if (!(width > 0)) continue;
+    let from = ((arc.fromRad % TAU) + TAU) % TAU;
+    let left = width;
+    while (left > 0) {
+      const toTurn = TAU - from;
+      const piece = Math.min(left, Math.PI, toTurn);
+      out.push({ fromRad: from, toRad: from + piece });
+      left -= piece;
+      from = piece === toTurn ? 0 : from + piece;
+    }
+  }
+  return out;
+}
+
 export interface TerrainArc {
   fromRad: number;
   toRad: number;
@@ -452,7 +475,8 @@ function stretchHash(index: number): number {
 // arcs, the LZs' brackets, the rim SURVEY has not mapped (`unmapped`, slice 6: systems/survey-hud.ts surveyUnmapped; none on
 // a GOOD planet), then the ground in TERRAIN_STRETCH_DEG stretches of the terrain's main or second glyph. Pure, from the
 // landing's own data.
-export function terrainStretches(landing: Readonly<Pick<LandingState, 'terrain' | 'lzs' | 'noGo'>>, unmapped: readonly RimArc[] = []): TerrainArc[] {
+export function terrainStretches(landing: Readonly<Pick<LandingState, 'terrain' | 'lzs' | 'noGo'>>, unmappedArcs: readonly RimArc[] = []): TerrainArc[] {
+  const unmapped = splitRimArcs(unmappedArcs);
   const pattern = TERRAIN_PATTERN[landing.terrain];
   const arcs: TerrainArc[] = [
     ...landing.noGo.map((arc): TerrainArc => ({
@@ -595,7 +619,7 @@ export function groundTrackModel(state: Readonly<GameState>, sol: Readonly<DropS
   const blocked = sol !== null && sol.block !== null ? GROUND_TRACK_TEXT.noSolution
     : dot === null ? GROUND_TRACK_TEXT.noDot : null;
   // The terrain under the strip: the planet's stretches that reach it, in priority order (terrainAt takes the first).
-  const unmapped = surveyUnmapped(state);
+  const unmapped = splitRimArcs(surveyUnmapped(state));
   const terrain: TerrainStretch[] = terrainStretches(landing, unmapped).flatMap((arc): TerrainStretch[] => {
     const span = stripSpan((arc.fromRad + arc.toRad) / 2, (arc.toRad - arc.fromRad) / 2);
     return onStrip(span) ? [{ ...span, glyph: arc.glyph, kind: arc.kind }] : [];
