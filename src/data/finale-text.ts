@@ -68,6 +68,9 @@ export const FINALE_TEXT = {
     ? 'NOW: + 1 eaten driver comes back · launch its pod'
     : `NOW: + ${drivers} eaten drivers come back · launch their pods`),
   nextRunLead: 'NEXT RUN:',
+  // The FUEL bar's ★ notch on the final ship (review B2: systems/finale-card.ts fuelStarTitle, Track CARD's hook): the notch
+  // is THE EMPTY SHIP's FUEL too (EMPTY_SHIP_FUEL_PCT = STAR_FUEL_PCT, R8).
+  fuelStar: `★ ${EMPTY_SHIP_FUEL_PCT}% FUEL · also THE EMPTY SHIP's: SPARE and SUNSET need it`,
   // An option never earned and out of reach (R11).
   unknown: '???',
   // STAY's sub-row (R9), and step 2's way back.

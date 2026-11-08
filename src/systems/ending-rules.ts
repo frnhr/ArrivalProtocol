@@ -49,7 +49,8 @@ export interface StayCandidate {
 
 // A ship of the run is ★ ON TARGET by its pods (R9; landing-rules onTargetTally's rule on the summaries): the colonists down
 // soft in an LZ with room are at least STAR_ON_TARGET_FRAC of everyone it arrived with (its unlaunched pods count).
-function resultOnTarget(result: Readonly<ShipResult>): boolean {
+// Exported for the save codec's STAY check (a ship of run.ships named by the record must be one).
+export function shipOnTarget(result: Readonly<Pick<ShipResult, 'pods'>>): boolean {
   let colonists = 0;
   let onTarget = 0;
   for (const pod of result.pods) {
@@ -73,7 +74,7 @@ export function stayCandidates(state: Readonly<GameState>): StayCandidate[] {
     ships.push({ slot, shipName: state.level.shipName, colony: named(state.landing.colony, state.level.shipName), year: routeYear(map, slot) });
   }
   for (const result of [...state.run.ships].reverse()) {
-    if (!resultOnTarget(result)) continue;
+    if (!shipOnTarget(result)) continue;
     ships.push({ slot: result.slot, shipName: result.shipName, colony: named(result.colony, result.shipName), year: routeYear(map, result.slot) });
   }
   return ships.slice(0, STAY_PICK_MAX);

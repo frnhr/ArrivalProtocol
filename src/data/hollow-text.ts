@@ -184,6 +184,12 @@ const mergeControl = (unit: number): string => `Unit ${unit} is non-compliant. :
 
 // LAST LIGHT's finale (§1, §6.6, §9 WP11 items 4–5, systems/finale.ts): ARRIVAL CONTROL's order at ORBIT LOCK, the
 // strip through the duel and the choice, the choice's words, and the two endings (≤ 6 lines each: part 2 types them).
+// Slice 7a (Track FINALE; review M5's keep-set): the two-step card's words are data/finale-text.ts FINALE_TEXT. Every key
+// below stays until the fix pass after Track CARD's merge: WP11's card (purge*/merge* card words, choice*, endingHint) and
+// its typed endings (purgeEnding, mergeEnding, retired by R13's verdict; finale.ts types them only with ENDINGS_BUILT.twoStep
+// down), mergeNeeds (WP11's refusal, finale.ts finaleChoiceRefusal) and stripChoice (the strip with the gate down) are then
+// dead and go, as do lastWords and the four echoes/verdicts (WP11's, said only with the gate down: the two steps say
+// FINALE_TEXT's). The duel's words (deleteIt, rootTag, the strip's duel lines, unresolvedLine) stay in use.
 export const HOLLOW_FINALE = {
   deleteIt: (hollow: string): string => `Please delete ${hollow}. :)`,
   // The root's tag once the duel opens it, beside its name on the strip (§6.6: `UNIT-046 ROOT · 16`; the name is the
