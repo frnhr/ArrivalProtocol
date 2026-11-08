@@ -30,6 +30,7 @@ export default defineConfig({
     // or tsconfig.json in there would otherwise force a full reload of every open game tab.
     // .claude/ holds agents' git worktrees (whole copies of the repo, index.html included), and
     // tests/.out/ holds e2e output: an edit in either reloaded the e2e tier's page mid-flight.
-    watch: { ignored: ['**/.tmp/**', '**/.claude/**', '**/tests/.out/**'] },
+    // Anchored to this checkout's root: a worktree itself lives under .claude/, so '**/.claude/**' would ignore all of it.
+    watch: { ignored: ['**/.tmp/**', `${resolve(__dirname, '.claude')}/**`, `${resolve(__dirname, 'tests/.out')}/**`] },
   },
 });
