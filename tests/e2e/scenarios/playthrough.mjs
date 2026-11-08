@@ -92,7 +92,8 @@ const BOOT_DELIVERIES = {
   CORMORANT: ['> DELIVERY: swap (arrived 2659)'], 'LAST LIGHT': ['> DELIVERY: cp (arrived 2915)'],
 };
 const MAX_LINE_CHARS = 70;         // tuning.ts MAX_LINE_CHARS: what the strip promises to fit
-const SHIP_MAX_MS = 6 * 60_000;    // a flight longer than this is stuck (a kid's whole run is about 15 minutes)
+const SHIP_MAX_MS = 8 * 60_000;    // a flight longer than this is stuck. Raised from 6 min in slice 7a: POOR CORMORANT's
+                                   // real-time flight by the strip measured 315–359 s, too close to a stuck-guard.
 const SCREEN_MAX_MS = 3 * 60_000;  // a report, TRANSMIT
 const LANDING_MAX_MS = 5 * 60_000; // a landing by the strip (LAST LIGHT's four LZs and its duel)
 const POLL_MS = 80;                // the kid's eyes: how often it reads the strip
