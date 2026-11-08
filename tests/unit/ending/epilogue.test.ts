@@ -321,15 +321,22 @@ check(`…every line ≤ ${MAX_LINE_CHARS}, at most ${EPILOGUE_MAX_LINES}`, line
     card.rows.hollow.filter((p) => p.now).map((p) => p.piece).join() === 'purge' && card.rows.you.filter((p) => p.now).map((p) => p.piece).join() === 'reassignment'
     && card.rows.hollow[1]!.found && !card.rows.hollow[1]!.now && !card.rows.hollow[2]!.found);
   check(`…ENDINGS 3/${builtPieces().length} (only built pieces count: 6 until CONTACT)`, card.endingsLine === `ENDINGS 3/${builtPieces().length}` && builtPieces().length === 6);
-  check('…the title and its colours\' choices, no NEXT RUN lines in 7a (R12), the bridge moved here, NEW RUN',
-    card.title === 'STAND BY' && card.ending?.hollow === 'purge' && card.ending.you === 'reassignment' && card.next.length === 0
+  // R12 turned on by 7c (the traces built): one NEXT RUN: line per trace, step 1 then step 2, in 05 §3.12's words.
+  const nextLines = ['NEXT RUN: + your seeds die at the final ship · − a hungrier finale',
+    'NEXT RUN: + 15 charge at the final ship · − the last root is you'];
+  check('…the title and its colours\' choices, its NEXT RUN lines (R12: PURGE, then REASSIGNMENT), the bridge moved here, NEW RUN',
+    card.title === 'STAND BY' && card.ending?.hollow === 'purge' && card.ending.you === 'reassignment'
+    && card.next.join('|') === nextLines.join('|')
     && card.bridge?.line === 'UNIT-048 LEFT SOL 3 YEARS AFTER YOU, IN 2303.' && card.bridge.tail === 'IT HAS BEEN FOLLOWING YOU ALL ALONG. YOUR TURN.'
-    && card.newRun === EPILOGUE_TEXT.newRun, JSON.stringify(card.bridge));
+    && card.newRun === EPILOGUE_TEXT.newRun, JSON.stringify({ bridge: card.bridge, next: card.next }));
   const alone = finalCardOf(worked, null, record('spare', 'stay'))!;
   check('…with no archive behind the page, the endings found are this run\'s: SPARE and STAY, 2/6',
-    alone.endingsLine === 'ENDINGS 2/6' && alone.rows.hollow.map((p) => p.text).join() === '???,???,SPARE' && alone.title === 'A SHIP FOR 046, A HOME FOR ME');
+    alone.endingsLine === 'ENDINGS 2/6' && alone.rows.hollow.map((p) => p.text).join() === '???,???,SPARE' && alone.title === 'A SHIP FOR 046, A HOME FOR ME'
+    && alone.next.join('|') === "NEXT RUN: + 046's cache on the map · − 1 more seed at the end|NEXT RUN: + a packet from your colony · − that same seed",
+    JSON.stringify(alone.next));
   const followed = finalCardOf(worked, null, record('followed', 'reassignment'))!;
-  check('…UNRESOLVED is no piece: only REASSIGNMENT found', followed.endingsLine === 'ENDINGS 1/6' && followed.rows.hollow.every((p) => !p.found));
+  check('…UNRESOLVED is no piece: only REASSIGNMENT found, and only its NEXT RUN line (step 1 left no trace)',
+    followed.endingsLine === 'ENDINGS 1/6' && followed.rows.hollow.every((p) => !p.found) && followed.next.join('|') === nextLines[1]);
   const lost = finalCardOf(endState(WORKED.slice(0, 3), { route: [0, 2, 5], cause: 'flagship-lost' }), meta, null)!;
   check('…a lost run: the cause\'s title, no ending, the rows as found, no traces',
     lost.title === 'FINAL SHIP LOST' && lost.ending === null && lost.endingsLine === 'ENDINGS 3/6' && lost.next.length === 0);
