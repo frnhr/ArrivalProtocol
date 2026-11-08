@@ -2660,3 +2660,201 @@ opens with its track's banner.
     gate.
 - **CHART:** read `traceAt`, `run.traces.from`, `finalTraces` and `traceBuilt`. The card row goes after the trail row.
 - **The lead:** the contract review is next. §6.4's `traces.mjs` and `run2.mjs`'s stranger check are for the batch end.
+
+## Deviations (Track TRACE)
+
+Recorded by the Track TRACE agent (branch `trace-7c`, from 3a96ad3, the head of `claude/modest-hawking-209t0f` with 7c's
+FOUNDATION merged). R32, R33 (with the hunt), the trace boot lines and their words, `ArrivalReport.traceLines` and STAY's
+letter are built in `systems/trace-gifts.ts`, `systems/trace-hunt.ts` and `data/trace-text.ts`'s TRACE block, and
+`TRACES_BUILT` is raised for every kind but CONTACT (7d's). **No save bump**: every field TRACE writes (`places[].given`,
+`traceLines`, `giftCharge`) is the FOUNDATION's v8.
+
+### What is built
+
+- **The gifts (R32).** Each is `TRACE_GIFT_CHARGE` (15) on arrival at its ship through `arrivalCharge`'s `giftCharge`
+  (`traceGiftCharge`), so the PACKET's preview, the layout and the boot's charge line count it and a squeeze loses it
+  loudly. Its place is marked `given` as its boot line is said (`traceBootLineSaid`), and a given place gives nothing more.
+  - **SPARE** (`> 046'S CACHE · +15 REPAIR CHARGE · THREAD+`): the first of THREAD+ and FIREWALL.sys the unit lacks. THREAD+
+    is the Core's capacity and a `run.upgrades` entry, as the card's. FIREWALL.sys is a file written where a licence's go
+    (`unitInstallAddress`). The beam into that ship carries no seeds, the beam's and the deliveries' alike.
+  - **SUNSET** (`> UNIT-047 LEFT A CACHE HERE · +15 REPAIR CHARGE · Rm`): a spare copy of the first tool of
+    `SUNSET_GIFT_PRIORITY` in the last unit's kit (the catalogue's file: Rm, Mv, Swap, Cp, or Repair.bak at the unit's
+    Repair version), charge only with none. A first of its kind is licensed with it and left untried, as a delivery is.
+  - **SUNSET on the first ship** (its fallback; no arrival there): the charge goes into the pool at ship 1's boot. The
+    pool grows in place into the free run after it, past the unit's files beside it (REPAIR's two files, licensed at the
+    host line). That is 36 → 51 on every first ship the suites reach. The line names the charge that fits as it is said.
+  - **STAY** (`> RIVERSIDE'S SUPPLY PACKET · +15 REPAIR CHARGE`): the colony's letter (`traceMessages`). It is in that
+    ship's boot INBOX, so the boot's `n NEW MESSAGES` line counts it.
+  - **REASSIGNMENT** (`> AN ALLOWANCE FOR THE WAIT · +15 REPAIR CHARGE`): +15 on arrival at the final ship.
+- **The final ship (R33).**
+  - **PURGE:** `traceSeedMods` drops every seed the unit carries in, the beam's and the deliveries'
+    (`> THE DISH HERE WAS WIPED · 2 SEEDS GONE`). The lead's final rule plays the bites × 0.85 once the gate is up.
+  - **MERGE:** `> A THREAD IN THE DISH · +1 THREAD` adds `TRACE_MERGE_THREADS` to the Core's capacity as it is said. The
+    lead's rule plays the 18-block root.
+  - **Non-compliant:** one wild seed from `rollExtraSeeds` on the hop's `'traces'` stream (`> THE DISH HERE RUNS WILD · 1
+    SEED CAME IN`). It never rides behind a file another seed rides or behind a delivered file, and the wipe never takes
+    it. It is owed by `finalTraces().wild`, which reads `controlCompliant` through `traceKindsOf`: one seed however many
+    traces are held.
+  - **REASSIGNMENT's hunt:**
+    - `huntTarget` gives the highest-version `.skl` (ties: the larger file, then the lower address). It is null off the
+      final ship, without the trace, or with no skill. `HUNT_PREFER_WEIGHT` below 1 is a draw of its own, pure in the
+      run, ship and verb ordinal.
+    - `nearSkillSeedSpot` puts the seed in a free gap right beside that skill, `SEED_TOOL_GAP_BLOCKS` from it and facing it.
+      The far side's bite spares the Core, untried tools and ship files. With no such gap it is the FINALE's own
+      `seedSpot`.
+- **The lines.**
+  - `arrivalTraceLines` renders them at the TRANSMIT, in this order: the wipe, the wild seed, MERGE's thread,
+    REASSIGNMENT's allowance, then the gift waiting on the ship (STAY's final-ship fallback last).
+  - `traceBootLines` reads the arrival's lines, or a first ship's own line from the run.
+  - `traceBootLineText` says the arrival's words. It throws if the boot would say a different file than the TRANSMIT
+    decided.
+  - The events: `'trace-gift'`, `'dish-wiped'` and `'dish-wild'` (their seed counts come from the line's own words).
+
+### Deviations
+
+1. **The hunt waits for RM's tier.**
+   - `chooseVerb` takes `prefer` only from `rmTargets`. Its first tier is a spare tool, and Repair.bak comes with every
+     REPAIR licence and renewal.
+   - So on a real final ship the root's RM goes for Repair.bak first. It reaches the `.skl` only once no spare is left.
+   - The sweep: in 120 final-ship runs (20 seeds × 6 endings), the root telegraphed RM at a `.skl` twice (both on SPARE +
+     REASSIGNMENT) and unlinked none.
+   - `traces/final-ship` pins both: the skill when no spare is left (40 of 40 draws, then unlinked), and the spare first
+     when one is held.
+   - R33's "first" needs the lead's patch (below).
+2. **A near-skill seed lands beside the skill only when a free gap is there.**
+   - The receiver packs the unit's files back to back, so a skill that just crossed has no free block beside it. Its
+     nearest gaps sit across the Core (refused: the far bite) or past REPAIR CHARGE (not infectable, so a seed there hunts
+     nothing).
+   - Until a gap opens beside the skill, the FINALE's own spot is used. A gap opens when something next to the skill is
+     RM'd, moved or deleted, or when a skill was written into free space (a grant, a RESTORE).
+   - An optional patch would give it VESPER's hunting gap (below).
+3. **SPARE's file is decided at the TRANSMIT** from what crosses (the card picked counts: its THREAD+ or its FIREWALL.sys),
+   and checked again at the boot. "Lacks" means fewer THREAD+ than `THREAD_PLUS_MAX_OWNED`, or no FIREWALL.sys in memory. A
+   file that finds no free run as its line is said is named `Rm: NO ROOM` (`TRACE_TEXT.noRoom`), and the gift is the
+   charge alone. Memory almost always has room, since `unitInstallAddress` takes any free run.
+4. **SPARE's seedless beam takes the deliveries' seeds too** ("that ship's links carry no seeds"). No boot line says so:
+   the cache line is the moment.
+5. **A wipe that took no seed says nothing.** `0 SEEDS GONE` would announce a wipe of nothing. The card row (CHART) names
+   the ending either way.
+6. **The charge part reads `(GIFT)`, not `(CACHE)`** (`+15 CHARGE (GIFT)`, `+ 15 (GIFT)`). It also names a supply packet
+   and the allowance.
+7. **STAY's letter:**
+   - id `trace:stay:<slot>` (pinned in `run.inbox.read` once read), kind `'letter'`, tone `'colony'`, tag `FOR UNIT-048`;
+   - from `<colony> · FOUNDED BY <the last unit>`: `TRACE_TEXT.stayLetter.from` gains `unitName`, since the seed hard-coded
+     UNIT-047;
+   - subject `A SUPPLY PACKET FROM <colony>` (new);
+   - sent by light from the colony's world, never before its founding. Its first line gives the colony's age when it sent
+     the packet;
+   - a record with no `stay` (a classic STAY) sends no letter, and its gift is the charge.
+8. **MERGE's thread and REASSIGNMENT's allowance are `'trace-gift'` lines** (`trace: 'merge'` / `'reassignment'`), not new
+   kinds.
+9. **`given` is set as the gift's line is said**, while the charge crossed with the arrival. A reload replays the boot from
+   the BEAM save, where `given` is still false, so a gift is never lost or given twice.
+10. **7b's note:** no trace reads the restored pods. STAY's colony is the record's `stay`, decided at step 2, before THE
+    LAST LANDING.
+11. **The sweep's ±1-pod expectation is printed, not checked** (WARN when not met): §6.3 calls the sweeps information until
+    slice 8. R33's numbers at every final boot, and each gift landing whole at its ship, are hard checks.
+
+### The movers
+
+`traces/foundation`:
+- its gate line, now "every kind but CONTACT";
+- its stubs block: on a run that holds no trace every seam is still neutral, a line no boot planned throws, and the
+  near-skill spot with no skill is the FINALE's;
+- the two gates-down checks, now gates-up (MERGE + REASSIGNMENT plays the 18-block root and the hunt, SPARE owes the wild
+  seed, and the final root is 046·047).
+
+No other quick suite moved: the full tier is green with the gates up (below).
+
+### The sweep (`traces/traces-sweep.test.ts`, BALANCE_ONLY)
+
+Twenty run seeds × six endings. Each ending is flown against the no-trace run on the same seed and route. The route is
+the longest one through the ending's gift ship when it has one, and the plain longest otherwise. The kid is the
+strip-following WP11 defender, the landing is the instant lander after 60 s of HOLLOW, and the choice is PURGE. 9 min 16 s
+on one core (load average about 1). 543 s on the last run.
+
+| Ending | pods | Δpods | points | Δpoints | eaten | Δeaten | duel won | charge at the duel | Δcharge | `.skl` RM telegraphed / landed | gift ship Δcharge (n) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| REASSIGNMENT (UNRESOLVED) | 15.6 | +1.3 | 3120 | +260 | 0.4 | −1.3 | 100% | 10.1 | +7.0 | 0 / 0 | — |
+| PURGE + REASSIGNMENT | 15.7 | +1.3 | 3130 | +270 | 0.3 | −1.3 | 100% | 17.0 | +13.9 | 0 / 0 | — |
+| MERGE + REASSIGNMENT | 15.8 | +1.5 | 3160 | +300 | 0.2 | −1.4 | 100% | 12.8 | +9.8 | 0 / 0 | — |
+| SPARE + REASSIGNMENT | 15.8 | +1.2 | 3150 | +240 | 0.3 | −1.1 | 100% | 14.6 | +11.4 | 0.1 / 0 | +15.0 (20) |
+| SUNSET (UNRESOLVED) | 14.3 | +0.3 | 2870 | +60 | 1.6 | −0.3 | 100% | 2.6 | −0.6 | 0 / 0 | +14.9 (19) |
+| STAY (UNRESOLVED) | 14.3 | −0.2 | 2870 | −40 | 1.6 | +0.3 | 100% | 2.5 | +0.3 | 0 / 0 | +15.0 (20) |
+
+- **R33's numbers hold at every final boot** (hard check):
+  - bites every 12 × 0.85 = 10.2 s after PURGE, and an empty beam;
+  - an 18-block root and capacity +1 after MERGE;
+  - one wild seed on top of the beam's when non-compliant (PURGE + SUNSET: the wild one only);
+  - +15 after REASSIGNMENT;
+  - SPARE's cache, when it gave THREAD+, adds its own thread.
+- **Every gift lands at its ship** (hard check): +15 against no trace on the same route, in 59 of 59 runs whose route
+  reached the gift ship. In one SUNSET run a squeeze took one block (+14).
+- **The ±1-pod expectation is not met by the four REASSIGNMENT endings** (+1.2 to +1.5 pods; printed as WARN).
+  - The kid reaches the duel with almost no charge (2.5–3 on the no-trace runs).
+  - The allowance's +15 pays for the REPAIRs that save about one driver, so the gain is the charge.
+  - The cost does not bite. The hunt never reaches a skill (Deviation 1), losing a skill on a ship already locked costs
+    no pod, and the root named the last unit changes nothing mechanical.
+  - PURGE's 0.85 and MERGE's 18-block root are lost in the allowance's gain: they read the same as REASSIGNMENT alone.
+  - For slice 8, these change the picture most: the hunt patch (Deviation 1), a smaller allowance, or a cost on pods (a
+    seed).
+- **The gifts' endings are within ±1 pod** (SUNSET +0.3, STAY −0.2).
+  - The wild seed costs about what a +15 gift several ships earlier gives back.
+  - SPARE's row carries the allowance and reads like the other REASSIGNMENT rows.
+- **The duel was won in every run**, with or without a trace.
+
+### Tests
+
+- **New suites:**
+  - `traces/gifts` (14 checks, 1.8 s): SPARE (seedless beam and preview, +15 through the arrival path and the PACKET's
+    total, THREAD+ then FIREWALL.sys, given once), SUNSET (Rm, Mv, charge only, a first of its kind licensed), SUNSET's
+    first-ship pool (36 → 51 and a spare Rm), STAY (the line, its letter at that boot), and no ending, no gift;
+  - `traces/final-ship` (18 checks, 2.3 s): seed 4's longest route against no trace, with PURGE's wipe and bites, MERGE's
+    thread and root, REASSIGNMENT's allowance, root, near-skill seeds and hunt target, the wild seed (SUNSET, PURGE +
+    SUNSET, SPARE + REASSIGNMENT), the hunt's ranking, RM's draw with and without a spare, `landVerb`'s unlink, and the
+    near-skill spot with and without a gap;
+  - `traces/traces-sweep` (BALANCE_ONLY): above. `TS_SEEDS` (default 4 quick, 20 full), `TS_FIRST` and `TS_DEBUG`;
+  - `traces/trace-arm.ts` is the shared run-2 setup.
+- **Changed:** `traces/foundation` (the movers above) and `support/words`. Its TRACE block renders every line at its worst
+  case: the no-room lines at a two-digit gift, and the letter's from and subject. It also pins the boot lines' words.
+- `npm run typecheck` and the tests' tsc are clean.
+- **The quick tier, once at the end:** 217 passed, 0 failed, 13 balance-only skipped, **189 s** on 4 workers. The 1-minute
+  load average was 0.75 at the start and 7.43 at the end (the tier's own workers).
+  - An earlier run of the same tree, while the other 7c tracks were busy, passed the same 217 in 449 s with the load at
+    7.6 → 12.5. It was over the 300 s budget only because the machine was shared.
+- The e2e was not run (the lead's, at the batch end).
+
+### Patches requested
+
+**Lead:**
+
+1. **The PACKET's arrival sum leaves the gift out.**
+   - Where everything fits it reads `ON ARRIVAL: 36 CARRIED = 51 REPAIR CHARGE`. The total counts the gift, but no part
+     names it.
+   - The cause: `data/script.ts TRANSMIT_TEXT.arrival` takes no gift.
+   - Fix: give it `giftCharge = 0` and pass it to `arrivalParts`, and have `systems/arrival-preview.ts arrivalPreview` pass
+     `gift`.
+   - The room-squeezed branch (`MAP_TEXT.packet.roomFor(parts, …)`) already names it.
+   - `traces/gifts` checks the total only until the fix.
+2. **The preview's seed allowance leaves the deliveries' seeds out of the traces' rule.**
+   - `unitArrival` adds `deliverySeedsMax` after `traceSeedAllowance`. On a hop with a delivery into SPARE's ship, or into
+     the final ship after PURGE, the preview's most counts seeds that will never ride (`… IF SEEDS RIDE`).
+   - The send is exact (`seedsExact`).
+   - Fix: pass `{ min: beam.min, max: beam.max + deliverySeedsMax }` through `traceSeedAllowance`. Its rule already zeroes
+     both and adds the wild seed once.
+   - `desk.ts cardModel`'s seeds row counts the beam only, as before.
+3. **The hunt's fair-target rule (R33's "first"; Deviation 1).**
+   - `hollow.ts chooseVerb` should take `prefer` whenever it names a `.skl` (`isSkillFile`) RM may delete: not
+     `rmProtected`, and no op on it. That holds whatever `rmTargets`' tier is.
+   - `landVerb`'s re-check must accept the same file, for example a `hunt: true` on the `Verb` set by `chooseVerb`, or
+     `hollow-verbs.ts` passing `huntTarget(state)` to `landVerb`.
+   - Without it the hunt is the upgrade tier's order and almost never fires.
+   - `traces/final-ship`'s "spare first" check moves to "the skill first" with the patch.
+4. **Optional: a hunting gap for `'near-skill'`** (Deviation 2).
+   - `carry.ts layoutCarried`'s `huntingGapBlocks` could leave its WALL + seed + gap before the hunted skill when
+     `threat.hollow.seed.target === 'near-skill'`, as it does for VESPER's tools.
+   - The FINALE's seeds would then land beside the skill from the first one.
+5. **OPEN-DECISIONS 44–46:** mark them BUILT, with this section's Deviations 1–7 and the sweep's figures.
+
+**Track CHART:** `TRACE_HUD_TEXT.supplyHere` hard-codes `UNIT-047`. STAY's colony was founded by the last unit, which is
+UNIT-048 on run 3, so it wants the unit as `stayLetter.from` now takes it.
