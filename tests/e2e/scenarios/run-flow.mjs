@@ -378,6 +378,9 @@ const boarded = await st(() => {
 check('CORMORANT boots boarded: the unpack types `100% ... 108%`, the root sits in memory, HOLLOW silent', cormorantBoot
   && /100% \.\.\. 108%/.test(boarded.unpack ?? '') && boarded.root !== null && boarded.root >= 8 && boarded.rootChip >= 1 && boarded.hollowLines === 0 && boarded.events >= 1,
   JSON.stringify(boarded));
+// Slice 5 (plan §7.4): CORMORANT is seed 4's gone-resident ship (PURSER left), so its boot types the amber RECEIVER CLOSED line.
+const closed = await st(() => window.__ap.log().filter((entry) => entry.text === '> RECEIVER CLOSED · this ship launched with its own AI').map((entry) => entry.tone ?? null));
+check('…and, its resident gone (PURSER), the amber `> RECEIVER CLOSED · this ship launched with its own AI`', closed.includes('resident'), JSON.stringify(closed));
 await kit.lockInRing({ sleep: true });
 check('CORMORANT (locked at once) lands and reaches its LANDING REPORT', await kit.landToReport());
 await kit.finishReport();
@@ -390,6 +393,11 @@ const toLastLight = await packetThreat();
 check('the PACKET to LAST LIGHT: HOLLOW rides along (the uninvited chip, not boarding now), no NO RM with DELETE aboard',
   toLastLight.chip !== null && /^\?\?\? · \d+ BLOCKS · NOT YOURS · RIDES FREE$/.test(toLastLight.chip.label ?? '') && !toLastLight.chip.boards && toLastLight.noRm === null,
   JSON.stringify(toLastLight));
+// Slice 5: the draft out of CORMORANT is what PURSER left: headed LEFT BEHIND BY PURSER, three cards; [1] is a pool card.
+const purserDeck = await st(() => ({ title: document.getElementById('txDraftTitle').textContent,
+  cards: window.__ap.draft()?.offer.map((card) => `${card.id}${card.leftover ? `@${card.leftover.segId}` : ''}`) ?? [] }));
+check('…its draft is PURSER\'s leftover deck: `LEFT BEHIND BY PURSER`, three cards, the first a pool card it left', purserDeck.title === 'LEFT BEHIND BY PURSER'
+  && purserDeck.cards.length === 3 && purserDeck.cards[0].endsWith('@leftover1') && !purserDeck.cards[0].startsWith('skill'), JSON.stringify(purserDeck));
 await kit.pickCard(0);
 await page.locator('#txGo').click();
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'LAST LIGHT', 30000);
@@ -539,7 +547,9 @@ await waitFor(() => window.__ap.store.getState().run.phase === 'flight', 16000);
 const given = await st(() => [...window.__ap.give('mv'), ...window.__ap.give('rm')].map((seg) => seg.name));
 await st(() => window.__ap.route([0, 2, 5, 11, 15]));
 const warpBoot = await waitFor(() => window.__ap.store.getState().run.phase === 'boot' && window.__ap.store.getState().level.shipName === 'CORMORANT', 20000, 50);
-await page.waitForTimeout(2500);
+// Slice 5: the boot has one line more (CORMORANT's RECEIVER CLOSED: PURSER left), so the unpack's 108% is waited for, not timed.
+await waitFor(() => window.__ap.log().some((entry) => /UNPACKING.*108%/.test(entry.text)), 8000, 100);
+await page.waitForTimeout(300);
 const warpUnpack = await st(() => window.__ap.log().filter((entry) => /UNPACKING/.test(entry.text)).map((entry) => entry.text).slice(-1)[0] ?? '');
 await page.keyboard.press('Space');
 await waitFor(() => window.__ap.store.getState().run.phase === 'flight' && window.__ap.store.getState().level.shipName === 'CORMORANT', 20000);

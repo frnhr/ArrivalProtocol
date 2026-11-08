@@ -481,6 +481,21 @@ for (const [index, name] of SHIPS.entries()) {
   } else if (index > 0) {
     check(`${tag}: …the boot's unpack stops at 100% (nothing boarded)`, !bootLines.some((text) => /108%/.test(text)), bootLines.join(' | '));
   }
+  // Slice 5 (plan §7.4): CORMORANT's resident left (LOOKOUT), so its boot types the amber RECEIVER CLOSED line after the sleep
+  // line; the worked route meets no other resident.
+  {
+    const closed = await st(() => {
+      const lines = window.__ap.log().filter((entry) => entry.id > window.__e2eLogFrom);
+      const at = lines.findIndex((entry) => entry.text === '> RECEIVER CLOSED · this ship launched with its own AI');
+      return { at, tone: lines[at]?.tone ?? null, sleepBefore: at > 0 && lines.slice(0, at).some((entry) => /sleep/i.test(entry.text)) };
+    });
+    if (name === 'CORMORANT') {
+      check(`${tag}: …the boot types \`> RECEIVER CLOSED · this ship launched with its own AI\` in amber, after the sleep line (its resident left)`,
+        closed.at >= 0 && closed.tone === 'resident' && closed.sleepBefore, JSON.stringify(closed));
+    } else {
+      check(`${tag}: …no RECEIVER CLOSED line (no resident on this ship)`, closed.at < 0, JSON.stringify(closed));
+    }
+  }
   if (name === 'KESTREL') {
     check(`${tag}: …its ECC line names the beam seed: 1 FOREIGN BLOCK IN PACKET · NEXT TO TELEMETRY`,
       bootLines.some((text) => text === '> ECC: 1 FOREIGN BLOCK IN PACKET · NEXT TO TELEMETRY'), bootLines.join(' | '));
@@ -1008,8 +1023,18 @@ for (const [index, name] of SHIPS.entries()) {
     const wantChips = CHIPS_INTO[next.name].map((text) => `${text} · [SEND ON]`);
     check(`${tag}: …DELIVERIES on the PACKET into ${next.name}: ${wantChips.length === 0 ? 'none' : wantChips.join(', ')}`, JSON.stringify(deliveries.chips) === JSON.stringify(wantChips),
       JSON.stringify(deliveries));
-    check(`${tag}: …the draft is headed SALVAGE · PICK ONE TO CARRY, no REPAIR v2 card (${deliveries.offer.join(', ')})`, deliveries.salvage === 'SALVAGE · PICK ONE TO CARRY'
-      && !deliveries.offer.includes('repair-v2'), JSON.stringify(deliveries));
+    if (name === 'CORMORANT') {
+      // Slice 5 (04 §3.13, plan §7.4): CORMORANT's departed resident left its deck: headed LEFT BEHIND BY LOOKOUT, three cards
+      // (two pool cards, then a skill card or a stand-in), so the kid's [1] still picks a pool card.
+      const deck = await st(() => ({ cards: window.__ap.draft()?.offer.map((card) => ({ id: card.id, leftover: card.leftover?.segId ?? null })) ?? [],
+        skl: [...document.querySelectorAll('#txCards .tx-card')].map((card) => card.querySelector('.tx-card-title')?.textContent ?? '') }));
+      check(`${tag}: …the draft is LOOKOUT's deck: headed LEFT BEHIND BY LOOKOUT, three cards, the first two its pool cards, no REPAIR v2 (${deliveries.offer.join(', ')})`,
+        deliveries.salvage === 'LEFT BEHIND BY LOOKOUT' && deck.cards.length === 3 && deck.cards[0].leftover === 'leftover1' && deck.cards[1].leftover === 'leftover2'
+        && deck.cards[0].id !== 'skill' && !deliveries.offer.includes('repair-v2'), JSON.stringify({ ...deliveries, deck }));
+    } else {
+      check(`${tag}: …the draft is headed SALVAGE · PICK ONE TO CARRY, no REPAIR v2 card (${deliveries.offer.join(', ')})`, deliveries.salvage === 'SALVAGE · PICK ONE TO CARRY'
+        && !deliveries.offer.includes('repair-v2'), JSON.stringify(deliveries));
+    }
     if (deliveries.inTransit !== null) log(`${tag}: PACKET ${deliveries.inTransit}`);
     // Slice 2: 046.log's chip (`046.log · n/12`, glowing while an entry is unread), and HOLLOW riding the beam to VESPER
     // (boarding) and on to LAST LIGHT: the uninvited chip after the unit's own; NO RM only with no working rm aboard.

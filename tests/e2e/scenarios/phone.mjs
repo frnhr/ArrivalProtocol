@@ -30,6 +30,7 @@
 // • blue: the mini-HUD as a top bar; no named file cut across two rows;
 // • a refused tool tap (paused) says why in the FILESYSTEM pill;
 // • across the 768 px breakpoint and back, the desktop keeps Telemetry, Engine, NAV PLOT and COMMS open.
+// Slice 5: the sleeper's offer (CURLEW on seed 7, BARNABY woken) in the TERMINAL at 360 × 740: untimed, its buttons on screen.
 // Usage: node tests/e2e/scenarios/phone.mjs   (env PHONE_VIEWPORT=390x844, E2E_BASE_URL; tests/e2e/run.mjs runs it)
 import { launch, BASE_URL } from '../lib.mjs';
 import { readFileSync } from 'node:fs';
@@ -602,6 +603,59 @@ await overflow('LOST card');
 await onScreen('LOST card', '#burnResultRetry');
 await page.tap('#burnResultRetry');
 check('a tap on the LOST card\'s button goes on', await waitFor(() => document.getElementById('burnResult').hidden, 8000));
+
+// --- Slice 5: the sleeper's offer in the TERMINAL at 360 px (CURLEW, run 1's seed 7: BARNABY) ------------------------------
+// Its untimed choice (no clock, no bar) with its buttons under the line: every button on screen, nothing spilling sideways.
+{
+  const small = await browser.newContext({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
+  const p = await small.newPage();
+  p.on('pageerror', (err) => errors.push(String(err)));
+  const pst = (fn, arg) => p.evaluate(fn, arg);
+  const pwait = async (pred, maxMs, stepMs = 100) => {
+    const end = Date.now() + maxMs;
+    while (Date.now() < end) { if (await p.evaluate(pred)) return true; await p.waitForTimeout(stepMs); }
+    return false;
+  };
+  await p.goto(BASE_URL + '?debug&seed=7', { waitUntil: 'networkidle' });
+  await pst(() => { window.__ap.archiveClear(); window.__ap.saveClear(); });
+  await p.reload({ waitUntil: 'networkidle' });
+  await p.tap('#titleReceive');
+  await pwait(() => window.__ap.store.getState().run.phase === 'boot', 5000);
+  await pst(() => window.__ap.skipBoot());
+  await pwait(() => window.__ap.store.getState().run.phase === 'flight', 10000);
+  await pst(() => window.__ap.route([0, 1, 7]));
+  const curlew = await pwait(() => {
+    const s = window.__ap.store.getState();
+    if (s.run.phase === 'boot') window.__ap.skipBoot();
+    return s.run.phase === 'flight' && s.level.shipName === 'CURLEW';
+  }, 30000);
+  await pst(() => window.__ap.sleeper.wake());
+  const offering = await pwait(() => window.__ap.store.getState().resident.sleeper?.phase === 'offering', 20000);
+  if ((await pst(() => window.__ap.store.getState().ui.mode)) !== 'memory') await p.tap('.mode-toggle-opt[data-mode="memory"]');
+  // The wake's three lines and the offer type first (about 16 s); then its buttons come up.
+  await pwait(() => document.querySelector('.term-line.has-choice.choice-open .term-choice')?.hidden === false, 30000);
+  await p.waitForTimeout(500);
+  const offer = await pst(() => {
+    const row = document.querySelector('.term-line.has-choice.choice-open');
+    const buttons = [...(row?.querySelectorAll('.term-choice-btn') ?? [])].map((btn) => {
+      const box = btn.getBoundingClientRect();
+      return { text: btn.innerText.replace(/\s+/g, ' ').trim(), left: Math.round(box.left), right: Math.round(box.right), top: Math.round(box.top), bottom: Math.round(box.bottom) };
+    });
+    return { untimed: row?.classList.contains('untimed') ?? false, clock: row?.querySelector('.term-clock') ? getComputedStyle(row.querySelector('.term-clock')).display : null,
+      buttons, width: innerWidth, height: innerHeight, overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth };
+  });
+  check('slice 5: CURLEW at 360 px, BARNABY awake: its offer stands in the TERMINAL with no clock, RUN THE DROPS and MEND DRIVERS among its buttons',
+    curlew && offering && offer.untimed && offer.clock === 'none' && offer.buttons.some((btn) => btn.text.includes('RUN THE DROPS'))
+    && offer.buttons.some((btn) => btn.text.includes('MEND DRIVERS')), JSON.stringify(offer));
+  check('…every button on screen, nothing spilling sideways', offer.buttons.length >= 2 && offer.buttons.every((btn) => btn.left >= 0 && btn.right <= offer.width
+    && btn.bottom > 0 && btn.top < offer.height) && !offer.overflow, JSON.stringify(offer.buttons));
+  await p.screenshot({ path: `tests/.out/e2e/shots/phone-360x740-curlew-offer.png` });
+  // A tap on MEND DRIVERS answers it.
+  await p.locator('.term-line.has-choice.choice-open .term-choice-btn', { hasText: 'MEND DRIVERS' }).first().tap();
+  check('…a tap on MEND DRIVERS answers it', await pwait(() => window.__ap.store.getState().resident.sleeper?.job === 'mend', 4000));
+  await pst(() => { window.__ap.archiveClear(); window.__ap.saveClear(); });
+  await small.close();
+}
 
 check('no console errors', errors.length === 0, errors.slice(0, 4).join(' | '));
 const failed = results.filter((ok) => !ok).length;

@@ -239,9 +239,9 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('…HALCYON\'s card leads: Tessaly · 5 PODS, 1,000 COLONISTS, 31 YRS EARLY, 3 HITS · 1 FIXED WHILE YOU SLEEP → 2 LAND',
     card?.slot === HALCYON && card.name === 'HALCYON' && card.sub === 'Tessaly · 5 PODS' && card.colonists === '1,000 COLONISTS'
     && card.sched === '31 YRS EARLY' && card.cost === '3 HITS · 1 FIXED WHILE YOU SLEEP → 2 LAND', JSON.stringify(card));
-  check('…its rows: YOU FIT first, then FLYBY, TOO WIDE · MEMORY 320 · COMPACT · ROOM FOR YOU 152 · LZ: 2 · 21 LY · LINK 123 · NOISE CLEAN',
+  check('…its rows: YOU FIT first, then FLYBY, TOO WIDE · MEMORY 320 · COMPACT · ROOM FOR YOU 152 · LZ: 2 · 21 LY · LINK 123 · NOISE CLEAN · RESIDENT none',
     card?.rows[0] === 'fit=YOU FIT' && ['problems=FLYBY, TOO WIDE', 'memory=MEMORY 320 · COMPACT · ROOM FOR YOU 152', 'lzs=LZ: 2 · SET BY ARRIVAL CONTROL',
-      'beam=21 LY · LINK 123', 'noise=NOISE CLEAN · SEEDS: none'].every((row) => card?.rows.includes(row))
+      'beam=21 LY · LINK 123', 'noise=NOISE CLEAN · SEEDS: none', 'resident=none'].every((row) => card?.rows.includes(row))
     && card?.rows.some((row) => /^run=SHIP 2 OF YOUR RUN · \d(–\d)? MORE TO THE FINAL SHIP$/.test(row)), JSON.stringify(card?.rows));
   check('…and the TIMELINE `2300 you leave · 2321 you get there · 2352 ▲ approach`', card?.timeline === '2300 you leave · 2321 you get there · 2352 ▲ approach', card?.timeline);
   check('3b: …the guidance moves to the file: `REQUEST mv · RECOMMENDED [R]` (the ship\'s step done)', view.step === 'REQUEST mv · RECOMMENDED [R]'
@@ -253,6 +253,9 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
   check('…ALBATROSS\'s card: ARK, 51 LY · LINK 90 · 7 HITS, 14 YRS EARLY and ONLY FROM HERE in red', albatross?.name === 'ALBATROSS' && albatross.tags.includes('ARK')
     && albatross.rows.some((row) => /^beam=51 LY · LINK 90$/.test(row)) && /^7 HITS/.test(albatross.cost ?? '') && albatross.sched === '14 YRS EARLY'
     && albatross.rows.some((row) => /^only=ONLY FROM HERE/.test(row)), JSON.stringify(albatross));
+  // Slice 5: ALBATROSS's resident left (BOSUN), which its card never says before the ship: `unknown`, as for a sleeper or a surprise.
+  check('…and its RESIDENT row reads `unknown` (a departed resident is not named before the ship)', albatross?.rows.includes('resident=unknown') === true,
+    JSON.stringify(albatross?.rows));
   // Slice 3b: ALBATROSS is in reach but a request from ARES-VII gets there a year late. Request toggling and the red mark.
   await page.keyboard.press('KeyR');
   await page.waitForTimeout(300);
@@ -301,6 +304,22 @@ async function toFirstDesk({ page, kit, run }, tap = false) {
     && tabs.rows[0].tone === 'eta-in-time' && tabs.rows[0].tag === ':) RECOMMENDED FOR YOU', JSON.stringify(tabs.rows[0]));
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
+  // Slice 5: GANNET (slot 9, WARDEN) and CURLEW (slot 7, a sleeper): `reported faulty` in the warning tone, and `unknown`.
+  const residentCard = async (slot) => {
+    await run.clickNode(slot);
+    await page.waitForTimeout(300);
+    const seen = await run.desk();
+    const tone = await st(() => [...(document.querySelector('#deskScreen .desk-card .dc-row.key-resident')?.classList ?? [])].join(' '));
+    return { name: seen.card?.name ?? null, row: seen.card?.rows.find((row) => row.startsWith('resident=')) ?? null, tone };
+  };
+  const gannet = await residentCard(9);
+  const curlew = await residentCard(7);
+  check('slice 5: GANNET\'s card says `RESIDENT reported faulty` in the warning tone; CURLEW\'s (a sleeper) `unknown`',
+    gannet.name === 'GANNET' && gannet.row === 'resident=reported faulty' && /warn/.test(gannet.tone) && curlew.name === 'CURLEW' && curlew.row === 'resident=unknown',
+    JSON.stringify({ gannet, curlew }));
+  await run.clickNode(HALCYON);
+  await page.waitForTimeout(300);
+  check('…a click back on HALCYON picks it again', (await run.desk()).selected === HALCYON);
   await shot('03-halcyon-card');
 
   // ENTER: the PACKET for HALCYON. On run 1 the LOG READER opens over it first (entry 01) and takes SPACE.

@@ -20,6 +20,7 @@ const SCENARIOS = [
   { name: 'run-flow', file: 'run-flow.mjs', what: 'a run through every screen and the DESK, BEAM OUT, NEW RUN twice, HOLLOW on CORMORANT' },
   { name: 'map-desk', file: 'map-desk.mjs', what: 'the galaxy map\'s DESK: chart, card, SET COURSE, ◀ CHART, TOO LATE, TIGHT\'s 0-charge confirm, the phone sheet, the title\'s beacon; 3b: the REPOSITORY and INBOX tabs, requests, SEND ON, last rm, the flight INBOX' },
   { name: 'skills-4cde-landing', file: 'skills-4cde-landing.mjs', what: 'slices 4c and 4e in the page: AUTODROP v1 held to BULLSEYE, v2\'s pass from the POD BAY flown from the MIND, v3\'s plan and [F] per gap, AUTOBURN v3 to its landing orbit' },
+  { name: 'residents', file: 'residents.mjs', what: 'slice 5\'s resident AIs on seed 7: GANNET\'s WARDEN (wake, burst, pip, a lock blocked, the DEAL by Y, SCAN, the cure; DELETE), PROVIDENCE\'s late surprise, CURLEW\'s BARNABY (wake, MEND, the gift), HERON\'s note and leftover deck' },
   { name: 'resume', file: 'resume.mjs', what: 'slice 3c\'s run save: RESUME at a desk, mid-flight (the boot replayed), at the final report; NEW RUN\'s confirm (ENTER and ESC keep, DEL abandons); CAN\'T RESUME and ABANDON RUN; NO SAVE' },
   { name: 'skills-4cde-sentry', file: 'skills-4cde-sentry.mjs', what: 'slices 4c–4e, SENTRY: a decoy in the MIND answers every tool as its file, SCAN and DELETE and MOVE unmask it, v2\'s pre-empt (and its outline below v2), v3\'s FIREWALL at the boot' },
   { name: 'label-hops', file: 'label-hops.mjs', what: 'NAV PLOT labels never hop, desktop and phone' },
