@@ -2385,10 +2385,18 @@ export const SURVEY_KEEP_FREE_THREADS = 1;
 
 // --- 6 SITES (owned by Track SITES; it edits values only in this block): SURVEY's look and sound (01 §4) ---------------
 
-// The find's sonar ping, under the op chirps, so seven finds never read as alarms. SITES tunes it by ear.
-export const SURVEY_PING_GAIN = 0.12;
+// The find's sonar ping (audio.ts surveyPing: its sine's peak, its echo at 0.3 of it), under the op chirps, so seven finds
+// never read as alarms. Tuned by ear and by __ap.audio.measure: 0.12 rang a sine louder than the 0.05 square op chirp; at
+// 0.04 the ping sits just under it.
+export const SURVEY_PING_GAIN = 0.04;
 // The SITES window opens itself at the first find, and once per ship at the boot of a POOR planet without SURVEY (showing
 // the guesses as UNSURVEYED).
 export const SITES_AUTO_OPEN = true;
+// The SITES window's rim strip (`▓▓░░`): one glyph per 10° (two of SURVEY's 5° cells), so the strip fits a 300 px window at
+// the phone's 360 px too, and a pass of the ±20° swath fills four glyphs.
+export const SITES_RIM_BAR_CELLS = 36;
+// The NAV PLOT's swath wedge: how far out it reaches past the rim, as a share of the planet's radius on the plot (the swath
+// is "the ground under the ship": the wedge points at the ship, and stops short of the path's labels).
+export const SURVEY_WEDGE_REACH = 0.9;
 
 // --- end of 6 SITES ------------------------------------------------------------------------------------------------------

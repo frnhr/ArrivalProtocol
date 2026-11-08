@@ -1,9 +1,23 @@
 // Slice 6: Track SITES owns this file (docs/phase3/impl/slice-6-plan.md §2.1, §2.14, §6.2): SURVEY's view models, pure,
 // which the painters (SitesWindow, plot-survey on the NAV PLOT, GroundTrack through landing-hud, the SHIP CARD through
 // desk.ts, TRAINING's AHEAD line through training-model.ts, the LANDING REPORT through landing-report.ts) read. The
-// FOUNDATION wrote the final signatures as stubs that answer empty (plan §6.1 item 6); SITES may widen the models' fields
-// (they are its own). No module state (plan §2.3). Words are data/sites-text.ts's (and data/survey-text.ts's labels).
+// FOUNDATION wrote the final signatures; SITES widened the models' fields. No module state (plan §2.3). Words are
+// data/sites-text.ts's (and data/survey-text.ts's labels and refusals). They paint STATE: what SWATH's machine wrote into
+// landing.survey, and its pure readers (survey-model.ts surveyRunning, swathHalfRad, siteStars, assignableLzs).
 import type { GameState } from '@state/schema';
+import type { LzState } from '@/types/landing';
+import type { SurveySite, SurveyState, BadGround, AssignRefusal } from '@/types/survey';
+import { siteDataOf } from '@data/survey';
+import { siteLabel, SURVEY_TEXT } from '@data/survey-text';
+import { SITES_TEXT as T } from '@data/sites-text';
+import { COLONISTS_PER_POD, SITES_RIM_BAR_CELLS } from '@data/tuning';
+import { surveyVersion, mappedPct, lzSiteOf } from '@state/survey-selectors';
+import { surveyRunning, swathHalfRad, siteStars, assignableLzs, type SiteStars } from '@systems/survey-model';
+import { shipSummaryAt } from '@systems/map-run';
+import { openBranchesAt } from '@systems/skill-tree';
+import { visitNow, fileLevel } from '@systems/skill-levels';
+
+const TAU = 2 * Math.PI;
 
 // An arc of the rim in world radians (from < to; `to` may run past 2π): a mapped or unmapped stretch, a swath's edges.
 export interface RimArc {
@@ -11,45 +25,144 @@ export interface RimArc {
   toRad: number;
 }
 
-// A found site's dashed bracket (look 'candidate', landing-hud.ts BracketLook) on the GROUND TRACK: world angles, its label
-// (`SITE 4`). landing-hud.ts groundTrackModel lays them onto the overview line and the strip.
+// A free site's dashed bracket (look 'candidate', landing-hud.ts BracketLook) on the GROUND TRACK and the NAV PLOT: world
+// angles, its label (`SITE 4`, `SITE 4 ★★★`). landing-hud.ts groundTrackModel lays them onto the overview line and the strip.
 export interface SurveyBracket {
   site: string;           // the SurveySite id (a click selects it in SITES)
   centreRad: number;
   halfWidthRad: number;
   label: string;
+  look: 'candidate' | 'wreck' | 'bad';   // a site to take, the wreck, a site known to be ROCKY or WET
 }
 
-// The GROUND TRACK's candidate brackets (found sites no LZ stands on; plan §2.14). FOUNDATION stub (neutral): none.
+// --- Shared readers ---------------------------------------------------------------------------------------------------
+
+// The survey of a planet that plays POOR now, else null (a GOOD planet: SITES paints nothing).
+function poorSurvey(state: Readonly<GameState>): Readonly<SurveyState> | null {
+  return state.landing.survey.site === 'poor' ? state.landing.survey : null;
+}
+
+// The rim's arcs whose cells are (want = true) or are not (false) mapped, merged across the cells' 0 rad seam (an arc may
+// then run past 2π). The whole rim as one arc when every cell agrees.
+export function cellArcs(mapped: readonly boolean[], want: boolean): RimArc[] {
+  const n = mapped.length;
+  if (n === 0 || !mapped.includes(want)) return [];
+  if (mapped.every((cell) => cell === want)) return [{ fromRad: 0, toRad: TAU }];
+  const step = TAU / n;
+  const arcs: RimArc[] = [];
+  for (let i = 0; i < n; i++) {
+    if (mapped[i] !== want || mapped[(i - 1 + n) % n] === want) continue;
+    let last = i;
+    while (mapped[(last + 1) % n] === want) last++;
+    arcs.push({ fromRad: i * step, toRad: (last + 1) * step });
+  }
+  return arcs;
+}
+
+// The sites no LZ stands on that SITES shows: the candidates and the wreck once found, and a guess an LZ moved off (CONTROL's
+// guesses stay sites, plan R10), in rim order.
+export function freeSites(state: Readonly<GameState>): SurveySite[] {
+  const survey = poorSurvey(state);
+  if (survey === null) return [];
+  const taken = new Set(state.landing.lzs.flatMap((lz) => (lz.site === null ? [] : [lz.site])));
+  return survey.sites
+    .filter((site) => !taken.has(site.id) && (site.kind === 'guess' || site.found))
+    .sort((a, b) => a.centreRad - b.centreRad);
+}
+
+// What is known of a site's ground, as the rows show it: `FLAT ★★★`, `ROCKY ✕`, `GROUND ?` (SURVEY aboard, not rated), or
+// `UNSURVEYED` (no SURVEY: CONTROL's guess, as 01 §3.13 flags it).
+export interface GroundShown {
+  word: string;
+  known: 'flat' | BadGround | null;
+  stars: SiteStars;               // 0 while unknown (and a wreck's)
+}
+
+function groundShown(site: Readonly<SurveySite>, surveying: boolean): GroundShown {
+  if (!site.groundKnown) return { word: surveying || site.kind !== 'guess' ? T.row.groundUnknown : T.row.unsurveyed, known: null, stars: 0 };
+  const stars = siteStars(site);
+  if (site.ground === 'flat') return { word: T.row.flat(stars), known: 'flat', stars };
+  return { word: T.row.bad(site.ground), known: site.ground, stars };
+}
+
+const lookOf = (site: Readonly<SurveySite>): SurveyBracket['look'] =>
+  site.kind === 'wreck' ? 'wreck' : site.groundKnown && site.ground !== 'flat' ? 'bad' : 'candidate';
+
+// --- The GROUND TRACK ---------------------------------------------------------------------------------------------------
+
+// The GROUND TRACK's candidate brackets (the free sites; plan §2.14): `SITE 4`, rated `SITE 4 ★★★`, the wreck's `WRECK`.
 export function surveyGroundBrackets(state: Readonly<GameState>): SurveyBracket[] {
-  void state;
-  return [];
+  return freeSites(state).map((site) => ({
+    site: site.id, centreRad: site.centreRad, halfWidthRad: site.halfWidthRad, look: lookOf(site),
+    label: site.kind === 'wreck' ? T.track.wreck
+      : site.groundKnown ? T.track.rated(siteLabel(site), siteStars(site)) : siteLabel(site),
+  }));
 }
 
 // The rim not yet mapped (drawn `░` on the GROUND TRACK: landing-hud.ts terrainStretches' `unmapped`, and the overview
-// line's planet.unmapped). FOUNDATION stub (neutral): none (all of a GOOD planet reads as mapped).
+// line's planet.unmapped), as any arcs (landing-hud splitRimArcs cuts them, review M4): the whole rim before SURVEY maps
+// (or with none aboard). None on a GOOD planet.
 export function surveyUnmapped(state: Readonly<GameState>): RimArc[] {
-  void state;
-  return [];
+  const survey = poorSurvey(state);
+  return survey === null ? [] : cellArcs(survey.mapped, false);
+}
+
+// --- The NAV PLOT -------------------------------------------------------------------------------------------------------
+
+// An LZ's mark on the plot: its geometry, the ground glyph (`?` until known, `✕` once bad, none once known FLAT), and in
+// FLIGHT its own outline and name (`LZ-B ?`; in LANDING the landing layer draws the bracket and its name).
+export interface SurveyPlotLz {
+  lz: string;
+  centreRad: number;
+  halfWidthRad: number;
+  glyph: string | null;
+  bad: boolean;
+  label: string | null;           // FLIGHT only
 }
 
 // The NAV PLOT's survey layer (plot-survey.ts, in flight and landing on POOR planets, under the landing layer): the swath's
-// wedge (±swath under the ship; twice as wide at v3), the mapped rim, the found candidates' dashed brackets, the guesses'
-// `?` and `✕`. FOUNDATION stub (neutral): null (nothing drawn).
+// wedge while SURVEY maps (±swath under the ship; twice as wide at v3), the mapped and unmapped rim, the free sites' dashed
+// brackets, the LZs' `?` and `✕`. null: nothing drawn (a GOOD planet, or another phase).
 export interface SurveyPlotModel {
   wedge: { centreRad: number; halfRad: number } | null;
   mapped: RimArc[];
+  unmapped: RimArc[];
   brackets: SurveyBracket[];
+  lzs: SurveyPlotLz[];
 }
 
 export function surveyPlotModel(state: Readonly<GameState>): SurveyPlotModel | null {
-  void state;
-  return null;
+  const survey = poorSurvey(state);
+  const phase = state.run.phase;
+  if (survey === null || (phase !== 'flight' && phase !== 'landing')) return null;
+  const running = surveyRunning(state);
+  const halfRad = running === 'running' ? swathHalfRad(surveyVersion(state)) : 0;
+  const lzs = state.landing.lzs.map((lz): SurveyPlotLz => {
+    const site = lzSiteOf(state.landing, lz.label);
+    const bad = site !== null && site.groundKnown && site.ground !== 'flat';
+    const glyph = site === null || !site.groundKnown ? T.plot.unknown : bad ? T.plot.bad : null;
+    return {
+      lz: lz.label, centreRad: lz.centreRad, halfWidthRad: lz.halfWidthRad, glyph, bad,
+      label: phase === 'flight' ? T.plot.lz(lz.label, glyph ?? '') : null,
+    };
+  });
+  return {
+    wedge: halfRad > 0 ? { centreRad: Math.atan2(state.orbit.y, state.orbit.x), halfRad } : null,
+    mapped: cellArcs(survey.mapped, true),
+    unmapped: cellArcs(survey.mapped, false),
+    brackets: freeSites(state).map((site) => ({
+      site: site.id, centreRad: site.centreRad, halfWidthRad: site.halfWidthRad, look: lookOf(site),
+      label: site.kind === 'wreck' ? T.track.wreck : siteLabel(site),
+    })),
+    lzs,
+  };
 }
 
+// --- The SHIP CARD and the AHEAD line (the desk) ------------------------------------------------------------------------
+
 // The SHIP CARD's SITE DATA row for `slot` (desk.ts cardModel's reserved 'site' row, R15): `SITE DATA · GOOD`, `POOR ·
-// ARRIVAL CONTROL GUESSED` (warn), and after the ship `POOR · LZ-B MOVED` / `SURVEYED, KEPT` / `NOT SURVEYED`. null: no row.
-// FOUNDATION stub (neutral): null.
+// ARRIVAL CONTROL GUESSED` (warn), and after the ship `POOR · LZ-B MOVED` (good) / `SURVEYED, KEPT` / `NOT SURVEYED` (review
+// m11: a POOR ship played before v6 has no record, and reads NOT SURVEYED, never GOOD). null: no row (the classic five).
 export interface SurveyCardRow {
   label: string;
   value: string;
@@ -57,37 +170,166 @@ export interface SurveyCardRow {
 }
 
 export function surveyCardRow(state: Readonly<GameState>, slot: number): SurveyCardRow | null {
-  void state;
-  void slot;
-  return null;
+  const map = state.run.map;
+  if (map.world !== 'arm') return null;
+  const row = (value: string, tone: SurveyCardRow['tone'] = 'plain'): SurveyCardRow => ({ label: T.card.label, value, tone });
+  const site = siteDataOf({ site: shipSummaryAt(map, slot).reserved?.site ?? 'good' });
+  if (site === 'good') return row(T.card.good);
+  const visited = map.route.some((stop) => stop.slot === slot);
+  const result = visited ? [...state.run.ships].reverse().find((ship) => ship.slot === slot) ?? null : null;
+  if (result === null) return row(T.card.poor, 'warn');
+  const record = result.survey;
+  if (record === null || record === undefined) return row(T.card.notSurveyed);
+  const moved = [...new Set(record.moves.map((move) => move.lz))].sort();
+  if (moved.length > 0) return row(T.card.moved(moved.join(', ')), 'good');
+  return record.ranAt > 0 ? row(T.card.kept) : row(T.card.notSurveyed);
 }
 
 // TRAINING's AHEAD row's second line for the selected ship `slot` (training-model.ts TrainingModel.aheadSite, R15): `SITE
-// DATA POOR · SURVEY FINDS BETTER SITES` (SURVEY's branch open or held), else `SITE DATA POOR · ARRIVAL CONTROL GUESSED THE
-// LZs`; null on a GOOD ship or none selected. FOUNDATION stub (neutral): null.
+// DATA POOR · SURVEY FINDS BETTER SITES` when SURVEY's branch is open at this desk, or the unit holds it or is training it,
+// else `SITE DATA POOR · ARRIVAL CONTROL GUESSED THE LZs`; null on a GOOD ship, none selected, or the classic five.
 export function surveyAheadLine(state: Readonly<GameState>, slot: number | null): string | null {
-  void state;
-  void slot;
-  return null;
+  const map = state.run.map;
+  if (slot === null || map.world !== 'arm') return null;
+  if (siteDataOf({ site: shipSummaryAt(map, slot).reserved?.site ?? 'good' }) !== 'poor') return null;
+  const open = openBranchesAt(state, visitNow(state.run)).includes('survey')
+    || fileLevel(state.memory, 'survey') !== null || state.run.skills.pending.some((purchase) => purchase.skill === 'survey');
+  return open ? T.ahead.open : T.ahead.closed;
 }
 
-// The LANDING REPORT's LZ row suffix for `lz` (landing-report.ts, 01's LZ-row slot): ` · SITE 4`, ` · ROCKY · 5 HARD`.
-// FOUNDATION stub (neutral): ''.
+// --- The LANDING REPORT -------------------------------------------------------------------------------------------------
+
+// The LANDING REPORT's LZ row suffix for `lz` (landing-report.ts, 01's LZ-row slot): the site it moved to (` · SITE 4`),
+// then a bad ground with the pods that landed hard on it (` · ROCKY · 5 HARD`), or the bad ground alone when it is known
+// and no pod went there. '' on a GOOD planet, or an LZ that stayed on a sound guess.
 export function surveyLzRowSuffix(state: Readonly<GameState>, lz: string): string {
-  void state;
-  void lz;
-  return '';
+  const survey = poorSurvey(state);
+  if (survey === null) return '';
+  const site = lzSiteOf(state.landing, lz);
+  if (site === null) return '';
+  let suffix = site.kind === 'guess' ? '' : T.report.site(siteLabel(site));
+  if (site.ground !== 'flat') {
+    const hard = state.landing.pods.filter((record) => record.fate.kind === 'down' && record.fate.touchdown.lz === lz
+      && record.fate.touchdown.touch === 'hard').length;
+    if (hard > 0) suffix += T.report.hard(site.ground, hard);
+    else if (site.groundKnown) suffix += T.report.bad(site.ground);
+  }
+  return suffix;
 }
 
-// The SITES window (SitesWindow.ts): its header and rows, or null while it has nothing to show (a GOOD planet). SITES fills
-// the model. FOUNDATION stub (neutral): null.
+// --- The SITES window ---------------------------------------------------------------------------------------------------
+
+// One row: an LZ (where it stands, its count, its ground) or a free site (its ROOM, WIDTH and ground; a click opens its pills).
+export interface SitesRow {
+  kind: 'lz' | 'site' | 'wreck';
+  key: string;                    // the LZ's label, or the site's id
+  site: string | null;            // the site id (an LZ's: the one it stands on)
+  text: string;
+  ground: GroundShown;
+  selectable: boolean;            // a click opens its pills (a free site that is no wreck)
+  selected: boolean;
+  moved: boolean;                 // an LZ SURVEY moved off CONTROL's guess
+}
+
+// A pill under the selected site: an LZ that can take it (`SET AS LZ-B (800)`), or why not, dimmed.
+export interface SitesPill {
+  lz: string;
+  text: string;
+  refusal: AssignRefusal | null;
+}
+
 export interface SitesWindowModel {
   header: string;
-  status: string | null;
-  rows: { site: string; text: string }[];
+  rim: string;                                // `▓▓▓░░░…`: the rim mapped, SITES_RIM_BAR_CELLS glyphs from 0 rad
+  status: string;                             // SURVEY's state and version, or NO SURVEY
+  tone: 'good' | 'warn' | 'dim';
+  pause: { label: string; paused: boolean } | null;   // [ PAUSE ] / [ RESUME ] while SURVEY works on this planet
+  lzs: SitesRow[];
+  sites: SitesRow[];
+  empty: string | null;                       // under SITES FOUND while there are none
+  pills: SitesPill[];                         // the selected site's
+  hint: string | null;                        // how to move an LZ, while a site could take one and none is selected
 }
 
-export function sitesWindowModel(state: Readonly<GameState>): SitesWindowModel | null {
-  void state;
-  return null;
+// The pill (or the refusal, in the lead's words) for one LZ and a site.
+function pillOf(state: Readonly<GameState>, site: Readonly<SurveySite>, lz: Readonly<LzState>, refusal: AssignRefusal | null): SitesPill {
+  const room = SURVEY_TEXT.room(lz.pods);
+  if (refusal === null) return { lz: lz.label, text: T.pill(lz.label, room), refusal };
+  // 'taken' names the LZ standing on the site (`SITE 4 IS LZ-A's`); every other refusal the LZ asked about.
+  const owner = state.landing.lzs.find((other) => other.site === site.id)?.label ?? lz.label;
+  const why = SURVEY_TEXT.refusal[refusal]({
+    site: siteLabel(site), lz: refusal === 'taken' ? owner : lz.label, holds: site.roomPods * COLONISTS_PER_POD, needs: lz.pods * COLONISTS_PER_POD,
+  });
+  return { lz: lz.label, text: T.pillRefused(lz.label, why), refusal };
+}
+
+// The rim as SITES_RIM_BAR_CELLS glyphs: a glyph is mapped when every cell under it is.
+function rimBar(mapped: readonly boolean[]): string {
+  if (mapped.length === 0) return '';
+  let bar = '';
+  for (let i = 0; i < SITES_RIM_BAR_CELLS; i++) {
+    const from = Math.floor((i * mapped.length) / SITES_RIM_BAR_CELLS);
+    const to = Math.max(from + 1, Math.floor(((i + 1) * mapped.length) / SITES_RIM_BAR_CELLS));
+    bar += mapped.slice(from, to).every(Boolean) ? T.window.rimMapped : T.window.rimUnmapped;
+  }
+  return bar;
+}
+
+// SITES's header, rows and the selected site's pills (`selected`: the site id the kid clicked, SitesWindow's; ignored when
+// it is no free site). null while it has nothing to show: a GOOD planet, or a phase with no tools view (the desk).
+export function sitesWindowModel(state: Readonly<GameState>, selected: string | null = null): SitesWindowModel | null {
+  const survey = poorSurvey(state);
+  const phase = state.run.phase;
+  if (survey === null || !(phase === 'boot' || phase === 'flight' || phase === 'landing' || phase === 'report')) return null;
+  const version = surveyVersion(state);
+  const surveying = version > 0;
+  const running = surveyRunning(state);
+  const pct = mappedPct(survey);
+  const allMapped = survey.mapped.length > 0 && survey.mapped.every(Boolean);
+  const found = survey.sites.filter((site) => site.kind !== 'guess' && site.found).length;
+
+  let status: string;
+  let tone: SitesWindowModel['tone'] = 'good';
+  if (!surveying) { status = T.window.status.none; tone = 'warn'; }
+  else if (running === 'done' || allMapped) status = T.window.status.done(version, found);
+  else if (running === 'running') status = version >= 3 ? T.window.status.sweeping(version) : T.window.status.running(version);
+  else if (running === 'waiting') { status = T.window.status.waiting(version); tone = 'warn'; }
+  else if (running === 'paused') { status = T.window.status.paused(version); tone = 'warn'; }
+  else { status = T.window.status.idle(version); tone = 'dim'; }
+  const pausable = surveying && !allMapped && (running === 'running' || running === 'waiting' || running === 'paused');
+  const pause = pausable ? { label: survey.paused ? T.window.resume : T.window.pause, paused: survey.paused } : null;
+
+  const lzs = state.landing.lzs.map((lz): SitesRow => {
+    const site = lzSiteOf(state.landing, lz.label);
+    if (site === null) throw new Error(`sitesWindowModel: ${lz.label} stands on no site on a POOR planet`);
+    const ground = groundShown(site, surveying);
+    const where = site.kind === 'guess' ? T.row.guess : siteLabel(site);
+    return {
+      kind: 'lz', key: lz.label, site: site.id, text: T.row.lz(lz.label, where, lz.pods, T.width[site.width], ground.word), ground,
+      selectable: false, selected: false, moved: site.kind !== 'guess',
+    };
+  });
+  const free = freeSites(state);
+  const chosen = free.find((site) => site.id === selected && site.kind !== 'wreck') ?? null;
+  const sites = free.map((site): SitesRow => {
+    const ground = groundShown(site, surveying);
+    if (site.kind === 'wreck') {
+      return { kind: 'wreck', key: site.id, site: site.id, text: T.row.wreck(siteLabel(site)), ground, selectable: false, selected: false, moved: false };
+    }
+    return {
+      kind: 'site', key: site.id, site: site.id, text: T.row.site(siteLabel(site), SURVEY_TEXT.room(site.roomPods), T.width[site.width], ground.word),
+      ground, selectable: true, selected: site.id === chosen?.id, moved: false,
+    };
+  });
+  const pills = chosen === null ? [] : assignableLzs(state, chosen.id).map(({ lz, refusal }) => {
+    const at = state.landing.lzs.find((candidate) => candidate.label === lz);
+    if (at === undefined) throw new Error(`sitesWindowModel: assignableLzs named ${lz}, which the landing does not have`);
+    return pillOf(state, chosen, at, refusal);
+  });
+  const empty = sites.length > 0 ? null : !surveying ? T.window.emptyNone : allMapped ? T.window.emptyDone : T.window.emptyMapping;
+  const anyRoom = sites.some((row) => row.kind === 'site');
+  return {
+    header: T.window.header(pct), rim: rimBar(survey.mapped), status, tone, pause, lzs, sites, empty, pills,
+    hint: chosen === null && anyRoom && surveying ? T.window.hint : null,
+  };
 }
