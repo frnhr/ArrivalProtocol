@@ -10,7 +10,7 @@ import type { Rng } from '@systems/rng';
 import {
   LZ_WIDTH_KM, LZ_MIN_GAP_DEG, NO_GO_EDGE_GAP_MIN_KM, POOR_BAD_GUESSES, POOR_EXTRA_BAD_GUESS_ODDS, BAD_GROUND_WET_SHARE,
   WET_WIDTH_FACTOR, SURVEY_EXTRA_SITES, GUARANTEED_SITE_ROOM_SPARE_PODS, GUARANTEED_SITE_WIDTHS, EXTRA_SITE_GROUND_ODDS,
-  EXTRA_SITE_WIDTHS, EXTRA_SITE_ROOM_SPARE_PODS, WRECK_SITE_ODDS,
+  EXTRA_SITE_WIDTHS, EXTRA_SITE_ROOM_SPARE_PODS, WRECK_SITE_ODDS, SITE_PLACE_TRIES,
 } from '@data/tuning';
 
 const TAU = 2 * Math.PI;
@@ -92,17 +92,34 @@ function freeSpans(placed: readonly { centreRad: number; half: number }[], noGo:
   return free;
 }
 
-// A uniform centre in the free spans (one draw: the same law as rejection sampling over the rim, with no attempt limit).
-function placeOn(free: readonly [number, number][], rng: Rng, what: string): number {
+// A uniform centre in the free spans (one draw: the same law as rejection sampling over the rim, with no attempt limit), or
+// null when the rim has no room left (no draw is made then).
+function placeOn(free: readonly [number, number][], rng: Rng): number | null {
   const total = free.reduce((sum, [from, to]) => sum + (to - from), 0);
-  if (!(total > 0)) throw new Error(`rollSurveySites: no room on the rim for ${what}`);
+  if (!(total > 0)) return null;
   let left = rng() * total;
   for (const [from, to] of free) {
-    if (left < to - from) return from + left;
+    // Review m1's nit: `from + left` may round up to `to` (2π on the last span); kept below it.
+    if (left < to - from) return Math.min(from + left, to - (to - from) * Number.EPSILON);
     left -= to - from;
   }
   // Float slack in the running sum: the last span's start, which is free.
   return free.at(-1)![0];
+}
+
+// Step 5 once: every non-guess site placed in draw order round the guesses, or null when a site finds no room (greedy
+// sequential placement can jam: about 1 roll in 100,000, on 4-LZ planets).
+function placeAll(guesses: readonly SurveySite[], drafts: readonly Draft[], noGo: readonly NoGoArcDef[], planetR: number, rng: Rng): number[] | null {
+  const placed = guesses.map((site) => ({ centreRad: site.centreRad, half: classHalfRad(site.width, planetR) }));
+  const centres: number[] = [];
+  for (const draft of drafts) {
+    const half = classHalfRad(draft.width, planetR);
+    const centreRad = placeOn(freeSpans(placed, noGo, half, planetR), rng);
+    if (centreRad === null) return null;
+    placed.push({ centreRad, half });
+    centres.push(centreRad);
+  }
+  return centres;
 }
 
 // The planet's sites (R2–R4, R9), in the plan's draw order, so a later change to one step moves no earlier draw:
@@ -113,10 +130,11 @@ function placeOn(free: readonly [number, number][], rng: Rng, what: string): num
 // 4. SURVEY_EXTRA_SITES extras (ground, width, ROOM each), then the wreck's draw: the last extra becomes the wreck (ROOM 0,
 //    ROCKY, STANDARD);
 // 5. placement, per non-guess site in draw order (data/survey-sites freeSpans: LZ_MIN_GAP_DEG from every placed site,
-//    NO_GO_EDGE_GAP_MIN_KM from every arc); it throws when the rim has no room left;
+//    NO_GO_EDGE_GAP_MIN_KM from every arc); a placement that jams starts over on the continuing stream, up to `tries`
+//    (SITE_PLACE_TRIES) placements in all (review m1: the draws before it never move), and then it throws;
 // 6. numbering: the candidates and the wreck `site-1` … in rim order from 0 rad.
 // Returns the guesses in LZ order, then the sites by number. validateSurveySites checks the answer before it is returned.
-export function rollSurveySites(def: Readonly<ShipLandingDef>, planetR: number, rng: Rng): SurveySite[] {
+export function rollSurveySites(def: Readonly<ShipLandingDef>, planetR: number, rng: Rng, tries = SITE_PLACE_TRIES): SurveySite[] {
   const lzs = def.lzs;
   if (lzs.length === 0) throw new Error('rollSurveySites: a landing with no LZ');
   // 1.
@@ -148,16 +166,13 @@ export function rollSurveySites(def: Readonly<ShipLandingDef>, planetR: number, 
   }
   if (SURVEY_EXTRA_SITES > 0 && rng() < WRECK_SITE_ODDS) drafts[drafts.length - 1] = { kind: 'wreck', width: 'standard', roomPods: 0, ground: 'rocky' };
   // 5.
-  const placed = guesses.map((site) => ({ centreRad: site.centreRad, half: classHalfRad(site.width, planetR) }));
-  const centres = drafts.map((draft, i) => {
-    const half = classHalfRad(draft.width, planetR);
-    const centreRad = placeOn(freeSpans(placed, def.noGo, half, planetR), rng, `site ${i + 1} of ${drafts.length} (${draft.width})`);
-    placed.push({ centreRad, half });
-    return centreRad;
-  });
+  let centres: number[] | null = null;
+  for (let attempt = 0; attempt < tries && centres === null; attempt++) centres = placeAll(guesses, drafts, def.noGo, planetR, rng);
+  if (centres === null) throw new Error(`rollSurveySites: no room on the rim for ${drafts.length} sites after ${tries} placements`);
   // 6.
-  const order = drafts.map((_, i) => i).sort((a, b) => centres[a]! - centres[b]!);
-  const sites = order.map((i, rank) => siteOf(drafts[i]!, `site-${rank + 1}`, rank + 1, centres[i]!, planetR));
+  const placedAt = centres;
+  const order = drafts.map((_, i) => i).sort((a, b) => placedAt[a]! - placedAt[b]!);
+  const sites = order.map((i, rank) => siteOf(drafts[i]!, `site-${rank + 1}`, rank + 1, placedAt[i]!, planetR));
   const all = [...guesses, ...sites];
   validateSurveySites(def, planetR, all);
   return all;

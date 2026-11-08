@@ -2349,6 +2349,10 @@ export const EXTRA_SITE_ROOM_SPARE_PODS = 2;
 export const WRECK_SITE_ODDS = 1 / 3;
 // The roller keeps every site LZ_MIN_GAP_DEG from every other edge to edge (by its class width, so a narrowed WET keeps the
 // nominal gap: windows never overlap whichever site an LZ moves to) and NO_GO_EDGE_GAP_MIN_KM from every no-go arc's edge.
+// Its greedy placement jams about once in 100,000 rolls (a 4-LZ planet: review m1), and a ShipKey's stream would jam at every
+// boot of that ship, so a jammed placement starts over on the same stream up to this many times in all before it throws:
+// with each try failing about 1 in 100,000, 8 tries never fail in practice.
+export const SITE_PLACE_TRIES = 8;
 
 // --- end of 6 lead -------------------------------------------------------------------------------------------------------
 

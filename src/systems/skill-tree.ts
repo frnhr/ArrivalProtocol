@@ -13,6 +13,7 @@ import type {
 } from '@/types/skill';
 import { levelPrice, skillBlocks, SKILL_TREE, SKILL_IDS } from '@data/skills';
 import { reachableFrom } from '@systems/map-hop';
+import { siteDataOf } from '@data/survey';
 import { currentSlot } from '@systems/map-streams';
 import {
   AUTO_DEMO_WINDOW, AUTOBURN_OFFSET_FACTOR, AUTOBURN_OFFSET_MAX_TAC, AUTOBURN_ACCURACY_PER_TAC,
@@ -240,7 +241,8 @@ export function shipMetSeeds(state: Readonly<GameState>, tally: Readonly<ThreatT
 function poorAhead(state: Readonly<GameState>): boolean {
   const map = state.run.map;
   if (map.world !== 'arm') return false;
-  return reachableFrom(map, currentSlot(state.run)).some((slot) => map.arm[slot]?.reserved.site === 'poor');
+  // Through the POOR gate (review m2: data/survey.ts siteDataOf), so SURVEY opens only for planets that play POOR.
+  return reachableFrom(map, currentSlot(state.run)).some((slot) => siteDataOf({ site: map.arm[slot]?.reserved.site ?? 'good' }) === 'poor');
 }
 
 function latchedRuleDue(state: Readonly<GameState>, id: SkillId, visit: number): boolean {
