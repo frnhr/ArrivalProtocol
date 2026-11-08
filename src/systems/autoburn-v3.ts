@@ -83,7 +83,8 @@ function worstFactors(state: Readonly<GameState>, caps: Readonly<Capabilities>):
 function aimKey(state: Readonly<GameState>, input: Readonly<AimInputs>): string {
   const { ring } = state.level;
   return [
-    state.run.rev, state.run.phase, ring.min, ring.max, state.landing.drag,
+    // Slice 6 (R13): sitesRev, so an LZ SURVEY moved re-aims (the fit reads the LZs' widths).
+    state.run.rev, state.run.phase, state.landing.sitesRev, ring.min, ring.max, state.landing.drag,
     input.lzs.map((lz) => `${lz.label}:${input.room[lz.label]}`).join(','), input.aboard, input.cadenceTac,
     input.factors.sensor, input.factors.plotter, input.factors.driver, Math.round(input.fuelPct), Math.round(input.capturePct),
     Math.round(input.loop.rp / 10), Math.round(input.loop.ra / 10),

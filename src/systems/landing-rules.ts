@@ -4,7 +4,7 @@ import type { DriverSegment } from '@/types/segment';
 import type {
   DropDot, DropFactors, DropSolution, ForgivenessClass, GoLowerFit, LandingEnd, LandingTally, LandingView, LandingWindow, LaunchAsk, LaunchRecord,
   LaunchRefusal, LaunchSource, LzResult, LzState, LzWindow, NoGoArcState, OnTargetTally, ParkReason, Place, PodFate, PodFateKind,
-  PodRecord, PodSummary, RepairHint, ShipLandingDef, TerrainWord, TooWide, Touch, Touchdown,
+  PodRecord, PodSummary, RepairHint, ShipLandingDef, TerrainWord, TooWide, Touch, Touchdown, LzGround,
 } from '@/types/landing';
 import type { SegmentRole } from '@/types/segment';
 import type { Capabilities } from '@systems/capabilities';
@@ -12,6 +12,7 @@ import type { PredictOutcome } from '@systems/predict';
 import type { Rng } from '@systems/rng';
 import { autoburnHoldsLandingOrbit, driversInMemory, filesWithRole, integrityBand, repairPossible } from '@state/selectors';
 import { bayCapability, capabilitiesNow, roleHealth } from '@systems/capabilities';
+import { groundAt } from '@state/survey-selectors';
 import { angleDelta, dropHalfWidthKm, secFromNow } from '@systems/landing-solve';
 import {
   decayForecast, decayWarned, dragLineKm, goLowerFit, highestFittingRadius, sureTacAt, timeToAngle, travelSign,
@@ -721,10 +722,12 @@ export function parkReasonOf(record: Readonly<PodRecord>): ParkReason {
   return record.driverLost ?? 'no-time';
 }
 
-// How a pod comes down (Touchdown.touch), decided at touchdown: the driver's integrity at launch for now; SURVEY's
-// grounds (slice 6) will make it depend on where the pod lands too, which is why it is not taken from the launch.
-export function touchAtTouchdown(launch: Readonly<LaunchRecord>): Touch {
-  return driverTouch(launch.driverIntegrity);
+// How a pod comes down (Touchdown.touch), decided at touchdown: hard on ROCKY or WET ground (slice 6, 01 §3.13: "every
+// landing there is hard"; the ground where it came down, state/survey-selectors.ts groundAt), else as its driver would at
+// launch (LaunchRecord.predictedTouch keeps that meaning: REPAIR can't fix ground, so the L-rows stay driver-only). Every
+// ground is FLAT until SURVEY_BUILT.poor is raised.
+export function touchAtTouchdown(launch: Readonly<LaunchRecord>, ground: LzGround): Touch {
+  return ground === 'flat' ? driverTouch(launch.driverIntegrity) : 'hard';
 }
 
 // A pod parked in orbit, with why (§3.10): only a driver HOLLOW ate is MERGE's to give back (restorable).
@@ -752,7 +755,7 @@ export function pendingTouchdowns(state: Readonly<GameState>): Map<number, Touch
   for (const { record, launch } of falling) {
     const placement = classifyLanding(landing.lzs, landing.noGo, launch.landingRad, fill);
     if (placement.lz !== null) fill[placement.lz] = (fill[placement.lz] ?? 0) + 1;
-    const touch = touchAtTouchdown(launch);
+    const touch = touchAtTouchdown(launch, groundAt(landing, placement.lz));
     touchdowns.set(record.pod, {
       place: placement.place,
       lz: placement.lz,

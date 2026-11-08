@@ -1,5 +1,6 @@
-// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2): AUTODROP's and SENTRY's rows are
-// pre-registered (SKILL_ROW_HOOKS), their status in autodrop.ts / sentry.ts; Track ORBIT owns autoburnStatus (autoburn.ts).
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2; slice 6: slice-6-plan.md §5): AUTODROP's, SENTRY's and
+// SURVEY's rows are pre-registered (SKILL_ROW_HOOKS), their status in autodrop.ts / sentry.ts / survey.ts; Track ORBIT owns
+// autoburnStatus (autoburn.ts).
 import type { GameState } from '@state/schema';
 import type { Segment } from '@/types/segment';
 import { getUpgrade, UPGRADES, type UpgradeId } from '@data/upgrades';
@@ -13,6 +14,7 @@ import { SKILLS_TEXT } from '@data/script';
 import { autoburnStatus } from '@systems/autoburn';
 import { autodropStatus } from '@systems/autodrop';
 import { sentryStatus } from '@systems/sentry';
+import { surveyStatus } from '@systems/survey';
 import { AUTOBURN_SKILL_ROW } from '@data/skill-text';
 import { REPAIR_V2_VERSION, CHARGE_CARD_BLOCKS, CORE_LOW_INTEGRITY, FUEL_TRIM_DV_BONUS_FRAC } from '@data/tuning';
 import type { SkillFileSegment } from '@/types/segment';
@@ -278,6 +280,11 @@ const SKILL_ROW_HOOKS: Readonly<Partial<Record<SkillId, SkillRowHook>>> = {
   sentry: {
     title: SKILL_TREE.sentry.fileName, effect: TRAINING_TEXT.skills.sentry.pitch,
     status: (state) => sentryStatus(state) ?? plainSkillStatus(state, 'sentry'),
+  },
+  // Slice 6 (plan §2.4): Track SWATH's status (survey.ts surveyStatus), the plain row while it answers null.
+  survey: {
+    title: SKILL_TREE.survey.fileName, effect: TRAINING_TEXT.skills.survey.pitch,
+    status: (state) => surveyStatus(state) ?? plainSkillStatus(state, 'survey'),
   },
 };
 

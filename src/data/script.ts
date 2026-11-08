@@ -1,6 +1,7 @@
-// Slice 5: the lead owns this file (slice-5-plan.md §5). The strip's corrupted-resident lines live in data/resident-rules.ts
-// (Track WARDEN's RESIDENT_RULES, spread into GUIDE_RULES before GHOST_ALARM_RULES); the boot's 'receiver-closed' line's words
-// are data/resident-text.ts's. Tracks ask by message.
+// Slice 6: the lead owns this file (slice-6-plan.md §5). The strip's SURVEY row lives in data/survey-rules.ts (Track SWATH's
+// SURVEY_RULES, spread into GUIDE_RULES after DROP_LESSON_RULES); the boot's 'site-data' line's words are data/survey-text.ts's.
+// Slice 5's corrupted-resident lines live in data/resident-rules.ts (Track WARDEN's RESIDENT_RULES, spread into GUIDE_RULES
+// before GHOST_ALARM_RULES); the boot's 'receiver-closed' line's words are data/resident-text.ts's. Tracks ask by message.
 import type {
   GameState, Speaker, TransitHit, ArrivalReport, RunEndCause, ShipOutcome, VerbKind, LineTone,
 } from '@state/schema';
@@ -52,6 +53,7 @@ import {
 import { HARD_WORDS_POOL } from '@data/souls';
 import { THREAT_RULES, DISGUISE_RULES } from '@data/threat-rules';
 import { RESIDENT_RULES } from '@data/resident-rules';
+import { SURVEY_RULES } from '@data/survey-rules';
 import { copyLessonDue, hollowAboard } from '@state/threat-selectors';
 import { THREAT_TEXT, eccSeedsLine } from '@data/threat-text';
 import { LOG_TEXT, LOG_HINT_TARGET } from '@data/log-text';
@@ -958,9 +960,12 @@ export function scriptedDamageLine(hits: readonly TransitHit[]): string {
 // Slice 5 (04 §3.15, plan §2.4): 'receiver-closed', `> RECEIVER CLOSED · this ship launched with its own AI`, on every
 // resident ship (any kind this build plays: systems/map-boot.ts), right after the sleep line and before the unpack (02 §4's
 // line order 3), in amber (bootLineTone).
+// Slice 6 (plan §2.4): 'site-data', `> SITE DATA POOR · ARRIVAL CONTROL GUESSED 2 LZs`, on a planet that plays POOR
+// (systems/map-boot.ts), right after the ship's own arrival-damage lines (02 §4, the end of line group 5) and before the
+// deliveries.
 export type BootLineKind =
   | 'sleep' | 'receiver-closed' | 'unpack' | 'board' | 'host' | 'receiver' | 'ecc-sleep' | 'ecc' | 'seeds' | 'sentry-seed'
-  | 'scripted' | 'delivery' | 'charge' | 'firewall' | 'overflow' | 'skill' | 'reading' | 'log' | 'inbox' | 'hollow';
+  | 'scripted' | 'site-data' | 'delivery' | 'charge' | 'firewall' | 'overflow' | 'skill' | 'reading' | 'log' | 'inbox' | 'hollow';
 
 // The entries this boot's keys open (05 §3.2, the interim keys of state/log-selectors.ts logEntriesAtBoot) that the run has
 // not found yet. Pure in the state: the boot plans its 'log' line from it, before anything marks them found.
@@ -989,18 +994,20 @@ export function bootLinePlan(state: Readonly<GameState>, skillLines: number): Bo
   const sleep: BootLineKind[] = [...(map.includes('sleep') ? ['sleep' as const] : []), ...(map.includes('receiver-closed') ? ['receiver-closed' as const] : [])];
   const receiver: BootLineKind[] = map.includes('receiver') ? ['receiver'] : [];
   const eccSleep: BootLineKind[] = map.includes('ecc-sleep') ? ['ecc-sleep'] : [];
+  const siteData: BootLineKind[] = map.includes('site-data') ? ['site-data'] : [];
   // 3b: the mail and HOLLOW's reading line (arm only: the classic world has neither), around the log key line.
   const arm = state.run.map.world === 'arm';
   const reading: BootLineKind[] = arm && readingLineDue(state) ? ['reading'] : [];
   const inbox: BootLineKind[] = arm && newMessagesAtBoot(state).length > 0 ? ['inbox'] : [];
   const story: BootLineKind[] = [...reading, ...log, ...inbox, ...hollow];
-  if (arrival === null) return [...sleep, 'unpack', 'host', ...receiver, 'ecc', ...story];
+  if (arrival === null) return [...sleep, 'unpack', 'host', ...receiver, 'ecc', ...siteData, ...story];
   const unpack: BootLineKind = arrival.boarded !== null ? 'board' : 'unpack';
   const plan: BootLineKind[] = [...sleep, unpack, 'host', ...receiver, ...eccSleep, 'ecc'];
   // A disguised seed is left off the ECC seeds line (04 §3.6): with only disguised ones the line is not said at all.
   if (arrival.seeds.some((seed) => seed.disguise === null)) plan.push('seeds');
   for (let line = 0; line < sentryBootLineCount(state); line++) plan.push('sentry-seed');
   if (arrival.scripted.length > 0) plan.push('scripted');
+  plan.push(...siteData);
   for (let line = 0; line < deliveryBootLines(state).length; line++) plan.push('delivery');
   plan.push('charge');
   if (firewallBootLineDue(state)) plan.push('firewall');
@@ -1057,7 +1064,8 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
     case 'sleep':
     case 'receiver-closed':
     case 'receiver':
-    case 'ecc-sleep': return mapBootLineText(kind, state);
+    case 'ecc-sleep':
+    case 'site-data': return mapBootLineText(kind, state);
     case 'unpack': return LINES.bootUnpack(vars);
     case 'board': return THREAT_TEXT.boardUnpack(unitName(vars.unit));
     case 'host': return LINES.bootHost(vars);
@@ -1109,8 +1117,9 @@ export function bootLine(kind: BootLineKind, state: Readonly<GameState>, vars: L
 // The most a boot ever says (a later ship with the beam's seeds, arrival damage, an overflow, a skill trained, a log key
 // and HOLLOW's line; on the arm also the sleep, receiver and ECC-while-asleep lines, and since slice 3b up to
 // DELIVERY_BOOT_LINES_MAX delivery lines, the INBOX line and HOLLOW's reading line; since slice 4d up to three SENTRY seed
-// lines and its FIREWALL line: foundation review m4; since slice 5 the RECEIVER CLOSED line).
-export const BOOT_LINE_MAX = 23;
+// lines and its FIREWALL line: foundation review m4; since slice 5 the RECEIVER CLOSED line; since slice 6 the SITE DATA POOR
+// line).
+export const BOOT_LINE_MAX = 24;
 
 // --- Beats: lines spoken on a moment (§6.3) ---------------------------------------------------
 
@@ -2516,6 +2525,8 @@ export const GUIDE_RULES: readonly GuideRule[] = [
   ...DRIVER_RULES,
   // Slice 1b: the wide-drop lesson after the hurt driver's (POD 02 WILL LAND HARD names the same REPAIR, and comes first).
   ...DROP_LESSON_RULES,
+  // Slice 6 (Track SWATH's, data/survey-rules.ts, R22): SURVEY's one hint, `LZ-B IS WET ✕ — SITES: SET SITE 4 AS LZ-B`.
+  ...SURVEY_RULES,
   {
     // WP12 p3 (WP11's TODO): the crossings wear the Core with transit hits, and below CORE_LOW_INTEGRITY it runs one
     // thread fewer (§3.3 C5) while nothing is infected, so no alarm ever says so; a kid reached LAST LIGHT with one

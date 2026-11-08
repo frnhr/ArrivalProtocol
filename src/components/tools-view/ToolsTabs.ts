@@ -13,6 +13,8 @@ const TAB_WINDOWS: Record<string, string> = {
   podbay: '.podbay-win',
   // Slice 3b: the INBOX (InboxWindow), read in flight and between ships.
   inbox: '.inbox-win',
+  // Slice 6 SITES: a POOR planet's sites (SitesWindow); its dock item and window are survey-only (styles/survey.css).
+  sites: '.sites-win',
 };
 
 // The tab a phone opens on: the NAV PLOT, where the line goes green (the touch flight bar sits under it).

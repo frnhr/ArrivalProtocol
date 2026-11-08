@@ -1,5 +1,5 @@
-// Slice 5: the lead owns this file (docs/phase3/impl/slice-5-plan.md §2.5, §5); every slice 4c–4e and slice 5 event is named
-// in the blocks at the end of GameEvents, and a track emits its own. Others ask by message.
+// Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §2.5, §5); every slice 4c–4e, slice 5 and slice 6 event is
+// named in the blocks at the end of GameEvents, and a track emits its own. Others ask by message.
 import type {
   FiringSource, ViewMode, TransitHit, AutoburnPhase, AutoburnEnd, DealOutcome, VerbKind,
 } from '@state/schema';
@@ -12,6 +12,8 @@ import type { LineState } from '@systems/flight-events';
 import type { OpKind } from '@systems/ops-core';
 import type { PlotMode } from '@systems/capabilities';
 import type { ResidentKind, ResidentDealOutcome, SleeperJob } from '@/types/resident';
+import type { SiteKind, SurveyRunning, BadGround, RevealBy } from '@/types/survey';
+import type { LzGround } from '@/types/landing';
 
 // The game's event bus (§9 WP2): moments, not state. Systems emit what just happened (the line
 // turned green, the flight ended, an input was refused); audio, juice and the director react.
@@ -256,6 +258,24 @@ export interface GameEvents {
   // A SCAN read a leftover (its card's name shows).
   'leftover-read': { segId: string };
   // --- end of 5 KIN ---
+
+  // === Slice 6 (docs/phase3/impl/slice-6-plan.md §2.5): the FOUNDATION named every event; Track SWATH emits them
+  // (systems/survey.ts). 'pod-landed' (it carries `lz` and `touch`) is reused for the touchdown reveal.
+
+  // --- 6 SURVEY ---
+  // SURVEY's state changed (the Skills row, the SITES header): mapping, waiting for a spare thread, paused, the planet mapped,
+  // or off (not aboard, OFF by damage, a GOOD planet, the landing over); at the version it works at.
+  'survey-state': { running: SurveyRunning; version: EffectiveVersion };
+  // A site's centre cell was mapped (`first`: the ship's first find, which the TERMINAL types).
+  'site-found': { siteId: string; kind: SiteKind; first: boolean };
+  // v2+ rated a found site (its GROUND known).
+  'site-rated': { siteId: string; ground: LzGround };
+  // A bad ground an LZ stands on was made known (R5): by SURVEY's swath or by the first pod down on it (the stamp
+  // `LZ-B · WET ✕`, CONTROL's reveal quip).
+  'site-revealed': { lz: string; siteId: string; ground: BadGround; by: RevealBy };
+  // assignSite moved an LZ from one site to another (the stamp `LZ-B → SITE 4`).
+  'lz-moved': { lz: string; from: string; to: string };
+  // --- end of 6 SURVEY ---
 }
 
 export type ZoneForecast = 'hit' | 'clear' | 'unknown';

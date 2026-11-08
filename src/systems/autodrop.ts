@@ -32,7 +32,7 @@ import { onWorldReset } from '@systems/reset';
 import { emit } from '@systems/events';
 import { say } from '@systems/say';
 import { raiseAlert, clearAlert } from '@systems/alerts';
-import { canStartOp, releaseThread, reserveThread } from '@systems/ops-core';
+import { canClaimThread, releaseThread, reserveThread } from '@systems/ops-core';
 import { getDropSolution } from '@systems/drop-cache';
 import { getPrediction } from '@systems/predict';
 import { landingOrbitAim } from '@systems/autoburn-v3';
@@ -539,8 +539,9 @@ function claimTick(store: Store<GameState>, next: Readonly<NextLaunch> | null): 
     return;
   }
   if (inTac !== null && inTac <= AUTODROP_CLAIM_TAC && next !== null) {
-    if (canStartOp()) {
-      if (!reserveThread(OWNER)) throw new Error('autodrop claim: no thread although canStartOp found one');
+    // Slice 6 (R8): a yieldable thread (SURVEY's) is taken when none is free.
+    if (canClaimThread()) {
+      if (!reserveThread(OWNER, { preempt: true })) throw new Error('autodrop claim: no thread although canClaimThread found one');
       store.update((draft) => { draft.landing.autodrop.claimed = true; draft.landing.autodrop.waitingSinceTSec = null; });
     } else if (ad.waitingSinceTSec === null) {
       const since = state.clock.tSec;

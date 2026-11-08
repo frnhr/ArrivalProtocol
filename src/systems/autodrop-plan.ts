@@ -336,7 +336,8 @@ let memoPlan: LandingPlan = EMPTY_PLAN;
 function planKey(state: Readonly<GameState>, view: Readonly<LandingView>, pods: readonly PlanPod[], wins: readonly WindowAt[]): string {
   const sol = view.solution;
   return [
-    state.run.rev, state.landing.orbitEpoch, Math.round(sol.periodSec), sol.validUntilTSec === null ? '-' : Math.round(sol.validUntilTSec),
+    // Slice 6 (R13): sitesRev, so an LZ SURVEY moved re-plans.
+    state.run.rev, state.landing.orbitEpoch, state.landing.sitesRev, Math.round(sol.periodSec), sol.validUntilTSec === null ? '-' : Math.round(sol.validUntilTSec),
     state.landing.loadNext ?? '-', view.bay.loaded, view.bay.cadenceTac ?? '-', autodropOffsetTac(state).toFixed(3),
     pods.map((pod) => `${pod.pod}:${pod.widthFactor.toFixed(4)}`).join(','),
     Object.entries(view.remaining).map(([lz, n]) => `${lz}=${n}`).join(','),

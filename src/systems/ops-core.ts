@@ -1,4 +1,5 @@
-// Slice 4: Track FLIGHT may add the claim's hook here, nothing else (docs/phase3/impl/slice-4-plan.md §5.2).
+// Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §2.4, §5): the yieldable thread (SURVEY's, R8).
+// Others ask by message.
 import type { Store } from '@state/store';
 import type { GameState } from '@state/schema';
 import { onAiTick } from '@systems/clock';
@@ -20,6 +21,10 @@ import { OP_COMPLETE_PCT, OP_PROGRESS_HZ } from '@data/tuning';
 // • Every running op holds one Core thread; reserveThread(owner) holds one without an op
 //   (AUTOBURN, SWAP). threadsBusy() counts both, and canStartOp() compares them with the Core's
 //   threads (capacity, or 1 while the Core is below 50).
+// • Slice 6 (plan R8): a reservation may be `yieldable` (SURVEY's: a polite tenant). A claim made with `preempt` (AUTOBURN's
+//   and AUTODROP's) that finds no thread free drops a yieldable one and takes it (the holder sees holdsThread go false at
+//   its next tick and claims again when one frees); canClaimThread() is canStartOp() or such a thread to take. The kid's
+//   own ops (startOp) and SENTRY's pre-empt never preempt: that is 03's "one op fewer".
 // • onOpsChange tells views about start, progress (at most OP_PROGRESS_HZ per op), end, and
 //   `threads` whenever the busy count or the thread total changes (a reserve or release, or the
 //   Core's integrity crossing CORE_LOW_INTEGRITY mid-op: the views repaint only on changes).
@@ -90,6 +95,8 @@ const REPORT_EVERY_SEC = 1 / OP_PROGRESS_HZ;
 const running = new Map<number, Entry>();
 const bySeg = new Map<string, Set<number>>();
 const reservedThreads = new Set<OpOwner>();
+// The reservations a preempting claim may take (slice 6, R8): a subset of reservedThreads, reset with the world.
+const yieldableThreads = new Set<OpOwner>();
 const listeners = new Set<(change: OpsChange) => void>();
 let nextOpId = 1;
 let storeRef: Store<GameState> | null = null;
@@ -141,19 +148,52 @@ export function canStartOp(): boolean {
   return threadsBusy() < threadsTotal();
 }
 
-// Holds one thread for `owner` without an op (AUTOBURN, SWAP). false when every thread is busy.
-export function reserveThread(owner: OpOwner): boolean {
+export interface ReserveOpts {
+  // Another claim may take it (SURVEY's thread, R8).
+  yieldable?: boolean;
+  // With no thread free, take a yieldable one (AUTOBURN's and AUTODROP's claims).
+  preempt?: boolean;
+}
+
+// The yieldable reservation a preempting claim would take now (the oldest held), or null: none held, or dropping it would
+// still leave no thread free (a Core worn below its reservations).
+function yieldableToTake(): OpOwner | null {
+  if (threadsBusy() - 1 >= threadsTotal()) return null;
+  for (const owner of yieldableThreads) return owner;
+  return null;
+}
+
+// Holds one thread for `owner` without an op (AUTOBURN, SWAP, SURVEY). false when every thread is busy (with `preempt`:
+// and none is yieldable).
+export function reserveThread(owner: OpOwner, opts: Readonly<ReserveOpts> = {}): boolean {
   if (reservedThreads.has(owner)) throw new Error(`reserveThread: '${owner}' already holds a thread`);
-  if (!canStartOp()) return false;
+  if (!canStartOp()) {
+    const taken = opts.preempt === true ? yieldableToTake() : null;
+    if (taken === null) return false;
+    reservedThreads.delete(taken);
+    yieldableThreads.delete(taken);
+  }
   reservedThreads.add(owner);
+  if (opts.yieldable === true) yieldableThreads.add(owner);
   announce({ type: 'threads' });
   return true;
 }
 
 export function releaseThread(owner: OpOwner): boolean {
   if (!reservedThreads.delete(owner)) return false;
+  yieldableThreads.delete(owner);
   announce({ type: 'threads' });
   return true;
+}
+
+// `owner` holds a reservation now (SURVEY reconciles its `claimed` with it: a preempting claim may have taken it).
+export function holdsThread(owner: OpOwner): boolean {
+  return reservedThreads.has(owner);
+}
+
+// A preempting claim would get a thread now: one is free, or a yieldable one can be taken (R8).
+export function canClaimThread(): boolean {
+  return canStartOp() || yieldableToTake() !== null;
 }
 
 // --- Ops -----------------------------------------------------------------------------------
@@ -259,6 +299,7 @@ function resetOps(): void {
   running.clear();
   bySeg.clear();
   reservedThreads.clear();
+  yieldableThreads.clear();
   announcedThreadsTotal = null;
   for (const entry of dropped) announce({ type: 'end', operation: entry.operation, reason: 'reset' });
   announce({ type: 'threads' });
@@ -269,7 +310,7 @@ export function mountOpsCore(store: Store<GameState>): () => void {
   storeRef = store;
   const offTick = onAiTick(tick);
   const offReset = onWorldReset('ops-core', resetOps,
-    () => ({ running: running.size, reserved: reservedThreads.size, announcedThreadsTotal }));
+    () => ({ running: running.size, reserved: reservedThreads.size, yieldable: yieldableThreads.size, announcedThreadsTotal }));
   return () => {
     offTick();
     offReset();

@@ -3,7 +3,9 @@ import type { ModifierId, MemoryClass, RoomFit } from '@/types/map';
 import type { LinkNoise } from '@/types/threat';
 import type { SaveRefusalKind } from '@/types/save';
 import type { LeaveWords } from '@/types/lineage';
+import type { SiteData } from '@/types/survey';
 import { formatCount } from '@data/format';
+import { SITES_TEXT } from '@data/sites-text';
 
 // PLACEHOLDER(05): every word slice 3a puts on screen (slice 3c's foundation added the save, the trail and the bridge) for the galaxy map (docs/phase3/02-map.md §4, 01-landing §3.16's
 // MEMORY row and room bar, 05-story.md §3.11–§3.12's title and trail; slice-3a-plan §3), drafted from the specs' sample
@@ -180,7 +182,9 @@ export const MAP_TEXT = {
     },
     planet: (terrain: string, offSite: string): string => `${terrain} · ${offSite}`,
     noGo: (words: readonly string[]): string => `NO-GO ZONES: ${[...new Set(words)].join(', ')}`,
-    lzs: (count: number): string => `LZ: ${count} · SET BY ARRIVAL CONTROL`,
+    // Slice 6: a POOR planet's words are Track SITES's (data/sites-text.ts SITES_TEXT.card.lzs, 01 §3.15's
+    // `LZ: 3 · SURVEY NEEDED`); `site` is the site data this build plays (data/survey.ts siteDataOf).
+    lzs: (count: number, site: SiteData): string => (site === 'good' ? `LZ: ${count} · SET BY ARRIVAL CONTROL` : SITES_TEXT.card.lzs(count)),
     // The BEAM row in two parts (02 §4's one line is 72 characters at its longest): the hop, then its noise and seeds.
     // The hits and what ECC fixes are the lead's cost line (card.cost), so the BEAM row is the hop itself.
     beam: (ly: number, link: number): string => `${ly} LY · LINK ${link}`,

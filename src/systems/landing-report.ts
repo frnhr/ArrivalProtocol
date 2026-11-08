@@ -12,6 +12,7 @@ import { LANDING_REPORT_TEXT, LANDING_REPORT_UI_TEXT, PARK_REASON_TEXT, podCode 
 import { HARD_WORDS_POOL } from '@data/souls';
 import { COLONISTS_PER_POD, STAR_CHARGE_BONUS } from '@data/tuning';
 import { residentReportRows, type ResidentReportRow } from '@systems/resident-hud';
+import { surveyLzRowSuffix } from '@systems/survey-hud';
 
 // The LANDING REPORT's view model (01-landing §4, plan §1.4), pure: everything the screen shows, from landingResult and
 // the stars, so the screen (components/run/LandingReport.ts) only lays it out and times it. It plays in three stages:
@@ -99,15 +100,17 @@ function podIcon(pod: PodSummary): PodIcon {
   }
 }
 
-// `locked`: the resident's report rows for pods parked with a lock still on their driver (slice 5), by pod.
-function reportRows(tally: LandingTally, locked: ReadonlyMap<number, ResidentReportRow>): ReportRow[] {
+// `locked`: the resident's report rows for pods parked with a lock still on their driver (slice 5), by pod. `lzSuffix`: each LZ
+// row's survey tail (slice 6, Track SITES's systems/survey-hud.ts surveyLzRowSuffix: ` · SITE 4`, ` · ROCKY · 5 HARD`; '' on a
+// GOOD planet), in 01's LZ-row slot.
+function reportRows(tally: LandingTally, locked: ReadonlyMap<number, ResidentReportRow>, lzSuffix: (lz: string) => string): ReportRow[] {
   const rows: ReportRow[] = [];
   for (const row of tally.lzs) {
     const inLz = tally.pods.filter((pod) => pod.fate === 'down' && pod.lz === row.lz && pod.place === 'lz');
     const mislanded = tally.pods.filter((pod) => pod.fate === 'down' && pod.lz === row.lz && pod.place === 'mislanded');
     const slots = Math.round(row.count / COLONISTS_PER_POD);
     const icons: PodIcon[] = [...inLz.map(podIcon), ...Array.from({ length: Math.max(0, slots - inLz.length) }, (): PodIcon => 'empty'), ...mislanded.map(podIcon)];
-    const line = LANDING_REPORT_TEXT.lzRow(row.lz, row.landed, row.count);
+    const line = LANDING_REPORT_TEXT.lzRow(row.lz, row.landed, row.count) + lzSuffix(row.lz);
     rows.push({
       kind: 'lz', label: row.lz, text: line.slice(row.lz.length + 1), icons, tone: row.landed >= row.count ? 'good' : 'short', line, why: null,
     });
@@ -211,7 +214,7 @@ export function landingReportModel(state: Readonly<GameState>): LandingReportMod
   const tally = landingResult(state, landingOutcome(state.burn.status));
   const resident = residentReportRows(state);
   const locked = new Map(resident.flatMap((row) => (row.kind === 'locked' && row.pod !== null ? [[row.pod, row] as const] : [])));
-  const rows = reportRows(tally, locked);
+  const rows = reportRows(tally, locked, (lz) => surveyLzRowSuffix(state, lz));
   // Near misses: pods down off-site or in a no-go arc, by their km to the nearest bracket edge, naming that LZ.
   const misses: { km: number; text: string }[] = [];
   for (const record of landing.pods) {

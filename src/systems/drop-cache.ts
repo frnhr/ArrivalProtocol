@@ -25,6 +25,8 @@ let storeRef: Store<GameState> | null = null;
 let cached: DropSolution | null = null;
 let cachedRev: number | null = null;
 let cachedEpoch: number | null = null;
+// Slice 6 (R13): the LZs' geometry as of the cached solution (landing.sitesRev, bumped by every LZ SURVEY moves).
+let cachedSitesRev: number | null = null;
 let sinceRefreshWall = 0;
 let track: DotTrack | null = null;
 let trackKey: string | null = null;
@@ -45,9 +47,11 @@ function trackKeyOf(state: Readonly<GameState>): string {
   ].join('|');
 }
 
-// The cached solution is for this world and this orbit epoch (a discrete orbit change re-solves at once, review N4).
+// The cached solution is for this world, this orbit epoch (a discrete orbit change re-solves at once, review N4) and these LZs
+// (slice 6: an LZ SURVEY moved re-solves its windows at once, R13).
 function fresh(state: Readonly<GameState>): boolean {
-  return cached !== null && cachedRev === state.run.rev && cachedEpoch === state.landing.orbitEpoch;
+  return cached !== null && cachedRev === state.run.rev && cachedEpoch === state.landing.orbitEpoch
+    && cachedSitesRev === state.landing.sitesRev;
 }
 
 // The game time of the next drag kick within one period (landing-orbit nextDragKick), or null with none due (no drag on
@@ -89,6 +93,7 @@ function recompute(state: Readonly<GameState>): DropSolution {
   }, caps.drop.solution && solvable ? track : null);
   cachedRev = state.run.rev;
   cachedEpoch = state.landing.orbitEpoch;
+  cachedSitesRev = state.landing.sitesRev;
   sinceRefreshWall = 0;
   return cached;
 }
@@ -97,6 +102,7 @@ function clear(): void {
   cached = null;
   cachedRev = null;
   cachedEpoch = null;
+  cachedSitesRev = null;
   sinceRefreshWall = 0;
   track = null;
   trackKey = null;
@@ -106,7 +112,7 @@ export function mountDropCache(store: Store<GameState>): () => void {
   if (storeRef) throw new Error('mountDropCache: already mounted');
   storeRef = store;
   const offReset = onWorldReset('drop-cache', clear, () => ({
-    cached: cached !== null, cachedRev, cachedEpoch, sinceRefreshWall, track: track !== null, trackKey,
+    cached: cached !== null, cachedRev, cachedEpoch, cachedSitesRev, sinceRefreshWall, track: track !== null, trackKey,
   }));
   const offTick = onGameTick((_dtWorld, dtWall) => {
     const state = store.getState();

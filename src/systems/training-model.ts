@@ -1,4 +1,5 @@
-// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2). Others ask by message.
+// Slices 4c–4e: the lead owns this file (slice-4cde-plan.md §7.2; slice 6: slice-6-plan.md §5, the AHEAD row's site line).
+// Others ask by message.
 // The TRAINING tab's model (phase 3 slice 4; docs/phase3/03-skills.md §4; slice-4-plan §2.5, §3): pure, over TREE's reads
 // (skill-tree.ts treeCells, bankOf, held, paid, lostLevels, deskBlocker) and the desk's selection (UiState.trainingSel,
 // trainingHoldSec). The view (components/desk/TrainingWindow.ts) only lays it out.
@@ -32,6 +33,7 @@ import { SKILL_TREE, SKILL_IDS, skillBlocks } from '@data/skills';
 import { layoutFor } from '@data/memory';
 import { NOISE_WORD } from '@data/map-text';
 import { TRAINING_TEXT, TRAINING_DEMO_ART, type DemoCount, type DemoArt } from '@data/training-text';
+import { surveyAheadLine } from '@systems/survey-hud';
 import { CHARGE_ARRIVAL_FLOOR, CYCLES_LANDED_STEPS, FIRST_PICK_FLOOR_CYCLES, LOCK_RANGE_TAC, TRAINING_HOLD_SEC } from '@data/tuning';
 
 // The TRAIN bar's length lives in tuning.ts (the review's m8); re-exported for the desk's actions and the suites.
@@ -132,6 +134,9 @@ export interface TrainingModel {
   saved: string | null;        // visit 1 after the pick: 2 CYCLES · SAVED FOR NEXT TIME
   moreLater: string | null;
   ahead: string;
+  // Slice 6 (R15): the AHEAD row's second line, the selected ship's site data (Track SITES's systems/survey-hud.ts
+  // surveyAheadLine: `SITE DATA POOR · SURVEY FINDS BETTER SITES`), or null.
+  aheadSite: string | null;
   preview: TrainingPreview | null;
   lastUnitLine: string | null;
   hold: number | null;         // the TRAIN bar, 0..1 (null: not filling)
@@ -420,6 +425,7 @@ export function trainingModel(state: Readonly<GameState>): TrainingModel {
     saved: picked ? TRAINING_TEXT.saved(bank) : null,
     moreLater: picked ? TRAINING_TEXT.moreLater : null,
     ahead: aheadLine(state, slot),
+    aheadSite: surveyAheadLine(state, slot),
     preview: run.map.world === 'arm' ? previewFor(state, slot) : null,
     lastUnitLine: lastSkills === null || lastSkills.length === 0 ? null
       : TRAINING_TEXT.lastUnit(lastSkills.map((record) => TRAINING_TEXT.cellName(TRAINING_TEXT.skills[record.skill].name, record.version))),
