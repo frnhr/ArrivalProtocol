@@ -11,7 +11,7 @@ import type { GameState, RunEndCause, ShipResult } from '@state/schema';
 import type { PodSummary } from '@/types/landing';
 import type { Meta } from '@systems/meta';
 import type { EndingPiece, EndingRecord, HollowFate, YouChoice } from '@/types/ending';
-import { endingRecordOf, controlCompliant } from '@systems/ending-rules';
+import { endingRecordOf, controlCompliant, endingTitle } from '@systems/ending-rules';
 import { runEndNext, fleetSlots } from '@systems/run-end';
 import { fleetHome } from '@systems/run-score';
 import { shipSummaryAt } from '@systems/map-run';
@@ -19,8 +19,8 @@ import { formatCount } from '@data/format';
 import { unitName, hollowUnitName } from '@data/hollow-text';
 import { RUN_END_TITLE } from '@data/script';
 import { RUN_END_TEXT } from '@data/landing-text';
-import { ENDING_TITLE, EPILOGUE_TEXT, PAYOFF_OF, WALKED_IN } from '@data/epilogue-text';
-import { HOLLOW_PIECES, YOU_PIECES, builtPieces, endingTitleKey, pieceBuilt } from '@data/endings';
+import { EPILOGUE_TEXT, PAYOFF_OF, WALKED_IN } from '@data/epilogue-text';
+import { HOLLOW_PIECES, YOU_PIECES, builtPieces, pieceBuilt } from '@data/endings';
 import {
   EPILOGUE_YEARS, EPILOGUE_MAX_LINES, EPILOGUE_DOUBLING_YEARS, EPILOGUE_SIG_FIGS, MAX_LINE_CHARS,
 } from '@data/tuning';
@@ -264,11 +264,6 @@ export function epilogueModel(state: Readonly<GameState>, meta: Readonly<Meta> |
 }
 
 // --- The final card ----------------------------------------------------------------------------------------------------
-
-// The ending's title (R23): by step 2, then step 1; STAY's names its colony.
-export function endingTitle(record: Readonly<EndingRecord>): string {
-  return ENDING_TITLE[endingTitleKey(record.you, record.hollow)](record.stay?.colony ?? '');
-}
 
 function causeTitle(state: Readonly<GameState>, cause: RunEndCause): string {
   const lastShip = state.run.ships[state.run.ships.length - 1]?.shipName ?? state.level.shipName;

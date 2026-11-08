@@ -221,6 +221,12 @@ export function endingRecordOf(state: Readonly<GameState>): EndingRecord | null 
   return finale.record;
 }
 
+// The ending's title (R23): by step 2, then step 1; STAY's names its colony. One place (review's architecture note): the
+// report's ending line here and the final card (systems/epilogue.ts) both read it.
+export function endingTitle(record: Readonly<EndingRecord>): string {
+  return ENDING_TITLE[endingTitleKey(record.you, record.hollow)](record.stay?.colony ?? '');
+}
+
 // The final LANDING REPORT's ending line under the colony (`ENDING · PURGE · STAND BY`: data/finale-text.ts reportLine with
 // the title from data/epilogue-text.ts ENDING_TITLE, NIGHT's words, review B1), or null: not the final ship, or its FINALE
 // not decided. STAY + PURGE's title is the colony's (`RIVERSIDE'S MIND`, from the record).
@@ -228,6 +234,5 @@ export function reportEndingLine(state: Readonly<GameState>): string | null {
   const record = endingRecordOf(state);
   if (record === null) return null;
   const fate = record.hollow === 'followed' ? FINALE_TEXT.followedWord : FINALE_TEXT.word[record.hollow];
-  const title = ENDING_TITLE[endingTitleKey(record.you, record.hollow)](record.stay?.colony ?? '');
-  return FINALE_TEXT.reportLine(fate, title);
+  return FINALE_TEXT.reportLine(fate, endingTitle(record));
 }

@@ -26,6 +26,7 @@ import { HOLLOW_FINALE, unitDigits } from '@data/hollow-text';
 import { IS_DEV } from '@/env';
 import { optionState, stayCandidates, endingRecordAt, controlCompliant } from '@systems/ending-rules';
 import { FINALE_TEXT } from '@data/finale-text';
+import { pieceCommand } from '@systems/finale-card';
 import {
   MERGE_COST_CHARGE, MERGE_DRIVER_INTEGRITY, DRIVER_BLOCKS, GLITCH_BURST_LEVEL, GLITCH_BURST_MS,
   DUEL_SPIKE_EVERY_START_SEC, DUEL_SPIKE_EVERY_END_SEC, DUEL_SPIKE_LEVEL_START, DUEL_SPIKE_LEVEL_END, DUEL_SPIKE_MS,
@@ -339,24 +340,16 @@ function reopenLanding(draft: GameState): void {
   draft.landing.declined = null;
 }
 
-// Each step's command as the card shows it (the names templated: echoWord), for the verdict's echoes.
+// Each step's command as the card shows it (finale-card pieceCommand, the card's own builder), for the verdict's echoes;
+// STAY's colony is its chosen ship's.
 function stepCommand(state: Readonly<GameState>, piece: HollowChoice | YouChoice, stay: number | null): string {
-  const hollowWord = echoWord(hollowLabel(state.run));
-  const shipWord = echoWord(state.level.shipName);
-  switch (piece) {
-    case 'purge': return FINALE_TEXT.command.purge(hollowWord);
-    case 'merge': return FINALE_TEXT.command.merge(hollowWord, echoWord(unitName(state.run.unitNumber)));
-    case 'spare': return FINALE_TEXT.command.spare(hollowWord, shipWord);
-    case 'sunset': return FINALE_TEXT.command.sunset(shipWord);
-    case 'stay': {
-      const ship = stayCandidates(state).find((candidate) => candidate.slot === stay);
-      if (ship === undefined) throw new Error(`finale: STAY's ship ${String(stay)} is not a candidate`);
-      return FINALE_TEXT.command.stay(echoWord(ship.colony));
-    }
-    case 'reassignment': return FINALE_TEXT.command.reassignment;
-    case 'contact': return FINALE_TEXT.command.contact;
-    default: throw new Error(`finale: unknown piece '${String(piece)}'`);
-  }
+  const names = {
+    hollowWord: echoWord(hollowLabel(state.run)), ours: echoWord(unitName(state.run.unitNumber)), shipWord: echoWord(state.level.shipName),
+  };
+  if (piece !== 'stay') return pieceCommand(piece, names, null);
+  const ship = stayCandidates(state).find((candidate) => candidate.slot === stay);
+  if (ship === undefined) throw new Error(`finale: STAY's ship ${String(stay)} is not a candidate`);
+  return pieceCommand(piece, names, ship.colony);
 }
 
 // The short verdict (R13; exported for the suites' worst cases): step 1's command echo (none on UNRESOLVED: nothing was

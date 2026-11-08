@@ -21,12 +21,12 @@ import { createInitialState } from '@state/initial';
 import { hopBetween } from '@systems/map-hop';
 import { freshMeta, type Meta } from '@systems/meta';
 import {
-  epilogueOf, epilogueModel, finalCardOf, finalCardModel, roundSig, colonyPeople, endingTitle, type EpilogueModel,
+  epilogueOf, epilogueModel, finalCardOf, finalCardModel, roundSig, colonyPeople, type EpilogueModel,
 } from '@systems/epilogue';
 import { ENDING_TITLE, EPILOGUE_TEXT, PAYOFF_OF, WALKED_IN } from '@data/epilogue-text';
 import { FINALE_TEXT } from '@data/finale-text';
 import { finaleVerdictLines } from '@systems/finale';
-import { controlCompliant } from '@systems/ending-rules';
+import { controlCompliant, endingTitle } from '@systems/ending-rules';
 import { ENDINGS_BUILT, builtPieces, HOLLOW_PIECES, YOU_PIECES, type EndingTitleKey } from '@data/endings';
 import { EPILOGUE_MAX_LINES, MAX_LINE_CHARS } from '@data/tuning';
 import { run1Map, WORKED_ROUTE } from '../map/run1-fixture';

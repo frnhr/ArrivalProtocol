@@ -151,22 +151,25 @@ function priceCaption(price: Readonly<PriceMeter>): string {
   }
 }
 
-function commandOf(piece: EndingPiece, names: Readonly<CardNames>, stay: readonly StayCandidate[]): string {
+// A piece's command with its names (the review's architecture note: one builder, so the card's row and the verdict's echo,
+// systems/finale.ts stepCommand, never drift). `stayColony`: STAY's colony (`???` when there is none yet).
+export function pieceCommand(piece: EndingPiece, names: Readonly<Pick<CardNames, 'hollowWord' | 'ours' | 'shipWord'>>, stayColony: string | null): string {
   const command = FINALE_TEXT.command;
   switch (piece) {
     case 'purge': return command.purge(names.hollowWord);
     case 'merge': return command.merge(names.hollowWord, names.ours);
     case 'spare': return command.spare(names.hollowWord, names.shipWord);
     case 'sunset': return command.sunset(names.shipWord);
-    // Review M3: the row names the newest candidate; with none yet, the colony just founded (it is the likeliest).
-    case 'stay': {
-      const colony = stay[0]?.colony ?? names.colony;
-      return command.stay(colony === null ? FINALE_TEXT.unknown : echoWord(colony));
-    }
+    case 'stay': return command.stay(stayColony === null ? FINALE_TEXT.unknown : echoWord(stayColony));
     case 'reassignment': return command.reassignment;
     case 'contact': return command.contact;
-    default: throw new Error(`commandOf: unknown piece '${String(piece)}'`);
+    default: throw new Error(`pieceCommand: unknown piece '${String(piece)}'`);
   }
+}
+
+// Review M3: the STAY row names the newest candidate; with none yet, the colony just founded (it is the likeliest).
+function commandOf(piece: EndingPiece, names: Readonly<CardNames>, stay: readonly StayCandidate[]): string {
+  return pieceCommand(piece, names, stay[0]?.colony ?? names.colony);
 }
 
 function rowOf(option: Readonly<EndingOption<EndingPiece>>, input: Readonly<CardInput>): CardRow | null {
