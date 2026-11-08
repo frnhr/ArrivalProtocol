@@ -5,6 +5,7 @@ import { RESIDENT_UI_TEXT } from '@data/resident-ui-text';
 import {
   CHART_NODE_PX, CHART_ARK_PX, CHART_PAD_PX, CHART_LABEL_ROOM_PX, CHART_STARS, CHART_PHONE_PX_PER_LY, CHART_PORTRAIT_DEG, CHART_LANDSCAPE_DEG,
   TAKEN_MARK_OFFSET_PX,
+  CHART_TRACE_MARK_PX, CHART_TRACE_MARK_GAP_PX, // 7c CHART (the `◆`)
 } from '@data/tuning';
 
 // The STAR CHART's drawing (02-map §4; slice-3a-plan §5.2), one SVG shared by the DESK, the title card's faint chart and
@@ -187,6 +188,13 @@ function placeLabels(
     const { px, py } = at(node.x, node.y);
     const h = (node.kind === 'ark' || node.isFinal ? CHART_ARK_PX : CHART_NODE_PX) / 2 + 2;
     taken.push({ x0: px - h, y0: py - h, x1: px + h, y1: py + h });
+    // --- 7c CHART: a label over the `◆` would hide it ---
+    if (node.trace) {
+      const c = traceMarkCentre(node, px, py);
+      const d = CHART_TRACE_MARK_PX + 1;
+      taken.push({ x0: c.x - d, y0: c.y - d, x1: c.x + d, y1: c.y + d });
+    }
+    // --- end of 7c CHART ---
   }
   // The trail's marks and the older colonies' dots are small, but a label over them hides them (3c plan risk 10).
   const h = MARK_HALF_PX + 2;
@@ -219,6 +227,13 @@ function placeLabels(
   }
   return out;
 }
+
+// --- 7c CHART: where a gift ship's `◆` sits, centred just over the node (over the final ship's beacon ring, r 9 below) ---
+function traceMarkCentre(node: Readonly<ChartNode>, px: number, py: number): { x: number; y: number } {
+  const h = node.isFinal ? 9 : (node.kind === 'ark' ? CHART_ARK_PX : CHART_NODE_PX) / 2;
+  return { x: Number(px.toFixed(1)), y: Number((py - h - CHART_TRACE_MARK_GAP_PX - CHART_TRACE_MARK_PX).toFixed(1)) };
+}
+// --- end of 7c CHART ---
 
 // A node's square (an ark's bigger), its corner notched on a TIGHT ship (a small ship has a small receiver).
 function nodeShape(node: Readonly<ChartNode>, px: number, py: number): SVGElement {
@@ -348,7 +363,7 @@ export function drawChart(svg: SVGSVGElement, model: Readonly<ChartModel>, opts:
     const g = el('g', { 'data-slot': node.slot },
       `cn state-${node.state} kind-${node.kind}${node.tight ? ' tight' : ''}${node.isFinal ? ' final' : ''}${node.onlyFromHere ? ' only' : ''}`
       + `${model.selected === node.slot ? ' selected' : ''}${node.taken !== null ? ' taken' : ''}${node.tag !== null ? ' tagged' : ''}`
-      + `${node.signal ? ' signal' : ''}`);
+      + `${node.signal ? ' signal' : ''}${node.trace ? ' trace' : ''}`); // 7c CHART: ' trace'
     // A generous hit area: the squares are small, a kid's click is not.
     g.append(el('circle', { cx: px.toFixed(1), cy: py.toFixed(1), r: 13 }, 'cn-hit'));
     if (node.isFinal) {
@@ -381,6 +396,15 @@ export function drawChart(svg: SVGSVGElement, model: Readonly<ChartModel>, opts:
       const c = (node.kind === 'ark' || node.isFinal ? CHART_ARK_PX : CHART_NODE_PX) / 2 + 2;
       g.append(text(px - c, py + c + 7, RESIDENT_UI_TEXT.chart.glyph, 'cn-signal', 'end'));
     }
+    // --- 7c CHART (R38): a gift ship's `◆` (node.trace), centred over the node: the upper-left corner is REPORTED HOME's
+    // diamond, the lower-left the signal's glyph, and the label sits to the right more often than anywhere else (placeLabels
+    // keeps it clear of the mark). The legend's TRACE says what it is, the card's TRACE row whose gift it is. ---
+    if (node.trace) {
+      const c = traceMarkCentre(node, px, py);
+      const d = CHART_TRACE_MARK_PX;
+      g.append(el('path', { d: `M${c.x},${c.y - d} L${c.x + d},${c.y} L${c.x},${c.y + d} L${c.x - d},${c.y} Z` }, 'cn-trace'));
+    }
+    // --- end of 7c CHART ---
     const showLabel = opts.labels === 'all'
       || (opts.labels === 'beacon' && node.isFinal)
       || (opts.labels === 'route' && routeSlots.has(node.slot));

@@ -839,3 +839,16 @@ body.reduced-motion .desk-tab.pulse .desk-tab-badge { animation: none; }
   .tr-detail .tr-demo-box .tr-demo { width: 96px; height: 64px; }
   .tr-detail { grid-template-columns: 100px minmax(0, 1fr); }
 }
+
+/* ── 7c CHART (R38): the traces on the desk ────────────────────────────────────────────────────────────────────────────
+   A gift ship's ◆ on the STAR CHART (pale gold, the colour of a cache: never REPORTED HOME's small green corner diamond),
+   the legend's TRACE, and the SHIP CARD's TRACE row: gold, with the chart's ◆ while its gift waits (tone good); the final
+   ship's ended-here row and a found gift's row in the same gold, without the ◆. */
+.star-chart .cn-trace {
+  fill: var(--desk-bright); stroke: var(--desk-sky); stroke-width: 0.8;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--desk-bright) 70%, transparent)); pointer-events: none;
+}
+.star-chart .cn.state-past .cn-trace, .star-chart .cn.state-too-late .cn-trace { opacity: 0.5; filter: none; }
+.desk-legend-item.kind-trace .desk-legend-glyph { background: var(--desk-bright); transform: rotate(45deg) scale(0.8); }
+.dc-row.key-trace .dc-v, .dc-rest .dc-row.key-trace .dc-v { color: var(--desk-bright); }
+.dc-row.key-trace.tone-good .dc-v::before { content: '◆ '; }
