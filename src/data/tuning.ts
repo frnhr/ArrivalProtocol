@@ -2465,3 +2465,42 @@ export const EPILOGUE_ARM_SEC = 0.6;
 export const FINAL_CARD_ARM_SEC = 1.2;
 
 // --- end of 7a NIGHT -------------------------------------------------------------------------------------------------
+
+
+// =====================================================================================================================
+// --- Phase 3 slice 7b, THE LAST LANDING (docs/phase3/impl/slice-7-plan.md §2.6, R26–R28; 01-landing §3.17). The FOUNDATION
+// wrote every number below. 7b lead's numbers are 01's own (the spec states them); Track DROP and Track VIEW each edit values
+// only in their own block, and a new number goes at the end of its own block. No save number moves (7b has no bump).
+// =====================================================================================================================
+
+// --- 7b lead ---------------------------------------------------------------------------------------------------------
+
+// THE LAST LANDING's pace (R26; 01 §3.17): this many game seconds between two launches, wherever the pods are (no bay: the
+// pods launch from the orbit, and the cadence keeps the rhythm readable).
+export const LAST_LANDING_CADENCE_SEC = 2.0;
+// AUTODROP flies the restored pods for at most this many orbits (R27; 01: "AUTODROP gets at most two orbits"); a pod it has
+// not placed by then drops blind in the next window.
+export const LAST_LANDING_AUTODROP_ORBITS = 2;
+// A blind drop's moment is uniform within ±(W ÷ 2 + this) of the LZ's centre, W the bracket's width (R27; 01: the no-go arcs
+// sit within 150 km of a bracket edge, so a blind drop can find one).
+export const BLIND_MARGIN_KM = 150;
+// A blind drop's spread is the pod's drop width times this (R27; 01: no unit steers the pod's motor). Taken in the one
+// product, landing-solve dropHalfWidthKm (DropFactors.blind).
+export const BLIND_DROP_MULT = 2.0;
+// [ENTER]'s fast-forward (R28) throws past this many clock steps: 16 pods blind on a HARSH planet take about 6 passes, far
+// under it at 20 Hz with SKIP; the cap exists to fail loudly on a bug (a machine that never ends).
+export const LAST_LANDING_SKIP_MAX_STEPS = 200_000;
+
+// --- end of 7b lead --------------------------------------------------------------------------------------------------
+
+// --- 7b DROP (Track DROP: systems/last-landing.ts) --------------------------------------------------------------------
+
+// (none yet: DROP's new numbers go here)
+
+// --- end of 7b DROP --------------------------------------------------------------------------------------------------
+
+// --- 7b VIEW (Track VIEW: components/run/LastLanding.ts, the POD BAY's RESTORED row, the beacons) ----------------------
+
+// (none yet: VIEW's new numbers go here)
+
+// --- end of 7b VIEW --------------------------------------------------------------------------------------------------

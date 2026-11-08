@@ -1,8 +1,10 @@
+// Slice 7b: the lead owns this file (slice-7-plan.md §2.5, §4.2): the `7b LAST LANDING` block is complete; Track DROP emits
+// it, and VIEW may change its cues in audio-cues.ts's 7b block only.
 // Slice 7a: the lead owns this file (slice-7-plan.md §2.5, §4.1): the `7 ENDING` block is complete; Track CARD and Track
 // NIGHT change cues in audio-cues.ts's block only.
 // Slice 6: the lead owns this file (docs/phase3/impl/slice-6-plan.md §2.5, §5); every slice 4c–4e, slice 5 and slice 6 event is
 // named in the blocks at the end of GameEvents, and a track emits its own. Others ask by message.
-import type { HollowFate, YouChoice } from '@/types/ending';
+import type { HollowFate, YouChoice, LastLandingState } from '@/types/ending';
 import type {
   FiringSource, ViewMode, TransitHit, AutoburnPhase, AutoburnEnd, DealOutcome, VerbKind,
 } from '@state/schema';
@@ -295,6 +297,16 @@ export interface GameEvents {
   'epilogue-open': Record<string, never>;
   'epilogue-line': { n: number };
   // --- end of 7 ENDING ---
+
+  // === Slice 7b (docs/phase3/impl/slice-7-plan.md §2.5): the FOUNDATION named both; Track DROP emits them
+  // (systems/last-landing.ts). 'pod-launched' and 'pod-landed' already carry source 'merge' for its pods.
+
+  // --- 7b LAST LANDING ---
+  // THE LAST LANDING started (R25, R27): this many restored pods, and who flies them (decided once at the start).
+  'last-landing-start': { pods: number; flier: LastLandingState['flier'] };
+  // It ended (every restored pod down, or parked): `landed`, the restored pods that came down in an LZ with room.
+  'last-landing-end': { landed: number };
+  // --- end of 7b LAST LANDING ---
 }
 
 export type ZoneForecast = 'hit' | 'clear' | 'unknown';
